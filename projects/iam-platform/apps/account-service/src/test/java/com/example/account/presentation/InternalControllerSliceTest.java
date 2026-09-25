@@ -2,6 +2,7 @@ package com.example.account.presentation;
 
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountStatusResult;
+import com.example.account.application.result.AccountStatusWithTenantResult;
 import com.example.account.application.result.DeleteAccountResult;
 import com.example.account.application.result.SocialSignupResult;
 import com.example.account.application.result.StatusChangeResult;
@@ -89,6 +90,49 @@ class InternalControllerSliceTest {
 
         mockMvc.perform(get("/internal/accounts/acc-123/status")
                         .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: GET /internal/accounts/{id}/status-with-tenant → 200 with the account's own tenantId")
+    void getStatusWithTenant_returnsTenantAndStatus() throws Exception {
+        Instant changedAt = Instant.parse("2026-09-25T00:00:00Z");
+        given(accountStatusUseCase.getStatusResolvingTenant(eq("acc-123")))
+                .willReturn(new AccountStatusWithTenantResult("acc-123", "ecommerce", "LOCKED", changedAt));
+
+        mockMvc.perform(get("/internal/accounts/acc-123/status-with-tenant"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value("acc-123"))
+                .andExpect(jsonPath("$.tenantId").value("ecommerce"))
+                .andExpect(jsonPath("$.status").value("LOCKED"))
+                .andExpect(jsonPath("$.statusChangedAt").exists())
+                // No PII on this internal read.
+                .andExpect(jsonPath("$.email").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: status-with-tenant ignores X-Tenant-Id — the tenant is the output, not an input")
+    void getStatusWithTenant_ignoresTenantHeader() throws Exception {
+        given(accountStatusUseCase.getStatusResolvingTenant(eq("acc-123")))
+                .willReturn(new AccountStatusWithTenantResult("acc-123", "fan-platform", "ACTIVE", Instant.now()));
+
+        mockMvc.perform(get("/internal/accounts/acc-123/status-with-tenant")
+                        .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value("fan-platform"));
+
+        verify(accountStatusUseCase, never()).getStatus(anyString());
+        verify(accountStatusUseCase, never()).getStatus(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: status-with-tenant — no tenant holds the id → 404 ACCOUNT_NOT_FOUND")
+    void getStatusWithTenant_absent_returns404() throws Exception {
+        given(accountStatusUseCase.getStatusResolvingTenant(eq("missing")))
+                .willThrow(new AccountNotFoundException("missing"));
+
+        mockMvc.perform(get("/internal/accounts/missing/status-with-tenant"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }

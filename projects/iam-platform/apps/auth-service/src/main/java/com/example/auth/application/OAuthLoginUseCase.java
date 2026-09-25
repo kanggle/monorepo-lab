@@ -7,7 +7,7 @@ import com.example.auth.application.port.OAuthClient;
 import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
 import com.example.auth.application.port.OAuthProviderConfigPort;
-import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
 import com.example.auth.application.result.SocialSignupResult;
@@ -15,6 +15,7 @@ import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.oauth.OAuthUserInfo;
 import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
+import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,8 @@ public class OAuthLoginUseCase {
     // TASK-BE-396 (ADR-006 option B): the session-establishing transactional tail
     // for the SAS browser flow (social_identity upsert + status check only — no JWT).
     private final SocialIdentityPersistStep socialIdentityPersistStep;
+    // TASK-BE-602: auth.login.* for the social path — the same recorder the form path uses.
+    private final LoginEventRecorder loginEventRecorder;
 
     /**
      * Generates an authorization URL for the given OAuth provider.
@@ -69,10 +72,16 @@ public class OAuthLoginUseCase {
      * ONLY social-login callback path. It runs the shared pre-resolution
      * ({@link #resolveSocialLogin}: state {@code consumeAtomic} →
      * {@code exchangeCodeForUserInfo} → email validate → identity lookup →
-     * socialSignup-or-existing → {@code getAccountStatus}), then runs ONLY the
+     * socialSignup-or-existing → {@code getAccountStatusAndTenant}), then runs ONLY the
      * social-identity upsert + account-status check via
      * {@link SocialIdentityPersistStep} — it does NOT issue a custom JWT, register a
-     * device session, persist a refresh token, or publish login events.
+     * device session, or persist a refresh token.
+     *
+     * <p>TASK-BE-602: it DOES record {@code auth.login.attempted} and then
+     * {@code succeeded} / {@code failed} through {@link LoginEventRecorder}, keyed on the
+     * account's own tenant as account-service reported it — and only when account-service
+     * answered (a 404 leaves no tenant to report, so no events). Recording is telemetry: its
+     * failure never changes the login outcome.
      *
      * <p>The caller (presentation layer) takes the returned {@code accountId}/{@code email}
      * and establishes a SAS-consumed authenticated HTTP session, then resumes the saved
@@ -90,14 +99,66 @@ public class OAuthLoginUseCase {
         // them. Before BE-507 it stopped here and the account was born fan-platform.
         ResolvedSocialLogin resolved = resolveSocialLogin(command, tenantId);
 
+        // TASK-BE-602: login events carry the account's OWN tenant, which only the status lookup
+        // knows. Without an answer (404) there is no tenant to put on them, so none are emitted —
+        // a guessed tenant (the client's) is exactly what is wrong for pre-BE-507 accounts.
+        Optional<LoginTelemetry> telemetry = resolved.account()
+                .map(account -> new LoginTelemetry(
+                        resolved.accountId(), account.tenantId(),
+                        LoginHashes.emailHash(resolved.userInfo().email()),
+                        command.sessionContext(),
+                        resolved.provider().loginMethod()));
+        telemetry.ifPresent(t -> recordTelemetry("attempted", () ->
+                loginEventRecorder.recordAttempted(t.accountId(), t.emailHash(), t.tenantId(), t.ctx())));
+
         // Session-establishing transactional tail — social_identity upsert + status
-        // check ONLY. No JWT / device session / refresh token / login events.
-        socialIdentityPersistStep.persistIdentityAndCheckStatus(
-                resolved.provider(), resolved.userInfo(),
-                resolved.accountId(), tenantId, resolved.accountStatus());
+        // check ONLY. No JWT / device session / refresh token.
+        try {
+            socialIdentityPersistStep.persistIdentityAndCheckStatus(
+                    resolved.provider(), resolved.userInfo(),
+                    resolved.accountId(), tenantId,
+                    resolved.account().map(AccountStatusWithTenantLookupResult::accountStatus));
+        } catch (AccountLockedException | AccountStatusException rejection) {
+            String reason = AccountStatusRule.eventFailureReason(rejection);
+            // A status outside the contract enum is rejected all the same, but has no
+            // failureReason to carry — attempted stands alone (the form path's rule).
+            if (reason != null) {
+                telemetry.ifPresent(t -> recordTelemetry("failed", () ->
+                        loginEventRecorder.recordFailed(t.accountId(), t.emailHash(), t.tenantId(),
+                                reason, t.ctx())));
+            }
+            throw rejection;
+        }
+
+        telemetry.ifPresent(t -> recordTelemetry("succeeded", () ->
+                loginEventRecorder.recordSucceeded(t.accountId(), t.tenantId(), t.ctx(), t.loginMethod())));
 
         return new BrowserLoginResolution(
                 resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount());
+    }
+
+    /**
+     * Runs a login-telemetry side effect (TASK-BE-602). Any failure (e.g. the outbox write) is
+     * logged and swallowed: telemetry must never change the login outcome — the same rule the form
+     * path follows (TASK-BE-599). The catch sits here, outside {@link LoginEventRecorder}'s
+     * transactional proxy, so a failed write cannot leave a rollback-only transaction behind.
+     */
+    private static void recordTelemetry(String what, Runnable sideEffect) {
+        try {
+            sideEffect.run();
+        } catch (RuntimeException e) {
+            log.warn("social-login telemetry '{}' failed — login outcome unaffected", what, e);
+        }
+    }
+
+    /** What the social-login events need, known only once account-service has answered. */
+    private record LoginTelemetry(
+            String accountId,
+            String tenantId,
+            String emailHash,
+            SessionContext ctx,
+            String loginMethod
+    ) {
     }
 
     /**
@@ -121,8 +182,10 @@ public class OAuthLoginUseCase {
      *   <li>TOCTOU: the identity existence check is a non-txn DB read. The transactional
      *       step still upserts the identity, and the DB unique key on
      *       {@code (provider, provider_user_id)} prevents duplicate rows.</li>
-     *   <li>Status lookup outcome (TASK-BE-600, replacing the BE-063 semantics): an empty
-     *       {@code accountStatus} now means ONLY that account-service answered 404 — the
+     *   <li>Status lookup outcome (TASK-BE-600, replacing the BE-063 semantics; since TASK-BE-602
+     *       the lookup is {@code getAccountStatusAndTenant}, which also returns the account's
+     *       own tenant): an empty {@code account} now means ONLY that account-service answered
+     *       404 — the
      *       status guard is skipped for that case, exactly as before. Under BE-063 "empty"
      *       also covered a non-404 4xx and an unreadable 200, i.e. failed lookups, and those
      *       silently skipped the guard (fail-open). They now throw
@@ -201,17 +264,20 @@ public class OAuthLoginUseCase {
             isNewAccount = signupResult.newAccount();
         }
 
-        // Pre-fetched account status. Empty = 404 only → the status guard is skipped. A failed
-        // lookup throws AccountServiceUnavailableException → the login fails closed
-        // (TASK-BE-600 AC-2; see the method javadoc for what changed from BE-063).
-        // 🔴 Header-less on purpose: account-service pins the lookup to fan-platform, which is
-        // where a pre-BE-507 social account lives even when its identity row says ecommerce.
-        // Sending the identity's tenant would lose the guard for those; making this lookup
-        // tenant-aware is a separate decision (TASK-BE-600 follow-up).
-        Optional<String> accountStatus = accountServicePort.getAccountStatus(accountId)
-                .map(AccountStatusLookupResult::accountStatus);
+        // Pre-fetched account status AND the account's own tenant (TASK-BE-602 — replaces the
+        // header-less, fan-platform-pinned getAccountStatus call; still one round trip).
+        // Empty = 404 only → the status guard is skipped (TASK-BE-600 — never turn it into a
+        // rejection). A failed lookup throws AccountServiceUnavailableException → the login fails
+        // closed (TASK-BE-600 AC-2; see the method javadoc for what changed from BE-063).
+        // Why not send a tenant instead: every candidate we hold is wrong for some accounts — the
+        // identity row and the initiating client say ecommerce for a pre-BE-507 account that lives
+        // in fan-platform, and the pinned lookup cannot see a post-BE-507 store account at all
+        // (a LOCKED store account used to get in). account-service reads the row by its id and
+        // reports the row's tenant (owner decision, TASK-BE-602 AC-0).
+        Optional<AccountStatusWithTenantLookupResult> account =
+                accountServicePort.getAccountStatusAndTenant(accountId);
 
-        return new ResolvedSocialLogin(provider, userInfo, accountId, isNewAccount, accountStatus);
+        return new ResolvedSocialLogin(provider, userInfo, accountId, isNewAccount, account);
     }
 
     /** Internal holder for the shared pre-resolution result. */
@@ -220,7 +286,7 @@ public class OAuthLoginUseCase {
             OAuthUserInfo userInfo,
             String accountId,
             boolean isNewAccount,
-            Optional<String> accountStatus
+            Optional<AccountStatusWithTenantLookupResult> account
     ) {
     }
 

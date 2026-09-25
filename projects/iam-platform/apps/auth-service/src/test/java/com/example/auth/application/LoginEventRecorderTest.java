@@ -70,6 +70,16 @@ class LoginEventRecorderTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-602: social succeeded carries loginMethod, the same null device fields, and nothing else")
+    void recordSucceeded_social_carriesLoginMethod() {
+        recorder.recordSucceeded("acc-1", "ecommerce", CTX, "OAUTH_NAVER");
+
+        verify(authEventPublisher).publishLoginSucceeded(
+                "acc-1", null, "ecommerce", CTX, null, null, "OAUTH_NAVER");
+        verifyNoMoreInteractions(authEventPublisher);
+    }
+
+    @Test
     @DisplayName("the form login does not register a device session — the recorder cannot even reach the use case")
     void formLogin_doesNotRegisterDeviceSession() {
         // Structural: the only collaborator is the event publisher. If device-session

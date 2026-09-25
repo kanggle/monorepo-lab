@@ -31,6 +31,16 @@ public class AccountRepositoryImpl implements AccountRepository {
                 .map(AccountJpaEntity::toDomain);
     }
 
+    /**
+     * TASK-BE-602 — documented exception; see {@link AccountRepository#findByIdResolvingTenant}.
+     * A PK lookup: at most one row, whose own tenant the caller reads back.
+     */
+    @Override
+    public Optional<Account> findByIdResolvingTenant(String id) {
+        return jpaRepository.findById(id)
+                .map(AccountJpaEntity::toDomain);
+    }
+
     @Override
     public Optional<Account> findByEmail(TenantId tenantId, String email) {
         return jpaRepository.findByTenantIdAndEmail(tenantId.value(), email)

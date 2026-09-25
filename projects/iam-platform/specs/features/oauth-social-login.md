@@ -39,7 +39,11 @@
 6. `OAuthLoginUseCase.resolveBrowserLogin(command, tenantId)`:
    a. state 검증 → token+userinfo 교환 → email 검증
    b. `social_identities` 조회 / auto-link / auto-create(`/internal/accounts/social-signup`, ADR-036 born-unified mint)
-   c. **`SocialIdentityPersistStep`**(신규 transactional bean): `social_identity` upsert + 계정 상태 검사(LOCKED/DORMANT/DELETED 거부)만 수행. **JWT/디바이스 세션/refresh token/로그인 이벤트는 발급하지 않음.**
+   b'. **계정 상태 + 계정의 실제 테넌트 조회** — account-service `GET /internal/accounts/{id}/status-with-tenant`(TASK-BE-602). 테넌트를 보내지 않고 **돌려받는다**
+      ([auth-to-account.md](../contracts/http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant)). 404 = 규칙 미적용 → 진행, 조회 실패 = fail-closed.
+   c. **`SocialIdentityPersistStep`**(신규 transactional bean): `social_identity` upsert + 계정 상태 검사(LOCKED/DORMANT/DELETED 거부)만 수행. **JWT/디바이스 세션/refresh token 은 발급하지 않음.**
+   d. **로그인 이벤트**(TASK-BE-602) — b' 가 200 으로 답했을 때만 `auth.login.attempted` → `succeeded`(`loginMethod=OAUTH_<P>`) / `failed`(`ACCOUNT_*`).
+      `tenantId` = b' 가 돌려준 계정의 테넌트. 텔레메트리 — 실패해도 로그인 결과 불변. 규칙: [auth-events.md § 소셜 로그인 경로](../contracts/events/auth-events.md#소셜-로그인-경로-task-be-602).
 7. **tenant 귀속** — saved `/oauth2/authorize` 의 `client_id` → `RegisteredClientRepository.findByClientId` → `ClientSettings` 의 `custom.tenant_id`/`custom.tenant_type` (`SavedRequestTenantResolver`). saved request 부재 시 `fan-platform` 기본값.
 8. **SAS 세션 확립** — `UsernamePasswordAuthenticationToken(email, null, [ROLE_USER])` + `details = HashMap{tenant_id, tenant_type, account_id}`(반드시 `HashMap` — `JdbcOAuth2AuthorizationService` 의 `SecurityJackson2Modules` allowlist), `HttpSessionSecurityContextRepository` 로 세션 영속.
 9. saved `/oauth2/authorize` 로 redirect → SAS `authorization_code` → **SAS 표준 토큰** 발급.
@@ -54,6 +58,7 @@
 | `InvalidOAuthStateException` | `/login?error=invalid_state` |
 | `OAuthProviderException` | `/login?error=provider_error` |
 | `UnsupportedProviderException` | `/login?error=unsupported_provider` |
+| `AccountServiceUnavailableException` (상태 조회 실패 · `socialSignup` 실패 — TASK-BE-602) | `/login?error=temporarily_unavailable` («Sign-in is temporarily unavailable. Please try again in a moment.» — 계정 상태에 대해 아무것도 말하지 않는다). BE-602 이전에는 catch 가 없어 전역 `AuthExceptionHandler` 의 **503 JSON** 이 브라우저에 떴다 |
 
 ### tenant 귀속 규칙 (ADR-006 옵션 1)
 
@@ -125,8 +130,9 @@ provider로부터 받는 access_token, refresh_token은 **저장하지 않는다
    f. `SocialIdentityPersistStep` — `social_identities` row upsert + 계정 상태 검사
    g. **SAS 세션 확립** (JSESSIONID `SecurityContext`; session id 회전)
 6. saved `/oauth2/authorize` 재개 → SAS `authorization_code` → **표준 OIDC 토큰** 발급
-   (`POST /oauth2/token`). 커스텀 JWT · device session · refresh row · `auth.login.*` 이벤트는
-   이 경로에서 발생하지 않는다 — 그것들은 제거된 레거시 JSON 플로우의 꼬리였다.
+   (`POST /oauth2/token`). 커스텀 JWT · device session · refresh row 는
+   이 경로에서 발생하지 않는다 — 그것들은 제거된 레거시 JSON 플로우의 꼬리였다. `auth.login.*` 이벤트는
+   TASK-BE-602 부터 5.f 직후에 낸다(위 플로우 6.d).
 
 ### 소셜 로그인 (기존 사용자, 이미 연결)
 
@@ -151,7 +157,8 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - Naver는 id_token 미발급(Kakao와 동일 비-OIDC) → user-info API(`response` 래퍼)의 `id`/`email`/`name` 사용. `resultcode != "00"` → `PROVIDER_ERROR`
 - provider id_token의 `email` 필드가 없으면 로그인 거부 (이메일 필수)
 - 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED / DORMANT / DELETED → `/login?error=account_unavailable`). 규칙은 폼 로그인과 **같은 하나**(`AccountStatusRule`, TASK-BE-600)
-- 계정 상태 조회가 **실패**하면(5xx · 타임아웃 · circuit-open · 404 가 아닌 4xx · 읽을 수 없는 200) 소셜 로그인은 **거부된다(fail-closed)** — 소유자 결정, TASK-BE-600 AC-2. BE-063 이후 404 가 아닌 4xx · 읽을 수 없는 200 은 «조회 불가 → 상태 검사 생략» 으로 통과했다(fail-open). 404(계정 레코드 없음)는 실패가 아니므로 지금처럼 검사를 생략하고 진행한다 — 신규 가입 · 첫 소셜 로그인은 `socialSignup` 이 계정을 먼저 만든 뒤라 영향이 없다
+- 계정 상태는 **계정의 실제 테넌트**로 판정한다(TASK-BE-602 — account-service 가 id 로 행을 찾아 상태와 그 행의 테넌트를 함께 답한다). BE-602 이전에는 `fan-platform` 고정 조회라 BE-507 이후 스토어(`ecommerce`) 소셜 계정은 404 로 보여 **잠겨도 소셜로 들어왔다**. 신원 행 · 시작 client 의 테넌트는 BE-507 이전 계정에서 계정 행과 어긋나므로 출처로 쓰지 않는다(소유자 결정 AC-0)
+- 계정 상태 조회가 **실패**하면(5xx · 타임아웃 · circuit-open · 404 가 아닌 4xx · 읽을 수 없는 200 — `tenantId` 없는 200 포함) 소셜 로그인은 **거부된다(fail-closed)** → `/login?error=temporarily_unavailable` — 소유자 결정, TASK-BE-600 AC-2. BE-063 이후 404 가 아닌 4xx · 읽을 수 없는 200 은 «조회 불가 → 상태 검사 생략» 으로 통과했다(fail-open). 404(계정 레코드 없음)는 실패가 아니므로 지금처럼 검사를 생략하고 진행한다 — 신규 가입 · 첫 소셜 로그인은 `socialSignup` 이 계정을 먼저 만든 뒤라 영향이 없다
 - 소셜 로그인 성공 시 발급하는 토큰은 폼 로그인과 동일한 **SAS 표준 OIDC 토큰**이다 (TASK-BE-398 이전에는 커스텀 JWT 였다)
 - 하나의 계정에 여러 provider 연결 가능 (Google + Kakao 동시 사용)
 - 하나의 provider_user_id는 하나의 계정에만 연결 (unique constraint)
@@ -182,6 +189,7 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - HTTP: [auth-api.md](../contracts/http/auth-api.md) — `GET /oauth2/authorize`, `POST /oauth2/token`
   (레거시 `GET /api/auth/oauth/authorize` · `POST /api/auth/oauth/callback` 은 TASK-BE-398 제거 기록으로 남아 있다)
 - Internal: [auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md)
-- Events: [auth-events.md](../contracts/events/auth-events.md) `auth.login.succeeded` (loginMethod 필드).
-  **주의**: SAS 브라우저 소셜 플로우는 이 이벤트를 발행하지 않는다 — 발행하던 것은 제거된
-  레거시 커스텀-JWT 꼬리(`OAuthLoginTransactionalStep`)였다.
+- Events: [auth-events.md](../contracts/events/auth-events.md) `auth.login.attempted/failed/succeeded` (succeeded 의 `loginMethod` 필드).
+  TASK-BE-398 ~ TASK-BE-602 사이에는 SAS 브라우저 소셜 플로우가 이 이벤트를 발행하지 않았다(발행하던 것은 제거된
+  레거시 커스텀-JWT 꼬리 `OAuthLoginTransactionalStep`). BE-602 부터 다시 발행한다 — [§ 소셜 로그인 경로](../contracts/events/auth-events.md#소셜-로그인-경로-task-be-602).
+- Internal (TASK-BE-602): [auth-to-account.md § status-with-tenant](../contracts/http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant)

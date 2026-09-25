@@ -7,6 +7,7 @@ import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -373,6 +374,68 @@ public class AccountServiceClient implements AccountServicePort {
             }
             String returnedId = (String) body.getOrDefault("accountId", accountId);
             return Optional.of(new AccountStatusLookupResult(returnedId, statusText));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
+    /**
+     * TASK-BE-602: {@code GET /internal/accounts/{id}/status-with-tenant}. Same failure policy as
+     * {@link #getAccountStatus(String, String)} (TASK-BE-600) — only a 404 is an answer (empty);
+     * a non-404 4xx, a 200 missing {@code status} or {@code tenantId}, and every transport failure
+     * throw {@link AccountServiceUnavailableException}, so the social login fails closed.
+     */
+    @Override
+    public Optional<AccountStatusWithTenantLookupResult> getAccountStatusAndTenant(String accountId) {
+        try {
+            return callResilient(() -> doGetStatusWithTenant(accountId));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service status-with-tenant lookup returned client error {} — treating "
+                    + "as a failed lookup (fail-closed)", e.getStatusCode());
+            throw new AccountServiceUnavailableException(
+                    "Account service status-with-tenant lookup rejected: " + e.getStatusCode(), e);
+        } catch (RuntimeException e) {
+            log.error("Account service status-with-tenant lookup failed after retries: msg={} type={} "
+                            + "cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    private Optional<AccountStatusWithTenantLookupResult> doGetStatusWithTenant(String accountId) {
+        try {
+            // account-service returns { accountId, tenantId, status, statusChangedAt }.
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/accounts/{id}/status-with-tenant", accountId)
+                    // No X-Tenant-Id: the tenant is what this call asks for.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+
+            // A 200 we cannot read is a failed lookup, not "no account" — the caller fails closed.
+            // tenantId is checked as strictly as status: a missing tenant would otherwise force the
+            // caller back onto a guessed one, which is the defect TASK-BE-602 removes.
+            if (body == null) {
+                throw new IllegalStateException("account status-with-tenant response had no body");
+            }
+            if (!(body.get("status") instanceof String statusText) || statusText.isBlank()) {
+                throw new IllegalStateException("account status-with-tenant response had no status");
+            }
+            if (!(body.get("tenantId") instanceof String tenantText) || tenantText.isBlank()) {
+                throw new IllegalStateException("account status-with-tenant response had no tenantId");
+            }
+            String returnedId = (String) body.getOrDefault("accountId", accountId);
+            return Optional.of(new AccountStatusWithTenantLookupResult(returnedId, tenantText, statusText));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (HttpClientErrorException e) {

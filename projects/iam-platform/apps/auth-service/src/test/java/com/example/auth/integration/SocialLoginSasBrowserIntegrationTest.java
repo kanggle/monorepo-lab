@@ -147,13 +147,17 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
                                 { "accountId": "social-acc-1", "accountStatus": "ACTIVE", "newAccount": true }
                                 """)));
 
-        // account status → ACTIVE.
-        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/accounts/social-acc-1/status"))
+        // account status + the account's own tenant → ACTIVE in ecommerce. TASK-BE-602: the social
+        // path now asks /status-with-tenant (not the fan-platform-pinned /status). Without this stub
+        // the lookup would 404 → rule not applied → the happy path would still pass, hiding a
+        // wrong path; the stub makes the ACTIVE answer the one the flow actually reads.
+        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo(
+                        "/internal/accounts/social-acc-1/status-with-tenant"))
                 .willReturn(WireMock.aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                { "accountId": "social-acc-1", "status": "ACTIVE",
-                                  "statusChangedAt": "2026-01-01T00:00:00Z" }
+                                { "accountId": "social-acc-1", "tenantId": "ecommerce",
+                                  "status": "ACTIVE", "statusChangedAt": "2026-01-01T00:00:00Z" }
                                 """)));
     }
 
@@ -290,6 +294,14 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
                         + "AND provider_user_id='google-social-001' AND account_id='social-acc-1'",
                 Integer.class);
         assertThat(rows).isEqualTo(1);
+
+        // TASK-BE-602: the social status check asked for the account's own tenant (no tenant
+        // header sent) — and did not fall back to the fan-platform-pinned /status.
+        wireMock.verify(1, WireMock.getRequestedFor(WireMock.urlPathEqualTo(
+                        "/internal/accounts/social-acc-1/status-with-tenant"))
+                .withoutHeader("X-Tenant-Id"));
+        wireMock.verify(0, WireMock.getRequestedFor(WireMock.urlPathEqualTo(
+                "/internal/accounts/social-acc-1/status")));
 
         // 5. Resume /oauth2/authorize with the now-authenticated session → code.
         MvcResult resumedAuthorize = mockMvc.perform(get("/oauth2/authorize")

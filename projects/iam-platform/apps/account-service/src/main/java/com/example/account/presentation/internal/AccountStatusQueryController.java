@@ -4,6 +4,7 @@ import com.example.account.application.result.AccountStatusResult;
 import com.example.account.application.service.AccountStatusUseCase;
 import com.example.account.domain.tenant.TenantId;
 import com.example.account.presentation.dto.response.AccountStatusResponse;
+import com.example.account.presentation.dto.response.AccountStatusWithTenantResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,5 +41,23 @@ public class AccountStatusQueryController {
                 ? accountStatusUseCase.getStatus(accountId)
                 : accountStatusUseCase.getStatus(accountId, TenantId.fromHeaderOrDefault(tenantId));
         return ResponseEntity.ok(AccountStatusResponse.from(result));
+    }
+
+    /**
+     * {@code GET /internal/accounts/{accountId}/status-with-tenant} (TASK-BE-602).
+     *
+     * <p>Status plus the tenant the account row actually lives in. Deliberately takes no
+     * {@code X-Tenant-Id}: a caller that has the tenant uses {@code /status} above; this is for the
+     * social-login callback, which does not. Kept apart from {@code /status} rather than giving
+     * that endpoint a mode flag, because {@code /status}'s header-less meaning ("pin to
+     * fan-platform") is load-bearing for membership-service and admin-service and must not change.
+     *
+     * <p>404 {@code ACCOUNT_NOT_FOUND} when no tenant holds the id (via {@code GlobalExceptionHandler}).
+     */
+    @GetMapping("/{accountId}/status-with-tenant")
+    public ResponseEntity<AccountStatusWithTenantResponse> getStatusWithTenant(
+            @PathVariable String accountId) {
+        return ResponseEntity.ok(AccountStatusWithTenantResponse.from(
+                accountStatusUseCase.getStatusResolvingTenant(accountId)));
     }
 }

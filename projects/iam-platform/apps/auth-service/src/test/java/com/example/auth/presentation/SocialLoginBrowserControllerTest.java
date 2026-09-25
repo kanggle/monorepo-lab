@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.OAuthLoginUseCase;
 import com.example.auth.application.command.OAuthCallbackCommand;
 import com.example.auth.application.exception.AccountLockedException;
+import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
@@ -209,6 +210,20 @@ class SocialLoginBrowserControllerTest {
     @DisplayName("callback: provider error → /login?error=provider_error")
     void callback_providerError_redirectsError() {
         assertErrorMapping(new OAuthProviderException("boom"), "provider_error");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: 상태 조회 실패(fail-closed) → 로그인 화면의 일반 오류 /login?error=temporarily_unavailable (전역 핸들러 503 JSON 이 아니다)")
+    void callback_statusLookupUnavailable_redirectsToLoginError() {
+        assertErrorMapping(new AccountServiceUnavailableException("status-with-tenant rejected: 401"),
+                "temporarily_unavailable");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: socialSignup 실패도 같은 모양 → /login?error=temporarily_unavailable")
+    void callback_socialSignupUnavailable_redirectsToLoginError() {
+        assertErrorMapping(new AccountServiceUnavailableException("Account service social-signup failed"),
+                "temporarily_unavailable");
     }
 
     private void assertErrorMapping(RuntimeException thrown, String expectedError) {

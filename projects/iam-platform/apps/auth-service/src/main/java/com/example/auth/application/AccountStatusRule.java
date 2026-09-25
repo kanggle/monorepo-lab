@@ -3,6 +3,8 @@ package com.example.auth.application;
 import com.example.auth.application.exception.AccountLockedException;
 import com.example.auth.application.exception.AccountStatusException;
 
+import java.util.Set;
+
 /**
  * TASK-BE-600 — the ONE rule deciding whether an account's status allows it to sign in.
  *
@@ -35,6 +37,30 @@ public final class AccountStatusRule {
     public static final String REASON_DELETED = "ACCOUNT_DELETED";
     /** Not in the event enum — a rejection with this code emits no {@code failureReason}. */
     public static final String CODE_UNKNOWN = "ACCOUNT_STATUS_UNKNOWN";
+
+    /**
+     * The rejections that have a {@code failureReason} in the {@code auth.login.failed} contract.
+     * {@link #CODE_UNKNOWN} is deliberately absent — inventing an enum value would break the
+     * consumer. Shared by both login paths (TASK-BE-600 form, TASK-BE-602 social).
+     */
+    public static final Set<String> EVENT_FAILURE_REASONS =
+            Set.of(REASON_LOCKED, REASON_DORMANT, REASON_DELETED);
+
+    /**
+     * The {@code auth.login.failed.failureReason} for a rejection this rule threw, or {@code null}
+     * when the rejection has no value in the event contract (an unrecognised status).
+     */
+    public static String eventFailureReason(RuntimeException rejection) {
+        String code;
+        if (rejection instanceof AccountLockedException) {
+            code = REASON_LOCKED;
+        } else if (rejection instanceof AccountStatusException statusRejection) {
+            code = statusRejection.getErrorCode();
+        } else {
+            return null;
+        }
+        return EVENT_FAILURE_REASONS.contains(code) ? code : null;
+    }
 
     private AccountStatusRule() {
     }

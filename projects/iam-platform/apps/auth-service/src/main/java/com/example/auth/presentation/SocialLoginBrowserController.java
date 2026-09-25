@@ -3,6 +3,7 @@ package com.example.auth.presentation;
 import com.example.auth.application.OAuthLoginUseCase;
 import com.example.auth.application.command.OAuthCallbackCommand;
 import com.example.auth.application.exception.AccountLockedException;
+import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
@@ -147,6 +148,14 @@ public class SocialLoginBrowserController {
             return loginError("provider_error");
         } catch (UnsupportedProviderException e) {
             return loginError("unsupported_provider");
+        } catch (AccountServiceUnavailableException e) {
+            // TASK-BE-602 (BE-600 follow-up): the status lookup's fail-closed and a failed
+            // socialSignup both surface as this. Before, neither was caught here, so the user got
+            // the global handler's error instead of the login page. The page says only "try again"
+            // — nothing about the account, whose state we could not read.
+            log.warn("social login callback failed closed — account-service unavailable: {}",
+                    e.getMessage());
+            return loginError("temporarily_unavailable");
         }
 
         establishSession(login, resolution, request, response);

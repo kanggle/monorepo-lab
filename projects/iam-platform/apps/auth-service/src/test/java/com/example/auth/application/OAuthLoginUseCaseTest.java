@@ -11,7 +11,7 @@ import com.example.auth.application.port.OAuthClient;
 import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
 import com.example.auth.application.port.OAuthProviderConfigPort;
-import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.auth.domain.oauth.OAuthProvider;
@@ -90,6 +90,9 @@ class OAuthLoginUseCaseTest {
     @Mock private SocialIdentityRepository socialIdentityRepository;
     @Mock private SocialIdentityPersistStep socialIdentityPersistStep;
     @Mock private OAuthClient oAuthClient;
+    // TASK-BE-602: the use case now records login events. Its behaviour is asserted in
+    // OAuthLoginUseCaseSocialTenantTest; here it only has to exist.
+    @Mock private LoginEventRecorder loginEventRecorder;
 
     @InjectMocks
     private OAuthLoginUseCase oAuthLoginUseCase;
@@ -138,8 +141,8 @@ class OAuthLoginUseCaseTest {
         when(accountServicePort.socialSignup(
                 "user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID))
                 .thenReturn(new SocialSignupResult("acc-123", "ACTIVE", true));
-        when(accountServicePort.getAccountStatus("acc-123"))
-                .thenReturn(Optional.of(new AccountStatusLookupResult("acc-123", "ACTIVE")));
+        when(accountServicePort.getAccountStatusAndTenant("acc-123"))
+                .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-123", TENANT_ID, "ACTIVE")));
 
         // when
         BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
@@ -149,7 +152,7 @@ class OAuthLoginUseCaseTest {
         order.verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         order.verify(accountServicePort).socialSignup(
                 "user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID);
-        order.verify(accountServicePort).getAccountStatus("acc-123");
+        order.verify(accountServicePort).getAccountStatusAndTenant("acc-123");
         order.verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
                 any(), any(), anyString(), anyString(), any());
 
@@ -177,8 +180,8 @@ class OAuthLoginUseCaseTest {
                 "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
         when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
-        when(accountServicePort.getAccountStatus("acc-existing"))
-                .thenReturn(Optional.of(new AccountStatusLookupResult("acc-existing", "ACTIVE")));
+        when(accountServicePort.getAccountStatusAndTenant("acc-existing"))
+                .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-existing", TENANT_ID, "ACTIVE")));
 
         BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
@@ -188,7 +191,7 @@ class OAuthLoginUseCaseTest {
         // Ordering: provider HTTP → getAccountStatus → persist step
         InOrder order = inOrder(oAuthClient, accountServicePort, socialIdentityPersistStep);
         order.verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
-        order.verify(accountServicePort).getAccountStatus("acc-existing");
+        order.verify(accountServicePort).getAccountStatusAndTenant("acc-existing");
         order.verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
                 any(), any(), anyString(), anyString(), any());
 
@@ -207,7 +210,7 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
-        when(accountServicePort.getAccountStatus("acc-new")).thenReturn(Optional.empty());
+        when(accountServicePort.getAccountStatusAndTenant("acc-new")).thenReturn(Optional.empty());
 
         oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
@@ -234,7 +237,7 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.of(existing));
         AccountServiceUnavailableException outage =
                 new AccountServiceUnavailableException("status lookup rejected: 401");
-        when(accountServicePort.getAccountStatus("acc-existing")).thenThrow(outage);
+        when(accountServicePort.getAccountStatusAndTenant("acc-existing")).thenThrow(outage);
 
         assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
                 .isSameAs(outage);
@@ -254,8 +257,9 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
-        // A new ecommerce account read through the fan-platform-pinned status lookup: 404.
-        when(accountServicePort.getAccountStatus("acc-new")).thenReturn(Optional.empty());
+        // account-service answers 404 (no account row in any tenant — TASK-BE-602 lookup). Before
+        // BE-602 this was how a new ecommerce account looked through the fan-platform-pinned lookup.
+        when(accountServicePort.getAccountStatusAndTenant("acc-new")).thenReturn(Optional.empty());
 
         BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
 
@@ -306,7 +310,7 @@ class OAuthLoginUseCaseTest {
                 .isSameAs(providerFailure);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
+        verify(accountServicePort, never()).getAccountStatusAndTenant(anyString());
         verify(socialIdentityPersistStep, never())
                 .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }
@@ -324,7 +328,7 @@ class OAuthLoginUseCaseTest {
                 .isInstanceOf(OAuthEmailRequiredException.class);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
+        verify(accountServicePort, never()).getAccountStatusAndTenant(anyString());
         verify(socialIdentityPersistStep, never())
                 .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }
@@ -340,8 +344,8 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
-        when(accountServicePort.getAccountStatus("acc-1"))
-                .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));
+        when(accountServicePort.getAccountStatusAndTenant("acc-1"))
+                .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-1", TENANT_ID, "ACTIVE")));
         RuntimeException dbFailure = new RuntimeException("db down");
         doThrow(dbFailure).when(socialIdentityPersistStep)
                 .persistIdentityAndCheckStatus(any(), any(), anyString(), anyString(), any());
@@ -352,7 +356,7 @@ class OAuthLoginUseCaseTest {
         // HTTP fetches happened exactly once; no retry after txn failure
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID);
-        verify(accountServicePort).getAccountStatus("acc-1");
+        verify(accountServicePort).getAccountStatusAndTenant("acc-1");
     }
 
     @Test
@@ -452,8 +456,8 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
-        when(accountServicePort.getAccountStatus("acc-1"))
-                .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", "ACTIVE")));
+        when(accountServicePort.getAccountStatusAndTenant("acc-1"))
+                .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-1", TENANT_ID, "ACTIVE")));
 
         OAuthCallbackCommand blankRedirect = new OAuthCallbackCommand(
                 "GOOGLE", CODE, STATE, "", CTX);
@@ -465,7 +469,7 @@ class OAuthLoginUseCaseTest {
     private void verifyNothingDownstreamRan() {
         verify(oAuthClientProvider, never()).getClient(any());
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
-        verify(accountServicePort, never()).getAccountStatus(anyString());
+        verify(accountServicePort, never()).getAccountStatusAndTenant(anyString());
         verify(socialIdentityPersistStep, never())
                 .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
     }

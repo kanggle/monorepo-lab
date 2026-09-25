@@ -58,6 +58,21 @@ class AccountStatusRuleTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-602: eventFailureReason — 계약 enum 값만 돌려주고, 계약 밖 · 무관한 예외는 null")
+    void eventFailureReason_onlyContractValues() {
+        org.assertj.core.api.Assertions.assertThat(
+                AccountStatusRule.eventFailureReason(new AccountLockedException())).isEqualTo("ACCOUNT_LOCKED");
+        org.assertj.core.api.Assertions.assertThat(AccountStatusRule.eventFailureReason(
+                new AccountStatusException("DORMANT", "ACCOUNT_DORMANT"))).isEqualTo("ACCOUNT_DORMANT");
+        org.assertj.core.api.Assertions.assertThat(AccountStatusRule.eventFailureReason(
+                new AccountStatusException("DELETED", "ACCOUNT_DELETED"))).isEqualTo("ACCOUNT_DELETED");
+        org.assertj.core.api.Assertions.assertThat(AccountStatusRule.eventFailureReason(
+                new AccountStatusException("X", AccountStatusRule.CODE_UNKNOWN))).isNull();
+        org.assertj.core.api.Assertions.assertThat(
+                AccountStatusRule.eventFailureReason(new IllegalStateException("db"))).isNull();
+    }
+
+    @Test
     @DisplayName("소셜 경로(SocialLoginSteps)는 같은 규칙을 쓴다 — LOCKED 를 똑같이 거부")
     void socialPath_usesTheSameRule() {
         SocialLoginSteps steps = new SocialLoginSteps(mock(SocialIdentityRepository.class));
