@@ -28,14 +28,21 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Legacy custom-JWT login use case.
+ *
+ * <p><b>TASK-BE-599 note.</b> This class has had no caller since TASK-BE-398 removed
+ * {@code POST /api/auth/login}. The live password-login path is the SAS form login
+ * ({@code CredentialAuthenticationProvider}), which now emits the {@code auth.login.*} events
+ * through {@link LoginEventRecorder} — deliberately WITHOUT this class's rate-limit counter
+ * (TASK-BE-599 AC-0: ⓑ declined) and WITHOUT its device-session registration /
+ * {@code auth.session.created} (ⓒ withdrawn — the browser form sends no device fingerprint).
+ * This class is kept, not deleted; whether to delete or fold it is a separate decision.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -195,15 +202,8 @@ public class LoginUseCase {
      * payload's {@code deviceFingerprintHash}.
      */
     static String fingerprintHash(String fingerprint) {
-        if (fingerprint == null || fingerprint.isBlank()) {
-            return null;
-        }
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(md.digest(fingerprint.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        // TASK-BE-599: single algorithm shared with the form-login path (LoginEventRecorder).
+        return LoginHashes.fingerprintHash(fingerprint);
     }
 
     /**
@@ -247,12 +247,7 @@ public class LoginUseCase {
     }
 
     static String hashEmail(String email) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(email.toLowerCase().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash).substring(0, 10);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        // TASK-BE-599: single algorithm shared with the form-login path (LoginEventRecorder).
+        return LoginHashes.emailHash(email);
     }
 }

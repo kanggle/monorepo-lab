@@ -26,6 +26,41 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 ---
 
+## 로그인 이벤트의 발행 경로 (TASK-BE-599)
+
+`auth.login.attempted` · `auth.login.failed` · `auth.login.succeeded` 의
+**살아 있는 발행자는 SAS 브라우저 폼 로그인 하나**다 — `POST /login` →
+`CredentialAuthenticationProvider` → `LoginEventRecorder` (→ `OutboxAuthEventPublisher`).
+`LoginUseCase` 도 같은 이벤트를 내는 코드를 갖고 있지만 TASK-BE-398 이후 호출자가 없다.
+(2026-08-01 BE-398 ~ BE-599 머지 전까지는 이 세 이벤트의 발행자가 **하나도 없었다**.)
+
+🔴 **`auth.session.created` 는 현재 발행자가 없다.** 폼 로그인 경로는 디바이스 세션을 등록하지
+않는다(소유자 결정, BE-599 AC-0 ⓒ 철회 — 브라우저 폼이 기기 fingerprint 를 보내지 않아
+[device-session.md D3](../../services/auth-service/device-session.md) 에 따라 매 로그인이 «새 기기» 가
+되기 때문). 이 이벤트를 내는 코드는 호출자 없는 `LoginUseCase` 에만 있다. 되살리는 조건 = 안정적인
+기기 식별 쿠키가 생길 때.
+
+이 경로의 규칙 — 스키마는 아래 각 절 그대로이고, 이 절은 «이 발행자가 필드를 어떻게 채우는가» 다:
+
+| 항목 | 폼 로그인 경로의 값 |
+|---|---|
+| 발행 순서 | 자격 조회 → `attempted` → (비밀번호 불일치) `failed` / (성공) `succeeded`. 디바이스 세션 등록 · `session.created` 없음 |
+| `accountId` (attempted/failed) | 자격을 **찾았으면 채운다** — 비밀번호 불일치도 포함(VelocityRule 은 `accountId` 없는 실패를 세지 않는다). 없는 이메일 · 테넌트 모호 → `null` |
+| `tenantId` | 자격을 찾았으면 **그 계정의 테넌트**(크로스-테넌트 폴백으로 찾았어도 마찬가지 — 시작 client 의 테넌트가 아니다). 못 찾았으면 시작 OIDC client 의 테넌트, 그것도 없으면 `fan-platform` |
+| `failureReason` | `CREDENTIALS_INVALID`(없는 이메일 · 비밀번호 불일치) 또는 `LOGIN_TENANT_AMBIGUOUS`. **`RATE_LIMITED` 는 이 경로에서 나오지 않는다** — rate-limit 을 적용하지 않기 때문(소유자 결정, BE-599 AC-0 ⓑ 미채택: 공유 데모 계정이 N회 실패 뒤 막히면 안 된다). `ACCOUNT_LOCKED/DORMANT/DELETED` 도 나오지 않는다 — 이 경로는 계정 상태를 조회하지 않는다 |
+| `failCount` | 항상 `0` — auth-service 측 실패 카운터가 없다(같은 이유). security-service VelocityRule 은 이 필드를 읽지 않고 자체 카운터로 센다 |
+| `sessionJti` (succeeded) | `null` — 비밀번호 검증 시점에는 refresh token 이 아직 없다(SAS 가 이후 `/oauth2/token` 에서 발급) |
+| `deviceId` / `isNewDevice` (succeeded) | 둘 다 `null` — 디바이스 세션을 등록하지 않으므로. 두 필드는 아래 `auth.login.succeeded` 절에서 **optional·additive** 이고 `null` 은 «알 수 없음(legacy)» 으로 정의돼 있어 계약에 맞다. 소비자(DeviceChangeRule)는 그때 `deviceFingerprint` 폴백으로 가는데, 브라우저 폼은 `X-Device-Fingerprint` 를 보내지 않아 `deviceFingerprint` 도 `null` 이므로 **규칙이 발화하지 않는다**(`DeviceChangeRule.java` 의 `fp == null \|\| fp.isBlank()` → NONE, 테스트 `DeviceChangeRuleTest.formLoginShape_noDeviceSignal_doesNotFire`) |
+| `ipMasked` · `userAgentFamily` · `geoCountry` | 다른 auth-service 진입점과 같은 `SessionContexts.fromRequest` — IP 는 `request.getRemoteAddr()`. 코드는 `X-Forwarded-For` 를 직접 읽지 않는다. 🔴 `application.yml` 에는 `server.forward-headers-strategy` 가 **없어서** 프록시 뒤라면 프록시의 주소가 마스킹된다. 데모 overlay(`infra/demo/iam-traefik.override.yml`)는 `SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK` 를 켜므로, 거기서는 Spring `ForwardedHeaderFilter` 가 `X-Forwarded-For` 첫 값을 `getRemoteAddr()` 로 돌려준다(spring-web 6.2.1 바이트코드로 확인 — 실제 값은 라이브 창에서 판정, BE-599 AC-4). `geoCountry` 는 `X-Geo-Country` 헤더, 없으면 `XX` |
+| 실패 격리 | 이벤트 쓰기가 실패해도 **로그인 결과는 바뀌지 않는다**(텔레메트리) |
+| 입력이 비어 있음 | 이메일/비밀번호 공백 제출은 로그인 시도로 치지 않는다 — 이벤트 없음 |
+
+🔴 **소셜 로그인(`GET /login/oauth/{provider}/callback`, `SocialLoginBrowserController`)은 아직
+어떤 로그인 이벤트도 내지 않는다.** 이 계약의 `loginMethod = OAUTH_*` 값은 현재 발행자가 없다.
+(TASK-BE-599 후속 — 태스크 파일 참조)
+
+---
+
 ## auth.login.attempted
 
 모든 로그인 시도에 발행 (성공·실패 불문). security-service가 login_history에 기록.
@@ -83,6 +118,8 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 - `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
 - `failureReason`: 이 enum의 `CREDENTIALS_INVALID` 값은 **HTTP 응답 code와 별개 계약**이다. 자격 증명 실패의 HTTP code는 `INVALID_CREDENTIALS`로 통일되었으나(TASK-MONO-246, platform-common canonical), 본 `failureReason` enum은 security-service가 소비하는 독립 Kafka 계약이므로 `CREDENTIALS_INVALID`를 유지한다. **두 문자열을 통일하지 말 것** — 동일하게 보여도 다른 네임스페이스다(HTTP 응답 vs 이벤트 enum).
 
+- (TASK-BE-599) 폼 로그인 경로에서 `failureReason` 은 `CREDENTIALS_INVALID` · `LOGIN_TENANT_AMBIGUOUS` 뿐이고 `failCount` 는 항상 `0` 이다(rate-limit 미적용 — 위 «발행 경로» 절).
+
 **Consumers**: security-service (VelocityRule 평가)
 
 ---
@@ -117,7 +154,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 - 두 필드 모두 **optional·additive**. 기존 consumer는 필드를 무시해도 정상 동작 (forward-compatible). 소비자는 unknown-field-tolerant 파싱을 유지해야 한다.
 
 **필드 노트** (OAuth Social Login):
-- `loginMethod`: 로그인 방식을 나타내는 optional enum 필드. `EMAIL_PASSWORD | OAUTH_GOOGLE | OAUTH_KAKAO | OAUTH_MICROSOFT`. 필드 생략 또는 `null`은 `EMAIL_PASSWORD`로 간주 (backward-compatible). 소셜 로그인 시 auth-service가 provider에 맞는 값을 설정한다.
+- `loginMethod`: 로그인 방식을 나타내는 optional enum 필드. `EMAIL_PASSWORD | OAUTH_GOOGLE | OAUTH_KAKAO | OAUTH_MICROSOFT`. 필드 생략 또는 `null`은 `EMAIL_PASSWORD`로 간주 (backward-compatible). 소셜 로그인 시 auth-service가 provider에 맞는 값을 설정한다. 🔴 (TASK-BE-599) 현재 소셜 로그인 경로는 이 이벤트를 발행하지 않으므로 실제로 관측되는 값은 필드 생략(=`EMAIL_PASSWORD`, 폼 로그인)뿐이다.
+
+**필드 노트** (TASK-BE-599 — 폼 로그인 경로): `sessionJti` · `deviceId` · `isNewDevice` 가 모두 `null` 이다(디바이스 세션 미등록 — 위 «로그인 이벤트의 발행 경로» 절). `isNewDevice=null` 은 이 절의 정의상 «알 수 없음» 이고, fingerprint 도 없어 DeviceChangeRule 은 발화하지 않는다.
 - 이 필드는 **additive**. 기존 consumer는 필드를 무시해도 정상 동작 (forward-compatible).
 
 **Consumers**: security-service (GeoAnomalyRule, DeviceChangeRule 평가, login_history 기록). DeviceChangeRule은 `isNewDevice`가 제공되면 이를 authoritative signal로 사용하고, 없으면 `deviceFingerprint` 기반 known-device 비교로 fallback한다.
@@ -231,8 +270,9 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
 **필드 노트**:
 - `evictedDeviceIds`: concurrent-session policy에 의해 이 로그인과 **동일 트랜잭션**에서 eviction된 이전 device들의 `device_id` 목록. 없으면 빈 배열. 각 evicted device는 별도로 `auth.session.revoked` 이벤트도 발행된다 (reason=`EVICTED_BY_LIMIT`)
 - fingerprint 원문은 발행하지 않음. 해시만.
+- 🔴 (TASK-BE-599) **현재 발행자 없음.** 이 이벤트를 내는 코드는 호출자 없는 `LoginUseCase`(BE-398 이후)에만 있고, 살아 있는 로그인 경로(SAS 폼 로그인)는 디바이스 세션을 등록하지 않으므로 이 이벤트를 내지 않는다(소유자 결정 AC-0 ⓒ 철회). 되살리는 조건 = 안정적인 기기 식별 쿠키가 생길 때.
 
-**Consumers**: security-service (DeviceChangeRule 입력, login_history 내 device 컬럼 정합성)
+**Consumers**: (현재 없음 — 미구현). 설계 의도는 security-service 가 DeviceChangeRule 입력 · login_history device 컬럼 정합성에 쓰는 것이나, **security-service 에 이 토픽의 `@KafkaListener` 는 없다**(TASK-BE-599 확인 2026-09-25: 리스너는 `auth.login.attempted/failed/succeeded` · `auth.token.refreshed/reuse.detected` 뿐). DeviceChangeRule 은 이 이벤트가 아니라 `auth.login.succeeded` 의 `isNewDevice`/`deviceId` 로 판정한다. 토픽 자체는 relay 매핑과 e2e `kafka-init` 목록에 있지만, 현재는 발행자도 소비자도 없다(위 필드 노트).
 
 ---
 

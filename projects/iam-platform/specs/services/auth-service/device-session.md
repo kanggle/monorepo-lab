@@ -53,6 +53,8 @@ fingerprint가 null·빈 문자열·resolve 실패인 경우:
 
 **원자성**: 1~3의 전체 흐름은 단일 DB 트랜잭션. 중간에 실패하면 **신규 device_session 생성도 롤백**되고 로그인은 `500 INTERNAL` 또는 재시도 유도. 부분 eviction 상태는 허용하지 않는다 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T3).
 
+**SAS 폼 로그인 경로 (TASK-BE-599)**: `POST /login`(`CredentialAuthenticationProvider`)은 위 1~3을 **수행하지 않는다** — device_session 을 등록하지 않고 `auth.session.created` 도 내지 않는다(소유자 결정, TASK-BE-599 AC-0 ⓒ 철회). 이유: 브라우저 폼은 `X-Device-Fingerprint` 를 보내지 않으므로 D3 에 따라 매 로그인이 신규 device_session(`isNewDevice=true`)이 되어, 새 기기 신호가 상수가 되고 행만 쌓인다. 되살리는 조건 = 안정적인 기기 식별 쿠키가 생길 때. 현재 이 문서의 로그인 시점 등록(1~3)을 구현한 코드는 호출자 없는 `LoginUseCase` 뿐이다(TASK-BE-398 이후).
+
 ### D5. refresh_tokens ↔ device_sessions 매핑
 
 - `refresh_tokens.device_id` 컬럼(`VARCHAR(36)`, nullable during migration window)은 `device_sessions.device_id`를 **논리 참조**한다 (서비스 내 참조이므로 FK는 선택적; 실 배포에서는 FK 추가 권장).

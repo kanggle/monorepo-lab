@@ -268,7 +268,23 @@ services:
 
   security-service:
     restart: unless-stopped
-    environment: *iam-oidc
+    environment:
+      <<: *iam-oidc
+      # -----------------------------------------------------------------------
+      # VELOCITY 자동 잠금 — 데모에서만 사실상 끈다 (TASK-BE-599, 소유자 결정 2026-09-25)
+      # -----------------------------------------------------------------------
+      # BE-599 부터 폼 로그인이 `auth.login.failed` 를 계정 id 와 함께 내므로
+      # VelocityRule 이 실제로 센다. 운영 기본값(security-service application.yml
+      # `DETECT_VELOCITY_THRESHOLD:10`, 창 3600s)이면 한 계정에 1시간 안에 비밀번호
+      # 오류 10번 → 점수 80 = AUTO_LOCK → 계정 LOCKED 다.
+      # 데모 시드 계정은 방문자가 **공유**한다 — 한 방문자의 오타가 다음 방문자를
+      # 막는 공유 계정 DoS 다. 폼 로그인 rate-limit(ⓑ)를 기각한 것과 **같은 이유**로
+      # 데모에서만 임계를 사실상 도달 불가능하게 둔다(int 범위 안의 큰 값 — 0 이하는
+      # DetectionThresholds 가 기동 시 거부한다).
+      # 🔴 운영 기본값은 불변이고, nightly/CI 가 쓰는 docker-compose.e2e.yml 에는
+      #   넣지 않는다 — 이것은 데모 전용 완화다. 이벤트·login_history 기록과
+      #   다른 규칙(GEO 등)은 그대로 돈다; VELOCITY 만 발화하지 않는다.
+      DETECT_VELOCITY_THRESHOLD: "1000000"
     networks:
       iam-e2e: null
       traefik-net:
