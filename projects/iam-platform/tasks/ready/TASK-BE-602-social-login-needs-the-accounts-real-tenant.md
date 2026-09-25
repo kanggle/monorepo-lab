@@ -62,7 +62,31 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — ⚪ 셋 재측 → 테넌트 출처 후보 표(정확성 · BE-507 이전 계정 · 비용) → 🔴 **소유자 결정**.
+- [x] **AC-0** — ⚪ 셋 재측 → 테넌트 출처 후보 표(정확성 · BE-507 이전 계정 · 비용) → 🔴 **소유자 결정**.
+  🟢 **닫힘 (2026-09-25 UTC · 저장소만)** — 결정 = **account-service 가 답한다**(아래 표 ①).
+
+  | 후보 | BE-507 이후 계정 | BE-507 이전 계정 | 비용 | 판정 |
+  |---|---|---|---|---|
+  | ① **account-service 가 accountId 로 (상태, 테넌트) 를 답한다** (신규 내부 조회) | ✅ 실제 `accounts` 행 | ✅ 실제 `accounts` 행 | 소셜의 기존 상태 조회 1회를 **대체**(호출 수 불변) · 내부 계약 추가 | 🟢 **선택** |
+  | ② 신원 행 `social_identities.tenant_id` | ✅ (시작 client 테넌트 = 계정 테넌트) | 🔴 **틀림** — BE-507 이전에도 신원 행은 시작 client 테넌트로 찍혔고(`OAuthLoginUseCase` 의 `resolveBrowserLogin(…, tenantId)` 가 신원 행에 귀속), 계정 생성 호출만 그 값을 버려 계정=`fan-platform` ⇒ 스토어 소셜 계정은 신원=`ecommerce` · 계정=`fan-platform` 로 **어긋난다**(BE-507 커밋 `b1658cede` 메시지: «이미 들고 있던 tenantId 를 socialSignup 에 넘긴다») | 무료 | 기각 |
+  | ③ 신원 행 → 404 면 `fan-platform` 재조회 | ✅ | ✅ (단 «BE-507 이전은 전부 fan-platform» 불변식에 기댐) | 올드 계정 +1 호출 | 기각 — 불변식이 깨지면 조용히 틀림 |
+  | ④ 자격 행 `credentials.tenant_id` | ❌ 소셜 전용 계정엔 행이 없다(`SocialSignupUseCase` 가 만들지 않음) | ❌ | — | 기각 |
+  | ⑤ 시작 client 테넌트 | ✅ | 🔴 틀림(위 ② 와 같은 어긋남) | 무료 | 기각(Failure Scenario 1) |
+  | ⑥ 데이터 소급 수정 | — | — | 운영 데이터 재배정 | 기각 — BE-507 이 의도적으로 피한 범위 |
+
+  **실측 근거 (코드·마이그레이션)**
+  - `social_identities.tenant_id` 는 V0007(BE-229)에서 추가, 유니크 키 `(tenant_id, provider, provider_user_id)` — **테넌트별**. 그러나 조회
+    `SocialIdentityJpaRepository.findByProviderAndProviderUserId` 는 테넌트 인자 없이 단수 `Optional` ⇒ 같은 신원이 두 테넌트에 있으면
+    `IncorrectResultSizeDataAccessException`. ⚪ 실제로 도달 가능한지는 미측정 — AC-1 에서 한 줄로 판정하고, 가능하면 별도 결함으로.
+  - account-service `AccountRepository` 규칙 «`findById(id)` without tenant is forbidden» — ① 은 **테넌트를 입력으로 받지 않고 출력으로 돌려주는**
+    조회라 이 규칙의 **문서화된 예외**가 된다(내부 전용 · 응답에 테넌트 포함). 참고: `GET /internal/accounts/{id}`(`AccountSearchController`)는
+    이미 테넌트 없이 PK 로 읽지만 응답에 `tenantId` 가 없다 — 확장 후보.
+  - account-service 에 «accountId → 테넌트» 를 돌려주는 엔드포인트는 **현재 없다**.
+
+  🔴 **범위에 추가 (같은 컨트롤러 · BE-600 후속)** — `SocialLoginBrowserController` 의 catch 목록에 `AccountServiceUnavailableException` 이 없다
+  ⇒ BE-600 이 소셜에 넣은 fail-closed 가 **로그인 오류 화면이 아니라 전역 핸들러(500 가능)** 로 떨어질 수 있다(⚪ 응답 미추적). `socialSignup`
+  실패도 같은 모양. AC-1 에서 «조회 실패 → 사용자에게는 일반 로그인 오류» 를 단언하라.
+  🔵 소셜 실패 분기에서 `accountId`·`emailHash` 를 둘 다 아는 곳은 **마지막 두 단계**(상태 조회 실패 · 비ACTIVE)뿐 — AC-2 이벤트 설계의 입력.
 - [ ] **AC-1** — 상태 조회에 실제 테넌트 전달 · 단위 테스트: 스토어 소셜 계정 LOCKED → 거부 · 신규 소셜 가입(404) → 통과 · 조회 실패 → fail-closed(BE-600 규칙 유지).
 - [ ] **AC-2** — 소셜 로그인 이벤트 발행 — 🔴 계약에 없는 값이 필요하면 **계약부터**(`loginMethod`, `emailHash` 선택화 여부).
 - [ ] **AC-3** — 🔴 결과로 판정: 스토어 테넌트 일회용 소셜 계정을 잠그고 소셜 로그인 → 거부 · 대조군(잠그기 전 성공). 소셜 공급자 없이 재현 가능한지부터(e2e 스텁).
