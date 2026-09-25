@@ -4,7 +4,7 @@ TASK-MONO-734
 
 # Status
 
-in-progress — 1단계(워크플로 · 목록 · 스크립트) 머지 뒤 실행 → 소유자 Public 전환 → 2단계(compose 전환)
+review
 
 # Title
 
@@ -55,14 +55,14 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 compose 의 두 `image:` 참조를 읽어 목록에 **복사**한다(digest 64자 전체). BE-598 이후 바뀌었으면 바뀐 값으로.
-- [ ] **AC-1** — 워크플로 1회 실행 로그에 두 이미지 각각 «원본 digest == 복사본 digest» 가 찍히고 run 이 success.
+- [x] **AC-0** — 착수 시 compose 의 두 `image:` 참조를 읽어 목록에 **복사**한다(digest 64자 전체). BE-598 이후 바뀌었으면 바뀐 값으로.
+- [x] **AC-1** — 워크플로 1회 실행 로그에 두 이미지 각각 «원본 digest == 복사본 digest» 가 찍히고 run 이 success.
       🔴 digest 가 다르면 실패해야 한다 — bite: 목록의 기대 digest 한 글자를 바꿔 로컬에서 스크립트를 돌리면 rc≠0(또는 워크플로 실패).
-- [ ] **AC-2** — 🔴 **소유자 수동 단계**: 두 GHCR 패키지 Public. 판정 = 토큰 없이 `https://ghcr.io/token?scope=repository:kanggle/<name>:pull`
+- [x] **AC-2** — 🔴 **소유자 수동 단계**: 두 GHCR 패키지 Public. 판정 = 토큰 없이 `https://ghcr.io/token?scope=repository:kanggle/<name>:pull`
       로 받은 익명 토큰으로 manifest HEAD 200(두 개 다). 이 판정 전에는 AC-3 에 들어가지 않는다.
-- [ ] **AC-3** — ecommerce compose 두 `image:` 를 GHCR 참조로 바꾸고(digest 동일), 주석에 BE-591 → BE-598 → 734 의 이력을 잇는다.
+- [x] **AC-3** — ecommerce compose 두 `image:` 를 GHCR 참조로 바꾸고(digest 동일), 주석에 BE-591 → BE-598 → 734 의 이력을 잇는다.
       `infra/demo/verify-demo-wrapper.sh` 의 (h) 칸이 두 참조를 **확인**했는가(skip 이 아니라) — CI `Demo wrapper smoke (infra/demo)` 로 본다.
-- [ ] **AC-4** — 🔴 재굽기 표면 기록: packer 가 compose 이미지를 pull 하므로 다음 굽기부터 GHCR 에서 가져온다. 이미 구운 AMI 는 옛 참조를
+- [x] **AC-4** — 🔴 재굽기 표면 기록: packer 가 compose 이미지를 pull 하므로 다음 굽기부터 GHCR 에서 가져온다. 이미 구운 AMI 는 옛 참조를
       들고 있다 — `TASK-MONO-672` 재굽기 목록에 한 줄(재굽기 필요 여부 = 아니오, 바이트 같음 · 다음 굽기에 자연 반영).
 
 # Related Specs
@@ -117,4 +117,31 @@ monorepo
 | `--visibility` 대조군(음성) | 🟢 미러 전이라 두 대상 **HTTP 404** · `--require-public` rc=1 |
 | `--visibility` 대조군(양성) | 🟢 공개 이미지 `ghcr.io/github/super-linter:latest` → **HEAD 200** · `--require-public` rc=0 ⇒ 판정기가 양방향으로 문다 |
 
-⏳ **남은 것**: AC-1 실제 run(머지 뒤 dispatch) · AC-2 소유자 Public 전환 → 익명 200 · AC-3 compose 전환 · AC-4 재굽기 목록 한 줄.
+⏳ **남은 것**(1단계 시점): AC-1 실제 run(머지 뒤 dispatch) · AC-2 소유자 Public 전환 → 익명 200 · AC-3 compose 전환 · AC-4 재굽기 목록 한 줄.
+
+1단계 PR #4015 → squash `807774652`(CI 69건 실패 0).
+
+## 실행 (2026-09-25T05:55Z) — AC-1 · AC-2
+
+- `gh workflow run mirror-images.yml --ref main` → run **`36100595693` success**(head `807774652`). 로그 요지:
+  - `self-test OK: match → rc=0 · changed digest → rc≠0 ('digest changed') · unpinned source → rc≠0` (러너에서도 bite)
+  - `✓ digest preserved: sha256:faf554135d50…6f6a` (minio) · `✓ digest preserved: sha256:c3e82110529b…193c` (minio-client)
+    ⇒ 멀티아치 인덱스가 **바이트 그대로** 옮겨졌다(재작성됐다면 digest 가 달랐을 것).
+  - `✓ public (anonymous manifest HEAD 200)` × 2
+- 🔵 **AC-2 의 소유자 수동 단계는 필요 없었다** — 기안은 «첫 게시물은 비공개가 기본» 을 전제했지만, 공개 저장소의 워크플로가
+  `GITHUB_TOKEN` 으로 올린 패키지는 **저장소 가시성을 물려받아 처음부터 공개**였다. 전제가 틀렸음을 러너 한 곳의 판정으로 믿지 않고
+  **이 호스트에서 따로** `--require-public` → 200 × 2 · rc=0 으로 확인했다. (다음에 미러를 추가할 때도 같으리라는 추론은 하지 않는다 —
+  같은 확인을 매번 한다. 워크플로 마지막 스텝이 그것을 보고한다.)
+
+## 2단계 — AC-3 · AC-4
+
+| 파일 | 변경 |
+|---|---|
+| ecommerce `docker-compose.yml` § `minio` · `minio-init` | `image:` → `ghcr.io/kanggle/mirror-minio…@sha256:faf5…` · `…/mirror-minio-client…@sha256:c3e8…` + 이력 주석(BE-591 → BE-598 → 734, «원본이 사라지면 유일본 — 지우지 마라») |
+| 🔴 ecommerce `k8s/base/storage-minio.yaml` (둘) | **compose 밖의 형제** — 저장소 전체 `bitnamilegacy` grep 으로 찾았다. 안 고쳤으면 k8s 판만 옛 출처에 남았다 |
+| `infra/mirror/images.txt` 주석 | 원본은 출처 기록으로 남는다는 한 줄 |
+| `TASK-MONO-672` § 재굽기 준비 표 아래 | AC-4 — **재굽기 불필요**(같은 바이트) · 다음 굽기의 GHCR pull 은 그 굽기가 처음 잰다 |
+
+🔵 **기계 대조**: compose 2 + k8s 2 참조의 digest 가 목록의 원본 digest 와 전부 일치(`uniq -c` = 각 2) · (h) 칸과 같은 방식
+`docker manifest inspect <ghcr ref@digest>` → 두 참조 모두 rc=0. 🔴 **(h) 칸이 실제로 이 둘을 «확인» 했는지(skip 아님)는 CI
+`Demo wrapper smoke (infra/demo)` 가 판정**한다 — 이 PR 의 CI 로 본다.

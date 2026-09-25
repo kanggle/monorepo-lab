@@ -60,7 +60,8 @@ spec:
           # compose 와 같은 출처·같은 MinIO 릴리스(Bitnami 빌드, 다이제스트 고정). 이 이미지의
           # ENTRYPOINT 는 Bitnami 셸 스크립트라 `server …` 를 그대로 exec 하려 든다 — 그래서
           # command 로 minio 바이너리를 직접 지정하고 args 는 예전 그대로 둔다.
-          image: docker.io/bitnamilegacy/minio:2024.10.13-debian-12-r1@sha256:faf554135d50ff8b382f79df7795e080726cb2d6f4ce7f056d733a6437546f6a
+          # TASK-MONO-734: compose 와 같이 GHCR 사본(원본과 digest 동일)으로 옮겼다.
+          image: ghcr.io/kanggle/mirror-minio:2024.10.13-debian-12-r1@sha256:faf554135d50ff8b382f79df7795e080726cb2d6f4ce7f056d733a6437546f6a
           imagePullPolicy: IfNotPresent
           command:
             - /opt/bitnami/minio/bin/minio
@@ -171,7 +172,8 @@ spec:
         - name: mc
           # TASK-BE-591 → TASK-BE-598: 위 minio 와 같은 사유·같은 출처(같은 mc 릴리스).
           # command 가 /bin/sh 라 Bitnami ENTRYPOINT 는 안 돈다. mc 는 이미지 PATH 에 있다.
-          image: docker.io/bitnamilegacy/minio-client:2024.10.8-debian-12-r1@sha256:c3e82110529b30658cdcdf6414619fe901c2ec820eba973bda936cdcb4c6193c
+          # TASK-MONO-734: GHCR 사본(원본과 digest 동일).
+          image: ghcr.io/kanggle/mirror-minio-client:2024.10.8-debian-12-r1@sha256:c3e82110529b30658cdcdf6414619fe901c2ec820eba973bda936cdcb4c6193c
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
