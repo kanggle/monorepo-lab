@@ -114,13 +114,15 @@ iam-platform
   (a) 유스케이스의 폐기 호출 + `ForceLogoutUseCase` 의 SAS 폐기 호출 제거 → `ForceLogoutUseCaseTest` · `RevokeSessionsOnAccountLockedUseCaseTest` **11 중 6 실패**;
   (b) 어댑터의 `account_id` 확정 제거 → `sameEmailOtherAccount_isLeftAlone` **실패**. 복구 후 전체 재실행 rc=0.
 - IT `AccountLockedSessionRevocationIntegrationTest` — 컴파일만 확인, **실행 안 됨**(Docker 데몬 없음). CI `integrationTest` 결과가 권위.
+- **CI 1차(run 36115767160) = IT 실패** — 기존 결함(`refresh_tokens.account_id` VARCHAR(36), 아래 § 기존 결함) 때문에 대조군 refresh 에서 터짐.
+  픽스처 이메일을 36자 이하로 바꿨다(결함 회피 — 정상 조건 아님).
 
 ## AC-3 런북 (창 또는 iam e2e compose — 미실행)
 
 🔴 **공유 데모 계정(`demo@demo.com` · `requester@demo.com` · `viewer@demo.com` · 아티스트 계정)은 잠그지 마라.** 이 브랜치의 auth-service 이미지가 떠 있어야 한다
 (재굽기 전 데모 창에는 없다). 🔵 첫 기동 때 `earliest` 로 최근 7일 잠금이 재생된다 — 그 사이 해제된 계정은 세션을 한 번 잃는다(정상).
 
-1. **일회용 계정 둘** — `be601-a-<UTC시각>@example.com`(잠글 것) · `be601-b-<UTC시각>@example.com`(대조군) — 같은 테넌트(`fan-platform`)로 가입(`/signup`).
+1. **일회용 계정 둘** — `b6a-<MMDDhhmm>@ex.io`(잠글 것) · `b6b-<MMDDhhmm>@ex.io`(대조군), **36자 이하**(아래 보정) — 같은 테넌트(`fan-platform`)로 가입(`/signup`).
 2. 각각 공개 클라이언트로 authorization_code + PKCE 로그인 → refresh 토큰 `A0` · `B0` 확보.
 3. **대조군**: `POST /oauth2/token grant_type=refresh_token refresh_token=A0 client_id=<client>` → **200**, 새 토큰 `A1`. 같은 방법으로 `B0` → `B1`.
 4. **잠금**: 운영자로 A 만 잠근다(콘솔 계정 잠금 또는 admin-service `POST /api/admin/accounts/{A의 id}/lock`). account-service 가 `account.locked` 를 발행.
@@ -130,8 +132,36 @@ iam-platform
 7. (선택) 운영자 «세션 폐기»(force-logout)도 같은 방식으로 SAS 세션을 끊는지 — 응답 `revokedTokenCount ≥ 1` 이고 그 뒤 refresh 400.
 8. 정리: A 잠금 해제 또는 삭제 · 두 계정 폐기.
 
+🔴 **런북 보정 (2026-09-25 UTC)**: 1단계의 일회용 이메일은 **36자 이하**여야 한다(예: `b6a-0925@ex.io`) — 아래 § 기존 결함 때문에 그보다 길면
+3단계 대조군 refresh 가 잠금과 무관하게 실패해 판정이 성립하지 않는다.
+
+## 기존 결함 — `refresh_tokens.account_id` VARCHAR(36) (🔴 별도 티켓 필요 · 기안은 코디네이터)
+
+**발견 경위 (2026-09-25 UTC)**: PR #4022 CI `Integration (iam B, Testcontainers)` (run 36115767160, job 108009462700) 에서 이 티켓의 IT 가
+`DataIntegrityViolationException: Data too long for column 'account_id'` 로 실패. 스택: `SasRefreshTokenAuthenticationProvider.persistRotation`
+(`:498`) ← `authenticate` 의 회전 트랜잭션(`:351,:372`) — **대조군 refresh 단계**(잠금 이전)에서 터졌다. BE-601 코드 경로가 아니다.
+
+**판정: 운영에서도 나는 기존 결함이다 (IT 픽스처만의 문제가 아니다).**
+
+| 사실 | 근거 |
+|---|---|
+| 컬럼 길이 36 | `V0001__create_credentials_and_refresh_tokens.sql:16` `account_id VARCHAR(36) NOT NULL` (이후 넓힌 마이그레이션 0 — V0014 는 `jti`/`rotated_from` 만). 엔티티 `RefreshTokenJpaEntity.java:24` `length = 36` |
+| 그 컬럼에 이메일이 들어간다 | SAS 미러 행이 `authorization.getPrincipalName()`(= 로그인 이메일)을 `account_id` 로 쓴다: `DomainSyncOAuth2AuthorizationService.java:135` · `SasRefreshTokenAuthenticationProvider.java:478` (principal 이름 = 이메일: `CredentialAuthenticationProvider.java:372-373`, `SocialLoginBrowserController.java:185-186`) |
+| 이메일 길이 상한은 36 보다 크다 | 가입 `SignupRequest.java:8-10` `@NotBlank @Email` 뿐(길이 제한 없음) · 소셜 `SocialSignupRequest.java:9` 동일 · 저장 `accounts.email VARCHAR(255)`(account-service `V0001__create_accounts_and_profiles.sql:3`) · `credentials.email VARCHAR(320)`(auth `V0006…:15`). ⇒ **37자 이상 이메일은 정상 가입된다** |
+| 최초 발급: 실패가 **삼켜진다** | `DomainSyncOAuth2AuthorizationService.java:154-163` `try { save } catch (Exception e) { log.error(...) }` — 토큰은 발급되고 미러 행만 없다(CI 로그의 `SAS_SYNC: failed to persist refresh token to domain store` 가 이 경로) |
+| 첫 refresh: **실패한다(삼키지 않음)** | 미러 행이 없으니 `:218` 통과 → 회전 트랜잭션의 `persistRotation` `:498` `refreshTokenRepository.save(newDomainToken)` 가 같은 INSERT 로 실패(`GenerationType.IDENTITY` — `RefreshTokenJpaEntity.java:17-18` — 라 즉시 실행) → 예외가 `authenticate` 밖으로 → **refresh 요청 자체가 오류**. 즉 **이메일이 36자를 넘는 모든 사용자는 refresh 가 불가능**하다(access token TTL 이 지나면 재로그인) |
+| 기존 IT 가 안 걸린 이유 | 모든 SAS refresh IT 의 principal 이 짧다: `OAuth2RefreshTokenIntegrationTest.java:162` `user("rt-account-001")`(14자) · `:368` `"cross-tenant-account"` · `OAuth2RevokeIntrospectIntegrationTest.java:213` `"revoke-test-account"`. 이 티켓의 IT 가 처음으로 **실제 모양의 이메일**(`be601-<UUID>@example.com`, 54자)을 principal 로 썼다 |
+| BE-601 에 대한 파급 (🔵 코드 읽기 추론 · 미측정) | 긴 이메일 계정에는 미러 행이 없으므로, 이 티켓의 `SasAuthorizationRevocationAdapter` 가 인가를 저장할 때 `DomainSync.save` 가 미러 행 INSERT 를 다시 시도한다. 그 실패는 `:154-163` 에서 삼켜지지만 이번에는 `ForceLogoutUseCase` 의 트랜잭션 **안**이라 `SimpleJpaRepository.save` 의 트랜잭션 프록시가 그 트랜잭션을 rollback-only 로 표시할 가능성이 높다 → 커밋 시 `UnexpectedRollbackException` → 잠금 이벤트는 재시도 후 DLQ, 관리자 force-logout 은 오류 응답. 그 계정은 위 결함으로 이미 refresh 가 불가능하므로 «잠긴 뒤에도 refresh 로 산다» 는 일어나지 않는다 |
+
+**이 PR 에서 한 것 (소유자 결정 없이 컬럼 확장 · principal 매핑 변경은 하지 않는다 — 코디네이터 지시)**: IT 픽스처 이메일을 36자 이하
+(`b6-<8hex>@ex.io`, 18자)로 바꿔 BE-601 자체 검증만 초록으로 만들었다. 테스트에 «짧은 이메일은 결함 회피이지 정상 조건 아님» 주석을 남겼다.
+**후속 티켓의 결정 후보**(소유자): ⓐ `refresh_tokens.account_id` 를 320 으로 넓힌다(이메일이 `account_id` 라는 이름으로 계속 남는다 — PII · 이름 거짓 유지)
+ⓑ 미러 행에 principal details 의 실제 `account_id`(UUID)를 쓴다(`revokeAllByAccountId` 가 SAS 세션도 잡게 된다 · 기존 이메일 키 행 이행 필요 ·
+`auth.token.refreshed.accountId` 도 UUID 가 된다 — 계약 확인 필요).
+
 ## 후속 (이 티켓 범위 밖 — 이름만)
 
+- 🔴 위 § 기존 결함 — 37자 이상 이메일은 SAS refresh 불가(별도 티켓, 기안은 코디네이터).
 - `ConfirmPasswordResetUseCase.java:95` — 비밀번호 재설정 후 SAS 세션 생존(같은 원인). `ForceLogoutUseCase` 경로 재사용 또는 포트 호출 추가.
 - reuse 탐지(`SasRefreshTokenAuthenticationProvider.handleReuseDetected`)도 미러 행만 닫고 SAS 인가 행은 그대로 — 다른 인가로의 refresh 는 계속 가능한지 측정 필요.
 - `refresh_tokens.account_id` 에 이메일이 들어가는 SAS 미러 행(`DomainSync…:135`, `persistRotation :478`) — `auth.token.refreshed` 의 `accountId` 도 이메일(PII)이다.
