@@ -41,17 +41,45 @@ public interface AccountServicePort {
     void signup(String email, String password, String displayName, String tenantId);
 
     /**
-     * Looks up an account's current status by id.
+     * Looks up an account's current status by id, without a tenant — account-service then
+     * pins the lookup to {@code fan-platform} (the pre-BE-507 behaviour). Equivalent to
+     * {@code getAccountStatus(accountId, null)}.
      *
      * <p>TASK-BE-063: replaces the previous email-based credential lookup. The
      * login path now resolves email → credential locally, then calls this to
      * verify the account is still ACTIVE.</p>
      *
-     * @param accountId the account to check
-     * @return the account's status, or empty if the account does not exist
-     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
+     * @see #getAccountStatus(String, String)
      */
-    Optional<AccountStatusLookupResult> getAccountStatus(String accountId);
+    default Optional<AccountStatusLookupResult> getAccountStatus(String accountId) {
+        return getAccountStatus(accountId, null);
+    }
+
+    /**
+     * Looks up an account's current status by id within {@code tenantId}
+     * ({@code GET /internal/accounts/{id}/status} with {@code X-Tenant-Id}).
+     *
+     * <p><b>TASK-BE-600 — "empty" means exactly one thing: 404.</b> Before BE-600 an empty
+     * result also stood for a non-404 4xx and for a 200 with no usable {@code status}, and
+     * the social path read every empty as "status unavailable, skip the guard" (BE-063). A
+     * rejected or unreadable lookup is a FAILED lookup, not an answer, so it now throws
+     * {@link com.example.auth.application.exception.AccountServiceUnavailableException} like a
+     * 5xx / timeout / open circuit does — and both login paths fail closed on it (owner
+     * decision, TASK-BE-600 AC-2).
+     *
+     * <p>404 stays empty because it is a legitimate answer on the login path: console
+     * operator credentials (tenant {@code iam}) have no {@code accounts} row by design, and a
+     * caller that sends no tenant gets a {@code fan-platform}-pinned lookup that cannot see an
+     * account born in another tenant.
+     *
+     * @param accountId the account to check
+     * @param tenantId  the tenant the account lives in; {@code null}/blank → no header →
+     *                  account-service pins {@code fan-platform}
+     * @return the account's status, or empty if account-service answered 404
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if the
+     *         lookup failed (5xx / timeout / circuit-open / IO / non-404 4xx / unusable body)
+     */
+    Optional<AccountStatusLookupResult> getAccountStatus(String accountId, String tenantId);
 
     /**
      * Creates or retrieves an account for social login via internal HTTP to account-service.

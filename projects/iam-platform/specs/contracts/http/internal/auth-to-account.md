@@ -81,11 +81,19 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 특정 계정의 현재 상태 조회. auth-service가 로그인/refresh 시 계정이 여전히 활성 상태인지 확인.
 
+> **TASK-BE-600 (2026-09-25)** — 소비처 현황: **폼 로그인**(`CredentialAuthenticationProvider`, `X-Tenant-Id` = 자격 행의 테넌트) · **소셜 콜백**(`OAuthLoginUseCase`, 헤더 없음 — 아래 🔴). **refresh 경로는 아직 이 조회를 하지 않는다**(`SasRefreshTokenAuthenticationProvider` — 이 문서 첫 줄의 «refresh 시 확인» 은 구현되지 않은 약속이다; 후속으로 분리, TASK-BE-600 AC-0 ①).
+
 **Path Parameters**:
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `accountId` | string (UUID) | 대상 계정 |
+
+**Headers** (TASK-BE-600):
+
+| 헤더 | 필수 | 설명 |
+|---|---|---|
+| `X-Tenant-Id` | No | 계정이 속한 테넌트. 형제 엔드포인트(`/lock` · `/unlock` · `/delete`)와 같은 해석 — **없거나 공백이면 `fan-platform` 고정**(BE-600 이전 동작 그대로 · membership-service · admin-service · 소셜 경로는 헤더를 보내지 않아 net-zero). 🔴 BE-600 이전 이 엔드포인트만 헤더를 받지 않아, `fan-platform` 밖의 계정은 `/lock` 으로 잠글 수는 있어도 여기서는 404 로 보였다 |
 
 **Response 200**:
 ```json
@@ -96,7 +104,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 }
 ```
 
-**Response 404**: 계정 미존재
+**Response 404**: 계정 미존재 (헤더가 있으면 **그 테넌트에** 미존재)
 ```json
 {
   "code": "ACCOUNT_NOT_FOUND",
@@ -105,6 +113,20 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 }
 ```
 
+**auth-service 매핑 규약** (TASK-BE-600 — BE-063 의미를 바꾼다):
+
+| 응답 | 포트 결과 | 로그인 경로의 처리 |
+|---|---|---|
+| 200 + `status` | `Optional.of(status)` | 공유 상태 규칙(`AccountStatusRule`) 적용 — `ACTIVE` 만 통과 |
+| 404 | `Optional.empty()` | **규칙을 적용할 계정 레코드가 없다** → 통과. 콘솔 운영자 자격(테넌트 `iam`)은 설계상 `accounts` 행이 없다(`R__05_seed_demo_corp_tenant_and_consumer_accounts.sql` 헤더) |
+| 그 밖의 4xx (401/403/422 …) | `AccountServiceUnavailableException` | **fail-closed** — 로그인 거부 |
+| 200 인데 body/`status` 없음 | `AccountServiceUnavailableException` | **fail-closed** |
+| 5xx / 타임아웃 / circuit-open / IO | `AccountServiceUnavailableException` | **fail-closed** (BE-600 이전에도 예외였다 — 불변) |
+
+🔴 **바뀐 것**: BE-063 이후 «empty» 는 404 · 그 밖의 4xx · 읽을 수 없는 200 을 한데 묶었고, 소셜 경로는 empty 를 «조회 불가 → 상태 검사 생략» 으로 읽었다. 즉 **실패한 조회가 잠금 검사를 조용히 건너뛰었다(fail-open)**. 소유자 결정(2026-09-25, TASK-BE-600 AC-2): 조회 **실패**는 폼 · 소셜 **둘 다 fail-closed**. 404 는 실패가 아니라 답이므로 empty 로 남긴다.
+
+🔴 **소셜 경로는 헤더를 보내지 않는다**(= `fan-platform` 고정 조회). BE-507 이전에 생긴 소셜 계정은 identity 행이 `ecommerce` 여도 계정 행은 `fan-platform` 에 있으므로, identity 의 테넌트를 보내면 그 계정들의 상태 검사가 404 로 빠진다. 반대로 지금은 BE-507 이후 `fan-platform` 밖에서 태어난 소셜 계정의 상태 검사가 404 로 빠진다 — 테넌트 인지 조회로 바꾸는 판단은 후속(TASK-BE-600 기록).
+
 ---
 
 ## Caller Constraints (auth-service 측)
@@ -112,4 +134,4 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 - 타임아웃: 연결 3s, 읽기 5s
 - 재시도: 2회 (지수 백오프 + jitter). **404는 재시도 금지** (4xx)
 - Circuit breaker: 실패율 50% / 10초 → open → 30초 half-open
-- account-service 장애 시 **로그인 불가** (fail-closed)
+- account-service 장애 시 **로그인 불가** (fail-closed) — TASK-BE-600 부터 폼 로그인 · 소셜 로그인 모두 실제로 그렇다(위 매핑 규약). 폼 로그인에서는 `AuthenticationServiceException` → 오답 비밀번호와 같은 `/login?error`

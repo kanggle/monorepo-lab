@@ -445,6 +445,47 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 
 ---
 
+## POST /login — HTML 폼 로그인의 계정 상태 규칙 (TASK-BE-600)
+
+`POST /login`(`application/x-www-form-urlencoded`: `username` · `password` · CSRF)은 SAS 브라우저 플로우의
+유일한 비밀번호 로그인이다(`CredentialAuthenticationProvider`, TASK-BE-309). 성공 → 저장된 `/oauth2/authorize`
+로 302, 실패 → **항상** 302 `/login?error`(화면 문구 «Invalid email or password.»).
+
+**계정 상태 규칙** — 비밀번호가 맞아도 계정 상태가 `ACTIVE` 가 아니면(`LOCKED` · `DORMANT` · `DELETED` · 그 밖의 값)
+로그인은 거부된다. 규칙은 소셜 로그인과 **같은 하나**다(`application/AccountStatusRule` — 두 경로가 다른 규칙을 들면
+지금 고친 결함이 그대로 되살아난다: BE-398 이후 폼 경로에는 상태 검사가 아예 없어서, 같은 잠긴 계정이 소셜로는 막히고
+비밀번호로는 들어갔다).
+
+| 경우 | 응답 | `auth.login.failed.failureReason` |
+|---|---|---|
+| 없는 이메일 | 302 `/login?error` | `CREDENTIALS_INVALID` (`accountId=null`) |
+| 비밀번호 불일치 (상태 무관 — 잠긴 계정 포함) | 302 `/login?error` | `CREDENTIALS_INVALID` |
+| 비밀번호 일치 + `LOCKED` / `DORMANT` / `DELETED` | 302 `/login?error` — **위 두 줄과 바이트 단위로 같다** | `ACCOUNT_LOCKED` / `ACCOUNT_DORMANT` / `ACCOUNT_DELETED` |
+| 비밀번호 일치 + 계약 밖 상태 값 | 302 `/login?error` | 발행 안 함 (enum 에 없는 값을 지어내지 않는다 — `attempted` 만 남는다) |
+| account-service 상태 조회 **실패** | 302 `/login?error` (**fail-closed**) | 발행 안 함 (`attempted` 만 — tenant_type 조회 장애와 같은 모양) |
+| 상태 조회 404 (계정 레코드 없음 — 콘솔 운영자) | 규칙 미적용 → 비밀번호대로 | — |
+
+🔴 **응답 모양 — 소유자 결정 (2026-09-25, AC-1 ⓐ)**: 상태로 거부된 로그인은 **오답 비밀번호와 정확히 같은 결과**다 —
+같은 예외(`BadCredentialsException("Invalid credentials")`), 같은 `/login?error`, 같은 문구, 힌트 없음. «잠겼습니다» 를
+비밀번호가 맞을 때만 보여 주면 잠긴 계정이 **비밀번호 정답 확인기**가 된다. 옛 JSON 경로의 423 `ACCOUNT_LOCKED` 는
+가져오지 않는다(그건 API 였고 이건 폼이다).
+
+🔴 **순서 — 타이밍도 새지 않게**: 자격을 찾으면 (1) 계정 상태를 **먼저** 조회하고 (2) 비밀번호를 상태와 **무관하게 항상**
+검증한 뒤 (3) 비밀번호 → 상태 순으로 판정한다. 그래서 찾은 자격은 상태 · 비밀번호 정답 여부와 무관하게 같은 두 비용(상태
+조회 1회 + 해시 검증 1회)을 치른다. 비밀번호 검증 **뒤에** 조회하면 조회 왕복이 «비밀번호가 맞았을 때만» 붙어 타이밍
+오라클이 되고, 상태로 **먼저 끊으면** 비활성 계정만 해시를 건너뛰어 상태 오라클이 된다. (없는 이메일은 두 비용을 모두
+치르지 않는다 — 계정 존재의 타이밍 차이는 BE-600 이전부터 있던 것으로 이 결정의 범위 밖이다.)
+
+🔴 **조회 실패 — 소유자 결정 (2026-09-25, AC-2)**: **fail-closed**. account-service 가 5xx · 타임아웃 · circuit-open ·
+404 가 아닌 4xx · 읽을 수 없는 200 을 주면 로그인은 거부된다(`AuthenticationServiceException` → 같은 `/login?error`).
+조용한 fail-open 이면 결함이 장애 때마다 되살아난다. 조회는 **자격 행의 테넌트**로 한다(`X-Tenant-Id`,
+[auth-to-account.md](internal/auth-to-account.md) § `GET /internal/accounts/{accountId}/status`).
+
+🔵 **이미 받은 세션**: 이 규칙은 **새 로그인**만 막는다. 발급된 access token 은 만료까지 유효하고, `refresh_token` grant
+(`SasRefreshTokenAuthenticationProvider`)는 아직 계정 상태를 보지 않는다 — TASK-BE-600 AC-0 ① 에서 후속으로 분리됐다.
+
+---
+
 ## POST /api/auth/logout
 
 현재 세션 종료. refresh token을 블랙리스트에 등록한다.

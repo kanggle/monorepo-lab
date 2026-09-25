@@ -4,7 +4,9 @@ import com.example.auth.application.LoginEventRecorder;
 import com.example.auth.application.LoginHashes;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.domain.credentials.Credential;
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantTypePort;
+import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.security.password.PasswordHasher;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -72,6 +76,11 @@ class CredentialAuthenticationProviderTest {
 
     @Mock
     private LoginEventRecorder loginEventRecorder;
+
+    // TASK-BE-600: unstubbed → Optional.empty() (= 404, "no account record"), so the BE-599
+    // tests above keep exercising the path they always did.
+    @Mock
+    private AccountServicePort accountServicePort;
 
     @InjectMocks
     private CredentialAuthenticationProvider provider;
@@ -363,5 +372,169 @@ class CredentialAuthenticationProviderTest {
         // such filter, so this proves only that the provider does no header parsing of its own
         // (and so cannot disagree with the filter).
         assertThat(ctx.getValue().ipMasked()).isEqualTo("172.18.*.*");
+    }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-BE-600 — account status on the form-login path
+    // ---------------------------------------------------------------------------------
+
+    private void stubStatus(String status) {
+        when(accountServicePort.getAccountStatus("acc-1", "acme-corp"))
+                .thenReturn(Optional.of(new AccountStatusLookupResult("acc-1", status)));
+    }
+
+    /** The wrong-password outcome, captured live so the status rejections are compared to it, not to a literal. */
+    private Throwable wrongPasswordOutcome() {
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential()));
+        when(passwordHasher.verify("wrong", "$argon2id$stored-hash")).thenReturn(false);
+        Throwable t = org.assertj.core.api.Assertions.catchThrowable(
+                () -> provider.authenticate(attempt("wrong")));
+        assertThat(t).isNotNull();
+        return t;
+    }
+
+    /**
+     * Right password, non-ACTIVE status → the SAME outcome as a wrong password (AC-1 ⓐ):
+     * same exception type, same message — so /login?error and its text are identical and
+     * a locked account cannot be used to confirm its password.
+     */
+    private void assertRejectedLikeWrongPassword(String status, String expectedReason) {
+        bindRequest(null);
+        Throwable wrongPassword = wrongPasswordOutcome();
+
+        stubHappyCredentialLookup();
+        stubStatus(status);
+
+        Throwable rejected = org.assertj.core.api.Assertions.catchThrowable(
+                () -> provider.authenticate(attempt(PASSWORD)));
+
+        assertThat(rejected).isNotNull();
+        assertThat(rejected.getClass()).isEqualTo(wrongPassword.getClass());
+        assertThat(rejected).isExactlyInstanceOf(BadCredentialsException.class);
+        assertThat(rejected.getMessage()).isEqualTo(wrongPassword.getMessage());
+        assertThat(rejected.getCause()).isNull();
+
+        // Telemetry: a failed attempt against a resolved identity, with the contract reason.
+        verify(loginEventRecorder).recordFailed(
+                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), eq(expectedReason), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+        // Nothing past the status gate ran.
+        verifyNoInteractions(tenantTypePort);
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-2: ACTIVE → login succeeds; status is looked up in the ACCOUNT's tenant")
+    void activeAccount_succeeds() {
+        bindRequest(null);
+        stubHappyCredentialLookup();
+        stubStatus("ACTIVE");
+        when(tenantTypePort.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
+
+        Authentication result = provider.authenticate(attempt(PASSWORD));
+
+        assertThat(result.isAuthenticated()).isTrue();
+        verify(accountServicePort).getAccountStatus("acc-1", "acme-corp");
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), any());
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-1/AC-2: LOCKED + right password → identical to a wrong password; failed=ACCOUNT_LOCKED")
+    void lockedAccount_rejectedLikeWrongPassword() {
+        assertRejectedLikeWrongPassword("LOCKED", "ACCOUNT_LOCKED");
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-1/AC-2: DORMANT + right password → identical to a wrong password; failed=ACCOUNT_DORMANT")
+    void dormantAccount_rejectedLikeWrongPassword() {
+        assertRejectedLikeWrongPassword("DORMANT", "ACCOUNT_DORMANT");
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-1/AC-2: DELETED + right password → identical to a wrong password; failed=ACCOUNT_DELETED")
+    void deletedAccount_rejectedLikeWrongPassword() {
+        assertRejectedLikeWrongPassword("DELETED", "ACCOUNT_DELETED");
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-1: status is fetched BEFORE and the password is verified REGARDLESS — "
+            + "a LOCKED account with a wrong password is a plain CREDENTIALS_INVALID")
+    void lockedAccount_wrongPassword_stillVerifiesPassword_credentialsInvalid() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential()));
+        stubStatus("LOCKED");
+        when(passwordHasher.verify("wrong", "$argon2id$stored-hash")).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(attempt("wrong")))
+                .isExactlyInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid credentials");
+
+        // Same two costs as any other found credential, in this order: no timing split
+        // between locked and active, nor between right and wrong password on a locked account.
+        InOrder order = inOrder(accountServicePort, passwordHasher);
+        order.verify(accountServicePort).getAccountStatus("acc-1", "acme-corp");
+        order.verify(passwordHasher).verify("wrong", "$argon2id$stored-hash");
+        verify(loginEventRecorder).recordFailed(
+                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), eq("ACCOUNT_LOCKED"), any());
+    }
+
+    @Test
+    @DisplayName("BE-600: a status outside the contract enum is rejected like a wrong password, with no invented failureReason")
+    void unknownStatus_rejected_noFailedEvent() {
+        bindRequest(null);
+        stubHappyCredentialLookup();
+        stubStatus("SUSPENDED");
+
+        assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
+                .isExactlyInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid credentials");
+
+        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-600: 404 (no account record — e.g. a console operator in tenant iam) → the rule has nothing to apply; login succeeds")
+    void noAccountRecord_404_proceeds() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credentialIn("iam")));
+        when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
+        when(accountServicePort.getAccountStatus("acc-1", "iam")).thenReturn(Optional.empty());
+        when(tenantTypePort.resolve("iam")).thenReturn("B2B_ENTERPRISE");
+
+        Authentication result = provider.authenticate(attempt(PASSWORD));
+
+        assertThat(result.isAuthenticated()).isTrue();
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-2: status lookup FAILURE → fail-closed (AuthenticationServiceException → /login?error); "
+            + "no success, no invented failureReason")
+    void statusLookupFailure_failsClosed() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential()));
+        when(accountServicePort.getAccountStatus("acc-1", "acme-corp"))
+                .thenThrow(new AccountServiceUnavailableException("down"));
+
+        assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
+                .isInstanceOf(AuthenticationServiceException.class)
+                .hasCauseInstanceOf(AccountServiceUnavailableException.class);
+
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
+        verifyNoInteractions(tenantTypePort);
+    }
+
+    @Test
+    @DisplayName("BE-600: unknown email → no status lookup at all (no identity to look up)")
+    void unknownEmail_noStatusLookup() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
+                .isExactlyInstanceOf(BadCredentialsException.class);
+
+        verifyNoInteractions(accountServicePort);
     }
 }

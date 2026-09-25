@@ -1,9 +1,14 @@
 package com.example.auth.infrastructure.security;
 
+import com.example.auth.application.AccountStatusRule;
 import com.example.auth.application.LoginEventRecorder;
 import com.example.auth.application.LoginHashes;
+import com.example.auth.application.exception.AccountLockedException;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.exception.AccountStatusException;
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantTypePort;
+import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
@@ -29,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * TASK-BE-309 — Spring Security {@link AuthenticationProvider} that bridges
@@ -50,6 +56,32 @@ import java.util.Optional;
  * (owner decision, TASK-BE-599 AC-0 ⓑ declined: shared demo accounts must not start being
  * blocked after N failures). Every recorder call is telemetry — a failure is logged and the
  * login outcome is unchanged ({@link #telemetry}).
+ *
+ * <p><b>Account status (TASK-BE-600).</b> A LOCKED / DORMANT / DELETED account is refused
+ * by the same {@link AccountStatusRule} the social callback uses. Before BE-600 this provider
+ * never looked at status, so a locked account (admin lock or security-service auto-lock)
+ * still signed in with its password while the social path refused it. Three decisions:
+ * <ul>
+ *   <li><b>Response shape (owner decision, AC-1 ⓐ)</b> — a status rejection is EXACTLY a
+ *       wrong password: {@link BadCredentialsException}{@code ("Invalid credentials")} →
+ *       {@code /login?error}. Saying "locked" only when the password was right would turn a
+ *       locked account into a password-confirmation oracle.</li>
+ *   <li><b>Order</b> — status is looked up BEFORE the password is verified, and the password
+ *       is verified regardless of the status. Every found credential therefore pays the same
+ *       two costs (one account-service call, one hash verification) whatever its status and
+ *       whatever the password, so neither the response nor its timing separates "locked +
+ *       right password" from "locked + wrong password", nor a locked account from an active
+ *       one given a wrong password. Checking after verification would add the account-service
+ *       round trip only when the password was right (a timing oracle); rejecting on status
+ *       before verification would skip the hash for non-ACTIVE accounts (a status oracle).
+ *       When both the password and the status are wrong, the event says
+ *       {@code CREDENTIALS_INVALID}, so password failures feed VelocityRule exactly as before.</li>
+ *   <li><b>Lookup failure (owner decision, AC-2)</b> — fail CLOSED: an account-service
+ *       failure (5xx / timeout / open circuit / non-404 4xx / unreadable body) rejects the
+ *       login as {@link AuthenticationServiceException}. A 404 is not a failure: no account
+ *       record exists for the credential (every console operator in tenant {@code iam}), so
+ *       the rule has nothing to apply to.</li>
+ * </ul>
  *
  * <p><b>Tenant resolution (TASK-BE-507, D1-a).</b> The lookup is scoped to the tenant of the
  * OIDC client the user is logging in through ({@link SavedRequestTenantResolver}, the same
@@ -82,10 +114,53 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
     private final TenantTypePort tenantTypePort;
     private final SavedRequestTenantResolver savedRequestTenantResolver;
     private final LoginEventRecorder loginEventRecorder;
+    private final AccountServicePort accountServicePort;
 
     /** {@code auth.login.failed.failureReason} values this path produces (auth-events.md enum). */
     static final String REASON_CREDENTIALS_INVALID = "CREDENTIALS_INVALID";
     static final String REASON_TENANT_AMBIGUOUS = "LOGIN_TENANT_AMBIGUOUS";
+
+    /**
+     * TASK-BE-600: the status rejections that have a {@code failureReason} in the event
+     * contract. {@link AccountStatusRule#CODE_UNKNOWN} is deliberately absent.
+     */
+    private static final Set<String> CONTRACT_STATUS_REASONS = Set.of(
+            AccountStatusRule.REASON_LOCKED,
+            AccountStatusRule.REASON_DORMANT,
+            AccountStatusRule.REASON_DELETED);
+
+    /**
+     * TASK-BE-600 — the account's status from account-service, looked up in the account's own
+     * tenant. Empty means account-service answered 404: there is no account record to apply
+     * the status rule to — which is the designed state of every console operator credential
+     * (tenant {@code iam} has no {@code accounts} rows). Any failed lookup fails CLOSED
+     * (owner decision, AC-2) as an {@link AuthenticationServiceException}, which the form
+     * renders as the same {@code /login?error} as a wrong password.
+     */
+    private Optional<String> lookupAccountStatus(String accountId, String tenantId) {
+        try {
+            return accountServicePort.getAccountStatus(accountId, tenantId)
+                    .map(AccountStatusLookupResult::accountStatus);
+        } catch (AccountServiceUnavailableException e) {
+            log.warn("form-login: account status lookup failed — failing closed");
+            throw new AuthenticationServiceException("Account status service is unavailable", e);
+        }
+    }
+
+    /**
+     * Applies the shared {@link AccountStatusRule} and returns the rejection code, or
+     * {@code null} when the status may sign in.
+     */
+    private static String statusRejection(String status) {
+        try {
+            AccountStatusRule.enforce(status);
+            return null;
+        } catch (AccountLockedException e) {
+            return AccountStatusRule.REASON_LOCKED;
+        } catch (AccountStatusException e) {
+            return e.getErrorCode();
+        }
+    }
 
     /**
      * Outcome of the credential lookup: either the credential, or the failure reason that the
@@ -220,11 +295,35 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         telemetry("attempted", () ->
                 loginEventRecorder.recordAttempted(accountId, emailHash, tenantId, ctx));
 
+        // TASK-BE-600: account status is looked up BEFORE the password is verified, and the
+        // password is verified whatever the status turns out to be — see the class javadoc
+        // ("Account status") for why this order leaks neither the password nor the status.
+        Optional<String> accountStatus = lookupAccountStatus(accountId, tenantId);
+
         if (!passwordHasher.verify(password, credential.getCredentialHash())) {
             log.debug("form-login password verification failed for emailHash=<redacted>");
             // accountId MUST be present: VelocityRule ignores failures without one.
             telemetry("failed", () -> loginEventRecorder.recordFailed(
                     accountId, emailHash, tenantId, REASON_CREDENTIALS_INVALID, ctx));
+            throw new BadCredentialsException("Invalid credentials");
+        }
+
+        String rejection = accountStatus.map(CredentialAuthenticationProvider::statusRejection)
+                .orElse(null);
+        if (rejection != null) {
+            log.info("form-login rejected: account status is not ACTIVE (reason={})", rejection);
+            if (CONTRACT_STATUS_REASONS.contains(rejection)) {
+                telemetry("failed", () -> loginEventRecorder.recordFailed(
+                        accountId, emailHash, tenantId, rejection, ctx));
+            } else {
+                // A status outside account-service's enum: rejected all the same, but there is
+                // no failureReason in the event contract to carry it, and inventing one would
+                // break the consumer's enum. The attempted event stands alone, as on an outage.
+                log.warn("form-login: account-service returned a status outside the contract "
+                        + "enum — rejected, no auth.login.failed emitted");
+            }
+            // Owner decision (AC-1 ⓐ): EXACTLY the wrong-password outcome — same exception,
+            // same message, so /login?error and "Invalid email or password." are identical.
             throw new BadCredentialsException("Invalid credentials");
         }
 

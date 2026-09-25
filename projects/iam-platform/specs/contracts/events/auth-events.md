@@ -44,10 +44,10 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 | 항목 | 폼 로그인 경로의 값 |
 |---|---|
-| 발행 순서 | 자격 조회 → `attempted` → (비밀번호 불일치) `failed` / (성공) `succeeded`. 디바이스 세션 등록 · `session.created` 없음 |
+| 발행 순서 | 자격 조회 → `attempted` → (계정 상태 조회 — TASK-BE-600) → (비밀번호 불일치) `failed` / (비밀번호 일치 + 비-ACTIVE) `failed` / (성공) `succeeded`. 상태 조회 **실패**는 `failed` 없이 로그인 거부(fail-closed — `attempted` 만 남는다). 디바이스 세션 등록 · `session.created` 없음 |
 | `accountId` (attempted/failed) | 자격을 **찾았으면 채운다** — 비밀번호 불일치도 포함(VelocityRule 은 `accountId` 없는 실패를 세지 않는다). 없는 이메일 · 테넌트 모호 → `null` |
 | `tenantId` | 자격을 찾았으면 **그 계정의 테넌트**(크로스-테넌트 폴백으로 찾았어도 마찬가지 — 시작 client 의 테넌트가 아니다). 못 찾았으면 시작 OIDC client 의 테넌트, 그것도 없으면 `fan-platform` |
-| `failureReason` | `CREDENTIALS_INVALID`(없는 이메일 · 비밀번호 불일치) 또는 `LOGIN_TENANT_AMBIGUOUS`. **`RATE_LIMITED` 는 이 경로에서 나오지 않는다** — rate-limit 을 적용하지 않기 때문(소유자 결정, BE-599 AC-0 ⓑ 미채택: 공유 데모 계정이 N회 실패 뒤 막히면 안 된다). `ACCOUNT_LOCKED/DORMANT/DELETED` 도 나오지 않는다 — 이 경로는 계정 상태를 조회하지 않는다 |
+| `failureReason` | `CREDENTIALS_INVALID`(없는 이메일 · 비밀번호 불일치) 또는 `LOGIN_TENANT_AMBIGUOUS`. **`RATE_LIMITED` 는 이 경로에서 나오지 않는다** — rate-limit 을 적용하지 않기 때문(소유자 결정, BE-599 AC-0 ⓑ 미채택: 공유 데모 계정이 N회 실패 뒤 막히면 안 된다). **TASK-BE-600 부터 `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 가 나온다** — 비밀번호가 **맞고** 계정 상태가 그것일 때만(`accountId` 채움). 비밀번호가 틀리면 상태와 무관하게 `CREDENTIALS_INVALID`(VelocityRule 에 가는 비밀번호 실패는 그대로다). 계약 밖 상태 값이면 `failed` 를 내지 않는다(enum 에 없는 값을 만들지 않는다). HTTP 응답은 이 값들과 무관하게 모두 같은 `/login?error` 다(소유자 결정, BE-600 AC-1 ⓐ) |
 | `failCount` | 항상 `0` — auth-service 측 실패 카운터가 없다(같은 이유). security-service VelocityRule 은 이 필드를 읽지 않고 자체 카운터로 센다 |
 | `sessionJti` (succeeded) | `null` — 비밀번호 검증 시점에는 refresh token 이 아직 없다(SAS 가 이후 `/oauth2/token` 에서 발급) |
 | `deviceId` / `isNewDevice` (succeeded) | 둘 다 `null` — 디바이스 세션을 등록하지 않으므로. 두 필드는 아래 `auth.login.succeeded` 절에서 **optional·additive** 이고 `null` 은 «알 수 없음(legacy)» 으로 정의돼 있어 계약에 맞다. 소비자(DeviceChangeRule)는 그때 `deviceFingerprint` 폴백으로 가는데, 브라우저 폼은 `X-Device-Fingerprint` 를 보내지 않아 `deviceFingerprint` 도 `null` 이므로 **규칙이 발화하지 않는다**(`DeviceChangeRule.java` 의 `fp == null \|\| fp.isBlank()` → NONE, 테스트 `DeviceChangeRuleTest.formLoginShape_noDeviceSignal_doesNotFire`) |
@@ -118,7 +118,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 - `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
 - `failureReason`: 이 enum의 `CREDENTIALS_INVALID` 값은 **HTTP 응답 code와 별개 계약**이다. 자격 증명 실패의 HTTP code는 `INVALID_CREDENTIALS`로 통일되었으나(TASK-MONO-246, platform-common canonical), 본 `failureReason` enum은 security-service가 소비하는 독립 Kafka 계약이므로 `CREDENTIALS_INVALID`를 유지한다. **두 문자열을 통일하지 말 것** — 동일하게 보여도 다른 네임스페이스다(HTTP 응답 vs 이벤트 enum).
 
-- (TASK-BE-599) 폼 로그인 경로에서 `failureReason` 은 `CREDENTIALS_INVALID` · `LOGIN_TENANT_AMBIGUOUS` 뿐이고 `failCount` 는 항상 `0` 이다(rate-limit 미적용 — 위 «발행 경로» 절).
+- (TASK-BE-599) 폼 로그인 경로에서 `failureReason` 은 `CREDENTIALS_INVALID` · `LOGIN_TENANT_AMBIGUOUS` 뿐이고 `failCount` 는 항상 `0` 이다(rate-limit 미적용 — 위 «발행 경로» 절). **(TASK-BE-600 갱신)** 여기에 `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 가 더해졌다(비밀번호 일치 + 비-ACTIVE). 새 enum 값은 없다 — 셋 다 이미 이 enum 에 있던 값이다. security-service `AuthEventMapper.resolveFailureOutcome` 은 `RATE_LIMITED` 외 모든 값을 `FAILURE` 로 읽는다.
 
 **Consumers**: security-service (VelocityRule 평가)
 
