@@ -10,9 +10,13 @@
 #
 # SOUND, NOT COMPLETE — on purpose.
 #   It only collects codes that are *unambiguously* HTTP error codes: a string literal
-#   passed as the `code` argument of an error-envelope factory, or carried by a domain
-#   exception's `super("CODE", ...)` call. Both reach the `code` field of an HTTP error
-#   response by construction.
+#   passed as the `code` argument of an error-envelope factory, carried by a domain
+#   exception's `super("CODE", ...)` call, or returned as a bare literal by an
+#   `errorCode()` / `getErrorCode()` override. All three reach the `code` field of an
+#   HTTP error response by construction — the override shape is the wms domain-exception
+#   standard, and each wms GlobalExceptionHandler writes `e.errorCode()` into the body
+#   (TASK-MONO-733: before it was collected, 32 of the 38 codes returned this way were
+#   invisible to this check).
 #
 #   It deliberately does NOT try to collect every SCREAMING_SNAKE literal. Doing so
 #   produces false positives that are worse than a miss, because they pressure a
@@ -29,8 +33,11 @@
 #     * plain enums          — `WEIGHTED_AVERAGE` is an FX costing method
 #
 #   A code carried in a field rather than a `super(...)` call can still slip past this
-#   check. That is an accepted gap: a guard that never fires wrongly is one people keep,
-#   and this catches the shape every drifted code so far actually had.
+#   check — including an `errorCode()` override that returns a field instead of a literal
+#   (`return errorCode;`, as the iam SignupNotPossible / AccountStatus /
+#   NonRetryableDownstream exceptions and wms MasterRefInactiveException do). That is an
+#   accepted gap: a guard that never fires wrongly is one people keep, and this catches
+#   the shape every drifted code so far actually had.
 #
 # Usage: scripts/check-error-code-registry.sh [--list]
 set -euo pipefail
@@ -48,10 +55,27 @@ registered="$(grep -oE '^\| *`?[A-Z][A-Z0-9_]{3,}`? *\|' "$REGISTRY" \
 # Codes a service can put in an error envelope.
 #   ErrorResponse.of("CODE"  /  ApiErrorBody.of("CODE"   — handler-synthesised
 #   super("CODE",                                        — domain exception carrying a code
-emitted="$(grep -rhoE '(ErrorResponse|ApiErrorBody)\.of\("[A-Z][A-Z0-9_]{3,}"|super\("[A-Z][A-Z0-9_]{3,}"' \
+#   errorCode() { return "CODE"; }                       — domain exception overriding the accessor
+SRC_DIRS=(projects/*/apps/*/src/main libs/*/src/main)
+
+# The override almost always puts `return` on the next line, so a line-by-line grep sees
+# nothing (that is how this shape stayed invisible). Flatten each override-bearing file
+# to one line first; the pattern is anchored on the method name, so joining lines cannot
+# pair a literal with a different method.
+OVERRIDE_RE='(get)?[eE]rrorCode\(\)[[:space:]]*\{[[:space:]]*return[[:space:]]+"[A-Z][A-Z0-9_]{3,}"[[:space:]]*;'
+override_files="$(grep -rlE '(get)?[eE]rrorCode\(\)[[:space:]]*\{' --include='*.java' \
+    "${SRC_DIRS[@]}" 2>/dev/null || true)"
+override_emitted="$(if [[ -n "$override_files" ]]; then
+    while read -r f; do tr '\r\n' '  ' < "$f"; echo; done <<<"$override_files" \
+      | { grep -oE "$OVERRIDE_RE" || true; } | grep -oE '"[A-Z][A-Z0-9_]{3,}"' | tr -d '"' || true
+  fi)"
+
+emitted="$({ grep -rhoE '(ErrorResponse|ApiErrorBody)\.of\("[A-Z][A-Z0-9_]{3,}"|super\("[A-Z][A-Z0-9_]{3,}"' \
     --include='*.java' \
-    projects/*/apps/*/src/main libs/*/src/main 2>/dev/null \
-  | grep -oE '"[A-Z][A-Z0-9_]{3,}"' | tr -d '"' | sort -u)"
+    "${SRC_DIRS[@]}" 2>/dev/null \
+  | grep -oE '"[A-Z][A-Z0-9_]{3,}"' | tr -d '"'
+  if [[ -n "$override_emitted" ]]; then echo "$override_emitted"; fi
+  } | sort -u)"
 
 if [[ "${1:-}" == "--list" ]]; then
   echo "registered: $(wc -l <<<"$registered")"
@@ -66,7 +90,15 @@ if [[ -n "$missing" ]]; then
   while read -r code; do
     [[ -z "$code" ]] && continue
     site="$(grep -rlE "(ErrorResponse|ApiErrorBody)\.of\(\"$code\"|super\(\"$code\"" \
-        --include='*.java' projects/*/apps/*/src/main libs/*/src/main 2>/dev/null | head -1)"
+        --include='*.java' "${SRC_DIRS[@]}" 2>/dev/null | head -1 || true)"
+    if [[ -z "$site" && -n "$override_files" ]]; then
+      # An override-only code: the literal sits on the line after the method name.
+      while read -r f; do
+        if tr '\r\n' '  ' < "$f" | grep -qE "(get)?[eE]rrorCode\(\)[[:space:]]*\{[[:space:]]*return[[:space:]]+\"$code\"[[:space:]]*;"; then
+          site="$f"; break
+        fi
+      done <<<"$override_files"
+    fi
     printf '  %-38s %s\n' "$code" "${site:-?}" >&2
   done <<<"$missing"
   echo >&2
