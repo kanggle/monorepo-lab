@@ -4,7 +4,7 @@ TASK-MONO-733
 
 # Status
 
-ready
+review
 
 # Title
 
@@ -66,14 +66,14 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 위 수치를 **다시 잰다**(49 · 45 · 38 · 32). 달라졌으면 달라진 값으로 진행하고 적는다.
-- [ ] **AC-1** — 새 모양 수집. 🔴 `--list` 의 `emitted` 가 **정확히 blind 개수만큼** 늘어야 한다(2026-09-25 기준 282 → 314).
+- [x] **AC-0** — 착수 시 위 수치를 **다시 잰다**(49 · 45 · 38 · 32). 달라졌으면 달라진 값으로 진행하고 적는다.
+- [x] **AC-1** — 새 모양 수집. 🔴 `--list` 의 `emitted` 가 **정확히 blind 개수만큼** 늘어야 한다(2026-09-25 기준 282 → 314).
       다른 수가 나오면 추출기가 다른 것을 잡은 것이다 — 멈추고 차이를 본다.
-- [ ] **AC-2** — bite 양방향: ① 레지스트리에서 `ORDER_LINE_MISMATCH` 행을 지우면 rc=1 이고 `site` 가
+- [x] **AC-2** — bite 양방향: ① 레지스트리에서 `ORDER_LINE_MISMATCH` 행을 지우면 rc=1 이고 `site` 가
       `OrderLineMismatchException.java` 를 가리킨다 · ② 복원하면 rc=0. 🔴 ① 은 **새 모양으로만 잡히는 코드**여야 한다
       (옛 모양으로도 잡히는 코드로 bite 하면 새 수집이 동작했다는 증거가 아니다).
-- [ ] **AC-3** — 대조군: 필드 반환 재정의 4개는 여전히 수집되지 **않는다**(헤더의 선언과 동작이 같다).
-- [ ] **AC-4** — `scripts/` 파일 추가·삭제는 없지만 가드 한 개를 고치므로, 이 가드를 부르는 CI 잡과 필수 3종을 스테이지 후 돌린다.
+- [x] **AC-3** — 대조군: 필드 반환 재정의 4개는 여전히 수집되지 **않는다**(헤더의 선언과 동작이 같다).
+- [x] **AC-4** — `scripts/` 파일 추가·삭제는 없지만 가드 한 개를 고치므로, 이 가드를 부르는 CI 잡과 필수 3종을 스테이지 후 돌린다.
 
 # Related Specs
 
@@ -98,3 +98,45 @@ monorepo
 1. **정규식이 한 줄만 본다** → `return` 이 다음 줄인 49개 전부를 놓치고 초록(이번 실측이 처음 그렇게 0건을 냈다).
 2. **bite 를 옛 모양 코드로 한다** → 새 수집이 죽어 있어도 rc=1 이 나와 통과한 것처럼 보인다(AC-2 🔴).
 3. **`emitted` 증가량을 안 본다** → 추출기가 엉뚱한 리터럴(메시지 문자열 등)을 먹어도 모른다(AC-1 🔴).
+
+---
+
+# 구현 기록 (2026-09-25 UTC · 분석=Opus 5.5)
+
+## 무엇을 바꿨나 — `scripts/check-error-code-registry.sh` 한 파일
+
+- 수집 모양 추가: `errorCode()`/`getErrorCode()` 가 **리터럴 하나를 곧바로 반환**하는 재정의. 재정의가 있는 파일만 골라
+  줄바꿈을 공백으로 편 뒤 `…ErrorCode() { return "CODE";` 를 뽑는다(패턴이 메서드 이름에 묶여 있어 줄을 합쳐도 다른
+  메서드의 리터럴과 짝지어지지 않는다).
+- 미등록 보고의 `site` 가 옛 세 모양에서 못 찾으면 재정의 파일에서 찾는다.
+- 헤더: 수집 모양 셋째를 추가하고, 여전히 못 보는 **필드 반환 재정의 4개**를 이름으로 적었다(accepted gap).
+- 🔴 `set -euo pipefail` 아래 **빈 결과가 스크립트를 조용히 죽이는 자리 둘**을 막았다(재정의 추출의 `grep` 무매치 ·
+  `site` 조회의 무매치 — 새 모양 전용 코드는 옛 grep 이 0건이라 그대로 두면 보고 도중 종료).
+
+## AC 판정
+
+| AC | 결과 |
+|---|---|
+| AC-0 재측정 | 🟢 재정의 파일 **49** · 리터럴 매치 **45** · 서로 다른 코드 **38** · 옛 수집 밖 **32** — 기안 수치와 동일 |
+| AC-1 `emitted` 증가량 | 🟢 `--list` **282 → 314 (+32)** = blind 수와 정확히 같다 · `registered` 384 불변 · rc=0 |
+| AC-2 bite (새 모양 전용 코드) | 🟢 레지스트리에서 `ORDER_LINE_MISMATCH` 행 삭제(1→0행) → **rc=1**, `site` = `outbound-service/…/OrderLineMismatchException.java` · 복원(백업 복사) → **rc=0**, `git status platform/` 차이 0 |
+| AC-2 대조군 | 🟢 **옛 가드**(`origin/main` 판)를 같은 삭제 상태에 돌리면 **rc=0** — 이 코드를 못 본다 ⇒ 위 rc=1 은 새 수집이 만든 것이다. 🔵 `TASK-BE-596` § 게이트 기록(«행을 지워도 rc=0») 이 기록한 바로 그 상태가 닫혔다 |
+| AC-3 필드 반환 4개 | 🟢 파일별 새 패턴 매치 **0** — `NonRetryableDownstreamException` · `AccountStatusException` · `SignupNotPossibleException` · `MasterRefInactiveException` |
+| AC-4 게이트 | 아래 |
+
+🔵 **오탐 전제 확인** — wms 세 서비스 핸들러가 모두 `e.errorCode()` 를 응답 `code` 로 싣는다: inbound
+`GlobalExceptionHandler.java:68` · outbound `:80`(+`:93` 503) · inventory `:72`. 기안의 «나머지 핸들러는 착수 시 확인» 을 닫았다.
+🔴 첫 확인은 Grep 의 glob(`{inbound,outbound}-service/src/main/**`)이 경로에 안 맞아 **0건**을 냈다 — «없다» 가 아니라 «못 찾음»
+이었고, 디렉터리를 바로 지정해 다시 쟀다.
+
+## 게이트 기록
+
+| 게이트 | 결과 |
+|---|---|
+| `bash -n scripts/check-error-code-registry.sh` | 🟢 |
+| `check-error-code-registry.sh` | 🟢 rc=0 · emitted 314 |
+| `check-domain-error-code-registry.sh` (레지스트리 파싱을 공유) | 🟢 rc=0 |
+| 필수 3종 | 🟢 rc=0 (스테이지 후) |
+| `scripts/check-*.sh` 전체 37개 (스테이지 후) | 🟢 35 · 🔴 2 — `check-erp-single-tenant-ratchet`(떠 있는 `erp-platform-mysql` 필요, 이 호스트 Docker 꺼짐) · `check-prerendered-demo-verdict`(`DEMO_API_BASE` 로 빌드한 web-store 산출물 필요). 🔵 **대조군: 같은 두 가드가 main 체크아웃(`326c4f852`)에서도 rc=1** ⇒ 이 변경과 무관한 환경 의존 |
+
+🔴 **안 돌린 것**: 없음에 가깝다 — 코드·계약 변경 없음. `scripts/` 에 파일 추가·삭제 없음(bite 대조군용 임시 사본은 같은 실행 안에서 지웠다).
