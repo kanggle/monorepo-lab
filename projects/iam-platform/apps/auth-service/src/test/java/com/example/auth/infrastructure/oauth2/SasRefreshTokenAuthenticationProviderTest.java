@@ -377,6 +377,131 @@ class SasRefreshTokenAuthenticationProviderTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-BE-603 — the rotated mirror row, the refreshed event, and the reuse
+    // kill-switch are keyed on the account UUID from the principal details, not
+    // on the principal name (the login email, here 54 characters — longer than
+    // refresh_tokens.account_id VARCHAR(36)).
+    // -----------------------------------------------------------------------
+
+    private static final String LONG_EMAIL = "first.last.long-name+tag@subdomain.example-company.com";
+
+    @Test
+    @DisplayName("rotation (TASK-BE-603): 54자 이메일 principal → 새 미러 행 · auth.token.refreshed 의 accountId = UUID")
+    void rotation_longEmailPrincipal_mirrorRowAndEventCarryAccountUuid() {
+        assertThat(LONG_EMAIL).hasSizeGreaterThan(36);
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+
+        String tokenValue = "rotated-rt-" + UUID.randomUUID();
+        OAuth2RefreshToken sasRt = new OAuth2RefreshToken(
+                tokenValue, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = buildLoginAuthorization(
+                registeredClient, LONG_EMAIL, accountId, Set.of("profile"), sasRt);
+
+        OAuth2RefreshTokenAuthenticationToken auth = mock(OAuth2RefreshTokenAuthenticationToken.class);
+        when(auth.getPrincipal()).thenReturn(clientPrincipal);
+        when(auth.getRefreshToken()).thenReturn(tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        RefreshToken existing = RefreshToken.create(
+                tokenValue, accountId, "fan-platform",
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), null, null, null);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(existing));
+        when(tokenReuseDetector.isReuse(existing)).thenReturn(false);
+
+        Instant now = Instant.now();
+        OAuth2Token generatedAccess = mock(OAuth2Token.class);
+        when(generatedAccess.getTokenValue()).thenReturn("new-access-jwt");
+        when(generatedAccess.getIssuedAt()).thenReturn(now);
+        when(generatedAccess.getExpiresAt()).thenReturn(now.plusSeconds(300));
+        OAuth2Token generatedRefresh = mock(OAuth2Token.class);
+        when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
+        when(generatedRefresh.getIssuedAt()).thenReturn(now);
+        when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
+        doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            provider.authenticate(auth);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(2)).save(saved.capture());
+        RefreshToken newRow = saved.getAllValues().stream()
+                .filter(t -> "new-refresh-opaque".equals(t.getJti()))
+                .findFirst().orElseThrow();
+        assertThat(newRow.getAccountId())
+                .as("the rotated mirror row is keyed on the account UUID, never the login email")
+                .isEqualTo(accountId);
+        assertThat(newRow.getRotatedFrom()).isEqualTo(tokenValue);
+
+        verify(authEventPublisher).publishTokenRefreshed(
+                eq(accountId), eq("fan-platform"), eq(tokenValue), eq("new-refresh-opaque"), any());
+    }
+
+    @Test
+    @DisplayName("reuse (TASK-BE-603): revoke-all · 기기 세션 · invalidate-all · 이벤트 = UUID, "
+            + "배수 기간의 이메일 키 미러 행도 폐기")
+    void reuse_longEmailPrincipal_keysOnUuidAndAlsoRevokesLegacyEmailRows() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+
+        String tokenValue = "rotated-rt-" + UUID.randomUUID();
+        RefreshToken domainToken = RefreshToken.create(
+                tokenValue, accountId, "fan-platform",
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), null, null, null);
+        OAuth2RefreshToken sasRt = new OAuth2RefreshToken(
+                tokenValue, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = buildLoginAuthorization(
+                registeredClient, LONG_EMAIL, accountId, Set.of("openid"), sasRt);
+
+        OAuth2RefreshTokenAuthenticationToken auth = mock(OAuth2RefreshTokenAuthenticationToken.class);
+        when(auth.getPrincipal()).thenReturn(clientPrincipal);
+        when(auth.getRefreshToken()).thenReturn(tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(domainToken));
+        when(tokenReuseDetector.isReuse(domainToken)).thenReturn(true);
+        when(refreshTokenRepository.findByRotatedFrom(tokenValue)).thenReturn(Optional.empty());
+        when(deviceSessionRepository.findActiveByAccountId(accountId)).thenReturn(List.of());
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(2);
+        // A session issued before TASK-BE-603 whose mirror row still carries the email.
+        when(refreshTokenRepository.revokeAllByAccountId(LONG_EMAIL)).thenReturn(1);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
+                .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+
+        verify(refreshTokenRepository).revokeAllByAccountId(accountId);
+        verify(refreshTokenRepository).revokeAllByAccountId(LONG_EMAIL);
+        verify(deviceSessionRepository).findActiveByAccountId(accountId);
+        verify(bulkInvalidationStore).invalidateAll(eq(accountId), anyLong());
+        verify(authEventPublisher).publishTokenReuseDetected(
+                eq(accountId), eq("fan-platform"), eq(tokenValue),
+                any(), any(), any(), any(), eq(true), eq(3));
+    }
+
+    /** An authorization carrying the principal shape the browser login paths build. */
+    private OAuth2Authorization buildLoginAuthorization(RegisteredClient client, String email,
+                                                         String accountId, Set<String> scopes,
+                                                         OAuth2RefreshToken refreshToken) {
+        return OAuth2Authorization.withRegisteredClient(client)
+                .id(UUID.randomUUID().toString())
+                .principalName(email)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(scopes)
+                .token(refreshToken)
+                .attribute(java.security.Principal.class.getName(),
+                        DomainSyncOAuth2AuthorizationServiceTest.loginPrincipal(email, accountId))
+                .build();
+    }
+
+    // -----------------------------------------------------------------------
     // TASK-MONO-705 ⓐ — the rotated response must carry an ID token
     //
     // 🔴 Why these three cells and not one. The defect was not "no ID token is

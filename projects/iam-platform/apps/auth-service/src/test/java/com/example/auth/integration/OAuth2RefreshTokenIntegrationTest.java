@@ -1,6 +1,7 @@
 package com.example.auth.integration;
 
 import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.infrastructure.persistence.RefreshTokenJpaRepository;
 import com.example.testsupport.integration.AbstractIntegrationTest;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -21,6 +23,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -28,10 +31,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -132,6 +139,9 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private RefreshTokenJpaRepository refreshTokenJpaRepository;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     // Shared state across ordered tests (normal rotation scenario)
     private static String refreshTokenValue;
@@ -442,6 +452,112 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
                             .as("404 means SAS swallowed /api/auth/refresh — not acceptable")
                             .isNotEqualTo(404);
                 });
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. TASK-BE-603: a real-shaped (long) login email. The mirror row is keyed on
+    //    the account UUID from the principal details, so issuance and refresh both
+    //    succeed, and revokeAllByAccountId(uuid) reaches the SAS session.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(8)
+    @DisplayName("TASK-BE-603: 54자+ 이메일 계정 — 발급 시 미러 행(UUID) 저장 → refresh 성공 → "
+            + "revokeAllByAccountId(UUID) 가 SAS 경로 행을 맞혀 다음 refresh 거부")
+    void longEmailAccount_mirrorRowKeyedOnUuid_refreshSucceeds_andAccountRevokeReachesIt() throws Exception {
+        String accountId = UUID.randomUUID().toString();
+        // Real-shaped address, longer than refresh_tokens.account_id VARCHAR(36).
+        String email = "first.last.long-name+" + UUID.randomUUID().toString().substring(0, 8)
+                + "@subdomain.example-company.com";
+        assertThat(email).hasSizeGreaterThan(36);
+
+        String issued = signInWithLoginPrincipal(email, accountId);
+
+        // 🔴 Assert the row exists: the initial-issuance INSERT swallows its failure
+        // (DomainSyncOAuth2AuthorizationService), so "the token endpoint returned 200"
+        // proves nothing about the mirror row.
+        Optional<RefreshToken> issuedRow = refreshTokenRepository.findByJti(issued);
+        assertThat(issuedRow)
+                .as("the initial-issuance mirror row must be persisted, not swallowed")
+                .isPresent();
+        assertThat(issuedRow.get().getAccountId())
+                .as("mirror row account_id = the account UUID, not the login email")
+                .isEqualTo(accountId);
+
+        // Refresh succeeds (before TASK-BE-603 this INSERT failed in persistRotation).
+        String rotated = refreshOk(issued);
+        Optional<RefreshToken> rotatedRow = refreshTokenRepository.findByJti(rotated);
+        assertThat(rotatedRow).isPresent();
+        assertThat(rotatedRow.get().getAccountId()).isEqualTo(accountId);
+        assertThat(rotatedRow.get().getRotatedFrom()).isEqualTo(issued);
+        assertThat(refreshTokenRepository.findByJti(issued).orElseThrow().isRevoked()).isTrue();
+
+        // AC-2: a revoke keyed on the account UUID reaches the SAS-path mirror row …
+        Integer revoked = transactionTemplate.execute(
+                s -> refreshTokenRepository.revokeAllByAccountId(accountId));
+        assertThat(revoked).as("the live SAS mirror row of this account").isEqualTo(1);
+        assertThat(refreshTokenRepository.findByJti(rotated).orElseThrow().isRevoked()).isTrue();
+
+        // … and that alone refuses the session's next refresh.
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", rotated)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"));
+    }
+
+    /** authorization_code + PKCE with the principal shape the form/social login paths build. */
+    private String signInWithLoginPrincipal(String email, String accountId) throws Exception {
+        Map<String, Object> details = new HashMap<>();
+        details.put(PrincipalDetailKeys.TENANT_ID, "fan-platform");
+        details.put(PrincipalDetailKeys.TENANT_TYPE, "B2C");
+        details.put(PrincipalDetailKeys.ACCOUNT_ID, accountId);
+        details.put(PrincipalDetailKeys.EMAIL, email);
+        UsernamePasswordAuthenticationToken principal = new UsernamePasswordAuthenticationToken(
+                email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        principal.setDetails(details);
+
+        String codeVerifier = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                UUID.randomUUID().toString().replace("-", "").getBytes(StandardCharsets.UTF_8));
+        String codeChallenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(codeVerifier.getBytes(StandardCharsets.US_ASCII)));
+
+        MvcResult authorize = mockMvc.perform(get("/oauth2/authorize")
+                        .with(authentication(principal))
+                        .queryParam("response_type", "code")
+                        .queryParam("client_id", "demo-spa-client")
+                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("scope", "openid profile email")
+                        .queryParam("code_challenge", codeChallenge)
+                        .queryParam("code_challenge_method", "S256"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String code = extractParam(authorize.getResponse().getHeader("Location"), "code");
+        assertThat(code).isNotNull();
+
+        MvcResult token = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", "http://localhost:3000/callback")
+                        .param("client_id", "demo-spa-client")
+                        .param("code_verifier", codeVerifier))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(token.getResponse().getContentAsString()).get("refresh_token").asText();
+    }
+
+    private String refreshOk(String refreshToken) throws Exception {
+        MvcResult result = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", refreshToken)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("refresh_token").asText();
     }
 
     // -----------------------------------------------------------------------

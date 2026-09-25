@@ -9,14 +9,12 @@ import com.example.auth.infrastructure.persistence.SocialIdentityJpaEntity;
 import com.example.auth.infrastructure.persistence.SocialIdentityJpaRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcOperations;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.stereotype.Component;
 
-import java.security.Principal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -33,10 +31,16 @@ import java.util.Set;
  * (1) {@code authorizationService.findByToken(token, REFRESH_TOKEN)} finds the
  * authorization and its refresh token {@code isActive()} — i.e. not invalidated, not
  * expired — and (2) the {@code refresh_tokens} mirror row, IF one exists, is not revoked
- * or expired. The mirror row is keyed by the principal name (the login email), so
- * {@code revokeAllByAccountId(accountId)} never touches it, and when it is missing the
- * provider proceeds on (1) alone. The authorization itself is therefore the store that has
- * to be closed; the mirror row is closed too so the two agree.
+ * or expired. When the mirror row is missing the provider proceeds on (1) alone, so the
+ * authorization itself is the store that has to be closed; the mirror row is closed too (by
+ * jti) so the two agree.
+ *
+ * <p><b>Still needed after TASK-BE-603.</b> BE-603 keys new mirror rows on the account UUID,
+ * so {@code revokeAllByAccountId(accountId)} now reaches them — but it only ever closes the
+ * mirror row, never the authorization, and rows written before BE-603 stay keyed by the
+ * login email until they expire. The authorization store's {@code principal_name} stays the
+ * login email (BE-603 does not change the principal name), so this email → candidates →
+ * {@code account_id}-confirmed lookup remains the only way to close the authorization.
  *
  * <p><b>Finding the account's authorizations.</b> {@code oauth2_authorization} has no
  * account column — only {@code principal_name}. The candidate names are the addresses the
@@ -132,7 +136,7 @@ public class SasAuthorizationRevocationAdapter implements OAuthAuthorizationRevo
         if (authorization == null) {
             return false;
         }
-        String ownerAccountId = principalAccountId(authorization);
+        String ownerAccountId = AuthorizationAccountId.fromPrincipalDetails(authorization);
         if (ownerAccountId == null) {
             log.warn("SAS revoke: authorization={} carries no account_id in its principal — "
                     + "cannot attribute it to account={}, left untouched", authorizationId, accountId);
@@ -164,21 +168,6 @@ public class SasAuthorizationRevocationAdapter implements OAuthAuthorizationRevo
                     refreshTokenRepository.save(row);
                 });
         return true;
-    }
-
-    /**
-     * The account id the login path stored on the resource-owner principal. SAS keeps that
-     * principal under {@code java.security.Principal} (the key its authorization-code
-     * provider writes — see TASK-BE-465).
-     */
-    private static String principalAccountId(OAuth2Authorization authorization) {
-        Object principal = authorization.getAttribute(Principal.class.getName());
-        if (principal instanceof Authentication authentication
-                && authentication.getDetails() instanceof Map<?, ?> details) {
-            Object accountId = details.get(PrincipalDetailKeys.ACCOUNT_ID);
-            return accountId instanceof String s && !s.isBlank() ? s : null;
-        }
-        return null;
     }
 
     /** The metadata SAS's own revocation writes; {@code Token#isActive()} reads it. */

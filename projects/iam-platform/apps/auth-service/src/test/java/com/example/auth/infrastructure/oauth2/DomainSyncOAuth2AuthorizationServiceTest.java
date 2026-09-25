@@ -276,6 +276,88 @@ class DomainSyncOAuth2AuthorizationServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-BE-603: the mirror row's account_id is the account UUID from the
+    // principal details — NOT the principal name (the login email)
+    // -----------------------------------------------------------------------
+
+    /** A real-shaped login email, 54 characters — longer than refresh_tokens.account_id (36). */
+    private static final String LONG_EMAIL = "first.last.long-name+tag@subdomain.example-company.com";
+
+    @Test
+    @DisplayName("save (TASK-BE-603): principal = 54자 이메일, details.account_id = UUID → 미러 행 account_id = UUID")
+    void save_principalIsLongEmail_mirrorRowCarriesAccountUuid() {
+        assertThat(LONG_EMAIL).hasSizeGreaterThan(36);
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildClient("demo-spa-client", "fan-platform|B2C");
+        OAuth2RefreshToken refreshToken = new OAuth2RefreshToken(
+                "rt-long-email", Instant.now(), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(client)
+                .id(UUID.randomUUID().toString())
+                .principalName(LONG_EMAIL)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(Set.of("openid"))
+                .token(refreshToken)
+                .attribute(java.security.Principal.class.getName(), loginPrincipal(LONG_EMAIL, accountId))
+                .build();
+
+        when(refreshTokenRepository.findByJti("rt-long-email")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.save(any(RefreshToken.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.save(authorization);
+
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getAccountId())
+                .as("the account UUID from the principal details, never the login email")
+                .isEqualTo(accountId)
+                .hasSizeLessThanOrEqualTo(36);
+    }
+
+    @Test
+    @DisplayName("save (TASK-BE-603): details 에 account_id 가 없으면 principal name 으로 — 토큰 sub 와 같은 규칙")
+    void save_principalWithoutAccountId_fallsBackToPrincipalName() {
+        RegisteredClient client = buildClient("demo-spa-client", "fan-platform|B2C");
+        OAuth2RefreshToken refreshToken = new OAuth2RefreshToken(
+                "rt-no-details", Instant.now(), Instant.now().plusSeconds(3600));
+        OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(client)
+                .id(UUID.randomUUID().toString())
+                .principalName("no-details-principal")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(Set.of("openid"))
+                .token(refreshToken)
+                .attribute(java.security.Principal.class.getName(),
+                        new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                "no-details-principal", null, java.util.List.of()))
+                .build();
+
+        when(refreshTokenRepository.findByJti("rt-no-details")).thenReturn(Optional.empty());
+        when(refreshTokenRepository.save(any(RefreshToken.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.save(authorization);
+
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getAccountId()).isEqualTo("no-details-principal");
+    }
+
+    /** The principal shape both browser login paths build: name = email, details carry account_id. */
+    static org.springframework.security.core.Authentication loginPrincipal(String email, String accountId) {
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_ID, "fan-platform");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_TYPE, "B2C");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.ACCOUNT_ID, accountId);
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.EMAIL, email);
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken principal =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        email, null, java.util.List.of(
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
+        principal.setDetails(details);
+        return principal;
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 

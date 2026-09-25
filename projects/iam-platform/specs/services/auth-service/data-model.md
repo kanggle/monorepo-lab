@@ -33,7 +33,7 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 |---|---|---|---|---|
 | `id` | BIGINT | PK | internal | — |
 | `jti` | VARCHAR(255) | UNIQUE, NOT NULL | confidential | JWT ID. V0001은 VARCHAR(36)으로 시작했으나 V0014에서 SAS의 96-byte URL-safe base64 RT 값을 수용하기 위해 VARCHAR(255)로 widening (TASK-MONO-046-1, Cluster A) |
-| `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | — |
+| `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | **계정 UUID** (account-service `accounts.id`). SAS 미러 행(`DomainSyncOAuth2AuthorizationService` 최초 발급 · `SasRefreshTokenAuthenticationProvider.persistRotation` 회전)은 SAS 인가의 principal **details 의 `account_id`** 를 쓴다 — principal name(= 로그인 이메일)이 **아니다**(TASK-BE-603). details 에 `account_id` 가 없는 principal 은 토큰 `sub` 와 같은 규칙으로 principal name 에 폴백한다(WARN 로그 · 운영 로그인 경로 둘 다 details 를 채우므로 테스트 픽스처에서만 나온다). 🔴 **배수 기간**: TASK-BE-603 이전에 쓰인 SAS 미러 행은 이메일을 담고 있다 — 이행하지 않고 refresh TTL(30일)로 소멸시킨다. 그동안 재사용 탐지는 UUID 와 principal name 양쪽으로 폐기하고, 계정 단위 SAS 세션 폐기는 `SasAuthorizationRevocationAdapter`(인가 자체 + 미러 행 jti)가 맡는다 |
 | `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT (NOT NULL 유지). TASK-BE-229 multi-tenant Phase 2/3 |
 | `issued_at` | DATETIME(6) | NOT NULL | internal | — |
 | `expires_at` | DATETIME(6) | NOT NULL | internal | — |

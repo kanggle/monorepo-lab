@@ -9,10 +9,14 @@ package com.example.auth.application.port;
  * every browser session today is a SAS session, and SAS records the authorization under
  * its principal NAME — the login email, not the account id
  * ({@code CredentialAuthenticationProvider} / {@code SocialLoginBrowserController} build
- * the principal as {@code UsernamePasswordAuthenticationToken(email, …)}). The mirror rows
- * {@code DomainSyncOAuth2AuthorizationService} writes into {@code refresh_tokens} copy that
- * name into {@code account_id}. A revoke keyed on the account id therefore never reaches a
- * SAS session, and the SAS {@code refresh_token} grant keeps accepting it.
+ * the principal as {@code UsernamePasswordAuthenticationToken(email, …)}). A revoke keyed on
+ * the account id therefore never reaches the authorization, and the SAS
+ * {@code refresh_token} grant keeps accepting it unless its mirror row is revoked.
+ *
+ * <p>TASK-BE-603: the {@code refresh_tokens} mirror rows are now keyed by the account UUID
+ * (they used to copy the principal name, i.e. the email), so {@code revokeAllByAccountId}
+ * reaches new SAS mirror rows. This port is still required: it closes the authorization
+ * itself, and mirror rows written before BE-603 remain email-keyed until they expire.
  *
  * <p>Implementations MUST confine the revoke to the given account: an email is not unique
  * across tenants (the same address may own an account in {@code fan-platform} and in
