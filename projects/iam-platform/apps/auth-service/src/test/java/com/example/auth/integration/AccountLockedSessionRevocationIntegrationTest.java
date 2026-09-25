@@ -171,13 +171,12 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
     void lockEvent_refusesTheNextRefresh_andSparesAnotherAccountWithTheSameEmail() throws Exception {
         String accountId = UUID.randomUUID().toString();
         String otherAccountId = UUID.randomUUID().toString();
-        // 🔴 Short email (<= 36 chars) is a WORKAROUND for a pre-existing defect, not a normal
-        // condition — see TASK-BE-601 § «기존 결함 — refresh_tokens.account_id VARCHAR(36)».
-        // The SAS mirror row writes the principal name (the login email) into
-        // refresh_tokens.account_id VARCHAR(36); a longer email fails that INSERT, and every
-        // refresh of that session then fails in persistRotation. Signup allows emails up to
-        // 255 chars, so real users hit this. Do not lengthen this email until that is fixed.
-        String email = "b6-" + UUID.randomUUID().toString().substring(0, 8) + "@ex.io";
+        // A real-shaped email (54 chars). TASK-BE-601 had to shorten it to <= 36 chars because
+        // the SAS mirror row wrote the principal name into refresh_tokens.account_id
+        // VARCHAR(36); TASK-BE-603 keys that row on the account UUID, so the workaround is
+        // reverted. Keep it longer than 36 — a short one would hide that defect again.
+        String email = "be601-" + UUID.randomUUID() + "@example.com";
+        assertThat(email).hasSizeGreaterThan(36);
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                 accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
 

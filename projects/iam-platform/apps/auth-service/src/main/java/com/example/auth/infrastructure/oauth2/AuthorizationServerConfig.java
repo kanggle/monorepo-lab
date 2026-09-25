@@ -122,6 +122,19 @@ public class AuthorizationServerConfig {
      * authentication manager; it takes priority over SAS's built-in refresh_token provider
      * because it is added first.
      *
+     * <p>🔴 <b>"Priority" is not "replacement"</b> (TASK-BE-603, measured in CI run
+     * 36134528069). The built-in {@code OAuth2RefreshTokenAuthenticationProvider} stays in
+     * the list after ours ({@code OAuth2TokenEndpointConfigurer.init} prepends custom
+     * providers to the defaults). {@code ProviderManager} catches an
+     * {@code AuthenticationException} from one provider and tries the next, so every
+     * {@code invalid_grant} the custom provider raises on its domain checks — mirror row
+     * revoked / expired, TOKEN_TENANT_MISMATCH — is retried by the built-in provider, which
+     * checks the SAS authorization only and succeeds. Removing it is a separate decision:
+     * by code reading (not measured), an account whose own tenant differs from the client's
+     * (e.g. a pre-BE-507 fan-platform account signing in through a client of another
+     * tenant) gets a mirror row whose tenant is its own, trips TOKEN_TENANT_MISMATCH here on
+     * every refresh, and currently refreshes only through that fall-through.
+     *
      * <p>Phase 2c: explicitly enables token revocation ({@code POST /oauth2/revoke}, RFC 7009)
      * and token introspection ({@code POST /oauth2/introspect}, RFC 7662). The introspection
      * endpoint is configured with a {@link TenantIntrospectionCustomizer} that appends

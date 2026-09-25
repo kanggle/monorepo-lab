@@ -63,11 +63,13 @@ public class ForceLogoutUseCase {
             return new Result(accountId, 0, Instant.now());
         }
 
-        // Rows keyed by the account id — the legacy custom-JWT refresh tokens.
+        // Rows keyed by the account id — the legacy custom-JWT refresh tokens and (since
+        // TASK-BE-603) the SAS mirror rows. Revoking a SAS mirror row does not by itself
+        // refuse that session's refresh (TASK-BE-603 § AC-2) — the port below does.
         int legacyRevoked = refreshTokenRepository.revokeAllByAccountId(accountId);
-        // TASK-BE-601: the SAS sessions. Their authorizations and mirror rows are keyed by
-        // the login email, so the line above never reached them and a force-logout left
-        // every browser session able to refresh (see OAuthAuthorizationRevocationPort).
+        // TASK-BE-601: the SAS sessions. Their authorizations are keyed by the login email,
+        // so the line above never reaches the authorization itself (and mirror rows written
+        // before TASK-BE-603 are email-keyed too) — see OAuthAuthorizationRevocationPort.
         int sasRevoked = oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(accountId);
         Instant revokedAt = Instant.now();
         bulkInvalidationStore.invalidateAll(accountId, tokenGeneratorPort.refreshTokenTtlSeconds());

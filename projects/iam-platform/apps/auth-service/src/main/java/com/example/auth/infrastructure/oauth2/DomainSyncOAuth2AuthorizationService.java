@@ -132,7 +132,9 @@ public class DomainSyncOAuth2AuthorizationService implements OAuth2Authorization
             return;
         }
 
-        String accountId = authorization.getPrincipalName();
+        // TASK-BE-603: the account UUID from the principal details — NOT the principal name,
+        // which is the login email (see AuthorizationAccountId).
+        String accountId = AuthorizationAccountId.forMirrorRow(authorization);
         String tenantId = extractTenantId(authorization);
 
         Instant issuedAt = refreshToken.getIssuedAt() != null ? refreshToken.getIssuedAt() : Instant.now();

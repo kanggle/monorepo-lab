@@ -33,7 +33,7 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 |---|---|---|---|---|
 | `id` | BIGINT | PK | internal | — |
 | `jti` | VARCHAR(255) | UNIQUE, NOT NULL | confidential | JWT ID. V0001은 VARCHAR(36)으로 시작했으나 V0014에서 SAS의 96-byte URL-safe base64 RT 값을 수용하기 위해 VARCHAR(255)로 widening (TASK-MONO-046-1, Cluster A) |
-| `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | — |
+| `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | **계정 UUID** (account-service `accounts.id`). SAS 미러 행(`DomainSyncOAuth2AuthorizationService` 최초 발급 · `SasRefreshTokenAuthenticationProvider.persistRotation` 회전)은 SAS 인가의 principal **details 의 `account_id`** 를 쓴다 — principal name(= 로그인 이메일)이 **아니다**(TASK-BE-603). details 에 `account_id` 가 없는 principal 은 토큰 `sub` 와 같은 규칙으로 principal name 에 폴백한다(WARN 로그 · 운영 로그인 경로 둘 다 details 를 채우므로 테스트 픽스처에서만 나온다). 🔴 **배수 기간**: TASK-BE-603 이전에 쓰인 SAS 미러 행은 이메일을 담고 있다 — 이행하지 않고 refresh TTL(30일)로 소멸시킨다. 그동안 재사용 탐지는 UUID 와 principal name 양쪽으로 폐기하고, 계정 단위 SAS 세션 폐기는 `SasAuthorizationRevocationAdapter`(인가 자체 + 미러 행 jti)가 맡는다 |
 | `tenant_id` | VARCHAR(32) | NOT NULL | internal | (R8) cross-tenant 격리 키. V0007에서 `DEFAULT 'fan-platform'` 백필 후 DROP DEFAULT (NOT NULL 유지). TASK-BE-229 multi-tenant Phase 2/3 |
 | `issued_at` | DATETIME(6) | NOT NULL | internal | — |
 | `expires_at` | DATETIME(6) | NOT NULL | internal | — |
@@ -47,6 +47,8 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 > `tenant_id` 단독 인덱스 또는 `(tenant_id, account_id)` 복합 인덱스는 V0007에서 추가하지 않았다. 현재 RT lookup은 항상 `jti`(UNIQUE) 또는 `account_id`(INDEX) 경로로 이루어지고, tenant 필터는 application 레벨에서 `WHERE account_id = ? AND tenant_id = ?` 형태로 보조 술어로만 적용된다 — RT 테이블은 account 당 카디널리티가 낮아 `idx_rt_account_id` 만으로 selectivity 충분. 향후 multi-tenant 트래픽이 tenant당 account 수를 크게 늘리면 `(tenant_id, account_id)` 복합 인덱스 도입 후보.
 
 **토큰 재사용 탐지 로직**: `POST /api/auth/refresh`가 `jti=A`로 rotation을 요청했을 때, A에 이미 `rotated_from`을 참조하는 자식이 존재하면 → 재사용 탐지. 해당 `account_id`의 모든 refresh_token을 `revoked=TRUE`로 일괄 처리 + `auth.token.reuse.detected` 이벤트 발행.
+
+> 🔴 **SAS 경로에서 미러 행 `revoked` 는 refresh 를 막지 못한다** (TASK-BE-603 CORRECTION, CI 실측 2026-09-25 UTC). `SasRefreshTokenAuthenticationProvider` 가 폐기·만료된 미러 행에 `invalid_grant` 를 던져도 SAS 기본 `OAuth2RefreshTokenAuthenticationProvider` 가 뒤에 등록돼 있어 `ProviderManager` 가 그쪽으로 넘기고, 기본 provider 는 SAS 인가(`oauth2_authorization`)만 보고 통과시킨다. SAS 세션을 실제로 끊는 것은 인가 무효화(`SasAuthorizationRevocationAdapter`, 강제 로그아웃 · 잠금)뿐이다. 기본 provider 제거는 후속 소유자 결정.
 
 ### `social_identities`
 

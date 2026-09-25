@@ -204,7 +204,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                                     "clientTenant={}, tokenTenant={}, jti={}",
                             expectedTenant, tokenTenant, submittedTokenValue);
                     authEventPublisher.publishTokenTenantMismatch(
-                            authorization.getPrincipalName(),
+                            AuthorizationAccountId.forMirrorRow(authorization),
                             tokenTenant, expectedTenant,
                             submittedTokenValue,
                             "masked", "unknown");
@@ -380,7 +380,8 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 // the dual-INSERT race that wasn't yet resolved). Here the race is
                 // resolved (skip-path) and we are using a programmatic
                 // TransactionTemplate, not annotation-based AOP.
-                String accountId = authorization.getPrincipalName();
+                // TASK-BE-603: the account UUID, not the principal name (the login email).
+                String accountId = AuthorizationAccountId.forMirrorRow(authorization);
                 String tenantId = extractClientTenantId(registeredClient);
                 authEventPublisher.publishTokenRefreshed(
                         accountId,
@@ -475,7 +476,10 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     private void persistRotation(String oldTokenValue, OAuth2RefreshToken newRefreshToken,
                                   OAuth2Authorization authorization, RegisteredClient registeredClient,
                                   Instant now) {
-        String accountId = authorization.getPrincipalName();
+        // TASK-BE-603: refresh_tokens.account_id is the account UUID (VARCHAR(36)). The
+        // principal name is the login email — writing it here made every refresh of an
+        // account whose email exceeds 36 characters fail on this INSERT.
+        String accountId = AuthorizationAccountId.forMirrorRow(authorization);
         String tenantId = extractClientTenantId(registeredClient);
         if (tenantId == null || tenantId.isBlank()) {
             tenantId = TenantContext.DEFAULT_TENANT_ID; // fallback per multi-tenancy policy
@@ -516,7 +520,19 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
      */
     private void handleReuseDetected(RefreshToken existingToken, String jti,
                                       OAuth2Authorization authorization) {
-        String accountId = authorization.getPrincipalName();
+        // TASK-BE-603: key everything below — the bulk revoke, the device-session lookup,
+        // the invalidate-all marker and the events — on the account UUID. With the principal
+        // name (the login email) the device-session lookup and the Redis marker were keyed on
+        // a value no other path uses, and the events carried the email as accountId.
+        String accountId = AuthorizationAccountId.forMirrorRow(authorization);
+        // Drain window: mirror rows written before TASK-BE-603 are keyed by the principal
+        // name. Revoke those too, so the mirror store keeps covering the same rows it did
+        // before this change. Once the last such row has expired (refresh TTL, 30 days) the
+        // second UPDATE matches nothing.
+        // 🔴 Neither UPDATE refuses the other sessions' next refresh today: this provider's
+        // invalid_grant on a revoked row falls through to SAS's built-in refresh provider,
+        // which checks only the authorization (TASK-BE-603 § AC-2 finding).
+        String legacyMirrorKey = authorization.getPrincipalName();
         log.warn("SAS_REFRESH: reuse detected for account={}, jti={}", accountId, jti);
 
         Instant originalRotationAt = refreshTokenRepository.findByRotatedFrom(jti)
@@ -546,7 +562,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // outage cannot roll back the security-critical revoke.
         Instant reuseAttemptAt = Instant.now();
         Integer revokedCountBoxed = transactionTemplate.execute(status -> {
-            int rc = doRevokeAllForReuse(accountId, activeSessions, reuseAttemptAt);
+            int rc = doRevokeAllForReuse(accountId, legacyMirrorKey, activeSessions, reuseAttemptAt);
 
             // Skip event emission if there was nothing to revoke (already-revoked
             // duplicate-reuse case). Mirrors the prior behaviour.
@@ -586,11 +602,18 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
      * Bulk revoke + per-device session revoke under one tx — kept package-private
      * so it can be exercised by unit tests as a single atomic step.
      *
-     * <p>Returns the count from {@link RefreshTokenRepository#revokeAllByAccountId(String)}.
+     * <p>Returns the count from {@link RefreshTokenRepository#revokeAllByAccountId(String)}
+     * — for the account UUID plus, during the TASK-BE-603 drain window, for the legacy
+     * principal-name key when it differs.
      */
-    private int doRevokeAllForReuse(String accountId, List<DeviceSession> activeSessions,
+    private int doRevokeAllForReuse(String accountId, String legacyMirrorKey,
+                                     List<DeviceSession> activeSessions,
                                      Instant reuseAttemptAt) {
         int revokedCount = refreshTokenRepository.revokeAllByAccountId(accountId);
+        if (legacyMirrorKey != null && !legacyMirrorKey.isBlank()
+                && !legacyMirrorKey.equals(accountId)) {
+            revokedCount += refreshTokenRepository.revokeAllByAccountId(legacyMirrorKey);
+        }
         for (DeviceSession session : activeSessions) {
             if (session.isRevoked()) {
                 continue;

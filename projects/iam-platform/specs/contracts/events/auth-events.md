@@ -184,6 +184,9 @@ Refresh token rotation 성공 시 발행.
 }
 ```
 
+**필드 노트** (TASK-BE-603):
+- `accountId`: **계정 UUID**. SAS `refresh_token` grant 경로(`SasRefreshTokenAuthenticationProvider`)는 SAS 인가의 principal details `account_id` 를 싣는다. 🔴 TASK-BE-603 이전에는 principal name(= **로그인 이메일**, PII)을 실었다 — 필드·스키마 불변, **값의 의미만 바로잡힘**. 소비자(security-service)는 처음부터 UUID 를 전제했다(`login_history.account_id` VARCHAR(36) · `account.deleted` 익명화 · 탐지 규칙 키) — 그래서 이전의 이메일 값은 36자 초과 시 적재 실패, 이하이면 UUID 이력과 갈라진 행이 되었다. 배포 이후 발행분부터 UUID 로 통일된다(과거 행은 이행하지 않음). 같은 교정이 이 경로의 `auth.token.reuse.detected` · `auth.token.tenant.mismatch` · `auth.session.revoked`(재사용 cascade) 에도 적용된다.
+
 **Consumers**: security-service (login_history에 outcome=REFRESH 기록)
 
 ---
@@ -213,6 +216,7 @@ Refresh token rotation 성공 시 발행.
 
 **필드 노트** (TASK-BE-259):
 - `tenantId`: 항상 required. publisher (`AuthEventPublisher.publishTokenReuseDetected`) 는 null/blank 시 `IllegalArgumentException` 을 던진다. consumer (security-service) 는 누락 메시지를 DLQ 로 라우팅하고, per-tenant reuse 카운터(`reuse:{tenantId}:{accountId}`)에 활용한다. 다른 auth-events 와 정합 (TASK-BE-248 시리즈).
+- `accountId` (TASK-BE-603): **계정 UUID**. SAS 경로도 principal details `account_id` 를 싣는다(이전엔 로그인 이메일 — 그래서 `TokenReuseRule` 의 자동 잠금 `/internal/accounts/{accountId}/lock` 이 이메일로 호출되었다). `auth.token.refreshed` 필드 노트 참조. `revokedCount` 는 배수 기간 동안 이메일 키 미러 행 폐기분을 포함한다.
 
 **Consumers**: security-service → 즉시 `auto.lock.triggered` 발행 (최고 우선순위)
 
@@ -238,6 +242,8 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
   "detectedAt": "2026-04-12T10:00:00Z"
 }
 ```
+
+**필드 노트** (TASK-BE-603): `accountId` = 계정 UUID(SAS 경로 포함 — 이전엔 로그인 이메일).
 
 **Consumers**: security-service (최고 우선순위 보안 이벤트)
 
