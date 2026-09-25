@@ -124,7 +124,33 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 - payload의 대체 필드 `reason`, `lockedBy`, `source`도 허용 (forward compatibility)
 - `tenant_id`는 additive field — 기존 컨슈머는 무시해도 무방 (forward-compatible)
 
-**Consumers**: auth-service (해당 계정 로그인 즉시 차단), security-service (`account_lock_history` append-only 이력 적재)
+**Consumers**: auth-service (해당 계정의 **기존 세션 폐기** — TASK-BE-601), security-service (`account_lock_history` append-only 이력 적재)
+
+> **정정 (TASK-BE-601, 2026-09-25)**: 이 줄은 오래전부터 auth-service 를 소비자로 적어 두었지만 **소비자 코드는 없었다**
+> (`@KafkaListener` 0). 잠금 뒤 «새 로그인 차단» 은 이 이벤트가 아니라 로그인 시점의 상태 조회가 한다(TASK-BE-600).
+> 이 이벤트로 auth-service 가 하는 일은 **잠금 전에 받은 세션을 끊는 것**이다.
+
+**auth-service 소비 규칙** (TASK-BE-601 · `AccountLockedConsumer` → `RevokeSessionsOnAccountLockedUseCase`):
+- **group** `auth-service-account-locked` (security-service 그룹과 독립 — 두 서비스가 모든 잠금을 받는다). `auto-offset-reset=earliest`:
+  커밋 오프셋이 없을 때(첫 기동 · 오프셋 만료)만 적용된다. `latest` 는 그 창의 잠금을 건너뛰어 잠긴 계정의 세션을 살려 두므로 금지
+  (`platform/service-types/event-consumer.md`). 대가(안전한 쪽): 첫 기동 때 보존 기간(compose 7일) 안의 잠금이 재생되어, 그 사이 **해제된** 계정도
+  현재 세션을 한 번 잃고 다시 로그인한다.
+- **봉투**: flat(루트 필드) — `payload` 래퍼도 허용. `eventId` 필수·UUID(dedupe 키) · `accountId` 필수 · **`tenantId` 필수**(누락 시
+  security-service 와 같은 규칙으로 재시도 없이 `account.locked.dlq`). 읽을 수 없는 봉투도 재시도 없이 DLQ. `reasonCode` · `lockedAt` 은 선택(로그 · 지연 메트릭).
+  `eventVersion`/`schemaVersion` 이 있으면 1·2 만 받고 그 밖은 DLQ(없으면 현재 = v2). 모르는 필드는 무시한다.
+- **동작**: `ForceLogoutUseCase` 의 **net-zero** 경로로 계정의 모든 refresh 를 폐기 — 레거시 `refresh_tokens` 행 + **SAS 인가(`oauth2_authorization`)의
+  refresh·access 무효화** + Redis 무효화 마커. 테넌트 한정 오버로드(BE-468)에 `tenantId` 를 넘기지 않는다: 그 한정은 «다른 테넌트 운영자의 행위» 를 막는
+  장치이고, 이 이벤트는 account-service 가 자기 계정에 대해 알리는 사실이며 계정 id(UUID)가 계정 하나를 정확히 가리킨다. 넘기면 자격 행이 없는(소셜 전용)
+  계정에서 잠금이 **조용한 no-op** 이 된다. SAS 폐기는 인가 principal 의 `account_id` 로 확정해 같은 이메일의 다른 테넌트 계정을 건드리지 않는다.
+- **멱등**: `eventId` 당 1회(`processed_events` 에 같은 트랜잭션으로 기록). 재전달은 no-op + `outcome=duplicate` 로 센다 — 두 번째 폐기로 세지 않는다.
+  («해제 → 재로그인» 뒤에 옛 잠금 이벤트가 재전달돼 **새 세션**을 끊는 것을 막는 것이 dedupe 의 실제 이유.)
+- **실패**: 삼키지 않는다. 폐기 실패 → 트랜잭션 롤백(dedupe 행 포함) → 지수 백오프 3회 → `account.locked.dlq`(파티션은 프로듀서가 선택 — DLQ 는 1 파티션).
+  메트릭 `outbox.dlq.size{reason}`(security-service 와 같은 이름).
+- 🔵 **수용한 틈 (소유자 결정 2026-09-25)**: 잠금 → 이 소비까지의 전파 지연 동안에는 잠금 전 세션의 refresh 가 **성공할 수 있다**. «refresh 때마다 상태 조회»
+  (fail-closed)는 account-service 장애가 모든 활성 세션의 갱신 장애로 번져 기각됐다. 지연은 `auth.account_locked.propagation.lag`(lockedAt → 폐기) 로 본다.
+  auth-service 가 내려가 있는 동안의 잠금은 Kafka 가 보관하고 복귀 후 소비된다. 이미 발급된 access token 은 TTL 동안 서명상 유효하다 —
+  Redis `access:invalidate-before:{accountId}` 마커를 읽는 iam gateway(`JwtAuthenticationFilter`)는 즉시 거부하고, 마커를 읽지 않는 검증자에게는
+  TTL 까지 유효하다. 이 Redis 마커 쓰기는 기존 동작대로 Redis 장애 시 WARN 후 계속한다 — refresh 폐기의 권위는 DB(SAS 인가 · `refresh_tokens`)다.
 
 ---
 

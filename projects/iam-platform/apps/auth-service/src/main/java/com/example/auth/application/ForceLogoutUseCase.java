@@ -1,5 +1,6 @@
 package com.example.auth.application;
 
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.repository.AccessTokenInvalidationStore;
 import com.example.auth.domain.repository.BulkInvalidationStore;
@@ -25,6 +26,7 @@ public class ForceLogoutUseCase {
     private final AccessTokenInvalidationStore accessTokenInvalidationStore;
     private final TokenGeneratorPort tokenGeneratorPort;
     private final CredentialRepository credentialRepository;
+    private final OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
 
     /**
      * NET-ZERO overload — no active tenant supplied (revoke across the account's
@@ -61,12 +63,19 @@ public class ForceLogoutUseCase {
             return new Result(accountId, 0, Instant.now());
         }
 
-        int revokedCount = refreshTokenRepository.revokeAllByAccountId(accountId);
+        // Rows keyed by the account id — the legacy custom-JWT refresh tokens.
+        int legacyRevoked = refreshTokenRepository.revokeAllByAccountId(accountId);
+        // TASK-BE-601: the SAS sessions. Their authorizations and mirror rows are keyed by
+        // the login email, so the line above never reached them and a force-logout left
+        // every browser session able to refresh (see OAuthAuthorizationRevocationPort).
+        int sasRevoked = oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(accountId);
         Instant revokedAt = Instant.now();
         bulkInvalidationStore.invalidateAll(accountId, tokenGeneratorPort.refreshTokenTtlSeconds());
         accessTokenInvalidationStore.invalidateAccessBefore(
                 accountId, revokedAt, tokenGeneratorPort.accessTokenTtlSeconds());
-        return new Result(accountId, revokedCount, revokedAt);
+        log.info("force-logout: account={} revoked legacyRefreshTokens={} sasAuthorizations={}",
+                accountId, legacyRevoked, sasRevoked);
+        return new Result(accountId, legacyRevoked + sasRevoked, revokedAt);
     }
 
     private static boolean isConcreteTenant(String tenantId) {

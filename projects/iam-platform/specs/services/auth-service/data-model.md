@@ -106,6 +106,7 @@ v1 레거시 테이블. 원래 [libs/java-messaging](../../../../../libs/java-me
 - V0016: V0011/V0012 의 `client_settings.settings.client.post-logout-redirect-uris` 를 SAS default-typed `["java.util.ArrayList",[...]]` 형태로 교정 (TASK-BE-297 — plain JSON array 가 `SecurityJackson2Modules.enableDefaultTyping` 하에서 `InvalidTypeIdException` 유발하던 잠재 production 결함. forward-only / 조건부 idempotent / 영향 행 3개만 갱신, clean client 무변경). **`client_settings` 는 MySQL native `JSON` 컬럼이므로** 교정은 `JSON_SET` + `JSON_EXTRACT` (parsed-tree 구조 변형)로 수행한다 — pre-normalization 문자열 리터럴 `REPLACE()` 는 MySQL 의 JSON 저장 정규화(키 재정렬·`:`/`,` 뒤 공백 재삽입·숫자 재정규화) 때문에 stored text 와 불일치하여 silent no-op 이 된다 (PR #571 에서 IT 3건으로 표면화된 1차 시도의 실패 원인). Flyway 는 본 서비스에서 MySQL 8.0 에만 적용된다 (유일한 H2 슬라이스 테스트 `OAuth2AuthorizationServerSliceTest` 는 `spring.flyway.enabled=false`); 따라서 MySQL 전용 JSON 함수 사용은 portable 하다. no-op 회귀는 `V0016MigrationShapeTest` (non-Docker) 가 즉시 차단한다.
 - V0022 / V0025: `credentials.account_type` 추가(BE-329) 후 제거(MONO-263 — ADR-MONO-032 D5 step 4b, roles 단일 축)
 - V0026: `credentials.identity_id` VARCHAR(36) NULL 추가 (TASK-BE-378 / ADR-MONO-035 O3 — 중앙 identity 상관키, value-convention cross-DB ref, additive net-zero, 미매핑·미백필)
+- V0039: `oauth2_authorization(principal_name)` 인덱스 (TASK-BE-601 — 계정 세션 폐기가 principal 이름으로 인가를 찾는다. SAS 는 만료 인가를 지우지 않아 무인덱스면 잠금마다 전표 스캔). 같은 티켓에서 V0004 `processed_events` 가 다시 쓰이기 시작했다 — `account.locked` 소비자의 eventId dedupe(`JdbcEventDedupeAdapter`, `INSERT IGNORE` 영향 행 수로 판정)
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---
@@ -203,7 +204,7 @@ Spring Authorization Server 공식 스키마. `JdbcOAuth2AuthorizationService`�
 |---|---|
 | `id` | PK (SAS authorization id) |
 | `registered_client_id` | `oauth_clients.id` 참조 (FK 없음 — 서비스 간 FK 금지) |
-| `principal_name` | 인가된 주체 (account_id 또는 client_id) |
+| `principal_name` | 인가된 주체 — 브라우저 로그인(폼 · 소셜)은 **로그인 이메일**, `client_credentials` 는 client_id. 🔴 account_id 가 **아니다**(TASK-BE-601 정정: 계정 id 는 `attributes` 의 principal details `account_id` 에만 있다). 그래서 계정 단위 세션 폐기는 이메일로 후보를 찾고 details 의 `account_id` 로 확정한다(`SasAuthorizationRevocationAdapter`). 인덱스 `idx_oauth2_authorization_principal_name` (V0039) |
 | `authorization_grant_type` | `client_credentials`, `authorization_code`, `refresh_token` |
 | `access_token_value` | BLOB (SAS 직렬화) |
 | `refresh_token_value` | BLOB (SAS 직렬화) |

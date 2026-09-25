@@ -12,6 +12,16 @@ admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / re
 
 특정 계정의 모든 세션 강제 종료. 해당 account의 모든 refresh_tokens를 revoke하고 `refresh:invalidate-all:{account_id}` Redis 키를 설정한다.
 
+> **TASK-BE-601 (2026-09-25) — SAS 세션도 끊는다.** 이전 구현은 `refresh_tokens` 를 `account_id` 로만 revoke 했다.
+> 그런데 브라우저 세션(SAS `authorization_code`)의 인가 행(`oauth2_authorization`)과 그 미러 행(`refresh_tokens`)은
+> **principal 이름 = 로그인 이메일**로 키가 잡혀 있어(`CredentialAuthenticationProvider` · `SocialLoginBrowserController`),
+> 이 엔드포인트는 **SAS 세션을 하나도 끊지 못했다** — 운영자 «세션 폐기» 뒤에도 refresh 가 통과했다. 이제
+> `SasAuthorizationRevocationAdapter` 가 그 계정의 이메일(자격 행 + 연결된 소셜 식별자의 provider 이메일)로 인가를 찾고,
+> principal 에 저장된 `account_id` 가 대상 계정과 **같은 것만** refresh·access 토큰을 무효화(SAS revoke 와 같은 metadata)
+> 한다 — 같은 이메일의 다른 테넌트 계정은 건드리지 않는다. 응답 shape 불변. **`revokedTokenCount` = 레거시 refresh 행
+> + 무효화한 SAS 인가 수**(재호출은 0 — 이미 무효화된 것은 세지 않는다). 같은 경로를 `account.locked` 소비자도 쓴다
+> ([account-events.md § account.locked](../../events/account-events.md#accountlocked)).
+
 **Path Parameters**:
 
 | 파라미터 | 타입 | 설명 |

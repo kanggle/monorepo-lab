@@ -12,7 +12,7 @@ and `platform/architecture-decision-rule.md`.
 |---|---|
 | Service name | `auth-service` |
 | Project | `iam-platform` |
-| Service Type | `identity-platform` (single — see Service Type Composition below) |
+| Service Type | `identity-platform + event-consumer` (primary identity-platform; event-consumer leg = account.locked → session revoke, TASK-BE-601 — a clarification per service-types INDEX Selection Rule 2, not a re-classification; see Service Type Composition below) |
 | Architecture Style | **Layered Architecture** |
 | Domain | saas |
 | Primary language / stack | Java 21, Spring Boot, Spring Authorization Server (SAS) 1.x |
@@ -20,12 +20,12 @@ and `platform/architecture-decision-rule.md`.
 | Deployable unit | `apps/auth-service/` |
 | Data store | MySQL (credentials + refresh tokens + login history + JPA OAuth2 영속화) |
 | Event publication | Kafka via transactional outbox v2 (auth.token.* + auth.login.* + auth.session.*) — see § Outbox (v2) |
-| Event consumption | none (single-type identity-platform) |
+| Event consumption | `account.locked` only (TASK-BE-601) — revoke the locked account's sessions. Group `auth-service-account-locked` — see § Subscribed Topics |
 
 ### Service Type Composition
 
-`auth-service` is a single-type `identity-platform` service per
-`platform/service-types/INDEX.md`. Spring Authorization Server (SAS) 기반
+`auth-service` is an `identity-platform` service per
+`platform/service-types/INDEX.md` (with a secondary `event-consumer` path since TASK-BE-601 — below). Spring Authorization Server (SAS) 기반
 OIDC Authorization Server — `/oauth2/authorize` · `/oauth2/token` ·
 `/oauth2/jwks` · `/oauth2/revoke` · `/oauth2/introspect` ·
 `/.well-known/openid-configuration` 표준 엔드포인트 발행 (ADR-001 ACCEPTED,
@@ -38,7 +38,14 @@ Authorization Code+PKCE / refresh / revoke 흐름 제공. 로그인/로그아웃
 **선언 이력**: 2026-04-30 import 시점 `rest-api` 선언 → 2026-05-02 ADR-001
 ACCEPTED + SAS 도입 (TASK-BE-251) → 2026-05-09 BE-272/273/274 closure 로
 OIDC AS 깊이 증명 완성 → **2026-05-11 service-type 정정** (Identity Platform
-카탈로그 정의가 본 서비스의 실 책임과 정확히 일치).
+카탈로그 정의가 본 서비스의 실 책임과 정확히 일치) → **2026-09-25 `+ event-consumer`**
+(TASK-BE-601).
+
+**Secondary type — `event-consumer` (TASK-BE-601).** 소유자 결정(«잠금 이벤트로 세션 폐기»)으로 auth-service 가
+`account.locked` 를 소비하게 되었다. 주 책임은 그대로 `identity-platform` 이고(세션 폐기 자체가 identity-platform 의 의무 —
+`identity-platform.md` § Reuse detection 의 «family revoke» 와 같은 축), 소비 경로에는
+[platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md) 의 MUST 가 적용된다
+(`scripts/check-service-type-drift.sh` 가 `@KafkaListener` ⇒ `event-consumer` 선언을 강제한다). 적용 현황은 아래 § Subscribed Topics.
 
 ---
 
@@ -105,6 +112,11 @@ apps/auth-service/src/main/java/com/example/auth/
     │   └── RedisLoginAttemptCounter.java
     ├── kafka/
     │   └── AuthKafkaProducer.java       ← outbox relay
+    ├── messaging/                       ← TASK-BE-601: inbound Kafka adapter (account-service
+    │   │                                   LoginSucceededConsumer 와 같은 모양 — 봉투 검증 후 application 호출)
+    │   ├── AccountLockedConsumer.java   ← account.locked → RevokeSessionsOnAccountLockedUseCase
+    │   ├── MissingTenantIdException.java / InvalidEventPayloadException.java ← 재시도 없이 DLQ
+    │   └── OutboxLagMetric.java
     ├── jwt/
     │   ├── JwtSigner.java               ← RSA 서명
     │   └── JwksProvider.java
@@ -119,6 +131,8 @@ apps/auth-service/src/main/java/com/example/auth/
     │   ├── AssumeTenantAuthenticationConverter.java    ← TASK-BE-327: assume-tenant token-exchange grant converter
     │   ├── AssumeTenantAuthenticationProvider.java     ← TASK-BE-327: subject 검증 + fail-closed assignment gate + mint (no refresh)
     │   ├── PublicClientTokenExchangeAuthenticationConverter.java ← TASK-BE-327: public-client client-auth for token-exchange
+    │   ├── SasAuthorizationRevocationAdapter.java      ← TASK-BE-601: 계정의 SAS 인가 refresh·access 무효화
+    │   │                                                  (principal 이름=이메일로 찾고 details account_id 로 확정)
     │   └── DomainSyncOAuth2AuthorizationService.java   ← SAS ↔ JPA RefreshTokenRepository 동기화
     │                                                      revoke 시 JPA 도메인 스토어도 갱신 (Phase 2c)
     ├── client/
@@ -130,6 +144,7 @@ apps/auth-service/src/main/java/com/example/auth/
         ├── PersistenceConfig.java
         ├── RedisConfig.java
         ├── KafkaConfig.java
+        ├── KafkaConsumerConfig.java     ← TASK-BE-601: DefaultErrorHandler (3회 백오프 → <topic>.dlq)
         └── SecurityConfig.java          ← @Order(2) 기존 /api/auth/** 체인
 ```
 
@@ -186,6 +201,47 @@ apps/auth-service/src/main/java/com/example/auth/
 >   매핑 표: [auth-to-account.md](../../contracts/http/internal/auth-to-account.md).
 > - **범위 밖(후속)**: `refresh_token` grant(`SasRefreshTokenAuthenticationProvider`)는 아직 상태를 보지 않는다 —
 >   이미 받은 세션은 잠금 뒤에도 refresh 로 산다. 소셜 조회의 테넌트 인지화도 후속.
+>   → **TASK-BE-601 로 처리** — refresh 는 여전히 상태를 보지 않는다(소유자 결정: «갱신 때마다 상태 조회» 기각). 대신 잠금 이벤트가
+>   세션을 끊는다 — 아래 § Event Consumption.
+
+### Event Consumption (TASK-BE-601)
+
+`account.locked` → `infrastructure/messaging/AccountLockedConsumer` → `application/RevokeSessionsOnAccountLockedUseCase` →
+`ForceLogoutUseCase.execute(accountId)` (net-zero). 규칙 원문(봉투 · 테넌트 · 멱등 · DLQ · 수용한 틈)은
+[account-events.md § account.locked](../../contracts/events/account-events.md#accountlocked) 이 정본이다. 여기에는 구조만 적는다.
+
+- **두 저장소를 다 닫는다.** SAS refresh 의 수락 여부는 `SasRefreshTokenAuthenticationProvider` 가
+  (1) `oauth2_authorization` 의 refresh 가 `isActive()` 인지, (2) `refresh_tokens` 미러 행이 **있으면** revoked/expired 가 아닌지로 정한다.
+  두 곳 모두 **principal 이름 = 로그인 이메일**로 키가 잡혀 있어, BE-601 이전의 `revokeAllByAccountId(accountId)` 는 어느 쪽에도 닿지 않았다
+  (관리자 force-logout 도 같은 구멍 — 같이 고쳐졌다). `SasAuthorizationRevocationAdapter`(port `OAuthAuthorizationRevocationPort`)가
+  이메일로 후보 인가를 찾고 principal details `account_id` 로 확정한 뒤 refresh·access 를 무효화하고 미러 행을 revoke 한다.
+- **멱등**: `EventDedupePort`(libs/java-messaging) ← `infrastructure/persistence/JdbcEventDedupeAdapter`(V0004 `processed_events`,
+  `INSERT IGNORE`, `Propagation.MANDATORY`). 폐기와 같은 트랜잭션 — 폐기가 실패하면 dedupe 행도 롤백되어 재시도가 다시 처리한다.
+- **inbound 어댑터 위치**: `infrastructure/messaging/` — `infrastructure → application` 호출은 이 inbound 어댑터에 한한다
+  (account-service `infrastructure/kafka/LoginSucceededConsumer` 선례). outbound 포트 구현 방향 규칙은 그대로다.
+- **오프셋**: `auto-offset-reset=earliest` — 커밋 오프셋이 없을 때 잠금을 건너뛰지 않도록(`latest` 는 event-consumer.md 금지 패턴).
+  대가: 첫 기동 때 보존 기간 안의 과거 잠금이 재생된다(그 사이 해제된 계정은 세션을 한 번 잃는다 — 안전한 쪽).
+- **DORMANT · DELETED 는 범위 밖**: account-service 는 DORMANT 전이에 특화 이벤트를 내지 않고(`retention.md`), `account.deleted` 는 별개 토픽 ·
+  별개 판단이다(티켓 제외 항목). 휴면·삭제 계정의 기존 세션은 이 소비자가 끊지 않는다.
+
+### Subscribed Topics
+
+| Topic | Group | Producer | Partition key | Handler | DLQ |
+|---|---|---|---|---|---|
+| `account.locked` | `auth-service-account-locked` | account-service (outbox, flat wire) | `account_id` — 한 계정의 잠금은 순서대로 온다 | `AccountLockedConsumer` → `RevokeSessionsOnAccountLockedUseCase` | `account.locked.dlq` (security-service 그룹과 공유 — `kafka_dlt-original-consumer-group` 헤더로 구분) |
+
+[event-consumer.md](../../../../../platform/service-types/event-consumer.md) MUST 적용 현황:
+
+| MUST | 상태 |
+|---|---|
+| 구독 토픽 선언 · 그룹 `<service>-<purpose>` | ✅ 위 표 |
+| 멱등 (eventId 테이블) | ✅ `processed_events` (`JdbcEventDedupeAdapter`) — 🔵 TTL/정리 작업 없음(행은 남는다; 24h+ 보존 요건은 충족, 무한 성장은 후속) |
+| 재시도 → DLQ `<topic>.dlq` · 파싱 오류 삼킴 금지 | ✅ `KafkaConsumerConfig` (지수 백오프 3회 · 잘못된 봉투는 즉시 DLQ) |
+| DLQ depth 알림 | 🔵 `account.locked.dlq` 는 security-service `SecurityMetricsConfig.DLQ_TOPICS` 가 이미 깊이를 잰다(토픽 단위라 이 그룹의 DLQ 기록도 포함). auth-service 는 `outbox.dlq.size{reason}` 카운터 |
+| eventVersion 분기 | ✅ 있으면 1·2 만, 그 밖은 DLQ |
+| OTel 전파 | 🔵 `spring.kafka.listener.observation-enabled=true` (traceparent 헤더가 있으면 이어 받는다). 명시적 `KafkaPropagator` 는 iam 어느 소비자에도 없다 — 플랫폼 공통 잔여 |
+| consumer lag 메트릭 · 알림 | ⚪ 미구성 — 후속 |
+| `latest` 자동 리셋 금지 | ✅ `earliest` |
 
 **SAS 필터 체인 우선순위**:
 - `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담
@@ -272,6 +328,7 @@ presentation → application → domain
 - **HTTP 컨트랙트 (내부, → account-service)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회. entitled_domains lookup (TASK-BE-324) — **fail-soft** (caller 가 claim 생략).
 - **HTTP 컨트랙트 (내부, → admin-service)** (TASK-BE-327, 신규 outbound edge): [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — assume-tenant 발급 시점의 1회성 assignment 확인 (`GET /internal/operator-assignments/check`). IAM `client_credentials` Bearer JWT (`IamClientCredentialsTokenProvider` 재사용). **fail-CLOSED**: 실패 시 발급 거부. per-request 도메인→IAM callback 이 아니라 issuance-time one-shot (ADR-MONO-020 § 3.1 은 후자만 금지).
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
+- **이벤트 구독** (TASK-BE-601): [account-events.md § account.locked](../../contracts/events/account-events.md#accountlocked) — group `auth-service`, DLQ `account.locked.dlq`. 위 § Event Consumption
 
 ### Outbox (v2)
 
