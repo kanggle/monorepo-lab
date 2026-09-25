@@ -613,6 +613,11 @@ compose / env / override 가 저장소에 하나도 없다**(`infra/**` · `proj
 | `a9bd9bd7b` | 716 | iam `admin-service` `/internal/**` 요구 scope | iam 내부 호출 경로 회귀 여부 |
 | `baca8c4ce` | 295 | 🔵 **런타임 변화 0** — 이 커밋의 java 파일은 **테스트 하나**뿐이다 | — (아래 § 4) |
 
+> 🔵 **2026-09-25 UTC 추가 (위 표는 09-18 굽기의 기록 — 이 줄은 그 표의 행이 아니다)** — `TASK-MONO-734` 가 ecommerce
+> `minio`·`minio-init` 의 `image:` 를 `bitnamilegacy` → `ghcr.io/kanggle/mirror-*` 로 바꿨다(compose + k8s). **digest 가 같다**
+> (미러 run `36100595693` 이 복사 후 대조) ⇒ **이것 때문에 굽을 이유는 없다**. 다음 굽기에서 packer 가 새 주소로 pull 하고,
+> 이미 구운 AMI 는 같은 바이트를 옛 주소로 들고 있을 뿐이다. 🔴 단, 다음 굽기의 pull 이 GHCR 에 닿는지는 그 굽기가 처음 잰다.
+
 ## 3. 🔴🔴 재굽기가 **사지 않는 것** — 항목 1·2②③ 은 «코드» 를 기다리는 게 아니다
 
 티켓은 항목 1·2②③ 을 «재굽기 전엔 판정 불가» 로 적었다. **그 이유를 다시 쟀고, 티켓이 적은 것과 다르다**:

@@ -208,7 +208,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-734-mirror-the-pinned-minio-images-to-ghcr.md` — **고정해 둔 MinIO 이미지 두 개를 GHCR 로 미러한다** (IN-PROGRESS, 2026-09-25 UTC · 소유자 결정: GHCR 미러). 1단계 = `workflow_dispatch` 워크플로 + `infra/mirror/images.txt`(compose 에서 추출) + `mirror-images.sh`(digest 보존 검증 · self-test bite · 익명 가시성 판정 양방향 대조). ⏳ 머지 → dispatch → 🔴 **소유자 GHCR 패키지 Public 전환**(웹 UI 전용) → 익명 200 → 2단계 compose 전환. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 
 
 
@@ -224,6 +223,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+- `TASK-MONO-734-mirror-the-pinned-minio-images-to-ghcr.md` — **고정해 둔 MinIO 이미지 두 개를 GHCR 로 미러했다** (REVIEW, 2026-09-25 UTC · 소유자 결정: GHCR 미러). 1단계 #4015 = 워크플로·목록·스크립트 → run `36100595693` 이 두 이미지를 **digest 그대로** 복사(`faf5…`·`c3e8…`, 멀티아치 보존). 🔵 소유자 Public 전환은 **불필요**했다 — 공개 저장소 워크플로가 올린 패키지는 처음부터 공개(러너 + 이 호스트 둘 다 익명 HEAD 200). 2단계 = ecommerce compose **+ k8s 매니페스트**(grep 으로 찾은 형제) 두 `image:` → `ghcr.io/kanggle/mirror-*@같은 digest`. 재굽기 불필요(같은 바이트, 672 에 기록). 대가: 보안 패치는 여전히 없음.
 - `TASK-MONO-727-the-census-of-code-defaults-nobody-overrides.md` — 🔴 **«설정 없음 → 코드 기본값» 전수조사의 결함 둘을 고쳤다** (REVIEW, 2026-09-24 UTC). ① batch-worker `PRODUCT_SERVICE_BASE_URL=…:8082` ② iam security-service `ACCOUNT_SERVICE_BASE_URL=http://account-service:8082`(자동 잠금). 가드 +2키, 각 bite rc=1. 고친 트리 재측정 56/45(main 58/47 — 정확히 2 차이). 🔴 AC-3(결과 상태)은 창 — `TASK-MONO-672` 항목 15, **재굽기 불필요**(compose 만).
 - `TASK-MONO-726-two-internal-callers-717-left-without-a-home.md` — 🔴 **batch-worker → order-service `/api/internal/**` 가 다섯 겹으로 끊겨 있던 것을 잇는다** (REVIEW, 2026-09-24 UTC · 소유자 승인: IdP 등록). 보내는 쪽(IdP 등록 `V0038` · 토큰 주소 · order 포트 8082→8086) + 받는 쪽(JWKS · issuer). 테넌트 assume 불필요(이 경로엔 테넌트 핀 없음). `check-internal-caller-addresses.sh` 목록 1→3행, 두 행 bite rc=1. auth-service 724/0 · `WorkloadRoleCatalogTest` 18/12/6. 🔴 창 판정 둘(PAID→CONFIRMED 결과 상태 · lock 라우트)은 `TASK-MONO-672` 항목 14.
 
