@@ -252,6 +252,11 @@ ShedLock `batch-search-index-consistency-check` 의 `locked_at` + 잡 로그(연
 
 🔴 **덤으로 본 것** — 클론의 `infra/demo/demo-boot.sh` 가 **이 창 전부터** 수정(unstaged) 상태였다. 이 창은 손대지 않았다.
 누가·언제 바꿨는지 모른다(부팅 시 이 파일이 도는 버전이므로 «구운 상태 = 커밋» 가정이 이 파일엔 성립하지 않을 수 있다).
+🔵 **같은 날 저장소에서 찾은 유력 원인 — 내용이 아니라 모드다**: git 이 `infra/demo/demo-boot.sh` 만 `100644` 로 들고 있고
+(`demo-up.sh`·`demo-down.sh` 는 `100755`), packer 가 굽는 중에 `test -x … || sudo chmod +x …/demo-boot.sh`
+(`packer/demo-ami.pkr.hcl:432`) 를 한다 ⇒ 클론은 모드만 바뀐 ` M` 이 된다. ⚪ **추론이지 관측이 아니다** — 다음 창에서
+`sudo -u ubuntu git -C /opt/monorepo-lab diff --summary infra/demo/demo-boot.sh` 가 `mode change 100644 => 100755` 한 줄만
+내면 닫는다(내용 diff 가 나오면 이 원인이 아니다 — 그땐 별도 티켓).
 
 - **무엇을 재나** (둘, 서로 독립):
   ① ecommerce batch-worker `SearchIndexConsistencyJob` — 로그에 product-service 연결 실패가 없고 잡이 완료를 기록하는가(예전엔 `:8081` 로 매번 실패).
