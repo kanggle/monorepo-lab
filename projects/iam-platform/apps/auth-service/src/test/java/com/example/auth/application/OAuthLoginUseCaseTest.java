@@ -1,6 +1,7 @@
 package com.example.auth.application;
 
 import com.example.auth.application.command.OAuthCallbackCommand;
+import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
@@ -215,6 +216,53 @@ class OAuthLoginUseCaseTest {
         verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
                 any(), any(), eq("acc-new"), eq(TENANT_ID), statusCaptor.capture());
         assertThat(statusCaptor.getValue()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600 AC-2: a FAILED status lookup fails the social login CLOSED — "
+            + "the exception propagates and the txn step (the status guard) is never reached with an empty status")
+    void callback_statusLookupFailure_failsClosed() {
+        // Under BE-063 a non-404 4xx came back as Optional.empty() and the persist step
+        // skipped the guard. The adapter now throws for it (AccountServiceClientUnitTest);
+        // this pins that the use case lets it through instead of degrading to "empty".
+        when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
+        SocialIdentity existing = SocialIdentity.create(
+                "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+                .thenReturn(Optional.of(existing));
+        AccountServiceUnavailableException outage =
+                new AccountServiceUnavailableException("status lookup rejected: 401");
+        when(accountServicePort.getAccountStatus("acc-existing")).thenThrow(outage);
+
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+                .isSameAs(outage);
+
+        verify(socialIdentityPersistStep, never())
+                .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: first social login (new account, status 404) still completes — "
+            + "only a FAILED lookup is fail-closed, not a not-found")
+    void callback_newAccount_statusNotFound_stillCompletes() {
+        when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
+        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+                .thenReturn(Optional.empty());
+        when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
+        // A new ecommerce account read through the fan-platform-pinned status lookup: 404.
+        when(accountServicePort.getAccountStatus("acc-new")).thenReturn(Optional.empty());
+
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
+
+        assertThat(result.accountId()).isEqualTo("acc-new");
+        assertThat(result.isNewAccount()).isTrue();
+        verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
+                any(), any(), eq("acc-new"), eq(TENANT_ID), eq(Optional.empty()));
     }
 
     @Test

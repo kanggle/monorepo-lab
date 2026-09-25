@@ -116,12 +116,69 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
-    @DisplayName("getAccountStatus — 기타 4xx 응답 → Optional.empty()")
-    void getAccountStatus_otherClientError_returnsEmpty() {
+    @DisplayName("TASK-BE-600: getAccountStatus — 404 가 아닌 4xx → AccountServiceUnavailableException (실패한 조회, 더는 empty 아님)")
+    void getAccountStatus_otherClientError_throwsAccountServiceUnavailable() {
+        // Before BE-600 this came back empty, and the social path read empty as "skip the
+        // status guard" — a 401/403 from a broken workload token silently let LOCKED in.
         wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
                 .willReturn(aResponse().withStatus(422)));
 
-        assertThat(client.getAccountStatus("acc-1")).isEmpty();
+        assertThatThrownBy(() -> client.getAccountStatus("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: getAccountStatus — 401 → AccountServiceUnavailableException")
+    void getAccountStatus_unauthorized_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
+                .willReturn(aResponse().withStatus(401)));
+
+        assertThatThrownBy(() -> client.getAccountStatus("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: getAccountStatus — 200 인데 status 없음 → AccountServiceUnavailableException (읽을 수 없는 답)")
+    void getAccountStatus_200WithoutStatus_throwsAccountServiceUnavailable() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\"}")));
+
+        assertThatThrownBy(() -> client.getAccountStatus("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: getAccountStatus(id, tenant) — X-Tenant-Id 헤더로 계정의 테넌트를 보낸다")
+    void getAccountStatus_withTenant_sendsTenantHeader() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"status\":\"LOCKED\"}")));
+
+        Optional<AccountStatusLookupResult> result = client.getAccountStatus("acc-1", "ecommerce");
+
+        assertThat(result).map(AccountStatusLookupResult::accountStatus).contains("LOCKED");
+        wireMockServer.verify(getRequestedFor(urlEqualTo(STATUS_PATH))
+                .withHeader("X-Tenant-Id", equalTo("ecommerce")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: getAccountStatus(id) — 테넌트 없으면 X-Tenant-Id 를 보내지 않는다(fan-platform 고정, 기존 동작)")
+    void getAccountStatus_withoutTenant_sendsNoTenantHeader() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"status\":\"ACTIVE\"}")));
+
+        client.getAccountStatus("acc-1");
+
+        wireMockServer.verify(getRequestedFor(urlEqualTo(STATUS_PATH))
+                .withoutHeader("X-Tenant-Id"));
     }
 
     @Test

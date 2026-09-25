@@ -121,9 +121,17 @@ public class OAuthLoginUseCase {
      *   <li>TOCTOU: the identity existence check is a non-txn DB read. The transactional
      *       step still upserts the identity, and the DB unique key on
      *       {@code (provider, provider_user_id)} prevents duplicate rows.</li>
-     *   <li>TASK-BE-063 empty-status semantics: an empty {@code accountStatus} means the
-     *       account lookup was unavailable — the status guard is skipped and the rest of
-     *       the flow proceeds.</li>
+     *   <li>Status lookup outcome (TASK-BE-600, replacing the BE-063 semantics): an empty
+     *       {@code accountStatus} now means ONLY that account-service answered 404 — the
+     *       status guard is skipped for that case, exactly as before. Under BE-063 "empty"
+     *       also covered a non-404 4xx and an unreadable 200, i.e. failed lookups, and those
+     *       silently skipped the guard (fail-open). They now throw
+     *       {@link AccountServiceUnavailableException} out of this method, so a failed lookup
+     *       rejects the social login — fail-closed, the owner decision shared with the
+     *       password form (TASK-BE-600 AC-2). A 5xx / timeout / open circuit already threw
+     *       before BE-600; that is unchanged. New-account and first-login flows are
+     *       unaffected: {@code socialSignup} has already created the account, so its status
+     *       lookup answers 200 (or 404, which still proceeds).</li>
      * </ul>
      */
     private ResolvedSocialLogin resolveSocialLogin(OAuthCallbackCommand command, String tenantId) {
@@ -193,9 +201,13 @@ public class OAuthLoginUseCase {
             isNewAccount = signupResult.newAccount();
         }
 
-        // Pre-fetched account status (TASK-BE-063 semantics: empty → account unavailable,
-        // status guard is skipped and the rest of the flow proceeds — social signup path
-        // would have created the account).
+        // Pre-fetched account status. Empty = 404 only → the status guard is skipped. A failed
+        // lookup throws AccountServiceUnavailableException → the login fails closed
+        // (TASK-BE-600 AC-2; see the method javadoc for what changed from BE-063).
+        // 🔴 Header-less on purpose: account-service pins the lookup to fan-platform, which is
+        // where a pre-BE-507 social account lives even when its identity row says ecommerce.
+        // Sending the identity's tenant would lose the guard for those; making this lookup
+        // tenant-aware is a separate decision (TASK-BE-600 follow-up).
         Optional<String> accountStatus = accountServicePort.getAccountStatus(accountId)
                 .map(AccountStatusLookupResult::accountStatus);
 

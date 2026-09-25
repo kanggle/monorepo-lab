@@ -55,9 +55,10 @@ public class SocialIdentityPersistStep {
      * @param tenantId      the tenant the new identity row is attributed to
      *                      (derived from the initiating OIDC client; falls back
      *                      to the default tenant by the caller)
-     * @param accountStatus pre-fetched account status (empty → status guard
-     *                      skipped, mirroring the legacy flow's "unavailable,
-     *                      proceed" semantics)
+     * @param accountStatus pre-fetched account status (empty → account-service
+     *                      answered 404 → status guard skipped. Since TASK-BE-600 a
+     *                      FAILED lookup never arrives here as empty — it throws
+     *                      before this step, so the login fails closed)
      */
     @Transactional
     public void persistIdentityAndCheckStatus(OAuthProvider provider,

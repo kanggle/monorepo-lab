@@ -8,9 +8,15 @@ import com.example.security.password.Argon2idPasswordHasher;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +26,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -92,15 +99,58 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379);
 
+    /**
+     * TASK-BE-600: the provider now asks account-service for the account's status before
+     * letting a password login through, and FAILS CLOSED when it cannot. Before BE-600 this
+     * IT had no account-service at all (nothing on the login path called it), so every login
+     * here would now be refused — the stub is what keeps the happy path honest, and it is also
+     * what lets this IT prove the locked / outage cases end to end.
+     */
+    static WireMockServer accountService;
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+
+        accountService = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+        accountService.start();
+        registry.add("auth.account-service.base-url", accountService::baseUrl);
+        stubStatus(TEST_ACCOUNT_ID, 200, "ACTIVE");
+        stubStatus(LOCKED_ACCOUNT_ID, 200, "LOCKED");
+        stubStatus(OUTAGE_ACCOUNT_ID, 503, null);
     }
+
+    private static void stubStatus(String accountId, int httpStatus, String accountStatus) {
+        accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo(
+                        "/internal/accounts/" + accountId + "/status"))
+                .willReturn(WireMock.aResponse().withStatus(httpStatus)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(accountStatus == null ? "{}" : """
+                                { "accountId": "%s", "status": "%s",
+                                  "statusChangedAt": "2026-01-01T00:00:00Z" }
+                                """.formatted(accountId, accountStatus))));
+    }
+
+    @AfterAll
+    static void stopAccountService() {
+        if (accountService != null && accountService.isRunning()) {
+            accountService.stop();
+        }
+    }
+
+    // The GAP client_credentials Bearer is minted via a SAS self-call unreachable in MockMvc.
+    @MockitoBean
+    IamClientCredentialsTokenProvider gapTokenProvider;
 
     private static final String TEST_EMAIL = "form-login-test@example.com";
     private static final String TEST_PASSWORD = "FormLoginPassw0rd!";
     private static final String TEST_ACCOUNT_ID = "form-login-account-001";
+    // TASK-BE-600: same password, different accounts — only their status differs.
+    private static final String LOCKED_EMAIL = "form-login-locked@example.com";
+    private static final String LOCKED_ACCOUNT_ID = "form-login-account-locked";
+    private static final String OUTAGE_EMAIL = "form-login-outage@example.com";
+    private static final String OUTAGE_ACCOUNT_ID = "form-login-account-outage";
     private static final String TEST_TENANT_ID = "fan-platform";
     private static final String CLIENT_ID = "platform-console-web";
     // The platform-console-web row in V0015 lists this exact redirect_uri.
@@ -127,6 +177,14 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(
                 Credential.create(TEST_ACCOUNT_ID, TEST_TENANT_ID, TEST_EMAIL,
                         CredentialHash.argon2id(hash), now)));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(
+                Credential.create(LOCKED_ACCOUNT_ID, TEST_TENANT_ID, LOCKED_EMAIL,
+                        CredentialHash.argon2id(hash), now)));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(
+                Credential.create(OUTAGE_ACCOUNT_ID, TEST_TENANT_ID, OUTAGE_EMAIL,
+                        CredentialHash.argon2id(hash), now)));
+
+        Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
 
         // Per-test PKCE pair.
         codeVerifier = Base64.getUrlEncoder().withoutPadding()
@@ -261,6 +319,48 @@ class FormLoginIntegrationTest extends AbstractIntegrationTest {
         assertThat(session.getAttribute("SPRING_SECURITY_CONTEXT"))
                 .as("failed login must leave SecurityContext unset")
                 .isNull();
+    }
+
+    // ------------------------------------------------------------------
+    // 2b. TASK-BE-600 — account status on the form-login path
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-600 AC-1/AC-2: LOCKED account + RIGHT password → the same 302 /login?error as a wrong password")
+    void formLogin_lockedAccount_rightPassword_redirectsExactlyLikeWrongPassword() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+
+        mockMvc.perform(post("/login")
+                        .session(session)
+                        .with(csrf())
+                        .param("username", LOCKED_EMAIL)
+                        .param("password", TEST_PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?error"));
+
+        assertThat(session.getAttribute("SPRING_SECURITY_CONTEXT"))
+                .as("a locked account must not get an authenticated session")
+                .isNull();
+        // The lookup was made in the ACCOUNT's tenant.
+        accountService.verify(WireMock.getRequestedFor(WireMock.urlPathEqualTo(
+                        "/internal/accounts/" + LOCKED_ACCOUNT_ID + "/status"))
+                .withHeader("X-Tenant-Id", WireMock.equalTo(TEST_TENANT_ID)));
+    }
+
+    @Test
+    @DisplayName("BE-600 AC-2: account-service status failure → fail-closed, 302 /login?error (no session)")
+    void formLogin_statusLookupFailure_failsClosed() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+
+        mockMvc.perform(post("/login")
+                        .session(session)
+                        .with(csrf())
+                        .param("username", OUTAGE_EMAIL)
+                        .param("password", TEST_PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?error"));
+
+        assertThat(session.getAttribute("SPRING_SECURITY_CONTEXT")).isNull();
     }
 
     // ------------------------------------------------------------------

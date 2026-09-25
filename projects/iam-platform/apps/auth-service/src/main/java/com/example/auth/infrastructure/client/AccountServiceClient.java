@@ -310,16 +310,25 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    /**
+     * TASK-BE-600: only a 404 is an answer ("no such account in that tenant") and becomes
+     * {@link Optional#empty()}. Everything else that is not a usable 200 is a failed lookup
+     * and throws {@link AccountServiceUnavailableException} — including a non-404 4xx
+     * (e.g. 401/403 from a broken workload token) and a 200 whose body carries no
+     * {@code status}, both of which used to come back empty and were then read by the social
+     * path as "skip the status guard".
+     */
     @Override
-    public Optional<AccountStatusLookupResult> getAccountStatus(String accountId) {
+    public Optional<AccountStatusLookupResult> getAccountStatus(String accountId, String tenantId) {
         try {
-            return callResilient(() -> doGetStatus(accountId));
+            return callResilient(() -> doGetStatus(accountId, tenantId));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (HttpClientErrorException e) {
-            log.warn("Account service status lookup returned client error {}: {}",
-                    e.getStatusCode(), e.getMessage());
-            return Optional.empty();
+            log.warn("Account service status lookup returned client error {} — treating as a "
+                    + "failed lookup (fail-closed)", e.getStatusCode());
+            throw new AccountServiceUnavailableException(
+                    "Account service status lookup rejected: " + e.getStatusCode(), e);
         } catch (RuntimeException e) {
             // TASK-BE-273 Phase 1 diagnostic: surface root cause + nested cause chain so
             // the CI Linux 503 origin (ConnectException / UnknownHostException /
@@ -333,29 +342,37 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
-    private Optional<AccountStatusLookupResult> doGetStatus(String accountId) {
+    private Optional<AccountStatusLookupResult> doGetStatus(String accountId, String tenantId) {
         try {
             // account-service returns { accountId, status, statusChangedAt } — map the
             // "status" field onto our port's accountStatus slot.
             @SuppressWarnings("unchecked")
             Map<String, Object> body = restClient().get()
                     .uri("/internal/accounts/{id}/status", accountId)
-                    // TASK-BE-318c: authenticate via GAP client_credentials Bearer JWT
-                    // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
-                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .headers(h -> {
+                        // TASK-BE-318c: authenticate via GAP client_credentials Bearer JWT
+                        // (account /internal/** dual-allows JWT or X-Internal-Token, BE-317).
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        // TASK-BE-600: the account's tenant. Omitted when null/blank —
+                        // account-service then pins fan-platform (net-zero for such callers).
+                        setTenantHeader(h, tenantId);
+                    })
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
                     .body(Map.class);
 
+            // TASK-BE-600: a 200 without a usable status is not "no such account" — it is an
+            // answer we cannot read. Fail the lookup (the caller fails closed) instead of
+            // returning empty, which the social path used to read as "skip the guard".
             if (body == null) {
-                return Optional.empty();
+                throw new IllegalStateException("account status response had no body");
+            }
+            Object status = body.get("status");
+            if (!(status instanceof String statusText) || statusText.isBlank()) {
+                throw new IllegalStateException("account status response had no status");
             }
             String returnedId = (String) body.getOrDefault("accountId", accountId);
-            String status = (String) body.get("status");
-            if (status == null) {
-                return Optional.empty();
-            }
-            return Optional.of(new AccountStatusLookupResult(returnedId, status));
+            return Optional.of(new AccountStatusLookupResult(returnedId, statusText));
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         } catch (HttpClientErrorException e) {

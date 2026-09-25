@@ -76,8 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-600-locked-account-still-passes-form-login.md` — 🔴 **잠긴 계정도 폼 로그인을 통과한다** (READY, 2026-09-25 UTC · `TASK-BE-599` 구현 중 발견). 폼 로그인 provider 가 계정 상태를 조회하지 않는다 — 옛 `LoginUseCase:91-95,222-229` 가 LOCKED 를 거부했지만 BE-398 이 그 유일한 호출 경로를 걷어냈다. 소셜 로그인은 `SocialLoginSteps.checkAccountStatus` 로 막으므로 **같은 계정이 소셜로는 막히고 비밀번호로는 들어간다**. 잠금 자체는 돈다(672 항목 15 ②) — 효력이 없을 뿐. AC-0 = 갱신 경로·DELETED 자격·다른 테넌트 재측 · **AC-1 = 소유자 결정(응답 모양 — 비밀번호 정답 오라클)** · AC-2 소셜과 같은 규칙 공유 + fail-closed/open 결정 · AC-3 결과 상태. 선행 BE-599 데모 완화 충족(#4016). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
-
+(empty)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -120,6 +119,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
+- `TASK-BE-600-locked-account-still-passes-form-login.md` — **REVIEW (2026-09-25 UTC)** 🔴 잠긴 계정의 폼 로그인 거부. 규칙 하나(`AccountStatusRule`)를 소셜 · 폼이 공유. **AC-1 소유자 결정 ⓐ** = 비-ACTIVE 는 오답 비밀번호와 정확히 같은 `/login?error`(테스트가 실제 오답 결과와 예외 · 메시지 비교) · 순서 = 상태 조회 → 비밀번호 검증(항상) → 판정(정답 · 상태 타이밍 오라클 없음). **AC-2 소유자 결정** = 조회 실패 fail-closed(폼 · 소셜) — 포트의 empty 를 **404 만**으로 좁힘(BE-063 의 «그 밖의 4xx · 읽을 수 없는 200 → empty → 검사 생략» 폐기), 404 = 규칙 미적용(콘솔 운영자는 계정 행이 설계상 없음 · 첫 소셜 로그인 불변). 텔레메트리 `failureReason` = 기존 enum 의 `ACCOUNT_LOCKED/DORMANT/DELETED`. **AC-0**: ① refresh grant 는 상태를 안 본다 → **후속 분리**(조회 실패 정책 = 새 소유자 결정) · ② DELETED 자격 행 남음 → 이 규칙이 막음 · ③ 🔴 상태 조회 엔드포인트가 fan-platform 고정 → **이탈: 선택 `X-Tenant-Id` 추가**(account-service, additive · 헤더 없음 net-zero). 단위 auth 766/실패 0 · account 506/실패 0 · bite 4/24. **AC-3(결과 상태) = 미완, 런북은 티켓 본문**. IT = CI 판정. 분석=Opus 5.5 / 구현=Opus 5.5.
 - `TASK-BE-599-form-login-emits-no-login-events-so-detection-rules-starve.md` — **REVIEW (2026-09-25 UTC)** 폼 로그인이 `auth.login.attempted/failed/succeeded` 를 낸다(디바이스 세션 · `auth.session.created` 없음). AC-0 소유자 **재결정 = ⓐ 만**(ⓒ 철회 — 브라우저에 기기 fingerprint 없음, 후속 조건 = 안정적 기기 식별 쿠키) · **ⓑ 기각 유지** · **데모에서만 `DETECT_VELOCITY_THRESHOLD` 완화**(`infra/demo/iam-traefik.override.yml`, 운영 기본값·e2e compose 불변) · «LOCKED 계정 폼 로그인 통과» 결함은 별도 티켓(기안 예정). 아래는 1차 기록: 1차 결정 = ⓐ + ⓒ. 모양 = provider → 신규 `LoginEventRecorder`(실패의 `accountId` 를 아는 곳이 provider 뿐 — 실패 핸들러는 예외만 본다), 텔레메트리 실패는 로그인 결과 불변(테스트). 비밀번호 오류 = 계정 id + **계정의 실제 테넌트**(크로스-테넌트 폴백 포함) · 없는 이메일 = null + 같은 `/login?error`. AC-1 계약 정정(+ `auth.session.created` 소비자 부재 발견). 단위 745/실패 0, bite 2/15. 🔴 **AC-3 · AC-4 = 창 항목(런북은 티켓 본문)**, Testcontainers IT = CI 판정. (1차에 올린 «머지 전 소유자 확인 2건» — VELOCITY 자동 잠금 · ⓒ 상시 새 디바이스 — 은 위 재결정으로 해소.) 소셜 로그인 = 후속 티켓 필요(테넌트 결정). 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - `TASK-BE-597-demo-account-read-coverage-and-restricted-account.md` — **REVIEW (2026-09-24 UTC)** AC-0: `partnership.manage` 의 SUPER_ADMIN 제외는 문서화된 의도(`rbac.md:72,:120` · ADR-MONO-045 D2-C/D3-A — 티켓 전제가 틀렸음) → 소유자 결정 ① 현행 유지(`/partnerships` 403 = 시연 가능한 경계, IT 로 핀). 무권한 계정 `viewer@demo.com` 신설 — 역할 0 · 배정 0 · 홈 테넌트 `demo-viewer`(미등록 → assume 불가). admin/auth `migration-dev` R__ 시드 2개 + `DemoViewerOperatorSeedTest`(4/4) + IT 5케이스(Docker 부재로 실행 ⚪). 재굽기 **필요**(시드 = 앱 소스). 론처·z11 은 재굽기 전 노출 방지로 **보류** — 후속 루트 티켓 필요.

@@ -122,7 +122,9 @@ apps/auth-service/src/main/java/com/example/auth/
     │   └── DomainSyncOAuth2AuthorizationService.java   ← SAS ↔ JPA RefreshTokenRepository 동기화
     │                                                      revoke 시 JPA 도메인 스토어도 갱신 (Phase 2c)
     ├── client/
-    │   ├── AccountServiceClient.java    ← 내부 HTTP, status/profile/entitled_domains lookup (fail-soft)
+    │   ├── AccountServiceClient.java    ← 내부 HTTP, status/profile/entitled_domains lookup
+    │   │                                   (entitled_domains/roles = fail-soft; status = 로그인 경로에서
+    │   │                                    fail-CLOSED, TASK-BE-600)
     │   └── AdminAssignmentClient.java   ← TASK-BE-327: assume-tenant assignment gate (admin-service, **fail-CLOSED**)
     └── config/
         ├── PersistenceConfig.java
@@ -166,6 +168,24 @@ apps/auth-service/src/main/java/com/example/auth/
 > 안정적인 기기 식별 쿠키가 생기면 재검토). 이 발행은 텔레메트리로 취급한다 — 실패해도
 > 로그인 결과를 바꾸지 않는다(provider `telemetry(...)`). 소셜 로그인
 > (`SocialLoginBrowserController`)은 아직 아무 로그인 이벤트도 내지 않는다 — TASK-BE-599 후속.
+>
+> **TASK-BE-600 갱신 — 계정 상태 규칙 (두 로그인 경로 공유).** 로그인 허용 여부를 계정 상태로 판정하는
+> 규칙은 **`application/AccountStatusRule` 하나**다(`ACTIVE` 만 통과 · `LOCKED` → `AccountLockedException` ·
+> `DORMANT`/`DELETED`/계약 밖 값 → `AccountStatusException`). 소셜(`SocialLoginSteps.checkAccountStatus` 가 위임)과
+> 폼(`CredentialAuthenticationProvider`) 이 같은 규칙을 든다 — BE-398 이후 폼 경로에 상태 검사가 없어 잠긴 계정이
+> 비밀번호로 들어가던 결함이 «두 경로가 갈라진» 모양이었기 때문이다. 🔴 새 로그인 경로를 만들면 이 규칙을 부른다;
+> 사본을 만들지 않는다(호출자 없는 `LoginUseCase` 의 옛 사본은 죽은 코드로 남아 있다).
+> - **폼 응답 모양**(소유자 결정 AC-1 ⓐ): 상태 거부 = 오답 비밀번호와 **정확히 같은** `BadCredentialsException` →
+>   `/login?error`. 소셜은 `?error=account_unavailable` 그대로(비밀번호가 없는 경로라 정답 오라클이 없다).
+> - **폼 순서**: 상태 조회 → 비밀번호 검증(상태와 무관하게 항상) → 비밀번호 판정 → 상태 판정. 응답도 타이밍도
+>   비밀번호 정답 여부 · 계정 상태를 가르지 않는다. 상세 [auth-api.md § POST /login](../../contracts/http/auth-api.md).
+> - **조회 실패 = fail-closed**(소유자 결정 AC-2, 폼 · 소셜 둘 다). `AccountServicePort.getAccountStatus` 의
+>   empty 는 이제 **404 만** 뜻한다(콘솔 운영자처럼 계정 레코드가 없는 자격 → 규칙 미적용). 그 밖의 4xx · 읽을 수
+>   없는 200 · 5xx · 타임아웃 · circuit-open 은 `AccountServiceUnavailableException`. 폼은 자격 행의 테넌트로
+>   (`X-Tenant-Id`), 소셜은 헤더 없이(fan-platform 고정 — BE-507 이전 계정 보호) 조회한다.
+>   매핑 표: [auth-to-account.md](../../contracts/http/internal/auth-to-account.md).
+> - **범위 밖(후속)**: `refresh_token` grant(`SasRefreshTokenAuthenticationProvider`)는 아직 상태를 보지 않는다 —
+>   이미 받은 세션은 잠금 뒤에도 refresh 로 산다. 소셜 조회의 테넌트 인지화도 후속.
 
 **SAS 필터 체인 우선순위**:
 - `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담

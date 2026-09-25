@@ -10,6 +10,7 @@ import com.example.account.application.service.SocialSignupUseCase;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.status.StateTransitionException;
 import com.example.account.domain.status.StatusChangeReason;
+import com.example.account.domain.tenant.TenantId;
 import com.example.account.infrastructure.config.SecurityConfig;
 import com.example.account.presentation.advice.GlobalExceptionHandler;
 import com.example.account.presentation.internal.AccountLockController;
@@ -29,8 +30,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,6 +64,33 @@ class InternalControllerSliceTest {
         mockMvc.perform(get("/internal/accounts/acc-123/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: GET /internal/accounts/{id}/status with X-Tenant-Id reads that tenant")
+    void getStatus_withTenantHeader_readsThatTenant() throws Exception {
+        given(accountStatusUseCase.getStatus(eq("acc-123"), eq(new TenantId("ecommerce"))))
+                .willReturn(new AccountStatusResult("acc-123", "LOCKED", Instant.now(), null));
+
+        mockMvc.perform(get("/internal/accounts/acc-123/status")
+                        .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOCKED"));
+
+        // The header-less (fan-platform-pinned) overload is NOT what answered.
+        verify(accountStatusUseCase, never()).getStatus(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-600: an account absent from the header's tenant → 404 ACCOUNT_NOT_FOUND")
+    void getStatus_withTenantHeader_notInTenant_returns404() throws Exception {
+        given(accountStatusUseCase.getStatus(eq("acc-123"), eq(new TenantId("ecommerce"))))
+                .willThrow(new AccountNotFoundException("acc-123"));
+
+        mockMvc.perform(get("/internal/accounts/acc-123/status")
+                        .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }
 
     @Test

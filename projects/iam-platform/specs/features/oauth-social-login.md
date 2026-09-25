@@ -150,7 +150,8 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - 지원 provider: **Google**, **Kakao**, **Microsoft**, **Naver** (TASK-BE-397; 추가 provider는 `OAuthClient` 인터페이스 구현으로 확장)
 - Naver는 id_token 미발급(Kakao와 동일 비-OIDC) → user-info API(`response` 래퍼)의 `id`/`email`/`name` 사용. `resultcode != "00"` → `PROVIDER_ERROR`
 - provider id_token의 `email` 필드가 없으면 로그인 거부 (이메일 필수)
-- 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED / DORMANT / DELETED → `/login?error=account_unavailable`)
+- 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED / DORMANT / DELETED → `/login?error=account_unavailable`). 규칙은 폼 로그인과 **같은 하나**(`AccountStatusRule`, TASK-BE-600)
+- 계정 상태 조회가 **실패**하면(5xx · 타임아웃 · circuit-open · 404 가 아닌 4xx · 읽을 수 없는 200) 소셜 로그인은 **거부된다(fail-closed)** — 소유자 결정, TASK-BE-600 AC-2. BE-063 이후 404 가 아닌 4xx · 읽을 수 없는 200 은 «조회 불가 → 상태 검사 생략» 으로 통과했다(fail-open). 404(계정 레코드 없음)는 실패가 아니므로 지금처럼 검사를 생략하고 진행한다 — 신규 가입 · 첫 소셜 로그인은 `socialSignup` 이 계정을 먼저 만든 뒤라 영향이 없다
 - 소셜 로그인 성공 시 발급하는 토큰은 폼 로그인과 동일한 **SAS 표준 OIDC 토큰**이다 (TASK-BE-398 이전에는 커스텀 JWT 였다)
 - 하나의 계정에 여러 provider 연결 가능 (Google + Kakao 동시 사용)
 - 하나의 provider_user_id는 하나의 계정에만 연결 (unique constraint)

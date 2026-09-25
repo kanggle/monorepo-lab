@@ -64,15 +64,14 @@ class SocialLoginSteps {
 
     /**
      * Rejects a non-ACTIVE account status. ACTIVE proceeds; LOCKED / DORMANT /
-     * DELETED and any unknown value map to the corresponding account exceptions.
+     * DELETED and any unknown value map to the corresponding account exceptions
+     * ({@link AccountLockedException} / {@link AccountStatusException}).
+     *
+     * <p>TASK-BE-600: delegates to {@link AccountStatusRule} — the same rule the password
+     * form applies. Do not inline a copy here again; the form path went without any status
+     * check precisely because the two paths had drifted apart.
      */
     void checkAccountStatus(String status) {
-        switch (status) {
-            case "ACTIVE" -> { /* proceed */ }
-            case "LOCKED" -> throw new AccountLockedException();
-            case "DORMANT" -> throw new AccountStatusException("DORMANT", "ACCOUNT_DORMANT");
-            case "DELETED" -> throw new AccountStatusException("DELETED", "ACCOUNT_DELETED");
-            default -> throw new AccountStatusException(status, "ACCOUNT_STATUS_UNKNOWN");
-        }
+        AccountStatusRule.enforce(status);
     }
 }
