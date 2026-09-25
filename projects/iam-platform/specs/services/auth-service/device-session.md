@@ -53,6 +53,11 @@ fingerprint가 null·빈 문자열·resolve 실패인 경우:
 
 **원자성**: 1~3의 전체 흐름은 단일 DB 트랜잭션. 중간에 실패하면 **신규 device_session 생성도 롤백**되고 로그인은 `500 INTERNAL` 또는 재시도 유도. 부분 eviction 상태는 허용하지 않는다 ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T3).
 
+**SAS 폼 로그인 경로 (TASK-BE-599)**: `POST /login`(`CredentialAuthenticationProvider` → `LoginEventRecorder`)도 로그인 성공 시 위 1~3을 수행한다. 차이와 주의:
+- 이 경로에서는 인증 시점에 refresh token 이 아직 없다(SAS 가 나중에 `/oauth2/token` 에서 발급하고, 그 `refresh_tokens` 미러 행은 `device_id = NULL`). 그래서 3의 «신규 `refresh_tokens` insert» 가 없고, 이벤트의 `sessionJti` 는 `null` 이다.
+- 원자성 단위는 그대로(eviction + insert + 이벤트가 한 트랜잭션, 실패 시 전부 롤백)지만, **롤백돼도 로그인은 실패시키지 않는다** — 이 경로의 device_session 은 어떤 토큰과도 연결되지 않은 텔레메트리이므로, 롤백이 남기는 불일치가 없다(소유자 결정, TASK-BE-599 AC-0).
+- 🔴 브라우저 폼은 `X-Device-Fingerprint` 를 보내지 않으므로 이 경로의 fingerprint 는 항상 `"unknown"` 이다 → D3 에 따라 **매 로그인이 신규 device_session**(`isNewDevice=true`)이 되고, 11번째 로그인부터 D4 eviction 이 돈다.
+
 ### D5. refresh_tokens ↔ device_sessions 매핑
 
 - `refresh_tokens.device_id` 컬럼(`VARCHAR(36)`, nullable during migration window)은 `device_sessions.device_id`를 **논리 참조**한다 (서비스 내 참조이므로 FK는 선택적; 실 배포에서는 FK 추가 권장).

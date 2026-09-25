@@ -157,6 +157,14 @@ apps/auth-service/src/main/java/com/example/auth/
 > `auth.login.*` 이벤트 · device-session 등록이 여기에 있고, 폼-로그인 경로
 > (`CredentialAuthenticationProvider`)는 그중 자격증명 검증만 재구현하고 있다. 통합 또는
 > 폐기 판단은 위 후속 task 와 함께한다.
+>
+> **TASK-BE-599 갱신** — 폼-로그인 경로가 `auth.login.attempted/failed/succeeded` ·
+> `auth.session.created` 발행과 device-session 등록을 갖게 됐다. 부수효과는
+> `application/LoginEventRecorder` 에 있고 provider 가 부른다(실패 이벤트의 `accountId` 를
+> 아는 곳이 provider 뿐이라서 — 실패 핸들러는 예외만 본다). **rate-limit(로그인 실패 카운터)은
+> 올리지 않았다** (소유자 결정 AC-0 ⓑ 미채택). 이 부수효과는 텔레메트리로 취급한다 — 실패해도
+> 로그인 결과를 바꾸지 않는다(provider `telemetry(...)`). 소셜 로그인
+> (`SocialLoginBrowserController`)은 아직 아무 로그인 이벤트도 내지 않는다 — TASK-BE-599 후속.
 
 **SAS 필터 체인 우선순위**:
 - `@Order(1)` — `AuthorizationServerConfig.authorizationServerSecurityFilterChain`: `/oauth2/**`, `/.well-known/**` 전담

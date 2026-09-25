@@ -433,6 +433,12 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 > 폼-로그인 경로(`CredentialAuthenticationProvider`)로 승격할지 폐기할지는 위 후속 판단과
 > 함께 결정한다.
 >
+> **TASK-BE-599 갱신** — 그중 `auth.login.*` 이벤트와 device-session 등록은 폼-로그인 경로로
+> 올라갔다(`LoginEventRecorder`, 발행 조건은 [auth-events.md](../events/auth-events.md) 각 절의
+> «발행 경로» 노트). **로그인 실패 카운터(rate-limit)는 올리지 않았다** — 소유자 결정(AC-0 ⓑ 미채택):
+> 방문자가 공유하는 데모 계정이 N회 실패 뒤 막히면 안 된다. 따라서 `POST /login` 은 실패 횟수와
+> 무관하게 같은 `/login?error` 로 응답한다. `LoginUseCase` 자체는 여전히 호출자 없이 남아 있다.
+>
 > 원본 스펙 본문(요청/응답/에러 표)은 git history 에 보존된다.
 
 ---
