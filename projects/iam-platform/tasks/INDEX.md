@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-600-locked-account-still-passes-form-login.md` — 🔴 **잠긴 계정도 폼 로그인을 통과한다** (READY, 2026-09-25 UTC · `TASK-BE-599` 구현 중 발견). 폼 로그인 provider 가 계정 상태를 조회하지 않는다 — 옛 `LoginUseCase:91-95,222-229` 가 LOCKED 를 거부했지만 BE-398 이 그 유일한 호출 경로를 걷어냈다. 소셜 로그인은 `SocialLoginSteps.checkAccountStatus` 로 막으므로 **같은 계정이 소셜로는 막히고 비밀번호로는 들어간다**. 잠금 자체는 돈다(672 항목 15 ②) — 효력이 없을 뿐. AC-0 = 갱신 경로·DELETED 자격·다른 테넌트 재측 · **AC-1 = 소유자 결정(응답 모양 — 비밀번호 정답 오라클)** · AC-2 소셜과 같은 규칙 공유 + fail-closed/open 결정 · AC-3 결과 상태. 선행 BE-599 데모 완화 충족(#4016). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
