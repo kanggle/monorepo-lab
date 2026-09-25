@@ -65,6 +65,12 @@ iam-platform
 # Acceptance Criteria
 
 - [ ] **AC-0** — 위 ⓐ/ⓑ/ⓒ 소유자 결정(+ ⓑ 면 측정 결과).
+  🔵 **소유자 결정 (2026-09-25 UTC) = ⓑ `tenant.mismatch` 발생량을 먼저 측정한다.** 측정은 실행 중인 스택이 필요하므로
+  `TASK-MONO-672` **항목 16** 으로 넘겼다: ① 살아 있는 SAS 세션의 (client 테넌트, 미러 행 테넌트) 교차표 — 불일치 세션 수 = 제거 시 끊길 세션 ·
+  ② 창 동안의 `cross-tenant attempt detected` 로그 줄과 outbox `auth.token.tenant.mismatch` · ③ 코드 판독상 예측된 모집단 둘
+  ((a) 테넌트 `'*'` SUPER_ADMIN 의 스토어 로그인 · (b) BE-507 이전 `fan-platform` 계정의 교차 테넌트 로그인)을 직접 재현하고 콘솔을 대조군으로.
+  유효성 술어(세션 0 · refresh 0 · 조인 전부 NULL 이면 «판정 불가»)는 그 항목에 있다.
+  🔴 **이 AC 는 측정 결과가 적히고 그것으로 ⓐ 또는 대안을 고르기 전에는 닫히지 않는다** — 측정 결과가 곧 결정은 아니다(0 이어도 데모 모집단 ≠ 운영).
 - [ ] **AC-1** — IT: 미러 행 폐기 → 다음 refresh 400 `invalid_grant` (BE-603 IT `@Order(8)` 가 일부러 **단언하지 않은** 칸). 🔴 기존 fall-through 200 을 고정하는 단언을 만들지 마라.
 - [ ] **AC-2** — IT: 비밀번호 재설정 후 기존 SAS 세션 refresh 거부 · 재사용 탐지 후 다른 세션 refresh 거부.
 - [ ] **AC-3** — 계정 테넌트 ≠ client 테넌트 세션의 refresh 가 결정한 대로 동작(허용이면 성공, 차단이면 명시적 거부 + 계약 문서).
