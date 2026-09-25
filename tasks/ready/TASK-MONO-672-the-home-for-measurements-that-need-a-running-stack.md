@@ -257,6 +257,15 @@ ShedLock `batch-search-index-consistency-check` 의 `locked_at` + 잡 로그(연
 (`packer/demo-ami.pkr.hcl:432`) 를 한다 ⇒ 클론은 모드만 바뀐 ` M` 이 된다. ⚪ **추론이지 관측이 아니다** — 다음 창에서
 `sudo -u ubuntu git -C /opt/monorepo-lab diff --summary infra/demo/demo-boot.sh` 가 `mode change 100644 => 100755` 한 줄만
 내면 닫는다(내용 diff 가 나오면 이 원인이 아니다 — 그땐 별도 티켓).
+🟢 **닫힘 (2026-09-25 11:28Z · 15차 AMI 새 인스턴스 `i-09f10c696375ba99b`)** — AMI 에서 **막 만든** 인스턴스에서도 ` M` 이었고,
+`diff --summary` = **`mode change 100644 => 100755 infra/demo/demo-boot.sh`** 한 줄 · 내용 diff **0줄**. ⇒ 굽기의 `chmod +x` 가 원인이 확정.
+누가 손으로 고친 것이 아니다. (근본 정리 — git 에 `100755` 로 올리면 ` M` 이 사라진다 — 는 선택 사항, 판정에는 영향 없음.)
+
+### 🔴 15차 AMI 첫 부팅에서 드러난 것 (2026-09-25 11:24–11:30Z)
+
+security-service 가 `DETECT_VELOCITY_THRESHOLD: "1000000"`(BE-599 데모 완화)로 `@Max(10_000)` 을 넘어 **기동 실패 재시작 루프**.
+SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restarts=0 · 스택 47개 healthy → `/stop`(예산 1491/1800). 저장소 수정 = 같은 날
+`fix(demo)` PR. ⇒ **내일 창의 인스턴스는 이미 고친 클론을 들고 있다**(stop/start 는 볼륨을 보존). 상세 = `TASK-BE-599` § CORRECTION.
 
 - **무엇을 재나** (둘, 서로 독립):
   ① ecommerce batch-worker `SearchIndexConsistencyJob` — 로그에 product-service 연결 실패가 없고 잡이 완료를 기록하는가(예전엔 `:8081` 로 매번 실패).
