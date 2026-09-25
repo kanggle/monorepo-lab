@@ -4,7 +4,7 @@ TASK-MONO-734
 
 # Status
 
-ready
+in-progress — 1단계(워크플로 · 목록 · 스크립트) 머지 뒤 실행 → 소유자 Public 전환 → 2단계(compose 전환)
 
 # Title
 
@@ -89,3 +89,32 @@ monorepo
 1. **태그로만 복사한다** → 원본 태그가 움직이면 다른 바이트를 미러한다. 원본은 `@sha256:` 로 지정한다.
 2. **digest 검증 없이 성공으로 본다** → 도구가 인덱스를 재작성해도 모른다(AC-1 🔴).
 3. **공개 전환 전에 compose 를 바꾼다** → CI·데모 pull 이 401(AC-2 순서).
+
+---
+
+# 구현 기록
+
+## 1단계 (2026-09-25 UTC · 분석=Opus 5.5) — 워크플로 · 목록 · 스크립트
+
+🔴 **이 호스트에서는 복사할 수 없었다** — crane/skopeo/oras 없음 · Docker 데몬 꺼짐 · 로컬 gh 토큰에 `write:packages` 없음
+(`gist, read:org, repo, user, workflow`). ⇒ 복사는 Actions 의 `GITHUB_TOKEN`(`packages: write`)으로 한다. 이것이 오히려 낫다 —
+무엇을 어디로 옮겼는지가 run 로그로 남는다. 🔴 `workflow_dispatch` 는 **기본 브랜치의 워크플로 파일**만 돈다 ⇒ 이 PR 머지가 실행의 선행이다.
+
+| 파일 | 내용 |
+|---|---|
+| `infra/mirror/images.txt` | AC-0 — compose 의 두 `image:` 를 **grep 으로 뽑아** 만들었다(손으로 치지 않음). 대상 = `ghcr.io/kanggle/mirror-minio:2024.10.13-debian-12-r1` · `ghcr.io/kanggle/mirror-minio-client:2024.10.8-debian-12-r1` |
+| `infra/mirror/mirror-images.sh` (`100755`) | 원본이 `@sha256:` 가 아니면 실패 · `crane copy` 후 `crane digest` 가 원본 digest 와 다르면 실패 · `--visibility`/`--require-public` = 익명 토큰으로 manifest HEAD · `--self-test` = 가짜 crane 으로 bite |
+| `.github/workflows/mirror-images.yml` | `workflow_dispatch` 전용 · crane 은 `go install …@v0.20.2`(모듈 프록시 체크섬 검증, 제3자 action 없음) · self-test → 로그인 → 복사+검증 → 가시성 보고(실패 아님) |
+
+🔵 git 모드를 `100755` 로 올렸다 — 오늘 `TASK-MONO-672` 항목 15 에서 본 «`100644` + 누군가의 `chmod +x` = 영원한 ` M`» 을 되풀이하지 않으려고.
+
+### 게이트 (로컬)
+
+| 칸 | 결과 |
+|---|---|
+| `bash -n` | 🟢 |
+| `--self-test` (AC-1 의 bite) | 🟢 일치 → rc=0 · **digest 다름 → rc≠0**(`digest changed`) · `@sha256` 없는 원본 → rc≠0 · 다른 디렉터리에서 호출해도 rc=0 · 잘못된 인자 rc=2 |
+| `--visibility` 대조군(음성) | 🟢 미러 전이라 두 대상 **HTTP 404** · `--require-public` rc=1 |
+| `--visibility` 대조군(양성) | 🟢 공개 이미지 `ghcr.io/github/super-linter:latest` → **HEAD 200** · `--require-public` rc=0 ⇒ 판정기가 양방향으로 문다 |
+
+⏳ **남은 것**: AC-1 실제 run(머지 뒤 dispatch) · AC-2 소유자 Public 전환 → 익명 200 · AC-3 compose 전환 · AC-4 재굽기 목록 한 줄.

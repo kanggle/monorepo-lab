@@ -1,0 +1,45 @@
+# Mirror pinned third-party images to GHCR, keeping their digests (TASK-MONO-734).
+#
+# Manual only: the list is pinned by digest, so one successful run is enough. Re-run it
+# when infra/mirror/images.txt gains an entry. The run fails if any copy's digest differs
+# from its source — the GHCR copy may become the only one left, so it must be the same bytes.
+#
+# First publish makes a package PRIVATE. Switching it to public is a web-UI-only step for
+# the owner; the last step reports which destinations are not anonymously pullable yet.
+name: Mirror pinned images to GHCR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    name: Mirror images (digest-preserving)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      # Installed through the Go module proxy, so the checksum database verifies the build.
+      - name: Install crane
+        run: go install github.com/google/go-containerregistry/cmd/crane@v0.20.2
+
+      - name: Self-test the digest check
+        run: bash infra/mirror/mirror-images.sh --self-test
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | "$(go env GOPATH)/bin/crane" auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copy and verify digests
+        run: CRANE="$(go env GOPATH)/bin/crane" bash infra/mirror/mirror-images.sh
+
+      - name: Report anonymous pull (not a failure — packages start private)
+        run: bash infra/mirror/mirror-images.sh --visibility
