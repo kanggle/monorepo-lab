@@ -181,8 +181,8 @@ apps/auth-service/src/main/java/com/example/auth/
 > 실패 카운터)과 device-session 등록 · `auth.session.created` 는 올리지 않았다** (소유자 결정
 > AC-0: ⓑ 기각, ⓒ 철회 — 브라우저 폼에 기기 fingerprint 가 없어 매 로그인이 «새 기기» 가 된다;
 > 안정적인 기기 식별 쿠키가 생기면 재검토). 이 발행은 텔레메트리로 취급한다 — 실패해도
-> 로그인 결과를 바꾸지 않는다(provider `telemetry(...)`). 소셜 로그인
-> (`SocialLoginBrowserController`)은 아직 아무 로그인 이벤트도 내지 않는다 — TASK-BE-599 후속.
+> 로그인 결과를 바꾸지 않는다(provider `telemetry(...)`). ~~소셜 로그인은 아직 아무 로그인 이벤트도 내지 않는다~~ —
+> **TASK-BE-602 로 해소**(아래 BE-602 블록).
 >
 > **TASK-BE-600 갱신 — 계정 상태 규칙 (두 로그인 경로 공유).** 로그인 허용 여부를 계정 상태로 판정하는
 > 규칙은 **`application/AccountStatusRule` 하나**다(`ACTIVE` 만 통과 · `LOCKED` → `AccountLockedException` ·
@@ -197,10 +197,24 @@ apps/auth-service/src/main/java/com/example/auth/
 > - **조회 실패 = fail-closed**(소유자 결정 AC-2, 폼 · 소셜 둘 다). `AccountServicePort.getAccountStatus` 의
 >   empty 는 이제 **404 만** 뜻한다(콘솔 운영자처럼 계정 레코드가 없는 자격 → 규칙 미적용). 그 밖의 4xx · 읽을 수
 >   없는 200 · 5xx · 타임아웃 · circuit-open 은 `AccountServiceUnavailableException`. 폼은 자격 행의 테넌트로
->   (`X-Tenant-Id`), 소셜은 헤더 없이(fan-platform 고정 — BE-507 이전 계정 보호) 조회한다.
+>   (`X-Tenant-Id`) 조회한다. ~~소셜은 헤더 없이(fan-platform 고정) 조회한다~~ → TASK-BE-602 부터 소셜은
+>   `getAccountStatusAndTenant`(테넌트를 돌려받는 조회 — 아래 BE-602 블록).
 >   매핑 표: [auth-to-account.md](../../contracts/http/internal/auth-to-account.md).
 > - **범위 밖(후속)**: `refresh_token` grant(`SasRefreshTokenAuthenticationProvider`)는 아직 상태를 보지 않는다 —
->   이미 받은 세션은 잠금 뒤에도 refresh 로 산다. 소셜 조회의 테넌트 인지화도 후속.
+>   이미 받은 세션은 잠금 뒤에도 refresh 로 산다. ~~소셜 조회의 테넌트 인지화도 후속~~ → TASK-BE-602.
+>
+> **TASK-BE-602 갱신 — 소셜 로그인은 계정의 실제 테넌트를 account-service 에서 받는다.** 소셜 콜백
+> (`OAuthLoginUseCase`)은 계정 상태 조회를 `AccountServicePort.getAccountStatusAndTenant`
+> (`GET /internal/accounts/{id}/status-with-tenant`)로 한다 — 테넌트를 **보내지 않고 돌려받는다**. 신원 행 ·
+> 시작 client 의 테넌트는 BE-507 이전 계정에서 계정 행과 어긋나므로 쓰지 않는다(소유자 결정 AC-0). 호출 수는 그대로(1회).
+> - **상태 규칙**은 그대로 `AccountStatusRule`(404 = 규칙 미적용 → 통과 · 조회 실패 = fail-closed).
+> - **로그인 이벤트**: 그 조회가 200 으로 답하면 `LoginEventRecorder` 로 `attempted` → `succeeded`(`loginMethod=OAUTH_<P>`) /
+>   `failed`(`ACCOUNT_*`), `tenantId` = 계정 행의 테넌트. 404 · 조회 실패 · 그 이전 단계의 실패는 이벤트 없음(테넌트를 추측하지 않는다).
+>   텔레메트리 — 실패는 로그로만(`OAuthLoginUseCase.recordTelemetry`). 규칙 원문: [auth-events.md § 소셜 로그인 경로](../../contracts/events/auth-events.md#소셜-로그인-경로-task-be-602).
+> - **화면**: `AccountServiceUnavailableException`(조회 실패 · `socialSignup` 실패)은 `SocialLoginBrowserController` 가
+>   `/login?error=temporarily_unavailable` 로 돌린다 — 이전에는 catch 가 없어 `AuthExceptionHandler` 의 503 JSON 이 브라우저에 떴다.
+> - 발급 토큰의 `tenant_id` 는 여전히 **시작 client 의 테넌트**다(ADR-006 옵션 1, 바꾸지 않았다) — 이벤트의 `tenantId` 와 다를 수 있다
+>   (BE-507 이전 계정). 이것은 의도된 차이다: 토큰은 «어느 플랫폼에 들어가나», 이벤트는 «어느 계정의 로그인인가».
 >   → **TASK-BE-601 로 처리** — refresh 는 여전히 상태를 보지 않는다(소유자 결정: «갱신 때마다 상태 조회» 기각). 대신 잠금 이벤트가
 >   세션을 끊는다 — 아래 § Event Consumption.
 

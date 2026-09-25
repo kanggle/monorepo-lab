@@ -16,6 +16,10 @@ import java.util.Optional;
  * <p>Rule (specs/features/multi-tenancy.md § Repository level):
  * "All JPA repository methods must receive tenant_id as the first argument.
  * findById(id) without tenant_id is forbidden."
+ *
+ * <p><b>Documented exception (TASK-BE-602):</b> {@link #findByIdResolvingTenant(String)}. It is
+ * the only method here without a {@link TenantId} argument; see its javadoc for the conditions
+ * that make it safe, and do not add another one without recording it the same way.
  */
 public interface AccountRepository {
 
@@ -29,6 +33,22 @@ public interface AccountRepository {
      * different tenant — cross-tenant ids are never visible across tenant boundaries.
      */
     Optional<Account> findById(TenantId tenantId, String id);
+
+    /**
+     * TASK-BE-602 — the ONE documented exception to "no lookup without a tenant": the tenant is
+     * the <b>output</b> of this lookup, not its input. It answers "which tenant does this account
+     * live in, and what is its status" for the social-login callback, which knows the account id
+     * but cannot know the account's tenant (the identity row and the initiating client both carry
+     * the wrong tenant for pre-BE-507 accounts).
+     *
+     * <p>Why this does not weaken isolation: {@code accounts.id} is a globally unique primary key,
+     * so the result is at most one row and cannot mix tenants; the caller receives that row's own
+     * {@link Account#getTenantId()} instead of guessing one; and the only consumer is an internal,
+     * workload-authenticated endpoint that returns no PII
+     * ({@code GET /internal/accounts/{id}/status-with-tenant}). Do not use it from a path that
+     * already has a tenant — use {@link #findById(TenantId, String)} there.
+     */
+    Optional<Account> findByIdResolvingTenant(String id);
 
     /**
      * Tenant-scoped lookup by email address.

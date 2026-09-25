@@ -124,10 +124,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      * TASK-BE-600: the status rejections that have a {@code failureReason} in the event
      * contract. {@link AccountStatusRule#CODE_UNKNOWN} is deliberately absent.
      */
-    private static final Set<String> CONTRACT_STATUS_REASONS = Set.of(
-            AccountStatusRule.REASON_LOCKED,
-            AccountStatusRule.REASON_DORMANT,
-            AccountStatusRule.REASON_DELETED);
+    private static final Set<String> CONTRACT_STATUS_REASONS = AccountStatusRule.EVENT_FAILURE_REASONS;
 
     /**
      * TASK-BE-600 — the account's status from account-service, looked up in the account's own

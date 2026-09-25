@@ -29,8 +29,9 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 ## 로그인 이벤트의 발행 경로 (TASK-BE-599)
 
 `auth.login.attempted` · `auth.login.failed` · `auth.login.succeeded` 의
-**살아 있는 발행자는 SAS 브라우저 폼 로그인 하나**다 — `POST /login` →
+**살아 있는 발행자는 SAS 브라우저 폼 로그인**이다 — `POST /login` →
 `CredentialAuthenticationProvider` → `LoginEventRecorder` (→ `OutboxAuthEventPublisher`).
+**TASK-BE-602 부터 소셜 로그인도** 같은 `LoginEventRecorder` 로 발행한다 — 아래 [소셜 로그인 경로](#소셜-로그인-경로-task-be-602) 절.
 `LoginUseCase` 도 같은 이벤트를 내는 코드를 갖고 있지만 TASK-BE-398 이후 호출자가 없다.
 (2026-08-01 BE-398 ~ BE-599 머지 전까지는 이 세 이벤트의 발행자가 **하나도 없었다**.)
 
@@ -55,9 +56,27 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 | 실패 격리 | 이벤트 쓰기가 실패해도 **로그인 결과는 바뀌지 않는다**(텔레메트리) |
 | 입력이 비어 있음 | 이메일/비밀번호 공백 제출은 로그인 시도로 치지 않는다 — 이벤트 없음 |
 
-🔴 **소셜 로그인(`GET /login/oauth/{provider}/callback`, `SocialLoginBrowserController`)은 아직
-어떤 로그인 이벤트도 내지 않는다.** 이 계약의 `loginMethod = OAUTH_*` 값은 현재 발행자가 없다.
-(TASK-BE-599 후속 — 태스크 파일 참조)
+### 소셜 로그인 경로 (TASK-BE-602)
+
+**TASK-BE-602 부터 소셜 로그인도 발행한다** — `GET /login/oauth/{provider}/callback` → `OAuthLoginUseCase.resolveBrowserLogin`
+→ `LoginEventRecorder`(폼과 **같은** 레코더). 스키마 변경 없음 — 새 enum 값은 `loginMethod` 의 `OAUTH_NAVER` 하나(아래 `auth.login.succeeded` 절).
+
+| 항목 | 소셜 경로의 값 |
+|---|---|
+| 발행 조건 | account-service `status-with-tenant` 가 **200 으로 답한 뒤에만** 낸다 — 그 응답이 계정의 실제 테넌트를 주는 유일한 출처라서다([auth-to-account.md](../http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant), 소유자 결정 TASK-BE-602 AC-0). 그 앞 단계의 실패(state 불일치 · 공급자 오류 · 이메일 미제공 · `socialSignup` 실패)와 **조회 실패**(fail-closed)· **404**(규칙 미적용 → 통과)는 이벤트를 **내지 않는다** — 테넌트를 모르는 채로 내면 시작 client 의 테넌트를 쓰게 되는데 그것이 BE-507 이전 계정에서 틀린 값이다(VELOCITY 가 틀린 테넌트 키로 센다). 필수 `tenantId` 를 추측으로 채우지 않는다 |
+| 발행 순서 | `attempted` → (ACTIVE) `succeeded` / (LOCKED · DORMANT · DELETED) `failed`. 계약 밖 상태 값이면 `failed` 없이 거부(`attempted` 만 — 폼과 같은 규칙). 신원 행 upsert 가 실패하면(DB) `attempted` 만 남는다 |
+| `accountId` | 해소된 계정(신원 행 또는 `socialSignup` 응답) — 항상 채운다 |
+| `emailHash` | 공급자가 준 이메일의 해시(`SHA256[:10]`, 폼과 같은 함수). 이 단계에서는 이메일이 **항상 있다**(이메일 없는 콜백은 그 전에 거부되고 이벤트가 없다) ⇒ 필수 필드 규칙 그대로, 선택화하지 않는다 |
+| `tenantId` | `status-with-tenant` 응답의 `tenantId` = **계정 행의 테넌트**. 시작 client 의 테넌트가 **아니다**(발급 토큰의 `tenant_id` 와 다를 수 있다 — BE-507 이전 계정) |
+| `failureReason` | `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 만(기존 enum 값). 소셜에는 비밀번호가 없어 `CREDENTIALS_INVALID` 가 나오지 않는다 |
+| `failCount` · `sessionJti` · `deviceId` · `isNewDevice` | 폼과 같다(`0` · `null` · `null` · `null`) |
+| `loginMethod` (succeeded) | `OAUTH_<PROVIDER>` — `OAUTH_GOOGLE` · `OAUTH_KAKAO` · `OAUTH_MICROSOFT` · `OAUTH_NAVER` |
+| 실패 격리 | 폼과 같다 — 이벤트 쓰기가 실패해도 로그인 결과는 바뀌지 않는다 |
+
+🔵 소비자 영향(2026-09-25 코드 읽기): security-service `AbstractAuthEventConsumer` 가 검사하는 필드는 `eventId` · `tenantId` 뿐이고
+`emailHash` · `loginMethod` 는 읽지 않는다(`AuthEventMapper`). account-service `LoginSucceededConsumer` 는 `accountId` · `tenantId` 로
+`findById(tenantId, accountId)` 해 `last_login_succeeded_at` 을 갱신한다 — 계정의 실제 테넌트를 싣기 때문에 스토어 소셜 계정의
+마지막 로그인 시각도 갱신된다(시작 client 의 테넌트를 실으면 BE-507 이전 계정은 조용히 no-op 이었을 것).
 
 ---
 
@@ -154,7 +173,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 - 두 필드 모두 **optional·additive**. 기존 consumer는 필드를 무시해도 정상 동작 (forward-compatible). 소비자는 unknown-field-tolerant 파싱을 유지해야 한다.
 
 **필드 노트** (OAuth Social Login):
-- `loginMethod`: 로그인 방식을 나타내는 optional enum 필드. `EMAIL_PASSWORD | OAUTH_GOOGLE | OAUTH_KAKAO | OAUTH_MICROSOFT`. 필드 생략 또는 `null`은 `EMAIL_PASSWORD`로 간주 (backward-compatible). 소셜 로그인 시 auth-service가 provider에 맞는 값을 설정한다. 🔴 (TASK-BE-599) 현재 소셜 로그인 경로는 이 이벤트를 발행하지 않으므로 실제로 관측되는 값은 필드 생략(=`EMAIL_PASSWORD`, 폼 로그인)뿐이다.
+- `loginMethod`: 로그인 방식을 나타내는 optional enum 필드. `EMAIL_PASSWORD | OAUTH_GOOGLE | OAUTH_KAKAO | OAUTH_MICROSOFT | OAUTH_NAVER`. 필드 생략 또는 `null`은 `EMAIL_PASSWORD`로 간주 (backward-compatible). 소셜 로그인 시 auth-service가 provider에 맞는 값을 설정한다. (TASK-BE-599 시점에는 소셜 경로가 이 이벤트를 발행하지 않아 관측값이 필드 생략뿐이었다.) **TASK-BE-602**: 소셜 경로가 발행을 시작하며 `OAUTH_<PROVIDER>` 가 실제로 나온다 — `OAUTH_NAVER` 는 이때 추가(TASK-BE-397 이 Naver 를 지원 provider 로 넣을 때 이 enum 이 따라오지 않았다). 폼 로그인은 여전히 필드를 생략한다(=`EMAIL_PASSWORD`). 이 필드는 `auth.login.succeeded` 에만 있다 — `attempted` · `failed` 에는 없다(소셜 실패와 폼 실패를 이벤트로 구별하지 않는다; 필요해지면 additive 로 추가).
 
 **필드 노트** (TASK-BE-599 — 폼 로그인 경로): `sessionJti` · `deviceId` · `isNewDevice` 가 모두 `null` 이다(디바이스 세션 미등록 — 위 «로그인 이벤트의 발행 경로» 절). `isNewDevice=null` 은 이 절의 정의상 «알 수 없음» 이고, fingerprint 도 없어 DeviceChangeRule 은 발화하지 않는다.
 - 이 필드는 **additive**. 기존 consumer는 필드를 무시해도 정상 동작 (forward-compatible).

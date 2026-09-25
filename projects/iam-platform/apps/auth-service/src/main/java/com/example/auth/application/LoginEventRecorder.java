@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * TASK-BE-599 — the login EVENTS of {@link LoginUseCase}, for the SAS form-login path.
+ * TASK-BE-602 — also used by the social-login callback ({@link OAuthLoginUseCase}); the caller
+ * rules below (telemetry, catch outside the proxy) apply there unchanged.
  *
  * <p>Before this class the only producer of {@code auth.login.attempted/failed/succeeded} was
  * {@link LoginUseCase}, which has had no caller since TASK-BE-398. The browser form login
@@ -79,5 +81,18 @@ public class LoginEventRecorder {
     @Transactional
     public void recordSucceeded(String accountId, String tenantId, SessionContext ctx) {
         authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, ctx, null, null);
+    }
+
+    /**
+     * TASK-BE-602 — {@code auth.login.succeeded} for the social-login callback. Same payload as
+     * {@link #recordSucceeded(String, String, SessionContext)} plus {@code loginMethod}
+     * ({@code OAUTH_<PROVIDER>}, auth-events.md). {@code tenantId} is the account's own tenant as
+     * account-service reported it — never the initiating client's.
+     */
+    @Transactional
+    public void recordSucceeded(String accountId, String tenantId, SessionContext ctx,
+                                String loginMethod) {
+        authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, ctx, null, null,
+                loginMethod);
     }
 }

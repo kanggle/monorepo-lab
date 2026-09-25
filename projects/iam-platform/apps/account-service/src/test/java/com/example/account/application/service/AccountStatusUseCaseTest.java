@@ -4,6 +4,7 @@ import com.example.account.application.command.ChangeStatusCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountStatusResult;
+import com.example.account.application.result.AccountStatusWithTenantResult;
 import com.example.account.application.result.DeleteAccountResult;
 import com.example.account.application.result.StatusChangeResult;
 import com.example.account.domain.account.Account;
@@ -95,6 +96,36 @@ class AccountStatusUseCaseTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.getStatus("missing"))
+                .isInstanceOf(AccountNotFoundException.class);
+    }
+
+    // ── getStatusResolvingTenant (TASK-BE-602) ────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-602: getStatusResolvingTenant — 테넌트를 입력받지 않고 계정 행의 테넌트를 돌려준다(ecommerce · LOCKED)")
+    void getStatusResolvingTenant_returnsAccountsOwnTenant() {
+        Instant now = Instant.now();
+        Account storeAccount = Account.reconstitute("acc-ec", new TenantId("ecommerce"), "shop@example.com", null,
+                AccountStatus.LOCKED, now, now, null, null, null, 0);
+        when(accountRepository.findByIdResolvingTenant("acc-ec")).thenReturn(Optional.of(storeAccount));
+        when(historyRepository.findTopByAccountIdOrderByOccurredAtDesc("acc-ec")).thenReturn(Optional.empty());
+
+        AccountStatusWithTenantResult result = useCase.getStatusResolvingTenant("acc-ec");
+
+        assertThat(result.accountId()).isEqualTo("acc-ec");
+        assertThat(result.tenantId()).isEqualTo("ecommerce");
+        assertThat(result.status()).isEqualTo("LOCKED");
+        assertThat(result.statusChangedAt()).isEqualTo(now);
+        // The tenant-scoped lookup (and its fan-platform pin) is not what answered.
+        verify(accountRepository, never()).findById(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getStatusResolvingTenant — 어느 테넌트에도 없음 → AccountNotFoundException (404)")
+    void getStatusResolvingTenant_absentEverywhere_throwsNotFound() {
+        when(accountRepository.findByIdResolvingTenant("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.getStatusResolvingTenant("missing"))
                 .isInstanceOf(AccountNotFoundException.class);
     }
 

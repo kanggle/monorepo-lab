@@ -3,6 +3,7 @@ package com.example.auth.infrastructure.client;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 
@@ -188,6 +189,82 @@ class AccountServiceClientUnitTest {
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
         assertThatThrownBy(() -> client.getAccountStatus("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    // ── getAccountStatusAndTenant (TASK-BE-602) ────────────────────────────────
+
+    private static final String STATUS_WITH_TENANT_PATH = "/internal/accounts/acc-1/status-with-tenant";
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 200 → status + 계정 행의 tenantId, X-Tenant-Id 는 보내지 않는다")
+    void getAccountStatusAndTenant_200_returnsStatusAndTenant_noTenantHeader() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"tenantId\":\"ecommerce\",\"status\":\"LOCKED\"}")));
+
+        Optional<AccountStatusWithTenantLookupResult> result = client.getAccountStatusAndTenant("acc-1");
+
+        assertThat(result).contains(new AccountStatusWithTenantLookupResult("acc-1", "ecommerce", "LOCKED"));
+        wireMockServer.verify(getRequestedFor(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withoutHeader("X-Tenant-Id"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 404 → Optional.empty() (답이다: 어느 테넌트에도 계정 없음)")
+    void getAccountStatusAndTenant_404_returnsEmpty() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertThat(client.getAccountStatusAndTenant("acc-1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 403 → AccountServiceUnavailableException (fail-closed)")
+    void getAccountStatusAndTenant_forbidden_throws() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse().withStatus(403)));
+
+        assertThatThrownBy(() -> client.getAccountStatusAndTenant("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 200 인데 tenantId 없음 → AccountServiceUnavailableException (추측한 테넌트로 되돌아가지 않는다)")
+    void getAccountStatusAndTenant_200WithoutTenant_throws() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"status\":\"ACTIVE\"}")));
+
+        assertThatThrownBy(() -> client.getAccountStatusAndTenant("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 200 인데 status 없음 → AccountServiceUnavailableException")
+    void getAccountStatusAndTenant_200WithoutStatus_throws() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"tenantId\":\"ecommerce\"}")));
+
+        assertThatThrownBy(() -> client.getAccountStatusAndTenant("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-602: getAccountStatusAndTenant — 네트워크 오류 → AccountServiceUnavailableException")
+    void getAccountStatusAndTenant_networkFault_throws() {
+        wireMockServer.stubFor(get(urlEqualTo(STATUS_WITH_TENANT_PATH))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThatThrownBy(() -> client.getAccountStatusAndTenant("acc-1"))
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 

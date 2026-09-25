@@ -2,6 +2,7 @@ package com.example.auth.application.port;
 
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
+import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 
 import java.util.List;
@@ -80,6 +81,31 @@ public interface AccountServicePort {
      *         lookup failed (5xx / timeout / circuit-open / IO / non-404 4xx / unusable body)
      */
     Optional<AccountStatusLookupResult> getAccountStatus(String accountId, String tenantId);
+
+    /**
+     * TASK-BE-602 — looks up an account's status AND the tenant it actually lives in, by id alone
+     * ({@code GET /internal/accounts/{id}/status-with-tenant}). The tenant is an output here, never
+     * an input.
+     *
+     * <p>For the social-login callback, which knows the account id but has no trustworthy source
+     * for the account's tenant: the initiating client's tenant and the social-identity row's tenant
+     * both disagree with the {@code accounts} row for accounts born before TASK-BE-507 (owner
+     * decision, TASK-BE-602 AC-0). It replaces that path's {@link #getAccountStatus(String)} call —
+     * one account-service round trip per social login, as before.
+     *
+     * <p>Failure mapping is the TASK-BE-600 one of {@link #getAccountStatus(String, String)}:
+     * <b>404 → empty</b> (an answer: no account row in any tenant — the login applies no status rule);
+     * everything else that is not a usable 200 — non-404 4xx, a 200 without {@code status} or
+     * {@code tenantId}, 5xx, timeout, open circuit, IO — throws
+     * {@link com.example.auth.application.exception.AccountServiceUnavailableException}, and the
+     * login fails closed.
+     *
+     * @param accountId the account to check
+     * @return the account's status and own tenant, or empty if account-service answered 404
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException if the
+     *         lookup failed
+     */
+    Optional<AccountStatusWithTenantLookupResult> getAccountStatusAndTenant(String accountId);
 
     /**
      * Creates or retrieves an account for social login via internal HTTP to account-service.

@@ -284,6 +284,12 @@ WMS·ERP 등 enterprise tenant는 **자체 가입 페이지를 두지 않고** �
 ### 격리 회귀 방지
 
 - **Repository 레벨**: 모든 JPA repository 메서드는 `tenant_id` 파라미터를 첫 번째 인자로 받는다. `findById(id)`처럼 `tenant_id` 없는 조회 메서드는 금지(컴파일 또는 정적 분석으로 차단)
+  - **문서화된 예외 1건 (TASK-BE-602)** — account-service `AccountRepository.findByIdResolvingTenant(accountId)`. 테넌트를 **입력으로 받지 않고
+    출력으로 돌려주는** 조회로, 내부 전용 `GET /internal/accounts/{accountId}/status-with-tenant`(소셜 로그인의 상태 조회) 하나만 쓴다.
+    성립 조건(전역 유일 PK · 응답에 그 행의 `tenant_id` 포함 · 내부 전용 · PII 없음)과 근거는
+    [auth-to-account.md § status-with-tenant](../contracts/http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant).
+    이 예외를 다른 조회의 근거로 넓히지 않는다 — 새 예외는 같은 형식으로 여기에 한 줄씩 적는다.
+  - ⚪ «정적 분석으로 차단» 은 현재 **없다**(2026-09-25 확인: account-service 테스트에 ArchUnit/리플렉션 기반 규칙 0). 지금 이 규칙을 지키는 것은 리뷰뿐이다.
 - **Specification/QueryDSL**: 동적 쿼리 빌더에 tenant predicate가 자동 주입되도록 base specification 제공
 - **테스트**: 모든 도메인 통합 테스트에 **cross-tenant leak 회귀 테스트** 포함 — 다른 `tenant_id`로 동일 PK·이메일 조회 시 결과가 격리되는지 검증
 

@@ -4,6 +4,7 @@ import com.example.account.application.command.ChangeStatusCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountStatusResult;
+import com.example.account.application.result.AccountStatusWithTenantResult;
 import com.example.account.application.result.DeleteAccountResult;
 import com.example.account.application.result.StatusChangeResult;
 import com.example.account.domain.account.Account;
@@ -64,6 +65,32 @@ public class AccountStatusUseCase {
                 account.getStatus().name(),
                 latestHistory.map(AccountStatusHistoryEntry::getOccurredAt).orElse(account.getCreatedAt()),
                 latestHistory.map(h -> h.getReasonCode().name()).orElse(null)
+        );
+    }
+
+    /**
+     * TASK-BE-602 — status AND the account's own tenant, looked up by id alone.
+     *
+     * <p>For the social-login callback, which knows the account id but not reliably its tenant:
+     * the initiating client's tenant and the social-identity row's tenant are both wrong for
+     * accounts born before TASK-BE-507 (identity {@code ecommerce}, account {@code fan-platform}).
+     * The tenant is returned, never taken as input — the documented exception in
+     * {@link AccountRepository#findByIdResolvingTenant(String)}.
+     *
+     * @throws AccountNotFoundException when no tenant holds an account with this id (→ 404)
+     */
+    @Transactional(readOnly = true)
+    public AccountStatusWithTenantResult getStatusResolvingTenant(String accountId) {
+        Account account = accountRepository.findByIdResolvingTenant(accountId)
+                .orElseThrow(() -> new AccountNotFoundException(accountId));
+
+        var latestHistory = historyRepository.findTopByAccountIdOrderByOccurredAtDesc(accountId);
+
+        return new AccountStatusWithTenantResult(
+                account.getId(),
+                account.getTenantId().value(),
+                account.getStatus().name(),
+                latestHistory.map(AccountStatusHistoryEntry::getOccurredAt).orElse(account.getCreatedAt())
         );
     }
 
