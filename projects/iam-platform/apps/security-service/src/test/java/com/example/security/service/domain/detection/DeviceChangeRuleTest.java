@@ -105,6 +105,20 @@ class DeviceChangeRuleTest {
         verify(store).remember("", "acc-1", "fp-new");
     }
 
+    @Test
+    @DisplayName("TASK-BE-599: the form-login succeeded shape (deviceId=null, isNewDevice=null, no fingerprint) never fires")
+    void formLoginShape_noDeviceSignal_doesNotFire() {
+        // auth-service's form-login path registers no device session (AC-0 ⓒ withdrawn) and
+        // the browser form sends no X-Device-Fingerprint, so its auth.login.succeeded carries
+        // deviceId=null, isNewDevice=null, deviceFingerprint=null. The rule must take the
+        // fingerprint fallback and stay silent — not fire on every login.
+        DetectionResult r = new DeviceChangeRule(store, thresholds)
+                .evaluate(new EvaluationContext("fan-platform", "evt-1", "auth.login.succeeded", "acc-1",
+                        "203.0.*.*", null, "XX", Instant.now(), null, null, null));
+        assertThat(r.fired()).isFalse();
+        verifyNoInteractions(store);
+    }
+
     // ── TASK-BE-248 Phase 2a: Cross-Tenant Isolation ───────────────────────────
 
     @Test

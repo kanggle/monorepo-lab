@@ -38,11 +38,12 @@ import java.util.Optional;
  * <p>This path does <b>not</b> reuse {@link com.example.auth.application.LoginUseCase}
  * (which has had no caller since TASK-BE-398 retired {@code POST /api/auth/login}).
  *
- * <p><b>Login events + device session (TASK-BE-599).</b> This provider is the only
- * password-verification path, so it is where {@code auth.login.attempted/failed/succeeded}
- * and {@code auth.session.created} are produced (via
- * {@link LoginEventRecorder}) — the input security-service's VELOCITY / DEVICE_CHANGE /
- * GEO_ANOMALY rules need. The provider is the seam because it is the only point that knows
+ * <p><b>Login events (TASK-BE-599).</b> This provider is the only password-verification path,
+ * so it is where {@code auth.login.attempted/failed/succeeded} are produced (via
+ * {@link LoginEventRecorder}) — the input security-service's VELOCITY / GEO_ANOMALY rules
+ * need. No device session is registered and no {@code auth.session.created} is emitted
+ * (owner decision, AC-0 ⓒ withdrawn: without a browser device fingerprint every login would
+ * be a "new device"). The provider is the seam because it is the only point that knows
  * the resolved credential on a FAILED attempt: a Spring failure handler or
  * {@code AuthenticationFailureEvent} listener sees only the exception, and VelocityRule
  * ignores failures without an {@code accountId}. Rate limiting is deliberately NOT applied
@@ -152,7 +153,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
     }
 
     /**
-     * Runs a login-telemetry side effect. Any failure (outbox write, device-session upsert) is
+     * Runs a login-telemetry side effect. Any failure (e.g. the outbox write) is
      * logged and swallowed: telemetry must never turn a correct password into a failed login,
      * nor a wrong password into a 500 (TASK-BE-599 — owner decision recorded on AC-0).
      */
@@ -276,7 +277,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         authenticated.setDetails(details);
 
         // Last, once every step that can still reject the login has passed — so a
-        // succeeded event / device session is never recorded for a login that then fails.
+        // succeeded event is never recorded for a login that then fails.
         telemetry("succeeded", () -> loginEventRecorder.recordSucceeded(accountId, tenantId, ctx));
         return authenticated;
     }

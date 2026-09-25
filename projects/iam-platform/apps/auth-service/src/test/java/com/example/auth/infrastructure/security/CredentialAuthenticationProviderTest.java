@@ -192,7 +192,7 @@ class CredentialAuthenticationProviderTest {
     }
 
     @Test
-    @DisplayName("BE-599: success → attempted + succeeded (device session) with accountId, the account's tenant, and the request context")
+    @DisplayName("BE-599: success → attempted + succeeded with accountId, the account's tenant, and the request context")
     void success_recordsAttemptedAndSucceeded() {
         bindRequest(null);
         stubHappyCredentialLookup();
@@ -308,8 +308,8 @@ class CredentialAuthenticationProviderTest {
         bindRequest(null);
         stubHappyCredentialLookup();
         when(tenantTypePort.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
-        when(loginEventRecorder.recordSucceeded(any(), any(), any()))
-                .thenThrow(new IllegalStateException("outbox down"));
+        doThrow(new IllegalStateException("outbox down"))
+                .when(loginEventRecorder).recordSucceeded(any(), any(), any());
 
         Authentication result = provider.authenticate(attempt(PASSWORD));
 

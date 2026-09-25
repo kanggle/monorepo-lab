@@ -37,11 +37,11 @@ import java.util.Optional;
  *
  * <p><b>TASK-BE-599 note.</b> This class has had no caller since TASK-BE-398 removed
  * {@code POST /api/auth/login}. The live password-login path is the SAS form login
- * ({@code CredentialAuthenticationProvider}), which now emits the {@code auth.login.*} /
- * {@code auth.session.created} events and registers the device session through
- * {@link LoginEventRecorder} — deliberately WITHOUT this class's rate-limit counter
- * (owner decision on TASK-BE-599 AC-0: option ⓑ declined). This class is kept, not deleted;
- * whether to delete or fold it is a separate decision.
+ * ({@code CredentialAuthenticationProvider}), which now emits the {@code auth.login.*} events
+ * through {@link LoginEventRecorder} — deliberately WITHOUT this class's rate-limit counter
+ * (TASK-BE-599 AC-0: ⓑ declined) and WITHOUT its device-session registration /
+ * {@code auth.session.created} (ⓒ withdrawn — the browser form sends no device fingerprint).
+ * This class is kept, not deleted; whether to delete or fold it is a separate decision.
  */
 @Slf4j
 @Service
