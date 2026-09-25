@@ -149,3 +149,35 @@ iam-platform
 1. **칸만 넓힌다** → 기각된 ⓐ. 의미·PII 가 남는다.
 2. **짧은 이메일로 테스트한다** → 결함이 다시 안 보인다(AC-1 🔴).
 3. **이벤트 소비자를 안 본다** → security-service 이력이 이메일/UUID 혼재로 갈라진다.
+
+---
+
+## CORRECTION (2026-09-25 UTC) — AC-2 의 «미러 행 폐기만으로 refresh 거부» 는 거짓이었다
+
+**무엇이 반증했나**: PR #4027 CI `Integration (iam B)` (run 36134528069, job 108069383637) — 106 중 1 실패, 이 티켓의 `OAuth2RefreshTokenIntegrationTest` `@Order(8)` 마지막 단계 `Status expected:<400> but was:<200>`.
+그 앞의 단언(`revokeAllByAccountId(uuid) == 1`, `findByJti(rotated).isRevoked() == true`)은 **통과**했다. ⇒ AC-1(UUID 미러 행 · 긴 이메일 refresh 성공)과 AC-2 의 앞 절반(UUID 로 SAS 미러 행을 맞힌다)은 CI 로 **참**, AC-2 의 «그것만으로 거부» 는 **거짓**.
+
+**원인 (코드로 확정, 추측 아님)**:
+
+| 사실 | 근거 |
+|---|---|
+| 우리 provider 는 폐기된 미러 행에서 `invalid_grant` 를 던진다 | `SasRefreshTokenAuthenticationProvider.java:188-191` (`existingDomainToken.isRevoked()` → `OAuth2AuthenticationException(INVALID_GRANT)`). 재사용 판정(`TokenReuseDetector.isReuse` = `existsByRotatedFrom(jti)`)은 회전된 적 없는 `rotated` 에 false 라 이 분기에 도달한다 |
+| SAS 기본 refresh provider 가 **제거되지 않고 우리 뒤에 남아 있다** | SAS 1.4.1 `OAuth2TokenEndpointConfigurer.init` (javap): `createDefaultAuthenticationProviders` 가 `new OAuth2RefreshTokenAuthenticationProvider(authorizationService, tokenGenerator)` 를 만들고, 커스텀 provider 목록은 `List.addAll(0, …)` 로 **앞에 끼워 넣을 뿐**. 우리 설정은 `authenticationProviders(consumer)` 로 기본값을 지우지 않는다(`AuthorizationServerConfig.java` — `authenticationProviders(` / `removeIf` 0건). 설정 주석의 «added first ⇒ takes priority» 가 «대체» 로 읽혔던 것 |
+| `ProviderManager` 는 `AuthenticationException` 을 받으면 **다음 provider 를 시도한다** | spring-security-core 6.4.2 `ProviderManager.authenticate` (javap) 예외 테이블: `AuthenticationException` → `lastException` 저장 후 루프 계속(`goto 41`). 즉시 재던지는 것은 `AccountStatusException` · `InternalAuthenticationServiceException` 뿐 |
+| 기본 provider 는 SAS 인가만 본다 | 인가가 `findByToken` 으로 찾아지고 refresh token 이 `isActive()` 면 새 토큰 발급 — 미러 행을 모른다. 발급 후 `authorizationService.save` → `DomainSync` 가 새 미러 행을 (회전 플래그 없이) 삽입 ⇒ 세션은 완전히 회복된다 |
+
+⇒ **우리 provider 의 도메인 거부(미러 행 revoked · expired · `TOKEN_TENANT_MISMATCH`)는 전부 SAS 기본 provider 로 흘러가 무력화된다.** 재사용 탐지 IT(`@Order(4)`)가 초록이었던 이유는 재사용된 옛 토큰이 이미 인가에서 빠져 있어 기본 provider 도 `findByToken` null → `invalid_grant` 이기 때문이다(우연한 일치).
+
+**운영 영향 (이 티켓이 만든 것이 아니라 BE-603 이전부터 있던 것)**:
+- 미러 행 폐기에만 기대는 경로는 SAS 세션을 **끊지 못한다**: 비밀번호 재설정(`ConfirmPasswordResetUseCase.java:95`), SAS 재사용 탐지의 «계정의 다른 세션 전부 폐기»(`SasRefreshTokenAuthenticationProvider.java:609-613`), 레거시 `RefreshTokenUseCase.java:198`. 강제 로그아웃·잠금은 BE-601 어댑터가 **인가 자체**를 무효화하므로 끊긴다 — **SAS refresh 를 실제로 막는 유일한 수단은 인가 무효화(`OAuthAuthorizationRevocationPort`)다.**
+- § AC-0 ① 표의 정정: 재사용 탐지 행의 «UUID 만 쓰면 회귀» 는 **미러 행 상태 기준**의 회귀일 뿐 refresh 차단 기준의 회귀가 아니다(원래부터 막지 못했다). 이중 키는 미러 행 상태 일관성용으로 유지. 비밀번호 재설정 행의 «회전한 세션은 이제 맞힘 — 좁아짐» 은 **미러 행만** 맞힐 뿐 SAS 세션은 여전히 산다 — 구멍 크기는 BE-603 이전과 같다.
+- § AC-0 ③ 강화: BE-601 어댑터는 «유지» 가 아니라 **유일한 집행 수단**.
+
+**이 티켓에서 고치지 않은 이유 (기본 provider 제거 = 별도 결정)**: 코드 판독상(실측 아님) 계정 자신의 테넌트가 클라이언트 테넌트와 다른 경우 — 예: BE-507 이전의 `fan-platform` 계정이 다른 테넌트 클라이언트로 로그인(`CredentialAuthenticationProvider.java:186-193` cross-tenant 폴백, `:289-293` 은 details 테넌트 = **계정의** 테넌트) — 발급 미러 행의 `tenant_id` 는 액세스 토큰 claim(= 계정 테넌트, `DomainSyncOAuth2AuthorizationService.extractTenantId`)이고 provider 가 비교하는 기대값은 **클라이언트** 테넌트(`SasRefreshTokenAuthenticationProvider.java:199-216`)라 매 refresh 가 `TOKEN_TENANT_MISMATCH` → 기본 provider 로 흘러가 **그 폴스루 덕분에** 갱신되고 있을 수 있다. 기본 provider 를 지우면 그 사용자들의 갱신이 전부 끊긴다. ⇒ **후속 티켓 필요(소유자 결정)**: ⓐ 기본 refresh provider 제거 + 테넌트 비교 의미 재정의를 한 묶음으로, 또는 ⓑ 제거 전 운영 `auth.token.tenant.mismatch` 발생량 실측을 AC-0 으로.
+
+**이 정정에서 바꾼 것**:
+- IT `@Order(8)` — 참인 것만 단언: ① `revokeAllByAccountId(uuid) == 1` + 행 revoked (UUID 로 SAS 미러 행을 맞힌다 = AC-2 의 참인 절반) ② 자격 행(긴 이메일) 저장 후 `ForceLogoutUseCase.execute(uuid)` → `revokedTokenCount == 1`(미러 행은 이미 revoked 라 0 + SAS 인가 1) → 다음 refresh `400 invalid_grant`. 결함(200)을 핀으로 박지 않았다 — 기본 provider 제거 후속이 뒤집을 동작이다.
+- 주석 정정: `AuthorizationServerConfig` 필터체인 javadoc(«priority ≠ replacement» + 테넌트 폴스루 위험) · `SasAuthorizationRevocationAdapter` javadoc(조건 (2)는 집행되지 않음) · `OAuthAuthorizationRevocationPort` javadoc · `ForceLogoutUseCase` 주석 · 재사용 이중 키 주석.
+- 동작 변경 = 없음(코드 경로 불변, 테스트·주석만).
+
+**검증 (2026-09-25 UTC)**: `./gradlew :projects:iam-platform:apps:auth-service:test` → rc=0, **797 / 실패 0 / 오류 0 / 건너뜀 28**(compileTestJava 재실행 — IT 변경분 컴파일 확인). 고친 IT 는 로컬 Docker 부재로 실행 불가(⚪) — **CI 판정**. 단위 테스트로 폴스루를 재현하지 않은 이유: 원인은 우리 provider 가 아니라 SAS 설정기 + `ProviderManager` 의 조합이고, 단위 수준에서 그 조합을 흉내 내면 우리 코드가 아니라 Spring 을 잰다 — 근거는 위 javap 두 건.

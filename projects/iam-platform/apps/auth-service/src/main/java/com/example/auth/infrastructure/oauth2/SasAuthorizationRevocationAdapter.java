@@ -35,12 +35,20 @@ import java.util.Set;
  * authorization itself is the store that has to be closed; the mirror row is closed too (by
  * jti) so the two agree.
  *
+ * <p>🔴 <b>(2) is not enforcing today</b> (TASK-BE-603, measured in CI). When
+ * {@code SasRefreshTokenAuthenticationProvider} rejects on (2) it throws
+ * {@code invalid_grant}; {@code ProviderManager} treats that as "try the next provider", and
+ * SAS's built-in {@code OAuth2RefreshTokenAuthenticationProvider} — still registered after
+ * ours — checks (1) only and issues the tokens. A revoked mirror row alone therefore does not
+ * refuse a refresh; closing the authorization, as this class does, is the enforcement.
+ *
  * <p><b>Still needed after TASK-BE-603.</b> BE-603 keys new mirror rows on the account UUID,
  * so {@code revokeAllByAccountId(accountId)} now reaches them — but it only ever closes the
- * mirror row, never the authorization, and rows written before BE-603 stay keyed by the
- * login email until they expire. The authorization store's {@code principal_name} stays the
- * login email (BE-603 does not change the principal name), so this email → candidates →
- * {@code account_id}-confirmed lookup remains the only way to close the authorization.
+ * mirror row, never the authorization (see above), and rows written before BE-603 stay keyed
+ * by the login email until they expire. The authorization store's {@code principal_name}
+ * stays the login email (BE-603 does not change the principal name), so this email →
+ * candidates → {@code account_id}-confirmed lookup remains the only way to close the
+ * authorization.
  *
  * <p><b>Finding the account's authorizations.</b> {@code oauth2_authorization} has no
  * account column — only {@code principal_name}. The candidate names are the addresses the

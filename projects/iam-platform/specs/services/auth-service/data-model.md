@@ -48,6 +48,8 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 
 **토큰 재사용 탐지 로직**: `POST /api/auth/refresh`가 `jti=A`로 rotation을 요청했을 때, A에 이미 `rotated_from`을 참조하는 자식이 존재하면 → 재사용 탐지. 해당 `account_id`의 모든 refresh_token을 `revoked=TRUE`로 일괄 처리 + `auth.token.reuse.detected` 이벤트 발행.
 
+> 🔴 **SAS 경로에서 미러 행 `revoked` 는 refresh 를 막지 못한다** (TASK-BE-603 CORRECTION, CI 실측 2026-09-25 UTC). `SasRefreshTokenAuthenticationProvider` 가 폐기·만료된 미러 행에 `invalid_grant` 를 던져도 SAS 기본 `OAuth2RefreshTokenAuthenticationProvider` 가 뒤에 등록돼 있어 `ProviderManager` 가 그쪽으로 넘기고, 기본 provider 는 SAS 인가(`oauth2_authorization`)만 보고 통과시킨다. SAS 세션을 실제로 끊는 것은 인가 무효화(`SasAuthorizationRevocationAdapter`, 강제 로그아웃 · 잠금)뿐이다. 기본 provider 제거는 후속 소유자 결정.
+
 ### `social_identities`
 
 OAuth/OIDC 외부 IdP(예: Google, Apple, Naver, Kakao)와 IAM 계정의 연결

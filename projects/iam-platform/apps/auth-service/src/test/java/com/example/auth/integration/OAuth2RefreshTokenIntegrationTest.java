@@ -1,8 +1,13 @@
 package com.example.auth.integration;
 
+import com.example.auth.application.ForceLogoutUseCase;
+import com.example.auth.domain.credentials.Credential;
+import com.example.auth.domain.credentials.CredentialHash;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.token.RefreshToken;
+import com.example.auth.infrastructure.persistence.CredentialJpaEntity;
+import com.example.auth.infrastructure.persistence.CredentialJpaRepository;
 import com.example.auth.infrastructure.persistence.RefreshTokenJpaRepository;
 import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,6 +35,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -142,6 +148,12 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private CredentialJpaRepository credentialJpaRepository;
+
+    @Autowired
+    private ForceLogoutUseCase forceLogoutUseCase;
 
     // Shared state across ordered tests (normal rotation scenario)
     private static String refreshTokenValue;
@@ -457,13 +469,14 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // -----------------------------------------------------------------------
     // 8. TASK-BE-603: a real-shaped (long) login email. The mirror row is keyed on
     //    the account UUID from the principal details, so issuance and refresh both
-    //    succeed, and revokeAllByAccountId(uuid) reaches the SAS session.
+    //    succeed, and revokeAllByAccountId(uuid) reaches the SAS mirror row. Refusal
+    //    of the next refresh comes from closing the SAS authorization (force-logout).
     // -----------------------------------------------------------------------
 
     @Test
     @Order(8)
     @DisplayName("TASK-BE-603: 54자+ 이메일 계정 — 발급 시 미러 행(UUID) 저장 → refresh 성공 → "
-            + "revokeAllByAccountId(UUID) 가 SAS 경로 행을 맞혀 다음 refresh 거부")
+            + "revokeAllByAccountId(UUID) 가 SAS 미러 행을 맞힘 → 강제 로그아웃(UUID)이 다음 refresh 거부")
     void longEmailAccount_mirrorRowKeyedOnUuid_refreshSucceeds_andAccountRevokeReachesIt() throws Exception {
         String accountId = UUID.randomUUID().toString();
         // Real-shaped address, longer than refresh_tokens.account_id VARCHAR(36).
@@ -492,13 +505,28 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
         assertThat(rotatedRow.get().getRotatedFrom()).isEqualTo(issued);
         assertThat(refreshTokenRepository.findByJti(issued).orElseThrow().isRevoked()).isTrue();
 
-        // AC-2: a revoke keyed on the account UUID reaches the SAS-path mirror row …
+        // AC-2 (i): a revoke keyed on the account UUID now reaches the SAS-path mirror row.
         Integer revoked = transactionTemplate.execute(
                 s -> refreshTokenRepository.revokeAllByAccountId(accountId));
         assertThat(revoked).as("the live SAS mirror row of this account").isEqualTo(1);
         assertThat(refreshTokenRepository.findByJti(rotated).orElseThrow().isRevoked()).isTrue();
 
-        // … and that alone refuses the session's next refresh.
+        // 🔴 A revoked mirror row does NOT by itself refuse the next refresh (CI run
+        // 36134528069 measured 200 here). SasRefreshTokenAuthenticationProvider rejects it
+        // with invalid_grant, but ProviderManager treats that as "try the next provider",
+        // and SAS's built-in OAuth2RefreshTokenAuthenticationProvider — still registered
+        // after ours — checks only the authorization. See TASK-BE-603 § AC-2 finding.
+        // So the refusal is asserted through the path that production relies on:
+        //
+        // AC-2 (ii): force-logout by account UUID closes the SAS authorization (BE-601
+        // adapter), and THAT refuses the next refresh.
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
+        ForceLogoutUseCase.Result forced = forceLogoutUseCase.execute(accountId);
+        assertThat(forced.revokedTokenCount())
+                .as("mirror row already revoked above (0) + the SAS authorization (1)")
+                .isEqualTo(1);
+
         mockMvc.perform(post("/oauth2/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "refresh_token")

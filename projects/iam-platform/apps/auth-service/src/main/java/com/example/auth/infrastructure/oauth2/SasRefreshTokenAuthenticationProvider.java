@@ -526,9 +526,12 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // a value no other path uses, and the events carried the email as accountId.
         String accountId = AuthorizationAccountId.forMirrorRow(authorization);
         // Drain window: mirror rows written before TASK-BE-603 are keyed by the principal
-        // name. Revoke those too, or a reuse would stop revoking an account's other sessions
-        // until each of them rotates once. Once the last such row has expired (refresh TTL,
-        // 30 days) the second UPDATE matches nothing.
+        // name. Revoke those too, so the mirror store keeps covering the same rows it did
+        // before this change. Once the last such row has expired (refresh TTL, 30 days) the
+        // second UPDATE matches nothing.
+        // 🔴 Neither UPDATE refuses the other sessions' next refresh today: this provider's
+        // invalid_grant on a revoked row falls through to SAS's built-in refresh provider,
+        // which checks only the authorization (TASK-BE-603 § AC-2 finding).
         String legacyMirrorKey = authorization.getPrincipalName();
         log.warn("SAS_REFRESH: reuse detected for account={}, jti={}", accountId, jti);
 
