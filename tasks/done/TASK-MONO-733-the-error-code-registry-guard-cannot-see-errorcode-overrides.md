@@ -4,7 +4,7 @@ TASK-MONO-733
 
 # Status
 
-review
+done
 
 # Title
 
