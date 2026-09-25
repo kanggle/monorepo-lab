@@ -218,7 +218,40 @@ monorepo
 - 🔵 **무엇을 기다리나 — 재굽기다.** `V0038`(Flyway) · ecommerce compose · `demo.env` 가 전부 구워지는 표면이다(compose·demo.env 는 SSM 패치로도 되지만 V0038 은 이미지 안).
 - 출처: `tasks/…/TASK-MONO-726-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 726 은 수령 시점에 `review/` — **726 이 닫히지 않고 살아남으면 이 항목은 726 으로 되돌린다**(의무 이중 보유 금지).
 
-## 항목 15 — `TASK-MONO-727` AC-3: 두 주소 고침이 **결과 상태로** 성립하는가 (2026-09-24 수령)
+## 항목 15 (② 닫힘 2026-09-25 — **PASS**, 대조군 포함 · ① 은 **열림**) — `TASK-MONO-727` AC-3: 두 주소 고침이 **결과 상태로** 성립하는가 (2026-09-24 수령)
+
+### 2026-09-25 창 기록 (04:06–04:13Z · 예산 1483 → 1486/1800 · 재굽기 없음)
+
+🔴 **이 창은 03:00 을 걸치지 못했다** — 01:36Z 에 시각을 한 번 재고 그 뒤 다시 재지 않은 채 `/start` 를 불렀더니
+04:06Z 였다. ⇒ **② 만 판정, ① 은 여전히 03:00 창이 필요하다.** 🔵 다음 창 교훈: `/start` 직전에 시각을 다시 재라.
+
+**방법** — 클론(`/opt/monorepo-lab`, HEAD=`f1da21800`)에 `git fetch --depth 1 origin main` 후 **두 파일만**
+`checkout FETCH_HEAD --`(`git pull` 전체 아님), `DEMO_DOMAIN` 을 IMDSv2 로 `demo-boot.sh` 와 같게 파생, `demo-up.sh`
+과 같은 `-p`/`-f` 로 `up -d --no-deps --force-recreate` 두 컨테이너. 🔴 재생성 **전후 env diff**:
+security-service **+1줄**(`ACCOUNT_SERVICE_BASE_URL`)뿐, batch-worker +3줄(727 의 1 + 726 의 `IAM_TOKEN_URI`·`ORDER_SERVICE_BASE_URL`),
+그 밖(DEMO_DOMAIN 포함) 불변. 창 끝에 두 파일을 `checkout HEAD --` 로 되돌림(다음 부팅 = 구운 상태).
+🔵 iam 의 `account_db` 는 **MySQL**(`iam-mysql`)이다 — Postgres 가 아니다.
+
+**② 자동 잠금 — PASS** (합성 `auth.token.reuse.detected` 로 쟀다 — 앞 구간 ⚪ 은 아래 § 창 전제 그대로)
+
+| | 고치기 전 (대조군) | 고친 뒤 (판정) |
+|---|---|---|
+| security-service `ACCOUNT_SERVICE_BASE_URL` | `<unset>` | `http://account-service:8082` |
+| 일회용 계정(`fan-platform`, signup 201) | `db7e2de3-…` | `93e1d733-…` |
+| 로그 | `Auto-lock attempt 1..3 threw: java.net.ConnectException` → `Auto-lock FAILURE — emitted pending event` | `account.locked recorded … source=system` |
+| `security_auto_lock_failures_total` | 0 → **1** | 0 → **0** (재생성으로 카운터 초기화 — 불변 판정은 이 컨테이너 안에서) |
+| **`account_db.accounts.status`** | **ACTIVE** (40초 대기) | **LOCKED** (~4초) |
+
+🔵 같은 방법·같은 창에서 결과가 **반대로** 갈렸다 ⇒ 차이는 주소 한 줄이다. 401 없음(토큰 축 이상 없음).
+
+**① 검색 색인 정합성 잡 — ⚪ 판정 안 됨(03:00 미포함)**. 보조(판정 아님): batch-worker 컨테이너 안에서
+`product-service:8082/actuator/health` = `UP`, 예전 기본값 `:8081` = `Connection refused` · 컨테이너 시계 UTC(`TZ` 미설정 —
+cron 03:00 은 UTC 로 돈다). ⇒ **다음 창은 02:50–03:10Z 면 된다**: batch-worker 하나만 같은 방법으로 재생성 → 03:00 뒤
+ShedLock `batch-search-index-consistency-check` 의 `locked_at` + 잡 로그(연결 실패 부재 · 완료 기록).
+🔴 727 은 `review/`(동결)라 거기엔 못 적는다 — **727 을 닫는 close chore 는 이 절을 읽고 ① 이 남았음을 봐야 한다**(4번째 차원).
+
+🔴 **덤으로 본 것** — 클론의 `infra/demo/demo-boot.sh` 가 **이 창 전부터** 수정(unstaged) 상태였다. 이 창은 손대지 않았다.
+누가·언제 바꿨는지 모른다(부팅 시 이 파일이 도는 버전이므로 «구운 상태 = 커밋» 가정이 이 파일엔 성립하지 않을 수 있다).
 
 - **무엇을 재나** (둘, 서로 독립):
   ① ecommerce batch-worker `SearchIndexConsistencyJob` — 로그에 product-service 연결 실패가 없고 잡이 완료를 기록하는가(예전엔 `:8081` 로 매번 실패).
