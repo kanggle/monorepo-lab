@@ -77,6 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-602-social-login-needs-the-accounts-real-tenant.md` — **소셜 로그인은 계정의 실제 테넌트를 모른다** (READY, 2026-09-25 UTC · BE-599 · BE-600 후속을 한 티켓으로 — 소유자 결정). 스토어(ecommerce) 소셜 계정은 잠겨도 소셜로 들어오고(상태 조회가 fan-platform 으로 읽어 404 → 검사 생략), 소셜 로그인은 `auth.login.*` 을 못 낸다(시작 client 테넌트는 BE-507 이전 계정과 어긋날 수 있음). **AC-0 = 테넌트 출처 소유자 결정.** 404 를 거부로 바꾸면 스토어 소셜 전면 차단 — 금지. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+- `TASK-BE-604-sas-default-refresh-provider-overrides-domain-rejections.md` — 🔴 **SAS 기본 refresh provider 가 우리 provider 뒤에 살아 있어 도메인 거부가 무시된다** (READY, 2026-09-25 UTC · BE-603 CI 에서 발견). 미러 행 폐기·만료·테넌트 불일치 거부가 `ProviderManager` fall-through 로 200 이 된다 ⇒ 비밀번호 재설정·재사용 탐지가 SAS 세션을 못 끝낸다(force-logout·잠금만 BE-601 어댑터로 막힘). **AC-0 = 소유자 결정**(기본 provider 제거 + 테넌트 비교 재정의 vs tenant.mismatch 발생량 선측정) — 그냥 제거하면 계정≠client 테넌트 세션이 끊길 수 있다(⚪ 미측정). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
