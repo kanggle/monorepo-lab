@@ -310,6 +310,40 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
 - 🔴 **창 제어 API 호출이 자동 모드 분류기에 막혔다**(2026-09-24 09:00Z — 읽기 전용 `GET /status` 가 «Exfil Scouting»).
   다음 창은 허용 규칙을 먼저 세우거나 소유자가 명령을 직접 실행해야 한다.
 
+## 항목 16 — `TASK-BE-604` AC-0 ⓑ: 테넌트 불일치로 **fall-through 로만 갱신되는 세션**이 실제로 있는가 (2026-09-25 수령)
+
+- **왜 재나**: 소유자 결정(2026-09-25 UTC) = ⓑ **측정 먼저**. SAS 기본 refresh provider 를 제거하면, 미러 행 테넌트 ≠ client
+  테넌트인 세션은 지금 `TOKEN_TENANT_MISMATCH` → 기본 provider 로 흘러 **갱신되고 있다가** 끊긴다. 그 모집단이 0 인지, 누구인지를 잰다.
+- **무엇을 재나** (셋, 🔴 ① 이 주 판정 · ②③ 은 교차 확인):
+  ① **구조 — 지금 살아 있는 SAS 세션 중 불일치 세션 수** (`auth_db`, 계정 = `auth_user`/`auth_pass`):
+  ```sql
+  SELECT c.client_id, c.tenant_id AS client_tenant, rt.tenant_id AS mirror_tenant, COUNT(*) AS n
+  FROM oauth2_authorization a
+  JOIN oauth_clients c ON c.id = a.registered_client_id
+  LEFT JOIN refresh_tokens rt ON rt.jti = CAST(a.refresh_token_value AS CHAR)
+  WHERE a.refresh_token_value IS NOT NULL AND a.refresh_token_expires_at > NOW()
+  GROUP BY 1, 2, 3 ORDER BY n DESC;
+  ```
+  판정 = `mirror_tenant IS NOT NULL AND mirror_tenant <> client_tenant` 행의 `n` 합(= 제거 시 끊길 세션).
+  🔴 `mirror_tenant IS NULL` 행은 **별도 코호트**(미러 행 없음 — 지금 provider 는 도메인 검사를 전부 건너뛴다. BE-604 Edge Case 2)로 따로 적어라.
+  🔴 **유효성 술어**: 전체 `n` 합 > 0. 0 이면 «불일치 0» 이 아니라 «세션이 없었다» — 판정 불가로 적는다. 🔴 `CAST(… AS CHAR)` 조인이
+  한 행도 안 맞으면(전부 NULL) 조인 키가 틀린 것이다 — 이때도 판정 불가(대조군: 창 안에서 방금 로그인한 세션은 반드시 맞아야 한다).
+  ② **흐름 — 창 동안 실제로 fall-through 한 refresh 수**: auth-service 로그의 `SAS_REFRESH: cross-tenant attempt detected` 줄 수와
+  `SELECT event_type, COUNT(*) FROM outbox WHERE event_type LIKE 'auth.token.%' GROUP BY 1;` 의 `auth.token.tenant.mismatch` 행.
+  🔴 **유효성 술어**: 같은 창에 `auth.token.refreshed` 가 1건 이상. refresh 가 0 이면 mismatch 0 은 아무것도 재지 않았다.
+  ⚪ outbox 행이 발행 뒤 지워지는지는 코드에서 정리 잡을 못 찾았다(부재 판정 아님) — 로그와 outbox 두 값이 어긋나면 적어라.
+  ③ **예측된 모집단을 직접 만든다** (코드 판독상 가설 둘 · 🔴 가설이지 관측이 아니다):
+     (a) SUPER_ADMIN(테넌트 `'*'`)이 스토어 client 로 로그인 → 클레임 `'*'`(`TenantClaimTokenCustomizer.java:895` 부근) vs client `ecommerce`;
+     (b) BE-507 이전 `fan-platform` 계정이 다른 테넌트 client 로 로그인(`CredentialAuthenticationProvider.java:190-213` 교차 조회).
+     각각 로그인 → refresh 1회 → ② 의 로그 줄이 **그 세션 jti 로** 찍히는가. 🔵 대조군: 콘솔(`gap` client · `gap` 클레임 예상)
+     로그인 → refresh 에서 mismatch 가 **안** 찍혀야 한다. 🔴 공유 데모 계정은 잠그지 마라(여기선 로그인·refresh 만 — 잠금 없음).
+- 🔵 **재굽기 불필요** — 15차 AMI 로 잰다(BE-603 이전 이미지라 미러 행 `account_id` 가 이메일이지만 테넌트 축과 무관).
+  🔴 단, 긴 이메일 계정은 미러 행이 없어 ① 의 NULL 코호트로 간다 — 섞지 마라.
+- 🔴 **이 측정이 답하지 못하는 것**: 데모의 모집단은 운영(실사용자)이 아니다. ① 이 0 이어도 «운영에 없다» 의 증거가 아니라
+  «데모에 없다» 다. ③ 이 재현되면 그것이 제거 판정의 실질 입력이다(«이 모양의 사용자가 있으면 끊긴다» 가 구조적으로 참).
+- 출처: `projects/iam-platform/tasks/ready/TASK-BE-604-…` § AC-0. 🔴 **Failure Scenario 2 대조**: 604 는 `ready/` — 결과는 604 AC-0 에도
+  적고, 604 가 착수되면 이 항목은 604 로 돌아간다(의무 이중 보유 금지).
+
 ---
 
 # Goal
