@@ -4,7 +4,7 @@ TASK-MONO-735
 
 # Status
 
-ready
+in-progress
 
 # Title
 
@@ -90,3 +90,24 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 1. **fan-platform 계정으로만 재고 닫는다** → 이 결함이 그렇게 숨었다. AC-3 은 반드시 비-fan 계정.
 2. **admin-service 에 운영자 테넌트를 넣는다** → SUPER_ADMIN(`"*"`)은 여전히 못 잠근다. 대상 계정의 테넌트다.
 3. **(b) 를 헤더 유무와 무관하게 적용** → 교차 테넌트 격리가 풀린다.
+
+---
+
+# AC-0 소유자 결정 (2026-09-26 UTC) = (c) 둘 다
+
+**(b)** account-service `/internal/accounts/{id}/lock` · `/unlock` · `/delete` 는 `X-Tenant-Id` 가 **없거나 공백이거나 `*`** 이면
+계정 행에서 테넌트를 푼다(`AccountRepository.findByIdResolvingTenant` — `TASK-BE-602` 의 문서화된 예외의 둘째 사용). 헤더가
+**구체 테넌트**면 오늘과 똑같이 그 테넌트로 한정한다(교차 테넌트 → 404). **(a)** 테넌트를 이미 아는 호출자는 그것을 명시적으로 싣는다
+(심층 방어 — 틀린 id 가 다른 테넌트 계정을 가리키면 잠그지 말고 404).
+
+🔵 `*` 를 «헤더 없음» 과 같이 푼 이유: 오늘 `TenantId.fromHeaderOrDefault` 가 `*` 를 부재와 **같은 값**(`fan-platform`)으로 읽고, admin-service
+는 SUPER_ADMIN 일 때 헤더를 **생략하지 않고 `*` 를 싣는다**(`QueryTenantScopeGate` 가 `*` 를 그대로 돌려주고 `callPost` 가 non-null 이면
+스탬프한다). «부재만» 을 풀면 SUPER_ADMIN 잠금은 고쳐지지 않는다.
+
+| 호출처 | 결정 뒤 싣는 테넌트 | account-service 가 찾는 곳 |
+|---|---|---|
+| security-service `AccountServiceClient.lock` (자동 잠금) | `X-Tenant-Id` = `SuspiciousEvent.getTenantId()` (탐지 이벤트의 테넌트 — 생성자에서 non-blank 강제) | 그 테넌트 한정 |
+| admin-service `AccountServiceClient.lock`/`unlock` — TENANT_ADMIN 등 일반 운영자 | 운영자의 해소된 활성 테넌트(변경 없음) | 그 테넌트 한정(교차 → 404 유지) |
+| admin-service 같은 메서드 — SUPER_ADMIN (`*`) | `X-Tenant-Id: *` (변경 없음) | **계정 행의 테넌트** (b) |
+| ecommerce product-service `AccountServiceSellerProvisioner.lockAccount(tenantId, accountId)` (셀러 정지) | `X-Tenant-Id` = 받은 `tenantId` | 그 테넌트 한정 |
+| 헤더를 안 싣는 그 밖의 호출자 | — | **계정 행의 테넌트** (b) — `fan-platform` 계정은 결과가 같다(net-zero) |
