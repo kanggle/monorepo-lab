@@ -42,8 +42,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -680,7 +684,9 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             legacyMirrorKey = null;
         }
         // Token values are deliberately not logged (identity-platform: never log refresh
-        // tokens); the event below carries it as reusedJti, as the contract defines.
+        // tokens); the event below carries a SHA-256 digest of it as reusedJti (TASK-BE-608 —
+        // the field used to carry the raw token; no consumer reads it, so it is now
+        // non-reversible), never the raw value.
         log.warn("SAS_REFRESH: reuse detected — revoking the refresh-token family. account={}, "
                 + "children={}", accountId, assessment.children().size());
 
@@ -726,7 +732,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             }
 
             authEventPublisher.publishTokenReuseDetected(
-                    accountId, tenantId, reusedToken, originalRotationAt, reuseAttemptAt,
+                    accountId, tenantId, reuseTokenDigest(reusedToken), originalRotationAt, reuseAttemptAt,
                     "masked", "unknown", true, rc);
 
             for (DeviceSession session : activeSessions) {
@@ -750,6 +756,25 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         if (revokedCount == 0) {
             log.info("SAS_REFRESH: reuse of an already-closed refresh-token family, "
                     + "no event. account={}", accountId);
+        }
+    }
+
+    /**
+     * TASK-BE-608 — {@code auth.token.reuse.detected.reusedJti} carried the raw SAS refresh
+     * token (identity-platform: never log/persist refresh tokens in the clear). No consumer
+     * (security-service {@code TokenReuseDetectedConsumer}/{@code TokenReuseRule}) reads the
+     * field's value — it is only ever stored — so the field is kept (contract §
+     * auth.token.reuse.detected) but its value is now a SHA-256 hex digest of the raw token,
+     * never the raw token itself. Package-private so the test can assert against the same
+     * derivation instead of duplicating it.
+     */
+    static String reuseTokenDigest(String rawToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

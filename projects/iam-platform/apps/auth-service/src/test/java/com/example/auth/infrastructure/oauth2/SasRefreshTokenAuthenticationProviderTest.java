@@ -290,8 +290,9 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(refreshTokenRepository).revokeAllByAccountId("account-001");
         verify(bulkInvalidationStore).invalidateAll(eq("account-001"), anyLong());
         // TASK-BE-259: tenantId is now a required arg, sourced from the reused token's DB row.
+        // TASK-BE-608: reusedJti is now a SHA-256 digest of the raw token, never the raw value.
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq("account-001"), eq("fan-platform"), eq(tokenValue),
+                eq("account-001"), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenValue)),
                 any(), any(), any(), any(), eq(true), eq(1));
     }
 
@@ -500,7 +501,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(deviceSessionRepository).findActiveByAccountId(accountId);
         verify(bulkInvalidationStore).invalidateAll(eq(accountId), anyLong());
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(accountId), eq("fan-platform"), eq(tokenValue),
+                eq(accountId), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenValue)),
                 any(), any(), any(), any(), eq(true), eq(3));
     }
 
@@ -686,7 +687,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
         verify(bulkInvalidationStore).invalidateAll(eq(accountId), anyLong());
         verify(authEventPublisher, times(1)).publishTokenReuseDetected(
-                eq(accountId), eq("fan-platform"), eq(tokenA), eq(childB.getIssuedAt()), eq(NOW),
+                eq(accountId), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenA)),
+                eq(childB.getIssuedAt()), eq(NOW),
                 any(), any(), eq(true), eq(2));
         verifyNoInteractions(tokenGenerator);
         verify(authorizationService, never()).save(any());
@@ -732,7 +734,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         assertThatThrownBy(() -> provider.authenticate(auth)).isInstanceOf(OAuth2AuthenticationException.class);
 
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(accountId), any(), eq(tokenA), any(), any(), any(), any(), eq(true), eq(1));
+                eq(accountId), any(), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenA)),
+                any(), any(), any(), any(), eq(true), eq(1));
     }
 
     @Test
@@ -755,7 +758,8 @@ class SasRefreshTokenAuthenticationProviderTest {
 
         // originalRotationAt = the EARLIEST child, whatever order the store returned them in.
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(accountId), any(), eq(tokenA), eq(childB1.getIssuedAt()), any(), any(), any(),
+                eq(accountId), any(), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenA)),
+                eq(childB1.getIssuedAt()), any(), any(), any(),
                 eq(true), eq(2));
     }
 
@@ -824,7 +828,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(refreshTokenRepository).revokeAllByAccountId(accountId);
         verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
         verify(authEventPublisher).publishTokenReuseDetected(
-                eq(accountId), eq("fan-platform"), eq(tokenA), any(), any(), any(), any(), eq(true), eq(1));
+                eq(accountId), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenA)),
+                any(), any(), any(), any(), eq(true), eq(1));
     }
 
     /** A mirror row rotated from {@code parent}, issued at {@code issuedAt} (tenant fan-platform). */

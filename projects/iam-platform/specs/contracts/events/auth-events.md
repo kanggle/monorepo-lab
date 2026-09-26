@@ -231,7 +231,7 @@ Refresh token rotation 성공 시 발행.
 {
   "accountId": "string",
   "tenantId": "string (required, 재사용된 refresh token DB row의 tenant_id. 미존재 시 'fan-platform' 기본값)",
-  "reusedJti": "string (재사용 시도된 토큰)",
+  "reusedJti": "string (재사용 시도된 refresh token 값의 SHA-256 hex 다이제스트 — TASK-BE-608, 원문 아님)",
   "originalRotationAt": "2026-04-12T09:50:00Z",
   "reuseAttemptAt": "2026-04-12T10:00:00Z",
   "ipMasked": "192.168.*.*",
@@ -246,6 +246,7 @@ Refresh token rotation 성공 시 발행.
 - `accountId` (TASK-BE-603): **계정 UUID**. SAS 경로도 principal details `account_id` 를 싣는다(이전엔 로그인 이메일 — 그래서 `TokenReuseRule` 의 자동 잠금 `/internal/accounts/{accountId}/lock` 이 이메일로 호출되었다). `auth.token.refreshed` 필드 노트 참조. `revokedCount` 는 배수 기간 동안 이메일 키 미러 행 폐기분을 포함한다.
 - `revokedCount` (TASK-BE-606, SAS 경로): 폐기한 미러 행 수 **+ 무효화한 SAS 인가 수**(같은 세션이 두 저장소에 하나씩 있으므로 세션 수가 아니다 — `ForceLogoutUseCase` 와 같은 합산). 0 이면 이벤트 자체가 발행되지 않는다(위 발행 조건).
 - `reusedJti` · `originalRotationAt` (TASK-BE-606): SAS 경로에서 `originalRotationAt` = 제출 토큰에서 회전된 자식 중 **가장 이른** 행의 `issued_at`(자식이 둘일 수 있다 — `rotated_from` 은 비고유). `tenantId` 는 제출 토큰 자신의 미러 행이 없으면(최초 발급 INSERT 가 삼켜진 경우) 그 자식 행의 테넌트다 — 한 사슬의 행은 모두 세션 테넌트를 싣는다.
+- `reusedJti` (TASK-BE-608, **BREAKING 아님 — 값의 의미만 교정**): BE-606 까지는 SAS refresh 토큰 **원문**이었다 — identity-platform의 "refresh 토큰을 로그/이벤트에 원문으로 남기지 않는다"와 충돌했고(이 이벤트는 security-service DB `login_history`에 적재된다), 소비자를 전수 확인한 결과 **값을 읽는 소비자가 없었다**(security-service `TokenReuseDetectedConsumer` → `AbstractAuthEventConsumer.processEvent` 는 `accountId`·`tenantId`·`ipMasked`·`timestamp` 만 읽고, `TokenReuseRule`(`EvaluationContext`)에도 `reusedJti` 필드가 없다 — 저장·전달만 되고 조회는 없었다). 그래서 필드명은 유지하고 값을 `SHA-256(rawToken)` hex(64자)로 교정했다 — 원문을 아예 담지 않아 리네임보다 breaking 범위가 작다. 계산 지점 = `SasRefreshTokenAuthenticationProvider.reuseTokenDigest`(발행 직전, `handleReuse` 안) — 원문은 그 시점까지도 이벤트 인자로 넘어가지 않는다. 레거시 `RefreshTokenUseCase` 경로는 대상이 아니다 — 그 경로가 싣는 값은 이미 원문 토큰이 아니라 `TokenGeneratorPort.extractJti`가 파싱한 JWT `jti` claim(비가역 식별자)이었다.
 
 **Consumers**: security-service `TokenReuseRule` (TASK-BE-606, 소유자 결정 2026-09-26): 같은 `(tenantId, accountId)` 의 재사용 이벤트를 기존 1시간 카운터(`reuse:{tenantId}:{accountId}`, 첫 증가 시각부터 TTL 1h)로 센다. **1건 = ALERT**(score 70 — `suspicious_events` 기록 + `security.suspicious.detected`, 잠금 없음) · **1시간 안 2건 이상 = AUTO_LOCK**(score 100 — `auto.lock.triggered`). 카운터를 읽지 못하면(Redis 장애 → 0) **AUTO_LOCK** 으로 떨어진다(fail-closed — BE-606 이전 동작). auth-service 쪽 세션 폐기는 1건째에 이미 끝났으므로, 잠금은 «반복된 재사용» 에 대한 추가 조치다. 🔴 TASK-BE-606 이전: 1건마다 즉시 `auto.lock.triggered`(score 100 고정).
 
