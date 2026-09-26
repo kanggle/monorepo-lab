@@ -184,6 +184,75 @@ class AccountStatusUseCaseTest {
                 .isInstanceOf(AccountNotFoundException.class);
     }
 
+    // ── changeStatusResolvingTenant / deleteAccountResolvingTenant (TASK-MONO-735) ──
+
+    @Test
+    @DisplayName("TASK-MONO-735: changeStatusResolvingTenant — ecommerce 계정을 계정 행의 테넌트로 찾아 LOCKED")
+    void changeStatusResolvingTenant_locksAccountInItsOwnTenant() {
+        Account storeAccount = accountIn("acc-ec", "ecommerce", AccountStatus.ACTIVE);
+        when(accountRepository.findByIdResolvingTenant("acc-ec")).thenReturn(Optional.of(storeAccount));
+        when(historyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        StatusChangeResult result = useCase.changeStatusResolvingTenant(new ChangeStatusCommand(
+                "acc-ec", AccountStatus.LOCKED, StatusChangeReason.AUTO_DETECT, "system", null, null));
+
+        assertThat(result.previousStatus()).isEqualTo("ACTIVE");
+        assertThat(result.currentStatus()).isEqualTo("LOCKED");
+        verify(accountRepository).save(storeAccount);
+        verify(eventPublisher).publishAccountLocked(any(), any(), any(), any(), any(), any());
+        // The tenant-scoped lookup (and its fan-platform pin) is not what answered.
+        verify(accountRepository, never()).findById(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: changeStatusResolvingTenant — 어느 테넌트에도 없음 → AccountNotFoundException, 저장 없음")
+    void changeStatusResolvingTenant_absentEverywhere_throwsNotFound() {
+        when(accountRepository.findByIdResolvingTenant("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.changeStatusResolvingTenant(new ChangeStatusCommand(
+                "missing", AccountStatus.LOCKED, StatusChangeReason.ADMIN_LOCK, "operator", "op-1", null)))
+                .isInstanceOf(AccountNotFoundException.class);
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735 대조군: changeStatus(tenant) — 다른 테넌트로 한정하면 계정 행 해소를 쓰지 않고 404")
+    void changeStatus_confinedToOtherTenant_neverResolvesFromRow() {
+        when(accountRepository.findById(TenantId.FAN_PLATFORM, "acc-ec")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.changeStatus(new ChangeStatusCommand(
+                "acc-ec", AccountStatus.LOCKED, StatusChangeReason.ADMIN_LOCK, "operator", "op-1", null),
+                TenantId.FAN_PLATFORM))
+                .isInstanceOf(AccountNotFoundException.class);
+        verify(accountRepository, never()).findByIdResolvingTenant(any());
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: deleteAccountResolvingTenant — ecommerce 계정을 계정 행의 테넌트로 찾아 DELETED")
+    void deleteAccountResolvingTenant_deletesAccountInItsOwnTenant() {
+        Account storeAccount = accountIn("acc-ec", "ecommerce", AccountStatus.ACTIVE);
+        when(accountRepository.findByIdResolvingTenant("acc-ec")).thenReturn(Optional.of(storeAccount));
+        when(historyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        DeleteAccountResult result = useCase.deleteAccountResolvingTenant(
+                "acc-ec", StatusChangeReason.ADMIN_DELETE, "operator", "op-1");
+
+        assertThat(result.currentStatus()).isEqualTo("DELETED");
+        verify(eventPublisher).publishAccountDeleted(any(), eq("ecommerce"), any(), any(), any(), any(), any());
+        verify(accountRepository, never()).findById(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: deleteAccountResolvingTenant — 어느 테넌트에도 없음 → AccountNotFoundException")
+    void deleteAccountResolvingTenant_absentEverywhere_throwsNotFound() {
+        when(accountRepository.findByIdResolvingTenant("gone")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.deleteAccountResolvingTenant(
+                "gone", StatusChangeReason.ADMIN_DELETE, "operator", "op-1"))
+                .isInstanceOf(AccountNotFoundException.class);
+    }
+
     // ── deleteAccount ─────────────────────────────────────────────────────────
 
     @Test
@@ -219,6 +288,12 @@ class AccountStatusUseCaseTest {
         Instant now = Instant.now();
         return Account.reconstitute(id, TenantId.FAN_PLATFORM, "test@example.com", null,
                 AccountStatus.ACTIVE, now, now, null, null, null, 0);
+    }
+
+    private static Account accountIn(String id, String tenant, AccountStatus status) {
+        Instant now = Instant.now();
+        return Account.reconstitute(id, new TenantId(tenant), "store@example.com", null,
+                status, now, now, null, null, null, 0);
     }
 
     private static Account lockedAccount(String id) {

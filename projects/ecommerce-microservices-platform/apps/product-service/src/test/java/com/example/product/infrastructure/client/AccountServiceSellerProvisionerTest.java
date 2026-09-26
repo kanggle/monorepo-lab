@@ -110,9 +110,11 @@ class AccountServiceSellerProvisionerTest {
     @Test
     @DisplayName("🔵 대조군 — 경로에 테넌트가 **없는** lock 호출은 기본 자격 그대로다")
     void tenantlessPathKeepsTheBaseCredential() {
-        // /internal/accounts/{id}/lock names no tenant, so the tenant-scope rule does not apply
-        // and exchanging would be work with no reason. 🔴 Without this cell, "switch everything
-        // to the exchanged token" would look equally correct.
+        // /internal/accounts/{id}/lock names no tenant in its PATH, so the tenant-scoped token
+        // exchange does not apply and exchanging would be work with no reason. 🔴 Without this
+        // cell, "switch everything to the exchanged token" would look equally correct.
+        // (TASK-MONO-735: the call now carries X-Tenant-Id as a LOOKUP scope — that is a header,
+        // not the bearer; see lockAccount_sendsSellersTenantAsXTenantId.)
         wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acct-1/lock"))
                 .willReturn(aResponse().withStatus(200)));
 
@@ -175,6 +177,22 @@ class AccountServiceSellerProvisionerTest {
         provisioner.lockAccount("tenant-a", "acct-1");
 
         wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock")));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: lockAccount — 셀러의 테넌트를 X-Tenant-Id 로 싣는다 (기본 자격 bearer 는 그대로)")
+    void lockAccount_sendsSellersTenantAsXTenantId() {
+        // Stub answers ONLY when the seller's tenant is on the request — the pre-MONO-735 shape
+        // (no header, which account-service read as fan-platform → 404) falls through to 404.
+        wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+                .withHeader("X-Tenant-Id", equalTo("tenant-a"))
+                .willReturn(aResponse().withStatus(200)));
+
+        provisioner.lockAccount("tenant-a", "acct-1");
+
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+                .withHeader("X-Tenant-Id", equalTo("tenant-a"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt")));
     }
 
     @Test

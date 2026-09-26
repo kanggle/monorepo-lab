@@ -24,7 +24,8 @@ import java.util.Map;
  * Internal HTTP client for the account-service auto-lock command.
  *
  * <p>Contract: {@code POST /internal/accounts/{id}/lock} with
- * {@code Idempotency-Key = suspicious_event_id}. 3 attempts on
+ * {@code Idempotency-Key = suspicious_event_id} and {@code X-Tenant-Id = suspicious_event.tenant_id}
+ * (TASK-MONO-735). 3 attempts on
  * timeout/5xx with exponential backoff + jitter. 409 is terminal (invalid
  * transition, e.g. deleted account) and must not be retried. 200 is terminal
  * (lock applied or already-locked idempotent response).</p>
@@ -79,6 +80,12 @@ public class AccountServiceClient implements AccountLockClient {
                         .timeout(Duration.ofMillis(cfg.getReadTimeoutMs()))
                         .header("Content-Type", "application/json")
                         .header("Idempotency-Key", event.getId())
+                        // TASK-MONO-735: the detection's tenant, so account-service looks the
+                        // account up THERE (a wrong id in another tenant is a 404, never a lock).
+                        // Without it account-service pinned the lookup to fan-platform and every
+                        // auto-lock of an account outside it was a 404 (measured live 2026-09-26,
+                        // ecommerce account). SuspiciousEvent guarantees a non-blank tenant.
+                        .header("X-Tenant-Id", event.getTenantId())
                         .POST(HttpRequest.BodyPublishers.ofString(body));
                 // TASK-BE-318: authenticate via GAP client_credentials Bearer JWT
                 // (account-service /internal/** dual-allows JWT or X-Internal-Token, BE-317).
