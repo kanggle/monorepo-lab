@@ -658,6 +658,65 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.error").value("invalid_grant"));
     }
 
+    // -----------------------------------------------------------------------
+    // 11. TASK-BE-607 AC-1: password reset closes the SAS authorization itself, so it ends a
+    //     session even when its mirror row is EMAIL-keyed (the pre-BE-603 shape, grace window
+    //     up to 30 days). Before this ticket, ConfirmPasswordResetUseCase only called
+    //     refreshTokenRepository.revokeAllByAccountId(accountId) (UUID-keyed query) — which
+    //     never matches an email-keyed row — so such a session kept refreshing after a reset.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(11)
+    @DisplayName("TASK-BE-607 AC-1: 비밀번호 재설정 → SAS 인가도 닫는다 — 미러 행이 이메일 키(pre-BE-603 모양)여도 "
+            + "다음 refresh 400 invalid_grant")
+    void passwordReset_closesSasAuthorization_evenWhenMirrorRowIsEmailKeyed() throws Exception {
+        String accountId = UUID.randomUUID().toString();
+        String email = "legacy-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
+
+        String issued = signInWithLoginPrincipal(email, accountId);
+
+        // Rewrite the mirror row into the pre-BE-603 shape: keyed by the login email instead of
+        // the account UUID (DomainSyncOAuth2AuthorizationService keys new rows on the UUID today
+        // — TASK-BE-603 — so this can no longer happen at issuance; it models a row written
+        // before that migration and still inside its grace window).
+        RefreshToken current = refreshTokenRepository.findByJti(issued).orElseThrow();
+        transactionTemplate.executeWithoutResult(status -> refreshTokenRepository.save(new RefreshToken(
+                current.getId(), current.getJti(), email, current.getTenantId(),
+                current.getIssuedAt(), current.getExpiresAt(), current.getRotatedFrom(),
+                current.isRevoked(), current.getDeviceFingerprint(), current.getDeviceId())));
+        assertThat(refreshTokenRepository.findByJti(issued).orElseThrow().getAccountId())
+                .as("fixture: mirror row is now keyed by the login email, not the account UUID")
+                .isEqualTo(email);
+
+        // Sanity: the UUID-keyed bulk revoke alone cannot see this row — the exact gap this AC
+        // closes (BE-604 § ⑨-2 / this ticket's Goal item 1).
+        Integer legacyOnly = transactionTemplate.execute(
+                s -> refreshTokenRepository.revokeAllByAccountId(accountId));
+        assertThat(legacyOnly)
+                .as("email-keyed mirror row is invisible to the UUID-keyed bulk revoke")
+                .isZero();
+        assertThat(refreshTokenRepository.findByJti(issued).orElseThrow().isRevoked()).isFalse();
+
+        String resetToken = "reset-" + UUID.randomUUID();
+        passwordResetTokenStore.save(resetToken, accountId, Duration.ofMinutes(10));
+        confirmPasswordResetUseCase.execute(new ConfirmPasswordResetCommand(resetToken, "Reset-Passw0rd!2026"));
+
+        assertThat(refreshTokenRepository.findByJti(issued).orElseThrow().isRevoked())
+                .as("the port revoked the email-keyed mirror row by jti (not by account_id) as a "
+                        + "side effect of closing the authorization")
+                .isTrue();
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", issued)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"));
+    }
+
     /** authorization_code + PKCE with the principal shape the form/social login paths build. */
     private String signInWithLoginPrincipal(String email, String accountId) throws Exception {
         Map<String, Object> details = new HashMap<>();

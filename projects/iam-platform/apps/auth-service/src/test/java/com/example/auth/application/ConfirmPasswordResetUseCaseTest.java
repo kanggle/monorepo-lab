@@ -2,6 +2,7 @@ package com.example.auth.application;
 
 import com.example.auth.application.command.ConfirmPasswordResetCommand;
 import com.example.auth.application.exception.PasswordResetTokenInvalidException;
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.PasswordPolicyViolationException;
@@ -65,6 +66,9 @@ class ConfirmPasswordResetUseCaseTest {
     @Mock
     private PasswordHasher passwordHasher;
 
+    @Mock
+    private OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
+
     @InjectMocks
     private ConfirmPasswordResetUseCase useCase;
 
@@ -95,6 +99,8 @@ class ConfirmPasswordResetUseCaseTest {
         given(credentialRepository.save(any(Credential.class)))
                 .willAnswer(inv -> inv.getArgument(0));
         given(refreshTokenRepository.revokeAllByAccountId(ACCOUNT_ID)).willReturn(2);
+        // TASK-BE-607: closes the SAS authorizations too — same shape as ForceLogoutUseCase.
+        given(oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(ACCOUNT_ID)).willReturn(1);
         given(tokenGeneratorPort.refreshTokenTtlSeconds()).willReturn(REFRESH_TTL);
         given(tokenGeneratorPort.accessTokenTtlSeconds()).willReturn(ACCESS_TTL);
 
@@ -115,13 +121,18 @@ class ConfirmPasswordResetUseCaseTest {
         assertThat(saved.getVersion()).isEqualTo(existing.getVersion());
         assertThat(saved.getCreatedAt()).isEqualTo(existing.getCreatedAt());
 
-        // Critical ordering: save → revoke (refresh + bulk + access marker) → delete token last.
-        // If save or revoke fails the token must still be valid for retry.
+        // Critical ordering: save → revoke (mirror rows + SAS authorizations + bulk + access
+        // marker) → delete token last. If save or revoke fails the token must still be valid
+        // for retry.
         InOrder order = inOrder(
-                credentialRepository, refreshTokenRepository,
+                credentialRepository, refreshTokenRepository, oAuthAuthorizationRevocationPort,
                 bulkInvalidationStore, accessTokenInvalidationStore, passwordResetTokenStore);
         order.verify(credentialRepository).save(any(Credential.class));
         order.verify(refreshTokenRepository).revokeAllByAccountId(ACCOUNT_ID);
+        // TASK-BE-607: the SAS authorization revoke happens alongside the mirror-row revoke —
+        // it reaches sessions whose mirror row predates TASK-BE-603 (email-keyed) that
+        // revokeAllByAccountId(uuid) alone cannot reach.
+        order.verify(oAuthAuthorizationRevocationPort).revokeActiveRefreshTokens(ACCOUNT_ID);
         order.verify(bulkInvalidationStore).invalidateAll(ACCOUNT_ID, REFRESH_TTL);
 
         // TASK-BE-146: marker is written via the port with the access-token TTL,
@@ -153,6 +164,7 @@ class ConfirmPasswordResetUseCaseTest {
         verify(refreshTokenRepository, never()).revokeAllByAccountId(anyString());
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
         verifyNoInteractions(accessTokenInvalidationStore);
+        verifyNoInteractions(oAuthAuthorizationRevocationPort);
         // Critically: token MUST NOT be deleted on a failed attempt.
         verify(passwordResetTokenStore, never()).delete(anyString());
     }
@@ -174,6 +186,7 @@ class ConfirmPasswordResetUseCaseTest {
         verify(refreshTokenRepository, never()).revokeAllByAccountId(anyString());
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
         verifyNoInteractions(accessTokenInvalidationStore);
+        verifyNoInteractions(oAuthAuthorizationRevocationPort);
         verify(passwordResetTokenStore, never()).delete(anyString());
     }
 
@@ -196,7 +209,33 @@ class ConfirmPasswordResetUseCaseTest {
         verify(refreshTokenRepository, never()).revokeAllByAccountId(anyString());
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
         verifyNoInteractions(accessTokenInvalidationStore);
+        verifyNoInteractions(oAuthAuthorizationRevocationPort);
         // Token preservation lets the user retry with a compliant password.
+        verify(passwordResetTokenStore, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-607: SAS 폐기 실패는 삼키지 않는다 — 예외가 트랜잭션 경계로 올라가고 토큰은 삭제되지 않는다")
+    void execute_sasRevokeFailure_propagatesAndPreservesToken() {
+        Credential existing = existingCredential();
+        ConfirmPasswordResetCommand cmd =
+                new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!");
+
+        given(passwordResetTokenStore.findAccountId(TOKEN)).willReturn(Optional.of(ACCOUNT_ID));
+        given(credentialRepository.findByAccountId(ACCOUNT_ID)).willReturn(Optional.of(existing));
+        given(passwordHasher.hash("NewPassw0rd!")).willReturn("$argon2id$v=19$new-hash");
+        given(credentialRepository.save(any(Credential.class)))
+                .willAnswer(inv -> inv.getArgument(0));
+        given(refreshTokenRepository.revokeAllByAccountId(ACCOUNT_ID)).willReturn(0);
+        given(oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(ACCOUNT_ID))
+                .willThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> useCase.execute(cmd))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("db down");
+
+        verifyNoInteractions(bulkInvalidationStore, accessTokenInvalidationStore);
+        // The transaction rolls back — the token must remain valid for retry (§ Ordering).
         verify(passwordResetTokenStore, never()).delete(anyString());
     }
 }

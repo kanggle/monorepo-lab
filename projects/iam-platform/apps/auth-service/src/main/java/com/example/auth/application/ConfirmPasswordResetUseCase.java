@@ -2,6 +2,7 @@ package com.example.auth.application;
 
 import com.example.auth.application.command.ConfirmPasswordResetCommand;
 import com.example.auth.application.exception.PasswordResetTokenInvalidException;
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
@@ -37,6 +38,14 @@ import java.time.Instant;
  * token are never logged. The only INFO log line identifies the {@code accountId}
  * and the count of revoked tokens.</p>
  *
+ * <p><strong>TASK-BE-607.</strong> Revoking the {@code refresh_tokens} mirror rows by account
+ * UUID does not, by itself, end every SAS browser session: a session whose mirror row predates
+ * TASK-BE-603 is still keyed by the login email (grace window up to 30 days), so
+ * {@code revokeAllByAccountId} never matches it and the SAS authorization backing it stays
+ * active. This use case therefore also closes the account's SAS authorizations directly via
+ * {@link OAuthAuthorizationRevocationPort} — the same shape {@code ForceLogoutUseCase} uses
+ * (TASK-BE-601) — so the reset ends a session regardless of which shape its mirror row has.</p>
+ *
  * <p>Failure modes:
  * <ul>
  *   <li>token unknown / expired → {@link PasswordResetTokenInvalidException}</li>
@@ -60,6 +69,7 @@ public class ConfirmPasswordResetUseCase {
     private final AccessTokenInvalidationStore accessTokenInvalidationStore;
     private final TokenGeneratorPort tokenGeneratorPort;
     private final PasswordHasher passwordHasher;
+    private final OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
 
     @Transactional
     public void execute(ConfirmPasswordResetCommand command) {
@@ -92,7 +102,12 @@ public class ConfirmPasswordResetUseCase {
         //    bulk-invalidation marker so any in-flight refresh attempts with
         //    a token issued before this instant fail closed. Both calls are
         //    idempotent and independently safe (see ForceLogoutUseCase).
-        int revokedCount = refreshTokenRepository.revokeAllByAccountId(accountId);
+        int legacyRevoked = refreshTokenRepository.revokeAllByAccountId(accountId);
+        // TASK-BE-607: also close the account's SAS authorizations. The mirror-row revoke above
+        // is keyed by the account UUID and never reaches a session whose mirror row predates
+        // TASK-BE-603 (email-keyed); this port reaches every session's authorization regardless
+        // (same shape as ForceLogoutUseCase, TASK-BE-601).
+        int sasRevoked = oAuthAuthorizationRevocationPort.revokeActiveRefreshTokens(accountId);
         bulkInvalidationStore.invalidateAll(
                 accountId, tokenGeneratorPort.refreshTokenTtlSeconds());
 
@@ -111,7 +126,7 @@ public class ConfirmPasswordResetUseCase {
         //    and the token must remain valid for retry.
         passwordResetTokenStore.delete(command.token());
 
-        log.info("Password reset confirmed for accountId={}, revokedTokens={}",
-                accountId, revokedCount);
+        log.info("Password reset confirmed for accountId={}, revokedTokens={}, sasAuthorizations={}",
+                accountId, legacyRevoked, sasRevoked);
     }
 }
