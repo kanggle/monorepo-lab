@@ -4,7 +4,7 @@ TASK-BE-600
 
 # Status
 
-review
+done (2026-09-26 UTC — 4차원 검증 · 아래 § CORRECTION)
 
 # Title
 
@@ -201,3 +201,8 @@ account-service 가 모두 떠 있어야 한다(이미지 시각 ≥ 머지 시�
 | B `wb-260249@ex.io` 폼 로그인 (잠그지 않음) | 성공 | 성공 |
 
 ⇒ **AC-3 닫힘.** 공유 데모 계정은 잠그지 않았다.
+
+## CORRECTION (2026-09-26 UTC) — close (4차원)
+
+- (a)(b) impl PR **#4020** MERGED 2026-09-25T08:05Z · 스쿼시 `9fc286ba3` 가 `origin/main` 에 있다. (c) 머지 전 체크 SUCCESS 18 · SKIPPED 49 · 실패 0. (d) AC-0·1·2·4 체크 · AC-3 = 위 CORRECTION(대조군 포함 PASS).
+- § 후속의 집: ① refresh 경로 → `TASK-BE-601`(done) · ② 소셜 상태 조회 테넌트 → `TASK-BE-602`(review, AC-3 창 대기). ③ 죽은 `LoginUseCase.checkAccountStatus` 는 **집 없음** — 후속 후보로만 남긴다(티켓 없음).
