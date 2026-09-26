@@ -251,3 +251,16 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -b "$J2" -c "$J2" \
 - 위 런북·본문의 «1,000,000» 은 모두 **10000** 으로 읽어라(판정 술어는 불변 — `VelocityRule` 은 임계 비교 전에 카운터를 올린다).
 - 🔵 왜 못 잡았나: 값 검증을 «타입 범위» 로 추론하고 바인딩 제약(`@Max`)을 읽지 않았다. 데모 오버레이 값은 단위 테스트·CI(e2e compose 는
   이 오버레이를 안 쓴다)가 **어디서도 기동시켜 보지 않는다** — 첫 부팅이 첫 판정이었다.
+
+## CORRECTION (2026-09-26 UTC) — 창 판정: AC-3 🟢 PASS · AC-4 🟡 기전 PASS / 라이브 ⚪
+
+15차 AMI(`46aa3191`, VELOCITY=10000 고친 클론) 데모. 상세 = `TASK-MONO-672` § 2026-09-26 창 수확 § 로그인 판정.
+
+- **AC-3 R1.1** — 일회용 A·B 의 폼 로그인 → `security_db.login_history` 에 `ATTEMPTED` → **`SUCCESS`** (tenant `fan-platform`).
+- **AC-3 R1.2** — B 틀린 비밀번호 → `/login?error` · `FAILURE` 행 · `security:velocity:fan-platform:<B>:3600` **없음 → 1**(이전 값을 먼저 읽었다).
+- **AC-3 R1.3 대조군** — 없는 이메일 틀린 로그인 → velocity 키 총수 **1 → 1**(계정 없는 실패는 안 센다). 🔴 `auth_outbox` 의 `auth.login.failed` 행은
+  **확인 못 했다** — auth `outbox` 에 `auth.*` 행이 하나도 안 보였다(발행 뒤 삭제로 보임). 술어 2 의 판별은 velocity 키로 성립한다.
+- **AC-4 R2.1 기전** — `SERVER_FORWARD_HEADERS_STRATEGY=FRAMEWORK` · XFF `198.51.100.9` 로그인 → `ip_masked=198.51.*.*`(헤더 없는 로그인 = `172.19.*.*`). 🟢
+- **AC-4 R2.2 라이브** — ⚪ 미실행: 서로 다른 두 네트워크에서 공개 주소로 로그인해야 한다(소유자 기기). **AC-4 는 열려 있다.**
+
+⇒ **AC-3 닫힘 · AC-4 열림.**

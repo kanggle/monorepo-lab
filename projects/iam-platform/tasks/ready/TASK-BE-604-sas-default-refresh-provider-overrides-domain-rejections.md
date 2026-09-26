@@ -71,6 +71,13 @@ iam-platform
   ((a) 테넌트 `'*'` SUPER_ADMIN 의 스토어 로그인 · (b) BE-507 이전 `fan-platform` 계정의 교차 테넌트 로그인)을 직접 재현하고 콘솔을 대조군으로.
   유효성 술어(세션 0 · refresh 0 · 조인 전부 NULL 이면 «판정 불가»)는 그 항목에 있다.
   🔴 **이 AC 는 측정 결과가 적히고 그것으로 ⓐ 또는 대안을 고르기 전에는 닫히지 않는다** — 측정 결과가 곧 결정은 아니다(0 이어도 데모 모집단 ≠ 운영).
+  🟢 **측정 결과 (2026-09-26 UTC 창 · 상세 = `TASK-MONO-672` § 2026-09-26 창 수확)**:
+  ① 살아 있는 SAS 세션 **불일치 0 / 6**(콘솔 iam/iam 4 · 스토어 ecommerce/ecommerce 2 · 미러 없음 0). ② 재현 전 `cross-tenant attempt detected` **0**.
+  ③(a) 모양 없음 — 데모 운영자 계정은 테넌트별 자격 행을 가져 자기 테넌트 client 로 일치한다(`'*'` 자격 행 없음).
+  ③(b) 🔴 **재현됨** — fan-platform 전용 계정이 `platform-console-web`(iam) 로 로그인 → refresh → `clientTenant=iam, tokenTenant=fan-platform` 로그 **+ HTTP 200**.
+  ⇒ **결정 입력**: 지금 그 모양의 세션은 0 이지만 **누구나 만들 수 있는 모양**이다(소비자 계정 → 다른 테넌트 client 로그인 → 교차 테넌트 조회). 기본 provider 만
+  제거하면 그 세션의 refresh 는 400 이 된다. 선택지는 (i) 제거 + «교차 테넌트 로그인 세션은 refresh 가능» 을 테넌트 비교에서 명시적으로 허용 ·
+  (ii) 제거 + 그런 세션은 refresh 불가(재로그인)로 정하고 계약에 적기 · (iii) 교차 테넌트 로그인 자체의 허용 범위부터 재검토. 🔴 **소유자 결정 대기.**
 - [ ] **AC-1** — IT: 미러 행 폐기 → 다음 refresh 400 `invalid_grant` (BE-603 IT `@Order(8)` 가 일부러 **단언하지 않은** 칸). 🔴 기존 fall-through 200 을 고정하는 단언을 만들지 마라.
 - [ ] **AC-2** — IT: 비밀번호 재설정 후 기존 SAS 세션 refresh 거부 · 재사용 탐지 후 다른 세션 refresh 거부.
 - [ ] **AC-3** — 계정 테넌트 ≠ client 테넌트 세션의 refresh 가 결정한 대로 동작(허용이면 성공, 차단이면 명시적 거부 + 계약 문서).

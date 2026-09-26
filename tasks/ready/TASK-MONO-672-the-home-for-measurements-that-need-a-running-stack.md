@@ -208,7 +208,7 @@ monorepo
   `review/` 이고 이 항목을 넘기며 닫히는 경로다 — **721 이 닫히지 않고 살아남으면 이 항목은
   721 로 되돌려야 한다**(의무 이중 보유 금지). 항목 5 가 683 에서 밟은 그 조건과 같다.
 
-## 항목 14 — `TASK-MONO-726`: batch-worker → order-service `/api/internal/**` 가 **실제로 성립하는가** · `lockAccount` 라우트 (2026-09-24 수령)
+## 🟡 항목 14 (① 배선 PASS · 결과 상태 ⚪ · ② ⚪ — 2026-09-26, § 2026-09-26 창 수확) — `TASK-MONO-726`: batch-worker → order-service `/api/internal/**` 가 **실제로 성립하는가** · `lockAccount` 라우트 (2026-09-24 수령)
 
 - **무엇을 재나** (둘, 🔴 앞 칸이 안 되면 뒤 칸은 «측정 불가»):
   ① 🔴 **결과 상태** — 결제 뒤 PAID 인 주문이 `batch.jobs.stale-paid-order-confirmation.older-than-minutes`(30) 뒤 **CONFIRMED** 로 넘어가는가.
@@ -218,7 +218,7 @@ monorepo
 - 🔵 **무엇을 기다리나 — 재굽기다.** `V0038`(Flyway) · ecommerce compose · `demo.env` 가 전부 구워지는 표면이다(compose·demo.env 는 SSM 패치로도 되지만 V0038 은 이미지 안).
 - 출처: `tasks/…/TASK-MONO-726-…` § 구현 기록. 🔴 **Failure Scenario 2 대조**: 726 은 수령 시점에 `review/` — **726 이 닫히지 않고 살아남으면 이 항목은 726 으로 되돌린다**(의무 이중 보유 금지).
 
-## 항목 15 (② 닫힘 2026-09-25 — **PASS**, 대조군 포함 · ① 은 **열림**) — `TASK-MONO-727` AC-3: 두 주소 고침이 **결과 상태로** 성립하는가 (2026-09-24 수령)
+## ✅ 항목 15 (② 닫힘 2026-09-25 — **PASS** · ① 닫힘 2026-09-26 — **PASS**, § 2026-09-26 창 수확) — `TASK-MONO-727` AC-3: 두 주소 고침이 **결과 상태로** 성립하는가 (2026-09-24 수령)
 
 ### 2026-09-25 창 기록 (04:06–04:13Z · 예산 1483 → 1486/1800 · 재굽기 없음)
 
@@ -310,7 +310,7 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
 - 🔴 **창 제어 API 호출이 자동 모드 분류기에 막혔다**(2026-09-24 09:00Z — 읽기 전용 `GET /status` 가 «Exfil Scouting»).
   다음 창은 허용 규칙을 먼저 세우거나 소유자가 명령을 직접 실행해야 한다.
 
-## 항목 16 — `TASK-BE-604` AC-0 ⓑ: 테넌트 불일치로 **fall-through 로만 갱신되는 세션**이 실제로 있는가 (2026-09-25 수령)
+## ✅ 항목 16 (측정 완료 2026-09-26 — 불일치 세션 0/6 · (b) 모양 재현=fall-through 200, § 2026-09-26 창 수확) — `TASK-BE-604` AC-0 ⓑ: 테넌트 불일치로 **fall-through 로만 갱신되는 세션**이 실제로 있는가 (2026-09-25 수령)
 
 - **왜 재나**: 소유자 결정(2026-09-25 UTC) = ⓑ **측정 먼저**. SAS 기본 refresh provider 를 제거하면, 미러 행 테넌트 ≠ client
   테넌트인 세션은 지금 `TOKEN_TENANT_MISMATCH` → 기본 provider 로 흘러 **갱신되고 있다가** 끊긴다. 그 모집단이 0 인지, 누구인지를 잰다.
@@ -343,6 +343,66 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
   «데모에 없다» 다. ③ 이 재현되면 그것이 제거 판정의 실질 입력이다(«이 모양의 사용자가 있으면 끊긴다» 가 구조적으로 참).
 - 출처: `projects/iam-platform/tasks/ready/TASK-BE-604-…` § AC-0. 🔴 **Failure Scenario 2 대조**: 604 는 `ready/` — 결과는 604 AC-0 에도
   적고, 604 가 착수되면 이 항목은 604 로 돌아간다(의무 이중 보유 금지).
+
+# 🟢 2026-09-26 창 수확 (02:42:55–~03:05Z · 예산 1491 → 1512/1800 · 15차 AMI `ami-004f04b67daf40b89` · 클론 `46aa3191` · 분석=Opus 5.5)
+
+🔴 **창이 약 03:05Z 에 스스로 꺼졌다 — 유휴 정지다.** 제어 Lambda 는 마지막 하트비트 뒤 `idle_minutes`(20) 가 지나면 정지한다
+(`infra/demo/aws/README.md:236`, EventBridge 5분 주기). 이 창은 론처 페이지를 열지 않고 **SSM 으로만** 일해서 하트비트가 한 번도 없었다
+⇒ 부팅 약 20분 뒤 정지. 🔵 **다음 창: 론처를 브라우저로 열어 두거나 `POST /heartbeat` 를 주기적으로 부른다.** 꺼진 뒤 남은 항목은 아래 표.
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 15 ① `TASK-MONO-727` 검색 색인 정합성 잡 | 🟢 **PASS** | ShedLock `batch-search-index-consistency-check` `locked_at=03:00:00.105Z` · `PRODUCT_SERVICE_BASE_URL=http://product-service:8082` · 02:58Z 이후 연결 실패 줄 **0** · `SearchIndexConsistencyJob completed (executionId=4)` + `totalProducts=24` (= product-service 를 실제로 읽었다) |
+| 14 ① `TASK-MONO-726` batch → order `/api/internal/**` | 🟡 **배선 PASS · 결과 상태 ⚪** | `StalePaidOrderConfirmationJob completed … scanned=0` 02:50Z·03:00Z 2회 · FAILED 0. 이 잡은 토큰 실패·4xx/5xx 면 `FAILED` 를 남긴다(`StalePaidOrderConfirmationJob.java:23`) ⇒ 토큰 발급 + order-service 2xx 성립. ⚪ 결과 상태(PENDING+payment 주문 → CONFIRMED)는 **후보가 없었다**: 시드 주문은 PENDING 1건뿐이고 `payment_id` 가 NULL(= 이 잡의 대상 아님, `OrderJpaRepository.java:135-137`), 02:50Z 에 order-service 자체의 결제 타임아웃 탐지기가 CANCELLED 로 바꿨다(`order_auto_cancelled_payment_timeout attempts=5`). 합성 후보(행에 `payment_id` 넣기)는 **원격 DB 쓰기로 분류기에 막혔다**(Remote Shell Writes). 🔴 «PAID 상태» 는 없다 — 판정 술어는 `status=PENDING AND payment_id IS NOT NULL AND created_at < now-30m` 이다(이 항목의 산문이 PAID 라고 적은 것을 정정). |
+| 14 ② `lockAccount` 라우트 | ⚪ 미시도 | 콘솔에서 셀러 정지가 필요 — 브라우저 항목 |
+| 16 `TASK-BE-604` AC-0 ⓑ | 🟢 **측정 완료** | 아래 § 항목 16 결과 |
+| `TASK-BE-598` AC-3 | 🟢 **PASS** | `ecommerce-minio-init` 종료코드 **0** · 이미지 `ghcr.io/kanggle/mirror-minio-client:2024.10.8-debian-12-r1` · `mc ls` 에 `firstproject-local-product-images/` · 익명 권한 `download` |
+| `TASK-BE-599` AC-3 | 🟢 **PASS** | 아래 § 로그인 판정 |
+| `TASK-BE-599` AC-4 | 🟡 **기전 PASS · 라이브 ⚪** | `SERVER_FORWARD_HEADERS_STRATEGY=FRAMEWORK` · XFF `198.51.100.9` 로그인 → `ip_masked=198.51.*.*` (헤더 없는 로그인 = `172.19.*.*`). 라이브 판정(서로 다른 두 네트워크에서 공개 주소로 로그인)은 소유자 기기가 필요 |
+| `TASK-BE-600` AC-3 | 🟢 **PASS** | 아래 § 로그인 판정 |
+| `TASK-BE-601` AC-3 | 🟢 **PASS** | 아래 § 로그인 판정 |
+| `TASK-MONO-730` AC-0 | 🟢 **참** | `git merge-base --is-ancestor a3f5d52ec 46aa31911` rc=0 · 라이브: `auth_db.credentials` 에 `viewer@demo.com`(iam, `…ad05`) · `admin_db.admin_operators` ACTIVE, 역할 **0** |
+| `TASK-BE-597` AC-1′ · AC-2 | ⚪ 미시도 | 콘솔 브라우저 항목(nav 전 라우트 HTTP 상태 · viewer 403 화면) |
+| `TASK-BE-596`(done) 시드 실패 0 · 706 사가 | ⚪ 미판정 | 시드 로그 위치를 추측으로 찾다 창이 꺼졌다. 시드는 `demo-up.sh:404` → `seed/seed.sh` 이고 출력은 부팅 서비스 로그로 간다 — 다음 창은 그 유닛 이름부터 `ls /etc/systemd/system` 로 잰 뒤 journal 을 **시간 범위를 좁혀** 읽어라(범위 없는 `journalctl` 이 60초 SSM 한도를 넘겼다) |
+| `TASK-PC-FE-299` AC-4 | ⏳ 지금 가능 | 데모가 꺼져 있다 — 콘솔 로그인 화면 확인은 브라우저 항목 |
+| `TASK-MONO-648` 재촬영 | ⚪ 미시도 | |
+
+## 로그인 판정 (BE-599 · 600 · 601) — 일회용 계정, 공유 데모 계정 잠금 없음
+
+방법: 인스턴스 안에서 `curl` — 공개 클라이언트 `demo-spa-client`(V0008, `["none"]`, PKCE, redirect `http://localhost:3000/callback`, 테넌트 fan-platform)로
+authorization_code 폼 로그인. 일회용 계정 A=`wa-260249@ex.io`(`7e39cb51-…`, 잠글 것) · B=`wb-260249@ex.io`(`6fd1e88f-…`, 대조군), 36자 이하.
+잠금 = 합성 `auth.token.reuse.detected`(727 ② 와 같은 방법) → `TokenReuseRule` 자동 잠금 → `account.locked`. 🔴 «합성 이벤트로 잠갔다».
+
+| 단계 | A | B |
+|---|---|---|
+| 가입 · 폼 로그인 · 토큰 | 201 · 성공 · 발급 | 201 · 성공 · 발급 |
+| `login_history` (BE-599 ①) | ATTEMPTED → **SUCCESS** (fan-platform) | ATTEMPTED → **SUCCESS** |
+| 틀린 비밀번호 (BE-599 ②) | — | `/login?error` · **FAILURE** 행 · velocity `security:velocity:fan-platform:<B>:3600` **없음 → 1** |
+| 대조군: 없는 이메일로 틀린 로그인 | velocity 키 총수 **1 → 1**(늘지 않음 = 계정 없는 실패는 안 센다) | |
+| 잠그기 전 refresh (대조군) | 200 · 200 | 200 · 200 |
+| 잠금 | ACTIVE → **LOCKED** (~2s) · auth-service `revoked sessions … revokedTokens=2 propagationLagMs=655` | ACTIVE |
+| **BE-601** 같은 refresh 토큰 | **400 `invalid_grant`** | **200** |
+| **BE-600** 폼 로그인 | **`/login?error`** | 성공 |
+
+⚪ auth `outbox` 에서 `auth.*` 행이 하나도 안 보였다(발행 뒤 삭제로 보인다 — 정리 코드는 이번에 확인 못 함) ⇒ outbox 는 이벤트 **발생량**의 계기가 아니다. 판정은 security `login_history`·로그로 했다.
+
+## 항목 16 결과 — `TASK-BE-604` AC-0 ⓑ
+
+① **구조** (살아 있는 SAS 세션, 로그인 판정 전 02:47Z): `platform-console-web` iam/iam **4** · `ecommerce-web-store-client` ecommerce/ecommerce **2** ⇒
+불일치 **0 / 6**, 미러 없음 **0**. 유효성 술어 충족(세션 > 0 · 조인 전부 맞음). 🔴 내 예측 «콘솔 client 테넌트 = `gap`» 은 **틀렸다** — 라이브 값은 `iam`.
+② **흐름**: 창 전체의 `cross-tenant attempt detected` = 재현 전 **0**(그 사이 refresh 다수 — 술어 충족).
+③ **재현**:
+- (a) `demo@demo.com` → `demo-spa-client`(fan-platform): 불일치 **안 남** — 이 계정은 테넌트별 자격 행이 셋(ecommerce · fan-platform · iam)이라
+  fan-platform 자격으로 들어온다. 🔴 테넌트 `'*'` 자격 행은 없다 ⇒ 가설 (a) 의 모양은 이 데모에 없다.
+- (b) 🔴 **재현됨** — fan-platform 에만 있는 B 로 **`platform-console-web`(iam)** 에 로그인 → 토큰 클레임 `tenant_id=fan-platform` · 미러 행 fan-platform →
+  refresh → 로그 `SAS_REFRESH: cross-tenant attempt detected. clientTenant=iam, tokenTenant=fan-platform` **그리고 HTTP 200**.
+  ⇒ 우리 provider 가 거부하고 SAS 기본 provider 가 통과시킨다는 BE-604 의 전제가 **라이브에서 참**. 기본 provider 를 그냥 제거하면 **이 모양의 세션은 끊긴다**.
+🔵 곁가지: fan-platform 소비자 계정이 콘솔 public client 로 토큰을 받는다(교차 테넌트 조회). 콘솔 권한은 operator 교환에서 걸러지므로 결함 판정은 아니다 — 기록만.
+
+## 🔴 새 관측 — 검색 색인에 시드 상품이 거의 없다
+
+ES `products` 인덱스 `docs.count=3` · 상품 24개 전부 `product not found in search index` ⇒ `suspectedDrift=24`. 727 의 주소 문제와 **무관**하다(잡은 product-service 를 읽었다).
+데모 시드 상품이 색인 경로(이벤트 → search-service)를 타지 않는 것으로 보인다 — ⚪ 원인 미확인, 별도 티켓 후보.
 
 ---
 

@@ -191,3 +191,17 @@ iam-platform
 1. **자체 refresh 저장소만 지운다** → SAS 인가 저장소로 계속 갱신(AC-0 ①).
 2. **소비자가 실패를 삼킨다** → 잠금은 됐는데 세션은 산다, 그리고 아무도 모른다.
 3. **단위 테스트로 닫는다** → 실제 갱신 거부는 모른다(AC-3).
+
+## CORRECTION (2026-09-26 UTC) — AC-3 창 판정: 🟢 PASS
+
+15차 AMI(`46aa3191`) 데모에서 런북대로 쟀다(상세 = `TASK-MONO-672` § 2026-09-26 창 수확 § 로그인 판정). 일회용 A=`wa-260249@ex.io` · B=`wb-260249@ex.io`
+(fan-platform, 36자 이하), 공개 클라이언트 `demo-spa-client` 로 PKCE 폼 로그인. 🔴 런북 4단계의 «운영자 잠금» 대신 **합성 `auth.token.reuse.detected` → 자동 잠금**으로 잠갔다
+(`account.locked` 발행 경로는 같다 — 판정 대상인 auth-service 소비 이후는 동일).
+
+| | 잠그기 전 (대조군) | 잠근 뒤 |
+|---|---|---|
+| A refresh | 200 · 200 | **400 `invalid_grant`** |
+| B refresh | 200 | **200** |
+| auth-service | — | `account.locked: revoked sessions account=7e39cb51-… reason=AUTO_DETECT revokedTokens=2 propagationLagMs=655` |
+
+⇒ **AC-3 닫힘.** 이 티켓의 close chore 는 이 절을 AC-3 의 근거로 읽는다. (7단계 force-logout 은 선택 항목이라 재지 않았다.)
