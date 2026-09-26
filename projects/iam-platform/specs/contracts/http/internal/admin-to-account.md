@@ -13,7 +13,10 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 모든 **변이(mutation) 엔드포인트** (`/lock`, `/unlock`, `/delete`, `/gdpr-delete`, `/export`) 는 선택적 `X-Tenant-Id` 헤더로 대상 계정을 **행위자의 활성 테넌트**에 가둔다. 이는 읽기 경로(`GET /internal/accounts` 의 `tenantId` 쿼리, TASK-BE-357)와 동일한 자세이며, 변이 경로를 읽기 경로와 **테넌트 패리티**로 맞춘다.
 
 - **헤더 존재 + 구체 slug**: account-service 는 `findById(TenantId.of(header), accountId)` 로 조회한다. 대상 계정이 **다른 테넌트**에 있으면 tenant-scoped 조회가 empty 를 반환 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주는 403 을 절대 반환하지 않는다). 계정은 변이되지 않는다.
-- **헤더 부재 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)**: `fan-platform` 기본값으로 폴백한다 — BE-467 이전의 하드핀과 **byte-identical (net-zero)**. 현재 유일 보유자인 SUPER_ADMIN(`'*'`) 및 헤더를 생략한 호출자는 오늘의 동작을 그대로 유지한다.
+- **헤더 부재 OR 공백 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)** — 엔드포인트에 따라 둘로 갈린다:
+  - **`/lock` · `/unlock` · `/delete` (TASK-MONO-735)**: 계정 **행 자신의 테넌트**로 찾는다(`AccountRepository.findByIdResolvingTenant` — [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지) 의 문서화된 예외 2번째 사용). `accounts.id` 는 전역 유일 PK 라 결과는 최대 한 행이고 테넌트를 섞지 않는다. 어느 테넌트에도 없는 id → `404 ACCOUNT_NOT_FOUND`. `fan-platform` 계정은 결과가 이전과 같다. 🔴 이전(BE-467~MONO-735)엔 `fan-platform` 기본값이라 SUPER_ADMIN(`'*'`)과 헤더 없는 호출자는 **`fan-platform` 밖 계정을 잠그지 못했다**(2026-09-26 16차 창 실측 — `ecommerce` 계정 잠금 404).
+  - **`/gdpr-delete` · `/export`**: 변경 없음 — `fan-platform` 기본값(BE-467 net-zero). 🔴 SUPER_ADMIN 의 비-fan 계정 gdpr-delete/export 는 그래서 아직 404 다(TASK-MONO-735 범위 밖, 기록).
+- **헤더 존재 + 구체 slug 는 위 첫 줄 그대로**다 — 계정 행 해소는 **헤더가 테넌트를 말하지 않을 때만** 쓴다. 구체 테넌트를 말한 호출은 결코 다른 테넌트의 계정을 건드리지 않는다(교차 → 404).
 
 admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자의 활성 테넌트를 해소해 이 헤더를 스탬프한다. out-of-scope 테넌트 요청은 account-service 도달 전에 admin-service 에서 `403 TENANT_SCOPE_DENIED` 로 차단된다 (best-effort DENIED `admin_actions` row). account-service 측 `X-Tenant-Id` 처리는 defense-in-depth 이며, 새로운 cross-tenant finder 를 추가하지 않는다.
 
@@ -100,7 +103,7 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
 **Headers**:
 - `Idempotency-Key: {admin_action_request_id}` (필수)
 - `X-Operator-ID: {operator_id}`
-- `X-Tenant-Id: {active_tenant}` (선택, TASK-BE-467 — 부재/`'*'` → `fan-platform` 기본; [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-467) 참조)
+- `X-Tenant-Id: {active_tenant}` (선택, TASK-BE-467 — 부재/`'*'` → 계정 행의 테넌트(TASK-MONO-735; 이전엔 `fan-platform` 기본); [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-467) 참조)
 
 **Request**:
 ```json
