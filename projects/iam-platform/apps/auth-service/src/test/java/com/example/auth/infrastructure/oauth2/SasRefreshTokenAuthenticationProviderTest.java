@@ -1,10 +1,12 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RefreshToken;
+import com.example.auth.domain.token.RotatedTokenReplayPolicy;
 import com.example.auth.domain.token.TokenReuseDetector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +46,10 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +97,12 @@ class SasRefreshTokenAuthenticationProviderTest {
     private AuthEventPublisher authEventPublisher;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private OAuthAuthorizationRevocationPort authorizationRevocationPort;
+
+    /** TASK-BE-606: the request time every test runs at (fixed clock). */
+    private static final Instant NOW = Instant.parse("2026-09-26T03:00:00Z");
+    private static final Duration GRACE = Duration.ofSeconds(30);
 
     private SasRefreshTokenAuthenticationProvider provider;
 
@@ -114,7 +125,10 @@ class SasRefreshTokenAuthenticationProviderTest {
                 bulkInvalidationStore,
                 deviceSessionRepository,
                 authEventPublisher,
-                transactionManager);
+                transactionManager,
+                authorizationRevocationPort,
+                new RotatedTokenReplayPolicy(refreshTokenRepository, GRACE),
+                Clock.fixed(NOW, ZoneOffset.UTC));
 
         // SAS AuthorizationServerContextHolder is a ThreadLocal — set a minimal context
         AuthorizationServerContext ctx = new AuthorizationServerContext() {
@@ -257,8 +271,11 @@ class SasRefreshTokenAuthenticationProviderTest {
         when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(domainToken));
         when(tokenReuseDetector.isReuse(domainToken)).thenReturn(true); // reuse detected
 
-        // For handleReuseDetected
-        when(refreshTokenRepository.findByRotatedFrom(tokenValue)).thenReturn(Optional.empty());
+        // TASK-BE-606: the pre-check (before findByToken) sees no child yet; the in-flow
+        // re-check sees the child a concurrent refresh committed — 60 s ago, so outside the
+        // grace window → reuse.
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenValue))
+                .thenReturn(List.of(), List.of(child(tokenValue, "account-001", NOW.minusSeconds(60))));
         when(deviceSessionRepository.findActiveByAccountId("account-001")).thenReturn(java.util.List.of());
         when(refreshTokenRepository.revokeAllByAccountId("account-001")).thenReturn(1);
         doNothing().when(bulkInvalidationStore).invalidateAll(eq("account-001"), anyLong());
@@ -466,7 +483,8 @@ class SasRefreshTokenAuthenticationProviderTest {
                 .thenReturn(authorization);
         when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(domainToken));
         when(tokenReuseDetector.isReuse(domainToken)).thenReturn(true);
-        when(refreshTokenRepository.findByRotatedFrom(tokenValue)).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenValue))
+                .thenReturn(List.of(), List.of(child(tokenValue, accountId, NOW.minusSeconds(60))));
         when(deviceSessionRepository.findActiveByAccountId(accountId)).thenReturn(List.of());
         when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(2);
         // A session issued before TASK-BE-603 whose mirror row still carries the email.
@@ -619,6 +637,200 @@ class SasRefreshTokenAuthenticationProviderTest {
         rotateSuccessfully(consoleClient, authorization, tokenValue, Optional.empty());
 
         assertThat(savedRow("new-refresh-opaque").getTenantId()).isEqualTo("fan-platform");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-606 — a token that was rotated away is judged from the mirror store's
+    // rotation chain BEFORE findByToken (SAS no longer knows it), with a 30 s grace
+    // window for client races (owner decision 2026-09-26, option B).
+    //
+    // 🔴 Each reuse cell asserts findByToken(A) is never asked: the defect was that the
+    //    SAS lookup answered first. 🔵 The grace cells are the control group — without
+    //    them "always revoke on any child" passes every reuse cell.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-606 AC-1 (unit): 회전된 토큰 A 를 유예 밖(60s)에 재제출 → findByToken 전에 재사용 판정 · "
+            + "미러 행 + SAS 인가 폐기 · reuse 이벤트 1건(originalRotationAt = 자식 발급 시각)")
+    void rotatedAwayToken_beyondGrace_revokesFamilyBeforeSasLookup() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        String tokenB = "rt-B-" + UUID.randomUUID();
+        RefreshToken childB = RefreshToken.create(tokenB, accountId, "fan-platform",
+                NOW.minusSeconds(60), NOW.plusSeconds(3600), tokenA, null, null);
+        OAuth2Authorization holdsB = buildLoginAuthorization(client, "user@example.com", accountId,
+                Set.of("openid"), activeRefreshToken(tokenB));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(childB));
+        // The family walk: B is the head (nothing rotated from it) → its authorization.
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenB)).thenReturn(List.of());
+        when(authorizationService.findByToken(tokenB, OAuth2TokenType.REFRESH_TOKEN)).thenReturn(holdsB);
+        when(deviceSessionRepository.findActiveByAccountId(accountId)).thenReturn(List.of());
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(1);
+        when(authorizationRevocationPort.revokeActiveRefreshTokens(accountId)).thenReturn(1);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .satisfies(e -> {
+                    var error = ((OAuth2AuthenticationException) e).getError();
+                    assertThat(error.getErrorCode()).isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+                    assertThat(error.getDescription()).contains("reuse detected");
+                });
+
+        verify(authorizationService, never()).findByToken(tokenA, OAuth2TokenType.REFRESH_TOKEN);
+        verify(refreshTokenRepository).revokeAllByAccountId(accountId);
+        // Drain window: the principal name (email) is revoked as a legacy mirror key too.
+        verify(refreshTokenRepository).revokeAllByAccountId("user@example.com");
+        verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
+        verify(bulkInvalidationStore).invalidateAll(eq(accountId), anyLong());
+        verify(authEventPublisher, times(1)).publishTokenReuseDetected(
+                eq(accountId), eq("fan-platform"), eq(tokenA), eq(childB.getIssuedAt()), eq(NOW),
+                any(), any(), eq(true), eq(2));
+        verifyNoInteractions(tokenGenerator);
+        verify(authorizationService, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BE-606 AC-2 (unit): 회전 10s 뒤 재제출(자식=체인 머리) → 400 invalid_grant, 폐기·이벤트 없음")
+    void rotatedAwayToken_withinGrace_refusedWithoutRevoking() {
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        RefreshToken childB = child(tokenA, UUID.randomUUID().toString(), NOW.minusSeconds(10));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(childB));
+        when(refreshTokenRepository.existsByRotatedFrom(childB.getJti())).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .satisfies(e -> {
+                    var error = ((OAuth2AuthenticationException) e).getError();
+                    assertThat(error.getErrorCode()).isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+                    assertThat(error.getDescription()).isNull();
+                });
+
+        verify(refreshTokenRepository, never()).revokeAllByAccountId(any());
+        verifyNoInteractions(authorizationRevocationPort, authEventPublisher, bulkInvalidationStore,
+                deviceSessionRepository, tokenGenerator, authorizationService);
+    }
+
+    @Test
+    @DisplayName("BE-606: 유예 안(10s)이라도 자식이 이미 다시 회전됨(손자 존재) → 재사용")
+    void rotatedAwayToken_withinWindowButChildAlreadyRotated_isReuse() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        RefreshToken childB = child(tokenA, accountId, NOW.minusSeconds(10));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(childB));
+        when(refreshTokenRepository.existsByRotatedFrom(childB.getJti())).thenReturn(true);
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(1);
+
+        assertThatThrownBy(() -> provider.authenticate(auth)).isInstanceOf(OAuth2AuthenticationException.class);
+
+        verify(authEventPublisher).publishTokenReuseDetected(
+                eq(accountId), any(), eq(tokenA), any(), any(), any(), any(), eq(true), eq(1));
+    }
+
+    @Test
+    @DisplayName("BE-606 AC-2 (unit): 자식 둘(동시 refresh 가 둘 다 통과한 상태) · 유예 안 → 예외 없이 재사용 판정")
+    void rotatedAwayToken_twoChildren_isReuseWithoutThrowing() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        RefreshToken childB1 = child(tokenA, accountId, NOW.minusSeconds(3));
+        RefreshToken childB2 = child(tokenA, accountId, NOW.minusSeconds(2));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(childB2, childB1));
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(2);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(e -> ((OAuth2AuthenticationException) e).getError().getDescription())
+                .asString().contains("reuse detected");
+
+        // originalRotationAt = the EARLIEST child, whatever order the store returned them in.
+        verify(authEventPublisher).publishTokenReuseDetected(
+                eq(accountId), any(), eq(tokenA), eq(childB1.getIssuedAt()), any(), any(), any(),
+                eq(true), eq(2));
+    }
+
+    @Test
+    @DisplayName("BE-606: 이미 닫힌 패밀리(폐기할 것 0) 재제출 → 400, 이벤트 없음(중복 발행·잠금 누적 방지)")
+    void rotatedAwayToken_familyAlreadyClosed_noEvent() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA))
+                .thenReturn(List.of(child(tokenA, accountId, NOW.minusSeconds(600))));
+
+        assertThatThrownBy(() -> provider.authenticate(auth)).isInstanceOf(OAuth2AuthenticationException.class);
+
+        verify(refreshTokenRepository).revokeAllByAccountId(accountId);
+        verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
+        verify(authEventPublisher, never()).publishTokenReuseDetected(
+                any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt());
+    }
+
+    @Test
+    @DisplayName("BE-606: 동시 refresh 경쟁 — 사전 검사 뒤 자식이 커밋됨(in-flow) · 5s 전 → 유예, 폐기 없음")
+    void inFlightRace_withinGrace_refusedWithoutRevoking() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(client);
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(client, "user@example.com", accountId,
+                Set.of("openid"), activeRefreshToken(tokenA));
+        RefreshToken rowA = mirrorRow(tokenA, accountId, "fan-platform");
+        RefreshToken childB = child(tokenA, accountId, NOW.minusSeconds(5));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(clientPrincipal, tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(), List.of(childB));
+        when(authorizationService.findByToken(tokenA, OAuth2TokenType.REFRESH_TOKEN)).thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenA)).thenReturn(Optional.of(rowA));
+        when(tokenReuseDetector.isReuse(rowA)).thenReturn(true);
+        when(refreshTokenRepository.existsByRotatedFrom(childB.getJti())).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
+                .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+
+        verify(refreshTokenRepository, never()).revokeAllByAccountId(any());
+        verifyNoInteractions(authorizationRevocationPort, authEventPublisher, tokenGenerator);
+    }
+
+    @Test
+    @DisplayName("BE-606: 체인 머리를 쥔 SAS 인가가 없음 → 가장 이른 자식 행의 account_id 로 폐기")
+    void rotatedAwayToken_noLiveHead_fallsBackToChildAccountId() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+        RefreshToken childB = child(tokenA, accountId, NOW.minusSeconds(120));
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA)).thenReturn(List.of(childB));
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(1);
+
+        assertThatThrownBy(() -> provider.authenticate(auth)).isInstanceOf(OAuth2AuthenticationException.class);
+
+        verify(authorizationService).findByToken(childB.getJti(), OAuth2TokenType.REFRESH_TOKEN);
+        verify(refreshTokenRepository).revokeAllByAccountId(accountId);
+        verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
+        verify(authEventPublisher).publishTokenReuseDetected(
+                eq(accountId), eq("fan-platform"), eq(tokenA), any(), any(), any(), any(), eq(true), eq(1));
+    }
+
+    /** A mirror row rotated from {@code parent}, issued at {@code issuedAt} (tenant fan-platform). */
+    private static RefreshToken child(String parent, String accountId, Instant issuedAt) {
+        return RefreshToken.create("rt-child-" + UUID.randomUUID(), accountId, "fan-platform",
+                issuedAt, issuedAt.plusSeconds(3600), parent, null, null);
     }
 
     private static OAuth2RefreshToken activeRefreshToken(String value) {

@@ -18,9 +18,11 @@ import java.time.Duration;
  *
  * <p>TASK-BE-259: introduces the per-tenant key scheme. The previous global
  * scheme ({@code reuse:{accountId}}) is replaced outright; any legacy keys
- * expire naturally at TTL (1 hour). False-negative bias during the transient
- * overlap window is acceptable — token reuse always fires at score 100
- * regardless of the counter value, so the counter is observability-only.</p>
+ * expire naturally at TTL (1 hour).</p>
+ *
+ * <p>TASK-BE-606: no longer observability-only — {@code TokenReuseRule} alerts on count 1
+ * and locks from count 2 within the TTL window; on a Redis error this returns 0 and the
+ * rule locks (fail-closed).</p>
  */
 @Slf4j
 @Component

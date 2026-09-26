@@ -139,6 +139,13 @@ auth:
     private-key-path: ${JWT_PRIVATE_KEY_PATH:classpath:keys/private.pem}
     public-key-path: ${JWT_PUBLIC_KEY_PATH:classpath:keys/public.pem}
     kid: ${JWT_KID:key-2026-04-01}
+  refresh-token:
+    # TASK-BE-606 (owner decision 2026-09-26, option B): a rotated-away refresh token presented
+    # again within this many seconds of its rotation — while the child is still the chain head
+    # and the only child — is refused (invalid_grant) WITHOUT revoking anything: a client race
+    # (two console tabs, a retried request). Later, or on a forked chain, it is reuse: the
+    # account's refresh-token family is revoked and auth.token.reuse.detected emitted.
+    reuse-grace-seconds: ${AUTH_REFRESH_REUSE_GRACE_SECONDS:30}
   login:
     max-failure-count: ${LOGIN_MAX_FAILURES:5}
     failure-window-seconds: ${LOGIN_FAILURE_WINDOW:900}

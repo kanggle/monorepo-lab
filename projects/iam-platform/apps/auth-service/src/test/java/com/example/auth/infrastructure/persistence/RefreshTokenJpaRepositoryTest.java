@@ -100,17 +100,31 @@ class RefreshTokenJpaRepositoryTest {
     }
 
     @Test
-    @DisplayName("findByRotatedFrom — rotation chain 토큰 조회")
-    void findByRotatedFrom_existingChain_returnsToken() {
+    @DisplayName("findAllByRotatedFrom — rotation chain 토큰 조회")
+    void findAllByRotatedFrom_existingChain_returnsToken() {
         String parentJti = uuid();
         String childJti = uuid();
         repo.save(active(parentJti, "acc-1", null, null));
         repo.save(active(childJti, "acc-1", parentJti, null));
 
-        Optional<RefreshTokenJpaEntity> child = repo.findByRotatedFrom(parentJti);
+        List<RefreshTokenJpaEntity> children = repo.findAllByRotatedFrom(parentJti);
 
-        assertThat(child).isPresent();
-        assertThat(child.get().getJti()).isEqualTo(childJti);
+        assertThat(children).extracting(RefreshTokenJpaEntity::getJti).containsExactly(childJti);
+    }
+
+    @Test
+    @DisplayName("findAllByRotatedFrom (TASK-BE-606) — 같은 부모의 자식 둘(동시 refresh 경쟁) → 예외 없이 둘 다 반환")
+    void findAllByRotatedFrom_twoChildren_returnsBothWithoutThrowing() {
+        String parentJti = uuid();
+        String childA = uuid();
+        String childB = uuid();
+        repo.save(active(parentJti, "acc-1", null, null));
+        repo.save(active(childA, "acc-1", parentJti, null));
+        repo.save(active(childB, "acc-1", parentJti, null));
+
+        assertThat(repo.findAllByRotatedFrom(parentJti))
+                .extracting(RefreshTokenJpaEntity::getJti)
+                .containsExactlyInAnyOrder(childA, childB);
     }
 
     // ── revokeAllByAccountId ─────────────────────────────────────────────────

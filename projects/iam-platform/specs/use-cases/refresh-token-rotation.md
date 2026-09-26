@@ -46,15 +46,21 @@
 3. token A의 `rotated_from`을 참조하는 자식 row(token B)가 이미 존재함을 감지한다
 4. **재사용 탐지 확정**: 해당 account_id의 **모든** refresh_tokens를 `revoked=TRUE`로 일괄 처리
 5. `refresh:invalidate-all:{account_id}` Redis 키 설정 (TTL = refresh token 최대 수명)
-6. `auth.token.reuse.detected` 이벤트 발행 (outbox) — security-service가 즉시 AUTO_LOCK
+6. `auth.token.reuse.detected` 이벤트 발행 (outbox)
 7. 응답 401: `TOKEN_REUSE_DETECTED`
-8. security-service가 이벤트를 소비하여 `suspicious_events` 기록 (ruleCode=TOKEN_REUSE, riskScore=100)
-9. security-service가 account-service에 `POST /internal/accounts/{id}/lock` 호출
+8. security-service가 이벤트를 소비하여 `suspicious_events` 기록 (ruleCode=TOKEN_REUSE) — TASK-BE-606: 1시간 안 1번째 = riskScore 70(ALERT), 2번째 이상 = riskScore 100(AUTO_LOCK)
+9. (2번째 이상일 때만) security-service가 account-service에 `POST /internal/accounts/{id}/lock` 호출
+
+### Alternative Flow (SAS `POST /oauth2/token` refresh_token grant — TASK-BE-606)
+- 판정은 SAS 인가 조회 **전에** 미러 저장소의 회전 사슬로 한다(SAS 는 회전된 옛 토큰을 모른다).
+- 회전 30초 이내 · 자식이 하나 · 자식이 사슬의 머리 → **유예**: 400 `invalid_grant`, 폐기·이벤트 없음 (클라이언트 경쟁).
+- 그 밖 → 4~6단계 + SAS 인가 무효화, 응답 400 `invalid_grant`(`error_description` 에 reuse detected).
+- 상세: [auth-events.md](../contracts/events/auth-events.md) § auth.token.reuse.detected 발행 조건.
 
 ### Post-Condition
 - 해당 계정의 모든 세션 무효화
-- 계정 상태 LOCKED (auto-detect)
-- 사용자는 운영자 unlock 후 재로그인 필요
+- 1시간 안 반복된 재사용이면 계정 상태 LOCKED (auto-detect) — 사용자는 운영자 unlock 후 재로그인 필요
+- 1건이면 잠기지 않는다(ALERT) — 사용자는 재로그인으로 새 세션을 시작한다
 
 ---
 

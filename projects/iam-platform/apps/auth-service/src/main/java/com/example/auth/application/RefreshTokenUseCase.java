@@ -182,8 +182,11 @@ public class RefreshTokenUseCase {
                                      SessionContext ctx) {
         log.warn("Refresh token reuse detected for account={}, jti={}", accountId, jti);
 
-        Instant originalRotationAt = refreshTokenRepository.findByRotatedFrom(jti)
+        // TASK-BE-606: rotated_from is not unique — the earliest child is the original rotation.
+        Instant originalRotationAt = refreshTokenRepository.findAllByRotatedFrom(jti).stream()
                 .map(RefreshToken::getIssuedAt)
+                .filter(java.util.Objects::nonNull)
+                .min(Instant::compareTo)
                 .orElse(null);
 
         boolean alreadyRevoked = existingToken.isRevoked();

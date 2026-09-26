@@ -49,7 +49,7 @@
 | `auth.login.failed` | `login_history` append + VelocityRule 평가 |
 | `auth.login.succeeded` | `login_history` append + GeoAnomalyRule / DeviceChangeRule 평가 |
 | `auth.token.refreshed` | `login_history` append (outcome=REFRESH) |
-| `auth.token.reuse.detected` | `login_history` append + 즉시 `auto.lock.triggered` 발행 (최고 우선순위) |
+| `auth.token.reuse.detected` | `login_history` append + TokenReuseRule: 1시간 안 1건 = ALERT(잠금 없음) · 2건 이상 = `auto.lock.triggered` (TASK-BE-606 — 이전엔 1건마다 즉시 잠금) |
 
 **consumer group**: `security-service`. 파티션 키는 `account_id`로 auth-service가 설정하므로 동일 계정의 이벤트는 순서 보장.
 

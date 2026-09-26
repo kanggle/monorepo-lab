@@ -631,7 +631,9 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
         // Control: B refreshes before the reuse.
         sessionB = refreshOk(sessionB);
 
-        Instant now = Instant.now();
+        // TASK-BE-606: a child issued 60 s ago — outside the 30 s replay grace window, so this is
+        // reuse (a child issued "now" would be the grace case: refused without revoking).
+        Instant now = Instant.now().minusSeconds(60);
         String childOfA = "concurrent-child-" + UUID.randomUUID();
         transactionTemplate.executeWithoutResult(s -> refreshTokenRepository.save(RefreshToken.create(
                 childOfA, accountId, "fan-platform", now, now.plusSeconds(3600), sessionA, null, null)));

@@ -41,8 +41,10 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
     }
 
     @Override
-    public Optional<RefreshToken> findByRotatedFrom(String jti) {
-        return refreshTokenJpaRepository.findByRotatedFrom(jti).map(RefreshTokenJpaEntity::toDomain);
+    public List<RefreshToken> findAllByRotatedFrom(String jti) {
+        return refreshTokenJpaRepository.findAllByRotatedFrom(jti).stream()
+                .map(RefreshTokenJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

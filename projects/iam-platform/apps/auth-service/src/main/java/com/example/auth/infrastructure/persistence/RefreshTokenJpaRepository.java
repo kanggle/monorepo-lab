@@ -21,7 +21,12 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
     @Query("SELECT r.jti FROM RefreshTokenJpaEntity r WHERE r.accountId = :accountId AND r.revoked = false")
     List<String> findActiveJtisByAccountId(@Param("accountId") String accountId);
 
-    Optional<RefreshTokenJpaEntity> findByRotatedFrom(String rotatedFrom);
+    /**
+     * TASK-BE-606: every row rotated from the given token. {@code rotated_from} is not unique
+     * (two concurrent refreshes of one token can each write a child), so this must not be an
+     * {@code Optional} finder — that threw on the two-children state.
+     */
+    List<RefreshTokenJpaEntity> findAllByRotatedFrom(String rotatedFrom);
 
     @Query("SELECT r.jti FROM RefreshTokenJpaEntity r WHERE r.deviceId = :deviceId AND r.revoked = false")
     List<String> findActiveJtisByDeviceId(@Param("deviceId") String deviceId);

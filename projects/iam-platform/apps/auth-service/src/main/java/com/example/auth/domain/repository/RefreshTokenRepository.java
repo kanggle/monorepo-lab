@@ -30,9 +30,17 @@ public interface RefreshTokenRepository {
     List<String> findActiveJtisByAccountId(String accountId);
 
     /**
-     * Finds the child token that was rotated from the given JTI.
+     * Finds every child token that was rotated from the given JTI.
+     *
+     * <p>TASK-BE-606: a list, not an {@code Optional}. {@code rotated_from} carries a
+     * NON-unique index ({@code V0001}), and two concurrent refreshes of the same token that
+     * both read before either commits each write a child with the same {@code rotated_from}.
+     * The former {@code Optional} finder threw {@code IncorrectResultSizeDataAccessException}
+     * on exactly that state — on the very lookup the reuse handler runs.
+     *
+     * @return the children, empty when the token was never rotated
      */
-    java.util.Optional<RefreshToken> findByRotatedFrom(String jti);
+    List<RefreshToken> findAllByRotatedFrom(String jti);
 
     /**
      * Returns the jtis of all currently-active (non-revoked) refresh tokens for the device.

@@ -49,11 +49,16 @@ class AuthorizationServerConfigRefreshProviderTest {
     @Mock private DeviceSessionRepository deviceSessionRepository;
     @Mock private AuthEventPublisher authEventPublisher;
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private com.example.auth.application.port.OAuthAuthorizationRevocationPort authorizationRevocationPort;
 
     private SasRefreshTokenAuthenticationProvider ours() {
         return new SasRefreshTokenAuthenticationProvider(authorizationService, tokenGenerator,
                 refreshTokenRepository, tokenReuseDetector, bulkInvalidationStore,
-                deviceSessionRepository, authEventPublisher, transactionManager);
+                deviceSessionRepository, authEventPublisher, transactionManager,
+                authorizationRevocationPort,
+                new com.example.auth.domain.token.RotatedTokenReplayPolicy(
+                        refreshTokenRepository, java.time.Duration.ofSeconds(30)),
+                java.time.Clock.systemUTC());
     }
 
     private OAuth2RefreshTokenAuthenticationProvider builtIn() {

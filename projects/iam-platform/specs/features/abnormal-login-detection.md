@@ -37,8 +37,14 @@
 
 ### TokenReuseRule
 - **조건**: `auth.token.reuse.detected` 이벤트 수신
-- **Risk score**: **100** (무조건)
-- **액션**: **즉시 AUTO_LOCK** (최고 우선순위)
+- **데이터**: Redis `reuse:{tenantId}:{accountId}` 카운터 (첫 증가 시 TTL 1시간)
+- **Risk score** (TASK-BE-606, 소유자 결정 2026-09-26):
+  - 1시간 안 **1번째** 재사용 → **70** (ALERT — 기록 + 메트릭, 잠금 안 함)
+  - 1시간 안 **2번째 이상** → **100** (AUTO_LOCK)
+  - 카운터 판독 불가(Redis 장애 → 0) → **100** (fail-closed)
+- **액션**: 1건 = ALERT, 반복 = AUTO_LOCK. 근거: auth-service 는 1건째에 이미 계정의 refresh-token 패밀리 전체를 폐기한다([auth-events.md](../contracts/events/auth-events.md) § auth.token.reuse.detected). 잠금은 그 위의 추가 조치이며, 1건만으로 잠그면 클라이언트 경쟁의 오탐(유예 창 30초 밖으로 밀린 재시도)이 계정 잠금으로 번진다.
+- 점수·임계는 `security.detection.token-reuse.*` 로 조정한다(`single-score` 70 · `repeated-score` 100 · `lock-threshold` 2).
+- 🔴 TASK-BE-606 이전: score **100** 무조건 → 1건마다 즉시 AUTO_LOCK.
 
 ## Risk Score Aggregation
 
@@ -74,7 +80,7 @@ max를 사용하는 이유: 하나라도 확신이 높은 규칙이 발동하면
 - 탐지는 **비동기** — auth-service의 로그인 응답 시간에 영향 없음
 - 자동 잠금은 **idempotent** — 같은 suspicious_event_id로 중복 호출 시 동일 결과
 - 규칙 파라미터(임계치, 윈도우, 거리)는 **설정으로 주입**, 코드 변경 없이 튜닝 가능
-- false positive 방지: DeviceChange 단독으로는 잠금하지 않음 (ALERT only)
+- false positive 방지: DeviceChange 단독으로는 잠금하지 않음 (ALERT only) · TokenReuse 도 1건은 ALERT, 1시간 안 2건째부터 잠금 (TASK-BE-606)
 - 모든 탐지 결과는 `suspicious_events`에 보존 (score < 50 제외 — NONE은 기록 안 함)
 
 ## Related Contracts
