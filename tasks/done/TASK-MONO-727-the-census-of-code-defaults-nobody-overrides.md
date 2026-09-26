@@ -4,7 +4,7 @@ TASK-MONO-727
 
 # Status
 
-review (2026-09-24 UTC — AC-1 · AC-2 닫힘. 🔴 AC-3(결과 상태)은 창 — `TASK-MONO-672` 항목 15)
+done (2026-09-26 UTC — 4차원 검증 · 아래 § CORRECTION)
 
 # Title
 
@@ -154,3 +154,11 @@ bite security-service ACCOUNT_SERVICE_BASE_URL 삭제  → rc=1 · DRIFT § secu
 ## ⏳ AC-3 → `TASK-MONO-672` 항목 15
 
 ① 검색 색인 정합성 잡이 연결 실패 없이 완료를 기록하는가 · ② 의심 로그인을 일으켜 `account_db.accounts.status` 가 LOCKED 가 되는가. 🔵 **재굽기 불필요** — 둘 다 compose(클론) 변경이라 SSM 으로 `git pull` + 두 컨테이너 재생성이면 창에 올라간다.
+
+## CORRECTION (2026-09-26 UTC) — AC-3 창 판정 완료 → close
+
+- AC-1 · AC-2 = 위 § 구현 기록(impl PR #3994 · 스쿼시 `91e594b9f` · 머지 전 실패 체크 0 · `origin/main` 조상). 체크박스는 review 동결로 못 고쳤다 — 이 절이 근거다.
+- **AC-3 🟢 PASS 둘 다** (`TASK-MONO-672` 항목 15):
+  - ② 자동 잠금 — 2026-09-25 창: 주소 한 줄로 결과가 반대로 갈렸다(대조군 ACTIVE 유지 · 고친 뒤 LOCKED ~4초).
+  - ① 검색 색인 정합성 잡 — 2026-09-26 창(15차 AMI): ShedLock `locked_at=03:00:00.105Z` · `PRODUCT_SERVICE_BASE_URL=http://product-service:8082` · 연결 실패 줄 **0** · `SearchIndexConsistencyJob completed (executionId=4)` · `totalProducts=24`.
+- 🔵 곁가지(이 티켓 범위 밖, 672 § 2026-09-26 창 수확에 기록됨): ES `products` 색인 3건 vs 상품 24 ⇒ `suspectedDrift=24`.
