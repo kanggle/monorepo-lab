@@ -34,6 +34,21 @@ vi.mock('@/features/catalog', () => ({
   },
 }));
 
+/**
+ * TASK-PC-FE-301 — the "no tenant selected" branch now renders
+ * `NoTenantNotice`, which resolves its OWN judgement via
+ * `noTenantNoticeKind` (`@/shared/lib/active-tenant-default`, reached
+ * through `fetchRegistry` — a DIFFERENT seam than the `@/features/catalog`
+ * mock above, which only feeds the TASK-MONO-718 tenant-mismatch check).
+ * Defaults to 'select' so every pre-301 "required" test (none of which
+ * concerns itself with the zero/select split) keeps its original
+ * «테넌트를 먼저 선택하세요» assertion unchanged.
+ */
+let noTenantNoticeKindResult: 'zero' | 'select' = 'select';
+vi.mock('@/shared/lib/active-tenant-default', () => ({
+  noTenantNoticeKind: async () => noTenantNoticeKindResult,
+}));
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DomainTenantGate, tenantSelectionRequired } from '@/widgets/domain-tenant-gate';
 import {
@@ -44,7 +59,10 @@ import {
   ASSUMED_TOKEN_COOKIE,
 } from '@/shared/lib/session';
 
-beforeEach(() => cookieJar.clear());
+beforeEach(() => {
+  cookieJar.clear();
+  noTenantNoticeKindResult = 'select';
+});
 
 function operatorSession() {
   cookieJar.set(ACCESS_COOKIE, 'base.iam');
@@ -93,6 +111,27 @@ describe('DomainTenantGate', () => {
     const out = await DomainTenantGate({ section: 'E-Commerce', children: child });
     expect(renderToStaticMarkup(out)).toContain('section-body');
     expect(renderToStaticMarkup(out)).not.toContain('domain-no-tenant');
+  });
+
+  it('🔴🔴 TASK-PC-FE-301 — 0 selectable tenants → the no-reachable-tenant notice, not «select a tenant»', async () => {
+    operatorSession();
+    noTenantNoticeKindResult = 'zero';
+    const out = await DomainTenantGate({ section: 'E-Commerce', children: child });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('domain-no-tenant');
+    expect(html).toContain('접근 가능한 테넌트가 없습니다');
+    expect(html).not.toContain('테넌트를 먼저 선택하세요');
+    expect(html).not.toContain('section-body');
+  });
+
+  it('TASK-PC-FE-301 control — ≥2 selectable, none chosen → the ORIGINAL «select a tenant» text, unchanged', async () => {
+    operatorSession();
+    noTenantNoticeKindResult = 'select';
+    const out = await DomainTenantGate({ section: 'E-Commerce', children: child });
+    const html = renderToStaticMarkup(out);
+    expect(html).toContain('domain-no-tenant');
+    expect(html).toContain('테넌트를 먼저 선택하세요');
+    expect(html).not.toContain('접근 가능한 테넌트가 없습니다');
   });
 });
 

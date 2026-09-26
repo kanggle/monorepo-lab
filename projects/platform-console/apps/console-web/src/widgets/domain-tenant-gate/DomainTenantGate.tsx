@@ -6,6 +6,7 @@ import {
   getAssumedToken,
   isSampleVisitor,
 } from '@/shared/lib/session';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 /**
  * Whether a domain section must ask the operator to pick a tenant first
@@ -165,23 +166,15 @@ export async function DomainTenantGate({
       <h1 id="domain-no-tenant-heading" className="mb-6 text-2xl font-semibold">
         {section}
       </h1>
-      <div
-        role="status"
-        data-testid="domain-no-tenant"
-        className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-      >
-        <p className="mb-2 font-medium text-foreground">테넌트를 먼저 선택하세요.</p>
-        <p>
-          {section} 화면은 선택한 테넌트의 권한으로 열립니다. 상단의 테넌트
-          스위처에서 테넌트를 선택하면 이 화면이 열립니다.
-        </p>
-        <Link
-          href="/console"
-          className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          카탈로그로 이동
-        </Link>
-      </div>
+      {await NoTenantNotice({
+        testId: 'domain-no-tenant',
+        description: (
+          <>
+            {section} 화면은 선택한 테넌트의 권한으로 열립니다. 상단의 테넌트
+            스위처에서 테넌트를 선택하면 이 화면이 열립니다.
+          </>
+        ),
+      })}
     </section>
   );
 }

@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import {
   getOperatorGroupsState,
   OperatorGroupsScreen,
 } from '@/features/operator-groups';
 import { getGrantableRolesOrNull } from '@/features/operators/api/operators-api';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,26 +40,16 @@ export default async function OperatorGroupsPage() {
         <h1 id="operator-groups-heading" className="mb-6 text-2xl font-semibold">
           운영자 그룹
         </h1>
-        <div
-          role="status"
-          data-testid="operator-groups-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            운영자 그룹 관리는 활성 테넌트가 선택되어 있어야 합니다. 상단의
-            테넌트 스위처에서 테넌트(SUPER_ADMIN 은 플랫폼 스코프 *)를 선택한 뒤
-            다시 시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'operator-groups-no-tenant',
+          description: (
+            <>
+              운영자 그룹 관리는 활성 테넌트가 선택되어 있어야 합니다. 상단의
+              테넌트 스위처에서 테넌트(SUPER_ADMIN 은 플랫폼 스코프 *)를
+              선택한 뒤 다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }

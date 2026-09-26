@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   OperatorOverviewScreen,
@@ -8,6 +7,7 @@ import {
   DomainHealthSummaryCard,
   getDomainHealthState,
 } from '@/features/domain-health';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,25 +68,15 @@ export default async function OperatorOverviewPage() {
         >
           운영자 통합 개요
         </h1>
-        <div
-          role="status"
-          data-testid="operator-overview-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            6개 도메인 통합 개요는 테넌트 범위로 구성됩니다. 상단 테넌트
-            스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'operator-overview-no-tenant',
+          description: (
+            <>
+              6개 도메인 통합 개요는 테넌트 범위로 구성됩니다. 상단 테넌트
+              스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }
