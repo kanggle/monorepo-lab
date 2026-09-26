@@ -18,7 +18,13 @@ public class RefreshTokenJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "jti", nullable = false, unique = true, length = 36)
+    // TASK-BE-607: was length = 36 — Flyway V0014 widened the jti/rotated_from COLUMNS to
+    // VARCHAR(255) (TASK-MONO-046-1 Cluster A) to hold SAS's ~128-char refresh token values,
+    // but this entity's declared length was never updated to match. ddl-auto=validate (the
+    // Testcontainers/Flyway path) does not fail on a length mismatch, so this was invisible
+    // there; a Hibernate-generated schema (H2 slice, ddl-auto=create-drop) creates the column
+    // at the entity's declared length and an INSERT of a SAS-length token fails.
+    @Column(name = "jti", nullable = false, unique = true, length = 255)
     private String jti;
 
     @Column(name = "account_id", nullable = false, length = 36)
@@ -34,7 +40,9 @@ public class RefreshTokenJpaEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    @Column(name = "rotated_from", length = 36)
+    // TASK-BE-607: was length = 36 — see the jti field comment above (V0014 widened this
+    // column to VARCHAR(255) too, for symmetry with jti).
+    @Column(name = "rotated_from", length = 255)
     private String rotatedFrom;
 
     @Column(name = "revoked", nullable = false)
