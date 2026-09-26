@@ -4,7 +4,7 @@ TASK-BE-607
 
 # Status
 
-review
+done (2026-09-26 UTC — 4차원 검증 · 맨 아래 § close)
 
 # Title
 
@@ -130,3 +130,9 @@ iam-platform
 - `POST /api/auth/password-reset/request|confirm` → **401 `TOKEN_INVALID`** — 게이트웨이 `public-paths` 에 없다(`gateway-service/src/main/resources/application.yml` § public-paths). 비로그인 사용자가 부르는 API 다.
 - `PATCH /api/auth/password` + 유효한 사용자 Bearer → 게이트웨이는 통과, auth-service 가 **401 `Missing or invalid internal credentials`**. 직접 호출로 재현: `X-Account-Id` 만 → 400(정상 판정) · 같은 요청 + `Authorization: Bearer <사용자 토큰>` → 401. 게이트웨이가 넘긴 사용자 Bearer 를 auth-service 의 내부 자격 체인이 검사하는 것으로 보인다.
 - 두 API 를 부르는 프런트는 **0**(저장소 grep) — 그래서 지금까지 안 보였다. 후속 = `TASK-BE-609`.
+
+## CORRECTION (2026-09-26 UTC) — close (4차원)
+
+- (a)(b) impl PR **#4035** MERGED · 스쿼시 `2150344c3` 가 `origin/main` 조상. (c) 머지 전 SUCCESS 16 · SKIPPED 51 · 실패 0.
+- (d) AC-1·2 체크 · AC-3 = 위 § AC-3 라이브 판정 PASS(서비스 수준 — AC 가 묻는 «변경·재설정이 성공하는가 · 실패 흔적 0 과 호출 0 의 구별» 에 답했다).
+- 집을 준 것: 게이트웨이 경유 401 두 건 → **`TASK-BE-609`** · `ChangePasswordUseCase` 의 다른 세션 폐기(스펙상 선택) → 후속 후보(티켓 없음, 기존 § AC-1 부속 결정 그대로). ⇒ **done.**

@@ -8,7 +8,7 @@ TASK-PC-FE-299
 
 # Status
 
-review
+done (2026-09-26 UTC — 4차원 검증 · 맨 아래 § close)
 
 # Owner
 
@@ -239,3 +239,9 @@ running/not-demo 4종 + 마커 없는 방문 대조군). 브라우저 재현: `/
 **남는 일**: 다음 데모 창에서 실제 데모 백엔드가 꺼진 상태로 `/login?error=session_expired` 를 열어 「서버가 종료되어 다시 로그인해야 합니다」류 문구가 실제로 렌더되는지 확인한다. 이 ⚪ 는 **살아 있는 티켓의 것**이므로 `TASK-MONO-672`(닫히는 티켓의 의무만 받는 집)로 옮기지 않는다 — 이 파일이 `review/` 에 남아 그 창을 기다린다.
 
 **결론**: `review/` 에 유지. `Status` 필드는 변경하지 않는다(review 그대로 참).
+
+## CORRECTION (2026-09-26 UTC) — AC-4 창 판정 🟢 PASS → close (4차원)
+
+- **AC-4 라이브**: 데모를 끈 직후(16차 AMI 창 종료, `/stop` → `stopping`) 소유자가 시크릿 창으로 `https://console.hubwang.com/login?error=session_expired` → **「데모 서버가 종료되어 다시 로그인해야 합니다. 데모 시작 페이지에서 서버를 켠 뒤(약 10분) 다시 로그인해주세요.」**(`(auth)/login/page.tsx:48` 의 `unavailable` 분기). 신호 소스 = `resolveDemoBackendState()`(데모 제어 API 상태 — `DemoBackendNotice` 와 같은 함수). 마커 없는 `/login` 은 일반 `DemoBackendNotice` 만(대조). **AC-4 닫힘.**
+- 🔴 **위 09-24 CORRECTION 의 impl PR 번호 정정**: **#3999**(`a77529a8c`)는 `TASK-PC-FE-297/298` 의 PR 이다. 이 티켓의 구현은 **#4000**(`3d3df69af` «fix(console): TASK-PC-FE-299 — 데모 종료 뒤 세션 잔존 표면 5종 정리»).
+- 4차원(이 close 에서 다시 잼): (a) #4000 MERGED (b) `3d3df69af` 는 `origin/main` 조상 (c) 머지 전 체크 SUCCESS 14 · SKIPPED 52 · 실패 0 (d) AC-1·2·3·5·6·7 은 09-24 절이 «실측 · 이의 없음» 으로 판정, AC-4 는 이 절. ⇒ **done.**
