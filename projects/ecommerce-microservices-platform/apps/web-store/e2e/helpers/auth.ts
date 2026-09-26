@@ -111,6 +111,44 @@ export const SEEDED_CROSS_TENANT_PRINCIPAL: TestUser = {
 };
 
 /**
+ * TASK-BE-605 — an `ecommerce` credential whose STORED roles lack `CUSTOMER`
+ * (`iam-consumer-seed.sql` + the one roles location in `account-mock.nginx.conf`, which answers
+ * `["ECOMMERCE_OPERATOR"]`). Stored roles win over the platform seed, so IAM admits the login
+ * and issues a storefront token without `CUSTOMER` — the only remaining way to hand web-store a
+ * token its role guard must reject, now that neither a cross-tenant credential (BE-604) nor a
+ * cross-tenant IAM session (BE-605) reaches the storefront client.
+ */
+export const SEEDED_NO_CUSTOMER_ROLE: TestUser = {
+  name: 'E2E No-Customer-Role',
+  email: 'e2e-no-customer-role@example.com',
+  password: 'devpassword123!',
+};
+
+/**
+ * Role guard (ADR-MONO-035 §4b-1 · TASK-MONO-381, restored by TASK-BE-605): IAM authenticates
+ * the user, the token has no `CUSTOMER`, and web-store's `signInCallback` bounces the browser to
+ * ITS OWN `/login?error=account_type_mismatch` — on the web-store origin, which is what tells
+ * this bounce apart from IAM's `/login?error` (no value).
+ */
+export async function loginAndExpectRoleGuardRejection(
+  page: Page,
+  user: TestUser = SEEDED_NO_CUSTOMER_ROLE,
+): Promise<void> {
+  await page.goto('/login');
+  const trigger = page.getByRole('button', { name: 'Global Account로 로그인' });
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await fillGapCredentialForm(page, user);
+  await page.waitForURL(
+    (url) =>
+      url.hostname === 'localhost' &&
+      url.pathname === '/login' &&
+      url.searchParams.get('error') === 'account_type_mismatch',
+    { timeout: 30_000 },
+  );
+}
+
+/**
  * Cross-tenant login through the storefront client (TASK-MONO-381 → TASK-BE-604).
  *
  * Until TASK-BE-604 a principal whose own tenant is NOT the storefront's authenticated at IAM

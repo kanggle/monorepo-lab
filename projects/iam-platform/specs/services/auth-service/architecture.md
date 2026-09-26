@@ -337,6 +337,9 @@ presentation → application → domain
 - 기술 상세의 어댑터. JPA, Redis, Kafka, WebClient, JWT 라이브러리 모두 여기
 - `client/AccountServiceClient`는 account-service tenant-info 엔드포인트를 내부 HTTP로 호출 ([specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md)) — 응답 array `[{accountId, tenantId, tenantType}]`는 내부 DTO로 번역 후 `domain`으로 전달. 로그인 use-case가 length 1 row의 `tenant_id`·`tenant_type`을 토큰 발급에 사용 (TASK-BE-229). credential 자체는 cross-service lookup이 아니라 auth-service local `CredentialRepository` (TASK-BE-063 closure 이후)
 - `jwt/JwtSigner`는 access token payload에 `tenant_id`, `tenant_type` claim을 포함하여 서명. claim 누락 시 발급 실패(fail-closed)
+- `oauth2/AuthorizeSessionTenantGate` (TASK-BE-605): SAS 체인에서 `OAuth2AuthorizationEndpointFilter` 바로 앞의 필터 — 인증된 브라우저 세션의 테넌트
+  (`AuthorizationSessionTenant`, 토큰 claim 과 같은 규칙) ≠ 요청 client 의 테넌트이고 그 client 가 콘솔(`iam`)이 아니면 **이 요청의** 보안 컨텍스트를 비워
+  재로그인으로 보낸다. HTTP 세션은 건드리지 않는다(저장된 요청 · 원래 로그인 보존). 규칙: [multi-tenancy.md § 로그인 가능한 계정과 client](../../features/multi-tenancy.md#로그인-가능한-계정과-client-task-be-604)
 
 ## Integration Rules
 

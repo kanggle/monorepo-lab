@@ -188,6 +188,11 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
+        // TASK-BE-605: this class now has two tests sharing the static WireMock server. Its
+        // request journal outlives a test, so the "exactly 1 status-with-tenant call" verify
+        // below would count the other test's calls whenever JUnit ran it first (the BE-604
+        // CORRECTION failure mode). Clears the journal only; the stubs stay.
+        wireMock.resetRequests();
 
         // Mocked Google client returns a CUSTOMER-eligible userInfo (any code).
         OAuthClient googleClient = Mockito.mock(OAuthClient.class);
@@ -397,6 +402,107 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
                         + "not the platform name `ecommerce`")
                 .containsExactly(WEB_STORE_CLIENT_ID);
         assertThat(wsPayload.get("tenant_id").asText()).isEqualTo("ecommerce");
+    }
+
+    /**
+     * TASK-BE-605 AC-2 (session-tenant axis) — the social path composes with the SSO tenant gate
+     * the same way the form path does: a store (ecommerce) social session opening the fan client
+     * ({@code demo-spa-client}, fan-platform) is sent to {@code /login}; signing in socially there
+     * stamps the fan client's tenant, so the resumed authorize passes the gate (no loop) and the
+     * token is {@code tenant_id=fan-platform} with the fan seed role.
+     *
+     * <p>🔴 Deliberately NOT asserted: WHICH account row the second login resolves to. Today the
+     * identity lookup is global, so it is the ecommerce-born account ({@code social-acc-1}) in a
+     * fan-platform session — the spec/code mismatch recorded in multi-tenancy.md § 소셜 로그인.
+     * Owner decision ② (iii) scopes that lookup to the client tenant after TASK-MONO-672 item 18
+     * measures the population; pinning today's account here would freeze the mismatch.
+     */
+    @Test
+    @DisplayName("BE-605: 스토어 소셜 세션 → 팬 client authorize → /login → 소셜 재로그인 → 코드(루프 없음) · tenant_id=fan-platform")
+    void socialSession_openingClientOfAnotherTenant_reauthenticatesSocially() throws Exception {
+        String verifier = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(UUID.randomUUID().toString().replace("-", "").getBytes(StandardCharsets.UTF_8));
+        String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+
+        // 1. Store (ecommerce) social session.
+        MvcResult start = mockMvc.perform(browserAuthorize(null, CLIENT_ID, REDIRECT_URI, challenge))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        HttpSession session = start.getRequest().getSession(false);
+        assertThat(start.getResponse().getHeader("Location")).endsWith("/login");
+        assertThat(socialCallback(session)).contains("client_id=" + CLIENT_ID);
+
+        // 2. The fan client: the ecommerce session is not reused.
+        String fanVerifier = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(UUID.randomUUID().toString().replace("-", "").getBytes(StandardCharsets.UTF_8));
+        String fanChallenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(fanVerifier.getBytes(StandardCharsets.US_ASCII)));
+        MvcResult gated = mockMvc.perform(browserAuthorize(
+                        toMockSession(session), FAN_CLIENT_ID, FAN_REDIRECT_URI, fanChallenge))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(gated.getResponse().getHeader("Location")).endsWith("/login").doesNotContain("code=");
+
+        // 3. Social login again — the saved request is the fan authorize now.
+        assertThat(socialCallback(session)).contains("client_id=" + FAN_CLIENT_ID);
+
+        // 4. No loop: the resumed fan authorize yields a code; the token is the fan tenant's.
+        MvcResult resumed = mockMvc.perform(browserAuthorize(
+                        toMockSession(session), FAN_CLIENT_ID, FAN_REDIRECT_URI, fanChallenge))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String codeRedirect = resumed.getResponse().getHeader("Location");
+        assertThat(codeRedirect).startsWith(FAN_REDIRECT_URI).contains("code=");
+
+        MvcResult token = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", extractParam(codeRedirect, "code"))
+                        .param("redirect_uri", FAN_REDIRECT_URI)
+                        .param("client_id", FAN_CLIENT_ID)
+                        .param("code_verifier", fanVerifier))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode payload = decodeJwtPayload(objectMapper.readTree(
+                token.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(payload.get("tenant_id").asText()).isEqualTo("fan-platform");
+        java.util.List<String> roles = new java.util.ArrayList<>();
+        payload.path("roles").forEach(r -> roles.add(r.asText()));
+        assertThat(roles).contains("FAN");
+    }
+
+    private static final String FAN_CLIENT_ID = "demo-spa-client";
+    private static final String FAN_REDIRECT_URI = "http://localhost:3000/callback";
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder browserAuthorize(
+            org.springframework.mock.web.MockHttpSession session, String clientId, String redirectUri,
+            String challenge) {
+        var builder = get("/oauth2/authorize")
+                .accept(MediaType.TEXT_HTML)
+                .queryParam("response_type", "code")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("scope", "openid profile email")
+                .queryParam("code_challenge", challenge)
+                .queryParam("code_challenge_method", "S256")
+                .queryParam("state", "be-605");
+        return session != null ? builder.session(session) : builder;
+    }
+
+    /** /login/oauth/google → mocked Google callback; returns the resume redirect. */
+    private String socialCallback(HttpSession session) throws Exception {
+        MvcResult startResult = mockMvc.perform(get("/login/oauth/google").session(toMockSession(session)))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String state = extractParam(startResult.getResponse().getHeader("Location"), "state");
+        MvcResult callback = mockMvc.perform(get("/login/oauth/google/callback")
+                        .session(toMockSession(session))
+                        .queryParam("code", "google-auth-code")
+                        .queryParam("state", state))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        return callback.getResponse().getHeader("Location");
     }
 
     private static final String WEB_STORE_CLIENT_ID = "ecommerce-web-store-client";

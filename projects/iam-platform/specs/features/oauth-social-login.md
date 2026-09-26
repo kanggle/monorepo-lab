@@ -68,6 +68,13 @@ client 의 `ClientSettings` tenant 설정을 추출(`SavedRequestTenantResolver`
 불필요(saved request 에 이미 `client_id` 존재). saved request 부재(직접 `/login` 진입) →
 `TenantContext.DEFAULT_TENANT_ID`(`fan-platform`) fallback.
 
+- **SSO 게이트와의 관계 (TASK-BE-605)** — 다른 테넌트 소비자 client 의 authorize 는 기존 세션을 재사용하지 않고 `/login` 으로 보낸다
+  ([multi-tenancy.md § SSO](multi-tenancy.md#로그인-가능한-계정과-client-task-be-604)). 거기서 소셜로 들어오면 위 규칙대로 **그 client 의 테넌트**가
+  찍히므로 재개된 authorize 는 게이트를 통과한다(루프 없음).
+- 🔴 **알려진 불일치 · 결정 (TASK-BE-605 ② (iii), 구현은 측정 뒤)** — 신원 **조회**는 테넌트 없이 전역이다(`findByProviderAndProviderUserId`)
+  — 그래서 찍힌 세션 테넌트가 신원 행 · 계정 행의 테넌트와 다를 수 있다. 결정은 «조회를 시작 client 의 테넌트로 한정» 이고, 모집단 측정
+  (`TASK-MONO-672` 항목 18) 뒤 별도 티켓으로 구현한다. 상세: [multi-tenancy.md § 소셜 로그인](multi-tenancy.md#로그인-가능한-계정과-client-task-be-604).
+
 ---
 
 ## Design Decisions

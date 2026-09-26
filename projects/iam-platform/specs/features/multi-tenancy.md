@@ -315,10 +315,48 @@ TASK-BE-309/507 · TASK-MONO-334/386 검토 — BE-604 § AC-0 (iii) 검토). �
   `/login?error`.
 - 로그인 세션의 테넌트(토큰 `tenant_id`)는 **자격 행의 테넌트**다 — 교차 조회로 찾았어도 client 테넌트가 아니다. refresh 는 그
   테넌트로 판정한다([Refresh Token](#refresh-token)).
-- 🔴 **이 표가 막지 않는 것 (TASK-BE-604 에서 확인, 후속)**: (1) **이미 인증된 IAM 브라우저 세션의 재사용(SSO)** — 콘솔(또는
-  시작 client 없는 `/login`)로 로그인한 세션으로 소비자 client 의 `/oauth2/authorize` 를 열면 자격 조회 없이 코드가 발급되고,
-  토큰 `tenant_id` 는 로그인 테넌트다(2026-09-26 로컬 측정). (2) **소셜 로그인** — 신원을 테넌트 없이 찾고 토큰 테넌트를 시작
-  client 로 찍는다(`SocialLoginBrowserController`). 둘 다 이 규칙의 범위 밖으로 남아 있다.
+- ~~이 표가 막지 않는 것 (TASK-BE-604 에서 확인, 후속): (1) SSO … (2) 소셜 로그인 …~~ — (1) 은 아래 **SSO** 절이 닫았고(TASK-BE-605),
+  (2) 는 아래 **소셜 로그인** 절에 결정과 남은 불일치를 적었다.
+
+#### 이미 로그인된 IAM 브라우저 세션의 재사용 — SSO (TASK-BE-605, 소유자 결정 ① (b) 재인증, 2026-09-26 UTC)
+
+폼 로그인 표는 **비밀번호를 받을 때만** 돈다. 이미 인증된 세션으로 다른 client 의 `/oauth2/authorize` 를 열면 자격 조회가 없으므로,
+authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth2AuthorizationEndpointFilter` 바로 앞):
+
+| 요청 client 의 테넌트 | 세션 테넌트 = client 테넌트 | 다름 (플랫폼 스코프 `'*'` 포함) |
+|---|---|---|
+| **콘솔** — `iam` | 그대로 통과 | **그대로 통과** — ADR-MONO-044 D5 운영자는 소비자 테넌트 세션으로만 콘솔에 온다 |
+| **소비자** — 그 밖의 모든 client | 그대로 통과 | **재인증** — 이 요청만 미인증으로 취급 → 그 client 의 `/login`(가입 힌트면 `/signup`). 로그인은 위 표대로 그 client 테넌트의 자격을 고른다 |
+| client 없음 · 모르는 client · 테넌트 설정 없는 client · 세션 없음 | 판정하지 않음 — SAS 가 기존대로 답한다 | |
+
+- **세션 테넌트** = 토큰 `tenant_id` claim 을 만드는 규칙과 **같은 함수**(`AuthorizationSessionTenant`): principal details 에 `tenant_id`+`tenant_type`
+  이 둘 다 있으면 그 `tenant_id`, 아니면 client 테넌트. 즉 게이트는 «이 코드로 나갈 토큰의 테넌트가 client 테넌트인가» 를 묻는다.
+- **왜** — 교차 테넌트 세션의 토큰은 쓸모가 없었다: 역할은 세션 테넌트로 조회되고(`listAccountRoles(sessionTenant, …)`) 플랫폼 시드는
+  세션 테넌트가 client 플랫폼일 때만 발화한다. 스토어에 로그인한 뒤 팬 client 를 열면 `tenant_id=ecommerce` · 역할 없음 토큰이 나왔고,
+  그 사람이 가진 **팬 자격은 한 번도 쓰이지 않았다**(BE-604 § ⑧ 로컬 측정). 이제 그 자리에서 팬 로그인 화면이 뜨고 팬 자격으로 들어간다.
+  `identity-platform` § SSO Scope Rules(«대상 플랫폼에 역할이 있으면 같은 세션에서 토큰을 받을 수 있다(MAY)») 와 충돌하지 않는다 —
+  교차 테넌트 세션은 대상 플랫폼에 역할이 없다.
+- **루프 없음** — 재로그인 뒤 세션 테넌트 = client 테넌트다: 폼은 client 테넌트 자격을 범위 조회로 고르고(없으면 로그인 실패 — 재시도할 것이
+  없다), 소셜은 client 테넌트를 찍는다(아래). 재개된 authorize 는 게이트를 통과한다(`SsoTenantGateIntegrationTest`).
+- **UX 대가** — 테넌트가 다른 서비스로 옮겨 가면 **그 서비스의 로그인 화면이 한 번** 뜬다. IAM 브라우저 세션은 한 번에 한 principal 만
+  들고 있으므로, 팬에 로그인한 뒤 스토어로 돌아가면 스토어 로그인이 다시 한 번 뜬다. **이미 발급된 토큰(각 서비스의 앱 세션)은 건드리지
+  않는다** — 영향은 다음 authorize 뿐이다. 로그인 화면을 떠나면 원래 세션은 그대로다(게이트는 세션을 무효화하지 않고 이 요청의 보안
+  컨텍스트만 비운다 — 저장된 요청도 그래서 살아남는다).
+- `prompt=none` 은 OIDC 대로 `login_required` 로 client 에 돌아간다. SAS 1.4.1 은 `prompt=login` 을 구현하지 않는다(값 검증만) — 이 게이트를
+  프롬프트로 표현할 수 없는 이유다.
+
+#### 소셜 로그인 (TASK-BE-605 결정 ② (iii), 2026-09-26 UTC — 🔴 구현은 측정 뒤)
+
+- **지금**: 신원을 테넌트 없이 찾고(`SocialIdentityRepository.findByProviderAndProviderUserId` — `OAuthLoginUseCase.java:250` ·
+  `SocialLoginSteps.java:47`) 세션 테넌트를 **시작 client 의 테넌트**로 찍는다(`SocialLoginBrowserController.java:185`). 그래서 위 SSO 게이트와는
+  맞물린다(재인증 뒤 항상 통과). 그러나 **찍힌 테넌트와 신원 행 · 계정 행의 테넌트가 다를 수 있다** — 예: `ecommerce` 에서 만든 구글 신원으로 팬
+  client 에 소셜 로그인하면 `ecommerce` 계정이 `tenant_id=fan-platform` 세션으로 들어간다.
+- 🔴 **스펙 ↔ 코드 불일치 (기록)**: 이 문서 § 적용 범위(`social_identities` unique `(tenant_id, provider, provider_user_id)` — «소셜 식별자도
+  테넌트별 분리») 와 `V0007__add_tenant_id_to_auth_tables.sql:49` 는 **테넌트별** 신원을 말하는데, 조회는 **전역**이다. 같은 구글 사용자가 두
+  테넌트에 신원 행을 가지면 전역 조회는 결과가 둘이다.
+- **결정 (iii)**: 신원 조회를 **시작 client 의 테넌트로 한정**한다 — 폼 로그인의 범위 조회와 같은 모양(그 테넌트에 신원이 없으면 그 테넌트에서
+  새로 가입). 🔴 **단, 모집단을 먼저 잰다** — 코드는 이 티켓에서 바꾸지 않았다. 측정은 루트 `TASK-MONO-672` **항목 18**(창이 서야 잴 수 있다),
+  구현은 그 측정 뒤 **별도 티켓**으로(항목 18 이 기안 의무를 든다).
 
 ### 격리 회귀 방지
 

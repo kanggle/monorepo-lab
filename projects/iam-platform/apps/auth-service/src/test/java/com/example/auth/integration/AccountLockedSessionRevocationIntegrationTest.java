@@ -281,8 +281,27 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
                 + Instant.now() + "\"}";
     }
 
-    /** authorization_code + PKCE with the principal shape the form/social login paths build. */
+    /**
+     * authorization_code + PKCE with the principal shape the form/social login paths build.
+     *
+     * <p>TASK-BE-605: the client is the principal's own tenant's client. Before BE-605 this signed
+     * the {@code ecommerce} account in through {@code demo-spa-client} ({@code fan-platform}) —
+     * a cross-tenant session reuse, which the authorize gate now answers with a re-login.
+     */
     private String signIn(String email, String accountId, String tenantId) throws Exception {
+        return "ecommerce".equals(tenantId)
+                ? signIn(email, accountId, tenantId, STORE_CLIENT_ID, STORE_REDIRECT_URI, STORE_CLIENT_SECRET)
+                : signIn(email, accountId, tenantId, "demo-spa-client", "http://localhost:3000/callback", null);
+    }
+
+    // V0012 confidential storefront client (client_secret_basic + PKCE); dev secret pinned by
+    // BcryptHashPinTest; callback path per V0024 — same constants as SocialLoginSasBrowserIntegrationTest.
+    private static final String STORE_CLIENT_ID = "ecommerce-web-store-client";
+    private static final String STORE_CLIENT_SECRET = "ecommerce-dev";
+    private static final String STORE_REDIRECT_URI = "http://localhost:3000/api/auth/callback/iam";
+
+    private String signIn(String email, String accountId, String tenantId, String clientId,
+                          String redirectUri, String clientSecret) throws Exception {
         Map<String, Object> details = new HashMap<>();
         details.put(PrincipalDetailKeys.TENANT_ID, tenantId);
         details.put(PrincipalDetailKeys.TENANT_TYPE, "B2C");
@@ -300,8 +319,8 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
         MvcResult authorize = mockMvc.perform(get("/oauth2/authorize")
                         .with(authentication(principal))
                         .queryParam("response_type", "code")
-                        .queryParam("client_id", "demo-spa-client")
-                        .queryParam("redirect_uri", "http://localhost:3000/callback")
+                        .queryParam("client_id", clientId)
+                        .queryParam("redirect_uri", redirectUri)
                         .queryParam("scope", "openid profile email")
                         .queryParam("code_challenge", codeChallenge)
                         .queryParam("code_challenge_method", "S256"))
@@ -311,13 +330,19 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
         assertThat(location).isNotNull().contains("code=");
         String code = location.substring(location.indexOf("code=") + 5).split("&")[0];
 
-        MvcResult token = mockMvc.perform(post("/oauth2/token")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("grant_type", "authorization_code")
-                        .param("code", code)
-                        .param("redirect_uri", "http://localhost:3000/callback")
-                        .param("client_id", "demo-spa-client")
-                        .param("code_verifier", codeVerifier))
+        var tokenRequest = post("/oauth2/token")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("grant_type", "authorization_code")
+                .param("code", code)
+                .param("redirect_uri", redirectUri)
+                .param("code_verifier", codeVerifier);
+        if (clientSecret != null) {
+            tokenRequest.header("Authorization", "Basic " + Base64.getEncoder().encodeToString(
+                    (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8)));
+        } else {
+            tokenRequest.param("client_id", clientId);
+        }
+        MvcResult token = mockMvc.perform(tokenRequest)
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode body = objectMapper.readTree(token.getResponse().getContentAsString());

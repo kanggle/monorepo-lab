@@ -1731,3 +1731,45 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
 - 출처: `projects/iam-platform/tasks/ready/TASK-BE-608-…` § Goal ④ · § Scope 포함 ④. 🔴 **Failure
   Scenario 대조 없음** — 608 은 이 AC 를 "측정값 또는 «측정 불가 + 이유»"로 닫는 것을 허용했고,
   이 항목으로의 이관 자체가 그 이유다(창이 서야만 잴 수 있다).
+
+## 🟡 항목 18 (수령 2026-09-26) — `TASK-BE-605` ② (iii): 소셜 신원 조회를 **client 테넌트로 한정**하면 누가 영향을 받는가 (2026-09-26 수령)
+
+- **왜 재나**: 소유자 결정(2026-09-26 UTC) = ② (iii) «소셜 신원 조회를 시작 client 의 테넌트로 한정» — 단 **모집단을 먼저 잰다**.
+  지금 조회는 전역이다(`SocialIdentityRepository.findByProviderAndProviderUserId` — `OAuthLoginUseCase.java:250` · `SocialLoginSteps.java:47`)
+  인데 스펙(`multi-tenancy.md` § 적용 범위 `social_identities` 줄)과 unique 인덱스(`V0007__add_tenant_id_to_auth_tables.sql:49`
+  `(tenant_id, provider, provider_user_id)`)는 **테넌트별**이다. 그리고 세션 테넌트는 신원 행이 아니라 **시작 client** 로 찍힌다
+  (`SocialLoginBrowserController.java:185`). 한정하면 «다른 테넌트에서 만든 신원으로 이 client 에 들어오던 사람» 은 그 테넌트에서
+  **새 계정으로 가입**된다(폼 로그인의 BE-604 결과와 같은 모양) — 그 사람이 몇 명인지가 결정의 실질 입력이다.
+- **무엇을 재나** (`auth_db`, 계정 = `auth_user`/`auth_pass` · ③ 은 `account_db`):
+  ① **전역 조회가 이미 모호한 신원** — 같은 제공자 사용자가 둘 이상의 테넌트에 신원 행을 가진 수(전역 조회가 결과 둘 = 지금 JPA 가
+  `IncorrectResultSize` 로 던지는 모양):
+  ```sql
+  SELECT provider, provider_user_id, COUNT(DISTINCT tenant_id) AS tenants
+  FROM social_identities GROUP BY 1, 2 HAVING tenants > 1;
+  ```
+  ② **신원 테넌트 ≠ 세션 테넌트** — 신원이 있는 계정의 미러 행(`refresh_tokens.tenant_id` = 세션 테넌트, BE-604) 중 신원 행과 테넌트가 다른 것.
+  🔴 계정이 폼 자격도 가지면 그 세션은 폼일 수 있다 ⇒ **자격 없는 계정(소셜 전용)** 과 **자격 있는 계정** 을 **따로** 적어라:
+  ```sql
+  SELECT si.tenant_id AS identity_tenant, rt.tenant_id AS session_tenant,
+         (SELECT COUNT(*) FROM credentials c WHERE c.account_id = si.account_id) > 0 AS has_credential,
+         COUNT(DISTINCT si.account_id) AS accounts, COUNT(*) AS rows_
+  FROM social_identities si JOIN refresh_tokens rt ON rt.account_id = si.account_id
+  GROUP BY 1, 2, 3 ORDER BY accounts DESC;
+  ```
+  판정 = `identity_tenant <> session_tenant AND has_credential = 0` 의 `accounts` 합 (= 한정하면 **새 계정으로 갈라질** 소셜 사용자).
+  ③ **신원 테넌트 ≠ 계정 테넌트** — `SELECT account_id, tenant_id FROM auth_db.social_identities` 와 `SELECT id, tenant_id FROM account_db.accounts`
+  를 `account_id = id` 로 대조(교차 스키마 조인 권한이 없으면 두 번 뽑아 대조). BE-507 이전 계정은 계정 행이 `fan-platform` 인데 신원 행이
+  다른 테넌트일 수 있다(`OAuthLoginUseCase.java:272-275` 주석) — 한정 후 이들이 어느 테넌트로 들어가야 하는지의 입력.
+- 🔴 **유효성 술어**: ① `SELECT COUNT(*) FROM social_identities` = **0 이면 전 항목 «측정 불가»** 다(«모집단 없음» 이 아님 — 데모는 소셜
+  로그인을 시드하지 않고 실제 구글/카카오 로그인이 필요하다). ② 는 조인 결과 행 > 0 이어야 한다 — 0 이면 «세션이 없었다».
+  🔴 BE-603 이전 미러 행은 `account_id` 가 **이메일**이라 조인에서 빠진다(항목 16 과 같은 NULL 코호트) — 빠진 수(`refresh_tokens` 중
+  `account_id LIKE '%@%'`)를 함께 적어라.
+- 🔴 **이 측정이 답하지 못하는 것**: 데모에는 실사용자가 없다 ⇒ 0 이 나와도 «운영에 없다» 가 아니라 «데모에 없다» 다. 그 경우 답은
+  **구조적**이다 — «한 사람이 두 테넌트 client 에서 같은 구글 계정으로 로그인하면 지금은 한 계정(첫 신원의 테넌트)으로, 한정 후에는
+  테넌트마다 한 계정으로 들어간다» 가 코드 판독상 참이다. 창에서 이것을 **직접 재현**(한 구글 계정으로 스토어 → 팬 소셜 로그인 → ② 쿼리에
+  그 계정이 `identity_tenant=ecommerce, session_tenant=fan-platform` 으로 찍히는가)하면 그것이 판정의 실질 입력이다(항목 16 ③ 과 같은 방식).
+  🔴 BE-605 의 SSO 게이트가 머지된 이미지에서 재현할 것 — 게이트 이전 이미지는 두 번째 client 에서 로그인 화면이 아예 안 뜬다.
+- **결과 뒤에 할 일 (🔴 이 항목이 의무를 든다)**: 측정(또는 «측정 불가 + 구조적 답») 을 적은 뒤 `projects/iam-platform/tasks/ready/` 에
+  **② 구현 티켓을 기안**한다 — 조회 한정 + 한정 미스 시 동작(그 테넌트에서 가입) + 기존 교차 신원의 이관 여부. `TASK-BE-605` 는 ② 구현을
+  들고 있지 않다(그 티켓 AC-2 가 이리로 넘겼다) — 이 항목이 닫히며 기안하지 않으면 그 의무는 아무 큐에도 없다.
+- 출처: `projects/iam-platform/tasks/review/TASK-BE-605-…` § AC-0 ② · AC-2.
