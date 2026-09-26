@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { getAccountsListState } from '@/features/accounts';
 import { AccountsScreen } from '@/features/accounts';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,25 +29,15 @@ export default async function AccountsPage() {
         <h1 id="accounts-heading" className="mb-6 text-2xl font-semibold">
           계정 운영
         </h1>
-        <div
-          role="status"
-          data-testid="accounts-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            계정 운영 작업은 테넌트 범위로 수행됩니다. 상단의 테넌트
-            스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'accounts-no-tenant',
+          description: (
+            <>
+              계정 운영 작업은 테넌트 범위로 수행됩니다. 상단의 테넌트
+              스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }

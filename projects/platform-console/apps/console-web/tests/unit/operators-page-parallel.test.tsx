@@ -59,6 +59,20 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+/**
+ * TASK-PC-FE-301 — the no-tenant branch renders `NoTenantNotice`, which
+ * resolves its OWN judgement via `noTenantNoticeKind`
+ * (`@/shared/lib/active-tenant-default`) through `fetchRegistry` — a
+ * DIFFERENT seam than `@/features/catalog`'s `getCatalog` mocked above (that
+ * one only feeds the create-form tenant options on the SUCCESS path).
+ * Defaults to 'select' so the pre-301 no-tenant test below (which only
+ * asserts the gate's testid, not its copy) is unaffected.
+ */
+let noTenantNoticeKindResult: 'zero' | 'select' = 'select';
+vi.mock('@/shared/lib/active-tenant-default', () => ({
+  noTenantNoticeKind: async () => noTenantNoticeKindResult,
+}));
+
 import OperatorsPage from '@/app/(console)/operators/page';
 
 const SUCCESS_STATE = {
@@ -77,6 +91,7 @@ beforeEach(() => {
   getCatalog.mockReset();
   selectableTenants.mockReset();
   selectableTenants.mockReturnValue(['wms', '*']);
+  noTenantNoticeKindResult = 'select';
 });
 
 describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () => {
@@ -160,6 +175,38 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
     expect(getCatalog).not.toHaveBeenCalled();
     expect(getSelfOperatorIdOrNull).not.toHaveBeenCalled();
     expect(getGrantableRolesOrNull).not.toHaveBeenCalled();
+  });
+
+  it('🔴🔴 TASK-PC-FE-301 — 0 selectable tenants → the no-reachable-tenant notice (uses the SAME shared judgement as DomainTenantGate)', async () => {
+    getOperatorsListState.mockResolvedValue({
+      page: null,
+      noTenant: true,
+      permissionError: null,
+      degraded: false,
+    });
+    noTenantNoticeKindResult = 'zero';
+
+    const ui = await OperatorsPage();
+    const { getByTestId } = render(ui);
+    const el = getByTestId('operators-no-tenant');
+    expect(el).toHaveTextContent('이 계정에는 접근 가능한 테넌트가 없습니다');
+    expect(el).not.toHaveTextContent('테넌트를 먼저 선택하세요');
+  });
+
+  it('TASK-PC-FE-301 control — ≥2 selectable, none chosen → the ORIGINAL «select a tenant» text, unchanged', async () => {
+    getOperatorsListState.mockResolvedValue({
+      page: null,
+      noTenant: true,
+      permissionError: null,
+      degraded: false,
+    });
+    noTenantNoticeKindResult = 'select';
+
+    const ui = await OperatorsPage();
+    const { getByTestId } = render(ui);
+    const el = getByTestId('operators-no-tenant');
+    expect(el).toHaveTextContent('테넌트를 먼저 선택하세요');
+    expect(el).not.toHaveTextContent('접근 가능한 테넌트가 없습니다');
   });
 
   it('does not fetch catalog/self on the permission-denied gate', async () => {

@@ -125,9 +125,35 @@ describe('IamOverviewScreen (TASK-PC-FE-180)', () => {
 
   it('no active tenant → page-level tenant gate, no cards', () => {
     cleanup();
-    render(<IamOverviewScreen state={state({ noActiveTenant: true })} />);
-    expect(screen.getByTestId('iam-overview-no-tenant')).toBeInTheDocument();
+    render(
+      <IamOverviewScreen
+        state={state({ noActiveTenant: true, tenantNoticeKind: 'select' })}
+      />,
+    );
+    const el = screen.getByTestId('iam-overview-no-tenant');
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveTextContent('테넌트를 먼저 선택하세요');
     expect(screen.queryByTestId('iam-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('iam-overview-operators')).not.toBeInTheDocument();
+  });
+
+  it('🔴🔴 TASK-PC-FE-301 — 0 selectable tenants (tenantNoticeKind=zero) → the no-reachable-tenant notice, same shared body every other gated screen uses', () => {
+    cleanup();
+    render(
+      <IamOverviewScreen
+        state={state({ noActiveTenant: true, tenantNoticeKind: 'zero' })}
+      />,
+    );
+    const el = screen.getByTestId('iam-overview-no-tenant');
+    expect(el).toHaveTextContent('이 계정에는 접근 가능한 테넌트가 없습니다');
+    expect(el).not.toHaveTextContent('테넌트를 먼저 선택하세요');
+  });
+
+  it('tenantNoticeKind missing (defensive default) → falls back to select, never crashes', () => {
+    cleanup();
+    render(<IamOverviewScreen state={state({ noActiveTenant: true })} />);
+    expect(screen.getByTestId('iam-overview-no-tenant')).toHaveTextContent(
+      '테넌트를 먼저 선택하세요',
+    );
   });
 });
