@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-604-sas-default-refresh-provider-overrides-domain-rejections.md` — 🔴 **SAS 기본 refresh provider 가 우리 provider 뒤에 살아 있어 도메인 거부가 무시된다** (READY, 2026-09-25 UTC · BE-603 CI 에서 발견). 미러 행 폐기·만료·테넌트 불일치 거부가 `ProviderManager` fall-through 로 200 이 된다 ⇒ 비밀번호 재설정·재사용 탐지가 SAS 세션을 못 끝낸다(force-logout·잠금만 BE-601 어댑터로 막힘). **AC-0 = ⓑ 측정 먼저(소유자 결정 2026-09-25 UTC)** 🟢 **측정 완료 2026-09-26**(살아 있는 불일치 0/6 · fan-platform 계정 → 콘솔 client 로그인 모양은 fall-through 200 재현) → **다음 결정 대기** → `TASK-MONO-672` 항목 16(살아 있는 세션의 client·미러 테넌트 교차표 · 창 동안 mismatch · 예측 모집단 재현) — 그냥 제거하면 계정≠client 테넌트 세션이 끊길 수 있다(⚪ 미측정). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+- `TASK-BE-604-sas-default-refresh-provider-overrides-domain-rejections.md` — 🔴 **SAS 기본 refresh provider 가 우리 provider 뒤에 살아 있어 도메인 거부가 무시된다** (READY, 2026-09-25 UTC · BE-603 CI 에서 발견). 미러 행 폐기·만료·테넌트 불일치 거부가 `ProviderManager` fall-through 로 200 이 된다 ⇒ 비밀번호 재설정·재사용 탐지가 SAS 세션을 못 끝낸다(force-logout·잠금만 BE-601 어댑터로 막힘). **AC-0 = ⓑ 측정 먼저(소유자 결정 2026-09-25 UTC)** 🟢 **측정 완료 2026-09-26**(살아 있는 불일치 0/6 · fan-platform 계정 → 콘솔 client 로그인 모양은 fall-through 200 재현) → 소유자 (iii) «교차 테넌트 로그인 범위부터 재검토»(2026-09-26) → 검토 완료, **선택지 A–D 결정 대기**(권고 D: 폴백을 콘솔 client 로만 · refresh 는 로그인 당시 테넌트와 비교) → `TASK-MONO-672` 항목 16(살아 있는 세션의 client·미러 테넌트 교차표 · 창 동안 mismatch · 예측 모집단 재현) — 그냥 제거하면 계정≠client 테넌트 세션이 끊길 수 있다(⚪ 미측정). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 

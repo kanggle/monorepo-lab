@@ -77,10 +77,55 @@ iam-platform
   ③(b) 🔴 **재현됨** — fan-platform 전용 계정이 `platform-console-web`(iam) 로 로그인 → refresh → `clientTenant=iam, tokenTenant=fan-platform` 로그 **+ HTTP 200**.
   ⇒ **결정 입력**: 지금 그 모양의 세션은 0 이지만 **누구나 만들 수 있는 모양**이다(소비자 계정 → 다른 테넌트 client 로그인 → 교차 테넌트 조회). 기본 provider 만
   제거하면 그 세션의 refresh 는 400 이 된다. 선택지는 (i) 제거 + «교차 테넌트 로그인 세션은 refresh 가능» 을 테넌트 비교에서 명시적으로 허용 ·
-  (ii) 제거 + 그런 세션은 refresh 불가(재로그인)로 정하고 계약에 적기 · (iii) 교차 테넌트 로그인 자체의 허용 범위부터 재검토. 🔴 **소유자 결정 대기.**
+  (ii) 제거 + 그런 세션은 refresh 불가(재로그인)로 정하고 계약에 적기 · (iii) 교차 테넌트 로그인 자체의 허용 범위부터 재검토.
+  🔵 **소유자 결정 (2026-09-26 UTC) = (iii) 교차 테넌트 로그인의 허용 범위부터 재검토.** 검토 결과(코드·이력 판독, 분석=Opus 5.5)는 아래 § AC-0 (iii) 검토.
+  🔴 **다음 소유자 결정 대기 — 아래 선택지 A–D.**
 - [ ] **AC-1** — IT: 미러 행 폐기 → 다음 refresh 400 `invalid_grant` (BE-603 IT `@Order(8)` 가 일부러 **단언하지 않은** 칸). 🔴 기존 fall-through 200 을 고정하는 단언을 만들지 마라.
 - [ ] **AC-2** — IT: 비밀번호 재설정 후 기존 SAS 세션 refresh 거부 · 재사용 탐지 후 다른 세션 refresh 거부.
 - [ ] **AC-3** — 계정 테넌트 ≠ client 테넌트 세션의 refresh 가 결정한 대로 동작(허용이면 성공, 차단이면 명시적 거부 + 계약 문서).
+
+## AC-0 (iii) 검토 — 교차 테넌트 로그인은 어디까지 허용되나 (2026-09-26 UTC · 코드·이력 판독)
+
+🔴 실측은 BE-604 AC-0 측정(0/6 · ③(b) 재현)과 `TASK-MONO-386`(모집단 0) 뿐이다. 나머지는 코드 판독이다.
+
+**경로 셋 — 서로 다르게 동작한다**
+
+| 경로 | 발동 | 토큰 `tenant_id` · 첫 미러 행 | 도달 client |
+|---|---|---|---|
+| 폼 `CredentialAuthenticationProvider.resolveCredential` (`:187-210`) | client 테넌트 조회 실패 → 전체 이메일 조회가 정확히 1건 | **계정 테넌트** (`:288-290` · `TenantClaimTokenCustomizer:363` → `DomainSyncOAuth2AuthorizationService:191-199`) | 전부 |
+| 소셜 `OAuthLoginUseCase:249-258` | 신원을 테넌트 없이 provider+userId 로 조회 | **client 테넌트** (`SocialLoginBrowserController:185`) — refresh 불일치가 구조적으로 안 난다 | 전부 |
+| 운영자 assume-tenant `AssumeTenantAuthenticationProvider:150-162` | admin 배정 게이트 통과 시(fail-closed) | 선택 테넌트 · **refresh token 미발급** (`:227-229`) | 콘솔 |
+
+🔴 곁가지 결함: 회전 시 미러 행 테넌트 = **client 테넌트**(`SasRefreshTokenAuthenticationProvider:483-495`) — 첫 행(claim 테넌트)과 어긋난다. 어느 선택지든 같이 고친다.
+
+**왜 있나**
+- `TASK-BE-309` 가 폼 로그인을 만들며 «v1 단일 테넌트 가정» 으로 전체 이메일 조회를 넣었다 — **부수적**.
+- `TASK-BE-507` D1-a 가 «BE-507 이전 `fan-platform` 쇼핑객» 을 살리는 폴백으로 **의도적으로** 유지.
+- `TASK-MONO-386` 이 그 모집단을 **실측 0 명**으로 확인 ⇒ 소비자 client 폴백의 원래 근거는 **사라졌다**.
+- 🔴 **새로 생긴 의존 — ADR-MONO-044 D5**(ACCEPTED): 기존 소비자가 운영자가 된다. 셀프 온보딩은 운영자 `oidc_subject` = 소비자 `account_id`,
+  비밀번호 NULL(`FirstAdminProvisioner.java:80-91`) ⇒ **그 운영자들은 교차 폴백으로만 콘솔에 로그인한다**(콘솔 경로 가입은 불가, `signup.md:54-56`).
+
+**교차 토큰이 하류에서 하는 일**
+- fan 소비자 → 콘솔 client: admin 교환은 `sub` 로만 운영자를 찾는다(`TokenExchangeService:28-31,81-88`). 매핑 없으면 401 → `/onboarding`(`callback/route.ts:178-193`).
+  콘솔 셸 진입 불가, 역할 증가 없음 ⇒ 닿는 곳은 **설계된 온보딩뿐**.
+- fan 계정 → 스토어 client(폼): 역할 비어 web-store 가 익명 세션으로 떨어지고, 게이트웨이도 테넌트로 막는다(`OAuth2ResourceServerConfig:122-125`) ⇒ **성공하지만 쓸모없는 세션**.
+- 🔴 소셜은 client 테넌트를 찍으므로 같은 사람이 폼으로는 쓸모없는 세션, 소셜로는 CUSTOMER 로 입장한다 — 폼·소셜이 갈라진다.
+
+**스펙** — «어느 계정이 어느 client 로 로그인할 수 있나» 규칙은 **찾지 못했다**(`specs/{features,services,contracts}` · ADR-MONO-044 · BE-309/507 · MONO-334/386).
+가까운 문장: `multi-tenancy.md:200`(교차 refresh 금지, **403** — 코드는 400 `invalid_grant`, 불일치) · `:337` · `:379-382` · `signup.md:57-63`.
+
+**선택지**
+
+| | 내용 | 깨지는 것 | 비용 | BE-604 에 주는 뜻 |
+|---|---|---|---|---|
+| A | 교차 로그인 그대로 · refresh 는 «미러 행 테넌트 == 로그인 당시 principal 테넌트» 로 판정 | 없음 | 작음 | 기본 provider 안전 제거 |
+| B | (계정 테넌트 → client 테넌트) 허용 목록 | 목록 밖 쌍 | 큼(새 스펙·계약 · 소셜 포함) | A + 목록 |
+| C | 교차 로그인 전면 금지(SUPER_ADMIN 예외) | **셀프 온보딩·OIDC-only 운영자 전원의 콘솔 로그인** | ADR-MONO-044 D5 개정 필요 | client 테넌트 비교로 충분 |
+| **D (권고)** | 폴백을 **client 테넌트 = `iam`(콘솔) 일 때만** 허용, 소비자 client 에선 제거 + refresh 는 A 방식 | 소비자 client 교차 로그인 — 실측 모집단 0, 지금도 쓸모없는 세션(해당자는 그 테넌트에서 새로 가입 가능, `(tenant_id,email)` 복합 unique) | 중간(`resolveCredential` 한 곳 + 스펙 한 줄 + A) | 기본 provider 안전 제거 |
+
+**미결** — ① 실제 운영자 중 자격 테넌트가 `iam` 이 아닌 사람 수(`admin_operators.oidc_subject` ↔ `credentials.tenant_id` — 창 측정) ·
+② C/(ii) 를 고르면 콘솔 refresh 400 뒤 IdP 세션으로 무화면 재로그인이 되는가 · ③ 소비자 client 폴백 제거 시 `/login?error` 가 «잘못된 비밀번호» 로만
+보이는 것을 받아들일지 · ④ 소셜 경로 테넌트 스탬프를 계정 테넌트로 맞출지(`TASK-BE-602` 와 연결) · ⑤ `multi-tenancy.md:200` 의 403 vs 코드 400.
 
 # Related Specs
 
