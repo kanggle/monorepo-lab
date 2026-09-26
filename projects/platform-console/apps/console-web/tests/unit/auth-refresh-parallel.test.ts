@@ -79,6 +79,11 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
+// TASK-PC-FE-300 — POST now reads `req.url` (the rotation-race retry hop).
+function postRefresh() {
+  return refreshPOST(new Request('http://console.local/api/auth/refresh', { method: 'POST' }));
+}
+
 describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (TASK-PC-FE-120)', () => {
   it('issues the assume-tenant exchange while the operator exchange is still pending (no waterfall)', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref' });
@@ -114,7 +119,7 @@ describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (T
       }),
     );
 
-    const pending = refreshPOST();
+    const pending = postRefresh();
     await tick();
 
     // Operator is still pending, yet assume has already been issued — proves
@@ -163,7 +168,7 @@ describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (T
       }),
     );
 
-    const res = await refreshPOST();
+    const res = await postRefresh();
 
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe('TOKEN_INVALID');
@@ -195,7 +200,7 @@ describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (T
       }),
     );
 
-    const res = await refreshPOST();
+    const res = await postRefresh();
     expect(res.status).toBe(200);
     expect(assumeIssued).toBe(false);
     expect(cookieJar.get(OPERATOR_COOKIE)?.value).toBe('new.op');

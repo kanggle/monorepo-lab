@@ -4,7 +4,7 @@ TASK-PC-FE-300
 
 # Status
 
-ready
+review
 
 # Title
 
@@ -52,9 +52,9 @@ platform-console
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — POST 경로가 경쟁 패자 400 에서 세션을 지우지 않는다(단위, 쿠키가 바뀐 경우).
-- [ ] **AC-2** — 진짜 거부(쿠키 불변)는 지금처럼 세션을 끝낸다(대조군 단위).
-- [ ] **AC-3** — GET·POST 두 경로가 같은 판정 함수를 쓴다(한 곳만 고쳐지는 것 방지).
+- [x] **AC-1** — POST 경로가 경쟁 패자 400 에서 세션을 지우지 않는다(단위, 쿠키가 바뀐 경우). `grant_rejected`+`rotationSuspect` 는 즉시 지우지 않고 대기 후 `307`(`?retry=1`)로 응답 — `apps/console-web/src/app/api/auth/refresh/route.ts:96-106`. 재시도 홉이 `hasCompleteSession(jar)` 로 판정해 참이면 지우지 않고 `{ok:true}` — `route.ts:77-84`. 실측: `apps/console-web/tests/unit/auth-refresh-post-rotation-race.test.ts:115-130`(첫 응답 307+쿠키 무변경+대기 실측) · `:132-155`(재시도에 승자 쿠키가 실려 오면 200/ok+무삭제+IAM 재호출 0회).
+- [x] **AC-2** — 진짜 거부(쿠키 불변)는 지금처럼 세션을 끝낸다(대조군 단위). `route.ts:77-84`(재시도에도 `hasCompleteSession` 거짓 → `clearFullSession`+401, 기존과 동일 코드/문구). 실측: `auth-refresh-post-rotation-race.test.ts:157-177`(대조군, 경쟁 없이 401+3쿠키 삭제) · `:179-192`(Edge Case: 대기 중 승자도 실패) · 기존 회귀 `auth-routes.test.ts`(단일 탭 재현을 두 홉 흐름으로 갱신, "clears all session cookies … (no race — cookies never change)") 및 `auth-refresh-parallel.test.ts` 3건 회귀 유지 — 전체 스위트 실행: `pnpm exec vitest run --minWorkers=1 --maxWorkers=1`.
+- [x] **AC-3** — GET·POST 두 경로가 같은 판정 함수를 쓴다(한 곳만 고쳐지는 것 방지). 판정 함수 `hasCompleteSession` 신설·단일 소유 — `apps/console-web/src/shared/lib/session-refresh.ts:70-91`. GET 호출부 `route.ts:157`(기존 인라인 조건을 대체), POST 호출부 `route.ts:78`. 구조 확인(스파이가 실제로 양쪽에서 불림): `auth-refresh-post-rotation-race.test.ts:215-235`(AC-3 describe 블록, GET·POST 각각 호출 확인).
 
 # Related Specs
 

@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-300-refresh-post-path-clears-shared-session-on-race-loss.md` — 🔴 **refresh POST 경로가 경쟁 패자 400 에 공유 쿠키 세션 전체를 지운다** (READY, 2026-09-26 UTC · `TASK-BE-606` 후속). iam 이 30초 유예로 경쟁 패자에게 400 만 주게 됐는데, GET 경로는 «회전 의심 → 대기 후 복귀» 인 반면 POST 는 `grant_rejected` 에 즉시 `clearFullSession`(`route.ts:70-71`) ⇒ 진 탭이 승자 탭까지 로그아웃. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -121,6 +121,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-300-refresh-post-path-clears-shared-session-on-race-loss.md` — 🔴 **REVIEW (2026-09-26 UTC).** refresh POST 경로가 경쟁 패자 400 에 공유 쿠키 세션 전체를 지우던 결함(`TASK-BE-606` 후속) 수정. `grant_rejected`+`rotationSuspect` 를 GET 의 «회전 의심 → 대기 후 복귀» 와 같은 판정으로 — 즉시 지우는 대신 `REFRESH_RACE_GRACE_MS` 만큼 대기 후 `307`(`?retry=1`)로 응답, `fetch()` 가 이를 투명하게 따라가는 진짜 두 번째 요청으로 승자 쿠키를 다시 판정한다(같은 `jar` 를 그 안에서 재확인하는 것은 HTTP 상 불가능 — `session-refresh.ts` 의 `hasCompleteSession` doc 참조). GET·POST 가 공유하는 판정 함수 `hasCompleteSession` 을 신설해 AC-3(한쪽만 고쳐지는 것 방지)을 기계적으로 지킨다. 신규 단위 스위트 `auth-refresh-post-rotation-race.test.ts`(8/8) + 기존 `auth-routes.test.ts`/`auth-refresh-parallel.test.ts`/`auth-idle-refresh.test.ts` 갱신·회귀 통과. 분석=Opus 5.5 / 구현=Sonnet 5.
 - `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — 🔴 **REVIEW (2026-09-24 UTC · close-chore 4차원 검증에서 (d) 미충족 — `done/` 으로 옮기지 않음, 파일 안 `## CORRECTION` 참조).** 데모 종료/세션 만료 뒤 잔존 표면 5개 정리. AC-1 캐시 헤더는 `next.config.mjs` 가 아니라 `src/middleware.ts`(인증 라우트만 같은 path 공유 문제 — path-only `headers()` 로는 구분 불가) — 🔴🔴 실측: `(console)` 는 이미 `force-dynamic` 이라 Next 가 **모든 방문자**(샘플 포함)에게 자동 `no-store` 류 헤더를 이미 얹고 있었다(티켓의 "정적 캐싱 문제 아님" 전제가 곧 이 사실). AC-3(bfcache) = `pageshow`/`persisted` 감지 → `location.reload()`(헤더만으론 최신 Chromium 의 bfcache 진입을 못 막는다), 인증 셸에만 마운트. 🔴 **AC-4 = `resolveDemoBackendState()`(`DemoBackendNotice` 와 동일 함수) 의 `'unavailable'` 만 데모 종료 문구로 대체하지만, 그 분기는 유닛 테스트(mock 리졸버)로만 확인됐고 라이브 재현은 "측정 불가, `DEMO_API_BASE` 없음" 으로 남았다 — AC-4 자신은 측정 불가 시 사유 기록을 요구하지 않으므로 그 ⚪ 가 AC 를 닫지 못한다(Fourth Dimension 원칙). 다음 데모 창에서 재확인.** AC-5 = grep 결과 localStorage/sessionStorage 사용 0건(세션은 쿠키 전용이 하드 룰) — 유일한 실재 잔존 표면은 루트 레이아웃에 걸린 `QueryClient`(TanStack Query 캐시)가 인앱 401 리다이렉트에도 안 죽는 것 → 강제 재로그인 착지에서만 `queryClient.clear()`. AC-6 = `DemoBackendNotice.tsx` 낡은 주석("66개 중 1개 익명") 정정. `relogin-marker.test.ts`(보호 대상) 미변경, 4/4 통과. 전체 vitest 323파일/3609테스트 rc=0 · tsc/lint/build rc=0 · Playwright 3시나리오(AC-2/AC-4/AC-3+5) 실브라우저 PASS. impl PR [#4000](https://github.com/kanggle/monorepo-lab/pull/4000) squash `3d3df69af` — (a)(b)(c) 는 전부 통과(required 4/4 SUCCESS), (d) 만 열려 있다. 분석=Opus 5.5 / 구현=Sonnet 5.
 
 ## done

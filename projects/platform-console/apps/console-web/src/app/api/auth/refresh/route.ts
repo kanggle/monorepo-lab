@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getServerEnv, publicOrigin } from '@/shared/config/env';
-import {
-  ACCESS_COOKIE,
-  REFRESH_COOKIE,
-  OPERATOR_COOKIE,
-  clearFullSession,
-} from '@/shared/lib/session';
+import { REFRESH_COOKIE, clearFullSession } from '@/shared/lib/session';
 import {
   refreshSessionCookies,
   REFRESH_RACE_GRACE_MS,
+  hasCompleteSession,
 } from '@/shared/lib/session-refresh';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import {
@@ -36,6 +32,21 @@ export const runtime = 'nodejs';
  * JSON. Unchanged contract: any failure drops the whole session (IAM +
  * operator cookies) and answers `401`; an unexpected error answers `502`.
  *
+ * 🔴 TASK-PC-FE-300 — cookies are shared across browser tabs, and IAM
+ * `TASK-BE-606` gives a same-token concurrent-refresh LOSER a bare `400
+ * invalid_grant` (no revoke) within a 30s grace window — indistinguishable,
+ * by error shape alone, from a genuinely dead refresh token. Clearing
+ * immediately on that 400 (the pre-300 behaviour) meant the losing tab wiped
+ * out the WINNING tab's just-written cookies too — both tabs logged out.
+ * `grant_rejected` + `rotationSuspect` (§ `session-refresh.ts`) now gets the
+ * SAME treatment `GET` already gives its own idle-refresh rotation race
+ * (§ 2.6.1): wait `REFRESH_RACE_GRACE_MS`, then look again via a genuinely
+ * NEW incoming request — a `307` redirect to `?retry=1` that `fetch()`
+ * follows transparently (same method, same credentials), never visible to
+ * `shared/api/client.ts`. `{@link hasCompleteSession}` is the ONE judge both
+ * entry points use (AC-3) — see its doc for why the SAME `jar` can never be
+ * rechecked in place.
+ *
  * ---------------------------------------------------------------------------
  * GET — the `(console)` guard's idle-expiry hop (TASK-MONO-674, § 2.6.1)
  * ---------------------------------------------------------------------------
@@ -54,9 +65,24 @@ export const runtime = 'nodejs';
  * outside the guard.
  */
 
-export async function POST() {
+export async function POST(req: Request): Promise<NextResponse> {
   const requestId = newRequestId();
   const jar = await cookies();
+  const { searchParams } = new URL(req.url);
+  const isRetry = searchParams.get(REFRESH_RETRY_PARAM) === '1';
+
+  // Loop bound (mirrors GET § 2.6.1): the retry hop never refreshes again.
+  // Whatever a winning tab wrote is either visible by now (AC-1) or this was
+  // never a race to begin with (AC-2) — either way the answer is final.
+  if (isRetry) {
+    if (hasCompleteSession(jar)) return NextResponse.json({ ok: true });
+    clearFullSession(jar);
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'refresh failed' },
+      { status: 401 },
+    );
+  }
+
   const outcome = await refreshSessionCookies(jar, { requestId, via: 'api' });
 
   switch (outcome.kind) {
@@ -68,6 +94,17 @@ export async function POST() {
         { status: 401 },
       );
     case 'grant_rejected':
+      if (outcome.rotationSuspect) {
+        // 🔴 Rotation race (TASK-PC-FE-300, same as GET § 2.6.1): do NOT
+        // clear yet — deleting now could land AFTER a concurrent winning
+        // tab's Set-Cookie and erase it. Wait, then force a real second
+        // round trip (see route JSDoc + `hasCompleteSession`).
+        await new Promise((resolve) => setTimeout(resolve, REFRESH_RACE_GRACE_MS));
+        const url = new URL(req.url);
+        url.searchParams.set(REFRESH_RETRY_PARAM, '1');
+        return NextResponse.redirect(url.toString(), 307);
+      }
+      // Not a rotation-shaped rejection (e.g. `invalid_client`) — unchanged.
       clearFullSession(jar);
       return NextResponse.json(
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
@@ -117,7 +154,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   // is also how `retry=1` wins a rotation race), or a stale bookmark. It also
   // means a cross-site-triggered GET can only ever rotate a session that is
   // already expired.
-  if (jar.get(ACCESS_COOKIE)?.value && jar.get(OPERATOR_COOKIE)?.value) {
+  if (hasCompleteSession(jar)) {
     logger.info('idle_refresh_session_complete', { requestId, retry: isRetry });
     return to(target);
   }

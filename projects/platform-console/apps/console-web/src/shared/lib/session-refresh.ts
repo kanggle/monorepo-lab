@@ -67,6 +67,29 @@ type CookieStore = Awaited<ReturnType<typeof cookies>>;
  */
 export const REFRESH_RACE_GRACE_MS = 2000;
 
+/**
+ * The ONE judge both refresh entry points use to decide "did a concurrent
+ * refresh already land its fresh cookies" (TASK-PC-FE-300 AC-3 — a copy of
+ * this predicate is exactly how one side quietly drifts from the other,
+ * Failure Scenario 1).
+ *
+ * 🔴 Why this can only be checked on a genuinely NEW incoming request, never
+ * by re-reading the SAME `jar` after a `setTimeout`: `cookies()` is a
+ * snapshot of the Cookie header THIS particular request arrived with, frozen
+ * for that request's whole lifetime — nothing another tab's concurrent
+ * request writes to the shared browser cookie store can ever appear in it.
+ * That is exactly why both callers pair this predicate with a real second
+ * round trip rather than an in-process wait-then-recheck:
+ *   - `GET` (§ 2.6.1) redirects to its own `retry=1` hop; the BROWSER issues
+ *     that as a brand new request, carrying whatever it holds by then.
+ *   - `POST` (TASK-PC-FE-300) does the same via a 307 redirect that
+ *     `fetch()` follows transparently (same method, same credentials) — the
+ *     caller in `shared/api/client.ts` never sees the intermediate hop.
+ */
+export function hasCompleteSession(jar: CookieStore): boolean {
+  return Boolean(jar.get(ACCESS_COOKIE)?.value) && Boolean(jar.get(OPERATOR_COOKIE)?.value);
+}
+
 export type RefreshOutcome =
   | { kind: 'ok' }
   | { kind: 'no_refresh_token' }

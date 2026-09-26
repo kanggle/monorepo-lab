@@ -55,6 +55,13 @@ vi.mock('@/shared/config/env', () => ({
   }) => e.CONSOLE_PUBLIC_ORIGIN ?? e.NEXT_PUBLIC_APP_URL,
 }));
 
+// TASK-PC-FE-300 — the rotation-race wait is real time in production; keep it
+// short (but non-zero — the "did we actually wait" tests below need >0) here.
+vi.mock('@/shared/lib/session-refresh', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/lib/session-refresh')>();
+  return { ...actual, REFRESH_RACE_GRACE_MS: 30 };
+});
+
 import { GET as loginGET } from '@/app/api/auth/login/route';
 import { GET as callbackGET } from '@/app/api/auth/callback/route';
 import { POST as refreshPOST } from '@/app/api/auth/refresh/route';
@@ -105,6 +112,12 @@ beforeEach(() => {
   cookieDeletes.length = 0;
   vi.unstubAllGlobals();
 });
+
+// TASK-PC-FE-300 — POST now reads `req.url` (the rotation-race retry hop),
+// so every call site needs a real Request, not the old bare `refreshPOST()`.
+function postRefresh(query = '') {
+  return refreshPOST(new Request(`http://console.local/api/auth/refresh${query}`, { method: 'POST' }));
+}
 
 describe('GET /api/auth/login (PKCE initiation)', () => {
   it('redirects to IAM /oauth2/authorize with PKCE S256 + state and sets transient HttpOnly cookies', async () => {
@@ -400,7 +413,7 @@ describe('GET /api/auth/callback (token exchange)', () => {
 
 describe('POST /api/auth/refresh (public-client rotation)', () => {
   it('401 when no refresh cookie', async () => {
-    const res = await refreshPOST();
+    const res = await postRefresh();
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe('TOKEN_INVALID');
   });
@@ -419,7 +432,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
         { accessToken: 'new.op', expiresIn: 600, tokenType: 'admin' },
       ),
     );
-    const res = await refreshPOST();
+    const res = await postRefresh();
     expect(res.status).toBe(200);
     expect(cookieJar.get(ACCESS_COOKIE)?.value).toBe('new.acc');
     expect(cookieJar.get(REFRESH_COOKIE)?.value).toBe('new.ref');
@@ -430,7 +443,12 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
     });
   });
 
-  it('clears all session cookies (incl. operator) and 401s when IAM rejects the refresh token', async () => {
+  // TASK-PC-FE-300 — `invalid_grant` is `rotationSuspect` (§ session-refresh.ts),
+  // so a single-tab genuine rejection now takes the SAME wait-then-retry hop a
+  // race loser does (AC-2 control case for TASK-PC-FE-300-BE-606-fe-fix.md's
+  // sibling ticket). No OTHER tab ever lands fresh cookies here, so the retry
+  // still sees an incomplete session and clears exactly as before.
+  it('clears all session cookies (incl. operator) and 401s when IAM rejects the refresh token (no race — cookies never change)', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'reused.ref', opts: {} });
     cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op', opts: {} });
     vi.stubGlobal(
@@ -441,7 +459,14 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
         }),
       ),
     );
-    const res = await refreshPOST();
+    const first = await postRefresh();
+    expect(first.status).toBe(307);
+    const retryUrl = new URL(first.headers.get('location')!);
+    expect(retryUrl.searchParams.get('retry')).toBe('1');
+    // Nothing deleted yet — deleting here could race ahead of a winner's Set-Cookie.
+    expect(cookieDeletes).toEqual([]);
+
+    const res = await refreshPOST(new Request(retryUrl, { method: 'POST' }));
     expect(res.status).toBe(401);
     expect(cookieDeletes).toContain(ACCESS_COOKIE);
     expect(cookieDeletes).toContain(REFRESH_COOKIE);
@@ -497,7 +522,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
         );
       }),
     );
-    const res = await refreshPOST();
+    const res = await postRefresh();
     expect(res.status).toBe(200);
     // The assumed token is re-minted from the rotated base token.
     expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.value).toBe('new.assumed');
@@ -547,7 +572,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
         );
       }),
     );
-    const res = await refreshPOST();
+    const res = await postRefresh();
     // The base IAM + operator session stays valid (200); only the tenant
     // selection is reset — never a stale assumed token.
     expect(res.status).toBe(200);
@@ -582,7 +607,7 @@ describe('POST /api/auth/refresh (public-client rotation)', () => {
         );
       }),
     );
-    const res = await refreshPOST();
+    const res = await postRefresh();
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe('TOKEN_INVALID');
     // No stale operator token, no GAP-token fallback on /api/admin/**.
