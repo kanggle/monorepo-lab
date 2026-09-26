@@ -142,6 +142,11 @@ class CrossTenantLoginRefreshIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void seedFanPlatformOnlyCredential() {
         Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
+        // The WireMock server is static — shared by every test in this class — and its request
+        // journal outlives a test. Without this, (b)'s "0 status lookups" also counted the
+        // lookups made by (a) and (c) whenever JUnit's method order ran them first (CI run
+        // 36222202640: "received 2"). Clears the journal only; the stubs stay.
+        accountService.resetRequests();
         credentialJpaRepository.deleteAll();
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                 ACCOUNT_ID, ACCOUNT_TENANT, EMAIL,
@@ -206,6 +211,10 @@ class CrossTenantLoginRefreshIntegrationTest extends AbstractIntegrationTest {
         Pkce pkce = Pkce.create();
         MockHttpSession authed = loginThrough(FAN_CLIENT_ID, FAN_REDIRECT_URI, pkce);
         assertThat(authed).isNotNull();
+        // Control for (b)'s zero: a resolved credential DOES cost exactly one status lookup,
+        // counted from this test's own start (journal reset in @BeforeEach).
+        accountService.verify(1, WireMock.getRequestedFor(WireMock.urlPathEqualTo(
+                "/internal/accounts/" + ACCOUNT_ID + "/status")));
 
         JsonNode tokens = exchangeCode(authed, FAN_CLIENT_ID, FAN_REDIRECT_URI, pkce);
         String issued = tokens.get("refresh_token").asText();

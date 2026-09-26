@@ -99,8 +99,16 @@ public class Credential {
 
     /**
      * Return a new {@code Credential} with the given hash applied. The id,
-     * accountId, tenantId, email, createdAt are preserved; updatedAt advances to {@code now}
-     * and version is incremented by 1 (optimistic-lock contract).
+     * accountId, tenantId, email, createdAt are preserved; updatedAt advances to {@code now}.
+     *
+     * <p><b>The version is carried, not incremented</b> (TASK-BE-604 CI finding). It is the
+     * optimistic-lock token of the row this credential was read from: the persistence layer
+     * ({@code CredentialJpaEntity} {@code @Version}) compares it with the stored row on save and
+     * increments it itself. This method used to return {@code version + 1}, so the entity handed
+     * to {@code merge} claimed a version the database did not have yet, and every password
+     * change and password-reset confirmation failed with
+     * {@code ObjectOptimisticLockingFailureException} — nothing had exercised either path
+     * against a real JPA store before.</p>
      *
      * <p>Callers must have already validated the new password against
      * {@link PasswordPolicy} before computing {@code newHash}.</p>
@@ -121,7 +129,7 @@ public class Credential {
                 newHash.algorithm(),
                 this.createdAt,
                 now,
-                this.version + 1
+                this.version
         );
     }
 

@@ -229,3 +229,18 @@ iam-platform
 4. 비밀번호 재설정이 SAS 인가도 닫게(`OAuthAuthorizationRevocationPort`) — 배수 기간의 이메일 키 세션(⑨-2).
 5. `RefreshTokenJpaEntity` 의 `jti`/`rotated_from` 길이 선언(36)이 Flyway `V0014`(255)와 어긋남 — Hibernate DDL 을 쓰는 H2 슬라이스에서 SAS 토큰 INSERT 가 깨진다(⑤ 에서 발견 · 운영 DB 는 Flyway 라 무해).
 6. web-store 역할 가드(`account_type_mismatch`)의 e2e 커버리지 상실(⑥) — 필요하면 SSO 경로로 다시 구성(단, 1 을 고치면 그 경로도 사라진다).
+
+---
+
+## CORRECTION (2026-09-26 UTC) — PR #4033 CI `Integration (iam B)` 111 중 2 실패 (run 36222202640, job 108349543320)
+
+**1. `CrossTenantLoginRefreshIntegrationTest` AC-3 (b) — `Expected exactly 0 requests matching GET /internal/accounts/…/status but received 2` → 테스트 결함, 코드 결함 아님.**
+- 코드 판독: 소비자 client 범위 조회 실패는 `CredentialAuthenticationProvider.resolveCredential` 에서 `Lookup.failed` 로 끝나고, `authenticate` 는 `lookup.credential() == null` 이면 상태 조회(`lookupAccountStatus`) **전에** `BadCredentialsException` 을 던진다. 단위 `consumerClient_scopedMiss_noCrossTenantFallback` 이 `verifyNoInteractions(accountServicePort)` 로 이미 고정한다.
+- 원인: WireMock 서버가 `static`(클래스 공유)이고 요청 저널이 테스트 사이에 초기화되지 않았다. JUnit 기본 메서드 순서에서 (a) · (c) 가 (b) 보다 먼저 돌았고, 각자 로그인 1회 = 상태 조회 1회 → 합계 2.
+- 수정: `@BeforeEach` 에서 `accountService.resetRequests()`(스텁 유지, 저널만 비움). 단언은 그대로 두고, (c) 에 대조군 `verify(1, …/status)` 를 추가 — 자격을 찾으면 정확히 1회, 이 테스트 시작부터 센다는 것을 같은 저널로 보인다.
+
+**2. `OAuth2RefreshTokenIntegrationTest` AC-2 비밀번호 재설정 — `ObjectOptimisticLockingFailureException … CredentialJpaEntity#71` → 🔴 운영 결함(이 티켓 이전부터).**
+- 위치: `Credential.changePassword` 가 `version + 1` 을 돌려줬다(`domain/credentials/Credential.java`). `CredentialRepositoryImpl.save` → `CredentialJpaEntity.fromDomain`(버전 복사) → `save` = `merge`. Hibernate 는 detached 엔티티의 `@Version`(v+1)이 행(v)과 다르면 `StaleObjectStateException` 을 던진다 ⇒ **기존 자격의 비밀번호 변경(`ChangePasswordUseCase`) · 재설정 확인(`ConfirmPasswordResetUseCase`)은 항상 실패**했다. 픽스처 문제가 아니다 — 이 IT 가 처음으로 두 경로를 실제 JPA 저장소에 태웠다(다른 IT · e2e 에 호출자 0, grep).
+- 로컬 재현(임시 H2 `@DataJpaTest`, 미커밋): 수정 전 `read → changePassword → save` = CI 와 **같은 메시지**의 `ObjectOptimisticLockingFailureException`. 수정 후 저장 성공 · DB 버전 0→1 · 같은 버전에서 읽은 두 번째 변경은 **여전히** 낙관적 락으로 거부(락 의미 보존).
+- 수정: `changePassword` 는 읽은 버전을 **그대로** 싣는다 — 그것이 낙관적 락 토큰이고 증가는 `@Version` 이 한다. 단위 `CredentialTest`(3→3 · 0→0) · `ConfirmPasswordResetUseCaseTest` · `ChangePasswordUseCaseTest`(저장 버전 = 읽은 버전)로 갱신. 권위 테스트 = `CredentialJpaRepositoryTest`(Testcontainers MySQL) 2건 추가: 읽기→변경→저장 성공 + 버전 +1 · 오래된 버전의 동시 변경은 거부. ⚪ Docker 부재로 로컬 미실행 → CI 판정.
+- 🔴 영향: `PATCH /api/auth/password` · `POST /api/auth/password-reset/confirm` 은 배포된 코드에서 기존 사용자에게 500(또는 매핑된 오류)이었을 것이다 — 운영 로그로 확인할 후속 후보.
