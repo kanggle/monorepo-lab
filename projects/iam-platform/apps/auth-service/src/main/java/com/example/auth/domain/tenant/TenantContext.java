@@ -25,6 +25,21 @@ public record TenantContext(String tenantId, String tenantType) {
      */
     public static final String PLATFORM_SCOPE_TENANT_ID = "*";
 
+    /**
+     * The operator console's own tenant slug — the {@code oauth_clients.tenant_id} of the
+     * {@code platform-console-web} client (seeded {@code gap} in V0015, renamed {@code iam} in
+     * V0024) and a reserved slug no consumer tenant can register (multi-tenancy.md § TenantId).
+     *
+     * <p>TASK-BE-604 (owner decision D, 2026-09-26): the form-login cross-tenant credential
+     * fallback is kept only for a login initiated by a client of THIS tenant. Operators whose
+     * only credential lives in a consumer tenant (ADR-MONO-044 D5 self-onboarding: operator
+     * {@code oidc_subject} = consumer {@code account_id}, no {@code iam} credential) reach the
+     * console only through that fallback. Until now the value existed only in SQL migrations;
+     * it is a constant here, not configuration, because it is the same kind of fact as
+     * {@link #PLATFORM_SCOPE_TENANT_ID} — a reserved platform slug, not a per-deployment choice.
+     */
+    public static final String CONSOLE_TENANT_ID = "iam";
+
     public TenantContext {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         if (tenantId.isBlank()) {

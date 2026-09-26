@@ -205,6 +205,7 @@ Refresh token rotation 성공 시 발행.
 
 **필드 노트** (TASK-BE-603):
 - `accountId`: **계정 UUID**. SAS `refresh_token` grant 경로(`SasRefreshTokenAuthenticationProvider`)는 SAS 인가의 principal details `account_id` 를 싣는다. 🔴 TASK-BE-603 이전에는 principal name(= **로그인 이메일**, PII)을 실었다 — 필드·스키마 불변, **값의 의미만 바로잡힘**. 소비자(security-service)는 처음부터 UUID 를 전제했다(`login_history.account_id` VARCHAR(36) · `account.deleted` 익명화 · 탐지 규칙 키) — 그래서 이전의 이메일 값은 36자 초과 시 적재 실패, 이하이면 UUID 이력과 갈라진 행이 되었다. 배포 이후 발행분부터 UUID 로 통일된다(과거 행은 이행하지 않음). 같은 교정이 이 경로의 `auth.token.reuse.detected` · `auth.token.tenant.mismatch` · `auth.session.revoked`(재사용 cascade) 에도 적용된다.
+- `tenantId` (TASK-BE-604): SAS 경로는 **세션의 로그인 시점 테넌트**(= 토큰의 `tenant_id`, 위 정의 그대로)를 싣는다. 이전엔 client 의 테넌트를 실었다 — 교차 테넌트 로그인 세션(콘솔 client 로 로그인한 소비자 테넌트 자격)에서만 값이 달라진다(`iam` → 그 계정의 테넌트).
 
 **Consumers**: security-service (login_history에 outcome=REFRESH 기록)
 
@@ -263,6 +264,12 @@ Refresh token rotation 시 제출된 token의 `tenant_id`와 새로 발급할 to
 ```
 
 **필드 노트** (TASK-BE-603): `accountId` = 계정 UUID(SAS 경로 포함 — 이전엔 로그인 이메일).
+
+**필드 노트** (TASK-BE-604, 2026-09-26): SAS 경로의 `expectedTenantId` = **세션의 로그인 시점 테넌트**(SAS 인가의 principal details
+`tenant_id` = 새 토큰에 실릴 `tenant_id` — 위 정의 그대로), `submittedTenantId` = 미러 행의 테넌트. BE-604 이전의 SAS 경로는
+`expectedTenantId` 에 **client 의 테넌트**를 실었다 — 그래서 교차 테넌트 로그인 세션(콘솔 client · 소비자 테넌트 자격)은 refresh
+마다 이 이벤트를 냈고, 그 refresh 는 SAS 기본 provider 로 흘러 200 이 되었다(BE-604 AC-0 ③(b)). 지금은 그런 세션이 이 이벤트를
+내지 않고, 이 이벤트가 나면 그 refresh 는 실제로 `400 invalid_grant` 로 거부된다. 스키마 불변 — 값의 의미만 정의에 맞춰졌다.
 
 **Consumers**: security-service (최고 우선순위 보안 이벤트)
 

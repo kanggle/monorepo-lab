@@ -15,10 +15,11 @@ package com.example.auth.application.port;
  *
  * <p>TASK-BE-603: the {@code refresh_tokens} mirror rows are now keyed by the account UUID
  * (they used to copy the principal name, i.e. the email), so {@code revokeAllByAccountId}
- * reaches new SAS mirror rows. That does NOT refuse the next refresh: a rejection by the
- * custom refresh provider falls through to SAS's built-in refresh provider, which checks the
- * authorization only (measured in CI — see TASK-BE-603 § AC-2). This port, which closes the
- * authorization itself, is the enforcement.
+ * reaches new SAS mirror rows. Until TASK-BE-604 that did NOT refuse the next refresh (the
+ * custom provider's rejection fell through to SAS's built-in refresh provider, which checks the
+ * authorization only — TASK-BE-603 § AC-2); BE-604 removed that provider, so it does now. This
+ * port is still what reaches every SAS session of an account, including those whose mirror
+ * row predates BE-603 and is keyed by the email: it closes the authorization itself.
  *
  * <p>Implementations MUST confine the revoke to the given account: an email is not unique
  * across tenants (the same address may own an account in {@code fan-platform} and in

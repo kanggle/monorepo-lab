@@ -15,6 +15,8 @@ import org.springframework.security.web.savedrequest.RequestCache;
 import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * TASK-BE-396 (ADR-006 option 1) — resolves the tenant a social-login principal
  * should be attributed to, from the OIDC client that <b>initiated</b> the SAS
@@ -74,6 +76,24 @@ public class SavedRequestTenantResolver {
         return new Resolution(tenant.tenantId(), tenant.tenantType(), redirectUrl);
     }
 
+    /**
+     * TASK-BE-604 — the tenant of the OIDC client that <b>initiated</b> the browser flow, or
+     * empty when there is none: no saved request, a saved request that is not a
+     * {@code /oauth2/authorize}, no {@code client_id}, an unknown client, or a client without
+     * tenant settings.
+     *
+     * <p>Unlike {@link #resolve}, this never substitutes {@link TenantContext#DEFAULT_TENANT_ID}.
+     * The form-login provider has to tell "the user came from a {@code fan-platform} client"
+     * apart from "the user came from no client at all", and {@link #resolve} answers both
+     * with {@code fan-platform} — which is right for attributing a new social identity or a
+     * signup, and wrong for deciding which accounts a login may reach.
+     */
+    public Optional<String> initiatingClientTenant(HttpServletRequest request,
+                                                   HttpServletResponse response) {
+        SavedRequest saved = requestCache.getRequest(request, response);
+        return Optional.ofNullable(clientTenant(extractClientId(saved))).map(TenantInfo::tenantId);
+    }
+
     private String extractClientId(SavedRequest saved) {
         if (saved == null) {
             return null;
@@ -91,20 +111,31 @@ public class SavedRequestTenantResolver {
         return params[0];
     }
 
+    /** The initiating client's tenant, or {@code null} when it cannot be determined. */
+    private TenantInfo clientTenant(String clientId) {
+        if (clientId == null) {
+            return null;
+        }
+        RegisteredClient client = registeredClientRepository.findByClientId(clientId);
+        if (client == null) {
+            return null;
+        }
+        ClientSettings cs = client.getClientSettings();
+        Object rawTenantId = cs.getSetting(OAuthClientMapper.SETTING_TENANT_ID);
+        Object rawTenantType = cs.getSetting(OAuthClientMapper.SETTING_TENANT_TYPE);
+        if (rawTenantId instanceof String tid && rawTenantType instanceof String ttype
+                && !tid.isBlank() && !ttype.isBlank()) {
+            log.debug("SavedRequestTenantResolver: resolved tenant_id={} tenant_type={} "
+                    + "from initiating client_id={}", tid.trim(), ttype.trim(), clientId);
+            return new TenantInfo(tid.trim(), ttype.trim());
+        }
+        return null;
+    }
+
     private TenantInfo resolveTenant(String clientId) {
-        if (clientId != null) {
-            RegisteredClient client = registeredClientRepository.findByClientId(clientId);
-            if (client != null) {
-                ClientSettings cs = client.getClientSettings();
-                Object rawTenantId = cs.getSetting(OAuthClientMapper.SETTING_TENANT_ID);
-                Object rawTenantType = cs.getSetting(OAuthClientMapper.SETTING_TENANT_TYPE);
-                if (rawTenantId instanceof String tid && rawTenantType instanceof String ttype
-                        && !tid.isBlank() && !ttype.isBlank()) {
-                    log.debug("SavedRequestTenantResolver: resolved tenant_id={} tenant_type={} "
-                            + "from initiating client_id={}", tid.trim(), ttype.trim(), clientId);
-                    return new TenantInfo(tid.trim(), ttype.trim());
-                }
-            }
+        TenantInfo fromClient = clientTenant(clientId);
+        if (fromClient != null) {
+            return fromClient;
         }
 
         // TASK-BE-407: tenant_type via the resolver. For DEFAULT_TENANT_ID this is the

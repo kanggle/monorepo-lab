@@ -486,6 +486,208 @@ class SasRefreshTokenAuthenticationProviderTest {
                 any(), any(), any(), any(), eq(true), eq(3));
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-BE-604 — the tenant check compares the mirror row with the SESSION's
+    // login-time tenant (principal details tenant_id = the token's tenant_id claim),
+    // not with the client's tenant; the rotated row carries that same tenant.
+    //
+    // 🔵 Cell A is the population the old client-tenant comparison broke: a console
+    //    (tenant iam) session of an account whose credential lives in fan-platform.
+    //    It refreshed only because SAS's built-in provider retried the grant.
+    // 🔴 Cell B is the control that keeps the check a check: a row whose tenant is
+    //    NOT the session's is still refused.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-604 A: cross-tenant console session (client iam, login tenant fan-platform, row fan-platform) "
+            + "→ rotates; new row + refreshed event carry fan-platform; no mismatch event")
+    void crossTenantConsoleSession_rowMatchesSessionTenant_rotates() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient consoleClient = buildClientInTenant("platform-console-web", "iam");
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(consoleClient,
+                "operator@example.com", accountId, Set.of("profile"), activeRefreshToken(tokenValue));
+        RefreshToken row = mirrorRow(tokenValue, accountId, "fan-platform");
+
+        rotateSuccessfully(consoleClient, authorization, tokenValue, Optional.of(row));
+
+        RefreshToken rotated = savedRow("new-refresh-opaque");
+        assertThat(rotated.getTenantId())
+                .as("the rotated row carries the login-time tenant, like the first row — not the client's iam")
+                .isEqualTo("fan-platform");
+        verify(authEventPublisher).publishTokenRefreshed(
+                eq(accountId), eq("fan-platform"), eq(tokenValue), eq("new-refresh-opaque"), any());
+        verify(authEventPublisher, never()).publishTokenTenantMismatch(
+                any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-604 B (control): row tenant ≠ session tenant → INVALID_GRANT TOKEN_TENANT_MISMATCH, "
+            + "event expected = session tenant, nothing minted")
+    void rowTenantDiffersFromSessionTenant_rejected() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient consoleClient = buildClientInTenant("platform-console-web", "iam");
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(consoleClient);
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(consoleClient,
+                "operator@example.com", accountId, Set.of("profile"), activeRefreshToken(tokenValue));
+        // The row carries the CLIENT's tenant — exactly what the pre-BE-604 persistRotation wrote.
+        RefreshToken row = mirrorRow(tokenValue, accountId, "iam");
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(clientPrincipal, tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(row));
+        when(tokenReuseDetector.isReuse(row)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .satisfies(e -> {
+                    var error = ((OAuth2AuthenticationException) e).getError();
+                    assertThat(error.getErrorCode()).isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+                    assertThat(error.getDescription()).isEqualTo("TOKEN_TENANT_MISMATCH");
+                });
+
+        verify(authEventPublisher).publishTokenTenantMismatch(
+                eq(accountId), eq("iam"), eq("fan-platform"), eq(tokenValue), any(), any());
+        verifyNoInteractions(tokenGenerator);
+        verify(authorizationService, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BE-604: a principal WITHOUT tenant details → session tenant = client tenant "
+            + "(the claim's own fallback) — a row of another tenant is refused")
+    void principalWithoutTenantDetails_fallsBackToClientTenant() {
+        RegisteredClient registeredClient = buildDemoSpaClient(); // fan-platform
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization =
+                buildAuthorization(registeredClient, "no-details-principal", activeRefreshToken(tokenValue));
+        RefreshToken row = mirrorRow(tokenValue, "no-details-principal", "ecommerce");
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(clientPrincipal, tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(row));
+        when(tokenReuseDetector.isReuse(row)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+
+        verify(authEventPublisher).publishTokenTenantMismatch(
+                eq("no-details-principal"), eq("ecommerce"), eq("fan-platform"), eq(tokenValue), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-604 AC-1 (unit leg): revoked mirror row → INVALID_GRANT and nothing is minted or saved")
+    void revokedMirrorRow_rejected() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        OAuth2ClientAuthenticationToken clientPrincipal = buildAuthenticatedClient(registeredClient);
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(registeredClient,
+                "user@example.com", accountId, Set.of("openid"), activeRefreshToken(tokenValue));
+        RefreshToken row = mirrorRow(tokenValue, accountId, "fan-platform");
+        row.revoke();
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(clientPrincipal, tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(row));
+        when(tokenReuseDetector.isReuse(row)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
+                .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+
+        verifyNoInteractions(tokenGenerator);
+        verify(authorizationService, never()).save(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BE-604 side defect: mirror row MISSING on a cross-tenant session → the row this rotation "
+            + "writes carries the session tenant, so the session's own next refresh accepts it")
+    void missingMirrorRow_rotatedRowCarriesSessionTenant() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient consoleClient = buildClientInTenant("platform-console-web", "iam");
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(consoleClient,
+                "operator@example.com", accountId, Set.of("profile"), activeRefreshToken(tokenValue));
+
+        rotateSuccessfully(consoleClient, authorization, tokenValue, Optional.empty());
+
+        assertThat(savedRow("new-refresh-opaque").getTenantId()).isEqualTo("fan-platform");
+    }
+
+    private static OAuth2RefreshToken activeRefreshToken(String value) {
+        return new OAuth2RefreshToken(value, Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+    }
+
+    private static RefreshToken mirrorRow(String jti, String accountId, String tenantId) {
+        return RefreshToken.create(jti, accountId, tenantId,
+                Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), null, null, null);
+    }
+
+    private static OAuth2RefreshTokenAuthenticationToken refreshRequest(
+            OAuth2ClientAuthenticationToken clientPrincipal, String tokenValue) {
+        OAuth2RefreshTokenAuthenticationToken auth = mock(OAuth2RefreshTokenAuthenticationToken.class);
+        when(auth.getPrincipal()).thenReturn(clientPrincipal);
+        when(auth.getRefreshToken()).thenReturn(tokenValue);
+        return auth;
+    }
+
+    /** Drives one rotation that must succeed; stubs access + refresh generation only (no openid). */
+    private void rotateSuccessfully(RegisteredClient client, OAuth2Authorization authorization,
+                                    String tokenValue, Optional<RefreshToken> existingRow) {
+        OAuth2RefreshTokenAuthenticationToken auth =
+                refreshRequest(buildAuthenticatedClient(client), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(existingRow);
+        existingRow.ifPresent(row -> when(tokenReuseDetector.isReuse(row)).thenReturn(false));
+
+        Instant now = Instant.now();
+        OAuth2Token generatedAccess = mock(OAuth2Token.class);
+        when(generatedAccess.getTokenValue()).thenReturn("new-access-jwt");
+        when(generatedAccess.getIssuedAt()).thenReturn(now);
+        when(generatedAccess.getExpiresAt()).thenReturn(now.plusSeconds(300));
+        OAuth2Token generatedRefresh = mock(OAuth2Token.class);
+        when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
+        when(generatedRefresh.getIssuedAt()).thenReturn(now);
+        when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
+        doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(provider.authenticate(auth)).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private RefreshToken savedRow(String jti) {
+        ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, atLeastOnce()).save(saved.capture());
+        return saved.getAllValues().stream()
+                .filter(t -> jti.equals(t.getJti()))
+                .findFirst().orElseThrow();
+    }
+
+    private RegisteredClient buildClientInTenant(String clientId, String tenantId) {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId(clientId)
+                .clientAuthenticationMethod(
+                        org.springframework.security.oauth2.core.ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                .redirectUri("http://localhost:3000/api/auth/callback")
+                .scope("openid")
+                .clientName(tenantId + "|B2B")
+                .build();
+    }
+
     /** An authorization carrying the principal shape the browser login paths build. */
     private OAuth2Authorization buildLoginAuthorization(RegisteredClient client, String email,
                                                          String accountId, Set<String> scopes,

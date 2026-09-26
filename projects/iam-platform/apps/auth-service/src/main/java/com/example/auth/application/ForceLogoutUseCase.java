@@ -64,8 +64,9 @@ public class ForceLogoutUseCase {
         }
 
         // Rows keyed by the account id — the legacy custom-JWT refresh tokens and (since
-        // TASK-BE-603) the SAS mirror rows. Revoking a SAS mirror row does not by itself
-        // refuse that session's refresh (TASK-BE-603 § AC-2) — the port below does.
+        // TASK-BE-603) the SAS mirror rows. Since TASK-BE-604 a revoked SAS mirror row refuses
+        // that session's refresh by itself; the port below also reaches the sessions whose
+        // mirror row predates BE-603 (email-keyed) by closing the authorization.
         int legacyRevoked = refreshTokenRepository.revokeAllByAccountId(accountId);
         // TASK-BE-601: the SAS sessions. Their authorizations are keyed by the login email,
         // so the line above never reaches the authorization itself (and mirror rows written

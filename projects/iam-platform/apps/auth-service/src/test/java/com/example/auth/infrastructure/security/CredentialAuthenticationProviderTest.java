@@ -191,8 +191,10 @@ class CredentialAuthenticationProviderTest {
         request.addHeader("User-Agent", "Mozilla/5.0 Chrome/120.0");
         MockHttpServletResponse response = new MockHttpServletResponse();
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request, response));
-        when(savedRequestTenantResolver.resolve(request, response))
-                .thenReturn(new SavedRequestTenantResolver.Resolution(clientTenant, null, null));
+        // TASK-BE-604: the provider asks for the INITIATING client's tenant only — resolve()
+        // would substitute fan-platform for "no client" and hide the difference.
+        when(savedRequestTenantResolver.initiatingClientTenant(request, response))
+                .thenReturn(Optional.ofNullable(clientTenant));
         return request;
     }
 
@@ -237,10 +239,11 @@ class CredentialAuthenticationProviderTest {
     }
 
     @Test
-    @DisplayName("BE-599 AC-2: cross-tenant fallback → the failed event carries the ACCOUNT's tenant, not the initiating client's")
+    @DisplayName("BE-599 AC-2: cross-tenant fallback (console client) → the failed event carries the ACCOUNT's tenant, not the initiating client's")
     void wrongPassword_crossTenantFallback_usesAccountTenant() {
-        bindRequest("ecommerce");
-        when(credentialRepository.findByTenantIdAndEmail("ecommerce", EMAIL)).thenReturn(Optional.empty());
+        // TASK-BE-604: the fallback exists only for the console client now.
+        bindRequest("iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credentialIn("fan-platform")));
         when(passwordHasher.verify("wrong", "$argon2id$stored-hash")).thenReturn(false);
 
@@ -253,17 +256,111 @@ class CredentialAuthenticationProviderTest {
     }
 
     @Test
-    @DisplayName("BE-599: success through the cross-tenant fallback → succeeded carries the account's tenant")
+    @DisplayName("BE-599 / BE-604: success through the console cross-tenant fallback → the principal and succeeded carry the account's tenant")
     void success_crossTenantFallback_usesAccountTenant() {
-        bindRequest("ecommerce");
-        when(credentialRepository.findByTenantIdAndEmail("ecommerce", EMAIL)).thenReturn(Optional.empty());
+        bindRequest("iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credentialIn("fan-platform")));
         when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
         when(tenantTypePort.resolve("fan-platform")).thenReturn("B2C_CONSUMER");
 
-        provider.authenticate(attempt(PASSWORD));
+        Authentication result = provider.authenticate(attempt(PASSWORD));
 
         verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("fan-platform"), any());
+        // The login-time tenant the SAS session carries — and that the refresh tenant check
+        // compares the mirror row with (TASK-BE-604 AuthorizationSessionTenant).
+        @SuppressWarnings("unchecked")
+        Map<String, Object> details = (Map<String, Object>) result.getDetails();
+        assertThat(details).containsEntry("tenant_id", "fan-platform");
+    }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-BE-604 — which accounts may log into which clients (owner decision D)
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-604 D: consumer client, scoped miss, account exists in another tenant → refused like a wrong password; "
+            + "no cross-tenant lookup, no password check")
+    void consumerClient_scopedMiss_noCrossTenantFallback() {
+        bindRequest("ecommerce");
+        when(credentialRepository.findByTenantIdAndEmail("ecommerce", EMAIL)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
+                .isExactlyInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid credentials");
+
+        // 🔴 The load-bearing assertion: the fan-platform credential is never even looked at.
+        verify(credentialRepository, never()).findAllByEmail(any());
+        verifyNoInteractions(passwordHasher, accountServicePort, tenantTypePort);
+        // Same telemetry as an unknown email under that client: no identity, the client's tenant.
+        verify(loginEventRecorder).recordAttempted(isNull(), eq(EMAIL_HASH), eq("ecommerce"), any());
+        verify(loginEventRecorder).recordFailed(
+                isNull(), eq(EMAIL_HASH), eq("ecommerce"), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-604 D (control): consumer client, scoped HIT → logs in, principal tenant = the client's tenant")
+    void consumerClient_scopedHit_succeeds() {
+        bindRequest("ecommerce");
+        when(credentialRepository.findByTenantIdAndEmail("ecommerce", EMAIL))
+                .thenReturn(Optional.of(credentialIn("ecommerce")));
+        when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
+        when(tenantTypePort.resolve("ecommerce")).thenReturn("B2C_CONSUMER");
+
+        Authentication result = provider.authenticate(attempt(PASSWORD));
+
+        assertThat(result.isAuthenticated()).isTrue();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> details = (Map<String, Object>) result.getDetails();
+        assertThat(details).containsEntry("tenant_id", "ecommerce");
+        verify(credentialRepository, never()).findAllByEmail(any());
+    }
+
+    @Test
+    @DisplayName("BE-604 D: console client, scoped HIT (an iam credential) → no cross-tenant lookup")
+    void consoleClient_scopedHit_noFallback() {
+        bindRequest("iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL))
+                .thenReturn(Optional.of(credentialIn("iam")));
+        when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
+        when(tenantTypePort.resolve("iam")).thenReturn("B2B_ENTERPRISE");
+
+        provider.authenticate(attempt(PASSWORD));
+
+        verify(credentialRepository, never()).findAllByEmail(any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("iam"), any());
+    }
+
+    @Test
+    @DisplayName("BE-604 D: console client, scoped miss, email in TWO consumer tenants → fail-closed LOGIN_TENANT_AMBIGUOUS")
+    void consoleClient_scopedMiss_ambiguous_failsClosed() {
+        bindRequest("iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
+        when(credentialRepository.findAllByEmail(EMAIL))
+                .thenReturn(List.of(credentialIn("fan-platform"), credentialIn("ecommerce")));
+
+        assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
+                .isExactlyInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid credentials");
+
+        verifyNoInteractions(passwordHasher);
+        verify(loginEventRecorder).recordFailed(
+                isNull(), eq(EMAIL_HASH), eq("iam"), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+    }
+
+    @Test
+    @DisplayName("BE-604: no initiating client (direct /login) → the cross-tenant lookup runs WITHOUT a fan-platform-scoped lookup first")
+    void noInitiatingClient_crossTenantLookupOnly() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credentialIn("ecommerce")));
+        when(passwordHasher.verify(PASSWORD, "$argon2id$stored-hash")).thenReturn(true);
+        when(tenantTypePort.resolve("ecommerce")).thenReturn("B2C_CONSUMER");
+
+        provider.authenticate(attempt(PASSWORD));
+
+        verify(credentialRepository, never()).findByTenantIdAndEmail(any(), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("ecommerce"), any());
     }
 
     @Test
@@ -287,7 +384,7 @@ class CredentialAuthenticationProviderTest {
     void unknownEmail_withClientTenant_usesClientTenant() {
         bindRequest("ecommerce");
         when(credentialRepository.findByTenantIdAndEmail("ecommerce", EMAIL)).thenReturn(Optional.empty());
-        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of());
+        // TASK-BE-604: a consumer client's scoped miss ends the lookup — no findAllByEmail.
 
         assertThatThrownBy(() -> provider.authenticate(attempt(PASSWORD)))
                 .isInstanceOf(BadCredentialsException.class);

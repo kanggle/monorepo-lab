@@ -49,9 +49,14 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationToken;
+
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * Spring Authorization Server configuration — Phase 2c (TASK-BE-251) + TASK-BE-252.
@@ -119,21 +124,23 @@ public class AuthorizationServerConfig {
      * <p>Phase 2b: after SAS configurer init, retrieves {@link OAuth2TokenGenerator} from the
      * {@link HttpSecurity} shared objects and creates a {@link SasRefreshTokenAuthenticationProvider}
      * that integrates domain reuse-detection. The provider is added to the token endpoint
-     * authentication manager; it takes priority over SAS's built-in refresh_token provider
-     * because it is added first.
+     * authentication manager, and SAS's built-in refresh_token provider is REMOVED
+     * ({@link #removeBuiltInRefreshTokenProvider}).
      *
      * <p>🔴 <b>"Priority" is not "replacement"</b> (TASK-BE-603, measured in CI run
-     * 36134528069). The built-in {@code OAuth2RefreshTokenAuthenticationProvider} stays in
-     * the list after ours ({@code OAuth2TokenEndpointConfigurer.init} prepends custom
-     * providers to the defaults). {@code ProviderManager} catches an
-     * {@code AuthenticationException} from one provider and tries the next, so every
-     * {@code invalid_grant} the custom provider raises on its domain checks — mirror row
-     * revoked / expired, TOKEN_TENANT_MISMATCH — is retried by the built-in provider, which
-     * checks the SAS authorization only and succeeds. Removing it is a separate decision:
-     * by code reading (not measured), an account whose own tenant differs from the client's
-     * (e.g. a pre-BE-507 fan-platform account signing in through a client of another
-     * tenant) gets a mirror row whose tenant is its own, trips TOKEN_TENANT_MISMATCH here on
-     * every refresh, and currently refreshes only through that fall-through.
+     * 36134528069). Adding ours only prepended it: the built-in
+     * {@code OAuth2RefreshTokenAuthenticationProvider} stayed in the list after it, and
+     * {@code ProviderManager} catches an {@code AuthenticationException} from one provider and
+     * tries the next — so every {@code invalid_grant} the custom provider raised on its domain
+     * checks (mirror row revoked / expired, TOKEN_TENANT_MISMATCH) was retried by the built-in
+     * provider, which checks the SAS authorization only and succeeded. Password reset and the
+     * reuse-detection revoke-all therefore never ended a SAS session.
+     *
+     * <p>TASK-BE-604 (owner decision D, 2026-09-26) removes it. The one population that
+     * refreshed only through that fall-through — a session whose login-time tenant differs
+     * from the client's, e.g. an ADR-MONO-044 D5 operator in the console — keeps refreshing
+     * because the custom provider now compares the mirror row with the session's tenant
+     * instead of the client's ({@link AuthorizationSessionTenant}).
      *
      * <p>Phase 2c: explicitly enables token revocation ({@code POST /oauth2/revoke}, RFC 7009)
      * and token introspection ({@code POST /oauth2/introspect}, RFC 7662). The introspection
@@ -236,6 +243,13 @@ public class AuthorizationServerConfig {
                                         tokenEndpoint
                                                 .authenticationProvider(
                                                         buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator))
+                                                // TASK-BE-604: REPLACE, not precede, SAS's built-in
+                                                // refresh_token provider. The consumer runs in
+                                                // OAuth2TokenEndpointConfigurer.init on the full list
+                                                // (defaults + the custom providers above), before any
+                                                // of them is registered with HttpSecurity.
+                                                .authenticationProviders(
+                                                        AuthorizationServerConfig::removeBuiltInRefreshTokenProvider)
                                                 // TASK-BE-327: assume-tenant token-exchange grant.
                                                 // The converter filters by grant_type (returns null
                                                 // on mismatch → existing grants byte-unchanged); the
@@ -331,6 +345,36 @@ public class AuthorizationServerConfig {
         DelegatingAuthenticationEntryPoint entryPoint = new DelegatingAuthenticationEntryPoint(byHint);
         entryPoint.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/login"));
         return entryPoint;
+    }
+
+    /**
+     * TASK-BE-604 — removes SAS's built-in {@link OAuth2RefreshTokenAuthenticationProvider} from
+     * the token endpoint's provider list and asserts that exactly one remaining provider
+     * handles the {@code refresh_token} grant.
+     *
+     * <p>The assertion is the point, not the removal: the defect was a SECOND provider for the
+     * same grant, and "remove the class we know about" alone would pass silently if a future
+     * SAS version registered the grant under another class. With a second refresh-capable
+     * provider every domain rejection becomes retryable again, so startup fails instead.
+     * Zero would mean the custom provider was not added — every refresh would then be
+     * unsupported — so that fails too.
+     *
+     * @throws IllegalStateException when anything other than exactly one refresh-capable
+     *                               provider remains
+     */
+    static void removeBuiltInRefreshTokenProvider(List<AuthenticationProvider> providers) {
+        providers.removeIf(provider -> provider instanceof OAuth2RefreshTokenAuthenticationProvider);
+        List<AuthenticationProvider> refreshCapable = providers.stream()
+                .filter(provider -> provider.supports(OAuth2RefreshTokenAuthenticationToken.class))
+                .toList();
+        if (refreshCapable.size() != 1
+                || !(refreshCapable.get(0) instanceof SasRefreshTokenAuthenticationProvider)) {
+            throw new IllegalStateException("TASK-BE-604: the token endpoint must have exactly one "
+                    + "refresh_token provider, SasRefreshTokenAuthenticationProvider — found "
+                    + refreshCapable.stream().map(p -> p.getClass().getName()).toList()
+                    + ". A second one turns every domain rejection (revoked / expired mirror row, "
+                    + "TOKEN_TENANT_MISMATCH) back into a retry.");
+        }
     }
 
     /**

@@ -48,7 +48,11 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 
 **토큰 재사용 탐지 로직**: `POST /api/auth/refresh`가 `jti=A`로 rotation을 요청했을 때, A에 이미 `rotated_from`을 참조하는 자식이 존재하면 → 재사용 탐지. 해당 `account_id`의 모든 refresh_token을 `revoked=TRUE`로 일괄 처리 + `auth.token.reuse.detected` 이벤트 발행.
 
-> 🔴 **SAS 경로에서 미러 행 `revoked` 는 refresh 를 막지 못한다** (TASK-BE-603 CORRECTION, CI 실측 2026-09-25 UTC). `SasRefreshTokenAuthenticationProvider` 가 폐기·만료된 미러 행에 `invalid_grant` 를 던져도 SAS 기본 `OAuth2RefreshTokenAuthenticationProvider` 가 뒤에 등록돼 있어 `ProviderManager` 가 그쪽으로 넘기고, 기본 provider 는 SAS 인가(`oauth2_authorization`)만 보고 통과시킨다. SAS 세션을 실제로 끊는 것은 인가 무효화(`SasAuthorizationRevocationAdapter`, 강제 로그아웃 · 잠금)뿐이다. 기본 provider 제거는 후속 소유자 결정.
+> ~~🔴 **SAS 경로에서 미러 행 `revoked` 는 refresh 를 막지 못한다** (TASK-BE-603 CORRECTION, CI 실측 2026-09-25 UTC).~~ → **TASK-BE-604 (2026-09-26 UTC) 이후 막는다.** 위 문장은 BE-603 당시 참이었다: `SasRefreshTokenAuthenticationProvider` 가 폐기·만료된 미러 행에 `invalid_grant` 를 던져도 SAS 기본 `OAuth2RefreshTokenAuthenticationProvider` 가 뒤에 등록돼 있어 `ProviderManager` 가 그쪽으로 넘겼고, 기본 provider 는 SAS 인가(`oauth2_authorization`)만 보고 통과시켰다. BE-604 가 기본 provider 를 토큰 엔드포인트에서 제거했다(`AuthorizationServerConfig#removeBuiltInRefreshTokenProvider`) ⇒ **미러 행 폐기·만료·테넌트 불일치는 그 자체로 최종 거부(`400 invalid_grant`)** 다. 비밀번호 재설정(`revokeAllByAccountId`)과 SAS 재사용 탐지의 «계정 전체 폐기» 가 이제 실제로 세션을 끝낸다. `SasAuthorizationRevocationAdapter`(강제 로그아웃 · 잠금)는 여전히 인가 자체도 닫는다 — BE-603 이전의 이메일 키 미러 행(배수 기간)은 UUID 폐기가 닿지 않으므로 그 세션을 끊는 것은 이 어댑터뿐이다.
+>
+> **미러 행의 `tenant_id` = 세션의 로그인 시점 테넌트 (TASK-BE-604)** — 최초 행(`DomainSyncOAuth2AuthorizationService`)은 발급 토큰의 `tenant_id` claim 을, 회전 행(`persistRotation`)은 SAS 인가의 principal details `tenant_id`(없으면 client 테넌트 — claim 과 같은 폴백, `AuthorizationSessionTenant`)를 쓴다 ⇒ 두 값이 같다. BE-604 이전 회전 행은 **client 테넌트**를 썼다 — 교차 테넌트 세션(콘솔 client 로 로그인한 소비자 테넌트 자격)에서 첫 행과 회전 행이 어긋났다. refresh 의 테넌트 검증도 이 값과 비교한다(client 테넌트와가 아니다 — [multi-tenancy.md § Refresh Token](../../features/multi-tenancy.md#refresh-token)).
+>
+> **미러 행이 없는 SAS 세션**(최초 INSERT 실패 — 삼켜진다)은 **허용**한다(BE-604 에서 기존 동작 유지로 결정): 판정 기준은 SAS 인가이고, 그 회전이 세션 테넌트로 행을 새로 쓴다. 이후 refresh 부터는 행 검증이 적용된다.
 
 ### `social_identities`
 

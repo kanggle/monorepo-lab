@@ -50,7 +50,9 @@ import java.util.Set;
  * Custom {@link AuthenticationProvider} for the {@code refresh_token} grant type.
  *
  * <p>Replaces SAS's built-in {@code OAuth2RefreshTokenAuthenticationProvider} to integrate
- * refresh-token rotation and reuse-detection with the existing domain infrastructure:
+ * refresh-token rotation and reuse-detection with the existing domain infrastructure
+ * (TASK-BE-604: "replaces" literally — the built-in provider is removed from the token
+ * endpoint, so an {@code invalid_grant} raised here is the final answer):
  * <ul>
  *   <li>{@link RefreshTokenRepository} — JPA-backed refresh token store shared with the
  *       legacy {@code POST /api/auth/refresh} flow</li>
@@ -69,7 +71,8 @@ import java.util.Set;
  * <ol>
  *   <li>Reuse detection — runs first (security-critical, same ordering as legacy RefreshTokenUseCase)</li>
  *   <li>Expired/revoked check</li>
- *   <li>Tenant mismatch check</li>
+ *   <li>Tenant mismatch check — mirror row tenant vs the session's login-time tenant
+ *       (TASK-BE-604), not the client's</li>
  *   <li>Rotation: generate new tokens, persist new JPA record, revoke old JPA record</li>
  *   <li>Event publishing (auth.token.refreshed or auth.token.reuse.detected)</li>
  * </ol>
@@ -170,6 +173,11 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
         }
 
+        // TASK-BE-604: the tenant this session was authenticated in — the tenant check below,
+        // the rotated mirror row and the auth.token.refreshed event all use it.
+        String clientTenant = extractClientTenantId(registeredClient);
+        String sessionTenant = AuthorizationSessionTenant.of(authorization, clientTenant);
+
         // --- SECURITY: Reuse detection (runs first, fail-closed) ---
         Optional<RefreshToken> existingDomainTokenOpt =
                 refreshTokenRepository.findByJti(submittedTokenValue);
@@ -195,17 +203,24 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
             }
 
-            // Cross-tenant check — the tenant of the token must match the registered client's tenant
-            String expectedTenant = extractClientTenantId(registeredClient);
-            if (expectedTenant != null && !expectedTenant.isBlank()) {
+            // Cross-tenant check — TASK-BE-604 (owner decision D/A): the mirror row's tenant must
+            // match the tenant the SESSION was authenticated in (the login-time principal's
+            // tenant = the tenant_id claim this refresh is about to mint again), NOT the
+            // registered client's tenant. The two differ for a console session of an operator
+            // whose credential lives in a consumer tenant; comparing with the client tenant
+            // refused every such refresh, which went unnoticed only while SAS's built-in
+            // provider re-ran the grant after this one (now removed — AuthorizationServerConfig).
+            if (sessionTenant != null && !sessionTenant.isBlank()) {
                 String tokenTenant = existingDomainToken.getTenantId();
-                if (!expectedTenant.equals(tokenTenant)) {
-                    log.warn("SAS_REFRESH: cross-tenant attempt detected. " +
-                                    "clientTenant={}, tokenTenant={}, jti={}",
-                            expectedTenant, tokenTenant, submittedTokenValue);
+                if (!sessionTenant.equals(tokenTenant)) {
+                    // The refresh-token value is deliberately not logged (identity-platform:
+                    // never log refresh tokens); the event below carries it as reusedJti.
+                    log.warn("SAS_REFRESH: cross-tenant attempt detected. "
+                                    + "sessionTenant={}, clientTenant={}, tokenTenant={}",
+                            sessionTenant, clientTenant, tokenTenant);
                     authEventPublisher.publishTokenTenantMismatch(
                             AuthorizationAccountId.forMirrorRow(authorization),
-                            tokenTenant, expectedTenant,
+                            tokenTenant, sessionTenant,
                             submittedTokenValue,
                             "masked", "unknown");
                     throw new OAuth2AuthenticationException(new OAuth2Error(
@@ -216,7 +231,14 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             }
         }
         // If not found in domain store, we proceed — the token was just issued and not yet
-        // persisted (rare race case); SAS's own expiry check already ran above.
+        // persisted (rare race case), or its initial-issuance INSERT failed (swallowed by
+        // DomainSyncOAuth2AuthorizationService). SAS's own expiry check already ran above, and
+        // persistRotation below writes the row this rotation continues from.
+        //
+        // TASK-BE-604: every rejection above is FINAL. SAS's built-in
+        // OAuth2RefreshTokenAuthenticationProvider is removed from the token endpoint
+        // (AuthorizationServerConfig#removeBuiltInRefreshTokenProvider), so ProviderManager has
+        // no other refresh_token provider to retry the grant with.
 
         // --- Generate new access token ---
         Set<String> authorizedScopes = authorization.getAuthorizedScopes();
@@ -369,7 +391,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
 
                 // --- Persist rotation in domain JPA store ---
                 Instant now = Instant.now();
-                persistRotation(submittedTokenValue, newRefreshToken, authorization, registeredClient, now);
+                persistRotation(submittedTokenValue, newRefreshToken, authorization, sessionTenant, now);
 
                 // --- Publish auth.token.refreshed event (outbox row INSERT) ---
                 // OutboxWriter.save() requires an active EntityManager transaction.
@@ -382,10 +404,11 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 // TransactionTemplate, not annotation-based AOP.
                 // TASK-BE-603: the account UUID, not the principal name (the login email).
                 String accountId = AuthorizationAccountId.forMirrorRow(authorization);
-                String tenantId = extractClientTenantId(registeredClient);
+                // TASK-BE-604: auth-events.md defines tenantId as "the token's tenant_id" — the
+                // session tenant, which differs from the client's for a cross-tenant session.
                 authEventPublisher.publishTokenRefreshed(
                         accountId,
-                        tenantId != null ? tenantId : "unknown",
+                        sessionTenant != null ? sessionTenant : "unknown",
                         submittedTokenValue,
                         newRefreshToken.getTokenValue(),
                         buildSessionContext());
@@ -472,15 +495,21 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     /**
      * Persists the new refresh token in the domain JPA store and revokes the old one.
      * Connects the SAS token value to the domain store via the {@code jti} field.
+     *
+     * <p>TASK-BE-604: the new row carries the SESSION tenant ({@link AuthorizationSessionTenant})
+     * — the same tenant the first row got from the token's {@code tenant_id} claim at issuance.
+     * It used to carry the client's tenant, so for a cross-tenant session the first row and the
+     * rotated rows disagreed, and a session whose first row was missing got a rotated row that
+     * its own next refresh would refuse.
      */
     private void persistRotation(String oldTokenValue, OAuth2RefreshToken newRefreshToken,
-                                  OAuth2Authorization authorization, RegisteredClient registeredClient,
+                                  OAuth2Authorization authorization, String sessionTenant,
                                   Instant now) {
         // TASK-BE-603: refresh_tokens.account_id is the account UUID (VARCHAR(36)). The
         // principal name is the login email — writing it here made every refresh of an
         // account whose email exceeds 36 characters fail on this INSERT.
         String accountId = AuthorizationAccountId.forMirrorRow(authorization);
-        String tenantId = extractClientTenantId(registeredClient);
+        String tenantId = sessionTenant;
         if (tenantId == null || tenantId.isBlank()) {
             tenantId = TenantContext.DEFAULT_TENANT_ID; // fallback per multi-tenancy policy
         }
@@ -529,9 +558,9 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // name. Revoke those too, so the mirror store keeps covering the same rows it did
         // before this change. Once the last such row has expired (refresh TTL, 30 days) the
         // second UPDATE matches nothing.
-        // 🔴 Neither UPDATE refuses the other sessions' next refresh today: this provider's
-        // invalid_grant on a revoked row falls through to SAS's built-in refresh provider,
-        // which checks only the authorization (TASK-BE-603 § AC-2 finding).
+        // TASK-BE-604: these UPDATEs are what refuse the other sessions' next refresh — the
+        // revoked-row branch above is final now that SAS's built-in refresh provider is gone.
+        // (Before BE-604 it fell through to that provider, which checks only the authorization.)
         String legacyMirrorKey = authorization.getPrincipalName();
         log.warn("SAS_REFRESH: reuse detected for account={}, jti={}", accountId, jti);
 

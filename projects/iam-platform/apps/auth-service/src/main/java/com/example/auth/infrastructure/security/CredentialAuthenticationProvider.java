@@ -83,19 +83,20 @@ import java.util.Set;
  *       the rule has nothing to apply to.</li>
  * </ul>
  *
- * <p><b>Tenant resolution (TASK-BE-507, D1-a).</b> The lookup is scoped to the tenant of the
- * OIDC client the user is logging in through ({@link SavedRequestTenantResolver}, the same
- * source the social path uses), falling back to the pre-BE-507 cross-tenant lookup when the
- * scoped lookup finds nothing — which is what keeps every account created before BE-507
- * (all of them {@code fan-platform}, including ecommerce shoppers) logging in exactly as
- * before. Without the fallback, scoping alone would lock out every existing shopper the
- * moment web-store started asking for {@code ecommerce}.
+ * <p><b>Tenant resolution (TASK-BE-507 D1-a, narrowed by TASK-BE-604 D).</b> The lookup is
+ * scoped to the tenant of the OIDC client the user is logging in through
+ * ({@link SavedRequestTenantResolver}, the same source the social path uses). A scoped miss
+ * falls back to the cross-tenant lookup only when that client is the console
+ * ({@link TenantContext#CONSOLE_TENANT_ID}); through any other client it is refused like a
+ * wrong password. BE-507 kept the fallback for every client to carry pre-BE-507
+ * {@code fan-platform} shoppers into web-store; TASK-MONO-386 measured that population at
+ * zero, and BE-604 AC-0 showed the fallback minted cross-tenant sessions nobody could use.
+ * The console keeps it because ADR-MONO-044 D5 operators have no {@code iam} credential.
+ * See {@link #resolveCredential} for the whole table.
  *
- * <p>The cross-tenant fallback keeps its fail-closed ambiguity guard (an email in two tenants
- * → {@link BadCredentialsException}) — but BE-507 makes that unreachable for the case it was
- * written for: once the same email exists in fan-platform AND ecommerce, the scoped lookup
- * resolves it by client and never reaches the fallback. Ambiguity now only surfaces for a
- * caller with no initiating client at all.
+ * <p>The cross-tenant lookup keeps its fail-closed ambiguity guard (an email in two tenants
+ * → {@link BadCredentialsException}). It surfaces for a caller with no initiating client and
+ * for a console login whose email exists in two or more non-console tenants.
  *
  * <p>The resolved tenant is published as
  * {@code Authentication.getDetails() = Map.of("tenant_id", ..., "tenant_type", ...)}
@@ -176,13 +177,26 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
     }
 
     /**
-     * TASK-BE-507 (D1-a): resolve the credential by the tenant of the initiating OIDC client
-     * first; fall back to the pre-BE-507 cross-tenant lookup when that misses.
+     * Resolves the credential a form login is for — "which accounts may log into which
+     * clients" (multi-tenancy.md § 로그인 가능한 계정과 client).
      *
-     * <p>The fallback is what makes this safe to ship without a data migration: every account
-     * that exists today is {@code fan-platform}, so an ecommerce shopper logging in through the
-     * web-store client misses the scoped lookup and is found by the fallback — byte-identical to
-     * today. New shoppers, born {@code ecommerce}, hit the scoped lookup instead.
+     * <ol>
+     *   <li><b>Scoped</b> (TASK-BE-507 D1-a) — the credential in the tenant of the initiating
+     *       OIDC client. A hit ends the lookup whatever the client.</li>
+     *   <li><b>Scoped miss, console client</b> ({@link TenantContext#CONSOLE_TENANT_ID}) —
+     *       the cross-tenant lookup below. An operator self-onboarded under ADR-MONO-044 D5 has
+     *       no {@code iam} credential: operator {@code oidc_subject} = consumer
+     *       {@code account_id}, so the console is reachable for them only through this.</li>
+     *   <li><b>Scoped miss, any other client</b> — refused as {@code CREDENTIALS_INVALID}, the
+     *       same response as a wrong password (TASK-BE-604, owner decision D, 2026-09-26).
+     *       BE-507 kept the fallback here for pre-BE-507 {@code fan-platform} shoppers;
+     *       TASK-MONO-386 measured that population at zero, and the session it produced was
+     *       unusable anyway (no seeded role on the storefront, gateway tenant gate). Such a
+     *       person signs up in the client's tenant instead ({@code (tenant_id, email)} unique).</li>
+     *   <li><b>No initiating client</b> ({@code clientTenant == null}: no saved
+     *       {@code /oauth2/authorize}, or no request bound) — the cross-tenant lookup, unchanged:
+     *       one match wins, several fail closed as {@code LOGIN_TENANT_AMBIGUOUS}.</li>
+     * </ol>
      */
     private Lookup resolveCredential(String email, String clientTenant) {
         if (clientTenant != null) {
@@ -190,8 +204,13 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             if (scoped.isPresent()) {
                 return Lookup.found(scoped.get());
             }
-            log.debug("form-login scoped lookup miss in tenant={} — falling back to cross-tenant "
-                    + "(a pre-BE-507 account lives in another tenant)", clientTenant);
+            if (!TenantContext.CONSOLE_TENANT_ID.equals(clientTenant)) {
+                log.debug("form-login scoped lookup miss in consumer tenant={} — no cross-tenant "
+                        + "fallback for a consumer client (TASK-BE-604)", clientTenant);
+                return Lookup.failed(REASON_CREDENTIALS_INVALID);
+            }
+            log.debug("form-login scoped lookup miss in the console tenant — falling back to "
+                    + "cross-tenant (an operator whose credential lives in a consumer tenant)");
         }
 
         List<Credential> matches = credentialRepository.findAllByEmail(email);
@@ -200,10 +219,10 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             return Lookup.failed(REASON_CREDENTIALS_INVALID);
         }
         if (matches.size() > 1) {
-            // Only reachable without an initiating client (no saved authorize request): with one,
-            // the scoped lookup above already disambiguated. Still fail-closed.
-            log.warn("form-login tenant ambiguity: email matches {} tenants and no initiating "
-                    + "client tenant is available — failing closed", matches.size());
+            // Reachable without an initiating client, and through the console client when the
+            // email exists in two or more non-console tenants. Fail-closed either way.
+            log.warn("form-login tenant ambiguity: email matches {} tenants and the initiating "
+                    + "client does not decide between them — failing closed", matches.size());
             return Lookup.failed(REASON_TENANT_AMBIGUOUS);
         }
         return Lookup.found(matches.get(0));
@@ -242,6 +261,13 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      * the login form, or {@code null} when there is no request context / no saved request
      * (e.g. a direct visit to {@code /login}) — in which case the caller keeps the legacy
      * cross-tenant behaviour.
+     *
+     * <p>TASK-BE-604: read through {@link SavedRequestTenantResolver#initiatingClientTenant},
+     * not {@code resolve(...).tenantId()}. The latter substitutes {@code fan-platform} when
+     * there is no initiating client, so the {@code null} this javadoc promised was reachable
+     * only with no request bound — a direct visit to {@code /login} was scoped to
+     * {@code fan-platform} and then fell back. With the fallback now limited to the console,
+     * that substitute would have turned "no client" into "a consumer client".
      */
     private String resolveClientTenant() {
         RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
@@ -249,8 +275,8 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             return null;
         }
         return savedRequestTenantResolver
-                .resolve(servletAttrs.getRequest(), servletAttrs.getResponse())
-                .tenantId();
+                .initiatingClientTenant(servletAttrs.getRequest(), servletAttrs.getResponse())
+                .orElse(null);
     }
 
     @Override

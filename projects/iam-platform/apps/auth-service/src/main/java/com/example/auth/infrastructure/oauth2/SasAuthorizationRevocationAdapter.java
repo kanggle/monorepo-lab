@@ -35,17 +35,18 @@ import java.util.Set;
  * authorization itself is the store that has to be closed; the mirror row is closed too (by
  * jti) so the two agree.
  *
- * <p>🔴 <b>(2) is not enforcing today</b> (TASK-BE-603, measured in CI). When
- * {@code SasRefreshTokenAuthenticationProvider} rejects on (2) it throws
- * {@code invalid_grant}; {@code ProviderManager} treats that as "try the next provider", and
- * SAS's built-in {@code OAuth2RefreshTokenAuthenticationProvider} — still registered after
- * ours — checks (1) only and issues the tokens. A revoked mirror row alone therefore does not
- * refuse a refresh; closing the authorization, as this class does, is the enforcement.
+ * <p><b>(2) enforces since TASK-BE-604.</b> Until then it did not (TASK-BE-603, measured in
+ * CI): a rejection on (2) fell through {@code ProviderManager} to SAS's built-in
+ * {@code OAuth2RefreshTokenAuthenticationProvider}, which checks (1) only. BE-604 removed that
+ * provider, so a revoked mirror row now refuses the refresh by itself. This class still closes
+ * (1) as well — it is the only store an email-keyed mirror row written before TASK-BE-603
+ * cannot hide from, and a closed authorization also stops the access token being introspected
+ * as active.
  *
- * <p><b>Still needed after TASK-BE-603.</b> BE-603 keys new mirror rows on the account UUID,
- * so {@code revokeAllByAccountId(accountId)} now reaches them — but it only ever closes the
- * mirror row, never the authorization (see above), and rows written before BE-603 stay keyed
- * by the login email until they expire. The authorization store's {@code principal_name}
+ * <p><b>Still needed after TASK-BE-603/604.</b> BE-603 keys new mirror rows on the account
+ * UUID, so {@code revokeAllByAccountId(accountId)} now reaches them (and since BE-604 that
+ * refuses their refresh) — but rows written before BE-603 stay keyed by the login email until
+ * they expire, and only the authorization itself is keyed the same way for every session. The authorization store's {@code principal_name}
  * stays the login email (BE-603 does not change the principal name), so this email →
  * candidates → {@code account_id}-confirmed lookup remains the only way to close the
  * authorization.
