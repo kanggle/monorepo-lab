@@ -111,20 +111,18 @@ export const SEEDED_CROSS_TENANT_PRINCIPAL: TestUser = {
 };
 
 /**
- * Cross-tenant role guard (TASK-MONO-381, amending ADR-MONO-035 §4b-iii).
+ * Cross-tenant login through the storefront client (TASK-MONO-381 → TASK-BE-604).
  *
- * A principal whose own tenant is NOT the storefront's platform authenticates fine at IAM
- * (BE-507's credential lookup admits them) but receives NO `roles` claim, so web-store's
- * `signInCallback` downgrades them to anonymous and bounces to
- * `/login?error=account_type_mismatch` (the error-code string is retained for UI
- * compatibility; the legacy `account_type` claim was removed in ADR-MONO-032 D5 step 4).
+ * Until TASK-BE-604 a principal whose own tenant is NOT the storefront's authenticated at IAM
+ * (BE-507's cross-tenant credential fallback admitted them) and was stopped only by web-store's
+ * role guard (`/login?error=account_type_mismatch` — no `roles` claim). BE-604 (owner decision
+ * D, 2026-09-26) keeps that fallback for the operator console client only: through a consumer
+ * client a credential outside the client's tenant is refused by IAM itself, with the same
+ * response as a wrong password — IAM's own `/login?error` (no value), never a web-store page.
  *
- * Uses `fillGapCredentialForm` — the same form filler the three working consumer specs use.
- * The old `completeGapSignIn` drove a signup-or-login page IAM does not render, which is one
- * of the two reasons this spec never ran (the other being that a CUSTOMER-less token was
- * unconstructible on the storefront client at all).
+ * Uses `fillGapCredentialForm` — the same form filler the working consumer specs use.
  */
-export async function loginAndExpectRoleGuardRejection(
+export async function loginAndExpectIamRefusal(
   page: Page,
   user: TestUser = SEEDED_CROSS_TENANT_PRINCIPAL,
 ): Promise<void> {
@@ -133,8 +131,10 @@ export async function loginAndExpectRoleGuardRejection(
   await expect(trigger).toBeEnabled();
   await trigger.click();
   await fillGapCredentialForm(page, user);
+  // IAM's failure URL is exactly `/login?error`; web-store's role-guard bounce carries a value
+  // (`error=account_type_mismatch`), so the two cannot be confused.
   await page.waitForURL(
-    (url) => url.pathname === '/login' && url.search.includes('account_type_mismatch'),
+    (url) => url.pathname === '/login' && url.search === '?error',
     { timeout: 30_000 },
   );
 }

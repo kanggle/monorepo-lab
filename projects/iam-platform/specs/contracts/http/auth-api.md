@@ -263,10 +263,19 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 
 | Status | 에러 코드 | 조건 |
 |---|---|---|
-| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 (위 Assume-Tenant Exchange 참조) |
+| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 (위 Assume-Tenant Exchange 참조) |
 | 400 | `invalid_request` | PKCE 미포함, assume-tenant `audience` 누락/malformed |
 | 401 | `invalid_client` | client 인증 실패 |
 | 401 | `unauthorized_client` | 해당 grant_type 미허용 client |
+
+🔴 **`refresh_token` grant 의 도메인 거부는 최종이다 (TASK-BE-604, 2026-09-26).** 위 `invalid_grant` 중 미러 행 폐기·만료 ·
+`TOKEN_TENANT_MISMATCH` 는 `SasRefreshTokenAuthenticationProvider` 가 내리는데, TASK-BE-604 이전에는 SAS 기본
+`OAuth2RefreshTokenAuthenticationProvider` 가 그 뒤에 남아 있어 **같은 요청을 다시 처리해 200 으로 발급**했다(SAS 인가만 봄 —
+TASK-BE-603 CORRECTION). 기본 provider 는 제거됐다(`AuthorizationServerConfig#removeBuiltInRefreshTokenProvider` — 토큰
+엔드포인트에 `refresh_token` provider 가 정확히 하나가 아니면 기동 실패).
+테넌트 비교의 기준은 **client 의 테넌트가 아니라 세션의 로그인 시점 테넌트**(resource-owner principal details `tenant_id`
+= 토큰의 `tenant_id` claim)다 — 교차 테넌트 로그인 세션(예: 소비자 테넌트 자격으로 콘솔에 들어온 ADR-MONO-044 D5 운영자)은
+계속 갱신된다. 규칙 원문: [multi-tenancy.md § Refresh Token](../../features/multi-tenancy.md#refresh-token).
 
 ---
 
@@ -459,11 +468,15 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 | 경우 | 응답 | `auth.login.failed.failureReason` |
 |---|---|---|
 | 없는 이메일 | 302 `/login?error` | `CREDENTIALS_INVALID` (`accountId=null`) |
+| 소비자 client 로 시작했고 그 client 테넌트에 자격이 없음 — 다른 테넌트에는 있어도 (TASK-BE-604) | 302 `/login?error` — **없는 이메일과 같다** | `CREDENTIALS_INVALID` (`accountId=null`, `tenantId` = client 테넌트) |
 | 비밀번호 불일치 (상태 무관 — 잠긴 계정 포함) | 302 `/login?error` | `CREDENTIALS_INVALID` |
 | 비밀번호 일치 + `LOCKED` / `DORMANT` / `DELETED` | 302 `/login?error` — **위 두 줄과 바이트 단위로 같다** | `ACCOUNT_LOCKED` / `ACCOUNT_DORMANT` / `ACCOUNT_DELETED` |
 | 비밀번호 일치 + 계약 밖 상태 값 | 302 `/login?error` | 발행 안 함 (enum 에 없는 값을 지어내지 않는다 — `attempted` 만 남는다) |
 | account-service 상태 조회 **실패** | 302 `/login?error` (**fail-closed**) | 발행 안 함 (`attempted` 만 — tenant_type 조회 장애와 같은 모양) |
 | 상태 조회 404 (계정 레코드 없음 — 콘솔 운영자) | 규칙 미적용 → 비밀번호대로 | — |
+
+**어느 자격을 찾나** — 시작 client(저장된 `/oauth2/authorize` 의 `client_id`)의 테넌트로 먼저 찾고, 없을 때 다른 테넌트로
+넘어가는 것은 **콘솔 client(테넌트 `iam`)일 때만**이다. 규칙 원문과 근거: [multi-tenancy.md § 로그인 가능한 계정과 client](../../features/multi-tenancy.md#로그인-가능한-계정과-client-task-be-604).
 
 🔴 **응답 모양 — 소유자 결정 (2026-09-25, AC-1 ⓐ)**: 상태로 거부된 로그인은 **오답 비밀번호와 정확히 같은 결과**다 —
 같은 예외(`BadCredentialsException("Invalid credentials")`), 같은 `/login?error`, 같은 문구, 힌트 없음. «잠겼습니다» 를

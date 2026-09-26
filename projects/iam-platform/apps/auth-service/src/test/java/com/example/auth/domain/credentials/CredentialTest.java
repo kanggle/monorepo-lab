@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CredentialTest {
 
     @Test
-    @DisplayName("changePassword replaces hash and algorithm, preserves identity, advances version")
+    @DisplayName("changePassword replaces hash and algorithm, preserves identity AND the read version (JPA increments it)")
     void changePassword_replacesHash() {
         Instant created = Instant.parse("2026-04-01T00:00:00Z");
         Credential original = new Credential(
@@ -41,7 +41,9 @@ class CredentialTest {
 
         // bookkeeping
         assertThat(updated.getUpdatedAt()).isEqualTo(changedAt);
-        assertThat(updated.getVersion()).isEqualTo(4);
+        // TASK-BE-604: the version is the optimistic-lock token of the row it was read from —
+        // carried unchanged; JPA @Version increments it on save. (+1 here made every save fail.)
+        assertThat(updated.getVersion()).isEqualTo(3);
 
         // original immutable
         assertThat(original.getCredentialHash()).isEqualTo("old-hash");
@@ -68,7 +70,7 @@ class CredentialTest {
 
         assertThat(updated.getHashAlgorithm()).isEqualTo("argon2id");
         assertThat(updated.getCredentialHash()).isEqualTo("argon-hash");
-        assertThat(updated.getVersion()).isEqualTo(1);
+        assertThat(updated.getVersion()).isZero();
     }
 
     // TASK-MONO-263 (ADR-032 D5 step 4): the account_type field/constructor-arg

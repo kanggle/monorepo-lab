@@ -1,8 +1,11 @@
 package com.example.auth.integration;
 
+import com.example.auth.application.ConfirmPasswordResetUseCase;
 import com.example.auth.application.ForceLogoutUseCase;
+import com.example.auth.application.command.ConfirmPasswordResetCommand;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
+import com.example.auth.domain.repository.PasswordResetTokenStore;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.token.RefreshToken;
@@ -22,6 +25,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -35,6 +40,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
@@ -154,6 +160,15 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private ForceLogoutUseCase forceLogoutUseCase;
+
+    @Autowired
+    private OAuth2AuthorizationService oAuth2AuthorizationService;
+
+    @Autowired
+    private ConfirmPasswordResetUseCase confirmPasswordResetUseCase;
+
+    @Autowired
+    private PasswordResetTokenStore passwordResetTokenStore;
 
     // Shared state across ordered tests (normal rotation scenario)
     private static String refreshTokenValue;
@@ -469,14 +484,15 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
     // -----------------------------------------------------------------------
     // 8. TASK-BE-603: a real-shaped (long) login email. The mirror row is keyed on
     //    the account UUID from the principal details, so issuance and refresh both
-    //    succeed, and revokeAllByAccountId(uuid) reaches the SAS mirror row. Refusal
-    //    of the next refresh comes from closing the SAS authorization (force-logout).
+    //    succeed, and revokeAllByAccountId(uuid) reaches the SAS mirror row.
+    //    TASK-BE-604 AC-1: that revoked row alone now refuses the next refresh.
     // -----------------------------------------------------------------------
 
     @Test
     @Order(8)
-    @DisplayName("TASK-BE-603: 54자+ 이메일 계정 — 발급 시 미러 행(UUID) 저장 → refresh 성공 → "
-            + "revokeAllByAccountId(UUID) 가 SAS 미러 행을 맞힘 → 강제 로그아웃(UUID)이 다음 refresh 거부")
+    @DisplayName("TASK-BE-603/604: 54자+ 이메일 계정 — 발급 시 미러 행(UUID) 저장 → refresh 성공 → "
+            + "revokeAllByAccountId(UUID) 가 SAS 미러 행을 맞힘 → 그것만으로 다음 refresh 400 invalid_grant(BE-604 AC-1) "
+            + "→ 강제 로그아웃(UUID)도 새 세션의 refresh 거부")
     void longEmailAccount_mirrorRowKeyedOnUuid_refreshSucceeds_andAccountRevokeReachesIt() throws Exception {
         String accountId = UUID.randomUUID().toString();
         // Real-shaped address, longer than refresh_tokens.account_id VARCHAR(36).
@@ -511,26 +527,132 @@ class OAuth2RefreshTokenIntegrationTest extends AbstractIntegrationTest {
         assertThat(revoked).as("the live SAS mirror row of this account").isEqualTo(1);
         assertThat(refreshTokenRepository.findByJti(rotated).orElseThrow().isRevoked()).isTrue();
 
-        // 🔴 A revoked mirror row does NOT by itself refuse the next refresh (CI run
-        // 36134528069 measured 200 here). SasRefreshTokenAuthenticationProvider rejects it
-        // with invalid_grant, but ProviderManager treats that as "try the next provider",
-        // and SAS's built-in OAuth2RefreshTokenAuthenticationProvider — still registered
-        // after ours — checks only the authorization. See TASK-BE-603 § AC-2 finding.
-        // So the refusal is asserted through the path that production relies on:
-        //
-        // AC-2 (ii): force-logout by account UUID closes the SAS authorization (BE-601
-        // adapter), and THAT refuses the next refresh.
-        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
-                accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
-        ForceLogoutUseCase.Result forced = forceLogoutUseCase.execute(accountId);
-        assertThat(forced.revokedTokenCount())
-                .as("mirror row already revoked above (0) + the SAS authorization (1)")
-                .isEqualTo(1);
-
+        // TASK-BE-604 AC-1 — the cell TASK-BE-603 deliberately did not assert. A revoked
+        // mirror row now refuses the next refresh BY ITSELF: SAS's built-in
+        // OAuth2RefreshTokenAuthenticationProvider is removed, so the custom provider's
+        // invalid_grant is no longer retried by a provider that checks only the authorization
+        // (CI run 36134528069 measured 200 here before the removal). Nothing else has touched
+        // this session: the SAS authorization is still active.
         mockMvc.perform(post("/oauth2/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("grant_type", "refresh_token")
                         .param("refresh_token", rotated)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"));
+        // …and nothing rotated behind the 400. The built-in provider used to rotate the SAS
+        // authorization here (reuse-refresh-tokens=false) and DomainSync inserted a fresh mirror
+        // row for it — "the session revives". Had it run, the authorization would no longer be
+        // found by the refused token's value.
+        assertThat(oAuth2AuthorizationService.findByToken(rotated, OAuth2TokenType.REFRESH_TOKEN))
+                .as("the SAS authorization still holds the refused token — no rotation happened")
+                .isNotNull();
+
+        // AC-2 (ii) of TASK-BE-603, kept: force-logout by account UUID on a FRESH session of
+        // the same account closes the SAS authorization (BE-601 adapter) and refuses its refresh.
+        String second = signInWithLoginPrincipal(email, accountId);
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
+        ForceLogoutUseCase.Result forced = forceLogoutUseCase.execute(accountId);
+        assertThat(forced.revokedTokenCount())
+                .as("mirror rows: the fresh session's live row (1); SAS authorizations: the fresh "
+                        + "session's (1) + the first session's (1) — above, only its mirror row "
+                        + "was revoked, its authorization is still active in SAS")
+                .isEqualTo(3);
+
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", second)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"));
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. TASK-BE-604 AC-2 (i): password reset ends an existing SAS session.
+    //    ConfirmPasswordResetUseCase revokes mirror rows by account UUID only — it never
+    //    touches the SAS authorization. Before BE-604 that left the session refreshing
+    //    (the built-in provider checked the authorization alone).
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(9)
+    @DisplayName("TASK-BE-604 AC-2: 비밀번호 재설정 → 기존 SAS 세션의 다음 refresh 400 invalid_grant "
+            + "(인가는 그대로 — 미러 행 폐기만으로 거부)")
+    void passwordReset_refusesExistingSasSessionRefresh() throws Exception {
+        String accountId = UUID.randomUUID().toString();
+        String email = "reset-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                accountId, "fan-platform", email, CredentialHash.argon2id("unused"), Instant.now())));
+
+        String issued = signInWithLoginPrincipal(email, accountId);
+        // Control: before the reset the session refreshes (so the 400 below is the reset's doing).
+        String rotated = refreshOk(issued);
+
+        String resetToken = "reset-" + UUID.randomUUID();
+        passwordResetTokenStore.save(resetToken, accountId, Duration.ofMinutes(10));
+        confirmPasswordResetUseCase.execute(new ConfirmPasswordResetCommand(resetToken, "Reset-Passw0rd!2026"));
+
+        assertThat(refreshTokenRepository.findByJti(rotated).orElseThrow().isRevoked())
+                .as("the reset revoked the session's live mirror row (by account UUID)")
+                .isTrue();
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", rotated)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"));
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. TASK-BE-604 AC-2 (ii): SAS reuse detection ends the account's OTHER sessions.
+    //
+    //     🔴 How the reuse branch is reached. A token that was really rotated away cannot
+    //     reach TokenReuseDetector on this path: JdbcOAuth2AuthorizationService keeps only
+    //     the authorization's CURRENT refresh token, so findByToken(old) is null and the
+    //     provider answers invalid_grant before looking at the mirror store (that is what
+    //     Order(4) observes — its 400 is not the reuse branch). The branch is reachable when
+    //     the SAS store still holds the token while the mirror store already has a child
+    //     rotated from it — the state two concurrent refreshes of the same token leave.
+    //     This test writes that child row directly.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(10)
+    @DisplayName("TASK-BE-604 AC-2: 재사용 탐지(세션 A) → 같은 계정의 다른 세션 B 의 refresh 400 invalid_grant")
+    void reuseDetected_refusesTheAccountsOtherSessions() throws Exception {
+        String accountId = UUID.randomUUID().toString();
+        String email = "reuse-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
+
+        String sessionA = signInWithLoginPrincipal(email, accountId);
+        String sessionB = signInWithLoginPrincipal(email, accountId);
+        // Control: B refreshes before the reuse.
+        sessionB = refreshOk(sessionB);
+
+        Instant now = Instant.now();
+        String childOfA = "concurrent-child-" + UUID.randomUUID();
+        transactionTemplate.executeWithoutResult(s -> refreshTokenRepository.save(RefreshToken.create(
+                childOfA, accountId, "fan-platform", now, now.plusSeconds(3600), sessionA, null, null)));
+
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", sessionA)
+                        .param("client_id", "demo-spa-client"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_grant"))
+                .andExpect(jsonPath("$.error_description").value(
+                        org.hamcrest.Matchers.containsString("reuse detected")));
+
+        assertThat(refreshTokenRepository.findByJti(sessionB).orElseThrow().isRevoked())
+                .as("the reuse branch revoked every mirror row of the account, B's included")
+                .isTrue();
+        mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", sessionB)
                         .param("client_id", "demo-spa-client"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_grant"));

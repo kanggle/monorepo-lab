@@ -110,7 +110,9 @@ class ConfirmPasswordResetUseCaseTest {
         assertThat(saved.getEmail()).isEqualTo("user@example.com");
         assertThat(saved.getCredentialHash()).isEqualTo("$argon2id$v=19$new-hash");
         assertThat(saved.getHashAlgorithm()).isEqualTo("argon2id");
-        assertThat(saved.getVersion()).isEqualTo(existing.getVersion() + 1);
+        // TASK-BE-604: the read version is carried to the save (JPA @Version increments it);
+        // +1 here was the defect that failed every save against a real store.
+        assertThat(saved.getVersion()).isEqualTo(existing.getVersion());
         assertThat(saved.getCreatedAt()).isEqualTo(existing.getCreatedAt());
 
         // Critical ordering: save → revoke (refresh + bulk + access marker) → delete token last.

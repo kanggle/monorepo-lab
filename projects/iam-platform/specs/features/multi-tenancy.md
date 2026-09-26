@@ -197,7 +197,18 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 ### Refresh Token
 
 - DB `refresh_tokens.tenant_id` NOT NULL. rotation 시 `tenant_id` 일치 검증 필수
-- cross-tenant refresh(다른 테넌트의 refresh로 다른 테넌트 access 발급)는 **절대 금지** → `TOKEN_TENANT_MISMATCH` 403
+- cross-tenant refresh(다른 테넌트의 refresh로 다른 테넌트 access 발급)는 **절대 금지** → `TOKEN_TENANT_MISMATCH`.
+  응답은 경로마다 다르다: **SAS `POST /oauth2/token`(`refresh_token` grant) = `400 invalid_grant`**
+  (`error_description=TOKEN_TENANT_MISMATCH`, RFC 6749 §5.2 — 브라우저 세션의 정본 경로), 레거시 REST
+  `POST /api/auth/refresh` = `403 TOKEN_TENANT_MISMATCH`([auth-api.md](../contracts/http/auth-api.md) § POST /api/auth/refresh —
+  의도된 divergence). ~~이 줄은 403 만 적고 있었다~~ — 코드는 SAS 경로에서 처음부터 400 이었다(TASK-BE-604 에서 정정).
+- **«같은 테넌트» 의 기준 (TASK-BE-604, 2026-09-26)** — SAS 경로의 비교는 미러 행(`refresh_tokens.tenant_id`) 대 **세션의 로그인
+  시점 테넌트**(SAS 인가에 저장된 resource-owner principal details 의 `tenant_id` = 그 세션 토큰의 `tenant_id` claim)다.
+  **client 의 테넌트가 아니다** — 둘은 [아래 로그인 규칙](#로그인-가능한-계정과-client-task-be-604)이 허용하는 교차 테넌트 로그인에서 다르고,
+  client 테넌트로 비교하면 그 세션의 모든 refresh 가 거부된다. 최초 미러 행(발급 시 claim 에서)과 회전 미러 행(회전 시 같은
+  규칙으로)이 같은 값을 갖는다. principal 에 `tenant_id`+`tenant_type` 이 없으면 claim 과 같은 폴백으로 client 테넌트.
+- **거부는 최종이다** — TASK-BE-604 이전에는 SAS 기본 refresh provider 가 우리 provider 의 거부를 다시 처리해 200 으로 발급했다
+  (미러 행 폐기·만료·테넌트 불일치 전부 무력화 — TASK-BE-603 CORRECTION). 지금은 제거되어 있다.
 
 ### Gateway 검증
 
@@ -280,6 +291,34 @@ WMS·ERP 등 enterprise tenant는 **자체 가입 페이지를 두지 않고** �
 | gateway | 라우트가 internal provisioning이면 path `{tenantId}` ↔ JWT `tenant_id` 또는 platform-scope 검사 |
 | 다운스트림 서비스 | `X-Tenant-Id` 헤더 ↔ JWT claim 재검증 (defense-in-depth) |
 | 도메인 쿼리 | 모든 read/write 쿼리는 `WHERE tenant_id = ?` 명시 — application layer에서 강제 |
+
+### 로그인 가능한 계정과 client (TASK-BE-604)
+
+🔴 TASK-BE-604 이전에는 **이 규칙이 스펙 어디에도 없었다**(`specs/{features,services,contracts}` · ADR-MONO-044 ·
+TASK-BE-309/507 · TASK-MONO-334/386 검토 — BE-604 § AC-0 (iii) 검토). 코드만 있었다. 아래는 소유자 결정 D (2026-09-26 UTC)다.
+
+폼 로그인(`POST /login`, `CredentialAuthenticationProvider`)이 어느 자격(`credentials` 행)을 찾는가:
+
+| 시작 client (저장된 `/oauth2/authorize` 의 `client_id`) | 그 client 테넌트에 자격 있음 | 없음 |
+|---|---|---|
+| **콘솔** — 테넌트 `iam` (`platform-console-web`) | 그 자격 | **교차 테넌트 조회** — 이메일이 정확히 한 테넌트에 있으면 그 자격, 둘 이상이면 fail-closed(`LOGIN_TENANT_AMBIGUOUS`) |
+| **소비자** — 그 밖의 모든 client | 그 자격 | **로그인 실패** — 틀린 비밀번호와 같은 `/login?error`, `CREDENTIALS_INVALID` |
+| 시작 client 없음 (저장된 authorize 요청 없음 — `/login` 직접 방문) | — | 교차 테넌트 조회 (위와 같음) |
+
+- **콘솔이 교차 조회를 갖는 이유** — ADR-MONO-044 D5 셀프 온보딩 운영자는 `iam` 자격이 없다(운영자 `oidc_subject` = 소비자
+  `account_id`, 비밀번호 NULL — `FirstAdminProvisioner`). 그들은 소비자 테넌트 자격으로만 콘솔에 들어온다. 콘솔 client 는
+  역할을 주지 않는다 — 운영자 매핑이 없으면 admin 교환 401 → 온보딩(TASK-BE-604 § AC-0 (iii) 검토).
+- **소비자 client 가 교차 조회를 잃은 이유** — TASK-BE-507 이 그것을 «BE-507 이전 `fan-platform` 쇼핑객» 폴백으로 남겼으나
+  TASK-MONO-386 이 그 모집단을 **0** 으로 실측했고, 그 세션은 쓸모도 없었다(역할 시드 없음 → web-store 익명 · 게이트웨이 테넌트
+  차단). 해당자는 그 테넌트에서 새로 가입한다(`(tenant_id, email)` 복합 unique).
+- **응답에 힌트를 주지 않는다** — «다른 테넌트에 계정이 있습니다» 는 계정 열거다. 소유자 기본값(변경 가능): 없는 이메일과 같은
+  `/login?error`.
+- 로그인 세션의 테넌트(토큰 `tenant_id`)는 **자격 행의 테넌트**다 — 교차 조회로 찾았어도 client 테넌트가 아니다. refresh 는 그
+  테넌트로 판정한다([Refresh Token](#refresh-token)).
+- 🔴 **이 표가 막지 않는 것 (TASK-BE-604 에서 확인, 후속)**: (1) **이미 인증된 IAM 브라우저 세션의 재사용(SSO)** — 콘솔(또는
+  시작 client 없는 `/login`)로 로그인한 세션으로 소비자 client 의 `/oauth2/authorize` 를 열면 자격 조회 없이 코드가 발급되고,
+  토큰 `tenant_id` 는 로그인 테넌트다(2026-09-26 로컬 측정). (2) **소셜 로그인** — 신원을 테넌트 없이 찾고 토큰 테넌트를 시작
+  client 로 찍는다(`SocialLoginBrowserController`). 둘 다 이 규칙의 범위 밖으로 남아 있다.
 
 ### 격리 회귀 방지
 

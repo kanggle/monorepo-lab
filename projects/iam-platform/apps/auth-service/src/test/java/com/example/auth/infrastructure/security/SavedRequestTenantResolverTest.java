@@ -140,4 +140,48 @@ class SavedRequestTenantResolverTest {
         assertThat(resolution.tenantId()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
         assertThat(resolution.redirectUrl()).contains("/oauth2/authorize");
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-604 — initiatingClientTenant never substitutes the default tenant
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-604: initiatingClientTenant — saved authorize request → the client's tenant")
+    void initiatingClientTenant_savedRequest_returnsClientTenant() {
+        when(registeredClientRepository.findByClientId("ecommerce-web-store-client"))
+                .thenReturn(ecommerceClient());
+        SavedRequestTenantResolver resolver =
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
+
+        assertThat(resolver.initiatingClientTenant(
+                savedAuthorizeRequest("ecommerce-web-store-client"), new MockHttpServletResponse()))
+                .contains("ecommerce");
+    }
+
+    @Test
+    @DisplayName("BE-604: initiatingClientTenant — no saved request → EMPTY, not fan-platform "
+            + "(resolve() answers fan-platform for the same request)")
+    void initiatingClientTenant_noSavedRequest_isEmpty() {
+        SavedRequestTenantResolver resolver =
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
+
+        assertThat(resolver.initiatingClientTenant(
+                new MockHttpServletRequest("POST", "/login"), new MockHttpServletResponse()))
+                .isEmpty();
+        // The default-tenant path is never consulted.
+        org.mockito.Mockito.verifyNoInteractions(tenantTypePort);
+    }
+
+    @Test
+    @DisplayName("BE-604: initiatingClientTenant — saved request for an unknown client → EMPTY")
+    void initiatingClientTenant_unknownClient_isEmpty() {
+        when(registeredClientRepository.findByClientId("unknown-client")).thenReturn(null);
+        SavedRequestTenantResolver resolver =
+                new SavedRequestTenantResolver(registeredClientRepository, tenantTypePort);
+
+        assertThat(resolver.initiatingClientTenant(
+                savedAuthorizeRequest("unknown-client"), new MockHttpServletResponse()))
+                .isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(tenantTypePort);
+    }
 }

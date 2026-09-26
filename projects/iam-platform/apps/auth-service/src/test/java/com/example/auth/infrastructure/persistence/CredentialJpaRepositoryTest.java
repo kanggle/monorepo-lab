@@ -1,6 +1,9 @@
 package com.example.auth.infrastructure.persistence;
 
+import com.example.auth.domain.credentials.Credential;
+import com.example.auth.domain.credentials.CredentialHash;
 import com.example.testsupport.integration.DockerAvailableCondition;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,7 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
@@ -16,12 +21,15 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
+@Import(CredentialRepositoryImpl.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
 @ExtendWith(DockerAvailableCondition.class)
@@ -51,6 +59,12 @@ class CredentialJpaRepositoryTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private CredentialRepositoryImpl credentialRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @BeforeEach
     void cleanup() {
@@ -172,6 +186,47 @@ class CredentialJpaRepositoryTest {
     @DisplayName("BE-384: assignIdentityIdIfAbsent — 없는 account 는 0행 (net-zero)")
     void assignIdentityIdIfAbsent_missingAccount_zeroRows() {
         assertThat(repo.assignIdentityIdIfAbsent("ghost-account", uuid())).isZero();
+    }
+
+    // ── TASK-BE-604 CI finding: a password change through the domain round-trips ──
+    //
+    // Credential.changePassword used to return version+1, so CredentialRepositoryImpl.save
+    // merged an entity whose version the row did not have → ObjectOptimisticLockingFailureException
+    // on EVERY password change / reset confirmation (first seen by the BE-604 reset IT).
+
+    @Test
+    @DisplayName("BE-604: 읽기 → changePassword → save 가 성공하고 저장 버전은 JPA 가 +1 한다")
+    void changePassword_readThenSave_succeeds_andJpaIncrementsVersion() {
+        String accountId = uuid();
+        insertCredential(accountId, uuid() + "@example.com");
+
+        Credential read = credentialRepository.findByAccountId(accountId).orElseThrow();
+        credentialRepository.save(read.changePassword(CredentialHash.argon2id("new-hash"), Instant.now()));
+        entityManager.flush();
+        entityManager.clear();
+
+        Credential after = credentialRepository.findByAccountId(accountId).orElseThrow();
+        assertThat(after.getCredentialHash()).isEqualTo("new-hash");
+        assertThat(after.getVersion()).isEqualTo(read.getVersion() + 1);
+    }
+
+    @Test
+    @DisplayName("BE-604 (대조군): 같은 버전에서 읽은 두 변경 중 늦은 쪽은 여전히 낙관적 락으로 거부된다")
+    void changePassword_staleConcurrentWrite_isStillRejected() {
+        String accountId = uuid();
+        insertCredential(accountId, uuid() + "@example.com");
+
+        Credential first = credentialRepository.findByAccountId(accountId).orElseThrow();
+        Credential second = credentialRepository.findByAccountId(accountId).orElseThrow();
+        entityManager.clear();
+        credentialRepository.save(first.changePassword(CredentialHash.argon2id("first"), Instant.now()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThatThrownBy(() -> {
+            credentialRepository.save(second.changePassword(CredentialHash.argon2id("second"), Instant.now()));
+            entityManager.flush();
+        }).isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

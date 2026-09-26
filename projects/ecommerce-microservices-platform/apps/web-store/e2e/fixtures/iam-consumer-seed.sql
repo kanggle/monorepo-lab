@@ -71,6 +71,11 @@ INSERT IGNORE INTO credentials (
 -- in their home tenant, and post-TASK-BE-507 that account is born in the tenant of the client
 -- they registered through — so an ecommerce operator is, structurally, a registered shopper.
 -- The guard is a cross-tenant guard, not an operator guard (MONO-381's measurement).
+--
+-- TASK-BE-604 (owner decision D, 2026-09-26): IAM's form-login cross-tenant fallback now
+-- applies to the operator console client only. Through the web-store client this '*'
+-- credential is refused by IAM itself (`/login?error`, same as a wrong password) and never
+-- reaches the role guard — account-type-guard.spec.ts asserts that refusal now.
 INSERT IGNORE INTO credentials (
     tenant_id,
     account_id,
