@@ -3,6 +3,7 @@ import {
   refreshAccessToken,
   jwtCallback,
   sessionCallback,
+  signInCallback,
 } from '@/shared/auth/auth-callbacks';
 
 /**
@@ -73,6 +74,38 @@ describe('auth.ts session callback — F2 token confidentiality', () => {
     expect(session.accountId).toBeNull();
     expect(session.user).toBeUndefined();
     expect(session).not.toHaveProperty('accessToken');
+  });
+});
+
+/**
+ * TASK-BE-605 (α) — the storefront role guard at sign-in, pinned without a running IAM. The
+ * full-stack proof is `e2e/account-type-guard.spec.ts` (nightly lane only); this is what a PR
+ * run can see. The guard admits on `CUSTOMER` and on nothing else (ADR-MONO-035 §4b-1).
+ */
+describe('auth.ts signIn callback — CUSTOMER role guard', () => {
+  const MISMATCH = '/login?error=account_type_mismatch';
+
+  it('CUSTOMER 보유 → 입장(true)', () => {
+    expect(signInCallback({ sub: 'acc-1', tenant_id: 'ecommerce', roles: ['CUSTOMER'] })).toBe(true);
+  });
+
+  it('다른 역할과 함께여도 CUSTOMER 가 있으면 입장', () => {
+    expect(signInCallback({ sub: 'acc-1', roles: ['ECOMMERCE_OPERATOR', 'CUSTOMER'] })).toBe(true);
+  });
+
+  it('CUSTOMER 없는 역할(운영자 전용) → account_type_mismatch 로 되돌린다', () => {
+    expect(signInCallback({ sub: 'op-1', tenant_id: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] }))
+      .toBe(MISMATCH);
+  });
+
+  it('roles claim 부재 · 빈 배열 · profile 없음 → 거부 (교차 테넌트 토큰의 모양)', () => {
+    expect(signInCallback({ sub: 'x', tenant_id: '*' })).toBe(MISMATCH);
+    expect(signInCallback({ sub: 'x', roles: [] })).toBe(MISMATCH);
+    expect(signInCallback(undefined)).toBe(MISMATCH);
+  });
+
+  it('대소문자가 다른 역할 이름은 CUSTOMER 가 아니다 (정확 일치)', () => {
+    expect(signInCallback({ sub: 'x', roles: ['customer'] })).toBe(MISMATCH);
   });
 });
 

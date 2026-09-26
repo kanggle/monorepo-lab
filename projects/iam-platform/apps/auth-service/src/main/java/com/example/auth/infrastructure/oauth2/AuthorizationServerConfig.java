@@ -27,6 +27,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.oauth2.server.authorization.web.OAuth2AuthorizationEndpointFilter;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -174,7 +176,8 @@ public class AuthorizationServerConfig {
             // parameter, not an @Autowired field: the adapter depends on the
             // OAuth2AuthorizationService this class itself produces, so field injection here
             // would be a circular reference.
-            OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort) throws Exception {
+            OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort,
+            AuthorizationServerSettings authorizationServerSettings) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -284,6 +287,12 @@ public class AuthorizationServerConfig {
                                 // tenant_id and tenant_type extension claims.
                                 .tokenIntrospectionEndpoint(introspection ->
                                         introspection.introspectionResponseHandler(introspectionCustomizer)))
+                // TASK-BE-605: session-tenant gate in front of the authorization endpoint. Added
+                // AFTER the SAS configurer on purpose — see AuthorizeSessionTenantGateConfigurer.
+                .with(new AuthorizeSessionTenantGateConfigurer(new AuthorizeSessionTenantGate(
+                                authorizationServerSettings.getAuthorizationEndpoint(),
+                                registeredClientRepository)),
+                        Customizer.withDefaults())
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
                 // TASK-MONO-046-1: scope the LoginUrlAuthenticationEntryPoint redirect
@@ -362,6 +371,34 @@ public class AuthorizationServerConfig {
         DelegatingAuthenticationEntryPoint entryPoint = new DelegatingAuthenticationEntryPoint(byHint);
         entryPoint.setDefaultEntryPoint(new LoginUrlAuthenticationEntryPoint("/login"));
         return entryPoint;
+    }
+
+    /**
+     * TASK-BE-605 — places {@link AuthorizeSessionTenantGate} immediately before SAS's
+     * {@link OAuth2AuthorizationEndpointFilter}.
+     *
+     * <p>A configurer, not a direct {@code http.addFilterBefore(...)} in the chain builder:
+     * {@code addFilterBefore} requires the reference filter class to already have a registered
+     * order, and SAS registers {@code OAuth2AuthorizationEndpointFilter} only in its own
+     * {@code configure} phase (SAS 1.4.1 {@code OAuth2AuthorizationEndpointConfigurer}:
+     * {@code addFilterBefore(…, AbstractPreAuthenticatedProcessingFilter.class)}). Configurers
+     * run {@code configure} in the order they were added, so this one — added after the SAS
+     * configurer — sees that order and lands directly in front of the endpoint filter, after
+     * the security context has been loaded from the session.
+     */
+    static final class AuthorizeSessionTenantGateConfigurer
+            extends AbstractHttpConfigurer<AuthorizeSessionTenantGateConfigurer, HttpSecurity> {
+
+        private final AuthorizeSessionTenantGate gate;
+
+        AuthorizeSessionTenantGateConfigurer(AuthorizeSessionTenantGate gate) {
+            this.gate = gate;
+        }
+
+        @Override
+        public void configure(HttpSecurity http) {
+            http.addFilterBefore(gate, OAuth2AuthorizationEndpointFilter.class);
+        }
     }
 
     /**

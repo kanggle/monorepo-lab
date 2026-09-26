@@ -95,3 +95,37 @@ INSERT IGNORE INTO credentials (
     NOW(6),
     0
 );
+
+-- =============================================================================
+-- TASK-BE-605 — a SAME-tenant credential without CUSTOMER, so the role guard bites again
+-- =============================================================================
+-- After BE-604 the '*' credential above never authenticates through the web-store client, and
+-- BE-605 closes the other road (reusing an IAM browser session of another tenant). So a
+-- CUSTOMER-less storefront token can no longer come from a CROSS-tenant principal at all.
+--
+-- It still comes from an ecommerce account whose stored roles lack CUSTOMER: stored
+-- account_roles take precedence over the platform seed (TenantClaimTokenCustomizer
+-- populateRoles — the seed fires only when the stored list is empty). account-mock.nginx.conf
+-- answers this account's roles lookup with ["ECOMMERCE_OPERATOR"] (the shape the storefront's
+-- REQUIRED_CONSUMER_ROLE comment names for an operator without a shopper role), so IAM admits
+-- the login and web-store's signInCallback bounces it to /login?error=account_type_mismatch.
+-- Same password hash as the rows above.
+INSERT IGNORE INTO credentials (
+    tenant_id,
+    account_id,
+    email,
+    credential_hash,
+    hash_algorithm,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'ecommerce',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8e003',
+    'e2e-no-customer-role@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id',
+    NOW(6),
+    NOW(6),
+    0
+);

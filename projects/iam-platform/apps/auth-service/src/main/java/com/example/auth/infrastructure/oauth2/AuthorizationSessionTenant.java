@@ -39,8 +39,23 @@ final class AuthorizationSessionTenant {
      */
     static String of(OAuth2Authorization authorization, String clientTenant) {
         Object principal = authorization.getAttribute(Principal.class.getName());
-        if (principal instanceof Authentication authentication
-                && authentication.getDetails() instanceof Map<?, ?> details) {
+        return principal instanceof Authentication authentication
+                ? of(authentication, clientTenant)
+                : clientTenant;
+    }
+
+    /**
+     * TASK-BE-605 — the same rule applied to a live browser-session principal, before any
+     * {@link OAuth2Authorization} exists. {@link AuthorizeSessionTenantGate} uses it to decide
+     * at {@code /oauth2/authorize} which tenant the code it is about to issue would carry; a
+     * second copy of the rule there would be the drift this class exists to prevent.
+     *
+     * @param principal    the authenticated resource owner
+     * @param clientTenant the registered client's tenant, or {@code null}
+     * @return the session tenant, or {@code null} when neither source has one
+     */
+    static String of(Authentication principal, String clientTenant) {
+        if (principal.getDetails() instanceof Map<?, ?> details) {
             String tenantId = nonBlank(details.get(PrincipalDetailKeys.TENANT_ID));
             String tenantType = nonBlank(details.get(PrincipalDetailKeys.TENANT_TYPE));
             if (tenantId != null && tenantType != null) {

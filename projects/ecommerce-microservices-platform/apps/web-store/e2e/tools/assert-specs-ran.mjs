@@ -35,7 +35,9 @@ import { readFileSync } from 'node:fs';
  * here precisely because the deferral it used to hold is exactly what this tool exists to
  * prevent: a check that does not run reports as green. (TASK-BE-604: the spec now asserts
  * that IAM refuses the cross-tenant credential on the storefront client — the fallback that
- * let it authenticate is console-only — so it no longer reaches the role guard.)
+ * let it authenticate is console-only — so it no longer reaches the role guard. TASK-BE-605
+ * restored the role-guard test beside it, driven by a same-tenant ecommerce account whose stored
+ * roles lack CUSTOMER — the spec file now holds both.)
  *
  * `rp-initiated-logout.spec.ts` is absent: it runs in its own lane
  * (web-store-iam-logout-e2e), against the lean IAM stack with no ecommerce

@@ -11,6 +11,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -168,7 +169,28 @@ class OAuth2AuthorizationServerSliceTest {
                     .build();
             registeredClientRepository.save(demoPkceClient);
         }
+
+        // TASK-BE-605: a console-tenant (iam) public client for the gate's exemption cell. The
+        // exemption keys on the client's TENANT, so a slice-only client id is enough.
+        if (registeredClientRepository.findByClientId(SLICE_CONSOLE_CLIENT_ID) == null) {
+            registeredClientRepository.save(RegisteredClient.withId("slice-console-client-id")
+                    .clientId(SLICE_CONSOLE_CLIENT_ID)
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                    .redirectUri(SLICE_CONSOLE_REDIRECT_URI)
+                    .scope("openid")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(true)
+                            .requireAuthorizationConsent(false)
+                            .setting(OAuthClientMapper.SETTING_TENANT_ID, "iam")
+                            .setting(OAuthClientMapper.SETTING_TENANT_TYPE, "B2B_ENTERPRISE")
+                            .build())
+                    .build());
+        }
     }
+
+    private static final String SLICE_CONSOLE_CLIENT_ID = "slice-console-client";
+    private static final String SLICE_CONSOLE_REDIRECT_URI = "http://localhost:3000/api/auth/callback";
 
     // -----------------------------------------------------------------------
     // 1. OIDC Discovery
@@ -636,5 +658,101 @@ class OAuth2AuthorizationServerSliceTest {
         assertThat(result.getResponse().getHeader("Sunset"))
                 .as("DeprecatedApiHeaderFilter was removed with the endpoint")
                 .isNull();
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. TASK-BE-605 — session-tenant gate at /oauth2/authorize, through the REAL SAS chain.
+    //     Non-authoritative (H2, no Flyway): it proves the gate is wired in front of the
+    //     authorization endpoint and what that endpoint then does. The login → code → token
+    //     proof is SsoTenantGateIntegrationTest (Testcontainers).
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(12)
+    @DisplayName("BE-605 대조군: fan-platform 세션 → demo-spa-client(fan-platform) authorize → 코드")
+    void sessionTenantGate_sameTenant_issuesCode() throws Exception {
+        MvcResult result = mockMvc.perform(authorizeWithSession(
+                        sessionOf("fan-platform"), "demo-spa-client", "http://localhost:3000/callback"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(result.getResponse().getHeader("Location"))
+                .startsWith("http://localhost:3000/callback")
+                .contains("code=");
+    }
+
+    @Test
+    @Order(13)
+    @DisplayName("BE-605: ecommerce 세션 → demo-spa-client(fan-platform) authorize → 코드 아님 · /login · 저장 요청 = 이 authorize")
+    void sessionTenantGate_otherConsumerTenant_sendsToLogin() throws Exception {
+        MockHttpSession session = sessionOf("ecommerce");
+        Object storedContext = session.getAttribute("SPRING_SECURITY_CONTEXT");
+
+        MvcResult result = mockMvc.perform(authorizeWithSession(
+                        session, "demo-spa-client", "http://localhost:3000/callback"))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+
+        String location = result.getResponse().getHeader("Location");
+        assertThat(location).as("re-authentication, not a code").endsWith("/login").doesNotContain("code=");
+        org.springframework.security.web.savedrequest.SavedRequest saved =
+                (org.springframework.security.web.savedrequest.SavedRequest)
+                        session.getAttribute("SPRING_SECURITY_SAVED_REQUEST");
+        assertThat(saved).as("the gated authorize is the request the login resumes").isNotNull();
+        assertThat(saved.getParameterValues("client_id")).containsExactly("demo-spa-client");
+        assertThat(session.getAttribute("SPRING_SECURITY_CONTEXT"))
+                .as("the session's own login is kept — the client it came from still has SSO")
+                .isSameAs(storedContext);
+        assertThat(((org.springframework.security.core.context.SecurityContext) storedContext)
+                .getAuthentication())
+                .as("… and still authenticated (the gate empties this request only)")
+                .isNotNull();
+    }
+
+    @Test
+    @Order(14)
+    @DisplayName("BE-605: ecommerce 세션 → 콘솔 테넌트(iam) client authorize → 코드(콘솔 면제)")
+    void sessionTenantGate_consoleClient_exempt() throws Exception {
+        MvcResult result = mockMvc.perform(authorizeWithSession(
+                        sessionOf("ecommerce"), SLICE_CONSOLE_CLIENT_ID, SLICE_CONSOLE_REDIRECT_URI))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(result.getResponse().getHeader("Location"))
+                .startsWith(SLICE_CONSOLE_REDIRECT_URI)
+                .contains("code=");
+    }
+
+    /** A browser session authenticated the way both login paths authenticate it. */
+    private static MockHttpSession sessionOf(String tenantId) {
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_ID, tenantId);
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_TYPE, "B2C");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.ACCOUNT_ID,
+                "0199de70-0000-7000-8000-00000000b605");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.EMAIL, "gate-605@example.com");
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken principal =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "gate-605@example.com", null,
+                        java.util.List.of(new org.springframework.security.core.authority
+                                .SimpleGrantedAuthority("ROLE_USER")));
+        principal.setDetails(details);
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("SPRING_SECURITY_CONTEXT",
+                new org.springframework.security.core.context.SecurityContextImpl(principal));
+        return session;
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
+    authorizeWithSession(MockHttpSession session, String clientId, String redirectUri) {
+        return get("/oauth2/authorize")
+                .session(session)
+                // A browser — the /login entry point is scoped to text/html (TASK-MONO-046-1).
+                .accept(MediaType.TEXT_HTML)
+                .queryParam("response_type", "code")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("scope", "openid")
+                .queryParam("code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+                .queryParam("code_challenge_method", "S256")
+                .queryParam("state", "be-605");
     }
 }
