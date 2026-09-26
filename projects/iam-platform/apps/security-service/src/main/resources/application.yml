@@ -138,6 +138,12 @@ security:
     ip-reputation:
       score: ${DETECT_IP_REPUTATION_SCORE:60}
       suspicious-cidrs: ${DETECT_IP_REPUTATION_CIDRS:}
+    # TASK-BE-606 (owner decision 2026-09-26): 1 reuse in the 1h counter window = ALERT,
+    # the lock-threshold-th and later = AUTO_LOCK. Counter unavailable → AUTO_LOCK.
+    token-reuse:
+      single-score: ${DETECT_TOKEN_REUSE_SINGLE_SCORE:70}
+      repeated-score: ${DETECT_TOKEN_REUSE_REPEATED_SCORE:100}
+      lock-threshold: ${DETECT_TOKEN_REUSE_LOCK_THRESHOLD:2}
 
 app:
   pii:

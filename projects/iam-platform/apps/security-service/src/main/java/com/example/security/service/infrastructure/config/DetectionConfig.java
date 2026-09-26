@@ -39,8 +39,11 @@ public class DetectionConfig {
     }
 
     @Bean
-    public TokenReuseRule tokenReuseRule(TokenReuseCounter counter) {
-        return new TokenReuseRule(counter);
+    public TokenReuseRule tokenReuseRule(TokenReuseCounter counter, DetectionProperties props) {
+        // TASK-BE-606: 1 reuse = ALERT, repeated within the counter window = AUTO_LOCK.
+        DetectionProperties.TokenReuse cfg = props.getTokenReuse();
+        return new TokenReuseRule(counter, cfg.getSingleScore(), cfg.getRepeatedScore(),
+                cfg.getLockThreshold());
     }
 
     @Bean

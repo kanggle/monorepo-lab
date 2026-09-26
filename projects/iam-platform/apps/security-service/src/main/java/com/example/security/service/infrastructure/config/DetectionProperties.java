@@ -1,6 +1,7 @@
 package com.example.security.service.infrastructure.config;
 
 import com.example.security.service.domain.detection.DetectionThresholds;
+import com.example.security.service.domain.detection.TokenReuseRule;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,6 +29,7 @@ public class DetectionProperties {
     @Valid @NotNull private GeoIp geoip = new GeoIp();
     @Valid @NotNull private ImpossibleTravel impossibleTravel = new ImpossibleTravel();
     @Valid @NotNull private IpReputation ipReputation = new IpReputation();
+    @Valid @NotNull private TokenReuse tokenReuse = new TokenReuse();
 
     public DetectionThresholds toThresholds() {
         return new DetectionThresholds(
@@ -59,6 +61,29 @@ public class DetectionProperties {
     public void setImpossibleTravel(ImpossibleTravel impossibleTravel) { this.impossibleTravel = impossibleTravel; }
     public IpReputation getIpReputation() { return ipReputation; }
     public void setIpReputation(IpReputation ipReputation) { this.ipReputation = ipReputation; }
+    public TokenReuse getTokenReuse() { return tokenReuse; }
+    public void setTokenReuse(TokenReuse tokenReuse) { this.tokenReuse = tokenReuse; }
+
+    /**
+     * TASK-BE-606 — {@code security.detection.token-reuse.*}: a single reuse in the counter
+     * window scores {@code singleScore} (ALERT band), the {@code lockThreshold}-th and later
+     * score {@code repeatedScore} (AUTO_LOCK band). Defaults are the owner decision of
+     * 2026-09-26.
+     */
+    public static class TokenReuse {
+        @Min(0) @Max(100)
+        private int singleScore = TokenReuseRule.DEFAULT_SINGLE_SCORE;
+        @Min(0) @Max(100)
+        private int repeatedScore = TokenReuseRule.DEFAULT_REPEATED_SCORE;
+        @Min(1) @Max(1_000)
+        private int lockThreshold = TokenReuseRule.DEFAULT_LOCK_THRESHOLD;
+        public int getSingleScore() { return singleScore; }
+        public void setSingleScore(int singleScore) { this.singleScore = singleScore; }
+        public int getRepeatedScore() { return repeatedScore; }
+        public void setRepeatedScore(int repeatedScore) { this.repeatedScore = repeatedScore; }
+        public int getLockThreshold() { return lockThreshold; }
+        public void setLockThreshold(int lockThreshold) { this.lockThreshold = lockThreshold; }
+    }
 
     public static class Velocity {
         @Min(1) @Max(10_000)

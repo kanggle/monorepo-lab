@@ -41,18 +41,64 @@ class TokenReuseRuleTest {
                 "1.2.3.***", "fp-1", null, Instant.now(), null);
     }
 
+    // ── TASK-BE-606: 1 reuse = ALERT, 2+ within the counter window = AUTO_LOCK ──────────
+
     @Test
-    @DisplayName("Any token.reuse.detected event fires at score 100 (AUTO_LOCK)")
-    void fires() {
+    @DisplayName("[BE-606] 1시간 창의 첫 재사용 → score 70 = ALERT (잠금 없음)")
+    void firstReuse_alertsWithoutLock() {
         when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn(1L);
 
         TokenReuseRule rule = new TokenReuseRule(counter);
         DetectionResult r = rule.evaluate(reuseCtx(TENANT_A, "evt-1"));
 
         assertThat(r.fired()).isTrue();
-        assertThat(r.riskScore()).isEqualTo(100);
+        assertThat(r.riskScore()).isEqualTo(70);
         assertThat(r.ruleCode()).isEqualTo("TOKEN_REUSE");
+        assertThat(RiskLevel.fromScore(r.riskScore())).isEqualTo(RiskLevel.ALERT);
+    }
+
+    @Test
+    @DisplayName("[BE-606] 같은 계정 1시간 안 두 번째 재사용 → score 100 = AUTO_LOCK")
+    void secondReuseWithinWindow_autoLocks() {
+        when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn(1L, 2L);
+
+        TokenReuseRule rule = new TokenReuseRule(counter);
+        DetectionResult first = rule.evaluate(reuseCtx(TENANT_A, "evt-1"));
+        DetectionResult second = rule.evaluate(reuseCtx(TENANT_A, "evt-2"));
+
+        assertThat(RiskLevel.fromScore(first.riskScore())).isEqualTo(RiskLevel.ALERT);
+        assertThat(second.riskScore()).isEqualTo(100);
+        assertThat(RiskLevel.fromScore(second.riskScore())).isEqualTo(RiskLevel.AUTO_LOCK);
+    }
+
+    @Test
+    @DisplayName("[BE-606] 창 안 세 번째 이후도 AUTO_LOCK")
+    void laterReuseWithinWindow_autoLocks() {
+        when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn(5L);
+
+        DetectionResult r = new TokenReuseRule(counter).evaluate(reuseCtx(TENANT_A, "evt-5"));
+
         assertThat(RiskLevel.fromScore(r.riskScore())).isEqualTo(RiskLevel.AUTO_LOCK);
+    }
+
+    @Test
+    @DisplayName("[BE-606] 설정값(single/repeated/threshold)을 따른다 — threshold 3 이면 2번째도 ALERT")
+    void configuredThresholdIsHonoured() {
+        when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn(2L, 3L);
+
+        TokenReuseRule rule = new TokenReuseRule(counter, 60, 90, 3);
+
+        assertThat(rule.evaluate(reuseCtx(TENANT_A, "evt-2")).riskScore()).isEqualTo(60);
+        assertThat(rule.evaluate(reuseCtx(TENANT_A, "evt-3")).riskScore()).isEqualTo(90);
+    }
+
+    @Test
+    @DisplayName("[BE-606] 잘못된 설정 → 생성 거부")
+    void invalidConfigurationRejected() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TokenReuseRule(counter, 101, 100, 2))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TokenReuseRule(counter, 70, 100, 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -109,18 +155,19 @@ class TokenReuseRuleTest {
         for (int i = 1; i <= 50; i++) {
             when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn((long) i);
             DetectionResult r = rule.evaluate(reuseCtx(TENANT_A, "evt-A-" + i));
-            // Every reuse fires at 100 regardless of count
-            assertThat(r.riskScore()).isEqualTo(100);
+            // TASK-BE-606: the first alerts (70), every later one locks (100)
+            assertThat(r.riskScore()).isEqualTo(i == 1 ? 70 : 100);
         }
 
         // Now a reuse event for tenantB hits the SAME accountId — its counter
-        // is independent (starts at 1, NOT 51). The rule still fires at 100,
-        // but the counter value proves the per-tenant isolation guarantee.
+        // is independent (starts at 1, NOT 51). TASK-BE-606 makes the isolation
+        // visible in the SCORE: tenantA's 50 events do not make tenantB's first
+        // one a lock — it is an ALERT (70).
         when(counter.incrementAndGet(TENANT_B, ACCOUNT_1)).thenReturn(1L);
         DetectionResult resultB = rule.evaluate(reuseCtx(TENANT_B, "evt-B-1"));
 
         assertThat(resultB.fired()).isTrue();
-        assertThat(resultB.riskScore()).isEqualTo(100);
+        assertThat(resultB.riskScore()).isEqualTo(70);
         assertThat(resultB.evidence().get("reuseCount")).isEqualTo(1L);
         assertThat(resultB.evidence().get("tenantId")).isEqualTo(TENANT_B);
 
@@ -166,10 +213,11 @@ class TokenReuseRuleTest {
     }
 
     @Test
-    @DisplayName("Redis 장애 (counter=0) 에도 reuse 는 score 100 으로 발화")
+    @DisplayName("Redis 장애 (counter=0) → 첫 재사용인지 알 수 없음 → score 100 (fail-closed, BE-606)")
     void redisOutage_stillFiresAtFullScore() {
-        // RedisTokenReuseCounter returns 0 on any Redis error (fail-open).
-        // The rule must not depend on the counter value for firing.
+        // RedisTokenReuseCounter returns 0 on any Redis error. TASK-BE-606: the count
+        // now decides ALERT vs AUTO_LOCK; an unknown count falls back to the
+        // pre-BE-606 behaviour (lock) instead of downgrading every reuse to an alert.
         when(counter.incrementAndGet(TENANT_A, ACCOUNT_1)).thenReturn(0L);
 
         TokenReuseRule rule = new TokenReuseRule(counter);

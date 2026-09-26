@@ -1,10 +1,12 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
+import com.example.auth.domain.token.RotatedTokenReplayPolicy;
 import com.example.auth.domain.token.TokenReuseDetector;
 import com.example.auth.infrastructure.oauth2.persistence.JpaOAuth2AuthorizationService;
 import com.example.auth.infrastructure.security.RegistrationHintRequestMatcher;
@@ -55,6 +57,8 @@ import org.springframework.security.oauth2.server.authorization.authentication.O
 
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -116,6 +120,13 @@ public class AuthorizationServerConfig {
     @Autowired
     private OperatorAssignmentPort operatorAssignmentPort;
     /**
+     * TASK-BE-606 (owner decision 2026-09-26, option B): how long after a rotation a replay of
+     * the rotated-away token is still treated as a client race (two tabs, a retried request) —
+     * refused without revoking anything — rather than as reuse. Default 30 s.
+     */
+    @Value("${auth.refresh-token.reuse-grace-seconds:30}")
+    private long refreshTokenReuseGraceSeconds;
+    /**
      * SAS security filter chain — Order(1).
      * Covers: /oauth2/**, /.well-known/openid-configuration
      *
@@ -158,7 +169,12 @@ public class AuthorizationServerConfig {
             OAuth2AuthorizationService oAuth2AuthorizationService,
             RegisteredClientRepository registeredClientRepository,
             OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator,
-            JwtDecoder jwtDecoder) throws Exception {
+            JwtDecoder jwtDecoder,
+            // TASK-BE-606: reuse detection closes the account's SAS authorizations too. A method
+            // parameter, not an @Autowired field: the adapter depends on the
+            // OAuth2AuthorizationService this class itself produces, so field injection here
+            // would be a circular reference.
+            OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -242,7 +258,8 @@ public class AuthorizationServerConfig {
                                 .tokenEndpoint(tokenEndpoint ->
                                         tokenEndpoint
                                                 .authenticationProvider(
-                                                        buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator))
+                                                        buildRefreshTokenProvider(oAuth2AuthorizationService, oAuth2TokenGenerator,
+                                                                oAuthAuthorizationRevocationPort))
                                                 // TASK-BE-604: REPLACE, not precede, SAS's built-in
                                                 // refresh_token provider. The consumer runs in
                                                 // OAuth2TokenEndpointConfigurer.init on the full list
@@ -391,7 +408,8 @@ public class AuthorizationServerConfig {
      */
     private SasRefreshTokenAuthenticationProvider buildRefreshTokenProvider(
             OAuth2AuthorizationService oAuth2AuthorizationService,
-            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator) {
+            OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator,
+            OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort) {
         return new SasRefreshTokenAuthenticationProvider(
                 oAuth2AuthorizationService,
                 oAuth2TokenGenerator,
@@ -400,7 +418,11 @@ public class AuthorizationServerConfig {
                 bulkInvalidationStore,
                 deviceSessionRepository,
                 authEventPublisher,
-                transactionManager);
+                transactionManager,
+                oAuthAuthorizationRevocationPort,
+                new RotatedTokenReplayPolicy(refreshTokenRepository,
+                        Duration.ofSeconds(refreshTokenReuseGraceSeconds)),
+                Clock.systemUTC());
     }
 
     /**

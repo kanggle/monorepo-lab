@@ -215,6 +215,13 @@ Refresh token rotation 성공 시 발행.
 
 이미 rotation된 refresh token의 재사용 탐지. **보안 critical 이벤트**.
 
+**발행 조건** (TASK-BE-606, 소유자 결정 2026-09-26 — 선택지 B, N = 30초). SAS `refresh_token` grant 경로(`SasRefreshTokenAuthenticationProvider`)는 제출된 토큰을 **SAS 인가 조회(`findByToken`) 전에** 미러 저장소의 회전 사슬(`refresh_tokens.rotated_from`)로 판정한다 — SAS 는 인가의 **현재** refresh 토큰만 저장하므로, 이전에는 회전된 옛 토큰의 재제출이 `findByToken` 에서 먼저 `invalid_grant` 로 끝나 이 이벤트에 도달하지 못했다.
+- 제출 토큰에서 회전된 자식이 **없음** → 재사용 아님(정상 흐름).
+- 자식이 **정확히 하나**이고, 그 자식이 **아직 사슬의 머리**(자식에서 회전된 행 없음)이며, 자식의 `issued_at` 이 **30초 이내**(`auth.refresh-token.reuse-grace-seconds`, 기본 30) → **유예**: 400 `invalid_grant`, **폐기 없음 · 이벤트 없음**(콘솔 멀티 탭 · 응답 유실 후 재시도 같은 클라이언트 경쟁).
+- 그 밖(유예 창 밖 · 자식 둘 이상 · 자식이 이미 다시 회전됨) → **재사용**: 계정의 refresh-token 패밀리 전체 폐기(미러 행 · 기기 세션 · **SAS 인가**) + 이 이벤트 발행 + 400 `invalid_grant`.
+- 🔵 **폐기한 것이 0건이면 발행하지 않는다** — 패밀리가 이미 닫힌 뒤(이전 탐지 · 로그아웃 · 강제 로그아웃)의 재제출. 같은 옛 토큰을 두 번 내는 것만으로 두 건이 되지 않게 하는 규칙이며, 아래 소비자의 «2회 = 잠금» 은 살아 있는 세션을 실제로 폐기한 재사용 두 건을 뜻한다.
+- 레거시 `POST /api/auth/refresh` 경로(`RefreshTokenUseCase`)의 발행 조건은 바뀌지 않았다(자체 탐지 — 유예 창 없음).
+
 **Topic**: `auth.token.reuse.detected`
 
 **Schema version**: 2 (TASK-BE-259: `tenant_id` required)
@@ -237,8 +244,10 @@ Refresh token rotation 성공 시 발행.
 **필드 노트** (TASK-BE-259):
 - `tenantId`: 항상 required. publisher (`AuthEventPublisher.publishTokenReuseDetected`) 는 null/blank 시 `IllegalArgumentException` 을 던진다. consumer (security-service) 는 누락 메시지를 DLQ 로 라우팅하고, per-tenant reuse 카운터(`reuse:{tenantId}:{accountId}`)에 활용한다. 다른 auth-events 와 정합 (TASK-BE-248 시리즈).
 - `accountId` (TASK-BE-603): **계정 UUID**. SAS 경로도 principal details `account_id` 를 싣는다(이전엔 로그인 이메일 — 그래서 `TokenReuseRule` 의 자동 잠금 `/internal/accounts/{accountId}/lock` 이 이메일로 호출되었다). `auth.token.refreshed` 필드 노트 참조. `revokedCount` 는 배수 기간 동안 이메일 키 미러 행 폐기분을 포함한다.
+- `revokedCount` (TASK-BE-606, SAS 경로): 폐기한 미러 행 수 **+ 무효화한 SAS 인가 수**(같은 세션이 두 저장소에 하나씩 있으므로 세션 수가 아니다 — `ForceLogoutUseCase` 와 같은 합산). 0 이면 이벤트 자체가 발행되지 않는다(위 발행 조건).
+- `reusedJti` · `originalRotationAt` (TASK-BE-606): SAS 경로에서 `originalRotationAt` = 제출 토큰에서 회전된 자식 중 **가장 이른** 행의 `issued_at`(자식이 둘일 수 있다 — `rotated_from` 은 비고유). `tenantId` 는 제출 토큰 자신의 미러 행이 없으면(최초 발급 INSERT 가 삼켜진 경우) 그 자식 행의 테넌트다 — 한 사슬의 행은 모두 세션 테넌트를 싣는다.
 
-**Consumers**: security-service → 즉시 `auto.lock.triggered` 발행 (최고 우선순위)
+**Consumers**: security-service `TokenReuseRule` (TASK-BE-606, 소유자 결정 2026-09-26): 같은 `(tenantId, accountId)` 의 재사용 이벤트를 기존 1시간 카운터(`reuse:{tenantId}:{accountId}`, 첫 증가 시각부터 TTL 1h)로 센다. **1건 = ALERT**(score 70 — `suspicious_events` 기록 + `security.suspicious.detected`, 잠금 없음) · **1시간 안 2건 이상 = AUTO_LOCK**(score 100 — `auto.lock.triggered`). 카운터를 읽지 못하면(Redis 장애 → 0) **AUTO_LOCK** 으로 떨어진다(fail-closed — BE-606 이전 동작). auth-service 쪽 세션 폐기는 1건째에 이미 끝났으므로, 잠금은 «반복된 재사용» 에 대한 추가 조치다. 🔴 TASK-BE-606 이전: 1건마다 즉시 `auto.lock.triggered`(score 100 고정).
 
 ---
 

@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
@@ -9,6 +10,7 @@ import com.example.auth.domain.session.DeviceSession;
 import com.example.auth.domain.session.RevokeReason;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
+import com.example.auth.domain.token.RotatedTokenReplayPolicy;
 import com.example.auth.domain.token.TokenReuseDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -40,6 +42,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +72,10 @@ import java.util.Set;
  *
  * <p><b>Security ordering:</b>
  * <ol>
+ *   <li>Replay of an already-rotated token (TASK-BE-606) — from the mirror store's rotation
+ *       chain, BEFORE the SAS lookup (SAS no longer knows a rotated-away token). Within the
+ *       grace window → {@code invalid_grant}, nothing revoked; otherwise the family is revoked
+ *       and {@code auth.token.reuse.detected} emitted ({@link RotatedTokenReplayPolicy})</li>
  *   <li>Reuse detection — runs first (security-critical, same ordering as legacy RefreshTokenUseCase)</li>
  *   <li>Expired/revoked check</li>
  *   <li>Tenant mismatch check — mirror row tenant vs the session's login-time tenant
@@ -83,6 +90,12 @@ import java.util.Set;
 public class SasRefreshTokenAuthenticationProvider implements AuthenticationProvider {
 
     private static final String ACTOR_TYPE_SYSTEM = "SYSTEM";
+
+    /**
+     * TASK-BE-606: upper bound on mirror rows visited while looking for the SAS authorization
+     * that holds the head of a reused token's chain ({@code findFamilyAuthorization}).
+     */
+    private static final int MAX_FAMILY_WALK = 64;
 
     /**
      * Token type SAS uses for the OIDC ID token. It is not one of the
@@ -117,6 +130,16 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
      * negative lesson of PR #264 cycle 8.
      */
     private final TransactionTemplate transactionTemplate;
+    /**
+     * TASK-BE-606: closes the account's SAS authorizations on reuse. The mirror-row revoke alone
+     * misses a session whose mirror row is keyed by the login email (written before TASK-BE-603)
+     * or whose initial-issuance mirror INSERT was swallowed — the authorization is the one store
+     * every session has.
+     */
+    private final OAuthAuthorizationRevocationPort authorizationRevocationPort;
+    /** TASK-BE-606: rotated-token replay classification (grace window vs reuse). */
+    private final RotatedTokenReplayPolicy replayPolicy;
+    private final Clock clock;
 
     public SasRefreshTokenAuthenticationProvider(
             OAuth2AuthorizationService authorizationService,
@@ -126,7 +149,10 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             BulkInvalidationStore bulkInvalidationStore,
             DeviceSessionRepository deviceSessionRepository,
             AuthEventPublisher authEventPublisher,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            OAuthAuthorizationRevocationPort authorizationRevocationPort,
+            RotatedTokenReplayPolicy replayPolicy,
+            Clock clock) {
         this.authorizationService = authorizationService;
         this.tokenGenerator = tokenGenerator;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -135,6 +161,9 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         this.deviceSessionRepository = deviceSessionRepository;
         this.authEventPublisher = authEventPublisher;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.authorizationRevocationPort = authorizationRevocationPort;
+        this.replayPolicy = replayPolicy;
+        this.clock = clock;
     }
 
     @Override
@@ -154,6 +183,18 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         }
 
         String submittedTokenValue = refreshTokenAuthentication.getRefreshToken();
+        Instant requestTime = clock.instant();
+
+        // --- SECURITY (TASK-BE-606): replay of an already-rotated token — BEFORE findByToken ---
+        // SAS keeps only the authorization's CURRENT refresh token, so findByToken(rotated) is
+        // null and the reuse branch further down was unreachable for the one shape reuse
+        // detection exists for (identity-platform.md § Refresh Token: reuse → revoke the family).
+        // The mirror store's rotation chain still remembers the token; ask it first.
+        RotatedTokenReplayPolicy.Assessment replay =
+                replayPolicy.assess(submittedTokenValue, requestTime);
+        if (replay.verdict() != RotatedTokenReplayPolicy.Verdict.NOT_ROTATED) {
+            throw rejectReplay(replay, submittedTokenValue, null, null, requestTime);
+        }
 
         // Look up the authorization from SAS's store
         OAuth2Authorization authorization = authorizationService.findByToken(
@@ -186,11 +227,18 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             RefreshToken existingDomainToken = existingDomainTokenOpt.get();
 
             if (tokenReuseDetector.isReuse(existingDomainToken)) {
-                handleReuseDetected(existingDomainToken, submittedTokenValue, authorization);
-                throw new OAuth2AuthenticationException(new OAuth2Error(
-                        OAuth2ErrorCodes.INVALID_GRANT,
-                        "Refresh token reuse detected — all sessions have been revoked.",
-                        null));
+                // A child appeared between the replay check above and here — a concurrent
+                // refresh of this same token committed in between. Classify it with the SAME
+                // policy, so the race gets the same grace window as the pre-check (and the
+                // reuse path runs exactly once per request — never both).
+                // (NOT_ROTATED here can only mean the child differs from this token in letter
+                // case alone — the column compares case-insensitively; not this token's child.)
+                RotatedTokenReplayPolicy.Assessment inFlight =
+                        replayPolicy.assess(submittedTokenValue, requestTime);
+                if (inFlight.verdict() != RotatedTokenReplayPolicy.Verdict.NOT_ROTATED) {
+                    throw rejectReplay(inFlight, submittedTokenValue, authorization,
+                            existingDomainToken.getTenantId(), requestTime);
+                }
             }
 
             // Revoked check
@@ -390,7 +438,9 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                 authorizationService.save(updatedAuthorization);
 
                 // --- Persist rotation in domain JPA store ---
-                Instant now = Instant.now();
+                // TASK-BE-606: the child's issued_at is what the replay grace window is measured
+                // from — take it from the same clock the window is checked against.
+                Instant now = clock.instant();
                 persistRotation(submittedTokenValue, newRefreshToken, authorization, sessionTenant, now);
 
                 // --- Publish auth.token.refreshed event (outbox row INSERT) ---
@@ -413,8 +463,9 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
                         newRefreshToken.getTokenValue(),
                         buildSessionContext());
 
-                log.debug("SAS refresh_token rotated: account={}, oldJti={}, newJti={}",
-                        accountId, submittedTokenValue, newRefreshToken.getTokenValue());
+                // Token values are deliberately not logged (identity-platform: never log refresh
+                // tokens — TASK-BE-606 removed them from this line).
+                log.debug("SAS refresh_token rotated: account={}", accountId);
             } catch (RuntimeException ex) {
                 // Ensure the flag is released immediately on failure; afterCompletion
                 // will fire too but unbindRotationFlagIfBound() is idempotent.
@@ -538,7 +589,43 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     }
 
     /**
-     * Handles refresh-token reuse: revokes all account sessions, emits security event.
+     * TASK-BE-606 — answers a request whose token the mirror store shows as already rotated.
+     * Always returns the exception to throw; for {@link RotatedTokenReplayPolicy.Verdict#REUSE}
+     * it first revokes the family ({@link #handleReuse}).
+     *
+     * @param knownAuthorization the SAS authorization when the caller already holds it (the
+     *                           in-flow race path), {@code null} on the pre-check path — a
+     *                           rotated-away token has no authorization of its own
+     * @param reusedRowTenant    the submitted token's own mirror-row tenant when known
+     */
+    private OAuth2AuthenticationException rejectReplay(RotatedTokenReplayPolicy.Assessment assessment,
+                                                       String submittedTokenValue,
+                                                       OAuth2Authorization knownAuthorization,
+                                                       String reusedRowTenant,
+                                                       Instant requestTime) {
+        RefreshToken original = assessment.originalRotation();
+        if (assessment.verdict() == RotatedTokenReplayPolicy.Verdict.WITHIN_GRACE) {
+            // A client race (two tabs, a retried request) — refuse without revoking anything,
+            // so the request that won keeps its session. Not an event: the owner decision
+            // (2026-09-26) keeps this out of the security pipeline. Token values not logged.
+            log.info("SAS_REFRESH: replay of a refresh token rotated {} ago, within the {}s grace "
+                            + "window — refused, nothing revoked. account={}",
+                    java.time.Duration.between(original.getIssuedAt(), requestTime),
+                    replayPolicy.grace().toSeconds(), original.getAccountId());
+            return new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
+        }
+
+        handleReuse(submittedTokenValue, assessment, knownAuthorization, reusedRowTenant, requestTime);
+        return new OAuth2AuthenticationException(new OAuth2Error(
+                OAuth2ErrorCodes.INVALID_GRANT,
+                "Refresh token reuse detected — all sessions have been revoked.",
+                null));
+    }
+
+    /**
+     * Handles refresh-token reuse: revokes the whole refresh-token family of the account —
+     * every mirror row, every device session, AND every SAS authorization — and emits
+     * {@code auth.token.reuse.detected} (identity-platform.md § Refresh Token, reuse detection).
      *
      * <p>TASK-BE-274: the JPA write path ({@code revokeAllByAccountId} + per-device
      * {@code deviceSessionRepository.save}) is wrapped in a programmatic
@@ -546,29 +633,58 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
      * (Redis bulk invalidation + Kafka event publish) stay outside so a Kafka
      * outage cannot roll back the security-critical revoke. Mirrors the cycle 8
      * negative lesson of PR #264 (don't put publish* under @Transactional).
+     *
+     * <p><b>Whose family (TASK-BE-606).</b> On the pre-check path the submitted token no longer
+     * has an authorization, so the owner is resolved from the chain: the SAS authorization that
+     * currently holds a head of the chain ({@link #findFamilyAuthorization}) gives the account
+     * UUID and — for the TASK-BE-603 drain window — the principal name that email-keyed mirror
+     * rows carry. When no head is held any more (every branch already closed), the earliest
+     * child's own {@code account_id} is used: that is the UUID for every row written since
+     * TASK-BE-603; a pre-BE-603 row carries the email, which still reaches that row's email-keyed
+     * siblings through {@code revokeAllByAccountId}, while the SAS port finds no credential for
+     * it and closes nothing (those authorizations have expired or were closed already, or a head
+     * would have been found).
+     *
+     * <p><b>Nothing revoked ⇒ no event.</b> When the bulk revoke, the device sessions and the
+     * SAS port together close nothing, the family was already dead (a previous detection,
+     * logout, force-logout) and a replay of it is not announced again — the same rule as
+     * before TASK-BE-606 ("already revoked and nothing revoked"), and the reason the second
+     * reuse event that locks the account (security-service {@code TokenReuseRule}) has to come
+     * from a replay that actually found live sessions.
      */
-    private void handleReuseDetected(RefreshToken existingToken, String jti,
-                                      OAuth2Authorization authorization) {
+    private void handleReuse(String reusedToken, RotatedTokenReplayPolicy.Assessment assessment,
+                             OAuth2Authorization knownAuthorization, String reusedRowTenant,
+                             Instant reuseAttemptAt) {
+        RefreshToken original = assessment.originalRotation();
+        OAuth2Authorization familyAuthorization = knownAuthorization != null
+                ? knownAuthorization
+                : findFamilyAuthorization(assessment.children());
+
         // TASK-BE-603: key everything below — the bulk revoke, the device-session lookup,
         // the invalidate-all marker and the events — on the account UUID. With the principal
         // name (the login email) the device-session lookup and the Redis marker were keyed on
         // a value no other path uses, and the events carried the email as accountId.
-        String accountId = AuthorizationAccountId.forMirrorRow(authorization);
+        final String accountId;
         // Drain window: mirror rows written before TASK-BE-603 are keyed by the principal
         // name. Revoke those too, so the mirror store keeps covering the same rows it did
         // before this change. Once the last such row has expired (refresh TTL, 30 days) the
         // second UPDATE matches nothing.
         // TASK-BE-604: these UPDATEs are what refuse the other sessions' next refresh — the
         // revoked-row branch above is final now that SAS's built-in refresh provider is gone.
-        // (Before BE-604 it fell through to that provider, which checks only the authorization.)
-        String legacyMirrorKey = authorization.getPrincipalName();
-        log.warn("SAS_REFRESH: reuse detected for account={}, jti={}", accountId, jti);
+        final String legacyMirrorKey;
+        if (familyAuthorization != null) {
+            accountId = AuthorizationAccountId.forMirrorRow(familyAuthorization);
+            legacyMirrorKey = familyAuthorization.getPrincipalName();
+        } else {
+            accountId = original.getAccountId();
+            legacyMirrorKey = null;
+        }
+        // Token values are deliberately not logged (identity-platform: never log refresh
+        // tokens); the event below carries it as reusedJti, as the contract defines.
+        log.warn("SAS_REFRESH: reuse detected — revoking the refresh-token family. account={}, "
+                + "children={}", accountId, assessment.children().size());
 
-        Instant originalRotationAt = refreshTokenRepository.findByRotatedFrom(jti)
-                .map(RefreshToken::getIssuedAt)
-                .orElse(null);
-
-        boolean alreadyRevoked = existingToken.isRevoked();
+        Instant originalRotationAt = original != null ? original.getIssuedAt() : null;
 
         List<DeviceSession> activeSessions = deviceSessionRepository.findActiveByAccountId(accountId);
         java.util.Map<String, List<String>> jtisByDevice = new java.util.LinkedHashMap<>();
@@ -578,9 +694,15 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         }
 
         // TASK-BE-248 Phase 2b / TASK-BE-259: tenantId from the reused token's DB record
-        // (authoritative). Resolved before publishing so it flows into auth.token.reuse.detected.
-        final String tenantId = existingToken.getTenantId() != null && !existingToken.getTenantId().isBlank()
-                ? existingToken.getTenantId()
+        // (authoritative). TASK-BE-606: on the pre-check path the reused token's own row may be
+        // missing (swallowed initial INSERT), so fall back to the child's — persistRotation
+        // writes the session tenant on every row of one chain.
+        String candidateTenant = reusedRowTenant;
+        if ((candidateTenant == null || candidateTenant.isBlank()) && original != null) {
+            candidateTenant = original.getTenantId();
+        }
+        final String tenantId = candidateTenant != null && !candidateTenant.isBlank()
+                ? candidateTenant
                 : TenantContext.DEFAULT_TENANT_ID; // SAS flow default per persistRotation fallback
 
         // Transactional revoke + outbox publish — all DB writes share one tx so
@@ -589,18 +711,22 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         //     events commit atomically with the revoke (standard outbox pattern).
         // Redis bulk invalidation is intentionally OUTSIDE the tx so a Redis
         // outage cannot roll back the security-critical revoke.
-        Instant reuseAttemptAt = Instant.now();
         Integer revokedCountBoxed = transactionTemplate.execute(status -> {
             int rc = doRevokeAllForReuse(accountId, legacyMirrorKey, activeSessions, reuseAttemptAt);
+            // TASK-BE-606: close the SAS authorizations too. The mirror-row UPDATE refuses the
+            // next refresh of every session whose mirror row it reached (BE-604); this reaches
+            // the sessions it cannot — a mirror row keyed by the login email, or one whose
+            // initial INSERT was swallowed — and also stops their access tokens introspecting
+            // as active. It joins this transaction (JDBC + authorizationService.save).
+            rc += authorizationRevocationPort.revokeActiveRefreshTokens(accountId);
 
-            // Skip event emission if there was nothing to revoke (already-revoked
-            // duplicate-reuse case). Mirrors the prior behaviour.
-            if (alreadyRevoked && rc == 0) {
+            // Nothing left to revoke = the family was already closed; see the method comment.
+            if (rc == 0) {
                 return rc;
             }
 
             authEventPublisher.publishTokenReuseDetected(
-                    accountId, tenantId, jti, originalRotationAt, reuseAttemptAt,
+                    accountId, tenantId, reusedToken, originalRotationAt, reuseAttemptAt,
                     "masked", "unknown", true, rc);
 
             for (DeviceSession session : activeSessions) {
@@ -621,10 +747,42 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // committed security revoke.
         bulkInvalidationStore.invalidateAll(accountId, 2592000L); // 30-day window
 
-        if (alreadyRevoked && revokedCount == 0) {
-            log.info("SAS_REFRESH: reuse on already-revoked token, skip duplicate event. account={}",
-                    accountId);
+        if (revokedCount == 0) {
+            log.info("SAS_REFRESH: reuse of an already-closed refresh-token family, "
+                    + "no event. account={}", accountId);
         }
+    }
+
+    /**
+     * TASK-BE-606 — the SAS authorization that currently holds a head of the rotation chain
+     * below the reused token, or {@code null}.
+     *
+     * <p>Only a head (a row nothing was rotated from) can be held by an authorization — SAS
+     * keeps the current refresh token only. Walks the chain breadth-first, bounded by
+     * {@link #MAX_FAMILY_WALK} rows so a replay of a very old token cannot turn one request
+     * into an unbounded number of queries; past the bound the caller falls back to the
+     * mirror row's own {@code account_id}.
+     */
+    private OAuth2Authorization findFamilyAuthorization(List<RefreshToken> children) {
+        java.util.Deque<RefreshToken> frontier = new java.util.ArrayDeque<>(children);
+        int visited = 0;
+        while (!frontier.isEmpty() && visited < MAX_FAMILY_WALK) {
+            RefreshToken node = frontier.poll();
+            visited++;
+            List<RefreshToken> next = refreshTokenRepository.findAllByRotatedFrom(node.getJti()).stream()
+                    .filter(row -> node.getJti().equals(row.getRotatedFrom()))
+                    .toList();
+            if (next.isEmpty()) {
+                OAuth2Authorization held = authorizationService.findByToken(
+                        node.getJti(), OAuth2TokenType.REFRESH_TOKEN);
+                if (held != null) {
+                    return held;
+                }
+            } else {
+                frontier.addAll(next);
+            }
+        }
+        return null;
     }
 
     /**

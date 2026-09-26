@@ -2,9 +2,12 @@ package com.example.security.service.domain.detection;
 
 /**
  * Port for the per-tenant per-account token-reuse counter backed by Redis.
- * Implementations must be graceful under Redis outage — return 0 and swallow
- * (the rule still fires at score 100 regardless of count: token reuse is a
- * confirmed compromise, not a threshold-driven heuristic).
+ * Implementations must be graceful under Redis outage — return 0 and swallow.
+ *
+ * <p>TASK-BE-606: the count now DRIVES the score — {@link TokenReuseRule} alerts on the
+ * first reuse in the window and locks from the second. 0 means "unknown" (outage) and the
+ * rule treats it as repeated (fail-closed), so an implementation must never return 0 after
+ * a successful increment.</p>
  *
  * <p>TASK-BE-259: counters are isolated per tenant so that a burst of reuse
  * events for one tenant never contributes to another tenant's frequency
