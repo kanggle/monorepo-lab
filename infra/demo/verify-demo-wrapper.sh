@@ -2227,6 +2227,44 @@ if [ -f "$z11_html" ] && [ -f "$z11_lib" ]; then
     || fail "(z11) 대조군 실패(콘솔) — 일부러 다르게 만든 값이 같다고 판정됐습니다. 비교가 죽어 있습니다."
 
   ok "론처·콘솔 계정 ↔ 시드 일치 (email=$z11_s_email · 비밀번호 일치 · 여섯 값 모두 추출 확인 · 콘솔 선언 각 1개 · 대조군 2/2 통과)"
+
+  # -------------------------------------------------------------------------
+  # TASK-MONO-730 — 뷰어(`viewer@demo.com`) 확장.
+  # -------------------------------------------------------------------------
+  # 위 demo@demo.com 짝과 달리 뷰어는 `seed/lib.sh` 의 `user_token()` 이 쓰지 않는다
+  # (BE-597 구현 기록 — "뷰어는 시드 스크립트가 쓰지 않으므로 그 살아 있는 출처가 없다").
+  # 그래서 권위를 auth-service 자격증명 시드의 이메일 **컬럼 값**(파일 머리의 설명 주석이
+  # 아니라 실제 INSERT VALUES)으로 잡는다. 앵커는 그 행의 account_id 리터럴이다 — 이 파일에
+  # 단 한 번만 나오므로(`grep -c` 로 아래에서 재확인) 이메일 *문자열* 을 앵커로 삼을 때의
+  # 함정(문서 산문에 걸림, 위 z11 본문 주석 참조)을 피한다.
+  z11_vcred="$ROOT/projects/iam-platform/apps/auth-service/src/main/resources/db/migration-dev/R__seed_demo_viewer_operator_credential.sql"
+  if [ -f "$z11_vcred" ]; then
+    z11_v_acct="0199de70-0000-7000-8000-00000000ad05"
+    z11_v_n="$(grep -c "$z11_v_acct" "$z11_vcred" || true)"
+    [ "$z11_v_n" = "1" ] || fail "(z11) 뷰어 시드의 account_id 앵커가 $z11_v_n 번 나옵니다(1 이어야 합니다) — 추출이 불안정합니다: $z11_vcred"
+
+    z11_p_vemail="$(sed -n 's/.*id="c-viewer-email"[^>]*>\([^<]*\)<.*/\1/p' "$z11_html" | head -1 | tr -d '\r')"
+    z11_s_vemail="$(sed -n "s/.*'$z11_v_acct', '\([^']*\)'.*/\1/p" "$z11_vcred" | head -1 | tr -d '\r')"
+
+    for z11_pair in "론처 뷰어 이메일:$z11_p_vemail" "시드 뷰어 이메일:$z11_s_vemail"; do
+      z11_name="${z11_pair%%:*}"; z11_val="${z11_pair#*:}"
+      [ -n "$z11_val" ] || fail "(z11) $z11_name 을 뽑지 못했습니다 — 앵커가 갈라졌습니다."\
+        $'\n'"→ 론처는 id=\"c-viewer-email\", 시드는 account_id \`$z11_v_acct\` 옆의 email 컬럼을 앵커로 씁니다."
+    done
+
+    [ "$z11_p_vemail" = "$z11_s_vemail" ] \
+      || fail "(z11) 론처의 뷰어 이메일이 시드 자격증명 컬럼과 다릅니다: 페이지=\"$z11_p_vemail\" · 시드=\"$z11_s_vemail\""\
+        $'\n'"→ 방문자가 이 계정으로 로그인에 실패합니다. 권위는 $z11_vcred 의 email 컬럼입니다(파일 머리 주석의 평문이 아닙니다)."
+
+    # 🔴 대조군 — 위 demo@demo.com 짝과 같은 이유. 사본마다 따로 본다.
+    [ "${z11_p_vemail}x" != "$z11_s_vemail" ] \
+      || fail "(z11) 대조군 실패(뷰어) — 일부러 다르게 만든 값이 같다고 판정됐습니다. 비교가 죽어 있습니다."
+
+    ok "론처 뷰어 계정 ↔ auth-service 자격증명 시드 일치 (email=$z11_s_vemail · account_id 앵커 유일 확인 · 대조군 통과)"
+  else
+    fail "(z11) 뷰어 자격증명 시드 파일이 없습니다: $z11_vcred"\
+      $'\n'"→ TASK-BE-597(#4001) 이 만든 파일입니다. 옮겼다면 이 가드의 경로도 같은 PR 에서 옮기세요."
+  fi
 fi
 
 # ---------------------------------------------------------------------------

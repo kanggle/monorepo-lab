@@ -177,6 +177,13 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
               {DEMO_TEST_ACCOUNT.entitledDomains.join(' · ')})을 모두 구독하므로 고르면 다섯 도메인의 운영 롤이 붙습니다.
             </li>
             <li>비밀번호는 데모 배포의 로그인 화면과 론처에 표시됩니다(이 가이드는 반복하지 않습니다).</li>
+            <li>
+              권한 부족 화면 시연용 계정 <Mono>viewer@demo.com</Mono> 도 있습니다 — 로그인은 되지만
+              역할이 없어(<Mono>admin_operator_roles</Mono> 0행) 대부분의 화면에서 403 「권한 없음」을
+              봅니다. <Mono>/partnerships</Mono> 는 위 <Mono>{DEMO_TEST_ACCOUNT.operatorId}</Mono> 도
+              설계상 403 이라 이 계정만의 특징은 아닙니다. 비밀번호는 위와 같은 자리(데모 로그인
+              화면 · 론처)에 표시됩니다(TASK-BE-597, TASK-MONO-730).
+            </li>
           </ul>
           <Sources sources={[...DEMO_TEST_ACCOUNT.sources]} />
         </Card>

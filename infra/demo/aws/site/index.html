@@ -381,6 +381,32 @@
       권한은 <code>demo-corp</code> 에서 파생되지만 데이터 스코프는 JWT 의 <code>tenant_id</code> 를 따르기 때문입니다.
       <code>demo-corp</code> 인 채로 상품 목록을 열면 빈 목록이 나옵니다(2026-09-11 실측).
     </p>
+
+    <!--
+      권한 부족 시연 계정 (TASK-MONO-730, 재굽기 후 — TASK-BE-597 #4001 이 시딩).
+
+      🔴 위 계정과 달리 **역할이 없다**(admin_operator_roles 0행) — 로그인·콘솔 셸 진입은
+      되지만 게이트된 화면은 전부 403 이다. `/partnerships` 는 위 demo@demo.com(SUPER_ADMIN)
+      도 설계상 403 이므로(ADR-MONO-045) 그 화면 하나로는 이 계정과 구별되지 않는다 — 그래서
+      아래 문구는 「대부분 메뉴」라고만 말한다.
+      🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-viewer-email"` 을
+      `R__seed_demo_viewer_operator_credential.sql` 의 이메일 컬럼과 대조한다.
+    -->
+    <p class="hint" style="margin-top:18px">
+      <strong>권한 부족 화면 시연용</strong> 계정도 있습니다. 로그인하면 콘솔 셸에는 들어가지만
+      역할이 없어 운영자 · 감사 · 테넌트 등 <strong>대부분의 메뉴에서 403 「권한 없음」</strong>을
+      봅니다(<code>/partnerships</code> 는 위 계정도 설계상 403 이라 이 계정만의 특징은 아닙니다).
+    </p>
+    <dl style="margin:0">
+      <div class="crow">
+        <dt>이메일</dt>
+        <dd><code id="c-viewer-email">viewer@demo.com</code><button class="copy" data-copy="c-viewer-email">복사</button></dd>
+      </div>
+      <div class="crow">
+        <dt>비밀번호</dt>
+        <dd><code id="c-viewer-pass">Demo1234!</code><button class="copy" data-copy="c-viewer-pass">복사</button></dd>
+      </div>
+    </dl>
   </div>
 
   <!--
