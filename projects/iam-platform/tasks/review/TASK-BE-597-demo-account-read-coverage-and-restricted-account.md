@@ -222,3 +222,15 @@ In Scope 첫 항목은 "`partnership.manage` 자체에는 이 파일에 같은 �
 - AC-4 — ⚪ **의도적 보류**(위) — 론처·z11 무변경이므로 기존 z11 은 그대로 통과해야 한다(아래 명령).
 - AC-5 — 🟡 유닛 ✅ `DemoViewerOperatorSeedTest` 4/4(+ bite: 링크 키 `…ad05→…ad06` 변조 시 1건 실패, 원복 후 통과 — admin 파일만 바꿨는데 재실행됨 = gradle 입력 배선도 확인), IT ⚪(Docker).
 - AC-6 — ✅ 재굽기 필요(측정 근거 위).
+
+## CORRECTION (2026-09-26 UTC) — 16차 AMI 창 판정: AC-1′ 🟢 PASS · AC-2 🔴 FAIL(도달 불가 → `TASK-PC-FE-301`)
+
+16차 AMI(`ami-0134ac19b5c15ef0d`, RepoCommit `58d4920c4`) · `console.hubwang.com`.
+
+**AC-1′** — `scripts/capture-portfolio.mjs --app console`(`DEMO_TENANT=demo-corp`, `demo@demo.com` = demo-operator SUPER_ADMIN, 16:21:51Z 매니페스트)가 nav 전 라우트를 로그인 상태로 순회하며 장별 거부 판정:
+계획 **68** · 촬영 **56** · 실패 12 = **거부 2**(`/partnerships` `partnerships-permission-denied` · `/tenants` `tenants-permission-denied`) + 동적 경로 미해결 10(`demo-corp` 의 이커머스 목록이 비어 따라갈 링크 없음 — 권한 아님).
+- `/partnerships` 403 = ADR-MONO-045 정답(소유자 브라우저로도 확인: «파트너십 관리는 partnership.manage 권한이 필요합니다»).
+- 🔴 **`/tenants` 도 거부다 — AC-1′ 문구는 `/partnerships` 만 예외로 적었다.** 이것은 `TASK-MONO-676`(DONE) 이 이미 «의도된 거부»(런타임 `403 TENANT_SCOPE_DENIED` — 권한 키가 아니라 플랫폼 스코프 `*` 가 활성 테넌트여야 한다, `app/(console)/tenants/page.tsx:20-22`)로 판정한 칸이다 ⇒ 판정은 **PASS**, 단 문구 불일치를 여기 명시한다(권한 변경 0).
+- 저하 8장(`/` · `/console` · `/login` · `/onboarding` · `/dashboards/*` · `/erp/delegation` · `/wms/operations` 일부)은 `infra/demo/console-vercel.override.yml` 이 적은 영구 한계(Vercel 콘솔 → console-bff 불가)와 같은 목록 — 권한 거부가 아니다.
+
+**AC-2** — `viewer@demo.com` 로그인은 되지만 **스위처가 없고** 게이트 화면 전부가 «테넌트를 먼저 선택하세요» ⇒ 403 에 **도달할 길이 없다**(원인 = 선택 가능 테넌트 0, 상세 `TASK-MONO-730` § CORRECTION 2026-09-26). 소유자 결정 ⓒ → `TASK-PC-FE-301`. 그 티켓이 닫힌 뒤 AC-2 를 «ⓒ 안내가 뜬다» 로 다시 잰다.

@@ -208,7 +208,7 @@ monorepo
   `review/` 이고 이 항목을 넘기며 닫히는 경로다 — **721 이 닫히지 않고 살아남으면 이 항목은
   721 로 되돌려야 한다**(의무 이중 보유 금지). 항목 5 가 683 에서 밟은 그 조건과 같다.
 
-## 🟡 항목 14 (① 배선 PASS · 결과 상태 ⚪ · ② ⚪ — 2026-09-26, § 2026-09-26 창 수확) — `TASK-MONO-726`: batch-worker → order-service `/api/internal/**` 가 **실제로 성립하는가** · `lockAccount` 라우트 (2026-09-24 수령)
+## 🟡 항목 14 (① 배선 PASS · 결과 상태 ⚪ · ② ⚪ 코드 판독상 결함 → `TASK-MONO-735` — 2026-09-26 두 창, § 16차 창 수확) — `TASK-MONO-726`: batch-worker → order-service `/api/internal/**` 가 **실제로 성립하는가** · `lockAccount` 라우트 (2026-09-24 수령)
 
 - **무엇을 재나** (둘, 🔴 앞 칸이 안 되면 뒤 칸은 «측정 불가»):
   ① 🔴 **결과 상태** — 결제 뒤 PAID 인 주문이 `batch.jobs.stale-paid-order-confirmation.older-than-minutes`(30) 뒤 **CONFIRMED** 로 넘어가는가.
@@ -344,6 +344,31 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
 - 출처: `projects/iam-platform/tasks/ready/TASK-BE-604-…` § AC-0. 🔴 **Failure Scenario 2 대조**: 604 는 `ready/` — 결과는 604 AC-0 에도
   적고, 604 가 착수되면 이 항목은 604 로 돌아간다(의무 이중 보유 금지).
 
+# 🟢 2026-09-26 16차 창 수확 (15:06Z 부팅 ~ 16:3xZ · 16차 AMI `ami-0134ac19b5c15ef0d` · 클론 `58d4920c4` · 인스턴스 `i-0917a5e39bd75f1d3` · 신선 볼륨 · 분석=Opus 5.5)
+
+🔵 **부팅 경위**: 옛 인스턴스 `i-09f10c696375ba99b` 가 apply 전에 **이미 AWS 에 없었다**(태그·id 조회 0건 · 볼륨 0) ⇒ plan 이 «replace» 가 아니라 «create»(0 destroy). 누가 지웠는지는 `cloudtrail:LookupEvents` 권한이 없어 미상. 새 인스턴스는 `/start` 를 거치지 않아 선택이 `iam ecommerce` 뿐이었고, 에이전트가 SSM 으로 `demo-boot.sh console wms scm fan erp finance` 를 더 올렸다(96 컨테이너 · unhealthy 0).
+하트비트 = 에이전트가 4분마다 `POST /heartbeat`(지난 창의 유휴 정지 교훈). 14차 AMI(`ami-03789993d93a320c1` · `snap-0c27fc0f645e5fa53`)는 이 창에서 prune(소유자 승인) — 남은 AMI = 15차(롤백본) · 16차.
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 부팅 점검 | 🟢 | RepoCommit `58d4920c4` · `demo-stack` active(7분) · security-service healthy · `DETECT_VELOCITY_THRESHOLD=10000`(컨테이너 env + override 파일) |
+| `TASK-BE-596`(done) 시드 실패 0 · `TASK-MONO-706` 사가 | 🟢 **PASS** | 시드 요약 ecommerce 14 · wms 3 · scm 9 · finance 7 · erp 20 · fan 18 — **실패 0 전부** · `outbound_db.outbound_saga` **COMPLETED=1**(STUCK 0) · `wms.outbound.shipping.confirmed.v1.DLT` **토픽 자체가 생기지 않음** · 모든 DLT/dlq 끝 오프셋 0 |
+| `TASK-BE-599` AC-4 | 🟢 **PASS** | 두 네트워크 `119.204.*.*` ↔ `118.235.*.*` (티켓 § CORRECTION) |
+| `TASK-BE-607` AC-3 | 🟢 **PASS** (서비스 수준) | 변경·재설정 204 · 결과 상태 · `OptimisticLock` 0 · 🔴 게이트웨이 경유는 둘 다 401 → `TASK-BE-609` |
+| `TASK-BE-602` AC-3 | ⚪ 전제 미충족 | 스토어 소셜 계정 생성·이벤트 테넌트 🟢 · 잠금 불가(404) → `TASK-MONO-735` |
+| `TASK-BE-597` AC-1′ · AC-2 | 🟢 · 🔴 | 콘솔 촬영 68/56 · 거부 = `/partnerships` · `/tenants`(676 의 의도된 거부) · viewer 는 403 에 도달 불가 → `TASK-PC-FE-301` |
+| `TASK-MONO-730` AC-1 | 🔴 **FAIL** | 위와 같은 원인 · 소유자 결정 ⓒ → `TASK-PC-FE-301` |
+| `TASK-MONO-697` AC-0 | ⚪ 관측 불가 | prometheus 3곳 게이트웨이 타깃 down(ecommerce = 401) · `result: []` → `TASK-MONO-736` |
+| 항목 14 ① | ⚪ 후보 없음 | 정상 흐름에서 결제 주문은 ~4초에 CONFIRMED(시드 15:11:42 → 15:11:46) ⇒ 후보(결제됐는데 확정 유실)는 **장애 주입으로만** 생긴다 · 원격 DB 쓰기는 분류기가 막는다 |
+| 항목 14 ② `lockAccount` | ⚪ 미측정 · **코드 판독상 같은 결함** | product-service `AccountServiceSellerProvisioner.lockAccount` 도 `X-Tenant-Id` 없음 — 오늘 잰 두 잠금 경로가 같은 모양으로 404 ⇒ `TASK-MONO-735` 에 셋째 호출처로 넣었다(시드 셀러를 정지시켜야 재므로 재지 않음) |
+| 항목 17 | ⚪ 이 창에 재사용 없음 | 실제 트래픽 재사용 **0** — `TOKEN_REUSE` 4행은 전부 BE-602 합성 · 콘솔 `refresh_error` 는 console-web(Vercel) 로그라 **인스턴스에서 측정 경로 없음** |
+| 항목 18 | ⚪ 모집단 측정 불가 · 🟢 **구조적 재현** · **② 구현 티켓 기안 = `TASK-BE-611`** | 모집단 `social_identities` = **0**(유효성 술어) · `refresh_tokens` 22 중 이메일 키 0. 재현(Kakao 스텁, 16:25Z): 한 신원 `60218261625` 으로 스토어 → 팬 소셜 로그인 둘 다 코드 발급 · 계정 **1**(`ecommerce`) · 신원 **1**(`ecommerce`) ⇒ 팬 client 로그인이 스토어 계정으로 들어간다. (② 미러 행 쿼리는 코드→토큰 교환을 안 해서 0행 — 판정은 계정·신원 행으로) · 이 항목의 기안 의무는 **BE-611 로 이행 — 항목 닫힘** |
+| `TASK-PC-FE-299` AC-4 | ⏳ | 데모 정지 뒤 소유자 확인 |
+| `TASK-MONO-648` | 🔵 | 콘솔만 재촬영 — 동적 미해결은 테넌트/앱 사유(티켓 § 2026-09-26) |
+
+🔴 **이 창의 새 결함 (전부 티켓 기안)**: `TASK-MONO-735` 잠금 호출이 계정 테넌트를 안 싣는다(자동 · SUPER_ADMIN · 셀러) · `TASK-BE-609` 게이트웨이 경유 비밀번호 변경/재설정 401 · `TASK-BE-610` 같은 브라우저 소비자 로그인 뒤 콘솔 = `/onboarding`(SSO 가 소비자 principal 을 재사용) · `TASK-PC-FE-301` 선택 가능 테넌트 0 의 막다른 안내 · `TASK-MONO-736` 게이트웨이 audience 카운터 관측 불가.
+🔴 **이 창에서 에이전트가 낸 사고(기록)**: BE-602 스텁용으로 auth-service 를 `demo.env` 없이 재생성 → `OIDC_ISSUER_URL` 이 `http://iam.local` 로 **약 3분간** 바뀌었다(워크로드 토큰 401). 같은 창에서 `demo.env` 를 source 해 복구 · 최종 원상복구 뒤 발급자 `https://auth.hubwang.com` · KAKAO env 0 확인.
+⚪ 곁관측: `login_history` 에 인스턴스 자신의 공인 주소(`43.203.*.*`, UA `Other`)로 찍힌 `demo@demo.com` 로그인 3건(15:25Z) — 출처 미확인(시드 또는 서버 쪽 호출로 추정), 판정에서 제외.
 # 🟢 2026-09-26 창 수확 (02:42:55–~03:05Z · 예산 1491 → 1512/1800 · 15차 AMI `ami-004f04b67daf40b89` · 클론 `46aa3191` · 분석=Opus 5.5)
 
 🔴 **창이 약 03:05Z 에 스스로 꺼졌다 — 유휴 정지다.** 제어 Lambda 는 마지막 하트비트 뒤 `idle_minutes`(20) 가 지나면 정지한다
@@ -1705,7 +1730,7 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
             항목 5 ②③                        (제안을 만드는 선행 경로)
 ```
 
-## 🟡 항목 17 (수령 2026-09-26) — `TASK-BE-608` AC-4: 늦은 재제출 오탐의 빈도 (2026-09-26 수령)
+## 🟡 항목 17 (수령 2026-09-26 · 16차 창: 재사용 0 — 판정 불가, § 16차 창 수확) — `TASK-BE-608` AC-4: 늦은 재제출 오탐의 빈도 (2026-09-26 수령)
 
 - **왜 재나**: `TASK-BE-606`(자동 잠금을 재사용 **횟수**로 가르는 변경)이 후속으로 남긴 넷 중 하나 —
   콘솔이 refresh 응답을 잃으면 쿠키를 그대로 두고(`console-web/src/shared/lib/session-refresh.ts:229-231`)
@@ -1732,7 +1757,7 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
   Scenario 대조 없음** — 608 은 이 AC 를 "측정값 또는 «측정 불가 + 이유»"로 닫는 것을 허용했고,
   이 항목으로의 이관 자체가 그 이유다(창이 서야만 잴 수 있다).
 
-## 🟡 항목 18 (수령 2026-09-26) — `TASK-BE-605` ② (iii): 소셜 신원 조회를 **client 테넌트로 한정**하면 누가 영향을 받는가 (2026-09-26 수령)
+## ✅ 항목 18 (닫힘 2026-09-26 16차 창 — 모집단 0 · 구조적 재현 성립 · ② 구현 = `TASK-BE-611` 기안, § 16차 창 수확) — `TASK-BE-605` ② (iii): 소셜 신원 조회를 **client 테넌트로 한정**하면 누가 영향을 받는가 (2026-09-26 수령)
 
 - **왜 재나**: 소유자 결정(2026-09-26 UTC) = ② (iii) «소셜 신원 조회를 시작 client 의 테넌트로 한정» — 단 **모집단을 먼저 잰다**.
   지금 조회는 전역이다(`SocialIdentityRepository.findByProviderAndProviderUserId` — `OAuthLoginUseCase.java:250` · `SocialLoginSteps.java:47`)

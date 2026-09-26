@@ -1649,3 +1649,12 @@ sellers/[id] · users/[id]` · `store /my/orders/[id] · /products/[id]` · `fan
 캡션에 «배송 완료는 WMS 출고가 이벤트로 밀어 올린 결과» 를 넣었다가 **뺐다** — 잰 적 없는 인과다.
 🔴 `site/thumbnails/`(론처)는 **안 건드렸다** — 이 선택은 README 용이고, 론처는 (z37) 삼중 대조가
 걸린 별도 결정이다.
+
+---
+
+# 🔵 2026-09-26 UTC 16차 AMI 창 — 콘솔만 재촬영(`demo-corp`) · 동적 칸은 **다시 찍어도 안 풀린다**
+
+`TASK-BE-597` AC-1′ 판정용으로 콘솔만 찍었다(`--app console`, `DEMO_TENANT=demo-corp`, Playwright 는 scratchpad 설치 · 저장소 무변경). 계획 68 · 촬영 56 · 실패 12
+(거부 2 `/partnerships` · `/tenants` = 의도 · 동적 미해결 10). 🔴 **동적 10개가 전부 `demo-corp` 의 빈 이커머스 목록 때문**이다 — 09-22 의 결론(«동적 경로는 테넌트에 달려 있다», `DEMO_TENANT=ecommerce` 판이 7개를 푼다)과 같다.
+09-22 에 끝까지 남은 3개(`/ecommerce/notifications/templates/[id]/edit` 목록에 상세 링크 없음 · `/ecommerce/settlements/periods/[id]` 부모 404 · store `/orders/[id]`)는 **앱 쪽 사유**라 재촬영으로 풀리지 않는다.
+촬영본은 scratchpad 에만 있다(승인 목록 결정 전이라 보관하지 않았다 — 이 창의 목적은 판정이었다).
