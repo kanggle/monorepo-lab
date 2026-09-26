@@ -241,3 +241,24 @@ Google · Microsoft 는 id_token JWKS 서명 검증이 있어 스텁이 더 무�
 1. **시작 client 의 테넌트를 믿는다** → BE-507 이전 계정에 틀린 테넌트 → 잠금 누락 · VELOCITY 오집계.
 2. **404 를 거부로 바꾼다** → 스토어 소셜 로그인 전면 차단.
 3. **이벤트를 계약 밖 값으로 낸다** → 소비자가 DLQ 로 보낸다(테넌트·필드 규칙).
+
+## CORRECTION (2026-09-26 UTC) — AC-3 창 판정: ⚪ 전제 미충족 (스토어 계정을 **잠글 방법이 없다**) — 🟢 두 부분은 라이브로 확인
+
+16차 AMI(`58d4920c4`) · 런북대로 Kakao 스텁. 🔵 WireMock 대신 **호스트 python 스텁**(`172.19.0.1:18602` — iam 네트워크 게이트웨이, 이미지 pull 없음) + auth-service 를
+`OAUTH_KAKAO_TOKEN_URI`/`…TOKENURI`/`…USER_INFO_URI`/`…USERINFOURI` 오버라이드로 재생성. 바인딩은 **스텁 접근 로그**로 확인(`POST /oauth/token` · `GET /v2/user/me` 도착).
+🔴 재생성 함정 두 개(다음 창을 위해 적는다):
+- `infra/demo/demo.env` 를 source 하지 않고 `docker compose up` 하면 `OIDC_ISSUER_URL` 이 `https://auth.hubwang.com` → **`http://iam.local`** 로 바뀐다 → 워크로드 토큰을 account-service 가 거부(소셜 가입 401 → `temporarily_unavailable`). `set -a; source infra/demo/demo.env; set +a; export DEMO_DOMAIN=<ip-대시>.sslip.io` 를 먼저.
+- 데모 설정에서 Kakao 시작 자체가 `provider_error` — 브라우저 콜백 `https://auth.hubwang.com/login/oauth/kakao/callback` 이 기본 `allowed-redirect-uris` 에 없다. 측정은 `OAUTH_KAKAO_ALLOWED_REDIRECT_URIS` 를 더해서 했다(데모엔 실제 Kakao 자격이 없어 소셜은 원래 데모 기능이 아니다 — 기록만).
+- 스토어 client 는 PKCE 필수이고, `Accept: text/html` 없는 authorize 는 `/login` 대신 **401** 을 준다.
+
+| 단계 | 결과 |
+|---|---|
+| 3 대조군 — `ecommerce-web-store-client` authorize → `/login/oauth/kakao` → 콜백 | 302 저장된 authorize → **코드 발급** 🟢 |
+| 계정 행 (`be602s-261551@ex.io`) | `419f99a1-…` · **`tenant_id=ecommerce`** · ACTIVE 🟢 |
+| AC-2 결과 상태 (`login_history`) | `ecommerce` ATTEMPTED · SUCCESS 🟢 (계정의 실제 테넌트) |
+| 4 잠금 — 합성 `auth.token.reuse.detected` ×2 (`tenantId=ecommerce`) | 1건째 ALERT · 2건째 AUTO_LOCK → **`Auto-lock non-retryable 4xx: status=404`** → **ACTIVE 그대로** 🔴 |
+| 4′ 운영자 잠금 (콘솔 `demo@demo.com`, 소유자) | **500** — admin-service → account-service **404**, 재시도가 같은 멱등 키로 감사 행 중복(`Duplicate entry … idx_admin_actions_idemp`) → fail-closed 🔴 |
+| 5 판정 | ⚪ **잠기지 않았으므로 판정 불가** (소셜 로그인 성공은 FAIL 이 아니다) |
+
+🟢 **규칙 자체는 `fan-platform` 계정으로 라이브 확인**: `be602-261549@ex.io`(`4d8961ea-…`) — 합성 재사용 2건 → **LOCKED(~2s)** → 소셜 콜백 **`/login?error=account_unavailable`** · `login_history` FAILURE 1.
+🔴 **원인(새 결함)**: 잠금 호출이 계정의 테넌트를 싣지 않는다 — security-service `AccountServiceClient.lock`(헤더 없음) · admin-service `lock`(SUPER_ADMIN 은 `"*"` → 헤더 없음) ⇒ account-service 는 `fan-platform` 으로 찾아 404. 후속 = **`TASK-MONO-735`**. AC-3 은 그 티켓이 닫힌 뒤 같은 런북으로 다시 잰다.

@@ -241,3 +241,19 @@ docker exec wms-prometheus sh -lc \
 🔴 **그 질의가 빈 결과를 내면 결론은 «섀도가 관측 불가능하게 출하됐다» 이고, 그것은 이 티켓이
 아니라 새 티켓(계측기를 노출하는 일)이다.** 「불일치 0」으로 읽고 ENFORCE 로 넘기지 마라 —
 `TASK-MONO-696` 2단계의 전환 조건은 **실측**이지 «빨간 게 안 보인다» 가 아니다.
+
+---
+
+# ⚪ 2026-09-26 UTC 16차 AMI 창 — 정정 ③ 의 탐침을 돌렸다: **섀도는 관측 불가능하게 출하됐다** → `TASK-MONO-736`
+
+트래픽: 소유자가 콘솔(`demo-corp`) · web-store · fan 웹에 로그인. 그 뒤(16:1xZ) 도메인 prometheus 에 질의:
+
+| prometheus | `gateway-service` 타깃 | `gateway_jwt_audience_total` · `{__name__=~"gateway_jwt.*"}` |
+|---|---|---|
+| `ecommerce-prometheus` | **down — `server returned HTTP status 401 Unauthorized`** | `result: []` |
+| `wms-prometheus` | **down** (연결 실패) | `result: []` |
+| `iam-prometheus` | **down** (연결 실패) | `result: []` |
+
+게이트웨이 7개 `JWT audience not on allowlist` WARN 은 전부 **0줄** — 정정 ③ 대로 분모가 없어 판정이 아니다.
+⇒ 정정 ③ 의 마지막 문장 그대로다: *«그 질의가 빈 결과를 내면 결론은 «섀도가 관측 불가능하게 출하됐다» 이고, 그것은 이 티켓이 아니라 새 티켓(계측기를 노출하는 일)이다.»*
+→ 새 티켓 **`TASK-MONO-736`** 기안. **AC-0 은 여전히 열려 있다 — 이 티켓은 `ready/` 에 그대로.**

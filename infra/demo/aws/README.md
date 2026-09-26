@@ -52,7 +52,9 @@ terraform output api_base_url
 ```
 
 **방문자가 여는 주소는 terraform 이 모른다.** 론처의 집은 **Vercel 하나**다
-(`https://kanggle-portfolio.vercel.app` — `ADR-MONO-067` D3, `TASK-MONO-579`).
+(`https://hubwang.com` — `ADR-MONO-067` D3, `TASK-MONO-579`, `TASK-MONO-584`).
+🔴 예전에 여기 적혀 있던 `https://kanggle-portfolio.vercel.app` 은 **죽었다**(404 — 2026-08-29 부터, 2026-09-26 재측;
+`site/check-launcher-fresh.sh:52` 가 이미 그렇게 적었다). 🔵 CORS 허용 목록(`terraform.tfvars` `allowed_origins`)에는 전환 창 때문에 둘 다 남아 있다.
 
 > 🔴 예전에는 여기에 `terraform output site_url`(CloudFront 도메인)이 있었고, 정적 사이트가
 > **S3 + CloudFront 에도** 배포됐다. 론처가 **두 집**을 갖고 있었던 것이고, Vercel 판은 커밋마다

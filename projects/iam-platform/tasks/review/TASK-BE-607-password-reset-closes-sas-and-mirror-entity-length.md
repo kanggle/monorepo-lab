@@ -110,3 +110,23 @@ iam-platform
 - `ChangePasswordUseCase` — 바꾸지 않음. 근거는 위 § AC-1 부속 결정(스펙이 "선택적 보안 강화 모드"로 명시, 트리거 필드가 계약에 없음).
 - AC-3(비밀번호 변경 실패의 실제 영향, 데모 로그/응답) — 미착수, 라이브 창 필요. 런북은 위 § AC-3.
 - `ForceLogoutUseCase`(TASK-BE-601)·`SasAuthorizationRevocationAdapter` 본체는 건드리지 않음 — 재사용만.
+
+## CORRECTION (2026-09-26 UTC) — AC-3 라이브 판정: 🟢 PASS (서비스 수준) · 🔴 게이트웨이 경로는 둘 다 막혀 있다 → `TASK-BE-609`
+
+16차 AMI(`58d4920c4` — BE-604 `06031b053` · BE-607 포함) 신선 볼륨. 일회용 계정 `b7-261521@ex.io`(`7e8ea56e-…`, fan-platform), 인스턴스 안에서 `curl`.
+🔴 **호출 경로를 밝힌다**: auth-service 에 **직접**, 게이트웨이가 하는 `X-Account-Id` 주입을 흉내 냈다(아래 ②의 이유).
+
+| 단계 | 결과 |
+|---|---|
+| 대조군: 가입 201 · PKCE 폼 로그인 · refresh | 성공 · 200 |
+| 변경 `PATCH /api/auth/password` P1→P2 | **204** · P2 로그인 성공 · P1 로그인 `/login?error` |
+| 재설정 `request` → Redis `pwd-reset:{token}`(값 = 계정 id) → `confirm` P3 | **204 · 204** · P3 성공 · P2 `/login?error` |
+| 재설정 전 P2 세션 refresh (대조군 200) → 재설정 뒤 | **400 `invalid_grant`** (AC-1 의 SAS 폐기 라이브 확인) |
+| auth-service 로그(T0 이후) | `OptimisticLock` **0** · ERROR **0** · `Password reset confirmed … revokedTokens=4, sasAuthorizations=4` |
+
+⇒ Failure Scenario 2 구별: 호출이 **있었고**(204 · 로그 줄) 실패 흔적이 0 이다 — «호출 0 이라 흔적 없음» 이 아니다. **AC-3 닫힘.**
+
+🔴 **② 새 결함 — 게이트웨이를 거치면 두 API 모두 쓸 수 없다** (iam 게이트웨이 `iam-gateway-service`, 같은 창):
+- `POST /api/auth/password-reset/request|confirm` → **401 `TOKEN_INVALID`** — 게이트웨이 `public-paths` 에 없다(`gateway-service/src/main/resources/application.yml` § public-paths). 비로그인 사용자가 부르는 API 다.
+- `PATCH /api/auth/password` + 유효한 사용자 Bearer → 게이트웨이는 통과, auth-service 가 **401 `Missing or invalid internal credentials`**. 직접 호출로 재현: `X-Account-Id` 만 → 400(정상 판정) · 같은 요청 + `Authorization: Bearer <사용자 토큰>` → 401. 게이트웨이가 넘긴 사용자 Bearer 를 auth-service 의 내부 자격 체인이 검사하는 것으로 보인다.
+- 두 API 를 부르는 프런트는 **0**(저장소 grep) — 그래서 지금까지 안 보였다. 후속 = `TASK-BE-609`.

@@ -76,8 +76,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
-
+- `TASK-BE-609-password-change-and-reset-unreachable-through-the-gateway.md` — **READY (2026-09-26 UTC)** 🔴 비밀번호 변경 · 재설정이 **게이트웨이를 거치면 401** — 재설정은 iam 게이트웨이 `public-paths` 누락(`TOKEN_INVALID`), 변경은 사용자 Bearer 를 auth-service 가 내부 자격으로 거부. 서비스 자체는 정상(`TASK-BE-607` AC-3 창 PASS). 부르는 프런트 0. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-BE-610-console-sso-reuses-a-consumer-session-and-lands-on-onboarding.md` — **READY (2026-09-26 UTC)** 같은 브라우저에서 스토어 · 팬 로그인 뒤 콘솔을 열면 SSO 가 **소비자 principal** 을 재사용 → `demo@demo.com` 이 `/onboarding`. 🔴 AC-0 소유자 결정(콘솔 면제 · ADR-MONO-044 D5 와의 관계). 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — **READY (2026-09-26 UTC)** `TASK-BE-605` 결정 ② (iii) 구현 — 소셜 신원 조회를 시작 client 테넌트로 한정. `TASK-MONO-672` 항목 18 이 기안(모집단 0 · 구조적 재현: 한 신원이 스토어 → 팬에서 **같은 ecommerce 계정**). 🔴 AC-0 소유자 결정(스펙 규칙 개정 · 기존 교차 신원). 분석=Opus 5.5 / 구현 권장=Opus.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 

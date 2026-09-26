@@ -116,3 +116,11 @@ monorepo
 5. `/operators` · `/audit` · `/tenants` 등 게이트된 화면으로 이동 → 403 「권한 없음」 렌더 확인. `/partnerships` 는 demo-operator(SUPER_ADMIN)도 403 이므로 이 계정만의 증거로 쓰지 않는다(BE-597 IT `DemoOperatorSeedIntegrationTest#viewerIsDeniedOnGatedReads` 가 코드 레벨로는 이미 핀).
 6. 스크린샷 저장(로그인 화면 · `/api/admin/me` 응답 · 게이트된 화면 403 화면 1장 이상) → 이 섹션에 경로/타임스탬프로 기록.
 7. 통과하면 AC-1 체크박스를 `[x]` 로, Status 를 `done` 후보로 갱신하고 `tasks/INDEX.md` 를 정리한다(4차원 검증 포함).
+
+## CORRECTION (2026-09-26 UTC) — AC-1 창 판정: 🔴 FAIL — 403 화면에 **도달할 길이 없다** · 소유자 결정 ⓒ → `TASK-PC-FE-301`
+
+16차 AMI(`58d4920c4`) · 소유자 브라우저(`console.hubwang.com`, `viewer@demo.com`). 로그인은 성공한다. 그러나 **테넌트 스위처가 없고** 모든 게이트 화면이
+«테넌트를 먼저 선택하세요» 를 그린다 — 403 「권한 없음」 까지 가지 못한다.
+- 원인(코드): 선택 가능한 테넌트 = 운영자가 쓸 수 있는 상품의 테넌트(`console-web/src/shared/lib/active-tenant-default.ts:44` `selectableTenants`). 역할 0 ⇒ 상품 0 ⇒ 테넌트 0 ⇒ 스위처 없음. 게이트 화면들은 **권한보다 테넌트를 먼저** 검사한다(`operators` · `audit` · `tenants` · `accounts` · `permissions` … 의 `page.tsx`).
+- 대조군: `demo@demo.com`(SUPER_ADMIN)으로 `/partnerships` → 「파트너십 관리는 partnership.manage 권한이 필요합니다」 — 권한 거부 화면 자체는 동작한다.
+- **소유자 결정 (2026-09-26 UTC) = ⓒ** «선택 가능한 테넌트가 0 이면 `테넌트를 선택하세요` 대신 `접근 가능한 테넌트가 없습니다(권한 없음)` 를 보인다» (기각: ⓐ viewer 에 권한 없는 테넌트 부여 · ⓑ 현 동작을 정답으로). 구현 = `TASK-PC-FE-301`. 이 AC 는 그 티켓이 닫힌 뒤 같은 절차로 다시 잰다 — 기대값을 «ⓒ 의 안내가 뜬다» 로 바꿔 읽는다.
