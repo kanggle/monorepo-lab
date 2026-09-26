@@ -140,7 +140,8 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/lock returns 200")
     void lockAccount_validRequest_returns200() throws Exception {
-        given(accountStatusUseCase.changeStatus(any(), any()))
+        // TASK-MONO-735: no X-Tenant-Id → the account's own tenant (row lookup).
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
                 .willReturn(new StatusChangeResult("acc-123", "ACTIVE", "LOCKED", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/lock")
@@ -159,7 +160,7 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/lock DELETED account returns 409")
     void lockAccount_deletedAccount_returns409() throws Exception {
-        given(accountStatusUseCase.changeStatus(any(), any()))
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
                 .willThrow(new StateTransitionException(AccountStatus.DELETED, AccountStatus.LOCKED,
                         StatusChangeReason.ADMIN_LOCK));
 
@@ -178,7 +179,7 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/unlock returns 200")
     void unlockAccount_validRequest_returns200() throws Exception {
-        given(accountStatusUseCase.changeStatus(any(), any()))
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
                 .willReturn(new StatusChangeResult("acc-123", "LOCKED", "ACTIVE", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-123/unlock")
@@ -198,8 +199,8 @@ class InternalControllerSliceTest {
     @DisplayName("POST /internal/accounts/{id}/delete returns 202")
     void deleteAccount_validRequest_returns202() throws Exception {
         Instant gracePeriodEndsAt = Instant.now().plusSeconds(30 * 24 * 3600L);
-        given(accountStatusUseCase.deleteAccount(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1"), any()))
+        given(accountStatusUseCase.deleteAccountResolvingTenant(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
+                eq("operator"), eq("op-1")))
                 .willReturn(new DeleteAccountResult("acc-123", "ACTIVE", "DELETED", gracePeriodEndsAt));
 
         mockMvc.perform(post("/internal/accounts/acc-123/delete")
@@ -220,8 +221,8 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/delete already DELETED returns 409")
     void deleteAccount_alreadyDeleted_returns409() throws Exception {
-        given(accountStatusUseCase.deleteAccount(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1"), any()))
+        given(accountStatusUseCase.deleteAccountResolvingTenant(eq("acc-123"), eq(StatusChangeReason.ADMIN_DELETE),
+                eq("operator"), eq("op-1")))
                 .willThrow(new StateTransitionException(AccountStatus.DELETED, AccountStatus.DELETED,
                         StatusChangeReason.ADMIN_DELETE));
 
@@ -240,8 +241,8 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("POST /internal/accounts/{id}/delete not found returns 404")
     void deleteAccount_notFound_returns404() throws Exception {
-        given(accountStatusUseCase.deleteAccount(eq("acc-999"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1"), any()))
+        given(accountStatusUseCase.deleteAccountResolvingTenant(eq("acc-999"), eq(StatusChangeReason.ADMIN_DELETE),
+                eq("operator"), eq("op-1")))
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(post("/internal/accounts/acc-999/delete")
@@ -254,6 +255,115 @@ class InternalControllerSliceTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
+
+    // --- TASK-MONO-735: which lookup /lock · /unlock · /delete use ---
+
+    private static final String LOCK_BODY = """
+            {"reason": "AUTO_DETECT", "ruleCode": "TOKEN_REUSE", "riskScore": 90}
+            """;
+
+    @Test
+    @DisplayName("TASK-MONO-735: lock 헤더 없음 → 계정 행의 테넌트로 찾는다 (fan-platform 고정 아님)")
+    void lock_noTenantHeader_resolvesTenantFromRow() throws Exception {
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
+                .willReturn(new StatusChangeResult("acc-ec", "ACTIVE", "LOCKED", Instant.now()));
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/lock")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
+
+        verify(accountStatusUseCase, never()).changeStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: lock X-Tenant-Id='*' (SUPER_ADMIN) → 계정 행의 테넌트로 찾는다")
+    void lock_wildcardTenantHeader_resolvesTenantFromRow() throws Exception {
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
+                .willReturn(new StatusChangeResult("acc-ec", "ACTIVE", "LOCKED", Instant.now()));
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/lock")
+                        .header("X-Tenant-Id", "*")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isOk());
+
+        verify(accountStatusUseCase, never()).changeStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735 대조군: lock X-Tenant-Id=ecommerce → 그 테넌트로 한정 (계정 행 해소 안 씀)")
+    void lock_concreteTenantHeader_staysConfined() throws Exception {
+        given(accountStatusUseCase.changeStatus(any(), eq(new TenantId("ecommerce"))))
+                .willReturn(new StatusChangeResult("acc-ec", "ACTIVE", "LOCKED", Instant.now()));
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/lock")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isOk());
+
+        verify(accountStatusUseCase, never()).changeStatusResolvingTenant(any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735 대조군: lock X-Tenant-Id=fan-platform + 계정이 다른 테넌트 → 404 (격리 유지)")
+    void lock_concreteTenantHeader_crossTenant_returns404() throws Exception {
+        given(accountStatusUseCase.changeStatus(any(), eq(TenantId.FAN_PLATFORM)))
+                .willThrow(new AccountNotFoundException("acc-ec"));
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/lock")
+                        .header("X-Tenant-Id", "fan-platform")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+
+        verify(accountStatusUseCase, never()).changeStatusResolvingTenant(any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: unlock 헤더 없음 → 계정 행 · 헤더 있음 → 한정")
+    void unlock_splitsOnTenantHeader() throws Exception {
+        given(accountStatusUseCase.changeStatusResolvingTenant(any()))
+                .willReturn(new StatusChangeResult("acc-ec", "LOCKED", "ACTIVE", Instant.now()));
+        given(accountStatusUseCase.changeStatus(any(), eq(new TenantId("ecommerce"))))
+                .willReturn(new StatusChangeResult("acc-ec", "LOCKED", "ACTIVE", Instant.now()));
+        String body = """
+                {"reason": "ADMIN_UNLOCK", "operatorId": "op-1"}
+                """;
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/unlock")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/internal/accounts/acc-ec/unlock")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+
+        verify(accountStatusUseCase).changeStatusResolvingTenant(any());
+        verify(accountStatusUseCase).changeStatus(any(), eq(new TenantId("ecommerce")));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735 대조군: delete X-Tenant-Id=ecommerce → 그 테넌트로 한정")
+    void delete_concreteTenantHeader_staysConfined() throws Exception {
+        given(accountStatusUseCase.deleteAccount(eq("acc-ec"), eq(StatusChangeReason.ADMIN_DELETE),
+                eq("operator"), eq("op-1"), eq(new TenantId("ecommerce"))))
+                .willReturn(new DeleteAccountResult("acc-ec", "ACTIVE", "DELETED", Instant.now()));
+
+        mockMvc.perform(post("/internal/accounts/acc-ec/delete")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "ADMIN_DELETE", "operatorId": "op-1"}
+                                """))
+                .andExpect(status().isAccepted());
+
+        verify(accountStatusUseCase, never())
+                .deleteAccountResolvingTenant(anyString(), any(), anyString(), anyString());
     }
 
     // --- Social Signup ---

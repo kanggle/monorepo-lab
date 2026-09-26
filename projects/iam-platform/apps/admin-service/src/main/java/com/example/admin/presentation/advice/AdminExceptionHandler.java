@@ -317,6 +317,15 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH", e.getMessage()));
     }
 
+    // TASK-MONO-735 — account-service 404 on an operator lock/unlock (admin-api.md: 404
+    // ACCOUNT_NOT_FOUND — missing OR cross-tenant, enumeration-safe). Was 503 DOWNSTREAM_ERROR.
+    @ExceptionHandler(com.example.admin.application.exception.TargetAccountNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTargetAccountNotFound(
+            com.example.admin.application.exception.TargetAccountNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("ACCOUNT_NOT_FOUND", e.getMessage()));
+    }
+
     @ExceptionHandler(StateTransitionInvalidException.class)
     public ResponseEntity<ErrorResponse> handleStateTransition(StateTransitionInvalidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

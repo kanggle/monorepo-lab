@@ -93,7 +93,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 | 헤더 | 필수 | 설명 |
 |---|---|---|
-| `X-Tenant-Id` | No | 계정이 속한 테넌트. 형제 엔드포인트(`/lock` · `/unlock` · `/delete`)와 같은 해석 — **없거나 공백이면 `fan-platform` 고정**(BE-600 이전 동작 그대로 · membership-service · admin-service 는 헤더를 보내지 않아 net-zero. 🔴 이 고정은 그 호출자들을 위해 **바꾸지 않는다** — «헤더 없음 = 테넌트 모름» 이 필요한 호출자는 아래 `status-with-tenant` 를 쓴다, TASK-BE-602). 🔴 BE-600 이전 이 엔드포인트만 헤더를 받지 않아, `fan-platform` 밖의 계정은 `/lock` 으로 잠글 수는 있어도 여기서는 404 로 보였다 |
+| `X-Tenant-Id` | No | 계정이 속한 테넌트. **없거나 공백이면 `fan-platform` 고정**(🔴 TASK-MONO-735 부터 형제 변이 엔드포인트 `/lock` · `/unlock` · `/delete` 는 헤더가 없으면 **계정 행의 테넌트**로 찾는다 — 이 읽기는 그 변경을 따르지 **않는다**. BE-600 이전 동작 그대로 · membership-service · admin-service 는 헤더를 보내지 않아 net-zero. 🔴 이 고정은 그 호출자들을 위해 **바꾸지 않는다** — «헤더 없음 = 테넌트 모름» 이 필요한 호출자는 아래 `status-with-tenant` 를 쓴다, TASK-BE-602). 🔴 BE-600 이전 이 엔드포인트만 헤더를 받지 않아, `fan-platform` 밖의 계정은 `/lock` 으로 잠글 수는 있어도 여기서는 404 로 보였다 |
 
 **Response 200**:
 ```json
@@ -141,6 +141,12 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 ① **내부 전용**(`/internal/**`, 워크로드 JWT — 게이트웨이 퍼블릭 라우트 금지) ② 조회 키가 전역 유일 PK(`accounts.id`, UUID)라 결과가 최대 1행이고
 다른 테넌트의 행을 «섞어» 돌려줄 수 없다 ③ 응답이 그 행의 `tenantId` 를 **함께** 돌려줘 호출자가 테넌트를 추측하지 않는다 ④ 응답에 PII 없음
 (이메일 · 프로필 미포함). 이 조건 밖의 새 «테넌트 없는 조회» 는 이 예외를 근거로 삼을 수 없다.
+
+🔵 **같은 finder 의 두 번째 사용 (TASK-MONO-735, 2026-09-26)** — `POST /internal/accounts/{id}/lock` · `/unlock` · `/delete` 가
+`X-Tenant-Id` 가 **없거나 공백이거나 `*`** 일 때만 이 finder 로 대상 계정을 찾는다([admin-to-account.md § Tenant Confinement](admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467)).
+성립 조건은 ①② 그대로이고, ③ 은 «호출자가 테넌트를 **말하지 않았을 때만**» 으로 바뀐다 — 구체 테넌트를 말한 호출은 여전히 그 테넌트로
+한정된다(교차 → 404). ④ 응답(`accountId` · 상태 · 시각)에 PII 없음. 새 예외가 아니라 **같은 예외의 등록된 두 번째 소비처**다 —
+[multi-tenancy.md](../../../features/multi-tenancy.md#격리-회귀-방지) 에 한 줄로 적었다.
 
 **Path Parameters**:
 

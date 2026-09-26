@@ -366,6 +366,12 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
     성립 조건(전역 유일 PK · 응답에 그 행의 `tenant_id` 포함 · 내부 전용 · PII 없음)과 근거는
     [auth-to-account.md § status-with-tenant](../contracts/http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant).
     이 예외를 다른 조회의 근거로 넓히지 않는다 — 새 예외는 같은 형식으로 여기에 한 줄씩 적는다.
+    - **같은 finder 의 두 번째 소비처 (TASK-MONO-735, 2026-09-26 소유자 결정 (c))** — 내부 전용 `POST /internal/accounts/{accountId}/lock` ·
+      `/unlock` · `/delete` 가 `X-Tenant-Id` 가 **없거나 공백이거나 `*`** 일 때만 대상 계정을 이 finder 로 찾는다(헤더 없는 자동 잠금 ·
+      SUPER_ADMIN(`*`) 잠금이 `fan-platform` 밖 계정을 404 로 놓치던 결함). 🔴 **헤더가 구체 테넌트를 말하면 지금처럼 그 테넌트로 한정**
+      (교차 → 404) — 헤더 유무와 무관하게 풀면 격리가 풀린다. 테넌트를 아는 호출자(security-service 자동 잠금 · product-service 셀러 정지)는
+      심층 방어로 헤더를 **명시**한다. 근거·조건: [admin-to-account.md § Tenant Confinement](../contracts/http/internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
+      `/gdpr-delete` · `/export` 는 이 소비처가 **아니다**(여전히 `fan-platform` 기본값).
   - ⚪ «정적 분석으로 차단» 은 현재 **없다**(2026-09-25 확인: account-service 테스트에 ArchUnit/리플렉션 기반 규칙 0). 지금 이 규칙을 지키는 것은 리뷰뿐이다.
 - **Specification/QueryDSL**: 동적 쿼리 빌더에 tenant predicate가 자동 주입되도록 base specification 제공
 - **테스트**: 모든 도메인 통합 테스트에 **cross-tenant leak 회귀 테스트** 포함 — 다른 `tenant_id`로 동일 PK·이메일 조회 시 결과가 격리되는지 검증

@@ -55,9 +55,7 @@ public class AccountLockController {
                 details.isEmpty() ? null : toJson(details)
         );
 
-        StatusChangeResult result = accountStatusUseCase.changeStatus(
-                command, TenantId.fromHeaderOrDefault(tenantId));
-        return ResponseEntity.ok(StatusChangeResponse.from(result));
+        return ResponseEntity.ok(StatusChangeResponse.from(changeStatus(command, tenantId)));
     }
 
     @PostMapping("/{accountId}/unlock")
@@ -79,9 +77,7 @@ public class AccountLockController {
                 details.isEmpty() ? null : toJson(details)
         );
 
-        StatusChangeResult result = accountStatusUseCase.changeStatus(
-                command, TenantId.fromHeaderOrDefault(tenantId));
-        return ResponseEntity.ok(StatusChangeResponse.from(result));
+        return ResponseEntity.ok(StatusChangeResponse.from(changeStatus(command, tenantId)));
     }
 
     @PostMapping("/{accountId}/delete")
@@ -91,16 +87,44 @@ public class AccountLockController {
             @Valid @RequestBody InternalDeleteAccountRequest request) {
         StatusChangeReason reason = StatusChangeReason.valueOf(request.reason());
 
-        DeleteAccountResult result = accountStatusUseCase.deleteAccount(
-                accountId,
-                reason,
-                "operator",
-                request.operatorId(),
-                TenantId.fromHeaderOrDefault(tenantId)
-        );
+        DeleteAccountResult result = namesTenant(tenantId)
+                ? accountStatusUseCase.deleteAccount(
+                        accountId, reason, "operator", request.operatorId(),
+                        TenantId.fromHeaderOrDefault(tenantId))
+                : accountStatusUseCase.deleteAccountResolvingTenant(
+                        accountId, reason, "operator", request.operatorId());
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(DeleteAccountResponse.from(result));
+    }
+
+    /**
+     * TASK-MONO-735 — how {@code /lock} and {@code /unlock} find the target ({@code /delete} applies
+     * the same {@link #namesTenant} split inline).
+     *
+     * <p>A caller that names a concrete tenant is confined to it: the tenant-scoped
+     * {@code findById} returns empty for an account in another tenant → 404, enumeration-safe
+     * (TASK-BE-467, unchanged). A caller that names none — header absent, blank, or the
+     * SUPER_ADMIN platform-scope {@code "*"} — gets the account's own tenant from its row.
+     * Until MONO-735 that second case was pinned to {@code fan-platform}, which is why every
+     * lock of an account outside it (security-service auto-lock, SUPER_ADMIN console lock) was
+     * a 404 (measured live 2026-09-26).
+     *
+     * <p>🔴 Do not apply the row lookup when a tenant IS named — that would dissolve the
+     * cross-tenant confinement the header exists for.
+     */
+    private StatusChangeResult changeStatus(ChangeStatusCommand command, String tenantHeader) {
+        return namesTenant(tenantHeader)
+                ? accountStatusUseCase.changeStatus(command, TenantId.fromHeaderOrDefault(tenantHeader))
+                : accountStatusUseCase.changeStatusResolvingTenant(command);
+    }
+
+    /**
+     * Does this {@code X-Tenant-Id} name a concrete tenant? Absent, blank and {@code "*"} do not —
+     * the same three values {@link TenantId#fromHeaderOrDefault(String)} maps to its fallback.
+     */
+    private static boolean namesTenant(String tenantHeader) {
+        return tenantHeader != null && !tenantHeader.isBlank() && !"*".equals(tenantHeader);
     }
 
     private String resolveActorType(StatusChangeReason reason) {

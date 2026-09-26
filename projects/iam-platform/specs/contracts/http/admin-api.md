@@ -79,7 +79,7 @@ base path: `/api/admin`
 
 - 생략 → 운영자 자신의 테넌트. 일반(비-플랫폼) 운영자가 effective scope 밖의 테넌트를 지정하면 → **`403 TENANT_SCOPE_DENIED`** (best-effort DENIED `admin_actions` row, BE-262 미러링).
 - 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다. 대상 계정이 **다른 테넌트**면 tenant-scoped 조회가 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주지 않는다).
-- **NET-ZERO**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 account-service 는 `fan-platform` 기본값으로 폴백 — BE-467 이전과 byte-identical.
+- **SUPER_ADMIN 플랫폼 스코프**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 admin-service 는 `'*'` 를 그대로 스탬프한다. account-service 는 **`lock` · `unlock` 에서 계정 행의 테넌트**로 대상을 찾는다(TASK-MONO-735 — 이전엔 `fan-platform` 기본값이라 `fan-platform` 밖 계정이 404 였다) · `gdpr-delete` · `export` 는 여전히 `fan-platform` 기본값(BE-467 net-zero). 상세: [admin-to-account.md § Tenant Confinement](internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
 - **session-revoke** 는 admin-service 가 활성 테넌트를 동일하게 해소·스탬프하며(TASK-BE-467), auth-service 가 이를 **실제로 enforce** 한다(**TASK-BE-468**): 구체 테넌트가 계정을 소유하지 않으면 force-logout 은 **no-op**(`revokedTokenCount=0`, DB revoke·Redis 무효화 미수행 — enumeration-safe). 부재/`'*'` → net-zero. 상세: [admin-to-auth.md](internal/admin-to-auth.md#tenant-confinement--x-tenant-id-task-be-468).
 
 ---
@@ -166,7 +166,7 @@ base path: `/api/admin`
 - `Authorization: Bearer <operator-token>`
 - `X-Operator-Reason: string (required, 감사 사유)`
 - `Idempotency-Key: string (required)`
-- `X-Tenant-Id: string (optional, 활성 테넌트 — 생략/`*` → net-zero; [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-467))`
+- `X-Tenant-Id: string (optional, 활성 테넌트 — 생략 → 운영자 자신의 테넌트 · SUPER_ADMIN `*` → 계정 행의 테넌트(TASK-MONO-735); [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-467))`
 
 **Request**:
 ```json
@@ -198,10 +198,13 @@ base path: `/api/admin`
 | 400 | `STATE_TRANSITION_INVALID` | 이미 LOCKED 또는 DELETED 상태 |
 | 400 | `REASON_REQUIRED` | X-Operator-Reason 또는 body reason 누락 |
 | 404 | `ACCOUNT_NOT_FOUND` | 대상 계정 미존재 **또는 cross-tenant** (`X-Tenant-Id` ≠ 계정 테넌트, BE-467) |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | **TASK-MONO-735** — 같은 운영자가 같은 `Idempotency-Key` 로 이 명령을 **이미 한 번 실행했다**(`admin_actions` 에 `(actor_id, action_code, idempotency_key)` 행이 있다). 두 번째 요청은 감사 행을 새로 쓰지 않고 account-service 를 부르지 않는다. 다시 시도하려면 새 키. 🔴 이전엔 두 번째 요청이 감사 INSERT 에서 유니크 키에 걸려 `500 AUDIT_FAILURE` 였다 |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 (5xx/timeout) |
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN (호출 자체 거부) |
 
-**Side Effects**: admin_actions 감사 기록 + `admin.action.performed` 이벤트 + account-service에 내부 HTTP lock 명령. `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN` 시에도 `admin_actions`에 `outcome=FAILURE` 행이 기록된다 (A10 fail-closed).
+🔴 **account-service 4xx 매핑 (TASK-MONO-735)**: account-service 의 `404` → **`404 ACCOUNT_NOT_FOUND`**, `409 STATE_TRANSITION_INVALID` → **`400 STATE_TRANSITION_INVALID`**(위 표). 이전 구현은 모든 하위 4xx 를 `503 DOWNSTREAM_ERROR` 로 냈다 — 재시도해도 안 바뀌는 답을 «재시도하라» 로 보여 줬고, 콘솔 확인 대화상자가 같은 키로 다시 보내 위 `500` 에 닿았다(2026-09-26 16차 창 실측). 그 밖의 4xx 는 여전히 `503 DOWNSTREAM_ERROR`.
+
+**Side Effects**: admin_actions 감사 기록 + `admin.action.performed` 이벤트 + account-service에 내부 HTTP lock 명령. `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN` 시에도 `admin_actions`에 `outcome=FAILURE` 행이 기록된다 (A10 fail-closed). 하위 `404`/`409` 도 같다(`outcome=FAILURE`).
 
 ---
 
@@ -301,7 +304,7 @@ base path: `/api/admin`
 }
 ```
 
-**Errors**: lock과 동일 구조 (503 `DOWNSTREAM_ERROR` + 503 `CIRCUIT_OPEN`, 403 `TENANT_SCOPE_DENIED`, cross-tenant → 404 `ACCOUNT_NOT_FOUND` 포함 — BE-467). `STATE_TRANSITION_INVALID`는 LOCKED가 아닌 상태에서 unlock 시도 시.
+**Errors**: lock과 동일 구조 (503 `DOWNSTREAM_ERROR` + 503 `CIRCUIT_OPEN`, 403 `TENANT_SCOPE_DENIED`, cross-tenant → 404 `ACCOUNT_NOT_FOUND` 포함 — BE-467 · 409 `IDEMPOTENCY_KEY_CONFLICT` 와 하위 4xx 매핑 — TASK-MONO-735). `STATE_TRANSITION_INVALID`는 LOCKED가 아닌 상태에서 unlock 시도 시.
 
 ---
 

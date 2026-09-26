@@ -1,6 +1,10 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.DownstreamFailureException;
+import com.example.admin.application.exception.IdempotencyKeyConflictException;
+import com.example.admin.application.exception.NonRetryableDownstreamException;
+import com.example.admin.application.exception.StateTransitionInvalidException;
+import com.example.admin.application.exception.TargetAccountNotFoundException;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
@@ -98,6 +102,21 @@ public class AccountAdminUseCase {
             String idempotencyKey,
             Function<String, AccountServiceClient.LockResponse> downstreamCall) {
 
+        // TASK-MONO-735: a second request with the same (operator, action, key) — the console's
+        // confirm dialog keeps one key per confirmed action, so "press confirm again" re-sends
+        // it — must not reach recordStart: its INSERT dies on idx_admin_actions_idemp and the
+        // operator sees 500 AUDIT_FAILURE for what was a definitive downstream answer (measured
+        // live 2026-09-26). Answer 409 IDEMPOTENCY_KEY_CONFLICT instead: no new audit row, no
+        // downstream call. The @Retry on AccountServiceClient is NOT the re-invoker — it sits
+        // below this method, never re-enters recordStart, and already ignores 4xx.
+        // Residual: two truly concurrent first requests can still race past this read; the loser
+        // gets the unique-key 500 as before (recorded in the ticket, not fixed here).
+        if (auditor.isIdempotencyKeyUsed(operator.operatorId(), actionCode, idempotencyKey)) {
+            throw new IdempotencyKeyConflictException(
+                    "Idempotency-Key already used for " + actionCode + " by this operator; "
+                            + "retry with a new key");
+        }
+
         String auditId = auditor.newAuditId();
         Instant startedAt = Instant.now();
 
@@ -128,8 +147,26 @@ public class AccountAdminUseCase {
         } catch (DownstreamFailureException ex) {
             recordAuditFailure(auditId, actionCode, operator, accountId,
                     reason, ticketId, idempotencyKey, startedAt, ex.getMessage());
-            throw ex;
+            throw toOperatorFacing(ex);
         }
+    }
+
+    /**
+     * TASK-MONO-735 — surface account-service's definitive 4xx answers as admin-api.md specifies
+     * for lock/unlock ({@code 404 ACCOUNT_NOT_FOUND}, {@code 400 STATE_TRANSITION_INVALID})
+     * instead of the blanket {@code 503 DOWNSTREAM_ERROR}, which told the operator to retry a
+     * call that cannot change. Any other failure is re-thrown unchanged (still 503).
+     */
+    private static RuntimeException toOperatorFacing(DownstreamFailureException ex) {
+        if (ex instanceof NonRetryableDownstreamException nr) {
+            if (nr.getHttpStatus() == 404) {
+                return new TargetAccountNotFoundException("Target account not found", nr);
+            }
+            if (nr.getHttpStatus() == 409) {
+                return new StateTransitionInvalidException("Account state transition invalid");
+            }
+        }
+        return ex;
     }
 
     /** Carries the success-path results of {@link #executeAccountAction}. */

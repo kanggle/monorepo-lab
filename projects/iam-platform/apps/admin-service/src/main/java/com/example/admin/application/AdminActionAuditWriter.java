@@ -100,6 +100,17 @@ public class AdminActionAuditWriter {
         }
     }
 
+    /**
+     * TASK-MONO-735 — does a row already hold {@code (actor_id, action_code, idempotency_key)}
+     * (the {@code idx_admin_actions_idemp} unique key)? Read-only; see
+     * {@link AdminActionAuditor#isIdempotencyKeyUsed}.
+     */
+    @Transactional(readOnly = true)
+    public boolean isIdempotencyKeyUsed(String operatorId, ActionCode actionCode, String idempotencyKey) {
+        return repository.findByActorIdAndActionCodeAndIdempotencyKey(
+                operatorId, actionCode.name(), idempotencyKey).isPresent();
+    }
+
     /** UPDATEs the IN_PROGRESS row to SUCCESS/FAILURE and emits the canonical outbox event. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordCompletion(AdminActionAuditor.CompletionRecord record) {

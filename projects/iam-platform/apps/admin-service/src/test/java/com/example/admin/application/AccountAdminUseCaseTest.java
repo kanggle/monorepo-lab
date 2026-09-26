@@ -2,7 +2,11 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.AuditFailureException;
 import com.example.admin.application.exception.DownstreamFailureException;
+import com.example.admin.application.exception.IdempotencyKeyConflictException;
+import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.admin.application.exception.ReasonRequiredException;
+import com.example.admin.application.exception.StateTransitionInvalidException;
+import com.example.admin.application.exception.TargetAccountNotFoundException;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -131,6 +135,80 @@ class AccountAdminUseCaseTest {
         verify(auditor, times(1)).recordCompletion(captor.capture());
         assertThat(captor.getValue().outcome()).isEqualTo(Outcome.FAILURE);
         assertThat(captor.getValue().downstreamDetail()).contains("CIRCUIT_OPEN");
+    }
+
+    // ── TASK-MONO-735 ────────────────────────────────────────────────────────
+
+    @Test
+    void lock_replayed_idempotency_key_is_409_without_new_audit_row_or_downstream_call() {
+        // The live 500: the console re-sent the same key after a failure; recordStart's INSERT
+        // died on idx_admin_actions_idemp → AuditFailureException → 500 AUDIT_FAILURE.
+        when(auditor.isIdempotencyKeyUsed("op-1", ActionCode.ACCOUNT_LOCK, "idemp-replay"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-replay", operator(), "*")))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+
+        verify(auditor, never()).recordStart(any());
+        verify(auditor, never()).recordCompletion(any());
+        verify(accountServiceClient, never()).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void unlock_replayed_idempotency_key_is_409() {
+        when(auditor.isIdempotencyKeyUsed("op-1", ActionCode.ACCOUNT_UNLOCK, "idemp-replay"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.unlock(new UnlockAccountCommand(
+                "acc-1", "restore", null, "idemp-replay", operator(), "*")))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
+
+        verify(auditor, never()).recordStart(any());
+    }
+
+    @Test
+    void lock_downstream_404_records_failure_and_surfaces_account_not_found_not_503() {
+        when(auditor.newAuditId()).thenReturn("audit-404");
+        doThrow(new NonRetryableDownstreamException("account-service error 404", null, 404, "ACCOUNT_NOT_FOUND"))
+                .when(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+
+        assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-404", operator(), "*")))
+                .isInstanceOf(TargetAccountNotFoundException.class)
+                // no longer the DownstreamFailureException family that maps to 503
+                .isNotInstanceOf(DownstreamFailureException.class);
+
+        var captor = forClass(AdminActionAuditor.CompletionRecord.class);
+        verify(auditor, times(1)).recordStart(any());
+        verify(auditor, times(1)).recordCompletion(captor.capture());
+        assertThat(captor.getValue().outcome()).isEqualTo(Outcome.FAILURE);
+    }
+
+    @Test
+    void lock_downstream_409_surfaces_state_transition_invalid() {
+        when(auditor.newAuditId()).thenReturn("audit-409");
+        doThrow(new NonRetryableDownstreamException("account-service error 409", null, 409, "STATE_TRANSITION_INVALID"))
+                .when(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+
+        assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-409", operator(), "ecommerce")))
+                .isInstanceOf(StateTransitionInvalidException.class);
+
+        verify(auditor, times(1)).recordCompletion(any());
+    }
+
+    @Test
+    void lock_downstream_other_4xx_stays_downstream_failure() {
+        when(auditor.newAuditId()).thenReturn("audit-400");
+        NonRetryableDownstreamException bad =
+                new NonRetryableDownstreamException("account-service error 400", null, 400, "VALIDATION_ERROR");
+        doThrow(bad)
+                .when(accountServiceClient).lock(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+
+        assertThatThrownBy(() -> useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-400", operator(), "ecommerce")))
+                .isSameAs(bad);
     }
 
     @Test

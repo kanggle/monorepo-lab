@@ -68,7 +68,16 @@ operable); filled on re-provision.
 ### 3. Lock the backing account on seller SUSPEND (D4)
 
 `POST /internal/accounts/{accountId}/lock` — `AccountLockController`.
-Request: `{ "reason": "ADMIN_LOCK", "operatorId": "product-service" }` + `Idempotency-Key`.
+Request: `{ "reason": "ADMIN_LOCK", "operatorId": "product-service" }` + `Idempotency-Key`
++ **`X-Tenant-Id: {tenantId}`** (TASK-MONO-735 — the seller's tenant, the one the account was
+minted in by §1). account-service confines the lookup to that tenant: an `accountId` that lives
+in another tenant is `404 ACCOUNT_NOT_FOUND` and is **not** locked. Before TASK-MONO-735 this call
+sent no `X-Tenant-Id`, account-service read that as `fan-platform`, and a seller account (minted
+in the seller's own tenant, e.g. `ecommerce`) could not be found — so seller SUSPEND never locked
+the backing account (read from the code; the same shape was measured live on the two sibling
+lock paths, 2026-09-26). The path names no tenant, so the bearer stays the base credential
+(ADR-MONO-076 changes only calls whose PATH names a tenant) — the header is a lookup scope, not
+an authorization claim.
 Called only when the seller has a stored `accountId` (null-safe / net-zero otherwise).
 Idempotent (re-locking an already-locked account is a no-op at the EP).
 

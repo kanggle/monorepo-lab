@@ -20,6 +20,7 @@ security-service가 비정상 로그인 탐지 결과에 따라 account-service�
 
 **Headers**:
 - `Idempotency-Key: {suspicious_event_id}` — 동일 탐지에 대한 중복 잠금 방지 ([rules/traits/transactional.md](../../../../../../rules/traits/transactional.md) T1)
+- `X-Tenant-Id: {suspicious_event.tenant_id}` (TASK-MONO-735) — 탐지를 일으킨 이벤트의 테넌트. security-service 는 **항상** 싣는다(`SuspiciousEvent` 가 non-blank 를 강제). account-service 는 그 테넌트로만 찾는다 — 계정이 다른 테넌트에 있으면 `404 ACCOUNT_NOT_FOUND` 이고 **잠그지 않는다**(틀린 id 가 남의 계정을 잠그지 않게 하는 심층 방어). 헤더가 없거나 `*` 이면 account-service 는 계정 행의 테넌트로 찾는다([admin-to-account.md § Tenant Confinement](admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467)). 🔴 MONO-735 이전 security-service 는 이 헤더를 싣지 않았고 account-service 는 `fan-platform` 으로 찾았다 ⇒ `fan-platform` 밖 계정의 자동 잠금은 404 였다(2026-09-26 16차 창 실측).
 
 **Request**:
 ```json
@@ -60,6 +61,8 @@ security-service가 비정상 로그인 탐지 결과에 따라 account-service�
   "timestamp": "2026-04-12T10:00:00Z"
 }
 ```
+
+**Response 404 `ACCOUNT_NOT_FOUND`**: `X-Tenant-Id` 의 테넌트에 그 id 의 계정이 없다(존재하지 않거나 다른 테넌트). 재시도 금지(4xx) — security-service 는 `Auto-lock non-retryable 4xx` 로 기록하고 FAILURE 로 끝낸다.
 
 ---
 
