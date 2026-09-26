@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-300-refresh-post-path-clears-shared-session-on-race-loss.md` — 🔴 **refresh POST 경로가 경쟁 패자 400 에 공유 쿠키 세션 전체를 지운다** (READY, 2026-09-26 UTC · `TASK-BE-606` 후속). iam 이 30초 유예로 경쟁 패자에게 400 만 주게 됐는데, GET 경로는 «회전 의심 → 대기 후 복귀» 인 반면 POST 는 `grant_rejected` 에 즉시 `clearFullSession`(`route.ts:70-71`) ⇒ 진 탭이 승자 탭까지 로그아웃. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
