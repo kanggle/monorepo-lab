@@ -4,7 +4,7 @@ TASK-BE-601
 
 # Status
 
-review
+done (2026-09-26 UTC — 4차원 검증 · 아래 § CORRECTION)
 
 # Title
 
@@ -205,3 +205,9 @@ iam-platform
 | auth-service | — | `account.locked: revoked sessions account=7e39cb51-… reason=AUTO_DETECT revokedTokens=2 propagationLagMs=655` |
 
 ⇒ **AC-3 닫힘.** 이 티켓의 close chore 는 이 절을 AC-3 의 근거로 읽는다. (7단계 force-logout 은 선택 항목이라 재지 않았다.)
+
+## CORRECTION (2026-09-26 UTC) — close (4차원)
+
+- (a)(b) impl PR **#4022** MERGED 2026-09-25T09:31Z · 스쿼시 `5f6d13d3a` 가 `origin/main` 에 있다. (c) 머지 전 체크 SUCCESS 21 · SKIPPED 46 · 실패 0. (d) AC-0·1·2 체크 · AC-3 = 위 CORRECTION(대조군 포함 PASS).
+- § 후속의 집: 37자 이상 이메일 refresh 불가 → `TASK-BE-603`(done) · 비밀번호 재설정 후 SAS 세션 → `TASK-BE-607`(review) · 재사용 탐지의 SAS 인가 행 → `TASK-BE-606`(done, 패밀리 + SAS 인가 폐기) · `auth.token.refreshed.accountId` 이메일 → `TASK-BE-603`.
+  **집 없음**(후속 후보로만 — 티켓 없음): `processed_events` 정리 작업 · consumer lag 메트릭/알림 · `account.deleted` 소비자.
