@@ -4,7 +4,7 @@ TASK-BE-605
 
 # Status
 
-review (2026-09-26 UTC — ① · ③ 구현 · ② 결정 기록 + 측정 이관(`TASK-MONO-672` 항목 18) · AC-4 확인. 🔴 AC-5(이 변경 머지 후 첫 nightly)는 `review → done` 전에 닫는다)
+done (2026-09-26 UTC — 4차원 검증 · 아래 § CORRECTION)
 
 # Title
 
@@ -180,3 +180,9 @@ claim 규칙상 client 테넌트로 찍히므로 불일치가 없다).
 - AC-1 문구는 «콘솔 로그인 세션 → 소비자 client» 인데, IT 는 소비자 → 소비자(스토어 → 팬)로 짰다 — 결정 ① 의 판정 축은 «세션 테넌트 ≠ client 테넌트» 이고
   그 모양이 `demo@demo.com` 사용자 경로다. 콘솔 세션(`iam` · `'*'` · D5 소비자 테넌트)에서 소비자 client 로 가는 칸은 단위가 덮는다.
 - **후속 (파일 만들지 않음)**: ② 구현은 `TASK-MONO-672` 항목 18 이 기안한다. 그 외 발견 없음.
+
+## CORRECTION (2026-09-26 UTC) — AC-5 확인 → close
+
+- impl PR **#4041** · 스쿼시 `ee8ee25ba` · 머지 전 실패 체크 0 · CI `Integration (iam B)`: SSO 게이트 IT **2 PASSED** · 소셜 IT **2 PASSED** · `AccountLockedSessionRevocationIntegrationTest` **3 PASSED**(표시 이름으로 셈) · `Frontend unit tests` 의 `auth-callbacks.test.ts` 통과.
+- **AC-5 🟢** — 머지 뒤 첫 nightly run **36241578298**(`ee8ee25ba`, success) `Frontend E2E full-stack (web-store …)`: `account-type-guard.spec.ts` **2 passed / 0 failed**(CUSTOMER 없는 ecommerce 계정 → web-store 가 거절 · `'*'` principal → IAM 거절), 전체 13 passed.
+- ② 소셜 신원 조회 범위 구현은 `TASK-MONO-672` 항목 18(모집단 측정 → 구현 티켓 기안 의무)이 들고 있다.
