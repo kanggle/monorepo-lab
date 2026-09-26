@@ -87,7 +87,7 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-598-quay-minio-is-closed-too.md` — 🟡 **REVIEW (2026-09-24 UTC)** `quay.io/minio` 익명 401 재확인(대조군 200) → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. 로컬 `verify-demo-wrapper.sh` rc=0·칸 (h) 17/17. 🔴 **AC-3(기동·버킷·업로드) 열림** — 로컬 Docker 없음, 나이틀리 web-store full-stack 은 머지 후 `main` 에서만 돌고 minio-init 결과는 단언 안 함. 🔴 `bitnamilegacy` = «갱신 안 됨» 아카이브. AMI 굽기는 pull 하므로(`demo-ami.pkr.hcl:381`) 재굽기 전 선행. 분석=Opus 5.5 / 구현=Opus 5.5.
+- `TASK-BE-598-quay-minio-is-closed-too.md` — 🟡 **REVIEW (2026-09-24 UTC)** 🟢 **2026-09-26 창: AC-3 잔여(minio-init 종료 0 · `mc ls` 버킷) PASS · 업로드 경로 ⚪** `quay.io/minio` 익명 401 재확인(대조군 200) → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. 로컬 `verify-demo-wrapper.sh` rc=0·칸 (h) 17/17. 🔴 **AC-3(기동·버킷·업로드) 열림** — 로컬 Docker 없음, 나이틀리 web-store full-stack 은 머지 후 `main` 에서만 돌고 minio-init 결과는 단언 안 함. 🔴 `bitnamilegacy` = «갱신 안 됨» 아카이브. AMI 굽기는 pull 하므로(`demo-ami.pkr.hcl:381`) 재굽기 전 선행. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 

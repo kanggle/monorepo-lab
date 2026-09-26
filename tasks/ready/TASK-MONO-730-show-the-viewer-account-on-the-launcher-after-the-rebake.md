@@ -4,7 +4,7 @@ TASK-MONO-730
 
 # Status
 
-ready — ⏳ **SCHEDULED / DO NOT START before the next AMI re-bake** (조건 게이트, 날짜 아님 — AC-0)
+ready — ~~⏳ SCHEDULED / DO NOT START before the next AMI re-bake~~ 🟢 **게이트 해소 2026-09-26 UTC** (AC-0 참 — 15차 AMI 가 viewer 시드를 들고 있다)
 
 # Title
 
@@ -50,7 +50,9 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (verify-then-act)** — 배포 AMI 의 `REPO_COMMIT` 이 `a3f5d52ec`(#4001 머지)의 **자손**인가(`git merge-base --is-ancestor a3f5d52ec <REPO_COMMIT>`). 아니면 **멈추고 ready/ 에 남는다** — 측정한 날짜와 커밋만 한 줄 적는다.
+- [x] **AC-0 (verify-then-act)** — 배포 AMI 의 `REPO_COMMIT` 이 `a3f5d52ec`(#4001 머지)의 **자손**인가(`git merge-base --is-ancestor a3f5d52ec <REPO_COMMIT>`). 아니면 **멈추고 ready/ 에 남는다** — 측정한 날짜와 커밋만 한 줄 적는다.
+      🟢 **참 (2026-09-26 UTC)** — 15차 AMI `ami-004f04b67daf40b89` · `REPO_COMMIT=46aa31911` · `is-ancestor` rc=0. 라이브(15차 부팅 02:43Z): `auth_db.credentials` 에
+      `viewer@demo.com`(iam, `…ad05`) · `admin_db.admin_operators` ACTIVE · 역할 **0**. ⇒ 착수 게이트 해소 — AC-1(창 · 브라우저)·론처 변경 진행 가능.
 - [ ] **AC-1** — 창에서 viewer 로 콘솔 로그인 → `/api/admin/me` 200 · `roles=[]` · 게이트된 화면(운영자·감사·테넌트) 403 「권한 없음」 렌더(스크린샷).
 - [ ] **AC-2** — 론처 viewer 행 추가, `bash infra/demo/verify-demo-wrapper.sh` rc=0, (z11) 새 칸 bite rc=1 → 복원 rc=0.
 - [ ] **AC-3** — 콘솔 전역 가이드 「권한 및 테스트 계정」 탭(`TASK-PC-FE-298`)이 viewer 를 언급하지 않는다면 한 줄 추가(비밀번호는 론처·데모 로그인 화면에만 — 298 의 결정).

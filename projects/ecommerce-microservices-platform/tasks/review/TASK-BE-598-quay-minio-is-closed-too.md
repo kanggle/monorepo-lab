@@ -247,3 +247,17 @@ AMI 가 죽었다(Failure Scenario 2 가 실재). 현 배포 AMI 는 이미 두 
 
 ⇒ AC-3 은 **닫히지 않는다.** 남은 것 = minio-init 종료 코드 0 + `mc ls` 로 버킷 존재(대조군 포함) — 다음 재굽기 부팅 또는
 Docker 호스트에서. 🔵 13:10Z 이후 나이틀리 빨강 3회(minio `unauthorized`)는 이 런으로 회복됐다.
+
+## CORRECTION (2026-09-26 UTC) — AC-3 잔여 창 판정: minio-init 🟢 · 업로드 경로 ⚪
+
+15차 AMI(`46aa3191`) 데모 부팅(02:43Z). 상세 = `TASK-MONO-672` § 2026-09-26 창 수확.
+
+| 칸 | 판정 | 근거 |
+|---|---|---|
+| minio-init 종료 코드 | 🟢 **0** | `docker inspect ecommerce-minio-init` → `exit=0 finished=2026-09-26T02:43:34Z` · 이미지 `ghcr.io/kanggle/mirror-minio-client:2024.10.8-debian-12-r1@sha256:c3e8…` |
+| minio-init 출력 | 🟢 | `ensuring bucket firstproject-local-product-images exists` → `Bucket created successfully` → `set to download` → `[minio-init] done.` |
+| `mc ls` 버킷 존재 | 🟢 | minio 컨테이너(`ghcr.io/kanggle/mirror-minio:2024.10.13-debian-12-r1`) 안 `mc ls` → **`firstproject-local-product-images/` 1개뿐** (다른 버킷 없음 = 목록이 비지 않고 정확히 그것) · `mc anonymous get` → `download` |
+| 이미지 업로드를 쓰는 서비스 경로 | ⚪ 미측정 | 이 창은 업로드 요청을 보내지 않았다 |
+
+⇒ 위 줄 248 이 남긴 잔여(종료 코드 0 + `mc ls`)는 **닫혔다.** AC-3 본문의 «업로드 경로 하나가 동작» 은 여전히 ⚪ — close chore 는 이 칸을
+소유자 판단(AC-3 을 잔여 기준으로 닫을지)으로 넘겨라.
