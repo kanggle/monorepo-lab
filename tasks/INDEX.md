@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## in-progress
-- `TASK-MONO-735-account-lock-calls-drop-the-accounts-tenant.md` — 🔵 **IN-PROGRESS (2026-09-26 UTC)** 계정 잠금 호출이 **계정의 테넌트를 싣지 않는다** — security-service 자동 잠금 · admin-service SUPER_ADMIN 잠금(실측 404 → 감사 중복 키 500) · product-service 셀러 정지(코드 판독) ⇒ `fan-platform` 밖 계정은 잠기지 않는다. 🟢 **AC-0 소유자 결정 = (c) 둘 다**(account-service 가 헤더 없음/`*` 일 때 계정 행에서 테넌트를 풀고 · 테넌트를 아는 호출자는 명시). `TASK-BE-602` AC-3 가 이것을 기다린다. 분석=Opus 5.5 / 구현=Opus.
 
 
 
@@ -223,6 +222,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+- `TASK-MONO-735-account-lock-calls-drop-the-accounts-tenant.md` — 🟡 **REVIEW — AC-0·1·2 구현 완료, AC-3 은 창 대기** (2026-09-26 UTC). 계정 잠금 호출이 계정의 테넌트를 싣지 않아 `fan-platform` 밖 계정이 404 였던 것. **AC-0 = (c)**: account-service `/lock`·`/unlock`·`/delete` 가 헤더 없음/공백/`*` 이면 `findByIdResolvingTenant` 로 계정 행의 테넌트에서 찾고(구체 테넌트 헤더는 한정 유지 — 교차 404), security-service 자동 잠금 · product-service 셀러 정지는 테넌트를 명시. admin-service: 하위 404 → 404 `ACCOUNT_NOT_FOUND`(이전 503) · 같은 키 재전송 → 409 `IDEMPOTENCY_KEY_CONFLICT`(이전 감사 유니크 키 500) — 500 을 만든 것은 @Retry 가 아니라 콘솔의 같은 키 재전송이었다. 로컬 rc=0 네 모듈(account 522 · security 249 · admin 859 · product 383, 실패 0) · bite 6종 전부 빨강 → 복구 rc=0. 🔴 Testcontainers IT 는 로컬 Docker 꺼짐 → CI 판정. 남김: gdpr-delete/export 의 `*` 는 여전히 fan 기본값 · 이벤트 테넌트≠계정 테넌트면 명시 헤더로 404. AC-3 런북은 티켓에.
 - `TASK-MONO-730-show-the-viewer-account-on-the-launcher-after-the-rebake.md` — 🟡 **REVIEW — AC-2·AC-3 구현 완료, AC-1 은 창 대기** (2026-09-26 UTC · `TASK-BE-597` 후속). 론처 「로그인 계정」 카드에 `viewer@demo.com` 행(`id="c-viewer-email"`/`c-viewer-pass` + 「권한 부족 화면 시연용」 설명) + (z11) 확장(론처 뷰어 이메일 ↔ `R__seed_demo_viewer_operator_credential.sql` email 컬럼 실값 대조, account_id 앵커 유일성 + 대조군). `bash infra/demo/verify-demo-wrapper.sh` **rc=0**(전체) · bite(이메일 변조) **rc=1** → 원복 **rc=0**. 콘솔 전역 가이드 「권한 및 테스트 계정」 탭에 뷰어 한 줄 추가(비밀번호는 반복하지 않음 — `TASK-PC-FE-298` 결정 유지). 🔴 콘솔↔론처 대조 드리프트 테스트가 이 저장소에 없어 새로 만들지 않았고(범위 밖), console-web 유닛 테스트는 이 worktree 에 `node_modules` 가 없어 **미실행**(pnpm install 안 함, green 주장 안 함). AC-1(창·브라우저: viewer 로그인 → `/api/admin/me` 200 roles=[] → 게이트 화면 403) 은 열려 있고 런북을 티켓에 적어 뒀다.
 - `TASK-MONO-726-two-internal-callers-717-left-without-a-home.md` — 🔴 **batch-worker → order-service `/api/internal/**` 가 다섯 겹으로 끊겨 있던 것을 잇는다** (REVIEW, 2026-09-24 UTC · 소유자 승인: IdP 등록). 보내는 쪽(IdP 등록 `V0038` · 토큰 주소 · order 포트 8082→8086) + 받는 쪽(JWKS · issuer). 테넌트 assume 불필요(이 경로엔 테넌트 핀 없음). `check-internal-caller-addresses.sh` 목록 1→3행, 두 행 bite rc=1. auth-service 724/0 · `WorkloadRoleCatalogTest` 18/12/6. 🔴 창 판정 둘(PAID→CONFIRMED 결과 상태 · lock 라우트)은 `TASK-MONO-672` 항목 14.
 
