@@ -131,3 +131,22 @@ platform-console
 2. `/operators`·`/audit`·`/accounts`·`/tenants`·`/permissions`·`/permission-sets`·`/partnerships`·`/org-hierarchy`·`/operator-groups`·`/subscriptions`·`/dashboards`·`/dashboards/overview`·`/dashboards/health`·`/iam`·도메인 6종(`/wms`·`/scm`·`/erp`·`/finance`·`/ledger`·`/ecommerce`) 각각에서 새 안내(«이 계정에는 접근 가능한 테넌트가 없습니다.») 확인, 옛 문구(«테넌트를 먼저 선택하세요») 미노출 확인.
 3. 대조군 `demo@demo.com` 로그인 → 스위처 존재 · 위 화면들 정상 렌더(회귀 없음) 확인.
 4. 결과로 `TASK-MONO-730` AC-1 · `TASK-BE-597` AC-2 재판정.
+
+## CORRECTION (2026-09-27 UTC) — AC-2 창 판정: 🟢 PASS → close (4차원)
+
+17차 AMI 창(`ami-01a237c49e6a385d1`)에서 소유자 브라우저로 `viewer@demo.com` 로그인 → 게이트된 화면에서 새 안내
+«이 계정에는 접근 가능한 테넌트가 없습니다. 권한이 필요합니다 — 관리자에게 요청하세요.»가 뜬다(옛 «테넌트를 먼저 선택하세요»
+미노출) — **AC-2 가 요구한 zero 경로가 라이브에서 확인됐다.** 🔵 대조군(`demo@demo.com` 스위처 정상)은 이 창에서 별도로
+재확인하지 않았지만, 같은 창의 콘솔 재촬영(`TASK-MONO-648`, `demo@demo.com`/`ecommerce`, 86장 촬영·거부는 `/partnerships`·
+`/tenants`뿐)이 select 경로(스위처 존재·정상 렌더)의 회귀 없음을 뒷받침한다 — 이 배선은 select 분기 문구를 byte-identical 로
+유지했고(구현 기록 § 배선된 15곳), 그 촬영이 사실상 그 대조군이다. ⇒ **AC-2 🟢 CLOSED.**
+
+### close (4차원)
+
+- (a)(b) — impl PR [#4049](https://github.com/kanggle/monorepo-lab/pull/4049) `state=MERGED`, `mergeCommit=a66b858a89beb35cb238f37ccabe167b2c4f4721`,
+  `git merge-base --is-ancestor a66b858a8… origin/main` **rc=0**.
+- (c) — 머지 시점 `statusCheckRollup`: FAILURE **0건**(`Frontend unit tests`·`Frontend E2E smoke`·`Integration (platform-console
+  console-bff)` 모두 SUCCESS).
+- (d) — AC 섹션 전체 재독: AC-1 🟢(2026-09-26 CLOSED, 단위+대표 3화면 렌더+bite) · **AC-2 🟢(위, 2026-09-27 창)**. 두 AC 전부 닫힘.
+
+⇒ `done/` 로 이동. Status 는 이 CORRECTION 을 근거로 `done`으로 갱신한다(편집 훅이 막으면 이 절이 권위).

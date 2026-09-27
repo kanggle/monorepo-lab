@@ -121,10 +121,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-301-say-no-tenant-is-reachable-instead-of-asking-to-pick-one.md` — **REVIEW (2026-09-26 UTC, impl PR 대기)** 선택 가능한 테넌트가 **0개**인 운영자(`viewer@demo.com`)에게 «테넌트를 선택하세요» 대신 «이 계정에는 접근 가능한 테넌트가 없습니다.»(소유자 결정 ⓒ). 판정 함수 `noTenantNoticeKind()`(`shared/lib/active-tenant-default.ts`) + 공유 렌더 `NoTenantNoticeBody`/`NoTenantNotice`(`widgets/no-tenant-notice/`) **한 곳**, 15곳 배선(`DomainTenantGate` 도메인 6종 + page.tsx 14개) + 티켓 밖에서 직접 찾은 **+1**(`/iam` `IamOverviewScreen` — 동기 컴포넌트라 `getIamOverviewState()` 가 판정을 미리 resolve 해 prop 으로 내림). 레지스트리 실패는 zero 로 안 읽음(Edge Case). **AC-1 CLOSED**(단위+대표 3화면 렌더 테스트+bite 확인) · **AC-2 OPEN**(다음 AMI 창 판정 런북을 태스크 파일 내에 기록). tsc/lint/vitest 전량(325파일/3634건) rc=0. 분석=Opus 5.5 / 구현=Opus.
+(empty)
 
 ## done
 
+- ✅ `TASK-PC-FE-301-say-no-tenant-is-reachable-instead-of-asking-to-pick-one.md` — **DONE 2026-09-27 UTC (4-dim verified)** — impl PR **#4049**, 스쿼시 **`a66b858a8`** (머지 전 실패 체크 0). 선택 가능한 테넌트가 0개인 운영자에게 «테넌트를 선택하세요» 대신 ⓒ 안내(«접근 가능한 테넌트가 없습니다»). 판정 함수 `noTenantNoticeKind()` + 공유 렌더 `NoTenantNotice*` 한 곳, 15+1곳 배선. **AC-1** 2026-09-26 CLOSED(단위+렌더+bite) · **AC-2 🟢** 17차 창 — `viewer@demo.com` 게이트 화면에 새 안내 렌더 확인(옛 문구 미노출). tsc/lint/vitest 전량 rc=0.
 - ✅ `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — **DONE 2026-09-26 UTC (4-dim verified)** — impl PR **#4000**, 스쿼시 **`3d3df69af`** (머지 전 실패 0 · 🔴 09-24 기록의 #3999 는 PC-FE-297/298 PR — 정정). 데모 종료 뒤 세션 잔존 표면 5종. **AC-4 🟢** 16차 창 종료 직후 `/login?error=session_expired` → 「데모 서버가 종료되어 다시 로그인해야 합니다」(데모 상태 신호).
 
 - ✅ `TASK-PC-FE-300-refresh-post-path-clears-shared-session-on-race-loss.md` — **DONE (2026-09-26 UTC · 4차원 검증 · impl PR #4038 · 스쿼시 `e78f4b265`)** — 머지 전 실패 체크 0 · CI `Frontend unit tests` 에서 신규 `auth-refresh-post-rotation-race.test.ts` **8 통과** · 콘솔 324 파일 통과. refresh POST 의 `grant_rejected`+회전 의심 → 대기 후 **307 `?retry=1`**(Route Handler `cookies()` 는 도착 스냅샷이라 같은 요청 안 재판정은 무효 — GET 과 같은 방식) · 판정 함수 `hasCompleteSession` 을 GET·POST 공유. ⚪ e2e 커버리지 없음(콘솔 e2e 는 쿠키 직접 주입). 원인 = iam `TASK-BE-606` 30초 유예.

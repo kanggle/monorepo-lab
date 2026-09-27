@@ -234,3 +234,34 @@ In Scope 첫 항목은 "`partnership.manage` 자체에는 이 파일에 같은 �
 - 저하 8장(`/` · `/console` · `/login` · `/onboarding` · `/dashboards/*` · `/erp/delegation` · `/wms/operations` 일부)은 `infra/demo/console-vercel.override.yml` 이 적은 영구 한계(Vercel 콘솔 → console-bff 불가)와 같은 목록 — 권한 거부가 아니다.
 
 **AC-2** — `viewer@demo.com` 로그인은 되지만 **스위처가 없고** 게이트 화면 전부가 «테넌트를 먼저 선택하세요» ⇒ 403 에 **도달할 길이 없다**(원인 = 선택 가능 테넌트 0, 상세 `TASK-MONO-730` § CORRECTION 2026-09-26). 소유자 결정 ⓒ → `TASK-PC-FE-301`. 그 티켓이 닫힌 뒤 AC-2 를 «ⓒ 안내가 뜬다» 로 다시 잰다.
+
+## CORRECTION (2026-09-27 UTC) — AC-2·AC-4·AC-5 판정 완료 → close (4차원)
+
+**AC-2 — 🟢 PASS(ⓒ 안내로 재판정).** `TASK-PC-FE-301`(#4049, 2026-09-27 UTC 병합)이 닫힌 뒤 17차 AMI 창에서 `viewer@demo.com` 로그인 →
+게이트된 화면에서 «이 계정에는 접근 가능한 테넌트가 없습니다. 권한이 필요합니다 — 관리자에게 요청하세요.» 안내가 뜬다(위 CORRECTION이
+예고한 그대로). AC-2 원문 «게이트된 화면 중 최소 1개에서 실제로 403을 받는다»는 이제 «ⓒ 안내가 뜬다»로 다시 읽는다(위 문단이 이미
+그렇게 정정했다) — 이 계정은 애초에 서버 403에 도달하지 않고 프런트 게이트에서 막힌다는 것이 소유자 결정 ⓒ의 정답이다. ⇒ **AC-2 🟢 CLOSED.**
+
+**AC-4 — 🟢 CLOSED(`TASK-MONO-730`으로 이행 완료).** 이 티켓의 Implementation Record가 «의도적 보류 — 후속(부모가 기안)」으로 남긴
+의무는 `TASK-MONO-730`이 넘겨받았다: 그 티켓 AC-2가 정확히 이 AC의 요구(론처 `index.html`에 뷰어 행 + (z11)에 «론처 뷰어 이메일 ↔
+`R__seed_demo_viewer_operator_credential.sql` 이메일 컬럼» 대조 + 대조군)를 구현했고, `bash infra/demo/verify-demo-wrapper.sh`
+**rc=0**(전체) · bite(이메일 변조) **rc=1** → 원복 **rc=0**으로 검증됐다(`TASK-MONO-730` § 구현 기록, 2026-09-26 UTC). `TASK-MONO-730`은
+이번 창(AC-1 창 판정 PASS)으로 `done/`로 닫힌다. ⇒ 이 AC가 남겨 둔 의무는 이행됐다 — **AC-4 🟢 CLOSED(참조: `TASK-MONO-730`)**.
+
+**AC-5 — 🟢 CLOSED(IT는 CI가 판정했다).** Implementation Record는 유닛 `DemoViewerOperatorSeedTest` 4/4(+bite)는 ✅, IT는 이 호스트
+Docker 부재로 ⚪로 남겼다. impl PR #4001의 머지 시점 `statusCheckRollup`을 확인하니 `Integration (iam A, Testcontainers) / integration`·
+`Integration (iam B, Testcontainers) / integration`이 둘 다 **SUCCESS**다 — `DemoOperatorSeedIntegrationTest`의 5케이스(뷰어 행 ·
+역할/배정 0 · `GET /api/admin/me` 200+`roles=[]` · 게이트 화면 403 · demo-operator `/partnerships` 403)를 포함한 iam 통합 테스트
+스위트가 CI에서 실제로 돌아 통과했다는 뜻이다. ⇒ **AC-5 🟢 CLOSED.**
+
+### close (4차원)
+
+- (a)(b) — impl PR [#4001](https://github.com/kanggle/monorepo-lab/pull/4001) `state=MERGED`, `mergeCommit=a3f5d52ec31fe24c58413444b7ae4983c76f2c65`,
+  `git merge-base --is-ancestor a3f5d52ec… origin/main` **rc=0**.
+- (c) — 머지 시점 `statusCheckRollup`: FAILURE **0건**(`Integration (iam A/B, Testcontainers)`·`E2E smoke (iam docker-compose)`·
+  `E2E (fan-platform v1 live-trio smoke)`·`Flyway placeholder with no value`·`Error code registry` 모두 SUCCESS).
+- (d) — **AC 섹션 전체(원 AC + 개정 AC + 모든 CORRECTION) 재독**: AC-0 🟢(2026-09-24, 소유자 결정 ① 근거 기록) · AC-1′ 🟢(2026-09-26
+  16차 창 PASS, `/tenants` 문구 불일치 기록됨) · **AC-2 🟢(위, 2026-09-27 창)** · AC-3′ 🟢(카탈로그 불변, `rbac.md` 무변경) ·
+  **AC-4 🟢(위, `TASK-MONO-730` 참조)** · **AC-5 🟢(위, CI 판정)** · AC-6 🟢(재굽기 필요, 측정 근거 기록). 여섯 AC 전부 닫힘.
+
+⇒ `done/` 로 이동. Status 는 이 CORRECTION 을 근거로 `done`으로 갱신한다(편집 훅이 막으면 이 절이 권위).
