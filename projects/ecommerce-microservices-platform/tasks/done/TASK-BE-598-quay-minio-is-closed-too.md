@@ -1,6 +1,6 @@
 # TASK-BE-598 — quay.io 의 minio 도 닫혔다 (BE-591 의 우회로가 끊겼다)
 
-**Status:** review
+**Status:** done (2026-09-26 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review
 
 **Type:** TASK-BE (project-internal — `projects/ecommerce-microservices-platform/` 안의 이미지 참조)
 
