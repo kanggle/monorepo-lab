@@ -113,28 +113,30 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
-    @DisplayName("TASK-MONO-735: lock 호출에 탐지 이벤트의 테넌트를 X-Tenant-Id 로 싣는다 (ecommerce 계정)")
-    void lock_sendsTheEventsTenantAsXTenantId() {
-        // Stub matches ONLY the ecommerce header — a request without it (the pre-MONO-735 shape,
-        // which account-service read as fan-platform → 404) falls through to WireMock's 404.
+    @DisplayName("TASK-MONO-735: lock 호출은 X-Tenant-Id 를 싣지 않는다 — 이벤트 테넌트는 세션 테넌트라 계정 테넌트와 다를 수 있다")
+    void lock_sendsNoXTenantId_accountServiceResolvesFromRow() {
+        // Owner decision 2026-09-26: the reuse event's tenantId is the SESSION tenant. For a
+        // cross-tenant session (ecommerce account via the fan client — TASK-BE-611) stamping it
+        // made account-service 404 and the account stayed ACTIVE. Header-less → account-service
+        // resolves the tenant from the account row. The event tenant here deliberately differs
+        // from the account's (fan-platform session, ecommerce account).
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
-                .withHeader("X-Tenant-Id", equalTo("ecommerce"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"accountId\":\"acc-ec\",\"previousStatus\":\"ACTIVE\"," +
                                 "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-09-26T00:00:00Z\"}")));
 
-        LockResult result = client.lock(buildEvent("acc-ec", "ecommerce"));
+        LockResult result = client.lock(buildEvent("acc-ec", "fan-platform"));
 
         assertThat(result.status()).isEqualTo(Status.SUCCESS);
         wireMock.verify(postRequestedFor(urlPathMatching("/internal/accounts/acc-ec/lock"))
-                .withHeader("X-Tenant-Id", equalTo("ecommerce"))
+                .withoutHeader("X-Tenant-Id")
                 .withHeader("Idempotency-Key", equalTo("evt-test-1")));
     }
 
     @Test
-    @DisplayName("TASK-MONO-735: account-service 404 (다른 테넌트의 id) → FAILURE, 재시도 없음")
+    @DisplayName("TASK-MONO-735: account-service 404 (어느 테넌트에도 없는 id) → FAILURE, 재시도 없음")
     void lock_404_crossTenant_returnsFailureWithoutRetry() {
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
                 .willReturn(aResponse()

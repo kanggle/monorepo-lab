@@ -106,7 +106,7 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 
 | 호출처 | 결정 뒤 싣는 테넌트 | account-service 가 찾는 곳 |
 |---|---|---|
-| security-service `AccountServiceClient.lock` (자동 잠금) | `X-Tenant-Id` = `SuspiciousEvent.getTenantId()` (탐지 이벤트의 테넌트 — 생성자에서 non-blank 강제) | 그 테넌트 한정 |
+| security-service `AccountServiceClient.lock` (자동 잠금) | **없음** — 🔵 소유자 결정 (2026-09-26 UTC, 2차): 이 호출처는 (b). 처음 구현은 `SuspiciousEvent.getTenantId()` 를 실었으나 철회 — 아래 § ⑧ | **계정 행의 테넌트** (b) |
 | admin-service `AccountServiceClient.lock`/`unlock` — TENANT_ADMIN 등 일반 운영자 | 운영자의 해소된 활성 테넌트(변경 없음) | 그 테넌트 한정(교차 → 404 유지) |
 | admin-service 같은 메서드 — SUPER_ADMIN (`*`) | `X-Tenant-Id: *` (변경 없음) | **계정 행의 테넌트** (b) |
 | ecommerce product-service `AccountServiceSellerProvisioner.lockAccount(tenantId, accountId)` (셀러 정지) | `X-Tenant-Id` = 받은 `tenantId` | 그 테넌트 한정 |
@@ -131,7 +131,7 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 | account-service | `presentation/internal/AccountLockController.java` | `namesTenant(header)` — 구체 테넌트면 `changeStatus(cmd, TenantId)` / `deleteAccount(..., TenantId)`(오늘 그대로), 아니면(없음·공백·`*`) `changeStatusResolvingTenant` / `deleteAccountResolvingTenant` |
 | account-service | `application/service/AccountStatusUseCase.java` | 위 두 메서드 추가(`findByIdResolvingTenant`), 본문은 `applyStatusChange` / `applyDelete` 로 공유. 헤더 없는 **배치/스케줄러** 오버로드 `changeStatus(cmd)` · 소비자 탈퇴 `deleteAccount(4-arg)` 는 `fan-platform` 그대로 |
 | account-service | `domain/repository/AccountRepository.java` | 문서화된 예외 javadoc — 등록 소비처 2개 |
-| security-service | `infrastructure/client/AccountServiceClient.java` | `X-Tenant-Id: event.getTenantId()` |
+| security-service | `infrastructure/client/AccountServiceClient.java` | ~~`X-Tenant-Id: event.getTenantId()`~~ → **헤더 없음**(§ ⑧ 소유자 결정 2차) |
 | product-service | `infrastructure/client/AccountServiceSellerProvisioner.java` | `lockAccount` 에 `X-Tenant-Id: tenantId` · 오해를 부르던 주석 정정 |
 | admin-service | `infrastructure/client/AccountServiceClient.java` | javadoc 만(`*`/null → 계정 행의 테넌트; 운영자 테넌트를 넣어 «고치지» 말 것) — 스탬프 로직 **변경 없음** |
 | admin-service | `application/AccountAdminUseCase.java` · `AdminActionAuditor.java` · `AdminActionAuditWriter.java` · `exception/TargetAccountNotFoundException.java` · `presentation/advice/AdminExceptionHandler.java` | ③ |
@@ -182,3 +182,12 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 2. **콘솔 잠금 (SUPER_ADMIN)**: `demo@demo.com` 으로 두 번째 `ecommerce` 일회용 계정을 잠금 → **200** · `accounts.status=LOCKED` · `admin_actions` 에 그 키로 행 1개 `SUCCESS`. 같은 대화상자에서 다시 확인을 눌러 **409 `IDEMPOTENCY_KEY_CONFLICT`**(500 아님)도 본다. 없는 id 잠금 → **404 `ACCOUNT_NOT_FOUND`**(503 아님).
 3. **`TASK-BE-602` AC-3**: 1 의 LOCKED 스토어 소셜 계정으로 소셜 로그인 → `/login?error=account_unavailable` · `login_history` FAILURE.
 4. **셀러 정지**: **일회용 셀러**를 온보딩(계정 발급 확인 — `sellers.account_id` · `accounts.tenant_id=ecommerce`) → 정지 → `accounts.status=LOCKED`. 🔴 시드 셀러를 건드리지 마라.
+5. **(§ ⑧ 추가) 교차 테넌트 세션 자동 잠금**: `ecommerce` 계정을 **팬 client** 로 로그인한 세션(`TASK-BE-611` 재현 경로)의 합성 재사용 2건(이벤트 `tenantId=fan-platform`) → `accounts.status=LOCKED`. 명시 헤더였다면 여기서 404 였다.
+
+## ⑧ 소유자 결정 (2026-09-26 UTC, 2차) — security-service 는 `X-Tenant-Id` 를 싣지 않는다 (§ ⑥ 셋째 항 해소)
+
+- **결정**: security-service 자동 잠금 호출은 헤더 **없이** 보낸다 ⇒ account-service 가 계정 행에서 테넌트를 푼다(b). product-service 는 명시 헤더 유지(셀러와 계정의 테넌트는 항상 같다) · admin-service 변경 없음.
+- **이유**: 재사용 이벤트의 `tenantId` 는 **세션 테넌트**다. 교차 테넌트 세션(`ecommerce` 계정이 팬 client 로 로그인 — 2026-09-26 라이브 재현, `TASK-BE-611`)에서는 계정 테넌트와 달라, 명시 헤더는 account-service 404 → **계정이 영영 잠기지 않는다**. 계정 id 는 우리 이벤트가 낸 UUID 이므로 «엉뚱한 테넌트의 계정을 잠글» 위험보다 «잠그지 못할» 위험이 크다. ⇒ § ⑥ 에 기록했던 «이벤트 테넌트 ≠ 계정 테넌트면 404» 대가는 **이 결정으로 사라졌다**.
+- **변경**: `security-service/.../infrastructure/client/AccountServiceClient.java` 에서 헤더 제거 + 이유 주석 · `AccountServiceClientUnitTest` 는 «세션 테넌트 `fan-platform` · 계정 `acc-ec`» 로 호출해 요청에 **`X-Tenant-Id` 가 없음**을 핀(`withoutHeader`) · `security-to-account.md` · `multi-tenancy.md` 갱신.
+- **검증 (로컬, 2026-09-26 UTC)**: `:projects:iam-platform:apps:security-service:test` **rc=0** · 249 tests · 0 fail · 13 skipped (`AccountServiceClientUnitTest` 9/0). **bite**: 헤더 한 줄을 다시 넣음 → `AccountServiceClientUnitTest` **rc=1 · 9 중 1 실패**(헤더 없음 핀 셀) → 원복 → 모듈 전체 **rc=0**.
+

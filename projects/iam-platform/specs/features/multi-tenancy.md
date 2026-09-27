@@ -369,8 +369,9 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
     - **같은 finder 의 두 번째 소비처 (TASK-MONO-735, 2026-09-26 소유자 결정 (c))** — 내부 전용 `POST /internal/accounts/{accountId}/lock` ·
       `/unlock` · `/delete` 가 `X-Tenant-Id` 가 **없거나 공백이거나 `*`** 일 때만 대상 계정을 이 finder 로 찾는다(헤더 없는 자동 잠금 ·
       SUPER_ADMIN(`*`) 잠금이 `fan-platform` 밖 계정을 404 로 놓치던 결함). 🔴 **헤더가 구체 테넌트를 말하면 지금처럼 그 테넌트로 한정**
-      (교차 → 404) — 헤더 유무와 무관하게 풀면 격리가 풀린다. 테넌트를 아는 호출자(security-service 자동 잠금 · product-service 셀러 정지)는
-      심층 방어로 헤더를 **명시**한다. 근거·조건: [admin-to-account.md § Tenant Confinement](../contracts/http/internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
+      (교차 → 404) — 헤더 유무와 무관하게 풀면 격리가 풀린다. 계정 테넌트를 **확실히** 아는 호출자(product-service 셀러 정지)는
+      심층 방어로 헤더를 **명시**한다. 🔴 security-service 자동 잠금은 **싣지 않는다**(소유자 결정 2026-09-26) — 이벤트의 테넌트는
+      세션 테넌트라 교차 테넌트 세션에서 계정 테넌트와 달라 404(미잠금)가 된다(`TASK-BE-611`). 근거·조건: [admin-to-account.md § Tenant Confinement](../contracts/http/internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
       `/gdpr-delete` · `/export` 는 이 소비처가 **아니다**(여전히 `fan-platform` 기본값).
   - ⚪ «정적 분석으로 차단» 은 현재 **없다**(2026-09-25 확인: account-service 테스트에 ArchUnit/리플렉션 기반 규칙 0). 지금 이 규칙을 지키는 것은 리뷰뿐이다.
 - **Specification/QueryDSL**: 동적 쿼리 빌더에 tenant predicate가 자동 주입되도록 base specification 제공
