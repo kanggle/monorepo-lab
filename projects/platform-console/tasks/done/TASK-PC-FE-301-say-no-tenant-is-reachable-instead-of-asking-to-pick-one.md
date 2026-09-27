@@ -4,7 +4,7 @@ TASK-PC-FE-301
 
 # Status
 
-review
+done (2026-09-27 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review
 
 # Title
 

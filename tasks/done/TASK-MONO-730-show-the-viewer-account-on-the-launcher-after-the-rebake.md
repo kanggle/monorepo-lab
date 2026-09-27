@@ -4,7 +4,7 @@ TASK-MONO-730
 
 # Status
 
-review — AC-2·AC-3 구현 완료(2026-09-26 UTC). **AC-1 은 창(라이브 브라우저) 대기로 열려 있다** — `review/` 에 두는 이유는 `platform/git-workflow-policy.md` § The Fourth Dimension 의 창-대기 선례(`TASK-BE-602`)와 같다.
+done (2026-09-27 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review — AC-2·AC-3 구현 완료(2026-09-26 UTC). **AC-1 은 창(라이브 브라우저) 대기로 열려 있다** — `review/` 에 두는 이유는 `platform/git-workflow-policy.md` § The Fourth Dimension 의 창-대기 선례(`TASK-BE-602`)와 같다.
 
 # Title
 
