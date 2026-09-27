@@ -194,3 +194,25 @@ bite: order-service ORDER_INTERNAL_OAUTH2_ISSUER 삭제 → rc=1 · DRIFT § ord
 
 - ② 결과 상태: 신선 볼륨(재굽기 필요 — V0038 과 compose 가 구워지는 표면)에서 batch-worker 로그에 `StalePaidOrderConfirmationJob FAILED` 가 **없고**, 결제 뒤 PAID 인 주문이 30분 뒤 CONFIRMED 로 넘어가는가.
 - ① `lockAccount` 의 `/internal/accounts/{a}/lock` — 셀러 정지를 일으켜 `accounts.status` 로 판정(§ AC-0 ①, 변동 없음).
+
+---
+
+## CORRECTION (2026-09-26 UTC) — AC-0 두 결과 + 소유자 결정
+
+`TASK-MONO-672` 항목 14 가 15차 AMI 창(2026-09-26 UTC)에서 두 결과를 냈고, 소유자가 갈래를 결정했다.
+
+**② — 배선 PASS, 결과 상태는 측정 불가 + 이유로 닫는다.** 15차 창: `StalePaidOrderConfirmationJob completed … scanned=0` 이
+02:50Z·03:00Z **2회**, FAILED **0**. 이 잡은 토큰 실패·4xx/5xx 면 `FAILED` 를 남기므로(`StalePaidOrderConfirmationJob.java:23`),
+FAILED 가 없다는 것은 **토큰 발급 + order-service 2xx 가 성립했다**는 뜻이다 — AC-0 ② 가 물은 "batch-worker 가 `/internal/**` 를
+실제로 부르는가"는 **PASS**로 닫힌다. 그러나 **결과 상태**(PENDING+payment 주문 → CONFIRMED)는 후보가 없었다 — 시드 주문은
+PENDING 1건뿐이고 `payment_id` 가 NULL(이 잡의 대상 아님), 02:50Z 에 order-service 자신의 결제 타임아웃 탐지기가 이미 CANCELLED
+로 바꿨다. 합성 후보(행에 `payment_id` 삽입)는 원격 DB 쓰기라 자동 모드 분류기(Remote Shell Writes)가 막는다. 소유자 결정
+(2026-09-26 UTC): 이 결과 상태 칸은 **⚪ 측정 불가 + 이유**로 닫는다 — 로컬 장애 주입 IT 는 후속 후보로만 남기고 티켓은
+기안하지 않는다.
+
+**① — OPEN 으로 남는다.** `lockAccount`(`POST /internal/accounts/{a}/lock`)의 라이브 판정은 `TASK-MONO-735`(#4048, 2026-09-26
+UTC 병합)가 그 잠금 호출 경로 자체를 고친 뒤라야 뜻이 있다 — **17차 AMI 창**(735 이후)에서 셀러를 정지시켜 `account_db.accounts.status`
+가 바뀌는지로 판정한다. 그때까지 이 항목은 `review/` 에 남는다.
+
+⇒ **AC-0 «두 결과를 이 파일에 적고, 갈래를 소유자에게 묻는다»** 의 답: 위 두 문단. 이 티켓은 ① 이 열려 있는 한 `done/` 으로
+옮기지 않는다.

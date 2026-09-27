@@ -87,9 +87,11 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-598-quay-minio-is-closed-too.md` — 🟡 **REVIEW (2026-09-24 UTC)** 🟢 **2026-09-26 창: AC-3 잔여(minio-init 종료 0 · `mc ls` 버킷) PASS · 업로드 경로 ⚪** `quay.io/minio` 익명 401 재확인(대조군 200) → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. 로컬 `verify-demo-wrapper.sh` rc=0·칸 (h) 17/17. 🔴 **AC-3(기동·버킷·업로드) 열림** — 로컬 Docker 없음, 나이틀리 web-store full-stack 은 머지 후 `main` 에서만 돌고 minio-init 결과는 단언 안 함. 🔴 `bitnamilegacy` = «갱신 안 됨» 아카이브. AMI 굽기는 pull 하므로(`demo-ami.pkr.hcl:381`) 재굽기 전 선행. 분석=Opus 5.5 / 구현=Opus 5.5.
+_(없음)_
 
 ## done
+
+- ✅ `TASK-BE-598-quay-minio-is-closed-too.md` — **DONE 2026-09-26 UTC (4-dim verified)** — impl PR **#4008** 머지, 스쿼시 **`6ea6b57d7`** (+ 문서 #4009, 머지 전 FAILURE 0). `quay.io/minio` 도 익명 pull 401 → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. **AC-3 소유자 결정(2026-09-26 UTC) — 잔여 기준으로 닫음**: minio-init 종료 코드 0 · 버킷 생성 · `mc ls`/`anonymous get` 은 15차·16차 창 둘 다 PASS, 남은 «업로드 경로 하나가 동작»은 ⚪(제품-이미지 시딩 자체가 미구현 — 이 티켓 Scope 밖). 🔴 이 워크트리의 HARDSTOP-05 훅이 `tasks/done/` 파일의 `## CORRECTION` 외 수정을 막아 파일 상단 `**Status:**` 는 `review` 로 남아 있다 — 파일 끝 `## CORRECTION (2026-09-26 UTC) — 4차원 종결` 절이 공식 판정이다.
 
 - `TASK-BE-595-tenant-rejection-reports-itself-as-401-so-a-permission-problem-reads-as-an-expired-session.md` — **✅ DONE (2026-09-16 UTC · 4차원 검증 — impl PR [#3861](https://github.com/kanggle/monorepo-lab/pull/3861) squash `23f416e64`; `state=MERGED` · `origin/main` 조상 · 머지 전 FAILURE 0 (success 17 / skipped 46) · AC 절 AC-0~4 대조)** — 🟢 **테넌트 거절이 403 `TENANT_FORBIDDEN` 으로 보고된다.** 403 분기가 실제 예외 사슬(`InvalidBearerTokenException` ⊃ `JwtValidationException`)에서 도달 불가였다 → 술어 «tenant_mismatch 가 사슬 어디에든 있으면 403». 만료·서명·발급자·토큰 부재는 401 유지(칸 4). bite 16 중 5 빨강. `GatewayIntegrationTest` 는 로컬 Docker 부재로 못 돌렸고 CI Integration A/B/C 에서 실제 통과. 형제 게이트웨이 5 중 0(공유 `libs/java-gateway` 는 이미 안쪽을 읽는다). 🔴 **AC-4 라이브 ⚪ → `TASK-MONO-672` 항목 4** — 09-16 데모 창이 열렸지만 AMI(`8cf474346`, 09-12 bake)에 이 수정이 없어 잴 수 없었다: 선행조건은 창이 아니라 **AMI 재굽기**. 🔵 부수 발견(티켓화): audience 미검증 → `TASK-MONO-696`. 분석=Opus 5 / 구현=Opus 5.
 
