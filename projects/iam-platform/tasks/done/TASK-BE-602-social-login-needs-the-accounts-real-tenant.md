@@ -4,7 +4,7 @@ TASK-BE-602
 
 # Status
 
-review
+done (2026-09-27 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review
 
 # Title
 
@@ -262,3 +262,22 @@ Google · Microsoft 는 id_token JWKS 서명 검증이 있어 스텁이 더 무�
 
 🟢 **규칙 자체는 `fan-platform` 계정으로 라이브 확인**: `be602-261549@ex.io`(`4d8961ea-…`) — 합성 재사용 2건 → **LOCKED(~2s)** → 소셜 콜백 **`/login?error=account_unavailable`** · `login_history` FAILURE 1.
 🔴 **원인(새 결함)**: 잠금 호출이 계정의 테넌트를 싣지 않는다 — security-service `AccountServiceClient.lock`(헤더 없음) · admin-service `lock`(SUPER_ADMIN 은 `"*"` → 헤더 없음) ⇒ account-service 는 `fan-platform` 으로 찾아 404. 후속 = **`TASK-MONO-735`**. AC-3 은 그 티켓이 닫힌 뒤 같은 런북으로 다시 잰다.
+
+## CORRECTION (2026-09-27 UTC) — AC-3 창 재판정: 🟢 PASS → close (4차원)
+
+`TASK-MONO-735`(#4048, 2026-09-26 UTC 병합)가 잠금 호출 경로를 고친 뒤, 17차 AMI 창(`ami-01a237c49e6a385d1`)에서 같은 런북 스텝 3을
+다시 실행했다: 스텝 1(자동 잠금)이 스토어(`ecommerce`) 일회용 소셜 계정 `69508370-eca4-4603-95f2-903ce7c78a8d`를 합성 재사용 2건으로
+**LOCKED(~2s)** 시켰고, 그 계정으로 소셜 로그인 → **`/login?error=account_unavailable`**, `login_history` ecommerce **FAILURE 1**
+(대조군: 잠그기 전 SUCCESS 1). ⇒ **AC-3 이 요구한 «결과로 판정: 잠근 뒤 소셜 로그인 거부 · 대조군(잠그기 전 성공)»이 충족됐다.**
+⇒ **AC-3 🟢 CLOSED.**
+
+### close (4차원)
+
+- (a)(b) — impl PR [#4029](https://github.com/kanggle/monorepo-lab/pull/4029) `state=MERGED`, `mergeCommit=69373a67817203e1d1de1d6b9ae5bd50e3d98988`,
+  `git merge-base --is-ancestor 69373a678… origin/main` **rc=0**.
+- (c) — 머지 시점 `statusCheckRollup`: FAILURE **0건**(`Integration (iam A/B, Testcontainers)`·`E2E smoke (iam docker-compose)`·
+  `E2E (fan-platform v1 live-trio smoke)` 모두 SUCCESS).
+- (d) — AC 섹션 전체 재독: AC-0 🟢 · AC-1 🟢 · AC-2 🟢(모두 2026-09-25 닫힘, 단위/어댑터/컨트롤러 테스트 + bite 6종) · **AC-3 🟢(위, 2026-09-27 창)**.
+  네 AC 전부 닫힘. 후속 후보(§ 후속 ①·②·③·④)는 파일 미생성 기록으로 남아 있고 이 티켓의 닫힘을 막지 않는다(범위 밖으로 명시됨).
+
+⇒ `done/` 로 이동. Status 는 이 CORRECTION 을 근거로 `done`으로 갱신한다(편집 훅이 막으면 이 절이 권위).

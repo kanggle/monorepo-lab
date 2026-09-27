@@ -191,3 +191,20 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 - **변경**: `security-service/.../infrastructure/client/AccountServiceClient.java` 에서 헤더 제거 + 이유 주석 · `AccountServiceClientUnitTest` 는 «세션 테넌트 `fan-platform` · 계정 `acc-ec`» 로 호출해 요청에 **`X-Tenant-Id` 가 없음**을 핀(`withoutHeader`) · `security-to-account.md` · `multi-tenancy.md` 갱신.
 - **검증 (로컬, 2026-09-26 UTC)**: `:projects:iam-platform:apps:security-service:test` **rc=0** · 249 tests · 0 fail · 13 skipped (`AccountServiceClientUnitTest` 9/0). **bite**: 헤더 한 줄을 다시 넣음 → `AccountServiceClientUnitTest` **rc=1 · 9 중 1 실패**(헤더 없음 핀 셀) → 원복 → 모듈 전체 **rc=0**.
 
+## CORRECTION (2026-09-27 UTC) — AC-3 창 판정: 스텝 1·3·5(§⑧)는 🟢 PASS, 스텝 2·4는 🔴 FAIL — 원인 미확정 → `TASK-MONO-737`
+
+17차 AMI(`ami-01a237c49e6a385d1`, RepoCommit `a6f0ab791`, 인스턴스 `i-08d11a45750b42955`) · § ⑦ AC-3 런북 그대로 실행(일회용 계정).
+
+| 런북 스텝 | 대상 | 결과 |
+|---|---|---|
+| 1 — 자동 잠금(스토어 `ecommerce`) | `69508370-eca4-4603-95f2-903ce7c78a8d` | 🟢 **PASS** — 합성 `auth.token.reuse.detected` 2건(tenantId=ecommerce) → **LOCKED(~2s)**, 보안 로그 `account.locked recorded … source=system`, `Auto-lock … 404` 없음(16차 창은 같은 절차로 404였다) |
+| 1 대조군 | fan-platform 계정 `554120af-85cc-4989-8a2b-bd9cb27abc18` | 🟢 LOCKED(~2s) |
+| 3 = `TASK-BE-602` AC-3 | 스텝 1 의 잠긴 스토어 소셜 계정 | 🟢 **PASS** — 소셜 로그인 → `/login?error=account_unavailable`, `login_history` ecommerce FAILURE 1(대조군: 잠그기 전 SUCCESS 1) |
+| 5(§⑧ 교차 테넌트 세션) | `83cfc587-5cb3-4001-904b-1a147184eec0`(ecommerce 계정, 스토어·팬 클라이언트 모두 로그인) | 🟢 **PASS** — 합성 이벤트 tenantId=**fan-platform** 2건 → LOCKED(~2s). ⓐ 소유자 결정(security-service 는 헤더 없음)이 라이브에서 성립함을 확인 |
+| 2 — 콘솔 SUPER_ADMIN 잠금 | `demo@demo.com`(콘솔 테넌트 전환 `ecommerce`), 대상 `78740d21-7658-4f2e-a7ff-7b5722d33b50` | 🔴 **FAIL** — **404 「대상 계정을 찾을 수 없습니다」**(3회, 07:02:15·07:02:39·07:05:12Z), admin-service 로그 `account-service returned 404 NOT_FOUND on /internal/accounts/…/lock`, 계정은 `ecommerce ACTIVE` 그대로, `admin_actions` FAILURE. **새 404 매핑 자체는 동작한다**(500/503 아님) |
+| 4 — 셀러 정지 | 신규 셀러 `seller-test`(계정 `c20bdafc-1bd2-4316-a3f0-c165da543ff9`) | 🔴 **FAIL** — 셀러는 `SUSPENDED` 로 전이했지만 **계정은 ACTIVE** 그대로, product-service 로그 `seller account lock failed (fail-soft) tenant=ecommerce account=c20bdafc-… : 404 Not Found` |
+
+🔴 **패턴**: 헤더 없는 호출(security-service, (b) 경로)은 전부 성공하고, **구체 테넌트를 명시로 싣는 호출**(admin-service · product-service, 둘 다 대상은 `ecommerce`)은 같은 모양으로 404다. account-service 코드상 구체 테넌트 헤더가 `ecommerce`로 오면 `findByTenantIdAndId(ecommerce, id)`로 찾아야 하므로, 실제 도착 헤더 값이 `ecommerce`가 아닐 가능성이 높다 — 그러나 **확인되지 않았다**(내부 워크로드 자격증명 재생이 필요, 이번 창은 하지 않았다). `AccountMutationTenantConfinementIntegrationTest`에는 「올바른 구체 테넌트 헤더 → 200」 셀이 없어(헤더 없음/`*` → 200 · 잘못된 테넌트 헤더 → 404 대조군만) CI가 이 결함을 못 잡았다.
+
+⇒ **AC-3 은 OPEN 으로 남는다** — 스텝 2·4 는 새 원인 미확정 결함이다. 후속 = **`TASK-MONO-737`**(원인 실측 + 수정 + 누락된 IT 셀). 이 티켓은 `review/` 에 남는다(4차원 close 대상 아님 — AC-3 미충족).
+

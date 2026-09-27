@@ -353,6 +353,33 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
 - 출처: `projects/iam-platform/tasks/ready/TASK-BE-604-…` § AC-0. 🔴 **Failure Scenario 2 대조**: 604 는 `ready/` — 결과는 604 AC-0 에도
   적고, 604 가 착수되면 이 항목은 604 로 돌아간다(의무 이중 보유 금지).
 
+# 🟢 2026-09-27 17차 창 수확 (06:13Z 부팅 ~ 07:15Z · 17차 AMI `ami-01a237c49e6a385d1` · 클론 `a6f0ab791` · 인스턴스 `i-08d11a45750b42955` · 신선 볼륨 · 예산 1602→1667/1800 · 분석=Opus 5.5)
+
+부팅: `demo-stack` active, SSM `demo-boot.sh console wms scm fan erp finance` 추가 부팅 → **47 → 96 running · unhealthy 0** · 시드 요약 전부 실패 0. Lambda `AMI_REPO_COMMIT = a6f0ab791`(정확 — 16차 창의 오류가 재발하지 않았다. 그때는 핀 파일이 apply 전에 되돌려져 Lambda 가 15차 커밋을 들고 있었다; 교훈 = **핀 PR 을 머지하고 pull 한 뒤에** `terraform plan`).
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 부팅 점검 | 🟢 | RepoCommit `a6f0ab791` 정확 일치 · 96 running · unhealthy 0 · 시드 실패 0 |
+| `TASK-MONO-735` AC-3 스텝 1(자동 잠금, ecommerce) | 🟢 **PASS** | 합성 재사용 2건 → LOCKED(~2s) · `account.locked … source=system` · 404 없음(16차 창은 같은 계정 모양에서 404였다) |
+| `TASK-MONO-735` AC-3 스텝 1 대조군(fan-platform) | 🟢 **PASS** | LOCKED(~2s) |
+| `TASK-MONO-735` AC-3 스텝 3 = `TASK-BE-602` AC-3 | 🟢 **PASS** | 잠긴 스토어 소셜 계정 로그인 → `/login?error=account_unavailable` · `login_history` FAILURE 1(대조군 SUCCESS 1) |
+| `TASK-MONO-735` AC-3 스텝 5(§⑧ 교차 테넌트 세션) | 🟢 **PASS** | ecommerce 계정, 스토어+팬 클라이언트 로그인, 이벤트 tenantId=fan-platform 2건 → LOCKED(~2s) |
+| `TASK-MONO-735` AC-3 스텝 2(콘솔 SUPER_ADMIN 잠금) | 🔴 **FAIL** | 404 「대상 계정을 찾을 수 없습니다」×3 · 계정 ACTIVE 유지 → `TASK-MONO-737` |
+| `TASK-MONO-735` AC-3 스텝 4(셀러 정지) | 🔴 **FAIL** | 셀러 SUSPENDED, 계정 ACTIVE 유지 · product-service 로그 404(fail-soft) → `TASK-MONO-737` |
+| `TASK-MONO-726` 항목 14 ②(`lockAccount`) | 🔴 **FAIL**(위와 동일 근거) | `review/` 유지 — `TASK-MONO-737` 대기 |
+| `TASK-MONO-730` AC-1 | 🟢 **PASS → close** | viewer 게이트 화면에 ⓒ 안내(«접근 가능한 테넌트가 없습니다») 렌더 |
+| `TASK-BE-597` AC-2 | 🟢 **PASS → close**(동일 근거) | 〃 |
+| `TASK-PC-FE-301` AC-2 | 🟢 **PASS → close**(동일 근거) | 〃 |
+| `TASK-MONO-648` 재촬영 | 🔵 완료 | 콘솔만(`DEMO_TENANT=ecommerce`) — 계획 101 · 촬영 86 · 실패 15(거부 11 = ecommerce 미구독 도메인 erp/finance/scm/tenants/partnerships · 동적 미해결 4). 후보 목록은 648 § 2026-09-27 절에 기록, `in-progress` 유지(소유자 최종 승인 대기) |
+| ⚪ 미설명 관측 | ⚪ | viewer 첫 로그인 시도에서 JSON `{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}` 1회 — 그러나 `login_history` 는 06:57:42Z SUCCESS, 어떤 서비스도 401 을 로깅하지 않음. `https://auth.hubwang.com/login` 에서 재시도하니 정상. 원인 미확인, 1회만 관측 |
+| 예산 | 정보 | 1602 → 1667/1800(창 소모 약 65분) |
+
+🔴 **새 결함(기안)**: `TASK-MONO-735` 가 고친 잠금 경로 중 **헤더 없는 호출은 성공하고 구체 테넌트 헤더를 싣는 호출(admin-service·product-service)은 여전히 404** — 원인 미확정 → **`TASK-MONO-737`** 신규 기안(root, ready). `TASK-MONO-735`·`TASK-MONO-726`(항목 14②)에 CORRECTION 절로 각각 기록, 둘 다 `review/` 유지.
+
+🟢 **닫힘(4차원 검증)**: `TASK-MONO-730`(#4043) · `TASK-BE-602`(#4029) · `TASK-PC-FE-301`(#4049) · `TASK-BE-597`(#4001) — 넷 다 이 창의 라이브 판정으로 남은 AC 가 해소돼 `done/` 로 이동.
+
+---
+
 # 🟢 2026-09-26 16차 창 수확 (15:06Z 부팅 ~ 16:3xZ · 16차 AMI `ami-0134ac19b5c15ef0d` · 클론 `58d4920c4` · 인스턴스 `i-0917a5e39bd75f1d3` · 신선 볼륨 · 분석=Opus 5.5)
 
 🔵 **부팅 경위**: 옛 인스턴스 `i-09f10c696375ba99b` 가 apply 전에 **이미 AWS 에 없었다**(태그·id 조회 0건 · 볼륨 0) ⇒ plan 이 «replace» 가 아니라 «create»(0 destroy). 누가 지웠는지는 `cloudtrail:LookupEvents` 권한이 없어 미상. 새 인스턴스는 `/start` 를 거치지 않아 선택이 `iam ecommerce` 뿐이었고, 에이전트가 SSM 으로 `demo-boot.sh console wms scm fan erp finance` 를 더 올렸다(96 컨테이너 · unhealthy 0).

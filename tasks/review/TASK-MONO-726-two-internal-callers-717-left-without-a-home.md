@@ -216,3 +216,18 @@ UTC 병합)가 그 잠금 호출 경로 자체를 고친 뒤라야 뜻이 있다
 
 ⇒ **AC-0 «두 결과를 이 파일에 적고, 갈래를 소유자에게 묻는다»** 의 답: 위 두 문단. 이 티켓은 ① 이 열려 있는 한 `done/` 으로
 옮기지 않는다.
+
+## CORRECTION (2026-09-27 UTC) — ① 창 판정: 🔴 FAIL — `account_db.accounts.status` 가 안 바뀐다 → `TASK-MONO-737` 대기
+
+17차 AMI 창(`ami-01a237c49e6a385d1`, RepoCommit `a6f0ab791`, `TASK-MONO-735`(#4048) 병합 이후)에서 위 CORRECTION 이 요구한 판정을 했다:
+신규 셀러 `seller-test`(계정 `c20bdafc-1bd2-4316-a3f0-c165da543ff9`, ecommerce)를 정지시켰다 — 셀러는 `SUSPENDED` 로 전이했지만
+**`account_db.accounts.status` 는 `ACTIVE` 그대로**다. product-service 로그: `seller account lock failed (fail-soft) tenant=ecommerce
+account=c20bdafc-… : 404 Not Found` — `AccountServiceSellerProvisioner.lockAccount`가 이제 `X-Tenant-Id: ecommerce`(구체 테넌트, 735 § AC-0
+표대로)를 싣는데도 account-service 가 404 를 낸다.
+
+🔴 이것은 735 가 고친 라우팅/헤더 로직 자체의 회귀가 아니다 — 같은 창에서 **콘솔 SUPER_ADMIN 잠금**(admin-service, 역시 구체 `X-Tenant-Id:
+ecommerce`)도 같은 모양으로 404였다(`TASK-MONO-735` § CORRECTION 2026-09-27 스텝 2). ⇒ **원인은 공통**이고 새 티켓 **`TASK-MONO-737`**(account-service
+에 실제로 도착하는 `X-Tenant-Id` 값부터 확인)로 넘겼다.
+
+⇒ **항목 14 ② (= 이 티켓의 ①)는 🔴 FAIL 로 판정됐다.** `TASK-MONO-737` 이 닫힌 뒤 같은 절차(셀러 정지 → `accounts.status`)로 다시 잰다.
+이 티켓은 여전히 `review/` 에 남는다 — `done/` 으로 옮기지 않는다(4차원 close 대상 아님, ① 미충족).

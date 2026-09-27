@@ -1668,3 +1668,49 @@ sellers/[id] · users/[id]` · `store /my/orders/[id] · /products/[id]` · `fan
 0」인 장들 가운데서 큐레이션 후보를 낸다(§ 사람 눈으로 전수 절의 판정 방식을 그대로 따른다). 그 후보 목록에서 **최종 승인 목록과
 4번째 장은 소유자가 고른다**(이 티켓이 지금 들고 있는 미해결 체크박스 그대로 — `/ecommerce/*` 3장 재촬영·`/erp/masters` 재촬영·
 4번째 장 확정). 이 티켓은 `in-progress` 에 남는다.
+
+---
+
+# 🔵 2026-09-27 UTC 17차 AMI 창 — 재촬영 완료 + 후보 목록 (소유자 결정 대기, 아직 고르지 않았다)
+
+`scripts/capture-portfolio.mjs`(콘솔 `DEMO_TENANT=ecommerce` · 스토어 · 팬 셋 다, `demo@demo.com`/`ecommerce` 세션)를 17차 AMI
+(`ami-01a237c49e6a385d1`)에서 실행 — 매니페스트 `portfolio-captures/2026-09-27/manifest.json`(`generatedAt` 07:19:28Z).
+
+**규모**: 계획 **101** · 촬영 **86** · 실패 **15**.
+- **거부 11**(`kind:"denied"`) — 콘솔 `/erp/approval` `/erp/delegation` `/erp/masters` `/erp/orgview` `/finance` `/ledger`
+  `/scm/inventory` `/scm/procurement` `/scm/replenishment` `/tenants`(의도된 거부, `TASK-MONO-676`) + `/partnerships`
+  (ADR-MONO-045, 의도) — 전부 `ecommerce` 테넌트가 그 도메인을 **구독하지 않아서**다(2026-09-22 `ecommerce` 런과 같은 모양) —
+  권한 결함이 아니라 테넌트 구독 상태다.
+- **동적 미해결 4** — `/ecommerce/notifications/templates/[id]/edit`(목록에 따라갈 항목 없음) · `/ecommerce/settlements/periods/[id]`
+  (부모 목록 404) · `/tenants/[tenantId]`(목록 자체가 거부) · store `/orders/[id]`(목록에 따라갈 항목 없음) — 09-22/09-26 이 이미
+  적은 「앱 쪽 사유」와 같다, 재촬영으로 안 풀린다.
+- **저하(`degraded:true`) 8장** — `/` `/console` `/dashboards/*` `/login` `/onboarding` `/erp`(부분) `/scm`(부분) — Vercel
+  콘솔 → console-bff 연결 한계(기존에 기록된 것과 같은 목록). 후보에서 제외.
+
+## 🔵 에이전트가 추린 후보 — 소유자가 최종 목록과 4번째 장을 고른다 (결정 아님)
+
+「빈값(`empty:true`) 아님 · 저하(`degraded:true`) 아님 · 거부 아님」인 장 중에서, 이커머스/IAM 축과 소유자가 지정한 스토어·팬
+장을 우선해 추렸다. `path`/`file` 은 매니페스트 그대로 — 재생성 시 그대로 찾을 수 있다.
+
+| # | 앱 | 라우트 | 파일 | 근거(매니페스트 실측) |
+|---|---|---|---|---|
+| 1 | console | `/ecommerce/orders` | `console__ecommerce__orders.jpg` | 728자 · PENDING~CANCELLED 5상태 실데이터 — «가장 살아 있는 목록」 |
+| 2 | console | `/ecommerce/orders/[id]` | `console__ecommerce__orders__d4e77b4c-….jpg` | 404자 · 주문 상세 DELIVERED, 실사용자 id 포함 |
+| 3 | console | `/ecommerce/products` | `console__ecommerce__products.jpg` | 963자 · 24개 상품 전부 렌더 |
+| 4 | console | `/ecommerce/products/[id]` | `console__ecommerce__products__b0000000-….jpg` | 457자 · 「슬림핏 데님 청바지」 상세 + 가격 |
+| 5 | console | `/ecommerce/settlements` | `console__ecommerce__settlements.jpg` | 1513자 · 셀러별 라인 단위 수수료·기간·지급 — 가장 데이터가 풍부한 콘솔 장 |
+| 6 | console | `/iam` | `console__iam.jpg` | 182자지만 밀도 높음 — 운영자 1/정지0 · 계정 6/잠금2 · 감사 이벤트 요약 카드 3종 |
+| 7 | console | `/operators` | `console__operators.jpg` | 1095자 · 운영자 등록·역할·상태 변경 UI 설명 + 목록 |
+| 8 | store | `/products` | `store__products.jpg` | 652자 · 24상품 카테고리별 렌더 |
+| 9 | store | `/products/[id]` | `store__products__b0000000-….jpg` | 527자 · 「2-in-1 컨버터블 노트북」 상세, 옵션 UI |
+| 10 | store | `/my/orders/[id]` | `store__my__orders__d4e77b4c-….jpg` | 400자 · 배송완료 주문 상세 + 결제정보 |
+| 11 | fan | `/artists/[id]` | `fan__artists__0199de80-….jpg` | 306자 · 아티스트 프로필 + 포스트 목록(멤버 전용 표시) |
+| 12 | fan | `/posts/[id]` | `fan__posts__01a0e18b-….jpg` | 198자 · 멤버십 전용 포스트 상세 + 반응 UI |
+
+🔴 **주의(추천에 넣지 않은 이유, 기록)**: `/ecommerce/sellers/[id]`(`seller-test`)는 이번 창이 `TASK-MONO-737` 재현을 위해
+방금 만든 **일회용 테스트 셀러**이고 상태가 `SUSPENDED`다 — 포트폴리오용으로 보여주기엔 부자연스러운 데이터라 후보에서 뺐다.
+`/permissions`·`/permission-sets`(각 1198·1417자, 데이터는 풍부)도 후보권이지만 이미 8+3+1 로 12장을 냈으므로 소유자가
+IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
+
+⏳ **소유자 결정 대기**: 위 12장 후보에서 최종 목록(원래 미해결 체크박스 = `/ecommerce/*` 3장 + `/erp/masters` 재촬영 + 4번째
+장)을 고른다. 결정 전까지 이 티켓은 `in-progress` 에 남는다 — 산출물은 `portfolio-captures/2026-09-27/`(gitignored)에 그대로 있다.

@@ -4,7 +4,7 @@ TASK-MONO-730
 
 # Status
 
-review — AC-2·AC-3 구현 완료(2026-09-26 UTC). **AC-1 은 창(라이브 브라우저) 대기로 열려 있다** — `review/` 에 두는 이유는 `platform/git-workflow-policy.md` § The Fourth Dimension 의 창-대기 선례(`TASK-BE-602`)와 같다.
+done (2026-09-27 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review — AC-2·AC-3 구현 완료(2026-09-26 UTC). **AC-1 은 창(라이브 브라우저) 대기로 열려 있다** — `review/` 에 두는 이유는 `platform/git-workflow-policy.md` § The Fourth Dimension 의 창-대기 선례(`TASK-BE-602`)와 같다.
 
 # Title
 
@@ -124,3 +124,21 @@ monorepo
 - 원인(코드): 선택 가능한 테넌트 = 운영자가 쓸 수 있는 상품의 테넌트(`console-web/src/shared/lib/active-tenant-default.ts:44` `selectableTenants`). 역할 0 ⇒ 상품 0 ⇒ 테넌트 0 ⇒ 스위처 없음. 게이트 화면들은 **권한보다 테넌트를 먼저** 검사한다(`operators` · `audit` · `tenants` · `accounts` · `permissions` … 의 `page.tsx`).
 - 대조군: `demo@demo.com`(SUPER_ADMIN)으로 `/partnerships` → 「파트너십 관리는 partnership.manage 권한이 필요합니다」 — 권한 거부 화면 자체는 동작한다.
 - **소유자 결정 (2026-09-26 UTC) = ⓒ** «선택 가능한 테넌트가 0 이면 `테넌트를 선택하세요` 대신 `접근 가능한 테넌트가 없습니다(권한 없음)` 를 보인다» (기각: ⓐ viewer 에 권한 없는 테넌트 부여 · ⓑ 현 동작을 정답으로). 구현 = `TASK-PC-FE-301`. 이 AC 는 그 티켓이 닫힌 뒤 같은 절차로 다시 잰다 — 기대값을 «ⓒ 의 안내가 뜬다» 로 바꿔 읽는다.
+
+## CORRECTION (2026-09-27 UTC) — AC-1 창 재판정: 🟢 PASS(ⓒ 안내 확인) → close (4차원)
+
+`TASK-PC-FE-301`(#4049, 2026-09-27 UTC 병합)이 닫힌 뒤, 17차 AMI 창(`ami-01a237c49e6a385d1`)에서 소유자 브라우저로
+`https://console.hubwang.com`에 `viewer@demo.com` 으로 로그인 → 게이트된 화면에서 «이 계정에는 접근 가능한 테넌트가 없습니다.
+권한이 필요합니다 — 관리자에게 요청하세요.» 안내가 뜬다(옛 «테넌트를 먼저 선택하세요» 미노출) — **AC-1 이 기대한 ⓒ 안내와 일치**.
+⇒ **AC-1 🟢 CLOSED.**
+
+### close (4차원)
+
+- (a)(b) — impl PR [#4043](https://github.com/kanggle/monorepo-lab/pull/4043) `state=MERGED`, `mergeCommit=b5ecdf3925513a829680f87f0ec03108dfb0da5a`,
+  `git merge-base --is-ancestor b5ecdf392… origin/main` **rc=0**.
+- (c) — 머지 시점 `statusCheckRollup`: FAILURE **0건**(SUCCESS/SKIPPED만 — required 4종 포함 SUCCESS, `Frontend unit tests`·
+  `Frontend E2E smoke`·`Integration (platform-console console-bff)` 모두 SUCCESS).
+- (d) — AC 섹션 전체 재독: AC-0 🟢(참, 2026-09-26 실측) · AC-2 🟢(구현+가드 rc=0+bite 확인, 2026-09-26) · AC-3 🟢(가이드 반영 확인,
+  2026-09-26) · **AC-1 🟢(위, 2026-09-27 창)**. 네 AC 전부 닫힘.
+
+⇒ `done/` 로 이동. Status 는 이 CORRECTION 을 근거로 `done`으로 갱신한다(편집 훅이 막으면 이 절이 권위).
