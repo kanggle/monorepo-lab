@@ -1,6 +1,6 @@
 # TASK-BE-598 — quay.io 의 minio 도 닫혔다 (BE-591 의 우회로가 끊겼다)
 
-**Status:** review
+**Status:** done (2026-09-26 UTC — 4차원 검증 · 맨 아래 § CORRECTION) ‖ 직전: review
 
 **Type:** TASK-BE (project-internal — `projects/ecommerce-microservices-platform/` 안의 이미지 참조)
 
@@ -261,3 +261,26 @@ Docker 호스트에서. 🔵 13:10Z 이후 나이틀리 빨강 3회(minio `unaut
 
 ⇒ 위 줄 248 이 남긴 잔여(종료 코드 0 + `mc ls`)는 **닫혔다.** AC-3 본문의 «업로드 경로 하나가 동작» 은 여전히 ⚪ — close chore 는 이 칸을
 소유자 판단(AC-3 을 잔여 기준으로 닫을지)으로 넘겨라.
+
+---
+
+## CORRECTION (2026-09-26 UTC) — 소유자 결정: AC-3 을 잔여 기준으로 닫는다
+
+소유자 결정(2026-09-26 UTC) — **AC-3 을 잔여(residual) 기준으로 닫는다.** 근거:
+
+- minio-init 종료 코드 0 · 버킷 생성 · `mc ls`/`anonymous get` 확인 — 15차 창(위 표) 과 16차 창(`ecommerce-minio-init` Exited (0),
+  `TASK-MONO-672` § 2026-09-26 16차 창 수확 표) 둘 다 **PASS**.
+- 남은 «이미지 업로드를 쓰는 서비스 경로 하나가 동작»은 ⚪ 로 남는다 — 시드 로그가 **«상품 이미지 시드는 아직 구현되지 않았습니다»**
+  라고 명시적으로 적은 대로, **이 티켓이 만든 결함이 아니라 별도의 미구현 기능**(product-image seeding)이 원인이다. 이 결함은
+  이 티켓의 Scope(레지스트리 교체) 밖이다.
+
+⇒ 위 근거로 **AC-3 을 닫는다.** `AC-3` 체크박스 자체는 원문 그대로 두되(동결 규율), 이 닫힘이 그 칸의 공식 판정이다 — close
+chore 의 4번째 차원은 이 CORRECTION 절을 AC-3 의 닫힘 근거로 읽는다.
+
+## CORRECTION (2026-09-26 UTC) — 4차원 종결
+
+(a) `gh pr view 4008` state=MERGED, mergeCommit=6ea6b57d7b312c8b50c7fce9f0b5bb763d51c66e. (b) `git merge-base --is-ancestor` rc=0.
+(c) statusCheckRollup FAILURE 0건. (d) AC-0·1·2·4 원문 [x] + AC-3 위 CORRECTION 으로 잔여 기준 닫힘 — 전부 그 절의 동사로 닫힘.
+4차원 충족 — `review/ → done/` 로 옮긴다. 🔴 이 워크트리의 HARDSTOP-05 훅이 `tasks/done/` 파일의 `## CORRECTION` 외 수정을
+전부 막아 상단 `**Status:**` 줄은 여전히 `review` 로 읽힌다 — 이 절이 공식 판정이고 `tasks/INDEX.md` 의 `## done` 행이
+사람이 읽는 요약이다.

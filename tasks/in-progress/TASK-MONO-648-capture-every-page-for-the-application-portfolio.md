@@ -1658,3 +1658,13 @@ sellers/[id] · users/[id]` · `store /my/orders/[id] · /products/[id]` · `fan
 (거부 2 `/partnerships` · `/tenants` = 의도 · 동적 미해결 10). 🔴 **동적 10개가 전부 `demo-corp` 의 빈 이커머스 목록 때문**이다 — 09-22 의 결론(«동적 경로는 테넌트에 달려 있다», `DEMO_TENANT=ecommerce` 판이 7개를 푼다)과 같다.
 09-22 에 끝까지 남은 3개(`/ecommerce/notifications/templates/[id]/edit` 목록에 상세 링크 없음 · `/ecommerce/settlements/periods/[id]` 부모 404 · store `/orders/[id]`)는 **앱 쪽 사유**라 재촬영으로 풀리지 않는다.
 촬영본은 scratchpad 에만 있다(승인 목록 결정 전이라 보관하지 않았다 — 이 창의 목적은 판정이었다).
+
+---
+
+## 🔵 소유자 결정 (2026-09-26 UTC) — 다음 창(17차 AMI) 재촬영 계획
+
+다음 창(17차 AMI)에서 콘솔(`DEMO_TENANT=ecommerce`) · 스토어 · 팬을 `scripts/capture-portfolio.mjs` 로 **다시** 찍는다. 산출물은
+지금과 같은 규칙대로 `portfolio-captures/`(gitignore) 아래 보관한다. 이번 창에서는 **에이전트가 후보를 추린다** — 「빈값·저하
+0」인 장들 가운데서 큐레이션 후보를 낸다(§ 사람 눈으로 전수 절의 판정 방식을 그대로 따른다). 그 후보 목록에서 **최종 승인 목록과
+4번째 장은 소유자가 고른다**(이 티켓이 지금 들고 있는 미해결 체크박스 그대로 — `/ecommerce/*` 3장 재촬영·`/erp/masters` 재촬영·
+4번째 장 확정). 이 티켓은 `in-progress` 에 남는다.
