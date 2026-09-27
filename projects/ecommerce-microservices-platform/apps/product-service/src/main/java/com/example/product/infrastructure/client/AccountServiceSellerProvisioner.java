@@ -143,9 +143,17 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     .uri("/internal/accounts/{accountId}/lock", accountId)
                     .headers(h -> {
                         h.add("Idempotency-Key", UUID.randomUUID().toString());
-                        // 🔵 NO tenant in this path (/internal/accounts/{id}/lock), so the
-                        // tenant-scope rule does not apply and the base credential is correct.
-                        // ADR-MONO-076 changes only the calls that name a tenant in the path.
+                        // TASK-MONO-735: the seller's tenant — the one §1 minted the account in —
+                        // so account-service looks the account up THERE (a stale/wrong id that
+                        // lives in another tenant is a 404, never a lock). The earlier comment here
+                        // said the tenant-scope rule "does not apply" because the path names no
+                        // tenant; that was true of the TOKEN, not of the lookup: with no header
+                        // account-service read the call as fan-platform, so the seller's account
+                        // (minted in its own tenant) was never found and SUSPEND never locked it.
+                        h.add("X-Tenant-Id", tenantId);
+                        // 🔵 The BEARER stays the base credential: the path names no tenant, so
+                        // ADR-MONO-076's tenant-scoped exchange (calls whose PATH names a tenant)
+                        // does not apply. X-Tenant-Id here is a lookup scope, not an authz claim.
                         h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(MediaType.APPLICATION_JSON);
                     })

@@ -43,8 +43,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li><b>Same-tenant</b> ({@code X-Tenant-Id} = the account's tenant) → success.</li>
  *   <li><b>Cross-tenant</b> ({@code X-Tenant-Id} = a different tenant) →
  *       {@code 404 ACCOUNT_NOT_FOUND} (enumeration-safe; the account is NOT mutated).</li>
- *   <li><b>NET-ZERO</b> (no {@code X-Tenant-Id}) → defaults to {@code fan-platform},
- *       byte-identical to the pre-BE-467 hard-pin.</li>
+ *   <li><b>No tenant named</b> (no / {@code "*"} {@code X-Tenant-Id}) on {@code /lock} ·
+ *       {@code /unlock} · {@code /delete} → the account's own tenant, from its row
+ *       (TASK-MONO-735; until then this pinned to {@code fan-platform} and every account
+ *       outside it was a 404). {@code fan-platform} accounts behave as before.</li>
  * </ul>
  */
 @SpringBootTest
@@ -56,6 +58,7 @@ class AccountMutationTenantConfinementIntegrationTest extends AbstractIntegratio
 
     private static final String WMS_TENANT_ID = "wms";
     private static final String FAN_TENANT_ID = "fan-platform";
+    private static final String ECOMMERCE_TENANT_ID = "ecommerce";
 
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
@@ -75,6 +78,10 @@ class AccountMutationTenantConfinementIntegrationTest extends AbstractIntegratio
                 INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
                 VALUES (?, 'Warehouse Management System', 'B2B_ENTERPRISE', 'ACTIVE', NOW(6), NOW(6))
                 """, WMS_TENANT_ID);
+        jdbc.update("""
+                INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
+                VALUES (?, 'E-commerce', 'B2C_CONSUMER', 'ACTIVE', NOW(6), NOW(6))
+                """, ECOMMERCE_TENANT_ID);
     }
 
     /** Seed an ACTIVE account directly under {@code tenantId} and return its id. */
@@ -91,6 +98,10 @@ class AccountMutationTenantConfinementIntegrationTest extends AbstractIntegratio
 
     private static final String LOCK_BODY = """
             {"reason":"ADMIN_LOCK","operatorId":"op-1"}""";
+
+    /** The security-service auto-lock body (security-to-account.md). */
+    private static final String AUTO_LOCK_BODY = """
+            {"reason":"AUTO_DETECT","ruleCode":"TOKEN_REUSE","riskScore":90,"suspiciousEventId":"evt-1"}""";
 
     // ── LOCK ────────────────────────────────────────────────────────────────────
 
@@ -141,18 +152,106 @@ class AccountMutationTenantConfinementIntegrationTest extends AbstractIntegratio
         assertThat(statusOf(FAN_TENANT_ID, fanAccountId)).isEqualTo(AccountStatus.LOCKED);
     }
 
-    @Test
-    @DisplayName("NET-ZERO 기본값 증명: 헤더 없음 → fan 기본값이라 wms 계정은 404")
-    void lock_noHeader_defaultsToFan_cannotSeeWmsAccount() throws Exception {
-        String wmsAccountId = seedAccount(WMS_TENANT_ID);
+    // ── TASK-MONO-735: a caller that names no tenant gets the account's own tenant ──
+    //
+    // Replaces the BE-467 cell "헤더 없음 → fan 기본값이라 wms 계정은 404". That cell pinned
+    // the defect: the header-less security-service auto-lock and the SUPER_ADMIN ('*') console
+    // lock both returned 404 for an `ecommerce` account in the 2026-09-26 live window.
 
-        mockMvc.perform(post("/internal/accounts/{id}/lock", wmsAccountId)
+    @Test
+    @DisplayName("TASK-MONO-735: 헤더 없음 → ecommerce 계정을 계정 행의 테넌트로 찾아 lock 200 + LOCKED")
+    void lock_noHeader_resolvesAccountsOwnTenant_locksEcommerceAccount() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(AUTO_LOCK_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previousStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.LOCKED);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: X-Tenant-Id='*' (SUPER_ADMIN) → ecommerce 계정 lock 200 + LOCKED")
+    void lock_wildcardHeader_resolvesAccountsOwnTenant_locksEcommerceAccount() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .header("X-Tenant-Id", "*")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.LOCKED);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735 대조군: X-Tenant-Id=fan-platform + ecommerce 계정 → 404 + 미변경 (격리 유지)")
+    void lock_concreteOtherTenantHeader_ecommerceAccount_returns404_andDoesNotMutate() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .header("X-Tenant-Id", FAN_TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(AUTO_LOCK_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: X-Tenant-Id=ecommerce (계정의 테넌트) → lock 200 — 테넌트를 아는 호출자의 명시 경로")
+    void lock_concreteOwnTenantHeader_ecommerceAccount_locks() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .header("X-Tenant-Id", ECOMMERCE_TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(AUTO_LOCK_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.LOCKED);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: 헤더 없음 → 어느 테넌트에도 없는 id 는 여전히 404")
+    void lock_noHeader_unknownId_returns404() throws Exception {
+        mockMvc.perform(post("/internal/accounts/{id}/lock", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(LOCK_BODY))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
 
-        assertThat(statusOf(WMS_TENANT_ID, wmsAccountId)).isEqualTo(AccountStatus.ACTIVE);
+    @Test
+    @DisplayName("TASK-MONO-735: 헤더 없음 → ecommerce 계정 unlock 200 · delete 202")
+    void unlockAndDelete_noHeader_resolveAccountsOwnTenant() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LOCK_BODY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/internal/accounts/{id}/unlock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"ADMIN_UNLOCK","operatorId":"op-1"}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStatus").value("ACTIVE"));
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.ACTIVE);
+
+        mockMvc.perform(post("/internal/accounts/{id}/delete", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"ADMIN_DELETE","operatorId":"op-1"}"""))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.currentStatus").value("DELETED"));
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.DELETED);
     }
 
     @Test

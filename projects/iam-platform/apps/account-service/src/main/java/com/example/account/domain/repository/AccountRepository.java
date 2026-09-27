@@ -19,7 +19,8 @@ import java.util.Optional;
  *
  * <p><b>Documented exception (TASK-BE-602):</b> {@link #findByIdResolvingTenant(String)}. It is
  * the only method here without a {@link TenantId} argument; see its javadoc for the conditions
- * that make it safe, and do not add another one without recording it the same way.
+ * that make it safe and its two registered consumers, and do not add another method — or another
+ * consumer — without recording it the same way (specs/features/multi-tenancy.md § 격리 회귀 방지).
  */
 public interface AccountRepository {
 
@@ -43,10 +44,21 @@ public interface AccountRepository {
      *
      * <p>Why this does not weaken isolation: {@code accounts.id} is a globally unique primary key,
      * so the result is at most one row and cannot mix tenants; the caller receives that row's own
-     * {@link Account#getTenantId()} instead of guessing one; and the only consumer is an internal,
-     * workload-authenticated endpoint that returns no PII
-     * ({@code GET /internal/accounts/{id}/status-with-tenant}). Do not use it from a path that
+     * {@link Account#getTenantId()} instead of guessing one; and its consumers are internal,
+     * workload-authenticated endpoints that return no PII. Do not use it from a path that
      * already has a tenant — use {@link #findById(TenantId, String)} there.
+     *
+     * <p>Registered consumers (and no others):
+     * <ol>
+     *   <li>TASK-BE-602 — {@code GET /internal/accounts/{id}/status-with-tenant} (social-login
+     *       status read; the tenant is returned in the response).</li>
+     *   <li>TASK-MONO-735 — {@code POST /internal/accounts/{id}/lock|unlock|delete}, <b>only</b>
+     *       when {@code X-Tenant-Id} is absent, blank or {@code "*"} (a caller that names no
+     *       tenant: header-less internal callers, SUPER_ADMIN platform scope). When the header
+     *       names a concrete tenant those endpoints stay on {@link #findById(TenantId, String)},
+     *       so cross-tenant is still a 404 — applying this lookup regardless of the header would
+     *       dissolve that confinement.</li>
+     * </ol>
      */
     Optional<Account> findByIdResolvingTenant(String id);
 

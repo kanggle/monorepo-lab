@@ -112,7 +112,30 @@ public class AccountStatusUseCase {
     public StatusChangeResult changeStatus(ChangeStatusCommand command, TenantId tenantId) {
         Account account = accountRepository.findById(tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
+        return applyStatusChange(account, command);
+    }
 
+    /**
+     * TASK-MONO-735 — lock/unlock for a caller that did NOT name a tenant (internal
+     * {@code /lock} / {@code /unlock} with no, blank or {@code "*"} {@code X-Tenant-Id}):
+     * the target is found in the tenant its own row lives in, via the documented exception
+     * {@link AccountRepository#findByIdResolvingTenant(String)}.
+     *
+     * <p>Until MONO-735 such a caller was pinned to {@code fan-platform}, so the security-service
+     * auto-lock and a SUPER_ADMIN ({@code "*"}) console lock returned 404 for every account outside
+     * it (measured live 2026-09-26 on an {@code ecommerce} account). A caller that DOES name a
+     * tenant keeps {@link #changeStatus(ChangeStatusCommand, TenantId)} — confined, cross-tenant → 404.
+     *
+     * @throws AccountNotFoundException when no tenant holds an account with this id (→ 404)
+     */
+    @Transactional
+    public StatusChangeResult changeStatusResolvingTenant(ChangeStatusCommand command) {
+        Account account = accountRepository.findByIdResolvingTenant(command.accountId())
+                .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
+        return applyStatusChange(account, command);
+    }
+
+    private StatusChangeResult applyStatusChange(Account account, ChangeStatusCommand command) {
         AccountStatus previousStatus = account.getStatus();
         StatusTransition transition = account.changeStatus(
                 statusMachine, command.targetStatus(), command.reason());
@@ -176,7 +199,26 @@ public class AccountStatusUseCase {
                                               String actorType, String actorId, TenantId tenantId) {
         Account account = accountRepository.findById(tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
+        return applyDelete(account, reason, actorType, actorId);
+    }
 
+    /**
+     * TASK-MONO-735 — operator delete for a caller that did NOT name a tenant (internal
+     * {@code /delete} with no, blank or {@code "*"} {@code X-Tenant-Id}); same rule as
+     * {@link #changeStatusResolvingTenant(ChangeStatusCommand)}.
+     *
+     * @throws AccountNotFoundException when no tenant holds an account with this id (→ 404)
+     */
+    @Transactional
+    public DeleteAccountResult deleteAccountResolvingTenant(String accountId, StatusChangeReason reason,
+                                                             String actorType, String actorId) {
+        Account account = accountRepository.findByIdResolvingTenant(accountId)
+                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        return applyDelete(account, reason, actorType, actorId);
+    }
+
+    private DeleteAccountResult applyDelete(Account account, StatusChangeReason reason,
+                                            String actorType, String actorId) {
         AccountStatus previousStatus = account.getStatus();
         StatusTransition transition = account.changeStatus(statusMachine, AccountStatus.DELETED, reason);
 

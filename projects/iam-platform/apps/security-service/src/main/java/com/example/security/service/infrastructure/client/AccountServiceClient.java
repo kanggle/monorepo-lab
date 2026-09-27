@@ -24,7 +24,9 @@ import java.util.Map;
  * Internal HTTP client for the account-service auto-lock command.
  *
  * <p>Contract: {@code POST /internal/accounts/{id}/lock} with
- * {@code Idempotency-Key = suspicious_event_id}. 3 attempts on
+ * {@code Idempotency-Key = suspicious_event_id} and <b>no</b> {@code X-Tenant-Id} (TASK-MONO-735:
+ * the event carries the session tenant, not necessarily the account's; account-service resolves
+ * the account's tenant from its row). 3 attempts on
  * timeout/5xx with exponential backoff + jitter. 409 is terminal (invalid
  * transition, e.g. deleted account) and must not be retried. 200 is terminal
  * (lock applied or already-locked idempotent response).</p>
@@ -79,6 +81,13 @@ public class AccountServiceClient implements AccountLockClient {
                         .timeout(Duration.ofMillis(cfg.getReadTimeoutMs()))
                         .header("Content-Type", "application/json")
                         .header("Idempotency-Key", event.getId())
+                        // TASK-MONO-735 (owner decision 2026-09-26): deliberately NO X-Tenant-Id.
+                        // The event's tenantId is the SESSION tenant, which differs from the
+                        // account's tenant for a cross-tenant session (an ecommerce account signed
+                        // in through the fan client — reproduced live, TASK-BE-611). Stamping it
+                        // made account-service 404 and the account was never locked. Header-less,
+                        // account-service resolves the tenant from the account row itself. The id
+                        // is a UUID from our own event, so a missed lock is the bigger risk.
                         .POST(HttpRequest.BodyPublishers.ofString(body));
                 // TASK-BE-318: authenticate via GAP client_credentials Bearer JWT
                 // (account-service /internal/** dual-allows JWT or X-Internal-Token, BE-317).

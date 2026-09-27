@@ -38,11 +38,14 @@ class AccountServiceClientUnitTest {
     void setUp() {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
+        client = newClient(1);
+    }
 
+    private AccountServiceClient newClient(int maxAttempts) {
         DetectionProperties props = new DetectionProperties();
         DetectionProperties.AutoLock autoLock = new DetectionProperties.AutoLock();
         autoLock.setAccountServiceBaseUrl(wireMock.baseUrl());
-        autoLock.setMaxAttempts(1);
+        autoLock.setMaxAttempts(maxAttempts);
         autoLock.setInitialBackoffMs(1L);
         autoLock.setConnectTimeoutMs(3000);
         autoLock.setReadTimeoutMs(5000);
@@ -53,7 +56,7 @@ class AccountServiceClientUnitTest {
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
 
-        client = new AccountServiceClient(props, new ObjectMapper(), new SimpleMeterRegistry(), tokenProvider);
+        return new AccountServiceClient(props, new ObjectMapper(), new SimpleMeterRegistry(), tokenProvider);
     }
 
     @AfterEach
@@ -110,6 +113,46 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-735: lock 호출은 X-Tenant-Id 를 싣지 않는다 — 이벤트 테넌트는 세션 테넌트라 계정 테넌트와 다를 수 있다")
+    void lock_sendsNoXTenantId_accountServiceResolvesFromRow() {
+        // Owner decision 2026-09-26: the reuse event's tenantId is the SESSION tenant. For a
+        // cross-tenant session (ecommerce account via the fan client — TASK-BE-611) stamping it
+        // made account-service 404 and the account stayed ACTIVE. Header-less → account-service
+        // resolves the tenant from the account row. The event tenant here deliberately differs
+        // from the account's (fan-platform session, ecommerce account).
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-ec\",\"previousStatus\":\"ACTIVE\"," +
+                                "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-09-26T00:00:00Z\"}")));
+
+        LockResult result = client.lock(buildEvent("acc-ec", "fan-platform"));
+
+        assertThat(result.status()).isEqualTo(Status.SUCCESS);
+        wireMock.verify(postRequestedFor(urlPathMatching("/internal/accounts/acc-ec/lock"))
+                .withoutHeader("X-Tenant-Id")
+                .withHeader("Idempotency-Key", equalTo("evt-test-1")));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-735: account-service 404 (어느 테넌트에도 없는 id) → FAILURE, 재시도 없음")
+    void lock_404_crossTenant_returnsFailureWithoutRetry() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"code\":\"ACCOUNT_NOT_FOUND\"}")));
+
+        // 3 attempts allowed — a 404 must still be sent exactly once.
+        LockResult result = newClient(3).lock(buildEvent("acc-other", "ecommerce"));
+
+        assertThat(result.status()).isEqualTo(Status.FAILURE);
+        assertThat(result.httpStatus()).isEqualTo(404);
+        wireMock.verify(1, postRequestedFor(urlPathMatching("/internal/accounts/.*/lock")));
+    }
+
+    @Test
     @DisplayName("409 응답 → INVALID_TRANSITION (재시도 금지)")
     void lock_409_returnsInvalidTransition() {
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
@@ -159,9 +202,13 @@ class AccountServiceClientUnitTest {
     }
 
     private static SuspiciousEvent buildEvent(String accountId) {
+        return buildEvent(accountId, Tenants.DEFAULT_TENANT_ID);
+    }
+
+    private static SuspiciousEvent buildEvent(String accountId, String tenantId) {
         return SuspiciousEvent.create(
                 "evt-test-1",
-                Tenants.DEFAULT_TENANT_ID,
+                tenantId,
                 accountId,
                 "CREDENTIAL_STUFFING",
                 90,

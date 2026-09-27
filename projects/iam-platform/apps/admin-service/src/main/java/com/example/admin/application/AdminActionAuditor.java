@@ -89,6 +89,16 @@ public class AdminActionAuditor {
         writer.recordStart(record);
     }
 
+    /**
+     * TASK-MONO-735 — has this operator already started {@code actionCode} under this
+     * {@code idempotencyKey}? True means a row keyed {@code (actor_id, action_code,
+     * idempotency_key)} exists, so {@link #recordStart} for the same triple would die on
+     * {@code idx_admin_actions_idemp} (surfacing as a 500 {@code AUDIT_FAILURE}).
+     */
+    public boolean isIdempotencyKeyUsed(String operatorId, ActionCode actionCode, String idempotencyKey) {
+        return writer.isIdempotencyKeyUsed(operatorId, actionCode, idempotencyKey);
+    }
+
     /** Finalizes the audit row to SUCCESS/FAILURE and emits the canonical outbox event. */
     public void recordCompletion(CompletionRecord record) {
         writer.recordCompletion(record);

@@ -253,6 +253,60 @@ class AdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
+     * TASK-MONO-735 — the 2026-09-26 live failure, replayed. SUPER_ADMIN locks an account and
+     * account-service answers 404; the console's confirm dialog re-sends the SAME key.
+     *
+     * <p>Before: the 404 surfaced as 503 DOWNSTREAM_ERROR ("try again"), and the re-send's
+     * IN_PROGRESS INSERT died on {@code idx_admin_actions_idemp} → 500 AUDIT_FAILURE.
+     * After: the 404 is 404 ACCOUNT_NOT_FOUND (one FAILURE row, no retry of a 4xx), and the
+     * re-send is 409 IDEMPOTENCY_KEY_CONFLICT with no new row and no second downstream call.
+     */
+    @Test
+    @DisplayName("TASK-MONO-735: 하위 404 → 404 ACCOUNT_NOT_FOUND · 같은 키 재전송 → 409 (500 아님)")
+    void lockDownstream404_thenReplaySameKey_isNot500() throws Exception {
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/accounts/acc-404/lock"))
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"code\":\"ACCOUNT_NOT_FOUND\",\"message\":\"Account not found\"}")));
+
+        mockMvc.perform(post("/api/admin/accounts/acc-404/lock")
+                        .header("Authorization", operatorToken())
+                        .header("Idempotency-Key", "idemp-integ-735")
+                        .header("X-Operator-Reason", "fraud-investigation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+
+        await().atMost(java.time.Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<AdminActionJpaEntity> rows = adminActionRepository.findAll().stream()
+                    .filter(r -> "idemp-integ-735".equals(r.getIdempotencyKey()))
+                    .toList();
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).getOutcome()).isEqualTo("FAILURE");
+        });
+
+        // The confirm dialog re-sends the same key.
+        mockMvc.perform(post("/api/admin/accounts/acc-404/lock")
+                        .header("Authorization", operatorToken())
+                        .header("Idempotency-Key", "idemp-integ-735")
+                        .header("X-Operator-Reason", "fraud-investigation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
+
+        assertThat(adminActionRepository.findAll().stream()
+                .filter(r -> "idemp-integ-735".equals(r.getIdempotencyKey()))
+                .count()).isEqualTo(1);
+        // A 4xx is never retried and the replay never reaches account-service. The SUPER_ADMIN
+        // platform scope rides as X-Tenant-Id '*' — account-service resolves the account's tenant.
+        wireMock.verify(1, WireMock.postRequestedFor(urlPathEqualTo("/internal/accounts/acc-404/lock"))
+                .withHeader("X-Tenant-Id", WireMock.equalTo("*")));
+    }
+
+    /**
      * TASK-BE-509 regression: GET /export must return 200 AND persist a
      * DATA_EXPORT/SUCCESS audit row. Before the fix the success meta-audit
      * passed literal {@code null} for the NOT-NULL {@code idempotency_key}

@@ -191,7 +191,14 @@ public class AccountServiceClient {
     /**
      * TASK-BE-467 — {@code tenantId} is the actor's resolved active tenant, stamped
      * as {@code X-Tenant-Id} so account-service confines the target (cross-tenant →
-     * 404 ACCOUNT_NOT_FOUND). {@code "*"} / null → account-service FAN default (net-zero).
+     * 404 ACCOUNT_NOT_FOUND). A TENANT_ADMIN stays confined to that tenant.
+     *
+     * <p>TASK-MONO-735 — {@code "*"} (SUPER_ADMIN platform scope, stamped as-is) or null (no
+     * header) → account-service finds the target in <b>the tenant its own row lives in</b>.
+     * Until MONO-735 that case fell back to {@code fan-platform}, so a SUPER_ADMIN could not
+     * lock any account outside it (measured live 2026-09-26: an {@code ecommerce} account → 404).
+     * Do NOT "fix" SUPER_ADMIN by stamping the operator's tenant — the target account's tenant
+     * is what matters, and account-service now resolves it.
      */
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
@@ -210,6 +217,7 @@ public class AccountServiceClient {
                 body, operatorId, tenantId, idempotencyKey, LockResponse.class);
     }
 
+    /** Same {@code X-Tenant-Id} semantics as {@link #lock} (TASK-BE-467 / TASK-MONO-735). */
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public LockResponse unlock(String accountId,
