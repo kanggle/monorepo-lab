@@ -82,6 +82,7 @@ import {
   chooseDefaultTenant,
   selectableTenants,
   rememberTenantValue,
+  noTenantNoticeKind,
 } from '@/shared/lib/active-tenant-default';
 import { RegistryUnavailableError } from '@/shared/api/errors';
 
@@ -361,5 +362,34 @@ describe('chooseDefaultTenant — the rule itself', () => {
   it('selectableTenants = distinct tenants of AVAILABLE products (the same set /api/tenant allows)', () => {
     const r = registryWith(['demo-corp', 'ecommerce']);
     expect(selectableTenants(r as never)).toEqual(['demo-corp', 'ecommerce']);
+  });
+});
+
+describe('noTenantNoticeKind — TASK-PC-FE-301 (owner decision ⓒ, 2026-09-26 UTC)', () => {
+  it('0 selectable tenants (viewer@demo.com shape, 0 roles → 0 products) → zero', async () => {
+    fetchRegistryMock.mockResolvedValue(registryWith([]));
+    expect(await noTenantNoticeKind()).toBe('zero');
+  });
+
+  it('exactly 1 selectable tenant → select (it auto-selects before any gate is asked, but the raw judgement is still "something to select")', async () => {
+    fetchRegistryMock.mockResolvedValue(registryWith(['demo-corp']));
+    expect(await noTenantNoticeKind()).toBe('select');
+  });
+
+  it('≥2 selectable tenants, none chosen → select (today’s unchanged copy)', async () => {
+    fetchRegistryMock.mockResolvedValue(registryWith(['demo-corp', 'ecommerce']));
+    expect(await noTenantNoticeKind()).toBe('select');
+  });
+
+  it('🔴 registry failure is NOT read as zero (Edge Case: 없음 ≠ 못 읽음) → falls back to select', async () => {
+    fetchRegistryMock.mockRejectedValue(new RegistryUnavailableError('timeout', 'x'));
+    expect(await noTenantNoticeKind()).toBe('select');
+  });
+
+  it('🔴 a degraded/empty-products registry is legitimately zero, not a failure — distinguish thrown vs resolved-empty', async () => {
+    // A resolved (not thrown) empty registry is the true "0 available products"
+    // shape — must still read as zero, not silently fall back to select.
+    fetchRegistryMock.mockResolvedValue({ products: [] });
+    expect(await noTenantNoticeKind()).toBe('zero');
   });
 });

@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { getTenantsListState, TenantsScreen } from '@/features/tenants';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,26 +35,16 @@ export default async function TenantsPage() {
         <h1 id="tenants-heading" className="mb-6 text-2xl font-semibold">
           테넌트 관리
         </h1>
-        <div
-          role="status"
-          data-testid="tenants-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            테넌트 관리는 SUPER_ADMIN 전용이며 활성 테넌트가 선택되어 있어야
-            합니다. 상단의 테넌트 스위처에서 플랫폼 스코프(*)를 선택한 뒤 다시
-            시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'tenants-no-tenant',
+          description: (
+            <>
+              테넌트 관리는 SUPER_ADMIN 전용이며 활성 테넌트가 선택되어 있어야
+              합니다. 상단의 테넌트 스위처에서 플랫폼 스코프(*)를 선택한 뒤
+              다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }

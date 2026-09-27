@@ -1,6 +1,7 @@
 import type { IamOverviewState } from '../api/overview-state';
 import { OperatorsCard, AccountsCard } from './IamOverviewSummaryCards';
 import { AuditCard } from './IamOverviewAuditCard';
+import { NoTenantNoticeBody } from '@/widgets/no-tenant-notice';
 
 /**
  * IAM operator **overview snapshot** presentation (TASK-PC-FE-180). Server
@@ -21,18 +22,23 @@ import { AuditCard } from './IamOverviewAuditCard';
  */
 export function IamOverviewScreen({ state }: { state: IamOverviewState }) {
   if (state.noActiveTenant) {
+    // TASK-PC-FE-301: `NoTenantNoticeBody` (not the async `NoTenantNotice`
+    // wrapper) — this component is sync/presentational and unit-tested with
+    // the client-side RTL renderer, so `state.tenantNoticeKind` is resolved
+    // server-side by `getIamOverviewState()` and threaded down as a plain
+    // prop. `?? 'select'` is defensive only (every real caller sets it
+    // whenever `noActiveTenant` is true).
     return (
-      <div
-        role="status"
-        data-testid="iam-overview-no-tenant"
-        className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-      >
-        <p className="mb-1 font-medium text-foreground">테넌트를 먼저 선택해주세요.</p>
-        <p>
-          IAM 개요는 선택한 테넌트 범위의 운영자·계정·감사 현황을 보여줍니다. 상단
-          테넌트 스위처에서 테넌트를 선택하면 현황이 표시됩니다.
-        </p>
-      </div>
+      <NoTenantNoticeBody
+        kind={state.tenantNoticeKind ?? 'select'}
+        testId="iam-overview-no-tenant"
+        description={
+          <>
+            IAM 개요는 선택한 테넌트 범위의 운영자·계정·감사 현황을 보여줍니다.
+            상단 테넌트 스위처에서 테넌트를 선택하면 현황이 표시됩니다.
+          </>
+        }
+      />
     );
   }
 

@@ -1,5 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getActiveTenant } from '@/shared/lib/session';
+import {
+  noTenantNoticeKind,
+  type NoTenantNoticeKind,
+} from '@/shared/lib/active-tenant-default';
 import { ApiError } from '@/shared/api/errors';
 import { listOperators } from '@/shared/api/iam-operators-read';
 import { searchAccounts } from '@/shared/api/iam-accounts-read';
@@ -100,6 +104,15 @@ export interface AuditSummary {
 export interface IamOverviewState {
   /** True when no tenant is selected — page-level gate, no fan-out was run. */
   noActiveTenant: boolean;
+  /**
+   * Only meaningful when {@link noActiveTenant} is true (TASK-PC-FE-301).
+   * Resolved server-side (not by the presentational `IamOverviewScreen`,
+   * which is sync and unit-tested with the client-side RTL renderer — it
+   * cannot itself await {@link noTenantNoticeKind}) and threaded down so the
+   * screen renders the SAME `NoTenantNoticeBody` every other gated screen
+   * uses, instead of its own copy of the two paragraphs.
+   */
+  tenantNoticeKind?: NoTenantNoticeKind;
   operators: OperatorsSummary;
   accounts: AccountsSummary;
   audit: AuditSummary;
@@ -145,7 +158,11 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
   // gate instead of three identical NO_ACTIVE_TENANT per-cell messages.
   const tenant = await getActiveTenant();
   if (!tenant) {
-    return { noActiveTenant: true, ...EMPTY };
+    return {
+      noActiveTenant: true,
+      tenantNoticeKind: await noTenantNoticeKind(),
+      ...EMPTY,
+    };
   }
 
   try {

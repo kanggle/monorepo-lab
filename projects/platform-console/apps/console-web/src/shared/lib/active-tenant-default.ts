@@ -54,6 +54,33 @@ export function chooseDefaultTenant(
   return selectable.length === 1 ? selectable[0] : null;
 }
 
+export type NoTenantNoticeKind = 'zero' | 'select';
+
+/**
+ * TASK-PC-FE-301 — distinguishes "nothing to select" from "something to
+ * select, none chosen", for a gate that already knows no tenant is currently
+ * active/assumed (every gated screen's `noTenant` state / {@link
+ * tenantSelectionRequired}).
+ *
+ * Owner decision ⓒ (2026-09-26 UTC): a 0-selectable operator (0 roles → 0
+ * available products → 0 selectable tenants, the `viewer@demo.com` shape
+ * measured live in the `TASK-MONO-730` AC-1 window) must be told they have no
+ * reachable tenant, not "select one" — there is nothing to select.
+ *
+ * A registry failure is deliberately NOT read as zero (task Edge Case: 없음 ≠
+ * 못 읽음) — any thrown/degraded result falls back to `'select'`, exactly
+ * today's copy, so a registry blip never turns into a false "you have no
+ * access" for every operator viewing a gated screen at that moment.
+ */
+export async function noTenantNoticeKind(): Promise<NoTenantNoticeKind> {
+  try {
+    const registry = await fetchRegistry();
+    return selectableTenants(registry).length === 0 ? 'zero' : 'select';
+  } catch {
+    return 'select';
+  }
+}
+
 /**
  * The last-tenant cookie value: `<operator sub>|<tenant>`. Keyed by the operator
  * so a selection made by one operator is never another operator's default in a

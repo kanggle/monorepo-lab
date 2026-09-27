@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { getOperatorsListState, OperatorsScreen } from '@/features/operators';
 import {
   getSelfOperatorIdOrNull,
@@ -7,6 +6,7 @@ import {
 import { getCatalog } from '@/features/catalog';
 import { selectableTenants } from '@/features/tenant';
 import { getActiveTenant } from '@/shared/lib/session';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,25 +46,15 @@ export default async function OperatorsPage() {
         >
           운영자 관리
         </h1>
-        <div
-          role="status"
-          data-testid="operators-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            운영자 관리는 테넌트 범위로 수행됩니다. 상단의 테넌트
-            스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'operators-no-tenant',
+          description: (
+            <>
+              운영자 관리는 테넌트 범위로 수행됩니다. 상단의 테넌트
+              스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }

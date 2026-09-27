@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { getRbacCatalogState } from '@/shared/api/rbac-catalog';
 import { PermissionSetsScreen } from '@/features/permission-sets';
+import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,25 +37,15 @@ export default async function PermissionSetsPage() {
         >
           권한 세트
         </h1>
-        <div
-          role="status"
-          data-testid="permission-sets-no-tenant"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            테넌트를 먼저 선택하세요.
-          </p>
-          <p>
-            권한 세트 조회는 테넌트 선택 후 이용할 수 있습니다. 상단의
-            테넌트 스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
-          </p>
-          <Link
-            href="/console"
-            className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            카탈로그로 이동
-          </Link>
-        </div>
+        {await NoTenantNotice({
+          testId: 'permission-sets-no-tenant',
+          description: (
+            <>
+              권한 세트 조회는 테넌트 선택 후 이용할 수 있습니다. 상단의
+              테넌트 스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+            </>
+          ),
+        })}
       </section>
     );
   }
