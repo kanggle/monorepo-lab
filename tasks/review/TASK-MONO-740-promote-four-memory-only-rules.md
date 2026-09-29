@@ -87,3 +87,14 @@ monorepo
 - **R4** → 같은 파일 § Test Types 에 «Fixture-pinned tests cannot validate a source-of-truth swap» 절 신설(픽스처 한계 계열 바로 뒤).
 - AC-2: 넣은 문장에 프로젝트·서비스명 없음 — 인용한 번호는 루트 `TASK-MONO-*` 둘뿐. 출처 사고의 프로젝트 고유 티켓 번호는 일부러 뺐다.
 - 🔵 «G1~G9» 를 적은 곳은 `done/` 티켓(404·441·470·475)뿐 — 종결 기록이라 고치지 않는다.
+
+## CORRECTION (2026-09-29 UTC, 종결 4차원 검증 (d))
+
+**AC-3 의 [x] 는 틀렸다.** AC-3 은 «스크립트 가드 **전부** rc=0» 인데 37개 중 둘은 **재지 못했다**:
+
+- ⚪ `check-erp-single-tenant-ratchet.sh` — 로컬 Docker 스택(`erp-platform-mysql`) 필요. 가드 자신이 «SKIP 이 아니라 실패» 라고 말한다.
+- ⚪ `check-prerendered-demo-verdict.sh` — web-store 빌드 산출물 필요(`DEMO_API_BASE=http://127.0.0.1:9` 로 빌드 후).
+
+두 스크립트가 이 PR 이 바꾼 `CLAUDE.md` · `platform/testing-strategy.md` 를 **읽지 않는다**는 것은 grep 으로 확인했다 — 그러나 그것은 «영향이 없을 것» 이라는 **추론**이지 AC 가 요구한 **측정**이 아니다.
+
+🔴 **닫는 법**: 다음에 erp 스택이 떠 있거나 web-store 를 빌드한 세션에서 두 스크립트를 돌려 rc 를 여기에 적는다. 그때까지 `review/` 에 둔다 — `done/` 은 얼어 있어 거기 남긴 잔여는 다시 안 읽힌다.
