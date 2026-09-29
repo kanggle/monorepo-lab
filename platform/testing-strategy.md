@@ -296,6 +296,20 @@ did not have.)
 (a) can coexist within one production run and (b) are produced by the *same tooling production wires*. If either
 fails, the green is a fact about the fixture, not about the property.
 
+## Fixture-pinned tests cannot validate a source-of-truth swap
+
+When a reader moves from one source of truth to another (frontmatter → registry, a local constant → a shared
+table, a hand-kept list → a derived one), the existing tests look like a safety net — *"these tests pin the
+current behaviour, so the swap is verifiable."* They are not. A test built on hand-written fixtures pins **the old
+source's answer**. Whether the new source agrees with the old one is a question no such test asks, so a swap can
+change real results — search hits, filters, recommendations — with the whole suite green.
+
+**Therefore, a source-of-truth migration is a data question before it is a code question.** Before repointing any
+reader, measure agreement between the two sources **per field**, with a re-runnable audit script rather than a
+one-off count. Expect the answer to differ by field: a field with zero drift can go new-source-first, a field with
+drift keeps the old source until the drift is resolved — and the reason each field differs is written down next to
+the policy, not left in the PR.
+
 ---
 
 ## "Fresh-volume CI represents production" can be a property of today's deployment, not of the system
@@ -386,7 +400,15 @@ Fill all four cells: no-signal / no-signal-with-`--require-coverage` / healthy /
 
 And **a fix that only removes false positives is indistinguishable from switching the guard off** — test the correction **symmetrically** (the false positive is gone ↔ the true positive still bites).
 
-*Incidents:* `TASK-MONO-357`, `TASK-MONO-360`, `TASK-MONO-376`, `TASK-MONO-388`, `TASK-MONO-389`.
+**Pin which tree the harness measures.** A bite harness run from a relative path measures whatever the shell's
+working directory happens to be — and an agent's shell can silently return to the parked main checkout between
+commands. Hard-code the worktree's **absolute path** in the harness and assert `git branch --show-current` at
+start (exit on mismatch). Run **one** harness at a time: stopping a background task in the agent harness does not
+necessarily stop its OS process, and a harness that keeps running interleaves its mutations with the next one, so
+no cell measures the state it thinks it does. Confirm a stopped harness is gone (its output files stop changing)
+before starting another. (`TASK-MONO-554`: both happened at once, and the whole verdict had to be discarded.)
+
+*Incidents:* `TASK-MONO-357`, `TASK-MONO-360`, `TASK-MONO-376`, `TASK-MONO-388`, `TASK-MONO-389`, `TASK-MONO-554`.
 
 ## G4 — 🔴 Prove it bites **on the runner it executes on**. A threshold calibrated on your host is a proposition about *your host*.
 
@@ -437,6 +459,24 @@ A known hole is a different thing from an unknown hole: the second is the path b
 ## G9 — Merging is half. Ask how the fix reaches the place it runs.
 
 *Incident:* `TASK-MONO-397` fixed `docker-compose.yml`; compose is **baked into the demo AMI**, so the fix did not reach the live demo at all (`TASK-MONO-399` AC-6). **A green `main` is not evidence that the deployed thing is fixed.** Where a subsystem has more than one deployment layer, the layer boundary must be documented at the point of change (see `infra/demo/aws/README.md` § "코드를 고쳤다 — 그게 데모에 도달하는가?").
+
+## G10 — Two individually-correct exclusions can compose into a hole where nothing runs. A suite that nothing runs rots.
+
+G1 is about a *guard's* trigger; this is the same failure for a *test suite*. Each layer's exclusion can be right on
+its own — the build's `test` task excludes the `integration` tag (Docker-free fast feedback), the CI build job runs
+`:check` ("it runs"), the CI integration job lists some modules ("integration is covered") — and a module whose
+`integrationTest` is in none of those lists **runs nowhere**, hidden behind two impressions of coverage. An
+unexecuted suite does not stay correct: when it was found, every test in it had been failing at initialisation for
+an unknown time.
+
+- **Before writing a test, find the runner that will execute it.** A test with no runner is documentation, not a
+  check — above all when an acceptance criterion names that suite as its verdict.
+- **Diff the populations**: modules that *declare* the task ↔ modules a CI job *lists*. A hardcoded list does not
+  report its own drift (G7). Fixing the one module you found leaves the next straggler of the same class.
+- **Separate pre-existing from yours**: run the baseline with your new case stashed before attributing a failure.
+- The variant with a runner: the runner exists but the suite's **fixtures** are excluded (gitignored, not built in
+  CI) — the suite then passes or skips on inputs that are not the ones it was written for.
+- **Attaching the runner is the fix.** Repairing the rotted tests without it only resets the clock.
 
 ---
 
