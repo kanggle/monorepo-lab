@@ -58,6 +58,47 @@ class PasswordControllerSliceTest {
         assertThat(cmd.newPassword()).isEqualTo("NewPassw0rd!");
     }
 
+    /**
+     * TASK-BE-609 — the shape the gateway actually delivers: the injected {@code X-Account-Id}
+     * AND the user's own {@code Authorization: Bearer} (the gateway forwards it). The token is
+     * not a workload credential; before the fix the chain's Bearer filter tried it against the
+     * internal decoder and answered 401 before the controller ran, {@code permitAll} or not.
+     */
+    @Test
+    @DisplayName("TASK-BE-609: 게이트웨이 모양(X-Account-Id + 사용자 Bearer) → 204, 내부 자격 검사에 걸리지 않는다")
+    void changePassword_withForwardedUserBearer_returns204() throws Exception {
+        mockMvc.perform(patch("/api/auth/password")
+                        .header("X-Account-Id", "acc-1")
+                        .header("Authorization", "Bearer " + NOT_A_WORKLOAD_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "OldPassw0rd!",
+                                  "newPassword": "NewPassw0rd!"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(changePasswordUseCase).execute(any(ChangePasswordCommand.class));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-609 대조군: 같은 Bearer 로 /internal/** → 여전히 401 (내부 경계는 그대로 fail-closed)")
+    void internalPath_withSameBearer_stillRejected() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/internal/auth/anything")
+                        .header("Authorization", "Bearer " + NOT_A_WORKLOAD_TOKEN))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Missing or invalid internal credentials"));
+    }
+
+    /**
+     * Not a workload credential, and rejected at PARSE time — so the slice needs no JWKS. (A
+     * well-formed RS256 JWT would make the decoder fetch the remote key set, which a slice cannot
+     * reach: that surfaces as AuthenticationServiceException, not the 401 under test.)
+     */
+    private static final String NOT_A_WORKLOAD_TOKEN = "not-a-jwt";
+
     @Test
     @DisplayName("PATCH /api/auth/password returns 400 CURRENT_PASSWORD_MISMATCH when current password mismatches")
     void changePassword_currentPasswordMismatch_returns400() throws Exception {

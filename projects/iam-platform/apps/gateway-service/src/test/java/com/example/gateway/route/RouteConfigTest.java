@@ -179,6 +179,33 @@ class RouteConfigTest {
         assertThat(isPublic).isTrue();
     }
 
+    @ParameterizedTest(name = "TASK-BE-609: {0} {1} → public (로그인 못 하는 사용자의 경로)")
+    @CsvSource({
+            "POST, /api/auth/password-reset/request",
+            "POST, /api/auth/password-reset/confirm"
+    })
+    @DisplayName("TASK-BE-609 — 비밀번호 재설정 두 경로는 토큰 없이 게이트웨이를 통과한다")
+    void passwordResetPaths_arePublic(String method, String path) {
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
+
+        assertThat(config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim())).isTrue();
+    }
+
+    @ParameterizedTest(name = "TASK-BE-609 대조군: {0} {1} → NOT public")
+    @CsvSource({
+            "PATCH, /api/auth/password",
+            "GET,   /api/auth/password-reset/request",
+            "POST,  /api/auth/password-reset/other",
+            "GET,   /api/accounts/me/sessions"
+    })
+    @DisplayName("TASK-BE-609 — 비밀번호 변경·다른 메서드·형제 경로는 여전히 인증 필요")
+    void passwordChangeAndNeighbours_areNotPublic(String method, String path) {
+        // /api/auth/** wholesale would open the change endpoint (Failure Scenario 2).
+        RouteConfig config = routeConfigWith(PUBLIC_PATHS);
+
+        assertThat(config.isPublicRoute(HttpMethod.valueOf(method.trim()), path.trim())).isFalse();
+    }
+
     @ParameterizedTest(name = "일몰된 레거시 경로 {0} {1} → NOT public")
     @CsvSource({
             "POST, /api/auth/login",
