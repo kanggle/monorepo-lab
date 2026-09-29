@@ -85,7 +85,7 @@ class LoginBrandingResolverTest {
     class Resolver {
 
         @Test
-        @DisplayName("a saved /oauth2/authorize from the fan client → GAP branding")
+        @DisplayName("a saved /oauth2/authorize from a branded client → that client's branding (sample values)")
         void savedAuthorizeRequestPicksThatClient() {
             RegisteredClientRepository repository = mock(RegisteredClientRepository.class);
             when(repository.findByClientId(GAP_CLIENT)).thenReturn(client(GAP_CLIENT, gapBranding()));

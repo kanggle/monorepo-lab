@@ -52,6 +52,18 @@
 
 구현 = `TASK-BE-613`(iam-platform `tasks/ready/`, 이 ACCEPT 와 같은 PR 에서 기안).
 
+### 값 변경 (2026-09-29, 소유자) — 팬 = GAP → IAM
+
+> 소유자: «IAM으로 변경» (팬의 «GAP» 표기를 IAM 으로)
+
+결정 칸(D1~D5)은 그대로이고 **아래 «적용 대상» 표의 팬 행 값만** 바뀐다. 근거: «GAP» 은 IAM 의 옛 이름이다(테넌트 슬러그 `gap` → `iam` 은 `V0024` 에서 이미 바뀌었다) — 화면 문구만 옛 이름으로 남아, 같은 공급자가 IAM·GAP·Global Account 세 이름으로 불리고 있었다. 팬을 «Global Account» 로 맞추지 않은 이유: 팬과 스토어 계정은 테넌트가 달라 서로 다른 계정인데(`TASK-BE-611`), 같은 이름이면 한 계정으로 양쪽을 쓴다고 읽힌다.
+
+| client | serviceName | title | description |
+|---|---|---|---|
+| `fan-platform-user-flow-client` | IAM | IAM 로그인 | IAM으로 안전하게 로그인합니다 |
+
+팬 앱 진입 버튼도 같이 바뀐다: «GAP로 로그인» → «IAM 로그인»(`TASK-MONO-728` 이 맞춘 문구의 후속). 스토어는 «Global Account» 그대로.
+
 ### D1 — 브랜딩 값을 어디에 두는가
 
 | 선택지 | 내용 | 대가 |
@@ -102,7 +114,7 @@
 | client | serviceName | title | description |
 |---|---|---|---|
 | `platform-console-web` | IAM | IAM 로그인 | 운영자 계정으로 로그인합니다 |
-| `fan-platform-user-flow-client` | GAP | GAP로 로그인 | GAP으로 안전하게 로그인합니다 |
+| `fan-platform-user-flow-client` | ~~GAP~~ IAM | ~~GAP로 로그인~~ IAM 로그인 | ~~GAP으로~~ IAM으로 안전하게 로그인합니다 (값 변경 2026-09-29 — 위 절) |
 | `ecommerce-web-store-client` | Global Account | Global Account로 로그인 | Global Account로 로그인하여 쇼핑을 계속하세요. |
 | 그 밖 · 판별 불가 | D3 의 기본값 → 채택: IAM | IAM 로그인 | (없음) |
 

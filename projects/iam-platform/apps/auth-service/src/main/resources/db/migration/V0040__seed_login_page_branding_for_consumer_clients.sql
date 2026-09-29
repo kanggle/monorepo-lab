@@ -10,7 +10,11 @@
 --
 --   client                          service          title / description
 --   platform-console-web            IAM              "IAM login" / "sign in with your operator account"
---   fan-platform-user-flow-client   GAP              "sign in with GAP" / "sign in to GAP securely"
+--   fan-platform-user-flow-client   IAM              "IAM login" / "sign in to IAM securely"
+--
+-- The fan client was "GAP" in the request; the owner changed it to IAM on
+-- 2026-09-29 before this migration shipped ("GAP" is IAM's former name -- V0024
+-- renamed the slug). Its row still exists for the subtitle and the colour.
 --   ecommerce-web-store-client      Global Account   "sign in with Global Account" / "... to keep shopping"
 --
 -- (English glosses above; the stored values are Korean and are pinned
@@ -71,9 +75,9 @@ UPDATE oauth_clients
 
 UPDATE oauth_clients
    SET client_settings = JSON_MERGE_PATCH(client_settings,
-           '{"custom.branding.service-name":"GAP",
-             "custom.branding.title":"GAP\\uB85C \\uB85C\\uADF8\\uC778",
-             "custom.branding.description":"GAP\\uC73C\\uB85C \\uC548\\uC804\\uD558\\uAC8C \\uB85C\\uADF8\\uC778\\uD569\\uB2C8\\uB2E4",
+           '{"custom.branding.service-name":"IAM",
+             "custom.branding.title":"IAM \\uB85C\\uADF8\\uC778",
+             "custom.branding.description":"IAM\\uC73C\\uB85C \\uC548\\uC804\\uD558\\uAC8C \\uB85C\\uADF8\\uC778\\uD569\\uB2C8\\uB2E4",
              "custom.branding.primary-color":"#9333ea"}'),
        updated_at = NOW()
  WHERE client_id = 'fan-platform-user-flow-client'

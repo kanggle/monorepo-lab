@@ -167,3 +167,15 @@ auth-service `test` 전체: 116 파일 · 931 · 실패 0 · 건너뜀 33(Docker
 1. **로고 = 인라인 SVG 조각**. 티켓·ADR 문장은 «`auth-service` 가 서빙하는 정적 자산 이름». 정적 경로(`/branding/**`)를 열려면 `WebLoginSecurityConfig` 의 `securityMatcher` 에 새 경로를 넣어야 하고, 그러지 않으면 다른 체인이 401 을 준다. 인라인이면 새 HTTP 경로도 보안 설정 변경도 없다. 불변 조건의 실체(허용 목록 이름만 · 외부 URL 없음)는 그대로이고 오히려 좁아졌다. 허용 목록(`LoginBranding.ALLOWED_LOGOS`)과 조각의 `th:case` 가 어긋나면 `everyAllowlistedLogoRenders` 가 빨개진다.
 2. **`color-scheme: light`**. Edge Cases 에 «이 티켓은 바꾸지 않되» 라고 적었으나, 스타일을 조각으로 옮기며 보니 `light dark` 가 OS 다크에서 입력칸을 흰 카드 위에 어둡게 칠하는 결함(팬 `TASK-FAN-FE-026` 과 같은 것)이었다. 한 줄이고 화면 확인으로 흰 배경을 쟀다.
 3. **회원가입 화면엔 부제를 안 보인다**. 등록된 부제는 로그인용 문장(«…로그인합니다»)이라 «GAP 회원가입» 아래에 두면 틀린 말이 된다 — 화면 확인에서 발견. 조각이 부제를 인자로 받고 회원가입은 `null` 을 넘긴다(슬라이스로 고정).
+
+## CORRECTION (2026-09-29 UTC) — 팬 = GAP → IAM (소유자 값 변경)
+
+소유자: «IAM으로 변경». Goal 표의 팬 행은 이제 `IAM` / `IAM 로그인` / `IAM으로 안전하게 로그인합니다` / 로고 없음 / `#9333ea`. 근거와 기록은 `ADR-007` § «값 변경 (2026-09-29)». 결정 칸 D1~D5 는 그대로.
+
+같은 PR 에서 바꾼 것:
+- `V0040` 팬 블록 값(아직 머지 전이라 새 마이그레이션이 아니라 그 파일을 고쳤다 — 어디에도 적용된 적 없음)
+- `LoginPageBrandingSeedIntegrationTest#fanBranding` 기대값
+- 팬 앱 `login/page.tsx` 버튼 «GAP로 로그인» → «IAM 로그인», 안내 «GAP으로…» → «IAM으로…» · `e2e-smoke/login.spec.ts` · `scripts/capture-portfolio.mjs` 주석
+- 단위·슬라이스 테스트의 GAP 값은 **표본 브랜드**라 그대로 두고, «팬 = GAP» 로 읽히던 테스트 이름만 고쳤다 — 팬 값과 같게 바꾸면 기본값(IAM)과 구별이 안 돼 «브랜딩이 적용됐다» 를 재지 못한다.
+
+위 «티켓과 달라진 점» 3 의 «GAP 회원가입» 은 표본 브랜드 기준의 예시다. 팬 실제 화면은 «IAM 회원가입».

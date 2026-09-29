@@ -112,7 +112,7 @@ export default async function LoginPage({
       <section className="w-full rounded-xl border border-ink-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-ink-900">로그인</h2>
         <p className="mt-1 text-sm text-ink-600">
-          GAP으로 안전하게 로그인합니다.
+          IAM으로 안전하게 로그인합니다.
         </p>
 
         {/* 🔴 상호배타 — 데모가 꺼져 있으면 그 사실만 말한다 (AC-2/AC-3). 색은 형제
@@ -158,7 +158,7 @@ export default async function LoginPage({
           }}
         >
           <Button type="submit" size="lg" className="w-full" data-testid="oidc-signin">
-            GAP로 로그인
+            IAM 로그인
           </Button>
         </form>
 

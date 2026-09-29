@@ -204,7 +204,7 @@ class LoginBrandingPageSliceTest {
     }
 
     @Test
-    @DisplayName("fan flow → GAP; no logo configured, so none is drawn")
+    @DisplayName("a client with its own brand (sample: GAP) → that brand; no logo configured, so none is drawn")
     void fanFlow() throws Exception {
         givenInitiatingClient(gapBranding());
 

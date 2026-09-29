@@ -75,10 +75,10 @@ class LoginPageBrandingSeedIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("V0040: fan-platform-user-flow-client → GAP, no logo, #9333ea")
+    @DisplayName("V0040: fan-platform-user-flow-client → IAM (owner change from GAP), no logo, #9333ea")
     void fanBranding() {
         assertThat(brandingOf("fan-platform-user-flow-client")).isEqualTo(new LoginBranding(
-                "GAP", "GAP로 로그인", "GAP으로 안전하게 로그인합니다", null, "#9333ea"));
+                "IAM", "IAM 로그인", "IAM으로 안전하게 로그인합니다", null, "#9333ea"));
     }
 
     @Test
