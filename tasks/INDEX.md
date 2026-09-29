@@ -204,7 +204,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## in-progress
-- `TASK-MONO-740-promote-four-memory-only-rules.md` — 🔵 **에이전트 메모리에만 있던 저장소 규칙 넷을 `CLAUDE.md` · `platform/testing-strategy.md` 로 올린다** (IN-PROGRESS, 2026-09-29 UTC). `/audit-memory` 2026-09-29 § 공통 규칙 후보 — 형제 grep · 두 제외의 구멍 · 하네스 트리 고정 · SSOT 스왑 전 데이터 대조. 문서만, 프로젝트 영향 없음.
 
 
 
@@ -220,6 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+- `TASK-MONO-740-promote-four-memory-only-rules.md` — 🟡 **REVIEW — AC-1~3 완료** (2026-09-29 UTC). 메모리 전용 규칙 넷을 정본으로: `CLAUDE.md` 10단계에 «고치기 전 형제 모듈을 증상 문구로 grep» · `platform/testing-strategy.md` **G10**(각각 옳은 두 제외가 겹치면 아무도 안 도는 스위트) · **G3** 문단(하네스가 재는 트리를 절대경로+브랜치 단언으로 고정) · 새 절 «픽스처 고정 테스트는 SSOT 스왑을 검증 못 한다». 프로젝트 영향 없음.
 - `TASK-MONO-736-the-gateway-audience-counter-nobody-can-read.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). **AC-0 = ② 집계 로그 한 줄**(소유자): 공용 `AllowedAudiencesValidator` 가 기동 이후 누적 `JWT audience summary: gateway=… mode=… match=… mismatch=…` 를 검사 때 최대 60초에 한 번(첫 검사 즉시) INFO 로 낸다 — 분자·분모가 **한 줄**에 있고 **줄 없음 = 검사 0회**(«불일치 0» 아님). 공개 생성자 불변 → 6 게이트웨이·console-bff 코드 무변경. 로컬 rc=0: java-security 128(요약 8칸 신규 + 중립성 OK) · java-gateway 83 · 게이트웨이 6 + console-bff 465, 실패 0 · bite 2종 빨강 → 원복. 스펙 6곳 동기화 · `TASK-MONO-697` § 정정 ④ = 읽는 법. 분석=Opus 5.5 / 구현=Opus 5.5.
 - `TASK-MONO-738-bundle-card-says-check-failed-while-booting.md` — 🟡 **REVIEW — AC-1~3 완료, AC-4 는 `terraform apply` 뒤 라이브** (2026-09-29 UTC). 데모 서버를 켠 직후 론처 카드가 「🔴 확인 실패(마지막 발행 176386초 전)」 — 지난 세션 스냅샷을 stale 로 읽음. 701 의 «이 세션 첫 발행 전» 판정을 `_first_publish()` 로 빼 `/status`·`/bundles` 가 공유 → 그 구간 선택 묶음 `requested`(🟡 기동 중…). 유예(300초) 넘기면 여전히 `unknown`. 109 OK · bite 5칸.
 - `TASK-MONO-737-account-lock-with-a-named-tenant-still-404s.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 같은 모양의 404 둘은 **원인이 달랐다** — 둘 다 데모에만 있는 IAM 게이트웨이 한 홉: ① 콘솔→admin 은 게이트웨이가 `X-Tenant-Id` 를 무조건 벗겨(`/api/admin/**` 는 public 이라 다시 찍지도 않음) admin-service 가 운영자 홈 테넌트 `demo-corp` 로 잠금을 보냄 ② product-service 는 base-url 이 게이트웨이인데 `/internal/accounts/**` 라우트가 없어 no-route 404. 🔵 소유자 결정: ① 게이트웨이가 `/api/admin/**` 에서 헤더 유지 ② `lockAccount` → 테넌트 경로 `PATCH …/status LOCKED`. 🔴 곁발견: 헤더를 판정 없이 믿던 admin 읽기 둘(`GET /api/admin/partnerships` · `…/operators/{id}/assignments`)을 같은 변경에서 막음. 티켓 전제 정정: 735 IT 에 「올바른 구체 테넌트 → 200」 셀은 **있었다**. 로컬 rc=0(gateway 116 · admin 866 · product 383, 실패 0) · bite 4종 → 새 셀 7개만 빨강 → 원복 rc=0. 닫으면 `TASK-MONO-735` AC-3 스텝 2·4 · `TASK-MONO-726` 항목 14② 도 닫힌다.
