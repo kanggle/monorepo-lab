@@ -136,7 +136,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(
                 "user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID))
@@ -178,7 +178,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         SocialIdentity existing = SocialIdentity.create(
                 "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
         when(accountServicePort.getAccountStatusAndTenant("acc-existing"))
                 .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-existing", TENANT_ID, "ACTIVE")));
@@ -206,7 +206,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
@@ -233,7 +233,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
         SocialIdentity existing = SocialIdentity.create(
                 "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.of(existing));
         AccountServiceUnavailableException outage =
                 new AccountServiceUnavailableException("status lookup rejected: 401");
@@ -253,7 +253,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
@@ -340,7 +340,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));
@@ -452,7 +452,7 @@ class OAuthLoginUseCaseTest {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
         when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
         when(oAuthClient.exchangeCodeForUserInfo(anyString(), anyString())).thenReturn(USER_INFO);
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "provider-user-1"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new SocialSignupResult("acc-1", "ACTIVE", true));

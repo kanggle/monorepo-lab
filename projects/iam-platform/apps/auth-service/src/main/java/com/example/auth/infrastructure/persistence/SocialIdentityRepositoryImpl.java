@@ -14,8 +14,10 @@ public class SocialIdentityRepositoryImpl implements SocialIdentityRepository {
     private final SocialIdentityJpaRepository socialIdentityJpaRepository;
 
     @Override
-    public Optional<SocialIdentity> findByProviderAndProviderUserId(String provider, String providerUserId) {
-        return socialIdentityJpaRepository.findByProviderAndProviderUserId(provider, providerUserId)
+    public Optional<SocialIdentity> findByTenantIdAndProviderAndProviderUserId(
+            String tenantId, String provider, String providerUserId) {
+        return socialIdentityJpaRepository
+                .findByTenantIdAndProviderAndProviderUserId(tenantId, provider, providerUserId)
                 .map(SocialIdentityJpaEntity::toDomain);
     }
 

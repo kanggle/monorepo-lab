@@ -181,7 +181,8 @@ public class OAuthLoginUseCase {
      *       performed.</li>
      *   <li>TOCTOU: the identity existence check is a non-txn DB read. The transactional
      *       step still upserts the identity, and the DB unique key on
-     *       {@code (provider, provider_user_id)} prevents duplicate rows.</li>
+     *       {@code (tenant_id, provider, provider_user_id)} prevents duplicate rows. Both
+     *       lookups use that same key (TASK-BE-611), so a lookup can never see two rows.</li>
      *   <li>Status lookup outcome (TASK-BE-600, replacing the BE-063 semantics; since TASK-BE-602
      *       the lookup is {@code getAccountStatusAndTenant}, which also returns the account's
      *       own tenant): an empty {@code account} now means ONLY that account-service answered
@@ -245,10 +246,14 @@ public class OAuthLoginUseCase {
             throw new OAuthEmailRequiredException();
         }
 
-        // Non-txn DB read: does a local social identity already exist for this provider user?
+        // Non-txn DB read: does a local social identity already exist for this provider user
+        // IN THE INITIATING CLIENT'S TENANT? TASK-BE-611: the lookup used to be global, so an
+        // identity made under another tenant's client resolved this login to that tenant's
+        // account while the session was stamped with this client's tenant. A miss now signs up
+        // in this tenant (socialSignup below) — one account per tenant, as the form path does.
         Optional<SocialIdentity> existingIdentity =
-                socialIdentityRepository.findByProviderAndProviderUserId(
-                        provider.name(), userInfo.providerUserId());
+                socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(
+                        tenantId, provider.name(), userInfo.providerUserId());
 
         // Internal HTTP to account-service. OUTSIDE @Transactional (TASK-BE-072).
         String accountId;

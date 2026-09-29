@@ -71,9 +71,10 @@ client 의 `ClientSettings` tenant 설정을 추출(`SavedRequestTenantResolver`
 - **SSO 게이트와의 관계 (TASK-BE-605)** — 다른 테넌트 소비자 client 의 authorize 는 기존 세션을 재사용하지 않고 `/login` 으로 보낸다
   ([multi-tenancy.md § SSO](multi-tenancy.md#로그인-가능한-계정과-client-task-be-604)). 거기서 소셜로 들어오면 위 규칙대로 **그 client 의 테넌트**가
   찍히므로 재개된 authorize 는 게이트를 통과한다(루프 없음).
-- 🔴 **알려진 불일치 · 결정 (TASK-BE-605 ② (iii), 구현은 측정 뒤)** — 신원 **조회**는 테넌트 없이 전역이다(`findByProviderAndProviderUserId`)
-  — 그래서 찍힌 세션 테넌트가 신원 행 · 계정 행의 테넌트와 다를 수 있다. 결정은 «조회를 시작 client 의 테넌트로 한정» 이고, 모집단 측정
-  (`TASK-MONO-672` 항목 18) 뒤 별도 티켓으로 구현한다. 상세: [multi-tenancy.md § 소셜 로그인](multi-tenancy.md#로그인-가능한-계정과-client-task-be-604).
+- **신원 조회도 같은 테넌트로 한정된다 (TASK-BE-605 ② (iii) · 구현 TASK-BE-611)** — `social_identities` 는
+  `(tenant_id = 시작 client 의 테넌트, provider, provider_user_id)` 로 찾는다. 그 테넌트에 신원이 없으면 그 테넌트에서 가입한다(아래
+  [§ 계정 연결 전략](#계정-연결-전략)). BE-611 이전에는 조회가 전역이라 다른 테넌트에서 만든 신원의 계정이 이 client 의 테넌트 세션으로
+  들어갔다. 상세 · 기존 교차 신원의 처분: [multi-tenancy.md § 소셜 로그인](multi-tenancy.md#로그인-가능한-계정과-client-task-be-604).
 
 ---
 
@@ -107,10 +108,11 @@ provider로부터 받는 access_token, refresh_token은 **저장하지 않는다
 
 ### 계정 연결 전략
 
-1. `social_identities` 테이블에서 `(provider, provider_user_id)` 조합으로 기존 연결 조회
+1. `social_identities` 테이블에서 `(tenant_id, provider, provider_user_id)` 조합으로 기존 연결 조회 — `tenant_id` = 로그인을 시작한
+   client 의 테넌트([§ tenant 귀속 규칙](#tenant-귀속-규칙-adr-006-옵션-1), TASK-BE-611). 다른 테넌트의 신원 행은 보지 않는다
 2. 연결이 있으면 해당 `account_id`로 로그인 처리
-3. 연결이 없으면:
-   a. provider email과 동일한 이메일의 기존 계정이 있으면 → 자동 연결 (auto-link)
+3. 연결이 없으면 (그 테넌트 안에서):
+   a. provider email과 동일한 이메일의 기존 계정이 **그 테넌트에** 있으면 → 자동 연결 (auto-link)
    b. 기존 계정이 없으면 → 계정 자동 생성 (auto-create)
 4. 계정 자동 생성·연결은 account-service의 `/internal/accounts/social-signup` 내부 API를 통해 수행
 
@@ -132,7 +134,7 @@ provider로부터 받는 access_token, refresh_token은 **저장하지 않는다
    a. state 검증 (Redis GETDEL + provider 바인딩 확인)
    b. provider token endpoint에 authorization code 교환 (server-side)
    c. id_token 파싱 → `{ providerUserId, email, displayName }` 추출
-   d. `social_identities` 테이블에서 `(provider, provider_user_id)` 조회
+   d. `social_identities` 테이블에서 `(tenant_id, provider, provider_user_id)` 조회 — `tenant_id` = 시작 client 의 테넌트(TASK-BE-611)
    e. 미존재 → account-service `/internal/accounts/social-signup` 호출 (계정 자동 생성)
    f. `SocialIdentityPersistStep` — `social_identities` row upsert + 계정 상태 검사
    g. **SAS 세션 확립** (JSESSIONID `SecurityContext`; session id 회전)
@@ -168,13 +170,17 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - 계정 상태 조회가 **실패**하면(5xx · 타임아웃 · circuit-open · 404 가 아닌 4xx · 읽을 수 없는 200 — `tenantId` 없는 200 포함) 소셜 로그인은 **거부된다(fail-closed)** → `/login?error=temporarily_unavailable` — 소유자 결정, TASK-BE-600 AC-2. BE-063 이후 404 가 아닌 4xx · 읽을 수 없는 200 은 «조회 불가 → 상태 검사 생략» 으로 통과했다(fail-open). 404(계정 레코드 없음)는 실패가 아니므로 지금처럼 검사를 생략하고 진행한다 — 신규 가입 · 첫 소셜 로그인은 `socialSignup` 이 계정을 먼저 만든 뒤라 영향이 없다
 - 소셜 로그인 성공 시 발급하는 토큰은 폼 로그인과 동일한 **SAS 표준 OIDC 토큰**이다 (TASK-BE-398 이전에는 커스텀 JWT 였다)
 - 하나의 계정에 여러 provider 연결 가능 (Google + Kakao 동시 사용)
-- 하나의 provider_user_id는 하나의 계정에만 연결 (unique constraint)
+- 하나의 provider_user_id는 **테넌트마다** 하나의 계정에만 연결 (unique `(tenant_id, provider, provider_user_id)`). 같은 provider 사용자가
+  두 테넌트에서 로그인하면 신원 행 · 계정이 테넌트마다 하나씩 생긴다 — 소유자 결정 2026-09-26 UTC(`TASK-BE-611` AC-0 ①). 이전 문장
+  «하나의 provider_user_id 는 하나의 계정에만» 은 V0007(TASK-BE-229) 이 unique 키를 테넌트별로 바꾼 뒤에도 남아 있던 옛 규칙이다
 - state TTL: **10분** (Redis `oauth:state:{state}`)
 
 ## Edge Cases
 
 - provider에서 이메일 미제공 (Kakao 이메일 미동의) → 422 `EMAIL_REQUIRED`
-- 동일 provider_user_id로 다른 계정에 이미 연결 → 로그인 시 기존 연결 계정으로 로그인 (새 연결 시도 없음)
+- 동일 provider_user_id로 **같은 테넌트의** 다른 계정에 이미 연결 → 로그인 시 기존 연결 계정으로 로그인 (새 연결 시도 없음)
+- 동일 provider_user_id 의 신원이 **다른 테넌트에만** 있다 → 그 행은 쓰지 않는다. 이 client 의 테넌트에서 가입 · 자동 연결한다(TASK-BE-611).
+  이미 있는 교차 신원 행은 옮기지 않는다(`TASK-BE-611` AC-0 ②)
 - provider에서 이메일 미제공 시 브라우저 플로우는 `/login?error=email_required` 로 표면화한다
 - provider token endpoint 장애 → `OAuthProviderException` → `/login?error=provider_error`
 - provider 가 authorization code 자체를 거절(4xx `invalid_grant`) → `OAuthCodeInvalidException`

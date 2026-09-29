@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -32,7 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -93,7 +96,7 @@ class OAuthLoginUseCaseSocialTenantTest {
 
     private void existingIdentity(String accountId) {
         // The identity row carries the initiating client's tenant — for BOTH account generations.
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "google-uid-602"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(CLIENT_TENANT, "GOOGLE", "google-uid-602"))
                 .thenReturn(Optional.of(SocialIdentity.create(
                         accountId, CLIENT_TENANT, "GOOGLE", "google-uid-602", EMAIL)));
     }
@@ -133,7 +136,7 @@ class OAuthLoginUseCaseSocialTenantTest {
     @Test
     @DisplayName("AC-1: 신규 소셜 가입 — account-service 404 → 통과 (BE-600 규칙: 404 는 거부가 아니다), 이벤트 없음")
     void newSocialSignup_notFound_passes() {
-        when(socialIdentityRepository.findByProviderAndProviderUserId("GOOGLE", "google-uid-602"))
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(CLIENT_TENANT, "GOOGLE", "google-uid-602"))
                 .thenReturn(Optional.empty());
         when(accountServicePort.socialSignup(EMAIL, "GOOGLE", "google-uid-602", "Shopper", CLIENT_TENANT))
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
@@ -160,6 +163,74 @@ class OAuthLoginUseCaseSocialTenantTest {
 
         verify(socialIdentityRepository, never()).save(any());
         verifyNoInteractions(loginEventRecorder);
+    }
+
+    // ── TASK-BE-611: the identity lookup is confined to the initiating client's tenant ───────
+
+    private static final String FAN_TENANT = "fan-platform";
+
+    @Test
+    @DisplayName("BE-611 AC-1: 스토어에서 만든 신원으로 팬 client 로그인 → 팬 테넌트에서 가입 · 신원 행도 팬 테넌트 (스토어 계정으로 들어가지 않는다)")
+    void identityOnlyInAnotherTenant_signsUpInTheClientsTenant() {
+        // The store row exists — the global lookup resolved it. lenient: the fixed code never asks
+        // the store tenant, and that absence is the point (verified below).
+        lenient().when(socialIdentityRepository
+                        .findByTenantIdAndProviderAndProviderUserId(CLIENT_TENANT, "GOOGLE", "google-uid-602"))
+                .thenReturn(Optional.of(SocialIdentity.create(
+                        "acc-ec", CLIENT_TENANT, "GOOGLE", "google-uid-602", EMAIL)));
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(FAN_TENANT, "GOOGLE", "google-uid-602"))
+                .thenReturn(Optional.empty());
+        when(accountServicePort.socialSignup(EMAIL, "GOOGLE", "google-uid-602", "Shopper", FAN_TENANT))
+                .thenReturn(new SocialSignupResult("acc-fan", "ACTIVE", true));
+        accountServiceAnswers("acc-fan", FAN_TENANT, "ACTIVE");
+
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT);
+
+        assertThat(result.accountId()).isEqualTo("acc-fan");
+        assertThat(result.isNewAccount()).isTrue();
+        ArgumentCaptor<SocialIdentity> saved = ArgumentCaptor.forClass(SocialIdentity.class);
+        verify(socialIdentityRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(FAN_TENANT);
+        assertThat(saved.getValue().getAccountId()).isEqualTo("acc-fan");
+        verify(socialIdentityRepository, never())
+                .findByTenantIdAndProviderAndProviderUserId(eq(CLIENT_TENANT), any(), any());
+        verify(loginEventRecorder).recordSucceeded("acc-fan", FAN_TENANT, CTX, "OAUTH_GOOGLE");
+    }
+
+    @Test
+    @DisplayName("BE-611 AC-1: 같은 client 재로그인 → 그 테넌트의 신원 행으로 같은 계정 (가입 호출 없음)")
+    void sameClientRelogin_resolvesTheSameAccount_noSignup() {
+        existingIdentity("acc-ec");
+        accountServiceAnswers("acc-ec", CLIENT_TENANT, "ACTIVE");
+
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+
+        assertThat(result.accountId()).isEqualTo("acc-ec");
+        assertThat(result.isNewAccount()).isFalse();
+        verify(accountServicePort, never()).socialSignup(any(), any(), any(), any(), any());
+        ArgumentCaptor<SocialIdentity> saved = ArgumentCaptor.forClass(SocialIdentity.class);
+        verify(socialIdentityRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(CLIENT_TENANT);
+    }
+
+    @Test
+    @DisplayName("BE-611 AC-0 ②: BE-507 이전 계정(신원=ecommerce, 계정=fan-platform) — 이관하지 않는다. 팬 client 로 오면 팬 테넌트 가입이 같은 이메일 계정을 돌려주고 팬 신원 행이 새로 생긴다")
+    void preBe507Account_fromTheFanClient_isNotMigrated_fanRowIsAdded() {
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(FAN_TENANT, "GOOGLE", "google-uid-602"))
+                .thenReturn(Optional.empty());
+        // account-service's social-signup looks the email up within fan-platform and finds the old account.
+        when(accountServicePort.socialSignup(EMAIL, "GOOGLE", "google-uid-602", "Shopper", FAN_TENANT))
+                .thenReturn(new SocialSignupResult("acc-old", "ACTIVE", false));
+        accountServiceAnswers("acc-old", FAN_TENANT, "ACTIVE");
+
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT);
+
+        assertThat(result.accountId()).isEqualTo("acc-old");
+        assertThat(result.isNewAccount()).isFalse();
+        ArgumentCaptor<SocialIdentity> saved = ArgumentCaptor.forClass(SocialIdentity.class);
+        verify(socialIdentityRepository).save(saved.capture());
+        assertThat(saved.getValue().getTenantId()).isEqualTo(FAN_TENANT);
+        assertThat(saved.getValue().getAccountId()).isEqualTo("acc-old");
     }
 
     // ── AC-2: auth.login.* with the account's real tenant ────────────────────────────────────

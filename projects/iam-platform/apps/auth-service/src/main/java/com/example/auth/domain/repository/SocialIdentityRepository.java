@@ -13,7 +13,17 @@ import java.util.Optional;
  */
 public interface SocialIdentityRepository {
 
-    Optional<SocialIdentity> findByProviderAndProviderUserId(String provider, String providerUserId);
+    /**
+     * Looks the identity up within one tenant — the key is the unique index
+     * {@code (tenant_id, provider, provider_user_id)}, so at most one row answers.
+     *
+     * <p>TASK-BE-611: there is deliberately no tenant-less lookup. The global
+     * {@code findByProviderAndProviderUserId} it replaced let an identity created under
+     * one tenant's client resolve a login started from another tenant's client — the
+     * other tenant's account then entered a session stamped with this client's tenant.
+     */
+    Optional<SocialIdentity> findByTenantIdAndProviderAndProviderUserId(
+            String tenantId, String provider, String providerUserId);
 
     SocialIdentity save(SocialIdentity socialIdentity);
 }

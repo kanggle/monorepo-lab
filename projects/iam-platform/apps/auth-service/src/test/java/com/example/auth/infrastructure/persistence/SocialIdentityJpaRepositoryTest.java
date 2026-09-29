@@ -55,17 +55,17 @@ class SocialIdentityJpaRepositoryTest {
         repo.deleteAll();
     }
 
-    // ── findByProviderAndProviderUserId ───────────────────────────────────────
+    // ── findByTenantIdAndProviderAndProviderUserId (TASK-BE-611) ──────────────
 
     @Test
-    @DisplayName("findByProviderAndProviderUserId — 일치하는 소셜 계정 반환")
-    void findByProviderAndProviderUserId_existing_returnsEntity() {
+    @DisplayName("findByTenantIdAndProviderAndProviderUserId — 같은 테넌트의 일치하는 소셜 계정 반환")
+    void findByTenant_existing_returnsEntity() {
         String accountId = uuid();
         repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
-                SocialIdentity.create(accountId, null, "google", "google-uid-123", "user@gmail.com")));
+                SocialIdentity.create(accountId, "fan-platform", "google", "google-uid-123", "user@gmail.com")));
 
         Optional<SocialIdentityJpaEntity> result =
-                repo.findByProviderAndProviderUserId("google", "google-uid-123");
+                repo.findByTenantIdAndProviderAndProviderUserId("fan-platform", "google", "google-uid-123");
 
         assertThat(result).isPresent();
         assertThat(result.get().getAccountId()).isEqualTo(accountId);
@@ -73,18 +73,45 @@ class SocialIdentityJpaRepositoryTest {
     }
 
     @Test
-    @DisplayName("findByProviderAndProviderUserId — 없는 조합 → empty")
-    void findByProviderAndProviderUserId_notFound_returnsEmpty() {
-        assertThat(repo.findByProviderAndProviderUserId("google", "unknown-uid")).isEmpty();
+    @DisplayName("findByTenantIdAndProviderAndProviderUserId — 없는 조합 → empty")
+    void findByTenant_notFound_returnsEmpty() {
+        assertThat(repo.findByTenantIdAndProviderAndProviderUserId("fan-platform", "google", "unknown-uid"))
+                .isEmpty();
     }
 
     @Test
-    @DisplayName("findByProviderAndProviderUserId — provider가 같아도 providerUserId가 다르면 제외")
-    void findByProviderAndProviderUserId_sameProviderDifferentUserId_returnsEmpty() {
+    @DisplayName("findByTenantIdAndProviderAndProviderUserId — provider가 같아도 providerUserId가 다르면 제외")
+    void findByTenant_sameProviderDifferentUserId_returnsEmpty() {
         repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
-                SocialIdentity.create(uuid(), null, "google", "uid-a", null)));
+                SocialIdentity.create(uuid(), "fan-platform", "google", "uid-a", null)));
 
-        assertThat(repo.findByProviderAndProviderUserId("google", "uid-b")).isEmpty();
+        assertThat(repo.findByTenantIdAndProviderAndProviderUserId("fan-platform", "google", "uid-b")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-611: 다른 테넌트의 같은 신원은 보이지 않는다 — ecommerce 행만 있으면 fan-platform 조회는 empty")
+    void findByTenant_identityOnlyInAnotherTenant_returnsEmpty() {
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(uuid(), "ecommerce", "kakao", "60218261625", "k@kakao.com")));
+
+        assertThat(repo.findByTenantIdAndProviderAndProviderUserId("fan-platform", "kakao", "60218261625"))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-611: 같은 신원이 두 테넌트에 있어도 조회는 각자 자기 행 하나 (전역 조회는 결과가 둘이었다 — BE-602 후속 ①)")
+    void findByTenant_sameIdentityInTwoTenants_eachLookupReturnsItsOwnRow() {
+        String storeAccount = uuid();
+        String fanAccount = uuid();
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(storeAccount, "ecommerce", "kakao", "60218261625", "k@kakao.com")));
+        repo.saveAndFlush(SocialIdentityJpaEntity.fromDomain(
+                SocialIdentity.create(fanAccount, "fan-platform", "kakao", "60218261625", "k@kakao.com")));
+
+        assertThat(repo.findByTenantIdAndProviderAndProviderUserId("ecommerce", "kakao", "60218261625"))
+                .get().extracting(SocialIdentityJpaEntity::getAccountId).isEqualTo(storeAccount);
+        assertThat(repo.findByTenantIdAndProviderAndProviderUserId("fan-platform", "kakao", "60218261625"))
+                .get().extracting(SocialIdentityJpaEntity::getAccountId).isEqualTo(fanAccount);
     }
 
     // ── findByAccountId ───────────────────────────────────────────────────────

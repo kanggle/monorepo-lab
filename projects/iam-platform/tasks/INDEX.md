@@ -77,7 +77,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-610-console-sso-reuses-a-consumer-session-and-lands-on-onboarding.md` — **READY (2026-09-26 UTC)** 같은 브라우저에서 스토어 · 팬 로그인 뒤 콘솔을 열면 SSO 가 **소비자 principal** 을 재사용 → `demo@demo.com` 이 `/onboarding`. 🟢 **AC-0 소유자 결정(2026-09-26 UTC) — 확정**: ① 조건부 재인증(세션 테넌트≠`iam` 이고 iam 자격 보유 시 재인증, ADR-MONO-044 D5 셀프 온보딩은 그대로) 채택 — ②③ 기각. AC-1·AC-2(구현·검증)는 미착수. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — **READY (2026-09-26 UTC)** `TASK-BE-605` 결정 ② (iii) 구현 — 소셜 신원 조회를 시작 client 테넌트로 한정. `TASK-MONO-672` 항목 18 이 기안(모집단 0 · 구조적 재현: 한 신원이 스토어 → 팬에서 **같은 ecommerce 계정**). 🟢 **AC-0 소유자 결정(2026-09-26 UTC) — 확정**: ① Business Rules 를 «테넌트마다 하나» 로 개정 ② 기존 교차 신원은 **이관하지 않음**(다음 로그인에 새 계정) — 자동 연결은 기각. AC-1·AC-2(구현·검증)는 미착수. 분석=Opus 5.5 / 구현 권장=Opus.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -119,6 +118,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+- `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 소셜 신원 조회를 **시작 client 의 테넌트로 한정** — 전역 `findByProviderAndProviderUserId` 를 없애고 `(tenant_id, provider, provider_user_id)` 조회로(unique 키와 같은 모양). 미스 → 그 테넌트에서 가입. 스펙 개정 먼저(«테넌트마다 하나»). `TASK-BE-602` 후속 ① 경쟁 조건 소멸. 🔴 AC-0 ② «새 계정» 은 그 테넌트에 같은 이메일 계정이 없을 때만 — 있으면 기존 auto-link(티켓 § 전제 정정). 로컬 auth `test` rc=0 · bite 2종 → 새 셀 빨강. 실 MySQL 슬라이스는 CI.
 - `TASK-BE-612-wire-user-recovery-unlock-on-password-reset-confirm.md` — 🟡 **REVIEW — AC-1·2·4 완료, AC-3 은 재굽기 뒤 창 대기** (2026-09-29 UTC). 비밀번호 재설정 확인이 **커밋 뒤** 계정이 LOCKED 면 `USER_RECOVERY` 해제를 요청(fail-soft). 🔴 해제 가부의 권위 = account-service: **그 계정을 잠근 전이**의 사유가 `AUTO_DETECT` 일 때만 허용, 그 밖은 409(운영자 잠금 뒤 멱등 자동탐지 행이 맨 위에 쌓여도 안 풀림). `USER_RECOVERY` 이력 actor=user 로 정정. 로컬 rc=0(account 527 · auth 885) · bite 3종 → 새 셀만 빨강. 실제 DB IT 는 CI.
 - `TASK-BE-609-password-change-and-reset-unreachable-through-the-gateway.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). ① 게이트웨이 `public-paths` 에 재설정 두 경로(POST 정확 경로) ② 원인 = auth-service `@Order(2)` 체인의 Bearer 필터가 `permitAll` 보다 먼저 돌아 게이트웨이가 넘긴 **사용자 토큰을 내부 자격으로 재검증**(401) → Bearer 를 `/internal/**` 에서만 읽는 리졸버. 같은 모양의 형제(세션 4경로 · logout)도 함께 풀림. 로컬 rc=0(gateway 122 · auth 877) · bite → 새 셀 3개만 빨강. 🔴 게이트웨이 경유 IT 는 Docker → CI 판정.
 

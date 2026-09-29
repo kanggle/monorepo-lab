@@ -39,13 +39,15 @@ class SocialLoginSteps {
      *
      * @param tenantId tenant the new identity row is attributed to — the default
      *                 tenant for the legacy flow, the initiating-client tenant for
-     *                 the SAS flow (resolved by each caller).
+     *                 the SAS flow (resolved by each caller). It is also the lookup
+     *                 scope (TASK-BE-611) — the same tenant the pre-resolution looked in,
+     *                 so the row found here is the row that resolved the account.
      */
     void upsertIdentity(OAuthProvider provider, OAuthUserInfo userInfo,
                         String accountId, String tenantId) {
         Optional<SocialIdentity> existingIdentity =
-                socialIdentityRepository.findByProviderAndProviderUserId(
-                        provider.name(), userInfo.providerUserId());
+                socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(
+                        tenantId, provider.name(), userInfo.providerUserId());
 
         if (existingIdentity.isPresent()) {
             var identity = existingIdentity.get();
