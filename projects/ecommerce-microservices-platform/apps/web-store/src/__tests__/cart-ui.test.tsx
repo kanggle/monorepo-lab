@@ -108,7 +108,11 @@ describe('CartSummary', () => {
         quantity: 1,
       },
     ];
-    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(JSON.stringify(items));
+    // TASK-FE-102: two keys now ('cart' / 'cart:guest'). A key-agnostic mock would feed the
+    // same items through BOTH and the login merge would double every quantity.
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) =>
+      key === 'cart' ? JSON.stringify(items) : null,
+    );
 
     renderWithCart(<CartSummary />);
 
@@ -133,7 +137,11 @@ describe('CartSummary', () => {
         quantity: 1,
       },
     ];
-    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(JSON.stringify(items));
+    // TASK-FE-102: two keys now ('cart' / 'cart:guest'). A key-agnostic mock would feed the
+    // same items through BOTH and the login merge would double every quantity.
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) =>
+      key === 'cart' ? JSON.stringify(items) : null,
+    );
 
     const user = userEvent.setup();
     renderWithCart(<CartSummary />);

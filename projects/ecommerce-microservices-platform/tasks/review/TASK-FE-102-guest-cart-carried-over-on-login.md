@@ -117,3 +117,12 @@ ecommerce-microservices-platform
 - e2e-smoke **5/5 통과**(`CI=1`, 포트 3001 비어 있음 확인 후 — 남의 서버 재사용 방지).
 - **bite**: `middleware.ts` 의 `/cart` 공개 줄 제거 → 재빌드 → smoke 2 실패(`/cart` 열림 · 비로그인 장바구니 표시), `/checkout` 칸은 통과 → 복원.
 - ⚪ **단위 스위트는 로컬 미측정** — web-store vitest 4 는 이 호스트(Node 24)에서 기동 불가(`#module-evaluator`, 알려진 한계). 권위 = CI `Frontend unit tests`(Node 20). 판정은 잡 초록이 아니라 **바꾼 파일들의 `(N tests)` 줄**로 한다. AC-3(b) 의 bite(소유자 검사 제거 → 빨강)도 같은 이유로 로컬에서 못 쟀다.
+
+## CORRECTION (2026-09-29 UTC) — 첫 CI 에서 `cart-ui.test.tsx` 1건 빨강
+
+첫 CI `Frontend unit tests`: 130 파일 중 1 실패 — `cart-ui.test.tsx › 상품이 있으면 장바구니 항목과 합계를 표시한다`(«1,500,000원» 을 못 찾음).
+
+- **원인은 테스트의 옛 전제**: `getItem` 을 **키와 무관하게** 같은 항목으로 mock 했다. 키가 `cart` 하나일 때는 무해했지만, 이제 로그인 로드가 `cart` 와 `cart:guest` 를 **둘 다** 읽어 합치므로 같은 항목이 두 번 들어와 수량 2 → 3,000,000원. 제품 결함이 아니라 «저장 키는 하나» 라는 가정이 mock 에 남아 있던 것 — 그리고 그 가정을 바꾼 것이 이 티켓이다.
+- 🔴 내가 놓친 곳: 수정할 테스트를 «인증 전제를 단언하는 파일» 로만 골랐다. 이 파일은 인증이 아니라 **저장소 모양**에 기대고 있어 그 필터에 안 걸렸다. 저장 키를 바꾸는 변경이면 `getItem` 을 mock 하는 파일 전부가 모집단이었다.
+- 수정: 이 파일의 두 mock 을 `key === 'cart' ? items : null` 로. 나머지 `getItem` mock 은 `null` 반환이라 무관(grep 으로 확인).
+- 같은 런에서 바꾼 파일의 실행 수(잡 로그): `cart-context` 21 · `logout-cart-integration` 2 · `header` 12 · `middleware` 10 · `add-to-cart-button` 5 — 전부 통과, 새 칸 포함.
