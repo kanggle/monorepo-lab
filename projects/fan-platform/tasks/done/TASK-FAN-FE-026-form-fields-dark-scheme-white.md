@@ -8,7 +8,7 @@ TASK-FAN-FE-026
 
 # Status
 
-review
+done (2026-09-29 UTC — AC-1~AC-3 닫힘 · impl PR #4064 squash `549a1a03c`)
 
 # Owner
 
