@@ -23,6 +23,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/products') ||
+    // TASK-FE-102 — the cart is usable logged out (guest cart). Exactly `/cart`:
+    // `/checkout*` stays gated, so ordering still requires login.
+    pathname === '/cart' ||
     pathname.startsWith('/api/auth') ||
     // The same-origin BFF proxy (`/api/bff/[...path]`) enforces auth itself: it
     // reads the server-side session token and attaches the bearer, returning

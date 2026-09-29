@@ -21,11 +21,29 @@ describe('web-store route-guard middleware', () => {
     expect(res.headers.get('location')).toBeNull();
   });
 
-  it('redirects a protected path to /login when unauthenticated', async () => {
-    const res = await middleware(request('/cart'));
+  // TASK-FE-102 — /cart is public now (guest cart); ordering stays behind login.
+  it('redirects a protected path (/checkout) to /login when unauthenticated', async () => {
+    const res = await middleware(request('/checkout?items=p1%3Av1'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toContain('/login');
+    expect(res.headers.get('location')).toContain(encodeURIComponent('/checkout'));
   });
+
+  it('serves /cart to an anonymous visitor (guest cart, TASK-FE-102)', async () => {
+    const res = await middleware(request('/cart'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  // 🔵 control — opening /cart must not open its neighbours: the rule is exactly '/cart'.
+  it.each(['/cartx', '/cart/anything', '/checkout/payment', '/my/orders'])(
+    '🔵 %s is still gated for an anonymous visitor',
+    async (path) => {
+      const res = await middleware(request(path));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toContain('/login');
+    },
+  );
 
   it('config.matcher excludes /sw.js so middleware never runs on the SW script', () => {
     expect(config.matcher[0]).toContain('sw.js');

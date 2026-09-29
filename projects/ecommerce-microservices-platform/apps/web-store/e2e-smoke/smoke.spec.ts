@@ -26,8 +26,31 @@ test.describe('웹스토어 smoke (백엔드 없음)', () => {
     await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toBeVisible();
   });
 
-  test('비로그인 상태에서 /cart 접근 시 /login 으로 리다이렉트된다', async ({ page }) => {
+  // TASK-FE-102 — was: anonymous /cart → /login (UC-0 EF-2, retired). The guest cart is
+  // usable logged out; ordering is not.
+  test('비로그인 상태에서도 /cart 가 열리고 빈 장바구니를 보여 준다', async ({ page }) => {
+    const response = await page.goto('/cart');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText('장바구니가 비어있습니다.')).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe('/cart');
+  });
+
+  test('비로그인 장바구니(cart:guest)에 담긴 상품이 /cart 와 헤더 뱃지에 보인다', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        'cart:guest',
+        JSON.stringify([
+          { productId: 'p-smoke', variantId: 'v-smoke', productName: '스모크 상품', optionName: '기본', price: 12000, quantity: 2 },
+        ]),
+      );
+    });
     await page.goto('/cart');
+    await expect(page.getByText('스모크 상품')).toBeVisible();
+    await expect(page.getByLabel('장바구니')).toContainText('2');
+  });
+
+  test('비로그인 상태에서 /checkout 은 여전히 /login 으로 리다이렉트된다', async ({ page }) => {
+    await page.goto('/checkout');
     await page.waitForURL('**/login**', { timeout: 10_000 });
     await expect(page.getByRole('heading', { name: '로그인' })).toBeVisible();
   });

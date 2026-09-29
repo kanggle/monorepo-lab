@@ -296,7 +296,9 @@ describe('CartContext × 인증 상태', () => {
     mockAuthState.isLoading = false;
   });
 
-  it('비로그인 상태에서는 localStorage 카트를 복원하지 않는다', async () => {
+  // TASK-FE-102 AC-3(a): the ACCOUNT cart ('cart') is still never shown to — and is wiped for —
+  // a logged-out load. What the visitor sees is the separate guest cart.
+  it('비로그인 상태에서는 계정 장바구니(cart)를 복원하지 않고 지운다', async () => {
     storage['cart'] = JSON.stringify([{ ...ITEM_A, quantity: 5 }]);
     mockAuthState.isAuthenticated = false;
 
@@ -312,7 +314,8 @@ describe('CartContext × 인증 상태', () => {
     expect(storage['cart']).toBeUndefined();
   });
 
-  it('비로그인 상태에서 addItem은 카트에 아무것도 추가하지 않는다', async () => {
+  // TASK-FE-102 — was: logged-out addItem adds nothing (UC-0 EF-1, retired).
+  it('비로그인 상태에서 addItem은 비로그인 장바구니(cart:guest)에 담는다', async () => {
     mockAuthState.isAuthenticated = false;
     const user = userEvent.setup();
 
@@ -324,8 +327,75 @@ describe('CartContext × 인증 상태', () => {
 
     await user.click(screen.getByText('addA'));
 
-    expect(screen.getByTestId('count').textContent).toBe('0');
+    await waitFor(() => {
+      expect(screen.getByTestId('count').textContent).toBe('1');
+    });
+    expect(JSON.parse(storage['cart:guest'])).toEqual([{ ...ITEM_A, quantity: 1 }]);
     expect(storage['cart']).toBeUndefined();
+  });
+
+  it('비로그인으로 다시 열면 비로그인 장바구니를 복원한다', async () => {
+    storage['cart:guest'] = JSON.stringify([{ ...ITEM_B, quantity: 2 }]);
+    mockAuthState.isAuthenticated = false;
+
+    render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('count').textContent).toBe('2');
+    });
+  });
+
+  it('AC-2 로그인하면 비로그인 장바구니가 계정 장바구니에 합쳐지고(같은 상품 수량 합) cart:guest 는 비워진다', async () => {
+    storage['cart'] = JSON.stringify([{ ...ITEM_A, quantity: 2 }]);
+    storage['cart:guest'] = JSON.stringify([{ ...ITEM_A, quantity: 1 }, { ...ITEM_B, quantity: 2 }]);
+    mockAuthState.isAuthenticated = true;
+
+    render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('count').textContent).toBe('5');
+    });
+    expect(screen.getByTestId('total').textContent).toBe('70000');
+    expect(JSON.parse(storage['cart'])).toEqual([
+      { ...ITEM_A, quantity: 3 },
+      { ...ITEM_B, quantity: 2 },
+    ]);
+    expect(storage['cart:guest']).toBeUndefined();
+  });
+
+  it('AC-2 같은 화면에서 비로그인으로 담고 → 로그인 전환 → 담은 것이 이어진다', async () => {
+    mockAuthState.isAuthenticated = false;
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>,
+    );
+    await user.click(screen.getByText('addB2'));
+    await waitFor(() => {
+      expect(screen.getByTestId('count').textContent).toBe('2');
+    });
+
+    mockAuthState.isAuthenticated = true;
+    rerender(
+      <CartProvider>
+        <TestConsumer />
+      </CartProvider>,
+    );
+
+    await waitFor(() => {
+      expect(JSON.parse(storage['cart'] ?? '[]')).toEqual([{ ...ITEM_B, quantity: 2 }]);
+    });
+    expect(screen.getByTestId('count').textContent).toBe('2');
+    expect(storage['cart:guest']).toBeUndefined();
   });
 
   it('인증 로딩 중에는 카트를 로드하지 않고 대기한다', async () => {
@@ -371,5 +441,8 @@ describe('CartContext × 인증 상태', () => {
       expect(screen.getByTestId('count').textContent).toBe('0');
     });
     expect(storage['cart']).toBeUndefined();
+    // 🔴 AC-3(b): the render where auth flips still holds the account items — they must
+    // not be written under the guest key, or the next visitor on this browser sees them.
+    expect(JSON.parse(storage['cart:guest'] ?? '[]')).toEqual([]);
   });
 });

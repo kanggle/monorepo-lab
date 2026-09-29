@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
   const protectedPaths = [
-    { path: '/cart', label: '장바구니' },
+    // '/cart' left this list in TASK-FE-102 — the guest cart is public; '/checkout' below stays gated.
     { path: '/my/profile', label: '마이페이지' },
     { path: '/my/wishlist', label: '위시리스트' },
     { path: '/my/addresses', label: '배송지 관리' },
