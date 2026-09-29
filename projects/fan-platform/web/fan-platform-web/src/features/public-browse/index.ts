@@ -9,12 +9,27 @@
 
 export { readFanPublicData, type FanPublicDataResult } from './api/read';
 
-export { feedPosts, findArtist, findPost, artistPosts, totalPagesOf } from './lib/select';
+export {
+  feedPosts,
+  filterFeedPosts,
+  resolveFeedFilter,
+  isFeedFiltered,
+  feedHref,
+  FEED_VISIBILITIES,
+  NO_FEED_FILTER,
+  type FeedFilter,
+  type FeedVisibility,
+  findArtist,
+  findPost,
+  artistPosts,
+  totalPagesOf,
+} from './lib/select';
 export { provenanceOf, type Provenance, type ProvenanceKind } from './lib/provenance';
 export { emptyKind, type EmptyKind } from './lib/empty-state';
 
 export { ProvenanceBanner } from './ui/ProvenanceBanner';
 export { PublicFeedList } from './ui/PublicFeedList';
+export { PublicFeedFilter } from './ui/PublicFeedFilter';
 export { PublicPostCard } from './ui/PublicPostCard';
 export { PublicPostDetail } from './ui/PublicPostDetail';
 export { PublicArtistCard } from './ui/PublicArtistCard';

@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-FAN-FE-025-public-feed-filter.md` — 공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색 추가. 저장본 안에서만 동작(ADR-MONO-070), 익명 게이트웨이 호출 0 유지, 기본값에서 잠긴 글 포함 유지, 페이지 링크의 필터 보존. 공용 `infra/demo/public-data` 무변경. 출처 = 2026-09-24 포트폴리오 UX 요청 § 12 의 남은 공백(2026-09-29 점검). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+(empty)
 
 ## in-progress
 
@@ -78,7 +78,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-(empty)
+- `TASK-FAN-FE-025-public-feed-filter.md` — **REVIEW (2026-09-29 UTC)** 공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색. 서버 렌더 GET 폼(클라이언트 코드·의존성 0), 저장본 안에서만, 익명 게이트웨이 호출 0, 기본값에서 잠긴 글 포함 유지, 페이지 링크의 필터 보존. AC-1~AC-8 판정 기록. 유닛 37 files / 326 tests · tsc · lint · build rc=0, bite 2건, Playwright 32칸 1280·400px. 브라우저가 뒤로가기 폼 값 복원 결함을 찾아 `autoComplete="off"` 로 고침. 🔵 React #418 간헐 하이드레이션 오류는 origin/main 대조군에서도 같은 빈도로 나 **범위 밖**(기록만). 분석=Opus 5.5 / 구현=Opus 5.5.
 
 
 

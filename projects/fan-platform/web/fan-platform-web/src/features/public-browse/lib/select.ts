@@ -1,4 +1,4 @@
-import type { FanPublicData, PublicArtist, PublicPost } from '@demo/public-data';
+import { normalizeQuery, type FanPublicData, type PublicArtist, type PublicPost } from '@demo/public-data';
 
 /**
  * 저장본 안에서의 선택 — **순수 함수만** 있다.
@@ -23,6 +23,85 @@ function byPublishedAtDesc(a: PublicPost, b: PublicPost): number {
  */
 export function feedPosts(data: FanPublicData): PublicPost[] {
   return data.posts.slice().sort(byPublishedAtDesc);
+}
+
+// ---------------------------------------------------------------------------
+// 공개 피드 필터 (TASK-FAN-FE-025)
+// ---------------------------------------------------------------------------
+
+export type FeedVisibility = PublicPost['visibility'];
+
+/** 필터 `<select>` 의 순서이자 쿼리스트링이 받아들이는 값의 **닫힌** 집합. */
+export const FEED_VISIBILITIES: readonly FeedVisibility[] = ['PUBLIC', 'MEMBERS_ONLY', 'PREMIUM'];
+
+/**
+ * **실제로 적용되는** 필터. `null` = 그 축은 전체.
+ *
+ * 🔴 쿼리스트링 원문이 아니라 이 값을 화면(폼의 선택 상태·페이지 링크·0건 문구)에 쓴다.
+ *    저장본에 없는 아티스트 id 나 모르는 공개 범위를 받아도 그 축은 무시되고, 폼도
+ *    「전체」를 보여준다 — 화면이 걸려 있지 않은 필터를 걸려 있다고 말하지 않게 한다.
+ */
+export interface FeedFilter {
+  artistId: string | null;
+  visibility: FeedVisibility | null;
+  /** 방문자가 친 검색어(앞뒤 공백만 제거). 정규화 결과가 비면 `null`. */
+  q: string | null;
+}
+
+export const NO_FEED_FILTER: FeedFilter = { artistId: null, visibility: null, q: null };
+
+export function resolveFeedFilter(
+  data: FanPublicData,
+  raw: { artist?: string; visibility?: string; q?: string },
+): FeedFilter {
+  const artistId =
+    raw.artist && data.artists.some((a) => a.id === raw.artist) ? raw.artist : null;
+  const visibility = FEED_VISIBILITIES.find((v) => v === raw.visibility) ?? null;
+  const q = normalizeQuery(raw.q) === '' ? null : (raw.q ?? '').trim();
+  return { artistId, visibility, q };
+}
+
+export function isFeedFiltered(filter: FeedFilter): boolean {
+  return filter.artistId !== null || filter.visibility !== null || filter.q !== null;
+}
+
+/**
+ * 공개 피드를 거른다. 세 축은 AND 다.
+ *
+ * 🔴🔴 필터가 없으면 결과는 `feedPosts` 와 **원소·순서가 같다** — 잠긴 글을 기본으로 거르지
+ *    않는 위 정책을 그대로 물려받는다. 잠긴 글이 빠지는 것은 방문자가 공개 범위를 «공개» 로
+ *    직접 골랐을 때뿐이다.
+ *
+ * 🔵 검색은 `queryArtists` 와 같은 약한 규칙이다 — `normalizeQuery` 로 정규화한 토큰이
+ *    **모두** 제목 또는 아티스트명 안에 부분 문자열로 있으면 매치. 형태소 분석을 흉내내지 않는다.
+ *    백엔드 피드(`GET /api/community/feed`)에는 필터 파라미터가 없어 맞춰야 할 백엔드
+ *    의미가 없으므로, 이 필터는 공용 `@demo/public-data` 가 아니라 이 앱에 산다.
+ */
+export function filterFeedPosts(data: FanPublicData, filter: FeedFilter): PublicPost[] {
+  const tokens = normalizeQuery(filter.q).split(' ').filter((t) => t !== '');
+  return feedPosts(data).filter((p) => {
+    if (filter.artistId !== null && p.artistId !== filter.artistId) return false;
+    if (filter.visibility !== null && p.visibility !== filter.visibility) return false;
+    if (tokens.length > 0) {
+      const text = `${p.title} ${p.artistStageName}`.toLowerCase();
+      if (!tokens.every((t) => text.includes(t))) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * 필터를 보존한 홈 링크. 빈 축은 생략하고, 첫 페이지면 `page` 도 생략한다 — 필터 없는
+ * 첫 페이지는 정확히 `/` 다(예전 링크와 같은 모양).
+ */
+export function feedHref(filter: FeedFilter, page = 0): string {
+  const params = new URLSearchParams();
+  if (filter.artistId !== null) params.set('artist', filter.artistId);
+  if (filter.visibility !== null) params.set('visibility', filter.visibility);
+  if (filter.q !== null) params.set('q', filter.q);
+  if (page > 0) params.set('page', String(page));
+  const qs = params.toString();
+  return qs ? `/?${qs}` : '/';
 }
 
 export function findArtist(data: FanPublicData, id: string): PublicArtist | null {

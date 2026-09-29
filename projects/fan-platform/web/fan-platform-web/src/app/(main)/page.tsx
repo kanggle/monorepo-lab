@@ -3,10 +3,13 @@ import { isAuthenticated } from '@/shared/auth/session';
 import { FollowingFeedSection } from '@/features/feed';
 import {
   readFanPublicData,
-  feedPosts,
+  filterFeedPosts,
+  resolveFeedFilter,
+  feedHref,
   emptyKind,
   totalPagesOf,
   PublicFeedList,
+  PublicFeedFilter,
   PublicEmptyState,
   ProvenanceBanner,
 } from '@/features/public-browse';
@@ -34,16 +37,17 @@ const PAGE_SIZE = 10;
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; artist?: string; visibility?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const page = Number.parseInt(params.page ?? '0', 10) || 0;
 
   const result = await readFanPublicData();
-  const posts = feedPosts(result.data);
-  // 🔵 `corpusSize` 는 **질의 이전의** 모집단이다. 공개 피드에는 필터가 없으므로 지금은
-  //    `totalElements` 와 같지만, 그래도 따로 넘긴다 — 0건 판정이 두 수의 «차이» 를 읽는
-  //    구조이고, 필터가 생기는 날 여기만 고치면 되게 한다.
+  // 🔵 TASK-FAN-FE-025 — 원문 쿼리가 아니라 **적용된** 필터를 쓴다(모르는 값은 그 축 전체).
+  const filter = resolveFeedFilter(result.data, params);
+  const posts = filterFeedPosts(result.data, filter);
+  // 🔴 `corpusSize` 는 **필터 이전의** 모집단이다. 0건 판정이 `totalElements` 와의 «차이» 를
+  //    읽으므로, 필터 결과 크기를 넘기면 조건 불일치가 «저장본이 비었다» 로 읽힌다.
   const paged = paginate(posts, { page, size: PAGE_SIZE }, result.data.posts.length);
   const empty = emptyKind(paged);
 
@@ -58,15 +62,18 @@ export default async function HomePage({
 
       {authed ? <FollowingFeedSection size={PAGE_SIZE} /> : null}
 
+      {/* 🔵 필터는 이 아래 공개 피드에만 걸린다 — 팔로잉 피드 섹션 뒤에 두어 그 범위를 드러낸다. */}
+      <PublicFeedFilter artists={result.data.artists} filter={filter} />
+
       {empty ? (
-        <PublicEmptyState kind={empty} noun="포스트" />
+        <PublicEmptyState kind={empty} query={filter.q ?? undefined} noun="포스트" />
       ) : (
         <>
           <PublicFeedList posts={paged.content} />
           <Pagination
             page={paged.page}
             totalPages={totalPagesOf(paged.totalElements, paged.size)}
-            hrefFor={(p) => (p === 0 ? '/' : `/?page=${p}`)}
+            hrefFor={(p) => feedHref(filter, p)}
           />
         </>
       )}
