@@ -84,6 +84,38 @@ class PartnershipManagementUseCaseTest {
                 null, null, Instant.parse("2026-07-04T10:00:00Z"), null, null);
     }
 
+    // ── list (TASK-MONO-737) ─────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-MONO-737 list: acting tenant in scope → read-path guard, then the page")
+    void list_inScope_readsThePage() {
+        TenantPartnershipPort.PartnershipPage page =
+                new TenantPartnershipPort.PartnershipPage(List.of(view(PartnershipStatus.ACTIVE)), 1, 0, 20, 1);
+        when(partnershipPort.listForTenant(HOST, null, null, 0, 20)).thenReturn(page);
+
+        assertThat(useCase().list(actor(), HOST, null, null, 0, 20)).isSameAs(page);
+        verify(tenantScopeGuard).requireTenantReadable(any(), eq(Permission.PARTNERSHIP_MANAGE), eq(HOST));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-737 list: X-Tenant-Id outside the caller's scope → 403 PARTNERSHIP_SCOPE_DENIED, nothing read")
+    void list_outOfScope_isDenied_andNothingIsRead() {
+        doThrow(new TenantScopeDeniedException("out of scope"))
+                .when(tenantScopeGuard).requireTenantReadable(any(), any(), eq(PARTNER));
+
+        assertThatThrownBy(() -> useCase().list(actor(), PARTNER, null, null, 0, 20))
+                .isInstanceOf(PartnershipScopeDeniedException.class);
+        verify(partnershipPort, never()).listForTenant(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    @DisplayName("list: blank acting tenant → empty page, no guard call (fail-closed, unchanged)")
+    void list_blankTenant_emptyPage() {
+        assertThat(useCase().list(actor(), " ", null, null, 0, 20).content()).isEmpty();
+        verify(tenantScopeGuard, never()).requireTenantReadable(any(), any(), any());
+    }
+
     // ── invite ────────────────────────────────────────────────────────────────
 
     @Test

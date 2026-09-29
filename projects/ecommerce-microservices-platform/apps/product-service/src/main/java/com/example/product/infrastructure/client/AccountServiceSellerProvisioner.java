@@ -34,9 +34,10 @@ import java.util.UUID;
  *       (role {@code SELLER}).</li>
  *   <li>{@code POST /internal/tenants/{t}/identities:resolveOrCreate} — born-unified
  *       identity (D5; {@code reuseExisting=true} converges same-email principals).</li>
- *   <li>{@code POST /internal/accounts/{accountId}/lock} — seller SUSPEND (D4).</li>
- *   <li>{@code PATCH /internal/tenants/{t}/accounts/{accountId}/status} — seller CLOSE
- *       (D4 deactivate).</li>
+ *   <li>{@code PATCH /internal/tenants/{t}/accounts/{accountId}/status} — seller SUSPEND and
+ *       seller CLOSE (D4), both {@code LOCKED}. SUSPEND used {@code POST
+ *       /internal/accounts/{accountId}/lock} until TASK-MONO-737 — unrouted in the deployed
+ *       topology (see {@link #lockAccount}).</li>
  * </ul>
  */
 @Slf4j
@@ -69,16 +70,16 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
     private static final String STATUS_DEACTIVATED = "LOCKED";
 
     private final RestClient restClient;
-    private final IamClientCredentialsTokenProvider tokenProvider;
     /**
      * TASK-MONO-721 (ADR-MONO-076 — 갈래 D): the bearer for calls whose PATH names a tenant.
      *
-     * <p>🔴 The two providers are not interchangeable and the difference is the whole ticket.
-     * {@code tokenProvider} yields this service's own credential ({@code tenant_id =
-     * global-account-platform}); every {@code /internal/tenants/{tenantId}/**} call made with it
-     * is refused by construction, because that surface treats {@code tenant_id == path tenant} as
-     * the authorization decision. This one exchanges that credential for a token minted FOR the
-     * target tenant, against a per-client catalog in the IdP.
+     * <p>🔴 It is not interchangeable with the base {@link IamClientCredentialsTokenProvider}
+     * credential ({@code tenant_id = global-account-platform}): every
+     * {@code /internal/tenants/{tenantId}/**} call made with that is refused by construction,
+     * because that surface treats {@code tenant_id == path tenant} as the authorization decision.
+     * This one exchanges it for a token minted FOR the target tenant, against a per-client
+     * catalog in the IdP. TASK-MONO-737 moved the last tenantless call (the SUSPEND lock) onto
+     * the tenant path, so this adapter no longer holds the base credential at all.
      */
     private final TenantScopedIamTokenProvider tenantTokenProvider;
 
@@ -97,10 +98,8 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
             @Value("${iam.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${iam.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             @Value("${iam.seller.role:SELLER}") String sellerRole,
-            IamClientCredentialsTokenProvider tokenProvider,
             TenantScopedIamTokenProvider tenantTokenProvider) {
         this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
-        this.tokenProvider = tokenProvider;
         this.tenantTokenProvider = tenantTokenProvider;
         this.sellerRole = sellerRole;
     }
@@ -130,53 +129,39 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
         }
     }
 
+    /**
+     * Seller SUSPEND (D4) → the backing account {@code LOCKED}, through the SAME tenant-path
+     * status EP as {@link #deactivateAccount} (TASK-MONO-737).
+     *
+     * <p>🔴 It used to call {@code POST /internal/accounts/{id}/lock}. That path names no tenant,
+     * and in the deployed topology this adapter does not reach account-service directly: its
+     * base URL is the IAM gateway ({@code demo.env ACCOUNT_SERVICE_BASE_URL=http://iam.<domain>}),
+     * whose only internal route is {@code /internal/tenants/**}. So every SUSPEND was a gateway
+     * <b>no-route 404</b> — swallowed by the fail-soft below, the seller SUSPENDED and the account
+     * still ACTIVE (measured live 2026-09-27). No suite could see it: they call account-service
+     * (or a mock of it) directly. MONO-735 had just added the {@code X-Tenant-Id} this call
+     * carried; that was right about the lookup and irrelevant to the route.
+     *
+     * <p>The tenant-path EP is the one this adapter already uses for provisioning and CLOSE, is
+     * routed, and is authorised by a token minted FOR the tenant (ADR-MONO-076). The recorded
+     * reason becomes {@code OPERATOR_PROVISIONING_STATUS_CHANGE} instead of {@code ADMIN_LOCK};
+     * consumers of {@code account.locked} read it for logging only.
+     */
     @Override
     public void lockAccount(String tenantId, String accountId) {
-        if (accountId == null || accountId.isBlank()) {
-            return; // net-zero: no backing account (legacy/PENDING seller)
-        }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("reason", "ADMIN_LOCK");
-        body.put("operatorId", "product-service");
-        try {
-            restClient.post()
-                    .uri("/internal/accounts/{accountId}/lock", accountId)
-                    .headers(h -> {
-                        h.add("Idempotency-Key", UUID.randomUUID().toString());
-                        // TASK-MONO-735: the seller's tenant — the one §1 minted the account in —
-                        // so account-service looks the account up THERE (a stale/wrong id that
-                        // lives in another tenant is a 404, never a lock). The earlier comment here
-                        // said the tenant-scope rule "does not apply" because the path names no
-                        // tenant; that was true of the TOKEN, not of the lookup: with no header
-                        // account-service read the call as fan-platform, so the seller's account
-                        // (minted in its own tenant) was never found and SUSPEND never locked it.
-                        h.add("X-Tenant-Id", tenantId);
-                        // 🔵 The BEARER stays the base credential: the path names no tenant, so
-                        // ADR-MONO-076's tenant-scoped exchange (calls whose PATH names a tenant)
-                        // does not apply. X-Tenant-Id here is a lookup scope, not an authz claim.
-                        h.setBearerAuth(tokenProvider.currentBearer());
-                        h.setContentType(MediaType.APPLICATION_JSON);
-                    })
-                    .body(body)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
-                        throw HttpClientErrorException.create(resp.getStatusCode(),
-                                resp.getStatusText(), resp.getHeaders(),
-                                resp.getBody().readAllBytes(), null);
-                    })
-                    .toBodilessEntity();
-        } catch (Exception e) {
-            // Fail-soft: the seller's domain SUSPEND already applied; the lock is
-            // retryable. (Re-locking an already-locked account is idempotent at the EP.)
-            log.warn("seller account lock failed (fail-soft) tenant={} account={}: {}",
-                    tenantId, accountId, e.getMessage());
-        }
+        // Fail-soft: the seller's domain SUSPEND already applied; the lock is retryable
+        // (LOCKED → LOCKED is idempotent at the EP).
+        changeStatusToLocked(tenantId, accountId, "lock");
     }
 
     @Override
     public void deactivateAccount(String tenantId, String accountId) {
+        changeStatusToLocked(tenantId, accountId, "deactivation");
+    }
+
+    private void changeStatusToLocked(String tenantId, String accountId, String what) {
         if (accountId == null || accountId.isBlank()) {
-            return; // net-zero
+            return; // net-zero: no backing account (legacy/PENDING seller)
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", STATUS_DEACTIVATED);
@@ -198,8 +183,8 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
                     })
                     .toBodilessEntity();
         } catch (Exception e) {
-            log.warn("seller account deactivation failed (fail-soft) tenant={} account={}: {}",
-                    tenantId, accountId, e.getMessage());
+            log.warn("seller account {} failed (fail-soft) tenant={} account={}: {}",
+                    what, tenantId, accountId, e.getMessage());
         }
     }
 

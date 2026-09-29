@@ -63,4 +63,31 @@ class TenantScopeGuardTest {
                 eq(actor), isNull(), eq(ActionCode.OPERATOR_ROLE_CHANGE),
                 eq(Permission.OPERATOR_MANAGE), eq("globex"));
     }
+
+    // ── TASK-MONO-737: read-path twin ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("TASK-MONO-737 read: in-scope → returns silently")
+    void readable_inScope_passes() {
+        when(grantScopeEvaluator.isTenantInAdminScope("actor-uuid", Permission.PARTNERSHIP_MANAGE, "acme"))
+                .thenReturn(true);
+
+        assertThatCode(() -> guard.requireTenantReadable(actor, Permission.PARTNERSHIP_MANAGE, "acme"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-737 read: out-of-scope → TenantScopeDeniedException, NO DENIED row (reads are not audited)")
+    void readable_outOfScope_deniesWithoutAuditRow() {
+        when(grantScopeEvaluator.isTenantInAdminScope("actor-uuid", Permission.PARTNERSHIP_MANAGE, "globex"))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> guard.requireTenantReadable(actor, Permission.PARTNERSHIP_MANAGE, "globex"))
+                .isInstanceOf(TenantScopeDeniedException.class);
+
+        verify(auditor, never()).recordCrossTenantDenied(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
 }

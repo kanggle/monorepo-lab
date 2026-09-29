@@ -1163,6 +1163,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | `X-Tenant-Id` 가 호출자의 `operator.manage` 스코프 밖 (TASK-MONO-737 — 형제 `PUT …/org-scope` 와 같은 판정; 읽기이므로 DENIED 감사 행 없음) |
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
 
 **Side Effects**: 없음 (read).
@@ -2048,7 +2049,7 @@ actor 의 활성 테넌트가 **당사자(host 또는 partner)인** 파트너십
 
 **Query parameters**: `role` (`host`|`partner`|둘 다=미지정), `status` (enum 필터), `page`, `size`(max 100).
 
-**Tenant confinement (D2)**: 결과는 `X-Tenant-Id ∈ {host_tenant_id, partner_tenant_id}` 인 row 로 confine(목록 읽기도 스코프 confine — D2 read parity). 타 테넌트의 파트너십은 노출되지 않는다.
+**Tenant confinement (D2)**: 결과는 `X-Tenant-Id ∈ {host_tenant_id, partner_tenant_id}` 인 row 로 confine(목록 읽기도 스코프 confine — D2 read parity). 타 테넌트의 파트너십은 노출되지 않는다. `X-Tenant-Id` 자체가 actor 의 `partnership.manage` 스코프 밖이면 `403 PARTNERSHIP_SCOPE_DENIED`(읽기이므로 DENIED 감사 행 없음). 🔴 TASK-MONO-737 이전 구현은 이 판정이 **없었다** — 이 절이 요구한 D2 read parity 를 코드가 어기고 있었고, IAM 게이트웨이가 헤더를 벗기던 동안 가려져 있었다.
 
 **Response 200**: `{ items: [ { partnershipId, hostTenantId, partnerTenantId, status, delegatedScope, myRole: "host"|"partner", invitedAt, acceptedAt, participantCount }, ... ], page, size, totalElements, totalPages }`.
 

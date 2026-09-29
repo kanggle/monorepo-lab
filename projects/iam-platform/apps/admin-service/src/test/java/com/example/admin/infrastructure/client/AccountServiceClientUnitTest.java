@@ -236,6 +236,29 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-737: lock — 올바른 구체 테넌트(ecommerce)를 X-Tenant-Id 로 그대로 싣는다 → 200 LOCKED")
+    void lock_concreteTenant_arrivesVerbatim_200() {
+        // Answers ONLY for X-Tenant-Id=ecommerce — the stand-in for account-service confining the
+        // lookup to that tenant. The 2026-09-27 live 404 had the header arrive as the operator's
+        // HOME tenant (demo-corp), because the IAM gateway stripped the console's value before
+        // admin-service saw it; this cell pins the admin-service half: what it resolves, it sends.
+        wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acc-ec/lock"))
+                .withHeader("X-Tenant-Id", equalTo("ecommerce"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-ec\",\"previousStatus\":\"ACTIVE\"," +
+                                "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-09-27T07:02:15Z\"}")));
+
+        AccountServiceClient.LockResponse resp =
+                client.lock("acc-ec", "op-1", "ADMIN_LOCK", null, "idemp-737", "ecommerce");
+
+        assertThat(resp.currentStatus()).isEqualTo("LOCKED");
+        wireMock.verify(1, postRequestedFor(urlPathEqualTo("/internal/accounts/acc-ec/lock"))
+                .withHeader("X-Tenant-Id", equalTo("ecommerce")));
+    }
+
+    @Test
     @DisplayName("lock — 4xx 응답 → NonRetryableDownstreamException")
     void lock_4xx_throwsNonRetryableDownstreamException() {
         wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))

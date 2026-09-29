@@ -234,12 +234,25 @@ public class PartnershipManagementUseCase {
      * Partnerships where {@code actingTenantId} is a party (host or partner), confined
      * to the acting tenant (D2 read parity). Blank acting tenant → empty page
      * (fail-closed, no leak).
+     *
+     * <p>TASK-MONO-737: the javadoc above claimed D2 parity but the scope check was
+     * absent — any {@code partnership.manage} holder could list another tenant's
+     * partnerships by naming it in {@code X-Tenant-Id}. Hidden only because the IAM
+     * gateway stripped that header, which it no longer does on {@code /api/admin/**}.
+     * Now gated like the mutations (read-path: no DENIED row).
      */
     @Transactional(readOnly = true)
-    public TenantPartnershipPort.PartnershipPage list(String actingTenantId, String roleFilter,
-                                                      String statusFilter, int page, int size) {
+    public TenantPartnershipPort.PartnershipPage list(OperatorContext actor, String actingTenantId,
+                                                      String roleFilter, String statusFilter,
+                                                      int page, int size) {
         if (actingTenantId == null || actingTenantId.isBlank()) {
             return new TenantPartnershipPort.PartnershipPage(List.of(), 0, page, size, 0);
+        }
+        try {
+            tenantScopeGuard.requireTenantReadable(actor, Permission.PARTNERSHIP_MANAGE, actingTenantId);
+        } catch (TenantScopeDeniedException e) {
+            // admin-api.md § Partnership Management uses the distinct code.
+            throw new PartnershipScopeDeniedException(e.getMessage());
         }
         PartnershipStatus status = parseStatusFilter(statusFilter);
         String role = (roleFilter == null || roleFilter.isBlank()) ? null : roleFilter.toLowerCase();

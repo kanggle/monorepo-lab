@@ -95,6 +95,24 @@ operator JWT 를 검증하는 상태" 가 ADR 없이 사실상 성립해 있었�
 
 `/.well-known/admin/jwks.json` 은 admin-service 의 공개키를 외부 검증자에게 노출하기 위한 표준 디스커버리 엔드포인트다. gateway 는 `/.well-known/admin/**` 라우트를 admin-service 로 프록시한다.
 
+### `/api/admin/**` 에서는 호출자의 `X-Tenant-Id` 를 **벗기지 않는다** (TASK-MONO-737)
+
+이 서브트리에서 `X-Tenant-Id` 는 신원 주장이 아니라 **운영자가 콘솔에서 고른 활성 테넌트**(요청
+파라미터)다. gateway 는 여기서 JWT 를 검증하지 않으므로 대신 찍을 claim 이 없고, admin-service 가
+그 값을 운영자의 범위로 판정한다(`QueryTenantScopeGate` / `TenantScopeGuard` — 범위 밖 → 403).
+그래서 gateway 는 이 서브트리에 한해 호출자의 값을 **그대로 전달**한다. `X-Account-ID` ·
+`X-Device-Id` 는 여기서도 제거한다(이쪽은 신원 주장이다).
+
+- 🔴 **admin-service 불변식**: `X-Tenant-Id` 를 읽는 모든 admin 엔드포인트는 그 값을 사용 전에 운영자
+  범위로 판정해야 한다. 벗겨지던 동안 두 읽기(`GET /api/admin/partnerships`,
+  `GET /api/admin/operators/{id}/assignments`)가 판정 없이 헤더를 믿고 있었고, 그 구멍은 헤더가
+  **도착하지 않아서** 가려져 있었을 뿐이다 — 이 개정과 같은 변경에서 둘 다 막았다.
+- **이전 동작과 그 증상**: 벗기면 admin-service 는 헤더를 못 받고 운영자의 **홈 테넌트**로 떨어진다.
+  2026-09-27 데모 창에서 `ecommerce` 로 전환한 운영자(홈 `demo-corp`)의 `ecommerce` 계정 잠금이
+  account-service 에 `X-Tenant-Id: demo-corp` 로 도착해 404 였다. 목록은 테넌트를 **쿼리 파라미터**로
+  보내서 멀쩡했으므로 «보이는데 잠기지 않는» 모양이었다. CI/e2e 는 콘솔이 admin-service 를 **직접**
+  부르는 토폴로지라 헤더가 늘 도착했고, 어떤 스위트도 이 경로를 지나지 않았다.
+
 ---
 
 ## Gateway-Generated Responses
@@ -179,6 +197,9 @@ operator JWT 를 검증하는 상태" 가 ADR 없이 사실상 성립해 있었�
 | `X-Forwarded-For` | 원본 client IP |
 
 다운스트림은 이 헤더를 신뢰한다. 외부에서 `X-Account-ID` 또는 `X-Tenant-Id`를 직접 보내는 경우 **게이트웨이가 덮어씀** (spoofing 방지).
+**예외 하나**: `/api/admin/**` 에서는 `X-Tenant-Id` 를 벗기지 않는다 — 거기서 그 값은 신원이 아니라
+운영자가 고른 활성 테넌트이고, admin-service 가 운영자 범위로 판정한다(§ Admin Routes, TASK-MONO-737).
+admin-service 는 이 헤더를 **신뢰하지 않고 판정한다.**
 
 ## Internal Provisioning Routes
 
