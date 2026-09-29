@@ -78,7 +78,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-(empty)
+- 🔍 `TASK-FAN-FE-026-form-fields-dark-scheme-white.md` — **REVIEW (2026-09-29 UTC)** 결제 기간 선택칸·아티스트 검색칸이 OS 다크 모드에서 어두운 바탕에 검은 글자 → 공용 `FORM_FIELD_CLASS`(흰 바탕·`ink-900` 글자·`[color-scheme:light]`)로 통일, 공개 피드 필터도 같은 상수로. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 
