@@ -4,7 +4,7 @@ TASK-FE-103
 
 # Status
 
-review
+done
 
 # Title
 
@@ -66,3 +66,11 @@ ecommerce-microservices-platform
 # Failure Scenarios
 
 - 문구를 부드럽게 하다 «로그인 후 기능» 이 잠긴 사실까지 지움 — AC-2 의 기존 칸이 막는다.
+
+## CORRECTION (2026-09-29 UTC) — 종결 (4차원 검증)
+
+- (a) PR **#4081** `state=MERGED` (2026-09-29T12:45:24Z) · (b) `origin/main` 끝 = 스쿼시 **`d187e3cba`** · (c) 머지 시점 `statusCheckRollup` 실패 0 / 68. 🔵 첫 런의 `Frontend lint & build` 는 한 번 빨갰다 — `src/app/layout.tsx`(이 PR 이 안 건드린 파일)의 `next/font` 가 Google 폰트 응답을 못 읽음(`Cannot read properties of null (reading '1')`). 같은 레이아웃이 직전 #4078 CI 에서 컴파일됐으므로 러너의 외부 fetch 로 보고 **실패 잡만** 재실행 → 통과.
+- (d) AC:
+  - **AC-1** ✅ 렌더 DOM 단언(CI `DemoBackendNotice.test.tsx` 10 tests, 새 칸 포함) + **라이브**: store.hubwang.com `/products` 꺼짐 배너 = «…로그인할 수 없고, 주문 같은 로그인 후 기능도 잠겨 있습니다. 장바구니는 로그인 없이 담아 둘 수 있습니다. …» (머지 후 두 번째 폴링에서 반영 확인).
+  - **AC-2** ✅ 같은 파일의 기존 칸(«샘플» · «불러올 수 없» 부재 · «로그인 후 기능») 초록.
+  - **AC-3** ✅ 배너 문장을 단언하는 다른 곳 없음(`git grep`, 착수 시).
