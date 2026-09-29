@@ -192,6 +192,46 @@ class AccountServiceClientUnitTest {
                 .isInstanceOf(AccountServiceUnavailableException.class);
     }
 
+    // ── unlockForSelfRecovery (TASK-BE-612) ────────────────────────────────────
+
+    private static final String UNLOCK_PATH = "/internal/accounts/acc-1/unlock";
+
+    @Test
+    @DisplayName("TASK-BE-612: unlock 200 → UNLOCKED, body reason=USER_RECOVERY, X-Tenant-Id 없음")
+    void unlockForSelfRecovery_200_unlocked() {
+        wireMockServer.stubFor(post(urlEqualTo(UNLOCK_PATH)).willReturn(aResponse()
+                .withStatus(200).withHeader("Content-Type", "application/json")
+                .withBody("{\"accountId\":\"acc-1\",\"previousStatus\":\"LOCKED\",\"currentStatus\":\"ACTIVE\"}")));
+
+        assertThat(client.unlockForSelfRecovery("acc-1"))
+                .isEqualTo(com.example.auth.application.port.AccountServicePort.SelfRecoveryUnlock.UNLOCKED);
+        wireMockServer.verify(postRequestedFor(urlEqualTo(UNLOCK_PATH))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock
+                        .matchingJsonPath("$.reason", equalTo("USER_RECOVERY")))
+                .withoutHeader("X-Tenant-Id"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: unlock 409 (자동 해제 대상 아닌 잠금) → REFUSED, 예외 아님 · 재시도 없음")
+    void unlockForSelfRecovery_409_refused() {
+        wireMockServer.stubFor(post(urlEqualTo(UNLOCK_PATH)).willReturn(aResponse()
+                .withStatus(409).withHeader("Content-Type", "application/json")
+                .withBody("{\"code\":\"STATE_TRANSITION_INVALID\"}")));
+
+        assertThat(client.unlockForSelfRecovery("acc-1"))
+                .isEqualTo(com.example.auth.application.port.AccountServicePort.SelfRecoveryUnlock.REFUSED);
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo(UNLOCK_PATH)));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: unlock 503 → AccountServiceUnavailableException (호출자가 fail-soft 로 삼킨다)")
+    void unlockForSelfRecovery_503_throws() {
+        wireMockServer.stubFor(post(urlEqualTo(UNLOCK_PATH)).willReturn(aResponse().withStatus(503)));
+
+        assertThatThrownBy(() -> client.unlockForSelfRecovery("acc-1"))
+                .isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
     // ── getAccountStatusAndTenant (TASK-BE-602) ────────────────────────────────
 
     private static final String STATUS_WITH_TENANT_PATH = "/internal/accounts/acc-1/status-with-tenant";

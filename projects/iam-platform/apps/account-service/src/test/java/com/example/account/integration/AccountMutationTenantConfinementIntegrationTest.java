@@ -269,6 +269,47 @@ class AccountMutationTenantConfinementIntegrationTest extends AbstractIntegratio
         assertThat(statusOf(FAN_TENANT_ID, fanAccountId)).isEqualTo(AccountStatus.LOCKED);
     }
 
+    // ── TASK-BE-612: USER_RECOVERY (password-reset confirm) lifts only an AUTO_DETECT lock ──
+
+    private static final String RECOVERY_BODY = """
+            {"reason":"USER_RECOVERY"}""";
+
+    @Test
+    @DisplayName("TASK-BE-612: 자동 잠금(AUTO_DETECT) → 헤더 없는 USER_RECOVERY 해제 → 200 ACTIVE · 이력 actor_type=user")
+    void userRecovery_afterAutoDetectLock_unlocks() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON).content(AUTO_LOCK_BODY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/internal/accounts/{id}/unlock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON).content(RECOVERY_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStatus").value("ACTIVE"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(jdbc.queryForObject("""
+                SELECT actor_type FROM account_status_history
+                 WHERE account_id = ? AND reason_code = 'USER_RECOVERY'""", String.class, ecAccountId))
+                .isEqualTo("user");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612 대조군: 운영자 잠금(ADMIN_LOCK) → USER_RECOVERY 해제 409 · 여전히 LOCKED")
+    void userRecovery_afterAdminLock_isRefused_andStaysLocked() throws Exception {
+        String ecAccountId = seedAccount(ECOMMERCE_TENANT_ID);
+        mockMvc.perform(post("/internal/accounts/{id}/lock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON).content(LOCK_BODY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/internal/accounts/{id}/unlock", ecAccountId)
+                        .contentType(MediaType.APPLICATION_JSON).content(RECOVERY_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STATE_TRANSITION_INVALID"));
+
+        assertThat(statusOf(ECOMMERCE_TENANT_ID, ecAccountId)).isEqualTo(AccountStatus.LOCKED);
+    }
+
     // ── GDPR DELETE ───────────────────────────────────────────────────────────────
 
     @Test
