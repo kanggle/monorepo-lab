@@ -291,7 +291,7 @@ Order Service                  Kafka                    Downstream
 | 스펙 | 시나리오 | 커버 |
 |------|----------|------|
 | `golden-flow.spec.ts` | 회원가입 → 로그인 → 상품 선택 → 옵션/담기 → 장바구니 → 결제 페이지 | 주문 전 구간 해피패스 |
-| `auth-redirect.spec.ts` | 비로그인 시 `/cart`, `/my/*`, `/checkout` → `/login` 리다이렉트 | 보호 라우트 6건 |
+| `auth-redirect.spec.ts` | 비로그인 시 `/my/*`, `/checkout` → `/login` 리다이렉트 (`/cart` 는 TASK-FE-102 로 공개 — 비로그인 장바구니) | 보호 라우트 5건 |
 | `wishlist.spec.ts` | 상품 상세에서 찜 추가 → `/my/wishlist` 목록 노출 → 목록에서 제거 | 위시리스트 토글 왕복 |
 | `cart-management.spec.ts` | 수량 +/− 조작 → 전체선택 → 선택 삭제 → 빈 장바구니 | 장바구니 핵심 조작 |
 

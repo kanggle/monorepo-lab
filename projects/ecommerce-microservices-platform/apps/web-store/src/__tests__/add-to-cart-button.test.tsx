@@ -87,15 +87,16 @@ describe('AddToCartButton', () => {
     expect(screen.getByRole('button')).toBeDisabled();
   });
 
-  it('비로그인 상태에서 클릭 시 addItem을 호출하지 않고 로그인 페이지로 이동한다', () => {
+  // TASK-FE-102 — was: logged out → redirect to /login and add nothing (UC-0 EF-1, retired).
+  it('비로그인 상태에서도 클릭하면 담고(비로그인 장바구니) 로그인으로 보내지 않는다', () => {
     mockAuthState.isAuthenticated = false;
     mockPathname.value = '/products/p1';
 
     render(<AddToCartButton {...defaultProps} />);
     fireEvent.click(screen.getByRole('button'));
 
-    expect(mockAddItem).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/login?redirect=%2Fproducts%2Fp1');
-    expect(screen.queryByText('장바구니에 추가되었습니다.')).not.toBeInTheDocument();
+    expect(mockAddItem).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByText('장바구니에 추가되었습니다.')).toBeInTheDocument();
   });
 });

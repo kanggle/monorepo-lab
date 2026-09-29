@@ -152,5 +152,8 @@ describe('로그아웃 카트 통합 (NextAuth)', () => {
       expect(screen.getByTestId('count').textContent).toBe('0');
     });
     expect(storage['cart']).toBeUndefined();
+    // 🔴 TASK-FE-102 AC-3(b): the account item must not have leaked into the guest cart
+    // on the render where auth flipped — the next visitor on this browser would see it.
+    expect(JSON.parse(storage['cart:guest'] ?? '[]')).toEqual([]);
   });
 });

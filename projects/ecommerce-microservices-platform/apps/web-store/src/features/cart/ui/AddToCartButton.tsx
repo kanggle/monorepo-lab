@@ -1,9 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
 import { useCart } from '../model/cart-context';
-import { useAuth } from '@/shared/lib/auth-context';
 import { Toast } from '@/shared/ui';
 
 interface AddToCartButtonProps {
@@ -26,23 +24,13 @@ export function AddToCartButton({
   disabled = false,
 }: AddToCartButtonProps) {
   const { addItem } = useCart();
-  const { isAuthenticated } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
   const [showToast, setShowToast] = useState(false);
 
+  // TASK-FE-102: a logged-out visitor adds to the guest cart; it carries over on login.
   const handleClick = useCallback(() => {
-    if (!isAuthenticated) {
-      const redirect = encodeURIComponent(pathname ?? '/');
-      router.push(`/login?redirect=${redirect}`);
-      return;
-    }
     addItem({ productId, variantId, productName, optionName, price }, quantity);
     setShowToast(true);
   }, [
-    isAuthenticated,
-    pathname,
-    router,
     addItem,
     productId,
     variantId,

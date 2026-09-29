@@ -12,7 +12,23 @@ import type { CartItem } from './types';
 import { calculateTotal, calculateItemCount } from '../lib/calculate-total';
 import { useAuth } from '@/shared/lib/auth-context';
 
-const STORAGE_KEY = 'cart';
+/**
+ * TASK-FE-102 — two carts, two keys.
+ *
+ * - `cart` — the ACCOUNT cart (the key logout and the 401 handler already clear).
+ * - `cart:guest` — the GUEST cart of a visitor who has not logged in.
+ *
+ * 🔴 They must not share a key. When the page opens logged out, the account cart is
+ * wiped (EF-3): a previous user's cart left behind by an expired session must never
+ * show up as the next visitor's guest cart. One key could not both be wiped on an
+ * anonymous load and be the guest cart.
+ */
+export const ACCOUNT_CART_KEY = 'cart';
+export const GUEST_CART_KEY = 'cart:guest';
+
+type Owner = 'guest' | 'account';
+
+const keyOf = (owner: Owner) => (owner === 'account' ? ACCOUNT_CART_KEY : GUEST_CART_KEY);
 
 interface CartContextValue {
   items: CartItem[];
@@ -26,10 +42,10 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function loadCart(): CartItem[] {
+function loadCart(key: string): CartItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -40,102 +56,120 @@ function loadCart(): CartItem[] {
   }
 }
 
-function saveCart(items: CartItem[]): void {
+function saveCart(key: string, items: CartItem[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(key, JSON.stringify(items));
   } catch (error) {
     console.warn('Cart save failed', error);
   }
 }
 
-function clearStoredCart(): void {
+function clearStoredCart(key: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(key);
   } catch (error) {
     console.warn('Cart clear failed', error);
   }
 }
 
+type LineKey = Pick<CartItem, 'productId' | 'variantId'>;
+
+const sameLine = (a: LineKey, b: LineKey) =>
+  a.productId === b.productId && a.variantId === b.variantId;
+
+/** AF-1: the guest cart joins the account cart — the same product+option adds quantities. */
+export function mergeCarts(account: CartItem[], guest: CartItem[]): CartItem[] {
+  const merged = account.map((item) => ({ ...item }));
+  for (const g of guest) {
+    const existing = merged.find((m) => sameLine(m, g));
+    if (existing) {
+      existing.quantity += g.quantity;
+    } else {
+      merged.push({ ...g });
+    }
+  }
+  return merged;
+}
+
+interface CartState {
+  /** Whose items these are. `null` until the auth state is known. */
+  owner: Owner | null;
+  items: CartItem[];
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [cart, setCart] = useState<CartState>({ owner: null, items: [] });
+  const currentOwner: Owner | null = authLoading ? null : isAuthenticated ? 'account' : 'guest';
 
   useEffect(() => {
-    if (authLoading) return;
-    if (isAuthenticated) {
-      setItems(loadCart());
-    } else {
-      setItems([]);
-      clearStoredCart();
+    if (currentOwner === 'account') {
+      const guest = loadCart(GUEST_CART_KEY);
+      const items = mergeCarts(loadCart(ACCOUNT_CART_KEY), guest);
+      if (guest.length > 0) {
+        saveCart(ACCOUNT_CART_KEY, items);
+        clearStoredCart(GUEST_CART_KEY);
+      }
+      setCart({ owner: 'account', items });
+    } else if (currentOwner === 'guest') {
+      clearStoredCart(ACCOUNT_CART_KEY);
+      setCart({ owner: 'guest', items: loadCart(GUEST_CART_KEY) });
     }
-    setIsLoaded(true);
-  }, [isAuthenticated, authLoading]);
+  }, [currentOwner]);
 
+  // 🔴 Persist only when the items belong to the CURRENT owner. On the render where
+  // auth flips (logout), `cart.items` are still the account's while `currentOwner` is
+  // already 'guest' — writing them under the guest key would hand them to the next
+  // visitor. The owner check skips that render; the load effect then replaces them.
   useEffect(() => {
-    if (isLoaded && isAuthenticated) {
-      saveCart(items);
+    if (cart.owner !== null && cart.owner === currentOwner) {
+      saveCart(keyOf(cart.owner), cart.items);
     }
-  }, [items, isLoaded, isAuthenticated]);
+  }, [cart, currentOwner]);
 
-  const addItem = useCallback(
-    (item: Omit<CartItem, 'quantity'>, quantity = 1) => {
-      if (!isAuthenticated) return;
-      setItems((prev) => {
-        const existing = prev.find(
-          (i) => i.productId === item.productId && i.variantId === item.variantId,
-        );
-        if (existing) {
-          return prev.map((i) =>
-            i.productId === item.productId && i.variantId === item.variantId
-              ? { ...i, quantity: i.quantity + quantity }
-              : i,
-          );
-        }
-        return [...prev, { ...item, quantity }];
-      });
-    },
-    [isAuthenticated],
-  );
+  const addItem = useCallback((item: Omit<CartItem, 'quantity'>, quantity = 1) => {
+    setCart((prev) => {
+      const existing = prev.items.find((i) => sameLine(i, item));
+      const items = existing
+        ? prev.items.map((i) => (sameLine(i, item) ? { ...i, quantity: i.quantity + quantity } : i))
+        : [...prev.items, { ...item, quantity }];
+      return { ...prev, items };
+    });
+  }, []);
 
-  const removeItem = useCallback(
-    (productId: string, variantId: string) => {
-      setItems((prev) =>
-        prev.filter((i) => !(i.productId === productId && i.variantId === variantId)),
-      );
-    },
-    [],
-  );
+  const removeItem = useCallback((productId: string, variantId: string) => {
+    setCart((prev) => ({
+      ...prev,
+      items: prev.items.filter((i) => !sameLine(i, { productId, variantId })),
+    }));
+  }, []);
 
   const updateQuantity = useCallback(
     (productId: string, variantId: string, quantity: number) => {
-      if (quantity <= 0) {
-        setItems((prev) =>
-          prev.filter((i) => !(i.productId === productId && i.variantId === variantId)),
-        );
-        return;
-      }
-      setItems((prev) =>
-        prev.map((i) =>
-          i.productId === productId && i.variantId === variantId
-            ? { ...i, quantity }
-            : i,
-        ),
-      );
+      setCart((prev) => ({
+        ...prev,
+        items:
+          quantity <= 0
+            ? prev.items.filter((i) => !sameLine(i, { productId, variantId }))
+            : prev.items.map((i) =>
+                sameLine(i, { productId, variantId }) ? { ...i, quantity } : i,
+              ),
+      }));
     },
     [],
   );
 
   const clearCart = useCallback(() => {
-    setItems([]);
-    clearStoredCart();
-  }, []);
+    setCart((prev) => ({ ...prev, items: [] }));
+    if (currentOwner !== null) clearStoredCart(keyOf(currentOwner));
+  }, [currentOwner]);
 
+  // Same rule as persisting: never show items that belong to someone else.
   const visibleItems = useMemo(
-    () => (isAuthenticated ? items : []),
-    [isAuthenticated, items],
+    () => (cart.owner !== null && cart.owner === currentOwner ? cart.items : []),
+    [cart, currentOwner],
   );
   const totalAmount = calculateTotal(visibleItems);
   const itemCount = calculateItemCount(visibleItems);

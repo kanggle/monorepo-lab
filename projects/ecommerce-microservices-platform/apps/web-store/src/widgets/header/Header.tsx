@@ -46,7 +46,8 @@ export function Header() {
               </svg>
             </Link>
           )}
-          {!isLoading && isAuthenticated && (
+          {/* TASK-FE-102: the cart is shown logged out too (guest cart). */}
+          {!isLoading && (
             <Link href="/cart" className={`${styles.iconButton} ${styles.cartLink}`} aria-label="장바구니">
               <span className={styles.cartIcon} aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

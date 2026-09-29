@@ -76,10 +76,14 @@ describe('Header', () => {
     expect(screen.getByLabelText('장바구니')).toHaveAttribute('href', '/cart');
   });
 
-  it('비로그인 상태에서 장바구니 링크를 숨긴다', () => {
+  // TASK-FE-102 — was hidden logged out (UC-0 v1, retired): the guest cart is usable now.
+  it('비로그인 상태에서도 장바구니 링크와 뱃지를 표시한다', () => {
+    mockUseCart.mockReturnValue({ items: [{ productId: 'p1', variantId: 'v1', quantity: 2 }] });
+
     render(<Header />);
 
-    expect(screen.queryByLabelText('장바구니')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('장바구니')).toHaveAttribute('href', '/cart');
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('인증 상태에서 알림 링크를 표시한다', () => {
