@@ -137,7 +137,7 @@ Lifecycle and review rules: `tasks/INDEX.md` (root) and each `projects/<name>/ta
 7. Determine target service's `Service Type` from `specs/services/<service>/architecture.md` → read the matching `platform/service-types/<type>.md` (exactly one file).
 8. Consult [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) for skill guidance.
 9. `<project>/knowledge/` for design judgment only.
-10. Read existing code patterns.
+10. Read existing code patterns. **Before fixing a defect, grep the same-role sibling modules first** (`projects/*/apps/<same-role>/`, test-support classes above all) by **symptom wording** (`flake`, `~25%`, `Do not reintroduce`), not by ticket number — this repo records *why* a fix was made in code comments, so an already-diagnosed fix often lives only in a sibling's javadoc. Copy that fix rather than inventing another variant, and read the siblings that were fixed as the list of which ones were not (`TASK-MONO-542`).
 11. Implement + test.
 12. Prepare for review.
 
