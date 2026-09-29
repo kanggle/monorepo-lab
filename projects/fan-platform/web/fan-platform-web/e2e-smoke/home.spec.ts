@@ -32,7 +32,11 @@ test('백엔드가 닫혀 있어도 / 가 공개 피드를 그린다 (로그인 
   //    저장본(번들 시드)에서 온 실제 게시물이 보이는지를 본다 — 시드의 아티스트 활동명은
   //    `infra/demo/public-data/snapshots/fan.json` 에서 왔고, 그 값이 화면에 닿는다는 것이
   //    «판독자 → 페이지» 배선이 살아 있다는 뜻이다.
-  await expect(page.getByText('루미').first()).toBeVisible({ timeout: 10_000 });
+  // 🔴 TASK-FAN-FE-025 — **피드 안에서** 찾는다. 공개 피드 필터의 아티스트 `<select>` 가
+  //    같은 활동명을 `<option>` 으로 피드보다 앞에 그리므로, 페이지 전체의 `.first()` 는
+  //    보이지 않는 option 을 잡는다(CI 에서 실제로 그렇게 빨개졌다). 이 칸의 명제는
+  //    «저장본의 글이 피드에 보인다» 이므로 범위를 피드로 좁히는 것이 원래 뜻 그대로다.
+  await expect(page.getByTestId('public-feed').getByText('루미').first()).toBeVisible({ timeout: 10_000 });
 
   // 🔴 ③ 출처를 **정직하게** 말하는가. 저장본을 못 읽었거나 아직 발행 전이면 화면은
   //    그 사실을 말해야 한다 — 말하지 않으면 번들 시드가 «지금 백엔드에서 뽑은 것» 으로
