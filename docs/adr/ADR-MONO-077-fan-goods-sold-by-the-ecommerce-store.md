@@ -211,3 +211,17 @@ D1~D4 는 갈래와 무관하게 고정이다. **D5 만 소유자가 고른다.*
 
 - «ACCEPT 후 기안» 조건이 걸린 항목: **없다**(구현 티켓 `TASK-MONO-739` 는 PROPOSED 와 함께 이미 기안됐다).
 - 로그인 이음새 ADR — 소유자가 지금 진행을 지시했으므로 이 PR 다음 작업으로 기안한다(의무가 산문에만 남지 않도록 여기 적는다).
+
+---
+
+## CORRECTION (2026-09-29) — 로그인 항목의 측정이 **낡았다**
+
+§ 새로 생기는 위험의 첫 항목은 «팬 → 스토어 = `account_type_mismatch` 로 거절» 을 `ADR-MONO-072`(09-11) 실측에서 가져왔다.
+그 뒤 `TASK-BE-605`(2026-09-26, #4041)가 `AuthorizeSessionTenantGate` 를 넣어, **지금 코드**는:
+
+- 팬 세션 → 스토어(스토어 계정 있음): IdP 로그인 폼이 **다시 뜬다**(거절이 아니라 재인증).
+- 팬 세션 → 스토어(팬에서만 가입): 폼에서 `CREDENTIALS_INVALID`(일반 실패 문구).
+- `account_type_mismatch` 는 IAM 이 아니라 **스토어의** `signInCallback` 이 `CUSTOMER` 역할이 없을 때 낸다.
+
+라이브 데모는 재굽기 전이면 옛 동작일 수 있다(못 쟀다). 결정 본문(D1~D5)은 이 항목에 기대지 않아 **바뀌지 않는다**.
+해소 경로: [`ADR-MONO-078`](ADR-MONO-078-one-consumer-login-across-fan-and-store.md)(전역 소비자 계정, 소유자 방향 선택).
