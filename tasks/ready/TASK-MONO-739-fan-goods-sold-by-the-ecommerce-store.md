@@ -30,7 +30,7 @@ monorepo
 
 # Dependency Markers
 
-- **선행 (prerequisite)**: `ADR-MONO-077` ACCEPTED(정확형 `ADR-MONO-077 ACCEPTED — <A|B|C>`). 갈래가 팬 쪽 링크 모양과 스토어 카테고리 수를 정한다.
+- **선행 (prerequisite)**: `ADR-MONO-077` ACCEPTED(정확형 `ADR-MONO-077 ACCEPTED — <A|B|C|D>`). 갈래가 팬 쪽 링크 모양과 스토어 카테고리 수를 정한다.
 
 # Goal
 
@@ -42,7 +42,7 @@ monorepo
 
 - postgres `V20__seed_artist_goods.sql` · h2 `V13__seed_artist_goods.sql` (카테고리 + 상품 + 변형, postgres 는 `tenant_id` 를 변형 행까지)
 - `infra/demo/public-data/fixtures/raw-backend-responses.mjs` 에 같은 행 + 카테고리 이름 → `bin/build-bundled-snapshots.mjs` 로 `snapshots/store.json` 재생성
-- 팬 웹: `NEXT_PUBLIC_STORE_URL`(기본 `https://store.hubwang.com`) 설정 모듈 + 헤더 「굿즈샵 ↗」 + (갈래 A·B) 아티스트 프로필 「공식 굿즈 ↗」
+- 팬 웹: `NEXT_PUBLIC_STORE_URL`(기본 `https://store.hubwang.com`) 설정 모듈 + 헤더 「굿즈샵 ↗」 + (갈래 A·B) 아티스트 프로필 「공식 굿즈 ↗」 / (갈래 D) 아티스트 프로필에 굿즈 **카드** → 스토어 상품 상세, 「전체 보기」 → 그 아티스트 굿즈 목록
 - 팬 웹 `VERCEL.md` 환경변수 원장에 한 줄
 
 ## Out of Scope
