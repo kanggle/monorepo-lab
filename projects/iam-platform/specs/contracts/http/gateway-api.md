@@ -19,6 +19,9 @@
 | ~~`GET /api/auth/oauth/authorize`~~ · ~~`POST /api/auth/oauth/callback`~~ | ~~auth-service~~ | — | **REMOVED 2026-08-01 (TASK-BE-398)** — 레거시 커스텀-JWT 소셜 플로우. 대체: 브라우저 `GET /login/oauth/{provider}` → SAS |
 | `POST /api/auth/logout` | auth-service | Yes (access token) | — |
 | `POST /api/auth/refresh` | auth-service | No (refresh token in body) | — |
+| `POST /api/auth/password-reset/request` | auth-service | No | 로그인 못 하는 사용자의 경로 — 계정 존재와 무관하게 204, 이메일별 제한은 auth-service (TASK-BE-609 — 이전엔 `public-paths` 누락으로 엣지 401) |
+| `POST /api/auth/password-reset/confirm` | auth-service | No (재설정 토큰 in body) | TASK-BE-609 |
+| `PATCH /api/auth/password` | auth-service | Yes (access token) | gateway 가 `X-Account-ID` 주입 + 사용자 `Authorization` 도 함께 전달. auth-service 는 Bearer 를 `/internal/**` 에서만 읽는다 — 이 경로에서 사용자 토큰을 내부 자격으로 재검증해 401 이던 것(TASK-BE-609) |
 | `POST /api/accounts/signup` | account-service | No | — |
 | `GET /api/accounts/me` | account-service | Yes | — |
 | `PATCH /api/accounts/me/profile` | account-service | Yes | — |

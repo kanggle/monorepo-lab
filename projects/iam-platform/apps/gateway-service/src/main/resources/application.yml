@@ -133,6 +133,14 @@ gateway:
     # sunset, 2026-08-01). Login is now standard OIDC via /oauth2/** below.
     - POST:/api/accounts/signup
     - POST:/api/auth/refresh
+    # TASK-BE-609: the password-reset pair is used by a user who CANNOT sign in — by
+    # definition there is no token to verify. Missing here, both 401'd at the edge
+    # (measured 2026-09-26) while auth-service itself answered 204. Exact paths, POST
+    # only — NOT /api/auth/**: PATCH /api/auth/password (change) stays authenticated.
+    # Abuse: auth-service rate-limits per email (RequestPasswordResetUseCase, BE-144) and
+    # answers 204 whether or not the account exists; the edge global bucket still runs.
+    - POST:/api/auth/password-reset/request
+    - POST:/api/auth/password-reset/confirm
     - GET:/actuator/health
     # OIDC / OAuth2 standard endpoints (TASK-BE-251 Phase 2c).
     # Gateway passes these through without JWT verification — auth-service (SAS)

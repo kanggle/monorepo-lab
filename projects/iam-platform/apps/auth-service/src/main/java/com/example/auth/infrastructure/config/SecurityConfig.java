@@ -21,6 +21,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -186,11 +188,36 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(rs -> rs
+                        .bearerTokenResolver(internalOnlyBearerTokenResolver())
                         .jwt(jwt -> jwt.decoder(internalJwtDecoder))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 );
 
         return http.build();
+    }
+
+    private static final String INTERNAL_PATH_PREFIX = "/internal/";
+
+    /**
+     * TASK-BE-609 — read a Bearer token ONLY on {@code /internal/**}, the one surface on this chain
+     * that authenticates by it.
+     *
+     * <p>{@code BearerTokenAuthenticationFilter} runs before authorization on EVERY request this
+     * chain matches, so {@code permitAll} did not protect the user-facing paths: the gateway
+     * forwards the user's own {@code Authorization: Bearer <user token>} alongside the
+     * {@code X-Account-Id} it injects, the filter tried it against {@link #internalJwtDecoder()}
+     * (which requires the {@code internal.invoke} workload scope a user token never has), and
+     * {@code PATCH /api/auth/password} answered 401 {@code Missing or invalid internal credentials}
+     * before the controller ran (measured through the gateway 2026-09-26; the same call without the
+     * header was accepted). {@code /api/accounts/me/sessions/**} has the same shape. Those paths are
+     * authenticated by the gateway and identified by {@code X-Account-Id} — the token is not theirs
+     * to re-verify here. {@code /internal/**} is unchanged: no token → still 401 (fail-closed).
+     */
+    static BearerTokenResolver internalOnlyBearerTokenResolver() {
+        DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+        return request -> request.getRequestURI().startsWith(INTERNAL_PATH_PREFIX)
+                ? delegate.resolve(request)
+                : null;
     }
 
     /**

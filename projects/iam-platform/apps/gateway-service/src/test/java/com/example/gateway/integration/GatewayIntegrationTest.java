@@ -112,6 +112,15 @@ class GatewayIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"accessToken\":\"mock-token\",\"refreshToken\":\"mock-refresh\"}")));
 
+        // TASK-BE-609 — the password pair. auth-service answers 204 for all three.
+        authServiceMock.stubFor(post(urlEqualTo("/api/auth/password-reset/request"))
+                .willReturn(aResponse().withStatus(204)));
+        authServiceMock.stubFor(post(urlEqualTo("/api/auth/password-reset/confirm"))
+                .willReturn(aResponse().withStatus(204)));
+        authServiceMock.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                .patch(urlEqualTo("/api/auth/password"))
+                .willReturn(aResponse().withStatus(204)));
+
         // Setup downstream account-service me endpoint
         accountServiceMock.stubFor(get(urlEqualTo("/api/accounts/me"))
                 .willReturn(aResponse()
@@ -214,6 +223,61 @@ class GatewayIntegrationTest {
         webTestClient.post().uri("/api/auth/login")
                 .header("Content-Type", "application/json")
                 .bodyValue("{\"email\":\"test@example.com\",\"password\":\"password\"}")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TOKEN_INVALID");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-609 — password change / reset through the edge
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TASK-BE-609: 비밀번호 재설정 요청·확인은 토큰 없이 게이트웨이를 지나 204")
+    void passwordReset_requestAndConfirm_passWithoutToken() {
+        webTestClient.post().uri("/api/auth/password-reset/request")
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"email\":\"forgot@example.com\"}")
+                .exchange()
+                .expectStatus().isNoContent();
+        webTestClient.post().uri("/api/auth/password-reset/confirm")
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"token\":\"reset-token\",\"newPassword\":\"NewPassw0rd!\"}")
+                .exchange()
+                .expectStatus().isNoContent();
+
+        authServiceMock.verify(postRequestedFor(urlEqualTo("/api/auth/password-reset/request")));
+        authServiceMock.verify(postRequestedFor(urlEqualTo("/api/auth/password-reset/confirm")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-609: 비밀번호 변경 + 사용자 JWT → 204, 하류에 X-Account-ID 와 사용자 Bearer 가 함께 간다")
+    void passwordChange_withUserJwt_forwardsAccountIdAndBearer() {
+        String token = createValidToken("account-123", "fan-platform");
+
+        webTestClient.patch().uri("/api/auth/password")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"currentPassword\":\"OldPassw0rd!\",\"newPassword\":\"NewPassw0rd!\"}")
+                .exchange()
+                .expectStatus().isNoContent();
+
+        // 🔴 The Bearer rides along — this is WHY auth-service must not re-verify it as a
+        // workload credential on this path (auth-service SecurityConfig
+        // internalOnlyBearerTokenResolver, the other half of BE-609).
+        authServiceMock.verify(com.github.tomakehurst.wiremock.client.WireMock
+                .patchRequestedFor(urlEqualTo("/api/auth/password"))
+                .withHeader("X-Account-ID", equalTo("account-123"))
+                .withHeader("Authorization", equalTo("Bearer " + token)));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-609 대조군: 토큰 없는 비밀번호 변경은 게이트웨이에서 401")
+    void passwordChange_withoutToken_returns401() {
+        webTestClient.patch().uri("/api/auth/password")
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"currentPassword\":\"x\",\"newPassword\":\"y\"}")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectBody()
