@@ -353,6 +353,20 @@ SSM 으로 클론 값을 `"10000"` 으로 고쳐 재생성 → healthy · restar
 - 출처: `projects/iam-platform/tasks/ready/TASK-BE-604-…` § AC-0. 🔴 **Failure Scenario 2 대조**: 604 는 `ready/` — 결과는 604 AC-0 에도
   적고, 604 가 착수되면 이 항목은 604 로 돌아간다(의무 이중 보유 금지).
 
+## ⏳ 항목 19 (수령 2026-09-29 UTC · 소유자 결정 «다음 AWS 데모 창에서 잰다») — `TASK-MONO-740` AC-3: erp 단일 테넌트 래칫(라이브 절반)의 rc
+
+- **왜 재나**: 740 의 AC-3 은 «스크립트 가드 **전부** rc=0» 인데 37개 중 이것 하나가 미측정으로 남았다. 로컬 Docker 가 비어 있어(이미지·볼륨 0) 재려면
+  iam·erp·console 서비스 ~13개를 처음부터 빌드해야 했고, 창에서는 스택이 이미 떠 있으므로 **명령 하나**다. 740 은 이 의무를 여기로 넘기고 닫혔다.
+- **무엇을 재나**: 창에서 erp 가 켜진 상태로, 클론에서 `bash scripts/check-erp-single-tenant-ratchet.sh` 의 rc 와 출력
+  (`tenant_id` 컬럼 보유 테이블 수 · erp 전체 distinct `tenant_id` 목록). 컨테이너 이름은 기본값 `erp-platform-mysql` 이 compose 의 `container_name` 과 같다;
+  루트 비밀번호가 기본값(`root`)이 아니면 `MYSQL_ROOT_PASSWORD` 로 준다.
+- 🔴 **유효성 술어는 스크립트가 이미 갖고 있다**: 컨테이너 없음 · 테이블 0 · 테넌트 값 0 은 전부 **실패**(rc≠0)로 나온다 — 그 rc=1 을 «래칫 위반» 으로 읽지 마라.
+  위반은 distinct ≥ 2 뿐이다(ADR-ERP-001 — D: 그때가 Option B 재논의 시점).
+- 🔵 **재굽기 불필요** — 스크립트는 클론에 이미 있고(`TASK-ERP-BE-043` AC-7), erp 번들만 켜면 된다.
+- 🔵 **740 이 이 측정에 기대하는 것은 «영향 없음» 의 확인뿐이다** — 740 이 바꾼 파일(`CLAUDE.md` · `platform/testing-strategy.md`)을 이 스크립트는 읽지 않는다(grep 확인).
+  즉 결과가 무엇이든 740 을 다시 열 이유는 되지 않는다; distinct ≥ 2 가 나오면 그것은 **ADR-ERP-001 의 사건**이고 새 티켓이다.
+- 출처: `tasks/done/TASK-MONO-740-promote-four-memory-only-rules.md` § CORRECTION.
+
 # 🟢 2026-09-27 17차 창 수확 (06:13Z 부팅 ~ 07:15Z · 17차 AMI `ami-01a237c49e6a385d1` · 클론 `a6f0ab791` · 인스턴스 `i-08d11a45750b42955` · 신선 볼륨 · 예산 1602→1667/1800 · 분석=Opus 5.5)
 
 부팅: `demo-stack` active, SSM `demo-boot.sh console wms scm fan erp finance` 추가 부팅 → **47 → 96 running · unhealthy 0** · 시드 요약 전부 실패 0. Lambda `AMI_REPO_COMMIT = a6f0ab791`(정확 — 16차 창의 오류가 재발하지 않았다. 그때는 핀 파일이 apply 전에 되돌려져 Lambda 가 15차 커밋을 들고 있었다; 교훈 = **핀 PR 을 머지하고 pull 한 뒤에** `terraform plan`).
