@@ -78,12 +78,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-FAN-FE-025-public-feed-filter.md` — **REVIEW (2026-09-29 UTC)** 공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색. 서버 렌더 GET 폼(클라이언트 코드·의존성 0), 저장본 안에서만, 익명 게이트웨이 호출 0, 기본값에서 잠긴 글 포함 유지, 페이지 링크의 필터 보존. AC-1~AC-8 판정 기록. 유닛 37 files / 326 tests · tsc · lint · build rc=0, bite 2건, Playwright 32칸 1280·400px. 브라우저가 뒤로가기 폼 값 복원 결함을 찾아 `autoComplete="off"` 로 고침. 🔵 React #418 간헐 하이드레이션 오류는 origin/main 대조군에서도 같은 빈도로 나 **범위 밖**(기록만). 분석=Opus 5.5 / 구현=Opus 5.5.
-
-
-
+(empty)
 
 ## done
+
+- ✅ `TASK-FAN-FE-025-public-feed-filter.md` — **DONE (2026-09-29 UTC · 4차원 검증 · impl PR [#4060](https://github.com/kanggle/monorepo-lab/pull/4060) squash `d3a2a3c5d`)** 🟢 **공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색, AC-1~AC-8 닫힘.** 서버 렌더 GET 폼(클라이언트 코드·의존성 0), 저장본 안에서만, 익명 게이트웨이 호출 0, 기본값 잠긴 글 포함 유지, 페이지 링크 필터 보존. 유닛 37 files / 326 tests · tsc · lint · build rc=0 · bite 2건 · Playwright 32칸 1280·400px · 로컬 e2e 스모크 18 passed. 브라우저가 뒤로가기 폼 값 복원 결함을 찾아 `autoComplete="off"` 로 고침. 🔴 CI 가 이 변경의 e2e 스모크 회귀(선택자가 `<option>` 을 잡음)를 잡아 같은 PR 에서 고침. 라이브(`build-info` = `d3a2a3c5d`) 31/32 — 남은 1칸은 main 대조군에서도 같은 빈도로 나는 기존 React #418(범위 밖). required 4/4 SUCCESS · 실패 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - ✅ `TASK-FAN-FE-024-login-page-top-navbar.md` — **DONE (2026-09-24 UTC · 4차원 검증 · impl PR [#3997](https://github.com/kanggle/monorepo-lab/pull/3997) squash `0b560910e`)** 🟢 **팬 로그인 페이지에 자기 서버 컴포넌트 `Header` 재사용, AC-1~AC-5 닫힘.** 신설 `(auth)/layout.tsx` 가 기존 `widgets/header/Header.tsx` 를 그대로 렌더(스토어의 클라이언트 헤더는 이식하지 않음, zero-gateway 불변식 유지). 신규 유닛 테스트 3건(`(auth)/__tests__/layout.test.tsx`) — 헤더 렌더 확인 + fetch 0회 단언 + 소스 배선 확인. 기존 로그인 테스트(유닛 36/36·e2e 텍스트) 무영향 확인. 브라우저로 데스크톱 1280px·모바일 400px 확인 — `flex-wrap` 두 줄 접힘, 카드와 겹침 없음. typecheck/lint/build rc=0. `TASK-MONO-728`과 같은 worktree에서 728→024 순서로 직렬 진행, 겹치지 않는 파일이라 병합 충돌 0건. required 4/4 SUCCESS. 라이브(부모 세션 확인) 팬 `/login` 헤더 내비 + 「GAP로 로그인」 렌더 확인. 분석=Opus 5.5 / 구현=Sonnet 5.
 - `TASK-FAN-FE-023-phone-width-header-wraps-per-character-and-detail-has-no-back.md` — 🟢 **DONE (2026-09-15 UTC, 4축 검증).** impl PR [#3841](https://github.com/kanggle/monorepo-lab/pull/3841) squash `7d8312925` (기안 #3838). **(a)** `state=MERGED` · **(b)** `merge-base --is-ancestor` ✅ · **(c)** 총 **61건 · FAILURE 0 · PENDING 0**(SUCCESS 15 · SKIPPED 46), required 4/4 SUCCESS, 팬 잡 6종(빌드·단위·E2E smoke·통합·live-trio) SUCCESS · **(d)** AC 절을 열어 읽었다 — AC-0~AC-4, 열린 **0**. 🟢 **⚪ 였던 AC-4 를 라이브로 닫았다**(`build-info.json` commit=`7d8312925`): 헤더 360·400px 전 항목 **1줄**·85px·넘침 없음, 768·1280 57px 불변 · 뒤로가기 5칸 전부 — ① 아티스트 → 상세 → 뒤로 = **그 아티스트 페이지**(폴백이면 `/` 였다 ⇒ `history.back()` 이 Next 라우터 위에서 동작) · ② 피드 1243px 스크롤 → 상세 → 뒤로 = `/` **스크롤 1243 유지**(폴백 이동이면 맨 위) · ③ 직접 진입 → `/` · ④ 🔴 이전 사이트 있는 탭: 직접 진입 → 아티스트 → 브라우저 뒤로 → «뒤로» = `/`(example.com 으로 안 나감) · ⑤ 같은 탭 직접 진입(`history.length`=3) → `/`. 🔵 **안 잰 것**: 로그인 헤더는 라이브 불가 → 재현본 측정(익명 전·후 재현값이 라이브·로컬과 폭까지 같다) · 로그인 헤더는 휴대폰에서 **세 줄 125px**(AC 충족, 줄이려면 동작 접기 설계 — Scope 밖, 결함 아님) ⇒ **넘긴 의무 0건.** 분석=**Opus 5** / 구현=**Opus 5**.
