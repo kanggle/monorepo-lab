@@ -1216,6 +1216,76 @@ class SelectionReadyOnStatusTest(unittest.TestCase):
         FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - handler.FIRST_PUBLISH_GRACE_SECONDS)
         self.assertIsNone(self._status()["selection_ready"])
 
+    # -- TASK-MONO-738: 같은 구간의 론처 카드(`/bundles`) ------------------------------
+    #
+    # 🔴🔴 2026-09-29 라이브: 팬 묶음을 켠 직후 카드가 「🔴 확인 실패 — 마지막 발행 176386초 전」
+    #    을 그렸다. `/status` 는 701 로 이 구간을 「켜지는 중」으로 냈지만 `/bundles` 는 여전히
+    #    stale → `unknown` 이었다. 아래 칸들은 두 엔드포인트가 이 구간에서 같은 말을 하는지 잰다.
+
+    def test_card_right_after_boot_with_a_days_old_snapshot_is_booting_not_unknown(self):
+        """🔴🔴 이 티켓의 결함 그 자체 — 49시간 묵은 지난 세션 스냅샷 + 30초 전 기동."""
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        self._health({"iam": "up", "fan": "up"}, age=176386)
+        b = self._bundles()
+        self.assertTrue(b["health_stale"])
+        self.assertTrue(b["health_first_publish_pending"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+        # 선택 밖 묶음은 지난 스냅샷(iam up)으로 `partial` 을 만들지 않는다 — 스냅샷을 안 믿는다.
+        self.assertEqual(b["bundles"]["store"]["state"], "waiting")
+
+    def test_card_right_after_boot_with_no_snapshot_at_all_is_booting(self):
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        self.assertEqual(self._bundles()["bundles"]["fan"]["state"], "requested")
+
+    def test_card_does_not_trust_a_previous_session_snapshot_that_looks_fresh(self):
+        """stop→start 가 90초 안 — 나이로는 신선한 지난 세션의 `up` 이 「사용 가능」이 되면 안 된다."""
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        self._health({"iam": "up", "fan": "up"}, age=40)
+        b = self._bundles()
+        self.assertFalse(b["health_stale"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "requested")
+
+    def test_card_dead_publisher_past_grace_is_still_unknown(self):
+        """🔴 반대 방향 — 상한을 넘으면 「기동 중」으로 붙들지 않는다(«영원히 켜지는 중» 금지)."""
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - handler.FIRST_PUBLISH_GRACE_SECONDS)
+        self._health({"iam": "up", "fan": "up"}, age=176386)
+        b = self._bundles()
+        self.assertFalse(b["health_first_publish_pending"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "unknown")
+
+    def test_card_without_started_param_keeps_todays_unknown(self):
+        handler._write_selection({"fan"})
+        self._health({"iam": "up", "fan": "up"}, age=176386)
+        b = self._bundles()
+        self.assertFalse(b["health_first_publish_pending"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "unknown")
+
+    def test_card_after_first_publish_of_this_session_uses_the_snapshot(self):
+        """대조군 — 이 세션의 발행이 들어오면 판정은 스냅샷으로 돌아간다(항상 requested 가 아니다)."""
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 90)
+        self._health({"iam": "up", "fan": "up"}, age=10)
+        b = self._bundles()
+        self.assertFalse(b["health_first_publish_pending"])
+        self.assertEqual(b["bundles"]["fan"]["state"], "ready")
+
+    def test_card_empty_selection_full_start_shows_everything_booting(self):
+        """«전체 시작» 은 선택을 안 쓴다 — 첫 발행 전이면 모든 묶음이 뜨는 중이다."""
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        states = {n: v["state"] for n, v in self._bundles()["bundles"].items()}
+        self.assertEqual(set(states.values()), {"requested"}, states)
+
+    def test_status_and_bundles_agree_before_the_first_publish(self):
+        """🔴 같은 구간에서 `/status` 는 False(켜지는 중)인데 카드는 🔴 이던 것이 이 결함이다."""
+        handler._write_selection({"fan"})
+        FAKE_SSM.store[handler.STARTED_PARAM] = str(T0 - 30)
+        self.assertIs(self._status()["selection_ready"], False)
+        self.assertEqual(self._bundles()["bundles"]["fan"]["state"], "requested")
+
 
 class RouterIsExactTest(unittest.TestCase):
     """🔴🔴 왜 이 클래스가 생겼는가.
