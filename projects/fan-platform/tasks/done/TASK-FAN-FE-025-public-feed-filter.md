@@ -8,7 +8,7 @@ TASK-FAN-FE-025
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -171,3 +171,12 @@ Playwright(Chromium, `next start`) 32칸 시나리오의 첫 실행에서 「뒤
 - 🔴 **놓친 이유**: 로컬 게이트(유닛·빌드·자작 Playwright)만 돌리고 앱의 `e2e-smoke/` 를 돌리지 않았다. 텍스트를 새로 그리는 변경은 기존 e2e 선택자와 충돌할 수 있다 — 이번 AC-8 의 게이트 목록이 그 스위트를 빠뜨렸다.
 - **고침**: 선택자를 `page.getByTestId('public-feed').getByText('루미').first()` 로 좁혔다. 그 칸의 명제는 «저장본의 글이 **피드에** 보인다» 이므로 원래 뜻 그대로이고 오히려 정확해졌다. 저장소 전체에서 팬 홈 텍스트에 기대는 다른 선택자 0건(재그렙).
 - **로컬 재현·확인**(`CI=1 pnpm run e2e:smoke`, 자체 서버 3002/3003 기동 — 다른 세션 서버 재사용 방지, CI 와 같게 `.env.local` 을 잠시 치움): 옛 선택자 **rc=1**(같은 실패) → 새 선택자 **rc=0, 18 passed**.
+
+## CORRECTION (2026-09-29 UTC) — close (4차원) → done
+
+- **(a)** impl PR [#4060](https://github.com/kanggle/monorepo-lab/pull/4060) `state=MERGED`, `mergedAt=2026-09-29T07:58:37Z`, `mergeCommit=d3a2a3c5dc2cc1862602308e621c5c505242724d`.
+- **(b)** `git merge-base --is-ancestor d3a2a3c5d origin/main` rc=0.
+- **(c)** 머지 직전 head `6c2e37f58` 의 체크 66건: SUCCESS 17 · SKIPPED 49 · **FAILURE 0**. required 4종(`changes` · `INDEX queue drift …` · `Task ID collision …` · `Walkthrough limitation ledger drift …`) 모두 SUCCESS. 첫 head `dc98f06a9` 에서 빨갰던 `Frontend E2E smoke` 는 위 CORRECTION 의 수정 뒤 SUCCESS.
+- **(d)** AC 절을 열어 동사 기준으로 재독: AC-1(거를 수 있다 · 필터 없는 결과 동일) ✅ · AC-2(잠긴 글 포함·노출 없음) ✅ · AC-3(링크 보존·첫 페이지 복귀·새로고침/직접 URL/뒤로가기 **브라우저 확인**) ✅ · AC-4(0건 두 문구) ✅ · AC-5(모르는 값 무시·폼이 적용값 표시 — 뒤로가기 결함 수정 뒤) ✅ · AC-6(fetch 0·새 클라이언트 컴포넌트/의존성 0) ✅ · AC-7(bite 2건 실측) ✅ · AC-8(개별 게이트 rc=0 · 1280·400px **브라우저 확인**) ✅. 열린 AC **0**.
+- **라이브**: `https://fan.hubwang.com/build-info.json` = `d3a2a3c5d`(머지 커밋). 같은 Playwright 32칸을 운영 주소에 태워 **31/32** — 필터·AND·새로고침·뒤로/앞으로·해제·직접 URL·0건·모르는 값·가로 넘침 0·이미지 외 외부 요청 0 전부 통과. 남은 1칸은 기존 React #418(§ 범위 밖 관측 — main 대조군과 같은 빈도).
+- **넘긴 의무**: 없음. 🔵 React #418 간헐 하이드레이션 오류는 이 티켓의 의무가 아니라 main 의 기존 결함이다 — 별도 티켓 여부는 소유자 결정(기안하지 않았다).
