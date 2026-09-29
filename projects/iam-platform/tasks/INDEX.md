@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-613-per-client-branding-of-the-login-and-signup-pages.md` — **READY** (2026-09-29 UTC). `ADR-007` ACCEPTED(소유자 `D1=A D2=A D3=A(문구는 "IAM 로그인") D4=A D5=A`)의 구현. 로그인·회원가입 화면이 시작 client 의 서비스명·제목·설명·로고·색을 그린다(콘솔=IAM · 팬=GAP · 스토어=Global Account · 그 밖=IAM). 값=`ClientSettings` `custom.branding.*`(V0040, `JSON_MERGE_PATCH`·ASCII `\\u` 이스케이프). 폼 계약 불변 · 비밀번호 표시/숨김 · 제출 중 표시 · a11y · 한국어 통일. 데모 확인(AC-5)은 재굽기 뒤 창.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
