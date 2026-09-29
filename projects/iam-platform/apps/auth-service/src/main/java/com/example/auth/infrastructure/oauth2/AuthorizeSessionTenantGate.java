@@ -1,5 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.domain.repository.CredentialRepository;
+import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import jakarta.servlet.FilterChain;
@@ -18,6 +20,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -38,8 +41,11 @@ import java.util.Objects;
  * <ul>
  *   <li>no authenticated principal, no {@code client_id}, unknown client, or a client without a
  *       tenant setting → untouched (SAS answers these as it always did);</li>
- *   <li>the client's tenant is {@link TenantContext#CONSOLE_TENANT_ID} → untouched. ADR-MONO-044
- *       D5 operators reach the console only with a consumer-tenant session;</li>
+ *   <li>the client's tenant is {@link TenantContext#CONSOLE_TENANT_ID} → untouched, UNLESS the
+ *       session is of another tenant and its email holds a credential in the console tenant
+ *       (TASK-BE-610) — then re-authentication. ADR-MONO-044 D5 operators, who have no
+ *       {@code iam} credential and reach the console only with a consumer-tenant session, are
+ *       untouched as before;</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -75,21 +81,26 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
 
     private final RequestMatcher authorizationEndpoint;
     private final RegisteredClientRepository registeredClientRepository;
+    private final CredentialRepository credentialRepository;
     private final SecurityContextHolderStrategy securityContextHolderStrategy;
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
-                               RegisteredClientRepository registeredClientRepository) {
-        this(authorizationEndpointUri, registeredClientRepository,
+                               RegisteredClientRepository registeredClientRepository,
+                               CredentialRepository credentialRepository) {
+        this(authorizationEndpointUri, registeredClientRepository, credentialRepository,
                 SecurityContextHolder.getContextHolderStrategy());
     }
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
                                RegisteredClientRepository registeredClientRepository,
+                               CredentialRepository credentialRepository,
                                SecurityContextHolderStrategy securityContextHolderStrategy) {
         this.authorizationEndpoint = new AntPathRequestMatcher(
                 Objects.requireNonNull(authorizationEndpointUri, "authorizationEndpointUri"));
         this.registeredClientRepository = Objects.requireNonNull(
                 registeredClientRepository, "registeredClientRepository");
+        this.credentialRepository = Objects.requireNonNull(
+                credentialRepository, "credentialRepository");
         this.securityContextHolderStrategy = Objects.requireNonNull(
                 securityContextHolderStrategy, "securityContextHolderStrategy");
     }
@@ -129,16 +140,67 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
             return false;
         }
         String clientTenant = clientTenant(client);
-        if (clientTenant == null || TenantContext.CONSOLE_TENANT_ID.equals(clientTenant)) {
+        if (clientTenant == null) {
             return false;
         }
         String sessionTenant = AuthorizationSessionTenant.of(principal, clientTenant);
         if (clientTenant.equals(sessionTenant)) {
             return false;
         }
+        if (TenantContext.CONSOLE_TENANT_ID.equals(clientTenant)) {
+            return holdsConsoleCredential(principal, sessionTenant, clientId);
+        }
         log.info("authorize: session tenant {} does not match client {} tenant {} — "
                 + "re-authentication required (TASK-BE-605)", sessionTenant, clientId, clientTenant);
         return true;
+    }
+
+    /**
+     * TASK-BE-610 (owner decision ①, 2026-09-26) — the console exemption holds only for a person
+     * with no credential in the console tenant. A consumer session reused for the console became
+     * the console token, the operator exchange found no operator, and {@code demo@demo.com} landed
+     * on {@code /onboarding} although they hold an {@code iam} credential (16th demo window).
+     *
+     * <p>The key is the session's email — the key the form login selects a credential by. Re-
+     * authentication grants nothing: the console login page then picks the {@code iam} credential
+     * by its scoped lookup and asks for ITS password, so the resumed authorize carries tenant
+     * {@code iam} and passes this gate (no loop). A person without one — an ADR-MONO-044 D5
+     * self-onboarded operator — is untouched, as before.
+     *
+     * <p>A failed lookup does NOT re-authenticate: for a D5 consumer that would loop (log in again →
+     * the same consumer session → the same failure). It falls back to the pre-BE-610 behaviour.
+     */
+    private boolean holdsConsoleCredential(Authentication principal, String sessionTenant, String clientId) {
+        String email = sessionEmail(principal);
+        if (email == null) {
+            return false;
+        }
+        boolean holds;
+        try {
+            holds = credentialRepository
+                    .findByTenantIdAndEmail(TenantContext.CONSOLE_TENANT_ID, email)
+                    .isPresent();
+        } catch (RuntimeException e) {
+            log.warn("authorize: console-credential lookup failed — session reused as before "
+                    + "(TASK-BE-610)", e);
+            return false;
+        }
+        if (holds) {
+            log.info("authorize: session tenant {} on console client {} and the session's email holds "
+                    + "a console credential — re-authentication required (TASK-BE-610)",
+                    sessionTenant, clientId);
+        }
+        return holds;
+    }
+
+    /** The email the login published in the principal details, else the principal name (both paths set both). */
+    private static String sessionEmail(Authentication principal) {
+        if (principal.getDetails() instanceof Map<?, ?> details
+                && details.get(PrincipalDetailKeys.EMAIL) instanceof String s && !s.isBlank()) {
+            return s;
+        }
+        String name = principal.getName();
+        return name != null && !name.isBlank() ? name : null;
     }
 
     /** The client's {@code custom.tenant_id}, trimmed — the same source {@code SavedRequestTenantResolver} reads. */

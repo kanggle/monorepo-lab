@@ -4,6 +4,7 @@ import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
+import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.repository.DeviceSessionRepository;
 import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RotatedTokenReplayPolicy;
@@ -177,7 +178,10 @@ public class AuthorizationServerConfig {
             // OAuth2AuthorizationService this class itself produces, so field injection here
             // would be a circular reference.
             OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort,
-            AuthorizationServerSettings authorizationServerSettings) throws Exception {
+            AuthorizationServerSettings authorizationServerSettings,
+            // TASK-BE-610: the session-tenant gate asks whether a console session's email holds
+            // an iam credential.
+            CredentialRepository credentialRepository) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -291,7 +295,8 @@ public class AuthorizationServerConfig {
                 // AFTER the SAS configurer on purpose — see AuthorizeSessionTenantGateConfigurer.
                 .with(new AuthorizeSessionTenantGateConfigurer(new AuthorizeSessionTenantGate(
                                 authorizationServerSettings.getAuthorizationEndpoint(),
-                                registeredClientRepository)),
+                                registeredClientRepository,
+                                credentialRepository)),
                         Customizer.withDefaults())
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())

@@ -84,6 +84,9 @@ class SsoTenantGateIntegrationTest extends AbstractIntegrationTest {
     private static final String PASSWORD = "SsoGatePassw0rd!";
     private static final String STORE_ACCOUNT_ID = "0199de70-0000-7000-8000-0000000e6050";
     private static final String FAN_ACCOUNT_ID = "0199de70-0000-7000-8000-0000000f6050";
+    // TASK-BE-610: a console-tenant credential for the same email, with its own password.
+    private static final String CONSOLE_ACCOUNT_ID = "0199de70-0000-7000-8000-0000000a6100";
+    private static final String CONSOLE_PASSWORD = "ConsoleOperat0r!";
 
     private static final String STORE_CLIENT_ID = "ecommerce-web-store-client";
     private static final String STORE_REDIRECT_URI = "http://localhost:3000/api/auth/callback/iam";
@@ -203,7 +206,7 @@ class SsoTenantGateIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("BE-605 AC-1 (b) 대조군: fan-platform 세션 → 콘솔 client(iam) authorize → 재로그인 없이 코드 (콘솔 면제)")
+    @DisplayName("BE-605 AC-1 (b) · BE-610 대조군: iam 자격 없는 fan-platform 세션 → 콘솔 client(iam) authorize → 재로그인 없이 코드 (D5 셀프 온보딩 그대로)")
     void fanSession_openingConsole_isExempt() throws Exception {
         MockHttpSession session = loginThrough(FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create());
 
@@ -224,6 +227,65 @@ class SsoTenantGateIntegrationTest extends AbstractIntegrationTest {
         assertThat(claim(accessToken, "tenant_id"))
                 .as("the console keeps the login-time tenant (BE-604 D)")
                 .isEqualTo("fan-platform");
+    }
+
+    @Test
+    @DisplayName("BE-610 AC-1: fan-platform 세션 → 콘솔 client authorize, 그 이메일에 iam 자격 있음 → /login(코드 아님) → "
+            + "iam 자격 로그인 → 코드 → tenant_id=iam · sub=운영자 계정 (demo@demo.com 이 /onboarding 에 떨어지던 경로)")
+    void fanSession_openingConsole_withConsoleCredential_reauthenticatesIntoIt() throws Exception {
+        // The demo@demo.com shape: the same email also holds a console-tenant credential, with its
+        // OWN password — so reaching the console token proves the iam credential was used.
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                CONSOLE_ACCOUNT_ID, "iam", EMAIL,
+                CredentialHash.argon2id(new Argon2idPasswordHasher().hash(CONSOLE_PASSWORD)), Instant.now())));
+        MockHttpSession session = loginThrough(FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create());
+
+        Pkce consolePkce = Pkce.create();
+        MvcResult gated = mockMvc.perform(authorize(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(gated.getResponse().getHeader("Location"))
+                .as("before BE-610 this was a code for a tenant_id=fan-platform console token → /onboarding")
+                .endsWith("/login")
+                .doesNotContain("code=");
+
+        // The console login's scoped lookup picks the iam credential — the consumer password no longer fits.
+        mockMvc.perform(post("/login")
+                        .session(session)
+                        .with(csrf())
+                        .param("username", EMAIL)
+                        .param("password", PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(result -> assertThat(result.getResponse().getRedirectedUrl()).contains("/login?error"));
+
+        MvcResult relogin = mockMvc.perform(post("/login")
+                        .session(session)
+                        .with(csrf())
+                        .param("username", EMAIL)
+                        .param("password", CONSOLE_PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(relogin.getResponse().getRedirectedUrl())
+                .as("the login resumes the gated console authorize")
+                .contains("/oauth2/authorize")
+                .contains("client_id=" + CONSOLE_CLIENT_ID);
+        MockHttpSession consoleSession = (MockHttpSession) relogin.getRequest().getSession(false);
+
+        // No loop: the resumed authorize passes the gate (session tenant iam = client tenant).
+        String code = authorizeExpectingCode(consoleSession, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce);
+        MvcResult token = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", CONSOLE_REDIRECT_URI)
+                        .param("client_id", CONSOLE_CLIENT_ID)
+                        .param("code_verifier", consolePkce.verifier()))
+                .andExpect(status().isOk())
+                .andReturn();
+        String accessToken = objectMapper.readTree(token.getResponse().getContentAsString())
+                .get("access_token").asText();
+        assertThat(claim(accessToken, "tenant_id")).isEqualTo("iam");
+        assertThat(claim(accessToken, "sub")).isEqualTo(CONSOLE_ACCOUNT_ID);
     }
 
     // -----------------------------------------------------------------------
