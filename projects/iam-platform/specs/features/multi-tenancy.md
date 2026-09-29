@@ -349,18 +349,21 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - `prompt=none` 은 OIDC 대로 `login_required` 로 client 에 돌아간다. SAS 1.4.1 은 `prompt=login` 을 구현하지 않는다(값 검증만) — 이 게이트를
   프롬프트로 표현할 수 없는 이유다.
 
-#### 소셜 로그인 (TASK-BE-605 결정 ② (iii), 2026-09-26 UTC — 🔴 구현은 측정 뒤)
+#### 소셜 로그인 — 신원은 시작 client 의 테넌트 안에서만 찾는다 (TASK-BE-605 결정 ② (iii) · 구현 TASK-BE-611)
 
-- **지금**: 신원을 테넌트 없이 찾고(`SocialIdentityRepository.findByProviderAndProviderUserId` — `OAuthLoginUseCase.java:250` ·
-  `SocialLoginSteps.java:47`) 세션 테넌트를 **시작 client 의 테넌트**로 찍는다(`SocialLoginBrowserController.java:185`). 그래서 위 SSO 게이트와는
-  맞물린다(재인증 뒤 항상 통과). 그러나 **찍힌 테넌트와 신원 행 · 계정 행의 테넌트가 다를 수 있다** — 예: `ecommerce` 에서 만든 구글 신원으로 팬
-  client 에 소셜 로그인하면 `ecommerce` 계정이 `tenant_id=fan-platform` 세션으로 들어간다.
-- 🔴 **스펙 ↔ 코드 불일치 (기록)**: 이 문서 § 적용 범위(`social_identities` unique `(tenant_id, provider, provider_user_id)` — «소셜 식별자도
-  테넌트별 분리») 와 `V0007__add_tenant_id_to_auth_tables.sql:49` 는 **테넌트별** 신원을 말하는데, 조회는 **전역**이다. 같은 구글 사용자가 두
-  테넌트에 신원 행을 가지면 전역 조회는 결과가 둘이다.
-- **결정 (iii)**: 신원 조회를 **시작 client 의 테넌트로 한정**한다 — 폼 로그인의 범위 조회와 같은 모양(그 테넌트에 신원이 없으면 그 테넌트에서
-  새로 가입). 🔴 **단, 모집단을 먼저 잰다** — 코드는 이 티켓에서 바꾸지 않았다. 측정은 루트 `TASK-MONO-672` **항목 18**(창이 서야 잴 수 있다),
-  구현은 그 측정 뒤 **별도 티켓**으로(항목 18 이 기안 의무를 든다).
+- **규칙**: 신원 조회 키는 `(tenant_id = 시작 client 의 테넌트, provider, provider_user_id)` — § 적용 범위의 unique 인덱스와 **같은 모양**이다
+  (`SocialIdentityRepository.findByTenantIdAndProviderAndProviderUserId`, 조회 두 곳 = `OAuthLoginUseCase` 해소 · `SocialLoginSteps` upsert).
+  세션 테넌트도 같은 client 테넌트로 찍힌다(`SocialLoginBrowserController`) — 그래서 위 SSO 게이트와 맞물린다(재인증 뒤 항상 통과).
+- **그 테넌트에 신원이 없으면 그 테넌트에서 가입한다** — account-service `social-signup` 에 client 테넌트를 보내고, 그 테넌트 안에서 이메일로
+  기존 계정을 찾아 연결하거나 새로 만든다([oauth-social-login.md § 계정 연결 전략](oauth-social-login.md#계정-연결-전략)). 폼 로그인과 같은 결과다 —
+  **테넌트마다 한 계정**. 같은 구글 사용자가 스토어 → 팬 순서로 들어오면 계정 둘 · 신원 행 둘(테넌트마다 하나)이다.
+- **BE-611 이전**: 조회가 전역이라 다른 테넌트에서 만든 신원이 잡혔다 — `ecommerce` 에서 만든 신원으로 팬 client 에 들어가면 `ecommerce`
+  계정이 `tenant_id=fan-platform` 세션으로 들어갔다(16차 창 구조적 재현, `TASK-MONO-672` 항목 18). 두 테넌트에 행이 생기면 전역 조회는 결과가
+  둘이 되어 그 신원의 로그인이 영구히 실패할 수 있었다(`TASK-BE-602` 후속 ①) — 한정 조회는 unique 키 그대로라 결과가 최대 하나다.
+- **기존 교차 신원은 옮기지 않는다** (소유자 결정 AC-0 ②) — 이미 만들어진 행은 그대로 둔다. 그 사람이 다른 테넌트 client 로 다음에 들어오면
+  그 테넌트의 신원 행이 새로 생기고, 계정은 위 가입 규칙대로 정해진다(그 테넌트에 같은 이메일 계정이 없으면 새 계정). BE-507 이전에 생긴
+  «신원 행 테넌트 ≠ 계정 행 테넌트» 행은 그 신원 행의 테넌트 client 로 들어올 때 여전히 그 계정으로 간다 — 상태 · 이벤트 테넌트는 계정 행에서
+  읽으므로(BE-602) 판정은 계정의 실제 테넌트로 한다.
 
 ### 격리 회귀 방지
 

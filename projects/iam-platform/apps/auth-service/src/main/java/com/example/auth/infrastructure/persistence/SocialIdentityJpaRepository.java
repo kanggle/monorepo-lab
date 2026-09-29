@@ -7,7 +7,9 @@ import java.util.Optional;
 
 public interface SocialIdentityJpaRepository extends JpaRepository<SocialIdentityJpaEntity, Long> {
 
-    Optional<SocialIdentityJpaEntity> findByProviderAndProviderUserId(String provider, String providerUserId);
+    // TASK-BE-611: the same columns as the unique index uk_social_tenant_provider_user (V0007).
+    Optional<SocialIdentityJpaEntity> findByTenantIdAndProviderAndProviderUserId(
+            String tenantId, String provider, String providerUserId);
 
     List<SocialIdentityJpaEntity> findByAccountId(String accountId);
 }
