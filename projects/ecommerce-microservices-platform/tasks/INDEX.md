@@ -87,6 +87,7 @@ _(없음)_
 
 ## review
 
+- `TASK-FE-103-demo-off-banner-no-longer-says-cart-is-locked.md` — 🟡 **REVIEW** (2026-09-29 UTC). TASK-FE-102 후속: 데모 꺼짐 배너가 «장바구니·주문 같은 로그인 후 기능도 잠겨» 라고 말하던 것을 «주문 같은 … 장바구니는 로그인 없이 담아 둘 수 있습니다» 로. 렌더 DOM 단언 1칸 추가 · README 한 줄. 로컬 tsc·lint rc=0, 단위는 CI(Node 20).
 - `TASK-FE-102-guest-cart-carried-over-on-login.md` — 🟡 **REVIEW** (2026-09-29 UTC). 소유자 결정 «로그인 시 이어 가기»: 비로그인도 장바구니를 쓴다(`cart:guest`), 로그인하면 계정 장바구니(`cart`)에 합친다, 로그아웃 시 비우기(EF-3) 유지, 주문(`/checkout*`)은 여전히 로그인. 두 키 분리 + 소유자 검사로 이전 계정의 카트가 다음 방문자에게 새지 않게. 스펙 UC-0·overview 먼저 갱신. 로컬 tsc·lint rc=0 · e2e-smoke 5/5 · bite(`/cart` 공개 제거 → 새 칸 2 빨강). 단위 스위트는 CI(Node 20). nightly `auth-redirect.spec.ts` 는 머지 후 확인.
 
 ## done
