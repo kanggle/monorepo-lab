@@ -109,6 +109,18 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
     expect(notice).toHaveTextContent('로그인 후 기능');
   });
 
+  // 🔴 TASK-FE-103 — 장바구니는 TASK-FE-102 로 로그인 없이(브라우저 저장만으로) 쓴다. 배너가 그것을
+  //    «잠겼다» 고 말하면 위 칸이 막으려던 «배너가 화면과 어긋난다» 가 다시 생긴다.
+  it('🔴 꺼짐 배너는 장바구니를 «잠긴 기능» 으로 말하지 않는다 — 주문은 여전히 잠겼다고 말한다', async () => {
+    stubProbe({ state: 'unavailable' });
+    await renderClient();
+    const notice = await screen.findByTestId('demo-backend-notice');
+
+    expect(notice.textContent).not.toContain('장바구니·주문');
+    expect(notice).toHaveTextContent('주문 같은 로그인 후');
+    expect(notice).toHaveTextContent('장바구니는 로그인 없이');
+  });
+
   // ===========================================================================
   // 🔴🔴 TASK-MONO-668 — 「켜지는 중」은 「켜졌다」와 **다른 화면**이다 (AC-3 실행 비교)
   // ===========================================================================
