@@ -1,7 +1,7 @@
 # ADR-007: 공유 로그인 페이지의 클라이언트별 브랜딩 — 폼은 하나, 서비스별 값만 다르게
 
-**Status:** PROPOSED
-**Date**: 2026-09-29 (proposed)
+**Status:** ACCEPTED
+**Date**: 2026-09-29 (proposed) · 2026-09-29 (accepted)
 **Deciders**: kanggle
 **Supersedes**: —
 **Relates to**: ADR-001 (OIDC 채택 — IAM 이 6개 도메인의 공유 인증 공급자), ADR-006 (커스텀 `/login` 페이지 — 소셜 로그인 통합), `TASK-BE-581`(로그인 페이지가 시작 client 로 회원가입 노출을 가른다), 모노레포 `TASK-MONO-728`(세 앱 로그인 버튼 문구)
@@ -37,6 +37,20 @@
 ## Decision
 
 소유자가 아래 각 칸에서 하나를 고른다. 🔵 표시는 **제안자(에이전트)의 추천이지 결정이 아니다**.
+
+### 채택 (2026-09-29, 소유자)
+
+> `ADR-007 ACCEPTED — D1=A D2=A D3=A(문구는 "IAM 로그인") D4=A D5=A`
+
+| 칸 | 채택 | 뜻 |
+|---|---|---|
+| D1 | A | 등록 client 의 `ClientSettings` 커스텀 키(`custom.branding.*`), Flyway 로 설정 |
+| D2 | A | `serviceName` · `title` · `description` · `logo`(선택) · `primaryColor` |
+| D3 | A + **단서** | 판별 불가·미설정 client 에도 **기본 브랜딩이 있다**(D3-A 의 구조). 단 그 기본값의 문구는 «Global Account» 가 아니라 **«IAM 로그인»** — 소유자가 적은 단서다. 🔴 아래 D3 표의 D3-A 설명(«지금 모양 그대로 Global Account»)은 제안 당시 문장이고, **문구는 이 단서가 이긴다**. 그래서 직접 방문(`/login` 을 주소로 연 경우)과 브랜딩 없는 client(scm·finance·erp·wms 등)의 화면은 오늘과 **달라진다**: «Global Account» → «IAM». 스토어는 자기 브랜딩(`Global Account`)을 명시적으로 가지므로 영향이 없다 |
+| D4 | A | 비밀번호 표시/숨김 · 제출 중 표시 · `role="alert"`/`aria-describedby` · 한국어 통일 |
+| D5 | A | `signup.html` 도 같은 브랜딩·개선을 받는다 |
+
+구현 = `TASK-BE-613`(iam-platform `tasks/ready/`, 이 ACCEPT 와 같은 PR 에서 기안).
 
 ### D1 — 브랜딩 값을 어디에 두는가
 
@@ -90,7 +104,7 @@
 | `platform-console-web` | IAM | IAM 로그인 | 운영자 계정으로 로그인합니다 |
 | `fan-platform-user-flow-client` | GAP | GAP로 로그인 | GAP으로 안전하게 로그인합니다 |
 | `ecommerce-web-store-client` | Global Account | Global Account로 로그인 | Global Account로 로그인하여 쇼핑을 계속하세요. |
-| 그 밖 · 판별 불가 | D3 의 기본값 | | |
+| 그 밖 · 판별 불가 | D3 의 기본값 → 채택: IAM | IAM 로그인 | (없음) |
 
 (description 은 각 앱 진입 화면에 이미 있는 문구를 가져왔다 — 팬 `TASK-MONO-728` CORRECTION, 스토어 `LoginForm.tsx`. 콘솔 문구는 제안이다.)
 
