@@ -2,6 +2,7 @@ package com.example.auth.presentation;
 
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +56,7 @@ class SignupPageBlockedSliceTest {
     private static final String SIGNUP_FORM_MARKER = "id=\"signup-form\"";
 
     /** Rendered by the page shell on every cell — the render-actually-happened control. */
-    private static final String ALWAYS_PRESENT_MARKER = "Create your Global Account";
+    private static final String ALWAYS_PRESENT_MARKER = "이미 계정이 있으신가요?";
 
     private AccountServicePort accountServicePort;
     private SavedRequestTenantResolver savedRequestTenantResolver;
@@ -83,7 +84,8 @@ class SignupPageBlockedSliceTest {
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new SignupPageController(
-                        accountServicePort, savedRequestTenantResolver, tenantSignupEligibilityPort))
+                        accountServicePort, savedRequestTenantResolver, tenantSignupEligibilityPort,
+                        new LoginBrandingResolver(savedRequestTenantResolver)))
                 .setViewResolvers(viewResolver)
                 .build();
     }
@@ -100,9 +102,9 @@ class SignupPageBlockedSliceTest {
     /**
      * Returns ONLY the text of the server-rendered {@code .error} element.
      *
-     * <p>Measured, not assumed: asserting {@code doesNotContain("패스워드는 8자 이상이어야 합니다")}
+     * <p>Measured, not assumed: asserting {@code doesNotContain("비밀번호는 8자 이상이어야 합니다")}
      * over the whole page fails even when the server never produced that message, because the
-     * page also ships an inline client-side pre-check whose {@code alert()} carries the same
+     * page also ships an inline client-side pre-check whose error box carries the same
      * sentence. Two sources, one string — so a whole-page predicate cannot tell which one
      * spoke. Read the element that carries the server's verdict.
      */
@@ -172,7 +174,7 @@ class SignupPageBlockedSliceTest {
         // on — fixing the password would not make this signup possible.
         assertThat(serverErrorText(html))
                 .contains("관리자")
-                .doesNotContain("패스워드는 8자 이상이어야 합니다")
+                .doesNotContain("비밀번호는 8자 이상이어야 합니다")
                 .doesNotContain("이메일 형식이 올바르지 않습니다");
         verify(accountServicePort, never()).signup(any(), any(), any(), any());
     }

@@ -4,7 +4,7 @@ TASK-BE-613
 
 # Status
 
-ready
+review
 
 # Title
 
@@ -126,3 +126,44 @@ iam-platform
 - 토글 버튼이 `type` 없이 들어가 기본값 `submit` 이 됨 → `button[type="submit"]`… 는 여전히 하나지만 `form button` 이 둘이 되고, 토글을 누르면 **폼이 제출된다**. `type="button"` 을 슬라이스로 고정.
 - 제출 중 비활성화가 뒤로가기 뒤에도 남아 버튼이 죽음 — `pageshow` 복원.
 - 판별 경로를 새로 짜서 `/oauth2/authorize` 검사가 빠짐 → 임의 저장 URL 의 `client_id` 로 다른 브랜드를 띄울 수 있음(피싱 화면 구성). In Scope 1 의 재사용이 막는다.
+
+---
+
+# 구현 결과 (2026-09-29 UTC · 분석=구현=Opus 5.5)
+
+## 무엇을 바꿨나
+
+- `SavedRequestTenantResolver#initiatingClient` — 기존 `client_id` 추출(저장된 `/oauth2/authorize` 만 신뢰)을 그대로 쓰는 공개 메서드. 새 추출 경로는 없다.
+- `LoginBranding`(값 객체·칸별 폴백·검증) + `LoginBrandingResolver`. 키 상수 5개는 `OAuthClientMapper`.
+- `templates/fragments/auth-page.html`(신규) — 두 페이지가 같이 쓰는 스타일·브랜드 머리·보조 스크립트. `login.html`·`signup.html` 은 이것을 끼워 쓴다.
+- `V0040__seed_login_page_branding_for_consumer_clients.sql` — `JSON_MERGE_PATCH`, ASCII 전용(비ASCII 0자 · `${` 없음을 노드로 확인).
+- `SignupPageController` 서버 오류 문구 4곳 `패스워드` → `비밀번호`(D4 ④). 가입 사전검사의 `alert()` 를 페이지 안 `role="alert"` 상자로.
+- 스펙 `specs/features/oauth-social-login.md` `GET /login` 행.
+
+## AC 판정
+
+- **AC-0** ✅ ① 두 템플릿 문구가 Goal 인용과 같았다 ② 세 client_id 가 V0011/V0012/V0015 에 있다 ③ `OAuth2AuthorizationServerSliceTest` 만 H2 이고 `spring.flyway.enabled=false` — Flyway 는 MySQL 에서만 돈다 ④ 소비자 선택자 목록 그대로.
+- **AC-1** ✅ `LoginBrandingPageSliceTest`(13): 콘솔·팬·기본값 로그인, 팬 회원가입 GET·POST 오류 재렌더.
+- **AC-2** ✅ `LoginBrandingResolverTest`(24) + 슬라이스의 이스케이프 칸. **bite 5종**(각각 변조 → 해당 테스트만 빨강 → 백업에서 복원, 컴파일 오류 0):
+  | 변조 | 빨개진 칸 |
+  |---|---|
+  | 색 정규식 검사 제거 | 색 파라미터 7/7 |
+  | 로고 허용 목록 검사 제거 | 로고 파라미터 7/7 |
+  | `initiatingClient` 에 «현재 요청의 `client_id`» 폴백 추가 | `client_id on the CURRENT request is ignored` 1 |
+  | 제목 `th:text` → `th:utext` | `printed as text, never as markup` 1 |
+  | 토글의 `type="button"` 제거 | 로그인 폼 계약 · 토글 칸 2 |
+- **AC-3** ✅ 슬라이스가 선택자를 문다: 폼 1개 · `action="/login" method="post"` · 폼 안 `type="submit"` 정확히 1 · 모든 `<button>` 이 `type` 명시 · `#username`/`#password` 의 `type`·`id`·`name` · CSRF 필드 · `/login/oauth/google` · 페이지 전체 submit 1(콘솔 e2e 는 페이지 전체를 누른다). 🔴 첫 판에서 페이지 전체 카운트가 **2** 로 나왔다 — 결함이 아니라 측정 오류였다: 보조 스크립트 **본문**의 `'button[type="submit"]'` 문자열까지 셌다. DOM 선택자는 스크립트 본문을 못 보므로 카운트를 `<script>`·`<style>`·주석을 걷어낸 마크업에서 하도록 고쳤다(같은 이유로 `aria-invalid` 부재 칸도 CSS 선택자 문자열에 걸렸었다).
+- **AC-4** ⏳ `LoginPageBrandingSeedIntegrationTest`(Testcontainers MySQL, 5칸: 세 client 값 한글 등호 · 브랜딩 행이 정확히 셋 · 기존 설정 보존). **로컬 Docker 미기동**(`docker info` → pipe 없음)이라 CI `Integration (iam A|B)` 로 판정한다 — 이 PR 의 CI 결과를 여기 CORRECTION 으로 적는다.
+- **AC-5** ⏳ 재굽기 뒤 창(소유자 승인 사항).
+
+auth-service `test` 전체: 116 파일 · 931 · 실패 0 · 건너뜀 33(Docker 게이트 IT) · rc=0.
+
+## 화면 확인 (1회 — 작은 시각 변경)
+
+슬라이스와 같은 방식으로 렌더한 HTML 을 Chromium 에서 열었다(420px, 한 번은 OS 다크). 4화면 모두 JS 오류 0 · 가로 넘침 0 · 입력칸 배경 흰색(다크에서도) · 토글 보임(스크립트가 켬). 비밀번호 토글 → `type=text`·`aria-pressed=true`. 가입 사전검사 → 페이지 안 상자에 «비밀번호는 8자 이상이어야 합니다.», 버튼은 비활성화되지 **않음**(거절된 제출에 진행 표시가 붙지 않는다).
+
+## 티켓과 달라진 점 (구현이 이긴 곳)
+
+1. **로고 = 인라인 SVG 조각**. 티켓·ADR 문장은 «`auth-service` 가 서빙하는 정적 자산 이름». 정적 경로(`/branding/**`)를 열려면 `WebLoginSecurityConfig` 의 `securityMatcher` 에 새 경로를 넣어야 하고, 그러지 않으면 다른 체인이 401 을 준다. 인라인이면 새 HTTP 경로도 보안 설정 변경도 없다. 불변 조건의 실체(허용 목록 이름만 · 외부 URL 없음)는 그대로이고 오히려 좁아졌다. 허용 목록(`LoginBranding.ALLOWED_LOGOS`)과 조각의 `th:case` 가 어긋나면 `everyAllowlistedLogoRenders` 가 빨개진다.
+2. **`color-scheme: light`**. Edge Cases 에 «이 티켓은 바꾸지 않되» 라고 적었으나, 스타일을 조각으로 옮기며 보니 `light dark` 가 OS 다크에서 입력칸을 흰 카드 위에 어둡게 칠하는 결함(팬 `TASK-FAN-FE-026` 과 같은 것)이었다. 한 줄이고 화면 확인으로 흰 배경을 쟀다.
+3. **회원가입 화면엔 부제를 안 보인다**. 등록된 부제는 로그인용 문장(«…로그인합니다»)이라 «GAP 회원가입» 아래에 두면 틀린 말이 된다 — 화면 확인에서 발견. 조각이 부제를 인자로 받고 회원가입은 `null` 을 넘긴다(슬라이스로 고정).

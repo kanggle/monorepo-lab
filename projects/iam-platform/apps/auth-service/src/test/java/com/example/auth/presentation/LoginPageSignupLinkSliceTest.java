@@ -1,6 +1,7 @@
 package com.example.auth.presentation;
 
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +51,7 @@ class LoginPageSignupLinkSliceTest {
     private static final String SIGNUP_LINK_TEXT = "회원가입";
 
     /** Rendered by the password form on every cell — the render-actually-happened control. */
-    private static final String ALWAYS_PRESENT_MARKER = "Sign in";
+    private static final String ALWAYS_PRESENT_MARKER = "id=\"username\"";
 
     private SavedRequestTenantResolver savedRequestTenantResolver;
     private TenantSignupEligibilityPort tenantSignupEligibilityPort;
@@ -76,7 +77,8 @@ class LoginPageSignupLinkSliceTest {
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new LoginPageController(
-                        savedRequestTenantResolver, tenantSignupEligibilityPort))
+                        savedRequestTenantResolver, tenantSignupEligibilityPort,
+                        new LoginBrandingResolver(savedRequestTenantResolver)))
                 .setViewResolvers(viewResolver)
                 .build();
     }

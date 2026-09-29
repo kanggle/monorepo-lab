@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<!--
+    TASK-BE-613 (ADR-007) — the parts login.html and signup.html share: styles, the brand
+    header, and the progressive-enhancement script. One copy, so a fix lands on both pages.
+    Every branding value is printed with th:text / th:style only (escaped); the values come
+    from the database. LoginBranding has already validated the colour and the logo name.
+-->
+<head>
+    <style th:fragment="styles">
+        /* The page is designed light-only. `light dark` let the OS dark mode repaint the
+           inputs dark on a white card (TASK-BE-613 — same defect TASK-FAN-FE-026 fixed on fan). */
+        :root { color-scheme: light; }
+        body {
+            --brand: #2563eb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo",
+                         "Malgun Gothic", Helvetica, Arial, sans-serif;
+            margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center;
+            background: #f4f5f7; color: #111;
+        }
+        .card {
+            background: #fff; width: 360px; max-width: calc(100vw - 32px); box-sizing: border-box;
+            padding: 32px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08);
+            overflow-wrap: anywhere;
+        }
+        .brand { text-align: center; margin: 0 0 24px; }
+        .brand .logo { display: block; width: 44px; height: 44px; margin: 0 auto 12px; }
+        h1 { font-size: 20px; margin: 0; }
+        .brand .description { margin: 8px 0 0; font-size: 13px; color: #555; }
+        label { display: block; font-size: 13px; margin: 12px 0 4px; color: #333; }
+        input[type=email], input[type=password], input[type=text] {
+            width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 14px;
+            border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #111;
+        }
+        input:focus-visible, button:focus-visible, a:focus-visible {
+            outline: 2px solid var(--brand); outline-offset: 2px;
+        }
+        input[aria-invalid=true] { border-color: #e02424; }
+        .password-field { position: relative; }
+        .password-field input { padding-right: 64px; }
+        .password-toggle {
+            position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+            padding: 4px 8px; font-size: 12px; color: #333; background: #f3f4f6;
+            border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;
+        }
+        .hint { font-size: 12px; color: #666; margin: 4px 0 0; }
+        button.primary {
+            width: 100%; margin-top: 20px; padding: 11px; font-size: 14px; font-weight: 600;
+            color: #fff; background: var(--brand); border: none; border-radius: 8px; cursor: pointer;
+        }
+        button.primary:disabled { opacity: .7; cursor: progress; }
+        .divider { display: flex; align-items: center; margin: 24px 0 16px; color: #666; font-size: 12px; }
+        .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #e2e2e2; }
+        .divider span { padding: 0 12px; }
+        a.social {
+            display: block; text-align: center; text-decoration: none; padding: 10px;
+            margin-bottom: 10px; font-size: 14px; font-weight: 500; color: #333;
+            border: 1px solid #ccc; border-radius: 8px; background: #fff;
+        }
+        a.social:hover { background: #f7f7f7; }
+        .error {
+            background: #fde8e8; color: #9b1c1c; border: 1px solid #f8b4b4;
+            padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+        }
+        .notice {
+            background: #e1f0ff; color: #1e429f; border: 1px solid #b4d4f8;
+            padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+        }
+        .footer { margin-top: 24px; font-size: 13px; text-align: center; color: #555; }
+        .footer a { color: var(--brand); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<!-- `description` is a parameter, not read from branding here: the configured subtitle is
+     worded for signing in ("...로 로그인합니다"), so the signup page passes null. -->
+<div th:fragment="brand-header(heading, description)" class="brand">
+    <th:block th:switch="${branding.logo()}">
+        <svg th:case="'console'" class="logo" data-logo="console" xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <rect x="1" y="1" width="62" height="62" rx="14" fill="#000" stroke="#52525b" stroke-width="2"/>
+            <rect x="12" y="15" width="40" height="34" rx="5" fill="none" stroke="#fff" stroke-width="4"/>
+            <path d="M12 24h40" stroke="#fff" stroke-width="4"/>
+            <path d="m20 32 6 5-6 5M30 42h12" fill="none" stroke="#fff" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </th:block>
+    <h1 th:text="${heading}">IAM 로그인</h1>
+    <p class="description" th:if="${description != null}" th:text="${description}">description</p>
+</div>
+
+<!-- Progressive enhancement only: with scripts off, the toggles stay hidden and the forms
+     submit exactly as before. -->
+<script th:fragment="enhance" th:inline="none">
+    (function () {
+        var toggles = document.querySelectorAll('[data-password-toggle]');
+        Array.prototype.forEach.call(toggles, function (btn) {
+            var input = document.getElementById(btn.getAttribute('aria-controls'));
+            if (!input) { return; }
+            btn.hidden = false;
+            btn.addEventListener('click', function () {
+                var show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+                btn.textContent = show ? '숨기기' : '표시';
+            });
+        });
+
+        var forms = document.querySelectorAll('form[data-busy-label]');
+        Array.prototype.forEach.call(forms, function (form) {
+            form.addEventListener('submit', function (e) {
+                // A page-level check (signup) may have refused this submit already.
+                if (e.defaultPrevented) { return; }
+                var btn = form.querySelector('button[type="submit"]');
+                if (!btn) { return; }
+                btn.setAttribute('data-idle-label', btn.textContent);
+                btn.textContent = form.getAttribute('data-busy-label');
+                btn.setAttribute('aria-busy', 'true');
+                btn.disabled = true;
+            });
+        });
+
+        // Back/forward cache: a page restored after submitting must not come back dead.
+        window.addEventListener('pageshow', function () {
+            var busy = document.querySelectorAll('button[aria-busy="true"]');
+            Array.prototype.forEach.call(busy, function (btn) {
+                btn.disabled = false;
+                btn.removeAttribute('aria-busy');
+                btn.textContent = btn.getAttribute('data-idle-label') || btn.textContent;
+            });
+        });
+    })();
+</script>
+
+</body>
+</html>
