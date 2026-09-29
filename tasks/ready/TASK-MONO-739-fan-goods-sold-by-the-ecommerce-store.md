@@ -25,6 +25,8 @@ monorepo
 > **분석 모델:** Opus 5.5 / **구현 권장:** Sonnet 5 (시드 세 곳 + 생성기 + 서버 컴포넌트 링크 — 결정은 ADR 이 다 했다)
 >
 > ⏳ **DO NOT START — AC-0 이 참이 되기 전에는 착수하지 않는다.** AC-0 은 verify-then-act 게이트다.
+>
+> 🔵 2026-09-29 — AC-0 **참**(`ADR-MONO-077 ACCEPTED — D`). 🔴 다만 소유자가 **로그인 이음새를 먼저** 하라고 지시했다 — 그 작업 뒤에 착수한다.
 
 ---
 
@@ -62,6 +64,7 @@ monorepo
 - [ ] **AC-6** — 브라우저(`next start`): 팬 헤더 1280·400px 줄바꿈 이상 없음, 스토어 목록에 굿즈 카드 이미지 렌더.
 - [ ] **AC-7** — 팬·스토어 유닛·lint·build, `node --test infra/demo/public-data/tests/public-data.test.mjs` rc=0.
 - [ ] **AC-8** — postgres `V20` 이 **기존 볼륨**(V19 까지 적용된 DB)에 적용된다 — Testcontainers 로 V19 까지 올린 뒤 V20 을 적용하거나, 불가하면 ⚪ 로 «못 쟀다, 이유» 를 적는다(`TASK-MONO-638` 의 V19 결함 부류).
+- [ ] **AC-9 (라이더, 구현자 기본값)** — `ADR-MONO-077` § 라이더 대조가 승격: 굿즈 아티스트당 3개·총 18개(R1) · 이미지 `placehold.co`(R2) · 링크는 같은 탭(R3). 소유자가 한 줄로 뒤집을 수 있다 — 구현 기록에 채택한 값을 적는다.
 
 # Related Specs
 
