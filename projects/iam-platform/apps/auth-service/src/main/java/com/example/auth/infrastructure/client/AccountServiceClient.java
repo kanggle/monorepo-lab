@@ -445,6 +445,32 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    /**
+     * TASK-BE-612 — see {@link AccountServicePort#unlockForSelfRecovery(String)}. 409 is account-service
+     * declining a lock that is not self-recoverable ({@code REFUSED}); every other failure throws
+     * {@link AccountServiceUnavailableException}. 4xx is neither retried nor counted by the circuit
+     * (standard resilience config), so a stream of 409s cannot open it.
+     */
+    @Override
+    public SelfRecoveryUnlock unlockForSelfRecovery(String accountId) {
+        try {
+            callResilient(() -> restClient().post()
+                    .uri("/internal/accounts/{id}/unlock", accountId)
+                    // No X-Tenant-Id: account-service finds the account in its own row's tenant
+                    // (TASK-MONO-735) — auth-service is not the one to name it.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("reason", "USER_RECOVERY"))
+                    .retrieve()
+                    .toBodilessEntity());
+            return SelfRecoveryUnlock.UNLOCKED;
+        } catch (HttpClientErrorException.Conflict e) {
+            return SelfRecoveryUnlock.REFUSED;
+        } catch (RuntimeException e) {
+            throw new AccountServiceUnavailableException("Account service self-recovery unlock failed", e);
+        }
+    }
+
     @Override
     public SocialSignupResult socialSignup(String email, String provider,
                                             String providerUserId, String displayName,

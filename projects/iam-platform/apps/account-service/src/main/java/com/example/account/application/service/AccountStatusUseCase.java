@@ -137,6 +137,9 @@ public class AccountStatusUseCase {
 
     private StatusChangeResult applyStatusChange(Account account, ChangeStatusCommand command) {
         AccountStatus previousStatus = account.getStatus();
+        if (command.reason() == StatusChangeReason.USER_RECOVERY && previousStatus == AccountStatus.LOCKED) {
+            requireSelfRecoverableLock(account.getId());
+        }
         StatusTransition transition = account.changeStatus(
                 statusMachine, command.targetStatus(), command.reason());
 
@@ -153,6 +156,32 @@ public class AccountStatusUseCase {
                 account.getStatus().name(),
                 now
         );
+    }
+
+    /**
+     * TASK-BE-612 — a {@code USER_RECOVERY} unlock (password-reset confirm) may lift ONLY a lock
+     * that {@code AUTO_DETECT} put on (owner decision, TASK-BE-608 § AC-3). An operator's
+     * {@code ADMIN_LOCK} — or any other reason — must not be self-served away.
+     *
+     * <p>The deciding row is the transition that actually LOCKED the account ({@code from != LOCKED,
+     * to == LOCKED}), not simply the newest row: after an {@code ADMIN_LOCK}, a later auto-detection
+     * appends an idempotent {@code LOCKED→LOCKED (AUTO_DETECT)} row on top, and reading that one would
+     * let the user unlock an operator's lock. No such row (history lost / pre-history account) → deny.
+     *
+     * <p>This is the authority; auth-service does not judge the lock reason, it only calls.
+     *
+     * @throws StateTransitionException (→ 409 STATE_TRANSITION_INVALID) when the lock is not self-recoverable
+     */
+    private void requireSelfRecoverableLock(String accountId) {
+        StatusChangeReason lockedBy = historyRepository.findByAccountIdOrderByOccurredAtDesc(accountId).stream()
+                .filter(h -> h.getToStatus() == AccountStatus.LOCKED && h.getFromStatus() != AccountStatus.LOCKED)
+                .findFirst()
+                .map(AccountStatusHistoryEntry::getReasonCode)
+                .orElse(null);
+        if (lockedBy != StatusChangeReason.AUTO_DETECT) {
+            throw new StateTransitionException(
+                    AccountStatus.LOCKED, AccountStatus.ACTIVE, StatusChangeReason.USER_RECOVERY);
+        }
     }
 
     private void recordStatusHistory(String accountId, StatusTransition transition,

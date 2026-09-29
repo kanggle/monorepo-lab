@@ -186,6 +186,42 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 ---
 
+## POST /internal/accounts/{accountId}/unlock — 비밀번호 재설정에 의한 자기 복구 (TASK-BE-612)
+
+> **새 caller 등록이지 새 엔드포인트가 아니다.** 엔드포인트와 요청 형태는 [admin-to-account.md § unlock](admin-to-account.md) 그대로다.
+> 소유자 결정(`TASK-BE-608` § AC-3, 2026-09-26 UTC): 비밀번호 재설정 **확인**이 성공하면(이메일 소유 증명 + 전 세션 폐기가 끝난 지점)
+> **`AUTO_DETECT` 로 잠긴 계정만** `USER_RECOVERY` 로 해제한다. `ADMIN_LOCK` 등 운영자·기타 사유의 잠금은 그대로 둔다.
+
+**호출 시점**: `ConfirmPasswordResetUseCase` 의 트랜잭션이 **커밋된 뒤**(새 비밀번호 · 세션 폐기가 확정된 뒤). 재설정이 롤백되면 호출하지 않는다.
+
+**호출 순서**: ① `GET /internal/accounts/{accountId}/status-with-tenant` 로 상태를 본다 → ② `status == LOCKED` 일 때만 unlock 을 호출한다
+(`ACTIVE` 등이면 호출 없음 — 불필요한 호출 · 불필요한 이력 행 금지).
+
+**Headers**: `X-Tenant-Id` 를 **보내지 않는다** — account-service 가 계정 행의 테넌트로 찾는다(위 § status-with-tenant 의 «같은 finder 의 두 번째 사용»).
+
+**Request**:
+```json
+{ "reason": "USER_RECOVERY" }
+```
+
+**🔴 해제 가부의 권위는 account-service 다** — auth-service 는 잠금 사유를 판정하지 않는다. account-service 는 `USER_RECOVERY` 해제를
+**그 계정을 실제로 잠근 전이**(`from != LOCKED`, `to == LOCKED` 인 가장 최근 이력 행)의 사유가 `AUTO_DETECT` 일 때만 허용하고, 그 밖에는
+`409 STATE_TRANSITION_INVALID` 로 거부한다(상태 · 이력 불변). «가장 최근 이력 행» 이 아니라 «잠근 전이» 를 보는 이유: `ADMIN_LOCK` 으로
+잠긴 뒤 자동 탐지가 한 번 더 발동하면 `LOCKED→LOCKED(AUTO_DETECT)` 멱등 행이 맨 위에 쌓인다 — 맨 위 행만 보면 운영자 잠금이 풀린다.
+
+**응답 처리 (auth-service)** — 🔴 **fail-soft**(TASK-BE-612 AC-4): 해제는 최선 노력이고 재설정의 핵심 효과(새 비밀번호 · 세션 폐기)를 되돌리지 않는다.
+
+| 응답 | auth-service |
+|---|---|
+| 200 | `info` 로그(accountId 만) |
+| 409 `STATE_TRANSITION_INVALID` | 정상 — 자동 해제 대상이 아닌 잠금(`ADMIN_LOCK` 등). `info` 로그 |
+| 상태 조회 404/실패 · unlock 의 그 밖의 4xx · 5xx · 타임아웃 | `warn` 로그 · 삼킴. 재설정 응답은 그대로 204 |
+
+**이벤트**: 해제되면 account-service 가 `account.unlocked`(`reasonCode=USER_RECOVERY`, `actorType=user`, `actorId=<accountId>`)를 발행한다 —
+[account-events.md](../../events/account-events.md) 에 이미 문서화된 값.
+
+---
+
 ## Caller Constraints (auth-service 측)
 
 - 타임아웃: 연결 3s, 읽기 5s

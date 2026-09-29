@@ -282,6 +282,82 @@ class AccountStatusUseCaseTest {
                 .isInstanceOf(AccountNotFoundException.class);
     }
 
+    // ── USER_RECOVERY (TASK-BE-612) — only an AUTO_DETECT lock is self-recoverable ──
+
+    private static ChangeStatusCommand recovery(String accountId) {
+        return new ChangeStatusCommand(accountId, AccountStatus.ACTIVE, StatusChangeReason.USER_RECOVERY,
+                "user", accountId, null);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: AUTO_DETECT 로 잠긴 계정 → USER_RECOVERY 해제 → ACTIVE + unlocked 이벤트")
+    void userRecovery_autoDetectLock_unlocks() {
+        Account account = accountIn("acc-r", "ecommerce", AccountStatus.LOCKED);
+        when(accountRepository.findByIdResolvingTenant("acc-r")).thenReturn(Optional.of(account));
+        when(historyRepository.findByAccountIdOrderByOccurredAtDesc("acc-r")).thenReturn(java.util.List.of(
+                historyEntry("acc-r", AccountStatus.ACTIVE, AccountStatus.LOCKED, StatusChangeReason.AUTO_DETECT)));
+        when(historyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        StatusChangeResult result = useCase.changeStatusResolvingTenant(recovery("acc-r"));
+
+        assertThat(result.currentStatus()).isEqualTo("ACTIVE");
+        verify(eventPublisher).publishAccountUnlocked(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612 대조군: ADMIN_LOCK 으로 잠긴 계정 → USER_RECOVERY 거부(409), 저장·이벤트 없음")
+    void userRecovery_adminLock_isRefused() {
+        Account account = accountIn("acc-a", "ecommerce", AccountStatus.LOCKED);
+        when(accountRepository.findByIdResolvingTenant("acc-a")).thenReturn(Optional.of(account));
+        when(historyRepository.findByAccountIdOrderByOccurredAtDesc("acc-a")).thenReturn(java.util.List.of(
+                historyEntry("acc-a", AccountStatus.ACTIVE, AccountStatus.LOCKED, StatusChangeReason.ADMIN_LOCK)));
+
+        assertThatThrownBy(() -> useCase.changeStatusResolvingTenant(recovery("acc-a")))
+                .isInstanceOf(com.example.account.domain.status.StateTransitionException.class);
+        verify(accountRepository, never()).save(any());
+        verify(historyRepository, never()).save(any());
+        verify(eventPublisher, never()).publishAccountUnlocked(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: ADMIN_LOCK 뒤 자동 탐지가 한 번 더(LOCKED→LOCKED AUTO_DETECT 가 맨 위) → 여전히 거부 — 잠근 전이를 본다")
+    void userRecovery_adminLockThenIdempotentAutoDetect_isStillRefused() {
+        Account account = accountIn("acc-b", "ecommerce", AccountStatus.LOCKED);
+        when(accountRepository.findByIdResolvingTenant("acc-b")).thenReturn(Optional.of(account));
+        when(historyRepository.findByAccountIdOrderByOccurredAtDesc("acc-b")).thenReturn(java.util.List.of(
+                historyEntry("acc-b", AccountStatus.LOCKED, AccountStatus.LOCKED, StatusChangeReason.AUTO_DETECT),
+                historyEntry("acc-b", AccountStatus.ACTIVE, AccountStatus.LOCKED, StatusChangeReason.ADMIN_LOCK)));
+
+        assertThatThrownBy(() -> useCase.changeStatusResolvingTenant(recovery("acc-b")))
+                .isInstanceOf(com.example.account.domain.status.StateTransitionException.class);
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: 잠근 전이 이력이 없음 → 거부(모르면 풀지 않는다)")
+    void userRecovery_noLockingRow_isRefused() {
+        Account account = accountIn("acc-n", "ecommerce", AccountStatus.LOCKED);
+        when(accountRepository.findByIdResolvingTenant("acc-n")).thenReturn(Optional.of(account));
+        when(historyRepository.findByAccountIdOrderByOccurredAtDesc("acc-n")).thenReturn(java.util.List.of());
+
+        assertThatThrownBy(() -> useCase.changeStatusResolvingTenant(recovery("acc-n")))
+                .isInstanceOf(com.example.account.domain.status.StateTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: ADMIN_UNLOCK 은 잠금 사유를 보지 않는다(운영자 해제는 그대로)")
+    void adminUnlock_doesNotConsultLockReason() {
+        Account account = accountIn("acc-o", "ecommerce", AccountStatus.LOCKED);
+        when(accountRepository.findByIdResolvingTenant("acc-o")).thenReturn(Optional.of(account));
+        when(historyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        StatusChangeResult result = useCase.changeStatusResolvingTenant(new ChangeStatusCommand(
+                "acc-o", AccountStatus.ACTIVE, StatusChangeReason.ADMIN_UNLOCK, "operator", "op-1", null));
+
+        assertThat(result.currentStatus()).isEqualTo("ACTIVE");
+        verify(historyRepository, never()).findByAccountIdOrderByOccurredAtDesc(any());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static Account activeAccount(String id) {

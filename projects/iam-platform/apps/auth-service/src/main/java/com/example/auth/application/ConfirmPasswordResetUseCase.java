@@ -2,6 +2,7 @@ package com.example.auth.application;
 
 import com.example.auth.application.command.ConfirmPasswordResetCommand;
 import com.example.auth.application.exception.PasswordResetTokenInvalidException;
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.credentials.Credential;
@@ -17,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 
@@ -70,6 +73,7 @@ public class ConfirmPasswordResetUseCase {
     private final TokenGeneratorPort tokenGeneratorPort;
     private final PasswordHasher passwordHasher;
     private final OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
+    private final AccountServicePort accountServicePort;
 
     @Transactional
     public void execute(ConfirmPasswordResetCommand command) {
@@ -128,5 +132,49 @@ public class ConfirmPasswordResetUseCase {
 
         log.info("Password reset confirmed for accountId={}, revokedTokens={}, sasAuthorizations={}",
                 accountId, legacyRevoked, sasRevoked);
+
+        // 8) TASK-BE-612: self-recovery of an AUTO_DETECT lock — only once the reset is COMMITTED.
+        //    A reset that rolls back must not have unlocked anything.
+        afterCommit(() -> recoverSelfRecoverableLock(accountId));
+    }
+
+    /**
+     * TASK-BE-612 (owner decision, TASK-BE-608 § AC-3): a confirmed reset — proof of mailbox ownership
+     * plus every session revoked — lifts a lock that auto-detection put on. It asks account-service to
+     * unlock with {@code USER_RECOVERY} when the account is LOCKED; account-service decides whether the
+     * lock is self-recoverable (only an {@code AUTO_DETECT} lock is) and answers 409 otherwise.
+     *
+     * <p>🔴 <b>Fail-soft (AC-4).</b> The unlock is best effort: the reset's own effects — the new
+     * password and the revoked sessions — are already committed and are never undone or reported as
+     * an error because the unlock could not be done. A failure is logged; the user can reset again or
+     * be unlocked by an operator.
+     */
+    void recoverSelfRecoverableLock(String accountId) {
+        try {
+            boolean locked = accountServicePort.getAccountStatusAndTenant(accountId)
+                    .map(s -> "LOCKED".equals(s.accountStatus()))
+                    .orElse(false);
+            if (!locked) {
+                return; // ACTIVE (the usual case) or unknown — nothing to recover, no call
+            }
+            AccountServicePort.SelfRecoveryUnlock outcome = accountServicePort.unlockForSelfRecovery(accountId);
+            log.info("Password reset self-recovery for accountId={}: {}", accountId, outcome);
+        } catch (RuntimeException e) {
+            log.warn("Password reset self-recovery unlock skipped (fail-soft) for accountId={}: {}",
+                    accountId, e.getMessage());
+        }
+    }
+
+    private static void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run(); // no surrounding transaction (e.g. a plain unit call) — nothing to wait for
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 }

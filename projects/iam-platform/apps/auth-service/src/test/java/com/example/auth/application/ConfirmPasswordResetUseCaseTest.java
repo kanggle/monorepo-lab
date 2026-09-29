@@ -69,8 +69,96 @@ class ConfirmPasswordResetUseCaseTest {
     @Mock
     private OAuthAuthorizationRevocationPort oAuthAuthorizationRevocationPort;
 
+    @Mock
+    private com.example.auth.application.port.AccountServicePort accountServicePort;
+
     @InjectMocks
     private ConfirmPasswordResetUseCase useCase;
+
+    // ── TASK-BE-612: self-recovery of an AUTO_DETECT lock after a confirmed reset ──
+
+    private void givenAValidReset() {
+        given(passwordResetTokenStore.findAccountId(TOKEN)).willReturn(Optional.of(ACCOUNT_ID));
+        given(credentialRepository.findByAccountId(ACCOUNT_ID)).willReturn(Optional.of(existingCredential()));
+        given(passwordHasher.hash("NewPassw0rd!")).willReturn("$argon2id$v=19$new-hash");
+        given(credentialRepository.save(any(Credential.class))).willAnswer(inv -> inv.getArgument(0));
+    }
+
+    private static Optional<com.example.auth.application.result.AccountStatusWithTenantLookupResult> status(String s) {
+        return Optional.of(new com.example.auth.application.result.AccountStatusWithTenantLookupResult(
+                ACCOUNT_ID, "ecommerce", s));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: 재설정 확인 + 계정 LOCKED → USER_RECOVERY 해제 요청 (판정은 account-service)")
+    void execute_lockedAccount_requestsSelfRecoveryUnlock() {
+        givenAValidReset();
+        given(accountServicePort.getAccountStatusAndTenant(ACCOUNT_ID)).willReturn(status("LOCKED"));
+        given(accountServicePort.unlockForSelfRecovery(ACCOUNT_ID))
+                .willReturn(com.example.auth.application.port.AccountServicePort.SelfRecoveryUnlock.UNLOCKED);
+
+        useCase.execute(new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!"));
+
+        verify(accountServicePort).unlockForSelfRecovery(ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: 계정 ACTIVE → 해제 호출 없음 (불필요한 호출 금지)")
+    void execute_activeAccount_makesNoUnlockCall() {
+        givenAValidReset();
+        given(accountServicePort.getAccountStatusAndTenant(ACCOUNT_ID)).willReturn(status("ACTIVE"));
+
+        useCase.execute(new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!"));
+
+        verify(accountServicePort, never()).unlockForSelfRecovery(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612 AC-4: account-service 장애 → 재설정은 그대로 성공(예외 없음 · 토큰 삭제됨)")
+    void execute_accountServiceDown_resetStillSucceeds() {
+        givenAValidReset();
+        given(accountServicePort.getAccountStatusAndTenant(ACCOUNT_ID)).willReturn(status("LOCKED"));
+        given(accountServicePort.unlockForSelfRecovery(ACCOUNT_ID)).willThrow(
+                new com.example.auth.application.exception.AccountServiceUnavailableException("down", null));
+
+        useCase.execute(new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!"));
+
+        verify(credentialRepository).save(any(Credential.class));
+        verify(passwordResetTokenStore).delete(TOKEN);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612 AC-4: 상태 조회부터 실패해도 재설정은 성공, 해제 호출 없음")
+    void execute_statusLookupFails_resetStillSucceeds() {
+        givenAValidReset();
+        given(accountServicePort.getAccountStatusAndTenant(ACCOUNT_ID)).willThrow(
+                new com.example.auth.application.exception.AccountServiceUnavailableException("down", null));
+
+        useCase.execute(new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!"));
+
+        verify(passwordResetTokenStore).delete(TOKEN);
+        verify(accountServicePort, never()).unlockForSelfRecovery(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-612: 트랜잭션 안에서는 커밋 전에 해제하지 않는다 — afterCommit 에서만")
+    void execute_insideTransaction_unlocksOnlyAfterCommit() {
+        givenAValidReset();
+        given(accountServicePort.getAccountStatusAndTenant(ACCOUNT_ID)).willReturn(status("LOCKED"));
+        given(accountServicePort.unlockForSelfRecovery(ACCOUNT_ID))
+                .willReturn(com.example.auth.application.port.AccountServicePort.SelfRecoveryUnlock.UNLOCKED);
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            useCase.execute(new ConfirmPasswordResetCommand(TOKEN, "NewPassw0rd!"));
+            verifyNoInteractions(accountServicePort); // not yet — the reset could still roll back
+
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(accountServicePort).unlockForSelfRecovery(ACCOUNT_ID);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
 
     private Credential existingCredential() {
         Instant created = Instant.parse("2026-01-01T00:00:00Z");

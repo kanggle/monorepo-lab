@@ -68,12 +68,16 @@ public class AccountLockController {
         Map<String, Object> details = new HashMap<>();
         if (request.ticketId() != null) details.put("ticketId", request.ticketId());
 
+        // TASK-BE-612: a USER_RECOVERY unlock is the user recovering their own account (password-reset
+        // confirm, via auth-service) — actorType=user / actorId=the account, as account-events.md
+        // documents for account.unlocked. Every other unlock stays operator-attributed.
+        boolean selfRecovery = reason == StatusChangeReason.USER_RECOVERY;
         ChangeStatusCommand command = new ChangeStatusCommand(
                 accountId,
                 AccountStatus.ACTIVE,
                 reason,
-                "operator",
-                request.operatorId(),
+                selfRecovery ? "user" : "operator",
+                selfRecovery ? accountId : request.operatorId(),
                 details.isEmpty() ? null : toJson(details)
         );
 

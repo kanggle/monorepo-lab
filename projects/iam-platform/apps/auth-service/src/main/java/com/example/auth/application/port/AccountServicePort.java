@@ -15,6 +15,23 @@ import java.util.Optional;
 public interface AccountServicePort {
 
     /**
+     * TASK-BE-612 — {@code POST /internal/accounts/{id}/unlock} with {@code reason=USER_RECOVERY}, no
+     * {@code X-Tenant-Id} (account-service resolves the account's tenant from its row). Called after a
+     * password reset is confirmed, for a LOCKED account only.
+     *
+     * <p>account-service is the authority on whether the lock is self-recoverable (only one an
+     * {@code AUTO_DETECT} transition put on): it answers 409 otherwise, which is {@link
+     * SelfRecoveryUnlock#REFUSED} here — a normal answer, not a failure.
+     *
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException on any
+     *         other 4xx, 5xx, timeout or open circuit (the caller treats it fail-soft)
+     */
+    SelfRecoveryUnlock unlockForSelfRecovery(String accountId);
+
+    /** Outcome of {@link #unlockForSelfRecovery(String)}. */
+    enum SelfRecoveryUnlock { UNLOCKED, REFUSED }
+
+    /**
      * TASK-BE-470-fix-001: creates a new account via the public
      * {@code POST /api/accounts/signup} endpoint on behalf of the browser signup
      * page (server-side proxy). Unlike the SAS browser pages, {@code /api/accounts}

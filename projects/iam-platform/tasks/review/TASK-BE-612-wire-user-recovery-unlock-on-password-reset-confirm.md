@@ -4,7 +4,7 @@ TASK-BE-612
 
 # Status
 
-ready
+review
 
 # Title
 
@@ -71,15 +71,15 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 재설정 확인 성공 + 계정이 `AUTO_DETECT` 로 LOCKED → account-service 호출로 ACTIVE 전이 + `account.unlocked`
+- [x] **AC-1** — 재설정 확인 성공 + 계정이 `AUTO_DETECT` 로 LOCKED → account-service 호출로 ACTIVE 전이 + `account.unlocked`
       이벤트(reason=`USER_RECOVERY`) 발행. 단위/IT 로 확인.
-- [ ] **AC-2** — 대조군: 계정이 `ADMIN_LOCK` 으로 LOCKED → 같은 재설정 확인을 거쳐도 계정은 **여전히 LOCKED**(자동 해제되지
+- [x] **AC-2** — 대조군: 계정이 `ADMIN_LOCK` 으로 LOCKED → 같은 재설정 확인을 거쳐도 계정은 **여전히 LOCKED**(자동 해제되지
       않음). IT 로 확인 — 이 대조군이 없으면 AC-1 은 "모든 잠금이 재설정으로 풀린다"와 구별되지 않는다.
-- [ ] **AC-3** — 🔴 **라이브 창 판정**: 데모에서 AUTO_DETECT 로 계정을 잠근 뒤(합성 `auth.token.reuse.detected` 또는 다른
+- [ ] **AC-3** ⏳ 재굽기 뒤 창(`TASK-MONO-737` · `TASK-BE-609` 와 같은 창) — 🔴 **라이브 창 판정**: 데모에서 AUTO_DETECT 로 계정을 잠근 뒤(합성 `auth.token.reuse.detected` 또는 다른
       가용한 방법) 그 계정으로 비밀번호 재설정을 완료하고, `account_db.accounts.status` 가 **결과 상태**로 `ACTIVE` 가
       되는지 확인한다. 로그 침묵은 판정이 아니다(이 티켓이 이어받는 `TASK-BE-608`/`TASK-MONO-672` 의 반복 원칙). 대조군으로
       `ADMIN_LOCK` 계정 하나도 같은 창에서 같이 재고, `LOCKED` 로 남는지 확인한다.
-- [ ] **AC-4** — account-service 가 응답하지 않거나 5xx 를 낼 때 재설정 확인 자체(비밀번호 변경 · 세션 폐기)는 실패하지
+- [x] **AC-4** — account-service 가 응답하지 않거나 5xx 를 낼 때 재설정 확인 자체(비밀번호 변경 · 세션 폐기)는 실패하지
       않는다(fail-soft) — unlock 호출은 최선 노력이고 재설정의 핵심 효과(새 비밀번호 · 세션 폐기)를 막지 않는다. 이 결정을
       코드 주석과 이 AC 에 명시한다.
 
@@ -114,3 +114,45 @@ iam-platform
    사용자에게 에러로 보이면 AC-4 위반이다.
 3. **호출 계약을 스펙에 먼저 안 적고 코드부터 짠다** → `auth-to-account.md` 가 실제 호출자와 갈린다(이 저장소가 반복해서
    겪은 "계약보다 코드가 먼저" 패턴).
+
+---
+
+# 구현 결과 (2026-09-29 UTC · 분석=Opus 5.5)
+
+**계약 먼저**: `auth-to-account.md` § `POST /internal/accounts/{accountId}/unlock — 비밀번호 재설정에 의한 자기 복구`(새 caller) ·
+`account-lockout-and-unlock.md` UC-8(자동 잠금 UC-6 의 대칭).
+
+**설계 판단 — 해제 가부의 권위는 account-service** (Edge Case 1 의 두 선택지 중 «상태기계 쪽 거부» + auth-service 의 «LOCKED 일 때만 호출»):
+auth-service 가 잠금 사유를 판정하면 호출자 실수 하나로 `ADMIN_LOCK` 이 풀린다(Failure Scenario 1). 그래서 판정은 한 곳 —
+`AccountStatusUseCase.requireSelfRecoverableLock` — 에 두고, auth-service 는 **상태만** 보고 호출한다.
+- 🔴 판정 행 = **그 계정을 실제로 잠근 전이**(`from != LOCKED, to == LOCKED` 의 가장 최근 행)이지 맨 위 행이 아니다. `ADMIN_LOCK` 뒤
+  자동 탐지가 한 번 더 발동하면 `LOCKED→LOCKED(AUTO_DETECT)` 멱등 행이 맨 위에 쌓이고, 맨 위만 보면 운영자 잠금이 풀린다 — 셀로 핀.
+- 잠근 전이 이력이 없으면 거부(모르면 풀지 않는다). 거부 = 기존 `StateTransitionException` → `409 STATE_TRANSITION_INVALID`, 상태·이력·이벤트 불변.
+- `ADMIN_UNLOCK` 등 다른 사유는 이력을 보지 않는다(운영자 해제 불변 — 셀로 핀).
+- 부수 수정: `AccountLockController.unlockAccount` 가 모든 해제를 `actorType=operator` 로 적고 있었다 → `USER_RECOVERY` 는
+  `actorType=user`, `actorId=<accountId>`(`account-events.md` 가 이미 문서화한 값).
+
+**auth-service**: `ConfirmPasswordResetUseCase` 가 **트랜잭션 커밋 뒤**(`TransactionSynchronization.afterCommit`) 상태를 조회하고
+`LOCKED` 일 때만 `AccountServicePort.unlockForSelfRecovery` 를 부른다(`X-Tenant-Id` 없음 — 계정 행의 테넌트). 🔴 **fail-soft (AC-4)**:
+상태 조회·해제의 어떤 실패도 로그만 남기고 재설정 응답은 그대로 — 새 비밀번호·세션 폐기는 이미 커밋돼 있다. 409 는 실패가 아니라 `REFUSED`.
+4xx 는 재시도·서킷 집계 대상이 아니다(표준 resilience 설정) — 409 폭주가 서킷을 열지 않는다.
+
+**검증 (로컬)**: `account-service:test` 527 / 0 fail / 47 skip(Docker IT) · `auth-service:test` 885 / 0 fail / 31 skip — **rc=0**.
+새 셀: `AccountStatusUseCaseTest` 5(AUTO_DETECT 해제 · ADMIN_LOCK 거부 · ADMIN_LOCK+멱등 AUTO_DETECT 거부 · 이력 없음 거부 · ADMIN_UNLOCK 불변) ·
+`ConfirmPasswordResetUseCaseTest` 5(LOCKED → 호출 · ACTIVE → 호출 없음 · 해제 실패 fail-soft · 조회 실패 fail-soft · **커밋 전에는 호출 안 함**) ·
+`AccountServiceClientUnitTest` 3(200 UNLOCKED + 헤더 없음 · 409 REFUSED 1회 · 503 예외) · IT `AccountMutationTenantConfinementIntegrationTest` 2
+(실제 DB: 자동 잠금 → 해제 200 · 이력 `actor_type=user` / 운영자 잠금 → 409 · LOCKED 유지 — 🔴 Docker → **CI 판정**).
+**bite** (백업 → 변이 → 복사 원복 · md5 일치): ① 판정 제거 → 4 빨강 ② 커밋 전 즉시 실행 → 1 빨강 ③ 409 를 REFUSED 로 안 받음 → 1 빨강.
+기존 셀 0 → 원복 후 rc=0.
+
+⚪ **남긴 것 (소유자 결정 범위 밖 · 정보)**: `PASSWORD_FAILURE_THRESHOLD` 는 상태기계에 선언만 있고 **그 사유로 잠그는 호출자가 저장소에 없다**
+(grep 전수 — 선언·상태기계·actor 매핑뿐). 누군가 이 사유로 잠그기 시작하면 «비밀번호를 잊어 잠긴 사용자가 재설정해도 안 풀리는» 경로가 된다 —
+그때 소유자 결정(«AUTO_DETECT 만»)을 다시 물어야 한다.
+
+# AC-3 창 런북
+
+0단계 = 재굽기 확인(`RepoCommit` 이 이 PR 스쿼시를 조상으로 포함). 🔴 공유 데모 계정 금지 — **일회용 계정 둘**.
+1. 계정 A: 합성 `auth.token.reuse.detected`(17차 창과 같은 방법)로 **자동 잠금** → `accounts.status=LOCKED` 확인 · 잠근 이력 행 `reason_code=AUTO_DETECT` 확인.
+2. A 로 비밀번호 재설정(`TASK-BE-609` 런북 스텝 1 — 게이트웨이 경유) → 🟢 **`accounts.status=ACTIVE`**(결과 상태) · 최신 이력 `reason_code=USER_RECOVERY, actor_type=user` · 새 비밀번호 로그인 성공.
+3. 대조군 계정 B: 콘솔에서 **운영자 잠금**(`TASK-MONO-737` 런북 ①) → B 로 재설정 → 🟢 재설정 204 · 새 비밀번호는 저장되지만 **`accounts.status=LOCKED` 유지** · auth-service 로그 `self-recovery … REFUSED`.
+- 🔴 유효성 술어: 스텝 2 이전에 A 가 **LOCKED 였음**을 먼저 적어라(이미 ACTIVE 면 «해제됨» 은 아무것도 재지 않았다).
