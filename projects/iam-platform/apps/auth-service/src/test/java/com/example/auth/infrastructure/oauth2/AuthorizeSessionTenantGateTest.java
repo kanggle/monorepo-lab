@@ -1,5 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.domain.credentials.Credential;
+import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import jakarta.servlet.FilterChain;
@@ -32,9 +34,11 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -56,6 +60,9 @@ class AuthorizeSessionTenantGateTest {
     @Mock
     RegisteredClientRepository registeredClientRepository;
 
+    @Mock
+    CredentialRepository credentialRepository;
+
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
@@ -71,20 +78,67 @@ class AuthorizeSessionTenantGateTest {
     }
 
     @Test
-    @DisplayName("다른 소비자 테넌트(ecommerce 세션 → fan-platform client) → 이 요청은 미인증 = 재인증")
+    @DisplayName("다른 소비자 테넌트(ecommerce 세션 → fan-platform client) → 이 요청은 미인증 = 재인증 (자격 조회 없음)")
     void otherConsumerTenant_requiresReauthentication() throws Exception {
         stubClient("fan", "fan-platform");
 
         assertThat(runAuthorize(principal("ecommerce"), "fan")).isNull();
+        verifyNoInteractions(credentialRepository);
     }
 
     @Test
-    @DisplayName("콘솔 client(iam) 는 교차 테넌트 세션도 통과 — ADR-MONO-044 D5 운영자")
-    void consoleClient_exempt() throws Exception {
+    @DisplayName("콘솔 client(iam) · 교차 테넌트 세션 · 그 이메일에 iam 자격 없음 → 통과 — ADR-MONO-044 D5 운영자 (대조군)")
+    void consoleClient_noConsoleCredential_passes() throws Exception {
         stubClient("platform-console-web", "iam");
+        noConsoleCredential();
         Authentication session = principal("fan-platform");
 
         assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-610: 콘솔 client · 팬 세션 · 그 이메일에 iam 자격 있음 → 재인증 (demo@demo.com 이 /onboarding 에 떨어지던 경로)")
+    void consoleClient_consumerSessionHoldingConsoleCredential_requiresReauthentication() throws Exception {
+        stubClient("platform-console-web", "iam");
+        consoleCredentialExists();
+
+        assertThat(runAuthorize(principal("fan-platform"), "platform-console-web")).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-610: 콘솔 client · iam 세션(재인증 뒤) → 통과 · 자격 조회조차 없음 — 루프 없음")
+    void consoleClient_consoleSession_passesWithoutLookup() throws Exception {
+        stubClient("platform-console-web", "iam");
+        Authentication session = principal("iam");
+
+        assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+        verifyNoInteractions(credentialRepository);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-610: 자격 조회 실패 → 재인증하지 않는다(통과) — 실패에 재인증으로 답하면 D5 소비자가 루프")
+    void consoleClient_lookupFailure_passes() throws Exception {
+        stubClient("platform-console-web", "iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL))
+                .thenThrow(new IllegalStateException("db down"));
+        Authentication session = principal("fan-platform");
+
+        assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-610: details 에 email 이 없으면 principal 이름으로 찾는다")
+    void consoleClient_emailFallsBackToPrincipalName() throws Exception {
+        stubClient("platform-console-web", "iam");
+        consoleCredentialExists();
+        Map<String, Object> details = new HashMap<>();
+        details.put(PrincipalDetailKeys.TENANT_ID, "fan-platform");
+        details.put(PrincipalDetailKeys.TENANT_TYPE, "B2C_CONSUMER");
+        UsernamePasswordAuthenticationToken session = new UsernamePasswordAuthenticationToken(
+                EMAIL, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        session.setDetails(details);
+
+        assertThat(runAuthorize(session, "platform-console-web")).isNull();
     }
 
     @Test
@@ -96,9 +150,10 @@ class AuthorizeSessionTenantGateTest {
     }
 
     @Test
-    @DisplayName("플랫폼 스코프 '*' 세션 → 콘솔 client 는 통과")
+    @DisplayName("플랫폼 스코프 '*' 세션 → 콘솔 client 는 통과 (그 이메일에 iam 자격이 없을 때)")
     void platformScopeOnConsole_passes() throws Exception {
         stubClient("platform-console-web", "iam");
+        noConsoleCredential();
         Authentication session = principal("*");
 
         assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
@@ -153,7 +208,7 @@ class AuthorizeSessionTenantGateTest {
     @Test
     @DisplayName("authorize 가 아닌 경로(/oauth2/token 등)에는 게이트가 없다")
     void otherPaths_notGated() throws Exception {
-        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository);
+        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository);
         Authentication session = principal("ecommerce");
         for (String path : List.of("/oauth2/token", "/oauth2/userinfo", "/oauth2/revoke", "/login")) {
             MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
@@ -174,7 +229,7 @@ class AuthorizeSessionTenantGateTest {
         httpSession.setAttribute(
                 HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, stored);
 
-        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository);
+        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository);
         MockHttpServletRequest request = authorizeRequest("fan");
         request.setSession(httpSession);
         SecurityContextHolder.setContext(stored);
@@ -192,6 +247,17 @@ class AuthorizeSessionTenantGateTest {
     }
 
     // -----------------------------------------------------------------------
+
+    private static final String EMAIL = "someone@example.com";
+
+    private void consoleCredentialExists() {
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL))
+                .thenReturn(Optional.of(mock(Credential.class)));
+    }
+
+    private void noConsoleCredential() {
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
+    }
 
     private void stubClient(String clientId, String tenant) {
         when(registeredClientRepository.findByClientId(clientId)).thenReturn(client(clientId, tenant));
@@ -236,7 +302,7 @@ class AuthorizeSessionTenantGateTest {
     }
 
     private Authentication runAuthorize(Authentication session, String clientId) throws Exception {
-        return run(new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository),
+        return run(new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository),
                 authorizeRequest(clientId), session);
     }
 
