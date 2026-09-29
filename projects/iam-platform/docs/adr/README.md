@@ -10,6 +10,7 @@
 | [ADR-004](ADR-004-oauth-callback-ci-linux-503-isolation.md) | OAuth 콜백 IT 의 CI Linux 503 격리 전략 | **ACCEPTED** — Phase 2 옵션 1 (HTTP/1.1 강제) |
 | [ADR-005](ADR-005-service-to-service-workload-identity.md) | 서비스 간(Workload) 인증 — `client_credentials` 단기 JWT | ACCEPTED |
 | [ADR-006](ADR-006-external-idp-login-sas-integration.md) | 외부 IdP(소셜) 로그인의 SAS 브라우저 플로우 통합 — Upstream Identity Brokering | ACCEPTED |
+| [ADR-007](ADR-007-per-client-branding-of-the-shared-login-page.md) | 공유 로그인 페이지의 클라이언트별 브랜딩 — 폼은 하나, 서비스별 값만 다르게 | PROPOSED |
 
 ## ADR 작성 원칙
 
