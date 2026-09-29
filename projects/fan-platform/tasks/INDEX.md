@@ -78,9 +78,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- 🔍 `TASK-FAN-FE-026-form-fields-dark-scheme-white.md` — **REVIEW (2026-09-29 UTC)** 결제 기간 선택칸·아티스트 검색칸이 OS 다크 모드에서 어두운 바탕에 검은 글자 → 공용 `FORM_FIELD_CLASS`(흰 바탕·`ink-900` 글자·`[color-scheme:light]`)로 통일, 공개 피드 필터도 같은 상수로. 분석=Opus 5.5 / 구현=Opus 5.5.
+(empty)
 
 ## done
+
+- ✅ `TASK-FAN-FE-026-form-fields-dark-scheme-white.md` — **DONE (2026-09-29 UTC · 4차원 검증 · impl PR [#4064](https://github.com/kanggle/monorepo-lab/pull/4064) squash `549a1a03c`)** 🟢 **결제 기간 선택칸·아티스트 검색칸이 OS 다크 모드에서 어두운 바탕에 검은 글자이던 것을 흰 바탕으로 통일, AC-1~AC-3 닫힘.** 공용 `FORM_FIELD_CLASS`(`bg-white`·`text-ink-900`·`[color-scheme:light]`), 공개 피드 필터도 같은 상수. Playwright dark 계산값 옛 `rgb(59,59,59)` → 새 `rgb(255,255,255)`. 유닛 37 files / 326 tests · tsc · lint · build rc=0. 실행된 체크 17개 SUCCESS · 실패 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - ✅ `TASK-FAN-FE-025-public-feed-filter.md` — **DONE (2026-09-29 UTC · 4차원 검증 · impl PR [#4060](https://github.com/kanggle/monorepo-lab/pull/4060) squash `d3a2a3c5d`)** 🟢 **공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색, AC-1~AC-8 닫힘.** 서버 렌더 GET 폼(클라이언트 코드·의존성 0), 저장본 안에서만, 익명 게이트웨이 호출 0, 기본값 잠긴 글 포함 유지, 페이지 링크 필터 보존. 유닛 37 files / 326 tests · tsc · lint · build rc=0 · bite 2건 · Playwright 32칸 1280·400px · 로컬 e2e 스모크 18 passed. 브라우저가 뒤로가기 폼 값 복원 결함을 찾아 `autoComplete="off"` 로 고침. 🔴 CI 가 이 변경의 e2e 스모크 회귀(선택자가 `<option>` 을 잡음)를 잡아 같은 PR 에서 고침. 라이브(`build-info` = `d3a2a3c5d`) 31/32 — 남은 1칸은 main 대조군에서도 같은 빈도로 나는 기존 React #418(범위 밖). required 4/4 SUCCESS · 실패 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 
