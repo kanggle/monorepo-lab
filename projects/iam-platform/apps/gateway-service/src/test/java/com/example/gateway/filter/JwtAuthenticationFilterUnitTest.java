@@ -237,6 +237,60 @@ class JwtAuthenticationFilterUnitTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-MONO-737: the admin subtree keeps the operator's selected X-Tenant-Id
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TASK-MONO-737: /api/admin/** 는 콘솔이 고른 X-Tenant-Id 를 그대로 전달 (X-Account-ID 는 여전히 제거)")
+    void filter_adminSubtree_keepsCallerTenant_stillStripsIdentityHeaders() {
+        String path = "/api/admin/accounts/78740d21/lock";
+        MockServerHttpRequest request = MockServerHttpRequest.post(path)
+                .header("X-Tenant-Id", "ecommerce")
+                .header("X-Account-ID", "spoofed-id")
+                .header("X-Device-Id", "spoofed-device")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        given(routeConfig.isPublicRoute(HttpMethod.POST, path)).willReturn(true);
+        ArgumentCaptor<ServerWebExchange> exchangeCaptor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        given(chain.filter(exchangeCaptor.capture())).willReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        HttpHeaders downstream = exchangeCaptor.getValue().getRequest().getHeaders();
+        assertThat(downstream.get("X-Tenant-Id")).containsExactly("ecommerce");
+        assertThat(downstream.getFirst("X-Account-ID")).isNull();
+        assertThat(downstream.getFirst("X-Device-Id")).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-737 대조군: /api/admin 밖의 public 경로는 X-Tenant-Id 를 계속 제거")
+    void filter_publicRouteOutsideAdminSubtree_stillStripsTenant() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/auth/login")
+                .header("X-Tenant-Id", "ecommerce")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        given(routeConfig.isPublicRoute(HttpMethod.POST, "/api/auth/login")).willReturn(true);
+        ArgumentCaptor<ServerWebExchange> exchangeCaptor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        given(chain.filter(exchangeCaptor.capture())).willReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchangeCaptor.getValue().getRequest().getHeaders().getFirst("X-Tenant-Id")).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-737 경계: '/api/administrator' 같은 접두 유사 경로는 관리 서브트리가 아니다")
+    void keepsCallerTenant_onlyTheAdminSubtree() {
+        assertThat(JwtAuthenticationFilter.keepsCallerTenant("/api/admin/accounts")).isTrue();
+        assertThat(JwtAuthenticationFilter.keepsCallerTenant("/api/administrator/x")).isFalse();
+        assertThat(JwtAuthenticationFilter.keepsCallerTenant("/api/accounts/me")).isFalse();
+        assertThat(JwtAuthenticationFilter.keepsCallerTenant("/internal/tenants/wms/accounts")).isFalse();
+        assertThat(JwtAuthenticationFilter.keepsCallerTenant(null)).isFalse();
+    }
+
+    // -----------------------------------------------------------------------
     // TASK-BE-230: tenant_id claim validation tests
     // -----------------------------------------------------------------------
 

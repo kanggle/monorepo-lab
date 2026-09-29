@@ -3,6 +3,7 @@ package com.example.admin.application;
 import com.example.admin.application.exception.AssignmentNotFoundException;
 import com.example.admin.application.exception.InvalidRequestException;
 import com.example.admin.application.exception.OperatorNotFoundException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.exception.TenantScopeMismatchException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
@@ -76,7 +77,7 @@ class ManageOperatorOrgScopeUseCaseTest {
         when(assignmentPort.findAssignment(OP_INTERNAL_ID, TENANT))
                 .thenReturn(Optional.of(new AssignmentView(TENANT, List.of("dept-sales"), null)));
 
-        List<AssignmentView> result = useCase.listAssignments(OP_PUBLIC_ID, TENANT);
+        List<AssignmentView> result = useCase.listAssignments(OP_PUBLIC_ID, TENANT, caller);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).tenantId()).isEqualTo(TENANT);
@@ -89,7 +90,7 @@ class ManageOperatorOrgScopeUseCaseTest {
         when(operatorPort.findByOperatorId(OP_PUBLIC_ID)).thenReturn(Optional.of(operatorView()));
         when(assignmentPort.findAssignment(OP_INTERNAL_ID, TENANT)).thenReturn(Optional.empty());
 
-        assertThat(useCase.listAssignments(OP_PUBLIC_ID, TENANT)).isEmpty();
+        assertThat(useCase.listAssignments(OP_PUBLIC_ID, TENANT, caller)).isEmpty();
     }
 
     @Test
@@ -97,7 +98,20 @@ class ManageOperatorOrgScopeUseCaseTest {
     void list_emptyWhenNoActiveTenant() {
         when(operatorPort.findByOperatorId(OP_PUBLIC_ID)).thenReturn(Optional.of(operatorView()));
 
-        assertThat(useCase.listAssignments(OP_PUBLIC_ID, null)).isEmpty();
+        assertThat(useCase.listAssignments(OP_PUBLIC_ID, null, caller)).isEmpty();
+        verify(tenantScopeGuard, never()).requireTenantReadable(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-737: listAssignments — 활성 테넌트가 호출자 operator.manage 범위 밖 → 403, 조회 안 함")
+    void list_activeTenantOutOfCallerScope_isDenied_andNothingIsRead() {
+        when(operatorPort.findByOperatorId(OP_PUBLIC_ID)).thenReturn(Optional.of(operatorView()));
+        org.mockito.Mockito.doThrow(new TenantScopeDeniedException("out of scope"))
+                .when(tenantScopeGuard).requireTenantReadable(caller, "operator.manage", TENANT);
+
+        assertThatThrownBy(() -> useCase.listAssignments(OP_PUBLIC_ID, TENANT, caller))
+                .isInstanceOf(TenantScopeDeniedException.class);
+        verify(assignmentPort, never()).findAssignment(any(Long.class), any());
     }
 
     @Test
@@ -105,7 +119,7 @@ class ManageOperatorOrgScopeUseCaseTest {
     void list_operatorNotFound() {
         when(operatorPort.findByOperatorId(OP_PUBLIC_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.listAssignments(OP_PUBLIC_ID, TENANT))
+        assertThatThrownBy(() -> useCase.listAssignments(OP_PUBLIC_ID, TENANT, caller))
                 .isInstanceOf(OperatorNotFoundException.class);
     }
 

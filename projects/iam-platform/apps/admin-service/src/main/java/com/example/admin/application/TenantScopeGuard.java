@@ -61,4 +61,26 @@ public class TenantScopeGuard {
                 "Operator is not scoped to administer tenant '" + targetTenantId
                         + "' for permission '" + permission + "'");
     }
+
+    /**
+     * TASK-MONO-737 — the READ-path twin of {@link #requireTenantInScope}: the same
+     * {@code target ∈ effectiveAdminScope} rule, but no DENIED row (reads write no audit
+     * row, BE-486 — the same shape as {@code GroupAdminUseCase.requireGroupReadable403}).
+     *
+     * <p>For a read keyed on the caller-chosen {@code X-Tenant-Id}. The IAM gateway used to
+     * strip that header on its way to {@code /api/admin/**}, which hid two reads that trusted
+     * it with no scope check; the gateway now passes it through (MONO-737), so every consumer
+     * of it has to gate.
+     *
+     * @throws TenantScopeDeniedException when the target is out of scope ({@code null} → deny)
+     */
+    public void requireTenantReadable(OperatorContext actor, String permission, String targetTenantId) {
+        String actorId = actor == null ? null : actor.operatorId();
+        if (grantScopeEvaluator.isTenantInAdminScope(actorId, permission, targetTenantId)) {
+            return;
+        }
+        throw new TenantScopeDeniedException(
+                "Operator is not scoped to read tenant '" + targetTenantId
+                        + "' for permission '" + permission + "'");
+    }
 }

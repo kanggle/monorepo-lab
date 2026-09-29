@@ -32,6 +32,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -101,7 +102,7 @@ class OperatorOrgScopeControllerSliceTest {
 
     @Test
     void list_assignments_returns_active_tenant_row() throws Exception {
-        when(useCase.listAssignments("op-target", "acme-corp"))
+        when(useCase.listAssignments(eq("op-target"), eq("acme-corp"), any()))
                 .thenReturn(List.of(new AssignmentView("acme-corp", List.of("dept-sales"), null)));
 
         mockMvc.perform(get("/api/admin/operators/op-target/assignments")
@@ -114,7 +115,7 @@ class OperatorOrgScopeControllerSliceTest {
 
     @Test
     void list_assignments_omits_orgScope_when_null() throws Exception {
-        when(useCase.listAssignments("op-target", "acme-corp"))
+        when(useCase.listAssignments(eq("op-target"), eq("acme-corp"), any()))
                 .thenReturn(List.of(new AssignmentView("acme-corp", null, null)));
 
         mockMvc.perform(get("/api/admin/operators/op-target/assignments")
@@ -127,7 +128,7 @@ class OperatorOrgScopeControllerSliceTest {
 
     @Test
     void list_assignments_empty_when_not_assigned() throws Exception {
-        when(useCase.listAssignments("op-target", "globex")).thenReturn(List.of());
+        when(useCase.listAssignments(eq("op-target"), eq("globex"), any())).thenReturn(List.of());
 
         mockMvc.perform(get("/api/admin/operators/op-target/assignments")
                         .header("Authorization", bearer())

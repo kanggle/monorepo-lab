@@ -63,7 +63,7 @@ public class OperatorOrgScopeController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String activeTenant) {
 
         List<OperatorTenantAssignmentPort.AssignmentView> assignments =
-                manageOrgScopeUseCase.listAssignments(operatorId, activeTenant);
+                manageOrgScopeUseCase.listAssignments(operatorId, activeTenant, OperatorContextHolder.require());
         List<OperatorAssignmentResponse> items = new ArrayList<>(assignments.size());
         for (OperatorTenantAssignmentPort.AssignmentView a : assignments) {
             items.add(toResponse(a));

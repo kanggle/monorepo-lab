@@ -214,6 +214,10 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 
 - gateway는 JWT 서명·만료뿐 아니라 `tenant_id` claim 존재를 검사한다. 누락 시 401
 - 라우트 패턴에 따라 다운스트림 서비스로 `X-Tenant-Id` 헤더를 전파한다. 다운스트림은 JWT claim과 헤더 일치를 재검증한다 (defense-in-depth)
+- **예외 — `/api/admin/**`** (TASK-MONO-737): gateway 는 이 서브트리에서 JWT 를 검증하지 않으므로(검증은 admin-service 위임)
+  claim 으로 찍을 값이 없고, 호출자의 `X-Tenant-Id`(운영자가 고른 활성 테넌트)를 **벗기지 않고 전달**한다. admin-service 는 그 값을
+  **신뢰하지 않고** 운영자 범위로 판정한다(범위 밖 → 403). 벗기던 동안 admin-service 는 운영자 홈 테넌트로 떨어져, 전환한 테넌트의
+  계정 잠금이 404 였다([`gateway-api.md` § Admin Routes](../contracts/http/gateway-api.md)).
 
 ---
 

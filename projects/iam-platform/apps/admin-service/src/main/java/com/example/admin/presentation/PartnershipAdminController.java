@@ -126,7 +126,8 @@ public class PartnershipAdminController {
             @RequestParam(value = "size", defaultValue = "20") int size) {
         int cappedSize = Math.min(Math.max(size, 1), 100);
         TenantPartnershipPort.PartnershipPage result =
-                managementUseCase.list(actingTenantId, role, status, Math.max(page, 0), cappedSize);
+                managementUseCase.list(OperatorContextHolder.require(), actingTenantId, role, status,
+                        Math.max(page, 0), cappedSize);
         List<PartnershipListItem> items = result.content().stream()
                 .map(v -> PartnershipListItem.from(v, actingTenantId,
                         managementUseCase.participantCount(v.internalId())))

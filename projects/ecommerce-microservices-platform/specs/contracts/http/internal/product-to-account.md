@@ -8,11 +8,12 @@
 
 ## Authentication
 
-GAP `client_credentials` Bearer JWT (`Authorization: Bearer <jwt>`), obtained + cached by
-product-service `IamClientCredentialsTokenProvider` (mirrors admin-service, ADR-005 단계 3b).
-The account `/internal/**` chain dual-allows JWT or `X-Internal-Token` (BE-317). The
-caller also stamps `X-Tenant-Id` as defense-in-depth (the receiver re-checks it against
-the path `{tenantId}`).
+GAP `client_credentials` Bearer JWT (`Authorization: Bearer <jwt>`), exchanged per target
+tenant by `TenantScopedIamTokenProvider` (ADR-MONO-076 — the `/internal/tenants/{tenantId}/**`
+surface authorises `tenant_id == path tenant`, so the base credential is refused there). Every
+call below names a tenant in its path (TASK-MONO-737, § 3), so every call carries the
+tenant-scoped token. The caller also stamps `X-Tenant-Id` as defense-in-depth (the receiver
+re-checks it against the path `{tenantId}`).
 
 ## Availability stance — FAIL-SOFT (ADR-042 D3)
 
@@ -67,19 +68,26 @@ operable); filled on re-provision.
 
 ### 3. Lock the backing account on seller SUSPEND (D4)
 
-`POST /internal/accounts/{accountId}/lock` — `AccountLockController`.
-Request: `{ "reason": "ADMIN_LOCK", "operatorId": "product-service" }` + `Idempotency-Key`
-+ **`X-Tenant-Id: {tenantId}`** (TASK-MONO-735 — the seller's tenant, the one the account was
-minted in by §1). account-service confines the lookup to that tenant: an `accountId` that lives
-in another tenant is `404 ACCOUNT_NOT_FOUND` and is **not** locked. Before TASK-MONO-735 this call
-sent no `X-Tenant-Id`, account-service read that as `fan-platform`, and a seller account (minted
-in the seller's own tenant, e.g. `ecommerce`) could not be found — so seller SUSPEND never locked
-the backing account (read from the code; the same shape was measured live on the two sibling
-lock paths, 2026-09-26). The path names no tenant, so the bearer stays the base credential
-(ADR-MONO-076 changes only calls whose PATH names a tenant) — the header is a lookup scope, not
-an authorization claim.
+**The same call as §4** — `PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status` with
+`{ "status": "LOCKED", "operatorId": "product-service" }`, the tenant-scoped bearer
+(ADR-MONO-076) and `X-Tenant-Id: {tenantId}` (the seller's tenant, the one §1 minted the account
+in). An `accountId` that lives in another tenant is `404` and is **not** locked. The recorded
+reason is `OPERATOR_PROVISIONING_STATUS_CHANGE` (the EP hardcodes it); consumers of
+`account.locked` read the reason for logging only. SUSPEND and CLOSE therefore leave the account
+in the same state (`LOCKED`) and differ only on the seller side.
 Called only when the seller has a stored `accountId` (null-safe / net-zero otherwise).
-Idempotent (re-locking an already-locked account is a no-op at the EP).
+Idempotent (`LOCKED → LOCKED` is permitted for that reason).
+
+> **TASK-MONO-737 — why not `POST /internal/accounts/{accountId}/lock`.** SUSPEND used that
+> endpoint until 2026-09-29. It names no tenant in its path, and in the deployed topology
+> product-service does not reach account-service directly: its base URL is the IAM gateway
+> (`infra/demo/demo.env` `ACCOUNT_SERVICE_BASE_URL=http://iam.<domain>`), whose only internal
+> route is `/internal/tenants/**`. Every SUSPEND was therefore a gateway **no-route 404**,
+> swallowed by the fail-soft stance above — measured live 2026-09-27: seller `SUSPENDED`,
+> account still `ACTIVE`. `TASK-MONO-735` had just added `X-Tenant-Id` to that call; the header
+> was right about the lookup and irrelevant to the route. No suite saw it because every suite
+> calls account-service (or a mock of it) directly — so the rule this contract now carries is
+> structural: **every call in this contract names a tenant in its path.**
 
 ### 4. Deactivate the backing account on seller CLOSE (D4)
 

@@ -71,16 +71,26 @@ public class ManageOperatorOrgScopeUseCase {
      * or 1 row; an operator with no explicit assignment row for the active tenant
      * (e.g. home-tenant-only) yields an empty list. Read-only; no audit row.
      *
+     * <p>TASK-MONO-737: the active tenant is caller-chosen, so it is gated against the
+     * caller's {@code operator.manage} scope exactly like {@link #setOrgScope} (read-path:
+     * 403, no DENIED row). Before, this trusted it outright — hidden only because the IAM
+     * gateway stripped {@code X-Tenant-Id}, which it no longer does on {@code /api/admin/**}.
+     *
      * @param operatorPublicId target operator's external UUID v7
      * @param activeTenant     the active tenant ({@code X-Tenant-Id})
+     * @param caller           authenticated operator (JWT principal)
+     * @throws com.example.admin.application.exception.TenantScopeDeniedException when
+     *         {@code activeTenant} is outside the caller's {@code operator.manage} scope
      */
     @Transactional(readOnly = true)
     public List<OperatorTenantAssignmentPort.AssignmentView> listAssignments(String operatorPublicId,
-                                                                             String activeTenant) {
+                                                                             String activeTenant,
+                                                                             OperatorContext caller) {
         AdminOperatorPort.OperatorView operator = resolveOperator(operatorPublicId);
         if (activeTenant == null || activeTenant.isBlank()) {
             return List.of();
         }
+        tenantScopeGuard.requireTenantReadable(caller, Permission.OPERATOR_MANAGE, activeTenant);
         Optional<OperatorTenantAssignmentPort.AssignmentView> assignment =
                 assignmentPort.findAssignment(operator.internalId(), activeTenant);
         return assignment.map(List::of).orElseGet(List::of);

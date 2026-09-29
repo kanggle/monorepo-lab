@@ -48,6 +48,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final Pattern INTERNAL_TENANT_PATH_PATTERN =
             Pattern.compile("^/internal/tenants/([^/]+)(/.*)?$");
     private static final String FALLBACK_METRIC_NAME = "gateway_tenant_fallback_total";
+    /** TASK-MONO-737 — the subtree whose caller-chosen {@code X-Tenant-Id} is passed through. */
+    private static final String ADMIN_SUBTREE_PREFIX = "/api/admin/";
 
     private final TokenValidator tokenValidator;
     private final RouteConfig routeConfig;
@@ -75,8 +77,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
 
-        // 1. Always strip spoofed headers (including X-Tenant-Id from external clients)
-        ServerHttpRequest stripped = stripSpoofedHeaders(request);
+        // 1. Always strip spoofed headers (including X-Tenant-Id from external clients —
+        //    except on the admin subtree, see keepsCallerTenant)
+        ServerHttpRequest stripped = stripSpoofedHeaders(request, path);
         ServerWebExchange strippedExchange = exchange.mutate().request(stripped).build();
 
         // 2. Public routes pass through without auth
@@ -215,14 +218,41 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return builder.build();
     }
 
-    private ServerHttpRequest stripSpoofedHeaders(ServerHttpRequest request) {
+    private ServerHttpRequest stripSpoofedHeaders(ServerHttpRequest request, String path) {
+        boolean keepTenant = keepsCallerTenant(path);
         return request.mutate()
                 .headers(h -> {
                     h.remove(ACCOUNT_ID_HEADER);
                     h.remove(DEVICE_ID_HEADER);
-                    h.remove(TENANT_ID_HEADER);
+                    if (!keepTenant) {
+                        h.remove(TENANT_ID_HEADER);
+                    }
                 })
                 .build();
+    }
+
+    /**
+     * TASK-MONO-737 — on {@code /api/admin/**} the caller's {@code X-Tenant-Id} is NOT a
+     * spoofed identity header: it is the operator's selected active tenant, a request
+     * parameter that admin-service gates against the operator's scope
+     * ({@code QueryTenantScopeGate} / {@code TenantScopeGuard} — out of scope → 403). The
+     * gateway performs no JWT verification on this subtree (gateway-api.md § Admin Routes:
+     * public, verification delegated to admin-service), so it has no claim to stamp in its
+     * place — stripping it left admin-service with no header at all, and every tenant-scoped
+     * admin call silently fell back to the operator's HOME tenant.
+     *
+     * <p>Measured live 2026-09-27 (17th window): a console operator switched to
+     * {@code ecommerce} locked an {@code ecommerce} account and got 404, because the lock
+     * reached account-service confined to the operator's home tenant {@code demo-corp}.
+     * The direct topology (CI/e2e, console → admin-service with no gateway) always
+     * delivered the header, which is why no suite saw it.
+     *
+     * <p>🔴 {@code X-Account-ID} / {@code X-Device-Id} are still stripped here — those ARE
+     * identity assertions. And every other path still strips {@code X-Tenant-Id}: on a
+     * JWT-verified route the value is the token's {@code tenant_id} claim, never the caller's.
+     */
+    static boolean keepsCallerTenant(String path) {
+        return path != null && path.startsWith(ADMIN_SUBTREE_PREFIX);
     }
 
     private String extractAccountId(Map<String, Object> claims) {

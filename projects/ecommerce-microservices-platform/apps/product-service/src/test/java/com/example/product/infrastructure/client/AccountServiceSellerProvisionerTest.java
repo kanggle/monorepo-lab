@@ -1,7 +1,6 @@
 package com.example.product.infrastructure.client;
 
 import com.example.product.application.port.SellerAccountProvisioner.ProvisioningResult;
-import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,16 +37,14 @@ class AccountServiceSellerProvisionerTest {
     void setUp() {
         wireMock = new WireMockServer(wireMockConfig().dynamicPort());
         wireMock.start();
-        IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
-        when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        // 🔴 TASK-MONO-721 (ADR-MONO-076 D1): the two providers yield DIFFERENT tokens, and the
-        // difference is the ticket. Calls whose path names a tenant must carry the EXCHANGED
-        // one; the base credential is refused on that surface by construction. The distinct
-        // literals are what let the cells below tell which one was used.
+        // 🔴 TASK-MONO-721 (ADR-MONO-076 D1): calls whose path names a tenant carry the
+        // EXCHANGED token; the base credential is refused on that surface by construction.
+        // TASK-MONO-737: since the lock moved to the tenant path, EVERY call is on that surface —
+        // the adapter no longer holds the base credential at all.
         tenantTokenProvider = mock(TenantScopedIamTokenProvider.class);
-        when(tenantTokenProvider.bearerFor("tenant-a")).thenReturn("test-jwt-tenant-a");
+        org.mockito.Mockito.lenient().when(tenantTokenProvider.bearerFor("tenant-a")).thenReturn("test-jwt-tenant-a");
         provisioner = new AccountServiceSellerProvisioner(
-                wireMock.baseUrl(), 3000, 5000, "SELLER", tokenProvider, tenantTokenProvider);
+                wireMock.baseUrl(), 3000, 5000, "SELLER", tenantTokenProvider);
     }
 
     @AfterEach
@@ -108,20 +105,23 @@ class AccountServiceSellerProvisionerTest {
     }
 
     @Test
-    @DisplayName("🔵 대조군 — 경로에 테넌트가 **없는** lock 호출은 기본 자격 그대로다")
-    void tenantlessPathKeepsTheBaseCredential() {
-        // /internal/accounts/{id}/lock names no tenant in its PATH, so the tenant-scoped token
-        // exchange does not apply and exchanging would be work with no reason. 🔴 Without this
-        // cell, "switch everything to the exchanged token" would look equally correct.
-        // (TASK-MONO-735: the call now carries X-Tenant-Id as a LOOKUP scope — that is a header,
-        // not the bearer; see lockAccount_sendsSellersTenantAsXTenantId.)
-        wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+    @DisplayName("🔴 TASK-MONO-737 — 어떤 호출도 /internal/accounts/** 로 가지 않는다 (배포 토폴로지의 IAM 게이트웨이엔 그 라우트가 없다)")
+    void noCallTargetsTheUnroutedTenantlessSurface() {
+        // In the deployed topology this adapter's base URL is the IAM gateway, whose only
+        // internal route is /internal/tenants/** — a tenantless /internal/accounts/{id}/lock is a
+        // gateway no-route 404 there (measured live 2026-09-27: seller SUSPENDED, account ACTIVE).
+        // This cell used to pin exactly that call as correct ("base credential for the tenantless
+        // lock"); a wiremock that answers any path could never tell the difference.
+        wireMock.stubFor(patch(urlPathMatching("/internal/tenants/tenant-a/accounts/acct-1/status"))
                 .willReturn(aResponse().withStatus(200)));
 
         provisioner.lockAccount("tenant-a", "acct-1");
+        provisioner.deactivateAccount("tenant-a", "acct-1");
 
-        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock"))
-                .withHeader("Authorization", equalTo("Bearer test-jwt")));
+        assertThat(wireMock.getAllServeEvents())
+                .extracting(e -> e.getRequest().getUrl())
+                .isNotEmpty()
+                .allSatisfy(url -> assertThat(url).startsWith("/internal/tenants/"));
     }
 
     @Test
@@ -169,30 +169,40 @@ class AccountServiceSellerProvisionerTest {
     // ─── deactivation (D4) ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("lockAccount - non-null accountId → POST /internal/accounts/{id}/lock 1회")
-    void lockAccount_callsLock() {
-        wireMock.stubFor(post(urlPathMatching("/internal/accounts/acct-1/lock"))
+    @DisplayName("TASK-MONO-737: lockAccount — PATCH /internal/tenants/{셀러 테넌트}/accounts/{id}/status, body status='LOCKED' 1회")
+    void lockAccount_patchesTenantPathStatusLocked() {
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .atPriority(10)
+                .willReturn(aResponse().withStatus(400))); // catch-all: any non-LOCKED body
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .atPriority(1)
+                .withRequestBody(equalToJson(
+                        "{\"status\":\"LOCKED\",\"operatorId\":\"product-service\"}"))
                 .willReturn(aResponse().withStatus(200)));
 
         provisioner.lockAccount("tenant-a", "acct-1");
 
-        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock")));
+        wireMock.verify(1, patchRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
+                .withRequestBody(matchingJsonPath("$.status", equalTo("LOCKED"))));
     }
 
     @Test
-    @DisplayName("TASK-MONO-735: lockAccount — 셀러의 테넌트를 X-Tenant-Id 로 싣는다 (기본 자격 bearer 는 그대로)")
-    void lockAccount_sendsSellersTenantAsXTenantId() {
-        // Stub answers ONLY when the seller's tenant is on the request — the pre-MONO-735 shape
-        // (no header, which account-service read as fan-platform → 404) falls through to 404.
-        wireMock.stubFor(post(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+    @DisplayName("TASK-MONO-737: lockAccount — 올바른 구체 테넌트(셀러 테넌트)를 X-Tenant-Id 와 교환 토큰으로 싣는다 → 200")
+    void lockAccount_carriesSellersTenant_headerAndExchangedBearer() {
+        // Answers ONLY when path tenant, X-Tenant-Id and the tenant-scoped bearer all name the
+        // seller's tenant — the gateway stamps X-Tenant-Id from the bearer's tenant_id and
+        // account-service's TenantScopeGuard requires it to equal the path. Anything else 404s.
+        wireMock.stubFor(patch(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
                 .withHeader("X-Tenant-Id", equalTo("tenant-a"))
+                .withHeader("Authorization", equalTo("Bearer test-jwt-tenant-a"))
                 .willReturn(aResponse().withStatus(200)));
 
         provisioner.lockAccount("tenant-a", "acct-1");
 
-        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/accounts/acct-1/lock"))
+        wireMock.verify(patchRequestedFor(urlPathEqualTo("/internal/tenants/tenant-a/accounts/acct-1/status"))
                 .withHeader("X-Tenant-Id", equalTo("tenant-a"))
-                .withHeader("Authorization", equalTo("Bearer test-jwt")));
+                .withHeader("Authorization", equalTo("Bearer test-jwt-tenant-a")));
+        verify(tenantTokenProvider).bearerFor("tenant-a");
     }
 
     @Test
@@ -206,7 +216,7 @@ class AccountServiceSellerProvisionerTest {
     @Test
     @DisplayName("lockAccount - 5xx → fail-soft (no throw)")
     void lockAccount_5xx_failSoft() {
-        wireMock.stubFor(post(urlPathMatching("/internal/accounts/acct-1/lock"))
+        wireMock.stubFor(patch(urlPathMatching("/internal/tenants/tenant-a/accounts/acct-1/status"))
                 .willReturn(aResponse().withStatus(503)));
 
         // must not throw
