@@ -2,6 +2,7 @@ package com.example.auth.presentation;
 
 import com.example.auth.application.port.TenantSignupEligibilityPort;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -52,6 +53,9 @@ public class LoginPageController {
     /** TASK-BE-581: whether signup may be OFFERED for that tenant. */
     private final TenantSignupEligibilityPort tenantSignupEligibilityPort;
 
+    /** TASK-BE-613 (ADR-007): which service this page presents itself as. */
+    private final LoginBrandingResolver loginBrandingResolver;
+
     @GetMapping("/login")
     public String loginPage(
             @RequestParam(name = "error", required = false) String error,
@@ -60,6 +64,7 @@ public class LoginPageController {
             HttpServletRequest request,
             HttpServletResponse response,
             Model model) {
+        model.addAttribute("branding", loginBrandingResolver.resolve(request, response));
         model.addAttribute("providers", PROVIDERS);
         model.addAttribute("error", error);
         model.addAttribute("loggedOut", logout != null);

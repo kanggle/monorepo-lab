@@ -25,7 +25,7 @@
 
 | 경로 | 역할 |
 |---|---|
-| `GET /login` | 커스텀 Thymeleaf 로그인 페이지(`LoginPageController` + `templates/login.html`). email/password 폼 + 소셜 버튼(Google/Kakao/Microsoft/Naver, `OAuthProvider.values()` 자동 렌더). CSRF 토큰 포함. `DefaultLoginPageGeneratingFilter` 대체(`.loginPage("/login")`). |
+| `GET /login` | 커스텀 Thymeleaf 로그인 페이지(`LoginPageController` + `templates/login.html`). email/password 폼 + 소셜 버튼(Google/Kakao/Microsoft/Naver, `OAuthProvider.values()` 자동 렌더). CSRF 토큰 포함. `DefaultLoginPageGeneratingFilter` 대체(`.loginPage("/login")`). **브랜딩(ADR-007)**: 제목·부제·로고·대표색은 저장된 `/oauth2/authorize` 요청의 `client_id` → 등록 client `ClientSettings` `custom.branding.*` 로 고른다(`LoginBrandingResolver`, 현재 요청의 파라미터는 읽지 않음). 판별 불가·미설정 client → `IAM` / `IAM 로그인`. `/signup` 도 같은 브랜드(`<서비스명> 회원가입`). 폼 계약(`#username`·`#password`·CSRF·`POST /login`·submit 버튼 1개)은 불변. |
 | `GET /login/oauth/{provider}` | 소셜 인증 개시. 요청 base 로부터 브라우저 콜백 URI(`scheme://host[:port]/login/oauth/{provider}/callback`)를 계산해 `OAuthLoginUseCase.authorize` 호출 → provider authorization URL 로 redirect. |
 | `GET /login/oauth/{provider}/callback` | provider 콜백. `OAuthLoginUseCase.resolveBrowserLogin` 으로 계정 해소 → SAS 세션 확립 → saved `/oauth2/authorize` 로 redirect. |
 

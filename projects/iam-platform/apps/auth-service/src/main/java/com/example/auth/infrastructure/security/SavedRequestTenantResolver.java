@@ -94,6 +94,21 @@ public class SavedRequestTenantResolver {
         return Optional.ofNullable(clientTenant(extractClientId(saved))).map(TenantInfo::tenantId);
     }
 
+    /**
+     * TASK-BE-613 (ADR-007) — the registered OIDC client that <b>initiated</b> this browser flow,
+     * or empty when there is none. Same trust rule as the tenant: the {@code client_id} is read
+     * only from a saved {@code /oauth2/authorize} request, never from the current request, so a
+     * query parameter cannot pick which client's settings (branding included) a page shows.
+     */
+    public Optional<RegisteredClient> initiatingClient(HttpServletRequest request,
+                                                       HttpServletResponse response) {
+        String clientId = extractClientId(requestCache.getRequest(request, response));
+        if (clientId == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(registeredClientRepository.findByClientId(clientId));
+    }
+
     private String extractClientId(SavedRequest saved) {
         if (saved == null) {
             return null;

@@ -4,6 +4,7 @@ import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +65,8 @@ class SignupPageControllerSliceTest {
         tenantSignupEligibilityPort = mock(TenantSignupEligibilityPort.class);
         when(tenantSignupEligibilityPort.isSignupOffered(any())).thenReturn(true);
         mockMvc = MockMvcBuilders.standaloneSetup(new SignupPageController(
-                        accountServicePort, savedRequestTenantResolver, tenantSignupEligibilityPort))
+                        accountServicePort, savedRequestTenantResolver, tenantSignupEligibilityPort,
+                        new LoginBrandingResolver(savedRequestTenantResolver)))
                 .setViewResolvers(viewResolver)
                 .build();
     }
@@ -137,7 +139,7 @@ class SignupPageControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("signup"))
                 .andExpect(model().attribute("error", containsString("이메일 형식")))
-                .andExpect(model().attribute("error", containsString("패스워드")));
+                .andExpect(model().attribute("error", containsString("비밀번호")));
     }
 
     @Test

@@ -48,6 +48,27 @@ public class OAuthClientMapper {
     /** Custom ClientSettings key for the tenant type (e.g. B2C, B2B). */
     public static final String SETTING_TENANT_TYPE = "custom.tenant_type";
 
+    /*
+     * TASK-BE-613 (ADR-007 D1-A) — per-client branding of the shared /login and /signup pages.
+     * Display values only; read by LoginBranding, which validates and falls back per key.
+     * Seeded by V0040. Never consulted for any authorization or redirect decision.
+     */
+
+    /** Branding: the service name shown on the page (e.g. {@code GAP}). */
+    public static final String SETTING_BRANDING_SERVICE_NAME = "custom.branding.service-name";
+
+    /** Branding: the page title and heading. */
+    public static final String SETTING_BRANDING_TITLE = "custom.branding.title";
+
+    /** Branding: the subtitle under the heading. */
+    public static final String SETTING_BRANDING_DESCRIPTION = "custom.branding.description";
+
+    /** Branding: an allowlisted logo NAME — never a URL. */
+    public static final String SETTING_BRANDING_LOGO = "custom.branding.logo";
+
+    /** Branding: the primary colour as {@code #RRGGBB}. */
+    public static final String SETTING_BRANDING_PRIMARY_COLOR = "custom.branding.primary-color";
+
     /**
      * ClientSettings key under which post-logout redirect URIs are persisted in
      * the {@code oauth_clients.client_settings} JSON (V0011/V0012/V0016/V0021).

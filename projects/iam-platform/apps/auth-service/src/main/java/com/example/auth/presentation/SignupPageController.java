@@ -6,6 +6,7 @@ import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -69,6 +70,9 @@ public class SignupPageController {
      */
     private final TenantSignupEligibilityPort tenantSignupEligibilityPort;
 
+    /** TASK-BE-613 (ADR-007 D5-A): the signup page wears the same brand as the login page. */
+    private final LoginBrandingResolver loginBrandingResolver;
+
     /**
      * Shown when signup cannot succeed for this tenant, whether that was decided <b>before</b>
      * the call (TASK-BE-581's eligibility gate) or reported <b>by</b> the call
@@ -110,10 +114,14 @@ public class SignupPageController {
      * whether signup is possible there at all. Sets {@code signupBlocked} unconditionally so
      * the template never has to interpret an absent attribute.
      *
+     * <p>TASK-BE-613: also sets {@code branding}. Every render of {@code signup} — the GET and
+     * each error re-render of the POST — passes through here first, so none of them loses it.
+     *
      * @return {@code true} when signup is blocked for this flow
      */
     private boolean applySignupAvailability(HttpServletRequest request,
                                             HttpServletResponse response, Model model) {
+        model.addAttribute("branding", loginBrandingResolver.resolve(request, response));
         String tenantId = savedRequestTenantResolver.resolve(request, response).tenantId();
         boolean blocked = !tenantSignupEligibilityPort.isSignupOffered(tenantId);
         model.addAttribute("signupBlocked", blocked);
@@ -150,7 +158,7 @@ public class SignupPageController {
 
         // Server-side validation (source of truth; the page also pre-checks client-side).
         if (normalizedEmail.isEmpty() || password == null || password.isEmpty()) {
-            model.addAttribute("error", "이메일과 패스워드를 입력해 주세요.");
+            model.addAttribute("error", "이메일과 비밀번호를 입력해 주세요.");
             return "signup";
         }
         // TASK-BE-472: reject a malformed email here so the user gets an email-specific message.
@@ -161,11 +169,11 @@ public class SignupPageController {
             return "signup";
         }
         if (password.length() < 8) {
-            model.addAttribute("error", "패스워드는 8자 이상이어야 합니다.");
+            model.addAttribute("error", "비밀번호는 8자 이상이어야 합니다.");
             return "signup";
         }
         if (!password.equals(confirmPassword)) {
-            model.addAttribute("error", "패스워드가 일치하지 않습니다.");
+            model.addAttribute("error", "비밀번호가 일치하지 않습니다.");
             return "signup";
         }
 
@@ -198,7 +206,7 @@ public class SignupPageController {
             // problem, so name both — do not blame the password alone (the email pre-check above
             // already caught the common malformed-email case with a precise message).
             model.addAttribute("error",
-                    "입력값을 확인해 주세요. 이메일 형식이 올바른지, 그리고 패스워드가 8자 이상이며 "
+                    "입력값을 확인해 주세요. 이메일 형식이 올바른지, 그리고 비밀번호가 8자 이상이며 "
                             + "대문자·소문자·숫자·특수문자 중 3종 이상인지 확인해 주세요.");
             return "signup";
         } catch (AccountServiceUnavailableException e) {
