@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PublicArtist } from '@demo/public-data';
+import { FORM_FIELD_CLASS } from '@/shared/ui/formField';
 import { FEED_VISIBILITIES, isFeedFiltered, type FeedFilter, type FeedVisibility } from '../lib/select';
 
 const VISIBILITY_LABEL: Record<FeedVisibility, string> = {
@@ -8,8 +9,7 @@ const VISIBILITY_LABEL: Record<FeedVisibility, string> = {
   PREMIUM: '프리미엄',
 };
 
-const FIELD =
-  'rounded-md border border-ink-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 dark:bg-ink-900';
+const FIELD = FORM_FIELD_CLASS;
 
 /**
  * 공개 피드 필터 — **서버 렌더 GET 폼**이다(TASK-FAN-FE-025).

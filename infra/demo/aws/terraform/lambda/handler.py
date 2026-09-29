@@ -439,7 +439,32 @@ def _with_lock(owner, fn):
         _put(LOCK_PARAM, json.dumps({"owner": owner, "until": 0}))
 
 
-def _bundle_state(name, instance_state, snap, stale, selected):
+def _first_publish(published_at):
+    """이 세션에서 헬스가 아직 한 번도 발행되지 않았나 — `None` / `"pending"` / `"overdue"`.
+
+      None      — 이 구별을 하지 않는다: `STARTED_PARAM` 을 못 읽거나 0(terraform 초기값/센티널),
+                  또는 이 세션 시작 **후** 발행된 스냅샷이 있다(= 헬스 나이로 판정하는 옛 동작)
+      "pending" — 헬스가 없거나 `published_at < started`(지난 세션이 남긴 스냅샷)이고, 기동 후
+                  `FIRST_PUBLISH_GRACE_SECONDS` 안이다 ⇒ 「켜지는 중」
+      "overdue" — 같은데 상한을 넘었다 ⇒ 발행자가 죽었다고 본다(「켜지는 중」으로 붙들지 않는다)
+
+    🔴 TASK-MONO-701 이 `_selection_ready()` 안에 만든 판정을 TASK-MONO-738 이 여기로 뺐다 —
+       `/bundles` 도 같은 판정이 필요했고(론처 카드가 부팅 직후 「🔴 확인 실패」를 그렸다),
+       같은 사실을 두 집에서 계산하면 한쪽만 고쳐진다.
+    """
+    # `_recently_started()` 와 같은 관용구: 파싱 실패는 예외가 아니라 «모른다»(0).
+    try:
+        started = int(_get(STARTED_PARAM, 0) or 0)
+    except (ValueError, TypeError):
+        started = 0
+    if started <= 0 or (published_at is not None and published_at >= started):
+        return None
+    # 헬스가 아예 없거나, 있어도 **이 세션 시작 전** 것이다(stop→start 를 90초 안에 반복하면
+    # 나이만으로는 신선해 보인다). age 로 재지 않고 «이 세션에서 한 번이라도 발행됐는가» 로 가른다.
+    return "pending" if 0 <= _now() - started < FIRST_PUBLISH_GRACE_SECONDS else "overdue"
+
+
+def _bundle_state(name, instance_state, snap, stale, selected, first_publish=None):
     """묶음 하나의 상태 - 8단계로 판정한다.
 
     waiting / selected / requested / booting / ready / partial / stopping / unknown
@@ -480,6 +505,12 @@ def _bundle_state(name, instance_state, snap, stale, selected):
             return "waiting"
         # 🔴 여기가 653 이 가른 자리다. 위 독스트링의 (가) 와 (나).
         return "requested" if instance_state == "pending" else "selected"
+    if first_publish == "pending":
+        # 🔴 TASK-MONO-738 — 방금 켜서 이 세션의 첫 헬스 발행 전이다(§ _first_publish). 스냅샷은
+        #    지난 세션 것이거나 없으므로 **믿지 않되**, 「확인 실패」가 아니라 인스턴스 `pending`
+        #    과 같은 값을 낸다 — 켜지는 중이 참이고, 여기서 버튼을 열면 중복 요청이 된다.
+        #    선택이 비었으면(«전체 시작») 전부가 뜨는 중이다.
+        return "requested" if (name in selected or not selected) else "waiting"
     if stale:
         return "unknown"
     required = BUNDLE_REQUIRED_DOMAINS.get(name, ())
@@ -531,12 +562,13 @@ def bundles():
     snap, published_at = _parse_health(_get(HEALTH_PARAM))
     age = None if published_at is None else max(0, _now() - published_at)
     stale = state == "running" and (age is None or age > HEALTH_STALE_AFTER_SECONDS)
+    first = _first_publish(published_at) if state == "running" else None
     if state != "running":
         snap, age, stale = {}, None, False
     out = {}
     for name in sorted(BUNDLE_NAMES):
         out[name] = {
-            "state": _bundle_state(name, state, snap, stale, selected),
+            "state": _bundle_state(name, state, snap, stale, selected, first),
             "domains": list(BUNDLE_REQUIRED_DOMAINS[name]),
             "selected": name in selected,
             "addon": name in BUNDLE_ADDONS,
@@ -551,6 +583,8 @@ def bundles():
         "bundles": out,
         "health_age_seconds": age,
         "health_stale": stale,
+        # TASK-MONO-738 — 참이면 stale 은 «발행이 멈췄다» 가 아니라 «이 세션 첫 발행 전» 이다.
+        "health_first_publish_pending": first == "pending",
         "bundle_boot_supported": cap_ok,
         "bundle_boot_blocked": None if cap_ok else cap,
     })
@@ -784,20 +818,11 @@ def _selection_ready(state):
         if not selected:
             return None
         snap, published_at = _parse_health(_get(HEALTH_PARAM))
-        # TASK-MONO-701 — `STARTED_PARAM` 을 읽는다. `_recently_started()` 와 같은 관용구:
-        # 파싱 실패는 예외가 아니라 «모른다»(0) 로 떨어뜨린다 — 그래야 아래 분기가 옛 동작으로
-        # 자연히 빠지고, 이 함수 전체가 None 으로 죽지 않는다(SSM 실패는 여전히 위 except 가 문다).
-        try:
-            started = int(_get(STARTED_PARAM, 0) or 0)
-        except (ValueError, TypeError):
-            started = 0
-        if started > 0 and (published_at is None or published_at < started):
-            # 헬스가 아예 없거나, 있어도 **이 세션 시작 전** 것이다(지난 세션이 남긴 스냅샷 —
-            # stop→start 를 90초 안에 반복하면 나이만으로는 신선해 보인다). age 로 재지 않고
-            # «이 세션에서 한 번이라도 발행됐는가» 로 가른다.
-            now = _now()
-            if 0 <= now - started < FIRST_PUBLISH_GRACE_SECONDS:
-                return False  # 방금 켰다 — 아직 첫 발행 전일 뿐, 「켜지는 중」이 맞다.
+        # TASK-MONO-701 — 이 세션의 첫 발행 전 구간. 판정은 `/bundles` 와 같은 함수(§ _first_publish).
+        first = _first_publish(published_at)
+        if first == "pending":
+            return False  # 방금 켰다 — 아직 첫 발행 전일 뿐, 「켜지는 중」이 맞다.
+        if first == "overdue":
             return None  # 상한을 넘었다 — 발행자가 죽었다고 보고 옛 동작(None)으로.
         age = None if published_at is None else max(0, _now() - published_at)
         if age is None or age > HEALTH_STALE_AFTER_SECONDS:

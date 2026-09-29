@@ -8,6 +8,7 @@ import {
   ProvenanceBanner,
 } from '@/features/public-browse';
 import { Pagination } from '@/shared/ui/Pagination';
+import { FORM_FIELD_CLASS } from '@/shared/ui/formField';
 
 const PAGE_SIZE = 12;
 
@@ -48,7 +49,7 @@ export default async function ArtistsPage({
             name="q"
             defaultValue={q ?? ''}
             placeholder="아티스트 이름..."
-            className="rounded-md border border-ink-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            className={FORM_FIELD_CLASS}
           />
           <button
             type="submit"
