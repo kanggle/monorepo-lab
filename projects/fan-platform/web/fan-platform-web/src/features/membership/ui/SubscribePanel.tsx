@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { FORM_FIELD_CLASS } from '@/shared/ui/formField';
 import { subscribe, getUpgradeQuote, type UpgradeQuote } from '@/features/membership/api/actions';
 import { requestPortOnePayment, TIER_MONTHLY_KRW } from '@/features/membership/lib/portone-checkout';
 import { isDemoPayment } from '@/features/membership/lib/demo-payment';
@@ -155,7 +156,7 @@ export function SubscribePanel({
           <select
             value={planMonths}
             onChange={(e) => setPlanMonths(Number(e.target.value))}
-            className="rounded-md border border-ink-300 px-3 py-1.5 text-sm"
+            className={FORM_FIELD_CLASS}
           >
             {PLAN_OPTIONS.map((m) => (
               <option key={m} value={m}>
