@@ -257,3 +257,18 @@ docker exec wms-prometheus sh -lc \
 게이트웨이 7개 `JWT audience not on allowlist` WARN 은 전부 **0줄** — 정정 ③ 대로 분모가 없어 판정이 아니다.
 ⇒ 정정 ③ 의 마지막 문장 그대로다: *«그 질의가 빈 결과를 내면 결론은 «섀도가 관측 불가능하게 출하됐다» 이고, 그것은 이 티켓이 아니라 새 티켓(계측기를 노출하는 일)이다.»*
 → 새 티켓 **`TASK-MONO-736`** 기안. **AC-0 은 여전히 열려 있다 — 이 티켓은 `ready/` 에 그대로.**
+
+## 정정 ④ (2026-09-29 UTC) — AC-0 을 읽는 채널이 생겼다: 게이트웨이 로그의 **요약 줄** (`TASK-MONO-736` AC-0 ②, 소유자 결정)
+
+`TASK-MONO-736` 이 prometheus 스크레이프를 고치는 대신(①) 검증기 자신이 로그로 보고하게 했다(②). 공유 `AllowedAudiencesValidator`(`libs/java-security`)가 토큰이 들어오는 동안 **최대 1분에 한 번**, 기동 이후 **누적** 값으로 한 줄을 낸다:
+
+```
+JWT audience summary: gateway=<g> mode=SHADOW match=<n> mismatch=<m>
+```
+
+- **분자** = 마지막 줄의 `mismatch` · **분모** = 같은 줄의 `match`. 한 줄에 둘 다 있으므로 «분모는 로그로는 영영 못 센다»(정정 ③)가 해소된다.
+- 🔴 **줄이 없으면 «검사 0회» 다 — «불일치 0» 이 아니다.** 판정 술어: 게이트웨이마다 마지막 요약 줄이 **있고** `match > 0` **이고** `mismatch = 0`. 분모 0 = 미측정(위 AC-0 그대로).
+- 🔴 누적은 **기동 이후** 다 — 컨테이너가 재시작되면 0 부터 다시 센다. 창에서 트래픽을 돈 **뒤에** 읽고, 재시작 여부(`docker ps` 의 Up 시간)를 같이 기록한다.
+- 읽는 법(데모 인스턴스, 게이트웨이마다): `docker logs <gateway-container> 2>&1 | grep "JWT audience summary" | tail -1`
+- 이 채널은 **재굽기된 AMI 에서만** 존재한다(검증기는 앱 소스 — `infra/demo/aws/README.md` 배포 층). 736 머지 이후 커밋으로 구운 AMI 인지 먼저 확인한다.
+- 위 AC-0 본문(prometheus·WARN 줄 수)은 역사 기록으로 둔다. 이 절이 읽는 법의 현재판이다.
