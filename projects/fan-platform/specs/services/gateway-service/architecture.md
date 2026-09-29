@@ -237,7 +237,9 @@ Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/ia
   fan web app's client — the operator console does not fan out to fan) ≠ ∅. Empty or absent
   allowlist fails the boot. `fanplatform.oauth2.audience-mode` ships **SHADOW** (mismatch
   logged + counted on `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is
-  the separate phase-2 change.
+  the separate phase-2 change. A cumulative `JWT audience summary: gateway=… mode=… match=…
+  mismatch=…` INFO line (at most once a minute while tokens arrive) is what that phase reads
+  (TASK-MONO-736).
 - Tenant: `TenantClaimValidator` — only `tenant_id ∈ { fan-platform, * }`. The
   wildcard accommodates SUPER_ADMIN platform-scope tokens.
 - Forwarded headers after successful validation:

@@ -219,7 +219,8 @@ Per `platform/security-rules.md` and
   its reach was not measured) ≠ ∅. Empty or absent allowlist fails the boot.
   `scmplatform.oauth2.audience-mode` ships **SHADOW** (mismatch logged + counted on
   `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is the separate
-  phase-2 change.
+  phase-2 change. A cumulative `JWT audience summary: gateway=… mode=… match=… mismatch=…` INFO
+  line (at most once a minute while tokens arrive) is what that phase reads (TASK-MONO-736).
 - Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
   (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
   (`*` = SUPER_ADMIN platform-scope) **or** the IAM-signed `entitled_domains`

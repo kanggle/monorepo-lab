@@ -7,6 +7,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -80,6 +84,30 @@ import org.springframework.security.oauth2.jwt.Jwt;
  * denominator rule exists to catch. They kept the name {@code gateway} through this move for that
  * reason, even though the class now also serves a non-gateway edge.
  *
+ * <h2>The summary line — the channel {@code TASK-MONO-697} actually reads</h2>
+ *
+ * The counter above turned out to be unreadable on the demo stack: no domain prometheus could
+ * scrape a gateway (401 on one, connection failures on the others — {@code TASK-MONO-736}), and
+ * the per-mismatch WARN has no denominator, so "0 WARN lines" could not be told from "no token
+ * was ever checked". The owner chose ({@code TASK-MONO-736} AC-0 ②) to have the check report
+ * <em>itself</em>, in the log every edge already ships:
+ *
+ * <pre>JWT audience summary: gateway=&lt;g&gt; mode=&lt;SHADOW|ENFORCE&gt; match=&lt;n&gt; mismatch=&lt;m&gt;</pre>
+ *
+ * <ul>
+ *   <li>The counts are <strong>cumulative since this validator was built</strong> (i.e. since the
+ *       edge started) — so the last line is the whole answer, and a restart visibly resets it.</li>
+ *   <li>It is emitted from {@link #validate} at most once per {@link #SUMMARY_INTERVAL_SECONDS}
+ *       seconds, the first check included — no thread, no scheduler, because this class is
+ *       framework-neutral and owns no lifecycle to stop one with.</li>
+ *   <li>🔴 Therefore <strong>no line means no token was checked</strong>, never "zero
+ *       mismatches". The reading predicate is: the last line exists <em>and</em> {@code match > 0}
+ *       — the same denominator rule as the counter.</li>
+ * </ul>
+ *
+ * <p>The prefix {@value #SUMMARY_LOG_PREFIX} and the {@code key=value} names are wire for the
+ * same reason the metric name is: {@code TASK-MONO-697} greps for them.
+ *
  * <p>{@code GatewayJwtDecoders.validatorChain} (in {@code libs/java-gateway}) takes an instance of
  * <em>this class</em> as a required argument — not any {@code OAuth2TokenValidator} — so a gateway
  * cannot hand it a no-op, and runs it <em>after</em> the rest of the chain has passed (see there
@@ -97,6 +125,14 @@ public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt
     public static final String OUTCOME_MISMATCH_SHADOWED = "mismatch_shadowed";
     public static final String OUTCOME_MISMATCH_REJECTED = "mismatch_rejected";
 
+    /** Wire prefix of the periodic summary line (see the class comment). */
+    public static final String SUMMARY_LOG_PREFIX = "JWT audience summary:";
+
+    /** At most one summary line per this many seconds, per validator. */
+    public static final long SUMMARY_INTERVAL_SECONDS = 60;
+
+    private static final long SUMMARY_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(SUMMARY_INTERVAL_SECONDS);
+
     private static final Logger log = LoggerFactory.getLogger(AllowedAudiencesValidator.class);
 
     /** Log-hygiene bound for a single {@code aud} value; client ids are far shorter. */
@@ -107,6 +143,12 @@ public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt
     private final AudienceMode mode;
     private final Counter matchCounter;
     private final Counter mismatchCounter;
+    private final AtomicLong matches = new AtomicLong();
+    private final AtomicLong mismatches = new AtomicLong();
+    private final LongSupplier nanoClock;
+    private final Consumer<String> summarySink;
+    /** {@code nanoClock} value at or after which the next summary line is due. */
+    private final AtomicLong nextSummaryAt;
 
     /**
      * @param gateway          a short, fixed name for this edge — it becomes a metric tag and a log
@@ -120,11 +162,22 @@ public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt
      */
     public AllowedAudiencesValidator(String gateway, List<String> allowedAudiences,
                                      AudienceMode mode, MeterRegistry meterRegistry) {
+        this(gateway, allowedAudiences, mode, meterRegistry, System::nanoTime, log::info);
+    }
+
+    /** Test seam: a controllable clock and a summary sink in place of the logger. */
+    AllowedAudiencesValidator(String gateway, List<String> allowedAudiences, AudienceMode mode,
+                              MeterRegistry meterRegistry, LongSupplier nanoClock,
+                              Consumer<String> summarySink) {
         if (gateway == null || gateway.isBlank()) {
             throw new IllegalArgumentException("gateway must be a non-blank constant name");
         }
         Objects.requireNonNull(mode, "mode");
         Objects.requireNonNull(meterRegistry, "meterRegistry");
+        this.nanoClock = Objects.requireNonNull(nanoClock, "nanoClock");
+        this.summarySink = Objects.requireNonNull(summarySink, "summarySink");
+        // Due immediately: the first check of an edge's life prints a line.
+        this.nextSummaryAt = new AtomicLong(nanoClock.getAsLong());
         Set<String> allowed = new LinkedHashSet<>();
         if (allowedAudiences != null) {
             for (String value : allowedAudiences) {
@@ -163,11 +216,15 @@ public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt
             for (String audience : audiences) {
                 if (audience != null && allowedAudiences.contains(audience)) {
                     matchCounter.increment();
+                    matches.incrementAndGet();
+                    maybeSummarize();
                     return OAuth2TokenValidatorResult.success();
                 }
             }
         }
         mismatchCounter.increment();
+        mismatches.incrementAndGet();
+        maybeSummarize();
         log.warn("JWT audience not on allowlist: gateway={} mode={} jti={} aud={}",
                 gateway, mode, sanitize(token.getId()), sanitize(audiences));
         if (mode == AudienceMode.SHADOW) {
@@ -192,6 +249,29 @@ public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt
     /** The effective allowlist (trimmed, blanks dropped). */
     public Set<String> allowedAudiences() {
         return allowedAudiences;
+    }
+
+    /** The summary line for the given cumulative counts — the exact wire format. */
+    static String summaryLine(String gateway, AudienceMode mode, long match, long mismatch) {
+        return SUMMARY_LOG_PREFIX + " gateway=" + gateway + " mode=" + mode
+                + " match=" + match + " mismatch=" + mismatch;
+    }
+
+    /**
+     * Emits the summary line if one is due. The compare-and-set makes concurrent checks at the
+     * boundary produce exactly one line; the losers simply skip — the next due line carries
+     * their counts anyway, because the counts are cumulative.
+     */
+    private void maybeSummarize() {
+        long now = nanoClock.getAsLong();
+        long due = nextSummaryAt.get();
+        if (now - due < 0) {
+            return;
+        }
+        if (!nextSummaryAt.compareAndSet(due, now + SUMMARY_INTERVAL_NANOS)) {
+            return;
+        }
+        summarySink.accept(summaryLine(gateway, mode, matches.get(), mismatches.get()));
     }
 
     private static List<String> sanitize(List<String> values) {

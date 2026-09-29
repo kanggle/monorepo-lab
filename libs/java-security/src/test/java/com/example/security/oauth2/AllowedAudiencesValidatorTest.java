@@ -158,6 +158,126 @@ class AllowedAudiencesValidatorTest {
     }
 
     /**
+     * TASK-MONO-736 AC-0 ② — the channel TASK-MONO-697 reads. The counter was unreadable on the
+     * demo stack, so the check reports itself in the log: cumulative counts, at most one line per
+     * interval, piggybacked on {@code validate}. No line = no check, never "zero mismatches".
+     */
+    @Nested
+    @DisplayName("요약 줄 — 누적 match · mismatch 를 주기적으로 한 줄 (TASK-MONO-736)")
+    class SummaryLine {
+
+        private static final long INTERVAL =
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(AllowedAudiencesValidator.SUMMARY_INTERVAL_SECONDS);
+
+        private final java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000L);
+        private final List<String> lines = new ArrayList<>();
+
+        private AllowedAudiencesValidator build(AudienceMode mode) {
+            return new AllowedAudiencesValidator(GATEWAY, ALLOWLIST, mode, registry, now::get, lines::add);
+        }
+
+        @Test
+        @DisplayName("🔴 형식은 wire 다 — 697 이 이 접두사와 key=value 를 grep 한다")
+        void wireFormat() {
+            assertThat(AllowedAudiencesValidator.summaryLine("edge-a", AudienceMode.SHADOW, 12, 0))
+                    .isEqualTo("JWT audience summary: gateway=edge-a mode=SHADOW match=12 mismatch=0");
+            assertThat(AllowedAudiencesValidator.SUMMARY_LOG_PREFIX).isEqualTo("JWT audience summary:");
+        }
+
+        @Test
+        @DisplayName("🔴 검사가 한 번도 없으면 줄도 없다 — «불일치 0» 이 아니라 «잰 적 없음» 이다")
+        void noCheck_noLine() {
+            build(AudienceMode.SHADOW);
+            now.addAndGet(10 * INTERVAL);
+            assertThat(lines).isEmpty();
+        }
+
+        @Test
+        @DisplayName("첫 검사가 곧바로 한 줄을 낸다 (match=1)")
+        void firstCheck_emitsImmediately() {
+            build(AudienceMode.SHADOW).validate(jwt(List.of("web-client")));
+            assertThat(lines).containsExactly(
+                    "JWT audience summary: gateway=edge-a mode=SHADOW match=1 mismatch=0");
+        }
+
+        @Test
+        @DisplayName("간격 안의 검사는 줄을 더 내지 않고, 간격이 지나면 **누적** 값으로 한 줄")
+        void throttledAndCumulative() {
+            AllowedAudiencesValidator v = build(AudienceMode.SHADOW);
+            v.validate(jwt(List.of("web-client")));          // line 1: match=1
+            v.validate(jwt(List.of("console-client")));
+            v.validate(jwt(List.of("stranger")));            // shadowed mismatch
+            now.addAndGet(INTERVAL - 1);
+            v.validate(jwt(List.of("web-client")));
+            assertThat(lines).hasSize(1);
+
+            now.addAndGet(1);                                // exactly due
+            v.validate(jwt(List.of("web-client")));
+            assertThat(lines).hasSize(2);
+            assertThat(lines.get(1))
+                    .isEqualTo("JWT audience summary: gateway=edge-a mode=SHADOW match=4 mismatch=1");
+        }
+
+        @Test
+        @DisplayName("요약의 수는 메트릭과 같은 사실을 센다")
+        void summaryAgreesWithCounter() {
+            AllowedAudiencesValidator v = build(AudienceMode.SHADOW);
+            v.validate(jwt(List.of("web-client")));
+            v.validate(jwt(null));
+            v.validate(jwt(List.of("stranger")));
+            now.addAndGet(INTERVAL);
+            v.validate(jwt(List.of("console-client")));
+            assertThat(lines.get(lines.size() - 1)).endsWith(
+                    "match=" + (long) count(AllowedAudiencesValidator.OUTCOME_MATCH)
+                            + " mismatch=" + (long) count(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED));
+            assertThat(count(AllowedAudiencesValidator.OUTCOME_MATCH)).isEqualTo(2.0); // non-vacuous
+        }
+
+        @Test
+        @DisplayName("ENFORCE 에서도 낸다 — mode 가 줄에 찍힌다, 거절도 mismatch 로 센다")
+        void enforceAlsoReports() {
+            AllowedAudiencesValidator v = build(AudienceMode.ENFORCE);
+            assertThat(v.validate(jwt(List.of("stranger"))).hasErrors()).isTrue();
+            assertThat(lines).containsExactly(
+                    "JWT audience summary: gateway=edge-a mode=ENFORCE match=0 mismatch=1");
+        }
+
+        @Test
+        @DisplayName("같은 시각의 동시 검사 여럿 → 줄은 하나")
+        void concurrentChecksAtBoundary_oneLine() throws Exception {
+            List<String> synced = java.util.Collections.synchronizedList(lines);
+            AllowedAudiencesValidator shared = new AllowedAudiencesValidator(
+                    GATEWAY, ALLOWLIST, AudienceMode.SHADOW, new SimpleMeterRegistry(), now::get, synced::add);
+            java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+            try {
+                java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+                List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+                for (int i = 0; i < 64; i++) {
+                    futures.add(pool.submit(() -> {
+                        start.await();
+                        return shared.validate(jwt(List.of("web-client")));
+                    }));
+                }
+                start.countDown();
+                for (java.util.concurrent.Future<?> f : futures) {
+                    f.get();
+                }
+            } finally {
+                pool.shutdownNow();
+            }
+            assertThat(synced).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("공개 생성자는 로거로 낸다 — 예외 없이 동작")
+        void publicConstructor_usesLogger() {
+            AllowedAudiencesValidator v =
+                    new AllowedAudiencesValidator(GATEWAY, ALLOWLIST, AudienceMode.SHADOW, registry);
+            assertThat(v.validate(jwt(List.of("web-client"))).hasErrors()).isFalse();
+        }
+    }
+
+    /**
      * The aud values come from the token. As tags they would hand series cardinality to whoever
      * can get a client registered, so the metric carries exactly {gateway, outcome}.
      */
