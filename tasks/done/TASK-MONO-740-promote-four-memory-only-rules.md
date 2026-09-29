@@ -4,7 +4,7 @@ TASK-MONO-740
 
 # Status
 
-review (2026-09-29 UTC)
+done (2026-09-29 UTC · 소유자 결정 — AC-3 잔여 1건을 `TASK-MONO-672` 항목 19 로 이관)
 
 # Title
 
@@ -98,3 +98,8 @@ monorepo
 두 스크립트가 이 PR 이 바꾼 `CLAUDE.md` · `platform/testing-strategy.md` 를 **읽지 않는다**는 것은 grep 으로 확인했다 — 그러나 그것은 «영향이 없을 것» 이라는 **추론**이지 AC 가 요구한 **측정**이 아니다.
 
 🔴 **닫는 법**: 다음에 erp 스택이 떠 있거나 web-store 를 빌드한 세션에서 두 스크립트를 돌려 rc 를 여기에 적는다. 그때까지 `review/` 에 둔다 — `done/` 은 얼어 있어 거기 남긴 잔여는 다시 안 읽힌다.
+
+### CORRECTION 해소 (2026-09-29 UTC)
+
+- ✅ `check-prerendered-demo-verdict.sh` — **rc=0 실측.** `DEMO_API_BASE=http://127.0.0.1:9 pnpm --filter web-store build` 은 rc=1 이었지만 실패 지점은 프리렌더 **뒤** standalone 복사(Windows 심볼릭 링크 EPERM)이고, `✓ Generating static pages (23/23)` 를 지났다. 가드가 읽은 HTML **19개 전부**가 그 빌드 시각에 생성됐음을 확인(옛 `.next` 를 읽은 것이 아님) ⇒ 프리렌더 라우트 19 / 구워진 판정 0.
+- ⏳ `check-erp-single-tenant-ratchet.sh` — 로컬 Docker 가 비어 있어(이미지·볼륨 0) 재려면 스택 전체를 처음부터 빌드해야 했다. **소유자 결정(2026-09-29): 다음 AWS 데모 창에서 잰다** ⇒ `TASK-MONO-672` **항목 19** 로 이관하고 이 티켓은 닫는다(의무 이중 보유 금지 — 결과는 672 에 적는다).
