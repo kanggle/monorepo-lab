@@ -179,6 +179,87 @@ describe('/ (공개 피드) — 세션 없이', () => {
   });
 });
 
+/**
+ * 시드 글을 `times` 배로 복제한 봉투 — 필터 결과가 한 페이지(10건)를 넘어야 «페이지 링크가
+ * 필터를 보존하는가» 를 물을 수 있는데, 번들 시드는 그만큼 크지 않다. id 만 바꾸고 나머지
+ * 필드는 원본 그대로라 필터의 판정 축(아티스트·공개 범위·제목)은 변하지 않는다.
+ */
+function inflatedResult(base: PublicDataResult<FanPublicData>, times: number): PublicDataResult<FanPublicData> {
+  const posts = Array.from({ length: times }, (_, i) =>
+    base.data.posts.map((p) => ({ ...p, id: `${p.id}-x${i}` })),
+  ).flat();
+  const data = { ...base.data, posts };
+  return { ...base, data, envelope: { ...base.envelope, data } };
+}
+
+describe('/ (공개 피드 필터) — TASK-FAN-FE-025', () => {
+  const seed = () => state.result as PublicDataResult<FanPublicData>;
+
+  it('필터 폼이 렌더되고, 필터가 없으면 «필터 해제» 가 없다', async () => {
+    await renderPage(HomePage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByTestId('public-feed-filter')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-feed-filter-reset')).toBeNull();
+  });
+
+  it('🔴 공개 범위 «공개» — 잠긴 글이 빠지고 «필터 해제» 가 나온다', async () => {
+    await renderPage(HomePage({ searchParams: Promise.resolve({ visibility: 'PUBLIC' }) }));
+    const lockeds = seed().data.posts.filter((p) => p.locked);
+    expect(lockeds.length).toBeGreaterThan(0); // 비공허성
+    for (const p of lockeds) expect(screen.queryByText(p.title)).toBeNull();
+    expect(screen.queryAllByText('멤버십 전용')).toHaveLength(0);
+    expect(screen.getByTestId('public-feed-filter-reset')).toHaveAttribute('href', '/');
+  });
+
+  it('아티스트 필터 — 다른 아티스트의 글이 없다', async () => {
+    const posts = seed().data.posts;
+    const artistId = posts[0].artistId;
+    await renderPage(HomePage({ searchParams: Promise.resolve({ artist: artistId }) }));
+    const others = posts.filter((p) => p.artistId !== artistId);
+    expect(others.length).toBeGreaterThan(0);
+    for (const p of others) expect(screen.queryByText(p.title)).toBeNull();
+    expect(posts.filter((p) => p.artistId === artistId).some((p) => screen.queryByText(p.title))).toBe(true);
+  });
+
+  it('🔴 조건 불일치는 «검색 결과가 없습니다» — «저장본이 비어 있습니다» 가 아니다', async () => {
+    await renderPage(HomePage({ searchParams: Promise.resolve({ q: 'zzz없는제목zzz' }) }));
+    expect(screen.getByText('검색 결과가 없습니다')).toBeInTheDocument();
+    expect(screen.getByText(/"zzz없는제목zzz" 와 일치하는 포스트/)).toBeInTheDocument();
+    expect(screen.queryByText('저장본이 비어 있습니다')).toBeNull();
+  });
+
+  it('🔴 모르는 값은 무시 — 전체 피드와 같고, 폼은 «전체» 를 보인다', async () => {
+    const base = render(<div>{await HomePage({ searchParams: Promise.resolve({}) })}</div>);
+    const baseText = base.getByTestId('public-feed').textContent;
+    base.unmount();
+
+    await renderPage(HomePage({ searchParams: Promise.resolve({ artist: 'no-such', visibility: 'SECRET' }) }));
+    expect(screen.getByTestId('public-feed').textContent).toBe(baseText);
+    expect((screen.getByLabelText('아티스트') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('공개 범위') as HTMLSelectElement).value).toBe('');
+    expect(screen.queryByTestId('public-feed-filter-reset')).toBeNull();
+  });
+
+  it('🔴🔴 페이지 링크가 필터를 보존한다', async () => {
+    state.result = inflatedResult(seed(), 3);
+    await renderPage(HomePage({ searchParams: Promise.resolve({ visibility: 'PUBLIC', q: '  ' }) }));
+    const next = screen.getByRole('link', { name: '다음' });
+    const url = new URL(next.getAttribute('href')!, 'http://x');
+    expect(url.pathname).toBe('/');
+    expect(url.searchParams.get('visibility')).toBe('PUBLIC');
+    expect(url.searchParams.get('page')).toBe('1');
+    expect(url.searchParams.has('q')).toBe(false); // 공백뿐인 검색어는 적용되지 않았다
+  });
+
+  it('🔴🔴 필터가 걸려도 fetch 0회 · 회원 조각 미생성', async () => {
+    const artistId = seed().data.posts[0].artistId;
+    await renderPage(
+      HomePage({ searchParams: Promise.resolve({ artist: artistId, visibility: 'MEMBERS_ONLY', q: '루미' }) }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(state.memberCalls).not.toContain('FollowingFeedSection');
+  });
+});
+
 describe('/artists (공개 목록 + 검색) — 세션 없이', () => {
   it('목록이 그려진다', async () => {
     await renderPage(ArtistsPage({ searchParams: Promise.resolve({}) }));

@@ -8,7 +8,7 @@ TASK-FAN-FE-025
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -106,3 +106,68 @@ frontend
 - `corpusSize` 를 필터 결과 크기로 넘겨 0건이 늘 «저장본이 비었다»로 읽힌다.
 - 페이지 링크가 필터를 잃어 2페이지로 넘어가는 순간 필터가 풀린다.
 - 테스트 기대값을 숫자로 하드코딩해, 시드 재발행 뒤 테스트가 틀리거나 공허해진다.
+
+---
+
+# Implementation Record (2026-09-29 UTC · 분석=Opus 5.5 · 구현=Opus 5.5)
+
+## 변경 파일
+
+- `src/features/public-browse/lib/select.ts` — `FeedFilter` · `FEED_VISIBILITIES` · `NO_FEED_FILTER` · `resolveFeedFilter`(원문 쿼리 → **적용되는** 필터, 모르는 값은 그 축 `null`) · `isFeedFiltered` · `filterFeedPosts`(`feedPosts` 위에서 AND 필터, 검색은 `normalizeQuery` 토큰이 제목+아티스트명에 전부 포함) · `feedHref`(필터 보존 링크, 빈 축·`page=0` 생략).
+- `src/features/public-browse/ui/PublicFeedFilter.tsx` (신규) — 서버 렌더 `<form method="get" action="/" autoComplete="off" role="search">`. 아티스트 `<select>`(활동명 가나다순)·공개 범위 `<select>`(공개/멤버 전용/프리미엄 — 카드 배지 「멤버 전용」과 같은 표기)·검색 `<input type="search">`·적용 버튼·필터가 걸렸을 때만 「필터 해제」. `'use client'` 없음.
+- `src/features/public-browse/index.ts` — 위 export 추가.
+- `src/app/(main)/page.tsx` — `resolveFeedFilter` → `filterFeedPosts` → `paginate(…, corpusSize = 필터 이전 전체)`, 폼은 `FollowingFeedSection` **뒤**(필터가 공개 피드에만 걸린다는 배치), 0건은 `PublicEmptyState query={filter.q}`, 페이지 링크는 `feedHref(filter, p)`.
+- 테스트: 신규 `__tests__/feed-filter.test.ts`(14칸, 실제 번들 시드에서 기대값 계산 + 비공허성), `__tests__/public-pages.test.tsx` 에 `/ (공개 피드 필터)` 7칸 추가(링크 보존 칸은 시드를 3배로 복제한 봉투 — 시드 13건으로는 필터 결과가 한 페이지를 못 넘는다).
+- **무변경**: `infra/demo/public-data`(공용 패키지), `package.json`(의존성 0 추가), 백엔드·계약.
+
+## AC 판정
+
+- **AC-1** ✅ — 세 축 AND(유닛: 아티스트·공개 범위 3값·검색 제목/아티스트명/대소문자/다중 토큰·조합). 필터 없는 결과 = `feedPosts` 원소·순서 동일(유닛), 브라우저에서 `/` 10건·「다음」=`/?page=1` 로 변경 전 모양 유지.
+- **AC-2** ✅ — 기본값에 잠긴 글 포함(유닛 + 기존 홈 칸 「잠긴 글은 티저로 나온다」 그대로 통과). `locked-redaction` 스위트 통과(필터는 봉투를 거르기만 하고 본문 필드를 만지지 않는다).
+- **AC-3** ✅ — 링크 보존(유닛 `feedHref` + 페이지 렌더 칸), 폼에 `page` 없음 ⇒ 필터 변경 시 첫 페이지(브라우저: 제출 뒤 URL 에 `page=` 없음). 새로고침·직접 URL·뒤로/앞으로 복원 — 브라우저 확인(아래). 🔴 **여기서 결함 1건을 찾아 고쳤다**(아래 § 브라우저가 찾은 것).
+- **AC-4** ✅ — `corpusSize` = `result.data.posts.length`(필터 이전). 불일치 → 「검색 결과가 없습니다」+ `"검색어" 와 일치하는 포스트`, 저장본 빔 → 「저장본이 비어 있습니다」(기존 칸) 그대로.
+- **AC-5** ✅ — 모르는 `artist`/`visibility`/공백 `q` 무시, 폼은 「전체」·해제 링크 없음(유닛 + 렌더 칸 + 브라우저).
+- **AC-6** ✅ — 필터 포함 익명 렌더 `fetch` 0회·`FollowingFeedSection` 미생성(렌더 칸). 브라우저에서 이미지가 아닌 외부 요청 0건(이미지 12건은 저장본 글의 `images.unsplash.com` — 변경 전과 같은 공개 데이터). 새 클라이언트 컴포넌트 0 · `package.json` diff 0.
+- **AC-7** ✅ — bite 2건(주입 줄 수 확인 → RED → 원복 → 주입 0줄 확인 → GREEN):
+  - ① `filterFeedPosts` 가 필터 없을 때 잠긴 글을 거르게 변조 → `feed-filter` 「필터가 없으면 feedPosts 와 원소·순서가 같다」 + 기존 `public-pages` 「잠긴 글은 티저로 나온다」 **2칸 RED**.
+  - ② 홈의 `hrefFor` 를 옛 `(p) => p === 0 ? '/' : '/?page=' + p` 로 되돌림 → 「페이지 링크가 필터를 보존한다」 **RED**.
+  - 원복 후 두 파일 40/40 GREEN.
+- **AC-8** ✅ — 개별 실행·종료 코드 직접 확인: `tsc --noEmit` rc=0 · `lint` rc=0 · 전체 유닛 rc=0(**37 files / 326 tests**) · `build` rc=0(`/` ƒ 동적 라우트). 브라우저 1280px·400px 가로 넘침 0.
+
+## 브라우저가 찾은 것 — 뒤로가기 뒤 폼이 적용되지 않은 값을 보였다 (고침)
+
+Playwright(Chromium, `next start`) 32칸 시나리오의 첫 실행에서 「뒤로가기 → 이전 필터」 2칸(1280·400)이 빨갰다. 진단: 뒤로 간 URL(`?artist=&visibility=PUBLIC`)과 결과(6건)는 맞는데, 아티스트 `<select>` 가 **떠나기 전에 골라 두었던** 값(노아)을 보이고 있었다 — 브라우저의 폼 값 복원이 서버가 렌더한 `defaultValue` 를 덮었다. 화면이 걸려 있지 않은 필터를 걸려 있다고 말하는 것이라 AC-5 의 취지 위반.
+- 고침: 폼에 `autoComplete="off"`(폼 값 복원 끔). 클라이언트 코드 없이 닫힌다.
+- 재측: 수정 후 프로덕션 빌드 32칸 전체 통과를 여러 차례, 개발 서버에서도 3회 연속 32/32.
+
+## 범위 밖 관측 — React #418 하이드레이션 오류는 **main 에 이미 있다** (고치지 않음)
+
+같은 시나리오에서 간헐적으로 `Minified React error #418`(서버 HTML ↔ 클라이언트 불일치)이 콘솔에 떴다. 이 변경의 결함인지 가르려고 origin/main(`bda353d81`)을 별도 worktree 에 빌드해 **같은 탐색 순서**(폼 조작 없이 URL·새로고침·뒤로/앞으로·`/artists` 왕복 10단계 × 20 브라우저)를 두 서버에 태웠다:
+
+| 빌드 | 1차 | 2차 |
+|---|---|---|
+| origin/main (대조군) | 11건 / 191 이동 | 9건 / 184 이동 |
+| 이 변경 | 3건 / 187 이동 | 6건 / 185 이동 |
+
+대조군에서도 필터 코드가 닿지 않는 `/artists`·`/`·reload 단계에서 같은 오류가 난다 ⇒ **이 PR 이 만든 것이 아니다.** 개발 모드(오류 원문이 나오는 판)에서는 3회 모두 재현되지 않아 불일치 지점을 특정하지 못했다. 원인 조사·수정은 별도 티켓 대상이다(이 티켓은 기록만).
+
+🔵 측정 중 하네스 실수 1건: 같은 앱 디렉터리에서 `next dev` 를 띄워 프로덕션 서버의 `.next` 를 덮어써 CSS/JS 청크가 400 이 된 6회 측정은 **무효 처리**했다(클린 재빌드 후 재측).
+
+## Edge Case 판정
+
+- 마지막 페이지를 넘는 `page` — 기존 `paginate` 동작 그대로(빈 `content`, `totalElements > 0` 이므로 `emptyKind` 는 0건 판정을 내지 않는다). 변경 전 홈과 같은 동작이라 그대로 둔다.
+- 공백뿐인 `q` — 적용 안 됨(`resolveFeedFilter` 가 `null`), 페이지 링크에도 안 실림(렌더 칸).
+- 로그인 사용자 — `FollowingFeedSection` 은 폼 **위**에 남고 필터 영향 없음(코드 배치). 로그인 상태 브라우저 확인은 하지 않았다(로컬 IAM 없음) — 코드상 분기가 바뀌지 않았다.
+
+## 측정하지 못한 것
+
+- 로그인 상태의 브라우저 화면(팔로잉 피드 + 필터 배치).
+- 실제 Vercel 서빙본 — 머지 뒤 확인할 일.
+
+## CORRECTION (2026-09-29 UTC — PR #4060 CI, 머지 전) — e2e 스모크 회귀 1건을 이 PR 이 만들었고 고쳤다
+
+- **증상**: CI `Frontend E2E smoke` 의 `e2e-smoke/home.spec.ts:35` «백엔드가 닫혀 있어도 / 가 공개 피드를 그린다» 가 `getByText('루미').first()` → `unexpected value "hidden"` 으로 빨갰다(재시도 포함 2회).
+- **원인(이 변경)**: 새 필터 폼의 아티스트 `<select>` 가 활동명을 `<option>` 으로 **피드보다 앞에** 그린다. 페이지 전체의 `.first()` 가 보이지 않는 option 을 잡았다.
+- 🔴 **놓친 이유**: 로컬 게이트(유닛·빌드·자작 Playwright)만 돌리고 앱의 `e2e-smoke/` 를 돌리지 않았다. 텍스트를 새로 그리는 변경은 기존 e2e 선택자와 충돌할 수 있다 — 이번 AC-8 의 게이트 목록이 그 스위트를 빠뜨렸다.
+- **고침**: 선택자를 `page.getByTestId('public-feed').getByText('루미').first()` 로 좁혔다. 그 칸의 명제는 «저장본의 글이 **피드에** 보인다» 이므로 원래 뜻 그대로이고 오히려 정확해졌다. 저장소 전체에서 팬 홈 텍스트에 기대는 다른 선택자 0건(재그렙).
+- **로컬 재현·확인**(`CI=1 pnpm run e2e:smoke`, 자체 서버 3002/3003 기동 — 다른 세션 서버 재사용 방지, CI 와 같게 `.env.local` 을 잠시 치움): 옛 선택자 **rc=1**(같은 실패) → 새 선택자 **rc=0, 18 passed**.
