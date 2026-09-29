@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-FAN-FE-025-public-feed-filter.md` — 공개 피드(홈 `/`)에 아티스트·공개 범위 필터와 제목·아티스트명 검색 추가. 저장본 안에서만 동작(ADR-MONO-070), 익명 게이트웨이 호출 0 유지, 기본값에서 잠긴 글 포함 유지, 페이지 링크의 필터 보존. 공용 `infra/demo/public-data` 무변경. 출처 = 2026-09-24 포트폴리오 UX 요청 § 12 의 남은 공백(2026-09-29 점검). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 
 ## in-progress
 
