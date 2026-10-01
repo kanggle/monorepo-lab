@@ -76,7 +76,10 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-614-consumer-account-pool-data-model.md` — **전역 소비자 계정 2단계 — 소비자 계정 풀 데이터 모델 + 새 가입은 풀로** (READY, 2026-10-01 UTC · `ADR-MONO-078` A · 선행 `TASK-MONO-742`). 🔴 기존 볼륨 마이그레이션 · 같은 이메일 기존 계정과 자동 묶기 금지.
+- `TASK-BE-615-consumer-pool-authorize-and-token-tenant.md` — **3단계 — 풀 계정 authorize · 토큰 테넌트 = client · 세션 게이트 · 로그아웃 범위** (READY, 2026-10-01 UTC · 선행 742·614). 🔴 역할 평탄화 금지 · 묶이지 않은 기존 계정은 재인증 유지(대조군) · 콘솔 `LOGIN_TENANT_AMBIGUOUS` 변화 고정.
+- `TASK-BE-616-first-visit-site-consent.md` — **4단계 — 사이트 첫 방문 동의 화면 + 멤버십·역할** (READY, 2026-10-01 UTC · 선행 614·615). 🔴 AC-4 = `ADR-007` 브랜드 이름(팬 GAP · 스토어 Global Account) 재검토를 소유자에게 묻는다.
+- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY, 2026-10-01 UTC · 선행 614~616·`TASK-MONO-743`). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
