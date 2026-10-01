@@ -62,8 +62,11 @@ class ConsumerPoolMigrationOnExistingVolumeIntegrationTest extends AbstractInteg
         // 2. … holding pre-pool data: a fan site account and an ecommerce seller with a role.
         exec("INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) "
                 + "VALUES ('" + FAN_ACCOUNT + "', 'fan-platform', 'fan@example.com', 'ACTIVE', NOW(6), NOW(6), 0)");
-        exec("INSERT INTO profiles (account_id, locale, timezone, updated_at) "
-                + "VALUES ('" + FAN_ACCOUNT + "', 'ko-KR', 'Asia/Seoul', NOW(6))");
+        // profiles.tenant_id is NOT NULL and has no default at V0028 — the first CI run of this
+        // fixture failed here ("Field 'tenant_id' doesn't have a default value") because the
+        // pre-pool row omitted it; the migration under test was never reached.
+        exec("INSERT INTO profiles (account_id, tenant_id, locale, timezone, updated_at) "
+                + "VALUES ('" + FAN_ACCOUNT + "', 'fan-platform', 'ko-KR', 'Asia/Seoul', NOW(6))");
         exec("INSERT INTO accounts (id, tenant_id, email, status, created_at, updated_at, version) "
                 + "VALUES ('" + SHOP_ACCOUNT + "', 'ecommerce', 'seller@example.com', 'ACTIVE', NOW(6), NOW(6), 0)");
         exec("INSERT INTO account_roles (tenant_id, account_id, role_name, granted_by, granted_at) "
