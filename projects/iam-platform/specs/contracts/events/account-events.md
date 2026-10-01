@@ -35,6 +35,21 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 
 **Consumers**: auth-service (credential 초기화 확인, 선택), 미래 서비스 (환영 이메일 등)
 
+**소비자 계정 풀 (ADR-MONO-078 A, `TASK-MONO-742`, 2026-10-01)** — 풀 계정에 대해 이 이벤트는 **계정이 한 소비자 사이트에 처음 들어갈 때**
+그 사이트 테넌트로 **한 번씩** 발행된다:
+
+| 시점 | `tenantId` | `accountId` |
+|---|---|---|
+| 소비자 client 에서 풀 가입 | 가입한 사이트(`fan-platform` / `ecommerce`) | 풀 계정 id |
+| 다른 사이트 첫 방문 동의 | 그 사이트 | **같은** 풀 계정 id |
+| 사이트별 계정을 같은 id 로 풀로 옮김 | 발행하지 않음 — 그 사이트에서는 이미 발행됐다 | — |
+
+- 🔴 **`tenantId` 는 절대 `consumer-pool` 이 아니다.** 소비자(이커머스 user-service `AccountCreatedConsumer`)는 이 값으로 프로필의 테넌트를 정한다 —
+  풀 값이면 프로필이 스토어가 읽지 않는 테넌트에 생긴다. 그래서 풀 단위 1회 발행 안을 기각했다([multi-tenancy.md § 소비자 계정 풀 § 6](../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742)).
+- 뜻이 «계정이 생겼다» 에서 «이 계정이 이 테넌트에서 쓸 수 있게 됐다» 로 넓어진다. **모양(필드·타입·토픽·파티션 키)은 그대로**이고, 같은 `accountId` 로
+  두 번(사이트마다) 올 수 있다 — 소비자는 `(tenantId, accountId)` 로 멱등해야 한다(지금도 테넌트별 프로필이라 그렇다).
+- 발행 위치: 가입 = account-service 가입 경로(`TASK-BE-614`), 동의 = 첫 방문 동의(`TASK-BE-616`).
+
 ---
 
 ## account.status.changed
@@ -60,6 +75,11 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 ```
 
 **Consumers**: auth-service (세션 무효화 판단), security-service (이력 보강)
+
+**소비자 계정 풀 (ADR-MONO-078)** — 풀 계정의 상태 전이는 **계정 하나**의 일이라(잠그면 모든 사이트에서 잠긴다) `tenantId = consumer-pool` 로 **한 번** 발행한다.
+auth-service·security-service 는 `accountId` 로 판단하므로 영향이 없다. 이커머스 product-service 의 셀러 소비자(`AccountStatusChangedSellerConsumer`)는
+`(tenantId, accountId)` 로 **셀러**를 찾는데, 셀러는 내부 프로비저닝으로 `ecommerce` 테넌트에 만들어지는 운영자 계정이지 풀 계정이 아니므로 영향이 없다.
+🔴 사이트 테넌트로 상태 이벤트를 걸러 듣는 소비자가 새로 생기면 그 소비자는 `consumer-pool` 도 들어야 한다.
 
 ---
 

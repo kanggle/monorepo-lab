@@ -27,6 +27,11 @@ credentials(비밀)와 profile(비밀 아님)은 **물리적으로 별도 서비
 - `idx_credentials_account_id` (UNIQUE) — V0001 그대로 유지
 - `uk_credentials_tenant_email (tenant_id, email)` UNIQUE — V0007에서 신설. V0006이 추가한 단순 `idx_credentials_email (email)` UNIQUE는 V0007에서 DROP하고 본 복합 인덱스로 대체 (테넌트 간 동일 email 허용).
 
+**소비자 계정 풀 (ADR-MONO-078 A, 계약 `TASK-MONO-742`)** — 풀 계정의 자격은 `tenant_id = 'consumer-pool'` 행 하나다. 스키마 변경 없음(`(tenant_id, email)` UNIQUE 가
+풀 안의 유일성을 지킨다). 소비자 client 폼 로그인은 풀 자격을 **먼저** 찾고, 없으면 client 테넌트의 사이트별 자격을 찾는다. 🔴 `consumer-pool` 은 이 행의 저장값일 뿐
+토큰의 `tenant_id` 가 아니다 — 토큰은 요청한 client 의 사이트 테넌트로 나간다. `refresh_tokens.tenant_id`(미러 행)도 **토큰의 사이트 테넌트**다(풀 값이 아니다).
+정본: [multi-tenancy.md § 소비자 계정 풀](../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742).
+
 ### `refresh_tokens`
 
 | 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
