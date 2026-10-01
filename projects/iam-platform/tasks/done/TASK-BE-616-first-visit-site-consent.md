@@ -4,7 +4,7 @@ TASK-BE-616
 
 # Status
 
-review
+done (2026-10-01 UTC — PR #4093 squash `2e7e2951f` · 통합 시험은 CI 실측, § CORRECTION)
 
 # Title
 
@@ -334,3 +334,17 @@ admin-service 는 플래그를 읽지 않는다 — 바뀐 것 없다(`check` rc
 - 🔵 **후속 — 동의 거절 문구**: `LoginForm.normalizeErrorCode` 가 거절을 운영자 거부 문구로 보일 수 있음(미측정). 측정은 새 nightly e2e `consent-decline.spec.ts` + 팬 전용 풀 시드 계정이 필요.
 - 🔵 **후속 — 콘솔 보안 이벤트 조회**: 사이트 테넌트로 걸러 보면 풀 계정 이벤트(`consumer-pool`)가 안 보인다.
 - **배포 순서**: account-service 를 auth-service 보다 먼저 또는 함께. 그리고 🔴 **이 PR 이 플래그를 켜므로** 머지 = 데모 재굽기 뒤 실제 동작 변경이다(팬·스토어 프런트는 Vercel — 바로 반영되는 것은 스토어 «IAM 로그인» 버튼 문구뿐이고, 백엔드는 재굽기 전까지 옛 동작).
+
+---
+
+## CORRECTION (2026-10-01 UTC) — ⚪ 로 적은 통합 시험 칸은 **CI 가 쟀다**
+
+«구현 기록» 은 AC-1·2·3·6 의 통합 절반과 web-store vitest 를 ⚪ «로컬 미실행» 으로 적었다(작성 시점에 참, 고치지 않는다). PR #4093 CI:
+
+| 항목 | 결과 |
+|---|---|
+| 통합 iam A·B · ecommerce A·B·C | **통과** — 로그에서 실행 확인: `ConsumerPoolSsoIntegrationTest` AC-6 체인(스토어 풀 가입 → 스토어 토큰 → 팬 첫 방문 `/consent` → 동의 → 팬 토큰) · AC-1 거절(`access_denied` + `state`, 코드·토큰·멤버십 쓰기 없음) · AC-3 콘솔에는 동의 없음 · 계정 쪽 동의 쓰기 IT(체인 · B2B `erp` 는 쓰기 없음) |
+| Frontend unit tests (vitest, CI Node) | **통과** |
+| Frontend E2E smoke | 1차 **실패** — 시험 전 web-store 빌드가 `next/font` Google Fonts 내려받기에서 `TypeError`(이 PR 은 `layout.tsx` 무변경, 같은 런의 «Frontend lint & build» 는 같은 앱 빌드 통과) → 그 잡만 재실행 → **통과**. 외부 네트워크 일시 실패로 판정 |
+
+⇒ 위 AC 는 CI 실측으로 닫혔다. 머지 `2e7e2951f`(#4093), 실패 0. 후속 셋(사이트 탈퇴 vs 계정 삭제 · 동의 거절 문구 · 콘솔 보안 이벤트 조회)은 «검토» 절에 그대로 남는다 — 이 티켓을 닫아도 그 의무는 사라지지 않게 별도 티켓으로 기안해야 한다(닫는 PR 에서 처리).
