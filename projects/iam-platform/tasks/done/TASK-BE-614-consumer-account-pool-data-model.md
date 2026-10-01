@@ -4,7 +4,7 @@ TASK-BE-614
 
 # Status
 
-review
+done (2026-10-01 UTC — PR #4089 squash `98e6c6dbe` · 통합 시험은 CI 실측, § CORRECTION)
 
 # Title
 
@@ -241,3 +241,16 @@ admin-service `ManageOperatorAssignmentUseCase.assignOperator` 는 테넌트 존
 - **발급자 게이트의 위치**: `TenantClaimTokenCustomizer.customize` 의 유일한 조기 `return` 은 «access·id 토큰이 아님» 분기(refresh 토큰 자체는 불투명 값 — 클레임 없음). 게이트는 모든 grant 분기 **뒤**에 있어 우회 경로가 없다.
 - **bite 직접 확인**: 게이트 호출(`refuseConsumerPoolTenant`)을 주석 처리하고 `TenantClaimConsumerPoolRefusalTest` + `AssumeTenantConsumerPoolRefusalTest` 실행 → **7개 중 4개 실패**(authorization_code · refresh_token · client_credentials · id_token 거절 칸). 실패하지 않은 3개 = 대조군 1(사이트 테넌트는 발급) + assume-tenant 2(그쪽은 공급자 자체 게이트가 막는다 — 별도 장치). 되돌린 뒤 7/7 통과, 작업 트리 무변경 확인.
 - ⚪ **통합 테스트는 이 호스트에서 한 번도 돌지 않았다**(Docker 없음) — AC-2/3/5/6/9/10 의 DB 수준 판정은 CI `integrationTest` 가 첫 실측이다.
+
+---
+
+## CORRECTION (2026-10-01 UTC) — ⚪ 로 적은 통합 시험 칸은 **CI 가 쟀다**
+
+이 파일의 «구현 기록» 은 AC-2/3/5/6/9/10 의 DB 수준 판정을 ⚪ «못 쟀다 — 로컬 Docker 없음» 으로 적었다. 그 기록은 작성 시점에 참이었고 고치지 않는다. 그 뒤 PR #4089 의 CI 가 처음으로 쟀다:
+
+| 런 | 결과 |
+|---|---|
+| 1차 (`Integration (iam B)`) | **1/92 실패** — AC-2 기존 볼륨 시험의 **픽스처** 결함: V0028 상태에 넣는 `profiles` 행이 `tenant_id`(NOT NULL, 기본값 없음)를 빠뜨려 `initializationError`. 마이그레이션 대상에 닿기 전에 죽었다 — 마이그레이션 결함 아님. 수정 커밋 `1d0b07e20` |
+| 2차 (job `110527622619`) | **통과** — 로그에서 실행·통과를 확인한 칸: AC-2(V0029·V0030 만 적용 · 기존 행 바이트 그대로 · 새 FK/CHECK 가 실제로 문다 · 재실행 no-op) · AC-3/AC-10(스토어 풀 가입 → `consumer-pool` 계정 + `ecommerce` 멤버십 + 풀 자격 + `account.created` 사이트 테넌트) · AC-3 §2(같은 이메일 팬 계정 → 409) · AC-5(비멤버 사이트 · B2B 테넌트 · LEFT 에서 안 보임) · AC-6(셀러 이메일 팬 풀 가입 거절, 셀러 계정 무변경) · AC-9(ecommerce 목록·검색·단건에 풀 쇼핑객, 풀 팬은 없음) · `AssumeTenantExchangeIntegrationTest` consumer-pool 거절 |
+
+⇒ 위 AC 들은 **CI 실측으로 닫혔다**. 머지 `98e6c6dbe`(#4089), 머지 전 체크 19/19 통과 · 실패 0.
