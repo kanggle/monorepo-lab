@@ -1,6 +1,7 @@
 package com.example.account.application.service;
 
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.result.ProvisionPasswordResetResult;
 import com.example.account.domain.account.Account;
@@ -29,6 +30,8 @@ public class ProvisionPasswordResetUseCase {
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
     private final AccountStatusHistoryRepository historyRepository;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     @Transactional
     public ProvisionPasswordResetResult execute(String tenantIdStr, String accountId,
@@ -38,7 +41,7 @@ public class ProvisionPasswordResetUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantIdStr));
 
-        Account account = accountRepository.findById(tenantId, accountId)
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         Instant now = Instant.now();
@@ -46,8 +49,9 @@ public class ProvisionPasswordResetUseCase {
 
         // Audit: record the password-reset event in account_status_history.
         // No status transition occurs; from/to carry the current status as a no-op record.
+        // TASK-BE-616: the row carries the ACCOUNT's tenant (see ProvisionStatusChangeUseCase).
         AccountStatusHistoryEntry auditEntry = AccountStatusHistoryEntry.create(
-                tenantIdStr,
+                account.getTenantId().value(),
                 accountId,
                 account.getStatus(),
                 account.getStatus(),

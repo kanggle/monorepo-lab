@@ -53,7 +53,9 @@ class AccountStatusUseCaseTest {
         useCase = new AccountStatusUseCase(
                 accountRepository, historyRepository,
                 new AccountStatusMachine(), eventPublisher,
-                GRACE_PERIOD_DAYS);
+                GRACE_PERIOD_DAYS,
+                // TASK-BE-616: flag off → exact findById(tenant, id), the lookups these cells stub.
+                () -> false);
     }
 
     // ── getStatus ─────────────────────────────────────────────────────────────

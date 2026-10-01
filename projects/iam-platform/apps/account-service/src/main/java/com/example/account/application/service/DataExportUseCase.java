@@ -1,6 +1,7 @@
 package com.example.account.application.service;
 
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.result.DataExportResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.profile.Profile;
@@ -23,6 +24,8 @@ public class DataExportUseCase {
 
     private final AccountRepository accountRepository;
     private final ProfileRepository profileRepository;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     /**
      * NET-ZERO overload — header-less callers stay pinned to
@@ -39,7 +42,7 @@ public class DataExportUseCase {
      */
     @Transactional(readOnly = true)
     public DataExportResult execute(String accountId, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, accountId)
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         DataExportResult.ProfileData profileData = profileRepository.findByAccountId(accountId)

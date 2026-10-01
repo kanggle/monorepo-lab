@@ -66,7 +66,9 @@ class GdprDeleteUseCaseTest {
                 profileRepository,
                 historyRepository,
                 statusMachine,
-                eventPublisher);
+                eventPublisher,
+                // TASK-BE-616: flag off → exact findById(tenant, id), the lookups these cells stub.
+                () -> false);
     }
 
     private Account activeAccount() {

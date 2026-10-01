@@ -3,6 +3,7 @@ package com.example.account.application.service;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.RateLimitedException;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.port.EmailVerificationNotifier;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
@@ -53,6 +54,8 @@ public class SendVerificationEmailUseCase {
     private final AccountRepository accountRepository;
     private final EmailVerificationTokenStore tokenStore;
     private final EmailVerificationNotifier notifier;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     /**
      * NET-ZERO overload — a header-less caller stays pinned to {@link TenantId#FAN_PLATFORM},
@@ -71,7 +74,7 @@ public class SendVerificationEmailUseCase {
     @Transactional(readOnly = true)
     public void execute(String accountId, TenantId tenantId) {
         // 1) Account must exist in the caller's tenant.
-        Account account = accountRepository.findById(tenantId, accountId)
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         // 2) Idempotent guard: don't issue a token that cannot be consumed.
@@ -90,7 +93,10 @@ public class SendVerificationEmailUseCase {
         //    do not roll back the token write: the user can wait for the
         //    rate-limit window to expire and try again.
         String token = UUID.randomUUID().toString();
-        tokenStore.save(token, tenantId.value(), accountId, TOKEN_TTL);
+        // TASK-BE-616: the token carries the account's OWN tenant (consumer-pool for a pool member found
+        // through a site), so the token-authenticated verify path keeps its exact (tenant, id) lookup.
+        // For a site account the two are the same value — byte-identical.
+        tokenStore.save(token, account.getTenantId().value(), accountId, TOKEN_TTL);
 
         try {
             notifier.sendVerificationEmail(account.getEmail(), token);

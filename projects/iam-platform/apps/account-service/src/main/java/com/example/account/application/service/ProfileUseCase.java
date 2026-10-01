@@ -2,6 +2,7 @@ package com.example.account.application.service;
 
 import com.example.account.application.command.UpdateProfileCommand;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.result.AccountMeResult;
 import com.example.account.application.result.ProfileUpdateResult;
 import com.example.account.domain.account.Account;
@@ -19,6 +20,8 @@ public class ProfileUseCase {
 
     private final AccountRepository accountRepository;
     private final ProfileRepository profileRepository;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     /**
      * NET-ZERO overload — a header-less caller stays pinned to {@link TenantId#FAN_PLATFORM},
@@ -36,7 +39,7 @@ public class ProfileUseCase {
      */
     @Transactional(readOnly = true)
     public AccountMeResult getMe(String accountId, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, accountId)
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
         Profile profile = profileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
@@ -58,7 +61,7 @@ public class ProfileUseCase {
      */
     @Transactional
     public ProfileUpdateResult updateProfile(UpdateProfileCommand command, TenantId tenantId) {
-        accountRepository.findById(tenantId, command.accountId())
+        SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
 
         Profile profile = profileRepository.findByAccountId(command.accountId())

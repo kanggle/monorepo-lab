@@ -58,6 +58,8 @@ class ProvisionAccountUseCaseTest {
     @Mock private AuthServicePort authServicePort;
     @Mock private AccountIdentityProvisioner accountIdentityProvisioner;
 
+    /** TASK-BE-616 — the § 2 pool-email refusal; a no-op mock here (own cells: ProvisionAccountPoolEmailRefusalTest). */
+    @Mock private ConsumerAccountPool consumerAccountPool;
     @InjectMocks private ProvisionAccountUseCase useCase;
 
     private static final String TENANT_ID = "wms";

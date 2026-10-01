@@ -82,6 +82,32 @@ public class ConsumerAccountPool {
     }
 
     /**
+     * TASK-BE-616 (§ 2, reverse direction) — refuse an INTERNAL account creation (operator provisioning,
+     * bulk provisioning, product-service seller onboarding: {@code POST /internal/tenants/{t}/accounts})
+     * into a consumer site when the email already has a <b>pool</b> account. § 2 forbids a pool account and
+     * a site account sharing an email; {@link #refuseIfEmailHasSiteAccount} guards the «site account first,
+     * pool signup second» order, this guards «pool first, site account second».
+     *
+     * <p>Same answer as any duplicate on that endpoint ({@link AccountAlreadyExistsException} →
+     * {@code 409 ACCOUNT_ALREADY_EXISTS}). Interim consequence: a pool shopper cannot be onboarded as a
+     * seller until {@code TASK-MONO-745} moves sellers into the pool — product-service lands such an
+     * onboarding in its existing fail-soft {@code PENDING_PROVISIONING}.
+     *
+     * <p>Only consumer sites ({@link Tenant#isConsumerSite()}): B2B tenants (wms, erp, …) and customer
+     * tenants keep per-tenant accounts that may share an email with anything (D1). Not behind the flag:
+     * the coexistence is wrong whenever a pool account exists; with the flag off none are created
+     * (one extra indexed read).
+     */
+    public void refuseIfEmailHasPoolAccount(Tenant creationTenant, String normalizedEmail, String emailAsTyped) {
+        if (!creationTenant.isConsumerSite()) {
+            return;
+        }
+        if (accountRepository.existsByEmail(TenantId.CONSUMER_POOL, normalizedEmail)) {
+            throw new AccountAlreadyExistsException(emailAsTyped);
+        }
+    }
+
+    /**
      * § 2: signing up on a site is consenting to it — record the membership in the same
      * transaction as the pool account. The {@code account.created} event of § 6 is published by
      * the caller with the site tenant.
