@@ -36,7 +36,7 @@ test.describe('storefront 입장 가드 (web-store)', () => {
 
     // The bounce lands on web-store's /login with the mismatch code, and no session was established.
     await expect(page).toHaveURL(/\/login\?.*error=account_type_mismatch/);
-    await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'IAM 로그인' })).toBeVisible();
   });
 
   test('타 tenant principal(platform-scope)이 web-store client 로 로그인하면 IAM 이 거부한다', async ({ page }) => {
@@ -45,6 +45,6 @@ test.describe('storefront 입장 가드 (web-store)', () => {
     // Still on IAM's credential form — no session, no hop back into web-store.
     await expect(page).toHaveURL(/\/login\?error$/);
     await expect(page.locator('#username')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Global Account로 로그인' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'IAM 로그인' })).toHaveCount(0);
   });
 });

@@ -112,8 +112,10 @@ export function LoginForm() {
         </div>
       )}
 
+      {/* IAM ADR-007 § 값 변경 (2026-10-01): one account name across fan and store — «IAM».
+          The store keeps its own wording and colour; only the account name is shared. */}
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        Global Account로 로그인하여 쇼핑을 계속하세요.
+        쇼핑을 계속하려면 IAM 계정으로 로그인하세요.
       </p>
 
       <button
@@ -123,7 +125,7 @@ export function LoginForm() {
         style={{ width: '100%' }}
         disabled={disabled}
       >
-        {disabled ? '이동 중...' : 'Global Account로 로그인'}
+        {disabled ? '이동 중...' : 'IAM 로그인'}
       </button>
 
       <p className="auth-footer" style={{ marginTop: 'var(--space-6)' }}>
