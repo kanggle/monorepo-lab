@@ -4,7 +4,7 @@ TASK-BE-615
 
 # Status
 
-review
+done (2026-10-01 UTC — PR #4091 squash `3d732a21b` · 통합 시험은 CI 실측, § CORRECTION)
 
 # Title
 
@@ -232,3 +232,16 @@ admin `CreateOperatorUseCaseTest` +1(22) · `AccountServiceClientUnitTest` +1(16
 - **`TASK-BE-614` 의 «bite 4/7» 은 그 날짜의 사실이다**: 이 티켓 이후 그 시험의 풀 칸 셋은 «멤버십 없음» 거절이 먼저 막는다(같은 결과, 다른 장치). 614 의 기록을 고치지 않는다 — 발급자 게이트는 이제 콘솔 경로 시험(`TenantClaimPoolPrincipalTest#consoleClient_poolPrincipal_refusedByIssuerGate`)이 문다.
 - **후속(이 티켓 밖)**: 풀 principal 의 로그인 이벤트가 `tenant_id=consumer-pool` 을 싣는다 — security-service 자동 잠금이 그 값으로 account-service 를 부를 때의 동작은 측정하지 않았다(계정 행이 `consumer-pool` 에 있으므로 맞물릴 가능성이 높지만 미측정). `TASK-BE-616` 착수 전에 확인한다.
 - **배포 순서**: account-service 가 auth-service 보다 먼저이거나 함께 — 거꾸로면 풀 principal 만 토큰을 못 받는다(기존 계정 무영향).
+
+---
+
+## CORRECTION (2026-10-01 UTC) — ⚪ 로 적은 통합 시험 칸은 **CI 가 쟀다**
+
+«구현 기록» 은 AC-1·3·4·5·6·7·8 의 통합 절반을 ⚪ «로컬 미실행(Docker 없음)» 으로 적었다. 작성 시점에 참이었고 고치지 않는다. PR #4091 의 CI 가 처음 쟀다:
+
+| 런 | 결과 |
+|---|---|
+| 1차 (`Integration (iam B)`) | account-service **8/99 실패** — 무관한 기존 `TenantProvisioningIntegrationTest` 가 ApplicationContext 로딩 실패, 근본 원인은 공유 Testcontainers MySQL «Too many connections»(1040). 614·615 의 풀 통합 시험이 같은 `@DynamicPropertySource`·`@MockitoBean` 을 클래스마다 선언해 컨텍스트(각자 Hikari 10)가 하나씩 늘었다. 수정 `abff0f5be`: `AbstractConsumerPoolIntegrationTest` 로 컨텍스트 공유 + 시험 Hikari `maximum-pool-size: 4` |
+| 2차 | **전부 통과**(18/18). 로그에서 실행을 확인한 칸: `ConsumerPoolSsoIntegrationTest` AC-1(팬→스토어 폼 없이 · `sub` 동일 · `tenant_id=ecommerce` · `FAN` 없음) · AC-3(콘솔 교차 조회가 풀 한 행으로 풀림 · 콘솔 토큰은 발급자 게이트가 400) · AC-4(스토어 RP 로그아웃 → IAM 세션 종료 → 팬 authorize 는 `/login`) · AC-5(스토어 refresh 로 팬 토큰 400) · 멤버십 없는 사이트(코드 발급, 루프 없음, 토큰 거절) · `SellerStoreTokenRolesBaselineIntegrationTest` AC-7(`[SELLER]`, `CUSTOMER` 없음) · `ConsumerSiteMembershipLookupIntegrationTest`(사이트별 멤버십·역할, AC-8 운영자 생성 확인은 풀 멤버 제외 · 콘솔 검색은 포함) |
+
+⇒ 위 AC 들은 **CI 실측으로 닫혔다**. 머지 `3d732a21b`(#4091), 머지 전 18/18 통과 · 실패 0. 🔵 «로그인 이벤트의 `consumer-pool` 과 security-service 자동 잠금» 은 이 티켓 밖의 후속으로 남는다(검토 절) — `TASK-BE-616` 착수 전 확인.
