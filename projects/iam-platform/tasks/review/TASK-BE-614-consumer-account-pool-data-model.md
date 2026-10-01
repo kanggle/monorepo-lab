@@ -4,7 +4,7 @@ TASK-BE-614
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -232,3 +232,12 @@ admin-service `ManageOperatorAssignmentUseCase.assignOperator` 는 테넌트 존
 - 가입 거절 문구는 계약 § 2 의 «로그인 후 전환» 안내가 아니라 기존 «이미 가입된 이메일입니다. 로그인해 주세요.» 다 — 전환 흐름인 `TASK-MONO-743` 으로 미룬다.
   플래그 OFF 의 바이트 동일성을 지키기 위해서다.
 - (앞서 적은 것) `tenants` 목록의 `consumer-pool` 노출 여부 — 소유자 결정. 풀 계정의 상태 전이·사이트 역할 쓰기 표면(위 «쓰기 경로»).
+
+---
+
+## 검증 (2026-10-01 UTC · 분석=Opus 5.5 — 구현 에이전트와 별개)
+
+- **계약 대조**: V0029/V0030 이 `account-service/data-model.md` 의 두 신설 테이블과 컬럼·PK·FK 단위로 일치. 플래그 이름·기본값 `iam.consumer-pool.enabled=false` 일치.
+- **발급자 게이트의 위치**: `TenantClaimTokenCustomizer.customize` 의 유일한 조기 `return` 은 «access·id 토큰이 아님» 분기(refresh 토큰 자체는 불투명 값 — 클레임 없음). 게이트는 모든 grant 분기 **뒤**에 있어 우회 경로가 없다.
+- **bite 직접 확인**: 게이트 호출(`refuseConsumerPoolTenant`)을 주석 처리하고 `TenantClaimConsumerPoolRefusalTest` + `AssumeTenantConsumerPoolRefusalTest` 실행 → **7개 중 4개 실패**(authorization_code · refresh_token · client_credentials · id_token 거절 칸). 실패하지 않은 3개 = 대조군 1(사이트 테넌트는 발급) + assume-tenant 2(그쪽은 공급자 자체 게이트가 막는다 — 별도 장치). 되돌린 뒤 7/7 통과, 작업 트리 무변경 확인.
+- ⚪ **통합 테스트는 이 호스트에서 한 번도 돌지 않았다**(Docker 없음) — AC-2/3/5/6/9/10 의 DB 수준 판정은 CI `integrationTest` 가 첫 실측이다.
