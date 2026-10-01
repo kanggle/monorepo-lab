@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-614-consumer-account-pool-data-model.md` — **전역 소비자 계정 2단계 — 소비자 계정 풀 데이터 모델 + 새 가입은 풀로** (READY, 2026-10-01 UTC · `ADR-MONO-078` A · 선행 `TASK-MONO-742`). 🔴 기존 볼륨 마이그레이션 · 같은 이메일 기존 계정과 자동 묶기 금지.
+- `TASK-BE-618-move-single-site-accounts-onto-the-pool.md` — **기존 한 사이트 계정을 같은 id 로 풀로** (READY, 2026-10-01 UTC · `TASK-BE-614` AC-7 에서 분리 · 선행 614·615). 운영자 측면 계정 제외 · `ARTIST` → 사이트 역할 · IAM 행 7종 전부 이동.
 - `TASK-BE-615-consumer-pool-authorize-and-token-tenant.md` — **3단계 — 풀 계정 authorize · 토큰 테넌트 = client · 세션 게이트 · 로그아웃 범위** (READY, 2026-10-01 UTC · 선행 742·614). 🔴 역할 평탄화 금지 · 묶이지 않은 기존 계정은 재인증 유지(대조군) · 콘솔 `LOGIN_TENANT_AMBIGUOUS` 변화 고정.
 - `TASK-BE-616-first-visit-site-consent.md` — **4단계 — 사이트 첫 방문 동의 화면 + 멤버십·역할** (READY, 2026-10-01 UTC · 선행 614·615). 🔴 AC-4 = `ADR-007` 브랜드 이름(팬 GAP · 스토어 Global Account) 재검토를 소유자에게 묻는다.
 - `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY, 2026-10-01 UTC · 선행 614~616·`TASK-MONO-743`). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
@@ -116,6 +116,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
+- `TASK-BE-614-consumer-account-pool-data-model.md` — 🔵 **IN-PROGRESS (2026-10-01 UTC)** 전역 소비자 계정 2단계 — 풀 데이터 모델 + 새 가입은 풀로, **`iam.consumer-pool.enabled` 기본 꺼짐**(615 가 로그인과 함께 켠다) · 사이트로 찾는 표면에 풀 멤버 포함 · `account.created` 사이트 테넌트. 기존 계정 이동은 `TASK-BE-618` 로 분리.
 (empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
