@@ -8,7 +8,7 @@ TASK-MONO-742
 
 # Status
 
-review
+done (2026-10-01 UTC — AC-1~AC-6 닫힘 · PR #4086 squash `b08b25d21`)
 
 # Owner
 
