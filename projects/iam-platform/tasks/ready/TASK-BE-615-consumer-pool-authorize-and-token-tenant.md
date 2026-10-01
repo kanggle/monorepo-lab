@@ -56,6 +56,7 @@ iam-platform
 - [ ] **AC-4** — 로그아웃 범위(한 사이트 / 전체 IdP 세션)를 정하고 기록, 시험으로 고정(`ADR-MONO-078` § 새로 생기는 위험).
 - [ ] **AC-5** — 갱신 토큰: 스토어에서 받은 refresh 로 팬 토큰을 받지 못한다(`TOKEN_TENANT_MISMATCH` 규칙 유지).
 - [ ] **AC-6** — `SsoTenantGateIntegrationTest` 등 기존 SSO 시험이 초록이고, 바뀐 기대값은 하나하나 이유를 적는다.
+- [ ] **AC-7 (대조군 — 고치기 전에 먼저 잰다)** — 🔴 **지금 셀러 계정은 스토어에서 쇼핑을 못 하는가.** 코드 읽기로는 그렇다: 셀러 계정은 `account_roles(ecommerce, acct, SELLER)` 를 갖고(`AccountServiceSellerProvisioner.java:196`), 발급 경로가 «저장 역할이 있으면 그것만, 없으면 시드» 라(`TenantClaimTokenCustomizer` `roles = stored.isEmpty() ? seed : stored`) 스토어 토큰이 `["SELLER"]` → web-store `signInCallback` 이 `CUSTOMER` 없음으로 `account_type_mismatch`. 🔴 **실측 아님** — 이 티켓의 구현 **전에** 통합 시험으로 이 동작을 단언해 기록한다(2026-10-01 분석, `ADR-MONO-078` 후속 결정). 풀 principal 의 역할 합치기(시드 ∪ 사이트 역할)를 넣은 뒤, 풀로 옮긴 셀러(`TASK-MONO-745`)의 스토어 토큰이 `["CUSTOMER","SELLER"]` 가 되는 시험은 745 의 AC 다 — 이 티켓은 «고치기 전» 칸만 소유한다.
 
 # Related Specs
 

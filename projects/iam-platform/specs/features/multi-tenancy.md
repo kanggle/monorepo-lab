@@ -413,13 +413,20 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   🔴 계정과 같은 테넌트 값을 들고 있는 IAM 행(`profiles` · `account_status_history` · `credentials` · `refresh_tokens` · `social_identities` · `identities`)을 **같이** 옮긴다 — 하나라도 남으면 그 행의 조회가 404 가 된다.
 - 같은 이메일로 **두 사이트**에 계정이 있는 사람은 자동으로 옮기지 않는다 — 본인이 두 계정을 모두 증명하고 묶는다(`TASK-MONO-743`, ADR-MONO-078 D2).
   묶기 전에는 두 계정이 지금처럼 따로 동작한다.
-- 🔴 **운영자 측면이 붙은 사이트 계정은 옮기지 않는다** — 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)으로 만들어지거나 그 경로로 운영자 측면을
-  얻은 계정이다: 이커머스 **셀러**(`ADR-MONO-042` — `(tenant_id, seller)` 로 product-service 가 찾는다), 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자
-  `oidc_subject` 가 이 계정 id 를 가리킨다). 옮기면 `(ecommerce, 계정)` 으로 셀러를 찾던 조회와 상태 이벤트 소비가 그 계정을 놓친다.
-  내부 프로비저닝은 앞으로도 **사이트 테넌트에** 계정을 만든다(풀이 아니다). 팬 `ARTIST` 역할(`ADR-MONO-059`)은 운영자 측면이 아니라 팬 사이트 역할이다 —
-  옮길 때 `consumer_site_roles(account, fan-platform, ARTIST)` 로 간다(id 가 그대로라 `artists.account_id` 는 무변경).
-- ⚪ **미결 (`TASK-BE-614` AC 로)** — 운영자 측면이 붙은 계정의 이메일로 소비자 client 풀 가입이 오면: § 2 대로 거절하면 그 사람은 «로그인 후 전환» 도 못 한다
-  (옮기지 않는 계정이므로). 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존한다(§ 4 폼 로그인 선택 순서가 결과를 정한다). 어느 쪽인지 이 문서는 정하지 않는다.
+- 🔴 **운영자 측면이 붙은 사이트 계정은 이 단계(§ 3 의 일괄·지연 이동)에서 옮기지 않는다 — 각자 자기 단계에서 옮긴다** (소유자 결정 2026-10-01 UTC:
+  «셀러를 풀에 포함, 080 후보 등록»):
+
+  | 계정 | 이동 단계 | 왜 그 단계까지 기다리나 |
+  |---|---|---|
+  | 이커머스 **셀러**(`ADR-MONO-042`, `SELLER` 역할) | `TASK-MONO-745` | product-service 가 셀러를 `(tenant_id, seller)` 로 찾고 상태 이벤트를 `(tenantId, accountId)` 로 소비한다 — 그 두 곳을 먼저 «계정 id» 로 고쳐야 옮겨도 셀러를 놓치지 않는다. 옮긴 뒤 `SELLER` 는 `consumer_site_roles(account, ecommerce, SELLER)` 로 가고, 스토어 토큰은 시드와 **합쳐** `["CUSTOMER","SELLER"]` 가 된다(§ 4 역할 규칙) |
+  | 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자 `oidc_subject` 가 이 계정 id) | `ADR-MONO-080` 후보(`TASK-MONO-746`) | 운영자 규칙(«운영자는 대상 테넌트 계정에만», `TASK-MONO-334`)을 바꾸는 결정이 먼저다 |
+
+  옮기기 전까지 이 계정들은 지금처럼 동작한다. 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)은 080 이 바꾸기 전까지 **사이트 테넌트에** 계정을 만든다.
+  팬 `ARTIST` 역할(`ADR-MONO-059`)은 운영자 측면이 아니라 팬 사이트 역할이다 — § 3 의 이동에서 `consumer_site_roles(account, fan-platform, ARTIST)` 로 간다(id 가 그대로라 `artists.account_id` 는 무변경).
+- **옮기기 전, 운영자 측면 계정의 이메일로 소비자 client 풀 가입이 오면 거절한다** (구현자 기본값 — `TASK-BE-614` AC-6, 소유자가 한 줄로 뒤집을 수 있다).
+  § 2 의 공존 금지와 같은 이유다: 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존해, 스토어 폼 로그인(풀 먼저)이 그 사람의 사이트 계정 비밀번호를 거절하고
+  콘솔 교차 조회가 `LOGIN_TENANT_AMBIGUOUS` 로 막힌다 — 그리고 이메일 인증이 없으니 **남이** 그 이메일로 가입만 해도 그렇게 된다. 거절의 대가는 그 사람이
+  자기 단계(745 / 080)까지 그 이메일로 다른 소비자 사이트에 못 들어간다는 것이다.
 
 #### 4. 로그인 · authorize · 토큰
 
