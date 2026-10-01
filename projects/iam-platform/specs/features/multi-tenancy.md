@@ -174,7 +174,7 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 
 ### 적용 범위 (서비스별)
 
-- **account-service**: `accounts`, `profiles`, `account_status_history`, `outbox_events`에 `tenant_id` NOT NULL. unique index `(tenant_id, email)`로 변경(테넌트 간 동일 이메일 허용)
+- **account-service**: `accounts`, `profiles`, `account_status_history`, `outbox_events`에 `tenant_id` NOT NULL. unique index `(tenant_id, email)`로 변경(테넌트 간 동일 이메일 허용). 🔵 소비자 사이트의 새 계정은 예약 테넌트 `consumer-pool` 에 하나로 산다 — [§ 소비자 계정 풀](#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742)(ADR-MONO-078)
 - **auth-service**: `credentials`, `refresh_tokens`, `social_identities`에 `tenant_id` NOT NULL. unique index `(tenant_id, provider, provider_user_id)` (소셜 식별자도 테넌트별 분리)
 - **admin-service**: `admin_operators`, `admin_operator_roles`, `admin_actions`에 `tenant_id`(또는 `target_tenant_id`) NOT NULL. SUPER_ADMIN은 cross-tenant 운영을 위해 `tenant_id = '*'` 같은 와일드카드 또는 별도 platform-scope role을 가짐(상세는 admin-service 스펙 후속)
 - **security-service**: 보안 이벤트(`auth.login.attempted`, `auth.login.failed`, `account.status.changed` 등) 모두 `tenant_id` 페이로드 필수. 테넌트별 비정상 탐지 임계치 운용 가능
@@ -367,6 +367,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - **그 테넌트에 신원이 없으면 그 테넌트에서 가입한다** — account-service `social-signup` 에 client 테넌트를 보내고, 그 테넌트 안에서 이메일로
   기존 계정을 찾아 연결하거나 새로 만든다([oauth-social-login.md § 계정 연결 전략](oauth-social-login.md#계정-연결-전략)). 폼 로그인과 같은 결과다 —
   **테넌트마다 한 계정**. 같은 구글 사용자가 스토어 → 팬 순서로 들어오면 계정 둘 · 신원 행 둘(테넌트마다 하나)이다.
+  🔵 **ADR-MONO-078 이후 소비자 사이트에서는 바뀐다** — 새 소셜 가입은 풀 계정이고 신원 행은 `consumer-pool` 에 하나다([§ 소비자 계정 풀](#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742), 구현 `TASK-BE-617`). 이 문단은 그 구현 전의 동작이다.
 - **BE-611 이전**: 조회가 전역이라 다른 테넌트에서 만든 신원이 잡혔다 — `ecommerce` 에서 만든 신원으로 팬 client 에 들어가면 `ecommerce`
   계정이 `tenant_id=fan-platform` 세션으로 들어갔다(16차 창 구조적 재현, `TASK-MONO-672` 항목 18). 두 테넌트에 행이 생기면 전역 조회는 결과가
   둘이 되어 그 신원의 로그인이 영구히 실패할 수 있었다(`TASK-BE-602` 후속 ①) — 한정 조회는 unique 키 그대로라 결과가 최대 하나다.
@@ -374,6 +375,98 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   그 테넌트의 신원 행이 새로 생기고, 계정은 위 가입 규칙대로 정해진다(그 테넌트에 같은 이메일 계정이 없으면 새 계정). BE-507 이전에 생긴
   «신원 행 테넌트 ≠ 계정 행 테넌트» 행은 그 신원 행의 테넌트 client 로 들어올 때 여전히 그 계정으로 간다 — 상태 · 이벤트 테넌트는 계정 행에서
   읽으므로(BE-602) 판정은 계정의 실제 테넌트로 한다.
+
+### 소비자 계정 풀 — 소비자 사이트끼리 계정 하나 (ADR-MONO-078 A, `TASK-MONO-742`)
+
+> 🔴 이 절은 **계약이 먼저다**(2026-10-01). 아래 규칙의 구현은 `TASK-BE-614`(저장) · `TASK-BE-615`(로그인·토큰) ·
+> `TASK-BE-616`(첫 방문 동의) · `TASK-MONO-743`(기존 계정 묶기) · `TASK-BE-617`(소셜)이다. 구현이 끝나기 전까지 위 표들(로그인 · SSO ·
+> 소셜)이 **지금 동작**이고, 이 절은 그것들이 **소비자 사이트에 대해** 어떻게 바뀌는지를 정한다. 콘솔(`iam`)과 소비자가 아닌 테넌트는 이 절 밖이다(D1).
+
+**용어** — *소비자 사이트* = 셀프 가입을 받는 client 의 테넌트(`fan-platform` · `ecommerce`). *풀 계정* = 이 절의 계정.
+*사이트별 계정* = ADR-MONO-078 이전 모양(한 소비자 테넌트에 속한 계정) — 묶이기 전까지 그대로 동작한다.
+
+#### 1. 저장 — 예약 테넌트 `consumer-pool` + 사이트 멤버십 (AC-4 결정)
+
+| 무엇 | 어디에 | 바뀌는 제약 |
+|---|---|---|
+| 풀 계정 | `accounts` 행, `tenant_id = 'consumer-pool'` | 없음 — `(tenant_id, email)` UNIQUE 가 풀 안의 이메일 유일성을 그대로 지킨다. `tenants` 에 `consumer-pool` 행을 하나 둔다(`fk_accounts_tenant_id` 때문) |
+| 풀 자격 | `credentials` 행, `tenant_id = 'consumer-pool'` | 없음 — `(tenant_id, email)` UNIQUE 그대로 |
+| 사이트 멤버십 | **신설** `consumer_site_memberships(account_id, site_tenant_id, status, consented_at)` — PK `(account_id, site_tenant_id)` | 신설 테이블만. 기존 테이블 무변경 |
+| 사이트별 역할(시드 밖) | **신설** `consumer_site_roles(account_id, site_tenant_id, role_name)` → 멤버십 FK | 신설만. `account_roles` 의 복합 FK `(tenant_id, account_id) → accounts(tenant_id, id)` 는 **건드리지 않는다** — 풀 계정의 사이트 역할을 거기 넣으면 사이트 테넌트 ≠ 계정 테넌트라 FK 가 깨진다 |
+| 소셜 신원 | `social_identities` 행, `tenant_id = 'consumer-pool'` | 없음 — `(tenant_id, provider, provider_user_id)` UNIQUE 가 풀 안에서 그대로 |
+
+- 🔴 **`consumer-pool` 은 저장값이다. 토큰에 절대 나오지 않는다** — 토큰의 `tenant_id` 는 요청한 client 의 사이트 테넌트다(`jwt-standard-claims.md` `tenant_id` 행).
+  그 값을 등록한 OAuth client 는 **없어야** 하고(있으면 그 client 가 풀 값을 토큰에 싣는다), 어느 게이트웨이도 그 값을 받아들이지 않는다.
+- 왜 «테넌트 없는 행»(`tenant_id` NULL)이 아닌가 — 컬럼이 NOT NULL 이고, NULL 은 MySQL UNIQUE 에서 중복 검사를 받지 않아 풀 안 이메일 유일성이 사라진다.
+
+#### 2. 가입 — 소비자 client 의 새 가입은 풀로
+
+- 소비자 client 에서 오는 폼·소셜 가입은 풀 계정을 만들고, 그 client 의 사이트 멤버십을 **같이** 만든다(가입 = 그 사이트 이용 동의).
+- 🔴 **같은 이메일의 사이트별 계정이 이미 있으면 풀 가입을 받지 않는다** — 대신 «그 이메일로 로그인한 뒤 전환» 으로 안내한다.
+  받으면 같은 이메일에 풀 계정과 사이트별 계정이 공존하고, 로그인 폼은 둘 중 하나의 비밀번호만 검사할 수 있다 — 남이 그 이메일로 풀 계정을
+  만들면 **원래 주인이 자기 사이트 계정에 못 들어간다**. 가입 화면의 «이미 가입된 이메일» 은 지금 가입이 이미 내는 응답과 같은 부류다(새 열거 경로가 아니다).
+
+#### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
+
+- 사이트별 계정이 **한 사이트에만** 있는 사람(대다수)은 그 계정의 `tenant_id` 를 `consumer-pool` 로 옮기고 그 사이트 멤버십을 만든다.
+  **id 가 그대로라** 그 사이트의 데이터(팬 팔로우, 스토어 주문)를 옮길 필요가 없다. 옮기는 시점(일괄 / 다음 로그인)은 `TASK-BE-614` 가 정한다.
+  🔴 계정과 같은 테넌트 값을 들고 있는 IAM 행(`profiles` · `account_status_history` · `credentials` · `refresh_tokens` · `social_identities` · `identities`)을 **같이** 옮긴다 — 하나라도 남으면 그 행의 조회가 404 가 된다.
+- 같은 이메일로 **두 사이트**에 계정이 있는 사람은 자동으로 옮기지 않는다 — 본인이 두 계정을 모두 증명하고 묶는다(`TASK-MONO-743`, ADR-MONO-078 D2).
+  묶기 전에는 두 계정이 지금처럼 따로 동작한다.
+- 🔴 **운영자 측면이 붙은 사이트 계정은 옮기지 않는다** — 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)으로 만들어지거나 그 경로로 운영자 측면을
+  얻은 계정이다: 이커머스 **셀러**(`ADR-MONO-042` — `(tenant_id, seller)` 로 product-service 가 찾는다), 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자
+  `oidc_subject` 가 이 계정 id 를 가리킨다). 옮기면 `(ecommerce, 계정)` 으로 셀러를 찾던 조회와 상태 이벤트 소비가 그 계정을 놓친다.
+  내부 프로비저닝은 앞으로도 **사이트 테넌트에** 계정을 만든다(풀이 아니다). 팬 `ARTIST` 역할(`ADR-MONO-059`)은 운영자 측면이 아니라 팬 사이트 역할이다 —
+  옮길 때 `consumer_site_roles(account, fan-platform, ARTIST)` 로 간다(id 가 그대로라 `artists.account_id` 는 무변경).
+- ⚪ **미결 (`TASK-BE-614` AC 로)** — 운영자 측면이 붙은 계정의 이메일로 소비자 client 풀 가입이 오면: § 2 대로 거절하면 그 사람은 «로그인 후 전환» 도 못 한다
+  (옮기지 않는 계정이므로). 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존한다(§ 4 폼 로그인 선택 순서가 결과를 정한다). 어느 쪽인지 이 문서는 정하지 않는다.
+
+#### 4. 로그인 · authorize · 토큰
+
+| 시작 client | 세션 principal | 결과 |
+|---|---|---|
+| 소비자 | 풀 계정, 그 사이트 멤버십 **있음** | 폼 없이 그 사이트 토큰 — `sub` = 풀 계정 id, `tenant_id` = 그 사이트, `roles` = 그 사이트 역할만 |
+| 소비자 | 풀 계정, 멤버십 **없음** | 그 사이트 **동의 화면 한 번**(`TASK-BE-616`) → 멤버십 생성 → 토큰 |
+| 소비자 | 사이트별 계정(묶이지 않음) | **지금 그대로** — 테넌트가 다르면 재인증(위 SSO 표) |
+| 콘솔 | 풀 계정 | 위 SSO 표의 콘솔 행 그대로(D1). 풀 계정은 운영자 권한을 주지 않는다 |
+
+- 폼 로그인의 자격 선택: 소비자 client 는 **풀 자격을 먼저**, 없으면 그 client 테넌트의 사이트별 자격을 찾는다. § 2 의 가입 거절과 § 3 의 이동이
+  «같은 이메일에 풀 자격과 사이트별 자격이 공존» 을 막으므로 순서가 결과를 바꾸지 않는다 — 🔴 공존이 생기면 그것이 결함이다(`TASK-BE-615` 의 대조군).
+- **역할(AC-5 결정)**: 풀 principal 의 토큰 역할 = 그 사이트의 시드 역할(`RoleSeedPolicy` — `ecommerce → CUSTOMER`, `fan-platform → FAN`) ∪
+  `consumer_site_roles(account, 그 사이트)`. 다른 사이트 역할은 **싣지 않는다**. 멤버십 없는 사이트로는 토큰을 만들지 않는다.
+  🔴 지금 발급 경로는 저장 역할을 그대로 싣는다(`TenantClaimTokenCustomizer.java:872-874`) — 풀 principal 에 대해 사이트로 거르는 것이 `TASK-BE-615` 의 일이다.
+- **refresh**: 풀 principal 의 refresh 미러 행 테넌트는 **토큰의 사이트 테넌트**다 — 스토어에서 받은 refresh 로 팬 토큰을 받지 못한다(`TOKEN_TENANT_MISMATCH` 그대로).
+- **콘솔 교차 조회**: 위 로그인 표의 콘솔 행은 «이메일이 정확히 한 테넌트에» 를 센다. 풀 계정은 `consumer-pool` 한 행이라, 같은 이메일이 팬·스토어에
+  따로 있어 `LOGIN_TENANT_AMBIGUOUS` 로 막히던 사람이 **묶은 뒤에는** 하나로 풀린다 — 행동 변경이므로 `TASK-BE-615` 가 시험으로 고정한다.
+
+#### 5. 사이트 테넌트로 계정을 찾는 표면
+
+`/internal/tenants/{tenantId}/accounts` 목록·조회와 콘솔 «고객 신원 → 계정 운영» 처럼 **사이트 테넌트로 계정을 찾는** 표면은, 그 사이트
+멤버십이 있는 풀 계정을 **포함해야** 한다. 안 그러면 운영자가 `ecommerce` 로 전환했을 때 새로 가입한 쇼핑객이 목록에서 사라진다
+(계정 행은 `consumer-pool` 에 있다). 🔴 이것은 § 격리 회귀 방지의 «`tenant_id` 를 첫 인자로» 규칙의 **확장**이지 예외가 아니다 — 입력은 여전히 사이트 테넌트이고,
+판정이 «계정 테넌트 = 입력» 에서 «계정 테넌트 = 입력 **또는** (풀 ∧ 그 사이트 멤버)» 로 넓어진다. 구현 `TASK-BE-614`.
+
+#### 6. 이벤트 (AC-3 결정)
+
+`account.created` 는 **계정이 한 사이트에 처음 들어갈 때** 그 사이트 테넌트로 **한 번씩** 나간다 — 풀 가입 시 가입한 사이트로 한 번, 다른 사이트의
+첫 방문 동의 때 그 사이트로 한 번. 이벤트의 뜻이 «계정이 생겼다» 에서 «이 계정이 이 테넌트에서 쓸 수 있게 됐다» 로 넓어지지만, **소비자가 보는 모양은
+그대로**다 — 이커머스 user-service 의 `AccountCreatedConsumer` 는 `tenantId=ecommerce` 인 이벤트로 프로필을 만들던 그대로 만든다.
+풀 단위로 한 번만 내는 안은 기각 — 그 이벤트의 `tenantId` 가 `consumer-pool` 이 되어 이커머스 소비자가 프로필을 **엉뚱한 테넌트**로 만든다.
+상세 계약: [account-events.md § account.created](../contracts/events/account-events.md#accountcreated).
+
+#### 7. 계약 문장과 그것을 지키는 시험의 자리 (AC-6)
+
+| 문장 | 시험 자리 |
+|---|---|
+| 풀 값은 토큰에 나오지 않는다 · `tenant_id` = 사이트 | `TASK-BE-615` — 풀 principal 로 두 client 토큰을 디코드해 `tenant_id` 를 단언 |
+| 같은 `sub` | `TASK-BE-615` — 같은 세션의 두 사이트 토큰 `sub` 동일 |
+| 사이트 역할만 | `TASK-BE-615` — 스토어 토큰에 `FAN` 없음 |
+| 멤버십 없으면 토큰 없음 · 동의 화면 | `TASK-BE-616` |
+| 같은 이메일 공존 금지(§ 2) | `TASK-BE-614` — 사이트별 계정이 있는 이메일로 풀 가입 → 거절 |
+| 사이트별 계정은 재인증 유지 | `TASK-BE-615` — `SsoTenantGateIntegrationTest` 기존 칸 그대로 초록 |
+| 이메일만으로 안 묶인다 | `TASK-MONO-743` · `TASK-BE-617` 대조군 |
+| 사이트로 찾는 목록에 풀 멤버 포함 | `TASK-BE-614` — `ecommerce` 목록에 풀 가입 쇼핑객 |
+| `account.created` 사이트별 1회 | `TASK-BE-614`(가입) · `TASK-BE-616`(동의) — 이벤트 `tenantId` 단언 |
 
 ### 격리 회귀 방지
 

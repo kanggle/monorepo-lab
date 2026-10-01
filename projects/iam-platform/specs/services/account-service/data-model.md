@@ -87,6 +87,36 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 - `add`: 단건 추가. 이미 존재 시 no-op (멱등). PK 중복은 409 가 아니라 정상 종료.
 - `remove`: 단건 삭제. 존재하지 않을 시 no-op.
 
+🔵 **소비자 계정 풀의 사이트 역할은 이 테이블에 두지 않는다** (ADR-MONO-078) — 풀 계정의 `tenant_id` 는 `consumer-pool` 이고 사이트 역할의 테넌트는
+사이트라서 위 복합 FK 가 깨진다. 아래 `consumer_site_roles` 에 둔다.
+
+### `consumer_site_memberships` (신설 — ADR-MONO-078 A, 계약 `TASK-MONO-742`, DDL `TASK-BE-614`)
+
+> 풀 계정(`accounts.tenant_id = 'consumer-pool'`)이 **어느 소비자 사이트에 들어왔는가**. 행이 없는 사이트로는 토큰을 만들지 않고 첫 방문 동의 화면을 보인다.
+> 규칙의 정본: [multi-tenancy.md § 소비자 계정 풀](../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `account_id` | VARCHAR(36) | NOT NULL, PK, FK → `accounts.id` | internal | 풀 계정 |
+| `site_tenant_id` | VARCHAR(32) | NOT NULL, PK, FK → `tenants.tenant_id` | internal | 소비자 사이트 테넌트(`fan-platform` · `ecommerce`). 🔴 `consumer-pool` 이면 안 된다(애플리케이션 검사) |
+| `status` | VARCHAR(20) | NOT NULL | internal | `ACTIVE` / `LEFT` (사이트 탈퇴 — 계정 자체 삭제와 별개) |
+| `consented_at` | DATETIME(6) | NOT NULL | internal | 그 사이트 이용 동의 시각(UTC). 가입한 사이트는 가입 시각 |
+
+**PK**: `(account_id, site_tenant_id)`. **인덱스**: `(site_tenant_id, status)` — 사이트 테넌트로 계정을 찾는 표면(목록·콘솔 계정 운영)이 쓴다.
+
+### `consumer_site_roles` (신설 — 같은 출처)
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `account_id` | VARCHAR(36) | NOT NULL, PK | internal | — |
+| `site_tenant_id` | VARCHAR(32) | NOT NULL, PK | internal | — |
+| `role_name` | VARCHAR(64) | NOT NULL, PK | internal | `account_roles.role_name` 과 같은 정규식. 시드 역할(`CUSTOMER`·`FAN`)은 **저장하지 않는다** — 발급 시 `RoleSeedPolicy` 가 사이트로 더한다 |
+| `granted_by` | VARCHAR(36) | NULL | internal | — |
+| `granted_at` | DATETIME(6) | NOT NULL | internal | — |
+
+**FK**: `(account_id, site_tenant_id) → consumer_site_memberships` ON DELETE CASCADE — 멤버십 없는 사이트 역할은 존재할 수 없다.
+예: 팬 `ARTIST`(ADR-MONO-059)가 풀로 옮겨진 계정에서 여기 산다.
+
 ### `org_node`
 
 > TASK-BE-490 / [ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D1 — `tenant` **위에** 얹히는 **데이터 없는 그룹핑 노드**. 한 회사(paying company)가 각자 격리된 다수의 service-tenant 를 소유하도록 표현하고, 그 노드 체인에 **deny-only 엔타이틀먼트 실링(ceiling)** 을 붙여 하위로 상속(narrow-only)한다. `org_node` 는 tenant 를 **그룹핑할 뿐 중첩(nest)하지 않는다** — `tenant_id` 는 여전히 단일 flat 격리 키다 (M1 불변, [multi-tenancy.md § Org Node Model](../../features/multi-tenancy.md#org-node-model-adr-mono-047)). DDL/entity 는 후속 TASK-BE-491 이 소유하며 (Flyway `V0027`), 본 스펙은 그보다 **먼저** 계약을 확정한다 (Change Rule).
