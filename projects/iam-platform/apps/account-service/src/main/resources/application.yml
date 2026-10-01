@@ -112,10 +112,12 @@ internal:
 iam:
   # TASK-BE-614 (ADR-MONO-078 A): consumer-site signups are born into the shared account pool
   # (tenant `consumer-pool` + a consumer_site_memberships row) and site-scoped account lookups
-  # include that site's pool members — ONLY while this is true. Default false: pool login is
-  # TASK-BE-615, which turns this on together with it. Off = byte-identical pre-pool behaviour.
+  # include that site's pool members — ONLY while this is true. Default true since TASK-BE-616
+  # (pool login = TASK-BE-615, first-visit consent = TASK-BE-616 — both shipped; turned on in the
+  # same change that renames the store login page to «IAM», ADR-007 § 값 변경 2026-10-01).
+  # IAM_CONSUMER_POOL_ENABLED=false stays a kill switch: byte-identical pre-pool signup/lookups.
   consumer-pool:
-    enabled: ${IAM_CONSUMER_POOL_ENABLED:false}
+    enabled: ${IAM_CONSUMER_POOL_ENABLED:true}
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}

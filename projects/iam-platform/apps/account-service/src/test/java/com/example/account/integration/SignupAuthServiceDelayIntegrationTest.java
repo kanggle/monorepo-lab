@@ -136,7 +136,9 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.accountId").exists());
 
-        Optional<Account> saved = accountRepository.findByEmail(TenantId.FAN_PLATFORM, email);
+        // TASK-BE-616: the pool flag defaults to true, so a header-less (fan-platform) signup is born
+        // in consumer-pool — the timeout behaviour under test is unchanged, only where the row lives.
+        Optional<Account> saved = accountRepository.findByEmail(TenantId.CONSUMER_POOL, email);
         assertThat(saved).isPresent();
         assertThat(saved.get().getStatus()).isEqualTo(AccountStatus.ACTIVE);
     }
@@ -166,7 +168,8 @@ class SignupAuthServiceDelayIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
-        Optional<Account> saved = accountRepository.findByEmail(TenantId.FAN_PLATFORM, email);
+        // TASK-BE-616: pool account (see the test above).
+        Optional<Account> saved = accountRepository.findByEmail(TenantId.CONSUMER_POOL, email);
         assertThat(saved).isPresent();
     }
 }

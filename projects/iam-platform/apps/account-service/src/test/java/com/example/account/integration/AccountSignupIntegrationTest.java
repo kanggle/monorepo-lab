@@ -5,6 +5,7 @@ import com.example.account.domain.account.Account;
 import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.AccountStatusHistoryRepository;
+import com.example.account.domain.repository.ConsumerSiteMembershipRepository;
 import com.example.account.domain.status.AccountStatus;
 import com.example.account.domain.tenant.TenantId;
 import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
@@ -53,6 +54,9 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private AccountStatusHistoryRepository historyRepository;
 
+    @Autowired
+    private ConsumerSiteMembershipRepository consumerSiteMembershipRepository;
+
     // TASK-BE-063: signup now calls auth-service /internal/auth/credentials. The
     // integration here focuses on account-service persistence, so we stub the
     // outbound call with a no-op mock.
@@ -71,11 +75,11 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
     private AccountOutboxPublisher accountOutboxPublisher;
 
     @Test
-    @DisplayName("회원가입 후 계정이 ACTIVE 상태로 생성된다")
+    @DisplayName("회원가입 후 계정이 ACTIVE 상태로 생성된다 — TASK-BE-616 이후 헤더 없는 가입(fan-platform)은 풀 계정 + 팬 멤버십")
     void signup_createsActiveAccount() throws Exception {
         String uniqueEmail = "signup-" + UUID.randomUUID() + "@example.com";
 
-        mockMvc.perform(post("/api/accounts/signup")
+        String body = mockMvc.perform(post("/api/accounts/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -85,11 +89,20 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(uniqueEmail)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.accountId").exists());
+                .andExpect(jsonPath("$.accountId").exists())
+                .andReturn().getResponse().getContentAsString();
+        String accountId = com.jayway.jsonpath.JsonPath.read(body, "$.accountId");
 
-        Optional<Account> saved = accountRepository.findByEmail(TenantId.FAN_PLATFORM, uniqueEmail);
+        // TASK-BE-616 (flag iam.consumer-pool.enabled now defaults to true): a header-less signup
+        // resolves to fan-platform, a consumer site, so the account is born in the pool with an
+        // ACTIVE fan-platform membership — no per-site fan-platform row (multi-tenancy.md § 소비자 계정 풀 § 2).
+        Optional<Account> saved = accountRepository.findByEmail(TenantId.CONSUMER_POOL, uniqueEmail);
         assertThat(saved).isPresent();
+        assertThat(saved.get().getId()).isEqualTo(accountId);
         assertThat(saved.get().getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(accountRepository.findByEmail(TenantId.FAN_PLATFORM, uniqueEmail)).isEmpty();
+        assertThat(consumerSiteMembershipRepository.find(TenantId.FAN_PLATFORM, accountId))
+                .hasValueSatisfying(m -> assertThat(m.isActive()).isTrue());
     }
 
     @Test
@@ -160,18 +173,24 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
         assertThat(history.get(0).getFromStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(history.get(0).getToStatus()).isEqualTo(AccountStatus.LOCKED);
 
-        // Verify account status
-        Account account = accountRepository.findById(TenantId.FAN_PLATFORM, accountId).orElseThrow();
+        // Verify account status. TASK-BE-616: the header-less signup is a pool account now; the
+        // header-less /lock above finds it by id (TASK-MONO-735 finder), so it lives in consumer-pool.
+        Account account = accountRepository.findById(TenantId.CONSUMER_POOL, accountId).orElseThrow();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
     }
 
     @Test
-    @DisplayName("DELETED 계정에 대한 LOCK 요청이 409를 반환한다")
+    @DisplayName("DELETED 계정에 대한 LOCK 요청이 409를 반환한다 (사이트별 계정 — erp)")
     void lockDeletedAccount_returns409() throws Exception {
         String uniqueEmail = "del-lock-" + UUID.randomUUID() + "@example.com";
 
-        // Signup
+        // TASK-BE-616: this test is about the per-tenant account lifecycle (self-delete → lock refused),
+        // so it uses a tenant whose signups stay per-tenant with the pool flag on (erp, B2B). A header-less
+        // signup is now a pool account, and DELETE /api/accounts/me resolves the account in the header's
+        // SITE tenant — a pool account is not found there (404). That gap is recorded as a follow-up in
+        // TASK-BE-616 («풀 계정의 자기 서비스 표면»), not asserted here.
         var result = mockMvc.perform(post("/api/accounts/signup")
+                        .header("X-Tenant-Id", "erp")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -188,6 +207,7 @@ class AccountSignupIntegrationTest extends AbstractIntegrationTest {
         // Delete account
         mockMvc.perform(delete("/api/accounts/me")
                         .header("X-Account-Id", accountId)
+                        .header("X-Tenant-Id", "erp")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

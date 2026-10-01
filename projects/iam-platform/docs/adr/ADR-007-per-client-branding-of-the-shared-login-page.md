@@ -72,7 +72,7 @@
 
 | client | serviceName | title | description |
 |---|---|---|---|
-| `ecommerce-web-store-client` | IAM | IAM 로그인 | 사이트 구분 문구(구현 `TASK-BE-616` 이 정한다 — 예: 쇼핑을 계속하려면 로그인하세요) |
+| `ecommerce-web-store-client` | IAM | IAM 로그인 | 사이트 구분 문구(구현 `TASK-BE-616` 이 정한다 — 예: 쇼핑을 계속하려면 로그인하세요) → `TASK-BE-616` 이 정한 값: «쇼핑을 계속하려면 IAM 계정으로 로그인하세요.» (auth-service `V0041`, 스토어 앱 `LoginForm` 같은 문구) |
 
 - 대표색·로고는 사이트별 그대로(D2) — **이름만** 하나다. 그래서 «어느 사이트에 들어가는가» 는 설명 문구와 색으로 보인다.
 - 스토어 앱 진입 버튼도 같이 바뀐다: «Global Account로 로그인» → «IAM 로그인».
@@ -128,7 +128,7 @@
 |---|---|---|---|
 | `platform-console-web` | IAM | IAM 로그인 | 운영자 계정으로 로그인합니다 |
 | `fan-platform-user-flow-client` | ~~GAP~~ IAM | ~~GAP로 로그인~~ IAM 로그인 | ~~GAP으로~~ IAM으로 안전하게 로그인합니다 (값 변경 2026-09-29 — 위 절) |
-| `ecommerce-web-store-client` | Global Account | Global Account로 로그인 | Global Account로 로그인하여 쇼핑을 계속하세요. |
+| `ecommerce-web-store-client` | ~~Global Account~~ IAM | ~~Global Account로 로그인~~ IAM 로그인 | ~~Global Account로 로그인하여 쇼핑을 계속하세요.~~ 쇼핑을 계속하려면 IAM 계정으로 로그인하세요. (값 변경 2026-10-01 — 위 절, `V0041`) |
 | 그 밖 · 판별 불가 | D3 의 기본값 → 채택: IAM | IAM 로그인 | (없음) |
 
 (description 은 각 앱 진입 화면에 이미 있는 문구를 가져왔다 — 팬 `TASK-MONO-728` CORRECTION, 스토어 `LoginForm.tsx`. 콘솔 문구는 제안이다.)

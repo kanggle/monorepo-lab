@@ -81,12 +81,28 @@ class LoginPageBrandingSeedIntegrationTest extends AbstractIntegrationTest {
                 "IAM", "IAM 로그인", "IAM으로 안전하게 로그인합니다", null, "#9333ea"));
     }
 
+    /**
+     * TASK-BE-616 — V0040 seeded «Global Account»; V0041 renames it to IAM (ADR-007 § 값 변경
+     * 2026-10-01: one account name once fan and store share one account). The colour V0040 set is
+     * kept — only the name and the subtitle change.
+     */
     @Test
-    @DisplayName("V0040: ecommerce-web-store-client → Global Account, the store's own subtitle, #1a1a2e")
+    @DisplayName("V0040+V0041: ecommerce-web-store-client → IAM (owner change from Global Account), store subtitle, #1a1a2e kept")
     void storeBranding() {
         assertThat(brandingOf("ecommerce-web-store-client")).isEqualTo(new LoginBranding(
-                "Global Account", "Global Account로 로그인",
-                "Global Account로 로그인하여 쇼핑을 계속하세요.", null, "#1a1a2e"));
+                "IAM", "IAM 로그인",
+                "쇼핑을 계속하려면 IAM 계정으로 로그인하세요.", null, "#1a1a2e"));
+    }
+
+    @Test
+    @DisplayName("V0041: no client carries the «Global Account» name any more")
+    void noGlobalAccountNameLeft() {
+        List<String> stillGlobal = jdbcTemplate.queryForList(
+                "SELECT client_id FROM oauth_clients WHERE JSON_UNQUOTE(JSON_EXTRACT(client_settings, "
+                        + "'$.\"custom.branding.service-name\"')) = 'Global Account'",
+                String.class);
+
+        assertThat(stillGlobal).isEmpty();
     }
 
     @Test

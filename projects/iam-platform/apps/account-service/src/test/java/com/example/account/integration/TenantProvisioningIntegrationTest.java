@@ -231,8 +231,12 @@ class TenantProvisioningIntegrationTest extends AbstractIntegrationTest {
         Account wmsAccount = accountRepository.findById(new TenantId(WMS_TENANT_ID), wmsAccountId).orElseThrow();
         assertThat(wmsAccount.getTenantId().value()).isEqualTo(WMS_TENANT_ID);
 
-        // fan-platform account should also exist with same email but different tenant
-        assertThat(accountRepository.findByEmail(new TenantId(FAN_TENANT_ID), sharedEmail)).isPresent();
+        // The self-signup account should also exist with the same email but in a different tenant.
+        // TASK-BE-616: the pool flag defaults to true, so the header-less (fan-platform) signup above is
+        // a consumer-pool account (with a fan-platform membership), not a fan-platform row — the
+        // cross-tenant uniqueness point of this test is unchanged (pool vs wms).
+        assertThat(accountRepository.findByEmail(TenantId.CONSUMER_POOL, sharedEmail)).isPresent();
+        assertThat(accountRepository.findByEmail(new TenantId(FAN_TENANT_ID), sharedEmail)).isEmpty();
         assertThat(accountRepository.findByEmail(new TenantId(WMS_TENANT_ID), sharedEmail)).isPresent();
 
         // Cross-tenant isolation: wms account not visible under fan-platform
