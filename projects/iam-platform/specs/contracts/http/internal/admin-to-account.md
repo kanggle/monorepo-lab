@@ -13,6 +13,8 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 모든 **변이(mutation) 엔드포인트** (`/lock`, `/unlock`, `/delete`, `/gdpr-delete`, `/export`) 는 선택적 `X-Tenant-Id` 헤더로 대상 계정을 **행위자의 활성 테넌트**에 가둔다. 이는 읽기 경로(`GET /internal/accounts` 의 `tenantId` 쿼리, TASK-BE-357)와 동일한 자세이며, 변이 경로를 읽기 경로와 **테넌트 패리티**로 맞춘다.
 
 - **헤더 존재 + 구체 slug**: account-service 는 `findById(TenantId.of(header), accountId)` 로 조회한다. 대상 계정이 **다른 테넌트**에 있으면 tenant-scoped 조회가 empty 를 반환 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주는 403 을 절대 반환하지 않는다). 계정은 변이되지 않는다.
+  🔵 **TASK-BE-616**: 헤더가 **소비자 사이트**면 그 사이트의 ACTIVE 멤버인 **풀 계정**도 찾는다([multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) «단건 표면까지»).
+  변이는 풀 계정 **하나**에 일어나므로 그 사람의 모든 소비자 사이트에 미친다(GDPR 삭제 포함). 그 사이트의 멤버가 아닌 풀 계정 → 여전히 `404`.
 - **헤더 부재 OR 공백 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)** — 엔드포인트에 따라 둘로 갈린다:
   - **`/lock` · `/unlock` · `/delete` (TASK-MONO-735)**: 계정 **행 자신의 테넌트**로 찾는다(`AccountRepository.findByIdResolvingTenant` — [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지) 의 문서화된 예외 2번째 사용). `accounts.id` 는 전역 유일 PK 라 결과는 최대 한 행이고 테넌트를 섞지 않는다. 어느 테넌트에도 없는 id → `404 ACCOUNT_NOT_FOUND`. `fan-platform` 계정은 결과가 이전과 같다. 🔴 이전(BE-467~MONO-735)엔 `fan-platform` 기본값이라 SUPER_ADMIN(`'*'`)과 헤더 없는 호출자는 **`fan-platform` 밖 계정을 잠그지 못했다**(2026-09-26 16차 창 실측 — `ecommerce` 계정 잠금 404).
   - **`/gdpr-delete` · `/export`**: 변경 없음 — `fan-platform` 기본값(BE-467 net-zero). 🔴 SUPER_ADMIN 의 비-fan 계정 gdpr-delete/export 는 그래서 아직 404 다(TASK-MONO-735 범위 밖, 기록).

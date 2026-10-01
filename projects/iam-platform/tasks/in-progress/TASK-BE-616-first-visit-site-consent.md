@@ -217,18 +217,109 @@ admin-service 는 플래그를 읽지 않는다 — 바뀐 것 없다(`check` rc
 
 - **콘솔 보안 이벤트 조회**: 콘솔에서 사이트 테넌트(`ecommerce` 등)로 전환해 보안 이벤트를 보면 풀 계정의 이벤트는 보이지 않는다 — 풀 principal 의
   로그인 이벤트는 `consumer-pool` 로 기록된다(615 D-8). 착수 시 결정의 ⚪ 공백 그대로.
-- 🔴 **풀 계정의 자기 서비스 표면** — `/api/accounts/me`(GET · PATCH profile) · `/api/accounts/me` DELETE · 상태 조회 · 이메일 인증 · 내부 `gdpr-delete`/`export`
-  는 계정을 **`X-Tenant-Id`(= 토큰의 사이트) 테넌트로** 찾는다 → 풀 계정은 404. 플래그를 켠 지금부터 **새로 가입하는 모든 소비자**에 해당한다.
-  저장소의 소비자 앱(팬·스토어)은 이 IAM 경로를 부르지 않는다(grep) — 그러나 콘솔의 GDPR 삭제/내보내기가 사이트 테넌트로 부르면 404 다.
-  614 가 «쓰기 경로는 넓히지 않았다» 로 미룬 것과 같은 묶음. `AccountSignupIntegrationTest#lockDeletedAccount_returns409` 를 erp 계정으로 옮긴 이유.
-- 🔴 **셀러 프로비저닝의 역방향 공존** — product-service 의 셀러 온보딩은 `POST /internal/tenants/ecommerce/accounts` 로 사이트 계정을 만든다. 그 이메일에
-  **이미 풀 계정이 있으면** 막는 것이 없다(§ 2 의 거절은 «사이트 계정이 먼저 있고 풀 가입이 뒤» 방향만 덮는다) → 같은 이메일에 풀 + 사이트 계정 공존.
-  플래그가 켜져 이제 도달 가능. `TASK-MONO-745`(셀러를 풀로) 의 범위에서 다룰 것.
+- ~~풀 계정의 자기 서비스 표면 404~~ → **이 브랜치에서 고쳤다** (아래 «추가 — § 5 단건 표면»). `AccountSignupIntegrationTest#lockDeletedAccount_returns409` 는
+  erp 계정 그대로 두었다(그 시험의 주제는 테넌트별 수명주기이고, 풀 멤버의 같은 경로는 새 IT 가 잰다).
+- ~~셀러 프로비저닝의 역방향 공존~~ → **이 브랜치에서 막았다** (아래 «추가 — § 2 역방향»).
 - **같은 세션의 두 탭**: 보관 슬롯이 하나라, 두 탭이 차례로 동의 화면에 오면 먼저 연 탭의 «동의» 가 **나중 탭의** authorize 를 재개한다(그 탭의 client 는
   `state` 불일치로 거절 — 토큰이 엉뚱한 곳으로 가지는 않는다). 필요해지면 요청별 키로.
-- 🔴 **스토어의 거절 문구 미측정** (AC-1 위): NextAuth 가 IdP 의 `error=access_denied` 를 어떤 `?error=` 코드로 넘기는지 실행으로 확인하고,
-  `AccessDenied` 라면 `LoginForm.normalizeErrorCode` 가 그것을 «operator 계정» 안내(`role_denied`)로 잘못 읽으니 동의 거절용 문구를 따로 둘 것 — 스토어 쪽 작업.
+- 🔴 **스토어의 거절 문구 미측정** (AC-1 위) — 구체적으로:
+  - **코드 경로**: `projects/ecommerce-microservices-platform/apps/web-store/src/features/auth/ui/LoginForm.tsx` 의 `normalizeErrorCode` →
+    `STANDARD_ERROR_MESSAGES`. `'AccessDenied'` 는 `role_denied` 로 접혀 «operator 계정으로는 web-store 에 접근할 수 없습니다…» 를 띄운다
+    (그 매핑은 `signInCallback` 의 operator 거절용이다). `access_denied` 그대로면 «로그인이 거부되었습니다. 권한을 확인해 주세요.», 그 밖의 코드
+    (`OAuthCallbackError` 등)면 일반 문구. IAM 이 동의 거절에 돌려주는 것은 `error=access_denied&error_description=the user declined to use this site&state=…`
+    (스토어 콜백 `/api/auth/callback/iam`) — NextAuth v5 가 그것을 `/login?error=` 의 어느 값으로 바꾸는지는 **실행해 보지 않았다**.
+  - **잴 시험**: web-store 풀스택 e2e 에 새 스펙 하나(예: `apps/web-store/e2e/consent-decline.spec.ts`, 짝 = 기존 `e2e/account-type-guard.spec.ts`
+    — `role_denied` 문구를 이미 같은 방식으로 단언한다): 팬에만 멤버인 풀 계정으로 스토어 «IAM 로그인» → IAM `/consent` → «동의하지 않음» →
+    스토어 `/login` 의 `role="alert"` 문구를 단언하고 URL 의 `error=` 값을 기록. 시드 계정이 필요하다(팬 멤버십만 있는 풀 계정 — dev 시드에 아직 없다).
+    nightly 전용(`nightly-e2e.yml`). 결과가 `AccessDenied` 면 `normalizeErrorCode` 에 동의 거절 갈래를 따로 둔다 — 스토어 쪽 작업.
 - `scripts/capture-portfolio.mjs:230` 주석이 스토어 버튼을 «Global Account로 로그인» 으로 적는다 — 셀렉터는 `button:has-text("로그인")` 이라 계속 맞는다.
   공유 경로라 이 프로젝트 티켓에서 고치지 않았다.
 - **배포 순서**: account-service(PUT 엔드포인트 + 플래그) 를 auth-service 보다 먼저 또는 함께. 거꾸로면 동의가 404 → 화면 «잠시 후 다시» · 토큰 없음(fail-closed).
   데모는 AMI 재굽기 뒤에 반영된다.
+
+---
+
+## 추가 (코디네이터 지시, 2026-10-01 UTC) — 플래그를 켜면 바로 결함이 되는 둘
+
+### § 5 단건 표면 — 풀 멤버를 사이트 테넌트로 찾는다
+
+계약 근거: multi-tenancy.md § 소비자 계정 풀 § 5 — «사이트 테넌트로 계정을 찾는 표면은 그 사이트 멤버십이 있는 풀 계정을 포함» · 판정 «계정 테넌트 = 입력
+∨ (풀 ∧ 그 사이트 ACTIVE 멤버)». 614 는 목록 · 검색 · `/internal/tenants/{t}/accounts/{id}` 에만 적용했다. 새 규칙이 아니라 같은 규칙의 나머지 적용이다.
+
+구현: `application/service/SiteAccountLookup.find(repo, flag, tenant, id)` — 플래그 ON ∧ 입력 ≠ `consumer-pool` → 614 의 `findByIdInSiteIncludingPoolMembers`
+(같은 JPQL), 아니면 옛 `findById(tenant, id)`. 테넌트 없는 조회 신설 없음.
+
+**census** — account-service 에서 계정 하나를 `(tenantId, accountId)` / `(tenantId, email)` 로 찾는 호출 전부(`accountRepository.find*/exists*` grep, 2026-10-01):
+
+| 호출 지점 | 표면 (테넌트의 출처) | 판정 | 이유 |
+|---|---|---|---|
+| `ProfileUseCase.getMe` / `updateProfile` | `GET /api/accounts/me` · `PATCH /me/profile` (게이트웨이 `X-Tenant-Id`) | **넓힘** | 본인 조회 — 풀 멤버가 404 였다 |
+| `AccountStatusUseCase.getStatus(id, tenant)` | `GET /api/accounts/me/status` · `GET /internal/accounts/{id}/status`(헤더) | **넓힘** | auth-service 의 풀 principal 상태 조회는 `consumer-pool` 을 보내 정확 조회 그대로 |
+| `AccountStatusUseCase.changeStatus(cmd, tenant)` | `POST /internal/accounts/{id}/lock` · `/unlock`(헤더 = 사이트) | **넓힘** | 계정 전체에 적용(아래 결과) |
+| `AccountStatusUseCase.deleteAccount(…, tenant)` | `DELETE /api/accounts/me` · `POST /internal/accounts/{id}/delete`(헤더) | **넓힘** | 〃 |
+| `SendVerificationEmailUseCase` | `POST /api/accounts/signup/resend-verification-email`(헤더) | **넓힘** + 토큰엔 **계정 자신의 테넌트** | 인증 단계를 넓히지 않아도 되게(사이트 계정은 같은 값 — 바이트 동일) |
+| `VerifyEmailUseCase` | `POST …/verify-email` (토큰이 테넌트를 운반) | 넓히지 않음 | 토큰이 이제 계정의 실제 테넌트를 싣는다 → 정확 조회가 맞다 |
+| `GdprDeleteUseCase` | `POST /internal/accounts/{id}/gdpr-delete`(헤더) | **넓힘** | 코디네이터 결정 — 아래 |
+| `DataExportUseCase` | `GET /internal/accounts/{id}/export`(헤더) | **넓힘** | 〃 |
+| `ProvisionStatusChangeUseCase` | `PATCH /internal/tenants/{t}/accounts/{id}/status` (경로) | **넓힘** · 이력 행 테넌트 = 계정의 테넌트 | product-service 셀러 정지도 이 경로 — 사이트 계정은 무변경 |
+| `ProvisionPasswordResetUseCase` | `POST /internal/tenants/{t}/accounts/{id}/password-reset` (경로) | **넓힘** · 이력 행 테넌트 = 계정의 테넌트 | 감사 행만 쓴다 |
+| `TenantAccountQueryUseCase` · `AccountSearchQueryService` | 목록 · 단건 · 이메일 검색 | 이미 넓음(614) | — |
+| `AssignRolesUseCase` · `AddAccountRoleUseCase` · `RemoveAccountRoleUseCase` | `PATCH …/roles` · `:add` · `:remove` | **넓히지 않음** | `account_roles` 복합 FK `(tenant_id, account_id) → accounts(tenant_id, id)` 가 풀 계정을 사이트 테넌트로 담을 수 없다. 풀 계정의 사이트 역할은 `consumer_site_roles`(작성자 = BE-618 / MONO-745). 404 유지 |
+| `GetAccountRolesUseCase` | `GET …/roles` | 넓히지 않음 | `account_roles` 만 읽는다 — 풀 멤버는 `[]`. auth-service 는 풀 principal 에 이 경로 대신 consumer-members 읽기를 쓴다 |
+| `GetAccountIdentityUseCase` (`findIdentityId`) · `ResolveOrCreateIdentity` | 운영자 연결 · 운영자 생성 | 넓히지 않음 | 운영자 측면 — 615 소유자 결정(«운영자 생성은 옛 규칙»), `ADR-MONO-080` 후보 |
+| `UpdateLastLoginUseCase` | auth 로그인 이벤트 소비 | 넓히지 않음 | 이벤트 테넌트 = 자격 행 테넌트 = 풀 principal 이면 `consumer-pool`(615 D-8) — 이미 정확 일치 |
+| `SocialSignupUseCase.findByEmail` | 소셜 가입 | 넓히지 않음 | 가입 경로 — `TASK-BE-617` |
+| `SignupUseCase.existsByEmail` · `ConsumerAccountPool.refuseIfEmailHasSiteAccount` | 가입 | 해당 없음 | 614 가 풀 규칙을 이미 적용 |
+| `ProvisionAccountUseCase.existsByEmail` | 내부 계정 생성(단건 · 벌크 · 셀러) | **§ 2 역방향 거절 추가** | 아래 |
+| `AccountStatusUseCase.*ResolvingTenant` · `GetConsumerSiteMembershipUseCase` · `ConsentToConsumerSiteUseCase` | id 만 / 풀 전용 | 해당 없음 | 사이트 테넌트 입력이 아니다 |
+
+**쓰기의 결과 (기록)** — 사이트 테넌트로 풀 멤버에게 하는 변이는 **풀 계정 하나**에 일어난다:
+- 🔴 **GDPR 삭제**: 그 사람이 멤버인 어느 사이트의 운영자든 할 수 있다(데이터 주체는 사람). 결과는 **모든 소비자 사이트에서** DELETED + PII 마스킹 —
+  팬에서 지워 달라고 한 사람의 스토어 계정도 같이 사라진다(하나이므로). 이벤트(`account.status.changed` · `account.deleted`)는 `consumer-pool` 로 한 번.
+- 잠금 · 해제 · 삭제 · 상태 전이도 같다 — 스토어 운영자의 잠금은 팬에서도 잠근다. 계약(account-events.md «풀 계정의 상태 전이는 계정 하나의 일»)과 같은 결.
+- 🔴 사이트 단위로만 «떠나기»(`LEFT`)는 이 변경의 범위가 아니다 — 그 작성자는 아직 없다.
+- **비멤버 대조군**: 스토어에만 멤버인 풀 계정을 `fan-platform` 으로 찾으면 읽기 · 상태 변경 · GDPR 삭제 모두 404, 계정 무변경(아래 IT).
+
+### § 2 역방향 — 내부 계정 생성이 풀 계정 이메일과 겹치면 거절
+
+- `ConsumerAccountPool.refuseIfEmailHasPoolAccount(tenant, email)` — `ProvisionAccountUseCase` 의 테넌트 내 중복 확인 바로 뒤.
+  단건 `POST /internal/tenants/{t}/accounts` 와 벌크(`RowProvisioningHelper` → 같은 use case) 둘 다 탄다. 응답은 기존 중복 그대로 `409 ACCOUNT_ALREADY_EXISTS`.
+- **소비자 사이트에만**(`Tenant.isConsumerSite()`). wms · erp · demo-corp 같은 B2B/고객 테넌트는 풀 조회조차 하지 않는다(D1).
+- 플래그와 무관 — 풀 계정이 하나라도 있으면 공존은 틀리다(플래그 OFF 면 풀 계정이 새로 생기지 않으므로 사실상 무변화, 인덱스 읽기 1회).
+- **잠정 결과(기록)**: 풀 쇼퍼를 **같은 이메일로** 셀러 온보딩할 수 없다 — `TASK-MONO-745` 전까지 product-service 의 기존 fail-soft 대로
+  `PENDING_PROVISIONING`(`AccountServiceSellerProvisioner.provision` 의 catch → `ProvisioningResult.failed()`, 확인함).
+- 🔵 **앞 기록의 정정**: product-service 셀러 온보딩이 보내는 이메일은 사람의 이메일이 아니라 합성값 `seller+{tenant}+{sellerId}@marketplace.local`
+  (`AccountServiceSellerProvisioner.sellerEmail`) 이다 — 그 경로로 실제 쇼퍼 이메일과 겹칠 일은 사실상 없다. 실제로 열려 있던 것은 **운영자 프로비저닝 · 벌크**
+  (콘솔이 `ecommerce` 에 계정을 사람 이메일로 만드는 경우)이고, 거절은 경로와 무관하게 셋 모두에 걸린다. 앞의 «셀러 온보딩이 공존을 만든다» 는 과장이었다.
+
+### 추가한 시험
+
+- 단위: `PoolMemberSiteLookupTest` 10(규칙 4칸 — ON/사이트 · ON/비멤버 · `consumer-pool` 입력 · OFF; 표면 6칸 — getMe · 상태(멤버 200 / 비멤버 404) ·
+  GDPR 삭제(풀 계정 DELETED · 이벤트 `consumer-pool`) · export · 인증 재발송(토큰 테넌트 `consumer-pool`) · 프로비저닝 상태 변경(이력 행 `consumer-pool`)) ·
+  `ProvisionAccountPoolEmailRefusalTest` 3(ecommerce 거절 · 풀 없음 통과 · B2B/고객/풀 테넌트 대조군 — 풀 조회 0).
+- 기존 단위 시험 배선만: `AccountStatusUseCaseTest` · `GdprDeleteUseCaseTest`(생성자에 플래그 OFF), `ProfileUseCaseTest` · `DataExportUseCaseTest` ·
+  `SendVerificationEmailUseCaseTest`(`@Mock ConsumerPoolFlag` — 미스텁 = OFF), `ProvisionAccountUseCaseTest`(`@Mock ConsumerAccountPool`). 기대값 변경 0,
+  단 `SendVerificationEmailUseCaseTest#execute_tenantAware…` 의 **픽스처**: ecommerce 로 찾은 계정이 fan-platform 테넌트를 들고 있던 모순을 ecommerce 계정으로
+  고쳤다(토큰이 이제 계정의 테넌트를 싣기 때문 — 단언 «토큰 테넌트 = ecommerce» 는 그대로).
+- 통합(⚪ 로컬 미실행 — CI 첫 실측): `PoolMemberSiteSurfacesIntegrationTest` — **`AbstractConsumerPoolIntegrationTest` 하위 클래스**(새 컨텍스트 없음).
+  스토어 풀 쇼퍼로 `/me` · `/me/status` · `export`(ecommerce 200 / fan-platform 404) · 상태 변경(fan 404 무변경 → ecommerce LOCKED · 이력 행 `consumer-pool`) ·
+  GDPR 삭제(fan 404 무변경 → ecommerce 200 · DELETED · 이메일 마스킹 · `account.deleted` 테넌트 `consumer-pool`) · 프로비저닝(ecommerce 409 · 사이트 행 0 /
+  같은 이메일 wms 201).
+
+### 게이트 (각각 단독 · `cmd > log 2>&1; echo rc=$?`)
+
+| 게이트 | rc | 비고 |
+|---|---|---|
+| `:projects:iam-platform:apps:account-service:check` | 0 | |
+| `:projects:iam-platform:apps:auth-service:check` | 0 | 이 추가분은 auth 코드 변경 없음(up-to-date) |
+| `:projects:iam-platform:apps:admin-service:check` | 0 | |
+| web-store `pnpm --filter web-store lint` | 0 | 이 추가분은 web-store 변경 없음 |
+| web-store `npx tsc --noEmit` | 0 | 〃 |
+| `git add` 후 가드 10개 — index-queue-drift · task-id-collision · walkthrough-ledger-drift · jwt-claims-registry · flyway-version-collision · error-code-registry · project-adr-index-drift · internal-caller-addresses · flyway-unresolvable-placeholder · dev-seed-migration-band | 각각 0 | |
+| 새 IT | ⚪ 로컬 미실행 | Docker 없음 — CI 첫 실측 |
+
+### bite (§ 5)
+
+| 끈 것 | 돌린 시험 | 결과 |
+|---|---|---|
+| (D) `ProfileUseCase.getMe` 만 넓힌 조회 → 옛 `accountRepository.findById` | `PoolMemberSiteLookupTest` · `ProfileUseCaseTest` | **16 중 1 실패** — 정확히 «`/api/accounts/me` … 풀 멤버의 내 정보» 칸. 되돌린 뒤 `git diff` 비어 있음 |
