@@ -3,6 +3,7 @@ package com.example.auth.application.port;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
+import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 
 import java.util.List;
@@ -222,6 +223,23 @@ public interface AccountServicePort {
      *         if account-service is down (5xx / circuit-open / timeout / IO)
      */
     Optional<String> getTenantType(String tenantId);
+
+    /**
+     * TASK-BE-615 (ADR-MONO-078 A; multi-tenancy.md § 소비자 계정 풀 § 4) — a consumer-pool account's
+     * membership of ONE site and its site roles there
+     * ({@code GET /internal/tenants/{siteTenantId}/consumer-members/{accountId}}).
+     *
+     * <p><b>Only a usable 200 is an answer.</b> account-service answers every "no" (not a consumer
+     * site, not a pool account, no membership) inside a 200, so a 404 here can only mean the endpoint
+     * does not exist (an older account-service). Every non-200 — 404 included — and every 200 without
+     * the {@code consumerSite} flag throws {@link
+     * com.example.auth.application.exception.AccountServiceUnavailableException}. Callers decide what a
+     * failure means; for a pool principal it is always "no token" (fail-closed), unlike the stored-roles
+     * fail-soft of {@link #listAccountRoles}.
+     *
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException on any failure
+     */
+    ConsumerSiteMembershipLookupResult getConsumerSiteMembership(String siteTenantId, String accountId);
 
     /**
      * Looks up a tenant's registry record — {@code tenant_type} AND {@code status}.

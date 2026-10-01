@@ -1,6 +1,7 @@
 package com.example.auth.domain.repository;
 
 import com.example.auth.domain.credentials.Credential;
+import com.example.auth.domain.tenant.TenantContext;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +21,17 @@ public interface CredentialRepository {
      * @param email    the login email (callers may pass raw input; implementations normalize)
      */
     Optional<Credential> findByTenantIdAndEmail(String tenantId, String email);
+
+    /**
+     * TASK-BE-615 (multi-tenancy.md § 소비자 계정 풀 § 1, § 4) — the consumer-POOL credential for this
+     * email ({@code credentials.tenant_id = 'consumer-pool'}), which a consumer-site form login looks
+     * up FIRST. A named operation rather than a call site passing the literal, so the pool lookup is
+     * findable and the scoped lookup it precedes stays the only {@code findByTenantIdAndEmail} on that
+     * path.
+     */
+    default Optional<Credential> findPoolCredentialByEmail(String email) {
+        return findByTenantIdAndEmail(TenantContext.CONSUMER_POOL_TENANT_ID, email);
+    }
 
     /**
      * Resolve all credentials matching the given email across all tenants.

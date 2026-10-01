@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
@@ -181,7 +182,10 @@ public class AuthorizationServerConfig {
             AuthorizationServerSettings authorizationServerSettings,
             // TASK-BE-610: the session-tenant gate asks whether a console session's email holds
             // an iam credential.
-            CredentialRepository credentialRepository) throws Exception {
+            CredentialRepository credentialRepository,
+            // TASK-BE-615: the gate asks account-service whether a pool session's client is a
+            // consumer site (only for consumer-pool principals).
+            AccountServicePort accountServicePort) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -296,7 +300,8 @@ public class AuthorizationServerConfig {
                 .with(new AuthorizeSessionTenantGateConfigurer(new AuthorizeSessionTenantGate(
                                 authorizationServerSettings.getAuthorizationEndpoint(),
                                 registeredClientRepository,
-                                credentialRepository)),
+                                credentialRepository,
+                                accountServicePort)),
                         Customizer.withDefaults())
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())

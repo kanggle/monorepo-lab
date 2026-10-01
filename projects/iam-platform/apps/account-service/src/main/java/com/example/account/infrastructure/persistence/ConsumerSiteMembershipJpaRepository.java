@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /** TASK-BE-614 — Spring Data repository for {@code consumer_site_memberships}. */
@@ -13,6 +14,17 @@ public interface ConsumerSiteMembershipJpaRepository
         extends JpaRepository<ConsumerSiteMembershipJpaEntity, ConsumerSiteMembershipJpaEntity.MembershipId> {
 
     Optional<ConsumerSiteMembershipJpaEntity> findBySiteTenantIdAndAccountId(String siteTenantId, String accountId);
+
+    /**
+     * TASK-BE-615 — {@code consumer_site_roles} of one account on ONE site (no entity maps that
+     * table; it has no writer yet — {@code TASK-BE-618} / {@code TASK-MONO-745}). Native so the read
+     * does not need a mapping that nothing else uses.
+     */
+    @Query(value = "SELECT role_name FROM consumer_site_roles "
+            + "WHERE site_tenant_id = :siteTenantId AND account_id = :accountId ORDER BY role_name",
+            nativeQuery = true)
+    List<String> findSiteRoleNames(@Param("siteTenantId") String siteTenantId,
+                                   @Param("accountId") String accountId);
 
     /**
      * Native INSERT with {@code flushAutomatically = true}: the pending {@code accounts} INSERT of

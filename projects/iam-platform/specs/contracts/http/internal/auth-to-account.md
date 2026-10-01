@@ -222,6 +222,59 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 ---
 
+## GET /internal/tenants/{tenantId}/consumer-members/{accountId} — 소비자 계정 풀의 사이트 멤버십 (TASK-BE-615)
+
+> [multi-tenancy.md § 소비자 계정 풀 § 4](../../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742) 의
+> «멤버십 있음/없음» · «roles = 그 사이트 역할만» 을 auth-service 가 판정하는 읽기. account-service `ConsumerSiteMembershipController`.
+
+**호출 시점 (auth-service)** — 세 곳, 모두 **풀 principal / 풀 자격이 있을 때만**(사이트별 계정의 로그인 · SSO · refresh 는 이 호출을 하지 않는다):
+
+| 호출자 | 묻는 것 | 실패 시 |
+|---|---|---|
+| 폼 로그인(`CredentialAuthenticationProvider`) — 그 이메일의 풀 자격이 **있을 때만** | `consumerSite` — 이 client 테넌트에서 풀 자격을 먼저 볼까 | **fail-closed** (`AuthenticationServiceException` → `/login?error`) |
+| authorize 게이트(`AuthorizeSessionTenantGate`) — 풀 세션 · 콘솔 아닌 client | `consumerSite` — 재인증 없이 통과시킬까 | 재인증(보수 쪽 — 폼이 같은 답 없이는 fail-closed 라 루프 없음) |
+| 토큰 발급(`TenantClaimTokenCustomizer`, `authorization_code` · `refresh_token`) | `membershipStatus` · `siteTenantType` · `siteRoles` | **fail-closed** — 토큰 없음(`invalid_grant`). 저장 역할 조회의 fail-soft 와 다르다 |
+
+**Path Parameters**: `tenantId` — 사이트 테넌트(slug, 범위의 첫 인자) · `accountId` — 풀 계정 id.
+
+**Headers**: `X-Tenant-Id` 를 보내지 않는다. 보냈는데 path 와 다르면 `403 TENANT_SCOPE_DENIED`(`TenantScopeGuard`).
+
+**Response 200 — 항상 200** («아니오» 도 본문의 답이다):
+```json
+{
+  "accountId": "string (UUID)",
+  "siteTenantId": "ecommerce",
+  "consumerSite": true,
+  "siteTenantType": "B2C_CONSUMER",
+  "membershipStatus": "ACTIVE | LEFT | null",
+  "siteRoles": ["SELLER"]
+}
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `consumerSite` | 그 테넌트가 소비자 사이트(`tenant_type = B2C_CONSUMER` ∧ ≠ `consumer-pool`, `Tenant.isConsumerSite()`)인가. 없는 테넌트 → `false` |
+| `siteTenantType` | 그 테넌트의 권위 `tenant_type` — 풀 principal 토큰의 `tenant_type`. 없는 테넌트 → `null` |
+| `membershipStatus` | `consumer_site_memberships` 행의 상태. 행 없음 · 풀 계정이 아님 · 소비자 사이트 아님 → `null` |
+| `siteRoles` | `consumer_site_roles(account, 그 사이트)` — **그 사이트 것만**, 이름 오름차순. `ACTIVE` 일 때만 채운다(그 밖엔 `[]`). 시드(`CUSTOMER`/`FAN`)는 저장하지 않으므로 여기 없다 — 발급이 합친다 |
+
+- 계정 조회는 `consumer-pool` 테넌트로 한정(`findById(CONSUMER_POOL, id)`) — 테넌트 없는 조회를 새로 만들지 않는다(§ 격리 회귀 방지).
+- **`iam.consumer-pool.enabled` 와 무관** — 플래그는 «새 가입이 풀로 가나» 만 정한다. 이미 있는 풀 계정은 플래그와 상관없이 로그인돼야 한다. 플래그가 꺼져 있으면 풀 계정을 만드는 경로가 없으므로 이 읽기에 도달하는 것도 없다.
+- 감사 행 · 이벤트 · 변이 없음.
+
+**auth-service 매핑 규약** (`AccountServicePort.getConsumerSiteMembership`):
+
+| 응답 | 포트 결과 |
+|---|---|
+| 200 + `consumerSite`(boolean) | `ConsumerSiteMembershipLookupResult` |
+| **404** | `AccountServiceUnavailableException` — 🔴 «멤버 아님» 은 200 이므로 404 는 **엔드포인트 없음**(옛 account-service)뿐이다. 그래서 실패로 읽는다 |
+| 그 밖의 4xx · 5xx · 타임아웃 · circuit-open · `consumerSite` 없는 200 | `AccountServiceUnavailableException` |
+
+🔵 **배포 순서**: 새 auth-service + 옛 account-service 이면 풀 principal 은 토큰을 못 받고(fail-closed) 풀 자격 폼 로그인은 `/login?error` 다.
+사이트별 계정은 이 호출을 하지 않으므로 영향이 없다. **account-service 를 먼저 또는 함께** 올린다.
+
+---
+
 ## Caller Constraints (auth-service 측)
 
 - 타임아웃: 연결 3s, 읽기 5s

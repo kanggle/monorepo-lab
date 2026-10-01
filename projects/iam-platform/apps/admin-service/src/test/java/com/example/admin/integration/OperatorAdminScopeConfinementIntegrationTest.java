@@ -130,7 +130,7 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
 
     @BeforeEach
     void stubAccountExists() {
-        when(accountServiceClient.search(anyString(), anyString()))
+        when(accountServiceClient.searchSiteAccounts(anyString(), anyString()))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 

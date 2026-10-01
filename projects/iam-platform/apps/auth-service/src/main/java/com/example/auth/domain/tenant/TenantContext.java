@@ -56,6 +56,20 @@ public record TenantContext(String tenantId, String tenantType) {
         return CONSUMER_POOL_TENANT_ID.equals(tenantId);
     }
 
+    /**
+     * TASK-BE-615 (multi-tenancy.md § 소비자 계정 풀 § 4) — whether a consumer-pool account is
+     * considered for a client of {@code clientTenant}: every client tenant except the console
+     * ({@link #CONSOLE_TENANT_ID} — contract D1, a pool account is not an operator) and the pool
+     * itself. Whether that tenant is actually a consumer site, and whether the account is a member,
+     * is account-service's answer; this is only the cheap, I/O-free pre-filter the form login, the
+     * authorize gate, the session-tenant rule and the issuer share.
+     */
+    public static boolean poolPrincipalMapsTo(String clientTenant) {
+        return clientTenant != null && !clientTenant.isBlank()
+                && !CONSOLE_TENANT_ID.equals(clientTenant.trim())
+                && !isConsumerPool(clientTenant.trim());
+    }
+
     public TenantContext {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         if (tenantId.isBlank()) {

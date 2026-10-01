@@ -136,7 +136,7 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void stubAccountExists() {
         // Default: the target email HAS a signed-up account in the tenant (totalElements=1).
-        when(accountServiceClient.search(anyString(), anyString()))
+        when(accountServiceClient.searchSiteAccounts(anyString(), anyString()))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 
@@ -179,7 +179,7 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     void createOperator_accountNotFound_returns422() throws Exception {
         String ghostEmail = "ghost-" + System.currentTimeMillis() + "@example.com";
         // Override the default "exists" stub for this email → definitively absent.
-        when(accountServiceClient.search("fan-platform", ghostEmail))
+        when(accountServiceClient.searchSiteAccounts("fan-platform", ghostEmail))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
 
         String body = """

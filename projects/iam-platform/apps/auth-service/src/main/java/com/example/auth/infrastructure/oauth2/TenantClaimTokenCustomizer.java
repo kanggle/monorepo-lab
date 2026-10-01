@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
+import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
@@ -400,6 +401,19 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         String tenantId = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_ID);
         String tenantType = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_TYPE);
 
+        // TASK-BE-615 — a consumer-pool principal on a site client: tenant = the site, roles = that
+        // site's only, and only with an ACTIVE membership. Decided by the SAME rule the authorize gate
+        // and the refresh comparison use (AuthorizationSessionTenant), so the three never disagree.
+        // A pool principal on the console (or a tenant-less client) is not mapped: its claim stays the
+        // pool value and refuseConsumerPoolTenant below mints nothing (TASK-BE-614, kept).
+        if (tenantId != null && tenantType != null && TenantContext.isConsumerPool(tenantId)) {
+            String clientTenant = clientTenantOf(context.getRegisteredClient());
+            if (AuthorizationSessionTenant.mapsPoolPrincipalTo(clientTenant)) {
+                customizeForPoolPrincipal(context, principal, clientTenant.trim(), clientId);
+                return;
+            }
+        }
+
         if (tenantId != null && tenantType != null) {
             context.getClaims()
                     .claim("tenant_id", tenantId)
@@ -444,6 +458,84 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                                 "clientId=" + clientId);
             }
         }
+    }
+
+    /**
+     * TASK-BE-615 (ADR-MONO-078 A; multi-tenancy.md § 소비자 계정 풀 § 4; jwt-standard-claims.md
+     * {@code tenant_id} / § Role Strategy) — the token of a consumer-pool principal on a site client.
+     * Serves {@code authorization_code} AND {@code refresh_token} (both reach here through
+     * {@link #customizeForAuthorizationCode}), so a membership that ended after login stops the next
+     * refresh as well.
+     *
+     * <ul>
+     *   <li>{@code sub} — already the pool account id ({@link #alignSubToAccountId}); the same on every
+     *       site.</li>
+     *   <li>{@code tenant_id} — the requesting client's site, never {@code consumer-pool}.
+     *       {@code tenant_type} — the site's authoritative type from account-service.</li>
+     *   <li>{@code roles} — {@link RoleSeedPolicy#seed}(site) ∪ {@code consumer_site_roles(account, site)},
+     *       seed first. Never another site's roles: account-service answers for THIS site only
+     *       (no flattening — Failure Scenario 1).</li>
+     *   <li><b>No ACTIVE membership of the site → no token</b> ({@code invalid_grant}). The first-visit
+     *       consent screen that would create it is {@code TASK-BE-616}; until then the client gets an
+     *       error at the token endpoint, never a loop (the authorize gate lets the session through, so
+     *       nothing re-prompts).</li>
+     *   <li><b>Fail-CLOSED</b> on a failed lookup — unlike the stored-roles fail-soft of
+     *       {@link #populateRoles}. Fail-soft here would mean "a site token without knowing the person
+     *       may use the site".</li>
+     * </ul>
+     */
+    private void customizeForPoolPrincipal(JwtEncodingContext context, Authentication principal,
+                                           String site, String clientId) {
+        String accountId = extractTenantAttribute(principal, PrincipalDetailKeys.ACCOUNT_ID);
+        if (accountId == null) {
+            throw refusePoolPrincipal(clientId, site, "the pool principal carries no account id");
+        }
+        ConsumerSiteMembershipLookupResult membership;
+        try {
+            membership = accountServicePort.getConsumerSiteMembership(site, accountId);
+        } catch (RuntimeException e) {
+            log.warn("TenantClaimTokenCustomizer: consumer-site membership lookup failed for site={} — "
+                    + "no token for the pool principal (fail-closed): {}", site, e.toString());
+            throw refusePoolPrincipal(clientId, site, "the consumer-site membership could not be verified");
+        }
+        if (membership == null || !membership.isActiveMember() || membership.siteTenantType() == null) {
+            throw refusePoolPrincipal(clientId, site, "no active consumer-site membership for this site");
+        }
+
+        context.getClaims()
+                .claim("tenant_id", site)
+                .claim("tenant_type", membership.siteTenantType());
+        populateEntitledDomains(context, site);
+
+        java.util.LinkedHashSet<String> roles = new java.util.LinkedHashSet<>(RoleSeedPolicy.seed(site));
+        roles.addAll(membership.siteRoles());
+        if (!roles.isEmpty()) {
+            // SecurityJackson2Modules allowlist: a mutable ArrayList (see populateRoles).
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(roles));
+        }
+        log.debug("TenantClaimTokenCustomizer: pool principal on clientId={} — tenant_id={} roles={} "
+                + "(seed ∪ site roles, TASK-BE-615)", clientId, site, roles);
+    }
+
+    private static OAuth2AuthenticationException refusePoolPrincipal(String clientId, String site, String why) {
+        log.info("TenantClaimTokenCustomizer: no token for a pool principal on clientId={} site={} — {}",
+                clientId, site, why);
+        return new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.INVALID_GRANT, why, null));
+    }
+
+    /**
+     * The registered client's tenant: ClientSettings (Option B) first, then the legacy
+     * {@code clientName = "tenantId|tenantType"} — the same two sources and order as the rest of this
+     * class. {@code null} when neither has one.
+     */
+    private TenantInfo clientTenantInfo(RegisteredClient client) {
+        TenantInfo info = extractTenantFromClientSettings(client);
+        return info != null ? info : extractTenantFromClientName(client);
+    }
+
+    private String clientTenantOf(RegisteredClient client) {
+        TenantInfo info = clientTenantInfo(client);
+        return info != null ? info.tenantId() : null;
     }
 
     /**

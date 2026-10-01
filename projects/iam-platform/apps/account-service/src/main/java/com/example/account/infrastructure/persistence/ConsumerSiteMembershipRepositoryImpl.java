@@ -6,6 +6,7 @@ import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /** TASK-BE-614 — adapter for {@link ConsumerSiteMembershipRepository}. */
@@ -28,5 +29,10 @@ public class ConsumerSiteMembershipRepositoryImpl implements ConsumerSiteMembers
     public Optional<ConsumerSiteMembership> find(TenantId siteTenantId, String accountId) {
         return jpaRepository.findBySiteTenantIdAndAccountId(siteTenantId.value(), accountId)
                 .map(ConsumerSiteMembershipJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<String> findSiteRoles(TenantId siteTenantId, String accountId) {
+        return jpaRepository.findSiteRoleNames(siteTenantId.value(), accountId);
     }
 }

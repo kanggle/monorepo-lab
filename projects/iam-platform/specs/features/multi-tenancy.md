@@ -442,9 +442,19 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - **역할(AC-5 결정)**: 풀 principal 의 토큰 역할 = 그 사이트의 시드 역할(`RoleSeedPolicy` — `ecommerce → CUSTOMER`, `fan-platform → FAN`) ∪
   `consumer_site_roles(account, 그 사이트)`. 다른 사이트 역할은 **싣지 않는다**. 멤버십 없는 사이트로는 토큰을 만들지 않는다.
   🔴 지금 발급 경로는 저장 역할을 그대로 싣는다(`TenantClaimTokenCustomizer.java:872-874`) — 풀 principal 에 대해 사이트로 거르는 것이 `TASK-BE-615` 의 일이다.
+  → 구현됨(`TenantClaimTokenCustomizer#customizeForPoolPrincipal`): 사이트별 계정의 «저장 역할이 있으면 그것만» 규칙은 **그대로**다(셀러 `[SELLER]` — `TASK-BE-615` AC-7 대조군).
 - **refresh**: 풀 principal 의 refresh 미러 행 테넌트는 **토큰의 사이트 테넌트**다 — 스토어에서 받은 refresh 로 팬 토큰을 받지 못한다(`TOKEN_TENANT_MISMATCH` 그대로).
 - **콘솔 교차 조회**: 위 로그인 표의 콘솔 행은 «이메일이 정확히 한 테넌트에» 를 센다. 풀 계정은 `consumer-pool` 한 행이라, 같은 이메일이 팬·스토어에
   따로 있어 `LOGIN_TENANT_AMBIGUOUS` 로 막히던 사람이 **묶은 뒤에는** 하나로 풀린다 — 행동 변경이므로 `TASK-BE-615` 가 시험으로 고정한다.
+  🔵 `TASK-BE-615` 구현: 교차 조회는 풀 자격 하나로 풀려 **로그인은 된다**. 그러나 콘솔 세션 테넌트는 `consumer-pool` 그대로라(풀 principal 을 콘솔로는
+  사상하지 않는다 — D1) 발급자가 `consumer-pool` 발급을 거절한다(`TASK-BE-614` 게이트) — **콘솔 토큰은 없다**(`invalid_grant`). 풀 계정의 운영자 경로는 `ADR-MONO-080` 후보(`TASK-MONO-746`).
+- **멤버십 없는 사이트 — `TASK-BE-616` 전까지의 결과 (`TASK-BE-615` 결정)**: authorize 는 재인증하지 않고 코드를 준다(재인증하면 그 client 의 폼이
+  풀 자격을 먼저 골라 같은 세션 → 같은 게이트 → 무한 반복). **토큰 엔드포인트가 `invalid_grant` 로 거절**한다 — 토큰 없음 · 루프 없음. 616 의 동의 화면이 이 자리에 들어온다.
+  멤버십 조회 실패도 토큰 없음(fail-closed). 갱신 때마다 다시 묻는다 — 멤버십이 `LEFT` 가 되면 다음 refresh 부터 토큰이 없다.
+- **소비자 사이트가 아닌 client**(B2B — wms · erp …): 풀 세션은 다른 테넌트 세션처럼 **재인증**, 그 client 의 폼은 풀 자격을 보지 않는다(풀-먼저는 소비자 사이트 규칙).
+- **로그아웃 범위 (소유자 결정 2026-10-01 «전체»)**: 어느 소비자 사이트에서 로그아웃하든(RP-initiated `/connect/logout`) **IAM 브라우저 세션이 끝난다** —
+  다른 사이트의 다음 authorize 는 로그인 화면이다. 이미 발급된 다른 사이트의 앱 세션(그 사이트의 토큰 · refresh)은 **그 사이트의 만료 · 자체 로그아웃**을 따른다
+  (IAM 이 그 토큰을 폐기하지 않는다). IAM 세션은 브라우저에 하나라 이것은 새 코드가 아니라 기존 동작이고, `TASK-BE-615` 가 풀 계정에 대해 시험으로 고정했다.
 
 #### 5. 사이트 테넌트로 계정을 찾는 표면
 

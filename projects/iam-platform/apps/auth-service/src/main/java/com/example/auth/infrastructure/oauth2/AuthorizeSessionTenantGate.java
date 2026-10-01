@@ -1,5 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
@@ -46,6 +48,9 @@ import java.util.Objects;
  *       (TASK-BE-610) — then re-authentication. ADR-MONO-044 D5 operators, who have no
  *       {@code iam} credential and reach the console only with a consumer-tenant session, are
  *       untouched as before;</li>
+ *   <li>TASK-BE-615 — a consumer-pool principal on a non-console client → untouched when the
+ *       client's tenant is a consumer site (member or not — issuance decides; no loop), re-
+ *       authentication otherwise ({@link #consumerSiteServesPoolPrincipal});</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -82,18 +87,22 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
     private final RequestMatcher authorizationEndpoint;
     private final RegisteredClientRepository registeredClientRepository;
     private final CredentialRepository credentialRepository;
+    /** TASK-BE-615 — asked only for a consumer-pool principal: is the client's tenant a consumer site. */
+    private final AccountServicePort accountServicePort;
     private final SecurityContextHolderStrategy securityContextHolderStrategy;
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
                                RegisteredClientRepository registeredClientRepository,
-                               CredentialRepository credentialRepository) {
-        this(authorizationEndpointUri, registeredClientRepository, credentialRepository,
+                               CredentialRepository credentialRepository,
+                               AccountServicePort accountServicePort) {
+        this(authorizationEndpointUri, registeredClientRepository, credentialRepository, accountServicePort,
                 SecurityContextHolder.getContextHolderStrategy());
     }
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
                                RegisteredClientRepository registeredClientRepository,
                                CredentialRepository credentialRepository,
+                               AccountServicePort accountServicePort,
                                SecurityContextHolderStrategy securityContextHolderStrategy) {
         this.authorizationEndpoint = new AntPathRequestMatcher(
                 Objects.requireNonNull(authorizationEndpointUri, "authorizationEndpointUri"));
@@ -101,6 +110,7 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
                 registeredClientRepository, "registeredClientRepository");
         this.credentialRepository = Objects.requireNonNull(
                 credentialRepository, "credentialRepository");
+        this.accountServicePort = Objects.requireNonNull(accountServicePort, "accountServicePort");
         this.securityContextHolderStrategy = Objects.requireNonNull(
                 securityContextHolderStrategy, "securityContextHolderStrategy");
     }
@@ -142,6 +152,10 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
         String clientTenant = clientTenant(client);
         if (clientTenant == null) {
             return false;
+        }
+        if (AuthorizationSessionTenant.isPoolPrincipal(principal)
+                && AuthorizationSessionTenant.mapsPoolPrincipalTo(clientTenant)) {
+            return !consumerSiteServesPoolPrincipal(principal, clientTenant, clientId);
         }
         String sessionTenant = AuthorizationSessionTenant.of(principal, clientTenant);
         if (clientTenant.equals(sessionTenant)) {
@@ -191,6 +205,49 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
                     sessionTenant, clientId);
         }
         return holds;
+    }
+
+    /**
+     * TASK-BE-615 (multi-tenancy.md § 소비자 계정 풀 § 4) — a consumer-pool principal is one account on
+     * every consumer site, so on a consumer-site client its session is reused WITHOUT re-
+     * authentication: the token is that site's (tenant = the client's site, roles = that site's only
+     * — {@code TenantClaimTokenCustomizer}).
+     *
+     * <ul>
+     *   <li><b>Member of the site</b> → pass → code → site token. AC-1.</li>
+     *   <li><b>Consumer site, no ACTIVE membership</b> → also pass, and the token endpoint refuses
+     *       ({@code invalid_grant} — no token without membership). Re-authenticating instead would
+     *       loop: the client's login form picks the pool credential first, the session is the same
+     *       pool principal, and this gate would send it back to the form forever. The first-visit
+     *       consent screen ({@code TASK-BE-616}) belongs exactly here.</li>
+     *   <li><b>Not a consumer site</b> (a B2B client — wms, erp …) → re-authentication, like any
+     *       session of another tenant: that client's form does not look the pool up (pool-first is a
+     *       consumer-site rule), so the resumed authorize carries the client's own tenant.</li>
+     *   <li><b>Lookup failure</b> → re-authentication (the conservative side). No loop: the form login
+     *       needs the same answer before it would pick the pool credential, and fails closed without it.</li>
+     * </ul>
+     * A per-site (non-pool) principal never reaches this method — its rule is byte-unchanged (AC-2).
+     */
+    private boolean consumerSiteServesPoolPrincipal(Authentication principal, String clientTenant, String clientId) {
+        String accountId = principal.getDetails() instanceof Map<?, ?> details
+                && details.get(PrincipalDetailKeys.ACCOUNT_ID) instanceof String s && !s.isBlank() ? s : null;
+        if (accountId == null) {
+            return false;
+        }
+        try {
+            ConsumerSiteMembershipLookupResult answer =
+                    accountServicePort.getConsumerSiteMembership(clientTenant, accountId);
+            boolean consumerSite = answer != null && answer.consumerSite();
+            if (!consumerSite) {
+                log.info("authorize: pool session on client {} of non-consumer tenant {} — re-authentication "
+                        + "required (TASK-BE-615)", clientId, clientTenant);
+            }
+            return consumerSite;
+        } catch (RuntimeException e) {
+            log.warn("authorize: consumer-site lookup failed for a pool session on client {} — "
+                    + "re-authentication (TASK-BE-615)", clientId, e);
+            return false;
+        }
     }
 
     /** The email the login published in the principal details, else the principal name (both paths set both). */
