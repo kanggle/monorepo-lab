@@ -28,6 +28,12 @@ class AccountSearchQueryServiceTest {
     @Mock
     private AccountQueryPort accountQueryPort;
 
+    // TASK-BE-614: unstubbed → lookupsIncludePoolMembers() is false (iam.consumer-pool.enabled off,
+    // the default). The tests below keep their pre-pool expectations (AC-8); the widened search is
+    // pinned in AccountSearchQueryServiceConsumerPoolTest.
+    @Mock
+    private ConsumerAccountPool consumerAccountPool;
+
     @InjectMocks
     private AccountSearchQueryService service;
 

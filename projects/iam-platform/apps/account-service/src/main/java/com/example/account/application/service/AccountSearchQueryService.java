@@ -18,6 +18,13 @@ public class AccountSearchQueryService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AccountQueryPort accountQueryPort;
+    /**
+     * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5): this is the search behind the console's
+     * customer-account operations AND admin-service {@code CreateOperatorUseCase}'s "a signed-up
+     * account exists in the target tenant" check. With the pool on, a site search includes that
+     * site's pool members. Flag off: the old tenant-only queries, unchanged.
+     */
+    private final ConsumerAccountPool consumerAccountPool;
 
     /**
      * TASK-BE-357: tenant-scoped search/list. {@code tenantId} is the concrete tenant
@@ -39,10 +46,14 @@ public class AccountSearchQueryService {
             // a bad value → 400 VALIDATION_ERROR (defense in depth; admin-service already
             // validated the allow-set before forwarding). null/blank → no filter.
             AccountStatus statusFilter = parseStatus(status);
-            return accountQueryPort.findAll(tenantId, statusFilter, page, size);
+            return consumerAccountPool.lookupsIncludePoolMembers()
+                    ? accountQueryPort.findAllIncludingPoolMembers(tenantId, statusFilter, page, size)
+                    : accountQueryPort.findAll(tenantId, statusFilter, page, size);
         }
 
-        List<AccountSearchResult.Item> items = accountQueryPort.findByEmail(tenantId, email.trim());
+        List<AccountSearchResult.Item> items = consumerAccountPool.lookupsIncludePoolMembers()
+                ? accountQueryPort.findByEmailIncludingPoolMembers(tenantId, email.trim())
+                : accountQueryPort.findByEmail(tenantId, email.trim());
         return new AccountSearchResult(items, items.size(), 0, size, items.isEmpty() ? 0 : 1);
     }
 

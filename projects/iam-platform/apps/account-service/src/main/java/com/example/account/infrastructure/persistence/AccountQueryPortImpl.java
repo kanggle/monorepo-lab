@@ -4,6 +4,7 @@ import com.example.account.application.port.AccountQueryPort;
 import com.example.account.application.result.AccountDetailResult;
 import com.example.account.application.result.AccountSearchResult;
 import com.example.account.domain.status.AccountStatus;
+import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -57,6 +58,32 @@ public class AccountQueryPortImpl implements AccountQueryPort {
         return accountJpaRepository.findByTenantIdAndEmail(tenantId, email)
                 .map(e -> List.of(toItem(e)))
                 .orElseGet(List::of);
+    }
+
+    @Override
+    public AccountSearchResult findAllIncludingPoolMembers(String siteTenantId, AccountStatus status,
+                                                           int page, int size) {
+        if (PLATFORM_TENANT_ID.equals(siteTenantId)) {
+            return findAll(siteTenantId, status, page, size);
+        }
+        Page<AccountJpaEntity> jpaPage = accountJpaRepository.findBySiteTenantIncludingPoolMembers(
+                siteTenantId, TenantId.CONSUMER_POOL.value(), status, PageRequest.of(page, size));
+        List<AccountSearchResult.Item> items = jpaPage.getContent().stream()
+                .map(AccountQueryPortImpl::toItem)
+                .toList();
+        return new AccountSearchResult(
+                items, jpaPage.getTotalElements(), jpaPage.getNumber(), jpaPage.getSize(), jpaPage.getTotalPages());
+    }
+
+    @Override
+    public List<AccountSearchResult.Item> findByEmailIncludingPoolMembers(String siteTenantId, String email) {
+        if (PLATFORM_TENANT_ID.equals(siteTenantId)) {
+            return findByEmail(siteTenantId, email);
+        }
+        return accountJpaRepository.findBySiteTenantAndEmailIncludingPoolMembers(
+                        siteTenantId, TenantId.CONSUMER_POOL.value(), email).stream()
+                .map(AccountQueryPortImpl::toItem)
+                .toList();
     }
 
     @Override

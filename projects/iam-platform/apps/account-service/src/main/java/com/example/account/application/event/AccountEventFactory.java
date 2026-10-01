@@ -25,9 +25,20 @@ import java.util.Map;
 public class AccountEventFactory {
 
     public AccountDomainEvent createdEvent(Account account, String emailHash, String locale) {
+        return createdEvent(account, account.getTenantId().value(), emailHash, locale);
+    }
+
+    /**
+     * TASK-BE-614 (account-events.md § account.created, consumer-account pool): the payload's
+     * {@code tenantId} is the tenant the account has just become usable in — for a pool account
+     * that is the signup <b>site</b>, never the pool's storage value {@code consumer-pool}.
+     * For every other account the caller passes the account's own tenant, which is what the
+     * 3-argument overload above does.
+     */
+    public AccountDomainEvent createdEvent(Account account, String tenantId, String emailHash, String locale) {
         return new AccountDomainEvent("account.created", Map.of(
                 "accountId", account.getId(),
-                "tenantId", account.getTenantId().value(),
+                "tenantId", tenantId,
                 "emailHash", emailHash,
                 "status", account.getStatus().name(),
                 "locale", locale,

@@ -1,0 +1,21 @@
+-- TASK-BE-614 (ADR-MONO-078 A, multi-tenancy.md § 소비자 계정 풀 § 1): the reserved tenant the
+-- consumer-account POOL lives in. Pool accounts are ordinary `accounts` rows with
+-- tenant_id = 'consumer-pool'; fk_accounts_tenant_id (V0010) needs this row to exist.
+--
+-- 🔴 'consumer-pool' is a STORAGE value. It is never a token's tenant_id (that is always the
+-- requesting client's site) and no OAuth client may be registered with it. account-service's
+-- ActiveTenantGuard answers "tenant not found" for it, so nobody signs up INTO it by naming it.
+--
+-- tenant_type = 'B2C_CONSUMER': the column has no CHECK constraint, but account-service maps it
+-- to the TenantType enum {B2C_CONSUMER, B2B_ENTERPRISE} (V0014's note) — a third value would make
+-- every tenant read of this row fail. The pool is consumer-side storage, so B2C_CONSUMER is the
+-- consistent value; code that means "a consumer SITE" excludes this id explicitly
+-- (Tenant.isConsumerSite()).
+--
+-- org_node_id is left NULL: V0028's backfill ran before this row existed, and NULL is a legal,
+-- permanent "ungrouped singleton" state (ADR-MONO-047 D7).
+--
+-- INSERT IGNORE keeps the migration idempotent on a volume where the row was hand-seeded
+-- (mirrors V0014).
+INSERT IGNORE INTO tenants (tenant_id, display_name, tenant_type, status, created_at, updated_at)
+VALUES ('consumer-pool', 'Consumer Account Pool', 'B2C_CONSUMER', 'ACTIVE', NOW(6), NOW(6));

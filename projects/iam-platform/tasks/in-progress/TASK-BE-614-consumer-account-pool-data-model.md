@@ -81,3 +81,106 @@ iam-platform
 
 1. UNIQUE `(tenant_id,email)` 를 풀어 기존 사이트 계정과 풀 계정이 **같은 행**으로 섞인다.
 2. 신선 볼륨 CI 만 보고 기존 볼륨에서 실패하는 마이그레이션이 머지된다.
+
+---
+
+# 구현 기록 (2026-10-01 UTC)
+
+## 만든 것
+
+- **플래그** `iam.consumer-pool.enabled` (env `IAM_CONSUMER_POOL_ENABLED`, 기본 `false`) — account-service `application.yml`.
+  읽는 곳은 한 곳: `infrastructure/config/ConsumerPoolFlagProperties` → 포트 `application/port/ConsumerPoolFlag`.
+  분기하는 곳은 `application/service/ConsumerAccountPool`(`signupGoesToPool` · `lookupsIncludePoolMembers`) 뿐이고,
+  그것을 `SignupUseCase` · `TenantAccountQueryUseCase` · `AccountSearchQueryService` 가 묻는다.
+  🔵 auth-service · admin-service 는 이 티켓에서 **분기하지 않는다** — 플래그를 두지 않았다(아래 «auth-service»).
+- **마이그레이션** (새 파일만 — AC-1): `V0029__seed_consumer_pool_tenant.sql`(테넌트 행) ·
+  `V0030__create_consumer_site_memberships_and_roles.sql`(두 테이블). 직전 최고 = V0028 확인. H2/테스트 미러 트리는 없다
+  (account-service 테스트 리소스는 `application-test.yml` 하나, 시험은 MySQL Testcontainers).
+- **도메인**: `TenantId.CONSUMER_POOL` · `isConsumerPool()`, `Tenant.isConsumerSite()`, `domain/consumerpool/ConsumerSiteMembership(+Status)`,
+  포트 `ConsumerSiteMembershipRepository`, `TenantRepository.findAllByTenantType`, `AccountRepository.findAllInSiteIncludingPoolMembers` ·
+  `findByIdInSiteIncludingPoolMembers`.
+- **가입**(`SignupUseCase`): 플래그 ON ∧ 가입 테넌트가 소비자 사이트 → 계정·identity·자격은 `consumer-pool`, 프로필 그대로, 같은 tx 에서
+  멤버십 `(account, 사이트, ACTIVE, consented_at = 계정 created_at)`, `account.created` 는 **사이트**로 1회. 플래그 OFF 는 기존 줄이 그대로 돈다.
+- **이벤트**: `AccountEventFactory.createdEvent(account, tenantId, …)` 4-인자 추가. 🔴 발견: `OutboxAccountEventPublisher.publishAccountCreated` 가
+  넘겨받은 `tenantId` 를 검사만 하고 **payload 에는 `account.getTenantId()` 를 썼다** — 풀 계정이면 `consumer-pool` 이 그대로 나갈 뻔했다.
+  이제 넘겨받은 값을 싣는다. 기존 호출자 셋(가입·소셜 가입·프로비저닝)은 모두 `account.getTenantId().value()` 를 넘기므로 바이트 동일.
+- **조회 표면**(§ 5): `/internal/tenants/{t}/accounts` 목록 · `/{accountId}` 단건, `/internal/accounts?tenantId&email`(콘솔 계정 운영 ·
+  admin-service `CreateOperatorUseCase` 가 쓰는 그 검색) — 플래그 ON 이면 «계정 테넌트 = t **또는** (풀 ∧ t 의 ACTIVE 멤버)». `*` 는 그대로.
+- **auth-service**: 코드·스키마 변경 없음. 확인: 자격 생성(`POST /internal/auth/credentials` → `CreateCredentialUseCase`)은 받은 `tenantId` 를
+  그대로 쓰고, DTO 패턴 `^[a-z][a-z0-9-]{1,31}$` 이 `consumer-pool` 을 통과시킨다. 풀 자격 = `tenant_id='consumer-pool'` 행 — auth data-model 그대로.
+  `SignupPageController` 는 바꿀 것이 없다: 테넌트 결정은 account-service 가 하고, 거절은 기존 409 경로로 돌아온다.
+- **admin-service**: 코드 변경 없음. 확인: `CreateOperatorUseCase` → `AccountServiceClient.search(tenantId, email)` → `GET /internal/accounts`
+  → `AccountSearchQueryService.search` — 바꾼 경로를 탄다.
+
+## 계약이 남긴 선택 — 내가 정한 것
+
+| # | 선택 | 정한 값 | 이유 |
+|---|---|---|---|
+| D-1 | `consumer-pool` 의 `tenant_type` | `B2C_CONSUMER` | 컬럼엔 CHECK 가 없지만 `TenantJpaEntity` 가 enum `{B2C_CONSUMER, B2B_ENTERPRISE}` 로 읽어 제3의 값은 이 행의 모든 조회를 깨뜨린다. 풀은 소비자 쪽 저장이므로 B2C. «소비자 **사이트**» 판정은 이 id 를 명시적으로 뺀다 |
+| D-2 | 소비자 사이트 판정 | `tenants.tenant_type = B2C_CONSUMER` ∧ id ≠ `consumer-pool` (`Tenant.isConsumerSite()`) | 문자열 하드코딩 대신 검증 가능한 데이터. 지금 운영 마이그레이션 기준 해당 = `fan-platform` · `ecommerce` 둘 (dev 시드의 B2C 0) |
+| D-3 | 거절 응답 | 기존 중복 응답 그대로 — `AccountAlreadyExistsException` → `409 ACCOUNT_ALREADY_EXISTS` → 가입 화면 «이미 가입된 이메일입니다. 로그인해 주세요.» | 새 열거 경로를 만들지 않는다(§ 2 마지막 문장). 🔴 계약은 «로그인한 뒤 **전환**» 안내를 말하지만 전환 흐름은 `TASK-MONO-743` 이고, 문구를 바꾸면 플래그 OFF 의 중복 응답도 바뀐다(AC-8) — **문구는 그대로 두었다** |
+| D-4 | AC-6 운영자 측면 판정 | 별도 판정 없음 — § 2 의 «소비자 사이트에 같은 이메일 계정이 있으면 거절» 하나가 셀러·D5 운영자를 포함한다 | 둘 다 소비자 사이트(`ecommerce`/`fan-platform`)의 사이트 계정이다. D5 운영자 연결(`admin_operators.oidc_subject`)은 admin DB 에 있어 account-service 가 볼 수 없는데, 이 단계에선 볼 필요가 없다. `TASK-BE-618` 이 단일 사이트 계정을 옮긴 뒤에도 남는 사이트 계정이 곧 운영자 측면·두 사이트 계정이라 같은 술어가 계속 문다 |
+| D-5 | 사이트 계정 존재 질의 | 소비자 사이트마다 테넌트 범위 `existsByEmail(site, email)` (정지 사이트 포함) | 테넌트 없는 조회를 새로 만들지 않는다(§ 격리 회귀 방지 — 예외 등록 불필요) |
+| D-6 | `consumer-pool` 을 직접 지명한 가입(`X-Tenant-Id: consumer-pool`) | **플래그와 무관하게** `TenantNotFoundException`(404 `TENANT_NOT_FOUND`) — `ActiveTenantGuard` | 행이 생기기 전과 같은 응답. 안 막으면 V0029 만으로(플래그 OFF 에서도) 멤버십 없는 풀 계정이 생길 수 있었다 |
+| D-7 | 멤버십 → `accounts` FK 삭제 동작 | `ON DELETE CASCADE` | 스펙 침묵. `account_roles` 와 같은 결. 공유 시험 컨테이너의 `DELETE FROM accounts` 정리가 RESTRICT 면 깨진다 |
+| D-8 | `status` 값 제약 | `CHECK (status IN ('ACTIVE','LEFT'))` | 스펙의 두 값. V0021 의 구독 상태 CHECK 와 같은 결 |
+| D-9 | 멤버십 쓰기 | 네이티브 `INSERT` + `flushAutomatically` | Hibernate 삽입 정렬이 매핑 없는 FK 를 모르므로 계정 INSERT 가 먼저 나가도록 강제 |
+| D-10 | 사이트 목록 항목의 `tenantId` 필드 | 풀 멤버는 **저장값 `consumer-pool`** 을 그대로 보인다 | 내부 표면이고 정직한 값이 두 종류를 구분하게 한다. 토큰이 아니므로 § 1 의 «토큰에 절대 안 나온다» 와 충돌하지 않는다 |
+| D-11 | 플래그 OFF 의 조회 | 옛 쿼리를 그대로 호출(새 쿼리는 OFF 에서 안 탐) | 멤버십이 0행이면 결과는 같지만 «바이트 동일» 을 SQL 수준에서 지키려고 |
+
+## 계약 대비 차이 · 안 한 것 (리뷰어가 줄 단위로 볼 곳)
+
+- 🔴 **`tenants` 목록에 `consumer-pool` 이 보인다 — 플래그와 무관.** V0029 는 계약 § 1 이 요구한 행이고, `GET /internal/tenants` (콘솔 테넌트 스위처)
+  · `OrgNode` 백필 시험의 테넌트 순회가 이 행을 센다. 숨기지 않았다(숨기면 `effectiveEntitledDomains` 등 기존 경로가 404 로 바뀐다). 운영자가 스위처에서
+  `consumer-pool` 로 전환하면 풀 계정 전체 목록을 본다 — 이것을 막을지는 소유자 결정 거리다.
+- 🔴 **`CreateOperatorUseCase` 의 «대상 테넌트에 가입 계정이 있어야 한다»(TASK-MONO-334) 검사가 플래그 ON 에서 풀 멤버로 통과한다.** § 5 를 글자대로 따른 결과다.
+  그 다음 줄 `resolveOrCreateIdentity(ecommerce, email)` 은 `ecommerce` 테넌트에 identity 를 **새로** 만든다(풀 계정의 identity 는 `consumer-pool`).
+  § 3 은 «운영자 규칙을 바꾸는 결정은 080 이 먼저» 라고 한다 — 플래그를 켜는 `TASK-BE-615` 전에 소유자가 정해야 한다(① 검색은 넓히되 운영자 생성은
+  사이트 계정만 보게 별도 질의 · ② 그대로 둔다).
+- **사이트 표면의 쓰기 경로는 넓히지 않았다** — `/internal/tenants/{t}/accounts/{id}/roles|status|password-reset` 와 `/internal/accounts/{id}/lock|unlock|delete`
+  (헤더가 사이트를 말할 때)는 풀 계정을 여전히 404 로 본다. 풀 계정의 상태 전이는 «계정 하나의 일» 이라 `consumer-pool` 로 다뤄야 하고(account-events.md
+  § status.changed), 사이트 역할은 `consumer_site_roles` 로 가야 한다 — 쓰는 쪽(`TASK-BE-615`/`618`/`MONO-745`) 과 함께.
+- **목록 항목의 `roles`** 는 `account_roles` 만 읽는다 — 풀 멤버는 빈 배열. `consumer_site_roles` 의 작성자가 이 티켓엔 없다(같은 후속).
+- **소셜 가입**(`SocialSignupUseCase`)은 손대지 않았다 — 계약상 `TASK-BE-617`. `ActiveTenantGuard` 의 D-6 변경만 공유한다(그 경로도 행 생성 전과 같은 응답).
+- 가입 직후 리다이렉트(`/login?registered`)에서 풀 계정은 **로그인되지 않는다** — `TASK-BE-615`. 플래그 기본 OFF 가 이것을 막는다.
+
+## 게이트 (각각 단독 실행 · `cmd > log 2>&1; echo rc=$?`)
+
+| 게이트 | rc | 비고 |
+|---|---|---|
+| `:projects:iam-platform:apps:account-service:check` | 0 | 단위·슬라이스. 🔴 `@Tag("integration")` 은 `check` 가 **제외**한다(`projects/iam-platform/build.gradle` `test { excludeTags 'integration' }`) — 새 IT 두 개는 **컴파일만** 됐다 |
+| `:projects:iam-platform:apps:auth-service:check` | 0 | 코드 변경 없음 |
+| `:projects:iam-platform:apps:admin-service:check` | 0 | 코드 변경 없음 |
+| `:account-service:integrationTest` | ⚪ 못 돌렸다 | 이 호스트에 Docker 데몬 없음(`docker info` → `dockerDesktopLinuxEngine` 파이프 없음). JPA 슬라이스(`*JpaRepositoryTest` 8개 스위트)도 같은 이유로 SKIPPED. CI `iam-integration-tests` 가 잰다 |
+| 새 JPQL 4개(목록·count·이메일·단건) | 파싱 OK | Docker 없이 대신 잰 것: 실제 엔티티 메타모델로 Hibernate `SessionFactory`(MySQL dialect, JDBC 접근 끔)를 띄워 `AccountJpaRepository` 의 모든 JPQL `@Query` 를 `createQuery` — 의미 분석까지 통과. 스크래치 시험, 커밋 안 함. 🔴 **실행 결과(행이 맞게 걸러지는가)는 아니다** |
+| `scripts/check-index-queue-drift.sh` | 0 | `git add` 후 실행 |
+| `scripts/check-task-id-collision.sh` | 0 | 〃 |
+| `scripts/check-walkthrough-ledger-drift.sh` | 0 | 〃 |
+| `scripts/check-flyway-version-collision.sh` | 0 | 모집단 299 마이그레이션 / 27 디렉터리 (스테이지 후) |
+| `scripts/check-flyway-unresolvable-placeholder.sh` | 0 | |
+| `scripts/check-dev-seed-migration-band.sh` | 0 | |
+
+## AC
+
+- ✅ **AC-1** — 새 파일 V0029 · V0030 만. 기존 마이그레이션 diff 0.
+- ⚪ **AC-2** — 시험은 썼다: `ConsumerPoolMigrationOnExistingVolumeIntegrationTest`(별도 DB 에 Flyway `target=28` → 사이트 계정·프로필·셀러 역할 기록 →
+  최신까지 → 새 버전이 29·30 **만** 적용 · 기존 행 바이트 동일 · 새 FK/CHECK 가 문다 · 재실행 no-op). **못 쟀다 — Docker 없음.** CI integrationTest 가 잰다.
+- ⚪ **AC-3** — 단위로 ✅(`SignupUseCaseConsumerPoolTest`: 풀 계정 + 멤버십 + 풀 자격 / 같은 이메일 팬 계정이 있으면 409, 저장·자격·이벤트 0).
+  DB 수준 `ConsumerPoolSignupIntegrationTest#storeSignup_bornInPool` · `#emailWithSiteAccount_isRefused_notPaired` 는 **못 쟀다 — Docker 없음**.
+- ✅ **AC-4** — 콘솔(`iam`)은 `tenants` 행이 없어 가입 자체가 없다(BE-581) — 바뀐 것 없음. 비소비자 테넌트는 플래그 ON 에서도 테넌트별 가입(`nonConsumerTenant_keepsPerTenantSignup`).
+  운영자 경로(admin-service)는 코드 변경 0, `admin-service:check` rc=0. 단, 위 «CreateOperatorUseCase» 항목 — 플래그 ON 의 행동 변화가 있다(OFF 에선 없다).
+- ⚪ **AC-6** — 단위 술어는 AC-3 의 거절과 같다(D-4). DB 시험 `#sellerEmail_fanPoolSignup_refused_sellerUntouched`(셀러 행·SELLER 역할 그대로, 자격 쓰기 0)는
+  **못 쟀다 — Docker 없음**. «셀러는 그대로 로그인된다» 는 이 티켓이 auth-service 로그인 경로를 바꾸지 않았다는 것(코드 diff 0)으로만 말할 수 있다 — 로그인을 실행해 잰 것은 아니다.
+- ✅ **AC-8** — 플래그 OFF: `SignupUseCaseTest`(10) · `AccountSearchQueryServiceTest`(13) · `AccountEventFactoryTest` 기존 칸이 **기대값 변경 없이** 초록
+  (바뀐 것은 생성자 배선에 mock 하나 추가뿐). 새 `FlagOff` 칸이 «멤버십 쓰기 0 · 다른 사이트 조회 0 · 옛 쿼리 호출» 을 단언. auth/admin `check` rc=0.
+  🔴 예외 하나: `tenants` 목록의 `consumer-pool` 행(위) — 플래그로 끌 수 없는 계약 § 1 의 결과.
+- ⚪ **AC-9** — 서비스 분기는 단위로 ✅(`AccountSearchQueryServiceConsumerPoolTest`), 쿼리 의미(스토어 목록·검색·단건에 풀 쇼핑객 있음 / 풀 팬 없음 — 대조군)는
+  `ConsumerPoolSignupIntegrationTest#siteLookups_includeMembers_excludeNonMembers` — **못 쟀다 — Docker 없음**.
+- ⚪ **AC-10** — 단위 ✅(이벤트 tenant = `ecommerce` ≠ `consumer-pool`, 팩토리 4-인자 시험). outbox 행 1개·payload `tenantId` 단언 IT 는 **못 쟀다 — Docker 없음**.
+- ⚪ **AC-5** — 갱신한 보장: 풀 계정은 (a) 테넌트 범위 `findById(site, id)` 로는 어느 사이트에서도 안 잡힌다 (b) 멤버가 아닌 사이트 · B2B 테넌트(`erp`)의
+  목록·검색에 없다 (c) 멤버십이 `LEFT` 가 되면 그 사이트 표면에서 사라진다. `ConsumerPoolSignupIntegrationTest#poolAccount_doesNotLeak` — **못 쟀다 — Docker 없음**.
+
+## 후속에 넘기는 것
+
+- `TASK-BE-615`: 플래그를 켜기 전에 위 «CreateOperatorUseCase» 와 «tenants 목록의 consumer-pool» 두 항목에 소유자 결정이 필요하다.
+- 풀 계정의 상태 전이·사이트 역할 쓰기 표면(위 «쓰기 경로»).
