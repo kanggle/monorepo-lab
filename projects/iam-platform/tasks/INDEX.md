@@ -77,7 +77,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-618-move-single-site-accounts-onto-the-pool.md` — **기존 한 사이트 계정을 같은 id 로 풀로** (READY, 2026-10-01 UTC · `TASK-BE-614` AC-7 에서 분리 · 선행 614·615). 운영자 측면 계정 제외 · `ARTIST` → 사이트 역할 · IAM 행 7종 전부 이동.
-- `TASK-BE-616-first-visit-site-consent.md` — **4단계 — 사이트 첫 방문 동의 화면 + 멤버십·역할** (READY, 2026-10-01 UTC · 선행 614·615). 🔴 AC-4 = `ADR-007` 브랜드 이름(팬 GAP · 스토어 Global Account) 재검토를 소유자에게 묻는다.
 - `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY, 2026-10-01 UTC · 선행 614~616·`TASK-MONO-743`). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -115,6 +114,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
+- `TASK-BE-616-first-visit-site-consent.md` — 🔵 **IN-PROGRESS (2026-10-01 UTC)** 전역 소비자 계정 4단계 — 첫 방문 동의 화면 + 멤버십·사이트 역할 · **플래그 켜기** · 스토어 로그인 이름 «Global Account» → «IAM 로그인»(소유자 결정, 플래그와 같은 PR). 선행 확인: security-service 자동 잠금은 풀 계정에도 동작 ✅.
 (empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
