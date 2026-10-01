@@ -4,7 +4,7 @@ TASK-BE-615
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -222,3 +222,13 @@ admin `CreateOperatorUseCaseTest` +1(22) · `AccountServiceClientUnitTest` +1(16
 - 멤버십 조회 호출 수: 풀 principal 의 발급 1회당 액세스 + ID 토큰 = 2회(refresh 도). 캐시하지 않았다(멤버십 `LEFT` 가 즉시 반영되는 쪽을 택함).
 - 풀 계정의 상태 전이 · `consumer_site_roles` 쓰기 표면은 여전히 없다(BE-618 / MONO-745).
 - 동의 화면은 616 — D-1 의 «코드는 나가고 토큰이 거절» 자리를 그 화면이 대신한다.
+
+---
+
+## 검토 (2026-10-01 UTC · 분석=Opus 5.5 — 구현 에이전트와 별개)
+
+- **멤버십 없는 사이트 = 인가 통과 → 토큰 단계 `invalid_grant`**(D-1): 재인증으로 답하면 폼 로그인이 다시 풀 자격을 골라 같은 게이트로 돌아오는 **무한 반복**이 된다 — 그래서 반복 없는 쪽을 택한 판단에 동의한다. 플래그가 꺼져 있어 운영에는 닿지 않고, `TASK-BE-616` 의 동의 화면이 이 자리를 대신한다.
+- **콘솔 + 풀 자격**: 교차 조회가 풀 행 하나로 풀려 로그인은 되지만, 세션 테넌트가 `consumer-pool` 이라 콘솔 토큰은 `TASK-BE-614` 발급자 게이트가 거절한다 — 풀 계정의 콘솔 사용은 `ADR-MONO-080` 몫이라는 D1 과 일치한다.
+- **`TASK-BE-614` 의 «bite 4/7» 은 그 날짜의 사실이다**: 이 티켓 이후 그 시험의 풀 칸 셋은 «멤버십 없음» 거절이 먼저 막는다(같은 결과, 다른 장치). 614 의 기록을 고치지 않는다 — 발급자 게이트는 이제 콘솔 경로 시험(`TenantClaimPoolPrincipalTest#consoleClient_poolPrincipal_refusedByIssuerGate`)이 문다.
+- **후속(이 티켓 밖)**: 풀 principal 의 로그인 이벤트가 `tenant_id=consumer-pool` 을 싣는다 — security-service 자동 잠금이 그 값으로 account-service 를 부를 때의 동작은 측정하지 않았다(계정 행이 `consumer-pool` 에 있으므로 맞물릴 가능성이 높지만 미측정). `TASK-BE-616` 착수 전에 확인한다.
+- **배포 순서**: account-service 가 auth-service 보다 먼저이거나 함께 — 거꾸로면 풀 principal 만 토큰을 못 받는다(기존 계정 무영향).
