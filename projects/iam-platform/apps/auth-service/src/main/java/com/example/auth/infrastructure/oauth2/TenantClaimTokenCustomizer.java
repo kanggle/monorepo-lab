@@ -3,10 +3,14 @@ package com.example.auth.infrastructure.oauth2;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import com.example.auth.domain.session.PrincipalDetailKeys;
+import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
@@ -230,6 +234,43 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             // and the registeredClient carries custom.tenant_id / custom.tenant_type via
             // OAuthClientMapper (Option B). Either path resolves tenant_id correctly.
             customizeForAuthorizationCode(context);
+        }
+
+        refuseConsumerPoolTenant(context, grantType);
+    }
+
+    /**
+     * TASK-BE-614 — the issuer-side gate for the contract sentence «{@code consumer-pool} never
+     * appears in a token» (jwt-standard-claims.md {@code tenant_id} row; multi-tenancy.md § 소비자
+     * 계정 풀 § 1). Applied once, after every grant branch has set its claims, so it holds for
+     * every grant this customizer serves — {@code client_credentials}, {@code authorization_code},
+     * {@code refresh_token}, both {@code token-exchange} shapes — and for the ID token as well as
+     * the access token, including a grant added later.
+     *
+     * <p>Why it is needed even with {@code iam.consumer-pool.enabled} off: the pool tenant row
+     * exists and is ACTIVE from V0029 on, and a pool credential row (tenant {@code consumer-pool})
+     * makes the pool value reachable as the principal's {@code tenant_id} — e.g. the console's
+     * cross-tenant form-login lookup selects a credential by email across tenants, and the session
+     * tenant is the credential row's tenant. Until TASK-BE-615 maps a pool principal onto the
+     * requesting site, the only safe answer is to <b>mint nothing</b>.
+     *
+     * <p>Refusal shape: {@code invalid_grant} (RFC 6749 § 5.2) — the grant cannot produce a token
+     * for this tenant. Fail-closed: no token is returned, the encoder is never reached.
+     */
+    private static void refuseConsumerPoolTenant(JwtEncodingContext context, AuthorizationGrantType grantType) {
+        org.springframework.security.oauth2.jwt.JwtClaimsSet.Builder builder = context.getClaims();
+        if (builder == null) {
+            return; // no claim set was built, so no tenant_id can be minted
+        }
+        Object[] tenant = new Object[1];
+        builder.claims(claims -> tenant[0] = claims.get("tenant_id"));
+        if (tenant[0] != null && TenantContext.isConsumerPool(tenant[0].toString())) {
+            log.error("SECURITY: refused to mint a token whose tenant_id is the reserved pool value. "
+                    + "grantType={}, clientId={}", grantType == null ? null : grantType.getValue(),
+                    context.getRegisteredClient().getClientId());
+            throw new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.INVALID_GRANT,
+                    "tenant_id '" + TenantContext.CONSUMER_POOL_TENANT_ID
+                            + "' is a reserved storage value and is never issued", null));
         }
     }
 

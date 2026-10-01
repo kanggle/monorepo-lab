@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AssumeTenantDeniedException;
 import com.example.auth.application.port.OperatorAssignmentPort;
+import com.example.auth.domain.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
@@ -100,6 +101,19 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         RegisteredClient registeredClient = clientPrincipal.getRegisteredClient();
         if (registeredClient == null) {
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_CLIENT);
+        }
+
+        // TASK-BE-614 (ADR-MONO-078 A; jwt-standard-claims.md `tenant_id` row): the consumer-pool
+        // tenant is a storage value and is never a token's tenant. It became a real, ACTIVE
+        // tenants row in account-service V0029, and nothing upstream validates an operator
+        // assignment's tenant — so an assignment row to it can exist. Refuse the selection here,
+        // before either branch and before the admin-service gate is even asked: the assignment
+        // row existing is exactly the case this must still refuse. (The customizer refuses the
+        // claim again at mint time — this is the earlier, cheaper of the two gates.)
+        if (TenantContext.isConsumerPool(exchange.getSelectedTenantId())) {
+            log.warn("SECURITY: assume-tenant refused — the selected tenant is the reserved pool "
+                    + "value. clientId={}", registeredClient.getClientId());
+            throw invalidGrant("the selected tenant cannot be assumed");
         }
 
         // TASK-MONO-721 (ADR-MONO-076 — 갈래 D): a WORKLOAD credential takes a different

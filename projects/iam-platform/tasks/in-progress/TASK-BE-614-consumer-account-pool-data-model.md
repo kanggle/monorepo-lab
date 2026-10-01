@@ -180,7 +180,55 @@ iam-platform
 - ⚪ **AC-5** — 갱신한 보장: 풀 계정은 (a) 테넌트 범위 `findById(site, id)` 로는 어느 사이트에서도 안 잡힌다 (b) 멤버가 아닌 사이트 · B2B 테넌트(`erp`)의
   목록·검색에 없다 (c) 멤버십이 `LEFT` 가 되면 그 사이트 표면에서 사라진다. `ConsumerPoolSignupIntegrationTest#poolAccount_doesNotLeak` — **못 쟀다 — Docker 없음**.
 
-## 후속에 넘기는 것
+## 추가 (리뷰 요청, 2026-10-01 UTC) — «consumer-pool 은 어떤 토큰에도 안 나온다» 의 강제
 
-- `TASK-BE-615`: 플래그를 켜기 전에 위 «CreateOperatorUseCase» 와 «tenants 목록의 consumer-pool» 두 항목에 소유자 결정이 필요하다.
-- 풀 계정의 상태 전이·사이트 역할 쓰기 표면(위 «쓰기 경로»).
+**왜**: 계약 문장(jwt-standard-claims.md `tenant_id` 행 · multi-tenancy.md § 소비자 계정 풀 § 1)을 지키는 게이트가 **하나도 없었다**.
+admin-service `ManageOperatorAssignmentUseCase.assignOperator` 는 테넌트 존재를 검증하지 않고(**기존 결함**), auth-service
+`AssumeTenantAuthenticationProvider` 는 배정 행만 요구한다 — V0029 가 `consumer-pool` 을 **보이는 ACTIVE 행**으로 만들면서 «플랫폼 관리자가
+운영자를 consumer-pool 에 배정 → assume → `tenant_id=consumer-pool` 토큰» 이 도달 가능해졌다. 확인하며 더 찾은 두 경로:
+(a) platform-scope(`*`) 운영자는 배정 행 없이도 `OperatorAssignmentCheckUseCase` 가 **모든** 비-공백 테넌트에 assigned 를 준다.
+(b) 풀 자격 행(`credentials.tenant_id=consumer-pool`)이 있으면(플래그 ON 가입 뒤 OFF 로 돌린 경우 등) 콘솔 교차 테넌트 폼 로그인이 그 자격을 골라
+세션 테넌트 = `consumer-pool` 이 되고, `authorization_code`/`refresh_token` 발급이 그 값을 싣는다.
+
+**발급자(auth-service)** — 상수 한 곳: `TenantContext.CONSUMER_POOL_TENANT_ID` (+ `isConsumerPool`).
+- `TenantClaimTokenCustomizer.customize` 끝에서 **모든 grant 분기 뒤 한 번** `tenant_id` 를 읽어 풀 값이면 `invalid_grant` 로 거절 — 토큰 없음.
+  `client_credentials` · `authorization_code` · `refresh_token` · 두 `token-exchange` 모양 · 액세스/ID 토큰 전부를 덮고, 나중에 추가되는 grant 도 덮는다.
+  결정: 풀 principal 을 사이트 테넌트로 바꿔 싣는 것은 `TASK-BE-615` 의 일이라, 그 전까지 가장 안전한 동작은 **발급 거절**이다(경로 (b) 의 로그인 세션은 생겨도 토큰은 없다).
+- `AssumeTenantAuthenticationProvider.authenticate` — 두 분기(운영자·워크로드) **앞에서** 선택 테넌트가 풀이면 `invalid_grant`. admin-service 게이트도,
+  토큰 생성기도 부르지 않는다(배정 행이 있어도).
+
+**배정 표면(admin-service)** — 상수 한 곳: `AdminOperator.CONSUMER_POOL_TENANT_ID` (+ `isConsumerPool`), `PLATFORM_TENANT_ID` 옆.
+- `ManageOperatorAssignmentUseCase.assignOperator` → `TenantScopeDeniedException`(기존 403 `TENANT_SCOPE_DENIED` 형태), SUPER_ADMIN 포함, 행·감사 없음.
+- `OperatorAssignmentCheckUseCase.check` → 풀이면 `notAssigned` (platform-scope 운영자·기존 배정 행이 있어도).
+- `ManageSubscriptionUseCase.subscribe` → `TenantScopeDeniedException` (account-service 호출 전).
+- `PartnershipManagementUseCase.invite` → host 또는 partner 가 풀이면 `IllegalArgumentException`(기존 VALIDATION_ERROR — 같은 자리의 플랫폼 센티넬 거절과 같은 형태).
+- 손대지 않은 것: `unassignOperator`(기존 행 제거는 막을 이유가 없다) · 구독 `changeStatus`(좁히는 방향) · partnership 의 accept/suspend 등(invite 가 막히면 행이 생기지 않는다).
+
+**추가한 시험**
+- auth: `AssumeTenantConsumerPoolRefusalTest` — `poolSelected_refused_evenWithAssignment`(배정 게이트가 «예» 라고 할 상태에서 `invalid_grant`, 게이트·생성기 호출 0) ·
+  `ordinaryTenant_withSameAssignment_mints`(대조군).
+- auth: `TenantClaimConsumerPoolRefusalTest` — `authorizationCode_poolPrincipal_refused` · `refresh_poolPrincipal_refused` · `idToken_poolPrincipal_refused` ·
+  `clientCredentials_poolClient_refused` · `authorizationCode_siteTenant_mints`(대조군).
+- auth IT: `AssumeTenantExchangeIntegrationTest#consumerPool_refusedEvenWhenAssigned` — ⚪ **못 돌렸다(Docker 없음)**.
+- admin: `ConsumerPoolTenantRefusalTest` — `assignOperator_toPool_refused` · `assignOperator_toOrdinaryTenant_created`(대조군) ·
+  `assignmentCheck_pool_notAssigned_evenForPlatformScopeWithRow`(같은 운영자로 일반 테넌트는 assigned — 대조군 포함) · `subscribe_pool_refused`.
+- admin: `PartnershipManagementUseCaseTest#invite_consumerPool_rejectedOnEitherSide`.
+
+**게이트 (이 추가분, 각각 단독 실행)**
+
+| 게이트 | rc |
+|---|---|
+| `:projects:iam-platform:apps:account-service:check` | 0 |
+| `:projects:iam-platform:apps:auth-service:check` | 0 |
+| `:projects:iam-platform:apps:admin-service:check` | 0 |
+| `git add` 후: `check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift` · `check-flyway-version-collision` · `check-flyway-unresolvable-placeholder` · `check-dev-seed-migration-band` · `check-seed-catalogue-parity` · `check-shared-lib-jpa-scan` | 각각 0 |
+| auth `integrationTest` | ⚪ 못 돌렸다 — Docker 없음 |
+
+## 후속
+
+- `TASK-BE-615` 는 플래그를 켜기 전에, 이 티켓에서 찾은 운영자 생성 상호작용을 정해야 한다: `CreateOperatorUseCase` 가 넓어진 검색으로 풀 멤버에 대해
+  통과한 뒤 `resolveOrCreateIdentity(site, email)` 이 사이트 테넌트에 identity 를 **새로** 만든다. 이것은 ADR-080 경계이므로 소유자가 달리 정하지 않는 한
+  615 는 운영자 생성을 옛 규칙에 묶어 둬야 한다(예: 그 검사에서만 풀 멤버를 뺀다).
+- 가입 거절 문구는 계약 § 2 의 «로그인 후 전환» 안내가 아니라 기존 «이미 가입된 이메일입니다. 로그인해 주세요.» 다 — 전환 흐름인 `TASK-MONO-743` 으로 미룬다.
+  플래그 OFF 의 바이트 동일성을 지키기 위해서다.
+- (앞서 적은 것) `tenants` 목록의 `consumer-pool` 노출 여부 — 소유자 결정. 풀 계정의 상태 전이·사이트 역할 쓰기 표면(위 «쓰기 경로»).
