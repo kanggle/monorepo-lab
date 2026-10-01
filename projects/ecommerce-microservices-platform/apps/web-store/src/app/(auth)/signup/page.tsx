@@ -55,7 +55,7 @@ export default function SignupPage() {
     <AuthCardLayout>
       <h1 className="auth-title">회원가입</h1>
       <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)' }}>
-        회원가입은 Global Account 에서 진행합니다. 잠시만 기다려 주세요.
+        회원가입은 IAM 에서 진행합니다. 잠시만 기다려 주세요.
       </p>
       <button
         type="button"
@@ -63,7 +63,7 @@ export default function SignupPage() {
         className="btn btn-primary btn-lg"
         style={{ width: '100%' }}
       >
-        Global Account 로 이동
+        IAM 으로 이동
       </button>
     </AuthCardLayout>
   );

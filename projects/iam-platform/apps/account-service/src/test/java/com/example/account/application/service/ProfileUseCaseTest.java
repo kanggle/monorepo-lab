@@ -35,6 +35,10 @@ class ProfileUseCaseTest {
     @Mock
     private ProfileRepository profileRepository;
 
+    /** TASK-BE-616 — unstubbed → isEnabled() false: lookups stay exact {@code findById(tenant, id)}. */
+    @Mock
+    private com.example.account.application.port.ConsumerPoolFlag consumerPoolFlag;
+
     @InjectMocks
     private ProfileUseCase useCase;
 

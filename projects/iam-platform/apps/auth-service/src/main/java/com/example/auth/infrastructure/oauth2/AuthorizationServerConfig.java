@@ -11,6 +11,7 @@ import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RotatedTokenReplayPolicy;
 import com.example.auth.domain.token.TokenReuseDetector;
 import com.example.auth.infrastructure.oauth2.persistence.JpaOAuth2AuthorizationService;
+import com.example.auth.infrastructure.security.PendingSiteConsentStore;
 import com.example.auth.infrastructure.security.RegistrationHintRequestMatcher;
 import org.springframework.jdbc.core.JdbcOperations;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -185,7 +186,10 @@ public class AuthorizationServerConfig {
             CredentialRepository credentialRepository,
             // TASK-BE-615: the gate asks account-service whether a pool session's client is a
             // consumer site (only for consumer-pool principals).
-            AccountServicePort accountServicePort) throws Exception {
+            AccountServicePort accountServicePort,
+            // TASK-BE-616: where the gate parks a pool principal's authorize for the first-visit
+            // consent page (the same bean the page reads it back from).
+            PendingSiteConsentStore pendingSiteConsentStore) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -301,7 +305,8 @@ public class AuthorizationServerConfig {
                                 authorizationServerSettings.getAuthorizationEndpoint(),
                                 registeredClientRepository,
                                 credentialRepository,
-                                accountServicePort)),
+                                accountServicePort,
+                                pendingSiteConsentStore)),
                         Customizer.withDefaults())
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())

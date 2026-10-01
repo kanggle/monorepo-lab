@@ -83,7 +83,7 @@ describe('SignupPage (TASK-FE-097)', () => {
 
   it('JS 가 늦거나 막혀도 누를 수 있는 버튼이 남는다', async () => {
     renderSignupPage();
-    const button = await screen.findByRole('button', { name: 'Global Account 로 이동' });
+    const button = await screen.findByRole('button', { name: 'IAM 으로 이동' });
 
     await userEvent.click(button);
 
@@ -92,6 +92,7 @@ describe('SignupPage (TASK-FE-097)', () => {
 
   it('무엇을 하는 화면인지 알려 준다 (빈 화면으로 리다이렉트를 기다리지 않는다)', async () => {
     renderSignupPage();
-    expect(await screen.findByText(/Global Account 에서 진행합니다/)).toBeInTheDocument();
+    expect(await screen.findByText(/IAM 에서 진행합니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/Global Account/)).not.toBeInTheDocument();
   });
 });

@@ -405,6 +405,10 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - 🔴 **같은 이메일의 사이트별 계정이 이미 있으면 풀 가입을 받지 않는다** — 대신 «그 이메일로 로그인한 뒤 전환» 으로 안내한다.
   받으면 같은 이메일에 풀 계정과 사이트별 계정이 공존하고, 로그인 폼은 둘 중 하나의 비밀번호만 검사할 수 있다 — 남이 그 이메일로 풀 계정을
   만들면 **원래 주인이 자기 사이트 계정에 못 들어간다**. 가입 화면의 «이미 가입된 이메일» 은 지금 가입이 이미 내는 응답과 같은 부류다(새 열거 경로가 아니다).
+- 🔴 **역방향도 같다 (`TASK-BE-616`)**: **풀 계정이 먼저 있는** 이메일로 내부 계정 생성(`POST /internal/tenants/{t}/accounts` — 운영자 프로비저닝 · 벌크 ·
+  product-service 셀러 온보딩)이 **소비자 사이트**에 오면 거절한다 — 그 엔드포인트의 기존 중복 응답 `409 ACCOUNT_ALREADY_EXISTS`. B2B · 고객 테넌트(wms · erp ·
+  demo-corp …)는 대상이 아니다(D1 — 테넌트별 계정). 잠정 결과: 풀 쇼퍼를 같은 이메일로 셀러 온보딩할 수 없다 — `TASK-MONO-745`(셀러를 풀로) 전까지는
+  product-service 의 기존 fail-soft 대로 `PENDING_PROVISIONING` 에 머문다.
 
 #### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
 
@@ -451,6 +455,13 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - **멤버십 없는 사이트 — `TASK-BE-616` 전까지의 결과 (`TASK-BE-615` 결정)**: authorize 는 재인증하지 않고 코드를 준다(재인증하면 그 client 의 폼이
   풀 자격을 먼저 골라 같은 세션 → 같은 게이트 → 무한 반복). **토큰 엔드포인트가 `invalid_grant` 로 거절**한다 — 토큰 없음 · 루프 없음. 616 의 동의 화면이 이 자리에 들어온다.
   멤버십 조회 실패도 토큰 없음(fail-closed). 갱신 때마다 다시 묻는다 — 멤버십이 `LEFT` 가 되면 다음 refresh 부터 토큰이 없다.
+  → **`TASK-BE-616` 이후 (구현됨)**: 멤버십 **행이 없는** 소비자 사이트의 authorize(`GET`)는 코드 대신 **동의 화면**(`/consent`)이다 — 게이트가 그 authorize 요청을
+  세션에 보관한다(전용 세션 속성 — 로그인 이어가기와 섞이지 않는다; 화면을 다시 열거나 뒤로 가도 남아 있다).
+  **동의** → account-service 가 멤버십(ACTIVE · `consented_at`)을 쓰고 그 사이트로 `account.created` 를 1회 낸다([auth-to-account.md § PUT consumer-members](../contracts/http/internal/auth-to-account.md#put-internaltenantstenantidconsumer-membersaccountid--첫-방문-동의-task-be-616))
+  → 보관한 authorize 가 다시 돌아 멤버로 통과 → 그 사이트 토큰. **거절** → 쓰기 없이 client 의 **등록된** redirect URI 로 `error=access_denied`(+`state`) —
+  토큰 없음 · 루프 없음 · IAM 세션은 그대로(다른 사이트 SSO 유지). `prompt=none` 은 화면을 띄울 수 없으므로 `error=consent_required`.
+  redirect URI 가 등록값과 **정확히** 같지 않으면 리다이렉트하지 않는다(오류 응답도 리다이렉트다 — 열린 리다이렉터 금지). `POST` authorize 와 `LEFT` 멤버십은
+  동의 화면을 띄우지 않고 위 615 결과 그대로(토큰 거절) — 동의는 떠난 멤버십을 다시 열지 않는다. 콘솔(`iam`)과 B2B client 에는 동의 화면이 없다.
 - **소비자 사이트가 아닌 client**(B2B — wms · erp …): 풀 세션은 다른 테넌트 세션처럼 **재인증**, 그 client 의 폼은 풀 자격을 보지 않는다(풀-먼저는 소비자 사이트 규칙).
 - **로그아웃 범위 (소유자 결정 2026-10-01 «전체»)**: 어느 소비자 사이트에서 로그아웃하든(RP-initiated `/connect/logout`) **IAM 브라우저 세션이 끝난다** —
   다른 사이트의 다음 authorize 는 로그인 화면이다. 이미 발급된 다른 사이트의 앱 세션(그 사이트의 토큰 · refresh)은 **그 사이트의 만료 · 자체 로그아웃**을 따른다
@@ -462,6 +473,18 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 멤버십이 있는 풀 계정을 **포함해야** 한다. 안 그러면 운영자가 `ecommerce` 로 전환했을 때 새로 가입한 쇼핑객이 목록에서 사라진다
 (계정 행은 `consumer-pool` 에 있다). 🔴 이것은 § 격리 회귀 방지의 «`tenant_id` 를 첫 인자로» 규칙의 **확장**이지 예외가 아니다 — 입력은 여전히 사이트 테넌트이고,
 판정이 «계정 테넌트 = 입력» 에서 «계정 테넌트 = 입력 **또는** (풀 ∧ 그 사이트 멤버)» 로 넓어진다. 구현 `TASK-BE-614`.
+
+🔵 **단건 표면까지 (`TASK-BE-616`)** — 요청이 준 사이트 테넌트(게이트웨이 `X-Tenant-Id` · 운영자 활성 테넌트 · `/internal/tenants/{t}/…` 경로)로 계정 **하나**를
+찾는 표면도 같은 술어다(account-service `SiteAccountLookup`, 614 와 같은 질의 · 같은 플래그): `/api/accounts/me`(GET · PATCH profile · DELETE) · `/me/status` ·
+이메일 인증 재발송 · `/internal/accounts/{id}/status` · 헤더가 사이트를 말하는 `lock`/`unlock`/`delete` · `gdpr-delete` · `export` ·
+`/internal/tenants/{t}/accounts/{id}/status` · `password-reset`. 🔴 **넓히지 않는 것**: `account_roles` 쓰기(`roles` PATCH · `:add`/`:remove` — 복합 FK
+`(tenant_id, account_id) → accounts` 가 풀 계정을 사이트 테넌트로 담을 수 없다; 사이트 역할은 `consumer_site_roles`) · 역할 GET(풀 멤버는 `[]`, 사이트 역할은
+consumer-members 읽기가 준다) · 계정 → identity 조회 · 운영자 생성의 identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
+- **비멤버 대조군**: 사이트 A 에만 멤버인 풀 계정을 사이트 B 로 찾으면 404 — 읽기 · 쓰기 모두.
+- 🔴 **쓰기의 범위는 «계정 하나»**: 사이트 운영자(또는 본인이 그 사이트 토큰으로)가 풀 멤버에게 하는 상태 전이 · 삭제 · **GDPR 삭제**는 **풀 계정 하나**에
+  일어난다 — 그 사람의 **모든 소비자 사이트**에서 잠기고 · 지워지고 · 마스킹된다. 데이터 주체는 사람이므로 그 사람이 멤버인 어느 사이트의 운영자든
+  GDPR 삭제/내보내기를 할 수 있다(`TASK-BE-616` 결정). 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번(account-events.md § 상태 전이).
+  운영자 이력 행(`account_status_history`)도 계정의 테넌트로 적힌다.
 
 #### 6. 이벤트 (AC-3 결정)
 

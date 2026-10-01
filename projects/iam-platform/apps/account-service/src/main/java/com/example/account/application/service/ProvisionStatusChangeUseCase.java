@@ -2,6 +2,7 @@ package com.example.account.application.service;
 
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.result.ProvisionedStatusChangeResult;
 import com.example.account.domain.account.Account;
@@ -35,6 +36,8 @@ public class ProvisionStatusChangeUseCase {
     private final AccountStatusHistoryRepository historyRepository;
     private final AccountStatusMachine statusMachine;
     private final AccountEventPublisher eventPublisher;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     @Transactional
     public ProvisionedStatusChangeResult execute(String tenantIdStr, String accountId,
@@ -46,8 +49,9 @@ public class ProvisionStatusChangeUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantIdStr));
 
-        // Validate account exists within this tenant
-        Account account = accountRepository.findById(tenantId, accountId)
+        // Validate account exists within this tenant — TASK-BE-616 (§ 5): or is a pool account that is an
+        // ACTIVE member of it. A status change of a pool account is account-wide (every consumer site).
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         AccountStatus previousStatus = account.getStatus();
@@ -58,8 +62,10 @@ public class ProvisionStatusChangeUseCase {
 
         // Audit
         String actor = operatorId != null ? operatorId : tenantIdStr;
+        // TASK-BE-616: the history row carries the ACCOUNT's tenant (consumer-pool for a pool member;
+        // the same value as the path for a site account) — multi-tenancy.md § 3 keeps IAM rows on it.
         AccountStatusHistoryEntry historyEntry = AccountStatusHistoryEntry.create(
-                tenantIdStr,
+                account.getTenantId().value(),
                 accountId,
                 transition.from(),
                 transition.to(),

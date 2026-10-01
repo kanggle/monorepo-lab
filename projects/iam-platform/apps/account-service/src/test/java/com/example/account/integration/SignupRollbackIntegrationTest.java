@@ -135,7 +135,11 @@ class SignupRollbackIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.timestamp").exists());
 
         // @Transactional rollback proof:
-        // 1) no account row persisted for the submitted email
+        // 1) no account row persisted for the submitted email.
+        // TASK-BE-616: with the pool flag on by default, this header-less (fan-platform) signup would be
+        // born in consumer-pool — checking fan-platform alone would now pass vacuously. Check both (the
+        // membership row has an FK to the account row, so no account row means no membership row).
+        assertThat(accountRepository.findByEmail(TenantId.CONSUMER_POOL, email)).isEmpty();
         assertThat(accountRepository.findByEmail(TenantId.FAN_PLATFORM, email)).isEmpty();
         // 2) overall profile row count is unchanged — this signup added no profile row
         assertThat(profileJpaRepository.count()).isEqualTo(profileCountBefore);

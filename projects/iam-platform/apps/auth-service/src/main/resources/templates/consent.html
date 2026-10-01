@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-BE-616 (ADR-MONO-078 A) — the one-screen first-visit consent of a consumer site.
+         Same card, styles and brand header as login.html (fragments/auth-page); the colour, logo and
+         subtitle are the parked client's registered branding (SiteConsentPageController), never
+         anything from the current request. -->
+    <title>이 사이트 이용 동의</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<main class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('이 사이트 이용 동의', ${branding.description()})}"></div>
+
+    <th:block th:if="${expired}">
+        <div class="error" id="consent-error" role="alert">
+            동의할 요청이 없거나 만료되었습니다. 이용하려던 사이트에서 로그인을 다시 시작해 주세요.
+        </div>
+    </th:block>
+
+    <th:block th:unless="${expired}">
+        <div class="error" id="consent-error" role="alert" th:if="${error != null}" th:switch="${error}">
+            <span th:case="'temporarily_unavailable'">지금은 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.</span>
+            <span th:case="'declined'">동의하지 않았습니다. 이 창을 닫고 사이트로 돌아가도 됩니다.</span>
+            <span th:case="'not_available'">이 계정으로는 이 사이트를 이용할 수 없습니다.</span>
+            <span th:case="*">동의 또는 동의하지 않음을 선택해 주세요.</span>
+        </div>
+
+        <th:block th:if="${answerable}">
+            <p class="consent-text" id="consent-text">
+                <span th:text="${branding.serviceName()}">IAM</span> 계정으로 이 사이트를 처음 이용합니다.
+                동의하면 같은 계정으로 이 사이트에 로그인할 수 있고, 계정 정보(이메일·이름)가 이 사이트에 제공됩니다.
+                새 비밀번호는 필요하지 않습니다.
+            </p>
+
+            <!-- Both answers are native submit buttons in ONE form: Tab reaches each, Enter/Space
+                 presses it — keyboard operable without any script (AC-5).
+                 🔴 No data-busy-label here: the shared enhance script disables the form's FIRST submit
+                 button on submit, and a disabled submitter is left out of the form data — «accept»
+                 would arrive without decision=accept. -->
+            <form action="/consent" th:action="@{/consent}" method="post" aria-describedby="consent-text">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit" name="decision" value="accept" class="primary" autofocus>동의하고 계속</button>
+                <button type="submit" name="decision" value="decline" class="secondary">동의하지 않음</button>
+            </form>
+        </th:block>
+    </th:block>
+</main>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

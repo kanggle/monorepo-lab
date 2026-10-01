@@ -49,6 +49,12 @@
             color: #fff; background: var(--brand); border: none; border-radius: 8px; cursor: pointer;
         }
         button.primary:disabled { opacity: .7; cursor: progress; }
+        /* TASK-BE-616 — the consent page's second answer («동의하지 않음»): same size, outlined. */
+        button.secondary {
+            width: 100%; margin-top: 10px; padding: 11px; font-size: 14px; font-weight: 600;
+            color: #333; background: #fff; border: 1px solid #ccc; border-radius: 8px; cursor: pointer;
+        }
+        .consent-text { font-size: 14px; line-height: 1.6; color: #333; margin: 0; }
         .divider { display: flex; align-items: center; margin: 24px 0 16px; color: #666; font-size: 12px; }
         .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #e2e2e2; }
         .divider span { padding: 0 12px; }

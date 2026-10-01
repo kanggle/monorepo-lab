@@ -2,6 +2,7 @@ package com.example.account.application.service;
 
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.result.GdprDeleteResult;
 import com.example.account.application.util.DigestUtils;
 import com.example.account.domain.account.Account;
@@ -33,6 +34,8 @@ public class GdprDeleteUseCase {
     private final AccountStatusHistoryRepository historyRepository;
     private final AccountStatusMachine statusMachine;
     private final AccountEventPublisher eventPublisher;
+    /** TASK-BE-616 — § 5: the site tenant finds that site's ACTIVE pool members too ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     /**
      * NET-ZERO overload — header-less callers stay pinned to
@@ -49,7 +52,11 @@ public class GdprDeleteUseCase {
      */
     @Transactional
     public GdprDeleteResult execute(String accountId, String operatorId, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, accountId)
+        // TASK-BE-616 (§ 5): a site operator may erase a pool account that is an ACTIVE member of that site
+        // — the person is the data subject. There is ONE pool account, so the erasure (DELETED + PII
+        // masking) takes effect on every consumer site; the events carry consumer-pool (account-events.md
+        // § 상태 전이 — one account, one event). A pool account that is not a member of the site → 404.
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         AccountStatus previousStatus = account.getStatus();

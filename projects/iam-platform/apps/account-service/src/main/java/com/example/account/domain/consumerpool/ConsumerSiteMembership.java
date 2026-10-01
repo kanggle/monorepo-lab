@@ -49,6 +49,17 @@ public final class ConsumerSiteMembership {
                 ConsumerSiteMembershipStatus.ACTIVE, signedUpAt);
     }
 
+    /**
+     * TASK-BE-616 (contract § 4) — a pool account's first visit to ANOTHER consumer site: the person
+     * accepted that site's one-screen consent, so the membership is born
+     * {@link ConsumerSiteMembershipStatus#ACTIVE} with {@code consentedAt} = the moment of consent.
+     */
+    public static ConsumerSiteMembership joinOnConsent(String accountId, TenantId siteTenantId,
+                                                       Instant consentedAt) {
+        return new ConsumerSiteMembership(accountId, siteTenantId,
+                ConsumerSiteMembershipStatus.ACTIVE, consentedAt);
+    }
+
     public static ConsumerSiteMembership reconstitute(String accountId, TenantId siteTenantId,
                                                       ConsumerSiteMembershipStatus status,
                                                       Instant consentedAt) {

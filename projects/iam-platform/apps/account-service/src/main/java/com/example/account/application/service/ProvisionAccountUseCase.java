@@ -49,6 +49,8 @@ public class ProvisionAccountUseCase {
     private final AccountEventPublisher eventPublisher;
     private final AuthServicePort authServicePort;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
+    /** TASK-BE-616 — § 2 coexistence refusal (pool account first, site account second). */
+    private final ConsumerAccountPool consumerAccountPool;
 
     @Transactional
     public ProvisionAccountResult execute(ProvisionAccountCommand command) {
@@ -66,6 +68,9 @@ public class ProvisionAccountUseCase {
         if (accountRepository.existsByEmail(tenantId, normalizedEmail)) {
             throw new AccountAlreadyExistsException(command.email());
         }
+        // TASK-BE-616 (multi-tenancy.md § 소비자 계정 풀 § 2): into a consumer site, an email that already
+        // has a pool account is a duplicate too — never a second account with the same email.
+        consumerAccountPool.refuseIfEmailHasPoolAccount(tenant, normalizedEmail, command.email());
 
         try {
             // 3. Create Account

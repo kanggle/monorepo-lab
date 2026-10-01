@@ -104,6 +104,14 @@ public class WebLoginSecurityConfig {
                         // (JSESSIONID SecurityContext) is established under the same
                         // policy the SAS chain consumes. Both are GET endpoints.
                         new AntPathRequestMatcher("/login/oauth/**", "GET"),
+                        // TASK-BE-616: the first-visit consent page of a consumer site. On THIS chain
+                        // so it reads the same session SecurityContext as /oauth2/authorize, and so the
+                        // POST carries CSRF like /login. It is permitAll here on purpose (like /login):
+                        // SiteConsentPageController itself refuses anything but a pool session with a
+                        // parked authorize request — an entry point redirect would save /consent as the
+                        // login continuation instead.
+                        new AntPathRequestMatcher("/consent", "GET"),
+                        new AntPathRequestMatcher("/consent", "POST"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

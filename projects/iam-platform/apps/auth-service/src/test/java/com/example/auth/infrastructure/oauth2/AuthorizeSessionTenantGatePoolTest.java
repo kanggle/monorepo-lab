@@ -7,6 +7,7 @@ import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
+import com.example.auth.infrastructure.security.PendingSiteConsentStore;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,15 +78,88 @@ class AuthorizeSessionTenantGatePoolTest {
         assertThat(runAuthorize(session, "store")).isSameAs(session);
     }
 
+    /**
+     * TASK-BE-616 — CHANGED EXPECTATION. Under TASK-BE-615 this cell was
+     * {@code poolSession_nonMemberConsumerSite_passes_noLoop}: the gate passed and the token endpoint
+     * refused ({@code invalid_grant}). The consent screen now takes exactly that place: the chain is NOT
+     * continued (no code), the request is parked, and the browser goes to {@code /consent}. Still no
+     * re-authentication (which would loop) and still no token without a membership.
+     */
     @Test
-    @DisplayName("멤버 아닌 소비자 사이트 → 역시 통과 (재인증하면 풀 자격으로 같은 세션 → 무한 반복) — 토큰은 발급자가 거절")
-    void poolSession_nonMemberConsumerSite_passes_noLoop() throws Exception {
+    @DisplayName("TASK-BE-616: 멤버십 없는 소비자 사이트 → 동의 화면으로 302 · 요청 보관 · 체인 중단(코드 없음) · 재인증 아님")
+    void poolSession_nonMemberConsumerSite_redirectsToConsent() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", null, List.of()));
+
+        Outcome out = run(principal("consumer-pool"), "fan", "GET", Map.of("state", "s-616"));
+
+        assertThat(out.chainCalled()).as("no code is issued for this request").isFalse();
+        assertThat(out.response().getStatus()).isEqualTo(302);
+        assertThat(out.response().getRedirectedUrl()).isEqualTo("/consent");
+        assertThat(out.request().getSession(false)).isNotNull();
+        assertThat(out.request().getSession(false).getAttribute(PendingSiteConsentStore.SESSION_ATTRIBUTE))
+                .as("the authorize request is parked for «accept» to resume").isNotNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-616: prompt=none · 멤버십 없음 → 화면 없이 client 로 consent_required(+state) · 요청 보관 없음")
+    void poolSession_nonMember_promptNone_consentRequired() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", null, List.of()));
+
+        Outcome out = run(principal("consumer-pool"), "fan", "GET",
+                Map.of("prompt", "none", "state", "s-616", "redirect_uri", REDIRECT_URI));
+
+        assertThat(out.chainCalled()).isFalse();
+        assertThat(out.response().getRedirectedUrl())
+                .startsWith(REDIRECT_URI + "?error=consent_required")
+                .contains("state=s-616");
+        assertThat(out.request().getSession(false)).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-616: prompt=none 인데 redirect_uri 가 등록값이 아님 → 리다이렉트하지 않고 그대로 통과(발급자가 거절)")
+    void poolSession_nonMember_promptNone_untrustedRedirect_passes() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", null, List.of()));
+
+        Outcome out = run(principal("consumer-pool"), "fan", "GET",
+                Map.of("prompt", "none", "redirect_uri", "https://evil.example/cb"));
+
+        assertThat(out.chainCalled()).isTrue();
+        assertThat(out.response().getRedirectedUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-616: POST authorize · 멤버십 없음 → 보관할 수 없으니 그대로 통과(발급자가 거절, 루프 없음)")
+    void poolSession_nonMember_postAuthorize_passes() throws Exception {
         stubClient("fan", "fan-platform");
         when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
                 new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", null, List.of()));
         Authentication session = principal("consumer-pool");
 
-        assertThat(runAuthorize(session, "fan")).isSameAs(session);
+        Outcome out = run(session, "fan", "POST", Map.of());
+
+        assertThat(out.chainCalled()).isTrue();
+        assertThat(out.seen()).isSameAs(session);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-616: LEFT 멤버십 → 동의 화면 아님 · 통과(발급자가 invalid_grant) — 동의가 떠난 멤버십을 다시 열지 않는다")
+    void poolSession_leftMembership_passes_noConsent() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", "LEFT", List.of()));
+        Authentication session = principal("consumer-pool");
+
+        Outcome out = run(session, "fan", "GET", Map.of());
+
+        assertThat(out.chainCalled()).isTrue();
+        assertThat(out.seen()).isSameAs(session);
+        assertThat(out.request().getSession(false)).isNull();
     }
 
     @Test
@@ -149,8 +224,40 @@ class AuthorizeSessionTenantGatePoolTest {
                 RegisteredClient.withId(clientId + "-id").clientId(clientId)
                         .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                         .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                        .redirectUri("http://localhost:3000/callback").scope("openid")
+                        .redirectUri(REDIRECT_URI).scope("openid")
                         .clientSettings(settings).build());
+    }
+
+    private static final String REDIRECT_URI = "http://localhost:3000/callback";
+
+    /** TASK-BE-616 — what one authorize request did: response, whether the chain ran, who it saw. */
+    private record Outcome(MockHttpServletRequest request, MockHttpServletResponse response,
+                           boolean chainCalled, Authentication seen) {
+    }
+
+    private Outcome run(Authentication session, String clientId, String method, Map<String, String> params)
+            throws Exception {
+        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(
+                AUTHORIZE, registeredClientRepository, credentialRepository, accountServicePort);
+        MockHttpServletRequest request = new MockHttpServletRequest(method, AUTHORIZE);
+        request.setServletPath(AUTHORIZE);
+        request.setParameter("client_id", clientId);
+        request.setParameter("response_type", "code");
+        params.forEach(request::setParameter);
+        StringBuilder query = new StringBuilder("client_id=" + clientId + "&response_type=code");
+        params.forEach((k, v) -> query.append('&').append(k).append('=').append(v));
+        request.setQueryString(query.toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        SecurityContextHolder.setContext(new SecurityContextImpl(session));
+        AtomicReference<Authentication> seen = new AtomicReference<>();
+        AtomicBoolean called = new AtomicBoolean();
+        FilterChain chain = (req, res) -> {
+            called.set(true);
+            seen.set(SecurityContextHolder.getContext().getAuthentication());
+        };
+        gate.doFilter(request, response, chain);
+        SecurityContextHolder.clearContext();
+        return new Outcome(request, response, called.get(), seen.get());
     }
 
     private static Authentication principal(String tenantId) {

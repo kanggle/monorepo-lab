@@ -2,6 +2,7 @@ package com.example.account.application.service;
 
 import com.example.account.application.command.ChangeStatusCommand;
 import com.example.account.application.event.AccountEventPublisher;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountStatusResult;
 import com.example.account.application.result.AccountStatusWithTenantResult;
@@ -28,17 +29,21 @@ public class AccountStatusUseCase {
     private final AccountStatusMachine statusMachine;
     private final AccountEventPublisher eventPublisher;
     private final int gracePeriodDays;
+    /** TASK-BE-616 — § 5: a site-keyed lookup includes that site's ACTIVE pool members ({@link SiteAccountLookup}). */
+    private final ConsumerPoolFlag consumerPoolFlag;
 
     public AccountStatusUseCase(AccountRepository accountRepository,
                                  AccountStatusHistoryRepository historyRepository,
                                  AccountStatusMachine statusMachine,
                                  AccountEventPublisher eventPublisher,
-                                 @Value("${account.deletion.grace-period-days:30}") int gracePeriodDays) {
+                                 @Value("${account.deletion.grace-period-days:30}") int gracePeriodDays,
+                                 ConsumerPoolFlag consumerPoolFlag) {
         this.accountRepository = accountRepository;
         this.historyRepository = historyRepository;
         this.statusMachine = statusMachine;
         this.eventPublisher = eventPublisher;
         this.gracePeriodDays = gracePeriodDays;
+        this.consumerPoolFlag = consumerPoolFlag;
     }
 
     /**
@@ -55,7 +60,7 @@ public class AccountStatusUseCase {
      */
     @Transactional(readOnly = true)
     public AccountStatusResult getStatus(String accountId, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, accountId)
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         var latestHistory = historyRepository.findTopByAccountIdOrderByOccurredAtDesc(accountId);
@@ -110,7 +115,7 @@ public class AccountStatusUseCase {
      */
     @Transactional
     public StatusChangeResult changeStatus(ChangeStatusCommand command, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, command.accountId())
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
         return applyStatusChange(account, command);
     }
@@ -226,7 +231,8 @@ public class AccountStatusUseCase {
     @Transactional
     public DeleteAccountResult deleteAccount(String accountId, StatusChangeReason reason,
                                               String actorType, String actorId, TenantId tenantId) {
-        Account account = accountRepository.findById(tenantId, accountId)
+        // TASK-BE-616: a pool member deleted through a site deletes the ONE pool account — everywhere.
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
         return applyDelete(account, reason, actorType, actorId);
     }

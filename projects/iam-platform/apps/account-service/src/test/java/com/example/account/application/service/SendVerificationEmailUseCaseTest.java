@@ -3,6 +3,7 @@ package com.example.account.application.service;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.RateLimitedException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.port.EmailVerificationNotifier;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.repository.AccountRepository;
@@ -52,12 +53,20 @@ class SendVerificationEmailUseCaseTest {
     @Mock
     private EmailVerificationNotifier notifier;
 
+    /** TASK-BE-616 — unstubbed → isEnabled() false: lookups stay exact {@code findById(tenant, id)}. */
+    @Mock
+    private ConsumerPoolFlag consumerPoolFlag;
+
     @InjectMocks
     private SendVerificationEmailUseCase useCase;
 
     private Account unverifiedAccount() {
+        return unverifiedAccount(TenantId.FAN_PLATFORM);
+    }
+
+    private Account unverifiedAccount(TenantId tenantId) {
         return Account.reconstitute(
-                ACCOUNT_ID, TenantId.FAN_PLATFORM, EMAIL, null,
+                ACCOUNT_ID, tenantId, EMAIL, null,
                 AccountStatus.ACTIVE,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Instant.parse("2026-01-01T00:00:00Z"),
@@ -110,8 +119,10 @@ class SendVerificationEmailUseCaseTest {
     @DisplayName("TASK-BE-507: ecommerce 소비자의 재발송 — 계정 조회도 토큰도 ecommerce tenant 로")
     void execute_tenantAware_scopesLookupAndMintsTenantIntoToken() {
         TenantId ecommerce = new TenantId("ecommerce");
+        // TASK-BE-616: the token now carries the ACCOUNT's tenant, so the fixture account lives in
+        // ecommerce (it used to be a fan-platform account returned by an ecommerce lookup).
         given(accountRepository.findById(ecommerce, ACCOUNT_ID))
-                .willReturn(Optional.of(unverifiedAccount()));
+                .willReturn(Optional.of(unverifiedAccount(ecommerce)));
         given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
                 .willReturn(true);
 

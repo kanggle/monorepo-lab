@@ -36,6 +36,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -85,6 +86,13 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
     private static final String BOTH_EMAIL = "pool-both-615@example.com";
     private static final String STORE_ONLY = "0199de70-0000-7000-8000-0000000c0615";
     private static final String STORE_ONLY_EMAIL = "pool-store-615@example.com";
+    /** TASK-BE-616 — signs up at the store in the test, then consents to the fan site. */
+    private static final String NEW_SHOPPER = "0199de70-0000-7000-8000-0000000e0616";
+    private static final String NEW_SHOPPER_EMAIL = "pool-new-616@example.com";
+    /** TASK-BE-616 — a store member who declines the fan site. */
+    private static final String DECLINER = "0199de70-0000-7000-8000-0000000f0616";
+    private static final String DECLINER_EMAIL = "pool-decline-616@example.com";
+    private static final String FAN_CONSENT = "fan-consent-616";
 
     private static final String STORE_CLIENT_ID = "ecommerce-web-store-client";
     private static final String STORE_CLIENT_SECRET = "ecommerce-dev";
@@ -102,7 +110,7 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         accountService = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         accountService.start();
         registry.add("auth.account-service.base-url", accountService::baseUrl);
-        for (String accountId : List.of(BOTH, STORE_ONLY)) {
+        for (String accountId : List.of(BOTH, STORE_ONLY, NEW_SHOPPER, DECLINER)) {
             accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/accounts/" + accountId + "/status"))
                     .willReturn(json("""
                             { "accountId": "%s", "status": "ACTIVE", "statusChangedAt": "2026-10-01T00:00:00Z" }
@@ -112,6 +120,47 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         membership("fan-platform", BOTH, "\"ACTIVE\"");
         membership("ecommerce", STORE_ONLY, "\"ACTIVE\"");
         membership("fan-platform", STORE_ONLY, "null");
+
+        // ── TASK-BE-616 ──
+        // NEW_SHOPPER: signs up at the store (pool account + store membership), then visits fan for the
+        // first time. The fan membership is a WireMock scenario: no membership until the consent PUT,
+        // ACTIVE after it — what account-service's ConsentToConsumerSiteUseCase does.
+        membership("ecommerce", NEW_SHOPPER, "\"ACTIVE\"");
+        accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo(
+                        "/internal/tenants/fan-platform/consumer-members/" + NEW_SHOPPER))
+                .inScenario(FAN_CONSENT).whenScenarioStateIs(com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED)
+                .willReturn(membershipBody("fan-platform", NEW_SHOPPER, "null")));
+        accountService.stubFor(WireMock.put(WireMock.urlPathEqualTo(
+                        "/internal/tenants/fan-platform/consumer-members/" + NEW_SHOPPER))
+                .inScenario(FAN_CONSENT).willSetStateTo("CONSENTED")
+                .willReturn(membershipBody("fan-platform", NEW_SHOPPER, "\"ACTIVE\"")));
+        accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo(
+                        "/internal/tenants/fan-platform/consumer-members/" + NEW_SHOPPER))
+                .inScenario(FAN_CONSENT).whenScenarioStateIs("CONSENTED")
+                .willReturn(membershipBody("fan-platform", NEW_SHOPPER, "\"ACTIVE\"")));
+        // DECLINER: a store member who says «no» to the fan site. No PUT stub on purpose — a write would 404.
+        membership("ecommerce", DECLINER, "\"ACTIVE\"");
+        membership("fan-platform", DECLINER, "null");
+        // The store signup page asks whether the store tenant may take signups (TASK-BE-581) and then
+        // proxies the signup itself (account-service decides it is a pool signup — TASK-BE-614).
+        accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenants/ecommerce"))
+                .willReturn(json("""
+                        { "tenantId": "ecommerce", "displayName": "E-Commerce Platform",
+                          "tenantType": "B2C_CONSUMER", "status": "ACTIVE" }
+                        """)));
+        accountService.stubFor(WireMock.post(WireMock.urlPathEqualTo("/api/accounts/signup"))
+                .willReturn(WireMock.aResponse().withStatus(201).withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                { "accountId": "%s", "email": "%s", "status": "ACTIVE" }
+                                """.formatted(NEW_SHOPPER, NEW_SHOPPER_EMAIL))));
+    }
+
+    private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder membershipBody(
+            String site, String accountId, String statusJson) {
+        return json("""
+                { "accountId": "%s", "siteTenantId": "%s", "consumerSite": true,
+                  "siteTenantType": "B2C_CONSUMER", "membershipStatus": %s, "siteRoles": [] }
+                """.formatted(accountId, site, statusJson));
     }
 
     private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder json(String body) {
@@ -147,12 +196,15 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
     void seedPoolCredentials() {
         Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
         accountService.resetRequests();
+        accountService.resetScenarios();
         credentialJpaRepository.deleteAll();
         String hash = new Argon2idPasswordHasher().hash(PASSWORD);
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                 BOTH, "consumer-pool", BOTH_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                 STORE_ONLY, "consumer-pool", STORE_ONLY_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                DECLINER, "consumer-pool", DECLINER_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
     }
 
     // ── AC-1 ──────────────────────────────────────────────────────────────────────────────────
@@ -188,18 +240,127 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
 
     // ── no membership → no token, no loop ───────────────────────────────────────────────────────
 
+    /**
+     * TASK-BE-616 — CHANGED EXPECTATION. Under TASK-BE-615 this cell was
+     * {@code storeOnlyPoolAccount_onFan_noTokenAndNoLoop}: the fan authorize issued a code and the token
+     * endpoint refused it ({@code invalid_grant}). The first-visit consent screen now takes that place:
+     * no code at all until the person answers. Still never a {@code /login} bounce (no loop).
+     */
     @Test
-    @DisplayName("멤버십 없는 사이트(스토어 전용 풀 계정 → 팬): authorize 는 코드(재로그인 요구 없음 = 루프 없음), 토큰 엔드포인트는 400 invalid_grant")
-    void storeOnlyPoolAccount_onFan_noTokenAndNoLoop() throws Exception {
+    @DisplayName("TASK-BE-616: 멤버십 없는 사이트(스토어 전용 풀 계정 → 팬) → 코드 대신 /consent · /login 아님 · 두 번째 시도도 같다")
+    void storeOnlyPoolAccount_onFan_consentScreen_noCode_noLoop() throws Exception {
         MockHttpSession session = loginThrough(STORE_ONLY_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
 
-        Pkce fanPkce = Pkce.create();
-        String code = authorizeExpectingCode(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce);
-        JsonNode error = exchange(code, FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce, 400);
-        assertThat(error.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(authorizeExpectingConsent(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create()))
+                .doesNotContain("code=");
+        assertThat(authorizeExpectingConsent(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create()))
+                .as("a second attempt is the same screen — never /login").endsWith("/consent");
+    }
 
-        // A second attempt behaves the same — never a /login bounce.
+    // ── TASK-BE-616 — first-visit consent ───────────────────────────────────────────────────────
+
+    /**
+     * AC-6 — «스토어 풀 가입 → 팬 첫 방문 → 동의 → 팬 토큰» through the browser path of THIS service.
+     * account-service is WireMock: the signup proxy is answered 201 (account-service would make it a
+     * pool account — that half is account-service's {@code ConsumerSiteConsentIntegrationTest}), and
+     * the pool credential account-service would write through {@code POST /internal/auth/credentials}
+     * is written directly here. The fan membership turns ACTIVE only when the consent PUT arrives.
+     */
+    @Test
+    @DisplayName("AC-6/AC-1: 스토어 풀 가입 → 스토어 토큰(CUSTOMER) → 팬 첫 방문 /consent → 동의 → 팬 토큰: sub 동일 · tenant_id=fan-platform · roles 에 FAN, CUSTOMER 없음")
+    void storeSignup_fanFirstVisit_consent_fanToken() throws Exception {
+        // 1. Store authorize → /login (a saved authorize request now carries the store client).
+        Pkce storePkce = Pkce.create();
+        MvcResult start = mockMvc.perform(authorize(null, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        MockHttpSession session = (MockHttpSession) start.getRequest().getSession(false);
+
+        // 2. Signup on the store's signup page — proxied to account-service with the store tenant.
+        mockMvc.perform(post("/signup").session(session).with(csrf())
+                        .param("email", NEW_SHOPPER_EMAIL)
+                        .param("password", PASSWORD)
+                        .param("confirmPassword", PASSWORD))
+                .andExpect(status().is3xxRedirection());
+        accountService.verify(WireMock.postRequestedFor(WireMock.urlPathEqualTo("/api/accounts/signup"))
+                .withHeader("X-Tenant-Id", WireMock.equalTo("ecommerce")));
+        // What account-service's pool signup writes here (POST /internal/auth/credentials, tenant consumer-pool).
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                NEW_SHOPPER, "consumer-pool", NEW_SHOPPER_EMAIL,
+                CredentialHash.argon2id(new Argon2idPasswordHasher().hash(PASSWORD)), Instant.now())));
+
+        // 3. Log in — the pool credential — and take the store token.
+        MvcResult login = mockMvc.perform(post("/login").session(session).with(csrf())
+                        .param("username", NEW_SHOPPER_EMAIL).param("password", PASSWORD))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        session = (MockHttpSession) login.getRequest().getSession(false);
+        String storeAccess = exchange(authorizeExpectingCode(session, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce),
+                STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce, 200).get("access_token").asText();
+        assertThat(claim(storeAccess, "tenant_id")).isEqualTo("ecommerce");
+        assertThat(roles(storeAccess)).containsExactly("CUSTOMER");
+
+        // 4. First visit to the fan site: the consent screen, not a code, not /login.
+        Pkce fanPkce = Pkce.create();
+        authorizeExpectingConsent(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce);
+        MvcResult page = mockMvc.perform(get("/consent").session(session)).andExpect(status().isOk()).andReturn();
+        assertThat(page.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .contains("이 사이트 이용 동의").contains("value=\"accept\"").contains("value=\"decline\"");
+        accountService.verify(0, WireMock.putRequestedFor(WireMock.urlPathMatching("/internal/tenants/.*")));
+
+        // 5. Accept → account-service writes the membership → the parked authorize resumes.
+        MvcResult accepted = mockMvc.perform(post("/consent").session(session).with(csrf())
+                        .param("decision", "accept"))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        String resume = accepted.getResponse().getRedirectedUrl();
+        assertThat(resume).contains("/oauth2/authorize").contains("client_id=" + FAN_CLIENT_ID);
+        accountService.verify(1, WireMock.putRequestedFor(WireMock.urlPathEqualTo(
+                "/internal/tenants/fan-platform/consumer-members/" + NEW_SHOPPER)));
+
+        MvcResult resumed = mockMvc.perform(get(URI.create(resume)).session(session))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        String location = resumed.getResponse().getHeader("Location");
+        assertThat(location).as("the resumed authorize yields a code").startsWith(FAN_REDIRECT_URI).contains("code=");
+
+        // 6. The fan token: one account, the fan site, the fan seed role only.
+        JsonNode fanTokens = exchange(queryParam(location, "code"), FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce, 200);
+        String fanAccess = fanTokens.get("access_token").asText();
+        assertThat(claim(fanAccess, "sub")).isEqualTo(claim(storeAccess, "sub")).isEqualTo(NEW_SHOPPER);
+        assertThat(claim(fanAccess, "tenant_id")).isEqualTo("fan-platform").isNotEqualTo("consumer-pool");
+        assertThat(roles(fanAccess)).contains("FAN").doesNotContain("CUSTOMER");
+
+        // AC-2: the next fan visit is a plain SSO code — no consent screen again.
         authorizeExpectingCode(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create());
+        accountService.verify(1, WireMock.putRequestedFor(WireMock.urlPathMatching("/internal/tenants/.*")));
+    }
+
+    @Test
+    @DisplayName("AC-1: 동의 거절 → 팬 client 로 error=access_denied + state · 코드·토큰 없음 · 멤버십 쓰기 없음 · IAM 세션은 그대로(스토어 SSO 유지)")
+    void decline_returnsAccessDenied_noWrite_sessionKept() throws Exception {
+        MockHttpSession session = loginThrough(DECLINER_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
+        authorizeExpectingConsent(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, Pkce.create());
+
+        MvcResult declined = mockMvc.perform(post("/consent").session(session).with(csrf())
+                        .param("decision", "decline"))
+                .andExpect(status().is3xxRedirection()).andReturn();
+
+        assertThat(declined.getResponse().getRedirectedUrl())
+                .startsWith(FAN_REDIRECT_URI + "?error=access_denied")
+                .contains("state=be-615")
+                .doesNotContain("code=");
+        accountService.verify(0, WireMock.putRequestedFor(WireMock.urlPathMatching("/internal/tenants/.*")));
+        // The IAM session survives a decline: the store still signs in without a form.
+        authorizeExpectingCode(session, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
+    }
+
+    @Test
+    @DisplayName("AC-3: 콘솔 client 에는 동의 화면이 없다 — 풀 세션도 /consent 로 가지 않는다(BE-610 그대로, 토큰은 발급자가 거절)")
+    void console_neverShowsConsent() throws Exception {
+        MockHttpSession session = loginThrough(STORE_ONLY_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
+
+        MvcResult console = mockMvc.perform(authorize(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, Pkce.create()))
+                .andExpect(status().is3xxRedirection()).andReturn();
+
+        assertThat(console.getResponse().getHeader("Location")).doesNotEndWith("/consent");
+        accountService.verify(0, WireMock.putRequestedFor(WireMock.urlPathMatching("/internal/tenants/.*")));
     }
 
     // ── AC-5 ──────────────────────────────────────────────────────────────────────────────────
@@ -355,6 +516,17 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         String location = result.getResponse().getHeader("Location");
         assertThat(location).as("a code, not a /login bounce").startsWith(redirectUri).contains("code=");
         return queryParam(location, "code");
+    }
+
+    /** TASK-BE-616 — the authorize answers with the first-visit consent page, not a code and not /login. */
+    private String authorizeExpectingConsent(MockHttpSession session, String clientId, String redirectUri,
+                                             Pkce pkce) throws Exception {
+        MvcResult result = mockMvc.perform(authorize(session, clientId, redirectUri, pkce))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String location = result.getResponse().getHeader("Location");
+        assertThat(location).as("the consent page — not a code, not a /login bounce").endsWith("/consent");
+        return location;
     }
 
     private JsonNode exchange(String code, String clientId, String redirectUri, Pkce pkce, int expectedStatus)

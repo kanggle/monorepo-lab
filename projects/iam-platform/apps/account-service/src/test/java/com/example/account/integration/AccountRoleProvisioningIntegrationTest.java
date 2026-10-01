@@ -113,7 +113,9 @@ class AccountRoleProvisioningIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("cross-tenant: tenantA 의 accountId 를 tenantB path 로 PATCH /roles → 404 ACCOUNT_NOT_FOUND")
     void replaceAll_crossTenantAccountId_returns404() throws Exception {
-        // Create account in fan-platform via signup path (default tenant for self-signup).
+        // Create an account via the self-signup path (default tenant fan-platform). TASK-BE-616: with the
+        // pool flag on by default this is a consumer-pool account with a fan-platform membership — still
+        // an account of ANOTHER tenant than wms, so the cross-tenant 404 below is unchanged.
         String email = "cross-" + UUID.randomUUID() + "@example.com";
         MvcResult signupResult = mockMvc.perform(post("/api/accounts/signup")
                         .contentType(MediaType.APPLICATION_JSON)
