@@ -114,12 +114,12 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-616-first-visit-site-consent.md` — 🔵 **IN-PROGRESS (2026-10-01 UTC)** 전역 소비자 계정 4단계 — 첫 방문 동의 화면 + 멤버십·사이트 역할 · **플래그 켜기** · 스토어 로그인 이름 «Global Account» → «IAM 로그인»(소유자 결정, 플래그와 같은 PR). 선행 확인: security-service 자동 잠금은 풀 계정에도 동작 ✅.
 (empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+- `TASK-BE-616-first-visit-site-consent.md` — 🟡 **REVIEW (2026-10-01 UTC)** 전역 소비자 계정 4단계: 첫 방문 동의 화면(동의 → 멤버십 + `account.created` 사이트 1회 · 거절 → `access_denied`, 반복 없음) · 🔴 **플래그 켬** · 스토어 «IAM 로그인»(V0041 + 앱 버튼) · 머지 전 보강: 풀 계정 사이트 단건 조회 404 해소(계약 § 5 전수) · 풀 이메일 중복 프로비저닝 409. bite 4종. ⚪ 통합 시험은 CI 첫 실측. 후속: 사이트 탈퇴 vs 계정 삭제 · 동의 거절 문구 · 콘솔 보안 이벤트 조회.
 - `TASK-BE-613-per-client-branding-of-the-login-and-signup-pages.md` — 🟡 **REVIEW — AC-0~3 완료, AC-4 는 CI(Testcontainers), AC-5 는 재굽기 뒤 창 대기** (2026-09-29 UTC). `ADR-007` 구현. 로그인·회원가입 화면이 시작 client 의 브랜드를 그린다(콘솔=IAM · 팬=IAM(소유자 값 변경, 원래 GAP) · 스토어=Global Account · 그 밖=IAM). 판별=`SavedRequestTenantResolver#initiatingClient`(저장된 authorize 요청만). 값=`custom.branding.*`(V0040 `JSON_MERGE_PATCH`, ASCII). 로고=허용 목록 이름 → 인라인 SVG(새 HTTP 경로 없음). 폼 계약 불변(슬라이스가 선택자·submit 개수까지 문다) · 토글·제출 중·a11y·한국어. 로컬 auth `test` 931/실패 0 · bite 5종 → 의도한 칸만 빨강.
 - `TASK-BE-610-console-sso-reuses-a-consumer-session-and-lands-on-onboarding.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 콘솔 SSO 면제를 조건부로 — 소비자 세션의 이메일에 `iam` 자격이 있으면 재인증(콘솔 로그인이 범위 조회로 그 자격을 고른다 → 루프 없음), 없으면 통과(ADR-MONO-044 D5 그대로). 판정 키 = 이메일(폼 로그인이 자격을 고르는 키와 같은 행 · 재인증은 아무것도 잇지 않음). 조회 실패 → 통과(재인증하면 D5 루프). 로컬 auth `test` rc=0 · bite 2종 → 재인증 셀 단언 실패. IT 는 CI.
 - `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 소셜 신원 조회를 **시작 client 의 테넌트로 한정** — 전역 `findByProviderAndProviderUserId` 를 없애고 `(tenant_id, provider, provider_user_id)` 조회로(unique 키와 같은 모양). 미스 → 그 테넌트에서 가입. 스펙 개정 먼저(«테넌트마다 하나»). `TASK-BE-602` 후속 ① 경쟁 조건 소멸. 🔴 AC-0 ② «새 계정» 은 그 테넌트에 같은 이메일 계정이 없을 때만 — 있으면 기존 auto-link(티켓 § 전제 정정). 로컬 auth `test` rc=0 · bite 2종 → 새 셀 빨강. 실 MySQL 슬라이스는 CI.
