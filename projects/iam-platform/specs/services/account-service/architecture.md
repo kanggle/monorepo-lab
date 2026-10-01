@@ -144,6 +144,7 @@ presentation → application → domain
 - 내부(`presentation/internal/`): 다른 서비스 전용. 별도 인증 경계(mTLS 또는 내부 토큰). 게이트웨이 경유 금지
 - 내부 provisioning: `/internal/tenants/{tenantId}/accounts` (POST/GET), `/internal/tenants/{tenantId}/accounts/{accountId}/roles|status|password-reset` — WMS 등 enterprise 소비자가 사용. path `{tenantId}`와 호출 주체의 tenant scope 불일치 시 403 `TENANT_SCOPE_DENIED`. 상세는 [specs/features/multi-tenancy.md](../../features/multi-tenancy.md)
 - 소비자 계정 풀 사이트 멤버십 읽기(TASK-BE-615): `GET /internal/tenants/{tenantId}/consumer-members/{accountId}` — auth-service 전용(폼 로그인 · authorize 게이트 · 토큰 발급). 항상 200(«멤버 아님»도 본문의 답). [auth-to-account.md](../../contracts/http/internal/auth-to-account.md)
+- 소비자 계정 풀 첫 방문 동의(TASK-BE-616): `PUT /internal/tenants/{tenantId}/consumer-members/{accountId}` — auth-service 동의 화면 전용. 멤버십 행이 없을 때만 ACTIVE 멤버십 + 그 사이트 `account.created` 1회(멱등), 항상 200(읽기와 같은 본문). [auth-to-account.md](../../contracts/http/internal/auth-to-account.md)
 - 응답에서 `password_hash`·`deleted_at` 같은 민감 필드 **절대 제외** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4)
 
 ### application/

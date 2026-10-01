@@ -6,6 +6,7 @@ import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
+import com.example.auth.infrastructure.security.PendingSiteConsentStore;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * TASK-BE-605 (owner decision ① (b), 2026-09-26) — an authenticated IAM browser session is
@@ -49,8 +51,9 @@ import java.util.Objects;
  *       {@code iam} credential and reach the console only with a consumer-tenant session, are
  *       untouched as before;</li>
  *   <li>TASK-BE-615 — a consumer-pool principal on a non-console client → untouched when the
- *       client's tenant is a consumer site (member or not — issuance decides; no loop), re-
- *       authentication otherwise ({@link #consumerSiteServesPoolPrincipal});</li>
+ *       client's tenant is a consumer site the account is a member of (or left — issuance refuses),
+ *       re-authentication when it is not a consumer site; TASK-BE-616 — and the first-visit consent
+ *       page when it is a consumer site the account has never joined ({@link #consumerSiteDecision});</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -89,20 +92,45 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
     private final CredentialRepository credentialRepository;
     /** TASK-BE-615 — asked only for a consumer-pool principal: is the client's tenant a consumer site. */
     private final AccountServicePort accountServicePort;
+    /** TASK-BE-616 — where a pool principal's authorize waits for the site's first-visit consent. */
+    private final PendingSiteConsentStore pendingSiteConsentStore;
     private final SecurityContextHolderStrategy securityContextHolderStrategy;
+
+    /** TASK-BE-616 — the first-visit consent page ({@code SiteConsentPageController}). */
+    static final String CONSENT_PATH = "/consent";
+
+    /** What the gate does with one authorize request. */
+    enum Decision {
+        /** Reuse the session — SAS answers as it always does. */
+        PASS,
+        /** Treat this request as unauthenticated → the client's login page. */
+        REAUTHENTICATE,
+        /** TASK-BE-616 — a pool principal on a consumer site it has never joined → the consent page. */
+        CONSENT
+    }
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
                                RegisteredClientRepository registeredClientRepository,
                                CredentialRepository credentialRepository,
                                AccountServicePort accountServicePort) {
         this(authorizationEndpointUri, registeredClientRepository, credentialRepository, accountServicePort,
-                SecurityContextHolder.getContextHolderStrategy());
+                new PendingSiteConsentStore(registeredClientRepository));
     }
 
     AuthorizeSessionTenantGate(String authorizationEndpointUri,
                                RegisteredClientRepository registeredClientRepository,
                                CredentialRepository credentialRepository,
                                AccountServicePort accountServicePort,
+                               PendingSiteConsentStore pendingSiteConsentStore) {
+        this(authorizationEndpointUri, registeredClientRepository, credentialRepository, accountServicePort,
+                pendingSiteConsentStore, SecurityContextHolder.getContextHolderStrategy());
+    }
+
+    AuthorizeSessionTenantGate(String authorizationEndpointUri,
+                               RegisteredClientRepository registeredClientRepository,
+                               CredentialRepository credentialRepository,
+                               AccountServicePort accountServicePort,
+                               PendingSiteConsentStore pendingSiteConsentStore,
                                SecurityContextHolderStrategy securityContextHolderStrategy) {
         this.authorizationEndpoint = new AntPathRequestMatcher(
                 Objects.requireNonNull(authorizationEndpointUri, "authorizationEndpointUri"));
@@ -111,6 +139,7 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
         this.credentialRepository = Objects.requireNonNull(
                 credentialRepository, "credentialRepository");
         this.accountServicePort = Objects.requireNonNull(accountServicePort, "accountServicePort");
+        this.pendingSiteConsentStore = Objects.requireNonNull(pendingSiteConsentStore, "pendingSiteConsentStore");
         this.securityContextHolderStrategy = Objects.requireNonNull(
                 securityContextHolderStrategy, "securityContextHolderStrategy");
     }
@@ -125,11 +154,14 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         Authentication principal = securityContextHolderStrategy.getContext().getAuthentication();
         String clientId = request.getParameter("client_id");
-        if (requiresReauthentication(principal, clientId)) {
+        Decision decision = decide(principal, clientId);
+        if (decision == Decision.REAUTHENTICATE) {
             // Replace, never mutate: the context in the holder IS the object the HTTP session
             // stores, so setAuthentication(null) on it would log the user out of the client they
             // came from as well (bite-checked, TASK-BE-605).
             securityContextHolderStrategy.setContext(securityContextHolderStrategy.createEmptyContext());
+        } else if (decision == Decision.CONSENT && askForConsent(request, response, clientId)) {
+            return;
         }
         filterChain.doFilter(request, response);
     }
@@ -138,35 +170,91 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
      * @return {@code true} when the session must not be reused for this client's authorize
      */
     boolean requiresReauthentication(Authentication principal, String clientId) {
+        return decide(principal, clientId) == Decision.REAUTHENTICATE;
+    }
+
+    Decision decide(Authentication principal, String clientId) {
         if (principal == null || principal instanceof AnonymousAuthenticationToken
                 || !principal.isAuthenticated()) {
-            return false;
+            return Decision.PASS;
         }
         if (clientId == null || clientId.isBlank()) {
-            return false;
+            return Decision.PASS;
         }
         RegisteredClient client = registeredClientRepository.findByClientId(clientId);
         if (client == null) {
-            return false;
+            return Decision.PASS;
         }
         String clientTenant = clientTenant(client);
         if (clientTenant == null) {
-            return false;
+            return Decision.PASS;
         }
         if (AuthorizationSessionTenant.isPoolPrincipal(principal)
                 && AuthorizationSessionTenant.mapsPoolPrincipalTo(clientTenant)) {
-            return !consumerSiteServesPoolPrincipal(principal, clientTenant, clientId);
+            return consumerSiteDecision(principal, clientTenant, clientId);
         }
         String sessionTenant = AuthorizationSessionTenant.of(principal, clientTenant);
         if (clientTenant.equals(sessionTenant)) {
-            return false;
+            return Decision.PASS;
         }
         if (TenantContext.CONSOLE_TENANT_ID.equals(clientTenant)) {
-            return holdsConsoleCredential(principal, sessionTenant, clientId);
+            return holdsConsoleCredential(principal, sessionTenant, clientId)
+                    ? Decision.REAUTHENTICATE : Decision.PASS;
         }
         log.info("authorize: session tenant {} does not match client {} tenant {} — "
                 + "re-authentication required (TASK-BE-605)", sessionTenant, clientId, clientTenant);
+        return Decision.REAUTHENTICATE;
+    }
+
+    /**
+     * TASK-BE-616 — sends a pool principal that has never joined this consumer site to the one-screen
+     * consent, with this authorize request parked so «accept» can resume it exactly.
+     *
+     * <ul>
+     *   <li>{@code GET} (the browser's authorize) → park + {@code 302 /consent}.</li>
+     *   <li>{@code prompt=none} → no screen may be shown (OIDC Core § 3.1.2.1): the client gets
+     *       {@code consent_required} on its registered redirect URI. If that URI cannot be trusted the
+     *       request continues as before (code, then {@code invalid_grant} at the token endpoint).</li>
+     *   <li>Anything else (a {@code POST} authorize) → continues as before: a POSTed request cannot be
+     *       resumed by a redirect, and the issuer still refuses a token without membership — no token,
+     *       no loop.</li>
+     * </ul>
+     *
+     * @return {@code true} when this method wrote the response (the chain must stop)
+     */
+    private boolean askForConsent(HttpServletRequest request, HttpServletResponse response, String clientId)
+            throws IOException {
+        if (isPromptNone(request)) {
+            RegisteredClient client = registeredClientRepository.findByClientId(clientId);
+            Optional<String> error = client == null ? Optional.empty()
+                    : PendingSiteConsentStore.errorRedirect(client, request.getParameter("redirect_uri"),
+                            request.getParameter("state"), "consent_required",
+                            "first visit to this site needs the user's consent");
+            if (error.isEmpty()) {
+                return false;
+            }
+            response.sendRedirect(error.get());
+            return true;
+        }
+        if (!"GET".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        pendingSiteConsentStore.save(request, response);
+        response.sendRedirect(request.getContextPath() + CONSENT_PATH);
         return true;
+    }
+
+    private static boolean isPromptNone(HttpServletRequest request) {
+        String prompt = request.getParameter("prompt");
+        if (prompt == null) {
+            return false;
+        }
+        for (String value : prompt.trim().split("\\s+")) {
+            if ("none".equals(value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -214,12 +302,17 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
      * — {@code TenantClaimTokenCustomizer}).
      *
      * <ul>
-     *   <li><b>Member of the site</b> → pass → code → site token. AC-1.</li>
-     *   <li><b>Consumer site, no ACTIVE membership</b> → also pass, and the token endpoint refuses
-     *       ({@code invalid_grant} — no token without membership). Re-authenticating instead would
-     *       loop: the client's login form picks the pool credential first, the session is the same
-     *       pool principal, and this gate would send it back to the form forever. The first-visit
-     *       consent screen ({@code TASK-BE-616}) belongs exactly here.</li>
+     *   <li><b>Member of the site</b> (ACTIVE) → pass → code → site token. AC-1.</li>
+     *   <li><b>Consumer site, no membership at all</b> → TASK-BE-616: the first-visit consent screen
+     *       ({@link Decision#CONSENT}). «Accept» writes the membership and resumes this authorize, which
+     *       then passes as a member; «decline» answers the client {@code access_denied}. Re-
+     *       authenticating instead would loop: the client's login form picks the pool credential first,
+     *       the session is the same pool principal, and this gate would send it back to the form
+     *       forever.</li>
+     *   <li><b>Consumer site, LEFT membership</b> → pass, and the token endpoint refuses
+     *       ({@code invalid_grant} — no token without an ACTIVE membership; TASK-BE-615 behaviour).
+     *       Consent does not reopen a membership the person left — no writer for LEFT exists yet, and
+     *       reopening is that writer's decision.</li>
      *   <li><b>Not a consumer site</b> (a B2B client — wms, erp …) → re-authentication, like any
      *       session of another tenant: that client's form does not look the pool up (pool-first is a
      *       consumer-site rule), so the resumed authorize carries the client's own tenant.</li>
@@ -227,26 +320,33 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
      *       needs the same answer before it would pick the pool credential, and fails closed without it.</li>
      * </ul>
      * A per-site (non-pool) principal never reaches this method — its rule is byte-unchanged (AC-2).
+     * The console never reaches it either ({@link AuthorizationSessionTenant#mapsPoolPrincipalTo}
+     * excludes {@code iam}): no consent screen there, and no operator account is created (D1).
      */
-    private boolean consumerSiteServesPoolPrincipal(Authentication principal, String clientTenant, String clientId) {
+    private Decision consumerSiteDecision(Authentication principal, String clientTenant, String clientId) {
         String accountId = principal.getDetails() instanceof Map<?, ?> details
                 && details.get(PrincipalDetailKeys.ACCOUNT_ID) instanceof String s && !s.isBlank() ? s : null;
         if (accountId == null) {
-            return false;
+            return Decision.REAUTHENTICATE;
         }
         try {
             ConsumerSiteMembershipLookupResult answer =
                     accountServicePort.getConsumerSiteMembership(clientTenant, accountId);
-            boolean consumerSite = answer != null && answer.consumerSite();
-            if (!consumerSite) {
+            if (answer == null || !answer.consumerSite()) {
                 log.info("authorize: pool session on client {} of non-consumer tenant {} — re-authentication "
                         + "required (TASK-BE-615)", clientId, clientTenant);
+                return Decision.REAUTHENTICATE;
             }
-            return consumerSite;
+            if (answer.membershipStatus() == null) {
+                log.info("authorize: pool session on consumer site {} (client {}) without a membership — "
+                        + "first-visit consent (TASK-BE-616)", clientTenant, clientId);
+                return Decision.CONSENT;
+            }
+            return Decision.PASS;
         } catch (RuntimeException e) {
             log.warn("authorize: consumer-site lookup failed for a pool session on client {} — "
                     + "re-authentication (TASK-BE-615)", clientId, e);
-            return false;
+            return Decision.REAUTHENTICATE;
         }
     }
 

@@ -275,6 +275,48 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 ---
 
+## PUT /internal/tenants/{tenantId}/consumer-members/{accountId} — 첫 방문 동의 (TASK-BE-616)
+
+> [multi-tenancy.md § 소비자 계정 풀 § 4](../../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742) 의
+> «멤버십 없음 → 그 사이트 동의 화면 한 번 → 멤버십 생성 → 토큰» 의 **쓰기**. 같은 자원(위 GET)의 PUT — account-service `ConsumerSiteMembershipController`.
+
+**호출 시점 (auth-service)**: 동의 화면(`SiteConsentPageController`, `POST /consent`)에서 사람이 **동의**를 누른 때 한 번. 거절은 이 호출을 하지 않는다.
+세션이 풀 principal 이고, authorize 게이트가 보관해 둔 그 사이트의 authorize 요청이 있을 때만.
+
+**Path Parameters**: `tenantId` — 사이트 테넌트(범위의 첫 인자) · `accountId` — 풀 계정 id. **Request body 없음.**
+
+**Headers**: `X-Tenant-Id` 를 보내지 않는다. 보냈는데 path 와 다르면 `403 TENANT_SCOPE_DENIED`(`TenantScopeGuard`) — 쓰기 없음.
+
+**동작 (account-service `ConsentToConsumerSiteUseCase`)** — 한 트랜잭션:
+
+| 상태 | 쓰기 | `account.created` |
+|---|---|---|
+| 소비자 사이트 ∧ ACTIVE 테넌트 ∧ 풀 계정 ∧ 그 사이트 멤버십 **행 없음** | `consumer_site_memberships(account, site, ACTIVE, consented_at = 지금)` | **1회**, `tenantId = 그 사이트`([account-events.md](../../events/account-events.md#accountcreated) «다른 사이트 첫 방문 동의» 행) |
+| 이미 `ACTIVE`(재제출 · 뒤로가기 재전송) | 없음 | 없음 |
+| `LEFT` | 없음 — 동의가 떠난 멤버십을 **다시 열지 않는다**(LEFT 의 작성자가 아직 없다; 재가입 규칙은 그 작성자의 결정) | 없음 |
+| 소비자 사이트 아님(B2B · 풀 테넌트 자신 · 없는 테넌트) · 정지된 사이트 · 풀 계정 아님 | 없음 | 없음 |
+
+- **멱등 — `(accountId, site)` 당 이벤트 정확히 1회.** 동시에 두 첫 동의가 오면 PK 가 충돌하고, 진 쪽 트랜잭션(멤버십 행 + 이벤트)은 통째로 롤백된 뒤 **읽기의 답**으로 200 을 준다.
+- **역할은 쓰지 않는다.** 사이트 시드 역할(`CUSTOMER`/`FAN`)은 발급 때 계산되고 저장되지 않는다 — 동의 전에도, 동의로도 역할 행이 생기지 않는다(`TASK-BE-616` Failure Scenario 1).
+- **`iam.consumer-pool.enabled` 와 무관** — 위 GET 과 같은 이유(이미 있는 풀 계정은 플래그와 상관없이 다른 사이트에 들어갈 수 있어야 한다).
+- 계정 조회는 `findById(CONSUMER_POOL, id)` 로만 — 테넌트 없는 조회 신설 없음.
+
+**Response 200 — 항상 200**, 본문은 **위 GET 과 같은 문서**(쓰기 뒤의 읽기). `membershipStatus = "ACTIVE"` 이면 그 사이트를 쓸 수 있다;
+그 밖의 값(`null` · `LEFT`, 또는 `consumerSite = false`)은 «쓰지 않았다» 는 답이다 — 오류가 아니다. 새 에러 코드 없음.
+
+**auth-service 매핑 규약** (`AccountServicePort.consentToConsumerSite`) — GET 과 같다: 200 + `consumerSite` → `ConsumerSiteMembershipLookupResult`,
+**404 포함** 그 밖의 모든 응답 · 타임아웃 · circuit-open · 읽을 수 없는 200 → `AccountServiceUnavailableException`. 멱등이므로 GET 과 같은 재시도 파이프라인을 탄다.
+
+| 결과 | 동의 화면(auth-service) |
+|---|---|
+| `isActiveMember()` | 보관한 authorize 요청으로 302 → 게이트가 멤버로 통과 → 코드 → 그 사이트 토큰(`roles` = 그 사이트 시드 ∪ 사이트 역할) |
+| 200 이지만 ACTIVE 아님 | 보관 요청 제거 → client 의 등록 redirect URI 로 `error=access_denied`(+`state`) — 토큰 없음 |
+| `AccountServiceUnavailableException` | 동의 화면에 «잠시 후 다시» (503) — 보관 요청 **유지**(다시 누를 수 있다) |
+
+🔵 **배포 순서**: 위 GET 과 같다 — 새 auth-service + 옛 account-service 이면 동의가 404 → 화면에 «잠시 후 다시», 토큰 없음(fail-closed). **account-service 를 먼저 또는 함께.**
+
+---
+
 ## Caller Constraints (auth-service 측)
 
 - 타임아웃: 연결 3s, 읽기 5s

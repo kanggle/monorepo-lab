@@ -719,6 +719,48 @@ public class AccountServiceClient implements AccountServicePort {
         }
     }
 
+    /**
+     * TASK-BE-616 — {@code PUT /internal/tenants/{site}/consumer-members/{accountId}} (the first-visit
+     * consent). Idempotent on account-service's side, so it rides the same retry pipeline as the read;
+     * the answer and the failure mapping are the read's.
+     */
+    @Override
+    public ConsumerSiteMembershipLookupResult consentToConsumerSite(String siteTenantId, String accountId) {
+        try {
+            return callResilient(() -> doConsentToConsumerSite(siteTenantId, accountId));
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service consumer-site consent returned client error {} — treating as a "
+                    + "failed write (no token)", e.getStatusCode());
+            throw new AccountServiceUnavailableException(
+                    "Account service consumer-site consent rejected: " + e.getStatusCode(), e);
+        } catch (RuntimeException e) {
+            log.error("Account service consumer-site consent failed after retries: msg={} type={} "
+                            + "cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConsumerSiteMembershipLookupResult doConsentToConsumerSite(String siteTenantId, String accountId) {
+        try {
+            Map<String, Object> body = restClient().put()
+                    .uri("/internal/tenants/{tid}/consumer-members/{aid}", siteTenantId, accountId)
+                    // No X-Tenant-Id: the site is the path's scope. No body: the path says it all.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+            return toMembershipResult(siteTenantId, body);
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private ConsumerSiteMembershipLookupResult doGetConsumerSiteMembership(String siteTenantId, String accountId) {
         try {
@@ -731,26 +773,35 @@ public class AccountServiceClient implements AccountServicePort {
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
                     .body(Map.class);
-            if (body == null || !(body.get("consumerSite") instanceof Boolean consumerSite)) {
-                throw new IllegalStateException("consumer-site membership response had no consumerSite");
-            }
-            String siteTenantType = body.get("siteTenantType") instanceof String t && !t.isBlank() ? t : null;
-            String membershipStatus = body.get("membershipStatus") instanceof String s && !s.isBlank() ? s : null;
-            List<String> siteRoles = new ArrayList<>();
-            if (body.get("siteRoles") instanceof List<?> raw) {
-                for (Object item : raw) {
-                    if (item instanceof String role && !role.isBlank()) {
-                        siteRoles.add(role);
-                    }
-                }
-            }
-            return new ConsumerSiteMembershipLookupResult(
-                    siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles);
+            return toMembershipResult(siteTenantId, body);
         } catch (HttpClientErrorException e) {
             throw e;
         } catch (RuntimeException e) {
             throw new RuntimeException("Account service communication error", e);
         }
+    }
+
+    /**
+     * The one reader of the membership body — shared by the read (TASK-BE-615) and the consent write
+     * (TASK-BE-616), whose responses are the same document. A body without {@code consumerSite} is
+     * unreadable, not "no" — it throws, and the caller fails closed.
+     */
+    private static ConsumerSiteMembershipLookupResult toMembershipResult(String siteTenantId, Map<String, Object> body) {
+        if (body == null || !(body.get("consumerSite") instanceof Boolean consumerSite)) {
+            throw new IllegalStateException("consumer-site membership response had no consumerSite");
+        }
+        String siteTenantType = body.get("siteTenantType") instanceof String t && !t.isBlank() ? t : null;
+        String membershipStatus = body.get("membershipStatus") instanceof String s && !s.isBlank() ? s : null;
+        List<String> siteRoles = new ArrayList<>();
+        if (body.get("siteRoles") instanceof List<?> raw) {
+            for (Object item : raw) {
+                if (item instanceof String role && !role.isBlank()) {
+                    siteRoles.add(role);
+                }
+            }
+        }
+        return new ConsumerSiteMembershipLookupResult(
+                siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles);
     }
 
     @Override

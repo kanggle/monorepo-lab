@@ -242,6 +242,22 @@ public interface AccountServicePort {
     ConsumerSiteMembershipLookupResult getConsumerSiteMembership(String siteTenantId, String accountId);
 
     /**
+     * TASK-BE-616 (multi-tenancy.md § 소비자 계정 풀 § 4 · § 6) — the first-visit consent: makes the pool
+     * account an ACTIVE member of {@code siteTenantId} ({@code PUT /internal/tenants/{site}/consumer-members/{id}}).
+     * account-service writes the membership and publishes {@code account.created} with that site only
+     * when there is no membership yet — the call is idempotent and safe to repeat.
+     *
+     * <p>Same answer shape and the same failure mapping as {@link #getConsumerSiteMembership}: the
+     * result says whether the account is now an ACTIVE member ({@link
+     * ConsumerSiteMembershipLookupResult#isActiveMember()}); a site that is not a consumer site, a
+     * suspended site or a LEFT membership comes back as a 200 without an ACTIVE membership. Every
+     * non-200 throws.
+     *
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException on any failure
+     */
+    ConsumerSiteMembershipLookupResult consentToConsumerSite(String siteTenantId, String accountId);
+
+    /**
      * Looks up a tenant's registry record — {@code tenant_type} AND {@code status}.
      *
      * <p>TASK-BE-581. {@link #getTenantType(String)} answers only "what type", discarding
