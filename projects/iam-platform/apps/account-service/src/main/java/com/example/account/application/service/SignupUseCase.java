@@ -10,6 +10,7 @@ import com.example.account.domain.account.PasswordPolicy;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
+import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,8 @@ public class SignupUseCase {
     private final AuthServicePort authServicePort;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
     private final ActiveTenantGuard activeTenantGuard;
+    /** TASK-BE-614 (ADR-MONO-078 A): consumer-pool rules, all behind iam.consumer-pool.enabled. */
+    private final ConsumerAccountPool consumerAccountPool;
 
     @Transactional
     public SignupResult execute(SignupCommand command) {
@@ -35,11 +38,27 @@ public class SignupUseCase {
         // client the user actually registered through — auth-service resolves it from the saved
         // /oauth2/authorize request and sends it as X-Tenant-Id. A header-less caller still pins
         // to fan-platform, so nothing that worked before changes.
-        TenantId tenantId = TenantId.fromHeaderOrDefault(command.tenantId());
-        activeTenantGuard.requireActive(tenantId);
+        TenantId signupTenantId = TenantId.fromHeaderOrDefault(command.tenantId());
+        Tenant signupTenant = activeTenantGuard.requireActive(signupTenantId);
+
+        // TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 2): with the pool flag on, a signup from a
+        // consumer site creates ONE pool account (tenant consumer-pool) plus that site's membership.
+        // The site stays the tenant the outside world sees — the account.created event (§ 6) and,
+        // from TASK-BE-615, the token. With the flag off `pool` is false and every line below runs
+        // exactly as before: tenantId == signupTenantId.
+        boolean pool = consumerAccountPool.signupGoesToPool(signupTenant);
+        TenantId tenantId = pool ? TenantId.CONSUMER_POOL : signupTenantId;
+        String normalizedEmail = command.email().trim().toLowerCase();
+
+        if (pool) {
+            // § 2 / § 3 (AC-6): an email that already has a site account on any consumer site
+            // is refused with the same answer as a duplicate — it is never silently paired with
+            // that account (ADR-MONO-078 D2) and never allowed to coexist with it.
+            consumerAccountPool.refuseIfEmailHasSiteAccount(normalizedEmail, command.email());
+        }
 
         // Check email uniqueness within this tenant (primary defense: DB unique constraint)
-        if (accountRepository.existsByEmail(tenantId, command.email().trim().toLowerCase())) {
+        if (accountRepository.existsByEmail(tenantId, normalizedEmail)) {
             throw new AccountAlreadyExistsException(command.email());
         }
 
@@ -69,6 +88,11 @@ public class SignupUseCase {
             );
             profileRepository.save(profile);
 
+            if (pool) {
+                // § 2: signing up on the site is consenting to it — membership in the same tx.
+                consumerAccountPool.joinOnSignup(account, signupTenantId);
+            }
+
             // TASK-BE-063: persist credential in auth-service via /internal/auth/credentials.
             // Any failure (409 from a racing signup, 5xx, timeout) propagates and rolls back
             // the account + profile rows above — signup is atomic end-to-end.
@@ -87,7 +111,10 @@ public class SignupUseCase {
 
             // Publish outbox event only after credential is persisted (avoids leaking
             // "account created" if the credential write later fails).
-            eventPublisher.publishAccountCreated(account, account.getTenantId().value(), profile.getLocale());
+            // TASK-BE-614 (§ 6, account-events.md § account.created): the event carries the SIGNUP
+            // SITE, never consumer-pool — the ecommerce consumer builds its profile under this
+            // tenant. Without the pool the two are the same value (the account's own tenant).
+            eventPublisher.publishAccountCreated(account, signupTenantId.value(), profile.getLocale());
 
             return SignupResult.from(account);
         } catch (DataIntegrityViolationException e) {

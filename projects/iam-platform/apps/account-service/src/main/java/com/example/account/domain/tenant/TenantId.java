@@ -39,6 +39,18 @@ public record TenantId(String value) {
      */
     public static final TenantId FAN_PLATFORM = new TenantId("fan-platform");
 
+    /**
+     * TASK-BE-614 (ADR-MONO-078 A, multi-tenancy.md § 소비자 계정 풀 § 1): the reserved tenant
+     * the consumer-account <b>pool</b> lives in. It is a <b>storage value only</b> — an account
+     * row with this tenant is "one account shared by the consumer sites", and which sites it may
+     * use is recorded in {@code consumer_site_memberships}.
+     *
+     * <p>🔴 It is never a tenant a person signs up <i>into</i> by naming it, and never a token's
+     * {@code tenant_id} (that is always the requesting client's site). {@code ActiveTenantGuard}
+     * therefore answers "no such tenant" for it, exactly as it did before the row existed.
+     */
+    public static final TenantId CONSUMER_POOL = new TenantId("consumer-pool");
+
     public TenantId {
         if (value == null || !PATTERN.matcher(value).matches()) {
             throw new IllegalArgumentException("Invalid tenant_id: " + value);
@@ -64,6 +76,11 @@ public record TenantId(String value) {
             return FAN_PLATFORM;
         }
         return new TenantId(headerValue);
+    }
+
+    /** TASK-BE-614: {@code true} for the reserved pool tenant ({@link #CONSUMER_POOL}). */
+    public boolean isConsumerPool() {
+        return CONSUMER_POOL.value.equals(value);
     }
 
     @Override

@@ -110,6 +110,12 @@ internal:
 # downstream credential-write call's timeouts): the shared provider previously had no timeout at all
 # (RestClient.create()), letting a hung token endpoint block the caller's thread indefinitely.
 iam:
+  # TASK-BE-614 (ADR-MONO-078 A): consumer-site signups are born into the shared account pool
+  # (tenant `consumer-pool` + a consumer_site_memberships row) and site-scoped account lookups
+  # include that site's pool members — ONLY while this is true. Default false: pool login is
+  # TASK-BE-615, which turns this on together with it. Off = byte-identical pre-pool behaviour.
+  consumer-pool:
+    enabled: ${IAM_CONSUMER_POOL_ENABLED:false}
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}

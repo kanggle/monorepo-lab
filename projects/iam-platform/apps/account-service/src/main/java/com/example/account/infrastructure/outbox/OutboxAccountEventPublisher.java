@@ -67,7 +67,10 @@ public class OutboxAccountEventPublisher implements AccountEventPublisher {
     public void publishAccountCreated(Account account, String tenantId, String locale) {
         requireTenantId(tenantId);
         String emailHash = DigestUtils.sha256Short(account.getEmail(), 10);
-        save(account.getId(), factory.createdEvent(account, emailHash, locale));
+        // TASK-BE-614: the payload tenant is the one the caller passes (the signup site for a pool
+        // account — never consumer-pool). Every pre-pool caller passes account.getTenantId(), so
+        // their bytes are unchanged.
+        save(account.getId(), factory.createdEvent(account, tenantId, emailHash, locale));
     }
 
     @Override

@@ -38,6 +38,13 @@ public interface TenantRepository {
     PageResult<Tenant> findAll(TenantStatus statusFilter, TenantType tenantTypeFilter, int page, int size);
 
     /**
+     * TASK-BE-614: every tenant of the given type, any status, ascending by id — unpaginated
+     * because the caller must see <b>all</b> of them (the pool-signup refusal asks "does this
+     * email have an account on any consumer site", and a missed page would be a silent hole).
+     */
+    List<Tenant> findAllByTenantType(TenantType tenantType);
+
+    /**
      * TASK-BE-491 (ADR-MONO-047 § D5): tenant ids attached to any of the given org-node ids,
      * ascending. Backs the subtree expansion admin-service uses to resolve an
      * {@code ORG_ADMIN @ node} grant. An empty input yields an empty list.

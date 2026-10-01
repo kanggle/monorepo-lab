@@ -52,6 +52,13 @@ public class TenantRepositoryImpl implements TenantRepository {
     }
 
     @Override
+    public List<Tenant> findAllByTenantType(TenantType tenantType) {
+        return jpaRepository.findAllByTenantTypeOrderByTenantIdAsc(tenantType).stream()
+                .map(TenantJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<String> findTenantIdsByOrgNodeIdIn(List<String> orgNodeIds) {
         // An empty IN (...) list is invalid SQL on some engines, and semantically matches
         // nothing anyway — short-circuit rather than issue the query.

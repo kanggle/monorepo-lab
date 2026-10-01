@@ -305,6 +305,24 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-614: consumer-pool 선택 → 배정 행이 있어도 invalid_grant, access_token 없음")
+    void consumerPool_refusedEvenWhenAssigned() throws Exception {
+        // The control: the assignment gate WOULD approve (an assignment row to the pool tenant
+        // exists). The token must still not be minted — consumer-pool is never a token tenant.
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq("consumer-pool")))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
+        stubEntitledDomains("ecommerce");
+
+        String base = mintBaseToken("assume-op-614");
+        MvcResult result = assumeTenant(base, "consumer-pool");
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(result.getResponse().getContentAsString())
+                .contains("invalid_grant")
+                .doesNotContain("access_token");
+    }
+
+    @Test
     @DisplayName("admin-unavailable → fail-CLOSED deny, invalid_grant (AC-2)")
     void adminUnavailable_failClosed() throws Exception {
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))

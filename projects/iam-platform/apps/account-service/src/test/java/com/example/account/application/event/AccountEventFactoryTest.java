@@ -46,6 +46,17 @@ class AccountEventFactoryTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-614: 풀 계정의 account.created 는 넘겨받은 사이트 테넌트를 싣는다 — consumer-pool 이 아니다")
+    void buildCreatedEvent_poolAccount_carriesTheSiteTenant() {
+        Account poolAccount = Account.create(TenantId.CONSUMER_POOL, EMAIL);
+
+        AccountDomainEvent event = factory.createdEvent(poolAccount, "ecommerce", EMAIL_HASH, LOCALE);
+
+        assertThat(event.payload().get("tenantId")).isEqualTo("ecommerce").isNotEqualTo("consumer-pool");
+        assertThat(event.payload().get("accountId")).isEqualTo(poolAccount.getId());
+    }
+
+    @Test
     @DisplayName("buildStatusChangedEvent — actorId null이면 payload에 포함되지 않는다")
     void buildStatusChangedEvent_nullActorId_notInPayload() {
         Account account = newActiveAccount();

@@ -74,4 +74,25 @@ public class AccountRepositoryImpl implements AccountRepository {
                 jpaPage.getTotalPages()
         );
     }
+
+    @Override
+    public PageResult<Account> findAllInSiteIncludingPoolMembers(TenantId siteTenantId, AccountStatus status,
+                                                                 int page, int size) {
+        Page<AccountJpaEntity> jpaPage = jpaRepository.findBySiteTenantIncludingPoolMembers(
+                siteTenantId.value(), TenantId.CONSUMER_POOL.value(), status, PageRequest.of(page, size));
+        return new PageResult<>(
+                jpaPage.getContent().stream().map(AccountJpaEntity::toDomain).toList(),
+                jpaPage.getTotalElements(),
+                jpaPage.getNumber(),
+                jpaPage.getSize(),
+                jpaPage.getTotalPages()
+        );
+    }
+
+    @Override
+    public Optional<Account> findByIdInSiteIncludingPoolMembers(TenantId siteTenantId, String id) {
+        return jpaRepository.findByIdInSiteIncludingPoolMembers(
+                        siteTenantId.value(), TenantId.CONSUMER_POOL.value(), id)
+                .map(AccountJpaEntity::toDomain);
+    }
 }

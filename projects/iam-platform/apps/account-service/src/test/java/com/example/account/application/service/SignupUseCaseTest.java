@@ -50,6 +50,10 @@ class SignupUseCaseTest {
     @Mock private AuthServicePort authServicePort;
     @Mock private AccountIdentityProvisioner accountIdentityProvisioner;
     @Mock private TenantRepository tenantRepository;
+    // TASK-BE-614: unstubbed → signupGoesToPool(..) answers false, i.e. iam.consumer-pool.enabled
+    // off (the default). Every expectation below is the pre-pool one, unchanged (AC-8). The pool
+    // path is pinned in SignupUseCaseConsumerPoolTest.
+    @Mock private ConsumerAccountPool consumerAccountPool;
 
     private SignupUseCase signupUseCase;
 
@@ -63,7 +67,8 @@ class SignupUseCaseTest {
         // runs for real — every stub and assertion below is preserved verbatim from the
         // pre-extraction test.
         signupUseCase = new SignupUseCase(accountRepository, profileRepository, eventPublisher,
-                authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository));
+                authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository),
+                consumerAccountPool);
         // lenient: the two rejection tests below shadow this with a tenant-specific stub, which
         // would otherwise make this one "unused" under STRICT_STUBS.
         lenient().when(tenantRepository.findById(any(TenantId.class)))

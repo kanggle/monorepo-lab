@@ -40,6 +40,22 @@ public record TenantContext(String tenantId, String tenantType) {
      */
     public static final String CONSOLE_TENANT_ID = "iam";
 
+    /**
+     * TASK-BE-614 (ADR-MONO-078 A; multi-tenancy.md § 소비자 계정 풀 § 1; jwt-standard-claims.md
+     * {@code tenant_id} row): the reserved tenant the consumer-account POOL is stored under
+     * ({@code accounts} / {@code credentials} rows with this tenant). 🔴 A storage value only — it
+     * must NEVER be a token's {@code tenant_id}; a pool principal's token carries the requesting
+     * client's SITE. The single home of this literal in auth-service: the issuer refuses to mint
+     * it ({@code TenantClaimTokenCustomizer}) and the assume-tenant exchange refuses to select it
+     * ({@code AssumeTenantAuthenticationProvider}).
+     */
+    public static final String CONSUMER_POOL_TENANT_ID = "consumer-pool";
+
+    /** TASK-BE-614: {@code true} when {@code tenantId} is {@link #CONSUMER_POOL_TENANT_ID}. */
+    public static boolean isConsumerPool(String tenantId) {
+        return CONSUMER_POOL_TENANT_ID.equals(tenantId);
+    }
+
     public TenantContext {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         if (tenantId.isBlank()) {

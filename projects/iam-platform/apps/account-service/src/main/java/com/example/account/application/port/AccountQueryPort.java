@@ -40,5 +40,15 @@ public interface AccountQueryPort {
      */
     List<AccountSearchResult.Item> findByEmail(String tenantId, String email);
 
+    /**
+     * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5): {@link #findAll} for a <b>site</b> tenant,
+     * widened to the pool accounts holding an ACTIVE membership of that site. {@code "*"} keeps the
+     * all-tenant meaning (pool accounts are already part of "all").
+     */
+    AccountSearchResult findAllIncludingPoolMembers(String siteTenantId, AccountStatus status, int page, int size);
+
+    /** TASK-BE-614: {@link #findByEmail} widened the same way. */
+    List<AccountSearchResult.Item> findByEmailIncludingPoolMembers(String siteTenantId, String email);
+
     Optional<AccountDetailResult> findDetailById(String accountId);
 }

@@ -12,6 +12,9 @@ public interface TenantJpaRepository extends JpaRepository<TenantJpaEntity, Stri
 
     boolean existsByTenantIdAndStatus(String tenantId, TenantStatus status);
 
+    /** TASK-BE-614: every tenant of one type (any status) — the consumer-site enumeration. */
+    java.util.List<TenantJpaEntity> findAllByTenantTypeOrderByTenantIdAsc(TenantType tenantType);
+
     @Query("""
             SELECT t FROM TenantJpaEntity t
             WHERE (:status IS NULL OR t.status = :status)

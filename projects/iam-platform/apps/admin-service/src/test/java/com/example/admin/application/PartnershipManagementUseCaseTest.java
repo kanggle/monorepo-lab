@@ -157,6 +157,22 @@ class PartnershipManagementUseCaseTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-614: consumer-pool 은 host 도 partner 도 될 수 없다 → VALIDATION_ERROR, 생성 없음")
+    void invite_consumerPool_rejectedOnEitherSide() {
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand("consumer-pool", List.of("wms"), List.of("WMS_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("consumer-pool");
+        assertThatThrownBy(() -> useCase().invite("consumer-pool",
+                new InvitePartnershipCommand(PARTNER, List.of("wms"), List.of("WMS_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("consumer-pool");
+        verify(partnershipPort, never()).createPending(any());
+    }
+
+    @Test
     @DisplayName("invite: duplicate (host,partner) → 409 PARTNERSHIP_ALREADY_EXISTS")
     void invite_duplicate_rejected() {
         when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(true);

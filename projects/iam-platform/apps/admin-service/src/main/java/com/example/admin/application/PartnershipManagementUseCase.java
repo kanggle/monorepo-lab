@@ -309,6 +309,10 @@ public class PartnershipManagementUseCase {
         if (AdminOperator.PLATFORM_TENANT_ID.equals(hostTenantId)) {
             throw new IllegalArgumentException("The platform sentinel cannot be a partnership host");
         }
+        if (AdminOperator.isConsumerPool(hostTenantId)) {
+            // TASK-BE-614: the consumer-pool tenant is storage, never an operated tenant.
+            throw new IllegalArgumentException("The reserved consumer-pool tenant cannot be a partnership host");
+        }
     }
 
     private void validatePartnerTenant(String host, String partner) {
@@ -317,6 +321,10 @@ public class PartnershipManagementUseCase {
         }
         if (AdminOperator.PLATFORM_TENANT_ID.equals(partner)) {
             throw new IllegalArgumentException("partnerTenantId must not be the platform sentinel");
+        }
+        if (AdminOperator.isConsumerPool(partner)) {
+            // TASK-BE-614: a partnership grants assume reach into the host — the pool is neither side.
+            throw new IllegalArgumentException("partnerTenantId must not be the reserved consumer-pool tenant");
         }
         if (partner.equals(host)) {
             throw new IllegalArgumentException("partnerTenantId must differ from the host (self-partnership forbidden)");

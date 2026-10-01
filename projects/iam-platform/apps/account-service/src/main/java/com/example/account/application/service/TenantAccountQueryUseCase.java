@@ -33,6 +33,8 @@ public class TenantAccountQueryUseCase {
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
     private final ProfileRepository profileRepository;
+    /** TASK-BE-614: § 5 — site lookups include the site's pool members (flag-gated). */
+    private final ConsumerAccountPool consumerAccountPool;
 
     @Transactional(readOnly = true)
     public ProvisionedAccountListResult listAccounts(String tenantIdStr, AccountStatus statusFilter,
@@ -45,8 +47,14 @@ public class TenantAccountQueryUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantIdStr));
 
-        PageResult<Account> accountPage =
-                accountRepository.findAllByTenantId(tenantId, statusFilter, page, size);
+        // TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5): with the pool on, a site's list also
+        // shows the pool accounts that joined that site — otherwise every new shopper would vanish
+        // from the ecommerce list (their row lives in consumer-pool). Flag off: the old query.
+        // Each item's tenantId stays the account's STORED tenant (consumer-pool for a pool member):
+        // this is an internal surface and the honest value lets the caller tell the two apart.
+        PageResult<Account> accountPage = consumerAccountPool.lookupsIncludePoolMembers()
+                ? accountRepository.findAllInSiteIncludingPoolMembers(tenantId, statusFilter, page, size)
+                : accountRepository.findAllByTenantId(tenantId, statusFilter, page, size);
 
         List<ProvisionedAccountListResult.Item> items = accountPage.content().stream()
                 .map(account -> {
@@ -79,7 +87,11 @@ public class TenantAccountQueryUseCase {
         tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException(tenantIdStr));
 
-        Account account = accountRepository.findById(tenantId, accountId)
+        // TASK-BE-614 (§ 5): same widening as the list — a pool member of this site is found here,
+        // a pool account that never joined it stays a 404 (enumeration-safe, like cross-tenant).
+        Account account = (consumerAccountPool.lookupsIncludePoolMembers()
+                ? accountRepository.findByIdInSiteIncludingPoolMembers(tenantId, accountId)
+                : accountRepository.findById(tenantId, accountId))
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
         List<String> roles = accountRoleRepository

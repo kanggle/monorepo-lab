@@ -73,6 +73,21 @@ public class Tenant {
         return TenantStatus.ACTIVE == this.status;
     }
 
+    /**
+     * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀, 용어): a <i>consumer site</i> is a
+     * {@link TenantType#B2C_CONSUMER} tenant other than the reserved pool tenant itself
+     * ({@link TenantId#CONSUMER_POOL}, which is stored as {@code B2C_CONSUMER} because the
+     * {@code TenantType} enum has no third value and the pool is consumer-side storage).
+     *
+     * <p>Decided from the tenant row's type rather than a hard-coded {@code fan-platform} /
+     * {@code ecommerce} list, so a consumer site registered later is covered without a code change.
+     */
+    public boolean isConsumerSite() {
+        return TenantType.B2C_CONSUMER == this.tenantType
+                && this.tenantId != null
+                && !this.tenantId.isConsumerPool();
+    }
+
     // -----------------------------------------------------------------------
     // TASK-BE-250: mutation support (admin-service PATCH via internal API)
     // -----------------------------------------------------------------------

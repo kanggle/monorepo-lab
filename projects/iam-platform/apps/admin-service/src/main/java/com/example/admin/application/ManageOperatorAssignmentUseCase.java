@@ -3,6 +3,8 @@ package com.example.admin.application;
 import com.example.admin.application.exception.AssignmentAlreadyExistsException;
 import com.example.admin.application.exception.AssignmentNotFoundException;
 import com.example.admin.application.exception.OperatorNotFoundException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
+import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.domain.rbac.Permission;
@@ -50,6 +52,16 @@ public class ManageOperatorAssignmentUseCase {
                                                                       String tenantId,
                                                                       OperatorContext actor,
                                                                       String reason) {
+        // TASK-BE-614: the consumer-pool tenant is storage, never an operator target. This
+        // surface has never validated that the tenant exists (pre-existing); V0029 made the pool
+        // a visible ACTIVE row, so without this an assignment to it — and from there an
+        // assume-tenant token with tenant_id=consumer-pool — became reachable. Refused for every
+        // actor, SUPER_ADMIN included, with the existing tenant-scope answer (403).
+        if (AdminOperator.isConsumerPool(tenantId)) {
+            throw new TenantScopeDeniedException(
+                    "tenant '" + tenantId + "' is reserved and cannot be assigned to an operator");
+        }
+
         AdminOperatorPort.OperatorView operator = resolveOperator(operatorPublicId);
 
         // ADR-024 D2 (step 1): confine to the actor's admin-grant scope for the target tenant.

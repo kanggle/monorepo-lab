@@ -100,6 +100,13 @@ public class OperatorAssignmentCheckUseCase {
             // Blank/malformed selected tenant never resolves to an assignment.
             return Result.notAssigned();
         }
+        if (AdminOperator.isConsumerPool(tenantId)) {
+            // TASK-BE-614: the consumer-pool tenant is never an assume target — not even for a
+            // platform-scope operator, and not even if an assignment row to it exists (rows
+            // created before ManageOperatorAssignmentUseCase refused it). auth-service refuses
+            // it independently; this keeps the gate's own answer honest.
+            return Result.notAssigned();
+        }
 
         // 1. Resolve admin_operators row, FAIL-CLOSED, account_id-only (ADR-040
         // Phase 3 part B): the validated sub IS the account UUID and

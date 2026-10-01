@@ -298,6 +298,8 @@ ALTER TABLE tenants
 - `V0012__create_account_roles.sql` — TASK-BE-231 초기 surrogate-PK 형태 (legacy)
 - `V0013__rebuild_account_roles_composite_pk.sql` — TASK-BE-255 composite PK + composite FK ON DELETE CASCADE + `granted_by` / `granted_at` + `(tenant_id, role_name)` index
 - `V0027__create_org_node_and_tenant_fk.sql` — TASK-BE-491 (ADR-MONO-047 § 4 step 2): `org_node` 테이블 + `tenants.org_node_id` **nullable** FK + `idx_org_node_parent` / `idx_tenants_org_node`. `org_node_id` NULLABLE 이므로 기존 tenant row 는 백필 없이 net-zero (D7). 노드별 1:1 백필(1 node + 1 service-tenant per 기존 tenant)은 별도 TASK-BE-493 이며 behavioural no-op.
+- `V0029__seed_consumer_pool_tenant.sql` — TASK-BE-614 (ADR-MONO-078 A): `tenants` 에 `consumer-pool` 행(`B2C_CONSUMER` · `ACTIVE` · `org_node_id` NULL). `tenant_type` 은 `TenantType` enum 이 두 값뿐이라 `B2C_CONSUMER` — «소비자 **사이트**» 판정은 이 id 를 명시적으로 뺀다(`Tenant.isConsumerSite()`).
+- `V0030__create_consumer_site_memberships_and_roles.sql` — TASK-BE-614: 위 두 신설 테이블. 스펙이 정하지 않은 두 가지를 구현이 정했다: `consumer_site_memberships.account_id` FK 는 `account_roles` 와 같이 **ON DELETE CASCADE**, `status` 는 **CHECK (`ACTIVE`,`LEFT`)**.
 - 각 마이그레이션은 forward-only. down migration은 PII 보존 규칙상 **제공하지 않음** (R6 — 데이터 복원 경로를 제한적으로만 허용)
 
 ---

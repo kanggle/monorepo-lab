@@ -101,4 +101,21 @@ public interface AccountRepository {
      * @return page slice of accounts
      */
     PageResult<Account> findAllByTenantId(TenantId tenantId, AccountStatus status, int page, int size);
+
+    /**
+     * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5) — the site-scoped listing: accounts whose
+     * tenant is {@code siteTenantId}, <b>plus</b> pool accounts ({@link TenantId#CONSUMER_POOL})
+     * holding an ACTIVE membership of that site. The tenant is still the first argument and still
+     * the input; only the predicate widens ("an extension of the rule, not an exception to it").
+     * A pool account without that site's membership is never returned.
+     */
+    PageResult<Account> findAllInSiteIncludingPoolMembers(TenantId siteTenantId, AccountStatus status,
+                                                          int page, int size);
+
+    /**
+     * TASK-BE-614 — single-account counterpart of
+     * {@link #findAllInSiteIncludingPoolMembers}: the account if it lives in {@code siteTenantId},
+     * or lives in the pool with an ACTIVE membership of that site.
+     */
+    Optional<Account> findByIdInSiteIncludingPoolMembers(TenantId siteTenantId, String id);
 }

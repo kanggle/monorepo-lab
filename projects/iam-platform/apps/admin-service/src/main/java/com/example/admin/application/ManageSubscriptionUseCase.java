@@ -1,7 +1,9 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.TenantDomainSubscriptionPort;
 import com.example.admin.application.tenant.SubscriptionMutationSummary;
+import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,12 @@ public class ManageSubscriptionUseCase {
 
     public SubscriptionMutationSummary subscribe(String tenantId, String domainKey,
                                                  OperatorContext actor, String reason) {
+        // TASK-BE-614: the consumer-pool tenant is storage — entitlements on it would only ever
+        // feed a token whose tenant_id is the pool value, which must never be minted.
+        if (AdminOperator.isConsumerPool(tenantId)) {
+            throw new TenantScopeDeniedException(
+                    "tenant '" + tenantId + "' is reserved and cannot subscribe to a domain");
+        }
         // ADR-MONO-024 D2 + D5-C (TASK-BE-345): the confinement gate covers the
         // entitlement admin surface too. Net-zero for SUPER_ADMIN ('*'); denies
         // before the account-service delegation when out of scope.

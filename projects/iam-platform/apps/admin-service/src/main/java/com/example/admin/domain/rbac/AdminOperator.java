@@ -34,6 +34,20 @@ public record AdminOperator(
      */
     public static final String PLATFORM_TENANT_ID = "*";
 
+    /**
+     * TASK-BE-614 (ADR-MONO-078 A; multi-tenancy.md § 소비자 계정 풀 § 1) — the reserved tenant
+     * the consumer-account pool is STORED under. It is a real, ACTIVE {@code tenants} row in
+     * account-service (V0029) but never a tenant anyone operates in or assumes: it must never
+     * appear in a token. admin-service's single home for the literal; every surface that would
+     * make it an operator/assume target refuses it ({@link #isConsumerPool(String)}).
+     */
+    public static final String CONSUMER_POOL_TENANT_ID = "consumer-pool";
+
+    /** TASK-BE-614: {@code true} for {@link #CONSUMER_POOL_TENANT_ID}. */
+    public static boolean isConsumerPool(String tenantId) {
+        return CONSUMER_POOL_TENANT_ID.equals(tenantId);
+    }
+
     public enum Status {
         ACTIVE, DISABLED, LOCKED
     }
