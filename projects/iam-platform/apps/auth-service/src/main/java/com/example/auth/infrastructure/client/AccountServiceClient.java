@@ -8,6 +8,7 @@ import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
+import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.application.result.SocialSignupResult;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -690,6 +691,65 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getCause() == null ? "null" : e.getCause().getMessage(),
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    /**
+     * TASK-BE-615 — {@code GET /internal/tenants/{site}/consumer-members/{accountId}}. Only a 200 that
+     * carries {@code consumerSite} is an answer; anything else — a 404 (endpoint absent on an older
+     * account-service), any other 4xx, 5xx, timeout, open circuit, unreadable body — throws
+     * {@link AccountServiceUnavailableException}, and the pool principal gets no token.
+     */
+    @Override
+    public ConsumerSiteMembershipLookupResult getConsumerSiteMembership(String siteTenantId, String accountId) {
+        try {
+            return callResilient(() -> doGetConsumerSiteMembership(siteTenantId, accountId));
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service consumer-site membership lookup returned client error {} — "
+                    + "treating as a failed lookup (fail-closed)", e.getStatusCode());
+            throw new AccountServiceUnavailableException(
+                    "Account service consumer-site membership lookup rejected: " + e.getStatusCode(), e);
+        } catch (RuntimeException e) {
+            log.error("Account service consumer-site membership lookup failed after retries: msg={} type={} "
+                            + "cause={} causeType={}",
+                    e.getMessage(), e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getMessage(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConsumerSiteMembershipLookupResult doGetConsumerSiteMembership(String siteTenantId, String accountId) {
+        try {
+            // account-service returns
+            //   { accountId, siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles[] }
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/tenants/{tid}/consumer-members/{aid}", siteTenantId, accountId)
+                    // No X-Tenant-Id: the site is the path's scope.
+                    .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+            if (body == null || !(body.get("consumerSite") instanceof Boolean consumerSite)) {
+                throw new IllegalStateException("consumer-site membership response had no consumerSite");
+            }
+            String siteTenantType = body.get("siteTenantType") instanceof String t && !t.isBlank() ? t : null;
+            String membershipStatus = body.get("membershipStatus") instanceof String s && !s.isBlank() ? s : null;
+            List<String> siteRoles = new ArrayList<>();
+            if (body.get("siteRoles") instanceof List<?> raw) {
+                for (Object item : raw) {
+                    if (item instanceof String role && !role.isBlank()) {
+                        siteRoles.add(role);
+                    }
+                }
+            }
+            return new ConsumerSiteMembershipLookupResult(
+                    siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles);
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
         }
     }
 

@@ -181,6 +181,9 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      * clients" (multi-tenancy.md § 로그인 가능한 계정과 client).
      *
      * <ol>
+     *   <li><b>Pool first on a consumer site</b> (TASK-BE-615) — {@link #poolCredentialFor}: the
+     *       {@code consumer-pool} credential when one exists and the client's tenant is a consumer
+     *       site. Absent → the rows below, unchanged.</li>
      *   <li><b>Scoped</b> (TASK-BE-507 D1-a) — the credential in the tenant of the initiating
      *       OIDC client. A hit ends the lookup whatever the client.</li>
      *   <li><b>Scoped miss, console client</b> ({@link TenantContext#CONSOLE_TENANT_ID}) —
@@ -200,6 +203,10 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      */
     private Lookup resolveCredential(String email, String clientTenant) {
         if (clientTenant != null) {
+            Optional<Credential> pool = poolCredentialFor(email, clientTenant);
+            if (pool.isPresent()) {
+                return Lookup.found(pool.get());
+            }
             Optional<Credential> scoped = credentialRepository.findByTenantIdAndEmail(clientTenant, email);
             if (scoped.isPresent()) {
                 return Lookup.found(scoped.get());
@@ -226,6 +233,56 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             return Lookup.failed(REASON_TENANT_AMBIGUOUS);
         }
         return Lookup.found(matches.get(0));
+    }
+
+    /**
+     * TASK-BE-615 (multi-tenancy.md § 소비자 계정 풀 § 4 — «소비자 client 는 풀 자격을 먼저») — the
+     * consumer-POOL credential, when this login comes through a consumer-site client.
+     *
+     * <ul>
+     *   <li>Only for a client tenant a pool account can map onto ({@link TenantContext#poolPrincipalMapsTo}
+     *       — never the console, never the pool itself), and only when a pool credential for the email
+     *       EXISTS. With no pool credential (every login today: the flag {@code iam.consumer-pool.enabled}
+     *       is off, so nothing creates one) this is one extra indexed read and nothing else — the rest
+     *       of the table above is byte-unchanged (AC-9).</li>
+     *   <li>Then account-service is asked whether the client's tenant is a consumer site
+     *       ({@code B2C_CONSUMER}, not the pool). A B2B client (wms, erp …) does not look the pool up —
+     *       its own scoped credential decides, so a pool shopper who is also a wms employee still logs
+     *       into wms with the wms credential.</li>
+     *   <li>That lookup failing is fail-CLOSED ({@link AuthenticationServiceException} → the same
+     *       {@code /login?error}): choosing either credential without the answer could sign the person
+     *       into the wrong account.</li>
+     *   <li>Membership is NOT required here: a pool account with no membership of this site logs in, and
+     *       the issuer mints no token for it ({@code TenantClaimTokenCustomizer}) — the first-visit
+     *       consent of {@code TASK-BE-616} goes there.</li>
+     * </ul>
+     *
+     * <p>Order does not change the result while § 2/§ 3 hold (no email has both a pool and a site
+     * credential); if both ever exist, that is the defect, and the pool one wins (contract).
+     */
+    private Optional<Credential> poolCredentialFor(String email, String clientTenant) {
+        if (!TenantContext.poolPrincipalMapsTo(clientTenant)) {
+            return Optional.empty();
+        }
+        Optional<Credential> pool = credentialRepository.findPoolCredentialByEmail(email);
+        if (pool.isEmpty()) {
+            return Optional.empty();
+        }
+        boolean consumerSite;
+        try {
+            consumerSite = accountServicePort
+                    .getConsumerSiteMembership(clientTenant, pool.get().getAccountId())
+                    .consumerSite();
+        } catch (RuntimeException e) {
+            log.warn("form-login: consumer-site lookup failed for a pool credential — failing closed");
+            throw new AuthenticationServiceException("Consumer-site lookup is unavailable", e);
+        }
+        if (!consumerSite) {
+            log.debug("form-login: client tenant={} is not a consumer site — the pool credential is not "
+                    + "considered (TASK-BE-615)", clientTenant);
+            return Optional.empty();
+        }
+        return pool;
     }
 
     /**

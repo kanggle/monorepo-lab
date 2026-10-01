@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.PrincipalDetailKeys;
@@ -62,6 +63,11 @@ class AuthorizeSessionTenantGateTest {
 
     @Mock
     CredentialRepository credentialRepository;
+
+    // TASK-BE-615: consulted only for a consumer-pool principal — never by the cells below
+    // (each is a per-site principal; AuthorizeSessionTenantGatePoolTest covers the pool).
+    @Mock
+    AccountServicePort accountServicePort;
 
     @AfterEach
     void clearContext() {
@@ -208,7 +214,7 @@ class AuthorizeSessionTenantGateTest {
     @Test
     @DisplayName("authorize 가 아닌 경로(/oauth2/token 등)에는 게이트가 없다")
     void otherPaths_notGated() throws Exception {
-        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository);
+        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository, accountServicePort);
         Authentication session = principal("ecommerce");
         for (String path : List.of("/oauth2/token", "/oauth2/userinfo", "/oauth2/revoke", "/login")) {
             MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
@@ -229,7 +235,7 @@ class AuthorizeSessionTenantGateTest {
         httpSession.setAttribute(
                 HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, stored);
 
-        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository);
+        AuthorizeSessionTenantGate gate = new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository, accountServicePort);
         MockHttpServletRequest request = authorizeRequest("fan");
         request.setSession(httpSession);
         SecurityContextHolder.setContext(stored);
@@ -302,7 +308,7 @@ class AuthorizeSessionTenantGateTest {
     }
 
     private Authentication runAuthorize(Authentication session, String clientId) throws Exception {
-        return run(new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository),
+        return run(new AuthorizeSessionTenantGate(AUTHORIZE, registeredClientRepository, credentialRepository, accountServicePort),
                 authorizeRequest(clientId), session);
     }
 

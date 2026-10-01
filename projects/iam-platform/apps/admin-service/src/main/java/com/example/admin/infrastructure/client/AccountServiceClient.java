@@ -44,9 +44,28 @@ public class AccountServiceClient {
     @Retry(name = "accountService")
     @CircuitBreaker(name = "accountService")
     public AccountSearchResponse search(String tenantId, String email) {
+        return doSearch(tenantId, email, false);
+    }
+
+    /**
+     * TASK-BE-615 AC-8 (owner decision 2026-10-01) — the same email search, asking for the target
+     * tenant's OWN accounts only ({@code excludePoolMembers=true}): a consumer-pool member of that site
+     * is NOT counted. Used by {@code CreateOperatorUseCase}'s "a signed-up account exists in the target
+     * tenant" check, which keeps the pre-pool rule until ADR-MONO-080 ({@code TASK-MONO-746}) decides
+     * operator accounts. The console's account-operations search ({@link #search}) keeps the pool
+     * members (multi-tenancy.md § 소비자 계정 풀 § 5).
+     */
+    @Retry(name = "accountService")
+    @CircuitBreaker(name = "accountService")
+    public AccountSearchResponse searchSiteAccounts(String tenantId, String email) {
+        return doSearch(tenantId, email, true);
+    }
+
+    private AccountSearchResponse doSearch(String tenantId, String email, boolean excludePoolMembers) {
         try {
             return restClient.get()
-                    .uri(uriBuilder -> uriBuilder
+                    .uri(uriBuilder -> {
+                        uriBuilder
                             .path("/internal/accounts")
                             // TASK-BE-510: "{email}"/"{tenantId}" are URI VARIABLES expanded via
                             // build(Map), NOT literal query values. Spring's variable expander
@@ -58,8 +77,13 @@ public class AccountServiceClient {
                             // x-www-form-urlencoded rules) decodes it back to a space, so
                             // plus-addressed emails ("foo+bar@x.com") never matched.
                             .queryParam("email", "{email}")
-                            .queryParam("tenantId", "{tenantId}")  // TASK-BE-357: tenant-scoped (was fan-platform hard-coded)
-                            .build(Map.of("email", email, "tenantId", tenantId)))
+                            .queryParam("tenantId", "{tenantId}");  // TASK-BE-357: tenant-scoped (was fan-platform hard-coded)
+                        // TASK-BE-615: sent only when narrowing, so the console search's URL is byte-unchanged.
+                        if (excludePoolMembers) {
+                            uriBuilder.queryParam("excludePoolMembers", "true");
+                        }
+                        return uriBuilder.build(Map.of("email", email, "tenantId", tenantId));
+                    })
                     .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {

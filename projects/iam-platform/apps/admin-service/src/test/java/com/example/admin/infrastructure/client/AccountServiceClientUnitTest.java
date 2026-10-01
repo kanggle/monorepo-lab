@@ -124,6 +124,28 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-615 AC-8: searchSiteAccounts 는 excludePoolMembers=true 를 보내고, search(콘솔)는 보내지 않는다")
+    void searchSiteAccounts_sendsExcludePoolMembers_searchDoesNot() {
+        wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
+
+        client.searchSiteAccounts("ecommerce", "foo+bar@x.com");
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("email", equalTo("foo+bar@x.com"))
+                .withQueryParam("tenantId", equalTo("ecommerce"))
+                .withQueryParam("excludePoolMembers", equalTo("true")));
+
+        wireMock.resetRequests();
+        client.search("ecommerce", "plain@example.com");
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
+                .withQueryParam("tenantId", equalTo("ecommerce"))
+                .withQueryParam("excludePoolMembers", absent()));
+    }
+
+    @Test
     @DisplayName("TASK-BE-510: search — 그 외 예약문자(공백/&/%/유니코드) 포함 이메일도 라운드트립된다")
     void search_otherReservedCharsEmail_roundTrips() {
         wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))

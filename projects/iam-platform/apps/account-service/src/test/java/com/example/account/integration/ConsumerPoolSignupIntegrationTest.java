@@ -3,21 +3,12 @@ package com.example.account.integration;
 import com.example.account.application.port.AuthServicePort;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.tenant.TenantId;
-import com.example.account.infrastructure.outbox.AccountOutboxPublisher;
-import com.example.testsupport.integration.AbstractIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -45,25 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>auth-service is mocked at the port (as in {@code AccountSignupIntegrationTest}); the
  * credential's tenant is read off the mock.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 @DisplayName("TASK-BE-614 — 소비자 계정 풀 가입 · 조회 · 이벤트 (MySQL, 플래그 켜짐)")
-class ConsumerPoolSignupIntegrationTest extends AbstractIntegrationTest {
-
-    @DynamicPropertySource
-    static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.flyway.enabled", () -> "true");
-        registry.add("iam.consumer-pool.enabled", () -> "true");
-    }
+class ConsumerPoolSignupIntegrationTest extends AbstractConsumerPoolIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private AccountRepository accountRepository;
-
-    @MockitoBean private AuthServicePort authServicePort;
-    @MockitoBean @SuppressWarnings("rawtypes") private KafkaTemplate kafkaTemplate;
-    @MockitoBean private AccountOutboxPublisher accountOutboxPublisher;
 
     private static String uniqueEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";

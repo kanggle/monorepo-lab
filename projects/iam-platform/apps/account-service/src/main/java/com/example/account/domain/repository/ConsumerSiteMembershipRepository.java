@@ -3,6 +3,7 @@ package com.example.account.domain.repository;
 import com.example.account.domain.consumerpool.ConsumerSiteMembership;
 import com.example.account.domain.tenant.TenantId;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,4 +23,11 @@ public interface ConsumerSiteMembershipRepository {
 
     /** The membership of {@code accountId} on {@code siteTenantId}, if any. */
     Optional<ConsumerSiteMembership> find(TenantId siteTenantId, String accountId);
+
+    /**
+     * TASK-BE-615 — the account's site roles outside the seed ({@code consumer_site_roles}) on
+     * {@code siteTenantId} only, ascending by role name. Never another site's roles: the site is
+     * the first argument and the only scope. Empty when there are none.
+     */
+    List<String> findSiteRoles(TenantId siteTenantId, String accountId);
 }

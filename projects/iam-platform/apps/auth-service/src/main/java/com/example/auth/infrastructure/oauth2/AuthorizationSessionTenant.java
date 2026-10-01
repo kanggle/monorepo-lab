@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.domain.session.PrincipalDetailKeys;
+import com.example.auth.domain.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 
@@ -26,6 +27,14 @@ import java.util.Map;
  * principal's details {@link PrincipalDetailKeys#TENANT_ID} when it carries BOTH
  * {@code tenant_id} and {@code tenant_type}; otherwise the registered client's tenant. Any
  * other rule would make the first row and the rotated rows disagree again.
+ *
+ * <p><b>TASK-BE-615 — consumer-pool principal.</b> A principal whose details tenant is the reserved
+ * {@code consumer-pool} is mapped onto the requesting client's tenant (except the console and the
+ * pool itself — {@link #mapsPoolPrincipalTo}). The claim minted for it is that site
+ * ({@code TenantClaimTokenCustomizer}), so the first mirror row carries the site, and the refresh
+ * comparison here must answer the site too: a store authorization compares with {@code ecommerce},
+ * a fan authorization with {@code fan-platform} — a store refresh token can never satisfy a fan
+ * comparison ({@code TOKEN_TENANT_MISMATCH} kept, AC-5). Every non-pool principal: byte-unchanged.
  */
 final class AuthorizationSessionTenant {
 
@@ -59,10 +68,41 @@ final class AuthorizationSessionTenant {
             String tenantId = nonBlank(details.get(PrincipalDetailKeys.TENANT_ID));
             String tenantType = nonBlank(details.get(PrincipalDetailKeys.TENANT_TYPE));
             if (tenantId != null && tenantType != null) {
+                if (TenantContext.isConsumerPool(tenantId) && mapsPoolPrincipalTo(clientTenant)) {
+                    // TASK-BE-615 — a pool principal's session tenant is the requesting client's
+                    // site (multi-tenancy.md § 소비자 계정 풀 § 4); the pool value is storage only.
+                    // Trimmed like the claim the issuer mints for it, so the mirror rows agree.
+                    return clientTenant.trim();
+                }
                 return tenantId;
             }
         }
         return clientTenant;
+    }
+
+    /**
+     * TASK-BE-615 — whether {@code principal} is a consumer-pool principal: its details carry the
+     * reserved {@link TenantContext#CONSUMER_POOL_TENANT_ID} as the login-time tenant (the tenant of
+     * the credential row the form login picked).
+     */
+    static boolean isPoolPrincipal(Authentication principal) {
+        return principal != null
+                && principal.getDetails() instanceof Map<?, ?> details
+                && TenantContext.isConsumerPool(nonBlank(details.get(PrincipalDetailKeys.TENANT_ID)));
+    }
+
+    /**
+     * TASK-BE-615 — the clients a pool principal is mapped onto: every client with a tenant except
+     * the console ({@code iam}, contract D1 — a pool account is not an operator; the session keeps
+     * the pool value there, so the issuer's pool refusal mints nothing) and the pool tenant itself.
+     *
+     * <p>Mapping does not mean admission: issuance mints a site token only for an ACTIVE membership
+     * of that site ({@code TenantClaimTokenCustomizer}), and the authorize gate decides re-
+     * authentication for non-consumer tenants ({@code AuthorizeSessionTenantGate}). This rule only
+     * keeps the three readers — claim, mirror row, gate — on one value, which is what this class is for.
+     */
+    static boolean mapsPoolPrincipalTo(String clientTenant) {
+        return TenantContext.poolPrincipalMapsTo(clientTenant);
     }
 
     private static String nonBlank(Object value) {

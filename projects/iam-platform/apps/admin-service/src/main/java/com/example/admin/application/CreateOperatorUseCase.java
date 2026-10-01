@@ -93,9 +93,13 @@ public class CreateOperatorUseCase {
         // account_db tenant row for '*' to verify against (SUPER_ADMIN bootstrap).
         // account-service unavailability propagates as DownstreamFailureException →
         // 503 DOWNSTREAM_ERROR: fail-CLOSED — we never create an unverified operator.
+        // TASK-BE-615 AC-8 (owner decision 2026-10-01): the check counts the target tenant's OWN
+        // accounts only — a consumer-pool member of that site (TASK-BE-614 widened the console search
+        // to include them) does NOT pass, so the next line never mints a site-tenant identity beside a
+        // pool account. Operator-account rules change only with ADR-MONO-080 (TASK-MONO-746).
         if (normalizedEmail != null && !AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
             AccountServiceClient.AccountSearchResponse accounts =
-                    accountServiceClient.search(tenantId, normalizedEmail);
+                    accountServiceClient.searchSiteAccounts(tenantId, normalizedEmail);
             boolean accountExists = accounts != null && accounts.totalElements() > 0;
             if (!accountExists) {
                 throw new OperatorAccountNotFoundException(

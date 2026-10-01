@@ -8,6 +8,13 @@ account:
 spring:
   datasource:
     hikari:
+      # TASK-BE-615 — every distinct Spring test context keeps its own pool alive in the context
+      # cache, all against ONE shared Testcontainers MySQL. At Hikari's default (10) the suite hit
+      # MySQL "Too many connections" (1040) once TASK-BE-614/615 each added a context — the failure
+      # surfaced as an unrelated class (TenantProvisioningIntegrationTest) failing to load. Cap per
+      # context so the number of cached contexts is not the thing that breaks the suite.
+      maximum-pool-size: 4
+      minimum-idle: 1
       validation-timeout: 3000
       connection-test-query: SELECT 1
       max-lifetime: 60000

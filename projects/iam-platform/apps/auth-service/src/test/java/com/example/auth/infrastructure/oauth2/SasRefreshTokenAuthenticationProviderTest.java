@@ -573,6 +573,91 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authorizationService, never()).save(any());
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-BE-615 AC-5 — a consumer-pool principal's session tenant is the authorization's SITE
+    // (the claim minted for it), so the store authorization rotates against an ecommerce row and
+    // a row of any other tenant is still TOKEN_TENANT_MISMATCH.
+    // -----------------------------------------------------------------------
+
+    private OAuth2Authorization poolAuthorization(RegisteredClient client, String accountId, String tokenValue) {
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_ID, "consumer-pool");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.TENANT_TYPE, "B2C_CONSUMER");
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.ACCOUNT_ID, accountId);
+        details.put(com.example.auth.domain.session.PrincipalDetailKeys.EMAIL, "pool@example.com");
+        org.springframework.security.authentication.UsernamePasswordAuthenticationToken principal =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "pool@example.com", null, java.util.List.of(
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
+        principal.setDetails(details);
+        return OAuth2Authorization.withRegisteredClient(client)
+                .id(UUID.randomUUID().toString())
+                .principalName("pool@example.com")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizedScopes(Set.of("profile"))
+                .token(activeRefreshToken(tokenValue))
+                .attribute(java.security.Principal.class.getName(), principal)
+                .build();
+    }
+
+    @Test
+    @DisplayName("BE-615 AC-5: 풀 principal · 스토어 인가 · 미러 행 ecommerce → 회전 · 새 행·이벤트 = ecommerce (consumer-pool 아님)")
+    void poolPrincipal_storeAuthorization_rotatesWithSiteTenant() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient storeClient = buildClientInTenant("ecommerce-web-store-client", "ecommerce");
+        String tokenValue = "rt-" + UUID.randomUUID();
+
+        rotateSuccessfully(storeClient, poolAuthorization(storeClient, accountId, tokenValue), tokenValue,
+                Optional.of(mirrorRow(tokenValue, accountId, "ecommerce")));
+
+        assertThat(savedRow("new-refresh-opaque").getTenantId()).isEqualTo("ecommerce");
+        verify(authEventPublisher).publishTokenRefreshed(
+                eq(accountId), eq("ecommerce"), eq(tokenValue), eq("new-refresh-opaque"), any());
+        verify(authEventPublisher, never()).publishTokenTenantMismatch(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-615 AC-5: 풀 principal · 스토어 인가 · 미러 행이 fan-platform → TOKEN_TENANT_MISMATCH 그대로 — 아무것도 발급 안 함")
+    void poolPrincipal_storeAuthorization_rowOfOtherSite_rejected() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient storeClient = buildClientInTenant("ecommerce-web-store-client", "ecommerce");
+        String tokenValue = "rt-" + UUID.randomUUID();
+        RefreshToken row = mirrorRow(tokenValue, accountId, "fan-platform");
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(storeClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(poolAuthorization(storeClient, accountId, tokenValue));
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(row));
+        when(tokenReuseDetector.isReuse(row)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getDescription())
+                        .isEqualTo("TOKEN_TENANT_MISMATCH"));
+        verify(authEventPublisher).publishTokenTenantMismatch(
+                eq(accountId), eq("fan-platform"), eq("ecommerce"), eq(tokenValue), any(), any());
+        verifyNoInteractions(tokenGenerator);
+    }
+
+    @Test
+    @DisplayName("BE-615 AC-5: 스토어에서 받은 refresh 를 팬 client 가 내밀면 invalid_grant (client 결속 — 팬 토큰 없음)")
+    void storeRefreshToken_presentedByFanClient_rejected() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient storeClient = buildClientInTenant("ecommerce-web-store-client", "ecommerce");
+        RegisteredClient fanClient = buildClientInTenant("demo-spa-client", "fan-platform");
+        String tokenValue = "rt-" + UUID.randomUUID();
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(fanClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(poolAuthorization(storeClient, accountId, tokenValue));
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
+                .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+        verifyNoInteractions(tokenGenerator);
+    }
+
     @Test
     @DisplayName("BE-604: a principal WITHOUT tenant details → session tenant = client tenant "
             + "(the claim's own fallback) — a row of another tenant is refused")

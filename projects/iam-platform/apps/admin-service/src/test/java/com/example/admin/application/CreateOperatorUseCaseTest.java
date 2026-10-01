@@ -69,7 +69,7 @@ class CreateOperatorUseCaseTest {
         // happy-path create below proceeds; the absent/downstream cases override it.
         // (LENIENT strictness → this default is harmless when a test doesn't reach it,
         // e.g. the platform-scope '*' exemption which never calls search.)
-        when(accountServiceClient.search(anyString(), anyString()))
+        when(accountServiceClient.searchSiteAccounts(anyString(), anyString()))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 
@@ -447,7 +447,7 @@ class CreateOperatorUseCaseTest {
     void createOperator_accountAbsentInTenant_throwsAccountNotFound() {
         when(operatorPort.existsByTenantIdAndEmail("fan-platform", "ghost@example.com")).thenReturn(false);
         // Override the default "exists" probe → definitively absent (totalElements=0).
-        when(accountServiceClient.search("fan-platform", "ghost@example.com"))
+        when(accountServiceClient.searchSiteAccounts("fan-platform", "ghost@example.com"))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
 
         assertThatThrownBy(() -> useCase.createOperator(
@@ -465,7 +465,7 @@ class CreateOperatorUseCaseTest {
     @DisplayName("MONO-334: break-glass 비밀번호가 있어도 가입 계정이 없으면 차단 (계정-없는 운영자 완전 금지)")
     void createOperator_accountAbsent_evenWithBreakGlassPassword_throws() {
         when(operatorPort.existsByTenantIdAndEmail("fan-platform", "ghost2@example.com")).thenReturn(false);
-        when(accountServiceClient.search("fan-platform", "ghost2@example.com"))
+        when(accountServiceClient.searchSiteAccounts("fan-platform", "ghost2@example.com"))
                 .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
 
         assertThatThrownBy(() -> useCase.createOperator(
@@ -496,15 +496,36 @@ class CreateOperatorUseCaseTest {
 
         assertThat(result.tenantId()).isEqualTo("*");
         // The account-existence probe is NEVER consulted for the '*' bootstrap path.
-        verify(accountServiceClient, never()).search(anyString(), anyString());
+        verify(accountServiceClient, never()).searchSiteAccounts(anyString(), anyString());
         verify(operatorPort).createOperator(any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-615 AC-8: 대상 테넌트 계정 확인은 «사이트 계정만» 묻는다 — 풀 가입 쇼핑객 이메일(사이트 계정 0) → "
+            + "지금처럼 «계정 없음» 거절, 풀 멤버를 포함하는 콘솔 검색은 부르지 않는다")
+    void createOperator_poolShopperEmail_refusedAsNoAccount_siteOnlySearch() {
+        when(operatorLookupPort.findByOperatorId("actor-uuid"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(99L, "actor-uuid", "*")));
+        when(operatorPort.existsByTenantIdAndEmail("ecommerce", "pool-shopper@example.com")).thenReturn(false);
+        // account-service answers the narrow ask (excludePoolMembers=true): the pool shopper is not an
+        // ecommerce SITE account → 0, although the console search would list them (§ 5).
+        when(accountServiceClient.searchSiteAccounts("ecommerce", "pool-shopper@example.com"))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
+
+        assertThatThrownBy(() -> useCase.createOperator(
+                "pool-shopper@example.com", "Shopper", null,
+                List.of(), actor(), "provisioning", "ecommerce", false))
+                .isInstanceOf(OperatorAccountNotFoundException.class);
+
+        verify(accountServiceClient, never()).search(anyString(), anyString());
+        verify(operatorPort, never()).createOperator(any());
     }
 
     @Test
     @DisplayName("MONO-334: account-service 장애 → DownstreamFailureException 전파 (fail-closed, 운영자 미생성)")
     void createOperator_accountServiceDownstreamFailure_failsClosed() {
         when(operatorPort.existsByTenantIdAndEmail("fan-platform", "down@example.com")).thenReturn(false);
-        when(accountServiceClient.search("fan-platform", "down@example.com"))
+        when(accountServiceClient.searchSiteAccounts("fan-platform", "down@example.com"))
                 .thenThrow(new DownstreamFailureException("account-service unavailable", new RuntimeException()));
 
         assertThatThrownBy(() -> useCase.createOperator(

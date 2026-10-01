@@ -67,6 +67,7 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
 |---|---|---|
 | `email` | string (required) | 조회할 이메일 (정확 일치 — `(tenant_id, email)` 유니크 인덱스, 부분/LIKE 검색 아님) |
 | `tenantId` | string (**required**, TASK-BE-357) | 조회 대상 테넌트. 특정 테넌트 → 해당 테넌트 내 정확 일치(0 또는 1행). `*` (SUPER_ADMIN 전용) → 전 테넌트에서 동일 이메일 매칭(테넌트마다 별도 행이 있을 수 있어 0..N행). 누락/공백 → `400 VALIDATION_ERROR`. |
+| `excludePoolMembers` | boolean (optional, default `false`, TASK-BE-615) | `true` → 그 테넌트의 **자기 계정만**(소비자 계정 풀 멤버 제외 — `iam.consumer-pool.enabled` 와 무관하게 풀 이전 쿼리). admin-service `CreateOperatorUseCase` 의 «대상 테넌트에 가입 계정이 있나» 확인이 보낸다(소유자 결정 2026-10-01: 운영자 생성은 옛 규칙 — 운영자 계정 규칙은 `ADR-MONO-080` 후보 `TASK-MONO-746` 의 몫). 콘솔 계정 운영 검색은 보내지 않는다 — [multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) 대로 풀 멤버 포함. 목록 분기(`email` 없음)에도 같은 뜻 |
 
 **Response 200** (특정 테넌트 단건 매칭):
 ```json
