@@ -232,13 +232,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
-- `TASK-MONO-754-draft-console-composition-stage-tickets.md` — 🟡 **REVIEW — `ADR-MONO-081` ACCEPTED — A, 단계 티켓 6개 기안** (2026-10-02 UTC · ACCEPT PR). `TASK-MONO-755` · `TASK-PC-FE-302` · `303` · `TASK-MONO-756` · `757` · `758`. AC-0~7 닫힘. 머지 뒤 4차원 검증으로 done.
 - `TASK-MONO-738-bundle-card-says-check-failed-while-booting.md` — 🟡 **REVIEW — AC-1~3 완료, AC-4 는 `terraform apply` 뒤 라이브** (2026-09-29 UTC). 데모 서버를 켠 직후 론처 카드가 「🔴 확인 실패(마지막 발행 176386초 전)」 — 지난 세션 스냅샷을 stale 로 읽음. 701 의 «이 세션 첫 발행 전» 판정을 `_first_publish()` 로 빼 `/status`·`/bundles` 가 공유 → 그 구간 선택 묶음 `requested`(🟡 기동 중…). 유예(300초) 넘기면 여전히 `unknown`. 109 OK · bite 5칸.
 - `TASK-MONO-726-two-internal-callers-717-left-without-a-home.md` — 🔴 **batch-worker → order-service `/api/internal/**` 가 다섯 겹으로 끊겨 있던 것을 잇는다** (REVIEW, 2026-09-24 UTC · 소유자 승인: IdP 등록). 보내는 쪽(IdP 등록 `V0038` · 토큰 주소 · order 포트 8082→8086) + 받는 쪽(JWKS · issuer). 테넌트 assume 불필요(이 경로엔 테넌트 핀 없음). `check-internal-caller-addresses.sh` 목록 1→3행, 두 행 bite rc=1. auth-service 724/0 · `WorkloadRoleCatalogTest` 18/12/6. 🔴 창 판정 둘(PAID→CONFIRMED 결과 상태 · lock 라우트)은 `TASK-MONO-672` 항목 14. 🟢 **2026-09-26 UTC 소유자 결정**: ② 배선 **PASS**(15차 창 `StalePaidOrderConfirmationJob completed … scanned=0` ×2·FAILED 0) + 결과 상태는 ⚪ 측정 불가로 닫음. **① 은 OPEN** — `TASK-MONO-735`(#4048 병합) 이후 17차 창에서 판정. `review/` 유지.
 
 
 ## done
 
+- ✅ `TASK-MONO-754-draft-console-composition-stage-tickets.md` — **DONE (2026-10-02 UTC · 4차원 검증 · PR [#4111](https://github.com/kanggle/monorepo-lab/pull/4111) squash `467663f48`)** 🟢 `ADR-MONO-081` ACCEPTED — A 와 같은 PR 에서 단계 티켓 6개 기안(`TASK-MONO-755` · `TASK-PC-FE-302` · `303` · `TASK-MONO-756` · `757` · `758`), AC-0~7 닫힘. 실패 체크 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 - ✅ `TASK-MONO-744-consumer-account-pool-demo-and-live.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 데모 계정 한 번 로그인으로 팬↔스토어(비밀번호·동의 없음) · 두 사이트 같은 accountId `…ec01` · 콘솔 ecommerce 주문 5건 · 새 풀 계정의 `/consent` 200. 곁발견 ERP read-model → `TASK-MONO-753`.
 - ✅ `TASK-MONO-737-account-lock-with-a-named-tenant-still-404s.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 콘솔 잠금 200 → LOCKED(풀 계정) · 일회용 셀러 정지 → 기계 계정 LOCKED.
 - ✅ `TASK-MONO-735-account-lock-calls-drop-the-accounts-tenant.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 AC-3 잔여 스텝 2·4 를 737 측정으로 닫음(스텝 1·3·5 는 17차 창).
