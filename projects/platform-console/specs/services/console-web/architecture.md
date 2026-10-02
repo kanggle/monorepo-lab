@@ -307,6 +307,14 @@ IAM access token·operator token 모두 **절대 JavaScript 접근 불가** (Htt
 - **Read model**: 각 도메인의 **기존 소비 중인** `list*` 서버 함수를 재사용해 server-side fan-out. credential = domain-facing IAM OIDC token(`getDomainFacingToken()`, `X-Tenant-Id` 미전송 — JWT `tenant_id` claim; 위 per-domain 규칙 § 2.4.5 상속).
 - **카운트 = `totalElements`**: 각 area 카운트 = 기존 list endpoint 의 `totalElements` 를 `?page=0&size=1` 로 읽음. **ADR-MONO-017 D3.B** — producer `/summary`/집계 endpoint **금지**, producer retrofit **금지**. (ecommerce 는 §2.4.10 console-absorption 도메인으로서 나중에 전용 `/summary`(BE-468/PC-FE-164)를 얻었으나, **비-흡수 federation 인 bff-도메인들은 그 treatment 를 받지 않는다** — 그것이 D3.B 가 금지하는 producer retrofit 이기 때문. bff-도메인은 `totalElements` 파생만.)
 - **왜 console-bff leg 가 아닌가**: BFF(§ 2.4.9)는 cross-domain 합성(콘솔 홈)을 위한 것 — 단일 도메인 내부 스냅샷은 server-side fan-in 이 불필요하고, DIRECT 클라이언트가 이미 per-domain credential + § 2.5 resilience taxonomy 를 갖춘다. bff leg 신설은 새 route+계약+백엔드 작업을 무이득으로 추가.
+
+> 🔴 **일반 규칙으로 승격 — [ADR-MONO-081](../../../../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md) (ACCEPTED 2026-10-02, A).** 위 bullet 의 «BFF 는 cross-domain 합성(콘솔 홈)을 위한 것» 이라는 **예외는 없어진다.** 콘솔의 **모든** 합성 — 도메인 하나 안이든(위 개요 스냅샷) 도메인 사이든(운영 개요 § 2.4.9.1 · 도메인 상태 § 2.4.9.2 · 알림 인박스) — 은 **console-web 서버**에서 한다. 규칙은 하나다:
+>
+> - 레그는 그 도메인 화면이 이미 쓰는 **console-web 서버 클라이언트**로 부른다(같은 base URL · 같은 경로 · `getDomainFacingToken()`, IAM 은 `getOperatorToken()`). docker 네트워크 전용 주소(옛 console-bff 레그의 direct-to-producer 경로)는 쓰지 않는다 — Vercel 에서 닿지 않는다.
+> - 레그 하나 실패 = 그 칸만 열화 · 어느 레그든 `401` = 전체 `401` / 재로그인 · 활성 테넌트 없음 = 호출 0 으로 `400`.
+> - 회로 차단기 없음, 레그별 타임아웃(값은 `TASK-PC-FE-302` 가 Vercel 한도를 재고 정한다) · 레그마다 구조화 로그 한 줄(`console_composition_leg`) — 계약 § 2.4.9.0.
+>
+> console-bff 는 `TASK-PC-FE-302`(두 대시보드) · `TASK-PC-FE-303`(알림) 머지까지 현재 생산자로 남고 `TASK-MONO-757` 이 지운다. 이 문서의 다른 자리에 남은 «console-bff fan-out» 대비 서술은 그때 함께 정리된다.
 - **Resilience (§ 2.5)**: per-cell degrade 는 cell-local(한 area 실패가 스냅샷을 blank 하지 않음); **어느 leg 든 `401` → whole-session `redirect('/login')`**(partial authed state 금지 — ecommerce `cell()` 미러). read-only, auto-refetch 없음.
 - **per-domain 편차**:
   - **wms (PC-FE-166, 레퍼런스)**: 재고/배송 `totalElements` 카운트 타일(배송=오늘/주간/월간/전체 기간, PC-FE-174) + 알림 확인상태 분포(미확인/확인) + 최근 출고. 알림은 규모-타일이 아니라 확인상태 분포로만 표현(총계 타일은 분포 합과 중복 → PC-FE-170 제거). 카운트 타일은 **비-링크 stat 타일**. 조회 테이블은 개요에서 분리되어 전용/기존 라우트로 이동(재고→`/wms/inventory` PC-FE-173, 택배/출고→`/wms/outbound` PC-FE-175); 개요는 스냅샷 타일 + 최근 출고 glance + 알림 테이블만 유지.

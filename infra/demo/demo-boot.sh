@@ -187,7 +187,36 @@ bash "$HERE/provision-demo-env.sh"
 #    per-domain 기동 경로(`demo-boot.sh fan`, 화이트리스트에 `full` 도 포함)에서도 불리고,
 #    거기서 전체 down 은 방문자가 보고 있는 데모를 내리는 것이 된다. 부팅인지 아닌지를
 #    아는 것은 systemd 유닛뿐이라 플래그가 거기서 온다. 가드 (z24)가 그 쌍을 묶는다.
-if [ "${DEMO_BOOT_RESET:-0}" = "1" ]; then
+#
+# 🔴🔴 TASK-MONO-753 — 리셋은 **한 부팅에 한 번**이다.
+# -----------------------------------------------------------------------------
+# 플래그는 «호출자가 유닛이다» 를 말할 뿐 «이것이 이 부팅의 첫 기동이다» 를 말하지 않는다.
+# 2026-10-02 18차 창(새 인스턴스의 첫 부팅)에서 유닛이 **같은 부팅에 두 번** 돌았다
+# (`journalctl -u demo-stack`: 09:16:39 첫 실행의 down → 09:21:02 둘째 실행의 down).
+# 둘째 실행의 전체 down 이 기동 중이던 ERP read-model 을 Flyway V2 **한가운데서** 끊었고,
+# MySQL DDL 은 트랜잭션이 아니어서 «테이블은 있고 이력은 없는» 볼륨이 남았다 —
+# 그 뒤로 매 기동 `Detected failed migration to version 2` 로 영영 안 뜬다.
+#
+# 리셋이 치우려는 것은 **지난 부팅에서 dockerd 가 되살린** 컨테이너다. 같은 부팅의 둘째
+# 실행에는 그런 것이 없다 — 거기 있는 것은 **이번 부팅이 방금 올린** 스택이고, 그것을
+# 내리는 것은 고침이 아니라 사고다. 그래서 boot_id 를 /run(tmpfs — 재부팅에 비워진다)에
+# 적고, 같은 boot_id 면 건너뛴다.
+# 🔵 `systemctl restart` 는 이 건너뜀에 영향받지 않는다 — 유닛의 ExecStop 이 이미 전체
+#    down 을 돌린 뒤에 ExecStart 가 오기 때문이다.
+# 🔴 마커를 못 쓰면(권한·경로) 리셋은 **예전처럼 돈다** — 이 갈래는 B4 경합을 다시 여는
+#    쪽보다 덜 나쁘다. 단, 말한다.
+DEMO_BOOT_RESET_MARKER="${DEMO_BOOT_RESET_MARKER:-/run/demo-boot-reset.boot-id}"
+current_boot_id="$(cat "${DEMO_BOOT_ID_SRC:-/proc/sys/kernel/random/boot_id}" 2>/dev/null || true)"
+reset_already_done=0
+if [ -n "$current_boot_id" ] && [ -f "$DEMO_BOOT_RESET_MARKER" ] \
+   && [ "$(cat "$DEMO_BOOT_RESET_MARKER" 2>/dev/null)" = "$current_boot_id" ]; then
+  reset_already_done=1
+fi
+
+if [ "${DEMO_BOOT_RESET:-0}" = "1" ] && [ "$reset_already_done" = "1" ]; then
+  echo "[boot] 잔존 스택 정리 건너뜀 — 이 부팅(boot_id=$current_boot_id)에서 이미 했습니다."
+  echo "[boot]   (같은 부팅의 두 번째 기동입니다. 지금 떠 있는 것은 이번 부팅이 올린 스택이라 내리지 않습니다 — TASK-MONO-753)"
+elif [ "${DEMO_BOOT_RESET:-0}" = "1" ]; then
   echo "[boot] 잔존 스택 정리 (DEMO_BOOT_RESET=1) — dockerd 가 되살린 컨테이너를 먼저 내립니다"
   # 🔴 볼륨은 건드리지 않는다. `demo-down.sh` 는 `down --remove-orphans` 이고 `-v` 가
   #    없다 — 데이터가 사라지면 이것은 고침이 아니라 파괴다.
@@ -204,6 +233,13 @@ if [ "${DEMO_BOOT_RESET:-0}" = "1" ]; then
   else
     echo "[boot] ⚠ coreutils 'timeout' 이 없습니다 — 잔존 스택 정리를 시간으로 묶지 못합니다" >&2
     bash "$HERE/demo-down.sh" || echo "[boot] ⚠ 잔존 스택 정리 실패 — 그대로 기동을 계속합니다" >&2
+  fi
+  # 정리의 성패와 무관하게 적는다 — 끊긴 정리를 둘째 실행이 «이어서» 하면 그것이 바로
+  # 방금 올린 스택을 내리는 일이 된다.
+  if [ -z "$current_boot_id" ]; then
+    echo "[boot] ⚠ boot_id 를 읽지 못했습니다 — 같은 부팅의 두 번째 기동도 다시 정리합니다 (TASK-MONO-753 의 보호 없음)" >&2
+  elif ! printf '%s' "$current_boot_id" > "$DEMO_BOOT_RESET_MARKER" 2>/dev/null; then
+    echo "[boot] ⚠ 리셋 마커($DEMO_BOOT_RESET_MARKER)를 쓰지 못했습니다 — 같은 부팅의 두 번째 기동도 다시 정리합니다 (TASK-MONO-753 의 보호 없음)" >&2
   fi
 else
   echo "[boot] 잔존 스택 정리 건너뜀 (DEMO_BOOT_RESET 미설정 — 부팅이 아닌 호출입니다)"
