@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-747-draft-adr-079-agencies-sellers-and-console-fan-management.md` — **`ADR-MONO-079` 기안 — 소속사·셀러·콘솔 팬 관리** (IN-PROGRESS, 2026-10-02 UTC · ADR PROPOSED 작성 — 갈래 A/B/C, 추천 A · AC-3 = PROPOSED 머지).
+(empty)
 
 
 
@@ -232,6 +232,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## done
 
+- ✅ `TASK-MONO-747-draft-adr-079-agencies-sellers-and-console-fan-management.md` — **DONE (2026-10-02 UTC · PR [#4103](https://github.com/kanggle/monorepo-lab/pull/4103) squash `c7d75d6d7`)** 🟢 `ADR-MONO-079` PROPOSED — 소속사(artist-service 엔티티) · 셀러 연결 0..1(팬 쪽) · `products.collection_ref` · 셀러 구성원(정지 = `SELLER` 회수) · 🔴 D4 갈래 A(콘솔 관리, 059 부분 개정) / B(팬 웹) / C(관리 표면 없음) — 소유자 ACCEPT 대기. 분석=Opus 5.5 / 기안=Opus 5.5.
 - **`TASK-MONO-745`** — ✅ **DONE (2026-10-02 UTC · 소유자 결정: «079로 합치기» · 구현 없이 종결)** 셀러를 풀로 옮기는 티켓 — 착수 전 측정에서 전제 거짓: 셀러 계정은 사람이 로그인하지 않는 **기계 계정**(`seller+<tenant>+<sellerId>@marketplace.local`, 무작위 비밀번호)이고 사람이 셀러로 일하는 로그인 경로도 없다. 옮겨도 쇼핑하는 사람이 생기지 않는다 ⇒ 사람 계정↔셀러 연결은 `ADR-MONO-079`(`TASK-MONO-747`)로. `ADR-MONO-078` 에 CORRECTION.
 - ✅ `TASK-MONO-742-consumer-account-pool-contracts-first.md` — **DONE (2026-10-01 UTC · 4차원 검증 · PR [#4086](https://github.com/kanggle/monorepo-lab/pull/4086) squash `b08b25d21`)** 🟢 전역 소비자 계정 계약·스펙(`ADR-MONO-078` A), AC-1~6 닫힘. 소비자 `sub` 공용 · `tenant_id`=요청 사이트 · 사이트 역할만 · 이벤트 사이트별 1회 · 저장 `consumer-pool` + 멤버십·사이트 역할. 코드 0. 실행 체크 9개 SUCCESS · 실패 0. ⚪ 미결(운영자 측면 계정 이메일의 풀 가입)은 `TASK-BE-614` AC-6. 분석=Opus 5.5 / 구현=Opus 5.5.
 - ✅ `TASK-MONO-741-one-consumer-login-across-fan-and-store.md` — **DONE (2026-10-01 UTC · 4차원 검증 · PR [#4084](https://github.com/kanggle/monorepo-lab/pull/4084) squash `333b8eef5`)** 🟢 `ADR-MONO-078` ACCEPTED — A 와 같은 PR 에서 단계 티켓 7개 기안(742·743·744 · BE-614~617), AC-0~6 닫힘. 실패 체크 0. 미결(가입 안내 임시 조치)은 ADR § Outstanding follow-ups 에 있다. 분석=Opus 5.5 / 구현=Opus 5.5.
