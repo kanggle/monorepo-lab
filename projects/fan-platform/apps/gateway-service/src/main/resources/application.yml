@@ -123,6 +123,21 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@accountKeyResolver}"
 
+        # TASK-MONO-748 (ADR-MONO-079 D1) — agencies live in artist-service.
+        - id: artist-service-agencies
+          uri: ${ARTIST_SERVICE_URI:http://artist-service:8080}
+          predicates:
+            - Path=/api/v1/agencies/**
+          filters:
+            # See community-service route for the (?:/.*)? rationale.
+            - RewritePath=/api/v1/agencies(?<segment>(?:/.*)?), /api/agencies${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 120
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@accountKeyResolver}"
+
         # membership-service — external path /api/v1/memberships/** is rewritten
         # to the downstream service's /api/fan/memberships/** (TASK-FAN-BE-009).
         # The /internal/membership/access surface is NOT routed here — it is

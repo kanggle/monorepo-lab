@@ -104,6 +104,10 @@ filtered out at the application service).
 
 If no fields actually change (caller sent only nulls), no event is emitted.
 
+`changedFields` may also be `["agencyId"]` — emitted by `PATCH /api/artists/{id}/agency`
+when an artist's agency affiliation changes (TASK-MONO-748). The payload carries no new
+field; a consumer that needs the new agency reads the artist.
+
 **Consumers:** **none yet.** No service currently subscribes.
 
 ### `artist.archived.v1`

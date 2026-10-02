@@ -52,6 +52,24 @@ artist-service produces silent 401s on traffic the gateway accepted.
 See `projects/fan-platform/specs/integration/iam-integration.md` for the full
 integration contract.
 
+### ecommerce store — seller lookup (TASK-MONO-748, `ADR-MONO-079` D2) — 🔴 NOT WIRED
+
+Write-time verification of `agencies.store_seller_id` goes through the outbound port
+`StoreSellerDirectory` (contract: `artist-api.md` § Store seller verification). The only
+adapter today, `UnwiredStoreSellerDirectory`, answers «cannot verify» to every call, so
+linking a seller is refused (503) and **nothing is saved** — fail-closed by construction.
+Clearing a link needs no lookup.
+
+The transport is an open decision, not an omission: the store's seller read is the
+operator-plane `GET /api/admin/sellers/{sellerId}` behind the ecommerce gateway
+(product-service validates no JWT; header-trust), and artist-service holds no IdP client.
+A workload path needs a new `client_credentials` registration + seller-read scope + a
+token for the store tenant (assume-tenant) — an IdP / permission-catalog change.
+
+| Failure | Behaviour |
+|---|---|
+| store unreachable / error / timeout / auth failure / unrecognised status | 503 `STORE_SELLER_LOOKUP_UNAVAILABLE`, link NOT saved |
+
 ## Cross-service contracts (produced)
 
 ### Kafka events

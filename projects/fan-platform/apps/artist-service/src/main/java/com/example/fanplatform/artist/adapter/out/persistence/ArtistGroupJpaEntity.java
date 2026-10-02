@@ -32,6 +32,13 @@ class ArtistGroupJpaEntity {
     @Column(name = "agency", length = 120)
     private String agency;
 
+    /**
+     * Agency affiliation (V4 — TASK-MONO-748). Nullable; composite FK
+     * {@code (tenant_id, agency_id) → agencies (tenant_id, id)} in the migration.
+     */
+    @Column(name = "agency_id", length = 36)
+    private String agencyId;
+
     @Column(name = "profile_image_ref", length = 500)
     private String profileImageRef;
 
@@ -81,6 +88,9 @@ class ArtistGroupJpaEntity {
     Instant getUpdatedAt() { return updatedAt; }
     Instant getArchivedAt() { return archivedAt; }
     Long getVersion() { return version; }
+    String getAgencyId() { return agencyId; }
+
+    void setAgencyId(String agencyId) { this.agencyId = agencyId; }
 
     void applyMutable(String name, LocalDate debutDate, String agency, String profileImageRef,
                       ArtistGroupStatus status, Instant updatedAt, Instant archivedAt) {

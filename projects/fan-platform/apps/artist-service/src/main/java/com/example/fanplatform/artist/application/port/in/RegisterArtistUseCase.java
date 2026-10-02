@@ -22,6 +22,17 @@ public interface RegisterArtistUseCase {
             LocalDate debutDate,
             String agency,
             String bio,
-            String profileImageRef
-    ) {}
+            String profileImageRef,
+            // Optional agency entity to affiliate with (TASK-MONO-748). Must be an
+            // ACTIVE agency of the caller's tenant; null = unaffiliated.
+            String agencyId
+    ) {
+        /** Pre-TASK-MONO-748 arity — no agency affiliation. */
+        public RegisterArtistCommand(ActorContext actor, String accountId, ArtistType artistType,
+                                     String stageName, String realName, LocalDate debutDate,
+                                     String agency, String bio, String profileImageRef) {
+            this(actor, accountId, artistType, stageName, realName, debutDate, agency, bio,
+                    profileImageRef, null);
+        }
+    }
 }

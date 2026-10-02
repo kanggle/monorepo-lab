@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.application.service;
 import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase;
+import com.example.fanplatform.artist.application.port.out.AgencyRepository;
 import com.example.fanplatform.artist.application.port.out.ArtistDirectoryCache;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
 import com.example.fanplatform.artist.domain.artist.Artist;
@@ -15,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -33,6 +35,8 @@ public class ArtistDirectoryService implements SearchArtistDirectoryUseCase {
 
     private final ArtistRepository artistRepository;
     private final ArtistDirectoryCache cache;
+    // TASK-MONO-748: the page's agency names in ONE batch query (none when no row is affiliated).
+    private final AgencyRepository agencyRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,7 +53,11 @@ public class ArtistDirectoryService implements SearchArtistDirectoryUseCase {
         }
         PageResult<Artist> dbPage = artistRepository.findPublishedDirectoryPage(
                 tenantId, qNorm.isEmpty() ? null : qNorm, q.type(), page, size);
-        List<ArtistView> items = dbPage.content().stream().map(ArtistView::from).toList();
+        Map<String, String> agencyNames = AgencySupport.names(agencyRepository, tenantId,
+                dbPage.content().stream().map(Artist::getAgencyId).toList());
+        List<ArtistView> items = dbPage.content().stream()
+                .map(a -> ArtistView.from(a, agencyNames))
+                .toList();
         DirectorySearchResult result = new DirectorySearchResult(
                 items, dbPage.page(), dbPage.size(), dbPage.totalElements(), dbPage.totalPages());
         cache.put(tenantId, key, result);

@@ -175,10 +175,15 @@ public class SliceTestSecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.POST,   "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.PATCH,  "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        // agencies (TASK-MONO-748) — same gate as production
+                        .requestMatchers(HttpMethod.POST,   "/api/agencies/**", "/api/agencies").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.PATCH,  "/api/agencies/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.DELETE, "/api/agencies/**").hasAnyRole(ADMIN_ROLES)
                         // reads — any authenticated caller
                         .requestMatchers(HttpMethod.GET,    "/api/artists/**", "/api/artists").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/artist-groups/**", "/api/artist-groups").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/fandoms/**").authenticated()
+                        .requestMatchers(HttpMethod.GET,    "/api/agencies/**", "/api/agencies").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt

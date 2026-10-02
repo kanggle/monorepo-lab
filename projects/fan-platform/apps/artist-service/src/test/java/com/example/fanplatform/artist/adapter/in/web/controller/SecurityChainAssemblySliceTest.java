@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.adapter.in.web.controller;
 
+import com.example.fanplatform.artist.application.port.in.ChangeAgencyAffiliationUseCase;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.GetArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.PublishArtistUseCase;
@@ -149,6 +150,8 @@ class SecurityChainAssemblySliceTest {
     @MockitoBean PublishArtistUseCase publishUseCase;
     @MockitoBean ArchiveArtistUseCase archiveUseCase;
     @MockitoBean GetArtistUseCase getUseCase;
+    // TASK-MONO-748: the controller now also serves PATCH /{id}/agency.
+    @MockitoBean ChangeAgencyAffiliationUseCase affiliationUseCase;
 
     private static String bearer(String token) {
         return "Bearer " + token;

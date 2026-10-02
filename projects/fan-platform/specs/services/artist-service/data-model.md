@@ -2,7 +2,8 @@
 
 > Persistent schema declared by Flyway in
 > `apps/artist-service/src/main/resources/db/migration/artist/` (`V1__init.sql`
-> onward; `account_id` arrives in V3 — see § V3 backfill obligation below).
+> onward; `account_id` arrives in V3 — see § V3 backfill obligation below; `agencies` and
+> the `agency_id` columns arrive in V4 — see § V4 below).
 > JPA entities under `adapter/out/persistence/` mirror this schema; the domain
 > aggregates (`domain/{artist,group,fandom}`) are framework-free.
 
@@ -22,7 +23,8 @@
 | `stage_name` | VARCHAR(120) NOT NULL | UNIQUE within tenant |
 | `real_name` | VARCHAR(120) | optional |
 | `debut_date` | DATE | optional |
-| `agency` | VARCHAR(120) | optional |
+| `agency` | VARCHAR(120) | optional — **legacy free text**, kept for the transition (V4). Display reads the agency entity when `agency_id` is set |
+| `agency_id` | VARCHAR(36) | nullable — V4; composite FK `(tenant_id, agency_id) → agencies (tenant_id, id)` |
 | `bio` | TEXT | optional |
 | `profile_image_ref` | VARCHAR(500) | media URL only (F5 — no binary in DB) |
 | `created_at` | TIMESTAMPTZ NOT NULL | |
@@ -70,7 +72,8 @@ collision. Both are provable, not hoped for:
 | `tenant_id` | VARCHAR(64) NOT NULL | |
 | `name` | VARCHAR(120) NOT NULL | UNIQUE within tenant |
 | `debut_date` | DATE | |
-| `agency` | VARCHAR(120) | |
+| `agency` | VARCHAR(120) | legacy free text (see `artists.agency`) |
+| `agency_id` | VARCHAR(36) | nullable — V4; composite FK `fk_artist_groups_agency` |
 | `profile_image_ref` | VARCHAR(500) | |
 | `status` | VARCHAR(20) NOT NULL | `ACTIVE` / `ARCHIVED` |
 | `created_at` / `updated_at` / `archived_at` | TIMESTAMPTZ | |
@@ -78,6 +81,51 @@ collision. Both are provable, not hoped for:
 
 **Constraints**:
 - `uq_artist_groups_tenant_name UNIQUE (tenant_id, name)`
+
+### `agencies` — V4 (`TASK-MONO-748`, `ADR-MONO-079` D1 · D2)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | VARCHAR(36) PK | UUID (UUIDv7 from the API; `gen_random_uuid()` for rows the V4 move created) |
+| `tenant_id` | VARCHAR(64) NOT NULL | |
+| `name` | VARCHAR(120) NOT NULL | stored **normalised** (§ V4 rule); UNIQUE within tenant |
+| `status` | VARCHAR(20) NOT NULL | `ACTIVE` / `ARCHIVED` |
+| `store_seller_id` | VARCHAR(64) | nullable — the ecommerce `seller_id` that sells this agency's goods (D2, 0..1). Other database → no FK; verified against the store at write time, fail-closed |
+| `created_at` / `updated_at` | TIMESTAMPTZ NOT NULL | |
+| `version` | BIGINT NOT NULL DEFAULT 0 | optimistic lock |
+
+**Constraints**: `ck_agencies_status` · `uq_agencies_tenant_name UNIQUE (tenant_id, name)`
+(→ 409 `AGENCY_NAME_CONFLICT`) · `uq_agencies_tenant_id_id UNIQUE (tenant_id, id)` — the
+target of the composite FKs `fk_artists_agency` / `fk_artist_groups_agency`, so the
+database itself refuses an artist pointing at another tenant's agency.
+
+**Indexes**: `idx_artists_tenant_agency (tenant_id, agency_id)` ·
+`idx_artist_groups_tenant_agency (tenant_id, agency_id)`.
+
+🔵 A real FK here departs from this service's general preference for logical FKs (§
+Cross-aggregate references) on purpose: `ADR-MONO-079` D1 and the ticket ask for one, and
+the composite form carries the tenant invariant into the schema.
+
+#### V4 — free text → agencies (the data move)
+
+`V4__agencies.sql` groups identical free-text values into one `agencies` row per tenant
+(across **both** `artists.agency` and `artist_groups.agency`) and points every row at it.
+
+**Normalisation rule** (also applied by `Agency.normalizeName` on every API write):
+runs of ASCII whitespace `[ \t\n\r\f\v]` collapse to one space, leading/trailing space
+is removed, **case is preserved and significant**. Empty after that (`NULL`, `''`,
+`'   '`) → `agency_id NULL`.
+
+Why case is not folded: the move must not invent equivalences no one wrote — the same
+reason «SM» / «SM Entertainment» are not merged (`TASK-MONO-748` § Edge Cases). Folding
+would also have to pick one spelling as the display name, silently rewriting what some
+rows showed. Whitespace is invisible on screen, so collapsing it changes nothing a reader
+saw.
+
+**Nothing left behind** — the migration ends with a `DO` block that raises (and fails the
+boot) if any row with non-blank free text still has `agency_id IS NULL` (Failure
+Scenario 1: «이전이 일부 행만 채워 소속사 표시가 사라진다»). The free-text columns are kept
+byte-identical. Proven against an existing volume by `AgencyMigrationExistingVolumeIT`.
 
 ### `group_memberships` — N:M with re-join support
 
@@ -129,6 +177,7 @@ The domain aggregates are pure POJOs. The persistence adapters
 | Domain | JPA entity | Adapter |
 |---|---|---|
 | `Artist` | `ArtistJpaEntity` | `ArtistRepositoryAdapter` |
+| `Agency` | `AgencyJpaEntity` | `AgencyRepositoryImpl` |
 | `ArtistGroup` | `ArtistGroupJpaEntity` | `ArtistGroupRepositoryAdapter` |
 | `GroupMembership` | `GroupMembershipJpaEntity` (`@EmbeddedId GroupMembershipKey`) | `ArtistGroupRepositoryAdapter` |
 | `Fandom` | `FandomJpaEntity` | `FandomRepositoryAdapter` |
@@ -146,6 +195,8 @@ read path from application code — every query is tenant-scoped.
 | community-service.follows.artist_account_id | community → artist | logical FK; v1 emits `artist.archived` so consumer can react |
 | group_memberships.artist_id | within service | logical FK; checked in application service via `ArtistRepository.existsInStatus` |
 | fandoms.artist_id | within service | logical FK + 1:1; checked at application service |
+| artists.agency_id / artist_groups.agency_id | within service | **physical** composite FK (V4) + ACTIVE check in the application service |
+| agencies.store_seller_id | fan → ecommerce `sellers.seller_id` | no FK (other database); verified through `StoreSellerDirectory` at write time, fail-closed — transport not yet wired (`artist-api.md` § Store seller verification) |
 
 No physical `FOREIGN KEY` constraints across services. Within the service we
 prefer logical FKs (CHECK + application-side validation) over hard FKs to keep

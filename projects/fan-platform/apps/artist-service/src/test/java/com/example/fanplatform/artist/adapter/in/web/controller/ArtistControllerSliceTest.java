@@ -2,6 +2,7 @@ package com.example.fanplatform.artist.adapter.in.web.controller;
 
 import com.example.fanplatform.artist.adapter.in.web.advice.GlobalExceptionHandler;
 import com.example.fanplatform.artist.application.exception.ArtistNotFoundException;
+import com.example.fanplatform.artist.application.port.in.ChangeAgencyAffiliationUseCase;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.GetArtistUseCase;
@@ -51,10 +52,12 @@ class ArtistControllerSliceTest {
     @MockitoBean PublishArtistUseCase publishUseCase;
     @MockitoBean ArchiveArtistUseCase archiveUseCase;
     @MockitoBean GetArtistUseCase getUseCase;
+    // TASK-MONO-748: the controller now also serves PATCH /{id}/agency.
+    @MockitoBean ChangeAgencyAffiliationUseCase affiliationUseCase;
 
     private static ArtistView sampleView(ArtistStatus status) {
         return new ArtistView("a-1", "fan-platform", "acc-artist-1", ArtistType.SOLO, status,
-                "STAGE", null, null, null, null, null,
+                "STAGE", null, null, null, null, null, null,
                 Instant.now(), Instant.now(), null, null);
     }
 

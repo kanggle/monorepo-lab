@@ -92,6 +92,16 @@ ARTIST_E="0199de80-0000-7000-8000-00000000a005"   # 리오
 ARTIST_F="0199de80-0000-7000-8000-00000000a006"   # 유노
 GROUP_1="0199de80-0000-7000-8000-00000000b001"
 
+# TASK-MONO-748 (ADR-MONO-079 D1) — 소속사는 이제 **엔티티**다(artist-service `agencies`).
+# 고정 id 는 **새 볼륨에서만** 쓰인다: 기존 볼륨에서는 V4 이전이 같은 이름의 행을 이미
+# 만들었고(무작위 id) 아래 INSERT 는 `WHERE NOT EXISTS (… name …)` 로 그것을 건너뛴다.
+# ⇒ 아티스트·그룹은 id 가 아니라 **이름으로** 소속사를 찾는다(AGENCY_OF_*) — 두 볼륨
+#    어느 쪽에서도 같은 행을 가리키게 하는 유일한 방법이다.
+# 🔵 스토어 셀러 연결(`store_seller_id`)은 시드하지 않는다 — 데모 굿즈를 파는 셀러는
+#    스토어의 `default` 셀러이고(product-service V21), 그것은 이 소속사의 셀러가 아니다.
+AGENCY_AURORA="0199de80-0000-7000-8000-00000000c001"
+AGENCY_NOVA="0199de80-0000-7000-8000-00000000c002"
+
 # 아티스트 로그인 — auth-service migration-dev R__02 의 이메일. 비밀번호는 데모와 같은
 # `Demo1234!` 다(면접관이 타이핑하는 계정은 여전히 demo@demo.com 하나 — 이쪽은 시드만 쓴다).
 ARTIST_A_EMAIL="${DEMO_FAN_ARTIST_A_EMAIL:-lumi@demo.com}"
@@ -113,8 +123,20 @@ POST_PUB=""
 # 넘어 "상태가 수렴한다" 가 깨진다. (게시물의 published_at 은 이제 이 규칙을 따르지
 # 않는다 — 도메인이 발행 시각을 정하기 때문이고, 그 대가는 2번 머리에 적었다.)
 if container_up fan-platform-postgres; then
+  AGENCY_OF_AURORA="(SELECT id FROM agencies WHERE tenant_id = '$TENANT' AND name = 'Aurora Entertainment')"
+  AGENCY_OF_NOVA="(SELECT id FROM agencies WHERE tenant_id = '$TENANT' AND name = 'Nova Sound')"
   dbexec --why "아티스트 디렉터리는 **결정에 의해 영구히 직접-DB 다.** ADR-MONO-063 ACCEPTED — D1 (2026-08-13) 이 디렉터리(아티스트·그룹·팬덤)의 **쓰기 표면을 v1 제품 범위 밖으로 확정**했다 ⇒ 이 블록은 '아직 회수 못 한 우회' 가 아니라 **그 결정의 구현**이고, 잠정 표현은 여기서 제거됐다(이전 문구는 'TASK-MONO-522 소관' 이라는 미결 상태였다). POST /api/v1/artists|artist-groups|fandoms 는 hasAnyRole(ADMIN,OPERATOR,SUPER_ADMIN,FAN_OPERATOR) 이고 그 네 이름을 fan-platform 에서 드는 주체는 **사람도 기계도 없다**: FAN_OPERATOR 는 tenant_domain_subscription(*, 'fan') 에서 파생되는데 그 행이 전 테넌트 0/18 이고(fan-platform 은 operator_tenant_assignment 에도 없다 — 2026-08-13 재측정에서 셋 다 여전히 0), ADR-MONO-059 ACCEPTED-A 가 B(운영자 대리)를 배제하며 'B2C_CONSUMER 테넌트를 운영자가 assume 하는 조합은 열지 않는다' 를 구속력 있게 확정했고, ADR-MONO-061 이 만든 세 번째 길(워크로드 토큰이 roles 를 싣는다)도 D1 이 **닫았다**(어떤 cc 클라이언트도 admin-tier 를 받지 않는다 — auth-service WorkloadRoleCatalog + 그 테스트). 🔴 이 사유를 TASK-MONO-512 나 TASK-MONO-522 '소관' 으로 적으면 안 된다: 둘 다 닫혔고, 열지 않기로 **확정하면서** 닫혔다. 되돌리려면 ADR-MONO-063 을 개정해야 한다. 🔵 이 결정의 근거는 '호출자가 없다' 이므로, 콘솔에 fan 관리 화면이 생기는 날 그 근거가 사라지고 결정은 다시 열려야 한다" \
     fan-platform-postgres psql fanplatform_artist fanplatform <<SQL
+-- TASK-MONO-748 — 소속사 엔티티. 이름이 키다(UNIQUE(tenant_id, name)) — 위 AGENCY_* 머리말.
+INSERT INTO agencies (id, tenant_id, name, status, created_at, updated_at, version)
+SELECT '$AGENCY_AURORA', '$TENANT', 'Aurora Entertainment', 'ACTIVE',
+       TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
+WHERE NOT EXISTS (SELECT 1 FROM agencies WHERE tenant_id = '$TENANT' AND name = 'Aurora Entertainment');
+INSERT INTO agencies (id, tenant_id, name, status, created_at, updated_at, version)
+SELECT '$AGENCY_NOVA', '$TENANT', 'Nova Sound', 'ACTIVE',
+       TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
+WHERE NOT EXISTS (SELECT 1 FROM agencies WHERE tenant_id = '$TENANT' AND name = 'Nova Sound');
+
 -- account_id 는 **엔티티 id 와 동일**하게 넣는다(TASK-FAN-BE-045 V3 의 항등 백필과 같은 값).
 -- 이유: 이 시드는 조인의 양쪽 모두에 아티스트 엔티티 id 를 쓴다 — follows 는 아래 API 호출로,
 -- posts.author_account_id 도 이제 API 발행 결과로. 다른 값을 넣으면 팔로우 검증(FAN-BE-045
@@ -123,48 +145,48 @@ if container_up fan-platform-postgres; then
 -- R__06 이 바로 이 id 로 계정을, auth-service R__02 가 자격증명을 만든다. 그래서 아래 2번이
 -- 아티스트 **본인 로그인**으로 글을 발행할 수 있다. (재지정이 아니라 그 id 를 실재화한 이유는
 -- R__06 헤더에 있다: 이미 시드된 데모 DB 의 follows/posts 가 옛 값을 들고 있기 때문이다.)
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_A', '$TENANT', '$ARTIST_A', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_A', '$TENANT', '$ARTIST_A', 'SOLO', 'PUBLISHED', '루미', '김하늘', DATE '2021-03-14', 'Aurora Entertainment', $AGENCY_OF_AURORA,
        E'2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.\n\n데모 데이터 — TASK-MONO-509',
        'https://images.unsplash.com/photo-1618673747378-7e0d3561371a?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_A');
 
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_B', '$TENANT', '$ARTIST_B', 'SOLO', 'PUBLISHED', '노아', '박서준', DATE '2019-08-01', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_B', '$TENANT', '$ARTIST_B', 'SOLO', 'PUBLISHED', '노아', '박서준', DATE '2019-08-01', 'Aurora Entertainment', $AGENCY_OF_AURORA,
        E'프로듀서 겸 솔로 아티스트.\n\n데모 데이터 — TASK-MONO-509',
        'https://images.unsplash.com/photo-1675859427928-fe41277572b4?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_B');
 
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_C', '$TENANT', '$ARTIST_C', 'GROUP_MEMBER', 'PUBLISHED', '세아', '이세아', DATE '2022-05-20', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_C', '$TENANT', '$ARTIST_C', 'GROUP_MEMBER', 'PUBLISHED', '세아', '이세아', DATE '2022-05-20', 'Aurora Entertainment', $AGENCY_OF_AURORA,
        E'그룹 STELLAR 의 리더.\n\n데모 데이터 — TASK-MONO-509',
        'https://images.unsplash.com/photo-1659150140178-d672b4763fd0?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_C');
 
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_D', '$TENANT', '$ARTIST_D', 'SOLO', 'PUBLISHED', '하린', '정하린', DATE '2023-09-08', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_D', '$TENANT', '$ARTIST_D', 'SOLO', 'PUBLISHED', '하린', '정하린', DATE '2023-09-08', 'Aurora Entertainment', $AGENCY_OF_AURORA,
        E'신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다.\n\n데모 데이터 — TASK-MONO-638',
        'https://images.unsplash.com/photo-1620653616528-7da9a2005478?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_D');
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_E', '$TENANT', '$ARTIST_E', 'GROUP_MEMBER', 'PUBLISHED', '리오', '강리오', DATE '2022-05-20', 'Aurora Entertainment',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_E', '$TENANT', '$ARTIST_E', 'GROUP_MEMBER', 'PUBLISHED', '리오', '강리오', DATE '2022-05-20', 'Aurora Entertainment', $AGENCY_OF_AURORA,
        E'그룹 STELLAR 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다.\n\n데모 데이터 — TASK-MONO-638',
        'https://images.unsplash.com/photo-1619361368198-53f950a51dfa?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_E');
-INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, bio, profile_image_ref, created_at, updated_at, published_at, version)
-SELECT '$ARTIST_F', '$TENANT', '$ARTIST_F', 'SOLO', 'PUBLISHED', '유노', '오유노', DATE '2020-11-02', 'Nova Sound',
+INSERT INTO artists (id, tenant_id, account_id, artist_type, status, stage_name, real_name, debut_date, agency, agency_id, bio, profile_image_ref, created_at, updated_at, published_at, version)
+SELECT '$ARTIST_F', '$TENANT', '$ARTIST_F', 'SOLO', 'PUBLISHED', '유노', '오유노', DATE '2020-11-02', 'Nova Sound', $AGENCY_OF_NOVA,
        E'재즈와 알앤비를 오가는 싱어송라이터입니다.\n\n데모 데이터 — TASK-MONO-638',
        'https://images.unsplash.com/photo-1619361369140-33c01702f9cc?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artists WHERE id = '$ARTIST_F');
 
-INSERT INTO artist_groups (id, tenant_id, name, debut_date, agency, status, created_at, updated_at, version)
-SELECT '$GROUP_1', '$TENANT', 'STELLAR', DATE '2022-05-20', 'Aurora Entertainment', 'ACTIVE',
+INSERT INTO artist_groups (id, tenant_id, name, debut_date, agency, agency_id, status, created_at, updated_at, version)
+SELECT '$GROUP_1', '$TENANT', 'STELLAR', DATE '2022-05-20', 'Aurora Entertainment', $AGENCY_OF_AURORA, 'ACTIVE',
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM artist_groups WHERE id = '$GROUP_1');
 
@@ -185,7 +207,7 @@ SELECT '$ARTIST_B', '$TENANT', '노바', '#0EA5E9', DATE '2019-08-01', '밤하�
        TIMESTAMPTZ '2026-01-05 09:00:00+00', TIMESTAMPTZ '2026-01-05 09:00:00+00', 0
 WHERE NOT EXISTS (SELECT 1 FROM fandoms WHERE artist_id = '$ARTIST_B');
 SQL
-  if [ $? -eq 0 ]; then seed_log "아티스트 3 · 그룹 1 · 팬덤 2 준비됨"; else seed_fail "아티스트/그룹/팬덤 INSERT 실패"; fi
+  if [ $? -eq 0 ]; then seed_log "소속사 2 · 아티스트 6 · 그룹 1 · 팬덤 2 준비됨"; else seed_fail "아티스트/그룹/팬덤 INSERT 실패"; fi
 
   # 🔵 ARTIST_POST 는 여기 없다 — TASK-MONO-512 가 아래 2번(API)으로 옮겼다.
   # 직접-DB 시절 이 자리에는 `post_status_history` 를 손으로 넣는 블록도 함께 있었다

@@ -1,5 +1,7 @@
 package com.example.fanplatform.artist.domain.artist;
 
+import com.example.fanplatform.artist.domain.agency.AgencyId;
+
 import java.time.Instant;
 import java.util.Objects;
 
@@ -35,6 +37,13 @@ public final class Artist {
     private final ArtistType artistType;
     private ArtistStatus status;
     private ArtistProfile profile;
+    /**
+     * The agency this artist belongs to (TASK-MONO-748, ADR-MONO-079 D1) — nullable:
+     * a solo artist with no agency is a legal state. Display reads the agency
+     * entity's name; {@code profile.agency()} (free text) survives only as the
+     * transition-period fallback.
+     */
+    private AgencyId agencyId;
     private final Instant createdAt;
     private Instant updatedAt;
     private Instant publishedAt;
@@ -47,6 +56,7 @@ public final class Artist {
                    ArtistType artistType,
                    ArtistStatus status,
                    ArtistProfile profile,
+                   AgencyId agencyId,
                    Instant createdAt,
                    Instant updatedAt,
                    Instant publishedAt,
@@ -58,6 +68,7 @@ public final class Artist {
         this.artistType = artistType;
         this.status = status;
         this.profile = profile;
+        this.agencyId = agencyId;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.publishedAt = publishedAt;
@@ -88,7 +99,7 @@ public final class Artist {
         Objects.requireNonNull(profile, "profile");
         Instant now = Instant.now();
         return new Artist(id, tenantId, accountId, artistType, ArtistStatus.DRAFT, profile,
-                now, now, null, null, 0L);
+                null, now, now, null, null, 0L);
     }
 
     /** Repository-side reconstitution — bypasses invariants intentionally. */
@@ -103,8 +114,25 @@ public final class Artist {
                                       Instant publishedAt,
                                       Instant archivedAt,
                                       long version) {
-        return new Artist(id, tenantId, accountId, artistType, status, profile, createdAt, updatedAt,
-                publishedAt, archivedAt, version);
+        return reconstitute(id, tenantId, accountId, artistType, status, profile, null,
+                createdAt, updatedAt, publishedAt, archivedAt, version);
+    }
+
+    /** Repository-side reconstitution including the agency affiliation (TASK-MONO-748). */
+    public static Artist reconstitute(ArtistId id,
+                                      String tenantId,
+                                      String accountId,
+                                      ArtistType artistType,
+                                      ArtistStatus status,
+                                      ArtistProfile profile,
+                                      AgencyId agencyId,
+                                      Instant createdAt,
+                                      Instant updatedAt,
+                                      Instant publishedAt,
+                                      Instant archivedAt,
+                                      long version) {
+        return new Artist(id, tenantId, accountId, artistType, status, profile, agencyId,
+                createdAt, updatedAt, publishedAt, archivedAt, version);
     }
 
     public void publish() {
@@ -136,6 +164,24 @@ public final class Artist {
         this.updatedAt = Instant.now();
     }
 
+    /**
+     * Sets ({@code null} clears) the agency affiliation (TASK-MONO-748). The caller has
+     * already checked the agency exists in this tenant and is ACTIVE; this method
+     * enforces only the artist's own invariant — an ARCHIVED artist is frozen.
+     *
+     * <p>{@code agencyName} is mirrored into the legacy free-text {@code agency} so the
+     * transition-period fallback never shows a stale value: clearing the affiliation
+     * must not resurrect the old free text on screen.
+     */
+    public void changeAgency(AgencyId newAgencyId, String agencyName) {
+        if (status == ArtistStatus.ARCHIVED) {
+            throw new IllegalStateException("cannot change the agency of an ARCHIVED artist");
+        }
+        this.agencyId = newAgencyId;
+        this.profile = profile.withAgency(newAgencyId == null ? null : agencyName);
+        this.updatedAt = Instant.now();
+    }
+
     /** True when the record is visible to ordinary (non-admin) callers. */
     public boolean isPublished() {
         return status == ArtistStatus.PUBLISHED;
@@ -147,6 +193,7 @@ public final class Artist {
     public ArtistType getArtistType() { return artistType; }
     public ArtistStatus getStatus() { return status; }
     public ArtistProfile getProfile() { return profile; }
+    public AgencyId getAgencyId() { return agencyId; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getPublishedAt() { return publishedAt; }

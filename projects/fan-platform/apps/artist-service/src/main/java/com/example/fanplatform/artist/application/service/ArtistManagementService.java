@@ -11,9 +11,11 @@ import com.example.fanplatform.artist.application.port.in.GetArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.PublishArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.RegisterArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.UpdateArtistUseCase;
+import com.example.fanplatform.artist.application.port.out.AgencyRepository;
 import com.example.fanplatform.artist.application.port.out.ArtistDirectoryCache;
 import com.example.fanplatform.artist.application.port.out.ArtistEventPublisher;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
+import com.example.fanplatform.artist.domain.agency.Agency;
 import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistProfile;
@@ -47,6 +49,8 @@ public class ArtistManagementService implements
     private final ArtistRepository artistRepository;
     private final ArtistEventPublisher eventPublisher;
     private final ArtistDirectoryCache directoryCache;
+    // TASK-MONO-748: affiliation on register + agency-name display on every read.
+    private final AgencyRepository agencyRepository;
 
     @Override
     @Transactional
@@ -65,6 +69,10 @@ public class ArtistManagementService implements
         if (artistRepository.existsByTenantIdAndAccountId(tenantId, cmd.accountId())) {
             throw new ArtistAccountConflictException(cmd.accountId());
         }
+        // Optional affiliation (TASK-MONO-748): the agency must be ACTIVE in this tenant.
+        Agency agency = cmd.agencyId() == null
+                ? null
+                : AgencySupport.loadAffiliable(agencyRepository, cmd.agencyId(), tenantId);
         ArtistProfile profile = new ArtistProfile(
                 cmd.stageName(), cmd.realName(), cmd.debutDate(),
                 cmd.agency(), cmd.bio(), cmd.profileImageRef());
@@ -74,6 +82,9 @@ public class ArtistManagementService implements
                 cmd.accountId(),
                 cmd.artistType(),
                 profile);
+        if (agency != null) {
+            artist.changeAgency(agency.getId(), agency.getName());
+        }
         Artist saved;
         try {
             saved = artistRepository.insert(artist);
@@ -90,7 +101,7 @@ public class ArtistManagementService implements
         // DRAFT artists do not appear in the public directory, so cache
         // invalidation is unnecessary on register. Publish/update/archive
         // handle invalidation downstream.
-        return ArtistView.from(saved);
+        return view(saved);
     }
 
     @Override
@@ -134,7 +145,7 @@ public class ArtistManagementService implements
         if (saved.isPublished()) {
             directoryCache.invalidateAll(tenantId);
         }
-        return ArtistView.from(saved);
+        return view(saved);
     }
 
     @Override
@@ -146,7 +157,7 @@ public class ArtistManagementService implements
         Artist saved = artistRepository.update(artist);
         eventPublisher.publishArtistPublished(saved);
         directoryCache.invalidateAll(actor.tenantId());
-        return ArtistView.from(saved);
+        return view(saved);
     }
 
     @Override
@@ -161,7 +172,7 @@ public class ArtistManagementService implements
         if (wasPublished) {
             directoryCache.invalidateAll(actor.tenantId());
         }
-        return ArtistView.from(saved);
+        return view(saved);
     }
 
     @Override
@@ -173,7 +184,12 @@ public class ArtistManagementService implements
         if (artist.getStatus() != ArtistStatus.PUBLISHED && !actor.isAdmin()) {
             throw new ArtistNotFoundException(artistId);
         }
-        return ArtistView.from(artist);
+        return view(artist);
+    }
+
+    /** Read model with the agency name taken from the entity (TASK-MONO-748, AC-4). */
+    private ArtistView view(Artist a) {
+        return ArtistView.from(a, AgencySupport.names(agencyRepository, a.getTenantId(), a.getAgencyId()));
     }
 
     private Artist loadOrThrow(String rawId, String tenantId) {

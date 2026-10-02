@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.domain.group;
 
+import com.example.fanplatform.artist.domain.agency.AgencyId;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 
 import java.time.Instant;
@@ -25,6 +26,8 @@ public final class ArtistGroup {
     private String name;
     private LocalDate debutDate;
     private String agency;
+    /** Agency affiliation (TASK-MONO-748, ADR-MONO-079 D1) — nullable. */
+    private AgencyId agencyId;
     private String profileImageRef;
     private ArtistGroupStatus status;
     private final Instant createdAt;
@@ -47,6 +50,20 @@ public final class ArtistGroup {
         this.updatedAt = updatedAt;
         this.archivedAt = archivedAt;
         this.version = version;
+    }
+
+    /** Reconstitution including the agency affiliation (TASK-MONO-748). */
+    public static ArtistGroup reconstitute(ArtistGroupId id, String tenantId,
+                                           String name, LocalDate debutDate,
+                                           String agency, AgencyId agencyId,
+                                           String profileImageRef,
+                                           ArtistGroupStatus status,
+                                           Instant createdAt, Instant updatedAt,
+                                           Instant archivedAt, long version) {
+        ArtistGroup g = new ArtistGroup(id, tenantId, name, debutDate, agency, profileImageRef,
+                status, createdAt, updatedAt, archivedAt, version);
+        g.agencyId = agencyId;
+        return g;
     }
 
     public static ArtistGroup create(ArtistGroupId id, String tenantId,
@@ -85,6 +102,20 @@ public final class ArtistGroup {
         }
         validateName(newName);
         this.name = newName;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Sets ({@code null} clears) the agency affiliation; an ARCHIVED group is frozen.
+     * {@code agencyName} is mirrored into the legacy free text (see
+     * {@code Artist#changeAgency}). TASK-MONO-748.
+     */
+    public void changeAgency(AgencyId newAgencyId, String agencyName) {
+        if (status == ArtistGroupStatus.ARCHIVED) {
+            throw new IllegalStateException("cannot change the agency of an ARCHIVED group");
+        }
+        this.agencyId = newAgencyId;
+        this.agency = newAgencyId == null ? null : agencyName;
         this.updatedAt = Instant.now();
     }
 
@@ -130,6 +161,7 @@ public final class ArtistGroup {
     public String getName() { return name; }
     public LocalDate getDebutDate() { return debutDate; }
     public String getAgency() { return agency; }
+    public AgencyId getAgencyId() { return agencyId; }
     public String getProfileImageRef() { return profileImageRef; }
     public ArtistGroupStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }

@@ -61,6 +61,13 @@ class ArtistJpaEntity {
     @Column(name = "agency", length = 120)
     private String agency;
 
+    /**
+     * Agency affiliation (V4 — TASK-MONO-748). Nullable; composite FK
+     * {@code (tenant_id, agency_id) → agencies (tenant_id, id)} in the migration.
+     */
+    @Column(name = "agency_id", length = 36)
+    private String agencyId;
+
     @Column(name = "bio", columnDefinition = "TEXT")
     private String bio;
 
@@ -126,6 +133,9 @@ class ArtistJpaEntity {
     Instant getPublishedAt() { return publishedAt; }
     Instant getArchivedAt() { return archivedAt; }
     Long getVersion() { return version; }
+    String getAgencyId() { return agencyId; }
+
+    void setAgencyId(String agencyId) { this.agencyId = agencyId; }
 
     void applyMutable(ArtistStatus status, String stageName, String realName,
                       LocalDate debutDate, String agency, String bio, String profileImageRef,

@@ -759,6 +759,12 @@ Owned by `artist-service` (artist identity / fandom metadata).
 | ALREADY_MEMBER | 422 | Account already a fandom member (`AlreadyMemberException`) |
 | FOLLOW_LIMIT_EXCEEDED | 429 | Per-account follow count threshold exceeded (v2-planned — no current exception class) |
 | FANDOM_METADATA_INVALID | 400 | Fandom metadata payload fails schema validation (v2-planned — currently handled via generic `VALIDATION_ERROR`) |
+| AGENCY_NOT_FOUND | 404 | Agency does not exist in this tenant (`AgencyNotFoundException`; ADR-MONO-079 D1 / TASK-MONO-748) |
+| AGENCY_NAME_CONFLICT | 409 | Agency name already taken in this tenant — `uq_agencies_tenant_name`, after whitespace normalization; case is significant (`AgencyNameConflictException`; TASK-MONO-748) |
+| AGENCY_ARCHIVED | 422 | Agency is ARCHIVED; affiliation or seller-link write rejected (`AgencyArchivedException`; TASK-MONO-748) |
+| STORE_SELLER_NOT_FOUND | 422 | Agency → store-seller link refused: the store answered definitively that the seller does not exist (ADR-MONO-079 D2; TASK-MONO-748) |
+| STORE_SELLER_CLOSED | 422 | Agency → store-seller link refused: the seller is CLOSED (ADR-MONO-079 D2; TASK-MONO-748) |
+| STORE_SELLER_LOOKUP_UNAVAILABLE | 503 | The store seller lookup could not answer (failure, null or unknown status); nothing is saved — fail-closed. Until `TASK-MONO-759` wires a real transport, every non-null link write returns this code (TASK-MONO-748) |
 
 ## Membership  `[domain: fan-platform]`
 
