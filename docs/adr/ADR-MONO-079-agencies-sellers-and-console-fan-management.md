@@ -1,11 +1,12 @@
 # ADR-MONO-079 — 소속사 · 셀러 · 콘솔의 팬 관리: **팬플랫폼의 아티스트와 스토어의 굿즈를 콘솔에서**
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-10-02
 **주관 티켓:** `TASK-MONO-747`
 **선행 결정:** [`ADR-MONO-077`](ADR-MONO-077-fan-goods-sold-by-the-ecommerce-store.md) (D — 굿즈는 스토어 상품, 팬은 카드·링크만) · [`ADR-MONO-078`](ADR-MONO-078-one-consumer-login-across-fan-and-store.md) (A — 전역 소비자 계정 풀 · CORRECTION 2026-10-02: 셀러 계정은 기계 계정, 사람 계정↔셀러 연결은 이 ADR 로) · [`ADR-MONO-059`](ADR-MONO-059-fan-authoring-identity-plane.md) (A — 아티스트가 진짜 계정으로 쓴다 · **binding: 운영자가 `B2C_CONSUMER` 테넌트를 assume 하는 새 조합은 열지 않는다**) · [`ADR-MONO-030`](ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md) (테넌트 = 스토어 운영사, 셀러 = 테넌트 안의 참여자) · [`ADR-MONO-042`](ADR-MONO-042-ecommerce-seller-onboarding-iam-provisioning.md) (셀러 기계 계정 · D4 정지 = 계정 잠금)
 
-> 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 `ADR-MONO-079 ACCEPTED — <A|B|C>` 로만 넘어간다. 구현 티켓은 ACCEPT PR 에서 기안한다.
+> 🟢 **ACCEPTED — 갈래 A** (2026-10-02 UTC, 소유자 정확형 `ADR-MONO-079 ACCEPTED — A`). 이름 · `ACCEPTED` · **갈래 letter** 세 요건이 모두 도착했다.
+> 🔴 **라이더는 공급되지 않았다** — R1~R4 는 구현자 기본값 그대로다(§ 라이더 대조). 구현 티켓은 이 ACCEPT PR 안에서 기안했다(§ ACCEPT 가 만든 새 의무).
 
 ---
 
@@ -160,3 +161,34 @@ B 는 059 를 건드리지 않는 장점이 있지만, 관리 권한이 **소비
 | 날짜 (UTC) | 상태 | 내용 | 근거 |
 |---|---|---|---|
 | 2026-10-02 | PROPOSED | D1~D5 · 갈래 A/B/C · 추천 A · 라이더 R1~R4. 소유자가 고른 세 갈래(소속사=관리 대상+셀러 연결 · 굿즈=스토어 상품 · 컬렉션 속성)는 결정으로 적음. `TASK-MONO-745` 흡수분(D5) 포함 | `TASK-MONO-747` · AC-0 실측(위 Context 표) |
+| 2026-10-02 | PROPOSED → **ACCEPTED (A)** | 소유자 정확형 `ADR-MONO-079 ACCEPTED — A`. D1~D5 본문은 **바이트 그대로** — ACCEPT 는 확정이지 재결정이 아니다. 라이더 미공급 → 기본값 | 소유자(이 대화) · § ACCEPT 게이트 기록 |
+
+## ACCEPT 게이트 기록 (2026-10-02 UTC) — 🔴 **게이트가 실제로 물었다**
+
+소유자의 첫 메시지는 *«ADR-079 갈래 선택 A»* 였다 — 갈래 letter 는 있지만 정확형(`ADR-MONO-079 ACCEPTED — <letter>`)이 아니다.
+이 ADR 의 추천도 A 였으므로, 그 문장을 수락으로 읽으면 «구현자 추천을 소유자 결정으로 읽는» 귀속 오류와 구별되지 않는다.
+그래서 반영하지 않고 정확형을 요청했고, 다음 메시지로 *«ADR-MONO-079 ACCEPTED — A»* 가 도착했다. ACCEPT 는 그 두 번째 메시지에 귀속된다.
+
+## 라이더 대조 (ACCEPT 시점) — 🔴 **반사가 아니라 대조로 했다**
+
+ACCEPT 메시지에 라이더 언급이 없다. 아래 기본값이 **구현자의 선택**으로 남는다 — 소유자가 언제든 한 줄로 뒤집을 수 있고, 그때 해당 티켓의 AC 를 고친다.
+
+| 번호 | 적용되는 기본값 | 걸리는 티켓 |
+|---|---|---|
+| R1 | `collection_ref` = **아티스트 id** 단위(그룹·소속사 컬렉션은 나중) | `TASK-MONO-749` |
+| R2 | 소속사 ↔ 셀러 **0..1** | `TASK-MONO-748` |
+| R3 | 운영자의 팬 관리 권한 = **플랫폼 운영자만**(고객사 운영자 assume 불가) | `TASK-MONO-750` |
+| R4 | 셀러 구성원 역할 **하나**(`MEMBER`) | `TASK-MONO-752` |
+
+## ACCEPT 가 만든 새 의무 — 티켓으로 기안했다
+
+| 티켓 | 무엇 | 선행 |
+|---|---|---|
+| `TASK-MONO-748` | D1 · D2 — artist-service `agencies` · 아티스트/그룹 `agency_id` · 자유 텍스트 이전 · 소속사 ↔ 셀러 연결(0..1, 쓰기 때 셀러 검증) · 소속사 CRUD API | — |
+| `TASK-MONO-749` | D3 — `products.collection_ref` · 공개 스냅숏에 싣기 · 팬 아티스트 페이지가 그것으로 굿즈 선택 | — (`TASK-MONO-739` 가 이것 위에서 시드) |
+| `TASK-MONO-750` | D4-A — 운영자의 팬 디렉터리 관리 경로: `fan` 도메인 구독 · `FAN_OPERATOR` 파생 · artist-service **관리 경로에만** 엔타이틀먼트 신뢰 · 커뮤니티·멤버십은 계속 닫힘(대조군) · `ADR-MONO-059` 부분 개정 기록 | 748 |
+| `TASK-MONO-751` | D4-A — 콘솔 팬 화면(소속사 · 아티스트 · 그룹) + BFF 라우트 | 748 · 750 |
+| `TASK-MONO-752` | D5 — `seller_members` · 초대 → 로그인 본인 수락 · IAM `consumer_site_roles(ecommerce, SELLER)` 쓰기/회수 · 셀러 정지 = 역할 회수 · 콘솔 셀러 화면의 초대 | — |
+
+- `TASK-MONO-739`(팬 굿즈)의 라이더 R4(예명 접두어)는 D3 으로 **대체**된다 — 739 에 그 정정과 선행(749)을 적었다.
+- `ADR-MONO-059` 에 부분 개정 사실을 덧붙였다(그 ADR 의 binding 문장 자체는 바이트 그대로 — 개정 범위는 이 ADR D4-A).
