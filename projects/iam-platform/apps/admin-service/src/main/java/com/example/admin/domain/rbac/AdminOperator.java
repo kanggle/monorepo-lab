@@ -48,6 +48,43 @@ public record AdminOperator(
         return CONSUMER_POOL_TENANT_ID.equals(tenantId);
     }
 
+    /**
+     * TASK-MONO-750 (ADR-MONO-079 ACCEPTED — A, D4-A, rider R3) — the fan tenant. It subscribes to
+     * the {@code fan} domain (account-service V0031), so a token minted by assuming it is derived
+     * {@code FAN_OPERATOR}, which opens fan artist-service's directory-management paths. R3 gives
+     * that path to <b>platform</b> operators only ({@link #isPlatformScope()}), never to a
+     * customer tenant's operator — so this tenant is reachable only through the platform-scope
+     * sentinel, never through an assignment row or a partnership. admin-service's single home for
+     * the literal.
+     */
+    public static final String FAN_PLATFORM_TENANT_ID = "fan-platform";
+
+    /**
+     * TASK-MONO-750: the domain keys that derive {@code FAN_OPERATOR} at assume-tenant (auth-service
+     * {@code OperatorRoleDerivation}: {@code case "fan", "fan-platform"}). Only
+     * {@link #FAN_PLATFORM_TENANT_ID} may subscribe to them.
+     */
+    public static final java.util.Set<String> FAN_DOMAIN_KEYS = java.util.Set.of("fan", "fan-platform");
+
+    /**
+     * TASK-MONO-750: {@code true} for a tenant that only a platform-scope operator may assume — no
+     * assignment row and no partnership reaches it.
+     */
+    public static boolean isPlatformOperatorOnlyTenant(String tenantId) {
+        return FAN_PLATFORM_TENANT_ID.equals(tenantId);
+    }
+
+    /**
+     * TASK-MONO-750: {@code true} when subscribing {@code tenantId} to {@code domainKey} would make
+     * a customer tenant's assume-tenant token carry {@code FAN_OPERATOR} — i.e. a fan domain key on
+     * any tenant other than {@link #FAN_PLATFORM_TENANT_ID}.
+     */
+    public static boolean isReservedFanSubscription(String tenantId, String domainKey) {
+        return domainKey != null
+                && FAN_DOMAIN_KEYS.contains(domainKey.trim())
+                && !FAN_PLATFORM_TENANT_ID.equals(tenantId);
+    }
+
     public enum Status {
         ACTIVE, DISABLED, LOCKED
     }

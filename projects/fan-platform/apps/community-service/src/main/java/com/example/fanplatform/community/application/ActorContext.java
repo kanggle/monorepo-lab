@@ -37,6 +37,14 @@ public record ActorContext(String accountId, String tenantId, Set<String> roles)
         // visibility over every author's gated content in the tenant. That is an ADR-level
         // change, not a configuration one.
         //
+        // TASK-MONO-750 / ADR-MONO-079 ACCEPTED — A (D4-A): that `fan` subscription row now
+        // EXISTS (iam account-service V0031) — a platform operator who assumes `fan-platform` is
+        // minted FAN_OPERATOR, for artist-service's directory. The side door above is held shut
+        // one layer up instead: SecurityConfig.END_USER_NOT_OPERATOR refuses a FAN_OPERATOR token
+        // on every /api/community/** path BEFORE any use case runs, so this predicate is still
+        // never evaluated true for that role. The branch is left as it was (ADR-MONO-059 option D
+        // not chosen); if the chain rule is ever removed, this is where option B reopens.
+        //
         // TASK-MONO-522 / ADR-MONO-063 ACCEPTED — D1: a THIRD way to make it true was
         // considered and declined. ADR-MONO-061 made a client_credentials token able to carry
         // `roles`, so a workload — not only a human — could have been issued one of these four

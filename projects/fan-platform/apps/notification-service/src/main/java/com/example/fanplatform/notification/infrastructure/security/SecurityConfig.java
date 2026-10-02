@@ -21,6 +21,11 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.io.IOException;
@@ -55,12 +60,49 @@ public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /**
+     * TASK-MONO-750 (ADR-MONO-079 ACCEPTED — A, D4-A · ADR-MONO-059 § 부분 개정): the role a
+     * <b>platform operator</b> carries after assuming {@code fan-platform} — derived at
+     * assume-tenant from that tenant's {@code fan} subscription (iam {@code OperatorRoleDerivation}).
+     */
+    static final String ASSUME_TENANT_OPERATOR_ROLE = "FAN_OPERATOR";
+
+    /**
+     * The end-user rule: authenticated, <b>and not</b> an assume-tenant operator.
+     *
+     * <h2>Why this service refuses the operator, and why the refusal has to live here</h2>
+     *
+     * ADR-MONO-079 D4-A opened ONE fan surface to the platform operator — artist-service's
+     * directory (artists, groups, fandoms, agencies). Everything else stays closed, and this
+     * service is in the "everything else": the notification inbox. The operator's token carries
+     * {@code tenant_id=fan-platform}, so the tenant gate admits it by plain equality — fan's
+     * refusal of {@code entitled_domains} does not touch it. Without this rule the token would be
+     * an ordinary authenticated caller on every path here; in community it would also satisfy
+     * {@code ActorContext.isOperator()}, which is exactly the side door ADR-MONO-059 excluded
+     * (option B: an operator publishing {@code ARTIST_POST} and owning every author's content).
+     *
+     * <p>So the refusal is a role rule on the chain, evaluated before any handler: a request whose
+     * token carries {@code FAN_OPERATOR} is 403 here on every end-user path. Composed from Spring
+     * Security's own managers rather than written as a lambda, so the decision for an anonymous
+     * caller is unchanged — {@code authenticated()} still denies it first and the entry point
+     * still answers 401.
+     */
+    static final AuthorizationManager<RequestAuthorizationContext> END_USER_NOT_OPERATOR =
+            AuthorizationManagers.<RequestAuthorizationContext>allOf(
+                    AuthenticatedAuthorizationManager.<RequestAuthorizationContext>authenticated(),
+                    AuthorizationManagers.<RequestAuthorizationContext>not(
+                            AuthorityAuthorizationManager.<RequestAuthorizationContext>hasRole(
+                                    ASSUME_TENANT_OPERATOR_ROLE)));
+
     @Bean
     public SecurityFilterChain endUserFilterChain(HttpSecurity http,
                                                   JwtDecoder endUserJwtDecoder) throws Exception {
         return ResourceServerChainAssembler.statelessJwtChain(http)
                 .publicPaths(PublicPaths.AS_SET)
-                .authenticated("/api/fan/**")
+                // TASK-MONO-750: was .authenticated("/api/fan/**") — same paths, plus the
+                // operator refusal (END_USER_NOT_OPERATOR above).
+                .authorizeRules(auth -> auth
+                        .requestMatchers("/api/fan/**").access(END_USER_NOT_OPERATOR))
                 .anyRequestDenied()
                 .jwtDecoder(endUserJwtDecoder)
                 .jwtAuthenticationConverter(

@@ -7,6 +7,14 @@
 > All requests are routed through the fan-platform gateway under the prefix
 > `/api/v1/community/**`; the gateway forwards to the service which serves
 > `/api/community/**`. Path examples below use the service-internal path.
+>
+> **Operator tokens are refused here** (`ADR-MONO-079` D4-A · `ADR-MONO-059` · `TASK-MONO-750`).
+> A platform operator who assumes `fan-platform` holds a token with `tenant_id=fan-platform` and
+> `roles=["FAN_OPERATOR"]`. That token passes the tenant gate (equality), so the refusal is a
+> **role rule** in this service's own chain: every request on `/api/community/**` whose token
+> carries `FAN_OPERATOR` is **403 `PERMISSION_DENIED`**, before any handler runs. The operator's
+> fan surface is artist-service's directory only (`artist-api.md` header); community (posts, comments, reactions, follows, feed — and above all `ARTIST_POST`, authoring as an artist) is not
+> part of it.
 
 ## Envelope shapes
 
@@ -37,7 +45,7 @@
 | 400 | VALIDATION_ERROR | malformed JSON / type mismatch |
 | 401 | UNAUTHORIZED | missing / expired / invalid signature |
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `fan-platform` (and is not `*`) |
-| 403 | PERMISSION_DENIED | authorized but not the author / operator |
+| 403 | PERMISSION_DENIED | authorized but not the author / operator; **or** the token carries `FAN_OPERATOR` (any path — see header) |
 | 403 | MEMBERSHIP_REQUIRED | gated visibility tier; details.requiredTier ∈ MEMBERS_ONLY/PREMIUM |
 | 404 | POST_NOT_FOUND | missing OR cross-tenant; existence not leaked |
 | 404 | COMMENT_NOT_FOUND | missing OR cross-tenant |

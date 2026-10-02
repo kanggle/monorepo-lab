@@ -10,6 +10,14 @@
 > `/api/v1/memberships/**`; the gateway forwards to the service which serves
 > `/api/fan/memberships/**`. Path examples below use the service-internal path.
 >
+> **Operator tokens are refused here** (`ADR-MONO-079` D4-A · `ADR-MONO-059` · `TASK-MONO-750`).
+> A platform operator who assumes `fan-platform` holds a token with `tenant_id=fan-platform` and
+> `roles=["FAN_OPERATOR"]`. That token passes the tenant gate (equality), so the refusal is a
+> **role rule** in this service's own chain: every request on `/api/fan/**` whose token
+> carries `FAN_OPERATOR` is **403 `PERMISSION_DENIED`**, before any handler runs. The operator's
+> fan surface is artist-service's directory only (`artist-api.md` header); membership is not
+> part of it.
+>
 > The **internal** endpoint `/internal/membership/access` is NOT gateway-routed —
 > it is reachable only on the internal docker network and is authenticated by a
 > IAM `client_credentials` workload-identity JWT (ADR-MONO-005), NOT an end-user
@@ -45,6 +53,7 @@
 | 401 | UNAUTHORIZED | missing / expired / invalid signature (public); end-user-only on `/internal/**` |
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `fan-platform` (and is not `*`) |
 | 403 | FORBIDDEN | `/internal/**` called with a non-workload-identity token |
+| 403 | PERMISSION_DENIED | the token carries `FAN_OPERATOR` (any public path — see header) |
 | 404 | MEMBERSHIP_NOT_FOUND | missing OR cross-tenant OR cross-account; existence not leaked |
 | 404 | BILLING_KEY_ENROLLMENT_NOT_FOUND | cancel of a tier with no active billing-key enrollment |
 | 409 | IDEMPOTENCY_KEY_CONFLICT | `Idempotency-Key` reused with a different payload |

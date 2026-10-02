@@ -45,6 +45,15 @@ public class ManageSubscriptionUseCase {
             throw new TenantScopeDeniedException(
                     "tenant '" + tenantId + "' is reserved and cannot subscribe to a domain");
         }
+        // TASK-MONO-750 (ADR-MONO-079 D4-A, rider R3): the `fan` domain derives FAN_OPERATOR at
+        // assume-tenant. Only `fan-platform` may hold it — whose subscription.manage scope only a
+        // platform-scope grant reaches — so the subscription is selectable by platform operators
+        // only. Refused for every actor before the scope gate, like the consumer-pool refusal.
+        if (AdminOperator.isReservedFanSubscription(tenantId, domainKey)) {
+            throw new TenantScopeDeniedException(
+                    "domain '" + domainKey + "' may be subscribed by tenant '"
+                            + AdminOperator.FAN_PLATFORM_TENANT_ID + "' only");
+        }
         // ADR-MONO-024 D2 + D5-C (TASK-BE-345): the confinement gate covers the
         // entitlement admin surface too. Net-zero for SUPER_ADMIN ('*'); denies
         // before the account-service delegation when out of scope.

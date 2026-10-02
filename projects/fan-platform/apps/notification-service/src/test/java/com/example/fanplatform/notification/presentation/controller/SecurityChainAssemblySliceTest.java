@@ -9,6 +9,7 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -221,5 +222,47 @@ class SecurityChainAssemblySliceTest {
         assertThat(result.getRequest().getSession(false)).isNull();
         assertThat(result.getResponse().getHeaders("Set-Cookie"))
                 .noneMatch(cookie -> cookie.startsWith("JSESSIONID"));
+    }
+
+    // ---- TASK-MONO-750: the platform operator's token is refused here ----------------------------
+
+    /**
+     * {@code ADR-MONO-079} D4-A opened the fan directory (artist-service) to a platform operator who
+     * assumes {@code fan-platform}; this service is NOT part of that surface ({@code ADR-MONO-059}
+     * § 부분 개정). The operator token below is shaped like the one iam mints on that path —
+     * {@code tenant_id=fan-platform} (so the tenant gate admits it by equality),
+     * {@code roles=["FAN_OPERATOR"]} (derived from the tenant's {@code fan} subscription) and
+     * {@code entitled_domains=["fan"]} — and every request with it must be refused by the chain.
+     *
+     * <p>Each refusal has a control on the same path with a non-operator token that gets PAST the
+     * chain, so the 403 is the operator rule and not the path being closed to everyone.
+     */
+    @Nested
+    @DisplayName("TASK-MONO-750 — a FAN_OPERATOR (assume-tenant) token is refused on every end-user path")
+    class OperatorTokenRefused {
+
+        private String operatorToken() {
+            return JWT.signEndUser("op-750", JwtTestHelper.DEFAULT_TENANT_ID, java.util.Map.of(
+                "roles", java.util.List.of("FAN_OPERATOR"),
+                "entitled_domains", java.util.List.of("fan")));
+        }
+
+        @Test
+        @DisplayName("🔴 reading the inbox as the operator -> 403 PERMISSION_DENIED")
+        void operatorCannotReadTheInbox() throws Exception {
+            mockMvc.perform(get("/api/fan/notifications")
+                            .header("Authorization", bearer(operatorToken())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+
+        @Test
+        @DisplayName("control: the same inbox read with a FAN token gets past the chain")
+        void fanGetsPastTheChain() throws Exception {
+            MvcResult result = mockMvc.perform(get("/api/fan/notifications")
+                            .header("Authorization", bearer(JWT.signFanToken("fan-1"))))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+        }
     }
 }
