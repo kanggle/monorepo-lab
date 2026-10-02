@@ -108,3 +108,20 @@ platform-console
 **로컬 게이트**: `pnpm lint` rc=0 · `tsc --noEmit` rc=0 · 전체 vitest **325 파일 / 3,648 시험** 통과(해석 위치를 옮기기 전 판) · 옮긴 뒤 영향 시험 4 파일 49 통과 · `check-fetch-resolution.mjs` rc=0(36 사이트 전부 분류).
 
 **미측정**: 실제 Vercel·데모에서의 동작(→ `TASK-MONO-758`), 게이트웨이 경유 scm 본문이 픽스처와 같은 모양인지의 **실물** 확인(콘솔 scm 화면 스키마가 같은 `{data, meta}` 를 읽는 것까지만 확인 — 실물은 758).
+
+## 결과 보강 — 🔴 단계 순서가 틀렸다, `TASK-MONO-756` 을 이 PR 로 흡수 (2026-10-02 UTC)
+
+PR CI 66/0 초록 뒤 머지 전 e2e 점검(`CLAUDE.md` «nightly 전용 스위트 grep»)에서, **합성을 옮기는 순간** nightly 전용 두 스택이 깨진다는 것이 보였다. `ADR-MONO-081` D4 는 «console-bff 를 **지우기** 전에 e2e 를 고친다» 로 적었지만 실제 경계는 **옮기기**였다.
+
+| 스택 | 깨지는 이유 | 고친 것 |
+|---|---|---|
+| platform-console e2e(`nightly-e2e.yml`) | console-web 에 `FINANCE_BASE_URL` 없음 → `operators-profile` 의 «finance 카드 ok» 실패 | `docker-compose.e2e.yml` console-web 에 console-bff 가 쓰던 값 이관(wms/scm/erp 는 즉시 거절 주소) |
+| federation e2e | console-web 에 도메인 주소 없음 · scm 은 게이트웨이 경로인데 하네스에 scm 게이트웨이 없음 → 엔타이틀먼트 스펙의 scm/erp `forbidden` 이 `degraded` | `scm-gateway-service` 추가(빌드·업로드·복원·기동·health 대기) + console-web 주소 |
+| federation 트레이스 스펙 | console-bff span 이 없어진다 | 같은 불변식을 console-web → 생산자로 재진술. 합성 레그를 OTel span(`console.composition.leg`, `composition.domain`/`route`)으로 감쌈 + 단위 시험 |
+
+**머지 전 실측(이 브랜치로 dispatch)**:
+- `nightly-e2e.yml` [37007698800](https://github.com/kanggle/monorepo-lab/actions/runs/37007698800) — **success**(`Platform Console E2E full-stack` 포함 전 잡).
+- `federation-hardening-e2e.yml` [37007694908](https://github.com/kanggle/monorepo-lab/actions/runs/37007694908) — **failure** at «Wait for scm-gateway-service health»: 게이트웨이의 기동 JWKS 확인(30 s)이 auth-service 연결 거부로 끝나 스스로 종료. 이 스택에서 기동 확인을 하는 서비스는 게이트웨이뿐. → `service_healthy` 의존 · 확인 120 s · `on-failure:3`.
+- 재실행 [37009462411](https://github.com/kanggle/monorepo-lab/actions/runs/37009462411) — **success, Playwright 20 passed**. 트레이스 보고: trace `40457fb4…` 하나에 레그 span 6(iam·wms·scm·finance·erp·ecommerce) + 생산자 4(admin-service · finance · scm-gateway · erp-masterdata). 🔵 admin-service 는 console-bff 시절 트리에 합류하지 않던 생산자다.
+
+🔵 AC-9(머지 뒤 첫 nightly)는 그대로 남긴다 — dispatch 는 같은 커밋의 같은 워크플로지만 «main 위에서» 는 아니다.

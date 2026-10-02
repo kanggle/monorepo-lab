@@ -56,6 +56,7 @@ platform-console
 - [ ] **AC-5** — 도메인별 자격이 console-bff `CredentialSelectionAdapter` 와 같다(헤더 단언).
 - [ ] **AC-6** — 라이더 R1: 레그 구조화 로그 한 줄. 라이더 R2: 레그 타임아웃(값은 `TASK-PC-FE-302` 가 잰 것을 쓴다).
 - [ ] **AC-7** — 머지 뒤 다음 nightly 콘솔 e2e 결과 확인.
+- [ ] **AC-8** — 🔴 **머지 전에** 이 브랜치로 `nightly-e2e.yml` 과 `federation-hardening-e2e.yml` 을 `workflow_dispatch` 로 돌려 둘 다 초록임을 적는다. `TASK-PC-FE-302` 의 교훈: 합성을 옮기는 순간 두 e2e 하네스의 console-web 배선(도메인·알림 서비스 주소)이 모자라 nightly 가 깨졌다 — PR CI 66/0 은 그것을 보지 못한다(두 스위트는 PR 에서 돌지 않는다). 알림 인박스는 두 하네스 모두 console-bff 로 가고 있으니 console-web 에 erp 알림 주소가 필요하다.
 
 # Related Specs
 
