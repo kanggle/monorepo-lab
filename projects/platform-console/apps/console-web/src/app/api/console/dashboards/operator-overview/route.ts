@@ -8,215 +8,106 @@ import {
 import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
+import { compose, operatorOverviewLegs } from '@/shared/composition/console-composition';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 
 export const runtime = 'nodejs';
 
 /**
- * Same-origin server proxy for the BFF-routed cross-domain operator
- * overview (TASK-PC-FE-011 — `console-integration-contract.md`
- * § 2.4.9.1).
+ * Operator Overview — `console-integration-contract.md` § 2.4.9.1.
  *
- * The browser NEVER reaches `console-bff` directly. The 3 inbound
- * headers required by the BFF (per § 2.4.9.1):
- *   - `Authorization: Bearer <gap-oidc-access-token>` (inbound principal)
- *   - `X-Operator-Token: <rfc8693-operator-token>` (request-scoped)
- *   - `X-Tenant-Id: <active-tenant>` (forwarded verbatim)
- * are read SERVER-SIDE here from the HttpOnly cookie session
- * (`shared/lib/session`) and forwarded to console-bff. The browser
- * has no JS path to these — server-component first + HttpOnly cookie
- * boundary (frontend-app.md § Authentication; architecture.md
- * § Forbidden Dependencies).
+ * Produced in the console-web server since TASK-PC-FE-302 (ADR-MONO-081, A;
+ * contract § 2.4.9.0). Before that this route proxied to `console-bff`, which
+ * has no public hostname, so the Vercel console could never reach it and the
+ * card grid always showed «unavailable». The wire envelope is unchanged.
  *
- * **4th (optional) header — Option (a) activation (TASK-PC-FE-014 /
- * § 2.4.9.1 Implementation guidance)**:
- *   - `X-Finance-Default-Account-Id: <finance-account-uuid>` (sourced
- *     server-side from `getFinanceDefaultAccountId()` which reads the
- *     IAM registry's `productItem[finance].operatorContext.defaultAccountId`).
- *   - **Set only when non-blank**. Absent / whitespace / null ⇒ header
- *     omitted entirely (NOT set to `""`). The BFF's `callFinance(...)`
- *     gate then preserves the existing MISSING_PREREQUISITE path.
- *   - Server-only (the value is `internal`-classified operator profile
- *     data; finance F7 / `regulated.md` R7 transitive discipline). The
- *     browser never sees the inbound or outbound header.
+ * Six legs, each through the address the domain's own console screen uses
+ * (`shared/composition/console-composition.ts`):
+ *   - IAM: RFC 8693 operator token + `X-Tenant-Id` (ADR-MONO-017 D4);
+ *   - wms / scm / finance / erp / ecommerce: domain-facing IAM OIDC token;
+ *   - finance only when the operator has a default account (option (a),
+ *     TASK-PC-FE-014); otherwise `forbidden / MISSING_PREREQUISITE`, no call.
  *
- * READ-ONLY (§ 2.4.9 HARD INVARIANT): GET only, no body, no
- * `Idempotency-Key`, no `X-Operator-Reason`. The BFF route never
- * carries a mutation method; adding one is a contract defect.
+ * Outcomes:
+ *   - no active tenant → 400 NO_ACTIVE_TENANT, no leg called;
+ *   - session tokens missing → 401 TOKEN_INVALID, no leg called;
+ *   - any data leg 401 → 401 TOKEN_INVALID (cross-leg rule — an expired
+ *     session is not a partial outage);
+ *   - otherwise 200 — failed legs are per-card `degraded` / `forbidden`,
+ *     never a blank dashboard and never 503.
  *
- * HTTP outcome map (mirrors BFF + § 2.4.9.1 error envelope):
- *   - inbound tenant absent → 400 NO_ACTIVE_TENANT (BEFORE any
- *     outbound; the BFF would also reject — pre-emptive client-side
- *     fail-closed).
- *   - inbound operator-token / access-token absent → 401
- *     TOKEN_INVALID (the BFF would also reject; we do not call it
- *     in that state).
- *   - BFF 200 → passthrough verbatim (the per-card degrade is INSIDE
- *     the 200 payload as `card.status`; the proxy never re-classifies).
- *   - BFF 400 NO_ACTIVE_TENANT → 400.
- *   - BFF 401 → 401 (the client api-client triggers /api/auth/refresh
- *     and a single retry; on retry-fail it redirects to /login).
- *   - BFF non-2xx other → 502 BAD_GATEWAY (NOT a 503 BFF emit — the
- *     BFF never emits 503 per D5.B; reaching this branch means
- *     transport / parse / unexpected status).
- *   - network/timeout/parse failure → 502 BAD_GATEWAY.
- *
- * No token / source PII is ever logged (only request id + status).
+ * READ-ONLY: GET only. Tokens and account ids are never logged.
  */
-
-/** Target URL on the console-bff side. Env-overridable; defaults to the BFF's
- *  address on the docker network — NOT a `*.local` Traefik hostname
- *  (TASK-MONO-362: console-bff holds no edge router; every call is server-side). */
-function bffUrl(): string {
-  const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
-  ).replace(/\/$/, '');
-  return `${base}/api/console/dashboards/operator-overview`;
-}
-
 export async function GET() {
   const requestId = newRequestId();
 
   // ADR-MONO-074 A2 — asked BEFORE the tenant and token reads. A sample visitor
-  // gets the sample overview fed into the passthrough mapping below; console-bff
-  // is never called. Everyone else takes the unchanged path in the `else`.
+  // gets the sample overview; no leg is called. The sample core keeps the name
+  // `console-bff` (ADR-MONO-081 rider check — renaming it trips the ledger guard).
   const sample = await sampleGate({
     core: 'console-bff',
     surface: 'operator-overview',
     method: 'GET',
     path: '/api/console/dashboards/operator-overview',
   });
+  if (sample) return passthroughSample(sample, requestId);
 
-  let res: Response;
-  if (sample) {
-    res = sample;
-  } else {
-    const tenant = await getActiveTenant();
-    if (!tenant) {
-      return NextResponse.json(
-        { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-        { status: 400 },
-      );
-    }
-
-    const accessToken = await getAccessToken();
-    const operatorToken = await getOperatorToken();
-    if (!accessToken || !operatorToken) {
-      // No partial authed state — both tokens required (mirrors
-      // `isAuthenticated()` in shared/lib/session.ts).
-      return NextResponse.json(
-        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-        { status: 401 },
-      );
-    }
-
-    // ── Domain-facing inbound principal (ADR-MONO-020 D4 / § 2.7) ──────────
-    // The BFF forwards `Authorization: Bearer <token>` verbatim to the non-GAP
-    // legs (ADR-017 D6 pass-through, 0-byte). We put the **domain-facing** token
-    // here: the ASSUMED (tenant-scoped) token when the operator has switched to
-    // a customer (so the non-IAM domain entitlement gates follow the selection),
-    // else the base token (net-zero). The IAM leg keeps using `X-Operator-Token`
-    // (§ 2.6 operator-token boundary — unchanged).
-    const domainFacingToken = await getDomainFacingToken();
-    if (!domainFacingToken) {
-      return NextResponse.json(
-        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-        { status: 401 },
-      );
-    }
-
-    // Option (a) activation (TASK-PC-FE-014): forward the optional
-    // operator finance default account id when present. The helper itself
-    // returns null on absent / whitespace / registry-degraded — we set the
-    // header ONLY when truthy. Never `headers.set('X-Finance-Default-Account-Id', '')`
-    // (the BFF's `hasText` gate treats blank as absent, but transmitting a
-    // blank header would obscure the intent at the wire).
-    const financeDefaultAccountId = await getFinanceDefaultAccountId();
-    const outboundHeaders: Record<string, string> = {
-      Accept: 'application/json',
-      Authorization: `Bearer ${domainFacingToken}`,
-      'X-Operator-Token': operatorToken,
-      'X-Tenant-Id': tenant,
-      'X-Request-Id': requestId,
-    };
-    if (financeDefaultAccountId) {
-      outboundHeaders['X-Finance-Default-Account-Id'] = financeDefaultAccountId;
-    }
-
-    try {
-      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-      res = await fetch(bffUrl(), {
-        method: 'GET',
-        headers: outboundHeaders,
-        cache: 'no-store',
-      });
-    } catch {
-      logger.warn('operator_overview_proxy_network_error', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-        { status: 502 },
-      );
-    }
+  const tenant = await getActiveTenant();
+  if (!tenant) {
+    // Before any leg — a test asserts zero calls on this path.
+    return NextResponse.json(
+      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+      { status: 400 },
+    );
   }
 
-  // Passthrough for the two contractually defined surfaces.
-  if (res.status === 200) {
-    // The BFF response body IS the wire envelope verbatim — the proxy
-    // never re-shapes it (per-card degrade lives inside the payload,
-    // not in the HTTP status).
-    let body: unknown;
-    try {
-      body = await res.json();
-    } catch {
-      logger.warn('operator_overview_proxy_bad_body', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff returned invalid body' },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(body, { status: 200 });
+  const accessToken = await getAccessToken();
+  const operatorToken = await getOperatorToken();
+  const domainFacingToken = await getDomainFacingToken();
+  if (!accessToken || !operatorToken || !domainFacingToken) {
+    // No partial authed state — mirrors `isAuthenticated()`.
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+      { status: 401 },
+    );
   }
 
-  if (res.status === 400 || res.status === 401) {
-    let envelope: { code?: unknown; message?: unknown } = {};
-    try {
-      envelope = (await res.json()) as { code?: unknown; message?: unknown };
-    } catch {
-      /* keep defaults */
-    }
-    const code =
-      typeof envelope.code === 'string'
-        ? envelope.code
-        : res.status === 400
-          ? 'NO_ACTIVE_TENANT'
-          : 'TOKEN_INVALID';
-    const message =
-      typeof envelope.message === 'string'
-        ? envelope.message
-        : res.status === 400
-          ? 'no active tenant selected'
-          : 'session expired';
-    logger.warn('operator_overview_proxy_4xx', {
-      requestId,
-      status: res.status,
-      code,
-    });
-    return NextResponse.json({ code, message }, { status: res.status });
-  }
-
-  // The BFF never emits 503 (D5.B); 5xx here means transport / proxy
-  // / unexpected upstream. Surface as BAD_GATEWAY so the operator
-  // sees an "overview unavailable" state without confusing the
-  // per-card discipline.
-  logger.warn('operator_overview_proxy_unexpected_status', {
+  const legs = await operatorOverviewLegs({
+    tenant,
+    operatorToken,
+    domainFacingToken,
+    financeDefaultAccountId: await getFinanceDefaultAccountId(),
     requestId,
-    status: res.status,
   });
+  const result = await compose(legs, {
+    route: 'operator-overview',
+    requestId,
+    // The demo host is resolved here, at the call site (check-fetch-resolution).
+    fetchLeg: async (url, init) => fetch(await resolveBackendUrl(url), init),
+  });
+
+  if (result.unauthorized) {
+    // Cross-leg 401 rule (§ 2.4.4 D3): one data leg's 401 is the session's.
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session expired' },
+      { status: 401 },
+    );
+  }
+  return NextResponse.json(result.envelope, { status: 200 });
+}
+
+/** The sample surface answers with the same envelope the composition would. */
+async function passthroughSample(res: Response, requestId: string): Promise<NextResponse> {
+  if (res.status === 200) {
+    try {
+      return NextResponse.json(await res.json(), { status: 200 });
+    } catch {
+      /* fall through */
+    }
+  }
+  logger.warn('operator_overview_sample_unexpected', { requestId, status: res.status });
   return NextResponse.json(
-    { code: 'BAD_GATEWAY', message: 'console-bff unexpected response' },
+    { code: 'BAD_GATEWAY', message: 'sample overview unavailable' },
     { status: 502 },
   );
 }

@@ -3,6 +3,11 @@ import { loginAsAcmeOperator } from '../fixtures/login';
 import { gotoOverview } from '../fixtures/console-helpers';
 
 /**
+ * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the overview legs now leave from the console-web
+ * server (scm through the scm gateway), not console-bff. The token they carry is
+ * the same domain-facing token, so the producer-side gate this spec measures is
+ * unchanged — «BFF pass-through» below now reads «console-web pass-through».
+ *
  * TASK-MONO-154 — ADR-MONO-019 runtime activation capstone.
  *
  * Entitlement-trust cross-domain discriminator spec. Proves, on the full
