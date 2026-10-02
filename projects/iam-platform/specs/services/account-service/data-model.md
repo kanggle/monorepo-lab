@@ -57,6 +57,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | `occurred_at` | DATETIME(6) | NOT NULL | internal | UTC |
 
 **불변성**: **append-only**. DB 트리거로 UPDATE/DELETE 차단 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
+그래서 한 사이트 계정을 풀로 옮길 때(`TASK-BE-618`) 이 표의 옛 행은 **옮기지 않는다** — `tenant_id` 는 «그 전이가 일어난 때의 테넌트» 로 남고, 읽기는 전부 `account_id` 로만 한다.
 
 **인덱스**: `idx_ash_account_id_occurred_at` (복합)
 
@@ -110,7 +111,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 |---|---|---|---|---|
 | `account_id` | VARCHAR(36) | NOT NULL, PK | internal | — |
 | `site_tenant_id` | VARCHAR(32) | NOT NULL, PK | internal | — |
-| `role_name` | VARCHAR(64) | NOT NULL, PK | internal | `account_roles.role_name` 과 같은 정규식. 시드 역할(`CUSTOMER`·`FAN`)은 **저장하지 않는다** — 발급 시 `RoleSeedPolicy` 가 사이트로 더한다 |
+| `role_name` | VARCHAR(64) | NOT NULL, PK | internal | `account_roles.role_name` 과 같은 정규식. 가입·동의는 시드 역할(`CUSTOMER`·`FAN`)을 **저장하지 않는다** — 발급 시 `RoleSeedPolicy` 가 사이트로 더한다. 예외: 한 사이트 계정 이동(`TASK-BE-618`)은 그 사이트 `account_roles` 를 **그대로**(저장돼 있던 시드 포함) 옮긴다 — 이동 전 세션(사이트 principal)의 «저장 역할만» 규칙이 같은 집합을 받게 하려고. 풀 발급은 `시드 ∪ 이 표` 라 중복이 결과를 바꾸지 않는다 |
 | `granted_by` | VARCHAR(36) | NULL | internal | — |
 | `granted_at` | DATETIME(6) | NOT NULL | internal | — |
 

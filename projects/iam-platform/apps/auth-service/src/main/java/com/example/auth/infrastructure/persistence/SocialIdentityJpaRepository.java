@@ -12,4 +12,7 @@ public interface SocialIdentityJpaRepository extends JpaRepository<SocialIdentit
             String tenantId, String provider, String providerUserId);
 
     List<SocialIdentityJpaEntity> findByAccountId(String accountId);
+
+    // TASK-BE-618: consumer-pool legacy move — skip accounts with any linked social identity.
+    boolean existsByAccountId(String accountId);
 }

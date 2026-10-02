@@ -3,6 +3,7 @@ package com.example.account.presentation.advice;
 import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.BulkLimitExceededException;
+import com.example.account.application.exception.ConsumerPoolDisabledException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.OrgNodeNotFoundException;
@@ -112,6 +113,13 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBulkLimitExceeded(BulkLimitExceededException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", e.getMessage()));
+    }
+
+    /** TASK-BE-618 — the consumer-pool legacy move refused as a whole: the pool flag is off. */
+    @ExceptionHandler(ConsumerPoolDisabledException.class)
+    public ResponseEntity<ErrorResponse> handleConsumerPoolDisabled(ConsumerPoolDisabledException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("CONSUMER_POOL_DISABLED", e.getMessage()));
     }
 
     /**

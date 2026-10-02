@@ -53,6 +53,39 @@ public interface AuthServicePort {
      */
     int backfillCredentialIdentities(List<CredentialIdentityBinding> bindings);
 
+    /**
+     * TASK-BE-618 (auth-internal.md § POST /internal/auth/consumer-pool/moves) — move the account's
+     * credential from {@code siteTenantId} into the consumer pool. Called as the LAST step of one account's
+     * legacy-move transaction, so that any refusal or failure (both thrown) rolls the account_db half back.
+     *
+     * <p>Returns normally when auth-service answered 200: moved, already in the pool (idempotent re-run),
+     * or no credential to move.
+     *
+     * @throws CredentialPoolMoveRefused when auth-service refused with a known 409 code — the account is
+     *                                   skipped with that reason
+     * @throws AuthServiceUnavailable    on anything else (5xx — including admin-service being unable to
+     *                                   answer the operator-facet question, 503 — timeout, unknown 4xx)
+     */
+    void moveCredentialToConsumerPool(String accountId, String siteTenantId);
+
+    /**
+     * TASK-BE-618 — auth-service refused the consumer-pool credential move (409). {@link #reason()} is the
+     * error code without its {@code POOL_MOVE_} prefix: {@code OPERATOR_FACETED}, {@code SOCIAL_LINKED},
+     * {@code POOL_CREDENTIAL_EXISTS} or {@code CREDENTIAL_TENANT_MISMATCH}.
+     */
+    final class CredentialPoolMoveRefused extends RuntimeException {
+        private final String reason;
+
+        public CredentialPoolMoveRefused(String accountId, String reason) {
+            super("auth-service refused the consumer-pool move of accountId=" + accountId + ": " + reason);
+            this.reason = reason;
+        }
+
+        public String reason() {
+            return reason;
+        }
+    }
+
     /** A single {@code account_id → identity_id} propagation pair (TASK-BE-386). */
     record CredentialIdentityBinding(String accountId, String identityId) {
     }

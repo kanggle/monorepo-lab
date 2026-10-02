@@ -42,7 +42,7 @@ account-service가 발행하는 Kafka 이벤트. 계정 생성 및 상태 변경
 |---|---|---|
 | 소비자 client 에서 풀 가입 | 가입한 사이트(`fan-platform` / `ecommerce`) | 풀 계정 id |
 | 다른 사이트 첫 방문 동의 | 그 사이트 | **같은** 풀 계정 id |
-| 사이트별 계정을 같은 id 로 풀로 옮김 | 발행하지 않음 — 그 사이트에서는 이미 발행됐다 | — |
+| 사이트별 계정을 같은 id 로 풀로 옮김(`TASK-BE-618` 일괄 이동 — 시험으로 고정) | 발행하지 않음 — 그 사이트에서는 이미 발행됐다 | — |
 
 - 🔴 **`tenantId` 는 절대 `consumer-pool` 이 아니다.** 소비자(이커머스 user-service `AccountCreatedConsumer`)는 이 값으로 프로필의 테넌트를 정한다 —
   풀 값이면 프로필이 스토어가 읽지 않는 테넌트에 생긴다. 그래서 풀 단위 1회 발행 안을 기각했다([multi-tenancy.md § 소비자 계정 풀 § 6](../../features/multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742)).

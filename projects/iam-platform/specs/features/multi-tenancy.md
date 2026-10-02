@@ -413,8 +413,24 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 #### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
 
 - 사이트별 계정이 **한 사이트에만** 있는 사람(대다수)은 그 계정의 `tenant_id` 를 `consumer-pool` 로 옮기고 그 사이트 멤버십을 만든다.
-  **id 가 그대로라** 그 사이트의 데이터(팬 팔로우, 스토어 주문)를 옮길 필요가 없다. 옮기는 시점(일괄 / 다음 로그인)은 `TASK-BE-614` 가 정한다.
-  🔴 계정과 같은 테넌트 값을 들고 있는 IAM 행(`profiles` · `account_status_history` · `credentials` · `refresh_tokens` · `social_identities` · `identities`)을 **같이** 옮긴다 — 하나라도 남으면 그 행의 조회가 404 가 된다.
+  **id 가 그대로라** 그 사이트의 데이터(팬 팔로우, 스토어 주문)를 옮길 필요가 없다.
+  **옮기는 시점 = 일괄** (`TASK-BE-618` 결정 — 다음 로그인 때 지연 이동은 기각: 로그인 한 번에 세 서비스 쓰기가 끼고, 휴면 계정은 영영 사이트 계정으로 남는다):
+  재실행 가능한 내부 유지보수 엔드포인트 `POST /internal/consumer-pool/legacy-moves`(account-service —
+  [account-maintenance-internal.md](../contracts/http/internal/account-maintenance-internal.md)). 내부 프로비저닝이 080 전까지 사이트 계정을 계속 만들므로 **몇 번이든 다시 돈다**.
+  계정마다 account_db 트랜잭션 하나이고, auth-service 의 자격 이동(`POST /internal/auth/consumer-pool/moves`)이 그 트랜잭션의 **마지막 단계**다 — 거절·실패하면 아무것도 옮겨지지 않는다.
+  🔴 같이 옮기는 행과 **옮기지 않는** 행 (`TASK-BE-618` 착수 시 정정 — 아래가 정본이다):
+
+  | 행 | 이동 | 왜 |
+  |---|---|---|
+  | `accounts` · `profiles` · 그 계정의 `identities` 행 · `credentials` | `tenant_id` → `consumer-pool` | 남으면 그 행의 조회가 404 |
+  | `account_roles`(그 사이트) | → `consumer_site_roles(account, site, role)` 후 원래 행 삭제(계정 테넌트 변경 **전에** — 복합 FK) | § 1 |
+  | `consumer_site_memberships` | **신설** `(account, site, ACTIVE, consented_at = 계정 생성 시각)` | 가입 = 그 사이트 동의(§ 2) |
+  | `refresh_tokens` | **옮기지 않는다** | 미러 행 테넌트는 계정이 아니라 **세션 테넌트**(= 토큰의 사이트, § 4 «refresh») — 이미 목표 모양이다. 옮기면 refresh 가 `TOKEN_TENANT_MISMATCH` |
+  | `social_identities` | **옮기지 않는다** — 소셜 신원이 있는 계정은 **통째로 건너뛴다** | 소셜 로그인이 `(사이트, provider, 사용자)` 로 찾는다 — 옮기면 그 사람의 소셜 로그인이 끊긴다. 소셜 조회를 풀에 맞추는 `TASK-BE-617` 이 같은 이동기로 옮긴다 |
+  | `account_status_history` | **옮기지 않는다** | append-only(DB 트리거, audit-heavy A3). 읽기는 전부 `account_id` 로만 — 404 가 나지 않는다 |
+
+  운영자 측면 판정(아래 표)에는 **운영자 신원 연결**(ADR-MONO-034 U3 — `admin_operators.identity_id` 가 이 계정의 신원)도 들어간다: 신원 행을 풀로 옮기면 그 운영자의
+  신원이 풀 신원이 된다. 판정은 auth-service 가 admin-service 에 묻는다(fail-closed — 못 물으면 옮기지 않는다).
 - 같은 이메일로 **두 사이트**에 계정이 있는 사람은 자동으로 옮기지 않는다 — 본인이 두 계정을 모두 증명하고 묶는다(`TASK-MONO-743`, ADR-MONO-078 D2).
   묶기 전에는 두 계정이 지금처럼 따로 동작한다.
 - 🔴 **운영자 측면이 붙은 사이트 계정은 이 단계(§ 3 의 일괄·지연 이동)에서 옮기지 않는다 — 각자 자기 단계에서 옮긴다** (소유자 결정 2026-10-01 UTC:
@@ -478,8 +494,11 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 찾는 표면도 같은 술어다(account-service `SiteAccountLookup`, 614 와 같은 질의 · 같은 플래그): `/api/accounts/me`(GET · PATCH profile · DELETE) · `/me/status` ·
 이메일 인증 재발송 · `/internal/accounts/{id}/status` · 헤더가 사이트를 말하는 `lock`/`unlock`/`delete` · `gdpr-delete` · `export` ·
 `/internal/tenants/{t}/accounts/{id}/status` · `password-reset`. 🔴 **넓히지 않는 것**: `account_roles` 쓰기(`roles` PATCH · `:add`/`:remove` — 복합 FK
-`(tenant_id, account_id) → accounts` 가 풀 계정을 사이트 테넌트로 담을 수 없다; 사이트 역할은 `consumer_site_roles`) · 역할 GET(풀 멤버는 `[]`, 사이트 역할은
-consumer-members 읽기가 준다) · 계정 → identity 조회 · 운영자 생성의 identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
+`(tenant_id, account_id) → accounts` 가 풀 계정을 사이트 테넌트로 담을 수 없다; 사이트 역할은 `consumer_site_roles`) · 계정 → identity 조회 · 운영자 생성의
+identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
+🔵 **역할 GET 은 `TASK-BE-618` 에서 넓혔다** — 그 사이트 `account_roles` 가 비고 계정이 그 사이트의 ACTIVE 풀 멤버면 `consumer_site_roles(account, site)` 를 답한다
+(§ 3 이동 전에 로그인한 세션의 refresh 가 이 조회로 역할을 싣는다 — [account-internal-provisioning.md § roles GET](../contracts/http/internal/account-internal-provisioning.md#get-internaltenantstenantidaccountsaccountidroles)).
+풀 principal 의 발급은 여전히 consumer-members 읽기를 쓴다.
 - **비멤버 대조군**: 사이트 A 에만 멤버인 풀 계정을 사이트 B 로 찾으면 404 — 읽기 · 쓰기 모두.
 - 🔴 **쓰기의 범위는 «계정 하나»**: 사이트 운영자(또는 본인이 그 사이트 토큰으로)가 풀 멤버에게 하는 상태 전이 · 삭제 · **GDPR 삭제**는 **풀 계정 하나**에
   일어난다 — 그 사람의 **모든 소비자 사이트**에서 잠기고 · 지워지고 · 마스킹된다. 데이터 주체는 사람이므로 그 사람이 멤버인 어느 사이트의 운영자든
@@ -507,6 +526,8 @@ consumer-members 읽기가 준다) · 계정 → identity 조회 · 운영자 �
 | 이메일만으로 안 묶인다 | `TASK-MONO-743` · `TASK-BE-617` 대조군 |
 | 사이트로 찾는 목록에 풀 멤버 포함 | `TASK-BE-614` — `ecommerce` 목록에 풀 가입 쇼핑객 |
 | `account.created` 사이트별 1회 | `TASK-BE-614`(가입) · `TASK-BE-616`(동의) — 이벤트 `tenantId` 단언 |
+| 한 사이트 계정의 이동(§ 3) — 옮길 행 전부 · 셀러/두 사이트 제외 · 실패 시 무변경 · 재실행 · `account.created` 없음 | `TASK-BE-618` — account-service `ConsumerPoolLegacyMoveIntegrationTest` |
+| 이동한 계정이 같은 비밀번호로 같은 `sub` · 이동 전 refresh 가 계속 된다 | `TASK-BE-618` — auth-service `ConsumerPoolLegacyMoveIntegrationTest` |
 
 ### 격리 회귀 방지
 

@@ -39,6 +39,13 @@ public class AuthServiceClient implements AuthServicePort {
 
     private static final String CREDENTIALS_PATH = "/internal/auth/credentials";
     private static final String CREDENTIAL_IDENTITY_BACKFILL_PATH = "/internal/auth/credentials/identity-backfill";
+    private static final String CONSUMER_POOL_MOVES_PATH = "/internal/auth/consumer-pool/moves";
+    /** TASK-BE-618 — the 409 codes of the move, mapped to the account-side skip reason (prefix dropped). */
+    private static final String POOL_MOVE_CODE_PREFIX = "POOL_MOVE_";
+    private static final java.util.Set<String> POOL_MOVE_REASONS = java.util.Set.of(
+            "OPERATOR_FACETED", "SOCIAL_LINKED", "POOL_CREDENTIAL_EXISTS", "CREDENTIAL_TENANT_MISMATCH");
+    private static final com.fasterxml.jackson.databind.ObjectMapper ERROR_BODY_READER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
@@ -122,6 +129,62 @@ public class AuthServiceClient implements AuthServicePort {
         } catch (Exception e) {
             log.error("auth-service credential identity backfill failed: {}", e.getMessage());
             throw new AuthServiceUnavailable("auth-service is unavailable", e);
+        }
+    }
+
+    @Override
+    public void moveCredentialToConsumerPool(String accountId, String siteTenantId) {
+        Runnable op = () -> doMoveCredentialToConsumerPool(accountId, siteTenantId);
+        Runnable resilient = CircuitBreaker.decorateRunnable(circuitBreaker, Retry.decorateRunnable(retry, op));
+        try {
+            resilient.run();
+        } catch (HttpClientErrorException.Conflict e) {
+            String reason = poolMoveReason(e.getResponseBodyAsString());
+            if (reason == null) {
+                log.error("auth-service consumer-pool move returned an unknown 409 for accountId={}", accountId);
+                throw new AuthServiceUnavailable("auth-service returned an unknown 409 for the pool move", e);
+            }
+            throw new CredentialPoolMoveRefused(accountId, reason);
+        } catch (HttpClientErrorException e) {
+            log.error("auth-service consumer-pool move returned 4xx {} for accountId={}", e.getStatusCode(), accountId);
+            throw new AuthServiceUnavailable("auth-service rejected the consumer-pool move", e);
+        } catch (Exception e) {
+            log.error("auth-service consumer-pool move failed for accountId={}: {}", accountId, e.getMessage());
+            throw new AuthServiceUnavailable("auth-service is unavailable", e);
+        }
+    }
+
+    private void doMoveCredentialToConsumerPool(String accountId, String siteTenantId) {
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("accountId", accountId);
+        body.put("siteTenantId", siteTenantId);
+        restClient.post()
+                .uri(CONSUMER_POOL_MOVES_PATH)
+                .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, (req, resp) -> {
+                    // Keep the body: the 409 code is the skip reason.
+                    throw HttpClientErrorException.create(
+                            resp.getStatusCode(), "auth-service 4xx",
+                            resp.getHeaders(), resp.getBody().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                })
+                .toBodilessEntity();
+    }
+
+    /** The skip reason carried by a 409 body ({@code {"code": "POOL_MOVE_…"}}), or {@code null}. */
+    static String poolMoveReason(String errorBody) {
+        try {
+            String code = ERROR_BODY_READER.readTree(errorBody).path("code").asText("");
+            if (!code.startsWith(POOL_MOVE_CODE_PREFIX)) {
+                return null;
+            }
+            String reason = code.substring(POOL_MOVE_CODE_PREFIX.length());
+            return POOL_MOVE_REASONS.contains(reason) ? reason : null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

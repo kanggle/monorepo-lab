@@ -146,6 +146,66 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.assigned").value(false));
     }
 
+    // ── TASK-BE-618 — GET /internal/operators/facet (same context on purpose: no new Spring context) ──
+
+    static final String FACET_OP_UUID = "00000000-0000-7000-8000-0000000006c1";
+    static final String FACET_SUBJECT = "00000000-0000-7000-8000-0000000006d1";
+    static final String FACET_IDENTITY = "00000000-0000-7000-8000-0000000006e1";
+    static final String SUSPENDED_OP_UUID = "00000000-0000-7000-8000-0000000006c2";
+    static final String SUSPENDED_SUBJECT = "00000000-0000-7000-8000-0000000006d2";
+
+    @Test
+    @DisplayName("TASK-BE-618 facet: oidc_subject = accountId → operatorFaceted=true")
+    void facet_bySubject() throws Exception {
+        seedFacetOperators();
+        facet(FACET_SUBJECT, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(true));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-618 facet: identity_id = identityId (다른 accountId) → operatorFaceted=true")
+    void facet_byIdentity() throws Exception {
+        seedFacetOperators();
+        facet(UNKNOWN_SUBJECT, FACET_IDENTITY).andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(true));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-618 facet: 상태 무관 — SUSPENDED 운영자의 subject 도 true")
+    void facet_suspendedOperatorStillFaceted() throws Exception {
+        seedFacetOperators();
+        facet(SUSPENDED_SUBJECT, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(true));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-618 facet: 어느 축도 안 맞으면 false (대조군)")
+    void facet_noMatch() throws Exception {
+        seedFacetOperators();
+        facet(UNKNOWN_SUBJECT, "00000000-0000-7000-8000-0000000006ff").andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(false));
+        facet(UNKNOWN_SUBJECT, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(false));
+    }
+
+    private void seedFacetOperators() {
+        seedOperator(FACET_OP_UUID, FACET_SUBJECT, "acme-corp", "facet-op-618@example.com");
+        jdbcTemplate.update("UPDATE admin_operators SET identity_id = ? WHERE operator_id = ?",
+                FACET_IDENTITY, FACET_OP_UUID);
+        seedOperator(SUSPENDED_OP_UUID, SUSPENDED_SUBJECT, "acme-corp", "facet-suspended-618@example.com");
+        jdbcTemplate.update("UPDATE admin_operators SET status = 'SUSPENDED' WHERE operator_id = ?",
+                SUSPENDED_OP_UUID);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions facet(String accountId, String identityId)
+            throws Exception {
+        var request = get("/internal/operators/facet").param("accountId", accountId);
+        if (identityId != null) {
+            request.param("identityId", identityId);
+        }
+        return mockMvc.perform(request);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private org.springframework.test.web.servlet.ResultActions check(String subject, String tenantId)

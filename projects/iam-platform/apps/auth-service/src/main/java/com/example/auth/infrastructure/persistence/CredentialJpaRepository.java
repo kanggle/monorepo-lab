@@ -49,4 +49,21 @@ public interface CredentialJpaRepository extends JpaRepository<CredentialJpaEnti
             nativeQuery = true)
     int assignIdentityIdIfAbsent(@Param("accountId") String accountId,
                                  @Param("identityId") String identityId);
+
+    /** TASK-BE-618 — native read of the unmapped {@code identity_id} column. */
+    @Query(value = "SELECT identity_id FROM credentials WHERE account_id = :accountId", nativeQuery = true)
+    Optional<String> findIdentityIdByAccountId(@Param("accountId") String accountId);
+
+    /**
+     * TASK-BE-618 — the consumer-pool legacy move of ONE credential: only {@code tenant_id} changes
+     * (guarded on the current tenant) and {@code version} is bumped so a concurrent stale save fails
+     * its optimistic lock. {@code clearAutomatically} evicts any managed copy holding the old tenant.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE credentials SET tenant_id = :toTenantId, version = version + 1 "
+            + "WHERE account_id = :accountId AND tenant_id = :fromTenantId",
+            nativeQuery = true)
+    int moveTenant(@Param("accountId") String accountId,
+                   @Param("fromTenantId") String fromTenantId,
+                   @Param("toTenantId") String toTenantId);
 }

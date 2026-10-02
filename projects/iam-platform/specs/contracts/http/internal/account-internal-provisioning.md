@@ -381,6 +381,16 @@ Return the account's role names within the tenant.
 | `tenantId` | string | Echoes the path `{tenantId}` |
 | `roles` | string[] | The account's role names within this tenant (possibly empty `[]`). Tenant-scoped: a foreign account (`accountId` belongs to a different tenant) resolves to `[]` — the tenant-scoped repository read returns nothing (enumeration-safe). |
 
+> **TASK-BE-618 (ADR-MONO-078 A, multi-tenancy.md § 소비자 계정 풀 § 3 · § 5) — 넓힘.** `iam.consumer-pool.enabled` 가 켜져 있고, `{tenantId}` 가 **소비자 사이트**
+> (`B2C_CONSUMER`, `consumer-pool` 아님)이며, 그 테넌트의 `account_roles` 가 비어 있고, `{accountId}` 가 **`consumer-pool` 계정으로서 그 사이트의 ACTIVE 멤버**이면
+> `roles` = `consumer_site_roles(account, {tenantId})` 의 역할 이름(오름차순)이다. 그 밖의 모든 경우는 위 그대로다(다른 사이트 멤버십 · `LEFT` 멤버십 · 비멤버 → `[]`).
+>
+> 왜: 이동(`POST /internal/consumer-pool/legacy-moves`) 전에 로그인한 사람의 SAS 세션 principal 은 **사이트 principal** 로 남아, refresh 때 auth-service 가 이 엔드포인트를
+> 그 사이트로 부른다. 이동이 그 사이트의 `account_roles` 를 `consumer_site_roles` 로 옮겼으므로, 넓히지 않으면 저장 역할이 비어 시드만 실리고 팬 `ARTIST` 가 사라진다.
+> 이동기는 저장 집합을 **그대로**(시드 역할 포함) 옮기므로 이 답은 이동 전과 같은 집합이고, 같은 «저장 역할이 있으면 그것만» 규칙으로 실린다.
+> 풀 principal 의 발급은 이 엔드포인트가 아니라 consumer-members 읽기를 쓴다([auth-to-account.md](./auth-to-account.md)) — 이 넓힘은 그 경로를 바꾸지 않는다.
+> 입력은 여전히 사이트 테넌트이고 그 사이트의 멤버만 답한다 — § 격리 회귀 방지의 **확장**이지 예외가 아니다(§ 5 와 같은 술어).
+
 **Side Effect**: none (read-only — no `account_status_history` row, no outbox event).
 
 **Errors**:
