@@ -122,13 +122,13 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — 🟡 **REVIEW — ADR-MONO-081 단계 3: 알림 인박스 + 읽음 처리를 console-web 서버로** (2026-10-02 UTC). `shared/composition/notification-inbox.ts` · `CONSOLE_NOTIFICATION_DOMAINS`(기본 erp) · 도메인 401 → 401(console-bff 는 열화로 삼켰다) · 읽음 처리 1회 · 미설정 도메인 404·호출 0. AC-1~6 ✅ · bite 3/3 · vitest 3,690. 🔴 티켓의 «테넌트 없음 → 400» 은 계약 § 4 와 어긋나 넣지 않음(본문). AC-8 dispatch 둘 다 초록(nightly 는 web-store 글꼴 다운로드 일시 장애로 1회 재실행). ⏳ AC-7 머지 뒤 nightly.
-- `TASK-PC-FE-302-overview-and-domain-health-composed-in-console-web.md` — 🟡 **REVIEW — ADR-MONO-081 단계 2: 운영 개요·도메인 상태를 console-web 서버에서 합성** (2026-10-02 UTC). 대조군 둘 bite 확인 · 레그 타임아웃 4 s(Vercel 문서 300 s, 프로젝트 재정의는 못 잼) · 🔴 발견: console-bff 는 health 503(DOWN)을 degraded 로 그렸다 — 계약대로 ok 로 고침. ⏳ AC-9 = 머지 뒤 첫 nightly.
 
 (empty)
 
 ## done
 
+- ✅ `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4122**, 스쿼시 **`bbdd3990f`**. ADR-MONO-081 단계 3: 알림 인박스·읽음 처리를 console-web 서버에서(도메인 401 → 401 · 읽음 1회 · 미설정 도메인 404). AC-7 = main push nightly `37024617764` 콘솔 e2e success.
+- ✅ `TASK-PC-FE-302-overview-and-domain-health-composed-in-console-web.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4118**, 스쿼시 **`f98ece821`**. ADR-MONO-081 단계 2: 운영 개요·도메인 상태를 console-web 서버에서 합성(756 흡수). AC-9 = main push nightly `37016874846` 콘솔 e2e success.
 - ✅ `TASK-PC-FE-301-say-no-tenant-is-reachable-instead-of-asking-to-pick-one.md` — **DONE 2026-09-27 UTC (4-dim verified)** — impl PR **#4049**, 스쿼시 **`a66b858a8`** (머지 전 실패 체크 0). 선택 가능한 테넌트가 0개인 운영자에게 «테넌트를 선택하세요» 대신 ⓒ 안내(«접근 가능한 테넌트가 없습니다»). 판정 함수 `noTenantNoticeKind()` + 공유 렌더 `NoTenantNotice*` 한 곳, 15+1곳 배선. **AC-1** 2026-09-26 CLOSED(단위+렌더+bite) · **AC-2 🟢** 17차 창 — `viewer@demo.com` 게이트 화면에 새 안내 렌더 확인(옛 문구 미노출). tsc/lint/vitest 전량 rc=0.
 - ✅ `TASK-PC-FE-299-session-end-after-demo-shutdown.md` — **DONE 2026-09-26 UTC (4-dim verified)** — impl PR **#4000**, 스쿼시 **`3d3df69af`** (머지 전 실패 0 · 🔴 09-24 기록의 #3999 는 PC-FE-297/298 PR — 정정). 데모 종료 뒤 세션 잔존 표면 5종. **AC-4 🟢** 16차 창 종료 직후 `/login?error=session_expired` → 「데모 서버가 종료되어 다시 로그인해야 합니다」(데모 상태 신호).
 

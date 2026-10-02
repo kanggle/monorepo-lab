@@ -4,7 +4,7 @@ TASK-PC-FE-302
 
 # Status
 
-review (2026-10-02 UTC — AC-9 는 머지 뒤 첫 nightly)
+done (2026-10-02 UTC — PR #4118 squash `f98ece821` · 4차원 검증)
 
 # Title
 
@@ -57,7 +57,7 @@ platform-console
 - [x] **AC-6** — 라이더 R2: 회로 차단기 없음, 레그마다 타임아웃. 🔴 타임아웃 값은 **Vercel 함수 실행 한도를 재고 나서** 정하고, 잰 값과 출처를 이 파일 § 결과에 적는다(값을 지어내지 않는다 — 지금 `maxDuration` 설정 0건).
 - [x] **AC-7** — 라이더 R1: 레그마다 구조화 로그 한 줄(`domain` · `status` · `latencyMs`), 토큰·PII 없음.
 - [x] **AC-8** — 샘플 방문자(`sampleGate`)는 여전히 레그를 부르지 않는다(기존 시험 유지).
-- [ ] **AC-9** — 🔴 콘솔 full-stack e2e 는 nightly 에서만 돈다 — 머지 뒤 다음 nightly 의 `Platform Console E2E full-stack` 결과를 확인해 적는다.
+- [x] **AC-9** — 🔴 콘솔 full-stack e2e 는 nightly 에서만 돈다 — 머지 뒤 다음 nightly 의 `Platform Console E2E full-stack` 결과를 확인해 적는다.
 
 # Related Specs
 
@@ -97,7 +97,7 @@ platform-console
 | AC-6 | `LEG_TIMEOUT_MS = 4000`. **잰 것**: Vercel 문서 «Maximum Duration» 원문(2026-10-02 수집, 페이지 갱신 2026-08-24) — fluid compute 기준 모든 요금제 기본 300 s. **못 잰 것**: 이 프로젝트의 대시보드 재정의값(저장소에서 Vercel CLI·API 접근 없음, `maxDuration` 설정 0건). 그래서 Vercel 이 내놓았던 가장 보수적인 한도(10 s)에서도 버티게 골랐다. 회로 차단기 없음 — 시험이 `CIRCUIT_OPEN` 이 나오지 않음을 단언. 값과 근거를 계약 § 2.4.9.0 에 적었다 |
 | AC-7 | 레그마다 `console_composition_leg` 한 줄(`route` · `domain` · `status` · `reason` · `latencyMs` · `requestId`). 시험이 로그 전체에 토큰·계정 id 가 없음을 단언 |
 | AC-8 | 샘플 방문자 경로 그대로 — `sample-mode-proxies.test.ts` ① fetch 0, 샘플 core 이름 `console-bff` 유지(라이더 대조 — 바꾸면 원장 가드) |
-| AC-9 | ⏳ 머지 뒤 첫 nightly `Platform Console E2E full-stack` |
+| AC-9 | ✅ main push nightly `37016874846` — Platform Console E2E full-stack success |
 
 **🔴 대조군이 무는지 확인(bite)**: ① 데이터 레그 401 을 `degraded` 로 바꾸면 «erp 401» 셀 1개 실패 ② 레그 하나라도 `degraded` 면 빈 봉투를 내게 바꾸면 7개 실패. 원본 복원 뒤 19/19.
 
@@ -125,3 +125,13 @@ PR CI 66/0 초록 뒤 머지 전 e2e 점검(`CLAUDE.md` «nightly 전용 스위�
 - 재실행 [37009462411](https://github.com/kanggle/monorepo-lab/actions/runs/37009462411) — **success, Playwright 20 passed**. 트레이스 보고: trace `40457fb4…` 하나에 레그 span 6(iam·wms·scm·finance·erp·ecommerce) + 생산자 4(admin-service · finance · scm-gateway · erp-masterdata). 🔵 admin-service 는 console-bff 시절 트리에 합류하지 않던 생산자다.
 
 🔵 AC-9(머지 뒤 첫 nightly)는 그대로 남긴다 — dispatch 는 같은 커밋의 같은 워크플로지만 «main 위에서» 는 아니다.
+
+# 닫기 (2026-10-02 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4118` → `state=MERGED`, merge commit `f98ece821` |
+| (b) | `git merge-base --is-ancestor f98ece821 origin/main` → main 위에 있음 |
+| (c) | 머지 직전 `gh pr checks 4118` head `ed2181d6b`: 69 개, pending 0, fail 0 |
+| (d) | `# Acceptance Criteria` 전부 `[x]` — 마지막 AC-9(머지 뒤 첫 nightly)는 그 머지 커밋의 main push nightly `37016874846` 에서 `Platform Console E2E full-stack` 가 **실행되어** success(경로 필터로 skipped 아님) |
+
