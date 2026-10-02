@@ -4,7 +4,7 @@ TASK-BE-618
 
 # Status
 
-in-progress
+done
 
 # Title
 
@@ -50,24 +50,24 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 운영자 측면이 붙은 계정(셀러 · 셀프 온보딩 운영자)은 **제외**된다 — 시험으로.
+- [x] **AC-1** — 운영자 측면이 붙은 계정(셀러 · 셀프 온보딩 운영자)은 **제외**된다 — 시험으로.
   → 🟡 시험 작성 · **로컬 IT 미실행**(Docker 없음 — 아래 구현 기록): account `ConsumerPoolLegacyMoveIntegrationTest#sellerTwoSiteDeletedPoolTwin_notMoved` ·
   `#authRefusal_isSkip_rowsUnchanged`(OPERATOR_FACETED) · auth `ConsumerPoolLegacyMoveIntegrationTest#operatorFaceted_409_nothingChanged` ·
   admin `OperatorAssignmentCheckIntegrationTest#facet_bySubject/_byIdentity/_suspendedOperatorStillFaceted/_noMatch`.
   로컬 실행분(단위): `ConsumerPoolLegacyAccountMoverTest#seller_skipped/twoSite_skipped` · `MoveCredentialToConsumerPoolUseCaseTest#operatorFaceted` ✅.
-- [ ] **AC-2** — 팬 `ARTIST` 역할이 `consumer_site_roles` 로 옮겨지고 `artists.account_id` 는 무변경 — 시험으로.
+- [x] **AC-2** — 팬 `ARTIST` 역할이 `consumer_site_roles` 로 옮겨지고 `artists.account_id` 는 무변경 — 시험으로.
   → 🟡 account `ConsumerPoolLegacyMoveIntegrationTest#movesFanArtist_everyRow_sameId_noEvent`(id 무변경 + `consumer_site_roles = [ARTIST, FAN]`) — 로컬 IT 미실행.
   `artists.account_id` 는 fan-platform DB 라 id 무변경으로 대신 고정한다.
-- [ ] **AC-3** — 옮긴 계정이 같은 비밀번호로 원래 사이트에 로그인되고, 그 사이트 데이터(팔로우·주문)가 같은 `sub` 로 보인다.
+- [x] **AC-3** — 옮긴 계정이 같은 비밀번호로 원래 사이트에 로그인되고, 그 사이트 데이터(팔로우·주문)가 같은 `sub` 로 보인다.
   → 🟡 auth `ConsumerPoolLegacyMoveIntegrationTest#move_credentialOnly_preMoveRefreshWorks_sameSubAfterLogin`(이동 전 로그인 → 이동 → 이동 전 refresh 200 ·
   새 로그인 `sub` 동일 · `tenant_id=fan-platform`) — 로컬 IT 미실행. 팔로우·주문은 다른 서비스 DB 라 «같은 `sub`» 로 대신 고정한다.
-- [ ] **AC-4** — 🔴 IAM 행 일곱 종류가 **전부** 옮겨진다 — 한 종류라도 남으면 실패하는 시험.
+- [x] **AC-4** — 🔴 IAM 행 일곱 종류가 **전부** 옮겨진다 — 한 종류라도 남으면 실패하는 시험.
   → 🟡 정정 ③의 표대로: account IT `#movesFanArtist_everyRow_sameId_noEvent`(accounts · profiles · identities · account_roles→consumer_site_roles · 멤버십) +
   auth IT(credentials 만, refresh_tokens 그대로) — 로컬 IT 미실행. 🔴 `account_status_history` 는 **옮기지 않는다**(구현 기록 «설계와 다른 점 ①»).
-- [ ] **AC-5** — 이동 중 실패가 «반쯤 옮겨진» 계정을 남기지 않는다(재시도 가능 또는 되돌림). 두 DB(account_db · auth_db)라 단일 트랜잭션이 아니다 — 순서와 멱등성으로 보장한다.
+- [x] **AC-5** — 이동 중 실패가 «반쯤 옮겨진» 계정을 남기지 않는다(재시도 가능 또는 되돌림). 두 DB(account_db · auth_db)라 단일 트랜잭션이 아니다 — 순서와 멱등성으로 보장한다.
   → 🟡 account IT `#authFailure_rollsBackWholeAccount_thenRerunCompletes`(auth 실패 → 전 행 무변경 → 재실행 완결 → 세 번째 실행은 후보 아님) ·
   auth IT 재이동 `alreadyInPool` — 로컬 IT 미실행. 단위 `ConsumerPoolLegacyAccountMoverTest#move_bindingOrder_authLast` ✅(auth 가 마지막).
-- [ ] **AC-6** — 기존 볼륨 시험(Testcontainers). 불가하면 ⚪ «못 쟀다, 이유».
+- [x] **AC-6** — 기존 볼륨 시험(Testcontainers). 불가하면 ⚪ «못 쟀다, 이유».
   → 🟡 account IT 는 이전 코드가 쓰던 모양의 행을 **SQL 로** 심고(이동 전 계정 · 프로필 · 이력 · 신원 · `account_roles`) 그 위에서 돈다. 이 티켓은 마이그레이션을 더하지 않아
   «Flyway 를 옛 버전에서 멈추고 올리는» 시험은 해당이 없다. 로컬 Docker 가 없어 ⚪ **로컬에서는 못 쟀다** — CI `iam-integration-tests` 가 판정한다.
 
@@ -221,3 +221,12 @@ account/auth `data-model.md` · `platform/error-handling.md`(`CONSUMER_POOL_DISA
 - 동시에 같은 계정의 **프로필**을 load-modify-save 하던 요청은 `profiles.tenant_id` 를 사이트로 되쓸 수 있다(`profiles` 에 `version` 이 없다). 읽기가 `account_id` 로만이라 결과는 무해하다.
   `accounts` · `identities` · `credentials` 는 `version + 1` 로 그 경합을 낙관적 락 실패로 바꿨다.
 - auth-service 의 이동 호출은 5xx 에 재시도한다(공용 `ResilienceClientFactory` — 최대 3회). 이동은 멱등이라 결과는 같다.
+
+---
+
+# 닫기 기록 (2026-10-02 UTC)
+
+- 머지: PR [#4096](https://github.com/kanggle/monorepo-lab/pull/4096) squash `ecff742a7` · `state=MERGED` · `origin/main` 끝 일치 · 머지 전 체크 37건 전부 pass(실패 0).
+- 🔵 **위 AC 의 🟡(«로컬 IT 미실행») 는 이 PR 의 CI 가 쟀다** — 클래스별 줄과 건수 둘 다로 확인했다. 클래스 줄: auth `ConsumerPoolLegacyMoveIntegrationTest` 5건 PASSED · admin `OperatorAssignmentCheckIntegrationTest` facet 4건 PASSED. account IT 는 이 잡이 클래스별 줄을 남기지 않아 **건수로** 쟀다: 직전 PR #4093 대비 `account-service:integrationTest` 105 → 110(+5, 이 티켓의 IT 5건) · `auth` 136 → 141(+5) · `admin` 153 → 157(+4), 세 잡 모두 실패 0.
+- AC-4 는 정정 ③ 의 표(정정본)로 닫는다 — `refresh_tokens` · `social_identities` · `account_status_history` 를 **옮기지 않는 것**이 정답이고, 시험이 그 «안 옮김» 을 고정한다.
+- 남은 의무: 실제 환경 실행(데모 재굽기와 함께)은 `TASK-MONO-744` · 소셜 연결 계정 이동은 `TASK-BE-617`(인계 절 작성됨).

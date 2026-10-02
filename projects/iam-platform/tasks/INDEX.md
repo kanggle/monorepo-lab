@@ -114,7 +114,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-618-move-single-site-accounts-onto-the-pool.md` — **기존 한 사이트 계정을 같은 id 로 풀로** (IN-PROGRESS, 2026-10-02 UTC). 일괄 이동(내부 유지보수 엔드포인트 · 재실행 가능) · 운영자 측면 · 소셜 연결 계정 제외 · `refresh_tokens` 는 옮기지 않는다(착수 시 정정).
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
@@ -129,6 +129,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## done
 
+- ✅ `TASK-BE-618-move-single-site-accounts-onto-the-pool.md` — **DONE (2026-10-02 UTC · 4차원 검증 · PR [#4096](https://github.com/kanggle/monorepo-lab/pull/4096) squash `ecff742a7`)** 🟢 전역 소비자 계정 5단계: 한 사이트 계정을 같은 id 로 풀로 옮기는 재실행 가능한 일괄 이동기(account · auth · admin). 착수 시 정정 — `refresh_tokens` · 소셜 신원 · 상태 이력은 옮기지 않음, 소셜 연결 계정은 617 인계. 새 IT 14건 CI 실측(건수 대조). 실제 환경 실행은 `TASK-MONO-744`. 분석=Opus 5.5 / 구현=Opus.
 - ✅ `TASK-BE-616-first-visit-site-consent.md` — **DONE (2026-10-01 UTC · 4차원 검증 · PR [#4093](https://github.com/kanggle/monorepo-lab/pull/4093) squash `2e7e2951f`)** 🟢 전역 소비자 계정 4단계: 첫 방문 동의 화면 · 🔴 **플래그 켬** · 스토어 «IAM 로그인»(소유자) · 머지 전 보강(풀 계정 사이트 단건 조회 404 해소 · 풀 이메일 중복 프로비저닝 409). CI 33/33(E2E 1차는 Google Fonts 일시 실패 → 재실행 통과). 후속 셋은 `TASK-BE-619`. 분석=Opus 5.5 / 구현=Opus 5.5.
 - ✅ `TASK-BE-615-consumer-pool-authorize-and-token-tenant.md` — **DONE (2026-10-01 UTC · 4차원 검증 · PR [#4091](https://github.com/kanggle/monorepo-lab/pull/4091) squash `3d732a21b`)** 🟢 전역 소비자 계정 3단계: 풀 자격 우선 로그인 · 사이트 토큰(`sub` 동일 · `tenant_id`=사이트 · 시드∪사이트 역할) · 멤버 아니면 토큰 거절(루프 없음) · refresh 사이트 고정 · 로그아웃=전체 · 운영자 생성은 풀 멤버 제외 · 셀러 `[SELLER]` 대조군. CI 1차 MySQL 연결 초과(컨텍스트 분기) → 공유 컨텍스트 + 풀 상한 → 18/18 통과(§ CORRECTION). 플래그는 616 이 켠다. 분석=Opus 5.5 / 구현=Opus 5.5.
 - ✅ `TASK-BE-614-consumer-account-pool-data-model.md` — **DONE (2026-10-01 UTC · 4차원 검증 · PR [#4089](https://github.com/kanggle/monorepo-lab/pull/4089) squash `98e6c6dbe`)** 🟢 전역 소비자 계정 2단계: `consumer-pool` + 멤버십·사이트 역할(V0029/V0030) · 풀 가입은 `iam.consumer-pool.enabled`(기본 꺼짐) 뒤 · 사이트로 찾는 표면에 풀 멤버 · `account.created` 사이트 테넌트(기존 결함 수정) · `consumer-pool` 토큰 거절(bite 4/7). 통합 시험은 로컬 Docker 부재 → CI 1차 픽스처 결함 1/92 → 수정 후 19/19 통과(§ CORRECTION). 분석=Opus 5.5 / 구현=Opus 5.5.
