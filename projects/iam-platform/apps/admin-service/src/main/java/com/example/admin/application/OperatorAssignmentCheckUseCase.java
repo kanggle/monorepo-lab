@@ -131,6 +131,19 @@ public class OperatorAssignmentCheckUseCase {
             return new Result(true, null, null);
         }
 
+        // 2b. TASK-MONO-750 (ADR-MONO-079 D4-A, rider R3): `fan-platform` is assumable by a
+        // PLATFORM operator only — and step 2 above has already admitted every one of those. So
+        // anyone who reaches this line is a customer tenant's operator, and is refused here,
+        // BEFORE steps 3 and 5: an assignment row to `fan-platform` (created by hand, or before
+        // ManageOperatorAssignmentUseCase refused it) and a partnership naming it as host must
+        // both stay inert. Without this, the `fan` subscription (account-service V0031) would
+        // hand that operator FAN_OPERATOR and with it fan's directory-management paths.
+        if (AdminOperator.isPlatformOperatorOnlyTenant(tenantId)) {
+            log.debug("assignment-check: tenant={} is platform-operator-only; operator home={} refused",
+                    tenantId, operator.tenantId());
+            return Result.notAssigned();
+        }
+
         // 3. Dual-read effective scope: assignment rows ∪ {legacy home tenant}.
         Set<String> effectiveScope = tenantScopeResolver.resolveEffectiveTenantScope(
                 operator.internalId(), operator.tenantId());

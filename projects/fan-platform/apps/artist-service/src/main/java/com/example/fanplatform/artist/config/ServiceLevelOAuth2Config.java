@@ -127,6 +127,19 @@ public class ServiceLevelOAuth2Config {
      * The policy pin asserts the refusal, not just the acceptance (ADR-MONO-049 § 1.9,
      * TASK-MONO-387).
      *
+     * <h2>TASK-MONO-750 (ADR-MONO-079 D4-A) — the operator path did NOT need it, and must not get it</h2>
+     *
+     * ADR-MONO-079 opened this service's directory to a platform operator. The ticket's wording
+     * said "trust the entitlement on the management paths"; the measurement said otherwise. The
+     * platform operator assumes {@code fan-platform} itself, so its token carries
+     * {@code tenant_id=fan-platform} and passes this gate by <em>equality</em> — the same way the
+     * console reaches ecommerce by assuming {@code ecommerce}. The entitlement branch would admit
+     * something different: a <em>customer</em> tenant's token ({@code tenant_id=demo-corp},
+     * {@code entitled_domains=["fan"]}) — exactly the operator rider R3 excludes, and one whose
+     * writes would land under the customer's tenant id rather than the directory's. So the switch
+     * stays OFF, now for two reasons instead of one, and {@code FanTenantGatePolicyTest} pins the
+     * customer-operator refusal by name.
+     *
      * <h2>{@code /internal/**} is exempt, and that is not a hole</h2>
      *
      * The Order(1) workload chain authenticates with {@link #internalJwtDecoder()}, which does

@@ -61,6 +61,17 @@ public class ManageOperatorAssignmentUseCase {
             throw new TenantScopeDeniedException(
                     "tenant '" + tenantId + "' is reserved and cannot be assigned to an operator");
         }
+        // TASK-MONO-750 (ADR-MONO-079 D4-A, rider R3): `fan-platform` is reached by platform
+        // operators through the platform-scope sentinel, never through a row. A row to it could
+        // only ever serve a customer operator, which R3 excludes — so it is refused for every
+        // actor, SUPER_ADMIN included, with the same tenant-scope answer (403). The assume gate
+        // (OperatorAssignmentCheckUseCase step 2b) ignores such a row anyway; refusing it here
+        // keeps the data from claiming an access the gate will not honour.
+        if (AdminOperator.isPlatformOperatorOnlyTenant(tenantId)) {
+            throw new TenantScopeDeniedException(
+                    "tenant '" + tenantId + "' is assumable by platform operators only and cannot be "
+                            + "assigned to an operator");
+        }
 
         AdminOperatorPort.OperatorView operator = resolveOperator(operatorPublicId);
 

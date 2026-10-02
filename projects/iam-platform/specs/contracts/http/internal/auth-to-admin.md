@@ -53,6 +53,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 2. platform-scope 운영자 (`tenant_id == '*'`, `isPlatformScope()`) → 비어있지 않은 모든 `tenantId` 에 대해 `assigned=true` (sentinel 이 모든 tenant 를 부여; assumed 토큰은 여전히 선택된 구체 `tenant_id` 를 운반한다 — `'*'` 토큰은 절대 발급되지 않는다). 명시적 assignment row 가 없으므로 `orgScope=null` (→ `["*"]`).
 3. 그 외 → `assigned = TenantScopeResolver.resolveEffectiveTenantScope(internalId, homeTenant).contains(tenantId)` (D1 assignment rows ∪ {legacy home tenant} — BE-326 dual-read). `assigned=true` 시 `orgScope = operator_tenant_assignment.{(operatorInternalId, tenantId)}.org_scope` (해당 (운영자, 선택 테넌트) assignment row 의 `org_scope`; row 부재 또는 컬럼 NULL → `null`).
 4. `tenantId` blank → `assigned=false`, `orgScope=null`.
+5. **`tenantId == fan-platform` — 플랫폼 운영자 전용 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3).** 2번(platform-scope)에 걸리지 않은 운영자 — 즉 **고객사 운영자** — 는 `fan-platform` 에 대해 **항상 `assigned=false`** 다. assignment row 가 있어도(이 surface 가 생기기 전에 만들어졌든 직접 SQL 이든), 파트너십-파생 host reach(3·`delegatedScope`) 가 있어도 같다 — 이 판정은 3번과 파트너십 분기 **앞에서** 내려진다. 이유: `fan-platform` 이 `fan` 도메인을 구독하므로 이 테넌트를 assume 한 토큰은 `FAN_OPERATOR` 를 파생받고, 그 역할로 열리는 길(artist-service 디렉터리 관리)은 플랫폼 운영자 몫으로만 열렸다. 플랫폼 운영자는 2번으로 지금처럼 `assigned=true`.
 
 **Side Effect**: 없음 (read-only — `admin_actions` row 미기록).
 

@@ -39,6 +39,13 @@ class ConsumerPoolMigrationOnExistingVolumeIntegrationTest extends AbstractInteg
     private static final String ROOT_USER = "root";
     private static final String DB = "be614_existing_volume";
     private static final String LAST_PRE_POOL_VERSION = "28";
+    /**
+     * The last of the two versions under test. TASK-MONO-750 added V0031 (an unrelated seed row);
+     * upgrading to "latest" would apply it too and break {@code newVersionsApplySuccessfully}'s
+     * "exactly the new files" premise for a reason that has nothing to do with the pool. So the
+     * upgrade stops here, the same way step 1 stops at {@link #LAST_PRE_POOL_VERSION}.
+     */
+    private static final String LAST_POOL_VERSION = "30";
 
     private static final String FAN_ACCOUNT = "00000000-0000-0000-0000-00000000f614";
     private static final String SHOP_ACCOUNT = "00000000-0000-0000-0000-00000000e614";
@@ -76,7 +83,7 @@ class ConsumerPoolMigrationOnExistingVolumeIntegrationTest extends AbstractInteg
         rolesBefore = column("SELECT CONCAT(tenant_id, '|', account_id, '|', role_name) FROM account_roles ORDER BY 1");
 
         // 3. the new versions on top of it
-        upgrade = flyway(null).migrate();
+        upgrade = flyway(LAST_POOL_VERSION).migrate();
     }
 
     private Flyway flyway(String target) {

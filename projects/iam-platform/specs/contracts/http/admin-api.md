@@ -1240,6 +1240,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 **Tenant confinement (ADR-024 D2, step-1)**: actor 는 path `tenantId` 에 대해 `operator.manage` 스코프를 보유해야 한다 — `TENANT_ADMIN @ acme` 는 acme 에만 배정 가능. SUPER_ADMIN(`'*'`) net-zero.
 
+**`fan-platform` 은 배정 대상이 아니다 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3)**: path `tenantId` 가 `fan-platform` 이면 **모든 actor**(SUPER_ADMIN 포함)에게 `403 TENANT_SCOPE_DENIED` — 그 테넌트는 플랫폼 운영자(`'*'`)만 assume 하고, 플랫폼 운영자는 assignment row 없이 platform-scope 로 닿는다([auth-to-admin.md](./internal/auth-to-admin.md) 판정 규칙 2·5). 고객사 운영자에게 row 를 만들어 줄 길이 없다. 배정 **해제**(`DELETE`)는 좁히는 방향이라 막지 않는다.
+
 **Response 201** (`GET .../assignments` element 와 동일 shape — `tenantId`, `orgScope`(omitted when null), `permissionSetId`(omitted when null)).
 
 | Status | Code | 조건 |
@@ -1911,6 +1913,8 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 ```
 
 `admin_actions: action_code=SUBSCRIPTION_SUBSCRIBE`, `permission_used=subscription.manage`, `target_type=SUBSCRIPTION`, `target_id=<tenantId>:<domainKey>`. account-service 가 `tenant.subscription.changed` (previousStatus=null) 발행.
+
+**`fan` 도메인은 `fan-platform` 테넌트만 구독한다 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3)**: `domainKey ∈ {fan, fan-platform}` 이고 `tenantId ≠ fan-platform` 이면 **모든 actor 에게** `403 TENANT_SCOPE_DENIED`. `fan-platform` 의 `subscription.manage` 스코프는 platform-scope(`'*'`) grant 만 가지므로, 결과적으로 `fan` 구독은 **플랫폼 운영자만 선택할 수 있다**. 그 구독은 `fan-platform` 을 assume 한 토큰의 `FAN_OPERATOR` 파생 근거다 (auth-service `OperatorRoleDerivation`) — 고객사 테넌트가 `fan` 을 구독해도 팬 서비스는 엔타이틀먼트를 신뢰하지 않으므로 닿지 않지만, 닿지 않는 역할을 발급하지 않는 쪽으로 닫는다. `fan-platform` 의 `fan` 구독 자체는 account-service `V0031` 이 시드한다(`ecommerce` 의 `V0022` 와 같은 모양).
 
 ### PATCH /api/admin/subscriptions/{tenantId}/{domainKey}/status
 
