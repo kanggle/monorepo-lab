@@ -61,6 +61,15 @@ export interface NavParent {
   testid: string;
   icon: NavIconName;
   children: NavLeaf[];
+  /**
+   * TASK-MONO-751 — OPTIONAL registry gate. When set, the sidebar renders this parent only
+   * if the operator's registry lists that product with at least one selectable tenant
+   * (`visibleNodes()` below). Absent = always rendered — every pre-existing entry, so the
+   * nav is byte-identical for them. Only the fan directory sets it: it exists for PLATFORM
+   * operators alone (ADR-MONO-079 rider R3), and a customer operator must not see an entry
+   * whose every screen would answer «no access» (AC-3).
+   */
+  productKey?: string;
 }
 export type NavNode = NavLeaf | NavParent;
 export interface NavGroup {
@@ -71,6 +80,27 @@ export interface NavGroup {
 
 export function isParent(node: NavNode): node is NavParent {
   return (node as NavParent).children !== undefined;
+}
+
+/**
+ * TASK-MONO-751 — the nav tree with every registry-gated parent whose product is not in
+ * `availableProductKeys` removed (and any group left empty dropped). Ungated nodes always
+ * stay. `undefined` = «no registry answer to gate on» → gated parents are hidden too
+ * (fail-closed for a gated entry; the ungated nav is unaffected).
+ */
+export function visibleGroups(
+  groups: NavGroup[],
+  availableProductKeys: readonly string[] | undefined,
+): NavGroup[] {
+  const allowed = new Set(availableProductKeys ?? []);
+  return groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (n) => !isParent(n) || n.productKey === undefined || allowed.has(n.productKey),
+      ),
+    }))
+    .filter((g) => g.items.length > 0);
 }
 
 export const GROUPS: NavGroup[] = [
@@ -388,6 +418,22 @@ export const GROUPS: NavGroup[] = [
             label: '알림',
             testid: 'nav-ecommerce-notifications', icon: 'bell',
           },
+        ],
+      },
+      {
+        // TASK-MONO-751 (ADR-MONO-079 D4-A) — the platform operator's fan DIRECTORY:
+        // 소속사 · 아티스트 · 그룹 in fan artist-service. Registry-gated (`productKey: 'fan'`):
+        // rendered only when the registry lists `fan` with a tenant, which admin-service does
+        // for platform operators ('*') alone (rider R3) — a customer operator never sees it.
+        // Directory only: fan community / membership stay closed to operators (ADR-MONO-059).
+        key: 'fan',
+        label: '팬 디렉터리',
+        testid: 'nav-fan', icon: 'identity',
+        productKey: 'fan',
+        children: [
+          { href: '/fan/agencies', label: '소속사', testid: 'nav-fan-agencies', icon: 'building' },
+          { href: '/fan/artists', label: '아티스트', testid: 'nav-fan-artists', icon: 'user' },
+          { href: '/fan/groups', label: '그룹', testid: 'nav-fan-groups', icon: 'users' },
         ],
       },
     ],

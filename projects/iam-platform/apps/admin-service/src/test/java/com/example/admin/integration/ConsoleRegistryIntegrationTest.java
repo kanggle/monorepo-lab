@@ -254,8 +254,8 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isOk())
-                // exactly 6 products in catalog order (TASK-MONO-240 added ecommerce)
-                .andExpect(jsonPath("$.products.length()").value(6))
+                // exactly 7 products in catalog order (TASK-MONO-240 added ecommerce, TASK-MONO-751 fan)
+                .andExpect(jsonPath("$.products.length()").value(7))
                 .andExpect(jsonPath("$.products[0].productKey").value("iam"))
                 .andExpect(jsonPath("$.products[0].displayName").value("Identity & Access Management"))
                 .andExpect(jsonPath("$.products[0].available").value(true))
@@ -291,7 +291,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(WMS_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(6))
+                .andExpect(jsonPath("$.products.length()").value(7))
                 // gap shows ONLY the operator's own tenant — not the full list
                 .andExpect(jsonPath("$.products[0].productKey").value("iam"))
                 .andExpect(jsonPath("$.products[0].tenants.length()").value(1))
@@ -399,7 +399,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(FINANCE_TENANT_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(6))
+                .andExpect(jsonPath("$.products.length()").value(7))
                 // finance product: available=true, own tenant selectable
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].available").value(true))
@@ -436,7 +436,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(ERP_TENANT_OP_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(6))
+                .andExpect(jsonPath("$.products.length()").value(7))
                 // erp product: available=true, own tenant selectable
                 .andExpect(jsonPath("$.products[3].productKey").value("erp"))
                 .andExpect(jsonPath("$.products[3].available").value(true))
@@ -527,7 +527,7 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/console/registry")
                         .header("Authorization", token(SUPER_ADMIN_UUID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.products.length()").value(6))
+                .andExpect(jsonPath("$.products.length()").value(7))
                 // finance product (index 4): acme-corp subscribed → must appear
                 .andExpect(jsonPath("$.products[4].productKey").value("finance"))
                 .andExpect(jsonPath("$.products[4].tenants",

@@ -86,7 +86,11 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
 
 /* ─────────────────────────── 데모 테스트 계정 ─────────────────────────── */
 
-export type DomainKey = 'wms' | 'scm' | 'finance' | 'erp' | 'ecommerce';
+// TASK-MONO-751 — `fan` is the fan DIRECTORY (agencies · artists · groups), reachable by
+// PLATFORM operators only (ADR-MONO-079 R3). The demo account's `entitledDomains` below does
+// NOT include it — `demo-corp` cannot subscribe to `fan` (TASK-MONO-750) — so the matrix
+// correctly shows «no» for `demo@demo.com` on those rows.
+export type DomainKey = 'wms' | 'scm' | 'finance' | 'erp' | 'ecommerce' | 'fan';
 
 /**
  * 데모 테스트 계정(`demo-operator`)이 **실제로** 가진 것. 로그인 이메일 문자열은 여기
@@ -732,6 +736,60 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     sources: [
       `${API}/ecommerce/notifications/templates/route.ts (GET,POST)`,
       `${API}/ecommerce/notifications/templates/[id]/route.ts (GET,PUT)`,
+    ],
+  },
+  // ── fan directory — TASK-MONO-751 (ADR-MONO-079 D4-A; platform operators only, R3) ──
+  {
+    href: '/fan/agencies',
+    area: 'fan',
+    gate: {
+      kind: 'domain',
+      domain: 'fan',
+      roles: ['FAN_OPERATOR'],
+      extra: '플랫폼 운영자(tenant_id=*) 가 fan-platform 으로 전환했을 때만 — 고객사 운영자는 메뉴가 보이지 않는다(R3)',
+    },
+    description: '소속사 목록 · 등록 · 이름 변경 · 보관 · 스토어 셀러 연결.',
+    crud: crud('RCU'),
+    crudNote: '삭제 없음 — 보관(ARCHIVED). 셀러 연결은 스토어 확인이 배선될 때까지(TASK-MONO-759) 503 으로 거절된다.',
+    purpose: '팬 플랫폼의 소속사 디렉터리를 관리한다.',
+    services: ['fan gateway-service → artist-service (소속사)'],
+    sources: [
+      `${API}/fan/agencies/route.ts (GET,POST)`,
+      `${API}/fan/agencies/[id]/route.ts (GET,PATCH)`,
+      `${API}/fan/agencies/[id]/status/route.ts (PATCH)`,
+      `${API}/fan/agencies/[id]/store-seller/route.ts (PATCH)`,
+      'projects/fan-platform/specs/contracts/http/artist-api.md (§ Agencies)',
+    ],
+  },
+  {
+    href: '/fan/artists',
+    area: 'fan',
+    gate: { kind: 'domain', domain: 'fan', roles: ['FAN_OPERATOR'], extra: '플랫폼 운영자 전용(R3)' },
+    description: '아티스트 목록(공개만) · 등록 · 프로필 수정 · 공개/보관 · 소속 변경.',
+    crud: crud('RCU'),
+    crudNote: '목록은 PUBLISHED 만 — 초안·보관은 ID 로 연다. 대리 저작(ARTIST_POST)은 없다(ADR-MONO-059).',
+    purpose: '아티스트 디렉터리와 소속을 관리한다.',
+    services: ['fan gateway-service → artist-service (아티스트)'],
+    sources: [
+      `${API}/fan/artists/route.ts (GET,POST)`,
+      `${API}/fan/artists/[id]/route.ts (GET,PATCH)`,
+      `${API}/fan/artists/[id]/status/route.ts (PATCH)`,
+      `${API}/fan/artists/[id]/agency/route.ts (PATCH)`,
+    ],
+  },
+  {
+    href: '/fan/groups',
+    area: 'fan',
+    gate: { kind: 'domain', domain: 'fan', roles: ['FAN_OPERATOR'], extra: '플랫폼 운영자 전용(R3)' },
+    description: '아티스트 그룹 생성 · ID 로 열기 · 멤버 조회 · 소속 변경.',
+    crud: crud('RCU'),
+    crudNote: '목록 없음 — 생산자에 그룹 목록 API 가 없다(artist-api § Artist groups).',
+    purpose: '그룹의 소속을 관리한다.',
+    services: ['fan gateway-service → artist-service (그룹)'],
+    sources: [
+      `${API}/fan/artist-groups/route.ts (POST)`,
+      `${API}/fan/artist-groups/[id]/route.ts (GET)`,
+      `${API}/fan/artist-groups/[id]/agency/route.ts (PATCH)`,
     ],
   },
 ];

@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * TASK-BE-296: The fixed platform-console product catalog (ADR-MONO-013
- * federated domains + ADR-MONO-030 ecommerce marketplace). Six product keys;
+ * federated domains + ADR-MONO-030 ecommerce marketplace + ADR-MONO-079 fan directory). Seven product keys;
  * {@code available} reflects whether the domain is bootstrapped on the IAM
  * platform.
  *
@@ -38,6 +38,10 @@ import java.util.List;
  *       marketplace SaaS); binds to its own tenant slug subscription-driven
  *       like wms/scm/erp/finance ({@code tenant_domain_subscription}
  *       {@code domain_key='ecommerce'} self-seed V0022).</li>
+ *   <li>{@code fan} (TASK-MONO-751, ADR-MONO-079 D4-A) binds to the {@code fan-platform}
+ *       tenant through its {@code fan} subscription (account-service V0031) and is
+ *       selectable by <b>platform-scope operators only</b> (rider R3 —
+ *       {@link com.example.admin.domain.rbac.AdminOperator#isPlatformOperatorOnlyTenant}).</li>
  * </ul>
  */
 public final class ProductCatalog {
@@ -66,7 +70,14 @@ public final class ProductCatalog {
             new Entry("scm", "Supply Chain Management", true, false, "scm", "/scm"),
             new Entry("erp", "Enterprise Resource Planning", true, false, "erp", "/erp"),
             new Entry("finance", "Finance", true, false, "finance", "/finance"),
-            new Entry("ecommerce", "E-Commerce Marketplace", true, false, "ecommerce", "/ecommerce")
+            new Entry("ecommerce", "E-Commerce Marketplace", true, false, "ecommerce", "/ecommerce"),
+            // TASK-MONO-751 (ADR-MONO-079 D4-A): the fan directory. Bound like every domain
+            // product (subscription-driven — account-service V0031 seeds the single
+            // `(fan-platform, fan)` row), but selectable by PLATFORM operators only (rider R3):
+            // ConsoleRegistryUseCase drops platform-operator-only tenants from a customer
+            // operator's list, so a customer operator's `fan.tenants` is always [].
+            // console-web ProductKeySchema gained `fan` in the same PR (see class javadoc).
+            new Entry("fan", "Fan Platform", true, false, "fan-platform", "/fan")
     );
 
     public static List<Entry> entries() {

@@ -188,8 +188,18 @@ public class ConsoleRegistryUseCase {
         // (assignment rows ∪ home tenant), preserving bound ordering. NET-ZERO
         // with no assignments → effectiveTenants == {home tenant} → reproduces
         // the legacy `bound.contains(ownTenant) ? [ownTenant] : []` exactly.
+        //
+        // TASK-MONO-751 (ADR-MONO-079 rider R3): a platform-operator-only tenant
+        // (`fan-platform`) is NEVER listed for a non-platform operator — not even when
+        // an assignment row names it. The assume gate already refuses such a row
+        // (OperatorAssignmentCheckUseCase step 2b, TASK-MONO-750); listing it here
+        // would offer a switch that then fails, and would show a customer operator
+        // the fan product. Same predicate as the assume gate, so the two cannot drift.
         List<String> scoped = new ArrayList<>();
         for (String tenant : bound) {
+            if (AdminOperator.isPlatformOperatorOnlyTenant(tenant)) {
+                continue;
+            }
             if (effectiveTenants.contains(tenant)) {
                 scoped.add(tenant);
             }

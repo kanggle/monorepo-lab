@@ -142,7 +142,7 @@ class ConsoleRegistryUseCaseTest {
     }
 
     @Test
-    @DisplayName("catalog: exactly 6 products; erp/finance/ecommerce available=true + tenants=[] when their slugs not registered (TASK-BE-305 / TASK-MONO-240)")
+    @DisplayName("catalog: exactly 7 products (fan = TASK-MONO-751); erp/finance/ecommerce available=true + tenants=[] when their slugs not registered (TASK-BE-305 / TASK-MONO-240)")
     void catalog_six_products_erp_finance_ecommerce_available_noRegisteredTenants() {
         // Seeds only fan-platform (no erp/finance/ecommerce tenant rows) — the
         // tenant-selection rule returns tenants:[] for those (slug not in
@@ -154,7 +154,7 @@ class ConsoleRegistryUseCaseTest {
         ConsoleRegistry r = useCase().execute(new OperatorContext("op-1", "jti"));
 
         assertThat(r.products()).extracting(ConsoleProduct::productKey)
-                .containsExactly("iam", "wms", "scm", "erp", "finance", "ecommerce");
+                .containsExactly("iam", "wms", "scm", "erp", "finance", "ecommerce", "fan");
         assertThat(product(r, "erp").available()).isTrue();
         assertThat(product(r, "erp").tenants()).isEmpty();
         assertThat(product(r, "finance").available()).isTrue();
@@ -470,6 +470,70 @@ class ConsoleRegistryUseCaseTest {
             // fan-platform is neither home nor assigned → never leaked
             assertThat(r.products())
                     .allSatisfy(p -> assertThat(p.tenants()).doesNotContain("fan-platform"));
+        }
+    }
+
+    /**
+     * TASK-MONO-751 (ADR-MONO-079 D4-A · rider R3): the {@code fan} product. Bound to
+     * {@code fan-platform} through its {@code fan} subscription; a platform operator sees
+     * it, a customer operator never does — not even with an assignment row naming it.
+     */
+    @Nested
+    @DisplayName("TASK-MONO-751: fan product is platform-operator-only (R3)")
+    class FanProductPlatformOperatorOnly {
+
+        private void stubFanWorld() {
+            stubTenants(
+                    tenant("fan-platform", "ACTIVE"),
+                    tenant("demo-corp", "ACTIVE"));
+            stubSubscriptions(
+                    new TenantDomainSubscriptionSummary("fan-platform", "fan"),
+                    new TenantDomainSubscriptionSummary("demo-corp", "ecommerce"));
+        }
+
+        @Test
+        @DisplayName("platform operator: fan.tenants = [fan-platform], baseRoute /fan")
+        void platformOperator_seesFanPlatform() {
+            stubOperator("platform-op", "*");
+            stubFanWorld();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("platform-op", "jti"));
+
+            assertThat(product(r, "fan").available()).isTrue();
+            assertThat(product(r, "fan").tenants()).containsExactly("fan-platform");
+            assertThat(product(r, "fan").baseRoute()).isEqualTo("/fan");
+        }
+
+        @Test
+        @DisplayName("customer operator (home demo-corp): fan.tenants = [] and fan-platform listed nowhere")
+        void customerOperator_neverSeesFan() {
+            stubOperator("demo-op", "demo-corp");
+            stubFanWorld();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("demo-op", "jti"));
+
+            assertThat(product(r, "fan").tenants()).isEmpty();
+            // Control: the same operator DOES see its own tenant — the predicate is not
+            // simply emptying every list.
+            assertThat(product(r, "ecommerce").tenants()).containsExactly("demo-corp");
+            assertThat(r.products())
+                    .allSatisfy(p -> assertThat(p.tenants()).doesNotContain("fan-platform"));
+        }
+
+        @Test
+        @DisplayName("customer operator WITH an assignment row to fan-platform: still [] (row ≠ access)")
+        void customerOperator_assignmentRow_stillRefused() {
+            stubOperatorEntityOnly("demo-op", "demo-corp");
+            stubEffectiveScope("demo-corp", "demo-corp", "fan-platform");
+            stubFanWorld();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("demo-op", "jti"));
+
+            assertThat(product(r, "fan").tenants())
+                    .as("R3: an assignment row must not surface the platform-operator-only tenant")
+                    .isEmpty();
+            assertThat(product(r, "iam").tenants())
+                    .containsExactly("demo-corp");
         }
     }
 

@@ -41,7 +41,14 @@ describe('2뎁스 순서 — 가이드 → 개요 in all six domains (AC-1)', ()
   );
 
   it('the config itself has 가이드 at index 0 and 개요 at index 1 of every drill parent', () => {
-    const parents = GROUPS.flatMap((g) => g.items).filter(isParent);
+    // TASK-MONO-751 — the registry-gated fan DIRECTORY parent (`productKey: 'fan'`, platform
+    // operators only) is not one of the six domain sections this order rule (TASK-PC-FE-297)
+    // was written for: it has no guide/overview pages, only the three directory screens.
+    // It is excluded BY NAME here so the rule still binds every domain section — a seventh
+    // ungated parent without 가이드/개요 still turns this red.
+    const allParents = GROUPS.flatMap((g) => g.items).filter(isParent);
+    const parents = allParents.filter((p) => p.productKey === undefined);
+    expect(allParents.filter((p) => p.productKey !== undefined).map((p) => p.key)).toEqual(['fan']);
     expect(parents).toHaveLength(6);
     for (const p of parents) {
       expect(p.children[0].label).toBe('가이드');

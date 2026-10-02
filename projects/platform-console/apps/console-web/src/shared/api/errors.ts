@@ -604,6 +604,29 @@ export class EcommerceUnavailableError extends Error {
 }
 
 /**
+ * fan-directory section degrade signal (TASK-MONO-751 — ADR-MONO-079 D4-A). Raised by the
+ * fan client on `503` / timeout / network from the fan-platform gateway so ONLY the fan
+ * section degrades. 🔴 One `503` is NOT a degrade: artist-service answers the store-seller
+ * link with `503 STORE_SELLER_LOOKUP_UNAVAILABLE` (fail-closed — nothing saved,
+ * TASK-MONO-748/759), and the agency screen renders that code as its own state. The code is
+ * carried here so the screen can tell the two apart.
+ */
+export class FanUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: FanUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'FanUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
+/**
  * Self-service tenant-onboarding surface degrade signal (ADR-MONO-044 §3.4 /
  * TASK-PC-FE-182 — `onboarding-api.md`). Sibling of the section
  * `*UnavailableError`s but for the pre-operator "create organization" call: a

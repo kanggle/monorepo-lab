@@ -177,12 +177,12 @@ Returns the data-driven product/tenant catalog the console renders.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | one of `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` |
+| `productKey` | string | one of `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` \| `fan` |
 | `displayName` | string | Catalog tile label |
 | `available` | boolean | `false` → console renders "coming soon" |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
-| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304** — optional extensible carrier for per-operator per-product profile attributes; **omitted entirely** when no attribute is set (never rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from `admin_operators.finance_default_account_id`); the other 5 items always omit it. See § Per-operator profile attributes. |
+| `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304** — optional extensible carrier for per-operator per-product profile attributes; **omitted entirely** when no attribute is set (never rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from `admin_operators.finance_default_account_id`); the other items always omit it. See § Per-operator profile attributes. |
 
 ### Per-operator profile attributes (`operatorContext`) — TASK-BE-304
 
@@ -231,6 +231,7 @@ Per-product emission rule (v1):
 | `erp` | no | — | always omitted |
 | `finance` | yes (`{ defaultAccountId }`) | `admin_operators.finance_default_account_id` | when the column is non-null + non-empty after trim; omitted otherwise |
 | `ecommerce` | no | — | always omitted |
+| `fan` | no | — | always omitted |
 
 The schema reserves `operatorContext` for future per-operator per-product
 attributes; the v1 producer surface populates only the `finance` product item.
@@ -239,8 +240,8 @@ the v1 consumer.
 
 ### Product catalog (static, registry-driven)
 
-The 6 product keys form a fixed catalog (ADR-MONO-013 federated domains +
-ADR-MONO-030 ecommerce marketplace). `available` is derived:
+The 7 product keys form a fixed catalog (ADR-MONO-013 federated domains +
+ADR-MONO-030 ecommerce marketplace + ADR-MONO-079 D4-A fan directory). `available` is derived:
 
 | productKey | displayName | available rule |
 |---|---|---|
@@ -250,6 +251,7 @@ ADR-MONO-030 ecommerce marketplace). `available` is derived:
 | `erp` | Enterprise Resource Planning | `true` (V1 live per ADR-MONO-013 § D6 Phase 6 COMPLETE 2026-05-20 — ADR-MONO-016 ACCEPTED + ERP-BE-001 masterdata-service + ERP-BE-002 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
 | `finance` | Finance | `true` (V1 live per ADR-MONO-013 § D6 Phase 5 COMPLETE 2026-05-19/20 — ADR-MONO-008 ACCEPTED + FIN-BE-001 account-service + FIN-BE-005 platform-console consumer reconciliation; flipped from `false` by TASK-BE-305 2026-05-21 reality-alignment) |
 | `ecommerce` | E-Commerce Marketplace | `true` (V1 live per ADR-MONO-030 ACCEPTED — multi-vendor marketplace SaaS; bound subscription-driven like wms/scm/erp/finance via `tenant_domain_subscription` `domain_key='ecommerce'` self-seed V0022, TASK-MONO-240 2026-06-13) |
+| `fan` | Fan Platform | `true` (TASK-MONO-751 — ADR-MONO-079 D4-A: the platform operator's fan **directory** management — agencies · artists · groups — in artist-service, never fan community/membership). Bound subscription-driven to `fan-platform` via `domain_key='fan'` (account-service V0031, TASK-MONO-750). 🔴 **Platform-operator-only** (rider R3) — see § Tenant selection rule (4). `baseRoute` `/fan`. |
 
 **Render is data-driven (0-change); membership enum is an explicit extension.**
 Flipping `available` / changing `displayName` / changing `tenants` of an
@@ -262,8 +264,9 @@ extension** — the deliberate fixed-membership guard asserted by
 `productKey` is absent from that enum makes `RegistryResponseSchema.parse` throw
 → the whole catalog renders `degraded` (not a crash). So the producer-side
 catalog addition and the consumer-side enum extension must land in the **same
-atomic PR** (TASK-MONO-240 — ADR-MONO-030 § 6 factual correction). All 6
-federated domains (`iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce`) are
+atomic PR** (TASK-MONO-240 — ADR-MONO-030 § 6 factual correction; TASK-MONO-751 added `fan`
+the same way). All 7 catalog members (`iam` + `wms` + `scm` + `erp` + `finance` +
+`ecommerce` + `fan`) are
 now V1 live; the `available` flag is `true` across the catalog and the console
 renders each tile as interactive (subject to per-operator `tenants` selection
 per § Tenant selection rule).
@@ -281,6 +284,13 @@ per § Tenant selection rule).
 3. the tenant being **registered + ACTIVE** in `tenants` (account-service
    owned; read via `ListTenantsUseCase`). A SUSPENDED or unregistered tenant
    is excluded.
+4. (TASK-MONO-751 — ADR-MONO-079 rider R3) a **platform-operator-only tenant**
+   (`fan-platform`, `AdminOperator.isPlatformOperatorOnlyTenant`) is listed for a
+   `'*'` operator only. A non-platform operator never sees it in any product's
+   `tenants` — **even when an `operator_tenant_assignment` row names it** — so a
+   customer operator's `fan.tenants` is always `[]`. Same predicate as the assume
+   gate (`OperatorAssignmentCheckUseCase` step 2b, TASK-MONO-750), which refuses the
+   switch itself.
 
 An unavailable product always has `tenants: []` regardless of operator scope.
 
@@ -359,7 +369,8 @@ Error envelope: the standard
    additionally requires the consumer-side `console-web` `ProductKeySchema` Zod
    enum extension** (+ its `registry-contract.test.ts` membership assertion) in
    the same atomic PR — render is data-driven but membership is a fixed-set
-   guard (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction).
+   guard (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction;
+   TASK-MONO-751 added `fan`).
 4. Adding a new `operatorContext.*` attribute (TASK-BE-304 extensible carrier)
    is **additive** when (a) it is optional + omitted-by-default and (b) the
    attribute is per-operator + scoped via `resolveOperator(operator.operatorId())`

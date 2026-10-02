@@ -407,6 +407,30 @@
         <dd><code id="c-viewer-pass">Demo1234!</code><button class="copy" data-copy="c-viewer-pass">복사</button></dd>
       </div>
     </dl>
+
+    <!--
+      플랫폼 운영자 계정 (TASK-MONO-751, 2026-10-03 소유자 결정 «플랫폼 운영자 데모 계정 시드» — 재굽기 후).
+
+      🔴 팬 디렉터리(소속사 · 아티스트 · 그룹) 화면은 **플랫폼 운영자만** 연다(ADR-MONO-079 라이더 R3).
+      위 demo@demo.com 은 고객사(demo-corp) 운영자라 그 메뉴가 보이지 않는다. 이 계정은 홈 테넌트가
+      플랫폼 스코프(`*`)이고 관리 역할은 없다(admin_operator_roles 0행) — IAM 관리 화면은 403 이다.
+      🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-platform-email"` 을
+      `R__seed_demo_platform_operator_credential.sql` 의 이메일 컬럼과 대조한다.
+    -->
+    <p class="hint" style="margin-top:18px">
+      <strong>팬 디렉터리(소속사 · 아티스트 · 그룹) 관리</strong>는 플랫폼 운영자 계정으로 봅니다.
+      로그인한 뒤 <strong>테넌트를 <code>fan-platform</code> 으로 선택</strong>하면 「팬 디렉터리」 메뉴가 열립니다.
+    </p>
+    <dl style="margin:0">
+      <div class="crow">
+        <dt>이메일</dt>
+        <dd><code id="c-platform-email">platform@demo.com</code><button class="copy" data-copy="c-platform-email">복사</button></dd>
+      </div>
+      <div class="crow">
+        <dt>비밀번호</dt>
+        <dd><code id="c-platform-pass">Demo1234!</code><button class="copy" data-copy="c-platform-pass">복사</button></dd>
+      </div>
+    </dl>
   </div>
 
   <!--
