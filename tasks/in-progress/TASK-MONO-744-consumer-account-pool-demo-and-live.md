@@ -8,7 +8,7 @@ TASK-MONO-744
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -28,7 +28,7 @@ monorepo
 
 # Dependency Markers
 
-- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` · `TASK-BE-617` (~~`TASK-MONO-743`~~ — 2026-10-02 보류, 아래 «743 보류 인계») (~~`TASK-MONO-745`~~ — 2026-10-02 구현 없이 닫힘: 셀러 계정은 기계 계정이라 풀로 옮기지 않는다 · `ADR-MONO-079` 로 흡수)
+- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` · `TASK-BE-618` — 전부 done (~~`TASK-BE-617`~~ — 2026-10-02 ⏳ 보류, 소유자 결정: 실제 소셜 키가 어디에도 없다 ⇒ 선행에서 뺀다. 데모 계정은 폼 로그인만 쓴다) (~~`TASK-MONO-743`~~ — 2026-10-02 보류, 아래 «743 보류 인계») (~~`TASK-MONO-745`~~ — 2026-10-02 구현 없이 닫힘: 셀러 계정은 기계 계정이라 풀로 옮기지 않는다 · `ADR-MONO-079` 로 흡수)
 
 # Goal
 
