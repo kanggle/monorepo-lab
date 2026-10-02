@@ -569,6 +569,45 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
+  # scm-gateway-service — TASK-PC-FE-302 (ADR-MONO-081). The console overview
+  # is now composed in console-web, and console-web reaches scm the way its
+  # scm screens do: through the scm gateway (`/api/v1/inventory-visibility/**`,
+  # RewritePath -> the service's `/api/inventory-visibility/**`). console-bff
+  # used to call the service directly on its docker address, which only
+  # exists on a docker network — not from Vercel. Running the real gateway
+  # here also puts its entitlement-trust dual-accept (ADR-MONO-019 § D5) on
+  # the path the entitlement specs measure.
+  # ---------------------------------------------------------------------------
+  scm-gateway-service:
+    logging: *default-logging
+    build:
+      context: ../../../projects/scm-platform/apps/gateway-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      INVENTORY_VISIBILITY_SERVICE_URI: http://scm-inventory-visibility-service:8080
+      PROCUREMENT_SERVICE_URI: http://scm-procurement-service:8080
+      OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      scm-inventory-visibility-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
   # finance-account-service — finance domain read endpoint.
   # Reuse from platform-console docker-compose.e2e.yml verbatim.
   # ---------------------------------------------------------------------------
@@ -737,6 +776,15 @@ services:
       CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
       TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
       IAM_ADMIN_API_BASE: http://admin-service:8085
+      # TASK-PC-FE-302 (ADR-MONO-081) — the overview / health legs are composed
+      # in console-web now, so it needs the per-domain bases console-bff held
+      # (CONSOLE_BFF_OUTBOUND_* above). Same producers; scm goes through the
+      # gateway like the console scm screens do (see scm-gateway-service).
+      WMS_ADMIN_BASE_URL: http://wms-admin-service:8086/api/v1/admin
+      SCM_GATEWAY_BASE_URL: http://scm-gateway-service:8080
+      FINANCE_BASE_URL: http://finance-account-service:8080
+      ERP_BASE_URL: http://erp-masterdata-service:8080
+      # console-bff stays the notification-inbox producer until TASK-PC-FE-303.
       CONSOLE_BFF_URL: http://console-bff:8080
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       # TASK-MONO-144 — otel-node (MONO-143 D3) starts the root SSR span +
@@ -751,6 +799,7 @@ services:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
       console-bff: { condition: service_started }
+      scm-gateway-service: { condition: service_started }
       victoriatraces: { condition: service_healthy }
     ports: ["3000:3000"]
     networks: [fed-e2e]

@@ -1,3 +1,4 @@
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { getServerEnv } from '@/shared/config/env';
 import { logger } from '@/shared/lib/logger';
 
@@ -28,6 +29,14 @@ import { logger } from '@/shared/lib/logger';
  * (a serverless function keeps no state between requests, so `CIRCUIT_OPEN`
  * is never produced here) and the `bff_*` metrics (one structured log line
  * per leg instead).
+ *
+ * Carried over: the per-leg trace span (contract § 2.4.9 Observability — «per-leg
+ * span carries domain + route attributes»). Each leg runs inside an active span
+ * `console.composition.leg` tagged `composition.domain` / `composition.route`, so
+ * the auto-instrumented `fetch` client span and the producer's server span join
+ * it under the request's trace (`tests/federation-hardening-e2e` gates this).
+ * With no OTel SDK registered (unit tests, Vercel without an exporter) the API
+ * is a no-op.
  */
 
 export type LegDomain = 'iam' | 'wms' | 'scm' | 'finance' | 'erp' | 'ecommerce';
@@ -144,7 +153,31 @@ async function forbiddenReason(res: Response): Promise<string> {
   return 'PERMISSION_DENIED';
 }
 
-async function runLeg(spec: LegSpec, ctx: LegContext): Promise<LegResult> {
+const tracer = trace.getTracer('console-web.composition');
+
+function runLeg(spec: LegSpec, ctx: LegContext): Promise<LegResult> {
+  return tracer.startActiveSpan(
+    'console.composition.leg',
+    { attributes: { 'composition.domain': spec.domain, 'composition.route': ctx.route } },
+    async (span) => {
+      try {
+        const r = await runLegInner(spec, ctx);
+        span.setAttribute(
+          'composition.outcome',
+          r.unauthorized ? 'unauthorized' : r.card.status,
+        );
+        return r;
+      } catch (e) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw e;
+      } finally {
+        span.end();
+      }
+    },
+  );
+}
+
+async function runLegInner(spec: LegSpec, ctx: LegContext): Promise<LegResult> {
   const startedAt = Date.now();
   if ('decided' in spec) {
     logLeg(ctx, spec.domain, spec.decided.status, startedAt, spec.decided.reason);

@@ -1,67 +1,50 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 /**
- * TASK-MONO-145 — Federation distributed-trace propagation spec
- * (producer-join regression gate). ADR-MONO-018 D4 follow-up, built on the
- * MONO-143 trace foundation (VictoriaTraces + OTLP direct export — ADR-007a
- * D1/D2) and the MONO-144 trace-tree assertion.
+ * Federation distributed-trace propagation spec (ADR-MONO-018 D4 — MONO-143
+ * trace foundation: VictoriaTraces + OTLP direct export, ADR-007a D1/D2).
  *
- * Drives one Operator Overview fan-out (console-web SSR → console-bff
- * aggregation → per-domain producers), then polls VictoriaTraces' Jaeger-compat
- * query API across ALL console-bff-bearing traces and gates TWO proven,
- * deterministic propagation invariants:
+ * 🔵 TASK-PC-FE-302 (ADR-MONO-081, A) moved the Operator Overview composition
+ * from console-bff into the console-web server. The hop this spec used to gate
+ * (console-web → console-bff → producers) no longer exists for the overview, so
+ * the gates are re-stated on the path that does: console-web → producers.
+ * The INVARIANTS are the same ones MONO-144/145/146/147 put in place; only the
+ * middle hop is gone:
  *
- *   (floor)         one trace_id with the console-web SSR root + the console-bff
- *                   aggregation span (console-web → console-bff propagation —
- *                   the MONO-144 gate).
- *   (producer-join) one trace_id co-assembling a console-bff span + >= 1
- *                   producer server span (console-bff → producer W3C
- *                   `traceparent` propagation — the MONO-144 "observed ceiling"
- *                   lifted into a gate).
+ *   (attribution)  the console-web trace of an overview request carries one
+ *                  span per fan-out leg, tagged `composition.domain` +
+ *                  `composition.route` (was console-bff's `bff.domain` /
+ *                  `bff.route` — MONO-147; contract § 2.4.9 Observability).
+ *   (unified tree) that SAME trace_id also carries >= 1 producer server span —
+ *                  console-web's auto-instrumented `fetch` injects a W3C
+ *                  `traceparent` the producer honours (was MONO-145's
+ *                  producer-join + MONO-146's unified-tree gates; with no
+ *                  virtual-thread hop in between there is only one tree).
  *
- * WHY a SEPARATE producer-join search (MONO-144 → MONO-145).  MONO-144 only
- * inspected the single *richest* trace and reported `producerServiceCount=0`,
- * concluding the producers do not join.  But the console-bff → producer hop IS
- * wired in src: `RestClientConfig` injects the `ObservationRegistry` into every
- * per-domain `RestClient.Builder`, so micrometer-tracing-bridge-otel injects a
- * W3C `traceparent` on every outbound producer call.  The fan-out
- * (`CompositionEngine.fanOut`) runs each leg on its own Java 21 virtual thread
- * (`Executors.newVirtualThreadPerTaskExecutor()` + `CompletableFuture`); the
- * inbound OTel context is a ThreadLocal NOT propagated to those worker threads,
- * so each leg's outbound client observation roots a FRESH trace_id carrying the
- * console-bff client span + the producer server span.  Those per-leg traces are
- * the deterministic proof of the console-bff → producer hop — MONO-144 never
- * searched for them.  This spec searches ALL console-bff traces and gates on
- * that join WITHOUT any console-bff src change (AC-3).
- *
- * Honest-scope (MONO-140/144 precedent).  Unifying the producer spans under
- * console-web's SINGLE trace_id (the literal ~7-span tree) would require
- * virtual-thread OTel context propagation in `CompositionEngine` (src) — out of
- * scope here.  The spec REPORTS whether the unified tree was reached (producers
- * present in the console-web → console-bff trace); if only per-leg join is
- * observed, that residual is the documented ceiling, not a failure.
+ * The report (logged + attached) is written BEFORE the asserts so a failure
+ * carries the evidence of what did and did not propagate.
  */
 
 const VT_BASE = (
   process.env.E2E_VICTORIATRACES_URL ?? 'http://localhost:10428'
 ).replace(/\/$/, '');
 
-/** console-bff `spring.application.name` (OTLP resource service.name). */
-const BFF_SERVICE = 'platform-console-console-bff';
 /** console-web otel-node `OTEL_SERVICE_NAME` (default 'console-web'). */
 const WEB_SERVICE = 'console-web';
 const OVERVIEW_API = '/api/console/dashboards/operator-overview';
+/** `shared/composition/console-composition.ts` — the per-leg span. */
+const LEG_SPAN = 'console.composition.leg';
+const DOMAIN_TAG = 'composition.domain';
+const ROUTE_TAG = 'composition.route';
 
 /**
- * Known OTLP-exporting producer service.names reachable from the
- * Operator Overview fan-out (diagnostic only — the gate uses the general
- * "any service that is not console-web / console-bff" rule so a renamed or
- * additional producer still counts). GAP/admin-service has no OTLP exporter
- * (no span); the finance leg short-circuits without an account-id header.
+ * OTLP-exporting producers reachable from the overview fan-out — diagnostic
+ * only. The gate counts any service that is not console-web, so a renamed or
+ * additional producer still counts.
  */
 const KNOWN_PRODUCERS = [
-  'master-service', // wms
-  'scm-platform-procurement-service', // scm
+  'scm-platform-gateway-service', // scm (console-web reaches scm through it)
+  'scm-platform-inventory-visibility-service',
   'finance-platform-account-service', // finance
   'erp-platform-masterdata-service', // erp
 ];
@@ -84,31 +67,19 @@ interface JaegerTrace {
   processes: Record<string, { serviceName: string }>;
 }
 
-/**
- * Collect the `bff.domain` values from spans that carry BOTH `bff.domain` and
- * `bff.route` tags — the per-leg attribution spans (TASK-MONO-147, architecture
- * D7.A). One per fan-out leg that ran `engine.time(...)`.
- */
-function legAttributionDomains(trace: JaegerTrace): string[] {
+/** `composition.domain` of every overview leg span in one trace. */
+function legDomains(trace: JaegerTrace): string[] {
   const domains = new Set<string>();
   for (const span of trace.spans ?? []) {
+    if (span.operationName !== LEG_SPAN) continue;
     const tags = span.tags ?? [];
-    const domainTag = tags.find((t) => t.key === 'bff.domain');
-    const hasRoute = tags.some((t) => t.key === 'bff.route');
-    if (domainTag && hasRoute) domains.add(String(domainTag.value));
-  }
-  return [...domains];
-}
-
-/** Distinct `bff.*` tag keys in a trace (diagnostic for tag round-trip). */
-function bffTagKeys(trace: JaegerTrace): string[] {
-  const keys = new Set<string>();
-  for (const span of trace.spans ?? []) {
-    for (const t of span.tags ?? []) {
-      if (t.key.startsWith('bff.')) keys.add(t.key);
+    const domain = tags.find((t) => t.key === DOMAIN_TAG);
+    const route = tags.find((t) => t.key === ROUTE_TAG);
+    if (domain && route && String(route.value) === 'operator-overview') {
+      domains.add(String(domain.value));
     }
   }
-  return [...keys];
+  return [...domains];
 }
 
 /** serviceName -> span count for one trace, via the processID -> process map. */
@@ -121,23 +92,19 @@ function serviceSpanCounts(trace: JaegerTrace): Map<string, number> {
   return counts;
 }
 
-/** Producer services in one trace = any service that is not web / bff / unknown. */
+/** Producer services in one trace = any service that is not console-web / unknown. */
 function producersIn(services: Map<string, number>): string[] {
-  return [...services.keys()].filter(
-    (s) => s !== WEB_SERVICE && s !== BFF_SERVICE && s !== '(unknown)',
-  );
+  return [...services.keys()].filter((s) => s !== WEB_SERVICE && s !== '(unknown)');
 }
 
-/** Jaeger-compat search for traces containing a console-bff span. */
-async function searchBffTraces(
-  request: APIRequestContext,
-): Promise<JaegerTrace[]> {
+/** Jaeger-compat search for traces containing a console-web span. */
+async function searchWebTraces(request: APIRequestContext): Promise<JaegerTrace[]> {
   const nowMs = Date.now();
   const startUs = (nowMs - 3_600_000) * 1000; // last 1h
   const endUs = (nowMs + 60_000) * 1000; // +1m clock skew slack
   const url =
     `${VT_BASE}/select/jaeger/api/traces` +
-    `?service=${encodeURIComponent(BFF_SERVICE)}` +
+    `?service=${encodeURIComponent(WEB_SERVICE)}` +
     `&start=${startUs}&end=${endUs}&limit=100&lookback=1h`;
   const res = await request.get(url);
   if (!res.ok()) return [];
@@ -148,209 +115,98 @@ async function searchBffTraces(
 interface TraceView {
   trace: JaegerTrace;
   services: Map<string, number>;
+  legs: string[];
 }
 
 test.describe('Federation distributed-trace propagation (ADR-018 D4)', () => {
-  test('one trace_id carries the console-web SSR + console-bff propagation AND a console-bff -> producer join', async ({
+  test('one console-web trace_id carries the per-leg spans AND >= 1 producer server span', async ({
     page,
     request,
   }, testInfo) => {
-    // The producer-join poll needs OTLP batch flush (~5s) + ingest + index for
-    // BOTH the console-web -> console-bff unified trace AND >= 1 per-leg
-    // console-bff -> producer trace. Deadline (110s) plus the navigation/discovery
-    // prelude must fit inside one attempt (MONO-144 cycle 2: deadline > test
-    // timeout -> killed mid-poll -> flaky pass-on-retry). 180s leaves headroom.
+    // OTLP batch flush (~5 s) + ingest + index; deadline + prelude fit in one
+    // attempt (MONO-144 cycle 2: deadline > test timeout → flaky pass-on-retry).
     test.setTimeout(180_000);
 
-    // 1. Drive the Operator Overview fan-out. Navigate (realistic operator
-    //    path) + an explicit same-context API request (deterministic
-    //    SSR -> BFF -> producer trigger). The storage-state SUPER_ADMIN session
-    //    (tenant_id='*', accepted by all producers) makes console-bff resolve
-    //    credentials and fan out to the live producers; each producer forms a
-    //    receiving server span regardless of the leg's HTTP outcome.
+    // 1. Drive the overview — navigate (realistic path) + an explicit same-
+    //    context request (deterministic composition trigger). The SUPER_ADMIN
+    //    storage state (tenant_id='*') is accepted by every producer; each
+    //    producer forms a server span regardless of the leg's HTTP outcome.
     await page.goto('/dashboards/overview');
     await page.waitForLoadState('networkidle');
     const apiRes = await page.request.get(OVERVIEW_API);
-    console.log(`[MONO-145] operator-overview proxy status=${apiRes.status()}`);
+    console.log(`[trace-tree] operator-overview status=${apiRes.status()}`);
 
-    // 2. Discover ingested services (diagnostic — surfaces which producers
-    //    exported at all this run).
-    const servicesRes = await request.get(
-      `${VT_BASE}/select/jaeger/api/services`,
-    );
-    const servicesBody = servicesRes.ok()
-      ? await servicesRes.json().catch(() => ({}))
-      : {};
+    // 2. Ingested services (diagnostic).
+    const servicesRes = await request.get(`${VT_BASE}/select/jaeger/api/services`);
+    const servicesBody = servicesRes.ok() ? await servicesRes.json().catch(() => ({})) : {};
     const ingestedServices: string[] = Array.isArray(servicesBody?.data)
       ? servicesBody.data
       : [];
-    console.log(
-      `[MONO-145] VictoriaTraces ingested services: ${JSON.stringify(ingestedServices)}`,
-    );
+    console.log(`[trace-tree] ingested services: ${JSON.stringify(ingestedServices)}`);
 
-    // 3. Full-window poll across ALL console-bff traces. Track, separately:
-    //    - bestUnified:      richest trace carrying BOTH console-web + console-bff
-    //                        (the console-web -> console-bff floor).
-    //    - bestProducerJoin: trace carrying console-bff + the MOST distinct
-    //                        producers (the console-bff -> producer gate).
-    //    - producerUnion:    every producer service seen sharing a trace_id with
-    //                        console-bff across ALL traces (per-leg fan-out forks
-    //                        each leg into its own trace_id, so the union is the
-    //                        full set that propagated).
-    //    Unlike MONO-144 this does NOT break at the 2-service floor — it waits
-    //    for a producer to join a console-bff trace too.
-    let bestUnified: TraceView | null = null;
-    let bestProducerJoin: TraceView | null = null;
+    // 3. Poll console-web traces. Keep the overview trace (has leg spans) with
+    //    the most producers; stop once one carries legs AND a producer.
+    let best: TraceView | null = null;
     const producerUnion = new Set<string>();
     const deadline = Date.now() + 110_000;
     while (Date.now() < deadline) {
-      for (const trace of await searchBffTraces(request)) {
+      for (const trace of await searchWebTraces(request)) {
+        const legs = legDomains(trace);
+        if (legs.length === 0) continue;
         const services = serviceSpanCounts(trace);
-        if (!services.has(BFF_SERVICE)) continue;
-
-        if (services.has(WEB_SERVICE)) {
-          const richer =
-            !bestUnified ||
-            (trace.spans?.length ?? 0) > (bestUnified.trace.spans?.length ?? 0);
-          if (richer) bestUnified = { trace, services };
-        }
-
         const producers = producersIn(services);
         producers.forEach((p) => producerUnion.add(p));
-        if (producers.length > 0) {
-          const moreProducers =
-            !bestProducerJoin ||
-            producers.length > producersIn(bestProducerJoin.services).length ||
-            (producers.length ===
-              producersIn(bestProducerJoin.services).length &&
-              (trace.spans?.length ?? 0) >
-                (bestProducerJoin.trace.spans?.length ?? 0));
-          if (moreProducers) bestProducerJoin = { trace, services };
-        }
+        const better =
+          !best ||
+          producers.length > producersIn(best.services).length ||
+          (producers.length === producersIn(best.services).length &&
+            legs.length > best.legs.length);
+        if (better) best = { trace, services, legs };
       }
-      // Stop once the FULL unified tree is assembled (TASK-MONO-146): producers
-      // joined console-web's single trace_id. This also implies the floor
-      // (web+bff) and the producer-join invariant. If the unified join never
-      // lands the poll runs to the deadline and the gate fails with evidence.
-      if (bestUnified && producersIn(bestUnified.services).length > 0) break;
+      if (best && producersIn(best.services).length > 0) break;
       await page.waitForTimeout(3_000);
     }
 
-    // 4. Report (artifact + log) BEFORE asserting, so a failure carries the full
-    //    evidence of what did / did not propagate.
-    const unifiedTreeProducerCount = bestUnified
-      ? producersIn(bestUnified.services).length
-      : 0;
+    // 4. Report before asserting.
     const report = {
       victoriaTracesBase: VT_BASE,
       ingestedServices,
-      unified: bestUnified
+      overviewTrace: best
         ? {
-            traceId: bestUnified.trace.traceID,
-            totalSpans: bestUnified.trace.spans?.length ?? 0,
-            serviceSpanCounts: Object.fromEntries(bestUnified.services),
-            consoleWebRootPresent: bestUnified.services.has(WEB_SERVICE),
-          }
-        : null,
-      producerJoin: bestProducerJoin
-        ? {
-            traceId: bestProducerJoin.trace.traceID,
-            totalSpans: bestProducerJoin.trace.spans?.length ?? 0,
-            serviceSpanCounts: Object.fromEntries(bestProducerJoin.services),
-            producers: producersIn(bestProducerJoin.services),
-            rootIsConsoleBff: !bestProducerJoin.services.has(WEB_SERVICE),
+            traceId: best.trace.traceID,
+            totalSpans: best.trace.spans?.length ?? 0,
+            serviceSpanCounts: Object.fromEntries(best.services),
+            legDomains: best.legs,
+            producers: producersIn(best.services),
           }
         : null,
       producerUnion: [...producerUnion],
       knownProducersExpected: KNOWN_PRODUCERS,
-      // Per-leg span attribution (TASK-MONO-147): bff.domain values on spans
-      // that carry both bff.domain + bff.route tags, in the unified trace.
-      legAttributionDomains: bestUnified
-        ? legAttributionDomains(bestUnified.trace)
-        : [],
-      bffTagKeysSeen: bestUnified ? bffTagKeys(bestUnified.trace) : [],
-      // The residual ceiling: did the producers join the UNIFIED console-web
-      // trace (full ~7-span tree), or only per-leg console-bff-rooted traces?
-      unifiedTreeReached: unifiedTreeProducerCount > 0,
-      ceilingNote:
-        unifiedTreeProducerCount > 0
-          ? 'Producers joined the unified console-web trace_id (full tree reached).'
-          : 'Producers join per-leg console-bff-rooted trace_ids; unifying them under console-web\'s single trace_id needs virtual-thread OTel context propagation in CompositionEngine (src, out of scope) — documented ceiling.',
     };
-    console.log(
-      `[MONO-145] propagation report:\n${JSON.stringify(report, null, 2)}`,
-    );
-    await testInfo.attach('mono-145-trace-propagation-report.json', {
+    console.log(`[trace-tree] propagation report:\n${JSON.stringify(report, null, 2)}`);
+    await testInfo.attach('trace-propagation-report.json', {
       body: JSON.stringify(report, null, 2),
       contentType: 'application/json',
     });
 
-    // 5a. Floor gate — console-web SSR -> console-bff propagation (MONO-144).
+    // 5a. Attribution gate — the overview trace carries per-leg spans.
     expect(
-      bestUnified,
-      'no console-web + console-bff trace found within the flush window — ' +
-        `ingested services were ${JSON.stringify(ingestedServices)}`,
+      best,
+      `no console-web trace with a ${LEG_SPAN} span (tags ${DOMAIN_TAG} + ${ROUTE_TAG}=operator-overview) ` +
+        `within the flush window — ingested services were ${JSON.stringify(ingestedServices)}. ` +
+        'If console-web is present but no leg span is, either the composition no longer wraps ' +
+        'legs in a span or the tags did not survive the OTLP → VictoriaTraces → Jaeger round-trip.',
     ).not.toBeNull();
-    const unified = bestUnified!.services;
-    expect(
-      unified.has(BFF_SERVICE) && unified.has(WEB_SERVICE),
-      `unified trace ${bestUnified!.trace.traceID} must carry BOTH console-web (SSR root) and console-bff — proves console-web -> console-bff W3C traceparent propagation + cross-format ingest; got: ${[...unified.keys()].join(', ')}`,
-    ).toBe(true);
+    expect(best!.legs.length).toBeGreaterThanOrEqual(1);
 
-    // 5b. Producer-join gate — console-bff -> producer propagation (the MONO-144
-    //     "observed ceiling" lifted into a regression gate). One trace_id
-    //     co-assembling a console-bff span + >= 1 producer server span proves the
-    //     RestClientConfig ObservationRegistry wiring injects a traceparent the
-    //     producer honors. (Per-leg or unified — searched across ALL bff traces.)
+    // 5b. Unified-tree gate — the SAME trace_id carries >= 1 producer span.
+    const producers = producersIn(best!.services);
     expect(
-      bestProducerJoin,
-      'no trace_id co-assembling a console-bff span + >= 1 producer span found ' +
-        'within the flush window — console-bff -> producer traceparent propagation ' +
-        `did not land. producerUnion=${JSON.stringify([...producerUnion])}, ` +
-        `ingestedServices=${JSON.stringify(ingestedServices)}. If this persists ` +
-        'under a longer poll it is a real propagation gap (file a console-bff src ' +
-        'diagnosis task — AC-5), but RestClientConfig makes per-leg join expected.',
-    ).not.toBeNull();
-    const joinProducers = producersIn(bestProducerJoin!.services);
-    expect(
-      bestProducerJoin!.services.has(BFF_SERVICE) && joinProducers.length >= 1,
-      `producer-join trace ${bestProducerJoin!.trace.traceID} must carry console-bff + >= 1 producer; got services: ${[...bestProducerJoin!.services.keys()].join(', ')}`,
-    ).toBe(true);
-
-    // 5c. Unified-tree gate (TASK-MONO-146) — the producers join console-web's
-    //     SINGLE trace_id (the full federation tree: console-web SSR ->
-    //     console-bff -> producers), NOT just per-leg console-bff-rooted traces.
-    //     Enabled by CompositionEngine virtual-thread OTel context propagation
-    //     (ContextSnapshot capture + wrapExecutor). This lifts the MONO-145
-    //     `unifiedTreeReached=false` documented ceiling into a regression gate
-    //     and verifies architecture.md § Observability D7.A ("inbound trace
-    //     context propagates to every outbound leg").
-    const unifiedProducers = producersIn(bestUnified!.services);
-    expect(
-      report.unifiedTreeReached && unifiedProducers.length >= 1,
-      `unified console-web trace ${bestUnified!.trace.traceID} must carry >= 1 producer span ` +
-        '(producers must join console-web\'s single trace_id — the full tree). ' +
-        `got unified services: ${[...unified.keys()].join(', ')}; ` +
-        `unifiedTreeReached=${report.unifiedTreeReached}; producerUnion=${JSON.stringify([...producerUnion])}. ` +
-        'If false under the full poll, CompositionEngine virtual-thread OTel context ' +
-        'propagation regressed (TASK-MONO-146) — producers forked to per-leg trace_ids.',
-    ).toBe(true);
-
-    // 5d. Per-leg span-attribution gate (TASK-MONO-147) — each outbound fan-out
-    //     leg emits a span tagged bff.domain + bff.route for per-domain
-    //     attribution in the trace UI (architecture.md § Observability D7.A 2nd
-    //     tracing bullet). console-bff creates these spans for every leg that
-    //     ran engine.time(...), independent of whether the producer exported.
-    const legDomains = legAttributionDomains(bestUnified!.trace);
-    expect(
-      legDomains.length >= 1,
-      `unified trace ${bestUnified!.trace.traceID} must contain >= 1 span tagged ` +
-        'bff.domain + bff.route (per-leg attribution — architecture.md D7.A). ' +
-        `got legAttributionDomains=${JSON.stringify(legDomains)}, ` +
-        `bffTagKeysSeen=${JSON.stringify(bffTagKeys(bestUnified!.trace))}. ` +
-        'If empty, either the leg span was not emitted (CompositionEngine.time ' +
-        'Tracer wiring regressed) or the bff.domain/bff.route tag key did not ' +
-        'survive the OTLP -> VictoriaTraces -> Jaeger round-trip.',
+      producers.length >= 1,
+      `overview trace ${best!.trace.traceID} must carry >= 1 producer server span ` +
+        '(console-web fetch → producer W3C traceparent). ' +
+        `got services: ${[...best!.services.keys()].join(', ')}; ` +
+        `producerUnion=${JSON.stringify([...producerUnion])}.`,
     ).toBe(true);
   });
 });

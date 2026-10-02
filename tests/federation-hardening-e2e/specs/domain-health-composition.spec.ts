@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 /**
+ * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the health legs are composed in the console-web
+ * server now, not console-bff; the route and the assertions below are unchanged.
+ *
  * TASK-MONO-139 — Domain Health composition spec.
  * ADR-MONO-018 D3 (MVP: 2 composition specs).
  *
