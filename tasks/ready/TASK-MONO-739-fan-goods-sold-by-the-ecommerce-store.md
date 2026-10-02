@@ -93,4 +93,5 @@ monorepo
 
 - **선행 추가**: `TASK-MONO-749`(상품 `collection_ref`). 굿즈 시드는 그 필드 위에서 한다.
 - 🔴 **라이더 R4(«굿즈 상품명은 예명으로 시작» · 팬은 카테고리 + 예명 접두어로 거른다)는 대체됐다** — ADR-079 D3: 팬 아티스트 페이지는 `collection_ref = <팬 아티스트 id>` 로 굿즈를 고른다. 예명이 바뀌거나 겹쳐도 깨지지 않는다. 카테고리 «아티스트 굿즈» 는 «전체 굿즈» 목록용으로 남는다. 착수 시 AC 중 예명 접두어를 단언하는 줄을 `collection_ref` 로 고친다.
+- 🔴 **마이그레이션 번호가 한 칸씩 밀렸다 (`TASK-MONO-749`, 2026-10-02 UTC)** — 749 가 선행으로 `V20__add_product_collection_ref.sql`(postgres) · `V13__add_product_collection_ref.sql`(h2)를 차지했다. 이 티켓 § Scope 와 `ADR-MONO-077` D2 가 적은 `V20__seed_artist_goods.sql` · `V13__seed_artist_goods.sql` 은 **`V21` · `V14`** 로 쓴다(같은 서비스 안 같은 버전 = `check-flyway-version-collision.sh` 빨강). 굿즈 행은 `collection_ref = <팬 아티스트 id>` 를 채우고, 픽스처(`raw-backend-responses.mjs`)에도 `collectionRef` 를 같은 값으로 넣는다 — 생성기(`toPublicProduct`)가 그 키를 공개 저장본에 싣는다. 팬 쪽 선택은 `features/public-browse` 의 **`artistGoods(fan, products, artistId)`** 를 쓴다(새로 만들지 마라).
 - 소속사(`TASK-MONO-748`)가 생기면 굿즈를 파는 셀러를 소속사의 연결 셀러로 둘 수 있다 — 이 티켓의 필수는 아니다(시드 셀러는 지금처럼 `default` 여도 된다).

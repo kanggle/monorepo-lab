@@ -199,6 +199,8 @@ export function toPublicProduct(raw) {
     thumbnailUrl: strOrNull(raw.thumbnailUrl),
     images,
     categoryId,
+    // ADR-MONO-079 D3 — 팬 아티스트 id(없으면 null). 🔴 searchText 에 섞지 않는다: id 는 검색어가 아니다.
+    collectionRef: strOrNull(raw.collectionRef),
     options,
     searchText: searchText([name, description, categoryId, ...options.map((o) => /** @type {any} */ (o).optionName)]),
     createdAt: str(raw.createdAt, ''),

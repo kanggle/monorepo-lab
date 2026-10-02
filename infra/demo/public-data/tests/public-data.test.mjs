@@ -134,6 +134,30 @@ test('상품: HIDDEN 은 공개 목록에 없다', () => {
   assert.equal(toPublicProduct({ id: 'x', name: 'n', status: 'WEIRD' }), null);
 });
 
+// ADR-MONO-079 D3 · TASK-MONO-749 — 상품의 `collectionRef`(= 팬 아티스트 id)가 공개 DTO 에 실린다.
+test('상품: collectionRef 가 실리고, 없으면 null 이다 (TASK-MONO-749)', () => {
+  const base = { id: 'p-goods', name: '응원봉', status: 'ON_SALE', price: 1000, variants: [] };
+  const withRef = toPublicProduct({ ...base, collectionRef: 'artist-a' });
+  assert.equal(withRef.collectionRef, 'artist-a', '백엔드가 준 collectionRef 가 공개 DTO 에서 사라졌다');
+  // 🔴 대조군 — 필드가 없는 기존 상품은 null(빈 문자열도 null). 키 자체는 있어야 한다(모양이 상품마다 갈리지 않게).
+  const without = toPublicProduct(base);
+  assert.ok('collectionRef' in without, 'collectionRef 키가 없다 — 공개 모양이 상품마다 갈린다');
+  assert.equal(without.collectionRef, null);
+  assert.equal(toPublicProduct({ ...base, collectionRef: '' }).collectionRef, null);
+  // 🔵 id 는 검색어가 아니다 — searchText 에 섞이면 스토어 검색이 uuid 조각에 걸린다.
+  assert.ok(!withRef.searchText.includes('artist-a'), 'collectionRef 가 searchText 에 섞였다');
+});
+
+test('번들 store.json: 모든 상품이 collectionRef 키를 갖는다 — 생성기를 지났다 (TASK-MONO-749)', async () => {
+  const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
+  const products = store.data.products;
+  assert.ok(products.length >= 8, '모집단이 비면 공허하다');
+  for (const p of products) {
+    assert.ok('collectionRef' in p, `상품 '${p.id}' 에 collectionRef 키가 없다 — store.json 을 생성기로 다시 만들어라`);
+    assert.ok(p.collectionRef === null || typeof p.collectionRef === 'string');
+  }
+});
+
 test('카테고리는 상품에서 파생되고 건수가 맞는다', () => {
   const pub = RAW_PRODUCTS.map(toPublicProduct).filter(Boolean);
   const cats = deriveCategories(pub);

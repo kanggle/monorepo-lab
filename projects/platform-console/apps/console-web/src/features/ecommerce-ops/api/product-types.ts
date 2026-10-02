@@ -66,6 +66,7 @@ export const ProductSummarySchema = z
     thumbnailUrl: z.string().nullable().optional(),
     categoryId: z.string().nullable().optional(),
     sellerId: z.string().nullable().optional(),
+    collectionRef: z.string().nullable().optional(),
   })
   .passthrough();
 export type ProductSummary = z.infer<typeof ProductSummarySchema>;
@@ -115,6 +116,8 @@ export const ProductDetailSchema = z
     categoryId: z.string().nullable().optional(),
     thumbnailUrl: z.string().nullable().optional(),
     sellerId: z.string().nullable().optional(),
+    /** Fan artist id (ADR-MONO-079 D3); null/absent = no collection. */
+    collectionRef: z.string().nullable().optional(),
     images: z.array(ProductImageSchema).default([]),
     variants: z.array(VariantSchema).default([]),
   })
@@ -142,6 +145,9 @@ export type AdjustStockResponse = z.infer<typeof AdjustStockResponseSchema>;
 // WRITE request bodies — matched to the producer request DTOs verbatim
 // ===========================================================================
 
+/** `products.collection_ref VARCHAR(64)` — producer `@Size(max = 64)` (TASK-MONO-749). */
+export const COLLECTION_REF_MAX_LENGTH = 64;
+
 /** RegisterVariantRequest (optionName / stock / additionalPrice). */
 export const RegisterVariantBodySchema = z.object({
   optionName: z.string().min(1),
@@ -160,6 +166,8 @@ export const RegisterProductBodySchema = z.object({
   categoryId: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   sellerId: z.string().optional(),
+  /** Fan artist id (ADR-MONO-079 D3) — producer `@Size(max = 64)`, no FK. */
+  collectionRef: z.string().max(COLLECTION_REF_MAX_LENGTH).optional(),
   variants: z.array(RegisterVariantBodySchema).min(1),
 });
 export type RegisterProductBody = z.infer<typeof RegisterProductBodySchema>;
@@ -172,6 +180,8 @@ export const UpdateProductBodySchema = z.object({
   price: z.number().int().nonnegative().optional(),
   status: z.enum(PRODUCT_STATUS_VALUES).optional(),
   thumbnailUrl: z.string().optional(),
+  /** Fan artist id (ADR-MONO-079 D3). absent = unchanged · `""` = clear. */
+  collectionRef: z.string().max(COLLECTION_REF_MAX_LENGTH).optional(),
 });
 export type UpdateProductBody = z.infer<typeof UpdateProductBodySchema>;
 

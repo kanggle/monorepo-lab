@@ -285,6 +285,28 @@ describe('PATCH/DELETE /api/ecommerce/products/{id}', () => {
     expect((init as RequestInit).method).toBe('PATCH');
   });
 
+  // TASK-MONO-749 — the Zod body schema strips unknown keys, so a field the
+  // schema does not name would be silently dropped HERE, before the producer.
+  it('update PATCH forwards collectionRef — including "" (= clear) — to the producer', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    // A fresh Response per call — a Response body can be read only once.
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ id: 'p-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    for (const collectionRef of ['artist-a', '']) {
+      const res = await updatePATCH(
+        new Request('http://console.local/api/ecommerce/products/p-1', {
+          method: 'PATCH',
+          body: JSON.stringify({ collectionRef }),
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        { params: Promise.resolve({ id: 'p-1' }) },
+      );
+      expect(res.status).toBe(200);
+      const init = fetchMock.mock.calls.at(-1)![1] as RequestInit;
+      expect(JSON.parse(init.body as string)).toEqual({ collectionRef });
+    }
+  });
+
   it('delete DELETE → 204', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(noContent()));

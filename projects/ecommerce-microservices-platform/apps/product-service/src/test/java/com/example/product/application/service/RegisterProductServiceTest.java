@@ -109,6 +109,24 @@ class RegisterProductServiceTest {
     }
 
     @Test
+    @DisplayName("collectionRef(ADR-MONO-079 D3): 등록 명령의 값이 상품에 실리고, 없으면 null 이다")
+    void register_collectionRef_carriedOrNull() {
+        given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+        RegisterProductCommand goods = new RegisterProductCommand(
+                "응원봉", null, 30000L, null, null, null,
+                List.of(new VariantCommand("기본", 10, 0)), "idem-goods", "artist-a");
+
+        registerProductService.register(goods);
+        registerProductService.register(validCommand);
+
+        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getCollectionRef()).isEqualTo("artist-a");
+        // 🔴 대조군(AC-2) — collectionRef 를 안 준 기존 경로는 null.
+        assertThat(captor.getAllValues().get(1).getCollectionRef()).isNull();
+    }
+
+    @Test
     @DisplayName("request.sellerId 가 있으면 그 셀러로 귀속 (default seller 시드 불필요)")
     void register_explicitSeller_ownedByThatSeller() {
         given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));

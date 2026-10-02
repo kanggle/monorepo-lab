@@ -22,6 +22,7 @@ export {
   findArtist,
   findPost,
   artistPosts,
+  artistGoods,
   totalPagesOf,
 } from './lib/select';
 export { provenanceOf, type Provenance, type ProvenanceKind } from './lib/provenance';

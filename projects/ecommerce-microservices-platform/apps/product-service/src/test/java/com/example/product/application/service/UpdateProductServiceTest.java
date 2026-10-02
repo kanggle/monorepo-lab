@@ -160,4 +160,26 @@ class UpdateProductServiceTest {
         assertThat(result).isEqualTo(productId);
         verify(productRepository).save(any(Product.class));
     }
+
+    // ─── collectionRef (ADR-MONO-079 D3 · TASK-MONO-749) ───────────────────
+
+    @Test
+    @DisplayName("collectionRef: 값이 오면 설정되고, null 은 무변경, 빈 문자열은 지운다")
+    void update_collectionRef_setUnchangedClear() {
+        UUID productId = existingProduct.getId();
+        given(productRepository.findById(productId)).willReturn(Optional.of(existingProduct));
+        given(productRepository.save(any(Product.class))).willAnswer(inv -> inv.getArgument(0));
+
+        updateProductService.update(
+                new UpdateProductCommand(productId, null, null, null, null, null, "artist-a"));
+        assertThat(existingProduct.getCollectionRef()).isEqualTo("artist-a");
+
+        // 🔴 대조군 — 다른 필드만 바꾸는 PATCH(collectionRef 부재)는 컬렉션을 건드리지 않는다.
+        updateProductService.update(new UpdateProductCommand(productId, "새 이름", null, null, null));
+        assertThat(existingProduct.getCollectionRef()).isEqualTo("artist-a");
+
+        updateProductService.update(
+                new UpdateProductCommand(productId, null, null, null, null, null, ""));
+        assertThat(existingProduct.getCollectionRef()).isNull();
+    }
 }

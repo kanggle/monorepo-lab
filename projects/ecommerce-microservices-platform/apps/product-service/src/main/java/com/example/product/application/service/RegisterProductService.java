@@ -148,6 +148,9 @@ public class RegisterProductService {
         if (command.thumbnailUrl() != null) {
             product.updateThumbnailUrl(command.thumbnailUrl());
         }
+        if (command.collectionRef() != null) {
+            product.updateCollectionRef(command.collectionRef());
+        }
 
         // Claim the key BEFORE the product is persisted. A concurrent duplicate
         // that also missed the lookup above loses this insert and never persists a

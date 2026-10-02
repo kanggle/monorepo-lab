@@ -20,7 +20,9 @@ public record ProductListResponse(
             long price,
             String thumbnailUrl,
             String categoryId,
-            String sellerId
+            String sellerId,
+            /** Fan artist id (ADR-MONO-079 D3); {@code null} = no collection. */
+            String collectionRef
     ) {}
 
     public static ProductListResponse from(ProductListResult result) {
@@ -38,6 +40,7 @@ public record ProductListResponse(
                 summary.price(),
                 summary.thumbnailUrl(),
                 UuidUtils.toString(summary.categoryId()),
-                summary.sellerId());
+                summary.sellerId(),
+                summary.collectionRef());
     }
 }

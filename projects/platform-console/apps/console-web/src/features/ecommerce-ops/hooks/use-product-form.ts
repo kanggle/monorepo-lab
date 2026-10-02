@@ -8,10 +8,27 @@ import {
   useUpdateProduct,
 } from './use-ecommerce-products';
 import {
+  COLLECTION_REF_MAX_LENGTH,
   type ProductDetail,
   type RegisterProductBody,
   type UpdateProductBody,
 } from '../api/product-types';
+
+/**
+ * PATCH value for `collectionRef` (TASK-MONO-749). The producer reads
+ * absent = unchanged and `""` = clear, so an operator who EMPTIES a field that
+ * had a value must send `""` — sending `undefined` (the thumbnail convention)
+ * would silently keep the old artist. An empty field that was already empty
+ * stays absent (no-op).
+ */
+export function collectionRefForUpdate(
+  draft: string,
+  previous: string | null | undefined,
+): string | undefined {
+  const trimmed = draft.trim();
+  if (trimmed !== '') return trimmed;
+  return previous ? '' : undefined;
+}
 
 export interface VariantDraft {
   optionName: string;
@@ -35,12 +52,15 @@ export function useProductForm(existing?: ProductDetail) {
   const priceId = useId();
   const statusId = useId();
   const thumbId = useId();
+  const collectionId = useId();
 
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [price, setPrice] = useState(existing ? String(existing.price) : '');
   const [status, setStatus] = useState(existing?.status ?? 'ON_SALE');
   const [thumbnailUrl, setThumbnailUrl] = useState(existing?.thumbnailUrl ?? '');
+  // Fan artist id (ADR-MONO-079 D3 · TASK-MONO-749). Optional; empty = no collection.
+  const [collectionRef, setCollectionRef] = useState(existing?.collectionRef ?? '');
   const [variants, setVariants] = useState<VariantDraft[]>([
     { optionName: '', stock: '', additionalPrice: '' },
   ]);
@@ -74,7 +94,8 @@ export function useProductForm(existing?: ProductDetail) {
           Number(v.additionalPrice) >= 0,
       ));
   const nameValid = isEdit || name.trim() !== '';
-  const formValid = nameValid && priceValid && variantsValid;
+  const collectionRefValid = collectionRef.trim().length <= COLLECTION_REF_MAX_LENGTH;
+  const formValid = nameValid && priceValid && variantsValid && collectionRefValid;
 
   function setVariant(i: number, patch: Partial<VariantDraft>) {
     setVariants((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
@@ -117,6 +138,7 @@ export function useProductForm(existing?: ProductDetail) {
         price: price !== '' ? priceNum : undefined,
         status: status as UpdateProductBody['status'],
         thumbnailUrl: thumbnailUrl.trim() || undefined,
+        collectionRef: collectionRefForUpdate(collectionRef, existing?.collectionRef),
       };
       update.mutate(
         { id: existing!.id, body },
@@ -136,6 +158,7 @@ export function useProductForm(existing?: ProductDetail) {
       description: description.trim() || undefined,
       price: priceNum,
       thumbnailUrl: thumbnailUrl.trim() || undefined,
+      collectionRef: collectionRef.trim() || undefined,
       variants: variants.map((v) => ({
         optionName: v.optionName.trim(),
         stock: Number(v.stock),
@@ -166,7 +189,7 @@ export function useProductForm(existing?: ProductDetail) {
   return {
     router,
     isEdit,
-    ids: { nameId, descId, priceId, statusId, thumbId },
+    ids: { nameId, descId, priceId, statusId, thumbId, collectionId },
     fields: {
       name,
       setName,
@@ -178,7 +201,10 @@ export function useProductForm(existing?: ProductDetail) {
       setStatus,
       thumbnailUrl,
       setThumbnailUrl,
+      collectionRef,
+      setCollectionRef,
     },
+    collectionRefValid,
     variants,
     setVariant,
     addVariantRow,

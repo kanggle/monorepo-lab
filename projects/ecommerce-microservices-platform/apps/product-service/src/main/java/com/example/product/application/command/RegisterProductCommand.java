@@ -19,20 +19,31 @@ public record RegisterProductCommand(
          * the service boundary); new call sites should use the canonical
          * constructor and supply one.
          */
-        String idempotencyKey
+        String idempotencyKey,
+        /**
+         * Optional fan artist collection (ADR-MONO-079 D3). {@code null}/blank =
+         * no collection. {@code null} in every backward-compat constructor.
+         */
+        String collectionRef
 ) {
     public RegisterProductCommand(String name, String description, long price, UUID categoryId,
+                                  String thumbnailUrl, String sellerId, List<VariantCommand> variants,
+                                  String idempotencyKey) {
+        this(name, description, price, categoryId, thumbnailUrl, sellerId, variants, idempotencyKey, null);
+    }
+
+    public RegisterProductCommand(String name, String description, long price, UUID categoryId,
                                   List<VariantCommand> variants) {
-        this(name, description, price, categoryId, null, null, variants, null);
+        this(name, description, price, categoryId, null, null, variants, null, null);
     }
 
     public RegisterProductCommand(String name, String description, long price, UUID categoryId,
                                   String thumbnailUrl, List<VariantCommand> variants) {
-        this(name, description, price, categoryId, thumbnailUrl, null, variants, null);
+        this(name, description, price, categoryId, thumbnailUrl, null, variants, null, null);
     }
 
     public RegisterProductCommand(String name, String description, long price, UUID categoryId,
                                   String thumbnailUrl, String sellerId, List<VariantCommand> variants) {
-        this(name, description, price, categoryId, thumbnailUrl, sellerId, variants, null);
+        this(name, description, price, categoryId, thumbnailUrl, sellerId, variants, null, null);
     }
 }

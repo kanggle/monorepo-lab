@@ -86,6 +86,36 @@ class ProductRepositoryIntegrationTest {
     }
 
     @Test
+    @DisplayName("collectionRef(V20): 값이 왕복하고, 없는 상품은 NULL, 지우면 NULL 이다 + (tenant_id, collection_ref) 인덱스가 있다")
+    void collectionRef_roundTrips_nullByDefault_andIndexed() {
+        Product goods = Product.create("응원봉", null, new Price(30000), null,
+                List.of(ProductVariant.create("기본", new StockQuantity(5), new Price(0))));
+        goods.updateCollectionRef("artist-a");
+        Product plain = Product.create("티셔츠", null, new Price(10000), null,
+                List.of(ProductVariant.create("기본", new StockQuantity(5), new Price(0))));
+        productRepository.save(goods);
+        productRepository.save(plain);
+        em.flush();
+        em.clear();
+
+        assertThat(productRepository.findById(goods.getId()).orElseThrow().getCollectionRef()).isEqualTo("artist-a");
+        // 🔴 대조군(AC-2) — 필드를 안 준 상품은 NULL 로 남는다.
+        assertThat(productRepository.findById(plain.getId()).orElseThrow().getCollectionRef()).isNull();
+
+        Product reloaded = productRepository.findById(goods.getId()).orElseThrow();
+        reloaded.updateCollectionRef("");
+        productRepository.save(reloaded);
+        em.flush();
+        em.clear();
+        assertThat(productRepository.findById(goods.getId()).orElseThrow().getCollectionRef()).isNull();
+
+        Object indexDef = em.createNativeQuery(
+                "SELECT indexdef FROM pg_indexes WHERE tablename = 'products' "
+                        + "AND indexname = 'idx_products_tenant_collection_ref'").getSingleResult();
+        assertThat(indexDef.toString()).contains("(tenant_id, collection_ref)");
+    }
+
+    @Test
     @DisplayName("상품과 variant가 함께 저장된다")
     void save_withVariants_persistsVariants() {
         ProductVariant variant1 = ProductVariant.create("S", new StockQuantity(5), new Price(0));
