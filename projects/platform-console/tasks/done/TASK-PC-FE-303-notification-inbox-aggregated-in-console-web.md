@@ -4,7 +4,7 @@ TASK-PC-FE-303
 
 # Status
 
-review (2026-10-02 UTC — AC-7 은 머지 뒤 첫 nightly)
+done (2026-10-02 UTC — PR #4122 squash `bbdd3990f` · 4차원 검증)
 
 # Title
 
@@ -55,7 +55,7 @@ platform-console
 - [x] **AC-4** — 읽음 처리: 설정에 없는 `sourceDomain` → 404 이고 **하위 호출 0**. 있는 도메인은 그 도메인 알림 서비스로 한 번만 간다(재시도로 두 번 보내지 않는다 — 쓰기).
 - [x] **AC-5** — 도메인별 자격이 console-bff `CredentialSelectionAdapter` 와 같다(헤더 단언).
 - [x] **AC-6** — 라이더 R1: 레그 구조화 로그 한 줄. 라이더 R2: 레그 타임아웃(값은 `TASK-PC-FE-302` 가 잰 것을 쓴다).
-- [ ] **AC-7** — 머지 뒤 다음 nightly 콘솔 e2e 결과 확인.
+- [x] **AC-7** — 머지 뒤 다음 nightly 콘솔 e2e 결과 확인.
 - [x] **AC-8** — 🔴 **머지 전에** 이 브랜치로 `nightly-e2e.yml` 과 `federation-hardening-e2e.yml` 을 `workflow_dispatch` 로 돌려 둘 다 초록임을 적는다. `TASK-PC-FE-302` 의 교훈: 합성을 옮기는 순간 두 e2e 하네스의 console-web 배선(도메인·알림 서비스 주소)이 모자라 nightly 가 깨졌다 — PR CI 66/0 은 그것을 보지 못한다(두 스위트는 PR 에서 돌지 않는다). 알림 인박스는 두 하네스 모두 console-bff 로 가고 있으니 console-web 에 erp 알림 주소가 필요하다.
 
 # Related Specs
@@ -97,7 +97,7 @@ platform-console
 | AC-4 | ✅ | 미설정 `sourceDomain`(`wms`) → 404 `NOTIFICATION_NOT_FOUND`, fetch 0. erp → POST 정확히 1회 — 200·503·네트워크·404·401·타임아웃 모두 1회 |
 | AC-5 | ✅ | erp 레그 헤더 = `Authorization: Bearer <domain-facing token>`, `X-Tenant-Id`·`X-Operator-Token` 없음(활성 테넌트가 있어도). console-bff `CredentialSelectionAdapter` 의 ERP → `IamOidcAccessToken` 과 `ErpNotificationsReadAdapter` 의 «X-Tenant-Id 없음» 과 같다 |
 | AC-6 | ✅ | R1: `console_composition_leg` 한 줄(route `notifications-inbox`/`notifications-read` · domain · status · reason · latencyMs · requestId, 토큰 없음 단언). R2: `LEG_TIMEOUT_MS`(4000, 302 실측값) 재사용 · 서킷브레이커 없음 · 읽음 처리 재시도 없음 |
-| AC-7 | ⏳ | 머지 뒤 첫 nightly |
+| AC-7 | ✅ | main push nightly `37024617764` — Platform Console E2E full-stack success |
 | AC-8 | ✅ | 아래 «AC-8 dispatch 실측» |
 
 ## bite (대조군)
@@ -130,4 +130,13 @@ lint rc=0 · tsc rc=0 · vitest **328 파일 / 3,690 시험** rc=0 · `check-fet
 | `nightly-e2e.yml` | `37020365215` | 1차: **web-store 잡만 failure**, 나머지 14 잡 success(**Platform Console E2E full-stack 포함**) → 실패 잡만 재실행 → ✅ success |
 
 🔴 1차 web-store 실패의 원인: `Build web-store (Next.js prod build)` 단계에서 `next/font` 가 `fonts.gstatic.com` 글꼴 파일을 못 받아 `TypeError: Cannot read properties of null (reading '1')` 로 빌드가 멈췄다(재시도 1/3 뒤). 이 PR 은 web-store 를 건드리지 않고, 같은 기준 커밋 `689594443` 의 main push nightly(`37017628507`)에서 그 잡은 success 였다. «외부 일시 장애» 는 가설이었고 **재실행 success 로 확인**했다 — 코드 변경 없이 같은 커밋으로.
+
+# 닫기 (2026-10-02 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4122` → `state=MERGED`, merge commit `bbdd3990f` |
+| (b) | `git merge-base --is-ancestor bbdd3990f origin/main` → main 위에 있음 |
+| (c) | 머지 직전 `gh pr checks 4122` head `a0cc3b5eb`: 66 개, pending 0, fail 0 |
+| (d) | `# Acceptance Criteria` 전부 `[x]` — 마지막 AC-7(머지 뒤 첫 nightly)는 그 머지 커밋의 main push nightly `37024617764` 에서 `Platform Console E2E full-stack` 가 **실행되어** success(경로 필터로 skipped 아님) |
 
