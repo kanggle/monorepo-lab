@@ -8,7 +8,7 @@ TASK-MONO-756
 
 # Status
 
-review (2026-10-02 UTC — `TASK-PC-FE-302` PR [#4118](https://github.com/kanggle/monorepo-lab/pull/4118) 에 흡수)
+done (2026-10-02 UTC — `TASK-PC-FE-302` PR [#4118](https://github.com/kanggle/monorepo-lab/pull/4118) 에 흡수 · squash `f98ece821` · 4차원 검증)
 
 # Owner
 
@@ -84,3 +84,14 @@ monorepo
 - **AC-4** — dispatch 실측: [37009462411](https://github.com/kanggle/monorepo-lab/actions/runs/37009462411) **20 passed**, trace `40457fb4…` 에 레그 6 + 생산자 4. console-bff 는 그 스택에 아직 떠 있지만(알림 인박스 — 303) 개요 트레이스에 console-bff 서비스가 **없다**(`serviceSpanCounts` 에 0) — 스펙이 그것 없이 선다는 증거.
 
 🔵 하네스에 `scm-gateway-service` 가 생겼다. console-web 이 scm 을 게이트웨이로 부르기 때문이고, 덤으로 게이트웨이의 엔타이틀먼트 이중 수용이 엔타이틀먼트 스펙의 경로 위에 올라왔다.
+
+# 닫기 (2026-10-02 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4118` → `state=MERGED`, `mergedAt=2026-10-02T14:00:36Z`, merge commit `f98ece821` |
+| (b) | `git log origin/main -1` = `f98ece821` |
+| (c) | 머지 직전 `gh pr checks 4118` head `ed2181d6b`: 69 개, pending 0, fail 0 |
+| (d) | `# Acceptance Criteria` AC-1~4 전부 `[x]` — 근거는 위 «결과» 절(dispatch 런 `37009462411` 20 passed · 트레이스 `40457fb4…` 레그 span 6 · 생산자 4) |
+
+🔵 302 의 AC-9(머지 뒤 첫 nightly)는 302 에 남는다 — 이 티켓의 AC 는 그것을 요구하지 않는다.

@@ -227,7 +227,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
-- `TASK-MONO-756-federation-e2e-without-console-bff.md` — 🟡 **REVIEW — `TASK-PC-FE-302` PR #4118 에 흡수** (2026-10-02 UTC). 🔴 302 가 옮기는 순간 하네스가 깨져 따로 머지하면 nightly 가 빨갛다. scm-gateway 추가 · 트레이스 스펙 재진술 · dispatch 실측 20 passed.
 - `TASK-MONO-739-fan-goods-sold-by-the-ecommerce-store.md` — 🟡 **REVIEW — ADR-077 갈래 D · 팬 굿즈 18개(아티스트 6×3)를 이커머스에 시드하고 팬 웹에서 카드·링크** (2026-10-02 UTC). postgres `V21` + h2 `V14`(카테고리 «아티스트 굿즈» · `collection_ref`=팬 아티스트 id · 옵션 `tenant_id` 포함) · 픽스처 → 생성기 `store.json` · 팬 헤더 「굿즈샵 ↗」 + 아티스트 굿즈 카드(서버 컴포넌트, 번들 저장본) · `NEXT_PUBLIC_STORE_URL`. AC-2 bite 확인. ⚪ AC-8 Testcontainers(Docker 꺼짐) · web-store vitest(Node 24) → CI. 🔴 데모 재굽기 필요(소유자).
 - `TASK-MONO-749-product-collection-ref-for-artist-goods.md` — 🟡 **REVIEW — ADR-079 D3 · 상품 `collection_ref`(= 팬 아티스트 id) · 공개 스냅숏 · 팬 `artistGoods`** (2026-10-02 UTC). postgres `V20` + h2 `V13` · API/콘솔 입력 `collectionRef` · `store.json` 재생성 · 팬 선택 함수(카드는 739). AC-1~4 로컬 판정 · ⚪ Testcontainers IT · web-store vitest 는 CI. 🔴 739 의 시드 마이그레이션은 `V21`/`V14` 로 밀림.
 - `TASK-MONO-753-erp-read-model-migration-interrupted-by-boot-down.md` — 🟡 **REVIEW — AC-2·3 완료, AC-1 은 다음 창(소유자 복구 명령)** (2026-10-02 UTC). 데모 ERP read-model 재시작 반복(Flyway V2 도중 중단 → «테이블 있고 이력 없음»). 🔴 **원인 정정**: `/bundle/start` 가 아니라 **같은 부팅에서 `demo-stack` 유닛이 두 번 돌아** 두 번째 실행의 `DEMO_BOOT_RESET` 전체 down 이 막 올린 스택을 끊었다(유닛 저널 실측; 방아쇠=user-data `systemctl start` 가설, 다음 창 이전 부팅 저널로 확인). 고침=리셋을 **boot_id 마커로 한 부팅에 한 번**. (z24) (7)(8) 추가 · bite 3 · 래퍼 전체 rc=0. census: MySQL 마이그레이션 158 중 95 재실행 불안전 ⇒ 갈래 (b) 기각. 재굽기 뒤에만 데모에 반영.
@@ -236,6 +235,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## done
+- ✅ `TASK-MONO-756-federation-e2e-without-console-bff.md` — **DONE (2026-10-02 UTC · 4차원 검증 · PR #4118 squash `f98ece821` 에 흡수)** — console-bff 없이 federation e2e 하네스(scm-gateway 추가 · 트레이스 스펙 재진술). dispatch 20 passed.
 
 - ✅ `TASK-MONO-755-console-composition-contracts-first.md` — **DONE (2026-10-02 UTC · 4차원 검증 · PR [#4116](https://github.com/kanggle/monorepo-lab/pull/4116) squash `69cdcb58c`)** 🟢 `ADR-MONO-081` 단계 1 — 계약 § 2.4.9.0(console-web 생산자 목표 규칙) · 선 모양 삭제 0줄 · console-bff-era 표시 17곳(757 정리) · 알림 계약 § 4 항목 6 · 751 정정. 🔴 발견: console-bff scm 레그는 docker 전용 주소 → 302 는 게이트웨이 클라이언트 재사용. 실패 체크 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 - ✅ `TASK-MONO-754-draft-console-composition-stage-tickets.md` — **DONE (2026-10-02 UTC · 4차원 검증 · PR [#4111](https://github.com/kanggle/monorepo-lab/pull/4111) squash `467663f48`)** 🟢 `ADR-MONO-081` ACCEPTED — A 와 같은 PR 에서 단계 티켓 6개 기안(`TASK-MONO-755` · `TASK-PC-FE-302` · `303` · `TASK-MONO-756` · `757` · `758`), AC-0~7 닫힘. 실패 체크 0. 분석=Opus 5.5 / 구현=Opus 5.5.
