@@ -8,7 +8,7 @@ TASK-MONO-748
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -51,10 +51,10 @@ ADR-079 D1·D2 를 구현한다. 지금 소속사는 `artists.agency` · `artist
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 기존 볼륨 이전 시험: 자유 텍스트가 같은 아티스트·그룹이 같은 소속사 행을 가리키고, 비어 있으면 NULL.
-- [ ] **AC-2** — 소속사 CRUD · 중복 이름 409 · 소속 변경 시험.
-- [ ] **AC-3** — 셀러 연결: 존재하는 ACTIVE 셀러 → 저장 · 없는/`CLOSED` 셀러 → 거절 · 셀러 조회 실패 → 저장 안 함(fail-closed).
-- [ ] **AC-4** — 공개 페이지의 소속사 표시가 그대로 보인다(회귀 없음).
+- [ ] **AC-1** — 기존 볼륨 이전 시험: 자유 텍스트가 같은 아티스트·그룹이 같은 소속사 행을 가리키고, 비어 있으면 NULL. — `AgencyMigrationExistingVolumeIT` 작성. ⚪ 로컬 미실행 — CI integrationTest 가 첫 실행.
+- [x] **AC-2** — 소속사 CRUD · 중복 이름 409 · 소속 변경 시험. — `AgencyServiceTest`(Crud 7 · Affiliation 6) · `AgencyControllerSliceTest` 초록(통합 `AgencyApiIntegrationTest` 는 CI).
+- [ ] ~~**AC-3** — 셀러 연결: 존재하는 ACTIVE 셀러 → 저장 · 없는/`CLOSED` 셀러 → 거절 · 셀러 조회 실패 → 저장 안 함(fail-closed).~~ → **`TASK-MONO-759` 로 분리** (소유자 결정 2026-10-02 «분리 후 진행»). 규칙·포트·fail-closed 어댑터는 이 티켓에 있고, 실제 조회 경로만 759.
+- [x] **AC-4** — 공개 페이지의 소속사 표시가 그대로 보인다(회귀 없음). — `AgencyDisplayTest` · `fan.json` 드리프트 0 · public-data 시험 초록.
 
 # Related Specs
 
@@ -79,6 +79,8 @@ ADR-079 D1·D2 를 구현한다. 지금 소속사는 `artists.agency` · `artist
 
 # 구현 기록 (2026-10-02 UTC · 분석=Opus 5.5 / 구현=Opus 5.5)
 
+> 🔵 **2026-10-02 정정 — 소유자 결정 «분리 후 진행»**: 끝난 부분을 이 티켓으로 머지하고, 셀러 조회의 실제 전송(AC-3)은 **`TASK-MONO-759`** 로 분리했다(⏳ 소유자의 전송 선택 대기). 그래서 이 티켓은 `review` 로 간다. 아래 「부분 완료」 문단은 분리 전 기록(보존).
+>
 > 🔴 **부분 완료 — `in-progress` 에 남긴다.** 소속사 엔티티 · 이전 · CRUD · 소속 변경 · 표시 · 시드 · 스냅숏은 끝났다.
 > **셀러 조회의 프로젝트 간 전송(fan → store)만 Hard Stop** 이다(아래 § Hard Stop). 검증 **의미**(무엇을 받고 무엇을 거절하나)는
 > 포트에 대고 구현·시험했고, 배포되는 어댑터는 «검증 불가» 로만 답한다 ⇒ 셀러 **연결은 전부 503 으로 거절**되고 **아무것도 저장되지 않는다**(fail-closed). 해제(null)는 된다.
@@ -150,7 +152,7 @@ ADR-079 D1·D2 를 구현한다. 지금 소속사는 `artists.agency` · `artist
 
 ## AC 상태
 
-- [ ] **AC-1** — 시험 작성 완료(`AgencyMigrationExistingVolumeIT`), ⚪ 로컬 미실행(Docker) → **CI 초록을 보고 닫는다**(작성≠통과).
+- [ ] **AC-1** — 시험 작성 완료(`AgencyMigrationExistingVolumeIT`). ⚪ 로컬 미실행 — CI integrationTest 가 첫 실행(작성≠통과, CI 초록을 보고 닫는다).
 - [x] **AC-2** — CRUD · 중복 409(정규화 후) · 소속 변경: 단위·슬라이스 초록, 통합 시험 작성(⚪ CI).
-- [ ] **AC-3** — 검증 의미(ACTIVE 저장 · 없음/CLOSED 거절 · 조회 실패 시 저장 안 함)는 포트 기준 초록 + bite. 🔴 **실제 스토어에 묻는 경로가 없다** — Hard Stop 해소 전에는 «존재하는 ACTIVE 셀러 → 저장» 이 운영에서 성립하지 않는다(503).
+- [ ] **AC-3 → `TASK-MONO-759` 로 분리** (소유자 결정 2026-10-02 «분리 후 진행»). 규칙·포트·fail-closed 어댑터는 이 티켓에 있고, 실제 조회 경로만 759. 🔴 **운영 동작(머지 후)**: `PATCH /api/agencies/{id}/store-seller` 에 값을 주면 **항상 503 `STORE_SELLER_LOOKUP_UNAVAILABLE`, 저장 0** · `null`(해제)은 200. — 분리 전 기록: 검증 의미(ACTIVE 저장 · 없음/CLOSED 거절 · 조회 실패 시 저장 안 함)는 포트 기준 초록 + bite. 🔴 **실제 스토어에 묻는 경로가 없다** — Hard Stop 해소 전에는 «존재하는 ACTIVE 셀러 → 저장» 이 운영에서 성립하지 않는다(503).
 - [x] **AC-4** — 표시 키·값 불변(`fan.json` 드리프트 0, 단위 시험), 통합 시험 작성(⚪ CI).
