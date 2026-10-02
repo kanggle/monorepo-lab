@@ -194,7 +194,9 @@ class ConsumerPoolMigrationOnExistingVolumeIntegrationTest extends AbstractInteg
     @Test
     @DisplayName("재실행은 no-op — 적용할 것이 없다")
     void secondRunIsNoOp() {
-        MigrateResult again = flyway(null).migrate();
+        // Same target as the upgrade — with no target, any later migration (V0031 on, TASK-MONO-750)
+        // would run here and turn «re-run is a no-op» into «a newer file exists».
+        MigrateResult again = flyway(LAST_POOL_VERSION).migrate();
         assertThat(again.success).isTrue();
         assertThat(again.migrationsExecuted).isZero();
     }
