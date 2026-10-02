@@ -4,7 +4,7 @@ TASK-FE-102
 
 # Status
 
-review
+done
 
 # Title
 
@@ -126,3 +126,9 @@ ecommerce-microservices-platform
 - 🔴 내가 놓친 곳: 수정할 테스트를 «인증 전제를 단언하는 파일» 로만 골랐다. 이 파일은 인증이 아니라 **저장소 모양**에 기대고 있어 그 필터에 안 걸렸다. 저장 키를 바꾸는 변경이면 `getItem` 을 mock 하는 파일 전부가 모집단이었다.
 - 수정: 이 파일의 두 mock 을 `key === 'cart' ? items : null` 로. 나머지 `getItem` mock 은 `null` 반환이라 무관(grep 으로 확인).
 - 같은 런에서 바꾼 파일의 실행 수(잡 로그): `cart-context` 21 · `logout-cart-integration` 2 · `header` 12 · `middleware` 10 · `add-to-cart-button` 5 — 전부 통과, 새 칸 포함.
+
+## CORRECTION (2026-10-02 UTC) — 4차원 종결
+
+- (a) #4078 `MERGED` 2026-09-29T12:18:40Z, 스쿼시 `735bd02e1` · (b) `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0 (SUCCESS 19 · SKIPPED 49).
+- (d) AC-0~5 — 위 «구현 결과»·CORRECTION 의 근거로 닫힘. AC-5 단위 스위트는 CI `Frontend unit tests` 의 바꾼 파일 실행 수로 판정.
+- 구현 결과가 남긴 의무 «머지 후 nightly 확인»: `nightly-e2e.yml` run 36982306407(`afe0b135d`, FE-102 이후) 의 `Frontend E2E full-stack (web-store, Playwright + docker compose)` success — `auth-redirect.spec.ts` 의 `/checkout` 보호 칸 포함.
