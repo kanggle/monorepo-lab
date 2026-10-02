@@ -197,6 +197,14 @@ public class AuthExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("INVALID_REDIRECT_URI", "Invalid redirect_uri"));
     }
 
+    /** TASK-BE-620 — a social signup refused because the email has a consumer-pool account (§ 2). */
+    @ExceptionHandler(com.example.auth.application.exception.SocialSignupEmailRegisteredException.class)
+    public ResponseEntity<ErrorResponse> handleSocialSignupEmailRegistered(
+            com.example.auth.application.exception.SocialSignupEmailRegisteredException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("ACCOUNT_ALREADY_EXISTS", "This email is already registered. Sign in with email and password."));
+    }
+
     @ExceptionHandler(OAuthEmailRequiredException.class)
     public ResponseEntity<ErrorResponse> handleOAuthEmailRequired(
             OAuthEmailRequiredException e) {

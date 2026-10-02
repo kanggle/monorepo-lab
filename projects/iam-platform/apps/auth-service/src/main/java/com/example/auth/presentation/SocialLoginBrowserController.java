@@ -8,6 +8,7 @@ import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
+import com.example.auth.application.exception.SocialSignupEmailRegisteredException;
 import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.application.exception.UnsupportedProviderException;
 import com.example.auth.application.result.BrowserLoginResolution;
@@ -148,6 +149,9 @@ public class SocialLoginBrowserController {
             return loginError("provider_error");
         } catch (UnsupportedProviderException e) {
             return loginError("unsupported_provider");
+        } catch (SocialSignupEmailRegisteredException e) {
+            // TASK-BE-620: the email already has an email/password pool account — sign in with that.
+            return loginError("email_registered");
         } catch (AccountServiceUnavailableException e) {
             // TASK-BE-602 (BE-600 follow-up): the status lookup's fail-closed and a failed
             // socialSignup both surface as this. Before, neither was caught here, so the user got
