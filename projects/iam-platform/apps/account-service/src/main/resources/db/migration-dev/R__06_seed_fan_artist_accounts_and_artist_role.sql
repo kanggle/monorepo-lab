@@ -62,18 +62,44 @@
 -- `artist.accountId` for follows since FAN-BE-045; the route key stays the
 -- entity id). Do not turn this seed convenience into an invariant.
 --
--- WHY BOTH `FAN` AND `ARTIST` — the seed is REPLACED, not unioned
+-- 🔵 SINCE TASK-MONO-744 (2026-10-02 UTC) THESE ARE CONSUMER-POOL ACCOUNTS
 -- ---------------------------------------------------------------------------
--- 🔴 `TenantClaimTokenCustomizer#populateRoles` emits the stored `account_roles`
--- VERBATIM when the set is non-empty, and falls to `RoleSeedPolicy` only when it
--- is EMPTY ("stored roles, when present, are emitted verbatim — never unioned
--- with the seed"). So granting `ARTIST` alone would not ADD a role to these
--- accounts — it would REPLACE the `fan-platform → FAN` seed and hand the artist
--- a token that no longer says FAN. Measured today no production code path reads
--- the `FAN` role (the fan gateway admits on `RoleAdmissions.roleOrScope()`, which
--- takes any role; the premium tier is a membership lookup, not a role), so the
--- displacement would be invisible until something started reading it — which is
--- precisely the failure this repo keeps paying for. Both roles are stored.
+-- ADR-MONO-078 A / multi-tenancy.md § 소비자 계정 풀: the artists' account,
+-- identity and credential live in tenant `consumer-pool`, each with an ACTIVE
+-- `fan-platform` membership, and their roles live in `consumer_site_roles`
+-- (account, 'fan-platform', role) instead of `account_roles` — that table's
+-- composite FK (tenant_id, account_id) → accounts(tenant_id, id) cannot hold a
+-- pool account under the site's tenant. 🔴 The ids did NOT change: the pool
+-- keeps a moved account's id (§ 3), so `artists.account_id`, seed-fan.sh's
+-- ARTIST_* literals and the public snapshot under infra/demo/public-data/ all
+-- stay valid. This is the same end state TASK-BE-618's legacy mover produces
+-- for a single-site account — the seed just starts there.
+--
+-- 🔴 EXISTING LOCAL VOLUMES KEEP THE OLD SHAPE — same reason and same rule as
+-- R__05's header: INSERT IGNORE + no DELETE, so a volume that already holds
+-- these ids as `fan-platform` accounts ignores the pool INSERTs and keeps its
+-- `account_roles` grant (and keeps working). The membership statement is
+-- guarded on `tenant_id = 'consumer-pool'`; the role tuples then have no
+-- membership to reference, and INSERT IGNORE turns that FK miss into a skipped
+-- row (MySQL downgrades ER_NO_REFERENCED_ROW_2 to a warning under IGNORE), so
+-- nothing is written onto a still-site account. Such a volume can be moved
+-- with TASK-BE-618's `POST /internal/consumer-pool/legacy-moves`, or recreated.
+--
+-- WHY BOTH `FAN` AND `ARTIST` ARE STORED
+-- ---------------------------------------------------------------------------
+-- For a POOL principal the token's roles are the site seed UNION the stored site
+-- roles (TenantClaimTokenCustomizer#customizeForPoolPrincipal — RoleSeedPolicy
+-- `fan-platform → FAN` ∪ consumer_site_roles), so `ARTIST` alone would already
+-- yield [FAN, ARTIST] there. FAN is stored anyway, for two reasons:
+--   1. it is exactly what TASK-BE-618's mover writes for these accounts (it
+--      copies the stored account_roles verbatim), so a seeded demo and a moved
+--      one are the same shape and one test describes both;
+--   2. 🔴 the pre-pool rule has not gone away: `populateRoles` still emits a
+--      stored set VERBATIM (no seed union) for every non-pool path, and the
+--      roles GET that TASK-BE-618 widened answers consumer_site_roles to such a
+--      path. Storing ARTIST alone would let any verbatim reader hand an artist
+--      a token without FAN — the displacement TASK-MONO-512 stored FAN to
+--      prevent (measured then: nothing reads FAN, so it would stay invisible).
 --
 -- WHY NO iam CODE CHANGED, AND WHY THAT IS THE FINDING
 -- ---------------------------------------------------------------------------
@@ -101,61 +127,80 @@
 -- on this side.
 --
 -- Version band: V9000+ per TASK-MONO-207. Idempotent: INSERT IGNORE throughout.
--- FK order: tenants (V0009 seeds `fan-platform`) → identities → accounts →
--- account_roles (composite FK to accounts + tenants, V0013).
+-- FK order: tenants (V0029 seeds `consumer-pool`, V0009 `fan-platform`) →
+-- identities → accounts → consumer_site_memberships → consumer_site_roles
+-- (FK to the membership, V0030).
 
 -- ---------------------------------------------------------------------------
--- 1. Artist identities (ADR-MONO-034 U1-A) — one per (tenant, email).
---    identity_id is a NEW UUID, deliberately NOT reusing the account id (V9005).
+-- 1. Artist identities (ADR-MONO-034 U1-A) — in the pool, like their accounts.
+--    identity_id is a NEW UUID, deliberately NOT reusing the account id (R__05).
 -- ---------------------------------------------------------------------------
 INSERT IGNORE INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version)
 VALUES
-    ('0199de82-0000-7000-8000-00000000a001', 'fan-platform', 'lumi@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
-    ('0199de82-0000-7000-8000-00000000a002', 'fan-platform', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
-    ('0199de82-0000-7000-8000-00000000a003', 'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a001', 'consumer-pool', 'lumi@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a002', 'consumer-pool', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a003', 'consumer-pool', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
     -- TASK-MONO-638 — 아티스트 셋 → 여섯.
-    ('0199de82-0000-7000-8000-00000000a004', 'fan-platform', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
-    ('0199de82-0000-7000-8000-00000000a005', 'fan-platform', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
-    ('0199de82-0000-7000-8000-00000000a006', 'fan-platform', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
+    ('0199de82-0000-7000-8000-00000000a004', 'consumer-pool', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a005', 'consumer-pool', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('0199de82-0000-7000-8000-00000000a006', 'consumer-pool', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
 
 -- ---------------------------------------------------------------------------
 -- 2. Artist accounts. `id` MUST equal the matching credentials.account_id
---    (auth-service migration-dev V9002) because that value is the OIDC `sub`,
+--    (auth-service migration-dev R__02) because that value is the OIDC `sub`,
 --    AND it must equal `artists.id` in seed-fan.sh — see the header.
 -- ---------------------------------------------------------------------------
 INSERT IGNORE INTO accounts (id, identity_id, tenant_id, email, status, created_at, updated_at, version)
 VALUES
     ('0199de80-0000-7000-8000-00000000a001', '0199de82-0000-7000-8000-00000000a001',
-     'fan-platform', 'lumi@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+     'consumer-pool', 'lumi@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de80-0000-7000-8000-00000000a002', '0199de82-0000-7000-8000-00000000a002',
-     'fan-platform', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+     'consumer-pool', 'noah@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de80-0000-7000-8000-00000000a003', '0199de82-0000-7000-8000-00000000a003',
-     'fan-platform', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
+     'consumer-pool', 'sea@demo.com',  'ACTIVE', NOW(6), NOW(6), 0),
     -- TASK-MONO-638 — id 는 artists.id 와 **같아야** 한다(헤더의 이유).
     ('0199de80-0000-7000-8000-00000000a004', '0199de82-0000-7000-8000-00000000a004',
-     'fan-platform', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+     'consumer-pool', 'harin@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de80-0000-7000-8000-00000000a005', '0199de82-0000-7000-8000-00000000a005',
-     'fan-platform', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
+     'consumer-pool', 'rio@demo.com', 'ACTIVE', NOW(6), NOW(6), 0),
     ('0199de80-0000-7000-8000-00000000a006', '0199de82-0000-7000-8000-00000000a006',
-     'fan-platform', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
+     'consumer-pool', 'yuno@demo.com', 'ACTIVE', NOW(6), NOW(6), 0);
 
 -- ---------------------------------------------------------------------------
--- 3. The grant. `granted_by` is NULL — no operator performed this; the demo
---    seed did. A non-null value here would name an operator who does not exist
---    and make the audit trail lie.
+-- 3. The fan-platform membership — without it the issuer mints no fan token for
+--    a pool account (TASK-BE-615), and consumer_site_roles below has nothing to
+--    reference. consented_at = the account's created_at (TASK-BE-618's value).
+--    Guarded on the account really being a pool account (header).
 -- ---------------------------------------------------------------------------
-INSERT IGNORE INTO account_roles (tenant_id, account_id, role_name, granted_by, granted_at)
+INSERT IGNORE INTO consumer_site_memberships (account_id, site_tenant_id, status, consented_at)
+SELECT id, 'fan-platform', 'ACTIVE', created_at
+  FROM accounts
+ WHERE tenant_id = 'consumer-pool'
+   AND id IN ('0199de80-0000-7000-8000-00000000a001',
+              '0199de80-0000-7000-8000-00000000a002',
+              '0199de80-0000-7000-8000-00000000a003',
+              '0199de80-0000-7000-8000-00000000a004',
+              '0199de80-0000-7000-8000-00000000a005',
+              '0199de80-0000-7000-8000-00000000a006');
+
+-- ---------------------------------------------------------------------------
+-- 4. The grant — a fan-platform SITE role of a pool account (consumer_site_roles,
+--    not account_roles; header). `granted_by` is NULL — no operator performed
+--    this; the demo seed did. A non-null value here would name an operator who
+--    does not exist and make the audit trail lie.
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO consumer_site_roles (account_id, site_tenant_id, role_name, granted_by, granted_at)
 VALUES
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a001', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a001', 'ARTIST', NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a002', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a002', 'ARTIST', NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a003', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a003', 'ARTIST', NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a001', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a001', 'fan-platform', 'ARTIST', NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a002', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a002', 'fan-platform', 'ARTIST', NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a003', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a003', 'fan-platform', 'ARTIST', NULL, NOW(6)),
     -- TASK-MONO-638 — 여섯으로 늘린 아티스트에게 같은 두 역할을 준다.
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a004', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a004', 'ARTIST', NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a005', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a005', 'ARTIST', NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a006', 'FAN',    NULL, NOW(6)),
-    ('fan-platform', '0199de80-0000-7000-8000-00000000a006', 'ARTIST', NULL, NOW(6));
+    ('0199de80-0000-7000-8000-00000000a004', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a004', 'fan-platform', 'ARTIST', NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a005', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a005', 'fan-platform', 'ARTIST', NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a006', 'fan-platform', 'FAN',    NULL, NOW(6)),
+    ('0199de80-0000-7000-8000-00000000a006', 'fan-platform', 'ARTIST', NULL, NOW(6));

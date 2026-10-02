@@ -127,9 +127,10 @@ class DemoViewerOperatorSeedTest {
         for (String seed : OTHER_CREDENTIAL_SEEDS) {
             others.addAll(parseCredentials(seed));
         }
-        // Control: the predicate reads the siblings (R__01 = 3 rows, second = 1). Without
-        // it, a regex that matched nothing would make both checks below pass vacuously.
-        assertThat(others).hasSize(4);
+        // Control: the predicate reads the siblings (R__01 = 2 rows since TASK-MONO-744 —
+        // consumer-pool + iam — second = 1). Without it, a regex that matched nothing would
+        // make both checks below pass vacuously.
+        assertThat(others).hasSize(3);
         assertThat(others).extracting(SeededCredential::email).doesNotContain(row.email());
         assertThat(others).extracting(SeededCredential::accountId).doesNotContain(row.accountId());
     }
