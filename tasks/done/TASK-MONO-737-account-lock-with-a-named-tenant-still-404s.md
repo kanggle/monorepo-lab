@@ -4,7 +4,7 @@ TASK-MONO-737
 
 # Status
 
-review
+done
 
 # Title
 
@@ -179,3 +179,14 @@ admin-service `@Tag("integration")` 58건은 Docker 필요 — CI 가 돈다.
 - 🔴 **유효성 술어**: ① 은 계정이 **잠그기 전 ACTIVE** 였음을 먼저 적어라(이미 LOCKED 면 409 로 갈라져 판정 불가). ② 는 셀러에
   `account_id` 가 **비어 있지 않아야** 한다(null 이면 net-zero 로 호출 자체가 없다 — 그 «성공» 은 아무것도 재지 않았다).
 - 결과로 닫는 것: `TASK-MONO-735` AC-3 잔여 스텝 2·4 · `TASK-MONO-726` 항목 14 ②. 둘 다 `review/` 에서 이 판정을 기다린다.
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-2 라이브 판정 🟢 (결과 상태로)
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- **콘솔 계정 잠금**: `demo@demo.com`(SUPER_ADMIN) · 테넌트 `ecommerce` 전환 · 일회용 계정 `0bf5cab4-4c18-447c-9d1a-1696a8fb774f`(🔵 풀 계정 — ecommerce ACTIVE 멤버. 티켓은 풀 이전 작성) → `POST /api/accounts/{id}/lock` **200**(`ACTIVE → LOCKED`, auditId `966a5804-1cbf-42b5-8737-9d2813611d7a`) → API 재조회·UI 재검색 **LOCKED**. DB 재확인: `account_status_history` = `LOCKED · ADMIN_LOCK · operator`(SSM). 풀 계정이 ecommerce 목록·잠금 경로에 보이는 것은 `TASK-BE-616` 의 사이트 조회 확대가 같이 증명한다.
+- **셀러 정지**: 일회용 셀러 `live18-1790934860` 등록 `201`(즉시 ACTIVE) → `POST …/suspend` **204** → SUSPENDED → 그 기계 계정 `seller+ecommerce+live18-1790934860@marketplace.local`(`168cd338-cd21-4538-8236-f8a9ade6ddc2`) **LOCKED**(API·UI). ⚪ 정지 **전** 상태는 기록하지 못했다(존재로 `account_id` 배선은 증명).
+- ⚪ 미측정: 런북의 대조군(demo-corp 로 전환해 잠금 → 404) · `admin_actions` 행.
+⇒ AC-2 의 술어(200 · LOCKED · 셀러 정지 → LOCKED)는 충족 → `done/`. 이 결과로 `TASK-MONO-735` AC-3 스텝 2·4 와 `TASK-MONO-726` 항목 ① 의 결과 상태도 닫힌다(각 파일에 기록).

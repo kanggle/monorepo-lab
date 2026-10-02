@@ -272,3 +272,20 @@ JWT audience summary: gateway=<g> mode=SHADOW match=<n> mismatch=<m>
 - 읽는 법(데모 인스턴스, 게이트웨이마다): `docker logs <gateway-container> 2>&1 | grep "JWT audience summary" | tail -1`
 - 이 채널은 **재굽기된 AMI 에서만** 존재한다(검증기는 앱 소스 — `infra/demo/aws/README.md` 배포 층). 736 머지 이후 커밋으로 구운 AMI 인지 먼저 확인한다.
 - 위 AC-0 본문(prometheus·WARN 줄 수)은 역사 기록으로 둔다. 이 절이 읽는 법의 현재판이다.
+
+---
+
+## 측정 표본 (2026-10-02 UTC, 18차 창 — `TASK-MONO-736` AC-2 채널) — AC-0 의 ① 데모 스택 칸 한 표본
+
+10:06:30Z, 각 게이트웨이 컨테이너 로그(기동 09:23–09:26Z 이후 누적). 트래픽 = 콘솔 5 도메인 화면 · 스토어·팬 로그인.
+
+| 게이트웨이 | match | mismatch(요약 줄) | `JWT audience not on allowlist` WARN |
+|---|---|---|---|
+| ecommerce | 181 | 0 | 0 |
+| fan | 69 | 0 | 0 |
+| scm | 60 | 0 | 0 |
+| erp | 29 | 0 | 0 |
+| wms | 26 | 0 | 0 |
+| finance | 1 | 0 | 0 |
+
+- 분모가 전부 > 0 → 이 창의 «0» 은 공허하지 않다. 🔴 단 **한 창 · 한 표본**이고 finance 분모는 1 이다. AC-0 의 나머지 — `/actuator/prometheus` 경로 · client 별 ⚪ 칸(`TASK-MONO-696` § AC-1 (b)) 판정 — 는 이 표본으로 채워지지 않는다. 이 티켓은 여전히 보류다.

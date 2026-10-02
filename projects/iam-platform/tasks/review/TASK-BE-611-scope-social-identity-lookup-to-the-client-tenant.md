@@ -145,3 +145,12 @@ iam-platform
 3. 판정: `auth_db.social_identities WHERE provider_user_id=<새 값>` = **2행**(`ecommerce` · `fan-platform`, `account_id` 서로 다름) ·
    `account_db.accounts WHERE email=<새 이메일>` = **2행**(테넌트별). BE-611 이전 값 = 1행 · 1행.
 4. 대조: 같은 client(스토어)로 한 번 더 → 행 수 변화 없음(재로그인 = 같은 계정).
+
+---
+
+## CORRECTION (2026-10-02 UTC) — 18차 창에서 AC-2 는 재지 못했다 (review 유지)
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- 이 창은 재굽기 대기분 일괄 측정이었고, AC-2 의 소셜 스텁 재현(`TASK-MONO-672` § 16차 방식)은 돌리지 않았다 — 데모의 소셜 키가 가짜 기본값이라 실제 제공자 경로는 없고, 스텁 재현은 인스턴스 안 쓰기 절차가 길어 다음 창으로 미룬다.
+- 🔵 관련 사실: `TASK-BE-617`(소셜을 풀로)은 보류, `TASK-BE-620` 이 «풀 계정 이메일로의 사이트 소셜 가입 거절» 을 넣었다 — 다음 창의 재현은 그 거절과 겹치지 않는 이메일로 한다.

@@ -98,3 +98,12 @@ monorepo
 - `handler.py` — `_first_publish(published_at)` → `None`/`"pending"`/`"overdue"`. `_selection_ready()` 는 그것을 부르도록 바꿨다(동작 무변경 — 기존 701 테스트 6칸 그대로 초록). `_bundle_state(..., first_publish)` 에 `pending` 갈래(stale 판정 **앞**). `bundles()` 가 running 일 때 판정을 넘기고 `health_first_publish_pending` 을 싣는다.
 - 테스트 `SelectionReadyOnStatusTest` 에 8칸. `python infra/demo/aws/tests/test_handler.py` → **109 tests OK, rc=0**(이전 101).
 - **bite**: `pending` 갈래를 끔 → **5 실패**(49시간 스냅샷 · 스냅샷 없음 · 신선해 보이는 지난 세션 스냅샷 · 전체 시작 · `/status`↔`/bundles` 일치) → 복원(마커 0건) → 109 OK. 반대 방향 칸(상한 넘김 · `STARTED_PARAM` 없음 · 첫 발행 이후)은 끈 상태에서도 초록 — 옛 동작을 지키는 칸이라 그것이 맞다.
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-4 라이브: 카드의 **입력**은 🟢, 카드 **화면**은 ⚪ (review 유지)
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- 이번 `terraform apply`(18차)가 Lambda 를 갱신했다. 꺼진 인스턴스(`stopped` 확인)에 `POST /bundle/start {"bundles":["fan"]}` → 직후부터 1분 넘게 `GET /bundles` 의 `fan.state = "requested"` (10:15:40 · 51 · 16:22 · 17:23Z), `health_first_publish_pending: true` — 예전의 `unknown`(«🔴 확인 실패») 이 아니다.
+- ⚪ AC-4 의 동사는 «카드가 🟡 기동 중… 인지 **본다**» 다 — 론처 화면 자체를 보지 않았다(API 상태만). 다음 기동 때 론처 페이지에서 버튼을 누른 직후 카드 문구를 보고 닫는다. ⇒ `review/` 유지.

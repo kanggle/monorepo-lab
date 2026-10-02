@@ -4,7 +4,7 @@ TASK-MONO-735
 
 # Status
 
-review
+done
 
 # Title
 
@@ -208,3 +208,13 @@ monorepo (iam-platform · ecommerce-microservices-platform — 호출처가 두 
 
 ⇒ **AC-3 은 OPEN 으로 남는다** — 스텝 2·4 는 새 원인 미확정 결함이다. 후속 = **`TASK-MONO-737`**(원인 실측 + 수정 + 누락된 IT 셀). 이 티켓은 `review/` 에 남는다(4차원 close 대상 아님 — AC-3 미충족).
 
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-3 잔여 스텝 2·4 라이브 🟢 → AC-3 닫힘
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- 스텝 1·3·5 는 17차 창(2026-09-27)에서 🟢. 남았던 스텝 2(콘솔 잠금)·4(셀러 정지)를 이번 창에서 쟀다 — 결과는 `TASK-MONO-737` § CORRECTION 2026-10-02(잠금 200 → LOCKED · 셀러 정지 → 기계 계정 LOCKED).
+- 덤: 합성 `auth.token.reuse.detected` 2건(tenantId=fan-platform) → 풀 계정 `8cb67fce-0f72-4a72-837f-8e06e6b65ff1` **LOCKED(AUTO_DETECT · system)** — 헤더 없는 자동 잠금이 풀 계정에도 닿는다(스텝 1 의 재확인, `TASK-BE-612` 측정과 같은 실행).
+- ⚪ 스텝 2 의 부가 술어(같은 키 재확인 409 · 없는 id 404 · `admin_actions` 행)는 이번에 재지 않았다 — AC-3 문장의 술어(200 → LOCKED)는 충족.
+⇒ `done/`.

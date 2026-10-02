@@ -4,7 +4,7 @@ TASK-MONO-736
 
 # Status
 
-review
+done
 
 # Title
 
@@ -107,3 +107,24 @@ monorepo (infra/observability · 6 게이트웨이)
 ## AC-2 — ⏳ 창 대기 (재굽기 뒤)
 
 검증기는 앱 소스라 **재굽기 전까지 데모에 없다**(`infra/demo/aws/README.md` 배포 층). 18차 AMI(이 PR 머지 이후 커밋)로 연 창에서: 콘솔 5 도메인 · web-store · fan 로그인 트래픽 → 6 게이트웨이 각각 `docker logs <gw> 2>&1 | grep "JWT audience summary" | tail -1` 이 있고 `match > 0`. 이어서 `TASK-MONO-697` AC-0 을 § 정정 ④ 대로 잰다.
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-2 라이브 🟢: 6 게이트웨이 전부 match > 0 · mismatch 0
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+트래픽: 콘솔 5 도메인 화면(09:43–10:00) · 스토어·팬 로그인(09:37–10:07). 10:06:30Z 에 각 게이트웨이 컨테이너 로그의 마지막 요약 줄(SSM 읽기):
+
+| 게이트웨이 | 요약 줄 | `not on allowlist` WARN 줄 |
+|---|---|---|
+| ecommerce | `mode=SHADOW match=181 mismatch=0` | 0 |
+| fan | `match=69 mismatch=0` | 0 |
+| scm | `match=60 mismatch=0` | 0 |
+| erp | `match=29 mismatch=0` | 0 |
+| wms | `match=26 mismatch=0` | 0 |
+| finance | `match=1 mismatch=0` | 0 |
+
+- 분모가 전부 0 보다 크다 ⇒ «불일치 0» 이 공허하지 않다. iam 게이트웨이는 대상 밖(요약 줄 0 — 이 검사를 하지 않는다).
+- 「그 뒤 697 AC-0 을 이 채널로 잰다」 — 이 표를 `TASK-MONO-697` 에 한 창의 표본으로 덧붙였다(697 AC-0 은 client 별 ⚪ 칸 판정까지 요구하므로 이 표본만으로 닫히지 않는다 — 그 판정은 697 의 몫).
+⇒ AC-2 닫힘 → `done/`.

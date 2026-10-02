@@ -4,7 +4,7 @@ TASK-BE-612
 
 # Status
 
-review
+done
 
 # Title
 
@@ -156,3 +156,18 @@ auth-service 가 잠금 사유를 판정하면 호출자 실수 하나로 `ADMIN
 2. A 로 비밀번호 재설정(`TASK-BE-609` 런북 스텝 1 — 게이트웨이 경유) → 🟢 **`accounts.status=ACTIVE`**(결과 상태) · 최신 이력 `reason_code=USER_RECOVERY, actor_type=user` · 새 비밀번호 로그인 성공.
 3. 대조군 계정 B: 콘솔에서 **운영자 잠금**(`TASK-MONO-737` 런북 ①) → B 로 재설정 → 🟢 재설정 204 · 새 비밀번호는 저장되지만 **`accounts.status=LOCKED` 유지** · auth-service 로그 `self-recovery … REFUSED`.
 - 🔴 유효성 술어: 스텝 2 이전에 A 가 **LOCKED 였음**을 먼저 적어라(이미 ACTIVE 면 «해제됨» 은 아무것도 재지 않았다).
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-3 라이브 🟢 (대조군 포함, 결과 상태 = DB)
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+| 계정 | 잠금 | 재설정 | `accounts.status` (결과) | `account_status_history` |
+|---|---|---|---|---|
+| `be612-1790934793@example.com` (`8cb67fce-…`, 풀 계정) | 합성 `auth.token.reuse.detected` 2건 → **LOCKED** | request 204 → Redis 의 토큰(값=계정 id 로 찾음, 출력 안 함) → confirm **204** | **ACTIVE** | `LOCKED · AUTO_DETECT · system` → `ACTIVE · USER_RECOVERY · user` |
+| 대조군 `live18-1790933938@example.com` (`0bf5cab4-…`) | 콘솔 잠금 → **LOCKED** | request 204 → confirm **204** | **LOCKED 유지** | `LOCKED · ADMIN_LOCK · operator` (그 뒤 행 없음) |
+
+- 재설정 뒤 새 비밀번호로 팬 로그인 성공(세션 accountId `8cb67fce-…`) · 틀린 비밀번호는 IAM 폼 오류 — `TASK-BE-609` § CORRECTION 2026-10-02.
+- «합성 이벤트로 잠갔다» — 실제 리프레시 재사용이 이벤트를 내는 앞 구간은 이 측정 밖이다(`TASK-MONO-672` 의 방법과 같음).
+⇒ `done/`.
