@@ -69,7 +69,8 @@ com.example.fanplatform.artist/
 │   │       │   ├── ArtistController.java               ← /api/artists CRUD
 │   │       │   ├── ArtistDirectoryController.java      ← /api/artists?q= search
 │   │       │   ├── ArtistGroupController.java          ← /api/artist-groups
-│   │       │   └── FandomController.java               ← /api/fandoms
+│   │       │   ├── FandomController.java               ← /api/fandoms
+│   │       │   └── AgencyController.java               ← /api/agencies (TASK-MONO-748)
 │   │       ├── dto/{request,response}
 │   │       ├── advice/GlobalExceptionHandler.java
 │   │       ├── filter/TenantClaimEnforcer.java         ← service-level fail-closed
@@ -85,6 +86,9 @@ com.example.fanplatform.artist/
 │   └── out/
 │       ├── persistence/                                ← JPA entities + adapters per repo port (+ ArtistOutboxJpaEntity/Repository)
 │       ├── cache/ArtistDirectoryCacheAdapter.java      ← Redis read-through, fail-open
+│       ├── store/UnwiredStoreSellerDirectory.java      ← StoreSellerDirectory port; fail-closed
+│       │                                                  «cannot verify» until the fan → store
+│       │                                                  transport is decided (TASK-MONO-748)
 │       ├── event/ArtistEventPublisherAdapter.java      ← v2 outbox write adapter (persists artist_outbox row; keeps artist_registered_total counter)
 │       └── messaging/ArtistOutboxPublisher.java        ← v2 relay (extends AbstractOutboxPublisher)
 ├── application/
@@ -101,7 +105,8 @@ com.example.fanplatform.artist/
 │   │                                                      ArtistProfile (VO), ArtistStatus, ArtistType
 │   ├── group/                                          ← ArtistGroup, ArtistGroupId,
 │   │                                                      GroupMembership, GroupRole, ArtistGroupStatus
-│   └── fandom/                                         ← Fandom, FandomId
+│   ├── fandom/                                         ← Fandom, FandomId
+│   └── agency/                                         ← Agency, AgencyId, AgencyStatus (TASK-MONO-748)
 └── config/
     ├── SecurityConfig.java                             ← OAuth2 RS + admin role enforcement
     ├── ServiceLevelOAuth2Config.java                   ← service-level JwtDecoder + validators
@@ -187,8 +192,8 @@ HTTP 422 `STATE_TRANSITION_INVALID`. Every transition emits a domain event
 | ARCHIVED | non-admin | 404 ARTIST_NOT_FOUND |
 | ARCHIVED | admin | GET allowed |
 
-POST / PATCH / DELETE on `/api/artists/**`, `/api/artist-groups/**`, PUT on
-`/api/fandoms/**` require admin role (enforced both at SecurityConfig and the
+POST / PATCH / DELETE on `/api/artists/**`, `/api/artist-groups/**`,
+`/api/agencies/**`, PUT on `/api/fandoms/**` require admin role (enforced both at SecurityConfig and the
 application service for defense-in-depth). Reads require any authenticated
 user in the same tenant.
 
@@ -264,6 +269,11 @@ user in the same tenant.
 | Artist not found OR cross-tenant OR DRAFT/ARCHIVED to non-admin | 404 ARTIST_NOT_FOUND |
 | Stage name UNIQUE collision | 409 STAGE_NAME_CONFLICT |
 | Group name UNIQUE collision | 409 GROUP_NAME_CONFLICT |
+| Agency name UNIQUE collision (after normalisation) | 409 AGENCY_NAME_CONFLICT |
+| Missing / cross-tenant agency | 404 AGENCY_NOT_FOUND |
+| New affiliation / rename / seller link on an ARCHIVED agency | 422 AGENCY_ARCHIVED |
+| Store seller missing / CLOSED | 422 STORE_SELLER_NOT_FOUND / STORE_SELLER_CLOSED — not saved |
+| Store seller cannot be verified (any lookup failure) | 503 STORE_SELLER_LOOKUP_UNAVAILABLE — **not saved** (fail-closed) |
 | Forbidden status transition | 422 STATE_TRANSITION_INVALID |
 | (group, artist) active membership added twice | 422 ALREADY_MEMBER |
 | Fandom create on DRAFT artist | 422 ARTIST_NOT_PUBLISHED |

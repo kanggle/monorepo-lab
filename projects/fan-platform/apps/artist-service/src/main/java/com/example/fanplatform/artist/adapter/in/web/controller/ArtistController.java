@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.adapter.in.web.controller;
 
+import com.example.fanplatform.artist.adapter.in.web.dto.request.ChangeAgencyAffiliationRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.ChangeArtistStatusRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.RegisterArtistRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.UpdateArtistRequest;
@@ -8,6 +9,7 @@ import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.ArchiveArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
+import com.example.fanplatform.artist.application.port.in.ChangeAgencyAffiliationUseCase;
 import com.example.fanplatform.artist.application.port.in.GetArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.PublishArtistUseCase;
 import com.example.fanplatform.artist.application.port.in.RegisterArtistUseCase;
@@ -42,6 +44,7 @@ public class ArtistController {
     private final PublishArtistUseCase publishUseCase;
     private final ArchiveArtistUseCase archiveUseCase;
     private final GetArtistUseCase getUseCase;
+    private final ChangeAgencyAffiliationUseCase affiliationUseCase;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<ArtistView>> register(
@@ -49,7 +52,7 @@ public class ArtistController {
             @Valid @RequestBody RegisterArtistRequest req) {
         ArtistView view = registerUseCase.register(new RegisterArtistCommand(
                 actor, req.accountId(), req.artistType(), req.stageName(), req.realName(),
-                req.debutDate(), req.agency(), req.bio(), req.profileImageRef()));
+                req.debutDate(), req.agency(), req.bio(), req.profileImageRef(), req.agencyId()));
         return ResponseEntity.created(URI.create("/api/artists/" + view.id()))
                 .body(ApiEnvelope.of(view));
     }
@@ -68,6 +71,18 @@ public class ArtistController {
                 actor, id, req.stageName(), req.realName(),
                 req.debutDate(), req.agency(), req.bio(), req.profileImageRef());
         return ResponseEntity.ok(ApiEnvelope.of(updateUseCase.update(cmd)));
+    }
+
+    /**
+     * Change the artist's agency (TASK-MONO-748 AC-2). {@code agencyId: null} removes
+     * the affiliation. Admin-tier — the existing PATCH {@code /api/artists/**} gate.
+     */
+    @PatchMapping("/{id}/agency")
+    public ResponseEntity<ApiEnvelope<ArtistView>> changeAgency(@CurrentActor ActorContext actor,
+                                                                @PathVariable String id,
+                                                                @Valid @RequestBody ChangeAgencyAffiliationRequest req) {
+        return ResponseEntity.ok(ApiEnvelope.of(
+                affiliationUseCase.changeArtistAgency(actor, id, req.agencyId())));
     }
 
     /**

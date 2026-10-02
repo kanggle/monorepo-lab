@@ -51,7 +51,7 @@ class ArtistDirectoryControllerSliceTest {
     @DisplayName("GET /api/artists?q=foo (fan) → 200 + envelope with PageMeta")
     void search_fanReturnsEnvelope() throws Exception {
         ArtistView view = new ArtistView("a-1", "fan-platform", "acc-artist-1", ArtistType.SOLO,
-                ArtistStatus.PUBLISHED, "STAGE", null, null, null, null, null,
+                ArtistStatus.PUBLISHED, "STAGE", null, null, null, null, null, null,
                 Instant.now(), Instant.now(), Instant.now(), null);
         when(searchUseCase.search(any(SearchArtistDirectoryQuery.class)))
                 .thenReturn(new DirectorySearchResult(List.of(view), 0, 20, 1L, 1));

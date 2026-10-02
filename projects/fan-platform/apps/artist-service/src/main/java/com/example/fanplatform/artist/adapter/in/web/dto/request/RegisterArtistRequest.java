@@ -17,5 +17,7 @@ public record RegisterArtistRequest(
         LocalDate debutDate,
         @Size(max = 120) String agency,
         @Size(max = 4000) String bio,
-        @Size(max = 500) String profileImageRef
+        @Size(max = 500) String profileImageRef,
+        // TASK-MONO-748: optional agency entity to affiliate with (ACTIVE, same tenant).
+        @Size(min = 1, max = 36) String agencyId
 ) {}

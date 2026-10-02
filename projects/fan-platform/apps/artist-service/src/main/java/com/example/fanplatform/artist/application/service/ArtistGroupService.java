@@ -12,10 +12,12 @@ import com.example.fanplatform.artist.application.port.in.ArtistGroupView;
 import com.example.fanplatform.artist.application.port.in.CreateArtistGroupUseCase;
 import com.example.fanplatform.artist.application.port.in.GetArtistGroupUseCase;
 import com.example.fanplatform.artist.application.port.in.RemoveGroupMemberUseCase;
+import com.example.fanplatform.artist.application.port.out.AgencyRepository;
 import com.example.fanplatform.artist.application.port.out.ArtistEventPublisher;
 import com.example.fanplatform.artist.application.port.out.ArtistEventPublisher.MemberChangeAction;
 import com.example.fanplatform.artist.application.port.out.ArtistGroupRepository;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
+import com.example.fanplatform.artist.domain.agency.Agency;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistStatus;
 import com.example.fanplatform.artist.domain.group.ArtistGroup;
@@ -41,6 +43,8 @@ public class ArtistGroupService implements
     private final ArtistGroupRepository groupRepository;
     private final ArtistRepository artistRepository;
     private final ArtistEventPublisher eventPublisher;
+    // TASK-MONO-748: affiliation on create + agency-name display on reads.
+    private final AgencyRepository agencyRepository;
 
     @Override
     @Transactional
@@ -50,13 +54,19 @@ public class ArtistGroupService implements
         if (groupRepository.existsByTenantIdAndName(tenantId, cmd.name())) {
             throw new GroupNameConflictException(cmd.name());
         }
+        Agency agency = cmd.agencyId() == null
+                ? null
+                : AgencySupport.loadAffiliable(agencyRepository, cmd.agencyId(), tenantId);
         ArtistGroup group = ArtistGroup.create(
                 ArtistGroupId.of(UuidV7.randomString()),
                 tenantId,
                 cmd.name(), cmd.debutDate(), cmd.agency(), cmd.profileImageRef());
+        if (agency != null) {
+            group.changeAgency(agency.getId(), agency.getName());
+        }
         ArtistGroup saved = groupRepository.insert(group);
         eventPublisher.publishArtistGroupCreated(saved);
-        return ArtistGroupView.from(saved, List.of());
+        return view(saved, List.of());
     }
 
     /**
@@ -92,7 +102,7 @@ public class ArtistGroupService implements
         groupRepository.insertMembership(membership);
         eventPublisher.publishArtistGroupMemberChanged(
                 group, aid, role, MemberChangeAction.ADDED, Instant.now());
-        return ArtistGroupView.from(group, groupRepository.findAllMembers(group.getId(), tenantId));
+        return view(group, groupRepository.findAllMembers(group.getId(), tenantId));
     }
 
     @Override
@@ -116,7 +126,12 @@ public class ArtistGroupService implements
         String tenantId = actor.tenantId();
         ArtistGroup group = loadGroupOrThrow(groupId, tenantId);
         List<GroupMembership> members = groupRepository.findAllMembers(group.getId(), tenantId);
-        return ArtistGroupView.from(group, members);
+        return view(group, members);
+    }
+
+    private ArtistGroupView view(ArtistGroup g, List<GroupMembership> members) {
+        return ArtistGroupView.from(g, members,
+                AgencySupport.names(agencyRepository, g.getTenantId(), g.getAgencyId()));
     }
 
     private ArtistGroup loadGroupOrThrow(String rawId, String tenantId) {

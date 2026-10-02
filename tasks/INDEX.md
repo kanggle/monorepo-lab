@@ -183,7 +183,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 - `TASK-MONO-743-link-existing-fan-and-store-accounts.md` — **전역 소비자 계정 5단계 — 기존 팬·스토어 계정 묶기 + id 이전** (READY · ⏳ **보류** 2026-10-02 UTC 소유자 결정 — 대상이 데모 계정 1명뿐, AC-00 게이트: 데모 밖 두 사이트 계정이 생기면 착수). 🔴 AC-0 미결 «어느 id 가 살아남는가» · AC-3 대조군(남의 이메일로 팬 가입 → 기존 스토어 계정과 안 묶임) · 팬·이커머스 데이터·운영자 매핑 이전.
 - `TASK-MONO-746-draft-adr-080-workforce-on-the-consumer-pool.md` — ⏳ **`ADR-MONO-080` 후보 기안 — 직원도 풀 계정** (READY, 2026-10-01 UTC · **DO NOT START — AC-0 = 078 단계 전부 done + 079 ACCEPTED**). 순서: 이메일 인증 게이트 → IAM 2단계 인증 → 운영자 규칙(`TASK-MONO-334`) 변경. 묶음 회수(그룹·배정·파트너십)는 이미 있음. 인증된 이메일끼리 자동 묶기 포함. 플랫폼 관리자는 분리 유지.
-- `TASK-MONO-748-fan-agencies-and-store-seller-link.md` — **ADR-079 D1·D2 — 팬 소속사 엔티티 · 아티스트/그룹 소속 · 소속사 ↔ 셀러(0..1)** (READY, 2026-10-02 UTC · ACCEPT PR 기안). 자유 텍스트 `agency` → `agencies` 이전 · 셀러 검증 fail-closed.
 - `TASK-MONO-750-operator-fan-directory-management-path.md` — **ADR-079 D4-A — 플랫폼 운영자의 팬 디렉터리 관리 경로** (READY, 2026-10-02 UTC · 선행 748). 🔴 관리 경로만 · 대리 저작/커뮤니티/멤버십 계속 403(대조군) · ADR-059 부분 개정의 구현.
 - `TASK-MONO-751-console-fan-directory-screens.md` — **ADR-079 D4-A — 콘솔 팬 화면(소속사·아티스트·그룹)** (READY, 2026-10-02 UTC · 선행 748·750). 머지 뒤 nightly 확인.
 - `TASK-MONO-752-seller-members-person-accounts.md` — **ADR-079 D5 — 셀러 구성원(초대 → 로그인 본인 수락) · `SELLER` 사이트 역할 쓰기/회수 · 정지 = 역할 회수** (READY, 2026-10-02 UTC · `TASK-MONO-745` 흡수분). 🔴 초대 수락 대조군.
@@ -213,7 +212,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-(empty)
+- `TASK-MONO-748-fan-agencies-and-store-seller-link.md` — 🟠 **IN-PROGRESS (부분 완료 · Hard Stop 1건) — ADR-079 D1·D2 팬 소속사 엔티티** (2026-10-02 UTC). artist-service `V4__agencies.sql`(`agencies` · 복합 FK `agency_id` · 자유 텍스트 이전: 공백 정규화·대소문자 보존 · 남은 행 있으면 RAISE) · 소속사 CRUD `/api/agencies` · 소속 변경 `PATCH …/agency` · 표시는 엔티티 이름 · 시드/스냅숏 반영(`fan.json` 드리프트 0). 🔴 **Hard Stop(HARDSTOP-09)**: fan → store 셀러 조회의 전송·인증(product-service 는 JWT 를 안 보고 artist-service 는 IdP 클라이언트가 없다 → 새 cc 등록·범위·assume-tenant = 소유자 결정). 그때까지 배포 어댑터는 fail-closed(셀러 연결 전부 503, 저장 0). ⚪ Testcontainers 6건(AC-1 기존 볼륨 포함) Docker 부재로 미실행 → CI. 단위 228/0.
 
 
 

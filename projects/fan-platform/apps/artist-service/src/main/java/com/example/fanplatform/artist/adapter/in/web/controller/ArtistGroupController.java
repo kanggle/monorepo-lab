@@ -1,12 +1,14 @@
 package com.example.fanplatform.artist.adapter.in.web.controller;
 
 import com.example.fanplatform.artist.adapter.in.web.dto.request.AddGroupMemberRequest;
+import com.example.fanplatform.artist.adapter.in.web.dto.request.ChangeAgencyAffiliationRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.request.CreateArtistGroupRequest;
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiEnvelope;
 import com.example.security.servlet.actor.CurrentActor;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.port.in.AddGroupMemberUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistGroupView;
+import com.example.fanplatform.artist.application.port.in.ChangeAgencyAffiliationUseCase;
 import com.example.fanplatform.artist.application.port.in.CreateArtistGroupUseCase;
 import com.example.fanplatform.artist.application.port.in.CreateArtistGroupUseCase.CreateArtistGroupCommand;
 import com.example.fanplatform.artist.application.port.in.GetArtistGroupUseCase;
@@ -16,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,13 +36,14 @@ public class ArtistGroupController {
     private final GetArtistGroupUseCase getUseCase;
     private final AddGroupMemberUseCase addMemberUseCase;
     private final RemoveGroupMemberUseCase removeMemberUseCase;
+    private final ChangeAgencyAffiliationUseCase affiliationUseCase;
 
     @PostMapping
     public ResponseEntity<ApiEnvelope<ArtistGroupView>> create(
             @CurrentActor ActorContext actor,
             @Valid @RequestBody CreateArtistGroupRequest req) {
         ArtistGroupView view = createUseCase.create(new CreateArtistGroupCommand(
-                actor, req.name(), req.debutDate(), req.agency(), req.profileImageRef()));
+                actor, req.name(), req.debutDate(), req.agency(), req.profileImageRef(), req.agencyId()));
         return ResponseEntity.created(URI.create("/api/artist-groups/" + view.id()))
                 .body(ApiEnvelope.of(view));
     }
@@ -48,6 +52,16 @@ public class ArtistGroupController {
     public ResponseEntity<ApiEnvelope<ArtistGroupView>> getById(@CurrentActor ActorContext actor,
                                                                 @PathVariable String id) {
         return ResponseEntity.ok(ApiEnvelope.of(getUseCase.getById(actor, id)));
+    }
+
+    /** Change the group's agency (TASK-MONO-748 AC-2); {@code agencyId: null} removes it. */
+    @PatchMapping("/{id}/agency")
+    public ResponseEntity<ApiEnvelope<ArtistGroupView>> changeAgency(
+            @CurrentActor ActorContext actor,
+            @PathVariable String id,
+            @Valid @RequestBody ChangeAgencyAffiliationRequest req) {
+        return ResponseEntity.ok(ApiEnvelope.of(
+                affiliationUseCase.changeGroupAgency(actor, id, req.agencyId())));
     }
 
     @PostMapping("/{id}/members")

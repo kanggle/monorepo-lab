@@ -2,6 +2,7 @@ package com.example.fanplatform.artist.adapter.out.persistence;
 
 import com.example.fanplatform.artist.application.exception.GroupNameConflictException;
 import com.example.fanplatform.artist.application.port.out.ArtistGroupRepository;
+import com.example.fanplatform.artist.domain.agency.AgencyId;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.group.ArtistGroup;
 import com.example.fanplatform.artist.domain.group.ArtistGroupId;
@@ -35,6 +36,7 @@ class ArtistGroupRepositoryImpl implements ArtistGroupRepository {
                 g.getAgency(), g.getProfileImageRef(), g.getStatus(),
                 g.getCreatedAt(), g.getUpdatedAt(), g.getArchivedAt(),
                 null /* version null → insert */);
+        entity.setAgencyId(g.getAgencyId() == null ? null : g.getAgencyId().value());
         try {
             ArtistGroupJpaEntity saved = groupJpa.saveAndFlush(entity);
             return toDomain(saved);
@@ -53,6 +55,7 @@ class ArtistGroupRepositoryImpl implements ArtistGroupRepository {
                         "Group disappeared between load and save: " + g.getId().value()));
         managed.applyMutable(g.getName(), g.getDebutDate(), g.getAgency(),
                 g.getProfileImageRef(), g.getStatus(), g.getUpdatedAt(), g.getArchivedAt());
+        managed.setAgencyId(g.getAgencyId() == null ? null : g.getAgencyId().value());
         return toDomain(groupJpa.saveAndFlush(managed));
     }
 
@@ -108,7 +111,9 @@ class ArtistGroupRepositoryImpl implements ArtistGroupRepository {
         return ArtistGroup.reconstitute(
                 ArtistGroupId.of(e.getId()),
                 e.getTenantId(),
-                e.getName(), e.getDebutDate(), e.getAgency(), e.getProfileImageRef(),
+                e.getName(), e.getDebutDate(), e.getAgency(),
+                e.getAgencyId() == null ? null : AgencyId.of(e.getAgencyId()),
+                e.getProfileImageRef(),
                 e.getStatus(),
                 e.getCreatedAt(), e.getUpdatedAt(), e.getArchivedAt(),
                 e.getVersion() == null ? 0L : e.getVersion()

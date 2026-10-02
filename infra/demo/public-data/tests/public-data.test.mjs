@@ -67,6 +67,18 @@ test('아티스트: 본명·계정·테넌트가 공개 DTO 에 없다', () => {
     '픽스처에 realName 이 없다 — 위 단언이 공허하다');
 });
 
+test('아티스트(TASK-MONO-748): 소속사는 이름으로 공개되고 소속사 엔티티 id 는 공개 DTO 에 없다', () => {
+  const pub = RAW_ARTISTS.map(toPublicArtist).filter(Boolean);
+  assert.ok(pub.length >= 3, '모집단이 비면 이 시험은 공허하다');
+  for (const a of pub) assert.ok(!('agencyId' in a), 'agencyId 가 새어 나왔다 — 허용 목록 밖이다');
+  // 🔴 양성 대조군 — 픽스처가 백엔드의 새 모양(agencyId)을 실제로 담고 있어야 위 단언이 뭔가를 잰다.
+  assert.ok(RAW_ARTISTS.some((a) => typeof a.agencyId === 'string' && a.agencyId !== ''),
+    '픽스처에 agencyId 가 없다 — 위 단언이 공허하다');
+  // AC-4 — 표시 이름은 그대로다.
+  const lumi = pub.find((a) => a.id === '0199de80-0000-7000-8000-00000000a001');
+  assert.equal(lumi.agency, 'Aurora Entertainment');
+});
+
 test('아티스트: 공개 상태가 아니면 목록에서 사라진다', () => {
   const draft = RAW_ARTISTS.find((a) => a.status !== 'PUBLISHED');
   assert.ok(draft, '픽스처에 비공개 아티스트(음성 대조군)가 없다');

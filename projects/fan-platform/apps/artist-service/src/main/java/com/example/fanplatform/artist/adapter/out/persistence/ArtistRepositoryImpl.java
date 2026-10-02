@@ -2,6 +2,7 @@ package com.example.fanplatform.artist.adapter.out.persistence;
 
 import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.port.out.ArtistRepository;
+import com.example.fanplatform.artist.domain.agency.AgencyId;
 import com.example.fanplatform.artist.domain.artist.Artist;
 import com.example.fanplatform.artist.domain.artist.ArtistId;
 import com.example.fanplatform.artist.domain.artist.ArtistProfile;
@@ -32,6 +33,7 @@ class ArtistRepositoryImpl implements ArtistRepository {
     @Override
     public Artist insert(Artist artist) {
         ArtistJpaEntity entity = toInsertEntity(artist);
+        entity.setAgencyId(agencyIdOf(artist));
         ArtistJpaEntity saved = jpa.saveAndFlush(entity);
         return toDomain(saved);
     }
@@ -48,6 +50,7 @@ class ArtistRepositoryImpl implements ArtistRepository {
                 artist.getUpdatedAt(),
                 artist.getPublishedAt(),
                 artist.getArchivedAt());
+        managed.setAgencyId(agencyIdOf(artist));
         ArtistJpaEntity saved = jpa.saveAndFlush(managed);
         return toDomain(saved);
     }
@@ -87,6 +90,10 @@ class ArtistRepositoryImpl implements ArtistRepository {
         return jpa.existsByIdAndTenantIdAndStatus(id.value(), tenantId, status);
     }
 
+    private static String agencyIdOf(Artist a) {
+        return a.getAgencyId() == null ? null : a.getAgencyId().value();
+    }
+
     private ArtistJpaEntity toInsertEntity(Artist a) {
         ArtistProfile p = a.getProfile();
         return new ArtistJpaEntity(
@@ -109,6 +116,7 @@ class ArtistRepositoryImpl implements ArtistRepository {
                 e.getArtistType(),
                 e.getStatus(),
                 profile,
+                e.getAgencyId() == null ? null : AgencyId.of(e.getAgencyId()),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
                 e.getPublishedAt(),

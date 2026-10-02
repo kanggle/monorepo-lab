@@ -17,6 +17,7 @@
 > | `/api/v1/artists/**` | `/api/artists/**` |
 > | `/api/v1/artist-groups/**` | `/api/artist-groups/**` |
 > | `/api/v1/fandoms/**` | `/api/fandoms/**` |
+> | `/api/v1/agencies/**` | `/api/agencies/**` |
 >
 > The gateway applies a `RewritePath` filter to strip the `/v1/` prefix before
 > forwarding (TASK-FAN-BE-005). Path examples below use the **service-internal**
@@ -64,9 +65,11 @@ For paginated list endpoints, `meta` adds `page`, `size`, `totalElements`,
 | 404 | ARTIST_NOT_FOUND | missing OR cross-tenant OR DRAFT/ARCHIVED to non-admin (existence not leaked) |
 | 404 | ARTIST_GROUP_NOT_FOUND | missing group OR cross-tenant |
 | 404 | FANDOM_NOT_FOUND | no fandom for the given artist |
+| 404 | AGENCY_NOT_FOUND | missing OR cross-tenant agency (incl. as the target of an affiliation) |
 | 409 | STAGE_NAME_CONFLICT | `(tenant_id, stage_name)` collides |
 | 409 | ARTIST_ACCOUNT_CONFLICT | `(tenant_id, account_id)` collides — that account already authors as another artist |
 | 409 | GROUP_NAME_CONFLICT | `(tenant_id, group_name)` collides |
+| 409 | AGENCY_NAME_CONFLICT | `(tenant_id, name)` collides **after the name normalisation rule** (§ Agencies) |
 | 409 | CONFLICT | optimistic-lock collision |
 | 422 | VALIDATION_ERROR | constraint violation (`@Valid`) |
 | 422 | STATE_TRANSITION_INVALID | rejected by Artist state machine; `details.from`, `details.to` |
@@ -75,6 +78,10 @@ For paginated list endpoints, `meta` adds `page`, `size`, `totalElements`,
 | 422 | ARTIST_NOT_PUBLISHED | fandom create/update against DRAFT/ARCHIVED artist |
 | 422 | ARTIST_ARCHIVED | adding an ARCHIVED artist as a new group member |
 | 422 | ILLEGAL_STATE | state-machine guard at controller boundary |
+| 422 | AGENCY_ARCHIVED | the agency is ARCHIVED — no new affiliation, rename or seller-link change |
+| 422 | STORE_SELLER_NOT_FOUND | the store answered: no seller with that id |
+| 422 | STORE_SELLER_CLOSED | the store answered: the seller is `CLOSED` |
+| 503 | STORE_SELLER_LOOKUP_UNAVAILABLE | the seller could not be verified — **nothing was saved** (fail-closed) |
 
 ---
 
@@ -94,9 +101,13 @@ Request:
   "debutDate": "YYYY-MM-DD (optional)",
   "agency": "string (max 120, optional)",
   "bio": "string (max 4000, optional)",
-  "profileImageRef": "string (max 500, optional, e.g. https://...)"
+  "profileImageRef": "string (max 500, optional, e.g. https://...)",
+  "agencyId": "string (1..36, optional) — an ACTIVE agency of the caller's tenant (§ Agencies)"
 }
 ```
+
+`agency` (free text) vs `agencyId` — see § Agencies › The `agency` field. An unknown
+`agencyId` is 404 `AGENCY_NOT_FOUND`; an ARCHIVED one is 422 `AGENCY_ARCHIVED`.
 
 `profileImageRef` holds an **absolute https URL the web app renders as-is** — it is stored and
 returned verbatim; nothing resolves it (`specs/services/artist-service/data-model.md`: "media URL
@@ -118,6 +129,7 @@ Response 201:
     "realName": null,
     "debutDate": null,
     "agency": null,
+    "agencyId": null,
     "bio": null,
     "profileImageRef": null,
     "createdAt": "2026-05-03T00:00:00Z",
@@ -283,6 +295,24 @@ Response 200:
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND,
 422 STATE_TRANSITION_INVALID (`details.from`, `details.to`).
 
+### `PATCH /api/artists/{id}/agency` — Change affiliation (TASK-MONO-748)
+
+Auth: admin role.
+
+Request:
+```json
+{ "agencyId": "string (1..36) | null" }
+```
+
+`null` (or an absent key) removes the affiliation (solo / unaffiliated is a legal
+state). A value must name an **ACTIVE** agency of the caller's tenant.
+
+Response 200: the artist (same shape as GET) with `agencyId` and `agency` (the
+agency's name) updated. Emits `artist.updated.v1` with `changedFields: ["agencyId"]`.
+
+Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 AGENCY_NOT_FOUND,
+422 AGENCY_ARCHIVED, 422 ILLEGAL_STATE (ARCHIVED artist).
+
 ---
 
 ## Artist groups
@@ -297,7 +327,8 @@ Request:
   "name": "string (1..120, unique per tenant)",
   "debutDate": "YYYY-MM-DD (optional)",
   "agency": "string (max 120, optional)",
-  "profileImageRef": "string (max 500, optional)"
+  "profileImageRef": "string (max 500, optional)",
+  "agencyId": "string (1..36, optional) — an ACTIVE agency of the caller's tenant"
 }
 ```
 
@@ -310,6 +341,7 @@ Response 201:
     "name": "Group X",
     "debutDate": null,
     "agency": null,
+    "agencyId": null,
     "profileImageRef": null,
     "status": "ACTIVE",
     "createdAt": "...",
@@ -381,6 +413,14 @@ Response 204 No Content.
 
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_GROUP_NOT_FOUND, 404 ARTIST_NOT_FOUND.
 
+### `PATCH /api/artist-groups/{id}/agency` — Change affiliation (TASK-MONO-748)
+
+Auth: admin role. Same request / semantics as `PATCH /api/artists/{id}/agency`.
+Response 200: the group (same shape as GET). No event (groups have no update event).
+
+Failures: 401, 403 FORBIDDEN, 404 ARTIST_GROUP_NOT_FOUND, 404 AGENCY_NOT_FOUND,
+422 AGENCY_ARCHIVED, 422 ILLEGAL_STATE (ARCHIVED group).
+
 ---
 
 ## Fandoms
@@ -449,6 +489,133 @@ Response 200: same shape as GET.
 
 Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 FANDOM_NOT_FOUND,
 422 ARTIST_NOT_PUBLISHED, 422 VALIDATION_ERROR.
+
+---
+
+## Agencies
+
+`TASK-MONO-748` · `ADR-MONO-079` (ACCEPTED — A) D1 (agency = an entity inside
+artist-service) · D2 (agency ↔ store seller, 0..1, held on the fan side).
+
+Writes are admin-tier — the **same** `ADMIN_ROLES` gate as artists / groups / fandoms;
+`TASK-MONO-750` is where the platform-operator path to it is opened. Reads are any
+authenticated tenant member. Every lookup is tenant-scoped; a cross-tenant id is 404.
+
+### The `agency` field on artists and groups
+
+Until V4 an artist's / group's agency was free text (`agency`). It is now an entity:
+
+- `agencyId` (new) — the agency entity id, or `null` (unaffiliated).
+- `agency` (unchanged key, unchanged meaning: **a display name**) — when `agencyId` is
+  set it is the **agency entity's name**; otherwise the legacy free text. Readers (the fan
+  web, the public snapshot) see the same key with the same value as before for every
+  existing row — V4 moved each free-text value into an agency of exactly that name.
+- Changing the affiliation (`PATCH …/agency`) also rewrites the stored free text to the
+  agency's name (or `null` when cleared), so the fallback can never resurface a stale
+  value. While `agencyId` is set, a free-text `agency` sent on `POST`/`PATCH /api/artists`
+  has no visible effect — use the affiliation endpoint. The free-text column is kept for
+  the transition and removed in a separate step (`ADR-MONO-079` D1).
+
+### Name normalisation rule
+
+The same rule is applied by the V4 data move and by every API write, so a name typed
+later lands on the row the move created:
+
+1. every run of ASCII whitespace (`[ \t\n\r\f\v]`) collapses to one space;
+2. leading / trailing space is removed;
+3. **case is preserved and significant** — `Aurora` and `AURORA` are two agencies.
+
+Empty after this → "no agency". Names that differ in anything but whitespace are
+**never** merged automatically («SM» / «SM Entertainment» stay two rows); a person merges
+them by re-affiliating and archiving the duplicate.
+
+### `POST /api/agencies` — Create
+
+Request: `{ "name": "string (1..120)" }` · Response 201 + `Location: /api/agencies/{id}`:
+
+```json
+{
+  "data": {
+    "id": "0190f3e2-...",
+    "tenantId": "fan-platform",
+    "name": "Aurora Entertainment",
+    "status": "ACTIVE",
+    "storeSellerId": null,
+    "createdAt": "...",
+    "updatedAt": "..."
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+Failures: 401, 403 FORBIDDEN, 409 AGENCY_NAME_CONFLICT, 422 VALIDATION_ERROR (blank / > 120).
+
+### `GET /api/agencies?page=&size=` — List
+
+Any authenticated member. Ordered by `name`, then `id`. `size` 1..100 (default 20).
+Paginated `meta` as in § Envelope shapes. Includes ARCHIVED agencies (`status` says so).
+
+### `GET /api/agencies/{id}` — Get one
+
+Any authenticated member. 404 `AGENCY_NOT_FOUND` when missing / cross-tenant.
+
+### `PATCH /api/agencies/{id}` — Rename
+
+Request: `{ "name": "string (1..120)" }`. Renaming to the agency's own (normalised) name is
+a no-op 200. Every affiliated artist / group displays the new name immediately (the
+directory cache is invalidated).
+Failures: 401, 403, 404 AGENCY_NOT_FOUND, 409 AGENCY_NAME_CONFLICT, 422 AGENCY_ARCHIVED,
+422 VALIDATION_ERROR.
+
+### `PATCH /api/agencies/{id}/status` — Archive
+
+Request: `{ "status": "ARCHIVED" }` — the only target; `ACTIVE` → 422 VALIDATION_ERROR,
+archiving twice → 422 AGENCY_ARCHIVED. Existing affiliations are **kept** (their display
+does not vanish); new affiliations to it are refused.
+
+### `PATCH /api/agencies/{id}/store-seller` — Link / clear the store seller
+
+Request: `{ "storeSellerId": "string (1..64) | null" }` — the ecommerce `seller_id`
+(`ADR-MONO-079` D2; 0..1 per agency, rider R2). `null` / absent clears the link without
+asking the store.
+
+A value is **verified against the store before anything is saved** (different database,
+so no FK):
+
+| Store's answer | Result |
+|---|---|
+| seller exists, status `ACTIVE` / `SUSPENDED` / `PENDING_PROVISIONING` | 200 — saved |
+| no such seller (definite answer) | 422 `STORE_SELLER_NOT_FOUND` — nothing saved |
+| seller is `CLOSED` | 422 `STORE_SELLER_CLOSED` — nothing saved |
+| no answer / error / timeout / auth failure / unrecognised status | 503 `STORE_SELLER_LOOKUP_UNAVAILABLE` — **nothing saved** |
+
+🔴 The last row is the point (`TASK-MONO-748` AC-3 · Failure Scenario 2): a lookup that
+saves on error is indistinguishable from no lookup. `SUSPENDED` is accepted because
+`ADR-MONO-079` D2 refuses exactly «없거나 CLOSED» and suspension is reversible.
+
+### Store seller verification — the cross-project lookup (caller side)
+
+artist-service asks through its outbound port `StoreSellerDirectory.findStatus(sellerId)`,
+whose contract with any adapter is:
+
+- **answers** `Optional.of(status)` — the store's `SellerStatus` name verbatim — or
+  `Optional.empty()` **only** for a definite «the store has no such seller» (e.g. the
+  store's 404 `SELLER_NOT_FOUND`);
+- **throws** `StoreSellerLookupUnavailableException` for everything else.
+
+What the store side must provide (input to the transport decision): a read of one seller
+**by `sellerId` in the store tenant** (`ecommerce`), returning at least
+`{ "sellerId", "status" }` with a distinguishable not-found — the shape `product-api.md`
+§ `GET /api/admin/sellers/{sellerId}` already has.
+
+🔴 **The transport is not decided, so the shipped adapter refuses every link**
+(`UnwiredStoreSellerDirectory` → 503). The store's only seller read is the operator-plane
+`GET /api/admin/sellers/{sellerId}` behind the ecommerce gateway (header-trust
+`X-User-Role: ECOMMERCE_OPERATOR`; product-service validates no JWT itself), and
+artist-service holds no IdP client. Reaching it needs a new `client_credentials`
+registration, a seller-read scope and a token for the store tenant (assume-tenant,
+`WorkloadTenantCatalog`) — an IdP / permission-catalog decision outside this ticket
+(`TASK-MONO-748` § 구현 기록 › Hard Stop). Clearing a link works today.
 
 ---
 

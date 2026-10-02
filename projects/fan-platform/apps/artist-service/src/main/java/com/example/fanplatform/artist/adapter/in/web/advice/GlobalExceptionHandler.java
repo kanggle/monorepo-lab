@@ -2,6 +2,12 @@ package com.example.fanplatform.artist.adapter.in.web.advice;
 
 import com.example.fanplatform.artist.adapter.in.web.dto.response.ApiErrorBody;
 import com.example.fanplatform.artist.application.exception.AdminRoleRequiredException;
+import com.example.fanplatform.artist.application.exception.AgencyArchivedException;
+import com.example.fanplatform.artist.application.exception.AgencyNameConflictException;
+import com.example.fanplatform.artist.application.exception.AgencyNotFoundException;
+import com.example.fanplatform.artist.application.exception.StoreSellerClosedException;
+import com.example.fanplatform.artist.application.exception.StoreSellerLookupUnavailableException;
+import com.example.fanplatform.artist.application.exception.StoreSellerNotFoundException;
 import com.example.fanplatform.artist.application.exception.AlreadyMemberException;
 import com.example.fanplatform.artist.application.exception.ArtistAccountConflictException;
 import com.example.fanplatform.artist.application.exception.ArtistArchivedException;
@@ -110,6 +116,46 @@ public class GlobalExceptionHandler extends AbstractDomainExceptionHandler {
     public ResponseEntity<ErrorResponse> handleArtistArchived(ArtistArchivedException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("ARTIST_ARCHIVED", e.getMessage()));
+    }
+
+    // ----- agencies (TASK-MONO-748, artist-api.md § Agencies) -----------------
+
+    @ExceptionHandler(AgencyNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAgencyNotFound(AgencyNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("AGENCY_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(AgencyNameConflictException.class)
+    public ResponseEntity<ErrorResponse> handleAgencyNameConflict(AgencyNameConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("AGENCY_NAME_CONFLICT", e.getMessage()));
+    }
+
+    @ExceptionHandler(AgencyArchivedException.class)
+    public ResponseEntity<ErrorResponse> handleAgencyArchived(AgencyArchivedException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("AGENCY_ARCHIVED", e.getMessage()));
+    }
+
+    @ExceptionHandler(StoreSellerNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleStoreSellerNotFound(StoreSellerNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("STORE_SELLER_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(StoreSellerClosedException.class)
+    public ResponseEntity<ErrorResponse> handleStoreSellerClosed(StoreSellerClosedException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("STORE_SELLER_CLOSED", e.getMessage()));
+    }
+
+    /** Fail-closed: the seller could not be verified, so nothing was saved (AC-3). */
+    @ExceptionHandler(StoreSellerLookupUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleStoreSellerLookupUnavailable(
+            StoreSellerLookupUnavailableException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("STORE_SELLER_LOOKUP_UNAVAILABLE", e.getMessage()));
     }
 
     /** Contract: {@code artist-api.md} — 422 with {@code details.from} / {@code details.to}. */

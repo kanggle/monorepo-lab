@@ -13,6 +13,14 @@ public interface CreateArtistGroupUseCase {
             String name,
             LocalDate debutDate,
             String agency,
-            String profileImageRef
-    ) {}
+            String profileImageRef,
+            // Optional agency entity (TASK-MONO-748); null = unaffiliated.
+            String agencyId
+    ) {
+        /** Pre-TASK-MONO-748 arity — no agency affiliation. */
+        public CreateArtistGroupCommand(ActorContext actor, String name, LocalDate debutDate,
+                                        String agency, String profileImageRef) {
+            this(actor, name, debutDate, agency, profileImageRef, null);
+        }
+    }
 }

@@ -26,7 +26,14 @@
 // 🔵 이 파일은 저장소 안에만 있고 어떤 배포에도 안 들어간다(`snapshots/` 만 배포된다).
 // =============================================================================
 
-/** 팬 게이트웨이 `GET /api/v1/artists` 가 돌려주는 모양. */
+/**
+ * 팬 게이트웨이 `GET /api/v1/artists` 가 돌려주는 모양.
+ *
+ * 🔵 TASK-MONO-748 (ADR-MONO-079 D1) — 백엔드는 이제 `agencyId`(소속사 엔티티 id)를 함께
+ *    준다. id 는 `seed-fan.sh` 의 `AGENCY_*`(새 볼륨의 고정 id)와 같다. `agency` 는 **같은
+ *    키·같은 의미(표시 이름)** 이고 값은 엔티티 이름에서 온다 — V4 이전이 자유 텍스트를
+ *    정확히 그 이름의 소속사로 옮겼으므로 기존 값과 같다(AC-4 회귀 없음).
+ */
 export const RAW_ARTISTS = [
   {
     id: '0199de80-0000-7000-8000-00000000a001',
@@ -38,6 +45,7 @@ export const RAW_ARTISTS = [
     realName: '김하늘',
     debutDate: '2021-03-14',
     agency: 'Aurora Entertainment',
+    agencyId: '0199de80-0000-7000-8000-00000000c001',
     bio: '2021년 데뷔한 솔로 아티스트입니다. 어쿠스틱 기반의 자작곡을 주로 발표합니다.',
     profileImageRef: 'https://images.unsplash.com/photo-1618673747378-7e0d3561371a?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -53,6 +61,7 @@ export const RAW_ARTISTS = [
     realName: '박서준',
     debutDate: '2019-08-01',
     agency: 'Aurora Entertainment',
+    agencyId: '0199de80-0000-7000-8000-00000000c001',
     bio: '프로듀서 겸 솔로 아티스트.',
     profileImageRef: 'https://images.unsplash.com/photo-1675859427928-fe41277572b4?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -68,6 +77,7 @@ export const RAW_ARTISTS = [
     realName: '이세아',
     debutDate: '2022-05-20',
     agency: 'Aurora Entertainment',
+    agencyId: '0199de80-0000-7000-8000-00000000c001',
     bio: '그룹 STELLAR 의 리더.',
     profileImageRef: 'https://images.unsplash.com/photo-1659150140178-d672b4763fd0?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -93,6 +103,7 @@ export const RAW_ARTISTS = [
     realName: '정하린',
     debutDate: '2023-09-08',
     agency: 'Aurora Entertainment',
+    agencyId: '0199de80-0000-7000-8000-00000000c001',
     bio: '신스팝 기반의 솔로 아티스트입니다. 직접 편곡한 무대를 자주 올립니다.',
     profileImageRef: 'https://images.unsplash.com/photo-1620653616528-7da9a2005478?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -108,6 +119,7 @@ export const RAW_ARTISTS = [
     realName: '강리오',
     debutDate: '2022-05-20',
     agency: 'Aurora Entertainment',
+    agencyId: '0199de80-0000-7000-8000-00000000c001',
     bio: '그룹 STELLAR 의 메인 보컬. 커버 무대와 라이브 클립을 자주 올립니다.',
     profileImageRef: 'https://images.unsplash.com/photo-1619361368198-53f950a51dfa?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -123,6 +135,7 @@ export const RAW_ARTISTS = [
     realName: '오유노',
     debutDate: '2020-11-02',
     agency: 'Nova Sound',
+    agencyId: '0199de80-0000-7000-8000-00000000c002',
     bio: '재즈와 알앤비를 오가는 싱어송라이터입니다.',
     profileImageRef: 'https://images.unsplash.com/photo-1619361369140-33c01702f9cc?w=400&h=400&q=80&auto=format&fit=crop&crop=faces',
     createdAt: '2026-01-05T09:00:00Z',
@@ -140,6 +153,7 @@ export const RAW_ARTISTS = [
     realName: '최비공',
     debutDate: null,
     agency: null,
+    agencyId: null,
     bio: '아직 공개되지 않은 프로필입니다.',
     profileImageRef: null,
     createdAt: '2026-02-01T09:00:00Z',

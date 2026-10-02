@@ -1,6 +1,7 @@
 package com.example.fanplatform.artist.adapter.in.web.controller;
 
 import com.example.fanplatform.artist.adapter.in.web.advice.GlobalExceptionHandler;
+import com.example.fanplatform.artist.application.port.in.ChangeAgencyAffiliationUseCase;
 import com.example.fanplatform.artist.application.port.in.AddGroupMemberUseCase;
 import com.example.fanplatform.artist.application.port.in.ArtistGroupView;
 import com.example.fanplatform.artist.application.port.in.CreateArtistGroupUseCase;
@@ -44,6 +45,8 @@ class ArtistGroupControllerSliceTest {
     @MockitoBean GetArtistGroupUseCase getUseCase;
     @MockitoBean AddGroupMemberUseCase addMemberUseCase;
     @MockitoBean RemoveGroupMemberUseCase removeMemberUseCase;
+    // TASK-MONO-748: the controller now also serves PATCH /{id}/agency.
+    @MockitoBean ChangeAgencyAffiliationUseCase affiliationUseCase;
 
     @Test
     @DisplayName("POST /api/artist-groups (FAN role) → 403")
@@ -62,7 +65,7 @@ class ArtistGroupControllerSliceTest {
     @DisplayName("POST /api/artist-groups (ADMIN) → 201")
     void create_adminCreated() throws Exception {
         ArtistGroupView view = new ArtistGroupView("g-1", "fan-platform", "Group X",
-                null, null, null, ArtistGroupStatus.ACTIVE, Instant.now(), Instant.now(), List.of());
+                null, null, null, null, ArtistGroupStatus.ACTIVE, Instant.now(), Instant.now(), List.of());
         when(createUseCase.create(any(CreateArtistGroupCommand.class))).thenReturn(view);
 
         String body = """

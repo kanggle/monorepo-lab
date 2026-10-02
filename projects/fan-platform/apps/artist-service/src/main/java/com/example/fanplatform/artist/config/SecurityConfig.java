@@ -226,10 +226,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/artist-groups/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.POST,   "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.PATCH,  "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
+                        // TASK-MONO-748 (ADR-MONO-079 D1): agencies are part of the same
+                        // directory and take the SAME gate — no new role, no new path to it.
+                        // TASK-MONO-750 is where the platform-operator path is opened.
+                        .requestMatchers(HttpMethod.POST,   "/api/agencies/**",      "/api/agencies").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.PATCH,  "/api/agencies/**").hasAnyRole(ADMIN_ROLES)
+                        .requestMatchers(HttpMethod.DELETE, "/api/agencies/**").hasAnyRole(ADMIN_ROLES)
                         // Reads — any authenticated caller in the same tenant.
                         .requestMatchers(HttpMethod.GET,    "/api/artists/**",       "/api/artists").authenticated()
                         .requestMatchers(HttpMethod.GET,    "/api/artist-groups/**", "/api/artist-groups").authenticated()
-                        .requestMatchers(HttpMethod.GET,    "/api/fandoms/**").authenticated())
+                        .requestMatchers(HttpMethod.GET,    "/api/fandoms/**").authenticated()
+                        .requestMatchers(HttpMethod.GET,    "/api/agencies/**",      "/api/agencies").authenticated())
                 .anyRequestDenied()
                 .jwtDecoder(jwtDecoder)
                 .jwtAuthenticationConverter(
