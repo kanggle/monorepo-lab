@@ -122,7 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — 🟡 **REVIEW — ADR-MONO-081 단계 3: 알림 인박스 + 읽음 처리를 console-web 서버로** (2026-10-02 UTC). `shared/composition/notification-inbox.ts` · `CONSOLE_NOTIFICATION_DOMAINS`(기본 erp) · 도메인 401 → 401(console-bff 는 열화로 삼켰다) · 읽음 처리 1회 · 미설정 도메인 404·호출 0. AC-1~6 ✅ · bite 3/3 · vitest 3,690. 🔴 티켓의 «테넌트 없음 → 400» 은 계약 § 4 와 어긋나 넣지 않음(본문). ⏳ AC-8 dispatch · AC-7 머지 뒤 nightly.
+- `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — 🟡 **REVIEW — ADR-MONO-081 단계 3: 알림 인박스 + 읽음 처리를 console-web 서버로** (2026-10-02 UTC). `shared/composition/notification-inbox.ts` · `CONSOLE_NOTIFICATION_DOMAINS`(기본 erp) · 도메인 401 → 401(console-bff 는 열화로 삼켰다) · 읽음 처리 1회 · 미설정 도메인 404·호출 0. AC-1~6 ✅ · bite 3/3 · vitest 3,690. 🔴 티켓의 «테넌트 없음 → 400» 은 계약 § 4 와 어긋나 넣지 않음(본문). AC-8 dispatch 둘 다 초록(nightly 는 web-store 글꼴 다운로드 일시 장애로 1회 재실행). ⏳ AC-7 머지 뒤 nightly.
 - `TASK-PC-FE-302-overview-and-domain-health-composed-in-console-web.md` — 🟡 **REVIEW — ADR-MONO-081 단계 2: 운영 개요·도메인 상태를 console-web 서버에서 합성** (2026-10-02 UTC). 대조군 둘 bite 확인 · 레그 타임아웃 4 s(Vercel 문서 300 s, 프로젝트 재정의는 못 잼) · 🔴 발견: console-bff 는 health 503(DOWN)을 degraded 로 그렸다 — 계약대로 ok 로 고침. ⏳ AC-9 = 머지 뒤 첫 nightly.
 
 (empty)
