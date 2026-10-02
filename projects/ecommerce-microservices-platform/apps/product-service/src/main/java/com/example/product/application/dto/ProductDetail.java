@@ -15,11 +15,19 @@ public record ProductDetail(
         UUID categoryId,
         String thumbnailUrl,
         String sellerId,
+        /** Fan artist id (ADR-MONO-079 D3); {@code null} = no collection. */
+        String collectionRef,
         List<VariantDetail> variants
 ) {
     public ProductDetail(UUID id, String name, String description, ProductStatus status, long price,
                          UUID categoryId, List<VariantDetail> variants) {
-        this(id, name, description, status, price, categoryId, null, null, variants);
+        this(id, name, description, status, price, categoryId, null, null, null, variants);
+    }
+
+    public ProductDetail(UUID id, String name, String description, ProductStatus status, long price,
+                         UUID categoryId, String thumbnailUrl, String sellerId,
+                         List<VariantDetail> variants) {
+        this(id, name, description, status, price, categoryId, thumbnailUrl, sellerId, null, variants);
     }
 
     public static ProductDetail from(Product product) {
@@ -36,6 +44,7 @@ public record ProductDetail(
                 product.getCategoryId(),
                 product.getThumbnailUrl(),
                 product.getSellerId(),
+                product.getCollectionRef(),
                 variants);
     }
 }

@@ -1,4 +1,10 @@
-import { normalizeQuery, type FanPublicData, type PublicArtist, type PublicPost } from '@demo/public-data';
+import {
+  normalizeQuery,
+  type FanPublicData,
+  type PublicArtist,
+  type PublicPost,
+  type PublicProduct,
+} from '@demo/public-data';
 
 /**
  * 저장본 안에서의 선택 — **순수 함수만** 있다.
@@ -115,6 +121,28 @@ export function findPost(data: FanPublicData, id: string): PublicPost | null {
 /** 한 아티스트의 공개 글. 순서는 피드와 같다 — 같은 글이 화면마다 다른 순서로 보이면 안 된다. */
 export function artistPosts(data: FanPublicData, artistId: string): PublicPost[] {
   return data.posts.filter((p) => p.artistId === artistId).sort(byPublishedAtDesc);
+}
+
+/**
+ * 한 아티스트의 공식 굿즈 — 스토어 공개 저장본(`store.json`)에서 **`collectionRef === artistId`** 인 상품
+ * (`ADR-MONO-079` D3 · `TASK-MONO-749`). 굿즈 카드(`TASK-MONO-739`)는 이 함수의 결과만 그린다.
+ *
+ * 🔴🔴 **저장본 안에서만 고른다** — 인자가 이미 읽힌 데이터뿐이라 여기서 백엔드로 갈 길이 없다
+ *    (익명 방문 «게이트웨이 호출 0», `ADR-MONO-077` D1).
+ * 🔴 매칭은 **id 일치**다. 예명 접두어(옛 739 R4)를 쓰지 않는다 — 예명이 바뀌거나 겹쳐도 안 깨진다.
+ * 🔴 `fan` 의 공개 아티스트 목록에 **없는** id 면 빈 배열이다 — 보관(ARCHIVED)·비공개 아티스트는 팬 저장본에서
+ *    이미 걸러지므로, 그 아티스트를 가리키는 상품은 팬 어디에도 안 보인다(스토어에는 그대로 있다). `FK 없음`
+ *    의 결과인 고아 상품이 화면에 새지 않게 하는 자리가 여기다.
+ * 🔵 `collectionRef === null` 인 상품(필드가 생기기 전의 상품 전부)은 어떤 아티스트에도 매칭되지 않는다.
+ * 🔵 순서는 저장본 순서 그대로다(같은 데이터면 같은 순서 — 화면이 렌더마다 흔들리지 않는다).
+ */
+export function artistGoods(
+  fan: FanPublicData,
+  products: readonly PublicProduct[],
+  artistId: string,
+): PublicProduct[] {
+  if (!fan.artists.some((a) => a.id === artistId)) return [];
+  return products.filter((p) => p.collectionRef !== null && p.collectionRef === artistId);
 }
 
 /**

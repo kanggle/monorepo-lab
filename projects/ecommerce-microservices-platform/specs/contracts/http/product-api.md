@@ -36,7 +36,8 @@ List products with filtering and pagination.
       "price": 10000,
       "thumbnailUrl": "string",
       "categoryId": "string (UUID)",
-      "sellerId": "string (read-only — owning seller within the tenant)"
+      "sellerId": "string (read-only — owning seller within the tenant)",
+      "collectionRef": "string (nullable — fan artist id, see § collectionRef)"
     }
   ],
   "page": 0,
@@ -81,7 +82,8 @@ read behind the platform-console Operator Overview ecommerce snapshot leg
       "price": 10000,
       "thumbnailUrl": "string",
       "categoryId": "string (UUID)",
-      "sellerId": "string (read-only — owning seller within the tenant)"
+      "sellerId": "string (read-only — owning seller within the tenant)",
+      "collectionRef": "string (nullable — fan artist id, see § collectionRef)"
     }
   ],
   "page": 0,
@@ -122,6 +124,7 @@ Get product detail including variants.
   "categoryId": "string (UUID)",
   "thumbnailUrl": "string (nullable — resolved URL of primary image)",
   "sellerId": "string (read-only — owning seller within the tenant)",
+  "collectionRef": "string (nullable — fan artist id, see § collectionRef)",
   "images": [
     {
       "imageId": "string (UUID)",
@@ -217,6 +220,7 @@ loser of the `UNIQUE (tenant_id, idempotency_key)` insert also receives **409
   "price": 10000,
   "categoryId": "string (UUID)",
   "sellerId": "string (optional — owning seller; OPERATOR surface)",
+  "collectionRef": "string (optional, ≤ 64 chars — fan artist id, see § collectionRef)",
   "variants": [
     {
       "optionName": "string",
@@ -499,9 +503,14 @@ Update product information. Requires admin role.
   "name": "string",
   "description": "string",
   "price": 10000,
-  "status": "ON_SALE"
+  "status": "ON_SALE",
+  "collectionRef": "string (optional, ≤ 64 chars — see § collectionRef)"
 }
 ```
+
+`collectionRef` on PATCH: **absent / `null` = unchanged**; a **blank string
+(`""`) clears it to `NULL`** (same convention as `description`); any other value
+is trimmed and stored.
 
 **Response 200**
 ```json
@@ -734,6 +743,33 @@ Public endpoint — no authentication required.
 | Status | Code | Reason |
 |---|---|---|
 | 404 | PRODUCT_NOT_FOUND | Product with given ID does not exist |
+
+---
+
+## collectionRef — fan artist collection (ADR-MONO-079 D3 · TASK-MONO-749)
+
+`products.collection_ref VARCHAR(64) NULL`, indexed `(tenant_id, collection_ref)`.
+
+- **Meaning**: the **fan-platform artist id** (`artists.id`, a UUID string) whose
+  official goods this product is — 팬 아티스트 id. It is the only identifier the
+  two projects share (rider R1: one artist per value; group / agency collections
+  are out of scope).
+- **No FK** — the value points into another project's database. product-service
+  never validates it against fan-platform and never resolves it. An archived
+  artist leaves the product orphaned **but still on sale in the store**; the fan
+  site simply has no page that shows it (it does not show archived artists).
+- **`NULL` = no collection** — the product belongs to no artist page. Every
+  product that pre-dates this field is `NULL` and behaves exactly as before.
+- **Write**: optional on `POST /api/admin/products` and `PATCH
+  /api/admin/products/{productId}`; max 64 chars (`400 VALIDATION_ERROR` above
+  that). Blank on register = `NULL`.
+- **Read**: returned on the public list/detail (`GET /api/products`,
+  `GET /api/products/{productId}`) and the admin list/detail. It is **public by
+  design** — the public snapshot (`@demo/public-data`, `PublicProduct.collectionRef`)
+  carries it so the fan artist page can select goods with **zero backend calls**
+  (ADR-MONO-077 invariant): `collectionRef === <artistId>`.
+- No query filter on `collectionRef` is offered (the fan selection runs inside the
+  snapshot); add one only when a backend consumer needs it.
 
 ---
 

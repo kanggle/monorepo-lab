@@ -32,6 +32,7 @@ function p(
     thumbnailUrl: `https://example.test/${id}.jpg`,
     images: [],
     categoryId,
+    collectionRef: null,
     options: [],
     searchText: `${name} ${categoryId}`.toLowerCase(),
     createdAt,

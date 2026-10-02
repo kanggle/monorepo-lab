@@ -28,6 +28,7 @@ function product(over: Partial<PublicProduct> & Pick<PublicProduct, 'id' | 'name
     thumbnailUrl: 'https://example.test/t.jpg',
     images: [],
     categoryId: 'cat-a',
+    collectionRef: null,
     options: [],
     searchText: `${over.name} ${over.categoryId ?? 'cat-a'}`.toLowerCase(),
     createdAt: '2026-01-01T00:00:00Z',

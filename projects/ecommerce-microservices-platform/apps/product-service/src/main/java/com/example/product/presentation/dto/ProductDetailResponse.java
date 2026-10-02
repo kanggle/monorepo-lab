@@ -14,6 +14,8 @@ public record ProductDetailResponse(
         String categoryId,
         String thumbnailUrl,
         String sellerId,
+        /** Fan artist id (ADR-MONO-079 D3); {@code null} = no collection. */
+        String collectionRef,
         List<ImageItem> images,
         List<VariantDetailItem> variants
 ) {
@@ -53,6 +55,7 @@ public record ProductDetailResponse(
                 UuidUtils.toString(detail.categoryId()),
                 detail.thumbnailUrl(),
                 detail.sellerId(),
+                detail.collectionRef(),
                 imageItems,
                 variants);
     }

@@ -203,4 +203,52 @@ class ProductTest {
 
         assertThat(product.getDescription()).isNull();
     }
+
+    // ─── collectionRef (ADR-MONO-079 D3 · TASK-MONO-749) ───────────────────
+
+    @Test
+    @DisplayName("collectionRef: 새 상품은 null 이다 — 필드가 없는 상품은 어느 아티스트의 굿즈도 아니다")
+    void collectionRef_defaultsToNull() {
+        Product product = Product.create("상품", "설명", new Price(10000), null, List.of(createVariant()));
+
+        assertThat(product.getCollectionRef()).isNull();
+    }
+
+    @Test
+    @DisplayName("collectionRef: 값은 trim 되어 저장되고, 공백이면 null 로 지워진다")
+    void updateCollectionRef_trimsAndBlankClears() {
+        Product product = Product.create("상품", "설명", new Price(10000), null, List.of(createVariant()));
+
+        product.updateCollectionRef("  artist-a  ");
+        assertThat(product.getCollectionRef()).isEqualTo("artist-a");
+
+        product.updateCollectionRef("   ");
+        assertThat(product.getCollectionRef()).isNull();
+    }
+
+    @Test
+    @DisplayName("collectionRef: 64자 초과는 거부한다(컬럼 폭) — 64자는 통과")
+    void updateCollectionRef_tooLong_throws() {
+        Product product = Product.create("상품", "설명", new Price(10000), null, List.of(createVariant()));
+
+        product.updateCollectionRef("a".repeat(64));
+        assertThat(product.getCollectionRef()).hasSize(64);
+
+        assertThatThrownBy(() -> product.updateCollectionRef("a".repeat(65)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("collectionRef: reconstitute 가 값을 그대로 복원하고, 옛 오버로드는 null 로 복원한다")
+    void reconstitute_carriesCollectionRef() {
+        java.time.Instant now = java.time.Instant.now();
+        UUID id = UUID.randomUUID();
+        Product withRef = Product.reconstitute(id, "상품", null, new Price(1000), ProductStatus.ON_SALE,
+                null, null, "default", "artist-a", now, now, List.of());
+        Product legacy = Product.reconstitute(id, "상품", null, new Price(1000), ProductStatus.ON_SALE,
+                null, null, "default", now, now, List.of());
+
+        assertThat(withRef.getCollectionRef()).isEqualTo("artist-a");
+        assertThat(legacy.getCollectionRef()).isNull();
+    }
 }

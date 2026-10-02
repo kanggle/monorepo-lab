@@ -1,7 +1,11 @@
 'use client';
 
 import { Button } from '@/shared/ui/Button';
-import { PRODUCT_STATUS_VALUES, type ProductDetail } from '../api/product-types';
+import {
+  COLLECTION_REF_MAX_LENGTH,
+  PRODUCT_STATUS_VALUES,
+  type ProductDetail,
+} from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductVariantsFieldset } from './ProductVariantsFieldset';
 import { useProductForm } from '../hooks/use-product-form';
@@ -13,7 +17,8 @@ import { useProductForm } from '../hooks/use-product-form';
  *   - REGISTER (no `existing`): name + price + ≥1 variant are required
  *     (producer RegisterProductRequest). On success → `/ecommerce/products`.
  *   - UPDATE (`existing` set): partial PATCH (UpdateProductRequest, all
- *     optional) — name/description/price/status/thumbnailUrl. Variants are
+ *     optional) — name/description/price/status/thumbnailUrl/collectionRef
+ *     (fan artist id, ADR-MONO-079 D3 — TASK-MONO-749). Variants are
  *     managed inline on the detail page (VariantEditor), NOT here. On success
  *     → `/ecommerce/products/{id}`.
  *
@@ -37,7 +42,7 @@ export function ProductForm({ existing }: ProductFormProps) {
   const {
     router,
     isEdit,
-    ids: { nameId, descId, priceId, statusId, thumbId },
+    ids: { nameId, descId, priceId, statusId, thumbId, collectionId },
     fields: {
       name,
       setName,
@@ -49,7 +54,10 @@ export function ProductForm({ existing }: ProductFormProps) {
       setStatus,
       thumbnailUrl,
       setThumbnailUrl,
+      collectionRef,
+      setCollectionRef,
     },
+    collectionRefValid,
     variants,
     setVariant,
     addVariantRow,
@@ -119,6 +127,31 @@ export function ProductForm({ existing }: ProductFormProps) {
             data-testid="product-form-thumbnail"
           />
         </div>
+      </div>
+
+      <div>
+        <label htmlFor={collectionId} className={labelCls}>
+          팬 아티스트 컬렉션
+        </label>
+        <input
+          id={collectionId}
+          value={collectionRef}
+          onChange={(e) => setCollectionRef(e.target.value)}
+          placeholder="팬 아티스트 id (선택)"
+          aria-describedby={`${collectionId}-hint`}
+          aria-invalid={!collectionRefValid}
+          className={inputCls}
+          data-testid="product-form-collection-ref"
+        />
+        <p id={`${collectionId}-hint`} className="mt-1 text-xs text-muted-foreground">
+          이 상품을 굿즈로 보일 팬 아티스트의 id 입니다. 비우면 어느 아티스트 페이지에도 보이지 않습니다.
+          {!collectionRefValid && (
+            <span className="text-destructive" data-testid="product-form-collection-ref-error">
+              {' '}
+              {COLLECTION_REF_MAX_LENGTH}자 이하로 입력하세요.
+            </span>
+          )}
+        </p>
       </div>
 
       {isEdit && (

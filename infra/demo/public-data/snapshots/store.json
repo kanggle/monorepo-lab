@@ -26,6 +26,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000001",
@@ -60,6 +61,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000005",
@@ -94,6 +96,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000009",
@@ -128,6 +131,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000013",
@@ -157,6 +161,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000016",
@@ -191,6 +196,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000020",
@@ -215,6 +221,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000022",
@@ -239,6 +246,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000024",
@@ -278,6 +286,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1574201635302-388dd92a4c3f?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000029",
@@ -307,6 +316,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1620799140188-3b2a02fd9a77?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000004",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000032",
@@ -336,6 +346,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000035",
@@ -365,6 +376,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1584865288642-42078afe6942?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000005",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000038",
@@ -394,6 +406,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1572569511254-d8f925fe2cbb?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000041",
@@ -418,6 +431,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000043",
@@ -442,6 +456,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000002",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000045",
@@ -471,6 +486,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000048",
@@ -495,6 +511,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000050",
@@ -519,6 +536,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1587049352851-8d4e89133924?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000003",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000052",
@@ -543,6 +561,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1592890288564-76628a30a657?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000054",
@@ -567,6 +586,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000056",
@@ -591,6 +611,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000006",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000058",
@@ -615,6 +636,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000060",
@@ -639,6 +661,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000062",
@@ -663,6 +686,7 @@
         "thumbnailUrl": "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=600&q=80&auto=format&fit=crop",
         "images": [],
         "categoryId": "a0000000-0000-0000-0000-000000000007",
+        "collectionRef": null,
         "options": [
           {
             "id": "c0000000-0000-0000-0000-000000000064",

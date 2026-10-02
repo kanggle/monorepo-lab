@@ -97,3 +97,92 @@ describe('ProductForm — register-mode variant number fields', () => {
     ]);
   });
 });
+
+/**
+ * TASK-MONO-749 (ADR-MONO-079 D3) — optional 「팬 아티스트 컬렉션」 input. The
+ * producer reads PATCH `collectionRef` as absent = unchanged and `""` = clear, so
+ * emptying a field that had a value must send `""`, not drop the key.
+ */
+describe('ProductForm — collectionRef (fan artist collection)', () => {
+  const EXISTING = {
+    id: 'p-1',
+    name: 'Light stick',
+    status: 'ON_SALE',
+    price: 30000,
+    collectionRef: 'artist-a',
+    images: [],
+    variants: [],
+  };
+
+  function lastBody(fetchMock: ReturnType<typeof vi.fn>, method: string) {
+    const call = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit)?.method === method).at(-1)!;
+    expect(call).toBeDefined();
+    return JSON.parse((call[1] as RequestInit).body as string);
+  }
+
+  it('register: sends collectionRef when filled, omits it when empty (AC-2 — wire unchanged)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-9' }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    const { unmount } = render(<ProductForm />, { wrapper: wrapper() });
+
+    await user.type(screen.getByTestId('product-form-name'), 'Light stick');
+    await user.type(screen.getByTestId('product-form-price'), '30000');
+    await user.type(screen.getByTestId('product-form-variant-name-0'), 'Default');
+    await user.type(screen.getByTestId('product-form-collection-ref'), '  artist-a ');
+    await user.click(screen.getByTestId('product-form-submit'));
+    await user.click(screen.getByTestId('ecommerce-confirm-confirm'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(lastBody(fetchMock, 'POST').collectionRef).toBe('artist-a');
+    unmount();
+
+    fetchMock.mockClear();
+    render(<ProductForm />, { wrapper: wrapper() });
+    await user.type(screen.getByTestId('product-form-name'), 'Tee');
+    await user.type(screen.getByTestId('product-form-price'), '12000');
+    await user.type(screen.getByTestId('product-form-variant-name-0'), 'M');
+    await user.click(screen.getByTestId('product-form-submit'));
+    await user.click(screen.getByTestId('ecommerce-confirm-confirm'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(lastBody(fetchMock, 'POST')).not.toHaveProperty('collectionRef');
+  });
+
+  it('edit: prefills the current collection and sends "" when the operator clears it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ProductForm existing={EXISTING} />, { wrapper: wrapper() });
+
+    const input = screen.getByTestId('product-form-collection-ref');
+    expect(input).toHaveValue('artist-a');
+    await user.clear(input);
+    await user.click(screen.getByTestId('product-form-submit'));
+    await user.click(screen.getByTestId('ecommerce-confirm-confirm'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(lastBody(fetchMock, 'PATCH').collectionRef).toBe('');
+  });
+
+  it('edit: an empty field on a product WITHOUT a collection stays absent (no-op)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'p-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ProductForm existing={{ ...EXISTING, collectionRef: null }} />, { wrapper: wrapper() });
+
+    expect(screen.getByTestId('product-form-collection-ref')).toHaveValue('');
+    await user.click(screen.getByTestId('product-form-submit'));
+    await user.click(screen.getByTestId('ecommerce-confirm-confirm'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(lastBody(fetchMock, 'PATCH')).not.toHaveProperty('collectionRef');
+  });
+
+  it('blocks submit when collectionRef exceeds 64 chars (producer @Size(max = 64))', async () => {
+    const user = userEvent.setup();
+    render(<ProductForm existing={EXISTING} />, { wrapper: wrapper() });
+
+    const input = screen.getByTestId('product-form-collection-ref');
+    await user.clear(input);
+    await user.type(input, 'a'.repeat(65));
+    expect(screen.getByTestId('product-form-submit')).toBeDisabled();
+    expect(screen.getByTestId('product-form-collection-ref-error')).toBeInTheDocument();
+  });
+});

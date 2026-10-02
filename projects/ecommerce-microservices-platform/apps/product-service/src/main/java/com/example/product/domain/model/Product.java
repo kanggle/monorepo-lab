@@ -28,6 +28,12 @@ public class Product {
      * (request seller / scope claim / tenant default). Never blank; immutable.
      */
     private String sellerId;
+    /**
+     * Fan artist collection (ADR-MONO-079 D3): the fan-platform artist id whose
+     * official goods this product is. {@code null} = no collection. No FK — the
+     * value points into another project's database and is never resolved here.
+     */
+    private String collectionRef;
     private Instant createdAt;
     private Instant updatedAt;
     private List<ProductVariant> variants = new ArrayList<>();
@@ -92,6 +98,15 @@ public class Product {
                                        ProductStatus status, UUID categoryId, String thumbnailUrl,
                                        String sellerId, Instant createdAt, Instant updatedAt,
                                        List<ProductVariant> variants) {
+        return reconstitute(id, name, description, price, status, categoryId, thumbnailUrl,
+                sellerId, null, createdAt, updatedAt, variants);
+    }
+
+    public static Product reconstitute(UUID id, String name, String description, Price price,
+                                       ProductStatus status, UUID categoryId, String thumbnailUrl,
+                                       String sellerId, String collectionRef,
+                                       Instant createdAt, Instant updatedAt,
+                                       List<ProductVariant> variants) {
         if (id == null) throw new IllegalArgumentException("id must not be null");
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Product name must not be blank");
         if (price == null) throw new IllegalArgumentException("Price must not be null");
@@ -106,6 +121,7 @@ public class Product {
         product.categoryId = categoryId;
         product.thumbnailUrl = thumbnailUrl;
         product.sellerId = (sellerId == null || sellerId.isBlank()) ? Seller.DEFAULT_SELLER_ID : sellerId;
+        product.collectionRef = collectionRef;
         product.createdAt = createdAt;
         product.updatedAt = updatedAt;
         product.variants = new ArrayList<>(variants);
@@ -164,6 +180,30 @@ public class Product {
     public void updateThumbnailUrl(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Sets or clears the fan artist collection (ADR-MONO-079 D3). A blank value
+     * clears it to {@code null}; any other value is trimmed. Max
+     * {@value #COLLECTION_REF_MAX_LENGTH} chars (the column width).
+     */
+    public void updateCollectionRef(String collectionRef) {
+        this.collectionRef = normalizeCollectionRef(collectionRef);
+        this.updatedAt = Instant.now();
+    }
+
+    public static final int COLLECTION_REF_MAX_LENGTH = 64;
+
+    private static String normalizeCollectionRef(String collectionRef) {
+        if (collectionRef == null || collectionRef.isBlank()) {
+            return null;
+        }
+        String trimmed = collectionRef.trim();
+        if (trimmed.length() > COLLECTION_REF_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Collection ref must not exceed " + COLLECTION_REF_MAX_LENGTH + " characters");
+        }
+        return trimmed;
     }
 
     public void changeStatus(ProductStatus status) {
