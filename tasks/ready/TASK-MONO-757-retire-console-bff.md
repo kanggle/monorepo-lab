@@ -46,6 +46,7 @@ console-bff 를 저장소에서 지우고, 그것을 전제로 한 설정·가�
 - CI: `.github/workflows/ci.yml`(경로 필터 · `:console-bff:check` · 통합 시험 잡) · `nightly-e2e.yml` · `federation-hardening-e2e.yml`
 - 가드: `scripts/check-gateway-drift.sh` · `check-service-map-drift.sh` · `infra/demo/verify-demo-wrapper.sh`
 - 데모 AMI 서비스 수(`infra/demo/aws/packer/demo-ami.pkr.hcl`)
+- 계약: `console-integration-contract.md` § 2.4.9 의 **⏳ console-bff-era 표시 17곳**(`TASK-MONO-755` 가 달았다 — 각 절을 § 2.4.9.0 규칙으로 다시 쓰거나 지우고, § 2.4.9.0 머리의 «현재 생산자» 문단도 정리) · `notification-inbox-contract.md` § 4 의 «처음엔 console-bff 에 지었다» 이력 문장 · `console-web/architecture.md` 의 «console-bff fan-out 과 달리» 대비 서술
 - 문서: `PROJECT.md`(Service Map 행 삭제 · `service_types` 에서 `rest-api` — ADR-013 § D5 가 넣은 근거가 사라졌음을 적는다) · `console-bff/architecture.md` 삭제 · `jwt-standard-claims.md` · `libs/java-security` `AllowedAudiencesValidator` javadoc 의 console-bff 사례 · `README.md` · `docs/project-overview.md` · `TEMPLATE.md` · `scripts/dev-setup.*`
 
 ## Out of Scope

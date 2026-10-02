@@ -58,7 +58,7 @@ monorepo
 
 # Related Contracts
 
-- console-bff ↔ fan gateway(관리 경로)
+- console-web(같은 출처 라우트, 서버 측) ↔ fan gateway(관리 경로) — 🔵 2026-10-02 `TASK-MONO-755` 정정: 원래 «console-bff ↔ fan gateway» 였으나 `ADR-MONO-081`(A) 로 콘솔 합성·프록시는 모두 console-web 서버다. 이 티켓의 «BFF 라우트» 는 `ecommerce/products/**` 와 같은 console-web 라우트를 뜻한다 — console-bff 에 새 코드를 쓰지 않는다.
 
 # Edge Cases
 
