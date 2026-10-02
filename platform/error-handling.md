@@ -533,6 +533,7 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 | RATE_LIMITED | 429 | Generic rate-limit for account operations (e.g. resend-verify-email) (`RateLimitedException`) |
 | AUTH_SERVICE_UNAVAILABLE | 503 | Upstream `auth-service` unreachable during signup; fail-closed (`AuthServicePort.AuthServiceUnavailable`) |
 | BULK_LIMIT_EXCEEDED | 400 | Bulk provisioning request exceeds the 1 000-item limit (`BulkLimitExceededException`) |
+| CONSUMER_POOL_DISABLED | 409 | A consumer-pool maintenance run was refused as a whole because the consumer-pool feature flag is off — nothing was written (`ConsumerPoolDisabledException`) |
 
 ## Auth / Token  `[domain: saas]`
 
@@ -560,6 +561,10 @@ Owned by `auth-service` (Spring Authorization Server).
 | EMAIL_REQUIRED | 422 | OAuth provider did not return email; `email` scope required (`OAuthEmailRequiredException`) |
 | PROVIDER_ERROR | 502 | OAuth provider returned an error during token exchange (infra-layer, `OAuthProviderException`) |
 | PASSWORD_POLICY_VIOLATION | 400 | Password does not meet complexity policy (`PasswordPolicyViolationException`) — also emitted by admin-service for operator password changes |
+| POOL_MOVE_OPERATOR_FACETED | 409 | Internal credential move into the consumer pool refused: the account carries an operator facet (an operator's subject or linked identity), so it must not be moved in this step. Nothing was written |
+| POOL_MOVE_SOCIAL_LINKED | 409 | Internal credential move into the consumer pool refused: the account has linked social identities, which are not moved in this step. Nothing was written |
+| POOL_MOVE_CREDENTIAL_EXISTS | 409 | Internal credential move into the consumer pool refused: a pool credential with the same email already exists for another account. Nothing was written |
+| POOL_MOVE_CREDENTIAL_TENANT_MISMATCH | 409 | Internal credential move into the consumer pool refused: the account's credential lives in neither the pool nor the named site tenant. Nothing was written |
 
 ## Tenant  `[domain: saas]`
 

@@ -3,7 +3,7 @@
 auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운영자의 D1 assignment 를 확인한다 (ADR-MONO-020 § 3.3 step 2, D2).
 
 **호출 방향**: auth-service (client) → admin-service (server)
-**노출 경로**: `/internal/operator-assignments/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
+**노출 경로**: `/internal/operator-assignments/*` · `/internal/operators/facet`(TASK-BE-618) — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
 **인증** (TASK-BE-327 호출측/수신측): `Authorization: Bearer <IAM client_credentials JWT>` — auth-service 가 `auth-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고 ([IamClientCredentialsTokenProvider] 재사용), admin-service 가 IAM JWKS 서명 + issuer 로 검증한다. 정적 토큰 경로 없음. JWT 미제시/무효 시 모든 `/internal/**` 요청은 401 `UNAUTHORIZED` 로 fail-closed (account-service 의 `/internal/**` 체인 미러링).
 
 > **TASK-BE-327 (ADR-MONO-020 D2)** — 이 edge 는 assume-tenant 발급 시점의 **1회성(one-shot) read** 이다. 도메인→IAM 의 per-request callback 이 **아니다** (ADR-020 § 3.1 은 후자만 금지한다; assignment store(D1)·assume-tenant 발급(D2)·entitled_domains 도출(D3) 은 모두 IAM 내부에 머무르므로 auth↔admin 조율은 IAM-internal). admin_actions row 를 쓰지 않는다 (read-only — ADR-014 token-exchange "not audited" 규칙과 동일).
@@ -64,6 +64,48 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 | 400 `VALIDATION_ERROR` | `oidcSubject`/`tenantId` 파라미터 누락 |
 
 운영자 미존재/비-ACTIVE/미할당은 모두 `200 {assigned:false}` 로 응답한다 (열거 방어; 별도 4xx 로 구분하지 않는다).
+
+---
+
+## GET /internal/operators/facet — 운영자 측면 판정 (TASK-BE-618)
+
+**TASK-BE-618 (ADR-MONO-078 A, [multi-tenancy.md § 소비자 계정 풀 § 3](../../../features/multi-tenancy.md#3-기존-계정--한-사이트에만-있으면-같은-id-로-풀로-옮긴다))** —
+한 사이트 계정을 풀로 옮기기 전에, 그 계정에 **운영자 측면**이 붙었는지 auth-service 가 묻는다
+([auth-internal.md § consumer-pool/moves](./auth-internal.md#post-internalauthconsumer-poolmoves--자격을-풀로-옮긴다-task-be-618) 판정 6).
+운영자 측면이 붙은 계정은 이 단계에서 옮기지 않는다(§ 3 운영자 측면 표 — 셀프 온보딩 운영자는 `TASK-MONO-746`).
+account-service 가 아니라 auth-service 가 묻는 이유: account-service 는 admin-service 를 부르지 않는다(반대 방향 의존 `admin → account` 가 이미 있어 순환).
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `accountId` | string (UUID) | Yes | 옮기려는 계정 id |
+| `identityId` | string (UUID) | No | 그 계정 자격 행의 `identity_id`(중앙 신원). 없거나 공백이면 신원 축은 묻지 않는다 |
+
+**Response 200**:
+```json
+{ "operatorFaceted": true }
+```
+
+**판정 (read-only)**: `admin_operators` 행이 **하나라도**(상태 무관 — `SUSPENDED` 운영자도 측면이다) 다음 중 하나를 만족하면 `true`:
+
+1. `oidc_subject = accountId` — ADR-MONO-044 D5 셀프 온보딩 운영자(운영자 `sub` = 그 소비자 계정 id).
+2. `identityId` 가 주어졌고 `identity_id = identityId` — 운영자 신원 연결(ADR-MONO-034 U3, `LinkOperatorIdentityUseCase`). 신원 행을 풀로 옮기면 그 운영자의 신원이
+   풀 신원이 되므로 운영자 측면이다.
+
+그 밖 `false`. 운영자 존재를 boolean 너머로 드러내지 않는다(어느 축이 맞았는지 답하지 않는다).
+
+**Side Effect**: 없음 (read-only — `admin_actions` row 미기록).
+
+**Errors**:
+
+| Status | 조건 |
+|---|---|
+| 401 `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 (`/internal/**` 체인 fail-closed) |
+| 400 `VALIDATION_ERROR` | `accountId` 누락 |
+
+**Caller (auth-service) — fail-CLOSED**: 아래 Caller Constraints 와 같은 타임아웃·재시도·circuit breaker(별도 breaker 이름 — 이동 배치의 실패가 assume-tenant 게이트를
+열지 않는다). 답을 못 받으면(4xx · 5xx · 타임아웃 · circuit-open · 본문 이상) **옮기지 않는다** → `503 SERVICE_UNAVAILABLE`. 모른 채 옮기면 운영자 계정을 풀로 끌고 간다.
 
 ---
 
