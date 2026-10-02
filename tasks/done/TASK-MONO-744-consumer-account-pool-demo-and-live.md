@@ -8,7 +8,7 @@ TASK-MONO-744
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -171,3 +171,20 @@ Vercel 쪽(굽기 무관): TASK-FE-102 · FE-103(web-store) · FAN-FE-025 · FAN
 - 머지: PR [#4102](https://github.com/kanggle/monorepo-lab/pull/4102) squash `fc6335279` · `state=MERGED` · `origin/main` 끝 일치 · 머지 전 체크 18건 전부 pass(첫 실행의 `Demo wrapper smoke` 빨강은 `/consent` 라우팅 누락 — 같은 PR 에서 고침, 위 «추가 발견»).
 - 통합 시험은 CI 가 쟀다: `account-service:integrationTest` 110 → 117(+7 = `DemoConsumerPoolSeedIntegrationTest` 5 + `FanArtistRoleSeedIntegrationTest` 6 − 옛 4), 실패 0.
 - 🔴 **남은 AC = AC-2 · AC-4 · AC-5 · 인계 항목 3(시드 뒤 확인)** — 전부 라이브다. 소유자의 **AMI 재굽기** 뒤 측정한다(측정 전 이미지 시각 vs 머지 시각 `fc6335279` 대조). 재굽기가 싣는 변경 목록은 위 «구현 기록». 그때까지 이 파일은 `review/` 에 있고, 측정 결과는 `## CORRECTION` 으로 덧붙인 뒤 `done/` 으로 옮긴다.
+
+---
+
+## CORRECTION (2026-10-02 UTC) — 라이브 판정: AC-2 · AC-4 · AC-5 · 인계 항목 3 전부 🟢
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+| AC | 결과 | 증거 |
+|---|---|---|
+| AC-4 + 인계 3 | 🟢 | 팬에서 `demo@demo.com` 비밀번호 로그인 1회 → 스토어 로그인은 authorize 302 → 콜백 → 스토어 `/` — **비밀번호 폼도 동의 화면도 없음**(미리 두 사이트 멤버). `m1-01`·`m1-04` |
+| AC-2 | 🟢 | 두 사이트 세션의 `accountId` 가 **같은 `0199de70-…-00000000ec01`**(팬 tenant=fan-platform · 스토어 tenant=ecommerce). 스토어 `/my/orders` 시드 주문 5건 · 팬 멤버십(멤버스 전용) · 루미·노아 팔로잉. `m2-*` |
+| AC-5 | 🟢 | 콘솔 `demo-corp → ecommerce` 전환 → `/ecommerce/orders` «총 5건» — 스토어와 같은 주문. `m5-console-ecommerce-orders.png` |
+| 추가(`/consent` 라우팅 수정) | 🟢 | 새 풀 계정(팬 가입) → 스토어 첫 로그인 = `auth.hubwang.com/consent` **200**(«이 사이트 이용 동의») → 동의 → 스토어 로그인 · 두 번째 로그인은 동의·비밀번호 없음. `m3-03` |
+
+- 관찰(결함 아님, 후속 후보): 가입 직후 자동 로그인이 아니라 IAM 로그인 화면이 다시 비밀번호를 묻는다(기존 동작) · 동의 화면 부제가 스토어 로그인 문구를 재사용한다 → `TASK-BE-619` 에 덧붙였다.
+- 🔴 같은 창의 곁발견: `console-erp` 묶음이 끝내 `ready` 가 안 됐다 — `erp-platform-read-model` 마이그레이션 V2 가 중단된 뒤 재시작 반복. 이 티켓과 무관 → `TASK-MONO-753`.
+⇒ 남은 AC 없음 → `done/`.

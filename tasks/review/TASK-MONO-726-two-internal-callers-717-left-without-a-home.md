@@ -231,3 +231,12 @@ ecommerce`)도 같은 모양으로 404였다(`TASK-MONO-735` § CORRECTION 2026-
 
 ⇒ **항목 14 ② (= 이 티켓의 ①)는 🔴 FAIL 로 판정됐다.** `TASK-MONO-737` 이 닫힌 뒤 같은 절차(셀러 정지 → `accounts.status`)로 다시 잰다.
 이 티켓은 여전히 `review/` 에 남는다 — `done/` 으로 옮기지 않는다(4차원 close 대상 아님, ① 미충족).
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-0 ① 의 결과 상태를 18차 창에서 쟀다
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- 셀러 정지(일회용 셀러 `live18-1790934860`, SUSPEND `204`) → 그 기계 계정 **`accounts` LOCKED**(콘솔 API·UI 재조회). 즉 product-service 의 잠금 호출이 **도착해서 효과를 냈다**(`TASK-MONO-737` 이 경로를 테넌트 경로 `PATCH …/status` 로 바꾼 뒤). ⚪ product-service 가 부른 URL·응답 코드의 로그는 읽지 않았다(결과 상태로 판정).
+- ② batch-worker · 갈래 질문 · 고친 뒤 판정 등 나머지 항목은 이 기록으로 닫히지 않는다 — `review/` 유지.

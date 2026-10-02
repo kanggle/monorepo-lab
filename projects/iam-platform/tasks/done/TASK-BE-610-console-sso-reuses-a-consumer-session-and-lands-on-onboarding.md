@@ -4,7 +4,7 @@ TASK-BE-610
 
 # Status
 
-review
+done
 
 # Title
 
@@ -135,3 +135,12 @@ principal 을 재사용)이 그대로 남아 결함이 안 고쳐진다.
 2. `console.hubwang.com` 을 연다 → 기대: **IAM 로그인 화면**(BE-610 이전 = 곧장 `/onboarding`). 새 `login_history` 줄이 **iam 자격으로** 하나 생긴다.
 3. iam 비밀번호로 로그인 → 운영자 화면 도달(`/onboarding` 아님).
 4. 대조: iam 자격이 없는 소비자 계정으로 같은 순서 → 콘솔이 로그인 화면 없이 `/onboarding`(D5 그대로).
+
+---
+
+## CORRECTION (2026-10-02 UTC) — AC-2 라이브 🟢
+
+창: 18차 AMI `ami-03fa427e858219e47`(RepoCommit `1feb9fc6d` — AMI 태그·Lambda `AMI_REPO_COMMIT`·`check-ami-generation.sh --with-aws` rc=0 세 곳 일치), 인스턴스 `i-05395a5a7baa23bb8`, 2026-10-02 09:16–10:19 UTC. 측정 대상 변경은 전부 `1feb9fc6d` 의 조상(이미지 시각 ≥ 머지 시각). 브라우저 측정 증거 = 세션 스크래치 `live18/`(스크린샷·로그), 인스턴스 측정 = SSM 읽기 + 일회용 계정 쓰기.
+
+- 한 브라우저 컨텍스트에서 스토어(비밀번호 로그인) → 팬(SSO, 화면 없음) → 콘솔 `/login` → `iam-login` → **운영자 브랜딩의 IAM 비밀번호 폼**(«운영자 계정으로 로그인합니다» — 의도된 재인증) → 입력 → `/dashboards/overview` **200** 운영자 화면(테넌트 선택기). 오류·온보딩 화면 없음. `m4-03` · `m4-05`.
+⇒ `done/`.
