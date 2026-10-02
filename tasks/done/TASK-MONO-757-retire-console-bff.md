@@ -8,7 +8,7 @@ TASK-MONO-757
 
 # Status
 
-review (2026-10-02 UTC — AC-6 은 머지 뒤 첫 nightly)
+done (2026-10-02 UTC — PR #4127 squash `8e8feacf1` · 4차원 검증)
 
 # Owner
 
@@ -61,7 +61,7 @@ console-bff 를 저장소에서 지우고, 그것을 전제로 한 설정·가�
 - [x] **AC-3** — `scripts/` 가 바뀌었으므로 **모든 가드**를 스테이지 뒤 돌려 rc 를 적는다(필수 4종만이 아니다 — `check-ls-files-guard-count.sh` 류가 개수로 문다).
 - [x] **AC-4** — `./gradlew projects` 에 console-bff 가 없고 `./gradlew check` 의 platform-console 범위가 초록.
 - [x] **AC-5** — 다른 티켓의 의무(`ADR-MONO-081` § ACCEPT 가 만든 새 의무): `TASK-MONO-672` 의 «console-bff `aud`(712)» 측정 행에 «대상 은퇴 — `TASK-MONO-757`» · `TASK-MONO-697` Out of Scope 의 console-bff 항목 한 줄 정리. 🔴 그 티켓이 그 사이 in-progress 면 소유 세션에 남길 문장만 적는다.
-- [ ] **AC-6** — 머지 뒤 다음 nightly 초록 확인.
+- [x] **AC-6** — 머지 뒤 다음 nightly 초록 확인.
 
 # Related Specs
 
@@ -96,7 +96,7 @@ console-bff 를 저장소에서 지우고, 그것을 전제로 한 설정·가�
 | AC-3 | ✅ | 스테이지 뒤 **모든 가드** — ci.yml 의 가드 호출 전부 + `scripts/check-*` 전부(인자 없이), 총 71건. 아래 § 가드 |
 | AC-4 | ✅ | `./gradlew projects` rc=0 — platform-console 모듈 **0**(console-bff 없음). platform-console 에는 이제 Gradle 범위가 없다(console-web 은 pnpm). 주석을 고친 14 모듈 compileJava/compileTestJava rc=0 |
 | AC-5 | ✅ | `TASK-MONO-672` 측정 행(712 `aud`) → «대상 은퇴 — `TASK-MONO-757`» · `TASK-MONO-697` Out of Scope 의 그 항목 정리. 둘 다 `ready`(소유 세션 없음) |
-| AC-6 | ⏳ | 머지 뒤 첫 nightly |
+| AC-6 | ✅ | 머지 커밋의 main push nightly `37054046640` success — Platform Console E2E full-stack **실행되어** success |
 
 ## 바뀐 것 (요약)
 
@@ -163,4 +163,15 @@ ci.yml 의 가드 호출 전부 + `scripts/check-*` 전부(인자 없이), 스�
 🔴 1차 Launcher freshness 실패의 원인 — **판정기의 ref 엇갈림**(이 PR 이 런처 `index.html` 을 바꿔서 드러났다): `check-launcher-fresh.sh --self-test` 가 «현재 판» 은 `origin/main` 에서, «이전 판» 은 `HEAD` 에서 구했다. 런처를 바꾼 브랜치로 dispatch 하면 HEAD 의 직전 판이 main 의 현재 판과 같아 «이전 커밋 없음»(exit 2). main 예약 런은 HEAD=REF 라 안 보였다. «이전 판» 도 `$REF` 에서 구하게 고쳤다(로컬 self-test rc=0, 위 2차 런 success).
 
 PR CI(`950eabf88`): 68 개, pending 0, fail 0.
+
+# 닫기 (2026-10-02 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4127` → `state=MERGED`, `mergedAt=2026-10-02T19:25:42Z`, merge commit `8e8feacf1` |
+| (b) | `git merge-base --is-ancestor 8e8feacf1 origin/main` → main 위 |
+| (c) | 머지 직전 `gh pr checks 4127` head `b997e1b80`: 68 개, pending 0, fail 0 |
+| (d) | `# Acceptance Criteria` AC-0~6 전부 `[x]` — AC-6 = 위 main nightly |
+
+🔵 남은 소유자 몫(이 티켓의 AC 가 아니다): `terraform apply`(Lambda) · AMI 재굽기 → 그 뒤 `TASK-MONO-758`.
 
