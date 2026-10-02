@@ -62,12 +62,12 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
   'app/api/console/dashboards/operator-overview/route.ts': {
     count: 1,
     category: 'gated',
-    why: 'console-bff operator overview',
+    why: 'operator overview legs (composed here — ADR-MONO-081)',
   },
   'app/api/console/dashboards/domain-health/route.ts': {
     count: 1,
     category: 'gated',
-    why: 'console-bff domain health',
+    why: 'domain health legs (composed here — ADR-MONO-081)',
   },
   'app/api/console/notifications/inbox/route.ts': {
     count: 1,
