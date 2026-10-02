@@ -593,12 +593,19 @@ services:
       INVENTORY_VISIBILITY_SERVICE_URI: http://scm-inventory-visibility-service:8080
       PROCUREMENT_SERVICE_URI: http://scm-procurement-service:8080
       OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      # The gateway (alone in this stack) probes JWKS at startup and closes its
+      # context after the timeout (libs/java-gateway JwksHealthProbe). First
+      # dispatched run: auth-service refused connections inside the default
+      # 30 s window and the gateway exited. Wait for a HEALTHY auth-service and
+      # give the probe room; restart covers an auth-service blip after that.
+      GATEWAY_JWKS_STARTUP_PROBE_TIMEOUT_SECONDS: "120"
       JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
     depends_on:
       redis: { condition: service_healthy }
-      auth-service: { condition: service_started }
+      auth-service: { condition: service_healthy }
       scm-inventory-visibility-service: { condition: service_started }
       victoriatraces: { condition: service_healthy }
+    restart: on-failure:3
     networks: [fed-e2e]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
