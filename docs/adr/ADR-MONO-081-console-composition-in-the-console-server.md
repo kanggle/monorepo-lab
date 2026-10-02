@@ -1,14 +1,13 @@
 # ADR-MONO-081 — 콘솔의 교차 도메인 합성을 **콘솔 서버**로: `console-bff` 은퇴
 
-**Status:** PROPOSED
+**Status:** ACCEPTED
 **Date:** 2026-10-02
 **주관 티켓:** `TASK-MONO-754`
 **개정 대상:** [`ADR-MONO-017`](ADR-MONO-017-platform-console-bff-architecture.md) D1·D2(합성을 하는 **자리**) · [`ADR-MONO-043`](ADR-MONO-043-notification-architecture-unification.md) D2(알림 집계기의 **자리**) · [`ADR-MONO-013`](ADR-MONO-013-platform-console-foundation.md) § D5(`service_types` 에 `rest-api` 를 더한 근거)
 **관련:** [`ADR-MONO-067`](ADR-MONO-067-demo-surfaces-served-from-vercel.md)(콘솔이 Vercel 로 감) · [`ADR-MONO-074`](ADR-MONO-074-anonymous-visitors-see-the-real-console-with-sample-data.md)(샘플 방문자) · [`ADR-MONO-079`](ADR-MONO-079-agencies-sellers-and-console-fan-management.md)(콘솔 팬 화면 — `TASK-MONO-751`)
 
-> 🔵 **PROPOSED.** 방향(합성을 콘솔 서버로 옮기고 `console-bff` 를 없앤다)은 소유자가 대화에서 «진행» 으로 승인했다(2026-10-02).
-> 🔴 아직 **ACCEPTED 가 아니다** — 수락은 정확형 `ADR-MONO-081 ACCEPTED — <A|B|C|D>` 로만 받는다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
-
+> 🟢 **ACCEPTED — 갈래 A** (2026-10-02 UTC, 소유자 정확형 `ADR-MONO-081 ACCEPTED — A`). 이름 · `ACCEPTED` · **갈래 letter** 세 요건이 모두 도착했다.
+> 🔴 **라이더는 공급되지 않았다** — R1~R3 은 구현자 기본값 그대로다(§ 라이더 대조). 단계 티켓은 이 ACCEPT PR 안에서 기안했다(§ ACCEPT 가 만든 새 의무).
 ---
 
 ## Context
@@ -169,3 +168,42 @@ D1~D4 는 갈래와 무관하게 고정이다. **D5 만 소유자가 고른다.*
 
 - 2026-10-02 — PROPOSED. 소유자가 대화에서 «콘솔도 서버 컴포넌트에서 하는 것으로 충분하다는 거지?» 에 대한 답(충분하다 — 근거: 도메인 안 합성의 선례 · Vercel 도달 불가 · ADR-017 의 미비교 후보)을 받고 «진행» 이라 했다. 갈래(D5)는 이 문서가 처음 제시한다.
   근거 조사: console-web 의 console-bff 호출 4 라우트 · console-bff 엔드포인트 4 · 저장소 전체 console-bff 언급(완료 티켓·ADR 제외 145 파일) · `console-vercel.override.yml` 의 알려진 한계.
+- 2026-10-02 — **ACCEPTED — A.** 소유자 원문: `ADR-MONO-081 ACCEPTED — A`(PROPOSED PR #4109 머지 뒤). D1~D5 본문은 **바이트 그대로**다(finalise 이지 re-decide 아님).
+
+---
+
+## 라이더 대조 (ACCEPT 시점, 2026-10-02) — 🔴 **반사가 아니라 대조로 했다**
+
+라이더는 공급되지 않았다. 판별: *«이 질문에 답하지 않고도 A 를 고를 수 있는가?»*
+
+| # | 항목 | 대조 결과 | 처리 |
+|---|---|---|---|
+| R1 | 도메인별 지표 → 구조화 로그 | 라이더다 — A 는 «옮긴다» 만 정하고 관측 수단을 정하지 않는다 | `TASK-PC-FE-302` · `303` AC(로그 한 줄 모양) · `TASK-MONO-757` AC(`bff_*` 소비자 grep = 0) |
+| R2 | 회로 차단기 없음, 레그 타임아웃만 | 라이더다 | `TASK-PC-FE-302` AC |
+| R3 | 삭제는 이전 머지 + nightly 초록 뒤 별도 PR | 라이더다 | `TASK-MONO-757` AC-0 게이트 |
+| — | 🔴 **레그 타임아웃 값** | 표에 **없던** 질문이다 — § 새로 생기는 위험이 «함수 한도보다 짧게» 만 적었고 한도를 재지 않았다(`maxDuration` 설정 0건). A 를 고르는 데 필요 없다 ⇒ 미결 | `TASK-PC-FE-302` AC — **재고 나서** 정한다(값을 지어내지 않는다) |
+| — | 🔴 **샘플 원장의 `core: 'console-bff'` 이름** | D1 이 «이름일 뿐, 단계 티켓이 정한다» 로 남겼다 | `TASK-PC-FE-302` Edge Case — 기본은 **바꾸지 않는다**(바꾸면 원장 가드가 문다) |
+
+### ACCEPT 가 인가하는 것 / 하지 않는 것
+
+- 인가: 아래 단계 티켓의 착수(계약 단계 `TASK-MONO-755` 가 먼저).
+- 인가하지 않음: 자격 모델 변경(ADR-017 D4) · 도메인 화면 6종의 경로 변경 · console-bff 를 엣지에 공개(B).
+
+### ACCEPT 가 만든 새 의무 — 확인하고 적는다
+
+`§ Outstanding follow-ups` 의 «ACCEPT 뒤 단계 티켓 기안» 을 **이 PR 에서** 했다(`TASK-MONO-754` → review):
+
+| 단계 | 티켓 | 무엇 | 선행 |
+|---|---|---|---|
+| 1 | `TASK-MONO-755` | 계약·스펙 — § 2.4.9 생산자 · `notification-inbox-contract.md` · `console-web/architecture.md` · `PROJECT.md` · `TASK-MONO-751` Related Contracts 줄 | — |
+| 2 | `TASK-PC-FE-302` | 운영 개요 + 도메인 상태 합성을 console-web 서버로 | 755 |
+| 3 | `TASK-PC-FE-303` | 알림 인박스 + 읽음 처리를 console-web 서버로 | 755 |
+| 4 | `TASK-MONO-756` | 페더레이션 e2e 세 스펙을 console-web 기준으로 | 302 · 303 |
+| 5 | `TASK-MONO-757` | console-bff 삭제 + 정리(D4) | 756 머지 + 다음 nightly 초록(R3) |
+| 6 | `TASK-MONO-758` | 재굽기 창에서 Vercel 콘솔 세 화면 라이브 확인 | 757 |
+
+🔴 **다른 티켓에 생긴 의무** — 활성 큐에서 console-bff 를 전제로 적은 티켓이 셋 있다. 이 PR 은 그 파일들을 고치지 않는다(남의 티켓·진행 중 티켓):
+- `TASK-MONO-751`(콘솔 팬 화면) — Related Contracts 줄 → `TASK-MONO-755` AC.
+- `TASK-MONO-672`(스택 측정의 집) — «console-bff 가 엣지로서 `aud` 를 본다(712)» 측정 행은 삭제 뒤 잴 대상이 없어진다 → `TASK-MONO-757` AC 가 그 행에 «대상 은퇴» 를 적는다.
+- `TASK-MONO-648`(포트폴리오 캡처, in-progress) — 저하 화면 셋(`/dashboards/overview` · `/dashboards/health` · `/`)이 단계 6 뒤 실제 화면이 된다 → `TASK-MONO-758` AC 가 648 에 다시 찍을 수 있다고 알린다.
+- `TASK-MONO-697`(audience 검사 섀도→거절) Out of Scope 의 «console-bff» 항목은 대상이 사라질 뿐 결정이 바뀌지 않는다 → `TASK-MONO-757` AC 에서 한 줄 정리.
