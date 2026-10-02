@@ -87,10 +87,11 @@ _(없음)_
 
 ## review
 
-- `TASK-FE-102-guest-cart-carried-over-on-login.md` — 🟡 **REVIEW** (2026-09-29 UTC). 소유자 결정 «로그인 시 이어 가기»: 비로그인도 장바구니를 쓴다(`cart:guest`), 로그인하면 계정 장바구니(`cart`)에 합친다, 로그아웃 시 비우기(EF-3) 유지, 주문(`/checkout*`)은 여전히 로그인. 두 키 분리 + 소유자 검사로 이전 계정의 카트가 다음 방문자에게 새지 않게. 스펙 UC-0·overview 먼저 갱신. 로컬 tsc·lint rc=0 · e2e-smoke 5/5 · bite(`/cart` 공개 제거 → 새 칸 2 빨강). 단위 스위트는 CI(Node 20). nightly `auth-redirect.spec.ts` 는 머지 후 확인.
+_(없음)_
 
 ## done
 
+- ✅ `TASK-FE-102-guest-cart-carried-over-on-login.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4078**, 스쿼시 **`735bd02e1`** (머지 시점 실패 0/68 — SUCCESS 19 · SKIPPED 49; 첫 런 `cart-ui.test.tsx` 빨강은 같은 PR CORRECTION 에서 mock 수정). 비로그인 장바구니(`cart:guest`) · 로그인 시 계정 장바구니(`cart`)로 합치기 · 로그아웃 비우기(EF-3) 유지 · `/checkout*` 보호 유지. 머지 후 nightly 의무: `Frontend E2E full-stack (web-store)` 가 `afe0b135d`(run 36982306407) 에서 success — `auth-redirect.spec.ts` 의 `/cart` 제거·`/checkout` 칸 포함.
 - ✅ `TASK-FE-103-demo-off-banner-no-longer-says-cart-is-locked.md` — **DONE 2026-09-29 UTC (4-dim verified)** — impl PR **#4081**, 스쿼시 **`d187e3cba`** (머지 시점 실패 0/68; 첫 런 lint·build 의 next/font 외부 fetch 오류는 실패 잡 재실행으로 통과). TASK-FE-102 후속: 데모 꺼짐 배너가 장바구니를 «잠긴 기능» 으로 말하지 않는다 — «주문 같은 … 장바구니는 로그인 없이 담아 둘 수 있습니다». 라이브 배너 문구 확인.
 - ✅ `TASK-BE-598-quay-minio-is-closed-too.md` — **DONE 2026-09-26 UTC (4-dim verified)** — impl PR **#4008** 머지, 스쿼시 **`6ea6b57d7`** (+ 문서 #4009, 머지 전 FAILURE 0). `quay.io/minio` 도 익명 pull 401 → 같은 MinIO 릴리스의 **Bitnami 빌드 `docker.io/bitnamilegacy/minio` + `minio-client`, 다이제스트 고정**으로 4곳 교체(제품·버전 무변경, 바이너리 릴리스 타임스탬프 실측). 이미지 차이 흡수: compose minio `entrypoint`·`user: "0:0"`, k8s `command`·`MC_CONFIG_DIR`. **AC-3 소유자 결정(2026-09-26 UTC) — 잔여 기준으로 닫음**: minio-init 종료 코드 0 · 버킷 생성 · `mc ls`/`anonymous get` 은 15차·16차 창 둘 다 PASS, 남은 «업로드 경로 하나가 동작»은 ⚪(제품-이미지 시딩 자체가 미구현 — 이 티켓 Scope 밖). 🔴 이 워크트리의 HARDSTOP-05 훅이 `tasks/done/` 파일의 `## CORRECTION` 외 수정을 막아 파일 상단 `**Status:**` 는 `review` 로 남아 있다 — 파일 끝 `## CORRECTION (2026-09-26 UTC) — 4차원 종결` 절이 공식 판정이다.
 
