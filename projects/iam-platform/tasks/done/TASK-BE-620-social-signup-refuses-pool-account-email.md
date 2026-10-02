@@ -4,7 +4,7 @@ TASK-BE-620
 
 # Status
 
-in-progress
+done
 
 # Title
 
@@ -51,9 +51,9 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 소비자 사이트 · 그 사이트에 같은 이메일 계정 없음 · 풀 계정 있음 → 거절, 계정·프로필·이벤트 생성 없음.
-- [ ] **AC-2** — 🔴 대조군: 같은 사이트 계정이 있으면 지금처럼 그 계정으로(풀 조회 안 함) · B2B 테넌트는 풀 이메일이어도 생성(D1).
-- [ ] **AC-3** — auth-service 가 두 409 를 `code` 로 구별한다: `ACCOUNT_ALREADY_EXISTS` → `email_registered`, `TENANT_SUSPENDED` · 읽을 수 없는 본문 → 이전 그대로(`temporarily_unavailable`). 재시도 없음.
+- [x] **AC-1** — 소비자 사이트 · 그 사이트에 같은 이메일 계정 없음 · 풀 계정 있음 → 거절, 계정·프로필·이벤트 생성 없음.
+- [x] **AC-2** — 🔴 대조군: 같은 사이트 계정이 있으면 지금처럼 그 계정으로(풀 조회 안 함) · B2B 테넌트는 풀 이메일이어도 생성(D1).
+- [x] **AC-3** — auth-service 가 두 409 를 `code` 로 구별한다: `ACCOUNT_ALREADY_EXISTS` → `email_registered`, `TENANT_SUSPENDED` · 읽을 수 없는 본문 → 이전 그대로(`temporarily_unavailable`). 재시도 없음.
 
 # Related Specs
 
@@ -72,3 +72,12 @@ iam-platform
 # Failure Scenarios
 
 1. `TENANT_SUSPENDED`(같은 409)를 «이미 가입된 이메일» 로 안내 — `TASK-BE-580` 이 가입 화면에서 고친 같은 혼동. 그래서 상태가 아니라 `code` 로 가른다.
+
+---
+
+# 닫기 기록 (2026-10-02 UTC)
+
+- 머지: PR [#4100](https://github.com/kanggle/monorepo-lab/pull/4100) squash `f5b436669` · `state=MERGED` · `origin/main` 끝 일치 · 머지 전 체크 17건 pass(실패 0, iam 통합 A/B · iam E2E 포함).
+- AC-1·AC-2: `SocialSignupUseCaseTest#execute_poolAccountWithEmail_refused` · `#execute_siteAccountExists_stillLinks_poolNotConsulted` · `#execute_b2bTenant_poolEmail_created` (로컬 10/0 실패).
+- AC-3: `AccountServiceClientSocialSignupConflictTest`(409 `ACCOUNT_ALREADY_EXISTS` → 예외 · 요청 1회=재시도 없음 · `TENANT_SUSPENDED`·판독 불가 → 이전 그대로, 3/0) · `SocialLoginBrowserControllerTest#callback_socialSignupEmailRegistered_redirectsToEmailRegistered`(13/0).
+- ⚪ 라이브 미측정 — 소셜 키가 어느 배포에도 없어 이 경로는 실제로 닿을 수 없다(그것이 `TASK-BE-617` 보류의 이유).
