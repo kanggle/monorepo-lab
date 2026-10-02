@@ -217,7 +217,12 @@ services:
       # 🔵 그래서 가드 (z20) 은 이 규칙을 **discovery 가 광고하는 경로 집합**과
       #   대조한다 — (p) 가 템플릿 링크로 하는 일의 형제다. 손으로 열거하는 한
       #   다음 엔드포인트에서 **세 번째**가 난다.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/.well-known`))"
+      # 🔴🔴 **세 번째가 났다 — `/consent`** (TASK-BE-616 이 만들고 TASK-MONO-744 의 가드 (p) 가 잡았다).
+      #   소비자 풀 계정이 아직 멤버가 아닌 사이트로 오면 authorize 게이트가 `/consent`(사이트 이용 동의
+      #   화면)로 보내고, 그 화면이 같은 경로로 POST 한다. 이 목록에 없으면 iam 게이트웨이로 떨어져 **404**
+      #   — 팬 ↔ 스토어 이동의 첫 방문이 막힌다. 616 은 `infra/demo` 를 건드리지 않아 그 PR 에서는
+      #   이 가드가 돌지 않았다(경로 필터) — 744 가 시드 때문에 `infra/demo` 를 건드리자 처음 돌았다.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"

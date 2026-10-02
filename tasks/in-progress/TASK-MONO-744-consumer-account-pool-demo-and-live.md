@@ -158,3 +158,10 @@ monorepo
 - 이 티켓 `4abeaee00` — 풀 모양 데모 시드
 
 Vercel 쪽(굽기 무관): TASK-FE-102 · FE-103(web-store) · FAN-FE-025 · FAN-FE-026(fan web). 재굽기 한 번이 위 백엔드 묶음 전부와 이 시드를 산다 — AC-4/AC-5 는 그 창에서.
+
+## 추가 발견 (2026-10-02 UTC) — 데모 엣지가 `/consent` 를 라우팅하지 않았다
+
+- 이 PR 의 첫 CI 에서 `Demo wrapper smoke` 의 가드 (p) 가 빨강: `TASK-BE-616` 이 만든 사이트 이용 동의 화면 `/consent` 가 `infra/demo/iam-traefik.override.yml` 의 `iam-oidc` 라우터 경로 목록에 없었다 → 데모에서 그 요청은 iam 게이트웨이로 떨어져 **404** — 재굽기 뒤 팬 ↔ 스토어 첫 방문(멤버가 아닌 풀 계정)이 막혔을 것이다.
+- 616 은 `infra/demo` 를 건드리지 않아 그 PR 에서는 이 가드가 돌지 않았다(경로 필터). 이 티켓이 시드 때문에 `infra/demo` 를 건드리자 처음 돌았다. 같은 파일 주석이 «손으로 열거하는 한 세 번째가 난다» 고 예고한 그 **세 번째**다(`/signup` MONO-380 · `/connect` MONO-615).
+- 고침: 규칙에 `PathPrefix(/consent)` 추가 + 주석. 로컬 재현: 가드 (p) 의 추출 논리로 고치기 전 `/consent` 누락 → 고친 뒤 `/consent` · `/login` · `/signup` 전부 덮임.
+- 🔵 데모 계정은 두 사이트 멤버가 미리 들어가 있어 동의 화면을 안 거친다 — 이 결함은 **새로 가입한 사람**이 다른 사이트로 넘어갈 때 드러났을 것이다.
