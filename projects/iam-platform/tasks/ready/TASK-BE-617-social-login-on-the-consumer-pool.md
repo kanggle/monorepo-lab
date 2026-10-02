@@ -28,7 +28,7 @@ iam-platform
 
 # Dependency Markers
 
-- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` · `TASK-MONO-743`(소셜 전용 계정의 본인 확인 수단)
+- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` (~~`TASK-MONO-743`~~ — 2026-10-02 보류: 묶기는 실사용자가 생길 때까지 만들지 않는다. 소셜 전용 계정의 본인 확인 수단은 그때 정한다)
 
 # Goal
 
@@ -62,7 +62,7 @@ iam-platform
 
 # Edge Cases
 
-- 같은 사람이 비밀번호 풀 계정과 소셜 신원을 둘 다 가지려는 경우 — 묶기(`TASK-MONO-743`) 경로로.
+- 같은 사람이 비밀번호 풀 계정과 소셜 신원을 둘 다 가지려는 경우 — 묶기(`TASK-MONO-743`, 2026-10-02 보류) 경로로. 묶기가 없는 동안은 § 2 의 공존 금지대로 거절된다.
 
 # Failure Scenarios
 

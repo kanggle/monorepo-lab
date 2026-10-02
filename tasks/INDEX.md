@@ -181,8 +181,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 
-- `TASK-MONO-743-link-existing-fan-and-store-accounts.md` — **전역 소비자 계정 5단계 — 기존 팬·스토어 계정 묶기 + id 이전** (READY, 2026-10-01 UTC · 선행 742·BE-614·BE-615). 🔴 AC-0 미결 «어느 id 가 살아남는가» · AC-3 대조군(남의 이메일로 팬 가입 → 기존 스토어 계정과 안 묶임) · 팬·이커머스 데이터·운영자 매핑 이전.
-- `TASK-MONO-744-consumer-account-pool-demo-and-live.md` — **전역 소비자 계정 7단계 — 데모 시드·안내 문서·라이브 검증** (READY, 2026-10-01 UTC · 선행 BE-614~617·743). 데모 계정 미리 묶기(R3) · 재굽기 뒤 라이브 측정(이미지 시각 대조).
+- `TASK-MONO-743-link-existing-fan-and-store-accounts.md` — **전역 소비자 계정 5단계 — 기존 팬·스토어 계정 묶기 + id 이전** (READY · ⏳ **보류** 2026-10-02 UTC 소유자 결정 — 대상이 데모 계정 1명뿐, AC-00 게이트: 데모 밖 두 사이트 계정이 생기면 착수). 🔴 AC-0 미결 «어느 id 가 살아남는가» · AC-3 대조군(남의 이메일로 팬 가입 → 기존 스토어 계정과 안 묶임) · 팬·이커머스 데이터·운영자 매핑 이전.
+- `TASK-MONO-744-consumer-account-pool-demo-and-live.md` — **전역 소비자 계정 7단계 — 데모 시드·안내 문서·라이브 검증** (READY, 2026-10-01 UTC · 선행 BE-614~617 · 743 은 보류되어 선행에서 빠짐). 🔵 `demo@demo.com` 을 처음부터 풀 계정 하나로 시드(743 보류 인계) · 재굽기 뒤 라이브 측정(이미지 시각 대조).
 - `TASK-MONO-747-draft-adr-079-agencies-sellers-and-console-fan-management.md` — **`ADR-MONO-079` 기안 — 소속사·셀러·콘솔 팬 관리** (READY, 2026-10-02 UTC · 소유자 갈래 3개는 결정됨: 소속사=관리 대상+셀러 연결 · 굿즈=스토어 상품 · 연결=상품 «컬렉션» 속성). 열린 것: 콘솔 팬 관리와 `ADR-MONO-059` · 🔵 **`TASK-MONO-745` 흡수** — 사람 계정을 셀러에 연결해 `SELLER` 사이트 역할 · 셀러 정지의 의미. 문서만(병행 가능).
 - `TASK-MONO-746-draft-adr-080-workforce-on-the-consumer-pool.md` — ⏳ **`ADR-MONO-080` 후보 기안 — 직원도 풀 계정** (READY, 2026-10-01 UTC · **DO NOT START — AC-0 = 078 단계 전부 done + 079 ACCEPTED**). 순서: 이메일 인증 게이트 → IAM 2단계 인증 → 운영자 규칙(`TASK-MONO-334`) 변경. 묶음 회수(그룹·배정·파트너십)는 이미 있음. 인증된 이메일끼리 자동 묶기 포함. 플랫폼 관리자는 분리 유지.
 - `TASK-MONO-739-fan-goods-sold-by-the-ecommerce-store.md` — ⏳ **팬 굿즈를 이커머스 스토어에 시드하고 팬 웹에서 링크** (READY, 2026-09-29 UTC · **DO NOT START — AC-0 = `ADR-MONO-077` ACCEPTED**). 아티스트 6명 실물 굿즈 → 시드 세 곳 + 픽스처 생성 `store.json`, 팬 헤더 「굿즈샵 ↗」 + (갈래 A·B) 아티스트 프로필 링크. 🔴 AC-2 = 팬이 만드는 링크가 스토어 저장본에서 **굿즈만 1건 이상**(0건 목록 방지).
