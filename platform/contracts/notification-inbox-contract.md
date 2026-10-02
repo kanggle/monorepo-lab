@@ -6,7 +6,7 @@ It is the **D3** deliverable of [ADR-MONO-043](../../docs/adr/ADR-MONO-043-notif
 
 - **Only the *shape* is shared** (the envelope fields + the inbox verb/paging/read semantics). The **base path, authentication, recipient resolution, and tenancy stay domain-owned** (ADR-MONO-043 D6 / ADR-MONO-017 D4 / [jwt-standard-claims.md](jwt-standard-claims.md)). This contract does **not** unify auth.
 - The four per-domain notification-services (erp, ecommerce, wms, fan) remain four independent deployables (ADR-MONO-043 D1). They **conform** to this shape; they are not merged.
-- This contract is **spec-only**. The shared `libs/` library that implements the consumer/dedupe/delivery machinery is the **D4** deliverable (a separate task); per-domain conformance is **P2**; the `console-bff` aggregator is **P3**.
+- This contract is **spec-only**. The shared `libs/` library that implements the consumer/dedupe/delivery machinery is the **D4** deliverable (a separate task); per-domain conformance is **P2**; the console aggregator is **P3** (built in `console-bff`; moves to the `console-web` server under [ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md) — `TASK-PC-FE-303`).
 
 > **HARDSTOP-03 note.** This file lives under `platform/contracts/` (shared regulation) and is **project-agnostic**: § 1–§ 4 are normative and name no service. § 5 (Conformance matrix) is an **informative** appendix that maps the existing per-domain surfaces to the shape — it references the four domains as conformance targets, mirroring how `platform/error-handling.md` carries per-domain sections.
 
@@ -93,13 +93,17 @@ Per ADR-MONO-043 D6 + [jwt-standard-claims.md](jwt-standard-claims.md), the foll
 
 ## 4. Aggregator consumption contract (D2 / D5)
 
-The platform-console `console-bff` notification **aggregator** (ADR-MONO-043 D2, the P3 deliverable) fans out to each domain's inbox and merges the feeds into the single shared-shell bell. This contract pins what the aggregator relies on:
+The platform-console notification **aggregator** (ADR-MONO-043 D2, the P3 deliverable) fans out to each domain's inbox and merges the feeds into the single shared-shell bell. This contract pins what the aggregator relies on:
+
+> **Where it runs — [ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md) (ACCEPTED 2026-10-02).** The aggregator is hosted in the **`console-web` server** (the same-origin route handlers `/api/console/notifications/inbox` and `/api/console/notifications/{sourceDomain}/{id}/read`). It was first built in `console-bff`, which keeps serving until `TASK-PC-FE-303` merges and is retired by `TASK-MONO-757`. The rules below bind the aggregator wherever it runs; the move changes none of them except the circuit-breaker clause in item 4.
+
 
 1. **Uniform item shape** — every per-domain `GET <base>/notifications` returns items conforming to § 1, so the aggregator parses one model and merges/sorts by `createdAt` desc across domains.
 2. **Per-domain attribution** — each merged item carries `sourceDomain` (§ 1). When a domain omits it, the aggregator injects it from the call target. The shell uses it to label + route each item.
 3. **Per-domain credential dispatch** (D6) — the aggregator attaches **each domain's own credential** per outbound call (it is a *dispatcher*, never a credential rewrite). It does not mint a unified notification token.
-4. **Failure isolation is a HARD INVARIANT** (ADR-MONO-043 D5 / ADR-MONO-017 D5) — the aggregator calls each domain independently with per-domain timeout + circuit-breaker and **degrades per domain**: a `503`/timeout/network from one domain yields a partial feed (that domain marked degraded) while the others render. The shared-shell bell **MUST NOT** be coupled to any single domain's availability. (This is the regression that prompted ADR-MONO-043: a downed single upstream made the bell fail on every console page.)
+4. **Failure isolation is a HARD INVARIANT** (ADR-MONO-043 D5 / ADR-MONO-017 D5) — the aggregator calls each domain independently with a per-domain timeout and **degrades per domain**: a `503`/timeout/network from one domain yields a partial feed (that domain marked degraded) while the others render. The shared-shell bell **MUST NOT** be coupled to any single domain's availability. (This is the regression that prompted ADR-MONO-043: a downed single upstream made the bell fail on every console page.) No circuit-breaker is required: the `console-web` server runs as a stateless function with nowhere to hold breaker state (ADR-MONO-081 R2). A `401` from a domain is **not** a degraded domain — it means the operator's session is no longer valid, and the aggregator answers `401` so the shell re-authenticates.
 5. **Read-through, not store-through** — the aggregator holds no notification store of its own; it reads each domain's authoritative inbox live (ADR-MONO-043 D2 rejected a central store). Mark-read is proxied to the owning domain's `POST <base>/notifications/{id}/read`.
+6. **Mark-read routing** — the `{sourceDomain}` path segment must name a domain in the aggregator's configured set; an unknown or unconfigured domain is answered `404` **without any downstream call**. A known domain receives the write **exactly once** — mark-read is a write, so it is never retried by the aggregator.
 
 ---
 
