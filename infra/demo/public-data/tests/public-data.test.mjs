@@ -134,11 +134,76 @@ test('상품: HIDDEN 은 공개 목록에 없다', () => {
   assert.equal(toPublicProduct({ id: 'x', name: 'n', status: 'WEIRD' }), null);
 });
 
+// ADR-MONO-079 D3 · TASK-MONO-749 — 상품의 `collectionRef`(= 팬 아티스트 id)가 공개 DTO 에 실린다.
+test('상품: collectionRef 가 실리고, 없으면 null 이다 (TASK-MONO-749)', () => {
+  const base = { id: 'p-goods', name: '응원봉', status: 'ON_SALE', price: 1000, variants: [] };
+  const withRef = toPublicProduct({ ...base, collectionRef: 'artist-a' });
+  assert.equal(withRef.collectionRef, 'artist-a', '백엔드가 준 collectionRef 가 공개 DTO 에서 사라졌다');
+  // 🔴 대조군 — 필드가 없는 기존 상품은 null(빈 문자열도 null). 키 자체는 있어야 한다(모양이 상품마다 갈리지 않게).
+  const without = toPublicProduct(base);
+  assert.ok('collectionRef' in without, 'collectionRef 키가 없다 — 공개 모양이 상품마다 갈린다');
+  assert.equal(without.collectionRef, null);
+  assert.equal(toPublicProduct({ ...base, collectionRef: '' }).collectionRef, null);
+  // 🔵 id 는 검색어가 아니다 — searchText 에 섞이면 스토어 검색이 uuid 조각에 걸린다.
+  assert.ok(!withRef.searchText.includes('artist-a'), 'collectionRef 가 searchText 에 섞였다');
+});
+
+test('번들 store.json: 모든 상품이 collectionRef 키를 갖는다 — 생성기를 지났다 (TASK-MONO-749)', async () => {
+  const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
+  const products = store.data.products;
+  assert.ok(products.length >= 8, '모집단이 비면 공허하다');
+  for (const p of products) {
+    assert.ok('collectionRef' in p, `상품 '${p.id}' 에 collectionRef 키가 없다 — store.json 을 생성기로 다시 만들어라`);
+    assert.ok(p.collectionRef === null || typeof p.collectionRef === 'string');
+  }
+});
+
 test('카테고리는 상품에서 파생되고 건수가 맞는다', () => {
   const pub = RAW_PRODUCTS.map(toPublicProduct).filter(Boolean);
   const cats = deriveCategories(pub);
   const total = cats.reduce((n, c) => n + c.productCount, 0);
   assert.equal(total, pub.length, '카테고리 건수 합이 상품 수와 다르다');
+});
+
+// TASK-MONO-739 AC-3 — `TASK-MONO-638` 과 같은 대조를 **카테고리마다** 한다(합만 맞으면 두 칸이 서로 틀려도 통과한다).
+// 🔴 번들 `store.json` 을 읽는다 — 생성기 함수가 아니라 실제로 배포되는 파일이 그 성질을 갖는지가 질문이다.
+test('번들 store.json: categories[].productCount 가 카테고리마다 실제 공개 상품 수와 같다 (TASK-MONO-739 AC-3)', async () => {
+  const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
+  const { products, categories } = store.data;
+  assert.ok(categories.length > 0 && products.length > 0, '모집단이 비면 공허하다');
+  const actual = new Map();
+  for (const p of products) actual.set(p.categoryId, (actual.get(p.categoryId) ?? 0) + 1);
+  assert.deepEqual(
+    new Set(categories.map((c) => c.id)),
+    new Set(actual.keys()),
+    '카테고리 목록과 상품이 실제로 쓰는 카테고리 집합이 다르다',
+  );
+  for (const c of categories) {
+    assert.equal(c.productCount, actual.get(c.id), `카테고리 '${c.name}'(${c.id}) 의 productCount 가 실제 공개 상품 수와 다르다`);
+  }
+});
+
+// TASK-MONO-739 — 굿즈 시드의 모양 (AC-9 R1·R2 · ADR-MONO-079 D3).
+test('번들 store.json: 아티스트 굿즈 — 팬 공개 아티스트마다 3개, collectionRef 는 팬 아티스트 id, 이미지는 placehold.co (TASK-MONO-739)', async () => {
+  const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
+  const fan = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'fan.json'), 'utf8'));
+  const GOODS = 'a0000000-0000-0000-0000-000000000008';
+  const goods = store.data.products.filter((p) => p.categoryId === GOODS);
+  assert.equal(store.data.categories.find((c) => c.id === GOODS)?.name, '아티스트 굿즈');
+  assert.equal(goods.length, 18, 'R1 — 굿즈는 총 18개');
+  const artistIds = fan.data.artists.map((a) => a.id);
+  assert.equal(artistIds.length, 6, '팬 공개 아티스트가 6명이 아니면 이 대조의 전제가 바뀐 것이다');
+  for (const id of artistIds) {
+    assert.equal(goods.filter((p) => p.collectionRef === id).length, 3, `R1 — 아티스트 ${id} 의 굿즈가 3개가 아니다`);
+  }
+  for (const p of goods) {
+    assert.ok(artistIds.includes(p.collectionRef), `굿즈 '${p.name}' 의 collectionRef 가 팬 공개 아티스트가 아니다`);
+    assert.match(p.thumbnailUrl, /^https:\/\/placehold\.co\//, `R2 — 굿즈 '${p.name}' 의 이미지가 placehold.co 가 아니다`);
+  }
+  // 🔴 굿즈 카테고리 밖의 상품은 어느 아티스트 컬렉션에도 속하지 않는다(기존 카탈로그는 백필하지 않았다).
+  for (const p of store.data.products.filter((x) => x.categoryId !== GOODS)) {
+    assert.equal(p.collectionRef, null, `굿즈가 아닌 상품 '${p.name}' 에 collectionRef 가 있다`);
+  }
 });
 
 // ===========================================================================

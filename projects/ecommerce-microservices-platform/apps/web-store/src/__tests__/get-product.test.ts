@@ -29,6 +29,7 @@ const PRODUCT: PublicProduct = {
     { url: 'https://example.test/1.jpg', sortOrder: 0, isPrimary: true },
   ],
   categoryId: 'cat-a',
+  collectionRef: null,
   options: [
     { id: 'c1', optionName: 'S', additionalPrice: 0 },
     { id: 'c2', optionName: 'XL', additionalPrice: 2000 },

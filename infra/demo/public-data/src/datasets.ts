@@ -160,6 +160,15 @@ export interface PublicProduct {
   thumbnailUrl: string | null;
   images: PublicProductImage[];
   categoryId: string;
+  /**
+   * 팬 아티스트 컬렉션 (`ADR-MONO-079` D3 · `TASK-MONO-749`). 값 = **팬 아티스트 id**(`PublicArtist.id`),
+   * `null` = 어느 아티스트의 굿즈도 아니다(필드가 생기기 전의 상품은 전부 `null`).
+   *
+   * 🔵 공개해도 되는 이유: 이미 `fan.json` 에 공개된 아티스트 id 를 **가리킬 뿐**이다 — 새 사실이 없다.
+   * 🔴 FK 가 아니다(두 프로젝트의 DB 가 다르다). 팬 화면은 `fan.json` 에 **있는** 아티스트의 페이지에서만
+   *    이 값으로 굿즈를 고른다 — 보관된 아티스트를 가리키는 상품은 팬 어디에도 안 보이고 스토어에는 그대로 있다.
+   */
+  collectionRef: string | null;
   options: PublicProductOption[];
   /** 검색·필터용 소문자 결합. 출처는 위 공개 필드뿐(§ PublicArtist.searchText 와 같은 규율). */
   searchText: string;

@@ -109,7 +109,8 @@ class ProductRepositoryImpl implements ProductRepository, ProductQueryPort {
                         entity.getPrice(),
                         entity.getThumbnailUrl(),
                         entity.getCategoryId(),
-                        entity.getSellerId()));
+                        entity.getSellerId(),
+                        entity.getCollectionRef()));
 
         PageResult<ProductSummary> pageResult = new PageResult<>(
                 result.getContent(), result.getNumber(), result.getSize(),

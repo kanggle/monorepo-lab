@@ -50,6 +50,10 @@ public class UpdateProductService {
         if (command.thumbnailUrl() != null) {
             product.updateThumbnailUrl(command.thumbnailUrl());
         }
+        if (command.collectionRef() != null) {
+            // null = unchanged; blank = clear (Product#updateCollectionRef).
+            product.updateCollectionRef(command.collectionRef());
+        }
 
         productRepository.save(product);
         productMetrics.incrementProductUpdated();

@@ -472,12 +472,31 @@ export const CATEGORY_NAMES = {
   'a0000000-0000-0000-0000-000000000005': '하의',
   'a0000000-0000-0000-0000-000000000006': '스마트폰',
   'a0000000-0000-0000-0000-000000000007': '노트북',
+  // TASK-MONO-739 — 루트 카테고리. 🔴 팬 웹 `shared/config/store-links.ts` 가 이 id 하나를 안다(ADR-MONO-077 D5 갈래 D).
+  'a0000000-0000-0000-0000-000000000008': '아티스트 굿즈',
 };
 
 const P = 'b0000000-0000-0000-0000-0000000000';
 const C = 'c0000000-0000-0000-0000-0000000000';
 const CAT = 'a0000000-0000-0000-0000-0000000000';
 const U = (id) => `https://images.unsplash.com/photo-${id}?w=600&q=80&auto=format&fit=crop`;
+
+// ── TASK-MONO-739 — 팬 굿즈 (ADR-MONO-077 갈래 D · ADR-MONO-079 D3) ──────────────────────────
+// 🔴 `collectionRef` = 팬 아티스트 id. 값은 위 `RAW_ARTISTS` 에서 **읽는다**(여기 다시 적지 않는다) —
+//    두 벌이면 한쪽만 바뀌는 날 굿즈가 아무 아티스트에도 안 붙고, 팬 카드는 조용히 0장이 된다.
+const artistIdOf = (stageName) => {
+  const a = RAW_ARTISTS.find((x) => x.stageName === stageName);
+  if (!a) throw new Error(`[fixtures] 굿즈의 아티스트 '${stageName}' 가 RAW_ARTISTS 에 없습니다`);
+  return a.id;
+};
+const ARTIST_A001 = artistIdOf('루미');
+const ARTIST_A002 = artistIdOf('노아');
+const ARTIST_A003 = artistIdOf('세아');
+const ARTIST_A004 = artistIdOf('하린');
+const ARTIST_A005 = artistIdOf('리오');
+const ARTIST_A006 = artistIdOf('유노');
+/** R2 — `placehold.co` 자리표시(아티스트 색 + 영문 상품명). 스토어 `next.config.ts` 가 이미 허용한 호스트다. */
+const GOODS_IMG = (color, text) => `https://placehold.co/600x600/${color}?text=${text.replace(/ /g, '+')}&font=noto-sans`;
 
 /** 스토어 게이트웨이 `GET /api/products/{id}` 의 모양(`ProductDetail`). 재고 포함. */
 export const RAW_PRODUCTS = [
@@ -737,6 +756,172 @@ export const RAW_PRODUCTS = [
       { id: `${C}65`, optionName: '16GB/1TB', stock: 11, additionalPrice: 200000 },
     ],
   },
+  // ===========================================================================
+  // TASK-MONO-739 — 팬 아티스트 6명의 공식 굿즈 (ADR-MONO-077 갈래 D · ADR-MONO-079 D3)
+  // ===========================================================================
+  // 🔵 실제 시드는 postgres `V21__seed_artist_goods.sql` · h2 `V14__seed_artist_goods.sql` 이다 — 같은 행이다.
+  // 🔵 아티스트당 3개(R1) · 이미지 `placehold.co`(R2). 그룹 STELLAR 멤버(세아·리오)는 **개인** 굿즈만 둔다.
+  // 🔴 이름이 `<예명> ` 으로 시작하는 것은 팬의 «전체 보기» 링크(`categoryId=<굿즈>&q=<예명>`)가 스토어
+  //    검색으로 그 아티스트 굿즈를 찾게 하는 규약이다. 카드 선택은 이름이 아니라 `collectionRef` 로 한다.
+  // ── 루미 (a001) ──
+  {
+    id: `${P}25`, name: '루미 공식 응원봉', description: '루미의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-27T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Light Stick'), images: [],
+    variants: [
+      { id: `${C}66`, optionName: '기본', stock: 120, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}26`, name: '루미 포토카드 세트', description: '앨범 콘셉트 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-28T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Photocard Set'), images: [],
+    variants: [
+      { id: `${C}67`, optionName: '8매 세트', stock: 200, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}27`, name: '루미 「밤의 끝」 후드티', description: '싱글 「밤의 끝」 아트워크를 자수로 넣은 오버핏 후드티입니다.',
+    price: 69000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-29T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Hoodie'), images: [],
+    variants: [
+      { id: `${C}68`, optionName: 'M', stock: 40, additionalPrice: 0 },
+      { id: `${C}69`, optionName: 'L', stock: 35, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 노아 (a002) ──
+  {
+    id: `${P}28`, name: '노아 공식 응원봉', description: '노아의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-01-30T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Light Stick'), images: [],
+    variants: [
+      { id: `${C}70`, optionName: '기본', stock: 100, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}29`, name: '노아 포토카드 세트', description: '작업실 비하인드 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-01-31T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Photocard Set'), images: [],
+    variants: [
+      { id: `${C}71`, optionName: '8매 세트', stock: 180, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}30`, name: '노아 프로듀싱 노트 포스터', description: '자필 프로듀싱 노트를 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
+    price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-02-01T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Poster'), images: [],
+    variants: [
+      { id: `${C}72`, optionName: 'A2', stock: 90, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 세아 (a003) ──
+  {
+    id: `${P}31`, name: '세아 공식 응원봉', description: '세아의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-02T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH Light Stick'), images: [],
+    variants: [
+      { id: `${C}73`, optionName: '기본', stock: 110, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}32`, name: '세아 포토카드 세트', description: '안무 연습실 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-03T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH Photocard Set'), images: [],
+    variants: [
+      { id: `${C}74`, optionName: '8매 세트', stock: 190, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}33`, name: '세아 시그니처 티셔츠', description: '세아의 손글씨 로고를 프린트한 코튼 반팔 티셔츠입니다.',
+    price: 39000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-04T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH T-Shirt'), images: [],
+    variants: [
+      { id: `${C}75`, optionName: 'M', stock: 50, additionalPrice: 0 },
+      { id: `${C}76`, optionName: 'L', stock: 45, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 하린 (a004) ──
+  {
+    id: `${P}34`, name: '하린 공식 응원봉', description: '하린의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-05T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Light Stick'), images: [],
+    variants: [
+      { id: `${C}77`, optionName: '기본', stock: 90, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}35`, name: '하린 포토카드 세트', description: '첫 단독 공연 리허설 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-06T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Photocard Set'), images: [],
+    variants: [
+      { id: `${C}78`, optionName: '8매 세트', stock: 160, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}36`, name: '하린 단독 공연 포스터', description: '첫 단독 공연 키 비주얼을 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
+    price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-07T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Poster'), images: [],
+    variants: [
+      { id: `${C}79`, optionName: 'A2', stock: 80, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 리오 (a005) ──
+  {
+    id: `${P}37`, name: '리오 공식 응원봉', description: '리오의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-08T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO Light Stick'), images: [],
+    variants: [
+      { id: `${C}80`, optionName: '기본', stock: 95, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}38`, name: '리오 포토카드 세트', description: '커버 무대 현장 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-09T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO Photocard Set'), images: [],
+    variants: [
+      { id: `${C}81`, optionName: '8매 세트', stock: 170, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}39`, name: '리오 시그니처 티셔츠', description: '리오의 손글씨 로고를 프린트한 코튼 반팔 티셔츠입니다.',
+    price: 39000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-10T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO T-Shirt'), images: [],
+    variants: [
+      { id: `${C}82`, optionName: 'M', stock: 45, additionalPrice: 0 },
+      { id: `${C}83`, optionName: 'L', stock: 40, additionalPrice: 0 },
+    ],
+  },
+
+  // ── 유노 (a006) ──
+  {
+    id: `${P}40`, name: '유노 공식 응원봉', description: '유노의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
+    price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-11T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Light Stick'), images: [],
+    variants: [
+      { id: `${C}84`, optionName: '기본', stock: 85, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}41`, name: '유노 포토카드 세트', description: '재즈 세션 녹음 현장 사진 8장을 담은 포토카드 세트입니다.',
+    price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-12T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Photocard Set'), images: [],
+    variants: [
+      { id: `${C}85`, optionName: '8매 세트', stock: 150, additionalPrice: 0 },
+    ],
+  },
+  {
+    id: `${P}42`, name: '유노 재즈 세션 포스터', description: '재즈 세션 라이브 사진을 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
+    price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-13T00:00:00Z',
+    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Poster'), images: [],
+    variants: [
+      { id: `${C}86`, optionName: 'A2', stock: 75, additionalPrice: 0 },
+    ],
+  },
+
   {
     // 🔴 **음성 대조군 — 숨김 상품.** 변환기가 걸러야 한다.
     id: `${P}9f`, name: 'HIDDEN-PRODUCT-MUST-NOT-LEAK', description: 'HIDDEN-DESC-MUST-NOT-LEAK',
@@ -801,6 +986,13 @@ const REVIEW_POOLS = {
     { rating: 4, title: '화면 만족', content: '색감이 좋아서 작업하기 편합니다. 팬 소음이 가끔 들려요.' },
     { rating: 3, title: '충전기가 커요', content: '성능은 좋은데 기본 충전기가 커서 휴대가 불편합니다.' },
     { rating: 5, title: '업무용으로 추천', content: '여러 프로그램을 띄워도 버벅임이 없습니다.' },
+  ],
+  // 아티스트 굿즈 (TASK-MONO-739) — 🔴 문구에 아티스트 예명을 넣지 않는다(리뷰는 상품을 돌려 고르므로 남의 이름이 붙는다).
+  [`${CAT}08`]: [
+    { rating: 5, title: '실물이 더 예뻐요', content: '사진보다 색감이 훨씬 좋습니다. 포장도 꼼꼼했어요.' },
+    { rating: 4, title: '공연 때 잘 썼어요', content: '마감이 깔끔하고 튼튼합니다. 배송이 하루 늦은 건 아쉬웠어요.' },
+    { rating: 5, title: '소장용으로 만족', content: '구성이 알차서 하나 더 사 둘까 고민 중입니다.' },
+    { rating: 3, title: '사이즈는 확인하세요', content: '디자인은 좋은데 생각보다 크게 나왔습니다.' },
   ],
 };
 

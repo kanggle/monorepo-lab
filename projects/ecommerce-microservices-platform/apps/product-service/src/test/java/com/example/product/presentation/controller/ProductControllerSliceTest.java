@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,6 +71,88 @@ class ProductControllerSliceTest {
 
     @MockitoBean
     private VariantManagementService variantManagementService;
+
+    // ─── collectionRef (ADR-MONO-079 D3 · TASK-MONO-749) ───────────────────
+
+    @Test
+    @DisplayName("GET /api/products - collectionRef 가 목록에 노출되고, 없는 상품은 null 이다 (대조군)")
+    void getProducts_exposesCollectionRef_nullWhenAbsent() throws Exception {
+        UUID goods = UUID.randomUUID();
+        UUID plain = UUID.randomUUID();
+        ProductSummary withRef = new ProductSummary(goods, "응원봉", ProductStatus.ON_SALE, 10000L, null, null,
+                "default", "artist-a");
+        ProductSummary without = new ProductSummary(plain, "티셔츠", ProductStatus.ON_SALE, 10000L, null);
+        given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(
+                new ProductListResult(new PageResult<>(List.of(withRef, without), 0, 20, 2L, 1)));
+
+        mockMvc.perform(get("/api/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].collectionRef").value("artist-a"))
+                .andExpect(jsonPath("$.content[1].collectionRef").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    @DisplayName("GET /api/products/{productId} - collectionRef 가 상세에 노출된다")
+    void getProduct_exposesCollectionRef() throws Exception {
+        UUID id = UUID.randomUUID();
+        ProductDetail detail = new ProductDetail(id, "응원봉", "설명", ProductStatus.ON_SALE, 10000L,
+                null, null, "default", "artist-a", List.of(new VariantDetail(UUID.randomUUID(), "기본", 1, 0L)));
+        given(queryProductService.findById(id)).willReturn(detail);
+
+        mockMvc.perform(get("/api/products/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collectionRef").value("artist-a"));
+    }
+
+    @Test
+    @DisplayName("POST /api/admin/products - request.collectionRef 가 command 로 전달되고, 없으면 null 이다")
+    void registerProduct_forwardsCollectionRef() throws Exception {
+        org.mockito.ArgumentCaptor<com.example.product.application.command.RegisterProductCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.RegisterProductCommand.class);
+        given(registerProductService.register(captor.capture())).willReturn(UUID.randomUUID());
+
+        mockMvc.perform(post("/api/admin/products")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "응원봉", "price": 10000, "collectionRef": "artist-a",
+                                  "variants": [ { "optionName": "기본", "stock": 10, "additionalPrice": 0 } ] }
+                                """))
+                .andExpect(status().isCreated());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().collectionRef()).isEqualTo("artist-a");
+
+        mockMvc.perform(post("/api/admin/products")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "티셔츠", "price": 10000,
+                                  "variants": [ { "optionName": "기본", "stock": 10, "additionalPrice": 0 } ] }
+                                """))
+                .andExpect(status().isCreated());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().collectionRef()).isNull();
+    }
+
+    @Test
+    @DisplayName("PATCH /api/admin/products/{id} - collectionRef 65자는 400, 빈 문자열은 그대로(=지우기) 전달된다")
+    void updateProduct_collectionRef_validationAndClear() throws Exception {
+        UUID id = UUID.randomUUID();
+        org.mockito.ArgumentCaptor<com.example.product.application.command.UpdateProductCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.UpdateProductCommand.class);
+        given(updateProductService.update(captor.capture())).willReturn(id);
+
+        mockMvc.perform(patch("/api/admin/products/{id}", id)
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"collectionRef\": \"" + "a".repeat(65) + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/admin/products/{id}", id)
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"collectionRef\": \"\"}"))
+                .andExpect(status().isOk());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().collectionRef()).isEmpty();
+    }
 
     @Test
     @DisplayName("GET /api/products - 목록 조회 성공")
