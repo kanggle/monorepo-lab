@@ -3,6 +3,7 @@ package com.example.account.domain.repository;
 import com.example.account.domain.consumerpool.ConsumerSiteMembership;
 import com.example.account.domain.tenant.TenantId;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,4 +31,19 @@ public interface ConsumerSiteMembershipRepository {
      * the first argument and the only scope. Empty when there are none.
      */
     List<String> findSiteRoles(TenantId siteTenantId, String accountId);
+
+    /**
+     * TASK-MONO-752 — inserts one {@code consumer_site_roles} row. The caller has already checked that the
+     * role is absent and the ACTIVE membership exists (FK); a concurrent duplicate raises a
+     * {@code DataIntegrityViolationException}.
+     */
+    void addSiteRole(TenantId siteTenantId, String accountId, String roleName, String grantedBy, Instant grantedAt);
+
+    /**
+     * TASK-MONO-752 — deletes one {@code consumer_site_roles} row on ONE site. Never touches the
+     * membership or the account.
+     *
+     * @return {@code true} iff a row was deleted
+     */
+    boolean removeSiteRole(TenantId siteTenantId, String accountId, String roleName);
 }

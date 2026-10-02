@@ -6,6 +6,7 @@ import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,5 +35,16 @@ public class ConsumerSiteMembershipRepositoryImpl implements ConsumerSiteMembers
     @Override
     public List<String> findSiteRoles(TenantId siteTenantId, String accountId) {
         return jpaRepository.findSiteRoleNames(siteTenantId.value(), accountId);
+    }
+
+    @Override
+    public void addSiteRole(TenantId siteTenantId, String accountId, String roleName, String grantedBy,
+                            Instant grantedAt) {
+        jpaRepository.insertSiteRole(accountId, siteTenantId.value(), roleName, grantedBy, grantedAt);
+    }
+
+    @Override
+    public boolean removeSiteRole(TenantId siteTenantId, String accountId, String roleName) {
+        return jpaRepository.deleteSiteRole(siteTenantId.value(), accountId, roleName) > 0;
     }
 }

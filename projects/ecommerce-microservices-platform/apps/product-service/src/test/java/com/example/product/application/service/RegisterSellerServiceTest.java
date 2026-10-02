@@ -40,6 +40,10 @@ class RegisterSellerServiceTest {
     @Mock
     private SellerAccountProvisioner provisioner;
 
+    /** TASK-MONO-752 — member-role revocation on SUSPEND / CLOSE (its own behaviour: SellerMemberServiceTest). */
+    @Mock
+    private SellerMemberService memberService;
+
     @InjectMocks
     private RegisterSellerService service;
 

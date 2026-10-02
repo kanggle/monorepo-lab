@@ -10,7 +10,14 @@ import com.example.product.domain.exception.InvalidCategoryException;
 import com.example.product.domain.exception.MediaNotFoundException;
 import com.example.product.domain.exception.MediaValidationException;
 import com.example.product.domain.exception.ProductNotFoundException;
+import com.example.product.domain.exception.SellerInvitationAlreadyUsedException;
+import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationExpiredException;
+import com.example.product.domain.exception.SellerInvitationNotFoundException;
+import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
+import com.example.product.domain.exception.SellerNotActiveException;
 import com.example.product.domain.exception.SellerNotFoundException;
+import com.example.product.domain.exception.SellerRoleServiceUnavailableException;
 import com.example.product.domain.exception.StorageUnavailableException;
 import com.example.product.domain.exception.VariantNotFoundException;
 import com.example.common.persistence.DataIntegrityViolations;
@@ -78,6 +85,50 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ErrorResponse handleVariantNotFound(VariantNotFoundException ex) {
         return ErrorResponse.of("VARIANT_NOT_FOUND", ex.getMessage());
+    }
+
+    // ─── seller members (TASK-MONO-752, product-api.md § Seller members) ───────────────────────
+
+    @ExceptionHandler(SellerNotActiveException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleSellerNotActive(SellerNotActiveException ex) {
+        return ErrorResponse.of("SELLER_NOT_ACTIVE", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerInvitationNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse handleSellerInvitationNotFound(SellerInvitationNotFoundException ex) {
+        return ErrorResponse.of("SELLER_INVITATION_NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerInvitationExpiredException.class)
+    @ResponseStatus(HttpStatus.GONE)
+    public ErrorResponse handleSellerInvitationExpired(SellerInvitationExpiredException ex) {
+        return ErrorResponse.of("SELLER_INVITATION_EXPIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerInvitationAlreadyUsedException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleSellerInvitationAlreadyUsed(SellerInvitationAlreadyUsedException ex) {
+        return ErrorResponse.of("SELLER_INVITATION_ALREADY_USED", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerInvitationEmailMismatchException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleSellerInvitationEmailMismatch(SellerInvitationEmailMismatchException ex) {
+        return ErrorResponse.of("SELLER_INVITATION_EMAIL_MISMATCH", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerMemberAccountNotEligibleException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleSellerMemberAccountNotEligible(SellerMemberAccountNotEligibleException ex) {
+        return ErrorResponse.of("SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE", ex.getMessage());
+    }
+
+    @ExceptionHandler(SellerRoleServiceUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ErrorResponse handleSellerRoleServiceUnavailable(SellerRoleServiceUnavailableException ex) {
+        return ErrorResponse.of("SERVICE_UNAVAILABLE", ex.getMessage());
     }
 
     @ExceptionHandler(SellerNotFoundException.class)

@@ -34,6 +34,7 @@ import java.security.interfaces.RSAPublicKey;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -347,6 +348,117 @@ class SecurityChainAssemblySliceTest {
                     .andReturn();
 
             assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+        }
+    }
+
+    // ---- TASK-MONO-750: the platform operator's directory-management path ---------------------------
+
+    /**
+     * {@code ADR-MONO-079} D4-A — the one fan surface a platform operator may use. The operator token
+     * is shaped like the one iam mints when a platform operator assumes {@code fan-platform}:
+     * {@code tenant_id=fan-platform}, {@code roles=["FAN_OPERATOR"]} (derived from the tenant's
+     * {@code fan} subscription), {@code entitled_domains=["fan"]}.
+     *
+     * <p>What is pinned is the <em>shape</em> of the opening, in both directions: the directory admits
+     * that token (reads and admin-tier writes), and every path that is not the directory — the
+     * {@code /internal/**} workload surface, an unlisted path — still refuses it. The R3 control is the
+     * same role and the same entitlement on a CUSTOMER tenant's token: refused, because this service
+     * admits by {@code tenant_id} equality and never by {@code entitled_domains}.
+     */
+    @Nested
+    @DisplayName("TASK-MONO-750 — the platform operator's token: directory yes, nothing else")
+    class PlatformOperatorDirectoryPath {
+
+        private String platformOperatorToken() {
+            return JWT.sign("op-750", null, JwtTestHelper.DEFAULT_TENANT_ID, 300, java.util.Map.of(
+                    "roles", java.util.List.of("FAN_OPERATOR"),
+                    "entitled_domains", java.util.List.of("fan")));
+        }
+
+        /**
+         * Same role — but minted for a customer tenant (rider R3's excluded case), entitled to BOTH
+         * keys iam derives FAN_OPERATOR from ({@code fan}, {@code fan-platform}). The second one is
+         * what makes this discriminating: the shared validator's entitlement branch compares the
+         * claim against the required tenant id {@code fan-platform}, so {@code ["fan"]} alone would
+         * be refused even with {@code .trustEntitledDomains()} switched on (measured: the bite left a
+         * {@code ["fan"]}-only version of this test green).
+         */
+        private String customerOperatorToken() {
+            return JWT.sign("op-cust", null, "demo-corp", 300, java.util.Map.of(
+                    "roles", java.util.List.of("FAN_OPERATOR"),
+                    "entitled_domains", java.util.List.of("fan", "fan-platform")));
+        }
+
+        @Test
+        @DisplayName("management path (POST /api/artists) — the operator is past the admin gate (422, not 403)")
+        void operatorIsAdmittedOnTheDirectoryWrite() throws Exception {
+            mockMvc.perform(post("/api/artists")
+                            .header("Authorization", bearer(platformOperatorToken()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isUnprocessableEntity());
+        }
+
+        @Test
+        @DisplayName("management path (PATCH /api/agencies/{id}) — past the admin gate too (the controller is not in this slice)")
+        void operatorIsAdmittedOnTheAgencyWrite() throws Exception {
+            MvcResult result = mockMvc.perform(patch("/api/agencies/ag-1")
+                            .header("Authorization", bearer(platformOperatorToken()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+        }
+
+        @Test
+        @DisplayName("management read (GET /api/artists/{id}) — admitted")
+        void operatorIsAdmittedOnTheDirectoryRead() throws Exception {
+            MvcResult result = mockMvc.perform(get("/api/artists/a-1")
+                            .header("Authorization", bearer(platformOperatorToken())))
+                    .andReturn();
+            assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+        }
+
+        @Test
+        @DisplayName("🔴 non-management path /internal/** — the operator token is refused by the workload chain")
+        void operatorIsRefusedOnTheInternalSurface() throws Exception {
+            mockMvc.perform(get("/internal/artists/exists")
+                            .header("Authorization", bearer(platformOperatorToken())))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.message").value("Workload identity required for /internal/**"));
+        }
+
+        @Test
+        @DisplayName("🔴 non-management path (unlisted) — the operator token is refused")
+        void operatorIsRefusedOnAnUnlistedPath() throws Exception {
+            mockMvc.perform(post("/api/artist-feed")
+                            .header("Authorization", bearer(platformOperatorToken()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+
+        @Test
+        @DisplayName("🔴 R3 — a CUSTOMER tenant's FAN_OPERATOR token entitled to fan -> 403 TENANT_FORBIDDEN on the management path")
+        void customerOperatorIsRefusedEvenWithTheEntitlement() throws Exception {
+            mockMvc.perform(post("/api/artists")
+                            .header("Authorization", bearer(customerOperatorToken()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
+        }
+
+        @Test
+        @DisplayName("🔴 AC-2 — a consumer (FAN) token on the agency write is still 403 FORBIDDEN")
+        void fanIsStillRefusedOnTheAgencyWrite() throws Exception {
+            mockMvc.perform(post("/api/agencies")
+                            .header("Authorization", bearer(JWT.signFanToken("fan-1")))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
     }
 }

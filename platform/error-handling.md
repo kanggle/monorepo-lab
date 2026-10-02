@@ -277,6 +277,12 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | INSUFFICIENT_STOCK | 400 | Stock adjustment would result in negative stock. Same string as the wms Inventory `INSUFFICIENT_STOCK` (422) but a distinct operation — this is an invalid stock adjustment (400), not a reservation/withdrawal exceeding available stock |
 | IMAGE_NOT_FOUND | 404 | Image with given ID does not exist for this product |
 | SELLER_NOT_FOUND | 404 | Seller with given ID does not exist (marketplace seller surface, ADR-MONO-030) |
+| SELLER_NOT_ACTIVE | 409 | A seller-member invitation was issued or accepted for a seller that is not `ACTIVE` (`SellerNotActiveException`, ADR-MONO-079 D5 / TASK-MONO-752) |
+| SELLER_INVITATION_NOT_FOUND | 404 | The seller-member invitation token matches no invitation in this tenant (`SellerInvitationNotFoundException`, TASK-MONO-752) |
+| SELLER_INVITATION_EXPIRED | 410 | The seller-member invitation is past its expiry (`SellerInvitationExpiredException`, TASK-MONO-752) |
+| SELLER_INVITATION_ALREADY_USED | 409 | The seller-member invitation was already accepted by another account — invitations are single-use (`SellerInvitationAlreadyUsedException`, TASK-MONO-752) |
+| SELLER_INVITATION_EMAIL_MISMATCH | 403 | The logged-in account's email is not the invitation's email (IAM-verified) — nothing is linked (`SellerInvitationEmailMismatchException`, TASK-MONO-752) |
+| SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE | 409 | The logged-in account cannot hold the store `SELLER` site role — not a consumer-pool account, or no ACTIVE store membership (`SellerMemberAccountNotEligibleException`, TASK-MONO-752) |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
 | DUPLICATE_VARIANT_OPTION | 409 | `POST /api/admin/products/{productId}/variants` would create a second variant with an `optionName` that already exists on this product — natural-key guard, `uq_product_variants_option UNIQUE (product_id, option_name)` (product-service `DuplicateVariantOptionException`, TASK-BE-536) |
 | IDEMPOTENCY_KEY_REQUIRED | 400 | `Idempotency-Key` header missing or blank on `PATCH /api/admin/products/{productId}/stock` or `POST /api/admin/products` (product-service `IdempotencyKeyRequiredException`, TASK-BE-536) |
@@ -534,6 +540,10 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 | AUTH_SERVICE_UNAVAILABLE | 503 | Upstream `auth-service` unreachable during signup; fail-closed (`AuthServicePort.AuthServiceUnavailable`) |
 | BULK_LIMIT_EXCEEDED | 400 | Bulk provisioning request exceeds the 1 000-item limit (`BulkLimitExceededException`) |
 | CONSUMER_POOL_DISABLED | 409 | A consumer-pool maintenance run was refused as a whole because the consumer-pool feature flag is off — nothing was written (`ConsumerPoolDisabledException`) |
+| SITE_ROLE_NOT_GRANTABLE | 400 | Internal site-role grant/revoke for a `(site, role)` pair outside the closed grantable list, or on a tenant that is not a consumer site — nothing is written (`SiteRoleNotGrantableException`, TASK-MONO-752) |
+| SITE_ROLE_EMAIL_MISMATCH | 403 | Internal site-role grant refused: the caller's `expectedEmail` (the invitation's address) is not the pool account's own email — nothing is written (`SiteRoleEmailMismatchException`, TASK-MONO-752) |
+| SITE_ROLE_REQUIRES_POOL_ACCOUNT | 409 | Internal site-role grant/revoke on an account of the site itself (not yet in the consumer pool) — a site account cannot hold consumer site roles (`SiteRoleRequiresPoolAccountException`, TASK-MONO-752) |
+| SITE_MEMBERSHIP_REQUIRED | 409 | Internal site-role grant refused: the pool account has no ACTIVE membership of that site; the grant never creates one (`SiteMembershipRequiredException`, TASK-MONO-752) |
 
 ## Auth / Token  `[domain: saas]`
 

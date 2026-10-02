@@ -97,6 +97,15 @@ public class OAuth2ResourceServerConfig {
      * {@code .trustEntitledDomains()} here would add a branch no token can ever take —
      * dead code inside a production security filter, added for symmetry's sake.
      *
+     * <p><strong>TASK-MONO-750 (ADR-MONO-079 D4-A) changed the premise, not the answer.</strong>
+     * {@code fan-platform} now subscribes {@code fan} (iam account-service V0031) so a platform
+     * operator who assumes it is minted {@code FAN_OPERATOR} — and that token carries
+     * {@code tenant_id=fan-platform}, so it passes here by equality. The branch would no longer be
+     * dead: it would admit a <em>customer</em> tenant's token entitled to {@code fan}, which rider R3
+     * excludes. Still off, for that reason now. {@code RoleAdmissions.roleOrScope()} admits the
+     * operator's role at this edge; which fan service then honours it is each service's decision
+     * (artist-service: the directory only; community/membership/notification: refused).
+     *
      * <p>This is a test seam: {@code TenantClaimValidatorTest} builds its validator
      * from <em>this</em> method, so a change to the gate here turns that suite red instead
      * of silently altering the edge.

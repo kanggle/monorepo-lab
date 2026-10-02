@@ -5,9 +5,23 @@
 > get 403 `TENANT_FORBIDDEN`.
 >
 > All mutating endpoints (POST / PATCH / DELETE) additionally require an
-> admin-tier role: `ADMIN`, `OPERATOR`, or `SUPER_ADMIN`. Non-admin callers
+> admin-tier role: `ADMIN`, `OPERATOR`, `SUPER_ADMIN`, or `FAN_OPERATOR`. Non-admin callers
 > receive 403 `FORBIDDEN`. Read endpoints accept any authenticated tenant
 > member.
+>
+> **The platform operator's directory-management path** (`ADR-MONO-079` D4-A · `TASK-MONO-750`).
+> A **platform operator** — an IAM operator whose home is the platform scope (`*`), never a
+> customer tenant's operator (rider R3) — assumes the `fan-platform` tenant and receives an
+> assume-tenant token with `tenant_id=fan-platform` and `roles=["FAN_OPERATOR"]` (derived from
+> the `fan-platform` tenant's `fan` domain subscription). That token is honoured on the
+> **directory resources only** — artists, artist groups, fandoms, agencies (reads and the
+> admin-tier writes above). It is admitted by **`tenant_id` equality**, not by entitlement:
+> this service does **not** trust `entitled_domains`, so a customer tenant's token that is
+> entitled to `fan` is still 403 `TENANT_FORBIDDEN` here, on every path. `/internal/**` stays
+> workload-only (403 for the operator token), and every unlisted path stays denied.
+> community-service, membership-service and notification-service refuse the same token on
+> every end-user path (their contracts' § Operator tokens) — the directory is the whole of what
+> the operator manages; authoring as an artist (`ARTIST_POST`) stays closed (`ADR-MONO-059`).
 >
 > All requests are routed through the fan-platform gateway. The gateway maps
 > external paths to the service-internal paths:
@@ -498,7 +512,8 @@ Failures: 401, 403 FORBIDDEN, 404 ARTIST_NOT_FOUND, 404 FANDOM_NOT_FOUND,
 artist-service) · D2 (agency ↔ store seller, 0..1, held on the fan side).
 
 Writes are admin-tier — the **same** `ADMIN_ROLES` gate as artists / groups / fandoms;
-`TASK-MONO-750` is where the platform-operator path to it is opened. Reads are any
+the platform-operator path to it (`FAN_OPERATOR`) is the one in the header above
+(`TASK-MONO-750`). Reads are any
 authenticated tenant member. Every lookup is tenant-scoped; a cross-tenant id is 404.
 
 ### The `agency` field on artists and groups

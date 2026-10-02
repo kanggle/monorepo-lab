@@ -157,6 +157,27 @@ public class SecurityConfig {
     // distinction is the whole point: a hold silently expires when its ticket closes, a
     // decision does not. The guard lives at the issuer because that is where the decision is;
     // this matcher is unchanged code.
+    //
+    // TASK-MONO-750 / ADR-MONO-079 ACCEPTED — A (D4-A): THE "NO CALLER" EXPIRY ABOVE HAS FIRED,
+    // AND FAN_OPERATOR — ONE OF THE FOUR — IS NOW PRESENTABLE, ON PURPOSE.
+    // ---------------------------------------------------------------------------------------
+    // ADR-MONO-079 is the retaking the 522 paragraph asked for (a console screen that manages
+    // the directory, TASK-MONO-751). It partially amends ADR-MONO-059: a PLATFORM operator (home
+    // `*`) may assume `fan-platform`, which now subscribes `fan` (iam account-service V0031), and
+    // is minted FAN_OPERATOR. iam refuses every CUSTOMER operator that assume (admin-service
+    // assignment check step 2b — rider R3) and refuses `fan` subscriptions on other tenants.
+    //
+    // Where that token is honoured is decided by THIS file's shape, and it is the directory only:
+    //   * ADMIN_ROLES appears on the directory write matchers below and nowhere else;
+    //   * the directory reads are authenticated();
+    //   * /internal/** is the Order(1) workload chain (ROLE_INTERNAL) — the operator token is 403;
+    //   * anything unlisted is denyAll().
+    // No entitlement trust was added (ServiceLevelOAuth2Config): the operator token carries
+    // tenant_id=fan-platform and is admitted by equality, so a customer tenant's token that is
+    // entitled to `fan` stays 403 TENANT_FORBIDDEN. community / membership / notification
+    // refuse FAN_OPERATOR on every path — authoring as an artist (ADR-MONO-059 option B) stays
+    // closed there. ADMIN/OPERATOR/SUPER_ADMIN remain unissued in `fan-platform`, as above.
+    // Pinned by SecurityChainAssemblySliceTest.PlatformOperatorDirectoryPath.
     private static final String[] ADMIN_ROLES = { "ADMIN", "OPERATOR", "SUPER_ADMIN", "FAN_OPERATOR" };
 
     /**
@@ -228,7 +249,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH,  "/api/fandoms/**").hasAnyRole(ADMIN_ROLES)
                         // TASK-MONO-748 (ADR-MONO-079 D1): agencies are part of the same
                         // directory and take the SAME gate — no new role, no new path to it.
-                        // TASK-MONO-750 is where the platform-operator path is opened.
+                        // TASK-MONO-750: the platform operator reaches it with FAN_OPERATOR
+                        // (see the ADMIN_ROLES note above).
                         .requestMatchers(HttpMethod.POST,   "/api/agencies/**",      "/api/agencies").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.PATCH,  "/api/agencies/**").hasAnyRole(ADMIN_ROLES)
                         .requestMatchers(HttpMethod.DELETE, "/api/agencies/**").hasAnyRole(ADMIN_ROLES)

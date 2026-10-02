@@ -8,6 +8,7 @@ public class RouteService {
     public String resolveTargetService(String path) {
         if (path.startsWith("/api/users") || path.startsWith("/api/admin/users")) return "user-service";
         if (path.startsWith("/api/products") || path.startsWith("/api/admin/products")) return "product-service";
+        if (path.startsWith("/api/seller-invitations")) return "product-service"; // TASK-MONO-752
         if (path.startsWith("/api/search")) return "search-service";
         if (path.startsWith("/api/orders")) return "order-service";
         if (path.startsWith("/api/payments")) return "payment-service";

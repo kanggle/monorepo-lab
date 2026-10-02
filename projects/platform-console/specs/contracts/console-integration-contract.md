@@ -3397,6 +3397,12 @@ same-origin route handlers → ecommerce gateway direct, NO composition write le
 | 4 | `POST` | `/api/admin/sellers/{sellerId}/provision` | re-provision a `PENDING_PROVISIONING` seller (ADR-042 D3 retry; idempotent — already-ACTIVE is a no-op) → 204 / 404 |
 | 5 | `POST` | `/api/admin/sellers/{sellerId}/suspend` | `ACTIVE → SUSPENDED` + lock the backing account (ADR-042 D4; idempotent, null-safe) → 204 / 404 |
 | 6 | `POST` | `/api/admin/sellers/{sellerId}/close` | `→ CLOSED` terminal + deactivate the backing account (ADR-042 D4; idempotent, null-safe) → 204 / 404 |
+| 7 | `GET` | `/api/admin/sellers/{sellerId}/members` | TASK-MONO-752 (ADR-MONO-079 D5) — `{ members[{accountId, role, status, joinedAt}], invitations[{invitationId, email, status, expired, expiresAt, createdAt, acceptedAt}] }`; never a token → 200 / 404 |
+| 8 | `POST` | `/api/admin/sellers/{sellerId}/invitations` | TASK-MONO-752 — body `{email}` → 201 `{invitationId, email, expiresAt, token}`; the token is shown to the operator **once** (no mail path) · 409 `SELLER_NOT_ACTIVE` on a non-ACTIVE seller |
+
+  TASK-MONO-752: #5 / #6 also revoke the members' store `SELLER` site role (never a lock of the person);
+  the console refreshes the members list after a lifecycle action. Proxies:
+  `/api/ecommerce/sellers/{id}/members` (GET) · `/api/ecommerce/sellers/{id}/invitations` (POST, zod-validated → 422 before the upstream).
 
   Error envelope = the same flat ecommerce shape `{ code, message, timestamp }`
   (400 `VALIDATION_ERROR`, 403 `ACCESS_DENIED`, 404 `SELLER_NOT_FOUND`,

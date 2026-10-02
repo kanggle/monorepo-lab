@@ -16,6 +16,14 @@
 > `/api/v1/notifications/**`; the gateway forwards to the service which serves
 > `/api/fan/notifications/**`. Path examples below use the service-internal path.
 >
+> **Operator tokens are refused here** (`ADR-MONO-079` D4-A · `ADR-MONO-059` · `TASK-MONO-750`).
+> A platform operator who assumes `fan-platform` holds a token with `tenant_id=fan-platform` and
+> `roles=["FAN_OPERATOR"]`. That token passes the tenant gate (equality), so the refusal is a
+> **role rule** in this service's own chain: every request on `/api/fan/**` whose token
+> carries `FAN_OPERATOR` is **403 `PERMISSION_DENIED`**, before any handler runs. The operator's
+> fan surface is artist-service's directory only (`artist-api.md` header); the notification inbox is not
+> part of it.
+>
 > This surface also conforms to the domain-agnostic
 > [`platform/contracts/notification-inbox-contract.md`](../../../../../platform/contracts/notification-inbox-contract.md)
 > (ADR-MONO-043 § D3) for the **item shape** (§ 1) and the **verb/paging/read
@@ -75,6 +83,7 @@ this project).
 | 400 | VALIDATION_ERROR | `page < 0`, `size` outside `1..100`, or an invalid `status` value |
 | 401 | UNAUTHORIZED | missing / expired / invalid signature |
 | 403 | TENANT_FORBIDDEN | `tenant_id` claim does not match `fan-platform` (and is not `*`) |
+| 403 | PERMISSION_DENIED | the token carries `FAN_OPERATOR` (any path — see header) |
 | 404 | NOTIFICATION_NOT_FOUND | missing OR cross-account OR cross-tenant; existence not leaked |
 | 409 | CONFLICT | optimistic-lock collision on concurrent mark-read |
 

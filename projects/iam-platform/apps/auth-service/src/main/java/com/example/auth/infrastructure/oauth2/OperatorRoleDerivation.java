@@ -105,17 +105,17 @@ final class OperatorRoleDerivation {
                 case "erp" -> List.of("ERP_OPERATOR");
                 case "finance" -> List.of("FINANCE_OPERATOR");
                 case "mes" -> List.of("MES_OPERATOR");
-                // TASK-MONO-512 / ADR-MONO-059 ACCEPTED — A: this arm is UNREACHABLE, kept
-                // deliberately. It needs a `tenant_domain_subscription` row for `fan`, and
-                // there is none (0 of 18 rows across 12 tenants, measured); `fan-platform`
-                // additionally has no `operator_tenant_assignment` row, so the exchange it
-                // would ride on fails earlier with `invalid_grant`. The ADR excluded option B
-                // (operator-proxied authoring) and records as BINDING that the "operator
-                // assumes a B2C_CONSUMER tenant" combination is not opened — so supplying
-                // either row is out of scope by decision. Option D (delete this arm and the
-                // three fan-side acceptors) was on the table and was not chosen, which is why
-                // the arm remains rather than being stripped. Adding a `fan` subscription is
-                // therefore not a data fix — it silently re-opens B.
+                // TASK-MONO-750 / ADR-MONO-079 ACCEPTED — A (D4-A), a partial amendment of
+                // ADR-MONO-059: this arm is now REACHABLE, on exactly one path. account-service
+                // V0031 subscribes `fan-platform` to `fan`, and a PLATFORM operator (home `*`)
+                // may assume `fan-platform` — admin-service refuses every customer operator
+                // (assignment check step 2b, rider R3) and refuses `fan` subscriptions on any
+                // other tenant. The FAN_OPERATOR minted here is honoured by fan artist-service's
+                // directory-management paths ONLY; community, membership and notification refuse
+                // it on every path, so ADR-MONO-059's excluded option B (authoring as an artist,
+                // ARTIST_POST) stays closed — that refusal lives in those services, not here.
+                // Until TASK-MONO-750 this arm was unreachable by decision (TASK-MONO-512); the
+                // history is in ADR-MONO-059 § 부분 개정.
                 case "fan", "fan-platform" -> List.of("FAN_OPERATOR");
                 default -> List.of(); // gap / unknown → no operator role
             };

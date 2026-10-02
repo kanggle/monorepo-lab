@@ -40,6 +40,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ArtistGoodsSeedOnExistingVolumeIntegrationTest {
 
     private static final String LAST_PRE_GOODS_VERSION = "20";
+    /**
+     * TASK-MONO-752 — the version this IT is about. Both the upgrade and the re-run are pinned to it: with no
+     * target, any later migration (V22 seller members on) would run too, and «only V21 applies» / «re-run is a
+     * no-op» would start asserting «no newer file exists» instead (the same fix
+     * {@code ConsumerPoolMigrationOnExistingVolumeIntegrationTest} needed in account-service).
+     */
+    private static final String GOODS_SEED_VERSION = "21";
     private static final String GOODS_CATEGORY = "a0000000-0000-0000-0000-000000000008";
     private static final String OPERATOR_PRODUCT = "b0000000-0000-0000-0000-0000000007a9";
 
@@ -69,7 +76,7 @@ class ArtistGoodsSeedOnExistingVolumeIntegrationTest {
         productsBefore = column("SELECT id || '|' || name || '|' || COALESCE(collection_ref, 'NULL') FROM products ORDER BY id");
 
         // 3. the new version on top of it
-        upgrade = flyway(null).migrate();
+        upgrade = flyway(GOODS_SEED_VERSION).migrate();
     }
 
     private Flyway flyway(String target) {
@@ -146,7 +153,7 @@ class ArtistGoodsSeedOnExistingVolumeIntegrationTest {
     @Test
     @DisplayName("재실행은 no-op")
     void secondRunIsNoOp() {
-        MigrateResult again = flyway(null).migrate();
+        MigrateResult again = flyway(GOODS_SEED_VERSION).migrate();
         assertThat(again.success).isTrue();
         assertThat(again.migrationsExecuted).isZero();
     }

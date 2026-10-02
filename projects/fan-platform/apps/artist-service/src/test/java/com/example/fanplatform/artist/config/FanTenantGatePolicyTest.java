@@ -118,6 +118,45 @@ class FanTenantGatePolicyTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-MONO-750 (ADR-MONO-079 D4-A): the platform operator's way in is
+    // tenant EQUALITY, and the customer operator's would-be way in — the
+    // entitlement — stays shut. Both halves, on both layers.
+    // -----------------------------------------------------------------------
+    @Nested
+    @DisplayName("TASK-MONO-750 — the platform operator enters by equality; the customer operator's entitlement is refused")
+    class OperatorPathIsEqualityNotEntitlement {
+
+        @Test
+        @DisplayName("the platform operator's assume-tenant token (tenant_id=fan-platform, entitled [fan]) — admitted by BOTH layers")
+        void platformOperatorTokenIsAdmitted() throws Exception {
+            Jwt token = jwt(TENANT, List.of("fan"));
+            assertThat(validator.validate(token).hasErrors()).isFalse();
+            assertThat(filter(token, "/api/artists").called).isTrue();
+        }
+
+        @Test
+        @DisplayName("🔴 R3 — a customer tenant entitled to fan (tenant_id=demo-corp, entitled [fan, fan-platform]) — refused by BOTH layers")
+        void customerOperatorTokenIsRefusedOnTheManagementPath() throws Exception {
+            // Both keys iam derives FAN_OPERATOR from. `fan-platform` is the one the entitlement
+            // branch would match (it compares against the required tenant id), so it is what makes
+            // this refusal discriminating against .trustEntitledDomains().
+            Jwt token = jwt("demo-corp", List.of("fan", "fan-platform"));
+            var result = validator.validate(token);
+            assertThat(result.hasErrors())
+                    .as("if this goes green, .trustEntitledDomains() was added — and a CUSTOMER "
+                            + "operator now manages the fan directory, which rider R3 excludes")
+                    .isTrue();
+            assertThat(result.getErrors())
+                    .anyMatch(e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
+
+            Outcome outcome = filter(token, "/api/agencies");
+            assertThat(outcome.called).isFalse();
+            assertThat(outcome.status).isEqualTo(403);
+            assertThat(outcome.body).contains(TenantClaimEnforcer.CODE_TENANT_FORBIDDEN);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     @Nested
     @DisplayName("the decoder admits")
     class DecoderAdmits {

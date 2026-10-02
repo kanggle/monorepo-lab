@@ -89,6 +89,39 @@ class TenantClaimValidatorTest {
                 e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
     }
 
+    /**
+     * Entitled to both keys iam derives FAN_OPERATOR from. {@code fan-platform} is the one an
+     * entitlement branch would match (it compares the claim with the required tenant id), so it is
+     * what makes the R3 refusal below discriminating.
+     */
+    private static Jwt operatorToken(String tenantId) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "RS256")
+                .issuer("http://iam.local")
+                .subject("op-750")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId)
+                .claim(TenantClaimValidator.CLAIM_ENTITLED_DOMAINS, java.util.List.of("fan", "fan-platform"))
+                .claim("roles", java.util.List.of("FAN_OPERATOR"))
+                .build();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-750 — 플랫폼 운영자의 assume-tenant 토큰(tenant_id=fan-platform · FAN_OPERATOR) → 통과(동등성)")
+    void platformOperatorAssumeTenantTokenPasses() {
+        assertThat(validator.validate(operatorToken("fan-platform")).hasErrors()).isFalse();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-750 🔴 R3 — 고객사 테넌트의 같은 역할·같은 엔타이틀먼트(tenant_id=demo-corp, [fan, fan-platform]) → tenant_mismatch")
+    void customerOperatorEntitledToFanIsRejected() {
+        OAuth2TokenValidatorResult r = validator.validate(operatorToken("demo-corp"));
+        assertThat(r.hasErrors()).isTrue();
+        assertThat(r.getErrors()).anyMatch(
+                e -> TenantClaimValidator.ERROR_CODE_TENANT_MISMATCH.equals(e.getErrorCode()));
+    }
+
     @Test
     @DisplayName("tenant_id=* (SUPER_ADMIN platform-scope) → success")
     void wildcardTenantPasses() {

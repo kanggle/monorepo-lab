@@ -15,6 +15,11 @@ import {
   type SellerAreaSummary,
   type RegisterSellerBody,
   type SellerListParams,
+  SellerMembersSchema,
+  type SellerMembers,
+  InviteSellerMemberResponseSchema,
+  type InviteSellerMemberResponse,
+  type InviteSellerMemberBody,
   SELLER_DEFAULT_PAGE_SIZE,
   SELLER_MAX_PAGE_SIZE,
 } from './seller-types';
@@ -164,4 +169,41 @@ export function suspendSeller(sellerId: string): Promise<void> {
 /** POST /api/admin/sellers/{id}/close — → CLOSED terminal (+ deactivate account). */
 export function closeSeller(sellerId: string): Promise<void> {
   return sellerLifecycle(sellerId, 'close');
+}
+
+// ---------------------------------------------------------------------------
+// MEMBERS (TASK-MONO-752 — ADR-MONO-079 D5). Producer codes beyond the seller
+// set: 409 SELLER_NOT_ACTIVE (invite on a non-ACTIVE seller).
+// ---------------------------------------------------------------------------
+
+/** GET /api/admin/sellers/{id}/members — members + invitations (no tokens). */
+export function listSellerMembers(sellerId: string): Promise<SellerMembers> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'GET',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/sellers/${encodeURIComponent(sellerId)}/members`,
+    },
+    (j) => SellerMembersSchema.parse(j),
+    SELLER_LABEL,
+  );
+}
+
+/** POST /api/admin/sellers/{id}/invitations — 201 with the one-time token. */
+export function inviteSellerMember(
+  sellerId: string,
+  body: InviteSellerMemberBody,
+): Promise<InviteSellerMemberResponse> {
+  const env = getServerEnv();
+  return callEcommerce(
+    {
+      method: 'POST',
+      base: env.ECOMMERCE_ADMIN_BASE_URL,
+      path: `/sellers/${encodeURIComponent(sellerId)}/invitations`,
+      body,
+    },
+    (j) => InviteSellerMemberResponseSchema.parse(j),
+    SELLER_LABEL,
+  );
 }

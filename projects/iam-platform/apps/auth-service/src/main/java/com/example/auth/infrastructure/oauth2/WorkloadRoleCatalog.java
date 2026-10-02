@@ -69,6 +69,15 @@ import java.util.Set;
  * closed ticket. Same bytes, different standing (see {@code feedback: retract the exemption
  * when the defect is fixed}).
  *
+ * <p><b>ADR-MONO-079 ACCEPTED — A (D4-A, {@code TASK-MONO-750}) reopened that write surface — to a
+ * HUMAN, not to a workload.</b> A platform operator who assumes {@code fan-platform} is now
+ * derived {@code FAN_OPERATOR} ({@code OperatorRoleDerivation}) and manages the directory. That
+ * path runs through the assume-tenant exchange's operator branch, which this table never sees;
+ * the workload branch still mints no derived roles at all. So nothing here changed: no workload
+ * client holds an admin-tier role, and {@code WorkloadRoleCatalogTest} still asserts it. The
+ * ADR-MONO-063 D1 reasoning above about the directory being out of v1 scope is superseded for the
+ * human operator only.
+ *
  * <h3>Not an account-service lookup — and it must not become one</h3>
  *
  * <p>This table is consulted from the {@code client_credentials} branch of

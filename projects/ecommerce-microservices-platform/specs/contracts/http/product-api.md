@@ -300,6 +300,116 @@ Operator CLOSE (ADR-042 D4): seller → `CLOSED` (terminal) and the backing IAM 
 deactivated. Requires admin role. Idempotent + null-safe. **Response 204**.
 `404 SELLER_NOT_FOUND` if missing.
 
+> **TASK-MONO-752 (ADR-MONO-079 D5) — SUSPEND and CLOSE also revoke the members' `SELLER` site role.**
+> Every `ACTIVE` member of the seller loses the store site role `SELLER` (IAM
+> `site-roles:revoke`, [internal/product-to-account.md § 6](internal/product-to-account.md)). The member's
+> **person account is never locked** — only the seller's machine account is (D4 above). A member who is
+> still an `ACTIVE` member of **another `ACTIVE` seller** keeps the role (the role is one per site, so
+> taking it away would take it from the other seller too); their row here still becomes `REVOKED`.
+> A revoke that IAM did not confirm leaves that member `ACTIVE` — **re-sending SUSPEND / CLOSE on an
+> already-SUSPENDED / CLOSED seller retries exactly those revocations** (nothing else: no second account
+> lock). The same revocation runs when the seller is suspended by the reverse projection (machine
+> account `LOCKED`, `events/account-lifecycle-subscriptions.md`).
+
+---
+
+## Seller members (TASK-MONO-752 — ADR-MONO-079 D5 · rider R4)
+
+A seller has **people**: pool accounts (ADR-MONO-078 A) linked as members. One role, `MEMBER` (R4).
+A person is linked only by **accepting an invitation while logged in to the store** — the invitation
+email alone never links anyone (ADR-MONO-034 § 1.3). On accept, IAM writes
+`consumer_site_roles(account, <tenant>, SELLER)` so the person's next store token carries
+`["CUSTOMER","SELLER"]`; the fan token is unaffected (roles are per site).
+
+Data: `seller_members(tenant_id, seller_id, account_id, role, status, joined_at)` — `status`
+`ACTIVE` | `REVOKED`; `seller_member_invitations(id, tenant_id, seller_id, email, token_hash, status,
+expires_at, invited_by, created_at, accepted_at, accepted_account_id)` — `status` `PENDING` | `ACCEPTED`.
+Only the SHA-256 of the invitation token is stored.
+
+🔵 **One person may be a member of several sellers** (decided here). The `SELLER` site role stays while
+at least one of those memberships is `ACTIVE` in an `ACTIVE` seller.
+
+### GET /api/admin/sellers/{sellerId}/members
+Operator read: the seller's members and invitations. Requires admin role (`X-User-Role` ∋ `ECOMMERCE_OPERATOR`).
+
+**Response 200**
+```json
+{
+  "members": [
+    { "accountId": "string", "role": "MEMBER", "status": "ACTIVE", "joinedAt": "string (ISO 8601)" }
+  ],
+  "invitations": [
+    { "invitationId": "string (UUID)", "email": "string", "status": "PENDING",
+      "expired": false, "expiresAt": "string (ISO 8601)", "createdAt": "string (ISO 8601)",
+      "acceptedAt": "string (ISO 8601) | null" }
+  ]
+}
+```
+Members are ordered by `joinedAt` ascending, invitations by `createdAt` descending. The token is never returned here.
+
+**Error responses**: 403 `ACCESS_DENIED` · 404 `SELLER_NOT_FOUND`
+
+### POST /api/admin/sellers/{sellerId}/invitations
+Operator invites a person by email. Requires admin role. The seller must be `ACTIVE`.
+
+**Request Body**
+```json
+{ "email": "string (email, ≤ 320)" }
+```
+
+**Response 201**
+```json
+{
+  "invitationId": "string (UUID)",
+  "email": "string (lower-cased)",
+  "expiresAt": "string (ISO 8601)",
+  "token": "string"
+}
+```
+- `token` is returned **once**, here — there is no mail delivery path in this stack (ADR-MONO-078 R1);
+  the operator hands it to the person. It is 32 random bytes, base64url; the server keeps only its SHA-256.
+- Lifetime **7 days** (`seller.invitation.ttl`, ISO-8601 duration). Single use.
+- Inviting the same email again issues another independent invitation.
+
+**Error responses**: 400 `VALIDATION_ERROR` · 403 `ACCESS_DENIED` · 404 `SELLER_NOT_FOUND` · 409 `SELLER_NOT_ACTIVE`
+
+### POST /api/seller-invitations/accept
+**Consumer plane** — the invited person, logged in to the store (gateway: authenticated + `CUSTOMER`).
+Identity comes only from the gateway headers (`X-User-Id` = token `sub` = the pool account id,
+`X-Tenant-Id` = the store tenant); the body carries only the token.
+
+**Request Body**
+```json
+{ "token": "string" }
+```
+
+**Response 200**
+```json
+{ "sellerId": "string", "role": "MEMBER", "status": "ACTIVE", "joinedAt": "string (ISO 8601)" }
+```
+
+**Order of checks** (the first that fails answers; nothing is written by a refusal):
+1. `X-User-Id` present → else `401 UNAUTHORIZED`.
+2. The token's invitation exists **in this tenant** → else `404 SELLER_INVITATION_NOT_FOUND`.
+3. Not yet accepted → else `409 SELLER_INVITATION_ALREADY_USED` (an accept by the **same** account that
+   already used it answers 200 with the membership — a double submit is not an error).
+4. Not expired → else `410 SELLER_INVITATION_EXPIRED`.
+5. The seller is `ACTIVE` → else `409 SELLER_NOT_ACTIVE`.
+6. IAM grant with `expectedEmail` = the invitation's email
+   ([internal/product-to-account.md § 5](internal/product-to-account.md)) — IAM compares it with the
+   logged-in account's own email: mismatch → `403 SELLER_INVITATION_EMAIL_MISMATCH`; a site (non-pool)
+   account or no store membership → `409 SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE`; IAM unreachable →
+   `503 SERVICE_UNAVAILABLE` (**fail-closed** — unlike provisioning, no link is made without IAM).
+7. The invitation becomes `ACCEPTED` (conditional update — a concurrent second accept loses) and the
+   member row is written `ACTIVE` (a previously `REVOKED` row for the same person is re-activated).
+   If this step fails after IAM granted the role, product-service revokes the role again (best-effort).
+
+A refused attempt does **not** consume the invitation — the right person can still accept it.
+
+**Error responses**: 400 `VALIDATION_ERROR` · 401 `UNAUTHORIZED` · 403 `SELLER_INVITATION_EMAIL_MISMATCH` ·
+404 `SELLER_INVITATION_NOT_FOUND` · 409 `SELLER_INVITATION_ALREADY_USED` · 409 `SELLER_NOT_ACTIVE` ·
+409 `SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE` · 410 `SELLER_INVITATION_EXPIRED` · 503 `SERVICE_UNAVAILABLE`
+
 ---
 
 ### DELETE /api/admin/products/{productId}
