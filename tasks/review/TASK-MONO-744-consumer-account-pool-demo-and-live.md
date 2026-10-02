@@ -8,7 +8,7 @@ TASK-MONO-744
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -165,3 +165,9 @@ Vercel 쪽(굽기 무관): TASK-FE-102 · FE-103(web-store) · FAN-FE-025 · FAN
 - 616 은 `infra/demo` 를 건드리지 않아 그 PR 에서는 이 가드가 돌지 않았다(경로 필터). 이 티켓이 시드 때문에 `infra/demo` 를 건드리자 처음 돌았다. 같은 파일 주석이 «손으로 열거하는 한 세 번째가 난다» 고 예고한 그 **세 번째**다(`/signup` MONO-380 · `/connect` MONO-615).
 - 고침: 규칙에 `PathPrefix(/consent)` 추가 + 주석. 로컬 재현: 가드 (p) 의 추출 논리로 고치기 전 `/consent` 누락 → 고친 뒤 `/consent` · `/login` · `/signup` 전부 덮임.
 - 🔵 데모 계정은 두 사이트 멤버가 미리 들어가 있어 동의 화면을 안 거친다 — 이 결함은 **새로 가입한 사람**이 다른 사이트로 넘어갈 때 드러났을 것이다.
+
+## review 로 옮김 (2026-10-02 UTC) — 저장소 몫 끝, 라이브 몫은 재굽기 뒤
+
+- 머지: PR [#4102](https://github.com/kanggle/monorepo-lab/pull/4102) squash `fc6335279` · `state=MERGED` · `origin/main` 끝 일치 · 머지 전 체크 18건 전부 pass(첫 실행의 `Demo wrapper smoke` 빨강은 `/consent` 라우팅 누락 — 같은 PR 에서 고침, 위 «추가 발견»).
+- 통합 시험은 CI 가 쟀다: `account-service:integrationTest` 110 → 117(+7 = `DemoConsumerPoolSeedIntegrationTest` 5 + `FanArtistRoleSeedIntegrationTest` 6 − 옛 4), 실패 0.
+- 🔴 **남은 AC = AC-2 · AC-4 · AC-5 · 인계 항목 3(시드 뒤 확인)** — 전부 라이브다. 소유자의 **AMI 재굽기** 뒤 측정한다(측정 전 이미지 시각 vs 머지 시각 `fc6335279` 대조). 재굽기가 싣는 변경 목록은 위 «구현 기록». 그때까지 이 파일은 `review/` 에 있고, 측정 결과는 `## CORRECTION` 으로 덧붙인 뒤 `done/` 으로 옮긴다.

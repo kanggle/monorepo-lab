@@ -8,7 +8,7 @@ TASK-MONO-747
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -67,9 +67,9 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 전 실측: 팬플랫폼의 아티스트·소속사 모델 현황(artist-service), 상품 모델에 컬렉션 같은 속성이 있는지(product-service), 콘솔의 팬 관련 화면 현황, `ADR-MONO-059` 의 정확한 금지 범위. 결과를 ADR § Context 에 적는다.
-- [ ] **AC-1** — ADR 이 Goal 1~4 를 각각 선택지 · 권장안으로 정한다. 소유자가 이미 고른 갈래(위 표)는 **다시 묻지 않고** 결정으로 적는다.
-- [ ] **AC-2** — Goal 3 에 셀러 정지의 의미를 정한다: 사람 계정이 셀러에 연결되면 «셀러 정지 → 계정 잠금»(`ADR-MONO-042` D4)이 그 사람의 쇼핑·팬 이용까지 막는다 — 계정 잠금 vs 사이트 역할 회수 중 무엇인가. product-service `AccountStatusChangedSellerConsumer` 가 이벤트 `tenantId` 를 셀러 테넌트로 읽는 문제(풀 계정이면 `consumer-pool`)도 다룬다(745 닫기 기록의 넘긴 의무).
+- [x] **AC-0** — 착수 전 실측: 팬플랫폼의 아티스트·소속사 모델 현황(artist-service), 상품 모델에 컬렉션 같은 속성이 있는지(product-service), 콘솔의 팬 관련 화면 현황, `ADR-MONO-059` 의 정확한 금지 범위. 결과를 ADR § Context 에 적는다.
+- [x] **AC-1** — ADR 이 Goal 1~4 를 각각 선택지 · 권장안으로 정한다. 소유자가 이미 고른 갈래(위 표)는 **다시 묻지 않고** 결정으로 적는다.
+- [x] **AC-2** — Goal 3 에 셀러 정지의 의미를 정한다: 사람 계정이 셀러에 연결되면 «셀러 정지 → 계정 잠금»(`ADR-MONO-042` D4)이 그 사람의 쇼핑·팬 이용까지 막는다 — 계정 잠금 vs 사이트 역할 회수 중 무엇인가. product-service `AccountStatusChangedSellerConsumer` 가 이벤트 `tenantId` 를 셀러 테넌트로 읽는 문제(풀 계정이면 `consumer-pool`)도 다룬다(745 닫기 기록의 넘긴 의무).
 - [ ] **AC-3** — ADR 은 PROPOSED 로 머지되고, ACCEPT 는 소유자의 정확형(`ADR-MONO-079 ACCEPTED — <letter>`)으로만 넘어간다.
 
 # Related Specs
@@ -93,3 +93,13 @@ monorepo
 
 1. 셀러 정지가 사람 계정 전체를 잠가, 셀러였던 사람이 쇼핑·팬 이용까지 못 한다.
 2. 콘솔 팬 관리 경로가 `ADR-MONO-059` 의 금지를 우회하는 새 assume 경로로 생긴다(결정 없이).
+
+---
+
+# 구현 기록 (2026-10-02 UTC)
+
+- `docs/adr/ADR-MONO-079-agencies-sellers-and-console-fan-management.md` PROPOSED + `docs/adr/INDEX.md` 행.
+- AC-0: 착수 전 실측을 ADR § Context 표에 적었다 — 소속사 엔티티 없음(자유 텍스트 `agency`) · 아티스트 디렉터리 쓰기 경로는 059 로 발급 불가 역할에만 열림(데모는 DB 직접 시드) · 상품에 태그·브랜드·컬렉션 없음 · 셀러 = 기계 계정, 사람이 셀러로 일하는 경로 없음 · 콘솔은 이커머스 화면만, 팬 0 · ADR-059 binding 원문(«B2C_CONSUMER 테넌트를 운영자가 assume 하는 새 조합은 열지 않는다», `ADR-MONO-059:168`)과 059 스스로 남긴 «관리 화면이 생기면 다시 정하라».
+- AC-1: Goal 1~4 → D1(소속사 엔티티) · D2(셀러 연결 0..1, 팬 쪽 보유) · D3(`products.collection_ref` = 팬 아티스트 id — 739 R4 대체) · D4(콘솔 팬 관리 갈래 ①②③) · D5(사람 계정 ↔ 셀러). 소유자가 고른 세 갈래는 다시 묻지 않고 결정으로 적었다. ACCEPT 단위 갈래 A/B/C, 추천 A(구현자 선호로 표시), 라이더 R1~R4.
+- AC-2: D5 — 셀러 정지 = 구성원의 `SELLER` 사이트 역할 회수(사람 계정 잠금 아님), 기계 계정 잠금은 유지 · `AccountStatusChangedSellerConsumer` 의 `tenantId` 가정은 기계 계정에만 적용되므로 그대로 맞다(기계 계정은 풀로 가지 않는다).
+- AC-3 은 이 PR 의 머지로 닫힌다(PROPOSED 머지) — ACCEPT 는 소유자 정확형으로만.
