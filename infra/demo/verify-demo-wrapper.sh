@@ -6540,9 +6540,15 @@ for z24_f in provision-demo-env.sh demo-down.sh demo-up.sh; do
     || z24_die "(z24) 주입 확인 실패 — 스텁 $z24_f 가 실행 가능하지 않습니다. 아래 판정은 전부 무효입니다."
 done
 
+# 🔴 TASK-MONO-753 — 리셋 마커와 boot_id 출처를 **대역 경로**로 준다. 안 주면 칸들이 실제
+#    `/run` 에 마커를 남기고, 쓸 수 있는 호스트에서는 (6) 이 «이미 정리함» 으로 건너뛰어
+#    매달림 칸이 아무것도 안 재게 된다. 기본은 칸마다 마커를 비운다(Z24_KEEP_MARKER=1 로 유지).
+printf 'z24-boot-A' > "$z24_tmp/boot_id"
 z24_run() {  # $1=플래그(0|1) $2..=인자 → 마커 파일 내용을 echo
   : > "$z24_tmp/mark"
-  ( export Z24_MARK="$z24_tmp/mark" Z24_HANG="${Z24_HANG:-0}" DEMO_DOMAIN=z24.invalid
+  [ "${Z24_KEEP_MARKER:-0}" = "1" ] || rm -f "$z24_tmp/reset-marker"
+  ( export Z24_MARK="$z24_tmp/mark" Z24_HANG="${Z24_HANG:-0}" DEMO_DOMAIN=z24.invalid \
+      DEMO_BOOT_RESET_MARKER="$z24_tmp/reset-marker" DEMO_BOOT_ID_SRC="$z24_tmp/boot_id"
     if [ "$1" = "1" ]; then export DEMO_BOOT_RESET=1; else unset DEMO_BOOT_RESET; fi
     shift
     bash "$z24_tmp/infra/demo/demo-boot.sh" "$@" ) > "$z24_tmp/out" 2>&1 || true
@@ -6583,8 +6589,37 @@ else
   z24_hangnote=" · (timeout 없음 — 매달림 칸 skip)"
 fi
 
+# (7) 🔴🔴 TASK-MONO-753 — **같은 부팅의 두 번째 기동은 내리지 않는다.**
+#     2026-10-02: 유닛이 한 부팅에 두 번 돌았고, 둘째 실행의 전체 down 이 기동 중이던 ERP
+#     read-model 을 Flyway V2 한가운데서 끊어 볼륨을 영구히 고장 냈다.
+#     🔴 주입부터: 첫 실행이 마커에 대역 boot_id 를 **적었는지** 먼저 본다. 안 적었는데
+#        둘째 실행의 «down 0회» 를 읽으면, 그것은 건너뜀이 아니라 다른 이유일 수 있다.
+z24_first="$(z24_run 1 full)"
+printf '%s\n' "$z24_first" | grepq '^DOWN-RAN$' \
+  || z24_die "(z24) (7) 첫 기동에서 잔존 정리가 안 돌았습니다 — 대조군이 성립하지 않습니다: [$z24_first]"
+[ "$(cat "$z24_tmp/reset-marker" 2>/dev/null)" = "z24-boot-A" ] \
+  || z24_die "(z24) (7) 첫 기동이 리셋 마커에 boot_id 를 적지 않았습니다 — 아래 «건너뜀» 판정은 무효입니다."
+z24_second="$(Z24_KEEP_MARKER=1 z24_run 1 full)"
+printf '%s\n' "$z24_second" | grepq '^DOWN-RAN$' \
+  && z24_die "(z24) (7) **같은 부팅의 두 번째 기동**이 잔존 정리(전체 down)를 다시 돌렸습니다."\
+  $'\n'"→ 그것이 TASK-MONO-753 의 사고입니다: 이번 부팅이 방금 올린 스택을 내리고, 마이그레이션"\
+  $'\n'"  도중의 서비스는 «테이블은 있고 이력은 없는» 볼륨을 남깁니다. demo-boot.sh 의 boot_id 마커를 보세요."
+printf '%s\n' "$z24_second" | grepq '^UP-RAN:full$' \
+  || z24_die "(z24) (7) 두 번째 기동에서 demo-up.sh 가 안 불렸습니다 — 건너뛸 것은 정리뿐입니다: [$z24_second]"
+grep -q '이미 했습니다' "$z24_tmp/out" \
+  || z24_die "(z24) (7) 정리를 건너뛰었는데 **그렇게 말하지 않습니다** — 로그에 '이미 했습니다' 가 없습니다."
+# (8) 대조군 — **다른 부팅**(boot_id 가 다르다)이면 마커가 남아 있어도 다시 정리한다.
+#     이 칸이 없으면 «마커가 있으면 영원히 건너뜀» 이 통과하고, 그 순간 B4 경합이 돌아온다.
+printf 'z24-boot-B' > "$z24_tmp/boot_id"
+z24_next="$(Z24_KEEP_MARKER=1 z24_run 1 full)"
+printf '%s\n' "$z24_next" | grepq '^DOWN-RAN$' \
+  || z24_die "(z24) (8) 다음 부팅(boot_id 변경)인데 잔존 정리가 안 돌았습니다 — 마커가 부팅을 넘어 살아남습니다."\
+  $'\n'"→ 그러면 dockerd 가 되살린 컨테이너를 아무도 안 치우고 B4 경합(iam 'Created' 잔존)이 돌아옵니다."
+[ "$(cat "$z24_tmp/reset-marker" 2>/dev/null)" = "z24-boot-B" ] \
+  || z24_die "(z24) (8) 다음 부팅의 정리가 마커를 새 boot_id 로 갱신하지 않았습니다."
+
 rm -rf "$z24_tmp"
-ok "(z24) 잔존 정리는 부팅에서만 돈다 — 플래그 有: down→up 순서 · 플래그 無(per-domain): down 0회${z24_hangnote}"
+ok "(z24) 잔존 정리는 부팅에서만 · 한 부팅에 한 번 돈다 — 플래그 有: down→up 순서 · 플래그 無(per-domain): down 0회 · 같은 부팅 둘째 기동: down 0회 · 다음 부팅: 다시 정리${z24_hangnote}"
 
 
 echo "[verify] (z29) 미집행 축 안내가 «현재 상태» 를 단정하지 않고, 지목한 원장이 실재하는가 (TASK-MONO-622)"
