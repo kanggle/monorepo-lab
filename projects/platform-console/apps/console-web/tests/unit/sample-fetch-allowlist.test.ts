@@ -72,12 +72,12 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
   'app/api/console/notifications/inbox/route.ts': {
     count: 1,
     category: 'gated',
-    why: 'console-bff notification inbox',
+    why: 'notification inbox legs (aggregated here — ADR-MONO-081)',
   },
   'app/api/console/notifications/[sourceDomain]/[id]/read/route.ts': {
     count: 1,
     category: 'gated',
-    why: 'console-bff mark-read',
+    why: 'mark-read to the owning domain (dispatched here — ADR-MONO-081)',
   },
 
   // ── same-origin (this app's route handlers, which are gated) ───────────────

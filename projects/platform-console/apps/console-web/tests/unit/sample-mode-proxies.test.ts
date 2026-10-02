@@ -8,7 +8,8 @@
  *   route's EXISTING mapping (the dashboards/inbox pass a 200 through; the
  *   dashboard/inbox bodies parse with the production schemas).
  * ② authenticated → the route still reaches the backend (the dashboards their
- *   domain legs, the notification routes console-bff until TASK-PC-FE-303).
+ *   domain legs, the inbox its notification domains — console-web server
+ *   since TASK-PC-FE-303).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -129,8 +130,12 @@ describe('② authenticated operator — the real path is still taken', () => {
     ).toBe(true);
   });
 
-  it('notification inbox reaches console-bff', async () => {
-    await inboxGET(new NextRequest('http://localhost/api/console/notifications/inbox'));
-    expect(fetchSpy).toHaveBeenCalled();
+  it('notification inbox reaches its notification domain', async () => {
+    const res = await inboxGET(new NextRequest('http://localhost/api/console/notifications/inbox'));
+    // fetch throws → erp degraded, still a 200 inbox.
+    expect(res.status).toBe(200);
+    expect(
+      fetchSpy.mock.calls.some(([url]) => String(url).includes('/api/erp/notifications')),
+    ).toBe(true);
   });
 });

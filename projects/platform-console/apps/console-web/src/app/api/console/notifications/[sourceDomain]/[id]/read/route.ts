@@ -1,40 +1,33 @@
 import { NextResponse } from 'next/server';
-import {
-  getDomainFacingToken,
-  getOperatorToken,
-  getActiveTenant,
-} from '@/shared/lib/session';
+import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
+import {
+  configuredInboxDomains,
+  domainInboxHeaders,
+  findInboxDomain,
+  markReadOnce,
+} from '@/shared/composition/notification-inbox';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 
 export const runtime = 'nodejs';
 
 /**
- * Same-origin server proxy for the console-bff notification aggregator
- * MARK-READ (ADR-MONO-043 P3b — contract § 4.5). Forwards
- * `POST /api/console/notifications/{sourceDomain}/{id}/read` to console-bff,
- * which dispatches it to the OWNING domain with that domain's credential (D6).
+ * Notification mark-read — `platform/contracts/notification-inbox-contract.md`
+ * § 4 items 5–6. Dispatched from the console-web server to the OWNING domain
+ * since TASK-PC-FE-303 (ADR-MONO-081, A); before that it went via console-bff.
  *
  * Naturally idempotent (state-converging) — no body, no `Idempotency-Key`.
- * The credential is attached server-side from the HttpOnly session; the
- * browser never reaches console-bff or a domain directly.
+ * It is still a write, so it is sent **exactly once**: no retry wrapper, and
+ * a timeout is answered 502 rather than re-sent.
  *
- * Outcome map:
- *   - no domain-facing token → 401 TOKEN_INVALID.
- *   - BFF 200 → passthrough (the updated notification `{ data }`).
- *   - BFF 401 → 401; BFF 404 (unknown sourceDomain / notification) → 404.
- *   - other / network / parse → 502 BAD_GATEWAY.
+ * Outcome map (unchanged for the browser):
+ *   - `{sourceDomain}` not configured → 404 NOTIFICATION_NOT_FOUND, no call;
+ *   - no domain-facing token → 401 TOKEN_INVALID, no call;
+ *   - domain 200 → passthrough (the updated notification);
+ *   - domain 401 / 404 → same status, the domain's `code` when it gave one;
+ *   - other status / network / timeout / unreadable body → 502 BAD_GATEWAY.
  */
-
-/** Docker-network address, not the Traefik edge (TASK-MONO-362: console-bff holds
- *  no edge router — every call is server-side, from this route handler). */
-function bffUrl(sourceDomain: string, id: string): string {
-  const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
-  ).replace(/\/$/, '');
-  return `${base}/api/console/notifications/${encodeURIComponent(sourceDomain)}/${encodeURIComponent(id)}/read`;
-}
-
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ sourceDomain: string; id: string }> },
@@ -59,6 +52,15 @@ export async function POST(
   if (sample) {
     res = sample;
   } else {
+    const domain = findInboxDomain(configuredInboxDomains(), sourceDomain);
+    if (!domain) {
+      // Contract § 4 item 6 — answered here, before any downstream call.
+      return NextResponse.json(
+        { code: 'NOTIFICATION_NOT_FOUND', message: 'unknown notification domain' },
+        { status: 404 },
+      );
+    }
+
     const domainFacingToken = await getDomainFacingToken();
     if (!domainFacingToken) {
       return NextResponse.json(
@@ -67,31 +69,17 @@ export async function POST(
       );
     }
 
-    const outboundHeaders: Record<string, string> = {
-      Accept: 'application/json',
-      Authorization: `Bearer ${domainFacingToken}`,
-      'X-Request-Id': requestId,
-    };
-    const operatorToken = await getOperatorToken();
-    if (operatorToken) outboundHeaders['X-Operator-Token'] = operatorToken;
-    const tenant = await getActiveTenant();
-    if (tenant) outboundHeaders['X-Tenant-Id'] = tenant;
-
     try {
-      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-      res = await fetch(bffUrl(sourceDomain, id), {
-        method: 'POST',
-        headers: outboundHeaders,
-        cache: 'no-store',
+      res = await markReadOnce(domain, id, {
+        headers: domainInboxHeaders(domainFacingToken, requestId),
+        requestId,
+        // The demo host is resolved here, at the call site (check-fetch-resolution).
+        fetchLeg: async (url, init) => fetch(await resolveBackendUrl(url), init),
       });
     } catch {
-      logger.warn('notification_markread_proxy_network_error', { requestId });
+      logger.warn('notification_markread_network_error', { requestId });
       return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
+        { code: 'BAD_GATEWAY', message: 'notification domain unreachable' },
         { status: 502 },
       );
     }
@@ -103,7 +91,7 @@ export async function POST(
       body = await res.json();
     } catch {
       return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff returned invalid body' },
+        { code: 'BAD_GATEWAY', message: 'notification domain returned invalid body' },
         { status: 502 },
       );
     }
@@ -121,16 +109,16 @@ export async function POST(
     const code = typeof envelope.code === 'string' ? envelope.code : fallbackCode;
     const message =
       typeof envelope.message === 'string' ? envelope.message : 'request failed';
-    logger.warn('notification_markread_proxy_4xx', { requestId, status: res.status });
+    logger.warn('notification_markread_4xx', { requestId, status: res.status });
     return NextResponse.json({ code, message }, { status: res.status });
   }
 
-  logger.warn('notification_markread_proxy_unexpected_status', {
+  logger.warn('notification_markread_unexpected_status', {
     requestId,
     status: res.status,
   });
   return NextResponse.json(
-    { code: 'BAD_GATEWAY', message: 'console-bff unexpected response' },
+    { code: 'BAD_GATEWAY', message: 'notification domain unexpected response' },
     { status: 502 },
   );
 }
