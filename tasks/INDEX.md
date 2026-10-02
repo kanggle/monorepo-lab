@@ -190,7 +190,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-751-console-fan-directory-screens.md` — **ADR-079 D4-A — 콘솔 팬 화면(소속사·아티스트·그룹)** (READY, 2026-10-02 UTC · 선행 748·750). 머지 뒤 nightly 확인.
 - `TASK-MONO-752-seller-members-person-accounts.md` — **ADR-079 D5 — 셀러 구성원(초대 → 로그인 본인 수락) · `SELLER` 사이트 역할 쓰기/회수 · 정지 = 역할 회수** (READY, 2026-10-02 UTC · `TASK-MONO-745` 흡수분). 🔴 초대 수락 대조군.
 - `TASK-MONO-753-erp-read-model-migration-interrupted-by-boot-down.md` — **데모 ERP read-model 재시작 반복 — 부팅의 `down: erp` 가 Flyway V2 를 도중에 끊음** (READY, 2026-10-02 UTC · 18차 창 곁발견). 🔴 같은 인스턴스는 다음 기동에서도 그대로 — 복구 명령(소유자) · 재발 방지(부팅 순서 / 마이그레이션 멱등).
-- `TASK-MONO-755-console-composition-contracts-first.md` — **ADR-081 단계 1 — 콘솔 합성 생산자를 console-web 으로: 계약·스펙 먼저** (READY, 2026-10-02 UTC · ACCEPT PR 기안). 선 모양 바이트 그대로 · 레그 401 = 응답 401 · `TASK-MONO-751` Related Contracts 정정.
 - `TASK-MONO-756-federation-e2e-without-console-bff.md` — **ADR-081 단계 4 — 페더레이션 e2e 세 스펙을 console-web 합성 기준으로** (READY, 2026-10-02 UTC · 선행 `TASK-PC-FE-302`·`303`). 🔴 삭제(757)보다 먼저 · 트레이스 단언을 약화하지 않는다.
 - `TASK-MONO-757-retire-console-bff.md` — ⏳ **ADR-081 단계 5 — console-bff 삭제와 정리** (READY, 2026-10-02 UTC · **DO NOT START — AC-0 = 302·303·756 머지 + 다음 nightly 초록**). 🔴 `scripts/` 변경 → 모든 가드 · `PROJECT.md` `service_types` · 672/697 의무.
 - `TASK-MONO-758-console-composition-live-on-vercel.md` — ⏳ **ADR-081 단계 6 — Vercel 콘솔 세 화면 라이브 확인** (READY, 2026-10-02 UTC · **DO NOT START — AC-0 = 757 이후 커밋으로 구운 AMI**). 대조군(도메인 하나 내림) · 648 알림.
@@ -232,6 +231,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+- `TASK-MONO-755-console-composition-contracts-first.md` — 🟡 **REVIEW — ADR-081 단계 1: 계약 § 2.4.9.0(목표 규칙) 신설 · 선 모양 삭제 0줄 · console-bff-era 표시 17곳(757 이 정리)** (2026-10-02 UTC). 알림 계약 § 4 항목 6(알 수 없는 도메인 404 · 쓰기 1회) · console-web 아키텍처 한 규칙 · 751 정정. 🔴 발견: scm 레그는 docker 전용 주소 → 302 는 게이트웨이 클라이언트 재사용.
 - `TASK-MONO-738-bundle-card-says-check-failed-while-booting.md` — 🟡 **REVIEW — AC-1~3 완료, AC-4 는 `terraform apply` 뒤 라이브** (2026-09-29 UTC). 데모 서버를 켠 직후 론처 카드가 「🔴 확인 실패(마지막 발행 176386초 전)」 — 지난 세션 스냅샷을 stale 로 읽음. 701 의 «이 세션 첫 발행 전» 판정을 `_first_publish()` 로 빼 `/status`·`/bundles` 가 공유 → 그 구간 선택 묶음 `requested`(🟡 기동 중…). 유예(300초) 넘기면 여전히 `unknown`. 109 OK · bite 5칸.
 - `TASK-MONO-726-two-internal-callers-717-left-without-a-home.md` — 🔴 **batch-worker → order-service `/api/internal/**` 가 다섯 겹으로 끊겨 있던 것을 잇는다** (REVIEW, 2026-09-24 UTC · 소유자 승인: IdP 등록). 보내는 쪽(IdP 등록 `V0038` · 토큰 주소 · order 포트 8082→8086) + 받는 쪽(JWKS · issuer). 테넌트 assume 불필요(이 경로엔 테넌트 핀 없음). `check-internal-caller-addresses.sh` 목록 1→3행, 두 행 bite rc=1. auth-service 724/0 · `WorkloadRoleCatalogTest` 18/12/6. 🔴 창 판정 둘(PAID→CONFIRMED 결과 상태 · lock 라우트)은 `TASK-MONO-672` 항목 14. 🟢 **2026-09-26 UTC 소유자 결정**: ② 배선 **PASS**(15차 창 `StalePaidOrderConfirmationJob completed … scanned=0` ×2·FAILED 0) + 결과 상태는 ⚪ 측정 불가로 닫음. **① 은 OPEN** — `TASK-MONO-735`(#4048 병합) 이후 17차 창에서 판정. `review/` 유지.
 
