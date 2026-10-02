@@ -11,7 +11,7 @@ import { sampleResponse, type SampleRequest } from '@/shared/sample/router';
  *   - the six gateway cores (`callAdminGateway`, `fetchRegistry`,
  *     `callWmsGateway`, `callEcommerceGateway`, `callFlatEnvelopeGateway`
  *     — which `callScmGateway` shims onto);
- *   - the out-of-core proxies that reach console-bff directly
+ *   - the out-of-core composition routes that call the domains themselves
  *     (`api/console/dashboards/{operator-overview,domain-health}`,
  *     `api/console/notifications/{inbox,[sourceDomain]/[id]/read}`) and the
  *     tenant switch (`api/tenant`).

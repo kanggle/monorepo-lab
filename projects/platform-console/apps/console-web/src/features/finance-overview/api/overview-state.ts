@@ -31,7 +31,7 @@ import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account
  * Mirrors `features/iam-overview/api/overview-state.ts` (TASK-PC-FE-180):
  * this is a domain-internal composition over the EXISTING finance
  * `account-service` (§ 2.4.7) + `ledger-service` (§ 2.4.7.1) server
- * clients — REUSED, never re-implemented. No console-bff leg, no new
+ * clients — REUSED, never re-implemented. No cross-domain composition leg, no new
  * endpoint, no new producer call.
  *
  * TASK-PC-FE-259 — those reads are consumed by this feature AND by

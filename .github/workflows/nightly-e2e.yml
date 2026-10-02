@@ -1163,7 +1163,9 @@ jobs:
   # 2026-07-20, TASK-MONO-445 — a larger box is not a reason to widen the set):
   #   IAM auth-service + account-service + admin-service
   #   finance-platform account-service
-  #   console-bff + console-web
+  #   console-web (composes the dashboards + notification inbox itself —
+  #     ADR-MONO-081; the Java BFF that used to sit here was retired by
+  #     TASK-MONO-757)
   #   MySQL 8.0 + Redis 7
   #
   # No Kafka, no Traefik, no observability stack — the 2 specs do not
@@ -1184,7 +1186,7 @@ jobs:
         uses: ./.github/actions/setup-java-gradle
 
       - name: Build platform-console e2e boot jars
-        # 5 boot jars — IAM auth/account/admin + finance account + console-bff.
+        # 4 boot jars — IAM auth/account/admin + finance account.
         # console-web is a Next.js standalone build (handled in the e2e job).
         run: >-
           ./gradlew
@@ -1192,7 +1194,6 @@ jobs:
           :projects:iam-platform:apps:account-service:bootJar
           :projects:iam-platform:apps:admin-service:bootJar
           :projects:finance-platform:apps:account-service:bootJar
-          :projects:platform-console:apps:console-bff:bootJar
           --no-daemon --stacktrace
 
       - name: Upload platform-console e2e boot jars
@@ -1206,7 +1207,6 @@ jobs:
             projects/iam-platform/apps/account-service/build/libs/account-service.jar
             projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
-            projects/platform-console/apps/console-bff/build/libs/console-bff.jar
           retention-days: 1
 
   platform-console-e2e-fullstack:
@@ -1257,7 +1257,6 @@ jobs:
           mkdir -p projects/iam-platform/apps/account-service/build/libs/
           mkdir -p projects/iam-platform/apps/admin-service/build/libs/
           mkdir -p projects/finance-platform/apps/account-service/build/libs/
-          mkdir -p projects/platform-console/apps/console-bff/build/libs/
           mv projects/platform-console/artifact-staging/iam-platform/apps/auth-service/build/libs/auth-service.jar \
              projects/iam-platform/apps/auth-service/build/libs/auth-service.jar
           mv projects/platform-console/artifact-staging/iam-platform/apps/account-service/build/libs/account-service.jar \
@@ -1266,14 +1265,12 @@ jobs:
              projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
           mv projects/platform-console/artifact-staging/finance-platform/apps/account-service/build/libs/account-service.jar \
              projects/finance-platform/apps/account-service/build/libs/account-service.jar
-          mv projects/platform-console/artifact-staging/platform-console/apps/console-bff/build/libs/console-bff.jar \
-             projects/platform-console/apps/console-bff/build/libs/console-bff.jar
 
       - name: Build console-web (Next.js standalone production)
         working-directory: projects/platform-console/apps/console-web
         run: pnpm build
 
-      # ADR-MONO-041 D2: iam (auth/account/admin), finance-account, and console-bff
+      # ADR-MONO-041 D2: iam (auth/account/admin) and finance-account
       # images `FROM monorepo/java-service-base:v1`. No image registry → build the
       # shared base before `compose up --build` (both phases) tries to resolve it.
       - name: Build shared java-service-base image (ADR-MONO-041 D2)
@@ -1315,11 +1312,11 @@ jobs:
           docker compose -f docker-compose.e2e.yml exec -T mysql \
             mysql -uroot -prootpass < apps/console-web/tests/e2e/fixtures/seed.sql
 
-      - name: Start remaining containers (finance + console-bff + console-web)
+      - name: Start remaining containers (finance + console-web)
         working-directory: projects/platform-console
         run: |
           docker compose -f docker-compose.e2e.yml up -d --build \
-            finance-account-service console-bff console-web
+            finance-account-service console-web
 
       - name: Wait for finance-account-service health (gates seed-finance.sql application)
         # Phase 2.5 gate (TASK-MONO-132) — finance-account-service Flyway
@@ -1364,7 +1361,7 @@ jobs:
             sleep 10
           done
           echo "console-web did not become healthy in time"
-          docker compose -f docker-compose.e2e.yml logs --tail=80 console-web console-bff
+          docker compose -f docker-compose.e2e.yml logs --tail=80 console-web
           exit 1
 
       - name: Install Playwright chromium
@@ -1394,8 +1391,8 @@ jobs:
         run: pnpm exec playwright test --project=chromium
 
       - name: Dump docker compose logs on failure
-        # TASK-MONO-133 — 7 containers (5 IAM + finance + console-bff +
-        # console-web + mysql/redis/kafka placeholder) ⇒ --tail=500 gives
+        # TASK-MONO-133 — the IAM services + finance + console-web +
+        # mysql/redis/kafka placeholder ⇒ --tail=500 gives
         # ~70 lines per container which covers boot sequence + first request
         # access log. Prior --tail=200 truncated the post-boot access path.
         if: failure()

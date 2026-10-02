@@ -3,12 +3,12 @@
  * origination).
  *
  * Registers the OpenTelemetry Node SDK so the SSR route handlers that
- * proxy console-bff (operator-overview / domain-health) start the root
- * span of the cross-product trace tree and auto-inject W3C `traceparent`
- * into the outbound `fetch` to console-bff. console-bff + the 5 per-domain
- * producers already adopt the incoming `traceparent` via their Spring Boot
- * OTel auto-instrumentation, so the tree assembles end-to-end
- * (console-web SSR → console-bff aggregation → 5 producer spans = 7 spans)
+ * compose the dashboards in this server (operator-overview / domain-health,
+ * `shared/composition/console-composition.ts`) start the root span of the
+ * cross-product trace tree and auto-inject W3C `traceparent` into each
+ * outbound leg `fetch`. The per-domain producers adopt the incoming
+ * `traceparent` via their Spring Boot OTel auto-instrumentation, so the tree
+ * assembles end-to-end (console-web SSR → composition legs → producer spans)
  * and exports directly to VictoriaTraces (ADR-007a D1). NOTE: D2 decided the
  * OTLP leg would route through the Vector source, but the shipped topology
  * bypasses Vector — Vector 0.45 has no `opentelemetry` sink (see ADR-MONO-007a

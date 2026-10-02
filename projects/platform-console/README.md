@@ -7,10 +7,10 @@
 |---|---|
 | Domain | `saas` ([rules/taxonomy.md](../../rules/taxonomy.md#saas)) |
 | Traits | `multi-tenant`, `integration-heavy`, `audit-heavy` |
-| Service Types | `frontend-app` (`console-web`) · `rest-api` (`console-bff`) |
+| Service Types | `frontend-app` (`console-web`) |
 | IdP | IAM — OIDC **public client** (Auth Code + PKCE) · RFC 8693 token-exchange 로 테넌트 assume |
 | Hostname | `console.local` (Traefik, [ADR-MONO-001](../../docs/adr/ADR-MONO-001-port-prefix-scaling.md)) · 라이브 `console.hubwang.com` |
-| Status | **v1 운영 중** — `console-web` **66 페이지** · `console-bff` 가동 · CI 편입 완료 |
+| Status | **v1 운영 중** — `console-web` **66 페이지** · 교차 도메인 합성도 `console-web` 서버에서 · CI 편입 완료 |
 
 ---
 
@@ -140,7 +140,9 @@ curl -i http://console.local/api/health   # → {"status":"ok"}
 - 🔴 **일부 도메인 화면은 데모 시드가 얇아 1–3행만 나온다**(WMS 재고·출고 등). 화면의 결함이
   아니라 시드의 문제이고, 그래서 이 README 는 그 화면들을 **싣지 않았다** — 스크린샷은
   광고이므로 «꽉 찬 화면만» 건다.
-- 🔵 `console-bff` 는 교차 도메인 집약을 맡는다. 도메인이 늘면 그 집약 지점도 늘어난다.
+- 🔵 교차 도메인 합성(통합 개요 · 도메인 상태 · 알림 벨)은 `console-web` 서버가 맡는다
+  ([ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md)) — 도메인이 늘면
+  그 합성의 레그도 늘어난다. 레그마다 타임아웃만 있고 회로 차단기는 없다.
 
 ---
 

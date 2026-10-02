@@ -14,7 +14,7 @@ import type { PurchaseOrder } from './types';
  * scm already reaches its gateway server-side via `getDomainFacingToken()`
  * (§ 2.4.6 direct client), so this reuses the feature's own `listPurchaseOrders`
  * / `getSnapshot` reads and derives counts from `totalElements` (`?page=0&size=1`).
- * NO console-bff leg, NO producer `/summary`, NO producer retrofit
+ * NO cross-domain composition leg, NO producer `/summary`, NO producer retrofit
  * (ADR-MONO-017 D3.B).
  *
  * ── S5 (§ 2.4.6, NORMATIVE) ──

@@ -21,15 +21,16 @@ import {
  * value rather than its "no data" placeholder.
  *
  * WHY A CENSUS AND NOT PER-CARD TESTS: three of the six cards (finance, wms,
- * scm) were broken by the same cause at the same time — console-bff loads the
- * producer body verbatim, the contract's § 2.4.9.1 example taught a different
+ * scm) were broken by the same cause at the same time — the composition loads
+ * the producer body verbatim, the contract's § 2.4.9.1 example taught a different
  * shape, and each suite seeded its own invented body so both sides stayed
  * green. Fixing the three cards one at a time cannot stop the fourth; a census
  * over `CARD_ORDER` can, because a new leg with no fixture entry fails here.
  *
- * The fixture is the SAME file the console-bff side reads
- * (`OperatorOverviewLegBodyContractTest`) — that shared set is the point of
- * AC-3. It is read with `fs` rather than imported so the app's `tsc --noEmit`
+ * The fixture is the SAME file the composition side reads
+ * (`tests/unit/dashboard-composition-routes.test.ts`; before ADR-MONO-081 it
+ * was the retired BFF's `OperatorOverviewLegBodyContractTest`) — that shared
+ * set is the point of AC-3. It is read with `fs` rather than imported so the app's `tsc --noEmit`
  * rootDir is untouched by a path outside `apps/console-web`.
  */
 

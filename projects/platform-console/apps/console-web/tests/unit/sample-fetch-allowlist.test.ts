@@ -39,7 +39,7 @@ const NETWORK_PRIMITIVES: RegExp[] = [
 ];
 
 type Category =
-  /** A gateway core / console-bff proxy: the call is behind `sampleGate(`. */
+  /** A gateway core / composition route: the call is behind `sampleGate(`. */
   | 'gated'
   /** Same-origin call to this app's own route handlers (which are gated). */
   | 'same-origin'

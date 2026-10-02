@@ -98,8 +98,10 @@ variable "volume_gb" {
   default = 100
 }
 
-// full = 8 프로젝트 전부. demo-core = iam+ecommerce+wms+console.
+// full = FULL 전부(7 데모 도메인 — projects.sh 가 출처). demo-core = iam+ecommerce+wms.
 // AMI 는 런타임 프로파일과 무관하게 full 을 구워두는 편이 낫다(둘 다 커버).
+// 🔵 TASK-MONO-757 — platform-console 은 FULL 에 없다(콘솔은 Vercel, BFF 은퇴 — ADR-MONO-081)
+//    ⇒ 5단계가 console-web 이미지를 더 이상 굽지 않는다. 데모 호스트에서 안 띄우는 이미지다.
 variable "demo_profile" {
   type    = string
   default = "full"
@@ -109,7 +111,7 @@ source "amazon-ebs" "demo" {
   region        = var.region
   instance_type = var.build_instance
   ssh_username  = "ubuntu"
-  // gradle 42 bootJar + 40여 이미지 빌드 — SSH 유휴 타임아웃 여유
+  // gradle 41 bootJar + 40여 이미지 빌드 — SSH 유휴 타임아웃 여유
   ssh_timeout = "20m"
 
   // AMI 등록 대기. 기본 waiter 는 10분(40회 × 15초)인데, 100GB 스냅샷은 그보다
@@ -256,11 +258,12 @@ build {
   }
 
   // ---------------------------------------------------------------------------
-  // 3) boot jar 42개 — 이미지 빌드의 선행조건
+  // 3) boot jar 41개 — 이미지 빌드의 선행조건
   // ---------------------------------------------------------------------------
   // 루트 `./gradlew bootJar` 는 태스크 이름 매칭으로 bootJar 를 가진 모든
-  // 서브프로젝트에서 실행된다(실측: 42개 — ecommerce 12 / wms 7 / iam 7 /
-  // fan 5 / scm 4 / erp 4 / finance 2 / console-bff 1).
+  // 서브프로젝트에서 실행된다(실측 42개에서 유도: ecommerce 12 / wms 7 / iam 7 /
+  // fan 5 / scm 4 / erp 4 / finance 2 = 41. 콘솔의 옛 BFF 1개는 ADR-MONO-081 로 은퇴했다 —
+  // TASK-MONO-757. 41 은 유도값이고 다음 굽기의 `expected=` 줄이 실측이다).
   //
   // 손으로 나열하지 않는 것이 핵심이다. 서비스가 추가될 때마다 드리프트하는
   // 목록은 이 저장소가 이미 두 번 데인 실패 모드다(MONO-339 의 README 서비스

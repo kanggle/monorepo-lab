@@ -118,8 +118,8 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 
 ### 운영자 콘솔 — [`projects/platform-console`](../projects/platform-console/)
 
-`console-web`(테넌트 스위처 · 도메인별 운영 화면 · 결재 인박스 · 알림) +
-`console-bff`(교차 도메인 집계). **wms·scm·finance·erp 의 유일한 프런트엔드입니다** —
+`console-web`(테넌트 스위처 · 도메인별 운영 화면 · 결재 인박스 · 알림, 그리고 그 서버에서 하는
+교차 도메인 합성). **wms·scm·finance·erp 의 유일한 프런트엔드입니다** —
 위 화면들 중 「운영자 콘솔」이라 적힌 것이 전부 이 앱입니다.
 
 ⚪ *콘솔 자신의 화면(카탈로그·구독·파트너십)은 아직 고르지 않았습니다.*

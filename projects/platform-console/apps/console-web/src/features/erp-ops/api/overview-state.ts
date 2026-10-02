@@ -25,7 +25,7 @@ import type { ErpListQueryParams } from './types';
  * erp already reaches its 3 backend services server-side via
  * `getDomainFacingToken()` (§ 2.4.8 direct client). This reuses the
  * feature's own EXISTING `list*` reads and derives each count from
- * `meta.totalElements` (`?page=0&size=1`). NO console-bff leg, NO producer
+ * `meta.totalElements` (`?page=0&size=1`). NO cross-domain composition leg, NO producer
  * `/summary`, NO producer retrofit (ADR-MONO-017 D3.B).
  *
  * erp remains the THINNEST of the 4 bff-domains: 7 counts only — no status

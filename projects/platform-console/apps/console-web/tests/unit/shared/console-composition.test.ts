@@ -3,8 +3,8 @@ import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Composition core moved from console-bff (TASK-PC-FE-302 / ADR-MONO-081 —
- * contract § 2.4.9.0). These cells pin the rules the move must NOT change
+ * Composition core moved from the former BFF (TASK-PC-FE-302 / ADR-MONO-081 —
+ * contract § 2.4.9). These cells pin the rules the move must NOT change
  * (ADR-MONO-081 D2) plus the two the move adds on purpose (R1 log line,
  * R2 timeout without circuit-breaker).
  */

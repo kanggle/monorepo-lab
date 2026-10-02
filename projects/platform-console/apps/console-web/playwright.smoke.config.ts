@@ -4,9 +4,9 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright config — smoke E2E (CI 전용, 백엔드 미기동).
  *
  * platform-console-web 는 인증을 GAP IdP (auth-service) 에 위임하고, 인증 후
- * 페이지는 console-bff + admin-service registry + token-exchange + per-domain
- * gateway 들에 의존한다. smoke 단계에서는 OIDC discovery / registry /
- * token-exchange / BFF URL 을 모두 도달 불가능한 closed loopback (127.0.0.1:1)
+ * 페이지는 admin-service registry + token-exchange + per-domain gateway 들에
+ * 의존한다. smoke 단계에서는 OIDC discovery / registry / token-exchange URL 을
+ * 모두 도달 불가능한 closed loopback (127.0.0.1:1)
  * 으로 강제하고, public path (`/`, `/login`) 와 (console) layout 의 미인증
  * redirect 경로 (`isAuthenticated()` 가드) 만 결정론적으로 검증한다.
  *
@@ -53,7 +53,7 @@ export default defineConfig({
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,
     env: {
-      // SSR fetch / OIDC discovery / registry / token-exchange / console-bff
+      // SSR fetch / OIDC discovery / registry / token-exchange
       // 모두 즉시 ECONNREFUSED 로 실패하도록 강제. 미인증 BrowserContext +
       // (console)/layout.tsx 의 `isAuthenticated()` 미인증 → /login redirect
       // 가 backend 호출 없이 활성화. 클릭 트리거 (CTA → /api/auth/login) 는
@@ -64,7 +64,6 @@ export default defineConfig({
       OIDC_SCOPE: 'openid profile email tenant.read',
       CONSOLE_REGISTRY_URL: 'http://127.0.0.1:1/api/admin/console/registry',
       CONSOLE_TOKEN_EXCHANGE_URL: 'http://127.0.0.1:1/api/admin/auth/token-exchange',
-      CONSOLE_BFF_URL: 'http://127.0.0.1:1',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
     },
   },

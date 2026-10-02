@@ -31,7 +31,7 @@ import {
  * ── THE AUTH MODEL (same as orders-api.ts — § 2.4.10) ─────────────────────
  *
  * Per ADR-MONO-017 D2.A this surface is console-web → ecommerce gateway
- * DIRECT (no console-bff write leg). The ecommerce gateway requires
+ * DIRECT (no intermediary write leg). The ecommerce gateway requires
  * `account_type=OPERATOR` on the IAM OIDC token (BE-367). Therefore this
  * client uses `getDomainFacingToken()` (the assumed tenant-scoped IAM OIDC
  * token when the operator switched to a customer, else the base access token

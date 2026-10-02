@@ -44,7 +44,7 @@ import {
  *    non-IAM § 2.4.5 per-domain rules) ──────────────────────────────────────
  *
  * Per ADR-MONO-017 D2.A this surface is console-web → ecommerce gateway
- * DIRECT (no console-bff write leg). The ecommerce gateway requires
+ * DIRECT (no intermediary write leg). The ecommerce gateway requires
  * `account_type=OPERATOR` on the IAM OIDC token (BE-366 removed the producer
  * `X-User-Role` gate). Therefore this client uses `getDomainFacingToken()`
  * (the assumed tenant-scoped IAM OIDC token when the operator switched to a

@@ -9,11 +9,12 @@ import { ApiError } from './errors';
  * 와 `401` 만 갈라내고 **나머지 전부**를 하나의 `bffUnavailable: true` 로 떨궜다.
  * 거기 떨어지는 것: 502 · 500 · 타임아웃 · DNS 실패 · `ApiError` 가 아닌 예외 전부.
  *
- * 🔴🔴 그래서 «기록된 영구 한계» 와 «진짜 장애» 가 **같은 값**으로 나온다. 콘솔이
- * Vercel 로 옮겨간 뒤(`ADR-MONO-067` 단계 3) `console-bff` 는 공개 호스트명이 없어
- * (`TASK-MONO-362`) 이 경로가 **상시** 실패한다 — 즉 이 신호는 늘 켜져 있고,
- * **상시 켜진 신호는 꺼진 것과 같다.** 언젠가 BFF 가 정말로 죽어도 아무도 구별하지
- * 못한다.
+ * 🔴🔴 그래서 «기록된 한계» 와 «진짜 장애» 가 **같은 값**으로 나온다. 이 분류를 만들
+ * 당시(`TASK-MONO-711`) 합성은 옛 BFF(퇴역 — `ADR-MONO-081`)가 했고, 그 BFF 는 공개
+ * 호스트명이 없어(`TASK-MONO-362`) Vercel 콘솔에서 이 경로가 **상시** 실패했다 —
+ * **상시 켜진 신호는 꺼진 것과 같다.** 지금은 합성이 이 서버 안에서 일어난다
+ * (`TASK-PC-FE-302`/`303`). Vercel 에서 패널이 실제로 서는지는 아직 재지 않았다 —
+ * AMI 재굽기 뒤 `TASK-MONO-758` 이 잰다. 분류는 그와 무관하게 진짜 장애를 가른다.
  *
  * ⇒ 실패를 **분류해서 들고 다닌다.** 화면 문구를 바꾸는 일이 아니다(그건 별건이다) —
  * 로그와 촬영 매니페스트가 «무엇이 실패했는지» 를 말할 수 있게 하는 것이 목적이다.
@@ -48,7 +49,7 @@ export function classifyUnavailable(err: unknown): UnavailableCause {
       : typeof err;
   if (name === 'AbortError' || name === 'TimeoutError') return { kind: 'timeout', name };
   // 🔴 `fetch` 가 네트워크 층에서 실패하면 `TypeError` 를 던진다(undici/브라우저 공통).
-  //    이것이 «BFF 에 닿지도 못했다» 이고, 지금 콘솔이 상시 머무는 상태다.
+  //    이것이 «상대에 닿지도 못했다» 이다.
   if (err instanceof TypeError) return { kind: 'transport', name };
   return { kind: 'unknown', name };
 }

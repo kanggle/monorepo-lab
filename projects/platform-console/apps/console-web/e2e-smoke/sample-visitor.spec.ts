@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * 익명 방문자가 **실제 콘솔 화면**을 샘플 데이터로 본다 — 백엔드 하나도 안 뜬 채로
  * (`ADR-MONO-074` R3ⓐ — `TASK-PC-FE-282` AC-10).
  *
- * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange · console-bff 를 전부
+ * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange 를 전부
  * 도달 불가 loopback(127.0.0.1:1)으로 고정한다. 그 상태에서 개요 카드에 **샘플 숫자**가
  * 서면 «샘플 방문자의 요청은 네트워크에 닿지 않는다» 가 실제 프로덕션 빌드로 증명된다 —
  * 하나라도 백엔드로 나갔다면 그 카드는 degrade 상태로 떨어졌을 것이다.

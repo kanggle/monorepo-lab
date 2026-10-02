@@ -44,8 +44,8 @@ import { fetchRegistry } from '@/shared/api/registry-client';
  * R7 transitive discipline); it must NEVER be logged at INFO and NEVER
  * reach the browser bundle (Failure Scenario "header forwarded from
  * client component"). The only legitimate consumer is the server-side
- * dashboard proxy route which forwards it as the `X-Finance-Default-Account-Id`
- * request header to `console-bff`.
+ * operator-overview composition route, which uses it to address the finance
+ * balances leg (`shared/composition/console-composition.ts`).
  */
 export async function getFinanceDefaultAccountId(): Promise<string | null> {
   let registry;

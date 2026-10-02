@@ -85,8 +85,8 @@ for slug in "$@"; do
 
   mapfile -t ARGS < <(compose_args "$slug")
   # 🔴 이미지 이름을 `<프로젝트>-<서비스>` 로 **파생하지 않는다.** 대부분은 그 규칙이지만
-  # compose 에 명시적 `image:` 가 있는 서비스가 있고(예: console-web =
-  # `platform-console/console-web:local`), 파생 이름은 그 경우 **존재하지 않는 이미지를
+  # compose 에 명시적 `image:` 가 있는 서비스가 있고(당시 예: console-web =
+  # `platform-console/console-web:local` — 콘솔은 TASK-MONO-757 에서 데모 도메인에서 빠졌다), 파생 이름은 그 경우 **존재하지 않는 이미지를
   # 찾다가 "판정 불가"를 만든다** — 실제로 첫 판에서 그렇게 냈다. compose 가 말하는 것을 읽는다.
   mapfile -t PAIRS < <(docker compose -p "$slug" "${ARGS[@]}" config 2>/dev/null | awk '
     /^services:/ { insvc=1; next }

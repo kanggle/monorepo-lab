@@ -10,7 +10,7 @@ served — by adding a thin **additive overlay** to the already-containerized
 
 | Screen | Proves | Active tenant |
 |---|---|---|
-| 운영자 통합 개요 / 도메인 상태 | BFF federation + health | any |
+| 운영자 통합 개요 / 도메인 상태 | cross-domain composition (console-web server) + health | any |
 | IAM 운영 (계정·감사·운영자) | operator-token surface | always |
 | **WMS 운영** | direct domain call, inventory read-model | **acme-corp** |
 | **Finance 운영** | account / balances / transactions | **acme-corp** |
@@ -20,12 +20,13 @@ served — by adding a thin **additive overlay** to the already-containerized
 ## Why an overlay (not `pnpm *:up`)
 
 The per-project `docker-compose.yml` files are **infrastructure only** — the
-application services (IAM auth/account/admin, the 5 producers, console-bff,
-console-web) run as containers ONLY via the `federation-hardening-e2e` harness
+application services (IAM auth/account/admin, the 5 producers, console-web)
+run as containers ONLY via the `federation-hardening-e2e` harness
 (or as host JVMs via `bootRun`). `pnpm iam:up` etc. start just DBs/redis/kafka.
 
 The fed-e2e harness already runs the full app stack, but it was built for the
-**BFF overview/health** legs + IAM, so it lacks two things the per-domain ops
+**cross-domain overview/health** legs + IAM (first served by a BFF service,
+now composed in the console-web server — ADR-MONO-081), so it lacks two things the per-domain ops
 pages need:
 
 1. **The SCM gateway** — the SCM ops client calls `scm.local/api/v1/procurement/po`

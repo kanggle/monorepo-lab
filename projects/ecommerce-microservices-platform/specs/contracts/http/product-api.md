@@ -61,7 +61,8 @@ Operator-plane tenant-scoped product list (snapshot). Mirrors the public
 `totalElements` / `totalPages`) but on the **operator plane** under `/api/admin/products`.
 Added by **TASK-MONO-243** (ADR-MONO-030 Step 4 facet a-후속-2) as the producer
 read behind the platform-console Operator Overview ecommerce snapshot leg
-(§ 2.4.9.1 row 6) — console-bff calls it with `?page=0&size=1` and surfaces
+(§ 2.4.9.1 row 6) — the console's cross-domain composition (in the `console-web`
+server) calls it with `?page=0&size=1` and surfaces
 `totalElements` as the tenant's product count.
 
 **Query Parameters** (all optional — mirror `GET /api/products`)

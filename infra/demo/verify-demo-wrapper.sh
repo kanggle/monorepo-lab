@@ -164,7 +164,14 @@ ok "published host ports: $(tr '\n' ' ' < "$ports_file")— 충돌 없음"
 # ---------------------------------------------------------------------------
 echo "[verify] (d) 커버리지 드리프트 — 모든 projects/*/docker-compose.yml 이 맵에 등록"
 # ---------------------------------------------------------------------------
-missing=""
+# 🔵 TASK-MONO-757 — **두 번째 답이 생겼다: «일부러 안 띄운다».** platform-console 은 데모
+#    도메인에서 빠졌다(콘솔은 Vercel, BFF 은퇴 — ADR-MONO-081). 그 compose 를 이 칸이 «잊었다»
+#    로 물면 안 되고, 그렇다고 이 칸을 느슨하게 하면 진짜 «잊음» 이 같이 통과한다. 그래서
+#    제외는 projects.sh 의 `NOT_DEMO_COMPOSE` 에 **사유와 함께** 적힌 것만 받고, 세 가지를 문다:
+#      · 사유가 빈 항목          → 사유 없는 제외는 «잊음» 과 구별되지 않는다
+#      · 없는 파일을 가리키는 항목 → 낡은 제외가 조용히 남는다(줄어드는 모집단)
+#      · COMPOSE 에도 있는 파일    → 두 표가 같은 파일에 반대 말을 한다
+missing=""; excluded=""
 for f in "$ROOT"/projects/*/docker-compose.yml; do
   [ -e "$f" ] || continue
   rel="${f#"$ROOT"/}"
@@ -172,11 +179,26 @@ for f in "$ROOT"/projects/*/docker-compose.yml; do
   for p in "${!COMPOSE[@]}"; do
     case " $(compose_files "$p" | tr '\n' ' ') " in *" $rel "*) found=1; break;; esac
   done
+  if [ "$found" -eq 0 ] && [ -n "${NOT_DEMO_COMPOSE[$rel]+x}" ]; then
+    excluded="$excluded $rel"; continue
+  fi
   [ "$found" -eq 1 ] || missing="$missing$rel"$'\n'
 done
 [ -z "$missing" ] || fail "래퍼 맵(infra/demo/projects.sh)에 미등록된 프로젝트 compose:"$'\n'"$missing"\
-  $'\n'"→ 데모에서 조용히 누락됩니다. COMPOSE + FULL/DOWN_ORDER 를 갱신하세요."
-ok "${#COMPOSE[@]} 개 프로젝트 전부 맵에 등록됨"
+  $'\n'"→ 데모에서 조용히 누락됩니다. COMPOSE + FULL/DOWN_ORDER 를 갱신하세요."\
+  $'\n'"→ 일부러 데모에서 안 띄우는 것이라면 NOT_DEMO_COMPOSE 에 **사유와 함께** 적으세요."
+for rel in "${!NOT_DEMO_COMPOSE[@]}"; do
+  [ -n "${NOT_DEMO_COMPOSE[$rel]}" ] \
+    || fail "(d) NOT_DEMO_COMPOSE[$rel] 의 사유가 비었습니다 — 사유 없는 제외는 «잊음» 과 구별되지 않습니다."
+  [ -e "$ROOT/$rel" ] \
+    || fail "(d) NOT_DEMO_COMPOSE 가 없는 파일을 가리킵니다: $rel"$'\n'"→ 낡은 제외입니다. 항목을 지우세요."
+  for p in "${!COMPOSE[@]}"; do
+    case " $(compose_files "$p" | tr '\n' ' ') " in
+      *" $rel "*) fail "(d) $rel 이 COMPOSE[$p] 와 NOT_DEMO_COMPOSE 양쪽에 있습니다 — 한쪽은 거짓입니다." ;;
+    esac
+  done
+done
+ok "${#COMPOSE[@]} 개 프로젝트 전부 맵에 등록됨${excluded:+ · 사유를 단 제외:$excluded}"
 
 for p in "${!COMPOSE[@]}"; do
   while read -r f; do
@@ -365,7 +387,8 @@ traefik_aliases() {
 #
 # `set -euo pipefail` 아래서 이 모양은 **모든 프로젝트가 라우터를 최소 하나 갖는 동안만**
 # 동작한다. 단계 3 이 `console-web` 을 억제하자 console 프로젝트의 렌더에 `Host(` 가
-# **0건**이 됐고(남은 `console-bff` 는 TASK-MONO-362 가 라우터를 일부러 없앴다), 그러자:
+# **0건**이 됐고(남은 옛 BFF 는 TASK-MONO-362 가 라우터를 일부러 없앴다 — 그 BFF 는
+# ADR-MONO-081 로 은퇴했고, 콘솔은 TASK-MONO-757 에서 데모 도메인째 빠졌다), 그러자:
 #
 #   grep 0건 → rc=1 → pipefail 로 파이프라인 rc=1 → for 루프 서브셸이 set -e 로 즉사
 #   → `router_hosts` 가 rc=1 → `router_hosts > "$hosts_file"` 실패 → **스크립트 즉사**
@@ -569,7 +592,7 @@ echo "[verify] (m) 쿠키 Secure 해제와 https 오리진이 함께 쓰이지 �
 # 🔴🔴 TASK-MONO-627 — **이 칸의 모집단이 말라 버렸다. 술어를 옮긴다.**
 # ---------------------------------------------------------------------------
 # 초판은 `render console`(데모 체인)을 읽었다. 단계 3 이 `console-web` 을 억제하자
-# (`infra/demo/console-vercel.override.yml`) 그 렌더에는 `CONSOLE_PUBLIC_ORIGIN` 자체가
+# (당시 `infra/demo/console-vercel.override.yml` — TASK-MONO-757 에서 체인째 삭제) 그 렌더에는 `CONSOLE_PUBLIC_ORIGIN` 자체가
 # **없어졌고**, 위 `[ -n "$pub_origin" ]` 단언이 «오리진이 빠졌다» 로 빨개졌다 — 실제로는
 # 빠진 것이 아니라 **그 서비스가 데모에 없는** 것이다. 실측으로 그 빨강을 재현했다
 # (2026-09-06). 이 저장소가 이름 붙인 함정: **줄어드는 모집단에 하한을 걸면 성공이 고장난다.**
@@ -587,6 +610,11 @@ echo "[verify] (m) 쿠키 Secure 해제와 https 오리진이 함께 쓰이지 �
 #   방문자 콘솔은 이제 `https://console.hubwang.com`(Vercel)이고 그 쿠키 정책은 Vercel
 #   프로젝트 env 의 몫이다. `TASK-MONO-624` 기동 창이 실측했다 — 세션 쿠키 5종이 전부
 #   `Secure; HttpOnly; SameSite=lax` 이고 오리진은 https ⇒ **아래 위험 조합의 반대쪽**이다.
+# 🔵 TASK-MONO-757 — `demo.env` 에서 콘솔 키(`CONSOLE_COOKIE_SECURE=false` ·
+#   `CONSOLE_PUBLIC_ORIGIN=http://console.<도메인>`)가 빠졌다(콘솔이 데모 도메인이 아니고 그 키를
+#   읽는 컨테이너가 0개다). 그래서 이 칸이 지금 재는 것은 **base 의 기본값 조합**, 곧 로컬
+#   (`pnpm console:up`)의 모양이다. 질문 자체(«Secure 해제 ∧ https 오리진» 금지)는 그대로 옳고,
+#   콘솔이 데모 호스트로 돌아와 demo.env 에 값이 다시 생기면 그 값이 자동으로 이 렌더에 들어온다.
 console_base="projects/platform-console/docker-compose.yml"
 console_render="$(docker compose -p verify-console-base -f "$ROOT/$console_base" config 2>/dev/null)"
 printf '%s\n' "$console_render" | grepq '^  console-web:' \
@@ -918,81 +946,25 @@ if [ -f "$site_html" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-echo "[verify] (u) 콘솔의 '.local' 기본값이 demo.env + compose 로 전부 덮이는가"
+# (u) 콘솔의 '.local' 기본값 ↔ demo.env + compose — 🔵 **은퇴** (TASK-MONO-757, 2026-10)
 # ---------------------------------------------------------------------------
-# 근거(MONO-505): 콘솔 코드는 도메인 대상 URL 마다 **하드코딩된 `.local` 기본값**을
-# 들고 있다(console-web 의 zod `.default('http://wms.local/...')`, console-bff 의
-# `${KEY:http://wms.local}`). 데모가 그걸 안 덮으면:
+# 이 자리에 있던 칸은 «콘솔 코드가 `.local` 기본값으로 들고 있는 키(console-web 의 zod
+# `.default('http://wms.local/…')` + 옛 BFF 의 `${KEY:http://x.local}`)가 demo.env 와 콘솔
+# compose 양쪽에 있는가» 를 물었다(MONO-505). 로컬에선 hosts 파일로 우연히 통과하고 클라우드에서만
+# 터지는 드리프트라 사람이 못 잡는 자리였다.
 #
-#   로컬 : `.local` 이 hosts 파일 + Traefik alias 로 풀린다  → **우연히 통과한다**
-#   AWS  : 도메인이 `<ip>.sslip.io` 다                       → 아무데도 안 풀린다
-#
-# 즉 이 드리프트의 실패 모드는 **로컬에서 초록**이고 클라우드에서만 터진다. 가드 (i)
-# 와 같은 부류이고, 같은 이유로 사람이 못 잡는다.
-#
-# 술어를 손으로 열거하지 않는다 — 그러면 키가 하나 늘 때 조용히 비어버린다(가드가
-# 아무것도 안 하면서 초록을 준다). **소스에서 `.local` 기본값을 가진 키를 뽑아내고**
-# 그 집합이 demo.env 에 전부 있는지 본다. 새 도메인 키가 코드에 추가되면 이 가드는
-# 자동으로 그것까지 요구한다.
-#
-# 제외: NEXT_PUBLIC_* — Next 가 **빌드타임에 인라인**하므로 런타임 env 로 덮을 수
-# 없다(그것이 CONSOLE_PUBLIC_ORIGIN 이 따로 존재하는 이유다. MONO-358).
-console_web_env="$ROOT/projects/platform-console/apps/console-web/src/shared/config/env.ts"
-console_bff_yml="$ROOT/projects/platform-console/apps/console-bff/src/main/resources/application.yml"
-console_compose="$ROOT/projects/platform-console/docker-compose.yml"
-demo_env_file="$ROOT/infra/demo/demo.env"
+# 은퇴 사유 — 그 질문이 물을 대상이 **데모에서 사라졌다**:
+#   · 옛 BFF 모듈이 삭제됐다(ADR-MONO-081) ⇒ 그 application.yml 읽기가 **실패**한다.
+#   · console-web 은 데모 호스트에서 돌지 않는다 — platform-console 은 데모 도메인이 아니다
+#     (projects.sh 의 NOT_DEMO_COMPOSE). demo.env 의 콘솔 키를 컨테이너로 넣는 compose 는
+#     그 하나뿐이었고, 다른 compose·오버라이드가 그 이름을 보간하는 곳은 0건이다(전수).
+#   · Vercel 콘솔은 demo.env 를 읽지 않는다 — 데모 주소를 런타임에 `.local` → `.<demoDomain>`
+#     으로 파생한다(console-web/src/shared/config/demo-backend.ts).
+# ⇒ 그래서 demo.env 의 콘솔 키도 같은 PR 에서 지웠다(그 파일의 «platform-console — 여기 없다» 절).
+#   이 칸만 남기면 지운 키를 «누락» 으로 물고, 키만 남기면 아무도 안 읽는 값이 된다.
+# 🔴 콘솔을 데모 호스트로 되돌리는 날에는 이 칸을 **git 이력에서** 되살려라(console-web 쪽 추출만
+#    — BFF 는 없다). 이름 `(u)` 는 아래 kafka 메모리 리밋 칸(MONO-442)이 따로 쓰고 있다.
 
-for f in "$console_web_env" "$console_bff_yml" "$console_compose" "$demo_env_file"; do
-  [ -r "$f" ] || fail "(u) 읽을 수 없습니다: ${f#$ROOT/}"\
-    $'\n'"→ 콘솔이 이동/개명됐다면 이 가드의 경로도 함께 옮기세요. 파일이 없다고 건너뛰면"\
-    $'\n'"   가드는 아무것도 검사하지 않으면서 초록을 보고합니다."
-done
-
-# console-web: `KEY: z` … `.default('http://<host>.local…')` (여러 줄에 걸쳐 있다)
-web_keys="$(
-  tr -d '\r' < "$console_web_env" | awk '
-    /^  [A-Z][A-Z0-9_]*: z/ { k=$1; sub(/:$/,"",k) }
-    k != "" && /\.default\(.http:\/\/[a-zA-Z0-9.-]*\.local/ { print k; k="" }
-  ' | grep -v '^NEXT_PUBLIC_' | sort -u
-)"
-# console-bff: `${KEY:http://<host>.local…}`
-bff_keys="$(
-  tr -d '\r' < "$console_bff_yml" \
-    | grep -oE '\$\{[A-Z][A-Z0-9_]*:http://[a-zA-Z0-9.-]*\.local' \
-    | sed 's/^\${//; s/:http.*//' | sort -u
-)"
-
-console_keys="$(printf '%s\n%s\n' "$web_keys" "$bff_keys" | grep -v '^$' | sort -u)"
-
-[ -n "$console_keys" ] || fail "(u) 콘솔 소스에서 '.local' 기본값 키를 **하나도** 못 뽑았습니다."\
-  $'\n'"→ 0건은 '없음' 이 아니라 **추출식이 깨졌다**는 신호입니다(zod/yaml 표기 변경 등)."\
-  $'\n'"   추출식을 고치기 전까지 이 가드는 공허합니다."
-
-missing_demo=""
-for k in $console_keys; do
-  grep -qE "^${k}=" "$demo_env_file" || missing_demo="$missing_demo $k"
-done
-
-[ -z "$missing_demo" ] || fail "demo.env 가 덮지 않은 콘솔 '.local' 기본값 키:"\
-  $'\n'"$(printf '  %s\n' $missing_demo)"\
-  $'\n'"→ 이 키들은 데모에서 콘솔 코드의 하드코딩 '.local' 기본값으로 떨어집니다."\
-  $'\n'"→ **로컬에서는 hosts 파일과 Traefik alias 덕에 통과하고, 클라우드에서만 터집니다.**"\
-  $'\n'"   컨테이너는 전부 healthy, 콘솔도 뜨고, 도메인 운영 섹션만 죽습니다."\
-  $'\n'"→ infra/demo/demo.env 에 <domain>.DEMO_DOMAIN 형태로 추가하세요."
-
-# demo.env 에 있어도 compose 가 이름을 안 적으면 컨테이너에 도달하지 않는다.
-missing_compose=""
-for k in $console_keys; do
-  grep -qE "^[[:space:]]+${k}:" "$console_compose" || missing_compose="$missing_compose $k"
-done
-
-[ -z "$missing_compose" ] || fail "콘솔 compose 가 이름을 적지 않은 키(= 컨테이너에 도달하지 않음):"\
-  $'\n'"$(printf '  %s\n' $missing_compose)"\
-  $'\n'"→ 셸 env 는 **compose 가 명시적으로 보간한 자리에만** 들어갑니다. demo.env 에 값을"\
-  $'\n'"   넣어도 이 목록에 없으면 그 값은 조용히 버려집니다 — 값이 있는데 무시되는"\
-  $'\n'"   상태라 진단이 특히 어렵습니다."
-
-ok "콘솔 '.local' 기본값 키 $(printf '%s\n' $console_keys | wc -l | tr -d ' ') 개가 demo.env + compose 양쪽에 있다"
 
 
 # ---------------------------------------------------------------------------
@@ -1726,7 +1698,7 @@ echo "[verify] (z4) 한 도메인의 기동 실패가 나머지 도메인을 막
 # 통제해야 하는 것은 정확히 compose 의 종료코드 하나다.
 #
 # 🔵 물리는지 확인함: 이 본문을 고침 **전**의 `demo-up.sh`(origin/main @ 4d328cfd0)에
-#    대고 돌리면 (2) 에서 FAIL 한다 — console 기동 줄이 로그에 없다.
+#    대고 돌리면 (2) 에서 FAIL 한다 — 뒤 도메인(당시 console, TASK-MONO-757 이후 fan) 기동 줄이 로그에 없다.
 z4_tmp="$(mktemp -d)"
 mkdir -p "$z4_tmp/infra" "$z4_tmp/bin"
 cp -r "$ROOT/infra/demo" "$z4_tmp/infra/demo"
@@ -1766,7 +1738,7 @@ z4_run() {  # $1=FAILDOM ('' = 실패 없음) → 로그는 $z4_tmp/run.log, rc 
   local z4_rc=0
   ( cd "$z4_tmp" && PATH="$z4_tmp/bin:$PATH" FAILDOM="$1" DEMO_SEED=0 DEMO_DOMAIN=local \
       DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
-      bash infra/demo/demo-up.sh iam wms console ) > "$z4_tmp/run.log" 2>&1 || z4_rc=$?
+      bash infra/demo/demo-up.sh iam wms fan ) > "$z4_tmp/run.log" 2>&1 || z4_rc=$?
   echo "$z4_rc"
 }
 
@@ -1779,13 +1751,14 @@ if [ "$z4_ok_rc" != "0" ]; then
     $'\n'"--- 마지막 로그 ---"$'\n'"$z4_tail"
 fi
 
-# (2)(3)(4) bite — 가운데 도메인(wms)만 실패시킨다. iam 은 앞, console 은 뒤에 있다.
+# (2)(3)(4) bite — 가운데 도메인(wms)만 실패시킨다. iam 은 앞, fan 은 뒤에 있다.
+# 🔵 TASK-MONO-757 — 뒤 도메인이 console → fan 으로 바뀌었다(console 은 더 이상 데모 도메인이 아니다).
 z4_bad_rc="$(z4_run wms)"
 z4_log="$(cat "$z4_tmp/run.log")"
 rm -rf "$z4_tmp"
 
-if ! printf '%s\n' "$z4_log" | grepq '^\[demo\] up: console'; then
-  fail "(z4) wms 기동 실패가 그 뒤의 console 기동을 막았습니다 — 부분 실패가 격리되지 않습니다."\
+if ! printf '%s\n' "$z4_log" | grepq '^\[demo\] up: fan'; then
+  fail "(z4) wms 기동 실패가 그 뒤의 fan 기동을 막았습니다 — 부분 실패가 격리되지 않습니다."\
     $'\n'"→ 실제 결과: 재시작 뒤 옛 라벨 컨테이너가 계속 서빙하고 **새 주소는 전부 404** 입니다."\
     $'\n'"→ demo-up.sh 의 기동 루프에서 compose 실패를 잡아 다음 도메인으로 진행하세요(TASK-MONO-553 A)."
 fi
@@ -1798,7 +1771,7 @@ fi
 if ! printf '%s\n' "$z4_log" | grepq 'wms'; then
   fail "(z4) 실패한 도메인(wms)의 이름이 출력에 없습니다 — 어느 도메인이 죽었는지 알 수 없습니다."
 fi
-ok "부분 실패 격리 — 정상 rc=0 · wms 실패 시 console 까지 진행하고 rc=$z4_bad_rc 로 보고"
+ok "부분 실패 격리 — 정상 rc=0 · wms 실패 시 fan 까지 진행하고 rc=$z4_bad_rc 로 보고"
 
 # ---------------------------------------------------------------------------
 echo "[verify] (z6) 헬스 발행이 스냅샷에 **발행 시각**을 싣는가"
@@ -2485,7 +2458,7 @@ z13_run() {  # $1=FAILDOM  $2=RECHECK(up|down)  $3=DOCKER_DEAD(0|1) → rc 를 e
   ( cd "$z13_tmp" && PATH="$z13_tmp/bin:$PATH" \
       FAILDOM="$1" RECHECK="$2" DOCKER_DEAD="$3" HANGDOM="${HANGDOM:-}" \
       DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
-      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+      bash infra/demo/demo-up.sh iam wms fan ) > "$z13_tmp/run.log" 2>&1 || rc=$?
   echo "$rc"
 }
 z13_die() { rm -rf "$z13_tmp"; fail "$@"; }
@@ -2542,7 +2515,7 @@ z13_starve() {
       FAILDOM="$1" RECHECK=up DOCKER_DEAD=0 \
       DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=3 DEMO_UP_RETRY_SLEEP=1 \
       DEMO_UP_RETRY_BUDGET=1 \
-      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+      bash infra/demo/demo-up.sh iam wms fan ) > "$z13_tmp/run.log" 2>&1 || rc=$?
   echo "$rc"
 }
 z13_rc5="$(z13_starve iam)"
@@ -2581,7 +2554,7 @@ z13_hang() {
       DEMO_SEED=0 DEMO_DOMAIN=local DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
       DEMO_UP_CALL_TIMEOUT=2 DEMO_UP_TOTAL_BUDGET=60 \
       DEMO_SURFACE_ATTEMPTS=1 DEMO_SURFACE_SLEEP=0 \
-      bash infra/demo/demo-up.sh iam wms console ) > "$z13_tmp/run.log" 2>&1 || rc=$?
+      bash infra/demo/demo-up.sh iam wms fan ) > "$z13_tmp/run.log" 2>&1 || rc=$?
   echo "$rc"
 }
 # 🔴🔴 **대조군을 먼저 돌린다.** 「끊었는가」를 총 실행시간의 절대값으로 판정하면 안 된다 —
@@ -3480,7 +3453,7 @@ async function main() {
   }, {});
   await run("E404R", { ok: false, status: 404, body: { message: "Not Found" } });
   await run("OK", { ok: true, status: 200, body: { bundles: {
-    console: { state: "waiting", domains: ["iam", "console"] },
+    console: { state: "waiting", domains: ["iam"] },
     store:   { state: "ready",   domains: ["iam", "ecommerce"] },
     fan:     { state: "booting", domains: ["iam", "fan"] }
   } } });
@@ -4482,12 +4455,19 @@ z41_verdict() {  # $1 = 드라이버 출력 → 사유(여러 줄) 또는 빈 �
       for (c in dcards) {
         if (index(dep["PRE", c], "iam") != 0) print "[PRE] " c " 가 응답도 받기 전에 공용 서비스(iam)를 말합니다 — 마크업에 사본이 있습니다: " dep["PRE", c]
         if (index(dep["D1", c], "iam") == 0) print "[D1] " c " 의 공용 서비스 고지에 iam 이 없습니다: " dep["D1", c]
-        if (index(dep["D1", c], odom[c]) != 0) print "[D1] " c " 의 공용 서비스 고지가 자기 도메인(" odom[c] ")을 공용으로 말합니다: " dep["D1", c]
+        # 🔵 TASK-MONO-757 — 콘솔 카드의 자기 도메인은 `iam` 이다(콘솔은 데모 도메인이 아니고 데모
+        #    호스트에서 쓰는 것이 IdP 하나다 — 묶음 console = iam). 그 카드에게 iam 은 «자기 것» 이면서
+        #    동시에 D1 픽스처의 공용 도메인이라, 고지가 iam 을 말하는 것은 **옳다**. 그래서 자기
+        #    도메인이 D1 의 공용 집합(["iam"])에 든 카드만 이 칸에서 뺀다. 🔴 비공허성은 아래
+        #    `nown` 이 지킨다 — 이 칸을 실제로 받는 카드가 0장이면 그 자체로 빨강이다.
+        if (odom[c] != "iam") nown++
+        if (odom[c] != "iam" && index(dep["D1", c], odom[c]) != 0) print "[D1] " c " 의 공용 서비스 고지가 자기 도메인(" odom[c] ")을 공용으로 말합니다: " dep["D1", c]
         if (index(dep["D2", c], "z41-shared") == 0) print "[D2] 응답에서 공용 도메인이 늘었는데 " c " 의 고지가 안 따라옵니다 — 응답이 아니라 사본을 읽습니다: " dep["D2", c]
         if (index(dep["D3", c], "iam") != 0) print "[D3] 모든 묶음이 공유하는 도메인이 없는데 " c " 가 iam 을 공용으로 말합니다 — 사본을 읽습니다: " dep["D3", c]
       }
       nc = 0; for (c in dcards) nc++
       if (nc != ncards) print "의존성 고지를 " nc "장에서만 읽었습니다(카드 " ncards "장)"
+      if (nown + 0 < 1) print "[D1] «자기 도메인을 공용으로 말하지 않는가» 를 받는 카드가 0장입니다 — 그 칸이 공허합니다"
       split("PRE D1 D2 D3", Q, " ")
       for (i = 1; i <= 4; i++) if (dcnt[Q[i]] != ncards) print "[" Q[i] "] 의존성 레코드가 " dcnt[Q[i]] + 0 "건입니다(기대 " ncards "건)"
     }
@@ -5338,7 +5318,7 @@ z15_run() {  # $1=FAILDOM  $2=RECHECK  $3=DEAD_HOST  $4=SURFACE_SRC(옵션) → 
       FAILDOM="$1" RECHECK="$2" Z15_DEAD_HOST="$3" Z15_PROBE_LOG="$z15_tmp/probe.log" \
       DEMO_SEED=0 DEMO_DOMAIN=1-2-3-4.sslip.io DEMO_UP_ATTEMPTS=2 DEMO_UP_RETRY_SLEEP=1 \
       DEMO_SURFACE_ATTEMPTS=1 DEMO_SURFACE_SLEEP=0 DEMO_SURFACE_SRC="$src" \
-      bash infra/demo/demo-up.sh console ecommerce fan ) > "$z15_tmp/run.log" 2>&1 || rc=$?
+      bash infra/demo/demo-up.sh ecommerce fan ) > "$z15_tmp/run.log" 2>&1 || rc=$?
   echo "$rc"
 }
 z15_die() { rm -rf "$z15_tmp"; fail "$@"; }
@@ -5842,7 +5822,7 @@ z18s_expect NOCOVER 0 '' 10   # 빈 출력을 0 으로 세지 않는다
 z18s_expect NOCOVER 0 0  0    # 모집단 0 을 통과로 세지 않는다
 ok "(z18s) 판정기 6/6 — 죽은 것은 물고, «질의 실패»·«빈 출력»·«모집단 0» 중 어느 것도 초록이 아니다"
 
-echo "[verify] (z19)·(z28)·(z31) Vercel 로 옮겨간 화면이 데모에서 억제되는가 (ADR-MONO-067 단계 2·3·4)"
+echo "[verify] (z19)·(z28) Vercel 로 옮겨간 화면이 데모에서 억제되는가 (ADR-MONO-067 단계 2·4 · 단계 3 콘솔은 데모 체인 밖)"
 # -----------------------------------------------------------------------------
 # 방문자 화면이 Vercel 로 옮겨갔는데 데모 호스트가 자기 사본을 계속 서빙하던 결함이다.
 # 억제는 도메인마다 `infra/demo/<slug>-vercel.override.yml` **한 곳**에 선언된다.
@@ -5979,34 +5959,39 @@ assert_vercel_suppressed z28 fan \
   "pnpm fan-platform:up (package.json:41-45)" \
   "https://fan.hubwang.com"
 
-# 🔵 콘솔의 바닥이 1 인 이유: base 가 **2서비스**(console-web · console-bff)라 앞의 두
-#    바닥(20 · 6)을 상속하면 **항상 FATAL** 이다. 바닥은 «렌더가 깨졌는가» 를 재는 것이므로
-#    스택 크기에 맞춰야 하고, 상속하면 그 축이 죽는다. (2026-09-06 선언 전수: 2 → 1 · 로컬 2)
-# 🔴 `console-bff` 는 **억제 대상이 아니다** — 공개 라우터가 없어(TASK-MONO-362) 데모
-#    호스트에 표면을 안 만들고, `console-web` 이 없으면 아무도 안 부른다. 그래도 남기는
-#    이유는 억제 파일의 권한이 «Vercel 로 옮겨간 표면 하나» 이기 때문이고, 그 권한은
-#    아래 «차이가 정확히 1개» 칸이 집행한다.
-# 🔴 태그가 `z29` 가 **아니다** — 그 이름은 TASK-MONO-622 의 미집행-축 칸이 이미 쓴다
-#    (실측 2026-09-06: 이 파일의 `(zNN)` 은 z2~z30 이 차 있다). 같은 이름을 두 칸이 쓰면
-#    FAIL 메시지만 보고는 **어느 칸이 물었는지 알 수 없다.**
-assert_vercel_suppressed z31 console \
-  infra/demo/console-vercel.override.yml console-web \
-  projects/platform-console/docker-compose.yml 1 \
-  "pnpm console:up (package.json:77)" \
-  "https://console.hubwang.com"
+# 🔵 TASK-MONO-757 — **(z31)(console) 은 은퇴했다. 억제가 풀린 것이 아니라 억제할 체인이 없어졌다.**
+#    (z31)은 `[console]` 체인에서 `console-vercel.override.yml` 이 console-web 하나를 지우는지
+#    쟀다. 그 체인에 남던 다른 하나(옛 BFF)가 은퇴하자(ADR-MONO-081) 체인이 **0 서비스**를
+#    렌더했고(`no service selected`), 그래서 platform-console 은 **데모 도메인째** 빠졌다
+#    (projects.sh 의 NOT_DEMO_COMPOSE · 억제 오버라이드 삭제). 이 함수의 다섯 칸은 «체인 안에서
+#    억제 파일이 한 서비스를 지운다» 를 재므로 체인이 없는 축에는 물을 것이 없다.
+# 🔴 그 화면의 «데모 호스트가 사본을 안 띄운다» 는 여전히 재어진다 — 다만 **다른 술어로**:
+#    console-web 의 compose 가 어느 데모 체인에도 없다는 것이다. (d) 가 COMPOSE ↔
+#    NOT_DEMO_COMPOSE 의 배타를 집행하고, 바로 아래 칸이 «그 제외가 사라지면» 을 문다.
+z19_console_base="projects/platform-console/docker-compose.yml"
+[ -n "${NOT_DEMO_COMPOSE[$z19_console_base]+x}" ] || fail \
+  "(z19) $z19_console_base 가 NOT_DEMO_COMPOSE 에 없습니다 — 콘솔이 데모 도메인으로 돌아왔다면"\
+  $'\n'"  그 체인에 억제(또는 의도)를 다시 선언하고 이 칸과 (z31)을 함께 되살리세요(TASK-MONO-757)."
+for z19_p in "${!COMPOSE[@]}"; do
+  case " ${COMPOSE[$z19_p]} " in
+    *" $z19_console_base "*) fail "(z19) 콘솔 compose 가 데모 체인 [$z19_p] 에 들어가 있습니다 — 데모 호스트가 Vercel 콘솔의 사본을 띄웁니다." ;;
+  esac
+done
 
 # 🔴 축이 조용히 사라지는 것을 막는 바닥. 유도가 아니라 등록이므로, 등록 줄을 지우면
 #    그 억제는 **아무도 안 재는 상태로 초록**이 된다 — 그 구멍을 여기서 닫는다.
 #    🔵 이 수는 ADR-MONO-067 이 «Vercel 로 옮긴 화면» 을 늘릴 때만 올라간다.
-# 🔵 TASK-MONO-627 — 2 → **3**. 단계 3(console)이 등록됐고, 이것으로 `ADR-MONO-067` 이
-#    옮긴 방문자 화면 **셋 전부**가 이 축에 들어왔다. 🔴 이 값을 되돌리는 것은 그 셋 중
-#    하나의 억제를 **아무도 안 재는 상태**로 만드는 것과 같다.
-z19_axes_floor=3
+# 🔵 TASK-MONO-627 — 2 → 3. 단계 3(console)이 등록됐었다.
+# 🔵 TASK-MONO-757 — 3 → **2**. 내린 이유는 «재는 화면이 줄었다» 가 아니라 **«억제로 재는 화면이
+#    줄었다»** 다: 콘솔은 위 칸이 «데모 체인에 없다» 로 재고, 그 술어는 이 함수의 «억제 파일이
+#    한 서비스를 지운다» 와 다른 것이라 이 바닥에 세지 않는다. 🔴 그래서 이 값을 다시 3 으로
+#    올리려면 «억제 축» 이 정말 하나 늘어야 한다 — 콘솔 칸을 이 바닥에 세어 맞추지 마라.
+z19_axes_floor=2
 [ "$z19_axes" -ge "$z19_axes_floor" ] || fail \
-  "(z19/z28/z31) 억제 축이 ${z19_axes}개만 등록됐습니다 (바닥 ${z19_axes_floor})."\
+  "(z19/z28) 억제 축이 ${z19_axes}개만 등록됐습니다 (바닥 ${z19_axes_floor})."\
   $'\n'"→ 등록 줄이 지워지면 그 도메인의 억제는 아무도 안 재면서 초록이 됩니다."\
   $'\n'"  ADR-MONO-067 이 화면을 되돌린 것이 아니라면 등록 줄을 복구하세요."
-ok "(z19/z28/z31) 억제 축 ${z19_axes}개가 등록돼 있고 전부 판정됐다 (바닥 ${z19_axes_floor}) — ADR-MONO-067 이 옮긴 방문자 화면 셋 전부"
+ok "(z19/z28) 억제 축 ${z19_axes}개가 등록돼 있고 전부 판정됐다 (바닥 ${z19_axes_floor}) · 콘솔은 데모 체인 밖(NOT_DEMO_COMPOSE) — ADR-MONO-067 이 옮긴 방문자 화면 셋 전부"
 
 # ---------------------------------------------------------------------------
 # idp_path_prefixes <discovery-json> — URL 값 필드에서 경로의 **첫 세그먼트** 집합

@@ -477,7 +477,7 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     // + TASK-PC-FE-055: 2 read-model delegation-fact GET routes
     //   (delegations list + delegations/[grantId] detail) = 18 total GET route files.
     // (TASK-PC-FE-138: the 2 erp-direct notification GET routes were removed —
-    //  the bell now reads the console-bff aggregator under /api/console.)
+    //  the bell now reads the notification aggregator under /api/console.)
     expect(getRouteFiles).toBe(18);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16

@@ -185,7 +185,8 @@ services:
       # 포트는 **8085** 다. application.yml 의 기본값 `localhost:8084` 를 보고 8084 로
       # 적었다가 같은 ConnectException 을 한 번 더 받았다 — 컨테이너가 실제로 여는
       # 포트는 `docker exec … netstat` 로 확인한 8085 이고(호스트 매핑 18085),
-      # console-bff 의 fed-e2e 배선이 쓰는 값과도 일치한다. **기본값 포트는 그 서비스가
+      # 당시 콘솔의 옛 BFF(은퇴 — ADR-MONO-081)가 fed-e2e 배선에서 쓰던 값과도 일치했다.
+      # **기본값 포트는 그 서비스가
       # 실제로 듣는 포트가 아니다.**
       ADMIN_SERVICE_URL: http://admin-service:8085
     networks:

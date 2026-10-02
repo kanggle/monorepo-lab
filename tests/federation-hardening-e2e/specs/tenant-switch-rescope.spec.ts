@@ -4,14 +4,14 @@ import { gotoOverview, switchTenant } from '../fixtures/console-helpers';
 
 /**
  * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the overview legs now leave from the console-web
- * server (scm through the scm gateway), not console-bff — same domain-facing token,
+ * server (scm through the scm gateway) — same domain-facing token,
  * same producer-side gate. «BFF pass-through» below now reads «console-web pass-through».
  *
  * TASK-MONO-158 — ADR-MONO-020 § 3.3 step 3 (D4) capstone.
  *
  * Active-tenant switcher → assume-tenant flow A↔B re-scope discriminator spec.
  * Proves, on the full federation-hardening-e2e stack (GAP + finance/wms/scm/erp
- * + console-bff + console-web), that switching a MULTI-ASSIGNMENT operator
+ * + console-web), that switching a MULTI-ASSIGNMENT operator
  * between two customers with COMPLEMENTARY entitlements re-scopes the SIGNED
  * domain-facing token (`tenant_id` + `entitled_domains`), so the federated
  * domain entitlement gates FOLLOW the selection. This is the single defining
@@ -31,7 +31,7 @@ import { gotoOverview, switchTenant } from '../fixtures/console-helpers';
  *          dual-accepts (slug OR entitled_domains). For acme-corp:
  *          finance/wms ACCEPT, scm/erp REJECT. For globex-corp: the INVERSE
  *          (scm/erp ACCEPT, finance/wms REJECT).
- *   BFF pass-through (ADR-017 D6 / PC-BE-007): console-bff forwards the assumed
+ *   BFF pass-through (ADR-017 D6 / PC-BE-007): console-web forwards the assumed
  *          token unchanged on the per-domain fan-out, so the per-card status
  *          reflects the REAL gate decision for the selected customer.
  *

@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  * (`ADR-MONO-074` — `TASK-PC-FE-288` AC-7, `ADR-MONO-074` 실행 시리즈의
  * 마지막 도메인 티켓).
  *
- * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange · console-bff
+ * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange
  * 를 전부 도달 불가 loopback(127.0.0.1:1)으로 고정한다. 그 상태에서 `/scm/procurement`
  * 이 배너 + 발주 목록 화면으로 서면 「실제 화면이 네트워크 없이 선다」가 프로덕션
  * 빌드로 증명된다. 🔴 행 수는 단언하지 않는다(작업지시서 AC-7) — 렌더 1칸만 잰다.

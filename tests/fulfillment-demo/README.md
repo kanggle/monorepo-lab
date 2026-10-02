@@ -190,7 +190,7 @@ a real failure risk; the code itself is CI-gated, so correctness does not depend
 3. **wms `inventory-service`** + seed: stock for `SKU-APPLE-001` at an `ACTIVE` location in
    `WH-MAIN`, so the outbound saga's reservation succeeds (`REQUESTED → RESERVED`). Pick is
    only enabled once the saga is `RESERVED`.
-4. **`platform-console`** (`console-bff` + `console-web`) — the operator UI.
+4. **`platform-console`** (`console-web`) — the operator UI.
 5. **`web-store`** (optional) — to place the order from the storefront UI instead of curl.
 6. An operator account provisioned with the **`wms` tenant** + the **`OUTBOUND_WRITE`** role
    (the gateway/outbound-service authorize on the JWT role claim).

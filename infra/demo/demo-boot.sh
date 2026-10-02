@@ -26,7 +26,7 @@
 #   DEMO_DOMAIN=1-2-3-4.sslip.io bash infra/demo/demo-boot.sh full   # 파생 건너뜀
 #
 # 인자를 **그대로 demo-up.sh 로 전달**한다(TASK-MONO-477). 그래서 컨트롤 플레인이
-# SSM 으로 `demo-boot.sh fan console` 을 부르면, 도메인 파생이 여기서 일어난 뒤
+# SSM 으로 `demo-boot.sh fan erp` 를 부르면, 도메인 파생이 여기서 일어난 뒤
 # demo-up.sh 가 그 도메인들을 올린다 — per-domain 기동도 올바른 DEMO_DOMAIN 을 얻는다.
 # =============================================================================
 set -euo pipefail
@@ -93,7 +93,7 @@ PROFILE="$*"
 # 설정·비용 0). **하이픈 표기**를 쓴다 — `web.ecommerce.${DEMO_DOMAIN}` 처럼 이미 2단인
 # 호스트명과 합쳐지므로 점 표기는 레이블이 불필요하게 길어진다.
 #
-# ⚠️ **빈 문자열이 가장 위험하다.** `DEMO_DOMAIN=""` 이면 라우터는 `Host(`console.`)` 가
+# ⚠️ **빈 문자열이 가장 위험하다.** `DEMO_DOMAIN=""` 이면 라우터는 `Host(`iam.`)` 가
 # 되는데, **Traefik 은 이걸 거부하지 않는다** — 그냥 아무 요청과도 매치하지 않는다.
 # 에러 로그 0건, 컨테이너 전부 healthy, 그런데 404. 358 이 내내 싸운 그 모양이다.
 # 그래서 파생 실패는 **반드시 `local` 로 떨어지고, 그 사실을 말한다.**

@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 
 /**
  * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the health legs are composed in the console-web
- * server now, not console-bff; the route and the assertions below are unchanged.
+ * server now (the former BFF was retired by TASK-MONO-757); the route and the
+ * assertions below are unchanged.
  *
  * TASK-MONO-139 — Domain Health composition spec.
  * ADR-MONO-018 D3 (MVP: 2 composition specs).
@@ -11,9 +12,9 @@ import { test, expect } from '@playwright/test';
  * assert 5-domain health attribution rendered + all 5 = UP.
  *
  * Per console-integration-contract.md § 2.4.9.2: the Domain Health route
- * aggregates health status for all 5 backend domains via console-bff
+ * aggregates health status for the backend domains at
  * GET /api/console/dashboards/domain-health. Each domain surfaces its
- * actuator health status through the BFF fan-out.
+ * actuator health status through the console-web server's fan-out.
  *
  * This spec verifies the composition renders (200 OK + 5 domain statuses)
  * when all 5 producers are live. Degrade path (force-503 one domain) = MVP
@@ -36,7 +37,7 @@ test.describe('Domain Health composition (5-domain health attribution)', () => {
     // MVP-level relaxation per TASK-MONO-140 cycle 5 (sibling MONO-133 honest
     // scope adjustment): cross-product e2e cohort verifies the dashboard page
     // resolves + auth works + heading renders. 5-domain health attribution
-    // visibility depends on console-bff fan-out integration to per-domain
+    // visibility depends on the fan-out reaching the per-domain
     // /actuator/health endpoints — deferred to a follow-up task.
     await expect(page).toHaveURL(/\/dashboards\/health(\?|$)/);
     await expect(page).toHaveTitle(/.+/);

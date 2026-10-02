@@ -1,13 +1,19 @@
 # infra/demo — 온디맨드 포트폴리오 통합 데모 (TASK-MONO-336)
 
-8개 프로젝트 전체(iam · ecommerce · wms · scm · fan · finance · erp · platform-console)를
+7개 데모 도메인(iam · ecommerce · wms · scm · fan · finance · erp)을
 **한 명령**으로 공유 Traefik 위에 기동한다. 온디맨드 데모 호스트(EC2 scale-to-zero)의
-`demo-stack.service` 가 부팅 시 `demo-up.sh full` 을 호출하는 것을 전제로 한다.
+`demo-stack.service` 가 부팅 시 `demo-boot.sh selection` 을 호출한다(방문자가 고른 묶음만 —
+ADR-MONO-071).
+
+> 🔵 **platform-console 은 데모 도메인이 아니다** (TASK-MONO-757 / ADR-MONO-081). 방문자 콘솔은
+> Vercel(`https://console.hubwang.com`)에서 돌고, 그 서버의 합성 레이어였던 BFF 는 은퇴했다.
+> 콘솔이 데모 호스트에서 쓰는 것은 IdP(iam) 하나이고, 론처의 «콘솔» 묶음은 iam 으로 풀린다
+> (`projects.sh` 의 `BUNDLES[console]`). 그 compose 는 `NOT_DEMO_COMPOSE` 에 사유와 함께 적혀 있다.
 
 ## 왜 단일 compose 파일이 아니라 래퍼인가
 
 `docker compose` 의 `include:` 와 `-f` 는 **같은 서비스 키를 조용히 하나로 병합**한다
-(실측: `include`=첫째 승, `-f`=마지막 승, 에러 없음). 8개 프로젝트는 서로 다른
+(실측: `include`=첫째 승, `-f`=마지막 승, 에러 없음). 프로젝트들은 서로 다른
 컨테이너인데도 제네릭 키를 공유한다 — `redis`×7, `kafka`×7, `postgres`×3, `mysql`×3,
 `grafana`×3, `notification-service`×3. 따라서 단일 병합 파일은 7개 redis 중 6개를
 소리없이 잃어 대부분 도메인이 뜨지 않는다.
@@ -19,15 +25,15 @@
 전제 조건은 이미 충족돼 있다(코드 조사 결과):
 - 모든 `container_name` 이 프로젝트 슬러그로 프리픽스됨 → 컨테이너명 충돌 0
 - host `ports:` 는 traefik(80/443/8080)·ecommerce jaeger(16686)뿐 → 포트 충돌 0
-- `traefik-net` 은 8개 프로젝트가 모두 `external: true` 로 참조, 정의자는 `infra/traefik`
+- `traefik-net` 은 데모 프로젝트가 모두 `external: true` 로 참조, 정의자는 `infra/traefik`
 
 ## 사용법
 
 ```bash
-# 핵심 경로만 (면접 콜드스타트 최소화: iam + ecommerce + wms + console)
+# 핵심 경로만 (면접 콜드스타트 최소화: iam + ecommerce + wms)
 bash infra/demo/demo-up.sh demo-core
 
-# 전체 8개 프로젝트
+# 전체 7개 데모 도메인
 bash infra/demo/demo-up.sh full
 
 # 개발 중 이미지 빌드까지 (AMI 는 prebaked 라 데모 호스트에선 불필요)
@@ -39,15 +45,16 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 ```
 
 기동 후 호스트네임 라우팅(Traefik):
-`console.local` · `web.ecommerce.local` · `ecommerce.local` · `scm.local` ·
+`iam.local` · `ecommerce.local` · `wms.local` · `scm.local` ·
 `fan-platform.local` · `finance.local` · `erp.local` · `kafka.<domain>.local` 등.
+방문자 화면 셋(콘솔·스토어·팬)은 Vercel 이고 데모 호스트에 없다(ADR-MONO-067).
 
 ## 프로파일
 
 | 프로파일 | 프로젝트 | 용도 |
 |---|---|---|
-| `demo-core` | iam · ecommerce · wms · console | 면접 핵심 데모. 콘솔은 부분 federation(iam+wms) |
-| `full` | 8개 전부 | 콘솔 5/5 federated 포함 전체 |
+| `demo-core` | iam · ecommerce · wms | 면접 핵심 데모. Vercel 콘솔은 이 셋으로 iam·이커머스·WMS 화면이 열린다 |
+| `full` | 7개 전부 | Vercel 콘솔의 업무 도메인 5/5 포함 전체 |
 
 > 리소스 주의: `full`(41 JVM 동시)은 RAM ~32–48GB. 저사양/로컬에서는 OOM/exit137
 > 위험이 있으니 `demo-core` 부터 확인할 것.
@@ -67,7 +74,7 @@ KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # traefik-net 유지
 | 패턴 | base | 풀스택 | 프로젝트 |
 |---|---|---|---|
 | 1 | 인프라 전용 | `docker-compose.e2e.yml` | **iam · wms** |
-| 2 | 앱까지 전부 | — | scm · fan · finance · erp · ecommerce · console |
+| 2 | 앱까지 전부 | — | scm · fan · finance · erp · ecommerce |
 
 패턴 1 에 base 만 주면 **DB 만 뜨고 앱이 0개**다. iam 은 OIDC IdP 이므로 그 경우
 전 도메인의 토큰 검증이 무너진다. 그래서 `projects.sh` 의 `COMPOSE[slug]` 는
@@ -98,7 +105,7 @@ bash infra/demo/verify-demo-wrapper.sh --live   # + (f) 실기동 증명 (redis 
 | (a) | 모든 compose 조합이 렌더된다 | 해당 프로젝트 미기동 |
 | (b) | `container_name` 전역 유일 | docker 가 중복 이름 거부 |
 | (c) | host `ports:` 전역 무충돌 | 포트 바인딩 실패 |
-| (d) | 모든 `projects/*/docker-compose.yml` 이 맵에 등록 | **신규 프로젝트가 데모에서 조용히 누락** |
+| (d) | 모든 `projects/*/docker-compose.yml` 이 맵에 등록(또는 `NOT_DEMO_COMPOSE` 에 사유와 함께) | **신규 프로젝트가 데모에서 조용히 누락** |
 | (e) | **각 프로젝트가 `build:` 서비스를 ≥1개 기여** | **DB 만 뜨고 앱이 0개** (MONO-342 가 겪은 결함) |
 | (g) | **미설정 compose 변수 0건** | **빈 비밀번호 → postgres 초기화 거부** (MONO-346 이 겪은 결함) |
 | (f) | 같은 키 `redis` 가 별도 `-p` 로 공존 | 누군가 `include:` 로 되돌림 = 침묵 병합 회귀 |
@@ -153,8 +160,8 @@ CI 잡 `demo-wrapper-smoke` (`.github/workflows/ci.yml`) 가 `infra/demo/**` ·
 호스트명 접미사가 파라미터다. **기본값 `local` 이라 개발자에게는 아무것도 바뀌지 않는다.**
 
 ```bash
-bash infra/demo/demo-up.sh full                                   # console.local …
-DEMO_DOMAIN=43-200-71-219.sslip.io bash infra/demo/demo-up.sh full   # console.43-200-71-219.sslip.io …
+bash infra/demo/demo-up.sh full                                   # iam.local …
+DEMO_DOMAIN=43-200-71-219.sslip.io bash infra/demo/demo-up.sh full   # iam.43-200-71-219.sslip.io …
 ```
 
 `<anything>.1-2-3-4.sslip.io` → `1.2.3.4` 로 해석되는 공개 와일드카드 DNS다(도메인 구매·DNS 설정·비용 0). EC2 데모 호스트는 부팅 시 IMDSv2 로 공인 IP 를 읽어 주입한다.
@@ -165,7 +172,7 @@ DEMO_DOMAIN=43-200-71-219.sslip.io bash infra/demo/demo-up.sh full   # console.4
 
 2. **[`seed-demo-domain.sh`](seed-demo-domain.sh)** — OAuth2 `redirect_uri` 는 **정확 일치** 검증인데 콜백 URL 이 Flyway 마이그레이션에 `.local` 로 박혀 있다. 데모 도메인은 부팅 때 정해지므로 마이그레이션이 알 수 없다 → 런타임에 등록한다. `demo-up.sh` 가 자동 호출.
 
-3. **Traefik network alias** — `console-web` 은 토큰 교환을 서버사이드로 한다. **AWS 는 인스턴스가 자기 공인 IP 로 보내는 트래픽을 되돌려주지 않으므로**(hairpin 부재) 컨테이너 안에서 `iam.<ip>.sslip.io` 로 나가면 죽는다. alias 가 같은 이름을 Docker 임베디드 DNS 로 해소해 준다.
+3. **Traefik network alias** — 컨테이너가 다른 도메인의 공개 호스트명을 서버사이드로 부른다(예: 셀러 프로비저닝의 `iam.<도메인>/oauth2/token`, 예전에는 데모 호스트의 console-web 토큰 교환). **AWS 는 인스턴스가 자기 공인 IP 로 보내는 트래픽을 되돌려주지 않으므로**(hairpin 부재) 컨테이너 안에서 `iam.<ip>.sslip.io` 로 나가면 죽는다. alias 가 같은 이름을 Docker 임베디드 DNS 로 해소해 준다.
 
 > 셋 중 하나만 빠져도 **컨테이너는 전부 healthy 한데 로그인만 안 된다.** `docker compose config` 도 healthcheck 도 이것을 증명하지 못한다 — 가드 (i)(j)(k)(l) 과 EC2 실기동 왕복만이 증명한다.
 
@@ -178,20 +185,29 @@ systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_
 ```
 
 - **유닛도 저장소 파일이다** ([`demo-stack.service`](demo-stack.service)). 예전엔 Packer 옆의 사본이었고, 그래서 **저장소가 계약을 바꿔도 유닛은 몰랐다** — 유닛이 `demo-up.sh` 를 직접 부르는 동안 스택은 96개 컨테이너가 전부 healthy 한 채로 `*.local` 에 떠서 **아무도 도달할 수 없었다.** AMI 는 이제 이 파일을 저장소 체크아웃에서 복사한다.
-- **빈 `DEMO_DOMAIN` 이 없는 것보다 위험하다.** `Host(\`console.\`)` 라우터가 만들어지는데 **Traefik 은 그걸 거부하지 않는다** — 그냥 아무 요청과도 매치하지 않는다. 에러 0건, 전부 healthy, 그런데 404. 그래서 파생 실패는 **반드시 `local` 로 떨어지고 그 사실을 말한다**(AWS 밖 실행도 안전하다 — 링크로컬 주소는 EC2 밖에서 라우팅 블랙홀이라 프로브를 `--max-time` 으로 끊는다).
+- **빈 `DEMO_DOMAIN` 이 없는 것보다 위험하다.** `Host(\`iam.\`)` 라우터가 만들어지는데 **Traefik 은 그걸 거부하지 않는다** — 그냥 아무 요청과도 매치하지 않는다. 에러 0건, 전부 healthy, 그런데 404. 그래서 파생 실패는 **반드시 `local` 로 떨어지고 그 사실을 말한다**(AWS 밖 실행도 안전하다 — 링크로컬 주소는 EC2 밖에서 라우팅 블랙홀이라 프로브를 `--max-time` 으로 끊는다).
 - **`demo.env` 의 `DEMO_DOMAIN=${DEMO_DOMAIN:-local}` 형태는 load-bearing 이다.** bare 대입이면 `demo-up.sh` 의 `set -a; source demo.env` 가 **`demo-boot.sh` 가 export 한 파생값을 덮어쓴다** — 파생은 성공했는데 스택은 여전히 `.local` 로 뜬다. 실제로 당했다.
 
 **가드 (n)** 이 이 세 고리를 전부 지킨다(유닛 → `demo-boot.sh` → export → `demo-up.sh`, + Packer 가 유닛을 저장소에서 설치). AWS 인프라(Packer/Terraform/Lambda/사이트)는 [`aws/`](aws/) 참조.
 
-## federation env 배선 (TASK-MONO-505)
+## federation env 배선 (TASK-MONO-505) — 🔵 **은퇴** (TASK-MONO-757)
+
+> 🔵 **이 절은 기록이다.** 콘솔(console-web)이 데모 호스트에서 돌던 시절의 배선이고,
+> TASK-MONO-757 에서 콘솔이 데모 도메인에서 빠지면서 `demo.env` 의 콘솔 키와 그 쌍을 지키던
+> 가드 (u)(콘솔 `.local` 기본값 ↔ demo.env + compose)를 함께 걷었다. 데모 호스트에서 그 키를
+> 읽는 컨테이너가 0개이고, Vercel 콘솔은 `demo.env` 를 읽지 않는다(그 주소는 런타임에
+> `.local` → `.<demoDomain>` 으로 파생한다 — `console-web/src/shared/config/demo-backend.ts`).
+> 아래의 «fed-e2e 값을 그대로 못 옮긴다» 는 관찰은 Vercel 콘솔에도 여전히 참이다(그쪽도
+> 도메인 게이트웨이만 부른다).
 
 > 이 절의 이전 판은 *"fed-e2e 데모 오버레이가 이미 6도메인에 대해 해둔 것과 겹치므로
 > 그 오버레이 env 를 승격/재사용한다(중복 재구현 금지)"* 였다. **MONO-505 착수 재측정에서
 > 그 전제가 틀렸음이 드러났다** — 아래가 실측 결과다.
 
-- **fed-e2e 값은 그대로 옮길 수 없다.** 그 하네스는 **단일 compose 프로젝트**라 console-bff 가
-  모든 백엔드 서비스와 같은 네트워크에 있고, 그래서 `http://wms-admin-service:8086` 같은
-  컨테이너 이름을 직접 부른다. 통합 데모는 **8개 프로젝트가 각자 `-p <slug>`** 로 뜨고
+- **fed-e2e 값은 그대로 옮길 수 없다.** 그 하네스는 **단일 compose 프로젝트**라 콘솔(당시는
+  옛 BFF 포함 — 은퇴, ADR-MONO-081)이 모든 백엔드 서비스와 같은 네트워크에 있고, 그래서
+  `http://wms-admin-service:8086` 같은 컨테이너 이름을 직접 부른다. 통합 데모는
+  **프로젝트마다 각자 `-p <slug>`** 로 뜨고
   **`traefik-net` 에 합류하는 것은 각 프로젝트의 `gateway-service` 뿐**이다 — 백엔드 서비스
   이름은 콘솔 쪽에서 **해소되지 않는다**(전부 NXDOMAIN). 그래서 데모는
   `<domain>.${DEMO_DOMAIN}` 로 **각 도메인의 게이트웨이를 통과**하도록 배선한다
@@ -200,12 +216,12 @@ systemd(demo-stack.service) → demo-boot.sh → (IMDSv2 로 공인 IP → DEMO_
   따라서 콘솔의 E-Commerce 레그는 **승격할 선례가 없었고** 여기서 신규 작성했다.
 - **`demo.env` 만으로는 아무 효과가 없다.** compose 는 **자기가 이름을 적은 변수만**
   컨테이너에 넣으므로 `projects/platform-console/docker-compose.yml` 의 `environment`
-  목록에도 키가 있어야 한다. 두 곳의 쌍을 **가드 (u)** 가 지킨다 — 그 술어는 "콘솔 코드가
-  `.local` 기본값을 가진 키" 이고 소스에서 뽑아내므로 키가 늘면 자동으로 따라온다.
+  목록에도 키가 있어야 했다. 두 곳의 쌍을 **가드 (u)** 가 지켰다(TASK-MONO-757 에서 은퇴 —
+  위 머리말).
 
 같은 태스크에서 데모 기동 자체를 막던 결함 2건을 고쳤다:
 
-- `resolve_deps` 가 **console 을 포함하지 않는 모든 요청에 exit 1** 을 냈다(`FULL` 마지막
+- `resolve_deps` 가 **console(당시 `FULL` 의 마지막)을 포함하지 않는 모든 요청에 exit 1** 을 냈다(`FULL` 마지막
   원소에 대한 테스트 결과가 함수 반환값으로 샜다). `demo-up.sh iam` / `demo-up.sh wms`
   같은 가장 흔한 부분 기동이 usage 를 찍고 죽었고, 메시지는 원인을 정반대로 가리켰다.
 - `iam-traefik.override.yml` 이 auth-service 에 **`ADMIN_SERVICE_URL` 을 주지 않아**

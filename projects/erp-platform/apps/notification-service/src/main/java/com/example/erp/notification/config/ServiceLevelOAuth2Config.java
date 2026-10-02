@@ -22,7 +22,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
  * This chain is therefore no longer a stand-in for a missing edge — it is the
  * second layer, and it is load-bearing: the gateway only fronts traffic arriving
  * on the {@code erp.local} hostname, while anything already inside the compose
- * network (console-bff's outbound legs, service-to-service calls) reaches this
+ * network (service-to-service calls) reaches this
  * service directly and never crosses the edge. A request that skipped the gateway
  * must still meet the same verdict here. Keep this chain if the duplicated
  * validators are ever consolidated.

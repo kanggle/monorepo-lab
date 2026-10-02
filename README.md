@@ -50,7 +50,8 @@ undocumented one.
 Locally:
 
 ```bash
-bash infra/demo/demo-up.sh iam ecommerce console     # hard deps resolve automatically
+bash infra/demo/demo-up.sh iam ecommerce             # hard deps resolve automatically
+# console UI: Vercel, or `pnpm console:up` locally — not a demo domain (TASK-MONO-757)
 ```
 
 ---
@@ -68,7 +69,7 @@ bash infra/demo/demo-up.sh iam ecommerce console     # hard deps resolve automat
 | [fan-platform](projects/fan-platform/) | Fan Community (K-pop) | Java 21 · Spring Boot 3.4 · Next.js 15 · Postgres · Kafka · Redis | ✅ **v1.1 — 5 backend + web**: community (post / comment / reaction / follow feed) · artist (profile + fandom) · membership (subscription state machine + PG mock + outbox) · notification (membership events → per-fan inbox) · gateway · lean Next.js frontend. | [kanggle/fan-platform](https://github.com/kanggle/fan-platform) |
 | [finance-platform](projects/finance-platform/) | Fintech | Java 21 · Spring Boot 3.4 · Postgres · Kafka | ✅ **v1.x — 2 services**: account (KYC · available/ledger balance hold·release·capture · idempotent fund movement · immutable audit log) · ledger (double-entry general ledger — trial balance, periods, reconciliation). **No gateway module** — Traefik routes straight to the services. Rendered by platform-console. | _(not yet published)_ |
 | [erp-platform](projects/erp-platform/) | ERP (internal system) | Java 21 · Spring Boot 3.4 · Postgres · Kafka | ✅ **v1.x — 4 services**: masterdata (org master data + org_scope subtree data-scope) · approval (multi-stage approval lines, proxy approval, delegation) · read-model (employee org-view + approval-fact projections) · notification (in-app approval inbox). **No gateway module.** Rendered by platform-console. | _(not yet published)_ |
-| [platform-console](projects/platform-console/) | SaaS (horizontal) | Next.js 15 · React 19 · Java 21 · Spring Boot 3.4 | ✅ **Phase 7 LIVE — 6/6 federated domains**: `console-web` (the single operator UI — tenant switcher, per-domain ops screens, approval inbox, notification bell) + `console-bff` (cross-domain aggregation — operator overview, domain health). Model B: the console is the *only* frontend for wms / scm / finance / erp. | _(monorepo-only)_ |
+| [platform-console](projects/platform-console/) | SaaS (horizontal) | Next.js 15 · React 19 | ✅ **Phase 7 LIVE — 6/6 federated domains**: `console-web` (the single operator UI — tenant switcher, per-domain ops screens, approval inbox, notification bell — and, in its server, the cross-domain composition: operator overview, domain health, notification inbox; [ADR-MONO-081](docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md)). Model B: the console is the *only* frontend for wms / scm / finance / erp. | _(monorepo-only)_ |
 
 Each project is extracted to its own standalone repo via [`scripts/sync-portfolio.sh`](scripts/sync-portfolio.sh) for easier discovery. This monorepo retains the full development history and shared library development.
 
@@ -227,7 +228,7 @@ Each project's testing strategy follows the platform-wide baseline in [platform/
 | 4. Catalyst | ✅ Completed | Five projects cohabiting; library churn stabilised |
 | 5. Template extraction | ✅ **Launched 2026-05-13** | [`kanggle/project-template`](https://github.com/kanggle/project-template) public, `is_template: true` ([ADR-MONO-003b](docs/adr/ADR-MONO-003b-phase-5-launch-criteria.md)) |
 | 6. New-domain bootstrap | ✅ **Complete 2026-05-19/20** | First two downstream Template forks confirmed ([ADR-MONO-008](docs/adr/ADR-MONO-008-finance-platform-bootstrap.md) / [ADR-MONO-016](docs/adr/ADR-MONO-016-erp-platform-bootstrap.md)) |
-| 7. Console federation | ✅ **Live 2026-05-20** | `console-bff` + cross-domain dashboards ([ADR-MONO-017](docs/adr/ADR-MONO-017-platform-console-bff-architecture.md)) |
+| 7. Console federation | ✅ **Live 2026-05-20** | Cross-domain dashboards (ADR-MONO-017; composition moved into the console server by [ADR-MONO-081](docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md)) |
 | 8. Federation hardening | ✅ **Complete 2026-05-28** | Cross-product E2E + observability federation + multi-tenant isolation regression ([ADR-MONO-018](docs/adr/ADR-MONO-018-platform-console-phase-8-federation-hardening.md)) |
 | 9. Ongoing sync | 🔮 Future | Periodically sync library improvements from this monorepo to the template |
 
