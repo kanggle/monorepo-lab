@@ -41,6 +41,11 @@ import org.junit.jupiter.api.Test;
  * (a route keyed on the entity id while the follow was keyed on the account id,
  * invisible because the demo values happened to be equal).
  *
+ * <p><b>TASK-MONO-744 (ADR-MONO-078 A)</b> — the artists are consumer-POOL accounts: credential,
+ * account and identity in tenant {@code consumer-pool}, an ACTIVE {@code fan-platform} membership,
+ * and the roles in {@code consumer_site_roles(account, 'fan-platform', role)}. The ids did not
+ * change, so the three-file agreement below is the same agreement.
+ *
  * <p><b>It reads the artifacts, never a copy.</b> Following
  * {@link DemoSeedCredentialTest}: the ids, emails, hashes and role names below are
  * parsed out of the seed files themselves. A test that restated them as its own
@@ -52,6 +57,7 @@ class FanArtistDemoSeedTest {
 
     private static final String DEMO_PASSWORD = "Demo1234!";
     private static final String FAN_TENANT = "fan-platform";
+    private static final String POOL_TENANT = "consumer-pool";
 
     private static final String CREDENTIAL_SEED =
             "db/migration-dev/R__02_seed_fan_artist_credentials.sql";
@@ -78,10 +84,14 @@ class FanArtistDemoSeedTest {
             "\\(\\s*'([0-9a-f-]{36})'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([a-z-]+)'\\s*,\\s*'([^']+)'",
             Pattern.MULTILINE);
 
-    /** R__06 account_roles tuples: ('<tenant>', '<accountId>', '<roleName>', NULL, ... */
+    /** R__06 consumer_site_roles tuples: ('<accountId>', '<site>', '<roleName>', NULL, ... */
     private static final Pattern ROLE_ROW = Pattern.compile(
-            "\\(\\s*'([a-z-]+)'\\s*,\\s*'([0-9a-f-]{36})'\\s*,\\s*'([A-Z][A-Z0-9_]*)'\\s*,\\s*NULL",
+            "\\(\\s*'([0-9a-f-]{36})'\\s*,\\s*'([a-z-]+)'\\s*,\\s*'([A-Z][A-Z0-9_]*)'\\s*,\\s*NULL",
             Pattern.MULTILINE);
+
+    /** R__06 membership statement (comment lines stripped first). */
+    private static final Pattern MEMBERSHIP_STATEMENT = Pattern.compile(
+            "INSERT\\s+IGNORE\\s+INTO\\s+consumer_site_memberships\\b[^;]*;");
 
     /**
      * seed-fan.sh: the JSON body of the ARTIST_POST create call. Matched on the line that names
@@ -135,10 +145,22 @@ class FanArtistDemoSeedTest {
         Matcher m = ROLE_ROW.matcher(readSibling(ACCOUNT_SEED, "the account-service artist seed"));
         Map<String, List<String>> grants = new LinkedHashMap<>();
         while (m.find()) {
-            assertThat(m.group(1)).as("artist roles are granted in the fan tenant").isEqualTo(FAN_TENANT);
-            grants.computeIfAbsent(m.group(2), k -> new ArrayList<>()).add(m.group(3));
+            assertThat(m.group(2)).as("artist roles are fan-platform SITE roles").isEqualTo(FAN_TENANT);
+            grants.computeIfAbsent(m.group(1), k -> new ArrayList<>()).add(m.group(3));
         }
         return grants;
+    }
+
+    /** The R__06 membership statements, comment lines removed. */
+    private static List<String> parseMembershipStatements() throws IOException {
+        String statements = readSibling(ACCOUNT_SEED, "the account-service artist seed")
+                .replaceAll("(?m)^\\s*--.*$", "");
+        Matcher m = MEMBERSHIP_STATEMENT.matcher(statements);
+        List<String> found = new ArrayList<>();
+        while (m.find()) {
+            found.add(m.group());
+        }
+        return found;
     }
 
     private static List<String> parseDemoSeedArtistIds() throws IOException {
@@ -151,14 +173,16 @@ class FanArtistDemoSeedTest {
     }
 
     @Test
-    @DisplayName("six artist credentials, all in the fan tenant, each with its own email")
+    @DisplayName("six artist credentials, all in the consumer pool, each with its own email")
     void credentialsCoverTheSixDemoArtists() throws IOException {
         List<SeededCredential> rows = parseCredentials();
 
         // TASK-MONO-638: 셋 → 여섯. 🔴 이 수는 «비어 있지 않음» 을 재는 바닥이지
         // «정확히 몇 명인가» 라는 제품 사실이 아니다 — 아티스트를 늘릴 때 함께 올린다.
         assertThat(rows).hasSize(6);
-        assertThat(rows).extracting(SeededCredential::tenantId).containsOnly(FAN_TENANT);
+        // TASK-MONO-744: the fan client looks the POOL credential up first (TASK-BE-615); a
+        // `fan-platform` row here would be a site credential for a pool account's email.
+        assertThat(rows).extracting(SeededCredential::tenantId).containsOnly(POOL_TENANT);
         // UNIQUE (tenant_id, email) since V0007 — and a shared email in one tenant would
         // also collide with the demo consumer credential R__01 already seeds there.
         assertThat(rows).extracting(SeededCredential::email).doesNotHaveDuplicates();
@@ -190,7 +214,9 @@ class FanArtistDemoSeedTest {
 
         assertThat(accounts).hasSize(credentialsByEmail.size());
         for (SeededAccount a : accounts) {
-            assertThat(a.tenantId()).isEqualTo(FAN_TENANT);
+            assertThat(a.tenantId())
+                    .as("the artists are pool accounts (TASK-MONO-744) — same id, tenant consumer-pool")
+                    .isEqualTo(POOL_TENANT);
             assertThat(credentialsByEmail)
                     .as("account-service seeds an artist account for an email auth-service "
                             + "has no credential for — that account can never be logged into")
@@ -206,24 +232,49 @@ class FanArtistDemoSeedTest {
     }
 
     @Test
-    @DisplayName("every artist account is granted ARTIST *and* FAN — the stored set replaces the seed, it does not extend it")
+    @DisplayName("every artist account is granted the fan-platform site roles ARTIST *and* FAN")
     void everyArtistAccountHoldsBothRoles() throws IOException {
         List<String> accountIds = parseAccounts().stream().map(SeededAccount::accountId).toList();
         Map<String, List<String>> grants = parseGrants();
 
         assertThat(accountIds).isNotEmpty();
         assertThat(grants.keySet())
-                .as("a seeded artist account with no role grant gets the RoleSeedPolicy default "
-                        + "[FAN] and still cannot publish an ARTIST_POST")
+                .as("a seeded artist account with no site-role grant gets only the "
+                        + "RoleSeedPolicy default [FAN] and still cannot publish an ARTIST_POST")
                 .containsExactlyInAnyOrderElementsOf(accountIds);
 
         for (String accountId : accountIds) {
             assertThat(grants.get(accountId))
-                    .as("TenantClaimTokenCustomizer#populateRoles emits stored account_roles "
-                            + "VERBATIM and falls to RoleSeedPolicy only when the stored set is "
-                            + "EMPTY — so granting ARTIST alone does not add a role, it REPLACES "
-                            + "the fan-platform FAN seed. Both must be stored explicitly.")
+                    .as("a pool principal's token is seed ∪ site roles, but every path that "
+                            + "emits a stored set VERBATIM (populateRoles; the roles GET TASK-BE-618 "
+                            + "widened answers consumer_site_roles to it) would drop FAN if only "
+                            + "ARTIST were stored — and TASK-BE-618's mover stores both. R__06 header.")
                     .containsExactlyInAnyOrder("FAN", "ARTIST");
+        }
+    }
+
+    @Test
+    @DisplayName("every artist account is an ACTIVE fan-platform member — guarded on consumer-pool")
+    void everyArtistAccountIsAFanMember() throws IOException {
+        List<String> accountIds = parseAccounts().stream().map(SeededAccount::accountId).toList();
+        List<String> statements = parseMembershipStatements();
+
+        assertThat(statements)
+                .as("R__06 must still contain a membership statement — without one the issuer mints "
+                        + "no fan token for a pool account (TASK-BE-615) and consumer_site_roles has "
+                        + "nothing to reference (FK, V0030)")
+                .hasSize(1);
+        String statement = statements.get(0);
+        assertThat(statement).containsPattern("SELECT\\s+id\\s*,\\s*'fan-platform'\\s*,\\s*'ACTIVE'");
+        assertThat(statement)
+                .as("written only onto a POOL account: on an existing volume these ids can still be "
+                        + "fan-platform site accounts, and a membership there makes TASK-BE-618's mover fail")
+                .containsPattern("tenant_id\\s*=\\s*'consumer-pool'");
+        assertThat(accountIds).isNotEmpty();
+        for (String accountId : accountIds) {
+            assertThat(statement)
+                    .as("artist account %s has no fan-platform membership", accountId)
+                    .contains("'" + accountId + "'");
         }
     }
 

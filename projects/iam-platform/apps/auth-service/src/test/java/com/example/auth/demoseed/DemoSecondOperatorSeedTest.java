@@ -19,9 +19,9 @@ import org.junit.jupiter.api.Test;
  * TASK-MONO-519 — guards the SECOND demo operator identity.
  *
  * <p><b>Why a separate class rather than more cases in {@link DemoSeedCredentialTest}.</b>
- * That test pins the R__01 file: it asserts exactly three rows in exactly three
- * tenants, which is a correct statement about the single-identity seed and must
- * stay that way. This one pins a different artifact (R__seed_demo_second_operator_credential.sql) and a different
+ * That test pins the R__01 file: it asserts exactly two rows (one consumer-pool, one
+ * {@code iam} — three rows in three tenants until TASK-MONO-744), which is a correct
+ * statement about the single-identity seed and must stay that way. This one pins a different artifact (R__seed_demo_second_operator_credential.sql) and a different
  * invariant (two operators, two link keys, no collision between them).
  *
  * <p><b>Why it exists at all.</b> {@code DemoSeedCredentialTest} already compares

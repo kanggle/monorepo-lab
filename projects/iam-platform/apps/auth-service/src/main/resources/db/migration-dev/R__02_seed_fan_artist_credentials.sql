@@ -45,8 +45,9 @@
 -- WHY NOT `demo@demo.com`
 -- ---------------------------------------------------------------------------
 -- `credentials` is UNIQUE (tenant_id, email) since V0007, and these accounts live
--- in `fan-platform` — where the demo consumer credential already sits. They need
--- their own emails, and that is also correct on the merits: the artist is a
+-- in the same tenant as the demo consumer credential (`fan-platform` until
+-- TASK-MONO-744, `consumer-pool` since). They need their own emails, and that is
+-- also correct on the merits: the artist is a
 -- DIFFERENT actor from the interviewer's demo account, which is the entire reason
 -- seed-fan.sh insists the gated posts not be authored by the demo account
 -- (`actor.owns()` would open MEMBERS_ONLY/PREMIUM to its own author and make the
@@ -57,9 +58,19 @@
 -- interviewer never types — the seed uses them to author the artist posts through
 -- the API instead of reaching into the database.
 --
--- Each email exists in exactly ONE tenant, so the scoped lookup hits and the
+-- Each email exists in exactly ONE tenant, so the lookup hits and the
 -- cross-tenant fallback's fail-closed-on-ambiguity branch (TASK-BE-507 D1-a,
--- three-row hazard documented in V9001) is never reached for them.
+-- hazard documented in R__01) is never reached for them.
+--
+-- 🔵 TASK-MONO-744 (2026-10-02 UTC, ADR-MONO-078 A) — the rows are in tenant
+-- `consumer-pool`, not `fan-platform`: the artists are pool accounts (account-
+-- service R__06 — same ids, a `fan-platform` membership, ARTIST/FAN in
+-- consumer_site_roles). The fan client looks the POOL credential up first
+-- (TASK-BE-615), so seed-fan.sh's artist login is unchanged; the token is still
+-- `tenant_id = fan-platform`, `sub` = the artist id, roles [FAN, ARTIST].
+-- 🔴 On an existing local volume the old `fan-platform` rows stay and these are
+-- ignored (account_id global unique index) — the old shape, consistently; see
+-- R__01's note. No DELETE, deliberately.
 --
 -- The password is the same `Demo1234!`, hence the same Argon2id digest as V9001 —
 -- one published demo password, one hash literal. (Sharing a digest means sharing
@@ -82,13 +93,13 @@ INSERT IGNORE INTO credentials (
 ) VALUES
 -- 루미 (ARTIST_A) — the follow target, author of the three visibility-tier posts.
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a001', 'lumi@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a001', 'lumi@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),
 -- 노아 (ARTIST_B) — the second followed artist, so the feed is not one author wide.
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a002', 'noah@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a002', 'noah@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),
@@ -97,7 +108,7 @@ INSERT IGNORE INTO credentials (
 -- rows, and "green because we only checked the one we fixed" is how it would
 -- come back.
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a003', 'sea@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a003', 'sea@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),
@@ -105,17 +116,17 @@ INSERT IGNORE INTO credentials (
 -- 로그인할 수 없고, seed-fan.sh 가 ARTIST_POST 를 **본인 로그인으로** 발행하므로
 -- 디렉터리에만 있고 글이 하나도 없는 아티스트가 된다.
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a004', 'harin@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a004', 'harin@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a005', 'rio@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a005', 'rio@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),
 (
-    'fan-platform', '0199de80-0000-7000-8000-00000000a006', 'yuno@demo.com',
+    'consumer-pool', '0199de80-0000-7000-8000-00000000a006', 'yuno@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 );

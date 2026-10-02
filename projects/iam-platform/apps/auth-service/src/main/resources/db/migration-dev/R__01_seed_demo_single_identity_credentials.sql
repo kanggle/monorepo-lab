@@ -37,40 +37,54 @@
 --
 --     demo@demo.com / Demo1234!
 --
--- WHY THREE ROWS FOR ONE "ACCOUNT" (this is the model, not a workaround)
+-- WHY TWO ROWS FOR ONE PERSON (this is the model, not a workaround)
 -- ---------------------------------------------------------------------------
+-- 🔵 TASK-MONO-744 (2026-10-02 UTC, ADR-MONO-078 A) — this was THREE rows until
+-- then: `ecommerce` (…ec01) + `fan-platform` (…fa02) + `iam` (…ad03). The two
+-- consumer rows are now ONE consumer-POOL credential (tenant `consumer-pool`,
+-- account `…ec01`), the console row is unchanged (D1 — the console stays an
+-- operator login). Why ec01 survives is in account-service R__05's header.
+--
 -- `credentials` is tenant-scoped: UNIQUE (tenant_id, email) since V0007. The
 -- tenant a login resolves to is decided by the OIDC client the user came through
 -- (SavedRequestTenantResolver reads the saved /oauth2/authorize `client_id` and
 -- takes that client's `custom.tenant_id`), and CredentialAuthenticationProvider
--- looks the credential up **scoped to that tenant first**, falling back to a
--- cross-tenant lookup only on a miss (TASK-BE-507 D1-a).
+-- resolves the credential per client (multi-tenancy.md § 소비자 계정 풀 § 4):
 --
--- Two consequences drive the shape below:
+--   1. A CONSUMER-site client (store `ecommerce-web-store-client`, fan
+--      `fan-platform-user-flow-client`) looks for the POOL credential FIRST
+--      (TASK-BE-615). One row therefore logs the person into both sites, and
+--      the token says `sub = …ec01`, `tenant_id = <that site>`, roles = the
+--      site's seed (store CUSTOMER / fan FAN) ∪ its consumer_site_roles — never
+--      `consumer-pool`, never the other site's roles. The issuer mints the token
+--      only for a site the account is an ACTIVE member of; R__05 makes it a
+--      member of both, so there is no first-visit consent screen for the demo.
 --
---   1. The `roles` claim seed fires ONLY when the principal's own tenant EQUALS
---      the client's platform (TenantClaimTokenCustomizer#seedFor, TASK-MONO-381).
---      So the storefront credential MUST live in `ecommerce` to get CUSTOMER, and
---      the fan credential MUST live in `fan-platform` to get FAN. A single shared
---      row cannot produce both.
---
---   2. The cross-tenant fallback fails CLOSED on ambiguity (an email in >1 tenant
---      with no initiating client → BadCredentialsException). With three rows the
---      scoped lookup must HIT on every surface, which is why the console row is
---      seeded under `iam` — the platform-console-web client's own tenant (V0024
---      renamed it from `gap`). Seeding it anywhere else would miss the scoped
---      lookup, reach the fallback, find three rows, and fail closed.
+--   2. The CONSOLE client (`platform-console-web`, tenant `iam`) never maps a
+--      pool principal (D1): its scoped lookup hits the `iam` row below. Seeding
+--      that row anywhere else would miss the scoped lookup, reach the
+--      cross-tenant fallback, find two rows, and fail closed.
 --
 --      ⚠️ Corollary worth knowing when demoing: logging in at the IAM login page
 --      DIRECTLY (no /oauth2/authorize first) has no initiating client, so the
---      fallback sees three rows and rejects. Always start from the app.
+--      fallback sees two rows and rejects. Always start from the app.
+--
+-- 🔴 A pool credential and a SITE credential for the same email must never
+-- coexist (§ 2/§ 3 — the pool one would win and the site one would be
+-- unreachable). This file seeds none: the old `ecommerce`/`fan-platform` rows are
+-- gone. On an EXISTING local volume they are still there and the pool row below
+-- is ignored (its account_id collides with the old `ecommerce` row on the global
+-- unique index) — that volume keeps the old three-row shape, consistently. No
+-- DELETE here, deliberately; start from a fresh auth_db + account_db volume to get
+-- the pool shape (the demo server always starts fresh — R__05's header).
 --
 -- account_id is the OIDC `sub` (TenantClaimTokenCustomizer#alignSubToAccountId),
 -- and `credentials.account_id` carries a GLOBAL unique index (V0001) — hence
--- three distinct UUIDs, not one shared value. The `iam` one is the link key that
--- admin_operators.oidc_subject must equal (see the admin-service repeatable seed);
--- operator resolution is account_id-only since TASK-MONO-299, with no email
--- fallback, so a mismatch here is a silent 401 at the console.
+-- distinct UUIDs per row. The pool one MUST equal account-service R__05's pool
+-- account id (DemoSeedCredentialTest compares them). The `iam` one is the link
+-- key that admin_operators.oidc_subject must equal (see the admin-service
+-- repeatable seed); operator resolution is account_id-only since TASK-MONO-299,
+-- with no email fallback, so a mismatch here is a silent 401 at the console.
 --
 -- The hash is Argon2id(`Demo1234!`) produced by the SAME
 -- com.example.security.password.Argon2idPasswordHasher the app verifies with
@@ -83,17 +97,11 @@ INSERT IGNORE INTO credentials (
     tenant_id, account_id, email,
     credential_hash, hash_algorithm, created_at, updated_at, version
 ) VALUES
--- storefront (web-store) — client `ecommerce-web-store-client`, tenant `ecommerce`
--- → roles [CUSTOMER] via RoleSeedPolicy.
+-- consumer pool — store (`ecommerce-web-store-client`) AND fan
+-- (`fan-platform-user-flow-client`) both resolve here: pool credential first
+-- (TASK-BE-615). Roles per site at issuance: store [CUSTOMER] · fan [FAN].
 (
-    'ecommerce', '0199de70-0000-7000-8000-00000000ec01', 'demo@demo.com',
-    '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
-    'argon2id', NOW(6), NOW(6), 0
-),
--- fan web — client `fan-platform-user-flow-client`, tenant `fan-platform`
--- → roles [FAN] via RoleSeedPolicy.
-(
-    'fan-platform', '0199de70-0000-7000-8000-00000000fa02', 'demo@demo.com',
+    'consumer-pool', '0199de70-0000-7000-8000-00000000ec01', 'demo@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
     'argon2id', NOW(6), NOW(6), 0
 ),

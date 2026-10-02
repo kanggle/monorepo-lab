@@ -64,7 +64,13 @@ container_up fan-platform-gateway || { seed_log "게이트웨이 미기동 — �
 wait_http "$GW/api/v1/artists" 240 || { seed_fail "게이트웨이가 240초 안에 응답하지 않습니다"; seed_summary; exit $?; }
 
 TENANT="${DEMO_FAN_TENANT:-fan-platform}"
-DEMO_SUB="${DEMO_FAN_SUB:-0199de70-0000-7000-8000-00000000fa02}"
+# TASK-MONO-744 (ADR-MONO-078 A) — 데모 계정은 이제 **풀 계정 하나**다(account-service
+# migration-dev R__05). 팬과 스토어가 같은 `sub`(…ec01)를 쓰므로 기본값도 스토어
+# (seed-ecommerce.sh 의 DEMO_SUB)와 같다. 옛 팬 전용 id(…fa02)는 시드에서 사라졌다.
+# 🔵 아래 3절은 여전히 **토큰의 sub 을 이긴다**(기본값과 다르면 경고 후 토큰 쪽) — 옛 모양이
+#    남은 로컬 볼륨(…fa02 가 팬 계정으로 살아 있는)에서도 시드가 맞는 주체에 붙는다.
+#    DemoSeedCredentialTest 가 이 기본값을 auth R__01 의 풀 자격 account_id 와 대조한다.
+DEMO_SUB="${DEMO_FAN_SUB:-0199de70-0000-7000-8000-00000000ec01}"
 
 # 고정 id — 2회차 실행이 같은 것을 또 만들지 않게 하는 근거다(직접-DB INSERT 가
 # `WHERE NOT EXISTS` 로 자기 id 를 검사한다). 랜덤이면 멱등이 성립할 수 없다.
@@ -272,7 +278,7 @@ seed_as_artist() { # <라벨> <email> <기대 account_id>
     return 1
   fi
   if ! jwt_has_role "$token" ARTIST; then
-    seed_fail "$who 의 토큰에 ARTIST 역할이 없습니다 — account_roles(fan-platform, $expected, 'ARTIST') 행을 확인하십시오(account-service R__06). 로그인은 됐으므로 자격증명 문제가 아닙니다"
+    seed_fail "$who 의 토큰에 ARTIST 역할이 없습니다 — consumer_site_roles($expected, fan-platform, 'ARTIST') 행과 그 계정의 fan-platform 멤버십을 확인하십시오(account-service R__06, TASK-MONO-744 이후 풀 계정. 옛 모양이 남은 로컬 볼륨이면 account_roles(fan-platform, $expected, 'ARTIST')). 로그인은 됐으므로 자격증명 문제가 아닙니다"
     return 1
   fi
   SEED_TOKEN="$token"
