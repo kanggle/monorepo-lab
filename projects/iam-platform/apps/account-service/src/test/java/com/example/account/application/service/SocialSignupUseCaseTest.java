@@ -1,11 +1,14 @@
 package com.example.account.application.service;
 
 import com.example.account.application.command.SocialSignupCommand;
+import com.example.account.application.exception.AccountAlreadyExistsException;
+import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.result.SocialSignupResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
+import com.example.account.domain.repository.ConsumerSiteMembershipRepository;
 import com.example.account.domain.repository.ProfileRepository;
 import com.example.account.domain.repository.TenantRepository;
 import com.example.account.domain.status.AccountStatus;
@@ -26,6 +29,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -52,6 +56,12 @@ class SocialSignupUseCaseTest {
     @Mock
     private TenantRepository tenantRepository;
 
+    @Mock
+    private ConsumerPoolFlag consumerPoolFlag;
+
+    @Mock
+    private ConsumerSiteMembershipRepository membershipRepository;
+
     private SocialSignupUseCase socialSignupUseCase;
 
     /** TASK-BE-507: social signup validates its tenant first, like every other create path. */
@@ -60,7 +70,9 @@ class SocialSignupUseCaseTest {
         // Real ActiveTenantGuard over the mocked TenantRepository — behaviour and every
         // assertion below are preserved verbatim; only the wiring changed.
         socialSignupUseCase = new SocialSignupUseCase(accountRepository, profileRepository,
-                eventPublisher, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository));
+                eventPublisher, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository),
+                // TASK-BE-620: the real pool rules over the mocked repositories.
+                new ConsumerAccountPool(consumerPoolFlag, tenantRepository, accountRepository, membershipRepository));
         lenient().when(tenantRepository.findById(any(TenantId.class)))
                 .thenAnswer(inv -> {
                     TenantId id = inv.getArgument(0);
@@ -233,5 +245,62 @@ class SocialSignupUseCaseTest {
         assertThat(result.created()).isTrue();
         verify(accountRepository).findByEmail(ecommerce, "dual@example.com");
         verify(accountRepository, never()).findByEmail(eq(TenantId.FAN_PLATFORM), any());
+    }
+
+    // ---- TASK-BE-620: no social site account beside a pool account with the same email (§ 2) ----
+
+    @Test
+    @DisplayName("TASK-BE-620: consumer site, no site account, POOL account with the email → 409, nothing created")
+    void execute_poolAccountWithEmail_refused() {
+        SocialSignupCommand command = new SocialSignupCommand(
+                "Pool@Example.com", "GOOGLE", "google-pool", "Pool User", "fan-platform");
+        given(accountRepository.findByEmail(TenantId.FAN_PLATFORM, "pool@example.com"))
+                .willReturn(Optional.empty());
+        given(accountRepository.existsByEmail(TenantId.CONSUMER_POOL, "pool@example.com")).willReturn(true);
+
+        assertThatThrownBy(() -> socialSignupUseCase.execute(command))
+                .isInstanceOf(AccountAlreadyExistsException.class);
+
+        verify(accountRepository, never()).save(any());
+        verify(profileRepository, never()).save(any());
+        verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-620 control: a same-site account still links first, even when a pool account exists")
+    void execute_siteAccountExists_stillLinks_poolNotConsulted() {
+        SocialSignupCommand command = new SocialSignupCommand(
+                "both@example.com", "GOOGLE", "google-both", "Both", "fan-platform");
+        Account siteAccount = Account.reconstitute(
+                "acc-site", TenantId.FAN_PLATFORM, "both@example.com", null, AccountStatus.ACTIVE,
+                Instant.now(), Instant.now(), null, null, null, 0);
+        given(accountRepository.findByEmail(TenantId.FAN_PLATFORM, "both@example.com"))
+                .willReturn(Optional.of(siteAccount));
+
+        SocialSignupResult result = socialSignupUseCase.execute(command);
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.accountId()).isEqualTo("acc-site");
+        verify(accountRepository, never()).existsByEmail(eq(TenantId.CONSUMER_POOL), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-620 control: a non-consumer (B2B) tenant is never refused for a pool email (D1)")
+    void execute_b2bTenant_poolEmail_created() {
+        given(tenantRepository.findById(new TenantId("wms"))).willReturn(Optional.of(Tenant.reconstitute(
+                new TenantId("wms"), "wms", TenantType.B2B_ENTERPRISE, TenantStatus.ACTIVE, Instant.now(), Instant.now())));
+        SocialSignupCommand command = new SocialSignupCommand(
+                "worker@example.com", "GOOGLE", "google-wms", "Worker", "wms");
+        given(accountRepository.findByEmail(new TenantId("wms"), "worker@example.com")).willReturn(Optional.empty());
+        lenient().when(accountRepository.existsByEmail(TenantId.CONSUMER_POOL, "worker@example.com")).thenReturn(true);
+        Account saved = Account.reconstitute(
+                "acc-wms", new TenantId("wms"), "worker@example.com", null, AccountStatus.ACTIVE,
+                Instant.now(), Instant.now(), null, null, null, 0);
+        given(accountRepository.save(any(Account.class))).willReturn(saved);
+
+        SocialSignupResult result = socialSignupUseCase.execute(command);
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.accountId()).isEqualTo("acc-wms");
     }
 }

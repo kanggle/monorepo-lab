@@ -59,6 +59,7 @@
 | `OAuthProviderException` | `/login?error=provider_error` |
 | `UnsupportedProviderException` | `/login?error=unsupported_provider` |
 | `AccountServiceUnavailableException` (상태 조회 실패 · `socialSignup` 실패 — TASK-BE-602) | `/login?error=temporarily_unavailable` («Sign-in is temporarily unavailable. Please try again in a moment.» — 계정 상태에 대해 아무것도 말하지 않는다). BE-602 이전에는 catch 가 없어 전역 `AuthExceptionHandler` 의 **503 JSON** 이 브라우저에 떴다 |
+| `SocialSignupEmailRegisteredException` (`socialSignup` 의 `409 ACCOUNT_ALREADY_EXISTS` — 그 이메일의 **풀 계정**이 있다, `TASK-BE-620`) | `/login?error=email_registered` («이미 이메일과 비밀번호로 가입된 주소입니다. 이메일과 비밀번호로 로그인해 주세요.») — `multi-tenancy.md` § 소비자 계정 풀 § 2 공존 금지 |
 
 ### tenant 귀속 규칙 (ADR-006 옵션 1)
 

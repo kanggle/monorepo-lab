@@ -4,6 +4,7 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.exception.SignupNotPossibleException;
+import com.example.auth.application.exception.SocialSignupEmailRegisteredException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
@@ -479,6 +480,13 @@ public class AccountServiceClient implements AccountServicePort {
         try {
             return callResilient(() -> doSocialSignup(email, provider, providerUserId, displayName, tenantId));
         } catch (HttpClientErrorException e) {
+            // TASK-BE-620: 409 ACCOUNT_ALREADY_EXISTS = the email has a consumer-pool account; the social
+            // signup is refused (§ 2 no-coexistence). Discriminated by the body's code, not the status —
+            // the same endpoint also answers 409 TENANT_SUSPENDED (see classifySignupClientError).
+            if (e.getStatusCode().value() == 409 && "ACCOUNT_ALREADY_EXISTS".equals(extractErrorCode(e))) {
+                log.info("Account service refused social-signup: the email already has a consumer-pool account");
+                throw new SocialSignupEmailRegisteredException("Email already registered as a consumer-pool account");
+            }
             log.warn("Account service social-signup returned client error {}: {}",
                     e.getStatusCode(), e.getMessage());
             throw new AccountServiceUnavailableException("Account service social-signup failed", e);

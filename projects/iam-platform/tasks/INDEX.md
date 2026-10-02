@@ -77,7 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-619-consumer-pool-followups-leave-site-decline-copy-security-view.md` — **전역 소비자 계정 후속 셋** (READY, 2026-10-01 UTC · `TASK-BE-616` 인계) — ① 사이트 탈퇴(멤버십 LEFT) vs 계정 삭제(지금 GDPR 삭제는 풀 계정 하나 → 모든 사이트) · ② 동의 거절 시 web-store 문구(측정 먼저) · ③ 콘솔 보안 이벤트를 사이트 테넌트로 보면 풀 계정 이벤트가 안 보임.
-- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY, 2026-10-01 UTC · 선행 614~616 — 743 은 2026-10-02 보류로 빠짐 · 618 이 건너뛴 소셜 연결 계정 인계). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
+- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY · ⏳ **보류** 2026-10-02 UTC 소유자 결정 — 소셜 키가 어느 배포에도 없어 성공 불가 · 소셜 신원 0개, AC-00 게이트: 실제 키 주입 시 착수 · 보류 동안 방어 = `TASK-BE-620` · 2026-10-01 UTC · 선행 614~616 — 743 은 2026-10-02 보류로 빠짐 · 618 이 건너뛴 소셜 연결 계정 인계). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -114,7 +114,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-620-social-signup-refuses-pool-account-email.md` — **소셜 가입이 풀 계정 이메일에 사이트 계정을 하나 더 만들지 않게** (IN-PROGRESS, 2026-10-02 UTC · `TASK-BE-617` 보류 동안의 방어). account-service 가 `refuseIfEmailHasPoolAccount` 재사용 → auth 가 409 를 `code` 로 구별 → `/login?error=email_registered`.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

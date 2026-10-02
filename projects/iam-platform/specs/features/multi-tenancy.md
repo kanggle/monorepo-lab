@@ -409,6 +409,10 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   product-service 셀러 온보딩)이 **소비자 사이트**에 오면 거절한다 — 그 엔드포인트의 기존 중복 응답 `409 ACCOUNT_ALREADY_EXISTS`. B2B · 고객 테넌트(wms · erp ·
   demo-corp …)는 대상이 아니다(D1 — 테넌트별 계정). 잠정 결과: 풀 쇼퍼를 같은 이메일로 셀러 온보딩할 수 없다 — 셀러 계정은 지금 `seller+<tenant>+<sellerId>@marketplace.local` 기계 계정이라 실제로 부딪히지 않는다. 사람 계정을 셀러에 연결하는 모델은 `ADR-MONO-079`(`TASK-MONO-747`, `TASK-MONO-745` 흡수) 몫이고, 그 전까지는
   product-service 의 기존 fail-soft 대로 `PENDING_PROVISIONING` 에 머문다.
+- 🔴 **소셜 가입도 같다 (`TASK-BE-620`, `TASK-BE-617` 보류 동안의 방어)**: 소셜 가입(`POST /internal/accounts/social-signup`)은 아직 풀이 아니라
+  **사이트 계정**을 만든다(풀 소셜은 `TASK-BE-617`, 소셜 키가 실제로 주입될 때까지 보류). 그 사이트 안에 같은 이메일의 사이트 계정이 있으면 지금처럼 그 계정으로
+  들어가고(기존 동작), 없는데 **풀 계정이 그 이메일로 있으면 거절한다**(`409 ACCOUNT_ALREADY_EXISTS` → 로그인 화면 `error=email_registered`
+  «이미 이메일·비밀번호로 가입된 주소» 안내). 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존한다 — 이 절이 금지하는 상태다.
 
 #### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
 

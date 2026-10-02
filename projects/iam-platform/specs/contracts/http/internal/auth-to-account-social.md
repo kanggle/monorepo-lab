@@ -58,6 +58,10 @@ auth-service가 OAuth 소셜 로그인 처리 중 account-service를 호출하�
 | Status | Code | 조건 |
 |---|---|---|
 | 422 | `VALIDATION_ERROR` | 필수 필드 누락 또는 형식 오류 |
+| 409 | `ACCOUNT_ALREADY_EXISTS` | **`TASK-BE-620`** — tenant 가 소비자 사이트이고, 그 사이트에 같은 이메일의 계정은 **없는데** 같은 이메일의 **풀 계정**(`consumer-pool`)이 있다(`multi-tenancy.md` § 소비자 계정 풀 § 2 공존 금지). 그 사이트에 같은 이메일 계정이 있으면 위 «200 자동 연결» 이 먼저다(무변경) |
+| 409 | `TENANT_SUSPENDED` | tenant 가 정지됨(`ActiveTenantGuard`) |
+
+> 🔴 **caller 는 두 409 를 구별해야 한다**(`code` 로) — `ACCOUNT_ALREADY_EXISTS` 는 «그 이메일은 비밀번호 풀 계정으로 쓰라», `TENANT_SUSPENDED` 는 «지금은 못 쓴다».
 
 **주의**: 반환된 `status`가 ACTIVE가 아닌 경우, auth-service가 로그인을 거부해야 한다 (caller 책임). account-service는 상태 검증 없이 조회 결과를 반환한다.
 

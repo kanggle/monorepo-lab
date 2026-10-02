@@ -7,6 +7,7 @@ import com.example.account.domain.account.Account;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
+import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,8 @@ public class SocialSignupUseCase {
     private final AccountEventPublisher eventPublisher;
     private final AccountIdentityProvisioner accountIdentityProvisioner;
     private final ActiveTenantGuard activeTenantGuard;
+    /** TASK-BE-620 (multi-tenancy.md § 소비자 계정 풀 § 2): the no-coexistence check against the pool. */
+    private final ConsumerAccountPool consumerAccountPool;
 
     @Transactional
     public SocialSignupResult execute(SocialSignupCommand command) {
@@ -33,7 +36,7 @@ public class SocialSignupUseCase {
         // and already stamps it on the social-identity row and the token — it now sends it here
         // too, so the account row no longer contradicts the token. Header-less → fan-platform.
         TenantId tenantId = TenantId.fromHeaderOrDefault(command.tenantId());
-        activeTenantGuard.requireActive(tenantId);
+        Tenant tenant = activeTenantGuard.requireActive(tenantId);
 
         String normalizedEmail = command.email().trim().toLowerCase();
 
@@ -42,6 +45,13 @@ public class SocialSignupUseCase {
         if (existing.isPresent()) {
             return SocialSignupResult.fromExisting(existing.get());
         }
+
+        // TASK-BE-620 — social signup still creates a SITE account (pool-aware social is TASK-BE-617,
+        // deferred until real provider keys are configured). An email that already has a POOL account
+        // is refused rather than given a second, site account: § 2 forbids the two coexisting (the form
+        // login could then check only one of them). The same-site link above stays first and unchanged.
+        // Same answer as any duplicate (409 ACCOUNT_ALREADY_EXISTS); consumer sites only, B2B untouched.
+        consumerAccountPool.refuseIfEmailHasPoolAccount(tenant, normalizedEmail, command.email());
 
         try {
             // Create new account (no password for social-only accounts)

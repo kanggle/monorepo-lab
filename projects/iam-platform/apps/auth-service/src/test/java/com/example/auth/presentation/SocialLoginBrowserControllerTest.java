@@ -226,6 +226,13 @@ class SocialLoginBrowserControllerTest {
                 "temporarily_unavailable");
     }
 
+    @Test
+    @DisplayName("TASK-BE-620: 그 이메일의 풀 계정이 있어 소셜 가입 거절 → /login?error=email_registered (temporarily_unavailable 이 아니다)")
+    void callback_socialSignupEmailRegistered_redirectsToEmailRegistered() {
+        assertErrorMapping(new com.example.auth.application.exception.SocialSignupEmailRegisteredException(
+                "Email already registered as a consumer-pool account"), "email_registered");
+    }
+
     private void assertErrorMapping(RuntimeException thrown, String expectedError) {
         when(savedRequestTenantResolver.resolve(any(), any()))
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
