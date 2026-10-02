@@ -8,7 +8,7 @@ TASK-MONO-755
 
 # Status
 
-review (2026-10-02 UTC)
+done (2026-10-02 UTC — 4차원 검증) ‖ 직전: review
 
 # Owner
 
@@ -96,3 +96,10 @@ monorepo
 🔴 **조사 중 발견 — 302 의 범위를 바꾼다.** console-bff 의 scm 레그는 게이트웨이를 거치지 않고 `inventory-visibility-service` 를 **직접** 부른다(§ 2.4.9.1 scm-leg topology 노트 — scm 게이트웨이가 당시 엔타이틀먼트 이중 수용을 못 했다). 그 주소는 docker 네트워크에만 있어 **Vercel 에서 닿지 않는다.** 그래서 § 2.4.9.0 «Which address each leg uses» 는 레그가 **그 도메인 콘솔 화면이 이미 쓰는 console-web 서버 클라이언트**(scm = `SCM_GATEWAY_BASE_URL` + `/api/v1/inventory-visibility/snapshot`)를 쓰라고 정한다 — Vercel 에서 이미 동작하는 경로다. 게이트웨이 경로의 응답 본문이 서비스 경로와 같다는 보장은 없으므로 302 가 레그마다 픽스처 모양을 단언한다(302 AC-1 이 이미 그것을 요구한다).
 
 🔵 `PROJECT.md` 의 `service_types: [frontend-app, rest-api]` 는 **그대로** 두었다 — console-bff 가 아직 떠 있는 동안 `rest-api` 를 빼면 분류가 실제와 어긋난다. Service Map 행에 «은퇴 예정» 과 그때 빠질 것을 적었다(757).
+
+# 종결 (2026-10-02 UTC) — 4차원 검증
+
+- (a) PR [#4116](https://github.com/kanggle/monorepo-lab/pull/4116) `state=MERGED` 2026-10-02T11:49:55Z (첫 PR #4113 은 #4110 과 `tasks/INDEX.md` 충돌로 CI 0건 → main 위로 다시 올린 새 브랜치로 대체, force-push 없음)
+- (b) squash `69cdcb58c` = 머지 직후 `origin/main` tip
+- (c) 머지 전 체크 66 · 실패 0
+- (d) § Acceptance Criteria 를 열어 읽음 — AC-1~6 전부 `[x]`, § 결과에 각 AC 의 근거(AC-1 은 삭제 0줄 측정)
