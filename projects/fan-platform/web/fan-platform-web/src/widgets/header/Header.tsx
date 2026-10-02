@@ -4,6 +4,7 @@ import { buildGapEndSessionUrl } from '@/shared/auth/federated-logout';
 import { getFanSession, isAuthenticated } from '@/shared/auth/session';
 import { NotificationBell, getRecentNotifications, getUnreadCount } from '@/features/notification';
 import { DemoHeartbeat } from '@/widgets/heartbeat/DemoHeartbeat';
+import { storeGoodsHref } from '@/shared/config/store-links';
 
 /**
  * Top navigation. Server Component — reads session via the server boundary.
@@ -30,7 +31,7 @@ import { DemoHeartbeat } from '@/widgets/heartbeat/DemoHeartbeat';
  * (`피`/`드`, `로그`/`인` — 한글은 글자 사이 어디서나 끊긴다). 그래서:
  *   · 모든 링크·버튼에 `whitespace-nowrap` — 항목은 쪼개지지 않는다.
  *   · `flex-wrap` + 메뉴 묶음 `order-last w-full` — 640px 미만에서는 첫 줄 = 로고 + 오른쪽 동작,
- *     둘째 줄 = 피드 · 아티스트 · 멤버십. `sm:` 부터는 예전과 같은 한 줄·같은 간격·같은 순서다.
+ *     둘째 줄 = 피드 · 아티스트 · 멤버십 · 굿즈샵 ↗(TASK-MONO-739). `sm:` 부터는 예전과 같은 한 줄·같은 간격·같은 순서다.
  *   · 줄바꿈 금지만 넣고 줄 배치를 안 정하면 문서가 **가로로 넘친다** — 둘은 짝이다.
  * 🔴 클래스만 바꿨다. 햄버거 메뉴처럼 클라이언트 상태를 들이면 위 § 의 서버 경계가 흔들린다.
  */
@@ -72,6 +73,11 @@ export async function Header() {
           <Link href="/membership" className={NAV_LINK}>
             멤버십
           </Link>
+          {/* TASK-MONO-739 (ADR-MONO-077 D4) — 스토어로 나가는 **평범한 `<a>`**. `Link` 가 아니다: 다른 사이트다.
+              「↗」 가 «바깥으로 나간다» 를 글자로 말한다. 같은 탭(R3). 익명 렌더에도 요청 0 — URL 은 env 와 상수로만 만든다. */}
+          <a href={storeGoodsHref()} data-testid="nav-goods-shop" className={NAV_LINK}>
+            굿즈샵 ↗
+          </a>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
           {authed ? (

@@ -181,3 +181,13 @@ PaymentGatewayConfig (PortOne) @Profile("portone")    ← 실 PG 는 opt-in
 🔴 **효과는 2026-09-04 시점에 아직 안 쟀다.** 데모가 꺼져 있었고(컨트롤 플레인 `/status` =
 `stopped`), 위 fail-closed 때문에 창 밖에서는 원리적으로 못 잰다. 판정은
 `TASK-MONO-622` AC-1·AC-2 가 기동 창에서 든다 — 그 티켓이 **판정의 소유자**다.
+
+## 굿즈샵 주소 — `NEXT_PUBLIC_STORE_URL` (`TASK-MONO-739` · `ADR-MONO-077` D3)
+
+| | |
+|---|---|
+| 값 | 스토어 공개 오리진(끝 `/` 없이). **미설정이면 `https://store.hubwang.com`** — 정본 공개 호스트(`TEMPLATE.md` § PUBLIC-HOSTNAMES) |
+| 환경 | 설정하지 않는다(기본값이 운영 스토어). 스토어 주소가 바뀔 때만 넣는다 |
+| 코드 | `src/shared/config/store-links.ts` — 헤더 「굿즈샵 ↗」 · 아티스트 굿즈 카드 · 「전체 보기」 |
+| 🔵 없으면 | 운영 스토어로 간다 — **조용히 죽는 쪽이 아니라 동작하는 쪽**으로 실패한다(D3). 🔴 `.local`/`sslip.io` 를 넣지 마라: 방문자 브라우저에서 안 열린다 |
+| 🔴 빌드 때 박힌다 | `NEXT_PUBLIC_*` 라 값을 바꾸면 **재배포**해야 반영된다 |

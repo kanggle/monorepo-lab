@@ -8,6 +8,8 @@
  */
 
 export { readFanPublicData, type FanPublicDataResult } from './api/read';
+// TASK-MONO-739 — 스토어 **번들** 저장본(굿즈 카드). 🔵 이것도 게이트웨이로 가지 않는다(`read-store.ts` 헤더).
+export { readStoreProducts } from './api/read-store';
 
 export {
   feedPosts,
@@ -35,5 +37,6 @@ export { PublicPostCard } from './ui/PublicPostCard';
 export { PublicPostDetail } from './ui/PublicPostDetail';
 export { PublicArtistCard } from './ui/PublicArtistCard';
 export { PublicArtistProfile } from './ui/PublicArtistProfile';
+export { PublicArtistGoods } from './ui/PublicArtistGoods';
 export { PublicMembershipPlans } from './ui/PublicMembershipPlans';
 export { PublicEmptyState } from './ui/PublicEmptyState';

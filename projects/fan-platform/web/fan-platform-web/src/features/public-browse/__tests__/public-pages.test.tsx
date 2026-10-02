@@ -46,6 +46,14 @@ const state = vi.hoisted(() => ({
 vi.mock('@/features/public-browse/api/read', () => ({
   readFanPublicData: async () => state.result,
 }));
+// TASK-MONO-739 — 스토어 번들 판독자도 `server-only` 라 갈아 끼운다. 갈아 끼운 자리에서 **같은 번들**을 같은
+// 함수(`bundledEnvelope`)로 읽으므로 굿즈 카드의 데이터 경로는 그대로 시험된다.
+vi.mock('@/features/public-browse/api/read-store', async () => {
+  const { bundledEnvelope } = await import('@demo/public-data');
+  const storeJson = (await import('@demo/public-data/snapshots/store.json')).default;
+  const products = (bundledEnvelope('store', storeJson).data as { products: unknown[] }).products;
+  return { readStoreProducts: () => products };
+});
 
 vi.mock('@/shared/auth/session', () => ({
   // 이 파일의 모든 칸은 **익명**이다. 회원 경로는 별도 관심사다.
@@ -321,6 +329,31 @@ describe('/artists/[id] (공개 프로필) — 세션 없이', () => {
       expect('realName' in a).toBe(false);
       expect('accountId' in a).toBe(false);
     }
+  });
+
+  it('🔴🔴 TASK-MONO-739 — 공식 굿즈 카드가 스토어 상세로, 「전체 보기」가 스토어 굿즈 목록으로 나간다 · 요청 0', async () => {
+    await renderPage(ArtistProfilePage({ params: Promise.resolve({ id: '0199de80-0000-7000-8000-00000000a001' }) }));
+
+    const cards = screen.getAllByTestId('artist-goods-card');
+    expect(cards.length).toBeGreaterThanOrEqual(1); // AC-2 — 0장이 아니다
+    for (const card of cards) {
+      // 평범한 `<a>` · 같은 탭(R3) · 스토어 상품 상세
+      expect(card.tagName).toBe('A');
+      expect(card).not.toHaveAttribute('target');
+      expect(card.getAttribute('href')).toMatch(/^https:\/\/store\.hubwang\.com\/products\/b0000000-/);
+      expect(card.querySelector('img')?.getAttribute('src')).toMatch(/^https:\/\/placehold\.co\//);
+    }
+    const all = screen.getByTestId('artist-goods-all');
+    expect(all).toHaveTextContent('↗');
+    expect(new URL(all.getAttribute('href')!).searchParams.get('q')).toBe('루미');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('🔴 다른 아티스트의 굿즈는 이 아티스트 페이지에 없다 (collectionRef 로 고른다)', async () => {
+    await renderPage(ArtistProfilePage({ params: Promise.resolve({ id: '0199de80-0000-7000-8000-00000000a001' }) }));
+    const text = screen.getByTestId('artist-goods').textContent ?? '';
+    expect(text).toContain('루미');
+    for (const other of ['노아', '세아', '하린', '리오', '유노']) expect(text).not.toContain(other);
   });
 
   it('저장본에 없는 id → notFound (게이트웨이에 되묻지 않는다)', async () => {

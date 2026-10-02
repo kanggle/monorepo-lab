@@ -30,6 +30,10 @@ const state = vi.hoisted(() => ({
 vi.mock('@/features/public-browse/api/read', () => ({
   readFanPublicData: async () => state.result,
 }));
+// TASK-MONO-739 — 배럴이 스토어 판독자(`server-only`)도 내보낸다. 이 페이지는 굿즈를 안 그리므로 빈 값이면 된다.
+vi.mock('@/features/public-browse/api/read-store', () => ({
+  readStoreProducts: () => [],
+}));
 vi.mock('@/shared/auth/session', () => ({
   isAuthenticated: async () => state.authed,
 }));
