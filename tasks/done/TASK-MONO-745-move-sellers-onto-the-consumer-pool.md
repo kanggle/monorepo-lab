@@ -8,7 +8,7 @@ TASK-MONO-745
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -79,3 +79,24 @@ monorepo
 
 1. 셀러 계정을 먼저 옮기고 product-service 를 나중에 고친다 — 그 사이 셀러 정지가 조용히 안 먹는다(«성공» 응답, 셀러는 그대로 판매).
 2. 셀러 사이트 역할을 `account_roles` 에 그대로 두어 풀 계정의 복합 FK 가 깨진다.
+
+---
+
+# 닫기 기록 (2026-10-02 UTC) — 구현 없이 종결 · 소유자 결정 «079로 합치기»
+
+**착수 전 측정에서 전제가 거짓으로 나왔다.** 이 티켓의 Goal(«셀러가 같은 계정으로 쇼핑하고 팬도 쓰게 한다»)은 셀러 계정이 **사람이 로그인하는 계정**이라는 전제 위에 있었다. 코드는 그렇지 않다.
+
+| 잰 것 | 결과 | 출처 |
+|---|---|---|
+| 셀러 계정의 이메일·비밀번호 | `seller+<tenant>+<sellerId>@marketplace.local` · 무작위 비밀번호 · «비밀번호로 로그인하지 않는다» | product-service `AccountServiceSellerProvisioner#sellerEmail` · `#generatePassword` |
+| 사람이 셀러로 일하는 로그인 경로 | 없다 — 셀러 범위 클레임이 «아직 연결되지 않았다» | ecommerce gateway `GatewayIdentityConfig` 주석(`ADR-MONO-030` Step 4) |
+| 사람 이메일의 셀러 계정(데모 시드) | 0건 — `SELLER` 를 심는 SQL 은 `V0030` 의 DDL 주석뿐 | `projects/**/*.sql` grep |
+
+⇒ 기계 계정을 풀로 옮기면 쇼핑하는 사람이 생기지 않는다. AC-2(스토어 로그인) · AC-5(팬 동의) · AC-6(셀러 이메일 풀 가입)은 **로그인하는 사람이 없어 성립하지 않는 AC** 다. AC-1·3·4(정지 경로 · 셀러 범위)는 옮기지 않으면 바뀌지 않는다.
+
+**소유자 결정 (2026-10-02 UTC)**: *«079로 합치기 (권장)»* — 이 티켓은 닫고, «사람의 풀 계정을 셀러에 연결해 스토어 사이트 역할 `SELLER` 를 준다» 를 `ADR-MONO-079` 의 셀러 모델에 넣는다. 기계 계정은 지금 자리에 둔다.
+
+**넘긴 의무 (받는 곳 = `TASK-MONO-747`, 079 기안)**
+- 사람 계정 ↔ 셀러 연결 모델 · 그 계정의 `SELLER` 사이트 역할(`consumer_site_roles`) · 셀러 정지가 그 사람 계정을 어떻게 다루나(계정 잠금 vs 역할 회수 — 사람 계정을 잠그면 쇼핑·팬까지 막힌다).
+- product-service 의 `AccountStatusChangedSellerConsumer` 는 이벤트 `tenantId` 를 그대로 셀러 테넌트로 쓴다 — 셀러에 연결된 계정이 풀 계정이 되면 `consumer-pool` 이벤트를 놓친다(원래 이 티켓의 AC-1). 079 의 연결 모델이 이것을 다뤄야 한다.
+- 남아 있는 코드 주석의 `TASK-MONO-745` 언급(account-service `ConsumerAccountPool` · `ConsumerPoolLegacyAccountMover` · `LegacyMoveOutcome` · `ConsumerSiteMembershipJpaRepository`, `V0030` 주석, auth-service `SellerStoreTokenRolesBaseline*Test`)은 «셀러는 이 단계에서 옮기지 않는다» 는 뜻으로 여전히 맞다 — 079 구현이 손댈 때 고친다.

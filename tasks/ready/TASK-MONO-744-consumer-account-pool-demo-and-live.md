@@ -28,7 +28,7 @@ monorepo
 
 # Dependency Markers
 
-- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` · `TASK-MONO-743` · `TASK-BE-617` · `TASK-MONO-745`(셀러 이동 — 데모 셀러도 풀 계정이 된다)
+- **선행**: `TASK-BE-614` · `TASK-BE-615` · `TASK-BE-616` · `TASK-MONO-743` · `TASK-BE-617` (~~`TASK-MONO-745`~~ — 2026-10-02 구현 없이 닫힘: 셀러 계정은 기계 계정이라 풀로 옮기지 않는다 · `ADR-MONO-079` 로 흡수)
 
 # Goal
 

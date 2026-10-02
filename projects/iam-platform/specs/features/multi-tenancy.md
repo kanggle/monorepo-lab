@@ -407,7 +407,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   만들면 **원래 주인이 자기 사이트 계정에 못 들어간다**. 가입 화면의 «이미 가입된 이메일» 은 지금 가입이 이미 내는 응답과 같은 부류다(새 열거 경로가 아니다).
 - 🔴 **역방향도 같다 (`TASK-BE-616`)**: **풀 계정이 먼저 있는** 이메일로 내부 계정 생성(`POST /internal/tenants/{t}/accounts` — 운영자 프로비저닝 · 벌크 ·
   product-service 셀러 온보딩)이 **소비자 사이트**에 오면 거절한다 — 그 엔드포인트의 기존 중복 응답 `409 ACCOUNT_ALREADY_EXISTS`. B2B · 고객 테넌트(wms · erp ·
-  demo-corp …)는 대상이 아니다(D1 — 테넌트별 계정). 잠정 결과: 풀 쇼퍼를 같은 이메일로 셀러 온보딩할 수 없다 — `TASK-MONO-745`(셀러를 풀로) 전까지는
+  demo-corp …)는 대상이 아니다(D1 — 테넌트별 계정). 잠정 결과: 풀 쇼퍼를 같은 이메일로 셀러 온보딩할 수 없다 — 셀러 계정은 지금 `seller+<tenant>+<sellerId>@marketplace.local` 기계 계정이라 실제로 부딪히지 않는다. 사람 계정을 셀러에 연결하는 모델은 `ADR-MONO-079`(`TASK-MONO-747`, `TASK-MONO-745` 흡수) 몫이고, 그 전까지는
   product-service 의 기존 fail-soft 대로 `PENDING_PROVISIONING` 에 머문다.
 
 #### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
@@ -438,7 +438,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 
   | 계정 | 이동 단계 | 왜 그 단계까지 기다리나 |
   |---|---|---|
-  | 이커머스 **셀러**(`ADR-MONO-042`, `SELLER` 역할) | `TASK-MONO-745` | product-service 가 셀러를 `(tenant_id, seller)` 로 찾고 상태 이벤트를 `(tenantId, accountId)` 로 소비한다 — 그 두 곳을 먼저 «계정 id» 로 고쳐야 옮겨도 셀러를 놓치지 않는다. 옮긴 뒤 `SELLER` 는 `consumer_site_roles(account, ecommerce, SELLER)` 로 가고, 스토어 토큰은 시드와 **합쳐** `["CUSTOMER","SELLER"]` 가 된다(§ 4 역할 규칙) |
+  | 이커머스 **셀러**(`ADR-MONO-042`, `SELLER` 역할) | ~~`TASK-MONO-745`~~ → **옮기지 않는다**(2026-10-02 소유자 결정: 셀러 계정은 사람이 로그인하지 않는 기계 계정 — 사람 계정 연결은 `ADR-MONO-079`, `TASK-MONO-747`). 아래 칸은 당시의 근거 | product-service 가 셀러를 `(tenant_id, seller)` 로 찾고 상태 이벤트를 `(tenantId, accountId)` 로 소비한다 — 그 두 곳을 먼저 «계정 id» 로 고쳐야 옮겨도 셀러를 놓치지 않는다. 옮긴 뒤 `SELLER` 는 `consumer_site_roles(account, ecommerce, SELLER)` 로 가고, 스토어 토큰은 시드와 **합쳐** `["CUSTOMER","SELLER"]` 가 된다(§ 4 역할 규칙) |
   | 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자 `oidc_subject` 가 이 계정 id) | `ADR-MONO-080` 후보(`TASK-MONO-746`) | 운영자 규칙(«운영자는 대상 테넌트 계정에만», `TASK-MONO-334`)을 바꾸는 결정이 먼저다 |
 
   옮기기 전까지 이 계정들은 지금처럼 동작한다. 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)은 080 이 바꾸기 전까지 **사이트 테넌트에** 계정을 만든다.
