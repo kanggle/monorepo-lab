@@ -26,4 +26,11 @@ public interface SocialIdentityRepository {
             String tenantId, String provider, String providerUserId);
 
     SocialIdentity save(SocialIdentity socialIdentity);
+
+    /**
+     * TASK-BE-618 — whether ANY social identity row (in any tenant) is linked to this account. The
+     * consumer-pool legacy move skips such accounts ({@code POOL_MOVE_SOCIAL_LINKED}) until
+     * TASK-BE-617 makes the social lookup pool-aware.
+     */
+    boolean existsByAccountId(String accountId);
 }

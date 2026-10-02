@@ -169,4 +169,58 @@ class AuthServiceClientUnitTest {
                 List.of(new AuthServicePort.CredentialIdentityBinding("acc-x", "idy-x"))))
                 .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
     }
+
+    // ── TASK-BE-618: consumer-pool credential move ───────────────────────────────
+
+    private static final String MOVES_PATH = "/internal/auth/consumer-pool/moves";
+
+    private void stubMove(int status, String body) {
+        wireMockServer.stubFor(post(urlEqualTo(MOVES_PATH))
+                .willReturn(aResponse().withStatus(status)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(body)));
+    }
+
+    @Test
+    @DisplayName("moveCredentialToConsumerPool — 200 → 예외 없음 · 바디에 accountId·siteTenantId · Bearer")
+    void move_ok_sendsBody() {
+        stubMove(200, "{\"moved\":true,\"alreadyInPool\":false}");
+
+        assertThatNoException().isThrownBy(() -> client.moveCredentialToConsumerPool("acc-m", "fan-platform"));
+        wireMockServer.verify(postRequestedFor(urlEqualTo(MOVES_PATH))
+                .withHeader("Authorization", equalTo("Bearer test-cc-token"))
+                .withRequestBody(matchingJsonPath("$[?(@.accountId == 'acc-m')]"))
+                .withRequestBody(matchingJsonPath("$[?(@.siteTenantId == 'fan-platform')]")));
+    }
+
+    @Test
+    @DisplayName("moveCredentialToConsumerPool — 409 POOL_MOVE_* 넷 → CredentialPoolMoveRefused(접두어 뗀 사유)")
+    void move_knownConflicts_mapToReasons() {
+        for (String reason : List.of("OPERATOR_FACETED", "SOCIAL_LINKED", "POOL_CREDENTIAL_EXISTS",
+                "CREDENTIAL_TENANT_MISMATCH")) {
+            stubMove(409, "{\"code\":\"POOL_MOVE_" + reason + "\",\"message\":\"x\",\"timestamp\":\"t\"}");
+
+            assertThatThrownBy(() -> client.moveCredentialToConsumerPool("acc-r", "fan-platform"))
+                    .isInstanceOfSatisfying(AuthServicePort.CredentialPoolMoveRefused.class,
+                            e -> assertThat(e.reason()).isEqualTo(reason));
+        }
+    }
+
+    @Test
+    @DisplayName("moveCredentialToConsumerPool — 모르는 409 코드 → AuthServiceUnavailable (건너뛰기 아님, 실패)")
+    void move_unknownConflict_isFailure() {
+        stubMove(409, "{\"code\":\"CREDENTIAL_ALREADY_EXISTS\",\"message\":\"x\",\"timestamp\":\"t\"}");
+
+        assertThatThrownBy(() -> client.moveCredentialToConsumerPool("acc-u", "fan-platform"))
+                .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
+    }
+
+    @Test
+    @DisplayName("moveCredentialToConsumerPool — 503(admin 무응답 fail-closed) → AuthServiceUnavailable")
+    void move_serviceUnavailable_isFailure() {
+        stubMove(503, "{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"x\",\"timestamp\":\"t\"}");
+
+        assertThatThrownBy(() -> client.moveCredentialToConsumerPool("acc-5", "fan-platform"))
+                .isInstanceOf(AuthServicePort.AuthServiceUnavailable.class);
+    }
 }

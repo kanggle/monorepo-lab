@@ -51,6 +51,18 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     List<AdminOperatorJpaEntity> findByOidcSubjectIsNotNull();
 
     /**
+     * TASK-BE-618 — any operator row (whatever its status) whose {@code oidc_subject} is this
+     * account id (ADR-MONO-044 D5 self-onboarded operator).
+     */
+    boolean existsByOidcSubject(String oidcSubject);
+
+    /**
+     * TASK-BE-618 — any operator row (whatever its status) linked to this central identity
+     * (ADR-MONO-034 U3 operator identity link).
+     */
+    boolean existsByIdentityId(String identityId);
+
+    /**
      * Per-tenant email uniqueness check. Replaces the legacy single-column
      * {@link #existsByEmail(String)} after V0025 changed the unique index to
      * {@code (tenant_id, email)}.

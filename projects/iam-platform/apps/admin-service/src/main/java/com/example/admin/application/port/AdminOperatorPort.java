@@ -96,6 +96,14 @@ public interface AdminOperatorPort {
     List<OperatorOidcSubjectView> findOperatorsWithOidcSubject();
 
     /**
+     * TASK-BE-618 (auth-to-admin.md § GET /internal/operators/facet) — whether ANY operator row,
+     * in any status, carries an operator facet of this consumer account: {@code oidc_subject =
+     * accountId}, or (when {@code identityId} is non-blank) {@code identity_id = identityId}.
+     * Read-only. A blank {@code accountId} matches nothing on that axis.
+     */
+    boolean existsOperatorFacet(String accountId, String identityId);
+
+    /**
      * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — set
      * {@code admin_operators.oidc_subject = newOidcSubject} on the row identified by
      * {@code operatorInternalId} (the email→account_id backfill write). Bumps

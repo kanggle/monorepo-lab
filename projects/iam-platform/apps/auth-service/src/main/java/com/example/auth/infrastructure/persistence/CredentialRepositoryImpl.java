@@ -66,4 +66,17 @@ public class CredentialRepositoryImpl implements CredentialRepository {
     public int assignIdentityId(String accountId, String identityId) {
         return credentialJpaRepository.assignIdentityIdIfAbsent(accountId, identityId);
     }
+
+    @Override
+    public Optional<String> findIdentityId(String accountId) {
+        if (accountId == null) {
+            return Optional.empty();
+        }
+        return credentialJpaRepository.findIdentityIdByAccountId(accountId);
+    }
+
+    @Override
+    public int moveToTenant(String accountId, String fromTenantId, String toTenantId) {
+        return credentialJpaRepository.moveTenant(accountId, fromTenantId, toTenantId);
+    }
 }

@@ -111,6 +111,17 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public boolean existsOperatorFacet(String accountId, String identityId) {
+        boolean bySubject = accountId != null && !accountId.isBlank()
+                && operatorRepository.existsByOidcSubject(accountId);
+        if (bySubject) {
+            return true;
+        }
+        return identityId != null && !identityId.isBlank()
+                && operatorRepository.existsByIdentityId(identityId);
+    }
+
+    @Override
     public void updateOidcSubject(long operatorInternalId, String newOidcSubject, Instant at) {
         AdminOperatorJpaEntity entity = operatorRepository.findById(operatorInternalId)
                 .orElseThrow(() -> new OperatorNotFoundException(

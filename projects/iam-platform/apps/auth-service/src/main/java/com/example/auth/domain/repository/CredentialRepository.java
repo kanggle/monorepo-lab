@@ -70,4 +70,20 @@ public interface CredentialRepository {
      * @return rows assigned (1 = set; 0 = already set, or no credential for the accountId)
      */
     int assignIdentityId(String accountId, String identityId);
+
+    /**
+     * TASK-BE-618 — the credential's central {@code identity_id} (native read; the column stays
+     * unmapped on the entity). Empty when there is no credential for the account or the value is NULL.
+     */
+    Optional<String> findIdentityId(String accountId);
+
+    /**
+     * TASK-BE-618 (auth-internal.md § consumer-pool/moves) — move the credential of {@code accountId}
+     * from {@code fromTenantId} to {@code toTenantId} (native UPDATE, guarded on the current tenant,
+     * {@code version + 1} so a concurrent load-modify-save holding the old tenant fails its optimistic
+     * lock instead of writing the site back).
+     *
+     * @return rows moved (1, or 0 when the credential is no longer in {@code fromTenantId})
+     */
+    int moveToTenant(String accountId, String fromTenantId, String toTenantId);
 }

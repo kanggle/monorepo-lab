@@ -26,4 +26,9 @@ public class SocialIdentityRepositoryImpl implements SocialIdentityRepository {
         SocialIdentityJpaEntity entity = SocialIdentityJpaEntity.fromDomain(socialIdentity);
         return socialIdentityJpaRepository.save(entity).toDomain();
     }
+
+    @Override
+    public boolean existsByAccountId(String accountId) {
+        return accountId != null && socialIdentityJpaRepository.existsByAccountId(accountId);
+    }
 }
