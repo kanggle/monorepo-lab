@@ -10,7 +10,15 @@
 #   패턴 1 — base = 인프라 전용, `docker-compose.e2e.yml` = 풀스택 하네스
 #            → iam, wms  (base + e2e 를 함께 줘야 앱이 뜬다)
 #   패턴 2 — base 가 앱까지 전부 포함
-#            → scm, fan, finance, erp, ecommerce, console
+#            → scm, fan, finance, erp, ecommerce
+#
+# 🔴 platform-console 은 **데모 도메인이 아니다** (TASK-MONO-757 / ADR-MONO-081).
+#    방문자 콘솔(console-web)은 Vercel 에서 돌고(ADR-MONO-067 단계 3), 그 서버의
+#    합성 레이어였던 Spring BFF 는 은퇴했다(ADR-MONO-081). 그 compose 에 남은 서비스는
+#    console-web 하나뿐인데 데모 호스트는 그것을 띄우지 않으므로, 체인으로 등록하면
+#    **서비스 0개**를 렌더한다(`no service selected` — 부팅 실패 + 상태가 영구 `down`).
+#    ⇒ COMPOSE 에서 뺐고, 커버리지 가드 (d) 가 «잊었다» 와 구별하도록 아래
+#    `NOT_DEMO_COMPOSE` 에 **사유와 함께** 적는다.
 #
 # 패턴 1 프로젝트에 base 만 주면 **DB 만 뜨고 앱은 하나도 안 뜬다**. iam 은 이
 # 모노레포의 OIDC IdP 이므로, 그 경우 나머지 전 도메인의 토큰 검증이 무너진다.
@@ -56,27 +64,26 @@ declare -A COMPOSE=(
   [fan]="projects/fan-platform/docker-compose.yml infra/demo/fan-identity.override.yml infra/demo/fan-vercel.override.yml"
   [finance]="projects/finance-platform/docker-compose.yml infra/demo/finance-identity.override.yml"
   [erp]="projects/erp-platform/docker-compose.yml infra/demo/erp-identity.override.yml"
-  # `console-vercel.override.yml` — 방문자 운영자 콘솔이 Vercel 로 옮겨갔으므로
-  # (ADR-MONO-067 단계 3) 데모에서는 console-web 을 **띄우지 않는다**. 억제는 그
-  # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다.
-  # 🔴 **CI 전수(2026-09-06, TASK-MONO-627 AC-1) — 첫 문장을 실측이 반증했다.**
-  #    처음에 «어느 CI 잡도 console-web 을 띄우지 않는다» 라고 적었는데 **거짓**이다.
-  #    두 잡이 띄운다. 다만 **다른 compose 파일에서** 띄우므로 이 억제가 안 닿는다:
-  #      · nightly-e2e.yml:1236   `-f docker-compose.e2e.yml`            (base 를 안 준다)
-  #      · federation-hardening-e2e.yml:263
-  #        `-f tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` (+2 오버레이)
-  #      · ci.yml 의 Frontend unit / Frontend E2E smoke 는 compose 를 안 쓴다
-  #        (`pnpm build` + Playwright 를 apps/console-web/ 에서 직접 돌린다)
-  #    ⇒ 결론은 같지만 **사유가 다르다**: 「아무도 안 띄운다」가 아니라 「띄우는 둘이
-  #      이 체인을 안 지난다」. 🔵 형제 둘의 주석도 같은 모양으로 읽어야 한다 —
-  #      전수를 다시 세지 않고 문장만 베끼면 **거짓을 복제**한다.
-  # 효력은 가드 (z31)이 렌더로, check-suppressed-containers.sh 가 도는 컨테이너로
-  # 확인한다.
-  # 🔴 `console-bff` 는 **남는다** — 억제 대상은 방문자 표면 하나뿐이다. 그 BFF 는
-  #    공개 라우터가 없으므로(TASK-MONO-362) 데모 호스트에 HTTP 표면을 안 만든다
-  #    ⇒ 이 억제로 [console] 도메인의 방문자 표면은 0 이 된다. 그것이 demo-up.sh 의
-  #    부팅 프로브를 iam 으로 옮긴 이유다(그 파일의 SURFACE_FLOOR 주석).
-  [console]="projects/platform-console/docker-compose.yml infra/demo/console-vercel.override.yml"
+  # 🔴 `[console]` 은 **없다** (TASK-MONO-757, 2026-10). 예전에는
+  #    `platform-console/docker-compose.yml + console-vercel.override.yml` 체인이었고, 그
+  #    오버라이드가 console-web 을 억제해 남은 서비스는 옛 BFF(공개 라우터 없음) 하나였다.
+  #    BFF 가 은퇴(ADR-MONO-081)하자 체인이 **0 서비스**를 렌더했다 — 실측:
+  #      docker compose -f …/platform-console/docker-compose.yml -f …/console-vercel.override.yml
+  #        --dry-run up -d  →  rc=1 `no service selected`
+  #    억제할 것도, 띄울 것도 남지 않았으므로 도메인째 뺐다. 콘솔이 데모 호스트에서 쓰는
+  #    것은 IdP(iam) 하나이고, 그것은 묶음 `console` 이 푼다(§ BUNDLES).
+)
+
+# ---------------------------------------------------------------------------
+# NOT_DEMO_COMPOSE — `projects/*/docker-compose.yml` 중 **일부러** 데모 도메인이 아닌 것
+# ---------------------------------------------------------------------------
+# 커버리지 가드 (d) 는 모든 프로젝트 compose 가 COMPOSE 에 등록됐는지 본다 — «새 프로젝트를
+# 맵에 안 넣고 잊었다» 가 데모에서 조용한 누락이 되기 때문이다. 이 표는 그 질문에
+# «잊은 것이 아니라 안 띄우는 것» 이라고 **사유를 대고** 답하는 유일한 자리다.
+# 🔴 사유 없는 항목을 두지 마라 — 빈 값은 (d) 가 문다. 그리고 여기 적힌 파일이 COMPOSE 에도
+#    있으면 (d) 가 문다(두 표가 같은 파일을 두고 반대 말을 하면 한쪽은 거짓이다).
+declare -A NOT_DEMO_COMPOSE=(
+  [projects/platform-console/docker-compose.yml]="console-web 은 Vercel 에서 돈다(ADR-MONO-067 단계 3) · BFF 은퇴(ADR-MONO-081) — 데모 호스트에서 띄울 서비스가 없다(TASK-MONO-757)"
 )
 
 # 공유 edge (traefik-net 정의자) — 항상 선행 기동
@@ -89,21 +96,26 @@ TRAEFIK_COMPOSE="infra/traefik/docker-compose.yml"
 # 참여한다. 그래서 **네 도메인이 전부 떠 있을 때만** 기동할 수 있다 — 없는 네트워크를
 # external 로 참조하면 compose 가 거부한다.
 #
-# 🔴 `demo-core` 는 scm 을 포함하지 않는다(CORE=iam ecommerce wms console) ⇒ 기본 데모
+# 🔴 `demo-core` 는 scm 을 포함하지 않는다(CORE=iam ecommerce wms) ⇒ 기본 데모
 # 프로파일에서는 릴레이가 **뜨지 않는다.** 조용히 넘기지 않고 demo-up.sh 가 어느 도메인이
 # 빠졌는지 이름을 대며 알린다. 이 티켓이 고친 결함이 정확히 *"배선이 없는데 아무도 모른다"*
 # 였으므로, 릴레이가 없다는 사실 자체가 침묵해서는 안 된다.
 RELAY_COMPOSE="infra/demo/docker-compose.relay.yml"
 RELAY_DOMAINS=(iam ecommerce wms scm)
 
-# 기동 순서: iam 먼저(모두가 OIDC 검증 대상인 IdP), console 마지막(federation 소비자)
-FULL=(iam wms scm finance erp ecommerce fan console)
+# 기동 순서: iam 먼저(모두가 OIDC 검증 대상인 IdP).
+# 🔵 예전에는 console 이 마지막(federation 소비자)이었다. 콘솔이 데모 도메인에서 빠지면서
+#    (TASK-MONO-757) 마지막 원소는 fan 이다 — 순서에 load-bearing 인 것은 «iam 먼저» 뿐이다.
+FULL=(iam wms scm finance erp ecommerce fan)
 
 # demo-core: 면접 콜드스타트 최소화용 핵심 경로
-CORE=(iam ecommerce wms console)
+# 🔵 console 이 빠졌다(TASK-MONO-757). Vercel 콘솔이 데모 호스트에서 쓰는 iam 은 이미 여기 있고,
+#    콘솔의 업무 화면이 쓰는 ecommerce·wms 도 여기 있다 ⇒ demo-core 로 콘솔이 쓸 수 있는 범위는
+#    그대로다.
+CORE=(iam ecommerce wms)
 
 # 종료 순서 = FULL 역순
-DOWN_ORDER=(console fan ecommerce erp finance scm wms iam)
+DOWN_ORDER=(fan ecommerce erp finance scm wms iam)
 
 # ---------------------------------------------------------------------------
 # 화면 묶음 (BUNDLES) — 방문자가 고르는 단위 (TASK-MONO-634 / ADR-MONO-071)
@@ -116,6 +128,13 @@ DOWN_ORDER=(console fan ecommerce erp finance scm wms iam)
 #     BUNDLES[fan]="fan" = «"팬 플랫폼" 이라는 화면은 fan 도메인이다» (제품 단위)
 #   묶음을 풀 때 `resolve_deps` 가 iam 을 얹으므로 여기에 iam 을 **적지 않는다.** 적으면
 #   같은 사실이 두 곳에 생기고, DEPS 가 바뀌는 날 한쪽만 고쳐진다.
+#   🔴 **예외 하나 — `console`** (TASK-MONO-757). 위 규칙의 근거는 «묶음에 자기 도메인이
+#   있고, iam 은 그 도메인의 하드 의존으로 따라온다» 이다. 콘솔 묶음에는 **자기 도메인이
+#   없다**: 화면(console-web)은 Vercel 에서 돌고 BFF 는 은퇴했으므로(ADR-MONO-081) 데모
+#   호스트에서 콘솔이 쓰는 것은 IdP 하나다. 그래서 iam 은 «얹히는 의존» 이 아니라 그 묶음의
+#   **내용 그 자체**이고, 여기 적지 않으면 묶음이 빈 집합이 되어 `resolve_bundles console`
+#   이 «묶음이 지정되지 않았습니다» 로 실패한다. DEPS 와 두 집이 되는 것도 아니다 — DEPS 는
+#   «X 가 기능하려면» 을 말하고, 이 줄은 «콘솔이 데모 호스트에서 쓰는 것» 을 말한다.
 #
 # 🔴🔴 **이 표가 Lambda 의 화이트리스트와 같아야 한다.** 컨트롤 플레인은 방문자 입력을
 #   SSM RunShellScript 로 넘기므로 화이트리스트가 **주입 방어**이기도 하다. 두 곳에 있는
@@ -127,7 +146,7 @@ DOWN_ORDER=(console fan ecommerce erp finance scm wms iam)
 declare -A BUNDLES=(
   [fan]="fan"
   [store]="ecommerce"
-  [console]="console"
+  [console]="iam"
 )
 
 # 애드온 — 방문자가 «그 기능» 을 쓸 때 **추가로** 올리는 것. 묶음과 합집합으로 쓰인다.
@@ -147,8 +166,9 @@ declare -A BUNDLE_ADDONS=(
 # resolve_bundles <name...> — 묶음/애드온 이름 집합을 **도메인 집합**으로 푼다.
 #   · 이름이 하나라도 모르는 것이면 stderr 로 알리고 return 1 (조용한 무시 금지 —
 #     오타가 «켰다고 생각했는데 안 켜진» 상태를 만들고, 그 상태는 방문자에게 «고장» 이다).
-#   · 하드 의존은 `resolve_deps` 가 얹는다. 여기서 iam 을 적지 않는 이유(위 § 참조).
-#   · 출력 순서 = FULL(iam 먼저, console 마지막). 기동 순서가 load-bearing 이다.
+#   · 하드 의존은 `resolve_deps` 가 얹는다. 여기서 iam 을 적지 않는 이유(위 § 참조 —
+#     `console` 만 예외이고 그 이유도 거기 있다).
+#   · 출력 순서 = FULL(iam 먼저). 기동 순서가 load-bearing 이다.
 # 호출: set="$(resolve_bundles fan console)" || exit 2
 # ---------------------------------------------------------------------------
 resolve_bundles() {
@@ -181,10 +201,10 @@ resolve_bundles() {
 #     검증하므로, iam 없이 어떤 도메인을 띄워도 로그인·인증이 무너진다 — 96 컨테이너가
 #     healthy 여도 로그인 불가라는, 이 저장소가 반복해서 당한 실패 모드(MONO-358).
 #
-# **소프트 의존은 여기 넣지 않는다.** console 은 다른 도메인을 프록시하지만, 그것들이
-# 없으면 해당 섹션만 "degraded" 로 보일 뿐 console 자체는 뜬다. wms↔ecommerce 풀필먼트도
-# 런타임 이벤트 연동이지 기동 전제가 아니다. 소프트 의존을 하드로 선언하면 "console 하나
-# 켜기" 가 전 스택을 끌어와 **도메인 선택의 존재 이유를 없앤다.**
+# **소프트 의존은 여기 넣지 않는다.** wms↔ecommerce 풀필먼트는 런타임 이벤트 연동이지
+# 기동 전제가 아니다. 소프트 의존을 하드로 선언하면 "도메인 하나 켜기" 가 전 스택을 끌어와
+# **도메인 선택의 존재 이유를 없앤다.** (콘솔의 업무 도메인이 그 예였고, 지금은 묶음
+# 애드온으로 표현된다 — § BUNDLE_ADDONS. 콘솔 자신은 더 이상 데모 도메인이 아니다.)
 #
 # iam 자신은 의존이 없다(선언 생략 = 의존 없음).
 declare -A DEPS=(
@@ -194,15 +214,14 @@ declare -A DEPS=(
   [fan]="iam"
   [finance]="iam"
   [erp]="iam"
-  [console]="iam"
 )
 
 # ---------------------------------------------------------------------------
 # resolve_deps <slug...> — 선택 집합의 하드-의존 전이 폐포를 FULL 순서로 출력.
 #   · 미지의 slug 는 stderr 로 알리고 return 1 (조용한 무시 금지 — 오타가 데모를 반쪽
 #     띄운다). 유효 slug 가 하나도 없어도 return 1.
-#   · 출력 순서 = FULL(iam 먼저, console 마지막). 기동 순서가 load-bearing 이다.
-# 호출: resolved="$(resolve_deps fan console)" || exit 2; mapfile -t SET <<<"$resolved"
+#   · 출력 순서 = FULL(iam 먼저). 기동 순서가 load-bearing 이다.
+# 호출: resolved="$(resolve_deps fan erp)" || exit 2; mapfile -t SET <<<"$resolved"
 # ---------------------------------------------------------------------------
 resolve_deps() {
   local -A want=()
@@ -227,12 +246,13 @@ resolve_deps() {
   # 🔴 이 `return 0` 은 장식이 아니다 (TASK-MONO-505).
   #
   # 함수의 종료 상태는 **마지막으로 실행된 명령**의 것이고, 위 루프의 마지막 명령은
-  # `FULL` 의 마지막 원소(`console`)에 대한 `[ -n ... ]` 테스트다. 요청 집합에
-  # console 이 없으면 그 테스트가 거짓이라 `&&` 가 단락되고, 그 1 이 함수의 반환값이
-  # 되어 나간다 — **출력은 완벽하게 맞는데** 호출자는 실패로 읽는다.
+  # `FULL` 의 마지막 원소에 대한 `[ -n ... ]` 테스트다. 요청 집합에 그 원소가 없으면
+  # 테스트가 거짓이라 `&&` 가 단락되고, 그 1 이 함수의 반환값이 되어 나간다 —
+  # **출력은 완벽하게 맞는데** 호출자는 실패로 읽는다.
   #
   # demo-up.sh 는 이 반환값을 보고 usage 를 찍고 exit 2 하므로, 결과적으로
-  # **console 을 포함하지 않는 모든 부분 기동이 불가능했다**(실측):
+  # **마지막 원소를 포함하지 않는 모든 부분 기동이 불가능했다**(실측 — 당시 FULL 의
+  # 마지막은 console 이었다. TASK-MONO-757 이후로는 fan 이고, 결함의 모양은 같다):
   #
   #   resolve_deps iam         → rc=1  (출력은 "iam" 으로 정확했다)
   #   resolve_deps erp         → rc=1  (출력은 "iam erp")

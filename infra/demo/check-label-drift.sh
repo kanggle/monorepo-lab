@@ -7,7 +7,7 @@
 # 무엇을 재는가
 # -----------------------------------------------------------------------------
 # 데모 호스트는 EIP 가 없다 ⇒ **재시작마다 공인 IP 가 바뀌고**, Traefik 라우터 규칙은
-# `Host(`console.<a-b-c-d>.sslip.io`)` 로 **컨테이너 라벨에 각인된다.** 따라서 재시작 뒤
+# `Host(`iam.<a-b-c-d>.sslip.io`)` 로 **컨테이너 라벨에 각인된다.** 따라서 재시작 뒤
 # 컨테이너가 재생성되지 않으면 그 컨테이너는 **옛 주소로만** 열린다.
 #
 # 2026-08-17 실증(TASK-MONO-553 배경): `demo-up.sh` 가 iam 을 처리하다 죽었고, 그래서
@@ -35,7 +35,7 @@
 #     부팅이 빨개지고, 빨개지는 가드는 곧 꺼진다.
 #
 # 사용법:
-#   DEMO_DOMAIN=1-2-3-4.sslip.io bash infra/demo/check-label-drift.sh iam wms console
+#   DEMO_DOMAIN=1-2-3-4.sslip.io bash infra/demo/check-label-drift.sh iam wms fan
 #   → exit 0: 기동 대상의 라벨이 전부 현재 도메인
 #     exit 1: 기동 대상 중 옛 도메인을 든 컨테이너가 있다 (이름을 전부 출력)
 #     exit 0 + 경고: 기동 대상이 아닌 컨테이너만 옛 도메인

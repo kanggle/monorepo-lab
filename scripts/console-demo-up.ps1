@@ -3,14 +3,15 @@
 # Enable the per-domain ops DEMO on the federation-hardening-e2e stack (Windows).
 #
 # The federation-hardening-e2e harness already runs all 5 domains' producers +
-# IAM + console-bff + console-web as CONTAINERS (the per-project `*:up` composes
+# IAM + console-web as CONTAINERS (the per-project `*:up` composes
 # are infra-only; app services run via that harness or bootRun). This script
 # adds — as an ADDITIVE overlay, leaving the CI base compose byte-unchanged —
-# the two things the per-domain ops pages need beyond the BFF overview/health
-# legs the base wires:
+# the two things the per-domain ops pages need beyond the overview/health legs
+# the base wires:
 #   1. scm-gateway (the SCM ops page calls the gateway /api/v1/{procurement,
-#      inventory-visibility}/** paths — the base runs the scm services directly,
-#      no gateway).
+#      inventory-visibility}/** paths). Since TASK-PC-FE-302 the base also runs
+#      `scm-gateway-service` for the overview's scm leg; this overlay keeps its
+#      own `scm-gateway` (procurement routes included) for the ops page.
 #   2. console-web per-domain ops base URLs (the base leaves them unset → they
 #      default to *.local, unreachable on the bridge net) → container DNS.
 # Then it seeds the globex-corp per-domain rows (SCM PO + ERP masters) so the
@@ -18,7 +19,7 @@
 # + globex scm-inventory; this adds the globex SCM-PO + ERP delta).
 #
 # PREREQUISITE: the federation-hardening-e2e base stack must already be UP
-#   (auth/account/admin/console-bff/console-web + the 5 producers + DBs). Bring
+#   (auth/account/admin/console-web + the 5 producers + DBs). Bring
 #   it up via the harness — see docs/guides/console-fullstack-local-dev.md.
 #   This script DETECTS it and stops with guidance if absent.
 #

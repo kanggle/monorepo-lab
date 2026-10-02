@@ -18,8 +18,8 @@ export const dynamic = 'force-dynamic';
  * per-leg `ok` / `degraded` outcome (D5.A discipline).
  *
  * Server component. The initial envelope is composed server-side by the
- * BFF (the proxy route forwards 2 headers from `shared/lib/session` to
- * console-bff — Authorization + X-Tenant-Id, NOT X-Operator-Token);
+ * route `/api/console/dashboards/domain-health` (health legs carry no
+ * credential; the route still requires a tenant and a session);
  * per-card degrade lives INSIDE the 200 payload, so the page never
  * branches on per-card status — only on the three whole-fan-out outcomes:
  *

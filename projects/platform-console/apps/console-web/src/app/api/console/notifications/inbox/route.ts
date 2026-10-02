@@ -16,8 +16,8 @@ export const runtime = 'nodejs';
  * Notification-bell inbox — `platform/contracts/notification-inbox-contract.md` § 4.
  *
  * Aggregated in the console-web server since TASK-PC-FE-303 (ADR-MONO-081, A).
- * Before that this route proxied to `console-bff`, which has no public
- * hostname, so the Vercel console's bell could never load. The wire shape is
+ * Before that this route proxied to the former BFF (retired — ADR-MONO-081),
+ * which had no public hostname, so the Vercel console's bell could not load. The wire shape is
  * unchanged: `{ asOf, items, meta: { page, size, totalElements }, degradedDomains }`.
  *
  * Each configured domain (`CONSOLE_NOTIFICATION_DOMAINS`, default `erp`) is
@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
   const search = req.nextUrl.search ?? '';
 
   // ADR-MONO-074 A2 — asked BEFORE any token read. A sample visitor gets the
-  // sample inbox; no domain is called. The sample core keeps the name
-  // `console-bff` (ADR-MONO-081 rider check — renaming it trips the ledger guard).
+  // sample inbox; no domain is called. Sample core `console-composition`
+  // (renamed from the former BFF's name by TASK-MONO-757).
   const sample = await sampleGate({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'notifications-inbox',
     method: 'GET',
     path: `/api/console/notifications/inbox${search}`,

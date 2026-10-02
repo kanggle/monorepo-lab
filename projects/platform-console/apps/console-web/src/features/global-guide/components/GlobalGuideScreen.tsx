@@ -82,7 +82,7 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
         <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
           브라우저 → <strong>console-web</strong>(Vercel) → 각 도메인의{' '}
           <strong>gateway-service</strong> → 도메인 서비스. 로그인은 <strong>IAM</strong> 한 곳,
-          대시보드 요약만 <strong>console-bff</strong> 가 모은다.
+          대시보드 요약은 <strong>console-web</strong> 서버가 여러 도메인에서 모은다.
         </p>
         <FactCards facts={ARCHITECTURE_FACTS} testid="global-guide-arch" />
       </>

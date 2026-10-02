@@ -8,18 +8,17 @@ import { DomainHealthSchema, type DomainHealth } from './types';
  * Sibling of `features/operator-overview/api/operator-overview-api.ts`
  * (TASK-PC-FE-011 / § 2.4.9.1) — same posture, distinct route.
  *
- * Both callers below go through the SAME-ORIGIN Next.js proxy route
- * (`/api/console/dashboards/domain-health`), which forwards
- * `Authorization` + `X-Tenant-Id` to console-bff server-side. The
- * BROWSER NEVER reaches console-bff directly; client JS NEVER reads
- * a session token (HttpOnly cookie + server proxy = trust-boundary
+ * Both callers below go through the SAME-ORIGIN Next.js route
+ * (`/api/console/dashboards/domain-health`), which composes the health
+ * envelope server-side (`shared/composition/console-composition.ts`). The
+ * BROWSER NEVER reaches a domain directly; client JS NEVER reads
+ * a session token (HttpOnly cookie + server route = trust-boundary
  * invariant of the platform — frontend-app.md § Authentication).
  *
- * **Header divergence from § 2.4.9.1** (intentional): the proxy
- * forwards ONLY `Authorization` + `X-Tenant-Id`. It does NOT forward
- * `X-Operator-Token` — the BFF does not consume it on this route
- * (the D4 sealed-switch is never invoked; actuator legs are public
- * per the § D4 scope clarification). Sending it would be misleading.
+ * **Divergence from § 2.4.9.1** (intentional): the health legs carry NO
+ * credential and NO tenant header — actuator legs are public per the
+ * § D4 scope clarification. The route still checks for a tenant and a
+ * session before any leg.
  *
  *   - {@link fetchDomainHealth} — client-side caller used by the
  *     React Query hook (`<RetryButton>` only). Uses the RELATIVE

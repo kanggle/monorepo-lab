@@ -52,9 +52,9 @@ monorepo
 - [ ] **AC-0 (게이트)** — 데모 AMI 의 구운 커밋이 757 머지 커밋의 자손이다(`tfvars` 의 AMI → 그 AMI 의 커밋을 **다시 읽는다** — 목록을 물려받지 않는다). 아니면 착수하지 않는다.
 - [ ] **AC-1** — 운영자 로그인 뒤 세 화면이 실제 값으로 뜬다 — 화면 글자 + 같은 시각의 console-web 라우트 응답(200, 카드 `status` 값)을 함께 적는다. 🔴 클라이언트 렌더 화면은 SSR HTML 로 판정하지 않는다.
 - [ ] **AC-2** — 🔴 대조군: 도메인 하나(예: scm)를 내린 상태에서 운영 개요는 200 이고 그 카드만 열화.
-- [ ] **AC-3** — 데모 호스트에 console-bff 컨테이너가 없다(`docker ps`).
+- [ ] **AC-3** — 데모 호스트에 console-bff 컨테이너가 없다(`docker ps`). 🔵 2026-10-02 UTC (757 이 덧붙임): 757 이 `console` 을 데모 **도메인** 목록에서 뺐다(FULL·CORE·COMPOSE·DOWN_ORDER — 그 compose 엔 데모가 띄울 서비스가 하나도 남지 않아 `up -d` 가 `no service selected` 로 실패한다는 것을 실측했다). 그래서 `console` 프로젝트 컨테이너 자체가 **0개**여야 한다. 루트 디스크를 재사용한 경우 옛 `console` 프로젝트 컨테이너가 남아 있으면 이제 아무것도 그것을 내리거나 재지 않는다 — 있으면 적고 수동으로 지운다.
 - [ ] **AC-4** — `TASK-MONO-648` 에 «저하 화면 셋이 실제 화면이 됐다 — 다시 찍을 수 있다» 를 알린다(그 티켓이 in-progress 면 소유 세션에 남길 문장).
-- [ ] **AC-5** — `infra/demo/console-vercel.override.yml` 에 더는 «영구 열화» 절이 없음을 확인(757 이 지웠다).
+- [ ] **AC-5** — 🔵 2026-10-02 UTC 고쳐 씀(757): `infra/demo/console-vercel.override.yml` 은 757 이 **파일째** 지웠다(억제할 서비스가 남지 않았다). 대신 확인할 것: 론처의 콘솔 카드가 iam 기동만으로 «준비됨» 이 되는가(`BUNDLES[console]=iam` — `projects.sh` 와 Lambda `handler.py` 둘 다. Lambda 쪽은 **`terraform apply` 가 선행**이다 — 소유자 몫).
 
 # Related Specs
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * `features/operator-overview` — wire types for the BFF-routed cross-domain
+ * `features/operator-overview` — wire types for the composed cross-domain
  * dashboard envelope (TASK-PC-FE-011 — ADR-MONO-017 § D8 Phase 7 MVP /
  * `console-integration-contract.md` § 2.4.9.1).
  *
@@ -9,7 +9,9 @@ import { z } from 'zod';
  * Java record landed by the BE half of this same task. This is the FIRST
  * concrete `§ 2.4.9.X` composition route — generalises the GAP-only
  * `features/dashboards` (ADR-MONO-015 D1-B) across 6 backend domains
- * (gap + wms + scm + finance + erp + ecommerce) via the new `console-bff`.
+ * (gap + wms + scm + finance + erp + ecommerce). Originally produced by a
+ * separate BFF; since TASK-PC-FE-302 the console-web server composes it
+ * (ADR-MONO-081) with the same wire shape.
  *
  * Hard invariants (mirrored from § 2.4.9.1 + the BE Javadoc):
  *  - `cards[]` is ALWAYS exactly 6 entries in fixed order

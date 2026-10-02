@@ -34,9 +34,9 @@ export type FixtureHandler = (path: string) => unknown | FixtureNotFound | undef
 
 export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
   'registry:registry': () => SAMPLE_REGISTRY,
-  'console-bff:operator-overview': () => SAMPLE_OPERATOR_OVERVIEW,
-  'console-bff:domain-health': () => SAMPLE_DOMAIN_HEALTH,
-  'console-bff:notifications-inbox': () => SAMPLE_NOTIFICATION_INBOX,
+  'console-composition:operator-overview': () => SAMPLE_OPERATOR_OVERVIEW,
+  'console-composition:domain-health': () => SAMPLE_DOMAIN_HEALTH,
+  'console-composition:notifications-inbox': () => SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_HANDLERS,
   ...ECOMMERCE_FIXTURE_HANDLERS,
   ...ERP_FIXTURE_HANDLERS,
@@ -60,9 +60,9 @@ export const SAMPLE_FIXTURES: Readonly<Record<string, FixtureHandler>> = {
  */
 export const SAMPLE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'registry:registry': SAMPLE_REGISTRY,
-  'console-bff:operator-overview': SAMPLE_OPERATOR_OVERVIEW,
-  'console-bff:domain-health': SAMPLE_DOMAIN_HEALTH,
-  'console-bff:notifications-inbox': SAMPLE_NOTIFICATION_INBOX,
+  'console-composition:operator-overview': SAMPLE_OPERATOR_OVERVIEW,
+  'console-composition:domain-health': SAMPLE_DOMAIN_HEALTH,
+  'console-composition:notifications-inbox': SAMPLE_NOTIFICATION_INBOX,
   ...IAM_FIXTURE_DOCUMENTS,
   ...ECOMMERCE_FIXTURE_DOCUMENTS,
   ...ERP_FIXTURE_DOCUMENTS,

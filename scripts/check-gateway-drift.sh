@@ -53,8 +53,8 @@
 #           TASK-MONO-365: iam's gateway was the one edge of seven that pinned a
 #           single `expected-issuer`, and it pinned the LEGACY one. SAS-issued
 #           tokens — what the other six take as primary — were 401'd there, and
-#           nothing failed, because console-bff bypasses that edge entirely
-#           (TASK-MONO-347). Worse, TASK-BE-398 retires the legacy issuer: under
+#           nothing failed, because the console's BFF (since retired — ADR-MONO-081)
+#           bypassed that edge entirely (TASK-MONO-347). Worse, TASK-BE-398 retires the legacy issuer: under
 #           that config the edge would have ended up accepting NOTHING, on a
 #           date, with nobody watching. This check exists so an edge cannot
 #           quietly fall off the fleet's issuer axis again.
@@ -85,7 +85,8 @@
 #     is true, and I1 must not demand one here.
 #
 #     What was NOT true is the reason this file originally gave for exempting the
-#     project from I2: that `console-bff` "deliberately holds `console-bff.local`"
+#     project from I2: that its BFF (since retired — ADR-MONO-081) "deliberately holds
+#     its own `.local` hostname"
 #     and that this is "a structure the policy explicitly permits". The policy
 #     permits no such thing — L14 forbids exactly it, and no ADR ever granted an
 #     exception (ADR-MONO-013 decides Model B; ADR-MONO-017 lists the Traefik label
@@ -195,8 +196,8 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
   #
   # TASK-MONO-362 widened this to EVERY project. It used to run only on
   # gateway-owning ones, which exempted platform-console — the one project that
-  # was actually violating L14 (`console-bff`, a backend, held
-  # `Host(console-bff.local)`). Scoping a policy check to the projects that
+  # was actually violating L14 (its BFF, a backend, held a `Host(...)` router;
+  # the BFF was later retired — ADR-MONO-081). Scoping a policy check to the projects that
   # already comply is how the single offender goes unchecked.
   compose="$PROJECTS_DIR/$project/docker-compose.yml"
   if [ -r "$compose" ]; then
@@ -222,7 +223,7 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       else
         echo "                 This project has NO gateway, so nothing sits in front of it at all. Either"
         echo "                 drop the router and reach the service on the docker network (TASK-MONO-362"
-        echo "                 did this for console-bff), or give the project a gateway (TASK-MONO-357 did"
+        echo "                 did this for the platform-console BFF), or give the project a gateway (TASK-MONO-357 did"
         echo "                 this for finance/erp)."
       fi
       echo "                 (If it is genuinely not a backend — a browser-facing frontend or operator"
@@ -248,7 +249,7 @@ for project_md in "$PROJECTS_DIR"/*/PROJECT.md; do
       echo "               SAS/OIDC issuer and the legacy 'iam' string). This is the exact state TASK-MONO-365"
       echo "               found on the iam edge — it pinned the LEGACY value alone, so SAS-issued tokens were"
       echo "               401'd there while the other six gateways took them as primary. Nothing failed,"
-      echo "               because console-bff bypasses that edge (TASK-MONO-347). And TASK-BE-398 retires the"
+      echo "               because the console BFF bypassed that edge (TASK-MONO-347). And TASK-BE-398 retires the"
       echo "               legacy issuer: under that config the edge would have ended up accepting NOTHING."
       fail=1
     elif ! printf '%s\n' "$issuer_line" | grep -q 'OIDC_ISSUER_URL'; then

@@ -36,7 +36,7 @@ import {
  * Identical to `products-api.ts` (the image endpoints are the SAME
  * `AdminProductImageController` operator-plane subtree, BE-366): per
  * ADR-MONO-017 D2.A this surface is console-web → ecommerce gateway DIRECT (no
- * console-bff write leg). The ecommerce gateway requires `account_type=
+ * intermediary write leg). The ecommerce gateway requires `account_type=
  * OPERATOR` on the IAM OIDC token. Therefore this client uses
  * `getDomainFacingToken()` (the assumed tenant-scoped IAM OIDC token when the
  * operator switched to a customer, else the base access token — net-zero;

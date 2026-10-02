@@ -54,7 +54,7 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     fail "컨테이너 '$CONTAINER' 가 떠 있지 않습니다.
     이것은 SKIP 이 아니라 실패입니다 — 안 떠 있으면 래칫은 '위반 없음' 이 아니라
     '아무것도 재지 못함' 입니다. 스택을 올리고 다시 실행하세요:
-      bash infra/demo/demo-up.sh iam erp console"
+      bash infra/demo/demo-up.sh iam erp"
 fi
 
 mysql_q() {

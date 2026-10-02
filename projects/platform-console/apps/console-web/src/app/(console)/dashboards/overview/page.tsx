@@ -18,13 +18,13 @@ export const dynamic = 'force-dynamic';
  *
  * The FIRST concrete `§ 2.4.9.X` composition route consumed by the
  * console. Generalises the GAP-only `features/dashboards` composed
- * overview (ADR-MONO-015 D1-B) across all 5 backend domains via the
- * new `console-bff`.
+ * overview (ADR-MONO-015 D1-B) across all 5 backend domains — composed
+ * in this server since TASK-PC-FE-302 (ADR-MONO-081).
  *
  * Server component (architecture.md § Server vs Client Components;
- * AC-24). The initial envelope is composed server-side by the BFF
- * (the proxy route forwards 3 headers from `shared/lib/session` to
- * console-bff); per-card degrade lives INSIDE the 200 payload, so
+ * AC-24). The initial envelope is composed server-side by the route
+ * `/api/console/dashboards/operator-overview` from the session tokens in
+ * `shared/lib/session`; per-card degrade lives INSIDE the 200 payload, so
  * the page never branches on per-card status — only on the three
  * whole-fan-out outcomes:
  *

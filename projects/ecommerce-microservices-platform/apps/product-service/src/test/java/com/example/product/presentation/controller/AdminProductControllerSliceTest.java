@@ -113,7 +113,7 @@ class AdminProductControllerSliceTest {
     @Test
     @DisplayName("GET /api/admin/products - status 필터 없이 ?page=0&size=1 호출 시 totalElements = tenant 총 상품 수")
     void list_pageSize1_surfacesTotalCatalogCount() throws Exception {
-        // metric semantics: console-bff calls ?page=0&size=1 (no status filter);
+        // metric semantics: the console's cross-domain overview calls ?page=0&size=1 (no status filter);
         // totalElements is the tenant's full catalog size.
         ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 1, 7L, 7));
         given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(1))).willReturn(result);

@@ -17,9 +17,9 @@ export const runtime = 'nodejs';
  * Operator Overview — `console-integration-contract.md` § 2.4.9.1.
  *
  * Produced in the console-web server since TASK-PC-FE-302 (ADR-MONO-081, A;
- * contract § 2.4.9.0). Before that this route proxied to `console-bff`, which
- * has no public hostname, so the Vercel console could never reach it and the
- * card grid always showed «unavailable». The wire envelope is unchanged.
+ * contract § 2.4.9). Before that this route proxied to the former BFF
+ * (retired — ADR-MONO-081), which had no public hostname, so the Vercel console
+ * could not reach it. The wire envelope is unchanged.
  *
  * Six legs, each through the address the domain's own console screen uses
  * (`shared/composition/console-composition.ts`):
@@ -42,10 +42,10 @@ export async function GET() {
   const requestId = newRequestId();
 
   // ADR-MONO-074 A2 — asked BEFORE the tenant and token reads. A sample visitor
-  // gets the sample overview; no leg is called. The sample core keeps the name
-  // `console-bff` (ADR-MONO-081 rider check — renaming it trips the ledger guard).
+  // gets the sample overview; no leg is called. Sample core
+  // `console-composition` (renamed from the former BFF's name by TASK-MONO-757).
   const sample = await sampleGate({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'operator-overview',
     method: 'GET',
     path: '/api/console/dashboards/operator-overview',

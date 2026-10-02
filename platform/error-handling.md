@@ -707,9 +707,10 @@ kept below as the historical record.
 | SUBSCRIPTION_NOT_ACTIVE | 409 | Operation requires an active subscription (`SubscriptionNotActiveException`) |
 | PLAN_NOT_FOUND | 404 | Subscription plan not found (`PlanNotFoundException`) |
 
-## Console BFF  `[domain: saas]`
+## Console Composition  `[domain: saas]`
 
-Owned by `console-bff` (unified operator console aggregation layer, ADR-013). Composes
+Owned by the `console-web` server's cross-domain composition routes (unified operator
+console, ADR-013; composition placed in that server by ADR-MONO-081). Composes
 downstream domain reads; most failure surfaces are degraded-card `reason` values inside a
 `200 OK` envelope (governed by `console-integration-contract.md`, a distinct namespace
 from this HTTP-error-code registry — e.g. `TIMEOUT`, `DOWNSTREAM_ERROR`, `MISSING_PREREQUISITE`).
@@ -718,7 +719,7 @@ The HTTP-level error surface reuses Platform-Common auth codes (`TOKEN_INVALID` 
 
 | Code | HTTP | Description |
 |---|---|---|
-| NO_ACTIVE_TENANT | 400 | `X-Tenant-Id` header absent or blank on a tenant-scoped console request; dispatch fails closed (`MissingTenantException` → `GlobalExceptionHandler` `BAD_REQUEST`). Frontend message-mapped (TASK-MONO-249) |
+| NO_ACTIVE_TENANT | 400 | No active tenant selected in the console session on a tenant-scoped composition request; the route fails closed before any downstream call. Frontend message-mapped (TASK-MONO-249) |
 
 ## Community  `[domain: fan-platform]`
 

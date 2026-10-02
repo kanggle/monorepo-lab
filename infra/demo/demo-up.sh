@@ -9,8 +9,8 @@
 #
 # 왜 단일 include/-f 파일이 아닌가 (실측 근거):
 #   docker compose 의 include: 와 -f 는 "같은 서비스 키"를 조용히 병합한다
-#   (include=첫째 승, -f=마지막 승). 8개 프로젝트는 서로 다른 컨테이너인데도
-#   redis/kafka/postgres 같은 키를 공유하므로, 단일 병합 파일은 7개 redis 중
+#   (include=첫째 승, -f=마지막 승). 프로젝트들은 서로 다른 컨테이너인데도
+#   redis/kafka/postgres 같은 키를 공유하므로, 단일 병합 파일은 (당시 실측) 7개 redis 중
 #   6개를 소리없이 잃는다. → 프로젝트당 별도 -p 만이 전부 살린다.
 #
 # 프로젝트당 compose 파일이 여러 개일 수 있다 (projects.sh 참조):
@@ -24,12 +24,14 @@
 #
 # 사용법:
 #   bash infra/demo/demo-up.sh [demo-core|full]
-#   bash infra/demo/demo-up.sh <domain...>        # 예: iam fan console (하드 의존 자동 포함)
+#   bash infra/demo/demo-up.sh <domain...>        # 예: iam fan erp (하드 의존 자동 포함)
 #   DEMO_BUILD=1 bash infra/demo/demo-up.sh full
 #
 # 도메인 리스트 모드 (TASK-MONO-477): 임의 도메인을 골라 부분 기동한다. projects.sh 의
-# resolve_deps 가 하드 의존(전원→iam)을 자동 포함하고 FULL 순서로 정렬하므로, `console`
+# resolve_deps 가 하드 의존(전원→iam)을 자동 포함하고 FULL 순서로 정렬하므로, `fan`
 # 하나만 줘도 iam 이 함께 뜬다(없으면 로그인 불가 — MONO-358).
+# 🔵 `console` 은 도메인이 아니다(TASK-MONO-757) — 콘솔은 Vercel 에서 돌고 데모 호스트에서는
+#    iam 만 쓴다. 론처의 «콘솔» 묶음은 `resolve_bundles console` = iam 으로 풀린다.
 # =============================================================================
 set -euo pipefail
 
@@ -91,7 +93,7 @@ bash "$HERE/check-env-preflight.sh" "${SET[@]}" || exit 1
 echo "[demo] profile=$PROFILE  build=$BUILD"
 echo "[demo] ensuring shared traefik-net + edge router"
 # 🔴 여기는 아래 루프와 달리 **격리하지 않는다.** 이 compose 가 `traefik-net` 을 *정의*하고
-# 나머지 8개는 그것을 external 로 참조하므로, 실패하면 8개가 전부 같은 이유로 실패한다 —
+# 나머지 프로젝트 전부가 그것을 external 로 참조하므로, 실패하면 전부가 같은 이유로 실패한다 —
 # 격리해 봐야 재시도 예산만 태우고 결과는 같다. 여기서 멈추는 편이 진단이 정확하다.
 docker compose -p traefik -f "$ROOT/$TRAEFIK_COMPOSE" up -d
 
@@ -257,7 +259,7 @@ post_up_call() {
 #   fan 재시도 2/3 (남은 120s) → 3/3 (남은  60s)   ← fan 은 60s 를 남기고 통과
 #
 # `fan` 은 경계에서 **60s** 떨어져 있었다. 한 도메인만 더 느렸다면, 또는 `fan` 뒤의
-# `console` 이 한 번이라도 재시도가 필요했다면, 그 도메인은 **재시도를 단 한 번도 받지
+# (당시 FULL 의 마지막이던) `console` 이 한 번이라도 재시도가 필요했다면, 그 도메인은 **재시도를 단 한 번도 받지
 # 못한 채** 실패로 기록된다 — 자기가 느려서가 아니라 **앞이 먼저 썼기 때문에.**
 # `SET` 배열 순서가 곧 우선순위였고 iam 이 첫 번째다.
 #
@@ -270,9 +272,11 @@ post_up_call() {
 #    TimeoutStartSec 을 넘겨 systemd 가 SIGTERM 을 보낸다(위 문단이 경고한 그 모양).
 #
 #    산술 (`TimeoutStartSec=1200`, demo-stack.service):
-#      재시도 최대 총합 = 도메인 수 × UP_RETRY_SLEEP = 8 × 60 = **480s**
+#      재시도 최대 총합 = 도메인 수 × UP_RETRY_SLEEP = 7 × 60 = **420s**
 #      기동 자체        = **540s**  ← 2026-08-19 실측(총 840s 중 sleep 300s 를 뺀 값)
-#      합               = 1020s ≤ 1200s   (여유 180s)
+#      합               = 960s ≤ 1200s   (여유 240s)
+#    🔵 도메인 수는 TASK-MONO-757 에서 8 → 7 이 됐다(console 이 데모 도메인에서 빠짐). 540s
+#       실측은 8도메인 시절 값이라 7도메인에는 보수 쪽 오차다.
 #
 #    ⚠️ 540s 는 **관측 1건**이지 상수가 아니다. 그래서 이 산술을 주석에만 두지 않고
 #    `verify-demo-wrapper.sh` 가드가 `FULL` 크기로 다시 계산해 상한을 넘으면 FAIL 한다.
@@ -429,8 +433,10 @@ echo "[demo] up complete — profile=$PROFILE"
 # 🔴 web.ecommerce 는 더 이상 이 목록에 없다 — 스토어는 Vercel 로 옮겨갔고 데모는
 # 그 사본을 띄우지 않는다(TASK-MONO-604). 여기에 남겨 두면 방문자에게 **없는 주소**를
 # 안내하게 되고, 그 404 는 "스택이 안 떴다" 와 구별되지 않는다.
-echo "[demo] 호스트: console.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
-echo "[demo] 스토어는 Vercel: https://store.hubwang.com (web.ecommerce.${DEMO_DOMAIN} 는 404 가 정상)"
+# 🔵 console.${DEMO_DOMAIN} 도 이 목록에 없다 — 콘솔은 Vercel 에서 돌고 데모 도메인이 아니다
+# (TASK-MONO-757). 방문자 화면 셋은 전부 Vercel 이고, 데모 호스트는 API 게이트웨이와 IdP 다.
+echo "[demo] 호스트: iam.${DEMO_DOMAIN} / wms.${DEMO_DOMAIN} / <domain>.${DEMO_DOMAIN} (Traefik)"
+echo "[demo] 화면은 Vercel: https://console.hubwang.com · https://store.hubwang.com · https://fan.hubwang.com"
 
 # -----------------------------------------------------------------------------
 # 최종 종료코드 — 🔴 여기서 삼키면 위의 모든 보고가 장식이 된다 (TASK-MONO-553 A)
@@ -527,7 +533,8 @@ SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
 # 하한 ②: **부팅 때 실제로 찌를 표면의 수** = 1.
 #
 # 🔴🔴 TASK-MONO-627 (2026-09-06) — **대상이 바뀌었다. 값은 안 바뀌었다.**
-#   단계 3 이 console 을 억제했다(`infra/demo/console-vercel.override.yml`) ⇒ 데모
+#   단계 3 이 console 을 억제했다(당시 `infra/demo/console-vercel.override.yml`. TASK-MONO-757
+#   이후로는 콘솔이 데모 도메인 자체가 아니다 — 결과는 같다) ⇒ 데모
 #   호스트가 서빙하는 **방문자 표면은 0개**다. TASK-MONO-625 가 이 자리에 «N=0 은 하한
 #   조정이 아니라 설계 변경» 이라고 적어 뒀고, 그 설계 변경이 이것이다:
 #
@@ -572,7 +579,8 @@ SURFACE_ROW_FLOOR="${DEMO_SURFACE_ROW_FLOOR:-3}"
 #
 # 🔴🔴 TASK-MONO-618 — **이 값을 억제와 같은 PR 에서 안 맞추면 부팅이 영구 실패한다.**
 #   그 규칙이 이 티켓에서도 그대로 적용됐다: console 억제 · 마크업의 프로브 선언 이동 ·
-#   이 provenance · 가드 (z14)(z15)(z31)이 **한 PR** 이다.
+#   이 provenance · 가드 (z14)(z15)(z31)이 **한 PR** 이다. ((z31)은 TASK-MONO-757 에서 콘솔이
+#   데모 도메인째 빠지며 은퇴했다 — verify-demo-wrapper.sh 의 그 자리.)
 # 🔴🔴 그리고 **부팅 완료 지문이 또 바뀐다** — 창 #3 까지는 `console=307 web.fan-platform=307`
 #   (2/2), 그다음은 `console=307`(1/1) 이었다. 이제 **`iam=200`(1/1)** 이다.
 #   옛 지문을 기다리면 창이 영원히 안 열린다.
@@ -589,8 +597,8 @@ while IFS= read -r sline; do
   shost="$(printf '%s' "$sline" | sed -n 's/.*data-host="\([^"]*\)".*/\1/p')"
   # 🔴🔴 TASK-MONO-625 — **찌를 표면을 `data-served` 가 혼자 정하지 않는다.**
   #    `data-served` 는 «방문자는 어디로 가는가» 를 답하고, 그 답이 `vercel` 이어도
-  #    **데모 호스트가 그 화면을 여전히 서빙할 수 있다**(console 이 그렇다 — 억제
-  #    오버레이가 없다). 그 경우에만 그 행이 `data-demo-probe` 로 부팅 프로브를 선언한다.
+  #    **데모 호스트가 그 화면을 여전히 서빙할 수 있다**(625 시점의 console 이 그랬다 —
+  #    지금은 그런 행이 없다). 그 경우에만 그 행이 `data-demo-probe` 로 부팅 프로브를 선언한다.
   #    🔴 `data-host` 를 재사용하지 않는 이유는 가드 (z14) 가 vercel 행의 잔존 `data-host`
   #    를 «아무도 안 읽는 낡은 값» 으로 물기 때문이고, 그 규칙은 옳다 — 「낡은 값」과
   #    「의도된 선언」은 이름이 달라야 한다.

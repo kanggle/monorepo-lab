@@ -88,7 +88,9 @@ domain_json() {
   printf '{"state":"%s","healthy":%d,"total":%d}' "$st" "$healthy" "$total"
 }
 
-# FULL 순서(iam 먼저 … console 마지막) + 공유 엣지 traefik 를 하나의 오브젝트로.
+# FULL 순서(iam 먼저) + 공유 엣지 traefik 를 하나의 오브젝트로.
+# 🔵 `console` 키는 **없다**(TASK-MONO-757) — 콘솔은 데모 도메인이 아니다(Vercel 에서 돈다).
+#    콘솔 묶음의 «준비됨» 은 람다가 이 스냅샷의 `iam` 으로 판정한다(handler.py BUNDLES).
 out="{"
 first=1
 for slug in "${FULL[@]}" traefik; do

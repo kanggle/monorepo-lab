@@ -28,8 +28,8 @@ import { SELLER_MAX_PAGE_SIZE, type SellerSummary } from './seller-types';
  * `list*({page:0,size:1})` leg. Per §2.4.10 the ecommerce operator surface is
  * console-web → ecommerce gateway DIRECT (domain-facing IAM OIDC token), so
  * each summary call reuses the feature's own `get*Summary()` api functions
- * server-side. No console-bff leg (contrast: the console-wide §2.4.9.1
- * operator overview is a BFF fan-out — this one is domain-internal, so the
+ * server-side. No cross-domain composition leg (contrast: the console-wide §2.4.9.1
+ * operator overview is a cross-domain fan-out — this one is domain-internal, so the
  * direct model fits).
  *
  * ── RESILIENCE (§2.4.10 / §2.5) — the decisive rule ──

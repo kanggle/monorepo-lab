@@ -42,8 +42,8 @@ export interface OperatorOverviewState {
   bffUnavailable: boolean;
   /**
    * 🔴 TASK-MONO-711 ② — `bffUnavailable` 이 **왜** 참인지. 그 플래그만으로는
-   * «기록된 영구 한계»(Vercel 콘솔은 `console-bff` 에 닿지 못한다 — `TASK-MONO-362`)와
-   * «진짜 장애» 가 구별되지 않는다. 상시 켜진 신호는 꺼진 것과 같다.
+   * 실패의 종류(응답 상태 · 전송 실패 · 타임아웃)가 구별되지 않는다. 상시 켜진 신호는
+   * 꺼진 것과 같다(배경: `shared/api/unavailable-cause.ts`).
    * 🔵 `bffUnavailable === false` 면 `undefined` 다 — 없는 사유를 지어내지 않는다.
    * 🔴 방문자에게 보이는 값이 아니다(로그·진단용).
    */

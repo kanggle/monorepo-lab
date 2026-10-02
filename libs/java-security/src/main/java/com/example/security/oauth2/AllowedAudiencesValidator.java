@@ -31,9 +31,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
  *
  * It was written for the six reactive gateways and lived beside them until {@code TASK-MONO-712}.
  * Rule 5 binds every <em>edge</em> — a <strong>position</strong> (the first validation of a token
- * presented from outside the trust boundary), not a service type — and {@code platform-console}'s
- * {@code console-bff} is one while being a <strong>servlet</strong> service. A servlet service may
- * not consume {@code libs/java-gateway} (ADR-MONO-049 § D1 — it would drag WebFlux and Spring Cloud
+ * presented from outside the trust boundary), not a service type — and an edge can be a
+ * <strong>servlet</strong> service (the first one, a backend-for-frontend that has since been
+ * retired by ADR-MONO-081, is why it moved; today only the six gateways use it). A servlet service
+ * may not consume {@code libs/java-gateway} (ADR-MONO-049 § D1 — it would drag WebFlux and Spring Cloud
  * Gateway onto its runtime classpath), so this class had to move or be copied. It moved: the same
  * resolution, for the same reason, that {@link TenantClaimValidator} already went through
  * (ADR-MONO-049 § D5-1). It is framework-neutral — an {@link OAuth2TokenValidator} plus a
@@ -63,10 +64,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
  *       403, not the decoder's default 401: re-authenticating cannot change the issuing client.</li>
  * </ul>
  *
- * <p>{@code console-bff} ships {@link AudienceMode#ENFORCE} with no shadow phase
- * ({@code TASK-MONO-712} AC-3 — the owner's decision E). Shadow is not skipped for convenience
- * there: its purpose is to discover an unmeasured caller population, and that population was
- * measured instead ({@code TASK-MONO-712} § AC-0).
+ * <p>An edge may ship {@link AudienceMode#ENFORCE} with no shadow phase only when its caller
+ * population was measured instead (the retired servlet edge above did, {@code TASK-MONO-712} AC-3 —
+ * the owner's decision E, measured in § AC-0). Shadow is not skipped for convenience: its purpose
+ * is to discover an unmeasured caller population.
  *
  * <h2>The metric</h2>
  *
@@ -111,7 +112,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
  * <p>{@code GatewayJwtDecoders.validatorChain} (in {@code libs/java-gateway}) takes an instance of
  * <em>this class</em> as a required argument — not any {@code OAuth2TokenValidator} — so a gateway
  * cannot hand it a no-op, and runs it <em>after</em> the rest of the chain has passed (see there
- * for why). console-bff's decoder bean holds the same ordering for the same reason.
+ * for why). A servlet edge's decoder bean must hold the same ordering for the same reason.
  */
 public final class AllowedAudiencesValidator implements OAuth2TokenValidator<Jwt> {
 

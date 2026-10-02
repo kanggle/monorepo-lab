@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * Feature-local types for the console notification bell (TASK-PC-FE-052;
  * ADR-MONO-016 § D3 first increment). Since ADR-MONO-043 P3b (TASK-PC-FE-137)
- * the bell consumes the **console-bff notification aggregator**
- * (`/api/console/notifications/**`) — one cross-domain merged feed — rather than
+ * the bell consumes the **notification aggregator**
+ * (`/api/console/notifications/**`, in this server since TASK-PC-FE-303) — one cross-domain merged feed — rather than
  * the retired erp-direct path. The erp-direct server client + `/api/erp/notifications`
  * proxy routes were removed in TASK-PC-FE-138.
  *
@@ -76,7 +76,7 @@ export const NotificationSchema = z
 export type Notification = z.infer<typeof NotificationSchema>;
 
 /**
- * Aggregator feed item — `sourceDomain` is GUARANTEED present (the console-bff
+ * Aggregator feed item — `sourceDomain` is GUARANTEED present (the server-side
  * aggregator injects/preserves it on every merged item, contract §4) so the
  * bell can key/label/route per domain and mark-read can address the owner. The
  * base `NotificationSchema` keeps it optional (the mark-read detail response
@@ -94,7 +94,7 @@ export type AggregatedNotification = z.infer<
 // ---------------------------------------------------------------------------
 
 /**
- * The console-bff notification **aggregator** response (ADR-MONO-043 P3a /
+ * The notification **aggregator** response (ADR-MONO-043 P3a /
  * §4): one merged feed across the operator-facing domains, with per-domain
  * `degradedDomains` attribution. Always HTTP 200 (D5 failure isolation — a
  * downed domain appears in `degradedDomains`, never collapses the bell).

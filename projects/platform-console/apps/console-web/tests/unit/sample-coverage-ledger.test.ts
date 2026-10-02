@@ -7,7 +7,7 @@
  *
  *   - surfaces: every gateway profile `logPrefix` literal (+ the ecommerce slice
  *     labels that compose `ecommerce_<event>`), the registry, and every GET
- *     console-bff proxy route. A new client profile without a ledger row → red.
+ *     console-composition route. A new client profile without a ledger row → red.
  *   - screens: every `src/app/(console)/**\/page.tsx` route. A new screen without
  *     a ledger row → red. (ADR-MONO-074 § Consequences: «a new screen must bring
  *     its sample fixture — otherwise the A9 ledger goes red».)
@@ -53,7 +53,7 @@ function discoverSurfaces(): Set<string> {
     }
     if (/export\s+async\s+function\s+fetchRegistry\s*\(/.test(src)) found.add('registry');
   }
-  // console-bff proxy GET routes: `app/api/console/<group>/<name>/route.ts`.
+  // console-composition GET routes: `app/api/console/<group>/<name>/route.ts`.
   const consoleApi = path.join(SRC, 'app', 'api', 'console');
   for (const file of walk(consoleApi).filter((f) => f.endsWith('route.ts'))) {
     const src = readFileSync(file, 'utf8');
@@ -154,9 +154,9 @@ describe('the ledger promises what the router does', () => {
   // path argument entirely — every OTHER `ready` row must name its own path.
   const FOUNDATION_ROWS_ANSWERING_ANY_PATH = new Set([
     'registry:registry',
-    'console-bff:operator-overview',
-    'console-bff:domain-health',
-    'console-bff:notifications-inbox',
+    'console-composition:operator-overview',
+    'console-composition:domain-health',
+    'console-composition:notifications-inbox',
   ]);
 
   it('🔴 every `ready` row outside the 4 TASK-PC-FE-282 rows has an explicit SURFACE_SAMPLE_PATH entry', () => {

@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 
 /**
  * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the overview is composed in the console-web
- * server now, not console-bff; the route and the assertions below are unchanged.
+ * server now (the former BFF was retired by TASK-MONO-757); the route and the
+ * assertions below are unchanged.
  *
  * TASK-MONO-139 — Operator Overview composition spec.
  * ADR-MONO-018 D3 (MVP: 2 composition specs).
@@ -42,8 +43,8 @@ test.describe('Operator Overview composition (5-domain fan-out)', () => {
     // MVP-level relaxation per TASK-MONO-140 cycle 5 (sibling MONO-133 honest
     // scope adjustment): cross-product e2e cohort verifies the dashboard page
     // resolves + auth works + heading renders. The 5-domain card grid +
-    // 'ok' status visibility depends on console-bff fan-out integration +
-    // BFF outbound base URLs + tenant-context (console_active_tenant cookie
+    // 'ok' status visibility depends on the console-web fan-out +
+    // its per-domain base URLs + tenant-context (console_active_tenant cookie
     // set to 'fan-platform' in login.ts, but seed uses tenant_id='*') —
     // deeper concerns deferred to a follow-up task.
     await expect(page).toHaveURL(/\/dashboards\/overview(\?|$)/);

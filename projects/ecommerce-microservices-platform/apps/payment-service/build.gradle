@@ -77,7 +77,7 @@ test {
 }
 
 // Dedicated task that runs ONLY @Tag("integration") Testcontainers ITs (TASK-MONO-307).
-// Mirrors the sibling pattern (scm/finance/erp/console-bff). Crucially it does NOT inherit
+// Mirrors the sibling pattern (scm/finance/erp). Crucially it does NOT inherit
 // the `test` task's local-Windows `DOCKER_HOST=npipe:…` / `api.version=1.44` override above —
 // it picks up the root build.gradle `tasks.withType(Test).configureEach` Docker env instead
 // (conditional DOCKER_HOST + DOCKER_API_VERSION=1.45), which is correct on a Linux CI runner.

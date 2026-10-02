@@ -75,7 +75,7 @@ describe('demoizeUrl', () => {
     const { demoizeUrl } = await load();
     for (const url of [
       'https://auth.hubwang.com/oauth2/token',
-      'http://console-bff:8080/api/console/dashboards/domain-health',
+      'http://some-service:8080/actuator/health',
       'https://console.hubwang.com',
       '/api/console/notifications',
     ]) {
@@ -243,12 +243,12 @@ describe('resolveBackendUrl — env.ts 의 12개 URL 을 하나씩', () => {
     );
   });
 
-  it('🔵 `console-bff` 의 컨테이너 DNS 도 그대로다 — 공개 호스트명이 없는 자리다', async () => {
+  it('🔵 컨테이너 DNS(점 없는 서비스명)도 그대로다 — `.local` 이 아닌 자리다', async () => {
     process.env.DEMO_API_BASE = CONTROL;
     stubStatus({ state: 'running', ip: IP });
     const { resolveBackendUrl } = await load();
-    expect(await resolveBackendUrl('http://console-bff:8080/x')).toBe(
-      'http://console-bff:8080/x',
+    expect(await resolveBackendUrl('http://some-service:8080/x')).toBe(
+      'http://some-service:8080/x',
     );
   });
 });

@@ -6,8 +6,8 @@ import java.time.Instant;
 
 /**
  * The canonical inbox item shape returned by every conforming per-domain
- * notification surface, and the single model the console-bff aggregator parses
- * + merges across domains.
+ * notification surface, and the single shape the console's notification
+ * aggregator merges across domains.
  *
  * <p>This is the D3 envelope of {@code platform/contracts/notification-inbox-contract.md}
  * § 1, lifted into shared code so the aggregator (D2) and any future client parse

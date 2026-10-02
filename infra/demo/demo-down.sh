@@ -15,7 +15,7 @@
 #
 # 사용법:
 #   bash infra/demo/demo-down.sh                  # 전체 종료 (+ traefik)
-#   bash infra/demo/demo-down.sh console fan      # 부분 종료 (traefik·의존 유지)
+#   bash infra/demo/demo-down.sh erp fan          # 부분 종료 (traefik·의존 유지)
 #   KEEP_TRAEFIK=1 bash infra/demo/demo-down.sh   # 전체 종료하되 traefik-net 유지
 # =============================================================================
 set -euo pipefail

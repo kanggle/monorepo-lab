@@ -4,7 +4,7 @@
  *
  * - Trace origination: starts the root SSR span for inbound operator
  *   requests; the undici (native `fetch`) auto-instrumentation injects W3C
- *   `traceparent` into the outbound console-bff call so the BFF adopts it as
+ *   `traceparent` into each outbound domain call so the producer adopts it as
  *   parent instead of starting a new root.
  * - Exporter: OTLP/HTTP directly to VictoriaTraces, URL from
  *   `OTEL_EXPORTER_OTLP_ENDPOINT`. NOTE: ADR-007a D2 decided this leg would

@@ -35,7 +35,7 @@ interface InboxItem {
 
 async function fetchInboxItems(): Promise<InboxItem[]> {
   const res = sampleResponse({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'notifications-inbox',
     method: 'GET',
     path: '/',

@@ -66,7 +66,7 @@ roles = [ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR,
 
 ```bash
 # demo-up.sh 가 마지막에 자동 호출한다 (기동된 도메인 목록을 그대로 넘긴다)
-bash infra/demo/demo-up.sh iam ecommerce console
+bash infra/demo/demo-up.sh iam ecommerce
 
 # 끄기
 DEMO_SEED=0 bash infra/demo/demo-up.sh ...

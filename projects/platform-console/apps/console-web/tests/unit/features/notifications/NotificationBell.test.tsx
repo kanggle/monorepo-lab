@@ -22,7 +22,7 @@ import type { ReactNode } from 'react';
  *   - outside-click closes the dropdown;
  *   - Escape closes the dropdown.
  *
- * Same-origin `/api/console/notifications` (console-bff aggregator) fetch
+ * Same-origin `/api/console/notifications` (server-side aggregator) fetch
  * mocked. QueryClientProvider wraps each test (mirrors ApprovalScreen.test.tsx).
  */
 
@@ -95,7 +95,7 @@ const UNKNOWN_SOURCE_NOTIFICATION = {
   createdAt: '2026-06-05T03:00:00Z',
 };
 
-// The console-bff aggregator response shape (P3b): { items, meta, degradedDomains }.
+// The notification aggregator response shape (P3b): { items, meta, degradedDomains }.
 const LIST_WITH_UNREAD = {
   items: [UNREAD_NOTIFICATION, READ_NOTIFICATION],
   meta: { page: 0, size: 20, totalElements: 2, timestamp: 'x' },

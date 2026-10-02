@@ -2,7 +2,7 @@
 name: platform-console
 domain: saas
 traits: [multi-tenant, integration-heavy, audit-heavy]
-service_types: [frontend-app, rest-api]
+service_types: [frontend-app]
 compliance: []
 data_sensitivity: internal
 scale_tier: startup
@@ -33,7 +33,7 @@ taxonomy_version: 0.1
 ## Trait Rationale
 
 - **multi-tenant** — 콘솔의 핵심 UX가 테넌트/제품 컨텍스트 전환이다. GAP JWT의 `tenant_id` claim을 받아 cross-tenant 요청을 거부하고, 테넌트별 가시 제품·권한 집합을 분리한다. 격리 회귀 테스트 필수.
-- **integration-heavy** — 콘솔은 N개 도메인 gateway/admin API로 fan-out 한다(BFF 패턴, Phase 7). circuit breaker · retry · timeout 을 `platform/` 베이스라인대로 적용 — 한 도메인 장애가 콘솔 전체 장애가 되지 않아야 한다.
+- **integration-heavy** — 콘솔은 N개 도메인 gateway/admin API로 fan-out 한다. 교차 도메인 합성(운영 개요 · 도메인 상태 · 알림 인박스)은 `console-web` 서버가 직접 한다([ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md)) — 레그마다 타임아웃, 레그 하나의 실패는 그 카드/도메인만 열화시킨다. 한 도메인 장애가 콘솔 전체 장애가 되지 않아야 한다. 서버리스 함수라 상태를 둘 곳이 없어 circuit breaker 는 두지 않는다(ADR-MONO-081 R2).
 - **audit-heavy** — 콘솔은 GAP `admin-web`의 운영자 작업(계정 lock/unlock, 강제 로그아웃, 감사 조회)을 흡수한다. "누가 언제 어떤 운영 작업을 했는가"는 불변 추적되어야 한다.
 
 미선언 trait와 이유는 § Out of Scope 참조.
@@ -45,7 +45,8 @@ taxonomy_version: 0.1
 | Service | Service Type | 핵심 책임 |
 |---|---|---|
 | `console-web` | frontend-app | 단일 콘솔 UI. GAP OIDC Auth Code+PKCE 로그인, data-driven 서비스 카탈로그, 테넌트 스위처, 도메인 운영 화면(gateway/admin API 호출 렌더). Phase 1 = 부트 가능 skeleton, Phase 2 = GAP 운영자 parity. Phase 4~6 = 4개 non-GAP 도메인(wms/scm/finance/erp) 운영 화면 federation 완료. 이후 `ecommerce` 편입([ADR-MONO-030](../../docs/adr/ADR-MONO-030-ecommerce-multivendor-marketplace-saas.md)/[ADR-MONO-031](../../docs/adr/ADR-MONO-031-ecommerce-operator-ui-console-consolidation.md) — TASK-MONO-240/241 카탈로그 타일 + `/ecommerce/**` 7개 운영 화면 `features/ecommerce-ops`, PC-FE-081~090)으로 non-GAP 5개 도메인으로 확장. |
-| `console-bff` | rest-api | ⏳ **은퇴 예정 — [ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md) (ACCEPTED 2026-10-02, A)**: 아래 합성은 console-web 서버로 옮겨 가고(`TASK-PC-FE-302` · `303`) 이 서비스는 `TASK-MONO-757` 이 지운다. 그때 이 행과 `service_types` 의 `rest-api`(ADR-MONO-013 § D5 가 «BFF 가 오면» 넣은 값)도 함께 빠진다 — 서비스가 아직 떠 있는 동안에는 분류를 그대로 둔다. 교차 도메인 집약 BFF (Backend-for-Frontend). 6 도메인(GAP + wms + scm + finance + erp + ecommerce — `ecommerce` domain-health leg는 ADR-MONO-030/031 편입 시 추가)의 기존 read API 를 서버사이드 fan-out 으로 합성해 단일 화면 대시보드 ("Operator Overview" / "Domain Health") 를 제공한다. [ADR-MONO-017](../../docs/adr/ADR-MONO-017-platform-console-bff-architecture.md) (ACCEPTED 2026-05-20) D1-D8 — REST orchestrator, server-side fan-out only, 기존 read 재사용 (zero retrofit), 도메인별 credential 규약 (HARD INVARIANT — `console-integration-contract.md` § 2.4.5/6/7/8 verbatim), per-domain CB + 부분 degrade, `tenant_id` pass-through, per-domain attribution observability. v1 LIVE = `/actuator/health` (PC-BE-001) + Operator Overview MVP (PC-FE-011) + Domain Health (PC-BE-002) + finance card 12-task vertical chain (BE-304~309 producer + PC-FE-014~022 consumer + e2e harness + auth-formLogin + fixture OIDC PKCE migration). |
+
+교차 도메인 합성은 별도 서비스가 아니라 `console-web` 서버 안에서 한다 — 처음엔 Java BFF(ADR-MONO-017, Phase 7)가 맡았고 [ADR-MONO-081](../../docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md)(ACCEPTED 2026-10-02, A)이 그것을 콘솔 서버로 옮긴 뒤 은퇴시켰다(`TASK-PC-FE-302` · `303` · `TASK-MONO-757`). 그래서 `service_types` 에서 `rest-api` 가 빠졌다 — [ADR-MONO-013](../../docs/adr/ADR-MONO-013-platform-console-foundation.md) § D5 가 «BFF 가 오면 더한다» 로 넣었던 값이고, 그 근거가 사라졌다.
 
 상세 아키텍처는 각 service의 `specs/services/<service>/architecture.md`에서 선언.
 

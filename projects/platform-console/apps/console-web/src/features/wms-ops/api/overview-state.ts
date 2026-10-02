@@ -10,14 +10,14 @@ import type { ShipmentRow, AdjustmentRow } from './types';
  * Server-side wms **operator overview snapshot** fan-out for the `/wms`
  * landing (TASK-PC-FE-166 — the FIRST bff-domain reference implementation of
  * the console domain-landing overview series; the analogue of the ecommerce
- * `getEcommerceOverviewState` for the console-bff read-leg domains).
+ * `getEcommerceOverviewState` for the composition read-leg domains).
  *
  * ── ARCHITECTURE (console-web DIRECT fan-out; PC-FE-168 shared decision) ──
  * Per the PC-FE-168 shared read-leg decision, the wms/scm/finance/erp landing
  * overviews use the SAME console-web DIRECT fan-out as ecommerce (§ 2.4.10.6),
- * NOT a console-bff leg: every one of these domains already reaches its
+ * NOT a cross-domain composition leg: every one of these domains already reaches its
  * producer server-side via `getDomainFacingToken()` (the § 2.4.5/6/7/8 direct
- * clients). The console-bff (§ 2.4.9.1/.2) is only the console-HOME
+ * clients). The cross-domain composition (§ 2.4.9.1/.2) is only the console-HOME
  * cross-domain dashboards — a single-domain landing snapshot needs no
  * server-side fan-in. So this reuses the feature's own `list*` api functions
  * and derives counts from each list's `totalElements` read with

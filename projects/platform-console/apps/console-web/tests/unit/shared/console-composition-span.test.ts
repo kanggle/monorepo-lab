@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * Per-leg trace span (TASK-PC-FE-302 — contract § 2.4.9 Observability: «per-leg
- * span carries domain + route attributes», formerly console-bff's
+ * span carries domain + route attributes», previously the retired BFF's
  * `bff.fanout.leg`). The federation trace spec gates the joined tree in a real
  * stack; this cell pins the span's name, attributes and closure without one.
  */

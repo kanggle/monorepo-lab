@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Asserts (mirrors the BE Javadoc on `DomainHealthController` +
  * `DomainHealthCompositionUseCase`):
  *   - the same-origin Next.js proxy URL is used (browser never reaches
- *     console-bff directly; tokens stay HttpOnly on the server side);
+ *     a domain directly; tokens stay HttpOnly on the server side);
  *   - GET only, no body, no `Idempotency-Key`, no `X-Operator-Reason`
  *     (READ-ONLY § 2.4.9 hard invariant);
  *   - parses the 6-card envelope per `DomainHealthSchema` (ecommerce 6th

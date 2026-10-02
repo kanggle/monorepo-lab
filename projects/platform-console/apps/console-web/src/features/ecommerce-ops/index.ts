@@ -3,12 +3,12 @@
  * this barrel, never feature internals; architecture.md § Allowed
  * Dependencies). ecommerce product operations section, TASK-PC-FE-081 — the
  * FIRST ecommerce **write** surface (ADR-MONO-031 Phase 1b; § 2.4.9.1/§ 2.4.9.2
- * bind ecommerce only as console-bff READ legs). The console equivalent of the
+ * bind ecommerce only as cross-domain composition READ legs). The console equivalent of the
  * standalone `admin-dashboard` product screens.
  *
  * Auth (console-integration-contract § 2.4.10, inheriting the non-IAM § 2.4.5
  * rules): per ADR-MONO-017 D2.A this surface is console-web → ecommerce
- * gateway DIRECT (no console-bff write leg). The server client uses the
+ * gateway DIRECT (no intermediary write leg). The server client uses the
  * **domain-facing IAM OIDC token** (`getDomainFacingToken()`), NEVER the IAM
  * exchanged operator token (`getOperatorToken()`) — the #569 invariant is
  * GAP-domain-scoped. Tenant rides in the JWT `tenant_id` claim (NO

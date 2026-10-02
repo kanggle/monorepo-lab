@@ -93,7 +93,7 @@ D 는 *거부*를 *사후 탐지*와 맞바꿨다: **"erp 전체에서 distinct 
 | | CI 절반 | 라이브 절반 |
 |---|---|---|
 | **무엇** | `SingleTenantRatchetIntegrationTest` (read-model + notification) | `scripts/check-erp-single-tenant-ratchet.sh` |
-| **레인** | `ci.yml` / `erp-integration-tests` — **모든 erp PR** | 살아 있는 스택에 대고 수동 (`demo-up.sh iam erp console` 후) |
+| **레인** | `ci.yml` / `erp-integration-tests` — **모든 erp PR** | 살아 있는 스택에 대고 수동 (`demo-up.sh iam erp` 후) |
 | **어디에 대고** | Testcontainers 실 MySQL + Kafka | erp 의 **네 스키마 전부** (`information_schema` 로 테이블 발견 — 손으로 안 적는다) |
 | **보는 것** | **코드가** 사실 옆에 상수를 찍어 두 번째 테넌트를 만드는 경우 | **런타임에** 다른 erp-entitled 테넌트가 assume 으로 들어와 쓴 경우 |
 | **못 보는 것** | 런타임 유입 (CI 엔 살아 있는 erp DB 가 없다) | 스택이 안 떠 있으면 아무것도 — 그래서 **SKIP 이 아니라 실패**다 |
@@ -118,7 +118,7 @@ D 는 *거부*를 *사후 탐지*와 맞바꿨다: **"erp 전체에서 distinct 
 
 ```bash
 docker compose -f projects/erp-platform/docker-compose.yml down -v   # 사장님 실행 (분류기 차단)
-bash infra/demo/demo-up.sh iam erp console
+bash infra/demo/demo-up.sh iam erp
 bash infra/demo/seed/seed-erp.sh
 ```
 

@@ -18,7 +18,7 @@ import java.time.Instant;
  * <h2>ADR-MONO-043 P2 conformance fields (additive)</h2>
  * <ul>
  *   <li>{@code sourceDomain} — contract § 1 normative attribution field; always
- *       the constant {@code "fan"} for this domain-owned surface. The console-bff
+ *       the constant {@code "fan"} for this domain-owned surface. The console's notification
  *       aggregator (P3) uses it to label + route each merged item.</li>
  *   <li>{@code deepLink} — contract § 1 optional in-app link; {@code null} here
  *       (fan does not yet derive an in-app link for the bell). Omitted when null.</li>
