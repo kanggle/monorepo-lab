@@ -151,3 +151,16 @@ ci.yml 의 가드 호출 전부 + `scripts/check-*` 전부(인자 없이), 스�
 - console-web vitest 를 기본 병렬로 두 번 돌리면 **서로 다른** 시험 1~5개가 5 s 타임아웃으로 실패(`LedgerOpsScreen` · `OperatorsScreen` — 이 PR 이 안 건드린 파일). 단독 실행 67/67 · 워커 축소 전체 328 파일 / 3,690 시험 rc=0. 이 호스트의 알려진 부하 플레이크 축이다(`env_console_web_vitest_flake_unhandled_error`). PR CI 가 판정한다.
 - 이 PR 범위 밖으로 본 것(고치지 않음): 방문자 가이드 문구 «개요 = 5개 도메인 요약» 은 실제 카드 6개(iam 포함)와 다르다 · `demo-backend.ts` 가 없는 `scripts/check-console-backend-urls.sh` 를 인용한다 · 로컬 데모 오버레이(`console-demo-up`)의 `scm-gateway` 가 302 이후 base 의 `scm-gateway-service` 와 중복 기동된다.
 
+## 머지 전 e2e dispatch 실측 (2026-10-02 UTC, 브랜치 `mono-757-retire-console-bff`)
+
+| 커밋 | 워크플로 | 런 | 결과 |
+|---|---|---|---|
+| `ba688eb53` | federation-hardening-e2e | `37048625934` | ✅ success |
+| `ba688eb53` | nightly-e2e | `37048619631` | ❌ **Launcher freshness 만** failure — 나머지 잡(Platform Console E2E full-stack 포함) success |
+| `950eabf88` (런처 판정기 수정 + main 병합) | nightly-e2e | `37050938638` | ✅ success |
+| `950eabf88` | federation-hardening-e2e | `37050942420` | ✅ success |
+
+🔴 1차 Launcher freshness 실패의 원인 — **판정기의 ref 엇갈림**(이 PR 이 런처 `index.html` 을 바꿔서 드러났다): `check-launcher-fresh.sh --self-test` 가 «현재 판» 은 `origin/main` 에서, «이전 판» 은 `HEAD` 에서 구했다. 런처를 바꾼 브랜치로 dispatch 하면 HEAD 의 직전 판이 main 의 현재 판과 같아 «이전 커밋 없음»(exit 2). main 예약 런은 HEAD=REF 라 안 보였다. «이전 판» 도 `$REF` 에서 구하게 고쳤다(로컬 self-test rc=0, 위 2차 런 success).
+
+PR CI(`950eabf88`): 68 개, pending 0, fail 0.
+
