@@ -1,145 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getDomainFacingToken,
-  getOperatorToken,
-  getActiveTenant,
-} from '@/shared/lib/session';
+import { getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
+import {
+  aggregateInbox,
+  configuredInboxDomains,
+  domainInboxHeaders,
+  type InboxQuery,
+} from '@/shared/composition/notification-inbox';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 
 export const runtime = 'nodejs';
 
 /**
- * Same-origin server proxy for the console-bff **notification aggregator**
- * inbox (ADR-MONO-043 P3b — the shared-shell bell's data source). The browser
- * NEVER reaches console-bff directly; the credential is attached server-side
- * from the HttpOnly cookie session.
+ * Notification-bell inbox — `platform/contracts/notification-inbox-contract.md` § 4.
  *
- * Forwarded inbound headers:
- *   - `Authorization: Bearer <domain-facing GAP/IAM OIDC token>` — the inbound
- *     principal the BFF dispatches per-domain (D6; the erp leg uses this token
- *     and sends NO `X-Tenant-Id` — erp reads tenant from the JWT claim).
- *   - `X-Operator-Token` — forwarded when present (forward-compat for a future
- *     IAM leg; the erp Phase-1 leg does not use it).
- *   - `X-Tenant-Id` — forwarded when an active tenant is selected (the BFF
- *     does NOT require it for the notification aggregator; absent is fine).
+ * Aggregated in the console-web server since TASK-PC-FE-303 (ADR-MONO-081, A).
+ * Before that this route proxied to `console-bff`, which has no public
+ * hostname, so the Vercel console's bell could never load. The wire shape is
+ * unchanged: `{ asOf, items, meta: { page, size, totalElements }, degradedDomains }`.
  *
- * READ-ONLY: GET only, no body. The aggregator always returns HTTP 200 (D5
- * failure isolation — a downed domain appears in `degradedDomains`, never a
- * 5xx), so the 200 passthrough is the main path.
+ * Each configured domain (`CONSOLE_NOTIFICATION_DOMAINS`, default `erp`) is
+ * read with the domain-facing IAM OIDC token and no `X-Tenant-Id` — erp
+ * resolves tenant and recipient from the token. No active tenant is required,
+ * as it never was: the bell renders across the whole console shell.
  *
- * Outcome map:
- *   - no domain-facing token → 401 TOKEN_INVALID (we do not call the BFF).
- *   - BFF 200 → passthrough verbatim (degradedDomains live inside the payload).
- *   - BFF 401 → 401 (api-client refresh + single retry).
- *   - BFF non-2xx / network / parse → 502 BAD_GATEWAY.
+ * Outcomes:
+ *   - malformed `page` / `size` / `unread` → 400 VALIDATION_ERROR, no call;
+ *   - no domain-facing token → 401 TOKEN_INVALID, no call;
+ *   - any domain 401 → 401 TOKEN_INVALID (contract § 4 item 4 — an expired
+ *     session is not a degraded domain);
+ *   - otherwise 200 — a failed domain is listed in `degradedDomains` and the
+ *     others' items still render (HARD INVARIANT, ADR-MONO-043 D5).
  *
- * No token is ever logged (only request id + status).
+ * READ-ONLY: GET only. No token is ever logged.
  */
-
-/** Target URL on the console-bff side — the docker network, not the Traefik edge
- *  (TASK-MONO-362: console-bff holds no edge router). */
-function bffUrl(search: string): string {
-  const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
-  ).replace(/\/$/, '');
-  return `${base}/api/console/notifications/inbox${search}`;
-}
-
 export async function GET(req: NextRequest) {
   const requestId = newRequestId();
-
-  // Forward the inbox query (page/size/unread) verbatim.
   const search = req.nextUrl.search ?? '';
 
   // ADR-MONO-074 A2 — asked BEFORE any token read. A sample visitor gets the
-  // sample inbox fed into the passthrough mapping below; console-bff is never
-  // called. Everyone else takes the unchanged `else` path.
+  // sample inbox; no domain is called. The sample core keeps the name
+  // `console-bff` (ADR-MONO-081 rider check — renaming it trips the ledger guard).
   const sample = await sampleGate({
     core: 'console-bff',
     surface: 'notifications-inbox',
     method: 'GET',
     path: `/api/console/notifications/inbox${search}`,
   });
+  if (sample) return passthroughSample(sample, requestId);
 
-  let res: Response;
-  if (sample) {
-    res = sample;
-  } else {
-    const domainFacingToken = await getDomainFacingToken();
-    if (!domainFacingToken) {
-      return NextResponse.json(
-        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-        { status: 401 },
-      );
-    }
-
-    const outboundHeaders: Record<string, string> = {
-      Accept: 'application/json',
-      Authorization: `Bearer ${domainFacingToken}`,
-      'X-Request-Id': requestId,
-    };
-    const operatorToken = await getOperatorToken();
-    if (operatorToken) outboundHeaders['X-Operator-Token'] = operatorToken;
-    const tenant = await getActiveTenant();
-    if (tenant) outboundHeaders['X-Tenant-Id'] = tenant;
-
-    try {
-      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-      res = await fetch(bffUrl(search), {
-        method: 'GET',
-        headers: outboundHeaders,
-        cache: 'no-store',
-      });
-    } catch {
-      logger.warn('notification_inbox_proxy_network_error', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-        { status: 502 },
-      );
-    }
+  const query = parseQuery(req.nextUrl.searchParams);
+  if (!query) {
+    return NextResponse.json(
+      { code: 'VALIDATION_ERROR', message: 'page, size and unread must be well-formed' },
+      { status: 400 },
+    );
   }
 
-  if (res.status === 200) {
-    let body: unknown;
-    try {
-      body = await res.json();
-    } catch {
-      logger.warn('notification_inbox_proxy_bad_body', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff returned invalid body' },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(body, { status: 200 });
+  const domainFacingToken = await getDomainFacingToken();
+  if (!domainFacingToken) {
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+      { status: 401 },
+    );
   }
 
-  if (res.status === 401) {
-    let envelope: { code?: unknown; message?: unknown } = {};
-    try {
-      envelope = (await res.json()) as { code?: unknown; message?: unknown };
-    } catch {
-      /* keep defaults */
-    }
-    const code =
-      typeof envelope.code === 'string' ? envelope.code : 'TOKEN_INVALID';
-    const message =
-      typeof envelope.message === 'string' ? envelope.message : 'session expired';
-    logger.warn('notification_inbox_proxy_401', { requestId });
-    return NextResponse.json({ code, message }, { status: 401 });
-  }
-
-  // The aggregator never emits 503 (D5); any non-200/401 is transport/proxy.
-  logger.warn('notification_inbox_proxy_unexpected_status', {
+  const result = await aggregateInbox(configuredInboxDomains(), {
+    query,
+    headers: domainInboxHeaders(domainFacingToken, requestId),
     requestId,
-    status: res.status,
+    // The demo host is resolved here, at the call site (check-fetch-resolution).
+    fetchLeg: async (url, init) => fetch(await resolveBackendUrl(url), init),
   });
+
+  if (result.unauthorized) {
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session expired' },
+      { status: 401 },
+    );
+  }
+  return NextResponse.json(result.body, { status: 200 });
+}
+
+/** `page` ≥ 0 (default 0), `size` 1–100 (default 20), `unread` true/false/absent. */
+function parseQuery(params: URLSearchParams): InboxQuery | null {
+  const int = (raw: string | null, fallback: number): number | null => {
+    if (raw === null || raw === '') return fallback;
+    return /^\d+$/.test(raw) ? Number(raw) : null;
+  };
+  const page = int(params.get('page'), 0);
+  const size = int(params.get('size'), 20);
+  if (page === null || size === null || size < 1 || size > 100) return null;
+  const rawUnread = params.get('unread');
+  let unread: boolean | null = null;
+  if (rawUnread === 'true') unread = true;
+  else if (rawUnread === 'false') unread = false;
+  else if (rawUnread !== null && rawUnread !== '') return null;
+  return { page, size, unread };
+}
+
+/** The sample surface answers with the same body the aggregation would. */
+async function passthroughSample(res: Response, requestId: string): Promise<NextResponse> {
+  if (res.status === 200) {
+    try {
+      return NextResponse.json(await res.json(), { status: 200 });
+    } catch {
+      /* fall through */
+    }
+  }
+  logger.warn('notification_inbox_sample_unexpected', { requestId, status: res.status });
   return NextResponse.json(
-    { code: 'BAD_GATEWAY', message: 'console-bff unexpected response' },
+    { code: 'BAD_GATEWAY', message: 'sample inbox unavailable' },
     { status: 502 },
   );
 }

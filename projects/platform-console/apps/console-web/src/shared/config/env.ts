@@ -262,6 +262,12 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for erp operations calls
    *  (integration-heavy I1 — same convention as FINANCE_TIMEOUT_MS). */
   ERP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Notification-bell inbox domains, comma-separated, in fan-in order
+   *  (TASK-PC-FE-303 — `notification-inbox-contract.md` § 4; was console-bff
+   *  `consolebff.notifications.domains`). Each name is both the `sourceDomain`
+   *  attribution and the mark-read path segment; a name with no known inbox
+   *  is skipped with a warning (`shared/composition/notification-inbox.ts`). */
+  CONSOLE_NOTIFICATION_DOMAINS: z.string().default('erp'),
   /** ecommerce gateway ADMIN base for the product operator surface
    *  (TASK-PC-FE-081 / § 2.4.10). The product admin CRUD endpoints hang off
    *  `${ECOMMERCE_ADMIN_BASE_URL}/products/...` (list / detail / register /
@@ -369,6 +375,7 @@ export function getServerEnv(): ServerEnv {
     LEDGER_TIMEOUT_MS: process.env.LEDGER_TIMEOUT_MS,
     ERP_BASE_URL: process.env.ERP_BASE_URL,
     ERP_TIMEOUT_MS: process.env.ERP_TIMEOUT_MS,
+    CONSOLE_NOTIFICATION_DOMAINS: process.env.CONSOLE_NOTIFICATION_DOMAINS,
     ECOMMERCE_ADMIN_BASE_URL: process.env.ECOMMERCE_ADMIN_BASE_URL,
     ECOMMERCE_PUBLIC_BASE_URL: process.env.ECOMMERCE_PUBLIC_BASE_URL,
     ECOMMERCE_TIMEOUT_MS: process.env.ECOMMERCE_TIMEOUT_MS,
