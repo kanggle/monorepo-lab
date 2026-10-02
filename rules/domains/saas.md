@@ -60,6 +60,10 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `SESSION_REVOKED` — 세션이 명시적으로 폐기됨
 - `LOGIN_RATE_LIMITED` — 로그인 시도가 rate limit 초과
 - `PERMISSION_DENIED` — 인증은 성공했으나 해당 리소스에 대한 권한 부재
+- `SITE_ROLE_NOT_GRANTABLE` — 내부 사이트 역할 쓰기/회수가 닫힌 «쓸 수 있는 (사이트, 역할)» 목록 밖 (400)
+- `SITE_ROLE_EMAIL_MISMATCH` — 내부 사이트 역할 쓰기에서 호출자가 기대한 이메일(초대 주소)이 그 계정의 이메일이 아님 (403)
+- `SITE_ROLE_REQUIRES_POOL_ACCOUNT` — 사이트 자체 계정(풀 밖)에 사이트 역할을 쓰려 함 (409)
+- `SITE_MEMBERSHIP_REQUIRED` — 그 사이트 ACTIVE 멤버십이 없는 풀 계정에 사이트 역할을 쓰려 함 — 쓰기는 멤버십을 만들지 않는다 (409)
 
 ### Admin Operations (admin-service 전용)
 

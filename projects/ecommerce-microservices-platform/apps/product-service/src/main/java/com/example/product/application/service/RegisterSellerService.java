@@ -47,6 +47,12 @@ public class RegisterSellerService {
 
     private final SellerLifecyclePersistence persistence;
     private final SellerAccountProvisioner provisioner;
+    /**
+     * TASK-MONO-752 (ADR-MONO-079 D5): a SUSPENDED / CLOSED seller's members lose the store {@code SELLER} site
+     * role. Separate from {@link #provisioner} on purpose: that one locks the seller's MACHINE account; this one
+     * never locks anyone.
+     */
+    private final SellerMemberService memberService;
 
     /**
      * Onboards a seller (D2/D3/D5): persist {@code PENDING_PROVISIONING} in a SHORT tx, then
@@ -97,6 +103,9 @@ public class RegisterSellerService {
             // null-safe + idempotent: no backing account → net-zero no-op (D4). OUTSIDE the tx.
             provisioner.lockAccount(TenantContext.currentTenant(), seller.getAccountId());
         }
+        // TASK-MONO-752 — also on an already-SUSPENDED seller: it retries exactly the member revocations IAM did
+        // not confirm last time (nothing else — the machine-account lock above is not re-sent).
+        memberService.revokeMemberRoles(sellerId);
     }
 
     /**
@@ -128,7 +137,10 @@ public class RegisterSellerService {
         }
         Seller seller = match.get();
         if (seller.suspend()) {
-            persistence.update(seller); // SHORT tx — no IAM call (account already locked)
+            persistence.update(seller); // SHORT tx — no IAM lock call (account already locked)
+            // TASK-MONO-752 — a suspended seller's members lose the SELLER site role, whichever way it was
+            // suspended. This is IAM's site-role endpoint, not the lock endpoint, so it is no loop-back.
+            memberService.revokeMemberRoles(seller.getSellerId());
             return true;
         }
         return false;
@@ -147,6 +159,8 @@ public class RegisterSellerService {
             persistence.update(seller); // SHORT tx
             provisioner.deactivateAccount(TenantContext.currentTenant(), seller.getAccountId());
         }
+        // TASK-MONO-752 — same as suspend: revoke the members' role, retrying any revocation still owed.
+        memberService.revokeMemberRoles(sellerId);
     }
 
     /**

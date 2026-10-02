@@ -118,6 +118,10 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 **FK**: `(account_id, site_tenant_id) → consumer_site_memberships` ON DELETE CASCADE — 멤버십 없는 사이트 역할은 존재할 수 없다.
 예: 팬 `ARTIST`(ADR-MONO-059)가 풀로 옮겨진 계정에서 여기 산다.
 
+**HTTP 쓰기/회수** (`TASK-MONO-752`, ADR-MONO-079 D5): `PATCH …/site-roles:grant` · `…:revoke` —
+[consumer-site-roles.md](../../contracts/http/internal/consumer-site-roles.md). 쓸 수 있는 `(사이트, 역할)` 은 **닫힌 목록**
+(`ecommerce`·`SELLER` 하나)이고, 쓰기는 멤버십을 만들지 않는다(ACTIVE 멤버십이 없으면 거절).
+
 ### `org_node`
 
 > TASK-BE-490 / [ADR-MONO-047](../../../../../docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md) § D1 — `tenant` **위에** 얹히는 **데이터 없는 그룹핑 노드**. 한 회사(paying company)가 각자 격리된 다수의 service-tenant 를 소유하도록 표현하고, 그 노드 체인에 **deny-only 엔타이틀먼트 실링(ceiling)** 을 붙여 하위로 상속(narrow-only)한다. `org_node` 는 tenant 를 **그룹핑할 뿐 중첩(nest)하지 않는다** — `tenant_id` 는 여전히 단일 flat 격리 키다 (M1 불변, [multi-tenancy.md § Org Node Model](../../features/multi-tenancy.md#org-node-model-adr-mono-047)). DDL/entity 는 후속 TASK-BE-491 이 소유하며 (Flyway `V0027`), 본 스펙은 그보다 **먼저** 계약을 확정한다 (Change Rule).

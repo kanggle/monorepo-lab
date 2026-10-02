@@ -81,6 +81,17 @@ marketplace seller. Before this, an admin-locked seller stayed `ACTIVE` in the m
 - **CLOSED-seller race tolerated** — `Seller.suspend()` throws `IllegalStateException` on a
   CLOSED (terminal) seller; the consumer catches it, WARNs, and does **not** rethrow (no DLQ —
   a terminal seller need not be re-suspended).
+- 🔴 **Machine accounts only (ADR-MONO-079 D5, TASK-MONO-752).** The lookup is
+  `sellers.account_id` — the seller's machine account (ADR-042 D2). A **seller member's** person
+  account (`seller_members.account_id`) is never consulted: one member being locked does **not**
+  suspend the seller. The event's `tenantId` is read as the seller tenant, which holds because a
+  machine account never moves to the consumer pool (ADR-MONO-078 CORRECTION); a member's lock event
+  carries `consumer-pool` and finds no seller there either way. Pinned by
+  `SellerMemberLockDoesNotSuspendSellerTest` (real consumer → `RegisterSellerService`; member lock with
+  `consumer-pool` or store tenant → no suspend · machine lock → suspend + member role revoked).
+- **A seller suspended this way also revokes its members' `SELLER` site role** — the same revocation
+  as the operator SUSPEND ([`product-to-account.md` §6](../http/internal/product-to-account.md)). That
+  call is to IAM's site-role endpoint, not the lock endpoint, so it is not a loop-back.
 
 > **DLQ / error handler.** product-service has a single shared `CommonErrorHandler` bean
 > (`WmsReconciliationConfig.wmsReconciliationErrorHandler`) auto-wired to the default Kafka

@@ -19,6 +19,7 @@ import {
 } from '../api/seller-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
+import { SellerMembers } from './SellerMembers';
 
 /**
  * ecommerce seller detail section (TASK-PC-FE-090 read + TASK-PC-FE-154
@@ -60,7 +61,7 @@ const ACTION_META: Record<SellerLifecycleAction, ActionMeta> = {
     tone: 'destructive',
     title: '셀러를 정지할까요?',
     describe: (n) =>
-      `"${n}" 셀러를 정지하고 연결된 계정을 잠급니다. 콘솔에서는 다시 활성화할 수 없습니다.`,
+      `"${n}" 셀러를 정지하고 연결된 계정을 잠급니다. 구성원의 셀러 권한도 회수됩니다(구성원 계정은 잠그지 않습니다). 콘솔에서는 다시 활성화할 수 없습니다.`,
     failMsg: '셀러를 정지하지 못했습니다.',
   },
   close: {
@@ -69,7 +70,7 @@ const ACTION_META: Record<SellerLifecycleAction, ActionMeta> = {
     tone: 'destructive',
     title: '셀러를 폐점할까요?',
     describe: (n) =>
-      `"${n}" 셀러를 영구 폐점하고 연결된 계정을 비활성화합니다. 이 작업은 되돌릴 수 없습니다.`,
+      `"${n}" 셀러를 영구 폐점하고 연결된 계정을 비활성화합니다. 구성원의 셀러 권한도 회수됩니다. 이 작업은 되돌릴 수 없습니다.`,
     failMsg: '셀러를 폐점하지 못했습니다.',
   },
 };
@@ -165,6 +166,9 @@ export function SellerDetail({ seller }: SellerDetailProps) {
           </div>
         )}
       </dl>
+
+      {/* TASK-MONO-752 — the people linked to this seller (ADR-MONO-079 D5). */}
+      <SellerMembers sellerId={data.sellerId} sellerStatus={data.status} />
 
       <ConfirmDialog
         open={pendingAction !== null}

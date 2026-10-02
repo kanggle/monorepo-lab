@@ -124,9 +124,45 @@ export const ECOMMERCE_SELLERS = [
 
 const SELLERS_SUMMARY = { today: 0, week: 1, month: 2, total: 3 };
 
+/** TASK-MONO-752 — one linked person + one pending invitation on the ACTIVE sample seller. */
+const ECOMMERCE_SELLER_MEMBERS = {
+  members: [
+    {
+      sellerId: 'seller-sample-0001',
+      accountId: '0199de70-0000-7000-8000-0000000sample',
+      role: 'MEMBER',
+      status: 'ACTIVE',
+      joinedAt: '2026-08-02T00:00:00Z',
+    },
+  ],
+  invitations: [
+    {
+      invitationId: '00000000-0000-4000-8000-000000000752',
+      email: 'staff@example.com',
+      status: 'PENDING',
+      expired: false,
+      expiresAt: '2026-12-31T00:00:00Z',
+      createdAt: '2026-08-20T00:00:00Z',
+      acceptedAt: null,
+    },
+  ],
+};
+
 function sellersFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
   if (pathname === `${SELLERS_PATH}/summary`) return SELLERS_SUMMARY;
+
+  // TASK-MONO-752 — GET /api/admin/sellers/{id}/members (no tokens, ever).
+  const membersMatch = pathname.match(
+    new RegExp(`^${SELLERS_PATH}/([^/]+)/members$`),
+  );
+  if (membersMatch) {
+    const id = decodeURIComponent(membersMatch[1]);
+    if (!ECOMMERCE_SELLERS.some((s) => s.sellerId === id)) {
+      return fixtureNotFound('SELLER_NOT_FOUND', 'seller not found');
+    }
+    return id === 'seller-sample-0001' ? ECOMMERCE_SELLER_MEMBERS : { members: [], invitations: [] };
+  }
 
   const detailMatch = pathname.match(new RegExp(`^${SELLERS_PATH}/([^/]+)$`));
   if (detailMatch) {
