@@ -8,7 +8,7 @@ TASK-MONO-754
 
 # Status
 
-review (2026-10-02 UTC — `ADR-MONO-081` ACCEPT PR 에서 단계 티켓 기안)
+done (2026-10-02 UTC — 4차원 검증) ‖ 직전: review
 
 # Owner
 
@@ -113,3 +113,10 @@ monorepo
 - **AC-7** — 755 AC-5.
 
 🔵 이 티켓 자신은 코드 변경 0. 다른 티켓에 생긴 의무(672 · 648 · 697)는 ADR § ACCEPT 가 만든 새 의무 표와 757 AC-5 · 758 AC-4 에 있다.
+
+# 종결 (2026-10-02 UTC) — 4차원 검증
+
+- (a) PR [#4111](https://github.com/kanggle/monorepo-lab/pull/4111) `state=MERGED` 2026-10-02T11:00:12Z
+- (b) squash `467663f48` = 머지 직후 `origin/main` tip
+- (c) 머지 전 체크 66 · 실패 0
+- (d) § Acceptance Criteria 를 열어 읽음 — AC-0~7 전부 `[x]`, 각 AC 의 동사(기안·명명·배치)대로 § 결과에 근거 있음
