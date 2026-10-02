@@ -54,7 +54,10 @@ spring:
             # TASK-BE-375). BE-375 assumed a generic /api/admin/** OPERATOR branch routed
             # it, but routing is per-service: the predicate was missing, so the gateway
             # 404'd before reaching product-service. Add it here (product-api.md § sellers).
-            - Path=/api/products/**,/api/admin/products/**,/api/admin/sellers/**
+            # /api/seller-invitations/** — a store shopper accepting a seller-member invitation
+            # (TASK-MONO-752, product-api.md § accept). Not public: the default branch of
+            # SecurityConfig authenticates it and AccountTypeEnforcementFilter admits CUSTOMER.
+            - Path=/api/products/**,/api/admin/products/**,/api/admin/sellers/**,/api/seller-invitations/**
           filters:
             - name: RequestRateLimiter
               args:

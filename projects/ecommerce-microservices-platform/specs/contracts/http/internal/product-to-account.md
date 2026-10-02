@@ -115,6 +115,35 @@ account-service `ProvisionAccountRequest.displayName` is `@Size(max=100)` but pr
 `sellers.display_name` is `VARCHAR(255)`, so a 101–255-char name would 400 the mint and strand the
 seller in `PENDING_PROVISIONING`.
 
+### 5. Grant the store `SELLER` site role to an accepting member (TASK-MONO-752 — ADR-MONO-079 D5)
+
+`PATCH /internal/tenants/{tenantId}/accounts/{accountId}/site-roles:grant` — iam
+[`consumer-site-roles.md`](../../../../iam-platform/specs/contracts/http/internal/consumer-site-roles.md).
+`{tenantId}` = the store tenant of the request (`X-Tenant-Id` of the accept call), `{accountId}` = the
+accepting person's pool account (`X-User-Id` = token `sub`). Same tenant-scoped bearer + `X-Tenant-Id` as §1–§4.
+
+Request: `{ "roleName": "SELLER", "expectedEmail": "<the invitation's email>", "operatorId": "product-service" }`.
+
+🔴 **This call is FAIL-CLOSED** — the opposite of §1–§4. It is the authorization step of a person
+becoming a seller member; without IAM's answer nobody is linked (`503` to the person, invitation left
+`PENDING`). Refusals map 1:1 to the accept endpoint's errors (product-api.md § accept):
+`403 SITE_ROLE_EMAIL_MISMATCH` → `SELLER_INVITATION_EMAIL_MISMATCH`;
+`409 SITE_ROLE_REQUIRES_POOL_ACCOUNT` / `409 SITE_MEMBERSHIP_REQUIRED` / `404 ACCOUNT_NOT_FOUND` →
+`SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE`; anything else (5xx, timeout, other 4xx) → `SERVICE_UNAVAILABLE`.
+The email comparison happens in IAM because IAM owns the account email — product-service never
+compares the invitation email with a header.
+
+### 6. Revoke the members' `SELLER` site role on seller SUSPEND / CLOSE (TASK-MONO-752)
+
+`PATCH /internal/tenants/{tenantId}/accounts/{accountId}/site-roles:revoke` with
+`{ "roleName": "SELLER", "operatorId": "product-service" }`, once per `ACTIVE` member whose role is not
+still needed by another `ACTIVE` membership in an `ACTIVE` seller.
+
+**Fail-soft per member, but retryable**: a failed revoke is logged `warn` and the member row stays
+`ACTIVE`; only a confirmed revoke (2xx) turns it `REVOKED`. Re-sending SUSPEND / CLOSE retries the
+remaining ones (product-api.md § close). 🔴 It is never a lock: the person's account and store
+membership are not touched (ADR-MONO-079 D5).
+
 ## Net-zero / idempotency invariants
 
 - **null-safe** — a seller with null `accountId` (pre-ADR-042 legacy or still-PENDING)

@@ -166,3 +166,71 @@ export interface SellerListParams {
   page?: number;
   size?: number;
 }
+
+// ===========================================================================
+// MEMBERS (TASK-MONO-752 — ADR-MONO-079 D5: people linked to a seller)
+//   GET  /api/admin/sellers/{id}/members      → { members, invitations }
+//   POST /api/admin/sellers/{id}/invitations  → 201 { invitationId, email, expiresAt, token }
+// The token is returned once, at invite — the console shows it to the operator
+// to hand over (there is no mail path). The list never carries it.
+// ===========================================================================
+
+export const SellerMemberSchema = z
+  .object({
+    accountId: z.string(),
+    role: z.string(),
+    status: z.string(),
+    joinedAt: z.string(),
+  })
+  .passthrough();
+export type SellerMember = z.infer<typeof SellerMemberSchema>;
+
+export const SellerInvitationSchema = z
+  .object({
+    invitationId: z.string(),
+    email: z.string(),
+    status: z.string(),
+    expired: z.boolean().optional(),
+    expiresAt: z.string(),
+    createdAt: z.string(),
+    acceptedAt: z.string().optional().nullable(),
+  })
+  .passthrough();
+export type SellerInvitation = z.infer<typeof SellerInvitationSchema>;
+
+export const SellerMembersSchema = z
+  .object({
+    members: z.array(SellerMemberSchema),
+    invitations: z.array(SellerInvitationSchema),
+  })
+  .passthrough();
+export type SellerMembers = z.infer<typeof SellerMembersSchema>;
+
+export const InviteSellerMemberBodySchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, '이메일을 입력해 주세요.')
+    .max(320, '이메일은 320자 이하여야 합니다.')
+    .email('이메일 형식이 올바르지 않습니다.'),
+});
+export type InviteSellerMemberBody = z.infer<typeof InviteSellerMemberBodySchema>;
+
+export const InviteSellerMemberResponseSchema = z
+  .object({
+    invitationId: z.string(),
+    email: z.string(),
+    expiresAt: z.string(),
+    token: z.string(),
+  })
+  .passthrough();
+export type InviteSellerMemberResponse = z.infer<
+  typeof InviteSellerMemberResponseSchema
+>;
+
+/** Display label of an invitation row: 수락됨 / 만료 / 대기. */
+export function invitationStateLabel(inv: SellerInvitation): string {
+  if (inv.status === 'ACCEPTED') return '수락됨';
+  if (inv.expired) return '만료';
+  return '대기';
+}

@@ -15,6 +15,10 @@ import {
   type SellerDetail,
   type SellerListParams,
   type RegisterSellerBody,
+  SellerMembersSchema,
+  type SellerMembers,
+  InviteSellerMemberResponseSchema,
+  type InviteSellerMemberResponse,
   SELLER_DEFAULT_PAGE_SIZE,
   SELLER_MAX_PAGE_SIZE,
 } from '../api/seller-types';
@@ -129,6 +133,8 @@ function invalidateSeller(
   sellerId: string,
 ) {
   qc.invalidateQueries({ queryKey: [SELLERS_KEY, 'detail', sellerId] });
+  // TASK-MONO-752 — SUSPEND / CLOSE revoke the members' SELLER role: refresh them too.
+  qc.invalidateQueries({ queryKey: [SELLERS_KEY, 'members', sellerId] });
   invalidateList(qc);
 }
 
@@ -159,3 +165,45 @@ export function useSuspendSeller() {
 export function useCloseSeller() {
   return useSellerLifecycle('close');
 }
+
+// --- members (TASK-MONO-752 — ADR-MONO-079 D5) ------------------------------
+
+function membersKey(sellerId: string) {
+  return [SELLERS_KEY, 'members', sellerId] as const;
+}
+
+async function fetchSellerMembers(sellerId: string): Promise<SellerMembers> {
+  const raw = await apiClient.get<unknown>(
+    `/api/ecommerce/sellers/${encodeURIComponent(sellerId)}/members`,
+  );
+  return SellerMembersSchema.parse(raw);
+}
+
+/** The seller's members + invitations (no tokens). */
+export function useSellerMembers(sellerId: string) {
+  return useQuery({
+    queryKey: membersKey(sellerId),
+    queryFn: () => fetchSellerMembers(sellerId),
+    staleTime: 0,
+    ...READ_QUERY_REFETCH,
+  });
+}
+
+/**
+ * Invite by email → 201 with the one-time token (shown once by the caller).
+ * Refreshes the member list (the new invitation appears as «대기»).
+ */
+export function useInviteSellerMember(sellerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (email: string): Promise<InviteSellerMemberResponse> =>
+      InviteSellerMemberResponseSchema.parse(
+        await apiClient.post<unknown>(
+          `/api/ecommerce/sellers/${encodeURIComponent(sellerId)}/invitations`,
+          { email },
+        ),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: membersKey(sellerId) }),
+  });
+}
+

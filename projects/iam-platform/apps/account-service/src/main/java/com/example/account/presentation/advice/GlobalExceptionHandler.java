@@ -8,6 +8,10 @@ import com.example.account.application.exception.EmailAlreadyVerifiedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.OrgNodeNotFoundException;
 import com.example.account.application.exception.RateLimitedException;
+import com.example.account.application.exception.SiteMembershipRequiredException;
+import com.example.account.application.exception.SiteRoleEmailMismatchException;
+import com.example.account.application.exception.SiteRoleNotGrantableException;
+import com.example.account.application.exception.SiteRoleRequiresPoolAccountException;
 import com.example.account.application.exception.SubscriptionAlreadyExistsException;
 import com.example.account.application.exception.SubscriptionDomainOutOfCeilingException;
 import com.example.account.application.exception.SubscriptionNotFoundException;
@@ -113,6 +117,34 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBulkLimitExceeded(BulkLimitExceededException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", e.getMessage()));
+    }
+
+    /** TASK-MONO-752 — a site-role grant/revoke outside the closed grantable list (consumer-site-roles.md). */
+    @ExceptionHandler(SiteRoleNotGrantableException.class)
+    public ResponseEntity<ErrorResponse> handleSiteRoleNotGrantable(SiteRoleNotGrantableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("SITE_ROLE_NOT_GRANTABLE", e.getMessage()));
+    }
+
+    /** TASK-MONO-752 — the invitation's email is not the account's email: nothing granted. */
+    @ExceptionHandler(SiteRoleEmailMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleSiteRoleEmailMismatch(SiteRoleEmailMismatchException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("SITE_ROLE_EMAIL_MISMATCH", e.getMessage()));
+    }
+
+    /** TASK-MONO-752 — a site account (not in the consumer pool) cannot hold consumer site roles. */
+    @ExceptionHandler(SiteRoleRequiresPoolAccountException.class)
+    public ResponseEntity<ErrorResponse> handleSiteRoleRequiresPoolAccount(SiteRoleRequiresPoolAccountException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SITE_ROLE_REQUIRES_POOL_ACCOUNT", e.getMessage()));
+    }
+
+    /** TASK-MONO-752 — no ACTIVE membership of the site: a grant never creates one. */
+    @ExceptionHandler(SiteMembershipRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleSiteMembershipRequired(SiteMembershipRequiredException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("SITE_MEMBERSHIP_REQUIRED", e.getMessage()));
     }
 
     /** TASK-BE-618 — the consumer-pool legacy move refused as a whole: the pool flag is off. */

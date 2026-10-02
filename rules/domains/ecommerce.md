@@ -63,6 +63,7 @@ B2C 이커머스 플랫폼. 고객이 상품을 탐색하고 주문하고 결제
 | Bounded Context | Error section in `platform/error-handling.md` |
 |---|---|
 | Catalog (Product, Variant) | `Product`, `Search` |
+| Marketplace seller · seller members (초대·수락) | `Product` (`SELLER_*`) |
 | Order | `Order` |
 | Payment | `Payment` |
 | Cart / Wishlist | `Wishlist` |
