@@ -91,7 +91,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-302-overview-and-domain-health-composed-in-console-web.md` — **ADR-MONO-081 단계 2 — 운영 개요 · 도메인 상태 합성을 console-web 서버로** (READY, 2026-10-02 UTC · 선행 `TASK-MONO-755`). 🔴 대조군 둘(레그 하나 죽음 = 그 카드만 열화 / 레그 401 = 응답 401) · 레그 타임아웃은 Vercel 한도를 잰 뒤 · 머지 뒤 nightly.
+- `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — **ADR-MONO-081 단계 3 — 알림 인박스 + 읽음 처리를 console-web 서버로** (READY, 2026-10-02 UTC · 선행 `TASK-MONO-755`). 🔴 읽음 처리는 쓰기 — 재시도로 두 번 보내지 않는다 · 알 수 없는 도메인 404 · 하위 호출 0.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
