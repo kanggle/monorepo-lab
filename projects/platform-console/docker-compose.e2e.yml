@@ -466,7 +466,19 @@ services:
       # falls into `degraded: true` branch → MyProfileForm never mounts →
       # spec `my-profile-default-account-id` testid 5s timeout.
       IAM_ADMIN_API_BASE: http://admin-service:8085
-      # console-bff orchestrator — server-side same-origin proxy.
+      # TASK-PC-FE-302 (ADR-MONO-081) — the operator overview / domain health
+      # legs are composed HERE now, not in console-bff, so console-web needs
+      # the per-domain bases console-bff used to hold (its
+      # CONSOLE_BFF_OUTBOUND_*_BASE_URL below). Same values: finance is the one
+      # leg the e2e specs exercise (operators-profile — finance card `ok` after
+      # saving a default account); wms / scm / erp stay non-routable so those
+      # cards degrade instantly instead of waiting on an unresolvable *.local.
+      FINANCE_BASE_URL: http://finance-account-service:8080
+      WMS_ADMIN_BASE_URL: http://127.0.0.1:9/api/v1/admin
+      SCM_GATEWAY_BASE_URL: http://127.0.0.1:9
+      ERP_BASE_URL: http://127.0.0.1:9
+      # console-bff orchestrator — still the producer of the notification
+      # inbox until TASK-PC-FE-303; retired by TASK-MONO-757.
       CONSOLE_BFF_URL: http://console-bff:8080
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.
       NEXT_PUBLIC_APP_URL: http://localhost:3000
@@ -474,6 +486,7 @@ services:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
       console-bff: { condition: service_started }
+      finance-account-service: { condition: service_started }
     ports: ["3000:3000"]
     networks: [pc-e2e]
     healthcheck:

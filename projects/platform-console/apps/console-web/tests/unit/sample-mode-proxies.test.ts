@@ -1,11 +1,14 @@
 /**
  * The out-of-core backend call sites in sample mode (ADR-MONO-074 A2 —
- * TASK-PC-FE-282 AC-2): the four console-bff proxies and the tenant switch.
+ * TASK-PC-FE-282 AC-2): the two dashboard composition routes (console-web
+ * server since TASK-PC-FE-302 / ADR-MONO-081), the two notification proxies
+ * and the tenant switch.
  *
  * ① sample visitor → `fetch` 0, and the sample Response runs through each
  *   route's EXISTING mapping (the dashboards/inbox pass a 200 through; the
  *   dashboard/inbox bodies parse with the production schemas).
- * ② authenticated → the route still reaches console-bff.
+ * ② authenticated → the route still reaches the backend (the dashboards their
+ *   domain legs, the notification routes console-bff until TASK-PC-FE-303).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -22,6 +25,13 @@ vi.mock('@/shared/config/env', () => ({
   getServerEnv: () => ({
     CONSOLE_REGISTRY_URL: 'http://iam.local/api/admin/console/registry',
     REGISTRY_TIMEOUT_MS: 50,
+    // The dashboard composition legs read these (schema defaults).
+    IAM_ADMIN_API_BASE: 'http://iam.local',
+    WMS_ADMIN_BASE_URL: 'http://wms.local/api/v1/admin',
+    SCM_GATEWAY_BASE_URL: 'http://scm.local',
+    FINANCE_BASE_URL: 'http://finance.local',
+    ERP_BASE_URL: 'http://erp.local',
+    ECOMMERCE_ADMIN_BASE_URL: 'http://ecommerce.local/api/admin',
   }),
 }));
 
@@ -103,20 +113,20 @@ describe('② authenticated operator — the real path is still taken', () => {
     cookieJar.set(TENANT_COOKIE, 'acme');
   });
 
-  it('operator overview reaches console-bff', async () => {
+  it('operator overview reaches its domain legs', async () => {
     const res = await overviewGET();
-    // fetch throws in this test → the existing mapping turns it into 502.
-    expect(res.status).toBe(502);
+    // fetch throws on every leg here → every card degraded, still a 200 envelope.
+    expect(res.status).toBe(200);
     expect(
-      fetchSpy.mock.calls.some(([url]) =>
-        String(url).endsWith('/api/console/dashboards/operator-overview'),
-      ),
+      fetchSpy.mock.calls.some(([url]) => String(url).includes('/api/admin/accounts')),
     ).toBe(true);
   });
 
-  it('domain health reaches console-bff', async () => {
+  it('domain health reaches its health legs', async () => {
     await healthGET();
-    expect(fetchSpy).toHaveBeenCalled();
+    expect(
+      fetchSpy.mock.calls.some(([url]) => String(url).endsWith('/actuator/health')),
+    ).toBe(true);
   });
 
   it('notification inbox reaches console-bff', async () => {

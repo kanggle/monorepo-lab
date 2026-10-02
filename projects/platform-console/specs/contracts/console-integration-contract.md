@@ -2289,9 +2289,30 @@ holds no state between requests, so there is nowhere to keep breaker state, and
 `reason: "CIRCUIT_OPEN"` is therefore never produced by the new producer (it stays
 in the vocabulary — consumers must not break on its absence). Each leg has its own
 timeout, set **below** the function's execution limit with room for the slowest
-leg. 🔴 The value is not stated here because it has not been measured
-(`console-web` sets no `maxDuration`); `TASK-PC-FE-302` measures the limit and
-records the chosen value in this sub-section. No retry on any leg that writes.
+leg. No retry on any leg that writes.
+
+- **Chosen value: `LEG_TIMEOUT_MS = 4000`** (`shared/composition/console-composition.ts`,
+  `TASK-PC-FE-302`). Legs run in parallel, so it also bounds the composition.
+- **What was measured**: Vercel's documented limit — 300 s default on every plan
+  with fluid compute (Vercel docs «Maximum Duration», fetched 2026-10-02, page
+  last updated 2026-08-24). 🔴 **What was not**: this project's dashboard
+  override — no Vercel CLI or API access from the repo, and `console-web` sets
+  no `maxDuration`. The value is therefore sized to hold under the most
+  conservative limit Vercel has shipped (10 s) as well.
+- It replaces console-bff's 2 s leg × bounded retry inside a 5 s composition
+  budget. No read retry is carried over: one 4 s attempt is inside the old
+  worst case (4.15 s) and a retried slow leg would only stretch the response.
+
+**Health legs answering 503 (finding, `TASK-PC-FE-302`).** Spring Boot answers
+`/actuator/health` with HTTP 503 when the aggregate status is `DOWN` /
+`OUT_OF_SERVICE`. § 2.4.9.2 renders that as an `ok` card carrying
+`data.status` — the producer reporting itself down is not the console failing
+to reach it. 🔴 console-bff did not: `RestClient.retrieve()` threw on 503 and the
+card went `degraded / DOWNSTREAM_ERROR`, so a self-reported DOWN looked like an
+unreachable producer. The console-web producer follows § 2.4.9.2: a 503 whose
+body is a health document (`status` ∈ `UP|DOWN|OUT_OF_SERVICE|UNKNOWN`, a
+string) is `ok`; any other 503 body (a gateway error envelope) stays
+`degraded`.
 
 **Observability (ADR-MONO-081 R1).** The `bff_*` metric families (§ 2.4.9
 Observability) are **not** carried over — the console-web server has no metrics

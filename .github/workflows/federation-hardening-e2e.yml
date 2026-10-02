@@ -87,6 +87,7 @@ jobs:
           :projects:wms-platform:apps:admin-service:bootJar
           :projects:scm-platform:apps:procurement-service:bootJar
           :projects:scm-platform:apps:inventory-visibility-service:bootJar
+          :projects:scm-platform:apps:gateway-service:bootJar
           :projects:scm-platform:apps:demand-planning-service:bootJar
           :projects:erp-platform:apps:masterdata-service:bootJar
           :projects:platform-console:apps:console-bff:bootJar
@@ -110,6 +111,7 @@ jobs:
             projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
             projects/scm-platform/apps/procurement-service/build/libs/procurement-service.jar
             projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+            projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
             projects/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar
             projects/erp-platform/apps/masterdata-service/build/libs/masterdata-service.jar
             projects/platform-console/apps/console-bff/build/libs/console-bff.jar
@@ -196,6 +198,9 @@ jobs:
           mkdir -p projects/scm-platform/apps/inventory-visibility-service/build/libs/
           mv artifact-staging/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar \
              projects/scm-platform/apps/inventory-visibility-service/build/libs/inventory-visibility-service.jar
+          # gateway-service (TASK-PC-FE-302 — console-web reaches scm through it, ADR-MONO-081)
+          mkdir -p projects/scm-platform/apps/gateway-service/build/libs/
+          mv artifact-staging/scm-platform/apps/gateway-service/build/libs/gateway-service.jar              projects/scm-platform/apps/gateway-service/build/libs/gateway-service.jar
           # demand-planning-service (TASK-SCM-INT-002 leg 2 — replenishment overlay consumer)
           mkdir -p projects/scm-platform/apps/demand-planning-service/build/libs/
           mv artifact-staging/scm-platform/apps/demand-planning-service/build/libs/demand-planning-service.jar \
@@ -266,7 +271,7 @@ jobs:
           docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml up -d --build \
             wms-postgres wms-admin-postgres scm-postgres scm-inv-postgres \
             wms-master-service wms-admin-service \
-            scm-procurement-service scm-inventory-visibility-service \
+            scm-procurement-service scm-inventory-visibility-service scm-gateway-service \
             scm-dp-postgres scm-demand-planning-service \
             wms-inbound-postgres wms-inbound-service \
             finance-account-service erp-masterdata-service \
@@ -370,6 +375,23 @@ jobs:
           done
           echo "scm-inventory-visibility-service did not become healthy in time"
           docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 scm-inventory-visibility-service
+          exit 1
+
+      # TASK-PC-FE-302 — console-web reaches scm through the gateway (ADR-MONO-081).
+      - name: Wait for scm-gateway-service health
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          echo "Waiting for scm-gateway-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps scm-gateway-service \
+                | grep -q "healthy"; then
+              echo "scm-gateway-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "scm-gateway-service did not become healthy in time"
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 scm-gateway-service
           exit 1
 
       - name: Wait for erp-masterdata-service health

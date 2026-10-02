@@ -2,173 +2,85 @@ import { NextResponse } from 'next/server';
 import { getAccessToken, getActiveTenant } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
+import { compose, domainHealthLegs } from '@/shared/composition/console-composition';
+import { resolveBackendUrl } from '@/shared/config/demo-backend';
 
 export const runtime = 'nodejs';
 
 /**
- * Same-origin server proxy for the BFF-routed Phase 7 "Domain Health
- * Overview" composition (TASK-PC-FE-013 — `console-integration-contract.md`
- * § 2.4.9.2).
+ * Domain Health Overview — `console-integration-contract.md` § 2.4.9.2.
  *
- * The browser NEVER reaches `console-bff` directly. The 2 inbound headers
- * this route forwards (per § 2.4.9.2 Auth flow):
- *   - `Authorization: Bearer <gap-oidc-access-token>` (inbound principal,
- *     RS256 / IAM issuer — Spring Security on the BFF validates).
- *   - `X-Tenant-Id: <active-tenant>` (forwarded for log MDC + audit
- *     traceability; the BFF's outbound actuator legs do NOT consume it).
+ * Produced in the console-web server since TASK-PC-FE-302 (ADR-MONO-081, A;
+ * contract § 2.4.9.0) instead of proxying to `console-bff`, which the Vercel
+ * console cannot reach. The wire envelope is unchanged.
  *
- * **`X-Operator-Token` is intentionally NOT forwarded** — this divergence
- * from § 2.4.9.1 is explicit in § 2.4.9.2: the BFF does not require it
- * (no outbound leg consumes it; the D4 sealed-switch is never invoked
- * because public actuator endpoints are outside D4's scope per the
- * § D4 scope clarification). Sending it would be misleading.
+ * Six public `/actuator/health` legs, one per domain edge, with NO credential
+ * and NO tenant header (§ 2.4.9.2 «D4 scope clarification»). Any leg failure,
+ * including a 401/403 from a misconfigured producer, degrades only that card.
+ * A 503 carrying a real health document (Spring's DOWN / OUT_OF_SERVICE) is an
+ * `ok` card with that status — the producer reporting itself down is not the
+ * same as the console failing to reach it.
  *
- * READ-ONLY (§ 2.4.9 HARD INVARIANT): GET only, no body, no
- * `Idempotency-Key`, no `X-Operator-Reason`. The BFF route never
- * carries a mutation method; adding one is a contract defect.
- *
- * HTTP outcome map (mirrors BFF + § 2.4.9.2 error envelope):
- *   - inbound tenant absent → 400 NO_ACTIVE_TENANT (BEFORE any outbound;
- *     the BFF also enforces it).
- *   - inbound IAM access-token absent → 401 TOKEN_INVALID (the BFF
- *     would also reject; we do not call it in that state).
- *   - BFF 200 → passthrough verbatim (per-card degrade is INSIDE the
- *     200 payload as `card.status`; the proxy never re-classifies).
- *   - BFF 400 NO_ACTIVE_TENANT → 400.
- *   - BFF 401 → 401 (client api-client triggers /api/auth/refresh and a
- *     single retry; on retry-fail it redirects to /login).
- *   - BFF non-2xx other → 502 BAD_GATEWAY (the BFF never emits 503 per
- *     § 2.4.9.2 error envelope; reaching this branch means transport /
- *     parse / unexpected status).
- *   - network/timeout/parse failure → 502 BAD_GATEWAY.
- *
- * No token / source PII is ever logged (only request id + status).
+ * The route keeps its inbound checks: no active tenant → 400, no session →
+ * 401, both before any leg. READ-ONLY: GET only.
  */
-
-/** Target URL on the console-bff side. Env-overridable; defaults to the BFF's
- *  address on the docker network.
- *
- *  NOT a `*.local` Traefik hostname (TASK-MONO-362): console-bff holds no edge
- *  router, because it is a backend service and the browser never reaches it —
- *  every call is server-side, from this route handler. Defaulting to the edge
- *  would point at a route that no longer exists. */
-function bffUrl(): string {
-  const base = (
-    process.env.CONSOLE_BFF_URL || 'http://console-bff:8080'
-  ).replace(/\/$/, '');
-  return `${base}/api/console/dashboards/domain-health`;
-}
-
 export async function GET() {
   const requestId = newRequestId();
 
-  // ADR-MONO-074 A2 — asked BEFORE the tenant and token reads. A sample visitor
-  // gets the sample health envelope fed into the passthrough mapping below;
-  // console-bff is never called. Everyone else takes the unchanged `else` path.
+  // ADR-MONO-074 A2 — a sample visitor gets the sample envelope; no leg runs.
   const sample = await sampleGate({
     core: 'console-bff',
     surface: 'domain-health',
     method: 'GET',
     path: '/api/console/dashboards/domain-health',
   });
+  if (sample) return passthroughSample(sample, requestId);
 
-  let res: Response;
-  if (sample) {
-    res = sample;
-  } else {
-    const tenant = await getActiveTenant();
-    if (!tenant) {
-      return NextResponse.json(
-        { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-        { status: 400 },
-      );
-    }
-
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      // Inbound principal absent — the BFF would also reject (Spring
-      // Security 401). We do not call it in that state.
-      return NextResponse.json(
-        { code: 'TOKEN_INVALID', message: 'session not authenticated' },
-        { status: 401 },
-      );
-    }
-
-    try {
-      // DEMO-URL-EXEMPT: console-bff-internal — console-bff 는 **공개 호스트명이 없다**
-      //   (`TASK-MONO-362` 가 그 Traefik 라우터를 일부러 없앴다: 백엔드 서비스는 엣지에
-      //   노출되지 않는다 — `api-gateway-policy.md` L14). 주소는 도커 네트워크 DNS
-      //   (`http://console-bff:8080`)이고 데모 도메인으로 파생될 수 있는 값이 아니다.
-      //   🔴 그래서 **Vercel 에서는 이 레그가 닿지 않는다** — TASK-MONO-585 § 알려진 한계.
-      res = await fetch(bffUrl(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          'X-Tenant-Id': tenant,
-          'X-Request-Id': requestId,
-        },
-        cache: 'no-store',
-      });
-    } catch {
-      logger.warn('domain_health_proxy_network_error', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff unreachable' },
-        { status: 502 },
-      );
-    }
+  // The health legs carry no credential, but the route keeps its inbound
+  // checks (§ 2.4.9.2 error envelope): a tenant for traceability, a session.
+  const tenant = await getActiveTenant();
+  if (!tenant) {
+    return NextResponse.json(
+      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+      { status: 400 },
+    );
+  }
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session not authenticated' },
+      { status: 401 },
+    );
   }
 
-  if (res.status === 200) {
-    // The BFF response body IS the wire envelope verbatim — the proxy
-    // never re-shapes it (per-card degrade lives inside the payload,
-    // not in the HTTP status).
-    let body: unknown;
-    try {
-      body = await res.json();
-    } catch {
-      logger.warn('domain_health_proxy_bad_body', { requestId });
-      return NextResponse.json(
-        { code: 'BAD_GATEWAY', message: 'console-bff returned invalid body' },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(body, { status: 200 });
-  }
-
-  if (res.status === 400 || res.status === 401) {
-    let envelope: { code?: unknown; message?: unknown } = {};
-    try {
-      envelope = (await res.json()) as { code?: unknown; message?: unknown };
-    } catch {
-      /* keep defaults */
-    }
-    const code =
-      typeof envelope.code === 'string'
-        ? envelope.code
-        : res.status === 400
-          ? 'NO_ACTIVE_TENANT'
-          : 'TOKEN_INVALID';
-    const message =
-      typeof envelope.message === 'string'
-        ? envelope.message
-        : res.status === 400
-          ? 'no active tenant selected'
-          : 'session expired';
-    logger.warn('domain_health_proxy_4xx', {
-      requestId,
-      status: res.status,
-      code,
-    });
-    return NextResponse.json({ code, message }, { status: res.status });
-  }
-
-  logger.warn('domain_health_proxy_unexpected_status', {
+  const result = await compose(await domainHealthLegs(requestId), {
+    route: 'domain-health',
     requestId,
-    status: res.status,
+    // The demo host is resolved here, at the call site (check-fetch-resolution).
+    fetchLeg: async (url, init) => fetch(await resolveBackendUrl(url), init),
   });
+  // Health legs are `kind: 'health'` — a 401 from one degrades that card and
+  // never reaches here as `unauthorized` (§ 2.4.9.2 «no cross-leg collapse»).
+  if (result.unauthorized) {
+    return NextResponse.json(
+      { code: 'TOKEN_INVALID', message: 'session expired' },
+      { status: 401 },
+    );
+  }
+  return NextResponse.json(result.envelope, { status: 200 });
+}
+
+async function passthroughSample(res: Response, requestId: string): Promise<NextResponse> {
+  if (res.status === 200) {
+    try {
+      return NextResponse.json(await res.json(), { status: 200 });
+    } catch {
+      /* fall through */
+    }
+  }
+  logger.warn('domain_health_sample_unexpected', { requestId, status: res.status });
   return NextResponse.json(
-    { code: 'BAD_GATEWAY', message: 'console-bff unexpected response' },
+    { code: 'BAD_GATEWAY', message: 'sample health unavailable' },
     { status: 502 },
   );
 }

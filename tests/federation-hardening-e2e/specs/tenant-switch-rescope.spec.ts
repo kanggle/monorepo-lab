@@ -3,6 +3,10 @@ import { loginAsMultiOperator } from '../fixtures/login';
 import { gotoOverview, switchTenant } from '../fixtures/console-helpers';
 
 /**
+ * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the overview legs now leave from the console-web
+ * server (scm through the scm gateway), not console-bff — same domain-facing token,
+ * same producer-side gate. «BFF pass-through» below now reads «console-web pass-through».
+ *
  * TASK-MONO-158 — ADR-MONO-020 § 3.3 step 3 (D4) capstone.
  *
  * Active-tenant switcher → assume-tenant flow A↔B re-scope discriminator spec.
