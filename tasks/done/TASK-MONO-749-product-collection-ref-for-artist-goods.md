@@ -8,7 +8,7 @@ TASK-MONO-749
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -126,3 +126,10 @@ monorepo
 - **h2 인덱스 모양**: 티켓의 `(tenant_id, collection_ref)` 는 postgres 에만 있다 — h2 트리에 `products.tenant_id` 가 없어서다(기존 드리프트, 이 티켓 범위 밖).
 - **이벤트 페이로드**(`ProductCreated`/`ProductUpdated`)에는 싣지 않았다 — 소비자가 없고 티켓 범위(API · 공개 스냅숏)에 없다.
 - **팬 아티스트 페이지 렌더**: 이 티켓은 선택 함수와 시험까지다(카드는 739 — 티켓 Scope 의 단서 그대로).
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 4차원 종결
+
+- (a) #4115 `MERGED` · (b) 스쿼시 `a8eb3d9c7` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/68.
+- (d) AC-1~4 전부 본문 근거로 닫힘(체크 4/4). ⚪ 이던 Testcontainers(`ProductRepositoryIntegrationTest` V20 왕복)는 CI `Integration (ecommerce A/B/C)` 가 실제로 돌아 SUCCESS — 건너뜀 아님.
