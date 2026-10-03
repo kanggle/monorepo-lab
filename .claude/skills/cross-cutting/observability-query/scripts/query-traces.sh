@@ -44,7 +44,7 @@ Examples:
 
 Returns the span tree for one trace_id from VictoriaTraces. Use the
 console-web SSR span as the tree root; for a console dashboard fan-out the
-tree spans console-web -> console-bff -> per-domain producers.
+tree spans console-web -> per-leg composition spans -> per-domain producers.
 
 See .claude/skills/cross-cutting/observability-query/SKILL.md § Trace queries.
 HELP
@@ -124,16 +124,17 @@ case "$HTTP_CODE" in
       exit 3
     fi
     cat "$HTTP_BODY"
-    # A complete console dashboard fan-out tree is 7 spans (console-web SSR +
-    # console-bff aggregation + 5 producers). Fewer may be a partial tree
-    # (broken span chain) — surface as a non-fatal OBSERVE-QUERY-07 hint while
-    # still returning the data on stdout.
+    # A console dashboard fan-out tree is at least 7 spans (the console-web
+    # route span + one console.composition.leg span per domain, ADR-MONO-081);
+    # producer spans come on top. Fewer may be a partial tree (broken span
+    # chain) — surface as a non-fatal OBSERVE-QUERY-07 hint while still
+    # returning the data on stdout.
     if [ "${SPANS:-0}" -lt 7 ]; then
       emit_4block "OBSERVE-QUERY-07" \
         "Trace found but only $SPANS span(s) — fewer than the 7-span console fan-out tree; possible broken span chain (a layer dropped/regenerated trace_id)." \
         "$URL" \
         "  1. If the dashboard only invoked a subset of domains, fewer spans is expected — not an error.
-  2. Otherwise check each layer propagates W3C traceparent: console-web (instrumentation.ts) -> console-bff (RestClient ObservationRegistry) -> producers (micrometer-tracing-bridge-otel).
+  2. Otherwise check each layer propagates W3C traceparent: console-web (instrumentation.ts + undici leg fetch) -> producers (micrometer-tracing-bridge-otel).
   3. A layer that starts a NEW root (no parent) indicates it dropped the inbound traceparent."
       exit 0
     fi

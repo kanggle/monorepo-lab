@@ -97,7 +97,7 @@ export const {
  * `` `${base}/api/admin/…` `` 가 `//api/admin/…` 이 된다(Traefik 404, 진단이 가장 오래
  * 걸리는 종류다). 여기서 바꾸는 것은 호스트 한 조각뿐이고 나머지 바이트는 안 건드린다.
  *
- * 🔵 `.local` 이 아닌 값(Vercel 의 `https://…`, 컨테이너 DNS 인 `http://console-bff:8080`)
+ * 🔵 `.local` 이 아닌 값(Vercel 의 `https://…`, 컨테이너 DNS 인 `http://<서비스명>:8080`)
  * 은 그대로 통과한다 — 「데모가 아닌 배포에서는 아무 일도 안 일어난다」가 요구사항이다.
  */
 export function demoizeUrl(url: string, demoDomain: string): string {

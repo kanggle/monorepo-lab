@@ -27,8 +27,8 @@ import java.util.List;
  * <p>The gateway <strong>exists</strong> as of TASK-MONO-357 (ADR-MONO-048 D7). This chain is
  * therefore no longer a stand-in for a missing edge — it is the second layer, and it is
  * load-bearing: the gateway only fronts traffic arriving on the {@code finance.local} hostname,
- * while anything already inside the compose network (console-bff's outbound legs,
- * service-to-service calls) reaches this service directly and never crosses the edge. A request
+ * while anything already inside the compose network (service-to-service calls)
+ * reaches this service directly and never crosses the edge. A request
  * that skipped the gateway must still meet the same verdict here.
  *
  * <h2>The three classes are shared now (ADR-MONO-049 § D5-3)</h2>

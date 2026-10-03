@@ -9,11 +9,11 @@ import {
  * MVP / `console-integration-contract.md` § 2.4.9.1).
  *
  * This module exports two callers — both go through the SAME-ORIGIN
- * Next.js proxy route (`/api/console/dashboards/operator-overview`),
- * which forwards `Authorization` + `X-Operator-Token` + `X-Tenant-Id`
- * to console-bff server-side. The BROWSER NEVER reaches console-bff
- * directly; client JS NEVER reads a session token (the HttpOnly cookie
- * + server proxy are the trust-boundary invariant of the platform —
+ * Next.js route (`/api/console/dashboards/operator-overview`), which
+ * composes the envelope server-side from the session's tokens
+ * (`shared/composition/console-composition.ts`). The BROWSER NEVER reaches
+ * a domain directly; client JS NEVER reads a session token (the HttpOnly
+ * cookie + server route are the trust-boundary invariant of the platform —
  * frontend-app.md § Authentication).
  *
  *   - {@link fetchOperatorOverview} — client-side caller used by the

@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * (TASK-PC-FE-303 / ADR-MONO-081 — `notification-inbox-contract.md` § 4).
  * The aggregation rules live in `shared/notification-inbox.test.ts`; this file
  * pins what only the ROUTE decides — the checks before any call and the HTTP
- * mapping — and that neither route reads `CONSOLE_BFF_URL` any more (AC-1).
+ * mapping — and that each call goes straight to the owning domain.
  */
 
 const cookieJar = new Map<string, string>();
@@ -66,15 +66,12 @@ function markRead(sourceDomain: string, id = 'n1') {
 
 beforeEach(() => {
   cookieJar.clear();
-  // AC-1 — a leftover read of the old address would surface as a call to it.
-  process.env.CONSOLE_BFF_URL = 'http://console-bff.invalid:8080';
   fetchMock = vi.fn(async () => json({ data: [erpItem], meta: { totalElements: 1 } }));
   vi.stubGlobal('fetch', fetchMock);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env.CONSOLE_BFF_URL;
 });
 
 function calledUrls(): string[] {
@@ -82,7 +79,7 @@ function calledUrls(): string[] {
 }
 
 describe('inbox route', () => {
-  it('200 — the contract shape, read from erp directly (never console-bff)', async () => {
+  it('200 — the contract shape, read from erp directly', async () => {
     session();
     const res = await inbox('?page=0&size=20&unread=true');
     expect(res.status).toBe(200);
@@ -92,7 +89,6 @@ describe('inbox route', () => {
     expect(calledUrls()).toEqual([
       'http://erp.local/api/erp/notifications?page=0&size=20&unread=true',
     ]);
-    expect(calledUrls().some((u) => u.includes('console-bff'))).toBe(false);
   });
 
   it('AC-5 — domain-facing bearer, no X-Tenant-Id even with an active tenant', async () => {

@@ -11,8 +11,9 @@ export const runtime = 'nodejs';
  * Domain Health Overview — `console-integration-contract.md` § 2.4.9.2.
  *
  * Produced in the console-web server since TASK-PC-FE-302 (ADR-MONO-081, A;
- * contract § 2.4.9.0) instead of proxying to `console-bff`, which the Vercel
- * console cannot reach. The wire envelope is unchanged.
+ * contract § 2.4.9) instead of proxying to the former BFF (retired —
+ * ADR-MONO-081), which the Vercel console could not reach. The wire envelope
+ * is unchanged.
  *
  * Six public `/actuator/health` legs, one per domain edge, with NO credential
  * and NO tenant header (§ 2.4.9.2 «D4 scope clarification»). Any leg failure,
@@ -28,8 +29,9 @@ export async function GET() {
   const requestId = newRequestId();
 
   // ADR-MONO-074 A2 — a sample visitor gets the sample envelope; no leg runs.
+  // Sample core `console-composition` (renamed by TASK-MONO-757).
   const sample = await sampleGate({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'domain-health',
     method: 'GET',
     path: '/api/console/dashboards/domain-health',

@@ -25,8 +25,9 @@ import java.util.Map;
  * <p>This edge used to pin a <em>single</em> {@code expected-issuer}, defaulting to
  * the <em>legacy</em> value — and {@code JWT_EXPECTED_ISSUER} was overridden in no
  * compose file anywhere. So SAS-issued tokens, the ones the rest of the fleet takes
- * as primary, were rejected here with a 401. It went unnoticed because console-bff
- * reaches the IAM services directly and never crosses this edge (TASK-MONO-347).
+ * as primary, were rejected here with a 401. It went unnoticed because the console's
+ * cross-domain composer (then a BFF service, since retired) reached the IAM services directly
+ * and never crossed this edge (TASK-MONO-347).
  *
  * <p>Worse, {@code TASK-BE-398} retires the legacy custom-JWT flow that mints
  * {@code iss=iam}. Under the old single-value config, that would have left this

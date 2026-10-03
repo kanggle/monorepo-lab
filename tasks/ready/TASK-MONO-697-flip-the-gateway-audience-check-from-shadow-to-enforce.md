@@ -49,7 +49,7 @@ monorepo
 
 ## Out of Scope
 
-- 서비스 레벨 디코더 · console-bff · iam gateway — `TASK-MONO-698`
+- 서비스 레벨 디코더 · iam gateway — `TASK-MONO-698` (🔵 2026-10-02 UTC: 이 줄에 있던 콘솔 BFF 엣지는 `TASK-MONO-757` 이 은퇴시켰다 — 더 이상 대상이 아니다)
 - allowlist 를 IdP client 레지스트리에서 자동 도출하는 가드(Edge Case 로만 기록)
 
 # Acceptance Criteria

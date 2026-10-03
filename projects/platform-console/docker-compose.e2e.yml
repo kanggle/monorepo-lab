@@ -10,11 +10,11 @@
 #                           `/api/admin/me/profile`, `/api/admin/operators/**`,
 #                           `/api/admin/auth/token-exchange`)
 #   - finance-platform account-service
-#                           (`/api/finance/accounts/{id}/balances` consumed by
-#                           console-bff `FinanceBalanceReadAdapter`)
-#   - console-bff          (Spring Boot orchestrator — `GET /api/console/
-#                           dashboards/operator-overview` composition)
-#   - console-web          (Next.js — Playwright target)
+#                           (`/api/finance/accounts/{id}/balances` — the
+#                           operator-overview finance leg)
+#   - console-web          (Next.js — Playwright target; composes
+#                           `GET /api/console/dashboards/operator-overview`
+#                           itself — ADR-MONO-081)
 #   - MySQL 8.0            (shared — `auth_db`, `account_db`, `admin_db`,
 #                           `finance_db` schemas)
 #   - Redis 7              (shared — rate-limit / SAS authorization cache)
@@ -53,8 +53,7 @@
 #     :projects:iam-platform:apps:auth-service:bootJar \
 #     :projects:iam-platform:apps:account-service:bootJar \
 #     :projects:iam-platform:apps:admin-service:bootJar \
-#     :projects:finance-platform:apps:account-service:bootJar \
-#     :projects:platform-console:apps:console-bff:bootJar
+#     :projects:finance-platform:apps:account-service:bootJar
 #
 # Each Dockerfile expects the boot jar at `<service-dir>/build/libs/*.jar`.
 # The CI nightly job below in .github/workflows/nightly-e2e.yml builds these
@@ -79,7 +78,7 @@ x-iam-service-env: &iam-service-env
   # sibling services during partial restarts (TASK-BE-044 / GAP e2e overlay).
   JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
   # The SAS issuer URL — every downstream validator (admin token-exchange,
-  # console-bff resource server, finance resource server) is configured to
+  # finance resource server) is configured to
   # expect THIS URL as the `iss` claim. The auth-service itself derives its
   # discovery document from `oidc.issuer-url` env var (default in
   # apps/auth-service/src/main/resources/application.yml).
@@ -169,8 +168,8 @@ services:
 
   # ---------------------------------------------------------------------------
   # GAP auth-service — SAS OIDC AS. Issues access tokens consumed by
-  # admin-service token-exchange + console-bff JWKS resource-server validation
-  # + finance account-service JWKS resource-server validation.
+  # admin-service token-exchange + finance account-service JWKS
+  # resource-server validation.
   # ---------------------------------------------------------------------------
   auth-service:
     build:
@@ -328,7 +327,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # finance-platform account-service — `/api/finance/accounts/{id}/balances`.
-  # Consumed by console-bff FinanceBalanceReadAdapter when an operator's
+  # Called by console-web's operator-overview finance leg when an operator's
   # finance_default_account_id is set (Phase 4 PC-FE-016 click sequence: after
   # Save, the overview's finance card flips from forbidden/MISSING_PREREQUISITE
   # to ok with balance data).
@@ -365,44 +364,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 60s
-
-  # ---------------------------------------------------------------------------
-  # console-bff — Spring Boot Hexagonal orchestrator
-  # (TASK-PC-BE-001/002/003 + ADR-MONO-017 Phase 7).
-  # ---------------------------------------------------------------------------
-  console-bff:
-    build:
-      context: ./apps/console-bff
-      dockerfile: Dockerfile
-    environment:
-      SERVER_PORT: "8080"
-      SPRING_PROFILES_ACTIVE: docker
-      # GAP OIDC trust anchor — JWKS validation of inbound bearer tokens.
-      CONSOLE_BFF_IAM_ISSUER_URL: http://auth-service:8081
-      CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
-      # Per-domain outbound base URLs (ADR-MONO-017 D6 fan-out). Only the
-      # finance leg is exercised by the 2 e2e specs (PC-FE-016 finance card
-      # ok-after-save assertion); the other domain legs (gap registry / wms /
-      # scm / erp) are wired to non-routable hostnames so their adapters
-      # surface as `down`/`unreachable` on the overview rather than 502'ing
-      # the entire response.
-      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: http://admin-service:8085
-      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
-      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://127.0.0.1:9
-      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://127.0.0.1:9
-      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://127.0.0.1:9
-    depends_on:
-      auth-service: { condition: service_started }
-      admin-service: { condition: service_started }
-      finance-account-service: { condition: service_started }
-    ports: ["18090:8080"]
-    networks: [pc-e2e]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # console-web — Next.js Playwright target.
@@ -467,9 +428,8 @@ services:
       # spec `my-profile-default-account-id` testid 5s timeout.
       IAM_ADMIN_API_BASE: http://admin-service:8085
       # TASK-PC-FE-302 (ADR-MONO-081) — the operator overview / domain health
-      # legs are composed HERE now, not in console-bff, so console-web needs
-      # the per-domain bases console-bff used to hold (its
-      # CONSOLE_BFF_OUTBOUND_*_BASE_URL below). Same values: finance is the one
+      # legs and the notification inbox are composed HERE, so console-web needs
+      # the per-domain bases. Finance is the one
       # leg the e2e specs exercise (operators-profile — finance card `ok` after
       # saving a default account); wms / scm / erp stay non-routable so those
       # cards degrade instantly instead of waiting on an unresolvable *.local.
@@ -477,15 +437,11 @@ services:
       WMS_ADMIN_BASE_URL: http://127.0.0.1:9/api/v1/admin
       SCM_GATEWAY_BASE_URL: http://127.0.0.1:9
       ERP_BASE_URL: http://127.0.0.1:9
-      # console-bff orchestrator — still the producer of the notification
-      # inbox until TASK-PC-FE-303; retired by TASK-MONO-757.
-      CONSOLE_BFF_URL: http://console-bff:8080
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     depends_on:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
-      console-bff: { condition: service_started }
       finance-account-service: { condition: service_started }
     ports: ["3000:3000"]
     networks: [pc-e2e]

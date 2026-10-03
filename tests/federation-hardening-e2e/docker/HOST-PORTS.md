@@ -48,7 +48,6 @@ Next free datastore port: **`15438`** (then `15439`, …).
 | `18082` | `8082` | `account-service` | iam | base |
 | `18085` | `8085` | `admin-service` | iam | base |
 | `18086` | `8080` | `finance-account-service` | finance | base |
-| `18090` | `8080` | `console-bff` | console | base |
 | `18091` | `8081` | `wms-master-service` | wms | base |
 | `18092` | `8080` | `scm-procurement-service` | scm | base |
 | `18093` | `8080` | `erp-masterdata-service` | erp | base |

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Notification aggregator in the console-web server (TASK-PC-FE-303 —
- * `notification-inbox-contract.md` § 4; replaces console-bff
+ * `notification-inbox-contract.md` § 4; replaces the former BFF's
  * `NotificationAggregationUseCase`). The domain set in production is `erp`
  * alone, so the isolation rule (AC-2) is measured here with TWO domains.
  */
@@ -169,7 +169,7 @@ describe('merge — contract § 1 / § 4 items 1–2', () => {
   });
 });
 
-describe('AC-5 — per-domain credential (console-bff CredentialSelectionAdapter: erp ← IAM OIDC token)', () => {
+describe('AC-5 — per-domain credential (former BFF CredentialSelectionAdapter: erp ← IAM OIDC token)', () => {
   it('erp leg: domain-facing bearer, no X-Tenant-Id, the erp gateway path', async () => {
     const [erp] = configuredInboxDomains();
     const fetchLeg = vi.fn(async () => json({ data: [] }));
@@ -187,7 +187,7 @@ describe('AC-5 — per-domain credential (console-bff CredentialSelectionAdapter
   });
 });
 
-describe('domain set — console-bff `consolebff.notifications.domains`', () => {
+describe('domain set — `CONSOLE_NOTIFICATION_DOMAINS`', () => {
   it('defaults to erp', () => {
     expect(configuredInboxDomains().map((d) => d.name)).toEqual(['erp']);
   });

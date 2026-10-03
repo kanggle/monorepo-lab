@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic';
  * retained), order-status distribution, top-5 product/seller ranking charts
  * (TASK-PC-FE-172), and recent orders + sellers. The snapshot is a console-web
  * DIRECT fan-out over the existing ecommerce list/summary/insights endpoints
- * (ADR-MONO-017 D3.B — no console-bff leg). Per-area/leg degrade is cell-local;
+ * (ADR-MONO-017 D3.B — no cross-domain composition leg). Per-area/leg degrade is cell-local;
  * a 401 in any leg triggers a whole-session re-login. (TASK-PC-FE-172 removed
  * the former 도메인 상태 DomainHealthCard block — the per-area service-status
  * dots on each count card supersede it.)

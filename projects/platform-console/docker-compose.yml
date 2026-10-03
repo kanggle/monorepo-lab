@@ -75,15 +75,6 @@ services:
       # the EXCHANGED operator token (NOT the GAP OIDC token).
       CONSOLE_REGISTRY_URL: ${CONSOLE_REGISTRY_URL:-http://iam.local/api/admin/console/registry}
       REGISTRY_TIMEOUT_MS: ${REGISTRY_TIMEOUT_MS:-5000}
-      # console-bff is reached on the DOCKER NETWORK, never through the Traefik
-      # edge (TASK-MONO-362). Both containers sit on traefik-net, so Docker's
-      # embedded DNS resolves the service name. The BFF holds no Traefik router:
-      # being ON the network is not the same as being exposed BY it — exposure
-      # comes from the router labels, and it has none.
-      #
-      # Same value the federation-hardening-e2e stack has always used; this
-      # aligns the thin `pnpm console:up` stack with the one CI actually runs.
-      CONSOLE_BFF_URL: ${CONSOLE_BFF_URL:-http://console-bff:8080}
       # GAP admin-service RFC 8693 operator-token exchange — AUTHORITATIVE
       # producer path (TASK-BE-298 / admin-api.md / ADR-MONO-014): POST
       # /api/admin/auth/token-exchange on the same /api/admin/** operator-auth
@@ -143,77 +134,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-
-  # ---------------------------------------------------------------------------
-  # console-bff — Spring Boot Hexagonal BFF (TASK-PC-BE-001).
-  #
-  # INTERNAL-ONLY, and now actually wired that way (TASK-MONO-362).
-  #
-  # It used to hold a Traefik router (`Host(console-bff.local)`) while the comment
-  # right here said "internal-only — the browser never reaches this hostname".
-  # Both cannot be true: a router on the shared edge means anyone who can send
-  # `Host: console-bff.local` reaches the BFF. "Internal-only" was a comment, not a
-  # constraint — and it made this the only BACKEND service in the monorepo holding
-  # an edge router, which is precisely what api-gateway-policy.md L14 forbids
-  # ("No backend service may be directly exposed to external traffic").
-  #
-  # The router is gone. console-web calls it on the docker network instead
-  # (CONSOLE_BFF_URL=http://console-bff:8080) — the wiring the federation-hardening
-  # e2e stack, the one CI actually runs, has always used.
-  #
-  # It STAYS on traefik-net: that is the network it shares with console-web, and
-  # network membership is not exposure. Exposure comes from the router labels.
-  # Traefik cannot route to a container it has no route for.
-  #
-  # expose: only — no host-port publish (Local Network Convention ADR-MONO-001).
-  # Per-domain credential dispatch is request-scoped (stateless, no DB/Redis).
-  # GAP issuer URL is passed via CONSOLE_BFF_IAM_ISSUER_URL (JWKS discovery).
-  # ---------------------------------------------------------------------------
-  console-bff:
-    build:
-      context: ./apps/console-bff
-      dockerfile: Dockerfile
-    container_name: platform-console-bff
-    restart: unless-stopped
-    expose:
-      - "8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SERVER_PORT: "8080"
-      # GAP OIDC issuer for RS256 JWKS validation of inbound bearer tokens.
-      CONSOLE_BFF_IAM_ISSUER_URL: ${CONSOLE_BFF_IAM_ISSUER_URL:-http://iam.local}
-      # JWKS is an actual FETCH, not a string compare, so it may point at
-      # container DNS while the issuer above stays the public hostname. Unset,
-      # application.yml derives it from the issuer — which works locally and
-      # dies on AWS (an instance cannot reach its own public IP; no IGW
-      # hairpin). demo.env pins it to the iam container.
-      CONSOLE_BFF_JWK_SET_URI: ${CONSOLE_BFF_JWK_SET_URI:-http://iam.local/oauth2/jwks}
-      # Outbound domain legs (TASK-MONO-505) — same reasoning as console-web's
-      # block above: named here so demo.env can reach them, defaults identical
-      # to application.yml so the thin stack is unchanged.
-      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: ${CONSOLE_BFF_OUTBOUND_IAM_BASE_URL:-http://iam.local}
-      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: ${CONSOLE_BFF_OUTBOUND_WMS_BASE_URL:-http://wms.local}
-      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: ${CONSOLE_BFF_OUTBOUND_SCM_BASE_URL:-http://scm.local}
-      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: ${CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL:-http://finance.local}
-      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: ${CONSOLE_BFF_OUTBOUND_ERP_BASE_URL:-http://erp.local}
-      # 🔴 The federation-hardening-e2e overlay does NOT set this one, because
-      # ecommerce is not in that harness at all (its rendered service list has
-      # no ecommerce service). So this leg had no prior art to promote — it is
-      # authored here, and its absence is why the console's E-Commerce health
-      # leg has read unavailable in the integrated demo.
-      CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL: ${CONSOLE_BFF_OUTBOUND_ECOMMERCE_BASE_URL:-http://ecommerce.local}
-    # No Traefik labels — deliberately unroutable from the edge (TASK-MONO-362).
-    # Do not re-add them: `scripts/check-gateway-drift.sh` (I2) will fail, which is
-    # the point. A backend service reachable at the edge without a gateway has no
-    # rate limiting, no identity-header strip→enrich, and no uniform error envelope.
-    networks:
-      - traefik-net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
 networks:
   traefik-net:

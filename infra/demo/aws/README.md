@@ -1,8 +1,9 @@
 # infra/demo/aws — 온디맨드 포트폴리오 데모 호스트 (TASK-MONO-366)
 
-방문자가 **Start Demo** 를 누르면 EC2 가 깨어나 통합 데모(8 프로젝트 / 96 컨테이너)를 올리고, 유휴해지면 스스로 꺼진다. **scale-to-zero** — 아무도 안 쓰면 컴퓨트 비용이 0 이다.
+방문자가 **Start Demo** 를 누르면 EC2 가 깨어나 통합 데모(고른 묶음의 도메인 — 전체는 `FULL`)를 올리고, 유휴해지면 스스로 꺼진다. **scale-to-zero** — 아무도 안 쓰면 컴퓨트 비용이 0 이다.
 
-> 프로젝트 수의 출처는 `infra/demo/projects.sh` 의 `FULL` 배열이다(iam · wms · scm · finance · erp · ecommerce · fan · console = **8**). 여기에 숫자를 다시 적지 말고 그 파일을 세라.
+> 프로젝트 수의 출처는 `infra/demo/projects.sh` 의 `FULL` 배열이다(iam · wms · scm · finance · erp · ecommerce · fan = **7**). 여기에 숫자를 다시 적지 말고 그 파일을 세라.
+> 🔵 TASK-MONO-757 — 8 → 7. platform-console 이 빠졌다: 콘솔은 Vercel 에서 돌고(ADR-MONO-067 단계 3) 그 BFF 는 은퇴했다(ADR-MONO-081). 론처의 «콘솔» 묶음은 데모 호스트에서 iam 만 올린다. 컨테이너 수(옛 «96»)는 세지 않았다 — 재굽기 뒤 첫 기동 창에서 재라.
 
 이 디렉터리는 그 호스트를 **저장소만으로 재현**하기 위해 존재한다. 이전에는 이 코드가 세션 스코프 scratchpad 에만 있어서, `README.md` 가 온디맨드 데모를 포트폴리오로 내세우는데 **그걸 만드는 코드는 저장소에 없었다** — 검증 불가능한 주장이었다.
 
@@ -252,8 +253,8 @@ aws iam put-user-policy --user-name <deployer> \
 이전 문서에 적혀 있던 *"43 컨테이너 / 21GB 여유"* 는 **고장난 스택을 잰 값이었다** — `bitnami/kafka:3.7` 이 Docker Hub 에서 삭제되어 33개만 뜬 상태였고(TASK-MONO-353), 죽은 이미지 하나가 나머지 6개 프로젝트를 통째로 막고 있었다.
 
 > 🔴 **이 숫자를 상한으로 읽지 마라.** 메모리 리밋을 선언하는 것은 **35개(2개 프로젝트)뿐** —
-> `ecommerce` 34개(전 서비스) + `finance` kafka 1개(FIN-BE-059). 나머지 **6개 프로젝트(iam·wms·
-> scm·erp·fan·console)는 리밋을 하나도 선언하지 않는다** ⇒ 그 컨테이너들은 **천장이 없다.** 26GB 도,
+> `ecommerce` 34개(전 서비스) + `finance` kafka 1개(FIN-BE-059). 나머지 **5개 프로젝트(iam·wms·
+> scm·erp·fan)는 리밋을 하나도 선언하지 않는다**(측정 당시엔 console 까지 6개 — TASK-MONO-757 에서 데모 도메인에서 빠졌다) ⇒ 그 컨테이너들은 **천장이 없다.** 26GB 도,
 > 5.5GB 여유도 **저장소의 무엇도 강제하지 않는 관측치**이며, 다음 변경이 그 여유를 먹어도
 > **아무 게이트도 멈춰 세우지 않는다.**
 >
@@ -277,9 +278,9 @@ aws iam put-user-policy --user-name <deployer> \
 
 **TLS 는 실 도메인 없이는 불가능하다** — `sslip.io` 는 **Public Suffix List 에 없다**(리스트 대조 확인). PSL 에 없으면 Let's Encrypt 가 `sslip.io` **전체를 하나의 등록 도메인**으로 취급하므로 주당 50장 한도를 전 세계 사용자와 공유하게 되고, 발급이 성립하지 않는다.
 
-그래서 데모는 평문 HTTP 이고, `CONSOLE_COOKIE_SECURE=false` 가 **필요하다** — 브라우저는 `http://` 로 온 `Secure` 쿠키를 **localhost 가 아닌 오리진에서 저장조차 하지 않으므로**, 켜 두면 PKCE/state 쿠키가 사라지고 모든 로그인이 `invalid_state` 로 튕긴다(TASK-MONO-358 에서 실측).
+그래서 데모 호스트는 평문 HTTP 다. 콘솔이 데모 호스트에서 돌던 시절에는 `CONSOLE_COOKIE_SECURE=false` 가 **필요했다** — 브라우저는 `http://` 로 온 `Secure` 쿠키를 **localhost 가 아닌 오리진에서 저장조차 하지 않으므로**, 켜 두면 PKCE/state 쿠키가 사라지고 모든 로그인이 `invalid_state` 로 튕겼다(TASK-MONO-358 에서 실측).
 
-실 도메인을 구매하면 `CONSOLE_COOKIE_SECURE` 를 **지우기만 하면**(기본값 `true`) 강화된다. 가드 (m) 이 `https` 오리진과 `Secure=false` 의 조합을 막는다 — 그 하나만이 진짜 다운그레이드다.
+🔵 **지금은 그 값이 `demo.env` 에 없다** (TASK-MONO-757). 방문자 콘솔은 `https://console.hubwang.com`(Vercel)이고 그 쿠키는 Vercel 프로젝트 env 의 몫이며 `Secure` 다(TASK-MONO-624 실측). platform-console 은 데모 도메인이 아니므로 데모 호스트에서 그 키를 읽는 컨테이너가 없다. 가드 (m) 은 여전히 `https` 오리진과 `Secure=false` 의 조합을 막는다(콘솔 base compose 를 렌더해서) — 그 하나만이 진짜 다운그레이드다.
 
 ---
 

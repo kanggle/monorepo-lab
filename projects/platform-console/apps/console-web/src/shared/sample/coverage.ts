@@ -9,7 +9,9 @@
  * ── Granularity: one row per SURFACE ─────────────────────────────────────────
  * A surface is one gateway profile — the `logPrefix` every feature client
  * already hands its core (`accounts`, `wms_outbound`, `ecommerce_order`, …) —
- * plus the console-bff proxy routes and the registry. 🔵 Why not one row per
+ * plus the console-composition routes (`app/api/console/**`) and the registry.
+ * (That core was named after the former BFF until TASK-MONO-757 renamed it.)
+ * 🔵 Why not one row per
  * endpoint: endpoint paths are composed across two or three wrapper layers
  * (prefix constants, `encodeURIComponent` ids, query builders), so a path
  * extractor would measure the extractor, not the inventory. `logPrefix` is a
@@ -29,7 +31,7 @@ export type SampleCore =
   | 'wms'
   | 'ecommerce'
   | 'flat'
-  | 'console-bff'
+  | 'console-composition'
   | 'console-web';
 
 export type CoverageStatus = 'ready' | 'pending';
@@ -53,9 +55,9 @@ const SCM = 'TASK-PC-FE-288';
 export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   // ── ready (R3ⓐ — dashboards first) ─────────────────────────────────────────
   { core: 'registry', surface: 'registry', status: 'ready', owner: FOUNDATION },
-  { core: 'console-bff', surface: 'operator-overview', status: 'ready', owner: FOUNDATION },
-  { core: 'console-bff', surface: 'domain-health', status: 'ready', owner: FOUNDATION },
-  { core: 'console-bff', surface: 'notifications-inbox', status: 'ready', owner: FOUNDATION },
+  { core: 'console-composition', surface: 'operator-overview', status: 'ready', owner: FOUNDATION },
+  { core: 'console-composition', surface: 'domain-health', status: 'ready', owner: FOUNDATION },
+  { core: 'console-composition', surface: 'notifications-inbox', status: 'ready', owner: FOUNDATION },
 
   // ── iam (`callAdminGateway`) — TASK-PC-FE-283 ───────────────────────────────
   { core: 'iam', surface: 'accounts', status: 'ready', owner: IAM },

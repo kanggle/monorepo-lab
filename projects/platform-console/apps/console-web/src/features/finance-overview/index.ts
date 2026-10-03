@@ -7,7 +7,7 @@
  * Composition (§ overview-state.ts): reuses the EXISTING `features/
  * ledger-ops` browsable index reads (trial balance / periods / OPEN
  * discrepancies / FX rates) + the EXISTING `features/finance-ops` single
- * default-account read — no new producer endpoint, no console-bff leg.
+ * default-account read — no new producer endpoint, no cross-domain composition leg.
  * The account leg NEVER calls a list/search endpoint (honest constraint,
  * PC-FE-160 non-negotiable).
  */

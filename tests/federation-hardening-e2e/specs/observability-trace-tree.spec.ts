@@ -5,15 +5,15 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
  * trace foundation: VictoriaTraces + OTLP direct export, ADR-007a D1/D2).
  *
  * 🔵 TASK-PC-FE-302 (ADR-MONO-081, A) moved the Operator Overview composition
- * from console-bff into the console-web server. The hop this spec used to gate
- * (console-web → console-bff → producers) no longer exists for the overview, so
+ * into the console-web server. The middle hop this spec used to gate
+ * (console-web → the former BFF → producers) no longer exists, so
  * the gates are re-stated on the path that does: console-web → producers.
  * The INVARIANTS are the same ones MONO-144/145/146/147 put in place; only the
  * middle hop is gone:
  *
  *   (attribution)  the console-web trace of an overview request carries one
  *                  span per fan-out leg, tagged `composition.domain` +
- *                  `composition.route` (was console-bff's `bff.domain` /
+ *                  `composition.route` (was the former BFF's `bff.domain` /
  *                  `bff.route` — MONO-147; contract § 2.4.9 Observability).
  *   (unified tree) that SAME trace_id also carries >= 1 producer server span —
  *                  console-web's auto-instrumented `fetch` injects a W3C

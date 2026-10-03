@@ -25,15 +25,15 @@
 #   - wms-master-service (wms warehouses read /api/v1/master/warehouses — legacy
 #     leg, kept harmless; the operator-overview wms leg no longer targets it)
 #   - wms-admin-service (wms inventory snapshot /api/v1/admin/dashboard/inventory
-#     — the producer the BFF WmsInventoryReadAdapter actually calls; TASK-MONO-162)
+#     — the producer the overview wms leg calls; TASK-MONO-162)
 #   - scm-procurement-service (scm PO read /api/procurement/po — golden-path leg)
 #   - scm-inventory-visibility-service (scm inventory snapshot
-#     /api/inventory-visibility/snapshot — the producer the BFF
-#     ScmInventoryReadAdapter actually calls; TASK-MONO-162)
+#     /api/inventory-visibility/snapshot — behind scm-gateway-service, which
+#     the overview scm leg calls; TASK-MONO-162 / TASK-PC-FE-302)
 #   - finance-account-service (finance read endpoint /api/finance/accounts/{id})
 #   - erp-masterdata-service (erp read endpoint /api/erp/masterdata/employees)
-#   - console-bff (Spring Boot orchestrator — operator-overview + domain-health)
-#   - console-web (Next.js Playwright target)
+#   - console-web (Next.js Playwright target; composes operator-overview,
+#     domain-health and the notification inbox itself — ADR-MONO-081)
 #
 # Phase 2.5 (seed-domains.sql + seed-wms.sql + seed-wms-admin.sql + seed-scm.sql
 #            + seed-scm-inv.sql applied):
@@ -44,21 +44,22 @@
 #   - scm purchase_orders (via psql exec against scm-postgres)
 #   - scm inventory snapshot read-model (via psql exec against scm-inv-postgres)
 #
-# console-bff outbound wiring (replaces 127.0.0.1:9 placeholder). The wms + scm
-# operator-overview legs point at the producers that actually serve the BFF
-# adapter paths (TASK-MONO-162 — previously mis-wired to master/procurement):
-#   CONSOLE_BFF_OUTBOUND_WMS_BASE_URL=http://wms-admin-service:8086
-#       (/api/v1/admin/dashboard/inventory — InventoryDashboardController)
-#   CONSOLE_BFF_OUTBOUND_SCM_BASE_URL=http://scm-inventory-visibility-service:8080
-#       (/api/inventory-visibility/snapshot — InventoryVisibilityController)
-#   CONSOLE_BFF_OUTBOUND_ERP_BASE_URL=http://erp-masterdata-service:8080
+# console-web composition legs (see the console-web service below — replaces the
+# 127.0.0.1:9 placeholders of the platform-console e2e compose):
+#   WMS_ADMIN_BASE_URL=http://wms-admin-service:8086/api/v1/admin
+#       (/dashboard/inventory — InventoryDashboardController)
+#   SCM_GATEWAY_BASE_URL=http://scm-gateway-service:8080
+#       (/api/v1/inventory-visibility/snapshot → the service's
+#        /api/inventory-visibility/snapshot)
+#   FINANCE_BASE_URL=http://finance-account-service:8080
+#   ERP_BASE_URL=http://erp-masterdata-service:8080
 #
 # Usage (local dev):
 #   ./gradlew :projects:iam-platform:apps:auth-service:bootJar ...
 #   docker compose -f docker-compose.federation-e2e.yml up -d --build mysql redis kafka auth-service account-service admin-service
 #   # wait for admin-service healthy
 #   docker compose -f docker-compose.federation-e2e.yml exec -T mysql mysql -uroot -prootpass < ../fixtures/seed.sql
-#   docker compose -f docker-compose.federation-e2e.yml up -d --build wms-postgres scm-postgres wms-master-service scm-procurement-service finance-account-service erp-masterdata-service console-bff console-web
+#   docker compose -f docker-compose.federation-e2e.yml up -d --build wms-postgres scm-postgres wms-master-service scm-procurement-service finance-account-service erp-masterdata-service scm-gateway-service console-web
 #   # wait for all healthy, then apply seed-domains.sql + seed-wms.sql + seed-scm.sql
 # =============================================================================
 
@@ -146,7 +147,7 @@ services:
   #
   # ADR-007a D2 **direct**-OTLP fallback (Vector 0.45 has no `opentelemetry`
   # sink — see infra/observability/vector.toml TRACE INGESTION note): the
-  # OTLP-capable Spring producers + console-bff export OTLP/protobuf directly
+  # OTLP-capable Spring producers export OTLP/protobuf directly
   # here (MANAGEMENT_OTLP_TRACING_ENDPOINT env below), and console-web exports
   # OTLP/JSON via otel-node (OTEL_EXPORTER_OTLP_ENDPOINT). No Vector trace
   # stage in this cohort — there is no Vector container here at all (this stack
@@ -572,9 +573,9 @@ services:
   # scm-gateway-service — TASK-PC-FE-302 (ADR-MONO-081). The console overview
   # is now composed in console-web, and console-web reaches scm the way its
   # scm screens do: through the scm gateway (`/api/v1/inventory-visibility/**`,
-  # RewritePath -> the service's `/api/inventory-visibility/**`). console-bff
-  # used to call the service directly on its docker address, which only
-  # exists on a docker network — not from Vercel. Running the real gateway
+  # RewritePath -> the service's `/api/inventory-visibility/**`). The former
+  # BFF (retired — ADR-MONO-081) called the service directly on its docker
+  # address, which only exists on a docker network — not from Vercel. Running the real gateway
   # here also puts its entitlement-trust dual-accept (ADR-MONO-019 § D5) on
   # the path the entitlement specs measure.
   # ---------------------------------------------------------------------------
@@ -694,58 +695,6 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
-  # console-bff — Spring Boot orchestrator.
-  # ADR-MONO-018 phase 2 outbound wiring: replaces 127.0.0.1:9 placeholders
-  # with real producer hostnames (wms / scm / erp).
-  # ---------------------------------------------------------------------------
-  console-bff:
-    logging: *default-logging
-    build:
-      context: ../../../projects/platform-console/apps/console-bff
-      dockerfile: Dockerfile
-    environment:
-      SERVER_PORT: "8080"
-      SPRING_PROFILES_ACTIVE: docker
-      CONSOLE_BFF_IAM_ISSUER_URL: http://auth-service:8081
-      CONSOLE_BFF_JWK_SET_URI: http://auth-service:8081/oauth2/jwks
-      # Per-domain outbound base URLs — ALL 5 live for this cohort.
-      # ADR-MONO-018 D1: replaces the 127.0.0.1:9 non-routable placeholders
-      # in platform-console docker-compose.e2e.yml (wms/scm/erp were placeholder).
-      CONSOLE_BFF_OUTBOUND_IAM_BASE_URL: http://admin-service:8085
-      # TASK-MONO-162 — the wms + scm operator-overview legs now target the
-      # producers that actually serve the BFF adapter paths (previously the wms
-      # leg was mis-wired to master-service → NoResourceFoundException → 500, and
-      # the scm leg to procurement-service → 404, both masking the real card).
-      CONSOLE_BFF_OUTBOUND_WMS_BASE_URL: http://wms-admin-service:8086
-      CONSOLE_BFF_OUTBOUND_SCM_BASE_URL: http://scm-inventory-visibility-service:8080
-      CONSOLE_BFF_OUTBOUND_FINANCE_BASE_URL: http://finance-account-service:8080
-      CONSOLE_BFF_OUTBOUND_ERP_BASE_URL: http://erp-masterdata-service:8080
-      # TASK-MONO-144 — OTLP/protobuf direct export to VictoriaTraces (ADR-007a D2).
-      # console-bff adopts console-web's inbound W3C traceparent and continues
-      # the trace; its exported spans share console-web's trace_id (the
-      # federation propagation hub).
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-    depends_on:
-      auth-service: { condition: service_started }
-      admin-service: { condition: service_started }
-      finance-account-service: { condition: service_started }
-      wms-master-service: { condition: service_started }
-      wms-admin-service: { condition: service_started }
-      scm-procurement-service: { condition: service_started }
-      scm-inventory-visibility-service: { condition: service_started }
-      erp-masterdata-service: { condition: service_started }
-      victoriatraces: { condition: service_healthy }
-    ports: ["18090:8080"]
-    networks: [fed-e2e]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 8
-      start_period: 30s
-
-  # ---------------------------------------------------------------------------
   # console-web — Next.js Playwright target.
   # Reuse from platform-console docker-compose.e2e.yml verbatim.
   # ---------------------------------------------------------------------------
@@ -783,29 +732,32 @@ services:
       CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
       TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
       IAM_ADMIN_API_BASE: http://admin-service:8085
-      # TASK-PC-FE-302 (ADR-MONO-081) — the overview / health legs are composed
-      # in console-web now, so it needs the per-domain bases console-bff held
-      # (CONSOLE_BFF_OUTBOUND_* above). Same producers; scm goes through the
-      # gateway like the console scm screens do (see scm-gateway-service).
+      # TASK-PC-FE-302 / 303 (ADR-MONO-081) — the overview / health legs and
+      # the notification inbox are composed in console-web, so it needs the
+      # per-domain bases. scm goes through the gateway like the console scm
+      # screens do (see scm-gateway-service).
       WMS_ADMIN_BASE_URL: http://wms-admin-service:8086/api/v1/admin
       SCM_GATEWAY_BASE_URL: http://scm-gateway-service:8080
       FINANCE_BASE_URL: http://finance-account-service:8080
       ERP_BASE_URL: http://erp-masterdata-service:8080
-      # console-bff stays the notification-inbox producer until TASK-PC-FE-303.
-      CONSOLE_BFF_URL: http://console-bff:8080
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       # TASK-MONO-144 — otel-node (MONO-143 D3) starts the root SSR span +
-      # undici auto-instrumentation injects W3C traceparent into the console-bff
+      # undici auto-instrumentation injects W3C traceparent into each leg
       # fetch. otel-node appends `/v1/traces` to this endpoint (OTLP/JSON).
-      # Whether VictoriaTraces ingests OTLP/JSON is the MONO-144 reported
-      # unknown — see task md honest-scope note. The traceparent propagation to
-      # console-bff happens regardless of console-web's own export success.
+      # The traceparent propagation to the producers happens regardless of
+      # console-web's own export success (observability-trace-tree.spec.ts
+      # gates the joined tree).
       OTEL_EXPORTER_OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry
       OTEL_SERVICE_NAME: console-web
     depends_on:
       auth-service: { condition: service_started }
       admin-service: { condition: service_started }
-      console-bff: { condition: service_started }
+      # The composition legs' producers. These used to arrive transitively
+      # through the former BFF's depends_on; started (not healthy) is enough —
+      # the workflow waits for each producer's health before the specs run.
+      finance-account-service: { condition: service_started }
+      wms-admin-service: { condition: service_started }
+      erp-masterdata-service: { condition: service_started }
       scm-gateway-service: { condition: service_started }
       victoriatraces: { condition: service_healthy }
     ports: ["3000:3000"]

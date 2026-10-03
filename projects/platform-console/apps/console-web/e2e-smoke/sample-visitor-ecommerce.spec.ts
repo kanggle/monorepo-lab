@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
  * 익명 방문자가 E-Commerce 화면을 샘플 데이터로 본다 — 백엔드 하나도 안 뜬 채로
  * (`ADR-MONO-074` — `TASK-PC-FE-284` AC-6).
  *
- * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange · console-bff
+ * `playwright.smoke.config.ts` 는 OIDC · registry · token-exchange
  * 를 전부 도달 불가 loopback(127.0.0.1:1)으로 고정한다. 그 상태에서 `/ecommerce/orders`
  * 가 배너 + 표로 서고, 주문 1건의 상세로 들어갈 수 있으면 「실제 화면이 네트워크
  * 없이 선다」가 프로덕션 빌드로 증명된다.

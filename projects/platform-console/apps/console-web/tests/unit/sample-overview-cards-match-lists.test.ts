@@ -7,7 +7,7 @@
  * the list screens they summarise held 5 · 3 · 3 — each screen looked fine on
  * its own and the two contradicted each other (the TASK-PC-FE-284 defect class).
  *
- * Both sides go THROUGH the router: the overview as the console-bff proxy
+ * Both sides go THROUGH the router: the overview as the console-composition
  * surface answers it, the list as the domain surface answers the list screen.
  * The list side is counted from the rows actually returned (a page large enough
  * to hold every row), not from the fixture's own `totalElements`, so a fixture
@@ -26,7 +26,7 @@ async function body(req: Omit<SampleRequest, 'method'>): Promise<Record<string, 
 
 async function overviewCard(domain: string): Promise<Record<string, unknown>> {
   const overview = (await body({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'operator-overview',
     path: '/api/console/dashboards/operator-overview',
   })) as { cards: { domain: string; status: string; data: Record<string, unknown> }[] };
@@ -74,7 +74,7 @@ describe('overview card = the list it summarises (through the router)', () => {
     expect(card.totalElements).toBe(list.content.length);
   });
 
-  it('Finance «잔액» (286 AC-7 · 295) = the SAME balances body the console-bff leg carries', async () => {
+  it('Finance «잔액» (286 AC-7 · 295) = the SAME balances body the overview finance leg carries', async () => {
     // TASK-PC-FE-295: the card's `data` IS the producer's balances envelope,
     // so "the card agrees with the list" is now an identity rather than a
     // derivation — the card cannot drift from the query without the query

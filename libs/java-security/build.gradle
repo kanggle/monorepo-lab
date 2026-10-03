@@ -37,7 +37,8 @@ dependencies {
     implementation 'org.slf4j:slf4j-api'
     // Micrometer counters for the rule-5 audience outcome (AllowedAudiencesValidator,
     // moved here by TASK-MONO-712 for the same reason TenantClaimValidator was —
-    // console-bff is a servlet edge and may not see libs/java-gateway).
+    // a servlet edge may not see libs/java-gateway; the servlet edge that prompted
+    // the move has since been retired by ADR-MONO-081).
     // micrometer-core is framework-neutral: neither servlet nor reactive, so the
     // assertClasspathNeutrality list below is unchanged and still passes.
     implementation 'io.micrometer:micrometer-core'

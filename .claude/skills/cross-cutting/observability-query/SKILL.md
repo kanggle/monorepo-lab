@@ -111,7 +111,6 @@ VictoriaMetrics is a drop-in Prometheus replacement; standard PromQL applies. Se
 | `jvm_memory_used_bytes` | Spring Boot Micrometer JVM binder | `jvm_memory_used_bytes{area="heap",service="<service-name>"}` |
 | `http_server_requests_seconds_count` | Spring Boot Micrometer web binder | `rate(http_server_requests_seconds_count[1m])` |
 | `system_cpu_usage` | Micrometer system binder | `system_cpu_usage{service="<service-name>"}` |
-| `bff_fanout_latency` / `bff_fanout_errors_total` / `bff_aggregation_degrade_count` | console-bff D7 per-domain fan-out attribution (ADR-MONO-017 D7) | `bff_fanout_errors_total{domain="finance"}` |
 | `<custom>_count_total` | service-specific Micrometer counter | per-service business metric (see project's observability section) |
 | `up` | Vector prometheus_scrape source | scrape target health |
 
@@ -123,21 +122,22 @@ Refer to the [PromQL reference](https://prometheus.io/docs/prometheus/latest/que
 
 ## Trace queries (VictoriaTraces)
 
-`/observe trace <trace_id>` returns the full span tree for one `trace_id` from VictoriaTraces (Jaeger-compatible query API). The trace layer is pinned by [ADR-MONO-007a](../../../../docs/adr/ADR-MONO-007a-trace-layer.md) and ingests OTLP **directly** into VictoriaTraces at `:10428/insert/opentelemetry/v1/traces` — producers + console-bff + console-web export OTLP straight to VictoriaTraces, **bypassing Vector**. (ADR-007a D2 *decided* this leg would route through the Vector `:4318` OTLP source, but Vector 0.45 has no `opentelemetry` sink, so the shipped topology is direct — see ADR-MONO-007a D2's as-built deviation note. Logs + metrics still flow through Vector; only traces are direct.) So when a trace is missing, inspect the VictoriaTraces ingest/query path, **not** a Vector trace pipeline — there is none.
+`/observe trace <trace_id>` returns the full span tree for one `trace_id` from VictoriaTraces (Jaeger-compatible query API). The trace layer is pinned by [ADR-MONO-007a](../../../../docs/adr/ADR-MONO-007a-trace-layer.md) and ingests OTLP **directly** into VictoriaTraces at `:10428/insert/opentelemetry/v1/traces` — producers + console-web export OTLP straight to VictoriaTraces, **bypassing Vector**. (ADR-007a D2 *decided* this leg would route through the Vector `:4318` OTLP source, but Vector 0.45 has no `opentelemetry` sink, so the shipped topology is direct — see ADR-MONO-007a D2's as-built deviation note. Logs + metrics still flow through Vector; only traces are direct.) So when a trace is missing, inspect the VictoriaTraces ingest/query path, **not** a Vector trace pipeline — there is none.
 
 The headline use case is **cross-product fan-out tracing**: a console dashboard request (Operator Overview / Domain Health) assembles as one trace tree —
 
 ```
-console-web SSR span                    (root — Next.js instrumentation.ts, ADR-MONO-007a D3)
-└─ console-bff aggregation span         (RestClient ObservationRegistry adopts the inbound traceparent)
-   ├─ iam producer span
-   ├─ wms producer span
-   ├─ scm producer span
-   ├─ finance producer span
-   └─ erp producer span
+console-web route span                  (root — Next.js instrumentation.ts, ADR-MONO-007a D3)
+├─ console.composition.leg  domain=iam        (composition.route / composition.outcome tags)
+│  └─ fetch client span → iam producer span  (undici auto-instrumentation injects traceparent)
+├─ console.composition.leg  domain=wms   → … → wms producer span
+├─ console.composition.leg  domain=scm   → … → scm gateway → scm producer span
+├─ console.composition.leg  domain=finance → … → finance producer span
+├─ console.composition.leg  domain=erp   → … → erp producer span
+└─ console.composition.leg  domain=ecommerce → … → ecommerce producer span
 ```
 
-= 7 spans sharing one `trace_id`. A degraded card resolves to the specific producer span that errored — the trace complements the `bff_fanout_*` D7 metrics with causal ordering.
+The composition runs in the console-web server (ADR-MONO-081 — there is no BFF hop). One `trace_id` carries the root, one leg span per domain and every producer span that joined. A degraded card resolves to its leg span (`composition.outcome`) and, below it, the producer span that errored. The per-leg structured log line `console_composition_leg` (route · domain · status · reason · latencyMs · requestId) is the metric-free counterpart — there is no `bff_*` metric family any more.
 
 ```
 $ ./.claude/skills/cross-cutting/observability-query/scripts/query-traces.sh 0af7651916cd43dd8448eb211c80319c
@@ -159,7 +159,7 @@ Every script failure emits a 4-block remediation message on stderr matching [`pl
 | `OBSERVE-QUERY-04` | No results within the query window (logs / metrics) | Widen the time range (PromQL: `--range 5m` → `--range 1h`) or relax the matcher; the stack works but the data isn't there |
 | `OBSERVE-QUERY-05` | Pagination overflow — result exceeded the limit (default 100 lines) | Refine the query with a narrower matcher or pass `--limit 500` to raise the cap |
 | `OBSERVE-QUERY-06` | Trace not found for the given `trace_id` (empty span set / 404) | Confirm the `trace_id`; allow trace-export flush latency and retry; verify `OTEL_EXPORTER_OTLP_ENDPOINT` is set so services export |
-| `OBSERVE-QUERY-07` | Trace found but incomplete — fewer than the expected fan-out spans (possible broken span chain: a layer dropped / regenerated `trace_id`) | If the dashboard invoked a subset of domains, fewer spans is expected; otherwise check each layer propagates W3C `traceparent` (console-web → console-bff → producers) |
+| `OBSERVE-QUERY-07` | Trace found but incomplete — fewer than the expected fan-out spans (possible broken span chain: a layer dropped / regenerated `trace_id`) | If the dashboard invoked a subset of domains, fewer spans is expected; otherwise check each layer propagates W3C `traceparent` (console-web leg fetch → producers) |
 
 Each remediation block ends with a `[REFERENCE]` line citing this skill's body.
 

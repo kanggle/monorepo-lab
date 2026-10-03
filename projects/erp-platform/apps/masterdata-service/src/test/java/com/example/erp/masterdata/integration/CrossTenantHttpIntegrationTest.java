@@ -43,9 +43,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>Mirrors the finance {@code CrossTenantHttpIntegrationTest} pattern; the
  * sibling producer ITs (wms {@code OidcAuthIntegrationTest} / scm
- * {@code MultiTenantIsolationIntegrationTest} / finance) + the console-bff
- * {@code CrossTenantDenyIntegrationTest} (TASK-PC-BE-006) complete the D5
- * isolation surface.
+ * {@code MultiTenantIsolationIntegrationTest} / finance) complete the D5
+ * isolation surface (the console composition layer's own deny IT,
+ * TASK-PC-BE-006, was retired with that layer — ADR-MONO-081).
  */
 @AutoConfigureMockMvc
 class CrossTenantHttpIntegrationTest extends AbstractMasterdataIntegrationTest {

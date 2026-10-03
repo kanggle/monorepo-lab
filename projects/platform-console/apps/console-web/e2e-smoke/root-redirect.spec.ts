@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
  *    값은 샘플이다. 🔵 `TASK-MONO-686` 이 `/demo` 자체(둘러보기 UI)를 은퇴시켰다 —
  *    지금은 `/demo` 가 308 로 이 화면(들)에 되돌아온다(§ `redirects()` in `next.config.mjs`).
  *
- * 🔵 이 설정은 백엔드(OIDC · registry · token-exchange · console-bff)를 전부 도달 불가
+ * 🔵 이 설정은 백엔드(OIDC · registry · token-exchange)를 전부 도달 불가
  *    loopback 으로 고정한다(`playwright.smoke.config.ts`). 그 상태에서 개요가 **숫자와 함께**
  *    선다는 것이 «샘플 화면은 네트워크 없이 선다» 의 end-to-end 증거다
  *    (`sample-visitor.spec.ts` 가 화면 쪽을 더 잰다).

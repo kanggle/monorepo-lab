@@ -191,7 +191,7 @@ public class GlobalExceptionHandler {
      * Defense-in-depth (TASK-MONO-162): a request to a path this service does
      * not serve raises {@link NoResourceFoundException}. Without this handler it
      * falls through to {@link #handleUnexpected} → 500, which a caller (e.g. the
-     * console-bff leg classifier) reads as {@code DOWNSTREAM_ERROR/degraded}
+     * console's composition leg classifier) reads as {@code DOWNSTREAM_ERROR/degraded}
      * rather than the truthful "not found" — masking a mis-route as a service
      * fault. Map it to a clean 404 so future mis-routes degrade honestly.
      */

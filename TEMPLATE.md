@@ -511,7 +511,7 @@ New projects pick an unused `*.local` hostname and register it in this table in 
 
 > **Only edge surfaces get a hostname.** A `*.local` name means "routable through the shared Traefik" — i.e. reachable by anything that can send that `Host` header. That is for **gateways**, **browser-facing frontends** and **operator tooling**. A backend service must not have one: on the edge without a gateway there is no rate limiting, no identity-header strip→enrich and no uniform error envelope (`platform/api-gateway-policy.md` L13/L14).
 >
-> `console-bff` **deliberately has no hostname** (TASK-MONO-362). It is reached by `console-web` on the docker network (`http://console-bff:8080`) — every call is server-side, the browser never touches it. **This is not a missing entry; do not add one.** `scripts/check-gateway-drift.sh` (I2) fails if any backend service acquires a Traefik router.
+> A backend service reached only server-side on the docker network **deliberately has no hostname** (precedent: TASK-MONO-362, which removed one from a backend-for-frontend service since retired by ADR-MONO-081). **Its absence from the table above is not a missing entry; do not add one.** `scripts/check-gateway-drift.sh` (I2) fails if any backend service acquires a Traefik router.
 
 ### 공개 호스트명 배분 — **정본** (`TASK-MONO-584`)
 

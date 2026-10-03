@@ -41,12 +41,13 @@ export const ARCHITECTURE_FACTS: GuideFact[] = [
     sources: ['infra/demo/README.md:222-228', 'infra/demo/README.md:192-198'],
   },
   {
-    title: '대시보드는 console-bff 가 모은다',
-    body: '「개요」의 5개 도메인 요약과 「도메인 상태」는 console-bff 가 여러 도메인을 fan-out 해 한 응답으로 만든다. 도메인별 운영 화면은 console-web 이 게이트웨이를 직접 부른다(ecommerce 쓰기도 console-bff 를 거치지 않는다).',
+    title: '대시보드는 콘솔 서버가 모은다',
+    body: '「개요」의 5개 도메인 요약과 「도메인 상태」는 console-web 서버가 여러 도메인을 fan-out 해 한 응답으로 만든다. 도메인별 운영 화면도 console-web 이 게이트웨이를 직접 부른다.',
     sources: [
-      'projects/platform-console/apps/console-bff',
-      'projects/platform-console/apps/console-web/src/shared/sample/coverage.ts:55-58',
-      'projects/platform-console/specs/services/console-web/architecture.md:19 (console-web → ecommerce gateway direct, no console-bff write leg)',
+      'projects/platform-console/apps/console-web/src/shared/composition/console-composition.ts',
+      'docs/adr/ADR-MONO-081-console-composition-in-the-console-server.md',
+      'projects/platform-console/apps/console-web/src/shared/sample/coverage.ts:58-60',
+      'projects/platform-console/specs/services/console-web/architecture.md:19 (console-web → ecommerce gateway direct)',
     ],
   },
   {
@@ -132,8 +133,8 @@ export const DOMAIN_SERVICE_GROUPS: DomainServiceGroup[] = [
   {
     project: 'platform-console',
     label: '콘솔',
-    apps: ['console-web', 'console-bff'],
-    consoleRole: '이 화면(Next.js App Router)과 대시보드 fan-out BFF.',
+    apps: ['console-web'],
+    consoleRole: '이 화면(Next.js App Router). 대시보드 fan-out 합성도 이 서버에서 한다.',
     sources: ['projects/platform-console/apps', 'projects/platform-console/specs/services/console-web/architecture.md:29'],
   },
 ];

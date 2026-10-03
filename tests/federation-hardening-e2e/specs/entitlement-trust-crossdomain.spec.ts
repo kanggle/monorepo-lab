@@ -4,15 +4,14 @@ import { gotoOverview } from '../fixtures/console-helpers';
 
 /**
  * 🔵 TASK-PC-FE-302 (ADR-MONO-081): the overview legs now leave from the console-web
- * server (scm through the scm gateway), not console-bff. The token they carry is
+ * server (scm through the scm gateway). The token they carry is
  * the same domain-facing token, so the producer-side gate this spec measures is
  * unchanged — «BFF pass-through» below now reads «console-web pass-through».
  *
  * TASK-MONO-154 — ADR-MONO-019 runtime activation capstone.
  *
  * Entitlement-trust cross-domain discriminator spec. Proves, on the full
- * federation-hardening-e2e stack (GAP + finance/wms/scm/erp + console-bff +
- * console-web), that a REAL customer `acme-corp` operator's token passes the
+ * federation-hardening-e2e stack (GAP + finance/wms/scm/erp + console-web), that a REAL customer `acme-corp` operator's token passes the
  * finance/wms domain gates (entitled) and is rejected by scm/erp (not
  * entitled) — i.e. entitlement-trust is a demonstrable runtime behaviour, not
  * just a unit-tested contract.
@@ -27,7 +26,7 @@ import { gotoOverview } from '../fixtures/console-helpers';
  *          dual-accepts (legacy slug OR entitled_domains). For acme-corp:
  *          finance/wms ACCEPT (in entitled set), scm/erp REJECT (acme-corp is
  *          neither their slug nor in their entitled set).
- *   BFF pass-through (PC-BE-007): console-bff forwards the token unchanged on
+ *   BFF pass-through (PC-BE-007): console-web forwards the token unchanged on
  *          the per-domain fan-out, so the per-card status reflects the REAL
  *          gate decision.
  *

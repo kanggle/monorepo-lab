@@ -29,8 +29,8 @@
 #     TASK-BE-132) — a glob would resurrect them.
 #   * Reverse direction only inspects tokens ending in `-service`. Frontends
 #     (`console-web`, `web-store`, `fan-platform-web`) are not gradle modules and
-#     are excluded by construction. `batch-worker` / `console-bff` are still
-#     checked in the forward direction.
+#     are excluded by construction. `batch-worker` is still checked in the
+#     forward direction.
 #   * A row is exempt from the reverse check when it is struck through (`~~`) or
 #     says RETIRED / FROZEN. The marker means "not current", which may or may not
 #     mean "no module" — the two are independent, and the exemption covers both:

@@ -6,7 +6,8 @@ import { LEG_TIMEOUT_MS, type FetchLeg } from './console-composition';
 /**
  * Notification aggregator in the console-web server (ADR-MONO-081, A —
  * `platform/contracts/notification-inbox-contract.md` § 4; TASK-PC-FE-303).
- * Replaces console-bff `NotificationAggregationUseCase` without changing the
+ * Replaces the former BFF's `NotificationAggregationUseCase` (retired —
+ * ADR-MONO-081) without changing the
  * inbox wire shape: `{ asOf, items, meta: { page, size, totalElements },
  * degradedDomains }`.
  *
@@ -19,8 +20,8 @@ import { LEG_TIMEOUT_MS, type FetchLeg } from './console-composition';
  *   THAT domain in `degradedDomains`; the inbox still answers 200 with the
  *   other domains' items (item 4 — HARD INVARIANT, ADR-MONO-043 D5);
  * - a domain answering 401 is NOT a degraded domain — the session is no
- *   longer valid and the whole inbox answers 401 (item 4). 🔴 console-bff
- *   degraded it instead, which kept an expired session looking like a quiet bell;
+ *   longer valid and the whole inbox answers 401 (item 4). 🔴 The former
+ *   BFF degraded it instead, which kept an expired session looking like a quiet bell;
  * - each domain gets its own credential (item 3) — every configured domain
  *   today takes the domain-facing IAM OIDC token and NO `X-Tenant-Id` (erp
  *   resolves tenant + recipient from the token);

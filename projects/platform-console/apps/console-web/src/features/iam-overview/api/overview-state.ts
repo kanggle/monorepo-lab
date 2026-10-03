@@ -18,8 +18,8 @@ import { queryAudit } from '@/shared/api/iam-audit-read';
  * ── ARCHITECTURE (console-web direct fan-out; NO new producer) ──
  * Per ADR-MONO-017 D3.B counts are derived from the EXISTING IAM admin-service
  * list endpoints' `totalElements` with `page=0&size=1` — NO `/summary`
- * aggregation endpoint, NO console-bff leg (contrast: the console-wide
- * §2.4.4 / §2.4.9.1 operator overview is a console-bff fan-out — this one is
+ * aggregation endpoint, NO cross-domain composition leg (contrast: the console-wide
+ * §2.4.4 / §2.4.9.1 operator overview is a cross-domain composition fan-out — this one is
  * domain-internal, reusing the three EXISTING server reads):
  *
  * TASK-PC-FE-259 — those reads live in

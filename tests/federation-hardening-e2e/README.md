@@ -4,7 +4,7 @@
 
 ## Overview
 
-Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms + scm + finance + erp) through the platform-console (console-web + console-bff) operator surface. Root-scoped (no single project owner; see ADR-MONO-018 D1).
+Cross-product Playwright suite that exercises all 5 backend domains (GAP + wms + scm + finance + erp) through the platform-console (console-web) operator surface — console-web's server composes the cross-domain dashboards and the notification inbox itself (ADR-MONO-081). Root-scoped (no single project owner; see ADR-MONO-018 D1).
 
 **7 spec files (ADR-018 D3 MVP):**
 
@@ -55,7 +55,7 @@ overlays have hit before (`ledger` ↔ `erp-read-model` on `18097`).
   :projects:wms-platform:apps:master-service:bootJar \
   :projects:scm-platform:apps:procurement-service:bootJar \
   :projects:erp-platform:apps:masterdata-service:bootJar \
-  :projects:platform-console:apps:console-bff:bootJar
+  :projects:scm-platform:apps:gateway-service:bootJar
 
 # 2. Build console-web Next.js standalone
 cd projects/platform-console/apps/console-web && pnpm install && pnpm build && cd -

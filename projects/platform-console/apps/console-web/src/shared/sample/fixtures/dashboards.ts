@@ -9,13 +9,14 @@ import { SCM_FIXTURE_HANDLERS } from './scm';
 /**
  * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
  * here. It is the answer the SAME domain fixture gives to the SAME request the
- * console-bff adapter makes, so the landing card and the list screen it
+ * overview composition leg makes, so the landing card and the list screen it
  * summarises cannot disagree. Before this, the cards said IAM 128 · ERP 12 ·
  * E-Commerce 342 while the lists they summarise held 5 · 3 · 3 — on the very
  * first screen an anonymous visitor lands on (`/` → `/dashboards/overview`).
  *
- * Paths mirror console-bff's outbound adapters (`IamAccountsReadAdapter`,
- * `ErpDepartmentsReadAdapter`, `EcommerceOverviewReadAdapter`). A fixture that
+ * Paths mirror the overview's iam / erp / ecommerce legs
+ * (`operatorOverviewLegs` in `shared/composition/console-composition.ts`;
+ * originally the former BFF's read adapters). A fixture that
  * stops answering throws at module load — loud, never a silent fallback number.
  */
 function countFrom(
@@ -49,10 +50,10 @@ const ECOMMERCE_PRODUCT_COUNT = countFrom(
 
 /**
  * TASK-PC-FE-295 — the overview cards now carry the PRODUCER'S OWN response
- * body, because that is what the real leg carries: console-bff's adapters
- * (`FinanceBalanceReadAdapter`, `WmsInventoryReadAdapter`,
- * `ScmInventoryReadAdapter`) load the producer body verbatim into
- * `cards[i].data`, with no reshaping anywhere on the path.
+ * body, because that is what the real leg carries: the finance / wms / scm
+ * composition legs (`shared/composition/console-composition.ts`) load the
+ * producer body verbatim into `cards[i].data`, with no reshaping anywhere on
+ * the path.
  *
  * 🔴🔴 Before 295 the three constants below deliberately emitted a DIFFERENT
  * shape — the one `FinanceDataSchema` / `WmsDataSchema` / `ScmDataSchema` read
@@ -154,7 +155,7 @@ const SCM_SNAPSHOT_BODY = (() => {
 })();
 
 /**
- * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the console-bff
+ * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the composed
  * operator overview (§ 2.4.9.1), domain health (§ 2.4.9.2) and the
  * notification aggregator inbox (ADR-MONO-043 §4).
  *

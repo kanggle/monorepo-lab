@@ -224,7 +224,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     description: '5개 도메인 요약 카드 + 도메인 상태 요약(→ 도메인 상태 화면).',
     crud: R,
     purpose: '운영자가 로그인 직후 전체 상태를 한눈에 본다.',
-    services: ['console-bff (operator-overview · domain-health)'],
+    services: ['console-web 서버 합성 (operator-overview · domain-health → 각 도메인)'],
     sources: [
       `${API}/console/dashboards/operator-overview/route.ts (GET)`,
       `${API}/console/dashboards/domain-health/route.ts (GET)`,

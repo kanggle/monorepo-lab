@@ -4,8 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * The two dashboard routes compose in the console-web server
- * (TASK-PC-FE-302 / ADR-MONO-081 — contract § 2.4.9.0). Replaces the
- * console-bff proxy tests (`operator-overview-proxy-header.test.ts`,
+ * (TASK-PC-FE-302 / ADR-MONO-081 — contract § 2.4.9). Replaces the former
+ * BFF's proxy tests (`operator-overview-proxy-header.test.ts`,
  * `domain-health-proxy.test.ts`): there is no BFF hop left to assert headers
  * on. The leg rules themselves live in `shared/console-composition.test.ts`;
  * this file pins what only the ROUTE decides — the inbound checks that run
@@ -101,8 +101,6 @@ describe('operator overview route', () => {
     const body = OperatorOverviewSchema.parse(await res.json());
     expect(body.cards.map((c) => c.domain)).toEqual(['iam', 'wms', 'scm', 'finance', 'erp', 'ecommerce']);
     expect(fetchMock).toHaveBeenCalledTimes(6);
-    // No leg is console-bff any more.
-    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('console-bff'))).toBe(false);
   });
 
   it('🔴 no active tenant → 400 NO_ACTIVE_TENANT and ZERO leg calls (AC-4)', async () => {

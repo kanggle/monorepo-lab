@@ -97,8 +97,9 @@ gateway:
     # string (L114). The other six gateways accept both. This one accepted the LEGACY
     # value only, and JWT_EXPECTED_ISSUER was overridden in no compose file anywhere —
     # so SAS-issued tokens, which the rest of the fleet takes as primary, were 401'd
-    # here. Nothing failed, because console-bff reaches the IAM services directly and
-    # never crosses this edge (TASK-MONO-347).
+    # here. Nothing failed, because the console's cross-domain composer (then a BFF
+    # service, since retired) reached the IAM services directly and never crossed this
+    # edge (TASK-MONO-347).
     #
     # TASK-BE-398 (2026-08-01 sunset, LANDED) removed the legacy custom-JWT flow that
     # minted `iss=iam`; the trailing legacy-issuer entry is dropped here with it, so the

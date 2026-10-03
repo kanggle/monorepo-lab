@@ -558,9 +558,9 @@ export class ErpUnavailableError extends Error {
  * ecommerce `product-service` operations surface degrade signal
  * (console-integration-contract § 2.4.10 / § 2.5). The FIRST ecommerce
  * **write** federated domain section (where § 2.4.9.1/§ 2.4.9.2 bind
- * ecommerce only as console-bff READ legs). Sibling of
+ * ecommerce only as cross-domain composition READ legs). Sibling of
  * {@link WmsOutboundUnavailableError} (the wms-outbound § 2.4.5.1 precedent:
- * console-web → domain gateway DIRECT, NO console-bff write leg, ADR-MONO-017
+ * console-web → domain gateway DIRECT, NO intermediary write leg, ADR-MONO-017
  * D2.A). A `503 SERVICE_UNAVAILABLE` / `503 STORAGE_UNAVAILABLE` / timeout /
  * network failure on an ecommerce call degrades ONLY the ecommerce section
  * (the console shell + every other section stay intact). Auth failures

@@ -452,7 +452,7 @@ End-user OAuth2 (the fan's access token). All routes are tenant + account scoped
   `status={UNREAD|READ}` param is retained as a **back-compat alias**, applied
   only when `unread` is absent (ADR-MONO-043 P2 / TASK-FAN-BE-023).
 - **Item shape** — list/detail items conform to the § 1 envelope: each carries
-  `sourceDomain="fan"` (attribution for the console-bff aggregator) and a
+  `sourceDomain="fan"` (attribution for the console's notification aggregator) and a
   nullable `deepLink` (currently `null` — fan derives no in-app link yet, omitted
   under NON_NULL). The fan-native `status`/`membershipId` fields are preserved as
   non-normative domain extensions (contract § 1.2).

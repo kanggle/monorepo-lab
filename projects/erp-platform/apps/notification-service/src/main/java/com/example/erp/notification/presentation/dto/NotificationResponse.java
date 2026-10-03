@@ -18,7 +18,7 @@ import java.time.Instant;
  * <h2>ADR-MONO-043 P2 conformance fields (additive)</h2>
  * <ul>
  *   <li>{@code sourceDomain} — contract § 1 normative attribution field; always
- *       the constant {@code "erp"} for this domain-owned surface. The console-bff
+ *       the constant {@code "erp"} for this domain-owned surface. The console's notification
  *       aggregator (P3) uses it to label + route each merged item.</li>
  *   <li>{@code deepLink} — contract § 1 optional in-app link, <b>derived</b> from
  *       the {@code sourceType}/{@code sourceId} pair (TASK-ERP-BE-028): APPROVAL →

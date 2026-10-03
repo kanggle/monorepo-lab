@@ -76,7 +76,7 @@ All endpoints:
 - `id` — the notification's own id (`ntf-...`), distinct from `sourceId`.
 - `sourceDomain` — the owning-domain attribution field of the cross-domain
   envelope ([`notification-inbox-contract.md`](../../../../../platform/contracts/notification-inbox-contract.md) § 1); always the
-  constant `"erp"`. The console-bff aggregator (ADR-MONO-043 D2/P3) uses it to
+  constant `"erp"`. The console's notification aggregator (ADR-MONO-043 D2/P3) uses it to
   label + route each merged item.
 - `deepLink` — the in-app console route the shell's notification bell navigates
   to (contract § 1). **Derived** from `sourceType`/`sourceId` (TASK-ERP-BE-028):

@@ -263,8 +263,8 @@ const ServerEnvSchema = z.object({
    *  (integration-heavy I1 — same convention as FINANCE_TIMEOUT_MS). */
   ERP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** Notification-bell inbox domains, comma-separated, in fan-in order
-   *  (TASK-PC-FE-303 — `notification-inbox-contract.md` § 4; was console-bff
-   *  `consolebff.notifications.domains`). Each name is both the `sourceDomain`
+   *  (TASK-PC-FE-303 — `notification-inbox-contract.md` § 4; was the former
+   *  BFF's domain-list property, retired — ADR-MONO-081). Each name is both the `sourceDomain`
    *  attribution and the mark-read path segment; a name with no known inbox
    *  is skipped with a warning (`shared/composition/notification-inbox.ts`). */
   CONSOLE_NOTIFICATION_DOMAINS: z.string().default('erp'),

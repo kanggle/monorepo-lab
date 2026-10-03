@@ -18,13 +18,14 @@ import {
 
 /**
  * Client-side notification hooks. After ADR-MONO-043 P3b the bell reads the
- * **console-bff notification aggregator** via the same-origin
- * `/api/console/notifications/**` proxy (was the erp-direct
- * `/api/erp/notifications/**`). The proxy attaches the HttpOnly domain-facing
- * IAM OIDC token + `X-Tenant-Id` server-side and forwards to console-bff,
- * which fans in the per-domain inboxes with per-domain failure isolation (D5)
- * + per-domain credential dispatch (D6) — the browser never reads a token or
- * calls a domain directly.
+ * **notification aggregator** via the same-origin
+ * `/api/console/notifications/**` routes (was the erp-direct
+ * `/api/erp/notifications/**`). Since TASK-PC-FE-303 (ADR-MONO-081) those
+ * routes aggregate in this server (`shared/composition/notification-inbox.ts`):
+ * they attach the HttpOnly domain-facing IAM OIDC token server-side and fan in
+ * the per-domain inboxes with per-domain failure isolation (D5) + per-domain
+ * credential dispatch (D6) — the browser never reads a token or calls a
+ * domain directly.
  *
  * NO `refetchInterval` / polling. The inbox is fetched **passively on mount**
  * so the bell badge reflects the unread count without a click; a modest
@@ -35,14 +36,14 @@ import {
  * Hooks deliberately DO NOT throw to an error boundary — query `isError` is
  * surfaced so the `NotificationBell` degrades gracefully. (The aggregator
  * itself always returns 200 with `degradedDomains` per D5; `isError` here
- * covers transport/proxy failure, e.g. console-bff unreachable.)
+ * covers transport/route failure, e.g. the console server unreachable.)
  */
 
 const clampSize = (size?: number): number =>
   clampPageSize(size, NOTIFICATION_DEFAULT_PAGE_SIZE, NOTIFICATION_MAX_PAGE_SIZE);
 
 // ---------------------------------------------------------------------------
-// useNotificationInbox — the merged cross-domain inbox (console-bff aggregator).
+// useNotificationInbox — the merged cross-domain inbox (server-side aggregator).
 // ---------------------------------------------------------------------------
 
 async function fetchNotificationInbox(opts: {

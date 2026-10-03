@@ -258,7 +258,10 @@ say "▶ 대조군 — 같은 오리진에 기준만 바꿔 두 결론이 갈리
 # 🔴 `git log -- <path>` 는 **cwd 기준**이고 `git show <ref>:<path>` 는 **저장소 루트 기준**이다.
 # 두 술어를 같은 문자열로 쓰면 한쪽이 조용히 0건이 된다(실측: 대조군이 "이전 커밋 없음" 으로
 # 죽었다). 루트 앵커 `:/` 를 붙여 둘의 축을 맞춘다.
-PREV_SHA="$(git -C "$HERE" log -2 --format=%H -- ':/infra/demo/aws/site/index.html' 2>/dev/null | tail -1)"
+# 🔴 그리고 **같은 ref** 에 묻는다(TASK-MONO-757). EXP_SHA 는 "$REF" 에서 구하는데 이 줄은
+# HEAD 에서 구했다 — 런처를 바꾼 **브랜치**로 dispatch 하면 HEAD 의 «직전 판» 이 곧 main 의
+# «현재 판» 이라 둘이 같아져 «이전 커밋 없음» 으로 죽었다(main 의 예약 런에선 HEAD=REF 라 안 보였다).
+PREV_SHA="$(git -C "$HERE" log -2 --format=%H "$REF" -- ':/infra/demo/aws/site/index.html' 2>/dev/null | tail -1)"
 if [ -z "$PREV_SHA" ] || [ "$PREV_SHA" = "$EXP_SHA" ]; then
   say "✖ index.html 을 바꾼 이전 커밋을 못 찾았습니다 ⇒ 대조군 성립 불가(판정 불가)"
   exit 2

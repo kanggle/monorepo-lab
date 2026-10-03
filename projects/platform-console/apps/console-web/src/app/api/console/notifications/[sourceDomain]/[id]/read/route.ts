@@ -15,7 +15,8 @@ export const runtime = 'nodejs';
 /**
  * Notification mark-read — `platform/contracts/notification-inbox-contract.md`
  * § 4 items 5–6. Dispatched from the console-web server to the OWNING domain
- * since TASK-PC-FE-303 (ADR-MONO-081, A); before that it went via console-bff.
+ * since TASK-PC-FE-303 (ADR-MONO-081, A); before that it went via the former
+ * BFF (retired — ADR-MONO-081).
  *
  * Naturally idempotent (state-converging) — no body, no `Idempotency-Key`.
  * It is still a write, so it is sent **exactly once**: no retry wrapper, and
@@ -40,9 +41,10 @@ export async function POST(
   // Response is fed into the mapping below UNCHANGED — which maps a non-200/401/
   // 404 to `502 BAD_GATEWAY`, as it always has. 🔵 The bell ignores mark-read
   // failures by design (navigation must not block), so no refusal copy is
-  // rendered for this write; nothing claims it succeeded either.
+  // rendered for this write; nothing claims it succeeded either. Sample core
+  // `console-composition` (renamed by TASK-MONO-757).
   const sample = await sampleGate({
-    core: 'console-bff',
+    core: 'console-composition',
     surface: 'notifications-read',
     method: 'POST',
     path: `/api/console/notifications/${encodeURIComponent(sourceDomain)}/${encodeURIComponent(id)}/read`,

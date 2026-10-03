@@ -136,14 +136,13 @@ fan·web-store 는 pnpm 워크스페이스 **멤버**라 Root Directory 에 lock
 
 착수 전(= `main` `59fd9e1da`)의 같은 측정은 **CLIENT 12 / SERVER 12** 였다.
 
-## 🔴 알려진 한계 — `console-bff` 는 Vercel 에서 **닿지 않는다**
+## 🔵 합성 레그 — 이제 이 서버가 만든다 (Vercel 실측은 아직)
 
-`console-bff` 는 **공개 호스트명이 없다**. `TASK-MONO-362` 가 그 Traefik 라우터를 일부러
-없앴고(백엔드 서비스는 엣지에 노출되지 않는다 — `api-gateway-policy.md` L14), 이 티켓의
-Edge Case 가 *"공개 호스트명을 주지 마라"* 로 그 결정을 다시 못 박았다. 주소는 도커 네트워크
-DNS(`http://console-bff:8080`)이고 데모 도메인으로 **파생될 수 있는 값이 아니다.**
-
-⇒ Vercel 에서는 BFF 를 지나는 레그가 실패한다. 실측 범위:
+예전에는 아래 세 레그가 옛 BFF(퇴역 — `ADR-MONO-081`)를 거쳤다. 그 BFF 는 **공개 호스트명이
+없었고**(`TASK-MONO-362` — 백엔드 서비스는 엣지에 노출되지 않는다, `api-gateway-policy.md` L14),
+그래서 Vercel 에서는 이 세 레그가 상시 실패했다. `ADR-MONO-081` 에 따라 세 합성은 이 서버
+(`src/shared/composition/`)로 옮겨왔다(`TASK-PC-FE-302` · `TASK-PC-FE-303`) — 각 레그는 그
+도메인의 콘솔 화면이 쓰는 게이트웨이 주소로 **직접** 나간다.
 
 | 레그 | 라우트 |
 |---|---|
@@ -151,13 +150,10 @@ DNS(`http://console-bff:8080`)이고 데모 도메인으로 **파생될 수 있�
 | 도메인 상태 합성 | `/api/console/dashboards/domain-health` → `/dashboards/health`, `/console` |
 | 알림 인박스 | `/api/console/notifications/**` |
 
-🔵 **화면은 뜬다.** 세 레그 전부 실패를 이미 상태로 표현한다(`bffUnavailable: true` →
-degrade 배너 / 502 `BAD_GATEWAY` 봉투) — 이관이 만든 결함이 아니라 이관이 **드러낸** 것이고,
-`ADR-MONO-067` 이 요구한 *"백엔드 없는 상태를 앱이 표현해야 한다"* 를 이미 만족한다.
-🔴 나머지 도메인 화면(iam·wms·scm·finance·erp·ecommerce)은 BFF 를 지나지 않는다
-(`ADR-MONO-017` D3.B — console-web → 도메인 게이트웨이 **직접**) ⇒ 영향 없다.
+🔴 **Vercel 에서 이 세 패널이 실제로 서는지는 아직 재지 않았다.** 그 판정은 데모 AMI 를
+다시 구운 뒤 `TASK-MONO-758` 이 한다. 그 전까지 이 절을 «Vercel 에서 동작한다» 로 읽지 마라.
 
-🔴 **이 한계를 이 티켓에서 «해결» 하지 않는다.** 해결하려면 BFF 에 공개 경로를 주거나
-(엣지 노출 금지에 정면으로 걸린다) BFF 합성을 콘솔 서버로 옮겨야 하고, 둘 다 아키텍처
-결정이다(`platform/architecture-decision-rule.md`). 여기서는 **적어 두고 넘긴다** — 조용히
-넘기면 다음 사람이 이것을 이관의 회귀로 오진한다.
+🔵 **실패해도 화면은 뜬다.** 세 레그 전부 실패를 상태로 표현한다(`bffUnavailable: true` →
+degrade 배너 / 502 `BAD_GATEWAY` 봉투) — `ADR-MONO-067` 이 요구한 *"백엔드 없는 상태를 앱이
+표현해야 한다"* 를 만족한다. 나머지 도메인 화면(iam·wms·scm·finance·erp·ecommerce)은 처음부터
+도메인 게이트웨이를 **직접** 불렀다(`ADR-MONO-017` D3.B).

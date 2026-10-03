@@ -5,8 +5,7 @@ committed `docker-compose.e2e.yml` stack.
 
 ## What the CI stack contains
 
-`docker-compose.e2e.yml` = **IAM (auth/account/admin) + finance-account + console-bff +
-console-web**. It deliberately does **not** contain the business-domain backends
+`docker-compose.e2e.yml` = **IAM (auth/account/admin) + finance-account + console-web**. It deliberately does **not** contain the business-domain backends
 (`ecommerce` / `scm` / `wms` / `erp`). A spec here may only assert surfaces reachable
 from that stack.
 

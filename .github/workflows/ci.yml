@@ -490,15 +490,14 @@ jobs:
               - 'projects/finance-platform/**'
             erp:
               - 'projects/erp-platform/**'
-            # TASK-PC-BE-001: pure-positive filter for platform-console backend
-            # (console-bff). No negation patterns (MONO-074/075 quirk rule).
-            # TASK-PC-FE-021: also covers console-web so the new
-            # `frontend-e2e-smoke` platform-console-web stage activates when the
-            # FE app or its docker-compose surface changes. Pure-positive +
-            # AND-combined with `code-changed` upstream so markdown-only PRs
-            # under console-web still skip (TS/JSON/YAML changes do trigger).
+            # TASK-PC-FE-021: console-web, so the `frontend-e2e-smoke`
+            # platform-console-web stage activates when the FE app or its
+            # docker-compose surface changes. Pure-positive + AND-combined with
+            # `code-changed` upstream so markdown-only PRs under console-web
+            # still skip (TS/JSON/YAML changes do trigger). No negation patterns
+            # (MONO-074/075 quirk rule). The project's Java BFF was retired by
+            # ADR-MONO-081 (TASK-MONO-757), so no Gradle lane reads this filter.
             platform-console:
-              - 'projects/platform-console/apps/console-bff/**'
               - 'projects/platform-console/apps/console-web/**'
               - 'projects/platform-console/docker-compose.yml'
               - 'projects/platform-console/docker-compose.e2e.yml'
@@ -2831,8 +2830,7 @@ jobs:
       needs.changes.outputs.fan == 'true' ||
       needs.changes.outputs.scm == 'true' ||
       needs.changes.outputs.finance == 'true' ||
-      needs.changes.outputs.erp == 'true' ||
-      needs.changes.outputs.platform-console == 'true'
+      needs.changes.outputs.erp == 'true'
 
     # TASK-MONO-545 — the eight task lists moved out of their `run:` blocks and into
     # env, so that the summarise step at the end of this job can be handed the SAME
@@ -2907,8 +2905,6 @@ jobs:
         :projects:erp-platform:apps:approval-service:check
         :projects:erp-platform:apps:notification-service:check
         :projects:erp-platform:apps:gateway-service:check
-      GRADLE_TASKS_CONSOLE: >-
-        :projects:platform-console:apps:console-bff:check
 
     steps:
       - name: Checkout
@@ -3009,15 +3005,6 @@ jobs:
         id: gradle-erp
         run: ./gradlew $GRADLE_TASKS_ERP --no-daemon --stacktrace
 
-      - name: Build and check platform-console backend (Docker-free)
-        # platform-console console-bff integration tests carry @Tag("integration")
-        # and are excluded from default :test/:check tasks (see console-bff
-        # build.gradle). Docker-backed integrationTest is invoked separately
-        # in the platform-console-bff-integration-tests job below.
-        # TASK-PC-BE-001: console-bff (ADR-MONO-017 ACCEPTED post-ACCEPTED execution)
-        id: gradle-console
-        run: ./gradlew $GRADLE_TASKS_CONSOLE --no-daemon --stacktrace
-
       # TASK-MONO-545. This is the biggest lane in the repo — every shared library and
       # every backend service's unit suite — and until now a green run of it recorded
       # nothing whatsoever, so "zero tests discovered" and "everything passed" were the
@@ -3050,7 +3037,6 @@ jobs:
             ${{ env.GRADLE_TASKS_CORE }} ${{ env.GRADLE_TASKS_IAM }}
             ${{ env.GRADLE_TASKS_FAN }} ${{ env.GRADLE_TASKS_SCM }}
             ${{ env.GRADLE_TASKS_FINANCE }} ${{ env.GRADLE_TASKS_ERP }}
-            ${{ env.GRADLE_TASKS_CONSOLE }}
           allow-empty: >-
             projects/iam-platform/tests/e2e
             projects/fan-platform/tests/e2e
@@ -3060,8 +3046,7 @@ jobs:
               && steps.gradle-fan.outcome == 'success'
               && steps.gradle-scm.outcome == 'success'
               && steps.gradle-finance.outcome == 'success'
-              && steps.gradle-erp.outcome == 'success'
-              && steps.gradle-console.outcome == 'success') && 'success' || 'failure' }}
+              && steps.gradle-erp.outcome == 'success') && 'success' || 'failure' }}
 
       - name: Upload test reports on failure
         if: failure()
@@ -3929,31 +3914,6 @@ jobs:
       report-paths: |
         projects/erp-platform/apps/*/build/reports/tests/integrationTest/
         projects/erp-platform/apps/*/build/test-results/integrationTest/
-
-  platform-console-bff-integration-tests:
-    name: Integration (platform-console console-bff, Testcontainers + WireMock JWKS)
-    needs: changes
-    # console-bff integration suite boots the full Spring context with WireMock
-    # stubbing the IAM JWKS endpoint. No DB/Kafka containers — stateless BFF.
-    # Scoped to monorepo-lab; standalone repo extraction relies on its own
-    # Docker-free `check` signal.
-    # Activate for platform-console changes or cross-project (libs/workflows).
-    # TASK-PC-BE-001 (ADR-MONO-017 ACCEPTED post-ACCEPTED execution).
-    if: >-
-      github.repository == 'kanggle/monorepo-lab' &&
-      (
-        (github.event_name == 'push' && needs.changes.outputs.code-changed != 'false') ||
-        needs.changes.outputs.libs == 'true' ||
-        needs.changes.outputs.workflows == 'true' ||
-        needs.changes.outputs.platform-console == 'true'
-      )
-    uses: ./.github/workflows/_integration.yml
-    with:
-      gradle-tasks: ':projects:platform-console:apps:console-bff:integrationTest'
-      artifact-name: platform-console-bff-integration-test-reports
-      report-paths: |
-        projects/platform-console/apps/console-bff/build/reports/tests/integrationTest/
-        projects/platform-console/apps/console-bff/build/test-results/integrationTest/
 
   ecommerce-integration-tests:
     name: Integration (ecommerce ${{ matrix.shard }}, Testcontainers)

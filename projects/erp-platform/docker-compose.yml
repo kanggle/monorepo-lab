@@ -148,8 +148,8 @@ services:
   # masterdata-service's 4 master-change topics and serves a read-only employee
   # org-view REST API (rest-api + event-consumer, CQRS read-model, E5 terminal).
   # Own MySQL database erp_read_model_db (created by the mysql initdb script).
-  # Not gateway-routed in v1 (no Traefik label) — reached internally / via
-  # console-bff once wired; the read API is internal-only (E7).
+  # Not gateway-routed in v1 (no Traefik label) — reached internally; the read
+  # API is internal-only (E7).
   # ---------------------------------------------------------------------------
   read-model-service:
     image: erp-platform/read-model-service:local

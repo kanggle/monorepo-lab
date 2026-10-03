@@ -4,9 +4,10 @@ import { logger } from '@/shared/lib/logger';
 
 /**
  * Cross-domain composition in the console-web server (ADR-MONO-081, A —
- * `console-integration-contract.md` § 2.4.9.0). Replaces the `console-bff`
- * producer of `operator-overview` (§ 2.4.9.1) and `domain-health` (§ 2.4.9.2)
- * without changing a byte of their wire envelope.
+ * `console-integration-contract.md` § 2.4.9). Replaces the former BFF
+ * (retired — ADR-MONO-081) as the producer of `operator-overview`
+ * (§ 2.4.9.1) and `domain-health` (§ 2.4.9.2) without changing a byte of
+ * their wire envelope.
  *
  * This module holds no network primitive. The route handler passes its own
  * `fetch` in, AFTER its `sampleGate(` — a sample visitor never reaches a leg
@@ -15,7 +16,7 @@ import { logger } from '@/shared/lib/logger';
  * the demo host is resolved where the request is made
  * (`scripts/check-fetch-resolution.mjs`). Leg URLs here are the CONFIGURED ones.
  *
- * Rules carried over from console-bff, not re-decided (ADR-MONO-081 D2):
+ * Rules carried over from the former BFF, not re-decided (ADR-MONO-081 D2):
  * - one leg failing (timeout / 5xx / network / unreadable body) degrades
  *   THAT card only — the composition still answers 200;
  * - a DATA leg answering 401 collapses the whole composition to 401 — an
@@ -61,7 +62,7 @@ export const CARD_ORDER: readonly LegDomain[] = [
  * access from this repo), so the value is chosen to hold under the most
  * conservative limit Vercel has shipped (10 s) as well — 4 s leaves room for
  * the session reads and response before either ceiling. It replaces
- * console-bff's 2 s leg × bounded retry inside a 5 s composition budget.
+ * the former BFF's 2 s leg × bounded retry inside a 5 s composition budget.
  */
 export const LEG_TIMEOUT_MS = 4000;
 
@@ -219,7 +220,7 @@ async function runLegInner(spec: LegSpec, ctx: LegContext): Promise<LegResult> {
       // OUT_OF_SERVICE. That is a SUCCESSFUL health document — the producer is
       // honestly reporting itself down — and § 2.4.9.2 renders it as an `ok`
       // card with `data.status`, distinct from `degraded` (could not reach it).
-      // 🔴 console-bff got this wrong: RestClient threw on 503 and the card
+      // 🔴 The former BFF (retired — ADR-MONO-081) got this wrong: RestClient threw on 503 and the card
       // went `degraded`. Only a real health body qualifies; a gateway error
       // envelope on 503 still degrades.
       try {
@@ -296,10 +297,10 @@ export async function compose(
 
 // ---------------------------------------------------------------------------
 // Leg addresses — the same base URL + path each domain's own console screen
-// already uses (§ 2.4.9.0 «Which address each leg uses»). The route's
+// already uses (§ 2.4.9 «Which address each leg uses»). The route's
 // `fetchLeg` resolves them through the demo backend resolver exactly like
 // those clients do. 🔴 Never the docker-only
-// direct-to-service paths console-bff used: they are unreachable from Vercel.
+// direct-to-service paths the former BFF used: they are unreachable from Vercel.
 // ---------------------------------------------------------------------------
 
 function originOf(base: string): string {

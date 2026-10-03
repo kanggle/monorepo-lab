@@ -215,8 +215,9 @@ class TokenValidatorUnitTest {
         // Before TASK-MONO-365 this edge pinned a SINGLE expected-issuer, defaulting to
         // the LEGACY `iam`, and JWT_EXPECTED_ISSUER was overridden in no compose file
         // anywhere. So SAS-issued tokens — the ones every other gateway takes as its
-        // primary issuer — were rejected here. Nothing failed, because console-bff
-        // reaches the IAM services directly and never crosses this edge (MONO-347).
+        // primary issuer — were rejected here. Nothing failed, because the console's
+        // composer (then a BFF service, since retired) reached the IAM services directly
+        // and never crossed this edge (MONO-347).
         given(jwksCache.getPublicKey("test-kid"))
                 .willReturn(Mono.just(Optional.of(keyPair.getPublic())));
 

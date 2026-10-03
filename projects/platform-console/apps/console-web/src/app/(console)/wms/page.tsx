@@ -84,7 +84,7 @@ export default async function WmsPage() {
   // Fire the operator overview-snapshot fan-out (TASK-PC-FE-166) concurrently
   // with the section-state fan-out. Both are console-web DIRECT reads over the
   // wms admin-service (per PC-FE-168 the bff-domain landings reuse the direct
-  // read leg, NOT a console-bff leg); both perform a whole-session
+  // read leg, NOT a cross-domain composition leg); both perform a whole-session
   // `redirect('/login')` internally on a 401 (no partial authed state). The
   // overview does per-cell degrade; the section-state gates the tables.
   const [overviewState, state] = await Promise.all([

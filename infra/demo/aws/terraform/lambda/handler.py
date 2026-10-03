@@ -111,7 +111,11 @@ REPO = "/opt/monorepo-lab"
 # 도메인 화이트리스트 (TASK-MONO-477). SSM RunShellScript 로 넘기는 이름은 **반드시**
 # 이 집합으로 검증한다 — 검증 없이 사용자 입력을 셸 명령에 넣으면 명령 주입이 된다.
 # 출처는 projects.sh 의 COMPOSE 키. "full"/"demo-core" 는 프로파일, "all" 은 전체 종료.
-DOMAINS = frozenset({"iam", "wms", "scm", "finance", "erp", "ecommerce", "fan", "console"})
+# 🔵 TASK-MONO-757 — "console" 이 빠졌다. 콘솔은 Vercel 에서 돌고(ADR-MONO-067 단계 3) 그 BFF 는
+#    은퇴했으므로(ADR-MONO-081) 데모 호스트에 콘솔 도메인이 없다. 남겨 두면 `demo-boot.sh console`
+#    을 보내고 인스턴스 쪽 resolve_deps 가 «알 수 없는 도메인» 으로 거절한다. 콘솔 **묶음**은
+#    그대로다(아래 BUNDLES — iam 으로 풀린다).
+DOMAINS = frozenset({"iam", "wms", "scm", "finance", "erp", "ecommerce", "fan"})
 START_NAMES = DOMAINS | {"full", "demo-core"}
 STOP_NAMES = DOMAINS | {"all"}
 
@@ -128,10 +132,15 @@ STOP_NAMES = DOMAINS | {"all"}
 #
 # 🔵 하드 의존(iam)은 여기 **안 적는다.** 인스턴스 쪽 `resolve_deps` 가 얹는다 —
 # 두 곳에서 얹으면 DEPS 가 바뀌는 날 여기가 낡는다.
+# 🔴 **예외 하나 — `console`** (TASK-MONO-757). 콘솔 묶음에는 자기 도메인이 없다: 화면은 Vercel
+#    이고 BFF 는 은퇴했다(ADR-MONO-081). 데모 호스트에서 콘솔이 쓰는 것은 IdP 하나이므로 iam 은
+#    «얹히는 의존» 이 아니라 그 묶음의 **내용**이다(projects.sh 의 같은 예외와 같은 말 — (z32)·(z42)
+#    가 두 표를 대조한다). 그래서 콘솔 묶음의 «준비됨» = iam up 이고, 그것은 사실이다: Vercel
+#    콘솔의 로그인 홉이 데모 호스트에서 밟는 곳이 iam 뿐이다. 업무 화면은 애드온이 켠다.
 BUNDLES = {
     "fan": ("fan",),
     "store": ("ecommerce",),
-    "console": ("console",),
+    "console": ("iam",),
 }
 BUNDLE_ADDONS = {
     "store-fulfillment": ("wms", "scm"),
@@ -701,9 +710,12 @@ def bundle_stop(event):
     def _do():
         remaining = _remove_from_selection(names)
         doms = sorted({d for n in names for d in BUNDLES.get(n, BUNDLE_ADDONS.get(n, ()))})
-        # 🔴 iam 은 **절대 이 목록에 안 들어간다** - BUNDLES/BUNDLE_ADDONS 어디에도 없다.
-        #    들어갔다면 위 § 의 "하드 의존은 여기 안 적는다" 가 깨진 것이고, 그때 이 호출은
-        #    남아 있는 다른 묶음의 로그인을 무너뜨린다.
+        # 🔴 iam 이 이 목록에 들어가는 길은 **`console` 묶음 하나뿐**이다(TASK-MONO-757 — 위
+        #    BUNDLES 의 예외). 그래도 남아 있는 다른 묶음의 로그인은 무너지지 않는다: 인스턴스 쪽
+        #    `demo-down.sh` 의 잔존 가드가 «아직 떠 있고 종료 대상이 아닌 도메인이 iam 에
+        #    하드-의존하면 iam 을 남긴다». 콘솔만 켜져 있었다면 iam 이 내려가고 그것이 «콘솔 끄기»
+        #    의 뜻이다. 🔴 다른 묶음·애드온에 iam 을 적지 마라 — 그 묶음을 끌 때마다 iam 이
+        #    종료 대상에 오르고, 잔존 가드가 아직 안 뜬(booting) 형제를 못 보는 창에서 로그인이 죽는다.
         cmd = _send(["bash %s/infra/demo/demo-down.sh %s" % (REPO, " ".join(doms))])
         return {"selection": sorted(remaining), "stopped": doms, "command_id": cmd}
 
@@ -767,7 +779,9 @@ def start():
     # "약 10분" 은 실측이다(MONO-389, 데모 호스트 저널): 부팅 → `up complete` 9분 32초.
     # 예전엔 "약 2~4분" 이라 적혀 있었다 — 잰 적 없는 숫자이고, 그 시점엔 console 이
     # 아직 시작도 안 했다. 방문자를 정확히 포기할 시점에 포기시키는 문구였다.
-    return _resp({"state": "starting", "message": "기동 시작 — 8개 프로젝트 웜업까지 약 10분"})
+    # 🔵 TASK-MONO-757 — 프로젝트 수를 문구에서 뺐다(8 → 7 이 됐고, 숫자는 다음에 또 낡는다).
+    #    "약 10분" 은 8개 시절 실측이라 7개에는 보수 쪽이다.
+    return _resp({"state": "starting", "message": "기동 시작 — 전체 데모 도메인 웜업까지 약 10분"})
 
 
 def stop():

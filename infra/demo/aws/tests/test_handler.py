@@ -384,9 +384,26 @@ class DomainControlTest(unittest.TestCase):
         self.assertEqual(len(FAKE_SSM.sent), 0)
 
     def test_domain_stop_partial_passes_domain_arg(self):
-        resp = handler.domain_stop(self._evt("console"))
+        resp = handler.domain_stop(self._evt("fan"))
         self.assertEqual(resp["statusCode"], 200)
-        self.assertIn("demo-down.sh console", FAKE_SSM.sent[0]["params"]["commands"][0])
+        self.assertIn("demo-down.sh fan", FAKE_SSM.sent[0]["params"]["commands"][0])
+
+    def test_console_is_no_longer_a_domain(self):
+        """🔴 TASK-MONO-757 — 콘솔은 데모 도메인이 아니다(화면은 Vercel, BFF 은퇴 — ADR-MONO-081).
+
+        도메인 화이트리스트에 남아 있으면 `/domain/start console` 이 `demo-boot.sh console` 을
+        보내고, 인스턴스 쪽 resolve_deps 가 «알 수 없는 도메인» 으로 거절한다 — 람다는 200 을 낸
+        뒤다. 그래서 람다에서 400 으로 먼저 거절해야 한다(명령을 보내지 않는다).
+        """
+        self._fresh_usage()
+        self.assertNotIn("console", handler.DOMAINS)
+        for fn in (handler.domain_start, handler.domain_stop):
+            with self.subTest(fn=fn.__name__):
+                FAKE_SSM.sent.clear()
+                with mock.patch.object(handler, "_now", return_value=T0):
+                    resp = fn(self._evt("console"))
+                self.assertEqual(resp["statusCode"], 400)
+                self.assertEqual(FAKE_SSM.sent, [])
 
     def test_domain_stop_all_downs_everything(self):
         resp = handler.domain_stop(self._evt("all"))
@@ -697,6 +714,48 @@ class BundleSelectionTest(unittest.TestCase):
         self.assertNotIn("iam", cmd)
         self.assertEqual(self.selection(), ["store"])
 
+    # -- 콘솔 묶음 = iam (TASK-MONO-757) -----------------------------------------
+    def test_console_bundle_is_the_idp_alone(self):
+        """🔴 콘솔 묶음에는 자기 도메인이 없다 — 데모 호스트에서 쓰는 것은 iam 하나다.
+
+        projects.sh 의 `BUNDLES[console]=iam` 과 같은 사실이다((z32)·(z42) 가 대조한다).
+        «준비됨» = iam up 이고, 그것이 Vercel 콘솔의 로그인 홉이 실제로 요구하는 전부다.
+        """
+        self.assertEqual(handler.BUNDLES["console"], ("iam",))
+        self.assertEqual(handler.BUNDLE_REQUIRED_DOMAINS["console"], ("iam",))
+        FAKE_EC2.state = "running"
+        self._health({"iam": "up"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler._write_selection({"console"})
+            b = body(handler.bundles())["bundles"]
+        self.assertEqual(b["console"]["state"], "ready")
+        self.assertEqual(b["console"]["domains"], ["iam"])
+        # 대조군 — iam 이 안 떴으면 준비됨이 아니다(선택됐으므로 «요청됨»).
+        self._health({"iam": "down"})
+        with mock.patch.object(handler, "_now", return_value=T0):
+            b = body(handler.bundles())["bundles"]
+        self.assertEqual(b["console"]["state"], "requested")
+
+    def test_console_bundle_stop_hands_iam_to_the_residual_guard(self):
+        """🔴 콘솔 끄기 = `demo-down.sh iam`. 다른 묶음의 로그인은 인스턴스 쪽 잔존 가드가 지킨다.
+
+        iam 이 종료 목록에 오르는 길은 이 묶음 하나뿐이어야 한다 — 형제 칸
+        (`test_bundle_stop_never_names_iam`)이 다른 묶음 쪽을 지킨다.
+        """
+        FAKE_EC2.state = "running"
+        with mock.patch.object(handler, "_now", return_value=T0):
+            handler.bundle_start(self.req({"bundles": ["console", "store"]}))
+            FAKE_SSM.sent.clear()
+            r = handler.bundle_stop(self.req({"bundles": ["console"]}))
+        self.assertEqual(r["statusCode"], 200)
+        cmd = FAKE_SSM.sent[-1]["params"]["commands"][0]
+        self.assertTrue(cmd.rstrip().endswith("demo-down.sh iam"), cmd)
+        self.assertEqual(self.selection(), ["store"])
+        # 다른 어떤 묶음·애드온도 iam 을 자기 내용으로 갖지 않는다.
+        others = {n: d for n, d in list(handler.BUNDLES.items()) + list(handler.BUNDLE_ADDONS.items())
+                  if n != "console"}
+        self.assertFalse([n for n, d in others.items() if "iam" in d], others)
+
     def test_bundle_stop_is_serialised_by_a_lock(self):
         FAKE_EC2.state = "running"
         with mock.patch.object(handler, "_now", return_value=T0):
@@ -892,7 +951,7 @@ class BundleSelectionTest(unittest.TestCase):
     def test_unselected_bundle_is_waiting_when_only_shared_iam_is_up(self):
         """🔴🔴 콘솔만 켰는데 스토어·팬이 «일부만 실행 중» 으로 보이던 결함."""
         FAKE_EC2.state = "running"
-        self._health({"iam": "up", "console": "up", "ecommerce": "down",
+        self._health({"iam": "up", "ecommerce": "down",
                       "fan": "down", "finance": "down"})
         with mock.patch.object(handler, "_now", return_value=T0):
             handler._write_selection({"console"})
@@ -1062,12 +1121,16 @@ class SelectionReadyOnStatusTest(unittest.TestCase):
         self.assertIs(self._status()["selection_ready"], True)
 
     def test_one_ready_and_one_booting_is_false_the_accepted_conservative_cost(self):
-        """🔴 «전부» = 선택 전부. 스토어가 다 떠도 콘솔이 booting 이면 False 다(수용한 대가)."""
-        handler._write_selection({"store", "console"})
-        self._health({"iam": "up", "ecommerce": "up", "console": "partial"})
+        """🔴 «전부» = 선택 전부. 스토어가 다 떠도 팬이 booting 이면 False 다(수용한 대가).
+
+        🔵 TASK-MONO-757 — 예전 판은 «콘솔이 booting» 이었다. 콘솔 묶음은 이제 iam 하나라
+        iam 이 up 이면 ready 다(그 판은 성립할 수 없다) ⇒ 두 번째 묶음을 팬으로 옮겼다.
+        """
+        handler._write_selection({"store", "fan"})
+        self._health({"iam": "up", "ecommerce": "up", "fan": "partial"})
         b = self._bundles()
         self.assertEqual(b["bundles"]["store"]["state"], "ready")
-        self.assertEqual(b["bundles"]["console"]["state"], "booting")
+        self.assertEqual(b["bundles"]["fan"]["state"], "booting")
         self.assertIs(self._status()["selection_ready"], False)
 
     def test_unselected_bundles_never_hold_it_back(self):
@@ -1139,8 +1202,8 @@ class SelectionReadyOnStatusTest(unittest.TestCase):
             ({"store"}, {"iam": "down", "ecommerce": "up"}),
             ({"store"}, {"iam": "up", "ecommerce": "down"}),
             ({"fan", "store"}, {"iam": "up", "fan": "up", "ecommerce": "partial"}),
-            ({"console", "console-wms"}, {"iam": "up", "console": "up", "wms": "up"}),
-            ({"console", "console-wms"}, {"iam": "up", "console": "up"}),
+            ({"console", "console-wms"}, {"iam": "up", "wms": "up"}),
+            ({"console", "console-wms"}, {"iam": "up"}),
         ]
         seen = set()
         for selection, health in worlds:
@@ -1198,8 +1261,9 @@ class SelectionReadyOnStatusTest(unittest.TestCase):
         self._health({"iam": "up", "ecommerce": "up"})
         self.assertIs(self._status()["selection_ready"], True)
         # 묶음을 나중에 추가한다 — 아직 안 뜬 상태(booting).
-        handler._write_selection({"store", "console"})
-        self._health({"iam": "up", "ecommerce": "up", "console": "partial"})
+        # 🔵 TASK-MONO-757 — 예전엔 console 이었다. 콘솔 묶음은 이제 iam 만이라 여기선 ready 다.
+        handler._write_selection({"store", "fan"})
+        self._health({"iam": "up", "ecommerce": "up", "fan": "partial"})
         self.assertIs(self._status()["selection_ready"], False)
 
     def test_started_param_unreadable_falls_back_to_todays_behaviour(self):
