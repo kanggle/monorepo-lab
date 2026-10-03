@@ -4,7 +4,7 @@ TASK-BE-619
 
 # Status
 
-review (2026-10-03 UTC — 세 항목 한 PR · 통합 시험(Docker)은 로컬 미실행 → CI 판정, § 구현 기록)
+done (2026-10-03 UTC — PR #4131 squash `38cd9dc81` · 4차원 검증)
 
 # Title
 
@@ -50,9 +50,9 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-1 (항목 1)** — «사이트 탈퇴» 와 «계정 삭제» 의 동작이 표로 정해져 있고(사용자 / 사이트 운영자 / 플랫폼 관리자 각각), 소유자 결정이 필요한 칸은 결정을 받아 기록했다. 멤버십 `LEFT` 경로가 있고, `LEFT` 뒤 그 사이트 토큰이 발급되지 않으며(615 의 멤버십 검사) 다른 사이트는 영향이 없다 — 대조 시험.
-- [ ] **AC-2 (항목 2)** — 거절 시 web-store 가 실제로 받는 `?error=` 값을 **측정**하고 기록한다(nightly full-stack e2e `apps/web-store/e2e/consent-decline.spec.ts`, `e2e/account-type-guard.spec.ts` 를 본뜸 — 팬 전용 풀 시드 계정이 필요). 측정값에 맞는 문구로 고친다. 측정 전에 문구를 고치지 않는다.
-- [ ] **AC-3 (항목 3)** — 콘솔 보안 이벤트 화면이 사이트 테넌트로 볼 때 그 사이트 멤버 풀 계정의 이벤트를 포함하거나, 포함하지 않는다면 그 사실을 화면이 말한다(조용히 빈 목록 금지). 선택과 근거를 기록.
+- [x] **AC-1 (항목 1)** — «사이트 탈퇴» 와 «계정 삭제» 의 동작이 표로 정해져 있고(사용자 / 사이트 운영자 / 플랫폼 관리자 각각), 소유자 결정이 필요한 칸은 결정을 받아 기록했다. 멤버십 `LEFT` 경로가 있고, `LEFT` 뒤 그 사이트 토큰이 발급되지 않으며(615 의 멤버십 검사) 다른 사이트는 영향이 없다 — 대조 시험.
+- [x] **AC-2 (항목 2)** — 거절 시 web-store 가 실제로 받는 `?error=` 값을 **측정**하고 기록한다(nightly full-stack e2e `apps/web-store/e2e/consent-decline.spec.ts`, `e2e/account-type-guard.spec.ts` 를 본뜸 — 팬 전용 풀 시드 계정이 필요). 측정값에 맞는 문구로 고친다. 측정 전에 문구를 고치지 않는다.
+- [x] **AC-3 (항목 3)** — 콘솔 보안 이벤트 화면이 사이트 테넌트로 볼 때 그 사이트 멤버 풀 계정의 이벤트를 포함하거나, 포함하지 않는다면 그 사실을 화면이 말한다(조용히 빈 목록 금지). 선택과 근거를 기록.
 
 # Related Specs
 
@@ -189,3 +189,16 @@ iam-platform
 - **account-service 를 auth-service · admin-service 보다 먼저 또는 함께**(V0032 + 응답 `leftBy`/`scope`). 거꾸로면: auth 는 `leftBy` 없음 → 본인 탈퇴도 토큰 거절(보수 — 복귀만 막힘), admin 은 `scope` 없음 → `ACCOUNT` 로 읽음. 콘솔(Vercel)은 `scope` 가 없어도 파싱된다(optional).
 - 🔵 **소유자에게 넘길 관찰(이 티켓의 결정 밖 — 고치지 않음)**: 사이트 운영자의 **잠금**은 여전히 풀 계정 하나에 걸린다(스토어 운영자 잠금 → 팬에서도 잠김, 616 결정). 소유자 결정 1 은 «삭제» 에 관한 것이라 잠금은 바꾸지 않았다 — «잠금도 사이트 범위여야 하나» 는 별도 결정.
 - 웹 화면의 «사이트 탈퇴» 버튼은 만들지 않았다(스토어·팬 앱에 탈퇴 UI 자체가 없다 — 엔드포인트만). 필요해지면 각 앱 티켓.
+
+# 닫기 (2026-10-03 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4131` → `state=MERGED`, merge commit `38cd9dc81` |
+| (b) | `origin/main` 위 |
+| (c) | 머지 직전 `gh pr checks 4131` head `397c0aca2`: 68 개, pending 0, fail 0 |
+| (d) | AC-1~3 전부 `[x]`. AC-1 의 «⚪ 통합은 CI» 는 머지 직전 `Integration (iam B, Testcontainers)` 잡(job `111128365602`)에서 **실제로 돌았다** — 로그에 `TASK-BE-619 — 사이트 탈퇴(멤버십 LEFT) vs 계정 삭제` 3칸(본인 탈퇴·재동의 복귀 / 플랫폼 관리자 계정 삭제 / 스토어 운영자 → 스토어만 LEFT·팬 유지) · `TEST-SUMMARY lane=integration tests=301 failures=0`. AC-2 = nightly 측정 런 `37094305963` → 수정 후 `37096777760` success. AC-2 의 web-store vitest 는 CI `Frontend unit tests` pass |
+
+🔵 소유자 몫으로 남긴 것(이 티켓의 AC 가 아니다): 사이트 운영자의 **잠금(lock)** 은 여전히 풀 계정 전체에 걸린다(616 결정). 결정 1 은 삭제만 다뤘다 — 잠금도 사이트 단위로 할지는 별도 결정.
+🔵 배포: 데모 반영은 AMI 재굽기(이번 재굽기 묶음에 들어간다).
+
