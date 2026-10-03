@@ -35,7 +35,9 @@ test.describe('사이트 첫 방문 동의 거절 (web-store)', () => {
       { timeout: 30_000 },
     );
     const error = new URL(page.url()).searchParams.get('error');
-    const alert = page.getByRole('alert');
+    // LoginForm's alert — not Next's empty route announcer, which also carries role="alert"
+    // (1st nightly run 37093051748: a bare getByRole('alert') hit both, strict mode).
+    const alert = page.locator('div.alert-error[role="alert"]');
     await expect(alert).toBeVisible();
     const alertText = (await alert.innerText()).trim();
 
