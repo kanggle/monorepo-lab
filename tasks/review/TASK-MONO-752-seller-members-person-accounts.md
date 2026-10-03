@@ -159,3 +159,10 @@ monorepo
 - 오류 코드 10개 신설(티켓에 이름 없음) — 레지스트리·도메인 파일에 먼저 등록.
 - 콘솔 샘플 픽스처(`src/shared/sample/fixtures/ecommerce.ts`)를 건드렸다 — 셀러 화면 밖 파일이지만, 안 하면 샘플 방문자에게 새 구성원 칸이 503 으로 뜬다.
 - 게이트웨이 라우트 1줄(티켓 Scope 에 명시 없음) — 소비자 수락 경로가 product-service 에 닿으려면 필요하다.
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 닫기 판정: review 유지
+
+- (a) #4126 `MERGED` · (b) 스쿼시 `761f5a58b` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/69 — iam A·B · ecommerce A·B·C 통합 잡 전부 실제로 돌아 SUCCESS.
+- (d) **닫지 않는다.** AC-1(수락 대조군)·AC-4(구성원 잠금 ≠ 셀러 정지)는 시험으로 닫혔다(`SellerMemberServiceTest#ac1_controlGroup` · `SellerMemberLockDoesNotSuspendSellerTest`, CI 통합 SUCCESS). 그러나 **AC-2·AC-3 의 동사는 «토큰 역할 = …»** 이고, 수락·정지 뒤의 실제 토큰은 아직 한 번도 발급되지 않았다 — 지금 근거는 «IAM 이 쓰는 행 + 토큰 발급 규칙(`TenantClaimPoolPrincipalTest`)» 의 **조합**이지 관측이 아니다. 재굽기 뒤 창에서 스토어 토큰 `["CUSTOMER","SELLER"]` → 정지 → `["CUSTOMER"]` · 팬 토큰에 `SELLER` 없음을 실제로 읽어 닫는다.

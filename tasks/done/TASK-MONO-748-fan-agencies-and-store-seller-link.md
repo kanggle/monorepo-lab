@@ -8,7 +8,7 @@ TASK-MONO-748
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -156,3 +156,12 @@ ADR-079 D1·D2 를 구현한다. 지금 소속사는 `artists.agency` · `artist
 - [x] **AC-2** — CRUD · 중복 409(정규화 후) · 소속 변경: 단위·슬라이스 초록, 통합 시험 작성(⚪ CI).
 - [ ] **AC-3 → `TASK-MONO-759` 로 분리** (소유자 결정 2026-10-02 «분리 후 진행»). 규칙·포트·fail-closed 어댑터는 이 티켓에 있고, 실제 조회 경로만 759. 🔴 **운영 동작(머지 후)**: `PATCH /api/agencies/{id}/store-seller` 에 값을 주면 **항상 503 `STORE_SELLER_LOOKUP_UNAVAILABLE`, 저장 0** · `null`(해제)은 200. — 분리 전 기록: 검증 의미(ACTIVE 저장 · 없음/CLOSED 거절 · 조회 실패 시 저장 안 함)는 포트 기준 초록 + bite. 🔴 **실제 스토어에 묻는 경로가 없다** — Hard Stop 해소 전에는 «존재하는 ACTIVE 셀러 → 저장» 이 운영에서 성립하지 않는다(503).
 - [x] **AC-4** — 표시 키·값 불변(`fan.json` 드리프트 0, 단위 시험), 통합 시험 작성(⚪ CI).
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 4차원 종결
+
+- (a) #4121 `MERGED` · (b) 스쿼시 `ccec68c71` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/69.
+- (d) AC-2·4 본문 근거로 닫힘. **AC-1 정정**: 본문의 ⚪(«CI integrationTest 가 첫 실행») 는 CI 에서 해소됐다 — `Integration (fan-platform)` SUCCESS, 잡 로그에 `Successfully applied 3 migrations` → `Successfully applied 1 migration` 쌍이 두 번(14:32:44→45, 14:32:48) — `AgencyMigrationExistingVolumeIT` 의 «V3 까지 → V4 만» 모양이다(V4 `agencies` 적용 줄 4회). 선택은 이름이 아니라 `@Tag("integration")` 이고 그 클래스에 태그가 있다.
+- **AC-3**: 소유자 결정(2026-10-02 «분리 후 진행»)으로 `TASK-MONO-759` 로 넘어갔다 — 이 티켓을 닫아도 의무는 759 에 산다(ready, 경로 결정 게이트).
+- 같은 PR 에 CI `Error code registry` 빨강을 고친 커밋(`b9453007c`, 코드 6개 등록)이 포함돼 머지됐다 — 머지 시점 rollup 실패 0.

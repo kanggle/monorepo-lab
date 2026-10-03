@@ -8,7 +8,7 @@ TASK-MONO-739
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -166,3 +166,11 @@ R1 아티스트당 3개 · 총 18개 / R2 `placehold.co` 자리표시(아티스�
 ## 🔴 재굽기 필요 (Failure Scenario 2)
 
 공개 열람(번들 저장본)은 머지·배포만으로 굿즈가 보인다. 그러나 **로그인 후 장바구니·주문 경로는 `product-service` DB** 를 쓰고, V21 은 데모 서버 이미지를 **다시 구워야** 들어간다. 그 전에는 «공개 목록엔 있는데 담으면 없는 상품» 이 된다 — 재굽기는 소유자 작업이다(ADR-077 § Outstanding follow-ups).
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 4차원 종결
+
+- (a) #4119 `MERGED` · (b) 스쿼시 `2921d1b7e` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/68.
+- (d) AC-0~7·9 본문 근거로 닫힘. **AC-8 정정**: 본문의 ⚪(«로컬 미실행») 는 CI 에서 해소됐다 — `Integration (ecommerce C)` 잡 로그에 `ArtistGoodsSeedOnExistingVolumeIntegrationTest` 의 모양(13:18:05 `Migrating … version "20 - add product collection ref"` → `"21 - seed artist goods"` → `Schema "public" is up to date. No migration necessary`)이 찍혀 있다. 즉 V20 까지 올린 볼륨에 V21 만 적용되고 재실행은 no-op. ⇒ AC-8 이 요구한 «기존 볼륨 적용» 을 CI 가 쟀다.
+- 🔵 그 IT 는 `TASK-MONO-752` 가 product-service 에 V22 를 더할 때 upgrade·재실행 target 을 `21` 로 고정했다(target 없는 재실행이 새 파일을 적용해 빨개지는 부류 — 750 의 iam IT 에서 실제로 났다).
