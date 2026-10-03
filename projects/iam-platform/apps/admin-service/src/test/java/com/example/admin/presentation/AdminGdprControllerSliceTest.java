@@ -121,6 +121,42 @@ class AdminGdprControllerSliceTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-619: 플랫폼 운영자(SUPER_ADMIN) → 하류에 '*' (계정 행으로 찾아 계정 자체를 지운다) · 사이트 운영자 → 활성 테넌트 그대로")
+    void gdpr_delete_platformScopeStampsStar_siteOperatorKeepsTenant() throws Exception {
+        when(useCase.gdprDelete(any(GdprDeleteCommand.class)))
+                .thenReturn(new GdprDeleteResult("acc-1", "DELETED", Instant.now(), "audit-p"));
+        org.mockito.ArgumentCaptor<GdprDeleteCommand> cmd = org.mockito.ArgumentCaptor.forClass(GdprDeleteCommand.class);
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/gdpr-delete")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-619-p")
+                        .header("X-Operator-Reason", "erasure")
+                        .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isOk());
+
+        when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("ecommerce", false));
+        when(useCase.gdprDelete(any(GdprDeleteCommand.class)))
+                .thenReturn(new GdprDeleteResult("acc-1", "ACTIVE", null, "audit-s", "SITE_MEMBERSHIP", "ecommerce"));
+        mockMvc.perform(post("/api/admin/accounts/acc-1/gdpr-delete")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-619-s")
+                        .header("X-Operator-Reason", "erasure")
+                        .header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"))
+                .andExpect(jsonPath("$.siteTenantId").value("ecommerce"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.maskedAt").value(org.hamcrest.Matchers.nullValue()));
+
+        org.mockito.Mockito.verify(useCase, org.mockito.Mockito.times(2)).gdprDelete(cmd.capture());
+        org.assertj.core.api.Assertions.assertThat(cmd.getAllValues().get(0).tenantId())
+                .as("platform scope → '*': account-service erases the account found by its own row").isEqualTo("*");
+        org.assertj.core.api.Assertions.assertThat(cmd.getAllValues().get(1).tenantId())
+                .as("site operator → its active tenant: a pool member only leaves that site").isEqualTo("ecommerce");
+    }
+
+    @Test
     @DisplayName("POST gdpr-delete: body.reason 으로 reason 을 전달해도 동일하게 200 처리된다")
     void gdpr_delete_with_body_reason_returns_200() throws Exception {
         Instant maskedAt = Instant.parse("2026-04-25T10:00:00Z");

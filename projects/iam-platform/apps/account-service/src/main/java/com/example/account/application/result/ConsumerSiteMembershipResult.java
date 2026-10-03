@@ -16,6 +16,9 @@ import java.util.List;
  *                         pool account or has no membership row on that site
  * @param siteRoles        {@code consumer_site_roles} on THAT site — only when the membership is
  *                         ACTIVE, otherwise empty. Never another site's roles
+ * @param leftBy           TASK-BE-619 — for a {@code LEFT} membership, who made it LEFT ({@code SELF} |
+ *                         {@code OPERATOR}); {@code null} otherwise. Only {@code SELF} is reopened by
+ *                         consent (owner decision 2026-10-03)
  */
 public record ConsumerSiteMembershipResult(
         String accountId,
@@ -23,5 +26,12 @@ public record ConsumerSiteMembershipResult(
         boolean consumerSite,
         String siteTenantType,
         String membershipStatus,
-        List<String> siteRoles) {
+        List<String> siteRoles,
+        String leftBy) {
+
+    /** A result without a leave record — every answer that is not a LEFT membership. */
+    public ConsumerSiteMembershipResult(String accountId, String siteTenantId, boolean consumerSite,
+                                        String siteTenantType, String membershipStatus, List<String> siteRoles) {
+        this(accountId, siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles, null);
+    }
 }

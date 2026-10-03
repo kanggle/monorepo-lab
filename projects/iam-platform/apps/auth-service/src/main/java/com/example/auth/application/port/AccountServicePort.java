@@ -281,9 +281,15 @@ public interface AccountServicePort {
     /**
      * A tenant registry record as account-service reports it.
      *
-     * @param tenantType the authoritative {@code tenant_type} (e.g. {@code B2C})
-     * @param status     the tenant lifecycle status (e.g. {@code ACTIVE}, {@code SUSPENDED})
+     * @param tenantType  the authoritative {@code tenant_type} (e.g. {@code B2C})
+     * @param status      the tenant lifecycle status (e.g. {@code ACTIVE}, {@code SUSPENDED})
+     * @param displayName TASK-BE-619 — the tenant's {@code display_name} (the site name the consent screen
+     *                    shows); {@code null} when the response carried none
      */
-    record TenantLookupResult(String tenantType, String status) {
+    record TenantLookupResult(String tenantType, String status, String displayName) {
+
+        public TenantLookupResult(String tenantType, String status) {
+            this(tenantType, status, null);
+        }
     }
 }

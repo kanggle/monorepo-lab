@@ -41,8 +41,9 @@ import java.util.Optional;
  *       again for this request. The IAM session is untouched (other sites keep working).</li>
  * </ul>
  *
- * <p>The page wears the site's brand (colour, subtitle, logo) from the parked client's registered
- * settings — the ADR-007 rule: never from the current request. The console never reaches this page
+ * <p>The page wears the site's brand (colour, logo) from the parked client's registered settings — the
+ * ADR-007 rule: never from the current request. Its subtitle is the consent's own (TASK-BE-619 — «{site}에서
+ * 내 IAM 계정을 쓰도록 허용합니다»), not the site's login subtitle. The console never reaches this page
  * (the gate does not map a pool principal onto {@code iam}), and the page itself refuses any session
  * that is not a pool principal.
  *
@@ -66,7 +67,27 @@ public class SiteConsentPageController {
         if (pending.isEmpty() || poolAccountId(principal, pending.get()) == null) {
             return expired(pending);
         }
-        return page(pending.get(), null, HttpStatus.OK);
+        return page(pending.get(), null, HttpStatus.OK, siteName(pending.get()));
+    }
+
+    /**
+     * TASK-BE-619 (owner decision 2026-10-03 «동의 화면 전용 부제») — the site the person is consenting to,
+     * by name, for the subtitle «{site}에서 내 IAM 계정을 쓰도록 허용합니다». The name is the parked client's
+     * site tenant's {@code display_name} in account-service — the parked client, never the current request
+     * (ADR-007 invariant 1). Fail-soft: any failure or a missing name → {@code null}, and the page says
+     * «이 사이트» instead (the page must not fail over a label).
+     */
+    private String siteName(PendingSiteConsent pending) {
+        try {
+            return accountServicePort.getTenant(pending.siteTenantId())
+                    .map(AccountServicePort.TenantLookupResult::displayName)
+                    .filter(name -> !name.isBlank())
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("site consent: site name lookup failed for {} — the page says «이 사이트»",
+                    pending.siteTenantId(), e);
+            return null;
+        }
     }
 
     @PostMapping("/consent")
@@ -102,7 +123,8 @@ public class SiteConsentPageController {
         }
         pendingSiteConsentStore.clear(request, response);
         if (!result.isActiveMember()) {
-            // A suspended site, a membership the person left, an account that is not in the pool:
+            // A suspended site, a membership the site's operator ended (TASK-BE-619 — one the person left
+            // themself IS reopened by this consent), an account that is not in the pool:
             // nothing was written and no token will be issued. Tell the client, like a decline.
             log.info("site consent: account {} is not an active member of site {} after consent (status {})",
                     accountId, pending.siteTenantId(), result.membershipStatus());
@@ -134,9 +156,16 @@ public class SiteConsentPageController {
         return details.get(PrincipalDetailKeys.ACCOUNT_ID) instanceof String id && !id.isBlank() ? id : null;
     }
 
-    private static ModelAndView page(PendingSiteConsent pending, String error, HttpStatus status) {
+    private ModelAndView page(PendingSiteConsent pending, String error, HttpStatus status) {
+        return page(pending, error, status, siteName(pending));
+    }
+
+    private static ModelAndView page(PendingSiteConsent pending, String error, HttpStatus status, String siteName) {
         ModelAndView mav = new ModelAndView(VIEW, status);
-        mav.addObject("branding", LoginBranding.from(pending.client().getClientSettings()));
+        LoginBranding branding = LoginBranding.from(pending.client().getClientSettings());
+        mav.addObject("branding", branding);
+        mav.addObject("siteName", siteName);
+        mav.addObject("consentSubtitle", consentSubtitle(siteName, branding));
         mav.addObject("error", error);
         mav.addObject("expired", false);
         mav.addObject("answerable", !"declined".equals(error) && !"not_available".equals(error));
@@ -147,10 +176,22 @@ public class SiteConsentPageController {
         ModelAndView mav = new ModelAndView(VIEW, HttpStatus.BAD_REQUEST);
         mav.addObject("branding", pending.map(p -> LoginBranding.from(p.client().getClientSettings()))
                 .orElse(LoginBranding.DEFAULT));
+        mav.addObject("siteName", null);
+        mav.addObject("consentSubtitle", null);
         mav.addObject("error", null);
         mav.addObject("expired", true);
         mav.addObject("answerable", false);
         return mav;
+    }
+
+    /**
+     * TASK-BE-619 (owner decision 2026-10-03 «동의 화면 전용 부제») — what is being consented to, in one
+     * line, instead of the site's LOGIN subtitle (which told an already-signed-in person to «로그인하세요»).
+     * «에서» reads right after any site name (no 받침-dependent particle to pick).
+     */
+    static String consentSubtitle(String siteName, LoginBranding branding) {
+        String site = siteName == null || siteName.isBlank() ? "이 사이트" : siteName;
+        return site + "에서 내 " + branding.serviceName() + " 계정을 쓰도록 허용합니다.";
     }
 
     /** A plain redirect: no model attributes appended, no {@code {…}} template expansion of the URL. */

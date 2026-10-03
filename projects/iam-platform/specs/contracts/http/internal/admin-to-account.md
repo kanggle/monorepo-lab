@@ -14,10 +14,16 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 
 - **헤더 존재 + 구체 slug**: account-service 는 `findById(TenantId.of(header), accountId)` 로 조회한다. 대상 계정이 **다른 테넌트**에 있으면 tenant-scoped 조회가 empty 를 반환 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주는 403 을 절대 반환하지 않는다). 계정은 변이되지 않는다.
   🔵 **TASK-BE-616**: 헤더가 **소비자 사이트**면 그 사이트의 ACTIVE 멤버인 **풀 계정**도 찾는다([multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) «단건 표면까지»).
-  변이는 풀 계정 **하나**에 일어나므로 그 사람의 모든 소비자 사이트에 미친다(GDPR 삭제 포함). 그 사이트의 멤버가 아닌 풀 계정 → 여전히 `404`.
+  변이는 풀 계정 **하나**에 일어나므로 그 사람의 모든 소비자 사이트에 미친다(잠금 · 해제). 그 사이트의 멤버가 아닌 풀 계정 → 여전히 `404`.
+  🔴 **삭제는 예외 — `TASK-BE-619` (소유자 결정 2026-10-03 «사이트 운영자 삭제 권한 = 자기 사이트 멤버십만»)**: 헤더가 소비자 사이트이고 대상이 그 사이트의
+  **풀 멤버**면 `/gdpr-delete` · `/delete` 는 계정을 지우지 **않고** 그 사이트 멤버십만 `LEFT`(`left_by = OPERATOR`, `left_by_actor_id = operatorId`)로 만든다.
+  응답의 `scope = SITE_MEMBERSHIP` 이 그것을 말한다(아래 각 엔드포인트). 그 사이트의 **자기 계정**(풀 아님)은 지금처럼 삭제된다.
 - **헤더 부재 OR 공백 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)** — 엔드포인트에 따라 둘로 갈린다:
   - **`/lock` · `/unlock` · `/delete` (TASK-MONO-735)**: 계정 **행 자신의 테넌트**로 찾는다(`AccountRepository.findByIdResolvingTenant` — [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지) 의 문서화된 예외 2번째 사용). `accounts.id` 는 전역 유일 PK 라 결과는 최대 한 행이고 테넌트를 섞지 않는다. 어느 테넌트에도 없는 id → `404 ACCOUNT_NOT_FOUND`. `fan-platform` 계정은 결과가 이전과 같다. 🔴 이전(BE-467~MONO-735)엔 `fan-platform` 기본값이라 SUPER_ADMIN(`'*'`)과 헤더 없는 호출자는 **`fan-platform` 밖 계정을 잠그지 못했다**(2026-09-26 16차 창 실측 — `ecommerce` 계정 잠금 404).
-  - **`/gdpr-delete` · `/export`**: 변경 없음 — `fan-platform` 기본값(BE-467 net-zero). 🔴 SUPER_ADMIN 의 비-fan 계정 gdpr-delete/export 는 그래서 아직 404 다(TASK-MONO-735 범위 밖, 기록).
+  - **`/gdpr-delete` (`TASK-BE-619`)**: `/lock` · `/unlock` · `/delete` 와 **같다** — 계정 행 자신의 테넌트로 찾고(finder 의 세 번째 소비처), **계정 자체를** 지운다
+    (풀 계정이면 모든 소비자 사이트에서 — `scope = ACCOUNT`). 이것이 «풀 계정 삭제는 플랫폼 관리자» 의 경로다: admin-service 는 **플랫폼 스코프 운영자**(SUPER_ADMIN)의
+    GDPR 삭제에 활성 테넌트 대신 `'*'` 를 찍는다([admin-api.md § gdpr-delete](../admin-api.md)). 619 이전엔 `fan-platform` 기본값이라 SUPER_ADMIN 의 비-fan 계정 GDPR 삭제는 404 였다.
+  - **`/export`**: 변경 없음 — `fan-platform` 기본값(BE-467 net-zero). 🔴 SUPER_ADMIN 의 비-fan 계정 export 는 그래서 아직 404 다(기록).
 - **헤더 존재 + 구체 slug 는 위 첫 줄 그대로**다 — 계정 행 해소는 **헤더가 테넌트를 말하지 않을 때만** 쓴다. 구체 테넌트를 말한 호출은 결코 다른 테넌트의 계정을 건드리지 않는다(교차 → 404).
 
 admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자의 활성 테넌트를 해소해 이 헤더를 스탬프한다. out-of-scope 테넌트 요청은 account-service 도달 전에 admin-service 에서 `403 TENANT_SCOPE_DENIED` 로 차단된다 (best-effort DENIED `admin_actions` row). account-service 측 `X-Tenant-Id` 처리는 defense-in-depth 이며, 새로운 cross-tenant finder 를 추가하지 않는다.
@@ -183,9 +189,14 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
   "accountId": "string",
   "previousStatus": "ACTIVE | LOCKED | DORMANT",
   "currentStatus": "DELETED",
-  "gracePeriodEndsAt": "2026-05-12T10:00:00Z"
+  "gracePeriodEndsAt": "2026-05-12T10:00:00Z",
+  "scope": "ACCOUNT | SITE_MEMBERSHIP",
+  "siteTenantId": "string | null"
 }
 ```
+
+- **`TASK-BE-619`** — `scope = SITE_MEMBERSHIP`: 헤더가 소비자 사이트이고 대상이 그 사이트의 풀 멤버 → 그 사이트 멤버십만 `LEFT`(`OPERATOR`). 계정은 그대로라
+  `previousStatus = currentStatus` = 계정의 지금 상태, `gracePeriodEndsAt = null`, `siteTenantId` = 그 사이트. 그 밖에는 `scope = ACCOUNT`, `siteTenantId = null`(기존 의미).
 
 **Errors**: 409 `STATE_TRANSITION_INVALID` (이미 DELETED), 404 `ACCOUNT_NOT_FOUND` (cross-tenant 대상 포함, BE-467)
 
@@ -219,9 +230,21 @@ GDPR/PIPA 삭제권. 계정 상태를 DELETED로 전이하고 PII를 즉시 마�
   "accountId": "string",
   "status": "DELETED",
   "emailHash": "string (SHA-256 hex)",
-  "maskedAt": "2026-04-18T10:00:00Z"
+  "maskedAt": "2026-04-18T10:00:00Z",
+  "scope": "ACCOUNT | SITE_MEMBERSHIP",
+  "siteTenantId": "string | null"
 }
 ```
+
+**`scope` (`TASK-BE-619`, 소유자 결정 2026-10-03)**:
+
+| 호출 | 대상 | 일어나는 일 | 응답 |
+|---|---|---|---|
+| `X-Tenant-Id` = 소비자 사이트 (사이트 운영자) | 그 사이트의 **풀 멤버** | 그 사이트 멤버십만 `LEFT`(`left_by = OPERATOR`) — **아무것도 지우지 않는다**(계정 · PII · 다른 사이트 멤버십 무변경, 이벤트 없음) | `scope = SITE_MEMBERSHIP`, `status` = 계정의 지금 상태, `emailHash` · `maskedAt` = `null`, `siteTenantId` = 그 사이트 |
+| `X-Tenant-Id` = 구체 테넌트 | 그 테넌트의 **자기 계정** | 아래 Server-side behavior 그대로 | `scope = ACCOUNT` |
+| `X-Tenant-Id` 없음 · 공백 · `*` (플랫폼 관리자) | 계정 행 자신의 테넌트로 찾은 계정(풀 계정 포함) | 아래 그대로 — 풀 계정이면 모든 소비자 사이트에서 삭제 | `scope = ACCOUNT` |
+
+옛 account-service(필드 없음)는 `scope` 를 내지 않는다 — 호출자는 없음을 `ACCOUNT` 로 읽는다.
 
 **Errors**: 409 `STATE_TRANSITION_INVALID` (이미 DELETED), 404 `ACCOUNT_NOT_FOUND` (cross-tenant 대상 포함, BE-467)
 

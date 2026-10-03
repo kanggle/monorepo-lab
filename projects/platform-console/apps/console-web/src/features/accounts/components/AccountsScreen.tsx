@@ -65,6 +65,13 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [bulkResult, setBulkResult] = useState<BulkLockItem[] | null>(null);
+  // TASK-BE-619 — a GDPR request that ended only this site's membership of a
+  // consumer-pool account (scope SITE_MEMBERSHIP): said out loud, never left to
+  // read as «erased».
+  const [siteScopeNotice, setSiteScopeNotice] = useState<{
+    email: string;
+    site: string;
+  } | null>(null);
 
   const lock = useLockAccount();
   const unlock = useUnlockAccount();
@@ -105,6 +112,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
     accountIds?: string[],
   ) {
     setBulkResult(null);
+    setSiteScopeNotice(null);
     lock.reset();
     unlock.reset();
     revoke.reset();
@@ -143,7 +151,19 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
     } else if (kind === 'revoke-session') {
       revoke.mutate({ accountId: account.id, ...common }, { onSuccess });
     } else if (kind === 'gdpr-delete') {
-      gdpr.mutate({ accountId: account.id, ...common }, { onSuccess });
+      gdpr.mutate(
+        { accountId: account.id, ...common },
+        {
+          onSuccess: (r) => {
+            setSiteScopeNotice(
+              r.scope === 'SITE_MEMBERSHIP'
+                ? { email: account.email, site: r.siteTenantId ?? '' }
+                : null,
+            );
+            setPending(null);
+          },
+        },
+      );
     }
   }
 
@@ -210,6 +230,20 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
       )}
 
       {bulkResult && <BulkLockResult results={bulkResult} />}
+
+      {siteScopeNotice && (
+        <div
+          role="status"
+          data-testid="accounts-gdpr-site-scope"
+          className="mb-6 rounded-md border border-border bg-muted px-4 py-3 text-sm text-foreground"
+        >
+          <strong>{siteScopeNotice.email}</strong> 은(는) 팬·스토어가 함께 쓰는
+          IAM 공용 계정이라 계정을 지우지 않고{' '}
+          <strong>{siteScopeNotice.site}</strong> 사이트에서만 탈퇴 처리했습니다.
+          다른 사이트의 이용과 계정 정보는 그대로입니다. 계정 전체 삭제는 본인
+          또는 플랫폼 관리자만 할 수 있습니다.
+        </div>
+      )}
 
       {!page || rows.length === 0 ? (
         <AccountsEmptyState

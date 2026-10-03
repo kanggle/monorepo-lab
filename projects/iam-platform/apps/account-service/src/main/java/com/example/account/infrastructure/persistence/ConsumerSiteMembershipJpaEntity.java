@@ -1,5 +1,6 @@
 package com.example.account.infrastructure.persistence;
 
+import com.example.account.domain.consumerpool.ConsumerSiteLeftBy;
 import com.example.account.domain.consumerpool.ConsumerSiteMembership;
 import com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus;
 import com.example.account.domain.tenant.TenantId;
@@ -48,9 +49,22 @@ public class ConsumerSiteMembershipJpaEntity {
     @Column(name = "consented_at", nullable = false)
     private Instant consentedAt;
 
+    /** TASK-BE-619 (V0032) — when the membership became LEFT; null while ACTIVE. */
+    @Column(name = "left_at")
+    private Instant leftAt;
+
+    /** TASK-BE-619 (V0032) — who made it LEFT ({@code SELF} | {@code OPERATOR}); null while ACTIVE. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "left_by", length = 20)
+    private ConsumerSiteLeftBy leftBy;
+
+    /** TASK-BE-619 (V0032) — the operator id (OPERATOR) or the account id (SELF). */
+    @Column(name = "left_by_actor_id", length = 64)
+    private String leftByActorId;
+
     public ConsumerSiteMembership toDomain() {
         return ConsumerSiteMembership.reconstitute(
-                accountId, new TenantId(siteTenantId), status, consentedAt);
+                accountId, new TenantId(siteTenantId), status, consentedAt, leftAt, leftBy, leftByActorId);
     }
 
     /** Composite key for {@link IdClass}. */

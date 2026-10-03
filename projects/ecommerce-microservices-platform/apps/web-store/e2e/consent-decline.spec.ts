@@ -15,6 +15,12 @@ import { fillGapCredentialForm, SEEDED_POOL_NOT_STORE_MEMBER } from './helpers/a
  * `[TASK-BE-619 AC-2]` stdout line, both in the JSON report) and pins the outcome the ticket fixed
  * after reading it.
  *
+ * MEASURED (nightly run 37094305963, before any copy change): `?error=OAuthCallbackError`, alert =
+ * the generic «로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.» — NOT `AccessDenied` / the
+ * operator message the ticket suspected, but still wrong: it told a person who declined to «retry
+ * later» as if something broke. Fix: `OAuthCallbackError` → `provider_error` (F5 vocabulary «IdP 가
+ * callback 에서 error 반환») with copy that says the login did not finish and how to continue.
+ *
  * Pair: `account-type-guard.spec.ts` (the same «IAM bounces back to web-store /login» shape).
  */
 test.describe('사이트 첫 방문 동의 거절 (web-store)', () => {
@@ -48,6 +54,13 @@ test.describe('사이트 첫 방문 동의 거절 (web-store)', () => {
     console.log(`[TASK-BE-619 AC-2] consent decline -> web-store /login?error=${error} | alert=${alertText}`);
 
     expect(error, 'web-store must say WHY the login ended (never a silent /login)').not.toBeNull();
+    // Pinned after the measurement: the value NextAuth v5 actually produces for a declined consent.
+    expect(error).toBe('OAuthCallbackError');
+    await expect(alert).toContainText('IAM 로그인이 끝나지 않았습니다');
+    await expect(alert).toContainText('동의하지 않으셨다면');
+    // 🔴 The two wrong readings this ticket exists for.
+    await expect(alert).not.toContainText('operator');
+    await expect(alert).not.toContainText('잠시 후 다시 시도');
     // No session was established — the store's entry button is still there.
     await expect(page.getByRole('button', { name: 'IAM 로그인' })).toBeVisible();
   });

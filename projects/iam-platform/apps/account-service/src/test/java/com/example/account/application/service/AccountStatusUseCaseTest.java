@@ -55,7 +55,9 @@ class AccountStatusUseCaseTest {
                 new AccountStatusMachine(), eventPublisher,
                 GRACE_PERIOD_DAYS,
                 // TASK-BE-616: flag off → exact findById(tenant, id), the lookups these cells stub.
-                () -> false);
+                () -> false,
+                // TASK-BE-619: only reached for a pool member found through a site — never in these cells.
+                org.mockito.Mockito.mock(LeaveConsumerSiteUseCase.class));
     }
 
     // ── getStatus ─────────────────────────────────────────────────────────────

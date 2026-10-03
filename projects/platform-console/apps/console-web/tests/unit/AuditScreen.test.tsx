@@ -157,6 +157,27 @@ describe('AuditScreen — filter submit & source switch', () => {
     expect(url.searchParams.get('page')).toBe('0');
   });
 
+  it('TASK-BE-619: a security source (login_history) says consumer-pool events are NOT in a site tenant list — no silent empty list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ ...PAGE, content: [], totalElements: 0, totalPages: 0 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AuditScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    // The admin source (initial) carries no note — it is not about security events.
+    expect(screen.queryByTestId('audit-consumer-pool-note')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByTestId('audit-filter-source'), 'login_history');
+    await user.click(screen.getByTestId('audit-filter-submit'));
+
+    const note = await screen.findByTestId('audit-consumer-pool-note');
+    expect(note).toHaveAttribute('role', 'note');
+    expect(note).toHaveTextContent('consumer-pool');
+    expect(note).toHaveTextContent('이 목록에는 나오지 않습니다');
+    await waitFor(() => expect(screen.getByTestId('audit-empty')).toBeInTheDocument());
+  });
+
   it('blocks the call with an inline range error when from > to (client guard)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

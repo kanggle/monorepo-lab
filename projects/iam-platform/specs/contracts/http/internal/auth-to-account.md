@@ -247,7 +247,8 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
   "consumerSite": true,
   "siteTenantType": "B2C_CONSUMER",
   "membershipStatus": "ACTIVE | LEFT | null",
-  "siteRoles": ["SELLER"]
+  "siteRoles": ["SELLER"],
+  "leftBy": "SELF | OPERATOR | null"
 }
 ```
 
@@ -257,6 +258,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 | `siteTenantType` | 그 테넌트의 권위 `tenant_type` — 풀 principal 토큰의 `tenant_type`. 없는 테넌트 → `null` |
 | `membershipStatus` | `consumer_site_memberships` 행의 상태. 행 없음 · 풀 계정이 아님 · 소비자 사이트 아님 → `null` |
 | `siteRoles` | `consumer_site_roles(account, 그 사이트)` — **그 사이트 것만**, 이름 오름차순. `ACTIVE` 일 때만 채운다(그 밖엔 `[]`). 시드(`CUSTOMER`/`FAN`)는 저장하지 않으므로 여기 없다 — 발급이 합친다 |
+| `leftBy` | **`TASK-BE-619`** — `LEFT` 멤버십을 누가 만들었나: `SELF`(본인 탈퇴) · `OPERATOR`(그 사이트 운영자가 내보냄). `LEFT` 가 아니거나 작성자 기록이 없으면 `null`. auth-service 는 **`SELF` 일 때만** authorize 에서 동의 화면을 다시 띄운다([multi-tenancy.md § 5 «사이트 탈퇴 vs 계정 삭제»](../../../features/multi-tenancy.md)) — 필드가 없는 옛 account-service 는 `null` 이라 지금처럼 토큰 거절(보수 쪽) |
 
 - 계정 조회는 `consumer-pool` 테넌트로 한정(`findById(CONSUMER_POOL, id)`) — 테넌트 없는 조회를 새로 만들지 않는다(§ 격리 회귀 방지).
 - **`iam.consumer-pool.enabled` 와 무관** — 플래그는 «새 가입이 풀로 가나» 만 정한다. 이미 있는 풀 계정은 플래그와 상관없이 로그인돼야 한다. 플래그가 꺼져 있으면 풀 계정을 만드는 경로가 없으므로 이 읽기에 도달하는 것도 없다.
@@ -293,10 +295,11 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 |---|---|---|
 | 소비자 사이트 ∧ ACTIVE 테넌트 ∧ 풀 계정 ∧ 그 사이트 멤버십 **행 없음** | `consumer_site_memberships(account, site, ACTIVE, consented_at = 지금)` | **1회**, `tenantId = 그 사이트`([account-events.md](../../events/account-events.md#accountcreated) «다른 사이트 첫 방문 동의» 행) |
 | 이미 `ACTIVE`(재제출 · 뒤로가기 재전송) | 없음 | 없음 |
-| `LEFT` | 없음 — 동의가 떠난 멤버십을 **다시 열지 않는다**(LEFT 의 작성자가 아직 없다; 재가입 규칙은 그 작성자의 결정) | 없음 |
+| `LEFT`, `left_by = SELF` (**`TASK-BE-619`** — 본인이 떠남) | 그 행을 **다시 `ACTIVE`** 로(`consented_at = 지금`, `left_*` 비움) — 소유자 결정 2026-10-03 «다시 동의하면 복귀» | **없음** — 그 사이트의 `account.created` 는 처음 들어갈 때 이미 한 번 나갔다(§ 6 «사이트마다 한 번») |
+| `LEFT`, `left_by = OPERATOR` 또는 작성자 기록 없음 | 없음 — 운영자가 내보낸 멤버십은 동의로 **다시 열리지 않는다**(`TASK-BE-619`) | 없음 |
 | 소비자 사이트 아님(B2B · 풀 테넌트 자신 · 없는 테넌트) · 정지된 사이트 · 풀 계정 아님 | 없음 | 없음 |
 
-- **멱등 — `(accountId, site)` 당 이벤트 정확히 1회.** 동시에 두 첫 동의가 오면 PK 가 충돌하고, 진 쪽 트랜잭션(멤버십 행 + 이벤트)은 통째로 롤백된 뒤 **읽기의 답**으로 200 을 준다.
+- **멱등 — `(accountId, site)` 당 이벤트 정확히 1회** (본인 탈퇴 후 복귀도 이벤트를 다시 내지 않는다 — `TASK-BE-619`). 동시에 두 첫 동의가 오면 PK 가 충돌하고, 진 쪽 트랜잭션(멤버십 행 + 이벤트)은 통째로 롤백된 뒤 **읽기의 답**으로 200 을 준다.
 - **역할은 쓰지 않는다.** 사이트 시드 역할(`CUSTOMER`/`FAN`)은 발급 때 계산되고 저장되지 않는다 — 동의 전에도, 동의로도 역할 행이 생기지 않는다(`TASK-BE-616` Failure Scenario 1).
 - **`iam.consumer-pool.enabled` 와 무관** — 위 GET 과 같은 이유(이미 있는 풀 계정은 플래그와 상관없이 다른 사이트에 들어갈 수 있어야 한다).
 - 계정 조회는 `findById(CONSUMER_POOL, id)` 로만 — 테넌트 없는 조회 신설 없음.

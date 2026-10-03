@@ -101,7 +101,10 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | `account_id` | VARCHAR(36) | NOT NULL, PK, FK → `accounts.id` | internal | 풀 계정 |
 | `site_tenant_id` | VARCHAR(32) | NOT NULL, PK, FK → `tenants.tenant_id` | internal | 소비자 사이트 테넌트(`fan-platform` · `ecommerce`). 🔴 `consumer-pool` 이면 안 된다(애플리케이션 검사) |
 | `status` | VARCHAR(20) | NOT NULL | internal | `ACTIVE` / `LEFT` (사이트 탈퇴 — 계정 자체 삭제와 별개) |
-| `consented_at` | DATETIME(6) | NOT NULL | internal | 그 사이트 이용 동의 시각(UTC). 가입한 사이트는 가입 시각 |
+| `consented_at` | DATETIME(6) | NOT NULL | internal | 그 사이트 이용 동의 시각(UTC). 가입한 사이트는 가입 시각. 본인 탈퇴 뒤 다시 동의하면 그 시각(`TASK-BE-619`) |
+| `left_at` | DATETIME(6) | NULL | internal | **`TASK-BE-619`(`V0032`)** — `LEFT` 가 된 시각(UTC). `ACTIVE` 면 NULL(CHECK) |
+| `left_by` | VARCHAR(20) | NULL, CHECK (`SELF`,`OPERATOR`) | internal | **`TASK-BE-619`** — 누가 `LEFT` 로 만들었나. `SELF` = 본인 탈퇴(다시 동의하면 `ACTIVE`), `OPERATOR` = 그 사이트 운영자가 내보냄(동의로 다시 열리지 않는다) — 소유자 결정 2026-10-03. `ACTIVE` 면 NULL(CHECK). `LEFT` 인데 NULL(619 이전 — 작성자가 없어 0행)은 `OPERATOR` 처럼 읽는다 |
+| `left_by_actor_id` | VARCHAR(64) | NULL | internal | **`TASK-BE-619`** — `OPERATOR` 면 운영자 id, `SELF` 면 그 계정 id |
 
 **PK**: `(account_id, site_tenant_id)`. **인덱스**: `(site_tenant_id, status)` — 사이트 테넌트로 계정을 찾는 표면(목록·콘솔 계정 운영)이 쓴다.
 
@@ -305,6 +308,7 @@ ALTER TABLE tenants
 - `V0027__create_org_node_and_tenant_fk.sql` — TASK-BE-491 (ADR-MONO-047 § 4 step 2): `org_node` 테이블 + `tenants.org_node_id` **nullable** FK + `idx_org_node_parent` / `idx_tenants_org_node`. `org_node_id` NULLABLE 이므로 기존 tenant row 는 백필 없이 net-zero (D7). 노드별 1:1 백필(1 node + 1 service-tenant per 기존 tenant)은 별도 TASK-BE-493 이며 behavioural no-op.
 - `V0029__seed_consumer_pool_tenant.sql` — TASK-BE-614 (ADR-MONO-078 A): `tenants` 에 `consumer-pool` 행(`B2C_CONSUMER` · `ACTIVE` · `org_node_id` NULL). `tenant_type` 은 `TenantType` enum 이 두 값뿐이라 `B2C_CONSUMER` — «소비자 **사이트**» 판정은 이 id 를 명시적으로 뺀다(`Tenant.isConsumerSite()`).
 - `V0030__create_consumer_site_memberships_and_roles.sql` — TASK-BE-614: 위 두 신설 테이블. 스펙이 정하지 않은 두 가지를 구현이 정했다: `consumer_site_memberships.account_id` FK 는 `account_roles` 와 같이 **ON DELETE CASCADE**, `status` 는 **CHECK (`ACTIVE`,`LEFT`)**.
+- `V0032__add_leave_record_to_consumer_site_memberships.sql` — TASK-BE-619: `consumer_site_memberships` 에 `left_at` · `left_by` · `left_by_actor_id`(모두 NULL 허용) + CHECK 둘(`left_by` 값 · `ACTIVE` 면 탈퇴 기록 없음). 기존 행은 전부 `ACTIVE`(619 전에는 `LEFT` 작성자가 없었다)라 백필 없이 CHECK 가 성립한다. (`V0031` 은 TASK-MONO-750 의 팬 도메인 구독 시드.)
 - 각 마이그레이션은 forward-only. down migration은 PII 보존 규칙상 **제공하지 않음** (R6 — 데이터 복원 경로를 제한적으로만 허용)
 
 ---

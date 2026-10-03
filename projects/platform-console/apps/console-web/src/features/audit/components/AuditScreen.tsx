@@ -74,6 +74,7 @@ export function AuditScreen({
     resetFilters,
     rangeError,
     securityKnownDenied,
+    securitySourceApplied,
     data,
     rows,
     totalPages,
@@ -111,6 +112,25 @@ export function AuditScreen({
         securityKnownDenied={securityKnownDenied}
         superAdminTenants={superAdminTenants}
       />
+
+      {/* TASK-BE-619 (iam multi-tenancy.md § 소비자 계정 풀 § 5) — NOT included, and said so: a
+          consumer-pool account's login / suspicious-activity events are recorded under the tenant
+          `consumer-pool`, because one IAM login is not a login to any one site (the session serves
+          every site it is a member of). Folding them into a site's view would either show another
+          site's activity of the same person or need a site on every event — so the list stays
+          per-tenant and this note keeps an empty list from reading as «no activity». */}
+      {securitySourceApplied && !permissionDenied && !validationDenied && !degraded && (
+        <p
+          role="note"
+          data-testid="audit-consumer-pool-note"
+          className="mb-6 rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
+        >
+          팬·스토어가 함께 쓰는 IAM 공용 계정(소비자 계정 풀)의 로그인 이력·의심 활동은 사이트
+          테넌트(ecommerce · fan-platform)가 아니라 <code>consumer-pool</code> 테넌트로 기록됩니다.
+          그 계정이 이 사이트의 멤버여도 사이트 테넌트로 조회한 이 목록에는 나오지 않습니다 —
+          IAM 로그인 한 번은 특정 사이트에 속하지 않기 때문입니다.
+        </p>
+      )}
 
       {rangeError && (
         <p

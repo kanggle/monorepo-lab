@@ -3,6 +3,7 @@ package com.example.account.application.service;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.result.ConsumerSiteMembershipResult;
 import com.example.account.domain.account.Account;
+import com.example.account.domain.consumerpool.ConsumerSiteLeftBy;
 import com.example.account.domain.consumerpool.ConsumerSiteMembership;
 import com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus;
 import com.example.account.domain.profile.Profile;
@@ -108,7 +109,49 @@ class ConsentToConsumerSiteUseCaseTest {
     }
 
     @Test
-    @DisplayName("LEFT 멤버십 → 동의가 다시 열지 않는다 · 쓰기 0 · 이벤트 0")
+    @DisplayName("TASK-BE-619 — 본인이 떠난(LEFT·SELF) 멤버십 → 다시 동의하면 ACTIVE 로 돌아온다 · account.created 는 다시 내지 않는다")
+    void selfLeftMembership_isReopenedByConsent_withoutEvent() {
+        given(tenantRepository.findById(FAN)).willReturn(Optional.of(
+                tenant("fan-platform", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE)));
+        given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT)).willReturn(Optional.of(mock(Account.class)));
+        given(membershipRepository.find(FAN, ACCOUNT)).willReturn(Optional.of(ConsumerSiteMembership.reconstitute(
+                ACCOUNT, FAN, ConsumerSiteMembershipStatus.LEFT, Instant.EPOCH,
+                Instant.parse("2026-10-02T00:00:00Z"), ConsumerSiteLeftBy.SELF, ACCOUNT)));
+        given(read.execute("fan-platform", ACCOUNT)).willReturn(answer("fan-platform", true, "ACTIVE"));
+        Instant before = Instant.now();
+
+        assertThat(useCase.execute("fan-platform", ACCOUNT).membershipStatus()).isEqualTo("ACTIVE");
+
+        ArgumentCaptor<ConsumerSiteMembership> written = ArgumentCaptor.forClass(ConsumerSiteMembership.class);
+        verify(membershipRepository).update(written.capture());
+        assertThat(written.getValue().getStatus()).isEqualTo(ConsumerSiteMembershipStatus.ACTIVE);
+        assertThat(written.getValue().getConsentedAt()).isAfterOrEqualTo(before);
+        assertThat(written.getValue().getLeftBy()).isNull();
+        assertThat(written.getValue().getLeftAt()).isNull();
+        verify(membershipRepository, never()).insert(any());
+        verifyNoInteractions(eventPublisher, profileRepository);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619 — 사이트 운영자가 내보낸(LEFT·OPERATOR) 멤버십 → 동의가 다시 열지 않는다 · 쓰기 0 · 이벤트 0")
+    void operatorLeftMembership_isNotReopened() {
+        given(tenantRepository.findById(FAN)).willReturn(Optional.of(
+                tenant("fan-platform", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE)));
+        given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT)).willReturn(Optional.of(mock(Account.class)));
+        given(membershipRepository.find(FAN, ACCOUNT)).willReturn(Optional.of(ConsumerSiteMembership.reconstitute(
+                ACCOUNT, FAN, ConsumerSiteMembershipStatus.LEFT, Instant.EPOCH,
+                Instant.parse("2026-10-02T00:00:00Z"), ConsumerSiteLeftBy.OPERATOR, "op-1")));
+        given(read.execute("fan-platform", ACCOUNT)).willReturn(answer("fan-platform", true, "LEFT"));
+
+        assertThat(useCase.execute("fan-platform", ACCOUNT).membershipStatus()).isEqualTo("LEFT");
+
+        verify(membershipRepository, never()).insert(any());
+        verify(membershipRepository, never()).update(any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("기록된 작성자가 없는 LEFT 멤버십 → 운영자 쪽으로 읽는다(보수) · 동의가 다시 열지 않는다 · 쓰기 0 · 이벤트 0")
     void leftMembership_isNotReopened() {
         given(tenantRepository.findById(FAN)).willReturn(Optional.of(
                 tenant("fan-platform", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE)));

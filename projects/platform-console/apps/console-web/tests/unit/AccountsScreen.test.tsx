@@ -167,6 +167,53 @@ describe('AccountsScreen — destructive ops are reason-gated', () => {
     );
   });
 
+  it('TASK-BE-619: a GDPR request that ended only the site membership (scope SITE_MEMBERSHIP) says so — never read as «erased»', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        accountId: 'acc-1',
+        status: 'ACTIVE',
+        maskedAt: null,
+        auditId: 'a',
+        scope: 'SITE_MEMBERSHIP',
+        siteTenantId: 'ecommerce',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('action-gdpr-acc-1'));
+    const dialog = screen.getByTestId('confirm-dialog');
+    expect(dialog).toHaveTextContent('IAM 공용 계정이면');
+    await user.type(within(dialog).getByTestId('confirm-reason'), 'erasure');
+    await user.type(within(dialog).getByTestId('confirm-typed'), 'DELETE');
+    await user.click(within(dialog).getByTestId('confirm-submit'));
+
+    const notice = await screen.findByTestId('accounts-gdpr-site-scope');
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveTextContent('alice@x.com');
+    expect(notice).toHaveTextContent('ecommerce 사이트에서만 탈퇴 처리했습니다');
+    expect(notice).toHaveTextContent('계정 전체 삭제는 본인 또는 플랫폼 관리자만');
+  });
+
+  it('TASK-BE-619 control: an account erasure (scope ACCOUNT / absent) shows no site-scope notice', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ accountId: 'acc-1', status: 'DELETED', maskedAt: 'x', auditId: 'a' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('action-gdpr-acc-1'));
+    const dialog = screen.getByTestId('confirm-dialog');
+    await user.type(within(dialog).getByTestId('confirm-reason'), 'erasure');
+    await user.type(within(dialog).getByTestId('confirm-typed'), 'DELETE');
+    await user.click(within(dialog).getByTestId('confirm-submit'));
+
+    await waitFor(() => expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('accounts-gdpr-site-scope')).not.toBeInTheDocument();
+  });
+
   it('cancel closes the dialog without calling the proxy', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

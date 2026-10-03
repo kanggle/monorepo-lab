@@ -87,6 +87,11 @@ export function accountActionDescription(pending: PendingAction): ReactNode {
     <>
       <strong>{pending.account?.email}</strong> 계정을 GDPR 삭제 합니다. 이
       작업은 <strong>되돌릴 수 없으며</strong> 개인정보가 즉시 마스킹됩니다.
+      {/* TASK-BE-619 — owner decision 2026-10-03: a site operator may only end
+          THEIR site's membership of a consumer-pool account. */}{' '}
+      단, 팬·스토어가 함께 쓰는 IAM 공용 계정이면 사이트 운영자의 요청은 계정을
+      지우지 않고 지금 사이트에서만 탈퇴 처리합니다(계정 전체 삭제는 본인 또는
+      플랫폼 관리자).
     </>
   ) : (
     <>

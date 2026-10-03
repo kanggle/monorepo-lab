@@ -43,14 +43,21 @@ public class AdminGdprController {
         // TASK-BE-467: resolve + effective-scope-gate the actor's active tenant;
         // stamped downstream as X-Tenant-Id (cross-tenant target → 404).
         OperatorContext op = OperatorContextHolder.require();
-        String resolvedTenant = queryTenantScopeGate.resolve(
-                op, tenantId, ActionCode.GDPR_DELETE, Permission.ACCOUNT_LOCK).tenantId();
+        QueryTenantScopeGate.Resolved resolved = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.GDPR_DELETE, Permission.ACCOUNT_LOCK);
+        // TASK-BE-619 (owner decision 2026-10-03): erasing a consumer-pool account is the person's or a
+        // PLATFORM admin's. The platform admin is told apart by role, not by the console's active tenant
+        // (the console always sends one): a platform-scope operator is stamped "*" downstream, which
+        // account-service reads as «no tenant named» → the account found by its own row is erased. A site
+        // operator keeps their active tenant, and on a pool member account-service ends only that site's
+        // membership (scope SITE_MEMBERSHIP).
+        String downstreamTenant = resolved.isPlatformScope() ? "*" : resolved.tenantId();
 
         GdprDeleteResult r = useCase.gdprDelete(new GdprDeleteCommand(
-                accountId, reason, ticketId, idempotencyKey, op, resolvedTenant));
+                accountId, reason, ticketId, idempotencyKey, op, downstreamTenant));
 
         return ResponseEntity.ok(new GdprDeleteResponse(
-                r.accountId(), r.status(), r.maskedAt(), r.auditId()));
+                r.accountId(), r.status(), r.maskedAt(), r.auditId(), r.scope(), r.siteTenantId()));
     }
 
     @GetMapping("/{accountId}/export")

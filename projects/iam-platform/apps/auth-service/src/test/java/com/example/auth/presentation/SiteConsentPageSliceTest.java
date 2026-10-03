@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -164,7 +166,9 @@ class SiteConsentPageSliceTest {
         String html = html(result);
         assertThat(html).contains("<title>이 사이트 이용 동의</title>");
         assertThat(html).contains("<h1>이 사이트 이용 동의</h1>");
-        assertThat(html).contains("IAM으로 안전하게 로그인합니다");
+        // TASK-BE-619 (owner decision «동의 화면 전용 부제»): the consent's own subtitle, never the login one.
+        assertThat(html).contains("이 사이트에서 내 IAM 계정을 쓰도록 허용합니다.");
+        assertThat(html).doesNotContain("IAM으로 안전하게 로그인합니다");
         assertThat(html).contains("--brand: #9333ea");
         assertThat(html).contains("<html lang=\"ko\"");
         assertThat(count(html, "<form\\b")).isEqualTo(1);
@@ -180,7 +184,26 @@ class SiteConsentPageSliceTest {
                 .doesNotContain("data-busy-label");
         assertThat(html).as("narrow screens: the card never exceeds the viewport (400px)")
                 .contains("max-width: calc(100vw - 32px)");
-        verifyNoInteractions(accountServicePort);
+        // TASK-BE-619: the only call is the site-name read (unstubbed → empty → «이 사이트»); nothing is written.
+        verify(accountServicePort).getTenant("fan-platform");
+        verifyNoMoreInteractions(accountServicePort);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619: 동의 화면 부제 = «{사이트 이름}에서 내 IAM 계정을 쓰도록 허용합니다.» — 이름은 보관된 client 의 사이트 테넌트 display_name · 조회 실패는 «이 사이트»")
+    void subtitle_namesTheSite_failSoft() throws Exception {
+        when(accountServicePort.getTenant("fan-platform")).thenReturn(Optional.of(
+                new AccountServicePort.TenantLookupResult("B2C_CONSUMER", "ACTIVE", "Fan Platform")));
+
+        String named = html(perform(get("/consent").session(parkedAuthorize()).principal(principal("consumer-pool"))));
+        assertThat(named).contains("Fan Platform에서 내 IAM 계정을 쓰도록 허용합니다.");
+        assertThat(named).doesNotContain("로그인합니다");
+        assertThat(named).as("a returning (self-left) member reads it too — no «처음»").doesNotContain("처음 이용");
+
+        when(accountServicePort.getTenant("fan-platform")).thenThrow(new RuntimeException("down"));
+        MvcResult failed = perform(get("/consent").session(parkedAuthorize()).principal(principal("consumer-pool")));
+        assertThat(failed.getResponse().getStatus()).as("the page never fails over a label").isEqualTo(200);
+        assertThat(html(failed)).contains("이 사이트에서 내 IAM 계정을 쓰도록 허용합니다.");
     }
 
     @Test
@@ -286,7 +309,9 @@ class SiteConsentPageSliceTest {
 
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(html(result)).contains("value=\"accept\"");
-        verifyNoInteractions(accountServicePort);
+        // TASK-BE-619: the re-rendered page reads the site name (subtitle); no write.
+        verify(accountServicePort).getTenant("fan-platform");
+        verifyNoMoreInteractions(accountServicePort);
     }
 
     @Test

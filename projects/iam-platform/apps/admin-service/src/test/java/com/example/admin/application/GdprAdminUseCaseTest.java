@@ -84,6 +84,28 @@ class GdprAdminUseCaseTest {
         }
 
         @Test
+        @DisplayName("TASK-BE-619: 하류가 scope=SITE_MEMBERSHIP 이면 maskedAt 을 지어내지 않고, 감사 행 detail 이 «사이트 멤버십만» 을 말한다")
+        void gdprDelete_siteScope_noFabricatedMaskedAt_auditDetailSaysSo() {
+            when(auditor.newAuditId()).thenReturn("audit-site");
+            when(accountServiceClient.gdprDelete(anyString(), anyString(), anyString(), anyString()))
+                    .thenReturn(new AccountServiceClient.GdprDeleteResponse(
+                            "acc-1", "ACTIVE", null, null, "SITE_MEMBERSHIP", "ecommerce"));
+
+            GdprDeleteResult r = useCase.gdprDelete(new GdprDeleteCommand(
+                    "acc-1", "erasure request", null, "idemp-site", operator(), "ecommerce"));
+
+            assertThat(r.scope()).isEqualTo("SITE_MEMBERSHIP");
+            assertThat(r.siteTenantId()).isEqualTo("ecommerce");
+            assertThat(r.status()).isEqualTo("ACTIVE");
+            assertThat(r.maskedAt()).as("nothing was masked — never stamp a masking time").isNull();
+            ArgumentCaptor<AdminActionAuditor.CompletionRecord> captor =
+                    ArgumentCaptor.forClass(AdminActionAuditor.CompletionRecord.class);
+            verify(auditor).recordCompletion(captor.capture());
+            assertThat(captor.getValue().outcome()).isEqualTo(Outcome.SUCCESS);
+            assertThat(captor.getValue().downstreamDetail()).isEqualTo("SITE_MEMBERSHIP_LEFT site=ecommerce");
+        }
+
+        @Test
         @DisplayName("downstream maskedAt 이 null 이면 useCase 가 completedAt 을 사용한다")
         void gdprDelete_downstream_maskedAt_null_uses_completedAt() {
             when(auditor.newAuditId()).thenReturn("audit-mask-null");

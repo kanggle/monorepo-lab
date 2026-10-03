@@ -7,6 +7,8 @@ import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.result.AccountStatusResult;
 import com.example.account.application.result.AccountStatusWithTenantResult;
 import com.example.account.application.result.DeleteAccountResult;
+import com.example.account.application.result.LeaveConsumerSiteResult;
+import com.example.account.domain.consumerpool.ConsumerSiteLeftBy;
 import com.example.account.application.result.StatusChangeResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.history.AccountStatusHistoryEntry;
@@ -31,19 +33,23 @@ public class AccountStatusUseCase {
     private final int gracePeriodDays;
     /** TASK-BE-616 — § 5: a site-keyed lookup includes that site's ACTIVE pool members ({@link SiteAccountLookup}). */
     private final ConsumerPoolFlag consumerPoolFlag;
+    /** TASK-BE-619 — what a site operator's delete of a pool member becomes: that site's membership LEFT. */
+    private final LeaveConsumerSiteUseCase leaveConsumerSiteUseCase;
 
     public AccountStatusUseCase(AccountRepository accountRepository,
                                  AccountStatusHistoryRepository historyRepository,
                                  AccountStatusMachine statusMachine,
                                  AccountEventPublisher eventPublisher,
                                  @Value("${account.deletion.grace-period-days:30}") int gracePeriodDays,
-                                 ConsumerPoolFlag consumerPoolFlag) {
+                                 ConsumerPoolFlag consumerPoolFlag,
+                                 LeaveConsumerSiteUseCase leaveConsumerSiteUseCase) {
         this.accountRepository = accountRepository;
         this.historyRepository = historyRepository;
         this.statusMachine = statusMachine;
         this.eventPublisher = eventPublisher;
         this.gracePeriodDays = gracePeriodDays;
         this.consumerPoolFlag = consumerPoolFlag;
+        this.leaveConsumerSiteUseCase = leaveConsumerSiteUseCase;
     }
 
     /**
@@ -225,16 +231,40 @@ public class AccountStatusUseCase {
     }
 
     /**
-     * TASK-BE-467 — tenant-aware operator delete. Cross-tenant target → 404 via the
+     * TASK-BE-467 — tenant-aware delete. Cross-tenant target → 404 via the
      * tenant-scoped {@code findById} (enumeration-safe confinement).
+     *
+     * <p>The person's own {@code DELETE /api/accounts/me} comes here: a pool member deleting themself through
+     * a site deletes the ONE pool account — everywhere (TASK-BE-616; owner decision 2026-10-03: deleting the
+     * pool account is the person's or a platform admin's). A site OPERATOR's delete does not come here — it
+     * is {@link #deleteAccountAsTenantOperator} (TASK-BE-619).
      */
     @Transactional
     public DeleteAccountResult deleteAccount(String accountId, StatusChangeReason reason,
                                               String actorType, String actorId, TenantId tenantId) {
-        // TASK-BE-616: a pool member deleted through a site deletes the ONE pool account — everywhere.
         Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
                 .orElseThrow(() -> new AccountNotFoundException(accountId));
         return applyDelete(account, reason, actorType, actorId);
+    }
+
+    /**
+     * TASK-BE-619 (owner decision 2026-10-03 «사이트 운영자 삭제 권한 = 자기 사이트 멤버십만») — the internal
+     * {@code /delete} by an operator who NAMES a tenant. A site's own account is deleted as before. A
+     * consumer-POOL member found through the site is NOT deleted: only that site's membership ends
+     * ({@code left_by = OPERATOR}) and the answer says {@code scope = SITE_MEMBERSHIP}. Same rule as the
+     * GDPR erasure ({@code GdprDeleteUseCase#execute(String, String, TenantId)}).
+     */
+    @Transactional
+    public DeleteAccountResult deleteAccountAsTenantOperator(String accountId, StatusChangeReason reason,
+                                                             String operatorId, TenantId tenantId) {
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, accountId)
+                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        if (account.getTenantId().isConsumerPool() && !tenantId.isConsumerPool()) {
+            LeaveConsumerSiteResult left = leaveConsumerSiteUseCase.execute(
+                    tenantId.value(), accountId, ConsumerSiteLeftBy.OPERATOR, operatorId);
+            return DeleteAccountResult.siteMembershipLeft(accountId, left.accountStatus(), tenantId.value());
+        }
+        return applyDelete(account, reason, "operator", operatorId);
     }
 
     /**

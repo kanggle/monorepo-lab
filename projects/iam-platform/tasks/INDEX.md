@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-619-consumer-pool-followups-leave-site-decline-copy-security-view.md` — **전역 소비자 계정 후속 셋** (READY, 2026-10-01 UTC · `TASK-BE-616` 인계) — ① 사이트 탈퇴(멤버십 LEFT) vs 계정 삭제(지금 GDPR 삭제는 풀 계정 하나 → 모든 사이트) · ② 동의 거절 시 web-store 문구(측정 먼저) · ③ 콘솔 보안 이벤트를 사이트 테넌트로 보면 풀 계정 이벤트가 안 보임.
 - `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY · ⏳ **보류** 2026-10-02 UTC 소유자 결정 — 소셜 키가 어느 배포에도 없어 성공 불가 · 소셜 신원 0개, AC-00 게이트: 실제 키 주입 시 착수 · 보류 동안 방어 = `TASK-BE-620` · 2026-10-01 UTC · 선행 614~616 — 743 은 2026-10-02 보류로 빠짐 · 618 이 건너뛴 소셜 연결 계정 인계). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -119,6 +118,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+- `TASK-BE-619-consumer-pool-followups-leave-site-decline-copy-security-view.md` — 🟡 **REVIEW (2026-10-03 UTC)** 전역 소비자 계정 후속 셋 + 관찰 ④⑤, 한 PR. ① 소유자 결정 «사이트 운영자 삭제 = 자기 사이트 멤버십만» · «본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님» — account `V0032`(`left_by` SELF/OPERATOR) · `DELETE /api/accounts/me/site-membership` · 사이트 운영자 GDPR 삭제가 풀 멤버면 그 사이트만 LEFT(`scope=SITE_MEMBERSHIP`) · 플랫폼(`*`)만 풀 계정 삭제. ② 측정 먼저: 거절 → web-store `?error=OAuthCallbackError`(일반 fallback, 가설 `AccessDenied` 아님 — nightly 37094305963) → `provider_error` 매핑·문구. ③ 콘솔 보안 이벤트는 포함하지 않고 화면이 말한다(`role=note`). ④ 동의 화면 전용 부제. ⑤ 의도된 동작으로 기록. account/auth/admin `check` rc=0 · bite 3종 · 통합(Docker) ⚪ CI 판정.
 - `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 소셜 신원 조회를 **시작 client 의 테넌트로 한정** — 전역 `findByProviderAndProviderUserId` 를 없애고 `(tenant_id, provider, provider_user_id)` 조회로(unique 키와 같은 모양). 미스 → 그 테넌트에서 가입. 스펙 개정 먼저(«테넌트마다 하나»). `TASK-BE-602` 후속 ① 경쟁 조건 소멸. 🔴 AC-0 ② «새 계정» 은 그 테넌트에 같은 이메일 계정이 없을 때만 — 있으면 기존 auto-link(티켓 § 전제 정정). 로컬 auth `test` rc=0 · bite 2종 → 새 셀 빨강. 실 MySQL 슬라이스는 CI.
 - `TASK-BE-609-password-change-and-reset-unreachable-through-the-gateway.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). ① 게이트웨이 `public-paths` 에 재설정 두 경로(POST 정확 경로) ② 원인 = auth-service `@Order(2)` 체인의 Bearer 필터가 `permitAll` 보다 먼저 돌아 게이트웨이가 넘긴 **사용자 토큰을 내부 자격으로 재검증**(401) → Bearer 를 `/internal/**` 에서만 읽는 리졸버. 같은 모양의 형제(세션 4경로 · logout)도 함께 풀림. 로컬 rc=0(gateway 122 · auth 877) · bite → 새 셀 3개만 빨강. 🔴 게이트웨이 경유 IT 는 Docker → CI 판정.
 

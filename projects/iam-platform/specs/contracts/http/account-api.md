@@ -254,6 +254,41 @@
 - auth-service의 모든 세션 무효화 (이벤트 소비)
 - 30일 후 PII 익명화 배치 실행
 
+🔴 **소비자 계정 풀 (`TASK-BE-619`)**: 풀 계정(팬·스토어가 함께 쓰는 IAM 계정)이 사이트 토큰으로 부르면 **풀 계정 하나**가 삭제된다 — 그 사람의 **모든 소비자
+사이트**에서(소유자 결정 2026-10-03: 풀 계정 삭제는 본인 또는 플랫폼 관리자). «이 사이트만 그만 쓰기» 는 아래 `DELETE /api/accounts/me/site-membership` 이다.
+응답에 `scope: "ACCOUNT"` · `siteTenantId: null` 이 더해진다(내부 `/delete` 와 같은 DTO — [admin-to-account.md](internal/admin-to-account.md)).
+
+---
+
+## DELETE /api/accounts/me/site-membership
+
+**`TASK-BE-619`** — «이 사이트 탈퇴»: 로그인한 **풀 계정**이 토큰의 사이트(게이트웨이 `X-Tenant-Id` = 토큰 `tenant_id`)만 그만 쓴다. 그 사이트 멤버십이 `LEFT`
+(`left_by = SELF`)가 되고, 그 사이트의 사이트 역할(`consumer_site_roles`)이 지워진다. **계정 · PII · 다른 사이트 멤버십은 그대로**다. 다음 authorize · refresh 부터 그 사이트
+토큰이 발급되지 않는다. 다시 그 사이트에 로그인해 동의 화면에서 «동의» 하면 돌아온다(소유자 결정 2026-10-03 «다시 동의하면 복귀» —
+[multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md)).
+
+**Auth required**: Yes (`X-Account-Id` · `X-Tenant-Id`, gateway 주입). Request body 없음.
+
+**Response 200**:
+```json
+{
+  "accountId": "string (UUID)",
+  "siteTenantId": "ecommerce",
+  "membershipStatus": "LEFT",
+  "leftBy": "SELF | OPERATOR",
+  "leftAt": "2026-10-03T10:00:00Z"
+}
+```
+
+- **멱등**: 이미 `LEFT` 면 쓰기 없이 지금 행을 답한다. 그 사이트 운영자가 먼저 내보냈다면 `leftBy = OPERATOR` 그대로다(본인 탈퇴가 «복귀 가능» 으로 낮추지 않는다).
+- **이벤트 없음** — `account.*` 를 내지 않는다(계정의 수명주기는 바뀌지 않았다).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 409 | `SITE_MEMBERSHIP_REQUIRED` | 그 사이트의 멤버십이 없다 — 사이트별 계정(풀이 아님: «탈퇴» 가 곧 `DELETE /api/accounts/me`), 멤버십 행 없음, 소비자 사이트가 아닌 테넌트 |
+
 ---
 
 ## Common Error Format

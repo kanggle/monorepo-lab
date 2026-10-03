@@ -79,7 +79,7 @@ base path: `/api/admin`
 
 - 생략 → 운영자 자신의 테넌트. 일반(비-플랫폼) 운영자가 effective scope 밖의 테넌트를 지정하면 → **`403 TENANT_SCOPE_DENIED`** (best-effort DENIED `admin_actions` row, BE-262 미러링).
 - 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다. 대상 계정이 **다른 테넌트**면 tenant-scoped 조회가 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주지 않는다).
-- **SUPER_ADMIN 플랫폼 스코프**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 admin-service 는 `'*'` 를 그대로 스탬프한다. account-service 는 **`lock` · `unlock` 에서 계정 행의 테넌트**로 대상을 찾는다(TASK-MONO-735 — 이전엔 `fan-platform` 기본값이라 `fan-platform` 밖 계정이 404 였다) · `gdpr-delete` · `export` 는 여전히 `fan-platform` 기본값(BE-467 net-zero). 상세: [admin-to-account.md § Tenant Confinement](internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
+- **SUPER_ADMIN 플랫폼 스코프**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 admin-service 는 `'*'` 를 그대로 스탬프한다. account-service 는 **`lock` · `unlock` 에서 계정 행의 테넌트**로 대상을 찾는다(TASK-MONO-735 — 이전엔 `fan-platform` 기본값이라 `fan-platform` 밖 계정이 404 였다) · **`gdpr-delete` 도 같다(TASK-BE-619)** — 그리고 `gdpr-delete` 는 SUPER_ADMIN 이 활성 테넌트를 골라 둔 채 불러도 **항상** `'*'` 를 찍는다(아래 § gdpr-delete) · `export` 는 여전히 `fan-platform` 기본값(BE-467 net-zero). 상세: [admin-to-account.md § Tenant Confinement](internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
 - **session-revoke** 는 admin-service 가 활성 테넌트를 동일하게 해소·스탬프하며(TASK-BE-467), auth-service 가 이를 **실제로 enforce** 한다(**TASK-BE-468**): 구체 테넌트가 계정을 소유하지 않으면 force-logout 은 **no-op**(`revokedTokenCount=0`, DB revoke·Redis 무효화 미수행 — enumeration-safe). 부재/`'*'` → net-zero. 상세: [admin-to-auth.md](internal/admin-to-auth.md#tenant-confinement--x-tenant-id-task-be-468).
 
 ---
@@ -799,10 +799,22 @@ GDPR/PIPA 삭제권 이행. 계정 상태를 DELETED로 전이하고 PII를 즉�
 {
   "accountId": "string",
   "status": "DELETED",
-  "maskedAt": "2026-04-18T10:00:00Z",
-  "auditId": "string (admin_actions.id)"
+  "maskedAt": "2026-04-18T10:00:00Z | null",
+  "auditId": "string (admin_actions.id)",
+  "scope": "ACCOUNT | SITE_MEMBERSHIP",
+  "siteTenantId": "string | null"
 }
 ```
+
+**누가 무엇을 지우나 (`TASK-BE-619`, 소유자 결정 2026-10-03 — [multi-tenancy.md § 소비자 계정 풀 § 5 «사이트 탈퇴 vs 계정 삭제»](../../features/multi-tenancy.md))**:
+
+| 운영자 | 하류 `X-Tenant-Id` | 대상 | 결과 |
+|---|---|---|---|
+| **플랫폼 스코프**(SUPER_ADMIN — `QueryTenantScopeGate.Resolved.isPlatformScope`) | **항상 `'*'`** — 콘솔이 활성 테넌트를 보내도. 플랫폼 관리자는 역할로 가른다(콘솔은 늘 활성 테넌트를 보낸다) | 계정 행 자신의 테넌트로 찾은 계정 | 계정 삭제 + PII 마스킹(풀 계정이면 모든 소비자 사이트에서) · `scope = ACCOUNT` |
+| 그 밖(사이트 운영자) | 활성 테넌트(BE-467 그대로) | 그 사이트의 **풀 멤버** | **아무것도 지우지 않는다** — 그 사이트 멤버십만 `LEFT`. `scope = SITE_MEMBERSHIP`, `status` = 계정의 지금 상태, `maskedAt = null`, `siteTenantId` = 그 사이트. 감사 행(`admin_actions`, `GDPR_DELETE` · `SUCCESS`)의 `downstream_detail` = `SITE_MEMBERSHIP_LEFT site=<사이트>` |
+| 〃 | 〃 | 그 사이트의 **자기 계정** | 계정 삭제 + 마스킹 · `scope = ACCOUNT` (기존 그대로) |
+
+`scope` 가 없는 응답(옛 account-service)은 `ACCOUNT` 로 읽는다. 콘솔은 `SITE_MEMBERSHIP` 을 «이 사이트에서만 탈퇴 처리» 로 따로 보여 준다(«삭제됨» 으로 읽히지 않게).
 
 **Errors**:
 

@@ -101,11 +101,22 @@ export type RevokeSessionResult = z.infer<typeof RevokeSessionResultSchema>;
 
 // --- gdpr-delete (irreversible) -------------------------------------------
 
+// TASK-BE-619 (iam admin-api.md § gdpr-delete): a SITE operator's request on a
+// consumer-pool account (one IAM account shared by the fan and store sites)
+// erases nothing — it ends only that site's membership (`scope =
+// SITE_MEMBERSHIP`, `maskedAt = null`, `status` = the account's unchanged
+// status). Erasing the pool account itself is the person's or a platform
+// admin's. `scope` is optional so an older admin-service still parses.
+export const GdprDeleteScopeSchema = z.enum(['ACCOUNT', 'SITE_MEMBERSHIP']);
+export type GdprDeleteScope = z.infer<typeof GdprDeleteScopeSchema>;
+
 export const GdprDeleteResultSchema = z.object({
   accountId: z.string(),
   status: z.string(),
-  maskedAt: z.string(),
+  maskedAt: z.string().nullable(),
   auditId: z.string(),
+  scope: GdprDeleteScopeSchema.optional(),
+  siteTenantId: z.string().nullable().optional(),
 });
 export type GdprDeleteResult = z.infer<typeof GdprDeleteResultSchema>;
 
