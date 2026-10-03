@@ -8,7 +8,7 @@ TASK-MONO-750
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -164,3 +164,11 @@ monorepo
 - fan gateway `allowed-audiences` 에 콘솔 client 가 없다(SHADOW 라 지금은 로그만). 751 이 실제로 닿은 뒤 측정해 넣어야 ENFORCE 전환이 콘솔을 끊지 않는다.
 - 콘솔 레지스트리 `ProductCatalog` 에 `fan` 항목 없음 — 넣으면 console-web `ProductKeySchema` 를 같은 PR 에서 바꿔야 한다(그 클래스 javadoc). 751 몫.
 - 부수 효과(무해): 팬 소비자 토큰에 `entitled_domains=["fan"]` 가 실린다(ecommerce 소비자 토큰이 V0022 이후 `["ecommerce"]` 를 싣는 것과 같다). 팬 엣지·서비스는 그 claim 을 읽지 않는다.
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 4차원 종결 (소유자 결정)
+
+- (a) #4125 `MERGED` · (b) 스쿼시 `d5f317508` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/67.
+- (d) AC-0·2·3 본문 근거로 닫힘. **AC-1 — 소유자 결정 (2026-10-03 UTC): «(a) 서비스별 시험 넷으로 충족한다»**. 문구는 «한 시험 안에서» 였지만 네 서비스가 별개 앱이라 같은 토큰 모양(`tenant_id=fan-platform` · `roles=[FAN_OPERATOR]` · `entitled_domains=[fan]`)을 각 서비스의 실제 보안 체인에 넣은 네 셀로 쟀다: artist `PlatformOperatorDirectoryPath.operatorIsAdmittedOnTheDirectoryWrite`(게이트 통과) · community `operatorCannotPublishArtistPost`(403) · membership `operatorCannotListMemberships`/`operatorCannotSubscribe`(403) · admin `customerOperator_withRow_isRefused`(고객사 운영자 거절). 소유자가 이것을 AC-1 의 충족으로 받았다.
+- 머지 시점 rollup 의 `Integration (iam B)` 첫 빨강(기존 볼륨 IT 의 target 없는 재실행이 새 V0031 을 적용)은 같은 PR 의 `3f9e398fe` 로 고쳐진 뒤 머지됐다 — 최종 rollup 실패 0.
