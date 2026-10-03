@@ -118,7 +118,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
-- `TASK-BE-619-consumer-pool-followups-leave-site-decline-copy-security-view.md` — 🟡 **REVIEW (2026-10-03 UTC)** 전역 소비자 계정 후속 셋 + 관찰 ④⑤, 한 PR. ① 소유자 결정 «사이트 운영자 삭제 = 자기 사이트 멤버십만» · «본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님» — account `V0032`(`left_by` SELF/OPERATOR) · `DELETE /api/accounts/me/site-membership` · 사이트 운영자 GDPR 삭제가 풀 멤버면 그 사이트만 LEFT(`scope=SITE_MEMBERSHIP`) · 플랫폼(`*`)만 풀 계정 삭제. ② 측정 먼저: 거절 → web-store `?error=OAuthCallbackError`(일반 fallback, 가설 `AccessDenied` 아님 — nightly 37094305963) → `provider_error` 매핑·문구. ③ 콘솔 보안 이벤트는 포함하지 않고 화면이 말한다(`role=note`). ④ 동의 화면 전용 부제. ⑤ 의도된 동작으로 기록. account/auth/admin `check` rc=0 · bite 3종 · 통합(Docker) ⚪ CI 판정.
 - `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 소셜 신원 조회를 **시작 client 의 테넌트로 한정** — 전역 `findByProviderAndProviderUserId` 를 없애고 `(tenant_id, provider, provider_user_id)` 조회로(unique 키와 같은 모양). 미스 → 그 테넌트에서 가입. 스펙 개정 먼저(«테넌트마다 하나»). `TASK-BE-602` 후속 ① 경쟁 조건 소멸. 🔴 AC-0 ② «새 계정» 은 그 테넌트에 같은 이메일 계정이 없을 때만 — 있으면 기존 auto-link(티켓 § 전제 정정). 로컬 auth `test` rc=0 · bite 2종 → 새 셀 빨강. 실 MySQL 슬라이스는 CI.
 
 
@@ -126,6 +125,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 ## done
 - ✅ `TASK-BE-609-password-change-and-reset-unreachable-through-the-gateway.md` — **DONE (2026-10-03 UTC · 4차원 검증 · 소유자 결정 · PR #4056 squash `3bd595b9c`)** — 비밀번호 변경·재설정이 게이트웨이를 거치면 401 이던 결함 — 재설정 public 경로 · auth-service 가 `/internal/` 에서만 Bearer 를 읽음. 라이브 재설정 🟢(18차 창). 변경 라이브 칸은 소유자 결정 «범위에서 뺀다».
 
+- ✅ `TASK-BE-619-consumer-pool-followups-leave-site-decline-copy-security-view.md` — **DONE (2026-10-03 UTC · 4차원 검증 · PR #4131 squash `38cd9dc81`)** — 사이트 탈퇴(멤버십 LEFT · SELF/OPERATOR 구별 · 본인 탈퇴만 재동의 복귀) vs 계정 삭제(본인·플랫폼 관리자만) · 동의 거절 문구(측정 `OAuthCallbackError` → 문구) · 콘솔 보안 이벤트 «포함 안 함 + 안내» · 동의 화면 전용 부제. 남은 소유자 몫: 잠금의 사이트 단위 여부.
 - ✅ `TASK-BE-610-console-sso-reuses-a-consumer-session-and-lands-on-onboarding.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 스토어→팬→콘솔 한 브라우저 — 운영자 브랜딩 재인증 → 운영자 화면.
 - ✅ `TASK-BE-612-wire-user-recovery-unlock-on-password-reset-confirm.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 AUTO_DETECT 잠금 → 재설정 → ACTIVE(USER_RECOVERY) · 대조군 ADMIN_LOCK 은 LOCKED 유지.
 - ✅ `TASK-BE-613-per-client-branding-of-the-login-and-signup-pages.md` — **DONE (18차 창 2026-10-02 UTC · 결과 상태로 판정)** 🟢 콘솔·팬·스토어 IAM 폼 h1 3/3 «IAM 로그인», 브랜딩 각각.
