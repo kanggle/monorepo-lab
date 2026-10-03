@@ -38,13 +38,13 @@
 --
 -- 3. NO operator_tenant_assignment row — '*' already covers every tenant.
 --
--- 🔴 KNOWN LIMIT — '*' is wider than the fan directory. A platform-scope operator may
---    assume ANY registered tenant (assignment check: '*' ⇒ assigned=true), and each
---    assumption derives that tenant's domain OPERATOR roles from its subscriptions. On the
---    public demo this identity can therefore also operate the domain tenants (ecommerce,
---    wms, scm, erp, finance, demo-corp, the e2e customer tenants). That is what «platform
---    operator» means in this codebase (R3 defines the fan path by exactly that sentinel);
---    narrowing it would need a new scope concept, not a seed. Recorded, not fixed.
+-- 4. confined_tenant_id = 'fan-platform' (Flyway V0046). Owner decision 2026-10-03 «데모
+--    운영자는 팬 전용으로»: a '*' operator otherwise passes the assignment check for EVERY
+--    registered tenant, so on the public demo this login could have operated ecommerce /
+--    wms / scm / erp / finance / demo-corp too. The confinement is checked BEFORE the
+--    platform-scope step (OperatorAssignmentCheckUseCase step 1b) and the registry narrows
+--    to it (ConsoleRegistryUseCase) — this identity can assume `fan-platform` and nothing
+--    else, and its tenant switcher lists only that. It only narrows: R3 is untouched.
 --
 -- 🔵 The link key: `oidc_subject` MUST equal the account_id of the matching `iam`-tenant
 --    credential (auth-service migration-dev R__seed_demo_platform_operator_credential.sql).
@@ -56,7 +56,7 @@
 
 INSERT INTO admin_operators (
     operator_id, tenant_id, email, password_hash, display_name, status,
-    oidc_subject, created_at, updated_at, version
+    oidc_subject, confined_tenant_id, created_at, updated_at, version
 ) VALUES (
     'demo-platform', '*', 'platform@demo.com',
     '$argon2id$v=16$m=65536,t=3,p=1$NR1Seql5fgXB0hQ7CmpFL6RyiXvL86lxeZCobfiBdRxzRlTkkcv6iIZDJq9eQ32QmKQMylwsG+IP25S1aaw9vw$kTFrCq8cQG4HVUKioosaD88eiXZkQesTp5Xc8yylaSM',
@@ -64,11 +64,14 @@ INSERT INTO admin_operators (
     -- == credentials.account_id of the platform operator's `iam`-tenant row
     --    (auth-service migration-dev R__seed_demo_platform_operator_credential.sql).
     '0199de70-0000-7000-8000-00000000ad06',
+    -- confined_tenant_id — fan-platform ONLY (choice 4 above).
+    'fan-platform',
     NOW(6), NOW(6), 0
 )
 ON DUPLICATE KEY UPDATE
-    tenant_id    = VALUES(tenant_id),
-    oidc_subject = VALUES(oidc_subject),
+    tenant_id          = VALUES(tenant_id),
+    oidc_subject       = VALUES(oidc_subject),
+    confined_tenant_id = VALUES(confined_tenant_id),
     status       = 'ACTIVE',
     updated_at   = NOW(6);
 

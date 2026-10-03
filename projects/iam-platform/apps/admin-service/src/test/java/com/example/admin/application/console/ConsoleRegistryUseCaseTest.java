@@ -521,6 +521,38 @@ class ConsoleRegistryUseCaseTest {
         }
 
         @Test
+        @DisplayName("demo platform operator ('*', confined_tenant_id=fan-platform): only fan lists a tenant (owner decision 2026-10-03)")
+        void confinedPlatformOperator_listsOnlyFan() {
+            AdminOperatorJpaEntity entity = AdminOperatorJpaEntity.create(
+                    "demo-platform", "platform@demo.com", "x", "Op", "ACTIVE", "*", Instant.now());
+            ReflectionTestUtils.setField(entity, "confinedTenantId", "fan-platform");
+            when(operatorRepository.findByOperatorId("demo-platform")).thenReturn(Optional.of(entity));
+            stubEffectiveScope("*", "*");
+            stubFanWorld();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("demo-platform", "jti"));
+
+            assertThat(product(r, "fan").tenants()).containsExactly("fan-platform");
+            assertThat(r.products())
+                    .filteredOn(p -> !"fan".equals(p.productKey()) && !"iam".equals(p.productKey()))
+                    .allSatisfy(p -> assertThat(p.tenants()).isEmpty());
+            // iam binds every tenant — narrowed to the confinement too (no demo-corp).
+            assertThat(product(r, "iam").tenants()).containsExactly("fan-platform");
+        }
+
+        @Test
+        @DisplayName("control: an unconfined '*' operator in the same world still sees demo-corp under ecommerce")
+        void unconfinedPlatformOperator_unchanged() {
+            stubOperator("platform-op", "*");
+            stubFanWorld();
+
+            ConsoleRegistry r = useCase().execute(new OperatorContext("platform-op", "jti"));
+
+            assertThat(product(r, "ecommerce").tenants()).containsExactly("demo-corp");
+            assertThat(product(r, "iam").tenants()).containsExactlyInAnyOrder("fan-platform", "demo-corp");
+        }
+
+        @Test
         @DisplayName("customer operator WITH an assignment row to fan-platform: still [] (row ≠ access)")
         void customerOperator_assignmentRow_stillRefused() {
             stubOperatorEntityOnly("demo-op", "demo-corp");

@@ -153,3 +153,34 @@ pnpm: 이 worktree 에 `pnpm install --frozen-lockfile` 을 **실제로** 돌렸
 
 - `TASK-MONO-759` — 셀러 연결 전송이 배선되면 소속사 상세의 «지금은 거절됩니다» 안내(`fan-agency-seller-unwired-note`)를 걷을 것.
 - 그룹 목록 API(생산자) — 생기면 `/fan/groups` 를 목록으로.
+
+## CORRECTION (2026-10-03 UTC)
+
+위 «로컬 판정» 의 🔴 **알려진 한계**(`'*'` 데모 운영자가 모든 등록 테넌트를 assume 할 수 있다)는 **닫혔다**. 위 본문은 그대로 두고 여기 덧붙인다.
+
+**소유자 결정 (2026-10-03, 메인 세션 경유 — 원문)**: **«데모 운영자는 팬 전용으로»** — the demo platform-operator identity must be able to assume **only `fan-platform`**.
+
+**기제 — `admin_operators.confined_tenant_id`(데이터 기반, 이메일·운영자 id 하드코딩 없음)**
+- 왜 이것: 기존 기제를 먼저 찾았다 — 배정 행(`operator_tenant_assignment`)은 `'*'` 운영자에겐 **보지도 않는다**(step 2 가 그 앞에서 `assigned=true`), 파트너십·org-node 는 다른 축. 운영자별 제한은 없었다. 그래서 가장 좁은 명시적 기제를 새로 뒀다: 비-NULL 이면 «이 운영자가 assume 할 수 있는 유일한 테넌트». NULL = 제한 없음(기존 모든 운영자 · 백필 없음 ⇒ 실제 플랫폼 운영자 동작 불변). 쓰기 API 없음(시드/데이터로만).
+- admin-service `V0046__add_admin_operator_confined_tenant_id.sql`(다음 빈 번호 — prod 최대 V0045, dev 최대 V0028) · `AdminOperatorJpaEntity`/`OperatorView`(옛 13-인자 생성자 유지 ⇒ 기존 호출 12곳 무변경)/`JpaAdminOperatorAdapter`.
+- `OperatorAssignmentCheckUseCase` **step 1b** — ACTIVE 확인 직후, **step 2(`'*'` = 모든 테넌트)보다 먼저** `isConfinedAway(confined, tenant)` 면 `assigned=false`(기존 거절과 같은 답 — 새 오류 코드 없음, auth-service 쪽은 기존 `invalid_grant`). 좁히기만: 같은 테넌트면 아래 단계가 그대로 판정 ⇒ R3(step 2b)는 묶인 고객사 운영자에게도 `fan-platform` 을 거절.
+- `ConsoleRegistryUseCase` — 모든 상품의 `tenants` 를 마지막에 그 테넌트로 좁힌다(같은 술어) ⇒ 데모 운영자의 레지스트리는 `fan → [fan-platform]`, 나머지 전부 `[]`(iam 포함).
+- 시드 `R__seed_demo_platform_operator.sql` — `confined_tenant_id='fan-platform'`(INSERT + ON DUPLICATE UPDATE), «KNOWN LIMIT» 문구 삭제 → «선택 4» 로 대체. `DemoPlatformOperatorSeedTest` +1(값 고정).
+- 계약·스펙 먼저: `internal/auth-to-admin.md` 판정 규칙 0 · `console-registry-api.md` 선택 규칙 5 · `multi-tenancy.md` · admin `data-model.md`(컬럼 행 + 마이그레이션 노트). `ADR-MONO-079` 끝에 «R3 보강 기록» 한 절(덧붙임만). 전역 가이드 문구 한 줄.
+
+**대조군 (증거)**
+
+| 칸 | 시험 | 결과 |
+|---|---|---|
+| 데모 운영자 → `fan-platform` 허용 | `ConfinedOperatorAssumeGateTest.demoPlatformOperator_fanPlatform_isAssigned` · IT `confinedPlatformOperator_fanPlatform_assigned` | ✅ / ⚪(IT) |
+| 데모 운영자 → `ecommerce`·`wms`·`scm`·`erp`·`finance`·`demo-corp`·`iam`·`acme-corp` 거절, step 1b 아래는 묻지도 않음 | `…everyOtherTenant_isRefused` ×8 · IT `…otherTenants_refused` | ✅ / ⚪(IT) |
+| 일반 `'*'` 운영자 → 불변(모든 테넌트) | `…normalPlatformOperator_unchanged` ×5 · `ConsoleRegistryUseCaseTest.unconfinedPlatformOperator_unchanged` · IT 의 `SUPER_SUBJECT → ecommerce` | ✅ / ⚪(IT) |
+| `demo@demo.com` 모양(demo-corp) → 자기 테넌트 불변 · `fan-platform` 여전히 거절 | `…demoCustomerOperator_ownTenant_unchanged` · `…demoCustomerOperator_fanPlatform_stillRefused` | ✅ |
+| 좁히기만(묶여도 열리지 않음) | `…confinementNeverOpens_customerConfinedToFan_stillRefused` | ✅ |
+| 레지스트리 = `fan` 만 | `ConsoleRegistryUseCaseTest.confinedPlatformOperator_listsOnlyFan` | ✅ |
+
+**물림**: step 1b 를 `if (false && …)` ⇒ `ConfinedOperatorAssumeGateTest` 18 중 8 빨강(«ecommerce not-assigned» 포함, rc=1) → 복사로 원복(`cmp` 동일).
+
+**명령 (rc · 개수)**: admin-service `:test` rc=0 — 908 · 0 fail · 58 skipped(`ConfinedOperatorAssumeGateTest` 18 · `ConsoleRegistryUseCaseTest$FanProductPlatformOperatorOnly` 5) · auth-service `:test` rc=0 — 1016 · 0 fail · 33 skipped(`DemoPlatformOperatorSeedTest` 5) · console-web `tsc` 0 · `next lint` 0 · `GlobalGuideScreen.test.tsx` 0 · 가드는 커밋 기록 참조.
+
+**⚪**: `OperatorAssignmentCheckIntegrationTest` 의 새 2칸 · V0046 이 실제 MySQL 에 적용되는지 — Docker 꺼짐(CI 판정). 데모 DB 반영은 여전히 재굽기 뒤. 새 오류 코드 없음 ⇒ 오류 코드 레지스트리 변경 없음.

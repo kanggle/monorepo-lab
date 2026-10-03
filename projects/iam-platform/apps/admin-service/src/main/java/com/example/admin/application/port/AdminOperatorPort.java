@@ -245,8 +245,23 @@ public interface AdminOperatorPort {
              * when unlinked. Read by the link/unlink use cases for the idempotency /
              * already-linked-to-different checks.
              */
-            String identityId
-    ) {}
+            String identityId,
+            /**
+             * TASK-MONO-751 — {@code admin_operators.confined_tenant_id}: the ONE tenant this
+             * operator may assume, or {@code null} = unrestricted (every existing operator).
+             */
+            String confinedTenantId
+    ) {
+        /** Pre-TASK-MONO-751 shape — unrestricted ({@code confinedTenantId = null}). */
+        public OperatorView(long internalId, String operatorId, String tenantId, String email,
+                            String passwordHash, String displayName, String status,
+                            Instant totpEnrolledAt, Instant lastLoginAt, Instant createdAt,
+                            Instant updatedAt, String financeDefaultAccountId, String identityId) {
+            this(internalId, operatorId, tenantId, email, passwordHash, displayName, status,
+                    totpEnrolledAt, lastLoginAt, createdAt, updatedAt, financeDefaultAccountId,
+                    identityId, null);
+        }
+    }
 
     /**
      * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — lightweight projection for the

@@ -186,7 +186,7 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
             </li>
             <li data-testid="global-guide-platform-operator">
               플랫폼 운영자 계정 <Mono>platform@demo.com</Mono> 도 있습니다(TASK-MONO-751) — 홈 테넌트가
-              플랫폼 스코프(<Mono>*</Mono>)라 <Mono>fan-platform</Mono> 으로 전환할 수 있고, 그때만 「팬
+              플랫폼 스코프(<Mono>*</Mono>)지만 <Mono>fan-platform</Mono> 에만 묶여 있어(<Mono>confined_tenant_id</Mono>, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로») 그 테넌트로만 전환할 수 있고, 그때 「팬
               디렉터리」(소속사 · 아티스트 · 그룹) 메뉴가 열립니다(ADR-MONO-079 R3 — 위 고객사 계정에는 보이지
               않음). 관리 역할은 없어(<Mono>admin_operator_roles</Mono> 0행) IAM 관리 화면은 403 입니다. 비밀번호는
               위와 같은 자리에 표시됩니다.

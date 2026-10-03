@@ -1,5 +1,6 @@
 package com.example.admin.application.console;
 
+import com.example.admin.application.OperatorAssignmentCheckUseCase;
 import com.example.admin.application.OperatorContext;
 import com.example.admin.application.TenantScopeResolver;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
@@ -96,8 +97,8 @@ public class ConsoleRegistryUseCase {
         List<ConsoleProduct> products = new ArrayList<>(ProductCatalog.entries().size());
         for (ProductCatalog.Entry entry : ProductCatalog.entries()) {
             List<String> tenants = entry.available()
-                    ? selectableTenants(entry, platformScope, effectiveTenants, activeTenants,
-                            subscriptionsByDomain)
+                    ? confine(selectableTenants(entry, platformScope, effectiveTenants,
+                            activeTenants, subscriptionsByDomain), entity.getConfinedTenantId())
                     : List.of();
             products.add(new ConsoleProduct(
                     entry.productKey(),
@@ -205,6 +206,25 @@ public class ConsoleRegistryUseCase {
             }
         }
         return scoped;
+    }
+
+    /**
+     * TASK-MONO-751 — narrows a product's tenants to the operator's confinement
+     * ({@code admin_operators.confined_tenant_id}); NULL = unchanged. Applied LAST so it can
+     * only narrow. Same predicate as the assignment check (step 1b) — owner decision
+     * 2026-10-03 «데모 운영자는 팬 전용으로».
+     */
+    private static List<String> confine(List<String> tenants, String confinedTenantId) {
+        if (confinedTenantId == null || confinedTenantId.isBlank()) {
+            return tenants;
+        }
+        List<String> kept = new ArrayList<>();
+        for (String tenant : tenants) {
+            if (!OperatorAssignmentCheckUseCase.isConfinedAway(confinedTenantId, tenant)) {
+                kept.add(tenant);
+            }
+        }
+        return kept;
     }
 
     /**

@@ -175,4 +175,17 @@ class DemoPlatformOperatorSeedTest {
         // that explains their absence).
         assertThat(seed).contains("admin_operator_roles").contains("operator_tenant_assignment");
     }
+
+    @Test
+    @DisplayName("the platform operator is confined to fan-platform (owner decision 2026-10-03)")
+    void platformOperatorIsConfinedToFanPlatform() throws IOException {
+        String statements = statementsOnly(operatorSeed());
+        // «데모 운영자는 팬 전용으로»: without this value a '*' operator passes the assignment
+        // check for every registered tenant (admin OperatorAssignmentCheckUseCase step 2).
+        Matcher m = Pattern.compile(
+                "'([0-9a-f-]{36})'\\s*,\\s*'([a-z-]+)'\\s*,\\s*NOW\\(6\\)").matcher(statements);
+        assertThat(m.find()).as("VALUES must carry oidc_subject, confined_tenant_id, created_at").isTrue();
+        assertThat(m.group(2)).isEqualTo("fan-platform");
+        assertThat(statements).contains("confined_tenant_id = VALUES(confined_tenant_id)");
+    }
 }

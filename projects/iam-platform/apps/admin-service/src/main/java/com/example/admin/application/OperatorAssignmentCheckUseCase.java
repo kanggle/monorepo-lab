@@ -125,6 +125,18 @@ public class OperatorAssignmentCheckUseCase {
             return Result.notAssigned();
         }
 
+        // 1b. TASK-MONO-751 — per-operator confinement (admin_operators.confined_tenant_id),
+        // BEFORE the platform-scope step: a confined operator may assume its one tenant only.
+        // It only narrows — a tenant equal to the confinement still goes through every step
+        // below (so R3's step 2b still refuses `fan-platform` to a confined customer operator).
+        // NULL (every existing operator) skips this. Owner decision 2026-10-03 «데모 운영자는 팬
+        // 전용으로»: the demo platform operator ('*') is confined to `fan-platform`.
+        if (isConfinedAway(operator.confinedTenantId(), tenantId)) {
+            log.debug("assignment-check: operator confined to tenant={}; tenant={} refused",
+                    operator.confinedTenantId(), tenantId);
+            return Result.notAssigned();
+        }
+
         // 2. Platform-scope sentinel → assigned to any non-blank tenant. No
         // explicit assignment row, so org_scope defaults to null (→ ["*"]).
         if (AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())) {
@@ -166,6 +178,15 @@ public class OperatorAssignmentCheckUseCase {
             return new Result(true, null, delegated);
         }
         return Result.notAssigned();
+    }
+
+    /**
+     * TASK-MONO-751 — {@code true} when the operator is confined to a tenant other than
+     * {@code tenantId}. Shared with the console registry so the two cannot drift.
+     */
+    public static boolean isConfinedAway(String confinedTenantId, String tenantId) {
+        return confinedTenantId != null && !confinedTenantId.isBlank()
+                && !confinedTenantId.equals(tenantId);
     }
 
     /**

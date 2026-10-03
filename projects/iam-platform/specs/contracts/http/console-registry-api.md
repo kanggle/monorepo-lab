@@ -291,6 +291,11 @@ per § Tenant selection rule).
    customer operator's `fan.tenants` is always `[]`. Same predicate as the assume
    gate (`OperatorAssignmentCheckUseCase` step 2b, TASK-MONO-750), which refuses the
    switch itself.
+5. (TASK-MONO-751 — 2026-10-03 owner decision «데모 운영자는 팬 전용으로») an operator with a
+   non-NULL `admin_operators.confined_tenant_id` sees **only that tenant**, in every product's
+   `tenants` (intersection applied last — it narrows, never opens). The demo platform operator is
+   confined to `fan-platform`, so its registry lists `fan` → `["fan-platform"]` and every other
+   product → `[]`. NULL (every other operator) = unchanged.
 
 An unavailable product always has `tenants: []` regardless of operator scope.
 
