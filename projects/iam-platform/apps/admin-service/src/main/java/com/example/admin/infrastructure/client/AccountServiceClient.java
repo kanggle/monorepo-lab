@@ -481,12 +481,23 @@ public class AccountServiceClient {
             Instant unlockedAt
     ) {}
 
+    /**
+     * TASK-BE-619 — {@code scope} ({@code ACCOUNT} | {@code SITE_MEMBERSHIP}) and {@code siteTenantId} are
+     * absent from an older account-service: {@code scope == null} reads as {@code ACCOUNT} (the only thing an
+     * older account-service could do).
+     */
     public record GdprDeleteResponse(
             String accountId,
             String status,
             String emailHash,
-            Instant maskedAt
-    ) {}
+            Instant maskedAt,
+            String scope,
+            String siteTenantId
+    ) {
+        public GdprDeleteResponse(String accountId, String status, String emailHash, Instant maskedAt) {
+            this(accountId, status, emailHash, maskedAt, null, null);
+        }
+    }
 
     public record DataExportResponse(
             String accountId,

@@ -4,8 +4,11 @@ import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.port.EmailVerificationNotifier;
+import com.example.account.application.result.GdprDeleteResult;
+import com.example.account.application.result.LeaveConsumerSiteResult;
 import com.example.account.application.result.ProvisionedStatusChangeResult;
 import com.example.account.domain.account.Account;
+import com.example.account.domain.consumerpool.ConsumerSiteLeftBy;
 import com.example.account.domain.history.AccountStatusHistoryEntry;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
@@ -126,7 +129,8 @@ class PoolMemberSiteLookupTest {
     void status_poolMember_and_nonMember() {
         AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
         AccountStatusUseCase useCase = new AccountStatusUseCase(accountRepository, history,
-                new AccountStatusMachine(), mock(AccountEventPublisher.class), 30, ON);
+                new AccountStatusMachine(), mock(AccountEventPublisher.class), 30, ON,
+                mock(LeaveConsumerSiteUseCase.class));
         given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
                 .willReturn(Optional.of(poolAccount()));
         given(accountRepository.findByIdInSiteIncludingPoolMembers(new TenantId("fan-platform"), POOL_ACCOUNT))
@@ -138,25 +142,77 @@ class PoolMemberSiteLookupTest {
     }
 
     @Test
-    @DisplayName("GDPR 삭제 (사이트 운영자, ecommerce) — 풀 계정 하나를 지운다: DELETED · 이벤트 테넌트 = consumer-pool")
-    void gdprDelete_poolMember_deletesThePoolAccount_eventOnPool() {
+    @DisplayName("TASK-BE-619 — GDPR 삭제 (사이트 운영자, ecommerce) — 풀 계정은 지우지 않는다: 그 사이트 멤버십만 LEFT(OPERATOR) · 이벤트 0")
+    void gdprDelete_siteOperator_poolMember_leavesTheSiteOnly() {
         AccountEventPublisher events = mock(AccountEventPublisher.class);
         ProfileRepository profiles = mock(ProfileRepository.class);
+        LeaveConsumerSiteUseCase leave = mock(LeaveConsumerSiteUseCase.class);
         GdprDeleteUseCase useCase = new GdprDeleteUseCase(accountRepository, profiles,
-                mock(AccountStatusHistoryRepository.class), new AccountStatusMachine(), events, ON);
+                mock(AccountStatusHistoryRepository.class), new AccountStatusMachine(), events, ON, leave);
         Account account = poolAccount();
         given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
                 .willReturn(Optional.of(account));
+        given(leave.execute("ecommerce", POOL_ACCOUNT, ConsumerSiteLeftBy.OPERATOR, "op-1"))
+                .willReturn(new LeaveConsumerSiteResult(POOL_ACCOUNT, "ecommerce", "LEFT", "OPERATOR",
+                        Instant.now(), true, "ACTIVE"));
+
+        GdprDeleteResult result = useCase.execute(POOL_ACCOUNT, "op-1", ECOMMERCE);
+
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_SITE_MEMBERSHIP);
+        assertThat(result.siteTenantId()).isEqualTo("ecommerce");
+        assertThat(result.status()).isEqualTo("ACTIVE");
+        assertThat(result.maskedAt()).isNull();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.getEmail()).isEqualTo("pool@example.com");
+        verify(accountRepository, never()).save(any());
+        verify(profiles, never()).findByAccountId(anyString());
+        org.mockito.Mockito.verifyNoInteractions(events);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619 — GDPR 삭제 (플랫폼 관리자 — 테넌트를 말하지 않음) — 풀 계정 하나를 지운다: DELETED · 이벤트 테넌트 = consumer-pool")
+    void gdprDelete_platformAdmin_deletesThePoolAccount_eventOnPool() {
+        AccountEventPublisher events = mock(AccountEventPublisher.class);
+        ProfileRepository profiles = mock(ProfileRepository.class);
+        LeaveConsumerSiteUseCase leave = mock(LeaveConsumerSiteUseCase.class);
+        GdprDeleteUseCase useCase = new GdprDeleteUseCase(accountRepository, profiles,
+                mock(AccountStatusHistoryRepository.class), new AccountStatusMachine(), events, ON, leave);
+        Account account = poolAccount();
+        given(accountRepository.findByIdResolvingTenant(POOL_ACCOUNT)).willReturn(Optional.of(account));
         given(profiles.findByAccountId(POOL_ACCOUNT)).willReturn(Optional.empty());
 
-        useCase.execute(POOL_ACCOUNT, "op-1", ECOMMERCE);
+        GdprDeleteResult result = useCase.executeResolvingTenant(POOL_ACCOUNT, "op-super");
 
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
         assertThat(account.getStatus()).isEqualTo(AccountStatus.DELETED);
         verify(accountRepository).save(account);
         verify(events).publishStatusChanged(eq(account), eq("consumer-pool"), anyString(), anyString(),
                 anyString(), anyString(), any());
         verify(events).publishAccountDeletedAnonymized(eq(account), eq("consumer-pool"), anyString(),
                 anyString(), anyString(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(leave);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619 — 사이트의 자기 계정(풀 아님)은 그 사이트 운영자의 GDPR 삭제로 그대로 지워진다 — 대조군")
+    void gdprDelete_siteOperator_siteOwnAccount_stillErased() {
+        AccountEventPublisher events = mock(AccountEventPublisher.class);
+        ProfileRepository profiles = mock(ProfileRepository.class);
+        LeaveConsumerSiteUseCase leave = mock(LeaveConsumerSiteUseCase.class);
+        GdprDeleteUseCase useCase = new GdprDeleteUseCase(accountRepository, profiles,
+                mock(AccountStatusHistoryRepository.class), new AccountStatusMachine(), events, ON, leave);
+        Account siteAccount = Account.reconstitute(POOL_ACCOUNT, ECOMMERCE, "shop@example.com", null,
+                AccountStatus.ACTIVE, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"),
+                null, null, null, 0);
+        given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
+                .willReturn(Optional.of(siteAccount));
+        given(profiles.findByAccountId(POOL_ACCOUNT)).willReturn(Optional.empty());
+
+        GdprDeleteResult result = useCase.execute(POOL_ACCOUNT, "op-1", ECOMMERCE);
+
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
+        assertThat(siteAccount.getStatus()).isEqualTo(AccountStatus.DELETED);
+        org.mockito.Mockito.verifyNoInteractions(leave);
     }
 
     @Test

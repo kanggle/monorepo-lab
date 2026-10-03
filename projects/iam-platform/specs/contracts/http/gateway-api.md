@@ -26,6 +26,7 @@
 | `GET /api/accounts/me` | account-service | Yes | — |
 | `PATCH /api/accounts/me/profile` | account-service | Yes | — |
 | `GET /api/accounts/me/status` | account-service | Yes | — |
+| `DELETE /api/accounts/me/site-membership` | account-service | Yes | **TASK-BE-619** — «이 사이트 탈퇴»(소비자 계정 풀 멤버십만 `LEFT`). 기존 `/api/accounts/**` 라우트가 받는다(새 라우트 없음). [account-api.md](account-api.md) |
 | `GET /api/accounts/me/sessions` | auth-service | Yes | 세션 관리 — auth-service `AccountSessionController` (TASK-BE-508). `/api/accounts/**` 보다 **먼저** 선언된 전용 라우트. [auth-api.md](auth-api.md) |
 | `GET /api/accounts/me/sessions/current` | auth-service | Yes | 현재 device session 단건 (TASK-BE-508). [auth-api.md](auth-api.md) |
 | `DELETE /api/accounts/me/sessions/{deviceId}` | auth-service | Yes | 특정 device session revoke (TASK-BE-508). [auth-api.md](auth-api.md) |

@@ -4,15 +4,18 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <!-- TASK-BE-616 (ADR-MONO-078 A) — the one-screen first-visit consent of a consumer site.
-         Same card, styles and brand header as login.html (fragments/auth-page); the colour, logo and
-         subtitle are the parked client's registered branding (SiteConsentPageController), never
-         anything from the current request. -->
+         Same card, styles and brand header as login.html (fragments/auth-page); the colour and logo are
+         the parked client's registered branding (SiteConsentPageController), never anything from the
+         current request.
+         TASK-BE-619 (owner decision 2026-10-03 «동의 화면 전용 부제») — the subtitle is the consent's own
+         («{site}에서 내 IAM 계정을 쓰도록 허용합니다.»), NOT the site's login subtitle: that one told a
+         person who is already signed in to «…로그인하세요». -->
     <title>이 사이트 이용 동의</title>
     <style th:replace="~{fragments/auth-page :: styles}"></style>
 </head>
 <body th:style="|--brand: ${branding.primaryColor()}|">
 <main class="card">
-    <div th:replace="~{fragments/auth-page :: brand-header('이 사이트 이용 동의', ${branding.description()})}"></div>
+    <div th:replace="~{fragments/auth-page :: brand-header('이 사이트 이용 동의', ${consentSubtitle})}"></div>
 
     <th:block th:if="${expired}">
         <div class="error" id="consent-error" role="alert">
@@ -30,7 +33,7 @@
 
         <th:block th:if="${answerable}">
             <p class="consent-text" id="consent-text">
-                <span th:text="${branding.serviceName()}">IAM</span> 계정으로 이 사이트를 처음 이용합니다.
+                <span th:text="${branding.serviceName()}">IAM</span> 계정으로 이 사이트를 이용합니다.
                 동의하면 같은 계정으로 이 사이트에 로그인할 수 있고, 계정 정보(이메일·이름)가 이 사이트에 제공됩니다.
                 새 비밀번호는 필요하지 않습니다.
             </p>

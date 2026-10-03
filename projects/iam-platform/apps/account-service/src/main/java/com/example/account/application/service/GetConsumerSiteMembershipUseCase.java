@@ -57,7 +57,12 @@ public class GetConsumerSiteMembershipUseCase {
         List<String> siteRoles = membership.filter(ConsumerSiteMembership::isActive)
                 .map(m -> membershipRepository.findSiteRoles(site, accountId))
                 .orElse(List.of());
+        // TASK-BE-619 — who left: auth-service shows the consent screen again only for SELF.
+        String leftBy = membership.filter(m -> !m.isActive())
+                .map(ConsumerSiteMembership::getLeftBy)
+                .map(Enum::name)
+                .orElse(null);
         return new ConsumerSiteMembershipResult(
-                accountId, siteTenantId, true, siteTenantType, status, siteRoles);
+                accountId, siteTenantId, true, siteTenantType, status, siteRoles, leftBy);
     }
 }

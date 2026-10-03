@@ -19,6 +19,14 @@ import { useAuth } from '../model/auth-context';
  *   - `Configuration` → `config_error`: NextAuth client/discovery setup error
  *     (most commonly "discovery doc fetch failed" when IAM is down).
  *   - `access_denied`: the IdP itself denied (user declined consent).
+ *   - NextAuth `OAuthCallbackError` → `provider_error`: the IdP answered the
+ *     callback with an error. MEASURED (iam TASK-BE-619 AC-2, nightly
+ *     full-stack `e2e/consent-decline.spec.ts`, run 37094305963): declining
+ *     IAM's first-visit consent screen (IAM → `error=access_denied` on our
+ *     callback) reaches THIS page as `?error=OAuthCallbackError` — NextAuth v5
+ *     does not pass the provider's own code through. Before 619 it fell to the
+ *     generic fallback, which told a person who had just said «no» to «잠시 후
+ *     다시 시도» as if something had broken.
  *   - any unrecognized code → generic fallback (F5: no silent failure).
  *
  * Note: NextAuth v5 surfaces its own `AccessDenied` when a `signIn` callback
@@ -49,6 +57,8 @@ function normalizeErrorCode(code: string): string {
       return 'role_denied';
     case 'Configuration': // NextAuth-native: client/discovery config error
       return 'config_error';
+    case 'OAuthCallbackError': // NextAuth-native: the IdP returned an error on the callback (TASK-BE-619)
+      return 'provider_error';
     default:
       return code;
   }
@@ -59,7 +69,10 @@ const STANDARD_ERROR_MESSAGES: Record<string, string> = {
     'operator 계정으로는 web-store 에 접근할 수 없습니다. 운영자 콘솔을 이용해 주세요.',
   config_error: '인증 서버 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.',
   access_denied: '로그인이 거부되었습니다. 권한을 확인해 주세요.',
-  provider_error: '인증 공급자에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+  // TASK-BE-619: the measured case is a declined first-visit consent — say what
+  // happened and how to continue, not «try again later» (nothing is broken).
+  provider_error:
+    'IAM 로그인이 끝나지 않았습니다. 이 사이트 이용에 동의하지 않으셨다면, 다시 «IAM 로그인»을 눌러 동의하면 계속할 수 있습니다.',
   invalid_state: '로그인 세션이 만료되었습니다. 다시 시도해 주세요.',
   state_mismatch: '로그인 요청을 검증하지 못했습니다. 다시 시도해 주세요.',
   token_exchange_failed: '인증 토큰 발급에 실패했습니다. 잠시 후 다시 시도해 주세요.',

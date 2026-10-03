@@ -51,9 +51,10 @@ import java.util.Optional;
  *       {@code iam} credential and reach the console only with a consumer-tenant session, are
  *       untouched as before;</li>
  *   <li>TASK-BE-615 — a consumer-pool principal on a non-console client → untouched when the
- *       client's tenant is a consumer site the account is a member of (or left — issuance refuses),
- *       re-authentication when it is not a consumer site; TASK-BE-616 — and the first-visit consent
- *       page when it is a consumer site the account has never joined ({@link #consumerSiteDecision});</li>
+ *       client's tenant is a consumer site the account is a member of (or was removed from by the site's
+ *       operator — issuance refuses), re-authentication when it is not a consumer site; TASK-BE-616 — and the
+ *       first-visit consent page when it is a consumer site the account has never joined, TASK-BE-619 — or
+ *       left itself ({@link #consumerSiteDecision});</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -309,10 +310,13 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
      *       authenticating instead would loop: the client's login form picks the pool credential first,
      *       the session is the same pool principal, and this gate would send it back to the form
      *       forever.</li>
-     *   <li><b>Consumer site, LEFT membership</b> → pass, and the token endpoint refuses
-     *       ({@code invalid_grant} — no token without an ACTIVE membership; TASK-BE-615 behaviour).
-     *       Consent does not reopen a membership the person left — no writer for LEFT exists yet, and
-     *       reopening is that writer's decision.</li>
+     *   <li><b>Consumer site, LEFT by the person themself</b> ({@code leftBy = SELF}) → TASK-BE-619 (owner
+     *       decision 2026-10-03 «다시 동의하면 복귀»): the consent screen again, exactly like a first visit —
+     *       «accept» reopens the membership (account-service), «decline» answers {@code access_denied}.</li>
+     *   <li><b>Consumer site, LEFT because the site's operator removed the account</b> ({@code leftBy =
+     *       OPERATOR}, or no recorded actor) → pass, and the token endpoint refuses ({@code invalid_grant} —
+     *       no token without an ACTIVE membership; TASK-BE-615 behaviour). No consent screen: consent cannot
+     *       undo a removal.</li>
      *   <li><b>Not a consumer site</b> (a B2B client — wms, erp …) → re-authentication, like any
      *       session of another tenant: that client's form does not look the pool up (pool-first is a
      *       consumer-site rule), so the resumed authorize carries the client's own tenant.</li>
@@ -340,6 +344,11 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
             if (answer.membershipStatus() == null) {
                 log.info("authorize: pool session on consumer site {} (client {}) without a membership — "
                         + "first-visit consent (TASK-BE-616)", clientTenant, clientId);
+                return Decision.CONSENT;
+            }
+            if (answer.isReopenableByConsent()) {
+                log.info("authorize: pool session on consumer site {} (client {}) that the account left "
+                        + "itself — consent again to come back (TASK-BE-619)", clientTenant, clientId);
                 return Decision.CONSENT;
             }
             return Decision.PASS;

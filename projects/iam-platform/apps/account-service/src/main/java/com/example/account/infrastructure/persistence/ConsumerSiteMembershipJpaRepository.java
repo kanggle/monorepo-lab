@@ -56,6 +56,33 @@ public interface ConsumerSiteMembershipJpaRepository
                        @Param("grantedBy") String grantedBy,
                        @Param("grantedAt") Instant grantedAt);
 
+    /**
+     * TASK-BE-619 — rewrites the state of ONE existing membership row (leave / rejoin). Native, like the
+     * insert: the entity is read-side only. Returns the number of rows updated (0 = no such row).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE consumer_site_memberships SET status = :status, consented_at = :consentedAt, "
+            + "left_at = :leftAt, left_by = :leftBy, left_by_actor_id = :leftByActorId "
+            + "WHERE site_tenant_id = :siteTenantId AND account_id = :accountId",
+            nativeQuery = true)
+    int updateMembership(@Param("siteTenantId") String siteTenantId,
+                         @Param("accountId") String accountId,
+                         @Param("status") String status,
+                         @Param("consentedAt") Instant consentedAt,
+                         @Param("leftAt") Instant leftAt,
+                         @Param("leftBy") String leftBy,
+                         @Param("leftByActorId") String leftByActorId);
+
+    /**
+     * TASK-BE-619 — every site role of one account on ONE site, removed when the account leaves that
+     * site (a returning member starts from the seed role only). Never another site's roles.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = "DELETE FROM consumer_site_roles WHERE site_tenant_id = :siteTenantId AND account_id = :accountId",
+            nativeQuery = true)
+    int deleteAllSiteRoles(@Param("siteTenantId") String siteTenantId,
+                           @Param("accountId") String accountId);
+
     /** TASK-MONO-752 — removes one site role on ONE site; the membership row is never touched. */
     @Modifying(flushAutomatically = true)
     @Query(value = "DELETE FROM consumer_site_roles "

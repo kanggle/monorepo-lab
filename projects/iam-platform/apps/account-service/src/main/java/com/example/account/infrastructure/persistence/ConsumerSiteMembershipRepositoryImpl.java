@@ -33,6 +33,23 @@ public class ConsumerSiteMembershipRepositoryImpl implements ConsumerSiteMembers
     }
 
     @Override
+    public boolean update(ConsumerSiteMembership membership) {
+        return jpaRepository.updateMembership(
+                membership.getSiteTenantId().value(),
+                membership.getAccountId(),
+                membership.getStatus().name(),
+                membership.getConsentedAt(),
+                membership.getLeftAt(),
+                membership.getLeftBy() == null ? null : membership.getLeftBy().name(),
+                membership.getLeftByActorId()) > 0;
+    }
+
+    @Override
+    public int removeAllSiteRoles(TenantId siteTenantId, String accountId) {
+        return jpaRepository.deleteAllSiteRoles(siteTenantId.value(), accountId);
+    }
+
+    @Override
     public List<String> findSiteRoles(TenantId siteTenantId, String accountId) {
         return jpaRepository.findSiteRoleNames(siteTenantId.value(), accountId);
     }

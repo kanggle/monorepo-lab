@@ -67,6 +67,7 @@ class GdprControllerSliceTest {
                 .willReturn(new GdprDeleteResult(ACCOUNT_ID, "DELETED", EMAIL_HASH, maskedAt));
 
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", ACCOUNT_ID)
+                        .header("X-Tenant-Id", "fan-platform")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(GDPR_DELETE_BODY))
                 .andExpect(status().isOk())
@@ -85,6 +86,7 @@ class GdprControllerSliceTest {
                         StatusChangeReason.REGULATED_DELETION));
 
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", ACCOUNT_ID)
+                        .header("X-Tenant-Id", "fan-platform")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(GDPR_DELETE_BODY))
                 .andExpect(status().isConflict())
@@ -98,10 +100,49 @@ class GdprControllerSliceTest {
                 .willThrow(new AccountNotFoundException("acc-999"));
 
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", "acc-999")
+                        .header("X-Tenant-Id", "fan-platform")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(GDPR_DELETE_BODY))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619 — 헤더 없음 · '*' (플랫폼 관리자) → 계정 행으로 찾아 지운다 (executeResolvingTenant) · scope=ACCOUNT")
+    void gdprDelete_noTenantNamed_resolvesByRow() throws Exception {
+        given(gdprDeleteUseCase.executeResolvingTenant(ACCOUNT_ID, "op-1"))
+                .willReturn(new GdprDeleteResult(ACCOUNT_ID, "DELETED", EMAIL_HASH, Instant.now()));
+
+        for (String header : new String[] {null, "*", " "}) {
+            var req = post("/internal/accounts/{id}/gdpr-delete", ACCOUNT_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(GDPR_DELETE_BODY);
+            if (header != null) req = req.header("X-Tenant-Id", header);
+            mockMvc.perform(req)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("DELETED"))
+                    .andExpect(jsonPath("$.scope").value("ACCOUNT"));
+        }
+        org.mockito.Mockito.verify(gdprDeleteUseCase, org.mockito.Mockito.never())
+                .execute(any(), any(), any(TenantId.class));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619 — 사이트 운영자(ecommerce) 의 풀 멤버 GDPR 삭제 → scope=SITE_MEMBERSHIP · 계정 상태 그대로 · 마스킹 없음")
+    void gdprDelete_siteOperator_poolMember_siteScope() throws Exception {
+        given(gdprDeleteUseCase.execute(eq(ACCOUNT_ID), eq("op-1"), eq(new TenantId("ecommerce"))))
+                .willReturn(GdprDeleteResult.siteMembershipLeft(ACCOUNT_ID, "ACTIVE", "ecommerce"));
+
+        mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", ACCOUNT_ID)
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(GDPR_DELETE_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"))
+                .andExpect(jsonPath("$.siteTenantId").value("ecommerce"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.maskedAt").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.emailHash").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

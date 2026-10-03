@@ -808,8 +808,10 @@ public class AccountServiceClient implements AccountServicePort {
                 }
             }
         }
+        // TASK-BE-619 — absent from an older account-service (it never wrote LEFT): null = not reopenable.
+        String leftBy = body.get("leftBy") instanceof String l && !l.isBlank() ? l : null;
         return new ConsumerSiteMembershipLookupResult(
-                siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles);
+                siteTenantId, consumerSite, siteTenantType, membershipStatus, siteRoles, leftBy);
     }
 
     @Override
@@ -919,7 +921,9 @@ public class AccountServiceClient implements AccountServicePort {
             Object status = body.get("status");
             if (tenantType instanceof String tt && !tt.isBlank()
                     && status instanceof String st && !st.isBlank()) {
-                return Optional.of(new TenantLookupResult(tt, st));
+                // TASK-BE-619 — the consent screen names the site with it; optional (null when absent).
+                String displayName = body.get("displayName") instanceof String dn && !dn.isBlank() ? dn : null;
+                return Optional.of(new TenantLookupResult(tt, st, displayName));
             }
             return Optional.empty();
         } catch (HttpClientErrorException.NotFound e) {

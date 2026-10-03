@@ -173,6 +173,9 @@ export function useAuditScreen({
     rangeError,
     // permission UX
     securityKnownDenied,
+    // TASK-BE-619 — the APPLIED query reads security events (login_history / suspicious), so the
+    // consumer-pool note must be shown (consumer-pool accounts' events are not under the site tenant).
+    securitySourceApplied: isSecuritySource(query.source),
     // query result derivations
     data,
     rows,

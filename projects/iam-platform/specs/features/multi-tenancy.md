@@ -482,6 +482,10 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   토큰 없음 · 루프 없음 · IAM 세션은 그대로(다른 사이트 SSO 유지). `prompt=none` 은 화면을 띄울 수 없으므로 `error=consent_required`.
   redirect URI 가 등록값과 **정확히** 같지 않으면 리다이렉트하지 않는다(오류 응답도 리다이렉트다 — 열린 리다이렉터 금지). `POST` authorize 와 `LEFT` 멤버십은
   동의 화면을 띄우지 않고 위 615 결과 그대로(토큰 거절) — 동의는 떠난 멤버십을 다시 열지 않는다. 콘솔(`iam`)과 B2B client 에는 동의 화면이 없다.
+  → **`TASK-BE-619` 이후**: `LEFT` 중 **본인이 떠난 것**(`leftBy = SELF`)은 행 없음과 같이 **동의 화면**이고, 동의하면 `ACTIVE` 로 돌아온다(이벤트 없음 — § 5
+  «사이트 탈퇴 vs 계정 삭제»). **운영자가 내보낸 것**(`leftBy = OPERATOR`)과 작성자 기록이 없는 `LEFT` 는 위 그대로(동의 화면 없음 · 토큰 거절).
+  동의 화면의 부제는 그 화면 전용이다 — «{사이트 이름}에서 내 IAM 계정을 쓰도록 허용합니다.»(사이트 이름 = 보관된 client 의 사이트 테넌트 `display_name`, 조회
+  실패 시 «이 사이트»). 사이트의 **로그인** 부제(«…로그인하세요»)는 쓰지 않는다(이미 로그인한 사람에게 하는 말이 아니다 — 소유자 결정 2026-10-03).
 - **소비자 사이트가 아닌 client**(B2B — wms · erp …): 풀 세션은 다른 테넌트 세션처럼 **재인증**, 그 client 의 폼은 풀 자격을 보지 않는다(풀-먼저는 소비자 사이트 규칙).
 - **로그아웃 범위 (소유자 결정 2026-10-01 «전체»)**: 어느 소비자 사이트에서 로그아웃하든(RP-initiated `/connect/logout`) **IAM 브라우저 세션이 끝난다** —
   다른 사이트의 다음 authorize 는 로그인 화면이다. 이미 발급된 다른 사이트의 앱 세션(그 사이트의 토큰 · refresh)은 **그 사이트의 만료 · 자체 로그아웃**을 따른다
@@ -504,10 +508,29 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 (§ 3 이동 전에 로그인한 세션의 refresh 가 이 조회로 역할을 싣는다 — [account-internal-provisioning.md § roles GET](../contracts/http/internal/account-internal-provisioning.md#get-internaltenantstenantidaccountsaccountidroles)).
 풀 principal 의 발급은 여전히 consumer-members 읽기를 쓴다.
 - **비멤버 대조군**: 사이트 A 에만 멤버인 풀 계정을 사이트 B 로 찾으면 404 — 읽기 · 쓰기 모두.
-- 🔴 **쓰기의 범위는 «계정 하나»**: 사이트 운영자(또는 본인이 그 사이트 토큰으로)가 풀 멤버에게 하는 상태 전이 · 삭제 · **GDPR 삭제**는 **풀 계정 하나**에
-  일어난다 — 그 사람의 **모든 소비자 사이트**에서 잠기고 · 지워지고 · 마스킹된다. 데이터 주체는 사람이므로 그 사람이 멤버인 어느 사이트의 운영자든
-  GDPR 삭제/내보내기를 할 수 있다(`TASK-BE-616` 결정). 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번(account-events.md § 상태 전이).
-  운영자 이력 행(`account_status_history`)도 계정의 테넌트로 적힌다.
+- 🔴 **쓰기의 범위는 «계정 하나»** — **삭제를 뺀** 상태 전이(잠금 · 해제 · 프로비저닝 상태 변경)는 **풀 계정 하나**에 일어난다: 스토어 운영자의 잠금은
+  팬에서도 잠근다(`TASK-BE-616` 결정, 아래 «사이트 탈퇴 vs 계정 삭제» 는 이것을 바꾸지 않는다). 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번
+  (account-events.md § 상태 전이). 운영자 이력 행(`account_status_history`)도 계정의 테넌트로 적힌다. GDPR **내보내기**는 그 사람이 멤버인 어느 사이트의
+  운영자든 할 수 있다(읽기).
+- 🔴 **삭제는 다르다 — «사이트 탈퇴» vs «계정 삭제» (`TASK-BE-619`, 소유자 결정 2026-10-03)**. 위 616 결정은 «사이트 운영자의 GDPR 삭제 = 풀 계정 삭제(모든
+  사이트에서)» 였고, 소유자가 이것을 **«사이트 운영자 삭제 권한 = 자기 사이트 멤버십만»** 으로 바꿨다 — *한 사이트가 다른 사이트의 회원 데이터를 지울 수 없다.*
+  풀 계정 삭제(GDPR 마스킹 포함)는 **본인 또는 플랫폼 관리자**만 한다.
+
+  | 행위자 | «사이트 탈퇴» (그 사이트 멤버십 → `LEFT`) | «계정 삭제» (풀 계정 → `DELETED`, 모든 소비자 사이트에서) |
+  |---|---|---|
+  | **본인** (그 사이트 토큰) | `DELETE /api/accounts/me/site-membership` — 토큰의 사이트만, `left_by = SELF` ([account-api.md](../contracts/http/account-api.md)) | `DELETE /api/accounts/me` — 풀 계정 하나(616 그대로) |
+  | **사이트 운영자** (활성 테넌트 = 그 사이트) | 콘솔 «GDPR 삭제» · 내부 `/delete` — 대상이 **풀 멤버**면 **그 사이트 멤버십만** `LEFT`, `left_by = OPERATOR`. 계정 · PII · 다른 사이트 멤버십 무변경. 응답 `scope = SITE_MEMBERSHIP` ([admin-to-account.md § gdpr-delete](../contracts/http/internal/admin-to-account.md)) | **할 수 없다**. 그 사이트의 **자기 계정**(풀이 아닌 사이트별 계정)은 지금처럼 삭제된다 — 그 사이트만의 계정이다 |
+  | **플랫폼 관리자** (SUPER_ADMIN — 테넌트를 말하지 않는 `X-Tenant-Id: *`) | (해당 없음 — 필요하면 그 사이트 운영자로 행동) | 콘솔 «GDPR 삭제» — admin-service 가 플랫폼 스코프 운영자에게 하류 `*` 를 찍고, account-service 는 **계정 행 자신의 테넌트**로 찾아 계정 자체를 지운다(`scope = ACCOUNT`) |
+
+  - **탈퇴 후 복귀 (소유자 결정 2026-10-03 «다시 동의하면 복귀»)**: **본인이** 떠난 사이트(`left_by = SELF`)는 다시 로그인해 그 사이트 동의 화면에서 «동의» 하면
+    `ACTIVE` 로 돌아온다(§ 4 동의). **운영자가** 내보낸 사이트(`left_by = OPERATOR`)는 동의로 다시 열리지 **않는다** — 동의 화면도 뜨지 않고 토큰도 없다(615 그대로).
+    두 경우는 멤버십 행의 `left_by` 로 가른다(account-service `V0032`). 기록된 작성자가 없는 `LEFT` 행(619 이전엔 작성자가 없었다 — 0행)은 운영자 쪽으로 읽는다(보수).
+  - 본인이 떠난 뒤 그 사이트 운영자가 내보내면 `OPERATOR` 로 다시 기록된다(내보냄이 남는다). 운영자가 내보낸 뒤 본인이 «탈퇴» 해도 그대로다(복귀 가능으로 낮추지 못한다).
+  - 떠날 때 그 사이트의 `consumer_site_roles` 행(ARTIST · SELLER …)은 지운다 — 돌아오면 그 사이트 시드 역할부터 다시 시작한다(동의가 운영자가 줬던 역할을 몰래 되살리지
+    않게. 구현자 기본값, 소유자가 한 줄로 뒤집을 수 있다).
+  - 떠남은 **이벤트를 내지 않는다**: 그 사이트 토큰은 다음 authorize · refresh 부터 발급되지 않고(615 — 멤버십 `LEFT` = 토큰 없음), 다시 돌아와도
+    `account.created` 를 다시 내지 않는다(§ 6 «사이트마다 한 번»). 사이트가 자기 쪽 회원 데이터를 어떻게 하는지는 그 사이트의 일이다(이 절 밖).
+  - 다른 사이트는 영향이 없다 — 대조 시험 `ConsumerSiteLeaveIntegrationTest`(account-service).
 
 #### 6. 이벤트 (AC-3 결정)
 
@@ -532,6 +555,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | `account.created` 사이트별 1회 | `TASK-BE-614`(가입) · `TASK-BE-616`(동의) — 이벤트 `tenantId` 단언 |
 | 한 사이트 계정의 이동(§ 3) — 옮길 행 전부 · 셀러/두 사이트 제외 · 실패 시 무변경 · 재실행 · `account.created` 없음 | `TASK-BE-618` — account-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 이동한 계정이 같은 비밀번호로 같은 `sub` · 이동 전 refresh 가 계속 된다 | `TASK-BE-618` — auth-service `ConsumerPoolLegacyMoveIntegrationTest` |
+| 사이트 운영자의 삭제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 삭제 · 본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님 | `TASK-BE-619` — account-service `ConsumerSiteLeaveIntegrationTest` · `PoolMemberSiteSurfacesIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(SELF → 동의 화면 · OPERATOR → 통과·발급 거절) |
 
 ### 격리 회귀 방지
 
@@ -548,6 +572,9 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
       심층 방어로 헤더를 **명시**한다. 🔴 security-service 자동 잠금은 **싣지 않는다**(소유자 결정 2026-09-26) — 이벤트의 테넌트는
       세션 테넌트라 교차 테넌트 세션에서 계정 테넌트와 달라 404(미잠금)가 된다(`TASK-BE-611`). 근거·조건: [admin-to-account.md § Tenant Confinement](../contracts/http/internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
       `/gdpr-delete` · `/export` 는 이 소비처가 **아니다**(여전히 `fan-platform` 기본값).
+    - **같은 finder 의 세 번째 소비처 (TASK-BE-619, 2026-10-03 소유자 결정 «풀 계정 삭제는 본인 또는 플랫폼 관리자»)** — 내부 `POST /internal/accounts/{id}/gdpr-delete`
+      가 `X-Tenant-Id` 가 **없거나 공백이거나 `*`** 일 때 대상 계정을 이 finder 로 찾는다(MONO-735 와 같은 조건 · 같은 갈림). admin-service 는 **플랫폼 스코프
+      운영자**에게만 `*` 를 찍는다. 🔴 헤더가 구체 테넌트를 말하면 그대로 한정된다(교차 → 404). `/export` 는 여전히 이 소비처가 아니다.
   - ⚪ «정적 분석으로 차단» 은 현재 **없다**(2026-09-25 확인: account-service 테스트에 ArchUnit/리플렉션 기반 규칙 0). 지금 이 규칙을 지키는 것은 리뷰뿐이다.
 - **Specification/QueryDSL**: 동적 쿼리 빌더에 tenant predicate가 자동 주입되도록 base specification 제공
 - **테스트**: 모든 도메인 통합 테스트에 **cross-tenant leak 회귀 테스트** 포함 — 다른 `tenant_id`로 동일 PK·이메일 조회 시 결과가 격리되는지 검증

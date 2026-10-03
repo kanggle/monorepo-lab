@@ -145,6 +145,8 @@ presentation → application → domain
 - 내부 provisioning: `/internal/tenants/{tenantId}/accounts` (POST/GET), `/internal/tenants/{tenantId}/accounts/{accountId}/roles|status|password-reset` — WMS 등 enterprise 소비자가 사용. path `{tenantId}`와 호출 주체의 tenant scope 불일치 시 403 `TENANT_SCOPE_DENIED`. 상세는 [specs/features/multi-tenancy.md](../../features/multi-tenancy.md)
 - 소비자 계정 풀 사이트 멤버십 읽기(TASK-BE-615): `GET /internal/tenants/{tenantId}/consumer-members/{accountId}` — auth-service 전용(폼 로그인 · authorize 게이트 · 토큰 발급). 항상 200(«멤버 아님»도 본문의 답). [auth-to-account.md](../../contracts/http/internal/auth-to-account.md)
 - 소비자 계정 풀 첫 방문 동의(TASK-BE-616): `PUT /internal/tenants/{tenantId}/consumer-members/{accountId}` — auth-service 동의 화면 전용. 멤버십 행이 없을 때만 ACTIVE 멤버십 + 그 사이트 `account.created` 1회(멱등), 항상 200(읽기와 같은 본문). [auth-to-account.md](../../contracts/http/internal/auth-to-account.md)
+  → TASK-BE-619: 본인이 떠난 멤버십(`LEFT`, `left_by = SELF`)도 동의로 `ACTIVE` 로 돌아온다(이벤트 없음). 운영자가 내보낸 것(`OPERATOR`)은 그대로.
+- 소비자 사이트 탈퇴(TASK-BE-619): `DELETE /api/accounts/me/site-membership`(본인, `left_by = SELF`) — 토큰의 사이트 멤버십만 `LEFT`, 계정 무변경. 사이트 운영자의 `/gdpr-delete` · `/delete` 가 풀 멤버를 겨누면 같은 use case(`LeaveConsumerSiteUseCase`, `left_by = OPERATOR`)로 간다 — 응답 `scope = SITE_MEMBERSHIP`. 풀 계정 삭제는 본인(`DELETE /api/accounts/me`) 또는 플랫폼(`X-Tenant-Id: *`). [account-api.md](../../contracts/http/account-api.md) · [admin-to-account.md](../../contracts/http/internal/admin-to-account.md)
 - 응답에서 `password_hash`·`deleted_at` 같은 민감 필드 **절대 제외** ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4)
 
 ### application/

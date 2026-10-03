@@ -148,7 +148,38 @@ class AuthorizeSessionTenantGatePoolTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-616: LEFT 멤버십 → 동의 화면 아님 · 통과(발급자가 invalid_grant) — 동의가 떠난 멤버십을 다시 열지 않는다")
+    @DisplayName("TASK-BE-619: 본인이 떠난 멤버십(LEFT·SELF) → 동의 화면 다시 (302 /consent · 요청 보관) — 다시 동의하면 복귀")
+    void poolSession_selfLeftMembership_redirectsToConsent() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", "LEFT", List.of(), "SELF"));
+
+        Outcome out = run(principal("consumer-pool"), "fan", "GET", Map.of("state", "s-619"));
+
+        assertThat(out.chainCalled()).as("no code is issued for this request").isFalse();
+        assertThat(out.response().getStatus()).isEqualTo(302);
+        assertThat(out.response().getRedirectedUrl()).isEqualTo("/consent");
+        assertThat(out.request().getSession(false).getAttribute(PendingSiteConsentStore.SESSION_ATTRIBUTE))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-619: 사이트 운영자가 내보낸 멤버십(LEFT·OPERATOR) → 동의 화면 아님 · 통과(발급자가 invalid_grant)")
+    void poolSession_operatorLeftMembership_passes_noConsent() throws Exception {
+        stubClient("fan", "fan-platform");
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", "LEFT", List.of(), "OPERATOR"));
+        Authentication session = principal("consumer-pool");
+
+        Outcome out = run(session, "fan", "GET", Map.of());
+
+        assertThat(out.chainCalled()).isTrue();
+        assertThat(out.seen()).isSameAs(session);
+        assertThat(out.request().getSession(false)).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-616/619: 작성자 기록 없는 LEFT 멤버십(옛 account-service) → 동의 화면 아님 · 통과(발급자가 invalid_grant) — 보수 쪽")
     void poolSession_leftMembership_passes_noConsent() throws Exception {
         stubClient("fan", "fan-platform");
         when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(

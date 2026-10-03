@@ -26,6 +26,22 @@ public interface ConsumerSiteMembershipRepository {
     Optional<ConsumerSiteMembership> find(TenantId siteTenantId, String accountId);
 
     /**
+     * TASK-BE-619 — writes the new state of an EXISTING membership row (leave / rejoin): status,
+     * {@code consented_at} and the leave record. Never inserts.
+     *
+     * @return {@code true} iff the row existed and was updated
+     */
+    boolean update(ConsumerSiteMembership membership);
+
+    /**
+     * TASK-BE-619 — removes every {@code consumer_site_roles} row of the account on {@code siteTenantId}
+     * only (leaving a site drops its site roles). Never another site's roles, never the membership.
+     *
+     * @return the number of roles removed
+     */
+    int removeAllSiteRoles(TenantId siteTenantId, String accountId);
+
+    /**
      * TASK-BE-615 — the account's site roles outside the seed ({@code consumer_site_roles}) on
      * {@code siteTenantId} only, ascending by role name. Never another site's roles: the site is
      * the first argument and the only scope. Empty when there are none.

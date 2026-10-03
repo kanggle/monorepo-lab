@@ -91,10 +91,10 @@ public class AccountLockController {
             @Valid @RequestBody InternalDeleteAccountRequest request) {
         StatusChangeReason reason = StatusChangeReason.valueOf(request.reason());
 
+        // TASK-BE-619: a named (site) tenant on a consumer-pool member ends only that site's membership.
         DeleteAccountResult result = namesTenant(tenantId)
-                ? accountStatusUseCase.deleteAccount(
-                        accountId, reason, "operator", request.operatorId(),
-                        TenantId.fromHeaderOrDefault(tenantId))
+                ? accountStatusUseCase.deleteAccountAsTenantOperator(
+                        accountId, reason, request.operatorId(), TenantId.fromHeaderOrDefault(tenantId))
                 : accountStatusUseCase.deleteAccountResolvingTenant(
                         accountId, reason, "operator", request.operatorId());
 

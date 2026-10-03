@@ -125,6 +125,18 @@ export const SEEDED_NO_CUSTOMER_ROLE: TestUser = {
 };
 
 /**
+ * TASK-BE-619 (AC-2) — a consumer-POOL credential (`iam-consumer-seed.sql`, tenant
+ * `consumer-pool`) that is not a member of the store (`account-mock.nginx.conf` answers its store
+ * membership lookup with «consumer site, no membership»). Logging in through the storefront client
+ * lands on IAM's first-visit consent screen (TASK-BE-616) — `consent-decline.spec.ts`.
+ */
+export const SEEDED_POOL_NOT_STORE_MEMBER: TestUser = {
+  name: 'E2E Pool Fan-only',
+  email: 'e2e-pool-fan-only@example.com',
+  password: 'devpassword123!',
+};
+
+/**
  * Role guard (ADR-MONO-035 §4b-1 · TASK-MONO-381, restored by TASK-BE-605): IAM authenticates
  * the user, the token has no `CUSTOMER`, and web-store's `signInCallback` bounces the browser to
  * ITS OWN `/login?error=account_type_mismatch` — on the web-store origin, which is what tells

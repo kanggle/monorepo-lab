@@ -100,8 +100,8 @@ class PoolMemberSiteSurfacesIntegrationTest extends AbstractConsumerPoolIntegrat
     }
 
     @Test
-    @DisplayName("GDPR 삭제: fan-platform(비멤버) 404·무변경 → ecommerce(멤버) 200 — 풀 계정 하나가 DELETED·마스킹 (모든 사이트에서) · 이벤트 consumer-pool")
-    void gdprDelete_nonMemberRefused_memberErasesThePoolAccount() throws Exception {
+    @DisplayName("GDPR 삭제: fan-platform(비멤버) 404·무변경 → ecommerce(멤버) 200 — TASK-BE-619: 스토어 멤버십만 LEFT, 계정은 그대로 → 플랫폼('*')만 풀 계정을 DELETED·마스킹 · 이벤트 consumer-pool")
+    void gdprDelete_nonMemberRefused_siteOperatorLeavesSite_platformErasesThePoolAccount() throws Exception {
         String email = uniqueEmail("616-gdpr");
         String id = storePoolShopper(email);
         String body = """
@@ -112,9 +112,19 @@ class PoolMemberSiteSurfacesIntegrationTest extends AbstractConsumerPoolIntegrat
                 .andExpect(status().isNotFound());
         assertThat(accountStatus(id)).isEqualTo("ACTIVE");
 
+        // TASK-BE-619 (owner decision 2026-10-03): the store operator ends only the store membership.
         mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", id).header("X-Tenant-Id", "ecommerce")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"));
+        assertThat(accountStatus(id)).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT email FROM accounts WHERE id = ?", String.class, id)).isEqualTo(email);
+
+        // Erasing the pool account is the platform admin's (no tenant named).
+        mockMvc.perform(post("/internal/accounts/{id}/gdpr-delete", id).header("X-Tenant-Id", "*")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ACCOUNT"));
         assertThat(accountStatus(id)).isEqualTo("DELETED");
         assertThat(jdbc.queryForObject("SELECT tenant_id FROM accounts WHERE id = ?", String.class, id))
                 .isEqualTo("consumer-pool");

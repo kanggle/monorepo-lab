@@ -28,8 +28,10 @@ import java.util.Optional;
  * <p><b>Idempotent on {@code (accountId, site)}.</b> The write happens only when there is no
  * membership row yet. A row that already exists — ACTIVE (a double submit, a back-button replay) or
  * LEFT — is left exactly as it is and no event is published: the event means «this account became
- * usable on this site», which happens once. A LEFT membership is <b>not reopened</b> by consent (no
- * writer for LEFT exists yet; reopening is a decision for whoever adds leaving). Two concurrent first
+ * usable on this site», which happens once. A LEFT membership is reopened by consent <b>only when the
+ * person left it themself</b> (TASK-BE-619, owner decision 2026-10-03 «다시 동의하면 복귀»): it becomes
+ * ACTIVE again with a new {@code consented_at}, and still no event. One the site's operator removed
+ * ({@code left_by = OPERATOR}) stays LEFT — consent cannot undo a removal. Two concurrent first
  * consents race on the primary key; the loser's transaction rolls back with its event, and the caller
  * answers with the read ({@link GetConsumerSiteMembershipUseCase}) — see the controller.
  *
@@ -64,13 +66,22 @@ public class ConsentToConsumerSiteUseCase {
                 ? accountRepository.findById(TenantId.CONSUMER_POOL, accountId)
                 : Optional.empty();
 
-        if (consumerSite && siteOpen && poolAccount.isPresent()
-                && membershipRepository.find(site, accountId).isEmpty()) {
+        Optional<ConsumerSiteMembership> existing = consumerSite && siteOpen && poolAccount.isPresent()
+                ? membershipRepository.find(site, accountId)
+                : Optional.empty();
+        if (consumerSite && siteOpen && poolAccount.isPresent() && existing.isEmpty()) {
             membershipRepository.insert(ConsumerSiteMembership.joinOnConsent(accountId, site, Instant.now()));
             String locale = profileRepository.findByAccountId(accountId).map(Profile::getLocale).orElse(null);
             // § 6: the site, never consumer-pool — the ecommerce consumer builds its profile under it.
             eventPublisher.publishAccountCreated(poolAccount.get(), site.value(), locale);
             log.info("consumer-site consent: account {} joined site {} (account.created published)",
+                    accountId, site.value());
+        } else if (existing.isPresent() && existing.get().isReopenableByConsent()) {
+            // TASK-BE-619 (owner decision 2026-10-03 «다시 동의하면 복귀») — the person left this site
+            // themself and consented again: ACTIVE again. NO account.created — the event means «usable on
+            // this site for the first time» and that already happened once (§ 6, one per (account, site)).
+            membershipRepository.update(existing.get().rejoinOnConsent(Instant.now()));
+            log.info("consumer-site consent: account {} rejoined site {} after leaving it themself",
                     accountId, site.value());
         } else if (consumerSite && !siteOpen) {
             log.info("consumer-site consent refused: site {} is not ACTIVE (account {})", site.value(), accountId);

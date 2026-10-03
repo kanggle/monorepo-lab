@@ -54,18 +54,31 @@ public class GdprAdminUseCase {
         }
 
         Instant completedAt = Instant.now();
+        // TASK-BE-619 — a site operator's request on a consumer-pool member erases nothing: account-service
+        // ends only that site's membership (scope SITE_MEMBERSHIP). The audit row says so in its detail, so
+        // «GDPR_DELETE · SUCCESS» is never read as «the account was erased» when it was not.
+        boolean siteScope = SCOPE_SITE_MEMBERSHIP.equals(downstream.scope());
         auditor.recordCompletion(new AdminActionAuditor.CompletionRecord(
                 auditId, ActionCode.GDPR_DELETE, cmd.operator(),
                 "ACCOUNT", cmd.accountId(),
                 cmd.reason(), cmd.ticketId(), cmd.idempotencyKey(),
-                Outcome.SUCCESS, null, startedAt, completedAt));
+                Outcome.SUCCESS,
+                siteScope ? "SITE_MEMBERSHIP_LEFT site=" + downstream.siteTenantId() : null,
+                startedAt, completedAt));
 
         return new GdprDeleteResult(
                 downstream.accountId(),
                 downstream.status(),
-                downstream.maskedAt() != null ? downstream.maskedAt() : completedAt,
-                auditId);
+                siteScope ? null : (downstream.maskedAt() != null ? downstream.maskedAt() : completedAt),
+                auditId,
+                siteScope ? SCOPE_SITE_MEMBERSHIP : SCOPE_ACCOUNT,
+                siteScope ? downstream.siteTenantId() : null);
     }
+
+    /** TASK-BE-619 — the account itself was erased (DELETED + PII masked). */
+    public static final String SCOPE_ACCOUNT = "ACCOUNT";
+    /** TASK-BE-619 — only the site's membership of a consumer-pool account ended; nothing was erased. */
+    public static final String SCOPE_SITE_MEMBERSHIP = "SITE_MEMBERSHIP";
 
     public DataExportResult dataExport(String accountId, OperatorContext operator, String reason,
                                        String tenantId) {

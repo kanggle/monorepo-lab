@@ -27,9 +27,20 @@ public class GdprController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @Valid @RequestBody GdprDeleteRequest request) {
 
-        GdprDeleteResult result = gdprDeleteUseCase.execute(
-                accountId, request.operatorId(), TenantId.fromHeaderOrDefault(tenantId));
+        // TASK-BE-619 — the TASK-MONO-735 split, now for gdpr-delete too: a caller that names a concrete
+        // tenant (a site operator) is confined to it, and on a consumer-pool member that tenant's erasure
+        // ends only that site's membership; a caller that names none (absent / blank / "*" — the platform
+        // admin) erases the account found by its own row. Before 619 the second case was pinned to
+        // fan-platform, so a SUPER_ADMIN could not erase any account outside it.
+        GdprDeleteResult result = namesTenant(tenantId)
+                ? gdprDeleteUseCase.execute(accountId, request.operatorId(), TenantId.fromHeaderOrDefault(tenantId))
+                : gdprDeleteUseCase.executeResolvingTenant(accountId, request.operatorId());
         return ResponseEntity.ok(GdprDeleteResponse.from(result));
+    }
+
+    /** Same predicate as {@code AccountLockController#namesTenant} (TASK-MONO-735). */
+    private static boolean namesTenant(String tenantHeader) {
+        return tenantHeader != null && !tenantHeader.isBlank() && !"*".equals(tenantHeader);
     }
 
     @GetMapping("/{accountId}/export")

@@ -350,8 +350,9 @@ class InternalControllerSliceTest {
     @Test
     @DisplayName("TASK-MONO-735 대조군: delete X-Tenant-Id=ecommerce → 그 테넌트로 한정")
     void delete_concreteTenantHeader_staysConfined() throws Exception {
-        given(accountStatusUseCase.deleteAccount(eq("acc-ec"), eq(StatusChangeReason.ADMIN_DELETE),
-                eq("operator"), eq("op-1"), eq(new TenantId("ecommerce"))))
+        // TASK-BE-619: a named tenant goes through the tenant-operator delete (a pool member → that site only).
+        given(accountStatusUseCase.deleteAccountAsTenantOperator(eq("acc-ec"), eq(StatusChangeReason.ADMIN_DELETE),
+                eq("op-1"), eq(new TenantId("ecommerce"))))
                 .willReturn(new DeleteAccountResult("acc-ec", "ACTIVE", "DELETED", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-ec/delete")
