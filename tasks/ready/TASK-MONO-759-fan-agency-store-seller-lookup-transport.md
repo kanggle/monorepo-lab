@@ -52,6 +52,45 @@ monorepo
 | **B** | **이벤트로 채운 셀러 상태 복제본**(artist-service 안) — 셀러 생성/정지/폐점 이벤트를 프로젝트 간 릴레이로 받아 `store_sellers(seller_id, status)` 를 유지하고 그것으로 검증 | 🔴 **ADR-079 라이더/개정** 필요(D2 는 «스토어의 셀러 조회로»). artist-service 의 Service Type 이 `rest-api` 단일 → `event-consumer` 추가. 복제 지연 동안 CLOSED 를 못 볼 수 있음(지연 상한을 정해야 함) |
 | C | **공개 스토어 스냅숏**(`@demo/public-data` `store.json`) | **기본 기각** — 실시간이 아니고, CLOSED 셀러를 믿을 수 있게 보이지 않는다(공개 스냅숏은 판매 중 상품 중심). 쓰기 시점 검증이 아니다 |
 
+## ✅ 소유자 선택 (2026-10-03 UTC) — 갈래 A, IdP 등록·권한 카탈로그 변경 승인 포함
+
+소유자가 고른 선택지(원문 그대로): «A: 워크로드 토큰 + 내부 읽기 (Recommended)»
+
+선택지 본문(원문 그대로): "artist-service용 IdP 클라이언트를 등록하고 셀러 읽기 범위·ecommerce assume-tenant를 줍니다. product-service에 내부 셀러 읽기 API(첫 JWT 표면)를 만들어 동기로 묻습니다. 이 선택은 IdP 등록과 권한 카탈로그 변경에 대한 승인을 포함합니다."
+
+⇒ AC-0 의 두 요건(갈래 선택 · 갈래 A 의 IdP 등록·권한 카탈로그 변경 명시 승인)이 모두 인용됐다.
+
+## 현황 재측정 (2026-10-03 UTC · 정적 · `origin/main` `108c26461`)
+
+| 전제 | 결과 |
+|---|---|
+| product-service 가 JWT 를 검증하지 않는다 | ✅ 여전히 참 — `build.gradle` 에 `spring-boot-starter-security`/`oauth2-resource-server` 0건, `SecurityFilterChain` 0건, 컨트롤러에 `/internal/**` 매핑 0건(`/internal` 문자열은 iam 을 **부르는** 클라이언트에만 있다) |
+| artist-service 에 IdP 클라이언트가 없다 | ✅ 여전히 참 — 저장소 전체에 `artist-service-client`·`store.seller` 0건 |
+| `WorkloadTenantCatalog` 의 모양 | 항목 1개 — `product-service-client → {ecommerce, demo-corp}`. 교환 grant 보유 = `platform-console-web`(운영자 분기) + `product-service-client` |
+
+## 🔴 HARDSTOP-09 (2026-10-03 UTC) — 갈래 A 가 정하지 않은 것: **fan → store 의 도달 경로**
+
+구현 착수 전 배선을 재다가 나왔다. 갈래 A 는 «무엇을 부르나»(product-service 내부 읽기) 와 «어떤 자격으로»(워크로드 토큰 + assume-tenant) 를 정했고, **«어느 길로 닿나»** 는 정하지 않았다 — 그리고 지금 저장소에는 그 길이 **없다**.
+
+| 측정 | 결과 |
+|---|---|
+| artist-service 의 네트워크 | 로컬 `fan-platform-net` 만 · 데모는 `fan-identity.override.yml` 이 `traefik-net` 을 더한다 |
+| product-service 의 네트워크 | 로컬·데모 모두 `ecommerce-net` 만 — `infra/demo/*.yml` 어디에도 product-service 를 다른 망에 붙이는 오버레이 0건 |
+| ecommerce 게이트웨이 | `/internal/**` 라우트 0건 · `AccountTypeEnforcementFilter` 는 «그 밖의 인증 라우트 → `CUSTOMER` 역할 필수» 라 역할 없는 워크로드 토큰을 403 · `allowed-audiences` = `platform-console-web,ecommerce-web-store-client`(SHADOW) |
+
+⇒ 두 서비스는 **공유 망이 0** 이고(`ADR-MONO-076` § Context 가 iam 에서 잰 것과 같은 모양), 스토어의 공개 입구(게이트웨이)는 내부 경로를 싣지 않는다. 내부 읽기를 만들어도 artist-service 는 거기 닿지 못한다.
+
+```
+[VIOLATION] HARDSTOP-09: Task `TASK-MONO-759` (갈래 A) requires an architecture decision — the network path by which fan artist-service reaches ecommerce product-service's new `/internal/sellers/{sellerId}` — that the owner's choice of 갈래 A and no spec/ADR documents.
+[WHY] artist-service and product-service share no docker network locally or in the demo, and the ecommerce gateway routes no `/internal/**` path (its AccountTypeEnforcementFilter would 403 a role-less workload token and its audience allowlist does not name a new client). Each way to open a path is a new edge/topology decision: (1) an ecommerce-gateway route for `/internal/sellers/**` + a workload branch in AccountTypeEnforcementFilter + an audience-allowlist entry — the iam precedent (`/internal/tenants/**` on the iam gateway, kept by ADR-MONO-076 Consequences 4) but a new public-edge exposure for the store; (2) joining product-service to a shared network (e.g. `traefik-net`) and calling it by container name — the shape TASK-MONO-721 offered as ⓐ «네트워크» and the owner did not choose there; (3) a dedicated Traefik router (internal hostname + path) to product-service. Picking one here would decide the store's edge implicitly.
+[REMEDIATION] Choose one:
+  1. Owner picks the reach path (R1 gateway route · R2 shared network · R3 Traefik router), recorded in this ticket's AC-0 (or as an ADR-MONO-079 rider); then implement 갈래 A end to end in one PR (contracts → V0042 IdP client + WorkloadTenantCatalog entry → product-service `/internal/**` JWT chain → artist-service HTTP adapter → compose/demo wiring + `check-internal-caller-addresses.sh` rows).
+  2. Split: land the decided parts now (contracts, IdP client, catalog entry, product-service internal chain, artist-service adapter with its base URL as configuration) with the deployed link still answering 503 until the reach path is decided — the fail-closed state 748 already ships; the reach path becomes its own AC/ticket.
+[REFERENCE] CLAUDE.md § Hard Stop Rules · platform/hardstop-rules.md#hardstop-09 · ADR-MONO-076 § Context (공유 네트워크 0) · TASK-MONO-721 AC-0 ⓐ · projects/ecommerce-microservices-platform/apps/gateway-service/src/main/java/com/example/gateway/filter/AccountTypeEnforcementFilter.java · infra/demo/fan-identity.override.yml
+```
+
+⇒ 이 티켓은 `ready/` 에 남는다(구현 0줄). 다음 행동 = 소유자의 도달 경로 선택(또는 분리 결정).
+
 # Goal
 
 `TASK-MONO-748` 이 만든 `StoreSellerDirectory` 포트에 **실제 조회 경로**를 붙여, 소속사 → 스토어 셀러 연결(`PATCH /api/agencies/{id}/store-seller`)이 운영에서 «존재하는 ACTIVE 셀러 → 저장» 이 되게 한다. 검증 규칙과 fail-closed 성질은 748 그대로다.
@@ -81,7 +120,7 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 소유자의 갈래 선택이 이 티켓에 인용돼 있다(⏳ 그 전 착수 금지). 갈래 A 면 IdP 등록·권한 카탈로그 변경의 **명시 승인**도 인용.
+- [x] **AC-0** — 소유자의 갈래 선택이 이 티켓에 인용돼 있다(⏳ 그 전 착수 금지). 갈래 A 면 IdP 등록·권한 카탈로그 변경의 **명시 승인**도 인용. — ✅ 2026-10-03 UTC 갈래 A + 승인 인용(§ 소유자 선택). 🔴 단, 재측정에서 **도달 경로 HARDSTOP-09** 가 나와 구현은 대기(§ HARDSTOP-09).
 - [ ] **AC-1** (`TASK-MONO-748` AC-3 원문) — 셀러 연결: 존재하는 ACTIVE 셀러 → 저장 · 없는/`CLOSED` 셀러 → 거절 · 셀러 조회 실패 → 저장 안 함(fail-closed). 🔴 **실제 전송 경로 위에서**(포트 대역이 아니라) 시험한다.
 - [ ] **AC-2** — 조회 실패 대조군: 스토어/IdP 를 내린 상태에서 연결 시도 → 503 · 저장값 불변. 그리고 같은 시험 안에서 정상 경로 200(«열린 경로 + 닫힌 경로»).
 - [ ] **AC-3** — (A) 새 워크로드 자격은 **셀러 읽기만** 된다: 같은 토큰으로 셀러 변경·다른 테넌트 assume 은 거절 / (B) 복제 지연·순서 뒤집힘(정지 후 재활성)의 결과가 시험으로 고정.
