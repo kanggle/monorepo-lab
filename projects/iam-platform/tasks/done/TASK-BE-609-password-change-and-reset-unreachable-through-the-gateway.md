@@ -4,7 +4,7 @@ TASK-BE-609
 
 # Status
 
-review
+done
 
 # Title
 
@@ -138,3 +138,10 @@ Bearer 동반 변경 204), 대조군·기존 셀 초록 → 원복 후 두 모�
 - **재설정 🟢**: `POST https://auth.hubwang.com/api/auth/password-reset/request` → **204**(실제 이메일 · 없는 이메일 둘 다 — 예전 401 TOKEN_INVALID 아님). 일회용 풀 계정 `be612-…` 의 재설정 확인 204 뒤 **새 비밀번호로 팬 로그인 성공**(세션 accountId `8cb67fce-…`) · 틀린 비밀번호 대조군은 IAM 폼 오류. `m9-*`.
 - **변경 ⚪**: 팬·스토어에 비밀번호 변경 화면이 없고(이 티켓은 UI 를 범위 밖으로 뒀다), 사용자 액세스 토큰은 브라우저에 오지 않는다(사이트 client 는 전부 confidential, 세션은 id·tenant·roles 만). 토큰 없이 `PATCH /api/auth/password` → **401 TOKEN_INVALID**(경로는 열려 있음). 🔴 곁발견: 스토어 BFF 의 `PATCH /api/bff/api/auth/password` 는 **404**(ecommerce 게이트웨이가 `/api/auth/**` 를 라우팅하지 않음) — 스토어에서 비밀번호를 바꿀 사용자 경로가 지금 없다.
 - ⇒ AC-2 의 «변경 → 새 비밀번호 로그인» 을 잴 길이 없다. 닫으려면 (a) 사용자 토큰을 얻는 측정 하네스(인스턴스 안 authorization-code 흐름) 또는 (b) 사이트의 비밀번호 변경 화면이 필요하다 — 소유자 판단. `review/` 유지.
+
+---
+
+## CORRECTION (2026-10-03 UTC) — 4차원 종결 (소유자 결정)
+
+- (a) #4056 `MERGED` · (b) 스쿼시 `3bd595b9c` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/67.
+- (d) AC-0·1 본문 근거로 닫힘. AC-2 의 **재설정** 칸은 18차 창(2026-10-02)에서 🟢(위 CORRECTION). AC-2 의 **변경** 칸 — **소유자 결정 (2026-10-03 UTC): «(a) 범위에서 뺀다»**. 팬·스토어에 비밀번호 변경 화면이 없고 사용자 액세스 토큰이 브라우저에 오지 않아 잴 길이 없었다(위 CORRECTION). 게이트웨이·auth-service 의 변경 경로 자체는 AC-1 의 IT/슬라이스(`passwordChange_withUserJwt_forwardsAccountIdAndBearer` · `PasswordControllerSliceTest`)가 지킨다. 변경 화면이 필요해지면 새 티켓으로 연다.
