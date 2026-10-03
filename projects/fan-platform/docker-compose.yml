@@ -150,6 +150,16 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP: kafka:9092
+      # TASK-MONO-759 (ADR-MONO-079 D2; owner decisions 2026-10-03: 갈래 A + reach path R1) —
+      # the agency → store-seller lookup. artist-service's first outbound call: a workload
+      # token from the IdP (client `artist-service-client`, iam V0042), exchanged for tenant
+      # `ecommerce`, then GET /internal/sellers/{id} on the ECOMMERCE GATEWAY (the two projects
+      # share no network). Without these the code defaults (`*.local`) are used — fail-closed
+      # (every link 503, nothing saved), never permissive. Demo values: infra/demo/demo.env.
+      # The client secret stays on the code default `secret` (the shared dev BCrypt, V0042
+      # header) — rotate via IAM_CLIENT_SECRET outside dev, as V0019/V0036 say.
+      IAM_TOKEN_URI: ${IAM_TOKEN_URI:-http://iam.local/oauth2/token}
+      STORE_SELLER_BASE_URL: ${STORE_SELLER_BASE_URL:-http://ecommerce.local}
     depends_on:
       postgres:
         condition: service_healthy

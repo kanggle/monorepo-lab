@@ -11,6 +11,7 @@ import com.example.product.domain.exception.StorageUnavailableException;
 import com.example.product.domain.model.ProductImage;
 import com.example.product.domain.port.MediaUrlResolver;
 import com.example.product.domain.port.PresignedUploadResult;
+import com.example.product.infrastructure.config.ProductSecurityConfig;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = AdminProductImageController.class)
 @ContextConfiguration(classes = TestProductServiceApplication.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ProductSecurityConfig.class})
 @DisplayName("AdminProductImageController 슬라이스 테스트")
 class AdminProductImageControllerSliceTest {
 

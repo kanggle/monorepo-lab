@@ -60,7 +60,8 @@ class SecurityConfigRealDecoderPathTest {
     private static final String ISSUER = "https://test.local/issuer";
     private static final String PROTECTED = "/api/orders/123";
     /** Kept equal to application.yml by {@code AudienceShippedConfigTest}. */
-    static final String SHIPPED_ALLOWED_AUDIENCES = "platform-console-web,ecommerce-web-store-client";
+    static final String SHIPPED_ALLOWED_AUDIENCES =
+            "platform-console-web,ecommerce-web-store-client,artist-service-client";
     private static final JwtTestHelper JWT = new JwtTestHelper();
     private static final JwksMockServer JWKS;
 

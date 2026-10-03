@@ -44,7 +44,9 @@ class AudienceShippedConfigTest {
         @DisplayName("allowed-audiences 는 실측된 도달 client 그대로다 (AC-1 (b))")
         void shipsMeasuredAllowlist() {
             assertThat(GatewayJwtDecoders.parseCsv(ShippedAudienceConfig.shippedValue(PREFIX + "allowed-audiences")))
-                    .containsExactly("platform-console-web", "ecommerce-web-store-client");
+                    .containsExactly("platform-console-web", "ecommerce-web-store-client",
+                            // TASK-MONO-759: the fan workload routed to /internal/sellers/** here
+                            "artist-service-client");
             assertThat(ShippedAudienceConfig.shippedValue(PREFIX + "allowed-audiences"))
                     .isEqualTo(SecurityConfigRealDecoderPathTest.SHIPPED_ALLOWED_AUDIENCES);
         }

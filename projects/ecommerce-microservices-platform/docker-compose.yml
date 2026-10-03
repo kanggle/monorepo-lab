@@ -720,6 +720,13 @@ services:
       # 🔵 리터럴 IP 를 박지 않는다 — 데모 IP 는 부팅마다 바뀐다.
       - IAM_TOKEN_URI=${IAM_TOKEN_URI:-http://iam.local/oauth2/token}
       - ACCOUNT_SERVICE_BASE_URL=${ACCOUNT_SERVICE_BASE_URL:-http://iam.local}
+      # TASK-MONO-759 — product-service's FIRST inbound JWT surface (/internal/** — the fan →
+      # store seller read, reached through this project's gateway). The decoder's JWKS + issuer;
+      # same pair and same reasoning as order-service's ORDER_INTERNAL_OAUTH2_* (TASK-MONO-726):
+      # without them the code defaults point at localhost and every seller read is a silent 401
+      # (fan side: 503, nothing saved). Demo values come from infra/demo/demo.env.
+      - PRODUCT_INTERNAL_OAUTH2_JWK_SET_URI=${PRODUCT_INTERNAL_OAUTH2_JWK_SET_URI:-http://iam.local/oauth2/jwks}
+      - PRODUCT_INTERNAL_OAUTH2_ISSUER=${PRODUCT_INTERNAL_OAUTH2_ISSUER:-http://iam.local}
     expose:
       - "8082"
     deploy:

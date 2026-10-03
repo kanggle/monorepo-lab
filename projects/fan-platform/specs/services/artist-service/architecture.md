@@ -86,9 +86,11 @@ com.example.fanplatform.artist/
 │   └── out/
 │       ├── persistence/                                ← JPA entities + adapters per repo port (+ ArtistOutboxJpaEntity/Repository)
 │       ├── cache/ArtistDirectoryCacheAdapter.java      ← Redis read-through, fail-open
-│       ├── store/UnwiredStoreSellerDirectory.java      ← StoreSellerDirectory port; fail-closed
-│       │                                                  «cannot verify» until the fan → store
-│       │                                                  transport is decided (TASK-MONO-748)
+│       ├── store/HttpStoreSellerDirectory.java         ← StoreSellerDirectory port (TASK-MONO-759): workload
+│       │                                                  token → assume-tenant `ecommerce` → ecommerce gateway
+│       │                                                  → product-service GET /internal/sellers/{id}; every
+│       │                                                  failure → «cannot verify» (fail-closed). Single bean:
+│       │                                                  StoreSellerDirectoryConfig (no permissive fallback)
 │       ├── event/ArtistEventPublisherAdapter.java      ← v2 outbox write adapter (persists artist_outbox row; keeps artist_registered_total counter)
 │       └── messaging/ArtistOutboxPublisher.java        ← v2 relay (extends AbstractOutboxPublisher)
 ├── application/

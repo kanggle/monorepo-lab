@@ -8,7 +8,7 @@ TASK-MONO-759
 
 # Status
 
-ready
+review (2026-10-03 UTC — 갈래 A + 도달 경로 R1 구현 · 단위/슬라이스 초록 · ⚪ Testcontainers IT 와 데모 창은 미측정)
 
 # Owner
 
@@ -91,6 +91,12 @@ monorepo
 
 ⇒ 이 티켓은 `ready/` 에 남는다(구현 0줄). 다음 행동 = 소유자의 도달 경로 선택(또는 분리 결정).
 
+### ✅ 해소 — 소유자 결정 (2026-10-03 UTC): 도달 경로 = **R1 스토어 게이트웨이 경유**
+
+소유자가 고른 선택지(원문 그대로): «R1: 스토어 게이트웨이 경유 — ecommerce 게이트웨이에 `/internal/sellers/**` 라우트를 추가하고, 워크로드 토큰은 CUSTOMER 역할 검사 대신 범위·테넌트로 거릅니다. 새 클라이언트는 audience 허용 목록에 넣습니다. iam이 `/internal/tenants/**`를 게이트웨이로 실어 나르는 것과 같은 모양이고 신뢰 경계가 게이트웨이에 남습니다. 대신 공개 게이트웨이에 내부 경로가 하나 생깁니다(JWT·범위·테넌트로 보호).»
+
+⇒ HARDSTOP-09 해소. 갈래 A + R1 을 한 PR 로 구현한다. 게이트웨이 쪽 구속(조정자 전달): iam 게이트웨이의 `/internal/tenants/**` 처리를 형제 선례로 복사 · `AccountTypeEnforcementFilter` 의 워크로드 분기는 **`/internal/sellers/**` 만, 셀러 읽기 범위 + 테넌트 `ecommerce` 를 실은 토큰만** · 그 밖의 모든 경로는 CUSTOMER 규칙 그대로 · audience 허용 목록에 새 클라이언트 추가(SHADOW 유지, 전환 금지).
+
 # Goal
 
 `TASK-MONO-748` 이 만든 `StoreSellerDirectory` 포트에 **실제 조회 경로**를 붙여, 소속사 → 스토어 셀러 연결(`PATCH /api/agencies/{id}/store-seller`)이 운영에서 «존재하는 ACTIVE 셀러 → 저장» 이 되게 한다. 검증 규칙과 fail-closed 성질은 748 그대로다.
@@ -121,10 +127,10 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 소유자의 갈래 선택이 이 티켓에 인용돼 있다(⏳ 그 전 착수 금지). 갈래 A 면 IdP 등록·권한 카탈로그 변경의 **명시 승인**도 인용. — ✅ 2026-10-03 UTC 갈래 A + 승인 인용(§ 소유자 선택). 🔴 단, 재측정에서 **도달 경로 HARDSTOP-09** 가 나와 구현은 대기(§ HARDSTOP-09).
-- [ ] **AC-1** (`TASK-MONO-748` AC-3 원문) — 셀러 연결: 존재하는 ACTIVE 셀러 → 저장 · 없는/`CLOSED` 셀러 → 거절 · 셀러 조회 실패 → 저장 안 함(fail-closed). 🔴 **실제 전송 경로 위에서**(포트 대역이 아니라) 시험한다.
-- [ ] **AC-2** — 조회 실패 대조군: 스토어/IdP 를 내린 상태에서 연결 시도 → 503 · 저장값 불변. 그리고 같은 시험 안에서 정상 경로 200(«열린 경로 + 닫힌 경로»).
-- [ ] **AC-3** — (A) 새 워크로드 자격은 **셀러 읽기만** 된다: 같은 토큰으로 셀러 변경·다른 테넌트 assume 은 거절 / (B) 복제 지연·순서 뒤집힘(정지 후 재활성)의 결과가 시험으로 고정.
-- [ ] **AC-4** — `UnwiredStoreSellerDirectory` 가 제거되거나 비활성일 때도 **허용 쪽 빈이 생기지 않는다**(빈이 0개면 기동 실패 or fail-closed 기본값 — 748 `AgencyDisplayTest.unwiredDirectoryIsFailClosed` 의 성질 유지).
+- [x] **AC-1** (`TASK-MONO-748` AC-3 원문) — 셀러 연결: 존재하는 ACTIVE 셀러 → 저장 · 없는/`CLOSED` 셀러 → 거절 · 셀러 조회 실패 → 저장 안 함(fail-closed). 🔴 **실제 전송 경로 위에서**(포트 대역이 아니라) 시험한다.
+- [x] **AC-2** — 조회 실패 대조군: 스토어/IdP 를 내린 상태에서 연결 시도 → 503 · 저장값 불변. 그리고 같은 시험 안에서 정상 경로 200(«열린 경로 + 닫힌 경로»).
+- [x] **AC-3** — (A) 새 워크로드 자격은 **셀러 읽기만** 된다: 같은 토큰으로 셀러 변경·다른 테넌트 assume 은 거절 / (B) 복제 지연·순서 뒤집힘(정지 후 재활성)의 결과가 시험으로 고정.
+- [x] **AC-4** — `UnwiredStoreSellerDirectory` 가 제거되거나 비활성일 때도 **허용 쪽 빈이 생기지 않는다**(빈이 0개면 기동 실패 or fail-closed 기본값 — 748 `AgencyDisplayTest.unwiredDirectoryIsFailClosed` 의 성질 유지).
 
 # Related Specs
 
@@ -149,3 +155,55 @@ monorepo
 1. 조회 장애 때 검증 없이 저장해 존재하지 않는 셀러를 가리킨다(748 Failure Scenario 2 — 이 티켓에서 처음 실제 경로로 노출된다).
 2. (A) 새 워크로드 자격이 셀러 읽기보다 넓다(쓰기·다른 테넌트) — 권한 카탈로그가 «무엇을» 과 «어디에» 를 둘 다 좁혀야 한다.
 3. (B) 복제본이 비어 있는 첫 기동에서 모든 셀러를 «없음»(422)으로 답한다 — «아직 모른다» 와 «없다» 를 구별해야 한다(그 동안은 503).
+
+---
+
+# 구현 기록 (2026-10-03 UTC · 분석=Opus 5.5 / 구현=Opus 5.5)
+
+갈래 A + 도달 경로 R1 을 한 PR 로. 계약 먼저, 그 다음 IdP → 받는 쪽(product-service) → 엣지(ecommerce 게이트웨이) → 보내는 쪽(artist-service) → 배선.
+
+## 무엇을 바꿨나
+
+| 층 | 변경 |
+|---|---|
+| 계약 | ecommerce `product-api.md` § Internal seller read 신설(`GET /internal/sellers/{sellerId}` → `{sellerId, status}` · 404 `SELLER_NOT_FOUND` · 401/403 두 층 표) · `iam-integration.md`(audience 목록 · 규칙 6 워크로드 예외 · 오류 행 · 클라이언트 표) · fan `artist-api.md` § Store seller verification(«NOT WIRED» → 전송 3단계 + 매핑 표) · artist-service `dependencies.md` / `architecture.md` · `platform/contracts/jwt-standard-claims.md` 규칙 6 ecommerce 하위 항목 1줄 |
+| IdP | auth-service **`V0042__seed_artist_service_workload_client.sql`** — `oauth_scopes` 에 `store.seller.read`(V0032 모양) · `artist-service-client`(`fan-platform`/`B2C`, `client_credentials`, 범위 `store.seller.read` 하나, 공유 dev BCrypt) · 교환 grant 는 **별도 `UPDATE … WHERE client_id=`**(V0037 모양 — `WorkloadTenantCatalogTest` 의 문장 단위 귀속을 지키려고). `WorkloadTenantCatalog`: `artist-service-client → {ecommerce}` (demo-corp·fan-platform 제외 — 사유 주석) · `WorkloadRoleCatalog`: **빈 맵** · 인구조사 18/12/6 → **19/13/6** |
+| 받는 쪽 | product-service 첫 JWT 표면 `ProductSecurityConfig`(형제 `OrderSecurityConfig` 복사): `/internal/**` 체인 — 디코더 안에서 timestamp + issuer + `RequiredScopeValidator(store.seller.read)` + `TenantClaimValidator.forTenant("ecommerce")`(와일드카드·entitlement 없음) → 실패 401; `GET /internal/sellers/*` 만 `authenticated`, 그 밖 `denyAll` → 403. 나머지 전부 permit-all 체인(헤더 신뢰 그대로). `InternalSellerController` — **테넌트는 토큰에서**(헤더 아님). 기존 슬라이스 8개는 `@Import(ProductSecurityConfig)` 로 실제 체인 아래서 돈다 |
+| 엣지 | ecommerce 게이트웨이 라우트 `product-service-internal`(`Path=/internal/sellers/**`, `StripPrefix=0` — iam `account-service-internal` 모양) · `AccountTypeEnforcementFilter` 에 그 접두사 **하나만** 의 분기: GET/HEAD **∧** `scope ∋ store.seller.read` **∧** `tenant_id == ecommerce` **∧** 정규화된 경로(디코드 경로·raw URI 둘 다 — `..`·`//`·`;`·`%` 거절). 그 경로에서 CUSTOMER/OPERATOR 규칙은 적용되지 않는다(= CUSTOMER 토큰 거절). 다른 모든 경로 무변경 · audience 목록에 `artist-service-client` 추가(**SHADOW 유지**) |
+| 보내는 쪽 | artist-service `HttpStoreSellerDirectory`(200 알려진 상태 → 그 값 · 404+`SELLER_NOT_FOUND` → empty · **그 밖 전부** → `StoreSellerLookupUnavailableException`, 200 의 `sellerId` 불일치·모르는 상태 포함) · `StoreTenantTokenProvider`(product-service `TenantScopedIamTokenProvider` 의 고정-테넌트 복사 — `libs/` 승격은 ADR 몫이라 복사, 주석에 사유) · `StoreSellerDirectoryConfig` 가 **유일한** 빈 · `UnwiredStoreSellerDirectory` **삭제** |
+| 배선 | ecommerce compose product-service `PRODUCT_INTERNAL_OAUTH2_JWK_SET_URI`/`_ISSUER` · fan compose artist-service `IAM_TOKEN_URI`/`STORE_SELLER_BASE_URL` · `infra/demo/demo.env` 세 키(product 두 값은 order-service 행과 같은 값, `STORE_SELLER_BASE_URL=http://ecommerce.${DEMO_DOMAIN}`) · `scripts/check-internal-caller-addresses.sh` product-service 행 확장 + artist-service 행 추가 |
+
+## AC
+
+| AC | 판정 | 증거 |
+|---|---|---|
+| **AC-0** | ✅ | § 소유자 선택(갈래 A + 승인) · § HARDSTOP-09 해소(R1) — 둘 다 원문 인용 |
+| **AC-1** | ✅ (실제 전송) | `AgencyStoreSellerTransportTest` — 실제 `AgencyService` + **운영 배선(`StoreSellerDirectoryConfig`)으로 만든** 어댑터가 소켓 위 IdP·스토어 대역(`FakeIdpAndStore`, cc → 교환 → GET)과 실제 HTTP 로 통신, 포트 스텁 0: ACTIVE 저장 · 없음 422 · CLOSED 422 · SUSPENDED 저장(Edge 1) · 500 → 503 미저장, 저장값은 저장소에서 다시 읽어 판정(스토어 호출 4회 확인). 매핑 16칸 `HttpStoreSellerDirectoryTest`(코드 없는 404 · 401/403 · 모르는 상태(Edge 3) · 깨진 본문 · 다른 셀러 답 · 스토어 다운 · 타임아웃 · IdP 다운 · 교환 거절 → 전부 unavailable). 스프링 배선 판: `StoreSellerLinkTransportIntegrationTest`(⚪ CI) |
+| **AC-2** | ✅ | `AgencyStoreSellerTransportTest.ac2_openClosedOpen` — **한 시험 안에서** 열림(200 저장) → 스토어 다운(503, 저장값 불변) → 열림(같은 셀러 200) → IdP 다운(503, 불변, 스토어 호출 0) → 열림. IT 판도 같은 모양(⚪ CI) |
+| **AC-3** | ✅ | 쓰기 불가: product-service `InternalSellerChainTest.CannotWrite`(PATCH/POST/DELETE `/internal/sellers/**` · 다른 `/internal/**` → 403, 서비스 호출 0 · 운영자 쓰기 경로 `/api/admin/sellers/{id}/close` 는 그 토큰만으로 403 `ACCESS_DENIED`) · 게이트웨이 `SellerReadWorkloadAdmissionTest`(쓰기 동사 403 · **`application.yml` 의 모든 다른 라우트 × 4동사에서 CUSTOMER 없는 워크로드 토큰 403** · CUSTOMER/OPERATOR 토큰은 `/internal/sellers/**` 403 · 다른 테넌트/와일드카드/무테넌트 403 · 비정규 경로 403) · 역할 0(`WorkloadRoleCatalog` 빈 맵, `exactlyOneWorkloadClientIsGrantedAnything` 무변). 다른 테넌트 assume 불가: `WorkloadTenantCatalogTest.artistServiceClientIsConfinedToTheStoreTenant`(demo-corp·fan-platform·wms·scm·erp·finance·iam·global·`*` 전부 false) + `WorkloadAssumeTenantProviderTest`(실제 provider 로 demo-corp/wms/fan-platform 교환 → `invalid_grant`, 민트 0; ecommerce 는 성공 + 범위 = `store.seller.read` 만). 받는 쪽도: product-service 는 범위·테넌트가 틀린 토큰을 401 (`InternalSellerChainTest.Refused` 7칸 — CUSTOMER 토큰 · 다른 테넌트 · `*` · 교환 안 한 fan 토큰 · 다른 issuer · 다른 키) |
+| **AC-4** | ✅ | `StoreSellerDirectoryConfigTest` — 기본 = HTTP 어댑터 1개 · 닿지 않는 설정 → unavailable(상태를 지어내지 않음) · 빈 설정 5종 → **기동 실패** · 설정 제거(빈 0개) → 포트 소비자 기동 실패 · 구조: `@Bean` 메서드 정확히 1개 · 메인 코드의 `StoreSellerDirectory` 구현은 `HttpStoreSellerDirectory` 하나뿐(always-ACTIVE 스텁이 생기면 빨강). 748 의 `unwiredDirectoryIsFailClosed` 는 이 클래스로 옮겼다 |
+
+## bite (주입 확인 → 빨강 → 복사로 복원 → `BITE` grep 0)
+
+- artist-service: `HttpStoreSellerDirectory` 의 «그 밖 → unavailable» 을 `return Optional.of("ACTIVE")` 로 → `*StoreSeller*` **4 FAILED** (rc=1) → 복원.
+- 게이트웨이: 워크로드 분기에 `|| hasRole(roles, "CUSTOMER")` → `SellerReadWorkloadAdmissionTest` **1 FAILED**(CUSTOMER 토큰 칸) (rc=1) → 복원.
+- 가드: fan compose 에서 `STORE_SELLER_BASE_URL` 삭제 → rc=1 `DRIFT § artist-service` · ecommerce compose 에서 `PRODUCT_INTERNAL_OAUTH2_ISSUER` 삭제 → rc=1 `DRIFT § product-service` → 복원 rc=0.
+- 🔴 첫 실행에서 게이트웨이 시험 하나가 **내 시험의 결함**으로 빨갰다: `MockServerHttpRequest.method(m, String)` 이 `UriComponentsBuilder` 를 거쳐 `//` 를 접어 버려 «`/internal/sellers//s-1` 거절» 칸이 필터에 정규화된 경로를 넘겼다. 시험을 raw `URI` 로 바꾸고, 필터는 디코드 경로와 raw URI 를 **둘 다** 검사하게 했다.
+
+## 게이트 기록 (rc · 개수 — JUnit XML 합산)
+
+| 게이트 | 결과 |
+|---|---|
+| `auth-service:test` / `:check` | rc=0 · 1014 tests · 0 fail · 33 skip(기존 Docker IT) / rc=0 |
+| `product-service:test` / `:check` | rc=0 · 438 tests · 0 fail / rc=0 |
+| ecommerce `gateway-service:test` / `:check` | rc=0 · 159 tests · 0 fail / rc=0 (첫 실행 1 fail = 시험 결함, 위 bite 절) |
+| `artist-service:test` / `:check` | rc=0 · 262 tests · 0 fail / rc=0 |
+| `infra/demo/verify-demo-wrapper.sh` (정적) | rc=0 «정적 검증 PASS» |
+| 필수 3종 + `check-flyway-version-collision` · `check-flyway-unresolvable-placeholder` · `check-dev-seed-migration-band` · `check-internal-caller-addresses`(12키 · self-test rc=0) · `check-gateway-drift` · `check-service-map-drift` · `check-jwt-claims-registry` · `check-ls-files-guard-count` · `check-required-check-names` | 전부 rc=0 (스테이지 후) |
+| `scripts/check-*.sh` 전수 37개(스크립트를 고쳤으므로) | 35 rc=0 · 2 rc=1 = **환경**: `check-erp-single-tenant-ratchet`(erp MySQL 컨테이너 필요 — Docker 미기동) · `check-prerendered-demo-verdict`(`DEMO_API_BASE` + web-store 빌드 필요). 둘 다 이 변경과 무관한 입력 |
+
+## ⚪ 안 잰 것
+
+- **Testcontainers IT**: `StoreSellerLinkTransportIntegrationTest`(artist-service) 는 작성만 — 로컬 Docker 미사용, CI `integrationTest` 레인이 첫 실행. product-service·auth-service 의 기존 IT 도 이 PR 에서 로컬로 안 돌렸다(product-service 에 Spring Security 가 처음 들어갔으므로 `@SpringBootTest` + MockMvc IT 들이 permit-all 체인 아래 그대로인지는 CI 가 판정).
+- **데모 창**: fan 컨테이너 → `ecommerce.<데모도메인>` → 게이트웨이 → product-service 의 실제 도달, IdP 의 실제 교환(실 `V0042` 행 · 실 `WorkloadTenantCatalog`), 실제 토큰의 `iss` 와 `PRODUCT_INTERNAL_OAUTH2_ISSUER` 일치 — 전부 미측정. 717/718/721 이 보인 대로 배선은 고침이 아니다. 판정 술어: 데모에서 소속사에 `default` 셀러를 연결 → 200 이고 `agencies.store_seller_id` 가 바뀐다(결과 상태). 🔴 신선 볼륨/재굽기 필요(V0042 · compose).
+- 로컬 `*.local` 기본값이 fan 컨테이너 안에서 해소되는지(형제 community-service 의 `iam.local` 과 같은 가정).

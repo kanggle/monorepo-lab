@@ -91,6 +91,18 @@ iam:
     # Yields the existing ADR-025 axis-2 X-Seller-Scope claim — authz net-zero.
     role: ${IAM_SELLER_ROLE:SELLER}
 
+# TASK-MONO-759 — product-service's first JWT surface: the /internal/** resource-server chain
+# (ProductSecurityConfig). Only the fan → store seller read lives there
+# (GET /internal/sellers/{id}, product-api.md § Internal seller read), reached through the
+# ecommerce gateway. JWKS / issuer are env-overridable (compose + infra/demo/demo.env set them,
+# scripts/check-internal-caller-addresses.sh checks they are declared). The required scope and
+# tenant are policy, not deployment config — constants in ProductSecurityConfig.
+product:
+  internal:
+    oauth2:
+      jwk-set-uri: ${PRODUCT_INTERNAL_OAUTH2_JWK_SET_URI:http://localhost:8081/oauth2/jwks}
+      issuer: ${PRODUCT_INTERNAL_OAUTH2_ISSUER:http://localhost:8081}
+
 storage:
   s3:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}

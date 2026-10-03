@@ -41,7 +41,7 @@ ecommerce:
   oauth2:
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:ecommerce}
-    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client}
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client,artist-service-client}
     audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
 ```
 
@@ -57,6 +57,7 @@ ecommerce:
 |---|---|---|---|---|
 | `ecommerce-web-store-client` | `authorization_code` + `refresh_token` | 필수 (`require_proof_key=true`) | `http://localhost:3000/api/auth/callback/iam`, `http://web.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
 | `ecommerce-admin-dashboard-client` (RETIRED — admin-dashboard app removed, TASK-MONO-259; operator UI now in platform-console. Client seed retire migration deferred.) | `authorization_code` + `refresh_token` | 필수 | `http://localhost:3001/api/auth/callback/iam`, `http://admin.ecommerce.local/api/auth/callback/iam` | V0012 (TASK-MONO-027) |
+| `artist-service-client` (fan-platform 소유) | `client_credentials` + `token-exchange` | No | — | **ACTIVE (TASK-MONO-759, IdP `V0042`)** — fan artist-service → 이 게이트웨이 → product-service `GET /internal/sellers/{sellerId}`. 범위 `store.seller.read` 하나, assume-tenant `ecommerce` 만(`WorkloadTenantCatalog`). |
 | `ecommerce-internal-services-client` | `client_credentials` | No | — | **ACTIVE (TASK-BE-410)** — internal service-to-service auth. First consumer: batch-worker → order-service `POST /api/internal/orders/confirm-paid-stale` (stale paid-order forward-confirm). Token minted/cached caller-side via `IamClientCredentialsTokenProvider` (mirrors product-service BE-402). Seed: `ecommerce-internal-services-client` row in IAM (Flyway V0012 follow-up / dev `.env` secret `ECOMMERCE_INTERNAL_SERVICES_CLIENT_SECRET`). |
 
 두 user-flow client 는 confidential (secret + PKCE 동시 사용) 로 등록:
@@ -89,10 +90,11 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증 (Spring Security `NimbusJwtDecoder` 자동).
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer 만 허용 (TASK-MONO-367: legacy `iam` issuer 는 2026-08-01 일몰로 제거됨, TASK-BE-398 이 발행 측을 먼저 끊었다).
-4. **Audience 검증 (TASK-MONO-696, 1단계 섀도)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=SHADOW`(출하값): 불일치는 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 `gateway.jwt.audience{gateway,outcome}` 로 센다. 같은 검증기가 토큰이 들어오는 동안 최대 1분에 한 번 누적 요약 INFO 한 줄(`JWT audience summary: gateway=… mode=… match=… mismatch=…`)을 낸다 — 2단계 전환의 «실측 불일치 0» 을 읽는 채널(TASK-MONO-736). `ENFORCE`(2단계, 별도 변경 — 실측 불일치 0 이후): 불일치 → 403.
+4. **Audience 검증 (TASK-MONO-696, 1단계 섀도)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client; `artist-service-client` — TASK-MONO-759 가 이 엣지로 라우트하는 워크로드, 같은 변경에서 추가(`jwt-standard-claims.md` 규칙 5)) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=SHADOW`(출하값): 불일치는 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 `gateway.jwt.audience{gateway,outcome}` 로 센다. 같은 검증기가 토큰이 들어오는 동안 최대 1분에 한 번 누적 요약 INFO 한 줄(`JWT audience summary: gateway=… mode=… match=… mismatch=…`)을 낸다 — 2단계 전환의 «실측 불일치 0» 을 읽는 채널(TASK-MONO-736). `ENFORCE`(2단계, 별도 변경 — 실측 불일치 0 이후): 불일치 → 403.
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
 6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
    - **operator-on-public 예외 (TASK-BE-380)** — promotion-api.md / shipping-api.md / notification-api.md 는 *운영자(Admin)* 엔드포인트를 **public 경로 트리**(`/api/promotions`, `/api/shippings`, `/api/notifications`)에 두고 서비스단에서 `X-User-Role == ECOMMERCE_OPERATOR` 으로 게이팅한다(`/api/admin/**` 아님). 따라서 게이트웨이는 이 세 read 트리에 한해 `CUSTOMER` 와 `ECOMMERCE_OPERATOR` 을 **둘 다** 수용한다(엔드포인트별 operator/consumer 구분은 서비스가 집행). prefix-only `non-/api/admin → CONSUMER` 규칙이면 운영자가 서비스 도달 전에 403 되는 라이브 갭(platform-console PC-FE-086/088/089 흡수)을 해소. 그 외 public 트리(`/api/products`, `/api/orders`, `/api/search`, `/api/users` 등)는 종전대로 `CUSTOMER` 전용.
+   - **워크로드 내부 경로 예외 (TASK-MONO-759, 소유자 결정 R1 2026-10-03)** — `/internal/sellers/**` 는 역할이 아니라 **범위·테넌트**로 거른다: 메서드 `GET`/`HEAD` **이고** `scope ∋ store.seller.read` **이고** `tenant_id == ecommerce` 인 토큰만 통과, 그 밖의 토큰(**`CUSTOMER` 토큰 포함**)은 403 `FORBIDDEN`. 이 예외는 그 접두사 하나뿐이고 다른 모든 경로의 `CUSTOMER`/`ECOMMERCE_OPERATOR` 규칙은 그대로다. iam 게이트웨이가 `/internal/tenants/**` 를 실어 나르는 모양과 같다. 계약: [`product-api.md` § Internal seller read](../contracts/http/product-api.md).
    - **`X-User-Role` 다중값 계약 (TASK-BE-393)** — `JwtHeaderEnrichmentFilter` 는 `roles` 클레임 배열을 **콤마 결합** 문자열로 `X-User-Role` 헤더에 주입한다 (예: `ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR`). 다중 도메인에 등록된 운영자는 여러 롤을 갖는다. **서비스단 operator 게이팅은 반드시 토큰-멤버십 검사**(`X-User-Role` 를 `,` 로 분리·trim 후 `ECOMMERCE_OPERATOR` 과 `equalsIgnoreCase` 비교)를 사용해야 한다 — 단순 문자열 동등 비교(`"ECOMMERCE_OPERATOR".equalsIgnoreCase(header)`)는 다중 도메인 운영자를 모두 403 으로 잠그는 버그다. `contains("ECOMMERCE_OPERATOR")` 형태의 서브스트링 검사도 금지 (`SUPERADMIN` 등 미래 롤의 오수용 위험). 구현 참조: 각 서비스의 `private static boolean hasAdminRole(String userRole)` 헬퍼.
 7. **Header Enrichment** — `JwtHeaderEnrichmentFilter` (TASK-BE-131) 가 downstream 으로 `X-User-Id`, `X-User-Email`, `X-User-Role` (`roles` 배열 comma-join), `X-Tenant-Id` (멀티테넌트 컨텍스트 전파, ADR-MONO-030 §2.2 M2 layer 2) 헤더 주입. (`X-Account-Type` 은 ADR-MONO-035 4b 로 주입 중단 — 다운스트림 리더 없음; `IdentityHeaderStripFilter` strip 엔트리는 inert defense-in-depth 로 잔존.) 클라이언트가 위조한 동일 헤더는 `IdentityHeaderStripFilter` 가 먼저 제거.
 
@@ -107,6 +109,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 | `aud` ∩ `allowed-audiences` = ∅ (`aud` 없음 포함) — `audience-mode=ENFORCE` 일 때만 | 403 | `AUDIENCE_FORBIDDEN` (**이름은 계약서의 제안** — 2단계 전환 시 확정). 출하 모드 `SHADOW` 에서는 거절 없음(로그 + 메트릭) |
 | `tenant_id` blank / missing | 403 | `TENANT_FORBIDDEN` (entitlement-trust: 임의 well-formed `tenant_id` 는 통과) |
 | `/api/admin/**` 인데 `roles ∌ ECOMMERCE_OPERATOR` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
+| `/internal/sellers/**` 인데 `GET`/`HEAD` 아님 · `scope ∌ store.seller.read` · `tenant_id ≠ ecommerce` 중 하나 (`CUSTOMER` 토큰 포함) | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter, TASK-MONO-759) |
 | 일반 경로인데 `roles ∌ CUSTOMER` (operator-on-public 트리 `/api/{promotions,shippings,notifications}` 에서는 `ECOMMERCE_OPERATOR` 도 통과 — TASK-BE-380) | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | 유효 토큰이지만 도메인 권한 부족 | 403 | downstream 서비스가 결정 |
 

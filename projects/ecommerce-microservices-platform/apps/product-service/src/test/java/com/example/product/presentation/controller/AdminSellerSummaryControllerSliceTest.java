@@ -4,6 +4,7 @@ import com.example.common.summary.PeriodSummary;
 import com.example.product.TestProductServiceApplication;
 import com.example.product.application.service.RegisterSellerService;
 import com.example.product.application.service.SellerQueryService;
+import com.example.product.infrastructure.config.ProductSecurityConfig;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = AdminSellerController.class)
 @ContextConfiguration(classes = TestProductServiceApplication.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ProductSecurityConfig.class})
 @DisplayName("GET /api/admin/sellers/summary 슬라이스 테스트")
 class AdminSellerSummaryControllerSliceTest {
 

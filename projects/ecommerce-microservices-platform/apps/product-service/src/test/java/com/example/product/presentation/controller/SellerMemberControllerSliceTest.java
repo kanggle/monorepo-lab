@@ -14,6 +14,7 @@ import com.example.product.domain.model.SellerInvitationStatus;
 import com.example.product.domain.model.SellerMember;
 import com.example.product.domain.model.SellerMemberRole;
 import com.example.product.domain.model.SellerMemberStatus;
+import com.example.product.infrastructure.config.ProductSecurityConfig;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** TASK-MONO-752 — seller-member HTTP surface (product-api.md § Seller members). */
 @WebMvcTest(controllers = {AdminSellerMemberController.class, SellerInvitationController.class})
 @ContextConfiguration(classes = TestProductServiceApplication.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ProductSecurityConfig.class})
 @DisplayName("셀러 구성원 컨트롤러 슬라이스 (TASK-MONO-752)")
 class SellerMemberControllerSliceTest {
 

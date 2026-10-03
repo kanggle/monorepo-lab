@@ -301,6 +301,68 @@ class WorkloadAssumeTenantProviderTest {
                 .containsExactly(SCOPE);
     }
 
+    // ---------------------------------------------------------------- TASK-MONO-759: artist-service-client
+
+    private static final String ARTIST_CLIENT = "artist-service-client";
+    private static final String SELLER_READ = "store.seller.read";
+
+    private static AssumeTenantAuthenticationToken artistExchangeFor(String tenant) {
+        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId(ARTIST_CLIENT)
+                .clientSecret("{noop}secret")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .authorizationGrantType(new AuthorizationGrantType(
+                        "urn:ietf:params:oauth:grant-type:token-exchange"))
+                .scope(SELLER_READ)
+                .build();
+        Authentication principal = new OAuth2ClientAuthenticationToken(
+                client, ClientAuthenticationMethod.CLIENT_SECRET_BASIC, "secret");
+        return new AssumeTenantAuthenticationToken(
+                principal, SUBJECT_TOKEN,
+                "urn:ietf:params:oauth:token-type:access_token", tenant);
+    }
+
+    private static Jwt artistSubjectJwt() {
+        return Jwt.withTokenValue(SUBJECT_TOKEN)
+                .header("alg", "RS256")
+                .subject(ARTIST_CLIENT)
+                .audience(List.of(ARTIST_CLIENT))
+                .claim("tenant_id", "fan-platform")
+                .claim("scope", List.of(SELLER_READ))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-759 — artist-service-client 는 ecommerce 로 교환된다, 범위는 store.seller.read 뿐")
+    void artistClientExchangesForTheStoreTenantWithOnlyTheSellerReadScope() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(artistSubjectJwt());
+        stubMint();
+
+        Authentication result = provider.authenticate(artistExchangeFor("ecommerce"));
+
+        assertThat(((OAuth2AccessTokenAuthenticationToken) result).getAccessToken().getScopes())
+                .containsExactly(SELLER_READ);
+        verifyNoInteractions(operatorAssignmentPort);
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-759 AC-3 대조군 — 같은 자격으로 다른 테넌트(demo-corp · wms · fan-platform)는 발급자에서 거절")
+    void artistClientCannotAssumeAnyOtherTenant() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(artistSubjectJwt());
+
+        for (String other : new String[] {"demo-corp", "wms", "fan-platform"}) {
+            assertThatThrownBy(() -> provider.authenticate(artistExchangeFor(other)))
+                    .as("artist-service-client assuming %s", other)
+                    .isInstanceOf(OAuth2AuthenticationException.class)
+                    .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getErrorCode())
+                            .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT));
+        }
+        verify(tokenGenerator, never()).generate(any());
+    }
+
     // ---------------------------------------------------------------- the operator path is intact
 
     @Test

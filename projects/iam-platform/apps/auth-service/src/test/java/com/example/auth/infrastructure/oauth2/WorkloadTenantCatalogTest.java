@@ -106,6 +106,28 @@ class WorkloadTenantCatalogTest {
                 "global-account-platform")).isFalse();
     }
 
+    /**
+     * TASK-MONO-759 AC-3 (the tenant half): the fan workload that reads store sellers may
+     * assume exactly the store tenant — not the demo tenant its sibling got, not its own
+     * tenant, not any other platform.
+     */
+    @Test
+    @DisplayName("🔴 TASK-MONO-759 AC-3 — artist-service-client 는 ecommerce 하나만 assume 한다")
+    void artistServiceClientIsConfinedToTheStoreTenant() {
+        assertThat(WorkloadTenantCatalog.isWorkloadExchangeClient("artist-service-client")).isTrue();
+        assertThat(WorkloadTenantCatalog.assumableTenants("artist-service-client"))
+                .containsExactly("ecommerce");
+
+        assertThat(WorkloadTenantCatalog.mayAssume("artist-service-client", "ecommerce")).isTrue();
+        for (String other : new String[] {
+                "demo-corp", "fan-platform", "wms", "scm", "erp", "finance", "iam",
+                "global-account-platform", "*"}) {
+            assertThat(WorkloadTenantCatalog.mayAssume("artist-service-client", other))
+                    .as("artist-service-client may NOT assume %s", other)
+                    .isFalse();
+        }
+    }
+
     @Test
     @DisplayName("🔴 `*` 는 이 규칙의 구현이 아니다 — 어떤 집합도 와일드카드를 담지 않는다")
     void noGrantUsesTheSuperAdminWildcard() {

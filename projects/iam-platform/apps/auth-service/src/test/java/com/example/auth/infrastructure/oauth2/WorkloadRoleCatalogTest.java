@@ -79,15 +79,16 @@ class WorkloadRoleCatalogTest {
         long browser = registered.values().stream().filter(g -> g.contains("authorization_code")).count();
 
         // The control: if the parser matched everything (or nothing), one of these two is
-        // wrong. Recounted at statement level 2026-09-24 after V0038 (TASK-MONO-726 added
-        // ecommerce-internal-services-client) — 18 clients, 12 cc, 6 browser. Before that:
-        // 17 / 11 / 6 after V0036 (2026-09-23), 16 / 10 / 6 on 2026-08-13.
+        // wrong. Recounted at statement level 2026-10-03 after V0042 (TASK-MONO-759 added
+        // artist-service-client) — 19 clients, 13 cc, 6 browser. Before that: 18 / 12 / 6
+        // after V0038 (2026-09-24), 17 / 11 / 6 after V0036 (2026-09-23), 16 / 10 / 6 on
+        // 2026-08-13.
         // membership-service-client is absent because V0029 revoked it, which is also the
         // only reason this test needs to honour DELETE at all.
         // 🔵 browser is UNCHANGED at 6: a workload client carries client_credentials only, so
         //    a seed that moved this number would mean the new client got the wrong grant.
-        assertThat(registered).hasSize(18);
-        assertThat(cc).isEqualTo(12);
+        assertThat(registered).hasSize(19);
+        assertThat(cc).isEqualTo(13);
         assertThat(browser).isEqualTo(6);
         assertThat(registered).doesNotContainKey("membership-service-client");
     }
