@@ -159,9 +159,16 @@ export default async function ConsoleLayout({
     : accountDisplayLabel(await getIdToken(), await getAccessToken());
   const sampleLoginHref = sampleVisitor ? await buildLoginRedirect() : null;
   let tenants: string[] = [];
+  // TASK-MONO-751 — products the registry lists with a selectable tenant; gates the
+  // registry-gated sidebar parents (the fan directory — platform operators only, ADR-MONO-079
+  // R3). A registry failure leaves it empty: gated entries hide, every other entry is ungated.
+  let availableProductKeys: string[] = [];
   try {
     const catalog = await getCatalog();
     tenants = selectableTenants(catalog.products);
+    availableProductKeys = catalog.products
+      .filter((p) => p.available && p.tenants.length > 0)
+      .map((p) => p.productKey);
   } catch (err) {
     // TASK-MONO-690 — this branch only runs past the TASK-MONO-674 guard
     // above (isAuthenticated() true, i.e. BOTH the access AND operator
@@ -269,7 +276,7 @@ export default async function ConsoleLayout({
       </header>
       <div className="flex flex-1">
         <aside className="hidden w-56 shrink-0 border-r border-border md:block">
-          <ConsoleSidebarNav />
+          <ConsoleSidebarNav availableProductKeys={availableProductKeys} />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">

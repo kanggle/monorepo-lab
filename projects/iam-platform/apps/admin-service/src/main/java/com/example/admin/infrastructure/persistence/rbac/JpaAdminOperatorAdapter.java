@@ -299,7 +299,8 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
                 e.getFinanceDefaultAccountId(),
-                e.getIdentityId());
+                e.getIdentityId(),
+                e.getConfinedTenantId());
     }
 
     private static RoleView toView(AdminRoleJpaEntity r) {

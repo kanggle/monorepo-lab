@@ -146,6 +146,39 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.assigned").value(false));
     }
 
+    // ── TASK-MONO-751 — admin_operators.confined_tenant_id (V0046) on the real column ──
+    // Owner decision 2026-10-03 «데모 운영자는 팬 전용으로»: a '*' operator confined to
+    // fan-platform assumes fan-platform only. Same context on purpose.
+
+    static final String CONFINED_UUID = "00000000-0000-7000-8000-0000000751c1";
+    static final String CONFINED_SUBJECT = "00000000-0000-7000-8000-0000000751d1";
+
+    private void seedConfinedPlatformOperator() {
+        seedOperator(CONFINED_UUID, CONFINED_SUBJECT, "*", "confined-751@example.com");
+        jdbcTemplate.update("UPDATE admin_operators SET confined_tenant_id = 'fan-platform' WHERE operator_id = ?",
+                CONFINED_UUID);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-751: confined '*' operator → fan-platform assigned=true")
+    void confinedPlatformOperator_fanPlatform_assigned() throws Exception {
+        seedConfinedPlatformOperator();
+        check(CONFINED_SUBJECT, "fan-platform").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-751: confined '*' operator → ecommerce / initech assigned=false; unconfined '*' still true (control)")
+    void confinedPlatformOperator_otherTenants_refused() throws Exception {
+        seedConfinedPlatformOperator();
+        check(CONFINED_SUBJECT, "ecommerce").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(false));
+        check(CONFINED_SUBJECT, "initech").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(false));
+        check(SUPER_SUBJECT, "ecommerce").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true));
+    }
+
     // ── TASK-BE-618 — GET /internal/operators/facet (same context on purpose: no new Spring context) ──
 
     static final String FACET_OP_UUID = "00000000-0000-7000-8000-0000000006c1";

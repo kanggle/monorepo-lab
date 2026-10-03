@@ -125,6 +125,11 @@ tasks.named('test') {
     inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_viewer_operator.sql'))
             .withPropertyName('demoViewerOperatorSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // TASK-MONO-751: DemoPlatformOperatorSeedTest pins the platform operator's link key, its
+    // '*' home tenant and its "no role / no assignment" shape against this sibling file.
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_platform_operator.sql'))
+            .withPropertyName('demoPlatformOperatorSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     // TASK-MONO-744: DemoSeedCredentialTest now pins the consumer-pool credential's
     // account_id against account-service R__05's pool account and its two site
     // memberships — same blind spot, same remedy.

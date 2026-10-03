@@ -95,6 +95,13 @@ public class AdminOperatorJpaEntity {
     @Column(name = "identity_id", length = 36)
     private String identityId;
 
+    // TASK-MONO-751 (Flyway V0046) — the ONE tenant this operator may assume; NULL =
+    // unrestricted (every existing row). Narrows the assignment check (before the '*'
+    // «all tenants» step) and the console registry. Owner decision 2026-10-03 «데모 운영자는
+    // 팬 전용으로»: the demo platform operator is confined to `fan-platform`. No write API.
+    @Column(name = "confined_tenant_id", length = 32)
+    private String confinedTenantId;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 

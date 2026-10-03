@@ -44,7 +44,9 @@ class AudienceShippedConfigTest {
         @DisplayName("allowed-audiences 는 실측된 도달 client 그대로다 (AC-1 (b))")
         void shipsMeasuredAllowlist() {
             assertThat(GatewayJwtDecoders.parseCsv(ShippedAudienceConfig.shippedValue(PREFIX + "allowed-audiences")))
-                    .containsExactly("fan-platform-user-flow-client");
+                    // TASK-MONO-751: the console's fan-directory screens reach this edge with the
+                    // assume-tenant token, whose aud is the console client.
+                    .containsExactly("fan-platform-user-flow-client", "platform-console-web");
         }
 
         @Test

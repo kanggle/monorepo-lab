@@ -645,7 +645,7 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
 - admin-service 가 `GET /api/admin/console/registry` 로 노출 (operator JWT 필수,
   read-only, audit row 없음). 상세 contract:
   [console-registry-api.md](../contracts/http/console-registry-api.md).
-- 응답은 6개 product (`iam`/`wms`/`scm`/`erp`/`finance`/`ecommerce`) 의 catalog
+- 응답은 7개 product (`iam`/`wms`/`scm`/`erp`/`finance`/`ecommerce`/`fan`) 의 catalog
   이며 각 product 의 `available` 플래그 + 운영자가 선택 가능한 `tenants` +
   `displayName` + `baseRoute` 를 담는다 (console-integration-contract § 2.2
   shape).
@@ -654,6 +654,14 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
   운영자는 자신의 테넌트 1개만 (`tenants` length ≤ 1). 다른 테넌트의 slug 는
   어떤 product 의 `tenants` 에도 노출되지 않는다 (cross-tenant 격리 회귀 테스트
   필수, 본 문서 [격리 회귀 방지](#격리-회귀-방지) + M6).
+- `fan` (TASK-MONO-751 — ADR-MONO-079 D4-A, 팬 **디렉터리** 관리: 소속사·아티스트·그룹) 은
+  `fan-platform` 의 `fan` 구독(account-service V0031)으로 바인딩되고 **플랫폼 운영자(`'*'`)
+  에게만** 나열된다(라이더 R3). 고객사 운영자에게는 `fan-platform` 을 이름한 assignment row
+  가 있어도 어떤 product 의 `tenants` 에도 나오지 않는다 — assume 게이트(TASK-MONO-750
+  step 2b)와 같은 술어 `AdminOperator.isPlatformOperatorOnlyTenant`.
+- `admin_operators.confined_tenant_id`(TASK-MONO-751, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로») 가 비-NULL 인 운영자는
+  그 **한 테넌트만** assume 할 수 있고 레지스트리에도 그 테넌트만 나온다 — `'*'` 의 «모든 테넌트» 보다 먼저 적용되는 좁히기.
+  데모 플랫폼 운영자(`platform@demo.com`)는 `fan-platform` 에 묶여 있다. NULL = 기존 동작.
 - 6 federated domains (`iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce`)
   는 모두 V1 live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
   reality-alignment — finance Phase 5 COMPLETE 2026-05-19/20 + erp Phase 6

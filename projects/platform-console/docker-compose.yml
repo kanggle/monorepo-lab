@@ -118,6 +118,8 @@ services:
       ERP_BASE_URL: ${ERP_BASE_URL:-http://erp.local}
       ECOMMERCE_ADMIN_BASE_URL: ${ECOMMERCE_ADMIN_BASE_URL:-http://ecommerce.local/api/admin}
       ECOMMERCE_PUBLIC_BASE_URL: ${ECOMMERCE_PUBLIC_BASE_URL:-http://ecommerce.local/api}
+      # TASK-MONO-751 — the platform operator's fan-directory screens (fan gateway).
+      FAN_GATEWAY_BASE_URL: ${FAN_GATEWAY_BASE_URL:-http://fan-platform.local}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
