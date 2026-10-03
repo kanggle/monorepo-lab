@@ -87,6 +87,24 @@ describe('registry contract (console-registry-api.md envelope)', () => {
     expect(parsed.productKey).toBe('ecommerce');
   });
 
+  it('accepts the fan productKey (TASK-MONO-751 — admin-service ProductCatalog gained `fan` in the same PR)', () => {
+    // Without this enum member the producer's 7th item makes the WHOLE registry parse throw
+    // → every operator's catalog renders degraded (the fixed-membership guard below).
+    const parsed = RegistryResponseSchema.parse({
+      products: [
+        ...PRODUCER_EXAMPLE.products,
+        {
+          productKey: 'fan',
+          displayName: 'Fan Platform',
+          available: true,
+          tenants: ['fan-platform'],
+          baseRoute: '/fan',
+        },
+      ],
+    });
+    expect(parsed.products.map((p) => p.productKey)).toContain('fan');
+  });
+
   it('rejects an unknown productKey (catalog membership is fixed)', () => {
     expect(() =>
       RegistryProductSchema.parse({

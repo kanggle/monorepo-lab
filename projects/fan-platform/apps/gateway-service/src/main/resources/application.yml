@@ -223,11 +223,17 @@ fanplatform:
     # Validation rule 5). `aud` is the CLIENT ID the token was issued to, not a platform name;
     # a token is admitted iff its aud values intersect this list. Mandatory: absent or empty
     # fails the boot. Values = the clients MEASURED to reach this edge (TASK-MONO-696 § AC-1 (b):
-    # the fan web app's user-flow client — the operator console does not fan out to fan).
+    # the fan web app's user-flow client).
+    # TASK-MONO-751 added `platform-console-web`: the console now DOES reach this edge — the
+    # platform operator's fan-directory screens call `/api/v1/{agencies,artists,artist-groups}`
+    # with the assume-tenant token (tenant `fan-platform`), and that token's `aud` is the console
+    # client (auth-service AssumeTenantExchangeIntegrationTest AC-6 pins
+    # `aud ∋ platform-console-web`). Same value the ecommerce/wms/scm/erp/finance gateways list.
+    # Added while still SHADOW so a later ENFORCE flip does not cut the console off.
     # Clients whose reach could not be measured are deliberately NOT listed — in shadow mode
     # their traffic shows up as a logged, counted mismatch, which is the measurement this phase
     # exists for.
-    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:fan-platform-user-flow-client}
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:fan-platform-user-flow-client,platform-console-web}
     # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
     # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
     # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.

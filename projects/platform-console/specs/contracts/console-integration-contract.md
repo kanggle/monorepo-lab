@@ -36,14 +36,14 @@
 
 | Field | Type | Meaning |
 |---|---|---|
-| `productKey` | string | `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` |
+| `productKey` | string | `iam` \| `wms` \| `scm` \| `erp` \| `finance` \| `ecommerce` \| `fan` (TASK-MONO-751 — platform operators only, § 2.4.11) |
 | `displayName` | string | Catalog tile label |
 | `available` | boolean | `false` → rendered as "coming soon"; reserved for future product additions (all 6 federated v1 domains — `iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce` — are `available:true`; `ecommerce` added by TASK-MONO-240 2026-06-13 per ADR-MONO-030) |
 | `tenants` | string[] | Tenant ids the operator may select for this product |
 | `baseRoute` | string | Console-internal route prefix for the product's screens |
 | `operatorContext` | `{ defaultAccountId?: string } \| undefined` | **TASK-BE-304 (producer) / TASK-PC-FE-014 (consumer)** — optional extensible per-operator per-product profile attributes carrier. **Omitted entirely** when no attribute is set (not rendered as `null`). v1: only the `finance` product item populates this (with `defaultAccountId` from IAM `admin_operators.finance_default_account_id`); the other 4 items always omit it. Authoritative producer shape + emission rule: [`iam-platform/specs/contracts/http/console-registry-api.md § Per-operator profile attributes`](../../../iam-platform/specs/contracts/http/console-registry-api.md). Consumer-side wiring (parser → session → dashboard proxy header) per § 2.4.9.1 Implementation guidance — Option (a) activation. |
 
-- Flipping `available` / `displayName` / `tenants` of an **existing** catalog member is a **registry change only** — zero `console-web` code change (the catalog renders the dynamic product list verbatim; ADR-MONO-013 § 1.2 / D5). **Adding a NEW `productKey`, however, requires a one-line consumer-side `ProductKeySchema` Zod enum extension** in `console-web` (`src/shared/api/registry-types.ts`) — the fixed-membership guard asserted by `registry-contract.test.ts` "rejects unknown productKey". An unknown `productKey` makes `RegistryResponseSchema.parse` throw → the whole catalog renders `degraded`. So a new-domain catalog addition lands the producer item + this consumer enum in the **same atomic PR** (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction). Render is data-driven (0-change); membership is an explicit extension.
+- Flipping `available` / `displayName` / `tenants` of an **existing** catalog member is a **registry change only** — zero `console-web` code change (the catalog renders the dynamic product list verbatim; ADR-MONO-013 § 1.2 / D5). **Adding a NEW `productKey`, however, requires a one-line consumer-side `ProductKeySchema` Zod enum extension** in `console-web` (`src/shared/api/registry-types.ts`) — the fixed-membership guard asserted by `registry-contract.test.ts` "rejects unknown productKey". An unknown `productKey` makes `RegistryResponseSchema.parse` throw → the whole catalog renders `degraded`. So a new-domain catalog addition lands the producer item + this consumer enum in the **same atomic PR** (TASK-MONO-240 added `ecommerce`; ADR-MONO-030 § 6 factual correction; TASK-MONO-751 added `fan` the same way). Render is data-driven (0-change); membership is an explicit extension.
 - **Subscription-driven `tenants` derivation (TASK-BE-322 / ADR-MONO-019 D2/D4 — envelope shape UNCHANGED, zero console-web change)**: each domain product's `tenants[]` is now derived producer-side from the **ACTIVE tenant↔domain subscriptions** IAM account-service owns (the D2 entitlement authority), instead of the prior fixed `tenantSlug == domain` binding. This is a **producer-internal derivation change only** — the response envelope, item shape, and field semantics are identical. In ADR-019 **step 1** the values are still the domain slugs (a backward-compatible self-subscription seed makes the output byte-identical to the pre-BE-322 catalog); real customer-tenant names surface in a later step (step 2) without any console-web change. `iam` continues to federate **all** registered tenants (it never consults the subscription surface).
 
 ### 2.3 Routing
@@ -3469,6 +3469,64 @@ retrofit, no § 2.4.9 composition leg**.
 
 > **Not a § 3 parity row**: consumes only already-listed endpoints in a new
 > read composition; adds no § 3 row and changes none (count stays **16**).
+
+#### 2.4.11 fan **directory** operator surface — agencies · artists · groups (TASK-MONO-751 / ADR-MONO-079 D4-A — platform operators only)
+
+The first console binding to the fan platform, and **directory-only**: the platform
+operator manages agencies, artists and artist groups in fan **artist-service**. Fan
+community, membership and notifications stay closed to operator tokens
+(ADR-MONO-059 § 부분 개정 · TASK-MONO-750 — those services refuse `FAN_OPERATOR`).
+Producer contract (authoritative, consumed only):
+[`fan-platform/specs/contracts/http/artist-api.md`](../../../fan-platform/specs/contracts/http/artist-api.md)
+(§ Artists · § Artist groups · § Agencies).
+
+- **Who** (ADR-MONO-079 rider R3). Only a **platform operator** (`admin_operators.tenant_id='*'`)
+  may assume `fan-platform`. The registry lists the `fan` product with `tenants: ["fan-platform"]`
+  for such an operator and `tenants: []` for every customer-tenant operator — even one holding an
+  assignment row naming it (§ 2.2; `console-registry-api.md` § Tenant selection rule (4)). The
+  console renders the 「팬 디렉터리」 nav parent **only** when `fan` has a selectable tenant
+  (`ConsoleSidebarNav` `availableProductKeys` — the first registry-gated nav entry).
+- **Credential** (§ 2.7). The domain-facing token — after the switch to `fan-platform` that is
+  the ASSUMED token (`tenant_id=fan-platform`, `roles=["FAN_OPERATOR"]`, `aud ∋ platform-console-web`),
+  admitted by artist-service by `tenant_id` **equality** (not entitlement). NEVER the operator
+  token; **NO `X-Tenant-Id`**.
+- **«Switch, then ask»** (ticket Failure Scenario 1). The `(console)/fan` layout is a
+  `DomainTenantGate productKey="fan"`: before a tenant is assumed it shows «테넌트를 선택하세요»;
+  with another tenant assumed it shows the mismatch note — the page never calls artist-service
+  with a token it would refuse (`403 TENANT_FORBIDDEN`).
+- **Transport.** console-web server → fan gateway `FAN_GATEWAY_BASE_URL`
+  (`http://fan-platform.local`, demo: `fan-platform.${DEMO_DOMAIN}`) + external `/api/v1/**`
+  (the gateway rewrites to `/api/**`). Through the shared FLAT-envelope core
+  (`callFlatEnvelopeGateway`, profile `fan` — sample branch first, ADR-MONO-074; the `fan`
+  sample surface is `pending`). The fan gateway's audience allowlist lists
+  `platform-console-web` (TASK-MONO-751; mode still SHADOW).
+- **Same-origin routes** (console-web `src/app/api/fan/**`, ADR-MONO-081 — no console-bff):
+
+| Console route | Producer (external path) |
+|---|---|
+| `GET/POST /api/fan/agencies` | `GET/POST /api/v1/agencies` |
+| `GET/PATCH /api/fan/agencies/{id}` | `GET/PATCH /api/v1/agencies/{id}` (rename) |
+| `PATCH /api/fan/agencies/{id}/status` | `PATCH /api/v1/agencies/{id}/status` (`ARCHIVED` only) |
+| `PATCH /api/fan/agencies/{id}/store-seller` | `PATCH /api/v1/agencies/{id}/store-seller` |
+| `GET/POST /api/fan/artists` | `GET/POST /api/v1/artists` (list = PUBLISHED only) |
+| `GET/PATCH /api/fan/artists/{id}` | `GET/PATCH /api/v1/artists/{id}` |
+| `PATCH /api/fan/artists/{id}/status` | `PATCH /api/v1/artists/{id}/status` |
+| `PATCH /api/fan/artists/{id}/agency` | `PATCH /api/v1/artists/{id}/agency` |
+| `POST /api/fan/artist-groups` | `POST /api/v1/artist-groups` |
+| `GET /api/fan/artist-groups/{id}` | `GET /api/v1/artist-groups/{id}` |
+| `PATCH /api/fan/artist-groups/{id}/agency` | `PATCH /api/v1/artist-groups/{id}/agency` |
+
+  The routes unwrap the producer's `{ data, meta }` (a list → `{ content, page, size,
+  totalElements, totalPages }`) and validate bodies before the upstream (`422 VALIDATION_ERROR`,
+  no upstream call). Errors: FLAT envelope passthrough; `503` keeps the producer `code`.
+- **Store-seller link** (ADR-MONO-079 D2). The field is rendered; `422 STORE_SELLER_NOT_FOUND`
+  / `STORE_SELLER_CLOSED` are shown as validation errors; `503 STORE_SELLER_LOOKUP_UNAVAILABLE`
+  is rendered as its own «nothing was saved» state — today **every** value gets it, because
+  artist-service's store lookup has no transport yet (TASK-MONO-759). Clearing (`null`) works.
+- **Producer gaps the screens state rather than hide.** No group **list** endpoint (groups are
+  opened by id or created); the artist list returns PUBLISHED only (DRAFT/ARCHIVED by id).
+
+> **Not a § 3 parity row**: a net-new surface with no `admin-web` counterpart; count stays **16**.
 
 ### 2.5 Resilience
 

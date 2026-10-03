@@ -114,6 +114,12 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'flat', surface: 'scm', status: 'ready', owner: SCM },
   { core: 'flat', surface: 'scm_replenishment', status: 'ready', owner: SCM },
   { core: 'flat', surface: 'scm_config', status: 'ready', owner: SCM },
+
+  // ── fan directory (`callFlatEnvelopeGateway`) — TASK-MONO-751 ──────────────
+  // 🔵 `pending` on purpose: the fan section is for PLATFORM operators only (ADR-MONO-079
+  // R3) and the sample registry lists no `fan` tenant, so a sample visitor never sees the
+  // nav entry; a deep link lands on the section's degraded note (503 SAMPLE_NOT_READY).
+  { core: 'flat', surface: 'fan', status: 'pending', owner: 'TASK-MONO-751' },
 ];
 
 export function findSurfaceCoverage(
@@ -262,6 +268,17 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/scm/inventory': 'ready',
   '/scm/procurement': 'ready',
   '/scm/replenishment': 'ready',
+
+  // fan directory — TASK-MONO-751 (pending: platform operators only, no sample tenant)
+  '/fan': 'pending',
+  '/fan/agencies': 'pending',
+  '/fan/agencies/new': 'pending',
+  '/fan/agencies/[id]': 'pending',
+  '/fan/artists': 'pending',
+  '/fan/artists/new': 'pending',
+  '/fan/artists/[id]': 'pending',
+  '/fan/groups': 'pending',
+  '/fan/groups/[id]': 'pending',
 };
 
 /**

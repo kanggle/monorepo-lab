@@ -184,6 +184,13 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
               설계상 403 이라 이 계정만의 특징은 아닙니다. 비밀번호는 위와 같은 자리(데모 로그인
               화면 · 론처)에 표시됩니다(TASK-BE-597, TASK-MONO-730).
             </li>
+            <li data-testid="global-guide-platform-operator">
+              플랫폼 운영자 계정 <Mono>platform@demo.com</Mono> 도 있습니다(TASK-MONO-751) — 홈 테넌트가
+              플랫폼 스코프(<Mono>*</Mono>)지만 <Mono>fan-platform</Mono> 에만 묶여 있어(<Mono>confined_tenant_id</Mono>, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로») 그 테넌트로만 전환할 수 있고, 그때 「팬
+              디렉터리」(소속사 · 아티스트 · 그룹) 메뉴가 열립니다(ADR-MONO-079 R3 — 위 고객사 계정에는 보이지
+              않음). 관리 역할은 없어(<Mono>admin_operator_roles</Mono> 0행) IAM 관리 화면은 403 입니다. 비밀번호는
+              위와 같은 자리에 표시됩니다.
+            </li>
           </ul>
           <Sources sources={[...DEMO_TEST_ACCOUNT.sources]} />
         </Card>

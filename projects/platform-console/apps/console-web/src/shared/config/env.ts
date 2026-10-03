@@ -300,6 +300,17 @@ const ServerEnvSchema = z.object({
   /** Outbound timeout (ms) for ecommerce product operations calls
    *  (integration-heavy I1 — same convention as ERP_TIMEOUT_MS). */
   ECOMMERCE_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** fan-platform gateway base for the platform operator's fan-DIRECTORY surface
+   *  (TASK-MONO-751 / ADR-MONO-079 D4-A). The agency · artist · artist-group endpoints hang
+   *  off `${FAN_GATEWAY_BASE_URL}/api/v1/{agencies,artists,artist-groups}/...` (the gateway
+   *  rewrites `/api/v1/` → artist-service `/api/`) — request/response/error owned by fan
+   *  `artist-api.md` (authoritative, consumed only). Gateway hostname `fan-platform.local`
+   *  (Traefik `Host(fan-platform.${DEMO_DOMAIN})`). Reached with the domain-facing token —
+   *  the platform operator's ASSUMED `fan-platform` token (`tenant_id=fan-platform`,
+   *  `roles=[FAN_OPERATOR]`); NEVER the IAM operator token. NO `X-Tenant-Id`. */
+  FAN_GATEWAY_BASE_URL: z.string().url().default('http://fan-platform.local'),
+  /** Outbound timeout (ms) for fan-directory calls (same convention as ECOMMERCE_TIMEOUT_MS). */
+  FAN_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://console.local'),
   /** Browser-visible origin of the console, resolved at RUNTIME.
@@ -379,6 +390,8 @@ export function getServerEnv(): ServerEnv {
     ECOMMERCE_ADMIN_BASE_URL: process.env.ECOMMERCE_ADMIN_BASE_URL,
     ECOMMERCE_PUBLIC_BASE_URL: process.env.ECOMMERCE_PUBLIC_BASE_URL,
     ECOMMERCE_TIMEOUT_MS: process.env.ECOMMERCE_TIMEOUT_MS,
+    FAN_GATEWAY_BASE_URL: process.env.FAN_GATEWAY_BASE_URL,
+    FAN_TIMEOUT_MS: process.env.FAN_TIMEOUT_MS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     CONSOLE_PUBLIC_ORIGIN: process.env.CONSOLE_PUBLIC_ORIGIN,

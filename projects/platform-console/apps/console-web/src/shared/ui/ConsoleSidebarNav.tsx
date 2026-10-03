@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/shared/lib/cn';
-import { GROUPS, isParent } from './console-nav-config';
+import { GROUPS, isParent, visibleGroups } from './console-nav-config';
 import {
   matchesRoute,
   activeHref,
@@ -95,7 +95,16 @@ function ChevronLeft() {
   );
 }
 
-export function ConsoleSidebarNav() {
+/**
+ * TASK-MONO-751 — `availableProductKeys` gates the registry-gated parents (today only the
+ * fan directory, `productKey: 'fan'`). The `(console)` layout passes the registry's
+ * products that have a selectable tenant. Omitted (every pre-existing test / caller) = no
+ * gated parent rendered, every ungated node exactly as before.
+ */
+export function ConsoleSidebarNav({
+  availableProductKeys,
+}: { availableProductKeys?: readonly string[] } = {}) {
+  const groups = visibleGroups(GROUPS, availableProductKeys);
   const pathname = navPathFor(usePathname() ?? '');
   // Drill state. Initialised from the route so a deep-link into a child route
   // opens its parent; re-synced on every navigation to the current route's
@@ -115,8 +124,14 @@ export function ConsoleSidebarNav() {
     setOpenKey(parentKeyForPath(pathname));
   }, [pathname]);
 
+  // A gated parent that is not visible must not open by deep link either.
+  const visibleParentKeys = new Set(
+    groups.flatMap((g) => g.items.filter(isParent).map((p) => p.key)),
+  );
   const openParent =
-    openKey === null ? null : PARENTS.find((p) => p.key === openKey) ?? null;
+    openKey === null || !visibleParentKeys.has(openKey)
+      ? null
+      : PARENTS.find((p) => p.key === openKey) ?? null;
 
   if (openParent) {
     const active = activeHref(openParent.children, pathname);
@@ -163,7 +178,7 @@ export function ConsoleSidebarNav() {
       aria-label="콘솔 내비게이션"
       className="sticky top-14 flex flex-col gap-6 p-4"
     >
-      {GROUPS.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={group.label ?? `g${gi}`} className="flex flex-col gap-0.5">
           {group.label && (
             <p

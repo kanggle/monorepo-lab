@@ -19,6 +19,17 @@ export const DEMO_LOGIN_EMAIL = 'demo@demo.com';
 export const DEMO_LOGIN_PASSWORD = 'Demo1234!';
 
 /**
+ * TASK-MONO-751 — the PLATFORM demo operator (owner decision 2026-10-03, «플랫폼 운영자 데모 계정
+ * 시드»). The fan-directory screens (소속사 · 아티스트 · 그룹) open for platform operators only
+ * (ADR-MONO-079 rider R3); `demo@demo.com` is a customer (`demo-corp`) operator and never sees
+ * them. Seeded by admin-service / auth-service `R__seed_demo_platform_operator*.sql` with the
+ * SAME published demo password (same Argon2id digest — `DemoPlatformOperatorSeedTest`), so
+ * this block names only the email and points at the password above.
+ * 🔴 Named so z11's assignment anchor for the login email (`verify-demo-wrapper.sh`) does not match it.
+ */
+export const DEMO_PLATFORM_OPERATOR_EMAIL = 'platform@demo.com';
+
+/**
  * 데모 배포의 `/login` 에서 **어느 계정으로 들어가는지 말한다** (`TASK-PC-FE-275`).
  *
  * -----------------------------------------------------------------------------
@@ -105,6 +116,13 @@ export async function DemoLoginCredentials() {
         <strong className="font-medium text-foreground">demo-corp</strong> 로
         선택하세요. 5개 도메인(이커머스 · WMS · SCM · ERP · 재무)의 운영자 권한은
         그 시점에 부여됩니다.
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground" data-testid="demo-login-platform-operator">
+        팬 디렉터리(소속사 · 아티스트 · 그룹) 관리 화면은 <b>플랫폼 운영자</b> 계정{' '}
+        <code className="text-foreground">{DEMO_PLATFORM_OPERATOR_EMAIL}</code>(비밀번호 같음)
+        으로 로그인해 테넌트를{' '}
+        <strong className="font-medium text-foreground">fan-platform</strong> 으로 선택하면
+        열립니다. 위 계정(고객사 운영자)에는 보이지 않습니다.
       </p>
     </section>
   );

@@ -2238,6 +2238,40 @@ if [ -f "$z11_html" ] && [ -f "$z11_lib" ]; then
     fail "(z11) 뷰어 자격증명 시드 파일이 없습니다: $z11_vcred"\
       $'\n'"→ TASK-BE-597(#4001) 이 만든 파일입니다. 옮겼다면 이 가드의 경로도 같은 PR 에서 옮기세요."
   fi
+
+  # -------------------------------------------------------------------------
+  # TASK-MONO-751 — 플랫폼 운영자(`platform@demo.com`) 확장. 뷰어와 같은 모양·같은 이유:
+  # `seed/lib.sh` 가 쓰지 않으므로 권위는 auth-service 자격증명 시드의 이메일 **컬럼 값**이고,
+  # 앵커는 그 행의 account_id 리터럴(파일에 한 번만 — 아래에서 재확인)이다.
+  # -------------------------------------------------------------------------
+  z11_pcred="$ROOT/projects/iam-platform/apps/auth-service/src/main/resources/db/migration-dev/R__seed_demo_platform_operator_credential.sql"
+  if [ -f "$z11_pcred" ]; then
+    z11_pl_acct="0199de70-0000-7000-8000-00000000ad06"
+    z11_pl_n="$(grep -c "$z11_pl_acct" "$z11_pcred" || true)"
+    [ "$z11_pl_n" = "1" ] || fail "(z11) 플랫폼 운영자 시드의 account_id 앵커가 $z11_pl_n 번 나옵니다(1 이어야 합니다) — 추출이 불안정합니다: $z11_pcred"
+
+    z11_p_plemail="$(sed -n 's/.*id="c-platform-email"[^>]*>\([^<]*\)<.*/\1/p' "$z11_html" | head -1 | tr -d '\r')"
+    z11_s_plemail="$(sed -n "s/.*'$z11_pl_acct', '\([^']*\)'.*/\1/p" "$z11_pcred" | head -1 | tr -d '\r')"
+
+    for z11_pair in "론처 플랫폼 운영자 이메일:$z11_p_plemail" "시드 플랫폼 운영자 이메일:$z11_s_plemail"; do
+      z11_name="${z11_pair%%:*}"; z11_val="${z11_pair#*:}"
+      [ -n "$z11_val" ] || fail "(z11) $z11_name 을 뽑지 못했습니다 — 앵커가 갈라졌습니다."\
+        $'\n'"→ 론처는 id=\"c-platform-email\", 시드는 account_id \`$z11_pl_acct\` 옆의 email 컬럼을 앵커로 씁니다."
+    done
+
+    [ "$z11_p_plemail" = "$z11_s_plemail" ] \
+      || fail "(z11) 론처의 플랫폼 운영자 이메일이 시드 자격증명 컬럼과 다릅니다: 페이지=\"$z11_p_plemail\" · 시드=\"$z11_s_plemail\""\
+        $'\n'"→ 방문자가 이 계정으로 로그인에 실패합니다. 권위는 $z11_pcred 의 email 컬럼입니다."
+
+    # 🔴 대조군 — 위 두 짝과 같은 이유.
+    [ "${z11_p_plemail}x" != "$z11_s_plemail" ] \
+      || fail "(z11) 대조군 실패(플랫폼 운영자) — 일부러 다르게 만든 값이 같다고 판정됐습니다. 비교가 죽어 있습니다."
+
+    ok "론처 플랫폼 운영자 계정 ↔ auth-service 자격증명 시드 일치 (email=$z11_s_plemail · account_id 앵커 유일 확인 · 대조군 통과)"
+  else
+    fail "(z11) 플랫폼 운영자 자격증명 시드 파일이 없습니다: $z11_pcred"\
+      $'\n'"→ TASK-MONO-751 이 만든 파일입니다. 옮겼다면 이 가드의 경로도 같은 PR 에서 옮기세요."
+  fi
 fi
 
 # ---------------------------------------------------------------------------

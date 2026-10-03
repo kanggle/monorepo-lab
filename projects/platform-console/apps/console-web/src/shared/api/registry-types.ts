@@ -14,7 +14,9 @@ import { OperatorContextSchema } from './operator-context-types';
  * schema is the runtime parser the contract test asserts against.
  */
 
-export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance', 'ecommerce']);
+// TASK-MONO-751 added `fan` (ADR-MONO-079 D4-A) together with admin-service `ProductCatalog` — the
+// fixed-membership guard: a producer key missing here makes the whole catalog parse fail.
+export const ProductKeySchema = z.enum(['iam', 'wms', 'scm', 'erp', 'finance', 'ecommerce', 'fan']);
 export type ProductKey = z.infer<typeof ProductKeySchema>;
 
 // `OperatorContextSchema`/`OperatorContext` moved to
