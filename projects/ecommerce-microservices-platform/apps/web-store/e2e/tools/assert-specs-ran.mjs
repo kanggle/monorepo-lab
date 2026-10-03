@@ -49,6 +49,9 @@ const REQUIRED = [
   'cart-management.spec.ts',
   'wishlist.spec.ts',
   'account-type-guard.spec.ts',
+  // TASK-BE-619 AC-2 — the consent-decline measurement. Required for the same reason as the guard
+  // spec above: a measurement that silently does not run reports green and measures nothing.
+  'consent-decline.spec.ts',
 ];
 
 const reportPath = process.argv[2];

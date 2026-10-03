@@ -129,3 +129,33 @@ INSERT IGNORE INTO credentials (
     NOW(6),
     0
 );
+
+-- =============================================================================
+-- TASK-BE-619 (AC-2) — a CONSUMER-POOL credential that is NOT a member of the store
+-- =============================================================================
+-- ADR-MONO-078 A: a pool account (tenant 'consumer-pool') that joined the fan site only. On the
+-- storefront client the form login picks the pool credential first (TASK-BE-615), the authorize gate
+-- finds no store membership and shows IAM's first-visit consent screen (TASK-BE-616). Declining it
+-- sends the browser back to the store with error=access_denied — consent-decline.spec.ts measures what
+-- web-store finally shows for it. This stack has no account-service: account-mock.nginx.conf answers this
+-- account's store-membership lookup with «consumer site, no membership» (the fan membership lives only
+-- in that answer's absence — the store is all this lane can see). Same password hash as the rows above.
+INSERT IGNORE INTO credentials (
+    tenant_id,
+    account_id,
+    email,
+    credential_hash,
+    hash_algorithm,
+    created_at,
+    updated_at,
+    version
+) VALUES (
+    'consumer-pool',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8e004',
+    'e2e-pool-fan-only@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id',
+    NOW(6),
+    NOW(6),
+    0
+);
