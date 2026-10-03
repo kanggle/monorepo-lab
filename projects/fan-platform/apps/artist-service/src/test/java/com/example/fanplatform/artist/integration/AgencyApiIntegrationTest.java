@@ -25,7 +25,8 @@ import static org.mockito.Mockito.when;
 /**
  * TASK-MONO-748 end to end over the real schema (V4): AC-2 (CRUD · duplicate 409 ·
  * affiliation change), AC-3 (seller link against the {@link StoreSellerDirectory}
- * port — the cross-project transport is not wired, see {@code UnwiredStoreSellerDirectory})
+ * port — mocked here to pin the RULES; the real transport is TASK-MONO-759's
+ * {@code StoreSellerLinkTransportIntegrationTest})
  * and AC-4 (the artist detail shows the agency name, from the entity).
  */
 class AgencyApiIntegrationTest extends ArtistServiceIntegrationBase {

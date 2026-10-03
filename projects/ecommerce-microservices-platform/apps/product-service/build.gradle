@@ -29,6 +29,13 @@ dependencies {
     // Web
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
+    // TASK-MONO-759 — product-service's FIRST JWT surface: a resource-server chain on
+    // /internal/** only (the fan → store seller read). Every other path keeps the
+    // gateway-header-trust model through a permit-all chain (ProductSecurityConfig) — the
+    // order-service OrderSecurityConfig shape.
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
     // Data JPA
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
@@ -61,6 +68,9 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    // RS256 signing for the /internal/** chain tests (TASK-MONO-759).
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'

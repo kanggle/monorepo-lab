@@ -857,6 +857,50 @@ Public endpoint — no authentication required.
 
 ---
 
+## Internal seller read — workload identity (ADR-MONO-079 D2 · TASK-MONO-759)
+
+The store side of the fan → store seller verification (`fan-platform`
+`artist-api.md` § Store seller verification). It is **not** an operator or shopper
+surface: it is product-service's **first JWT-validating surface**, and the only
+caller is a `client_credentials` workload token re-issued for the store tenant
+(ADR-MONO-076 assume-tenant). Every other product-service path keeps the
+gateway-header-trust model unchanged.
+
+### GET /internal/sellers/{sellerId}
+
+Reached **through the ecommerce gateway** (route `product-service-internal`,
+`Path=/internal/sellers/**`, no rewrite) — the same shape as the iam gateway carrying
+`/internal/tenants/**` (owner decision R1, 2026-10-03).
+
+**Authorization — two layers, both fail-closed**
+
+| Layer | Admits iff | Otherwise |
+|---|---|---|
+| ecommerce gateway (`AccountTypeEnforcementFilter`) | method `GET`/`HEAD` **and** `scope ∋ store.seller.read` **and** `tenant_id == ecommerce`. The `CUSTOMER` / `ECOMMERCE_OPERATOR` role rules do **not** apply on this path — and a `CUSTOMER` token without the scope is refused here | 403 `FORBIDDEN` |
+| product-service (`ProductSecurityConfig`, `/internal/**` chain) | signature + issuer + expiry verify **and** `scope ∋ store.seller.read` **and** `tenant_id == ecommerce` (all checked in the decoder) | 401 `UNAUTHORIZED` |
+| product-service, method | only `GET /internal/sellers/{sellerId}` is admitted; any other method/path under `/internal/**` | 403 `FORBIDDEN` |
+
+`store.seller.read` is a machine-only scope: IdP migration `V0042` grants it to
+`artist-service-client` alone, and no end-user client carries it. The token's tenant is
+the store tenant `ecommerce` (assume-tenant — `WorkloadTenantCatalog` enumerates
+`artist-service-client → {ecommerce}` only). The lookup is scoped to the token's
+`tenant_id` — a request header cannot change it.
+
+**Response 200**
+```json
+{ "sellerId": "string", "status": "PENDING_PROVISIONING | ACTIVE | SUSPENDED | CLOSED" }
+```
+`status` is the `SellerStatus` name verbatim. No other field is exposed.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 401 | UNAUTHORIZED | no / invalid / expired token, wrong issuer, missing `store.seller.read`, `tenant_id ≠ ecommerce` |
+| 403 | FORBIDDEN | gateway: not a seller-read workload token · service: a method/path other than `GET /internal/sellers/{sellerId}` |
+| 404 | SELLER_NOT_FOUND | no seller with that id **in tenant `ecommerce`** — the definite «does not exist» the caller maps to `Optional.empty()` |
+
+---
+
 ## collectionRef — fan artist collection (ADR-MONO-079 D3 · TASK-MONO-749)
 
 `products.collection_ref VARCHAR(64) NULL`, indexed `(tenant_id, collection_ref)`.

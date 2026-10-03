@@ -49,8 +49,19 @@ SELF_TEST=0
 #     🔵 iam 의 이 서비스는 **e2e compose 에만** 정의된다(데모 조합 = base + e2e + 오버레이).
 # 🔴 전수조사 술어 자체를 가드로 옮기지 않았다 — relaxed binding 오탐(admin-service)이 있어
 #    «걸림» 이 결함이 아니다. 이 목록은 사람이 확인한 호출자만 든다.
+#
+# TASK-MONO-759 — 두 행을 넓혔다/더했다(fan → store 셀러 조회, 소유자 결정 갈래 A + R1). 🔵 둘 다
+# «실제로 부르는가/받는가» 를 코드로 확인하고 넣었다:
+#   · product-service — 이제 **받는 쪽이기도 하다**. 첫 JWT 표면 `/internal/**` 의 디코더가 읽는
+#                       JWKS·issuer(`ProductSecurityConfig`). 기본값은 localhost — 빠지면 셀러 읽기가
+#                       조용히 401 이고 fan 쪽은 503(저장 0)이다. order-service 행과 같은 모양.
+#   · artist-service  — 보내는 쪽(fan). `HttpStoreSellerDirectory` 가 IdP 토큰을 받아(assume-tenant
+#                       ecommerce) ecommerce **게이트웨이**의 `/internal/sellers/{id}` 를 부른다.
+#                       기본값 `*.local` 은 데모에서 닿지 않는 호스트다 — fail-closed 라 저장은 0
+#                       이지만 셀러 연결이 전부 503 이 되고 아무 화면도 원인을 말하지 않는다.
 CALLERS=(
-  "projects/ecommerce-microservices-platform/docker-compose.yml|product-service|IAM_TOKEN_URI ACCOUNT_SERVICE_BASE_URL"
+  "projects/ecommerce-microservices-platform/docker-compose.yml|product-service|IAM_TOKEN_URI ACCOUNT_SERVICE_BASE_URL PRODUCT_INTERNAL_OAUTH2_JWK_SET_URI PRODUCT_INTERNAL_OAUTH2_ISSUER"
+  "projects/fan-platform/docker-compose.yml|artist-service|IAM_TOKEN_URI STORE_SELLER_BASE_URL"
   "projects/ecommerce-microservices-platform/docker-compose.yml|batch-worker|IAM_TOKEN_URI ORDER_SERVICE_BASE_URL PRODUCT_SERVICE_BASE_URL"
   "projects/ecommerce-microservices-platform/docker-compose.yml|order-service|ORDER_INTERNAL_OAUTH2_JWK_SET_URI ORDER_INTERNAL_OAUTH2_ISSUER"
   "projects/iam-platform/docker-compose.e2e.yml|security-service|ACCOUNT_SERVICE_BASE_URL"

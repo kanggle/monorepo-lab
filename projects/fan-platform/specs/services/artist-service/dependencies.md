@@ -52,23 +52,33 @@ artist-service produces silent 401s on traffic the gateway accepted.
 See `projects/fan-platform/specs/integration/iam-integration.md` for the full
 integration contract.
 
-### ecommerce store — seller lookup (TASK-MONO-748, `ADR-MONO-079` D2) — 🔴 NOT WIRED
+### ecommerce store — seller lookup (TASK-MONO-748 port · TASK-MONO-759 transport, `ADR-MONO-079` D2) — WIRED
 
 Write-time verification of `agencies.store_seller_id` goes through the outbound port
 `StoreSellerDirectory` (contract: `artist-api.md` § Store seller verification). The only
-adapter today, `UnwiredStoreSellerDirectory`, answers «cannot verify» to every call, so
-linking a seller is refused (503) and **nothing is saved** — fail-closed by construction.
-Clearing a link needs no lookup.
+adapter is `HttpStoreSellerDirectory` (`adapter/out/store/`), declared by
+`StoreSellerDirectoryConfig` as the single bean of that type — there is no permissive or
+"unwired" alternative to fall back to.
 
-The transport is an open decision, not an omission: the store's seller read is the
-operator-plane `GET /api/admin/sellers/{sellerId}` behind the ecommerce gateway
-(product-service validates no JWT; header-trust), and artist-service holds no IdP client.
-A workload path needs a new `client_credentials` registration + seller-read scope + a
-token for the store tenant (assume-tenant) — an IdP / permission-catalog change.
+Transport (owner decisions 2026-10-03: 갈래 A + reach path R1):
 
-| Failure | Behaviour |
-|---|---|
-| store unreachable / error / timeout / auth failure / unrecognised status | 503 `STORE_SELLER_LOOKUP_UNAVAILABLE`, link NOT saved |
+1. `client_credentials` token for **`artist-service-client`** with scope `store.seller.read`
+   from the IdP (`IAM_TOKEN_URI`; registration = iam auth-service `V0042`).
+2. RFC 8693 assume-tenant exchange of that token for tenant **`ecommerce`** (the only
+   tenant `WorkloadTenantCatalog` lets this client assume) — cached per tenant until expiry.
+3. `GET {STORE_SELLER_BASE_URL}/internal/sellers/{sellerId}` with the exchanged token —
+   through the **ecommerce gateway** (`http://ecommerce.local` locally,
+   `http://ecommerce.${DEMO_DOMAIN}` in the demo) to product-service
+   (`product-api.md` § Internal seller read).
+
+| Store / IdP answer | Port result | API result |
+|---|---|---|
+| 200 `{status}` with a known `SellerStatus` name | `Optional.of(status)` | ACTIVE / SUSPENDED / PENDING_PROVISIONING → saved · CLOSED → 422 |
+| 404 with code `SELLER_NOT_FOUND` | `Optional.empty()` | 422 `STORE_SELLER_NOT_FOUND` |
+| any other status (incl. a 404 without that code), malformed body, timeout, connection refused, token / exchange failure | `StoreSellerLookupUnavailableException` | 503 `STORE_SELLER_LOOKUP_UNAVAILABLE`, link NOT saved |
+
+Timeouts: connect 2 s / read 3 s on both the IdP and the store hop
+(`artist.store-seller.connect-timeout-ms` / `read-timeout-ms`).
 
 ## Cross-service contracts (produced)
 

@@ -31,6 +31,10 @@ import reactor.core.publisher.Mono;
  *       {@code /api/shippings}, {@code /api/notifications}) → admit {@code CUSTOMER}
  *       <b>or</b> {@code ECOMMERCE_OPERATOR}; the per-endpoint operator/consumer split is enforced
  *       service-side via the gateway-injected {@code X-User-Role} header (TASK-BE-380).</li>
+ *   <li>{@code /internal/sellers/**} (TASK-MONO-759, the ONE workload path this edge carries) →
+ *       admitted on the <b>scope</b> axis, not a role: safe method (GET/HEAD) <b>and</b>
+ *       {@code scope ∋ store.seller.read} <b>and</b> {@code tenant_id == ecommerce}. Every other
+ *       token — a {@code CUSTOMER} or {@code ECOMMERCE_OPERATOR} token included — → 403.</li>
  *   <li>All other authenticated routes → requires the {@code CUSTOMER} role; any other token → 403</li>
  *   <li>Public routes (no security context) → passes through unchanged</li>
  * </ul>
@@ -63,6 +67,21 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
     private static final int ORDER = -2;
     private static final String MSG_CONSUMER_ONLY = "This operation requires a consumer account";
     private static final String MSG_OPERATOR_ONLY = "This operation requires an operator account";
+    private static final String MSG_WORKLOAD_ONLY =
+            "This internal path requires the store seller-read workload credential";
+
+    /**
+     * TASK-MONO-759 (owner decision R1, 2026-10-03). The one internal path this edge routes —
+     * the fan → store seller read ({@code product-api.md} § Internal seller read). Exact
+     * prefix, so {@code /internal/sellers-something} does not match it.
+     */
+    static final String SELLER_READ_PATH = "/internal/sellers";
+
+    /** The machine-only scope the IdP grants to {@code artist-service-client} alone (V0042). */
+    static final String SELLER_READ_SCOPE = "store.seller.read";
+
+    /** The store tenant the seller read is scoped to; a workload reaches it only by assume-tenant. */
+    static final String SELLER_READ_TENANT = "ecommerce";
 
     private final ObjectMapper objectMapper;
 
@@ -77,6 +96,11 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                 .flatMap(auth -> {
                     org.springframework.security.oauth2.jwt.Jwt token = auth.getToken();
                     java.util.List<String> roles = token.getClaimAsStringList("roles");
+                    if (isSellerReadPath(path)) {
+                        // TASK-MONO-759: this branch REPLACES the role rules for exactly this
+                        // prefix, it does not add to them — a CUSTOMER token is refused here.
+                        return Mono.just(isSellerReadWorkload(exchange, token, path));
+                    }
                     boolean isAdmin = path.startsWith("/api/admin/");
                     if (isAdmin) {
                         boolean allowed = hasRole(roles, "ECOMMERCE_OPERATOR")
@@ -99,7 +123,8 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
                         return chain.filter(exchange);
                     }
                     boolean isAdmin = path.startsWith("/api/admin/");
-                    String message = isAdmin ? MSG_OPERATOR_ONLY : MSG_CONSUMER_ONLY;
+                    String message = isSellerReadPath(path) ? MSG_WORKLOAD_ONLY
+                            : isAdmin ? MSG_OPERATOR_ONLY : MSG_CONSUMER_ONLY;
                     return writeForbidden(exchange, message);
                 });
     }
@@ -139,6 +164,68 @@ public class AccountTypeEnforcementFilter implements GlobalFilter, Ordered {
         return isSafeMethod(exchange.getRequest().getMethod())
                 && TenantClaimValidator.WILDCARD_TENANT.equals(
                         token.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID));
+    }
+
+    /**
+     * TASK-MONO-759 — is this the internal seller-read path? Exact segment match on the prefix
+     * the {@code product-service-internal} route predicate names ({@code /internal/sellers/**}).
+     */
+    static boolean isSellerReadPath(String path) {
+        return path != null
+                && (path.equals(SELLER_READ_PATH) || path.startsWith(SELLER_READ_PATH + "/"));
+    }
+
+    /**
+     * TASK-MONO-759 — the workload admission for {@link #SELLER_READ_PATH}, as narrow as the
+     * owner's decision R1 allows: «워크로드 토큰은 CUSTOMER 역할 검사 대신 범위·테넌트로 거릅니다».
+     * All of:
+     * <ol>
+     *   <li>a safe method — the credential is for a READ, so no write verb reaches the service
+     *       even if one were ever mapped there;</li>
+     *   <li>{@code scope ∋ store.seller.read} — a scope only {@code artist-service-client} is
+     *       registered for, so no end-user token (a {@code CUSTOMER} one included) carries it;</li>
+     *   <li>{@code tenant_id == ecommerce} — the store tenant, reached only by assume-tenant
+     *       (no {@code *} wildcard, no entitlement trust on this branch);</li>
+     *   <li>a normalised path — no dot segments, empty segments, matrix parameters or
+     *       percent-encoding, so a path that STARTS with the prefix cannot resolve to anything
+     *       else further down.</li>
+     * </ol>
+     * product-service re-checks the scope and tenant in its own decoder; this is the edge half.
+     */
+    static boolean isSellerReadWorkload(ServerWebExchange exchange, Jwt token, String path) {
+        return isSafeMethod(exchange.getRequest().getMethod())
+                && isNormalised(path)
+                // the raw URI too: the routed path and the decoded one must agree it is plain
+                && isNormalised(String.valueOf(exchange.getRequest().getURI().getRawPath()))
+                && scopes(token).contains(SELLER_READ_SCOPE)
+                && SELLER_READ_TENANT.equals(
+                        token.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID));
+    }
+
+    private static boolean isNormalised(String path) {
+        return !path.contains("/../") && !path.endsWith("/..")
+                && !path.contains("/./") && !path.endsWith("/.")
+                && !path.contains("//") && !path.contains(";") && !path.contains("%");
+    }
+
+    /**
+     * The token's scopes in either shape the issuer may emit — a JSON array (Spring
+     * Authorization Server) or an RFC 6749 space-delimited string. Reading only one shape
+     * would turn the other into a silent 403.
+     */
+    private static java.util.Set<String> scopes(Jwt token) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        Object raw = token.getClaims().get("scope");
+        if (raw instanceof java.util.Collection<?> c) {
+            for (Object o : c) {
+                if (o != null) out.add(o.toString());
+            }
+        } else if (raw instanceof String s) {
+            for (String part : s.trim().split("\\s+")) {
+                if (!part.isBlank()) out.add(part);
+            }
+        }
+        return out;
     }
 
     /** Safe (read-only, side-effect-free) HTTP methods: GET and HEAD. */

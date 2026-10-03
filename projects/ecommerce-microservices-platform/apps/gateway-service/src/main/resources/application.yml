@@ -65,6 +65,25 @@ spring:
                 redis-rate-limiter.burstCapacity: 200
                 key-resolver: "#{@tenantRouteKeyResolver}"
 
+        # TASK-MONO-759 (owner decision R1, 2026-10-03) — the ONE internal path this edge
+        # carries: the fan → store seller read (product-api.md § Internal seller read). Same
+        # shape as the iam gateway's `account-service-internal` route (`/internal/tenants/**`,
+        # StripPrefix=0): the path reaches product-service unchanged. Admission is NOT the
+        # CUSTOMER rule — AccountTypeEnforcementFilter admits only GET/HEAD + scope
+        # store.seller.read + tenant_id=ecommerce here — and product-service re-validates the
+        # token itself (its /internal/** resource-server chain).
+        - id: product-service-internal
+          uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/internal/sellers/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                key-resolver: "#{@tenantRouteKeyResolver}"
+
         - id: user-service
           uri: ${USER_SERVICE_URL:http://localhost:8084}
           predicates:
@@ -247,7 +266,10 @@ ecommerce:
     # the operator console and the web-store). Clients whose reach could not be measured are
     # deliberately NOT listed — in shadow mode their traffic shows up as a logged, counted
     # mismatch, which is the measurement this phase exists for.
-    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client}
+    # TASK-MONO-759: `artist-service-client` added in the same change that routes it here
+    # (rule 5: "Registering a new client that calls an edge therefore requires adding its client
+    # id to that edge's allowlist in the same change"). The mode stays SHADOW — not flipped here.
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client,artist-service-client}
     # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
     # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
     # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.

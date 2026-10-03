@@ -618,19 +618,31 @@ whose contract with any adapter is:
   store's 404 `SELLER_NOT_FOUND`);
 - **throws** `StoreSellerLookupUnavailableException` for everything else.
 
-What the store side must provide (input to the transport decision): a read of one seller
-**by `sellerId` in the store tenant** (`ecommerce`), returning at least
-`{ "sellerId", "status" }` with a distinguishable not-found — the shape `product-api.md`
-§ `GET /api/admin/sellers/{sellerId}` already has.
+The store side is `product-api.md` § Internal seller read —
+`GET /internal/sellers/{sellerId}` → `{ "sellerId", "status" }`, 404 `SELLER_NOT_FOUND`
+when the store tenant (`ecommerce`) has no such seller.
 
-🔴 **The transport is not decided, so the shipped adapter refuses every link**
-(`UnwiredStoreSellerDirectory` → 503). The store's only seller read is the operator-plane
-`GET /api/admin/sellers/{sellerId}` behind the ecommerce gateway (header-trust
-`X-User-Role: ECOMMERCE_OPERATOR`; product-service validates no JWT itself), and
-artist-service holds no IdP client. Reaching it needs a new `client_credentials`
-registration, a seller-read scope and a token for the store tenant (assume-tenant,
-`WorkloadTenantCatalog`) — an IdP / permission-catalog decision outside this ticket
-(`TASK-MONO-748` § 구현 기록 › Hard Stop). Clearing a link works today.
+**Transport (TASK-MONO-759 — owner decisions 2026-10-03: 갈래 A + reach path R1)** —
+adapter `HttpStoreSellerDirectory`, the only `StoreSellerDirectory` bean:
+
+1. `client_credentials` token for `artist-service-client`, scope `store.seller.read`.
+2. RFC 8693 assume-tenant exchange → a short-lived token with `tenant_id = ecommerce`
+   (`WorkloadTenantCatalog`: this client may assume `ecommerce` and nothing else).
+3. `GET /internal/sellers/{sellerId}` on the **ecommerce gateway** with that token; the
+   gateway admits it on scope + tenant (not on a role) and routes it to product-service,
+   which re-validates scope + tenant itself.
+
+Mapping (the adapter's whole contract with the port):
+
+| Answer | Port result |
+|---|---|
+| 200 with a `status` that is a known `SellerStatus` name | `Optional.of(status)` |
+| 404 whose body `code` is `SELLER_NOT_FOUND` | `Optional.empty()` |
+| anything else — other status codes (incl. a 404 without that code), malformed / missing body, unknown status string, timeout, connection refused, token or exchange failure | `StoreSellerLookupUnavailableException` |
+
+🔴 There is no permissive adapter and no switch that selects one: a missing or failing
+store makes every link a 503 with nothing saved (`TASK-MONO-759` AC-4). Clearing a link
+still needs no lookup.
 
 ---
 

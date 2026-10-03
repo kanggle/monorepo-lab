@@ -105,6 +105,26 @@ artist:
     poll-ms: ${ARTIST_OUTBOX_POLL_MS:1000}
     initial-delay-ms: ${ARTIST_OUTBOX_INITIAL_DELAY_MS:5000}
     batch-size: ${ARTIST_OUTBOX_BATCH_SIZE:100}
+  # TASK-MONO-759 (ADR-MONO-079 D2; owner decisions 2026-10-03: 갈래 A + reach path R1) — the
+  # agency → store-seller write-time lookup. base-url is the ECOMMERCE GATEWAY (the two projects
+  # share no network); it routes /internal/sellers/** to product-service. Compose passes
+  # STORE_SELLER_BASE_URL (scripts/check-internal-caller-addresses.sh checks it is declared).
+  # scope / tenant-id are the values the IdP registration (V0042) and WorkloadTenantCatalog grant.
+  store-seller:
+    base-url: ${STORE_SELLER_BASE_URL:http://ecommerce.local}
+    scope: store.seller.read
+    tenant-id: ecommerce
+    connect-timeout-ms: ${STORE_SELLER_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${STORE_SELLER_READ_TIMEOUT_MS:3000}
+
+# TASK-MONO-759 — artist-service's FIRST IdP client (`artist-service-client`, iam auth-service
+# V0042): client_credentials + assume-tenant `ecommerce`, scope store.seller.read. Same keys as
+# community-service's workload client. Rotate IAM_CLIENT_SECRET outside dev (V0042 header).
+iam:
+  internal-client:
+    token-uri: ${IAM_TOKEN_URI:http://iam.local/oauth2/token}
+    client-id: ${IAM_CLIENT_ID:artist-service-client}
+    client-secret: ${IAM_CLIENT_SECRET:secret}
 
 fanplatform:
   oauth2:

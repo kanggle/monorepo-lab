@@ -17,6 +17,7 @@ import com.example.product.application.service.VariantManagementService;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.model.ProductStatus;
 import com.example.product.domain.port.MediaUrlResolver;
+import com.example.product.infrastructure.config.ProductSecurityConfig;
 import com.example.product.presentation.advice.GlobalExceptionHandler;
 import com.example.product.presentation.controller.AdminProductController;
 import com.example.product.presentation.controller.ProductController;
@@ -59,7 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = {ProductController.class, AdminProductController.class})
 @ContextConfiguration(classes = TestProductServiceApplication.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ProductSecurityConfig.class})
 @DisplayName("Product API 컨트랙트 테스트 — specs/contracts/http/product-api.md")
 class ProductApiContractTest {
 

@@ -119,8 +119,8 @@ final class WorkloadRoleCatalog {
      * compares this key set against the Flyway seeds rather than against itself.
      *
      * <p>Population recounted from the auth-service migrations at statement level
-     * (2026-09-24, after V0038): <b>18</b> registered clients, <b>12</b> with the
-     * {@code client_credentials} grant and 6 without. {@code membership-service-client} was
+     * (2026-10-03, after V0042): <b>19</b> registered clients, <b>13</b> with the
+     * {@code client_credentials} grant and 6 without (2026-09-24 after V0038: 18 / 12 / 6). {@code membership-service-client} was
      * revoked by V0029 and is therefore not here. 🔴 The figure is not carried forward by
      * hand — {@code WorkloadRoleCatalogTest} parses the migrations and asserts it, so a seed
      * that lands without a line here fails rather than drifting.
@@ -187,6 +187,13 @@ final class WorkloadRoleCatalog {
             // matcher was TASK-MONO-522's open question; ADR-MONO-063 (ACCEPTED — D1) answered
             // no, so this empty map is now a decision rather than a placeholder for one.
             Map.entry("community-service-client", Map.of()),
+            // TASK-MONO-759 (owner decision 2026-10-03), seeded by V0042. Its one call is
+            // GET /internal/sellers/{id} on the ecommerce store (gateway → product-service),
+            // admitted on the store.seller.read SCOPE + tenant_id == ecommerce, never on a
+            // role. Measured, and the answer is none — a role would put a fan workload onto
+            // role-gated domain surfaces (and the ecommerce gateway's CUSTOMER /
+            // ECOMMERCE_OPERATOR branches) it has no business reaching.
+            Map.entry("artist-service-client", Map.of()),
             Map.entry("test-internal-client", Map.of()),
 
             // TASK-MONO-528 asked whether INVENTORY_RESERVE belongs on one of the entries

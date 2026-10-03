@@ -88,7 +88,9 @@ public final class WorkloadTenantCatalog {
      * Every client holding both {@code client_credentials} and the token-exchange grant,
      * mapped to the tenants it may assume.
      *
-     * <p>Population as of 2026-09-23 (after {@code V0037}): <b>one</b>. Before V0037 the only
+     * <p>Population as of 2026-10-03 (after {@code V0042}): <b>two</b> — {@code V0037} added
+     * {@code product-service-client}, {@code V0042} added {@code artist-service-client}.
+     * Population as of 2026-09-23 (after {@code V0037}): <b>one</b>. Before V0037 the only
      * client with the exchange grant at all was {@code platform-console-web}, which is an
      * {@code authorization_code} client — an operator credential, not a workload — so it is
      * deliberately not here and takes the operator branch it always took.
@@ -110,7 +112,24 @@ public final class WorkloadTenantCatalog {
             // 🔴 What is NOT here is the point: `wms`, `scm`, `erp`, `finance` and every
             //    tenant registered tomorrow. TASK-MONO-721 AC-1's control measures exactly
             //    that — the same credential asking for `wms` must be refused.
-            Map.entry("product-service-client", Set.of("ecommerce", "demo-corp")));
+            Map.entry("product-service-client", Set.of("ecommerce", "demo-corp")),
+
+            // --- fan artist-service (registered tenant: fan-platform) ---
+            // TASK-MONO-759 (owner decision 2026-10-03 — 갈래 A, which explicitly approved this
+            // catalog change). Seeded by V0042 with the single scope `store.seller.read`.
+            //
+            //   ecommerce  — the store tenant whose seller it reads (ADR-MONO-079 D2: an
+            //                agency links to a seller of the `ecommerce` tenant). Its one call
+            //                is GET /internal/sellers/{id}, which the ecommerce gateway and
+            //                product-service both admit only for tenant_id == ecommerce.
+            //
+            // 🔴 Deliberately NOT demo-corp (unlike product-service-client's R1): this client
+            //    provisions nothing — it reads one store tenant's sellers, and the store side
+            //    pins exactly `ecommerce`. A second tenant here would mint tokens nothing
+            //    accepts, which only widens what a stolen secret can obtain.
+            //    Not fan-platform either: that is its OWN tenant, which its plain
+            //    client_credentials token already carries — it never needs to assume it.
+            Map.entry("artist-service-client", Set.of("ecommerce")));
 
     /**
      * Whether this client is governed by this table at all — i.e. whether the assume-tenant

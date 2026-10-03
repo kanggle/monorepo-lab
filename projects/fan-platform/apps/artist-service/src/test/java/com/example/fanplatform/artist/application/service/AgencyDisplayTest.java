@@ -1,9 +1,7 @@
 package com.example.fanplatform.artist.application.service;
 
 import com.example.common.page.PageResult;
-import com.example.fanplatform.artist.adapter.out.store.UnwiredStoreSellerDirectory;
 import com.example.fanplatform.artist.application.ActorContext;
-import com.example.fanplatform.artist.application.exception.StoreSellerLookupUnavailableException;
 import com.example.fanplatform.artist.application.port.in.ArtistView;
 import com.example.fanplatform.artist.application.port.in.RegisterArtistUseCase.RegisterArtistCommand;
 import com.example.fanplatform.artist.application.port.in.SearchArtistDirectoryUseCase.DirectorySearchResult;
@@ -155,10 +153,7 @@ class AgencyDisplayTest {
         verify(repo, never()).insert(any());
     }
 
-    @Test
-    @DisplayName("🔴 the shipped StoreSellerDirectory refuses to verify — never permissive")
-    void unwiredDirectoryIsFailClosed() {
-        assertThatThrownBy(() -> new UnwiredStoreSellerDirectory().findStatus("default"))
-                .isInstanceOf(StoreSellerLookupUnavailableException.class);
-    }
+    // TASK-MONO-759: `unwiredDirectoryIsFailClosed` moved to StoreSellerDirectoryConfigTest
+    // (AC-4) when UnwiredStoreSellerDirectory was deleted — the property it pinned («no
+    // permissive StoreSellerDirectory») is now asserted against the wiring that replaced it.
 }
