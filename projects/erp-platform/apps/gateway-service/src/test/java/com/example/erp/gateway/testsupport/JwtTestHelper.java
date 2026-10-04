@@ -109,7 +109,8 @@ public final class JwtTestHelper {
     public String signClientCredentialsToken(String clientId) {
         return signToken(SAS_ISSUER, clientId, null, DEFAULT_TENANT_ID, 300,
                 // aud = the client itself, as the identity-platform mints it (TASK-MONO-696 AC-1).
-                // Not on this edge's measured allowlist: a shadow-mode mismatch, by design.
+                // Not on this edge's allowlist: 403 AUDIENCE_FORBIDDEN under ENFORCE
+                // (TASK-MONO-697 AC-4 (b)). Do not swap in an allowlisted aud to make a test pass.
                 Map.of("azp", clientId, "aud", List.of(clientId), "scope", "erp.read erp.write"));
     }
 

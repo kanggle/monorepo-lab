@@ -70,16 +70,24 @@ class GatewayEdgeIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
-    void scopeOnlyMachineTokenReachesDownstream() {
-        downstream.enqueue(new MockResponse().setResponseCode(200).setBody("{\"ok\":true}"));
-
-        // Scope but no role — admitted on the rule-6 "role OR scope" scope leg.
+    void scopeOnlyMachineTokenOutsideTheAudienceAllowlistIsRejectedWith403() {
+        // TASK-MONO-697 AC-4 (b). aud = the workload client itself, as the IdP mints it; it is not
+        // on this edge's audience allowlist (the AC-0 census found no configured caller of any
+        // finance workload client), so under ENFORCE the edge refuses it. Do not "fix" this cell
+        // by minting an allowlisted aud. No downstream response is queued: a 403 at the edge must
+        // never reach the MockWebServer (a stale queued response would also poison the next cell).
+        //
+        // This cell used to be the IT witness of the rule-6 "role OR scope" scope leg. That proof
+        // lives in RoleAdmissionFilterTest#admitsScopeOnlyMachineToken, against the
+        // RoleAdmissionFilter this gateway actually wires.
         String token = jwt.signScopeOnlyToken("machine-client");
 
         webTestClient.get().uri(ACCOUNTS_PATH)
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AUDIENCE_FORBIDDEN");
     }
 
     @Test

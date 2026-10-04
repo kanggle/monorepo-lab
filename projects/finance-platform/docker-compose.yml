@@ -62,6 +62,11 @@ services:
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       OIDC_REQUIRED_TENANT_ID: finance
+      # TASK-MONO-697 rollback lever: OIDC_AUDIENCE_MODE=SHADOW in the env file + recreating
+      # this service reverts the audience check to log-only without a rebuild. Unset, it is
+      # the shipped ENFORCE. Pass-through only: AudienceShippedConfigTest rejects any fixed
+      # value here. OIDC_ALLOWED_AUDIENCES is deliberately NOT passed — it differs per gateway.
+      OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}
       ACCOUNT_SERVICE_URI: http://account-service:8080
       LEDGER_SERVICE_URI: http://ledger-service:8080
       REDIS_HOST: redis

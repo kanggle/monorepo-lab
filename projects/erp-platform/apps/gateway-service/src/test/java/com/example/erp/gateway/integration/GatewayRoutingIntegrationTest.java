@@ -37,14 +37,22 @@ class GatewayRoutingIntegrationTest extends GatewayIntegrationBase {
     }
 
     @Test
-    @DisplayName("scope 만 있는 client_credentials 토큰 → 200 (머신 호출은 scope 로 인가)")
-    void clientCredentialsScopeTokenPassesThroughToDownstream() {
+    @DisplayName("allowlist 밖 aud 의 client_credentials 토큰 → 403 AUDIENCE_FORBIDDEN (TASK-MONO-697 AC-4 (b))")
+    void clientCredentialsTokenOutsideTheAudienceAllowlistIsRejectedWith403() {
+        // aud = the client itself, as the IdP mints it; that client is not on this edge's audience
+        // allowlist (the AC-0 census found no configured caller of any erp workload client), so
+        // under ENFORCE the edge refuses it. Do not "fix" this cell by minting an allowlisted aud.
+        //
+        // This cell used to be the IT witness that rule-6 admission admits a scope-only token.
+        // That proof lives in RoleAdmissionFilterTest#admitsScopeOnlyMachineToken, against the
+        // RoleAdmissionFilter this gateway actually wires.
         String token = jwt.signClientCredentialsToken("erp-internal-client");
 
         webTestClient.get().uri(PATH)
                 .header("Authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("AUDIENCE_FORBIDDEN");
     }
 
     @Test

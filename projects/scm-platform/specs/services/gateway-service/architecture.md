@@ -215,12 +215,15 @@ Per `platform/security-rules.md` and
 - Audience (TASK-MONO-696, `jwt-standard-claims.md` rule 5): `AllowedAudiencesValidator`, run by
   the shared chain only on a token every other check accepted — `aud` (the issuing **client
   id**) ∩ `scmplatform.oauth2.allowed-audiences` (shipped: `platform-console-web`, the client
-  measured to reach this edge; the internal `client_credentials` client is not listed because
-  its reach was not measured) ≠ ∅. Empty or absent allowlist fails the boot.
-  `scmplatform.oauth2.audience-mode` ships **SHADOW** (mismatch logged + counted on
-  `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is the separate
-  phase-2 change. A cumulative `JWT audience summary: gateway=… mode=… match=… mismatch=…` INFO
-  line (at most once a minute while tokens arrive) is what that phase reads (TASK-MONO-736).
+  measured to reach this edge; the internal `client_credentials` client is not listed — the
+  TASK-MONO-697 census found no configured caller of it) ≠ ∅. Empty or absent allowlist fails the
+  boot. `scmplatform.oauth2.audience-mode` ships **ENFORCE** (TASK-MONO-697): a mismatch is 403
+  `AUDIENCE_FORBIDDEN`, counted on `gateway.jwt.audience{gateway,outcome}` — so a
+  `client_credentials` token minted for the internal client is refused at this edge. `SHADOW`
+  (log + count, never reject) remains the rollback — the compose passes `OIDC_AUDIENCE_MODE`
+  through, defaulting to ENFORCE. A cumulative `JWT audience summary: gateway=… mode=… match=…
+  mismatch=…` INFO line (at most once a minute while tokens arrive) reports the mode and counts
+  (TASK-MONO-736).
 - Tenant: `TenantClaimValidator` — **entitlement-trust dual-accept**
   (ADR-MONO-019 § D5). Accepts when the legacy slug `tenant_id ∈ { scm, * }`
   (`*` = SUPER_ADMIN platform-scope) **or** the IAM-signed `entitled_domains`

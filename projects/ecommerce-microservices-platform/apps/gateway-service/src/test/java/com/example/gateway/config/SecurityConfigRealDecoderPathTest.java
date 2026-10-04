@@ -3,6 +3,7 @@ package com.example.gateway.config;
 import com.example.security.oauth2.AllowedAudiencesValidator;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.apigateway.testfixtures.ShippedAudienceConfig;
 import com.example.gateway.testsupport.JwksMockServer;
 import com.example.gateway.testsupport.JwtTestHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +63,9 @@ class SecurityConfigRealDecoderPathTest {
     /** Kept equal to application.yml by {@code AudienceShippedConfigTest}. */
     static final String SHIPPED_ALLOWED_AUDIENCES =
             "platform-console-web,ecommerce-web-store-client,artist-service-client";
+    /** The mode application.yml ships, read from it — not typed in here (TASK-MONO-697 AC-3). */
+    static final String SHIPPED_AUDIENCE_MODE =
+            ShippedAudienceConfig.shippedValue("ecommerce.oauth2.audience-mode");
     private static final JwtTestHelper JWT = new JwtTestHelper();
     private static final JwksMockServer JWKS;
 
@@ -203,86 +207,104 @@ class SecurityConfigRealDecoderPathTest {
     }
 
     // -----------------------------------------------------------------------
-    // TASK-MONO-696 AC-5 — phase 1 (SHADOW): audience is checked, recorded, not rejected
+    // TASK-MONO-697 AC-3 — the shipped mode (ENFORCE): an audience mismatch is refused, and counted
     // -----------------------------------------------------------------------
 
     /**
-     * Phase 1 of the audience rollout, on the real decoder path (TASK-MONO-696 AC-5).
+     * The audience rollout as this gateway ships it — phase 2, ENFORCE (TASK-MONO-697 AC-3).
      *
-     * <p>These were the AC-0 "passes today" cells: before the shared chain carried an audience
-     * gate, {@code aud} was never looked at. They flip <em>in what they assert</em>, not in
-     * status: in shadow mode a missing or foreign {@code aud} still reaches the route, and the
-     * mismatch is now <strong>counted</strong> ({@code gateway.jwt.audience}, outcome
-     * {@code mismatch_shadowed}). A "passes" assertion alone could not tell shadow mode from no
-     * check at all — the counter is what distinguishes them. Phase 2 (reject) is asserted in
-     * {@link SecurityConfigAudienceEnforceRealDecoderPathTest}.
+     * <p>These cells measured phase 1 when the gateway shipped SHADOW: a missing or foreign
+     * {@code aud} reached the route and the mismatch was counted ({@code mismatch_shadowed}).
+     * The decoder here is built with the mode {@code application.yml} actually ships (read by
+     * {@link ShippedAudienceConfig}, not typed in), so the same cells now flip in status: 403
+     * {@code AUDIENCE_FORBIDDEN}, counted as {@code mismatch_rejected}, and never as
+     * {@code mismatch_shadowed}. If the shipped mode is switched back to SHADOW these cells go
+     * red together with {@code AudienceShippedConfigTest} — that is intended; the rollback lever
+     * is the environment variable, not the shipped default.
      *
-     * <p>The controls stay: the same claims minus {@code tenant_id} is refused with 403, which
-     * proves "reached" means the real decoder accepted the token — and, since the audience gate
-     * only runs on a token the rest of the chain accepted, those controls must count nothing.
+     * <p>The controls stay: the same claims minus {@code tenant_id} are refused with 403
+     * {@code TENANT_FORBIDDEN}, not {@code AUDIENCE_FORBIDDEN}, and the audience gate counts
+     * nothing for them — it only runs on a token the rest of the chain accepted.
+     * {@link SecurityConfigAudienceEnforceRealDecoderPathTest} keeps the wider ENFORCE matrix.
      */
     @Nested
-    @DisplayName("TASK-MONO-696 AC-5 — phase 1 SHADOW: aud 불일치는 통과하고 기록된다")
-    class AudienceShadowed {
+    @DisplayName("TASK-MONO-697 AC-3 — 출하 모드 ENFORCE: aud 불일치는 403 으로 거절되고 기록된다")
+    class AudienceEnforcedAsShipped {
 
         @Test
-        @DisplayName("(i) aud 없음 + tenant_id=ecommerce → 200 + mismatch_shadowed +1")
-        void noAudience_ecommerceTenant_passesInShadow_andIsCounted() {
+        @DisplayName("전제: 이 칸들이 재는 디코더는 출하 모드 ENFORCE 로 만들어졌다")
+        void decoderIsBuiltWithTheShippedEnforceMode() {
+            assertThat(SHIPPED_AUDIENCE_MODE).isEqualTo("ENFORCE");
+        }
+
+        @Test
+        @DisplayName("(i) aud 없음 + tenant_id=ecommerce → 403 AUDIENCE_FORBIDDEN + mismatch_rejected +1")
+        void noAudience_ecommerceTenant_isRejected_andCounted() {
+            double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
             double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
             double matchBefore = audience(AllowedAudiencesValidator.OUTCOME_MATCH);
 
-            send(JWT.signToken("user-no-aud", null, 300L, Map.of("tenant_id", "ecommerce")))
-                    .expectStatus().isOk()
-                    .expectBody(String.class).isEqualTo("reached");
+            String body = send(JWT.signToken("user-no-aud", null, 300L, Map.of("tenant_id", "ecommerce")))
+                    .expectStatus().isForbidden()
+                    .expectBody(String.class).returnResult().getResponseBody();
 
-            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(1.0);
+            assertThat(body).contains("\"AUDIENCE_FORBIDDEN\"").doesNotContain("reached");
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(1.0);
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
             assertThat(audience(AllowedAudiencesValidator.OUTCOME_MATCH) - matchBefore).isEqualTo(0.0);
         }
 
         @Test
         @DisplayName("(i) 대조군: 같은 토큰(aud 없음)에서 tenant_id 만 빼면 → 403 TENANT_FORBIDDEN, audience 는 세지 않음")
         void noAudience_control_withoutTenant_is403() {
+            double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
             double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
 
             send(JWT.signToken("user-no-aud", null, 300L, Map.of()))
                     .expectStatus().isForbidden()
                     .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
 
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(0.0);
             assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
         }
 
         @Test
-        @DisplayName("(ii) aud=[wms] + tenant_id=ecommerce → 200 + mismatch_shadowed +1")
-        void foreignAudience_ecommerceTenant_passesInShadow_andIsCounted() {
-            double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
+        @DisplayName("(ii) aud=[wms] + tenant_id=ecommerce → 403 AUDIENCE_FORBIDDEN + mismatch_rejected +1")
+        void foreignAudience_ecommerceTenant_isRejected_andCounted() {
+            double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
 
             send(JWT.signToken("user-wms-aud", null, 300L,
                     Map.of("aud", List.of("wms"), "tenant_id", "ecommerce")))
-                    .expectStatus().isOk()
-                    .expectBody(String.class).isEqualTo("reached");
+                    .expectStatus().isForbidden()
+                    .expectBody().jsonPath("$.code").isEqualTo("AUDIENCE_FORBIDDEN");
 
-            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(1.0);
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(1.0);
         }
 
         @Test
         @DisplayName("(ii) 대조군: 같은 토큰(aud=[wms])에서 tenant_id 만 빼면 → 403 TENANT_FORBIDDEN")
         void foreignAudience_control_withoutTenant_is403() {
+            double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
+
             send(JWT.signToken("user-wms-aud", null, 300L, Map.of("aud", List.of("wms"))))
                     .expectStatus().isForbidden()
                     .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
+
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(0.0);
         }
 
         @Test
         @DisplayName("(iii) 허용 aud(web-store client) → 200 + match +1, mismatch 0")
         void allowedAudience_passes_andCountsMatch() {
-            double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
+            double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
             double matchBefore = audience(AllowedAudiencesValidator.OUTCOME_MATCH);
 
             send(JWT.signTokenWithIssuerAndTenant(ISSUER, "ecommerce"))
-                    .expectStatus().isOk();
+                    .expectStatus().isOk()
+                    .expectBody(String.class).isEqualTo("reached");
 
             assertThat(audience(AllowedAudiencesValidator.OUTCOME_MATCH) - matchBefore).isEqualTo(1.0);
-            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
+            assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(0.0);
         }
     }
 
@@ -354,12 +376,13 @@ class SecurityConfigRealDecoderPathTest {
 
         /**
          * The production decoder, built by the production config class — with the allowlist and
-         * mode this gateway ships (SHADOW), so this suite measures phase 1 as deployed.
+         * the mode this gateway ships (read from application.yml), so this suite measures the
+         * audience gate as deployed.
          */
         @Bean
         ReactiveJwtDecoder reactiveJwtDecoder(MeterRegistry registry) {
             return new OAuth2ResourceServerConfig(JWKS.hostJwksUrl(), ISSUER, "ecommerce",
-                    SHIPPED_ALLOWED_AUDIENCES, "SHADOW", registry)
+                    SHIPPED_ALLOWED_AUDIENCES, SHIPPED_AUDIENCE_MODE, registry)
                     .reactiveJwtDecoder();
         }
 

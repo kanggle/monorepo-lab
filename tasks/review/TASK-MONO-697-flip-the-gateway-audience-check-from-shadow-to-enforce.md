@@ -8,7 +8,7 @@ TASK-MONO-697
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -76,13 +76,13 @@ monorepo
     - web-store·console fullstack 과 federation 스위트는 성공하면 컨테이너 로그를 안 남긴다.
   - 상세는 아래 **§ AC-0 판정 — 2026-10-04 UTC** 와 **§ 소유자 결정 2 (2026-10-04 UTC)** 에 있다.
 - [x] **AC-1 — 오류 코드 이름 확정.** 🔵 2026-10-04 UTC 소유자 결정: `AUDIENCE_FORBIDDEN` 확정(`PERMISSION_DENIED` 재사용안 대신 추천안 채택). 계약서 문구 개정은 이 PR 에서 했다. 이름이 그대로라 rename 작업은 없다. 아래 § AC-0 판정 › 소유자 결정 참고. 소유자에게 `AUDIENCE_FORBIDDEN` 확정 또는 대체 이름을 묻고 그 답을 이 파일에 정확한 형태로 기록한다. 이름이 바뀌면 `GatewayErrorCodes.AUDIENCE_FORBIDDEN` 값 · `GatewayErrorCodesTest` 핀 · 두 enforce 테스트 · ecommerce `iam-integration.md` Error Responses 행 · 네 gateway architecture.md 를 같은 PR 에서 바꾼다. 계약서 § Error Handling 의 「not yet fixed … proposal」 문장을 확정 문장으로 개정한다(스펙 먼저).
-- [ ] **AC-2 — 6 게이트웨이 ENFORCE 출하.** 각 `application.yml` `audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}`; 각 `AudienceShippedConfigTest#shipsShadow` → `shipsEnforce` 로 기대값 변경. 🔴 한 PR 에서 6 개 전부 — 일부만 뒤집으면 콘솔 한 토큰이 도메인마다 다르게 취급된다.
+- [x] **AC-2 — 6 게이트웨이 ENFORCE 출하.** 🟢 2026-10-04 UTC 뒤집기 PR — 증거는 아래 **§ 뒤집기 PR 기록 (2026-10-04 UTC)** 의 AC-2 절. 각 `application.yml` `audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}`; 각 `AudienceShippedConfigTest#shipsShadow` → `shipsEnforce` 로 기대값 변경. 🔴 한 PR 에서 6 개 전부 — 일부만 뒤집으면 콘솔 한 토큰이 도메인마다 다르게 취급된다.
   - **되돌리기 레버 (소유자 결정 3, 2026-10-04 UTC):** 같은 PR 에서 6 게이트웨이 compose 의 `environment:` 에 `OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}` 를 넣는다. 그러면 재굽기 없이 `demo.env` 한 줄과 재생성으로 되돌릴 수 있다. compose 위치: ecommerce `docker-compose.yml:1181-`, wms `docker-compose.e2e.yml:76-`(데모도 이 파일로 앱을 띄운다 — `infra/demo/projects.sh:50`), scm `:39-`, erp `:49-`, finance `:50-`, fan `:27-`.
     - 🔴 `OIDC_ALLOWED_AUDIENCES` 는 넘기지 않는다. 값이 게이트웨이마다 다르기 때문이다.
     - 🔴 6 `AudienceShippedConfigTest$Shipped` ③(«프로젝트 `docker-compose*.yml`·`.env*` 에 ENFORCE override 줄 0»)은 이 줄이 들어가면 빨개진다. 같은 PR 에서 술어를 바꾼다: «compose 는 `OIDC_AUDIENCE_MODE` 를 `${OIDC_AUDIENCE_MODE:-ENFORCE}` 형태로만 넘긴다 · 다른 값을 고정하지 않는다 · `.env*` 에 `OIDC_AUDIENCE_MODE=SHADOW` 고정 없음».
     - 🔴 그 술어는 «전달 줄이 6/6 있다» 도 단언해야 한다. 안 그러면 레버가 하나 빠져도 초록이다.
-- [ ] **AC-3 — 1단계 섀도 칸의 뒤집기.** ecommerce·wms `SecurityConfigRealDecoderPathTest` 의 `…passesInShadow_andIsCounted` 칸은 출하 모드를 측정한다 — ENFORCE 출하 후에는 403 `AUDIENCE_FORBIDDEN` + `mismatch_rejected +1` 로 뒤집는다(또는 enforce 테스트와 합친다). 대조군(테넌트 없음 → `TENANT_FORBIDDEN`, audience 카운터 0)은 유지.
-- [ ] **AC-4 — 픽스처가 allowlist 밖으로 민팅하는 알려진 셋 정리.** scm `JwtTestHelper#signClientCredentialsToken`(`aud=scm-platform-internal-services-client`) · erp `#signClientCredentialsToken(clientId)`(`aud=clientId`) · finance `#signScopeOnlyToken`(`aud=subject`). 이 셋을 쓰는 IT 가 ENFORCE 에서 403 이 된다. AC-0 판정에 맞춰 (a) allowlist 에 해당 client 추가, 또는 (b) 해당 IT 의 기대값을 403 으로 — 둘 중 무엇인지 기록. **픽스처를 allowlist 값으로 바꿔 초록을 만들지 않는다**(운영 토큰은 그 `aud` 를 안 가진다).
+- [x] **AC-3 — 1단계 섀도 칸의 뒤집기.** 🟢 2026-10-04 UTC — 증거는 아래 **§ 뒤집기 PR 기록** 의 AC-3 절. ecommerce·wms `SecurityConfigRealDecoderPathTest` 의 `…passesInShadow_andIsCounted` 칸은 출하 모드를 측정한다 — ENFORCE 출하 후에는 403 `AUDIENCE_FORBIDDEN` + `mismatch_rejected +1` 로 뒤집는다(또는 enforce 테스트와 합친다). 대조군(테넌트 없음 → `TENANT_FORBIDDEN`, audience 카운터 0)은 유지.
+- [x] **AC-4 — 픽스처가 allowlist 밖으로 민팅하는 알려진 셋 정리.** 🟢 2026-10-04 UTC — (b) 를 집행했다. scope 다리 증명은 admission 단위 테스트로 옮겼고, e2e 헬퍼 둘을 고쳤다. 증거는 아래 **§ 뒤집기 PR 기록** 의 AC-4 절. scm `JwtTestHelper#signClientCredentialsToken`(`aud=scm-platform-internal-services-client`) · erp `#signClientCredentialsToken(clientId)`(`aud=clientId`) · finance `#signScopeOnlyToken`(`aud=subject`). 이 셋을 쓰는 IT 가 ENFORCE 에서 403 이 된다. AC-0 판정에 맞춰 (a) allowlist 에 해당 client 추가, 또는 (b) 해당 IT 의 기대값을 403 으로 — 둘 중 무엇인지 기록. **픽스처를 allowlist 값으로 바꿔 초록을 만들지 않는다**(운영 토큰은 그 `aud` 를 안 가진다).
   - **2026-10-04 UTC 확정 — (b).** AC-0 판정이 6/6 (i) 호출자 없음이므로, 위 세 IT 칸(scm `GatewayBootstrapIntegrationTest.java:44-54` · erp `GatewayRoutingIntegrationTest.java:42` · finance `GatewayEdgeIntegrationTest.java:77`)의 기대값을 **403 `AUDIENCE_FORBIDDEN`** 으로 바꾼다.
   - 🔴 **«scope 만 있는 토큰이 admission 을 통과한다» 증명은 다른 방법으로 남긴다.** 이 세 칸은 rule-6 admission «role OR scope» 중 scope 다리의 유일한 IT 증인이었다. 둘 중 하나로 대체하고, 그 칸 이름을 이 티켓에 기록한다: 그 칸만 테스트 한정 SHADOW override 로 돌리거나, admission 단위 테스트로 옮긴다.
   - **확장 (소유자 결정 2, 2026-10-04 UTC): «전환 PR 에서 scm·fan `tests/e2e` 헬퍼도 운영과 같은 `aud` 를 민팅하도록 함께 고친다.»** 대상과 근거:
@@ -90,7 +90,7 @@ monorepo
     - scm 의 사람 토큰(BUYER·OPERATOR)은 콘솔 경유 → `platform-console-web`. fan 의 사람 토큰 → `fan-platform-user-flow-client`.
     - 이것은 사람 사용자 토큰이 운영에서 실제로 싣는 값이다. 그러므로 «allowlist 값으로 초록 만들기» 금지에 걸리지 않는다(`TASK-MONO-696` AC-5 원칙의 연장). 워크로드 모양 토큰에는 적용하지 않는다.
     - 고치지 않으면 ENFORCE 뒤에 scm smoke(`ci.yml`) · scm/fan e2e full(nightly) · fan smoke 가 403 이 된다.
-- [ ] **AC-5 — 검증.** `:libs:java-gateway:check` + 6 게이트웨이 `:check` rc=0(파이프 금지, rc 명시). 통합 잡(Testcontainers)은 CI 가 권위. 배포 후 데모에서 콘솔 5 도메인 · web-store · fan 각 1회 200 확인 + `mismatch_rejected` 0.
+- [ ] **AC-5 — 검증.** (🔵 2026-10-04 UTC: 로컬 `:check` 7개 rc=0 은 § 뒤집기 PR 기록에 있다. 데모 창 확인이 남아 있어 이 AC 는 열려 있다.) `:libs:java-gateway:check` + 6 게이트웨이 `:check` rc=0(파이프 금지, rc 명시). 통합 잡(Testcontainers)은 CI 가 권위. 배포 후 데모에서 콘솔 5 도메인 · web-store · fan 각 1회 200 확인 + `mismatch_rejected` 0.
   - **창 = 다음 AMI 재굽기(`TASK-FAN-BE-050` 과 함께) 뒤의 데모 창**(소유자 결정, 2026-10-04 UTC). 그 창에서 다음을 확인한다.
   - 마지막 요약 줄이 6/6 `mode=ENFORCE` 이고 `mismatch=0` 이다.
   - **되돌리기 레버 확인**(소유자 결정 3):
@@ -454,3 +454,131 @@ AC-0 을 닫는 조건은 «client 6/6 이 (i)/(ii)» **그리고** «채널 ②
 | 3 | «각 게이트웨이 compose 에 `OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}` 를 넘기는 줄을 전환 PR 에서 추가한다(재굽기 없는 되돌리기 레버).» | AC-2 본문(전달 줄 + `AudienceShippedConfigTest$Shipped` ③ 술어 변경), AC-5 본문(레버 확인) |
 
 ⇒ **AC-0 · AC-1 닫힘.** 이 티켓은 **뒤집기 PR 을 받을 준비가 됐다**(AC-2~AC-5). 그 PR 은 다음 AMI 재굽기에 `TASK-FAN-BE-050` 과 함께 싣는다. ⏳ 머리말의 «DO NOT START — AC-0 이 참이 되기 전에는» 조건은 이제 충족됐다.
+
+---
+
+# 뒤집기 PR 기록 (2026-10-04 UTC)
+
+> 브랜치 `feat/mono-697-enforce`(base `origin/main` `8a31e5ef5`). 소유자 결정 1·2·3 과 AC-2~4 본문을 글자 그대로 따랐다. 어긋난 곳은 맨 아래 § 티켓 문구와 다른 점에 따로 적었다. 분석=Opus 5.5 / 구현=Opus 5.5.
+
+## AC-2 — 6 게이트웨이 ENFORCE 출하 + 되돌리기 레버
+
+**출하값.** 여섯 `application.yml` 의 `audience-mode` 를 `${OIDC_AUDIENCE_MODE:ENFORCE}` 로 바꿨다. 같은 블록 주석은 «SHADOW 가 출하값» 문장을 «ENFORCE 출하, SHADOW 는 env 로 되돌리는 수단» 으로 고쳤다. allowlist 주석에 있던 «섀도에서 세어진다» 문장도 «ENFORCE 에서는 403, 추가는 리뷰를 거치는 allowlist 변경» 으로 고쳤다. `allowed-audiences` 값은 하나도 바꾸지 않았다.
+
+**compose 전달 줄 (소유자 결정 3).** 여섯 게이트웨이 서비스의 `environment:` 에 넣었다. 파일은 데모가 실제로 쓰는 것이다(`infra/demo/projects.sh`).
+
+| 게이트웨이 | 파일 | 형태 |
+|---|---|---|
+| ecommerce | `projects/ecommerce-microservices-platform/docker-compose.yml` `gateway-service` | `- OIDC_AUDIENCE_MODE=${OIDC_AUDIENCE_MODE:-ENFORCE}` (이 블록은 리스트 형식이다) |
+| wms | `projects/wms-platform/docker-compose.e2e.yml` `gateway-service` | `OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}` |
+| scm | `projects/scm-platform/docker-compose.yml` `gateway-service` | 같음 |
+| erp | `projects/erp-platform/docker-compose.yml` `gateway-service` | 같음 |
+| finance | `projects/finance-platform/docker-compose.yml` `gateway-service` | 같음 |
+| fan | `projects/fan-platform/docker-compose.yml` `gateway-service` | 같음 |
+
+- wms 는 줄을 공용 앵커(`x-wms-oidc-env`)가 아니라 **게이트웨이 블록에 직접** 넣었다. 앵커에 넣으면 wms 서비스 전부가 이 변수를 받는다.
+- `OIDC_ALLOWED_AUDIENCES` 는 넘기지 않았다. 각 줄 위 주석에 그 이유도 적었다.
+
+**술어 교체 (`AudienceShippedConfigTest$Shipped` ③).** 공유 픽스처 `libs/java-gateway/src/testFixtures/.../ShippedAudienceConfig.java` 를 바꿨다.
+
+- `enforceOverrides` 를 지우고 `modeOverrides(projectDir)` 를 넣었다. compose 에서는 전달 줄 형태(맵·리스트)만 허용한다. 고정 `SHADOW`, 고정 `ENFORCE`, 다른 기본값의 전달 줄은 전부 적발한다. `.env*` 에서는 `ENFORCE` 가 아닌 대입(곧 `SHADOW` 고정)을 적발한다. 주석 줄은 건너뛴다.
+- `servicesPassingModeThrough(composeFile)` 를 새로 넣었다. compose 를 YAML 로 파싱하고(merge key 포함) `environment` 의 `OIDC_AUDIENCE_MODE` 가 정확히 전달 줄인 서비스 이름을 돌려준다. 주석 처리된 줄이나 엉뚱한 서비스 아래의 줄은 세지 않는다.
+- 게이트웨이마다 `$Shipped` 칸은 넷이 됐다.
+  - `shipsEnforce` — `shipsShadow` 에서 바꿨다.
+  - `shipsMeasuredAllowlist` — 그대로다.
+  - `deploymentFilesOnlyPassTheModeThrough` — 바꾼 술어 ③.
+  - `runningComposePassesTheModeThroughToTheGateway` — **전달 줄 존재 단언**이다. `containsExactly("gateway-service")`.
+- 🔴 «전달 줄이 6/6 있다» 는 **게이트웨이 여섯 스위트가 각자 자기 파일을 단언한 합**이다. 한 모듈이 다른 프로젝트 파일을 읽으면 Gradle 입력과 PR 경로 필터에서 안 보이게 된다(`TASK-MONO-695`). 그래서 이 방법을 골랐다. 프로젝트 compose 는 이미 각 게이트웨이 `test` 태스크의 입력으로 선언돼 있다(`build.gradle` `audienceModeDeploymentFiles`).
+- 공유 픽스처의 단위 테스트는 `libs/java-gateway/src/test/.../testfixtures/ShippedAudienceConfigTest.java` 다(8칸). 적발해야 하는 칸 다섯이 bite 다. 게이트웨이 스위트는 깨끗한 자기 파일만 보므로, 술어가 아무것도 못 잡게 되면 이 칸들만 그것을 드러낸다.
+- **bite 실측(scm):** compose 줄을 `OIDC_AUDIENCE_MODE: SHADOW` 로 바꾸고 `:projects:scm-platform:apps:gateway-service:test --tests '*AudienceShippedConfigTest*'` 를 돌렸다 → **rc=1**. ③ `deploymentFilesOnlyPassTheModeThrough` 와 ④ `runningComposePassesTheModeThroughToTheGateway` **둘 다 FAILED** 였다. 원복한 뒤 `:check` → rc=0.
+
+## AC-3 — 1단계 섀도 칸의 뒤집기
+
+- ecommerce `SecurityConfigRealDecoderPathTest`:
+  - `$AudienceShadowed` 를 `$AudienceEnforcedAsShipped` 로 바꿨다(6칸).
+  - (i) `noAudience_ecommerceTenant_isRejected_andCounted` 와 (ii) `foreignAudience_ecommerceTenant_isRejected_andCounted` 는 이제 **403 `AUDIENCE_FORBIDDEN` + `mismatch_rejected` +1** 이고 `mismatch_shadowed` 는 0 이다.
+  - 대조군 `noAudience_control_withoutTenant_is403` · `foreignAudience_control_withoutTenant_is403` 은 그대로 `TENANT_FORBIDDEN` 이고 audience 카운터는 0 이다.
+  - (iii) 허용 aud 칸은 200 + match +1 이다.
+- wms `SecurityConfigRealDecoderPathTest` 도 같은 모양이다. `noAudience_wmsTenant_isRejected_andCounted` · `foreignAudience_isRejected_andCounted` 가 403 이고, 대조군과 콘솔 aud 200 칸은 남겼다.
+- 🔵 두 스위트 모두 디코더를 만들 때 쓰는 mode 를 **리터럴 `"SHADOW"` 대신 `ShippedAudienceConfig.shippedValue("<prefix>.oauth2.audience-mode")`** 로 읽는다. 티켓 문장(«출하 모드를 측정한다»)을 코드가 그대로 따르게 하려는 것이다. 칸 `decoderIsBuiltWithTheShippedEnforceMode` 가 그 전제를 단언한다.
+- 두 `SecurityConfigAudienceEnforceRealDecoderPathTest` 는 그대로 `"ENFORCE"` 리터럴을 쓴다. 출하값이 언젠가 다시 바뀌어도 ENFORCE 동작 행렬을 계속 재게 하려는 것이다. Javadoc 의 «ENFORCE 로 출하하지 않는다» 문장만 고쳤다.
+
+## AC-4 — 픽스처 셋 (b) · scope 다리 증명 · e2e 헬퍼
+
+**(b) 집행 — IT 기대값을 403 `AUDIENCE_FORBIDDEN` 로 바꿨다.** 픽스처의 `aud` 는 하나도 바꾸지 않았다.
+
+| 게이트웨이 | 칸 (새 이름) | 픽스처 |
+|---|---|---|
+| scm | `GatewayBootstrapIntegrationTest#clientCredentialsTokenIsRejectedWith403AudienceForbidden` | `signClientCredentialsToken()` 그대로(`aud=scm-platform-internal-services-client`) |
+| erp | `GatewayRoutingIntegrationTest#clientCredentialsTokenOutsideTheAudienceAllowlistIsRejectedWith403` | `signClientCredentialsToken("erp-internal-client")` 그대로 |
+| finance | `GatewayEdgeIntegrationTest#scopeOnlyMachineTokenOutsideTheAudienceAllowlistIsRejectedWith403` | `signScopeOnlyToken("machine-client")` 그대로 |
+
+- scm·finance 칸이 넣던 `downstream.enqueue(200)` 를 뺐다. 403 은 엣지에서 끝나므로 큐에 남은 응답이 공유 MockWebServer 의 **다음 칸**을 오염시킨다.
+- 세 헬퍼 Javadoc 의 «shadow-mode mismatch» 주석을 «ENFORCE 에서 403 — allowlist 값으로 바꿔 초록 만들기 금지» 로 고쳤다.
+
+**scope 다리 증명 — admission 단위 테스트로 옮겼다(티켓의 둘째 방법).** 출하 `GatewayIdentityConfig#roleAdmissionFilter` 빈으로 만든 필터에 scope 만 있는 토큰을 넣어 통과를 단언한다. 디코더 아래라 audience 게이트가 적용되지 않는다.
+
+| 게이트웨이 | 증인 칸 |
+|---|---|
+| scm | **새 파일** `projects/scm-platform/apps/gateway-service/src/test/java/com/example/scmplatform/gateway/filter/RoleAdmissionFilterTest.java` `#admitsScopeOnlyMachineToken`. 대조군 `#rejectsNoRoleNoScopeWith403` 이 짝이다. scm 에는 이 파일이 없었다 |
+| erp | 기존 `projects/erp-platform/apps/gateway-service/src/test/java/com/example/erp/gateway/filter/RoleAdmissionFilterTest.java#admitsScopeOnlyMachineToken` |
+| finance | 기존 `projects/finance-platform/apps/gateway-service/src/test/java/com/example/finance/gateway/filter/RoleAdmissionFilterTest.java#admitsScopeOnlyMachineToken` |
+
+- 셋 다 로컬 `:check` 에서 4/4 통과했다.
+- 테스트 한정 SHADOW override 방법은 고르지 않았다. 그러려면 Testcontainers 컨텍스트가 하나 더 필요하고, 이 호스트에서는 돌려 볼 수 없다.
+- 🔴 이 대체로 잃는 것이 하나 있다. 이제 «scope 만 있는 토큰이 **게이트웨이 HTTP 사슬 전체**를 200 으로 통과한다» 를 재는 IT 칸은 없다. 운영에도 그런 토큰은 없다. allowlist 에 든 `aud` 를 가진 scope-only 토큰을 IdP 가 발급하지 않기 때문이다.
+
+**e2e 헬퍼 (소유자 결정 2).** 대상 `aud` 는 각 게이트웨이 출하 allowlist 에서 확인했다. scm 은 `platform-console-web` 이고(`scm…/application.yml` `allowed-audiences`), fan 은 `fan-platform-user-flow-client,platform-console-web` 이다.
+
+| 헬퍼 | 변경 |
+|---|---|
+| `projects/scm-platform/tests/e2e/src/test/java/com/example/scmplatform/e2e/testsupport/JwtTestHelper.java` | `DEFAULT_AUDIENCE = "platform-console-web"`. `signToken` 이 `.audience(List.of(DEFAULT_AUDIENCE))` 를 민팅한다. 추가 클레임 `"aud"` 로 덮을 수 있다 |
+| `projects/fan-platform/tests/e2e/src/test/java/com/example/fanplatform/e2e/testsupport/JwtTestHelper.java` | `DEFAULT_AUDIENCE = "fan-platform-user-flow-client"`. 같은 방식이다 |
+
+- 두 스위트 모두 토큰을 편의 메서드로만 만든다(`signToken` 직접 호출 0건, grep). 그러니 사람 토큰 전부에 적용된다. 워크로드 모양 토큰은 두 헬퍼에 없다.
+- 컴파일: `:projects:scm-platform:tests:e2e:compileTestJava` **rc=0**, `:projects:fan-platform:tests:e2e:compileTestJava` **rc=0**. 스위트 실행은 Docker 가 필요해서 못 했다. CI(scm smoke `ci.yml` · nightly full)가 권위다.
+
+**그 밖의 토큰 경로를 조사했다(지시받은 항목).** 결론은 **고칠 것 없음**이다.
+
+- `tests/federation-hardening-e2e`:
+  - 토큰을 직접 만들지 않는다. `fixtures/login.ts` 는 실제 SAS PKCE 로그인이다(«no programmatic token mint»).
+  - 게이트웨이로 가는 것은 콘솔의 base/assumed 토큰이다. 이 토큰의 `aud` 는 `platform-console-web` 이다. assumed 쪽은 `AssumeTenantExchangeIntegrationTest` AC-6 이 핀으로 고정한다(fan `application.yml` 주석).
+  - 그 스택의 `scm-gateway-service` 는 소스에서 빌드되고 allowlist 기본값이 `platform-console-web` 이다.
+  - `console_operator_token` 은 `/api/admin/**`(iam 게이트웨이, 범위 밖)로만 간다.
+- nightly web-store fullstack 두 잡(`nightly-e2e.yml` `frontend-e2e-fullstack` 과 lean sibling)은 실제 IdP 로그인을 쓰고 `ECOMMERCE_WEB_STORE_CLIENT_ID: ecommerce-web-store-client` 를 쓴다(`:702`, `:833`). allowlist 안이다.
+- platform-console fullstack 은 `console-web/tests/e2e/fixtures/login.ts` 를 쓴다. 실제 SAS 로그인이고 `aud=platform-console-web` 이다.
+- wms 게이트웨이 `src/e2eTest` 는 `signWmsOperatorToken` 을 쓰고 이미 `aud=platform-console-web` 이다. 컴파일 `:projects:wms-platform:apps:gateway-service:compileE2eTestJava` **rc=0**.
+- ecommerce·iam `tests/e2e` 는 domain 게이트웨이 토큰을 만들지 않는다(iam 게이트웨이는 범위 밖이다, `TASK-MONO-698`).
+- ⚪ 위는 **코드를 읽어서 낸 판정**이다. 이 스위트들을 ENFORCE 로 실제로 돌려 보지는 않았다. 첫 nightly 가 판정한다.
+
+## 공유 lib · 스펙
+
+- `GatewayErrorCodes.AUDIENCE_FORBIDDEN` Javadoc 의 «Still a proposal» 문단을 확정 문구로 바꿨다(§ AC-0 판정의 «남은 한 줄»). `GatewayErrorCodesTest` 주석도 같이 고쳤다. 값과 핀은 그대로다.
+- `libs/java-gateway/build.gradle`: `testFixturesImplementation 'org.yaml:snakeyaml'` 을 넣었다(새 YAML 파싱용, Boot BOM 관리). HARDSTOP-03: 공유 파일에 프로젝트 이름·서비스 이름·client id 를 넣지 않았다(픽스처 테스트의 서비스 이름은 `edge`·`a-map` 같은 합성값이다).
+- 스펙 동기화. 문장만 고쳤고 규칙은 바꾸지 않았다.
+  - `platform/contracts/jwt-standard-claims.md` rule 5 «Implementation status» 를 2026-10-04 판으로 고쳤다. 내용은 «여섯 게이트웨이 rejection 출하 · 섀도는 환경 override 로 되돌리는 수단» 이다. Change log 에 AC-2 항목을 넣었다. 프로젝트 이름은 넣지 않았다.
+  - ecommerce gateway `architecture.md` · `overview.md` · `dependencies.md` · `iam-integration.md`(설정 예시 · 4단계 설명 · Error Responses 행)를 고쳤다.
+  - wms·scm gateway `overview.md` 와 erp·finance·fan·scm gateway `architecture.md` 의 «ships **SHADOW**» 문장을 ENFORCE 로 바꿨다.
+
+## 검증 (로컬, Windows · Git Bash — 각 명령 단독 실행, 파일로 리다이렉트, `rc=$?` 직접 출력)
+
+| 명령 | rc |
+|---|---|
+| `./gradlew :libs:java-gateway:check` | **0** (`ShippedAudienceConfigTest$ModeOverrides` 6/6 · `$PassThrough` 2/2) |
+| `./gradlew :projects:ecommerce-microservices-platform:apps:gateway-service:check` | **0** (`$AudienceEnforcedAsShipped` 6/6 · `AudienceShippedConfigTest$Shipped` 4/4) |
+| `./gradlew :projects:wms-platform:apps:gateway-service:check` | **0** (`SecurityConfigRealDecoderPathTest` 5/5 · `$Shipped` 4/4) |
+| `./gradlew :projects:scm-platform:apps:gateway-service:check` | **0** (bite 원복 뒤 재실행도 0 · `RoleAdmissionFilterTest` 4/4) |
+| `./gradlew :projects:erp-platform:apps:gateway-service:check` | **0** |
+| `./gradlew :projects:finance-platform:apps:gateway-service:check` | **0** |
+| `./gradlew :projects:fan-platform:apps:gateway-service:check` | **0** |
+
+- 각 로그에서 `:test` 태스크가 **실행됐는지**(캐시 아님) 확인했다.
+- 🔴 **Testcontainers 통합 테스트(`@Tag("integration")`, 위 AC-4 의 세 IT 칸 포함)는 로컬에서 돌지 않았다.** 이 호스트에는 Docker 가 없다. `:check` 는 그 칸들을 **컴파일만** 했다. 403 기대가 맞는지는 **CI 통합 잡이 권위**다. e2e(scm smoke · scm/fan full · federation · fullstack)도 같다.
+
+## 티켓 문구와 다른 점
+
+1. ecommerce compose 의 `environment:` 는 리스트 형식이라, 전달 줄을 `- OIDC_AUDIENCE_MODE=${OIDC_AUDIENCE_MODE:-ENFORCE}` 로 썼다. 의미는 같고, 술어가 두 형태를 모두 인정한다.
+2. «전달 줄 6/6» 은 한 테스트가 여섯 파일을 세는 방식이 아니다. 여섯 스위트가 각자 자기 파일을 단언한다(이유는 AC-2 절).
+3. 공유 픽스처 메서드 `enforceOverrides` 를 지우고 `modeOverrides` + `servicesPassingModeThrough` 를 넣었다. 그에 맞춰 lib 단위 테스트와 `snakeyaml` testFixtures 의존을 새로 추가했다.
+4. 티켓 In Scope 목록에 없는 **스펙 문장 동기화**(계약서 Implementation status 와 프로젝트 gateway 스펙들)를 같은 PR 에서 했다. 스펙이 «SHADOW 출하» 라고 말하는 채로 코드만 ENFORCE 가 되면 스펙과 코드가 충돌하기 때문이다.
+5. AC-3 칸의 디코더 mode 를 출하값에서 읽게 했다(리터럴 대신).

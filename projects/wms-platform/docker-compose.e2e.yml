@@ -82,6 +82,11 @@ services:
     environment:
       <<: [*wms-infra-env, *wms-oidc-env]
       SERVER_PORT: "8080"
+      # TASK-MONO-697 rollback lever: OIDC_AUDIENCE_MODE=SHADOW in the env file + recreating
+      # this service reverts the audience check to log-only without a rebuild. Unset, it is
+      # the shipped ENFORCE. Pass-through only: AudienceShippedConfigTest rejects any fixed
+      # value here. OIDC_ALLOWED_AUDIENCES is deliberately NOT passed — it differs per gateway.
+      OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}
       MASTER_SERVICE_URI: http://wms-master-service:8081
       INBOUND_SERVICE_URI: http://wms-inbound-service:8082
       INVENTORY_SERVICE_URI: http://wms-inventory-service:8083

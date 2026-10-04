@@ -91,6 +91,11 @@ dependencies {
     // -------------------------------------------------------------------------
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-gateway'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    //   - snakeyaml                     → ShippedAudienceConfig parses a compose file to find
+    //                                     which service passes the audience mode through.
+    //                                     Already on the path via the Boot starter; declared so
+    //                                     the fixture does not depend on that by accident.
+    testFixturesImplementation 'org.yaml:snakeyaml'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

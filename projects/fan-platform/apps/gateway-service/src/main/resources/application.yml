@@ -229,15 +229,17 @@ fanplatform:
     # with the assume-tenant token (tenant `fan-platform`), and that token's `aud` is the console
     # client (auth-service AssumeTenantExchangeIntegrationTest AC-6 pins
     # `aud ∋ platform-console-web`). Same value the ecommerce/wms/scm/erp/finance gateways list.
-    # Added while still SHADOW so a later ENFORCE flip does not cut the console off.
-    # Clients whose reach could not be measured are deliberately NOT listed — in shadow mode
-    # their traffic shows up as a logged, counted mismatch, which is the measurement this phase
-    # exists for.
+    # Added while still SHADOW so the ENFORCE flip (TASK-MONO-697) does not cut the console off.
+    # Clients whose reach could not be measured are deliberately NOT listed — under ENFORCE their tokens are refused with 403
+    # (TASK-MONO-697 found no configured caller for any of them); adding one is a
+    # reviewed allowlist change.
     allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:fan-platform-user-flow-client,platform-console-web}
-    # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
-    # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
-    # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.
-    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
+    # ENFORCE = 403 AUDIENCE_FORBIDDEN on a mismatch (rollout phase 2, TASK-MONO-697 — flipped
+    # once the measured mismatch count was zero, all six gateways in one change). SHADOW = log +
+    # count, never reject; it stays as the rollback: the project compose passes OIDC_AUDIENCE_MODE
+    # through, so setting it to SHADOW and recreating the gateway reverts without a rebuild.
+    # AudienceShippedConfigTest fails if this ships as anything but ENFORCE.
+    audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}
 
 # JWKS startup probe — fails the gateway boot fast when GAP/IdP is unreachable
 # at startup, instead of waiting for the first protected request. Configured per

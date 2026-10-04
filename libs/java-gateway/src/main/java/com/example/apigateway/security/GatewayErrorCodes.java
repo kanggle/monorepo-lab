@@ -54,10 +54,10 @@ public final class GatewayErrorCodes {
     /**
      * The response error code for an audience rejection.
      *
-     * <p><strong>Still a proposal.</strong> The contract names {@code AUDIENCE_FORBIDDEN} as a
-     * proposal parallel to {@code TENANT_FORBIDDEN} and leaves it to be settled by the change that
-     * turns rejection on. Every gateway ships in shadow mode, so no client can observe this value
-     * yet; confirming (or renaming) it is part of that switch.
+     * <p><strong>Confirmed.</strong> {@code jwt-standard-claims.md} § Error Handling fixes
+     * {@code AUDIENCE_FORBIDDEN} as the code, parallel to {@code TENANT_FORBIDDEN}. Gateways that
+     * ship the audience check in {@link AudienceMode#ENFORCE} return it to clients, so it is now a
+     * wire value: renaming it is a contract change, and {@code GatewayErrorCodesTest} pins it.
      */
     public static final String AUDIENCE_FORBIDDEN = "AUDIENCE_FORBIDDEN";
 

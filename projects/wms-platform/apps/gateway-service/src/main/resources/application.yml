@@ -163,10 +163,13 @@ wms:
     # a token is admitted iff its aud values intersect this list. Mandatory: absent or empty
     # fails the boot. Values = the clients MEASURED to reach this edge (TASK-MONO-696 § AC-1 (b):
     # the operator console). Clients whose reach could not be measured are deliberately NOT
-    # listed — in shadow mode their traffic shows up as a logged, counted mismatch, which is the
-    # measurement this phase exists for.
+    # listed — under ENFORCE their tokens are refused with 403
+    # (TASK-MONO-697 found no configured caller for any of them); adding one is a
+    # reviewed allowlist change.
     allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web}
-    # SHADOW = log + count a mismatch, never reject (rollout phase 1). ENFORCE = 403
-    # AUDIENCE_FORBIDDEN. Switching is its own reviewed change, taken only once the measured
-    # mismatch count is zero; AudienceShippedConfigTest fails if this ships as anything but SHADOW.
-    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
+    # ENFORCE = 403 AUDIENCE_FORBIDDEN on a mismatch (rollout phase 2, TASK-MONO-697 — flipped
+    # once the measured mismatch count was zero, all six gateways in one change). SHADOW = log +
+    # count, never reject; it stays as the rollback: the project compose passes OIDC_AUDIENCE_MODE
+    # through, so setting it to SHADOW and recreating the gateway reverts without a rebuild.
+    # AudienceShippedConfigTest fails if this ships as anything but ENFORCE.
+    audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}

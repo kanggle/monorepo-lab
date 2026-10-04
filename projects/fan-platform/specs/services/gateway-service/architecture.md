@@ -237,11 +237,12 @@ Per `platform/security-rules.md` and `projects/fan-platform/specs/integration/ia
   fan web app's client, and `platform-console-web` — since TASK-MONO-751 the console's
   fan-directory screens reach this edge with the platform operator's assume-tenant token, whose
   `aud` is the console client) ≠ ∅. Empty or absent
-  allowlist fails the boot. `fanplatform.oauth2.audience-mode` ships **SHADOW** (mismatch
-  logged + counted on `gateway.jwt.audience{gateway,outcome}`, not rejected); `ENFORCE` (403) is
-  the separate phase-2 change. A cumulative `JWT audience summary: gateway=… mode=… match=…
-  mismatch=…` INFO line (at most once a minute while tokens arrive) is what that phase reads
-  (TASK-MONO-736).
+  allowlist fails the boot. `fanplatform.oauth2.audience-mode` ships **ENFORCE** (TASK-MONO-697):
+  a mismatch is 403 `AUDIENCE_FORBIDDEN`, counted on `gateway.jwt.audience{gateway,outcome}`.
+  `SHADOW` (log + count, never reject) remains the rollback — the compose passes
+  `OIDC_AUDIENCE_MODE` through, defaulting to ENFORCE. A cumulative `JWT audience summary:
+  gateway=… mode=… match=… mismatch=…` INFO line (at most once a minute while tokens arrive)
+  reports the mode and counts (TASK-MONO-736).
 - Tenant: `TenantClaimValidator` — only `tenant_id ∈ { fan-platform, * }`. The
   wildcard accommodates SUPER_ADMIN platform-scope tokens.
 - Forwarded headers after successful validation:
