@@ -77,9 +77,14 @@ class PoolMemberSiteSurfacesIntegrationTest extends AbstractConsumerPoolIntegrat
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }
 
+    /**
+     * TASK-BE-622 — this cell used to pin «ecommerce 200 LOCKED = the ONE pool account (account-wide)». The owner
+     * decision of 2026-10-04 (TASK-BE-621 § 2) made the site backend's machine path site-scoped: the store's call
+     * now locks the store MEMBERSHIP only. The full matrix is {@link ProvisionStatusSiteScopeIntegrationTest}.
+     */
     @Test
-    @DisplayName("PATCH /internal/tenants/{t}/accounts/{id}/status: fan-platform(비멤버) 404·무변경 → ecommerce 200 LOCKED (계정 전체) · 이력 행 테넌트 consumer-pool")
-    void statusChange_nonMemberRefused_memberLocksTheOneAccount() throws Exception {
+    @DisplayName("PATCH /internal/tenants/{t}/accounts/{id}/status: fan-platform(비멤버) 404·무변경 → ecommerce 200 — TASK-BE-622: 스토어 멤버십만 LOCKED · 계정 ACTIVE · 이력 행 0")
+    void statusChange_nonMemberRefused_memberLocksTheSiteOnly() throws Exception {
         String id = storePoolShopper(uniqueEmail("616-status"));
         String body = """
                 {"status":"LOCKED","operatorId":"op-616"}""";
@@ -92,11 +97,14 @@ class PoolMemberSiteSurfacesIntegrationTest extends AbstractConsumerPoolIntegrat
         mockMvc.perform(patch("/internal/tenants/ecommerce/accounts/{id}/status", id)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"))
                 .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
-        assertThat(accountStatus(id)).isEqualTo("LOCKED");
+        assertThat(accountStatus(id)).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT status FROM consumer_site_memberships "
+                + "WHERE account_id = ? AND site_tenant_id = 'ecommerce'", String.class, id)).isEqualTo("LOCKED");
         assertThat(jdbc.queryForList("SELECT tenant_id FROM account_status_history WHERE account_id = ? "
                 + "AND reason_code = 'OPERATOR_PROVISIONING_STATUS_CHANGE'", String.class, id))
-                .containsExactly("consumer-pool");
+                .isEmpty();
     }
 
     @Test

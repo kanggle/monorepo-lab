@@ -511,7 +511,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 - **비멤버 대조군**: 사이트 A 에만 멤버인 풀 계정을 사이트 B 로 찾으면 404 — 읽기 · 쓰기 모두.
 - 🔵 **«그 사이트 멤버» = 멤버십 `ACTIVE` 또는 `LOCKED` (`TASK-BE-621`)** — 위 술어의 «멤버» 는 그 사이트에서 **잠긴** 풀 계정도 포함한다(목록 · 이메일 검색 · 단건).
   잠긴 회원이 그 사이트의 목록·단건 조회에서 사라지면 그 사이트 운영자가 해제할 길이 없다. `LEFT` 는 여전히 멤버가 아니다(찾히지 않는다 → 404).
-- 🔴 **쓰기의 범위는 «계정 하나»** — **삭제와 운영자 잠금·해제를 뺀** 상태 전이(프로비저닝 상태 변경 등)는 **풀 계정 하나**에 일어난다. 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번
+- 🔴 **쓰기의 범위는 «계정 하나»** — **삭제와 운영자 잠금·해제, 사이트 백엔드의 프로비저닝 상태 변경을 뺀** 상태 전이(휴면 등)는 **풀 계정 하나**에 일어난다. 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번
   (account-events.md § 상태 전이). 운영자 이력 행(`account_status_history`)도 계정의 테넌트로 적힌다. GDPR **내보내기**는 그 사람이 멤버인 어느 사이트의
   운영자든 할 수 있다(읽기). (`TASK-BE-616` 은 잠금도 여기 넣었다 — 스토어 운영자의 잠금이 팬에서도 잠갔다. `TASK-BE-621` 이 아래 «사이트 잠금» 으로 바꿨다.)
 - 🔴 **잠금도 다르다 — «사이트 잠금» vs «계정 잠금» (`TASK-BE-621`, 소유자 결정 2026-10-04 «사이트 운영자가 회원을 잠글 때, 그 잠금은 자기 사이트에만 걸린다.
@@ -521,13 +521,16 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
   |---|---|---|
   | **사이트 운영자** (활성 테넌트 = 그 사이트, 플랫폼 스코프 아님) | 콘솔 잠금 · 해제 · 일괄 잠금 → 내부 `/lock` · `/unlock`(헤더 = 사이트) — 대상이 **풀 멤버**면 **그 사이트 멤버십만** `LOCKED`/`ACTIVE`. 계정 · 다른 사이트 멤버십 무변경, 이벤트 없음. 응답 `scope = SITE_MEMBERSHIP` ([admin-to-account.md § lock](../contracts/http/internal/admin-to-account.md)) | **할 수 없다** — 해제도(계정 전체 잠금은 사이트 운영자가 풀지 못한다). 그 사이트의 **자기 계정**(풀 아님)은 지금처럼 계정을 잠근다 |
   | **플랫폼 관리자** (SUPER_ADMIN — `isPlatformScope`) | (해당 없음) | 콘솔 잠금 · 해제 — admin-service 가 활성 테넌트와 무관하게 하류 `*` 를 찍고, account-service 는 계정 행 자신의 테넌트로 찾아 계정을 잠근다(`scope = ACCOUNT`, `account.locked` · 세션 폐기 그대로) |
-  | **자동** (security-service `AUTO_DETECT`, 헤더 없음) · **본인 복구** (`USER_RECOVERY`) | (해당 없음) | 지금 그대로 — 계정 전체(자격·IAM 세션이 사이트마다가 아니라 하나다). 🔵 `TASK-BE-621` «소유자 결정 필요» 1 |
+  | **사이트 백엔드** (기계 경로 — 자기 테넌트 토큰으로 `PATCH /internal/tenants/{t}/accounts/{id}/status`, `TASK-BE-622`) | 대상이 사이트 `t` 의 **풀 멤버**면 `LOCKED` → 그 사이트 멤버십 `LOCKED` · `ACTIVE` → 멤버십 `ACTIVE` · `DELETED` → 멤버십 `LEFT`(`OPERATOR`, 아래 «사이트 탈퇴»). 계정 · 다른 사이트 무변경, 이력 행 · 이벤트 없음. 응답 `scope = SITE_MEMBERSHIP` ([account-internal-provisioning.md § Consumer-pool member](../contracts/http/internal/account-internal-provisioning.md)) | **할 수 없다**(계정 전체 잠금을 풀지도 못한다). 사이트 **자기 계정**(이커머스 셀러 운영 계정 등)은 지금처럼 계정 상태가 바뀐다(`scope = ACCOUNT`) |
+  | **자동** (security-service `AUTO_DETECT`, 헤더 없음) · **본인 복구** (`USER_RECOVERY`) | (해당 없음) | 지금 그대로 — 계정 전체(자격·IAM 세션이 사이트마다가 아니라 하나다). 소유자 결정 2026-10-04 «계정 전체 유지» (`TASK-BE-621` § 소유자 결정 1) |
 
   - **`LOCKED` 멤버십**: 그 사이트로는 토큰이 없다(§ 4 — `ACTIVE` 멤버십만 발급; authorize 게이트는 동의 화면을 띄우지 않고 통과, 토큰 엔드포인트가 `invalid_grant`).
     **동의로 열리지 않는다**(동의 `PUT` 무변경), 본인 «사이트 탈퇴» 도 무변경(떠났다 다시 동의해 잠금을 벗지 못한다). 운영자 «GDPR 삭제» 는 `LOCKED → LEFT`(`OPERATOR`).
     잠금은 그 사이트 `consumer_site_roles` 를 지우지 않는다 — 해제하면 원래대로. 잠금 기록 `locked_at` · `locked_by_actor_id`(account-service `V0033`).
   - 다른 사이트는 영향이 없다 — 대조 시험 `ConsumerSiteLockIntegrationTest`(account-service). 🔵 이미 발급된 그 사이트 access token 은 만료까지 산다(refresh 는 거절).
-  - 🔵 내부 프로비저닝 `PATCH /internal/tenants/{t}/accounts/{id}/status`(사이트 백엔드의 기계 경로)는 아직 계정 전체다 — `TASK-BE-621` «소유자 결정 필요» 2.
+  - 내부 프로비저닝 `PATCH /internal/tenants/{t}/accounts/{id}/status`(사이트 백엔드의 기계 경로)도 같은 규칙이다 — 소유자 결정 2026-10-04 «별도 티켓으로 적용»
+    (`TASK-BE-621` § 소유자 결정 2 → `TASK-BE-622`). 위 표 «사이트 백엔드» 행. 🔵 2026-10-04 전수: 지금 이 경로의 유일한 호출자(이커머스 product-service 셀러 정지·폐점)는
+    셀러 **운영 계정**(사이트 자기 계정)을 겨누므로 동작이 바뀌지 않는다. 대조 시험 `ProvisionStatusSiteScopeIntegrationTest`(account-service).
 - 🔴 **삭제는 다르다 — «사이트 탈퇴» vs «계정 삭제» (`TASK-BE-619`, 소유자 결정 2026-10-03)**. 위 616 결정은 «사이트 운영자의 GDPR 삭제 = 풀 계정 삭제(모든
   사이트에서)» 였고, 소유자가 이것을 **«사이트 운영자 삭제 권한 = 자기 사이트 멤버십만»** 으로 바꿨다 — *한 사이트가 다른 사이트의 회원 데이터를 지울 수 없다.*
   풀 계정 삭제(GDPR 마스킹 포함)는 **본인 또는 플랫폼 관리자**만 한다.

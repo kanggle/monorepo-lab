@@ -507,24 +507,30 @@ Return the account's central identity id within the tenant.
 
 ## PATCH /internal/tenants/{tenantId}/accounts/{accountId}/status
 
-Change the account status. Follows `AccountStatusMachine` transition rules.
+Change the account status. Follows `AccountStatusMachine` transition rules — **except** for a consumer-pool
+member reached through a consumer site, whose **site membership** changes instead (TASK-BE-622, below).
 
-> **Audit**: Records `OPERATOR_PROVISIONING_STATUS_CHANGE` in account_status_history.
+> **Audit**: Records `OPERATOR_PROVISIONING_STATUS_CHANGE` in account_status_history (account scope only —
+> a site-membership change writes no history row; see § Consumer-pool member).
 
 **Request**:
 ```json
 {
   "status": "LOCKED",
-  "reason": "ADMIN_LOCK",
   "operatorId": "sys-wms-backend"
 }
 ```
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `status` | string | Yes | `ACTIVE`, `LOCKED`, `DELETED` |
-| `reason` | string | Yes | Must be a valid `StatusChangeReason` enum value |
+| `status` | string | Yes | `ACTIVE`, `LOCKED`, `DELETED`. Parsed as `AccountStatus`: a non-enum value → 400 `VALIDATION_ERROR`; `DORMANT` parses but is not a permitted target for this EP → 409 `STATE_TRANSITION_INVALID`. The same status as the current one is an idempotent 200. |
 | `operatorId` | string | No | Caller identifier for audit; ≤ 36 chars |
+
+> **TASK-BE-622 correction (behaviour unchanged).** Earlier revisions listed a required `reason` field. The
+> request has no such field: a `reason` sent by a caller is ignored, and the recorded reason is always
+> `OPERATOR_PROVISIONING_STATUS_CHANGE` (the transition table permits it for `ACTIVE→LOCKED`, `LOCKED→ACTIVE`
+> and `→DELETED`). The one production caller (ecommerce product-service, `product-to-account.md` § 3 · § 4)
+> never sent it.
 
 **Response 200 OK**:
 ```json
@@ -533,11 +539,53 @@ Change the account status. Follows `AccountStatusMachine` transition rules.
   "tenantId": "wms",
   "previousStatus": "ACTIVE",
   "currentStatus": "LOCKED",
-  "changedAt": "2026-04-30T10:10:00Z"
+  "changedAt": "2026-04-30T10:10:00Z",
+  "scope": "ACCOUNT"
 }
 ```
 
+| Field | Description |
+|---|---|
+| `tenantId` | Echoes the path `{tenantId}` |
+| `previousStatus` / `currentStatus` | The **account**'s status when `scope = ACCOUNT`; the **site membership**'s status (`ACTIVE` · `LOCKED` · `LEFT`) when `scope = SITE_MEMBERSHIP` |
+| `scope` | TASK-BE-622 — `ACCOUNT` (the account's own status changed) \| `SITE_MEMBERSHIP` (only the path site's membership of a consumer-pool account changed). Same vocabulary as `/lock` · `/unlock` ([admin-to-account.md](./admin-to-account.md)). A response without it (an account-service before 622) reads as `ACCOUNT`. |
+
 **Errors**: 403 `TENANT_SCOPE_DENIED`, 404 `TENANT_NOT_FOUND`, 404 `ACCOUNT_NOT_FOUND`, 409 `STATE_TRANSITION_INVALID`, 400 `VALIDATION_ERROR`
+
+### Consumer-pool member — the site's membership, not the account (TASK-BE-622)
+
+Owner decision (2026-10-04, `TASK-BE-621` § 소유자 결정 2 → «별도 티켓으로 적용»): a site backend changing the
+status of a **consumer-pool member** through this machine path follows the same rule as the console site
+operator's `/lock` · `/unlock` (621) and `/delete` (619) — it changes **that site's membership only**, never the
+pool account (which is the person's account on every consumer site). [multi-tenancy.md § 소비자 계정 풀 § 5](../../../features/multi-tenancy.md).
+
+Applies when `iam.consumer-pool.enabled` is on, the path `{tenantId}` is a consumer site (not `consumer-pool`
+itself), and `{accountId}` is a `consumer-pool` account found through that site (§ 5 — membership `ACTIVE` or
+`LOCKED`):
+
+| `status` | Membership `ACTIVE` | Membership `LOCKED` | Response |
+|---|---|---|---|
+| `LOCKED` | → `LOCKED` (`locked_at`, `locked_by_actor_id`) | unchanged (idempotent) | 200, `scope = SITE_MEMBERSHIP` |
+| `ACTIVE` | unchanged (idempotent) | → `ACTIVE` (lock record cleared, site roles kept) | 200, `scope = SITE_MEMBERSHIP`. A **whole-account** lock (platform admin · automatic) is NOT lifted — only the membership is looked at |
+| `DELETED` | → `LEFT`, `left_by = OPERATOR`; that site's `consumer_site_roles` removed | → `LEFT` (`OPERATOR`), lock record cleared | 200, `scope = SITE_MEMBERSHIP`, `currentStatus = LEFT`. The account is **not** deleted |
+| any other (`DORMANT`) | — | — | 409 `STATE_TRANSITION_INVALID` |
+
+- The account itself is `DELETED` → `LOCKED` / `ACTIVE` answer 409 `STATE_TRANSITION_INVALID` (as `/lock` does).
+- **Membership `LEFT`** (the person left, or the site removed them): `LOCKED` / `ACTIVE` / `DORMANT` → 404
+  `ACCOUNT_NOT_FOUND` — a LEFT membership is not a member (§ 5) and is not brought back. `DELETED` → **200,
+  idempotent** (`previousStatus = currentStatus = LEFT`, `scope = SITE_MEMBERSHIP`); a self-left row is
+  re-recorded as `OPERATOR`, so the site's removal sticks (619).
+- **No membership of `{tenantId}`** (a pool account that only joined another site) → 404 `ACCOUNT_NOT_FOUND`;
+  no other site's membership and not the account is touched.
+- **Side effects of the site scope**: no account row change, **no `account_status_history` row** and **no outbox
+  event** (no `account.locked` / `account.status.changed` / `account.deleted` — the person's IAM session and
+  other sites keep working). The membership row records the actor (`locked_by_actor_id` / `left_by_actor_id` =
+  `operatorId`, or the path `{tenantId}` when absent). The site's token stops at the next authorize / refresh
+  (TASK-BE-615 — only an `ACTIVE` membership issues).
+- **Unchanged**: a site's **own** account (its `tenant_id` is the path tenant — e.g. ecommerce's seller-operator
+  account, `product-to-account.md` § 3 · § 4) changes as before, `scope = ACCOUNT`. Path `{tenantId} =
+  consumer-pool` finds the pool account exactly and changes the account, `scope = ACCOUNT`. Flag off → no pool
+  member is found through a site, nothing here applies.
 
 ---
 
@@ -595,7 +643,7 @@ For bulk create: one audit row per call with `target_count=N` (where N = number 
 |---|---|
 | `account.created` | POST create — payload includes `tenant_id` |
 | `account.created` (×N) | POST accounts:bulk — N events emitted for N successfully created rows; downstream consumers process each event individually (TASK-BE-257) |
-| `account.status.changed` | PATCH status — payload includes `tenant_id` |
+| `account.status.changed` | PATCH status — payload includes `tenant_id`. Account scope only: a TASK-BE-622 site-membership change (consumer-pool member) emits no event |
 | `account.roles.changed` | PATCH roles, PATCH roles:add, PATCH roles:remove — payload includes `tenant_id`, `roles`, `before_roles`, `after_roles`, `changed_by` (TASK-BE-255). Add/remove only emit when the role set actually changed (idempotent calls are silent). |
 
 All payloads must include `tenant_id` per `specs/contracts/events/account-events.md`.

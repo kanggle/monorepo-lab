@@ -339,23 +339,33 @@ class PoolMemberSiteLookupTest {
         verify(tokens).save(anyString(), eq("consumer-pool"), eq(POOL_ACCOUNT), any(Duration.class));
     }
 
+    /**
+     * TASK-BE-622 — this cell used to call the path {@code ecommerce} and pin «a pool member's status change is
+     * account-wide». That is now the site scope ({@link ProvisionStatusChangeUseCaseTest}); what stays true is the
+     * history row's tenant when the pool account itself is changed — through the {@code consumer-pool} path.
+     */
     @Test
-    @DisplayName("PATCH /internal/tenants/ecommerce/accounts/{id}/status — 풀 멤버의 상태 전이(계정 전체) · 이력 행 테넌트 = consumer-pool")
-    void provisionStatusChange_poolMember_historyOnPool() {
+    @DisplayName("PATCH /internal/tenants/consumer-pool/accounts/{id}/status — 풀 계정 자체의 상태 전이(정확 조회) · 이력 행 테넌트 = consumer-pool · 사이트 갈래 0")
+    void provisionStatusChange_poolPath_historyOnPool() {
         TenantRepository tenants = mock(TenantRepository.class);
         AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
-        given(tenants.findById(ECOMMERCE)).willReturn(Optional.of(Tenant.reconstitute(
-                ECOMMERCE, "ecommerce", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE, Instant.EPOCH, Instant.EPOCH)));
-        given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
-                .willReturn(Optional.of(poolAccount()));
+        SiteMembershipLockUseCase siteLock = mock(SiteMembershipLockUseCase.class);
+        LeaveConsumerSiteUseCase leave = mock(LeaveConsumerSiteUseCase.class);
+        given(tenants.findById(TenantId.CONSUMER_POOL)).willReturn(Optional.of(Tenant.reconstitute(
+                TenantId.CONSUMER_POOL, "consumer-pool", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE,
+                Instant.EPOCH, Instant.EPOCH)));
+        given(accountRepository.findById(TenantId.CONSUMER_POOL, POOL_ACCOUNT)).willReturn(Optional.of(poolAccount()));
 
         ProvisionedStatusChangeResult r = new ProvisionStatusChangeUseCase(tenants, accountRepository, history,
-                new AccountStatusMachine(), mock(AccountEventPublisher.class), ON)
-                .execute("ecommerce", POOL_ACCOUNT, AccountStatus.LOCKED, "op-1");
+                new AccountStatusMachine(), mock(AccountEventPublisher.class), ON, siteLock, leave,
+                mock(com.example.account.domain.repository.ConsumerSiteMembershipRepository.class))
+                .execute("consumer-pool", POOL_ACCOUNT, AccountStatus.LOCKED, "op-1");
 
         assertThat(r.currentStatus()).isEqualTo("LOCKED");
+        assertThat(r.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
         ArgumentCaptor<AccountStatusHistoryEntry> row = ArgumentCaptor.forClass(AccountStatusHistoryEntry.class);
         verify(history).save(row.capture());
         assertThat(row.getValue().getTenantId()).isEqualTo("consumer-pool");
+        org.mockito.Mockito.verifyNoInteractions(siteLock, leave);
     }
 }

@@ -104,9 +104,9 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | `consented_at` | DATETIME(6) | NOT NULL | internal | 그 사이트 이용 동의 시각(UTC). 가입한 사이트는 가입 시각. 본인 탈퇴 뒤 다시 동의하면 그 시각(`TASK-BE-619`) |
 | `left_at` | DATETIME(6) | NULL | internal | **`TASK-BE-619`(`V0032`)** — `LEFT` 가 된 시각(UTC). `ACTIVE` 면 NULL(CHECK) |
 | `left_by` | VARCHAR(20) | NULL, CHECK (`SELF`,`OPERATOR`) | internal | **`TASK-BE-619`** — 누가 `LEFT` 로 만들었나. `SELF` = 본인 탈퇴(다시 동의하면 `ACTIVE`), `OPERATOR` = 그 사이트 운영자가 내보냄(동의로 다시 열리지 않는다) — 소유자 결정 2026-10-03. `ACTIVE` 면 NULL(CHECK). `LEFT` 인데 NULL(619 이전 — 작성자가 없어 0행)은 `OPERATOR` 처럼 읽는다 |
-| `left_by_actor_id` | VARCHAR(64) | NULL | internal | **`TASK-BE-619`** — `OPERATOR` 면 운영자 id, `SELF` 면 그 계정 id |
+| `left_by_actor_id` | VARCHAR(64) | NULL | internal | **`TASK-BE-619`** — `OPERATOR` 면 운영자 id, `SELF` 면 그 계정 id. **`TASK-BE-622`** — 사이트 백엔드의 프로비저닝 `DELETED` 면 그 호출의 `operatorId`(없으면 경로 테넌트) |
 | `locked_at` | DATETIME(6) | NULL | internal | **`TASK-BE-621`(`V0033`)** — 그 사이트에서 잠긴 시각(UTC). `LOCKED` 면 NOT NULL, 그 밖이면 NULL(CHECK) |
-| `locked_by_actor_id` | VARCHAR(64) | NULL | internal | **`TASK-BE-621`** — 잠근 사이트 운영자 id. `LOCKED` 가 아니면 NULL(CHECK) |
+| `locked_by_actor_id` | VARCHAR(64) | NULL | internal | **`TASK-BE-621`** — 잠근 사이트 운영자 id. **`TASK-BE-622`** — 사이트 백엔드의 프로비저닝 `LOCKED` 면 그 호출의 `operatorId`(없으면 경로 테넌트). `LOCKED` 가 아니면 NULL(CHECK) |
 
 **CHECK (`V0033` 까지)**: `status` 값 · `left_by` 값 · `ACTIVE` 면 탈퇴 기록 없음 · `LOCKED` 면 `locked_at` 있음 · `LOCKED` 가 아니면 잠금 기록 없음 · `LOCKED` 면 탈퇴 기록 없음.
 

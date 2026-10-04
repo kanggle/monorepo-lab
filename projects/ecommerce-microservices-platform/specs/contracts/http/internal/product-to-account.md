@@ -96,6 +96,12 @@ Idempotent (`LOCKED → LOCKED` is permitted for that reason).
 Request: `{ "status": "LOCKED", "operatorId": "product-service" }`.
 Called only when the seller has a stored `accountId`. Idempotent + fail-soft.
 
+> **IAM TASK-BE-622 (2026-10-04) — unaffected.** account-service now changes only the path site's
+> **membership** when the target of this EP is a consumer-**pool** member (`scope = SITE_MEMBERSHIP` in the
+> response). The seller-operator account is not one: §1 mints it in the seller's tenant (a site's own
+> account), so SUSPEND / CLOSE keep locking the **account** — the response carries `scope = ACCOUNT`, which
+> this caller does not read (`toBodilessEntity`). See IAM `account-internal-provisioning.md` § Consumer-pool member.
+
 - `status` **MUST** be a valid account-service `AccountStatus` enum constant
   (`ACTIVE`, `LOCKED`, `DORMANT`, `DELETED`). The EP does `AccountStatus.valueOf(status)`, so a
   non-enum value (e.g. the never-valid `DEACTIVATED`) 400s server-side and the fail-soft swallow
