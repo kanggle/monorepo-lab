@@ -114,8 +114,12 @@ public final class JwtTestHelper {
      * Convenience: 5-minute valid client_credentials token. Mirrors the
      * V0013-seeded {@code scm-platform-internal-services-client} grant —
      * {@code sub = client_id}, {@code azp = client_id}, {@code scope = "scm.read scm.write"},
-     * no email/roles claims (Edge Case E1 / E3). This is scm v1's primary
-     * authentication shape since v1 is backend-only.
+     * no email/roles claims (Edge Case E1 / E3).
+     *
+     * <p>{@code aud} is the client itself, as the IdP mints it — and that client is not on this
+     * edge's audience allowlist, so through the real decoder this token is 403
+     * {@code AUDIENCE_FORBIDDEN} (TASK-MONO-697 AC-4 (b)). Do not change the {@code aud} to an
+     * allowlisted value to make a test pass: production never issues that token.
      */
     public String signClientCredentialsToken() {
         return signToken(INTERNAL_CLIENT_ID, null, DEFAULT_TENANT_ID, 300,
@@ -145,8 +149,8 @@ public final class JwtTestHelper {
     /**
      * Convenience: a valid scm token (correct tenant, issuer, signature) carrying neither a
      * role nor a scope — authenticated but unauthorized. Rule-6 admission (TASK-MONO-416)
-     * must reject it with 403 {@code FORBIDDEN}. Contrast {@link #signClientCredentialsToken()},
-     * which carries a scope and is therefore admitted.
+     * must reject it with 403 {@code FORBIDDEN}. (The scope leg — a scope-only token is admitted —
+     * is pinned at the admission filter itself, {@code RoleAdmissionFilterTest}.)
      */
     public String signNoRoleToken(String subject) {
         return signToken(subject, null, DEFAULT_TENANT_ID, 300,

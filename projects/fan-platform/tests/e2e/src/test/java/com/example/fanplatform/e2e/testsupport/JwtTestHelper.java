@@ -33,6 +33,10 @@ import java.util.UUID;
  * issuer the gateway/community/artist services accept by default) and
  * {@code tenant_id=fan-platform} (matches the required tenant). Cross-tenant
  * tokens use {@code tenant_id=wms} to verify the gateway's tenant gate.
+ *
+ * <p>Every token carries {@code aud = fan-platform-user-flow-client} ({@link #DEFAULT_AUDIENCE}):
+ * that is the client the fan web app signs users in with, and the gateway rejects an {@code aud}
+ * outside its allowlist (TASK-MONO-697). Before that change this helper minted no {@code aud}.
  */
 public final class JwtTestHelper {
 
@@ -42,6 +46,15 @@ public final class JwtTestHelper {
     public static final String DEFAULT_TENANT_ID = "fan-platform";
     /** Token lifetime — generous so a slow CI run never trips an exp boundary. */
     public static final long DEFAULT_TTL_SECONDS = 600;
+    /**
+     * The client id that really appears in {@code aud} on the human (FAN / ADMIN / OPERATOR) — the fan web app's tokens reaching this platform's
+     * gateway in production (TASK-MONO-697 AC-4, owner decision 2). Minted by default so the suite
+     * sends what production sends — the gateway ships audience ENFORCE, and a token with no
+     * {@code aud} is 403 {@code AUDIENCE_FORBIDDEN} there. Pass {@code "aud"} in the additional
+     * claims to override it. This is NOT "an allowlisted value to make the suite green": it is the
+     * value the IdP stamps on these human-user tokens; workload-shaped tokens must not reuse it.
+     */
+    public static final String DEFAULT_AUDIENCE = "fan-platform-user-flow-client";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -74,6 +87,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(SAS_ISSUER)
                 .claim("tenant_id", tenantId)
+                .audience(List.of(DEFAULT_AUDIENCE))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());

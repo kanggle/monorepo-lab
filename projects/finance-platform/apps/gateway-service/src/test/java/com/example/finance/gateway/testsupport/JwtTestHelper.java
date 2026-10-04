@@ -105,13 +105,16 @@ public final class JwtTestHelper {
 
     /**
      * Convenience: 5-minute machine token carrying a scope but no role. Rule-6 admission
-     * ({@code RoleAdmissions.roleOrScope}) admits it on the scope leg — the regression guard
-     * that admission gates on "role OR scope", not role alone.
+     * ({@code RoleAdmissions.roleOrScope}) would admit it on the scope leg, but its {@code aud} is
+     * not on this edge's allowlist, so through the real decoder it is 403
+     * {@code AUDIENCE_FORBIDDEN} first (TASK-MONO-697 AC-4 (b)). The scope-leg proof lives in
+     * {@code RoleAdmissionFilterTest}.
      */
     public String signScopeOnlyToken(String subject) {
         return signToken(SAS_ISSUER, subject, DEFAULT_TENANT_ID, 300,
                 // aud = the workload client itself, as the identity-platform mints it
-                // (TASK-MONO-696 AC-1). Not on the measured allowlist: a shadow-mode mismatch.
+                // (TASK-MONO-696 AC-1). Not on the allowlist: 403 under ENFORCE. Do not swap in
+                // an allowlisted aud to make a test pass (TASK-MONO-697 AC-4).
                 Map.of("scope", "finance.read", "aud", List.of(subject)));
     }
 

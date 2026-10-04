@@ -121,9 +121,9 @@ class GatewayIntegrationTest {
         // `spring.security.oauth2.resourceserver.jwt.audiences` property was never applied to it;
         // measured 2026-09-16 on the real decoder path, the same token WITH tenant_id=ecommerce
         // and no aud is admitted (200). The only thing rejecting this token is the missing
-        // tenant_id — a tenant rejection, which is 403. TASK-MONO-696 added the audience check,
-        // shipped in SHADOW mode (no rejection), and it runs only on tokens the rest of the chain
-        // accepted — so this cell stays TENANT_FORBIDDEN in either mode.
+        // tenant_id — a tenant rejection, which is 403. TASK-MONO-696 added the audience check
+        // (shipped SHADOW, ENFORCE since TASK-MONO-697), and it runs only on tokens the rest of the
+        // chain accepted — so this cell stays TENANT_FORBIDDEN in either mode.
         String noAudToken = jwtHelper.signToken(
                 "user-123", "BUYER", 300L,
                 java.util.Map.of("account_type", "CONSUMER", "email", "user@example.com"));

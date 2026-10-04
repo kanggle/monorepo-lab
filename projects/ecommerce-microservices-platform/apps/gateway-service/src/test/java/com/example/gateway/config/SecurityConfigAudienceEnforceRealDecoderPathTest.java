@@ -33,15 +33,16 @@ import org.springframework.web.reactive.config.EnableWebFlux;
  * Phase 2 of the audience rollout — ENFORCE — through the <strong>real</strong> decoder path and
  * ecommerce's own {@link SecurityConfig} entry point (TASK-MONO-696 AC-5).
  *
- * <p><strong>This gateway does not ship in ENFORCE</strong> ({@code AudienceShippedConfigTest}
- * fails if it does). The mode is overridden for this test context only, so that switching phase
- * 2 on is a configuration flip whose behaviour has already been measured, not a first run in
- * production. Same harness as {@link SecurityConfigRealDecoderPathTest}: real filter chain, real
- * decoder from {@link OAuth2ResourceServerConfig}, real RS256 over a MockWebServer JWKS, no
- * Docker.
+ * <p><strong>This gateway ships ENFORCE since TASK-MONO-697</strong> ({@code AudienceShippedConfigTest}
+ * pins it). This suite was written while it still shipped SHADOW, so that switching phase 2 on
+ * would be a configuration flip whose behaviour had already been measured. The mode is still
+ * stated literally here rather than read from {@code application.yml}, so this matrix keeps
+ * measuring ENFORCE even if the shipped default were ever switched back. Same harness as
+ * {@link SecurityConfigRealDecoderPathTest}: real filter chain, real decoder from
+ * {@link OAuth2ResourceServerConfig}, real RS256 over a MockWebServer JWKS, no Docker.
  */
 @SpringJUnitConfig(classes = {SecurityConfig.class, SecurityConfigAudienceEnforceRealDecoderPathTest.Beans.class})
-@DisplayName("SecurityConfig — ENFORCE 모드의 aud 거절 (TASK-MONO-696 phase 2, 테스트 한정 설정)")
+@DisplayName("SecurityConfig — ENFORCE 모드의 aud 거절 (TASK-MONO-696 phase 2 — TASK-MONO-697 부터 출하 모드)")
 class SecurityConfigAudienceEnforceRealDecoderPathTest {
 
     private static final String ISSUER = "https://test.local/issuer";
@@ -253,7 +254,7 @@ class SecurityConfigAudienceEnforceRealDecoderPathTest {
             return new GatewayMetrics(registry);
         }
 
-        /** The production decoder, with the shipped allowlist and a TEST-ONLY ENFORCE mode. */
+        /** The production decoder, with the shipped allowlist and ENFORCE stated literally. */
         @Bean
         ReactiveJwtDecoder reactiveJwtDecoder(MeterRegistry registry) {
             return new OAuth2ResourceServerConfig(JWKS.hostJwksUrl(), ISSUER, "ecommerce",

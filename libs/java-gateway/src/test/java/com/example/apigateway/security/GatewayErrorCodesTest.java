@@ -45,7 +45,7 @@ class GatewayErrorCodesTest {
         assertThat(GatewayErrorCodes.AUDIENCE_MISMATCH)
                 .isEqualTo(AllowedAudiencesValidator.ERROR_CODE_AUDIENCE_MISMATCH)
                 .isEqualTo("audience_mismatch");
-        // Response code — still a contract PROPOSAL (jwt-standard-claims.md § Error Handling).
+        // Response code — confirmed in jwt-standard-claims.md § Error Handling; a wire value.
         assertThat(GatewayErrorCodes.AUDIENCE_FORBIDDEN).isEqualTo("AUDIENCE_FORBIDDEN");
     }
 }

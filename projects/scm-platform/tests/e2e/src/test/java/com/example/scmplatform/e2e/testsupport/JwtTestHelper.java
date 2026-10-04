@@ -32,6 +32,11 @@ import java.util.UUID;
  * and {@code tenant_id=scm} (matches the required tenant). Cross-tenant
  * tokens use {@code tenant_id=wms} to verify the procurement service's
  * tenant-scoped queries reject foreign actors (Edge Case #5 of the task spec).
+ *
+ * <p>Every token carries {@code aud = platform-console-web} ({@link #DEFAULT_AUDIENCE}): scm's
+ * human users reach the gateway through the operator console, and the gateway rejects any other
+ * {@code aud} (TASK-MONO-697). Before that change this helper minted no {@code aud} at all, and
+ * every call it made was a logged audience mismatch.
  */
 public final class JwtTestHelper {
 
@@ -41,6 +46,15 @@ public final class JwtTestHelper {
     public static final String DEFAULT_TENANT_ID = "scm";
     /** Token lifetime — generous so a slow CI run never trips an exp boundary. */
     public static final long DEFAULT_TTL_SECONDS = 600;
+    /**
+     * The client id that really appears in {@code aud} on the human (BUYER / OPERATOR) — the operator console's tokens reaching this platform's
+     * gateway in production (TASK-MONO-697 AC-4, owner decision 2). Minted by default so the suite
+     * sends what production sends — the gateway ships audience ENFORCE, and a token with no
+     * {@code aud} is 403 {@code AUDIENCE_FORBIDDEN} there. Pass {@code "aud"} in the additional
+     * claims to override it. This is NOT "an allowlisted value to make the suite green": it is the
+     * value the IdP stamps on these human-user tokens; workload-shaped tokens must not reuse it.
+     */
+    public static final String DEFAULT_AUDIENCE = "platform-console-web";
 
     private final RSAKey rsaJwk;
     private final RSASSASigner signer;
@@ -73,6 +87,7 @@ public final class JwtTestHelper {
                 .subject(subject)
                 .issuer(SAS_ISSUER)
                 .claim("tenant_id", tenantId)
+                .audience(List.of(DEFAULT_AUDIENCE))
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(ttlSeconds)))
                 .jwtID(UUID.randomUUID().toString());

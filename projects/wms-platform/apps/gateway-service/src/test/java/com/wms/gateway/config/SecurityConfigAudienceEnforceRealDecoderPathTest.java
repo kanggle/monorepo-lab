@@ -35,11 +35,13 @@ import org.springframework.web.reactive.config.EnableWebFlux;
  * <strong>shared</strong> {@code libs/java-gateway} {@link SecurityConfig} entry point, which is
  * the one wms, scm, erp, finance and fan all register (TASK-MONO-696 AC-5).
  *
- * <p><strong>wms does not ship in ENFORCE</strong> ({@code AudienceShippedConfigTest}). The mode
- * is overridden for this test context only.
+ * <p><strong>wms ships ENFORCE since TASK-MONO-697</strong> ({@code AudienceShippedConfigTest} pins
+ * it). The mode is still stated literally in this context rather than read from
+ * {@code application.yml}, so this matrix keeps measuring ENFORCE behaviour even if the shipped
+ * default were ever switched back.
  */
 @SpringJUnitConfig(classes = {SecurityConfig.class, SecurityConfigAudienceEnforceRealDecoderPathTest.Beans.class})
-@DisplayName("wms (공유 SecurityConfig) — ENFORCE 모드의 aud 거절 (TASK-MONO-696 phase 2, 테스트 한정 설정)")
+@DisplayName("wms (공유 SecurityConfig) — ENFORCE 모드의 aud 거절 (TASK-MONO-696 phase 2 — TASK-MONO-697 부터 출하 모드)")
 class SecurityConfigAudienceEnforceRealDecoderPathTest {
 
     private static final String PROTECTED = SecurityConfigRealDecoderPathTest.PROTECTED;

@@ -18,12 +18,18 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 
 /**
  * What this gateway ships for the audience check, and what happens when it ships nothing
- * (TASK-MONO-696 AC-4/AC-5).
+ * (TASK-MONO-696 AC-4/AC-5, TASK-MONO-697 AC-2).
  *
- * <p><strong>The SHADOW pin is a rollout guard, not a style check.</strong> Rejection is phase 2,
- * a separate reviewed change taken only after the measured mismatch count is zero. Flipping the
- * default in {@code application.yml} (or overriding it in a deployment file) without that change
- * turns this suite red. The phase-2 change edits the expectation here on purpose.
+ * <p><strong>The ENFORCE pin is a rollout guard, not a style check.</strong> Phase 2 (reject) was
+ * switched on for all six gateways in one reviewed change (TASK-MONO-697), after the measured
+ * mismatch count was zero. Flipping the default back in {@code application.yml}, or pinning the
+ * mode in a deployment file, turns this suite red.
+ *
+ * <p><strong>The rollback lever is pinned too.</strong> {@code docker-compose.e2e.yml} — the file the gateway
+ * container is started from — must hand {@code OIDC_AUDIENCE_MODE} to it as a pass-through that
+ * defaults to ENFORCE, so the mode can be reverted on a running host without a rebuild. Asserting
+ * only "no override" could not tell a wired lever from a missing one; the second cell below is
+ * what fails when the line is gone.
  */
 @DisplayName("wms gateway — 출하되는 audience 설정 (TASK-MONO-696)")
 class AudienceShippedConfigTest {
@@ -35,9 +41,9 @@ class AudienceShippedConfigTest {
     class Shipped {
 
         @Test
-        @DisplayName("audience-mode 는 SHADOW 로 출하된다 — ENFORCE 는 별도 변경(phase 2)")
-        void shipsShadow() {
-            assertThat(ShippedAudienceConfig.shippedValue(PREFIX + "audience-mode")).isEqualTo("SHADOW");
+        @DisplayName("audience-mode 는 ENFORCE 로 출하된다 (phase 2 — TASK-MONO-697)")
+        void shipsEnforce() {
+            assertThat(ShippedAudienceConfig.shippedValue(PREFIX + "audience-mode")).isEqualTo("ENFORCE");
         }
 
         @Test
@@ -50,10 +56,17 @@ class AudienceShippedConfigTest {
         }
 
         @Test
-        @DisplayName("프로젝트 compose · .env 어디에도 audience mode 를 ENFORCE 로 덮는 줄이 없다")
-        void noDeploymentFileOverridesToEnforce() {
-            assertThat(ShippedAudienceConfig.enforceOverrides(Path.of("../..")))
+        @DisplayName("프로젝트 compose · .env 는 audience mode 를 전달 줄 형태로만 다룬다 — 다른 값 고정 · .env 의 SHADOW 고정 없음")
+        void deploymentFilesOnlyPassTheModeThrough() {
+            assertThat(ShippedAudienceConfig.modeOverrides(Path.of("../..")))
                     .isEmpty();
+        }
+
+        @Test
+        @DisplayName("docker-compose.e2e.yml 의 gateway-service 가 OIDC_AUDIENCE_MODE 를 ${OIDC_AUDIENCE_MODE:-ENFORCE} 로 넘긴다 (되돌리기 레버)")
+        void runningComposePassesTheModeThroughToTheGateway() {
+            assertThat(ShippedAudienceConfig.servicesPassingModeThrough(Path.of("../../docker-compose.e2e.yml")))
+                    .containsExactly("gateway-service");
         }
     }
 

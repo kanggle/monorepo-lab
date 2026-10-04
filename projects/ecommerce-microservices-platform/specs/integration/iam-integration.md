@@ -42,7 +42,7 @@ ecommerce:
     allowed-issuers: ${OIDC_ALLOWED_ISSUERS:${OIDC_ISSUER_URL}}
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:ecommerce}
     allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:platform-console-web,ecommerce-web-store-client,artist-service-client}
-    audience-mode: ${OIDC_AUDIENCE_MODE:SHADOW}
+    audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}
 ```
 
 > TASK-MONO-696: 예전 이 자리의 `spring.security.oauth2.resourceserver.jwt.audiences: ecommerce` 는 **한 번도 읽히지 않았다** — Boot 자동 구성 디코더에만 적용되는데, 게이트웨이는 자체 디코더 빈(`OAuth2ResourceServerConfig`)을 쓰므로 자동 구성이 물러난다. 그리고 IdP 는 `aud` 에 플랫폼 이름이 아니라 **발급 client id** 를 넣는다(`platform/contracts/jwt-standard-claims.md` `aud` 행). 속성은 삭제됐고, audience 검사는 아래 `allowed-audiences` / `audience-mode` 로 공유 검증기 사슬에서 한다.
@@ -90,7 +90,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 1. **서명 검증** — IAM 의 JWKS 로 RS256 서명 검증 (Spring Security `NimbusJwtDecoder` 자동).
 2. **표준 클레임 검증** — `exp`, `nbf`, `iat` (`JwtTimestampValidator`).
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer 만 허용 (TASK-MONO-367: legacy `iam` issuer 는 2026-08-01 일몰로 제거됨, TASK-BE-398 이 발행 측을 먼저 끊었다).
-4. **Audience 검증 (TASK-MONO-696, 1단계 섀도)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client; `artist-service-client` — TASK-MONO-759 가 이 엣지로 라우트하는 워크로드, 같은 변경에서 추가(`jwt-standard-claims.md` 규칙 5)) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=SHADOW`(출하값): 불일치는 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 `gateway.jwt.audience{gateway,outcome}` 로 센다. 같은 검증기가 토큰이 들어오는 동안 최대 1분에 한 번 누적 요약 INFO 한 줄(`JWT audience summary: gateway=… mode=… match=… mismatch=…`)을 낸다 — 2단계 전환의 «실측 불일치 0» 을 읽는 채널(TASK-MONO-736). `ENFORCE`(2단계, 별도 변경 — 실측 불일치 0 이후): 불일치 → 403.
+4. **Audience 검증 (TASK-MONO-696 → TASK-MONO-697, 2단계 거절)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client; `artist-service-client` — TASK-MONO-759 가 이 엣지로 라우트하는 워크로드, 같은 변경에서 추가(`jwt-standard-claims.md` 규칙 5)) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=ENFORCE`(출하값, TASK-MONO-697 — 실측 불일치 0 이후 6 게이트웨이 동시 전환): 불일치 → 403 `AUDIENCE_FORBIDDEN` + 메트릭 `gateway.jwt.audience{gateway,outcome="mismatch_rejected"}`. `SHADOW`(1단계): 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 — 이제는 되돌리기 수단이다(compose 가 `OIDC_AUDIENCE_MODE` 를 기본값 ENFORCE 로 전달하므로 env 한 줄 + 재생성). 같은 검증기가 토큰이 들어오는 동안 최대 1분에 한 번 누적 요약 INFO 한 줄(`JWT audience summary: gateway=… mode=… match=… mismatch=…`)을 낸다(TASK-MONO-736).
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
 6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
    - **operator-on-public 예외 (TASK-BE-380)** — promotion-api.md / shipping-api.md / notification-api.md 는 *운영자(Admin)* 엔드포인트를 **public 경로 트리**(`/api/promotions`, `/api/shippings`, `/api/notifications`)에 두고 서비스단에서 `X-User-Role == ECOMMERCE_OPERATOR` 으로 게이팅한다(`/api/admin/**` 아님). 따라서 게이트웨이는 이 세 read 트리에 한해 `CUSTOMER` 와 `ECOMMERCE_OPERATOR` 을 **둘 다** 수용한다(엔드포인트별 operator/consumer 구분은 서비스가 집행). prefix-only `non-/api/admin → CONSUMER` 규칙이면 운영자가 서비스 도달 전에 403 되는 라이브 갭(platform-console PC-FE-086/088/089 흡수)을 해소. 그 외 public 트리(`/api/products`, `/api/orders`, `/api/search`, `/api/users` 등)는 종전대로 `CUSTOMER` 전용.
@@ -106,7 +106,7 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 |---|---|---|
 | Authorization 헤더 누락 / 만료 / 서명 불일치 | 401 | `UNAUTHORIZED` |
 | `iss` 가 allowed-issuers 미포함 | 401 | `UNAUTHORIZED` |
-| `aud` ∩ `allowed-audiences` = ∅ (`aud` 없음 포함) — `audience-mode=ENFORCE` 일 때만 | 403 | `AUDIENCE_FORBIDDEN` (**이름은 계약서의 제안** — 2단계 전환 시 확정). 출하 모드 `SHADOW` 에서는 거절 없음(로그 + 메트릭) |
+| `aud` ∩ `allowed-audiences` = ∅ (`aud` 없음 포함) — `audience-mode=ENFORCE`(출하 모드) | 403 | `AUDIENCE_FORBIDDEN` (계약서 확정, TASK-MONO-697). 되돌리기 모드 `SHADOW` 에서는 거절 없음(로그 + 메트릭) |
 | `tenant_id` blank / missing | 403 | `TENANT_FORBIDDEN` (entitlement-trust: 임의 well-formed `tenant_id` 는 통과) |
 | `/api/admin/**` 인데 `roles ∌ ECOMMERCE_OPERATOR` | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter) |
 | `/internal/sellers/**` 인데 `GET`/`HEAD` 아님 · `scope ∌ store.seller.read` · `tenant_id ≠ ecommerce` 중 하나 (`CUSTOMER` 토큰 포함) | 403 | `FORBIDDEN` (AccountTypeEnforcementFilter, TASK-MONO-759) |

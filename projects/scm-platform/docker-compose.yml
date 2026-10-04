@@ -51,6 +51,11 @@ services:
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
       OIDC_REQUIRED_TENANT_ID: scm
+      # TASK-MONO-697 rollback lever: OIDC_AUDIENCE_MODE=SHADOW in the env file + recreating
+      # this service reverts the audience check to log-only without a rebuild. Unset, it is
+      # the shipped ENFORCE. Pass-through only: AudienceShippedConfigTest rejects any fixed
+      # value here. OIDC_ALLOWED_AUDIENCES is deliberately NOT passed — it differs per gateway.
+      OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}
       OIDC_INTERNAL_CLIENT_ID: ${OIDC_INTERNAL_CLIENT_ID:-scm-platform-internal-services-client}
       OIDC_INTERNAL_CLIENT_SECRET: ${OIDC_INTERNAL_CLIENT_SECRET:-scm-dev}
       REDIS_HOST: redis

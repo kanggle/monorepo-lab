@@ -4,6 +4,7 @@ import com.example.security.oauth2.AllowedAudiencesValidator;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.apigateway.config.SecurityConfig;
+import com.example.apigateway.testfixtures.ShippedAudienceConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.gateway.testsupport.JwksMockServer;
 import com.wms.gateway.testsupport.JwtTestHelper;
@@ -30,7 +31,7 @@ import org.springframework.web.reactive.config.EnableWebFlux;
 
 /**
  * Audience handling at the wms edge, measured through the <strong>real</strong> decoder path
- * (TASK-MONO-696 AC-0 → AC-5, phase 1).
+ * (TASK-MONO-696 AC-0 → AC-5; since TASK-MONO-697 AC-3, the shipped phase 2).
  *
  * <p>Mirrors ecommerce's {@code SecurityConfigRealDecoderPathTest} (TASK-BE-595), minimally:
  *
@@ -39,7 +40,8 @@ import org.springframework.web.reactive.config.EnableWebFlux;
  *       (entry point included),</li>
  *   <li>the real decoder from {@link OAuth2ResourceServerConfig#reactiveJwtDecoder()} — the
  *       shared validator chain with wms's tenant gate and audience gate, configured with the
- *       allowlist and mode this gateway ships (SHADOW),</li>
+ *       allowlist and the mode this gateway ships (read from {@code application.yml} by
+ *       {@link ShippedAudienceConfig} — ENFORCE since TASK-MONO-697),</li>
  *   <li>a real RS256 signature checked against a JWKS document fetched over HTTP
  *       ({@link JwksMockServer}, an in-process MockWebServer).</li>
  * </ul>
@@ -50,17 +52,22 @@ import org.springframework.web.reactive.config.EnableWebFlux;
  *
  * <p><strong>AC-0 recorded that {@code aud} was never checked</strong>: the
  * {@code spring.security.oauth2.resourceserver.jwt.audiences: wms} property configured a decoder
- * this service replaces (the property is now deleted). In phase 1 the no-{@code aud} token still
- * reaches the route — and the mismatch is now counted, which is the assertion that tells shadow
- * mode apart from no check at all. Phase 2 (reject) is {@link SecurityConfigAudienceEnforceRealDecoderPathTest}.
+ * this service replaces (the property is now deleted). In phase 1 (SHADOW) the no-{@code aud}
+ * token still reached the route and the mismatch was counted. The gateway now ships phase 2, so
+ * the same cells flip in status: 403 {@code AUDIENCE_FORBIDDEN}, counted as
+ * {@code mismatch_rejected}. Switching the shipped default back to SHADOW turns them red together
+ * with {@code AudienceShippedConfigTest}; the rollback lever is the environment variable.
+ * {@link SecurityConfigAudienceEnforceRealDecoderPathTest} keeps the wider ENFORCE matrix.
  */
 @SpringJUnitConfig(classes = {SecurityConfig.class, SecurityConfigRealDecoderPathTest.Beans.class})
-@DisplayName("wms SecurityConfig — 실제 디코더 경로의 aud 처리 (TASK-MONO-696 phase 1 SHADOW)")
+@DisplayName("wms SecurityConfig — 실제 디코더 경로의 aud 처리 (출하 모드 ENFORCE — TASK-MONO-697)")
 class SecurityConfigRealDecoderPathTest {
 
     static final String PROTECTED = "/api/v1/master/probe";
     /** Kept equal to application.yml by {@code AudienceShippedConfigTest}. */
     static final String SHIPPED_ALLOWED_AUDIENCES = "platform-console-web";
+    /** The mode application.yml ships, read from it — not typed in here (TASK-MONO-697 AC-3). */
+    static final String SHIPPED_AUDIENCE_MODE = ShippedAudienceConfig.shippedValue("wms.oauth2.audience-mode");
     private static final JwtTestHelper JWT = new JwtTestHelper();
     private static final JwksMockServer JWKS;
 
@@ -95,20 +102,30 @@ class SecurityConfigRealDecoderPathTest {
     }
 
     @Test
-    @DisplayName("(i) aud 없음 + tenant_id=wms → 200 + mismatch_shadowed +1 (phase 1 — 거절하지 않고 센다)")
-    void noAudience_wmsTenant_passesInShadow_andIsCounted() {
+    @DisplayName("전제: 이 칸들이 재는 디코더는 출하 모드 ENFORCE 로 만들어졌다")
+    void decoderIsBuiltWithTheShippedEnforceMode() {
+        assertThat(SHIPPED_AUDIENCE_MODE).isEqualTo("ENFORCE");
+    }
+
+    @Test
+    @DisplayName("(i) aud 없음 + tenant_id=wms → 403 AUDIENCE_FORBIDDEN + mismatch_rejected +1 (phase 2 — 출하 모드)")
+    void noAudience_wmsTenant_isRejected_andCounted() {
+        double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
         double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
 
-        send(JWT.signToken("user-no-aud", null, 300L, without("aud")))
-                .expectStatus().isOk()
-                .expectBody(String.class).isEqualTo("reached");
+        String body = send(JWT.signToken("user-no-aud", null, 300L, without("aud")))
+                .expectStatus().isForbidden()
+                .expectBody(String.class).returnResult().getResponseBody();
 
-        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(1.0);
+        assertThat(body).contains("\"AUDIENCE_FORBIDDEN\"").doesNotContain("reached");
+        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(1.0);
+        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
     }
 
     @Test
     @DisplayName("(i) 대조군: 같은 토큰(aud 없음)에서 tenant_id 만 빼면 → 403 TENANT_FORBIDDEN, audience 는 세지 않음")
     void noAudience_control_withoutTenant_is403() {
+        double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
         double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
         Map<String, Object> claims = without("aud");
         // A null value drops the claim from the serialized payload (Nimbus omits null claims).
@@ -118,31 +135,34 @@ class SecurityConfigRealDecoderPathTest {
                 .expectStatus().isForbidden()
                 .expectBody().jsonPath("$.code").isEqualTo("TENANT_FORBIDDEN");
 
+        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(0.0);
         assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
     }
 
     @Test
-    @DisplayName("(ii) 낯선 aud + tenant_id=wms → 200 + mismatch_shadowed +1")
-    void foreignAudience_passesInShadow_andIsCounted() {
-        double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
+    @DisplayName("(ii) 낯선 aud + tenant_id=wms → 403 AUDIENCE_FORBIDDEN + mismatch_rejected +1")
+    void foreignAudience_isRejected_andCounted() {
+        double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
 
         send(JWT.signToken("user-foreign-aud", null, 300L, Map.of("aud", List.of("wms-user-flow-client"))))
-                .expectStatus().isOk();
+                .expectStatus().isForbidden()
+                .expectBody().jsonPath("$.code").isEqualTo("AUDIENCE_FORBIDDEN");
 
-        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(1.0);
+        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(1.0);
     }
 
     @Test
     @DisplayName("(iii) 헬퍼 기본 aud(콘솔 client) → 200 + match +1, mismatch 0")
     void consoleAudience_passes_andCountsMatch() {
-        double shadowedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED);
+        double rejectedBefore = audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED);
         double matchBefore = audience(AllowedAudiencesValidator.OUTCOME_MATCH);
 
         send(JWT.signToken("user-console", null, 300L, Map.of()))
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectBody(String.class).isEqualTo("reached");
 
         assertThat(audience(AllowedAudiencesValidator.OUTCOME_MATCH) - matchBefore).isEqualTo(1.0);
-        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_SHADOWED) - shadowedBefore).isEqualTo(0.0);
+        assertThat(audience(AllowedAudiencesValidator.OUTCOME_MISMATCH_REJECTED) - rejectedBefore).isEqualTo(0.0);
     }
 
     static Map<String, Object> without(String claim) {
@@ -186,12 +206,12 @@ class SecurityConfigRealDecoderPathTest {
             return new SimpleMeterRegistry();
         }
 
-        /** The production decoder, built by the production config class, as shipped (SHADOW). */
+        /** The production decoder, built by the production config class, as shipped (mode read from application.yml). */
         @Bean
         ReactiveJwtDecoder reactiveJwtDecoder(MeterRegistry registry) {
             return new OAuth2ResourceServerConfig(
                     JWKS.hostJwksUrl(), JwtTestHelper.SAS_ISSUER, JwtTestHelper.DEFAULT_TENANT_ID,
-                    SHIPPED_ALLOWED_AUDIENCES, "SHADOW", registry)
+                    SHIPPED_ALLOWED_AUDIENCES, SHIPPED_AUDIENCE_MODE, registry)
                     .reactiveJwtDecoder();
         }
 
