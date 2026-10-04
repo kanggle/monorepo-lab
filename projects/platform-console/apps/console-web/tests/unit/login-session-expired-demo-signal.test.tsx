@@ -55,7 +55,7 @@ vi.mock('@/shared/config/demo-backend', () => ({
   resolveDemoBackendState: async () => state.value,
 }));
 
-async function renderLogin(sp: { error?: string } = {}) {
+async function renderLogin(sp: { error?: string; redirect?: string; demo_checked?: string } = {}) {
   const { default: LoginPage } = await import('@/app/(auth)/login/page');
   const el = await LoginPage({ searchParams: Promise.resolve(sp) });
   const qc = new QueryClient({
@@ -79,9 +79,14 @@ beforeEach(() => {
 });
 
 describe('세션 만료 문구 — 데모 종료 신호 (TASK-PC-FE-299 AC-4)', () => {
-  it('🔴🔴 `unavailable`(데모 꺼짐, 실신호) → 데모 종료 문구', async () => {
+  // 🔴 TASK-PC-FE-305 — `unavailable` 의 정상 경로는 더 이상 이 문구가 아니다: 로그인이 성공할
+  //    수 없으므로 세션을 끝내고 샘플 셸로 보낸다(`/api/auth/demo-ended`, 계약 § 2.6.2 —
+  //    `tests/unit/session-end-demo-stopped.test.tsx` 가 그 경로를 잰다). 이 문구는 라우트가
+  //    신호를 다시 읽어 동의하지 않았을 때(`demo_checked=1`)의 폴백으로만 남는다.
+  it('🔴🔴 `unavailable` + `demo_checked=1`(라우트가 이미 한 번 확인) → 데모 종료 문구, 다시 넘기지 않는다', async () => {
     state.value = 'unavailable';
-    await renderLogin({ error: SESSION_EXPIRED });
+    await renderLogin({ error: SESSION_EXPIRED, demo_checked: '1' });
+    expect(redirectMock).not.toHaveBeenCalled();
     const t = alertText()!;
     expect(t).toContain('데모 서버가 종료');
     expect(t).not.toContain('세션이 만료');

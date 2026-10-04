@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -35,6 +35,7 @@ import { DemoHeartbeat } from '@/widgets/demo-heartbeat/DemoHeartbeat';
 import { BfcacheGuard } from '@/widgets/bfcache-guard/BfcacheGuard';
 import { SampleVisitorBanner } from '@/widgets/sample-visitor/SampleVisitorBanner';
 import { SampleScreenNotice } from '@/widgets/sample-visitor/SampleScreenNotice';
+import { DemoSignedOutNotice } from '@/widgets/sample-visitor/DemoSignedOutNotice';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
@@ -222,7 +223,14 @@ export default async function ConsoleLayout({
   return (
     <div className="flex min-h-screen flex-col">
       {sampleVisitor ? (
-        <SampleVisitorBanner />
+        <>
+          {/* TASK-PC-FE-305 — 데모 종료로 세션이 끝나 여기 착지했을 때만(`?signed_out=demo_stopped`)
+              그 이유를 말한다. `useSearchParams` 를 쓰는 클라이언트 위젯이라 Suspense 로 감싼다. */}
+          <Suspense fallback={null}>
+            <DemoSignedOutNotice />
+          </Suspense>
+          <SampleVisitorBanner />
+        </>
       ) : (
         <>
           {/* TASK-MONO-585 AC-3 — 인증된 66개 화면 전부가 이 셸 안에 있다. 데모가 꺼져
