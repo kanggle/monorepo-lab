@@ -1,6 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.messaging;
 
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +26,11 @@ import java.util.Map;
 public class WmsInventoryTransferredConsumer {
 
     static final String TOPIC = "wms.inventory.transferred.v1";
-    static final String TENANT_ID = "scm";
 
     private final InventoryVisibilityApplicationService applicationService;
     private final ObjectMapper objectMapper;
+    // wms events carry no tenant — project into the configured one (TASK-MONO-760).
+    private final ProjectionTenant projectionTenant;
 
     @RetryableTopic(
             attempts = "3",
@@ -73,7 +75,7 @@ public class WmsInventoryTransferredConsumer {
                     sourceLocationId, targetLocationId,
                     skuId, quantity, warehouseCode,
                     envelope.eventId(), envelope.occurredAt(),
-                    TENANT_ID, TOPIC);
+                    projectionTenant.id(), TOPIC);
 
             ack.acknowledge();
         } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {

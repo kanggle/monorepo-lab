@@ -248,7 +248,7 @@ Invalid envelopes (null `eventId` or null `payload`) bypass dedupe and route str
 
 ## Multi-tenancy
 
-**N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a IAM `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant).
+**N/A as SaaS row-level isolation — single-tenant by project classification.** `scm-platform` does **not** declare the `multi-tenant` trait (PROJECT.md § Out of Scope: it receives a IAM `tenant_id=scm` claim but does not isolate multiple organisations internally — it is one organisation's supply chain). All persisted rows belong to the `scm` tenant; there is no per-tenant partitioning column and cross-tenant reads are not a structural concern (there is only one tenant). (🔴 TASK-MONO-760 correction: the previous sentence predates ADR-MONO-019/020. Rows **do** carry `tenant_id`, reads are scoped by the token's `tenant_id`, and event-driven writes land under the configurable **projection tenant** — see the end of this section. "Single-tenant" still holds in the sense that this service runs no per-organisation isolation logic of its own.)
 
 The domain claim is still **fail-closed enforced** at the gate via
 **entitlement-trust dual-accept** (ADR-MONO-019 § D5, single-tenant gate,
@@ -273,7 +273,9 @@ This dual-accept gate is independent of row-level isolation: the
 row scoping, defaulting to `scm`) is **not** an enforcement gate and is
 unchanged.
 
-The published `scm.inventory.alert.v1` payload carries a constant `tenantId: "scm"`. Consumed `wms-platform` events are cross-project but are projected into the single `scm` tenant scope.
+The published `scm.inventory.alert.v1` payload carries the projection tenant as `tenantId` (default `"scm"`). Consumed `wms-platform` events are cross-project but are projected into the single **projection tenant** scope.
+
+**Projection tenant (TASK-MONO-760).** The tenant under which event-driven writes land is one setting, `inventory-visibility.projection-tenant-id` (env `INVENTORY_VISIBILITY_PROJECTION_TENANT_ID`, default `scm`). It is read by every consumer that has no tenant of its own to go on — the three `wms.inventory.*` consumers and the 3PL inbound-expected consumer — and by the staleness detection batch, so that the batch scans the nodes those consumers created. Reads stay scoped by the token's `tenant_id` (above). The two meet only when the reader's token tenant equals the projection tenant: with the default, an operator whose active tenant (ADR-MONO-020) is some other customer sees an empty projection. A deployment whose operators work under one customer tenant sets the projection tenant to that tenant (the AWS demo sets `demo-corp` — `infra/demo/scm-identity.override.yml`). 🔴 It is a single value, not a mapping: wms events carry no tenant, so there is nothing to route on. Changing it does not move existing rows; they stay under the tenant they were written with.
 
 ## Mandatory Rule mapping (rules/domains/scm.md)
 

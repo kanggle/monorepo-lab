@@ -2,6 +2,7 @@ package com.example.scmplatform.inventoryvisibility.adapter.inbound.messaging;
 
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ExpectedLine;
+import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,10 +44,12 @@ import java.util.Map;
 public class ScmThirdPartyInboundExpectedConsumer {
 
     static final String TOPIC = "scm.procurement.inbound-expected.third-party.v1";
-    static final String TENANT_ID = "scm"; // this service only serves tenant_id=scm
 
     private final InventoryVisibilityApplicationService applicationService;
     private final ObjectMapper objectMapper;
+    // The same projection tenant the wms consumers write under (TASK-MONO-760). The payload's
+    // own `tenantId` is documented as always "scm" in v1, so it is not routed on here.
+    private final ProjectionTenant projectionTenant;
 
     @RetryableTopic(
             attempts = "3",
@@ -89,7 +92,7 @@ public class ScmThirdPartyInboundExpectedConsumer {
             }
 
             applicationService.recordThirdPartyInboundExpectation(
-                    nodeId, TENANT_ID, poId, poNumber, expectedAt, expectedLines);
+                    nodeId, projectionTenant.id(), poId, poNumber, expectedAt, expectedLines);
 
             ack.acknowledge();
         } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {

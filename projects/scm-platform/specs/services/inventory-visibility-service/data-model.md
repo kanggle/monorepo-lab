@@ -165,4 +165,11 @@ Standard ShedLock schema (batch-heavy trait). Used by `StalenessDetectionSchedul
 
 ## tenant_id Policy
 
-All tables carry `tenant_id` as a non-nullable column. v1 always `scm`. Key indexes prefix `tenant_id` to support future multi-org extension without schema migration.
+All tables carry `tenant_id` as a non-nullable column. Key indexes prefix `tenant_id` to support future multi-org extension without schema migration.
+
+Which value lands there depends on the write path (TASK-MONO-760):
+
+- **Event-driven writes** (wms inventory consumers, 3PL inbound-expected consumer, staleness batch) → the **projection tenant**, `inventory-visibility.projection-tenant-id` (default `scm`). The "always `scm` in v1" notes on the tables above describe that default.
+- **API writes** (3PL node registration, observed-stock posts) → the caller token's `tenant_id`.
+
+Reads are scoped by the caller token's `tenant_id` (`architecture.md` § Multi-tenancy).

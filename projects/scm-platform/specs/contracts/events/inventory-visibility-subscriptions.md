@@ -30,12 +30,16 @@ authoritative payload schema is owned by
 `scm.procurement.inbound-expected.third-party`; the fields this consumer reads:
 
 - `payload.poId` / `payload.poNumber` — the source PO reference (idempotency key).
-- `payload.tenantId` — always `scm` in v1.
+- `payload.tenantId` — always `scm` in v1. 🔵 **Not routed on**: the consumer does
+  not read it; the tenant it records and compares against is this service's
+  **projection tenant** (`inventory-visibility.projection-tenant-id`, default `scm` —
+  TASK-MONO-760; `../../services/inventory-visibility-service/architecture.md`
+  § Multi-tenancy).
 - `payload.destinationNodeId` — the inventory-visibility node the PO is addressed
   to. The consumer resolves the `THIRD_PARTY_LOGISTICS` node by this id via
   `InventoryNodeRepository#findById` and **fails closed** (no orphan expectation)
-  if the node is absent, not `THIRD_PARTY_LOGISTICS`, or belongs to another
-  tenant (→ non-retryable DLT with a clear error).
+  if the node is absent, not `THIRD_PARTY_LOGISTICS`, or belongs to a tenant
+  other than the projection tenant (→ non-retryable DLT with a clear error).
 - `payload.expectedArrivalDate` (nullable), `payload.currency`.
 - `payload.lines[]` — `skuCode` + `expectedQty` (one `inbound_expectations` row
   per line).
