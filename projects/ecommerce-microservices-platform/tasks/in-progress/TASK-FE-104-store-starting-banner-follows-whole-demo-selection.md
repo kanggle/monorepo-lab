@@ -4,7 +4,7 @@ TASK-FE-104
 
 # Status
 
-ready
+in-progress
 
 # Title
 
@@ -57,7 +57,7 @@ ecommerce-microservices-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (측정 + 소유자 결정)** — ① web-store `widgets/demo-notice/DemoBackendNoticeClient.tsx`·console-web `widgets/demo-notice/DemoBackendNotice.tsx`·fan-platform-web `widgets/demo-notice/DemoBackendNotice.tsx` 가 «켜지는 중» 을 내는 신호의 출처를 file:line 으로 적는다(전부 공유 해석기의 `starting` 인지). ② 해석기가 묶음별 상태를 줄 수 있는지(`infra/demo/backend-resolver/src/index.ts` 가 `/bundles` 를 읽는가) 적는다. ③ 소유자에게 묻는다: (가) 스토어 배너는 **스토어 묶음**만 따른다 (나) 지금처럼 **선택 전체**를 따른다(의도 — 문구/주석만 보강). 답을 원문 그대로 이 파일에 적는다.
+- [x] **AC-0 (측정 + 소유자 결정)** — ① web-store `widgets/demo-notice/DemoBackendNoticeClient.tsx`·console-web `widgets/demo-notice/DemoBackendNotice.tsx`·fan-platform-web `widgets/demo-notice/DemoBackendNotice.tsx` 가 «켜지는 중» 을 내는 신호의 출처를 file:line 으로 적는다(전부 공유 해석기의 `starting` 인지). ② 해석기가 묶음별 상태를 줄 수 있는지(`infra/demo/backend-resolver/src/index.ts` 가 `/bundles` 를 읽는가) 적는다. ③ 소유자에게 묻는다: (가) 스토어 배너는 **스토어 묶음**만 따른다 (나) 지금처럼 **선택 전체**를 따른다(의도 — 문구/주석만 보강). 답을 원문 그대로 이 파일에 적는다.
 - [ ] **AC-1** — (가) 이면: 스토어 묶음이 ready 이고 다른 선택 묶음이 booting 인 상태 → web-store 에 «켜지는 중» 배너 **없음**. 스토어 묶음이 booting → 배너 있음. 둘 다 렌더된 DOM 단언. (나) 이면: 배너 문구나 주석이 «선택한 묶음 전체» 기준임을 밝히고 그 이유를 적는다.
 - [ ] **AC-2 (대조군)** — `unavailable`(꺼짐) · `running` + 전체 ready · `not-demo` 의 기존 화면이 그대로다(`DemoBackendNotice.test.tsx` 기존 칸 초록).
 - [ ] **AC-3** — bite: 새 판정을 «선택 전체» 로 되돌리면 AC-1 의 칸만 빨강.
@@ -84,3 +84,38 @@ ecommerce-microservices-platform
 1. **앱이 `/status`·`/bundles` 를 직접 부르는 자기 구현을 만든다** — 해석기 사본 가드의 취지를 깨고 15 s 캐시도 못 탄다(§ 범위가 바뀌는 경우 → 루트 티켓).
 2. **배너를 없애기만 하고 실제 준비는 안 본다** — 스토어 묶음이 booting 인데 배너가 안 떠 방문자가 실패를 «고장» 으로 읽는다(AC-1 의 둘째 칸이 막는다).
 3. **세 앱이 서로 다른 기준을 갖게 된다** — web-store 만 바꾸고 그 사실을 console/fan 쪽에 남기지 않는다(In Scope 의 판단 기록).
+
+---
+
+# AC-0 기록 (2026-10-04 UTC · `2e5567050` · 코드 0줄)
+
+> 분석=Opus 5.5. 소유자 결정(2026-10-04): 새 티켓 3건 중 세 번째로 착수.
+
+## ① «켜지는 중» 의 출처 — 세 앱 모두 같은 하나
+
+| 앱 | 배너 | 신호 |
+|---|---|---|
+| web-store | `src/widgets/demo-notice/DemoBackendNoticeClient.tsx:54,59` — 브라우저가 `/api/demo/backend-state` 를 물어 `state === 'starting'` | 그 라우트 `src/app/api/demo/backend-state/route.ts:46` 가 `resolveDemoBackendState()` |
+| console-web | `src/widgets/demo-notice/DemoBackendNotice.tsx:56` (서버 컴포넌트) | `resolveDemoBackendState()` |
+| fan-platform-web | `projects/fan-platform/web/fan-platform-web/src/widgets/demo-notice/DemoBackendNotice.tsx:37` (티켓의 경로 `apps/fan-platform-web` 는 틀렸다 — 실제는 `web/`) | `resolveDemoBackendState()` |
+
+공유 해석기 `infra/demo/backend-resolver/src/index.ts:228` — `starting = status.selection_ready === false`(`/status` 한 번, 15 s 캐시). 세 앱 모두 **같은 판정**이다.
+
+## ② 해석기가 묶음별 상태를 줄 수 있는가 — 없다, 그리고 «없음» 이 설계다
+
+- 해석기는 `/bundles` 를 **읽지 않는다**(`/status` 만 — `index.ts:178`).
+- `index.ts:56-57`: «어느 묶음이 내 것인가 를 이 모듈이 알게 되는 순간 그것이 넷째 설정이고 ADR 재개봉이다.» · `:100-101`: «넷째 축이 생기면 … `ADR-MONO-068` 을 다시 열어라.»
+- 🔴🔴 **이 동작은 이미 소유자가 수용한 트레이드오프다.** Lambda `infra/demo/aws/terraform/lambda/handler.py` `_selection_ready` docstring(`:792` 이하): «**«전부» 는 선택된 묶음 전부다(소유자 결정 ⓑ, 2026-09-15).** 그 앱이 쓰는 묶음만 보려면 해석기가 «내 묶음 이름» 을 알아야 하고 그것은 `ADR-MONO-068` 재개봉이다. 대가로, 자기 묶음이 ready 여도 **다른 선택 묶음이 booting 이면 False** 다 — 보수 쪽 오차로 수용했다.»
+- 20차 창에서 내린 묶음은 `console-scm`(콘솔 애드온 — `TASK-MONO-758` 표 `:105` `POST /bundle/stop {"bundles":["console-scm"]}`)이었다. 스토어 묶음 `store` = `ecommerce`(+`iam`, `handler.py:140-161`)와 **무관**하다 ⇒ 관찰 자체는 맞다. (스토어 애드온 `store-fulfillment` = wms·scm 이었다면 무관하지 않았을 것이다.)
+- Edge Case «스토어 묶음이 둘 이상» — `store` 는 `ecommerce`+`iam` 하나이고, 애드온 `store-fulfillment` 는 선택적이다(이 결정 아래에선 정할 필요가 없어졌다).
+
+## ③ 소유자 결정 (원문)
+
+> 질문: «스토어 «켜지는 중» 배너의 기준을 어떻게 할까요?»
+> **답: «(나) 선택 전체 유지 + 문구 정확히 (Recommended)»** — 09-15 결정 ⓑ 유지. web-store 배너 문구를 «선택한 데모 화면 일부가 아직 켜지는 중» 쪽으로 바로잡고 주석에 그 결정을 적는다. 앱 안에서 끝 · Vercel · 재굽기 무관. 콘솔·팬 적용은 판단만 기록.
+
+(대안이던 (가) = 09-15 결정 번복 + `ADR-MONO-068` 재개봉 + 해석기에 «내 묶음» 설정을 더하는 루트 티켓 선행.)
+
+## Edge Case «배너와 다른 동작이 엇갈린다»
+
+로그인 포워더·BFF 는 `starting` 에서도 주소를 받는다(`index.ts:87-90` — «말하기 용이지 막기 용이 아니다»). 그러니 스토어 묶음이 ready 이면 배너가 떠 있어도 로그인·주문은 **된다**. 옛 문구 «데모 서버가 켜지는 중입니다 … 장바구니·로그인 … 동작하지 않을 수 있습니다» 는 그 경우 사실과 어긋났다. 새 문구는 «이 스토어는 이미 준비됐을 수 있지만, 그 전에는 로그인·주문이 실패할 수 있습니다» 다.
