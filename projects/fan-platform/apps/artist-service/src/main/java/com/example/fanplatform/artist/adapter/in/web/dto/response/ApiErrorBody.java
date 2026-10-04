@@ -31,14 +31,16 @@ import java.util.Map;
  * an {@code Instant} its rendering depends on the {@code ObjectMapper}'s
  * {@code WRITE_DATES_AS_TIMESTAMPS} setting, which is <em>not</em> a Jackson or
  * {@code spring-web} default: only Spring Boot's {@code JacksonAutoConfiguration}
- * disables it. artist-service is exactly the service where that assumption fails —
- * {@code config/RedisCacheConfig} contributes an {@code ObjectMapper} bean that Boot's
- * auto-configuration then backs off from ({@code @ConditionalOnMissingBean}), so the
- * effective mapper writes {@code "timestamp": 1785370282.333000000}, contradicting both
- * {@code platform/error-handling.md} ("timestamp: string (ISO 8601)") and
+ * disables it. artist-service used to be exactly the service where that assumption
+ * failed — {@code config/RedisCacheConfig} contributed an {@code ObjectMapper} bean that
+ * Boot's auto-configuration then backed off from ({@code @ConditionalOnMissingBean}), so
+ * the effective mapper wrote {@code "timestamp": 1785370282.333000000}, contradicting
+ * both {@code platform/error-handling.md} ("timestamp: string (ISO 8601)") and
  * {@code artist-api.md}'s own envelope example. Formatting at construction makes the
  * envelope mapper-independent and identical to {@link ErrorResponse} by construction
- * rather than by configuration (TASK-FAN-BE-038).
+ * rather than by configuration (TASK-FAN-BE-038) — a defense-in-depth that stayed
+ * correct even while the mapper itself was broken, and stays correct now that
+ * TASK-FAN-BE-050 has removed that bean and restored Boot's auto-configured mapper.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiErrorBody(String code, String message, Map<String, Object> details, String timestamp) {

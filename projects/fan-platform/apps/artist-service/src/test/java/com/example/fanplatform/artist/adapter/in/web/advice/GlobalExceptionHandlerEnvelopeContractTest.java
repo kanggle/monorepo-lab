@@ -151,32 +151,35 @@ class GlobalExceptionHandlerEnvelopeContractTest {
     }
 
     /**
-     * artist-service is the one fan service whose effective {@code ObjectMapper} is NOT
-     * Spring Boot's: {@code config/RedisCacheConfig} contributes an {@code ObjectMapper}
-     * {@code @Bean}, and Boot's {@code JacksonAutoConfiguration} bean is
-     * {@code @ConditionalOnMissingBean}, so it backs off. That mapper leaves
-     * {@code WRITE_DATES_AS_TIMESTAMPS} enabled — measured, an {@code Instant} renders as
-     * {@code 1785370282.333000000}. Before TASK-FAN-BE-038 the error envelope held its
-     * timestamp as an {@code Instant}, so <strong>artist-service was emitting a numeric
-     * {@code timestamp}</strong>, contradicting {@code platform/error-handling.md}
-     * ("timestamp: string (ISO 8601)"), {@code artist-api.md}'s own envelope example
-     * ({@code "timestamp": "2026-05-03T00:00:00Z"}), and the frontend's
-     * {@code ApiErrorBody.timestamp?: string} type.
+     * Historically (before TASK-FAN-BE-050), artist-service's effective {@code
+     * ObjectMapper} was NOT Spring Boot's: {@code config/RedisCacheConfig} used to
+     * contribute its own {@code ObjectMapper} {@code @Bean}, and Boot's {@code
+     * JacksonAutoConfiguration} bean is {@code @ConditionalOnMissingBean}, so it backed
+     * off. That mapper left {@code WRITE_DATES_AS_TIMESTAMPS} enabled (Jackson's library
+     * default) — measured, an {@code Instant} rendered as {@code 1785370282.333000000}.
+     * Before TASK-FAN-BE-038 the error envelope held its timestamp as an {@code Instant},
+     * so artist-service was emitting a numeric {@code timestamp}, contradicting {@code
+     * platform/error-handling.md} ("timestamp: string (ISO 8601)"), {@code
+     * artist-api.md}'s own envelope example ({@code "timestamp": "2026-05-03T00:00:00Z"}),
+     * and the frontend's {@code ApiErrorBody.timestamp?: string} type. TASK-FAN-BE-038
+     * fixed the error envelope specifically by pre-formatting the timestamp to a {@code
+     * String}, which made it correct under either mapper — but left the broader mapper
+     * defect (every other response DTO's raw {@code java.time} fields, and the Redis
+     * directory-cache payload) open, as this class's javadoc said at the time.
      *
-     * <p>The envelope now pre-formats the timestamp to a {@code String}, so it is correct
-     * under either mapper. This test drives the <em>real</em> artist mapper — resolved
-     * from {@code RedisCacheConfig} exactly as the running service resolves it — rather
-     * than a hand-built one, so it stays honest if that config changes.
-     *
-     * <p>Note this fixes only the <em>error envelope</em>. The underlying mapper shadowing
-     * still affects any other artist response DTO holding a raw {@code java.time} value
-     * and the Redis directory-cache payload; the Kafka event contract is unaffected
-     * because {@code ArtistEventPublisherAdapter} already pre-formats {@code occurredAt}
-     * with {@code .toString()}. Repairing the mapper itself is out of this task's scope
-     * (it would change the cache payload format) and is left as a separate finding.
+     * <p><strong>TASK-FAN-BE-050 (2026-10-04 UTC) removed the shadowing bean</strong>, so
+     * {@code RedisCacheConfig} no longer contributes an {@code ObjectMapper} and Boot's
+     * auto-configured one (ISO-8601 strings, {@code WRITE_DATES_AS_TIMESTAMPS=false}) is
+     * now the service's only mapper. This test still drives the mapper resolved from
+     * {@code RedisCacheConfig} + {@code JacksonAutoConfiguration} exactly as the running
+     * service resolves it — rather than a hand-built one — so it stays honest if that
+     * config changes again; it now also asserts the premise flipped: a raw {@code
+     * Instant} serializes as an ISO-8601 string, not a number. See {@code
+     * ArtistObjectMapperDateFormatContractTest} for the regression pin covering the
+     * other response DTOs (TASK-FAN-BE-050 AC-2).
      */
     @Test
-    @DisplayName("artist 실 ObjectMapper(RedisCacheConfig 가 Boot 것을 밀어냄) 하에서도 timestamp 는 ISO-8601 문자열 — 숫자 아님")
+    @DisplayName("artist 실 ObjectMapper(Boot 자동설정, TASK-FAN-BE-050 이후) 하에서 timestamp 는 ISO-8601 문자열 — 숫자 아님")
     void envelopeTimestampIsIsoStringUnderArtistsOwnObjectMapper() {
         new ApplicationContextRunner()
                 .withUserConfiguration(RedisCacheConfig.class)
@@ -184,10 +187,11 @@ class GlobalExceptionHandlerEnvelopeContractTest {
                 .run(context -> {
                     ObjectMapper effective = context.getBean(ObjectMapper.class);
 
-                    // Guard the premise: this really is the shadowing mapper, i.e. one
-                    // that would have rendered a raw Instant numerically.
+                    // Guard the premise: a raw Instant now serializes as an ISO-8601
+                    // string (TASK-FAN-BE-050 fixed the mapper itself, not just this
+                    // envelope) — the inverse of what this test guarded before the fix.
                     assertThat(effective.writeValueAsString(Map.of("t", Instant.parse("2026-07-30T00:11:22.333Z"))))
-                            .doesNotContain("2026-07-30T00:11:22.333Z");
+                            .contains("2026-07-30T00:11:22.333Z");
 
                     JsonNode node = effective.readTree(effective.writeValueAsString(
                             ApiErrorBody.withDetails("STATE_TRANSITION_INVALID",

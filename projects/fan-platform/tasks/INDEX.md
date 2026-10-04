@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — ⏳ **artist-service 가 날짜를 숫자로 내보낸다 — 실효 `ObjectMapper` 를 고쳐 ISO 문자열로** (READY, 2026-10-04 UTC · 19차 데모 창 실측). `RedisCacheConfig` 의 매퍼가 Boot 자동설정을 밀어내 `WRITE_DATES_AS_TIMESTAMPS` 가 켜져 있다 → `AgencyView` 등의 `Instant` 가 숫자 → 콘솔 팬 디렉터리 파싱 실패(«일시적으로 불러올 수 없습니다»). 소유자 결정: 콘솔 우회 없이 생산자 수리 · 다음 재굽기. AC-0 현재 형식 실측 · AC-2 컨텍스트 매퍼로 회귀 · AC-3 소비자 전수 · AC-4 Redis 캐시 호환 · AC-5 데모 창(+ `TASK-MONO-759` 판정). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+(empty)
 
 ## in-progress
 
@@ -78,7 +78,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-(empty)
+- `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — 🟡 **REVIEW (2026-10-04 UTC) — artist-service 가 날짜를 숫자로 내보내던 결함을 고쳤다, AC-0~AC-4 닫힘 · AC-5 ⚪.** `config/RedisCacheConfig` 의 그늘막 `ObjectMapper @Bean` 을 삭제해 Boot 자동설정(`WRITE_DATES_AS_TIMESTAMPS=false`)이 유일한 매퍼가 되도록 수리 — `ArtistDirectoryCacheAdapter`/`ArtistEventPublisherAdapter` 는 같은 주입 빈이라 배선 변경 없음. AC-0 실측(고치기 전): `Instant` → JSON 숫자 `1.785370282333E9`, `LocalDate` → 배열 `[2024,5,1]`(STOP 미해당, 구현 진행). 신설 `ArtistObjectMapperDateFormatContractTest`(4 뷰 전부, 컨텍스트 매퍼) bite 확인 — 옛 빈으로 되돌리면 4/4 RED, 복원 후 4/4 GREEN. AC-3 소비자 전수 0건(콘솔 `fan-types.ts`·팬웹 `entities/artist/types.ts`·community-service `HttpArtistAccountChecker`·Kafka 아웃박스 전부 이미 문자열/무관 — 수정 없음). AC-4 캐시 키 버전 상향 불필요 — 신설 `ArtistDirectoryCacheOldFormatCompatibilityTest` 로 옛 포맷 항목이 수리된 매퍼로도 읽힘을 증명. `./gradlew :projects:fan-platform:apps:artist-service:test` rc=0(Testcontainers 통합 테스트는 로컬 Docker 없어 미실행, CI 전제). AC-5(데모 창)는 AMI 재굽기 뒤로 ⚪ 유지. 분석=Opus 5.5 / 구현=Sonnet 5.
 
 ## done
 
