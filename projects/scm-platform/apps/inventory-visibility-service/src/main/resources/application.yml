@@ -106,6 +106,10 @@ scmplatform:
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:scm}
 
 inventory-visibility:
+  # TASK-MONO-760 — the tenant event-driven writes land under (wms events carry none).
+  # Reads are scoped by the caller token's tenant_id, so this must equal the tenant the
+  # operators read as, or the projection reads empty. The AWS demo sets demo-corp.
+  projection-tenant-id: ${INVENTORY_VISIBILITY_PROJECTION_TENANT_ID:scm}
   staleness:
     # Threshold in seconds; nodes with last_event_at older than this become STALE.
     # Matches staleness-monitoring.md default of 10 minutes (600 seconds).

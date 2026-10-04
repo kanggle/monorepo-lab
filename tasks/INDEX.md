@@ -205,7 +205,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-760-scm-inventory-visibility-empty-in-demo.md` — **데모 SCM 재고 가시성 투영이 비어 있다** (IN-PROGRESS, 2026-10-04 UTC 착수 · 소유자 결정 «새 티켓 중 두 번째»). 🔴 **정적 분석으로 원인 확정 — 테넌트 불일치**: wms 소비자 셋은 스냅샷을 `tenant_id="scm"` 으로 쓰고, 조회는 토큰 테넌트(`demo-corp`)로 거른다(ADR-MONO-020 active-tenant 범위). 파이프라인이 다 돌아도 화면은 0이다. ⏳ **수리 방향 = 소유자 결정 대기**(§ 정적 분석 · 결정 갈래). 다음 창에서 `inventory_snapshots` 테넌트별 행 수 · 릴레이 컨테이너 기동 여부를 잰다. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-760-scm-inventory-visibility-empty-in-demo.md` — **데모 SCM 재고 가시성 투영이 비어 있다** (IN-PROGRESS, 2026-10-04 UTC 착수 · 소유자 결정 «새 티켓 중 두 번째»). 🔴 **정적 분석으로 원인 확정 — 테넌트 불일치**: wms 소비자 셋은 스냅샷을 `tenant_id="scm"` 으로 쓰고, 조회는 토큰 테넌트(`demo-corp`)로 거른다(ADR-MONO-020 active-tenant 범위). 파이프라인이 다 돌아도 화면은 0이다. 🔵 **소유자 결정 ⓑ — 투영 테넌트를 설정값으로**(`inventory-visibility.projection-tenant-id`, 기본 `scm` · 데모 오버라이드 `demo-corp`). 소비자 넷 + 신선도 배치가 한 빈을 읽는다. 스펙·계약 먼저 고침. 단위 6칸 + IT(CI), bite = received 칸만 빨강. 🔴 데모 반영은 AMI 재굽기 뒤 — 판정 창에서 `inventory_snapshots` 의 `demo-corp` 행 수 · 릴레이 기동을 잰다. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 

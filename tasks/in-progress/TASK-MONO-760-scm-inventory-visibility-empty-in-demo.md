@@ -150,3 +150,36 @@ monorepo
    - 둘 다 0 ⇒ 경로 쪽에도 결함이 있다 → 2 로.
 2. `docker ps -a --filter name=demo-event-relay` · demo-up 로그의 릴레이 생략 문구 · `bash infra/demo/relay/probe-relay.sh`. 🔴 `probe-relay.sh:109` 는 봉투가 아닌 `{"probe":...}` 를 `wms.inventory.adjusted.v1` 에 넣는다 ⇒ scm 쪽 adjusted **DLT 증가는 탐침 탓**일 수 있다(결함으로 읽지 마라 — 추론).
 3. (2 가 정상인데 1 이 둘 다 0 일 때만) wms `inventory_outbox` 의 `event_type='inventory.received'` 행 수·`published_at`, `wms-kafka` 의 `wms.inventory.received.v1` end offset(대조로 `wms.inbound.putaway.completed.v1` 도 함께 — 도구 무응답과 0 을 가른다), 그룹 `scm-inventory-visibility-v1` 의 `--describe`.
+
+---
+
+# 소유자 결정 · 구현 (2026-10-04 UTC)
+
+> 🔵 **소유자 결정: ⓑ 투영 테넌트를 설정값으로.** 분석=Opus 5.5 / 구현=Opus 5.5.
+> 🔴 **AC-0 순서와 다르게 갔다**: AC-0 은 «창에서 먼저 재고 코드 0줄»을 요구했다. 그런데 정적 분석이 «경로가 다 돌아도 0» 인 결함을 이미 보였고, 소유자가 창 전에 수리를 골랐다. 그래서 AC-0 의 창 측정은 **수리 뒤 판정 창**으로 옮긴다. 그 창에서 잴 것은 위 «다음 창 측정»이고, 1 의 기대값만 바뀐다(아래).
+
+## 무엇을 바꿨나
+
+| 층 | 변경 |
+|---|---|
+| 스펙(먼저) | `inventory-visibility-service/architecture.md` § Multi-tenancy — `:251` 에 정정 문장(ADR-019/020 이후 행은 토큰 테넌트로 읽힌다) · `:276` 을 «투영 테넌트(기본 `scm`)»로 · **Projection tenant** 문단 신설. `data-model.md` § tenant_id Policy — 쓰기 경로별 테넌트(이벤트 → 투영 테넌트, API → 토큰 테넌트). 계약 `contracts/events/inventory-visibility-subscriptions.md` — 3PL 소비자는 `payload.tenantId` 를 **읽지 않고** 투영 테넌트로 비교한다(코드가 원래 그랬다 — 계약 문장이 «읽는 필드» 목록에 넣어 둔 것을 바로잡음) |
+| 코드 | `config/ProjectionTenant` 빈 신설 — `inventory-visibility.projection-tenant-id`(env `INVENTORY_VISIBILITY_PROJECTION_TENANT_ID`, 기본 `scm`), 빈 값이면 기동 실패, 앞뒤 공백 제거. `"scm"` 상수를 쓰던 소비자 넷(`WmsInventory{Received,Adjusted,Transferred}Consumer` · `ScmThirdPartyInboundExpectedConsumer`)이 이 빈을 쓴다. `StalenessDetectionScheduler` 도 같은 빈을 쓴다 — 🔴 예전에는 `scmplatform.oauth2.required-tenant-id` 를 빌려 썼고, 소비자 상수와는 **우연히** 같았다. 투영 테넌트만 바꾸면 배치가 새 노드를 안 훑어 신선도가 영원히 비게 되는 길이었다 |
+| `application.yml` | `inventory-visibility.projection-tenant-id: ${INVENTORY_VISIBILITY_PROJECTION_TENANT_ID:scm}` |
+| 데모 | `infra/demo/scm-identity.override.yml` — `inventory-visibility-service` 에 `INVENTORY_VISIBILITY_PROJECTION_TENANT_ID=demo-corp`(같은 파일 `supplier-mock` 의 `ACK_TENANT_ID` 와 같은 이유 · `projects.sh:57` 이 scm 묶음에 이 파일을 건다) |
+
+데모 밖(기본값 `scm`)의 동작은 바이트 단위로 같다. fed-e2e 의 globex 행(`TASK-MONO-171`)은 API/픽스처 행이라 무관하다.
+
+## 시험
+
+- `adapter/inbound/messaging/ProjectionTenantConsumersTest`(단위 6칸): 소비자 넷이 각각 서비스에 **설정된 테넌트**를 넘기는지, 배치가 그 테넌트를 훑는지, 빈 값은 기동 실패·공백은 제거되는지. 🔴 시험의 테넌트는 일부러 `scm` 이 **아니다**(`demo-corp`) — 기본값으로 재면 상수가 남아 있어도 통과한다.
+- `integration/ProjectionTenantIntegrationTest`(IT, `@Tag("integration")`): `projection-tenant-id=demo-corp` 로 띄운 컨텍스트에 실제 Kafka 로 received 를 넣는다 → 노드가 `demo-corp` 아래에 생기고, `getCrossNodeSnapshot("demo-corp")` 가 그 SKU 를 돌려준다. 대조군: `scm` 아래에는 노드가 없고 `getCrossNodeSnapshot("scm")` 은 그 SKU 를 못 본다. ⚪ 이 호스트에는 Docker 가 없어서(`docker info` → npipe 없음) **CI 통합 레인에서만 돈다**.
+- 로컬(worktree `mlab-mono760`): `./gradlew :projects:scm-platform:apps:inventory-visibility-service:test` rc=0 · BUILD SUCCESSFUL. 새 단위 시험 6/6, 기존 시험 무수정.
+  - 첫 실행은 새 시험 3칸이 빨강이었다. 원인은 시험 픽스처였다: `ObjectMapper.findAndRegisterModules()` 가 클래스패스의 jackson-module-scala 를 올려 페이로드가 Scala 컬렉션이 됐다. `JavaTimeModule` 만 명시 등록하도록 고쳤다. 운영 코드는 Spring 의 ObjectMapper 라 해당 없다.
+- **bite**: `WmsInventoryReceivedConsumer` 의 인자만 `"scm"` 리터럴로 되돌리면 → **received 칸 하나만 빨강**(6 중 1 실패, rc=1). 원본은 scratchpad 백업으로 복원했고 `cmp` 일치를 확인했다.
+
+## 재굽기 뒤 판정 창에서 (AC-0 이관 · AC-2)
+
+- 🔴 이 수리는 **AMI 재굽기 뒤에만** 데모에 있다(백엔드 + compose 오버라이드). 판정 전에 구운 커밋이 이 PR 머지의 자손인지 먼저 확인한다(실패 시나리오 3).
+- 🔴 **볼륨**: 수리 전에 `scm` 아래로 쌓인 행은 옮겨지지 않는다(스펙 Projection tenant 문단). `terraform apply` 의 인스턴스 교체가 신선 볼륨을 사므로, 재굽기 창에서는 시드가 다시 낸 이벤트가 `demo-corp` 로 쌓인다.
+- 측정 1 의 기대값: **`demo-corp` ≥ 1**(이 수리가 동작) · `scm` 은 0 이거나 수리 전 잔여. `demo-corp` = 0 이면 테넌트 말고 경로에도 결함이 있다 → 측정 2(릴레이 기동)로.
+- AC-2 의 화면 판정(`/scm/inventory` ≥ 1 행 · 운영 개요 SCM 스냅샷 수 ≥ 1 · WMS 재고와 같은 SKU/창고)은 그대로다.

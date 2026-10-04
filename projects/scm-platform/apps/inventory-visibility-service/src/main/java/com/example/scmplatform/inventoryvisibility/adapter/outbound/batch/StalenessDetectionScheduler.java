@@ -1,10 +1,10 @@
 package com.example.scmplatform.inventoryvisibility.adapter.outbound.batch;
 
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,9 +23,9 @@ import org.springframework.stereotype.Component;
 public class StalenessDetectionScheduler {
 
     private final InventoryVisibilityApplicationService applicationService;
-
-    @Value("${scmplatform.oauth2.required-tenant-id:scm}")
-    private String tenantId;
+    // Scan the tenant the event consumers write under (TASK-MONO-760). It used to borrow
+    // the OAuth2 required-tenant key, which only agreed with the consumers by coincidence.
+    private final ProjectionTenant projectionTenant;
 
     /**
      * Detect stale nodes and publish SNAPSHOT_STALE alerts every 5 minutes.
@@ -43,6 +43,7 @@ public class StalenessDetectionScheduler {
             lockAtLeastFor = "PT4M"
     )
     public void detectStaleNodes() {
+        String tenantId = projectionTenant.id();
         log.info("Starting staleness detection batch for tenantId={}", tenantId);
         long startMs = System.currentTimeMillis();
         try {

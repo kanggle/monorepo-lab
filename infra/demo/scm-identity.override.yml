@@ -28,6 +28,12 @@ services:
   inventory-visibility-service:
     networks:
       - traefik-net
+    # TASK-MONO-760 — 투영 테넌트. wms 재고 이벤트에는 테넌트가 없어서 소비자가 이 값으로
+    # 쓴다(기본 `scm`). 조회는 토큰의 tenant_id 로 거르고, 데모 운영자는 `demo-corp` 를
+    # assume 한다(아래 supplier-mock 과 같은 이유). 기본값을 두면 투영이 끝까지 돌아도
+    # `/scm/inventory` 와 운영 개요 SCM 카드가 «200 인데 0 건» 이다(19·20차 창).
+    environment:
+      INVENTORY_VISIBILITY_PROJECTION_TENANT_ID: ${INVENTORY_VISIBILITY_PROJECTION_TENANT_ID:-demo-corp}
 
   # ---------------------------------------------------------------------------
   # supplier-mock (TASK-SCM-BE-060) — 데모 테넌트를 알려 준다.
