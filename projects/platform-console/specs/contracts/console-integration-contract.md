@@ -3595,6 +3595,23 @@ Owner decision (TASK-MONO-674 AC-1): **refresh silently, and show the reason whe
   - Operator re-exchange **fail-closed** (`401`, not an operator of any tenant) → callback parity: operator session dropped, rotated IAM cookies kept → `/onboarding`.
 - **Loop bound**: one guard bounce reaches the handler at most **twice** (first attempt + one `retry=1`); every failure destination (`/login…`, `/onboarding`) is outside the `(console)` guard, and `/login?error=session_expired` does not short-circuit back to the console (TASK-PC-FE-278). A success whose cookies the browser refuses to store cannot cycle: the old refresh token was rotated away, so the next attempt is rejected.
 - **Unchanged**: the browser `POST /api/auth/refresh` after a `401` (§ 2.6 "When") and its JSON responses; the 53 server-side `401` sites (`/login?error=session_expired`).
+- **Superseded in one case by § 2.6.2**: when the forced re-login lands while the demo backend is confirmed stopped, `/login?error=session_expired` is no longer the visitor's final destination.
+
+#### 2.6.2 Session end while the demo backend is stopped → sample shell (normative — TASK-PC-FE-305)
+
+Owner report (2026-10-04): a visitor logged in, the demo backend shut down, and on returning the console showed the login page with «데모 서버가 종료되어 다시 로그인해야 합니다…». Logging in at that point cannot succeed — the IdP is down with the backend — so the login wall leads nowhere. The owner expects the no-login sample shell (ADR-MONO-074) instead.
+
+- **One decision point, not 53.** Every forced re-login — the § 2.6.1 refresh-failure redirects, the server-side `401` sites, the `(onboarding)` guard — already converges on `/login?error=session_expired` (the `SESSION_EXPIRED` marker). The `/login` page asks the demo-state signal **only when that marker is present** and makes the decision there. The `401` sites and the § 2.6.1 handler are not edited.
+- **The signal**: `resolveDemoBackendState()` (`shared/config/demo-backend.ts` → `@demo/backend-resolver`) — the same function `DemoBackendNotice` and the TASK-PC-FE-299 copy use. The refresh error alone is never the signal.
+  - `unavailable` → **sample**. 🔴 This value covers both «the control plane answered `state≠running`» and «`/status` failed» (`infra/demo/backend-resolver/README.md` table). The console cannot distinguish them through the shared resolver; this decision inherits the TASK-PC-FE-299 copy's reading of `unavailable`. Splitting it is a change to the shared resolver, outside this contract.
+  - `running` · `starting` · `not-demo` → **login**, exactly as § 2.6.1 (`/login?error=session_expired`, generic copy).
+- **Sample branch**: `/login` redirects to `GET /api/auth/demo-ended?redirect=<target>` (a page cannot delete cookies). That handler:
+  - re-reads the signal itself (a GET that deletes cookies must not trust its caller);
+  - still `unavailable` → `clearFullSession` (access / refresh / id_token / operator / tenant / assumed; `console_last_tenant` is kept, as on logout) → redirect to `<target>?signed_out=demo_stopped`, `Cache-Control: no-store`. With no session cookie left, the `(console)` guard admits the visitor as a sample visitor (ADR-MONO-074 A1 — the predicate is unchanged; the cookies are gone, not reinterpreted);
+  - anything else → `/login?error=session_expired&demo_checked=1[&redirect=<target>]`, cookies untouched. `/login` does not forward again when `demo_checked=1` (loop bound: one extra hop), and renders the TASK-PC-FE-299 copy for whatever it now sees.
+  - `<target>`: the same consume-side predicate as § 2.6.1 (`sanitizeReturnPath` + guard predicate), plus `/onboarding…` rejected (not reachable in sample mode); anything rejected becomes `/`.
+- **Notice**: the sample shell shows «데모 서버가 종료되어 로그아웃되었습니다…» (`data-testid="demo-signed-out-notice"`) when `signed_out=demo_stopped` is on the URL, and clears the TanStack Query cache on that landing (the TASK-PC-FE-299 AC-5 obligation, carried over from the forced re-login landing it replaces).
+- **Not covered**: (a) access + operator cookies still alive when the backend stops — no refresh, no `401`, the authenticated shell renders with `DemoBackendNotice`; (b) the browser API client's refresh failure (`shared/api/client.ts` → `/login?redirect=…`, no marker) — the marker is absent, so no decision is made.
 
 ### 2.7 Active-Tenant Switcher → Assume-Tenant Exchange (normative — ADR-MONO-020 D4)
 

@@ -4,6 +4,11 @@ import { SESSION_EXPIRED } from '@/shared/lib/re-login';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { redirect } from 'next/navigation';
 import { resolveDemoBackendState } from '@/shared/config/demo-backend';
+import {
+  sessionEndDestination,
+  buildDemoEndedRedirectFor,
+  DEMO_CHECKED_PARAM,
+} from '@/shared/lib/session-end';
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoLoginCredentials } from '@/widgets/demo-credentials/DemoLoginCredentials';
 import { ForcedReLoginCacheReset } from '@/widgets/forced-relogin-cache-reset/ForcedReLoginCacheReset';
@@ -87,7 +92,7 @@ const GENERIC_ERROR =
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; redirect?: string }>;
+  searchParams: Promise<{ error?: string; redirect?: string; demo_checked?: string }>;
 }) {
   const sp = await searchParams;
 
@@ -97,14 +102,34 @@ export default async function LoginPage({
   const forcedReLogin = sp.error === SESSION_EXPIRED;
   if (!forcedReLogin && (await isAuthenticated())) redirect('/console');
 
+  // The demo-state signal is asked ONLY on a forced re-login landing (the
+  // marker) — a plain /login visit never pays the control-plane round trip.
+  const demoState = forcedReLogin ? await resolveDemoBackendState() : null;
+
+  // TASK-PC-FE-305 (contract § 2.6.2) — a forced re-login while the demo
+  // backend is stopped does NOT stop here: logging in cannot succeed (the IdP is
+  // down with the backend), so the session is ended and the visitor lands in the
+  // sample shell. The decision is `sessionEndDestination` (the one judge, shared
+  // with the route that clears the cookies). `demo_checked=1` means the route
+  // already re-read the signal and disagreed — never forward twice.
+  if (
+    demoState !== null &&
+    sp[DEMO_CHECKED_PARAM] !== '1' &&
+    sessionEndDestination(demoState) === 'sample'
+  ) {
+    redirect(buildDemoEndedRedirectFor(sp.redirect));
+  }
+
   // TASK-PC-FE-299 AC-4 — a demo-shutdown logout gets a distinct message
   // ONLY when a real signal confirms it (same resolver `DemoBackendNotice`
   // uses, below). Never guessed: `resolveDemoBackendState()` reads the
   // control-plane `/status` this request; every other outcome ('starting' —
   // instance is coming up, not down; 'running' — a genuine session expiry;
   // 'not-demo' — no control plane to ask) keeps the generic message.
-  const demoShutdownLogout =
-    forcedReLogin && (await resolveDemoBackendState()) === 'unavailable';
+  // 🔵 After TASK-PC-FE-305 this branch is reached only on the `demo_checked=1`
+  //    landing (the route and this page read the signal differently a moment
+  //    apart) — it is the fallback copy, not the normal demo-stop path.
+  const demoShutdownLogout = demoState === 'unavailable';
 
   // Gap C (F5): unknown codes must never render silent (null → visible fallback).
   const error = demoShutdownLogout
