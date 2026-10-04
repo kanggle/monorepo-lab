@@ -4,7 +4,7 @@ TASK-BE-621
 
 # Status
 
-review (2026-10-04 UTC — 구현 완료, 통합 시험은 CI 첫 실측 대기)
+done (2026-10-04 UTC — 4차원 검증 · PR #4141 squash `7a127c39a`)
 
 # Title
 
@@ -116,7 +116,7 @@ iam-platform
 - [x] **AC-5 (잠긴 사이트 거절)** — 멤버십 `LOCKED` 인 사이트로는 토큰이 발급되지 않는다 — 기존 계약 오류 `invalid_grant`(615 «ACTIVE 멤버십 없으면 토큰 없음»; authorize 게이트는 동의 화면을 띄우지 않고 통과, 발급자가 거절). consumer-members 읽기가 `membershipStatus = LOCKED` 를 답한다.
 - [x] **AC-6 (동의로 안 열림)** — `LOCKED` 멤버십에 동의 `PUT` 은 무변경(그대로 `LOCKED`), 본인 «사이트 탈퇴» 도 무변경(떠났다 다시 동의해 잠금을 벗는 길 없음). 운영자 «GDPR 삭제» 는 `LOCKED → LEFT OPERATOR`.
 - [x] **AC-7 (감사)** — 사이트 범위 잠금·해제의 `admin_actions` 행 `downstream_detail` = `SITE_MEMBERSHIP_LOCKED|UNLOCKED site=<사이트>`; 멤버십 행에 잠금 기록.
-- [ ] **AC-8 (시험 · bite)** — 단위(도메인 전이 · use case · admin 판별) + 슬라이스(컨트롤러 갈래) + 통합(Testcontainers — 스토어 잠금 → 팬 ACTIVE 대조군 · 해제 · 동의 무변경 · `'*'` 계정 전체). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록한다. 로컬에서 못 돈 통합 시험은 ⚪ 로 적고 CI 실측으로 닫는다.
+- [x] **AC-8 (시험 · bite)** — 단위(도메인 전이 · use case · admin 판별) + 슬라이스(컨트롤러 갈래) + 통합(Testcontainers — 스토어 잠금 → 팬 ACTIVE 대조군 · 해제 · 동의 무변경 · `'*'` 계정 전체). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록한다. 로컬에서 못 돈 통합 시험은 ⚪ 로 적고 CI 실측으로 닫는다.
 
 # Related Specs
 
@@ -237,3 +237,19 @@ iam-platform
 - **account-service 를 admin-service 보다 먼저 또는 함께**(V0033 + 응답 `scope`). 거꾸로(새 admin + 옛 account)면: 플랫폼 관리자 `'*'` 는 MONO-735 경로라 그대로 계정 잠금 ✅, 사이트 운영자는 옛 동작(계정 전체 잠금 — 지금의 결함 그대로, `scope` 없음 → `ACCOUNT`). 새 account + 옛 admin 이면: 플랫폼 관리자가 활성 테넌트로 보내 **사이트 범위로 떨어진다**(Failure Scenario 4) — 그래서 함께 올린다.
 - auth-service 는 배포 무관(코드 변경 없음).
 - 🔵 데모 반영은 다음 AMI 재굽기 뒤(백엔드는 구워진 클론에서 돈다).
+
+# 소유자 결정 (2026-10-04 UTC, § 소유자 결정 필요 의 답 — 원문 그대로)
+
+1. 자동 잠금 → **«계정 전체 유지 (Recommended)»**. security-service `AUTO_DETECT` 잠금은 계정 전체 그대로 — 코드 변경 없음.
+2. 내부 프로비저닝 PATCH → **«별도 티켓으로 적용 (Recommended)»** → `TASK-BE-622`(ready).
+
+# 닫기 (2026-10-04 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4141` → `MERGED`, `7a127c39a` |
+| (b) | `7a127c39a` 는 `origin/main` 의 조상 |
+| (c) | #4141 `statusCheckRollup` 66 개 · FAILURE 0 |
+| (d) | AC-0~7 `[x]`(구현 기록). **AC-8** — 단위·슬라이스 로컬 rc=0 · bite (A) 1칸 (C) 2칸(구현 기록), 그리고 ⚪ 이던 통합: PR 런 `37189155467` `Integration (iam B, Testcontainers)` 잡 `111397547167` 로그에 `TASK-BE-621 — 사이트 잠금(멤버십 LOCKED) vs 계정 잠금 (MySQL, 풀 켜짐)` 3칸(스토어 운영자 잠금→스토어만 LOCKED·팬 ACTIVE·해제 / 잠긴 회원 GDPR 삭제→LEFT OPERATOR / 플랫폼 관리자 `'*'`→계정 LOCKED) **PASSED** · `TEST-SUMMARY lane=integration tests=304 failures=0 errors=0 skipped=0` — V0033 이 실제 MySQL 에 적용됐다. 🔵 bite (B)(admin `'*'` 분기)는 분류기에 막혀 못 했다 — 슬라이스 두 칸 + 위 통합 셋째 칸이 그 분기를 지킨다 |
+
+🔵 데모 반영: 다음 AMI 재굽기(account-service · admin-service 함께). § 후속(콘솔 표시 · 거절 문구)은 이 티켓 밖.
