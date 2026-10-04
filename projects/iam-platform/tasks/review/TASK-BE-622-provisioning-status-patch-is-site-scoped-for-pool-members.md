@@ -207,3 +207,15 @@ iam-platform
 - account-service 단독(다른 서비스 코드 변경 없음, 마이그레이션 없음). 응답 필드 추가는 하위 호환(유일한 호출자는 본문을 읽지 않는다).
 - 🔵 데모 반영은 다음 AMI 재굽기 뒤(백엔드는 구워진 클론에서 돈다). 지금 이 갈래를 타는 운영 호출은 없다(AC-0) — 재굽기에 넣는 급함은 없다.
 - 🔵 관찰(고치지 않음): 계정 갈래의 `DELETED`(사이트 자기 계정)는 `deleted_at` 은 찍지만(`Account#changeStatus`) `account.deleted` 이벤트는 내지 않는다 — `account.status.changed` 만(`AccountStatusEvents`). `/delete` 경로의 `applyDelete`(유예 기간 + `account.deleted`)와 다르다. 이 티켓 밖 — 지금 호출자는 `DELETED` 를 보내지 않는다.
+
+---
+
+## CORRECTION (2026-10-04 UTC — PR #4146 CI 첫 실측)
+
+CI 런 `37194401941` 잡 `111413168319` `Integration (iam B)`: tests=269 failures=1. 실패는 `ProvisionStatusSiteScopeIntegrationTest#storeBackend_sellerOperatorAccount_locksTheAccount`(AC-3 대조군) 178행 하나뿐 — `OPERATOR_PROVISIONING_STATUS_CHANGE` 이력 행 기대 1, 실제 2. AC-2 · AC-4 IT 와 뒤집은 `PoolMemberSiteSurfacesIntegrationTest` 칸은 PASSED.
+
+**판정: 시험 기대가 틀렸다(회귀 아님).** 두 행 모두 이 PR 전 `main` 이 쓰던 행이다:
+1. 계정 **생성** — `ProvisionAccountUseCase#writeProvisioningAudit`(184행): `ACTIVE→ACTIVE`, 사유 `OPERATOR_PROVISIONING_STATUS_CHANGE`, details `action=OPERATOR_PROVISIONING_CREATE`. 이 파일은 이 PR 이 건드리지 않았다(`git diff origin/main` 0줄; 마지막 변경 #4093).
+2. **상태 변경** — `ProvisionStatusChangeUseCase` 계정 갈래의 `historyRepository.save` 한 번(`ACTIVE→LOCKED`). `git diff origin/main` 에서 이력 쓰기·이벤트 발행 줄의 추가/삭제 0 — 계정 갈래는 main 과 같은 한 행을 쓴다.
+
+시험이 생성 행을 세지 못했다(대조군 계정을 시험 안에서 `POST /internal/tenants/ecommerce/accounts` 로 만들었기 때문). 고침: 개수 2 + 각 행을 `from>to` 로 핀(`ACTIVE>ACTIVE` · `ACTIVE>LOCKED`) + `LOCKED` 행의 테넌트 `ecommerce`. 위 § 시험 표의 «이력 1» 은 «이력 2(생성 1 + 잠금 1)» 로 읽는다. AC-5 는 여전히 🟡 — 다음 CI 런의 실행 줄로 닫는다.

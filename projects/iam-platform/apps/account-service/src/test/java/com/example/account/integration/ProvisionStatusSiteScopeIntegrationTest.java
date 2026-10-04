@@ -175,7 +175,16 @@ class ProvisionStatusSiteScopeIntegrationTest extends AbstractConsumerPoolIntegr
 
         assertThat(accountStatus(sellerAccountId)).isEqualTo("LOCKED");
         assertThat(outboxCount(sellerAccountId, "account.locked")).isEqualTo(1);
-        assertThat(provisioningHistoryRows(sellerAccountId)).isEqualTo(1);
+        // Two OPERATOR_PROVISIONING_STATUS_CHANGE rows, both written on main before TASK-BE-622: the creation audit
+        // (ProvisionAccountUseCase#writeProvisioningAudit — ACTIVE→ACTIVE, action OPERATOR_PROVISIONING_CREATE) and
+        // the status change (ProvisionStatusChangeUseCase account branch — ACTIVE→LOCKED). Pin each one.
+        assertThat(provisioningHistoryRows(sellerAccountId)).isEqualTo(2);
+        assertThat(jdbc.queryForList("SELECT CONCAT(from_status, '>', to_status) FROM account_status_history "
+                        + "WHERE account_id = ? AND reason_code = 'OPERATOR_PROVISIONING_STATUS_CHANGE'",
+                String.class, sellerAccountId))
+                .containsExactlyInAnyOrder("ACTIVE>ACTIVE", "ACTIVE>LOCKED");
+        assertThat(jdbc.queryForObject("SELECT tenant_id FROM account_status_history WHERE account_id = ? "
+                + "AND to_status = 'LOCKED'", String.class, sellerAccountId)).isEqualTo("ecommerce");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM consumer_site_memberships WHERE account_id = ?",
                 Integer.class, sellerAccountId)).isZero();
     }
