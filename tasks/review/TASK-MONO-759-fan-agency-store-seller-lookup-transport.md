@@ -215,3 +215,11 @@ monorepo
 원인(이 티켓 밖): Vercel 로그에서 같은 요청이 `fan_ok status=200 path=/api/v1/agencies` 다음 **1ms 뒤** `fan_error` — 게이트웨이·artist-service 는 200 을 줬고 콘솔이 **본문 파싱에서** 실패했다. artist-service 의 실효 `ObjectMapper` 가 `RedisCacheConfig` 의 것이라(Boot 자동설정이 물러남) `WRITE_DATES_AS_TIMESTAMPS` 가 켜져 있고, `AgencyView.createdAt/updatedAt`(`Instant`)이 숫자로 나간다 — 콘솔 `AgencySchema` 는 문자열(계약 `artist-api.md` 도 ISO 문자열). 이 기전은 `GlobalExceptionHandlerEnvelopeContractTest` 가 이미 실측해 적어 둔 것이다(«오류 봉투만 고쳤다»). ⚪ 응답 본문 자체는 직접 보지 못했다(콘솔 토큰 없이는 못 받는다) — 로그 순서 + 코드 + 기록된 실측의 추론. 소유자 결정(2026-10-04): **백엔드를 고쳐 다음 재굽기에 싣는다**(콘솔이 숫자를 받아주는 우회는 하지 않는다) → `TASK-FAN-BE-050`. 이 티켓의 데모 판정은 그 재굽기 창에서.
 
 🔵 곁발견: 콘솔 `AgencyDetail.tsx` 의 안내(`fan-agency-seller-unwired-note` — «스토어 조회가 아직 연결 안 됨», 머리 주석 25–32행)는 759 이후로 사실이 아니다. 화면 판정 때 함께 고칠 것.
+
+---
+
+## CORRECTION (2026-10-04 UTC)
+
+위 곁발견을 별도 PR(`fix/console-agency-seller-stale-note`)에서 처리했다 — `AgencyDetail.tsx` 의 낡은
+`fan-agency-seller-unwired-note` 안내와 머리 주석을 걷어내고, 503 상태 문구의 "아직 배선 안 됨" 표현도
+지금 동작(실 스토어 조회 · fail-closed)에 맞게 고쳤다. 단위 시험(`FanAgencyDetail.test.tsx`)도 함께 갱신.
