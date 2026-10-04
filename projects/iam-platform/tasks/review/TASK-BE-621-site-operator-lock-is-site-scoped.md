@@ -4,7 +4,7 @@ TASK-BE-621
 
 # Status
 
-in-progress (2026-10-04 UTC)
+review (2026-10-04 UTC — 구현 완료, 통합 시험은 CI 첫 실측 대기)
 
 # Title
 
@@ -108,14 +108,14 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (계약 먼저)** — 아래 «Related Contracts» 의 문서가 코드보다 먼저(같은 PR, 앞 커밋) 고쳐져 있다: 사이트 운영자 잠금·해제 = 그 사이트 멤버십 · 플랫폼 관리자 = `'*'` 계정 전체 · `LOCKED` 멤버십의 토큰 거절 · 동의로 안 열림 · 응답 `scope`.
-- [ ] **AC-1 (사이트 운영자 잠금)** — 스토어 운영자(활성 테넌트 `ecommerce`, 플랫폼 스코프 아님)가 스토어·팬 둘 다 멤버인 풀 계정을 잠그면: 스토어 멤버십 `LOCKED`(잠금 시각·운영자 id 기록) · **팬 멤버십 `ACTIVE`** · **계정 `ACTIVE`** · `account.locked`/`account.status.changed` 0 · 응답 `scope = SITE_MEMBERSHIP`, `siteTenantId = ecommerce`, `currentStatus = LOCKED`. 근거가 된 멤버십 상태 값과 마이그레이션 선택은 § 설계에 적혀 있다.
-- [ ] **AC-2 (다른 사이트 — 대조군)** — 같은 사람이 팬으로는 여전히 토큰을 받는다(멤버십 ACTIVE · 계정 ACTIVE → 발급 경로 그대로). 스토어 사이트 계정(풀 아님)을 스토어 운영자가 잠그면 지금처럼 **계정**이 잠긴다(`scope = ACCOUNT`).
-- [ ] **AC-3 (플랫폼 관리자)** — 플랫폼 스코프 운영자(SUPER_ADMIN)의 잠금·해제는 활성 테넌트와 무관하게 하류 `'*'` → 계정 전체 `LOCKED`/`ACTIVE`(기존 이벤트 · 이력 · 세션 폐기). 풀 계정이면 모든 사이트에서.
-- [ ] **AC-4 (해제 대칭)** — 사이트 운영자 해제: 그 사이트 멤버십 `LOCKED → ACTIVE`(잠금 기록 지움, 역할 그대로) · `scope = SITE_MEMBERSHIP`. 계정 전체 잠금은 사이트 운영자가 풀지 못한다(D-3 — 계정 `LOCKED` 그대로).
-- [ ] **AC-5 (잠긴 사이트 거절)** — 멤버십 `LOCKED` 인 사이트로는 토큰이 발급되지 않는다 — 기존 계약 오류 `invalid_grant`(615 «ACTIVE 멤버십 없으면 토큰 없음»; authorize 게이트는 동의 화면을 띄우지 않고 통과, 발급자가 거절). consumer-members 읽기가 `membershipStatus = LOCKED` 를 답한다.
-- [ ] **AC-6 (동의로 안 열림)** — `LOCKED` 멤버십에 동의 `PUT` 은 무변경(그대로 `LOCKED`), 본인 «사이트 탈퇴» 도 무변경(떠났다 다시 동의해 잠금을 벗는 길 없음). 운영자 «GDPR 삭제» 는 `LOCKED → LEFT OPERATOR`.
-- [ ] **AC-7 (감사)** — 사이트 범위 잠금·해제의 `admin_actions` 행 `downstream_detail` = `SITE_MEMBERSHIP_LOCKED|UNLOCKED site=<사이트>`; 멤버십 행에 잠금 기록.
+- [x] **AC-0 (계약 먼저)** — 아래 «Related Contracts» 의 문서가 코드보다 먼저(같은 PR, 앞 커밋) 고쳐져 있다: 사이트 운영자 잠금·해제 = 그 사이트 멤버십 · 플랫폼 관리자 = `'*'` 계정 전체 · `LOCKED` 멤버십의 토큰 거절 · 동의로 안 열림 · 응답 `scope`.
+- [x] **AC-1 (사이트 운영자 잠금)** — 스토어 운영자(활성 테넌트 `ecommerce`, 플랫폼 스코프 아님)가 스토어·팬 둘 다 멤버인 풀 계정을 잠그면: 스토어 멤버십 `LOCKED`(잠금 시각·운영자 id 기록) · **팬 멤버십 `ACTIVE`** · **계정 `ACTIVE`** · `account.locked`/`account.status.changed` 0 · 응답 `scope = SITE_MEMBERSHIP`, `siteTenantId = ecommerce`, `currentStatus = LOCKED`. 근거가 된 멤버십 상태 값과 마이그레이션 선택은 § 설계에 적혀 있다.
+- [x] **AC-2 (다른 사이트 — 대조군)** — 같은 사람이 팬으로는 여전히 토큰을 받는다(멤버십 ACTIVE · 계정 ACTIVE → 발급 경로 그대로). 스토어 사이트 계정(풀 아님)을 스토어 운영자가 잠그면 지금처럼 **계정**이 잠긴다(`scope = ACCOUNT`).
+- [x] **AC-3 (플랫폼 관리자)** — 플랫폼 스코프 운영자(SUPER_ADMIN)의 잠금·해제는 활성 테넌트와 무관하게 하류 `'*'` → 계정 전체 `LOCKED`/`ACTIVE`(기존 이벤트 · 이력 · 세션 폐기). 풀 계정이면 모든 사이트에서.
+- [x] **AC-4 (해제 대칭)** — 사이트 운영자 해제: 그 사이트 멤버십 `LOCKED → ACTIVE`(잠금 기록 지움, 역할 그대로) · `scope = SITE_MEMBERSHIP`. 계정 전체 잠금은 사이트 운영자가 풀지 못한다(D-3 — 계정 `LOCKED` 그대로).
+- [x] **AC-5 (잠긴 사이트 거절)** — 멤버십 `LOCKED` 인 사이트로는 토큰이 발급되지 않는다 — 기존 계약 오류 `invalid_grant`(615 «ACTIVE 멤버십 없으면 토큰 없음»; authorize 게이트는 동의 화면을 띄우지 않고 통과, 발급자가 거절). consumer-members 읽기가 `membershipStatus = LOCKED` 를 답한다.
+- [x] **AC-6 (동의로 안 열림)** — `LOCKED` 멤버십에 동의 `PUT` 은 무변경(그대로 `LOCKED`), 본인 «사이트 탈퇴» 도 무변경(떠났다 다시 동의해 잠금을 벗는 길 없음). 운영자 «GDPR 삭제» 는 `LOCKED → LEFT OPERATOR`.
+- [x] **AC-7 (감사)** — 사이트 범위 잠금·해제의 `admin_actions` 행 `downstream_detail` = `SITE_MEMBERSHIP_LOCKED|UNLOCKED site=<사이트>`; 멤버십 행에 잠금 기록.
 - [ ] **AC-8 (시험 · bite)** — 단위(도메인 전이 · use case · admin 판별) + 슬라이스(컨트롤러 갈래) + 통합(Testcontainers — 스토어 잠금 → 팬 ACTIVE 대조군 · 해제 · 동의 무변경 · `'*'` 계정 전체). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록한다. 로컬에서 못 돈 통합 시험은 ⚪ 로 적고 CI 실측으로 닫는다.
 
 # Related Specs
@@ -156,4 +156,84 @@ iam-platform
 
 - **콘솔 계정 목록의 상태 표시** — 사이트 범위로 잠긴 풀 멤버도 목록의 `status` 는 **계정** 상태(`ACTIVE`)다(목록 응답에 멤버십 상태가 없다). 해제 버튼은 상태와 무관하게 있으므로(`AccountRowActions`) 해제는 된다. 콘솔이 `scope = SITE_MEMBERSHIP` 응답을 «이 사이트에서만 잠금» 으로 보이고, 목록이 사이트 범위 잠금을 보이려면 목록 응답에 멤버십 상태가 필요하다 — platform-console + account-service 목록 티켓. 잠금 현황 카운트(`status=LOCKED` 필터)도 사이트 범위 잠금을 세지 않는다.
 - **스토어·팬의 거절 문구** — 잠긴 사이트에서 로그인하면 IAM 로그인은 되고 그 사이트 토큰만 `invalid_grant` → 사이트 앱은 일반 오류 문구(619 항목 2 의 측정 결과와 같은 갈래 — `OAuthCallbackError`)를 보인다. «이 사이트에서 이용이 제한되었습니다» 같은 문구는 IAM 이 authorize 단계에서 `access_denied` 로 돌려줄 때 가능하다 — 별도 결정·티켓.
+- **bulk-lock 응답의 행 결과**는 `scope` 를 싣지 않는다(`outcome = LOCKED` 는 계정 잠금과 사이트 잠금이 같다) — 행마다의 감사 행 `downstream_detail` 이 구별한다. 콘솔 일괄 잠금 결과 화면이 구별해 보여야 하면 콘솔 티켓.
+- 🔵 관찰(고치지 않음): `admin-to-account.md` 의 `/lock`·`/unlock` 응답 예시는 시각 필드를 `lockedAt`/`unlockedAt` 으로 적었지만 account-service 는 `changedAt` 을 낸다(`StatusChangeResponse`) — admin-service 는 그 값이 없어 자기 완료 시각을 쓴다. 계약 예시만 고쳤다(동작 무변경).
 - 데모 반영은 다음 AMI 재굽기 뒤.
+
+---
+
+# 구현 기록 (2026-10-04 UTC)
+
+> 분석=Opus 5.5 / 구현=Opus 5.5. 한 PR. 브랜치 `feat/be-621-site-scoped-lock`. 커밋 1 = 티켓 + 계약(코드 앞), 커밋 2 = 코드 + 시험.
+
+## 바꾼 것
+
+**계약 (커밋 1 — 코드보다 먼저)**: `multi-tenancy.md` § 4 · § 5(«사이트 잠금 vs 계정 잠금» 표 · «멤버» = `ACTIVE ∨ LOCKED` · § 7 시험 자리) · `admin-to-account.md`(`/lock`·`/unlock` `scope` 표 · 플랫폼 관리자 `'*'`) · `admin-api.md`(lock · unlock · bulk-lock · Tenant Confinement) · `auth-to-account.md`(`membershipStatus = LOCKED` · 동의 무변경) · `account-api.md`(본인 탈퇴의 `LOCKED` 응답) · `data-model.md`(`V0033`) · `account-lifecycle.md`(사이트 잠금은 계정 상태가 아니다).
+
+**account-service**
+- `V0033__add_site_lock_to_consumer_site_memberships.sql` — 상태 CHECK 교체(`ACTIVE`,`LEFT`,`LOCKED`) + `locked_at` · `locked_by_actor_id` + CHECK 셋. 적용된 마이그레이션 무변경. 다음 빈 번호 확인(`V0032` 가 마지막).
+- 도메인 `ConsumerSiteMembershipStatus.LOCKED` · `ConsumerSiteMembership.lockBySiteOperator` / `unlockBySiteOperator` / `isLocked`, `leave()` 의 `LOCKED` 갈래(`OPERATOR` → `LEFT`, `SELF` → 무변경), 생성자 불변식(= V0033 CHECK).
+- `SiteMembershipLockUseCase`(신설) — 멤버십만 쓴다. 계정 저장소·이벤트 발행기를 갖지 않는다(구조적으로 계정을 못 건드린다).
+- `AccountStatusUseCase#changeStatusAsTenantOperator`(신설, D-1) — 이름 있는 테넌트 ∧ 풀 멤버 → 사이트 갈래. `AccountLockController` 의 이름 있는 갈래가 이것을 부른다. 기존 `changeStatus(cmd, tenant)` 무변경(휴면 스케줄러).
+- `StatusChangeResult` / `StatusChangeResponse` + `scope` · `siteTenantId`(4-인자 생성자 유지).
+- § 5 술어 4개 질의(`AccountJpaRepository` 목록 · 개수 · 이메일 · 단건) `m.status = ACTIVE` → `IN (ACTIVE, LOCKED)`.
+- 영속 `ConsumerSiteMembershipJpaEntity` 두 컬럼 · `updateMembership` 이 잠금 기록까지 쓴다.
+
+**admin-service**
+- `AccountAdminController` lock · unlock · bulk-lock — 하류 테넌트 = 플랫폼 스코프면 `'*'`, 아니면 활성 테넌트(`downstreamTenant`). 619 의 `AdminGdprController` 와 같은 판별.
+- `AccountAdminUseCase` — 하류 `scope = SITE_MEMBERSHIP` 이면 감사 `downstream_detail = SITE_MEMBERSHIP_LOCKED|UNLOCKED site=…`, 결과에 `scope` · `siteTenantId`.
+- `AccountServiceClient.LockResponse` · `LockAccountResult` · `UnlockAccountResult` · 응답 DTO 두 개 + `scope` · `siteTenantId`(옛 생성자 유지 — 옛 account-service 의 응답은 `ACCOUNT` 로 읽는다).
+
+**auth-service** — 코드 변경 없음(문자열 비교 — `LOCKED` 는 `isActiveMember()=false` · `isReopenableByConsent()=false` 로 이미 «토큰 없음 · 동의 화면 없음»). 결과 타입 javadoc · 게이트 시험 한 칸.
+
+## 시험
+
+| 새/바뀐 시험 | 무엇을 문다 |
+|---|---|
+| account `ConsumerSiteMembershipLockTest` 7 (신설) | 잠금·멱등·해제·본인 탈퇴 무변경·운영자 탈퇴 → LEFT·LEFT 는 못 잠금·V0033 과 같은 불변식 |
+| account `SiteMembershipLockUseCaseTest` 7 (신설) | 멤버십만 쓴다 · 멱등 · 해제 · D-3(계정 전체 잠금은 못 푼다) · LEFT/없음 404 · DELETED 409 · 다른 목표 409 |
+| account `PoolMemberSiteLookupTest` +4 (16) | 사이트 운영자 → 사이트만(계정 저장·이력·이벤트 0) · 플랫폼 관리자 → 계정 LOCKED·이벤트 `consumer-pool` · **대조군** 사이트 자기 계정 → 계정 잠금 · **대조군** 휴면 경로는 계정 전체 |
+| account `ConsentToConsumerSiteUseCaseTest` +1 (10) · `LeaveConsumerSiteUseCaseTest` +2 (7) | `LOCKED` 는 동의로 안 열림 · 본인 탈퇴 무변경 · 운영자 탈퇴 → LEFT |
+| account `InternalControllerSliceTest` +1, 기존 3칸 갈래 이름 변경 (24) | 이름 있는 헤더 → `changeStatusAsTenantOperator` · 응답 `scope`/`siteTenantId` |
+| account `ConsumerSiteLockIntegrationTest` 3 (신설, `AbstractConsumerPoolIntegrationTest` 하위) | **실 MySQL V0033**: 스토어 운영자 잠금 → 스토어 LOCKED · **팬 ACTIVE(대조군)** · 계정 ACTIVE · `account.locked` 0 · 목록에 남음 · 재동의/본인 탈퇴 무변경 · 해제 → ACTIVE / 잠긴 회원 GDPR → LEFT OPERATOR / `'*'` → 계정 LOCKED · 사이트 운영자 해제로 안 풀림 |
+| admin `AccountAdminControllerSliceTest` +3 (16) | 플랫폼 스코프 → lock·unlock 하류 `'*'`(활성 테넌트가 있어도) · 사이트 운영자 → 활성 테넌트 · 응답 `scope` |
+| admin `AccountAdminUseCaseTest` +3 (14) | 감사 `SITE_MEMBERSHIP_LOCKED/UNLOCKED site=ecommerce` · 옛 응답(scope 없음) → `ACCOUNT` · detail null |
+| auth `AuthorizeSessionTenantGatePoolTest` +1 (14) | `LOCKED` → 동의 화면 없음 · 통과(발급자 `invalid_grant`) |
+
+## 게이트 (각각 단독 · `cmd > log 2>&1; echo rc=$?`)
+
+| 게이트 | rc | 비고 |
+|---|---|---|
+| `:projects:iam-platform:apps:account-service:test` | 0 | 위 칸 실행 확인(test-results) |
+| `:projects:iam-platform:apps:account-service:check` | 0 | 통합 시험은 컴파일만 |
+| `:projects:iam-platform:apps:admin-service:check` | 0 | `AccountAdminUseCaseTest` 14 · `AccountAdminControllerSliceTest` 16 · `BulkLockAccountUseCaseTest` 10 · `BulkLockControllerSliceTest` 8 |
+| `:projects:iam-platform:apps:auth-service:check` | 0 | `AuthorizeSessionTenantGatePoolTest` 14 |
+| `@Tag("integration")` (`ConsumerSiteLockIntegrationTest` 등) | ⚪ 로컬 미실행 | Docker 없음(`dockerDesktopLinuxEngine` 파이프 없음) — **CI 첫 실측**. 통과했다고 적지 않는다 |
+
+## bite (되돌린 뒤 재실행 rc=0 · `false &&`/`true ||` 잔존 grep 0)
+
+| 끈 것 | 돌린 시험 | 결과 |
+|---|---|---|
+| (A) `changeStatusAsTenantOperator` 의 사이트 갈래(`if (false && …)`) | `PoolMemberSiteLookupTest` · `ConsumerSiteMembershipLockTest` · `LeaveConsumerSiteUseCaseTest` · `SiteMembershipLockUseCaseTest` · `ConsumerSiteMembershipLeaveTest` | 43 중 정확히 1 — «사이트 운영자 잠금 → 그 사이트만» 칸 |
+| (C) `leave()` 가 `LOCKED` 를 본인(`SELF`)에게도 `LEFT` 로 | 〃 | 43 중 정확히 2 — 도메인 «본인 탈퇴 → LOCKED 그대로» · use case «본인 탈퇴 쓰기 0» (A·C 동시 주입, 합 3) |
+| (B) admin `downstreamTenant` 의 `'*'` 갈래 | — | ⚪ **수행 못 함** — 편집이 자동 모드 분류기에 «Security Weaken» 으로 막혔다. 우회하지 않았다. 그 갈래를 무는 칸은 `AccountAdminControllerSliceTest` 의 플랫폼 스코프 두 칸(`…stampsWildcard…`)이다 — 소유자가 손으로 돌릴 수 있다 |
+
+## AC
+
+| AC | 판정 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 커밋 1 = 계약만(코드 0) |
+| AC-1 | ✅ 단위·슬라이스 / ⚪ 통합은 CI | `PoolMemberSiteLookupTest` · `SiteMembershipLockUseCaseTest` · `InternalControllerSliceTest`; DB 경로 `ConsumerSiteLockIntegrationTest#storeOperatorLock_locksTheStoreOnly` |
+| AC-2 | ✅ 단위 / ⚪ 통합은 CI | 대조군: 사이트 자기 계정 → 계정 잠금(`PoolMemberSiteLookupTest`) · 팬 멤버십 ACTIVE + consumer-members 읽기 ACTIVE(IT) |
+| AC-3 | ✅ 단위·슬라이스 / ⚪ 통합은 CI | admin 슬라이스 `'*'` 두 칸 · account `changeStatusResolvingTenant` 칸 · IT `platformAdminLock_locksThePoolAccount` |
+| AC-4 | ✅ 단위 / ⚪ 통합은 CI | 해제 · D-3 칸 |
+| AC-5 | ✅ | auth 게이트 칸 + 발급 규칙(`isActiveMember` = ACTIVE 만, 615 그대로) · consumer-members 읽기 `LOCKED`(IT) |
+| AC-6 | ✅ 단위 / ⚪ 통합은 CI | 동의 무변경 · 본인 탈퇴 무변경 · 운영자 GDPR → LEFT |
+| AC-7 | ✅ | `AccountAdminUseCaseTest` 감사 detail · 멤버십 행 잠금 기록(도메인·IT) |
+| AC-8 | 🟡 | 단위·슬라이스 ✅ · account bite 2종 ✅ · admin bite ⚪(분류기) · 통합 ⚪ — **CI 의 `Integration (iam …)` 잡에서 `ConsumerSiteLockIntegrationTest` 3칸이 실제로 돈 것을 확인해야 닫힌다** |
+
+## 배포 순서
+
+- **account-service 를 admin-service 보다 먼저 또는 함께**(V0033 + 응답 `scope`). 거꾸로(새 admin + 옛 account)면: 플랫폼 관리자 `'*'` 는 MONO-735 경로라 그대로 계정 잠금 ✅, 사이트 운영자는 옛 동작(계정 전체 잠금 — 지금의 결함 그대로, `scope` 없음 → `ACCOUNT`). 새 account + 옛 admin 이면: 플랫폼 관리자가 활성 테넌트로 보내 **사이트 범위로 떨어진다**(Failure Scenario 4) — 그래서 함께 올린다.
+- auth-service 는 배포 무관(코드 변경 없음).
+- 🔵 데모 반영은 다음 AMI 재굽기 뒤(백엔드는 구워진 클론에서 돈다).

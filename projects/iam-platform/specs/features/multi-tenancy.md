@@ -572,7 +572,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 한 사이트 계정의 이동(§ 3) — 옮길 행 전부 · 셀러/두 사이트 제외 · 실패 시 무변경 · 재실행 · `account.created` 없음 | `TASK-BE-618` — account-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 이동한 계정이 같은 비밀번호로 같은 `sub` · 이동 전 refresh 가 계속 된다 | `TASK-BE-618` — auth-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 사이트 운영자의 삭제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 삭제 · 본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님 | `TASK-BE-619` — account-service `ConsumerSiteLeaveIntegrationTest` · `PoolMemberSiteSurfacesIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(SELF → 동의 화면 · OPERATOR → 통과·발급 거절) |
-| 사이트 운영자의 잠금·해제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 잠금 · `LOCKED` 는 동의·본인 탈퇴로 안 열림 | `TASK-BE-621` — account-service `ConsumerSiteLockIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(LOCKED → 통과·발급 거절, 동의 화면 없음); admin-service `AccountAdminControllerPlatformScopeTest` |
+| 사이트 운영자의 잠금·해제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 잠금 · `LOCKED` 는 동의·본인 탈퇴로 안 열림 | `TASK-BE-621` — account-service `ConsumerSiteLockIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(LOCKED → 통과·발급 거절, 동의 화면 없음); admin-service `AccountAdminControllerSliceTest`(플랫폼 스코프 → `*` · 사이트 운영자 → 활성 테넌트) · `AccountAdminUseCaseTest`(감사 `SITE_MEMBERSHIP_LOCKED`) |
 
 ### 격리 회귀 방지
 
