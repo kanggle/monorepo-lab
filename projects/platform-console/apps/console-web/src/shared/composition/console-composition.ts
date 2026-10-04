@@ -348,12 +348,24 @@ export async function operatorOverviewLegs(c: OverviewCredentials): Promise<LegS
     : { domain: 'finance', decided: card('finance', 'forbidden', 'MISSING_PREREQUISITE') };
 
   return [
-    await data('iam', `${env.IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1`, {
-      Accept: 'application/json',
-      Authorization: `Bearer ${c.operatorToken}`,
-      'X-Tenant-Id': c.tenant,
-      'X-Request-Id': c.requestId,
-    }),
+    // TASK-PC-FE-304: `tenantId` MUST ride as a query param, not only the
+    // `X-Tenant-Id` header — `AccountAdminController#search` (iam-platform
+    // admin-service) reads the tenant EXCLUSIVELY from the `tenantId` query
+    // param (`QueryTenantScopeGate` falls back to the operator's HOME tenant
+    // when it is absent). Without this, switching the active tenant moved
+    // every other card but left the IAM card pinned to the operator's home
+    // tenant — the accounts screen (`searchAccounts`, TASK-BE-357) already
+    // appends `tenantId` for the same reason; this leg now matches it.
+    await data(
+      'iam',
+      `${env.IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1&tenantId=${encodeURIComponent(c.tenant)}`,
+      {
+        Accept: 'application/json',
+        Authorization: `Bearer ${c.operatorToken}`,
+        'X-Tenant-Id': c.tenant,
+        'X-Request-Id': c.requestId,
+      },
+    ),
     await data('wms', `${env.WMS_ADMIN_BASE_URL}/dashboard/inventory`, domainHeaders),
     await data(
       'scm',
