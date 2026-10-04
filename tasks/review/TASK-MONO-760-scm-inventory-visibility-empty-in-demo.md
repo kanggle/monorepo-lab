@@ -8,7 +8,7 @@ TASK-MONO-760
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -65,7 +65,7 @@ monorepo
   3. **소비**: scm inventory-visibility 의 그룹 `scm-inventory-visibility-v1` 이 그 토픽을 구독하고 있는가(컨슈머 그룹 lag · 할당) · 처리 실패 로그(`Failed to process wms.inventory.*`) · DLT 존재 여부.
   4. **투영/조회**: 행은 있는데 조회가 안 보이는가 — `inventory_visibility` 스냅샷 테이블 행 수와 그 `tenant_id`, 그리고 콘솔이 묻는 테넌트(`demo-corp`)·화면 질의(`GET /api/v1/inventory-visibility/snapshot`)의 테넌트 일치.
   - 🔴 **0 행을 «이벤트 없음» 으로 읽지 않는다** — 각 칸은 «도구가 답을 못 함»(401 · 연결 실패 · 빈 출력)과 «0» 을 가르는 유효성 술어를 같이 적는다(예: 같은 명령으로 다른 토픽의 오프셋이 0 이 아님을 함께 읽는다).
-- [ ] **AC-1** — AC-0 의 원인 칸에 맞는 수리를 **한 PR** 로: 그 경로를 지키는 시험(생산자면 아웃박스 발행 시험, 릴레이면 `scripts/check-cross-project-topic-relay.sh` 가 이미 지키는 화이트리스트와의 대조, 소비자면 테넌트/토픽 IT). 수리 전 빨강 → 수리 후 초록의 bite 를 적는다.
+- [x] **AC-1** — AC-0 의 원인 칸에 맞는 수리를 **한 PR** 로: 그 경로를 지키는 시험(생산자면 아웃박스 발행 시험, 릴레이면 `scripts/check-cross-project-topic-relay.sh` 가 이미 지키는 화이트리스트와의 대조, 소비자면 테넌트/토픽 IT). 수리 전 빨강 → 수리 후 초록의 bite 를 적는다.
 - [ ] **AC-2** — 데모 판정(재굽기 뒤 창): `/scm/inventory` 에 스냅샷 행이 ≥ 1 보이고, 운영 개요 SCM «스냅샷 행 수» ≥ 1, 그 값이 같은 창 WMS 의 재고와 모순되지 않는다(같은 SKU/창고가 보인다). 🔴 AC-0 이 «데모에서는 근본적으로 안 된다» 를 보이면 이 AC 는 소유자 결정으로 대체한다 — ⓐ 빈 화면 안내 문구만 고친다 · ⓑ 시드로 채운다(시드 머리 주석의 원칙을 어기는 결정이므로 그 이유를 기록) · ⓒ 그대로 둔다.
 
 # Related Specs
@@ -176,6 +176,13 @@ monorepo
 - 로컬(worktree `mlab-mono760`): `./gradlew :projects:scm-platform:apps:inventory-visibility-service:test` rc=0 · BUILD SUCCESSFUL. 새 단위 시험 6/6, 기존 시험 무수정.
   - 첫 실행은 새 시험 3칸이 빨강이었다. 원인은 시험 픽스처였다: `ObjectMapper.findAndRegisterModules()` 가 클래스패스의 jackson-module-scala 를 올려 페이로드가 Scala 컬렉션이 됐다. `JavaTimeModule` 만 명시 등록하도록 고쳤다. 운영 코드는 Spring 의 ObjectMapper 라 해당 없다.
 - **bite**: `WmsInventoryReceivedConsumer` 의 인자만 `"scm"` 리터럴로 되돌리면 → **received 칸 하나만 빨강**(6 중 1 실패, rc=1). 원본은 scratchpad 백업으로 복원했고 `cmp` 일치를 확인했다.
+
+### CI (PR #4154, run `37220436665`)
+
+- 체크 18 pass · 47 skipping · **fail 0**.
+- `Integration (scm-platform, Testcontainers)` 잡 로그로 **새 IT 가 실제로 돌았음을 확인**했다(레인 초록 ≠ 그 시험이 돌았다). 로그에 `IT: projection tenant … > received → node + snapshot under demo-corp, readable as demo-corp, nothing under scm PASSED` 와 `auto-registering node … demo-corp` 줄이 있고, 레인 전체는 PASSED 107 · FAILED 0 · SKIPPED 0 이다.
+- ⇒ **AC-1 닫힘.** 동사 «원인 칸에 맞는 수리를 한 PR 로 + 그 경로를 지키는 시험 + bite» 기준: 수리 1 PR · 소비자 테넌트 IT · 단위 bite.
+- ⚪ IT 자체의 bite(수리 전 빨강)는 이 호스트에 Docker 가 없어 **재지 않았다**. 같은 경로의 단위 bite 가 그것을 대신한다.
 
 ## 재굽기 뒤 판정 창에서 (AC-0 이관 · AC-2)
 
