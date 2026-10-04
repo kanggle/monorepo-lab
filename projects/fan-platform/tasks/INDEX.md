@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — ⏳ **artist-service 가 날짜를 숫자로 내보낸다 — 실효 `ObjectMapper` 를 고쳐 ISO 문자열로** (READY, 2026-10-04 UTC · 19차 데모 창 실측). `RedisCacheConfig` 의 매퍼가 Boot 자동설정을 밀어내 `WRITE_DATES_AS_TIMESTAMPS` 가 켜져 있다 → `AgencyView` 등의 `Instant` 가 숫자 → 콘솔 팬 디렉터리 파싱 실패(«일시적으로 불러올 수 없습니다»). 소유자 결정: 콘솔 우회 없이 생산자 수리 · 다음 재굽기. AC-0 현재 형식 실측 · AC-2 컨텍스트 매퍼로 회귀 · AC-3 소비자 전수 · AC-4 Redis 캐시 호환 · AC-5 데모 창(+ `TASK-MONO-759` 판정). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 
 ## in-progress
 

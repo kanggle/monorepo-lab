@@ -207,3 +207,11 @@ monorepo
 - **Testcontainers IT**: `StoreSellerLinkTransportIntegrationTest`(artist-service) 는 작성만 — 로컬 Docker 미사용, CI `integrationTest` 레인이 첫 실행. product-service·auth-service 의 기존 IT 도 이 PR 에서 로컬로 안 돌렸다(product-service 에 Spring Security 가 처음 들어갔으므로 `@SpringBootTest` + MockMvc IT 들이 permit-all 체인 아래 그대로인지는 CI 가 판정).
 - **데모 창**: fan 컨테이너 → `ecommerce.<데모도메인>` → 게이트웨이 → product-service 의 실제 도달, IdP 의 실제 교환(실 `V0042` 행 · 실 `WorkloadTenantCatalog`), 실제 토큰의 `iss` 와 `PRODUCT_INTERNAL_OAUTH2_ISSUER` 일치 — 전부 미측정. 717/718/721 이 보인 대로 배선은 고침이 아니다. 판정 술어: 데모에서 소속사에 `default` 셀러를 연결 → 200 이고 `agencies.store_seller_id` 가 바뀐다(결과 상태). 🔴 신선 볼륨/재굽기 필요(V0042 · compose).
 - 로컬 `*.local` 기본값이 fan 컨테이너 안에서 해소되는지(형제 community-service 의 `iam.local` 과 같은 가정).
+
+# 데모 창 — 19차 창 (2026-10-04 UTC · 인스턴스 i-08d452973ebf789be · AMI ami-00815e1f9614cda90 · 커밋 2a49dfb48) — ⚪ 판정 못 함 (review 유지)
+
+`platform@demo.com`(테넌트 `fan-platform` 자동 선택) → `/fan/agencies` → «팬 디렉터리 정보를 일시적으로 불러올 수 없습니다». 소속사 화면에 도달하지 못해 셀러 연결을 시도하지 못했다 ⇒ 이 티켓의 술어(`default` 연결 → 200 · `store_seller_id` 변경)는 **잴 수 없었다**. 759 의 결함이라는 증거도, 아니라는 증거도 아니다.
+
+원인(이 티켓 밖): Vercel 로그에서 같은 요청이 `fan_ok status=200 path=/api/v1/agencies` 다음 **1ms 뒤** `fan_error` — 게이트웨이·artist-service 는 200 을 줬고 콘솔이 **본문 파싱에서** 실패했다. artist-service 의 실효 `ObjectMapper` 가 `RedisCacheConfig` 의 것이라(Boot 자동설정이 물러남) `WRITE_DATES_AS_TIMESTAMPS` 가 켜져 있고, `AgencyView.createdAt/updatedAt`(`Instant`)이 숫자로 나간다 — 콘솔 `AgencySchema` 는 문자열(계약 `artist-api.md` 도 ISO 문자열). 이 기전은 `GlobalExceptionHandlerEnvelopeContractTest` 가 이미 실측해 적어 둔 것이다(«오류 봉투만 고쳤다»). ⚪ 응답 본문 자체는 직접 보지 못했다(콘솔 토큰 없이는 못 받는다) — 로그 순서 + 코드 + 기록된 실측의 추론. 소유자 결정(2026-10-04): **백엔드를 고쳐 다음 재굽기에 싣는다**(콘솔이 숫자를 받아주는 우회는 하지 않는다) → `TASK-FAN-BE-050`. 이 티켓의 데모 판정은 그 재굽기 창에서.
+
+🔵 곁발견: 콘솔 `AgencyDetail.tsx` 의 안내(`fan-agency-seller-unwired-note` — «스토어 조회가 아직 연결 안 됨», 머리 주석 25–32행)는 759 이후로 사실이 아니다. 화면 판정 때 함께 고칠 것.

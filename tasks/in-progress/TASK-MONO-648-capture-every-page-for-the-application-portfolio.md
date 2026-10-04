@@ -1714,3 +1714,7 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 
 ⏳ **소유자 결정 대기**: 위 12장 후보에서 최종 목록(원래 미해결 체크박스 = `/ecommerce/*` 3장 + `/erp/masters` 재촬영 + 4번째
 장)을 고른다. 결정 전까지 이 티켓은 `in-progress` 에 남는다 — 산출물은 `portfolio-captures/2026-09-27/`(gitignored)에 그대로 있다.
+
+# TASK-MONO-758 알림 (2026-10-04 UTC)
+
+콘솔 운영 개요(`/dashboards/overview`) · 도메인 상태(`/dashboards/health`) · 상단 알림함이 이제 console-web 서버의 합성으로 **실제 데이터로** 뜬다(19차 창에서 확인, ADR-MONO-081 · console-bff 삭제). 저하·알림 화면을 다시 찍을 수 있다. 🔵 overview 의 Finance 카드는 운영자 프로필에 기본 finance 계정이 없으면 «사전 설정 누락» 으로 나온다(원래 있는 안내).
