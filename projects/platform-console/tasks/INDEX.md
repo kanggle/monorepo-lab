@@ -91,8 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-307-overview-all-forbidden-reads-as-outage.md` — ⏳ **소유자 우선순위 결정 대기** · 운영 개요 카드가 **전부 `forbidden`**(잘못된 계정·테넌트)일 때 상단 배너가 «모든 도메인의 개요 정보를 일시적으로 불러올 수 없습니다 … 잠시 후 다시 시도»(`console_composition_all_down`)로 장애처럼 읽힌다 — «전부 거절» 과 «전부 열화» 를 구별(20차 창 15:34Z 관측, `TASK-MONO-758`). 섞인 경우는 지금 배너 유지 · 서버 이벤트를 나누면 계약 § 2.4.9 먼저. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
+(empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -122,6 +121,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-307-overview-all-forbidden-reads-as-outage.md` — 운영 개요 카드 6장이 **전부 `forbidden`** 이면 장애 배너(«일시적으로 불러올 수 없습니다 … 다시 시도») 대신 **권한 배너**(`operator-overview-all-forbidden` · «이 계정과 테넌트로 볼 수 있는 도메인 개요가 없습니다.» · 재시도 없음)를 낸다. `degraded` 가 하나라도 섞이면 기존 배너 그대로. 서버 이벤트 `console_composition_all_down` 은 **나누지 않음**(계약 무변경 — 이유와 한계는 티켓 § AC-0). bite = AC-1 한 칸만 빨강 · vitest 3804/3804. ⚪ AC-4 는 다음 데모 창(라이브).
 - `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. AC-2 «`/status` 실패» 칸은 소유자 결정(2026-10-04)으로 알려진 한계로 닫힘 · ⚪ AC-6 라이브 · 경로 D 는 `TASK-PC-FE-306`. 🔵 **20차 창(2026-10-04 UTC)**: AC-6 **안 잼** — 데모 종료가 306 의 live 경로(살아 있는 쿠키)로 끝났고, 이 티켓의 경로(갱신 실패/401 → `live` 없는 라우트)는 타지 않았다 ⇒ review 유지(§ CORRECTION 2026-10-05 — 다음 창: 액세스 쿠키 만료 뒤 정지).
 
 ## done
