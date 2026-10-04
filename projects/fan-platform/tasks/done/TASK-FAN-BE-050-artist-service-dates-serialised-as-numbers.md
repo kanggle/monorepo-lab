@@ -8,7 +8,7 @@ artist-service 가 날짜를 **숫자로** 내보낸다 — 실효 `ObjectMapper
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -104,3 +104,34 @@ artist-service 의 모든 HTTP 성공 응답에서 `Instant` 는 ISO-8601 문자
 1. 테스트가 손으로 만든 `new ObjectMapper()` 로 단언해 초록인데 서비스는 여전히 숫자를 낸다 — AC-2 가 «컨텍스트의 매퍼» 를 요구하는 이유(BE-038 javadoc 이 같은 함정을 적었다).
 2. 캐시에 남은 옛 항목을 못 읽어 첫 요청들이 500 — AC-4.
 3. 재굽기 전에 «고쳐졌다» 고 닫는다 — 데모 판정(AC-5)은 재굽기 창에서만.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> 위 AC-5 의 `[ ]` 와 «⚪ 의도적으로 열어 둠» 은 **이제 사실이 아니다.** 동결 파일이라 체크박스는 고치지 않고 여기서 닫는다. 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**재굽기 확인.** 이 티켓의 머지 `eebeda112`(#4139)는 20차 AMI 의 구운 커밋 `f0927bcd0` 의 조상이다(`git merge-base --is-ancestor` 참, AMI 태그 `RepoCommit` = `f0927bcd0`, provenance `ami-tag`) ⇒ 이 창의 artist-service 는 수리본이다. Failure Scenario 3(«재굽기 전에 닫기»)에 걸리지 않는다.
+
+### AC-5
+
+| AC-5 요구 | 판정 | 근거 |
+|---|---|---|
+| 콘솔 `platform@demo.com` / `fan-platform` → `/fan/agencies` 가 목록으로 뜬다 | ✅ | 소유자 화면: 소속사 목록 렌더(19차의 «팬 디렉터리 정보를 일시적으로 불러올 수 없습니다» 가 사라짐) |
+| `/fan/artists` 가 목록으로 뜬다 | ✅ | 소유자 화면: 아티스트 목록 렌더 |
+| `/fan/groups` 가 목록으로 뜬다 | ✅ | 소유자 화면: 그룹 화면 렌더. 🔵 이 화면은 `TASK-MONO-751` 이탈 1 대로 «ID 로 열기 + 생성» 화면이다(생산자에 그룹 목록 API 가 없다) — «목록» 은 그 화면이 오류 없이 뜬 것으로 읽는다 |
+| 같은 창에서 `TASK-MONO-759` 판정을 잇는다 | ✅ | 소속사 하나에 `default` 연결 → 현재 값 `default`, ecommerce 게이트웨이 `GET /internal/sellers/default 200 308ms`(15:27:22Z) — 판정은 `TASK-MONO-759` 의 20차 절 |
+
+- 🔵 «목록이 뜬다» 는 콘솔 zod 스키마(`AgencySchema` 등 — 날짜 필드 `nullableString`)가 artist-service 본문을 **받아들였다**는 뜻이다. 19차의 실패 기전(`fan_ok status=200` 1ms 뒤 `fan_error` — 본문 파싱 실패)이 이번에는 화면에 나타나지 않았다.
+- ⚪ 응답 본문의 날짜 필드를 원문으로 찍어 보지는 않았다(콘솔 토큰 없이는 못 받는다 — 배경 절의 같은 공백). 판정은 «소비자 스키마가 수락했다» 는 결과 상태이고, 형식 자체는 AC-0~AC-2 의 컨텍스트 매퍼 시험이 고정한다.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4139` | `state=MERGED` · mergedAt 2026-10-04T07:45:54Z · mergeCommit `eebeda112` |
+| (b) origin/main 조상 | 참(origin/main `92a6320eb`) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` 65건 = SUCCESS 16 · SKIPPED 49 · **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-0 ~ AC-4 `[x]`(본문) · **AC-5 = 이 절에서 닫힘** — 동사 «목록으로 뜬다» 세 화면 + «759 판정을 이어서 한다» 를 위 표로 확인 |
+
+⇒ **`review/` → `done/`.**

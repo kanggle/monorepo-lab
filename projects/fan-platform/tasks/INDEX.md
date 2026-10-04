@@ -78,9 +78,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — 🟡 **REVIEW (2026-10-04 UTC) — artist-service 가 날짜를 숫자로 내보내던 결함을 고쳤다, AC-0~AC-4 닫힘 · AC-5 ⚪.** `config/RedisCacheConfig` 의 그늘막 `ObjectMapper @Bean` 을 삭제해 Boot 자동설정(`WRITE_DATES_AS_TIMESTAMPS=false`)이 유일한 매퍼가 되도록 수리 — `ArtistDirectoryCacheAdapter`/`ArtistEventPublisherAdapter` 는 같은 주입 빈이라 배선 변경 없음. AC-0 실측(고치기 전): `Instant` → JSON 숫자 `1.785370282333E9`, `LocalDate` → 배열 `[2024,5,1]`(STOP 미해당, 구현 진행). 신설 `ArtistObjectMapperDateFormatContractTest`(4 뷰 전부, 컨텍스트 매퍼) bite 확인 — 옛 빈으로 되돌리면 4/4 RED, 복원 후 4/4 GREEN. AC-3 소비자 전수 0건(콘솔 `fan-types.ts`·팬웹 `entities/artist/types.ts`·community-service `HttpArtistAccountChecker`·Kafka 아웃박스 전부 이미 문자열/무관 — 수정 없음). AC-4 캐시 키 버전 상향 불필요 — 신설 `ArtistDirectoryCacheOldFormatCompatibilityTest` 로 옛 포맷 항목이 수리된 매퍼로도 읽힘을 증명. `./gradlew :projects:fan-platform:apps:artist-service:test` rc=0(Testcontainers 통합 테스트는 로컬 Docker 없어 미실행, CI 전제). AC-5(데모 창)는 AMI 재굽기 뒤로 ⚪ 유지. 분석=Opus 5.5 / 구현=Sonnet 5.
+(empty)
 
 ## done
+
+- ✅ `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — **DONE (2026-10-05 UTC · 4차원 검증 · impl PR [#4139](https://github.com/kanggle/monorepo-lab/pull/4139) squash `eebeda112`, 머지 시점 실패 0/65)** 🟢 **artist-service 날짜가 ISO 문자열로 — AC-5 는 20차 창(`ami-0d78d476824493d77` · `f0927bcd0`)에서 닫힘.** 콘솔 `platform@demo.com`/`fan-platform` → `/fan/agencies` · `/fan/artists` · `/fan/groups` 렌더(19차의 «불러올 수 없습니다» 해소) + 같은 창 `TASK-MONO-759` 셀러 연결 판정. ⚪ 응답 본문 날짜 원문은 안 찍음(소비자 스키마 수락으로 판정).
 
 - ✅ `TASK-FAN-FE-026-form-fields-dark-scheme-white.md` — **DONE (2026-09-29 UTC · 4차원 검증 · impl PR [#4064](https://github.com/kanggle/monorepo-lab/pull/4064) squash `549a1a03c`)** 🟢 **결제 기간 선택칸·아티스트 검색칸이 OS 다크 모드에서 어두운 바탕에 검은 글자이던 것을 흰 바탕으로 통일, AC-1~AC-3 닫힘.** 공용 `FORM_FIELD_CLASS`(`bg-white`·`text-ink-900`·`[color-scheme:light]`), 공개 피드 필터도 같은 상수. Playwright dark 계산값 옛 `rgb(59,59,59)` → 새 `rgb(255,255,255)`. 유닛 37 files / 326 tests · tsc · lint · build rc=0. 실행된 체크 17개 SUCCESS · 실패 0. 분석=Opus 5.5 / 구현=Opus 5.5.
 

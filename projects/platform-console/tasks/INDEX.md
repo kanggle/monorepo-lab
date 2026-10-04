@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-307-overview-all-forbidden-reads-as-outage.md` — ⏳ **소유자 우선순위 결정 대기** · 운영 개요 카드가 **전부 `forbidden`**(잘못된 계정·테넌트)일 때 상단 배너가 «모든 도메인의 개요 정보를 일시적으로 불러올 수 없습니다 … 잠시 후 다시 시도»(`console_composition_all_down`)로 장애처럼 읽힌다 — «전부 거절» 과 «전부 열화» 를 구별(20차 창 15:34Z 관측, `TASK-MONO-758`). 섞인 경우는 지금 배너 유지 · 서버 이벤트를 나누면 계약 § 2.4.9 먼저. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -122,12 +122,12 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-304-overview-iam-card-ignores-active-tenant.md` — 운영 개요 IAM 카드가 활성(선택) 테넌트를 무시하고 운영자 홈 테넌트를 센다(iam-platform `AccountAdminController`는 `tenantId` 쿼리 파라미터만 읽는데 이 레그는 `X-Tenant-Id` 헤더만 보냄) + "전체 계정" 라벨이 그 카드가 실제로 세는 것(이 테넌트의 회원 계정, 운영자 제외)과 불일치. 19차 데모 창 조사(`TASK-MONO-758`)에서 발견, 수정은 이 티켓. AC-3(라이브 확인)만 ⚪ 미확인.
-- `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. AC-2 «`/status` 실패» 칸은 소유자 결정(2026-10-04)으로 알려진 한계로 닫힘 · ⚪ AC-6 라이브 · 경로 D 는 `TASK-PC-FE-306`.
-- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다 — 단 **서로 다른 두 번의 연속 `unavailable`**(해석기 15초 캐시 창보다 멀리 떨어진)일 때만(소유자 결정 ①). 계약 § 2.6.1 «no network call» 문장 + § 2.6.2 를 먼저 고친다(소유자 결정 ②). · 로컬 게이트 전부 초록, bite 확인 · ⚪ AC-6 라이브 · 소유자 후속 3건(305 경로의 단일 판독 노출 · 자동 재확인 · TTL 사본).
+- `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. AC-2 «`/status` 실패» 칸은 소유자 결정(2026-10-04)으로 알려진 한계로 닫힘 · ⚪ AC-6 라이브 · 경로 D 는 `TASK-PC-FE-306`. 🔵 **20차 창(2026-10-04 UTC)**: AC-6 **안 잼** — 데모 종료가 306 의 live 경로(살아 있는 쿠키)로 끝났고, 이 티켓의 경로(갱신 실패/401 → `live` 없는 라우트)는 타지 않았다 ⇒ review 유지(§ CORRECTION 2026-10-05 — 다음 창: 액세스 쿠키 만료 뒤 정지).
 
 ## done
 
+- ✅ `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4150**, 스쿼시 **`60b97d178`** (머지 시점 실패 0/65). 살아 있는 세션도 데모가 꺼지면 **서로 다른 두 번의 연속 `unavailable`** 뒤에 샘플 셸로. **AC-6 🟢 20차 창**: 정지(15:46:15 → EC2 stopped 15:48:08) 뒤 첫 새로고침 15:49:16 `demo_ended_live_session_kept`(pending — 배너 붙은 인증 셸) → ~24 s 뒤 15:49:40 `demo_ended_live_session_cleared` → 샘플 셸 + «데모 서버가 종료되어 로그아웃되었습니다» 안내.
+- ✅ `TASK-PC-FE-304-overview-iam-card-ignores-active-tenant.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4147**, 스쿼시 **`09b0887c5`** (머지 시점 실패 0/65). IAM 레그가 `tenantId` 쿼리로 활성 테넌트를 센다 · 라벨 «회원 계정 (이 테넌트)». **AC-3 🟢 20차 창**: `demo@demo.com` — `demo-corp` 0 · `ecommerce` **2**(기대 ≥1; 2번째 계정은 조사 안 함).
 - ✅ `TASK-PC-FE-303-notification-inbox-aggregated-in-console-web.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4122**, 스쿼시 **`bbdd3990f`**. ADR-MONO-081 단계 3: 알림 인박스·읽음 처리를 console-web 서버에서(도메인 401 → 401 · 읽음 1회 · 미설정 도메인 404). AC-7 = main push nightly `37024617764` 콘솔 e2e success.
 - ✅ `TASK-PC-FE-302-overview-and-domain-health-composed-in-console-web.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4118**, 스쿼시 **`f98ece821`**. ADR-MONO-081 단계 2: 운영 개요·도메인 상태를 console-web 서버에서 합성(756 흡수). AC-9 = main push nightly `37016874846` 콘솔 e2e success.
 - ✅ `TASK-PC-FE-301-say-no-tenant-is-reachable-instead-of-asking-to-pick-one.md` — **DONE 2026-09-27 UTC (4-dim verified)** — impl PR **#4049**, 스쿼시 **`a66b858a8`** (머지 전 실패 체크 0). 선택 가능한 테넌트가 0개인 운영자에게 «테넌트를 선택하세요» 대신 ⓒ 안내(«접근 가능한 테넌트가 없습니다»). 판정 함수 `noTenantNoticeKind()` + 공유 렌더 `NoTenantNotice*` 한 곳, 15+1곳 배선. **AC-1** 2026-09-26 CLOSED(단위+렌더+bite) · **AC-2 🟢** 17차 창 — `viewer@demo.com` 게이트 화면에 새 안내 렌더 확인(옛 문구 미노출). tsc/lint/vitest 전량 rc=0.

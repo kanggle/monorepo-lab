@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — ⏳ **소유자 우선순위 결정 대기** · web-store «데모 서버가 켜지는 중입니다…» 배너가 **데모 선택 전체**(`/status` `selection_ready`)를 따라, 스토어 묶음이 ready 인데도 무관한 scm 묶음 재기동(20차 창 15:36–15:38 UTC) 중에 떴다. AC-0 = 세 앱(store·console·fan)의 신호 출처 측정 + 소유자 결정(스토어 묶음 기준 vs 전체 기준). 🔴 공유 해석기(`infra/demo/backend-resolver`)·`/status` 변경이 필요하면 루트 티켓으로. 분석=Opus 5.5 / 구현 권장=Opus.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 

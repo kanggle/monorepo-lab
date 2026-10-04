@@ -184,3 +184,26 @@ pnpm: 이 worktree 에 `pnpm install --frozen-lockfile` 을 **실제로** 돌렸
 **명령 (rc · 개수)**: admin-service `:test` rc=0 — 908 · 0 fail · 58 skipped(`ConfinedOperatorAssumeGateTest` 18 · `ConsoleRegistryUseCaseTest$FanProductPlatformOperatorOnly` 5) · auth-service `:test` rc=0 — 1016 · 0 fail · 33 skipped(`DemoPlatformOperatorSeedTest` 5) · console-web `tsc` 0 · `next lint` 0 · `GlobalGuideScreen.test.tsx` 0 · 가드는 커밋 기록 참조.
 
 **⚪**: `OperatorAssignmentCheckIntegrationTest` 의 새 2칸 · V0046 이 실제 MySQL 에 적용되는지 — Docker 꺼짐(CI 판정). 데모 DB 반영은 여전히 재굽기 뒤. 새 오류 코드 없음 ⇒ 오류 코드 레지스트리 변경 없음.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0) — AC-4 닫힘 · **AC-1 은 열림 (review 유지)**
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 아래가 AC 별 현재 상태다. 이 티켓의 impl PR #4130(`5ce0cccc9`)은 `MERGED` · 머지 시점 실패 체크 0 · origin/main 조상 · 20차 AMI 커밋 `f0927bcd0` 의 조상이다(재굽기 뒤 데모 DB 에 R__ 시드·V0046 이 실렸다).
+
+### 이 창에서 라이브로 잰 것
+
+- 소유자가 `platform@demo.com`(테넌트 `fan-platform` 자동 선택 — 묶인 플랫폼 운영자, § CORRECTION 2026-10-03)으로 로그인 → `/fan/agencies` · `/fan/artists` · `/fan/groups` 세 화면이 **오류 없이 렌더**(19차의 «팬 디렉터리 정보를 일시적으로 불러올 수 없습니다» 해소 — 원인 수리는 `TASK-FAN-BE-050`).
+- 소속사 하나의 **상세** → 셀러 연결 입력 `default` → «연결» → 현재 값 `default`(서버 재조회 값). 같은 시각 ecommerce 게이트웨이 `GET /internal/sellers/default 200 308ms`(15:27:22Z). 판정 상세는 `TASK-MONO-759` 20차 절.
+- ⇒ 위 «로컬 판정» 의 ⚪ «콘솔 → assume → fan 게이트웨이 → artist-service 실왕복» 은 **읽기(목록·상세)와 쓰기 하나(`PATCH …/store-seller`)로 메워졌다.** 게이트웨이는 ENFORCE 였고(`TASK-MONO-697`) fan 요약 줄 mismatch 0 이다 — assume 토큰의 `aud` 가 fan allowlist 를 통과했다.
+
+### AC 별
+
+| AC | 상태 | 근거 |
+|---|---|---|
+| AC-1 — 소속사를 **만들고** 아티스트를 **소속시킬** 수 있다 | ⚪ **열림** | 이 창은 소속사 **생성**(`/fan/agencies/new` → `POST`)도, 아티스트 **소속 변경**(`PATCH …/agency`)도 하지 않았다. 잰 쓰기는 셀러 연결 하나뿐이고, 그것은 AC-2 의 화면이다. AC-1 의 동사(만들기·소속시키기)는 아직 라이브로 한 번도 안 돌았다. 다음 창 술어: 소속사 하나 생성 → 목록에 보임 · 아티스트 상세에서 그 소속사로 변경 → 상세 재조회 값이 바뀜 |
+| AC-2 — 셀러 연결 입력이 존재하는 셀러만 받는다 | `[x]`(본문) · 🔵 라이브 열린 경로 확인 | 존재하는 ACTIVE 셀러 `default` → 저장. 본문의 «🔴 지금은 모든 값이 503» 은 759 배선 후 **사실이 아니다**(같은 날 별도 PR 이 화면 안내도 고쳤다 — 759 § CORRECTION 2026-10-04). 422/503 화면은 라이브로 안 쟀다 |
+| AC-3 — 고객사 운영자에게 `fan` 이 안 보인다 | `[x]`(본문) | 이 창에서 새로 잰 것 없음 |
+| AC-4 — 머지 뒤 다음 nightly e2e 결과 확인 | ✅ **이 chore 에서 닫음** | 머지 커밋 `5ce0cccc9` 의 push 트리거 `nightly-e2e.yml` 런 **`37094199260`**(2026-10-03T03:44:12Z) = `success`. 잡 «Platform Console E2E full-stack (Playwright + docker compose)» `success` — 본문 § e2e 영향이 말한 대로 그 잡이 재는 것은 «레지스트리 7개 상품 + 사이드바 렌더가 기존 스펙을 깨지 않는가» 이고 팬 화면 자체는 아니다. 그 뒤 main 의 nightly 도 연속 `success`(최신 `37210122680`, `92a6320eb`) |
+
+⇒ AC-1 이 열려 있으므로 4차원 (d) 가 거짓 — **`review/` 에 둔다.** 닫는 데 남은 것은 AC-1 의 라이브 한 바퀴(생성 + 소속 변경)뿐이다.

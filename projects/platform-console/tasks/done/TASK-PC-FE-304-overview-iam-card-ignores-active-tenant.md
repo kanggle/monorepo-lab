@@ -4,7 +4,7 @@ TASK-PC-FE-304
 
 # Status
 
-review (2026-10-04 UTC — impl PR 생성 대기 중, 로컬 게이트 전부 통과: lint/tsc/vitest 334파일·3738시험 rc=0, bite 확인)
+done (2026-10-04 UTC — impl PR 생성 대기 중, 로컬 게이트 전부 통과: lint/tsc/vitest 334파일·3738시험 rc=0, bite 확인)
 
 # Title
 
@@ -104,3 +104,33 @@ platform-console
 **로컬 게이트**: `pnpm lint` rc=0 · `npx tsc --noEmit` rc=0 · `npx vitest run --maxWorkers=4 --minWorkers=1` **334 파일 / 3,738 시험** 전부 통과(rc=0). 추가로 `node scripts/check-fetch-resolution.mjs`(repo root) rc=0.
 
 **티켓과 다르게 한 것**: 없음.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> 위 AC-3 의 `[ ]` 와 «⚪ 미확인» 은 **이제 사실이 아니다.** 동결 파일이라 체크박스는 고치지 않고 여기서 닫는다. Status 괄호의 «impl PR 생성 대기 중» 도 낡았다 — impl PR 은 #4147 로 머지됐다. 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**배포 확인.** 이 티켓은 콘솔(Vercel) 변경이라 AMI 와 무관하다. 창 시점의 Vercel 콘솔은 main ≥ `60b97d178` 이고, 이 티켓의 머지 `09b0887c5`(#4147)는 그 조상이다 ⇒ 이 창의 IAM 레그는 `tenantId` 쿼리 파라미터를 보낸다.
+
+### AC-3
+
+| 테넌트 (운영자 `demo@demo.com`) | IAM 카드 라벨 | 값 | AC-3 기대 | 판정 |
+|---|---|---|---|---|
+| `demo-corp` | «회원 계정 (이 테넌트)» | **0** | 0 | ✅ |
+| `ecommerce` | «회원 계정 (이 테넌트)» | **2** | ≥ 1 | ✅ |
+
+- ⇒ 같은 운영자가 테넌트만 바꿨을 때 IAM 카드 값이 따라 바뀐다 — 수정 전 결함(홈 테넌트 `demo-corp` 를 계속 셈 → 두 테넌트 모두 0)이 사라졌다. 라벨도 AC-2 의 새 문구로 렌더됐다.
+- «다른 카드들과 일치»: `demo-corp` 쪽은 같은 화면 15:36:07Z 의 라우트 로그(`TASK-MONO-758` 20차 절, requestId `8582d51c-…`)에서 iam leg 가 다른 다섯 leg 와 같은 요청 안에서 `ok` 였다 — 여섯 카드가 한 활성 테넌트로 합성된 같은 봉투다. `ecommerce` 쪽은 화면 값만 있고 같은 시각의 라우트 로그 줄은 따로 적지 않았다.
+- 🔵 값이 1 이 아니라 **2** 다. 기대는 «≥ 1»(풀 멤버 1명을 예상한 하한)이므로 판정은 바뀌지 않는다. 2 번째 계정이 누구인지는 **조사하지 않았다** — `ecommerce` 테넌트에 풀 멤버 외의 계정(예: 스토어 셀러/고객 시드 계정)이 더 있어서 함께 세어졌을 수 있다. 이 카드는 «이 테넌트의 회원 계정(운영자 제외)» 을 세므로 2 가 틀렸다는 증거도 아니다.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4147` | `state=MERGED` · mergedAt 2026-10-04T10:20:34Z · mergeCommit `09b0887c5` |
+| (b) origin/main 조상 | 참(origin/main `92a6320eb`) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` 65건 = SUCCESS 12 · SKIPPED 53 · **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-0 · AC-1 · AC-2 `[x]`(본문) · **AC-3 = 이 절에서 닫힘** — 동사는 «Vercel 배포 뒤 다음 데모 창에서 `demo-corp` → 0, `ecommerce` → ≥1» 이고 두 칸 다 충족 |
+
+⇒ **`review/` → `done/`.**
