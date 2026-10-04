@@ -8,7 +8,7 @@ TASK-PC-FE-306
 
 # Status
 
-review (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 337파일·3799시험/next build rc=0, 클라이언트 그래프·해석기 사본 가드 rc=0, bite 확인. 소유자 결정 ①② 반영(두 번 연속 · 계약 먼저). AC-6 라이브 ⚪)
+done (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 337파일·3799시험/next build rc=0, 클라이언트 그래프·해석기 사본 가드 rc=0, bite 확인. 소유자 결정 ①② 반영(두 번 연속 · 계약 먼저). AC-6 라이브 ⚪)
 
 # Owner
 
@@ -178,3 +178,38 @@ PC-FE-305 는 세션을 **갱신할 수 없게 된 뒤**(갱신 실패 / 401)의
 2. **자동 재확인 없음** — 첫 판독 뒤 방문자는 인증 셸 + `DemoBackendNotice` 를 보고, 15초 넘게 지난 **하드 내비게이션/새로고침**에서 두 번째 판독이 일어난다(App Router 의 소프트 내비게이션은 레이아웃을 다시 렌더하지 않는다). 배너가 떠 있는 동안 16초 뒤 `router.refresh()` 하는 클라이언트 위젯을 달면 자동이 된다 — 범위 밖으로 뒀다.
 3. **콘솔의 TTL 사본** — `DEMO_STATE_SNAPSHOT_TTL_MS` 는 해석기 `CACHE_TTL_MS` 의 사본이다(해석기 변경 금지). 실제 해석기로 고정하는 칸이 있다(해석기 TTL 이 늘면 빨강); 해석기가 TTL 을 export 하면 사본을 지울 수 있다(루트 티켓 감).
 4. AC-6 라이브 ⚪.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> 위 AC-6 의 `[ ]` 와 Owner follow-ups 4 «AC-6 라이브 ⚪» 는 **이제 사실이 아니다.** 동결 파일이라 체크박스는 고치지 않고 여기서 닫는다. 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**배포 확인.** 콘솔(Vercel) 변경이다. 창 시점 Vercel 콘솔 = main ≥ `60b97d178` = 이 티켓의 머지 커밋(#4150) ⇒ live 모드(`live=check|clear`)가 배포돼 있었다.
+
+### AC-6 — 로그인 → 30분 안에 데모 정지 → 콘솔 새로고침 → 안내가 붙은 샘플 셸
+
+| 시각 (UTC) | 무엇 | 관측 |
+|---|---|---|
+| (창 중) | 소유자 콘솔 로그인 | 세션 살아 있음(액세스 쿠키 30분 안) |
+| 15:46:15 | 데모 정지 | `POST /stop` |
+| 15:48:08 | EC2 stopped · `/status` = `stopped` | |
+| 15:49:16.91 | **첫 새로고침** — Vercel `GET /api/auth/demo-ended` | `demo_ended_live_session_kept` · `intent=check` · `state=unavailable` · `pending=true` ⇒ 첫 판독은 **세션을 끝내지 않았다**(소유자 결정 ①) |
+| 15:49:20 | 첫 새로고침의 화면 | 로그인된 셸 + 데모 꺼짐 배너 · 카드 전부 `DOWNSTREAM_ERROR` |
+| 15:49:40 | **두 번째 새로고침**(~24 s 뒤 — 해석기 15 s 캐시 창 밖) — Vercel `GET /api/auth/demo-ended` | `demo_ended_live_session_cleared` · `state=unavailable` |
+| 같은 때 | 두 번째 새로고침의 화면 | **샘플 셸** — 테넌트 `sample` · 기준 시각 2026-09-15T11:00:00Z 샘플 데이터 · 안내 «데모 서버가 종료되어 로그아웃되었습니다. 지금은 샘플 데이터로 둘러보는 중입니다 — …»(305 의 `DemoSignedOutNotice`) |
+
+⇒ **AC-6 ✅.** AC 문장의 순서 그대로 끝났고, 끝나는 방식이 이 티켓의 설계(«서로 다른 두 번의 연속 `unavailable`» — § Design)와 정확히 맞는다: 첫 판독 `kept` + 표식 기록(`pending=true`) → 15 s 넘게 떨어진 두 번째 판독 `cleared` → 305 의 같은 착지·안내. 두 판독 간격 ~24 s 는 `DEMO_STATE_SNAPSHOT_TTL_MS`(15 s)보다 크고 표식 `Max-Age`(600 s)보다 작다.
+- 🔵 Owner follow-up 2(«자동 재확인 없음 — 두 번째 판독은 하드 새로고침에서») 도 라이브로 그대로 보였다: 첫 새로고침 뒤 방문자는 꺼짐 배너가 붙은 인증 셸에 머물렀고, 두 번째 **새로고침**에서야 끝났다.
+- ⚪ 이 창은 `/status` **실패**(컨트롤 플레인 장애) 판독을 만들지 않았다 — 두 판독 모두 진짜 정지에서 나온 `unavailable` 이다. «실패 한 번은 세션을 끝내지 않는다» 는 단위 시험(`live-session-demo-stop-resolver.test.ts`)이 고정한 그대로다.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4150` | `state=MERGED` · mergedAt 2026-10-04T14:09:05Z · mergeCommit `60b97d178` |
+| (b) origin/main 조상 | 참(origin/main `92a6320eb`) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` 65건 = SUCCESS 15 · SKIPPED 50 · **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-0 ~ AC-5 `[x]`(본문) · **AC-6 = 이 절에서 닫힘** — 동사 «로그인 → 데모 정지 → 새로고침 → 안내가 붙은 샘플 셸» 을 위 표로 확인 |
+
+⇒ **`review/` → `done/`.**

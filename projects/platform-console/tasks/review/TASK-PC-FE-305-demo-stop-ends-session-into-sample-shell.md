@@ -165,3 +165,16 @@ frontend
 ## CI 수정 (2026-10-04 UTC) — 클라이언트 그래프가 서버 전용 주소에 닿았다
 
 PR #4149 첫 CI: `Client graph backend origins (the browser must not know the address)` RED — `scripts/check-client-graph-backend-origins.mjs` 가 console-web `hits=1`: `src/shared/config/demo-backend.ts → http://console.local`(ADR-MONO-067 D1). 원인: 클라이언트 컴포넌트 `DemoSignedOutNotice` 가 표식 상수를 `shared/lib/session-end.ts` 에서 import 했고, 그 판정 모듈은 `DemoBackendState` 를 위해 `demo-backend.ts` 를 import 한다 — `import type` 이어도 가드의 그래프에 든다(번들에는 안 들어가지만 가드는 import 문을 따라간다). 처방은 가드 완화가 아니라 **모듈 분리**: 상수만 `src/shared/lib/session-end-params.ts`(import 0)로 빼고, 클라이언트는 그 파일만 import 한다. `session-end.ts` 는 서버 전용으로 남아 상수를 재수출한다. 가드 rc=1 → rc=0 (console-web `reached=423 hits=0`). 로컬 첫 검증에서 이 가드를 돌리지 않은 것이 누락이었다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0) — AC-6 은 이 창에서 **재지 않았다** (review 유지)
+
+> 분석=Opus 5.5. 덧붙이기만 한다. AC-6 은 여전히 `[ ]` 이고 그것이 현재 상태다.
+
+- 이 창의 데모 종료(15:46:15 `POST /stop` → 15:48:08 EC2 stopped)는 **`TASK-PC-FE-306` 의 경로**로 끝났다: 소유자의 액세스 쿠키가 아직 살아 있었으므로(로그인 30분 안) 레이아웃 가드가 `live=check` 홉을 보냈고, 15:49:16 `demo_ended_live_session_kept`(pending) → 15:49:40 `demo_ended_live_session_cleared` → 샘플 셸 + 안내. 판정은 `TASK-PC-FE-306` 20차 절.
+- 🔴 그러므로 **이 티켓의 경로(갱신 실패 / 백엔드 401 뒤 — 액세스 쿠키가 만료됐거나 갱신이 실패한 세션이 `/login?error=session_expired` 착지 → `live` 없는 `/api/auth/demo-ended` 로 가는 길)는 라이브로 한 번도 타지 않았다.** AC-6 의 글자(«로그인 → 데모 정지 → 콘솔 새로고침 → 안내가 붙은 샘플 셸»)는 이번 창의 순서와 같아 보이지만, 그 순서는 30분 안에서는 306 의 live 모드로 끝나므로 305 핸들러의 판정 분기(단일 판독 · 갱신 실패 후 착지)를 재지 않는다.
+- 공유된 것과 아닌 것:
+  - ✅ 재사용 부품은 라이브로 보였다 — 305 가 만든 착지 `<target>?signed_out=demo_stopped`, 안내 `DemoSignedOutNotice`(«데모 서버가 종료되어 로그아웃되었습니다 …»), 세션 쿠키 지우기(`clearFullSession`, 306 의 live 모드가 같은 함수를 부른다).
+  - ⚪ 305 고유 칸은 미측정 — 갱신 라우트 실패 → 로그인 착지 → `live` 없는 라우트의 단일 판독 판정, 그리고 페이지 단위 401 공유 헬퍼(AC-3) 경로.
+- **다음 창에서 이 AC 를 재려면:** 로그인 → **30분 이상**(액세스 쿠키 `maxAge` 1800 s 만료) 기다리거나 액세스 쿠키만 지운 뒤 → 데모 정지 → 새로고침. 그러면 레이아웃 가드는 인증 분기가 아니라 갱신 홉을 타고, 갱신이 실패한 뒤 305 의 라우트에 닿는다. Vercel 로그에서 `live` 모드 이벤트(`demo_ended_live_session_*`)가 **아닌** 305 핸들러의 종료 이벤트가 찍히는지로 경로를 가른다.

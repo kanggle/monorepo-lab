@@ -8,7 +8,7 @@ TASK-MONO-759
 
 # Status
 
-review (2026-10-03 UTC — 갈래 A + 도달 경로 R1 구현 · 단위/슬라이스 초록 · ⚪ Testcontainers IT 와 데모 창은 미측정)
+done (2026-10-03 UTC — 갈래 A + 도달 경로 R1 구현 · 단위/슬라이스 초록 · ⚪ Testcontainers IT 와 데모 창은 미측정)
 
 # Owner
 
@@ -223,3 +223,35 @@ monorepo
 위 곁발견을 별도 PR(`fix/console-agency-seller-stale-note`)에서 처리했다 — `AgencyDetail.tsx` 의 낡은
 `fan-agency-seller-unwired-note` 안내와 머리 주석을 걷어내고, 503 상태 문구의 "아직 배선 안 됨" 표현도
 지금 동작(실 스토어 조회 · fail-closed)에 맞게 고쳤다. 단위 시험(`FanAgencyDetail.test.tsx`)도 함께 갱신.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> Status 괄호의 «⚪ … 데모 창은 미측정» 과 19차 절의 «⚪ 판정 못 함» 은 **이제 사실이 아니다.** 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**선행 확인.** 19차에 판정을 막았던 원인(`TASK-FAN-BE-050` — artist-service 가 날짜를 숫자로 내보냄)의 수리 #4139 `eebeda112` 와 이 티켓의 #4133 `2a49dfb48` 이 둘 다 20차 AMI 커밋 `f0927bcd0` 의 조상이다(`git merge-base --is-ancestor`). 게이트웨이는 이 창에서 **ENFORCE** 다(`TASK-MONO-697`) — 19차와 달리 audience 검사가 실제로 거절하는 상태에서 쟀다.
+
+### 데모 창 술어 — «소속사에 `default` 셀러 연결 → 200 · `agencies.store_seller_id` 변경»
+
+| 관측 | 출처 |
+|---|---|
+| 소유자가 `platform@demo.com`(테넌트 `fan-platform` 자동 선택)으로 `/fan/agencies` 목록 → 소속사 하나 열기 → `default` 입력 → «연결» → 화면의 «현재 값» 이 `default` | 소유자 화면 관찰 |
+| `GET /internal/sellers/default 200 308ms` (2026-10-04T15:27:22Z) | ecommerce 게이트웨이 로그 — artist-service 의 워크로드 토큰이 R1 경로(스토어 게이트웨이 `/internal/sellers/**`)로 product-service 에 닿았다 |
+| 같은 시각 ecommerce 요약 줄 `match` 121 → 122 · `mismatch` 0 · 거절 0 | `artist-service-client` 의 `aud` 가 ENFORCE allowlist 를 통과했다(`TASK-MONO-697` 20차 표) |
+
+**판정 — ✅ 술어 충족(단, «저장» 의 근거는 DB 직접 읽기가 아니라 서버 재조회다).**
+- «200»: 스토어 조회 leg 가 200(ACTIVE 셀러)이었고 화면이 오류 상태(422/503 문구)가 아니라 갱신된 현재 값을 그렸다 ⇒ `PATCH /api/v1/agencies/{id}/store-seller` 가 성공으로 끝났다. PATCH 응답 자체의 상태코드 줄은 전달받은 기록에 없다.
+- «`store_seller_id` 변경»: `agencies.store_seller_id` 행은 **직접 읽지 않았다**(SQL 읽기 없음). 화면의 «현재 값» 은 낙관적 표시가 아니다 — 콘솔 `use-fan-directory.ts` 의 연결 뮤테이션은 성공 시 `invalidateAgencies(qc, agencyId)` 로 `[fan, agency, <id>]` 쿼리를 무효화하고, 상세 화면은 그 쿼리의 **재조회**(`GET /api/v1/agencies/{id}` → artist-service)가 돌려준 `storeSellerId` 를 그린다(`AgencyDetail.tsx` `fan-agency-seller-current`). 즉 «저장소를 다시 읽은 서버의 답» 이 `default` 였다. 이것을 술어의 «바뀐다(결과 상태)» 로 받는다 — 같은 저장소를 다른 경로(SQL)로 읽은 것은 아니라는 한계를 적어 둔다.
+- ⚪ 이 창에서 재지 않은 것: 닫힌 경로(스토어/IdP 다운 → 503 · 저장 불변)의 **라이브** 판. AC-2 는 단위 시험(`AgencyStoreSellerTransportTest.ac2_openClosedOpen`)으로 닫혀 있고 데모 창은 열린 경로만 재었다.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4133` | `state=MERGED` · mergedAt 2026-10-03T05:55:18Z · mergeCommit `2a49dfb48` |
+| (b) origin/main 조상 | 참(origin/main `92a6320eb`) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` 68건 = SUCCESS 46 · SKIPPED 22 · **FAILURE 0** (구현 기록의 ⚪ Testcontainers IT 는 이 CI 레인이 판정 — 잡 단위로 그 클래스가 돌았는지는 이 chore 에서 따로 열어 보지 않았다) |
+| (d) `# Acceptance Criteria` | AC-0 ~ AC-4 전부 `[x]`(구현 기록 § AC 표). 데모 창 술어는 AC 가 아니라 «⚪ 안 잰 것» 의 남은 칸이었고, 위에서 채웠다 |
+
+⇒ **`review/` → `done/`.**

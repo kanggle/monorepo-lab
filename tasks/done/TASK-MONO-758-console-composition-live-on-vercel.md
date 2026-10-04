@@ -8,7 +8,7 @@ TASK-MONO-758
 
 # Status
 
-review (2026-10-04 UTC — 19차 창: AC-0·1·3·4·5 닫힘, AC-2 는 화면만 — 다음 창에서 라우트 로그와 함께 재측정)
+done (2026-10-04 UTC — 19차 창: AC-0·1·3·4·5 닫힘, AC-2 는 화면만 — 다음 창에서 라우트 로그와 함께 재측정)
 
 # Owner
 
@@ -89,3 +89,45 @@ monorepo
 🔵 곁관찰 (AC 밖, 판정에 안 씀):
 - IAM 카드 «전체 계정 0» 은 IAM 이 `X-Tenant-Id: demo-corp` 로 `GET /api/admin/accounts?page=0&size=1` 에 `totalElements=0` 을 답한 값이다(화면 파서 정상). 데모 계정이 소비자 풀에 있다면 0 이 맞을 수 있다. DB 읽기(`account_db.accounts` 테넌트별 집계)는 분류기에 막혀 못 쟀다 — 다음 창에서 같은 질문.
 - `platform@demo.com`(테넌트 `fan-platform`)으로 들어간 세션에서 `notifications-inbox` erp leg 가 `degraded/PERMISSION_DENIED` → `notification_inbox_degraded` — 303 의 설계대로(401 아닌 도메인 실패 = 저하).
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> 위 AC 목록의 «AC-2 `[ ]`» 와 Status 괄호의 «AC-2 는 화면만 — 다음 창에서 재측정» 은 **이제 사실이 아니다.** 동결 파일이라 체크박스는 고치지 않고 여기서 닫는다. 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**창.** 20차 AMI 창(2026-10-04 UTC 14:5x–15:49), 인스턴스 `i-0c4859442f56d70e0`, AMI `ami-0d78d476824493d77`(구운 커밋 `f0927bcd0`, 핀 #4151, provenance `ami-tag`). 콘솔 = Vercel `console.hubwang.com`, main ≥ `60b97d178`. AC-0 의 술어(구운 커밋이 757 머지 `8e8feacf1` 의 자손)는 이 AMI 에서도 참이다(`git merge-base --is-ancestor 8e8feacf1 f0927bcd0`).
+
+### AC-2 — 도메인 하나(scm)를 내린 대조군
+
+| 시각 (UTC) | 무엇 | 관측 |
+|---|---|---|
+| 15:28:28 | scm 묶음 정지 | `POST /bundle/stop {"bundles":["console-scm"]}` → 15:28:46 scm 컨테이너 **0** |
+| 15:33:58–15:34:00 | 도메인 상태 라우트 `domain-health` (requestId `0a13b147-9613-4e49-b6a7-d776e7b74e76`) | scm `degraded(DOWNSTREAM_ERROR)` · iam · ecommerce · wms · erp · finance `ok` |
+| 15:34:00 | (무효) `platform@demo.com` 세션으로 연 첫 시도 | 카드가 `forbidden` — **잘못된 계정**(팬 전용으로 묶인 데모 플랫폼 운영자)이라 판정에 쓰지 않았다. 그 화면의 배너 문제는 새 티켓으로 뺐다(아래 곁발견) |
+| 15:36:07.080Z | 운영 개요 화면 — `demo@demo.com` / 테넌트 `demo-corp` | IAM 회원 계정 0 · WMS 재고 행 수 1 · **SCM «하위 서비스에서 오류가 발생했습니다 / 사유: DOWNSTREAM_ERROR / 다시 시도»** · Finance `MISSING_PREREQUISITE`(19차 AC-1 에도 있던 기존 안내) · ERP 활성 부서 3 · ecommerce 상품 0 · 상태 요약 **«정상 5 · 주의 0 · 점검 불가 1»** |
+| 같은 시각 | 같은 요청의 Vercel 라우트 로그 `operator-overview` (requestId `8582d51c-51c0-4644-9737-c8df0e7eecd0`) | finance `forbidden(MISSING_PREREQUISITE)` · **scm `degraded(DOWNSTREAM_ERROR)`** · ecommerce · iam · wms · erp `ok` |
+| 15:36–15:38 | scm 묶음 재기동 | (`TASK-MONO-697` 의 scm 요약 카운터가 여기서 0 부터 다시 센다) |
+
+⇒ **AC-2 ✅.** 도메인 하나가 내려간 상태에서 운영 개요는 응답했고(라우트가 6 leg 의 합성 본문을 냈고 화면이 그것을 정상 카드 다섯 + 열화 카드 하나로 그렸다), **열화는 scm 카드 하나뿐**이다. 19차의 공백(«같은 시각의 라우트 응답을 Vercel 에서 못 찾음»)은 같은 requestId 의 화면 + 라우트 로그 짝으로 메워졌다.
+- 🔵 finance 의 `forbidden(MISSING_PREREQUISITE)` 은 scm 을 내리기 전부터 있던 상태이고(19차 AC-1 «정상 6 / 6» 에서도 같은 값), 상태 요약도 그것을 «점검 불가» 로 세지 않는다 ⇒ «그 카드만 열화» 를 깨지 않는다.
+- ⚪ 라우트 로그 줄에 HTTP 상태코드가 따로 찍혔는지는 전달받은 기록에 없다. 200 의 근거는 «라우트가 leg 별 결과를 담은 합성 본문을 냈고 화면이 그 본문을 카드로 그렸다» 이다(계약 § 2.4.9 — all-down 도 200 이고, 합성 라우트가 실패하면 화면은 카드 대신 전면 오류를 그린다).
+
+### 곁발견 (판정에 안 씀 → 새 티켓)
+
+- 15:34:00 무효 시도에서, 모든 카드가 `forbidden` 일 때 상단 배너 «모든 도메인의 개요 정보를 일시적으로 불러올 수 없습니다 … 잠시 후 다시 시도»(로그 `console_composition_all_down`)가 떴다 — 원인은 권한인데 장애처럼 읽힌다 → **`TASK-PC-FE-307`**.
+- SCM «스냅샷 행 수 0»(카드는 `ok`)은 19·20차 모두 같다 — 재고 가시성 투영이 비어 있다 → **`TASK-MONO-760`**.
+- scm 재기동(15:36–15:38) 동안 web-store 에 «데모 서버가 켜지는 중입니다…» 배너가 떴다(스토어 묶음은 ready) → **`TASK-FE-104`**(ecommerce).
+
+### 4차원 (close chore)
+
+이 티켓은 **측정 티켓**이다(`ADR-MONO-081` 단계 6) — **자기 구현 PR 이 없다.** (a)–(c) 는 이 티켓이 재는 단계 PR 에 대해 적는다. 이 티켓의 PR 을 지어내지 않는다.
+
+| 차원 | 결과 |
+|---|---|
+| (a) MERGED | `TASK-PC-FE-302` #4118 `f98ece821` · `TASK-PC-FE-303` #4122 `bbdd3990f` · `TASK-MONO-757` #4127 `8e8feacf1` — 셋 다 `state=MERGED` |
+| (b) origin/main 조상 | 셋 다 `git merge-base --is-ancestor <sha> origin/main` 참(origin/main `92a6320eb`) · 셋 다 20차 AMI 커밋 `f0927bcd0` 에도 포함 |
+| (c) 실패 체크 | #4118 69건 · #4122 66건 · #4127 68건 — FAILURE/CANCELLED/TIMED_OUT **각 0** |
+| (d) `# Acceptance Criteria` | AC-0 · AC-1 · AC-3 · AC-4 · AC-5 `[x]`(19차) · **AC-2 = 이 절에서 닫힘** — 동사 «도메인 하나를 내린 상태에서 운영 개요는 200 이고 그 카드만 열화» 를 화면 + 같은 requestId 라우트 로그로 확인 |
+
+⇒ **`review/` → `done/`.**

@@ -8,7 +8,7 @@ TASK-MONO-697
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -582,3 +582,49 @@ AC-0 을 닫는 조건은 «client 6/6 이 (i)/(ii)» **그리고** «채널 ②
 3. 공유 픽스처 메서드 `enforceOverrides` 를 지우고 `modeOverrides` + `servicesPassingModeThrough` 를 넣었다. 그에 맞춰 lib 단위 테스트와 `snakeyaml` testFixtures 의존을 새로 추가했다.
 4. 티켓 In Scope 목록에 없는 **스펙 문장 동기화**(계약서 Implementation status 와 프로젝트 gateway 스펙들)를 같은 PR 에서 했다. 스펙이 «SHADOW 출하» 라고 말하는 채로 코드만 ENFORCE 가 되면 스펙과 코드가 충돌하기 때문이다.
 5. AC-3 칸의 디코더 mode 를 출하값에서 읽게 했다(리터럴 대신).
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 20차 창 판정 (2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)
+
+> 위 본문의 «AC-5 `[ ]` — 데모 창 확인이 남아 있어 열려 있다» 와 Definition of Done 의 `[ ]` 두 칸은 **이제 사실이 아니다.** 체크박스는 고치지 않고(동결 파일 — 덧붙이기만) 여기서 닫는다. 이 절이 현재 상태다. 분석=Opus 5.5.
+
+**창.** 20차 AMI 창, 2026-10-04 UTC 14:5x–15:49. 인스턴스 `i-0c4859442f56d70e0` · AMI `ami-0d78d476824493d77` · 구운 커밋 `f0927bcd0`(핀 PR #4151, provenance `ami-tag`). 뒤집기 PR #4143 의 머지 `c32e56e7b` 는 `f0927bcd0` 의 조상이다(`git merge-base --is-ancestor` 참) ⇒ 이 창의 게이트웨이는 ENFORCE 출하본이다.
+
+### AC-5 — 항목별
+
+| AC-5 요구 | 판정 | 근거 |
+|---|---|---|
+| `:libs:java-gateway:check` + 6 게이트웨이 `:check` rc=0 | ✅ | § 뒤집기 PR 기록 › 검증 (7개 rc=0, 2026-10-04) |
+| 통합 잡(Testcontainers)은 CI 가 권위 | ✅ | #4143 `statusCheckRollup` 68건 = SUCCESS 43 · SKIPPED 25 · **FAILURE 0** |
+| 마지막 요약 줄 6/6 `mode=ENFORCE` · `mismatch=0` | ✅ | 아래 표 (~15:43 UTC, SSM 읽기) |
+| 콘솔 5 도메인 · web-store · fan 각 1회 200 | ✅ | 콘솔 5 도메인 화면 200(overview 15:36:07 의 leg 들 ok — scm 은 그 순간 `TASK-MONO-758` 대조군으로 **일부러 내려 둠**, 재기동 15:38 뒤 scm 화면 200 · health 라우트는 그 전에 전 도메인 ok) · web-store 로그인 성공 · fan 웹 로그인 성공 · 콘솔 팬 디렉터리(fan 게이트웨이) 목록 표시 |
+| `mismatch_rejected` 0 | ✅ | 6 게이트웨이 모두 `grep -ciE "AUDIENCE_FORBIDDEN\|audience not on allowlist\|mismatch_rejected"` = **0** |
+| 되돌리기 레버 (최소) — env 가 컨테이너에 도달 | ✅ | 6/6 `docker exec <gw> printenv OIDC_AUDIENCE_MODE` = `ENFORCE`(SSM 읽기). 🔵 AC 문구의 `docker inspect … Config.Env` 대신 **실행 중 프로세스 환경**을 읽었다 — 같은 사실의 더 직접적인 관측이다 |
+| 되돌리기 레버 (가능하면) — SHADOW 로 재생성 후 `mode=SHADOW` 확인 | ⚪ **안 했다** | 데모 호스트 원격 쓰기(컨테이너 재생성)라 이번 창에서는 하지 않았다. AC 가 «가능하면» 으로 둔 칸이므로 닫힘을 막지 않는다. 🔴 그러므로 «레버를 당기면 실제로 SHADOW 가 된다» 는 **미측정**이다 — 아는 것은 «env 가 컨테이너에 도달한다» 와 출하 스위트의 전달 줄 단언(`runningComposePassesTheModeThroughToTheGateway`)까지다 |
+
+**마지막 요약 줄 (~15:43 UTC, 소유자 트래픽 뒤 — 콘솔 5 도메인 · scm 재기동 뒤 재방문 · web-store 로그인 · fan 웹 로그인 · 콘솔 팬 디렉터리)**
+
+| 게이트웨이 | mode | match | mismatch | 거절 grep |
+|---|---|---|---|---|
+| ecommerce | ENFORCE | 288 | 0 | 0 |
+| erp | ENFORCE | 83 | 0 | 0 |
+| fan | ENFORCE | 33 | 0 | 0 |
+| finance | ENFORCE | 46 | 0 | 0 |
+| scm | ENFORCE | 38 | 0 | 0 |
+| wms | ENFORCE | 36 | 0 | 0 |
+
+- 🔴 scm 은 15:38 에 재기동됐다(758 대조군) ⇒ 그 줄의 누적은 **재기동 이후분**만이다(정정 ④ 의 «누적은 기동 이후»). 분모 38 > 0 이므로 공허하지 않다.
+- 🔵 finance 분모가 처음으로 1 을 넘었다(18·19차는 1). 
+- 🔵 ecommerce 의 match 에는 `artist-service-client` 워크로드 토큰(`TASK-MONO-759` 의 `/internal/sellers/default` 조회, 15:27:22Z)도 들어 있다 — 그 줄에서 요약이 121→122, mismatch 0.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4143` | `state=MERGED` · mergedAt 2026-10-04T09:13:16Z · mergeCommit `c32e56e7b` |
+| (b) origin/main 조상 | `git merge-base --is-ancestor c32e56e7b origin/main` 참 (origin/main = `92a6320eb`) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` FAILURE/CANCELLED/TIMED_OUT **0** (68건 중 SUCCESS 43 · SKIPPED 25) |
+| (d) `# Acceptance Criteria` | AC-0 · AC-1 · AC-2 · AC-3 · AC-4 `[x]`(본문) · **AC-5 = 이 절에서 닫힘**. AC-5 의 동사는 «확인» 이고, 필수 칸은 전부 관측으로 확인했다. 선택 칸(SHADOW 재생성)은 «가능하면» 이라 ⚪ 로 기록했다. DoD 두 칸(AC-0~5 · 출하 ENFORCE + 오류 코드 확정)도 참이다 |
+
+⇒ **`review/` → `done/`.**
