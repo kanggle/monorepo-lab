@@ -484,6 +484,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   동의 화면을 띄우지 않고 위 615 결과 그대로(토큰 거절) — 동의는 떠난 멤버십을 다시 열지 않는다. 콘솔(`iam`)과 B2B client 에는 동의 화면이 없다.
   → **`TASK-BE-619` 이후**: `LEFT` 중 **본인이 떠난 것**(`leftBy = SELF`)은 행 없음과 같이 **동의 화면**이고, 동의하면 `ACTIVE` 로 돌아온다(이벤트 없음 — § 5
   «사이트 탈퇴 vs 계정 삭제»). **운영자가 내보낸 것**(`leftBy = OPERATOR`)과 작성자 기록이 없는 `LEFT` 는 위 그대로(동의 화면 없음 · 토큰 거절).
+  → **`TASK-BE-621` 이후**: 그 사이트 운영자가 잠근 멤버십(`LOCKED`)도 운영자 `LEFT` 와 같다 — 동의 화면 없음 · 토큰 거절(`invalid_grant`) · 다른 사이트는 그대로.
   동의 화면의 부제는 그 화면 전용이다 — «{사이트 이름}에서 내 IAM 계정을 쓰도록 허용합니다.»(사이트 이름 = 보관된 client 의 사이트 테넌트 `display_name`, 조회
   실패 시 «이 사이트»). 사이트의 **로그인** 부제(«…로그인하세요»)는 쓰지 않는다(이미 로그인한 사람에게 하는 말이 아니다 — 소유자 결정 2026-10-03).
 - **소비자 사이트가 아닌 client**(B2B — wms · erp …): 풀 세션은 다른 테넌트 세션처럼 **재인증**, 그 client 의 폼은 풀 자격을 보지 않는다(풀-먼저는 소비자 사이트 규칙).
@@ -508,10 +509,25 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 (§ 3 이동 전에 로그인한 세션의 refresh 가 이 조회로 역할을 싣는다 — [account-internal-provisioning.md § roles GET](../contracts/http/internal/account-internal-provisioning.md#get-internaltenantstenantidaccountsaccountidroles)).
 풀 principal 의 발급은 여전히 consumer-members 읽기를 쓴다.
 - **비멤버 대조군**: 사이트 A 에만 멤버인 풀 계정을 사이트 B 로 찾으면 404 — 읽기 · 쓰기 모두.
-- 🔴 **쓰기의 범위는 «계정 하나»** — **삭제를 뺀** 상태 전이(잠금 · 해제 · 프로비저닝 상태 변경)는 **풀 계정 하나**에 일어난다: 스토어 운영자의 잠금은
-  팬에서도 잠근다(`TASK-BE-616` 결정, 아래 «사이트 탈퇴 vs 계정 삭제» 는 이것을 바꾸지 않는다). 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번
+- 🔵 **«그 사이트 멤버» = 멤버십 `ACTIVE` 또는 `LOCKED` (`TASK-BE-621`)** — 위 술어의 «멤버» 는 그 사이트에서 **잠긴** 풀 계정도 포함한다(목록 · 이메일 검색 · 단건).
+  잠긴 회원이 그 사이트의 목록·단건 조회에서 사라지면 그 사이트 운영자가 해제할 길이 없다. `LEFT` 는 여전히 멤버가 아니다(찾히지 않는다 → 404).
+- 🔴 **쓰기의 범위는 «계정 하나»** — **삭제와 운영자 잠금·해제를 뺀** 상태 전이(프로비저닝 상태 변경 등)는 **풀 계정 하나**에 일어난다. 이벤트는 계정의 테넌트 `consumer-pool` 로 한 번
   (account-events.md § 상태 전이). 운영자 이력 행(`account_status_history`)도 계정의 테넌트로 적힌다. GDPR **내보내기**는 그 사람이 멤버인 어느 사이트의
-  운영자든 할 수 있다(읽기).
+  운영자든 할 수 있다(읽기). (`TASK-BE-616` 은 잠금도 여기 넣었다 — 스토어 운영자의 잠금이 팬에서도 잠갔다. `TASK-BE-621` 이 아래 «사이트 잠금» 으로 바꿨다.)
+- 🔴 **잠금도 다르다 — «사이트 잠금» vs «계정 잠금» (`TASK-BE-621`, 소유자 결정 2026-10-04 «사이트 운영자가 회원을 잠글 때, 그 잠금은 자기 사이트에만 걸린다.
+  계정 전체 잠금은 플랫폼 관리자만.»)**. 아래 «사이트 탈퇴 vs 계정 삭제» 와 같은 설계다.
+
+  | 행위자 | «사이트 잠금» (그 사이트 멤버십 → `LOCKED`) | «계정 잠금» (풀 계정 → `LOCKED`, 모든 소비자 사이트에서) |
+  |---|---|---|
+  | **사이트 운영자** (활성 테넌트 = 그 사이트, 플랫폼 스코프 아님) | 콘솔 잠금 · 해제 · 일괄 잠금 → 내부 `/lock` · `/unlock`(헤더 = 사이트) — 대상이 **풀 멤버**면 **그 사이트 멤버십만** `LOCKED`/`ACTIVE`. 계정 · 다른 사이트 멤버십 무변경, 이벤트 없음. 응답 `scope = SITE_MEMBERSHIP` ([admin-to-account.md § lock](../contracts/http/internal/admin-to-account.md)) | **할 수 없다** — 해제도(계정 전체 잠금은 사이트 운영자가 풀지 못한다). 그 사이트의 **자기 계정**(풀 아님)은 지금처럼 계정을 잠근다 |
+  | **플랫폼 관리자** (SUPER_ADMIN — `isPlatformScope`) | (해당 없음) | 콘솔 잠금 · 해제 — admin-service 가 활성 테넌트와 무관하게 하류 `*` 를 찍고, account-service 는 계정 행 자신의 테넌트로 찾아 계정을 잠근다(`scope = ACCOUNT`, `account.locked` · 세션 폐기 그대로) |
+  | **자동** (security-service `AUTO_DETECT`, 헤더 없음) · **본인 복구** (`USER_RECOVERY`) | (해당 없음) | 지금 그대로 — 계정 전체(자격·IAM 세션이 사이트마다가 아니라 하나다). 🔵 `TASK-BE-621` «소유자 결정 필요» 1 |
+
+  - **`LOCKED` 멤버십**: 그 사이트로는 토큰이 없다(§ 4 — `ACTIVE` 멤버십만 발급; authorize 게이트는 동의 화면을 띄우지 않고 통과, 토큰 엔드포인트가 `invalid_grant`).
+    **동의로 열리지 않는다**(동의 `PUT` 무변경), 본인 «사이트 탈퇴» 도 무변경(떠났다 다시 동의해 잠금을 벗지 못한다). 운영자 «GDPR 삭제» 는 `LOCKED → LEFT`(`OPERATOR`).
+    잠금은 그 사이트 `consumer_site_roles` 를 지우지 않는다 — 해제하면 원래대로. 잠금 기록 `locked_at` · `locked_by_actor_id`(account-service `V0033`).
+  - 다른 사이트는 영향이 없다 — 대조 시험 `ConsumerSiteLockIntegrationTest`(account-service). 🔵 이미 발급된 그 사이트 access token 은 만료까지 산다(refresh 는 거절).
+  - 🔵 내부 프로비저닝 `PATCH /internal/tenants/{t}/accounts/{id}/status`(사이트 백엔드의 기계 경로)는 아직 계정 전체다 — `TASK-BE-621` «소유자 결정 필요» 2.
 - 🔴 **삭제는 다르다 — «사이트 탈퇴» vs «계정 삭제» (`TASK-BE-619`, 소유자 결정 2026-10-03)**. 위 616 결정은 «사이트 운영자의 GDPR 삭제 = 풀 계정 삭제(모든
   사이트에서)» 였고, 소유자가 이것을 **«사이트 운영자 삭제 권한 = 자기 사이트 멤버십만»** 으로 바꿨다 — *한 사이트가 다른 사이트의 회원 데이터를 지울 수 없다.*
   풀 계정 삭제(GDPR 마스킹 포함)는 **본인 또는 플랫폼 관리자**만 한다.
@@ -556,6 +572,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 한 사이트 계정의 이동(§ 3) — 옮길 행 전부 · 셀러/두 사이트 제외 · 실패 시 무변경 · 재실행 · `account.created` 없음 | `TASK-BE-618` — account-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 이동한 계정이 같은 비밀번호로 같은 `sub` · 이동 전 refresh 가 계속 된다 | `TASK-BE-618` — auth-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 사이트 운영자의 삭제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 삭제 · 본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님 | `TASK-BE-619` — account-service `ConsumerSiteLeaveIntegrationTest` · `PoolMemberSiteSurfacesIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(SELF → 동의 화면 · OPERATOR → 통과·발급 거절) |
+| 사이트 운영자의 잠금·해제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 잠금 · `LOCKED` 는 동의·본인 탈퇴로 안 열림 | `TASK-BE-621` — account-service `ConsumerSiteLockIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(LOCKED → 통과·발급 거절, 동의 화면 없음); admin-service `AccountAdminControllerSliceTest`(플랫폼 스코프 → `*` · 사이트 운영자 → 활성 테넌트) · `AccountAdminUseCaseTest`(감사 `SITE_MEMBERSHIP_LOCKED`) |
 
 ### 격리 회귀 방지
 

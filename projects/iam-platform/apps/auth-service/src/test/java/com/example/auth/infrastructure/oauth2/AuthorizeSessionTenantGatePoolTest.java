@@ -179,6 +179,25 @@ class AuthorizeSessionTenantGatePoolTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-621: 그 사이트 운영자가 잠근 멤버십(LOCKED) → 동의 화면 아님 · 통과(발급자가 invalid_grant) · 멤버로도 보지 않는다")
+    void poolSession_siteLockedMembership_passes_noConsent() throws Exception {
+        stubClient("fan", "fan-platform");
+        ConsumerSiteMembershipLookupResult locked =
+                new ConsumerSiteMembershipLookupResult("fan-platform", true, "B2C_CONSUMER", "LOCKED", List.of(), null);
+        when(accountServicePort.getConsumerSiteMembership("fan-platform", POOL_ACCOUNT)).thenReturn(locked);
+        Authentication session = principal("consumer-pool");
+
+        Outcome out = run(session, "fan", "GET", Map.of());
+
+        assertThat(out.chainCalled()).isTrue();
+        assertThat(out.seen()).isSameAs(session);
+        assertThat(out.request().getSession(false)).as("no consent stash — consent cannot undo a site lock").isNull();
+        // The issuer's own rule (TenantClaimTokenCustomizer): no ACTIVE membership → no token (invalid_grant).
+        assertThat(locked.isActiveMember()).isFalse();
+        assertThat(locked.isReopenableByConsent()).isFalse();
+    }
+
+    @Test
     @DisplayName("TASK-BE-616/619: 작성자 기록 없는 LEFT 멤버십(옛 account-service) → 동의 화면 아님 · 통과(발급자가 invalid_grant) — 보수 쪽")
     void poolSession_leftMembership_passes_noConsent() throws Exception {
         stubClient("fan", "fan-platform");

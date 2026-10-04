@@ -176,6 +176,80 @@ class AccountAdminControllerSliceTest {
                 .andExpect(jsonPath("$.auditId").value("audit-1"));
     }
 
+    // ── TASK-BE-621: who locks what — the platform admin the account ('*'), a site operator their site ──
+
+    @Test
+    void lock_platformScopeOperator_stampsWildcard_evenWithAnActiveTenant() throws Exception {
+        when(queryTenantScopeGate.resolve(any(), eq("ecommerce"), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("ecommerce", true));
+        when(useCase.lock(any())).thenReturn(new LockAccountResult(
+                "acc-1", "ACTIVE", "LOCKED", "op-1", Instant.parse("2026-10-04T00:00:00Z"), "audit-1"));
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-621-a")
+                        .header("X-Operator-Reason", "fraud")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ACCOUNT"));
+
+        org.mockito.ArgumentCaptor<com.example.admin.application.LockAccountCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(com.example.admin.application.LockAccountCommand.class);
+        org.mockito.Mockito.verify(useCase).lock(cmd.capture());
+        assertThat(cmd.getValue().tenantId())
+                .as("the platform admin is told apart by role — '*' means «the whole account»")
+                .isEqualTo("*");
+    }
+
+    @Test
+    void lock_siteOperator_keepsTheActiveTenant_andAnswersSiteScope() throws Exception {
+        when(queryTenantScopeGate.resolve(any(), eq("ecommerce"), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("ecommerce", false));
+        when(useCase.lock(any())).thenReturn(new LockAccountResult(
+                "acc-1", "ACTIVE", "LOCKED", "op-1", Instant.parse("2026-10-04T00:00:00Z"), "audit-1",
+                "SITE_MEMBERSHIP", "ecommerce"));
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-621-b")
+                        .header("X-Operator-Reason", "fraud")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"))
+                .andExpect(jsonPath("$.siteTenantId").value("ecommerce"));
+
+        org.mockito.ArgumentCaptor<com.example.admin.application.LockAccountCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(com.example.admin.application.LockAccountCommand.class);
+        org.mockito.Mockito.verify(useCase).lock(cmd.capture());
+        assertThat(cmd.getValue().tenantId()).isEqualTo("ecommerce");
+    }
+
+    @Test
+    void unlock_platformScopeOperator_stampsWildcard() throws Exception {
+        when(queryTenantScopeGate.resolve(any(), eq("ecommerce"), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("ecommerce", true));
+        when(useCase.unlock(any())).thenReturn(new com.example.admin.application.UnlockAccountResult(
+                "acc-1", "LOCKED", "ACTIVE", "op-1", Instant.parse("2026-10-04T00:00:00Z"), "audit-1"));
+
+        mockMvc.perform(post("/api/admin/accounts/acc-1/unlock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-621-c")
+                        .header("X-Operator-Reason", "resolved")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<com.example.admin.application.UnlockAccountCommand> cmd =
+                org.mockito.ArgumentCaptor.forClass(com.example.admin.application.UnlockAccountCommand.class);
+        org.mockito.Mockito.verify(useCase).unlock(cmd.capture());
+        assertThat(cmd.getValue().tenantId()).isEqualTo("*");
+    }
+
     @Test
     void lock_missing_idempotency_key_returns_400_validation_error() throws Exception {
         mockMvc.perform(post("/api/admin/accounts/acc-1/lock")

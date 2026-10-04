@@ -50,7 +50,9 @@ public class AccountAdminUseCase {
                 outcome.downstream.currentStatus(),
                 cmd.operator().operatorId(),
                 outcome.downstream.lockedAt() != null ? outcome.downstream.lockedAt() : outcome.completedAt,
-                outcome.auditId);
+                outcome.auditId,
+                scopeOf(outcome.downstream),
+                isSiteScope(outcome.downstream) ? outcome.downstream.siteTenantId() : null);
     }
 
     public UnlockAccountResult unlock(UnlockAccountCommand cmd) {
@@ -72,7 +74,9 @@ public class AccountAdminUseCase {
                 outcome.downstream.currentStatus(),
                 cmd.operator().operatorId(),
                 outcome.downstream.unlockedAt() != null ? outcome.downstream.unlockedAt() : outcome.completedAt,
-                outcome.auditId);
+                outcome.auditId,
+                scopeOf(outcome.downstream),
+                isSiteScope(outcome.downstream) ? outcome.downstream.siteTenantId() : null);
     }
 
     /**
@@ -133,7 +137,7 @@ public class AccountAdminUseCase {
                     auditId, actionCode, operator,
                     "ACCOUNT", accountId,
                     reason, ticketId, idempotencyKey,
-                    Outcome.SUCCESS, null, startedAt, completedAt));
+                    Outcome.SUCCESS, siteScopeDetail(actionCode, downstream), startedAt, completedAt));
             return new AccountActionOutcome(auditId, completedAt, downstream);
         } catch (CallNotPermittedException ex) {
             // Circuit breaker OPEN: downstream call was rejected. Record FAILURE
@@ -167,6 +171,27 @@ public class AccountAdminUseCase {
             }
         }
         return ex;
+    }
+
+    /**
+     * TASK-BE-621 — a site operator's lock / unlock of a consumer-pool member changed only that site's membership.
+     * The audit row says so ({@code SITE_MEMBERSHIP_LOCKED|UNLOCKED site=<site>}), so «ACCOUNT_LOCK · SUCCESS» is
+     * never read as «the account was locked» when it was not — the same reason as TASK-BE-619's GDPR detail.
+     */
+    private static String siteScopeDetail(ActionCode actionCode, AccountServiceClient.LockResponse downstream) {
+        if (!isSiteScope(downstream)) {
+            return null;
+        }
+        String what = actionCode == ActionCode.ACCOUNT_UNLOCK ? "SITE_MEMBERSHIP_UNLOCKED" : "SITE_MEMBERSHIP_LOCKED";
+        return what + " site=" + downstream.siteTenantId();
+    }
+
+    private static boolean isSiteScope(AccountServiceClient.LockResponse downstream) {
+        return downstream != null && GdprAdminUseCase.SCOPE_SITE_MEMBERSHIP.equals(downstream.scope());
+    }
+
+    private static String scopeOf(AccountServiceClient.LockResponse downstream) {
+        return isSiteScope(downstream) ? GdprAdminUseCase.SCOPE_SITE_MEMBERSHIP : GdprAdminUseCase.SCOPE_ACCOUNT;
     }
 
     /** Carries the success-path results of {@link #executeAccountAction}. */

@@ -24,7 +24,11 @@
 - `AUTO_DETECT`: security-service의 비정상 탐지 (velocity/geo/device/token-reuse)
 - `PASSWORD_FAILURE_THRESHOLD`: 로그인 실패 임계치 초과 (미래 자동 잠금)
 
-해제: 운영자 unlock 또는 사용자 본인 복구 (미래).
+해제: 운영자 unlock 또는 사용자 본인 복구 (`AUTO_DETECT` 잠금만, `TASK-BE-612`).
+
+🔵 **소비자 풀 계정의 사이트 잠금은 계정 상태가 아니다 (`TASK-BE-621`)** — 사이트 운영자가 풀 계정 회원을 잠그면 계정은 `ACTIVE` 그대로이고 **그 사이트 멤버십**
+(`consumer_site_memberships.status`)만 `LOCKED` 가 된다(이벤트 · `account_status_history` 없음, 감사 = admin-service `admin_actions`). 계정 `LOCKED`(이 절)는
+플랫폼 관리자 · 자동 탐지 · 사이트 자기 계정에 대한 잠금이다. 규칙의 정본: [multi-tenancy.md § 소비자 계정 풀 § 5 «사이트 잠금 vs 계정 잠금»](multi-tenancy.md).
 
 ### DORMANT
 장기 미사용 휴면. 로그인 시도 시 **423** `ACCOUNT_DORMANT`. 전이 조건:

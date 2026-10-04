@@ -35,6 +35,8 @@ public class AccountStatusUseCase {
     private final ConsumerPoolFlag consumerPoolFlag;
     /** TASK-BE-619 — what a site operator's delete of a pool member becomes: that site's membership LEFT. */
     private final LeaveConsumerSiteUseCase leaveConsumerSiteUseCase;
+    /** TASK-BE-621 — what a site operator's lock / unlock of a pool member becomes: that site's membership only. */
+    private final SiteMembershipLockUseCase siteMembershipLockUseCase;
 
     public AccountStatusUseCase(AccountRepository accountRepository,
                                  AccountStatusHistoryRepository historyRepository,
@@ -42,7 +44,8 @@ public class AccountStatusUseCase {
                                  AccountEventPublisher eventPublisher,
                                  @Value("${account.deletion.grace-period-days:30}") int gracePeriodDays,
                                  ConsumerPoolFlag consumerPoolFlag,
-                                 LeaveConsumerSiteUseCase leaveConsumerSiteUseCase) {
+                                 LeaveConsumerSiteUseCase leaveConsumerSiteUseCase,
+                                 SiteMembershipLockUseCase siteMembershipLockUseCase) {
         this.accountRepository = accountRepository;
         this.historyRepository = historyRepository;
         this.statusMachine = statusMachine;
@@ -50,6 +53,7 @@ public class AccountStatusUseCase {
         this.gracePeriodDays = gracePeriodDays;
         this.consumerPoolFlag = consumerPoolFlag;
         this.leaveConsumerSiteUseCase = leaveConsumerSiteUseCase;
+        this.siteMembershipLockUseCase = siteMembershipLockUseCase;
     }
 
     /**
@@ -123,6 +127,29 @@ public class AccountStatusUseCase {
     public StatusChangeResult changeStatus(ChangeStatusCommand command, TenantId tenantId) {
         Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, command.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
+        return applyStatusChange(account, command);
+    }
+
+    /**
+     * TASK-BE-621 (owner decision 2026-10-04 «사이트 운영자가 회원을 잠글 때, 그 잠금은 자기 사이트에만 걸린다.
+     * 계정 전체 잠금은 플랫폼 관리자만.») — the internal {@code /lock} / {@code /unlock} by a caller that NAMES a
+     * tenant (admin-service's site operator; a platform admin is stamped {@code "*"} and goes to
+     * {@link #changeStatusResolvingTenant}). A site's own account changes as before. A consumer-POOL member found
+     * through the site does NOT: only that site's membership becomes LOCKED / ACTIVE
+     * ({@link SiteMembershipLockUseCase}) and the answer says {@code scope = SITE_MEMBERSHIP}. Same shape as
+     * {@link #deleteAccountAsTenantOperator} (TASK-BE-619).
+     *
+     * <p>🔴 A separate method on purpose: {@link #changeStatus(ChangeStatusCommand, TenantId)} is also reached by
+     * the dormant scheduler (pinned to {@code fan-platform}), whose DORMANT transition must stay account-wide.
+     */
+    @Transactional
+    public StatusChangeResult changeStatusAsTenantOperator(ChangeStatusCommand command, TenantId tenantId) {
+        Account account = SiteAccountLookup.find(accountRepository, consumerPoolFlag, tenantId, command.accountId())
+                .orElseThrow(() -> new AccountNotFoundException(command.accountId()));
+        if (account.getTenantId().isConsumerPool() && !tenantId.isConsumerPool()) {
+            return siteMembershipLockUseCase.execute(
+                    tenantId, account, command.targetStatus(), command.reason(), command.actorId());
+        }
         return applyStatusChange(account, command);
     }
 

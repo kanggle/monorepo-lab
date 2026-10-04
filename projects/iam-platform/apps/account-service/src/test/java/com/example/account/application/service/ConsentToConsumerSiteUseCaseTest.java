@@ -151,6 +151,24 @@ class ConsentToConsumerSiteUseCaseTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-621 — 사이트 운영자가 잠근(LOCKED) 멤버십 → 동의가 열지 않는다 · 쓰기 0 · 이벤트 0")
+    void lockedMembership_isNotReopenedByConsent() {
+        given(tenantRepository.findById(FAN)).willReturn(Optional.of(
+                tenant("fan-platform", TenantType.B2C_CONSUMER, TenantStatus.ACTIVE)));
+        given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT)).willReturn(Optional.of(mock(Account.class)));
+        given(membershipRepository.find(FAN, ACCOUNT)).willReturn(Optional.of(ConsumerSiteMembership.reconstitute(
+                ACCOUNT, FAN, ConsumerSiteMembershipStatus.LOCKED, Instant.EPOCH, null, null, null,
+                Instant.parse("2026-10-04T00:00:00Z"), "op-fan")));
+        given(read.execute("fan-platform", ACCOUNT)).willReturn(answer("fan-platform", true, "LOCKED"));
+
+        assertThat(useCase.execute("fan-platform", ACCOUNT).membershipStatus()).isEqualTo("LOCKED");
+
+        verify(membershipRepository, never()).insert(any());
+        verify(membershipRepository, never()).update(any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     @DisplayName("기록된 작성자가 없는 LEFT 멤버십 → 운영자 쪽으로 읽는다(보수) · 동의가 다시 열지 않는다 · 쓰기 0 · 이벤트 0")
     void leftMembership_isNotReopened() {
         given(tenantRepository.findById(FAN)).willReturn(Optional.of(

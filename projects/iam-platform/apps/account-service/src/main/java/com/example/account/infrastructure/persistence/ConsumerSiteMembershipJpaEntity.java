@@ -62,9 +62,18 @@ public class ConsumerSiteMembershipJpaEntity {
     @Column(name = "left_by_actor_id", length = 64)
     private String leftByActorId;
 
+    /** TASK-BE-621 (V0033) — when the site's operator locked it; non-null iff LOCKED. */
+    @Column(name = "locked_at")
+    private Instant lockedAt;
+
+    /** TASK-BE-621 (V0033) — the operator that locked it; null unless LOCKED. */
+    @Column(name = "locked_by_actor_id", length = 64)
+    private String lockedByActorId;
+
     public ConsumerSiteMembership toDomain() {
         return ConsumerSiteMembership.reconstitute(
-                accountId, new TenantId(siteTenantId), status, consentedAt, leftAt, leftBy, leftByActorId);
+                accountId, new TenantId(siteTenantId), status, consentedAt, leftAt, leftBy, leftByActorId,
+                lockedAt, lockedByActorId);
     }
 
     /** Composite key for {@link IdClass}. */

@@ -473,13 +473,25 @@ public class AccountServiceClient {
             Instant createdAt
     ) {}
 
+    /**
+     * TASK-BE-621 — {@code scope} ({@code ACCOUNT} | {@code SITE_MEMBERSHIP}) and {@code siteTenantId} are absent
+     * from an older account-service: {@code scope == null} reads as {@code ACCOUNT} (the only thing an older
+     * account-service could do). With {@code SITE_MEMBERSHIP} the statuses are the site membership's.
+     */
     public record LockResponse(
             String accountId,
             String previousStatus,
             String currentStatus,
             Instant lockedAt,
-            Instant unlockedAt
-    ) {}
+            Instant unlockedAt,
+            String scope,
+            String siteTenantId
+    ) {
+        public LockResponse(String accountId, String previousStatus, String currentStatus,
+                            Instant lockedAt, Instant unlockedAt) {
+            this(accountId, previousStatus, currentStatus, lockedAt, unlockedAt, null, null);
+        }
+    }
 
     /**
      * TASK-BE-619 — {@code scope} ({@code ACCOUNT} | {@code SITE_MEMBERSHIP}) and {@code siteTenantId} are

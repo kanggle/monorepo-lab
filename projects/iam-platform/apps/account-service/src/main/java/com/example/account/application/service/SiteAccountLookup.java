@@ -18,6 +18,10 @@ import java.util.Optional;
  * {@code /internal/tenants/{t}/accounts} reads; this applies the same predicate to every other
  * single-account lookup that is keyed on a site tenant (census: TASK-BE-616 구현 기록).
  *
+ * <p>TASK-BE-621: «member» = membership ACTIVE <b>or LOCKED</b> — a person that site's operator locked out
+ * of the site is still found through it (so the operator can see and unlock them, and erase them as
+ * TASK-BE-619 allows). LEFT stays invisible.
+ *
  * <ul>
  *   <li>The input is still the first argument and still the scope: a pool account that is NOT an ACTIVE
  *       member of the input site stays invisible there (404) — site B cannot see a pool account that only
