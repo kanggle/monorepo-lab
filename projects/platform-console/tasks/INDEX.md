@@ -118,12 +118,13 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다 — 단 **서로 다른 두 번의 연속 `unavailable`**(해석기 15초 캐시 창보다 멀리 떨어진)일 때만(소유자 결정 ①). 계약 § 2.6.1 «no network call» 문장 + § 2.6.2 를 먼저 고친다(소유자 결정 ②).
+(empty)
 
 ## review
 
 - `TASK-PC-FE-304-overview-iam-card-ignores-active-tenant.md` — 운영 개요 IAM 카드가 활성(선택) 테넌트를 무시하고 운영자 홈 테넌트를 센다(iam-platform `AccountAdminController`는 `tenantId` 쿼리 파라미터만 읽는데 이 레그는 `X-Tenant-Id` 헤더만 보냄) + "전체 계정" 라벨이 그 카드가 실제로 세는 것(이 테넌트의 회원 계정, 운영자 제외)과 불일치. 19차 데모 창 조사(`TASK-MONO-758`)에서 발견, 수정은 이 티켓. AC-3(라이브 확인)만 ⚪ 미확인.
 - `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. AC-2 «`/status` 실패» 칸은 소유자 결정(2026-10-04)으로 알려진 한계로 닫힘 · ⚪ AC-6 라이브 · 경로 D 는 `TASK-PC-FE-306`.
+- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다 — 단 **서로 다른 두 번의 연속 `unavailable`**(해석기 15초 캐시 창보다 멀리 떨어진)일 때만(소유자 결정 ①). 계약 § 2.6.1 «no network call» 문장 + § 2.6.2 를 먼저 고친다(소유자 결정 ②). · 로컬 게이트 전부 초록, bite 확인 · ⚪ AC-6 라이브 · 소유자 후속 3건(305 경로의 단일 판독 노출 · 자동 재확인 · TTL 사본).
 
 ## done
 

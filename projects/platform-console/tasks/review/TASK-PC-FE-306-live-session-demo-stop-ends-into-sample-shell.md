@@ -8,7 +8,7 @@ TASK-PC-FE-306
 
 # Status
 
-in-progress (2026-10-04 UTC)
+review (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 337파일·3799시험/next build rc=0, 클라이언트 그래프·해석기 사본 가드 rc=0, bite 확인. 소유자 결정 ①② 반영(두 번 연속 · 계약 먼저). AC-6 라이브 ⚪)
 
 # Owner
 
@@ -61,12 +61,12 @@ PC-FE-305 는 세션을 **갱신할 수 없게 된 뒤**(갱신 실패 / 401)의
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시점(305 머지 후) 레이아웃 가드·`DemoBackendNotice`·계약 § 2.6.1/§ 2.6.2 의 file:line 을 다시 재고, 위 § 제약의 TTL·호출 지점 사실이 여전히 참인지 확인한다. 계약 문장을 **먼저** 고친다.
-- [ ] **AC-1** — 액세스·운영자 쿠키가 살아 있고 데모 상태 신호가 `unavailable` 이면, 방문자는 세션 쿠키가 지워진 채 샘플 셸에 착지하고 305 와 같은 안내(`data-testid="demo-signed-out-notice"`)를 본다. 판정은 305 의 `sessionEndDestination` 하나 — 두 번째 판정을 만들지 않는다.
-- [ ] **AC-2 (대조군)** — `running`·`starting`·`not-demo` → 오늘 그대로 인증 셸(리다이렉트 없음, 쿠키 무변경). `starting` 은 `DemoBackendNotice` 의 「켜지는 중」 배너 그대로.
-- [ ] **AC-3** — 레이아웃이 컨트롤 플레인을 요청마다 부르지 않는다: 같은 렌더에서 가드와 `DemoBackendNotice` 가 해석기 스냅샷을 공유함을(또는 TTL 안의 두 번째 요청이 `/status` 를 다시 부르지 않음을) 테스트로 고정하고, `not-demo` 에서 `/status` 호출 0 을 고정한다.
-- [ ] **AC-4** — PC-FE-299/305 보장(Query 캐시 비움 · no-store · bfcache · `demo_checked` 루프 상한) 유지, 기존 테스트 초록. `scripts/check-client-graph-backend-origins.mjs` rc=0(클라이언트는 `session-end-params.ts` 만 import — 305 CI 수정 참조).
-- [ ] **AC-5** — 판정 칸 단위 테스트 + bite(가드의 분기 뒤집기 → 정확히 그 칸들만 빨강).
+- [x] **AC-0** — 착수 시점(305 머지 후) 레이아웃 가드·`DemoBackendNotice`·계약 § 2.6.1/§ 2.6.2 의 file:line 을 다시 재고, 위 § 제약의 TTL·호출 지점 사실이 여전히 참인지 확인한다. 계약 문장을 **먼저** 고친다.
+- [x] **AC-1** — 액세스·운영자 쿠키가 살아 있고 데모 상태 신호가 `unavailable` 이면, 방문자는 세션 쿠키가 지워진 채 샘플 셸에 착지하고 305 와 같은 안내(`data-testid="demo-signed-out-notice"`)를 본다. 판정은 305 의 `sessionEndDestination` 하나 — 두 번째 판정을 만들지 않는다. — 🟢 소유자 결정 ①로 «서로 다른 두 번의 연속 `unavailable`» 뒤에 (§ Design · § Implementation Record).
+- [x] **AC-2 (대조군)** — `running`·`starting`·`not-demo` → 오늘 그대로 인증 셸(리다이렉트 없음, 쿠키 무변경). `starting` 은 `DemoBackendNotice` 의 「켜지는 중」 배너 그대로.
+- [x] **AC-3** — 레이아웃이 컨트롤 플레인을 요청마다 부르지 않는다: 같은 렌더에서 가드와 `DemoBackendNotice` 가 해석기 스냅샷을 공유함을(또는 TTL 안의 두 번째 요청이 `/status` 를 다시 부르지 않음을) 테스트로 고정하고, `not-demo` 에서 `/status` 호출 0 을 고정한다.
+- [x] **AC-4** — PC-FE-299/305 보장(Query 캐시 비움 · no-store · bfcache · `demo_checked` 루프 상한) 유지, 기존 테스트 초록. `scripts/check-client-graph-backend-origins.mjs` rc=0(클라이언트는 `session-end-params.ts` 만 import — 305 CI 수정 참조).
+- [x] **AC-5** — 판정 칸 단위 테스트 + bite(가드의 분기 뒤집기 → 정확히 그 칸들만 빨강).
 - [ ] **AC-6 (라이브, ⚪)** — 다음 데모 창: 로그인 → 30분 안에 데모 정지 → 콘솔 새로고침 → 안내가 붙은 샘플 셸.
 
 # Related Specs
@@ -138,3 +138,43 @@ PC-FE-305 는 세션을 **갱신할 수 없게 된 뒤**(갱신 실패 / 401)의
 
 - 가드는 `DemoBackendNotice` 와 **같은 모듈 인스턴스**의 `resolveDemoBackendState` 를 같은 요청에서 부른다 ⇒ 같은 캐시 스냅샷, 추가 왕복 0(캐시 미스여도 그 렌더에서 1회 — 테스트로 고정). 카탈로그 호출(`resolveBackendUrl`)도 같은 스냅샷을 기다리므로 지연도 더하지 않는다.
 - 비데모: 해석기가 `/status` 를 안 부르고, 가드는 쿠키도 안 읽는다(테스트로 고정).
+
+# Implementation Record (2026-10-04 UTC)
+
+## 커밋 순서
+
+1. `docs(platform-console)` — 계약 § 2.6.1 문장(«no network call» → «no network call of its own; 데모 배포에서만 같은 15초 스냅샷; 비데모 호출 0»), § 2.6.2 «Live session» 블록(«Not covered (a)» 대체), `architecture.md` Auth Flow 5c. **코드보다 먼저**(소유자 결정 ②).
+2. `fix(platform-console)` — 코드 + 테스트.
+
+## 코드 (모두 `apps/console-web/`)
+
+- `src/shared/lib/live-session-demo-stop.ts`(신규, 서버 전용) — 표식 형식·속성, 순수 판정 둘(`liveShellDemoStopAction` 레이아웃 홉 · `liveRouteDemoStopOutcome` 두 번 연속 규칙), 레이아웃용 `liveSessionDemoStopRedirect`. 「꺼짐인가」 는 305 의 `sessionEndDestination` 그대로 호출.
+- `src/app/(console)/layout.tsx` — 인증 분기(샘플 방문자 제외)에서 `liveSessionDemoStopRedirect(x-pathname)` → 홉이면 `redirect`. `not-demo` 면 쿠키도 안 읽고 `null`.
+- `src/app/api/auth/demo-ended/route.ts` — live 모드(`live=check|clear` + 살아 있는 쿠키) 추가. 그 밖은 305 핸들러 **무변경**(끝낼 때 표식이 있으면 함께 지우는 한 줄만 추가).
+- 클라이언트 컴포넌트 변경 0 — 새 모듈은 서버 전용(레이아웃·라우트만 import). 클라이언트 그래프 가드 `reached=424 hits=0`.
+
+## 테스트
+
+- `tests/unit/live-session-demo-stop.test.tsx`(신규, 32칸) — ① 판정표(첫 꺼짐 → 머묾·표식 기록 / 15초 넘게 떨어진 두 번째 → 쿠키 6종·표식 삭제 + 샘플 안내 / 캐시 창 안 두 번째 → 홉 없음 / 정확히 15초째 라우트 직접 호출 → 안 끝남 / 꺼짐→켜짐 → 표식 비움, 다음 꺼짐은 다시 «첫» / 꺼짐→starting 도 깸 / 10분 넘은 첫 판독 → 다시 셈 / 순수 함수 4값) ② 대조군 `running`·`starting`·`not-demo`(홉 0 · 쿠키 무변경 · `not-demo` 는 쿠키 읽기 0) ③ 홉 상한(엇갈리는 신호 3패턴 × 6스텝 → 라우트 방문 ≤ 2 · 표식 거부 → 한 홉 · 같은 URL 새로고침이 두 번째 판독이 됨 · 불일치 착지 = 요청 화면, `/login` 아님 · 전 응답 no-store) ④ 305 보존(`live` 없음 → 한 번에 끝 · 죽은 쿠키 + `live` → 305 · 305 불일치 착지 그대로) ⑤ 표식 속성·형식 오류·위조 범위 ⑥ **실제 레이아웃**(꺼짐 → live 홉 · 대조군 3종 → 가드 통과 · 샘플 방문자 → 신호 미호출).
+- `tests/unit/live-session-demo-stop-resolver.test.ts`(신규, 6칸, **실제 해석기**) — 비데모 `/status` 0·쿠키 읽기 0 / 가드 + `DemoBackendNotice` 한 렌더 = `/status` 1회 / TTL 안 다음 요청 재호출 없음 / 콘솔 상수만큼 떨어지면 새 왕복(해석기 TTL ≤ 콘솔 상수 — 해석기 TTL 이 늘면 빨강) / **실패한 `/status` 하나 → 머묾, 다음 켜짐 → 표식 비움** / 대조군: 두 번 연속 실패 → 샘플.
+- 기존 305·299·레이아웃 스위트 무수정 초록.
+
+## Bite
+
+`liveRouteDemoStopOutcome` 의 두 판독 요구를 끔(`if (true || (pending && age > TTL)) return { end: true }` — 꺼짐 판독 하나로 끝냄) → 새 두 파일 + 305 스위트 61칸 중 **13 빨강 · 48 초록**. 빨강: 첫 꺼짐 → 머묾, **실패한 `/status` 하나 → 머묾**, 캐시 창 안 두 번째, 정확히 15초째, 꺼짐→켜짐/starting, 10분 초과, 형식 오류 표식, 표식 거부, 두 번째 → 샘플(첫 판독에서 이미 끝나 착지 경로가 달라짐), no-store 체인, 표식 속성(첫 판독에서 이미 끝나 표식이 안 써짐), 두 번 연속 실패 대조군(같은 이유). 초록으로 남은 것: 305 스위트 전부(판정 무관 — 의도), 대조군 3종(꺼짐을 안 거침), 순수 함수 4값 칸(만료된 표식을 넣으므로 어느 쪽이든 end), 305 보존 칸, 위조 칸(어차피 끝남을 기대). 원복 후 61/61.
+
+## 검증 (2026-10-04 UTC, `apps/console-web`, 각 명령 단독 실행 · rc 직접 읽음)
+
+- `pnpm install --frozen-lockfile` rc=0
+- `pnpm lint` rc=0 («No ESLint warnings or errors»)
+- `npx tsc --noEmit` rc=0
+- `npx vitest run --maxWorkers=4 --minWorkers=1` rc=0 — 337 파일 / 3799 시험
+- `npx next build` rc=0 (`ƒ /api/auth/demo-ended` 생성; 경고는 기존 OpenTelemetry `winston-transport` 미해결 import 뿐)
+- 리포 루트: `node scripts/check-client-graph-backend-origins.mjs` rc=0(console-web `reached=424 hits=0`), `bash scripts/check-demo-resolver-copies.sh` rc=0
+
+## Owner follow-ups (이 티켓이 정하지 않은 것)
+
+1. **305 경로는 여전히 판독 하나로 끝낸다** — `live` 없이 라우트에 오는 홉(`/login?error=session_expired` 착지 = 갱신 실패·백엔드 401 뒤, 또는 손으로 만든 링크)은 305 핸들러 그대로다. 쿠키가 살아 있는 채 그 길로 오는 경우(경로 B — 백엔드 401)와 교차 사이트 최상위 GET(쿠키 `SameSite=Lax` 라 실린다)으로 라우트를 직접 여는 경우, `/status` 실패 **한 번**이 그 세션을 끝낼 수 있다(305 이후 존재하던 노출 — 라우트가 신호를 다시 읽으므로 신호가 `unavailable` 일 때만). 좁히려면 «살아 있는 쿠키면 `live` 와 무관하게 두 번 규칙» 으로 바꾸면 되지만, 그러면 경로 B 의 첫 착지가 PC-FE-299 문구(로그인 벽)가 된다 — 그래서 이 티켓은 305 를 그대로 뒀다.
+2. **자동 재확인 없음** — 첫 판독 뒤 방문자는 인증 셸 + `DemoBackendNotice` 를 보고, 15초 넘게 지난 **하드 내비게이션/새로고침**에서 두 번째 판독이 일어난다(App Router 의 소프트 내비게이션은 레이아웃을 다시 렌더하지 않는다). 배너가 떠 있는 동안 16초 뒤 `router.refresh()` 하는 클라이언트 위젯을 달면 자동이 된다 — 범위 밖으로 뒀다.
+3. **콘솔의 TTL 사본** — `DEMO_STATE_SNAPSHOT_TTL_MS` 는 해석기 `CACHE_TTL_MS` 의 사본이다(해석기 변경 금지). 실제 해석기로 고정하는 칸이 있다(해석기 TTL 이 늘면 빨강); 해석기가 TTL 을 export 하면 사본을 지울 수 있다(루트 티켓 감).
+4. AC-6 라이브 ⚪.

@@ -16,6 +16,7 @@ import {
   buildSessionRefreshRedirectFor,
 } from '@/shared/lib/login-redirect';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
+import { liveSessionDemoStopRedirect } from '@/shared/lib/live-session-demo-stop';
 import { getCatalog } from '@/features/catalog';
 import {
   selectableTenants,
@@ -116,7 +117,11 @@ async function buildSessionRefreshRedirect(): Promise<string> {
  *     TASK-MONO-674) → the silent refresh hop `GET /api/auth/refresh`, exactly as
  *     MONO-674 defined it — NOT the sample shell;
  *   - a half session (access cookie only / operator cookie only, no refresh
- *     cookie) → `/login`, exactly as before.
+ *     cookie) → `/login`, exactly as before;
+ *   - authenticated, demo deployment, and the demo-state snapshot reads
+ *     `unavailable` (TASK-PC-FE-306) → `GET /api/auth/demo-ended?live=check`,
+ *     which ends the session into the sample shell only on the SECOND distinct
+ *     reading (`shared/lib/live-session-demo-stop.ts`); otherwise this shell.
  *
  * 🔴 Order matters: the sample question is asked first, and it already excludes
  *    every browser that holds any session cookie — so the MONO-674 branch below
@@ -152,6 +157,17 @@ export default async function ConsoleLayout({
         ? await buildSessionRefreshRedirect()
         : await buildLoginRedirect(),
     );
+  }
+
+  // TASK-PC-FE-306 (contract § 2.6.2 «Live session») — a session that still works
+  // meets a stopped demo. Only in a demo deployment (not-demo returns before any
+  // cookie read, and the resolver makes no call there), and it reads the SAME
+  // 15 s snapshot `DemoBackendNotice` below already reads — no extra round trip.
+  // The session ends only after two consecutive, distinct `unavailable` readings;
+  // the route counts them (a layout cannot write the marker cookie).
+  if (!sampleVisitor) {
+    const demoStopHop = await liveSessionDemoStopRedirect((await headers()).get('x-pathname'));
+    if (demoStopHop !== null) redirect(demoStopHop);
   }
 
   const activeTenant = await getActiveTenant();
