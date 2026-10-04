@@ -164,7 +164,7 @@ iam-platform
 
 # 구현 기록 (2026-10-04 UTC)
 
-> 분석=Opus 5.5 / 구현=Opus 5.5. 한 PR. 브랜치 `feat/be-621-site-scoped-lock`. 커밋 1 = 티켓 + 계약(코드 앞), 커밋 2 = 코드 + 시험.
+> 분석=Opus 5.5 / 구현=Opus 5.5. 한 PR. 브랜치 `feat/be-621-site-scoped-lock`. 커밋 1 = 티켓 + 계약(코드 앞), 커밋 2 = 계약 보강(`account-api.md` 본인 탈퇴의 `LOCKED` 응답 · § 7 시험 이름 — 역시 코드 앞), 커밋 3 = 코드 + 시험 + 티켓 review.
 
 ## 바꾼 것
 
@@ -222,7 +222,7 @@ iam-platform
 
 | AC | 판정 | 증거 |
 |---|---|---|
-| AC-0 | ✅ | 커밋 1 = 계약만(코드 0) |
+| AC-0 | ✅ | 커밋 1 · 2 = 계약만(코드 0), 코드는 커밋 3 |
 | AC-1 | ✅ 단위·슬라이스 / ⚪ 통합은 CI | `PoolMemberSiteLookupTest` · `SiteMembershipLockUseCaseTest` · `InternalControllerSliceTest`; DB 경로 `ConsumerSiteLockIntegrationTest#storeOperatorLock_locksTheStoreOnly` |
 | AC-2 | ✅ 단위 / ⚪ 통합은 CI | 대조군: 사이트 자기 계정 → 계정 잠금(`PoolMemberSiteLookupTest`) · 팬 멤버십 ACTIVE + consumer-members 읽기 ACTIVE(IT) |
 | AC-3 | ✅ 단위·슬라이스 / ⚪ 통합은 CI | admin 슬라이스 `'*'` 두 칸 · account `changeStatusResolvingTenant` 칸 · IT `platformAdminLock_locksThePoolAccount` |

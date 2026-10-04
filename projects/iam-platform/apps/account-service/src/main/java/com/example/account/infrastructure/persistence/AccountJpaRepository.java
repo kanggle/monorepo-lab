@@ -108,8 +108,9 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
      * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5): the site-scoped counterpart of
      * {@link #findByTenantIdWithStatusFilter}. The input is still the <b>site</b> tenant; the
      * predicate widens from "account tenant = site" to "account tenant = site <b>or</b> (account is
-     * in the pool ∧ has an ACTIVE membership of that site)". A pool account that never joined this
-     * site — or left it — is not returned.
+     * in the pool ∧ is a member of that site)". A pool account that never joined this site — or left it —
+     * is not returned. «Member» = membership ACTIVE or LOCKED (TASK-BE-621): a person that site's operator
+     * locked out of the site is still on the site's list — otherwise the operator could not unlock them.
      *
      * <p>{@code :poolTenantId} is a parameter (always {@code consumer-pool}) rather than a literal so
      * the reserved value has one home ({@code TenantId.CONSUMER_POOL}).
@@ -120,14 +121,16 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
             + "     OR (a.tenantId = :poolTenantId AND EXISTS ("
             + "         SELECT 1 FROM ConsumerSiteMembershipJpaEntity m "
             + "         WHERE m.accountId = a.id AND m.siteTenantId = :siteTenantId "
-            + "           AND m.status = com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE)))",
+            + "           AND m.status IN (com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE, "
+            + "                            com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.LOCKED))))",
             countQuery = "SELECT COUNT(a) FROM AccountJpaEntity a "
             + "WHERE (:status IS NULL OR a.status = :status) "
             + "AND (a.tenantId = :siteTenantId "
             + "     OR (a.tenantId = :poolTenantId AND EXISTS ("
             + "         SELECT 1 FROM ConsumerSiteMembershipJpaEntity m "
             + "         WHERE m.accountId = a.id AND m.siteTenantId = :siteTenantId "
-            + "           AND m.status = com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE)))")
+            + "           AND m.status IN (com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE, "
+            + "                            com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.LOCKED))))")
     Page<AccountJpaEntity> findBySiteTenantIncludingPoolMembers(
             @Param("siteTenantId") String siteTenantId,
             @Param("poolTenantId") String poolTenantId,
@@ -145,7 +148,8 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
             + "     OR (a.tenantId = :poolTenantId AND EXISTS ("
             + "         SELECT 1 FROM ConsumerSiteMembershipJpaEntity m "
             + "         WHERE m.accountId = a.id AND m.siteTenantId = :siteTenantId "
-            + "           AND m.status = com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE))) "
+            + "           AND m.status IN (com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE, "
+            + "                            com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.LOCKED)))) "
             + "ORDER BY a.tenantId ASC")
     List<AccountJpaEntity> findBySiteTenantAndEmailIncludingPoolMembers(
             @Param("siteTenantId") String siteTenantId,
@@ -154,7 +158,8 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
 
     /**
      * TASK-BE-614: single-account counterpart — the account if it lives in the site tenant, or lives
-     * in the pool with an ACTIVE membership of that site. A PK lookup, so at most one row.
+     * in the pool with an ACTIVE or LOCKED (TASK-BE-621) membership of that site. A PK lookup, so at most
+     * one row.
      */
     @Query("SELECT a FROM AccountJpaEntity a "
             + "WHERE a.id = :accountId "
@@ -162,7 +167,8 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
             + "     OR (a.tenantId = :poolTenantId AND EXISTS ("
             + "         SELECT 1 FROM ConsumerSiteMembershipJpaEntity m "
             + "         WHERE m.accountId = a.id AND m.siteTenantId = :siteTenantId "
-            + "           AND m.status = com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE)))")
+            + "           AND m.status IN (com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.ACTIVE, "
+            + "                            com.example.account.domain.consumerpool.ConsumerSiteMembershipStatus.LOCKED))))")
     Optional<AccountJpaEntity> findByIdInSiteIncludingPoolMembers(
             @Param("siteTenantId") String siteTenantId,
             @Param("poolTenantId") String poolTenantId,

@@ -72,6 +72,58 @@ class AccountAdminUseCaseTest {
         order.verify(auditor).recordCompletion(any());
     }
 
+    // ── TASK-BE-621: a site-scoped lock is recorded as such ──────────────────
+
+    @Test
+    void lock_siteScope_auditDetailSaysSiteMembership_andResultCarriesScope() {
+        when(auditor.newAuditId()).thenReturn("audit-621");
+        when(accountServiceClient.lock(anyString(), anyString(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.LockResponse(
+                        "acc-1", "ACTIVE", "LOCKED", null, null, "SITE_MEMBERSHIP", "ecommerce"));
+
+        LockAccountResult r = useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-621", operator(), "ecommerce"));
+
+        assertThat(r.scope()).isEqualTo("SITE_MEMBERSHIP");
+        assertThat(r.siteTenantId()).isEqualTo("ecommerce");
+        var captor = forClass(AdminActionAuditor.CompletionRecord.class);
+        verify(auditor).recordCompletion(captor.capture());
+        assertThat(captor.getValue().outcome()).isEqualTo(Outcome.SUCCESS);
+        assertThat(captor.getValue().downstreamDetail()).isEqualTo("SITE_MEMBERSHIP_LOCKED site=ecommerce");
+    }
+
+    @Test
+    void unlock_siteScope_auditDetailSaysUnlocked() {
+        when(auditor.newAuditId()).thenReturn("audit-621u");
+        when(accountServiceClient.unlock(anyString(), anyString(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.LockResponse(
+                        "acc-1", "LOCKED", "ACTIVE", null, null, "SITE_MEMBERSHIP", "ecommerce"));
+
+        UnlockAccountResult r = useCase.unlock(new UnlockAccountCommand(
+                "acc-1", "restore", null, "idemp-621u", operator(), "ecommerce"));
+
+        assertThat(r.scope()).isEqualTo("SITE_MEMBERSHIP");
+        var captor = forClass(AdminActionAuditor.CompletionRecord.class);
+        verify(auditor).recordCompletion(captor.capture());
+        assertThat(captor.getValue().downstreamDetail()).isEqualTo("SITE_MEMBERSHIP_UNLOCKED site=ecommerce");
+    }
+
+    @Test
+    void lock_accountScope_or_olderAccountService_hasNoDetail_andReadsAsAccount() {
+        when(auditor.newAuditId()).thenReturn("audit-621a");
+        when(accountServiceClient.lock(anyString(), anyString(), anyString(), any(), anyString(), anyString()))
+                .thenReturn(new AccountServiceClient.LockResponse("acc-1", "ACTIVE", "LOCKED", null, null));
+
+        LockAccountResult r = useCase.lock(new LockAccountCommand(
+                "acc-1", "fraud", null, "idemp-621a", operator(), "*"));
+
+        assertThat(r.scope()).isEqualTo("ACCOUNT");
+        assertThat(r.siteTenantId()).isNull();
+        var captor = forClass(AdminActionAuditor.CompletionRecord.class);
+        verify(auditor).recordCompletion(captor.capture());
+        assertThat(captor.getValue().downstreamDetail()).isNull();
+    }
+
     @Test
     void lock_downstream_failure_records_failure_completion_and_throws() {
         when(auditor.newAuditId()).thenReturn("audit-2");

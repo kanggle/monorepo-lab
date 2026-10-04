@@ -275,7 +275,7 @@ class InternalControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
 
-        verify(accountStatusUseCase, never()).changeStatus(any(), any());
+        verify(accountStatusUseCase, never()).changeStatusAsTenantOperator(any(), any());
     }
 
     @Test
@@ -290,28 +290,53 @@ class InternalControllerSliceTest {
                         .content(LOCK_BODY))
                 .andExpect(status().isOk());
 
-        verify(accountStatusUseCase, never()).changeStatus(any(), any());
+        verify(accountStatusUseCase, never()).changeStatusAsTenantOperator(any(), any());
     }
 
     @Test
     @DisplayName("TASK-MONO-735 대조군: lock X-Tenant-Id=ecommerce → 그 테넌트로 한정 (계정 행 해소 안 씀)")
     void lock_concreteTenantHeader_staysConfined() throws Exception {
-        given(accountStatusUseCase.changeStatus(any(), eq(new TenantId("ecommerce"))))
+        // TASK-BE-621: a named tenant goes through the tenant-operator lock (a pool member → that site only).
+        given(accountStatusUseCase.changeStatusAsTenantOperator(any(), eq(new TenantId("ecommerce"))))
                 .willReturn(new StatusChangeResult("acc-ec", "ACTIVE", "LOCKED", Instant.now()));
 
         mockMvc.perform(post("/internal/accounts/acc-ec/lock")
                         .header("X-Tenant-Id", "ecommerce")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(LOCK_BODY))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ACCOUNT"));
 
         verify(accountStatusUseCase, never()).changeStatusResolvingTenant(any());
     }
 
     @Test
+    @DisplayName("TASK-BE-621: lock X-Tenant-Id=ecommerce, 풀 멤버 → scope=SITE_MEMBERSHIP · 멤버십 상태 · siteTenantId")
+    void lock_siteOperatorOnPoolMember_answersSiteMembershipScope() throws Exception {
+        given(accountStatusUseCase.changeStatusAsTenantOperator(any(), eq(new TenantId("ecommerce"))))
+                .willReturn(StatusChangeResult.siteMembership("acc-pool", "ACTIVE", "LOCKED", Instant.now(),
+                        "ecommerce"));
+
+        mockMvc.perform(post("/internal/accounts/acc-pool/lock")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "ADMIN_LOCK", "operatorId": "op-store"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"))
+                .andExpect(jsonPath("$.siteTenantId").value("ecommerce"))
+                .andExpect(jsonPath("$.previousStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentStatus").value("LOCKED"));
+
+        verify(accountStatusUseCase, never()).changeStatusResolvingTenant(any());
+        verify(accountStatusUseCase, never()).changeStatus(any(), any());
+    }
+
+    @Test
     @DisplayName("TASK-MONO-735 대조군: lock X-Tenant-Id=fan-platform + 계정이 다른 테넌트 → 404 (격리 유지)")
     void lock_concreteTenantHeader_crossTenant_returns404() throws Exception {
-        given(accountStatusUseCase.changeStatus(any(), eq(TenantId.FAN_PLATFORM)))
+        given(accountStatusUseCase.changeStatusAsTenantOperator(any(), eq(TenantId.FAN_PLATFORM)))
                 .willThrow(new AccountNotFoundException("acc-ec"));
 
         mockMvc.perform(post("/internal/accounts/acc-ec/lock")
@@ -329,7 +354,7 @@ class InternalControllerSliceTest {
     void unlock_splitsOnTenantHeader() throws Exception {
         given(accountStatusUseCase.changeStatusResolvingTenant(any()))
                 .willReturn(new StatusChangeResult("acc-ec", "LOCKED", "ACTIVE", Instant.now()));
-        given(accountStatusUseCase.changeStatus(any(), eq(new TenantId("ecommerce"))))
+        given(accountStatusUseCase.changeStatusAsTenantOperator(any(), eq(new TenantId("ecommerce"))))
                 .willReturn(new StatusChangeResult("acc-ec", "LOCKED", "ACTIVE", Instant.now()));
         String body = """
                 {"reason": "ADMIN_UNLOCK", "operatorId": "op-1"}
@@ -344,7 +369,7 @@ class InternalControllerSliceTest {
                 .andExpect(status().isOk());
 
         verify(accountStatusUseCase).changeStatusResolvingTenant(any());
-        verify(accountStatusUseCase).changeStatus(any(), eq(new TenantId("ecommerce")));
+        verify(accountStatusUseCase).changeStatusAsTenantOperator(any(), eq(new TenantId("ecommerce")));
     }
 
     @Test

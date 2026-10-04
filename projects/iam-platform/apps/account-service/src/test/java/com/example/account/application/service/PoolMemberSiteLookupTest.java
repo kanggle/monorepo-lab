@@ -130,7 +130,7 @@ class PoolMemberSiteLookupTest {
         AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
         AccountStatusUseCase useCase = new AccountStatusUseCase(accountRepository, history,
                 new AccountStatusMachine(), mock(AccountEventPublisher.class), 30, ON,
-                mock(LeaveConsumerSiteUseCase.class));
+                mock(LeaveConsumerSiteUseCase.class), mock(SiteMembershipLockUseCase.class));
         given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
                 .willReturn(Optional.of(poolAccount()));
         given(accountRepository.findByIdInSiteIncludingPoolMembers(new TenantId("fan-platform"), POOL_ACCOUNT))
@@ -213,6 +213,104 @@ class PoolMemberSiteLookupTest {
         assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
         assertThat(siteAccount.getStatus()).isEqualTo(AccountStatus.DELETED);
         org.mockito.Mockito.verifyNoInteractions(leave);
+    }
+
+    // ── TASK-BE-621: lock / unlock — a site operator's is that site's membership, a platform admin's the account ──
+
+    private AccountStatusUseCase lockUseCase(AccountEventPublisher events, AccountStatusHistoryRepository history,
+                                             SiteMembershipLockUseCase siteLock) {
+        return new AccountStatusUseCase(accountRepository, history, new AccountStatusMachine(), events, 30, ON,
+                mock(LeaveConsumerSiteUseCase.class), siteLock);
+    }
+
+    private static com.example.account.application.command.ChangeStatusCommand lockCommand(
+            AccountStatus target, com.example.account.domain.status.StatusChangeReason reason, String operator) {
+        return new com.example.account.application.command.ChangeStatusCommand(
+                POOL_ACCOUNT, target, reason, "operator", operator, null);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-621 — 잠금 (사이트 운영자, ecommerce) — 풀 계정은 잠그지 않는다: 그 사이트 멤버십만 · 계정 저장 · 이력 · 이벤트 0")
+    void lock_siteOperator_poolMember_locksTheSiteOnly() {
+        AccountEventPublisher events = mock(AccountEventPublisher.class);
+        AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
+        SiteMembershipLockUseCase siteLock = mock(SiteMembershipLockUseCase.class);
+        Account account = poolAccount();
+        given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
+                .willReturn(Optional.of(account));
+        given(siteLock.execute(ECOMMERCE, account, AccountStatus.LOCKED,
+                com.example.account.domain.status.StatusChangeReason.ADMIN_LOCK, "op-store"))
+                .willReturn(com.example.account.application.result.StatusChangeResult.siteMembership(
+                        POOL_ACCOUNT, "ACTIVE", "LOCKED", Instant.now(), "ecommerce"));
+
+        var result = lockUseCase(events, history, siteLock).changeStatusAsTenantOperator(
+                lockCommand(AccountStatus.LOCKED, com.example.account.domain.status.StatusChangeReason.ADMIN_LOCK,
+                        "op-store"), ECOMMERCE);
+
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_SITE_MEMBERSHIP);
+        assertThat(result.siteTenantId()).isEqualTo("ecommerce");
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        verify(accountRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(events, history);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-621 — 잠금 (플랫폼 관리자 — 테넌트를 말하지 않음) — 풀 계정 전체 LOCKED · 이벤트 테넌트 = consumer-pool · 사이트 갈래 0")
+    void lock_platformAdmin_locksThePoolAccount() {
+        AccountEventPublisher events = mock(AccountEventPublisher.class);
+        AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
+        SiteMembershipLockUseCase siteLock = mock(SiteMembershipLockUseCase.class);
+        Account account = poolAccount();
+        given(accountRepository.findByIdResolvingTenant(POOL_ACCOUNT)).willReturn(Optional.of(account));
+
+        var result = lockUseCase(events, history, siteLock).changeStatusResolvingTenant(
+                lockCommand(AccountStatus.LOCKED, com.example.account.domain.status.StatusChangeReason.ADMIN_LOCK,
+                        "op-super"));
+
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
+        verify(accountRepository).save(account);
+        verify(events).publishStatusChanged(eq(account), eq("consumer-pool"), anyString(), anyString(),
+                anyString(), anyString(), any());
+        org.mockito.Mockito.verifyNoInteractions(siteLock);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-621 대조군 — 사이트의 자기 계정(풀 아님)은 그 사이트 운영자의 잠금으로 계정이 잠긴다")
+    void lock_siteOperator_siteOwnAccount_locksTheAccount() {
+        AccountStatusHistoryRepository history = mock(AccountStatusHistoryRepository.class);
+        SiteMembershipLockUseCase siteLock = mock(SiteMembershipLockUseCase.class);
+        Account siteAccount = Account.reconstitute(POOL_ACCOUNT, ECOMMERCE, "shop@example.com", null,
+                AccountStatus.ACTIVE, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"),
+                null, null, null, 0);
+        given(accountRepository.findByIdInSiteIncludingPoolMembers(ECOMMERCE, POOL_ACCOUNT))
+                .willReturn(Optional.of(siteAccount));
+
+        var result = lockUseCase(mock(AccountEventPublisher.class), history, siteLock).changeStatusAsTenantOperator(
+                lockCommand(AccountStatus.LOCKED, com.example.account.domain.status.StatusChangeReason.ADMIN_LOCK,
+                        "op-store"), ECOMMERCE);
+
+        assertThat(result.scope()).isEqualTo(GdprDeleteResult.SCOPE_ACCOUNT);
+        assertThat(siteAccount.getStatus()).isEqualTo(AccountStatus.LOCKED);
+        verify(accountRepository).save(siteAccount);
+        org.mockito.Mockito.verifyNoInteractions(siteLock);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-621 대조군 — 휴면 스케줄러 경로 changeStatus(cmd) 는 풀 멤버도 계정 전체(사이트 갈래 없음)")
+    void dormantPath_poolMember_staysAccountWide() {
+        SiteMembershipLockUseCase siteLock = mock(SiteMembershipLockUseCase.class);
+        Account account = poolAccount();
+        given(accountRepository.findByIdInSiteIncludingPoolMembers(TenantId.FAN_PLATFORM, POOL_ACCOUNT))
+                .willReturn(Optional.of(account));
+
+        lockUseCase(mock(AccountEventPublisher.class), mock(AccountStatusHistoryRepository.class), siteLock)
+                .changeStatus(new com.example.account.application.command.ChangeStatusCommand(POOL_ACCOUNT,
+                        AccountStatus.DORMANT, com.example.account.domain.status.StatusChangeReason.DORMANT_365D,
+                        "system", null, null));
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DORMANT);
+        org.mockito.Mockito.verifyNoInteractions(siteLock);
     }
 
     @Test

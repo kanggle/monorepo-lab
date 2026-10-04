@@ -12,7 +12,9 @@ import java.util.List;
  * @param consumerSite     the site is a consumer site ({@code B2C_CONSUMER}, not the pool itself)
  * @param siteTenantType   the site's authoritative {@code tenant_type} (the token's {@code tenant_type}),
  *                         {@code null} when the tenant does not exist
- * @param membershipStatus {@code ACTIVE} / {@code LEFT}, or {@code null} for no membership
+ * @param membershipStatus {@code ACTIVE} / {@code LEFT} / {@code LOCKED} (TASK-BE-621 — that site's operator locked
+ *                         the account out of THAT site only; like any non-ACTIVE value it admits no token and is
+ *                         not reopenable by consent), or {@code null} for no membership
  * @param siteRoles        the account's roles on THAT site outside the seed (never another site's);
  *                         empty unless the membership is ACTIVE. Never null
  * @param leftBy           TASK-BE-619 — for a {@code LEFT} membership, who left: {@code SELF} | {@code OPERATOR};

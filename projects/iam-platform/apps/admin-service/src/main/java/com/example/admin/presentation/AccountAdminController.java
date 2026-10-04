@@ -152,13 +152,27 @@ public class AccountAdminController {
         // (shared read gate). Out-of-scope tenant → 403 TENANT_SCOPE_DENIED (best-effort
         // DENIED row); omitted → operator's own tenant. Stamped downstream as X-Tenant-Id.
         OperatorContext op = OperatorContextHolder.require();
-        String resolvedTenant = queryTenantScopeGate.resolve(
-                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK).tenantId();
+        String downstreamTenant = downstreamTenant(queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK));
         LockAccountResult r = useCase.lock(new LockAccountCommand(
-                accountId, reason, ticketId, idempotencyKey, op, resolvedTenant));
+                accountId, reason, ticketId, idempotencyKey, op, downstreamTenant));
         return ResponseEntity.ok(new LockAccountResponse(
                 r.accountId(), r.previousStatus(), r.currentStatus(),
-                r.operatorId(), r.lockedAt(), r.auditId()));
+                r.operatorId(), r.lockedAt(), r.auditId(), r.scope(), r.siteTenantId()));
+    }
+
+    /**
+     * TASK-BE-621 (owner decision 2026-10-04 «사이트 운영자가 회원을 잠글 때, 그 잠금은 자기 사이트에만 걸린다. 계정
+     * 전체 잠금은 플랫폼 관리자만.») — the {@code X-Tenant-Id} stamped downstream on lock / unlock / bulk-lock.
+     *
+     * <p>The platform admin is told apart by ROLE, not by the console's active tenant (the console always sends
+     * one): a platform-scope operator is stamped {@code "*"}, which account-service reads as «no tenant named» →
+     * the account found by its own row is locked — every site, for a pool account. A site operator keeps their
+     * active tenant, and on a consumer-pool member account-service locks only that site's membership
+     * ({@code scope = SITE_MEMBERSHIP}). Same split as {@code AdminGdprController} (TASK-BE-619).
+     */
+    private static String downstreamTenant(QueryTenantScopeGate.Resolved resolved) {
+        return resolved.isPlatformScope() ? "*" : resolved.tenantId();
     }
 
     @PostMapping("/{accountId}/unlock")
@@ -173,13 +187,14 @@ public class AccountAdminController {
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
         String ticketId = body == null ? null : body.ticketId();
         OperatorContext op = OperatorContextHolder.require();
-        String resolvedTenant = queryTenantScopeGate.resolve(
-                op, tenantId, ActionCode.ACCOUNT_UNLOCK, Permission.ACCOUNT_UNLOCK).tenantId();
+        // TASK-BE-621: platform scope → "*" (the whole account); a site operator → their site (membership only).
+        String downstreamTenant = downstreamTenant(queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_UNLOCK, Permission.ACCOUNT_UNLOCK));
         UnlockAccountResult r = useCase.unlock(new UnlockAccountCommand(
-                accountId, reason, ticketId, idempotencyKey, op, resolvedTenant));
+                accountId, reason, ticketId, idempotencyKey, op, downstreamTenant));
         return ResponseEntity.ok(new UnlockAccountResponse(
                 r.accountId(), r.previousStatus(), r.currentStatus(),
-                r.operatorId(), r.unlockedAt(), r.auditId()));
+                r.operatorId(), r.unlockedAt(), r.auditId(), r.scope(), r.siteTenantId()));
     }
 
     @PostMapping("/bulk-lock")
@@ -202,15 +217,16 @@ public class AccountAdminController {
         // TASK-BE-467: resolve the actor's active tenant once for the batch; every
         // per-row lock inherits it (cross-tenant row → that row's ACCOUNT_NOT_FOUND).
         OperatorContext op = OperatorContextHolder.require();
-        String resolvedTenant = queryTenantScopeGate.resolve(
-                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK).tenantId();
+        // TASK-BE-621: platform scope → "*" (each row locks the whole account); a site operator → their site.
+        String downstreamTenant = downstreamTenant(queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK));
         BulkLockAccountResult r = bulkLockUseCase.execute(new BulkLockAccountCommand(
                 body.accountIds(),
                 body.reason(),
                 body.ticketId(),
                 idempotencyKey,
                 op,
-                resolvedTenant));
+                downstreamTenant));
 
         List<BulkLockResponse.ResultItem> items = new ArrayList<>(r.results().size());
         for (var it : r.results()) {

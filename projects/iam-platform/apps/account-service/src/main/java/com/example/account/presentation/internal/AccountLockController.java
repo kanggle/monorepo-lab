@@ -116,10 +116,14 @@ public class AccountLockController {
      *
      * <p>🔴 Do not apply the row lookup when a tenant IS named — that would dissolve the
      * cross-tenant confinement the header exists for.
+     *
+     * <p>TASK-BE-621: a named (site) tenant on a consumer-pool member locks / unlocks only that site's
+     * membership ({@code scope = SITE_MEMBERSHIP}); the unnamed path is the whole-account lock (platform admin,
+     * automatic lock, self-recovery unlock).
      */
     private StatusChangeResult changeStatus(ChangeStatusCommand command, String tenantHeader) {
         return namesTenant(tenantHeader)
-                ? accountStatusUseCase.changeStatus(command, TenantId.fromHeaderOrDefault(tenantHeader))
+                ? accountStatusUseCase.changeStatusAsTenantOperator(command, TenantId.fromHeaderOrDefault(tenantHeader))
                 : accountStatusUseCase.changeStatusResolvingTenant(command);
     }
 

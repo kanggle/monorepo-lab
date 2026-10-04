@@ -7,7 +7,8 @@ import java.time.Instant;
  *
  * @param accountId        the pool account
  * @param siteTenantId     the ONE site it left
- * @param membershipStatus always {@code LEFT}
+ * @param membershipStatus {@code LEFT}; or {@code LOCKED} (TASK-BE-621) when the person tried to leave a site
+ *                         whose operator locked them — nothing was written ({@code changed = false})
  * @param leftBy           {@code SELF} | {@code OPERATOR} — who the row now records (an operator removal
  *                         of a self-left member re-records it as {@code OPERATOR})
  * @param leftAt           when the recorded leave happened

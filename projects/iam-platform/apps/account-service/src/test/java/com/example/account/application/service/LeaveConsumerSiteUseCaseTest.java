@@ -106,6 +106,42 @@ class LeaveConsumerSiteUseCaseTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-621 — 그 사이트에서 잠긴(LOCKED) 사람의 본인 탈퇴 → 쓰기 0 · LOCKED 그대로 (탈퇴→재동의로 잠금을 벗지 못한다)")
+    void selfLeave_ofLockedMembership_isNoOp() {
+        storeAndPoolAccount();
+        given(membershipRepository.find(STORE, ACCOUNT)).willReturn(Optional.of(
+                ConsumerSiteMembership.joinOnSignup(ACCOUNT, STORE, Instant.EPOCH)
+                        .lockBySiteOperator("op-store", Instant.EPOCH)));
+
+        LeaveConsumerSiteResult r = useCase.execute("ecommerce", ACCOUNT, ConsumerSiteLeftBy.SELF, ACCOUNT);
+
+        assertThat(r.changed()).isFalse();
+        assertThat(r.membershipStatus()).isEqualTo("LOCKED");
+        verify(membershipRepository, never()).update(any());
+        verify(membershipRepository, never()).removeAllSiteRoles(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-621 — 잠긴 회원을 그 사이트 운영자가 내보냄(GDPR) → LEFT(OPERATOR) · 잠금 기록 지움")
+    void operatorLeave_ofLockedMembership_becomesLeftOperator() {
+        storeAndPoolAccount();
+        given(membershipRepository.find(STORE, ACCOUNT)).willReturn(Optional.of(
+                ConsumerSiteMembership.joinOnSignup(ACCOUNT, STORE, Instant.EPOCH)
+                        .lockBySiteOperator("op-store", Instant.EPOCH)));
+        given(membershipRepository.update(any())).willReturn(true);
+        given(membershipRepository.removeAllSiteRoles(STORE, ACCOUNT)).willReturn(0);
+
+        LeaveConsumerSiteResult r = useCase.execute("ecommerce", ACCOUNT, ConsumerSiteLeftBy.OPERATOR, "op-store");
+
+        ArgumentCaptor<ConsumerSiteMembership> written = ArgumentCaptor.forClass(ConsumerSiteMembership.class);
+        verify(membershipRepository).update(written.capture());
+        assertThat(written.getValue().getStatus()).isEqualTo(ConsumerSiteMembershipStatus.LEFT);
+        assertThat(written.getValue().getLeftBy()).isEqualTo(ConsumerSiteLeftBy.OPERATOR);
+        assertThat(written.getValue().getLockedAt()).isNull();
+        assertThat(r.changed()).isTrue();
+    }
+
+    @Test
     @DisplayName("사이트 계정(풀 아님) → 409 SITE_MEMBERSHIP_REQUIRED · 쓰기 0 — 사이트 계정의 «탈퇴» 는 계정 삭제다")
     void siteAccount_isRefused() {
         given(tenantRepository.findById(STORE)).willReturn(Optional.of(tenant("ecommerce", TenantType.B2C_CONSUMER)));

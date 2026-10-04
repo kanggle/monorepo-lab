@@ -57,7 +57,9 @@ class AccountStatusUseCaseTest {
                 // TASK-BE-616: flag off → exact findById(tenant, id), the lookups these cells stub.
                 () -> false,
                 // TASK-BE-619: only reached for a pool member found through a site — never in these cells.
-                org.mockito.Mockito.mock(LeaveConsumerSiteUseCase.class));
+                org.mockito.Mockito.mock(LeaveConsumerSiteUseCase.class),
+                // TASK-BE-621: same — only a pool member found through a named site reaches it.
+                org.mockito.Mockito.mock(SiteMembershipLockUseCase.class));
     }
 
     // ── getStatus ─────────────────────────────────────────────────────────────

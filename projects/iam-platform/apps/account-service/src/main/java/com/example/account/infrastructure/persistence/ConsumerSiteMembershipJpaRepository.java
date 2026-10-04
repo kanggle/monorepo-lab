@@ -57,12 +57,15 @@ public interface ConsumerSiteMembershipJpaRepository
                        @Param("grantedAt") Instant grantedAt);
 
     /**
-     * TASK-BE-619 — rewrites the state of ONE existing membership row (leave / rejoin). Native, like the
-     * insert: the entity is read-side only. Returns the number of rows updated (0 = no such row).
+     * TASK-BE-619 — rewrites the state of ONE existing membership row (leave / rejoin; TASK-BE-621 also
+     * site lock / unlock). Native, like the insert: the entity is read-side only. Every state column is
+     * written, so the row's CHECKs (V0032 · V0033) see one consistent state. Returns the number of rows
+     * updated (0 = no such row).
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "UPDATE consumer_site_memberships SET status = :status, consented_at = :consentedAt, "
-            + "left_at = :leftAt, left_by = :leftBy, left_by_actor_id = :leftByActorId "
+            + "left_at = :leftAt, left_by = :leftBy, left_by_actor_id = :leftByActorId, "
+            + "locked_at = :lockedAt, locked_by_actor_id = :lockedByActorId "
             + "WHERE site_tenant_id = :siteTenantId AND account_id = :accountId",
             nativeQuery = true)
     int updateMembership(@Param("siteTenantId") String siteTenantId,
@@ -71,7 +74,9 @@ public interface ConsumerSiteMembershipJpaRepository
                          @Param("consentedAt") Instant consentedAt,
                          @Param("leftAt") Instant leftAt,
                          @Param("leftBy") String leftBy,
-                         @Param("leftByActorId") String leftByActorId);
+                         @Param("leftByActorId") String leftByActorId,
+                         @Param("lockedAt") Instant lockedAt,
+                         @Param("lockedByActorId") String lockedByActorId);
 
     /**
      * TASK-BE-619 — every site role of one account on ONE site, removed when the account leaves that

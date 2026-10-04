@@ -41,7 +41,9 @@ public class ConsumerSiteMembershipRepositoryImpl implements ConsumerSiteMembers
                 membership.getConsentedAt(),
                 membership.getLeftAt(),
                 membership.getLeftBy() == null ? null : membership.getLeftBy().name(),
-                membership.getLeftByActorId()) > 0;
+                membership.getLeftByActorId(),
+                membership.getLockedAt(),
+                membership.getLockedByActorId()) > 0;
     }
 
     @Override
