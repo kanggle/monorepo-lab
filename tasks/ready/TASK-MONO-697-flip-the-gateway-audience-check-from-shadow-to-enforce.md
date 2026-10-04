@@ -54,18 +54,49 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (verify-then-act) — 실측 불일치 = 0, 그리고 «0» 이 공허하지 않다.** 게이트웨이마다 두 수를 잰다:
+- [x] **AC-0 (verify-then-act) — 실측 불일치 = 0, 그리고 «0» 이 공허하지 않다.** 게이트웨이마다 두 수를 잰다:
   - **분자** `gateway_jwt_audience_total{gateway="<g>",outcome="mismatch_shadowed"}` (Micrometer `gateway.jwt.audience`) 증가량 = **0**, 그리고 WARN 로그 `JWT audience not on allowlist: gateway=<g>` 줄 수 = **0**.
   - **분모** 같은 기간 `outcome="match"` 증가량 **> 0** — match 가 0 이면 «불일치 0» 은 트래픽이 없었다는 뜻이지 allowlist 가 맞았다는 뜻이 아니다. 분모가 0 인 게이트웨이는 **통과가 아니라 미측정**이다.
   - **어디서 읽나 (셋 다, 각각 기록):** ① 데모 스택 — 각 게이트웨이 `/actuator/prometheus`(노출 여부부터 확인) 또는 컨테이너 로그(`docker logs <gateway> 2>&1 | grep -c "JWT audience not on allowlist"`), 데모의 실제 사용 경로(콘솔 5 도메인 화면 순회 · web-store 로그인·주문 · fan 웹 로그인) 를 한 바퀴 돈 뒤. ② `nightly-e2e.yml` 의 fullstack 잡들 — 게이트웨이 컨테이너 로그를 아티팩트로 남기는지부터 확인(안 남기면 그것이 측정 공백이다 — 공백을 기록하고 ①로 판정). ③ Testcontainers IT(`:<project>:apps:gateway-service:integrationTest`, CI 통합 잡) — 헬퍼 픽스처는 이제 운영과 같은 `aud` 를 민팅하므로, 로그에 mismatch 가 찍히면 픽스처 또는 allowlist 결함이다.
   - **`TASK-MONO-696` § AC-1 (b) 의 ⚪ 칸(미측정 client)을 하나씩 판정한다:** `ecommerce-admin-dashboard-client` · `wms-user-flow-client` · `wms-internal-services-client` · `scm-platform-internal-services-client` · `erp-platform-internal-services-client` · `finance-platform-internal-services-client`. 섀도 로그에 나타나면 → 그 게이트웨이 allowlist 에 넣을지(정말 그 엣지를 쓰는 호출자인가) **소유자 결정** 후 이 티켓에서 추가; 안 나타나면 «측정 기간 동안 도달 0» 으로 기록(부재 증명이 아님을 명시).
   - 측정 결과가 0 이 아니면 **여기서 멈춘다** — 값·기간·출처를 이 파일에 덧붙이고 `ready/` 유지.
-  - 🔵 **2026-10-04 UTC — 열린 채로 둔다.** ⚪ client 6개는 코드 전수로 **6/6 (i) 호출자 없음**, 데모 창 두 번은 6/6 깨끗하다. 그러나 CI 채널 ③에 불일치 줄이 **있고**(전부 테스트 픽스처에서 나온 것으로 추적됨), 그 줄을 AC-0 에서 빼고 읽을지는 소유자가 정한다. 아래 **§ AC-0 판정 — 2026-10-04 UTC** 의 「소유자 결정 필요」 참고.
+  - 🔵 **2026-10-04 UTC — 닫음 (소유자 결정 1: «CI 로그의 불일치 줄은 전부 테스트 픽스처 → 판정에서 제외하고 AC-0 을 닫는다.»).** 근거는 셋이다.
+    - **데모 창 두 번이 6/6 `match>0 · mismatch=0`이다.** 18차(2026-10-02)와 19차(2026-10-04) 모두 그랬다. finance 의 분모는 두 창 다 1 이다.
+    - **코드 전수에서 ⚪ client 6개가 모두 (i) 호출자 없음이다.** 그래서 allowlist 에 추가할 것이 없다.
+    - **CI 의 불일치 줄은 전부 테스트 픽스처가 민팅했고, 소유자 결정으로 판정에서 뺐다.** 목록:
+      - scm IT 1줄, `aud=[scm-platform-internal-services-client]`
+      - scm e2e smoke 16줄, `aud=[]`
+      - erp IT 1줄, `aud=[erp-internal-client]`
+      - finance IT 1줄, `aud=[machine-client]`
+      - nightly scm e2e 67줄, `aud=[]`
+  - 🔴 **측정 공백 — 0 이 아니라 «안 쟀다» 다.**
+    - ecommerce 게이트웨이 IT 는 테스트 logback 에 콘솔 appender 가 없어서 앱 로그가 안 찍힌다.
+    - wms 게이트웨이 `integrationTest`·`e2eSmokeTest`·`e2eFullTest` 는 `FROM-CACHE` 였다(돌지 않았다).
+    - nightly 는 게이트웨이 컨테이너 로그를 아티팩트로 남기지 않는다. fan e2e 도 게이트웨이 stdout 을 흘리지 않는다.
+    - web-store·console fullstack 과 federation 스위트는 성공하면 컨테이너 로그를 안 남긴다.
+  - 상세는 아래 **§ AC-0 판정 — 2026-10-04 UTC** 와 **§ 소유자 결정 2 (2026-10-04 UTC)** 에 있다.
 - [x] **AC-1 — 오류 코드 이름 확정.** 🔵 2026-10-04 UTC 소유자 결정: `AUDIENCE_FORBIDDEN` 확정(`PERMISSION_DENIED` 재사용안 대신 추천안 채택). 계약서 문구 개정은 이 PR 에서 했다. 이름이 그대로라 rename 작업은 없다. 아래 § AC-0 판정 › 소유자 결정 참고. 소유자에게 `AUDIENCE_FORBIDDEN` 확정 또는 대체 이름을 묻고 그 답을 이 파일에 정확한 형태로 기록한다. 이름이 바뀌면 `GatewayErrorCodes.AUDIENCE_FORBIDDEN` 값 · `GatewayErrorCodesTest` 핀 · 두 enforce 테스트 · ecommerce `iam-integration.md` Error Responses 행 · 네 gateway architecture.md 를 같은 PR 에서 바꾼다. 계약서 § Error Handling 의 「not yet fixed … proposal」 문장을 확정 문장으로 개정한다(스펙 먼저).
 - [ ] **AC-2 — 6 게이트웨이 ENFORCE 출하.** 각 `application.yml` `audience-mode: ${OIDC_AUDIENCE_MODE:ENFORCE}`; 각 `AudienceShippedConfigTest#shipsShadow` → `shipsEnforce` 로 기대값 변경. 🔴 한 PR 에서 6 개 전부 — 일부만 뒤집으면 콘솔 한 토큰이 도메인마다 다르게 취급된다.
+  - **되돌리기 레버 (소유자 결정 3, 2026-10-04 UTC):** 같은 PR 에서 6 게이트웨이 compose 의 `environment:` 에 `OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}` 를 넣는다. 그러면 재굽기 없이 `demo.env` 한 줄과 재생성으로 되돌릴 수 있다. compose 위치: ecommerce `docker-compose.yml:1181-`, wms `docker-compose.e2e.yml:76-`(데모도 이 파일로 앱을 띄운다 — `infra/demo/projects.sh:50`), scm `:39-`, erp `:49-`, finance `:50-`, fan `:27-`.
+    - 🔴 `OIDC_ALLOWED_AUDIENCES` 는 넘기지 않는다. 값이 게이트웨이마다 다르기 때문이다.
+    - 🔴 6 `AudienceShippedConfigTest$Shipped` ③(«프로젝트 `docker-compose*.yml`·`.env*` 에 ENFORCE override 줄 0»)은 이 줄이 들어가면 빨개진다. 같은 PR 에서 술어를 바꾼다: «compose 는 `OIDC_AUDIENCE_MODE` 를 `${OIDC_AUDIENCE_MODE:-ENFORCE}` 형태로만 넘긴다 · 다른 값을 고정하지 않는다 · `.env*` 에 `OIDC_AUDIENCE_MODE=SHADOW` 고정 없음».
+    - 🔴 그 술어는 «전달 줄이 6/6 있다» 도 단언해야 한다. 안 그러면 레버가 하나 빠져도 초록이다.
 - [ ] **AC-3 — 1단계 섀도 칸의 뒤집기.** ecommerce·wms `SecurityConfigRealDecoderPathTest` 의 `…passesInShadow_andIsCounted` 칸은 출하 모드를 측정한다 — ENFORCE 출하 후에는 403 `AUDIENCE_FORBIDDEN` + `mismatch_rejected +1` 로 뒤집는다(또는 enforce 테스트와 합친다). 대조군(테넌트 없음 → `TENANT_FORBIDDEN`, audience 카운터 0)은 유지.
 - [ ] **AC-4 — 픽스처가 allowlist 밖으로 민팅하는 알려진 셋 정리.** scm `JwtTestHelper#signClientCredentialsToken`(`aud=scm-platform-internal-services-client`) · erp `#signClientCredentialsToken(clientId)`(`aud=clientId`) · finance `#signScopeOnlyToken`(`aud=subject`). 이 셋을 쓰는 IT 가 ENFORCE 에서 403 이 된다. AC-0 판정에 맞춰 (a) allowlist 에 해당 client 추가, 또는 (b) 해당 IT 의 기대값을 403 으로 — 둘 중 무엇인지 기록. **픽스처를 allowlist 값으로 바꿔 초록을 만들지 않는다**(운영 토큰은 그 `aud` 를 안 가진다).
+  - **2026-10-04 UTC 확정 — (b).** AC-0 판정이 6/6 (i) 호출자 없음이므로, 위 세 IT 칸(scm `GatewayBootstrapIntegrationTest.java:44-54` · erp `GatewayRoutingIntegrationTest.java:42` · finance `GatewayEdgeIntegrationTest.java:77`)의 기대값을 **403 `AUDIENCE_FORBIDDEN`** 으로 바꾼다.
+  - 🔴 **«scope 만 있는 토큰이 admission 을 통과한다» 증명은 다른 방법으로 남긴다.** 이 세 칸은 rule-6 admission «role OR scope» 중 scope 다리의 유일한 IT 증인이었다. 둘 중 하나로 대체하고, 그 칸 이름을 이 티켓에 기록한다: 그 칸만 테스트 한정 SHADOW override 로 돌리거나, admission 단위 테스트로 옮긴다.
+  - **확장 (소유자 결정 2, 2026-10-04 UTC): «전환 PR 에서 scm·fan `tests/e2e` 헬퍼도 운영과 같은 `aud` 를 민팅하도록 함께 고친다.»** 대상과 근거:
+    - 대상: `projects/scm-platform/tests/e2e/.../JwtTestHelper.java:69-92` · `projects/fan-platform/tests/e2e/.../JwtTestHelper.java:70-126`. 둘 다 지금 `aud` 를 아예 넣지 않는다.
+    - scm 의 사람 토큰(BUYER·OPERATOR)은 콘솔 경유 → `platform-console-web`. fan 의 사람 토큰 → `fan-platform-user-flow-client`.
+    - 이것은 사람 사용자 토큰이 운영에서 실제로 싣는 값이다. 그러므로 «allowlist 값으로 초록 만들기» 금지에 걸리지 않는다(`TASK-MONO-696` AC-5 원칙의 연장). 워크로드 모양 토큰에는 적용하지 않는다.
+    - 고치지 않으면 ENFORCE 뒤에 scm smoke(`ci.yml`) · scm/fan e2e full(nightly) · fan smoke 가 403 이 된다.
 - [ ] **AC-5 — 검증.** `:libs:java-gateway:check` + 6 게이트웨이 `:check` rc=0(파이프 금지, rc 명시). 통합 잡(Testcontainers)은 CI 가 권위. 배포 후 데모에서 콘솔 5 도메인 · web-store · fan 각 1회 200 확인 + `mismatch_rejected` 0.
+  - **창 = 다음 AMI 재굽기(`TASK-FAN-BE-050` 과 함께) 뒤의 데모 창**(소유자 결정, 2026-10-04 UTC). 그 창에서 다음을 확인한다.
+  - 마지막 요약 줄이 6/6 `mode=ENFORCE` 이고 `mismatch=0` 이다.
+  - **되돌리기 레버 확인**(소유자 결정 3):
+    - (최소) 6 게이트웨이마다 `docker inspect <gateway> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep OIDC_AUDIENCE_MODE` 가 `OIDC_AUDIENCE_MODE=ENFORCE` 를 보인다. env 가 컨테이너에 **도달한다**는 증거다.
+    - (가능하면) 게이트웨이 하나에서 `OIDC_AUDIENCE_MODE=SHADOW` 로 재생성한다(`docker compose up -d --force-recreate gateway-service`). 그 뒤 요약 줄 `mode=SHADOW` 를 확인하고 ENFORCE 로 되돌린다.
+    - 🔴 레버를 실제로 당기는 것은 데모 상태를 바꾸므로 창 안에서 소유자가 승인한다.
 
 # Related Specs
 
@@ -411,3 +442,15 @@ AC-0 을 닫는 조건은 «client 6/6 이 (i)/(ii)» **그리고** «채널 ②
 (allowlist 에 client 를 추가할지 정할 일은 **없다** — § 1.)
 
 🔵 이 PR 에서 하지 않은 것: ENFORCE 뒤집기(AC-2), 테스트 기대값(AC-3/4), `GatewayErrorCodes` Javadoc, compose 전달 줄. 전부 다음 AMI 재굽기에 실릴 뒤집기 PR 의 일이다(소유자 결정 «`TASK-FAN-BE-050` 과 함께»).
+
+🔵 위 «`[ ]` 로 둔다» 절은 결정 전 기록으로 그대로 둔다. 아래가 그 결정이다.
+
+## 소유자 결정 2 (2026-10-04 UTC) — 세 건 모두 추천안. 받은 그대로 적는다
+
+| # | 결정 (원문) | 반영 위치 |
+|---|---|---|
+| 1 | «CI 로그의 불일치 줄은 전부 테스트 픽스처 → 판정에서 제외하고 AC-0 을 닫는다.» | AC-0 `[x]` — 근거 요약·제외한 줄 목록·측정 공백 목록을 AC-0 항목에 적었다 |
+| 2 | «전환 PR 에서 scm·fan `tests/e2e` 헬퍼도 운영과 같은 `aud` 를 민팅하도록 함께 고친다.» | AC-4 본문 확장: (b) 403 기대 + e2e 헬퍼 수정 + scope 다리 증명 보존 요건 |
+| 3 | «각 게이트웨이 compose 에 `OIDC_AUDIENCE_MODE: ${OIDC_AUDIENCE_MODE:-ENFORCE}` 를 넘기는 줄을 전환 PR 에서 추가한다(재굽기 없는 되돌리기 레버).» | AC-2 본문(전달 줄 + `AudienceShippedConfigTest$Shipped` ③ 술어 변경), AC-5 본문(레버 확인) |
+
+⇒ **AC-0 · AC-1 닫힘.** 이 티켓은 **뒤집기 PR 을 받을 준비가 됐다**(AC-2~AC-5). 그 PR 은 다음 AMI 재굽기에 `TASK-FAN-BE-050` 과 함께 싣는다. ⏳ 머리말의 «DO NOT START — AC-0 이 참이 되기 전에는» 조건은 이제 충족됐다.
