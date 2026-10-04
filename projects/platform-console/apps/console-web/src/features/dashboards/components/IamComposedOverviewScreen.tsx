@@ -107,8 +107,13 @@ export function IamComposedOverviewScreen({
           forbiddenCopy="이 항목은 현재 권한으로 조회할 수 없습니다."
         >
           <dl className="grid grid-cols-2 gap-4">
+            {/* TASK-PC-FE-304 — this leg (`searchAccounts`, TASK-BE-357)
+                already scopes to the active tenant; the label is renamed to
+                match what it counts (end-user accounts of this tenant,
+                operators excluded), consistent with the operator-overview
+                IAM card (`DomainCardSummaries.tsx`). */}
             <Metric
-              label="전체 계정"
+              label="회원 계정 (이 테넌트)"
               value={accounts.totalElements}
               testid="overview-accounts-total"
             />

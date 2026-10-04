@@ -2468,7 +2468,7 @@ files and are **not redefined here**:
 
 | # | Card | Composed producer endpoint (the address the domain's own console screen uses) | Domain credential (§ 2.4.9 D4) | Producer spec § (authoritative) | Read content surfaced |
 |---|---|---|---|---|---|
-| 1 | accounts summary | `GET ${IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` + `X-Tenant-Id` | IAM [`admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot) |
+| 1 | accounts summary | `GET ${IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1&tenantId={activeTenant}` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` + `X-Tenant-Id` (header **and** `tenantId` query param — TASK-PC-FE-304: the producer's `AccountAdminController#search` resolves the scope tenant EXCLUSIVELY from the `tenantId` query param, `QueryTenantScopeGate` falling back to the operator's HOME tenant when it is absent; the header alone is not read by this endpoint) | IAM [`admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot, **of the active tenant** — this is the tenant's own + pool-member end-user accounts; it excludes `admin_operators`, so it is NOT a platform-wide or operator-inclusive count) |
 | 2 | wms inventory health | `GET ${WMS_ADMIN_BASE_URL}/dashboard/inventory` (default `http://wms.local/api/v1/admin/dashboard/inventory`, snapshot) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.1 Dashboard / Read-Model (already bound by § 2.4.5 / FE-007) | inventory snapshot **row** count |
 | 3 | scm procurement / inventory | `GET ${SCM_GATEWAY_BASE_URL}/api/v1/inventory-visibility/snapshot` (snapshot) — through the scm gateway, the same route the § 2.4.6 console screen uses (see scm-leg topology note below) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
 | 4 | finance balance health | `GET ${FINANCE_BASE_URL}/api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → the account id comes from the operator profile (§ Option (a) activation); if absent → that card renders `forbidden / MISSING_PREREQUISITE` with **no** call (not a crash) |
@@ -2484,6 +2484,22 @@ product-service — it does **not** retrofit an existing producer, and no
 (D3.B rejection — the new read mirrors the public `GET /api/products` query
 path exactly, on the operator plane). The composer calls the existing GETs
 verbatim.
+
+> **accounts-leg tenant scoping fix (TASK-PC-FE-304, 2026-10-04 — additive,
+> card 1 query string only).** `AccountAdminController#search` resolves the
+> scope tenant **exclusively** from the `tenantId` query parameter —
+> `QueryTenantScopeGate` falls back to the operator's HOME tenant when it is
+> absent (it does **not** read `X-Tenant-Id`). Card 1 sent only the header, so
+> switching the active tenant moved cards 2–6 but left the accounts card
+> pinned to the operator's home tenant (e.g. a `demo-corp`-home operator
+> switched to `ecommerce` still saw the `demo-corp` count). The accounts
+> screen's own read (`searchAccounts`, TASK-BE-357) already appends
+> `tenantId`; this leg now matches it. `0` for a tenant that owns no
+> end-user accounts (operators live in `admin_operators`, consumers in the
+> shared pool) remains a correct, **by-design** answer — the defect was the
+> wrong tenant being counted, not the zero itself. The `X-Tenant-Id` header
+> is kept (harmless, and other IAM reads on this leg's credential path do
+> consult it) — this is additive, not a header removal.
 
 > **scm-leg topology (ADR-MONO-081 «Which address each leg uses»; supersedes the
 > TASK-MONO-162 direct-to-producer reading).** Card 3 goes **through the scm

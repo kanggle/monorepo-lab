@@ -122,8 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-
-(empty)
+- `TASK-PC-FE-304-overview-iam-card-ignores-active-tenant.md` — 운영 개요 IAM 카드가 활성(선택) 테넌트를 무시하고 운영자 홈 테넌트를 센다(iam-platform `AccountAdminController`는 `tenantId` 쿼리 파라미터만 읽는데 이 레그는 `X-Tenant-Id` 헤더만 보냄) + "전체 계정" 라벨이 그 카드가 실제로 세는 것(이 테넌트의 회원 계정, 운영자 제외)과 불일치. 19차 데모 창 조사(`TASK-MONO-758`)에서 발견, 수정은 이 티켓. AC-3(라이브 확인)만 ⚪ 미확인.
 
 ## done
 

@@ -243,6 +243,21 @@ describe('credentials per leg (AC-5 — ADR-MONO-017 D4)', () => {
     expect(scm).not.toMatch(/\/api\/inventory-visibility\//);
   });
 
+  it('iam leg sends tenantId as a query param for the ACTIVE (selected) tenant, not only X-Tenant-Id (TASK-PC-FE-304)', async () => {
+    const urls: string[] = [];
+    await compose(await operatorOverviewLegs({ ...CREDS, tenant: 'ecommerce' }), {
+      route: 'operator-overview',
+      requestId: 'req-1',
+      fetchLeg: async (url) => {
+        urls.push(url);
+        return json(fixture.legs[legOf(url)].body);
+      },
+    });
+    const iam = urls.find((u) => u.includes('/api/admin/accounts'))!;
+    expect(iam).toBeDefined();
+    expect(new URL(iam).searchParams.get('tenantId')).toBe('ecommerce');
+  });
+
   it.each([null, '', '   '])(
     'no finance default account (%j) → finance forbidden/MISSING_PREREQUISITE and NO finance call',
     async (acc) => {

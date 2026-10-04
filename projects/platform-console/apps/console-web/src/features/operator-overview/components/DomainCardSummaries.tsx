@@ -33,7 +33,15 @@ function GapSummary({ data }: { data: unknown }): ReactNode {
       : null;
   return (
     <dl>
-      <dt className="text-sm text-muted-foreground">전체 계정</dt>
+      {/*
+        TASK-PC-FE-304 — this is the SELECTED TENANT's own + pool-member
+        end-user account count (operators excluded, counted in the operators
+        card). "전체 계정" read as platform-wide/operator-inclusive; a
+        tenant that owns no end-user accounts (e.g. an operator-only tenant)
+        correctly shows 0 here while the other cards show nonzero — that is
+        not a bug, so the label must not claim "all accounts".
+      */}
+      <dt className="text-sm text-muted-foreground">회원 계정 (이 테넌트)</dt>
       <dd
         className="text-2xl font-semibold tabular-nums text-foreground"
         data-testid="operator-overview-card-iam-total"

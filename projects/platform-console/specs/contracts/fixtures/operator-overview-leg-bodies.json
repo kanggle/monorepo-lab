@@ -23,7 +23,7 @@
   ],
   "legs": {
     "iam": {
-      "producer": "GET /api/admin/accounts?page=0&size=1",
+      "producer": "GET /api/admin/accounts?page=0&size=1&tenantId={activeTenant}",
       "sourceOfShape": "iam-platform admin-service AccountAdminController#search -> AccountServiceClient.AccountSearchResponse(content, totalElements, page, size, totalPages)",
       "surfaced": "total account count",
       "body": {

@@ -37,7 +37,7 @@ async function overviewCard(domain: string): Promise<Record<string, unknown>> {
 }
 
 describe('overview card = the list it summarises (through the router)', () => {
-  it('IAM «전체 계정» = rows on the accounts list', async () => {
+  it('IAM «회원 계정 (이 테넌트)» = rows on the accounts list', async () => {
     const card = await overviewCard('iam');
     const list = (await body({
       core: 'iam',
