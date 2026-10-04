@@ -12,13 +12,24 @@ import { DegradeBanner as SharedDegradeBanner } from '@/shared/ui/DegradeBanner'
  * whole envelope is currently degraded and surfaces the explicit
  * retry affordance at the top.
  *
- * Thin wrapper (TASK-PC-FE-263) — owns `isAllDown`, its copy text,
- * and its testid, delegates the banner shell to `shared/ui/DegradeBanner`.
+ * 🔴 All-`forbidden` is a different banner (TASK-PC-FE-307): every leg
+ * refused this operator/tenant, so nothing is down and retrying returns
+ * the same envelope. It must not read as an outage, and it carries no
+ * retry. A single `degraded` card among the rest keeps the outage banner —
+ * there retry can change the answer.
+ *
+ * Thin wrapper (TASK-PC-FE-263) — owns `isAllDown`/`isAllForbidden`, their
+ * copy text and testids, delegates the banner shell to `shared/ui/DegradeBanner`.
  */
 
 export function isAllDown(cards: ReadonlyArray<Card>): boolean {
   if (cards.length === 0) return false;
   return cards.every((c) => c.status !== 'ok');
+}
+
+export function isAllForbidden(cards: ReadonlyArray<Card>): boolean {
+  if (cards.length === 0) return false;
+  return cards.every((c) => c.status === 'forbidden');
 }
 
 export interface OverviewDegradeBannerProps {
@@ -28,6 +39,17 @@ export interface OverviewDegradeBannerProps {
 }
 
 export function OverviewDegradeBanner({ initial }: OverviewDegradeBannerProps) {
+  if (isAllForbidden(initial.cards)) {
+    return (
+      <SharedDegradeBanner
+        show
+        testid="operator-overview-all-forbidden"
+        heading="이 계정과 테넌트로 볼 수 있는 도메인 개요가 없습니다."
+        description="모든 도메인이 이 운영자의 개요 조회를 허용하지 않았습니다. 각 카드의 사유를 확인하고, 테넌트를 바꾸거나 운영자 권한을 확인하세요."
+        retry={null}
+      />
+    );
+  }
   return (
     <SharedDegradeBanner
       show={isAllDown(initial.cards)}

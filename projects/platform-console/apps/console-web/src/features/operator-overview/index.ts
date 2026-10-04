@@ -17,6 +17,7 @@ export type { DomainCardProps } from './components/DomainCard';
 export {
   OverviewDegradeBanner,
   isAllDown,
+  isAllForbidden,
 } from './components/OverviewDegradeBanner';
 export { RetryButton } from './components/RetryButton';
 export { useOperatorOverview } from './hooks/use-operator-overview';
