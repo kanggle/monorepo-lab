@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다. 제약: 레이아웃이 요청마다 컨트롤 플레인을 부르지 않는다(해석기 15초 캐시 · 인증 셸의 `DemoBackendNotice` 가 이미 같은 스냅샷을 읽음) — 계약 § 2.6.1 «guard makes no network call» 문장을 먼저 고친다. 🔴 선행: 305 머지.
+(empty)
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -118,7 +118,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
+- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다 — 단 **서로 다른 두 번의 연속 `unavailable`**(해석기 15초 캐시 창보다 멀리 떨어진)일 때만(소유자 결정 ①). 계약 § 2.6.1 «no network call» 문장 + § 2.6.2 를 먼저 고친다(소유자 결정 ②).
 
 ## review
 
