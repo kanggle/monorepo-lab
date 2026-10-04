@@ -289,3 +289,18 @@ JWT audience summary: gateway=<g> mode=SHADOW match=<n> mismatch=<m>
 | finance | 1 | 0 | 0 |
 
 - 분모가 전부 > 0 → 이 창의 «0» 은 공허하지 않다. 🔴 단 **한 창 · 한 표본**이고 finance 분모는 1 이다. AC-0 의 나머지 — `/actuator/prometheus` 경로 · client 별 ⚪ 칸(`TASK-MONO-696` § AC-1 (b)) 판정 — 는 이 표본으로 채워지지 않는다. 이 티켓은 여전히 보류다.
+
+# 표본 — 19차 창 (2026-10-04 UTC · 인스턴스 i-08d452973ebf789be · AMI ami-00815e1f9614cda90 · 커밋 2a49dfb48)
+
+소유자가 콘솔(5 도메인 화면 · 알림 · 팬 디렉터리 시도)·웹스토어·팬 웹에 로그인해 트래픽을 낸 뒤, 게이트웨이마다 `docker logs <gw> | grep "JWT audience summary" | tail -1`(SSM 읽기):
+
+| 게이트웨이 | match | mismatch | 마지막 요약(UTC) | 요약 줄 수 |
+|---|---|---|---|---|
+| ecommerce | 63 | 0 | 06:59:54 | 5 |
+| erp | 89 | 0 | 06:52:13 | 9 |
+| fan | 11 | 0 | 07:00:43 | 4 |
+| finance | 1 | 0 | 06:22:19 | 1 |
+| scm | 42 | 0 | 06:38:11 | 6 |
+| wms | 19 | 0 | 06:38:11 | 6 |
+
+⇒ 6/6 `match>0 · mismatch=0`. 18차에 이은 **두 번째 창**의 표본이다. 🔴 AC-0 은 아직 참이 아니다: 696 §AC-1(b) 의 ⚪ 미측정 client 6개를 하나씩 판정하는 일이 남아 있다(이번 창은 그 판정을 하지 않았다). finance 는 표본이 1건뿐이다(콘솔 Finance 카드가 `MISSING_PREREQUISITE` 로 호출 자체를 안 해서 트래픽이 적다).

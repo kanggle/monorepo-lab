@@ -8,7 +8,7 @@ TASK-MONO-753
 
 # Status
 
-review
+done (2026-10-04 UTC — 4차원 검증 · PR #4110 squash `ce3364931` · AC-1 19차 창)
 
 # Owner
 
@@ -61,7 +61,7 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 다음 데모 창에서 `console-erp` 가 `ready` 가 되고 ERP 목록이 보인다(복구 명령 실행 뒤).
+- [x] **AC-1** — 다음 데모 창에서 `console-erp` 가 `ready` 가 되고 ERP 목록이 보인다(복구 명령 실행 뒤).
 - [x] **AC-2** — 재발 방지 갈래(a/b)를 정하고 구현 — (a) 면 «실행 중 인스턴스에 묶음 추가 → 이미 기동 중인 도메인에 `down` 없음» 을 부팅 스크립트 시험으로 고정. → **(a)**, 단 문장을 실제 원인에 맞게 고쳐 «**같은 부팅의 두 번째 유닛 기동** → `down` 없음» 으로 고정(아래 «구현 결과»). «묶음 추가 → `down` 없음» 은 이미 (z24)(5) 가 지키고 있었다.
 - [x] **AC-3** — census 결과(같은 위험을 가진 마이그레이션 목록)를 이 파일에 적는다. → 아래 «census».
 
@@ -150,3 +150,14 @@ aws ssm send-command --instance-ids i-05395a5a7baa23bb8 --document-name AWS-RunS
 1. 복구 명령(위, 소유자) → `console-erp` `ready` · ERP 목록 (AC-1).
 2. 방아쇠 가설: `journalctl --list-boots` 로 18차 첫 부팅(2026-10-02 09:1x)의 인덱스를 찾고 `journalctl -b <idx> -u demo-stack -u cloud-final --no-pager | grep -E 'Started|Finished|Failed|failed|Main process|systemctl'` — 첫 실행이 `failed` 로 끝나고 cloud-final 의 `systemctl start` 직후 두 번째 실행이 시작됐는지. 🔴 저널이 비영속이면(목록에 그 부팅이 없음) ⚪ «측정 불가 — 저널 비영속» 으로 닫는다; 고침은 방아쇠와 무관하므로 AC 에 영향 없음.
 3. 이 고침은 **재굽기 뒤에만** 데모에 있다(`demo-boot.sh` 는 구워진 클론에서 돈다).
+
+# 닫기 (2026-10-04 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4110` → `MERGED`, `ce3364931` |
+| (b) | `ce3364931` 는 `origin/main` 의 조상 |
+| (c) | #4110 `statusCheckRollup` 66 개 · FAILURE 0 |
+| (d) | AC-2·3 `[x]`. **AC-1** — 19차 창 (2026-10-04 UTC · 인스턴스 i-08d452973ebf789be · AMI ami-00815e1f9614cda90 · 커밋 2a49dfb48): `console-erp` 가 `ready`(1차 기동 05:14Z · 2차 기동 06:20Z) · 콘솔 ERP 결재함 목록 3건(작성중 1 · 상신됨 2) · 내 미결함 2건 · 상세(결재선 1/1 · 이력) 정상(소유자 화면) |
+
+🔴 **AC-1 의 괄호 «(복구 명령 실행 뒤)» 는 실행하지 않았다 — 필요가 없어졌기 때문이다.** 19차 apply 가 `aws_instance.demo` 를 **교체**해(`ami` force-new) 문제의 docker 볼륨(«테이블 있고 이력 없음») 이 인스턴스와 함께 사라졌다. 그래서 이 판정은 «복구가 됐다» 가 아니라 «**새 볼륨에서** 두 번 기동해도(05:04Z 켬 → 자동 정지 → 06:13Z 다시 켬) read-model 이 걸리지 않았다» 이다. 복구 명령은 옛 인스턴스(`i-05395a5a7baa23bb8`)를 가리키므로 더는 쓸 수 없다. 🔵 재발 방지(AC-2 의 boot_id 마커)가 실제로 두 번째 유닛 기동을 막았는지는 이번 창에서 저널로 확인하지 않았다 — 같은 증상이 다시 나면 그때의 출발점.

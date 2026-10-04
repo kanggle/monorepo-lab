@@ -8,7 +8,7 @@ TASK-MONO-738
 
 # Status
 
-review (2026-09-29 UTC)
+done (2026-10-04 UTC — 4차원 검증 · PR #4065 squash `f0c5aa575` · AC-4 19차 창)
 
 # Owner
 
@@ -55,7 +55,7 @@ monorepo
 - [x] **AC-1** — 기동 후 유예 안 · 이 세션 발행 전이면 선택 묶음이 `unknown` 이 아니라 `requested`. 49시간 묵은 스냅샷(라이브 그대로의 값)으로 테스트한다.
 - [x] **AC-2 — 반대 방향.** 유예를 넘기면(발행자가 죽음) 여전히 `unknown`(«영원히 기동 중» 금지). `STARTED_PARAM` 이 없으면 옛 동작.
 - [x] **AC-3** — `/status` 와 `/bundles` 가 이 구간에서 같은 말을 한다(판정 함수 하나).
-- [ ] **AC-4 — 라이브.** 🔴 람다는 `terraform apply` 가 필요하다(소유자 몫, AMI 불필요). 다음 기동에서 버튼을 누른 직후 카드가 「🟡 기동 중…」인지 본다.
+- [x] **AC-4 — 라이브.** 🔴 람다는 `terraform apply` 가 필요하다(소유자 몫, AMI 불필요). 다음 기동에서 버튼을 누른 직후 카드가 「🟡 기동 중…」인지 본다.
 
 ---
 
@@ -107,3 +107,12 @@ monorepo
 
 - 이번 `terraform apply`(18차)가 Lambda 를 갱신했다. 꺼진 인스턴스(`stopped` 확인)에 `POST /bundle/start {"bundles":["fan"]}` → 직후부터 1분 넘게 `GET /bundles` 의 `fan.state = "requested"` (10:15:40 · 51 · 16:22 · 17:23Z), `health_first_publish_pending: true` — 예전의 `unknown`(«🔴 확인 실패») 이 아니다.
 - ⚪ AC-4 의 동사는 «카드가 🟡 기동 중… 인지 **본다**» 다 — 론처 화면 자체를 보지 않았다(API 상태만). 다음 기동 때 론처 페이지에서 버튼을 누른 직후 카드 문구를 보고 닫는다. ⇒ `review/` 유지.
+
+# 닫기 (2026-10-04 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4065` → `MERGED`, `f0c5aa575` |
+| (b) | `f0c5aa575` 는 `origin/main` 의 조상 |
+| (c) | #4065 `statusCheckRollup` 66 개 · FAILURE 0 |
+| (d) | AC-1~3 `[x]`(구현 기록). **AC-4** — 19차 창 (2026-10-04 UTC · 인스턴스 i-08d452973ebf789be · AMI ami-00815e1f9614cda90 · 커밋 2a49dfb48): 멈춘 인스턴스에서 `POST /bundle/start` 직후 **소유자가 론처 페이지에서 카드가 «🟡 기동 중…» 인 것을 봤다**(«🔴 확인 실패» 아님). 같은 순간 API: 묶음 7개 `requested` · `health_first_publish_pending:true` · `health_age_seconds=42250`(묵은 스냅샷 — 고치기 전이면 `unknown` 이 됐을 값). Lambda 는 19차 apply 로 실림 |
