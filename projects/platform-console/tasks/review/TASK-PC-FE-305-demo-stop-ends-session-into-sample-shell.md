@@ -8,7 +8,7 @@ TASK-PC-FE-305
 
 # Status
 
-review (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 335파일·3761시험/next build rc=0, bite 확인. AC-2 의 «판정 불가» 칸 ⚪(Owner decisions ①), AC-6 라이브 ⚪)
+review (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 335파일·3761시험/next build rc=0, bite 확인. AC-2 «판정 불가» 칸은 소유자 결정 ①(2026-10-04)으로 알려진 한계로 닫힘, AC-6 라이브 ⚪. 경로 D 는 `TASK-PC-FE-306`(ready))
 
 # Owner
 
@@ -57,7 +57,7 @@ frontend
 
 - [x] **AC-0** — 데모가 꺼진 상태에서 남은 세션 방문자가 탈 수 있는 경로 전부를 file:line 으로 기록하고(레이아웃 가드 → 갱신 라우트 → `clearFullSession`; 페이지 401 리다이렉트; 로그인 페이지의 `unavailable` 분기), 세션 종료·샘플 방문자 동작을 정의하는 스펙(ADR-MONO-074 · 계약 · PC-FE-299)을 확인해 로그인 페이지 동작을 적은 스펙을 **먼저** 고친다.
 - [x] **AC-1** — 세션을 갱신할 수 없고 **그리고** 데모 상태 신호가 백엔드 정지(`resolveDemoBackendState()` 의 `unavailable` — 로그인 페이지가 쓰는 같은 함수, 갱신 에러만으로 추정 금지)를 말하면, 세션 쿠키가 지워지고 방문자는 샘플 셸(요청한 화면이 샘플로 닿으면 그 화면, 아니면 `/`)에 착지하며 데모 서버가 꺼져 로그아웃됐다는 짧은 한국어 안내(`DemoBackendNotice` 문구와 일관)를 본다. 로그인 벽 없음.
-- [ ] **AC-2 (대조군)** — 데모 백엔드가 켜져 있고 세션만 만료/무효면 오늘 그대로(`/login?error=session_expired`, 일반 문구). 데모 상태를 판정할 수 없으면(`/status` 실패) 역시 오늘 그대로 — 그 선택을 명시한다. — 🟢 `running`·`starting`·`not-demo` 칸 / ⚪ `/status` 실패 칸: 공유 해석기가 `unavailable` 로 뭉쳐 돌려주므로 **오늘 그대로가 아니라 샘플로 간다** — 선택과 근거는 Implementation Record § AC-2, 결정은 § Owner decisions ①.
+- [x] **AC-2 (대조군)** — 데모 백엔드가 켜져 있고 세션만 만료/무효면 오늘 그대로(`/login?error=session_expired`, 일반 문구). 데모 상태를 판정할 수 없으면(`/status` 실패) 역시 오늘 그대로 — 그 선택을 명시한다. — 🟢 `running`·`starting`·`not-demo` 칸 / ⚪ `/status` 실패 칸: 공유 해석기가 `unavailable` 로 뭉쳐 돌려주므로 **오늘 그대로가 아니라 샘플로 간다** — 선택과 근거는 Implementation Record § AC-2, 결정은 § Owner decisions ①. — ✅ **소유자 결정 ①(2026-10-04 UTC)로 닫힘**: «데모 상태 확인(/status) 자체가 실패해 꺼짐인지 알 수 없을 때도 지금처럼(샘플 화면으로) 둔다 (Recommended)». 알려진 한계 — 해석기가 실패한 `/status` 에도 `unavailable` 을 돌려주고, 영향은 갱신 실패 / 401 **뒤**로 한정된다.
 - [x] **AC-3** — 페이지 단위 401 리다이렉트가 AC-1/AC-2 와 일관되게 동작한다(15곳을 각각 고치기보다 공유 헬퍼 하나).
 - [x] **AC-4** — PC-FE-299 의 보장(클라 잔존 상태 비움 · no-store · bfcache)이 유지되고 기존 테스트가 초록이다.
 - [x] **AC-5** — 판정 유닛 테스트(정지 → 샘플; 실행 → 로그인; 판정 불가 → 로그인) + bite(분기 뒤집기 → 정확히 그 칸들만 빨강). 299 흐름의 Playwright/e2e 스펙이 있으면 갱신한다.
@@ -155,3 +155,13 @@ frontend
 1. **`unavailable` 을 둘로 가를 것인가** — 공유 해석기에 「컨트롤 플레인이 정지라고 답함」과 「`/status` 실패」를 가르는 값(또는 함수)을 더하면 AC-2 의 «판정 불가 → 오늘 그대로» 가 문자 그대로 성립한다. 해석기는 세 앱 + auth-forwarder 가 쓰는 공유 패키지라 루트 티켓 감이다.
 2. **쿠키가 아직 살아 있는 동안의 정지(경로 D)** — 인증 셸이 빈 데이터 + `DemoBackendNotice` 를 보여준다. 이것도 샘플로 보낼지는 소유자 보고의 범위(«로그인된 채로 … 꺼지고 들어가면»)에 걸칠 수 있다. 바꾸면 레이아웃 가드가 매 요청 컨트롤 플레인을 묻게 된다(지금은 «가드는 네트워크 호출 없음» — 계약 § 2.6.1).
 3. **ADR-MONO-074 A1 에 이력 한 줄을 남길지** — 술어는 그대로지만 «죽은 쿠키는 재로그인» 의 한 경우가 이제 «쿠키를 지우고 샘플» 로 끝난다.
+
+## Owner decisions — 답 (2026-10-04 UTC, 원문 그대로)
+
+1. «데모 상태 확인(/status) 자체가 실패해 꺼짐인지 알 수 없을 때도 지금처럼(샘플 화면으로) 둔다 (Recommended)» ⇒ AC-2 의 «판정 불가» 칸은 **알려진 한계로 닫는다**(해석기가 실패한 `/status` 에도 `unavailable` 을 돌려준다; 영향은 갱신 실패 / 401 뒤로 한정). AC-2 `[x]`.
+2. «로그인 쿠키가 아직 살아 있을 때(Path D) 데모가 꺼져도 샘플 화면으로 보낸다 (Recommended)» ⇒ **이 PR 이 아니라 후속 티켓** `TASK-PC-FE-306`(`tasks/ready/`, 같은 PR 에서 기안만 — 구현 안 함).
+3. (묻지 않음) ADR-MONO-074 이력 한 줄 — ADR 은 손대지 않는다. 위 3번 메모를 그대로 남긴다.
+
+## CI 수정 (2026-10-04 UTC) — 클라이언트 그래프가 서버 전용 주소에 닿았다
+
+PR #4149 첫 CI: `Client graph backend origins (the browser must not know the address)` RED — `scripts/check-client-graph-backend-origins.mjs` 가 console-web `hits=1`: `src/shared/config/demo-backend.ts → http://console.local`(ADR-MONO-067 D1). 원인: 클라이언트 컴포넌트 `DemoSignedOutNotice` 가 표식 상수를 `shared/lib/session-end.ts` 에서 import 했고, 그 판정 모듈은 `DemoBackendState` 를 위해 `demo-backend.ts` 를 import 한다 — `import type` 이어도 가드의 그래프에 든다(번들에는 안 들어가지만 가드는 import 문을 따라간다). 처방은 가드 완화가 아니라 **모듈 분리**: 상수만 `src/shared/lib/session-end-params.ts`(import 0)로 빼고, 클라이언트는 그 파일만 import 한다. `session-end.ts` 는 서버 전용으로 남아 상수를 재수출한다. 가드 rc=1 → rc=0 (console-web `reached=423 hits=0`). 로컬 첫 검증에서 이 가드를 돌리지 않은 것이 누락이었다.

@@ -91,7 +91,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-306-live-session-demo-stop-ends-into-sample-shell.md` — PC-FE-305 경로 D(소유자 결정 2026-10-04): 액세스·운영자 쿠키가 **아직 살아 있을 때** 데모가 꺼져도 세션을 끝내고 샘플 셸 + 같은 안내로 보낸다. 제약: 레이아웃이 요청마다 컨트롤 플레인을 부르지 않는다(해석기 15초 캐시 · 인증 셸의 `DemoBackendNotice` 가 이미 같은 스냅샷을 읽음) — 계약 § 2.6.1 «guard makes no network call» 문장을 먼저 고친다. 🔴 선행: 305 머지.
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -123,7 +123,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## review
 
 - `TASK-PC-FE-304-overview-iam-card-ignores-active-tenant.md` — 운영 개요 IAM 카드가 활성(선택) 테넌트를 무시하고 운영자 홈 테넌트를 센다(iam-platform `AccountAdminController`는 `tenantId` 쿼리 파라미터만 읽는데 이 레그는 `X-Tenant-Id` 헤더만 보냄) + "전체 계정" 라벨이 그 카드가 실제로 세는 것(이 테넌트의 회원 계정, 운영자 제외)과 불일치. 19차 데모 창 조사(`TASK-MONO-758`)에서 발견, 수정은 이 티켓. AC-3(라이브 확인)만 ⚪ 미확인.
-- `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. ⚪ AC-2 «`/status` 실패» 칸(공유 해석기가 `unavailable` 로 뭉침 — 소유자 결정) · AC-6 라이브.
+- `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — 데모 서버가 꺼진 뒤 남은 세션이 「데모 서버가 종료되어 다시 로그인해야 합니다」 로그인 벽(IdP 도 꺼져 로그인 불가)에 닿던 것을, 강제 재로그인 착지(`/login?error=session_expired`)에서 데모 상태 신호 `unavailable` 이면 `GET /api/auth/demo-ended` 가 세션 쿠키를 지우고 샘플 셸(ADR-MONO-074)로 보내도록(`?signed_out=demo_stopped` 안내). 판정 하나(`shared/lib/session-end.ts`), 401 지점 53곳 무수정. 계약 § 2.6.2 신설. AC-2 «`/status` 실패» 칸은 소유자 결정(2026-10-04)으로 알려진 한계로 닫힘 · ⚪ AC-6 라이브 · 경로 D 는 `TASK-PC-FE-306`.
 
 ## done
 

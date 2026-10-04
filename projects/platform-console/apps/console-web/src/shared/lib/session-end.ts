@@ -33,20 +33,16 @@
 import type { DemoBackendState } from '@/shared/config/demo-backend';
 import { resolveRefreshReturnPath } from '@/shared/lib/login-redirect';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
+import {
+  DEMO_ENDED_PATH,
+  SIGNED_OUT_PARAM,
+  SIGNED_OUT_DEMO_STOPPED,
+  DEMO_CHECKED_PARAM,
+} from '@/shared/lib/session-end-params';
 
-/** 세션을 끝내고 샘플 셸로 보내는 라우트 핸들러(페이지는 쿠키를 못 지운다). */
-export const DEMO_ENDED_PATH = '/api/auth/demo-ended';
-
-/** 샘플 셸이 안내를 띄우는 표식 — `?signed_out=demo_stopped`. */
-export const SIGNED_OUT_PARAM = 'signed_out';
-export const SIGNED_OUT_DEMO_STOPPED = 'demo_stopped';
-
-/**
- * 루프 상한. 라우트가 신호를 다시 읽어 `unavailable` 이 **아니면** 이 표식을 달아
- * `/login` 으로 돌려보내고, `/login` 은 이 표식이 있으면 다시 넘기지 않는다
- * (두 서버 인스턴스의 15초 캐시가 서로 다른 답을 들고 있는 경우의 핑퐁을 끊는다).
- */
-export const DEMO_CHECKED_PARAM = 'demo_checked';
+// 🔴 서버 전용 모듈이다(위 `import type` 도 `demo-backend.ts` 를 클라이언트 그래프 가드의
+//    그래프에 넣는다). 클라이언트 컴포넌트는 `session-end-params.ts` 를 직접 import 하라.
+export { DEMO_ENDED_PATH, SIGNED_OUT_PARAM, SIGNED_OUT_DEMO_STOPPED, DEMO_CHECKED_PARAM };
 
 /** 판정 결과. 🔴 「샘플」은 세션을 **지운 뒤** 의 착지다 — 죽은 쿠키를 샘플로 재해석하지 않는다. */
 export type SessionEndDestination = 'sample' | 'login';

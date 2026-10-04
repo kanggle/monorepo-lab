@@ -2,7 +2,9 @@
 
 import { useSearchParams } from 'next/navigation';
 import { ForcedReLoginCacheReset } from '@/widgets/forced-relogin-cache-reset/ForcedReLoginCacheReset';
-import { SIGNED_OUT_DEMO_STOPPED, SIGNED_OUT_PARAM } from '@/shared/lib/session-end';
+// 🔴 `session-end.ts` 가 아니라 순수 상수 모듈 — 판정 모듈은 서버 전용 주소 리터럴을 가진
+//    `demo-backend.ts` 를 그래프에 넣는다(ADR-MONO-067 D1, `session-end-params.ts` 헤더).
+import { SIGNED_OUT_DEMO_STOPPED, SIGNED_OUT_PARAM } from '@/shared/lib/session-end-params';
 
 /** 안내 문구 — `DemoBackendNotice` 의 «데모 시작 페이지에서 서버를 켠 뒤(약 10분)» 와 같은 말을 쓴다. */
 export const DEMO_SIGNED_OUT_COPY =
