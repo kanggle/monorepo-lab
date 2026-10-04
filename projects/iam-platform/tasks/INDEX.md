@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-622-provisioning-status-patch-is-site-scoped-for-pool-members.md` — **내부 프로비저닝 상태 변경도 풀 멤버에게는 그 사이트 멤버십만** (READY, 2026-10-04 UTC · 소유자 결정 «별도 티켓으로 적용» — `TASK-BE-621` 결정 2). `LOCKED`/`ACTIVE` → 멤버십 · `DELETED` → `LEFT OPERATOR` · 셀러 운영 계정(풀 아님)은 대조군으로 계정 그대로. AC-0 호출자 전수 먼저. 재굽기 포함 여부는 크기를 보고. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 - `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (READY · ⏳ **보류** 2026-10-02 UTC 소유자 결정 — 소셜 키가 어느 배포에도 없어 성공 불가 · 소셜 신원 0개, AC-00 게이트: 실제 키 주입 시 착수 · 보류 동안 방어 = `TASK-BE-620` · 2026-10-01 UTC · 선행 614~616 — 743 은 2026-10-02 보류로 빠짐 · 618 이 건너뛴 소셜 연결 계정 인계). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군).
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -114,7 +113,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-622-provisioning-status-patch-is-site-scoped-for-pool-members.md` — **내부 프로비저닝 상태 변경도 풀 멤버에게는 그 사이트 멤버십만** (IN-PROGRESS, 2026-10-04 UTC · 소유자 결정 «별도 티켓으로 적용» — `TASK-BE-621` 결정 2). `LOCKED`/`ACTIVE` → 멤버십 · `DELETED` → `LEFT OPERATOR` · 셀러 운영 계정(풀 아님)은 대조군으로 계정 그대로. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
