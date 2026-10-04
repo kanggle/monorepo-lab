@@ -5,11 +5,11 @@ import { AgencyDetail } from '@/features/fan-directory/components/AgencyDetail';
 import { ApiError } from '@/shared/api/errors';
 
 /**
- * TASK-MONO-751 — the agency detail's store-seller link (AC-2) and its honest «unwired»
- * state. artist-service refuses every link with `503 STORE_SELLER_LOOKUP_UNAVAILABLE` until
- * TASK-MONO-759 wires the store lookup; the field must stay visible and a refused attempt
- * must say nothing was saved. A definite store answer (`422 STORE_SELLER_NOT_FOUND`) is the
- * validation error AC-2 asks to show.
+ * TASK-MONO-751/759 — the agency detail's store-seller link (AC-2). artist-service verifies
+ * the seller against the store (`HttpStoreSellerDirectory`); a definite "no" answer is the
+ * validation error AC-2 asks to show (`422 STORE_SELLER_NOT_FOUND` / `STORE_SELLER_CLOSED`),
+ * and a lookup that could not complete fails closed — `503 STORE_SELLER_LOOKUP_UNAVAILABLE`,
+ * nothing saved — with its own state rather than the generic error.
  */
 const patch = vi.fn();
 vi.mock('@/shared/api/client', () => ({
@@ -49,10 +49,9 @@ beforeEach(() => {
 });
 
 describe('AgencyDetail — store-seller link', () => {
-  it('shows the field AND says up front that new links are refused for now (not hidden)', () => {
+  it('shows the store-seller link field', () => {
     renderDetail();
     expect(screen.getByTestId('fan-agency-seller-input')).toBeInTheDocument();
-    expect(screen.getByTestId('fan-agency-seller-unwired-note')).toHaveTextContent('TASK-MONO-759');
     expect(screen.getByTestId('fan-agency-seller-current')).toHaveTextContent('연결 없음');
   });
 

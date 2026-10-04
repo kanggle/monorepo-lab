@@ -22,14 +22,14 @@ export const STORE_SELLER_LOOKUP_UNAVAILABLE = 'STORE_SELLER_LOOKUP_UNAVAILABLE'
 /**
  * Agency detail (TASK-MONO-751 — ADR-MONO-079 D1/D2): rename · archive · store-seller link.
  *
- * 🔴 The store-seller link is shown and usable, but artist-service currently refuses EVERY
- *    value with `503 STORE_SELLER_LOOKUP_UNAVAILABLE` — its store lookup has no transport yet
- *    (`UnwiredStoreSellerDirectory`, TASK-MONO-748 → TASK-MONO-759). The field is NOT hidden:
- *    hiding it would make «the console cannot link a seller» look like «there is no such
- *    feature». Instead the section says so up front, and a refused attempt renders its own
- *    state (`fan-agency-seller-lookup-unavailable`) that says nothing was saved. A definite
- *    store answer (`STORE_SELLER_NOT_FOUND` / `STORE_SELLER_CLOSED`, 422) renders as the
- *    validation error it is (AC-2). Clearing a link works today (no store lookup).
+ * The store-seller link calls artist-service's real store lookup (`HttpStoreSellerDirectory`,
+ * TASK-MONO-759). `ACTIVE` / `SUSPENDED` / `PENDING_PROVISIONING` saves the link; a definite
+ * "no" from the store (`STORE_SELLER_NOT_FOUND` / `STORE_SELLER_CLOSED`, 422) renders as the
+ * validation error it is (AC-2), via `fan-agency-seller-error`. A lookup that could not
+ * complete (store unreachable, timeout, bad auth, unrecognised status) fails closed —
+ * `503 STORE_SELLER_LOOKUP_UNAVAILABLE`, nothing saved — and renders its own state
+ * (`fan-agency-seller-lookup-unavailable`) rather than the generic error. Clearing a link
+ * never calls the store (no lookup needed).
  */
 export function AgencyDetail({ agency: initial }: { agency: Agency }) {
   const q = useAgency(initial.id, initial);
@@ -108,15 +108,6 @@ function StoreSellerSection({ agency, archived }: { agency: Agency; archived: bo
         현재:{' '}
         <code data-testid="fan-agency-seller-current">{agency.storeSellerId ?? '연결 없음'}</code>
       </p>
-      <div
-        role="note"
-        data-testid="fan-agency-seller-unwired-note"
-        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-      >
-        🔵 지금은 새 연결이 거절됩니다 — 팬 서비스가 스토어 셀러를 확인하는 경로가 아직 배선되지
-        않았습니다(TASK-MONO-759). 시도하면 «확인할 수 없어 저장하지 않았습니다» 가 표시되고 아무것도
-        바뀌지 않습니다. 연결 해제는 지금도 됩니다.
-      </div>
       {!archived && (
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[16rem] flex-1">
@@ -159,7 +150,7 @@ function StoreSellerSection({ agency, archived }: { agency: Agency; archived: bo
           className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground"
         >
           스토어 셀러를 확인할 수 없어 <strong>연결하지 않았습니다 — 아무것도 저장되지 않았습니다.</strong>{' '}
-          팬 서비스가 스토어에 묻는 경로가 아직 배선되지 않았습니다(TASK-MONO-759).
+          잠시 후 다시 시도해 주세요.
         </div>
       )}
       <FanError testId="fan-agency-seller-error" message={error} />
