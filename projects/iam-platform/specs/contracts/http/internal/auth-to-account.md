@@ -246,7 +246,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
   "siteTenantId": "ecommerce",
   "consumerSite": true,
   "siteTenantType": "B2C_CONSUMER",
-  "membershipStatus": "ACTIVE | LEFT | null",
+  "membershipStatus": "ACTIVE | LOCKED | LEFT | null",
   "siteRoles": ["SELLER"],
   "leftBy": "SELF | OPERATOR | null"
 }
@@ -256,7 +256,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 |---|---|
 | `consumerSite` | 그 테넌트가 소비자 사이트(`tenant_type = B2C_CONSUMER` ∧ ≠ `consumer-pool`, `Tenant.isConsumerSite()`)인가. 없는 테넌트 → `false` |
 | `siteTenantType` | 그 테넌트의 권위 `tenant_type` — 풀 principal 토큰의 `tenant_type`. 없는 테넌트 → `null` |
-| `membershipStatus` | `consumer_site_memberships` 행의 상태. 행 없음 · 풀 계정이 아님 · 소비자 사이트 아님 → `null` |
+| `membershipStatus` | `consumer_site_memberships` 행의 상태. 행 없음 · 풀 계정이 아님 · 소비자 사이트 아님 → `null`. **`LOCKED`** (`TASK-BE-621`) = 그 사이트 운영자가 이 사이트에서만 잠갔다 — auth-service 는 `ACTIVE` 가 아닌 다른 값과 같이 다룬다(토큰 없음 `invalid_grant`, 동의 화면 없음). 문자열 비교라 auth-service 코드 변경은 없다 |
 | `siteRoles` | `consumer_site_roles(account, 그 사이트)` — **그 사이트 것만**, 이름 오름차순. `ACTIVE` 일 때만 채운다(그 밖엔 `[]`). 시드(`CUSTOMER`/`FAN`)는 저장하지 않으므로 여기 없다 — 발급이 합친다 |
 | `leftBy` | **`TASK-BE-619`** — `LEFT` 멤버십을 누가 만들었나: `SELF`(본인 탈퇴) · `OPERATOR`(그 사이트 운영자가 내보냄). `LEFT` 가 아니거나 작성자 기록이 없으면 `null`. auth-service 는 **`SELF` 일 때만** authorize 에서 동의 화면을 다시 띄운다([multi-tenancy.md § 5 «사이트 탈퇴 vs 계정 삭제»](../../../features/multi-tenancy.md)) — 필드가 없는 옛 account-service 는 `null` 이라 지금처럼 토큰 거절(보수 쪽) |
 
@@ -297,6 +297,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 | 이미 `ACTIVE`(재제출 · 뒤로가기 재전송) | 없음 | 없음 |
 | `LEFT`, `left_by = SELF` (**`TASK-BE-619`** — 본인이 떠남) | 그 행을 **다시 `ACTIVE`** 로(`consented_at = 지금`, `left_*` 비움) — 소유자 결정 2026-10-03 «다시 동의하면 복귀» | **없음** — 그 사이트의 `account.created` 는 처음 들어갈 때 이미 한 번 나갔다(§ 6 «사이트마다 한 번») |
 | `LEFT`, `left_by = OPERATOR` 또는 작성자 기록 없음 | 없음 — 운영자가 내보낸 멤버십은 동의로 **다시 열리지 않는다**(`TASK-BE-619`) | 없음 |
+| `LOCKED` (**`TASK-BE-621`** — 그 사이트 운영자가 잠금) | 없음 — 잠긴 멤버십은 동의로 **열리지 않는다**(해제는 그 사이트 운영자의 unlock) | 없음 |
 | 소비자 사이트 아님(B2B · 풀 테넌트 자신 · 없는 테넌트) · 정지된 사이트 · 풀 계정 아님 | 없음 | 없음 |
 
 - **멱등 — `(accountId, site)` 당 이벤트 정확히 1회** (본인 탈퇴 후 복귀도 이벤트를 다시 내지 않는다 — `TASK-BE-619`). 동시에 두 첫 동의가 오면 PK 가 충돌하고, 진 쪽 트랜잭션(멤버십 행 + 이벤트)은 통째로 롤백된 뒤 **읽기의 답**으로 200 을 준다.
@@ -305,7 +306,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 - 계정 조회는 `findById(CONSUMER_POOL, id)` 로만 — 테넌트 없는 조회 신설 없음.
 
 **Response 200 — 항상 200**, 본문은 **위 GET 과 같은 문서**(쓰기 뒤의 읽기). `membershipStatus = "ACTIVE"` 이면 그 사이트를 쓸 수 있다;
-그 밖의 값(`null` · `LEFT`, 또는 `consumerSite = false`)은 «쓰지 않았다» 는 답이다 — 오류가 아니다. 새 에러 코드 없음.
+그 밖의 값(`null` · `LEFT` · `LOCKED`, 또는 `consumerSite = false`)은 «쓰지 않았다» 는 답이다 — 오류가 아니다. 새 에러 코드 없음.
 
 **auth-service 매핑 규약** (`AccountServicePort.consentToConsumerSite`) — GET 과 같다: 200 + `consumerSite` → `ConsumerSiteMembershipLookupResult`,
 **404 포함** 그 밖의 모든 응답 · 타임아웃 · circuit-open · 읽을 수 없는 200 → `AccountServiceUnavailableException`. 멱등이므로 GET 과 같은 재시도 파이프라인을 탄다.

@@ -113,7 +113,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-621-site-operator-lock-is-site-scoped.md` — 🔵 **IN-PROGRESS** (2026-10-04 UTC) — 사이트 운영자의 잠금은 그 사이트 멤버십만(`LOCKED`, `V0033`) · 계정 전체 잠금·해제는 플랫폼 관리자(`'*'`)만 — `TASK-BE-619` 삭제 결정의 잠금판(소유자 결정 2026-10-04). 분석=Opus 5.5 / 구현 권장=Opus.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

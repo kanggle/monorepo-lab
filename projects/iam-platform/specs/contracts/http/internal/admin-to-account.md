@@ -14,12 +14,15 @@ admin-service가 운영자 명령으로 account-service에 계정 상태 변경(
 
 - **헤더 존재 + 구체 slug**: account-service 는 `findById(TenantId.of(header), accountId)` 로 조회한다. 대상 계정이 **다른 테넌트**에 있으면 tenant-scoped 조회가 empty 를 반환 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주는 403 을 절대 반환하지 않는다). 계정은 변이되지 않는다.
   🔵 **TASK-BE-616**: 헤더가 **소비자 사이트**면 그 사이트의 ACTIVE 멤버인 **풀 계정**도 찾는다([multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) «단건 표면까지»).
-  변이는 풀 계정 **하나**에 일어나므로 그 사람의 모든 소비자 사이트에 미친다(잠금 · 해제). 그 사이트의 멤버가 아닌 풀 계정 → 여전히 `404`.
+  그 사이트의 멤버(멤버십 `ACTIVE` 또는 `LOCKED` — `TASK-BE-621`)가 아닌 풀 계정 → 여전히 `404`. 🔵 616 은 «잠금 · 해제도 풀 계정 하나에» 였고, 아래 621 이 바꿨다.
+  🔴 **잠금 · 해제도 예외 — `TASK-BE-621` (소유자 결정 2026-10-04 «사이트 운영자가 회원을 잠글 때, 그 잠금은 자기 사이트에만 걸린다. 계정 전체 잠금은 플랫폼 관리자만.»)**:
+  헤더가 소비자 사이트이고 대상이 그 사이트의 **풀 멤버**면 `/lock` · `/unlock` 은 계정을 바꾸지 **않고** 그 사이트 멤버십만 `LOCKED`/`ACTIVE` 로 만든다
+  (사유와 무관 — 이름 있는 사이트 헤더로 `/lock` 을 부르는 호출자는 admin-service 뿐). 응답 `scope = SITE_MEMBERSHIP`(아래 각 엔드포인트). 그 사이트의 **자기 계정**(풀 아님)은 지금처럼 계정을 잠근다.
   🔴 **삭제는 예외 — `TASK-BE-619` (소유자 결정 2026-10-03 «사이트 운영자 삭제 권한 = 자기 사이트 멤버십만»)**: 헤더가 소비자 사이트이고 대상이 그 사이트의
   **풀 멤버**면 `/gdpr-delete` · `/delete` 는 계정을 지우지 **않고** 그 사이트 멤버십만 `LEFT`(`left_by = OPERATOR`, `left_by_actor_id = operatorId`)로 만든다.
   응답의 `scope = SITE_MEMBERSHIP` 이 그것을 말한다(아래 각 엔드포인트). 그 사이트의 **자기 계정**(풀 아님)은 지금처럼 삭제된다.
 - **헤더 부재 OR 공백 OR `'*'` (SUPER_ADMIN 플랫폼 스코프)** — 엔드포인트에 따라 둘로 갈린다:
-  - **`/lock` · `/unlock` · `/delete` (TASK-MONO-735)**: 계정 **행 자신의 테넌트**로 찾는다(`AccountRepository.findByIdResolvingTenant` — [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지) 의 문서화된 예외 2번째 사용). `accounts.id` 는 전역 유일 PK 라 결과는 최대 한 행이고 테넌트를 섞지 않는다. 어느 테넌트에도 없는 id → `404 ACCOUNT_NOT_FOUND`. `fan-platform` 계정은 결과가 이전과 같다. 🔴 이전(BE-467~MONO-735)엔 `fan-platform` 기본값이라 SUPER_ADMIN(`'*'`)과 헤더 없는 호출자는 **`fan-platform` 밖 계정을 잠그지 못했다**(2026-09-26 16차 창 실측 — `ecommerce` 계정 잠금 404).
+  - **`/lock` · `/unlock` · `/delete` (TASK-MONO-735)**: (🔵 `TASK-BE-621`: `/lock` · `/unlock` 의 이 갈래가 «계정 전체 잠금 = 플랫폼 관리자» 의 경로다 — admin-service 는 플랫폼 스코프 운영자의 잠금·해제에 활성 테넌트 대신 **항상** `'*'` 를 찍는다. 자동 잠금 · 본인 복구 해제는 헤더를 싣지 않아 이 갈래다.) 계정 **행 자신의 테넌트**로 찾는다(`AccountRepository.findByIdResolvingTenant` — [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지) 의 문서화된 예외 2번째 사용). `accounts.id` 는 전역 유일 PK 라 결과는 최대 한 행이고 테넌트를 섞지 않는다. 어느 테넌트에도 없는 id → `404 ACCOUNT_NOT_FOUND`. `fan-platform` 계정은 결과가 이전과 같다. 🔴 이전(BE-467~MONO-735)엔 `fan-platform` 기본값이라 SUPER_ADMIN(`'*'`)과 헤더 없는 호출자는 **`fan-platform` 밖 계정을 잠그지 못했다**(2026-09-26 16차 창 실측 — `ecommerce` 계정 잠금 404).
   - **`/gdpr-delete` (`TASK-BE-619`)**: `/lock` · `/unlock` · `/delete` 와 **같다** — 계정 행 자신의 테넌트로 찾고(finder 의 세 번째 소비처), **계정 자체를** 지운다
     (풀 계정이면 모든 소비자 사이트에서 — `scope = ACCOUNT`). 이것이 «풀 계정 삭제는 플랫폼 관리자» 의 경로다: admin-service 는 **플랫폼 스코프 운영자**(SUPER_ADMIN)의
     GDPR 삭제에 활성 테넌트 대신 `'*'` 를 찍는다([admin-api.md § gdpr-delete](../admin-api.md)). 619 이전엔 `fan-platform` 기본값이라 SUPER_ADMIN 의 비-fan 계정 GDPR 삭제는 404 였다.
@@ -129,11 +132,27 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
   "accountId": "string",
   "previousStatus": "ACTIVE",
   "currentStatus": "LOCKED",
-  "lockedAt": "2026-04-12T10:00:00Z"
+  "changedAt": "2026-04-12T10:00:00Z",
+  "scope": "ACCOUNT | SITE_MEMBERSHIP",
+  "siteTenantId": "string | null"
 }
 ```
 
-**Errors**: 409 `STATE_TRANSITION_INVALID` (이미 LOCKED/DELETED), 404 `ACCOUNT_NOT_FOUND` (존재하지 않거나 **cross-tenant** 대상 — `X-Tenant-Id` ≠ 계정 테넌트, BE-467)
+> 🔵 시각 필드의 실제 이름은 `changedAt` 이다(`StatusChangeResponse` — 이 문서의 옛 예시 `lockedAt` 은 구현과 달랐다. admin-service 는 그것이 없으면 자기 완료 시각을 쓴다).
+
+**`scope` (`TASK-BE-621`, 소유자 결정 2026-10-04)** — `/unlock` 도 같다:
+
+| 호출 | 대상 | 일어나는 일 | 응답 |
+|---|---|---|---|
+| `X-Tenant-Id` = 소비자 사이트 (사이트 운영자) | 그 사이트의 **풀 멤버** | 그 사이트 멤버십만 `ACTIVE → LOCKED`(`locked_at` · `locked_by_actor_id = operatorId`). 계정 · 다른 사이트 멤버십 · 그 사이트 역할 무변경. **이벤트 · `account_status_history` 없음** | `scope = SITE_MEMBERSHIP`, `previousStatus`·`currentStatus` = **멤버십** 상태, `siteTenantId` = 그 사이트 |
+| `X-Tenant-Id` = 구체 테넌트 | 그 테넌트의 **자기 계정** | 계정 잠금(기존) | `scope = ACCOUNT`, `siteTenantId = null` |
+| `X-Tenant-Id` 없음 · 공백 · `*` (플랫폼 관리자 · 자동 잠금) | 계정 행 자신의 테넌트로 찾은 계정(풀 계정 포함) | 계정 잠금 — 풀 계정이면 모든 소비자 사이트에서 | `scope = ACCOUNT` |
+
+- 사이트 범위의 멱등: 이미 `LOCKED` 인 멤버십 잠금 → 200, `previousStatus = currentStatus = LOCKED`(계정 상태 기계의 같은 상태 규칙과 같다).
+- 사이트 범위인데 **계정**이 `DELETED` → `409 STATE_TRANSITION_INVALID`.
+- 옛 account-service(필드 없음)는 `scope` 를 내지 않는다 — 호출자는 없음을 `ACCOUNT` 로 읽는다.
+
+**Errors**: 409 `STATE_TRANSITION_INVALID` (이미 DELETED · 허용되지 않는 전이), 404 `ACCOUNT_NOT_FOUND` (존재하지 않거나 **cross-tenant** 대상 — `X-Tenant-Id` ≠ 계정 테넌트, BE-467 · 그 사이트 멤버가 아닌(`LEFT` 포함) 풀 계정)
 
 **Note**: security-to-account의 lock과 같은 엔드포인트를 공유하되, `reason` 필드로 구분 (`ADMIN_LOCK` vs `AUTO_DETECT`). Idempotency-Key 네임스페이스는 다름.
 
@@ -160,11 +179,15 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
   "accountId": "string",
   "previousStatus": "LOCKED",
   "currentStatus": "ACTIVE",
-  "unlockedAt": "2026-04-12T10:00:00Z"
+  "changedAt": "2026-04-12T10:00:00Z",
+  "scope": "ACCOUNT | SITE_MEMBERSHIP",
+  "siteTenantId": "string | null"
 }
 ```
 
-**Errors**: 409 `STATE_TRANSITION_INVALID` (LOCKED가 아닌 상태), 404 `ACCOUNT_NOT_FOUND` (cross-tenant 대상 포함, BE-467)
+- **`TASK-BE-621`** — `scope` 는 `/lock` 과 같은 표. 사이트 범위 해제 = 그 사이트 멤버십 `LOCKED → ACTIVE`(잠금 기록 지움). 🔴 사이트 운영자는 **계정 전체 잠금을 풀지 못한다** — 사이트 범위 해제는 멤버십만 보므로, 멤버십이 `ACTIVE` 면 멱등 200(`ACTIVE`/`ACTIVE`)이고 계정은 `LOCKED` 그대로다. 계정 해제는 헤더 없음/`*`(플랫폼 관리자 · 본인 복구).
+
+**Errors**: 409 `STATE_TRANSITION_INVALID` (허용되지 않는 전이 — 예: `USER_RECOVERY` 로 운영자 잠금 해제), 404 `ACCOUNT_NOT_FOUND` (cross-tenant 대상 포함, BE-467)
 
 ---
 
