@@ -4,7 +4,7 @@ TASK-BE-622
 
 # Status
 
-review (2026-10-04 UTC — AC-0~4 ✅ · AC-5 🟡 통합 시험은 CI 실측 대기)
+done (2026-10-04 UTC — 4차원 검증 · PR #4146 squash `6eef35bcc`)
 
 # Title
 
@@ -67,7 +67,7 @@ iam-platform
 - [x] **AC-2 (풀 멤버)** — 사이트 `ecommerce` 백엔드가 스토어·팬 둘 다 멤버인 풀 계정에 `LOCKED` → 스토어 멤버십 `LOCKED` · 팬 `ACTIVE` · 계정 `ACTIVE` · `account.locked` 0. `ACTIVE` → 멤버십 해제. `DELETED` → 스토어 멤버십 `LEFT OPERATOR` · 계정·팬 그대로.
 - [x] **AC-3 (대조군 — 사이트 자기 계정)** — 셀러 운영 계정(풀 아님)에 같은 호출 → 지금처럼 **계정** 상태가 바뀐다(`scope = ACCOUNT`) — product-service 셀러 정지·폐점 흐름이 그대로.
 - [x] **AC-4 (넘지 못함)** — 경로 테넌트 `t` 의 멤버십이 없는 풀 계정에 대한 호출은 다른 사이트의 멤버십이나 계정을 바꾸지 않는다(계약이 정하는 오류).
-- [ ] **AC-5 (시험 · bite)** — 단위 + 슬라이스 + 통합(Testcontainers: 풀 멤버 사이트 범위 · 셀러 운영 계정 대조군). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록. 로컬에서 못 돈 통합은 ⚪ 로 적고 CI 로그에서 실제 실행을 확인해 닫는다.
+- [x] **AC-5 (시험 · bite)** — 단위 + 슬라이스 + 통합(Testcontainers: 풀 멤버 사이트 범위 · 셀러 운영 계정 대조군). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록. 로컬에서 못 돈 통합은 ⚪ 로 적고 CI 로그에서 실제 실행을 확인해 닫는다.
 
 # Related Specs
 
@@ -219,3 +219,14 @@ CI 런 `37194401941` 잡 `111413168319` `Integration (iam B)`: tests=269 failure
 2. **상태 변경** — `ProvisionStatusChangeUseCase` 계정 갈래의 `historyRepository.save` 한 번(`ACTIVE→LOCKED`). `git diff origin/main` 에서 이력 쓰기·이벤트 발행 줄의 추가/삭제 0 — 계정 갈래는 main 과 같은 한 행을 쓴다.
 
 시험이 생성 행을 세지 못했다(대조군 계정을 시험 안에서 `POST /internal/tenants/ecommerce/accounts` 로 만들었기 때문). 고침: 개수 2 + 각 행을 `from>to` 로 핀(`ACTIVE>ACTIVE` · `ACTIVE>LOCKED`) + `LOCKED` 행의 테넌트 `ecommerce`. 위 § 시험 표의 «이력 1» 은 «이력 2(생성 1 + 잠금 1)» 로 읽는다. AC-5 는 여전히 🟡 — 다음 CI 런의 실행 줄로 닫는다.
+
+# 닫기 (2026-10-04 UTC) — 4차원 검증
+
+| 차원 | 판정 |
+|---|---|
+| (a) | `gh pr view 4146` → `MERGED`, `6eef35bcc` |
+| (b) | `origin/main` tip 이 `6eef35bcc` |
+| (c) | #4146 `statusCheckRollup` 68 개 · FAILURE 0 (첫 런 `37194401941` 의 iam B 실패는 § CORRECTION 의 판정 (a) — 기대값 오류, 테스트만 고친 뒤 재실행) |
+| (d) | AC-0~4 `[x]`(구현 기록). **AC-5** — 단위 · 슬라이스 로컬 rc=0 · bite(사이트 갈래 끔 → 예측한 5칸 정확히 실패), 그리고 ⚪ 이던 통합: PR 런 `37195190173` `Integration (iam B, Testcontainers)` 잡 `111415561162` 로그에 `TASK-BE-622 — 프로비저닝 상태 PATCH: 풀 멤버는 그 사이트 멤버십만 · 셀러 운영 계정은 계정` 3칸(AC-2 · AC-3 대조군 · AC-4) 실행 · `TEST-SUMMARY lane=integration tests=307 failures=0 errors=0 skipped=0` |
+
+🔵 데모 반영: 다음 AMI 재굽기. 지금 이 경로를 부르는 유일한 호출자(셀러 정지·폐점)는 셀러 운영 계정을 겨누므로 데모 동작은 바뀌지 않는다(AC-3 대조군).
