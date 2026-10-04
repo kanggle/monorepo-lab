@@ -363,7 +363,71 @@ class TenantProvisioningControllerSliceTest {
                 .andExpect(jsonPath("$.tenantId").value(TENANT_ID))
                 .andExpect(jsonPath("$.previousStatus").value("ACTIVE"))
                 .andExpect(jsonPath("$.currentStatus").value("LOCKED"))
-                .andExpect(jsonPath("$.changedAt").exists());
+                .andExpect(jsonPath("$.changedAt").exists())
+                .andExpect(jsonPath("$.scope").value("ACCOUNT"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-622 — PATCH status 풀 멤버(사이트 범위) → 200 · scope=SITE_MEMBERSHIP · 상태 = 멤버십")
+    void changeStatus_poolMemberSiteScope_returnsScope() throws Exception {
+        given(provisionStatusChangeUseCase.execute(eq("ecommerce"), eq(ACCOUNT_ID),
+                eq(AccountStatus.DELETED), eq("sys-store")))
+                .willReturn(ProvisionedStatusChangeResult.siteMembership(ACCOUNT_ID, "ecommerce",
+                        "ACTIVE", "LEFT", NOW));
+
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/status",
+                        "ecommerce", ACCOUNT_ID)
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "DELETED",
+                                  "operatorId": "sys-store"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value("ecommerce"))
+                .andExpect(jsonPath("$.previousStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.currentStatus").value("LEFT"))
+                .andExpect(jsonPath("$.scope").value("SITE_MEMBERSHIP"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-622 (계약 정정) — PATCH status 의 reason 은 읽지 않는다: 보내도 200, 유스케이스 인자에 없다")
+    void changeStatus_reasonFieldIgnored() throws Exception {
+        given(provisionStatusChangeUseCase.execute(eq(TENANT_ID), eq(ACCOUNT_ID),
+                eq(AccountStatus.LOCKED), eq("sys-wms-backend")))
+                .willReturn(new ProvisionedStatusChangeResult(ACCOUNT_ID, TENANT_ID, "ACTIVE", "LOCKED", NOW));
+
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/status",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "LOCKED",
+                                  "reason": "ADMIN_LOCK",
+                                  "operatorId": "sys-wms-backend"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ACCOUNT"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-622 (계약 정정) — PATCH status 열거형 아닌 값 → 400 VALIDATION_ERROR")
+    void changeStatus_nonEnumStatus_returns400() throws Exception {
+        mockMvc.perform(patch("/internal/tenants/{tenantId}/accounts/{accountId}/status",
+                        TENANT_ID, ACCOUNT_ID)
+                        .header("X-Tenant-Id", TENANT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "DEACTIVATED"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test

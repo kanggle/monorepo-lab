@@ -4,7 +4,7 @@ TASK-BE-622
 
 # Status
 
-in-progress (2026-10-04 UTC)
+review (2026-10-04 UTC — AC-0~4 ✅ · AC-5 🟡 통합 시험은 CI 실측 대기)
 
 # Title
 
@@ -62,11 +62,11 @@ iam-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (전수 먼저)** — 이 경로의 호출자 전부를 `main` 에서 다시 센다(621 의 표 #4 를 물려받지 않는다): 누가 부르나 · 어떤 상태 값을 보내나 · 대상이 풀 계정일 수 있나. 프로비저닝 계약 파일과 지금 허용 상태 값 목록을 적는다. 풀 계정을 겨누는 호출자가 이미 있으면 그 호출자의 의도(정말 사이트 범위인가)를 적고, 의도가 계정 전체라면 STOP — 소유자 결정.
-- [ ] **AC-1 (계약 먼저)** — 계약 문서가 코드보다 먼저(같은 PR, 앞 커밋) 풀 멤버의 사이트 범위 처리 · 응답 `scope` 를 적는다.
-- [ ] **AC-2 (풀 멤버)** — 사이트 `ecommerce` 백엔드가 스토어·팬 둘 다 멤버인 풀 계정에 `LOCKED` → 스토어 멤버십 `LOCKED` · 팬 `ACTIVE` · 계정 `ACTIVE` · `account.locked` 0. `ACTIVE` → 멤버십 해제. `DELETED` → 스토어 멤버십 `LEFT OPERATOR` · 계정·팬 그대로.
-- [ ] **AC-3 (대조군 — 사이트 자기 계정)** — 셀러 운영 계정(풀 아님)에 같은 호출 → 지금처럼 **계정** 상태가 바뀐다(`scope = ACCOUNT`) — product-service 셀러 정지·폐점 흐름이 그대로.
-- [ ] **AC-4 (넘지 못함)** — 경로 테넌트 `t` 의 멤버십이 없는 풀 계정에 대한 호출은 다른 사이트의 멤버십이나 계정을 바꾸지 않는다(계약이 정하는 오류).
+- [x] **AC-0 (전수 먼저)** — 이 경로의 호출자 전부를 `main` 에서 다시 센다(621 의 표 #4 를 물려받지 않는다): 누가 부르나 · 어떤 상태 값을 보내나 · 대상이 풀 계정일 수 있나. 프로비저닝 계약 파일과 지금 허용 상태 값 목록을 적는다. 풀 계정을 겨누는 호출자가 이미 있으면 그 호출자의 의도(정말 사이트 범위인가)를 적고, 의도가 계정 전체라면 STOP — 소유자 결정.
+- [x] **AC-1 (계약 먼저)** — 계약 문서가 코드보다 먼저(같은 PR, 앞 커밋) 풀 멤버의 사이트 범위 처리 · 응답 `scope` 를 적는다.
+- [x] **AC-2 (풀 멤버)** — 사이트 `ecommerce` 백엔드가 스토어·팬 둘 다 멤버인 풀 계정에 `LOCKED` → 스토어 멤버십 `LOCKED` · 팬 `ACTIVE` · 계정 `ACTIVE` · `account.locked` 0. `ACTIVE` → 멤버십 해제. `DELETED` → 스토어 멤버십 `LEFT OPERATOR` · 계정·팬 그대로.
+- [x] **AC-3 (대조군 — 사이트 자기 계정)** — 셀러 운영 계정(풀 아님)에 같은 호출 → 지금처럼 **계정** 상태가 바뀐다(`scope = ACCOUNT`) — product-service 셀러 정지·폐점 흐름이 그대로.
+- [x] **AC-4 (넘지 못함)** — 경로 테넌트 `t` 의 멤버십이 없는 풀 계정에 대한 호출은 다른 사이트의 멤버십이나 계정을 바꾸지 않는다(계약이 정하는 오류).
 - [ ] **AC-5 (시험 · bite)** — 단위 + 슬라이스 + 통합(Testcontainers: 풀 멤버 사이트 범위 · 셀러 운영 계정 대조군). 사이트 갈래를 끄면 정확히 그 칸이 빨개지는 bite 를 기록. 로컬에서 못 돈 통합은 ⚪ 로 적고 CI 로그에서 실제 실행을 확인해 닫는다.
 
 # Related Specs
@@ -147,3 +147,63 @@ iam-platform
 | D-3 | `LEFT` 멤버에 `DELETED` | 200 멱등 — 풀 계정 + 그 사이트 `LEFT` 행이 있을 때만, 그 밖은 404 | 티켓 Edge Case 1 «`DELETED` 는 멱등». 기계 호출자는 fail-soft 재시도를 한다(product-service 처럼) — 두 번째 호출이 404 면 «이미 지워졌다» 와 «없다» 를 가를 수 없다. 조회는 여전히 경로 사이트의 멤버십 행으로만(테넌트 없는 조회 아님) |
 | D-4 | `LEFT` 멤버에 `LOCKED`/`ACTIVE` | 404 — 무변경 | 621 `/lock`·`/unlock` 과 같은 답. «되살리지 않는다» 를 200 으로 답하면 «그 사이트에서 잠겼다/풀렸다» 로 읽힌다 |
 | D-5 | 응답 | `scope`(`ACCOUNT` \| `SITE_MEMBERSHIP`) 한 필드 추가. 사이트는 이미 `tenantId`(경로) 로 실려 있어 `siteTenantId` 는 더하지 않는다 | 621 `/lock` 과 같은 어휘. 없는 필드(옛 account-service)는 `ACCOUNT` 로 읽는다 |
+
+---
+
+# 구현 기록 (2026-10-04 UTC)
+
+> 분석=Opus 5.5 / 구현=Opus 5.5. 한 PR, 브랜치 `feat/be-622-provisioning-site-scope`. 커밋 1 = 티켓(AC-0 전수 · 설계) + 계약(코드 0) · 커밋 2 = 코드 + 시험 + 티켓 review.
+
+## 바꾼 것
+
+**계약 (커밋 1 — 코드보다 먼저)**: `account-internal-provisioning.md` § PATCH status(응답 `scope` · § Consumer-pool member 표 · `reason` 행 정정 · Outbox 표) · `multi-tenancy.md` § 5(«사이트 잠금 vs 계정 잠금» 표에 «사이트 백엔드» 행 · «쓰기의 범위» 문장 · 621 의 «아직 계정 전체다» 줄 교체) · account-service `data-model.md`(`locked_by_actor_id` · `left_by_actor_id` 에 622 행위자) · ecommerce `product-to-account.md` § 4(영향 없음 메모 — 셀러 운영 계정은 사이트 자기 계정).
+
+**account-service (커밋 2)** — 스키마 변경 없음(V0032 · V0033 재사용, 새 마이그레이션 0).
+- `ProvisionStatusChangeUseCase` — «찾은 계정 = `consumer-pool` ∧ 경로 ≠ `consumer-pool`» 이면 사이트 갈래: `LOCKED`/`ACTIVE`/그 밖 → `SiteMembershipLockUseCase`(621, 사유 `OPERATOR_PROVISIONING_STATUS_CHANGE`), `DELETED` → `LeaveConsumerSiteUseCase`(619, `OPERATOR`). 조회 실패 + `DELETED` + 풀 계정 + 그 사이트 `LEFT` 행 → 200 멱등(D-3). 계정 갈래는 그대로.
+- `ProvisionedStatusChangeResult` / `ProvisionedStatusChangeResponse` + `scope`(5-인자 생성자 유지 = `ACCOUNT`, `siteMembership(…)` 팩토리).
+- 컨트롤러 무변경.
+
+## 시험
+
+| 새/바뀐 시험 | 무엇을 문다 |
+|---|---|
+| `ProvisionStatusChangeUseCaseTest` 12 (신설 — 621 `SiteMembershipLockUseCase` · 619 `LeaveConsumerSiteUseCase` 는 **실물**, 저장소만 mock) | AC-2 `LOCKED`·`ACTIVE`·`DELETED`(멤버십만 · 계정 저장/이력/이벤트 0) · operatorId 없음 → 행위자 = 경로 테넌트 · Edge 2(계정 전체 잠금은 안 풀림) · `DORMANT` 409 · **AC-3 대조군**(셀러 운영 계정 → 계정 LOCKED · 이력 행 `ecommerce` · `account.locked` · 멤버십 0) · AC-4 비멤버 `LOCKED`/`DELETED` 404 · Edge 1 `LEFT` 에 `DELETED` 200 멱등(OPERATOR 재기록) / `LOCKED` 404 · 플래그 OFF |
+| `PoolMemberSiteLookupTest` (16, 1칸 뒤집음) | `provisionStatusChange_poolMember_historyOnPool`(경로 `ecommerce` → 계정 전체 — **이 티켓이 없앤 동작을 핀으로 박던 칸**)을 `provisionStatusChange_poolPath_historyOnPool`(경로 `consumer-pool` → 계정 전체 · 이력 행 `consumer-pool` · 사이트 갈래 0)로 |
+| `TenantProvisioningControllerSliceTest` +3 (24) | 응답 `scope=ACCOUNT` · `SITE_MEMBERSHIP` 직렬화 · `reason` 보내도 200(계약 정정의 근거) · 열거형 아닌 `status` → 400 `VALIDATION_ERROR` |
+| `PoolMemberSiteSurfacesIntegrationTest` (1칸 뒤집음) | `statusChange_nonMemberRefused_memberLocksTheOneAccount` → `…memberLocksTheSiteOnly`: 팬(비멤버) 404 그대로 · 스토어 200 → `scope=SITE_MEMBERSHIP` · 계정 ACTIVE · 스토어 멤버십 LOCKED · 이력 행 0 |
+| `ProvisionStatusSiteScopeIntegrationTest` 3 (신설, `AbstractConsumerPoolIntegrationTest` 하위 — 공유 컨텍스트) | **실 MySQL**: AC-2 스토어 백엔드 `LOCKED` → 스토어만 · 팬 ACTIVE · `ACTIVE` 해제 · `DELETED` → `LEFT OPERATOR`(행위자) · 재시도 `DELETED` 멱등 · 이후 `LOCKED` 404 · 계정/이력/이벤트 0 / **AC-3** 셀러 운영 계정(`POST /internal/tenants/ecommerce/accounts` 로 만든 사이트 계정) `LOCKED` → 계정 LOCKED · `scope=ACCOUNT` · `account.locked` 1 · 이력 1 / AC-4 팬 백엔드 → 스토어만 멤버인 풀 계정 404 ×2 · 무변경 |
+
+## 게이트 (각각 단독 · `cmd > log 2>&1; echo rc=$?`)
+
+| 게이트 | rc | 비고 |
+|---|---|---|
+| `:projects:iam-platform:apps:account-service:test` | 0 | test-results: `ProvisionStatusChangeUseCaseTest` 12/0 실패 · `PoolMemberSiteLookupTest` 16/0 · `TenantProvisioningControllerSliceTest` 24/0 |
+| `:projects:iam-platform:apps:account-service:check` | 0 | `check` = `test`(+ 컴파일). 새 IT 클래스는 컴파일됨(`build/classes/java/test/…/ProvisionStatusSiteScopeIntegrationTest.class`) |
+| `@Tag("integration")` (`ProvisionStatusSiteScopeIntegrationTest` 3 · 뒤집은 `PoolMemberSiteSurfacesIntegrationTest` 칸) | ⚪ 로컬 미실행 | Docker 없음 — **CI 첫 실측**. 통과했다고 적지 않는다 |
+| product-service | — | 코드 변경 없음(계약 메모만) → 돌리지 않음 |
+
+## bite (되돌린 뒤 `test` 재실행 rc=0 · `false &&` / `true ||` 잔존 grep 0)
+
+같은 5 클래스(`ProvisionStatusChangeUseCaseTest` · `PoolMemberSiteLookupTest` · `TenantProvisioningControllerSliceTest` · `SiteMembershipLockUseCaseTest` · `LeaveConsumerSiteUseCaseTest`, 66칸)로.
+
+| 끈 것 | 결과 |
+|---|---|
+| (A) 사이트 갈래 — `if (false && account.getTenantId().isConsumerPool() && …)` | 66 중 **정확히 5** — AC-2 `LOCKED` · `ACTIVE` · `DELETED` · Edge 2 · operatorId 없음. 예측과 같다. 🔵 `DORMANT` 409 칸은 초록 그대로 — 계정 상태 기계도 그 사유로 `→DORMANT` 를 409 하므로 갈래를 끄든 안 끄든 같은 답(이 칸은 갈래가 아니라 «409 를 지킨다» 를 문다). AC-3 대조군 · AC-4 · Edge 1 은 갈래 밖이라 초록 — 맞다 |
+| (B) `LEFT` 멤버 `DELETED` 멱등 — `if (true \|\| …)` | 66 중 2 — Edge 1 `DELETED` 멱등(동작) + AC-4 `DELETED` 비멤버(🔵 **동작이 아니라 STRICT_STUBS «unnecessary stubbing»** — 그 칸이 스텁한 멤버십 읽기가 쓰이지 않게 됐다; 판정 404 자체는 그대로). 동작으로 무는 칸은 1 |
+
+## AC
+
+| AC | 판정 | 증거 |
+|---|---|---|
+| AC-0 | ✅ | 위 § AC-0 — 호출자 1(product-service, `LOCKED`, 셀러 운영 계정 = 사이트 자기 계정). 풀 계정을 겨누는 호출자 0 → STOP 아님. 계약 drift(`reason`) 기록 |
+| AC-1 | ✅ | 커밋 1 = 티켓 + 계약(코드 0), 코드는 커밋 2 |
+| AC-2 | ✅ 단위·슬라이스 / ⚪ 통합은 CI | `ProvisionStatusChangeUseCaseTest` AC-2 칸 셋 · IT `storeBackend_poolMember_changesTheStoreMembershipOnly` |
+| AC-3 | ✅ 단위 / ⚪ 통합은 CI | `locked_sellerOperatorAccount_locksTheAccount` · IT `storeBackend_sellerOperatorAccount_locksTheAccount`. product-service 코드 무변경 |
+| AC-4 | ✅ 단위 / ⚪ 통합은 CI | 비멤버 `LOCKED`/`DELETED` 404 · IT `fanBackend_nonMemberPoolAccount_notFound`(스토어 멤버십·계정 무변경) |
+| AC-5 | 🟡 | 단위·슬라이스 ✅ · bite (A) 5칸 · (B) 1칸(+스텁 1) ✅ · 통합 ⚪ — **CI `Integration (iam …)` 잡에서 `ProvisionStatusSiteScopeIntegrationTest` 3칸과 `PoolMemberSiteSurfacesIntegrationTest#statusChange_nonMemberRefused_memberLocksTheSiteOnly` 가 실제로 돈 줄을 확인해야 닫힌다** |
+
+## 배포 · 남은 것
+
+- account-service 단독(다른 서비스 코드 변경 없음, 마이그레이션 없음). 응답 필드 추가는 하위 호환(유일한 호출자는 본문을 읽지 않는다).
+- 🔵 데모 반영은 다음 AMI 재굽기 뒤(백엔드는 구워진 클론에서 돈다). 지금 이 갈래를 타는 운영 호출은 없다(AC-0) — 재굽기에 넣는 급함은 없다.
+- 🔵 관찰(고치지 않음): 계정 갈래의 `DELETED`(사이트 자기 계정)는 `deleted_at` 은 찍지만(`Account#changeStatus`) `account.deleted` 이벤트는 내지 않는다 — `account.status.changed` 만(`AccountStatusEvents`). `/delete` 경로의 `applyDelete`(유예 기간 + `account.deleted`)와 다르다. 이 티켓 밖 — 지금 호출자는 `DELETED` 를 보내지 않는다.

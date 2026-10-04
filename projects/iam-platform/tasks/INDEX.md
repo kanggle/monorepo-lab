@@ -113,11 +113,12 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-622-provisioning-status-patch-is-site-scoped-for-pool-members.md` — **내부 프로비저닝 상태 변경도 풀 멤버에게는 그 사이트 멤버십만** (IN-PROGRESS, 2026-10-04 UTC · 소유자 결정 «별도 티켓으로 적용» — `TASK-BE-621` 결정 2). `LOCKED`/`ACTIVE` → 멤버십 · `DELETED` → `LEFT OPERATOR` · 셀러 운영 계정(풀 아님)은 대조군으로 계정 그대로. 분석=Opus 5.5 / 구현=Opus 5.5.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+- `TASK-BE-622-provisioning-status-patch-is-site-scoped-for-pool-members.md` — 🟡 **REVIEW (2026-10-04 UTC)** — 내부 프로비저닝 상태 변경도 풀 멤버에게는 그 사이트 멤버십만(`LOCKED`/`ACTIVE` → 멤버십 · `DELETED` → `LEFT OPERATOR`, 이력·이벤트 없음, 응답 `scope`). AC-0 전수: 호출자 1(product-service 셀러 정지·폐점 → 셀러 운영 계정 = 사이트 자기 계정, 풀 아님) → 동작 무변경 대조군(AC-3). 스키마 변경 없음. 로컬 account `test`·`check` rc=0 · bite (A) 5칸. 🟡 AC-5 통합 3칸은 CI 실측 대기. 데모 반영은 다음 재굽기.
 - `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — 🟡 **REVIEW — AC-0·1 완료, AC-2 는 재굽기 뒤 창 대기** (2026-09-29 UTC). 소셜 신원 조회를 **시작 client 의 테넌트로 한정** — 전역 `findByProviderAndProviderUserId` 를 없애고 `(tenant_id, provider, provider_user_id)` 조회로(unique 키와 같은 모양). 미스 → 그 테넌트에서 가입. 스펙 개정 먼저(«테넌트마다 하나»). `TASK-BE-602` 후속 ① 경쟁 조건 소멸. 🔴 AC-0 ② «새 계정» 은 그 테넌트에 같은 이메일 계정이 없을 때만 — 있으면 기존 auto-link(티켓 § 전제 정정). 로컬 auth `test` rc=0 · bite 2종 → 새 셀 빨강. 실 MySQL 슬라이스는 CI.
 
 
