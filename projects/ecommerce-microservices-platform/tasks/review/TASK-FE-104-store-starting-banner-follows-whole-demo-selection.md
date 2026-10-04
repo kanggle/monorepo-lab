@@ -4,7 +4,7 @@ TASK-FE-104
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -24,7 +24,7 @@ ecommerce-microservices-platform
 
 > **분석 모델:** Opus 5.5 / **구현 권장:** Opus — 결정은 «무엇이 스토어의 준비인가» 이고, 그 신호를 읽는 해석기(`infra/demo/backend-resolver`)는 **세 앱이 공유**한다. 어느 층을 고칠지가 범위를 바꾼다(AC-0). 앱 안에서 끝나면 Sonnet 으로 충분하다.
 >
-> ⏳ **소유자 우선순위 결정 대기** — 착수 순서와 AC-0 의 결정은 소유자 몫이다. 프런트(Vercel)만 바뀌면 재굽기 없이 배포된다. 🔴 해석기나 Lambda `/status` 를 바꾸는 갈래는 루트 티켓으로 다시 기안한다(아래 § 범위가 바뀌는 경우).
+> 🔵 **소유자 결정(2026-10-04 UTC): 착수 · AC-0 ③ = (나).** (원문: 소유자 우선순위 결정 대기 — 착수 순서와 AC-0 의 결정은 소유자 몫이다.) 프런트(Vercel)만 바뀌면 재굽기 없이 배포된다. 🔴 해석기나 Lambda `/status` 를 바꾸는 갈래는 루트 티켓으로 다시 기안한다(아래 § 범위가 바뀌는 경우).
 
 ---
 
@@ -58,9 +58,9 @@ ecommerce-microservices-platform
 # Acceptance Criteria
 
 - [x] **AC-0 (측정 + 소유자 결정)** — ① web-store `widgets/demo-notice/DemoBackendNoticeClient.tsx`·console-web `widgets/demo-notice/DemoBackendNotice.tsx`·fan-platform-web `widgets/demo-notice/DemoBackendNotice.tsx` 가 «켜지는 중» 을 내는 신호의 출처를 file:line 으로 적는다(전부 공유 해석기의 `starting` 인지). ② 해석기가 묶음별 상태를 줄 수 있는지(`infra/demo/backend-resolver/src/index.ts` 가 `/bundles` 를 읽는가) 적는다. ③ 소유자에게 묻는다: (가) 스토어 배너는 **스토어 묶음**만 따른다 (나) 지금처럼 **선택 전체**를 따른다(의도 — 문구/주석만 보강). 답을 원문 그대로 이 파일에 적는다.
-- [ ] **AC-1** — (가) 이면: 스토어 묶음이 ready 이고 다른 선택 묶음이 booting 인 상태 → web-store 에 «켜지는 중» 배너 **없음**. 스토어 묶음이 booting → 배너 있음. 둘 다 렌더된 DOM 단언. (나) 이면: 배너 문구나 주석이 «선택한 묶음 전체» 기준임을 밝히고 그 이유를 적는다.
-- [ ] **AC-2 (대조군)** — `unavailable`(꺼짐) · `running` + 전체 ready · `not-demo` 의 기존 화면이 그대로다(`DemoBackendNotice.test.tsx` 기존 칸 초록).
-- [ ] **AC-3** — bite: 새 판정을 «선택 전체» 로 되돌리면 AC-1 의 칸만 빨강.
+- [x] **AC-1** — (가) 이면: 스토어 묶음이 ready 이고 다른 선택 묶음이 booting 인 상태 → web-store 에 «켜지는 중» 배너 **없음**. 스토어 묶음이 booting → 배너 있음. 둘 다 렌더된 DOM 단언. (나) 이면: 배너 문구나 주석이 «선택한 묶음 전체» 기준임을 밝히고 그 이유를 적는다.
+- [x] **AC-2 (대조군)** — `unavailable`(꺼짐) · `running` + 전체 ready · `not-demo` 의 기존 화면이 그대로다(`DemoBackendNotice.test.tsx` 기존 칸 초록).
+- [x] **AC-3** — bite: 새 판정을 «선택 전체» 로 되돌리면 AC-1 의 칸만 빨강.
 - [ ] **AC-4 (라이브, ⚪)** — 다음 데모 창: 스토어가 ready 인 동안 scm 묶음 하나를 내렸다 올려도 web-store 배너가 안 뜬다(또는 (나) 의 새 문구가 뜬다).
 
 # Related Specs
@@ -130,6 +130,8 @@ ecommerce-microservices-platform
 - `__tests__/DemoBackendNotice.test.tsx` — 새 칸 «켜지는 중 배너는 «선택한 화면 일부» 라고 말한다»: 새 문장 · «이 스토어는 이미 준비됐을 수 있지만» · 옛 문장 **없음** · «장바구니» 없음 · «로그인·주문» 있음. 기존 실행 비교 칸·«꺼져 있어가 아니다» 칸은 두 문구 공통인 «켜지는 중입니다» 만 단언하도록 좁혔다(문장 전체는 새 칸 하나가 고정 — bite 가 한 칸에만 떨어지게).
 - **bite (AC-3)** — 시험만 담은 커밋 `4a84365de`(문구는 옛것)를 먼저 푸시했다: PR #4155 run `37223031001` job `111497049132` → web-store **`1 failed | 992 passed`**, 실패 칸 = 새 FE-104 칸 하나(`:185`, 새 문장 단언). 같은 파일 나머지 10칸 · fan(7)·console 스위트 초록. 문구 수정은 그 다음 커밋이다.
 - 로컬: `npx tsc --noEmit` rc=0 · `pnpm lint` rc=0(«No ESLint warnings or errors»).
+- **수정 뒤 CI**: run `37223282382` job `111497816983` — web-store **`130 passed` 파일 / `993 passed`**(`DemoBackendNotice.test.tsx` 11칸 전부), fan·console 스위트 초록, PR 체크 17 pass · 50 skipping · fail 0.
+- AC 판정(동사 기준): **AC-1** (나) 갈래 — «배너 문구나 주석이 «선택한 묶음 전체» 기준임을 밝히고 그 이유를 적는다» → 문구(«선택한 데모 화면 중 일부») + 주석(09-15 결정 ⓑ · 이번 결정 (나)) ✅. **AC-2** — `unavailable`·`running`·`not-demo`·탐침 전·탐침 실패 기존 칸 초록(같은 파일 11칸) ✅. **AC-3** — 새 판정 대신 (나)에서는 «옛 문장으로 되돌리면 AC-1 칸만 빨강» 이 그 등가물이고, 위 bite 가 그것이다 ✅. ⚪ **AC-4** 라이브 — 다음 데모 창.
 
 ## Edge Case «배너와 다른 동작이 엇갈린다»
 

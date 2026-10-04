@@ -82,10 +82,12 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-- `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — web-store «켜지는 중» 배너가 **데모 선택 전체**(`/status` `selection_ready`)를 따라, 스토어 묶음이 ready 인데도 콘솔 애드온 `console-scm` 재기동(20차 창) 중에 떴다. AC-0: 세 앱 모두 공유 해석기의 `starting`(= `selection_ready === false`)을 쓰고, 해석기는 `/bundles` 를 안 읽는다. 이 동작은 09-15 소유자 결정 ⓑ의 알려진 대가다. 🔵 **소유자 결정 (나)(2026-10-04)**: 기준 유지 + 문구를 판정이 아는 것(«선택한 데모 화면 중 일부»)으로 바로잡는다. 분석=Opus 5.5 / 구현=Opus.
+_(없음)_
 
 
 ## review
+
+- `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — 🟡 **REVIEW** — web-store «켜지는 중» 배너가 **데모 선택 전체**(`/status` `selection_ready`)를 따라, 스토어 묶음이 ready 인데도 콘솔 애드온 `console-scm` 재기동(20차 창) 중에 떴다. AC-0: 세 앱 모두 공유 해석기의 `starting`(= `selection_ready === false`)을 쓰고, 해석기는 `/bundles` 를 안 읽는다. 이 동작은 09-15 소유자 결정 ⓑ의 알려진 대가다. 🔵 **소유자 결정 (나)(2026-10-04)**: 기준은 유지하고, 문구를 판정이 아는 것(«선택한 데모 화면 중 일부가 아직 켜지는 중 · 이 스토어는 이미 준비됐을 수 있지만 …»)으로 바로잡았다. «장바구니» 도 뺐다(FE-102/103). bite = 시험만 담은 커밋에서 CI web-store `1 failed | 992 passed`(새 칸만) → 수정 뒤 `993 passed`. ⚪ AC-4 라이브. console·fan 문장은 그대로이고, 맞출지는 각 프로젝트 티켓이 정한다. 분석=Opus 5.5 / 구현=Opus.
 
 _(없음)_
 
