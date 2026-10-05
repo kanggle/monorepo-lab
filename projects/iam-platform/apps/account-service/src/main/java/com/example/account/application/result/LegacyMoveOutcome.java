@@ -9,7 +9,7 @@ public enum LegacyMoveOutcome {
     MOVED,
     /** A stored {@code SELLER} role on the site — moved in TASK-MONO-745's step. */
     SELLER,
-    /** The same email has an account on another consumer site — TASK-MONO-743 (the person links them). */
+    /** The same email has an account on another consumer site — left in place (linking, TASK-MONO-743, was closed unbuilt on 2026-10-06). */
     TWO_SITE,
     /** The same email already has a pool account — § 2 coexistence; not papered over by moving. */
     POOL_EMAIL_EXISTS,
