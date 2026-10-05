@@ -15,6 +15,7 @@ import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -186,7 +187,15 @@ public class SocialLoginBrowserController {
                                   HttpServletRequest request,
                                   HttpServletResponse response) {
         Map<String, Object> details = new HashMap<>();
-        details.put(PrincipalDetailKeys.TENANT_ID, resolution.tenantId());
+        // TASK-BE-617: a consumer-pool account becomes a POOL principal — the shape the form login
+        // builds for a pool credential (details tenant_id = consumer-pool). The issuer, the authorize
+        // gate and refresh then map it onto the requesting site by one rule (AuthorizationSessionTenant):
+        // tenant_id = that site, roles = that site's, consent screen for a site not yet joined. The
+        // tenant_type is the client's (a pool account only resolves on a consumer site — B2C_CONSUMER,
+        // the pool tenant's own type). Every other account: the client tenant, unchanged.
+        details.put(PrincipalDetailKeys.TENANT_ID, login.poolAccount()
+                ? TenantContext.CONSUMER_POOL_TENANT_ID
+                : resolution.tenantId());
         details.put(PrincipalDetailKeys.TENANT_TYPE, resolution.tenantType());
         details.put(PrincipalDetailKeys.ACCOUNT_ID, login.accountId());
         // TASK-BE-577: the social path must publish the email too, or a social login
@@ -220,8 +229,8 @@ public class SocialLoginBrowserController {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
 
-        log.debug("social login session established for account_id={} tenant_id={} (newAccount={})",
-                login.accountId(), resolution.tenantId(), login.isNewAccount());
+        log.debug("social login session established for account_id={} tenant_id={} (newAccount={}, pool={})",
+                login.accountId(), resolution.tenantId(), login.isNewAccount(), login.poolAccount());
     }
 
     /**

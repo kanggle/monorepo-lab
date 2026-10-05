@@ -67,6 +67,10 @@ OAuth/OIDC 외부 IdP(예: Google, Apple, Naver, Kakao)와 IAM 계정의 연결
 관계. 동일 사용자가 다수 provider 를 연결 가능. V0005에서 신설,
 V0007 (TASK-BE-229)에서 `tenant_id` 컬럼 + 인덱스 swap.
 
+**소비자 계정 풀 (`TASK-BE-617`)** — 풀 계정의 소셜 신원은 `tenant_id = 'consumer-pool'` 행이다. 스키마 변경 없음(`(tenant_id, provider, provider_user_id)` UNIQUE 가
+풀 안에서 그대로). 소비자 사이트 client 의 소셜 로그인은 이 행을 **먼저** 찾고, 없으면 client 테넌트의 행(078 이전 사이트별 신원)을 찾는다. 🔴 행의
+`tenant_id` 는 저장값이다 — 토큰의 `tenant_id` 는 요청한 사이트다. 정본: [oauth-social-login.md § 계정 연결 전략](../../features/oauth-social-login.md#계정-연결-전략).
+
 | 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
 |---|---|---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | — |

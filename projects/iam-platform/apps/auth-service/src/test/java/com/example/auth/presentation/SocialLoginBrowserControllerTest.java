@@ -140,6 +140,30 @@ class SocialLoginBrowserControllerTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-617: a consumer-pool account → POOL principal (details tenant_id=consumer-pool), "
+            + "the shape the form login builds — the issuer maps it onto the requesting site")
+    void callback_poolAccount_establishesPoolPrincipal() {
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution(
+                        "fan-platform", "B2C_CONSUMER",
+                        "http://iam.local/oauth2/authorize?client_id=demo-spa-client"));
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform")))
+                .thenReturn(new BrowserLoginResolution("acc-pool", "fan@example.com", true, true));
+
+        controller().socialLoginCallback("google", "code-1", "state-1",
+                callbackRequest(), new MockHttpServletResponse());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> details =
+                (Map<String, Object>) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        assertThat(details).isInstanceOf(java.util.HashMap.class)
+                .containsEntry("tenant_id", "consumer-pool")
+                .containsEntry("tenant_type", "B2C_CONSUMER")
+                .containsEntry("account_id", "acc-pool")
+                .containsEntry("email", "fan@example.com");
+    }
+
+    @Test
     @DisplayName("callback success: rotates the session ID before establishing the SAS "
             + "session (session-fixation defense — item A)")
     void callback_success_rotatesSessionId() {

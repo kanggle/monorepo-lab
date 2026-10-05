@@ -77,7 +77,7 @@ id 가 그대로라 사이트 데이터(팬 팔로우 · 스토어 주문 · `ar
 | `POOL_EMAIL_EXISTS` | 같은 이메일의 `consumer-pool` 계정이 있다 | account-service | § 2 공존 금지 — 결함 상태이므로 옮겨서 덮지 않는다 |
 | `IDENTITY_CONFLICT` | 그 계정의 신원(`identities`)과 같은 `primary_email` 의 `consumer-pool` 신원이 따로 있거나, 그 신원을 **다른 계정**도 가리킨다 | account-service | 신원 행을 풀로 옮기면 `(tenant_id, primary_email)` UNIQUE 가 깨지거나 남의 계정이 같이 끌려온다 |
 | `OPERATOR_FACETED` | admin-service 가 운영자 측면이라 답했다(`oidc_subject` = 이 계정 id, 또는 `identity_id` = 이 계정의 신원) | auth-service → admin-service | § 3 셀프 온보딩 운영자(`TASK-MONO-746`) · 운영자 신원 연결(ADR-MONO-034 U3) |
-| `SOCIAL_LINKED` | 그 계정에 `social_identities` 행이 있다 | auth-service | `TASK-BE-617` 로 인계(소셜 조회가 풀에 맞춰진 뒤 같은 이동기로) |
+| `SOCIAL_LINKED` | 그 계정에 `social_identities` 행이 있다 | auth-service | `TASK-BE-617` 결정(2026-10-05 UTC): **사이트 계정으로 남는다** — 이동기는 계속 건너뛴다. 그 사람의 소셜 로그인은 사이트 신원 그대로 같은 계정으로 간다(617 AC-3). 근거 · 되살리는 조건: `multi-tenancy.md` § 3 표 |
 | `POOL_CREDENTIAL_EXISTS` | 같은 이메일의 `consumer-pool` 자격이 있다 | auth-service | § 2 — 공존하면 로그인 폼이 한쪽 비밀번호만 본다 |
 | `CREDENTIAL_TENANT_MISMATCH` | 그 계정의 자격 행이 풀도 그 사이트도 아닌 테넌트에 있다 | auth-service | 옮길 대상이 아니라 조사 대상이다(BE-507 이전 이상 행) |
 | `NO_LONGER_CANDIDATE` | 행을 잠그고 다시 보니 더는 사이트 계정이 아니다(동시 실행이 먼저 옮겼다 · 삭제됐다) | account-service | 멱등 |
