@@ -1,5 +1,6 @@
 package com.example.scmplatform.inventoryvisibility.domain.snapshot;
 
+import com.example.scmplatform.inventoryvisibility.domain.error.NegativeSnapshotQuantityException;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 
 import java.time.Instant;
@@ -68,6 +69,29 @@ public class InventorySnapshot {
         } else {
             this.quantity = this.quantity.subtract(delta);
         }
+        this.lastEventId = Objects.requireNonNull(eventId, "eventId");
+        this.lastEventAt = Objects.requireNonNull(eventAt, "eventAt");
+        this.version++;
+        this.updatedAt = eventAt;
+    }
+
+    /**
+     * Apply an outbound-confirmation decrement (TASK-MONO-762 AC-0 ⓐ) — on-hand decreases
+     * only on {@code wms.inventory.confirmed.v1}; {@code reserved}/{@code released} are
+     * deliberately ignored by the consumer that calls this.
+     *
+     * <p>Unlike {@link #applyDelta} (which floors a subtraction at zero), a decrement that
+     * would make the quantity negative is rejected rather than clamped — AC-0 chose
+     * retry→DLT over silently understating on-hand.
+     *
+     * @throws NegativeSnapshotQuantityException if {@code decrement} exceeds the current quantity
+     */
+    public void applyConfirmedDecrement(Quantity decrement, UUID eventId, Instant eventAt) {
+        if (decrement.value().compareTo(this.quantity.value()) > 0) {
+            throw new NegativeSnapshotQuantityException(
+                    nodeId.toString(), sku.toString(), this.quantity.value(), decrement.value());
+        }
+        this.quantity = this.quantity.subtract(decrement);
         this.lastEventId = Objects.requireNonNull(eventId, "eventId");
         this.lastEventAt = Objects.requireNonNull(eventAt, "eventAt");
         this.version++;

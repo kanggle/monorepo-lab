@@ -5,6 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.AlertPublisherPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
+import com.example.scmplatform.inventoryvisibility.domain.error.InventorySnapshotNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeNotFoundException;
 import com.example.scmplatform.inventoryvisibility.domain.error.NodeTypeConflictException;
 import com.example.scmplatform.inventoryvisibility.domain.expectation.InboundExpectation;
@@ -148,6 +149,61 @@ public class InventoryVisibilityApplicationService {
         processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
         log.info("applied inventory.transferred: src={} dst={} sku={} qty={} eventId={}",
                 srcNode.getId(), dstNode.getId(), skuId, quantity, eventId);
+    }
+
+    /**
+     * Process wms.inventory.confirmed.v1 — decrement on-hand for each confirmed outbound
+     * line (TASK-MONO-762 AC-0 ⓐ: snapshot quantity means on-hand = available + reserved;
+     * only {@code confirmed} moves it, {@code reserved}/{@code released} are deliberately
+     * not subscribed to).
+     *
+     * <p>Unlike {@link #applyInventoryReceived}/{@link #applyInventoryAdjusted}, this use
+     * case never auto-registers the node and never creates a snapshot row: a node or
+     * node/SKU row that does not already exist means the event arrived out of order
+     * (confirmed before received) or references a node this projection has never seen.
+     * Both propagate as an unchecked exception so the Kafka consumer's
+     * {@code @RetryableTopic} retries 3× then routes to the DLT — no negative/zero row is
+     * ever created (Edge Case, AC-0).
+     *
+     * <p>All lines of one event apply in the same transaction: if any line fails (missing
+     * row, or a decrement that would go negative), the whole event rolls back and retries
+     * as a unit, exactly like {@link #applyInventoryTransferred}'s atomic source+destination
+     * update.
+     *
+     * @throws InventorySnapshotNotFoundException if the node or a line's node/SKU snapshot
+     *                                              row does not exist
+     * @throws com.example.scmplatform.inventoryvisibility.domain.error.NegativeSnapshotQuantityException
+     *                                              if a line's decrement would make the
+     *                                              snapshot negative
+     */
+    @Transactional
+    public void applyInventoryConfirmed(String warehouseId, List<ConfirmedLine> lines,
+                                         UUID eventId, Instant occurredAt,
+                                         String tenantId, String sourceTopic) {
+        if (processedEventPort.isDuplicate(eventId)) {
+            log.debug("Duplicate event skipped: eventId={} topic={}", eventId, sourceTopic);
+            return;
+        }
+        InventoryNode node = nodeRepository.findByTenantIdAndExternalId(tenantId, warehouseId)
+                .orElseThrow(() -> new InventorySnapshotNotFoundException(warehouseId, null));
+
+        for (ConfirmedLine line : lines) {
+            Sku sku = Sku.of(line.skuId());
+            InventorySnapshot snapshot = snapshotRepository
+                    .findByNodeIdAndSku(node.getId(), sku, tenantId)
+                    .orElseThrow(() -> new InventorySnapshotNotFoundException(warehouseId, line.skuId()));
+            snapshot.applyConfirmedDecrement(
+                    Quantity.of(BigDecimal.valueOf(line.quantity())), eventId, occurredAt);
+            snapshotRepository.save(snapshot);
+        }
+        updateStaleness(node.getId(), tenantId, eventId, occurredAt);
+        processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
+        log.info("applied inventory.confirmed: node={} lines={} eventId={}",
+                node.getId(), lines.size(), eventId);
+    }
+
+    /** A single confirmed-outbound line: a quantity to decrement for one SKU. */
+    public record ConfirmedLine(String skuId, long quantity) {
     }
 
     // -------------------------------------------------------------------------

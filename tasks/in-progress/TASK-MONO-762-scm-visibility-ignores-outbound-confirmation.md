@@ -8,7 +8,7 @@ SCM 재고 가시성이 **출고를 반영하지 않는다** — wms 는 출고 
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -67,7 +67,7 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (소유자 결정)** — scm 스냅샷 수량의 뜻: **ⓐ 보유 재고**(가용 + 예약 — `confirmed` 를 차감으로만 반영, `reserved`·`released` 는 무시) · **ⓑ 가용 재고**(`reserved` −, `released` +, `confirmed` 무변화). 결정을 이 파일에 원문으로 적는다. (추천: ⓐ — 지금 스냅샷이 이미 «받은 만큼 더한» 보유 의미이고, 이벤트 하나 · 대칭 이벤트 쌍이 없어 경로가 짧다.)
+- [x] **AC-0 (소유자 결정)** — ✅ 2026-10-05 UTC 소유자 답(선택창, 원문): **«ⓐ 보유 + 재시도→DLT (Recommended)»** — 보유 = 가용 + 예약, `wms.inventory.confirmed.v1` 만 차감으로 반영하고 `reserved`·`released` 는 무시한다. 노드·SKU 행이 없으면(순서 역전) 음수를 만들지 않고 재시도 후 DLT 로 보낸다. 원 문항: — scm 스냅샷 수량의 뜻: **ⓐ 보유 재고**(가용 + 예약 — `confirmed` 를 차감으로만 반영, `reserved`·`released` 는 무시) · **ⓑ 가용 재고**(`reserved` −, `released` +, `confirmed` 무변화). 결정을 이 파일에 원문으로 적는다. (추천: ⓐ — 지금 스냅샷이 이미 «받은 만큼 더한» 보유 의미이고, 이벤트 하나 · 대칭 이벤트 쌍이 없어 경로가 짧다.)
 - [ ] **AC-1** — 결정한 뜻대로 적치 95 → 출고 10 시나리오에서 scm 스냅샷이 85 가 된다(IT, 실제 Kafka). 대조군: 출고 없는 적치만이면 95.
 - [ ] **AC-2** — 릴레이 허용 목록이 새 토픽을 포함하고, `scripts/check-cross-project-topic-relay.sh` 가 초록이다(구독 ↔ 허용 목록 대조).
 - [ ] **AC-3** — bite: 새 소비자의 차감을 끄면 AC-1 의 칸만 빨강.
@@ -94,3 +94,24 @@ monorepo
 1. **소비자만 추가하고 릴레이를 안 연다** — 데모에서 이벤트가 scm 에 안 닿아 여전히 95(AC-2 가 막는다).
 2. **`reserved` 도 빼고 `confirmed` 도 뺀다** — 두 번 차감해 75 가 된다(뜻을 섞은 결과 — AC-0 이 한 뜻만 고른다).
 3. **시드로 맞춘다** — 투영은 여전히 출고를 모른다(`TASK-MONO-760` 이 금지한 그것).
+
+## 구현 메모 (2026-10-05 UTC)
+
+**변경 파일**
+
+- 계약: `projects/scm-platform/specs/contracts/events/inventory-visibility-subscriptions.md`(새 구독 서술), `projects/scm-platform/specs/contracts/events/README.md`(§1 토픽 목록)
+- 스펙: `projects/scm-platform/specs/services/inventory-visibility-service/architecture.md`, `.../data-model.md`
+- 릴레이: `infra/demo/relay/mm2.properties`(`wms->scm.topics` 에 `wms.inventory.confirmed.v1` 추가)
+- 소비자(신규): `adapter/inbound/messaging/WmsInventoryConfirmedConsumer.java`
+- 애플리케이션: `application/service/InventoryVisibilityApplicationService.java`(`applyInventoryConfirmed` + `ConfirmedLine`)
+- 도메인: `domain/snapshot/InventorySnapshot.java`(`applyConfirmedDecrement`), `domain/error/InventorySnapshotNotFoundException.java`(신규), `domain/error/NegativeSnapshotQuantityException.java`(신규)
+- 테스트(신규): `application/ApplyInventoryConfirmedUseCaseTest.java`, `integration/WmsInventoryConfirmedConsumerIntegrationTest.java`
+- 테스트(수정): `adapter/inbound/messaging/ProjectionTenantConsumersTest.java`(projection tenant 케이스 추가), `integration/AbstractInventoryVisibilityIntegrationTest.java`(토픽 상수 + `confirmedEnvelope` 헬퍼)
+
+**테스트 명령 + rc**
+
+- `./gradlew :projects:scm-platform:apps:inventory-visibility-service:test` → `rc=0`(146 테스트, 전부 통과)
+- `./gradlew :projects:scm-platform:apps:inventory-visibility-service:integrationTest` → `rc=0`이지만 **이 호스트에 Docker 데몬이 없어 전부 `SKIPPED`**(`DockerAvailableCondition`) — AC-1 의 95→85/대조군 95, 그리고 Edge Case(행 없음→DLT, 행 미생성)는 신규 5개 IT 테스트로 작성은 했으나 **이 worktree 에서 실행 확인은 못 했다**(`project_testcontainers_docker_desktop_blocker` 기록된 호스트 제약). Docker 가용한 CI/환경에서 재확인 필요.
+- `bash scripts/check-cross-project-topic-relay.sh` → `rc=0`("18 cross-project routes across 5 relay flows")
+
+**bite (AC-3)** — Docker 미가용으로 IT 대신 단위 테스트로 수행. `InventorySnapshot.applyConfirmedDecrement` 의 `this.quantity = this.quantity.subtract(decrement);` 줄만 주석 처리(차감 비활성화) → `./gradlew :...:test` 재실행 결과 **146개 중 정확히 2개만 RED**: `ApplyInventoryConfirmedUseCaseTest.singleLine_decrementsOnHand_95minus10equals85()` 와 `multiLine_decrementsEachLineIndependently()`(둘 다 수량 변화를 직접 단언하는 테스트) — 예외-던짐을 검증하는 나머지 confirmed 테스트(중복 스킵·노드 없음·snapshot 없음·음수 거부)는 영향 없이 통과. 주석을 제거해(edit, `git checkout --` 미사용) 원복 후 재실행 → `rc=0`, 전부 복구(`FROM-CACHE`로 직전 통과 상태와 동일 확인).

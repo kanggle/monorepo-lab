@@ -30,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,8 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
     static final String TOPIC_INVENTORY_RECEIVED = "wms.inventory.received.v1";
     static final String TOPIC_INVENTORY_ADJUSTED = "wms.inventory.adjusted.v1";
     static final String TOPIC_INVENTORY_TRANSFERRED = "wms.inventory.transferred.v1";
+    // TASK-MONO-762 — on-hand decrement from wms's outbound confirmation leg.
+    static final String TOPIC_INVENTORY_CONFIRMED = "wms.inventory.confirmed.v1";
     protected static final String TOPIC_ALERT = "scm.inventory.alert.v1";
     // ADR-MONO-055 §D4 / TASK-SCM-BE-049 — the intra-scm 3PL inbound-expectation sink topic.
     protected static final String TOPIC_INBOUND_EXPECTED_THIRD_PARTY =
@@ -118,6 +121,7 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
                     new NewTopic(TOPIC_INVENTORY_RECEIVED, 1, (short) 1),
                     new NewTopic(TOPIC_INVENTORY_ADJUSTED, 1, (short) 1),
                     new NewTopic(TOPIC_INVENTORY_TRANSFERRED, 1, (short) 1),
+                    new NewTopic(TOPIC_INVENTORY_CONFIRMED, 1, (short) 1),
                     new NewTopic(TOPIC_ALERT, 1, (short) 1),
                     new NewTopic(TOPIC_INBOUND_EXPECTED_THIRD_PARTY, 1, (short) 1)
             )).all().get(30, java.util.concurrent.TimeUnit.SECONDS);
@@ -244,6 +248,37 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
         line.put("skuId", skuId);
         line.put("qtyReceived", qtyReceived);
         payload.put("lines", List.of(line));
+        env.put("payload", payload);
+        return toJson(env);
+    }
+
+    /**
+     * Build the wms-platform global event envelope JSON for an
+     * {@code inventory.confirmed.v1} event with a single line (TASK-MONO-762).
+     */
+    protected String confirmedEnvelope(UUID eventId, Instant occurredAt,
+                                       String warehouseId, String skuId, long quantity) {
+        return confirmedEnvelope(eventId, occurredAt, warehouseId, List.of(Map.entry(skuId, quantity)));
+    }
+
+    /**
+     * As {@link #confirmedEnvelope(UUID, Instant, String, String, long)}, with multiple
+     * {@code (skuId, quantity)} lines in one event.
+     */
+    protected String confirmedEnvelope(UUID eventId, Instant occurredAt,
+                                       String warehouseId, List<Map.Entry<String, Long>> lines) {
+        Map<String, Object> env = baseEnvelope(eventId, "inventory.confirmed",
+                occurredAt, "reservation", warehouseId);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("warehouseId", warehouseId);
+        List<Map<String, Object>> payloadLines = new ArrayList<>();
+        for (Map.Entry<String, Long> line : lines) {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("skuId", line.getKey());
+            l.put("quantity", line.getValue());
+            payloadLines.add(l);
+        }
+        payload.put("lines", payloadLines);
         env.put("payload", payload);
         return toJson(env);
     }
