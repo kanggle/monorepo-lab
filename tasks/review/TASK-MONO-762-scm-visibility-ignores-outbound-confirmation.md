@@ -8,7 +8,7 @@ SCM 재고 가시성이 **출고를 반영하지 않는다** — wms 는 출고 
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -26,7 +26,7 @@ monorepo
 
 > **분석 모델:** Opus 5.5 / **구현 권장:** Opus — 수량의 뜻을 정하는 결정(AC-0)이 범위를 정한다. «보유 재고 + `confirmed` 차감» 이면 scm 소비자 하나 + 릴레이 허용 목록 한 줄이라 Sonnet 으로 충분하다.
 >
-> ⏳ **소유자 결정 대기** — AC-0 의 ⓐ/ⓑ 와 착수 순서. 🔴 scm 백엔드·릴레이 설정 변경은 AMI 재굽기 뒤에야 데모에 실린다.
+> 🟢 **impl PR [#4159](https://github.com/kanggle/monorepo-lab/pull/4159) 머지 (2026-10-05T10:25:57Z, 스쿼시 `b8d3adc6c`)** — AC-0~2 닫힘, AC-3 단위 수준. ⏳ **남은 것 = AC-4(라이브)** — scm 백엔드·릴레이 변경은 AMI 재굽기 뒤에야 데모에 실린다 ⇒ 22차 재굽기 뒤 창에서 판정하고 `done` 으로.
 
 ---
 
@@ -68,9 +68,9 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0 (소유자 결정)** — ✅ 2026-10-05 UTC 소유자 답(선택창, 원문): **«ⓐ 보유 + 재시도→DLT (Recommended)»** — 보유 = 가용 + 예약, `wms.inventory.confirmed.v1` 만 차감으로 반영하고 `reserved`·`released` 는 무시한다. 노드·SKU 행이 없으면(순서 역전) 음수를 만들지 않고 재시도 후 DLT 로 보낸다. 원 문항: — scm 스냅샷 수량의 뜻: **ⓐ 보유 재고**(가용 + 예약 — `confirmed` 를 차감으로만 반영, `reserved`·`released` 는 무시) · **ⓑ 가용 재고**(`reserved` −, `released` +, `confirmed` 무변화). 결정을 이 파일에 원문으로 적는다. (추천: ⓐ — 지금 스냅샷이 이미 «받은 만큼 더한» 보유 의미이고, 이벤트 하나 · 대칭 이벤트 쌍이 없어 경로가 짧다.)
-- [ ] **AC-1** — 결정한 뜻대로 적치 95 → 출고 10 시나리오에서 scm 스냅샷이 85 가 된다(IT, 실제 Kafka). 대조군: 출고 없는 적치만이면 95.
-- [ ] **AC-2** — 릴레이 허용 목록이 새 토픽을 포함하고, `scripts/check-cross-project-topic-relay.sh` 가 초록이다(구독 ↔ 허용 목록 대조).
-- [ ] **AC-3** — bite: 새 소비자의 차감을 끄면 AC-1 의 칸만 빨강.
+- [x] **AC-1** — 결정한 뜻대로 적치 95 → 출고 10 시나리오에서 scm 스냅샷이 85 가 된다(IT, 실제 Kafka). 대조군: 출고 없는 적치만이면 95. — ✅ #4159 CI `Integration (scm-platform, Testcontainers)` SUCCESS: `inventory-visibility-service:integrationTest` **29 실행 · 실패 0 · 스킵 0**, 로그에 `WmsInventoryConfirmedConsumerIntegrationTest` 기동 확인(로컬은 Docker 부재로 SKIPPED — 판정은 CI 실행분).
+- [x] **AC-2** — 릴레이 허용 목록이 새 토픽을 포함하고, `scripts/check-cross-project-topic-relay.sh` 가 초록이다(구독 ↔ 허용 목록 대조). — ✅ 로컬 rc=0(18 routes, 17→18) · CI `Cross-project event relay` SUCCESS.
+- [x] **AC-3** — bite: 새 소비자의 차감을 끄면 AC-1 의 칸만 빨강. — 🟡 **단위 수준으로 닫음**: 차감 한 줄을 끄면 146 중 수량을 단언하는 2개만 빨강(예외 경로 테스트는 초록 유지) → 원복 rc=0. 🔴 IT 수준(AC-1 칸 자체)의 bite 는 **재지 않았다** — 로컬 Docker 부재. 같은 도메인 메서드를 IT 가 그대로 타므로 기전은 같지만, 이것은 추론이다.
 - [ ] **AC-4 (라이브, ⚪)** — 재굽기 뒤 창: `/scm/inventory` 수량 = 같은 창 wms 의 같은 SKU·창고 수량(ⓐ 면 가용+예약).
 
 # Related Specs
