@@ -333,7 +333,8 @@ claim"*). 즉 `/ecommerce/*` 셋은 **재촬영으로 회수된다**.
 열고 두 개를 「발견」이라 불렀다 — 이것과, 테넌트 분리(§ 4 에 이미 표로 있다)다.
 
       → 🟢 **1280×800 · `deviceScaleFactor: 1`** 로 고정했다(`TASK-MONO-639` 와 같은 값).
-- [ ] 🔴 **`/dashboards/overview` 를 대체할 4번째 장을 소유자가 고른다.** 오늘 68장 중
+- [x] ✅ **2026-10-06 소유자 결정: 4번째 장 = `/dashboards/health`** (§ 22차 창) — 🔴 론처 배선은 아직(같은 절 «남은 것»).
+      (원문) 🔴 **`/dashboards/overview` 를 대체할 4번째 장을 소유자가 고른다.** 오늘 68장 중
       «빈값·저하 0» 인 nav 그룹은 **IAM 9장 · ERP 6장 · Finance 4장**이다. 후보는 이 19장
       안에서 낸다. 🔴🔴 **2026-09-09 정정** — 첫 판에 나는 이것을 «erp 6 · iam 5 ·
       finance 3 = 14» 로 적었고 **셋 다 틀렸다.** `route.split('/')[1]` 로 서비스를
@@ -345,10 +346,12 @@ claim"*). 즉 `/ecommerce/*` 셋은 **재촬영으로 회수된다**.
       🔴🔴 **그리고 «19장» 도 아니었다** — 아래 § 사람 눈으로 전수를 보라. 16장을
       열어 보니 **✅✅ 6장**이고, 자동 표지는 빈값 셋·권한거부 하나·영문 실패 하나·빈
       검색 폼 하나를 **못 본다.** 「19」는 «표지가 안 걸었다» 이지 «볼 만하다» 가 아니다.
-- [ ] 🔴 `/ecommerce/*` 3장은 **테넌트 `ecommerce` 로 재촬영**한 뒤에만 승인 목록으로
+- [x] ✅ **2026-10-06** — 22차 창에서 테넌트 `ecommerce` 로 재촬영 → 소유자 확정: `/ecommerce/orders` · `/ecommerce/products/[id]` · `/ecommerce/settlements` (§ 22차 창).
+      (원문) 🔴 `/ecommerce/*` 3장은 **테넌트 `ecommerce` 로 재촬영**한 뒤에만 승인 목록으로
       확정한다. 🔵 `demo-corp` 로 찍어서 「승인 목록대로 찍었다」고 적으면, 그 매니페스트는
       **빈 표 세 장을 승인된 것으로** 기록한다.
-- [ ] 🔴🔴 **`/erp/masters` 도 재촬영 대상이 됐다** (2026-09-10, `TASK-PC-FE-276` 이 알림).
+- [x] ✅ **2026-10-06 소유자 결정: 기존 촬영본 유지** — 276 이후의 2026-09-22 촬영본에서 UUID 0 을 눈으로 확인했다(§ AC-4 `/erp/masters` 눈 확인). 22차 창의 `demo-corp` 재촬영은 사전 점검 오탐으로 0장(§ 22차 창).
+      (원문) 🔴🔴 **`/erp/masters` 도 재촬영 대상이 됐다** (2026-09-10, `TASK-PC-FE-276` 이 알림).
       승인된 4장 중 **1번**인 그 장에는 지금 **참조 칸에 raw UUID 가 박혀 있다**
       (「상위 부서」·「부서」 칸). 276 이 그것을 고쳤고(8곳 · `CODE · 이름`), 머지되면
       **그림이 코드보다 낡는다.** ⇒ 위 `/ecommerce/*` 3장과 **같은 창에서 함께** 찍는다.
@@ -1718,3 +1721,36 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 # TASK-MONO-758 알림 (2026-10-04 UTC)
 
 콘솔 운영 개요(`/dashboards/overview`) · 도메인 상태(`/dashboards/health`) · 상단 알림함이 이제 console-web 서버의 합성으로 **실제 데이터로** 뜬다(19차 창에서 확인, ADR-MONO-081 · console-bff 삭제). 저하·알림 화면을 다시 찍을 수 있다. 🔵 overview 의 Finance 카드는 운영자 프로필에 기본 finance 계정이 없으면 «사전 설정 누락» 으로 나온다(원래 있는 안내).
+
+# 🔵 2026-10-05 UTC 22차 AMI 창 — 재촬영 + 소유자 최종 결정 (2026-10-06)
+
+창 13:21:34Z–13:51Z · 인스턴스 `i-023b8d947a0ead2ee` · AMI `ami-056411515ac3afbf6`(`9ab4e274e`) · 9묶음 ready 13:32:58Z. Playwright 는 scratchpad 설치(저장소 무변경). 산출물은 `portfolio-captures/`(gitignore) 아래:
+
+| 실행 | 출력 | 계획 | 찍음 | 실패 | 비고 |
+|---|---|---|---|---|---|
+| store · fan (`DEMO_TENANT=ecommerce`) | `2026-10-05-w22/` | 33 | 32 | 1 | store `/orders/[id]` 동적 미해결(알려진 앱 쪽 사유). 빈값 `/cart` `/checkout` |
+| console (`ecommerce`) — 1차 | 같음 | 77 | **0** | 앱 전체 | 🔴 사전 점검 오탐 ① (아래) |
+| console (`ecommerce`) — 사전 점검 경로만 로컬 임시 변경 | `2026-10-05-w22-console/` | 77 | 54 | 23 | 거부 17 = `ecommerce` 가 erp·fan·finance·scm 을 구독하지 않아서(의도, 09-27 과 같은 모양) · 동적 미해결 6 |
+| console (`demo-corp`) — 사전 점검 `/scm/inventory` | `2026-10-05-w22-console-democorp/` | 77 | **0** | 앱 전체 | 🔴 사전 점검 오탐 ② (아래) |
+
+(사전 점검 경로 임시 변경은 실행 뒤 되돌렸다 — 커밋 없음, `git status` 깨끗 확인.)
+
+## 🔴 사전 점검(`sanityCheck`) 오탐 둘 — 앱 결함이 아니라 판정기의 낡음
+
+1. **`/dashboards/overview` 의 «부분 거부» 를 «화면 전체 거부» 로 읽는다.** `TASK-MONO-758` 이후 개요가 실데이터로 그려지면서, 테넌트가 구독하지 않는 도메인 카드(SCM·ERP)에 «선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)» 가 뜬다. 이전엔 개요 전체가 저하(BFF 없음)라 이 문구가 없었고 그래서 통과했다. ⇒ 09-27 과 같은 설정이 오늘은 콘솔 0장.
+2. **`DENIED_MARKERS` 의 `'403'` 이 데이터 안의 숫자에 걸린다.** demo-corp `/scm/inventory` 는 SKU `01910000-0000-7000-8000-000000000403` 행을 정상으로 그렸는데(같은 창 Playwright 로 행 확인: 수량 85) 사전 점검이 «403 을 그린다» 로 앱을 건너뛰었다.
+- ⇒ 둘 다 위 «표지를 넓혀라» 칸(아직 `[ ]`)과 같은 축이다 — **표지는 «못 보는 것» 만이 아니라 «잘못 보는 것» 도 있다.** 고칠 때 대조군: ① 일부 카드만 거부인 개요는 통과 · 전 카드 거부는 실패 ② 본문 데이터의 `…403` 은 통과 · 거부 화면의 «403» 은 실패.
+
+## 🟢 소유자 결정 (2026-10-06 UTC, 원문 «추천 목록으로 확정 (Recommended)»)
+
+| 칸 | 결정 | 근거(오늘 이미지를 열어 확인) |
+|---|---|---|
+| `/ecommerce/*` 3장 | `/ecommerce/orders` · `/ecommerce/products/[id]` · `/ecommerce/settlements` — 22차 `ecommerce` 촬영본 | orders: 5상태(DELIVERED~CANCELLED) 실데이터 5건 · settlements: 정산 라인 3건(ACCRUAL) + 정산 기간 CLOSED/OPEN 2건 |
+| `/erp/masters` | **기존(2026-09-22) 촬영본 유지** | 276 이후 촬영본에서 UUID 0 확인(§ AC-4 눈 확인). 오늘은 오탐 ② 로 재촬영 0장 |
+| 4번째 장 | **`/dashboards/health`** — 22차 촬영본 | 6도메인(IAM·WMS·SCM·Finance·ERP·E-Commerce) 전부 «OK 정상» — 758 이후 처음 실데이터. 🔵 개요(`/dashboards/overview`)는 `ecommerce` 테넌트에서 SCM·ERP 카드 거부·Finance 사전설정 누락이 섞여 후보에서 뺐다 |
+
+## ⏳ 남은 것 (이 티켓은 아직 `in-progress`)
+
+- 🔴 **론처 배선은 창이 하나 더 필요하다.** 론처 썸네일은 `infra/demo/aws/site/capture-shots.mjs` 가 **창 안에서** 자기 규격(뷰포트·매니페스트)으로 찍고, (z37) 이 `capture-shots.mjs` SHOTS ↔ `index.html` SHOTS ↔ `thumbnails/*.jpg` 를 한 묶음으로 지킨다 ⇒ 포트폴리오 촬영본(1440 폭)을 그대로 끼울 수 없다. 다음 창에서: SHOTS 에 위 확정 장을 넣고 `capture-shots.mjs` 로 찍어 셋을 **한 커밋으로**.
+- `[ ]` 동적 경로(AC-1) — 남은 미해결은 앱 쪽 사유(템플릿 목록에 상세 링크 없음 · 정산 기간 부모 404 · store `/orders/[id]`)라 재촬영으로 안 풀린다. 오늘 콘솔 `ecommerce` 에서 fan·tenants 동적 4개도 미해결 = 그 테넌트에 권한이 없어서(의도).
+- `[ ]` 표지 넓히기 — 위 오탐 둘을 함께.
