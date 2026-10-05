@@ -8,7 +8,7 @@ TASK-MONO-751
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -207,3 +207,30 @@ pnpm: 이 worktree 에 `pnpm install --frozen-lockfile` 을 **실제로** 돌렸
 | AC-4 — 머지 뒤 다음 nightly e2e 결과 확인 | ✅ **이 chore 에서 닫음** | 머지 커밋 `5ce0cccc9` 의 push 트리거 `nightly-e2e.yml` 런 **`37094199260`**(2026-10-03T03:44:12Z) = `success`. 잡 «Platform Console E2E full-stack (Playwright + docker compose)» `success` — 본문 § e2e 영향이 말한 대로 그 잡이 재는 것은 «레지스트리 7개 상품 + 사이드바 렌더가 기존 스펙을 깨지 않는가» 이고 팬 화면 자체는 아니다. 그 뒤 main 의 nightly 도 연속 `success`(최신 `37210122680`, `92a6320eb`) |
 
 ⇒ AC-1 이 열려 있으므로 4차원 (d) 가 거짓 — **`review/` 에 둔다.** 닫는 데 남은 것은 AC-1 의 라이브 한 바퀴(생성 + 소속 변경)뿐이다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-1 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 소유자가 콘솔(`platform@demo.com` · `fan-platform`)에서 화면으로 실행했고, 저장 결과를 SSM 으로 `fan-platform-postgres` / `fanplatform_artist` 에서 읽었다(07:06:36Z).
+
+| 동작 | DB 결과 |
+|---|---|
+| 소속사 생성 ① | `agencies`: `Test Entertainment` · ACTIVE · created 07:01:51Z |
+| 소속사 생성 ② | `agencies`: `Test2 Entertainment` · ACTIVE · created 07:04:59Z |
+| 아티스트 소속 변경 ① | `artists`: **노아 → Test Entertainment** · updated 07:04:00Z · version 2 |
+| 아티스트 소속 변경 ② | `artists`: **루미 → Test2 Entertainment** · updated 07:05:20Z |
+| 대조 | 시드 아티스트 리오·하린 = Aurora Entertainment · version 0 (변화 없음) |
+
+⇒ 콘솔 → IAM assume → fan 게이트웨이 → artist-service 왕복이 **생성 2 · 소속 변경 2** 로 라이브로 돌았다(20차 절의 «다음 창 술어» 그대로). 테스트 소속사 두 개와 바뀐 소속은 이 인스턴스 볼륨에만 남는다(다음 재굽기의 신선 볼륨에서 사라진다).
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4130` | `state=MERGED` · mergeCommit `5ce0cccc9` |
+| (b) origin/main 조상 | 참 · 21차 AMI 커밋 `678b6d003` 의 조상 |
+| (c) 머지 시점 실패 체크 | 66 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-2 · AC-3 `[x]` · AC-4 = 20차 절에서 닫힘 · **AC-1 = 이 절에서 닫힘** (동사 «만들고 … 소속시킬 수 있다» = 위 표) |
+
+⇒ **`review/` → `done/`.**

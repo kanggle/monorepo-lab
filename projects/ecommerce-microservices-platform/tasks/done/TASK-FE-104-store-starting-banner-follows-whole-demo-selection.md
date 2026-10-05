@@ -4,7 +4,7 @@ TASK-FE-104
 
 # Status
 
-review
+done
 
 # Title
 
@@ -136,3 +136,34 @@ ecommerce-microservices-platform
 ## Edge Case «배너와 다른 동작이 엇갈린다»
 
 로그인 포워더·BFF 는 `starting` 에서도 주소를 받는다(`index.ts:87-90` — «말하기 용이지 막기 용이 아니다»). 그러니 스토어 묶음이 ready 이면 배너가 떠 있어도 로그인·주문은 **된다**. 옛 문구 «데모 서버가 켜지는 중입니다 … 장바구니·로그인 … 동작하지 않을 수 있습니다» 는 그 경우 사실과 어긋났다. 새 문구는 «이 스토어는 이미 준비됐을 수 있지만, 그 전에는 로그인·주문이 실패할 수 있습니다» 다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-4 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. web-store 는 Vercel(#4155 머지 뒤 배포) — AMI 와 무관.
+
+AC-4 의 동사: «스토어가 ready 인 동안 scm 묶음 하나를 내렸다 올려도 … (나) 의 새 문구가 뜬다».
+
+| 시각(UTC) | 묶음 상태 (`/bundles`) | 스토어 탐침 `/api/demo/backend-state` |
+|---|---|---|
+| 07:10 | 전부 ready · `selection_ready=true` | `running` |
+| 07:11:02 | `console-scm` `/bundle/stop` (scm 도메인 내려감) | — |
+| 07:11:14 | `console-scm` `/bundle/start` | — |
+| **07:12:06 · 07:12:23 · 07:12:41** | **`store` = ready · `console-scm` = booting** | **`starting`** ✅ |
+| 07:12:58 ~ | 전부 ready | `running` |
+
+- 그 `starting` 동안 web-store 가 그리는 배너의 문장 = 배포본의 `(store)/layout` 청크에 새 문장 «선택한 데모 화면 중 일부가 아직 켜지는 중입니다» 1건 · 옛 «데모 서버가 켜지는 중입니다» 0건(06:41:28Z, 같은 배포 · 창 기동 직후 측정). 클라이언트 배너는 탐침의 `starting` 하나로 그 문장을 낸다(`DemoBackendNoticeClient.tsx`).
+- ⚪ 이 판정은 «렌더된 DOM 을 사람이 봤다» 가 아니라 «탐침 `starting` × 배포된 문장» 의 조합이다. 같은 판정의 DOM 단언은 단위 시험(§ 시험 · bite)이 고정한다.
+- 곁에서 본 것: 내린 직후 ~30 s 는 헬스 스냅샷이 옛 값이라 `/status` 가 `selection_ready=true` 였다(07:11:35) — «켜지는 중» 표시는 헬스 발행 주기만큼 늦게 뜬다. 결함으로 기안하지 않는다(보수 쪽은 «말하지 않음», 기동은 수 분이라 체감 영향 작음).
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4155` | `state=MERGED` · mergeCommit `678b6d003` |
+| (b) origin/main 조상 | 참 |
+| (c) 머지 시점 실패 체크 | 67 중 **FAILURE 0** (web-store `993 passed` — § 시험) |
+| (d) `# Acceptance Criteria` | AC-0 ~ AC-3 `[x]` · **AC-4 = 이 절에서 닫힘** |
+
+⇒ **`review/` → `done/`.**

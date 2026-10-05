@@ -4,7 +4,7 @@ TASK-PC-FE-307
 
 # Status
 
-review
+done
 
 # Title
 
@@ -121,3 +121,26 @@ platform-console
 - **AC-3 bite**: 분기 조건을 `false && isAllForbidden(...)` 로 바꿔 돌린 결과 **1 failed / 10 passed**였고, 실패한 칸은 AC-1 하나였다. 원본은 scratchpad 백업에서 복원했고 `cmp` 일치를 확인했다.
 - `tsc --noEmit` rc=0 · `pnpm lint` rc=0(«No ESLint warnings or errors») · `vitest run` 전체 **337 파일 / 3804 통과**, rc=0.
 - ⚪ **AC-4** — 라이브라서 다음 데모 창에서 잰다. review 에서 닫히지 않는 칸이다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-4 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 콘솔은 Vercel 이라 21차 AMI 와 무관하고, 판정은 소유자 브라우저 관찰이다.
+
+| 시각(UTC) | 계정 · 상태 | 관찰 |
+|---|---|---|
+| 06:59:02 | `demo@demo.com` · `demo-corp` · ERP 묶음 **꺼짐** | ERP 카드 `DOWNSTREAM_ERROR` · 나머지 ok/forbidden(MISSING_PREREQUISITE) — **상단 배너 없음**(하나라도 ok) ✅ AC-4 둘째 칸 |
+| 07:00:55 | `platform@demo.com` · ERP 꺼짐 | 거절 5 + ERP `DOWNSTREAM_ERROR` 1 = 섞인 전부-비정상 → **기존 장애 배너**(«일시적으로 불러올 수 없습니다» + 다시 시도) ✅ AC-2 대조군의 라이브 판 |
+| 07:05:51 | `platform@demo.com` · `console-erp` 를 추가로 켬(07:03:26 → ready 07:05:13) | 6장 전부 `forbidden`(PERMISSION_DENIED · TENANT_FORBIDDEN ×4 · MISSING_PREREQUISITE) → **«이 계정과 테넌트로 볼 수 있는 도메인 개요가 없습니다.»** 권한 배너 · «다시 시도»·«일시적으로» 없음 ✅ AC-4 첫째 칸 |
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4153` | `state=MERGED` · mergeCommit `1427ef425` |
+| (b) origin/main 조상 | 참 |
+| (c) 머지 시점 실패 체크 | 65 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-0 ~ AC-3 `[x]` · **AC-4 = 이 절에서 닫힘** (동사 «권한 문구 배너 · 하나라도 ok 면 장애 배너 안 뜸» = 위 표) |
+
+⇒ **`review/` → `done/`.**

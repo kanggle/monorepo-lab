@@ -178,3 +178,27 @@ PR #4149 첫 CI: `Client graph backend origins (the browser must not know the ad
   - ✅ 재사용 부품은 라이브로 보였다 — 305 가 만든 착지 `<target>?signed_out=demo_stopped`, 안내 `DemoSignedOutNotice`(«데모 서버가 종료되어 로그아웃되었습니다 …»), 세션 쿠키 지우기(`clearFullSession`, 306 의 live 모드가 같은 함수를 부른다).
   - ⚪ 305 고유 칸은 미측정 — 갱신 라우트 실패 → 로그인 착지 → `live` 없는 라우트의 단일 판독 판정, 그리고 페이지 단위 401 공유 헬퍼(AC-3) 경로.
 - **다음 창에서 이 AC 를 재려면:** 로그인 → **30분 이상**(액세스 쿠키 `maxAge` 1800 s 만료) 기다리거나 액세스 쿠키만 지운 뒤 → 데모 정지 → 새로고침. 그러면 레이아웃 가드는 인증 분기가 아니라 갱신 홉을 타고, 갱신이 실패한 뒤 305 의 라우트에 닿는다. Vercel 로그에서 `live` 모드 이벤트(`demo_ended_live_session_*`)가 **아닌** 305 핸들러의 종료 이벤트가 찍히는지로 경로를 가른다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-6 은 이번에도 **재지 못했다** (review 유지)
+
+> 분석=Opus 5.5. 덧붙이기만 한다. AC-6 은 여전히 `[ ]` 다.
+
+**한 것** — 소유자가 콘솔(`demo@demo.com`)에서 개발자 도구로 `console_access_token` 을 삭제했다고 알린 뒤 데모를 정지했다(`/stop` 08:36:53Z → EC2 stopped 08:38:11Z · `/status` stopped · 스토어 탐침 `unavailable`). 그 뒤 새로고침 두 번.
+
+**Vercel 로그(소유자 제공, UTC)**
+
+| 시각 | 이벤트 |
+|---|---|
+| 08:39 무렵 | 첫 새로고침 → `/scm/inventory?demo_checked=1` (306 의 첫 판독 «kept») |
+| 08:40:02 | `/dashboards/overview` → 307 → `/api/auth/demo-ended` |
+| 08:40:03 | **`demo_ended_live_session_cleared`** (`state=unavailable`) → 샘플 셸(`org-sample-0001`) |
+| 08:40:40 · 08:41:05 | 샘플 셸의 «로그인» → `oidc_login_initiated` ×2 → `/login?redirect=/dashboards/overview` |
+
+- 이 구간에 **`/api/auth/refresh` 요청이 0건**이다 ⇒ 두 새로고침 모두 접근 쿠키가 살아 있었다(인증 분기 = 306 의 live 경로). 삭제가 실제로 적용되지 않았거나, 지운 뒤 정지가 끝나기까지 ~2분 동안 데모가 켜져 있어 갱신으로 다시 받은 것이다(어느 쪽인지는 못 가른다).
+- ⇒ 306 의 «서로 다른 두 번의 꺼짐 → 샘플 셸» 은 라이브로 한 번 더 확인됐지만, **305 고유 경로(갱신 실패 → `/login?error=session_expired` → `live` 없는 라우트 → `demo_ended_session_cleared`)는 타지 않았다.**
+
+**다음 창의 순서 — 바꾼다** (위 20차 절의 순서는 쿠키가 다시 발급될 틈을 남긴다)
+1. 콘솔 로그인 → 2. **데모를 먼저 정지**(EC2 stopped + `/status` stopped 확인) → 3. 화면을 건드리지 않은 채 `console_access_token` **행 삭제**(Application → Cookies → 행 선택 → 도구 막대 `✕`, 표에서 사라졌는지 확인 · `console_refresh_token` 은 남긴다) → 4. 새로고침.
+- 데모가 이미 꺼진 뒤라 갱신이 반드시 실패한다. 판정 = Vercel 로그의 `idle_refresh_*` 실패 이벤트 → `demo_ended_session_cleared` · URL `signed_out=demo_stopped` · 샘플 셸 안내.

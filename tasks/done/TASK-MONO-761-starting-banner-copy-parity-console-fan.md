@@ -8,7 +8,7 @@ console-web · fan-platform-web 의 «데모 서버가 켜지는 중입니다» 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -111,3 +111,32 @@ monorepo
   - console-web: `tsc` rc=0 · `pnpm lint` rc=0 · 전체 vitest `5 failed | 3800 passed` — 실패 3 파일(`OperatorsScreen` · `ProductForm` · `AccountSelfService`)은 이 변경과 **무관**한 파일이고 증상이 5000 ms 타임아웃 · 입력 중복(`expected 'ee' to be ''`)이다. 그 셋 + 이 티켓의 시험 파일을 `--maxWorkers=1` 로 단독 재실행 → `4 files / 31 passed`. 같은 세션의 PC-FE-307 에서 같은 스위트가 3804/3804 였다. ⇒ 부하 flake 로 판정, 권위는 CI(아래).
   - fan-platform-web: `tsc` rc=0 · `pnpm lint` rc=0 · 전체 vitest(`--maxWorkers=2`) `40 files / 359 passed`.
 - AC 판정: **AC-1** ✅(두 앱 배너 + fan 로그인, DOM 단언) · **AC-2** ✅(각 파일 기존 칸 초록) · **AC-3** ✅(위 bite) · ⚪ **AC-4** 라이브 — 다음 데모 창. CI 결과는 PR 체크로 확인한다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-4 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. #4156 은 06:16:13Z 에 머지됐고 창은 06:40:06Z 에 열렸다 — 그사이 Vercel 배포가 끝났는지를 가정하지 않고, **배포된 HTML·청크의 문장**으로 판정했다(옛 문장 0 · 새 문장 있음 = 이 PR 의 배포).
+
+창 기동 직후 묶음이 booting(`selection_ready=false`)인 동안 세 앱을 HTTP 로 읽었다(06:40:44–06:41:28Z).
+
+| 앱 · 경로 | `starting` 배너 testid | 새 첫 문장 | 옛 첫 문장 |
+|---|---|---|---|
+| console-web `/login` | `demo-backend-starting` | 있음 | 0 |
+| fan-platform-web `/` | `demo-backend-starting` | 있음 | 0 |
+| fan-platform-web `/login` | `login-demo-starting` | 있음 | 0 |
+| web-store (클라이언트 배너) | 탐침 `{"state":"starting"}` | `(store)/layout` 청크 1 | 0 |
+
+- console-web `/dashboards/overview` 는 익명 요청이라 샘플 셸로 가서 배너가 없다(설계 — 샘플 셸은 `DemoBackendNotice` 를 안 단다).
+- ⇒ 세 앱이 같은 판정에 **같은 첫 문장**을 낸다(AC-4).
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4156` | `state=MERGED` · mergedAt 2026-10-05T06:16:13Z · mergeCommit `51fa90bf1` |
+| (b) origin/main 조상 | 참 |
+| (c) 머지 시점 실패 체크 | 67 중 **FAILURE 0** (`Frontend unit tests` — 콘솔 전체 스위트 포함 — pass) |
+| (d) `# Acceptance Criteria` | AC-1 ~ AC-3 `[x]` · **AC-4 = 이 절에서 닫힘** |
+
+⇒ **`review/` → `done/`.**

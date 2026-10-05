@@ -8,7 +8,7 @@ TASK-MONO-760
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -190,3 +190,44 @@ monorepo
 - 🔴 **볼륨**: 수리 전에 `scm` 아래로 쌓인 행은 옮겨지지 않는다(스펙 Projection tenant 문단). `terraform apply` 의 인스턴스 교체가 신선 볼륨을 사므로, 재굽기 창에서는 시드가 다시 낸 이벤트가 `demo-corp` 로 쌓인다.
 - 측정 1 의 기대값: **`demo-corp` ≥ 1**(이 수리가 동작) · `scm` 은 0 이거나 수리 전 잔여. `demo-corp` = 0 이면 테넌트 말고 경로에도 결함이 있다 → 측정 2(릴레이 기동)로.
 - AC-2 의 화면 판정(`/scm/inventory` ≥ 1 행 · 운영 개요 SCM 스냅샷 수 ≥ 1 · WMS 재고와 같은 SKU/창고)은 그대로다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (06:40–08:38 UTC · i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-0 · AC-2 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 신선 볼륨(apply 의 인스턴스 교체). 묶음 = fan · store · store-fulfillment · console · console-ecommerce · console-wms · console-scm (한 요청, 06:40:06Z) → 전부 ready 06:48:07Z. 측정은 SSM(`aws ssm send-command`)으로 했다.
+
+### AC-0 — 경로 전 구간 (각 칸 값·시각·명령)
+
+| 칸 | 결과 | 시각(UTC) · 명령 |
+|---|---|---|
+| 투영 테넌트 설정 | `demo-corp` | 06:49:03 · `docker exec scm-platform-inventory-visibility printenv INVENTORY_VISIBILITY_PROJECTION_TENANT_ID` |
+| 1 생산 | wms `inventory_outbox`: `inventory.received` 1 · `inventory.reserved` 1 · `inventory.confirmed` 1, 셋 다 `published_at` 있음 · `wms-kafka` `wms.inventory.received.v1` end offset **1**(파티션 1). 유효성 대조: 같은 명령으로 `wms.inbound.putaway.completed.v1` 1 | 06:51:51 · `kafka-get-offsets.sh` |
+| 2 릴레이 | `demo-event-relay` Up(healthy, 기동 06:47:13 — 네 도메인이 모두 준비된 뒤) · `wms->scm` 흐름이 17 토픽-파티션 복제 · scm 쪽 `wms.inventory.received.v1` end offset **1** | 06:52:31 · `docker logs demo-event-relay` · `kafka-get-offsets.sh` |
+| 3 소비 | 그룹 `scm-inventory-visibility-v1` 이 세 토픽에 할당 · `event_dedupe` 1 | 06:49 / 06:57 |
+| 4 투영 | `inventory_snapshots`: **`demo-corp` 1** · `scm` 0 · `inventory_nodes`: `demo-corp/WMS_WAREHOUSE` 1(`node_external_id` = wms 창고 `01910000-0000-7000-8000-000000000001`) | 06:52:58 |
+
+- 🔴 첫 측정(06:49:03)은 스냅샷 0 · scm 토픽 «0» 이었다. 그때 «0» 으로 읽은 scm 쪽 offset 은 소비자 그룹 출력의 **파티션 0 줄**이었다(메시지는 파티션 1). 06:52 재측정에서 1 이 확인됐다 — 파티션 하나를 토픽 전체로 읽은 내 오독이다.
+- 이벤트는 릴레이보다 먼저 났지만(06:47:24 적치) MM2 가 offset 0 부터 읽어 빠짐없이 복제했다.
+
+### AC-2 — 화면 (소유자 관찰) + 대조
+
+- `/scm/inventory`(`demo@demo.com` · `demo-corp`): 스냅샷 1행 — 노드 `c7332d81-…` · SKU `01910000-0000-7000-8000-000000000403` · 수량 **95** · FRESH · 마지막 이벤트 06:47:24.756982Z. 노드 신선도 «마지막 점검» 06:56:07Z — 이 수리가 같은 설정값을 읽게 한 **신선도 배치가 `demo-corp` 노드를 실제로 훑고 있다.**
+- 운영 개요 SCM 카드 «스냅샷 행 수» **1** (06:59:02Z) — 19·20차 창은 0.
+- WMS 대조(SSM, 06:57:35): 같은 창고 `…0001` · 같은 SKU `…0403` 의 재고 행이 있다 ⇒ AC-2 의 괄호 기준(«같은 SKU/창고가 보인다») 충족.
+- 🔴 **수량은 다르다** — wms `available_qty` **85**(version 2: 06:47:24 적치 95 → 06:47:28 `shipping-confirmed-consumer` 출고 −10) 대 scm **95**. 원인: scm 은 `received`·`adjusted`·`transferred` 만 구독하고, 출고 확정은 wms 가 `inventory.confirmed`(그리고 `inventory.reserved`)로 낸다 — 구독도 릴레이 허용 목록(`mm2.properties` `wms->scm.topics`)도 그것을 모른다. 이 티켓의 Out of Scope(«투영 규칙 자체의 변경») 이므로 여기서 고치지 않고 **`TASK-MONO-762`** 로 기안했다.
+
+### 정적 분석 정정 — «도메인 재기동 뒤 릴레이가 안 뜬다» 는 틀렸다
+
+§ 정적 분석의 홉 표가 «`demo-down.sh` 는 넷 중 하나만 내려도 릴레이를 내린다 ⇒ 20차 창의 scm 내림·올림 뒤로는 릴레이가 없었을 가능성» 이라고 적었다(코드에서 추론). 21차 창 07:11 에 `console-scm` 을 `/bundle/stop` → `/bundle/start` 하자 **릴레이도 함께 다시 떴다**(07:11:50Z `demo-event-relay Up 11 seconds`). 추론은 관측과 다르다 — 이 문장은 근거로 쓰지 마라.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4154` | `state=MERGED` · mergeCommit `2e5567050` |
+| (b) origin/main 조상 | 참 · 21차 AMI 커밋 `678b6d003` 의 조상(측정한 이미지에 이 수리가 있다) |
+| (c) 머지 시점 실패 체크 | `statusCheckRollup` 65 중 **FAILURE 0** (scm 통합 레인에서 새 IT 실행·PASSED 는 § CI 절) |
+| (d) `# Acceptance Criteria` | AC-1 `[x]` · **AC-0 · AC-2 = 이 절에서 닫힘** — AC-0 의 동사 «창에서 재고 각 칸을 값·시각·명령과 함께 적는다» = 위 표 · AC-2 의 동사 «행 ≥ 1 · 카드 ≥ 1 · 같은 SKU/창고가 보인다» = 위 관찰 |
+
+⇒ **`review/` → `done/`.** 수량 차이는 `TASK-MONO-762`.
