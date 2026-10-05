@@ -100,7 +100,9 @@ class WmsInventoryConfirmedConsumerIntegrationTest extends AbstractInventoryVisi
         // Re-deliver the SAME eventId — must be skipped (T8), not a second decrement.
         publish(TOPIC_INVENTORY_CONFIRMED, confirmedEventId.toString() + "-redelivery", envelope);
 
-        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
+        // 85 is already true before the re-delivery is consumed, so without pollDelay this
+        // would pass without ever exercising the dedupe path.
+        await().pollDelay(5, TimeUnit.SECONDS).atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
             String nodeId = nodeJpa.findByTenantIdAndNodeExternalId(TENANT_SCM, warehouseId)
                     .orElseThrow().getId();
             BigDecimal qty = snapshotJpa.findAll().stream()
