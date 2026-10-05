@@ -8,7 +8,7 @@ TASK-PC-FE-305
 
 # Status
 
-review (2026-10-04 UTC — 로컬 게이트 전부 통과: lint/tsc/vitest 335파일·3761시험/next build rc=0, bite 확인. AC-2 «판정 불가» 칸은 소유자 결정 ①(2026-10-04)으로 알려진 한계로 닫힘, AC-6 라이브 ⚪. 경로 D 는 `TASK-PC-FE-306`(ready))
+done (2026-10-06 UTC — AC-6 22차 창 라이브 판정, 아래 CORRECTION. 경로 D 는 `TASK-PC-FE-306`)
 
 # Owner
 
@@ -202,3 +202,23 @@ PR #4149 첫 CI: `Client graph backend origins (the browser must not know the ad
 **다음 창의 순서 — 바꾼다** (위 20차 절의 순서는 쿠키가 다시 발급될 틈을 남긴다)
 1. 콘솔 로그인 → 2. **데모를 먼저 정지**(EC2 stopped + `/status` stopped 확인) → 3. 화면을 건드리지 않은 채 `console_access_token` **행 삭제**(Application → Cookies → 행 선택 → 도구 막대 `✕`, 표에서 사라졌는지 확인 · `console_refresh_token` 은 남긴다) → 4. 새로고침.
 - 데모가 이미 꺼진 뒤라 갱신이 반드시 실패한다. 판정 = Vercel 로그의 `idle_refresh_*` 실패 이벤트 → `demo_ended_session_cleared` · URL `signed_out=demo_stopped` · 샘플 셸 안내.
+
+---
+
+## CORRECTION (2026-10-06 UTC) — 22차 창: AC-6 ✅ (소유자 결정 «지금 done») → done
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 위 AC-6 의 `[ ]` 는 기록 당시의 상태이고, **지금 참인 것은 이 절이다.**
+
+**순서** — 위 21차 절이 바꾼 순서 그대로, 소유자 브라우저 없이 Playwright(헤드리스, 새 컨텍스트)로 했다. 창 = 인스턴스 `i-023b8d947a0ead2ee` · AMI `ami-056411515ac3afbf6`(22차).
+
+| 시각(UTC) | 단계 | 관측 |
+|---|---|---|
+| 13:49:37 | 콘솔 로그인(`demo@demo.com`) | `/dashboards/overview` 착지 · 쿠키 `console_access_token` · `console_refresh_token` · `console_id_token` · `console_operator_token` |
+| 13:49:38 | **데모 먼저 정지** `POST /stop` 200 | 13:51:22 `/status` stopped (EC2 `stopped` 도 별도 확인) |
+| 13:51:22 | `console_access_token` **만** 삭제 | 남은 쿠키: refresh · id · operator |
+| 13:51:23–25 | 새로고침 | `307 /dashboards/overview` → `307 /api/auth/refresh?redirect=…` → `307 /login?error=session_expired&redirect=…` → `307 /api/auth/demo-ended?redirect=…` |
+| 13:51:35 | 착지 | `/dashboards/overview?signed_out=demo_stopped` · **쿠키 0개** · 화면: 상단 안내 «데모 서버가 종료되어 로그아웃되었습니다. 지금은 샘플 데이터로 둘러보는 중입니다 …» + 테넌트 `sample` 샘플 셸(스크린숏 확인) |
+
+- ⇒ **305 고유 경로(갱신 실패 → `/login?error=session_expired` → `live` 없는 `/api/auth/demo-ended` → `signed_out=demo_stopped`)를 처음으로 라이브에서 탔다.** 20·21차가 못 탄 이유(쿠키가 켜진 동안 지워져 갱신으로 되살아남)는 «먼저 정지» 순서로 제거됐다.
+- ⚪ **Vercel 로그의 `demo_ended_session_cleared` 한 줄은 재지 않았다** — 이 호스트에 Vercel CLI 가 없다. 같은 경로가 남기는 서버 부산물이고 위 리다이렉트 사슬과 쿠키 0개가 그 핸들러의 결과다. 소유자 결정(2026-10-06 UTC, 원문 «지금 done (Recommended)»): 화면·경로 관측으로 AC-6 을 닫고 로그 줄은 보조 증거로 남긴다. 확인하려면 console-web 로그 2026-10-05 13:51:25Z 무렵.
+- 4차원(close): (a) #4149 MERGED (2026-10-04T12:42:40Z) · (b) `f0927bcd0` 는 `origin/main` 조상 · (c) 머지 시점 실패 체크 0 · (d) AC-1~6 전부 닫힘(AC-2 «판정 불가» 칸은 2026-10-04 소유자 결정, AC-6 은 이 절).

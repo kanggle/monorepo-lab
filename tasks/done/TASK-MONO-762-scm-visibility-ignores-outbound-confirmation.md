@@ -8,7 +8,7 @@ SCM 재고 가시성이 **출고를 반영하지 않는다** — wms 는 출고 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -115,3 +115,17 @@ monorepo
 - `bash scripts/check-cross-project-topic-relay.sh` → `rc=0`("18 cross-project routes across 5 relay flows")
 
 **bite (AC-3)** — Docker 미가용으로 IT 대신 단위 테스트로 수행. `InventorySnapshot.applyConfirmedDecrement` 의 `this.quantity = this.quantity.subtract(decrement);` 줄만 주석 처리(차감 비활성화) → `./gradlew :...:test` 재실행 결과 **146개 중 정확히 2개만 RED**: `ApplyInventoryConfirmedUseCaseTest.singleLine_decrementsOnHand_95minus10equals85()` 와 `multiLine_decrementsEachLineIndependently()`(둘 다 수량 변화를 직접 단언하는 테스트) — 예외-던짐을 검증하는 나머지 confirmed 테스트(중복 스킵·노드 없음·snapshot 없음·음수 거부)는 영향 없이 통과. 주석을 제거해(edit, `git checkout --` 미사용) 원복 후 재실행 → `rc=0`, 전부 복구(`FROM-CACHE`로 직전 통과 상태와 동일 확인).
+
+---
+
+## CORRECTION (2026-10-06 UTC) — 22차 창 판정: AC-4 ✅ → done
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 위 AC-4 의 `[ ]` 는 기록 당시의 상태이고, **지금 참인 것은 이 절이다.**
+
+- 창: 2026-10-05T13:21:34Z–13:51Z · 인스턴스 `i-023b8d947a0ead2ee` · AMI `ami-056411515ac3afbf6`(22차, `9ab4e274e`, provenance ami-tag) · 9묶음 ready 13:32:58Z.
+- **AC-4 ✅** — 같은 창·같은 SKU(`…0403`)·같은 창고(`…0001`):
+  - wms `inventory_db.inventory`: `available_qty` 85 · `reserved_qty` 0 ⇒ 보유 **85**(13:33:51Z SSM).
+  - scm `inventory_snapshots`(`demo-corp`): `quantity` **85.000** · `last_event_at` 13:32:05.626982Z(= wms `inventory.confirmed` 발행 시각).
+  - 화면 `/scm/inventory`(테넌트 `demo-corp`, Playwright): 같은 노드·SKU 행이 **85**. 21차의 95 대 85 불일치 해소.
+- 🔵 **AC-0 의 순서 역전 규칙이 라이브로 한 번 탔다** — scm 소비자가 13:33:17Z 에 기동하며 `confirmed`(파티션 1, offset 0)를 `received` 보다 먼저 읽었다 → `InventorySnapshotNotFoundException`(행 없음) → `wms.inventory.confirmed.v1-retry-0` 에서 13:33:18Z `applied inventory.confirmed`. 오프셋: 본 토픽 p1=1 · retry-0=1 · retry-1=0 · **DLT=0**. ⇒ «재시도 → DLT» 의 재시도 쪽이 실제 순서 역전을 구했다(DLT 쪽은 이 창에서 타지 않았다).
+- 4차원(close): (a) #4159 MERGED · (b) `b8d3adc6c` 는 `origin/main` 조상 · (c) 머지 시점 실패 체크 0 · (d) AC-0~4 전부 닫힘(AC-3 은 단위 수준 — 위 본문 그대로).
