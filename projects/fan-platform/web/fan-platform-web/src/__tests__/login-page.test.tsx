@@ -108,10 +108,21 @@ describe('/login — 데모가 켜지는 중일 때 (TASK-MONO-668)', () => {
     await renderLogin();
 
     const notice = screen.getByTestId('login-demo-starting');
-    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice).toHaveTextContent('켜지는 중입니다');
     expect(screen.queryByTestId('login-demo-off')).toBeNull();
     // 🔴 꺼진 동안의 문장(«다시 시도해도 같은 결과»)은 여기서 **거짓**이다 — 준비되면 된다.
     expect(notice.textContent).not.toContain('같은 결과');
+  });
+
+  // 🔴🔴 TASK-MONO-761 — 배너와 같은 판정이므로 같은 첫 문장이다. 이 칸이 bite 다.
+  it('🔴🔴 «켜지는 중» 로그인 문구는 «선택한 화면 일부» 라고 말한다 — 옛 첫 문장이 없다', async () => {
+    await renderLogin();
+
+    const notice = screen.getByTestId('login-demo-starting');
+    expect(notice).toHaveTextContent('선택한 데모 화면 중 일부가 아직 켜지는 중입니다');
+    expect(notice.textContent).not.toContain('데모 서버가 켜지는 중입니다');
+    // 🔵 처방은 남는다 — 준비되면 로그인은 성공한다.
+    expect(notice).toHaveTextContent('다시 시도');
   });
 
   it('🔴 로그인 폼은 **막지 않는다** — 판정이 «선택 전부» 라 IdP 는 이미 준비됐을 수 있다', async () => {

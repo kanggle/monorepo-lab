@@ -94,10 +94,23 @@ describe('DemoBackendNotice (fan)', () => {
 
     await renderNotice();
     const notice = screen.getByTestId('demo-backend-starting');
-    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice).toHaveTextContent('켜지는 중입니다');
     expect(notice.textContent).not.toContain('꺼져 있어');
     expect(notice.textContent).not.toContain('샘플');
     expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+  });
+
+  // 🔴🔴 TASK-MONO-761 — 세 앱이 같은 첫 문장을 쓴다(web-store TASK-FE-104 가 먼저 바꿨다).
+  //    🔴 이 칸이 bite 다 — 옛 문장(«데모 서버가 켜지는 중입니다»)을 되살리면 여기서만 빨개진다.
+  it('🔴🔴 «켜지는 중» 배너는 «선택한 화면 일부» 라고 말한다 — 팬 자신이 준비 중이라고 단정하지 않는다', async () => {
+    process.env.DEMO_API_BASE = 'https://control.example';
+    stubStatus({ state: 'running', ip: '13.125.1.2', selection_ready: false });
+
+    await renderNotice();
+    const notice = screen.getByTestId('demo-backend-starting');
+    expect(notice).toHaveTextContent('선택한 데모 화면 중 일부가 아직 켜지는 중입니다');
+    expect(notice).toHaveTextContent('이 팬 페이지는 이미 준비됐을 수 있지만');
+    expect(notice.textContent).not.toContain('데모 서버가 켜지는 중입니다');
   });
 
   it('🔵 대조군 — 선택 묶음이 전부 준비됐으면(selection_ready=true) 배너 없음', async () => {
