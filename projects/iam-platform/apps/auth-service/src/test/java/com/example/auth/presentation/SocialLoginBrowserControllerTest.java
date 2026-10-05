@@ -11,8 +11,10 @@ import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.application.exception.UnsupportedProviderException;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
+import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,10 +52,33 @@ class SocialLoginBrowserControllerTest {
     @Mock
     private SavedRequestTenantResolver savedRequestTenantResolver;
 
+    /**
+     * TASK-BE-623: a real (not mocked) instance — simplest way to express "configured" /
+     * "not configured" per test without re-deriving the predicate here. google is
+     * configured by default because most of this suite's cells drive it; kakao is left
+     * at its (unconfigured) default for the new AC-3 cell below.
+     */
+    private OAuthProperties oAuthProperties;
+
+    @BeforeEach
+    void setUpOAuthProperties() {
+        oAuthProperties = new OAuthProperties();
+        configure(oAuthProperties.getGoogle());
+        // The existing "unsupported provider" cell below drives a provider name
+        // (naver) that must reach OAuthLoginUseCase.authorize to exercise the
+        // UnsupportedProviderException mapping — it must read as configured here.
+        configure(oAuthProperties.getNaver());
+    }
+
+    private static void configure(OAuthProperties.ProviderProperties props) {
+        props.setClientId("real-client-id");
+        props.setClientSecret("real-client-secret");
+    }
+
     private SocialLoginBrowserController controller() {
         // Issuer base URL → the browser callback is built from this (not the request host).
         return new SocialLoginBrowserController(
-                oAuthLoginUseCase, savedRequestTenantResolver, "http://iam.local");
+                oAuthLoginUseCase, savedRequestTenantResolver, oAuthProperties, "http://iam.local");
     }
 
     @AfterEach
@@ -93,6 +119,17 @@ class SocialLoginBrowserControllerTest {
         String view = controller().startSocialLogin("naver");
 
         assertThat(view).isEqualTo("redirect:/login?error=unsupported_provider");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-623 AC-3: a recognized provider with no real credentials (kakao, left "
+            + "at its unconfigured default) → /login?error=provider_unavailable, without ever "
+            + "calling the use case")
+    void start_recognizedButUnconfiguredProvider_redirectsProviderUnavailable() {
+        String view = controller().startSocialLogin("kakao");
+
+        assertThat(view).isEqualTo("redirect:/login?error=provider_unavailable");
+        verify(oAuthLoginUseCase, never()).authorize(any(), any());
     }
 
     @Test

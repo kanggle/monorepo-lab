@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth;
 
+import com.example.auth.domain.oauth.OAuthProvider;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,6 +17,26 @@ public class OAuthProperties {
     private ProviderProperties kakao = new ProviderProperties();
     private ProviderProperties microsoft = new ProviderProperties();
     private ProviderProperties naver = new ProviderProperties();
+
+    /**
+     * TASK-BE-623: whether {@code provider} has real credentials configured, i.e. the
+     * single "provider configured" predicate the login page and the direct
+     * {@code GET /login/oauth/{provider}} entry point both use. Lives here — not in the
+     * Thymeleaf template, not in the controller — so the "what counts as configured"
+     * rule has exactly one home ({@link ProviderProperties#isConfigured()}).
+     */
+    public boolean isConfigured(OAuthProvider provider) {
+        return properties(provider).isConfigured();
+    }
+
+    private ProviderProperties properties(OAuthProvider provider) {
+        return switch (provider) {
+            case GOOGLE -> google;
+            case KAKAO -> kakao;
+            case MICROSOFT -> microsoft;
+            case NAVER -> naver;
+        };
+    }
 
     @Getter
     @Setter
@@ -62,6 +83,24 @@ public class OAuthProperties {
                 return List.copyOf(allowedRedirectUris);
             }
             return redirectUri != null ? List.of(redirectUri) : List.of();
+        }
+
+        /**
+         * TASK-BE-623: "provider configured" = both {@code clientId} AND
+         * {@code clientSecret} are present and are not the demo default
+         * ({@code application.yml}'s {@code test-*-client-id} / {@code test-*-client-secret}
+         * fallback). Checking only {@code clientId} would show a button for a half-real
+         * configuration (real id, still-default secret) that cannot finish the token
+         * exchange — the AC-2 control case. No format check on purpose: each provider's
+         * real id/secret shape differs and may change, and pinning a format would make
+         * the button silently disappear the day a provider changes it.
+         */
+        public boolean isConfigured() {
+            return hasRealValue(clientId) && hasRealValue(clientSecret);
+        }
+
+        private static boolean hasRealValue(String value) {
+            return value != null && !value.isBlank() && !value.startsWith("test-");
         }
     }
 }

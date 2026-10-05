@@ -23,6 +23,9 @@
         <span th:case="'unsupported_provider'">지원하지 않는 로그인 방식입니다.</span>
         <span th:case="'email_registered'">이미 이메일과 비밀번호로 가입된 주소입니다. 이메일과 비밀번호로 로그인해 주세요.</span>
         <span th:case="'temporarily_unavailable'">지금은 로그인할 수 없습니다. 잠시 후 다시 시도해 주세요.</span>
+        <!-- TASK-BE-623: a provider whose button /login never drew (no real credentials
+             configured) was still reachable by typing /login/oauth/{provider} directly. -->
+        <span th:case="'provider_unavailable'">이 로그인 방식은 현재 사용할 수 없습니다. 다른 방법으로 로그인해 주세요.</span>
         <span th:case="*">이메일 또는 비밀번호가 올바르지 않습니다.</span>
     </div>
 

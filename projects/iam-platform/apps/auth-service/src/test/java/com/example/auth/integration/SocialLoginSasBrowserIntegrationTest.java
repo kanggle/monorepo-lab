@@ -100,6 +100,14 @@ class SocialLoginSasBrowserIntegrationTest extends AbstractIntegrationTest {
         registry.add("oauth.google.allowed-redirect-uris",
                 () -> "http://localhost/login/oauth/google/callback");
 
+        // TASK-BE-623: application-test.yml's google client-id/secret are the demo-default
+        // "test-google-client-*" pair, which the new "provider configured" predicate treats
+        // as NOT configured (on purpose — the demo default can never complete a real token
+        // exchange). This IT drives the real google button + /login/oauth/google end-to-end,
+        // so it needs google to read as configured; override with non-"test-"-prefixed values.
+        registry.add("oauth.google.client-id", () -> "it-google-client-id");
+        registry.add("oauth.google.client-secret", () -> "it-google-client-secret");
+
         wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMock.start();
         registry.add("auth.account-service.base-url", wireMock::baseUrl);

@@ -13,8 +13,10 @@ import com.example.auth.application.exception.OAuthProviderException;
 import com.example.auth.application.exception.UnsupportedProviderException;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
+import com.example.auth.domain.oauth.OAuthProvider;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.session.SessionContext;
+import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -62,6 +64,14 @@ public class SocialLoginBrowserController {
     private final SavedRequestTenantResolver savedRequestTenantResolver;
 
     /**
+     * TASK-BE-623: the same "provider configured" predicate the login page uses to
+     * decide which buttons to draw. Checked again here so a provider the page never
+     * offered a button for cannot be reached by typing the URL directly — the
+     * recommended option from the task's Scope decision.
+     */
+    private final OAuthProperties oAuthProperties;
+
+    /**
      * The public base URL the browser uses for this auth-service (the OIDC issuer).
      * The social callback URI is built from this — NOT from the request {@code Host}
      * header — so it is deterministic, registered in each provider's
@@ -89,9 +99,11 @@ public class SocialLoginBrowserController {
     public SocialLoginBrowserController(
             OAuthLoginUseCase oAuthLoginUseCase,
             SavedRequestTenantResolver savedRequestTenantResolver,
+            OAuthProperties oAuthProperties,
             @Value("${oidc.issuer-url:http://localhost:8081}") String issuerUrl) {
         this.oAuthLoginUseCase = oAuthLoginUseCase;
         this.savedRequestTenantResolver = savedRequestTenantResolver;
+        this.oAuthProperties = oAuthProperties;
         this.browserCallbackBaseUrl = issuerUrl.endsWith("/")
                 ? issuerUrl.substring(0, issuerUrl.length() - 1)
                 : issuerUrl;
@@ -99,6 +111,14 @@ public class SocialLoginBrowserController {
 
     @GetMapping("/login/oauth/{provider}")
     public String startSocialLogin(@PathVariable String provider) {
+        // TASK-BE-623 (AC-3): a recognized provider with no real credentials never got a
+        // button on /login — a direct URL hit must not reach it either. An unrecognized
+        // provider string falls through unchanged, so UnsupportedProviderException below
+        // still owns that mapping (?error=unsupported_provider).
+        if (isKnownAndUnconfigured(provider)) {
+            log.warn("social login start rejected — provider '{}' not configured", provider);
+            return loginError("provider_unavailable");
+        }
         String callbackUri = browserCallbackUri(provider);
         try {
             OAuthAuthorizeResult result = oAuthLoginUseCase.authorize(provider, callbackUri);
@@ -113,6 +133,20 @@ public class SocialLoginBrowserController {
                     + "allowed-redirect-uris (check oidc.issuer-url + OAUTH_<P>_ALLOWED_REDIRECT_URIS)",
                     callbackUri, provider);
             return loginError("provider_error");
+        }
+    }
+
+    /**
+     * {@code true} only for a provider string that parses to a real {@link OAuthProvider}
+     * AND is not configured. An unparseable string returns {@code false} so the existing
+     * {@code UnsupportedProviderException} path (thrown from {@code OAuthLoginUseCase})
+     * keeps owning that case — this method only narrows the already-valid-provider case.
+     */
+    private boolean isKnownAndUnconfigured(String providerStr) {
+        try {
+            return !oAuthProperties.isConfigured(OAuthProvider.from(providerStr));
+        } catch (IllegalArgumentException e) {
+            return false;
         }
     }
 
