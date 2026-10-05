@@ -16,10 +16,21 @@ package com.example.auth.application.result;
  *                      {@code /internal/accounts/social-signup} (ADR-036)
  * @param email         the provider-supplied email (used as the SAS principal name)
  * @param isNewAccount  whether the resolution created a new account
+ * @param poolAccount   TASK-BE-617 — the account is a consumer-POOL account: the session principal must
+ *                      be a pool principal (details {@code tenant_id = consumer-pool}), exactly the shape
+ *                      the form login builds, so the token, the SSO gate and refresh map it onto the
+ *                      requesting site by the same rule ({@code AuthorizationSessionTenant}).
+ *                      {@code false} → the per-tenant session from before (client tenant).
  */
 public record BrowserLoginResolution(
         String accountId,
         String email,
-        boolean isNewAccount
+        boolean isNewAccount,
+        boolean poolAccount
 ) {
+
+    /** A per-tenant (site) account — the pre-TASK-BE-617 shape. */
+    public BrowserLoginResolution(String accountId, String email, boolean isNewAccount) {
+        this(accountId, email, isNewAccount, false);
+    }
 }

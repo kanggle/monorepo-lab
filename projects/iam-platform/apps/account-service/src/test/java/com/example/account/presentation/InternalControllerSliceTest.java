@@ -398,7 +398,7 @@ class InternalControllerSliceTest {
     @DisplayName("POST /internal/accounts/social-signup new email returns 201")
     void socialSignup_newEmail_returns201() throws Exception {
         given(socialSignupUseCase.execute(any()))
-                .willReturn(new SocialSignupResult("acc-new", "new@example.com", "ACTIVE", true));
+                .willReturn(new SocialSignupResult("acc-new", "new@example.com", "ACTIVE", true, "fan-platform"));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -413,14 +413,36 @@ class InternalControllerSliceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accountId").value("acc-new"))
                 .andExpect(jsonPath("$.email").value("new@example.com"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.tenantId").value("fan-platform"));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-617: a pool social signup answers 201 with tenantId=consumer-pool (auth-to-account-social.md)")
+    void socialSignup_poolAccount_returnsTenantIdConsumerPool() throws Exception {
+        given(socialSignupUseCase.execute(any()))
+                .willReturn(new SocialSignupResult("acc-pool", "pool@example.com", "ACTIVE", true, "consumer-pool"));
+
+        mockMvc.perform(post("/internal/accounts/social-signup")
+                        .header("X-Tenant-Id", "ecommerce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "pool@example.com",
+                                  "provider": "GOOGLE",
+                                  "providerUserId": "google-pool"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accountId").value("acc-pool"))
+                .andExpect(jsonPath("$.tenantId").value("consumer-pool"));
     }
 
     @Test
     @DisplayName("POST /internal/accounts/social-signup existing email returns 200")
     void socialSignup_existingEmail_returns200() throws Exception {
         given(socialSignupUseCase.execute(any()))
-                .willReturn(new SocialSignupResult("acc-existing", "existing@example.com", "ACTIVE", false));
+                .willReturn(new SocialSignupResult("acc-existing", "existing@example.com", "ACTIVE", false, "fan-platform"));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -471,7 +493,7 @@ class InternalControllerSliceTest {
     @DisplayName("POST /internal/accounts/social-signup existing locked account returns LOCKED status")
     void socialSignup_lockedAccount_returnsLockedStatus() throws Exception {
         given(socialSignupUseCase.execute(any()))
-                .willReturn(new SocialSignupResult("acc-locked", "locked@example.com", "LOCKED", false));
+                .willReturn(new SocialSignupResult("acc-locked", "locked@example.com", "LOCKED", false, "fan-platform"));
 
         mockMvc.perform(post("/internal/accounts/social-signup")
                         .contentType(MediaType.APPLICATION_JSON)

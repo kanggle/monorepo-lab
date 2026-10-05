@@ -38,7 +38,7 @@
 5. Google 인증 → `GET /login/oauth/google/callback?code=...&state=...`
 6. `OAuthLoginUseCase.resolveBrowserLogin(command, tenantId)`:
    a. state 검증 → token+userinfo 교환 → email 검증
-   b. `social_identities` 조회 / auto-link / auto-create(`/internal/accounts/social-signup`, ADR-036 born-unified mint)
+   b. `social_identities` 조회(소비자 사이트 client 는 `consumer-pool` 먼저 — `TASK-BE-617`) / auto-link / auto-create(`/internal/accounts/social-signup`, ADR-036 born-unified mint) — [§ 계정 연결 전략](#계정-연결-전략)
    b'. **계정 상태 + 계정의 실제 테넌트 조회** — account-service `GET /internal/accounts/{id}/status-with-tenant`(TASK-BE-602). 테넌트를 보내지 않고 **돌려받는다**
       ([auth-to-account.md](../contracts/http/internal/auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant)). 404 = 규칙 미적용 → 진행, 조회 실패 = fail-closed.
    c. **`SocialIdentityPersistStep`**(신규 transactional bean): `social_identity` upsert + 계정 상태 검사(LOCKED/DORMANT/DELETED 거부)만 수행. **JWT/디바이스 세션/refresh token 은 발급하지 않음.**
@@ -46,6 +46,8 @@
       `tenantId` = b' 가 돌려준 계정의 테넌트. 텔레메트리 — 실패해도 로그인 결과 불변. 규칙: [auth-events.md § 소셜 로그인 경로](../contracts/events/auth-events.md#소셜-로그인-경로-task-be-602).
 7. **tenant 귀속** — saved `/oauth2/authorize` 의 `client_id` → `RegisteredClientRepository.findByClientId` → `ClientSettings` 의 `custom.tenant_id`/`custom.tenant_type` (`SavedRequestTenantResolver`). saved request 부재 시 `fan-platform` 기본값.
 8. **SAS 세션 확립** — `UsernamePasswordAuthenticationToken(email, null, [ROLE_USER])` + `details = HashMap{tenant_id, tenant_type, account_id}`(반드시 `HashMap` — `JdbcOAuth2AuthorizationService` 의 `SecurityJackson2Modules` allowlist), `HttpSessionSecurityContextRepository` 로 세션 영속.
+   🔵 **풀 계정(`TASK-BE-617`)** 이면 details `tenant_id = consumer-pool` — 폼 로그인의 풀 principal 과 같은 모양이라 토큰 · SSO 게이트 · refresh 가 같은 규칙(`AuthorizationSessionTenant`)으로
+   그것을 요청한 사이트로 사상한다. 사이트 계정이면 이전 그대로 client 테넌트.
 9. saved `/oauth2/authorize` 로 redirect → SAS `authorization_code` → **SAS 표준 토큰** 발급.
 10. **role 시딩(신규 코드 0)** — `TenantClaimTokenCustomizer` → `RoleSeedPolicy.seed(platform)`, `platform = 개시 client 의 tenant_id`. `ecommerce-web-store-client` → `roles:[CUSTOMER]`. operator 는 assume-tenant 단계에서 별도 파생.
 
@@ -59,7 +61,7 @@
 | `OAuthProviderException` | `/login?error=provider_error` |
 | `UnsupportedProviderException` | `/login?error=unsupported_provider` |
 | `AccountServiceUnavailableException` (상태 조회 실패 · `socialSignup` 실패 — TASK-BE-602) | `/login?error=temporarily_unavailable` («Sign-in is temporarily unavailable. Please try again in a moment.» — 계정 상태에 대해 아무것도 말하지 않는다). BE-602 이전에는 catch 가 없어 전역 `AuthExceptionHandler` 의 **503 JSON** 이 브라우저에 떴다 |
-| `SocialSignupEmailRegisteredException` (`socialSignup` 의 `409 ACCOUNT_ALREADY_EXISTS` — 그 이메일의 **풀 계정**이 있다, `TASK-BE-620`) | `/login?error=email_registered` («이미 이메일과 비밀번호로 가입된 주소입니다. 이메일과 비밀번호로 로그인해 주세요.») — `multi-tenancy.md` § 소비자 계정 풀 § 2 공존 금지 |
+| `SocialSignupEmailRegisteredException` (`socialSignup` 의 `409 ACCOUNT_ALREADY_EXISTS` — 그 이메일의 **풀 계정**이 있다(`TASK-BE-620`), 또는 풀 가입인데 그 이메일의 사이트 계정이 다른 소비자 사이트에 있다(`TASK-BE-617`)) | `/login?error=email_registered` («이미 이메일과 비밀번호로 가입된 주소입니다. 이메일과 비밀번호로 로그인해 주세요.») — `multi-tenancy.md` § 소비자 계정 풀 § 2 공존 금지 |
 
 ### tenant 귀속 규칙 (ADR-006 옵션 1)
 
@@ -109,13 +111,27 @@ provider로부터 받는 access_token, refresh_token은 **저장하지 않는다
 
 ### 계정 연결 전략
 
+0. **풀-먼저 (`TASK-BE-617`, ADR-MONO-078 D4 — [multi-tenancy.md § 소비자 계정 풀](multi-tenancy.md#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742))** —
+   시작 client 의 테넌트가 풀 계정을 받을 수 있는 테넌트(콘솔 `iam` · 풀 자신이 아님)면 `social_identities (tenant_id = 'consumer-pool', provider, provider_user_id)` 를
+   **먼저** 찾는다. 있으면 account-service 에 그 테넌트가 소비자 사이트인지 묻고(`consumer-members` 읽기 — 폼 로그인의 풀-먼저와 같은 질문, 실패 = fail-closed
+   `temporarily_unavailable`), 소비자 사이트면 그 풀 계정으로 로그인 처리 — 세션은 **풀 principal**(details `tenant_id = consumer-pool`)이라 폼 로그인과 같은
+   규칙을 탄다: 토큰 `tenant_id` = 요청한 사이트, 멤버십 없는 사이트는 첫 방문 동의 화면(`TASK-BE-616`). 소비자 사이트가 아니면(B2B client) 풀 신원은 보지 않는다.
 1. `social_identities` 테이블에서 `(tenant_id, provider, provider_user_id)` 조합으로 기존 연결 조회 — `tenant_id` = 로그인을 시작한
-   client 의 테넌트([§ tenant 귀속 규칙](#tenant-귀속-규칙-adr-006-옵션-1), TASK-BE-611). 다른 테넌트의 신원 행은 보지 않는다
+   client 의 테넌트([§ tenant 귀속 규칙](#tenant-귀속-규칙-adr-006-옵션-1), TASK-BE-611). 다른 테넌트의 신원 행은 보지 않는다.
+   ADR-MONO-078 이전의 **사이트별 소셜 신원은 이 단계로 그대로 동작한다**(`TASK-BE-617` AC-3 — 묶이기 전까지 사이트 계정)
 2. 연결이 있으면 해당 `account_id`로 로그인 처리
-3. 연결이 없으면 (그 테넌트 안에서):
-   a. provider email과 동일한 이메일의 기존 계정이 **그 테넌트에** 있으면 → 자동 연결 (auto-link)
-   b. 기존 계정이 없으면 → 계정 자동 생성 (auto-create)
-4. 계정 자동 생성·연결은 account-service의 `/internal/accounts/social-signup` 내부 API를 통해 수행
+3. 연결이 없으면 account-service `social-signup` (그 테넌트를 보낸다):
+   a. provider email과 동일한 이메일의 기존 계정이 **그 테넌트에** 있으면 → 자동 연결 (auto-link) — 사이트별 계정에 한정된 기존 동작(무변경)
+   b. 🔴 소비자 사이트 + 풀 플래그 켜짐 → **풀 계정 자동 생성** + 그 사이트 멤버십, 신원 행은 `consumer-pool` 에. 같은 이메일의 **풀 계정**이 이미 있으면
+      **연결하지 않고 거절**한다(`409 ACCOUNT_ALREADY_EXISTS` → `/login?error=email_registered`) — ADR-MONO-078 D2: 이메일 일치는 같은 사람이라는 증거가 아니다.
+      같은 이메일의 사이트별 계정이 **다른** 소비자 사이트에 있어도 거절(§ 2 공존 금지)
+   c. 그 밖(B2B · 플래그 꺼짐) → 그 테넌트에 계정 자동 생성 (auto-create) — 이전 그대로
+4. 계정 자동 생성·연결은 account-service의 `/internal/accounts/social-signup` 내부 API를 통해 수행 — 어느 테넌트에 태어났는지는 응답의 `tenantId` 로 안다
+   ([auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md))
+
+> 🔵 **대가 (`TASK-BE-617`, 기록)**: 풀 계정에는 **이메일로 두 번째 제공자를 붙일 수 없다** — 구글로 가입한 풀 계정의 주인이 같은 이메일의 카카오로 오면
+> `email_registered` 로 거절된다(그 안내 문구는 «이메일·비밀번호로 가입된 주소» 라 소셜 전용 계정에는 정확하지 않다). 로그인한 상태에서 제공자를 잇는
+> 흐름은 없다 — 필요해지면 «본인 확인 후 연결» 티켓으로 연다(D2 의 묶기와 같은 결).
 
 ### CSRF 방어 (state 파라미터)
 
@@ -173,7 +189,9 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - 하나의 계정에 여러 provider 연결 가능 (Google + Kakao 동시 사용)
 - 하나의 provider_user_id는 **테넌트마다** 하나의 계정에만 연결 (unique `(tenant_id, provider, provider_user_id)`). 같은 provider 사용자가
   두 테넌트에서 로그인하면 신원 행 · 계정이 테넌트마다 하나씩 생긴다 — 소유자 결정 2026-09-26 UTC(`TASK-BE-611` AC-0 ①). 이전 문장
-  «하나의 provider_user_id 는 하나의 계정에만» 은 V0007(TASK-BE-229) 이 unique 키를 테넌트별로 바꾼 뒤에도 남아 있던 옛 규칙이다
+  «하나의 provider_user_id 는 하나의 계정에만» 은 V0007(TASK-BE-229) 이 unique 키를 테넌트별로 바꾼 뒤에도 남아 있던 옛 규칙이다.
+  🔵 **`TASK-BE-617` 이후 소비자 사이트(팬 · 스토어)는 예외가 아니라 이 규칙의 «테넌트» 가 `consumer-pool` 이다** — 새 소셜 가입의 신원 행은 풀에 하나라,
+  같은 구글 사용자가 팬 → 스토어로 오면 계정 하나 · 신원 행 하나다(스토어는 첫 방문 동의 화면). B2B 테넌트와 078 이전 사이트별 신원은 테넌트마다 그대로
 - state TTL: **10분** (Redis `oauth:state:{state}`)
 
 ## Edge Cases
@@ -181,7 +199,9 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 - provider에서 이메일 미제공 (Kakao 이메일 미동의) → 422 `EMAIL_REQUIRED`
 - 동일 provider_user_id로 **같은 테넌트의** 다른 계정에 이미 연결 → 로그인 시 기존 연결 계정으로 로그인 (새 연결 시도 없음)
 - 동일 provider_user_id 의 신원이 **다른 테넌트에만** 있다 → 그 행은 쓰지 않는다. 이 client 의 테넌트에서 가입 · 자동 연결한다(TASK-BE-611).
-  이미 있는 교차 신원 행은 옮기지 않는다(`TASK-BE-611` AC-0 ②)
+  이미 있는 교차 신원 행은 옮기지 않는다(`TASK-BE-611` AC-0 ②). 🔵 `TASK-BE-617`: 다른 소비자 사이트의 **사이트별** 신원만 있는 사람이 풀 가입으로 오면
+  그 이메일의 사이트 계정 때문에 거절된다(§ 2 공존 금지) — 새 계정이 하나 더 생기지 않는다
+- 🔴 소셜 이메일이 기존 **비밀번호 풀 계정**의 이메일과 같다 → 자동 연결하지 않는다. `/login?error=email_registered`(`TASK-BE-617` AC-2 대조군 · ADR-MONO-078 D2)
 - provider에서 이메일 미제공 시 브라우저 플로우는 `/login?error=email_required` 로 표면화한다
 - provider token endpoint 장애 → `OAuthProviderException` → `/login?error=provider_error`
 - provider 가 authorization code 자체를 거절(4xx `invalid_grant`) → `OAuthCodeInvalidException`

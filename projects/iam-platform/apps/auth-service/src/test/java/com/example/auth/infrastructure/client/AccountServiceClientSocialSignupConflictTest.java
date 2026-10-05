@@ -19,6 +19,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -91,5 +92,32 @@ class AccountServiceClientSocialSignupConflictTest {
         stub(409, "not json");
 
         assertThatThrownBy(this::call).isInstanceOf(AccountServiceUnavailableException.class);
+    }
+
+    // ── TASK-BE-617: the additive `tenantId` field (auth-to-account-social.md) ──
+
+    @Test
+    @DisplayName("TASK-BE-617: 201 의 tenantId=consumer-pool 을 읽는다 → poolAccount()")
+    void poolResponse_tenantIdRead() {
+        stub(201, "{\"accountId\":\"acc-pool\",\"email\":\"pool@example.com\",\"status\":\"ACTIVE\","
+                + "\"tenantId\":\"consumer-pool\"}");
+
+        var result = client.socialSignup("pool@example.com", "GOOGLE", "google-1", "Pool", "fan-platform");
+
+        assertThat(result.accountId()).isEqualTo("acc-pool");
+        assertThat(result.tenantId()).isEqualTo("consumer-pool");
+        assertThat(result.poolAccount()).isTrue();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-617 대조군: tenantId 가 없는 응답(이전 account-service) → 사이트 계정으로 읽는다")
+    void legacyResponse_withoutTenantId_isNotPool() {
+        stub(200, "{\"accountId\":\"acc-site\",\"email\":\"pool@example.com\",\"status\":\"ACTIVE\"}");
+
+        var result = client.socialSignup("pool@example.com", "GOOGLE", "google-1", "Pool", "fan-platform");
+
+        assertThat(result.accountId()).isEqualTo("acc-site");
+        assertThat(result.tenantId()).isNull();
+        assertThat(result.poolAccount()).isFalse();
     }
 }

@@ -367,7 +367,9 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 - **그 테넌트에 신원이 없으면 그 테넌트에서 가입한다** — account-service `social-signup` 에 client 테넌트를 보내고, 그 테넌트 안에서 이메일로
   기존 계정을 찾아 연결하거나 새로 만든다([oauth-social-login.md § 계정 연결 전략](oauth-social-login.md#계정-연결-전략)). 폼 로그인과 같은 결과다 —
   **테넌트마다 한 계정**. 같은 구글 사용자가 스토어 → 팬 순서로 들어오면 계정 둘 · 신원 행 둘(테넌트마다 하나)이다.
-  🔵 **ADR-MONO-078 이후 소비자 사이트에서는 바뀐다** — 새 소셜 가입은 풀 계정이고 신원 행은 `consumer-pool` 에 하나다([§ 소비자 계정 풀](#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742), 구현 `TASK-BE-617`). 이 문단은 그 구현 전의 동작이다.
+  🔵 **ADR-MONO-078 이후 소비자 사이트에서는 바뀐다 — 구현됨(`TASK-BE-617`)**: 소비자 사이트 client 는 `consumer-pool` 신원 행을 **먼저** 찾고, 새 소셜 가입은
+  (풀 플래그가 켜져 있으면) 풀 계정이고 신원 행은 `consumer-pool` 에 하나다([§ 소비자 계정 풀](#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742) § 2). 이 문단의 «테넌트마다 한 계정» 은
+  B2B 테넌트 · 플래그 꺼짐 · 078 이전에 만들어진 사이트별 신원(그대로 그 사이트 계정으로 간다)에 남는다.
 - **BE-611 이전**: 조회가 전역이라 다른 테넌트에서 만든 신원이 잡혔다 — `ecommerce` 에서 만든 신원으로 팬 client 에 들어가면 `ecommerce`
   계정이 `tenant_id=fan-platform` 세션으로 들어갔다(16차 창 구조적 재현, `TASK-MONO-672` 항목 18). 두 테넌트에 행이 생기면 전역 조회는 결과가
   둘이 되어 그 신원의 로그인이 영구히 실패할 수 있었다(`TASK-BE-602` 후속 ①) — 한정 조회는 unique 키 그대로라 결과가 최대 하나다.
@@ -409,10 +411,13 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   product-service 셀러 온보딩)이 **소비자 사이트**에 오면 거절한다 — 그 엔드포인트의 기존 중복 응답 `409 ACCOUNT_ALREADY_EXISTS`. B2B · 고객 테넌트(wms · erp ·
   demo-corp …)는 대상이 아니다(D1 — 테넌트별 계정). 잠정 결과: 풀 쇼퍼를 같은 이메일로 셀러 온보딩할 수 없다 — 셀러 계정은 지금 `seller+<tenant>+<sellerId>@marketplace.local` 기계 계정이라 실제로 부딪히지 않는다. 사람 계정을 셀러에 연결하는 모델은 `ADR-MONO-079`(`TASK-MONO-747`, `TASK-MONO-745` 흡수) 몫이고, 그 전까지는
   product-service 의 기존 fail-soft 대로 `PENDING_PROVISIONING` 에 머문다.
-- 🔴 **소셜 가입도 같다 (`TASK-BE-620`, `TASK-BE-617` 보류 동안의 방어)**: 소셜 가입(`POST /internal/accounts/social-signup`)은 아직 풀이 아니라
-  **사이트 계정**을 만든다(풀 소셜은 `TASK-BE-617`, 소셜 키가 실제로 주입될 때까지 보류). 그 사이트 안에 같은 이메일의 사이트 계정이 있으면 지금처럼 그 계정으로
-  들어가고(기존 동작), 없는데 **풀 계정이 그 이메일로 있으면 거절한다**(`409 ACCOUNT_ALREADY_EXISTS` → 로그인 화면 `error=email_registered`
-  «이미 이메일·비밀번호로 가입된 주소» 안내). 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존한다 — 이 절이 금지하는 상태다.
+- 🔴 **소셜 가입도 같다 (`TASK-BE-620` 방어 → `TASK-BE-617` 풀 소셜)**: 소비자 사이트 client 의 새 소셜 가입(`POST /internal/accounts/social-signup`)은 풀 플래그가
+  켜져 있으면 **풀 계정** + 그 사이트 멤버십을 만들고, 신원 행은 `consumer-pool` 에 쓴다(auth-service 는 신원을 `consumer-pool` 에서 먼저 찾는다 — 폼 로그인의 풀-먼저와 같은 결).
+  순서([auth-to-account-social.md](../contracts/http/internal/auth-to-account-social.md)): ① 그 사이트 안에 같은 이메일의 **사이트 계정**이 있으면 지금처럼 그 계정으로 들어간다
+  (사이트별 계정은 묶이기 전까지 그대로 — 기존 동작) ② 같은 이메일의 **풀 계정**이 있으면 **거절**(`409 ACCOUNT_ALREADY_EXISTS` → `error=email_registered`) —
+  🔴 **이메일로 풀 계정에 붙이지 않는다**(ADR-MONO-078 D2: 이메일을 검증하지 않는 제공자를 통한 탈취 경로. `TASK-BE-617` AC-2 대조군) ③ 다른 소비자 사이트에 같은 이메일의
+  사이트 계정이 있으면 거절(폼 가입과 같은 공존 금지) ④ 그 밖 → 풀 계정. 플래그가 꺼져 있으면 사이트 계정을 만들고 ②만 남는다(`TASK-BE-620` 그대로).
+  🔵 `TASK-BE-620` 의 검사는 **지우지 않았다** — 풀 경로에서는 ② 가 곧 D2 대조군이고, 꺼진 경로에서는 620 그대로의 방어다(`TASK-BE-617` § 620 결정).
 
 #### 3. 기존 계정 — 한 사이트에만 있으면 **같은 id 로** 풀로 옮긴다
 
@@ -430,7 +435,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   | `account_roles`(그 사이트) | → `consumer_site_roles(account, site, role)` 후 원래 행 삭제(계정 테넌트 변경 **전에** — 복합 FK) | § 1 |
   | `consumer_site_memberships` | **신설** `(account, site, ACTIVE, consented_at = 계정 생성 시각)` | 가입 = 그 사이트 동의(§ 2) |
   | `refresh_tokens` | **옮기지 않는다** | 미러 행 테넌트는 계정이 아니라 **세션 테넌트**(= 토큰의 사이트, § 4 «refresh») — 이미 목표 모양이다. 옮기면 refresh 가 `TOKEN_TENANT_MISMATCH` |
-  | `social_identities` | **옮기지 않는다** — 소셜 신원이 있는 계정은 **통째로 건너뛴다** | 소셜 로그인이 `(사이트, provider, 사용자)` 로 찾는다 — 옮기면 그 사람의 소셜 로그인이 끊긴다. 소셜 조회를 풀에 맞추는 `TASK-BE-617` 이 같은 이동기로 옮긴다 |
+  | `social_identities` | **옮기지 않는다** — 소셜 신원이 있는 계정은 **통째로 건너뛴다**(`SOCIAL_LINKED`) — 🔵 `TASK-BE-617` 결정(2026-10-05 UTC): **사이트 계정으로 남는다** | 소셜 로그인이 `(사이트, provider, 사용자)` 로 찾는다 — 옮기면 그 사람의 소셜 로그인이 끊긴다. 617 이 조회를 풀-먼저로 바꿨지만 이동기는 바꾸지 않았다: 그 모집단은 배포 환경에서 0 이고(실제 소셜 키가 배포된 적 없음 · 617 이후 소비자 사이트의 새 소셜 가입은 풀) 남은 사람은 사이트 신원 그대로 로그인된다(AC-3). 그 이메일들에는 § 2 의 «사이트 계정 이메일로 풀 가입 거절» 이 계속 걸린다. 되살리는 조건 = 그 계정 수가 0 이 아닌 것이 실측될 때 — 이동기 판정 4 를 «신원 행도 같이 옮긴다» 로 바꾸는 티켓을 연다 |
   | `account_status_history` | **옮기지 않는다** | append-only(DB 트리거, audit-heavy A3). 읽기는 전부 `account_id` 로만 — 404 가 나지 않는다 |
 
   운영자 측면 판정(아래 표)에는 **운영자 신원 연결**(ADR-MONO-034 U3 — `admin_operators.identity_id` 가 이 계정의 신원)도 들어간다: 신원 행을 풀로 옮기면 그 운영자의
@@ -569,7 +574,8 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 멤버십 없으면 토큰 없음 · 동의 화면 | `TASK-BE-616` |
 | 같은 이메일 공존 금지(§ 2) | `TASK-BE-614` — 사이트별 계정이 있는 이메일로 풀 가입 → 거절 |
 | 사이트별 계정은 재인증 유지 | `TASK-BE-615` — `SsoTenantGateIntegrationTest` 기존 칸 그대로 초록 |
-| 이메일만으로 안 묶인다 | `TASK-BE-617` 대조군 (`TASK-MONO-743` 은 2026-10-06 구현 없이 종결) |
+| 이메일만으로 안 묶인다 | `TASK-BE-617` 대조군 (`TASK-MONO-743` 은 2026-10-06 구현 없이 종결) — account-service `SocialSignupUseCaseConsumerPoolTest`(풀 이메일 → 409 · 경합도 409) · `ConsumerPoolSocialSignupIntegrationTest`; auth-service `OAuthLoginUseCaseConsumerPoolTest` · `ConsumerPoolSocialLoginIntegrationTest`(비밀번호 풀 계정 이메일의 소셜 → `email_registered` · 신원 행 0) |
+| 소셜 가입 = 풀 계정 · 신원 행 `consumer-pool` · 다른 사이트는 동의 화면 · 사이트별 소셜 신원은 그대로 | `TASK-BE-617` — auth-service `ConsumerPoolSocialLoginIntegrationTest`; account-service `ConsumerPoolSocialSignupIntegrationTest` |
 | 사이트로 찾는 목록에 풀 멤버 포함 | `TASK-BE-614` — `ecommerce` 목록에 풀 가입 쇼핑객 |
 | `account.created` 사이트별 1회 | `TASK-BE-614`(가입) · `TASK-BE-616`(동의) — 이벤트 `tenantId` 단언 |
 | 한 사이트 계정의 이동(§ 3) — 옮길 행 전부 · 셀러/두 사이트 제외 · 실패 시 무변경 · 재실행 · `account.created` 없음 | `TASK-BE-618` — account-service `ConsumerPoolLegacyMoveIntegrationTest` |
