@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** 🟢 **2026-10-06 보류 해제(소유자 «추천대로 진행»)** — Google·Naver 키 SSM 저장 완료, 배포는 `TASK-MONO-763`(이 티켓 뒤 머지). 착수 가능. (READY · ⏳ ~~보류~~ 2026-10-02 UTC 소유자 결정 — 소셜 키가 어느 배포에도 없어 성공 불가 · 소셜 신원 0개, AC-00 게이트: 실제 키 주입 시 착수 · 보류 동안 방어 = `TASK-BE-620` · 2026-10-01 UTC · 선행 614~616 — 743 은 2026-10-02 보류로 빠짐 · 618 이 건너뛴 소셜 연결 계정 인계). 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군). 🔴🔴 **2026-10-06 순서 규칙**: 실제 소셜 키는 **이 티켓 머지 이후(또는 같은 PR)에만** 배포 환경에 넣는다 — 그 전엔 소셜 가입이 사이트별 계정을 만들고, 묶기(743)는 구현 없이 닫혔다. 키가 먼저 들어갔으면 AC-00′(이중 사이트 소셜 계정 수) 부터.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -114,6 +113,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## in-progress
 
 - `TASK-BE-623-hide-social-providers-without-keys.md` — **로그인 화면이 키 없는 소셜 제공자 버튼을 그리지 않는다** (IN-PROGRESS, 2026-10-06 UTC). 지금 `LoginPageController` 가 `OAuthProvider` 넷을 무조건 그려 데모에서 누르면 실패하는 버튼이 넷. 판정 = client-id·secret 둘 다 기본값(`test-*`)·빈값이 아님 · 직접 `/login/oauth/{p}` 진입도 같은 판정 · 대조군 = 반쪽 설정은 숨김. 순서 제약 없음(버튼을 줄이기만). 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (IN-PROGRESS, 2026-10-05 UTC 착수). 소비자 사이트의 새 소셜 가입 = 풀 계정 + 그 사이트 멤버십 · 신원 행 `consumer-pool` · 풀-먼저 조회. 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군). 618 이 건너뛴 소셜 연결 사이트 계정은 **사이트 계정으로 남긴다**(결정 기록은 티켓). 🔴🔴 순서 규칙: 실제 소셜 키 배포(`TASK-MONO-763`)는 이 티켓 머지 뒤. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

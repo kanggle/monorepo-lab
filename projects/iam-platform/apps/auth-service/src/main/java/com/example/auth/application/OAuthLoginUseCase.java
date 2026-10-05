@@ -17,6 +17,7 @@ import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
+import com.example.auth.domain.tenant.TenantContext;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -89,9 +90,10 @@ public class OAuthLoginUseCase {
      *
      * @param command the browser callback command (carries provider, code, state,
      *                browser callback URI, and request session context)
-     * @param tenantId the tenant the new social-identity row is attributed to,
-     *                derived from the initiating OIDC client by the caller
-     * @return the resolved account id, email, and new-account flag (no tokens)
+     * @param tenantId the initiating OIDC client's tenant (derived by the caller). The social-identity
+     *                row is attributed to it — except for a consumer-POOL account (TASK-BE-617), whose
+     *                row lives in {@code consumer-pool}
+     * @return the resolved account id, email, new-account flag and whether it is a pool account (no tokens)
      */
     public BrowserLoginResolution resolveBrowserLogin(OAuthCallbackCommand command, String tenantId) {
         // TASK-BE-507: the same client-derived tenant that attributes the social-identity row
@@ -114,9 +116,11 @@ public class OAuthLoginUseCase {
         // Session-establishing transactional tail — social_identity upsert + status
         // check ONLY. No JWT / device session / refresh token.
         try {
+            // TASK-BE-617: a pool account's identity row lives in consumer-pool (found there, or created
+            // there for a new pool signup); every other account's in the client tenant, as before.
             socialIdentityPersistStep.persistIdentityAndCheckStatus(
                     resolved.provider(), resolved.userInfo(),
-                    resolved.accountId(), tenantId,
+                    resolved.accountId(), resolved.identityTenant(tenantId),
                     resolved.account().map(AccountStatusWithTenantLookupResult::accountStatus));
         } catch (AccountLockedException | AccountStatusException rejection) {
             String reason = AccountStatusRule.eventFailureReason(rejection);
@@ -134,7 +138,8 @@ public class OAuthLoginUseCase {
                 loginEventRecorder.recordSucceeded(t.accountId(), t.tenantId(), t.ctx(), t.loginMethod())));
 
         return new BrowserLoginResolution(
-                resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount());
+                resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount(),
+                resolved.poolAccount());
     }
 
     /**
@@ -246,27 +251,42 @@ public class OAuthLoginUseCase {
             throw new OAuthEmailRequiredException();
         }
 
+        // TASK-BE-617 (oauth-social-login.md § 계정 연결 전략 0) — POOL FIRST, as the form login looks the
+        // pool credential up first: a consumer-site client finds a consumer-pool identity before its own
+        // tenant's. Empty for the console, a B2B client, or no pool identity.
+        Optional<SocialIdentity> poolIdentity = poolIdentityFor(provider, userInfo, tenantId);
+
         // Non-txn DB read: does a local social identity already exist for this provider user
         // IN THE INITIATING CLIENT'S TENANT? TASK-BE-611: the lookup used to be global, so an
         // identity made under another tenant's client resolved this login to that tenant's
         // account while the session was stamped with this client's tenant. A miss now signs up
         // in this tenant (socialSignup below) — one account per tenant, as the form path does.
-        Optional<SocialIdentity> existingIdentity =
-                socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(
+        // TASK-BE-617: this is also where a pre-ADR-MONO-078 SITE identity keeps resolving to its site
+        // account (AC-3) — it is asked only when the pool had none.
+        Optional<SocialIdentity> existingIdentity = poolIdentity.isPresent()
+                ? poolIdentity
+                : socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(
                         tenantId, provider.name(), userInfo.providerUserId());
 
         // Internal HTTP to account-service. OUTSIDE @Transactional (TASK-BE-072).
         String accountId;
         boolean isNewAccount;
+        boolean poolAccount;
         if (existingIdentity.isPresent()) {
             accountId = existingIdentity.get().getAccountId();
             isNewAccount = false;
+            poolAccount = poolIdentity.isPresent();
         } else {
+            // 🔴 TASK-BE-617 AC-2: account-service never links this provider identity to an existing POOL
+            // account by email (ADR-MONO-078 D2) — it answers 409 → SocialSignupEmailRegisteredException.
             SocialSignupResult signupResult = accountServicePort.socialSignup(
                     userInfo.email(), provider.name(), userInfo.providerUserId(), userInfo.name(),
                     tenantId);
             accountId = signupResult.accountId();
             isNewAccount = signupResult.newAccount();
+            // Only a consumer-site client can have been signed up into the pool; trusting the answer for
+            // any other client would put a pool principal on the console.
+            poolAccount = signupResult.poolAccount() && TenantContext.poolPrincipalMapsTo(tenantId);
         }
 
         // Pre-fetched account status AND the account's own tenant (TASK-BE-602 — replaces the
@@ -282,7 +302,54 @@ public class OAuthLoginUseCase {
         Optional<AccountStatusWithTenantLookupResult> account =
                 accountServicePort.getAccountStatusAndTenant(accountId);
 
-        return new ResolvedSocialLogin(provider, userInfo, accountId, isNewAccount, account);
+        return new ResolvedSocialLogin(provider, userInfo, accountId, isNewAccount, poolAccount, account);
+    }
+
+    /**
+     * TASK-BE-617 — the consumer-POOL identity for this provider user, when this login comes through a
+     * client a pool account can map onto. Mirrors {@code CredentialAuthenticationProvider#poolCredentialFor}
+     * (the form login's pool-first), so the two login methods pick a pool account under the same rule:
+     *
+     * <ul>
+     *   <li>Only for a client tenant a pool principal maps onto ({@link TenantContext#poolPrincipalMapsTo} —
+     *       never the console, never the pool itself), and only when a pool identity EXISTS. Without one
+     *       this is one indexed read and the rest of the resolution is byte-unchanged.</li>
+     *   <li>Then account-service is asked whether the client's tenant is a consumer site. A B2B client
+     *       (wms, erp …) does not take the pool identity — its own tenant's identity decides.</li>
+     *   <li>That lookup failing is fail-CLOSED ({@link AccountServiceUnavailableException} →
+     *       {@code temporarily_unavailable}): choosing either account without the answer could sign the
+     *       person into the wrong one.</li>
+     *   <li>Membership is not required here: a pool account with no membership of this site logs in, and
+     *       the authorize gate shows that site's first-visit consent (TASK-BE-616) — the form login's
+     *       behaviour.</li>
+     * </ul>
+     */
+    private Optional<SocialIdentity> poolIdentityFor(OAuthProvider provider, OAuthUserInfo userInfo,
+                                                     String clientTenant) {
+        if (!TenantContext.poolPrincipalMapsTo(clientTenant)) {
+            return Optional.empty();
+        }
+        Optional<SocialIdentity> pool =
+                socialIdentityRepository.findPoolIdentity(provider.name(), userInfo.providerUserId());
+        if (pool.isEmpty()) {
+            return Optional.empty();
+        }
+        boolean consumerSite;
+        try {
+            consumerSite = accountServicePort
+                    .getConsumerSiteMembership(clientTenant, pool.get().getAccountId())
+                    .consumerSite();
+        } catch (AccountServiceUnavailableException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new AccountServiceUnavailableException("Consumer-site lookup is unavailable", e);
+        }
+        if (!consumerSite) {
+            log.debug("social login: client tenant={} is not a consumer site — the pool identity is not "
+                    + "considered (TASK-BE-617)", clientTenant);
+            return Optional.empty();
+        }
+        return pool;
     }
 
     /** Internal holder for the shared pre-resolution result. */
@@ -291,8 +358,16 @@ public class OAuthLoginUseCase {
             OAuthUserInfo userInfo,
             String accountId,
             boolean isNewAccount,
+            boolean poolAccount,
             Optional<AccountStatusWithTenantLookupResult> account
     ) {
+        /**
+         * TASK-BE-617 — the tenant the social-identity row is read and written under: {@code consumer-pool}
+         * for a pool account, the initiating client's tenant otherwise (unchanged since TASK-BE-611).
+         */
+        String identityTenant(String clientTenant) {
+            return poolAccount ? TenantContext.CONSUMER_POOL_TENANT_ID : clientTenant;
+        }
     }
 
     private OAuthProvider parseProvider(String providerStr) {
