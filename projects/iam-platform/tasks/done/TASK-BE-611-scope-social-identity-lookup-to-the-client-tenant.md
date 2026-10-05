@@ -4,7 +4,7 @@ TASK-BE-611
 
 # Status
 
-review
+done
 
 # Title
 
@@ -160,3 +160,35 @@ iam-platform
 ## CORRECTION (2026-10-05 UTC) — 20차 창(2026-10-04 UTC · i-0c4859442f56d70e0 · ami-0d78d476824493d77 · f0927bcd0)에서도 AC-2 는 재지 않았다 (review 유지)
 
 - 20차 창은 `TASK-MONO-697` · `758` · `759` · `TASK-FAN-BE-050` · `TASK-PC-FE-304` · `306` 판정에 썼고, AC-2 의 소셜 스텁 재현은 **미뤘다**. AC-2 는 여전히 `[ ]` 다. 위 § AC-2 창 런북과 18차 절의 재현 조건(스텁 방식 · 새 `provider_user_id`·이메일 · BE-620 거절과 겹치지 않는 이메일)은 그대로다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-2 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다. 전부 SSM 으로 했다(소유자 조작 없음). 16차 방식: 호스트 python Kakao 스텁(`172.20.0.1:18611` — iam 네트워크 게이트웨이) + auth-service 를 KAKAO URI 오버라이드로 재생성.
+
+**재생성 안전장치**(`TASK-BE-602` § 재생성 함정): `DEMO_DOMAIN` 을 먼저 정하고 `infra/demo/demo.env` 를 읽은 뒤 `docker compose -p iam`(라벨의 4 파일 + 임시 오버라이드)로 `auth-service` 만. 재생성 **전** 환경 변수를 저장해 **후**와 비교했다 — 08:23:33Z: 차이 = `OAUTH_KAKAO_*` 5개 추가뿐 · 다른 값 변화 0 · 발급자 `https://auth.hubwang.com` · healthy. 허용 리다이렉트에 `https://auth.hubwang.com/login/oauth/kakao/callback` 을 더했다(BE-602 함정 ②).
+
+**재현** — 새 `provider_user_id=611188613` · 새 이메일 `be611-082333@ex.io`(16차 `60218261625` 와 겹치지 않음). 쿠키 유지 curl + PKCE 로 authorize → `/login/oauth/kakao` 302(state) → 콜백 `?code=any&state=` → 저장된 authorize 재개 → client redirect_uri 로 **코드 발급**.
+
+| 단계 (08:24:42Z) | `auth_db.social_identities` (provider_user_id) | `account_db.accounts` (email) |
+|---|---|---|
+| 시작 전 | 0 | 0 |
+| 스토어 client 로그인 → 코드 발급 | 1 — `ecommerce` · `03242853-…` | 1 — `ecommerce` · ACTIVE |
+| 팬 client 로그인 → 코드 발급 | **2** — `ecommerce` · `fan-platform`(`720df7bd-…`) — account_id **서로 다름** | **2** — 테넌트별 |
+| 대조: 스토어 client 재로그인 → 코드 발급 | 2 (변화 없음 = 같은 계정) | 2 (변화 없음) |
+
+- 바인딩 확인: 스텁 접근 로그 `POST /oauth/token` 3 · `GET /v2/user/me` 4(1건은 기동 확인 요청). BE-611 이전(16차 항목 18) 값은 1행 · 1행(팬 로그인이 스토어 계정으로 들어갔다).
+
+**원상복구**(08:25:20Z) — 오버라이드 없이 같은 명령으로 재생성 → 환경 변수가 **재생성 전 스냅샷과 완전히 같다**(`cmp`) · 발급자 `https://auth.hubwang.com` · `OAUTH_KAKAO_*` 0 · 스텁 프로세스 0 · 임시 파일 삭제 · `/login` 200. 08:26:03Z 데모 계정 스토어·팬 토큰 발급 정상.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4061` | `state=MERGED` · mergedAt 2026-09-29T07:45:36Z · mergeCommit `fa3940bf7` |
+| (b) origin/main 조상 | 참 · 21차 AMI 커밋 `678b6d003` 의 조상 |
+| (c) 머지 시점 실패 체크 | 67 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-2 외 `[x]` · **AC-2 = 이 절에서 닫힘** (동사 «계정 2 · 신원 2(테넌트별)로 바뀌는지» = 위 표 · 대조군 포함) |
+
+⇒ **`review/` → `done/`.**

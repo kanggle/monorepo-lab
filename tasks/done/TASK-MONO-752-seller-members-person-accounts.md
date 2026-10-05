@@ -8,7 +8,7 @@ TASK-MONO-752
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -166,3 +166,33 @@ monorepo
 
 - (a) #4126 `MERGED` · (b) 스쿼시 `761f5a58b` 가 `origin/main` 에 포함 · (c) 머지 시점 rollup 실패 0/69 — iam A·B · ecommerce A·B·C 통합 잡 전부 실제로 돌아 SUCCESS.
 - (d) **닫지 않는다.** AC-1(수락 대조군)·AC-4(구성원 잠금 ≠ 셀러 정지)는 시험으로 닫혔다(`SellerMemberServiceTest#ac1_controlGroup` · `SellerMemberLockDoesNotSuspendSellerTest`, CI 통합 SUCCESS). 그러나 **AC-2·AC-3 의 동사는 «토큰 역할 = …»** 이고, 수락·정지 뒤의 실제 토큰은 아직 한 번도 발급되지 않았다 — 지금 근거는 «IAM 이 쓰는 행 + 토큰 발급 규칙(`TenantClaimPoolPrincipalTest`)» 의 **조합**이지 관측이 아니다. 재굽기 뒤 창에서 스토어 토큰 `["CUSTOMER","SELLER"]` → 정지 → `["CUSTOMER"]` · 팬 토큰에 `SELLER` 없음을 실제로 읽어 닫는다.
+
+---
+
+## CORRECTION (2026-10-05 UTC) — 21차 창 판정 (i-0aa3180ae21de4445 · ami-0a7b20c97325be01d · 678b6d003) — AC-2 · AC-3 닫힘
+
+> 분석=Opus 5.5. 덧붙이기만 한다.
+
+**준비** — 소유자가 콘솔(운영자 `demo@demo.com` · 테넌트 `ecommerce`)에서 판정용 셀러 `test-seller-752` 를 만들고 활성화한 뒤, 이메일 `demo@demo.com` 으로 초대했다(같은 이메일의 **소비자** 풀 계정 — 직원·소비자 계정은 별개, ADR-078/079). 시드 셀러 `demo-seller` 는 정산 화면이 물고 있어 쓰지 않았다.
+**전제 확인**(IAM `iam-mysql`, 07:22Z): 소비자 `demo@demo.com` = `consumer-pool` 계정 하나(`…ec01`, ACTIVE) · 사이트 멤버십 `ecommerce` ACTIVE · `fan-platform` ACTIVE · 사이트 역할 **0**(기준선).
+**토큰 판독** — 인스턴스 안에서 시드 `infra/demo/seed/lib.sh` 의 `user_token`(authorization_code + PKCE, 스토어 client `ecommerce-web-store-client` · 팬 client `fan-platform-user-flow-client`)으로 발급하고, 페이로드의 `sub · tenant_id · roles · aud` 만 출력했다(토큰·비밀번호·시크릿 미출력). 수락은 로그인한 스토어 토큰으로 `POST /api/seller-invitations/accept` 직접 호출(스토어 수락 화면은 없다 — § 구현 기록의 후속 후보).
+
+| 시각(UTC) | 단계 | 스토어 토큰 `roles` | 팬 토큰 `roles` |
+|---|---|---|---|
+| 07:28:42 | 기준선 | `["CUSTOMER"]` | `["FAN"]` |
+| 07:29:04 | 수락 → **HTTP 200** `{"sellerId":"test-seller-752","role":"MEMBER","status":"ACTIVE"}` | **`["CUSTOMER","SELLER"]`** ✅ AC-2 | `["FAN"]` — `SELLER` 없음 ✅ AC-2 |
+| 08:21:52 | 소유자가 콘솔에서 셀러 **정지** 뒤 | **`["CUSTOMER"]`** ✅ AC-3 (SELLER 만 빠짐) | `["FAN"]` · 발급 성공 = 팬 로그인 그대로 ✅ AC-3 |
+
+- 세 번 모두 같은 `sub`(`0199de70-…-ec01`) — 한 풀 계정의 사이트별 토큰이다. 정지 뒤에도 두 토큰이 발급됐다 ⇒ 계정은 잠기지 않았다(ADR-079 D5 «정지 = 역할 회수, 잠금 아님»).
+- ⚪ 정지 뒤 `consumer_site_roles` 행을 직접 읽으려던 질의는 컬럼 이름을 잘못 써 실패했다(`role`). 판정은 AC 의 동사(«토큰 역할») 대로 토큰으로 했다.
+
+### 4차원 (close chore)
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4126` | `state=MERGED` · mergeCommit `761f5a58b` |
+| (b) origin/main 조상 | 참 · 21차 AMI 커밋 `678b6d003` 의 조상 |
+| (c) 머지 시점 실패 체크 | 69 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-1 · AC-4 = 시험으로 닫힘(10-03 CORRECTION) · **AC-2 · AC-3 = 이 절에서 닫힘** |
+
+⇒ **`review/` → `done/`.**

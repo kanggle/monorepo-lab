@@ -87,11 +87,11 @@ _(없음)_
 
 ## review
 
-- `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — 🟡 **REVIEW** — web-store «켜지는 중» 배너가 **데모 선택 전체**(`/status` `selection_ready`)를 따라, 스토어 묶음이 ready 인데도 콘솔 애드온 `console-scm` 재기동(20차 창) 중에 떴다. AC-0: 세 앱 모두 공유 해석기의 `starting`(= `selection_ready === false`)을 쓰고, 해석기는 `/bundles` 를 안 읽는다. 이 동작은 09-15 소유자 결정 ⓑ의 알려진 대가다. 🔵 **소유자 결정 (나)(2026-10-04)**: 기준은 유지하고, 문구를 판정이 아는 것(«선택한 데모 화면 중 일부가 아직 켜지는 중 · 이 스토어는 이미 준비됐을 수 있지만 …»)으로 바로잡았다. «장바구니» 도 뺐다(FE-102/103). bite = 시험만 담은 커밋에서 CI web-store `1 failed | 992 passed`(새 칸만) → 수정 뒤 `993 passed`. ⚪ AC-4 라이브. console·fan 문장은 그대로이고, 맞출지는 각 프로젝트 티켓이 정한다. 분석=Opus 5.5 / 구현=Opus.
 
 _(없음)_
 
 ## done
+- ✅ `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4155**, 스쿼시 **`678b6d003`** (머지 시점 실패 0/67). 소유자 결정 (나): 선택 전체 기준 유지 + 문구를 «선택한 데모 화면 중 일부가 아직 켜지는 중» 으로. **AC-4 🟢 21차 창**: `console-scm` 내림·올림 중 07:12:06–07:12:41Z `store` ready · `console-scm` booting · 스토어 탐침 `starting`(배포본 새 문장).
 
 - ✅ `TASK-FE-102-guest-cart-carried-over-on-login.md` — **DONE 2026-10-02 UTC (4-dim verified)** — impl PR **#4078**, 스쿼시 **`735bd02e1`** (머지 시점 실패 0/68 — SUCCESS 19 · SKIPPED 49; 첫 런 `cart-ui.test.tsx` 빨강은 같은 PR CORRECTION 에서 mock 수정). 비로그인 장바구니(`cart:guest`) · 로그인 시 계정 장바구니(`cart`)로 합치기 · 로그아웃 비우기(EF-3) 유지 · `/checkout*` 보호 유지. 머지 후 nightly 의무: `Frontend E2E full-stack (web-store)` 가 `afe0b135d`(run 36982306407) 에서 success — `auth-redirect.spec.ts` 의 `/cart` 제거·`/checkout` 칸 포함.
 - ✅ `TASK-FE-103-demo-off-banner-no-longer-says-cart-is-locked.md` — **DONE 2026-09-29 UTC (4-dim verified)** — impl PR **#4081**, 스쿼시 **`d187e3cba`** (머지 시점 실패 0/68; 첫 런 lint·build 의 next/font 외부 fetch 오류는 실패 잡 재실행으로 통과). TASK-FE-102 후속: 데모 꺼짐 배너가 장바구니를 «잠긴 기능» 으로 말하지 않는다 — «주문 같은 … 장바구니는 로그인 없이 담아 둘 수 있습니다». 라이브 배너 문구 확인.
