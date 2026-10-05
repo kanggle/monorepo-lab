@@ -152,7 +152,8 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
 
     expect(starting).not.toBe(running);
     // 🔵 «다르다» 가 «엉뚱한 배너» 로 성립하면 안 된다 — 무엇이 달라졌는지 단언한다.
-    expect(starting).toContain('데모 서버가 켜지는 중입니다');
+    // 🔵 문장 전체는 아래 TASK-FE-104 칸이 고정한다 — 여기는 «켜지는 중» 배너인지만 본다.
+    expect(starting).toContain('켜지는 중입니다');
     expect(running).not.toContain('켜지는 중');
   });
 
@@ -161,7 +162,7 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
     await renderClient();
 
     const notice = await screen.findByTestId('demo-backend-starting');
-    expect(notice).toHaveTextContent('데모 서버가 켜지는 중입니다');
+    expect(notice).toHaveTextContent('켜지는 중입니다');
     expect(notice.getAttribute('role')).toBe('status');
     // 🔴 이미 켜졌다 — 「서버를 켠 뒤」는 방문자를 론처로 돌려보내 중복 기동을 누르게 한다.
     expect(notice.textContent).not.toContain('꺼져 있어');
@@ -169,6 +170,24 @@ describe('DemoBackendNoticeClient — 방문 시점 판정', () => {
     // 🔴 켜지는 중에 무엇이 그려지는지는 잰 적이 없다 — 「샘플」을 주장하지 않는다(642 규칙).
     expect(notice.textContent).not.toContain('샘플');
     expect(screen.queryByTestId('demo-backend-notice')).toBeNull();
+  });
+
+  // 🔴🔴 TASK-FE-104 (소유자 결정 (나), 2026-10-04) — `starting` 은 «선택된 묶음 **전부**가 아직
+  //    ready 가 아니다» 이고 스토어 묶음은 이미 ready 일 수 있다(20차 창: 콘솔 애드온 `console-scm`
+  //    재기동 중 스토어에 배너). 기준은 유지하고 **문장이 판정이 아는 것만 말하게** 했다.
+  //    🔴 이 칸이 bite 다 — 옛 문장(«데모 서버가 켜지는 중입니다», 스토어 자신이 준비 중이라고
+  //    읽힌다)을 되살리면 여기서만 빨개진다.
+  it('🔴🔴 «켜지는 중» 배너는 «선택한 화면 일부» 라고 말한다 — 스토어 자신이 준비 중이라고 단정하지 않는다', async () => {
+    stubProbe({ state: 'starting' });
+    await renderClient();
+
+    const notice = await screen.findByTestId('demo-backend-starting');
+    expect(notice).toHaveTextContent('선택한 데모 화면 중 일부가 아직 켜지는 중입니다');
+    expect(notice).toHaveTextContent('이 스토어는 이미 준비됐을 수 있지만');
+    expect(notice.textContent).not.toContain('데모 서버가 켜지는 중입니다');
+    // 🔴 장바구니는 서버 없이 동작한다(TASK-FE-102) — 꺼짐 배너(FE-103)와 같은 규칙.
+    expect(notice.textContent).not.toContain('장바구니');
+    expect(notice).toHaveTextContent('로그인·주문');
   });
 
   it('🔵 대조군 — 탐침이 «꺼짐» 을 주면 «켜지는 중» 배너는 없다 (두 값을 한 화면으로 뭉치지 않는다)', async () => {
