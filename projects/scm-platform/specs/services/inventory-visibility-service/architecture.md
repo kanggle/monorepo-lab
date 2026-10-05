@@ -14,7 +14,7 @@
 | Deployable unit | `apps/inventory-visibility-service/` |
 | Data store | PostgreSQL `scm_inventory_visibility` schema (Flyway) + Redis aggregation cache |
 | Event publication | Kafka `scm.inventory.alert.v1` (best-effort, no outbox per ADR-MONO-005 Cat C) |
-| Event consumption | Kafka 3 topics: `wms.inventory.received.v1` / `wms.inventory.adjusted.v1` / `wms.inventory.transferred.v1` (cross-project, EventDedupe idempotency) |
+| Event consumption | Kafka 4 wms topics (cross-project, EventDedupe idempotency): `wms.inventory.received.v1` / `wms.inventory.adjusted.v1` / `wms.inventory.transferred.v1` / `wms.inventory.confirmed.v1` (TASK-MONO-762 added `confirmed`) — plus 1 intra-scm topic (`scm.procurement.inbound-expected.third-party.v1`) |
 
 ### Service Type Composition
 
@@ -33,6 +33,11 @@
   - `wms.inventory.received.v1` → upsert quantity snapshot
   - `wms.inventory.adjusted.v1` → delta apply on snapshot
   - `wms.inventory.transferred.v1` → dual-row update (source + destination nodes)
+  - `wms.inventory.confirmed.v1` → on-hand decrement per line (TASK-MONO-762 AC-0 ⓐ —
+    snapshot quantity means on-hand = available + reserved; `reserved`/`released` are
+    deliberately not subscribed). Never auto-registers the node and never auto-creates
+    the snapshot row — a missing row or a would-go-negative decrement throws (retry →
+    DLT), see [`inventory-visibility-subscriptions.md`](../../contracts/events/inventory-visibility-subscriptions.md)
 
 Both surfaces share the same domain model (`InventoryNode` + `InventorySnapshot` +
 `NodeStaleness`) and persistence. Read both
@@ -47,7 +52,7 @@ Cross-node inventory read-model. Consumes wms-platform inventory events (cross-p
 ## Architecture Style Rationale
 
 Hexagonal chosen because:
-1. Multiple inbound adapters coexist naturally: Kafka consumers (3 topics) and REST controllers share the same domain core without coupling.
+1. Multiple inbound adapters coexist naturally: Kafka consumers (4 wms topics + 1 intra-scm topic) and REST controllers share the same domain core without coupling.
 2. Domain logic (staleness evaluation, idempotency check) is framework-free and fully testable.
 3. Outbound adapters for JPA, Redis, Kafka alert publisher are interchangeable — important for testing (H2 slice tests) and future migration.
 
@@ -133,7 +138,7 @@ read-model for an authoritative source.
 
 ### event-consumer
 - Consumer group: `scm-inventory-visibility-v1`
-- 3 topics from wms-platform (cross-project): `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`
+- 4 topics from wms-platform (cross-project): `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`, `wms.inventory.confirmed.v1` (TASK-MONO-762)
 - Manual ACK mode
 - Retry: 3 attempts + DLT
 - Idempotency: `event_dedupe` table keyed on `eventId` (UUID v7)
@@ -144,7 +149,7 @@ read-model for an authoritative source.
 
 | Node type | Birth path | Trigger |
 |---|---|---|
-| `WMS_WAREHOUSE` | **Auto-registered** | First `wms.inventory.{received,adjusted,transferred}.v1` event referencing an unknown `nodeExternalId` (Edge Case 3, TASK-SCM-BE-003). Name/contactInfo start empty, enriched later; `warehouseCode` learned set-if-present (ADR-MONO-050 §D9). |
+| `WMS_WAREHOUSE` | **Auto-registered** | First `wms.inventory.{received,adjusted,transferred}.v1` event referencing an unknown `nodeExternalId` (Edge Case 3, TASK-SCM-BE-003). Name/contactInfo start empty, enriched later; `warehouseCode` learned set-if-present (ADR-MONO-050 §D9). 🔴 `wms.inventory.confirmed.v1` (TASK-MONO-762) is deliberately **not** in this list — it never auto-registers; see § Dependencies. |
 | `THIRD_PARTY_LOGISTICS` | **Explicitly registered** | `POST /api/inventory-visibility/nodes` (operator/onboarding action). A 3PL relationship has no upstream event stream to be born from — it is an onboarding fact, not an event side-effect. Named **at** registration (unlike the empty-then-enriched warehouse name); `warehouseCode` stays `null` (wms-only business code, not applicable). Idempotent on `(tenant_id, node_external_id)` — a repeat registration of the same external id is a no-op returning the existing node, not a duplicate. |
 | `SUPPLIER` / `IN_TRANSIT` | Declared, no active registration path in v1 | Reserved for a future task. |
 
@@ -206,7 +211,7 @@ This is the first `batch-heavy` trait code in scm-platform (TASK-SCM-BE-003).
 | Direction | Target | Protocol | Notes |
 |---|---|---|---|
 | In | scm-platform gateway-service | HTTP `/api/v1/inventory-visibility/**` | tenant-validated JWT 통과 후 라우팅 |
-| In | wms-platform Kafka | Consumer subscribed to `wms.inventory.{received,adjusted,transferred}.v1` | EventDedupe 멱등; cross-project 첫 사례 |
+| In | wms-platform Kafka | Consumer subscribed to `wms.inventory.{received,adjusted,transferred,confirmed}.v1` | EventDedupe 멱등; cross-project 첫 사례; `confirmed`(TASK-MONO-762)은 node/snapshot 을 auto-create 하지 않는 유일한 소비자 — 행이 없거나 음수가 되면 재시도→DLT |
 | Out | PostgreSQL (inventory-visibility schema) | JDBC | InventoryNode / InventorySnapshot / NodeStaleness / EventDedupe |
 | Out | Redis | TCP | read-model cache (fail-OPEN) |
 | Out | IAM `/oauth2/jwks` | HTTPS | JWT 서명 검증 (libs/java-security) |
@@ -217,7 +222,7 @@ Per [ADR-MONO-005](../../../../../docs/adr/ADR-MONO-005-saga-timeout-escalation-
 
 | Flow | Category | Resilience config | Fail behavior | Metrics | Status |
 |---|---|---|---|---|---|
-| wms inventory event consumption (`wms.inventory.{received,adjusted,transferred}.v1`) | **C** (single-step idempotent consume, retry + DLT, no saga row) | manual ACK; 3 retries exponential backoff (1s, 2s); invalid envelope (null `eventId`/`payload`) → immediate DLT, no retry | duplicate `eventId` skipped via `event_dedupe`; retry exhaustion → `<topic>.DLT` (no silent discard) | consumer lag, DLT route count, dedupe-skip count | Compliant |
+| wms inventory event consumption (`wms.inventory.{received,adjusted,transferred,confirmed}.v1`) | **C** (single-step idempotent consume, retry + DLT, no saga row) | manual ACK; 3 retries exponential backoff (1s, 2s); invalid envelope (null `eventId`/`payload`) → immediate DLT, no retry | duplicate `eventId` skipped via `event_dedupe`; retry exhaustion → `<topic>.DLT` (no silent discard); `confirmed` additionally retries→DLTs on a missing node/snapshot row or a would-go-negative decrement (TASK-MONO-762 AC-0, no auto-create) | consumer lag, DLT route count, dedupe-skip count | Compliant |
 | staleness detection sweep (`StalenessDetectionScheduler`) | **D** (periodic TTL-style sweep, cluster singleton) | `@Scheduled(fixedDelay = 5 min)` + ShedLock; each run recomputes node status from `last_event_at` (deterministic, rerun-safe) | ShedLock not acquired → silent skip + metric (not an error, B5) | run/lag/failure metrics (B6) | Compliant |
 
 The outbound `scm.inventory.alert.v1` publish is **at-most-once, no outbox** (Category C best-effort) — see § Outbox + audit_log invariants for the deliberate-deviation rationale.
@@ -237,7 +242,7 @@ The outbound `scm.inventory.alert.v1` publish is **at-most-once, no outbox** (Ca
 `inventory-visibility-service` has **no mutating REST endpoints**, so the `Idempotency-Key` header pattern (T1, used by `procurement-service`) does **not** apply here. Idempotency lives entirely on the **event-consumer** side (T8):
 
 - **Dedupe store**: `event_dedupe` table keyed on the wms envelope `eventId` (UUID v7). A duplicate `eventId` is skipped without mutation — re-delivering the same wms event leaves the snapshot byte-identical.
-- **Idempotent projection**: snapshot application is itself rerun-safe — `received` = upsert by `(skuId, nodeId)`, `adjusted` = delta apply guarded by the dedupe check, `transferred` = dual-row (source + destination) update in one unit. Replaying an already-applied `eventId` is a no-op.
+- **Idempotent projection**: snapshot application is itself rerun-safe — `received` = upsert by `(skuId, nodeId)`, `adjusted` = delta apply guarded by the dedupe check, `transferred` = dual-row (source + destination) update in one unit, `confirmed` = decrement guarded by the same dedupe check (TASK-MONO-762). Replaying an already-applied `eventId` is a no-op.
 - **Sweep idempotency** (batch-heavy B1): `StalenessDetectionScheduler` recomputes each node's status from `last_event_at`; running it twice in succession yields the same `NodeStaleness` rows (no accumulating side-effect).
 
 ```
@@ -275,7 +280,7 @@ unchanged.
 
 The published `scm.inventory.alert.v1` payload carries the projection tenant as `tenantId` (default `"scm"`). Consumed `wms-platform` events are cross-project but are projected into the single **projection tenant** scope.
 
-**Projection tenant (TASK-MONO-760).** The tenant under which event-driven writes land is one setting, `inventory-visibility.projection-tenant-id` (env `INVENTORY_VISIBILITY_PROJECTION_TENANT_ID`, default `scm`). It is read by every consumer that has no tenant of its own to go on — the three `wms.inventory.*` consumers and the 3PL inbound-expected consumer — and by the staleness detection batch, so that the batch scans the nodes those consumers created. Reads stay scoped by the token's `tenant_id` (above). The two meet only when the reader's token tenant equals the projection tenant: with the default, an operator whose active tenant (ADR-MONO-020) is some other customer sees an empty projection. A deployment whose operators work under one customer tenant sets the projection tenant to that tenant (the AWS demo sets `demo-corp` — `infra/demo/scm-identity.override.yml`). 🔴 It is a single value, not a mapping: wms events carry no tenant, so there is nothing to route on. Changing it does not move existing rows; they stay under the tenant they were written with.
+**Projection tenant (TASK-MONO-760).** The tenant under which event-driven writes land is one setting, `inventory-visibility.projection-tenant-id` (env `INVENTORY_VISIBILITY_PROJECTION_TENANT_ID`, default `scm`). It is read by every consumer that has no tenant of its own to go on — the four `wms.inventory.*` consumers (TASK-MONO-762 added `confirmed`) and the 3PL inbound-expected consumer — and by the staleness detection batch, so that the batch scans the nodes those consumers created. Reads stay scoped by the token's `tenant_id` (above). The two meet only when the reader's token tenant equals the projection tenant: with the default, an operator whose active tenant (ADR-MONO-020) is some other customer sees an empty projection. A deployment whose operators work under one customer tenant sets the projection tenant to that tenant (the AWS demo sets `demo-corp` — `infra/demo/scm-identity.override.yml`). 🔴 It is a single value, not a mapping: wms events carry no tenant, so there is nothing to route on. Changing it does not move existing rows; they stay under the tenant they were written with.
 
 ## Mandatory Rule mapping (rules/domains/scm.md)
 
@@ -342,16 +347,19 @@ The published `scm.inventory.alert.v1` payload carries the projection tenant as 
 | 14 | `POST /nodes/{nodeId}/observed-stock` — `nodeId` does not exist | 404 `NODE_NOT_FOUND` (TASK-SCM-BE-047) |
 | 15 | `POST /nodes/{nodeId}/observed-stock` — `nodeId` resolves to a non-`THIRD_PARTY_LOGISTICS` node (e.g. a wms warehouse), or a node belonging to a different tenant | 409 `NODE_TYPE_CONFLICT` — never silently mutates a wms node's snapshot, never auto-registers (TASK-SCM-BE-047 Failure Scenario B) |
 | 16 | `POST /nodes/{nodeId}/observed-stock` — a line's `observedAt` is older than the SKU's stored `lastEventAt` | that line is skipped (last-observation-wins by time); the request still returns 200 and staleness still refreshes (TASK-SCM-BE-047 Edge Case) |
+| 17 | `wms.inventory.confirmed.v1` references a node, or a node/SKU pair, with no existing snapshot row (out-of-order: `confirmed` arrived before `received`) | no row created — `InventorySnapshotNotFoundException` → 3 retries → `wms.inventory.confirmed.v1.DLT` (TASK-MONO-762 AC-0, no auto-create) |
+| 18 | `wms.inventory.confirmed.v1` line's decrement exceeds the stored on-hand quantity | not clamped — `NegativeSnapshotQuantityException` → 3 retries → DLT, same disposition as #17 (TASK-MONO-762 AC-0) |
 
 ## Testing Strategy
 
 - **Unit** (`./gradlew :apps:inventory-visibility-service:test`):
-  - Domain: `InventorySnapshot` (received upsert / adjusted delta / transferred dual-row apply), `NodeStaleness` FRESH/STALE/UNREACHABLE classification, `InventoryNode`, `ProcessedEventRecord`.
-  - Application: use-case services with mocked ports.
-  - Adapters: 3 Kafka consumer mappers, validator units (`TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`), `TenantClaimEnforcerTest`.
+  - Domain: `InventorySnapshot` (received upsert / adjusted delta / transferred dual-row apply / confirmed decrement — TASK-MONO-762), `NodeStaleness` FRESH/STALE/UNREACHABLE classification, `InventoryNode`, `ProcessedEventRecord`.
+  - Application: use-case services with mocked ports, incl. `applyInventoryConfirmed` (decrement, dedupe, multi-line, missing-row throw, would-go-negative throw — TASK-MONO-762).
+  - Adapters: 4 Kafka consumer mappers (TASK-MONO-762 added the `confirmed` consumer), validator units (`TenantClaimValidatorTest`, `AllowedIssuersValidatorTest`), `TenantClaimEnforcerTest`.
 - **Slice**: JPA adapter slices (H2), Redis cache adapter (fail-open path), REST controller slices (S5 `meta.warning` assertion), error-handler slice.
 - **Integration** (`./gradlew :apps:inventory-visibility-service:integrationTest`, `@Tag("integration")`, Testcontainers PostgreSQL + Redis + Kafka):
   - Consume `wms.inventory.{received,adjusted,transferred}.v1` → snapshot upsert / delta / dual-row.
+  - `wms.inventory.confirmed.v1` (TASK-MONO-762): received 95 then confirmed 10 → snapshot 85; control: received-only → 95; missing node/SKU row → DLT, no row created.
   - Duplicate `eventId` → idempotent skip (snapshot unchanged).
   - Poison envelope → DLT; transient error → 3-retry then DLT.
   - `StalenessDetectionScheduler` ShedLock — 2-instance singleton (only one runs); STALE/UNREACHABLE → `scm.inventory.alert.v1` published.

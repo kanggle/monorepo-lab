@@ -17,7 +17,41 @@ The authoritative envelope schema is at:
 | `wms.inventory.received.v1` | `inventory.received` | `WmsInventoryReceivedConsumer` |
 | `wms.inventory.adjusted.v1` | `inventory.adjusted` | `WmsInventoryAdjustedConsumer` |
 | `wms.inventory.transferred.v1` | `inventory.transferred` | `WmsInventoryTransferredConsumer` |
+| `wms.inventory.confirmed.v1` | `inventory.confirmed` | `WmsInventoryConfirmedConsumer` |
 | `scm.procurement.inbound-expected.third-party.v1` | `scm.procurement.inbound-expected.third-party` | `ScmThirdPartyInboundExpectedConsumer` |
+
+### `wms.inventory.confirmed.v1` — on-hand decrement (TASK-MONO-762 AC-0 ⓐ)
+
+Added by TASK-MONO-762 to fix the 21차 데모 window discrepancy where this service's snapshot
+quantity (95) diverged from wms's `available_qty` (85) for the same warehouse/SKU, because
+the outbound-confirmation leg of the wms inventory lifecycle was never subscribed to.
+
+**Decision (AC-0 ⓐ, owner, 2026-10-05 UTC)**: the snapshot quantity means **on-hand**
+(available + reserved). Only `wms.inventory.confirmed.v1` moves it — each line's `quantity`
+is subtracted from the snapshot for that warehouse/SKU. `wms.inventory.reserved.v1` and
+`wms.inventory.released.v1` are **deliberately not subscribed to** (they move stock between
+available and reserved, which on-hand is indifferent to — subscribing to them as well would
+double-count the same movement against on-hand).
+
+- Node resolution: the payload's top-level `warehouseId` (same external-id convention as
+  `wms.inventory.received.v1`, which is how the node for a warehouse is normally
+  auto-registered) — **not** auto-registered here; see below.
+- `payload.lines[]` — each line's `skuId` + `quantity` is one decrement
+  (`InventoryVisibilityApplicationService#applyInventoryConfirmed`).
+- **No auto-registration, no auto-create.** Unlike `received`/`adjusted`/`transferred`, this
+  consumer never calls `resolveOrCreateNode` and never creates a snapshot row. If the
+  warehouse node does not exist yet, or a snapshot row for `(node, sku)` does not exist
+  (Edge Case: `confirmed` arrives before `received` — e.g. partition skew), the use case
+  throws and the Kafka consumer's retry+DLT disposition applies (3 attempts, then
+  `wms.inventory.confirmed.v1.DLT`) — **never** a negative or zero-floored row.
+- **No clamping.** If a line's decrement would make the snapshot go negative, the use case
+  throws the same way (retry → DLT) rather than floor at zero — AC-0 chose surfacing the
+  discrepancy over silently understating on-hand.
+- Idempotency: the standard `event_dedupe` eventId check (T8), same as the other three wms
+  consumers — a re-delivered `confirmed` event is skipped without a second decrement.
+- Multiple lines in one event each decrement independently within the same transaction; a
+  failure on any one line rolls back the whole event (mirrors
+  `applyInventoryTransferred`'s atomic source+destination update).
 
 ### Intra-scm subscription — 3PL inbound-expected honour sink (ADR-MONO-055 §D4 / TASK-SCM-BE-049)
 

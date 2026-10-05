@@ -2,6 +2,7 @@ package com.example.scmplatform.inventoryvisibility.adapter.inbound.messaging;
 
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.batch.StalenessDetectionScheduler;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ConfirmedLine;
 import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -88,6 +89,20 @@ class ProjectionTenantConsumersTest {
 
         verify(service).applyInventoryTransferred(eq("loc-a"), eq("loc-b"), eq("sku-1"), eq(4L),
                 isNull(), any(UUID.class), any(Instant.class), eq(TENANT), anyString());
+    }
+
+    @Test
+    @DisplayName("wms.inventory.confirmed → applyInventoryConfirmed(…, projection tenant, …) (TASK-MONO-762)")
+    void confirmed() throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("warehouseId", "wh-1");
+        payload.put("lines", List.of(Map.of("skuId", "sku-1", "quantity", 10)));
+
+        new WmsInventoryConfirmedConsumer(service, objectMapper, projectionTenant)
+                .consume(record("wms.inventory.confirmed.v1", "inventory.confirmed", payload), ack);
+
+        verify(service).applyInventoryConfirmed(eq("wh-1"), eq(List.of(new ConfirmedLine("sku-1", 10L))),
+                any(UUID.class), any(Instant.class), eq(TENANT), anyString());
     }
 
     @Test

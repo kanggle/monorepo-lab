@@ -14,7 +14,7 @@ Index of this project's event contracts and the project's declared choices for t
 |---|---|---|
 | `scm.procurement.<aggregate>.<fact>.v1` — one topic per `eventType` | `scm.procurement.po.submitted.v1`, `scm.procurement.po.acknowledged.v1`, `scm.procurement.asn.received.v1` | procurement-service, transactional outbox, named `TOPIC_*`/`EVENT_*` constants |
 | `scm.inventory.alert.v1` — a **single shared topic** for a whole alert family (subtype lives only in `eventType`, not the topic) | `scm.inventory.alert.v1` | inventory-visibility-service, direct `KafkaTemplate.send`, no outbox |
-| `wms.inventory.<action>.v1` — wms-owned scheme, scm does not control it | `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`, `wms.inventory.alert.v1` | consumed only, from wms-platform |
+| `wms.inventory.<action>.v1` — wms-owned scheme, scm does not control it | `wms.inventory.received.v1`, `wms.inventory.adjusted.v1`, `wms.inventory.transferred.v1`, `wms.inventory.confirmed.v1` (TASK-MONO-762), `wms.inventory.alert.v1` | consumed only, from wms-platform |
 
 ## 2. `eventType` Naming
 

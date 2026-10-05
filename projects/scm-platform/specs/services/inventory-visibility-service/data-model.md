@@ -71,6 +71,14 @@ Indexes: `(tenant_id, sku)`, `(node_id, updated_at DESC)`, `(tenant_id, updated_
 
 **S5 note**: this table is an eventually-consistent read-model. `last_event_at` is the authoritative freshness indicator. Callers must check staleness before trusting quantity values for PO decisions.
 
+**Outbound-confirmation note** (TASK-MONO-762 AC-0 ⓐ): `quantity` means **on-hand**
+(available + reserved). `wms.inventory.confirmed.v1` is the only outbound-leg event that
+moves it — each line's `quantity` is subtracted. `wms.inventory.reserved.v1` /
+`wms.inventory.released.v1` are not subscribed to (on-hand is indifferent to the
+available↔reserved split). Unlike every other write path to this table, the `confirmed`
+consumer never creates a row: a missing `(node_id, sku, tenant_id)` row, or a decrement that
+would make `quantity` negative, is rejected (retry → DLT) rather than floored at zero.
+
 **3PL observation note** (ADR-MONO-054 §D4 / TASK-SCM-BE-047): the table carries
 **no node-type column** — a row for a `THIRD_PARTY_LOGISTICS` node is
 structurally identical to a `WMS_WAREHOUSE` row. The two differ only in how
