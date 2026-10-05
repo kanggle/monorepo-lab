@@ -245,4 +245,16 @@ else
   echo "[boot] 잔존 스택 정리 건너뜀 (DEMO_BOOT_RESET 미설정 — 부팅이 아닌 호출입니다)"
 fi
 
+# -----------------------------------------------------------------------------
+# TASK-MONO-763 — 소셜 로그인 키를 SSM 에서 읽어 export 한다 (demo-up.sh **전**)
+# -----------------------------------------------------------------------------
+# 바로 아래의 `exec` 가 이 값을 demo-up.sh 로 넘기는 경로다 — exec 는 포크가 아니라
+# 현재 프로세스의 환경을 그대로 새 프로그램에 이어 주므로, 여기서 export 한
+# `OAUTH_*` 는 demo-up.sh → `docker compose up -d` 까지 셸 경계 없이 전달된다
+# (자세한 근거는 fetch-oauth-secrets.sh 헤더).
+# 🔴 값은 어디에도 찍지 않는다 — 실패해도 부팅은 막지 않는다(한 줄 경고만).
+# shellcheck source=infra/demo/fetch-oauth-secrets.sh
+source "$HERE/fetch-oauth-secrets.sh"
+fetch_oauth_secrets
+
 exec bash "$HERE/demo-up.sh" "$@"

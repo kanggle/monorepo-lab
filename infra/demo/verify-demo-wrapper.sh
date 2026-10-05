@@ -649,6 +649,50 @@ esac
 ok "쿠키 Secure=$cookie_secure ↔ 오리진 $pub_origin (조합 안전)"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z43) auth-service 가 OAUTH_* 키·리디렉트를 compose 에서 받는가 (TASK-MONO-763)"
+# ---------------------------------------------------------------------------
+# 근거: `infra/demo/fetch-oauth-secrets.sh` 가 부팅 때 호스트 env 에 OAUTH_* 를 export
+# 해도, iam 체인의 **compose 가 그 키를 auth-service 로 전달하지 않으면** 컨테이너에는
+# 끝까지 닿지 않는다(TASK-MONO-763 실측 — docker-compose.e2e.yml 의 auth-service 는
+# 이 키를 하나도 모른다). 가드 (g) 는 "렌더가 경고를 낸다" 만 잡으므로, **키 자체가
+# 안 적혀 있는** 이 결함은 (g) 로는 안 보인다(경고가 안 난다 — 그냥 그 이름이 없을
+# 뿐이다). 그래서 여기서 auth-service 블록 **안의 존재**를 직접 본다.
+z43_render="$(render iam)"
+z43_block="$(printf '%s\n' "$z43_render" | awk '
+  /^  [A-Za-z0-9._-]+:$/ {
+    if (f) exit
+    f = ($0 == "  auth-service:")
+    next
+  }
+  f { print }
+')"
+[ -n "$z43_block" ] || fail "(z43) render iam 에 auth-service 블록이 없습니다 — iam 체인이 바뀌었는지 확인하세요."
+
+z43_missing=""
+for z43_key in OAUTH_GOOGLE_CLIENT_ID OAUTH_GOOGLE_CLIENT_SECRET OAUTH_GOOGLE_REDIRECT_URI OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS \
+               OAUTH_KAKAO_CLIENT_ID OAUTH_KAKAO_CLIENT_SECRET OAUTH_KAKAO_REDIRECT_URI OAUTH_KAKAO_ALLOWED_REDIRECT_URIS \
+               OAUTH_MICROSOFT_CLIENT_ID OAUTH_MICROSOFT_CLIENT_SECRET OAUTH_MICROSOFT_REDIRECT_URI OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS \
+               OAUTH_NAVER_CLIENT_ID OAUTH_NAVER_CLIENT_SECRET OAUTH_NAVER_REDIRECT_URI OAUTH_NAVER_ALLOWED_REDIRECT_URIS; do
+  printf '%s\n' "$z43_block" | grepq "^      ${z43_key}:" || z43_missing="$z43_missing $z43_key"
+done
+[ -z "$z43_missing" ] || fail "(z43) auth-service 가 compose 에서 못 받는 OAUTH 키:$z43_missing"\
+  $'\n'"→ iam-traefik.override.yml 의 auth-service.environment 에 넣으세요(TASK-MONO-763)."
+
+# AC-1: 비밀을 안 주입한 이 렌더(verify 는 demo.env 만 source 했다)에서 client-id는
+# 빈 문자열이어야 하고, 리디렉트는 IAM_PUBLIC_URL 에서 파생된 실제 URL 이어야 한다.
+z43_cid="$(printf '%s\n' "$z43_block" | sed -n 's/^      OAUTH_GOOGLE_CLIENT_ID:[[:space:]]*//p' | tr -d '"')"
+[ -z "$z43_cid" ] || fail "(z43) OAUTH_GOOGLE_CLIENT_ID 가 빈 문자열이 아닙니다: 길이=${#z43_cid}"\
+  $'\n'"→ 이 가드를 부르는 쉘의 환경에 OAUTH_GOOGLE_CLIENT_ID 가 이미 설정돼 있을 수 있습니다"\
+  $'\n'"   (그 자체는 compose 배선의 결함이 아니지만, 이 칸이 재는 '비밀 미설정 기본값' 축이 가려집니다)."
+
+z43_redir="$(printf '%s\n' "$z43_block" | sed -n 's/^      OAUTH_GOOGLE_REDIRECT_URI:[[:space:]]*//p' | tr -d '"')"
+[ "$z43_redir" = "${IAM_PUBLIC_URL}/login/oauth/google/callback" ] \
+  || fail "(z43) OAUTH_GOOGLE_REDIRECT_URI='$z43_redir' — IAM_PUBLIC_URL(=${IAM_PUBLIC_URL})에서 파생된 값과 다릅니다."\
+    $'\n'"→ 기본값 http://localhost:3000/oauth/callback 이 쓰이면 제공자가 redirect_uri_mismatch 로 거절합니다."
+
+ok "(z43) auth-service 가 OAUTH_* 16키를 받습니다 · 비밀 미설정 시 빈 문자열 · 리디렉트는 IAM_PUBLIC_URL 파생값"
+
+# ---------------------------------------------------------------------------
 echo "[verify] (n) 부팅 경로가 DEMO_DOMAIN 을 실제로 설정하는가"
 # ---------------------------------------------------------------------------
 # 근거(MONO-366): MONO-358 이 저장소 쪽 계약을 만들었다 — **`DEMO_DOMAIN` 을 주면 그
@@ -6553,8 +6597,15 @@ cat > "$z24_tmp/infra/demo/demo-up.sh" <<'Z24STUB'
 echo "UP-RAN:$*" >> "$Z24_MARK"
 exit 0
 Z24STUB
+# TASK-MONO-763 — demo-boot.sh 가 exec 직전에 source 하는 파일이다. 안 깔면 demo-boot.sh
+# 는 `set -euo pipefail` 아래 "No such file" 로 그 자리에서 죽고, 이 칸의 (4)가 UP-RAN 을
+# 영원히 못 본다 — 실제로 그렇게 죽었다(원인은 demo-up.sh 가 아니라 그 앞 단계였다).
+cat > "$z24_tmp/infra/demo/fetch-oauth-secrets.sh" <<'Z24STUB'
+#!/usr/bin/env bash
+fetch_oauth_secrets() { :; }
+Z24STUB
 chmod +x "$z24_tmp/infra/demo/"*.sh
-for z24_f in provision-demo-env.sh demo-down.sh demo-up.sh; do
+for z24_f in provision-demo-env.sh demo-down.sh demo-up.sh fetch-oauth-secrets.sh; do
   [ -x "$z24_tmp/infra/demo/$z24_f" ] \
     || z24_die "(z24) 주입 확인 실패 — 스텁 $z24_f 가 실행 가능하지 않습니다. 아래 판정은 전부 무효입니다."
 done

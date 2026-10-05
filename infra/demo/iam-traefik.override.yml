@@ -189,6 +189,40 @@ services:
       # **기본값 포트는 그 서비스가
       # 실제로 듣는 포트가 아니다.**
       ADMIN_SERVICE_URL: http://admin-service:8085
+      # -----------------------------------------------------------------------
+      # TASK-MONO-763 — 소셜 로그인 키 (SSM 에서 부팅 때 읽어 셸 env 로 전달됨)
+      # -----------------------------------------------------------------------
+      # `docker-compose.e2e.yml` 은 이 여덟 키를 전혀 주지 않으므로 application.yml
+      # 기본값(`test-<provider>-client-id` 등)이 남아 **지금은 호스트 env 에 값이
+      # 있어도 컨테이너에 전달되지 않는다**(TASK-MONO-763 실측). 그 기본값이 바로
+      # TASK-BE-623 이 "키 없음" 으로 읽어 버튼을 숨기는 신호이기도 하다 — 그래서
+      # client-id/secret 은 **빈 기본값**이어야 한다(`:-` 뒤가 비어 있다). 값을
+      # 채우면 거짓으로 "있음" 이 되어 623 이 버튼을 보여주는데 실제로는 로그인이
+      # 끝나지 않는다.
+      #
+      # 🔴 값은 `infra/demo/fetch-oauth-secrets.sh` 가 부팅 때 SSM
+      # (`/portfolio-demo/oauth/<provider>/{client-id,client-secret}`)에서 읽어
+      # `demo-boot.sh` 의 셸에 export 한다 — **이 파일에 리터럴로 적지 않는다**
+      # (비밀을 저장소에 두지 않는다. Failure Scenarios § 1).
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      OAUTH_KAKAO_CLIENT_ID: ${OAUTH_KAKAO_CLIENT_ID:-}
+      OAUTH_KAKAO_CLIENT_SECRET: ${OAUTH_KAKAO_CLIENT_SECRET:-}
+      OAUTH_MICROSOFT_CLIENT_ID: ${OAUTH_MICROSOFT_CLIENT_ID:-}
+      OAUTH_MICROSOFT_CLIENT_SECRET: ${OAUTH_MICROSOFT_CLIENT_SECRET:-}
+      OAUTH_NAVER_CLIENT_ID: ${OAUTH_NAVER_CLIENT_ID:-}
+      OAUTH_NAVER_CLIENT_SECRET: ${OAUTH_NAVER_CLIENT_SECRET:-}
+      # 리디렉트는 비밀이 아니다 — `infra/demo/demo.env` 가 `IAM_PUBLIC_URL` 에서
+      # 파생해 둔다(기본값 `http://localhost:3000/oauth/callback` 이 쓰이면
+      # 제공자가 redirect_uri_mismatch 로 거절한다 — Failure Scenarios § 3).
+      OAUTH_GOOGLE_REDIRECT_URI: ${OAUTH_GOOGLE_REDIRECT_URI:-}
+      OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS: ${OAUTH_GOOGLE_ALLOWED_REDIRECT_URIS:-}
+      OAUTH_KAKAO_REDIRECT_URI: ${OAUTH_KAKAO_REDIRECT_URI:-}
+      OAUTH_KAKAO_ALLOWED_REDIRECT_URIS: ${OAUTH_KAKAO_ALLOWED_REDIRECT_URIS:-}
+      OAUTH_MICROSOFT_REDIRECT_URI: ${OAUTH_MICROSOFT_REDIRECT_URI:-}
+      OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS: ${OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS:-}
+      OAUTH_NAVER_REDIRECT_URI: ${OAUTH_NAVER_REDIRECT_URI:-}
+      OAUTH_NAVER_ALLOWED_REDIRECT_URIS: ${OAUTH_NAVER_ALLOWED_REDIRECT_URIS:-}
     networks:
       iam-e2e: null
       traefik-net:

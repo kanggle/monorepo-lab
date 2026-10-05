@@ -288,3 +288,52 @@ aws iam put-user-policy --user-name <deployer> \
 
 `terraform.tfvars`(본인 공인 IP CIDR) · `*.tfstate` · `.terraform/` 은 **gitignore** 다. `terraform.tfvars.example` 만 커밋되며, 그것이 재현 계약이다. **AWS 비밀 키를 tfvars 에 적지 말 것** — 평문이다. 환경변수나 `~/.aws/credentials` 를 쓴다.
 
+### 소셜 로그인 키 (TASK-MONO-763)
+
+**값은 저장소 어디에도 없다.** google · kakao · microsoft · naver 네 제공자의
+client-id / client-secret 은 **SSM Parameter Store** 에만 산다:
+
+```
+/portfolio-demo/oauth/<provider>/client-id       (String)
+/portfolio-demo/oauth/<provider>/client-secret   (SecureString, alias/aws/ssm)
+```
+
+`<provider>` = `google` · `kakao` · `microsoft` · `naver`. 2026-10-06 실측 — google ·
+naver 는 등록 완료, kakao · microsoft 는 아직 없음(값은 소유자가 AWS 콘솔에서 직접
+`aws ssm put-parameter --type SecureString` 로 올린다 — terraform 은 이 파라미터를
+**만들지 않고 읽기만** 한다, `terraform/main.tf` 의 `aws_iam_role_policy.ec2_health`).
+
+**누가 읽어서 어디로 넘기는가** (셸 경계를 넘는 경로 전체):
+
+```
+systemd(demo-stack.service)
+  → demo-boot.sh                       (domain 파생 뒤, demo-up.sh 를 exec 하기 전)
+    → fetch-oauth-secrets.sh           aws ssm get-parameter --with-decryption
+      → export OAUTH_<P>_CLIENT_ID / OAUTH_<P>_CLIENT_SECRET   (프로세스 환경에 남는다)
+  → exec demo-up.sh                    (exec 이므로 환경이 복제 없이 이어진다)
+    → docker compose up -d            (iam-traefik.override.yml 의 auth-service.environment
+                                        가 호스트 env 의 그 이름을 그대로 컨테이너로 보간)
+```
+
+- 파라미터가 **없으면** export 하지 않는다 — auth-service 의 application.yml 기본값
+  (`test-<provider>-client-id` 등)이 남고, 그 기본값이 `TASK-BE-623` 이 "키 없음" 으로
+  읽어 그 제공자의 로그인 버튼을 숨기는 신호다.
+- 읽기가 **다른 이유로**(권한·네트워크) 실패하면 부팅을 막지 않고 한 줄 경고만 찍는다.
+- **값은 어디에도 찍지 않는다** — `fetch-oauth-secrets.sh` 는 `set -x` 를 쓰지 않고,
+  에러 메시지에도 값을 넣지 않는다. 단위 시험: `infra/demo/test-fetch-oauth-secrets.sh`
+  (가짜 `aws` 로 있음/없음/읽기실패 세 경우 + 비밀 미노출 대조군).
+
+**Kakao · Microsoft 를 나중에 추가하려면 재굽기가 필요 없다** — 키를 SSM 에 올리고
+데모를 **재부팅**만 하면 된다(부팅 때마다 다시 읽으므로). 단, 이 티켓(부팅 스크립트 ·
+compose 배선 자체)이 처음 AMI 에 실리는 데는 재굽기가 한 번 필요하다 — 위 §
+"코드를 고쳤다 — 그게 데모에 도달하는가" 의 표에서 `infra/demo/*.sh` 행과 같다.
+
+리디렉트 주소(`OAUTH_<P>_REDIRECT_URI` · `OAUTH_<P>_ALLOWED_REDIRECT_URIS`)는 비밀이
+아니라 `infra/demo/demo.env` 에 `IAM_PUBLIC_URL` 에서 파생되어 있다 — 제공자 콘솔에
+등록한 콜백(`https://auth.hubwang.com/login/oauth/<provider>/callback`)과 반드시
+같아야 한다. 다르면 `redirect_uri_mismatch` 로 거절당한다.
+
+⚠️ **`TASK-BE-617` 머지 전에는 이 티켓을 머지하지 않는다** — 순서 규칙은
+`tasks/ready/TASK-MONO-763-*.md` AC-0 참조. 구현·리뷰는 먼저 해도 되지만, 머지와
+재굽기(=배포)는 617 뒤다.
+
