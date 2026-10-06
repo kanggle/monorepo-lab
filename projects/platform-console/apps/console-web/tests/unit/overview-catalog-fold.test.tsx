@@ -93,7 +93,7 @@ describe('AC-3 — overview, no active tenant: the catalog grid IS the primary c
       unauthorized: false,
       bffUnavailable: false,
     });
-    getDomainHealthState.mockReturnValue(new Promise(() => {})); // wasted on this branch
+    getDomainHealthState.mockResolvedValue({ health: null, noTenant: true, unauthorized: false, bffUnavailable: false });
     getCatalog.mockResolvedValue({ products: [IAM, WMS], degraded: false });
 
     const ui = await OperatorOverviewPage();
@@ -111,6 +111,8 @@ describe('AC-3 — overview, no active tenant: the catalog grid IS the primary c
     // Catalog has something to pick → the original no-tenant notice is NOT
     // also shown (Edge Case only fires on an EMPTY catalog).
     expect(screen.queryByTestId('operator-overview-no-tenant')).toBeNull();
+    // TASK-MONO-711 ③ — the missing dots are explained, not silently absent.
+    expect(screen.getByTestId('catalog-health-no-tenant')).toBeInTheDocument();
   });
 
   it('Edge Case — an empty catalog ALSO shows the original no-tenant notice (nothing to pick)', async () => {
@@ -120,7 +122,7 @@ describe('AC-3 — overview, no active tenant: the catalog grid IS the primary c
       unauthorized: false,
       bffUnavailable: false,
     });
-    getDomainHealthState.mockReturnValue(new Promise(() => {}));
+    getDomainHealthState.mockResolvedValue({ health: null, noTenant: true, unauthorized: false, bffUnavailable: false });
     getCatalog.mockResolvedValue({ products: [], degraded: false });
 
     const ui = await OperatorOverviewPage();
@@ -193,7 +195,7 @@ describe('AC-5 — overview, BFF unavailable: banner + an OPEN 제품·테넌트
       unauthorized: false,
       bffUnavailable: true,
     });
-    getDomainHealthState.mockReturnValue(new Promise(() => {})); // wasted on this branch
+    getDomainHealthState.mockResolvedValue({ health: null, noTenant: false, unauthorized: false, bffUnavailable: true });
     getCatalog.mockResolvedValue({ products: [IAM], degraded: false });
 
     const ui = await OperatorOverviewPage();
@@ -203,5 +205,7 @@ describe('AC-5 — overview, BFF unavailable: banner + an OPEN 제품·테넌트
     const section = screen.getByTestId('overview-catalog-section') as HTMLDetailsElement;
     expect(section.open).toBe(true);
     expect(screen.getByTestId('tile-iam')).toBeInTheDocument();
+    // TASK-MONO-711 ③ — a dead health leg is said, not shown as an empty «ok».
+    expect(screen.getByTestId('catalog-health-unavailable')).toBeInTheDocument();
   });
 });

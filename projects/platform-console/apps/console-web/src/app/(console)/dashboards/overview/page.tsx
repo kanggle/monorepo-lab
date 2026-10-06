@@ -75,13 +75,10 @@ export default async function OperatorOverviewPage() {
   // from `overview + health` into `max(overview, health)`.
   //
   // This deliberately reverses TASK-PC-FE-061's "fetch only in the success
-  // branch" posture: on the gated branches below (unauthorized / noTenant /
-  // bffUnavailable) this speculative call is wasted. The trade-off is net
-  // positive — those branches are degraded/rare (noTenant is effectively
-  // first-entry-only since the active-tenant default of TASK-PC-FE-036),
-  // while the hot success path runs on every load. `getDomainHealthState()`
-  // never throws, so leaving `healthPromise` un-awaited on a gated branch
-  // raises no unhandled rejection.
+  // branch" posture. Since TASK-PC-FE-310 every rendering branch reads it (the
+  // embedded catalog grid needs its health notice); only the `unauthorized`
+  // redirect leaves it un-awaited, and `getDomainHealthState()` never throws,
+  // so that raises no unhandled rejection.
   const healthPromise = getDomainHealthState();
   // TASK-PC-FE-310 — the catalog leg joins the same up-front fan-out; every
   // branch below needs the grid (directly, in the closed section, or in the
@@ -108,6 +105,15 @@ export default async function OperatorOverviewPage() {
     throw err;
   }
 
+  // TASK-PC-FE-310 — every branch that renders the grid passes the health
+  // notice, not just the success branch. Without it `ServiceCatalog` defaults
+  // to `'ok'`, and the missing dots go unexplained — the hole TASK-MONO-711 ③
+  // closed. `getDomainHealthState()` never throws, so this await is safe on
+  // every branch.
+  const healthState = await healthPromise;
+  const { healthByDomain, healthNotice } =
+    deriveHealthByDomain<ProductKey>(healthState);
+
   if (state.noTenant) {
     // 🔴 Edge Case "레지스트리 제품 0개 / 테넌트 0개" — if the grid would have
     // nothing to pick from, there is nothing this screen can hand the
@@ -129,6 +135,8 @@ export default async function OperatorOverviewPage() {
           catalog={catalog}
           headingLevel="h2"
           headingText="제품·테넌트"
+          healthByDomain={healthByDomain}
+          healthState={healthNotice}
         />
         {catalogEmpty &&
           (await NoTenantNotice({
@@ -178,6 +186,8 @@ export default async function OperatorOverviewPage() {
               catalog={catalog}
               headingLevel="h2"
               headingText="제품·테넌트"
+              healthByDomain={healthByDomain}
+              healthState={healthNotice}
             />
           </div>
         </details>
@@ -189,15 +199,10 @@ export default async function OperatorOverviewPage() {
   // fan-out won't NO_ACTIVE_TENANT here. The summary card degrades on its own
   // (null health → compact note) so it never blanks the overview. The health
   // call was started up-front (concurrently with the overview fetch) and is
-  // awaited here only on the success path. (TASK-PC-FE-061 / TASK-PC-FE-117)
-  const healthState = await healthPromise;
-  // TASK-PC-FE-310 — the tile-tone map the catalog grid needs, derived from
-  // the SAME `healthState` the summary card above reads (one fetch, two
-  // consumers) via the single shared mapping (`features/domain-health`'s
-  // `deriveHealthByDomain`, extracted from the pre-fold `console/page.tsx` so
-  // the two consumers can never drift apart — Failure Scenario 5).
-  const { healthByDomain, healthNotice } =
-    deriveHealthByDomain<ProductKey>(healthState);
+  // awaited above (TASK-PC-FE-061 / TASK-PC-FE-117); the tile-tone map comes
+  // from the SAME `healthState` the summary card reads (one fetch, two
+  // consumers) via the single shared mapping `deriveHealthByDomain`
+  // (TASK-PC-FE-310 Failure Scenario 5).
 
   return (
     <>
