@@ -46,12 +46,22 @@ export const dynamic = 'force-dynamic';
 const backendBaseUrl = resolveUpstreamBaseUrl;
 
 // Hop-by-hop / host-specific headers that must not be forwarded verbatim.
+//
+// 🔴 `origin` (TASK-FE-105): this proxy is same-origin server-to-server — the
+//    browser's `Origin` describes the *client's* page (e.g. the Vercel store
+//    host), not this server, and CORS is a browser↔server mechanism that is
+//    meaningless once the BFF has terminated the request. Forwarding it
+//    verbatim made every browser-initiated write 403 at the gateway's
+//    `globalcors` allow-list, which never listed the deployed store origin
+//    (measured live, 2026-10-06 UTC, 23rd AMI window). The fix belongs here,
+//    not in widening the gateway's CORS config.
 const STRIPPED_REQUEST_HEADERS = new Set([
   'host',
   'connection',
   'content-length',
   'authorization', // re-attached server-side from the session
   'cookie', // never forward the NextAuth session cookie to the backend
+  'origin', // browser Origin is meaningless to the backend past this proxy
 ]);
 
 // Methods that may be repeated without repeating a side effect.
