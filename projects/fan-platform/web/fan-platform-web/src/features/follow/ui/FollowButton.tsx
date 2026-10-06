@@ -17,19 +17,33 @@ export function FollowButton({
   const [following, setFollowing] = useState(initialFollowing);
   const [isPending, startTransition] = useTransition();
 
+  /**
+   * TASK-FAN-FE-028 — optimistic update. The label used to flip only after the
+   * server action's `await` resolved, so a slow round trip (cold start /
+   * gateway latency — measured >=3s in the 23차 창 live run) left the button
+   * silently frozen on the pre-click label even though the click had already
+   * been accepted. `setFollowing` now runs synchronously on click, before the
+   * network call starts, so the label always reacts within the same tick.
+   *
+   * Rollback: `wasFollowing` is captured before the optimistic flip so a real
+   * failure (one that reaches this `catch` — `actions.ts` already swallows the
+   * idempotent 409/404 cases by returning normally, so those never get here)
+   * restores the pre-click label instead of leaving the UI claiming a state the
+   * server never reached. This mirrors `ReactionBar`'s existing optimistic
+   * pattern in this codebase (`features/post/ui/ReactionBar.tsx`).
+   */
   const onClick = () => {
+    const wasFollowing = following;
+    setFollowing(!wasFollowing);
     startTransition(async () => {
       try {
-        if (following) {
+        if (wasFollowing) {
           await unfollowArtist(artistAccountId, artistId);
-          setFollowing(false);
         } else {
           await followArtist(artistAccountId, artistId);
-          setFollowing(true);
         }
       } catch {
-        // Server action error already returned to UI; toast layer can pick up
-        // the rejected promise if added later.
+        setFollowing(wasFollowing);
       }
     });
   };

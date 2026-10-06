@@ -12,7 +12,8 @@ import {
 import { statusToneClass, type StatusTone } from '@/shared/ui/StatusBadge';
 import { approvalErrorMessage } from './approval-error';
 import { formatDateTime } from '@/shared/lib/datetime';
-import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
+import { statusLabel, StatusBadge } from './approval-common';
+import { ApprovalSubjectRef, ApprovalEmployeeRef } from './approval-refs';
 import { useApprovalDetail } from '../hooks/use-approval-detail';
 
 // ===========================================================================
@@ -82,11 +83,18 @@ export function ApprovalDetail({
             <dl className="mb-4 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
               <dt className="text-muted-foreground">대상</dt>
               <dd>
-                {SUBJECT_LABEL[data.subjectType] ?? data.subjectType} ·{' '}
-                {data.subjectId}
+                <ApprovalSubjectRef
+                  subjectType={data.subjectType}
+                  subjectId={data.subjectId}
+                />
               </dd>
               <dt className="text-muted-foreground">기안자</dt>
-              <dd>{data.submitterId}</dd>
+              <dd>
+                <ApprovalEmployeeRef
+                  employeeId={data.submitterId}
+                  field="submitterId"
+                />
+              </dd>
               {data.reason ? (
                 <>
                   <dt className="text-muted-foreground">사유</dt>
@@ -147,7 +155,12 @@ export function ApprovalDetail({
                       <span className="text-muted-foreground w-10 shrink-0">
                         {stage.stageIndex + 1}단계
                       </span>
-                      <span className="flex-1">{stage.approverId}</span>
+                      <span className="flex-1">
+                        <ApprovalEmployeeRef
+                          employeeId={stage.approverId}
+                          field="stageApproverId"
+                        />
+                      </span>
                       <span className={statusToneClass(stageTone)}>
                         {stage.status === 'APPROVED'
                           ? '승인됨'
@@ -168,7 +181,12 @@ export function ApprovalDetail({
               /* Legacy / single-stage fallback — show approverId as before */
               <dl className="mb-4 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
                 <dt className="text-muted-foreground">결재자</dt>
-                <dd data-testid="approval-approverId">{data.approverId}</dd>
+                <dd data-testid="approval-approverId">
+                  <ApprovalEmployeeRef
+                    employeeId={data.approverId}
+                    field="approverId"
+                  />
+                </dd>
               </dl>
             )}
 
@@ -198,7 +216,9 @@ export function ApprovalDetail({
                       {statusLabel(h.transition)}
                     </span>{' '}
                     <span className="text-muted-foreground">
-                      · {h.actor} · {h.at}
+                      ·{' '}
+                      <ApprovalEmployeeRef employeeId={h.actor} field="actor" />{' '}
+                      · {h.at}
                       {/* v2.0 — stage annotation */}
                       {h.stage !== undefined
                         ? ` · ${h.stage + 1}단계`
@@ -210,7 +230,12 @@ export function ApprovalDetail({
                         className="ml-1 text-xs text-muted-foreground"
                         data-testid={`approval-history-delegated-${i}`}
                       >
-                        (대결: {h.actingForApproverId} 대신)
+                        (대결:{' '}
+                        <ApprovalEmployeeRef
+                          employeeId={h.actingForApproverId}
+                          field="actingForApproverId"
+                        />{' '}
+                        대신)
                       </span>
                     ) : null}
                     {h.reason ? (

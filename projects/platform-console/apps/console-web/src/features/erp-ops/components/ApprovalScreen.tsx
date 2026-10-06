@@ -12,7 +12,8 @@ import {
   useApprovalInbox,
 } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
-import { SUBJECT_LABEL, statusLabel, StatusBadge } from './approval-common';
+import { statusLabel, StatusBadge } from './approval-common';
+import { ApprovalSubjectRef } from './approval-refs';
 import { ApprovalDetail } from './ApprovalDetail';
 import { ApprovalCreateDialog } from './ApprovalCreateDialog';
 
@@ -202,7 +203,10 @@ export function ApprovalScreen({
               >
                 <td className="p-2">{r.title}</td>
                 <td className="p-2 text-sm text-muted-foreground">
-                  {SUBJECT_LABEL[r.subjectType] ?? r.subjectType} · {r.subjectId}
+                  <ApprovalSubjectRef
+                    subjectType={r.subjectType}
+                    subjectId={r.subjectId}
+                  />
                 </td>
                 <td className="p-2">
                   <StatusBadge status={r.status} />
