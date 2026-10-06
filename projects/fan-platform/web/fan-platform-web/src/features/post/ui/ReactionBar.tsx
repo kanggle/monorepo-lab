@@ -13,11 +13,19 @@ const REACTIONS: Array<{ type: ReactionType; emoji: string; label: string }> = [
 export function ReactionBar({
   postId,
   totalReactions,
+  initialReaction = null,
 }: {
   postId: string;
   totalReactions: number;
+  /**
+   * The viewer's own reaction, as known by the server at render time
+   * (TASK-FAN-FE-029). `null`/omitted means "not reacted" — the call site is
+   * responsible for collapsing a missing `myReaction` field to `null` before
+   * this prop is set (`post.myReaction ?? null`).
+   */
+  initialReaction?: ReactionType | null;
 }) {
-  const [active, setActive] = useState<ReactionType | null>(null);
+  const [active, setActive] = useState<ReactionType | null>(initialReaction);
   const [isPending, startTransition] = useTransition();
 
   const onClick = (type: ReactionType) => {

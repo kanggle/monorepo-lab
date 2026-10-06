@@ -24,6 +24,18 @@ export interface Post {
   mediaRefs?: string[];
   commentCount: number;
   reactionCount: number;
+  /**
+   * The caller's own reaction on this post (`community-api.md` § `myReaction`,
+   * TASK-FAN-BE-051). `null` means the caller has not reacted — never an error,
+   * and independent of `reactionCount` (other fans' reactions still count there
+   * even when this is `null`).
+   *
+   * 🔴 optional for the same reason as `mediaRefs`: the demo backend serving
+   *    this response was built before TASK-FAN-BE-051 and does not send this key
+   *    until its next AMI rebake. Readers must treat a missing key the same as
+   *    `null` — `post.myReaction ?? null` — never crash, never render `undefined`.
+   */
+  myReaction?: ReactionType | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
