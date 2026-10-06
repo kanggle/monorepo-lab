@@ -221,4 +221,46 @@ class UserProfileTest {
         assertThat(profile.getStatus()).isEqualTo(ProfileStatus.WITHDRAWN);
     }
 
+    @Test
+    @DisplayName("assignEmail: email 이 비어 있는 최소 프로필에 값을 채운다 (TASK-BE-624)")
+    void assignEmail_noEmailYet_backfills() {
+        UserProfile profile = UserProfile.createMinimal(UUID.randomUUID());
+
+        profile.assignEmail("backfilled@example.com");
+
+        assertThat(profile.getEmail().value()).isEqualTo("backfilled@example.com");
+    }
+
+    @Test
+    @DisplayName("assignEmail: 이미 email 이 있으면 덮어쓰지 않는다 (TASK-BE-624)")
+    void assignEmail_alreadyHasEmail_doesNotOverwrite() {
+        UserProfile profile = UserProfile.create(UUID.randomUUID(), "original@example.com", null);
+
+        profile.assignEmail("other@example.com");
+
+        assertThat(profile.getEmail().value()).isEqualTo("original@example.com");
+    }
+
+    @Test
+    @DisplayName("assignEmail: WITHDRAWN 프로필에는 채우지 않는다 — PII 삭제를 되돌리지 않는다 (TASK-BE-624)")
+    void assignEmail_withdrawnProfile_doesNotResurrectPii() {
+        UserProfile profile = UserProfile.createMinimal(UUID.randomUUID());
+        profile.anonymize();
+
+        profile.assignEmail("late@example.com");
+
+        assertThat(profile.getEmail()).isNull();
+        assertThat(profile.getStatus()).isEqualTo(ProfileStatus.WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName("assignEmail: 형식이 잘못되면 IllegalArgumentException 발생 (TASK-BE-624)")
+    void assignEmail_invalidFormat_throwsException() {
+        UserProfile profile = UserProfile.createMinimal(UUID.randomUUID());
+
+        assertThatThrownBy(() -> profile.assignEmail("not-an-email"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Email format is invalid");
+    }
+
 }
