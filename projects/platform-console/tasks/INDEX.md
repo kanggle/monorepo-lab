@@ -123,7 +123,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**.
+- `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
 - ✅ `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4149**, 스쿼시 **`f0927bcd0`** (머지 시점 실패 0) — 데모가 꺼진 뒤 접근 쿠키가 만료된 세션이 로그인 벽 대신 샘플 셸(`?signed_out=demo_stopped`)로 간다. AC-6 = 22차 창(라이브, Playwright): 로그인 → **데모 먼저 정지** → 접근 쿠키만 삭제 → 새로고침 ⇒ `refresh` → `/login?error=session_expired` → `/api/auth/demo-ended` → 쿠키 0 · 샘플 셸 안내. ⚪ Vercel 로그 줄 `demo_ended_session_cleared` 는 미측정(CLI 없음) — 소유자 결정 «지금 done».

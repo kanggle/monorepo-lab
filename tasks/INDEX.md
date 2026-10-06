@@ -181,7 +181,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 
-- `TASK-MONO-764-demo-functional-checklist.md` — **데모 기능 점검표 — 배포된 데모에서 세 앱의 쓰기 흐름 16개를 실제로 눌러 PASS/FAIL + 증거** (READY, 2026-10-06 UTC · ⏳ 창 필요 — 23차 재굽기·apply 뒤, 소셜 로그인 확인(763 AC-4 · 617 · 623 AC-5)과 같은 창). «열림» 은 PASS 아님 — 끝 상태를 화면·데이터로. FAIL 은 고치지 않고 프로젝트 티켓으로 기안. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. 시드 보강 + 재굽기 필요. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-766-demo-corp-has-no-seedable-account-for-operator-creation.md` — **데모에서 신규 운영자 생성을 끝까지 보여줄 수 없다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 콘솔 `/operators` 생성 사전 게이트는 tenant `demo-corp` 에 이미 등록된 계정을 요구하는데, `account_db.accounts` 의 demo-corp 행이 **0**(기존 운영자 둘은 `admin_operators` 에만 있음). "운영자 아님" 상태의 demo-corp 계정 시드 필요. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-746-draft-adr-080-workforce-on-the-consumer-pool.md` — ⏳ **`ADR-MONO-080` 후보 기안 — 직원도 풀 계정** (READY, 2026-10-01 UTC · **DO NOT START — AC-0 = 078 단계 전부 done + 079 ACCEPTED**). 🔵 2026-10-05: 079 는 ACCEPTED(A) · 743 은 구현 없이 종결로 선행에서 빠짐 ⇒ **남은 선행 = `TASK-BE-617` 하나**. 순서: 이메일 인증 게이트 → IAM 2단계 인증 → 운영자 규칙(`TASK-MONO-334`) 변경. 묶음 회수(그룹·배정·파트너십)는 이미 있음. 인증된 이메일끼리 자동 묶기 포함. 플랫폼 관리자는 분리 유지.
@@ -207,6 +206,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-764-demo-functional-checklist.md` — **데모 기능 점검표** (IN-PROGRESS, 2026-10-06 UTC · 23차 창 실행). AC-0·1·2·4 ✅ — 흐름 16개 판정(PASS 10 · 부분 2(11·12) · FAIL 1(14 wms 이행 전량 DLT, ⓒ) · ⚪ 3(2·3 소셜 — 소유자 미참여 · 15 운영자 생성 — ⓒ)). 창 안 수정 2건(`TASK-FE-105` 스토어 쓰기 403 · `TASK-PC-FE-308` 한글 사유 503) · 기안 9건(#4175). ⏳ **AC-3 소셜(흐름 2·3)만 남음 — 다음 창, 소유자 Google · Naver 계정.** 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -220,7 +220,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-763-demo-social-login-keys-from-ssm.md` — **데모 호스트가 소셜 키를 SSM 에서 읽어 iam auth-service 에 넘긴다** (IN-PROGRESS, 2026-10-05 UTC · ⏳ **DO NOT MERGE before `TASK-BE-617`** — 순서 규칙, AC-0). Google · Naver 키는 소유자가 SSM(`/portfolio-demo/oauth/<p>/client-{id,secret}`)에 저장 완료 · kakao·microsoft 는 아직 없음. 🟢 **착수 2026-10-05 UTC — 구현 완료, 머지는 617 대기.** `infra/demo/fetch-oauth-secrets.sh`(신규, 부팅 때 SSM 읽어 `OAUTH_<P>_CLIENT_ID/SECRET` export, 없으면 조용히 건너뜀·읽기실패만 경고 1줄·값 미노출) → `demo-boot.sh` 가 `demo-up.sh` exec 전에 호출(exec 라 환경이 그대로 이어진다) → `iam-traefik.override.yml` auth-service.environment 에 16키 전달(빈 기본값) → `demo.env` 에 `OAUTH_<P>_REDIRECT_URI/ALLOWED_REDIRECT_URIS` 를 `IAM_PUBLIC_URL` 에서 파생(비밀 아님). terraform(`main.tf` `ec2_health` 정책)에 `/portfolio-demo/oauth/*` 읽기 전용 추가(KMS 는 AC-4 실측 대기, 추측으로 안 넣음). `verify-demo-wrapper.sh` (z43) 신설(auth-service 가 16키를 실제로 받는지 · 비밀 미설정 시 빈 문자열 · 리디렉트 파생값 — render iam 직접 검사, (g) 는 "키 자체 없음"은 못 본다). 단위 시험 `test-fetch-oauth-secrets.sh`(가짜 aws — 있음/없음/읽기실패 + 비밀 미노출 대조군, 전부 PASS). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **REVIEW (2026-10-06 UTC)** — impl #4167 `ddf39df00` · AC-0~2 ✅(617→623→763 순서) · ⏳ AC-3 terraform plan/apply · AC-4 라이브.
+- `TASK-MONO-763-demo-social-login-keys-from-ssm.md` — **데모 호스트가 소셜 키를 SSM 에서 읽어 iam auth-service 에 넘긴다** (IN-PROGRESS, 2026-10-05 UTC · ⏳ **DO NOT MERGE before `TASK-BE-617`** — 순서 규칙, AC-0). Google · Naver 키는 소유자가 SSM(`/portfolio-demo/oauth/<p>/client-{id,secret}`)에 저장 완료 · kakao·microsoft 는 아직 없음. 🟢 **착수 2026-10-05 UTC — 구현 완료, 머지는 617 대기.** `infra/demo/fetch-oauth-secrets.sh`(신규, 부팅 때 SSM 읽어 `OAUTH_<P>_CLIENT_ID/SECRET` export, 없으면 조용히 건너뜀·읽기실패만 경고 1줄·값 미노출) → `demo-boot.sh` 가 `demo-up.sh` exec 전에 호출(exec 라 환경이 그대로 이어진다) → `iam-traefik.override.yml` auth-service.environment 에 16키 전달(빈 기본값) → `demo.env` 에 `OAUTH_<P>_REDIRECT_URI/ALLOWED_REDIRECT_URIS` 를 `IAM_PUBLIC_URL` 에서 파생(비밀 아님). terraform(`main.tf` `ec2_health` 정책)에 `/portfolio-demo/oauth/*` 읽기 전용 추가(KMS 는 AC-4 실측 대기, 추측으로 안 넣음). `verify-demo-wrapper.sh` (z43) 신설(auth-service 가 16키를 실제로 받는지 · 비밀 미설정 시 빈 문자열 · 리디렉트 파생값 — render iam 직접 검사, (g) 는 "키 자체 없음"은 못 본다). 단위 시험 `test-fetch-oauth-secrets.sh`(가짜 aws — 있음/없음/읽기실패 + 비밀 미노출 대조군, 전부 PASS). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **REVIEW (2026-10-06 UTC)** — impl #4167 `ddf39df00` · AC-0~2 ✅(617→623→763 순서) · ⏳ AC-3 terraform plan/apply · AC-4 라이브. 🟡 **23차 창(2026-10-06 UTC)** — AC-3 ✅(apply · 정책 in-place) · AC-4 인스턴스 쪽 ✅(SSM 복호화 KMS 불필요 · env 길이 · 리디렉트 · 버튼 2개) · ⏳ Google 가입 끝까지(소유자, 다음 창).
 
 
 ## done

@@ -82,7 +82,7 @@ monorepo
 - [x] **AC-0 (머지 게이트)** — `TASK-BE-617` 이 `origin/main` 에 머지됐다(또는 이 PR 에 함께 있다). 아니면 머지하지 않는다.
 - [x] **AC-1** — 정적: compose 렌더(`docker compose config`)에서 auth-service 가 `OAUTH_*_CLIENT_ID/SECRET/REDIRECT_URI/ALLOWED_REDIRECT_URIS` 를 받는다 · `demo.env` 만으로 렌더하면 키는 빈 문자열, 리디렉트는 `https://auth.hubwang.com/login/oauth/<p>/callback`.
 - [x] **AC-2** — 부팅 스크립트 단위 시험(가짜 `aws`): 파라미터 있음 → export · 없음 → export 안 함 · 읽기 실패 → 경고 한 줄 + 계속. 🔴 대조군: 출력 어디에도 가짜 비밀 문자열이 안 나온다(grep 0).
-- [ ] **AC-3** — `terraform plan`: 인스턴스 역할 정책 in-place 변경만(인스턴스 교체는 재굽기 때). 소유자 apply.
+- [x] **AC-3** — `terraform plan`: 인스턴스 역할 정책 in-place 변경만(인스턴스 교체는 재굽기 때). 소유자 apply.
 - [ ] **AC-4 (라이브, 재굽기 뒤 창)** — 인스턴스 안에서 `aws ssm get-parameter --with-decryption` 이 권한 오류 없이 성공(값 출력 금지 — 길이만) · auth-service 컨테이너 env 에 `OAUTH_GOOGLE_CLIENT_ID` 길이 > 0 · 로그인 화면에 Google · Naver 버튼만(623 함께) · **Google 로 가입 → 로그인 끝까지**(소유자 계정) · 팬 → 스토어 이동 시 재로그인 없음(617).
 
 # Related Specs
@@ -119,3 +119,15 @@ monorepo
 - AC-1 ✅ (`docker compose config` 렌더 + `verify-demo-wrapper.sh` 정적 PASS · (z43) 신설) · AC-2 ✅ (`test-fetch-oauth-secrets.sh` — 있음/없음/실패 + 가짜 비밀 grep 0).
 - ⏳ AC-3 `terraform plan`(메인 체크아웃) → 소유자 apply · AC-4 라이브(재굽기 뒤 창).
 - 🔵 구현 편차(옳음): auth-service 는 `projects/iam-platform/docker-compose.yml` 이 아니라 `infra/demo/iam-traefik.override.yml` 에 정의돼 있어 키 전달을 거기에 넣었다. KMS 권한은 넣지 않았다 — AC-4 에서 `alias/aws/ssm` 복호화가 역할 권한만으로 되는지 실측.
+
+---
+
+## 23차 창 (2026-10-06 UTC) — AC-3 ✅ · AC-4 인스턴스 쪽 ✅ · 소셜 가입 ⏳
+
+- AC-3 ✅ — plan(메인 체크아웃, 핀 PR #4171 머지·pull 뒤) «1 add · 3 change · 1 destroy»: `aws_iam_role_policy.ec2_health` in-place 로 `ssm:GetParameter` on `parameter/portfolio-demo/oauth/*` 추가 + 23차 AMI 인스턴스 교체 + Lambda·Lambda 정책 in-place. 소유자 apply 완료(`i-036521b58c68566f2`), Lambda `AMI_REPO_COMMIT=d44dd0d61`.
+- AC-4 인스턴스 쪽 ✅ (SSM RunShellScript, 값 미출력 — 길이만):
+  - `aws ssm get-parameter --with-decryption`: google client-id 72 · secret 35 · naver client-id 20 · secret 10 (rc=0) · kakao·microsoft `ParameterNotFound`. ⇒ **`alias/aws/ssm` SecureString 은 역할 권한만으로 복호화된다 — KMS 권한 추가 불필요**(구현 때 미뤄 둔 실측).
+  - `iam-auth-service-1` env: `OAUTH_GOOGLE_CLIENT_ID/SECRET`·`OAUTH_NAVER_CLIENT_ID/SECRET` 길이 72/35/20/10(set) · kakao·microsoft = 기본값 `test-*` · `OAUTH_{GOOGLE,NAVER}_REDIRECT_URI=https://auth.hubwang.com/login/oauth/{google,naver}/callback`.
+  - 로그인 화면(`auth.hubwang.com/login`) 소셜 링크 = `/login/oauth/google` · `/login/oauth/naver` 둘뿐(623).
+  - 96 컨테이너 running · unhealthy 0 · 클론 `d44dd0d6`.
+- ⏳ AC-4 나머지(**Google 로 가입 → 로그인 끝까지 · 팬→스토어 재로그인 없음**) — 소유자 계정 필요, 창이 08:55Z 상한으로 닫히기 전에 못 했다. 다음 창. 기록 보유자: `TASK-MONO-764` § 23차 창 결과.

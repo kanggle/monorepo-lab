@@ -95,3 +95,9 @@ iam-platform
 - impl PR #4166 · 스쿼시 `85b4c9263` · 머지 시점 실패 0 (16 SUCCESS). 617 과 병렬 작업 → main 병합 시 충돌 2곳(import 한 줄 · iam INDEX) 해소 + 617 IT 의 google 키 덮어쓰기(`b7093adfc`).
 - AC-1~4 ✅ — 단위·슬라이스 시험 + bite(판정 «항상 참» → AC-1·2·3 칸 빨강).
 - ⏳ AC-5(라이브) = 재굽기 뒤 창: 로그인 화면에 Google · Naver 버튼만.
+
+---
+
+## 23차 창 (2026-10-06 UTC)
+
+- 🟡 AC-5 화면 쪽 ✅ — `auth.hubwang.com/login` 의 소셜 링크 = `/login/oauth/google` · `/login/oauth/naver` 둘뿐(kakao·microsoft 0). 인스턴스 auth-service env 는 kakao·microsoft 가 기본값 `test-*`, google·naver 는 실제 키(길이만 확인) — 버튼 집합과 키 집합이 일치. ⏳ 버튼을 눌러 제공자까지 가는 클릭 확인은 소유자 계정이 필요해 다음 창(`TASK-MONO-764` AC-3).

@@ -193,3 +193,9 @@ iam-platform
 - AC-1 · AC-2 · AC-3 ✅ — 단위 + CI 통합(`Integration (iam A/B)` SUCCESS, 새 IT 2개 포함). 🔴 병렬로 만든 `TASK-BE-623` 과 합칠 때 이 티켓의 `ConsumerPoolSocialLoginIntegrationTest` 가 623 판정(test-* = 미설정)에 막혀 4/145 실패 → 623 PR 에서 google 키 덮어쓰기를 넣어 해소(#4166 `b7093adfc`).
 - ⏳ 라이브 = `TASK-MONO-763` AC-4(재굽기 뒤 창: Google 가입 → 팬 → 스토어 재로그인 없음). 그 창 판정 뒤 done.
 - 🔵 범위 밖 발견(이 티켓이 기록): auth-service `SocialSignupResult` 가 응답 필드 이름을 잘못 읽어 `isNewAccount` 가 운영에서 늘 false(로그 한 줄만 영향).
+
+---
+
+## 23차 창 (2026-10-06 UTC)
+
+- ⏳ 라이브(소셜 가입 → 풀 계정 · 사이트 이동 시 재로그인 없음)는 미측정 — 소유자 계정이 필요한데 창이 08:55Z 상한으로 닫혔다. 이 창에 이 티켓의 코드는 실렸다(23차 AMI `d44dd0d61`, 인스턴스 클론 `d44dd0d6` 확인). 🔵 같은 창에서 이메일 가입 계정은 `consumer-pool` 에 생겼다(IAM `account_db.accounts` 테넌트 분포 consumer-pool 8) — 소셜 경로의 증거는 아니다. 다음 창.
