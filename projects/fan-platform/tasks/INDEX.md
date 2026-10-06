@@ -83,6 +83,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
+- `TASK-FAN-FE-031-logout-never-reaches-idp-end-session.md` — **팬 로그아웃이 IdP `end_session` 에 닿지 않아 다음 로그인이 비밀번호 없이 통과** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 소유자 보고). NextAuth 기본 `redirect` 콜백이 다른 origin 주소를 앱 루트로 바꿈 → `redirectCallback` 으로 issuer `/connect/logout` 하나만 허용. 단위 시험 + bite. ⏳ AC-4 라이브. 분석=Opus 5.5 / 구현 권장=Sonnet.
 (empty)
 
 ## done

@@ -198,6 +198,43 @@ export async function jwtCallback({
  * NEVER copied onto the public session (F2) — this reads the raw JWT instead,
  * which is why the token survives here even though `sessionCallback` strips it.
  */
+/**
+ * NextAuth `redirect` callback (TASK-FAN-FE-031).
+ *
+ * 🔴 Without it, NextAuth's default rewrites every cross-origin URL to `baseUrl`.
+ * The header's logout passes the IdP `end_session` URL (`<issuer>/connect/logout`)
+ * as `signOut({ redirectTo })`, and the issuer is a different origin from this
+ * app (deployed: `auth.hubwang.com` vs `fan.hubwang.com`) — so the browser never
+ * reached the IdP, the IdP session survived, and the next «IAM 로그인» signed the
+ * user straight back in (measured live, 2026-10-06 UTC, 23rd AMI window). The
+ * store does not have this defect because it navigates with `window.location`.
+ *
+ * Allowed: relative paths and same-origin URLs (the default's behaviour), plus
+ * EXACTLY the issuer's `/connect/logout`. Everything else still falls back to
+ * `baseUrl` — this is not an open redirect.
+ */
+export function redirectCallback(
+  { url, baseUrl }: { url: string; baseUrl: string },
+  issuerUrl: string = env.oidcIssuerUrl,
+): string {
+  if (url.startsWith('/')) return `${baseUrl}${url}`;
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    return baseUrl;
+  }
+  if (target.origin === new URL(baseUrl).origin) return url;
+  try {
+    const issuer = new URL(issuerUrl);
+    const logoutPath = `${issuer.pathname.replace(/\/$/, '')}/connect/logout`;
+    if (target.origin === issuer.origin && target.pathname === logoutPath) return url;
+  } catch {
+    /* unparseable issuer → no cross-origin allowance */
+  }
+  return baseUrl;
+}
+
 export function selectAccessToken(jwt: JwtToken | null | undefined): string | null {
   if (!jwt) return null;
   if (jwt.error === 'RefreshAccessTokenError') return null;
