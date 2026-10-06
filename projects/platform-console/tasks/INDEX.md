@@ -119,10 +119,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (IN-PROGRESS, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 · 성공 → «제품·테넌트 전체» 접힘 섹션 · `/console` = 개요 리다이렉트 · «카탈로그로 이동» 31곳 → «개요로 이동». 스펙(`architecture.md`) 먼저. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 ## review
 
+- `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done

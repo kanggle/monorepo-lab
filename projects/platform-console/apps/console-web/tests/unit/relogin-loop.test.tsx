@@ -14,7 +14,8 @@
  *
  * `isAuthenticated()` 는 **백엔드에 묻지 않는다**. 백엔드가 토큰을 거절해도 쿠키는
  * 멀쩡하므로 재로그인하러 보낸 사람이 카탈로그로 되돌아왔다 — 반짝임 하나, 설명 0,
- * 세션은 죽은 채로.
+ * 세션은 죽은 채로. (TASK-PC-FE-310 이후 그 되돌아가는 주소는 `/dashboards/overview`
+ * 다 — 카탈로그가 그 화면 안으로 접혔다; 아래 단언들은 그 값으로 갱신했다.)
  *
  * 🔴 **이 스위트의 본체는 「루프가 끊겼는가」이지 「문구가 보이는가」가 아니다.**
  *    문구만 재면 `redirect('/console')` 를 되살려도 초록일 수 있다.
@@ -102,18 +103,18 @@ describe('재로그인 루프 (TASK-PC-FE-278)', () => {
     expect(screen.getByTestId('host')).toHaveTextContent('세션이 만료');
   });
 
-  it('🔵 대조군 — 마커가 없으면 예전 그대로 /console 로 보낸다 (편의를 뺏지 않았다)', async () => {
+  it('🔵 대조군 — 마커가 없으면 예전 그대로 /dashboards/overview 로 보낸다(TASK-PC-FE-310 — 구 목적지 /console 은 이제 그 한 홉짜리 리다이렉트라 줄였다; 편의를 뺏지 않았다)', async () => {
     isAuthenticatedMock.mockResolvedValue(true);
 
-    await expect(renderLogin()).rejects.toThrow('REDIRECT:/console');
-    expect(redirectMock).toHaveBeenCalledWith('/console');
+    await expect(renderLogin()).rejects.toThrow('REDIRECT:/dashboards/overview');
+    expect(redirectMock).toHaveBeenCalledWith('/dashboards/overview');
   });
 
   it('🔵 대조군 — 다른 error 코드는 단락 회로를 그대로 탄다 (마커만 특별하다)', async () => {
     isAuthenticatedMock.mockResolvedValue(true);
 
     await expect(renderLogin({ error: 'state_mismatch' })).rejects.toThrow(
-      'REDIRECT:/console',
+      'REDIRECT:/dashboards/overview',
     );
   });
 
