@@ -103,11 +103,18 @@ describe('console nav guard (sidebar — TASK-PC-FE-039 / consolidation TASK-PC-
   it('does NOT remove any of the other pre-existing nav entries', () => {
     const src = readFileSync(NAV_PATH, 'utf8');
     expect(src).toContain("'nav-dashboards'");
-    expect(src).toContain("'nav-catalog'");
     expect(src).toContain("'nav-audit'");
     expect(src).toContain("'nav-operators'");
     expect(src).toContain("'nav-wms'");
     expect(src).toContain("'nav-scm'");
     expect(src).toContain("'nav-finance'");
+  });
+
+  it('removes the "카탈로그" (nav-catalog) top-level entry — folded into the 개요 screen (TASK-PC-FE-310)', () => {
+    const src = readFileSync(NAV_PATH, 'utf8');
+    // The quoted testid + href LITERALS are gone (`/console` survives only as
+    // a redirect route, no longer a sidebar leaf).
+    expect(src).not.toContain("'nav-catalog'");
+    expect(src).not.toContain("href: '/console'");
   });
 });

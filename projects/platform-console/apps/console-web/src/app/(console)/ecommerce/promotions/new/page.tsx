@@ -46,10 +46,10 @@ export default async function NewPromotionPage() {
             ecommerce 프로모션 운영 화면에 대한 접근 권한이 없습니다.
           </p>
           <Link
-            href="/console"
+            href="/dashboards/overview"
             className="mt-2 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            카탈로그로 이동
+            개요로 이동
           </Link>
         </div>
       </section>

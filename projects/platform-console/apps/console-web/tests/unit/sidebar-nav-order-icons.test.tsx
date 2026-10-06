@@ -8,14 +8,17 @@ import { navPathFor } from '@/shared/ui/console-nav-matching';
  * TASK-PC-FE-297 — 가이드-first order, item icons, subordinate group labels,
  * the collapsed-drill active marker, and the `/dashboards/health` alias.
  */
-let mockPath = '/console';
+// TASK-PC-FE-310 — `/console` is no longer a nav leaf (folded into the
+// overview); an arbitrary non-domain-parent route is all this default needs
+// to be ("on a non-parent route, no parent is marked active" below).
+let mockPath = '/dashboards/overview';
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPath,
 }));
 
 beforeEach(() => {
   cleanup();
-  mockPath = '/console';
+  mockPath = '/dashboards/overview';
 });
 
 const DOMAIN_ORDER: Array<[parent: string, guide: string, overview: string]> = [
@@ -109,7 +112,7 @@ describe('collapsed drill still marks the current parent (AC-3)', () => {
   });
 
   it('on a non-parent route, no parent is marked active', () => {
-    mockPath = '/console';
+    mockPath = '/dashboards/overview';
     render(<ConsoleSidebarNav />);
     for (const [parent] of DOMAIN_ORDER) {
       expect(screen.getByTestId(parent)).not.toHaveAttribute('aria-current');

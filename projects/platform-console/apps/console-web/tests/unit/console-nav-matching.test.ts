@@ -10,11 +10,15 @@ import type { NavLeaf } from '@/shared/ui/console-nav-config';
  * TASK-PC-FE-244 — isolated unit coverage for the pure route-matching
  * helpers split out of `ConsoleSidebarNav.tsx` into `console-nav-matching.ts`.
  * Cases are based on the CURRENT behavior read from the source (no new
- * semantics): `matchesRoute` is exact-or-prefix-at-a-path-boundary except
- * `/console`, which is exact-only; `activeHref` picks the single **longest**
- * matching leaf so a nested child route wins over its parent route;
- * `parentKeyForPath` resolves the real `GROUPS` nav tree (imported
- * transitively via `console-nav-matching.ts`'s `PARENTS`).
+ * semantics): `matchesRoute` is exact-or-prefix-at-a-path-boundary;
+ * `activeHref` picks the single **longest** matching leaf so a nested child
+ * route wins over its parent route; `parentKeyForPath` resolves the real
+ * `GROUPS` nav tree (imported transitively via `console-nav-matching.ts`'s
+ * `PARENTS`).
+ *
+ * 🔵 TASK-PC-FE-310 — `matchesRoute`'s old `/console` exact-only special case
+ * is GONE (no nav leaf points at `/console` any more — it is a bare redirect,
+ * never rendered in the sidebar), so the dedicated case below is retired too.
  */
 
 describe('matchesRoute', () => {
@@ -36,9 +40,9 @@ describe('matchesRoute', () => {
     expect(matchesRoute('/scm', '/wms')).toBe(false);
   });
 
-  it('/console (catalog) is an exact match — sub-pages do not light it up', () => {
+  it('TASK-PC-FE-310 — a bare `/console` (now just a redirect target, no nav leaf) matches only itself, like any other leaf', () => {
     expect(matchesRoute('/console', '/console')).toBe(true);
-    expect(matchesRoute('/console/catalog', '/console')).toBe(false);
+    expect(matchesRoute('/console/anything', '/console')).toBe(true);
   });
 });
 

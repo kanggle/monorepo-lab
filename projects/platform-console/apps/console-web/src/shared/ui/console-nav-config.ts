@@ -111,12 +111,15 @@ export const GROUPS: NavGroup[] = [
       // 「가이드 → 개요」 원칙(TASK-PC-FE-297)을 1뎁스에도 적용해 맨 앞에 둔다.
       // 정적 화면이라 샘플 방문자(ADR-MONO-074)도 백엔드 호출 없이 읽는다.
       { href: '/guide', label: '가이드', testid: 'nav-global-guide', icon: 'guide' },
-      { href: '/dashboards/overview', label: '개요', testid: 'nav-dashboards', icon: 'dashboard' },
+      // TASK-PC-FE-310 — 개요가 유일한 1뎁스 홈이다. 옛 「카탈로그」(`/console`) 항목은
+      // 지웠다: 제품·테넌트 그리드는 이제 이 개요 화면 안으로 접혀 들어갔다(테넌트
+      // 없음 → 그리드 직접 노출, 있음 → 「제품·테넌트 전체」 접힘 섹션). `/console` 은
+      // `/dashboards/overview` 로 리다이렉트하는 주소로만 남는다(옛 북마크 보존).
       // 도메인 상태(/dashboards/health) is NOT a top-level entry (TASK-PC-FE-068)
       // — it is reached only from the 개요 page's "도메인 상태 요약" card
       // "전체 보기 →" link (PC-FE-061), and that page carries a back link to the
-      // overview. Keeps the top group to the 1-click home + catalog.
-      { href: '/console', label: '카탈로그', testid: 'nav-catalog', icon: 'catalog' },
+      // overview. Keeps the top group to the single 1-click home.
+      { href: '/dashboards/overview', label: '개요', testid: 'nav-dashboards', icon: 'dashboard' },
     ],
   },
   {

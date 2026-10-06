@@ -10,14 +10,16 @@ import { GROUPS, visibleGroups } from '@/shared/ui/console-nav-config';
  * rider R3). A customer operator (`demo@demo.com`, home `demo-corp`) gets `fan.tenants = []`,
  * so `fan` is not passed and the entry is absent.
  */
-let mockPath = '/console';
+// TASK-PC-FE-310 — `/console` is no longer a nav leaf (folded into the
+// overview); an arbitrary non-fan route is all this default needs to be.
+let mockPath = '/dashboards/overview';
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPath,
 }));
 
 beforeEach(() => {
   cleanup();
-  mockPath = '/console';
+  mockPath = '/dashboards/overview';
 });
 
 // What the layout passes for each operator kind (products with ≥1 selectable tenant).

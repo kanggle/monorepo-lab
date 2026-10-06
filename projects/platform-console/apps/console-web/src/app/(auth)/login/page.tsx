@@ -70,10 +70,12 @@ const GENERIC_ERROR =
  * -----------------------------------------------------------------------------
  * `if (await isAuthenticated()) redirect('/console')` 는 **쿠키만** 보고 판정한다
  * ({@link isAuthenticated} 는 백엔드에 묻지 않는다). 백엔드가 `401` 을 내도 쿠키는
- * 멀쩡하므로, 401 지점이 보낸 재로그인 요청이 **여기서 되튕겨 카탈로그로 돌아갔다**:
+ * 멀쩡하므로, 401 지점이 보낸 재로그인 요청이 **여기서 되튕겨 카탈로그로 돌아갔다**
+ * (TASK-PC-FE-310 이후 착지점은 `/dashboards/overview` — 카탈로그 자신이 지금은
+ * 그 화면 안으로 접혔다. 결함의 모양은 같다, 목적지 이름만 바뀌었다):
  *
  * ```
- *   /ecommerce ──401──▶ /login ──쿠키 있음──▶ /console      (반짝임 + 무설명)
+ *   /ecommerce ──401──▶ /login ──쿠키 있음──▶ /dashboards/overview   (반짝임 + 무설명)
  * ```
  *
  * 계약(`console-integration-contract` § 2.4.6/§ 2.4.7)이 **"never a re-login loop"**
@@ -83,7 +85,9 @@ const GENERIC_ERROR =
  * 🔵 고침은 술어 교체가 아니라 **정보 채널**이다 — 401 지점이
  * {@link SESSION_EXPIRED} 마커를 붙이고, 여기서는 그 마커가 있으면 단락 회로를 타지
  * 않는다. 마커가 없는 방문(운영자가 직접 `/login` 을 친 경우)은 **예전 그대로**
- * `/console` 로 보낸다 — 편의를 뺏지 않았다는 것이 이 수리의 대조군이다.
+ * `/dashboards/overview` 로 보낸다(TASK-PC-FE-310 — 구 목적지 `/console` 은 이제
+ * 그리로 리다이렉트하는 한 홉짜리 주소라 여기서 한 홉 줄였다) — 편의를 뺏지
+ * 않았다는 것이 이 수리의 대조군이다.
  *
  * 🔴 죽은 쿠키를 **지우는** 것은 여기가 아니라 `/api/auth/login` 이다(서버 컴포넌트는
  * 쿠키를 못 바꾼다 — 애초에 이 결함이 생긴 구조적 이유다). 그 라우트가 PKCE 를 걸기
@@ -100,7 +104,7 @@ export default async function LoginPage({
   //    마커가 붙어 있으면 쿠키가 남아 있어도 로그인 화면을 보여준다. 그 쿠키는
   //    백엔드가 이미 거절한 것이므로 "인증됨" 의 증거가 아니다.
   const forcedReLogin = sp.error === SESSION_EXPIRED;
-  if (!forcedReLogin && (await isAuthenticated())) redirect('/console');
+  if (!forcedReLogin && (await isAuthenticated())) redirect('/dashboards/overview');
 
   // The demo-state signal is asked ONLY on a forced re-login landing (the
   // marker) — a plain /login visit never pays the control-plane round trip.

@@ -151,10 +151,10 @@ export async function DomainTenantGate({
             때문입니다.
           </p>
           <Link
-            href="/console"
+            href="/dashboards/overview"
             className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            카탈로그로 이동
+            개요로 이동
           </Link>
         </div>
       </section>
