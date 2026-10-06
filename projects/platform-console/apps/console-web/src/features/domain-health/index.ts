@@ -28,6 +28,8 @@ export { getDomainHealthState } from './api/domain-health-state';
 export type { DomainHealthState } from './api/domain-health-state';
 export { healthTone } from './lib/tone';
 export type { HealthTone } from './lib/tone';
+export { deriveHealthByDomain } from './lib/health-by-domain';
+export type { HealthByDomainResult } from './lib/health-by-domain';
 export {
   DomainHealthSchema,
   CardSchema,

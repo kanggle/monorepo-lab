@@ -40,9 +40,11 @@ export function navPathFor(pathname: string): string {
 }
 
 export function matchesRoute(pathname: string, href: string): boolean {
-  // `/console` (catalog) is an exact match — the catalog root must not light up
-  // on sub-pages; everything else is prefix-matched at a path boundary.
-  if (href === '/console') return pathname === '/console';
+  // 🔴 TASK-PC-FE-310 — the `/console` (old catalog) exact-match special case
+  // is gone: no nav leaf points at `/console` any more (it is now a bare
+  // redirect to `/dashboards/overview`, never rendered in the sidebar), so
+  // this function had no remaining caller to special-case for. Every leaf is
+  // exact-or-prefix-at-a-path-boundary, uniformly.
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

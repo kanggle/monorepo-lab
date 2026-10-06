@@ -53,8 +53,8 @@ export function FanSectionNote({
       >
         {body}
       </div>
-      <Link href={backHref ?? '/console'} className="mt-4 inline-block text-sm underline">
-        {backHref ? '목록으로' : '카탈로그로 이동'}
+      <Link href={backHref ?? '/dashboards/overview'} className="mt-4 inline-block text-sm underline">
+        {backHref ? '목록으로' : '개요로 이동'}
       </Link>
     </section>
   );

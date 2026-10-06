@@ -66,10 +66,10 @@ export default async function EcommerceOrdersPage() {
             않습니다. 접근이 필요하면 운영자 관리자에게 문의하세요.
           </p>
           <Link
-            href="/console"
+            href="/dashboards/overview"
             className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            카탈로그로 이동
+            개요로 이동
           </Link>
         </div>
       </section>

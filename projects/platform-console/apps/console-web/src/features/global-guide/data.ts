@@ -77,7 +77,7 @@ export const DOMAIN_SERVICE_GROUPS: DomainServiceGroup[] = [
     project: 'iam-platform',
     label: 'IAM',
     apps: ['gateway-service', 'auth-service', 'account-service', 'admin-service', 'security-service'],
-    consoleRole: '로그인(OIDC IdP) · 운영자/테넌트/권한 관리 · 소비자 계정 · 감사. 콘솔 카탈로그(레지스트리)도 admin-service 가 준다.',
+    consoleRole: '로그인(OIDC IdP) · 운영자/테넌트/권한 관리 · 소비자 계정 · 감사. 개요 화면의 「제품·테넌트 전체」 섹션(레지스트리, 구 콘솔 카탈로그 — TASK-PC-FE-310 으로 개요 안에 접힘)도 admin-service 가 준다.',
     sources: ['projects/iam-platform/apps', 'projects/iam-platform/specs/services/admin-service/rbac.md:5'],
   },
   {

@@ -9,7 +9,7 @@ import Link from 'next/link';
  *   - `registryDegraded` / `degraded` → `erp-degraded` (same copy — the
  *     registry-down and producer-down paths are indistinguishable to the
  *     operator and recover the same way).
- *   - `notEligible`  → `erp-not-eligible` (+ a "카탈로그로 이동" link).
+ *   - `notEligible`  → `erp-not-eligible` (+ an "개요로 이동" link).
  *   - `forbidden`    → `erp-forbidden`.
  *
  * The `heading` is route-specific (e.g. "ERP 마스터") so the notice keeps
@@ -49,10 +49,10 @@ export function ErpSectionNotice({
             않습니다. 접근이 필요하면 운영자 관리자에게 문의하세요.
           </p>
           <Link
-            href="/console"
+            href="/dashboards/overview"
             className="mt-4 inline-block text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            카탈로그로 이동
+            개요로 이동
           </Link>
         </div>
       ) : kind === 'forbidden' ? (

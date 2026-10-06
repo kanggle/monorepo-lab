@@ -219,30 +219,26 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     area: 'platform',
     gate: {
       kind: 'operator',
-      note: '셸 진입(로그인)만 요구. 카드별 도메인 데이터는 각 도메인 게이트가 따로 판정.',
+      note: '셸 진입(로그인)만 요구. 카드별 도메인 데이터는 각 도메인 게이트가 따로 판정. 제품·테넌트 섹션의 레지스트리 읽기도 같은 셸 진입 게이트 — GET /api/admin/console/registry 에 @RequiresPermission 없음(TASK-PC-FE-310).',
     },
-    description: '5개 도메인 요약 카드 + 도메인 상태 요약(→ 도메인 상태 화면).',
+    description:
+      '5개 도메인 요약 카드 + 도메인 상태 요약(→ 도메인 상태 화면) + 「제품·테넌트 전체」 섹션(구 /console 카탈로그 그리드, TASK-PC-FE-310 으로 이 화면 안에 접힘 — 테넌트 미선택 시 직접 노출).',
     crud: R,
-    purpose: '운영자가 로그인 직후 전체 상태를 한눈에 본다.',
-    services: ['console-web 서버 합성 (operator-overview · domain-health → 각 도메인)'],
+    purpose: '운영자가 로그인 직후 전체 상태를 한눈에 보고, 제품·테넌트를 골라 들어간다.',
+    services: ['console-web 서버 합성 (operator-overview · domain-health → 각 도메인)', 'iam admin-service (console registry)'],
     sources: [
       `${API}/console/dashboards/operator-overview/route.ts (GET)`,
       `${API}/console/dashboards/domain-health/route.ts (GET)`,
+      `${ADMIN_CTRL}/console/ConsoleRegistryController.java:21-31,42`,
+      `${API}/registry/route.ts (GET)`,
     ],
   },
-  {
-    href: '/console',
-    area: 'platform',
-    gate: {
-      kind: 'operator',
-      note: 'GET /api/admin/console/registry 에는 @RequiresPermission 이 없다 — 유효한 운영자 토큰이면 누구나(자기 테넌트 범위로 축소).',
-    },
-    description: '제품(도메인) 카탈로그 타일 — 레지스트리에서 데이터 기반으로 렌더.',
-    crud: R,
-    purpose: '어떤 도메인을 쓸 수 있는지 보고 그 화면으로 이동한다.',
-    services: ['iam admin-service (console registry)'],
-    sources: [`${ADMIN_CTRL}/console/ConsoleRegistryController.java:21-31,42`, `${API}/registry/route.ts (GET)`],
-  },
+  // 🔴 TASK-PC-FE-310 — the old `/console` row is GONE, not degraded-to-static:
+  //    that route is now a bare `redirect('/dashboards/overview')`, no longer a
+  //    sidebar leaf (`console-nav-config.ts`), so a row here would be an orphan
+  //    the drift guard (`permission-map-drift.test.ts` "no orphans") catches.
+  //    Its content (registry gate note + description + sources) moved UP into
+  //    the `/dashboards/overview` row above — one screen, one row.
 
   // ── 관리 ▸ IAM ────────────────────────────────────────────────────────
   guideRow('/iam/guide', 'iam', 'IAM'),

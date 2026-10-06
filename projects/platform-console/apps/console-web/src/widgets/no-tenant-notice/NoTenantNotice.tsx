@@ -19,10 +19,11 @@ export interface NoTenantNoticeBodyProps {
   /** The screen-specific second sentence, shown only in the 'select' case
    *  (≥2 selectable tenants, none chosen — today's unchanged copy). */
   description: ReactNode;
-  /** Where "카탈로그로 이동" points. Defaults to `/console`; the tenant-detail
+  /** Where "개요로 이동" points. Defaults to `/dashboards/overview` (TASK-PC-FE-310
+   *  — the catalog grid now lives inside the overview); the tenant-detail
    *  route points back to its own list instead. */
   linkHref?: string;
-  /** Defaults to "카탈로그로 이동". */
+  /** Defaults to "개요로 이동". */
   linkLabel?: string;
 }
 
@@ -54,8 +55,8 @@ export function NoTenantNoticeBody({
   kind,
   testId,
   description,
-  linkHref = '/console',
-  linkLabel = '카탈로그로 이동',
+  linkHref = '/dashboards/overview',
+  linkLabel = '개요로 이동',
 }: NoTenantNoticeBodyProps) {
   if (kind === 'zero') {
     return (

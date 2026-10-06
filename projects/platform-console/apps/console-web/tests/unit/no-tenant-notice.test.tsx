@@ -67,9 +67,9 @@ describe('NoTenantNoticeBody — the shared copy (owner decision ⓒ, 2026-09-26
     expect(el).toHaveTextContent('테넌트를 먼저 선택하세요.');
     expect(el).toHaveTextContent('screen-specific description');
     expect(el).not.toHaveTextContent('접근 가능한 테넌트가 없습니다');
-    expect(screen.getByRole('link', { name: '카탈로그로 이동' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '개요로 이동' })).toHaveAttribute(
       'href',
-      '/console',
+      '/dashboards/overview',
     );
   });
 

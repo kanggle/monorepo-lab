@@ -25,6 +25,15 @@ export interface ServiceCatalogProps {
   catalog: CatalogState;
   healthByDomain?: Partial<Record<ProductKey, TileTone>>;
   /**
+   * Heading level + text for this instance (TASK-PC-FE-310 — the overview
+   * folds this grid in as a `<h2>` subsection, never a second page `<h1>`;
+   * see Edge Case "h1 중복"). Defaults to the ORIGINAL standalone `<h1>서비스</h1>`
+   * so every pre-existing consumer (the old `/console` page) is byte-identical
+   * if it ever rendered this directly again.
+   */
+  headingLevel?: 'h1' | 'h2';
+  headingText?: string;
+  /**
    * Why the per-domain dots are (not) there. TASK-MONO-711 ③.
    *
    * - `'ok'` — dots rendered (or the registry simply has no matching domain).
@@ -49,12 +58,15 @@ export function ServiceCatalog({
   catalog,
   healthByDomain,
   healthState = 'ok',
+  headingLevel = 'h1',
+  headingText = '서비스',
 }: ServiceCatalogProps) {
+  const Heading = headingLevel;
   return (
     <section aria-labelledby="catalog-heading">
-      <h1 id="catalog-heading" className="mb-6 text-2xl font-semibold">
-        서비스
-      </h1>
+      <Heading id="catalog-heading" className="mb-6 text-2xl font-semibold">
+        {headingText}
+      </Heading>
 
       {catalog.degraded && (
         <div
