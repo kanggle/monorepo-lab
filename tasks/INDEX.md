@@ -219,10 +219,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-764-demo-functional-checklist.md` — **데모 기능 점검표** (REVIEW, 2026-10-06 UTC · 23차 창 1·2회차). AC-0~4 ✅ — 흐름 16개: PASS 12 · 부분 2(11·12) · FAIL 1(14 wms 이행 전량 DLT, ⓒ `TASK-MONO-765`) · ⚪ 1(15 운영자 생성, ⓒ `TASK-MONO-766`). 창 안 수정 3건(`TASK-FE-105` · `TASK-PC-FE-308` · `TASK-FAN-FE-031`) · 기안 9건(#4175). 소셜 2·3 PASS 로 763·617·623 닫음. 분석=Opus 5.5 / 구현 권장=Opus.
+_(없음)_
 
 
 ## done
+- ✅ `TASK-MONO-764-demo-functional-checklist.md` — **DONE 2026-10-06 UTC (4-dim verified)** — 측정 티켓, 결과 PR **#4176** `bdca01274` · **#4178** `7346591f9` (머지 시점 실패 0). 데모 기능 점검표 23차 창 1·2회차: 흐름 16개 PASS 12 · 부분 2 · FAIL 1(ⓒ 765) · ⚪ 1(ⓒ 766). 창 안 수정 3건(FE-105 · PC-FE-308 · FAN-FE-031) · 기안 9건(#4175).
 - ✅ `TASK-MONO-763-demo-social-login-keys-from-ssm.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4167**, 스쿼시 **`ddf39df00`** (머지 시점 실패 0/39). 데모가 소셜 키를 SSM 에서 읽어 auth-service 로. AC-3 apply · AC-4 라이브(SecureString 은 역할 권한만으로 복호화 — KMS 불필요 · Google 가입 끝까지, 23차 창 2회차).
 - ✅ `TASK-MONO-743-link-existing-fan-and-store-accounts.md` — **DONE (2026-10-05 UTC · 소유자 결정 «진행» · 구현 없이 종결)** 기존 팬·스토어 계정 묶기 — 모집단이 0 이고 더는 안 생긴다: 이메일 가입은 614/616 이후 처음부터 풀 · 078 이전 이중 계정은 데모 계정 하나뿐(744 가 해결) · 데모 호스트는 재굽기마다 신선 볼륨. 남은 생성 경로(사이트별 소셜 가입)는 `TASK-BE-617` 순서 규칙(실제 소셜 키는 617 머지 이후)으로 막는다. AC-0 «어느 id 가 살아남는가» 는 미결인 채 보류 · 되살리는 조건은 닫기 기록. `ADR-MONO-078` 에 CORRECTION.
 - ✅ `TASK-MONO-762-scm-visibility-ignores-outbound-confirmation.md` — **DONE (2026-10-05 UTC · 4차원 검증 · impl PR #4159 squash `b8d3adc6c`, 머지 시점 실패 0)** — scm 재고 가시성이 `wms.inventory.confirmed.v1` 로 보유를 차감(AC-0 ⓐ 보유 + 재시도→DLT). AC-4 = 22차 창: scm **85** = wms 보유 85 (DB·`/scm/inventory` 화면). 부팅 중 순서 역전이 실제로 일어나 retry-0 이 구했다(DLT 0).

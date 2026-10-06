@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `TASK-BE-575`/`577` 이 각각 프로필 지연 생성 + `email` 클레임 발행을 고쳤다고 닫았는데, 23차 창의 새 계정(06:12:55Z 생성)도 `GET /api/bff/api/users/me` 가 `email:null`. 배포 반영 여부부터 재확인. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 _(없음)_
 
@@ -90,6 +89,7 @@ _(없음)_
 ## review
 
 - `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (REVIEW, 2026-10-06 UTC · impl PR **#4183** · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전). bite = CI 런 37479099169 예상 4셀 빨강. ⚪ AC-0/2/3 라이브는 다음 창.
+- `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 원인은 세 후보(ⓐ배포 미반영·ⓑ클레임 없음·ⓒ소셜 가입)가 아니라 **ⓓ** — `TASK-BE-575` 의 pull-through 프로비저닝과 `TASK-MONO-511`(이후 완료)이 살린 `account.created` 이벤트 소비자가 서로 레이스하고, 이벤트 쪽이 거의 항상 먼저 도착해 `email=null` 로 행을 선점한다(`AccountCreatedHandler.java:28` 이 항상 `null` 전달, `UserProfileProvisioner` 의 기존 no-op 이 뒤따르는 pull-through 의 실 이메일을 버림). `UserProfile.assignEmail` + `UserProfileProvisioner.backfillEmailIfMissing` 로 1회 백필 추가, 단위 테스트 추가(`./gradlew :…:user-service:test` BUILD SUCCESSFUL). 라이브 재확인은 AMI 재굽기 이후(AC-4 ⚪ 미체크). impl PR **#4184**. 분석=Opus 5.5 / 구현 권장=Sonnet(실제: Opus 5.5 — 레이스 조건 진단은 복잡 도메인 작업).
 
 ## done
 - ✅ `TASK-FE-105-bff-forwards-browser-origin-so-every-demo-store-write-is-403.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4172**, 스쿼시 **`6fd6a8d76`** (머지 시점 실패 0 — SUCCESS 18 · SKIPPED 49). BFF 가 브라우저 `Origin` 을 게이트웨이로 넘겨 데모 스토어 쓰기 전부 403 → `origin` 제거. 라이브(23차 창, 07:31:48Z 배포 반영): 프로필 PATCH 200 · 배송지 POST 201 · 새로고침 후 유지, 주문·결제·위시·리뷰 연쇄 PASS(`TASK-MONO-764`).
