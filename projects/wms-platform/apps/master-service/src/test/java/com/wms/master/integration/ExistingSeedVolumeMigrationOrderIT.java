@@ -90,11 +90,13 @@ class ExistingSeedVolumeMigrationOrderIT {
             assertThatCode(() -> flyway(ds, REAL_LOCATIONS, false).migrate())
                     .doesNotThrowAnyException();
 
-            assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(1);
+            // TASK-MONO-765: WH01 + WH-MAIN (shipping-service default-warehouse-code).
+            assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(2);
             assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(3);
             assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(3);
             assertThat(count(ds, "SELECT count(*) FROM skus")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(3);
+            // TASK-MONO-765: + ECOMMERCE-STORE (FulfillmentRequestedConsumer partner).
+            assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(4);
 
             // Not just "3 rows landed" — each one resolves through the chain the
             // prefixes exist to order.
@@ -143,11 +145,13 @@ class ExistingSeedVolumeMigrationOrderIT {
             // The repeatables re-ran over rows the old versioned seeds had already
             // inserted — over live conflicting data, which is precisely what must
             // not crash or double up.
-            assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(1);
+            // TASK-MONO-765: WH01 + WH-MAIN (shipping-service default-warehouse-code).
+            assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(2);
             assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(3);
             assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(3);
             assertThat(count(ds, "SELECT count(*) FROM skus")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(3);
+            // TASK-MONO-765: + ECOMMERCE-STORE (FulfillmentRequestedConsumer partner).
+            assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(4);
         }
     }
 
