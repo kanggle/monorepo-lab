@@ -4,7 +4,7 @@ TASK-FE-106
 
 # Status
 
-ready
+in-progress
 
 # Title
 
@@ -168,3 +168,81 @@ web-store 는 NextAuth JWT 전략(`jwt` 콜백이 메모리의 토큰 객체를 
   다른 경로(다른 페이지 동시 로드 등)로 재발할 수 있다.
 - **console-web 의 307 패턴을 기계적으로 복사한다** — web-store 는 Route Handler 가 아닌
   NextAuth JWT 콜백 구조라 같은 리다이렉트 지점이 없다; 형태가 다르면 다른 해법이 필요하다.
+
+---
+
+# 구현 · 결정 (2026-10-06 UTC, 브랜치 `task-fe-106`)
+
+## 착수 조사 — 코드에서 찾은 기전 (AC-0 의 코드 쪽 절반 · 라이브 재현은 아직)
+
+1. **「NextAuth 가 `jwt` 콜백을 직렬화한다」는 가정은 어디서도 참이 아니다** — 한 프로세스
+   안에서도 동시 요청 각각이 자기 쿠키 스냅숏으로 `jwt` 콜백을 돌린다. 서버리스 인스턴스는
+   그 위에 얹힌 한 가지 경우일 뿐이다.
+2. 🔴 **미들웨어가 refresh 를 하고 결과를 버리고 있었다.** `src/middleware.ts` 의 `await auth()`
+   (요청 인자 없는 RSC 형태)는 `jwt` 콜백 = silent refresh 를 실제로 돌려 IAM 에서 refresh
+   토큰을 **회전시킨 뒤**, 회전된 쿠키(Set-Cookie)를 **버린다** —
+   `next-auth@5.0.0-beta.25/lib/index.js:91` `getSession(h, config).then((r) => r.json())`.
+   그래서 액세스 토큰 만료 뒤의 보호 경로 네비게이션·**링크 prefetch** 하나하나가 「승자」가
+   되고 그 승자의 결과는 아무에게도 전달되지 않는다. 브라우저는 옛 refresh 토큰을 그대로
+   들고 있고, 다음 `/api/auth/session` 이 그것을 다시 보내 → 30초 안이면 유예 거절(관측된
+   `SAS_REFRESH: replay … within the 30s grace window` 5회와 같은 모양), 30초 밖이면
+   **재사용 탐지 → 패밀리 폐기 + 보안 이벤트**. 이 기전은 **인스턴스가 하나여도** 성립한다
+   — n=1 관측을 설명하는 데 서버리스 다중 인스턴스가 필요 없다(둘 중 무엇이 실제였는지는
+   AC-0 라이브 재현으로만 가릴 수 있다).
+3. 「별개 관측」(옛 세션 쿠키 재생 → `reuse detected — revoking the family`)도 2번과 같은
+   경로로 생길 수 있다 — 미들웨어가 버린 회전 뒤 30초가 지나 같은 토큰이 다시 나가면 그
+   로그가 나온다. 결함 아님 판정 자체(iam 쪽은 옳게 동작)는 그대로다.
+
+## 결정 — 두 갈래
+
+**(가) 미들웨어 게이트를 decode-only 로** (`src/middleware.ts`). refresh 는 **결과가 브라우저에
+쓰이는 곳에서만** 돈다: `GET /api/auth/session`. 게이트는 세션 쿠키를 복호만 하고
+(`shared/auth/session-token.ts`) `session` 콜백과 같은 규칙(역할 · `error`)으로 판정한다.
+만료됐지만 refresh 가능한 세션은 통과 — 클라이언트의 세션 조회가 갱신하고, BFF 는 낡은
+bearer 를 스스로 거절한다(기존과 같음 — 미들웨어의 refresh 결과는 원래도 버려졌으므로
+RSC·BFF 가 보던 토큰은 변하지 않는다).
+
+**(나) 경합 패자는 쿠키를 쓰지 않고, 한 번 더 묻는다** (console-web `TASK-PC-FE-300` 의
+기전을 세션 조회 자리로 옮김):
+
+- `refreshTokenGrant`(`auth-callbacks.ts`)가 실패를 `rotation_suspect`(IAM `400
+  invalid_grant` — BE-606 유예 거절의 모양) / `failed` 로 나눈다. 판정 기준은 console 의
+  `rotationSuspect` 와 같다.
+- 패자의 `jwt` 콜백은 `error`(종결 — 쿠키가 어디로든 새어 나가도 결과는 오늘의 로그아웃이지
+  옛 refresh 토큰의 재전송이 아니다) **와** `refreshRaceLost` 표지를 단다. 표지는 그 호출
+  한 번에만 유효(다음 호출 시작에서 지움).
+- `GET /api/auth/session` 래퍼(`shared/auth/session-route.ts`)가 표지를 보면 그 응답을
+  **Set-Cookie 째 버리고**, 2초(`REFRESH_RACE_GRACE_MS`, console 과 같은 값) 기다린 뒤
+  `307 ?refresh_retry=1` 을 준다. `next-auth/react` 의 `fetch` 가 투명하게 따라가고, 그
+  요청은 **그 시점의** 브라우저 쿠키 — 승자가 착지했다면 승자의 것 — 를 싣는다.
+- **재시도 홉은 절대 refresh 하지 않는다**(루프 상한 · 옛 토큰 재전송 금지). 액세스 토큰이
+  신선하면(`hasFreshAccessToken` — `jwt` 콜백과 **같은 판정 함수 하나**) 정상 응답 →
+  로그인 유지. 여전히 만료면 세션 쿠키를 지우고 익명 → 로그아웃(진짜 실패, 또는 승자가
+  2초 안에 못 온 경합).
+- 경합 모양이 아닌 실패(5xx · 네트워크 · `invalid_client` 등)는 기존대로 즉시 `error` → 로그아웃.
+
+## 버린 대안
+
+- **공유 저장소(Redis/KV)로 승자의 토큰을 인스턴스 간 전달** — 새 인프라 = 아키텍처 결정
+  (HARDSTOP-09 영역)이고, 그래도 패자의 Set-Cookie 덮어쓰기는 따로 막아야 한다.
+- **패자가 `error` 없이 옛 토큰을 그대로 둔다** — 패자 쿠키가 승자 뒤에 착지하면 브라우저에
+  옛 refresh 토큰이 남고, 30초 뒤 다음 refresh 가 **재사용 → 패밀리 폐기 + 보안 점수**
+  (같은 계정 1시간 2회면 AUTO_LOCK, BE-606 결정 2). 로그아웃보다 나쁘다.
+- **미들웨어도 refresh 하되 쿠키를 저장**(`auth(handler)` 래퍼 형태) — prefetch 하나하나가
+  refresh 주체가 되고, 그 경로(`lib/index.js:168`)는 세션 Set-Cookie 를 무조건 붙이므로 패자
+  쿠키를 막을 자리가 없다.
+- iam 유예창 확대 · 클라이언트 동시 요청 합치기 — Out of Scope(Failure Scenarios).
+
+## 남는 위험 (알고 둔다)
+
+- 승자의 응답이 2초 넘게 걸리면 패자의 재시도 홉이 쿠키를 지운다 → 그 뒤 착지 순서가
+  결과를 정한다(console 과 같은 절충; 비용은 실패 경로에서만).
+- `POST /api/auth/session`(`useSession().update()`)은 래핑하지 않았다 — web-store 는 쓰지
+  않는다. 쓰게 되더라도 `error` 가 같이 붙으므로 결과는 로그아웃이지 재전송이 아니다.
+- RSC 는 refresh 하지 않는다(그 사실은 수정 전에도 같았다 — 미들웨어의 refresh 결과는
+  버려졌다).
+
+## 스펙
+
+- `specs/services/web-store/architecture.md` § Authentication — 「refresh 는 한 곳」 ·
+  「경합 처리」 두 줄 추가(Change Rule: 코드보다 먼저).

@@ -1,9 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
-import { getToken } from 'next-auth/jwt';
-
-const SECURE_COOKIE = '__Secure-authjs.session-token';
-const PLAIN_COOKIE = 'authjs.session-token';
+import { decodeSessionCookieHeader } from './session-token';
 
 /**
  * Decode the encrypted NextAuth session-token cookie server-side via `getToken`,
@@ -13,25 +10,15 @@ const PLAIN_COOKIE = 'authjs.session-token';
  * own shape validation and error handling.
  *
  * Shared by `session.ts` (bearer/session) and `federated-logout.ts` (id_token
- * hint) so the cookie-name resolution and `getToken` wiring stay in one place.
+ * hint). The cookie-name resolution + `getToken` wiring live in
+ * `session-token.ts` (TASK-FE-106 — also used by the edge middleware, which may
+ * not import `server-only`).
  */
 export async function decodeServerJwt<T>(): Promise<T | null> {
   const jar = await cookies();
-  const cookieName = jar.get(SECURE_COOKIE) ? SECURE_COOKIE : PLAIN_COOKIE;
   const cookieHeader = jar
     .getAll()
     .map((c) => `${c.name}=${c.value}`)
     .join('; ');
-
-  const token = await getToken({
-    req: { headers: { cookie: cookieHeader } },
-    secret: process.env.NEXTAUTH_SECRET ?? '',
-    // Auth.js v5 derives the decryption salt from the cookie name; pass both so
-    // the secure (`__Secure-`) and plain variants both decode correctly.
-    salt: cookieName,
-    cookieName,
-    secureCookie: cookieName === SECURE_COOKIE,
-  });
-
-  return (token as T | null) ?? null;
+  return decodeSessionCookieHeader<T>(cookieHeader);
 }

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   refreshAccessToken,
+  refreshTokenGrant,
+  hasFreshAccessToken,
+  REFRESH_RACE_LOST_CLAIM,
   jwtCallback,
   sessionCallback,
   signInCallback,
@@ -250,5 +253,86 @@ describe('auth.ts jwt callback — F3 silent refresh', () => {
     expect(token.error).toBeUndefined();
     // No refresh attempt on initial sign-in.
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * TASK-FE-106 — IAM answers the LOSER of a same-token concurrent refresh with a
+ * bare `400 invalid_grant` inside its 30s grace window (iam TASK-BE-606/608).
+ */
+describe('TASK-FE-106 — rotation-race classification', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const nowSec = () => Math.floor(Date.now() / 1000);
+  const expired = () => ({
+    accessToken: 'old',
+    refreshToken: 'rt-0',
+    expiresAt: nowSec() - 10,
+    accountId: 'acc-1',
+    roles: ['CUSTOMER'],
+  });
+
+  it('400 invalid_grant → rotation_suspect', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: 'invalid_grant' }) });
+    expect(await refreshTokenGrant('rt-0')).toEqual({ kind: 'rotation_suspect' });
+  });
+
+  it.each([
+    ['400 invalid_client', 400, { error: 'invalid_client' }],
+    ['401', 401, { error: 'invalid_grant' }],
+    ['503', 503, {}],
+  ])('%s → failed (경합 모양이 아님)', async (_label, status, body) => {
+    fetchMock.mockResolvedValue({ ok: false, status, json: async () => body });
+    expect(await refreshTokenGrant('rt-0')).toEqual({ kind: 'failed' });
+  });
+
+  it('경합 패자: error(종결) + refreshRaceLost 를 둘 다 단다', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: 'invalid_grant' }) });
+    const token = await jwtCb({ token: expired(), account: null });
+    // Terminal if the cookie ever escapes: never a silent replay of rt-0.
+    expect(token.error).toBe('RefreshAccessTokenError');
+    expect(token[REFRESH_RACE_LOST_CLAIM]).toBe(true);
+  });
+
+  it('🔵 대조군 — 경합 모양이 아닌 실패에는 refreshRaceLost 를 달지 않는다', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
+    const token = await jwtCb({ token: expired(), account: null });
+    expect(token.error).toBe('RefreshAccessTokenError');
+    expect(token[REFRESH_RACE_LOST_CLAIM]).toBeUndefined();
+  });
+
+  it('refreshRaceLost 는 그 호출에서만 — 다음 jwt 호출이 지우고, error 가 있으니 재전송도 없다', async () => {
+    const token = await jwtCb({
+      token: { ...expired(), error: 'RefreshAccessTokenError', [REFRESH_RACE_LOST_CLAIM]: true },
+      account: null,
+    });
+    expect(token[REFRESH_RACE_LOST_CLAIM]).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('session 콜백은 패자 표지를 익명 세션에 boolean 으로만 싣는다', () => {
+    const s = sessionCb({
+      session: {},
+      token: { ...expired(), error: 'RefreshAccessTokenError', [REFRESH_RACE_LOST_CLAIM]: true },
+    });
+    expect(s.accountId).toBeNull();
+    expect(s[REFRESH_RACE_LOST_CLAIM]).toBe(true);
+    expect(JSON.stringify(s)).not.toContain('rt-0');
+    const plain = sessionCb({ session: {}, token: { ...expired(), error: 'RefreshAccessTokenError' } });
+    expect(plain).not.toHaveProperty(REFRESH_RACE_LOST_CLAIM);
+  });
+
+  it('hasFreshAccessToken — 만료 60초 전부터는 신선하지 않다', () => {
+    const now = Date.now();
+    const sec = Math.floor(now / 1000);
+    expect(hasFreshAccessToken({ expiresAt: sec + 3600 }, now)).toBe(true);
+    expect(hasFreshAccessToken({ expiresAt: sec + 30 }, now)).toBe(false);
+    expect(hasFreshAccessToken({}, now)).toBe(false);
   });
 });

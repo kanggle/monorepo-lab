@@ -44,6 +44,13 @@ export const WEB_STORE_CLIENT_SECRET =
  */
 export const REFRESH_MARGIN_SECONDS = 60;
 
+/**
+ * TASK-FE-106 — the claim the `jwt` callback sets (and the `session` callback
+ * surfaces) when ITS refresh attempt got IAM's rotation-shaped refusal. Read
+ * by `session-route.ts` only; never meaningful to client code.
+ */
+export const REFRESH_RACE_LOST_CLAIM = 'refreshRaceLost';
+
 export interface RefreshedTokens {
   accessToken: string;
   refreshToken: string;
@@ -52,15 +59,42 @@ export interface RefreshedTokens {
 }
 
 /**
- * Exchange a stored `refresh_token` for a rotated access/refresh pair at the
- * IAM `/oauth2/token` endpoint (RFC 6749 § 6, `client_secret_basic`). Returns
- * null on any non-2xx / malformed response so the caller can flag the session
- * for a full re-auth (F1 fallback). Server-only — invoked from the `jwt`
- * callback which runs on the server.
+ * The outcome of one refresh_token grant (TASK-FE-106).
+ *
+ *   - `ok`               → IAM rotated the pair.
+ *   - `rotation_suspect` → IAM `400 invalid_grant`. 🔴 Since iam `TASK-BE-606`
+ *     this is ALSO what the LOSER of a same-token concurrent refresh receives
+ *     within the 30s grace window ("refused, nothing revoked") — by error shape
+ *     alone it cannot be told apart from a genuinely dead refresh token, so the
+ *     caller must not conclude "dead" from it before looking again (see
+ *     `session-route.ts`). Same classification console-web uses
+ *     (`session-refresh.ts` `rotationSuspect`, TASK-PC-FE-300).
+ *   - `failed`           → anything else (other 4xx, 5xx, network, malformed body).
  */
-export async function refreshAccessToken(
-  refreshToken: string,
-): Promise<RefreshedTokens | null> {
+export type RefreshGrantResult =
+  | { kind: 'ok'; tokens: RefreshedTokens }
+  | { kind: 'rotation_suspect' }
+  | { kind: 'failed' };
+
+/**
+ * The ONE "does this session JWT still hold a usable access token" judge
+ * (TASK-FE-106). Used by the `jwt` callback to decide whether to refresh AND by
+ * the `/api/auth/session` retry hop to decide whether a concurrent winner's
+ * rotated cookie has landed — a second copy of this predicate is how the two
+ * would quietly disagree (console-web TASK-PC-FE-300 Failure Scenario 1).
+ */
+export function hasFreshAccessToken(token: { expiresAt?: unknown }, nowMs: number = Date.now()): boolean {
+  const expiresAt = token.expiresAt;
+  return typeof expiresAt === 'number' && nowMs < (expiresAt - REFRESH_MARGIN_SECONDS) * 1000;
+}
+
+/**
+ * Exchange a stored `refresh_token` for a rotated access/refresh pair at the
+ * IAM `/oauth2/token` endpoint (RFC 6749 § 6, `client_secret_basic`), and say
+ * which kind of failure it was when it fails ({@link RefreshGrantResult}).
+ * Server-only — invoked from the `jwt` callback which runs on the server.
+ */
+export async function refreshTokenGrant(refreshToken: string): Promise<RefreshGrantResult> {
   try {
     const basic = Buffer.from(
       `${WEB_STORE_CLIENT_ID}:${WEB_STORE_CLIENT_SECRET}`,
@@ -86,29 +120,50 @@ export async function refreshAccessToken(
       }),
       cache: 'no-store',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: unknown };
+      return res.status === 400 && body?.error === 'invalid_grant'
+        ? { kind: 'rotation_suspect' }
+        : { kind: 'failed' };
+    }
     const data = (await res.json()) as {
       access_token?: string;
       refresh_token?: string;
       id_token?: string;
       expires_in?: number;
     };
-    if (!data.access_token) return null;
+    if (!data.access_token) return { kind: 'failed' };
     return {
-      accessToken: data.access_token,
-      // Rotation: IAM returns a NEW refresh token (reuse-refresh-tokens=false).
-      // If a token endpoint ever omits it, fall back to the one we sent so the
-      // session does not silently lose its refresh capability.
-      refreshToken: data.refresh_token ?? refreshToken,
-      idToken: data.id_token,
-      expiresAt:
-        typeof data.expires_in === 'number'
-          ? Math.floor(Date.now() / 1000) + data.expires_in
-          : undefined,
+      kind: 'ok',
+      tokens: {
+        accessToken: data.access_token,
+        // Rotation: IAM returns a NEW refresh token (reuse-refresh-tokens=false).
+        // If a token endpoint ever omits it, fall back to the one we sent so the
+        // session does not silently lose its refresh capability.
+        refreshToken: data.refresh_token ?? refreshToken,
+        idToken: data.id_token,
+        expiresAt:
+          typeof data.expires_in === 'number'
+            ? Math.floor(Date.now() / 1000) + data.expires_in
+            : undefined,
+      },
     };
   } catch {
-    return null;
+    return { kind: 'failed' };
   }
+}
+
+/**
+ * Tokens-or-null view of {@link refreshTokenGrant} (kept for existing import
+ * sites — `auth.ts` re-exports it). Returns null on ANY failure, including a
+ * rotation-race refusal; callers that must tell those apart use
+ * {@link refreshTokenGrant}.
+ */
+export async function refreshAccessToken(
+  refreshToken: string,
+): Promise<RefreshedTokens | null> {
+  const result = await refreshTokenGrant(refreshToken);
+  return result.kind === 'ok' ? result.tokens : null;
 }
 
 // Minimal structural types mirroring the NextAuth callback args we use. Kept
@@ -170,17 +225,33 @@ export async function jwtCallback({
 
   // Phase 4.5 F3 — proactive silent refresh. On subsequent calls (no
   // `account`), refresh if the access token is at/near expiry and a refresh
-  // token is held. NextAuth serializes the `jwt` callback per session token, so
-  // this is the in-flight-dedupe point (a single refresh per session JWT).
+  // token is held.
+  //
+  // 🔴 TASK-FE-106 — there is NO in-flight dedupe here. The old comment claimed
+  // "NextAuth serializes the jwt callback per session token"; nothing does —
+  // not across parallel requests of one browser, not across tabs, and certainly
+  // not across serverless instances. Several requests carrying the SAME expired
+  // session cookie each send the SAME refresh token; IAM rotates for the first
+  // and refuses the rest within its 30s grace window (iam TASK-BE-606/608:
+  // `400 invalid_grant`, nothing revoked). A loser cannot learn the winner's
+  // rotated pair from here (it lives in the winner's response cookie), so it
+  // must neither keep the old refresh token as if nothing happened (re-sending
+  // it after 30s IS reuse → family revoke) nor be allowed to overwrite the
+  // winner's cookie. It flags the token terminally (same `error` as before, so
+  // if this token's cookie is ever written the result is today's logged-out
+  // state, never a replay) and marks it `refreshRaceLost` so the
+  // `/api/auth/session` wrapper (`session-route.ts`) discards this response —
+  // cookie included — and lets the browser ask again with whatever cookie it
+  // holds by then.
   if (!account) {
-    const expiresAt = token.expiresAt as number | undefined;
+    // The marker is per-call: a token whose cookie escaped with it must not
+    // keep re-triggering the retry hop on every later read.
+    delete token[REFRESH_RACE_LOST_CLAIM];
     const refreshToken = token.refreshToken as string | undefined;
-    const stillValid =
-      typeof expiresAt === 'number' &&
-      Date.now() < (expiresAt - REFRESH_MARGIN_SECONDS) * 1000;
-    if (!stillValid && refreshToken && !token.error) {
-      const refreshed = await refreshAccessToken(refreshToken);
-      if (refreshed) {
+    if (!hasFreshAccessToken(token) && refreshToken && !token.error) {
+      const result = await refreshTokenGrant(refreshToken);
+      if (result.kind === 'ok') {
+        const refreshed = result.tokens;
         token.accessToken = refreshed.accessToken;
         token.refreshToken = refreshed.refreshToken;
         if (refreshed.idToken) token.idToken = refreshed.idToken;
@@ -189,6 +260,8 @@ export async function jwtCallback({
       } else {
         // Refresh failed → flag so session()/BFF force a full re-auth (F1).
         token.error = 'RefreshAccessTokenError';
+        // BITE-PROBE (TASK-FE-106): marker disabled in this commit only.
+        void result;
       }
     }
   }
@@ -210,6 +283,10 @@ export function sessionCallback({ session, token }: SessionCallbackArgs): Record
       accountId: null,
       tenantId: null,
       roles: [],
+      // TASK-FE-106 — tells the `/api/auth/session` wrapper this anonymous
+      // answer may be a lost refresh race, not a dead session. A boolean only;
+      // no token material.
+      ...(token[REFRESH_RACE_LOST_CLAIM] === true && { [REFRESH_RACE_LOST_CLAIM]: true }),
     };
   }
   session.accountId = (token.accountId as string | null | undefined) ?? null;

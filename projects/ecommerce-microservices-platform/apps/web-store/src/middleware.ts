@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { auth } from '@/shared/auth/auth';
+import { sessionCallback } from '@/shared/auth/auth-callbacks';
+import { decodeSessionCookieHeader } from '@/shared/auth/session-token';
 
 /**
  * Route guard. Public storefront paths (`/`, `/products/...`, `/login`,
@@ -55,7 +56,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = await auth();
+  // 🔴 TASK-FE-106 — decode-only, NEVER `auth()`. `auth()` called without a
+  // request (the RSC form) runs the `jwt` callback — i.e. performs the silent
+  // refresh, rotating the refresh token at IAM — and then DISCARDS the
+  // resulting Set-Cookie (next-auth `lib/index.js`: `getSession(...).then(r =>
+  // r.json())`). Every protected navigation / prefetch after the access token
+  // expired therefore burned the browser's refresh token: the rotated pair was
+  // thrown away, the browser kept the old one, and the next session read sent
+  // it again → IAM grace-window refusal (or, after 30s, reuse → family revoke).
+  // A refresh may only run where its result is written back: `/api/auth/session`
+  // (`session-route.ts`). Here we only judge the session we were handed, with
+  // the same rules the session callback applies (role, refresh-failure flag).
+  // An expired-but-refreshable session passes; the client's session read
+  // refreshes it, and the BFF rejects a stale bearer on its own.
+  const token = await decodeSessionCookieHeader<Record<string, unknown>>(
+    request.headers.get('cookie') ?? '',
+  );
+  const session = token ? sessionCallback({ session: {}, token }) : null;
   if (!session || !session.accountId) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';

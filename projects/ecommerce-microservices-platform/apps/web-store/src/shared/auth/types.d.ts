@@ -18,6 +18,8 @@ declare module 'next-auth' {
     tenantId?: string | null;
     roles?: string[];
     // NOTE: no `accessToken` here — tokens are server-only (F2).
+    /** TASK-FE-106 — lost-refresh-race signal for `session-route.ts`; a boolean only. */
+    refreshRaceLost?: boolean;
   }
 
   interface User {
@@ -48,5 +50,12 @@ declare module 'next-auth/jwt' {
      * (F1). Cleared on a fresh sign-in.
      */
     error?: 'RefreshAccessTokenError';
+    /**
+     * TASK-FE-106 — set (alongside `error`) only on the `jwt` call whose
+     * refresh got IAM's rotation-shaped `400 invalid_grant`, i.e. possibly the
+     * loser of a concurrent refresh. Cleared at the start of every later call.
+     * Consumed by `session-route.ts`.
+     */
+    refreshRaceLost?: boolean;
   }
 }

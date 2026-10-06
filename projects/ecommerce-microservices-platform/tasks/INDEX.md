@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — Vercel 서버리스 인스턴스 경합으로 세션이 로그아웃된다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 · n=1). `auth-callbacks.ts:174` 의 in-process dedupe 가정(NextAuth 가 `jwt` 콜백을 직렬화)이 다중 서버리스 인스턴스를 못 넘는다 — iam 유예창(`TASK-BE-606`/`608`) 내 재사용 거절 5회 뒤 세션 붕괴. 참고: `TASK-PC-FE-300`(console 의 307 재시도 패턴). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 - `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `TASK-BE-575`/`577` 이 각각 프로필 지연 생성 + `email` 클레임 발행을 고쳤다고 닫았는데, 23차 창의 새 계정(06:12:55Z 생성)도 `GET /api/bff/api/users/me` 가 `email:null`. 배포 반영 여부부터 재확인. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 _(없음)_
@@ -85,7 +84,7 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-_(없음)_
+- `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (IN-PROGRESS, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전).
 
 
 ## review
