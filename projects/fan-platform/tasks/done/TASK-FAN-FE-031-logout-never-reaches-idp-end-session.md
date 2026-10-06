@@ -8,7 +8,7 @@ TASK-FAN-FE-031
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -70,7 +70,7 @@ auth-service 로그에 팬 쪽 로그아웃 흔적 0.
 - [x] **AC-1** — IdP `end_session` URL 은 그대로 통과, 다른 외부 주소(다른 호스트의 `/connect/logout` · issuer 의 다른 경로 · `..` 우회 · 파싱 불가)는 `baseUrl`. 상대·같은 origin 은 기본 동작 유지(대조군).
 - [x] **AC-2** — bite: 콜백을 기본 동작으로 되돌리면 수정을 재는 2건만 실패, 대조군·거부 4건은 통과. 복원 후 `cmp` 동일 · 재통과.
 - [x] **AC-3** — `tsc --noEmit` rc=0 · `next lint` rc=0 · `auth-callbacks.test.ts` 와 함께 26/26.
-- [ ] **AC-4 (라이브, 23차 창)** — 배포 후 같은 브라우저에서 팬 로그인 → 로그아웃 시 `auth.hubwang.com/connect/logout` 을 거치고, 다시 «IAM 로그인» 에 **비밀번호 폼이 뜬다**.
+- [x] **AC-4 (라이브, 23차 창)** — 배포 후 같은 브라우저에서 팬 로그인 → 로그아웃 시 `auth.hubwang.com/connect/logout` 을 거치고, 다시 «IAM 로그인» 에 **비밀번호 폼이 뜬다**.
 
 # Related Specs
 
@@ -89,3 +89,11 @@ auth-service 로그에 팬 쪽 로그아웃 흔적 0.
 
 1. **issuer origin 전체를 허용** — 그 호스트의 아무 경로로나 보낼 수 있는 리디렉트가 된다. 경로까지 고정한다.
 2. **id_token 이 없는 세션** — 기존대로 `/login` 로컬 로그아웃(무변경).
+
+---
+
+## 라이브 AC-4 ✅ + done 이관 (2026-10-06 UTC)
+
+- 배포 반영 13:43:54Z(`fan.hubwang.com/build-info.json` commit = `99c1332c7`).
+- 같은 재현 스크립트 · 같은 이메일 계정 · 한 브라우저: 로그아웃 → `GET auth.hubwang.com/connect/logout [q:id_token_hint,post_logout_redirect_uri,client_id]` → `302 → fan.hubwang.com/` · 다시 «IAM 로그인» → `authorize → auth.hubwang.com/login` **비밀번호 폼 1**(수정 전 0, 13:21Z).
+- 4-dim: (a) #4177 MERGED (b) `99c1332c7` ∈ origin/main (c) 머지 시점 실패 0 (SUCCESS 16) (d) AC-1~4 전부 닫힘.

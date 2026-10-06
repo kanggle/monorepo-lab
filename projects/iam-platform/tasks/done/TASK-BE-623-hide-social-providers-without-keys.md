@@ -4,7 +4,7 @@ TASK-BE-623
 
 # Status
 
-review
+done
 
 # Title
 
@@ -63,7 +63,7 @@ iam-platform
 - [x] **AC-2** — Google 만 실제 형식 값이면 Google 버튼 하나만 보인다. 🔴 대조군: client-id 만 진짜이고 secret 이 `test-*` 면 **안 보인다**(반쪽 설정은 로그인을 못 끝낸다).
 - [x] **AC-3** — 버튼 없는 제공자로 직접 `GET /login/oauth/{provider}` → 위 Scope 결정대로(추천안이면 `provider_unavailable`).
 - [x] **AC-4** — bite: 판정을 «항상 참» 으로 바꾸면 AC-1 이 빨강.
-- [ ] **AC-5 (라이브, ⚪)** — 재굽기 뒤 데모 로그인 화면: 키를 넣은 제공자 버튼만 보인다.
+- [x] **AC-5 (라이브, ⚪)** — 재굽기 뒤 데모 로그인 화면: 키를 넣은 제공자 버튼만 보인다.
 
 # Related Specs
 
@@ -101,3 +101,14 @@ iam-platform
 ## 23차 창 (2026-10-06 UTC)
 
 - 🟡 AC-5 화면 쪽 ✅ — `auth.hubwang.com/login` 의 소셜 링크 = `/login/oauth/google` · `/login/oauth/naver` 둘뿐(kakao·microsoft 0). 인스턴스 auth-service env 는 kakao·microsoft 가 기본값 `test-*`, google·naver 는 실제 키(길이만 확인) — 버튼 집합과 키 집합이 일치. ⏳ 버튼을 눌러 제공자까지 가는 클릭 확인은 소유자 계정이 필요해 다음 창(`TASK-MONO-764` AC-3).
+
+---
+
+## 23차 창 AC-5 ✅ + done 이관 (2026-10-06 UTC)
+
+- 로그인 화면 소셜 링크 = `/login/oauth/google` · `/login/oauth/naver` 둘뿐(kakao·microsoft 0, 같은 날 06:10Z 실측) — 소유자도 화면에서 «Google · Naver 둘뿐» 확인 후 두 버튼으로 실제 로그인 성공.
+- 창: 2026-10-06 UTC 12:08:55Z `/bundle/start {fan, store}`(대상 `i-036521b58c68566f2`, 23차 AMI `d44dd0d61`, 소유자 승인 «둘다해») → 12:22Z ready → 13:45:45Z 정지(제어 API · EC2 `stopped`, 예산 629/1800).
+- 소유자가 직접 실행(시크릿 창): **Google** — 팬 «IAM 로그인» → 로그인 화면 버튼 Google · Naver 둘뿐 → Google 계정 선택 → 팬 로그인 상태 → 같은 창 스토어 «로그인» = 비밀번호·Google 재선택 없이 통과(소유자 «완료»). **Naver** — 새 시크릿 창, 멤버 등록 계정으로 로그인(소유자 «네이버도 돼»).
+- DB(`iam-mysql`, 값 미출력): `auth_db.social_identities` 0 → `GOOGLE · consumer-pool · 13:15:34Z` → `NAVER · consumer-pool · 13:25:37Z`, 각 연결 계정 `account_db.accounts.tenant_id = consumer-pool`(풀 계정 8 → 9 → 10, ecommerce 1 불변 — 사이트별 계정 0). auth-service: `authorize: pool session on consumer site ecommerce (client ecommerce-web-store-client) without a membership — first-visit consent (TASK-BE-616)` 13:16:07Z.
+- 🔵 같은 소유자의 Google · Naver 는 **별개의 풀 계정 두 개**가 됐다 — 617 «이메일로 풀 계정에 붙지 않는다» 규칙대로(결함 아님).
+- 4-dim: (a) #4166 MERGED (b) `85b4c9263` ∈ origin/main (c) 머지 시점 실패 0 (SUCCESS 16) (d) AC-5 포함 전부 닫힘.

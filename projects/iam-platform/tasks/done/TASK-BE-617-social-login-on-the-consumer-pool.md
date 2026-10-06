@@ -4,7 +4,7 @@ TASK-BE-617
 
 # Status
 
-review
+done
 
 # Title
 
@@ -199,3 +199,14 @@ iam-platform
 ## 23차 창 (2026-10-06 UTC)
 
 - ⏳ 라이브(소셜 가입 → 풀 계정 · 사이트 이동 시 재로그인 없음)는 미측정 — 소유자 계정이 필요한데 창이 08:55Z 상한으로 닫혔다. 이 창에 이 티켓의 코드는 실렸다(23차 AMI `d44dd0d61`, 인스턴스 클론 `d44dd0d6` 확인). 🔵 같은 창에서 이메일 가입 계정은 `consumer-pool` 에 생겼다(IAM `account_db.accounts` 테넌트 분포 consumer-pool 8) — 소셜 경로의 증거는 아니다. 다음 창.
+
+---
+
+## 23차 창 라이브 + done 이관 (2026-10-06 UTC)
+
+- 창: 2026-10-06 UTC 12:08:55Z `/bundle/start {fan, store}`(대상 `i-036521b58c68566f2`, 23차 AMI `d44dd0d61`, 소유자 승인 «둘다해») → 12:22Z ready → 13:45:45Z 정지(제어 API · EC2 `stopped`, 예산 629/1800).
+- 소유자가 직접 실행(시크릿 창): **Google** — 팬 «IAM 로그인» → 로그인 화면 버튼 Google · Naver 둘뿐 → Google 계정 선택 → 팬 로그인 상태 → 같은 창 스토어 «로그인» = 비밀번호·Google 재선택 없이 통과(소유자 «완료»). **Naver** — 새 시크릿 창, 멤버 등록 계정으로 로그인(소유자 «네이버도 돼»).
+- DB(`iam-mysql`, 값 미출력): `auth_db.social_identities` 0 → `GOOGLE · consumer-pool · 13:15:34Z` → `NAVER · consumer-pool · 13:25:37Z`, 각 연결 계정 `account_db.accounts.tenant_id = consumer-pool`(풀 계정 8 → 9 → 10, ecommerce 1 불변 — 사이트별 계정 0). auth-service: `authorize: pool session on consumer site ecommerce (client ecommerce-web-store-client) without a membership — first-visit consent (TASK-BE-616)` 13:16:07Z.
+- 🔵 같은 소유자의 Google · Naver 는 **별개의 풀 계정 두 개**가 됐다 — 617 «이메일로 풀 계정에 붙지 않는다» 규칙대로(결함 아님).
+- ⇒ 라이브 ✅: 소셜 가입은 풀 계정 · 팬 → 스토어 이동 시 재로그인 없이 첫 방문 동의만.
+- 4-dim: (a) #4165 MERGED (b) `71b66135c` ∈ origin/main (c) 머지 시점 실패 0 (SUCCESS 17) (d) AC 섹션 열린 칸 0 + 위 라이브.

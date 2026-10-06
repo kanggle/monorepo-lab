@@ -206,7 +206,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-764-demo-functional-checklist.md` — **데모 기능 점검표** (IN-PROGRESS, 2026-10-06 UTC · 23차 창 실행). AC-0·1·2·4 ✅ — 흐름 16개 판정(PASS 10 · 부분 2(11·12) · FAIL 1(14 wms 이행 전량 DLT, ⓒ) · ⚪ 3(2·3 소셜 — 소유자 미참여 · 15 운영자 생성 — ⓒ)). 창 안 수정 2건(`TASK-FE-105` 스토어 쓰기 403 · `TASK-PC-FE-308` 한글 사유 503) · 기안 9건(#4175). ⏳ **AC-3 소셜(흐름 2·3)만 남음 — 다음 창, 소유자 Google · Naver 계정.** 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -220,10 +219,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-763-demo-social-login-keys-from-ssm.md` — **데모 호스트가 소셜 키를 SSM 에서 읽어 iam auth-service 에 넘긴다** (IN-PROGRESS, 2026-10-05 UTC · ⏳ **DO NOT MERGE before `TASK-BE-617`** — 순서 규칙, AC-0). Google · Naver 키는 소유자가 SSM(`/portfolio-demo/oauth/<p>/client-{id,secret}`)에 저장 완료 · kakao·microsoft 는 아직 없음. 🟢 **착수 2026-10-05 UTC — 구현 완료, 머지는 617 대기.** `infra/demo/fetch-oauth-secrets.sh`(신규, 부팅 때 SSM 읽어 `OAUTH_<P>_CLIENT_ID/SECRET` export, 없으면 조용히 건너뜀·읽기실패만 경고 1줄·값 미노출) → `demo-boot.sh` 가 `demo-up.sh` exec 전에 호출(exec 라 환경이 그대로 이어진다) → `iam-traefik.override.yml` auth-service.environment 에 16키 전달(빈 기본값) → `demo.env` 에 `OAUTH_<P>_REDIRECT_URI/ALLOWED_REDIRECT_URIS` 를 `IAM_PUBLIC_URL` 에서 파생(비밀 아님). terraform(`main.tf` `ec2_health` 정책)에 `/portfolio-demo/oauth/*` 읽기 전용 추가(KMS 는 AC-4 실측 대기, 추측으로 안 넣음). `verify-demo-wrapper.sh` (z43) 신설(auth-service 가 16키를 실제로 받는지 · 비밀 미설정 시 빈 문자열 · 리디렉트 파생값 — render iam 직접 검사, (g) 는 "키 자체 없음"은 못 본다). 단위 시험 `test-fetch-oauth-secrets.sh`(가짜 aws — 있음/없음/읽기실패 + 비밀 미노출 대조군, 전부 PASS). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **REVIEW (2026-10-06 UTC)** — impl #4167 `ddf39df00` · AC-0~2 ✅(617→623→763 순서) · ⏳ AC-3 terraform plan/apply · AC-4 라이브. 🟡 **23차 창(2026-10-06 UTC)** — AC-3 ✅(apply · 정책 in-place) · AC-4 인스턴스 쪽 ✅(SSM 복호화 KMS 불필요 · env 길이 · 리디렉트 · 버튼 2개) · ⏳ Google 가입 끝까지(소유자, 다음 창).
+- `TASK-MONO-764-demo-functional-checklist.md` — **데모 기능 점검표** (REVIEW, 2026-10-06 UTC · 23차 창 1·2회차). AC-0~4 ✅ — 흐름 16개: PASS 12 · 부분 2(11·12) · FAIL 1(14 wms 이행 전량 DLT, ⓒ `TASK-MONO-765`) · ⚪ 1(15 운영자 생성, ⓒ `TASK-MONO-766`). 창 안 수정 3건(`TASK-FE-105` · `TASK-PC-FE-308` · `TASK-FAN-FE-031`) · 기안 9건(#4175). 소셜 2·3 PASS 로 763·617·623 닫음. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done
+- ✅ `TASK-MONO-763-demo-social-login-keys-from-ssm.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4167**, 스쿼시 **`ddf39df00`** (머지 시점 실패 0/39). 데모가 소셜 키를 SSM 에서 읽어 auth-service 로. AC-3 apply · AC-4 라이브(SecureString 은 역할 권한만으로 복호화 — KMS 불필요 · Google 가입 끝까지, 23차 창 2회차).
 - ✅ `TASK-MONO-743-link-existing-fan-and-store-accounts.md` — **DONE (2026-10-05 UTC · 소유자 결정 «진행» · 구현 없이 종결)** 기존 팬·스토어 계정 묶기 — 모집단이 0 이고 더는 안 생긴다: 이메일 가입은 614/616 이후 처음부터 풀 · 078 이전 이중 계정은 데모 계정 하나뿐(744 가 해결) · 데모 호스트는 재굽기마다 신선 볼륨. 남은 생성 경로(사이트별 소셜 가입)는 `TASK-BE-617` 순서 규칙(실제 소셜 키는 617 머지 이후)으로 막는다. AC-0 «어느 id 가 살아남는가» 는 미결인 채 보류 · 되살리는 조건은 닫기 기록. `ADR-MONO-078` 에 CORRECTION.
 - ✅ `TASK-MONO-762-scm-visibility-ignores-outbound-confirmation.md` — **DONE (2026-10-05 UTC · 4차원 검증 · impl PR #4159 squash `b8d3adc6c`, 머지 시점 실패 0)** — scm 재고 가시성이 `wms.inventory.confirmed.v1` 로 보유를 차감(AC-0 ⓐ 보유 + 재시도→DLT). AC-4 = 22차 창: scm **85** = wms 보유 85 (DB·`/scm/inventory` 화면). 부팅 중 순서 역전이 실제로 일어나 retry-0 이 구했다(DLT 0).
 - ✅ `TASK-MONO-760-scm-inventory-visibility-empty-in-demo.md` — **DONE (2026-10-05 UTC · 4차원 검증 · PR #4154 squash `2e5567050`, 머지 시점 실패 0/65)** — 원인 = 테넌트 불일치(wms 소비자가 `scm` 으로 쓰고 조회는 토큰 테넌트). 소유자 결정 ⓑ: 투영 테넌트 설정값(`inventory-visibility.projection-tenant-id`, 데모 `demo-corp`) — 소비자 넷 + 신선도 배치. **21차 창**(`ami-0a7b20c97325be01d` · `678b6d003`): AC-0 경로 전 구간(wms 발행 → 릴레이 → `demo-corp` 스냅샷 1) · AC-2 `/scm/inventory` 1행 · 운영 개요 SCM 1 · 같은 SKU/창고. 🔴 수량 95 대 wms 85(출고 미반영) → `TASK-MONO-762`. 🔴 정적 분석의 «재기동 뒤 릴레이 안 뜸» 추론은 관측과 달랐다(§ CORRECTION).

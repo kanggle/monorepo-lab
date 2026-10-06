@@ -8,7 +8,7 @@ TASK-MONO-763
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -83,7 +83,7 @@ monorepo
 - [x] **AC-1** — 정적: compose 렌더(`docker compose config`)에서 auth-service 가 `OAUTH_*_CLIENT_ID/SECRET/REDIRECT_URI/ALLOWED_REDIRECT_URIS` 를 받는다 · `demo.env` 만으로 렌더하면 키는 빈 문자열, 리디렉트는 `https://auth.hubwang.com/login/oauth/<p>/callback`.
 - [x] **AC-2** — 부팅 스크립트 단위 시험(가짜 `aws`): 파라미터 있음 → export · 없음 → export 안 함 · 읽기 실패 → 경고 한 줄 + 계속. 🔴 대조군: 출력 어디에도 가짜 비밀 문자열이 안 나온다(grep 0).
 - [x] **AC-3** — `terraform plan`: 인스턴스 역할 정책 in-place 변경만(인스턴스 교체는 재굽기 때). 소유자 apply.
-- [ ] **AC-4 (라이브, 재굽기 뒤 창)** — 인스턴스 안에서 `aws ssm get-parameter --with-decryption` 이 권한 오류 없이 성공(값 출력 금지 — 길이만) · auth-service 컨테이너 env 에 `OAUTH_GOOGLE_CLIENT_ID` 길이 > 0 · 로그인 화면에 Google · Naver 버튼만(623 함께) · **Google 로 가입 → 로그인 끝까지**(소유자 계정) · 팬 → 스토어 이동 시 재로그인 없음(617).
+- [x] **AC-4 (라이브, 재굽기 뒤 창)** — 인스턴스 안에서 `aws ssm get-parameter --with-decryption` 이 권한 오류 없이 성공(값 출력 금지 — 길이만) · auth-service 컨테이너 env 에 `OAUTH_GOOGLE_CLIENT_ID` 길이 > 0 · 로그인 화면에 Google · Naver 버튼만(623 함께) · **Google 로 가입 → 로그인 끝까지**(소유자 계정) · 팬 → 스토어 이동 시 재로그인 없음(617).
 
 # Related Specs
 
@@ -131,3 +131,14 @@ monorepo
   - 로그인 화면(`auth.hubwang.com/login`) 소셜 링크 = `/login/oauth/google` · `/login/oauth/naver` 둘뿐(623).
   - 96 컨테이너 running · unhealthy 0 · 클론 `d44dd0d6`.
 - ⏳ AC-4 나머지(**Google 로 가입 → 로그인 끝까지 · 팬→스토어 재로그인 없음**) — 소유자 계정 필요, 창이 08:55Z 상한으로 닫히기 전에 못 했다. 다음 창. 기록 보유자: `TASK-MONO-764` § 23차 창 결과.
+
+---
+
+## 23차 창 2회차 — AC-4 ✅ + done 이관 (2026-10-06 UTC)
+
+- AC-4 인스턴스 쪽은 같은 날 1회차(06:10Z)에 닫혔다(위 절). 남은 «Google 로 가입 → 로그인 끝까지 · 팬 → 스토어 재로그인 없음» 을 2회차에서 소유자가 실행:
+- 창: 2026-10-06 UTC 12:08:55Z `/bundle/start {fan, store}`(대상 `i-036521b58c68566f2`, 23차 AMI `d44dd0d61`, 소유자 승인 «둘다해») → 12:22Z ready → 13:45:45Z 정지(제어 API · EC2 `stopped`, 예산 629/1800).
+- 소유자가 직접 실행(시크릿 창): **Google** — 팬 «IAM 로그인» → 로그인 화면 버튼 Google · Naver 둘뿐 → Google 계정 선택 → 팬 로그인 상태 → 같은 창 스토어 «로그인» = 비밀번호·Google 재선택 없이 통과(소유자 «완료»). **Naver** — 새 시크릿 창, 멤버 등록 계정으로 로그인(소유자 «네이버도 돼»).
+- DB(`iam-mysql`, 값 미출력): `auth_db.social_identities` 0 → `GOOGLE · consumer-pool · 13:15:34Z` → `NAVER · consumer-pool · 13:25:37Z`, 각 연결 계정 `account_db.accounts.tenant_id = consumer-pool`(풀 계정 8 → 9 → 10, ecommerce 1 불변 — 사이트별 계정 0). auth-service: `authorize: pool session on consumer site ecommerce (client ecommerce-web-store-client) without a membership — first-visit consent (TASK-BE-616)` 13:16:07Z.
+- 🔵 같은 소유자의 Google · Naver 는 **별개의 풀 계정 두 개**가 됐다 — 617 «이메일로 풀 계정에 붙지 않는다» 규칙대로(결함 아님).
+- 4-dim: (a) #4167 MERGED (b) `ddf39df00` ∈ origin/main (c) 머지 시점 실패 0 (SUCCESS 39) (d) AC-0~4 전부 닫힘.
