@@ -141,12 +141,16 @@ class CommunityApiContractTest extends CommunityServiceIntegrationBase {
         for (String key : new String[]{
                 "postId", "tenantId", "postType", "visibility", "status",
                 "authorAccountId", "title", "body", "mediaRefs",
-                "commentCount", "reactionCount",
+                "commentCount", "reactionCount", "myReaction",
                 "publishedAt", "createdAt", "updatedAt"}) {
             assertThat(data.has(key)).as("data missing field '%s'", key).isTrue();
         }
         assertThat(data.path("tenantId").asText()).isEqualTo("fan-platform");
         assertThat(data.path("status").asText()).isEqualTo("PUBLISHED");
+        // TASK-FAN-BE-051: publish is not GetPostUseCase's path — myReaction is
+        // fixed null here by design (community-api.md § "Why PostView is not
+        // shared for this field"), never the caller's actual reaction state.
+        assertThat(data.path("myReaction").isNull()).isTrue();
     }
 
     @Test
@@ -164,7 +168,12 @@ class CommunityApiContractTest extends CommunityServiceIntegrationBase {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
         JsonNode json = objectMapper.readTree(res.getBody());
         assertEnvelope(json);
-        assertThat(json.path("data").path("postId").asText()).isEqualTo(post.getId());
+        JsonNode data = json.path("data");
+        assertThat(data.path("postId").asText()).isEqualTo(post.getId());
+        // TASK-FAN-BE-051: this is the ONE path that populates myReaction for real;
+        // no reaction seeded here, so it reads null (AC-3's own cell lives in
+        // ReactionMyStatusReadIntegrationTest — this test only pins field presence).
+        assertThat(data.has("myReaction")).as("data missing field 'myReaction'").isTrue();
     }
 
     @Test
