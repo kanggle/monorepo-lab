@@ -90,6 +90,26 @@ export function ReactionBar({ postId, totalReactions }: { postId: string; totalR
 
 ---
 
+> ⛔ **이 갈림길은 이미 밟았다 — 없다 (2026-10-06 UTC 게이트 수행, HARDSTOP-08 발동).**
+>
+> | 축 | 결과 |
+> |---|---|
+> | `community-api.md` § Reactions | `PUT /api/community/posts/{postId}/reactions` · `DELETE …` — **끝.** 응답은 방금 호출한 액션의 결과일 뿐, 그 외 시점에 "지금 내 반응이 뭔가"를 물을 길이 없다 |
+> | `GET /api/community/posts/{id}` 응답 (§ Posts) | `commentCount`·`reactionCount`(집계)만. 뷰어별 필드 없음 |
+> | `ReactionController` (코드) | `@PutMapping` + `@DeleteMapping` — **`@GetMapping` 없음** |
+> | `GetPostUseCase` (코드) | `reactionRepository.countByPostId(...)` 만 호출 — `reactionRepository.find(postId, actor.accountId(), tenantId)` 를 **부르지 않는다**. 이 메서드 자체는 이미 존재하고 `AddReactionUseCase`/`RemoveReactionUseCase` 가 멱등 upsert 판정용으로 내부적으로만 쓴다 — 데이터는 테이블에 있고, 질문하는 코드만 없다 |
+> | `PostView`/`PostResponse` DTO | 뷰어별 반응 필드 **없음** |
+>
+> **계약과 코드가 일치한다** ⇒ 드리프트가 아니라 **진짜 공백**이다(`TASK-FAN-FE-017`이
+> 팔로우 쪽에서 겪은 것과 같은 클래스). `reactionCount` 집계로 추론하는 우회는 **금지**다 —
+> 합계는 귀속 정보를 버리므로 원리적으로 불가능하다(아래 Failure Scenarios 참조).
+>
+> ⇒ **선행 티켓 `TASK-FAN-BE-051` 을 세웠다**(계약 + community-service 읍기 경로).
+> **이 티켓은 그것이 머지된 뒤에 착수한다.** 지금 착수하면 계약 없는 필드를 추측으로
+> 넣거나(HARDSTOP-08이 정확히 금지하는 것), 위의 금지된 우회를 하게 된다.
+
+---
+
 # Acceptance Criteria
 
 - [ ] **AC-0 (전제 확인)** — `active` 가 여전히 항상 `null` 로 시작하는지, 호출부가
