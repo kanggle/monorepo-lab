@@ -1,6 +1,6 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import { env } from '@/shared/config/env';
-import { jwtCallback, sessionCallback } from '@/shared/auth/auth-callbacks';
+import { jwtCallback, redirectCallback, sessionCallback } from '@/shared/auth/auth-callbacks';
 import { isPublicPath } from '@/shared/auth/public-paths';
 
 /**
@@ -95,6 +95,11 @@ export const authConfig: NextAuthConfig = {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     session: sessionCallback as any,
+    /**
+     * Lets the header's RP-initiated logout actually leave for the IdP
+     * `end_session` (cross-origin) — see `redirectCallback` (TASK-FAN-FE-031).
+     */
+    redirect: redirectCallback,
     /**
      * 🔴 공개 경로 목록을 여기 **다시 적지 않는다.** 예전에는 이 콜백과 `middleware.ts` 가
      * 각자 접두사 목록을 들고 있었고, 그 둘은 이미 갈라져 있었다(`/favicon` vs
