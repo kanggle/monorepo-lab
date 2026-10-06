@@ -10,6 +10,7 @@ import com.example.fanplatform.community.domain.post.status.ActorType;
 import com.example.fanplatform.community.domain.post.status.PostStatus;
 import com.example.fanplatform.community.domain.post.status.PostStatusHistoryEntry;
 import com.example.fanplatform.community.domain.post.status.PostStatusHistoryRepository;
+import com.example.fanplatform.community.domain.reaction.ReactionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,14 +79,26 @@ public class PublishPostUseCase {
         return view(saved, 0L, 0L);
     }
 
+    /**
+     * Fixes {@code myReaction} to {@code null} — every call site except
+     * {@link GetPostUseCase} (publish / update / mine) reports the result of a
+     * write or a self-authored listing, where the field would almost always read
+     * {@code null} anyway. See {@code community-api.md} § "Why PostView is not
+     * shared for this field" (TASK-FAN-BE-051).
+     */
     static PostView view(Post p, long commentCount, long reactionCount) {
+        return view(p, commentCount, reactionCount, null);
+    }
+
+    /** Used by {@link GetPostUseCase}, the only path that resolves the caller's own reaction. */
+    static PostView view(Post p, long commentCount, long reactionCount, ReactionType myReaction) {
         return new PostView(
                 p.getId(), p.getTenantId(), p.getPostType(), p.getVisibility(), p.getStatus(),
                 p.getAuthorAccountId(), p.getTitle(), p.getBody(),
                 // Single-post reads reach here only after PostAccessGuard has passed, so the media
                 // refs follow the same entitlement as the body (TASK-MONO-679).
                 PostMediaRefSerializer.deserialize(p.getMediaRefsJson()),
-                commentCount, reactionCount,
+                commentCount, reactionCount, myReaction,
                 p.getPublishedAt(), p.getCreatedAt(), p.getUpdatedAt()
         );
     }
