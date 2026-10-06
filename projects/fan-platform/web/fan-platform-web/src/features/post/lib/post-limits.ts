@@ -10,3 +10,9 @@
  */
 export const FAN_POST_BODY_MAX = 10_000;
 export const FAN_POST_TITLE_MAX = 200;
+
+/**
+ * Comment body bound (TASK-FAN-FE-032) — mirrors `AddCommentRequest` /
+ * `community-api.md` § Comments (`POST`): 1..2000.
+ */
+export const FAN_COMMENT_BODY_MAX = 2_000;

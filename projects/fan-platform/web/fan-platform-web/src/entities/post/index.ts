@@ -8,4 +8,5 @@ export type {
   MyPostsPage,
   ReactionType,
   Comment,
+  CommentPage,
 } from './types';

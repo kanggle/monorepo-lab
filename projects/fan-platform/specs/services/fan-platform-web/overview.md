@@ -20,8 +20,8 @@
 
 - **5-page user journey** — feed (`/`), artists directory (`/artists`), artist detail (`/artists/[id]`), post detail (`/posts/[id]`), membership stub (`/membership`), me (`/me`).
 - **Authentication via next-auth v5 + IAM OIDC PKCE** — `/login` → Server Action `signIn('iam')` → OIDC discovery + PKCE → IAM `/oauth2/authorize` → callback `/api/auth/callback/iam` → JWT session cookie (`access_token` / `refresh_token` / `tenant_id` on HttpOnly).
-- **Server Components data fetch** — feed / artists / posts pages fetch via RSC (`getFeed()`, `getArtists()`, `getArtist()`, `getPost()`); bearer token attached via `'server-only'` `getFanSession()`.
-- **Server Actions** — reactions (`setReaction`), follow / unfollow (`followArtist` / `unfollowArtist`) marked `'use server'`; tokens read on server only.
+- **Server Components data fetch** — feed / artists / posts pages fetch via RSC (`getFeed()`, `getArtists()`, `getArtist()`, `getPost()`, `getComments()`); bearer token attached via `'server-only'` `getFanSession()`.
+- **Server Actions** — reactions (`setReaction`), follow / unfollow (`followArtist` / `unfollowArtist`), comment write (`addComment` / `deleteComment` / `loadMoreComments`, TASK-FAN-FE-032) marked `'use server'`; tokens read on server only.
 - **Middleware redirect** — `middleware.ts` redirects unauthenticated visits to gated paths → `/login`.
 - **Tenant forwarding only** — frontend does NOT enforce `tenant_id` (backend gateway/community/artist services re-validate); wrong-tenant token surfaces as `ApiError(403, TENANT_FORBIDDEN)` → `ErrorState` UI.
 - **Error / Loading boundaries** — Suspense surfaces `LoadingState`, `ApiError` → `ErrorState` (or `notFound()` for 404), global `app/error.tsx`.
@@ -37,11 +37,18 @@
 | `/` | RSC + Suspense | gated | feed (followed artists' PUBLISHED posts) |
 | `/artists` | RSC + Suspense | gated | artist directory (PUBLISHED only) |
 | `/artists/[id]` | RSC + Suspense | gated | artist detail + FollowButton |
-| `/posts/[id]` | RSC + Suspense | gated | post detail + ReactionBar |
+| `/posts/[id]` | RSC + Suspense | gated | post detail + ReactionBar + 댓글 목록/작성/본인삭제[^1] |
 | `/membership` | RSC | gated | membership stub (v1 placeholder; v2 결제 flow) |
 | `/me` | RSC | gated | account profile + session info |
 
 middleware-gated paths 외에는 모두 `/login` 으로 redirect.
+
+[^1]: `TASK-FAN-FE-030`(소유자 전환 결정) → `TASK-FAN-FE-032` 로 v1 범위에 들어왔다 — 이전에는
+    read-only display 가 의도된 범위였다(§ Out of scope 과거 판 참조, git 이력에 남음).
+    게이트웨이 판(`memberPostDetail`)에만 있다 — 공개 저장본(`PublicPostDetail`, 익명·zero-gateway)
+    에는 반응 바와 같은 이유로 없다: 댓글 목록/작성/삭제는 전부 게이트웨이 인증 호출이고,
+    `PublicPostDetail` 은 `@demo/public-data` 저장본만 읽는 zero-gateway 불변식
+    (`PostDetailPage.tsx`의 ADR-MONO-070 주석) 을 따른다.
 
 ## Key invariants
 
@@ -54,7 +61,6 @@ middleware-gated paths 외에는 모두 `/login` 으로 redirect.
 
 ## Out of scope (v1)
 
-- 댓글 composer UI — `community-service` 의 comment API 는 backend 존재, 본 frontend 는 read-only display.
 - 모더레이션 UI (포스트 HIDDEN/DELETED 전이) — v2 admin-service / admin dashboard.
 - 멤버십 결제 flow — v2 membership-service 도입 시 (`/membership` 가 stub 페이지로 유지).
 - artist self-service (artist 본인이 자기 프로필 수정) — backend 자체가 v1 admin-only.
