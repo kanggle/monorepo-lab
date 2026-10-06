@@ -2747,6 +2747,14 @@ jobs:
           # verify-demo-wrapper.sh, which builds a tree with no `.env` and runs the
           # real scripts on it. This step only asserts the DEMO_DOMAIN fallback.
           printf '%s\n' 'echo "[provision-env] (stub)"' > "$tmp/provision-demo-env.sh"
+          # TASK-MONO-763 added a second step to the boot contract (source +
+          # call fetch_oauth_secrets before exec'ing demo-up.sh), so this
+          # harness has to model it too — same reason as provision-demo-env.sh
+          # above. Stubbed rather than copied: the real script shells out to
+          # `aws`, which this bare temp dir (and this off-AWS runner) has no
+          # use for, and that is guard (z43) in verify-demo-wrapper.sh's job,
+          # not this step's. This step only asserts the DEMO_DOMAIN fallback.
+          printf '%s\n' 'fetch_oauth_secrets() { :; }' > "$tmp/fetch-oauth-secrets.sh"
           out="$(cd "$tmp" && timeout 30 bash demo-boot.sh full)"
           echo "$out"
           echo "$out" | grep -qx 'DEMO_DOMAIN=\[local\]' \

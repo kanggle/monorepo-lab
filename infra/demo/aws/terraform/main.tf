@@ -135,6 +135,26 @@ resource "aws_iam_role_policy" "ec2_health" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
         Resource = aws_ssm_parameter.selection.arn
+      },
+      # -----------------------------------------------------------------------
+      # TASK-MONO-763 — 소셜 로그인 키를 **읽는다.** `infra/demo/fetch-oauth-secrets.sh`
+      # 가 부팅 중에 `/portfolio-demo/oauth/<provider>/{client-id,client-secret}` 를
+      # 읽어 OAUTH_* 로 export 한다(위 selection 과 같은 "부팅이 읽기만 한다" 모양).
+      #
+      # 🔴 이 파라미터들은 **terraform 이 만들지 않는다** — 소유자가 콘솔에서 직접
+      #    등록했다(2026-10-06 실측: google·naver 완료, kakao·microsoft 는 아직 없음).
+      #    그래서 위의 selection/health 처럼 `aws_ssm_parameter.*.arn` 을 참조할 수
+      #    없고, 와일드카드 ARN 을 직접 조립한다 — 네 제공자 모두 같은 접두사를 쓰므로
+      #    하나를 늘려도(kakao·microsoft 키 추가) 이 정책을 다시 apply 할 필요가 없다.
+      # 🔴 KMS — `client-secret` 은 SecureString(`alias/aws/ssm`, AWS 관리형 키)이다.
+      #    그 키에 대한 `kms:Decrypt` 를 이 역할에 명시로 줘야 하는지는 **AC-4(재굽기
+      #    뒤 라이브 창)에서 실측한다** — 여기서 미리 추가하지 않는다. 추측으로 권한을
+      #    넓히면 "꼭 필요해서 넣었다" 와 "혹시 몰라서 넣었다" 가 같은 줄에 남아
+      #    다음 사람이 구별할 수 없다.
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/oauth/*"
     }]
   })
 }

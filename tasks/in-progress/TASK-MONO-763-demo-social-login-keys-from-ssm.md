@@ -8,7 +8,7 @@ TASK-MONO-763
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
