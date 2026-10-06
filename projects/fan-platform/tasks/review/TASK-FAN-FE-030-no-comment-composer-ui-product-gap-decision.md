@@ -8,7 +8,7 @@ fan-platform-web 에 댓글을 쓰는 화면이 없다 — v1 스펙이 이미 �
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -69,6 +69,50 @@ fan-platform-web 어디에도 댓글을 **쓰는** UI 가 없다 — 코드에�
 
 ---
 
+# 결정 기록 (owner decision, 2026-10-07 UTC)
+
+소유자 발화(verbatim): 「FAN-FE-030(팬 댓글 작성 화면을 넣을지) 넣어줘」
+
+**결정 — AC-2 (전환 결정): 범위에 넣는다.** fan-platform-web 은 댓글 목록 + 작성 + 본인
+댓글 삭제 UI 를 받는다. `overview.md:57` 의 "read-only display" 줄은 더 이상 소유자의
+의도가 아니다 — 아래 조치 ③에서 고친다.
+
+## 착수 시 다시 측정한 간극
+
+이 티켓이 ready 로 올라온 시점의 전제("backend comment API 는 이미 존재")를 다시 재서
+보니 **절반만 사실**이었다: `specs/contracts/http/community-api.md` § Comments (당시
+~L353)에는 `POST /api/community/posts/{postId}/comments` 와
+`DELETE …/comments/{commentId}` 만 있고 **읽기 경로가 없었다** — post 상세 응답은
+`commentCount` 숫자만 들고 있고, `CommentController` 에 `@GetMapping` 자체가 없었다.
+목록 없는 composer 는 쓸 수 없는 화면이므로, 프런트 작업 전에 백엔드 읽기 경로가
+선행되어야 한다는 결론이 이 결정에서 바로 나온다.
+
+## 분기
+
+- **`TASK-FAN-BE-052`** (backend) — `GET /api/community/posts/{postId}/comments` 페이지
+  조회 경로. contract-first로 계약을 먼저 갱신하고 구현.
+- **`TASK-FAN-FE-032`** (frontend, BE-052 선행 의존) — post 상세 화면에 댓글 목록 +
+  작성 + 본인 댓글 삭제 UI. `overview.md:57` 의 그 줄을 "넣는다" 로 고친다. BE-052 가
+  아직 배포되지 않은 데모 백엔드에서도 화면이 깨지지 않도록(404/부재 → 목록만 숨김) 해야
+  한다.
+
+양쪽 모두 `projects/fan-platform/tasks/ready/` 에 새로 기안했다(아래 Related Specs 참조).
+
+## AC 닫음
+
+- **AC-0** — 위 발화로 확인됨.
+- **AC-1** — 적용 안 됨(유지 결정이 아니었음).
+- **AC-2** — 위 "분기" 절 + `TASK-FAN-BE-052`/`TASK-FAN-FE-032` 기안으로 닫힘.
+- **AC-3** — 🟡 **부분 이탈, 사유를 기록한다.** 이 AC 는 원래 "이 결정 티켓은 결정만 남기고
+  구현 PR 과 분리된다"는 전제로 적혔다. 그런데 오케스트레이터 지시가 이 결정 종결 +
+  `TASK-FAN-BE-052` 백엔드 구현 + `TASK-FAN-FE-032` 기안을 **하나의 PR** 로 묶으라고
+  명시했다 — 즉 이 PR 에는 코드 변경이 **있다**. 다만 그 코드는 이 티켓 자신이 아니라
+  AC-2 가 새로 분기시킨 `TASK-FAN-BE-052` 에 귀속되는 변경이며, 이 티켓 파일 자체는
+  결정 기록 + 링크만 담고 있다 — "코드 변경이 없다"의 글자 그대로는 충족하지 못했으므로
+  AC-3 를 그대로 체크하지 않고 이 각주로 이탈을 밝힌다.
+
+---
+
 # Goal
 
 fan-platform-web 의 댓글 쓰기 UI가 **지금도** v1 범위 밖인지 소유자가 다시 확인하고,
@@ -97,14 +141,14 @@ fan-platform-web 의 댓글 쓰기 UI가 **지금도** v1 범위 밖인지 소�
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — `overview.md:57` 의 그 줄이 여전히 커밋된 의도인지, 소유자에게 확인한다.
-- [ ] **AC-1 (유지 결정)** — "그대로 둔다"면 그 이유를 이 티켓에 기록하고 코드 변경 없이
-      종결한다.
-- [ ] **AC-2 (전환 결정)** — "범위에 넣는다"면, 이 티켓은 구현하지 않고 **별도 구현
+- [x] **AC-0** — `overview.md:57` 의 그 줄이 여전히 커밋된 의도인지, 소유자에게 확인한다.
+      → 위 "결정 기록" 절, 2026-10-07 UTC.
+- [ ] **AC-1 (유지 결정)** — 적용 안 됨(소유자가 전환을 결정).
+- [x] **AC-2 (전환 결정)** — "범위에 넣는다"면, 이 티켓은 구현하지 않고 **별도 구현
       티켓**(Scope/AC 포함, 기존 `community-api.md` 의 comment 엔드포인트를 인용)을 새로
-      기안해 이 티켓에서 링크한다.
-- [ ] **AC-3** — 어느 쪽이든, 이 티켓 자체의 PR 에는 코드 변경이 없다(결정 기록 또는
-      링크만).
+      기안해 이 티켓에서 링크한다. → `TASK-FAN-BE-052` + `TASK-FAN-FE-032` 기안 완료.
+- [ ] **AC-3** — 🟡 부분 이탈 — 위 "AC 닫음" 절 참조. 이 PR 은 결정 기록 전용이 아니라
+      `TASK-FAN-BE-052` 구현을 함께 묶는다(오케스트레이터 지시).
 
 ---
 
@@ -113,10 +157,13 @@ fan-platform-web 의 댓글 쓰기 UI가 **지금도** v1 범위 밖인지 소�
 - `projects/fan-platform/specs/services/fan-platform-web/overview.md` § Out of scope (v1)
 - `projects/fan-platform/specs/contracts/http/community-api.md`(댓글 API — 이미 backend
   존재한다고 overview 가 적음, 정확한 엔드포인트는 착수 시 확인)
+- 후속 티켓: `projects/fan-platform/tasks/ready/TASK-FAN-BE-052-community-comment-list-read-endpoint.md`
+- 후속 티켓: `projects/fan-platform/tasks/ready/TASK-FAN-FE-032-post-detail-comment-list-compose-delete-ui.md`
 
 # Related Contracts
 
-- 없음(이 티켓은 결정 기록 — 전환 결정 시 후속 티켓이 계약을 인용한다)
+- `projects/fan-platform/specs/contracts/http/community-api.md` § Comments — `GET`
+  목록 엔드포인트는 이 티켓이 아니라 `TASK-FAN-BE-052` 가 추가한다(이 티켓은 결정 기록).
 
 ---
 
