@@ -142,7 +142,7 @@ resource "aws_iam_role_policy" "ec2_health" {
       # 읽어 OAUTH_* 로 export 한다(위 selection 과 같은 "부팅이 읽기만 한다" 모양).
       #
       # 🔴 이 파라미터들은 **terraform 이 만들지 않는다** — 소유자가 콘솔에서 직접
-      #    등록했다(2026-10-06 실측: google·naver 완료, kakao·microsoft 는 아직 없음).
+      #    등록했다(2026-10-05 실측: google·naver 완료, kakao·microsoft 는 아직 없음).
       #    그래서 위의 selection/health 처럼 `aws_ssm_parameter.*.arn` 을 참조할 수
       #    없고, 와일드카드 ARN 을 직접 조립한다 — 네 제공자 모두 같은 접두사를 쓰므로
       #    하나를 늘려도(kakao·microsoft 키 추가) 이 정책을 다시 apply 할 필요가 없다.

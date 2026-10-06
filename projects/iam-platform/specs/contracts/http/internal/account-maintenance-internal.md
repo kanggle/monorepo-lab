@@ -73,7 +73,7 @@ id 가 그대로라 사이트 데이터(팬 팔로우 · 스토어 주문 · `ar
 | 사유 | 판정 | 판정 자리 | 근거 |
 |---|---|---|---|
 | `SELLER` | 그 사이트에 저장된 `SELLER` 역할(`account_roles`) | account-service | § 3 운영자 측면 표 — 셀러 기계 계정은 옮기지 않는다(`TASK-MONO-745` 는 `ADR-MONO-079`/`TASK-MONO-747` 로 흡수) |
-| `TWO_SITE` | 같은 이메일의 계정이 **다른 소비자 사이트**에 있다(상태 무관) | account-service | § 3 — 옮기지 않는다(묶기 `TASK-MONO-743` 은 2026-10-06 대상 0 으로 구현 없이 종결) |
+| `TWO_SITE` | 같은 이메일의 계정이 **다른 소비자 사이트**에 있다(상태 무관) | account-service | § 3 — 옮기지 않는다(묶기 `TASK-MONO-743` 은 2026-10-05 대상 0 으로 구현 없이 종결) |
 | `POOL_EMAIL_EXISTS` | 같은 이메일의 `consumer-pool` 계정이 있다 | account-service | § 2 공존 금지 — 결함 상태이므로 옮겨서 덮지 않는다 |
 | `IDENTITY_CONFLICT` | 그 계정의 신원(`identities`)과 같은 `primary_email` 의 `consumer-pool` 신원이 따로 있거나, 그 신원을 **다른 계정**도 가리킨다 | account-service | 신원 행을 풀로 옮기면 `(tenant_id, primary_email)` UNIQUE 가 깨지거나 남의 계정이 같이 끌려온다 |
 | `OPERATOR_FACETED` | admin-service 가 운영자 측면이라 답했다(`oidc_subject` = 이 계정 id, 또는 `identity_id` = 이 계정의 신원) | auth-service → admin-service | § 3 셀프 온보딩 운영자(`TASK-MONO-746`) · 운영자 신원 연결(ADR-MONO-034 U3) |

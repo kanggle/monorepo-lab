@@ -381,7 +381,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 ### 소비자 계정 풀 — 소비자 사이트끼리 계정 하나 (ADR-MONO-078 A, `TASK-MONO-742`)
 
 > 🔴 이 절은 **계약이 먼저다**(2026-10-01). 아래 규칙의 구현은 `TASK-BE-614`(저장) · `TASK-BE-615`(로그인·토큰) ·
-> `TASK-BE-616`(첫 방문 동의) · `TASK-MONO-743`(기존 계정 묶기 — 2026-10-06 대상 0 으로 구현 없이 종결) · `TASK-BE-617`(소셜)이다. 구현이 끝나기 전까지 위 표들(로그인 · SSO ·
+> `TASK-BE-616`(첫 방문 동의) · `TASK-MONO-743`(기존 계정 묶기 — 2026-10-05 대상 0 으로 구현 없이 종결) · `TASK-BE-617`(소셜)이다. 구현이 끝나기 전까지 위 표들(로그인 · SSO ·
 > 소셜)이 **지금 동작**이고, 이 절은 그것들이 **소비자 사이트에 대해** 어떻게 바뀌는지를 정한다. 콘솔(`iam`)과 소비자가 아닌 테넌트는 이 절 밖이다(D1).
 
 **용어** — *소비자 사이트* = 셀프 가입을 받는 client 의 테넌트(`fan-platform` · `ecommerce`). *풀 계정* = 이 절의 계정.
@@ -440,7 +440,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 
   운영자 측면 판정(아래 표)에는 **운영자 신원 연결**(ADR-MONO-034 U3 — `admin_operators.identity_id` 가 이 계정의 신원)도 들어간다: 신원 행을 풀로 옮기면 그 운영자의
   신원이 풀 신원이 된다. 판정은 auth-service 가 admin-service 에 묻는다(fail-closed — 못 물으면 옮기지 않는다).
-- 같은 이메일로 **두 사이트**에 계정이 있는 사람은 자동으로 옮기지 않는다 — 본인이 두 계정을 모두 증명하고 묶는다(`TASK-MONO-743`, ADR-MONO-078 D2). 🔵 2026-10-06: 743 은 대상 0(새 이메일 가입은 처음부터 풀)으로 구현 없이 종결 — 그런 계정이 생기면 옮기지 않은 채 남고, 묶기는 743 닫기 기록의 «되살리는 조건» 으로 새로 연다.
+- 같은 이메일로 **두 사이트**에 계정이 있는 사람은 자동으로 옮기지 않는다 — 본인이 두 계정을 모두 증명하고 묶는다(`TASK-MONO-743`, ADR-MONO-078 D2). 🔵 2026-10-05: 743 은 대상 0(새 이메일 가입은 처음부터 풀)으로 구현 없이 종결 — 그런 계정이 생기면 옮기지 않은 채 남고, 묶기는 743 닫기 기록의 «되살리는 조건» 으로 새로 연다.
   묶기 전에는 두 계정이 지금처럼 따로 동작한다.
 - 🔴 **운영자 측면이 붙은 사이트 계정은 이 단계(§ 3 의 일괄·지연 이동)에서 옮기지 않는다 — 각자 자기 단계에서 옮긴다** (소유자 결정 2026-10-01 UTC:
   «셀러를 풀에 포함, 080 후보 등록»):
@@ -574,7 +574,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 멤버십 없으면 토큰 없음 · 동의 화면 | `TASK-BE-616` |
 | 같은 이메일 공존 금지(§ 2) | `TASK-BE-614` — 사이트별 계정이 있는 이메일로 풀 가입 → 거절 |
 | 사이트별 계정은 재인증 유지 | `TASK-BE-615` — `SsoTenantGateIntegrationTest` 기존 칸 그대로 초록 |
-| 이메일만으로 안 묶인다 | `TASK-BE-617` 대조군 (`TASK-MONO-743` 은 2026-10-06 구현 없이 종결) — account-service `SocialSignupUseCaseConsumerPoolTest`(풀 이메일 → 409 · 경합도 409) · `ConsumerPoolSocialSignupIntegrationTest`; auth-service `OAuthLoginUseCaseConsumerPoolTest` · `ConsumerPoolSocialLoginIntegrationTest`(비밀번호 풀 계정 이메일의 소셜 → `email_registered` · 신원 행 0) |
+| 이메일만으로 안 묶인다 | `TASK-BE-617` 대조군 (`TASK-MONO-743` 은 2026-10-05 구현 없이 종결) — account-service `SocialSignupUseCaseConsumerPoolTest`(풀 이메일 → 409 · 경합도 409) · `ConsumerPoolSocialSignupIntegrationTest`; auth-service `OAuthLoginUseCaseConsumerPoolTest` · `ConsumerPoolSocialLoginIntegrationTest`(비밀번호 풀 계정 이메일의 소셜 → `email_registered` · 신원 행 0) |
 | 소셜 가입 = 풀 계정 · 신원 행 `consumer-pool` · 다른 사이트는 동의 화면 · 사이트별 소셜 신원은 그대로 | `TASK-BE-617` — auth-service `ConsumerPoolSocialLoginIntegrationTest`; account-service `ConsumerPoolSocialSignupIntegrationTest` |
 | 사이트로 찾는 목록에 풀 멤버 포함 | `TASK-BE-614` — `ecommerce` 목록에 풀 가입 쇼핑객 |
 | `account.created` 사이트별 1회 | `TASK-BE-614`(가입) · `TASK-BE-616`(동의) — 이벤트 `tenantId` 단언 |

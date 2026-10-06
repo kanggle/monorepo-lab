@@ -222,3 +222,9 @@ PR #4149 첫 CI: `Client graph backend origins (the browser must not know the ad
 - ⇒ **305 고유 경로(갱신 실패 → `/login?error=session_expired` → `live` 없는 `/api/auth/demo-ended` → `signed_out=demo_stopped`)를 처음으로 라이브에서 탔다.** 20·21차가 못 탄 이유(쿠키가 켜진 동안 지워져 갱신으로 되살아남)는 «먼저 정지» 순서로 제거됐다.
 - ⚪ **Vercel 로그의 `demo_ended_session_cleared` 한 줄은 재지 않았다** — 이 호스트에 Vercel CLI 가 없다. 같은 경로가 남기는 서버 부산물이고 위 리다이렉트 사슬과 쿠키 0개가 그 핸들러의 결과다. 소유자 결정(2026-10-06 UTC, 원문 «지금 done (Recommended)»): 화면·경로 관측으로 AC-6 을 닫고 로그 줄은 보조 증거로 남긴다. 확인하려면 console-web 로그 2026-10-05 13:51:25Z 무렵.
 - 4차원(close): (a) #4149 MERGED (2026-10-04T12:42:40Z) · (b) `f0927bcd0` 는 `origin/main` 조상 · (c) 머지 시점 실패 체크 0 · (d) AC-1~6 전부 닫힘(AC-2 «판정 불가» 칸은 2026-10-04 소유자 결정, AC-6 은 이 절).
+
+---
+
+## CORRECTION (2026-10-06 UTC) — 날짜 표기
+
+이 파일에서 «2026-10-06 (UTC)» 로 적힌 날짜는 **KST 날짜**였다. 기록된 일(창 판정 · 소유자 결정 · 종결)은 모두 **UTC 2026-10-05** 에 일어났다(작성 호스트가 KST+9 라 00:00–09:00 KST 의 «오늘» 이 UTC 의 «내일» 이 된다 — 전역 지침 «Date Stamps on This Host»). 위 본문은 고치지 않고 이 절이 정정한다. 같은 날 다른 파일(INDEX · 진행 중 티켓 · 명세 · 코드 주석)의 같은 표기는 직접 2026-10-05 로 고쳤다.
