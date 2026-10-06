@@ -375,6 +375,44 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
                 .isEqualTo("/api/community/posts/" + postId);
     }
 
+    /**
+     * TASK-FAN-BE-052 AC.
+     *
+     * <p>Same reasoning as {@code communityRouteRewritesFollowStatusRead} above: the
+     * {@code Path=/api/v1/community/**} predicate is method- and depth-agnostic by
+     * inspection, so "is a brand-new nested GET actually reachable" is a question only
+     * the gateway can answer, not a reading of its config. This pins that the new
+     * {@code GET /api/v1/community/posts/{postId}/comments} route arrives downstream as
+     * a GET on the rewritten internal path, not silently dropped or forwarded as a
+     * different method.
+     */
+    @Test
+    void communityRouteRewritesCommentsListRead() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{\"content\":[]}}"));
+
+        String postId = "0190f3e2-eeee-7abc-8def-000000000006";
+        String token = jwt.signFanToken("fan-rewrite-comments-list");
+
+        webTestClient.get()
+                .uri("/api/v1/community/posts/{postId}/comments", postId)
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk();
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).as("downstream did not receive the request").isNotNull();
+        assertThat(received.getMethod())
+                .as("the read must arrive as a GET")
+                .isEqualTo("GET");
+        assertThat(received.getPath())
+                .as("GET /api/v1/community/posts/{id}/comments must rewrite to "
+                        + "/api/community/posts/{id}/comments")
+                .isEqualTo("/api/community/posts/" + postId + "/comments");
+    }
+
     @Test
     void fandomsRouteRewritesV1PrefixToInternalFandomsPath() throws Exception {
         downstream.enqueue(new MockResponse()

@@ -1,6 +1,8 @@
 package com.example.fanplatform.community.infrastructure.jpa;
 
 import com.example.fanplatform.community.domain.comment.Comment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,6 +25,20 @@ public interface CommentJpaRepository extends JpaRepository<Comment, String> {
             """)
     List<PostIdCount> countsGroupedByPostId(@Param("postIds") Collection<String> postIds,
                                             @Param("tenantId") String tenantId);
+
+    /**
+     * Oldest-first, non-deleted comments on one post (TASK-FAN-BE-052) — a comment
+     * thread reads as a conversation top-to-bottom, unlike {@code findByAuthor} on
+     * posts (newest-first, distinct items with no reading order between them).
+     */
+    @Query("""
+            SELECT c FROM Comment c
+            WHERE c.postId = :postId AND c.tenantId = :tenantId AND c.deletedAt IS NULL
+            ORDER BY c.createdAt ASC
+            """)
+    Page<Comment> findByPostId(@Param("postId") String postId,
+                               @Param("tenantId") String tenantId,
+                               Pageable pageable);
 
     interface PostIdCount {
         String getPostId();

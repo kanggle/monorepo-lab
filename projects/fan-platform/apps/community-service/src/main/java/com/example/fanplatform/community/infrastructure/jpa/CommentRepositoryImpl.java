@@ -1,8 +1,11 @@
 package com.example.fanplatform.community.infrastructure.jpa;
 
+import com.example.common.page.PageResult;
 import com.example.fanplatform.community.domain.comment.Comment;
 import com.example.fanplatform.community.domain.comment.CommentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -41,5 +44,16 @@ public class CommentRepositoryImpl implements CommentRepository {
                 .collect(Collectors.toMap(
                         CommentJpaRepository.PostIdCount::getPostId,
                         CommentJpaRepository.PostIdCount::getCnt));
+    }
+
+    @Override
+    public PageResult<Comment> findByPostId(String postId, String tenantId, int page, int size) {
+        Page<Comment> jpaPage = jpa.findByPostId(postId, tenantId, PageRequest.of(page, size));
+        return new PageResult<>(
+                jpaPage.getContent(),
+                jpaPage.getNumber(),
+                jpaPage.getSize(),
+                jpaPage.getTotalElements(),
+                jpaPage.getTotalPages());
     }
 }

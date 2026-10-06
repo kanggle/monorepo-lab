@@ -378,6 +378,55 @@ Response 201:
 
 Errors: 401, 403 (MEMBERSHIP_REQUIRED for gated posts), 404, 422.
 
+### `GET /api/community/posts/{postId}/comments?page=0&size=20` — List (TASK-FAN-BE-052)
+
+Auth: bearer. **Same gate as `POST` on this path** — the post must be
+PUBLISHED + visibility-accessible to the caller, enforced by the identical
+`PostAccessGuard.requirePublishedAccess(postId, actor)` call `POST` already
+runs before writing a comment (`AddCommentUseCase`). A viewer who cannot
+read the post (not PUBLISHED and not its author, or gated by
+`MEMBERS_ONLY`/`PREMIUM` without the required membership) cannot list its
+comments either — reusing the guard means the read and write paths cannot
+drift apart on this question. See `specs/services/community-service/architecture.md`
+§ Visibility Tiers for the underlying rule.
+
+Ordered **oldest first** (`createdAt ASC`) — a comment thread reads as a
+conversation top-to-bottom, unlike `GET /posts/mine` (newest-first, a list of
+distinct items with no reading order between them). Deleted comments
+(`deletedAt IS NOT NULL`) are excluded, matching `commentCount`'s own count.
+
+Query params: `page` (default 0, clamped ≥0), `size` (default 20, clamped
+1..50 — same bounds as `mine`/feed).
+
+Response 200:
+```json
+{
+  "data": {
+    "content": [
+      {
+        "commentId": "...",
+        "postId": "...",
+        "tenantId": "fan-platform",
+        "authorAccountId": "...",
+        "body": "...",
+        "createdAt": "..."
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 3,
+    "totalPages": 1,
+    "hasNext": false
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+Item shape is identical to the `POST` response's `data` object — a client
+that renders one comment can render this list without a second mapping.
+
+Errors: 401, 403 (MEMBERSHIP_REQUIRED for gated posts), 404 (POST_NOT_FOUND).
+
 ### `DELETE /api/community/posts/{postId}/comments/{commentId}`
 
 Auth: comment author or operator.
