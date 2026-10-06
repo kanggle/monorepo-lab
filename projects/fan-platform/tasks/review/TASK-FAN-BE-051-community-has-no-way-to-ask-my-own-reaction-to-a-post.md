@@ -9,7 +9,7 @@ community 에 **"이 글에 내가 어떤 반응을 남겼나"** 를 물을 방�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -104,16 +104,16 @@ community 가 **호출자 자신의** 특정 글에 대한 반응 상태(없으�
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (전제 재확인)** — 착수 시 `community-api.md` § Reactions 에 읍기 경로가 **여전히
+- [x] **AC-0 (전제 재확인)** — 착수 시 `community-api.md` § Reactions 에 읍기 경로가 **여전히
       없고** `ReactionController` 에 `@GetMapping` 이 **없는지**, `GetPostUseCase` 가 여전히
       `reactionRepository.find(...)` 를 호출하지 **않는지** 확인한다. 생겼다면 **STOP** — 이
       티켓의 전제가 사라진 것이고, 그때 남는 일은 FE-029 뿐이다.
-- [ ] **AC-1 (계약 먼저)** — `community-api.md` § Reactions 또는 § Posts 에 읍기 경로(또는
+- [x] **AC-1 (계약 먼저)** — `community-api.md` § Reactions 또는 § Posts 에 읍기 경로(또는
       필드)가 명세되고, **선택한 모양(A/B)과 그 이유**가 적힌다. (A) 를 골랐다면 `PostView`
       공유 문제(위 🔴)를 어떻게 풀었는지도 적는다. **계약 변경이 구현 커밋보다 앞서거나 같은
       PR 안에 있어야 한다**(CLAUDE.md § Layer Rules).
-- [ ] **AC-2** — 구현한 경로/필드의 응답이 계약의 형태와 **글자 그대로** 일치한다(필드명 포함).
-- [ ] **AC-3 (대조군 — 이것이 판정이다)** — 통합 테스트가 **같은 호출자·같은 글**로 세 칸을
+- [x] **AC-2** — 구현한 경로/필드의 응답이 계약의 형태와 **글자 그대로** 일치한다(필드명 포함).
+- [x] **AC-3 (대조군 — 이것이 판정이다)** — 통합 테스트가 **같은 호출자·같은 글**로 세 칸을
       잰다:
 
       | 상태 | 기대 |
@@ -124,16 +124,84 @@ community 가 **호출자 자신의** 특정 글에 대한 반응 상태(없으�
 
       🔴 **한 칸만으로는 통과가 무의미하다** — 항상 `null` 을 내는 구현도 첫 칸은 맞힌다.
       세 칸이 **갈라져야** 잰 것이다.
-- [ ] **AC-4 (격리)** — **다른 팬**의 반응이 내 답에 새지 않는다. 팬 A 가 어떤 반응을 남긴
+- [x] **AC-4 (격리)** — **다른 팬**의 반응이 내 답에 새지 않는다. 팬 A 가 어떤 반응을 남긴
       글을 **팬 B** 로 조회하면 `myReaction = null` 이어야 한다(A의 반응이 집계에는 보이되
       B의 "내 반응" 에는 보이지 않아야 함). 🔴 이 축이 빠지면 "그 글에 달린 반응 중 하나를
       아무거나" 를 답하는 구현이 AC-3 을 통과한다.
-- [ ] **AC-5** — 인증 없는 호출은 401. (조회 대상이 **호출자 자신**이므로 익명 답변이 성립하지
+- [x] **AC-5** — 인증 없는 호출은 401. (조회 대상이 **호출자 자신**이므로 익명 답변이 성립하지
       않는다.)
-- [ ] **AC-6** — 게이트웨이 라우트가 (A) 를 골랐다면 기존 `GET /posts/{id}` 라우트가 새 필드를
+- [x] **AC-6** — 게이트웨이 라우트가 (A) 를 골랐다면 기존 `GET /posts/{id}` 라우트가 새 필드를
       그대로 통과시키는지, (B) 를 골랐다면 신규 경로가 실제로 라우팅되는지 확인한다. 🔴 쓰기
       두 경로가 라우팅된다는 것이 읍기도 된다는 뜻이 아니다(`TASK-FAN-BE-049` 가 겪은 함정과
       같다) — 판정은 **게이트웨이를 통한 호출**로 한다.
+
+---
+
+# ✅ 실행 결과 (2026-10-06 UTC)
+
+## 채택한 모양 — (A), `GET /api/community/posts/{id}` 응답에 `myReaction` 필드 추가
+
+`myReaction: "LIKE"|"LOVE"|"FIRE"|"SAD"|null`. 전용 엔드포인트(B)를 쓰지 않은 이유, `null`
+의미, `PostView`/`PublishPostUseCase.view(...)` 공유 문제를 어떻게 풀었는지(값은
+`GetPostUseCase` 경로에서만 채우고 나머지 세 경로는 오버로드로 고정 `null`) 전부
+`community-api.md` § `myReaction`(§ Posts)과 § "Reading the caller's own reaction"(§
+Reactions)에 적었다.
+
+## 코드 변경
+
+- `PostView.java` — `ReactionType myReaction` 필드 추가(`reactionCount` 뒤, `publishedAt`
+  앞).
+- `PublishPostUseCase.view(...)` — 기존 3-인자 메서드는 4-인자 오버로드를 `myReaction=null`
+  로 호출하도록 변경(기존 호출부 `UpdatePostUseCase`/`GetMyPostsUseCase`는 **무변경**). 새
+  4-인자 오버로드를 `GetPostUseCase` 전용으로 추가.
+- `GetPostUseCase.execute(...)` — `reactionRepository.find(postId, actor.accountId(),
+  actor.tenantId())` 호출 추가(기존에 `AddReactionUseCase`/`RemoveReactionUseCase`가 이미
+  쓰던 메서드) → `Optional<Reaction>` → `ReactionType` 매핑 → `view(...)`에 전달.
+- `PostResponse.java` — `myReaction` 필드 추가(`String`, `v.myReaction()==null ? null :
+  v.myReaction().name()`).
+- 테스트 call site 2곳(`PostControllerSliceTest`의 직접 `new PostView(...)`)에 `null` 인자
+  추가해 컴파일 유지.
+
+## AC 판정
+
+| AC | 판정 | 실측 |
+|---|---|---|
+| AC-0 | ✅ | 착수 시 재확인: `community-api.md` § Reactions 에 `GET` 없음(`PUT`/`DELETE` 뿐) · `ReactionController` 에 `@GetMapping` **0건** · `GetPostUseCase` 가 `reactionRepository.find(...)` 를 호출하지 않음 — 전제 그대로 성립 |
+| AC-1 | ✅ | 계약 먼저 갱신 — (A) 선택 근거, `null` 의미, `PostView` 공유 문제의 해법을 본문에 기재 |
+| AC-2 | ✅ | `PostResponse.myReaction` 필드명이 계약과 글자 그대로 일치(`PostControllerSliceTest.get_responseFieldNameMatchesContractExactly`) |
+| AC-3 | ✅(유닛) / CI 권위(IT) | 유닛 `GetPostUseCaseTest.theThreeCellsDiffer` — 세 칸(`null`/`LIKE`/`LOVE`)이 pairwise 다름을 단언. 같은 세 칸을 HTTP 레벨로 재는 `ReactionMyStatusReadIntegrationTest`(Testcontainers)는 이 호스트에 Docker 가 없어 로컬 미실행 — CI Linux 가 권위 |
+| AC-4 | ✅(유닛 호출계약) / CI 권위(IT) | 유닛 `GetPostUseCaseTest.queriesOnlyTheCallersOwnAccountId` — `reactionRepository.find` 가 호출자 자신의 accountId로만 질의됨을 단언. 실제 격리(팬 A 반응 vs 팬 B 조회)는 `ReactionMyStatusReadIntegrationTest.anotherFansReactionDoesNotLeakIntoMine` + 테넌트 격리 케이스 — Docker 부재로 로컬 미실행, CI 권위 |
+| AC-5 | ✅ | 슬라이스 `PostControllerSliceTest.get_withoutAuth_returns401`(로컬 실행, 통과) + 통합 `ReactionMyStatusReadIntegrationTest.withoutBearer_returns401`(CI) |
+| AC-6 | ✅(코드) / CI 권위(IT) | `GatewayRouteRewriteTest.communityRouteForwardsMyReactionFieldOnPostDetailRead` 추가 — 게이트웨이가 `GET /api/v1/community/posts/{id}` 를 `/api/community/posts/{id}` 로 재작성하고 응답 본문의 `myReaction` 필드를 그대로 통과시키는지 확인. 이 스위트는 `TASK-FAN-BE-049` 가 밝힌 대로 CI 통합 워크플로에 없고(`TASK-MONO-541` 미해결), Docker 부재로 로컬도 미실행 — **이 PR 로는 AC-6 이 CI 에서 재지지 않는다**, 추가한 테스트 코드 자체가 유일한 산출물이다 |
+
+## 🔴 로컬 측정의 한계 — Docker 없음
+
+이 Windows 호스트에는 Docker 가 없다(`docker info` rc=1). `CommunityServiceIntegrationBase`
+(`@Testcontainers(disabledWithoutDocker = true)`)와 `GatewayIntegrationBase` 가 끄는 모든
+IT는 로컬에서 **실행되지 않고 스킵된다** — `TASK-FAN-BE-049` 가 겪은 "로컬 1회 관측, flaky"
+상황과도 다르다(여기는 로컬 관측이 **전혀 없다**). 따라서 AC-3/AC-4/AC-6 의 IT 레벨 판정은
+전적으로 CI 에 있다. 로컬로 실제로 돌려 XML 로 확인한 것은 unit + slice 뿐이다:
+
+| 스위트 | tests | failures | errors | skipped |
+|---|---|---|---|---|
+| `GetPostUseCaseTest` (신규) | 5 | 0 | 0 | 0 |
+| `PostControllerSliceTest` | 18 | 0 | 0 | 0 |
+| `AddReactionUseCaseTest` | 5 | 0 | 0 | 0 |
+| `ReactionControllerSliceTest` | 4 | 0 | 0 | 0 |
+| community-service `test` 전체 (40 클래스) | 219 | 0 | 0 | 0 |
+| `community-service:check` + `gateway-service:check` | — | rc=0 | — | — |
+
+수치는 `build/test-results/test/*.xml` 을 직접 파싱해 읽었다(`BUILD SUCCESSFUL` 을 판정으로
+쓰지 않았다). `gateway-service:test` 는 `GatewayRouteRewriteTest` 가 `@Tag("integration")`
+이라 기본 `test` 태스크에서 애초에 제외된다 — 그 클래스의 신규 케이스는 **컴파일만** 로컬로
+확인했다(`compileTestJava` rc=0).
+
+## Out of Scope 로 남긴 것 (티켓 선언대로)
+
+- 프런트 배선 — `TASK-FAN-FE-029`.
+- 피드/`posts/mine` 에 같은 필드 추가 — 미요청.
+- 다른 팬의 반응 공개 — 새 제품 결정.
+- AMI 재굽기 — 데모 라이브는 다음 재굽기 창까지 이 필드를 못 돌려준다(계약에 명시).
 
 ---
 

@@ -336,6 +336,45 @@ class GatewayRouteRewriteTest extends GatewayIntegrationBase {
                 .isEqualTo("/api/community/follows/" + artistAccountId);
     }
 
+    /**
+     * TASK-FAN-BE-051 AC-6.
+     *
+     * <p>Shape (A) adds {@code myReaction} to the EXISTING {@code GET /posts/{id}}
+     * response rather than opening a new route, so the risk here is narrower than
+     * TASK-FAN-BE-049's (a brand-new route that might not be wired at all) — but
+     * not zero: a body-rewriting filter, a response-side projection, or a route
+     * that strips unknown fields would silently drop the new field while every
+     * other assertion about this route stayed green. This pins that the gateway
+     * forwards the response body for this route byte-for-byte, new field included.
+     */
+    @Test
+    void communityRouteForwardsMyReactionFieldOnPostDetailRead() throws Exception {
+        downstream.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"data\":{\"postId\":\"p1\",\"myReaction\":\"LOVE\",\"reactionCount\":3}}"));
+
+        String postId = "0190f3e2-ffff-7abc-8def-000000000007";
+        String token = jwt.signFanToken("fan-rewrite-myreaction");
+
+        webTestClient.get()
+                .uri("/api/v1/community/posts/{postId}", postId)
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data.myReaction").isEqualTo("LOVE");
+
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).as("downstream did not receive the request").isNotNull();
+        assertThat(received.getMethod())
+                .as("the read must arrive as a GET")
+                .isEqualTo("GET");
+        assertThat(received.getPath())
+                .as("GET /api/v1/community/posts/{id} must rewrite to /api/community/posts/{id}")
+                .isEqualTo("/api/community/posts/" + postId);
+    }
+
     @Test
     void fandomsRouteRewritesV1PrefixToInternalFandomsPath() throws Exception {
         downstream.enqueue(new MockResponse()
