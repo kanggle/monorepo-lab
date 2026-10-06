@@ -4,7 +4,7 @@ TASK-FE-105
 
 # Status
 
-review
+done
 
 # Title
 
@@ -123,7 +123,7 @@ BFF 프록시가 브라우저의 `Origin` 헤더를 백엔드 게이트웨이로
       성공했으나 Windows `output: 'standalone'` 트레이싱 단계의 심볼릭 링크 생성이
       `EPERM`(관리자 권한 필요, 이 호스트의 알려진 제약)으로 실패 — 코드와 무관한 환경
       한계이며, CI `Frontend lint & build` 잡(Linux 러너)이 SUCCESS(2m46s)로 빌드를 쟀다.
-- [ ] **라이브(23차 창) 재확인** — 배포된 스토어(store.hubwang.com)에서 프로필 수정·배송지
+- [x] **라이브(23차 창) 재확인** — 배포된 스토어(store.hubwang.com)에서 프로필 수정·배송지
       추가가 200 으로 성공하고, 새로고침 후 값이 유지된다. (오케스트레이터가 측정)
 
 ---
@@ -169,3 +169,12 @@ BFF 프록시가 브라우저의 `Origin` 헤더를 백엔드 게이트웨이로
 - [x] 수정 + 테스트
 - [x] 로컬 게이트(`tsc`, `next lint`) 통과, CI `Frontend unit tests` 로 단위 테스트 권위 확보
 - [x] Ready for review
+
+---
+
+## 23차 창 라이브 확인 + done 이관 (2026-10-06 UTC)
+
+- 배포 반영 07:31:48Z — `Origin: https://store.hubwang.com` 을 붙인 `GET /api/bff/api/products` 가 403 → **200** 으로 바뀐 순간(30초 폴링).
+- 라이브 AC ✅ — 같은 새 계정(`TASK-MONO-764` 흐름 1 에서 가입)으로 브라우저에서: 프로필 `PATCH /api/bff/api/users/me` **200**(«프로필이 수정되었습니다») → 새로고침 뒤 닉네임 «점검닉네임23» · 전화 «010-2345-6789» 유지 · 배송지 `POST …/addresses` **201** → `GET` 에 «회사 · 김점검 · 04524 · 서울특별시청 3층 · 기본» 저장. 수정 전 같은 화면은 두 요청 다 403.
+- 연쇄로 풀린 흐름(764): 주문 `POST orders 201` → `payments/confirm 200` · 위시 `DELETE 204` · 리뷰 `POST reviews 201`.
+- 4-dim: (a) #4172 MERGED (b) `6fd6a8d76` = origin/main 에 있음 (c) 머지 시점 실패 0 (SUCCESS 18 · SKIPPED 49) (d) AC 섹션 전부 닫힘(위 라이브 AC 포함).

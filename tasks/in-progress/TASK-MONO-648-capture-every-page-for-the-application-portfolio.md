@@ -1766,3 +1766,7 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 - 🔴 **촬영 스크립트 결함 하나를 같은 커밋에 고쳤다** — 콘솔 테넌트 셀렉트에 비활성 자리표시자 옵션이 생긴 뒤로 `assumeTenant` 가 글자 목록에서 그 자리표시자를 «다른 테넌트» 로 골라 왕복 전환하다 `option … is not enabled` 로 4장 전부 실패했다. 고를 수 있는(`!disabled && value`) 옵션만 센다.
 - 🔵 무게 재측정: 캐러셀 9장 합계 **652 KB**(`du -ck`, 이전 540 KB / 7장) — 콘솔 2→4장.
 - ⏳ 론처 배포 = 이 PR 머지 뒤 `terraform apply`(site 는 S3 — 소유자). 
+
+## CORRECTION (2026-10-06 UTC) — 론처 배포는 `terraform apply` 가 아니다
+
+바로 위 절의 «⏳ 론처 배포 = 이 PR 머지 뒤 `terraform apply`(site 는 S3)» 는 **틀렸다.** 론처는 Vercel(`https://hubwang.com`)이고 main 푸시로 배포된다(`check-launcher-fresh.sh`). #4174(`28fffa5f4`) 머지 뒤 실측: `terraform plan` «No changes» · `hubwang.com` 이 `console-{1..4}-*.jpg` 4장을 200 으로 서빙 · 옛 `console-1-erp-masters.jpg` 404 · `check-launcher-fresh.sh` rc=0 «서빙 커밋 = 기대 커밋 = 28fffa5f4». ⇒ **론처 콘솔 4장 배선은 끝났다.** 이 티켓의 남은 것은 위 «⏳ 남은 것» 의 동적 경로(AC-1)·표지 넓히기 두 칸이다.
