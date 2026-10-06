@@ -49,6 +49,7 @@ export function SessionKeeper({ staleAtRender }: { staleAtRender: boolean }) {
 
   const readSession = useRef(() => {
     if (!inFlight.current) {
+      // DEMO-URL-EXEMPT: same-origin — `SESSION_ENDPOINT` is this app's own Auth.js route (a relative path), not a backend.
       inFlight.current = fetch(SESSION_ENDPOINT, {
         cache: 'no-store',
         credentials: 'same-origin',
