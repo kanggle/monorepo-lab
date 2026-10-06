@@ -91,6 +91,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-PC-FE-309-erp-approval-list-and-detail-print-raw-uuids.md` — **ERP 결재 목록·상세가 부서·직원·기안자·결재선을 UUID 그대로 찍는다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `TASK-PC-FE-276`(마스터만) · `TASK-PC-FE-277`(48곳 census, erp-ops 전체 제외)둘 다 이 화면을 본 적이 없다 — census 공백, 중복 아님. `shared/lib/master-ref-label.ts` 재사용 + `erp-master-ref-names.test.tsx` 모집단 확장. 분석=Opus 5.5 / 구현 권장=Sonnet.
+
 (empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.

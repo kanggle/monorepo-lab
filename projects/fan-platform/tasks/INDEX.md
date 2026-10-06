@@ -70,6 +70,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-FAN-FE-027-session-lost-under-concurrent-refresh-on-serverless.md` — **fan-platform-web 도 같은 모양의 refresh 경합 해저드** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 · 코드 형태 일치로 기안, n=0 — 라이브 미재현). `auth-callbacks.ts:122` 주석이 `ecommerce web-store`(`TASK-FE-106`)와 거의 동일한 in-process-dedupe 가정. 선행 = `TASK-FE-106` 의 결론을 먼저 읍고 같은 해법을 복사. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+- `TASK-FAN-FE-028-follow-button-does-not-update-until-reload.md` — **팔로우가 200 으로 성공해도 버튼 라벨이 3초 넘게 「팔로우」로 남는다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FollowButton.tsx` 가 `setFollowing` 을 서버 액션 `await` **완료 후**에만 호출 — 낙관적 갱신 없음. `TASK-FAN-FE-017`(초기 SSR 상태)과 다른 레이어. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-FAN-FE-029-reaction-button-does-not-restore-viewers-own-reaction.md` — **반응은 저장되는데 새로고침 뒤 내 반응을 기억 못 한다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `ReactionBar` 의 `active` 가 항상 `null` 로 시작, 호출부(`memberPostDetail.tsx:85`)가 뷰어의 기존 반응을 안 넘김. `TASK-FAN-FE-017` 과 같은 클래스 — AC-0b/AC-2/AC-4 구조 재사용. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-FAN-FE-030-no-comment-composer-ui-product-gap-decision.md` — **댓글 쓰기 UI 부재 — 소유자 결정 티켓(구현 아님)** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `specs/services/fan-platform-web/overview.md:57` 이 이미 v1 Out of scope 로 명시(backend API 존재, frontend read-only). `TASK-FAN-FE-016`(글쓰기 추가) 이후도 그 결정이 유효한지만 확인. 분석=Opus 5.5 / 구현 권장=Sonnet.
+
 (empty)
 
 ## in-progress
