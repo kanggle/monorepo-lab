@@ -1316,8 +1316,10 @@
     //    옛 세 장은 `/demo/*` — 그 페이지가 스스로 *"샘플(합성) 데이터로 만든 둘러보기
     //    입니다"* 라고 적는 **합성 투어**였다. 지금 둘은 **로그인해서 찍은 진짜 콘솔**이고,
     //    테넌트가 서로 다르다(`/erp/masters`=demo-corp · `/ecommerce/products`=ecommerce).
+    // 🟢 **2026-10-06 UTC — 네 장으로**(소유자 결정 «4장 — 원 승인목록 회복»): 이커머스
+    //    주문 · 상품 상세 · 정산 + 6도메인 상태. 정본·근거는 `capture-shots.mjs` 의 SHOTS 주석.
     const SHOTS = {
-      console: [{ file: 'console-1-erp-masters.jpg', alt: '운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)' }, { file: 'console-2-ecommerce-products.jpg', alt: '운영자 콘솔 — 이커머스 상품 목록' }],
+      console: [{ file: 'console-1-ecommerce-orders.jpg', alt: '운영자 콘솔 — 이커머스 주문 목록(상태별)' }, { file: 'console-2-ecommerce-product.jpg', alt: '운영자 콘솔 — 이커머스 상품 상세' }, { file: 'console-3-ecommerce-settlements.jpg', alt: '운영자 콘솔 — 이커머스 정산' }, { file: 'console-4-dashboards-health.jpg', alt: '운영자 콘솔 — 6도메인 상태' }],
       store: [{ file: 'store-1-home.jpg', alt: '이커머스 스토어 홈' }, { file: 'store-2-products.jpg', alt: '이커머스 스토어 — 상품 목록' }],
       fan: [{ file: 'fan-1-feed.jpg', alt: '팬 플랫폼 — 공개 피드' }, { file: 'fan-2-artists.jpg', alt: '팬 플랫폼 — 아티스트 목록' }, { file: 'fan-3-membership.jpg', alt: '팬 플랫폼 — 멤버십 소개' }],
     };

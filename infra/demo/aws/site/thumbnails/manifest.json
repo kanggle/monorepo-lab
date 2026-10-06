@@ -12,25 +12,47 @@
   "shots": [
     {
       "bundle": "console",
-      "file": "console-1-erp-masters.jpg",
-      "url": "https://console.hubwang.com/erp/masters",
-      "alt": "운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)",
+      "file": "console-1-ecommerce-orders.jpg",
+      "url": "https://console.hubwang.com/ecommerce/orders",
+      "alt": "운영자 콘솔 — 이커머스 주문 목록(상태별)",
       "status": 200,
-      "capturedAt": "2026-09-11T11:37:26.481Z",
+      "capturedAt": "2026-10-06T07:18:29.785Z",
       "requiresAuth": true,
-      "tenant": "demo-corp",
-      "bodyChars": 1677
+      "tenant": "ecommerce",
+      "bodyChars": 730
     },
     {
       "bundle": "console",
-      "file": "console-2-ecommerce-products.jpg",
-      "url": "https://console.hubwang.com/ecommerce/products",
-      "alt": "운영자 콘솔 — 이커머스 상품 목록",
+      "file": "console-2-ecommerce-product.jpg",
+      "url": "https://console.hubwang.com/ecommerce/products/b0000000-0000-0000-0000-000000000002",
+      "alt": "운영자 콘솔 — 이커머스 상품 상세",
       "status": 200,
-      "capturedAt": "2026-09-11T11:37:44.186Z",
+      "capturedAt": "2026-10-06T07:18:37.104Z",
       "requiresAuth": true,
       "tenant": "ecommerce",
-      "bodyChars": 1004
+      "bodyChars": 469
+    },
+    {
+      "bundle": "console",
+      "file": "console-3-ecommerce-settlements.jpg",
+      "url": "https://console.hubwang.com/ecommerce/settlements",
+      "alt": "운영자 콘솔 — 이커머스 정산",
+      "status": 200,
+      "capturedAt": "2026-10-06T07:18:43.298Z",
+      "requiresAuth": true,
+      "tenant": "ecommerce",
+      "bodyChars": 1530
+    },
+    {
+      "bundle": "console",
+      "file": "console-4-dashboards-health.jpg",
+      "url": "https://console.hubwang.com/dashboards/health",
+      "alt": "운영자 콘솔 — 6도메인 상태",
+      "status": 200,
+      "capturedAt": "2026-10-06T07:18:50.146Z",
+      "requiresAuth": true,
+      "tenant": "ecommerce",
+      "bodyChars": 543
     },
     {
       "bundle": "store",

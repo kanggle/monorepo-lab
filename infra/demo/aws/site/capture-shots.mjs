@@ -118,14 +118,27 @@ const HOSTS = {
 // 🔵 **목록을 가능하게 하는 «기전» 은 아래에 이미 있다** — 장별 `tenant` + `assumeTenant()`.
 //    그 둘이 없으면 이 목록은 **찍을 수가 없다**(같은 콘솔인데 `/erp/masters` 는
 //    `demo-corp` 에서만, `/ecommerce/products` 는 `ecommerce` 에서만 그려진다).
+//
+// 🟢 **콘솔이 다시 네 장이다** (TASK-MONO-648, 2026-10-06 UTC 소유자 결정 «4장 — 원 승인목록 회복»).
+//    2026-09-08 승인 목록 넷 중 셋(`/ecommerce/*`)은 테넌트를 `ecommerce` 로 고르자 회수됐고
+//    (22차 창 촬영본으로 소유자 확정), 저하로 못 쓰던 `/dashboards/overview` 자리는
+//    `/dashboards/health`(758 이후 6도메인 실데이터)가 대신한다. 위 두 줄 판은 이 결정으로 대체.
+//    🔴 이 스크립트는 동적 경로를 못 푼다 ⇒ 상품 상세는 **Flyway 시드 고정 id** 를 박는다
+//       (`product-service` `V8__seed_sample_data.sql` 의 `b0000000-…-0002` — 굽기마다 같다).
 const SHOTS = [
-  // 운영자 콘솔 — 🔴 둘 다 **로그인 + 테넌트 assume** 이 필요하고, 요구 테넌트가 서로 다르다.
-  { bundle: 'console', name: 'console-1-erp-masters', path: '/erp/masters',
-    requiresAuth: true, tenant: 'demo-corp',
-    alt: '운영자 콘솔 — ERP 마스터 5종(effective-dating·asOf)' },
-  { bundle: 'console', name: 'console-2-ecommerce-products', path: '/ecommerce/products',
+  // 운영자 콘솔 — 🔴 넷 다 **로그인 + 테넌트 assume** 이 필요하다.
+  { bundle: 'console', name: 'console-1-ecommerce-orders', path: '/ecommerce/orders',
     requiresAuth: true, tenant: 'ecommerce',
-    alt: '운영자 콘솔 — 이커머스 상품 목록' },
+    alt: '운영자 콘솔 — 이커머스 주문 목록(상태별)' },
+  { bundle: 'console', name: 'console-2-ecommerce-product', path: '/ecommerce/products/b0000000-0000-0000-0000-000000000002',
+    requiresAuth: true, tenant: 'ecommerce',
+    alt: '운영자 콘솔 — 이커머스 상품 상세' },
+  { bundle: 'console', name: 'console-3-ecommerce-settlements', path: '/ecommerce/settlements',
+    requiresAuth: true, tenant: 'ecommerce',
+    alt: '운영자 콘솔 — 이커머스 정산' },
+  { bundle: 'console', name: 'console-4-dashboards-health', path: '/dashboards/health',
+    requiresAuth: true, tenant: 'ecommerce',
+    alt: '운영자 콘솔 — 6도메인 상태' },
 
   // 이커머스 스토어
   { bundle: 'store', name: 'store-1-home', path: '/',
@@ -228,7 +241,11 @@ async function assumeTenant(page, tenant) {
       throw new Error('테넌트 셀렉트 [data-testid=tenant-select] 를 못 찾았습니다');
     }
   }
-  const options = (await sel.locator('option').allTextContents()).map((t) => t.trim()).filter(Boolean);
+  // 🔴 **고를 수 있는 옵션만** 센다(2026-10-06 UTC 23차 창). 셀렉트에 비활성 자리표시자
+  //    옵션이 생긴 뒤로, 글자 목록을 그대로 쓰면 왕복 전환의 «다른 테넌트» 가 그 자리표시자가
+  //    되어 `selectOption` 이 «option … is not enabled» 로 30초를 기다리다 죽었다(4장 전부).
+  const options = await sel.locator('option').evaluateAll((os) =>
+    os.filter((o) => !o.disabled && o.value).map((o) => o.value));
   if (!options.includes(tenant)) {
     // 🔴 «없는 테넌트» 와 «assume 실패» 는 다른 사실이다. 사유를 대며 죽는다.
     throw new Error(`테넌트 ${tenant} 가 셀렉트에 없습니다 (있는 것: ${options.join(', ')})`);

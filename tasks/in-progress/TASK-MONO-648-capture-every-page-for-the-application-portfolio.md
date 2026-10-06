@@ -1754,3 +1754,15 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 - 🔴 **론처 배선은 창이 하나 더 필요하다.** 론처 썸네일은 `infra/demo/aws/site/capture-shots.mjs` 가 **창 안에서** 자기 규격(뷰포트·매니페스트)으로 찍고, (z37) 이 `capture-shots.mjs` SHOTS ↔ `index.html` SHOTS ↔ `thumbnails/*.jpg` 를 한 묶음으로 지킨다 ⇒ 포트폴리오 촬영본(1440 폭)을 그대로 끼울 수 없다. 다음 창에서: SHOTS 에 위 확정 장을 넣고 `capture-shots.mjs` 로 찍어 셋을 **한 커밋으로**.
 - `[ ]` 동적 경로(AC-1) — 남은 미해결은 앱 쪽 사유(템플릿 목록에 상세 링크 없음 · 정산 기간 부모 404 · store `/orders/[id]`)라 재촬영으로 안 풀린다. 오늘 콘솔 `ecommerce` 에서 fan·tenants 동적 4개도 미해결 = 그 테넌트에 권한이 없어서(의도).
 - `[ ]` 표지 넓히기 — 위 오탐 둘을 함께.
+
+# 🟢 2026-10-06 UTC 23차 AMI 창 — 론처 콘솔 카드 배선 완료
+
+창 06:09Z~ · 인스턴스 `i-036521b58c68566f2` · AMI `ami-0ad357acf81d69a8c`(`d44dd0d61`).
+
+- 🟢 **소유자 결정(2026-10-06 UTC, «4장 — 원 승인목록 회복»)**: 론처 콘솔 카드 = `/ecommerce/orders` · `/ecommerce/products/b0000000-…-0002` · `/ecommerce/settlements` · `/dashboards/health`, 넷 다 테넌트 `ecommerce`. 옛 두 장(`/erp/masters` · `/ecommerce/products`)은 뺐다.
+  - 상품 상세는 `capture-shots.mjs` 가 동적 경로를 못 풀어 **Flyway 시드 고정 id**(`product-service` `V8__seed_sample_data.sql`, 슬림핏 데님 청바지)를 박았다 — 굽기마다 같은 값.
+- ✅ 세 곳을 한 커밋으로: `capture-shots.mjs` SHOTS · `index.html` SHOTS · `thumbnails/console-{1..4}-*.jpg` + `manifest.json`, 옛 썸네일 2장 삭제. `verify-demo-wrapper.sh` 정적 rc=0 — (z37) 9장 양방향 일치 · (z35) 0·1·N장 실행 대조 통과.
+- ✅ 이미지 4장을 **열어서** 확인: 주문 5상태 실데이터 · 상품 상세 옵션 4개+재고 · 정산 라인 3건 · 6도메인 «OK 정상».
+- 🔴 **촬영 스크립트 결함 하나를 같은 커밋에 고쳤다** — 콘솔 테넌트 셀렉트에 비활성 자리표시자 옵션이 생긴 뒤로 `assumeTenant` 가 글자 목록에서 그 자리표시자를 «다른 테넌트» 로 골라 왕복 전환하다 `option … is not enabled` 로 4장 전부 실패했다. 고를 수 있는(`!disabled && value`) 옵션만 센다.
+- 🔵 무게 재측정: 캐러셀 9장 합계 **652 KB**(`du -ck`, 이전 540 KB / 7장) — 콘솔 2→4장.
+- ⏳ 론처 배포 = 이 PR 머지 뒤 `terraform apply`(site 는 S3 — 소유자). 
