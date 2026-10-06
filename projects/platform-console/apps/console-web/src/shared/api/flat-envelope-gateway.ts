@@ -53,7 +53,9 @@ import { samplePath } from '@/shared/sample/router';
  * - **Mutation headers**: `Content-Type` is attached ONLY when a `body` is
  *   present; `Idempotency-Key` / `X-Operator-Reason` ONLY when the caller
  *   supplies them. A read-only caller passes none → GET with no mutation
- *   headers.
+ *   headers. `X-Operator-Reason` is percent-encoded (TASK-PC-FE-308 —
+ *   matches iam-gateway.ts's TASK-MONO-176 fix) so a non-Latin-1 reason
+ *   (Korean) does not make `fetch()` throw on the ByteString header.
  * - **Optional 429** (`profile.rateLimit`): ONE bounded backoff honouring
  *   `Retry-After` (capped) then the profile's rate-limited error (scm only).
  *   Absent → a stray `429` falls through the default-error path as a surfaced
@@ -140,7 +142,9 @@ export interface FlatEnvelopeGatewayRequest {
    *  profile's fail-fast guard is on). Reads omit it. */
   idempotencyKey?: string;
   /** `X-Operator-Reason` header value — attached ONLY when present (the erp
-   *  approval reasoned transitions; every other caller omits it). */
+   *  approval reasoned transitions; every other caller omits it).
+   *  Percent-encoded on the wire (TASK-PC-FE-308) — pass the RAW reason
+   *  here, the core encodes it. */
   operatorReason?: string;
   /** Seed-lookup GETs only: a `404` short-circuits to the profile's
    *  `notFoundSentinel` instead of throwing (config's 404-as-empty-state). */
@@ -427,7 +431,15 @@ async function prepareFlatHeaders(
     headers['Idempotency-Key'] = req.idempotencyKey;
   }
   if (req.operatorReason !== undefined) {
-    headers['X-Operator-Reason'] = req.operatorReason;
+    // TASK-PC-FE-308: percent-encode so a non-Latin-1 reason (e.g. Korean)
+    // does not make `fetch()` throw `TypeError: Cannot convert argument to
+    // a ByteString` on the header — the SAME fix as iam-gateway.ts
+    // (TASK-MONO-176). The erp approval-service producer never reads this
+    // header (confirmed: no `@RequestHeader("X-Operator-Reason")` anywhere
+    // in erp-platform — the reason authority is the request BODY `reason`
+    // field, which is JSON/UTF-8 and unaffected), so there is no producer
+    // decode to coordinate.
+    headers['X-Operator-Reason'] = encodeURIComponent(req.operatorReason);
   }
   if (req.body !== undefined) headers['Content-Type'] = 'application/json';
   return headers;

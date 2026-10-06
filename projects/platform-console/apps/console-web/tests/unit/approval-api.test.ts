@@ -420,33 +420,45 @@ describe('approval-api — create + transitions (Idempotency-Key + X-Operator-Re
     expect(c.headers['X-Operator-Reason']).toBeUndefined();
     expect(c.body).toEqual({});
 
-    // with reason
+    // with reason — TASK-PC-FE-308: percent-encoded on the wire (a raw
+    // Korean header value is not a valid HTTP ByteString and makes `fetch()`
+    // throw); the body carries the reason verbatim (JSON/UTF-8, unaffected).
     fetchMock = vi.fn().mockResolvedValue(jsonResponse(SUBMITTED_DETAIL));
     vi.stubGlobal('fetch', fetchMock);
     await approveApproval('appr-1', 'idem-app2', '승인합니다');
     c = lastCall(fetchMock);
-    expect(c.headers['X-Operator-Reason']).toBe('승인합니다');
+    expect(/^[\x00-\x7F]*$/.test(c.headers['X-Operator-Reason'])).toBe(true);
+    expect(c.headers['X-Operator-Reason']).toBe(encodeURIComponent('승인합니다'));
+    expect(decodeURIComponent(c.headers['X-Operator-Reason'])).toBe('승인합니다');
     expect(c.body.reason).toBe('승인합니다');
   });
 
-  it('reject → reason REQUIRED in body + X-Operator-Reason header', async () => {
+  it('reject → reason REQUIRED in body + percent-encoded X-Operator-Reason header (TASK-PC-FE-308)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SUBMITTED_DETAIL));
     vi.stubGlobal('fetch', fetchMock);
     await rejectApproval('appr-1', '근거 부족', 'idem-rej');
     const { url, headers, body } = lastCall(fetchMock);
     expect(url).toBe('http://erp.local/api/erp/approval/requests/appr-1/reject');
     expect(headers['Idempotency-Key']).toBe('idem-rej');
-    expect(headers['X-Operator-Reason']).toBe('근거 부족');
+    // ASCII-only on the wire (the bug: an unencoded Korean reason made
+    // undici `fetch()` throw `TypeError: Cannot convert argument to a
+    // ByteString`, surfaced to the operator as "erp unavailable" 503) …
+    expect(/^[\x00-\x7F]*$/.test(headers['X-Operator-Reason'])).toBe(true);
+    expect(headers['X-Operator-Reason']).toBe(encodeURIComponent('근거 부족'));
+    // … and round-trips for the audit trail.
+    expect(decodeURIComponent(headers['X-Operator-Reason'])).toBe('근거 부족');
     expect(body.reason).toBe('근거 부족');
   });
 
-  it('withdraw → reason REQUIRED in body + X-Operator-Reason header', async () => {
+  it('withdraw → reason REQUIRED in body + percent-encoded X-Operator-Reason header (TASK-PC-FE-308)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SUBMITTED_DETAIL));
     vi.stubGlobal('fetch', fetchMock);
     await withdrawApproval('appr-1', '수정 필요', 'idem-wd');
     const { url, headers, body } = lastCall(fetchMock);
     expect(url).toBe('http://erp.local/api/erp/approval/requests/appr-1/withdraw');
-    expect(headers['X-Operator-Reason']).toBe('수정 필요');
+    expect(/^[\x00-\x7F]*$/.test(headers['X-Operator-Reason'])).toBe(true);
+    expect(headers['X-Operator-Reason']).toBe(encodeURIComponent('수정 필요'));
+    expect(decodeURIComponent(headers['X-Operator-Reason'])).toBe('수정 필요');
     expect(body.reason).toBe('수정 필요');
   });
 });

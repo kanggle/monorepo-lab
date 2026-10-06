@@ -59,8 +59,12 @@ export interface CallOptions {
   /** `Idempotency-Key` header — required on create + the 4 transitions. */
   idempotencyKey?: string;
   /** `X-Operator-Reason` header — set ONLY on the transitions that record a
-   *  reason (the producer echoes it for the audit trail). Reads + create never
-   *  set it. */
+   *  reason. Reads + create never set it. Percent-encoded on the wire by the
+   *  shared core (TASK-PC-FE-308) — the erp `approval-service` producer does
+   *  NOT actually read this header (no `@RequestHeader("X-Operator-Reason")`
+   *  anywhere in erp-platform); the reason authority is the request BODY
+   *  `reason` field (JSON/UTF-8, unaffected). The header is an audit-trail
+   *  echo only, per the contract narrative — not consumed producer-side. */
   operatorReason?: string;
 }
 

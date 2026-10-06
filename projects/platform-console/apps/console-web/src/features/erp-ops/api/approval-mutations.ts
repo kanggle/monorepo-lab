@@ -20,7 +20,12 @@ import { callApproval, parseApprovalRequest } from './approval-call';
  *     `X-Operator-Reason` header for the audit trail (producer § Operator
  *     reason). This is the SOLE erp surface that sends `X-Operator-Reason`
  *     (the masterdata surface deliberately never does — erp has no reason
- *     slot there).
+ *     slot there). The header is percent-encoded by the shared
+ *     `callFlatEnvelopeGateway` core (TASK-PC-FE-308 — a raw Korean reason
+ *     is not a valid HTTP header ByteString and made `fetch()` throw before
+ *     the request ever left the console). The producer does NOT read this
+ *     header (verified: no `@RequestHeader("X-Operator-Reason")` in
+ *     erp-platform) — the body `reason` field is the sole authority.
  *
  * Server-only by construction — see `approval-call.ts` for the credential
  * + resilience posture. The public surface stays the `approval-api.ts`
