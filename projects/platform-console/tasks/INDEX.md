@@ -92,6 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-309-erp-approval-list-and-detail-print-raw-uuids.md` — **ERP 결재 목록·상세가 부서·직원·기안자·결재선을 UUID 그대로 찍는다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `TASK-PC-FE-276`(마스터만) · `TASK-PC-FE-277`(48곳 census, erp-ops 전체 제외)둘 다 이 화면을 본 적이 없다 — census 공백, 중복 아님. `shared/lib/master-ref-label.ts` 재사용 + `erp-master-ref-names.test.tsx` 모집단 확장. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (READY, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 · 성공 → «제품·테넌트 전체» 접힘 섹션 · `/console` = 개요 리다이렉트 · «카탈로그로 이동» 31곳 → «개요로 이동». 스펙(`architecture.md`) 먼저. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 (empty)
 
