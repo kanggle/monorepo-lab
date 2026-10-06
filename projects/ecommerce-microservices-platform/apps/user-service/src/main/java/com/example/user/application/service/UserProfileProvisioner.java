@@ -40,10 +40,16 @@ import java.util.UUID;
  * <h2>Both paths converge here</h2>
  *
  * <p>{@link AccountCreatedHandler} (event) and {@link com.example.user.presentation.filter.UserProfileProvisioningFilter}
- * (pull-through) both call {@link #ensureProvisioned}, so a profile born from an event
- * and a profile born from a first request are byte-identical, and whichever arrives
- * first wins with the other becoming a no-op. Restoring the event path later changes
- * nothing here.
+ * (pull-through) both call {@link #ensureProvisioned}. The two are <strong>not</strong>
+ * byte-identical, though: the event path carries no email (PII-masked by design) while
+ * the pull-through path carries whatever the gateway verified for this request. Before
+ * TASK-MONO-511 the event path was dead (no delivery topology), so "whichever arrives
+ * first wins" was vacuously true on email — only the pull-through path ever ran. Once
+ * TASK-MONO-511 restored the relay, the event typically wins the race (a live Kafka
+ * consumer polls continuously; the browser round-trip to the first authenticated request
+ * is slower), which silently stranded the real email forever (TASK-BE-624). This class now
+ * backfills the email on an existing row the first time a non-null one shows up — see
+ * {@link #backfillEmailIfMissing}.
  *
  * <h2>The shape is deliberately minimal</h2>
  *
@@ -91,7 +97,9 @@ public class UserProfileProvisioner {
         if (userId == null) {
             return;
         }
-        if (userProfileRepository.findByUserId(userId).isPresent()) {
+        var existing = userProfileRepository.findByUserId(userId);
+        if (existing.isPresent()) {
+            backfillEmailIfMissing(existing.get(), email);
             return;
         }
         if (userProfileRepository.existsByUserId(userId)) {
@@ -112,6 +120,38 @@ public class UserProfileProvisioner {
             // The row exists, which is all the caller needed — not an error.
             log.debug("Concurrent provisioning for userId={}, losing insert ignored", userId);
         }
+    }
+
+    /**
+     * Backfills {@code email} onto a profile that already exists (TASK-BE-624). No-op
+     * unless the edge actually supplied a usable, non-blank email — most calls on an
+     * existing row still pass {@code null} (the event path, or a later pull-through call
+     * on a profile that already has one), and those must stay no-ops exactly as before.
+     * {@link UserProfile#assignEmail} itself guards against overwriting an existing email
+     * or touching a withdrawn profile, so this method only decides whether a save is
+     * worth attempting at all.
+     */
+    private void backfillEmailIfMissing(UserProfile profile, String email) {
+        if (profile.getEmail() != null || email == null || email.isBlank()) {
+            return;
+        }
+        try {
+            profile.assignEmail(email.trim());
+        } catch (IllegalArgumentException e) {
+            log.warn("Edge supplied an unusable X-User-Email for userId={} during backfill, leaving profile as-is",
+                    profile.getUserId());
+            return;
+        }
+        if (profile.getEmail() == null) {
+            // assignEmail declined (e.g. the profile was withdrawn/anonymized in the
+            // meantime) — nothing changed, so there is nothing to persist or log.
+            return;
+        }
+        userProfileRepository.save(profile);
+        log.info("Backfilled email for userId={} tenant={} — the account.created event that first "
+                        + "provisioned this profile carries no email; a later pull-through call supplied one "
+                        + "(TASK-BE-624)",
+                profile.getUserId(), TenantContext.currentTenant());
     }
 
     /**
