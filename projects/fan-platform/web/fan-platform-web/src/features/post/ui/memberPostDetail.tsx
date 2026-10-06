@@ -82,7 +82,14 @@ export async function memberPostDetail(id: string): Promise<ReactNode | null> {
         ) : null}
         <p className="whitespace-pre-line text-base leading-relaxed text-ink-800">{post.body}</p>
         <footer className="mt-8 border-t border-ink-200 pt-4">
-          <ReactionBar postId={post.postId} totalReactions={post.reactionCount} />
+          <ReactionBar
+            postId={post.postId}
+            totalReactions={post.reactionCount}
+            // 🔴 `?? null` — same AMI-rebake-gap convention as `mediaRefs` above
+            // (TASK-FAN-BE-051 § myReaction); the field can be absent on the
+            // currently-deployed demo backend.
+            initialReaction={post.myReaction ?? null}
+          />
         </footer>
       </article>
     );
