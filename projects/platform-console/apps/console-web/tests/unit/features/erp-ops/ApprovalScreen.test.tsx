@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { MASTER_REF_UNRESOLVED } from '@/shared/lib/master-ref-label';
 
 /**
  * TASK-PC-FE-051 — `<ApprovalScreen>` / `<ApprovalDetail>` / the reason +
@@ -15,6 +16,16 @@ import type { ReactNode } from 'react';
  *   - the approval error codes map to inline messages (no crash);
  *   - create dialog gates required fields + POSTs with an Idempotency-Key.
  * Same-origin `/api/erp/approval/**` fetch mocked.
+ *
+ * TASK-PC-FE-309 — every subject/approver/submitter/actor cell now resolves
+ * via `useDepartment`/`useEmployee` (see `approval-refs.tsx`) instead of
+ * printing the raw id. None of the fixtures below seed a matching
+ * department/employee detail response, so every resolution in THIS file
+ * legitimately lands on `이름 확인 불가` (MASTER_REF_UNRESOLVED) — honest, not
+ * a crash. The POSITIVE (resolved-name) case is covered in the shared
+ * regression guard `tests/unit/erp-master-ref-names.test.tsx`, which mocks
+ * `useDepartment`/`useEmployee` directly (this file's concern stays the
+ * approval state machine, not master-ref resolution).
  */
 
 vi.mock('next/navigation', () => ({
@@ -130,6 +141,15 @@ const APPROVED: ApprovalRequest = {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  // TASK-PC-FE-309 — safe default so the new per-cell useDepartment/useEmployee
+  // resolution never hits a REAL network call in a test that only seeds
+  // `initialRequests`/`initialInbox` and never stubs fetch itself (e.g. the
+  // plain list-rendering tests below). Tests that need a specific fetch
+  // behaviour call `vi.stubGlobal('fetch', ...)` again and fully replace this.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(errorResponse('MASTERDATA_NOT_FOUND', 404)),
+  );
 });
 
 // ===========================================================================
@@ -541,8 +561,12 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
       expect(screen.getByTestId('approval-history')).toBeInTheDocument(),
     );
     // History entry 1 has stage=0 and actingForApproverId=emp-a.
+    // TASK-PC-FE-309 — actingForApproverId now resolves via useEmployee;
+    // this fixture never seeds a matching employee detail response, so the
+    // honest outcome is MASTER_REF_UNRESOLVED, never the raw id (276 Edge
+    // Case — "id 로 조용히 되돌아가지 않는다").
     const delegated = await screen.findByTestId('approval-history-delegated-1');
-    expect(delegated.textContent).toContain('emp-a');
+    expect(delegated.textContent).toContain(MASTER_REF_UNRESOLVED);
     expect(delegated.textContent).toContain('대결');
     // Stage annotation visible in history entry 0.
     expect(screen.getByTestId('approval-history-0').textContent).toContain('1단계');
@@ -561,9 +585,16 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
       // No stages timeline; falls back to single approverId display.
       expect(screen.queryByTestId('approval-stages')).not.toBeInTheDocument(),
     );
-    // The fallback approverId is rendered.
+    // The fallback approverId is rendered. TASK-PC-FE-309 — it now resolves
+    // via useEmployee; this fixture never seeds a matching employee detail
+    // response, so the honest outcome is MASTER_REF_UNRESOLVED, never the
+    // raw id.
     expect(screen.getByTestId('approval-approverId')).toBeInTheDocument();
-    expect(screen.getByTestId('approval-approverId').textContent).toBe('emp-a');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        MASTER_REF_UNRESOLVED,
+      ),
+    );
   });
 });
 

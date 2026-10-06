@@ -91,8 +91,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-309-erp-approval-list-and-detail-print-raw-uuids.md` — **ERP 결재 목록·상세가 부서·직원·기안자·결재선을 UUID 그대로 찍는다** (READY, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `TASK-PC-FE-276`(마스터만) · `TASK-PC-FE-277`(48곳 census, erp-ops 전체 제외)둘 다 이 화면을 본 적이 없다 — census 공백, 중복 아님. `shared/lib/master-ref-label.ts` 재사용 + `erp-master-ref-names.test.tsx` 모집단 확장. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 (empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -123,6 +121,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-309-erp-approval-list-and-detail-print-raw-uuids.md` — **ERP 결재 목록·상세가 부서·직원·기안자·결재선을 UUID 그대로 찍는다** (REVIEW, 2026-10-07 UTC · 출처 `TASK-MONO-764` 23차 창). census 7곳 전부 참조(자기 식별자 0) — 대상(부서/직원, 목록+상세) · 기안자 · 결재자(legacy+단계별) · 이력 처리자 · 대결 대상. 전부 같은 feature 의 기존 id 단건 조회 훅(`useDepartment`/`useEmployee`, TASK-PC-FE-276 Method A — 새 계약·새 feature-import 없음)으로 해소 가능해 **⚪ 0개**(후속 티켓 불필요). 신설 `approval-refs.tsx`(`ApprovalSubjectRef`/`ApprovalEmployeeRef`) + `erp-master-ref-names.test.tsx` 모집단 확장(45→57) + 실제 소스 되돌리기 bite 2건. 🔵 라이브 데모 시드가 승인자 자리에 넣는 운영자 sub(계약 위반 편법, `seed-erp.sh` §6)는 직원 마스터에 없어 정직하게 `이름 확인 불가` — 결함 아님. AC-0~AC-4 전부 코드/계약/테스트 대조로 닫힘, **라이브 화면 재확인은 ⚪ — 오케스트레이터가 다음 창에서 측정**. 분석=Opus 5.5 / 구현=Sonnet 4.6(실제: Claude Sonnet 5).
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
