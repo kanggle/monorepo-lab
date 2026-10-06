@@ -2,6 +2,7 @@ package com.example.auth.presentation;
 
 import com.example.auth.application.port.TenantSignupEligibilityPort;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,15 +36,6 @@ import java.util.List;
 public class LoginPageController {
 
     /**
-     * The enabled social providers, sourced from the {@link OAuthProvider} enum
-     * (Naver is a future addition — TASK-BE-397). Lowercased for the
-     * {@code /login/oauth/{provider}} link path.
-     */
-    private static final List<ProviderView> PROVIDERS = Arrays.stream(OAuthProvider.values())
-            .map(p -> new ProviderView(p.name(), p.name().toLowerCase()))
-            .toList();
-
-    /**
      * TASK-BE-581: the tenant this browser flow would create an account in, derived from the
      * OIDC client that initiated it. The same resolver {@code SignupPageController} uses to
      * decide where the account is born — so the offer and the act cannot disagree.
@@ -56,6 +48,15 @@ public class LoginPageController {
     /** TASK-BE-613 (ADR-007): which service this page presents itself as. */
     private final LoginBrandingResolver loginBrandingResolver;
 
+    /**
+     * TASK-BE-623: whether a provider's credentials are configured (vs. still the
+     * demo default) — the single predicate the login page's button list is filtered
+     * by. The rule itself lives in {@link OAuthProperties}, not here and not in the
+     * template, so the screen never has to know what a "real" client-id/secret looks
+     * like.
+     */
+    private final OAuthProperties oAuthProperties;
+
     @GetMapping("/login")
     public String loginPage(
             @RequestParam(name = "error", required = false) String error,
@@ -65,7 +66,10 @@ public class LoginPageController {
             HttpServletResponse response,
             Model model) {
         model.addAttribute("branding", loginBrandingResolver.resolve(request, response));
-        model.addAttribute("providers", PROVIDERS);
+        // TASK-BE-623: only providers with real (non-demo-default) credentials get a
+        // button — the predicate itself lives in OAuthProperties (infrastructure), not
+        // here and not in the template.
+        model.addAttribute("providers", configuredProviders());
         model.addAttribute("error", error);
         model.addAttribute("loggedOut", logout != null);
         // TASK-BE-470: the signup page redirects here with ?registered on success.
@@ -81,6 +85,18 @@ public class LoginPageController {
         // The password form posts to the form-login filter's default URL.
         model.addAttribute("passwordFormAction", "/login");
         return "login";
+    }
+
+    /**
+     * TASK-BE-623: the subset of {@link OAuthProvider} values with real credentials
+     * configured, in enum declaration order. Computed per-request (not cached at class
+     * load) so a config change takes effect without a code change.
+     */
+    private List<ProviderView> configuredProviders() {
+        return Arrays.stream(OAuthProvider.values())
+                .filter(oAuthProperties::isConfigured)
+                .map(p -> new ProviderView(p.name(), p.name().toLowerCase()))
+                .toList();
     }
 
     /**

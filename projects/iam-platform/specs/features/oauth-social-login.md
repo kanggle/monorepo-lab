@@ -25,8 +25,8 @@
 
 | 경로 | 역할 |
 |---|---|
-| `GET /login` | 커스텀 Thymeleaf 로그인 페이지(`LoginPageController` + `templates/login.html`). email/password 폼 + 소셜 버튼(Google/Kakao/Microsoft/Naver, `OAuthProvider.values()` 자동 렌더). CSRF 토큰 포함. `DefaultLoginPageGeneratingFilter` 대체(`.loginPage("/login")`). **브랜딩(ADR-007)**: 제목·부제·로고·대표색은 저장된 `/oauth2/authorize` 요청의 `client_id` → 등록 client `ClientSettings` `custom.branding.*` 로 고른다(`LoginBrandingResolver`, 현재 요청의 파라미터는 읽지 않음). 판별 불가·미설정 client → `IAM` / `IAM 로그인`. `/signup` 도 같은 브랜드(`<서비스명> 회원가입`). 폼 계약(`#username`·`#password`·CSRF·`POST /login`·submit 버튼 1개)은 불변. |
-| `GET /login/oauth/{provider}` | 소셜 인증 개시. 요청 base 로부터 브라우저 콜백 URI(`scheme://host[:port]/login/oauth/{provider}/callback`)를 계산해 `OAuthLoginUseCase.authorize` 호출 → provider authorization URL 로 redirect. |
+| `GET /login` | 커스텀 Thymeleaf 로그인 페이지(`LoginPageController` + `templates/login.html`). email/password 폼 + 소셜 버튼. CSRF 토큰 포함. `DefaultLoginPageGeneratingFilter` 대체(`.loginPage("/login")`). **버튼은 설정된 제공자만 그린다(TASK-BE-623)**: `OAuthProvider.values()` 넷 전부가 아니라 client-id·client-secret 둘 다 실값(비어 있지 않고 데모 기본값 `test-*` 가 아님)인 제공자만 — 판정은 `OAuthProperties`(infrastructure) 에 있고 화면·컨트롤러는 그 규칙을 모른다. 목록이 비면 «또는 다음으로 계속» 구분선도 안 나온다. **브랜딩(ADR-007)**: 제목·부제·로고·대표색은 저장된 `/oauth2/authorize` 요청의 `client_id` → 등록 client `ClientSettings` `custom.branding.*` 로 고른다(`LoginBrandingResolver`, 현재 요청의 파라미터는 읽지 않음). 판별 불가·미설정 client → `IAM` / `IAM 로그인`. `/signup` 도 같은 브랜드(`<서비스명> 회원가입`). 폼 계약(`#username`·`#password`·CSRF·`POST /login`·submit 버튼 1개)은 불변. |
+| `GET /login/oauth/{provider}` | 소셜 인증 개시. **버튼이 없는(미설정) 제공자로 직접 진입해도 같은 판정이 막는다**(TASK-BE-623) — `OAuthProperties.isConfigured(provider)` 가 거짓이면 provider authorize 호출 전에 `/login?error=provider_unavailable` 로 돌려보낸다. 설정된 제공자는 요청 base 로부터 브라우저 콜백 URI(`scheme://host[:port]/login/oauth/{provider}/callback`)를 계산해 `OAuthLoginUseCase.authorize` 호출 → provider authorization URL 로 redirect. |
 | `GET /login/oauth/{provider}/callback` | provider 콜백. `OAuthLoginUseCase.resolveBrowserLogin` 으로 계정 해소 → SAS 세션 확립 → saved `/oauth2/authorize` 로 redirect. |
 
 ### 플로우
@@ -60,6 +60,7 @@
 | `InvalidOAuthStateException` | `/login?error=invalid_state` |
 | `OAuthProviderException` | `/login?error=provider_error` |
 | `UnsupportedProviderException` | `/login?error=unsupported_provider` |
+| 설정되지 않은 제공자로 `GET /login/oauth/{provider}` 직접 진입(TASK-BE-623, `SocialLoginBrowserController` — `OAuthLoginUseCase.authorize` 호출 전에 가로챔) | `/login?error=provider_unavailable` |
 | `AccountServiceUnavailableException` (상태 조회 실패 · `socialSignup` 실패 — TASK-BE-602) | `/login?error=temporarily_unavailable` («Sign-in is temporarily unavailable. Please try again in a moment.» — 계정 상태에 대해 아무것도 말하지 않는다). BE-602 이전에는 catch 가 없어 전역 `AuthExceptionHandler` 의 **503 JSON** 이 브라우저에 떴다 |
 | `SocialSignupEmailRegisteredException` (`socialSignup` 의 `409 ACCOUNT_ALREADY_EXISTS` — 그 이메일의 **풀 계정**이 있다(`TASK-BE-620`), 또는 풀 가입인데 그 이메일의 사이트 계정이 다른 소비자 사이트에 있다(`TASK-BE-617`)) | `/login?error=email_registered` («이미 이메일과 비밀번호로 가입된 주소입니다. 이메일과 비밀번호로 로그인해 주세요.») — `multi-tenancy.md` § 소비자 계정 풀 § 2 공존 금지 |
 
@@ -180,6 +181,7 @@ Microsoft Identity Platform (Azure AD v2.0)은 OpenID Connect 표준을 따르�
 ## Business Rules
 
 - 지원 provider: **Google**, **Kakao**, **Microsoft**, **Naver** (TASK-BE-397; 추가 provider는 `OAuthClient` 인터페이스 구현으로 확장)
+- 로그인 화면에 버튼이 보이는 provider는 **설정된(client-id·client-secret 모두 실값) provider 뿐**이다(TASK-BE-623) — 지원 provider 목록과 별개 축. 네 provider 모두 `application.yml` 기본값(`test-*`)을 쓰는 한, 지원 목록에는 있어도 화면에는 없다.
 - Naver는 id_token 미발급(Kakao와 동일 비-OIDC) → user-info API(`response` 래퍼)의 `id`/`email`/`name` 사용. `resultcode != "00"` → `PROVIDER_ERROR`
 - provider id_token의 `email` 필드가 없으면 로그인 거부 (이메일 필수)
 - 계정 상태가 ACTIVE가 아니면 소셜 로그인도 거부 (LOCKED / DORMANT / DELETED → `/login?error=account_unavailable`). 규칙은 폼 로그인과 **같은 하나**(`AccountStatusRule`, TASK-BE-600)

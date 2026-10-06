@@ -108,6 +108,10 @@ class ConsumerPoolSocialLoginIntegrationTest extends AbstractIntegrationTest {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("oauth.google.allowed-redirect-uris", () -> "http://localhost/login/oauth/google/callback");
+        // TASK-BE-623: the test-* default pair reads as «not configured», which blocks /login/oauth/google
+        // before it reaches the flow this IT drives — the same override SocialLoginSasBrowserIntegrationTest has.
+        registry.add("oauth.google.client-id", () -> "it-google-client-id");
+        registry.add("oauth.google.client-secret", () -> "it-google-client-secret");
 
         accountService = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         accountService.start();

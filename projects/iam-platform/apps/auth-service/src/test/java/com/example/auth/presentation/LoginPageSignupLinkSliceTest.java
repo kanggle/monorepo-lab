@@ -1,6 +1,7 @@
 package com.example.auth.presentation;
 
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.security.LoginBrandingResolver;
 import com.example.auth.infrastructure.security.SavedRequestTenantResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +79,8 @@ class LoginPageSignupLinkSliceTest {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new LoginPageController(
                         savedRequestTenantResolver, tenantSignupEligibilityPort,
-                        new LoginBrandingResolver(savedRequestTenantResolver)))
+                        new LoginBrandingResolver(savedRequestTenantResolver),
+                        new OAuthProperties()))
                 .setViewResolvers(viewResolver)
                 .build();
     }

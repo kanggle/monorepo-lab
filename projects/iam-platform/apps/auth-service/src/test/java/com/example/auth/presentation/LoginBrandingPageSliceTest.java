@@ -2,6 +2,7 @@ package com.example.auth.presentation;
 
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantSignupEligibilityPort;
+import com.example.auth.infrastructure.oauth.OAuthProperties;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import com.example.auth.infrastructure.security.LoginBranding;
 import com.example.auth.infrastructure.security.LoginBrandingResolver;
@@ -67,9 +68,16 @@ class LoginBrandingPageSliceTest {
         when(eligibility.isSignupOffered(any())).thenReturn(true);
         LoginBrandingResolver brandingResolver = new LoginBrandingResolver(savedRequestTenantResolver);
 
+        // TASK-BE-623: this suite renders the real login.html and asserts on
+        // href="/login/oauth/google" (loginFormContract below) — google must read as
+        // "configured" or the button (and the "또는 다음으로 계속" divider) would not render.
+        OAuthProperties oAuthProperties = new OAuthProperties();
+        oAuthProperties.getGoogle().setClientId("real-client-id");
+        oAuthProperties.getGoogle().setClientSecret("real-client-secret");
+
         loginMvc = MockMvcBuilders
                 .standaloneSetup(new LoginPageController(
-                        savedRequestTenantResolver, eligibility, brandingResolver))
+                        savedRequestTenantResolver, eligibility, brandingResolver, oAuthProperties))
                 .setViewResolvers(realTemplates())
                 .build();
         signupMvc = MockMvcBuilders
