@@ -298,7 +298,7 @@ client-id / client-secret 은 **SSM Parameter Store** 에만 산다:
 /portfolio-demo/oauth/<provider>/client-secret   (SecureString, alias/aws/ssm)
 ```
 
-`<provider>` = `google` · `kakao` · `microsoft` · `naver`. 2026-10-06 실측 — google ·
+`<provider>` = `google` · `kakao` · `microsoft` · `naver`. 2026-10-05 실측 — google ·
 naver 는 등록 완료, kakao · microsoft 는 아직 없음(값은 소유자가 AWS 콘솔에서 직접
 `aws ssm put-parameter --type SecureString` 로 올린다 — terraform 은 이 파라미터를
 **만들지 않고 읽기만** 한다, `terraform/main.tf` 의 `aws_iam_role_policy.ec2_health`).

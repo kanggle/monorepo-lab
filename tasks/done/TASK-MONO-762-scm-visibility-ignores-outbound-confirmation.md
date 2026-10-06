@@ -129,3 +129,9 @@ monorepo
   - 화면 `/scm/inventory`(테넌트 `demo-corp`, Playwright): 같은 노드·SKU 행이 **85**. 21차의 95 대 85 불일치 해소.
 - 🔵 **AC-0 의 순서 역전 규칙이 라이브로 한 번 탔다** — scm 소비자가 13:33:17Z 에 기동하며 `confirmed`(파티션 1, offset 0)를 `received` 보다 먼저 읽었다 → `InventorySnapshotNotFoundException`(행 없음) → `wms.inventory.confirmed.v1-retry-0` 에서 13:33:18Z `applied inventory.confirmed`. 오프셋: 본 토픽 p1=1 · retry-0=1 · retry-1=0 · **DLT=0**. ⇒ «재시도 → DLT» 의 재시도 쪽이 실제 순서 역전을 구했다(DLT 쪽은 이 창에서 타지 않았다).
 - 4차원(close): (a) #4159 MERGED · (b) `b8d3adc6c` 는 `origin/main` 조상 · (c) 머지 시점 실패 체크 0 · (d) AC-0~4 전부 닫힘(AC-3 은 단위 수준 — 위 본문 그대로).
+
+---
+
+## CORRECTION (2026-10-06 UTC) — 날짜 표기
+
+이 파일에서 «2026-10-06 (UTC)» 로 적힌 날짜는 **KST 날짜**였다. 기록된 일(창 판정 · 소유자 결정 · 종결)은 모두 **UTC 2026-10-05** 에 일어났다(작성 호스트가 KST+9 라 00:00–09:00 KST 의 «오늘» 이 UTC 의 «내일» 이 된다 — 전역 지침 «Date Stamps on This Host»). 위 본문은 고치지 않고 이 절이 정정한다. 같은 날 다른 파일(INDEX · 진행 중 티켓 · 명세 · 코드 주석)의 같은 표기는 직접 2026-10-05 로 고쳤다.

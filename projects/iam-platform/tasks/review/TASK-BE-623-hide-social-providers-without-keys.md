@@ -4,7 +4,7 @@ TASK-BE-623
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -28,14 +28,14 @@ iam-platform
 
 # Dependency Markers
 
-- 출처: 2026-10-06 소유자 대화 «현재 소셜 로그인이 작동돼?» — 데모 로그인 화면의 소셜 버튼 넷이 전부 가짜 키(`test-*-client-id`)로 동작하지 않는다는 것을 확인.
+- 출처: 2026-10-05 소유자 대화 «현재 소셜 로그인이 작동돼?» — 데모 로그인 화면의 소셜 버튼 넷이 전부 가짜 키(`test-*-client-id`)로 동작하지 않는다는 것을 확인.
 - 관계: `TASK-BE-617`(소셜 → 풀) · `TASK-MONO-763`(데모 배선)과 **같은 재굽기**에 실린다. 순서 제약은 없다 — 이 티켓은 버튼을 **줄이기만** 하므로 먼저 머지돼도 안전하다(키가 없으면 버튼이 없을 뿐).
 
 # Goal
 
 로그인 화면이 **실제로 쓸 수 있는 제공자만** 보여 준다. 키를 배포 환경에 넣으면 그 제공자의 버튼이 따로 손대지 않아도 나타난다.
 
-# 실측 (2026-10-06 UTC)
+# 실측 (2026-10-05 UTC)
 
 - `LoginPageController.java:42` — `PROVIDERS = Arrays.stream(OAuthProvider.values())…` 로 **설정과 무관하게** 넷을 모두 모델에 싣는다. `login.html:52-57` 은 그 목록이 비어 있지 않으면 «또는 다음으로 계속» 구분선과 버튼을 그린다.
 - `application.yml:82·97·107·119` — 네 제공자 모두 `client-id: ${OAUTH_<P>_CLIENT_ID:test-<p>-client-id}`. 데모·운영 어디에도 실제 값이 주입되지 않는다(`TASK-BE-617` AC-00, 2026-10-02 측정과 같음).
@@ -54,15 +54,15 @@ iam-platform
 ## Out of Scope
 
 - 키 주입 자체(`TASK-MONO-763`) · 소셜 → 풀(`TASK-BE-617`).
-- Meta 등 새 제공자(2026-10-06 소유자 결정: 보류).
+- Meta 등 새 제공자(2026-10-05 소유자 결정: 보류).
 - 버튼 디자인(제공자 브랜드 가이드) — 네이버 검수 때 별도 판단.
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 네 제공자 모두 기본값(`test-*`)이면 로그인 화면에 소셜 버튼 0개 · «또는 다음으로 계속» 구분선 없음.
-- [ ] **AC-2** — Google 만 실제 형식 값이면 Google 버튼 하나만 보인다. 🔴 대조군: client-id 만 진짜이고 secret 이 `test-*` 면 **안 보인다**(반쪽 설정은 로그인을 못 끝낸다).
-- [ ] **AC-3** — 버튼 없는 제공자로 직접 `GET /login/oauth/{provider}` → 위 Scope 결정대로(추천안이면 `provider_unavailable`).
-- [ ] **AC-4** — bite: 판정을 «항상 참» 으로 바꾸면 AC-1 이 빨강.
+- [x] **AC-1** — 네 제공자 모두 기본값(`test-*`)이면 로그인 화면에 소셜 버튼 0개 · «또는 다음으로 계속» 구분선 없음.
+- [x] **AC-2** — Google 만 실제 형식 값이면 Google 버튼 하나만 보인다. 🔴 대조군: client-id 만 진짜이고 secret 이 `test-*` 면 **안 보인다**(반쪽 설정은 로그인을 못 끝낸다).
+- [x] **AC-3** — 버튼 없는 제공자로 직접 `GET /login/oauth/{provider}` → 위 Scope 결정대로(추천안이면 `provider_unavailable`).
+- [x] **AC-4** — bite: 판정을 «항상 참» 으로 바꾸면 AC-1 이 빨강.
 - [ ] **AC-5 (라이브, ⚪)** — 재굽기 뒤 데모 로그인 화면: 키를 넣은 제공자 버튼만 보인다.
 
 # Related Specs
@@ -87,3 +87,11 @@ iam-platform
 3. **형식 정규식으로 판정한다** — 제공자 형식 변경에 조용히 깨진다.
 </content>
 </invoke>
+
+---
+
+## review 이관 (2026-10-06 UTC)
+
+- impl PR #4166 · 스쿼시 `85b4c9263` · 머지 시점 실패 0 (16 SUCCESS). 617 과 병렬 작업 → main 병합 시 충돌 2곳(import 한 줄 · iam INDEX) 해소 + 617 IT 의 google 키 덮어쓰기(`b7093adfc`).
+- AC-1~4 ✅ — 단위·슬라이스 시험 + bite(판정 «항상 참» → AC-1·2·3 칸 빨강).
+- ⏳ AC-5(라이브) = 재굽기 뒤 창: 로그인 화면에 Google · Naver 버튼만.

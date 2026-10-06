@@ -59,7 +59,7 @@ public class ConsumerAccountPool {
      *       consumer site, so this one predicate refuses them too — no operator-specific lookup
      *       is needed in this step. Once {@code TASK-BE-618} moves the plain single-site accounts,
      *       the site accounts left behind are the operator-faceted ones and the two-site ones
-     *       (linking, {@code TASK-MONO-743}, was closed unbuilt on 2026-10-06 — none exist), and this check is what keeps refusing their emails.</li>
+     *       (linking, {@code TASK-MONO-743}, was closed unbuilt on 2026-10-05 — none exist), and this check is what keeps refusing their emails.</li>
      * </ul>
      *
      * <p>The refusal is the existing duplicate answer ({@link AccountAlreadyExistsException} →
