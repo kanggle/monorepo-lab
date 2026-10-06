@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -58,6 +58,32 @@ vi.mock('@/features/org-hierarchy/hooks/use-org-nodes', () => ({
   useRevokeOrgAdmin: () => idleMutation,
 }));
 
+// TASK-PC-FE-309 — `ApprovalScreen`/`ApprovalDetail` 의 참조 칸(대상/기안자/결재선/
+// 이력/대결)은 `useDepartment`/`useEmployee` 로 푼다(`approval-refs.tsx`). 이 가드가
+// 재는 것은 **렌더된 참조 셀**이므로 그 둘만 결정적 룩업으로 막는다 — 나머지(목록
+// 조회·mutation 훅)는 `DepartmentList`/`EmployeeList`/`CostCenterList` 가 여전히
+// 실 구현을 쓴다(위 `use-org-nodes` 부분모의와 같은 이유: 이 파일이 재는 축은
+// 「이름이 셀에 그려지는가」이지 「조회가 되나」가 아니다).
+vi.mock('@/features/erp-ops/hooks/use-erp-ops', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/erp-ops/hooks/use-erp-ops')>();
+  return {
+    ...actual,
+    useDepartment: (id: string | null) => ({
+      data: id ? APPROVAL_DEPT_LOOKUP[id] : undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+    }),
+    useEmployee: (id: string | null) => ({
+      data: id ? APPROVAL_EMP_LOOKUP[id] : undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+    }),
+  };
+});
+
 import { DepartmentList } from '@/features/erp-ops/components/DepartmentList';
 import { EmployeeList } from '@/features/erp-ops/components/EmployeeList';
 import { CostCenterList } from '@/features/erp-ops/components/CostCenterList';
@@ -73,6 +99,9 @@ import { OrgScopeDialogBody } from '@/features/operators/components/OrgScopeDial
 // TASK-MONO-677 이 더한 두 칸 — scm 발주의 「공급사」(목록 · 상세).
 import { ScmPoTable } from '@/features/scm-ops/components/ScmPoTable';
 import { PoDetailDialog } from '@/features/scm-ops/components/PoDetailDialog';
+// TASK-PC-FE-309 — ERP 결재(approval) 목록·상세의 대상/기안자/결재선/이력/대결 칸.
+import { ApprovalScreen } from '@/features/erp-ops/components/ApprovalScreen';
+import { ApprovalDetail } from '@/features/erp-ops/components/ApprovalDetail';
 import {
   codeName,
   masterRefLabel,
@@ -858,6 +887,190 @@ describe('scm 발주의 공급사 칸 (TASK-MONO-677)', () => {
     expect((screen.getByTestId('scm-po-supplier').textContent ?? '').trim()).toBe(
       MASTER_REF_UNRESOLVED,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-309 — ERP 결재(approval) 목록·상세. 🔵 술어도 하한도 위와 **같은
+// 함수**다. `useDepartment`/`useEmployee` 는 위 `vi.mock` 으로 결정적 룩업으로
+// 막았다(모의 테이블: `APPROVAL_DEPT_LOOKUP`/`APPROVAL_EMP_LOOKUP`).
+//
+// 🔴 `TASK-PC-FE-276`/`277` 둘 다 이 화면을 census 한 적이 없다 — `276` 은
+//    `/erp/masters` 8곳만, `277` 은 `features/erp-ops/` 를 통째로 제외했다. 이
+//    티켓이 처음 보는 칸이다.
+// ---------------------------------------------------------------------------
+
+const APPR_SUBJ_DEPT = '01a10fd2-742e-7a1e-9c3a-000000000001';
+const APPR_SUBJ_EMP = '01a10fd2-78b3-7a1e-9c3a-000000000002';
+const APPR_SUBJ_GHOST = '01a10fd2-742e-7a1e-9c3a-0000000009ff';
+const APPR_SUBMITTER = '0199de70-0000-7000-8000-000000000a04';
+const APPR_APPROVER = '0199de70-0000-7000-8000-000000000a03';
+// 🔴 라이브 데모 시드가 승인자 자리에 넣는 **운영자 로그인 sub**(계약이 정한
+//    "employee id" 를 어기는 데모 전용 편법 — `infra/demo/seed/seed-erp.sh` §6
+//    실측). 직원 마스터에 없으므로 `이름 확인 불가` 가 정직한 결과다.
+const APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE = '0199de70-0000-7000-8000-0000000009ff';
+
+// 🔴 키는 각 real 훅이 실제로 읽는 필드와 맞춘다 — `useDepartment` 는
+// `Department.code`, `useEmployee` 는 `Employee.employeeNumber`
+// (`approval-refs.tsx` 가 `empQ.data.employeeNumber` 를 읽는다. `code` 가
+// 아니다 — 직원 마스터에는 `code` 필드가 없다).
+const APPROVAL_DEPT_LOOKUP: Record<string, { code: string; name: string } | undefined> = {
+  [APPR_SUBJ_DEPT]: { code: 'DEPT-OPS', name: '운영본부' },
+};
+const APPROVAL_EMP_LOOKUP: Record<
+  string,
+  { employeeNumber: string; name: string } | undefined
+> = {
+  [APPR_SUBJ_EMP]: { employeeNumber: 'EMP-0004', name: '최사원' },
+  [APPR_SUBMITTER]: { employeeNumber: 'EMP-0003', name: '박재무' },
+  [APPR_APPROVER]: { employeeNumber: 'EMP-0002', name: '이운영' },
+};
+
+function renderApprovalList() {
+  return render(
+    <ApprovalScreen
+      initialRequests={{
+        data: [
+          {
+            id: 'appr-1', status: 'SUBMITTED', subjectType: 'DEPARTMENT',
+            subjectId: APPR_SUBJ_DEPT, title: '운영본부 개편', approverId: APPR_APPROVER,
+            submitterId: APPR_SUBMITTER, createdAt: '2026-01-01T00:00:00Z',
+          },
+          {
+            id: 'appr-2', status: 'DRAFT', subjectType: 'EMPLOYEE',
+            subjectId: APPR_SUBJ_EMP, title: '사원 배치', approverId: APPR_APPROVER,
+            submitterId: APPR_SUBMITTER, createdAt: '2026-01-01T00:00:00Z',
+          },
+          // 🔴 대조군 — 조회 밖(마스터에 없는) 대상. `이름 확인 불가` 여야 하고
+          // UUID 는 안 된다 — id 로 되돌아가지 않는다.
+          {
+            id: 'appr-3', status: 'DRAFT', subjectType: 'DEPARTMENT',
+            subjectId: APPR_SUBJ_GHOST, title: '유령 부서 결재', approverId: APPR_APPROVER,
+            submitterId: APPR_SUBMITTER, createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        meta: { page: 0, size: 20, totalElements: 3 },
+      } as never}
+      initialInbox={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } } as never}
+    />,
+    { wrapper: wrapper() },
+  );
+}
+
+describe('ERP 결재 목록 — 「대상」 칸 (TASK-PC-FE-309)', () => {
+  it('부서/직원 대상이 이름을 그리고, 조회 밖 대상은 UUID 로 안 돌아간다', () => {
+    const { container } = renderApprovalList();
+    assertNoUuidInRefCells(container, 3, 'ERP 결재 목록');
+    expect(screen.getByText('부서 · DEPT-OPS · 운영본부')).toBeTruthy();
+    expect(screen.getByText('직원 · EMP-0004 · 최사원')).toBeTruthy();
+    expect(screen.getByText(`부서 · ${MASTER_REF_UNRESOLVED}`)).toBeTruthy();
+  });
+
+  it('🔵 원본 id 는 사라지지 않는다 — `title` 로 옮겼을 뿐이다', () => {
+    const { container } = renderApprovalList();
+    const titles = refCells(container).map((el) => el.getAttribute('title'));
+    expect(titles).toContain(APPR_SUBJ_DEPT);
+    expect(titles).toContain(APPR_SUBJ_GHOST);
+  });
+});
+
+function approvalDetailResponse(over: Record<string, unknown>) {
+  return {
+    id: 'appr-1',
+    status: 'SUBMITTED',
+    subjectType: 'DEPARTMENT',
+    subjectId: APPR_SUBJ_DEPT,
+    title: '운영본부 개편',
+    approverId: APPR_APPROVER,
+    submitterId: APPR_SUBMITTER,
+    history: [
+      { transition: 'SUBMITTED', actor: APPR_SUBMITTER, at: '2026-01-01T00:00:00Z' },
+      {
+        transition: 'APPROVED', actor: APPR_APPROVER, at: '2026-01-02T00:00:00Z',
+        // 🔴 대결 — 위임받은 쪽(actor)이 실제로 처리했고, 원 승인자
+        // (actingForApproverId)는 데모 편법(운영자 sub, 직원 마스터에 없음)이다.
+        actingForApproverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE,
+      },
+    ],
+    createdAt: '2026-01-01T00:00:00Z',
+    submittedAt: '2026-01-01T00:00:00Z',
+    finalizedAt: '2026-01-02T00:00:00Z',
+    ...over,
+  };
+}
+
+function renderApprovalDetail(over: Record<string, unknown> = {}) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: approvalDetailResponse(over) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  );
+  return render(<ApprovalDetail id="appr-1" onClose={vi.fn()} />, { wrapper: wrapper() });
+}
+
+describe('ERP 결재 상세 — 기안자/결재자/이력/대결 칸 (TASK-PC-FE-309)', () => {
+  it('기안자·결재자(legacy, stages 없음)가 이름을 그린다', async () => {
+    const { container } = renderApprovalDetail();
+    await screen.findByTestId('approval-detail');
+    // 대상 1 + 기안자 1 + 결재자(legacy) 1 + 이력 actor 2 + 대결 1 = 6.
+    await waitFor(() => assertNoUuidInRefCells(container, 6, 'ERP 결재 상세'));
+    expect(screen.getByTestId('approval-approverId').textContent).toBe(
+      'EMP-0002 · 이운영',
+    );
+  });
+
+  it('이력의 처리자(actor)가 이름을 그린다', async () => {
+    renderApprovalDetail();
+    await screen.findByTestId('approval-history');
+    await waitFor(() => {
+      expect(screen.getByTestId('approval-history-0').textContent).toContain(
+        '박재무',
+      );
+      expect(screen.getByTestId('approval-history-1').textContent).toContain(
+        '이운영',
+      );
+    });
+  });
+
+  it('🔴🔴 대결 대상(actingForApproverId) — 데모 편법(운영자 sub)은 직원 마스터에 없어 `이름 확인 불가`, id 로 안 돌아간다', async () => {
+    renderApprovalDetail();
+    const delegated = await screen.findByTestId('approval-history-delegated-1');
+    await waitFor(() =>
+      expect(delegated.textContent).toContain(MASTER_REF_UNRESOLVED),
+    );
+    expect(delegated.textContent).not.toContain(APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE);
+  });
+
+  it('🔴 다단계(stages) — 결재선 각 단계도 같은 술어를 지킨다', async () => {
+    const { container } = renderApprovalDetail({
+      status: 'IN_REVIEW',
+      stages: [
+        { stageIndex: 0, approverId: APPR_SUBMITTER, status: 'APPROVED' },
+        { stageIndex: 1, approverId: APPR_APPROVER, status: 'PENDING' },
+      ],
+      currentStage: 1,
+      totalStages: 2,
+    });
+    await screen.findByTestId('approval-stages');
+    // 대상 1 + 기안자 1 + 결재선 단계 2 + 이력 actor 2 + 대결 1 = 7.
+    await waitFor(() => assertNoUuidInRefCells(container, 7, 'ERP 결재 상세(다단계)'));
+    // 🔵 각 이름이 두 번(결재선 단계 + 이력 actor) 나온다 — getAllByText.
+    // 라벨은 `masterRefLabel` 의 `CODE · 이름` 형이라 부분일치로 찾는다.
+    expect(screen.getAllByText(/박재무/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/이운영/).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('AC-4 회귀 — 결재 자신의 id(appr-1)는 보이는 텍스트로 그려지지 않는다', async () => {
+    const { container } = renderApprovalDetail();
+    await screen.findByTestId('approval-detail');
+    await waitFor(() => assertNoUuidInRefCells(container, 6, 'ERP 결재 상세(자기 id 제외)'));
+    // approval-detail 컨테이너 전체에도 "appr-1" 문자열이 보이는 텍스트로 없다
+    // (testid 속성에만 쓰인다 — 속성은 textContent 에 안 잡힌다).
+    expect(container.textContent ?? '').not.toContain('appr-1');
   });
 });
 

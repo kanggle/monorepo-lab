@@ -144,6 +144,40 @@ Flow:
 Server Components or Server Actions; the gateway client pulls the bearer
 token from the session via `'server-only'`.
 
+### Silent refresh — exactly one place (TASK-FAN-FE-027)
+
+- **Server-side session reads are decode-only.** `middleware.ts`,
+  `getFanSession()` and `isAuthenticated()` decode the session cookie
+  (`shared/auth/session-token.ts`) and judge it with the `session`
+  callback's rules (`publicSessionFromToken` + `hasAuthenticatedUser`).
+  They **never call `auth()`**: the request-less `auth()` form runs the
+  `jwt` callback — i.e. the silent refresh, rotating the refresh token at
+  IAM — and then discards the rotated Set-Cookie (`next-auth/lib/index.js`
+  RSC branch), so the browser keeps the old refresh token and the next
+  refresh replays it (IAM grace refusal within 30s, reuse → family revoke
+  after). An expired-but-refreshable session therefore passes the gate.
+- **The refresh runs only in `GET /api/auth/session`**, whose response
+  writes the rotated cookie back. fan-platform-web has no `next-auth/react`
+  session reader, so the authenticated header mounts a client
+  `SessionKeeper` (`shared/auth/SessionKeeper.tsx`) that reads that route on
+  tab return and every 50s while visible (less than the 60s
+  `REFRESH_MARGIN_SECONDS`, so a visible tab never holds an expired access
+  token). When the server render already saw an expired access token, the
+  keeper calls `router.refresh()` after its read so the page re-renders with
+  the rotated cookie. Anonymous renders do not mount it (no request).
+- **Concurrent refresh** (several tabs / instances reading the session with
+  the same expired cookie): IAM rotates for the first and refuses the rest
+  with `400 invalid_grant` inside its 30s grace window, revoking nothing
+  (iam TASK-BE-606/608). The loser's `jwt` callback sets `error` and the
+  one-call `refreshRaceLost` marker; the wrapped `GET /api/auth/session`
+  (`shared/auth/session-route.ts`) discards that response with its
+  Set-Cookie, waits 2s, and answers one `307` to `?refresh_retry=1`. The
+  retry hop never refreshes: a fresh access token (the winner's cookie)
+  answers normally; otherwise the session cookie is cleared (logged out)
+  without sending the old refresh token again. Same mechanism as
+  ecommerce web-store (TASK-FE-106) — a per-project copy, not a shared
+  library (repo-root `libs/` must stay project-agnostic).
+
 ### OIDC client registration
 
 IAM V0011 seed (TASK-MONO-026 머지 완료) 가 `fan-platform-user-flow-client`
@@ -184,7 +218,8 @@ as `ApiError(403, TENANT_FORBIDDEN)` and the page renders an `ErrorState`
 
 | Situation | UX response |
 |---|---|
-| Missing/expired session | middleware → `/login?from=<path>` |
+| Missing session / failed refresh (`error` flag) | middleware → `/login?from=<path>` |
+| Access token expired, refresh token held | gate passes; `SessionKeeper` refreshes via `/api/auth/session` and re-renders |
 | Backend gateway 5xx / network down | RSC `try/catch` → `ErrorState` placeholder |
 | `MEMBERSHIP_REQUIRED` (post detail) | inline "멤버십이 필요합니다" CTA → `/membership` |
 | Unknown server error | `app/error.tsx` boundary + `Reset` button |

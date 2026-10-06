@@ -78,6 +78,28 @@ public class UserProfile {
         return profile;
     }
 
+    /**
+     * Backfills the email once, for a profile born with none (TASK-BE-624).
+     *
+     * <p>A profile created by {@code AccountCreatedHandler} from the IAM
+     * {@code account.created} event always has {@code email == null} — the event is
+     * PII-masked by design (ADR-MONO-037 P1). When that event now reaches this service
+     * (TASK-MONO-511 restored the relay) it typically wins the race against the first
+     * authenticated request, so the pull-through path's real, gateway-verified email was
+     * being silently discarded by the existing-row no-op in
+     * {@code UserProfileProvisioner#ensureProvisioned}. This closes that gap without
+     * touching the no-op's other guarantee: a profile that already has an email, or one
+     * that has been withdrawn/anonymized, is left untouched — this never overwrites or
+     * resurrects PII.
+     */
+    public void assignEmail(String email) {
+        if (this.email != null || this.status != ProfileStatus.ACTIVE) {
+            return;
+        }
+        this.email = Email.of(email);
+        this.updatedAt = Instant.now();
+    }
+
     public void updateNickname(String nickname) {
         this.nickname = validateAndTrim(nickname, 50, "Nickname");
         this.updatedAt = Instant.now();

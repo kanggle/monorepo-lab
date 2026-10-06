@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { auth } from '@/shared/auth/auth';
+import { publicSessionFromToken } from '@/shared/auth/auth-callbacks';
 import { isPublicPath } from '@/shared/auth/public-paths';
 import { hasAuthenticatedUser } from '@/shared/auth/session-shape';
+import { decodeSessionCookieHeader } from '@/shared/auth/session-token';
 
 /**
  * Route guard. Protects every page except the public browsing surface
@@ -20,8 +21,10 @@ import { hasAuthenticatedUser } from '@/shared/auth/session-shape';
  *
  *   · 공개 경로  — 애초에 세션을 안 묻는다(익명이 정상 상태다). 판정이 없으므로
  *                  판정 실패도 없다.
- *   · 그 외 전부 — 예전 그대로. `auth()` 가 throw 하든, 오류 본문을 주든, F3 로 강등된
- *                  세션을 주든 **전부 `/login` 으로 꺾인다**.
+ *   · 그 외 전부 — 예전 그대로. 세션 판정이 throw 하든, 쿠키가 없거나 복호가 안 되든,
+ *                  F3 로 강등된 세션이든 **전부 `/login` 으로 꺾인다**. (판정 수단은
+ *                  `TASK-FAN-FE-027` 에서 `auth()` → 복호 전용으로 바뀌었다 — 아래
+ *                  `isAuthenticated` 주석. 아래 FE-019 서술은 그 이전의 기록이다.)
  *
  * 🔴 그래서 판별자(`/nonexistent-xyz` → `/login`)가 **살아 있어야 한다.** 그 칸이
  *    404 로 바뀌면 그것은 "그런 페이지가 없다" 가 아니라 «미들웨어가 안 돈다» 는 뜻이고,
@@ -77,31 +80,50 @@ import { hasAuthenticatedUser } from '@/shared/auth/session-shape';
 
 /**
  * Resolve "is this request authenticated?" so that every failure mode —
- * throw, error payload, degraded session — lands on `false` (closed).
+ * throw, undecodable cookie, degraded session — lands on `false` (closed).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 🔴 TASK-FAN-FE-027 — decode-only, NEVER `auth()`.
+ * ─────────────────────────────────────────────────────────────────────────
+ * `auth()` called without a request (the form this gate used) runs the `jwt`
+ * callback — i.e. performs the silent refresh, rotating the refresh token at
+ * IAM — and then DISCARDS the resulting Set-Cookie (`next-auth/lib/index.js`
+ * RSC branch: `getSession(h, config).then((r) => r.json())`). Every protected
+ * navigation / prefetch after the access token expired therefore spent the
+ * browser's refresh token: the rotated pair was thrown away, the browser kept
+ * the old one, and the next read sent it again → IAM grace refusal within 30s,
+ * reuse → family revoke after. A refresh may only run where its result is
+ * written back: `GET /api/auth/session` (`session-route.ts`, driven by
+ * `SessionKeeper`). Here we only judge the cookie we were handed, with the
+ * rules the `session` callback applies (`publicSessionFromToken`) and the one
+ * predicate (`hasAuthenticatedUser`). An expired-but-refreshable session
+ * passes; the keeper refreshes it.
+ *
+ * 🔵 The fail-closed contract of TASK-FAN-FE-019 is unchanged, only its inputs
+ * are: auth.js's 500 config-error body can no longer reach this gate (nothing
+ * here calls auth.js's session action); its counterpart is the decoder
+ * throwing — `getToken` raises MissingSecret when `NEXTAUTH_SECRET` is absent
+ * — which is caught below and closes, logged.
  */
-async function isAuthenticated(pathname: string): Promise<boolean> {
-  let session: unknown;
+async function isAuthenticated(request: NextRequest, pathname: string): Promise<boolean> {
+  let token: Record<string, unknown> | null;
   try {
-    session = await auth();
+    token = await decodeSessionCookieHeader<Record<string, unknown>>(
+      request.headers.get('cookie') ?? '',
+    );
   } catch (error) {
-    // auth.js can also throw outright (e.g. an unparseable config). Closed.
+    // e.g. NEXTAUTH_SECRET absent (MissingSecret). Cannot judge → closed.
     console.error(
-      `[middleware] auth() threw for ${pathname}; failing closed to /login`,
+      `[middleware] session decode threw for ${pathname}; failing closed to /login. ` +
+        'If this is a configuration error, /api/auth/providers answers 500.',
       error,
     );
     return false;
   }
-  if (session == null) return false; // anonymous — the ordinary case, not an error
-  if (hasAuthenticatedUser(session)) return true;
-  // Non-null but carrying no user: an auth.js error payload, or a session the
-  // `session` callback degraded to anonymous. Both are closed, and the first
-  // is an outage — say so, because option (A) is otherwise silent.
-  console.error(
-    `[middleware] auth() returned no user for ${pathname}; failing closed to /login. ` +
-      'If this is a configuration error, /api/auth/providers answers 500. Value: ' +
-      JSON.stringify(session),
-  );
-  return false;
+  if (token == null) return false; // anonymous / undecodable — the ordinary case
+  // A session the `session` callback degrades to anonymous (failed refresh) is
+  // closed — the ordinary end of a dead session, not an outage.
+  return hasAuthenticatedUser(publicSessionFromToken(token));
 }
 
 export async function middleware(request: NextRequest) {
@@ -111,7 +133,7 @@ export async function middleware(request: NextRequest) {
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
-  if (!(await isAuthenticated(pathname))) {
+  if (!(await isAuthenticated(request, pathname))) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     loginUrl.search = `?from=${encodeURIComponent(pathname + search)}`;

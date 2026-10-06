@@ -15,6 +15,7 @@ import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.ActorType;
 import com.example.fanplatform.community.domain.post.status.InvalidStateTransitionException;
 import com.example.fanplatform.community.domain.post.status.PostStatus;
+import com.example.fanplatform.community.domain.reaction.ReactionType;
 import com.example.fanplatform.community.presentation.advice.GlobalExceptionHandler;
 import com.example.fanplatform.community.testsupport.JwtTestHelper;
 import com.example.fanplatform.community.testsupport.SliceTestSecurityConfig;
@@ -99,7 +100,7 @@ class PostControllerSliceTest {
         return new PostView(
                 id, "fan-platform",
                 PostType.ARTIST_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
-                "artist-1", "t", "body", mediaRefs, 0L, 0L, now, now, now);
+                "artist-1", "t", "body", mediaRefs, 0L, 0L, null, now, now, now);
     }
 
     @Test
@@ -312,7 +313,7 @@ class PostControllerSliceTest {
         PostView view = new PostView(
                 "post-9", "fan-platform",
                 PostType.FAN_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
-                "fan-1", "my title", "my body", List.of(PHOTO), 2L, 3L, now, now, now);
+                "fan-1", "my title", "my body", List.of(PHOTO), 2L, 3L, null, now, now, now);
         when(getMyPostsUseCase.execute(any(), eq(0), eq(20)))
                 .thenReturn(new PageResult<>(List.of(view), 0, 20, 1, 1));
 
@@ -352,5 +353,63 @@ class PostControllerSliceTest {
                 .andExpect(status().isOk());
 
         verify(getMyPostsUseCase).execute(any(), eq(2), eq(5));
+    }
+
+    // ------------------------------------------------------------------
+    // GET /{postId} — myReaction (TASK-FAN-BE-051)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("GET /api/community/posts/{id} (no Authorization) → 401")
+    void get_withoutAuth_returns401() throws Exception {
+        mockMvc.perform(get("/api/community/posts/post-1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /api/community/posts/{id} — 반응 없음 → myReaction = null (필드명 글자 그대로)")
+    void get_noReaction_myReactionIsNull() throws Exception {
+        Instant now = Instant.now();
+        PostView view = new PostView(
+                "post-10", "fan-platform",
+                PostType.ARTIST_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
+                "artist-1", "t", "body", List.of(), 0L, 0L, null, now, now, now);
+        when(getPostUseCase.execute(eq("post-10"), any())).thenReturn(view);
+
+        mockMvc.perform(get("/api/community/posts/post-10").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.postId").value("post-10"))
+                .andExpect(jsonPath("$.data.myReaction").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/community/posts/{id} — LIKE 반응 중 → myReaction = \"LIKE\"")
+    void get_likeReaction_myReactionIsLike() throws Exception {
+        Instant now = Instant.now();
+        PostView view = new PostView(
+                "post-11", "fan-platform",
+                PostType.ARTIST_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
+                "artist-1", "t", "body", List.of(), 0L, 1L, ReactionType.LIKE, now, now, now);
+        when(getPostUseCase.execute(eq("post-11"), any())).thenReturn(view);
+
+        mockMvc.perform(get("/api/community/posts/post-11").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.myReaction").value("LIKE"));
+    }
+
+    @Test
+    @DisplayName("🔴 PostResponse 필드명은 계약과 글자 그대로 일치한다 — myReaction (대소문자·오타 없음)")
+    void get_responseFieldNameMatchesContractExactly() throws Exception {
+        Instant now = Instant.now();
+        PostView view = new PostView(
+                "post-12", "fan-platform",
+                PostType.ARTIST_POST, PostVisibility.PUBLIC, PostStatus.PUBLISHED,
+                "artist-1", "t", "body", List.of(), 0L, 1L, ReactionType.LOVE, now, now, now);
+        when(getPostUseCase.execute(eq("post-12"), any())).thenReturn(view);
+
+        mockMvc.perform(get("/api/community/posts/post-12").header("Authorization", fanBearer("fan-1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.myReaction").value("LOVE"))
+                .andExpect(jsonPath("$.data.reactionCount").value(1));
     }
 }

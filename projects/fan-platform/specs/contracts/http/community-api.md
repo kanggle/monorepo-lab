@@ -93,6 +93,7 @@ Response 201:
     "mediaRefs": ["https://images.example.com/photo.jpg"],
     "commentCount": 0,
     "reactionCount": 0,
+    "myReaction": null,
     "publishedAt": "2026-05-03T00:00:00Z",
     "createdAt": "2026-05-03T00:00:00Z",
     "updatedAt": "2026-05-03T00:00:00Z"
@@ -133,9 +134,78 @@ guard the reversibility depends on.
 Auth: bearer. Visibility check: PUBLIC/MEMBERS_ONLY/PREMIUM gating per
 `specs/services/community-service/architecture.md` § Visibility Tiers.
 
-Response 200: same shape as Publish response.
+Response 200: same shape as Publish response. **This is the one path where
+`myReaction` is actually populated** — see § `myReaction` below.
 
 Errors: 401, 403 (MEMBERSHIP_REQUIRED for gated posts), 404 (POST_NOT_FOUND).
+
+### `myReaction` — the caller's own reaction on this post (TASK-FAN-BE-051)
+
+Chosen shape: **(A)** — add a field to the existing `GET /api/community/posts/{id}`
+response rather than a dedicated `GET /api/community/posts/{postId}/reactions/mine`
+endpoint (candidate B). The web app's post-detail screen already makes exactly one
+call to fetch a post (`GET /{id}`) and needs the reaction answer for that same post,
+so (A) adds zero round trips where (B) would add one **every time the detail screen
+loads**, for a question the detail screen always asks. (B) remains additive if a
+future consumer needs the answer for a post it has not already fetched (e.g. a feed
+item) — it does not conflict with this field.
+
+```json
+{ "myReaction": "LIKE" }
+```
+
+`myReaction` ∈ `"LIKE" | "LOVE" | "FIRE" | "SAD" | null`. `null` means the caller has
+not reacted to this post — never an error, and never confused with "this post has no
+reactions" (that question is `reactionCount == 0`, which is independent: other fans'
+reactions still count toward `reactionCount` even when the caller's own is `null`).
+
+**Answers about the caller only.** Backed by the same
+`ReactionRepository.find(postId, reactorAccountId, tenantId)` lookup
+`AddReactionUseCase`/`RemoveReactionUseCase` already use internally for their upsert
+decision — this field is the first caller to *ask* it instead of just using it.
+Scoped to the actor's own account AND tenant, matching the idempotency key
+`(post_id, reactor_account_id)` on the `reactions` table (see `Reaction.java`
+composite PK). **Another fan's reaction is never surfaced this way** — exposing any
+other fan's identified reaction is a separate product decision this ticket does not
+make (`TASK-FAN-BE-051` § Out of Scope).
+
+#### Why `PostView`/`PublishPostUseCase.view(...)` is not shared for this field
+
+`PostView` is a shared view factory used by four call sites: `PublishPostUseCase`,
+`UpdatePostUseCase`, `GetMyPostsUseCase` (`mine`), and `GetPostUseCase` (this
+endpoint) — all four produce the identical `PostResponse` JSON shape, so
+`myReaction` appears as a field in all four response bodies. **Only `GetPostUseCase`
+populates it**; the other three always emit `myReaction: null`, by a second
+`view(...)` overload that defaults the parameter rather than a factory split:
+
+| Endpoint | `myReaction` |
+|---|---|
+| `GET /api/community/posts/{id}` | the caller's actual reaction (or `null` if none) |
+| `POST /api/community/posts` (publish) | always `null` |
+| `PATCH /api/community/posts/{id}` (update) | always `null` |
+| `GET /api/community/posts/mine` | always `null` |
+
+This is deliberate, not an oversight the other three forgot to wire up:
+
+1. **It is almost always correct anyway.** A publish/update response describes the
+   post immediately after the *author's own* write; an author reacting to their own
+   post in the same request is not a real flow, so the field would read `null` even
+   if wired up in the overwhelming majority of cases.
+2. **Splitting the factory is not worth it for v1.** `myReaction` is a read-time
+   property of the *caller*, not a property of the `Post` aggregate the other three
+   endpoints are reporting the result of a write against. Fully correcting this
+   would mean either threading a reaction lookup through three more use cases that
+   have no other reason to touch the `reactions` table, or splitting `PostView` into
+   a write-result view and a read view — both increase the surface for a field whose
+   value is `null` almost everywhere it would land.
+3. **No consumer needs it elsewhere.** The only known consumer (`TASK-FAN-FE-029`,
+   the post-detail screen) reads `GET /{id}`. If `mine` or the feed need the same
+   field later, that is a new ticket (per `TASK-FAN-BE-051` § Out of Scope), at which
+   point revisit whether the shared factory should grow a parameter or split.
+
+Clients must tolerate the field being fixed at `null` on every response except
+`GET /{id}` — reading `post.myReaction ?? null` (already the convention `mediaRefs`
+established) continues to work everywhere.
 
 ### `GET /api/community/posts/mine?page=0&size=20` — My posts (TASK-FAN-FE-016)
 
@@ -347,6 +417,20 @@ Response 200:
 Auth: bearer. Removes the actor's own reaction (no-op if none exists).
 
 Response: 204.
+
+### Reading the caller's own reaction — `myReaction` on `GET /api/community/posts/{id}`
+
+`TASK-FAN-BE-051`. Until this landed, these two endpoints were write-only — a caller
+could set or clear their own reaction but never ask what it currently was (the
+aggregate `reactionCount` above cannot answer that; a sum discards attribution). The
+read lives on the Post resource, not a third endpoint under this path — see § Posts
+§ `myReaction` for the field shape, the (A) vs (B) shape decision, and why it is
+populated only on `GET /api/community/posts/{id}`.
+
+**AMI rebake gap** — same shape as `mediaRefs` above: this field ships in the
+contract and code with this ticket, but the demo live environment does not serve it
+until the next AMI rebake window. `TASK-FAN-FE-029` (the first consumer) tolerates
+its absence (`post.myReaction ?? null`) until then.
 
 ---
 

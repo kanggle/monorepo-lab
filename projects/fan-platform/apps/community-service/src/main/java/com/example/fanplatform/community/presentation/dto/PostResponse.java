@@ -17,6 +17,12 @@ public record PostResponse(
         List<String> mediaRefs,
         long commentCount,
         long reactionCount,
+        /**
+         * The caller's own reaction, or {@code null} (TASK-FAN-BE-051). Populated
+         * only on {@code GET /api/community/posts/{id}} — see {@code
+         * community-api.md} § {@code myReaction}.
+         */
+        String myReaction,
         Instant publishedAt,
         Instant createdAt,
         Instant updatedAt
@@ -33,6 +39,7 @@ public record PostResponse(
                 v.mediaRefs(),
                 v.commentCount(),
                 v.reactionCount(),
+                v.myReaction() == null ? null : v.myReaction().name(),
                 v.publishedAt(),
                 v.createdAt(),
                 v.updatedAt());
