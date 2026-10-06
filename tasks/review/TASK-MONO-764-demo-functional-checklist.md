@@ -8,7 +8,7 @@ TASK-MONO-764
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -81,7 +81,7 @@ monorepo
 - [x] **AC-0 (창 전 재측정)** — 흐름 목록을 그 시점의 라우트(`app/**/page.tsx`)와 시드로 다시 맞춘다. 시드상 할 수 없는 흐름(예: 결제 수단 없음)은 «시드 부족» 으로 미리 표시하고 창 시간을 쓰지 않는다.
 - [x] **AC-1** — 흐름 1~16 각각 PASS / FAIL / ⚪(측정 불가 — 이유) 한 줄 + 증거(스크린숏 경로 · 응답 코드 · DB 행). **«열렸다» 는 PASS 가 아니다** — 끝 상태(주문 행 · 재고 수 · 노출 여부)를 확인해야 PASS.
 - [x] **AC-2** — FAIL 마다 원인 분류: ⓐ 데모 배선(도메인·쿠키·env) ⓑ 앱 결함 ⓒ 시드 부족 ⓓ 외부(제공자·결제 샌드박스). ⓑ 는 프로젝트 티켓으로 기안하고 번호를 이 파일에 적는다.
-- [ ] **AC-3** — 소셜: 2 가 PASS 면 `TASK-MONO-763` AC-4 · `TASK-BE-617` 라이브 · `TASK-BE-623` AC-5 를 같은 증거로 닫는다(각 티켓에 CORRECTION/기록).
+- [x] **AC-3** — 소셜: 2 가 PASS 면 `TASK-MONO-763` AC-4 · `TASK-BE-617` 라이브 · `TASK-BE-623` AC-5 를 같은 증거로 닫는다(각 티켓에 CORRECTION/기록).
 - [x] **AC-4** — 창 시간 기록: 기동 · ready · 흐름별 소요 · 정지. 다음 점검의 창 상한 근거.
 
 # Related Specs
@@ -187,3 +187,21 @@ monorepo
 | 정지 | 08:55Z 최대 가동 상한으로 자동 정지(11:13Z 확인 — 제어 API `stopped` · EC2 `stopped` · 예산 539/1800) |
 
 🔵 다음 점검의 창 상한 근거: 측정 자체는 약 1시간 45분, 그중 «창 안 수정 + 배포 대기»가 두 번 약 40분.
+
+---
+
+## 23차 창 2회차 — 소셜 흐름 2·3 + AC-3 (2026-10-06 UTC)
+
+| # | 흐름 | 판정 |
+|---|---|---|
+| 2 | Google 소셜 가입 → 팬 → 스토어 | ✅ PASS |
+| 3 | Naver 소셜 로그인 | ✅ PASS |
+
+- 창: 2026-10-06 UTC 12:08:55Z `/bundle/start {fan, store}`(대상 `i-036521b58c68566f2`, 23차 AMI `d44dd0d61`, 소유자 승인 «둘다해») → 12:22Z ready → 13:45:45Z 정지(제어 API · EC2 `stopped`, 예산 629/1800).
+- 소유자가 직접 실행(시크릿 창): **Google** — 팬 «IAM 로그인» → 로그인 화면 버튼 Google · Naver 둘뿐 → Google 계정 선택 → 팬 로그인 상태 → 같은 창 스토어 «로그인» = 비밀번호·Google 재선택 없이 통과(소유자 «완료»). **Naver** — 새 시크릿 창, 멤버 등록 계정으로 로그인(소유자 «네이버도 돼»).
+- DB(`iam-mysql`, 값 미출력): `auth_db.social_identities` 0 → `GOOGLE · consumer-pool · 13:15:34Z` → `NAVER · consumer-pool · 13:25:37Z`, 각 연결 계정 `account_db.accounts.tenant_id = consumer-pool`(풀 계정 8 → 9 → 10, ecommerce 1 불변 — 사이트별 계정 0). auth-service: `authorize: pool session on consumer site ecommerce (client ecommerce-web-store-client) without a membership — first-visit consent (TASK-BE-616)` 13:16:07Z.
+- 🔵 같은 소유자의 Google · Naver 는 **별개의 풀 계정 두 개**가 됐다 — 617 «이메일로 풀 계정에 붙지 않는다» 규칙대로(결함 아님).
+- AC-3 ✅ — 같은 증거로 `TASK-MONO-763` AC-4 · `TASK-BE-617` 라이브 · `TASK-BE-623` AC-5 를 닫고 셋 다 done(각 티켓에 기록).
+- **2회차에서 새로 나온 결함 1건 — 창 안에서 고침**(소유자 결정 «창 안에서 고치기»): 소유자 보고 «로그아웃한 상태에서 IAM 로그인 누르면 로그인 창이 떠야 하는데 자동 로그인돼» → 이메일 계정으로 재현(팬 로그아웃이 IdP 에 안 감, 재로그인 비밀번호 폼 0 · 스토어 대조군 1) → 원인 NextAuth 기본 `redirect` 콜백 → **`TASK-FAN-FE-031`**(#4177 `99c1332c7`) → 13:43:54Z 배포 후 같은 재현에서 `/connect/logout` 경유 · 비밀번호 폼 1 → done. 분류 ⓑ.
+- 판정 집계(1·2회차 합): PASS 12 · 부분 2(11·12) · FAIL 1(14, ⓒ `TASK-MONO-765`) · ⚪ 1(15 운영자 생성, ⓒ `TASK-MONO-766`).
+- 창 시간(2회차): 기동 12:08:55 → ready 12:22 → 소유자 Google 13:15 · Naver 13:25 → 결함 재현 13:21 · 수정 PR → 배포 13:43:54 → 재측정 13:44 → 정지 13:45:45.

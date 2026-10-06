@@ -120,12 +120,13 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-623-hide-social-providers-without-keys.md` — **로그인 화면이 키 없는 소셜 제공자 버튼을 그리지 않는다** (IN-PROGRESS, 2026-10-05 UTC). 지금 `LoginPageController` 가 `OAuthProvider` 넷을 무조건 그려 데모에서 누르면 실패하는 버튼이 넷. 판정 = client-id·secret 둘 다 기본값(`test-*`)·빈값이 아님 · 직접 `/login/oauth/{p}` 진입도 같은 판정 · 대조군 = 반쪽 설정은 숨김. 순서 제약 없음(버튼을 줄이기만). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **REVIEW (2026-10-06 UTC)** — impl #4166 `85b4c9263` · AC-1~4 ✅ · ⏳ AC-5 라이브(재굽기 뒤 창).
-- `TASK-BE-617-social-login-on-the-consumer-pool.md` — **6단계 — 소셜 로그인을 풀 계정 규칙으로** (IN-PROGRESS, 2026-10-05 UTC 착수). 소비자 사이트의 새 소셜 가입 = 풀 계정 + 그 사이트 멤버십 · 신원 행 `consumer-pool` · 풀-먼저 조회. 🔴 소셜 이메일로 기존 풀 계정에 자동 연결 금지(대조군). 618 이 건너뛴 소셜 연결 사이트 계정은 **사이트 계정으로 남긴다**(결정 기록은 티켓). 🔴🔴 순서 규칙: 실제 소셜 키 배포(`TASK-MONO-763`)는 이 티켓 머지 뒤. 분석=Opus 5.5 / 구현=Opus 5.5. 🟢 **REVIEW (2026-10-06 UTC)** — impl #4165 `71b66135c` · AC-1~3 ✅(CI iam A/B) · ⏳ 라이브 = MONO-763 AC-4 창.
+_(없음)_
 
 
 
 ## done
+- ✅ `TASK-BE-623-hide-social-providers-without-keys.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4166**, 스쿼시 **`85b4c9263`** (머지 시점 실패 0). 키 없는 제공자 버튼 숨김. AC-5 라이브: 로그인 화면 Google · Naver 둘뿐, 두 버튼으로 실제 로그인 성공(23차 창).
+- ✅ `TASK-BE-617-social-login-on-the-consumer-pool.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4165**, 스쿼시 **`71b66135c`** (머지 시점 실패 0). 소셜 로그인을 소비자 계정 풀 규칙으로. 라이브(23차 창 2회차): Google · Naver 가입이 `consumer-pool` 계정 · 팬 → 스토어 재로그인 없이 첫 방문 동의만.
 - ✅ `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4061**, 스쿼시 **`fa3940bf7`** (머지 시점 실패 0/67). 소셜 신원 조회를 시작 client 의 테넌트로 한정. **AC-2 🟢 21차 창**(Kakao 스텁 · auth-service 재생성 → 원상복구 env 동일): 같은 신원으로 스토어 → 팬 = 신원 2 · 계정 2(테넌트별, account_id 다름) · 스토어 재로그인 대조군 변화 없음.
 - ✅ `TASK-BE-622-provisioning-status-patch-is-site-scoped-for-pool-members.md` — **DONE (2026-10-04 UTC · 4차원 검증 · PR #4146 squash `6eef35bcc`)** — 내부 프로비저닝 상태 PATCH 도 풀 멤버에게는 그 사이트 멤버십만(`LOCKED`/`ACTIVE` · `DELETED` → `LEFT OPERATOR`), 셀러 운영 계정은 계정 그대로. 스키마 변경 없음. AC-5 통합 3칸 CI(iam B) 실행·통과. 데모 반영은 다음 재굽기.
 - ✅ `TASK-BE-621-site-operator-lock-is-site-scoped.md` — **DONE (2026-10-04 UTC · 4차원 검증 · PR #4141 squash `7a127c39a`)** — 사이트 운영자의 잠금은 그 사이트 멤버십만(`LOCKED`, V0033) · 계정 전체는 플랫폼 관리자만. AC-8 통합 3칸 CI(iam B) PASSED. 소유자 결정: 자동 잠금 = 계정 전체 유지 · 프로비저닝 PATCH = `TASK-BE-622`. 데모 반영은 다음 재굽기.

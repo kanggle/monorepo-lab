@@ -83,10 +83,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-FAN-FE-031-logout-never-reaches-idp-end-session.md` — **팬 로그아웃이 IdP `end_session` 에 닿지 않아 다음 로그인이 비밀번호 없이 통과** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 소유자 보고). NextAuth 기본 `redirect` 콜백이 다른 origin 주소를 앱 루트로 바꿈 → `redirectCallback` 으로 issuer `/connect/logout` 하나만 허용. 단위 시험 + bite. ⏳ AC-4 라이브. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 (empty)
 
 ## done
+- ✅ `TASK-FAN-FE-031-logout-never-reaches-idp-end-session.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4177**, 스쿼시 **`99c1332c7`** (머지 시점 실패 0). 팬 로그아웃이 IdP `end_session` 에 닿지 않던 결함(NextAuth 기본 `redirect` 콜백) → issuer `/connect/logout` 만 허용. 라이브: 로그아웃이 `/connect/logout` 경유 · 재로그인 비밀번호 폼 0 → 1.
 
 - ✅ `TASK-FAN-BE-050-artist-service-dates-serialised-as-numbers.md` — **DONE (2026-10-05 UTC · 4차원 검증 · impl PR [#4139](https://github.com/kanggle/monorepo-lab/pull/4139) squash `eebeda112`, 머지 시점 실패 0/65)** 🟢 **artist-service 날짜가 ISO 문자열로 — AC-5 는 20차 창(`ami-0d78d476824493d77` · `f0927bcd0`)에서 닫힘.** 콘솔 `platform@demo.com`/`fan-platform` → `/fan/agencies` · `/fan/artists` · `/fan/groups` 렌더(19차의 «불러올 수 없습니다» 해소) + 같은 창 `TASK-MONO-759` 셀러 연결 판정. ⚪ 응답 본문 날짜 원문은 안 찍음(소비자 스키마 수락으로 판정).
 
