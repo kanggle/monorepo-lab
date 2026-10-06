@@ -16,7 +16,7 @@ vi.mock('@/shared/auth/session', () => ({
 // next/server's NextRequest/NextResponse work under the node test env. Import
 // the route AFTER mocks are registered.
 import { NextRequest } from 'next/server';
-import { GET, POST, DELETE } from '@/app/api/bff/[...path]/route';
+import { GET, POST, PATCH, DELETE } from '@/app/api/bff/[...path]/route';
 
 function makeCtx(segments: string[]) {
   return { params: Promise.resolve({ path: segments }) };
@@ -178,6 +178,38 @@ describe('BFF proxy — F2 server-side bearer attach', () => {
     const res = await GET(req, makeCtx(['api', 'orders']));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+
+  // TASK-FE-105 — the browser's `Origin` describes the client page, not this
+  // server, and this proxy is same-origin server-to-server. Forwarding it
+  // verbatim made the gateway's CORS allow-list 403 every browser-initiated
+  // write (the deployed store origin was never in the allow-list).
+  it('[FE-105] 인바운드 origin 헤더는 백엔드로 포워딩하지 않는다', async () => {
+    getWebStoreSession.mockResolvedValue({
+      accessToken: 'tok',
+      accountId: 'a',
+      tenantId: 't',
+      roles: ['CUSTOMER'],
+    });
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+
+    const req = new NextRequest('http://localhost:3000/api/bff/api/users/me', {
+      method: 'PATCH',
+      headers: {
+        origin: 'https://store.hubwang.com',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ nickname: 'new-name' }),
+    });
+
+    const res = await PATCH(req, makeCtx(['api', 'users', 'me']));
+    expect(res.status).toBe(200);
+
+    const [, init] = fetchMock.mock.calls[0];
+    // The browser Origin must not reach the backend gateway.
+    expect(init.headers.get('origin')).toBeNull();
+    // Control: an ordinary header is still forwarded unchanged.
+    expect(init.headers.get('content-type')).toBe('application/json');
   });
 
   it('업스트림 네트워크 실패 → 502', async () => {
