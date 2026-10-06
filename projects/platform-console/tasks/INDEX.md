@@ -121,6 +121,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**.
+
 ## done
 - ✅ `TASK-PC-FE-305-demo-stop-ends-session-into-sample-shell.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4149**, 스쿼시 **`f0927bcd0`** (머지 시점 실패 0) — 데모가 꺼진 뒤 접근 쿠키가 만료된 세션이 로그인 벽 대신 샘플 셸(`?signed_out=demo_stopped`)로 간다. AC-6 = 22차 창(라이브, Playwright): 로그인 → **데모 먼저 정지** → 접근 쿠키만 삭제 → 새로고침 ⇒ `refresh` → `/login?error=session_expired` → `/api/auth/demo-ended` → 쿠키 0 · 샘플 셸 안내. ⚪ Vercel 로그 줄 `demo_ended_session_cleared` 는 미측정(CLI 없음) — 소유자 결정 «지금 done».
 - ✅ `TASK-PC-FE-307-overview-all-forbidden-reads-as-outage.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4153**, 스쿼시 **`1427ef425`** (머지 시점 실패 0/65). 운영 개요 6장이 전부 `forbidden` 이면 권한 배너(재시도 없음), `degraded` 가 섞이면 기존 장애 배너. **AC-4 🟢 21차 창**: `platform@demo.com` 07:05:51Z 전부 거절 → 권한 배너 · 07:00:55Z(ERP 꺼짐) 섞임 → 장애 배너 · `demo@demo.com`/`demo-corp` 06:59:02Z 하나라도 ok → 배너 없음.

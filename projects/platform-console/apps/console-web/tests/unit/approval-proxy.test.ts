@@ -374,14 +374,18 @@ describe('POST /api/erp/approval/requests/{id}/{transition}', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('reject WITH reason → upstream POST .../reject + X-Operator-Reason + body reason', async () => {
+  it('reject WITH reason → upstream POST .../reject + percent-encoded X-Operator-Reason + body reason (TASK-PC-FE-308)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(DETAIL));
     vi.stubGlobal('fetch', fetchMock);
     await transitionReq('reject', { reason: '근거 부족', idempotencyKey: 'idem-r' });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('http://erp.local/api/erp/approval/requests/appr-1/reject');
     const h = (init as RequestInit).headers as Record<string, string>;
-    expect(h['X-Operator-Reason']).toBe('근거 부족');
+    // TASK-PC-FE-308: a raw Korean header value is not a valid HTTP
+    // ByteString and made `fetch()` throw — percent-encoded on the wire.
+    expect(/^[\x00-\x7F]*$/.test(h['X-Operator-Reason'])).toBe(true);
+    expect(h['X-Operator-Reason']).toBe(encodeURIComponent('근거 부족'));
+    expect(decodeURIComponent(h['X-Operator-Reason'])).toBe('근거 부족');
     expect(JSON.parse(String((init as RequestInit).body)).reason).toBe('근거 부족');
   });
 
