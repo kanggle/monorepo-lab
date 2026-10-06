@@ -13,6 +13,8 @@ declare module 'next-auth' {
     roles?: string[];
     /** Server-side only — never read from a client component. */
     accessToken?: string;
+    /** TASK-FAN-FE-027 — lost-refresh-race signal for `session-route.ts`; a boolean only. */
+    refreshRaceLost?: boolean;
   }
 
   interface User {
@@ -36,5 +38,14 @@ declare module 'next-auth/jwt' {
      * onto the public Session (would leak via /api/auth/session).
      */
     idToken?: string;
+    /** Set when a silent refresh failed (F1); the session degrades to anonymous. */
+    error?: 'RefreshAccessTokenError';
+    /**
+     * TASK-FAN-FE-027 — set (alongside `error`) only on the `jwt` call whose
+     * refresh got IAM's rotation-shaped `400 invalid_grant`, i.e. possibly the
+     * loser of a concurrent refresh. Cleared at the start of every later call.
+     * Consumed by `session-route.ts`.
+     */
+    refreshRaceLost?: boolean;
   }
 }

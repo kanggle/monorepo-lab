@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { signOut } from '@/shared/auth/auth';
 import { buildGapEndSessionUrl } from '@/shared/auth/federated-logout';
 import { getFanSession, isAuthenticated } from '@/shared/auth/session';
+import { SessionKeeper } from '@/shared/auth/SessionKeeper';
 import { NotificationBell, getRecentNotifications, getUnreadCount } from '@/features/notification';
 import { DemoHeartbeat } from '@/widgets/heartbeat/DemoHeartbeat';
 import { storeGoodsHref } from '@/shared/config/store-links';
@@ -87,6 +88,10 @@ export async function Header() {
                   `app/api/demo/heartbeat/route.ts` 헤더에 있다. 이것을 `(main)/layout.tsx`
                   같은 공용 자리로 올리면 익명 방문자도 핑을 보내게 된다. */}
               <DemoHeartbeat />
+              {/* TASK-FAN-FE-027 — the only reader of `/api/auth/session`, i.e. the
+                  only thing that makes the silent refresh run (every server read is
+                  decode-only). Same placement rule as the heartbeat: authed only. */}
+              <SessionKeeper staleAtRender={session?.accessTokenStale ?? false} />
               {/* TASK-FAN-FE-016: the compose entry point lives inside the `authed`
                   branch, so an anonymous visitor is never offered a form they cannot
                   submit (AC-3). This is the whole of the anonymous-case handling —

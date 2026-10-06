@@ -43,6 +43,13 @@ vi.mock('@/widgets/heartbeat/DemoHeartbeat', () => ({
     return null;
   },
 }));
+// TASK-FAN-FE-027 — the session keeper reads `/api/auth/session`; it is a member fragment too.
+vi.mock('@/shared/auth/SessionKeeper', () => ({
+  SessionKeeper: () => {
+    state.memberCalls.push('SessionKeeper');
+    return null;
+  },
+}));
 
 import { Header } from '@/widgets/header/Header';
 import { STORE_GOODS_CATEGORY_ID } from '@/shared/config/store-links';
