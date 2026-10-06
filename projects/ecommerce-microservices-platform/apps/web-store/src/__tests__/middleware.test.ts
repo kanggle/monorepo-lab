@@ -1,18 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@/shared/auth/auth', () => ({
-  auth: vi.fn().mockResolvedValue(null),
+vi.mock('@/shared/auth/session-token', () => ({
+  decodeSessionCookieHeader: vi.fn().mockResolvedValue(null),
 }));
 
 import { NextRequest } from 'next/server';
 import { middleware, config } from '@/middleware';
+import { decodeSessionCookieHeader } from '@/shared/auth/session-token';
+
+const mockDecode = vi.mocked(decodeSessionCookieHeader);
 
 function request(path: string) {
   return new NextRequest(new URL(`http://localhost:3001${path}`));
 }
 
 describe('web-store route-guard middleware', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDecode.mockResolvedValue(null);
+  });
 
   it('serves /sw.js without an auth redirect (TASK-FE-083-fix-001)', async () => {
     const res = await middleware(request('/sw.js'));
@@ -66,5 +72,70 @@ describe('web-store route-guard middleware', () => {
     const res = await middleware(request('/api/demo/heartbeat'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toContain('/login');
+  });
+});
+
+/**
+ * 🔴 TASK-FE-106 — the gate must never spend the refresh token. The old gate
+ * called `auth()` (RSC form), which ran the silent refresh — rotating the
+ * refresh token at IAM — and threw the rotated cookie away.
+ */
+describe('web-store middleware — decode-only gate (TASK-FE-106)', () => {
+  const fetchMock = vi.fn();
+  const nowSec = () => Math.floor(Date.now() / 1000);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('🔴 만료됐지만 refresh 가능한 CUSTOMER 세션은 통과시키고, IAM 에 refresh 를 보내지 않는다', async () => {
+    mockDecode.mockResolvedValue({
+      accountId: 'acc-1',
+      roles: ['CUSTOMER'],
+      accessToken: 'expired-access',
+      refreshToken: 'rt-0',
+      expiresAt: nowSec() - 600,
+    });
+    const res = await middleware(request('/my/orders'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refresh 실패 플래그(error)가 있는 세션은 /login 으로 보낸다', async () => {
+    mockDecode.mockResolvedValue({
+      accountId: 'acc-1',
+      roles: ['CUSTOMER'],
+      error: 'RefreshAccessTokenError',
+    });
+    const res = await middleware(request('/checkout'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain('/login');
+  });
+
+  it('CUSTOMER 역할이 없는 세션은 /login 으로 보낸다 (교차 앱 가드 유지)', async () => {
+    mockDecode.mockResolvedValue({
+      accountId: 'op-1',
+      roles: ['ECOMMERCE_OPERATOR'],
+      expiresAt: nowSec() + 1800,
+    });
+    const res = await middleware(request('/checkout'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain('/login');
+  });
+
+  it('🔵 대조군 — 유효한 CUSTOMER 세션은 통과', async () => {
+    mockDecode.mockResolvedValue({
+      accountId: 'acc-1',
+      roles: ['CUSTOMER'],
+      expiresAt: nowSec() + 1800,
+    });
+    const res = await middleware(request('/checkout'));
+    expect(res.status).toBe(200);
   });
 });

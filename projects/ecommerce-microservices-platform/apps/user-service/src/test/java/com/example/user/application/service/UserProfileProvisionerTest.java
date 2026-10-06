@@ -50,7 +50,7 @@ class UserProfileProvisionerTest {
     }
 
     @Test
-    @DisplayName("이미 있으면 아무것도 쓰지 않는다 (요청마다 도는 경로다 — 멱등이 아니면 못 쓴다)")
+    @DisplayName("이미 있고 email 도 안 들어오면 아무것도 쓰지 않는다 (요청마다 도는 경로다 — 멱등이 아니면 못 쓴다)")
     void ensure_present_isNoOp() {
         given(userProfileRepository.findByUserId(USER_ID))
                 .willReturn(Optional.of(UserProfile.createMinimal(USER_ID)));
@@ -59,6 +59,48 @@ class UserProfileProvisionerTest {
 
         then(userProfileRepository).should(never()).save(any());
         then(userProfileRepository).should(never()).existsByUserId(any());
+    }
+
+    /**
+     * TASK-BE-624: once TASK-MONO-511 restored the account.created relay, the event path
+     * (always {@code email == null}) typically wins the race and provisions the row first.
+     * The later pull-through call — the one carrying the real, gateway-verified email —
+     * must not become a silent no-op just because a row already exists.
+     */
+    @Test
+    @DisplayName("이미 있지만 email 이 비어 있고 이번에 email 이 들어오면 채운다 (TASK-BE-624 — event-wins-the-race)")
+    void ensure_presentWithoutEmail_andEmailNowSupplied_backfills() {
+        UserProfile existing = UserProfile.createMinimal(USER_ID);
+        given(userProfileRepository.findByUserId(USER_ID)).willReturn(Optional.of(existing));
+
+        provisioner.ensureProvisioned(USER_ID, "shopper@example.com");
+
+        ArgumentCaptor<UserProfile> captor = ArgumentCaptor.forClass(UserProfile.class);
+        then(userProfileRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getEmail().value()).isEqualTo("shopper@example.com");
+        then(userProfileRepository).should(never()).existsByUserId(any());
+    }
+
+    @Test
+    @DisplayName("이미 email 이 있으면 다른 값이 들어와도 덮어쓰지 않는다 (TASK-BE-624)")
+    void ensure_presentWithEmail_doesNotOverwriteOnLaterCall() {
+        UserProfile existing = UserProfile.create(USER_ID, "original@example.com", null);
+        given(userProfileRepository.findByUserId(USER_ID)).willReturn(Optional.of(existing));
+
+        provisioner.ensureProvisioned(USER_ID, "different@example.com");
+
+        then(userProfileRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 있고 들어온 email 형식이 잘못되면 저장을 시도하지 않는다 (TASK-BE-624)")
+    void ensure_presentWithoutEmail_malformedEmailSupplied_doesNotSave() {
+        UserProfile existing = UserProfile.createMinimal(USER_ID);
+        given(userProfileRepository.findByUserId(USER_ID)).willReturn(Optional.of(existing));
+
+        provisioner.ensureProvisioned(USER_ID, "not-an-email");
+
+        then(userProfileRepository).should(never()).save(any());
     }
 
     @Test
