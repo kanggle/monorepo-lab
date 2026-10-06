@@ -4,7 +4,7 @@ TASK-FE-106
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -131,13 +131,23 @@ web-store 는 NextAuth JWT 전략(`jwt` 콜백이 메모리의 토큰 객체를 
       요청을 유발하는 조작)로 위 auth-service 로그(`SAS_REFRESH: replay … within the 30s
       grace window`)와 `/api/auth/session` 의 로그아웃을 재현한다. n=1 관측을 n≥2 로
       확인하거나, 재현 안 되면 조건을 더 좁혀 다시 시도하고 그 결과를 기록한다.
-- [ ] **AC-1** — web-store 의 refresh 처리가 다중 인스턴스에 안전한 전략으로 바뀐다(구체적
+      ⚪ **오케스트레이터가 다음 창에서 측정** (라이브 스택 필요). 코드 쪽 기전은 아래
+      § 착수 조사 — 재현 시 **보호 경로(`/my/*`·`/checkout`) 진입 또는 그 링크의 prefetch**
+      를 넣으면 미들웨어 경로가 섞인다. 수정 전 배포본에서 재야 한다.
+- [x] **AC-1** — web-store 의 refresh 처리가 다중 인스턴스에 안전한 전략으로 바뀐다(구체적
       기전은 착수 시 결정 — console-web 패턴을 인용만, 강제하지 않음).
+      → § 결정 (가)(나). 인스턴스 상태를 공유하지 않으므로 인스턴스 수와 무관.
 - [ ] **AC-2** — AC-0 재현 절차를 수정 후 다시 돌리면 세션이 깨지지 않는다(유효한
-      `accountId` 유지).
+      `accountId` 유지). ⚪ **오케스트레이터가 다음 창에서 측정** (머지·배포 뒤).
 - [ ] **AC-3 (회귀)** — 진짜 재사용 탐지 경로(Edge Case 의 "결함 아님" 사례)는 여전히
       정상 동작한다 — `TASK-BE-606`/`608` 의 의도된 동작을 깨뜨리지 않는다.
-- [ ] **AC-4** — 만료된 같은 JWT 에 대한 동시 refresh 호출을 재현하는 단위/통합 테스트.
+      ⚪ **오케스트레이터가 다음 창에서 측정.** iam 코드는 건드리지 않았다. 클라이언트 쪽
+      단위 증거: 경합 패자·진짜 실패 어느 경로도 같은 refresh 토큰을 두 번 보내지 않는다
+      (`session-route-refresh-race.test.ts` 의 IAM 호출 수 단언 — 재시도 홉은 refresh 0회).
+- [x] **AC-4** — 만료된 같은 JWT 에 대한 동시 refresh 호출을 재현하는 단위/통합 테스트.
+      → `apps/web-store/src/__tests__/session-route-refresh-race.test.ts` (8셀) +
+      `auth-callbacks.test.ts` § TASK-FE-106 (9셀) + `middleware.test.ts` § decode-only (4셀).
+      bite 는 CI 로 확인 — 아래 § 검증.
 
 ---
 
@@ -246,3 +256,27 @@ RSC·BFF 가 보던 토큰은 변하지 않는다).
 
 - `specs/services/web-store/architecture.md` § Authentication — 「refresh 는 한 곳」 ·
   「경합 처리」 두 줄 추가(Change Rule: 코드보다 먼저).
+
+## 검증 (2026-10-06 UTC)
+
+| 무엇 | rc / 결과 |
+|---|---|
+| `npx tsc --noEmit` (web-store) | 0 |
+| `npx next lint` (web-store) | 0 — No ESLint warnings or errors |
+| 로컬 vitest | 기동 불가(Node 24 `#module-evaluator`, 알려진 호스트 한계) → CI 가 권위 |
+| **bite** — 커밋 `5464e7b84`(패자 표지 한 줄만 끈 트리), PR #4183 CI `Frontend unit tests` 런 37479099169 | **fail, 정확히 예상한 4셀**: `auth-callbacks` «경합 패자: error + refreshRaceLost» (`expected undefined to be true`) · `session-route-refresh-race` «loser converges» (`expected 200 to be 307`) · «winner not landed → logged out» · «dead refresh token → one retry hop». 🔵 대조군 «bare Auth.js session action → 패자가 승자를 덮는다» 는 **통과** = 하네스가 결함을 재현한다. 나머지 129 파일 통과 |
+| 수정 커밋 CI | PR #4183 의 다음 런 (리뷰어가 `Frontend unit tests` 의 `session-route-refresh-race.test.ts (8 tests)` 줄 확인) |
+
+미들웨어의 bite 는 재지 않았다: 수정 전 미들웨어는 `@/shared/auth/auth`(NextAuth 팩토리)를
+불러 시험 환경에서 목 없이는 로드되지 않는다 — «IAM 에 refresh 를 보내지 않는다» 셀은 수정
+후 성질의 고정이다.
+
+## FAN-FE-027 로 옮길 것 (같은 코드 모양)
+
+fan-platform-web 은 `auth()` 호출처가 **더 많다** — `middleware.ts:85`, `shared/auth/session.ts:72`
+(`getFanSession`, RSC), `:109`(`isAuthenticated` — 헤더가 매 페이지에서 부름). 셋 다 요청 없는
+`auth()` 라 refresh 를 하고 회전된 쿠키를 버린다(공개 페이지 조회마다). 옮길 것: ① 세 곳
+전부 decode-only 로(판정은 `session` 콜백 규칙 재사용), ② `jwt` 콜백의 `rotation_suspect` 분류
++ `error`·`refreshRaceLost` 동시 표지, ③ `GET /api/auth/session` 래퍼(버림 → 2초 → `307
+?refresh_retry=1` → 재시도 홉은 refresh 안 함, 미해결이면 쿠키 삭제), ④ 같은 대조군 셀
+(bare 세션 액션이 패자로 승자를 덮는 것)을 먼저 초록으로 세운 뒤 수정 셀.

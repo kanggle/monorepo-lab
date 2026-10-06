@@ -260,8 +260,7 @@ export async function jwtCallback({
       } else {
         // Refresh failed → flag so session()/BFF force a full re-auth (F1).
         token.error = 'RefreshAccessTokenError';
-        // BITE-PROBE (TASK-FE-106): marker disabled in this commit only.
-        void result;
+        if (result.kind === 'rotation_suspect') token[REFRESH_RACE_LOST_CLAIM] = true;
       }
     }
   }

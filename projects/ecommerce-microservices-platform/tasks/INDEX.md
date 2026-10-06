@@ -84,12 +84,12 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-- `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (IN-PROGRESS, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전).
+_(없음)_
 
 
 ## review
 
-_(없음)_
+- `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (REVIEW, 2026-10-06 UTC · impl PR **#4183** · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전). bite = CI 런 37479099169 예상 4셀 빨강. ⚪ AC-0/2/3 라이브는 다음 창.
 
 ## done
 - ✅ `TASK-FE-105-bff-forwards-browser-origin-so-every-demo-store-write-is-403.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4172**, 스쿼시 **`6fd6a8d76`** (머지 시점 실패 0 — SUCCESS 18 · SKIPPED 49). BFF 가 브라우저 `Origin` 을 게이트웨이로 넘겨 데모 스토어 쓰기 전부 403 → `origin` 제거. 라이브(23차 창, 07:31:48Z 배포 반영): 프로필 PATCH 200 · 배송지 POST 201 · 새로고침 후 유지, 주문·결제·위시·리뷰 연쇄 PASS(`TASK-MONO-764`).
