@@ -75,6 +75,60 @@ GW="http://wms.${DEMO_DOMAIN}"
 
 container_up wms-gateway-service || { seed_log "게이트웨이 미기동 — 건너뜀"; exit 0; }
 
+# =============================================================================
+# 0) 마스터 읽기 검증 (TASK-MONO-765 AC-2/AC-3 전제)
+# =============================================================================
+# `FulfillmentRequestedConsumer.toCommand` 가 ecommerce 풀필먼트 요청마다 조회하는
+# 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·ecommerce 카탈로그 SKU 86종(V8 28 ·
+# V19 37 · V21 21 — V21 은 재굽기 전까지 데모 AMI 에는 없지만, 다음 재굽기부터는
+# 있으므로 지금 다 심어 둔다)이 실제로
+# 존재하는지 **다시 읽어서** 확인한다. master-service 는 `MASTER_WRITE` 역할이
+# 어떤 신원으로도 열리지 않으므로(TASK-MONO-514 — operator_token 의 derived role
+# 은 `MASTER_READ` 까지, 워크로드 토큰은 scope 만 싣고 role 을 안 싣는다. 전문은
+# `infra/demo/wms-devseed.override.yml` 헤더) 이 마스터들은 API 로 "만들" 수 없고
+# master-service `db/seed/R__01`·`R__05`(거래처·창고)와 outbound-service 자신의
+# `db/seed/R__seed_dev_masterref.sql`(그 셋의 미러 + SKU 86종)이 Flyway 로 심는다.
+# 그래서 이 시드는 그 둘을 **만드는 것이 아니라 읽어서 검증**한다 — 읽기 전용이라
+# `dbexec --why` 가 아니라 사유가 필요 없는 `dbquery` 를 쓴다.
+#
+# 🔴 outbound_db.sku_snapshot 만 재는 이유: outbound-service 의
+# `MasterReadModelPort.findSkuByCode` 가 실제로 조회하는 테이블이 그것이고
+# (`FulfillmentRequestedConsumer` 가 막히는 지점), master-service 자신의
+# `skus.sku_code` 는 `CHECK (sku_code = UPPER(sku_code))` 제약이 있어 이 86개
+# ecommerce 변형(variant) UUID(소문자)를 담을 수 없다 — 그래서 master-service
+# 쪽에는 이 SKU 들을 심지 않았다(outbound-service 쪽 R__ 파일 헤더에 전문 설명).
+if container_up wms-postgres; then
+  wh_count="$(dbquery wms-postgres psql master_db master "${MASTER_DB_PASSWORD:-master}" \
+    "SELECT count(*) FROM warehouses WHERE warehouse_code='WH-MAIN' AND status='ACTIVE'")"
+  [ "${wh_count:-0}" = "1" ] \
+    || seed_fail "master_db.warehouses 에 WH-MAIN(ACTIVE) 이 없습니다(읽은 값: ${wh_count:-?}) — R__01_seed_dev_warehouse.sql 적용 여부를 확인하십시오"
+
+  pt_count="$(dbquery wms-postgres psql master_db master "${MASTER_DB_PASSWORD:-master}" \
+    "SELECT count(*) FROM partners WHERE partner_code='ECOMMERCE-STORE' AND partner_type='CUSTOMER' AND status='ACTIVE'")"
+  [ "${pt_count:-0}" = "1" ] \
+    || seed_fail "master_db.partners 에 ECOMMERCE-STORE(CUSTOMER·ACTIVE) 이 없습니다(읽은 값: ${pt_count:-?}) — R__05_seed_dev_partners.sql 적용 여부를 확인하십시오"
+
+  ows_count="$(dbquery wms-postgres psql outbound_db outbound "${OUTBOUND_DB_PASSWORD:-outbound}" \
+    "SELECT count(*) FROM warehouse_snapshot WHERE warehouse_code='WH-MAIN' AND status='ACTIVE'")"
+  [ "${ows_count:-0}" = "1" ] \
+    || seed_fail "outbound_db.warehouse_snapshot 에 WH-MAIN 미러가 없습니다(읽은 값: ${ows_count:-?}) — ecommerce 풀필먼트 요청이 다시 DLT 로 갑니다"
+
+  ops_count="$(dbquery wms-postgres psql outbound_db outbound "${OUTBOUND_DB_PASSWORD:-outbound}" \
+    "SELECT count(*) FROM partner_snapshot WHERE partner_code='ECOMMERCE-STORE' AND status='ACTIVE'")"
+  [ "${ops_count:-0}" = "1" ] \
+    || seed_fail "outbound_db.partner_snapshot 에 ECOMMERCE-STORE 미러가 없습니다(읽은 값: ${ops_count:-?}) — ecommerce 풀필먼트 요청이 다시 DLT 로 갑니다"
+
+  osk_count="$(dbquery wms-postgres psql outbound_db outbound "${OUTBOUND_DB_PASSWORD:-outbound}" \
+    "SELECT count(*) FROM sku_snapshot WHERE sku_code LIKE 'c0000000-0000-0000-0000-%' AND status='ACTIVE'")"
+  if [ "${osk_count:-0}" = "86" ]; then
+    seed_log "마스터 읽기 검증 통과 — WH-MAIN · ECOMMERCE-STORE · ecommerce SKU 86종 전부 ACTIVE"
+  else
+    seed_fail "outbound_db.sku_snapshot 의 ecommerce SKU 미러가 86종이 아닙니다(읽은 값: ${osk_count:-?}) — product-service 카탈로그(V8+V19+V21, 변형 86종)와 outbound-service R__seed_dev_masterref.sql 을 대조하십시오"
+  fi
+else
+  seed_warn "wms-postgres 컨테이너 미기동 — 마스터 읽기 검증을 건너뜁니다(아래 흐름도 같은 이유로 실패할 것입니다)"
+fi
+
 # --- 마스터 고정 UUID (db/seed/V99..V103) ------------------------------------
 WAREHOUSE_ID=01910000-0000-7000-8000-000000000001
 LOCATION_ID=01910000-0000-7000-8000-000000001001

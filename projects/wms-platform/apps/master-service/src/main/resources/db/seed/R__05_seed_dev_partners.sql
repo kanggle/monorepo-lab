@@ -17,6 +17,15 @@
 -- between master and the consumer services without code drift. BOTH-001 is
 -- new — only emitted into the master read-model once a downstream consumer
 -- pulls the partner.created event.
+--
+-- ECOMMERCE-STORE (TASK-MONO-765, added 2026-10-06) — the fixed customer
+-- partner code ecommerce-platform's shipping-service FulfillmentAcl stamps
+-- on every `ecommerce.fulfillment.requested.v1` event
+-- (ecommerce-microservices-platform apps/shipping-service
+-- src/main/java/com/example/shipping/infrastructure/event/FulfillmentAcl.java:32,
+-- `CUSTOMER_PARTNER_CODE = "ECOMMERCE-STORE"`, constant — not configurable).
+-- `partner_type=CUSTOMER` + `status=ACTIVE` is required for
+-- `PartnerSnapshot.canReceive()` (outbound-service) to return true.
 
 INSERT INTO partners (
     id, partner_code, name, partner_type,
@@ -67,6 +76,23 @@ INSERT INTO partners (
     'sam@omnitrading.example.com',
     '+82-2-5555-5555',
     'Incheon, Korea',
+    'ACTIVE',
+    0,
+    '2026-04-18T00:00:00Z',
+    'seed-dev',
+    '2026-04-18T00:00:00Z',
+    'seed-dev'
+),
+(
+    '01910000-0000-7000-8000-000000000902',
+    'ECOMMERCE-STORE',
+    'Ecommerce Storefront (cross-project customer)',
+    'CUSTOMER',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     'ACTIVE',
     0,
     '2026-04-18T00:00:00Z',

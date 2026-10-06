@@ -4,7 +4,7 @@ TASK-MONO-765
 
 # Status
 
-ready
+review
 
 # Title
 
@@ -100,6 +100,72 @@ fulfillment:
 
 ---
 
+# 구현 — AC-0 재측정 + AC-1 표 (2026-10-06 UTC)
+
+## AC-0 재측정
+
+착수 시 코드를 다시 읽었다(가정하지 않음). `FulfillmentRequestedConsumer.toCommand`
+(apps/outbound-service/.../consumer/FulfillmentRequestedConsumer.java:143-201)는 위
+배경 절의 세 호출부(`findPartnerByCode` → `findWarehouseByCode` → 라인별
+`findSkuByCode` → 있으면 `findLotBySkuAndLotNo`)를 **그대로** 갖고 있다 — 코드 변경
+없음, 진단 그대로 유효.
+
+## AC-1 표 — ecommerce 가 실제로 보내는 값 vs wms 읽기 모델(수정 전)
+
+| 갈래 | ecommerce 가 보내는 값(코드·file:line) | wms 읽기 모델(수정 전) |
+|---|---|---|
+| 거래처 | `"ECOMMERCE-STORE"` 고정 상수 — `FulfillmentAcl.CUSTOMER_PARTNER_CODE`, ecommerce-microservices-platform apps/shipping-service src/main/java/com/example/shipping/infrastructure/event/FulfillmentAcl.java:32 | **없음** (`outbound_db.partner_snapshot` 에 `CUST-001`/`BOTH-001` 뿐) |
+| 창고 | `fulfillment.default-warehouse-code` 설정값, 기본 `WH-MAIN` — shipping-service application.yml:73 (`${FULFILLMENT_DEFAULT_WAREHOUSE_CODE:WH-MAIN}`, 데모 compose 에 오버라이드 없음 → 실제로 `WH-MAIN` 이 나간다) | **없음** (`outbound_db.warehouse_snapshot` 에 `WH01` 뿐 — 다른 코드) |
+| SKU | `require-sku-mapping=false` → `FulfillmentAcl.resolveSkuCode` 가 identity passthrough(FulfillmentAcl.java:81-92)로 order-service 의 주문 라인 `sku` 필드를 그대로 보낸다. 그 필드는 `OrderConfirmationService.toLine` 이 **variantId**(없으면 productId)로 채운다 — apps/order-service/.../OrderConfirmationService.java:58-64. 즉 skuCode = product-service `product_variants.id` 그 자체(소문자 UUID 문자열), `SKU-APPLE-001` 류 인간 코드가 아니다. | `SKU-APPLE-001` **하나뿐**(`outbound_db.sku_snapshot`) — ecommerce 변형 UUID 0건 |
+| LOT | `FulfillmentAcl.toFulfillmentRequested` 가 이 경로에서 `lotNo` 를 항상 `null` 로 보낸다(FulfillmentAcl.java:76) — 실측으로 확정, LOT 불필요 | 해당 없음 |
+
+🔴 **티켓 원문의 가정 하나가 틀렸다** — "SKU 코드가 그대로 wms skuCode" 는 맞지만, 그
+실제 값이 `SKU-APPLE-001` 같은 인간 코드가 아니라 **product-service 의 변형(variant)
+UUID 문자열**이라는 것은 코드를 다시 읽어서만 드러났다(AC-0 의 "가정하지 말 것" 지시가
+여기서 실제로 값을 낸 지점).
+
+🔴🔴 **변형 전수도 처음 셈이 틀렸다** — `grep INSERT INTO product_variants`로 마이그레이션
+전체를 센 결과 V8(28)+V19(37) **만이 아니라 V21__seed_artist_goods.sql(21, 팬 아티스트
+굿즈)도 있어 총 86종**이다. V21 은 "데모 서버는 재굽기 전까지 갖지 않는다"(V21 자신의
+헤더)지만, 다음 재굽기부터는 있다 — 65종만 심었다면 이 티켓이 경고하는 바로 그 SKU-드리프트
+재발을 **이 티켓 스스로** 만들 뻔했다. 86종 전부를 심었다(아래 AC-2).
+
+## AC-2 — 적용한 변경
+
+마스터 데이터는 API 로 넣을 수 없다(`MASTER_WRITE` 가 어떤 신원으로도 열리지 않음 —
+`infra/demo/wms-devseed.override.yml` 헤더, TASK-MONO-514) — 그래서 `seed-wms.sh` 에
+API 호출을 추가하지 않았다. 대신 이 저장소가 이미 wms 마스터에 쓰는 경로(Flyway
+`db/seed/R__*`, 각 서비스가 own-mirror 로 가짐)로 추가했다:
+
+- `projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__01_seed_dev_warehouse.sql`
+  — 창고 `WH-MAIN` 행 추가(기존 `WH01` 은 유지·이름 변경 안 함 — 다른 inbound/outbound
+  픽스처가 그 UUID 를 참조한다).
+- `.../master-service/.../db/seed/R__05_seed_dev_partners.sql` — 거래처
+  `ECOMMERCE-STORE`(`CUSTOMER`·`ACTIVE`) 행 추가.
+- `.../outbound-service/src/main/resources/db/seed/R__seed_dev_masterref.sql` —
+  `FulfillmentRequestedConsumer.masterReadModel` 이 **실제로 읽는** 테이블(outbound-service
+  자신의 로컬 읽기 모델 미러)에 위 둘을 미러 + SKU 86종(`sku_snapshot`, `tracking_type=NONE`,
+  `sku_code` = ecommerce 변형 UUID 그대로, 소문자) 추가.
+- `infra/demo/seed/seed-wms.sh` — API 로 만드는 대신 **읽어서 검증**하는 블록 추가(§0):
+  master_db.warehouses/partners + outbound_db.warehouse_snapshot/partner_snapshot/
+  sku_snapshot(count=86) 를 `dbquery`(읽기 전용, `--why` 불필요)로 확인하고 다르면
+  `seed_fail`.
+
+🔴 **master-service 자신의 `skus` 테이블에는 SKU 86종을 안 심었다** — 그 테이블의
+`CHECK (sku_code = UPPER(sku_code))` 제약(V5__init_sku.sql:35)이 소문자 UUID 를
+거부한다. 대문자로 올리면 제약은 통과하지만 실제 이벤트가 보내는 값(소문자)과
+달라져 **아무 의미가 없다.** `FulfillmentRequestedConsumer` 가 조회하는 테이블은
+outbound-service 자신의 `sku_snapshot`(제약 없음)뿐이므로 거기에만 정확한 대소문자로
+심었다 — 전문은 그 파일의 TASK-MONO-765 주석.
+
+🔴 **알려진 잔여 격차(이 티켓 범위 밖, AC-4 에 영향)** — inventory-service 자신의
+`db/seed/R__seed_dev_masterref.sql` 미러는 아직 `WH-MAIN`/이 86 SKU 를 안 갖고 있다.
+AC-3(DLT 회피·주문 생성)은 이 변경만으로 충분하지만, AC-4(재고 반영)는 그 예약 사가가
+inventory-service 자신의 로컬 캐시를 또 거치므로 이 SKU 들에 대해서는 불완전할 수
+있다 — 후속 티켓 대상.
+
+---
+
 # Goal
 
 데모에서 ecommerce 스토어 주문이 발생하면, 그 fulfillment 요청이 wms outbound-service 에서
@@ -138,18 +204,26 @@ DLT 로 가지 않고 정상적으로 outbound order 로 들어간다(재굽기 
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 착수 시 DLT 깊이·헤더·`findPartnerByCode`/`findWarehouseByCode`/
+- [x] **AC-0 (재측정)** — 착수 시 DLT 깊이·헤더·`findPartnerByCode`/`findWarehouseByCode`/
       `findSkuByCode` 호출부를 다시 확인한다. 이 티켓의 표는 2026-10-06 23차 창 실측이다.
-- [ ] **AC-1** — 위 Scope 의 세 갈래(거래처·창고·SKU) 각각에 대해 ecommerce 가 실제로
-      보내는 코드값과 wms 읍기 모델의 현재 상태를 **표로** 남긴다(빠진 것만 추측하지 않는다).
-- [ ] **AC-2** — 거래처 `ECOMMERCE-STORE`(`canReceive()=true`) + 창고(실제 전송 코드) +
+      → 위 "구현 — AC-0 재측정" 절. 코드 변경 없음 — 진단 그대로 유효함을 확인했다.
+- [x] **AC-1** — 위 Scope 의 세 갈래(거래처·창고·SKU) 각각에 대해 ecommerce 가 실제로
+      보내는 코드값과 wms 읽기 모델의 현재 상태를 **표로** 남긴다(빠진 것만 추측하지 않는다).
+      → 위 "AC-1 표". SKU 쪽이 "인간 코드" 가 아니라 ecommerce 변형 UUID 라는 것과,
+      그 변형이 65 종이 아니라 86 종(V21 포함)이라는 것 둘 다 이 재측정에서 드러났다.
+- [x] **AC-2** — 거래처 `ECOMMERCE-STORE`(`canReceive()=true`) + 창고(실제 전송 코드) +
       ecommerce 주문 가능 SKU 전부를 시드에 추가한다. LOT 추적 SKU 라면 LOT 도 함께.
+      → 위 "AC-2 — 적용한 변경". LOT 은 불필요(이 경로의 `lotNo` 는 항상 null, 실측 확정).
 - [ ] **AC-3** — 재굽기·apply 뒤, 새 스토어 주문 1건이 wms DLT 로 가지 않고 outbound order
-      로 들어간다(`outbound_order` 행 생성 · DLT 증가 없음).
+      로 들어간다(`outbound_order` 행 생성 · DLT 증가 없음). ⏳ **재굽기 필요 — 오케스트레이터가
+      재굽기 창에서 측정.** 정적 변경(시드·Flyway)은 이 PR 에 포함돼 있다.
 - [ ] **AC-4** — wms 출고·재고 콘솔 화면과 scm 재고 가시성(`TASK-MONO-762`)이 그 주문을
-      반영한다(762 연장 측정).
+      반영한다(762 연장 측정). ⏳ **재굽기 필요 — 오케스트레이터가 재굽기 창에서 측정.**
+      🔴 위 "잔여 격차" 메모 참고 — inventory-service 자신의 미러가 아직 이 SKU 들을
+      모르므로 이 AC 는 재굽기 뒤에도 바로 안 닫힐 수 있다.
 - [ ] **AC-5 (판정 보류)** — 기존 DLT 4건의 처리 방향(replay vs 폐기)은 **이 티켓에서
-      정하지 않는다** — Edge Cases 에 옵션만 남기고 소유자 결정으로 넘긴다.
+      정하지 않는다** — Edge Cases 에 옵션만 남기고 소유자 결정으로 넘긴다. ⚪ 소유자 결정
+      대기 — 이 티켓이 바꾸는 것은 **앞으로의** 요청뿐이다.
 
 ---
 
