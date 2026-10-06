@@ -17,8 +17,13 @@ import { render, screen } from '@testing-library/react';
  * below deletes the key entirely rather than setting it to `null`.
  */
 
-const { getPost, setReaction, removeReaction } = vi.hoisted(() => ({
+const { getPost, getComments, setReaction, removeReaction } = vi.hoisted(() => ({
   getPost: vi.fn(),
+  // TASK-FAN-FE-032 — `memberPostDetail` now also calls `getComments`
+  // (`server-only`, same reason as `getPost` below). Default rejection is
+  // the realistic deployment-order case (`comment-section-404.test.tsx`
+  // covers that behaviour directly); this file only cares about ReactionBar.
+  getComments: vi.fn().mockRejectedValue(new Error('not relevant to this suite')),
   setReaction: vi.fn(),
   removeReaction: vi.fn(),
 }));
@@ -27,6 +32,7 @@ const { getPost, setReaction, removeReaction } = vi.hoisted(() => ({
 // reaches `@/shared/auth/session` (also `server-only`) — neither loads in
 // jsdom. ReactionBar itself is exercised directly in axis 1 below.
 vi.mock('@/features/post/api/getPost', () => ({ getPost }));
+vi.mock('@/features/post/api/getComments', () => ({ getComments }));
 vi.mock('@/features/post/api/reactions', () => ({ setReaction, removeReaction }));
 vi.mock('@/shared/auth/session', () => ({
   getFanSession: async () => ({ accessToken: 'token-abc' }),

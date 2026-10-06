@@ -1,10 +1,13 @@
 export { PostCard } from './ui/PostCard';
 export { ReactionBar } from './ui/ReactionBar';
+export { CommentPanel } from './ui/CommentPanel';
 export { getPost } from './api/getPost';
+export { getComments } from './api/getComments';
 export { setReaction, removeReaction } from './api/reactions';
+export { addComment, deleteComment, loadMoreComments } from './api/comments';
 export { getMyPosts } from './api/getMyPosts';
 export { publishFanPost } from './api/actions';
-export { FAN_POST_BODY_MAX, FAN_POST_TITLE_MAX } from './lib/post-limits';
+export { FAN_POST_BODY_MAX, FAN_POST_TITLE_MAX, FAN_COMMENT_BODY_MAX } from './lib/post-limits';
 export { ComposeForm } from './ui/ComposeForm';
 export { MyPostList } from './ui/MyPostList';
 export { memberPostDetail } from './ui/memberPostDetail';

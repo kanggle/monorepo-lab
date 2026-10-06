@@ -2,10 +2,56 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { getFanSession } from '@/shared/auth/session';
 import { getPost } from '@/features/post/api/getPost';
+import { getComments } from '@/features/post/api/getComments';
 import { ReactionBar } from './ReactionBar';
+import { CommentPanel } from './CommentPanel';
 import { ApiError } from '@/shared/api/errors';
 import { ErrorState } from '@/shared/ui/ErrorState';
 import { PostImage } from '@/shared/ui/PostImage';
+
+/**
+ * 댓글 섹션(TASK-FAN-FE-032). `null` 이면 호출자는 아무것도 그리지 않는다 —
+ * `memberPostDetail` 자신의 반환값 관용구(ReactNode | null)와 같은 모양이다.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 🔴 AMI 재굽기 간극(TASK-FAN-BE-052) — 이 호출이 404/오류를 던지면 **댓글
+ * 섹션 전체를 숨긴다**(목록 + composer + 삭제). 본문·반응·메타는 이 함수
+ * 바깥에서 이미 그려졌으므로 영향받지 않는다.
+ * ─────────────────────────────────────────────────────────────────────────
+ * 섹션 전체를 숨기는 쪽을 택한 이유 — 목록 없이 composer만 보여주는 절반짜리
+ * 화면은 "쓰면 서버에는 반영되는데 같은 화면에서 다시 보이지는 않는다"는,
+ * AC-2 가 명시적으로 금지하는 모양을 그대로 만든다. 이 티켓의 배경 절도
+ * 글자 그대로 "댓글 섹션만 숨겨진다"고 적어 뒀다 — 목록만 숨기고 composer는
+ * 남기는 절반 숨김이 아니다.
+ */
+async function commentSection(
+  postId: string,
+  accessToken: string | null,
+  viewerAccountId: string | null,
+): Promise<ReactNode | null> {
+  try {
+    const firstPage = await getComments(accessToken, postId);
+    return (
+      <section
+        data-testid="comment-section"
+        className="mt-8 border-t border-ink-200 pt-6"
+      >
+        <h2 className="mb-4 text-lg font-semibold text-ink-900">
+          댓글 {firstPage.totalElements.toLocaleString()}개
+        </h2>
+        <CommentPanel
+          postId={postId}
+          initialComments={firstPage.content}
+          initialPage={firstPage.page}
+          initialHasNext={firstPage.hasNext}
+          viewerAccountId={viewerAccountId}
+        />
+      </section>
+    );
+  } catch {
+    return null;
+  }
+}
 
 /**
  * `/posts/[id]` 의 **회원 판** — 게이트웨이가 그리는 상세. 예전 페이지의 본문 그대로다.
@@ -91,6 +137,7 @@ export async function memberPostDetail(id: string): Promise<ReactNode | null> {
             initialReaction={post.myReaction ?? null}
           />
         </footer>
+        {await commentSection(post.postId, session.accessToken, session.accountId)}
       </article>
     );
   } catch (err) {

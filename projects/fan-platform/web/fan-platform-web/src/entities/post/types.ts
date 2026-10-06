@@ -96,3 +96,16 @@ export interface Comment {
   body: string;
   createdAt: string;
 }
+
+/**
+ * `GET /api/community/posts/{postId}/comments` page (TASK-FAN-BE-052 /
+ * `community-api.md` § Comments — List). Ordered oldest-first.
+ */
+export interface CommentPage {
+  content: Comment[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+}
