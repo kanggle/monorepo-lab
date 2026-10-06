@@ -4,7 +4,7 @@ TASK-FE-105
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -102,17 +102,27 @@ BFF 프록시가 브라우저의 `Origin` 헤더를 백엔드 게이트웨이로
 
 # Acceptance Criteria
 
-- [ ] **AC-0 (재측정)** — 라이브 게이트웨이 직접 호출로 403 이 `Origin` 헤더 유무에만 달려
+- [x] **AC-0 (재측정)** — 라이브 게이트웨이 직접 호출로 403 이 `Origin` 헤더 유무에만 달려
       있음을 확인했다(배경 § 증거).
-- [ ] **AC-1** — BFF 가 받은 요청에 `origin` 헤더가 있어도, 백엔드로 보내는 요청에는
-      `origin` 헤더가 없다 (단위 테스트).
-- [ ] **AC-2** — 같은 요청의 평범한 헤더(`content-type`)는 그대로 포워딩된다 (대조군, 같은
-      테스트).
-- [ ] **AC-3** — 기존 `bff-proxy.test.ts` 케이스가 수정 없이 통과한다.
-- [ ] **AC-4** — `tsc --noEmit` · `next lint` 로컬 통과. 단위 테스트는 로컬 vitest 4.x 가
-      이 호스트(Node 24)에서 기동 자체를 못 하는 환경 한계(`env_webstore_vitest4_node24_module_evaluator`
-      메모리 토픽 — `#module-evaluator` 기동 오류, CI 는 Node 20 이라 영향 없음)라 CI
-      `Frontend unit tests` 잡이 권위다.
+- [x] **AC-1** — BFF 가 받은 요청에 `origin` 헤더가 있어도, 백엔드로 보내는 요청에는
+      `origin` 헤더가 없다 (단위 테스트). **bite 확인**: 수정 전 커밋(impl PR #4172,
+      `b6e6659ec`/`ab3917286`)의 CI `Frontend unit tests` 런에서 이 단언이
+      `AssertionError: expected 'https://store.hubwang.com' to be null` 로 실제 적색이었고
+      (run `37426431100`, job `112147261858`, `bff-proxy.test.ts (14 tests | 1 failed)` —
+      실패 테스트는 이 신규 케이스뿐), 수정 커밋(`f548ac8ae`)에서 같은 런이
+      `Frontend unit tests` SUCCESS(6m21s, run `37426919727`)로 통과했다.
+- [x] **AC-2** — 같은 요청의 평범한 헤더(`content-type`)는 그대로 포워딩된다 (대조군, 같은
+      테스트) — 위 CI 런에서 같은 테스트 케이스의 일부로 함께 통과.
+- [x] **AC-3** — 기존 `bff-proxy.test.ts` 케이스가 수정 없이 통과한다 — 같은 CI 런에서
+      `(14 tests)` 전체 통과(기존 13 + 신규 1).
+- [x] **AC-4** — `tsc --noEmit` rc=0 · `next lint` rc=0 로컬 통과. 단위 테스트는 로컬
+      vitest 4.x 가 이 호스트(Node 24)에서 기동 자체를 못 하는 환경 한계
+      (`env_webstore_vitest4_node24_module_evaluator` 메모리 토픽 — `#module-evaluator`
+      기동 오류, CI 는 Node 20 이라 영향 없음)라 CI `Frontend unit tests` 잡을 권위로 썼다
+      (위 AC-1 참조). `next build` 는 로컬에서 컴파일·타입체크·정적 페이지 생성까지는
+      성공했으나 Windows `output: 'standalone'` 트레이싱 단계의 심볼릭 링크 생성이
+      `EPERM`(관리자 권한 필요, 이 호스트의 알려진 제약)으로 실패 — 코드와 무관한 환경
+      한계이며, CI `Frontend lint & build` 잡(Linux 러너)이 SUCCESS(2m46s)로 빌드를 쟀다.
 - [ ] **라이브(23차 창) 재확인** — 배포된 스토어(store.hubwang.com)에서 프로필 수정·배송지
       추가가 200 으로 성공하고, 새로고침 후 값이 유지된다. (오케스트레이터가 측정)
 
@@ -156,6 +166,6 @@ BFF 프록시가 브라우저의 `Origin` 헤더를 백엔드 게이트웨이로
 
 # Definition of Done
 
-- [ ] 수정 + 테스트
-- [ ] 로컬 게이트(`tsc`, `next lint`) 통과, CI `Frontend unit tests` 로 단위 테스트 권위 확보
-- [ ] Ready for review
+- [x] 수정 + 테스트
+- [x] 로컬 게이트(`tsc`, `next lint`) 통과, CI `Frontend unit tests` 로 단위 테스트 권위 확보
+- [x] Ready for review

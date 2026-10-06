@@ -82,13 +82,12 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-- `TASK-FE-105-bff-forwards-browser-origin-so-every-demo-store-write-is-403.md` — 구현 진행 중 (impl PR [#4172](https://github.com/kanggle/monorepo-lab/pull/4172)). BFF 가 브라우저 `Origin` 을 게이트웨이로 넘겨 데모 스토어 쓰기가 전부 403.
+_(없음)_
 
 
 ## review
 
-
-_(없음)_
+- `TASK-FE-105-bff-forwards-browser-origin-so-every-demo-store-write-is-403.md` — review (impl PR [#4172](https://github.com/kanggle/monorepo-lab/pull/4172), CI `Frontend unit tests` SUCCESS). BFF 가 브라우저 `Origin` 을 게이트웨이로 그대로 넘겨 데모 스토어의 브라우저 발 쓰기(프로필 수정·배송지 추가·위시리스트·주문·결제 확인·리뷰 작성)가 전부 게이트웨이 CORS 허용 목록에 의해 403 되는 결함. `STRIPPED_REQUEST_HEADERS` 에 `origin` 추가. 라이브(23차 창) 재확인은 오케스트레이터 몫으로 남김.
 
 ## done
 - ✅ `TASK-FE-104-store-starting-banner-follows-whole-demo-selection.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4155**, 스쿼시 **`678b6d003`** (머지 시점 실패 0/67). 소유자 결정 (나): 선택 전체 기준 유지 + 문구를 «선택한 데모 화면 중 일부가 아직 켜지는 중» 으로. **AC-4 🟢 21차 창**: `console-scm` 내림·올림 중 07:12:06–07:12:41Z `store` ready · `console-scm` booting · 스토어 탐침 `starting`(배포본 새 문장).
