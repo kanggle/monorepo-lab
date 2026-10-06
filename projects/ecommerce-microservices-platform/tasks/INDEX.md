@@ -82,7 +82,7 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-_(없음)_
+- `TASK-FE-105-bff-forwards-browser-origin-so-every-demo-store-write-is-403.md` — 구현 진행 중 (impl PR [#4172](https://github.com/kanggle/monorepo-lab/pull/4172)). BFF 가 브라우저 `Origin` 을 게이트웨이로 넘겨 데모 스토어 쓰기가 전부 403.
 
 
 ## review
