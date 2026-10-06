@@ -22,6 +22,17 @@
 --
 -- 🔴 Renaming an ALREADY-APPLIED repeatable makes Flyway reject the database
 -- ("applied migration not resolved locally"). This name is final.
+--
+-- TASK-MONO-765 — second warehouse WH-MAIN, added (not renamed) 2026-10-06.
+-- ecommerce shipping-service's `fulfillment.default-warehouse-code` (default
+-- `WH-MAIN`, see ecommerce-microservices-platform apps/shipping-service
+-- src/main/resources/application.yml:73) is a *different* literal than the
+-- warehouse this file already seeds (`WH01`). Renaming WH01 was rejected —
+-- out-of-scope changes to pre-existing inbound/outbound fixtures that key off
+-- WH01's UUID (`01910000-…-000001`) — so this is an additive second row.
+-- `FulfillmentRequestedConsumer.findWarehouseByCode` only needs the code to
+-- resolve to an ACTIVE warehouse id; it does not require zones/locations
+-- under it (those are assigned later, at putaway/picking time).
 
 INSERT INTO warehouses (
     id, warehouse_code, name, address, timezone, status, version,
@@ -30,6 +41,19 @@ INSERT INTO warehouses (
     '01910000-0000-7000-8000-000000000001',
     'WH01',
     'Seoul Main Warehouse',
+    'Seoul, Korea',
+    'Asia/Seoul',
+    'ACTIVE',
+    0,
+    '2026-04-18T00:00:00Z',
+    'seed-dev',
+    '2026-04-18T00:00:00Z',
+    'seed-dev'
+),
+(
+    '01910000-0000-7000-8000-000000000002',
+    'WH-MAIN',
+    'Ecommerce Fulfillment Warehouse',
     'Seoul, Korea',
     'Asia/Seoul',
     'ACTIVE',
