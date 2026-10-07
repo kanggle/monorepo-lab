@@ -863,7 +863,7 @@ Refresh rotation(`POST /api/auth/refresh`) 경로에서 새 access token이 발�
 `false`/미설정이면 `prod` 가 아닐 때만 로깅 스텁이 뜨고 `prod` 에서는 **아무것도 안 떠 기동이 실패한다**(TASK-BE-242
 의 fail-fast 유지). 링크 = `{iam.mail.password-reset-link-base-url}?token=<token>`. 🔴 응답은 여전히 **언제나 204** 다 —
 이 엔드포인트는 계정 존재 여부를 숨겨야 하므로 발송 실패를 응답으로 드러낼 수 없다(실패는 WARN 로그, 토큰·주소 미기록).
-⚪ 링크가 가리킬 **재설정 화면은 아직 없다**(요청 화면도 없다) — 이 티켓은 «메일이 나간다» 까지다.
+링크가 가리킬 재설정 화면 · 요청 화면은 TASK-BE-627 이 만들었다 — 아래 § IdP 브라우저 화면 — 비밀번호 재설정.
 
 ---
 
@@ -886,3 +886,47 @@ Refresh rotation(`POST /api/auth/refresh`) 경로에서 새 access token이 발�
 |---|---|---|
 | PASSWORD_RESET_TOKEN_INVALID | 400 | 토큰 없음·만료·이미 사용됨 |
 | PASSWORD_POLICY_VIOLATION | 400 | 새 패스워드가 정책 미충족 |
+
+---
+
+## IdP 브라우저 화면 — 비밀번호 재설정 (TASK-BE-627, TASK-MONO-770 의 남은 화면)
+
+위 두 JSON 엔드포인트가 가리킬 화면 둘. 둘 다 `/login` · `/signup` · `/consent` · `/email-verification` ·
+`/verify-email` 과 같은 `@Order(0)` 폼 체인에 있다(같은 세션 정책 · CSRF 켜짐 · permitAll — 판정은 컨트롤러가
+한다). **이메일 인증 화면과 달리 account-service 를 부르지 않는다** — `RequestPasswordResetUseCase` ·
+`ConfirmPasswordResetUseCase` 가 auth-service 로컬 애플리케이션 서비스이기 때문에(크리덴셜 소유권은 이미
+auth-service local, TASK-BE-063 이후) `PasswordResetPageController` 는 이들을 HTTP 가 아니라 **직접** 부른다
+— 기존 JSON `PasswordResetController` 와 같은 호출 방식. 데모 엣지(Traefik `iam-oidc` 라우터)는
+`PathPrefix(\`/password-reset\`)` 하나로 두 경로를 다 덮는다(가드 (p) 가 템플릿 링크와 대조한다).
+
+### GET · POST /password-reset/request — 재설정 메일 요청
+
+| 상황 | 화면 |
+|---|---|
+| GET | 이메일 입력 폼 |
+| POST, 이메일 비어 있음 | «이메일을 입력해 주세요» — `RequestPasswordResetUseCase` 를 부르지 않는다(계정 조회 전 형식 검사라 존재 비노출과 무관) |
+| POST, 이메일 입력됨 | 🔴 **있는 이메일 · 없는 이메일 · 홍수 제한에 걸린 요청 모두 같은 화면**: «계정이 있다면 비밀번호 재설정 메일을 보냈습니다» — `RequestPasswordResetUseCase.execute()` 는 이 셋을 전부 조용히 흡수하고 정상 반환하므로(auth-api.md § POST /api/auth/password-reset/request), 컨트롤러에는 이 셋을 가를 수 있는 분기 자체가 없다 |
+| POST, 그 밖의 예외(예: Redis 장애) | «잠시 후 다시 시도해 주세요» |
+
+### GET · POST /password-reset — 메일의 링크가 도착하는 곳
+
+- `GET /password-reset?token=…`(= `iam.mail.password-reset-link-base-url`): 토큰이 있으면 새 비밀번호 +
+  확인 입력 폼. 토큰이 없으면(주소를 직접 친 경우 등) **오류가 아니라 안내** — «재설정 링크가 필요합니다» +
+  요청 화면 링크(Edge Case).
+- `POST /password-reset`(`token` hidden 필드 · `newPassword` · `confirmPassword` · CSRF) →
+  `ConfirmPasswordResetUseCase`. 로그인 세션은 보지 않는다 — 로그인 상태에서 링크를 열어도 그대로 진행된다
+  (토큰 자체가 자격이다, Edge Case).
+
+| 화면/판정 | 결과 |
+|---|---|
+| `newPassword` 비어 있음 · `confirmPassword` 와 불일치 | «비밀번호가 일치하지 않습니다» — 유스케이스를 부르지 않는다. 토큰은 hidden 필드로 유지 |
+| `PasswordResetTokenInvalidException`(토큰 없음·만료·이미 사용됨) | «링크가 만료되었거나 이미 사용되었습니다» + «재설정 메일 다시 요청» 링크. 같은 토큰으로 재시도해도 성공할 수 없으므로 토큰은 **버린다**(요청 화면으로 안내할 뿐) |
+| `PasswordPolicyViolationException` | 🔴 정책 문구(8자 이상 · 대/소문자·숫자·특수문자 3종 이상 · 이메일 미포함) — **토큰은 유지**한다(Failure Scenario 3: 여기서 토큰을 잃으면 메일을 다시 받아야 한다), 단 `newPassword`/`confirmPassword` 입력값은 절대 다시 채우지 않는다 |
+| 성공 | `/login?passwordReset` 로 redirect → «비밀번호를 변경했습니다. 새 비밀번호로 로그인해 주세요» |
+| 그 밖의 예외 | «지금은 처리할 수 없습니다 — 잠시 뒤 다시» (토큰은 소비되지 않았다 — 같은 링크로 다시 된다) |
+
+🔴 R4: 화면·로그 어디에도 토큰을 텍스트로 쓰지 않는다(hidden 필드만 예외 — 그 페이지를 연 사람에게 돌려주는 것).
+
+`login.html` 에 «비밀번호를 잊으셨나요?» 링크(`/password-reset/request`)를 추가했다 — ADR-007 invariant 3
+(`#username`/`#password`, CSRF 필드, `POST /login`, 폼당 submit 버튼 정확히 1개)은 변경하지 않았다(이 링크는
+`<a>` 이지 버튼이 아니다).
