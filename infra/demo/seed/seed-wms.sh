@@ -9,6 +9,9 @@
 #   ASN 생성 → 검수 시작 → 검수 기록 → 적치 지시 → 적치 확정 → (재고 반영)
 #   그리고 출고 주문 1건
 #
+# + (TASK-MONO-768) 같은 입고 흐름을 WH-MAIN 에 ecommerce SKU 86종 × 1장씩 — 스토어 주문의
+#   출고 예약이 BACKORDERED 가 아니라 RESERVED 가 되도록. 아래 1b) · 3) 참조.
+#
 # 즉 이 스크립트가 통과한다는 것은 콘솔의 `/wms/inbound` · `/wms/inventory` ·
 # `/wms/outbound` 가 채워진다는 뜻이고, 동시에 **그 6개 엔드포인트가 살아 있다는
 # 검증**이다(MONO-506 의 원칙: 넣는 행위가 곧 검증).
@@ -193,7 +196,11 @@ wait_backend "outbound-service" "$GW/api/v1/outbound/orders?size=1" 60 || wms_re
 # 저장소가 반복해서 당한 모양이다. 그래서 종착 상태일 때만 건너뛰고, 중간이면 실패로 센다.
 ASN_FOUND=0
 ASN_STATE=""
-if http GET "$GW/api/v1/inbound/asns?size=100" && printf '%s' "$SEED_LAST_BODY" | grep -qF "\"$ASN_NO\""; then
+# 🔴 `warehouseId=` 필터는 TASK-MONO-768 이 붙였다. 목록은 createdAt 내림차순 100건까지만
+# 오는데, 아래 1b) 가 WH-MAIN 에 ASN 86건을 **이 ASN 보다 나중에** 만든다(scm 발 ASN 도 쌓인다).
+# 필터 없이 두면 몇 번의 실행 뒤 ASN-DEMO-0001 이 첫 페이지 밖으로 밀려나 "없음" 으로 읽히고,
+# 다시 만들다 409(ASN_NO_DUPLICATE) 로 실패한다. WH01 로 좁히면 그 86건은 이 질문에 안 섞인다.
+if http GET "$GW/api/v1/inbound/asns?warehouseId=$WAREHOUSE_ID&size=100" && printf '%s' "$SEED_LAST_BODY" | grep -qF "\"$ASN_NO\""; then
   ASN_FOUND=1
   ASN_STATE="$(printf '%s' "$SEED_LAST_BODY" \
     | sed -E "s/.*\"asnNo\":\"$ASN_NO\"[^}]*\"status\":\"([A-Z_]*)\".*/\1/")"
@@ -267,6 +274,128 @@ JSON
       fi
     fi
   fi
+fi
+
+# =============================================================================
+# 1b) ecommerce SKU 86종 입고 — WH-MAIN (TASK-MONO-768)
+# =============================================================================
+# 765 이후 스토어 주문은 wms 출고 주문까지 간다. 그런데 그다음 예약에서 inventory 의
+# `PickingRequestedConsumer` 가 `(WH-MAIN, skuId, lot=NULL)` 의 `available_qty > 0` 행을
+# 찾고, **0행이면 `inventory.reserve.failed` → 출고 BACKORDERED** 다. WH-MAIN 에는 로케이션도
+# 재고도 없었다. 그래서 여기서 SKU 마다 위 1) 과 **같은 실제 입고 API** 를 밟는다.
+#
+# 🔴 재고를 `dbexec` 로 `inventory` 에 넣으면 **안 된다** — 예약은 되지만 scm 재고 가시성은
+# `wms.inventory.received.v1` 로만 노드·SKU 스냅샷을 만들고, 그것 없이 온 출고 확정
+# (`wms.inventory.confirmed.v1`)은 `InventorySnapshotNotFoundException` 으로 DLT 에 간다.
+#
+# 🔴 **ASN 한 장에 SKU 하나** — 한 장에 86라인을 넣지 않는 이유(2026-10-07 코드로 확인):
+# inbound 는 라인 수 상한이 없고 inventory 도 86라인 이벤트를 한 트랜잭션에 받는다. 막는 것은
+# **scm** 이다. `WmsInventoryReceivedConsumer` 는 라인마다 `applyInventoryReceived(…,
+# eventId, …)` 를 부르고, 그 안에서 `isDuplicate(eventId)` → 반영 → `markProcessed(eventId)`
+# 를 한다 ⇒ 같은 eventId 의 **두 번째 라인부터는 "중복" 으로 버려진다.** 86라인 ASN 은 scm
+# 에 SKU 1종만 남긴다. 1라인 ASN 이면 received 이벤트도 1라인이라 이 결함을 밟지 않는다.
+# (scm 결함 자체는 이 티켓 범위 밖 — TASK-MONO-768 본문에 후속으로 적었다.)
+#
+# 🔵 ID 는 떠도는 상수가 아니다: WH-MAIN `…0002` = master R__01, 로케이션 `…1101` = master
+# R__03, SKU `…{2001..2086}` = outbound `sku_snapshot` 의 id(그 id 가 `picking.requested`
+# 의 skuId 다). inbound·inventory 미러가 같은 값을 갖고, inventory-service 의
+# `EcommerceSeedParityTest` 가 **이 파일의 아래 세 줄까지** 읽어 대조한다 — 한 곳만 바뀌면 빨강.
+# 공급 거래처는 1) 의 SUP-001(`$SUPPLIER_ID`)을 재사용한다.
+#
+# 멱등: ASN 번호 `ASN-DEMO-EC-001..086` 고정. WH-MAIN ASN 목록을 **전 페이지** 읽어 번호별
+# 상태를 모은 뒤, 종착(PUTAWAY_DONE·CLOSED)이면 건너뛰고 중간 상태면 1) 과 같은 이유로 실패로
+# 센다. 목록을 못 읽으면 아무것도 만들지 않는다(모르는 채 만들면 86건이 전부 409 다).
+WH_MAIN_ID=01910000-0000-7000-8000-000000000002
+WH_MAIN_LOCATION_ID=01910000-0000-7000-8000-000000001101
+EC_SKU_ID_FORMAT='01910000-0000-7000-8000-%012d'
+EC_SKU_ID_BASE=2000
+EC_SKU_COUNT=86
+EC_QTY=100
+
+# re_get <변수> <ERE(그룹 1개)> — SEED_LAST_BODY 의 첫 매치를 변수에 넣는다.
+# 🔵 서브셸·파이프를 쓰지 않는다: 86 × 5 호출에 `$(printf | grep | head | sed)` 를 쓰면
+# 항목마다 프로세스 네 개다(msys 에서는 fork 가 비싸다). bash 정규식은 fork 0 이다.
+re_get() {
+  local __re="$2"
+  if [[ $SEED_LAST_BODY =~ $__re ]]; then
+    printf -v "$1" '%s' "${BASH_REMATCH[1]}"
+  else
+    printf -v "$1" '%s' ""
+  fi
+}
+
+# ec_receive_one <asnNo> <skuId> — ASN → 검수 시작 → 검수 → 적치 지시 → 적치 확정.
+ec_receive_one() {
+  local no="$1" sku="$2" asn_id line_id instr_id pl_id
+  idem POST "$GW/api/v1/inbound/asns" \
+    "{\"asnNo\":\"$no\",\"supplierPartnerId\":\"$SUPPLIER_ID\",\"warehouseId\":\"$WH_MAIN_ID\",\"expectedArriveDate\":\"2026-10-07\",\"notes\":\"데모 입고 — ecommerce SKU 기초 재고\",\"lines\":[{\"skuId\":\"$sku\",\"lotId\":null,\"expectedQty\":$EC_QTY}]}" \
+    || { seed_fail "$no ASN 생성 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1; }
+  re_get asn_id '"id":"([^"]*)"'
+  re_get line_id '"lines":\[\{"id":"([^"]*)"'
+  [ -n "$asn_id" ] && [ -n "$line_id" ] \
+    || { seed_fail "$no ASN 응답에서 id/라인 id 를 읽지 못했습니다 — ${SEED_LAST_BODY:0:160}"; return 1; }
+
+  idem POST "$GW/api/v1/inbound/asns/$asn_id/inspection:start" '{"version":0}' \
+    || { seed_fail "$no 검수 시작 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1; }
+  # tracking_type NONE — lot 을 주지 않는다(InspectionService 의 LOT_REQUIRED 는 LOT 추적 SKU 만).
+  # 합격+파손+부족 = 예정 수량이라 불일치(discrepancy)가 없고, 검수가 곧바로 INSPECTED 로 닫힌다.
+  idem POST "$GW/api/v1/inbound/asns/$asn_id/inspection" \
+    "{\"notes\":\"외관 양호\",\"lines\":[{\"asnLineId\":\"$line_id\",\"qtyPassed\":$EC_QTY,\"qtyDamaged\":0,\"qtyShort\":0,\"lotId\":null,\"lotNo\":null}],\"version\":1}" \
+    || { seed_fail "$no 검수 기록 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1; }
+
+  idem POST "$GW/api/v1/inbound/asns/$asn_id/putaway:instruct" \
+    "{\"lines\":[{\"asnLineId\":\"$line_id\",\"destinationLocationId\":\"$WH_MAIN_LOCATION_ID\",\"qtyToPutaway\":$EC_QTY}],\"version\":2}" \
+    || { seed_fail "$no 적치 지시 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1; }
+  re_get instr_id '"putawayInstructionId":"([^"]*)"'
+  re_get pl_id '"putawayLineId":"([^"]*)"'
+  [ -n "$instr_id" ] && [ -n "$pl_id" ] \
+    || { seed_fail "$no 적치 지시 응답에서 id 를 읽지 못했습니다 — ${SEED_LAST_BODY:0:160}"; return 1; }
+
+  idem POST "$GW/api/v1/inbound/putaway/$instr_id/lines/$pl_id:confirm" \
+    "{\"actualLocationId\":\"$WH_MAIN_LOCATION_ID\",\"qtyConfirmed\":$EC_QTY}" \
+    || { seed_fail "$no 적치 확정 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1; }
+}
+
+declare -A EC_ASN_STATE=()
+ec_list_ok=1
+ec_page=0
+ec_pages=1
+ec_obj_re='"asnNo":"(ASN-DEMO-EC-[0-9]+)"[^}]*"status":"([A-Z_]+)"'
+while [ "$ec_page" -lt "$ec_pages" ]; do
+  if ! http GET "$GW/api/v1/inbound/asns?warehouseId=$WH_MAIN_ID&size=100&page=$ec_page"; then
+    ec_list_ok=0; break
+  fi
+  re_get ec_total_pages '"totalPages":([0-9]+)'
+  ec_pages="${ec_total_pages:-0}"
+  [ "$ec_pages" -le 50 ] || ec_pages=50   # 안전 상한 — 응답이 이상해도 무한히 돌지 않는다
+  while IFS= read -r ec_obj; do
+    [[ $ec_obj =~ $ec_obj_re ]] && EC_ASN_STATE["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
+  done < <(printf '%s' "$SEED_LAST_BODY" | tr '{' '\n')
+  ec_page=$((ec_page + 1))
+done
+
+ec_new=0; ec_existing=0; ec_bad=0
+if [ "$ec_list_ok" != "1" ]; then
+  seed_fail "WH-MAIN ASN 목록을 읽지 못했습니다(HTTP $SEED_LAST_STATUS) — 이미 있는지 모르는 채로 86건을 만들지 않습니다"
+else
+  for (( ec_i=1; ec_i<=EC_SKU_COUNT; ec_i++ )); do
+    printf -v ec_no 'ASN-DEMO-EC-%03d' "$ec_i"
+    # shellcheck disable=SC2059  # 형식 문자열은 위의 고정 상수다(EcommerceSeedParityTest 가 대조).
+    printf -v ec_sku "$EC_SKU_ID_FORMAT" $((EC_SKU_ID_BASE + ec_i))
+    ec_state="${EC_ASN_STATE[$ec_no]:-}"
+    case "$ec_state" in
+      PUTAWAY_DONE|CLOSED)
+        ec_existing=$((ec_existing + 1)) ;;
+      "")
+        if ec_receive_one "$ec_no" "$ec_sku"; then ec_new=$((ec_new + 1)); else ec_bad=$((ec_bad + 1)); fi ;;
+      *)
+        ec_bad=$((ec_bad + 1))
+        seed_fail "$ec_no 이 중간 상태($ec_state)로 남아 있습니다 — 이전 실행이 흐름 도중 실패했습니다. 원인을 고친 뒤 해당 ASN 을 정리하고 다시 실행하세요" ;;
+    esac
+  done
+  SEED_CREATED=$((SEED_CREATED + ec_new))
+  SEED_EXISTING=$((SEED_EXISTING + ec_existing))
+  seed_log "ecommerce 입고 (WH-MAIN, SKU ${EC_SKU_COUNT}종 × ${EC_QTY}) — 생성 $ec_new · 존재 $ec_existing · 실패 $ec_bad"
 fi
 
 # =============================================================================
@@ -418,5 +547,29 @@ JSON
 
 push_outbound_to_shipped \
   || seed_warn "출고 흐름이 SHIPPED 까지 가지 못했습니다 — 주문 화면은 정상이고 **출하 화면만 빕니다**(위 복구 명령 참조)"
+
+# =============================================================================
+# 3) 끝 검증 — WH-MAIN 에 ecommerce SKU 86종의 예약 가능한 재고가 있는가 (TASK-MONO-768)
+# =============================================================================
+# 1b) 의 적치 확정은 `inbound.putaway.completed` 를 내고 inventory 가 **비동기로** 받는다.
+# 그래서 API 가 전부 2xx 여도 그것은 "재고가 생겼다" 의 증거가 아니다 — 예약이 실제로 찾는
+# 조건(`PickingRequestedConsumer`: warehouse · sku · lot NULL · available_qty > 0)을 그대로
+# 읽기 전용으로 센다. 비동기라 잠시 기다린다(inventory-service 가 막 떴으면 소비가 늦다).
+if container_up wms-postgres; then
+  ec_inv=""
+  for (( ec_t=0; ec_t<180; ec_t+=5 )); do
+    ec_inv="$(dbquery wms-postgres psql inventory_db inventory "${INVENTORY_DB_PASSWORD:-inventory}" \
+      "SELECT count(DISTINCT sku_id) FROM inventory WHERE warehouse_id='$WH_MAIN_ID' AND location_id='$WH_MAIN_LOCATION_ID' AND lot_id IS NULL AND available_qty > 0 AND sku_id BETWEEN '01910000-0000-7000-8000-000000002001'::uuid AND '01910000-0000-7000-8000-000000002086'::uuid")"
+    [ "${ec_inv:-0}" = "$EC_SKU_COUNT" ] && break
+    sleep 5
+  done
+  if [ "${ec_inv:-0}" = "$EC_SKU_COUNT" ]; then
+    seed_log "재고 검증 통과 — inventory_db.inventory 에 WH-MAIN ecommerce SKU ${EC_SKU_COUNT}종 전부 available_qty > 0"
+  else
+    seed_fail "inventory_db.inventory 의 WH-MAIN ecommerce 재고가 ${EC_SKU_COUNT}종이 아닙니다(읽은 값: ${ec_inv:-?}, 180초 대기) — 스토어 주문이 BACKORDERED 됩니다. inventory-service 의 inbound.putaway.completed 소비(DLT 포함)를 확인하십시오"
+  fi
+else
+  seed_warn "wms-postgres 컨테이너 미기동 — WH-MAIN 재고 검증을 건너뜁니다"
+fi
 
 seed_summary
