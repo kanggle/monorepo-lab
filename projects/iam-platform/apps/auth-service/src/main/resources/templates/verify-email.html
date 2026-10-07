@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-MONO-770 (ADR-MONO-080 D3) — where the verification mail's link lands.
+         🔴 GET draws the button only; the POST verifies. Mail scanners and link previews fetch the link first —
+         a verifying GET would spend the token before the person opened it.
+         The token appears only in the hidden field (R4 — never as text, never in a log). -->
+    <title>이메일 인증</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<main class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('이메일 인증', null)}"></div>
+
+    <th:block th:switch="${result}">
+        <div th:case="'VERIFIED'" class="notice" id="verify-result" role="status">
+            이메일이 인증되었습니다. 이 창을 닫고 하던 일을 계속하세요.
+        </div>
+        <div th:case="'ALREADY_VERIFIED'" class="notice" id="verify-result" role="status">
+            이미 인증된 이메일입니다.
+        </div>
+        <div th:case="'INVALID_OR_EXPIRED'" class="error" id="verify-result" role="alert">
+            링크가 만료되었거나 이미 사용되었습니다.
+        </div>
+        <div th:case="'UNAVAILABLE'" class="error" id="verify-result" role="alert">
+            지금은 확인할 수 없습니다. 잠시 뒤 다시 눌러 주세요 — 같은 링크로 다시 됩니다.
+        </div>
+    </th:block>
+
+    <form action="/verify-email" th:action="@{/verify-email}" method="post"
+          data-busy-label="확인 중…" th:if="${token != null}">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+        <input type="hidden" name="token" th:value="${token}"/>
+        <button type="submit" class="primary" id="confirm-verification">이메일 인증 완료</button>
+    </form>
+
+    <p class="footer" th:if="${result == 'INVALID_OR_EXPIRED'}">
+        <a th:href="@{/email-verification}" href="/email-verification">인증 메일 다시 받기</a>
+    </p>
+</main>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

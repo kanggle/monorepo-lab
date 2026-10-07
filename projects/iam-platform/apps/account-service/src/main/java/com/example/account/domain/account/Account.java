@@ -138,6 +138,14 @@ public class Account {
     }
 
     /**
+     * TASK-MONO-770 (ADR-MONO-080 D3) — whether the owner of this account has proven the email is theirs
+     * ({@code email_verified_at} set by {@link #verifyEmail(Instant)}).
+     */
+    public boolean hasVerifiedEmail() {
+        return this.emailVerifiedAt != null;
+    }
+
+    /**
      * Transition account status via the state machine.
      * Returns the validated transition for recording in history.
      */

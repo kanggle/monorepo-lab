@@ -64,6 +64,26 @@ x-iam-oidc: &iam-oidc
   OIDC_TOKEN_URI: http://auth-service:8081/oauth2/token
 
 # -----------------------------------------------------------------------------
+# IAM 의 바깥으로 나가는 메일 → Mailpit (TASK-MONO-770, ADR-MONO-080 D3 · 소유자 결정 2026-10-07)
+# -----------------------------------------------------------------------------
+# 인증 메일(account-service)과 비밀번호 재설정 메일(auth-service)은 **설정 하나**(`IAM_MAIL_ENABLED`)로
+# 켜지는 범용 SMTP 어댑터 하나로 나간다. 🔴 **프로필이 아니라 설정인 이유가 이 파일에 있다** — 데모의 IAM 은
+# `docker-compose.e2e.yml` 의 `SPRING_PROFILES_ACTIVE: e2e` 로 뜬다. `@Profile("prod")` 어댑터였다면 데모에서
+# 영영 안 돌았다.
+#
+# 받는 곳은 같은 iam 프로젝트의 `iam-mailpit`(base compose — 받기만 하고 **어디로도 릴레이하지 않는다**).
+# 운영으로 갈 때 바뀌는 것은 이 블록의 값뿐이다(예: SPRING_MAIL_HOST=email-smtp.<region>.amazonaws.com,
+# 587 + STARTTLS + SMTP 자격) — 코드는 그대로다.
+#
+# 🔴 링크의 호스트는 `IAM_PUBLIC_URL`(브라우저가 실제로 여는 IdP 이름 — 지금 `https://auth.hubwang.com`)에서
+#    파생한다. `iam.${DEMO_DOMAIN}` 로 조립하면 부팅마다 바뀌는 IP 가 메일에 박혀 **어제 보낸 링크가 죽는다**.
+x-iam-mail: &iam-mail
+  IAM_MAIL_ENABLED: "true"
+  IAM_MAIL_FROM: no-reply@hubwang.com
+  SPRING_MAIL_HOST: iam-mailpit
+  SPRING_MAIL_PORT: "1025"
+
+# -----------------------------------------------------------------------------
 # 재시작 정책 (TASK-MONO-534)
 # -----------------------------------------------------------------------------
 # 🔴 iam 의 **앱 5개는 어떤 compose 파일에서도 `restart:` 를 받지 않는다.** base
@@ -159,7 +179,7 @@ services:
   auth-service:
     restart: unless-stopped
     environment:
-      <<: *iam-oidc
+      <<: [*iam-oidc, *iam-mail]
       SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK
       # -----------------------------------------------------------------------
       # assume-tenant 의 배정 확인 홉 (TASK-MONO-505)
@@ -223,6 +243,9 @@ services:
       OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS: ${OAUTH_MICROSOFT_ALLOWED_REDIRECT_URIS:-}
       OAUTH_NAVER_REDIRECT_URI: ${OAUTH_NAVER_REDIRECT_URI:-}
       OAUTH_NAVER_ALLOWED_REDIRECT_URIS: ${OAUTH_NAVER_ALLOWED_REDIRECT_URIS:-}
+      # TASK-MONO-770 — password-reset mail → Mailpit (the `*iam-mail` anchor is merged at the top of this
+      # map; same switch as account-service). ⚪ No reset page exists yet — the link is right the day one does.
+      IAM_MAIL_PASSWORD_RESET_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/password-reset
     networks:
       iam-e2e: null
       traefik-net:
@@ -257,7 +280,11 @@ services:
       #   화면)로 보내고, 그 화면이 같은 경로로 POST 한다. 이 목록에 없으면 iam 게이트웨이로 떨어져 **404**
       #   — 팬 ↔ 스토어 이동의 첫 방문이 막힌다. 616 은 `infra/demo` 를 건드리지 않아 그 PR 에서는
       #   이 가드가 돌지 않았다(경로 필터) — 744 가 시드 때문에 `infra/demo` 를 건드리자 처음 돌았다.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/.well-known`))"
+      # 🔵 `/email-verification` · `/verify-email` (TASK-MONO-770) — the IdP's email-verification pages:
+      #   the first sends the mail, the second is where the mail's link lands. Same failure mode as the
+      #   three above if missing: the link in every verification mail would 404 at the iam gateway.
+      #   Guard (p) derives the needed prefixes from the templates' links, so it bites if one is dropped.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"
@@ -265,7 +292,10 @@ services:
   # account/admin/security 도 콘솔 BFF 와 다른 도메인이 이름으로 찾는다.
   account-service:
     restart: unless-stopped
-    environment: *iam-oidc
+    environment:
+      <<: [*iam-oidc, *iam-mail]
+      # TASK-MONO-770 — the verification mail's link lands on the IdP page GET /verify-email.
+      IAM_MAIL_VERIFICATION_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/verify-email
     networks:
       iam-e2e: null
       traefik-net:
@@ -333,6 +363,41 @@ services:
       traefik-net:
         aliases:
           - iam-security-service
+
+  # ---------------------------------------------------------------------------
+  # mailpit — 데모 메일함, **소유자만** (TASK-MONO-770 · 소유자 결정 2026-10-07)
+  # ---------------------------------------------------------------------------
+  # 서비스 자체는 base(`projects/iam-platform/docker-compose.yml`)에 있다 — 이 파일은 서비스를 **추가하지
+  # 않는다**(check-suppressed-containers.sh 의 유도 전제 «데모 오버라이드는 서비스를 추가하지 않는다» 유지).
+  # 여기서 하는 일은 셋이다: traefik-net 합류(IAM 앱·ecommerce notification-service 가 `iam-mailpit:1025`
+  # 로 보낸다) · 웹 UI 라우터 · 그 라우터의 basic auth.
+  #
+  # 🔴🔴 메일함은 **자격증명 보관소**다 — 모든 사용자의 인증 링크(1회용 토큰)가 거기 보인다. 그래서:
+  #   ① 라우터는 **기본 꺼짐**이다(`traefik.enable=${MAILPIT_UI_ENABLED:-false}`). 켜는 것은
+  #      `infra/demo/fetch-mail-secrets.sh` 하나뿐이고, SSM 에서 basic auth 자격을 **실제로 읽었을 때만** 켠다.
+  #      읽기 실패·미등록 → 라우터 자체가 없다(fail-closed). «인증 없는 메일함» 으로 떨어지는 갈래가 없다.
+  #   ② 자격은 저장소에 없다 — htpasswd 한 줄(`<user>:<bcrypt>`)이 SSM SecureString
+  #      `/portfolio-demo/mailpit/ui-basicauth-users` 에 있고, 부팅이 읽어 `MAILPIT_UI_BASICAUTH_USERS` 로
+  #      넘긴다(소셜 로그인 키와 같은 길 — fetch-oauth-secrets.sh).
+  #   ③ 🔴 **이 엣지는 평문 HTTP 다**(entrypoint `web`, :80). basic auth 의 자격은 요청마다 base64 로 실려
+  #      전송 구간에서 읽힐 수 있다. 데모 전용 자격(다른 곳에 재사용 금지)이라는 전제에서 소유자가 고른
+  #      방식이고, TLS 가 필요해지면 auth-forwarder 같은 Vercel 앞단이 다음 수다.
+  #   ④ SMTP(1025)는 어느 라우터에도 없다 — 컨테이너 망 안에서만 닿는다.
+  # 호스트명 `mail.iam.<도메인>` 은 kafka.iam · grafana.iam 과 같은 모양이고 sslip.io 와일드카드가 그대로
+  # 해소한다(DNS 작업 없음). 가드 (i) 때문에 Traefik alias 에도 같은 이름이 있다.
+  mailpit:
+    networks:
+      iam-net: null
+      traefik-net: null
+    labels:
+      - "traefik.enable=${MAILPIT_UI_ENABLED:-false}"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.iam-mailpit.rule=Host(`mail.iam.${DEMO_DOMAIN:-local}`)"
+      - "traefik.http.routers.iam-mailpit.entrypoints=web"
+      - "traefik.http.routers.iam-mailpit.middlewares=iam-mailpit-auth"
+      - "traefik.http.middlewares.iam-mailpit-auth.basicauth.users=${MAILPIT_UI_BASICAUTH_USERS:-}"
+      - "traefik.http.middlewares.iam-mailpit-auth.basicauth.removeheader=true"
+      - "traefik.http.services.iam-mailpit.loadbalancer.server.port=8025"
 
 networks:
   # base compose(`projects/iam-platform/docker-compose.yml`)가 이미 external 로

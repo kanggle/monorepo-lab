@@ -5,6 +5,9 @@ import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.BulkLimitExceededException;
 import com.example.account.application.exception.ConsumerPoolDisabledException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
+import com.example.account.application.exception.EmailDeliveryException;
+import com.example.account.application.exception.EmailNotVerifiedException;
+import com.example.account.application.exception.VerificationEmailSendFailedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.OrgNodeNotFoundException;
 import com.example.account.application.exception.RateLimitedException;
@@ -131,6 +134,30 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleSiteRoleEmailMismatch(SiteRoleEmailMismatchException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of("SITE_ROLE_EMAIL_MISMATCH", e.getMessage()));
+    }
+
+    /**
+     * TASK-MONO-770 (ADR-MONO-080 D3 · R1) — a company role cannot be attached to an account whose email is not
+     * verified: nothing written. The shared predicate is {@code VerifiedEmailRequirement}.
+     */
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleEmailNotVerified(EmailNotVerifiedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("EMAIL_NOT_VERIFIED", e.getMessage()));
+    }
+
+    /**
+     * TASK-MONO-770 — the verification mail did not leave. Transient → 503 (retry helps; the rate-limit slot
+     * was released), permanent → 422 (the mail server refuses the address).
+     */
+    @ExceptionHandler(VerificationEmailSendFailedException.class)
+    public ResponseEntity<ErrorResponse> handleVerificationEmailSendFailed(VerificationEmailSendFailedException e) {
+        if (e.getKind() == EmailDeliveryException.Kind.PERMANENT) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(ErrorResponse.of("VERIFICATION_EMAIL_UNDELIVERABLE", e.getMessage()));
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("VERIFICATION_EMAIL_SEND_FAILED", e.getMessage()));
     }
 
     /** TASK-MONO-752 — a site account (not in the consumer pool) cannot hold consumer site roles. */

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-MONO-770 (ADR-MONO-080 D3) — send the verification mail of the account signed in to the IdP.
+         EmailVerificationPageController; outcomes = auth-api.md § IdP 브라우저 화면 — 이메일 인증.
+         🔴 A failed send says «메일을 보내지 못했습니다 · 다시 시도» (ADR-080 § 새로 생기는 위험) — never anything
+         that reads like «권한을 못 받음». -->
+    <title>이메일 인증</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<main class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('이메일 인증', ${maskedEmail})}"></div>
+
+    <th:block th:switch="${result}">
+        <div th:case="'no_session'" class="error" id="verification-result" role="alert">
+            로그인 세션이 없습니다. 스토어나 팬 사이트에 로그인한 같은 브라우저에서 이 페이지를 다시 열어 주세요.
+        </div>
+        <div th:case="'SENT'" class="notice" id="verification-result" role="status">
+            인증 메일을 보냈습니다. 메일함에서 링크를 열어 «이메일 인증 완료» 를 눌러 주세요. 링크는 24시간 동안 유효합니다.
+        </div>
+        <div th:case="'ALREADY_VERIFIED'" class="notice" id="verification-result" role="status">
+            이미 인증된 이메일입니다.
+        </div>
+        <div th:case="'RATE_LIMITED'" class="notice" id="verification-result" role="status">
+            방금 인증 메일을 보냈습니다. 메일함을 확인하시고, 받지 못했다면 5분 뒤에 다시 요청해 주세요.
+        </div>
+        <div th:case="'SEND_FAILED'" class="error" id="verification-result" role="alert">
+            메일을 보내지 못했습니다. 잠시 뒤 다시 시도해 주세요.
+        </div>
+        <div th:case="'UNDELIVERABLE'" class="error" id="verification-result" role="alert">
+            이 주소로는 메일을 보낼 수 없습니다. 다시 시도해도 같은 결과가 나옵니다.
+        </div>
+        <div th:case="'NOT_APPLICABLE'" class="error" id="verification-result" role="alert">
+            이 계정은 이메일 인증 대상이 아닙니다.
+        </div>
+    </th:block>
+
+    <th:block th:if="${result == null or result == 'SEND_FAILED'}">
+        <p class="consent-text" id="verification-text">
+            이메일을 인증하면 회사·셀러 권한을 받을 수 있습니다. 로그인과 쇼핑·팬 이용은 인증과 무관하게 그대로입니다.
+        </p>
+        <form action="/email-verification" th:action="@{/email-verification}" method="post"
+              aria-describedby="verification-text" data-busy-label="보내는 중…">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="primary" id="send-verification-email"
+                    th:text="${result == 'SEND_FAILED'} ? '다시 시도' : '인증 메일 보내기'">인증 메일 보내기</button>
+        </form>
+    </th:block>
+</main>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

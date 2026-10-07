@@ -113,6 +113,10 @@ services:
           # 남아 있다: 억제된 것은 웹 사본이지 백엔드가 아니다.)
           - kafka.iam.${DEMO_DOMAIN:-local}
           - grafana.iam.${DEMO_DOMAIN:-local}
+          # TASK-MONO-770 — the demo inbox (Mailpit UI, basic-auth, router off unless the credential was
+          # read at boot — infra/demo/iam-traefik.override.yml). No container needs this name; it is here
+          # because alias and Host() router exist only as a pair (guard (i)).
+          - mail.iam.${DEMO_DOMAIN:-local}
           - kafka.wms.${DEMO_DOMAIN:-local}
           - grafana.wms.${DEMO_DOMAIN:-local}
     healthcheck:

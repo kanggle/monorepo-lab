@@ -112,6 +112,16 @@ public class WebLoginSecurityConfig {
                         // login continuation instead.
                         new AntPathRequestMatcher("/consent", "GET"),
                         new AntPathRequestMatcher("/consent", "POST"),
+                        // TASK-MONO-770 (ADR-MONO-080 D3): the email-verification pages. Same reasons as
+                        // /consent — this chain's session (the send page acts for the signed-in account)
+                        // and CSRF on the POSTs; permitAll on purpose, EmailVerificationPageController
+                        // makes the checks (no session → it says so; the link page needs no session, the
+                        // token is the credential). An entry-point redirect would park the page as the
+                        // login continuation with no client, i.e. no tenant.
+                        new AntPathRequestMatcher("/email-verification", "GET"),
+                        new AntPathRequestMatcher("/email-verification", "POST"),
+                        new AntPathRequestMatcher("/verify-email", "GET"),
+                        new AntPathRequestMatcher("/verify-email", "POST"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

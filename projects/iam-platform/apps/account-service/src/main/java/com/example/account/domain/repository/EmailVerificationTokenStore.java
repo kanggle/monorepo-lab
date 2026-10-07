@@ -73,4 +73,14 @@ public interface EmailVerificationTokenStore {
      * Edge Cases).</p>
      */
     boolean tryAcquireResendSlot(String accountId, Duration ttl);
+
+    /**
+     * TASK-MONO-770 — gives back a slot acquired by {@link #tryAcquireResendSlot(String, Duration)} when the
+     * mail it was acquired for did not leave. The person must be able to retry at once: making them wait five
+     * minutes for a mail that was never sent is the throttle punishing the outage, not the abuse.
+     *
+     * <p>Best-effort like the acquire side: implementations swallow store failures (the marker then simply
+     * expires with its TTL).
+     */
+    void releaseResendSlot(String accountId);
 }

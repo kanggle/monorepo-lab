@@ -2,6 +2,7 @@ package com.example.product.application.service;
 
 import com.example.product.application.port.SellerSiteRoleGateway;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.model.Seller;
 import com.example.product.domain.model.SellerInvitation;
 import com.example.product.domain.model.SellerInvitationStatus;
@@ -37,6 +38,8 @@ final class InMemorySellerStores {
     final Map<String, SellerMember> members = new LinkedHashMap<>();    // key tenant|sellerId|accountId
     final Map<String, SellerInvitation> invitations = new LinkedHashMap<>(); // key tenant|id
     final Map<String, String> iamEmails = new HashMap<>();               // accountId -> email
+    /** TASK-MONO-770 — accounts IAM reports as not having verified their email (consumer-site-roles rule 4b). */
+    final Set<String> iamUnverified = new HashSet<>();                   // accountId
     final Set<String> sellerRoles = new HashSet<>();                     // tenant|accountId
     final List<String> revokeCalls = new ArrayList<>();
     boolean failRevokes;
@@ -126,6 +129,9 @@ final class InMemorySellerStores {
             String email = iamEmails.get(accountId);
             if (email == null || !email.equalsIgnoreCase(invitedEmail.trim())) {
                 throw new SellerInvitationEmailMismatchException();
+            }
+            if (iamUnverified.contains(accountId)) { // after the email rule, as in IAM
+                throw new SellerInvitationEmailNotVerifiedException();
             }
             sellerRoles.add(tenant + "|" + accountId);
             afterGrant.run();

@@ -53,7 +53,9 @@ declare -A COMPOSE=(
   # 파일 한 곳에 선언돼 있고, 로컬(base 단독)과 CI 는 영향받지 않는다 — 어느 CI
   # 잡도 이 compose 의 web-store 서비스를 띄우지 않는다(TASK-MONO-604 AC-0 ②
   # 전수). 효력은 가드 (z19)가 렌더로 확인한다.
-  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml infra/demo/ecommerce-vercel.override.yml"
+  # `ecommerce-mail.override.yml` — notification-service 의 SMTP(이미 있던 발송기)를 iam 의 Mailpit
+  # (`iam-mailpit`)으로 보낸다(TASK-MONO-770). 메일 서버가 저장소에 하나도 없어 그 발송은 늘 연결 실패였다.
+  [ecommerce]="projects/ecommerce-microservices-platform/docker-compose.yml infra/demo/ecommerce-relay.override.yml infra/demo/ecommerce-vercel.override.yml infra/demo/ecommerce-mail.override.yml"
   [scm]="projects/scm-platform/docker-compose.yml infra/demo/scm-identity.override.yml infra/demo/scm-relay.override.yml"
   # `fan-vercel.override.yml` — 방문자 팬 화면이 Vercel 로 옮겨갔으므로
   # (ADR-MONO-067 단계 4) 데모에서는 fan-platform-web 을 **띄우지 않는다**. 억제는

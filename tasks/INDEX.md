@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-770-verification-mail-and-email-gate.md` — **`ADR-MONO-080` 단계 1 (D3 · R1) — 인증 메일을 실제로 보낸다 + 회사 권한이 붙는 쓰기에 인증된 이메일 필수** (IN-PROGRESS, 2026-10-07 UTC · ADR-080 ACCEPTED A). 발송 어댑터 0 → prod 어댑터 + 데모 수신 경로가 먼저 · 셀러 구성원 수락(079 D5)에 게이트(R1). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -221,6 +220,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-770-verification-mail-and-email-gate.md` — **`ADR-MONO-080` 단계 1 (D3 · R1) — 인증 메일을 실제로 보낸다 + 회사 권한이 붙는 쓰기에 인증된 이메일 필수** (REVIEW, 2026-10-07 UTC). 범용 SMTP 어댑터(`iam.mail.enabled`, 프로필 아님 — 데모 IAM 은 e2e) · prod+꺼짐 fail-fast 유지 · 발송 실패 = 503/422 응답 · IdP 화면 `/email-verification` · `/verify-email` · 셀러 수락 규칙 4b `403 EMAIL_NOT_VERIFIED`(공용 술어 `VerifiedEmailRequirement` — 772 재사용) · 재설정 메일도 같은 장치(소유자 결정) · 데모 Mailpit(소유자 전용 basic auth, SSM 자격, 기본 꺼짐). 🔴 스토어 수락 화면 없음 = 소유자 판단 · IT 는 Docker 없음으로 미실행 · AC-1 라이브 ⚪ 재굽기 + SSM 등록 + `terraform apply` 뒤.
 - `TASK-MONO-775-adr-047-tenant-placement-amendment.md` — **`ADR-MONO-047` 개정 — 테넌트를 노드에 두는 권한 «양쪽을 다 관리하는 사람만»** (REVIEW, 2026-10-07 UTC · 소유자 선택). 실측: 붙이는 API 0 · `assignOrgNode` 호출자 0 · 소속은 V0028 백필뿐. 라이더 P1(무소속 T 의 `TENANT_ADMIN` 은 출발 쪽) · P2(잃는 도메인은 거절 아닌 확인). 단계 `TASK-BE-625` → `TASK-PC-FE-312`. 분석=Opus 5.5.
 - `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없었다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. master-service R__01/R__05 + outbound-service R__seed_dev_masterref.sql(WH-MAIN·ECOMMERCE-STORE·SKU 86종) 추가 + `seed-wms.sh` 읽기 검증(§0) — AC-3/4 는 재굽기 뒤 측정.
 - `TASK-MONO-766-demo-corp-has-no-seedable-account-for-operator-creation.md` — **데모에서 신규 운영자 생성을 끝까지 보여줄 수 없다** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 콘솔 `/operators` 생성 사전 게이트는 tenant `demo-corp` 에 이미 등록된 계정을 요구하는데 `account_db.accounts` 의 demo-corp 행이 0이었다(기존 운영자 둘은 `admin_operators` 에만 있음). 자가가입·엔터프라이즈 프로비저닝 API 둘 다 데모 호스트에서 도달 불가(AC-1) — account-service `R__07`/auth-service `R__03` Flyway dev-seed 로 "운영자 아님" 계정 1개 추가. 기존 운영자 행은 무변경(AC-3). AC-4 는 재굽기 뒤 측정.

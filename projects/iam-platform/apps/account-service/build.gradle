@@ -24,6 +24,11 @@ dependencies {
     // TASK-BE-317: verify GAP client_credentials JWT on /internal/** (dual-allow with
     // the legacy X-Internal-Token during the ADR-005 단계 2 migration window).
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // TASK-MONO-770 (ADR-MONO-080 D3): the verification mail actually leaves — one generic SMTP
+    // adapter (SmtpEmailVerificationNotifier), enabled by iam.mail.enabled, configured by the
+    // standard spring.mail.* keys. No provider SDK: any SMTP endpoint (Mailpit in the demo,
+    // e.g. the SES SMTP interface in production) is a config change.
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'

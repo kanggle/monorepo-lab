@@ -22,6 +22,10 @@ dependencies {
     // TASK-BE-396 (ADR-006): custom /login page renders the social-login buttons +
     // password form via Thymeleaf, replacing the default-generated form.
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    // TASK-MONO-770 (owner decision 2026-10-07): the password-reset mail leaves through the same
+    // generic SMTP mechanism as account-service's verification mail — SmtpEmailSender, enabled by
+    // iam.mail.enabled, configured by the standard spring.mail.* keys.
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // Spring Authorization Server (OIDC / OAuth2 AS) — TASK-BE-251
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'

@@ -3,6 +3,7 @@ package com.example.product.application.service;
 import com.example.product.application.port.SellerAccountProvisioner;
 import com.example.product.domain.exception.SellerInvitationAlreadyUsedException;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerInvitationExpiredException;
 import com.example.product.domain.exception.SellerInvitationNotFoundException;
 import com.example.product.domain.exception.SellerNotActiveException;
@@ -103,6 +104,32 @@ class SellerMemberServiceTest {
         SellerMemberService eightDaysLater = stores.memberService(at(T0.plus(Duration.ofDays(8))));
         assertThatThrownBy(() -> eightDaysLater.accept(late, PERSON))
                 .isInstanceOf(SellerInvitationExpiredException.class);
+    }
+
+    /**
+     * TASK-MONO-770 AC-2 at the store edge (ADR-MONO-080 D3 · R1): the right address, not yet verified → refused
+     * FIRST, no member, no role, and the invitation is NOT consumed; the same person verifies and the SAME
+     * invitation then links them.
+     */
+    @Test
+    @DisplayName("🔴 AC-2: 주소는 맞는데 미인증 → 거절(먼저) · 구성원·역할 없음 · 초대 PENDING 유지 → 인증 뒤 같은 초대로 수락")
+    void unverifiedRefused_invitationKept_thenAcceptedAfterVerification() {
+        String token = service.invite("s-1", INVITED, "op-1").token();
+        stores.iamUnverified.add(PERSON);
+
+        assertThatThrownBy(() -> service.accept(token, PERSON))
+                .isInstanceOf(SellerInvitationEmailNotVerifiedException.class);
+        assertThat(stores.member(TENANT, "s-1", PERSON)).isNull();
+        assertThat(stores.sellerRoles).isEmpty();
+        assertThat(service.list("s-1").invitations())
+                .singleElement()
+                .satisfies(i -> assertThat(i.getStatus()).isEqualTo(SellerInvitationStatus.PENDING));
+
+        stores.iamUnverified.remove(PERSON); // the person opened the verification mail's link
+
+        SellerMember joined = service.accept(token, PERSON);
+        assertThat(joined.getStatus()).isEqualTo(SellerMemberStatus.ACTIVE);
+        assertThat(stores.sellerRoles).containsExactly(TENANT + "|" + PERSON);
     }
 
     @Test

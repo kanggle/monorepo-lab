@@ -32,6 +32,19 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 50ms
 
+  # TASK-MONO-770 — SMTP for the verification mail. Only the timeouts live here; the connection itself
+  # (spring.mail.host / port / username / password) comes from the environment (SPRING_MAIL_HOST …).
+  # 🔴 Do NOT add a `spring.mail.host` default: Spring Boot creates a JavaMailSender as soon as the key
+  # exists (even blank), so a default here would make an enabled-but-unconfigured deployment start and
+  # then fail every send — instead of failing at boot (SmtpEmailVerificationNotifier needs the sender).
+  # The timeouts bound the synchronous resend request: an unreachable mail server answers 503
+  # VERIFICATION_EMAIL_SEND_FAILED in seconds instead of hanging the request thread.
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
     consumer:
@@ -55,6 +68,13 @@ spring:
 
 server:
   port: 8082
+
+# TASK-MONO-770 — a mail-server outage must not mark account-service DOWN (Traefik and compose drop an
+# unhealthy container; the mail path has its own error answer, 503 VERIFICATION_EMAIL_SEND_FAILED).
+management:
+  health:
+    mail:
+      enabled: false
 
 account:
   # TASK-BE-451 — v2 outbox relay (AccountOutboxPublisher) cadence + batch size.
@@ -118,6 +138,16 @@ iam:
   # IAM_CONSUMER_POOL_ENABLED=false stays a kill switch: byte-identical pre-pool signup/lookups.
   consumer-pool:
     enabled: ${IAM_CONSUMER_POOL_ENABLED:true}
+  # TASK-MONO-770 (ADR-MONO-080 D3) — which EmailVerificationNotifier is wired (account-api.md § Delivery):
+  #   enabled=true            → SmtpEmailVerificationNotifier (standard spring.mail.* — any SMTP endpoint)
+  #   enabled=false, not prod → LoggingEmailVerificationNotifier (masked recipient, token never logged)
+  #   enabled=false, prod     → none → the context fails to start (TASK-BE-236 fail-fast kept)
+  # A property, not a profile: the demo runs IAM under `e2e`, where a @Profile("prod") adapter never runs.
+  mail:
+    enabled: ${IAM_MAIL_ENABLED:false}
+    from: ${IAM_MAIL_FROM:no-reply@iam.local}
+    # The IdP page the mail links to (auth-service GET /verify-email); `?token=…` is appended.
+    verification-link-base-url: ${IAM_MAIL_VERIFICATION_LINK_BASE_URL:http://localhost:8081/verify-email}
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}

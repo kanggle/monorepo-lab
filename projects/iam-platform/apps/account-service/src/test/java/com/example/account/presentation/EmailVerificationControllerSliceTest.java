@@ -1,6 +1,8 @@
 package com.example.account.presentation;
 
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
+import com.example.account.application.exception.EmailDeliveryException;
+import com.example.account.application.exception.VerificationEmailSendFailedException;
 import com.example.account.application.exception.EmailVerificationTokenInvalidException;
 import com.example.account.application.exception.RateLimitedException;
 import com.example.account.application.result.VerifyEmailResult;
@@ -158,6 +160,30 @@ class EmailVerificationControllerSliceTest {
                         .header("X-Account-Id", "acc-1"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_VERIFIED"));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: resend — 일시 발송 실패는 503 VERIFICATION_EMAIL_SEND_FAILED (더는 204 로 삼키지 않는다)")
+    void resend_transientSendFailure_returns503() throws Exception {
+        doThrow(new VerificationEmailSendFailedException(EmailDeliveryException.Kind.TRANSIENT))
+                .when(sendVerificationEmailUseCase).execute(anyString(), any(TenantId.class));
+
+        mockMvc.perform(post("/api/accounts/signup/resend-verification-email")
+                        .header("X-Account-Id", "acc-1"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("VERIFICATION_EMAIL_SEND_FAILED"));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: resend — 영구 발송 실패는 422 VERIFICATION_EMAIL_UNDELIVERABLE")
+    void resend_permanentSendFailure_returns422() throws Exception {
+        doThrow(new VerificationEmailSendFailedException(EmailDeliveryException.Kind.PERMANENT))
+                .when(sendVerificationEmailUseCase).execute(anyString(), any(TenantId.class));
+
+        mockMvc.perform(post("/api/accounts/signup/resend-verification-email")
+                        .header("X-Account-Id", "acc-1"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VERIFICATION_EMAIL_UNDELIVERABLE"));
     }
 
     @Test
