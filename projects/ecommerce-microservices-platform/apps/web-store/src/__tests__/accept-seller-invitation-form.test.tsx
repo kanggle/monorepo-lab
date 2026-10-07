@@ -35,6 +35,10 @@ function apiError(code: string, message = 'error'): ApiErrorResponse {
 describe('AcceptSellerInvitationForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks 는 호출 기록만 지우고 mockResolvedValueOnce/mockRejectedValueOnce 대기열은 남긴다.
+    // 한 시험이 중간에 실패해 대기열을 다 쓰지 못하면 남은 응답이 다음 시험으로 새어 뒤 시험들이
+    // 응답을 하나씩 밀려 받는다(TASK-FE-107 bite 실측: AC-2 하나를 깨면 12 칸이 빨강). 대기열까지 비운다.
+    mockAccept.mockReset();
   });
 
   it('?token= 값으로 입력칸이 미리 채워진다 (AC-1)', () => {
