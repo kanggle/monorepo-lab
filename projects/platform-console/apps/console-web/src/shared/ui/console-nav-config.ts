@@ -128,13 +128,15 @@ export const GROUPS: NavGroup[] = [
       {
         // TASK-PC-FE-225 — orthodox IAM taxonomy: this drill parent is now the
         // **workforce plane** only (AWS IAM / GCP Cloud IAM equivalent) —
-        // 테넌트 (isolation boundary, AWS account / GCP project) · 운영자
-        // (workforce identity, IAM User) · 운영자 그룹 (IAM User Group /
+        // 운영자 (workforce identity, IAM User) · 운영자 그룹 (IAM User Group /
         // Google Group, ADR-MONO-046) · 권한 (Action/Permission) · 권한 세트
         // (IAM Policy/Role). The consumer-facing 계정(/accounts) surface moved
         // OUT to its own 「고객 신원」 group below (Cognito / Identity Platform
         // equivalent) — nav placement only, route/features unchanged
         // (Catalog iam.baseRoute stays /accounts, FE-002).
+        // TASK-PC-FE-313 — 조직 계층 · 테넌트 moved OUT to 「조직 설정」 below
+        // for the same reason: they model the company structure (AWS
+        // Organizations, not AWS IAM), not who may do what.
         key: 'iam',
         label: 'IAM',
         testid: 'nav-iam', icon: 'shield',
@@ -154,8 +156,8 @@ export const GROUPS: NavGroup[] = [
           // Then the workforce-plane management (write) surfaces in
           // **setup-first** order — 운영자 관리 (provision the operators)
           // immediately followed by 운영자 그룹 (bulk-grant roles to a group
-          // of operators, ADR-MONO-046) — then the isolation/permission
-          // surfaces 테넌트 · 권한 · 권한 세트 — then 감사·보안 (read-only
+          // of operators, ADR-MONO-046) — then the permission
+          // surfaces 권한 · 권한 세트 — then 감사·보안 (read-only
           // oversight) last: learn → orient → configure → operate → review.
           { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide', icon: 'guide' },
           { href: '/iam', label: '개요', testid: 'nav-iam-overview', icon: 'overview' },
@@ -168,18 +170,6 @@ export const GROUPS: NavGroup[] = [
             label: '운영자 그룹',
             testid: 'nav-iam-operator-groups', icon: 'users',
           },
-          // 조직 계층 (TASK-PC-FE-237 / ADR-047) — company → service → domain
-          // 3-axis hierarchy (org-node tree + entitlement ceiling + ORG_ADMIN).
-          // Placed BEFORE 테넌트: a company (org node) sits above its
-          // service-tenants (AWS Organizations account-group above accounts).
-          {
-            href: '/org-hierarchy',
-            label: '조직 계층',
-            testid: 'nav-iam-org-hierarchy', icon: 'hierarchy',
-          },
-          // 테넌트 (real feature = TASK-PC-FE-226) — isolation boundary,
-          // AWS account / GCP project equivalent.
-          { href: '/tenants', label: '테넌트', testid: 'nav-iam-tenants', icon: 'building' },
           // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
           // equivalent.
           {
@@ -217,8 +207,21 @@ export const GROUPS: NavGroup[] = [
     // the IAM identity plane above: a tenant owner (TENANT_BILLING_ADMIN)
     // self-enables domains for their tenant (TASK-PC-FE-183, the piece that
     // makes self-service onboarding PC-FE-182 usable).
+    // TASK-PC-FE-313 — one rule for the split: 「조직 설정」 = what the
+    // company IS, BOUGHT and AGREED (structure · subscriptions · partnerships;
+    // AWS Organizations + Billing), IAM = who may do what. So 조직 계층 and
+    // 테넌트 joined this group, structure first: a company (org node) sits
+    // above its service-tenants, and a tenant must exist before it subscribes
+    // or partners. Routes and features unchanged — nav placement only.
     label: '조직 설정',
+    testid: 'nav-group-org-settings',
     items: [
+      // 조직 계층 (TASK-PC-FE-237 / ADR-047) — company → service → domain
+      // 3-axis hierarchy (org-node tree + entitlement ceiling + ORG_ADMIN).
+      { href: '/org-hierarchy', label: '조직 계층', testid: 'nav-org-hierarchy', icon: 'hierarchy' },
+      // 테넌트 (real feature = TASK-PC-FE-226) — isolation boundary,
+      // AWS account / GCP project equivalent.
+      { href: '/tenants', label: '테넌트', testid: 'nav-tenants', icon: 'building' },
       { href: '/subscriptions', label: '도메인 구독', testid: 'nav-subscriptions', icon: 'subscription' },
       // Cross-org partner delegation (ADR-MONO-045 §3.4 / TASK-PC-FE-187) — a
       // tenant owner (TENANT_ADMIN, partnership.manage) manages cross-org

@@ -4,8 +4,8 @@ import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 export const dynamic = 'force-dynamic';
 
 /**
- * ADR-047 org-node hierarchy route (TASK-PC-FE-237) — the IAM ▸ 조직 계층 menu
- * destination. The company → service → domain 3-axis surface: org-node tree
+ * ADR-047 org-node hierarchy route (TASK-PC-FE-237) — the 조직 설정 ▸ 조직 계층
+ * menu destination (IAM ▸ 조직 계층 until TASK-PC-FE-313). The company → service → domain 3-axis surface: org-node tree
  * CRUD + entitlement-ceiling editor + subtree-scoped `ORG_ADMIN` assignment,
  * gated by `org.manage` (SUPER_ADMIN or a parent node's ORG_ADMIN).
  *
