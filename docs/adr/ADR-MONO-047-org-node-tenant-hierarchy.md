@@ -138,3 +138,54 @@ Follow-up ADRs (out of this scope): **role-level ceiling** (D3-B) if a company n
 - **Neutral** — intra-tenant department data-scope (`org_scope`, ADR-025) is a **separate, orthogonal** tree inside a tenant/domain and is unchanged by this ADR; cross-owner consortium (ADR-045 D1-C) remains deferred by design.
 
 **ACCEPTED 2026-07-10 (TASK-MONO-340).** The PROPOSED record carried no implementation; the § 4 roadmap is now UNPAUSED and its steps execute as the separate tasks named there. D1–D7 are finalised and not re-litigated at execution.
+
+---
+
+## 개정 (2026-10-07 UTC, `TASK-MONO-775`) — 테넌트를 노드에 **두는** 일: 누가 할 수 있나 · 어디로 하나
+
+> 덧붙이기만 한다. D1~D7 본문은 바이트 그대로다.
+
+### 왜 개정인가 — 로드맵에 없던 한 칸 (실측, 코드 읽기)
+
+D1 은 `tenant.org_node_id` 로 테넌트를 노드에 **묶는다**고 정했고 D7 은 «같은 노드 아래 서비스-테넌트를 더하는 것» 을 회사 분할의 방법으로 적었다. 그런데 § 4 로드맵의 네 단계(스펙 · 백엔드 · 콘솔 · 백필) 어디에도 **테넌트를 노드에 두거나 옮기는 쓰기**가 없다. 그래서 지금:
+
+| 잰 것 | 결과 | 근거 |
+|---|---|---|
+| org-node API | 생성 · 조회 · 수정 · 삭제 · 상한 · 소속 테넌트 **조회** · `ORG_ADMIN` 배정 — 테넌트를 붙이는 엔드포인트 **0** | `projects/iam-platform/specs/contracts/http/admin-api.md` § Org Hierarchy (`:2198`~`:2478`) |
+| 테넌트 생성 입력 | `tenantId` · `displayName` · `tenantType` — 노드 칸 없음 | `projects/platform-console/apps/console-web/src/app/api/tenants/_proxy.ts:22-30` |
+| 도메인 메서드 | `Tenant.assignOrgNode()` 가 있으나 **호출자 0** | account-service `domain/tenant/Tenant.java:144` · `assignOrgNode(` 호출 grep 0 |
+| 소속이 있는 테넌트 | V0028 백필이 그때 있던 테넌트마다 노드 하나씩 붙인 것뿐 — 이후 생긴 테넌트(온보딩 · `/tenants` · 데모 시드)는 전부 무소속 | `V0028__backfill_org_node_per_tenant.sql` 머리 주석 |
+
+⇒ 조직 계층 화면에서 노드를 만들어도 그 안에 테넌트를 넣을 수 없다. 노드의 상한 · `ORG_ADMIN` 이 걸릴 대상이 없다.
+
+### 왜 결정이 필요한가
+
+테넌트를 노드 N 에 두는 순간 **N 과 그 조상의 `ORG_ADMIN` 이 그 테넌트의 관리 범위를 얻는다**(D5 subtree) — 그리고 N 의 유효 상한이 그 테넌트의 도메인을 **좁힌다**(D2 · D6). 반대로 노드에서 빼면 상한이 풀린다. 둘 다 권한 경계를 옮기는 쓰기라 D5 의 no-escalation 이 «누가» 를 정해야 하는데, D5 는 노드 위의 권한만 말하고 이 쓰기를 말하지 않았다.
+
+### 결정 — **양쪽을 다 관리하는 사람만** (소유자, 2026-10-07 UTC)
+
+소유자가 선택창에서 *«① 양쪽 관리자 (추천)»* 를 골랐다(대안: «② `SUPER_ADMIN` 만» · «③ 목적지만 관리하면 됨 — 권한 상승 구멍이라 제시 단계에서 기각»).
+
+- **쓰기**: 테넌트 T 의 소속을 «지금 위치» → «목적지» 로 바꾼다. 넣기 · 옮기기 · 빼기(목적지 = 무소속)가 모두 이 한 쓰기다. 새 테넌트를 노드 아래에 **만드는** 것(D7)도 «무소속 → 목적지» 의 같은 쓰기로 본다.
+- **출발 쪽**: actor 가 T 를 관리한다 — `SUPER_ADMIN`, 또는 T 를 subtree 에 둔 노드의 `ORG_ADMIN`(지금 위치가 노드일 때), 또는 🔵 T 의 `TENANT_ADMIN`(라이더 P1).
+- **도착 쪽**: 목적지가 노드 D 면 `administers(actor, D)`(admin-api § Org Hierarchy 의 reach 술어 — `SUPER_ADMIN` 또는 D 와 그 조상의 `ORG_ADMIN`). 목적지가 무소속이면 출발 쪽 조건만.
+- **범위 밖은 404**(기존 org-node 규율 — 존재를 흘리지 않는다) + best-effort DENIED 감사 행. 성공은 `admin_actions` 에 사유와 함께.
+- **결과**: 「목적지만 관리하면 됨」 이 막힌다 — 노드 관리자가 남의 테넌트를 끌어와 관리 범위를 넓히는 길이 없다. 「테넌트 주인 혼자 빼기」 도 막힌다 — T 가 노드 S 아래 있으면 출발 쪽은 **S 쪽 관리자**(`SUPER_ADMIN` · S 와 조상의 `ORG_ADMIN`)이고, T 의 `TENANT_ADMIN` 은 출발 쪽이 되지 못한다(P1 은 무소속 T 에만 적용). 그래서 상한을 테넌트 쪽에서 혼자 벗어날 수 없다.
+
+### 라이더 — 구현자 기본값(소유자가 한 줄로 뒤집을 수 있다)
+
+| 번호 | 기본값 | 뒤집기 |
+|---|---|---|
+| P1 | 출발 쪽에 «T 의 `TENANT_ADMIN`» 을 넣는다 — 단 **무소속 T 를 노드에 넣을 때만** 의미가 있다(T 가 이미 노드 S 아래면 출발 쪽은 S 쪽 관리자다 — T 의 관리자 혼자 S 에서 빼면 S 의 상한을 벗어나므로). 실제로는 «T 의 주인이면서 D 의 `ORG_ADMIN`» 인 사람 또는 `SUPER_ADMIN` 이 넣는다 | «무소속 T 넣기도 `SUPER_ADMIN` 만» |
+| P2 | 상한이 걸린 노드로 옮겨 잃게 되는 도메인은 **거절하지 않고** 확인 화면에 보여 준다(상한은 deny-only 이므로 구독 행은 남고 다시 빼면 돌아온다 — D2) | «잃는 도메인이 있으면 거절» |
+
+### 인가하는 것 (단계 티켓)
+
+| 티켓 | 무엇 | 선행 |
+|---|---|---|
+| `TASK-BE-625` (iam-platform) | 계약(admin-api · admin-to-account) → account-service 소속 변경 내부 쓰기(`assignOrgNode` 배선) · admin-service 양쪽 검사 · 감사 · 테넌트 생성에 선택 `orgNodeId` · 격리 대조군 IT | — |
+| `TASK-PC-FE-312` (platform-console) | 조직 계층 노드 상세 «테넌트 추가 · 옮기기 · 빼기» · 잃는 도메인 확인 화면(P2) · `/tenants` 생성 폼의 «소속 노드 (선택)» | BE-625 머지 |
+
+### 건드리지 않는 것
+
+D1~D7 · 상한 의미(deny-only) · `ORG_ADMIN` 권한 집합 · 노드 생성 권한(루트 = `SUPER_ADMIN` 만, `admin-api.md:2200`).
