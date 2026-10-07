@@ -8,7 +8,7 @@ masterdata — 직원 ↔ IAM 계정 연결 모델: `employees.account_id` · �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -147,3 +147,9 @@ erp-platform
 - `specs/contracts/http/masterdata-api.md` — ① 머리말 «`details` 를 싣는 코드는 `MASTERDATA_REFERENCE_VIOLATION` 하나» 가 S1 이후 **틀린 문장**이 됐다(`EMPLOYEE_LINK_CONFLICT`/`INVALID` 가 `details.cause` 를 싣는다) ⇒ 고침. ② `EmployeeAccountLinkProposal` **전체 모양**(`decidedBy?`/`decidedAt?`/`decisionReason?` — 이력 목록에 필요한데 201 부분집합만 적혀 있었다) · `employeeName`/`employeeNumber` 는 `/mine` 에만 · 두 목록의 `?page=&size=` 와 정렬. ③ 수락 본문 `{}` 생략 허용. ④ 해제의 계정 주인 경로도 `erp.read` 이상. ⑤ 이벤트 `changeKind = UPDATED` + 감사 행 귀속. — 전부 **명시화(additive)** 이고 S1 이 정한 규칙(쓰기 경로 · 두 사람 규칙 · 검사 순서 · 오류 코드)은 바꾸지 않았다.
 - `specs/contracts/events/erp-masterdata-events.md` — employee 스냅샷에 `accountId` additive(AC-0 판정 — 새 `changeKind` 는 소비자가 DLT 로 보낸다).
 - `specs/services/masterdata-service/architecture.md` — 엔드포인트 표 9행(권한 열에 «data scope 없음» 이유) · 엔드포인트 수 26→35.
+
+# 닫기 — 4차원 검증 (2026-10-07 UTC, `date -u` 실측)
+
+- (a) PR **#4231** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`836a122d9`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~8 전부 `[x]`. 구현 때 ⚪ 였던 IT 는 **CI 가 닫았다**: `Integration (erp-platform, Testcontainers)` 잡 로그에 `EmployeeAccountLinkIntegrationTest` **9 메서드 PASSED**(8 스레드 동시 제안 · DB 유니크 · 직접 INSERT 한 자기 수신 행의 2인 규칙 포함), `masterdata-service:integrationTest` = 32 · 실패 0 · 건너뜀 0.
+- 후속: `TASK-MONO-776`(S3 — approval · notification · read-model · 데모 시드) → `TASK-PC-FE-318`(S4 콘솔). 우산 `TASK-MONO-774`.
