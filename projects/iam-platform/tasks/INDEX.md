@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (READY, 2026-10-07 UTC · `ADR-MONO-047` § 개정). 양쪽 관리자 검사(기존 `TenantScopeGuard` · `OrgNodeScopeGuard` 재사용) · 범위 밖 404 · 감사 · 테넌트 생성의 선택 `orgNodeId` · 격리 대조군. 후속 `TASK-PC-FE-312`. 분석=Opus 5.5 / 구현 권장=Opus.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
