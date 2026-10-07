@@ -68,17 +68,23 @@ export async function createTenant(
   reason: string,
   idempotencyKey?: string,
 ): Promise<Tenant> {
+  const body: Record<string, unknown> = {
+    tenantId: input.tenantId,
+    displayName: input.displayName,
+    tenantType: input.tenantType,
+  };
+  // TASK-PC-FE-312 — `orgNodeId` rides ONLY when chosen; an unplaced create
+  // keeps the pre-312 three-field body (the producer reads absent = 무소속).
+  if (input.orgNodeId !== undefined && input.orgNodeId !== '') {
+    body.orgNodeId = input.orgNodeId;
+  }
   return callGapTenants(
     {
       method: 'POST',
       path: TENANTS_PREFIX,
       reason,
       idempotencyKey,
-      body: {
-        tenantId: input.tenantId,
-        displayName: input.displayName,
-        tenantType: input.tenantType,
-      },
+      body,
     },
     (json) => TenantSchema.parse(json),
   );

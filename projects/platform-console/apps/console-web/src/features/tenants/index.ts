@@ -23,5 +23,6 @@ export type {
   TenantListParams,
   CreateTenantInput,
   UpdateTenantInput,
+  TenantOrgNodeOption,
 } from './api/types';
 export { TENANT_TYPES, TENANT_STATUSES } from './api/types';

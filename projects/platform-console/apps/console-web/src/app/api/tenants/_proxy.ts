@@ -18,7 +18,9 @@ import { TENANT_TYPES, TENANT_STATUSES } from '@/features/tenants';
  */
 
 /** create: tenantId + displayName + tenantType + reason (+ optional
- *  idempotencyKey — producer-recommended, not required). */
+ *  idempotencyKey — producer-recommended, not required) (+ optional
+ *  `orgNodeId` — TASK-PC-FE-312 / TASK-BE-625: the node to place the new
+ *  tenant under; absent or `null` = 무소속, the pre-312 create). */
 export const CreateTenantBodySchema = z
   .object({
     tenantId: z.string().min(1),
@@ -26,6 +28,7 @@ export const CreateTenantBodySchema = z
     tenantType: z.enum(TENANT_TYPES),
     reason: z.string(),
     idempotencyKey: z.string().min(1).optional(),
+    orgNodeId: z.string().min(1).nullable().optional(),
   })
   .strict();
 export type CreateTenantBody = z.infer<typeof CreateTenantBodySchema>;

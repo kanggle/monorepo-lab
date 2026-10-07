@@ -75,6 +75,21 @@ export const OrgNodeReasonBodySchema = z
   .strict();
 export type OrgNodeReasonBody = z.infer<typeof OrgNodeReasonBodySchema>;
 
+/**
+ * tenant placement (TASK-PC-FE-312 / TASK-BE-625): `orgNodeId` + reason.
+ * `orgNodeId` is `nullable()` but NOT `optional()` — the KEY must be present,
+ * `null` = detach. A body without the key is a 422 here, before it can reach
+ * the producer (which 400s `{}` for the same reason: a typo'd key must never
+ * silently detach the tenant and lift its ceiling).
+ */
+export const PlaceTenantBodySchema = z
+  .object({
+    orgNodeId: z.string().min(1).nullable(),
+    reason: z.string(),
+  })
+  .strict();
+export type PlaceTenantBody = z.infer<typeof PlaceTenantBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 
 /**
@@ -34,6 +34,12 @@ export interface OrgReasonDialogProps {
   error: string | null;
   onConfirm: (reason: string) => void;
   onCancel: () => void;
+  /** Extra body rendered above the reason field (TASK-PC-FE-312 — the tenant
+   *  placement dialog shows the previewed effect here). */
+  children?: ReactNode;
+  /** Extra disable condition on top of «reason is empty» (TASK-PC-FE-312 —
+   *  a placement can't be confirmed until its effect preview has loaded). */
+  confirmBlocked?: boolean;
 }
 
 export function OrgReasonDialog({
@@ -45,6 +51,8 @@ export function OrgReasonDialog({
   error,
   onConfirm,
   onCancel,
+  children,
+  confirmBlocked = false,
 }: OrgReasonDialogProps) {
   const reasonId = useId();
   const reasonRef = useRef<HTMLTextAreaElement>(null);
@@ -60,7 +68,7 @@ export function OrgReasonDialog({
       confirmLabel={confirmLabel}
       destructive={tone === 'destructive'}
       pending={pending}
-      confirmDisabled={!reasonOk}
+      confirmDisabled={!reasonOk || confirmBlocked}
       errorMessage={error}
       dialogTestId="org-reason-dialog"
       overlayTestId="org-reason-overlay"
@@ -71,6 +79,7 @@ export function OrgReasonDialog({
       onConfirm={() => onConfirm(reason.trim())}
       onCancel={onCancel}
     >
+      {children}
       <label
         htmlFor={reasonId}
         className="mt-4 block text-sm font-medium text-foreground"
