@@ -42,7 +42,7 @@ platform-console
 # Dependency Markers
 
 - 선행(차단): ADR-MONO-080 D6 실행 — `TASK-MONO-770`~`774` 중 운영자 초대 단계. 위 AC-0.
-- 선행: `TASK-PC-FE-314`(그룹 멤버 선택기) — 이미 있는 운영자 고르기. 이 티켓은 그 옆에 «초대» 를 더한다(대체하지 않는다).
+- 선행: `TASK-PC-FE-317`(그룹 멤버 선택기) — 이미 있는 운영자 고르기. 이 티켓은 그 옆에 «초대» 를 더한다(대체하지 않는다).
 - 선행: `TASK-PC-FE-315`(권한 세트 ↔ 권한 순서).
 - 관련: `docs/adr/ADR-MONO-046-operator-group-model.md`(그룹 fan-out · `group_origin` · no-escalation).
 
@@ -104,7 +104,7 @@ platform-console
 
 - 초대 수락 시점에 그룹이 지워졌다 → 운영자 측면만 생기고 그룹 추가는 건너뛴다(또는 수락 거절) — 착수 때 결정해 계약에 적는다.
 - 같은 이메일을 두 그룹에서 초대 → 수락 하나로 두 그룹 모두? 초대마다 따로? — 착수 때 결정.
-- 이미 그 테넌트 운영자인 사람을 이메일로 초대 → 초대 대신 TASK-PC-FE-314 선택기로 안내.
+- 이미 그 테넌트 운영자인 사람을 이메일로 초대 → 초대 대신 TASK-PC-FE-317 선택기로 안내.
 
 # Failure Scenarios
 
