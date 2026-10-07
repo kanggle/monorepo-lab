@@ -5,12 +5,15 @@ import com.example.erp.approval.application.command.Commands.CreateDelegationCom
 import com.example.erp.approval.application.command.Commands.RevokeDelegationCommand;
 import com.example.erp.approval.application.event.ApprovalEventPublisher;
 import com.example.erp.approval.application.port.outbound.ClockPort;
+import com.example.erp.approval.application.port.outbound.EmployeeLookup;
+import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.delegation.DelegationGrant;
 import com.example.erp.approval.domain.delegation.DelegationGrantRepository;
 import com.example.erp.approval.domain.delegation.DelegationScope;
 import com.example.erp.approval.domain.delegation.DelegationStatus;
+import com.example.erp.approval.domain.error.ApprovalErrors.ApprovalActorNotLinkedException;
 import com.example.erp.approval.domain.error.ApprovalErrors.DelegationInvalidException;
 import com.example.erp.approval.domain.error.ApprovalErrors.DelegationNotFoundException;
 import com.example.erp.approval.domain.error.ApprovalErrors.PermissionDeniedException;
@@ -31,6 +34,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -51,7 +55,7 @@ class DelegationApplicationServiceTest {
     private static final Instant NOW = Instant.parse("2026-06-05T00:00:00Z");
     private static final Instant FROM = Instant.parse("2026-06-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-06-30T00:00:00Z");
-    private static final ActorContext A = new ActorContext("emp-a", TENANT,
+    private static final ActorContext A = new ActorContext("acc-a", TENANT,
             Set.of("erp.write", "erp.read"), Set.of("*"));
     private static final ActorContext NO_ROLE = new ActorContext("emp-x", TENANT,
             Set.of(), Set.of());
@@ -60,12 +64,21 @@ class DelegationApplicationServiceTest {
     @Mock ApprovalAuditLogRepository auditLogRepository;
     @Mock ApprovalEventPublisher eventPublisher;
     @Mock ClockPort clock;
+    @Mock MasterDataPort masterDataPort;
 
     DelegationApplicationService service;
 
     @BeforeEach
     void setup() {
-        service = new DelegationApplicationService(repo, auditLogRepository, eventPublisher, clock);
+        service = new DelegationApplicationService(repo, auditLogRepository, eventPublisher, clock,
+                masterDataPort);
+        // TASK-MONO-776: account "acc-X" is linked to the ACTIVE employee "emp-X"; every
+        // employee id resolves ACTIVE unless a test says otherwise.
+        lenient().when(masterDataPort.callerEmployee(anyString(), anyString()))
+                .thenAnswer(i -> EmployeeLookup.found(
+                        "emp-" + ((String) i.getArgument(0)).substring(4), "ACTIVE", i.getArgument(0)));
+        lenient().when(masterDataPort.approverRef(anyString(), anyString()))
+                .thenAnswer(i -> EmployeeLookup.found(i.getArgument(0), "ACTIVE", null));
         lenient().when(clock.now()).thenReturn(NOW);
         lenient().when(repo.save(any(DelegationGrant.class))).thenAnswer(i -> i.getArgument(0));
         lenient().when(auditLogRepository.append(any(ApprovalAuditLog.class)))
@@ -160,7 +173,8 @@ class DelegationApplicationServiceTest {
         verify(repo).save(any(DelegationGrant.class));
         verify(auditLogRepository).append(any(ApprovalAuditLog.class));
         // TASK-ERP-BE-015: an actual ACTIVE→REVOKED transition emits the revoke event.
-        verify(eventPublisher).publishRevoked(any(DelegationGrant.class), eq("emp-a"));
+        // revoked event actor = the revoker's JWT sub (events contract) — not a person field.
+        verify(eventPublisher).publishRevoked(any(DelegationGrant.class), eq("acc-a"));
         verify(eventPublisher, never()).publishDelegated(any(), any());
     }
 
@@ -212,6 +226,58 @@ class DelegationApplicationServiceTest {
         var rows = service.listDelegations(A, DelegationRole.DELEGATE);
         assertThat(rows).isEmpty();
         verify(repo).findByDelegate("emp-a", TENANT);
+    }
+
+    // ---- TASK-MONO-776 (approval-api.md § v2.4) ----
+
+    @Test
+    @DisplayName("776 AC-5: delegator = the caller's EMPLOYEE (not the sub); createdBy/event actor stay the sub")
+    void delegatorIsTheCallersEmployee() {
+        var view = service.createDelegation(new CreateDelegationCommand(
+                A, "emp-d", FROM, TO, null, DelegationScope.GLOBAL, null));
+        assertThat(view.delegatorId()).isEqualTo("emp-a");
+        verify(eventPublisher).publishDelegated(any(DelegationGrant.class), eq("acc-a"));
+    }
+
+    @Test
+    @DisplayName("776: unlinked caller → 403 APPROVAL_ACTOR_NOT_LINKED, nothing saved")
+    void unlinkedCallerCannotDelegate() {
+        when(masterDataPort.callerEmployee("acc-a", TENANT)).thenReturn(EmployeeLookup.notFound());
+        assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
+                A, "emp-d", FROM, TO, null, DelegationScope.GLOBAL, null)))
+                .isInstanceOf(ApprovalActorNotLinkedException.class);
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("776: self-delegation compares employee ids (my linked employee as delegate → invalid)")
+    void selfDelegationThroughTheLink() {
+        assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
+                A, "emp-a", FROM, TO, null, DelegationScope.GLOBAL, null)))
+                .isInstanceOf(DelegationInvalidException.class);
+    }
+
+    @Test
+    @DisplayName("776: delegate RETIRED / missing / unavailable → DELEGATION_INVALID delegate_unresolved")
+    void delegateMustBeAnActiveEmployee() {
+        for (EmployeeLookup bad : List.of(EmployeeLookup.found("emp-d", "RETIRED", "acc-d"),
+                EmployeeLookup.notFound(), EmployeeLookup.unavailable())) {
+            when(masterDataPort.approverRef("emp-d", TENANT)).thenReturn(bad);
+            assertThatThrownBy(() -> service.createDelegation(new CreateDelegationCommand(
+                    A, "emp-d", FROM, TO, null, DelegationScope.GLOBAL, null)))
+                    .isInstanceOf(DelegationInvalidException.class)
+                    .extracting(e -> ((DelegationInvalidException) e).details())
+                    .isEqualTo(java.util.Map.of("cause", "delegate_unresolved"));
+        }
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("776: list for an unlinked caller → empty, no repository query")
+    void listUnlinkedIsEmpty() {
+        when(masterDataPort.callerEmployee("acc-a", TENANT)).thenReturn(EmployeeLookup.notFound());
+        assertThat(service.listDelegations(A, null)).isEmpty();
+        verify(repo, never()).findByDelegatorOrDelegate(any(), any());
     }
 
     @Test

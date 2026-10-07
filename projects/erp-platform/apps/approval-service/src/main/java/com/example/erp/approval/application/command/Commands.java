@@ -50,8 +50,9 @@ public final class Commands {
     // ---- delegation (TASK-ERP-BE-013, 대결/위임) ----
 
     /**
-     * Create a delegation grant. The delegator A = the caller's {@code sub}
-     * ({@code actor.actorId()}); D = {@code delegateId}. {@code validTo} null =
+     * Create a delegation grant. The delegator A = the employee linked to the caller's
+     * {@code sub} (resolved by the use case — v2.4, TASK-MONO-776); D = {@code delegateId}
+     * (an employee id). {@code validTo} null =
      * open-ended. TASK-ERP-BE-017 — {@code scope} ({@code null} → GLOBAL) +
      * {@code scopeRequestId} (REQUEST-scoped grant target; the controller parses the
      * scope string and an unknown value is a 400 before the command is built).

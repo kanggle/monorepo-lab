@@ -5,11 +5,14 @@ import com.example.erp.approval.application.command.Commands.CreateDelegationCom
 import com.example.erp.approval.application.command.Commands.RevokeDelegationCommand;
 import com.example.erp.approval.application.event.ApprovalEventPublisher;
 import com.example.erp.approval.application.port.outbound.ClockPort;
+import com.example.erp.approval.application.port.outbound.EmployeeLookup;
+import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.application.view.DelegationGrantView;
 import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
 import com.example.erp.approval.domain.delegation.DelegationGrant;
 import com.example.erp.approval.domain.delegation.DelegationGrantRepository;
+import com.example.erp.approval.domain.error.ApprovalErrors.DelegationInvalidException;
 import com.example.erp.approval.domain.error.ApprovalErrors.DelegationNotFoundException;
 import com.example.erp.approval.domain.error.ApprovalErrors.PermissionDeniedException;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Delegation grant lifecycle use cases (TASK-ERP-BE-013, 대결/위임). Each mutation
@@ -29,9 +34,10 @@ import java.util.List;
  * outbox event (TASK-ERP-BE-015) — both A7. Audit-fail-closed (A10).
  *
  * <p>Create / revoke require {@code erp.write} (own grants / operator); list
- * requires {@code erp.read}. The delegator A of a created grant = the caller's
- * {@code sub} (a caller delegates their OWN approver authority); an operator may
- * also create on behalf via the operator role.
+ * requires {@code erp.read}. The delegator A of a created grant = the employee linked to
+ * the caller's {@code sub} (a caller delegates their OWN approver authority — v2.4,
+ * TASK-MONO-776; it used to be the {@code sub} itself). {@code created_by} /
+ * {@code revoked_by} and the audit actor stay the {@code sub}.
  */
 @Slf4j
 @Service
@@ -42,20 +48,27 @@ public class DelegationApplicationService {
     private final ApprovalAuditLogRepository auditLogRepository;
     private final ApprovalEventPublisher eventPublisher;
     private final ClockPort clock;
+    private final MasterDataPort masterDataPort;
 
     @Transactional
     public DelegationGrantView createDelegation(CreateDelegationCommand cmd) {
         ActorContext actor = cmd.actor();
         authorizeWrite(actor);
+        // v2.4 (TASK-MONO-776): delegator A = the EMPLOYEE linked to the caller's sub
+        // (unlinked / not ACTIVE → 403 APPROVAL_ACTOR_NOT_LINKED). Before this, A was the sub
+        // and D an employee id — one row, two id spaces, so no stage approver ever matched A.
+        String delegatorEmployeeId = ActingEmployee.require(masterDataPort, actor);
         Instant now = clock.now();
 
-        // Delegator A = the caller's sub (delegating their own approver authority).
-        // Domain factory enforces self-delegation + invalid-window → DELEGATION_INVALID.
+        // Domain factory enforces self-delegation (employee id vs employee id) +
+        // invalid-window + scope coherence → DELEGATION_INVALID. createdBy stays the sub:
+        // it records who logged in, like audit_log.actor.
         String grantId = "dgr-" + UuidV7.randomString();
         DelegationGrant grant = DelegationGrant.create(
-                grantId, actor.tenantId(), actor.actorId(), cmd.delegateId(),
+                grantId, actor.tenantId(), delegatorEmployeeId, cmd.delegateId(),
                 cmd.validFrom(), cmd.validTo(), cmd.reason(),
                 cmd.scope(), cmd.scopeRequestId(), actor.actorId(), now);
+        ensureDelegateActive(cmd.delegateId(), actor.tenantId());
         DelegationGrant saved = delegationGrantRepository.save(grant);
 
         // Immutable audit row (L131) — before = none, after = ACTIVE — same Tx.
@@ -95,16 +108,41 @@ public class DelegationApplicationService {
     @Transactional(readOnly = true)
     public List<DelegationGrantView> listDelegations(ActorContext actor, DelegationRole role) {
         authorizeRead(actor);
+        // v2.4: the caller's grants = grants whose delegator/delegate is the caller's
+        // EMPLOYEE. Unlinked caller → empty list (participates in nothing), not an error.
+        Optional<String> me = ActingEmployee.forRead(masterDataPort, actor);
+        if (me.isEmpty()) {
+            return List.of();
+        }
+        String employeeId = me.get();
         List<DelegationGrant> grants;
         if (role == DelegationRole.DELEGATOR) {
-            grants = delegationGrantRepository.findByDelegator(actor.actorId(), actor.tenantId());
+            grants = delegationGrantRepository.findByDelegator(employeeId, actor.tenantId());
         } else if (role == DelegationRole.DELEGATE) {
-            grants = delegationGrantRepository.findByDelegate(actor.actorId(), actor.tenantId());
+            grants = delegationGrantRepository.findByDelegate(employeeId, actor.tenantId());
         } else {
             grants = delegationGrantRepository.findByDelegatorOrDelegate(
-                    actor.actorId(), actor.tenantId());
+                    employeeId, actor.tenantId());
         }
         return grants.stream().map(DelegationGrantView::from).toList();
+    }
+
+    /**
+     * v2.4: {@code delegateId} must be an ACTIVE employee — no such employee / not ACTIVE /
+     * masterdata could not be asked → 422 {@code DELEGATION_INVALID}
+     * ({@code details.cause = "delegate_unresolved"}; the «could not ask» case is counted by the
+     * adapter). A delegate need not be linked: a grant to an unlinked employee is valid and
+     * becomes usable once that employee's account link is accepted.
+     */
+    private void ensureDelegateActive(String delegateId, String tenantId) {
+        EmployeeLookup ref = masterDataPort.approverRef(delegateId, tenantId);
+        if (!ref.isActive()) {
+            String why = ref.isUnavailable() ? "could not be resolved (masterdata unavailable)"
+                    : ref.isFound() ? "is " + ref.status() + ", not ACTIVE"
+                    : "is not an employee";
+            throw new DelegationInvalidException("delegate '" + delegateId + "' " + why,
+                    Map.of("cause", DelegationInvalidException.CAUSE_DELEGATE_UNRESOLVED));
+        }
     }
 
     /** Optional {@code ?role=DELEGATOR|DELEGATE} list filter (null = both). */

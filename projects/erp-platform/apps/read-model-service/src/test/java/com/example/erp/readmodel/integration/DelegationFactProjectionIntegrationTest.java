@@ -241,6 +241,47 @@ class DelegationFactProjectionIntegrationTest extends AbstractReadModelIntegrati
     }
 
     /**
+     * TASK-MONO-776 AC-7. «전»: a grant whose {@code delegatorId} is an IAM account {@code sub}
+     * (what approval-service stored before the person-field change) cannot be placed in any
+     * department — even for an operator scoped to the department of the employee that account
+     * is linked to, it is a 404. «후»: the same grant with the delegator's EMPLOYEE id is visible
+     * inside that scope and 404 outside it. No read-model code changed; only the id it receives.
+     */
+    @Test
+    void ac7_employeeIdDelegatorIsScopedButAnAccountSubDelegatorIsNot() throws Exception {
+        String deptIn = newId();
+        String deptOut = newId();
+        publish(TOPIC_DEPARTMENT, deptIn,
+                envelope(newId(), "department", deptIn, "CREATED", deptAfter("I776", "안776", null)));
+        publish(TOPIC_DEPARTMENT, deptOut,
+                envelope(newId(), "department", deptOut, "CREATED", deptAfter("O776", "밖776", null)));
+        String delegatorEmp = newId();
+        publish(TOPIC_EMPLOYEE, delegatorEmp, envelope(newId(), "employee", delegatorEmp,
+                "CREATED", empAfter("E-776", "위임자", deptIn)));
+        String accountSub = "0199de70-0000-7000-8000-" + newId().substring(0, 12);
+
+        String grantBySub = newId();
+        String grantByEmp = newId();
+        publish(TOPIC_DELEGATED, grantBySub, delegationEnvelope(newId(),
+                "erp.approval.delegated", grantBySub, accountSub, "emp-d", FROM, TO, "before"));
+        publish(TOPIC_DELEGATED, grantByEmp, delegationEnvelope(newId(),
+                "erp.approval.delegated", grantByEmp, delegatorEmp, "emp-d", FROM, TO, "after"));
+        await().atMost(Duration.ofSeconds(30)).until(() ->
+                delegationFactJpa.findById(grantBySub).isPresent()
+                        && delegationFactJpa.findById(grantByEmp).isPresent()
+                        && employeeJpa.findById(delegatorEmp).isPresent());
+
+        String inScope = token(c -> c.claim("tenant_id", "erp").claim("scope", "erp.read")
+                .claim("org_scope", List.of(deptIn)));
+        String outScope = token(c -> c.claim("tenant_id", "erp").claim("scope", "erp.read")
+                .claim("org_scope", List.of(deptOut)));
+
+        assertThat(getDelegation(grantBySub, inScope).statusCode()).isEqualTo(404);   // «전»
+        assertThat(getDelegation(grantByEmp, inScope).statusCode()).isEqualTo(200);   // «후»
+        assertThat(getDelegation(grantByEmp, outScope).statusCode()).isEqualTo(404);
+    }
+
+    /**
      * Builds a delegation envelope with an explicit tenant — or with <b>none</b>
      * when {@code tenantId} is null. The shared helper deliberately cannot produce
      * either shape.

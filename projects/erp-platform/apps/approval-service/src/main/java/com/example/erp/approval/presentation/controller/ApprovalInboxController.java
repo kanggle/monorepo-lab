@@ -3,6 +3,7 @@ package com.example.erp.approval.presentation.controller;
 import com.example.erp.approval.application.ActorContext;
 import com.example.erp.approval.application.ApprovalApplicationService;
 import com.example.common.page.PageResult;
+import com.example.erp.approval.application.view.ApprovalInboxView;
 import com.example.erp.approval.application.view.ApprovalSummaryView;
 import com.example.security.servlet.actor.ActorContextResolver;
 import com.example.erp.approval.presentation.dto.ApiEnvelope;
@@ -32,10 +33,18 @@ public class ApprovalInboxController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
-        PageResult<ApprovalSummaryView> result = service.inbox(actor, page, size);
+        ApprovalInboxView inbox = service.inbox(actor, page, size);
+        PageResult<ApprovalSummaryView> result = inbox.page();
         // page/size/totalPages sourced from the result object (not the raw request) — guaranteed
         // to agree since the repository echoes the exact page/size it was called with (AC-4).
-        return ResponseEntity.ok(ApiEnvelope.ofList(result.content(), result.page(), result.size(),
-                result.totalElements(), result.totalPages()));
+        ApiEnvelope<List<ApprovalSummaryView>> body = ApiEnvelope.ofList(result.content(),
+                result.page(), result.size(), result.totalElements(), result.totalPages());
+        // approval-api.md § v2.4 — present = the employee the caller acts as; ABSENT = the
+        // caller's account is linked to no employee (so «empty» means «not linked», not
+        // «nothing waiting»). Never serialized as null.
+        if (inbox.actorEmployeeId() != null) {
+            body.meta().put("actorEmployeeId", inbox.actorEmployeeId());
+        }
+        return ResponseEntity.ok(body);
     }
 }

@@ -7,8 +7,10 @@ import java.util.Set;
  * keeps Spring Security types out of the application layer (mirrors
  * masterdata-service's {@code ActorContext}).
  *
- * <p>{@code actorId} = JWT {@code sub} (the submitter at create/submit, the
- * approver at approve/reject). Roles/scopes ({@code erp.read} / {@code erp.write}
+ * <p>{@code actorId} = JWT {@code sub} — the IAM account UUID, i.e. who logged in. It is
+ * NOT a person field value: since approval-api.md § v2.4 (TASK-MONO-776) the submitter /
+ * approver / delegator is the employee linked to this {@code sub}, resolved per use case
+ * ({@code ActingEmployee}); {@code actorId} stays on {@code audit_log.actor}. Roles/scopes ({@code erp.read} / {@code erp.write}
  * / {@code erp.approval.*}) and {@code org_scope} are extracted by the JWT
  * converter. {@code "*"} in {@code dataScopeDepartmentIds} = platform-wide scope.
  *

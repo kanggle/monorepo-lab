@@ -77,6 +77,94 @@ public abstract class AbstractApprovalIntegrationTest {
      */
     protected static volatile String masterSeenAuthorization;
 
+    // ------------------------------------------------------------------------
+    // Person registry (TASK-MONO-776 — approval-api.md § v2.4).
+    //
+    // DEFAULT CONVENTION, so the pre-776 ITs keep their meaning: a token whose sub is
+    // "emp-x" belongs to an account that is linked to the ACTIVE employee "emp-x", and an
+    // approver id "emp-y" is an ACTIVE employee linked to the account "emp-y". That makes
+    // the two id spaces coincide on purpose for those tests — they pin lifecycle behaviour,
+    // not the id space. Tests about the id space (PersonIdSpaceIntegrationTest) register
+    // DISTINCT account and employee ids below and so are not covered by the convention.
+    // ------------------------------------------------------------------------
+
+    /** account sub → linked employee id (overrides the identity convention). */
+    protected static final java.util.Map<String, String> ACCOUNT_LINKS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** accounts linked to no employee → `/me` answers 404. */
+    protected static final java.util.Set<String> UNLINKED_ACCOUNTS =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** employee id → {status, accountId-or-null} (overrides the identity convention). */
+    protected static final java.util.Map<String, String[]> EMPLOYEES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** employee ids that do not exist → `/approver-ref` answers 404. */
+    protected static final java.util.Set<String> MISSING_EMPLOYEES =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Non-200 forces `/employees/me` to fail with that status («could not ask who I am»). */
+    protected static volatile int meHttpStatus = 200;
+    /** Non-200 forces `/approver-ref` to fail with that status («could not ask about the approver»). */
+    protected static volatile int approverRefHttpStatus = 200;
+
+    /** Call from a test's {@code @BeforeEach}: back to the identity convention. */
+    protected static void resetPeople() {
+        ACCOUNT_LINKS.clear();
+        UNLINKED_ACCOUNTS.clear();
+        EMPLOYEES.clear();
+        MISSING_EMPLOYEES.clear();
+        meHttpStatus = 200;
+        approverRefHttpStatus = 200;
+    }
+
+    /** Register an employee with a status and (nullable) linked account. */
+    protected static void employee(String id, String status, String accountId) {
+        EMPLOYEES.put(id, new String[]{status, accountId});
+        if (accountId != null) {
+            ACCOUNT_LINKS.put(accountId, id);
+        }
+    }
+
+    private static MockResponse personResponse(String[] codeAndBody) {
+        return new MockResponse().setResponseCode(Integer.parseInt(codeAndBody[0]))
+                .setHeader("Content-Type", "application/json")
+                .setBody(codeAndBody[1]);
+    }
+
+    private static String[] meResponse(String rawToken) {
+        if (meHttpStatus != 200) {
+            return new String[]{String.valueOf(meHttpStatus), "{\"code\":\"X\"}"};
+        }
+        String sub;
+        try {
+            sub = SignedJWT.parse(rawToken).getJWTClaimsSet().getSubject();
+        } catch (Exception e) {
+            return new String[]{"401", "{\"code\":\"UNAUTHORIZED\"}"};
+        }
+        if (UNLINKED_ACCOUNTS.contains(sub)) {
+            return new String[]{"404", "{\"code\":\"MASTERDATA_NOT_FOUND\"}"};
+        }
+        String employeeId = ACCOUNT_LINKS.getOrDefault(sub, sub);
+        String[] e = EMPLOYEES.getOrDefault(employeeId, new String[]{"ACTIVE", sub});
+        return new String[]{"200", personBody(employeeId, e[0], e[1])};
+    }
+
+    private static String[] approverRefResponse(String employeeId) {
+        if (approverRefHttpStatus != 200) {
+            return new String[]{String.valueOf(approverRefHttpStatus), "{\"code\":\"X\"}"};
+        }
+        if (MISSING_EMPLOYEES.contains(employeeId)) {
+            return new String[]{"404", "{\"code\":\"MASTERDATA_NOT_FOUND\"}"};
+        }
+        String[] e = EMPLOYEES.getOrDefault(employeeId, new String[]{"ACTIVE", employeeId});
+        return new String[]{"200", personBody(employeeId, e[0], e[1])};
+    }
+
+    /** {@code accountId} ABSENT when unlinked — masterdata's NON_NULL convention. */
+    private static String personBody(String id, String status, String accountId) {
+        return "{\"data\":{\"id\":\"" + id + "\",\"status\":\"" + status + "\""
+                + (accountId == null ? "" : ",\"accountId\":\"" + accountId + "\"")
+                + "},\"meta\":{}}";
+    }
+
     private static RSAKey rsaKey;
 
     static {
@@ -105,13 +193,26 @@ public abstract class AbstractApprovalIntegrationTest {
                             .setHeader("Content-Type", "application/json")
                             .setBody("{\"code\":\"UNAUTHORIZED\"}");
                 }
+                String path = request.getPath() == null ? "" : request.getPath();
+                // TASK-MONO-776 — person lookups (`/employees/me`, `/employees/{id}/approver-ref`)
+                // are answered from the person registry below, NOT from masterStatus /
+                // masterHttpStatus: those two drive the E1 subject check, and letting them
+                // leak into the caller's own `/me` would turn every «subject 404» test into
+                // «caller not linked».
+                if (path.endsWith("/employees/me")) {
+                    return personResponse(meResponse(authorization.substring("Bearer ".length())));
+                }
+                if (path.endsWith("/approver-ref")) {
+                    String rest = path.substring(0, path.length() - "/approver-ref".length());
+                    return personResponse(approverRefResponse(
+                            rest.substring(rest.lastIndexOf('/') + 1)));
+                }
                 if (masterHttpStatus != 200) {
                     return new MockResponse().setResponseCode(masterHttpStatus)
                             .setHeader("Content-Type", "application/json")
                             .setBody("{\"code\":\"MASTERDATA_NOT_FOUND\"}");
                 }
-                String id = request.getPath() == null ? "x"
-                        : request.getPath().substring(request.getPath().lastIndexOf('/') + 1);
+                String id = path.isEmpty() ? "x" : path.substring(path.lastIndexOf('/') + 1);
                 return new MockResponse()
                         .setHeader("Content-Type", "application/json")
                         .setBody("{\"data\":{\"id\":\"" + id + "\",\"status\":\""

@@ -101,6 +101,22 @@ public abstract class AbstractNotificationIntegrationTest {
 
     private static final RSAKey RSA_KEY = generateRsaKey();
 
+    /**
+     * Stand-in masterdata-service for {@code GET /employees/me} (TASK-MONO-776 — the inbox
+     * predicate is «the employee linked to my sub»). Like the real resource server it answers
+     * 401 to an anonymous call. DEFAULT CONVENTION, so the pre-776 tests keep their meaning: an
+     * account whose sub is not registered below is linked to the employee of the SAME id.
+     * {@link #ACCOUNT_LINKS} / {@link #UNLINKED_ACCOUNTS} break that convention on purpose.
+     */
+    @SuppressWarnings("resource")
+    protected static final MockWebServer MASTERDATA = new MockWebServer();
+    protected static final java.util.Map<String, String> ACCOUNT_LINKS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    protected static final java.util.Set<String> UNLINKED_ACCOUNTS =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Non-200 = masterdata «could not answer» for every /me call. */
+    protected static volatile int meHttpStatus = 200;
+
     static {
         MYSQL.start();
         KAFKA.start();
@@ -114,11 +130,44 @@ public abstract class AbstractNotificationIntegrationTest {
                         .setBody(jwksBody);
             }
         });
+        MASTERDATA.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                String auth = request.getHeader("Authorization");
+                if (auth == null || !auth.startsWith("Bearer ")) {
+                    return json(401, "{\"code\":\"UNAUTHORIZED\"}");
+                }
+                if (request.getPath() == null || !request.getPath().endsWith("/employees/me")) {
+                    return json(404, "{\"code\":\"MASTERDATA_NOT_FOUND\"}");
+                }
+                if (meHttpStatus != 200) {
+                    return json(meHttpStatus, "{\"code\":\"X\"}");
+                }
+                String sub;
+                try {
+                    sub = SignedJWT.parse(auth.substring(7)).getJWTClaimsSet().getSubject();
+                } catch (Exception e) {
+                    return json(401, "{\"code\":\"UNAUTHORIZED\"}");
+                }
+                if (UNLINKED_ACCOUNTS.contains(sub)) {
+                    return json(404, "{\"code\":\"MASTERDATA_NOT_FOUND\"}");
+                }
+                String employee = ACCOUNT_LINKS.getOrDefault(sub, sub);
+                return json(200, "{\"data\":{\"id\":\"" + employee
+                        + "\",\"status\":\"ACTIVE\",\"accountId\":\"" + sub + "\"},\"meta\":{}}");
+            }
+        });
         try {
             JWKS.start();
+            MASTERDATA.start();
         } catch (java.io.IOException e) {
-            throw new IllegalStateException("JWKS MockWebServer start failed", e);
+            throw new IllegalStateException("JWKS / masterdata MockWebServer start failed", e);
         }
+    }
+
+    private static MockResponse json(int status, String body) {
+        return new MockResponse().setResponseCode(status)
+                .setHeader("Content-Type", "application/json").setBody(body);
     }
 
     private static RSAKey generateRsaKey() {
@@ -168,6 +217,8 @@ public abstract class AbstractNotificationIntegrationTest {
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
                 () -> JWKS.url("/oauth2/jwks").toString());
         registry.add("erpplatform.oauth2.allowed-issuers", () -> ISSUER);
+        registry.add("erpplatform.notification.masterdata.base-url",
+                () -> "http://localhost:" + MASTERDATA.getPort());
     }
 
     @LocalServerPort

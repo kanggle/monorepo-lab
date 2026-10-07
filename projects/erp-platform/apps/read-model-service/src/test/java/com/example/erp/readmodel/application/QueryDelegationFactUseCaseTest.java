@@ -161,6 +161,43 @@ class QueryDelegationFactUseCaseTest {
                 .isInstanceOf(ReadModelNotFoundException.class);
     }
 
+    /**
+     * TASK-MONO-776 AC-7 «전»: before approval-service stored employee ids, a grant's
+     * {@code delegatorId} was the creator's JWT {@code sub} (an IAM account UUID). That id is
+     * not an {@code employee_proj} key, so the delegator's department can never be resolved and
+     * a bounded-scope operator sees nothing — even an operator whose scope is exactly the
+     * department of the employee that account is linked to.
+     */
+    @Test
+    void ac7_before_accountSubDelegatorCannotBeScopedEvenForTheLinkedEmployeesDepartment() {
+        String accountSub = "0199de70-0000-7000-8000-00000000ad03";
+        when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(grant(accountSub)));
+        when(departmentRepository.findSubtreeIds("dept-in", 32)).thenReturn(List.of("dept-in"));
+        when(employeeRepository.findById(accountSub)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.getOne("dgr-1", List.of("dept-in")))
+                .isInstanceOf(ReadModelNotFoundException.class);
+    }
+
+    /**
+     * TASK-MONO-776 AC-7 «후»: the same grant written with the delegator's EMPLOYEE id (what
+     * approval-service now stores) resolves through {@code employee_proj} — visible to an
+     * operator scoped to that department, invisible (404) to one scoped elsewhere. No
+     * read-model code changed: the projection already assumed employee ids.
+     */
+    @Test
+    void ac7_after_employeeIdDelegatorIsVisibleInsideItsDepartmentScopeAndNotOutside() {
+        when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(grant("emp-a")));
+        when(departmentRepository.findSubtreeIds("dept-in", 32)).thenReturn(List.of("dept-in"));
+        when(departmentRepository.findSubtreeIds("dept-other", 32))
+                .thenReturn(List.of("dept-other"));
+        when(employeeRepository.findById("emp-a")).thenReturn(Optional.of(emp("emp-a", "dept-in")));
+
+        assertThat(useCase.getOne("dgr-1", List.of("dept-in")).delegatorId()).isEqualTo("emp-a");
+        assertThatThrownBy(() -> useCase.getOne("dgr-1", List.of("dept-other")))
+                .isInstanceOf(ReadModelNotFoundException.class);
+    }
+
     @Test
     void getOneNetZeroPlatformScopeReturnsFact() {
         when(delegationRepository.findById("dgr-1")).thenReturn(Optional.of(grant("emp-a")));

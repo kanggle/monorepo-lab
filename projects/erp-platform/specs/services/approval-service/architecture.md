@@ -285,7 +285,11 @@ the Approval Workflow bounded context's first realisation. It MUST:
   최초 결과를 반환").
 - Append every transition to an **immutable append-only audit log** in the **same
   transaction** as the state change + outbox write (E2 / E4 / E8 + A2 / A3 / A7 / A10):
-  `actor` (결재자/기안자 JWT sub) / `occurred_at` / `action` / `before_state` /
+  `actor` (결재자/기안자 JWT sub — 로그인한 주체. 🔵 TASK-MONO-776: 이 감사 행만 `sub` 를
+  유지하고, 사람 칸(`submitter_id` · `approver_id` · 단계 승인자 · `approval_action.actor`
+  = `history[].actor` · 위임 `delegator_id`/`delegate_id`)은 전부 **직원 id** — 호출자 쪽은
+  masterdata `/employees/me` 로 푼 «내 `sub` 와 연결된 직원», approval-api.md § v2.4) /
+  `occurred_at` / `action` / `before_state` /
   `after_state` / `reason` (required on reject and withdraw). UPDATE/DELETE on the
   audit table is structurally blocked (A3).
 - Enforce **cross-service reference integrity of the approval subject** (E1): an
@@ -947,6 +951,7 @@ synchronous, single-aggregate** commits — there is **no multi-step distributed
 
 | Flow | Category | Resilience config | Fail behavior | Metrics | Status |
 |---|---|---|---|---|---|
+| person resolution (`/employees/me` on every person-resolving use case; `/employees/{id}/approver-ref` per stage at submit + for `delegateId`) — TASK-MONO-776 | **B** | same RestClient, caller-token propagation as the subject call | caller unresolvable → 503 `SERVICE_UNAVAILABLE`; approver/delegate unresolvable → 422 (`approver_unresolved` / `delegate_unresolved`) — no state change | `approval_person_resolve_failures_total{lookup,cause}` | Implemented |
 | `submit` subject-resolution call to masterdata-service | **B** (synchronous external/internal call, no saga row) | RestClient timeout (connect 2s / read 3s); no retry of a definitive 404 (subject genuinely absent); transient 5xx/timeout → bounded retry (2 attempts) then fail | subject-unresolvable / masterdata-unreachable → submit aborts before any state change; request stays DRAFT; `APPROVAL_ROUTE_INVALID` | `approval_subject_resolve_failures_total{cause}`, masterdata-call latency | Target |
 
 The transition events are **outbox** (Category C-adjacent producer side — at-least-once
@@ -978,6 +983,13 @@ treatment; this increment's single stage is not a saga.
     is the whole point of the tag: before TASK-ERP-BE-041 an authentication failure
     and an absent master were the same silent `false`, so an infrastructure fault was
     reported to the operator as a verdict about the customer's data.
+  - `approval_person_resolve_failures_total{lookup,cause}` (TASK-MONO-776,
+    approval-api.md § v2.4) — the same rule for PEOPLE. `lookup="actor"` = masterdata
+    `GET /employees/me` (who the caller acts as; no answer → 503 `SERVICE_UNAVAILABLE`, never
+    «not linked»); `lookup="approver"` = `GET /employees/{id}/approver-ref` (E3 at submit and
+    the `delegateId` check; no answer → the same 422 as «absent», but counted here). `cause` as
+    above plus `subject_mismatch` (actor only: the propagated token is not the use case's
+    caller). A 404 is an answer and is not counted.
   - `approval_outbox_publish_failures_total` — outbox publish-side retry signal.
   - `approval_audit_append_failures_total` — audit-fail-closed signal (A10).
 - Tracing OTLP via `micrometer-tracing-bridge-otel`; sampling 1.0 (dev). The submit

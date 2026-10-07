@@ -262,8 +262,15 @@ Common to every approval payload:
   "submitterId": "emp-submitter-...",
   "tenantId": "<tenantId>",
   "occurredAt": "<ISO-8601 UTC>",
-  "actor": "<JWT sub of the transition actor>" }
+  "actor": "<acting employee id — approval-api.md § v2.4>" }
 ```
+
+> TASK-MONO-776 wording fix (no wire change for any consumer — none reads `actor`): this
+> header said *"JWT sub of the transition actor"* while every example below and the
+> withdrawn rule (`actor == submitterId`) already said **employee id**. The examples were the
+> intent (approval-api.md § v2.4: person fields hold employee ids; only `audit_log.actor` keeps
+> the `sub`). The delegation events' `actor` (*"JWT sub of the grant creator / revoker"*) is
+> unchanged — it records who logged in, like `created_by` / `revoked_by`.
 
 `erp.approval.submitted` payload — the common header only (no `finalizedAt`,
 no `reason`):

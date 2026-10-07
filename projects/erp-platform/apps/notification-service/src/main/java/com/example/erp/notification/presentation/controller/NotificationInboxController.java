@@ -117,6 +117,11 @@ public class NotificationInboxController {
         return ResponseEntity.ok(ApiEnvelope.of(NotificationResponse.from(notification)));
     }
 
+    /**
+     * The caller's {@code sub} — NOT the recipient. Since notification-api.md § v1.1
+     * (TASK-MONO-776) the use cases turn it into «the employee linked to this sub», which is
+     * what {@code recipient_id} holds.
+     */
     private String recipient(Jwt jwt) {
         return jwt.getSubject();
     }

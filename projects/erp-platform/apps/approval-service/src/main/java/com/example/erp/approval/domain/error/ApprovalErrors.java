@@ -80,6 +80,8 @@ public final class ApprovalErrors {
         public static final String CAUSE_SUBJECT_UNRESOLVED = "subject_unresolved";
         public static final String CAUSE_SELF_APPROVAL = "self_approval";
         public static final String CAUSE_DUPLICATE_STAGE_APPROVER = "duplicate_stage_approver";
+        /** v2.4 (TASK-MONO-776): a stage approver is no employee / not ACTIVE / could not be asked. */
+        public static final String CAUSE_APPROVER_UNRESOLVED = "approver_unresolved";
 
         public ApprovalRouteInvalidException(String message) {
             super("APPROVAL_ROUTE_INVALID", message);
@@ -141,8 +143,53 @@ public final class ApprovalErrors {
     // ---- 422 (delegation grant malformed: self-delegation / invalid window) ----
     // TASK-ERP-BE-013 (대결/위임). error-handling.md § Approval Workflow [domain: erp].
     public static final class DelegationInvalidException extends ApprovalDomainException {
+
+        /** v2.4 (TASK-MONO-776): {@code delegateId} is no employee / not ACTIVE / could not be asked. */
+        public static final String CAUSE_DELEGATE_UNRESOLVED = "delegate_unresolved";
+
         public DelegationInvalidException(String message) {
             super("DELEGATION_INVALID", message);
+        }
+
+        public DelegationInvalidException(String message, java.util.Map<String, Object> details) {
+            super("DELEGATION_INVALID", message, details);
+        }
+    }
+
+    // ---- v2.4 person-field codes (TASK-MONO-774 contract, TASK-MONO-776 code) ----
+
+    /**
+     * 403 — the caller's {@code sub} has no linked ACTIVE employee in this tenant, so it has
+     * no person to act as (create / transition / delegation create). A linked but
+     * {@code RETIRED} employee is refused with the same code: the contract's sentence is «no
+     * linked employee», and a retired employee is not one the caller may act as.
+     */
+    public static final class ApprovalActorNotLinkedException extends ApprovalDomainException {
+        public ApprovalActorNotLinkedException(String message) {
+            super("APPROVAL_ACTOR_NOT_LINKED", message);
+        }
+    }
+
+    /**
+     * 422 — submit with a stage approver that is an ACTIVE employee but has no linked IAM
+     * account: nobody could ever see the request in an inbox. {@code details.stageIndex} names
+     * the stage.
+     */
+    public static final class ApprovalApproverUnlinkedException extends ApprovalDomainException {
+        public ApprovalApproverUnlinkedException(String message, int stageIndex) {
+            super("APPROVAL_APPROVER_UNLINKED", message, java.util.Map.of("stageIndex", stageIndex));
+        }
+    }
+
+    /**
+     * 503 {@code SERVICE_UNAVAILABLE} (platform-common) — masterdata could not be asked who the
+     * caller is. Not folded into {@code APPROVAL_ACTOR_NOT_LINKED}: that would tell an operator
+     * «your account is not linked» during a masterdata outage. The adapter has already counted
+     * the cause.
+     */
+    public static final class PersonResolveUnavailableException extends ApprovalDomainException {
+        public PersonResolveUnavailableException(String message) {
+            super("SERVICE_UNAVAILABLE", message);
         }
     }
 

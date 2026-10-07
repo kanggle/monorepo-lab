@@ -150,9 +150,22 @@ exactly one approver (`approverId`).
 >   `APPROVAL_ACTOR_NOT_LINKED`). `delegateId` 는 `ACTIVE` 직원이어야 한다 — 아니면 422
 >   `DELEGATION_INVALID` (`details.cause = "delegate_unresolved"`). 자기위임 비교도 직원 id.
 >   `?role=` 목록의 참여자도 호출자의 직원 id.
-> - **기존 행** — 이 개정 이전에 만들어진 결재·위임 행의 사람 칸에는 계정 UUID 가 들어 있다.
->   자동 이전은 하지 않는다(approval DB 는 연결을 모른다). 데모는 볼륨 초기화 + 재시드로
->   새로 심는다 — 처리 방식은 구현 슬라이스의 AC-0 이 판정한다(`TASK-MONO-774` § 분할 제안).
+> - **이전 데이터 (소유자 결정 2026-10-07 UTC, `TASK-MONO-776` AC-0: «그대로 두고 데모는
+>   재시드»)** — 이 개정을 구현한 코드 이전에 만들어진 결재·위임 행의 사람 칸(`submitter_id` ·
+>   `approver_id` · `approval_route_stage.approver_id` · `approval_action.actor` ·
+>   `delegation_grant.delegator_id`)에는 계정 UUID 가 들어 있을 수 있다. **이전하지 않는다** —
+>   새 술어(«호출자의 직원 id»)로는 그런 행이 **아무의 결재함 · `?role=` 목록 · 위임 목록에도
+>   나오지 않는다**(운영자의 테넌트 전체 목록 `role` 없음에는 그대로 보인다). 그 결재를 진행하려면
+>   새 요청으로 다시 상신한다. 데모는 신선 볼륨 재시드로 새 모델의 행만 갖는다. 🔵 연결 표로
+>   `sub → 직원` 을 푸는 일회성 이전은 고르지 않았다 — 연결은 배포 **뒤** 제안 → 수락으로만
+>   생기므로 이전이 돌 시점의 연결 표는 비어 있어 0 행을 풀었을 것이다.
+> - **호출자의 직원을 물어보지 못함** — `/employees/me` 가 401/403/5xx/timeout 이면 503
+>   **`SERVICE_UNAVAILABLE`**(platform-common, 새 코드 아님) + 계측
+>   (`approval_person_resolve_failures_total{lookup="actor",cause}`). «연결 없음»(403/빈 페이지)
+>   으로 접지 않는다 — 장애를 «당신 계정이 연결되지 않았다» 로 말하게 된다. 연결된 직원이
+>   `RETIRED` 면 쓰기는 403 `APPROVAL_ACTOR_NOT_LINKED`(같은 코드 — 그 직원으로는 행동할 수
+>   없다), 읽기(결재함 · `?role=`)는 그 직원 id 로 그대로 본다. 승인자 해소의 «물어보지 못함»
+>   은 `lookup="approver"` 로 따로 센다.
 > - **New error codes** — `APPROVAL_ACTOR_NOT_LINKED` (403), `APPROVAL_APPROVER_UNLINKED` (422),
 >   registered in `platform/error-handling.md` § Approval Workflow + `rules/domains/erp.md`.
 
@@ -205,8 +218,12 @@ All endpoints:
   field was documented here from the start but was not populated by the service
   until then):
   - `APPROVAL_ROUTE_INVALID` → `details.cause ∈ { "subject_unresolved",
-    "self_approval", "duplicate_stage_approver" }`. Structural route defects the
-    contract does not name (empty stage list, blank approver) carry **no**
+    "self_approval", "duplicate_stage_approver", "approver_unresolved" }` (the last
+    v2.4). Structural route defects the contract does not name (empty stage list,
+    blank approver) carry **no** `details`.
+  - `APPROVAL_APPROVER_UNLINKED` → `details.stageIndex` (v2.4).
+  - `DELEGATION_INVALID` → `details.cause = "delegate_unresolved"` when `delegateId`
+    is not an `ACTIVE` employee (v2.4); the pre-v2.4 delegation refusals carry no
     `details`.
   - `APPROVAL_NOT_AUTHORIZED_APPROVER` → `details.role = "submitter"` on the
     submitter-only gate (`withdraw`). An approver-position rejection carries no
@@ -517,7 +534,8 @@ filtering (v2 deferred).
 ```
 
 **Errors**: 400 `VALIDATION_ERROR` (bad page/size), 401 `UNAUTHORIZED`,
-403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`.
+403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`, 503 `SERVICE_UNAVAILABLE` (could not
+resolve the caller's employee — v2.4; never answered with an empty page).
 
 ---
 
@@ -535,6 +553,7 @@ filtering (v2 deferred).
 | `APPROVAL_ROUTE_INVALID` | 422 | route construction error at submit: self-approval (`approverId == submitterId`), unresolved subject master, or unresolved / non-`ACTIVE` approver employee (`details.cause = "approver_unresolved"`, v2.4) (E3/E1) |
 | `APPROVAL_APPROVER_UNLINKED` | 422 | submit with a stage approver employee that is `ACTIVE` but has no linked IAM account — nobody could see it in an inbox (`details.stageIndex`) (v2.4, TASK-MONO-774) |
 | `APPROVAL_ACTOR_NOT_LINKED` | 403 | the caller's `sub` has no linked employee in this tenant — create / transition / delegation create refused (inbox and `?role=` lists return an empty page instead) (v2.4, TASK-MONO-774) |
+| `SERVICE_UNAVAILABLE` | 503 | masterdata could not be asked which employee the caller is (`/employees/me` 401/403/5xx/timeout) — any person-resolving endpoint (v2.4, TASK-MONO-776; platform-common code) |
 | `PERMISSION_DENIED` | 403 | required role/scope not present (E6) |
 | `DATA_SCOPE_FORBIDDEN` | 403 | request subject outside caller's data scope (E6). **Reserved for v2 `permission-service`; NOT emitted in v1** (TASK-ERP-BE-030 — see § Auth). Endpoint error lists below retain it as the reserved v2 code. |
 | `TENANT_FORBIDDEN` | 403 | `tenant_id ∉ {erp, *}` |
