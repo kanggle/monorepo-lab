@@ -285,6 +285,10 @@ jobs:
       #    잡의 `if` 가 항상 거짓이 된다 — 배선이 없는데 초록으로 보인다(MONO-619/640 과 같은 함정).
       capture-route-staleness: ${{ steps.filter.outputs.capture-route-staleness }}
       stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
+      # 🔴 TASK-MONO-767 도 MONO-619/640 과 같은 함정을 밟았다 — 이 한 줄 없이 PR 을 올렸고
+      #    필터 스텝 자체는 `no-next-font-google = true` 를 맞게 계산했는데(raw 로그 확인)
+      #    `needs.changes.outputs.no-next-font-google` 는 빈 값이라 잡이 통째로 skipped 였다.
+      no-next-font-google: ${{ steps.filter.outputs.no-next-font-google }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
