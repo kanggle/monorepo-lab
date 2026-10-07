@@ -8,7 +8,7 @@ TASK-SCM-BE-061
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -112,3 +112,12 @@ processedEventPort.markProcessed(eventId, ...);
 4. 새 테스트: `WmsInventoryReceivedConsumerMultiLineTest`(AC-0 재현, 컨슈머+실서비스+mock 포트), `ApplyInventoryReceivedUseCaseTest`(3라인 적용/AC-1 재전달 멱등/중간 라인 실패 전파/동일 SKU 두 번 합산), `WmsInventoryReceivedConsumerIntegrationTest` 에 3개 IT 추가(3라인 성공/재전달 멱등/skuId 결손 라인 전체 미반영).
 
 **디비에이션**: Testcontainers(PostgreSQL+Redis+Kafka) IT 는 이 Windows 호스트에 Docker 가 없어(`docker info` rc=1) 로컬 실행 불가 — 코드는 작성·커밋했고 CI(`integrationTest` 태스크, `@Tag("integration")`)에서 실행되는 것에 의존한다. 로컬에서는 `./gradlew :projects:scm-platform:apps:inventory-visibility-service:test`(단위+슬라이스, integrationTest 제외)와 `:check` 만 rc=0 확인.
+
+---
+
+# 닫기 기록 (2026-10-07 UTC, 4차원 검증)
+
+- (a) PR #4206 `state=MERGED`, squash `58392b114`.
+- (b) `origin/main` 이 `58392b114` 를 포함.
+- (c) 머지된 PR 의 `statusCheckRollup` 실패 0 · 대기 0.
+- (d) AC 절을 열어 동사대로 읽음: AC-0~AC-3 전부 [x]. 로컬 Docker 부재로 못 돈 IT 는 #4206 의 `Integration (scm-platform, Testcontainers)` · `E2E (scm-platform v1 cross-service smoke)` SUCCESS(실행됨)로 확인.
