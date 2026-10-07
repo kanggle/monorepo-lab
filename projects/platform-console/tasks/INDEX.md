@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **erp 직원 ↔ 계정 연결 화면 다섯 — «연결된 계정» · 제안 · 내 앞 제안 수락/거절 · 결재선 선택기 «연결된 계정 없음» · 결재함 빈 이유 + 콘솔 계약 § 2.4.8 보정 + `TASK-PC-FE-311` 보정 걷기** (READY, 2026-10-08 UTC · ⏳ 선행 루트 `TASK-MONO-776` `done/`). 루트 `TASK-MONO-774` S4. 결재선은 지금 원시 id 입력 → 직원 선택기. `iam-integration.md:120` 낡은 «콘솔은 쓰지 않는다» 도 같이 고친다. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 

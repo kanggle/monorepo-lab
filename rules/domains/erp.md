@@ -60,6 +60,11 @@ erp 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `MASTERDATA_DUPLICATE_KEY` — 마스터 자연키(코드 등) 중복
 - `MASTERDATA_EFFECTIVE_PERIOD_INVALID` — 유효기간 모순(종료 < 시작) 또는 기간 겹침 위반
 - `MASTERDATA_PARENT_CYCLE` — 계층 마스터(부서 등)의 순환 참조
+- `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND` — 존재하지 않는 직원 ↔ 계정 연결 제안
+- `EMPLOYEE_LINK_CONFLICT` — 연결 상태 충돌(이미 연결 · 계정 중복 연결 · 대기 제안 중복 · 대기 아님)
+- `EMPLOYEE_LINK_INVALID` — 연결 대상 부적격(직원 비활성)
+- `EMPLOYEE_LINK_NOT_ADDRESSEE` — 계정 주인이 아닌 호출자의 수락/거절
+- `EMPLOYEE_LINK_SELF_ACCEPT` — 두 사람 규칙 위반(제안자 = 수락자)
 
 ### Approval Workflow
 - `APPROVAL_REQUEST_NOT_FOUND` — 존재하지 않는 결재 요청
@@ -67,6 +72,8 @@ erp 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `APPROVAL_NOT_AUTHORIZED_APPROVER` — 현재 단계의 결재 권한자가 아님
 - `APPROVAL_ROUTE_INVALID` — 결재선 구성 오류(단계 누락·자기 결재 등)
 - `APPROVAL_ALREADY_FINALIZED` — 이미 완료/반려된 결재의 재처리 시도
+- `APPROVAL_APPROVER_UNLINKED` — 계정이 연결되지 않은 직원을 승인자로 상신
+- `APPROVAL_ACTOR_NOT_LINKED` — 호출자 계정과 연결된 직원이 없음
 
 ### Integrated Read Model / Authorization
 - `READ_MODEL_SOURCE_UNAVAILABLE` — 통합 조회의 원천 시스템 응답 불가

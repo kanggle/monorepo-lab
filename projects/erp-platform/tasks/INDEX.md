@@ -82,6 +82,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-ERP-BE-044-employee-account-link-model.md` — **masterdata 직원 ↔ IAM 계정 연결 모델 — `employees.account_id` · 연결 제안 표 · 제안/수락/거절/철회/해제 · 🔴 두 사람 규칙(제안자 ≠ 수락자) + bite** (READY, 2026-10-08 UTC · ⏳ 선행 루트 `TASK-MONO-774` S1 머지). 루트 `TASK-MONO-774` S2. 제안 시 IAM 계정 확인 **없음**(소유자 결정 (b)) · `/employees/me` · `/approver-ref` 는 부서 data scope 없음. 후속 = 루트 `TASK-MONO-776`. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## in-progress
 
