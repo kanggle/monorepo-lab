@@ -4,6 +4,7 @@ import com.example.scmplatform.inventoryvisibility.application.port.outbound.Ale
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ReceivedLine;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
@@ -20,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -91,7 +93,7 @@ class ApplyWarehouseCodeUseCaseTest {
                 .thenReturn(Optional.empty());
         when(nodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived(EXTERNAL_ID, "SKU-001", 50L, "WH01",
+        service.applyInventoryReceived(EXTERNAL_ID, List.of(new ReceivedLine("SKU-001", 50L)), "WH01",
                 eventId, now, TENANT, TOPIC);
 
         assertThat(savedNode().getWarehouseCode()).isEqualTo("WH01");
@@ -103,7 +105,7 @@ class ApplyWarehouseCodeUseCaseTest {
                 .thenReturn(Optional.of(existingNode(null)));
         when(nodeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived(EXTERNAL_ID, "SKU-001", 50L, "WH01",
+        service.applyInventoryReceived(EXTERNAL_ID, List.of(new ReceivedLine("SKU-001", 50L)), "WH01",
                 eventId, now, TENANT, TOPIC);
 
         assertThat(savedNode().getWarehouseCode()).isEqualTo("WH01");
@@ -119,7 +121,7 @@ class ApplyWarehouseCodeUseCaseTest {
         when(nodeRepository.findByTenantIdAndExternalId(TENANT, EXTERNAL_ID))
                 .thenReturn(Optional.of(stored));
 
-        service.applyInventoryReceived(EXTERNAL_ID, "SKU-001", 50L, null,
+        service.applyInventoryReceived(EXTERNAL_ID, List.of(new ReceivedLine("SKU-001", 50L)), null,
                 eventId, now, TENANT, TOPIC);
 
         assertThat(stored.getWarehouseCode()).isEqualTo("WH01");
@@ -132,7 +134,7 @@ class ApplyWarehouseCodeUseCaseTest {
         when(nodeRepository.findByTenantIdAndExternalId(TENANT, EXTERNAL_ID))
                 .thenReturn(Optional.of(existingNode(null)));
 
-        service.applyInventoryReceived(EXTERNAL_ID, "SKU-001", 50L, null,
+        service.applyInventoryReceived(EXTERNAL_ID, List.of(new ReceivedLine("SKU-001", 50L)), null,
                 eventId, now, TENANT, TOPIC);
 
         verify(snapshotRepository).save(any());

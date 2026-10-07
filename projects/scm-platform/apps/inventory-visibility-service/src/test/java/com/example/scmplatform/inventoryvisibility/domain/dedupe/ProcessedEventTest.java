@@ -3,6 +3,7 @@ package com.example.scmplatform.inventoryvisibility.domain.dedupe;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ClockPort;
 import com.example.scmplatform.inventoryvisibility.application.port.outbound.ProcessedEventPort;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ReceivedLine;
 import com.example.scmplatform.inventoryvisibility.domain.node.InventoryNode;
 import com.example.scmplatform.inventoryvisibility.domain.node.NodeId;
 import com.example.scmplatform.inventoryvisibility.domain.expectation.repository.InboundExpectationRepository;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,7 +76,7 @@ class ProcessedEventTest {
         when(stalenessRepository.findByNodeId(nodeId)).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", List.of(new ReceivedLine("SKU-001", 50L)), null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         verify(snapshotRepository).save(any(InventorySnapshot.class));
@@ -87,7 +89,7 @@ class ProcessedEventTest {
         // Duplicate: isDuplicate returns true
         when(processedEventPort.isDuplicate(eventId)).thenReturn(true);
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", List.of(new ReceivedLine("SKU-001", 50L)), null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // No snapshot mutation
@@ -109,12 +111,12 @@ class ProcessedEventTest {
         when(stalenessRepository.findByNodeId(nodeId)).thenReturn(Optional.empty());
         when(stalenessRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", List.of(new ReceivedLine("SKU-001", 50L)), null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // Second call: now duplicate
         when(processedEventPort.isDuplicate(eventId)).thenReturn(true);
-        service.applyInventoryReceived("WH-001", "SKU-001", 50L, null, eventId, now, "scm",
+        service.applyInventoryReceived("WH-001", List.of(new ReceivedLine("SKU-001", 50L)), null, eventId, now, "scm",
                 "wms.inventory.received.v1");
 
         // snapshotRepository.save called exactly once

@@ -71,13 +71,21 @@ public class InventoryVisibilityApplicationService {
     // -------------------------------------------------------------------------
 
     /**
-     * Process wms.inventory.received.v1 — upsert snapshot with received quantity.
-     * Edge Case 3: auto-register node if not found.
+     * Process wms.inventory.received.v1 — upsert snapshot with received quantity for
+     * every line of the event. Edge Case 3: auto-register node if not found.
+     *
+     * <p>TASK-SCM-BE-061: the previous shape took a single {@code skuId}/{@code qtyReceived}
+     * pair and the Kafka consumer looped this call once per line, re-passing the SAME
+     * {@code eventId} each time. The dedupe check/mark above is keyed on {@code eventId},
+     * so line 1 marked the event processed and line 2+ then read as a duplicate and were
+     * silently skipped — only the first line of a multi-line {@code wms.inventory.received.v1}
+     * ever reached the snapshot. The sibling {@link #applyInventoryConfirmed} already had
+     * the correct shape (dedupe checked/marked once per EVENT, every line applied inside
+     * the same transaction); this mirrors it.
      */
     @Transactional
-    public void applyInventoryReceived(String warehouseId, String skuId,
-                                        long qtyReceived, String warehouseCode,
-                                        UUID eventId,
+    public void applyInventoryReceived(String warehouseId, List<ReceivedLine> lines,
+                                        String warehouseCode, UUID eventId,
                                         Instant occurredAt, String tenantId,
                                         String sourceTopic) {
         if (processedEventPort.isDuplicate(eventId)) {
@@ -85,13 +93,19 @@ public class InventoryVisibilityApplicationService {
             return;
         }
         InventoryNode node = resolveOrCreateNode(warehouseId, NodeType.WMS_WAREHOUSE, tenantId, warehouseCode);
-        applySnapshotDelta(node.getId(), Sku.of(skuId),
-                Quantity.of(BigDecimal.valueOf(qtyReceived)), true,
-                eventId, occurredAt, tenantId);
+        for (ReceivedLine line : lines) {
+            applySnapshotDelta(node.getId(), Sku.of(line.skuId()),
+                    Quantity.of(BigDecimal.valueOf(line.qtyReceived())), true,
+                    eventId, occurredAt, tenantId);
+        }
         updateStaleness(node.getId(), tenantId, eventId, occurredAt);
         processedEventPort.markProcessed(eventId, tenantId, clock.now(), sourceTopic);
-        log.info("applied inventory.received: node={} sku={} qty={} eventId={}",
-                node.getId(), skuId, qtyReceived, eventId);
+        log.info("applied inventory.received: node={} lines={} eventId={}",
+                node.getId(), lines.size(), eventId);
+    }
+
+    /** A single received line: a quantity to add for one SKU. */
+    public record ReceivedLine(String skuId, long qtyReceived) {
     }
 
     /**

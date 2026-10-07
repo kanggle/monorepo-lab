@@ -82,11 +82,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-SCM-BE-061-received-event-drops-every-line-after-the-first.md` — **`wms.inventory.received.v1` 의 둘째 라인부터 «중복» 으로 버려진다** (READY, 2026-10-07 UTC · 출처 `TASK-MONO-768`). 소비자가 라인마다 같은 `eventId` 로 dedupe 검사·기록 → 라인 1 만 반영, 나머지는 debug 로그뿐(에러·DLT 없음). 형제 `applyInventoryConfirmed` 처럼 이벤트당 한 번으로. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 ## in-progress
 
 ## review
+
+- `TASK-SCM-BE-061-received-event-drops-every-line-after-the-first.md` — **REVIEW (2026-10-07 UTC · 출처 `TASK-MONO-768`).** `wms.inventory.received.v1` 의 둘째 라인부터 «중복» 으로 버려지던 결함 — 소비자가 라인마다 같은 `eventId` 로 dedupe 검사·기록해서 라인 1 만 반영되고 나머지는 debug 로그뿐(에러·DLT 없음)이던 것을, 형제 `applyInventoryConfirmed` 와 같은 모양(이벤트당 한 번 dedupe, `List<ReceivedLine>` 한 번에 적용)으로 수정. AC-0 재현: `WmsInventoryReceivedConsumerMultiLineTest` 가 수정 전 `TooFewActualInvocations`(2라인 중 1개만 저장) → 수정 후 GREEN. AC-2: adjusted/transferred 는 `inventory-events.md` §2·§3 가 `lines[]` 없는 단일-라인 계약이라 해당 없음(근거 명시). AC-3: `:test`/`:check` rc=0 로컬 확인, Testcontainers IT 는 Docker 미가용(Windows 호스트)으로 CI 의존. 분석=Opus 5.5 / 구현=Sonnet 5.
 
 
 ## done
