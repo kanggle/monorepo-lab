@@ -8,7 +8,7 @@ TASK-BE-625
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -57,13 +57,13 @@ ADR-047 D1 이 정한 «테넌트를 노드에 묶는다» 를 쓰는 길이 없
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 재측정: org-node 엔드포인트 목록 · `assignOrgNode` 호출자 0 · `TenantScopeGuard` / `OrgNodeScopeGuard` · `AdminGrantScopeEvaluator` 의 subtree 판정 file:line. P2 의 «잃는 도메인» 을 API 가 줄지 콘솔이 계산할지 정하고 이유를 적는다. 🔴 TASK-ID 충돌 확인(`TASK-BE-` 네임스페이스가 프로젝트 사이에 공유되는지).
-- [ ] **AC-1** — 🔴 격리 대조군(실패 쪽 먼저): 노드 D 의 `ORG_ADMIN` 이 **자기 범위 밖** 테넌트를 D 로 끌어오려 하면 **404 · 소속 불변 · DENIED 행**. 같은 시험에서 양쪽을 관리하는 actor 는 성공.
-- [ ] **AC-2** — T 의 `TENANT_ADMIN` 이 노드 S 아래의 T 를 무소속으로 빼려 하면 거절(상한 탈출 금지). S 의 `ORG_ADMIN` 은 성공.
-- [ ] **AC-3** — (P1) 무소속 T 의 `TENANT_ADMIN` 이면서 D 의 `ORG_ADMIN` 인 actor → 성공 · `TENANT_ADMIN` 만 → 거절.
-- [ ] **AC-4** — 상한이 걸린 노드로 옮긴 뒤 T 의 유효 도메인이 상한과의 교집합으로 줄고, 다시 빼면 원래대로(구독 행 불변).
-- [ ] **AC-5** — 테넌트 생성 + `orgNodeId` → 그 노드 아래 생성 · `orgNodeId` 없음 → 무소속(지금과 동일, 회귀).
-- [ ] **AC-6** — 같은 요청 반복 = 같은 결과(멱등) · 감사 행에 이전/이후 노드 · 사유.
+- [x] **AC-0** — 착수 시 재측정: org-node 엔드포인트 목록 · `assignOrgNode` 호출자 0 · `TenantScopeGuard` / `OrgNodeScopeGuard` · `AdminGrantScopeEvaluator` 의 subtree 판정 file:line. P2 의 «잃는 도메인» 을 API 가 줄지 콘솔이 계산할지 정하고 이유를 적는다. 🔴 TASK-ID 충돌 확인(`TASK-BE-` 네임스페이스가 프로젝트 사이에 공유되는지).
+- [x] **AC-1** — 🔴 격리 대조군(실패 쪽 먼저): 노드 D 의 `ORG_ADMIN` 이 **자기 범위 밖** 테넌트를 D 로 끌어오려 하면 **404 · 소속 불변 · DENIED 행**. 같은 시험에서 양쪽을 관리하는 actor 는 성공.
+- [x] **AC-2** — T 의 `TENANT_ADMIN` 이 노드 S 아래의 T 를 무소속으로 빼려 하면 거절(상한 탈출 금지). S 의 `ORG_ADMIN` 은 성공.
+- [x] **AC-3** — (P1) 무소속 T 의 `TENANT_ADMIN` 이면서 D 의 `ORG_ADMIN` 인 actor → 성공 · `TENANT_ADMIN` 만 → 거절.
+- [x] **AC-4** — 상한이 걸린 노드로 옮긴 뒤 T 의 유효 도메인이 상한과의 교집합으로 줄고, 다시 빼면 원래대로(구독 행 불변).
+- [x] **AC-5** — 테넌트 생성 + `orgNodeId` → 그 노드 아래 생성 · `orgNodeId` 없음 → 무소속(지금과 동일, 회귀).
+- [x] **AC-6** — 같은 요청 반복 = 같은 결과(멱등) · 감사 행에 이전/이후 노드 · 사유.
 
 # Related Specs
 
@@ -140,3 +140,11 @@ ADR-047 D1 이 정한 «테넌트를 노드에 묶는다» 를 쓰는 길이 없
 | AC-6 | ✅ 단위 · ⚪ IT | 단위: `$IdempotenceAndAudit` — 감사 행(`TENANT`/T, `from…to…changed=`, 사유), 반복 = `changed=false`, no-op 도 판정 먼저. account `#sameTarget_noOp`(쓰기 0). IT ⚪. |
 
 ⚪ 의 이유는 하나다: 이 호스트에서 Docker 데몬에 닿지 않는다(`docker info` rc=1). 두 IT 클래스는 `:integrationTest --tests …` 로 돌렸고 **전부 SKIPPED** 로 보고됐다(`DockerAvailableCondition`) — «돌았다» 가 아니다. 첫 실제 실행은 이 PR 의 CI iam 통합 잡이다.
+
+## 닫기 — 4차원 검증 (2026-10-08 UTC)
+
+- (a) PR **#4223** `state=MERGED` · (b) `origin/main` 맨 위 = 스쿼시 **`9880f9209`** · (c) 머지 시점 `statusCheckRollup` 실패 **0** (통과 34 · 건너뜀 35).
+- (d) 위 «AC 결과» 표의 ⚪ IT 는 **CI 가 닫았다**:
+  - admin-service `TenantOrgNodePlacementIntegrationTest` — CI `Integration (iam …)` 잡 로그에 AC-1 · AC-2 · AC-3 · AC-5 · AC-6 다섯 메서드가 이름과 함께 `PASSED`.
+  - account-service `OrgNodeHierarchyIntegrationTest#placementNarrowsThenDetachRestores`(AC-4) — 그 잡은 메서드 이름을 찍지 않고 합계만 낸다. 그래서 **개수로** 확인: 직전 main 런 `account-service:integrationTest` = **134** · 이 PR = **136** · 실패 0 · 건너뜀 0 — 늘어난 2 = 이 PR 이 더한 `@Test` 2.
+- 후속: `projects/platform-console` `TASK-PC-FE-312`(이 API 의 화면).
