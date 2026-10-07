@@ -120,11 +120,12 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (REVIEW, 2026-10-08 UTC · `ADR-MONO-047` § 개정). `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(P2 — 잃는 도메인은 API 가 준다) · 양쪽 관리자 판정(`OrgNodeScopeGuard.requirePlacementAllowed` — 기존 술어 조합) · 범위 밖 404 · 판정한 출발지 조건부 쓰기(409) · `TENANT_ORG_NODE_ASSIGN` 감사 · 테넌트 생성의 선택 `orgNodeId`. 단위·슬라이스 초록, IT 2클래스는 Docker 없음으로 SKIPPED(⚪, CI 첫 실행). 후속 `TASK-PC-FE-312`.
+_(없음)_
 
 
 
 ## done
+- ✅ `TASK-BE-625-tenant-org-node-placement-api.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4223**, 스쿼시 **`9880f9209`** (머지 시점 실패 0 · 통과 34). 테넌트를 org-node 에 두기 · 옮기기 · 빼기 `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(잃는 도메인) · 양쪽 관리자 판정 · 범위 밖 404 · 조건부 쓰기 409 · 테넌트 생성의 선택 `orgNodeId`. IT 는 CI 가 닫음(admin 5 메서드 PASSED · account 134→136). 후속 `TASK-PC-FE-312`.
 - ✅ `TASK-BE-626-operator-list-home-tenant-id.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0 · SUCCESS 22). `GET /api/admin/operators` 항목(+ `/me`)에 운영자 HOME 테넌트 `homeTenantId`. AC-4(CI iam 레인) = Build & Test · Integration iam A/B · iam E2E smoke SUCCESS. 라이브 AC 없음. 짝 platform-console `TASK-PC-FE-319` 는 라이브 AC 로 review 잔류.
 - ✅ `TASK-BE-623-hide-social-providers-without-keys.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4166**, 스쿼시 **`85b4c9263`** (머지 시점 실패 0). 키 없는 제공자 버튼 숨김. AC-5 라이브: 로그인 화면 Google · Naver 둘뿐, 두 버튼으로 실제 로그인 성공(23차 창).
 - ✅ `TASK-BE-617-social-login-on-the-consumer-pool.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4165**, 스쿼시 **`71b66135c`** (머지 시점 실패 0). 소셜 로그인을 소비자 계정 풀 규칙으로. 라이브(23차 창 2회차): Google · Naver 가입이 `consumer-pool` 계정 · 팬 → 스토어 재로그인 없이 첫 방문 동의만.
