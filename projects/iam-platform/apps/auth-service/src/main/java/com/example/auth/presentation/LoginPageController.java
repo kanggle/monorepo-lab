@@ -62,6 +62,7 @@ public class LoginPageController {
             @RequestParam(name = "error", required = false) String error,
             @RequestParam(name = "logout", required = false) String logout,
             @RequestParam(name = "registered", required = false) String registered,
+            @RequestParam(name = "passwordReset", required = false) String passwordReset,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model) {
@@ -74,6 +75,8 @@ public class LoginPageController {
         model.addAttribute("loggedOut", logout != null);
         // TASK-BE-470: the signup page redirects here with ?registered on success.
         model.addAttribute("registered", registered != null);
+        // TASK-BE-627: PasswordResetPageController redirects here with ?passwordReset on success.
+        model.addAttribute("passwordReset", passwordReset != null);
         // TASK-BE-581: the signup entry point is conditional. A flow started by a client
         // whose tenant cannot accept signups (the console's reserved `iam` slug; a suspended
         // tenant) must not be offered a form that is guaranteed to fail. Consumer clients and

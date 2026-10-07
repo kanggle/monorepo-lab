@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-627-password-reset-pages.md` — **IdP 비밀번호 재설정 화면** (READY, 2026-10-08 UTC · 출처 `TASK-MONO-770` 남은 판단). 메일 링크(`/password-reset?token=`)가 닿을 화면 0 · 요청 화면 0 · 로그인 화면 링크 0 · 데모 Traefik 규칙(`iam-traefik.override.yml:287`)에 경로 없음. 화면 둘(존재 비노출 유지) + 링크 + 경로 한 줄. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty — 활성 ready 행 없음; 아래는 과거 로드맵/스윕의 완결 기록)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -120,7 +120,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-_(없음)_
+- `TASK-BE-627-password-reset-pages.md` — **IdP 비밀번호 재설정 화면** (REVIEW, 2026-10-08 UTC). `PasswordResetPageController`(`/password-reset/request` · `/password-reset`) + 템플릿 둘 + `login.html` 링크 + `WebLoginSecurityConfig` 매처 4개 + 데모 Traefik `PathPrefix(\`/password-reset\`)`. AC-1/3/4/5 닫힘(슬라이스 21개 + bite 수행·복원), AC-2(DB round-trip IT)·AC-6 라이브는 이 환경에 Docker 없어 ⚪. 전체 스위트 1090 tests / 0 failures. 분석=Opus 5.5 / 구현=Sonnet.
 
 
 

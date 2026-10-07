@@ -14,6 +14,8 @@
 
     <div class="notice" role="status" th:if="${loggedOut}">로그아웃되었습니다.</div>
     <div class="notice" role="status" th:if="${registered}">가입이 완료되었습니다. 로그인해 주세요.</div>
+    <!-- TASK-BE-627: PasswordResetPageController redirects here on a successful reset. -->
+    <div class="notice" role="status" th:if="${passwordReset}">비밀번호를 변경했습니다. 새 비밀번호로 로그인해 주세요.</div>
 
     <div class="error" id="form-error" role="alert" th:if="${error != null}" th:switch="${error}">
         <span th:case="'email_required'">소셜 계정에서 이메일 주소를 받지 못했습니다. 이메일 제공에 동의한 뒤 다시 시도해 주세요.</span>
@@ -48,6 +50,10 @@
             <button type="button" class="password-toggle" data-password-toggle
                     aria-controls="password" aria-pressed="false" aria-label="비밀번호 표시" hidden>표시</button>
         </div>
+        <!-- TASK-BE-627: a plain <a>, not a button — ADR-007 invariant 3 requires exactly ONE
+             submit button per form, and this link is outside the password-reset page's own form
+             anyway (/password-reset/request is a separate page). -->
+        <p class="hint"><a th:href="@{/password-reset/request}">비밀번호를 잊으셨나요?</a></p>
 
         <button type="submit" class="primary">로그인</button>
     </form>

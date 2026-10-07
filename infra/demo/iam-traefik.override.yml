@@ -244,7 +244,8 @@ services:
       OAUTH_NAVER_REDIRECT_URI: ${OAUTH_NAVER_REDIRECT_URI:-}
       OAUTH_NAVER_ALLOWED_REDIRECT_URIS: ${OAUTH_NAVER_ALLOWED_REDIRECT_URIS:-}
       # TASK-MONO-770 — password-reset mail → Mailpit (the `*iam-mail` anchor is merged at the top of this
-      # map; same switch as account-service). ⚪ No reset page exists yet — the link is right the day one does.
+      # map; same switch as account-service). TASK-BE-627 added the page this link lands on + the
+      # `/password-reset` PathPrefix above.
       IAM_MAIL_PASSWORD_RESET_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/password-reset
     networks:
       iam-e2e: null
@@ -284,7 +285,13 @@ services:
       #   the first sends the mail, the second is where the mail's link lands. Same failure mode as the
       #   three above if missing: the link in every verification mail would 404 at the iam gateway.
       #   Guard (p) derives the needed prefixes from the templates' links, so it bites if one is dropped.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/.well-known`))"
+      # 🔵 `/password-reset` (TASK-BE-627, TASK-MONO-770 의 남은 화면) — covers BOTH the request page
+      #   (`/password-reset/request`) and the confirm page the reset mail's link lands on
+      #   (`/password-reset?token=…`, matches `iam.mail.password-reset-link-base-url`'s default
+      #   path) — PathPrefix matches both since one is a sub-path of the other. Same failure mode:
+      #   missing this, the link in every password-reset mail 404s at the iam gateway. Guard (p)
+      #   derives its top-level segment from both templates' `@{/password-reset...}` links.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/password-reset`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"

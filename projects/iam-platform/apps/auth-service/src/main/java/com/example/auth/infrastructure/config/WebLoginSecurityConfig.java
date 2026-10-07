@@ -122,6 +122,17 @@ public class WebLoginSecurityConfig {
                         new AntPathRequestMatcher("/email-verification", "POST"),
                         new AntPathRequestMatcher("/verify-email", "GET"),
                         new AntPathRequestMatcher("/verify-email", "POST"),
+                        // TASK-BE-627 (TASK-MONO-770 의 남은 화면, ADR-MONO-080 D3): the password-reset
+                        // pages. Same reasons as /consent and /email-verification — this chain's CSRF on
+                        // the POSTs, permitAll on purpose (PasswordResetPageController makes the checks —
+                        // neither page needs or looks at a session; the reset token is the credential).
+                        // An entry-point redirect would park the page as the login continuation instead
+                        // of showing it directly, and these pages are reached from an emailed link, not
+                        // from an authorize redirect.
+                        new AntPathRequestMatcher("/password-reset/request", "GET"),
+                        new AntPathRequestMatcher("/password-reset/request", "POST"),
+                        new AntPathRequestMatcher("/password-reset", "GET"),
+                        new AntPathRequestMatcher("/password-reset", "POST"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
