@@ -103,6 +103,59 @@ exactly one approver (`approverId`).
 > (every grant is `GLOBAL`). v2.2-still-deferred: **per-route** scoping (a
 > route-template identity does not yet exist), auto-absence, transitive chaining.
 
+> **v2.4 AMENDMENT (TASK-MONO-774 — `ADR-MONO-080` D7 = E1: 사람 칸 전부를 직원 id 한
+> 공간으로, contract-first).** 이 계약은 처음부터 사람을 **직원 id** 로 적었다
+> (`approverId` *"(employee id)"*, 예시 `emp-submitter-…`, 이벤트 `delegatorId: "emp-A-…"`).
+> 코드는 그 자리에 호출자 JWT `sub`(계정 UUID — `ADR-MONO-060`)를 넣어 왔다. 이 개정은
+> **계약을 바꾸지 않고 코드가 따라올 술어를 못박는다.**
+> - **호출자의 직원** — 모든 사람 비교의 호출자 쪽 = «호출자 `sub` 와 연결된 직원»
+>   (`masterdata-api.md` § Employee ↔ IAM account link, `GET /employees/me`, 호출자 토큰
+>   전파 — 기존 subject 해소와 같은 `MasterDataPort` 경로). `sub` 는 더 이상 어떤 사람
+>   칸에도 저장되지 않는다.
+> - **직원 id 인 칸 (전부)**: `approverId` · `approverIds[]` · `stages[].approverId` ·
+>   `submitterId` · `history[].actor` · `actingForApproverId` · 위임 `delegatorId` /
+>   `delegateId` · 이벤트 payload 의 같은 이름 칸. 🔵 append-only `audit_log.actor` 는
+>   **인증된 주체(`sub`) 그대로** 둔다(E8 — 감사는 «누가 로그인해서 했나» 를 적는다;
+>   그 순간의 직원은 같은 행의 `history[].actor` 가 적는다).
+> - **create** — 호출자가 연결된 직원이 없으면 403 **`APPROVAL_ACTOR_NOT_LINKED`**(새 코드).
+>   `submitterId` = 호출자의 직원 id. 자기결재(`submitter ∈ any stage`)는 **직원 id 끼리**
+>   비교한다 — 한 계정은 테넌트당 직원 하나에만 연결되므로(masterdata 유니크) «내 계정과
+>   연결된 직원을 승인자로» 는 곧 `approverId == submitterId` 다 → 422
+>   `APPROVAL_ROUTE_INVALID` (`details.cause = "self_approval"`).
+> - **submit — E3 를 코드로 집행** (기존 E1 subject 검사 다음, 상태 변화 전, 단계마다):
+>   승인자 직원이 없거나 `ACTIVE` 가 아니면 422 `APPROVAL_ROUTE_INVALID`
+>   (`details.cause = "approver_unresolved"` — 새 cause 값, 새 코드 아님). 🔴 아래 «submit»
+>   절의 *"approver unresolvable / not an eligible approver → `APPROVAL_NOT_AUTHORIZED_APPROVER`"*
+>   를 **대체한다** — 그 분기는 코드에 한 번도 존재한 적이 없고(승인자를 안 봤다), 이것은
+>   호출자 권한이 아니라 결재선 결함이므로 subject 와 같은 422 가 맞다. 승인자가
+>   `ACTIVE` 이지만 **연결된 계정이 없으면**(`accountId` ABSENT) 422
+>   **`APPROVAL_APPROVER_UNLINKED`**(새 코드, `details.stageIndex` = 그 단계) — 소유자 결정
+>   (2026-10-08 UTC): 결재함에 나타날 사람이 없는 결재는 상신 시점에 거절한다. 승인자
+>   해소가 장애로 답을 못 받으면(401/403/5xx/timeout) 기존 subject 와 같이 거절 +
+>   계측(«물어보지 못함» 과 «없다» 를 가른다). 해소는 `GET /employees/{id}/approver-ref`
+>   (부서 data scope 없음 — 승인자는 보통 상신자의 scope 밖이다).
+> - **approve / reject** — 행위자 = 호출자의 직원. 연결 없음 → 403
+>   `APPROVAL_ACTOR_NOT_LINKED`. 현재 단계 승인자(직원 id) 와 같거나 그 직원의 활성 위임의
+>   피위임자(직원 id)여야 한다 — 그 외 403 `APPROVAL_NOT_AUTHORIZED_APPROVER`(그대로).
+>   위임 SoD(피위임자 ≠ 상신자)도 직원 id 끼리.
+> - **withdraw** — 호출자의 직원 == `submitterId`.
+> - **inbox** — 술어 = «현재 단계 승인자 직원의 `accountId` == 호출자 `sub`» = «`approverId`
+>   == 호출자의 직원 id». 호출자에게 연결된 직원이 없으면 **오류가 아니라 빈 페이지**
+>   (200, `totalElements = 0`) + 추가 `meta.actorEmployeeId` 가 **ABSENT** — 콘솔이 «계정이
+>   직원과 연결되지 않아 결재함이 비어 있다» 를 «처리할 건이 없다» 와 갈라 말할 수 있게.
+>   연결돼 있으면 `meta.actorEmployeeId` = 그 직원 id.
+> - **list `?role=`** — 참여자 = 호출자의 직원 id(연결 없으면 빈 페이지). 운영자의 테넌트
+>   전체 목록(`role` 없음)은 그대로.
+> - **delegations** — `delegatorId` = 호출자의 직원(연결 없음 → 403
+>   `APPROVAL_ACTOR_NOT_LINKED`). `delegateId` 는 `ACTIVE` 직원이어야 한다 — 아니면 422
+>   `DELEGATION_INVALID` (`details.cause = "delegate_unresolved"`). 자기위임 비교도 직원 id.
+>   `?role=` 목록의 참여자도 호출자의 직원 id.
+> - **기존 행** — 이 개정 이전에 만들어진 결재·위임 행의 사람 칸에는 계정 UUID 가 들어 있다.
+>   자동 이전은 하지 않는다(approval DB 는 연결을 모른다). 데모는 볼륨 초기화 + 재시드로
+>   새로 심는다 — 처리 방식은 구현 슬라이스의 AC-0 이 판정한다(`TASK-MONO-774` § 분할 제안).
+> - **New error codes** — `APPROVAL_ACTOR_NOT_LINKED` (403), `APPROVAL_APPROVER_UNLINKED` (422),
+>   registered in `platform/error-handling.md` § Approval Workflow + `rules/domains/erp.md`.
+
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {erp, *}`
   (RS256, IAM JWKS — [`iam-integration.md`](../../integration/iam-integration.md)).
@@ -175,7 +228,7 @@ All endpoints:
 `ApprovalHistoryEntry` (one immutable audit row per transition, E4):
 ```json
 { "transition": "SUBMITTED|APPROVED|REJECTED|WITHDRAWN",
-  "actor": "<JWT sub / approver / submitter id>",
+  "actor": "<acting employee id — v2.4: never the JWT sub>",
   "at": "<ISO-8601 UTC>",
   "reason": "<≤512; ABSENT when none>" }
 ```
@@ -232,7 +285,8 @@ is non-terminal but simply not the legal predecessor (e.g. `approve` on a
 ### POST /api/erp/approval/requests
 
 Create an approval request in initial state `DRAFT`. The caller is recorded as
-`submitterId` (from the JWT `sub`). No master validation or route validation
+`submitterId` — v2.4: the **employee linked to** the JWT `sub` (unlinked caller →
+403 `APPROVAL_ACTOR_NOT_LINKED`). No master validation or route validation
 occurs at create time — those are deferred to `submit` (E3).
 
 **Headers**: `Authorization` (req), `Idempotency-Key` (req),
@@ -266,7 +320,8 @@ occurs at create time — those are deferred to `submit` (E3).
 
 **Errors**: 400 `VALIDATION_ERROR`, 400 `IDEMPOTENCY_KEY_REQUIRED`,
 409 `IDEMPOTENCY_KEY_CONFLICT`, 401 `UNAUTHORIZED`,
-403 `PERMISSION_DENIED` / `DATA_SCOPE_FORBIDDEN`, 403 `TENANT_FORBIDDEN`.
+403 `PERMISSION_DENIED` / `DATA_SCOPE_FORBIDDEN`, 403 `TENANT_FORBIDDEN`,
+403 `APPROVAL_ACTOR_NOT_LINKED` (v2.4).
 
 > Note: a bad `subjectId` / `approverId` is **not** validated here — create is a
 > draft. Reference + route validation is enforced at `submit`.
@@ -323,7 +378,10 @@ Transition `DRAFT → SUBMITTED`. At this point the service:
 2. **Validates the route** (E3) — `approverId` must resolve to a live employee
    and must **not** equal `submitterId` (no self-approval). Self-approval →
    `APPROVAL_ROUTE_INVALID` (`details.cause = "self_approval"`); approver
-   unresolvable / not an eligible approver → `APPROVAL_NOT_AUTHORIZED_APPROVER`.
+   unresolvable / not `ACTIVE` → `APPROVAL_ROUTE_INVALID`
+   (`details.cause = "approver_unresolved"`); approver `ACTIVE` but with no linked
+   account → 422 `APPROVAL_APPROVER_UNLINKED` (v2.4 — TASK-MONO-774; this replaces
+   the earlier `APPROVAL_NOT_AUTHORIZED_APPROVER` mapping, which no code ever emitted).
 
 **Headers**: `Authorization` (req), `Idempotency-Key` (req)
 
@@ -341,8 +399,9 @@ Transition `DRAFT → SUBMITTED`. At this point the service:
 **Errors**: 404 `APPROVAL_REQUEST_NOT_FOUND`,
 409 `APPROVAL_STATUS_TRANSITION_INVALID` (not in `DRAFT`),
 409 `APPROVAL_ALREADY_FINALIZED` (already terminal),
-422 `APPROVAL_ROUTE_INVALID` (self-approval / unresolved subject),
-403 `APPROVAL_NOT_AUTHORIZED_APPROVER` (approver ineligible),
+422 `APPROVAL_ROUTE_INVALID` (self-approval / unresolved subject / unresolved approver),
+422 `APPROVAL_APPROVER_UNLINKED` (approver employee has no linked account — v2.4),
+403 `APPROVAL_ACTOR_NOT_LINKED` (caller has no linked employee — v2.4),
 400 `IDEMPOTENCY_KEY_REQUIRED`, 409 `IDEMPOTENCY_KEY_CONFLICT`,
 401 `UNAUTHORIZED`, 403 `PERMISSION_DENIED` / `DATA_SCOPE_FORBIDDEN`,
 403 `TENANT_FORBIDDEN`.
@@ -439,6 +498,11 @@ The current approver's **pending** queue — `SUBMITTED` requests whose
 increment is intentionally minimal: no due-date / priority / delegation
 filtering (v2 deferred).
 
+> v2.4 (TASK-MONO-774): «equals the caller» = equals **the employee linked to the
+> caller's `sub`** (never the `sub` itself). Unlinked caller → 200 with an empty
+> page and `meta.actorEmployeeId` ABSENT; linked caller → `meta.actorEmployeeId`
+> carries that employee id.
+
 **Headers**: `Authorization` (req)
 
 **Query**:
@@ -468,7 +532,9 @@ filtering (v2 deferred).
 | `APPROVAL_STATUS_TRANSITION_INVALID` | 409 | transition from a state that is not the legal (non-terminal) predecessor (E3) |
 | `APPROVAL_ALREADY_FINALIZED` | 409 | transition attempted on a terminal request (`APPROVED`/`REJECTED`/`WITHDRAWN`) (E3) |
 | `APPROVAL_NOT_AUTHORIZED_APPROVER` | 403 | `approve`/`reject` caller ≠ `approverId`, or `withdraw` caller ≠ `submitterId`, or approver ineligible at submit (E3) |
-| `APPROVAL_ROUTE_INVALID` | 422 | route construction error at submit: self-approval (`approverId == submitterId`) or unresolved subject master (E3/E1) |
+| `APPROVAL_ROUTE_INVALID` | 422 | route construction error at submit: self-approval (`approverId == submitterId`), unresolved subject master, or unresolved / non-`ACTIVE` approver employee (`details.cause = "approver_unresolved"`, v2.4) (E3/E1) |
+| `APPROVAL_APPROVER_UNLINKED` | 422 | submit with a stage approver employee that is `ACTIVE` but has no linked IAM account — nobody could see it in an inbox (`details.stageIndex`) (v2.4, TASK-MONO-774) |
+| `APPROVAL_ACTOR_NOT_LINKED` | 403 | the caller's `sub` has no linked employee in this tenant — create / transition / delegation create refused (inbox and `?role=` lists return an empty page instead) (v2.4, TASK-MONO-774) |
 | `PERMISSION_DENIED` | 403 | required role/scope not present (E6) |
 | `DATA_SCOPE_FORBIDDEN` | 403 | request subject outside caller's data scope (E6). **Reserved for v2 `permission-service`; NOT emitted in v1** (TASK-ERP-BE-030 — see § Auth). Endpoint error lists below retain it as the reserved v2 code. |
 | `TENANT_FORBIDDEN` | 403 | `tenant_id ∉ {erp, *}` |

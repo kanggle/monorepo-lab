@@ -33,6 +33,20 @@ All endpoints:
   cross-recipient operator surface is v2). A notification whose `recipient` is
   not the caller's `sub` is treated as **non-existent** to the caller → 404, not
   403 (avoids existence leak, mirroring the read-model detail rule).
+
+  > **v1.1 AMENDMENT (TASK-MONO-774 — `ADR-MONO-080` D7 = E1, contract-first).** The
+  > sentence above conflates two id spaces: `recipient` is resolved from the approval
+  > event payload (`approverId` / `submitterId` / `delegateId` — **employee ids**,
+  > `RecipientResolver`), while the JWT `sub` is an **IAM account UUID**
+  > (`ADR-MONO-060`). They are never equal, so «`recipient == caller.sub`» matches
+  > nothing once the approval side stores employee ids as its contract says. The
+  > recipient-scope predicate becomes **`recipient == the employee linked to
+  > caller.sub`**, resolved via masterdata `GET /api/erp/masterdata/employees/me`
+  > (caller-token propagation, `masterdata-api.md` § Employee ↔ IAM account link).
+  > An unlinked caller sees an **empty** inbox (200, `totalElements = 0`) and every
+  > detail / mark-read is 404 — same existence-leak rule. No new error code. Rows
+  > stored before the approval-side v2.4 change carry account UUIDs as `recipient`;
+  > their handling is decided by the implementing slice (`TASK-MONO-774` § 분할 제안).
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp": "<ISO-8601>",
   ... } }`. List responses extend `meta` with `PageMeta` (ADR-MONO-058 § D3 —
   `com.example.common.page.PageResult` adoption added `totalPages`, additive).

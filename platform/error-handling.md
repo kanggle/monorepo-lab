@@ -928,6 +928,11 @@ and append-only audit. See [`rules/domains/erp.md`](../rules/domains/erp.md)
 | MASTERDATA_REFERENCE_VIOLATION | 409 | Retire blocked because ≥1 live referencer still points at this row (employees → department / costCenter / jobGrade; costCenters → department; child departments → parent). `details` enumerates the referencer kinds (`MasterdataReferenceViolationException`) (E1) |
 | MASTERDATA_PARENT_CYCLE | 409 | `Department.moveParent` would close a cycle — the candidate new parent is a descendant of, or equal to, this department (`MasterdataParentCycleException`) (E1) |
 | MASTERDATA_EFFECTIVE_PERIOD_INVALID | 422 | Effective-dated revision insert / append violates the period invariant: overlapping `[effectiveFrom, effectiveTo)` interval on the same natural key, OR `effectiveTo ≤ effectiveFrom` (`MasterdataEffectivePeriodInvalidException`) (E2) |
+| EMPLOYEE_LINK_PROPOSAL_NOT_FOUND | 404 | Employee ↔ IAM account link proposal with the given id does not exist (for the caller's tenant) — TASK-MONO-774 (ADR-MONO-080 D7 = E1) |
+| EMPLOYEE_LINK_CONFLICT | 409 | Link state collision: the employee is already linked, the account is already linked to another employee of the tenant (one account → at most one employee per tenant), a `PENDING` proposal already exists for the employee, the proposal is no longer `PENDING`, or an unlink finds no link (`details.cause`) — TASK-MONO-774 |
+| EMPLOYEE_LINK_INVALID | 422 | Link target not eligible: the employee is not `ACTIVE`, or the proposed account does not exist in IAM (`details.cause`) — TASK-MONO-774 |
+| EMPLOYEE_LINK_NOT_ADDRESSEE | 403 | Accept / decline of a link proposal by a caller whose JWT `sub` is not the proposal's account — only the account owner decides — TASK-MONO-774 |
+| EMPLOYEE_LINK_SELF_ACCEPT | 403 | Two-person rule: the accepting account is the proposing account (or a proposal names the proposer's own account). Without it an `erp.write` holder could link their own account to any employee in scope and take that employee's approval inbox — TASK-MONO-774 |
 
 ## Approval Workflow  `[domain: erp]`
 
@@ -947,6 +952,8 @@ in the domain catalog) + the delegation codes (BE-013).
 | APPROVAL_ROUTE_INVALID | 422 | Route malformed — no approver, blank approver, `submitter ∈ any stage` (self-approval), duplicate approver across stages (`details.cause = duplicate_stage_approver`), or the referenced subject does not resolve to an ACTIVE master (`ApprovalRouteInvalidException`) (E1·E3·I4) |
 | DELEGATION_INVALID | 422 | Delegation grant create is malformed — self-delegation (`delegatorId == delegateId`) or an invalid validity window (`validTo < validFrom`) (`DelegationInvalidException`) (E3·I4) — TASK-ERP-BE-013 |
 | DELEGATION_NOT_FOUND | 404 | Delegation grant with the given id does not exist (for the caller's scope) — e.g. revoke of an unknown grant (`DelegationNotFoundException`) (E3) — TASK-ERP-BE-013 |
+| APPROVAL_APPROVER_UNLINKED | 422 | Submit with a stage approver employee that is `ACTIVE` but has no linked IAM account — the request could appear in nobody's inbox (`details.stageIndex`) (E3) — TASK-MONO-774 (ADR-MONO-080 D7 = E1) |
+| APPROVAL_ACTOR_NOT_LINKED | 403 | The caller's JWT `sub` has no linked employee in the tenant, so it cannot act as submitter / approver / delegator (create, transitions, delegation create). Inbox and participant lists return an empty page instead (E3·E6) — TASK-MONO-774 |
 
 > The mutating approval/delegation endpoints reuse the shared codes: `UNAUTHORIZED`
 > (401), `PERMISSION_DENIED` / `DATA_SCOPE_FORBIDDEN` / `TENANT_FORBIDDEN` (403, see

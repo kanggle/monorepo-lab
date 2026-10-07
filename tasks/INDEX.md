@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **`ADR-MONO-080` 단계 2 (D4 · R2 · R3) — IAM 로그인 TOTP + 토큰 교환 · assume-tenant 정책 검사** (READY, ⏳ AC-0 = 770 `done/`). 지금은 `SUPER_ADMIN` 도 주 경로로 2FA 없이 들어온다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-774-erp-employee-account-link.md` — **`ADR-MONO-080` D7 = E1 — erp `employees.account_id` · 결재함 · E3 · 자기결재를 한 id 공간으로** (READY · AC-0 에 소유자 결정 «연결을 누가 쓰나»). `TASK-PC-FE-311` 보정 걷기. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -207,6 +206,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-774-erp-employee-account-link.md` — **`ADR-MONO-080` D7 = E1 — erp `employees.account_id` · 결재함 · E3 · 자기결재를 한 id 공간으로** (IN-PROGRESS, 2026-10-08 UTC). 소유자 결정 = **ⓑ 인사 제안 + 본인 수락**(두 사람 규칙: 제안자 ≠ 수락자) · 미연결 승인자 = **상신 거절**. AC-0 완료 + 계약 먼저(masterdata 연결 표면 · approval v2.4 · notification v1.1 · 오류 코드 7개 등록). 🔴 **한 PR 로는 과대 → S1 에서 멈춤**, 분할 S2(masterdata 연결 모델) → S3(approval + 알림 + 시드) → S4(콘솔) 제안. 새로 센 것: 알림 수신자도 같은 두 id 공간 결함(계약 문장에까지) · 직원 상세 data scope 가 E3 를 막는다 · erp → IAM 워크로드 자격 없음. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 

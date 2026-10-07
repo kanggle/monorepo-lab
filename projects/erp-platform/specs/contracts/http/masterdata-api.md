@@ -265,6 +265,139 @@ and those are not enforced here per E5 read-only boundary.)
 
 ---
 
+## Employee ↔ IAM account link (TASK-MONO-774 — `ADR-MONO-080` D7 = E1, additive)
+
+> **v1.1 AMENDMENT (contract-first; 구현은 후속 슬라이스).** 직원 마스터가 그 직원으로
+> 로그인하는 IAM 계정을 안다. 결재(`approval-api.md` § v2.4)와 알림(`notification-api.md`
+> § v1.1)은 «내 `sub` → 나와 연결된 직원» 을 이 표면으로 푼다.
+>
+> 🔴 **연결을 누가 쓰나 = ⓑ 인사 제안 + 본인 수락** (소유자 결정 2026-10-08 UTC,
+> `TASK-MONO-774` AC-0). `erp.write` 보유자(직원의 부서 data scope 안 — 다른 직원 쓰기와 같은
+> 규칙)가 «직원 E ↔ 계정 A» 를 **제안**하고, 계정 A 의 주인(JWT `sub` = A)이 **수락**해야만
+> `accountId` 가 쓰인다. 🔴 **두 사람 규칙**: 제안자와 수락자는 달라야 한다 — 같으면
+> 인사 권한자가 CFO 직원에 자기 계정을 제안하고 스스로 수락해 CFO 의 결재함을 가져간다(ⓑ 가
+> ⓐ 로 무너진다).
+
+### Data model (invariants)
+
+- `employees.account_id` — NULL 허용. **테넌트 안 유니크** `(tenant_id, account_id)`: 한
+  계정은 한 테넌트에서 직원 **최대 하나**에 연결된다(NULL 은 여럿 허용). IAM 으로의 FK 없음
+  (교차 컨텍스트 참조).
+- 퇴사(`RETIRED`) 직원의 연결은 **남긴다** — 결재 쪽 E3 가 그 직원을 승인자로 받지 않는다.
+  계정 삭제·잠금도 연결을 지우지 않는다 — 그 계정은 토큰을 못 받으므로 결재함에 들어올 수 없다.
+- `employee_account_link_proposals` — 제안 한 건 = 한 행. 열: `id`, `tenant_id`,
+  `employee_id`, `account_id`, `status` (`PENDING|ACCEPTED|DECLINED|REVOKED`),
+  `proposed_by`(제안자 JWT `sub`), `proposed_at`, `reason?`, `decided_by?`, `decided_at?`,
+  `decision_reason?`, `version`. **직원당 `PENDING` 최대 하나**(DB 유니크로 강제 — MySQL 에
+  부분 인덱스가 없으므로 `status='PENDING'` 일 때만 값을 갖는 생성 열 + 유니크).
+  `PENDING` 이 아닌 행은 불변(감사 이력).
+- 모든 상태 변화는 append-only `audit_log` 행 + 직원 쪽 변화(`accountId` 설정·해제)는
+  `erp.masterdata.employee.changed.v1` 을 같은 Tx 에서 낸다(E8 · A7 — 기존 규약 그대로).
+
+### Employee 응답의 `accountId`
+
+- `GET /employees` 목록 원소와 `GET /employees/{id}` 상세에 **`accountId`** 추가 —
+  연결되지 않았으면 **ABSENT**(`@JsonInclude(NON_NULL)`).
+- `POST /employees` · `PATCH /employees/{id}` 는 `accountId` 를 **받지 않는다** — 연결의
+  쓰기 경로는 아래 «수락» 하나뿐이다(요청 DTO 에 그 필드가 없다 — 실려 와도 쓰이지 않는다.
+  이 서비스의 기존 규약대로 모르는 필드는 무시된다).
+
+### GET /api/erp/masterdata/employees/me
+
+호출자 `sub` 와 연결된 직원(호출자 토큰의 테넌트). 결재·알림 서비스가 호출자 토큰을 그대로
+전달해 «내 직원 id» 를 푼다.
+
+- Auth: `erp.read`. **부서 data scope 를 적용하지 않는다** — 자기 자신의 연결을 읽는 것이다.
+- **200**: Employee 상세 봉투(상태 무관 — `RETIRED` 도 돌려준다. 판정은 호출자 몫).
+- **404** `MASTERDATA_NOT_FOUND` — 호출자 `sub` 와 연결된 직원이 이 테넌트에 없다(«연결 없음»
+  은 답이지 장애가 아니다).
+
+### GET /api/erp/masterdata/employees/{id}/approver-ref
+
+결재선 해소용 최소 조회 — `{ "id", "status", "accountId"? }` (이름 등 PII 없음).
+
+- Auth: `erp.read`. **부서 data scope 를 적용하지 않는다** — 승인자는 보통 상신자의 data
+  scope 밖(상위 부서)에 있고, 기존 `GET /employees/{id}` 는 그 직원의 부서로 scope 를 건다
+  (`MasterdataApplicationService` 의 employee detail read). 그 상세로 E3 를 풀면 정상적인
+  결재선이 403 으로 «승인자 확인 불가» 가 된다.
+- **404** `MASTERDATA_NOT_FOUND` — 그런 직원이 없다.
+
+### POST /api/erp/masterdata/employees/{id}/account-link-proposals
+
+제안. **Headers**: `Idempotency-Key` (req).
+
+**Request**: `{ "accountId": "<IAM account UUID>", "reason": "<≤256, optional>" }`
+
+검사 순서(앞이 실패하면 뒤는 안 본다):
+1. Auth — `erp.write` + 직원 부서 data scope(다른 직원 쓰기와 같은 `AuthorizationPort` 경로).
+2. 직원 존재 → 없으면 404 `MASTERDATA_NOT_FOUND`. `ACTIVE` 아님 → 422
+   `EMPLOYEE_LINK_INVALID` (`details.cause = "employee_not_active"`).
+3. `accountId == 호출자 sub` → 403 `EMPLOYEE_LINK_SELF_ACCEPT` (두 사람 규칙 — 그 제안은
+   어차피 수락될 수 없으므로 일찍 거절한다. 권위 있는 검사는 «수락» 쪽이다).
+4. 계정 존재 — IAM 으로 확인 → 없으면 422 `EMPLOYEE_LINK_INVALID`
+   (`details.cause = "account_not_found"`). 🔴 이 확인의 배선(erp → IAM 워크로드 자격)은
+   아직 없다 — `TASK-MONO-774` § 분할 제안 S2 가 판정한다. 수락 시점에는 IAM 이 서명한
+   토큰 자체가 계정 실재의 증거다.
+5. 직원이 이미 연결됨 / 계정이 이 테넌트의 다른 직원에 연결됨 / 이 직원에 `PENDING` 제안이
+   이미 있음 → 409 `EMPLOYEE_LINK_CONFLICT` (`details.cause ∈ { "employee_already_linked",
+   "account_already_linked", "proposal_pending" }`).
+
+**201**: `EmployeeAccountLinkProposal` —
+`{ "id", "employeeId", "accountId", "status": "PENDING", "proposedBy", "proposedAt", "reason"? }`.
+
+### GET /api/erp/masterdata/account-link-proposals/mine
+
+호출자 `sub` 앞으로 온 `PENDING` 제안(수락 화면). Auth: `erp.read`, data scope 없음(자기 앞
+제안). **200**: list 봉투(`EmployeeAccountLinkProposal[]` + 직원 표시용 `employeeName`,
+`employeeNumber`).
+
+### GET /api/erp/masterdata/employees/{id}/account-link-proposals
+
+한 직원의 제안 이력(전 상태). Auth: `erp.read` + 직원 부서 data scope. **200**: list 봉투.
+
+### POST /api/erp/masterdata/account-link-proposals/{proposalId}/accept
+
+수락 — 이 호출이 `employees.account_id` 를 쓰는 **유일한** 경로다. **Headers**:
+`Idempotency-Key` (req). **Request**: `{}`.
+
+1. 제안 없음 → 404 `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND`.
+2. 호출자 `sub ≠ proposal.accountId` → 403 `EMPLOYEE_LINK_NOT_ADDRESSEE`.
+3. 🔴 호출자 `sub == proposal.proposedBy` → 403 `EMPLOYEE_LINK_SELF_ACCEPT` (두 사람 규칙).
+4. `status ≠ PENDING` → 409 `EMPLOYEE_LINK_CONFLICT` (`details.cause = "proposal_not_pending"`).
+5. 직원이 `ACTIVE` 아님 → 422 `EMPLOYEE_LINK_INVALID` (`employee_not_active`). 직원이 그새
+   연결됨 / 계정이 그새 다른 직원에 연결됨 → 409 `EMPLOYEE_LINK_CONFLICT`
+   (`employee_already_linked` / `account_already_linked`).
+
+성공: `employees.account_id = accountId` · 제안 `ACCEPTED`(`decidedBy = 호출자 sub`) — 한 Tx.
+**200**: 직원 상세 봉투(`accountId` 포함).
+
+🔵 수락에 부서 data scope 를 걸지 않는다 — 수락자는 인사 권한자가 아니라 **계정 주인**이다.
+`erp.read` 이상(이 테넌트의 erp 참여자)은 요구한다.
+
+🔵 ADR-MONO-080 R1(회사 권한이 붙는 쓰기에 인증된 이메일)을 수락에 거는가 — erp 토큰에
+`email_verified` 가 없고(현재 access token 클레임에 부재) IAM 조회 배선도 없다. 판정은
+`TASK-MONO-774` § 열린 항목.
+
+### POST /api/erp/masterdata/account-link-proposals/{proposalId}/decline
+
+거절 — 계정 주인만(2 와 같은 403). `{ "reason": "<≤256, optional>" }`. `PENDING` 아님 → 409
+`EMPLOYEE_LINK_CONFLICT` (`proposal_not_pending`). **200**: 제안(`DECLINED`).
+
+### POST /api/erp/masterdata/account-link-proposals/{proposalId}/revoke
+
+철회 — `erp.write` + 직원 부서 data scope(제안자 본인이 아니어도 된다). `{ "reason":
+"<≤256, required>" }`. `PENDING` 아님 → 409 `EMPLOYEE_LINK_CONFLICT`
+(`proposal_not_pending`). **200**: 제안(`REVOKED`).
+
+### POST /api/erp/masterdata/employees/{id}/account-link/unlink
+
+연결 해제 — `erp.write` + 직원 부서 data scope, **또는** 연결된 계정 주인 본인.
+`{ "reason": "<≤256, required>" }`. 연결이 없으면 409 `EMPLOYEE_LINK_CONFLICT`
+(`details.cause = "not_linked"`). **200**: 직원 상세 봉투(`accountId` ABSENT). 다시 연결하려면
+새 제안 → 수락.
+
+---
+
 ## JobGrade
 
 ### POST /api/erp/masterdata/job-grades
@@ -452,6 +585,11 @@ E5; v1 has no inbound enforcement surface here.)
 | `UNAUTHORIZED` | 401 | missing / invalid / expired JWT (Platform-Common Authentication) |
 | `CONCURRENT_MODIFICATION` | 409 | optimistic-lock conflict on revision append (Platform-Common Transactional Trait `CONFLICT` semantic; this surface uses the erp-specific name) |
 | `ILLEGAL_STATE` | 422 | aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common General). Prefer a domain code above where the failure is a known one |
+| `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND` | 404 | unknown account-link proposal id (TASK-MONO-774) |
+| `EMPLOYEE_LINK_CONFLICT` | 409 | link state collision — `details.cause ∈ { employee_already_linked, account_already_linked, proposal_pending, proposal_not_pending, not_linked }` (TASK-MONO-774) |
+| `EMPLOYEE_LINK_INVALID` | 422 | link target not eligible — `details.cause ∈ { employee_not_active, account_not_found }` (TASK-MONO-774) |
+| `EMPLOYEE_LINK_NOT_ADDRESSEE` | 403 | accept/decline by a caller whose `sub` is not the proposal's `accountId` (TASK-MONO-774) |
+| `EMPLOYEE_LINK_SELF_ACCEPT` | 403 | two-person rule — the acceptor's `sub` equals the proposer's `sub` (or a proposal names the proposer's own account) (TASK-MONO-774) |
 
 > `IDEMPOTENCY_STORE_UNAVAILABLE` (503) is **v1-emittable but rare** — v1 uses
 > the DB-table primary inside the mutation Tx (see architecture.md
@@ -462,4 +600,6 @@ E5; v1 has no inbound enforcement surface here.)
 
 All erp codes registered in `platform/error-handling.md` under the
 `Master Data  [domain: erp]` and `Authorization  [domain: erp]` sections
-(this PR appends them).
+(this PR appends them). The five `EMPLOYEE_LINK_*` codes (TASK-MONO-774) are
+registered there and in `rules/domains/erp.md` § Master Data before any emitter
+exists (contract-first).
