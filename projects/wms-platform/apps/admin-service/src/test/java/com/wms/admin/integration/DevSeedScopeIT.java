@@ -109,12 +109,14 @@ class DevSeedScopeIT {
             assertThat(count(ds, "SELECT count(*) FROM admin_user_role_assignment")).isEqualTo(1);
             assertThat(count(ds, "SELECT count(*) FROM admin_setting")).isEqualTo(4);
             // TASK-MONO-675 — R__seed_dev_masterref.sql mirrors master-service's seed.
-            assertThat(count(ds, "SELECT count(*) FROM admin_warehouse_ref")).isEqualTo(1);
-            assertThat(count(ds, "SELECT count(*) FROM admin_zone_ref")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM admin_location_ref")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM admin_sku_ref")).isEqualTo(3);
+            // TASK-MONO-768 — + WH-MAIN, its zone and location, the 86 ecommerce SKUs and
+            // ECOMMERCE-STORE (the console renders their codes from these tables).
+            assertThat(count(ds, "SELECT count(*) FROM admin_warehouse_ref")).isEqualTo(2);
+            assertThat(count(ds, "SELECT count(*) FROM admin_zone_ref")).isEqualTo(4);
+            assertThat(count(ds, "SELECT count(*) FROM admin_location_ref")).isEqualTo(4);
+            assertThat(count(ds, "SELECT count(*) FROM admin_sku_ref")).isEqualTo(3 + 86);
             assertThat(count(ds, "SELECT count(*) FROM admin_lot_ref")).isEqualTo(1);
-            assertThat(count(ds, "SELECT count(*) FROM admin_partner_ref")).isEqualTo(3);
+            assertThat(count(ds, "SELECT count(*) FROM admin_partner_ref")).isEqualTo(4);
         }
     }
 

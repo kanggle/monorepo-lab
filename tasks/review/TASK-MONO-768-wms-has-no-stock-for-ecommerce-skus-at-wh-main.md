@@ -124,12 +124,45 @@ monorepo
 - `bash -n infra/demo/seed/seed-wms.sh` → **rc=0**. 1b) 의 응답 파싱(`re_get` · 목록 상태 맵 · id 생성식)은
   모의 JSON 으로 따로 돌려 기대값을 확인했다(실제 서버 응답 아님).
 
+## 추가 — admin-service 미러 (2026-10-07 UTC, 조정자 지시로 같은 PR)
+
+첫 커밋은 admin 미러를 «범위 밖» 으로 남겼다. 콘솔이 실제로 무엇을 그리는지 읽고 넣었다:
+
+| 콘솔 화면 (console-web) | 그리는 값 | admin 에서 그 값이 오는 곳 |
+|---|---|---|
+| `WmsInventoryDataTable` · `WmsInventoryDetailPanel` | `locationCode` · `skuCode` · `warehouseCode` | `InventoryProjectionService.applySnapshot`(:338-349)가 **이벤트 도착 시점에** `admin_location_ref` / `admin_sku_ref` / `admin_warehouse_ref` 에서 복사(없으면 null) |
+| `WmsAsnDataTable` | `warehouseCode` · `supplierName` | `InboundProjectionService.resolveWarehouseCode`(:275-278) · 공급사 이름(`SUP-001`, 이미 있음) |
+| 마스터 참조 화면(`wms-master-helpers` — warehouses·zones·locations·skus·partners) | 각 `*_ref` 의 코드 | `MasterRefController` 가 `*_ref` 테이블을 그대로 나열 |
+
+⇒ `admin-service …/db/seed/R__seed_dev_masterref.sql` 에 **WH-MAIN 창고 · 존 Z-A · 로케이션 · SKU 86종 ·
+`ECOMMERCE-STORE` 거래처**를 추가했다(같은 UUID, `last_event_at` 는 기존 행처럼 과거로 — 실제 `master.*` 이벤트가
+이기게, 추가만, `ON CONFLICT DO NOTHING`). 🔵 **거래처는 지시 범위(창고·존·로케이션·SKU) 밖이지만 넣었다** —
+마스터 참조 화면의 partners 목록이 그리고, master R__05 에는 765 부터 있는데 admin 에만 빠져 있었다(4줄). SKU
+`name` 은 NOT NULL 이고 wms 에는 이 변형들의 상품명이 없어 `Ecommerce variant #NNN` 중립 라벨을 넣었다. 🔴 투영은
+코드를 **이벤트 도착 때 한 번** 복사하므로 ref 행이 seed-wms.sh 보다 먼저 있어야 한다 — admin 기동 시 Flyway 가
+넣으므로 순서는 맞다. 주문 요약의 `customerName` 은 콘솔 컴포넌트가 그리지 않아(grep 0건) 근거로 쓰지 않았다.
+
+- `DevSeedScopeIT`(admin) 기대치 — warehouse 1→2 · zone 3→4 · location 3→4 · sku 3→89 · partner 3→4.
+- `EcommerceSeedParityTest` 확장 — admin 의 SKU 86쌍 · WH-MAIN id · 존 · 로케이션, 그리고 `ECOMMERCE-STORE`
+  id(master R__05 · outbound · admin) 대조(4 테스트).
+- 🔴🔴 **그 검사가 처음엔 물지 않았다 — 고쳤다.** admin 시드의 `…2086` → `…2087` 로 바꿔도 **rc=0** 이었고
+  `:inventory-service:test UP-TO-DATE` 였다. Gradle 이 테스트가 **다른 모듈의 파일**을 읽는다는 것을 모르기
+  때문이다(첫 bite 는 inventory 자신의 시드라 클래스패스 입력이어서 우연히 물었다 — 즉 첫 커밋의 AC-1 은
+  outbound · inbound · master · seed-wms.sh 쪽 드리프트에 대해 **캐시 속에서 초록일 수 있었다**). 형제
+  `inbound-service/build.gradle`(TASK-MONO-683)과 같은 처방: `inventory-service/build.gradle` 에
+  `inputs.files(…시드 7개)` + `inputs.file(infra/demo/seed/seed-wms.sh)` 선언, 그리고 repo-root 파일인
+  seed-wms.sh 를 ci.yml `wms` 필터에 추가(안 하면 그 스크립트만 바꾼 PR 에서 `Build & Test` 가 SKIPPED).
+  재측정: 같은 변조 → **rc=1**(`admin_sku_ref must equal outbound's`, 4 중 1 실패) → 백업으로 복원 → rc=0.
+  `check-outside-module-input-filter-coverage.sh` rc=0(4개 전부 덮임) · ci.yml 줄을 빼면 **rc=1**
+  (`'wms' filter does not cover infra/demo/seed/seed-wms.sh`) → 복원 rc=0.
+- 로컬: `:inventory-service:test` + `:admin-service:test` → rc=0. `DevSeedScopeIT` 는 Testcontainers 라
+  로컬 미실행(도커 없음) — CI `integrationTest`.
+
 ## 남은 것 / 범위 밖
 
 - ⚪ AC-3 실측 · AC-4 — 재굽기 창. 시드는 구워진 클론에서 돈다.
-- 🔴 scm 다중 라인 received 결함(위) — 후속 티켓 필요.
-- 🔵 admin-service 미러(`admin_*_ref`)에는 WH-MAIN 계열이 없다(765 도 안 넣었다) — 콘솔 재고·입고 화면에서
-  WH-MAIN 행의 창고/로케이션/SKU **코드 표시**가 비어 보일 수 있다. 예약 경로와 무관해 이 티켓 범위 밖.
+- 🔴 scm 다중 라인 received 결함(위) — 후속 티켓 필요(조정자가 기안).
+- ~~admin-service 미러에 WH-MAIN 계열 없음~~ → 위 «추가» 절에서 해소.
 
 # Goal
 

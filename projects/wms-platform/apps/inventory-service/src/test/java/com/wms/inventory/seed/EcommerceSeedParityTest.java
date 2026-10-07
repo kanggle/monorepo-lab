@@ -40,13 +40,16 @@ import org.junit.jupiter.api.Test;
  * classpath: only inventory's own seed is on this module's classpath. 🔴 Every extraction asserts
  * it found something — a regex that matches nothing must fail, not compare two empty maps.
  */
-@DisplayName("TASK-MONO-768 — ecommerce seed UUIDs agree across master / inbound / inventory / outbound / seed-wms.sh")
+@DisplayName("TASK-MONO-768 — ecommerce seed UUIDs agree across master / inbound / inventory / outbound / admin / seed-wms.sh")
 class EcommerceSeedParityTest {
 
     private static final String APPS = "projects/wms-platform/apps/";
     private static final Path OUTBOUND = Paths.get(APPS + "outbound-service/src/main/resources/db/seed/R__seed_dev_masterref.sql");
     private static final Path INBOUND = Paths.get(APPS + "inbound-service/src/main/resources/db/seed/R__seed_dev_masterref.sql");
     private static final Path INVENTORY = Paths.get(APPS + "inventory-service/src/main/resources/db/seed/R__seed_dev_masterref.sql");
+    /** admin-service's ref tables — the console renders the codes its projections copy from here. */
+    private static final Path ADMIN = Paths.get(APPS + "admin-service/src/main/resources/db/seed/R__seed_dev_masterref.sql");
+    private static final Path MASTER_PARTNERS = Paths.get(APPS + "master-service/src/main/resources/db/seed/R__05_seed_dev_partners.sql");
     private static final Path MASTER_WAREHOUSE = Paths.get(APPS + "master-service/src/main/resources/db/seed/R__01_seed_dev_warehouse.sql");
     private static final Path MASTER_ZONES = Paths.get(APPS + "master-service/src/main/resources/db/seed/R__02_seed_dev_zones.sql");
     private static final Path MASTER_LOCATIONS = Paths.get(APPS + "master-service/src/main/resources/db/seed/R__03_seed_dev_locations.sql");
@@ -81,6 +84,8 @@ class EcommerceSeedParityTest {
                 .containsExactlyInAnyOrderEntriesOf(outbound);
         assertThat(inventory).as("inventory sku_snapshot must equal outbound's (the reservation lookup)")
                 .containsExactlyInAnyOrderEntriesOf(outbound);
+        assertThat(skuPairs(ADMIN)).as("admin_sku_ref must equal outbound's (the console's sku code)")
+                .containsExactlyInAnyOrderEntriesOf(outbound);
 
         // seed-wms.sh does not list ids — it formats them. Re-run its formula and compare the set.
         String script = read(SEED_WMS);
@@ -102,7 +107,17 @@ class EcommerceSeedParityTest {
         assertThat(single(WH_MAIN, OUTBOUND, 1)).as("outbound warehouse_snapshot").isEqualTo(master);
         assertThat(single(WH_MAIN, INBOUND, 1)).as("inbound warehouse_snapshot").isEqualTo(master);
         assertThat(single(WH_MAIN, INVENTORY, 1)).as("inventory warehouse_snapshot").isEqualTo(master);
+        assertThat(single(WH_MAIN, ADMIN, 1)).as("admin_warehouse_ref").isEqualTo(master);
         assertThat(shellLiteral(read(SEED_WMS), "WH_MAIN_ID")).as("seed-wms.sh WH_MAIN_ID").isEqualTo(master);
+    }
+
+    @Test
+    @DisplayName("ECOMMERCE-STORE has one id in master, outbound and admin")
+    void ecommerceStorePartnerIdAgrees() throws IOException {
+        Pattern partner = Pattern.compile("'(" + UUID_RE + ")',\\s*'ECOMMERCE-STORE'");
+        String master = single(partner, MASTER_PARTNERS, 1);
+        assertThat(single(partner, OUTBOUND, 1)).as("outbound partner_snapshot").isEqualTo(master);
+        assertThat(single(partner, ADMIN, 1)).as("admin_partner_ref").isEqualTo(master);
     }
 
     @Test
@@ -118,8 +133,10 @@ class EcommerceSeedParityTest {
         Pattern whMainZone = Pattern.compile("'(" + UUID_RE + ")',\\s*'" + warehouse + "',\\s*'Z-A'");
         assertThat(single(whMainZone, MASTER_ZONES, 1)).as("master zone under WH-MAIN").isEqualTo(zoneId);
         assertThat(single(whMainZone, INBOUND, 1)).as("inbound zone_snapshot").isEqualTo(zoneId);
+        assertThat(single(whMainZone, ADMIN, 1)).as("admin_zone_ref").isEqualTo(zoneId);
 
-        for (Path snapshot : List.of(INBOUND, INVENTORY)) {
+        // admin_location_ref shares the snapshot column order (id, code, warehouse, zone).
+        for (Path snapshot : List.of(INBOUND, INVENTORY, ADMIN)) {
             Matcher m = only(SNAPSHOT_LOCATION, snapshot);
             assertThat(m.group(1)).as("%s location id", snapshot).isEqualTo(locationId);
             assertThat(m.group(2)).as("%s location warehouse", snapshot).isEqualTo(warehouse);
