@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-627-password-reset-pages.md` — **IdP 비밀번호 재설정 화면** (READY, 2026-10-08 UTC · 출처 `TASK-MONO-770` 남은 판단). 메일 링크(`/password-reset?token=`)가 닿을 화면 0 · 요청 화면 0 · 로그인 화면 링크 0 · 데모 Traefik 규칙(`iam-traefik.override.yml:287`)에 경로 없음. 화면 둘(존재 비노출 유지) + 링크 + 경로 한 줄. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 

@@ -77,7 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 
-_(없음)_
+- `TASK-FE-107-seller-invitation-accept-screen.md` — **web-store 셀러 초대 수락 화면** (READY, 2026-10-08 UTC · 출처 `TASK-MONO-770` 남은 판단). 수락 API(`product-api.md:376-415`)를 부르는 화면이 web-store 에 0 — 토큰 입력/`?token=` · 계약 오류 전부의 문구 · `EMAIL_NOT_VERIFIED` → IAM 인증 메일 화면 안내(초대 미소모). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
