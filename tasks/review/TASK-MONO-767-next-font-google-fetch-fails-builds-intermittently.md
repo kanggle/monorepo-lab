@@ -79,7 +79,7 @@ TypeError: Cannot read properties of null (reading '1')
 
 - [x] **AC-0** — 원인 확정: 같은 빌드를 네트워크 차단(또는 Google Fonts 호스트 차단) 상태에서 돌려 같은 TypeError 가 나는지(재현) · 수정 후 같은 조건에서 빌드 성공(대조). → § Implementation ① 재현/대조.
 - [x] **AC-1** — 두 앱 `next build` 가 Google Fonts 호스트 없이 rc=0. → § Implementation ② (fan-platform-web 로컬 rc=0 · web-store 는 기존·무관한 Windows 전용 결함으로 로컬 rc=1, CI(Linux) 는 AC-4 로 측정).
-- [x] **AC-2** — 렌더된 글꼴 동일: 수정 전·후 같은 페이지 스크린숏(또는 computed `font-family`) 대조. → § Implementation ③ — 라틴/영문은 동일, 한글은 실측 가능한 차이(아래 상세) · 스크린숏 diff 첨부.
+- [x] **AC-2** — 렌더된 글꼴 동일: 수정 전·후 같은 페이지 스크린숏(또는 computed `font-family`) 대조. → § Implementation ③·⑥. 1차 수정(latin 만)은 한글에서 실측 가능한 차이가 있었다 — **소유자 결정(2026-10-07 UTC)으로 한글도 자체 호스팅**(unicode-range 분할) 하여 해소, 재측정: diff 비제로 채널 8,900→51(약 3%→0.017%), 육안 구분 불가 수준.
 - [x] **AC-3** — `git grep "next/font/google"` 0건, 재도입 방지 가드(정적 검사 한 칸) — 가드가 문다는 bite 포함. → § Implementation ④.
 - [ ] **AC-4** — CI `Frontend lint & build` · `Frontend E2E smoke` 초록. → PR 푸시 후 CI 결과로 닫는다(이 PR 자체의 `statusCheckRollup` 로 확인).
 
@@ -126,6 +126,31 @@ TypeError: Cannot read properties of null (reading '1')
 ## ⑤ 가드-카운트 분모(`scripts/` 파일 추가의 부수효과)
 
 `scripts/check-no-next-font-google.sh` 신설로 `scripts/` 직속 파일 수가 64→65. `scripts/check-ls-files-guard-count.sh` 가 `CLAUDE.md`·`platform/git-workflow-policy.md` 의 "26 of the 64" 문장을 "26 of the 65" 로 요구(분자는 안 바뀜 — 새 가드는 `git ls-files` 를 안 씀, `git grep` 사용) → 두 곳 모두 고치고 재실행 **rc=0** 확인. 새 파일 추가가 트리거하는 **모든** `scripts/check-*.sh` 를 스윕(38개) — 결과는 PR 본문에 기록.
+
+## ⑥ 소유자 결정 후속 (2026-10-07 UTC) — 한글도 자체 호스팅
+
+**결정**: 렌더된 화면을 완전히 동일하게 유지한다 — 한글도 `next/font/local` 로 자체 호스팅하되, Google 이 서빙하는 것과 같은 **unicode-range 분할** 로 커밋해 페이지가 실제로 쓰는 조각만 내려받게 한다.
+
+**`next/font/local` 의 한계 확인**: 설치된 패키지 자신의 타입(`next/dist/compiled/@next/font/dist/local/validate-local-font-function-call.d.ts`)을 읽었다 — `src` 배열 항목 타입은 `{ path, weight?, style?, ext, format }` 뿐, `unicode-range` 필드가 없다. 즉 `next/font/local` 은 **한 weight 안에서 여러 unicode-range 조각을 가진 `@font-face` 세트를 만들 수 없다**(weight 마다 파일 하나만 가능). → 손으로 작성한 작은 글루 CSS(`fonts.css`) 가 **생성된** `noto-sans-kr.generated.css`(`scripts/gen-noto-sans-kr-fonts-css.mjs` 로 재생성 가능) 를 `@import` 하는 구조로 바꿨다. `next/font/local` 의 `variable`/`className` 이 만들던 것과 **같은 CSS 변수명**(`--font-noto-sans-kr`, fan-platform-web) · **같은 클래스**(`.font-noto-sans-kr`, web-store, 같은 폴백 체인) 를 `fonts.css` 가 직접 선언해 소비 측(Tailwind `font-sans`, web-store `<html className>`) 은 무변경이다. `adjustFontFallback` 이 계산했던 메트릭(`ascent/descent/line-gap-override`, `size-adjust`) 은 폰트 바이트가 그대로이므로 그대로 재사용했다(이전 빌드 산출 CSS에서 실측).
+
+**모집단**: `@fontsource/noto-sans-kr@5.3.0` 이 Google 과 **동일한 unicode-range 경계**로 4 weight(400/500/600/700) 전부에 **120개씩 동일하게** 분할해 제공한다(`diff` 로 네 weight 경계 동일 확인) — latin 1개 + 한글/한자/CJK 기호 묶음(Google 쪽 raw CSS 가 주석을 안 붙이는 "기본" 서브셋) 120개 = weight 당 121개, 4 weight 합 484개. `latin-ext`·`cyrillic`·`vietnamese` 는 이전에도 요청한 적 없어 계속 제외.
+
+**커밋 용량(앱당)**: 총 **7,837,289 bytes (≈7.84 MB / 7.47 MiB)** — 한글 분할 파일 480개 **7,431,516 bytes (≈7.43 MB)** + 기존 latin 4개(≈55 KB, 그대로 재사용) + 생성 CSS(`noto-sans-kr.generated.css`, 344,556 bytes) + 글루 CSS(`fonts.css`, 1,011 bytes) + `LICENSE-OFL.txt`. 두 앱 합 ≈15.67 MB.
+
+**페이지당 실다운로드(Playwright `page.on('response')`, `font-display: swap`, `networkidle`, 로컬 `next start`, 네트워크 열림)**:
+
+| 앱 | 요청한 woff2 개수 | 합계 바이트 |
+|---|---|---|
+| fan-platform-web `/` (피드) | 33 | 299,860 bytes (≈293 KB) |
+| web-store `/` (홈) | 29 | 262,512 bytes (≈256 KB) |
+
+즉 커밋된 7.84 MB 중 페이지 하나가 실제로 받는 양은 **3~4%** — unicode-range 분할이 의도대로 동작한다(전체 한글 묶음을 하나의 파일로 커밋했다면 모든 방문자가 매 weight 마다 ≈1.86 MB를 받아야 했다).
+
+**AC-0/AC-1 재확인(네트워크 차단, `rm -rf .next && next build`)**: fan-platform-web **rc=0**(2회 재현) · web-store **rc=1** — 원인은 1차 수정 때와 **동일**한, 폰트와 무관한 기존 Windows `output:'standalone'` 심링크 EPERM(§②, 대조군 포함 재확인 완료, 정적 페이지 23/23 은 네트워크 없이 통과). CI(Ubuntu)는 이 변경 전 PR 에서 이미 초록이었고 이 추가 커밋도 같은 메커니즘이라 영향 없을 것으로 본다 — 최종 확인은 CI 런으로.
+
+**AC-2 재측정(스크린숏 diff, fan-platform-web `/`, 1280×800, 헤더 0–230px = 294,400픽셀 × RGB 3채널 = 883,200칸)**: 진짜 수정 전(`next/font` 의 `google` 로더, 네트워크 열림) 대 이번 수정 후를 PIL `ImageChops.difference` 로 비교 — 비제로 채널 합계가 1차 수정(latin 만) 때 **26,844/883,200 ≈ 3.04%** (최대 채널 diff 231, 한글 글리프 윤곽에 집중) 에서 이번엔 **150/883,200 ≈ 0.017%** (최대 채널 diff 48) 로 떨어졌다. 증폭 diff 이미지는 사실상 빈 화면(점 몇 개, 서브픽셀 안티앨리어싱 수준) — 한글 렌더가 수정 전과 사실상 동일해졌다고 판단한다. web-store 는 동일한 생성 메커니즘(같은 `noto-sans-kr.generated.css`, 같은 unicode-range, 같은 weight 집합)을 쓰므로 같은 결론을 적용했다(web-store 는 이번에 처음으로 실제 샘플 데이터까지 성공적으로 렌더하는 것을 스크린숏으로 확인했지만, true-before 비교는 시간상 생략 — ⚪).
+
+**가드**: `scripts/check-no-next-font-google.sh` 재실행 rc=0(새 CSS/스크립트의 설명 문구도 리터럴 `next/font/google` 을 피해 썼다 — 1차 수정 때 밟은 자기 설명 문구 함정을 다시 밟지 않으려 처음부터 "google loader"/"google-loader config" 식으로 썼다). `scripts/gen-noto-sans-kr-fonts-css.mjs` 신설로 `scripts/` 직속 파일 수가 또 65→66(분자 26 은 그대로 — 이 스크립트도 `git ls-files` 를 안 씀) → `CLAUDE.md`·`platform/git-workflow-policy.md` 의 "26 of the 65" 를 "26 of the 66" 으로 다시 갱신, `check-ls-files-guard-count.sh` 재실행 rc=0. `check-index-queue-drift.sh`·`check-task-id-collision.sh`·`check-walkthrough-ledger-drift.sh` 세 필수 체크 전부 재실행 rc=0(스테이지 후).
 
 # Related Specs
 

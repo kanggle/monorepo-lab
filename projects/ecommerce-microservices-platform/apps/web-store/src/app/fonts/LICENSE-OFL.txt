@@ -1,4 +1,4 @@
-Source: Noto Sans KR, Google Fonts (OFL-1.1). Files extracted from npm package @fontsource/noto-sans-kr@5.3.0 (files/noto-sans-kr-latin-{400,500,600,700}-normal.woff2), self-hosted here to avoid a build-time fetch to fonts.googleapis.com (TASK-MONO-767). Subset: latin only (matches the subset this app requests via next/font's google loader). Full OFL-1.1 text below.
+Source: Noto Sans KR, Google Fonts (OFL-1.1). Files extracted from npm package @fontsource/noto-sans-kr@5.3.0, self-hosted here to avoid a build-time fetch to fonts.googleapis.com (TASK-MONO-767). Weights: 400/500/600/700. Subsets: 'latin' (4 files, noto-sans-kr-latin-{weight}.woff2, directly in this directory) + the unmarked/default subset covering Korean + Hanja + CJK symbols (480 files, 120 unicode-range-split chunks per weight, under ./korean/ — owner decision 2026-10-07, see the task file's Implementation section for the byte/measurement breakdown). Deliberately excluded (not requested by this app either): latin-ext, cyrillic, vietnamese. Generated CSS at ./noto-sans-kr.generated.css — see scripts/gen-noto-sans-kr-fonts-css.mjs to regenerate. Full OFL-1.1 text below.
 
 Google Inc.
 
