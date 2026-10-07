@@ -155,6 +155,19 @@ resource "aws_iam_role_policy" "ec2_health" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
         Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/oauth/*"
+      },
+      # -----------------------------------------------------------------------
+      # TASK-MONO-770 — 데모 메일함(Mailpit UI)의 basic auth 자격을 **읽는다.** 같은
+      # `fetch-oauth-secrets.sh` 가 부팅 중에 `/portfolio-demo/mailpit/ui-basicauth-users`
+      # (SecureString, htpasswd 한 줄 `<user>:<bcrypt>`)를 읽어 MAILPIT_UI_BASICAUTH_USERS 로 넘긴다.
+      # 🔴 terraform 이 값을 만들지 않는다(저장소·state 에 자격을 두지 않는다) — 소유자가 콘솔/CLI 로
+      #    등록한다. 위 oauth 와 같은 이유로 와일드카드 ARN 을 조립한다.
+      # 🔴 이 정책이 apply 되기 전 · 파라미터가 없을 때 → 읽기 실패/없음 → 메일함 라우터가 **꺼진 채** 뜬다
+      #    (fail-closed). 메일 발송 자체(SMTP → Mailpit)는 이 권한과 무관하게 동작한다.
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/mailpit/*"
     }]
   })
 }

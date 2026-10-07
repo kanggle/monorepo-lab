@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# infra/demo/fetch-oauth-secrets.sh — SSM 에서 소셜 로그인 키를 읽어 export 한다
+# infra/demo/fetch-oauth-secrets.sh — SSM 에서 소셜 로그인 키(+ 데모 메일함 자격, TASK-MONO-770)를 읽어 export 한다
 # =============================================================================
 # TASK-MONO-763.
 #
@@ -45,6 +45,21 @@
 #                 실패가 부팅을 막으면 안 된다 — demo-boot.sh 는 `set -euo pipefail` 아래
 #                 있고, 여기서 비-0 으로 끝나면 그 자체가 데모 전체를 못 띄우게 한다.
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# TASK-MONO-770 — 데모 메일함(Mailpit UI)의 basic auth 자격도 **이 파일이** 읽는다
+# -----------------------------------------------------------------------------
+# 같은 부팅 경로 · 같은 «값을 찍지 않는다» 규칙 · 같은 SSM 이라 새 파일을 만들지 않았다. 🔴 더 중요한 이유:
+# 부팅 계약(demo-boot.sh 가 이 파일을 source 하고 `fetch_oauth_secrets` 하나를 부른다)을 **하네스 둘이**
+# 이 파일을 통째로 스텁해 모사한다(ci.yml 의 DEMO_DOMAIN 폴백 칸 · verify-demo-wrapper.sh (z24)). 두 번째
+# 파일·두 번째 함수를 만들면 그 둘이 «No such file / command not found» 로 죽는다 — 763 이 (z24)에서 실제로
+# 겪은 그 모양이다. 그래서 함수 이름은 그대로 두고 그 안에서 한 칸을 더 읽는다.
+#
+#   있음(`<user>:<hash>` 한 줄) → MAILPIT_UI_BASICAUTH_USERS · MAILPIT_UI_ENABLED=true 를 export
+#   없음 · 읽기 실패 · 모양이 틀림 → **아무것도 export 하지 않는다** ⇒ Mailpit 라우터 꺼짐(fail-closed —
+#   iam-traefik.override.yml 의 `traefik.enable=${MAILPIT_UI_ENABLED:-false}`). «인증 없는 메일함» 으로
+#   떨어지는 갈래는 없다. 없음은 조용히, 읽기 실패·모양 틀림은 한 줄 경고.
+MAIL_UI_SECRET_NAME="/portfolio-demo/mailpit/ui-basicauth-users"
 
 OAUTH_PROVIDERS=(google kakao microsoft naver)
 
@@ -91,6 +106,33 @@ _oauth_fetch_one() {
 }
 
 # -----------------------------------------------------------------------------
+# _mail_ui_fetch — TASK-MONO-770. 데모 메일함 basic auth 자격(htpasswd 한 줄)을 읽는다(위 머리말).
+# 🔴 값은 찍지 않는다 · 모양 검사도 값을 출력하지 않고 참/거짓만 쓴다.
+# -----------------------------------------------------------------------------
+_mail_ui_fetch() {
+  local value rc err_file
+  err_file="$(mktemp)"
+  value="$(aws ssm get-parameter --region "$OAUTH_REGION" --with-decryption \
+             --name "$MAIL_UI_SECRET_NAME" --query 'Parameter.Value' --output text 2>"$err_file")" \
+    && rc=0 || rc=$?
+
+  if [ "$rc" -eq 0 ] && [ -n "$value" ] && [ "$value" != "None" ]; then
+    # 한 줄 `<user>:<hash>` 만 받는다 — 공백·줄바꿈이 섞이면 Traefik 라벨이 깨지거나 사용자 둘로 읽힌다.
+    if [[ "$value" =~ ^[^:[:space:]]+:[^[:space:]]+$ ]]; then
+      export MAILPIT_UI_BASICAUTH_USERS="$value"
+      export MAILPIT_UI_ENABLED=true
+    else
+      echo "[mail] ⚠ 메일함 자격의 모양이 '<user>:<hash>' 한 줄이 아닙니다 — 메일함 UI 를 열지 않고 계속합니다" >&2
+    fi
+  elif grep -q 'ParameterNotFound' "$err_file" 2>/dev/null; then
+    : # 아직 등록 안 함 — 메일함 UI 는 닫힌 채(정상). 경고 없음.
+  else
+    echo "[mail] ⚠ 메일함 자격 읽기 실패 — 메일함 UI 를 열지 않고 계속합니다 (권한·네트워크를 확인하세요)" >&2
+  fi
+  rm -f "$err_file"
+}
+
+# -----------------------------------------------------------------------------
 # fetch_oauth_secrets — 네 제공자 × (client-id, client-secret) 를 전부 읽는다.
 # 🔴 항상 rc=0 으로 끝난다 — 이 함수 자체의 실패로 부팅을 막지 않는다. 진짜 실패는
 #    위 _oauth_fetch_one 의 한 줄 경고로만 드러난다.
@@ -119,6 +161,9 @@ fetch_oauth_secrets() {
     _oauth_fetch_one "$provider" "client-id" "CLIENT_ID"
     _oauth_fetch_one "$provider" "client-secret" "CLIENT_SECRET"
   done
+
+  # TASK-MONO-770 — 데모 메일함 UI 자격(머리말 참조). 실패해도 rc=0, 메일함만 닫힌다.
+  _mail_ui_fetch
 
   [ "$__oauth_had_xtrace" -eq 1 ] && set -x
   return 0

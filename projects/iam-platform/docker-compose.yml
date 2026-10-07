@@ -28,6 +28,9 @@
 #   loki         — log aggregation
 #   promtail     — docker log tailer
 #   grafana      — dashboards (Traefik-routed)
+#   mailpit      — SMTP sink for IAM's outbound mail (TASK-MONO-770): verification + password-reset
+#                  mail lands here instead of the internet. No router here; the demo overlay adds
+#                  an owner-only (basic-auth) web UI.
 #
 # Local bootRun workflow
 #   Application services running as host JVM processes need to reach the
@@ -386,6 +389,37 @@ services:
     networks:
       - iam-net
       - traefik-net
+
+  # ---------------------------------------------------------------------------
+  # Mailpit — SMTP sink + web inbox (TASK-MONO-770, ADR-MONO-080 D3)
+  # ---------------------------------------------------------------------------
+  # account-service (verification mail) and auth-service (password-reset mail) send through ONE
+  # generic SMTP adapter enabled by IAM_MAIL_ENABLED=true and pointed by SPRING_MAIL_HOST/PORT.
+  # Mailpit accepts everything on 1025 and relays NOTHING — no mail leaves the stack, it is only
+  # stored (MP_MAX_MESSAGES caps the store) and shown in the web UI on 8025.
+  # 🔴 No router and no host port here, on purpose: the inbox shows every user's verification link,
+  #    i.e. a credential. The demo overlay (infra/demo/iam-traefik.override.yml) is the ONE place that
+  #    exposes the UI, behind Traefik basic auth whose credential comes from SSM at boot.
+  # container_name `iam-mailpit` is also the SMTP host name other containers use (a container name
+  # resolves on every user-defined network the container is on).
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    container_name: iam-mailpit
+    restart: unless-stopped
+    expose:
+      - "1025"
+      - "8025"
+    environment:
+      MP_MAX_MESSAGES: "1000"
+      TZ: UTC
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - iam-net
 
 volumes:
   mysql-data:

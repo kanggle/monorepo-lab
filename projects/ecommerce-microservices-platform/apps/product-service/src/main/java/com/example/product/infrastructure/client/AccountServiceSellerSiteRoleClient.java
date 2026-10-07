@@ -3,6 +3,7 @@ package com.example.product.infrastructure.client;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.product.application.port.SellerSiteRoleGateway;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
 import com.example.product.domain.exception.SellerRoleServiceUnavailableException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,6 +69,10 @@ public class AccountServiceSellerSiteRoleClient implements SellerSiteRoleGateway
             String code = errorCode(e.getResponseBodyAsString());
             if (e.getStatusCode().value() == 403 && "SITE_ROLE_EMAIL_MISMATCH".equals(code)) {
                 throw new SellerInvitationEmailMismatchException();
+            }
+            // TASK-MONO-770 (ADR-MONO-080 D3 · R1): right address, not proven — the person verifies and retries.
+            if (e.getStatusCode().value() == 403 && "EMAIL_NOT_VERIFIED".equals(code)) {
+                throw new SellerInvitationEmailNotVerifiedException();
             }
             if (code != null && NOT_ELIGIBLE_CODES.contains(code)) {
                 throw new SellerMemberAccountNotEligibleException();

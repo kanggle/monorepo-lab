@@ -12,6 +12,7 @@ import com.example.product.domain.exception.MediaValidationException;
 import com.example.product.domain.exception.ProductNotFoundException;
 import com.example.product.domain.exception.SellerInvitationAlreadyUsedException;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerInvitationExpiredException;
 import com.example.product.domain.exception.SellerInvitationNotFoundException;
 import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
@@ -117,6 +118,13 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ErrorResponse handleSellerInvitationEmailMismatch(SellerInvitationEmailMismatchException ex) {
         return ErrorResponse.of("SELLER_INVITATION_EMAIL_MISMATCH", ex.getMessage());
+    }
+
+    /** TASK-MONO-770 (ADR-MONO-080 D3 · R1) — IAM: the account has not verified the invited address. */
+    @ExceptionHandler(SellerInvitationEmailNotVerifiedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleSellerInvitationEmailNotVerified(SellerInvitationEmailNotVerifiedException ex) {
+        return ErrorResponse.of("SELLER_INVITATION_EMAIL_NOT_VERIFIED", ex.getMessage());
     }
 
     @ExceptionHandler(SellerMemberAccountNotEligibleException.class)

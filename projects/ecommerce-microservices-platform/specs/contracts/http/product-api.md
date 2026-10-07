@@ -397,9 +397,12 @@ Identity comes only from the gateway headers (`X-User-Id` = token `sub` = the po
 5. The seller is `ACTIVE` → else `409 SELLER_NOT_ACTIVE`.
 6. IAM grant with `expectedEmail` = the invitation's email
    ([internal/product-to-account.md § 5](internal/product-to-account.md)) — IAM compares it with the
-   logged-in account's own email: mismatch → `403 SELLER_INVITATION_EMAIL_MISMATCH`; a site (non-pool)
-   account or no store membership → `409 SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE`; IAM unreachable →
-   `503 SERVICE_UNAVAILABLE` (**fail-closed** — unlike provisioning, no link is made without IAM).
+   logged-in account's own email: mismatch → `403 SELLER_INVITATION_EMAIL_MISMATCH`; the address matches but
+   the account has **not verified** it → `403 SELLER_INVITATION_EMAIL_NOT_VERIFIED` (TASK-MONO-770 — ADR-MONO-080
+   D3 · R1; the client tells the person «이메일 인증 필요» and offers IAM's verification-mail page, then the same
+   invitation can be accepted again); a site (non-pool) account or no store membership →
+   `409 SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE`; IAM unreachable → `503 SERVICE_UNAVAILABLE` (**fail-closed** —
+   unlike provisioning, no link is made without IAM).
 7. The invitation becomes `ACCEPTED` (conditional update — a concurrent second accept loses) and the
    member row is written `ACTIVE` (a previously `REVOKED` row for the same person is re-activated).
    If this step fails after IAM granted the role, product-service revokes the role again (best-effort).
@@ -407,7 +410,7 @@ Identity comes only from the gateway headers (`X-User-Id` = token `sub` = the po
 A refused attempt does **not** consume the invitation — the right person can still accept it.
 
 **Error responses**: 400 `VALIDATION_ERROR` · 401 `UNAUTHORIZED` · 403 `SELLER_INVITATION_EMAIL_MISMATCH` ·
-404 `SELLER_INVITATION_NOT_FOUND` · 409 `SELLER_INVITATION_ALREADY_USED` · 409 `SELLER_NOT_ACTIVE` ·
+403 `SELLER_INVITATION_EMAIL_NOT_VERIFIED` · 404 `SELLER_INVITATION_NOT_FOUND` · 409 `SELLER_INVITATION_ALREADY_USED` · 409 `SELLER_NOT_ACTIVE` ·
 409 `SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE` · 410 `SELLER_INVITATION_EXPIRED` · 503 `SERVICE_UNAVAILABLE`
 
 ---

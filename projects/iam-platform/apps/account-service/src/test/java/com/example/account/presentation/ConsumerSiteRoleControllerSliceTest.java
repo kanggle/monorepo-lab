@@ -1,5 +1,6 @@
 package com.example.account.presentation;
 
+import com.example.account.application.exception.EmailNotVerifiedException;
 import com.example.account.application.exception.SiteMembershipRequiredException;
 import com.example.account.application.exception.SiteRoleEmailMismatchException;
 import com.example.account.application.exception.SiteRoleNotGrantableException;
@@ -71,6 +72,17 @@ class ConsumerSiteRoleControllerSliceTest {
         mockMvc.perform(patch(GRANT, "ecommerce", ACCOUNT).contentType(MediaType.APPLICATION_JSON).content(GRANT_BODY))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("SITE_ROLE_EMAIL_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: 이메일 미인증 → 403 EMAIL_NOT_VERIFIED")
+    void grant_emailNotVerified_403() throws Exception {
+        given(useCase.grant("ecommerce", ACCOUNT, "SELLER", "member@example.com", "product-service"))
+                .willThrow(new EmailNotVerifiedException("not verified"));
+
+        mockMvc.perform(patch(GRANT, "ecommerce", ACCOUNT).contentType(MediaType.APPLICATION_JSON).content(GRANT_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"));
     }
 
     @Test

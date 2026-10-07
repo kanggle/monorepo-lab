@@ -1,6 +1,7 @@
 package com.example.account.application.service;
 
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.exception.EmailNotVerifiedException;
 import com.example.account.application.exception.SiteMembershipRequiredException;
 import com.example.account.application.exception.SiteRoleEmailMismatchException;
 import com.example.account.application.exception.SiteRoleNotGrantableException;
@@ -68,7 +69,14 @@ class ConsumerSiteRoleWriteUseCaseTest {
         return Tenant.reconstitute(id, id.value(), type, TenantStatus.ACTIVE, Instant.EPOCH, Instant.EPOCH);
     }
 
+    /** A verified account — TASK-MONO-770: every pre-770 cell is about a rule other than verification. */
     private static Account account(TenantId tenant, String email) {
+        return Account.reconstitute(ACCOUNT, tenant, email, null, AccountStatus.ACTIVE,
+                Instant.EPOCH, Instant.EPOCH, null, null, Instant.EPOCH, 0);
+    }
+
+    /** TASK-MONO-770 — the same account before its owner proved the address ({@code email_verified_at} null). */
+    private static Account unverifiedAccount(TenantId tenant, String email) {
         return Account.reconstitute(ACCOUNT, tenant, email, null, AccountStatus.ACTIVE,
                 Instant.EPOCH, Instant.EPOCH, null, null, null, 0);
     }
@@ -112,6 +120,78 @@ class ConsumerSiteRoleWriteUseCaseTest {
             verify(membershipRepository).addSiteRole(org.mockito.ArgumentMatchers.eq(STORE),
                     org.mockito.ArgumentMatchers.eq(ACCOUNT), org.mockito.ArgumentMatchers.eq("SELLER"),
                     org.mockito.ArgumentMatchers.eq("product-service"), any(Instant.class));
+        }
+
+        /**
+         * TASK-MONO-770 AC-2 (ADR-MONO-080 § Verification) — the control group. The SAME pool account, SAME site,
+         * SAME role and the SAME (matching) invited email; only {@code email_verified_at} differs between the two
+         * halves, and the refusal is asserted FIRST. Someone who signed up with another person's address passes
+         * rule 4 (the address matches) — this is the rule that stops them.
+         */
+        @Test
+        @DisplayName("🔴 AC-2 대조군: 초대 이메일과 같은 주소의 미인증 풀 계정은 수락 못 한다(먼저 단언) → 같은 계정이 인증하면 된다")
+        void controlGroup_unverifiedRefusedFirst_thenVerifiedAccepts() {
+            storeIsConsumerSite();
+            Account sameAccount = unverifiedAccount(TenantId.CONSUMER_POOL, EMAIL);
+            given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT)).willReturn(Optional.of(sameAccount));
+
+            // 1) failure side first: right address, not proven → refused, nothing written, no audit.
+            assertThatThrownBy(() -> useCase.grant("ecommerce", ACCOUNT, "SELLER", EMAIL, "product-service"))
+                    .isInstanceOf(EmailNotVerifiedException.class);
+            verify(membershipRepository, never()).addSiteRole(any(), anyString(), anyString(), any(), any());
+            verify(membershipRepository, never()).find(any(), anyString());
+            verifyNoInteractions(historyRepository);
+
+            // 2) the owner opens the mail's link (VerifyEmailUseCase → Account.verifyEmail) — same account object.
+            sameAccount.verifyEmail(Instant.parse("2026-10-07T00:00:00Z"));
+            activeStoreMembership();
+            given(membershipRepository.findSiteRoles(STORE, ACCOUNT)).willReturn(List.of(), List.of("SELLER"));
+
+            SiteRoleMutationResult result = useCase.grant("ecommerce", ACCOUNT, "SELLER", EMAIL, "product-service");
+
+            assertThat(result.changed()).isTrue();
+            assertThat(result.roles()).containsExactly("SELLER");
+            verify(membershipRepository).addSiteRole(org.mockito.ArgumentMatchers.eq(STORE),
+                    org.mockito.ArgumentMatchers.eq(ACCOUNT), org.mockito.ArgumentMatchers.eq("SELLER"),
+                    org.mockito.ArgumentMatchers.eq("product-service"), any(Instant.class));
+        }
+
+        @Test
+        @DisplayName("TASK-MONO-770: 다른 주소면 미인증이어도 SITE_ROLE_EMAIL_MISMATCH 가 먼저 답한다 (더 구체적인 거절)")
+        void emailMismatch_answersBeforeVerification() {
+            storeIsConsumerSite();
+            given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT))
+                    .willReturn(Optional.of(unverifiedAccount(TenantId.CONSUMER_POOL, EMAIL)));
+
+            assertThatThrownBy(() -> useCase.grant("ecommerce", ACCOUNT, "SELLER", "someone-else@example.com", null))
+                    .isInstanceOf(SiteRoleEmailMismatchException.class);
+        }
+
+        @Test
+        @DisplayName("TASK-MONO-770: 이미 SELLER 인 미인증 계정의 새 수락도 거절 — 멱등 지름길보다 게이트가 먼저 · 가진 역할은 회수 안 함")
+        void alreadyHeld_unverified_stillRefused_neverRevoked() {
+            storeIsConsumerSite();
+            given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT))
+                    .willReturn(Optional.of(unverifiedAccount(TenantId.CONSUMER_POOL, EMAIL)));
+            lenient().when(membershipRepository.findSiteRoles(STORE, ACCOUNT)).thenReturn(List.of("SELLER"));
+
+            assertThatThrownBy(() -> useCase.grant("ecommerce", ACCOUNT, "SELLER", EMAIL, null))
+                    .isInstanceOf(EmailNotVerifiedException.class);
+            // ADR-MONO-080 D5: verification is evidence at the moment of attaching, not a condition for keeping.
+            verify(membershipRepository, never()).removeSiteRole(any(), anyString(), anyString());
+            verify(membershipRepository, never()).addSiteRole(any(), anyString(), anyString(), any(), any());
+        }
+
+        @Test
+        @DisplayName("TASK-MONO-770: 회수는 인증을 묻지 않는다 — 미인증 계정의 SELLER 도 회수된다")
+        void revoke_doesNotAskForVerification() {
+            storeIsConsumerSite();
+            given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT))
+                    .willReturn(Optional.of(unverifiedAccount(TenantId.CONSUMER_POOL, EMAIL)));
+            given(membershipRepository.removeSiteRole(STORE, ACCOUNT, "SELLER")).willReturn(true);
+            given(membershipRepository.findSiteRoles(STORE, ACCOUNT)).willReturn(List.of());
+
+            assertThat(useCase.revoke("ecommerce", ACCOUNT, "SELLER", "product-service").changed()).isTrue();
         }
 
         @Test

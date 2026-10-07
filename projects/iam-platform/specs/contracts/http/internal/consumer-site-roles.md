@@ -64,6 +64,18 @@ successful no-op (`changed=false`).
    account not yet moved to the pool — it cannot hold `consumer_site_roles`), `409 SITE_ROLE_REQUIRES_POOL_ACCOUNT`;
    otherwise `404 ACCOUNT_NOT_FOUND`.
 4. `expectedEmail` equals the account's email → else `403 SITE_ROLE_EMAIL_MISMATCH`. Nothing is written.
+4b. 🔴 **The account's email is verified** (`accounts.email_verified_at` is set) → else `403 EMAIL_NOT_VERIFIED`.
+   Nothing is written. (TASK-MONO-770 — ADR-MONO-080 D3 · rider R1, which amends ADR-MONO-079 D5.)
+   Rule 4 alone proves only «the logged-in account *says* it is that address»; IAM never checked that the person
+   owns it, so someone who signed up to the pool with *another person's* address could accept an invitation sent
+   to that address. Rule 4b makes the email an identity before a company role is attached.
+   - Checked **after** rule 4: a wrong address is the stronger, more specific answer.
+   - Checked **before** the idempotency check below — an account that already holds the role (e.g. a member of a
+     second seller) still has to be verified to be attached again. 🔵 It never revokes anything: an unverified
+     account that already holds the role keeps it (ADR-MONO-080 D5 — verification is evidence at the moment of
+     attaching, not a condition for keeping).
+   - The predicate is the shared one (`VerifiedEmailRequirement`) that ADR-MONO-080 step 3 (`TASK-MONO-772`)
+     reuses for operator-invitation acceptance — one home, not one copy per caller.
 5. The account holds an **ACTIVE** membership of `{tenantId}` → else `409 SITE_MEMBERSHIP_REQUIRED`.
    🔵 **Membership rule (decided here): grant never creates a membership.** A membership is the site
    consent (ADR-MONO-078 D3 · `PUT …/consumer-members/{accountId}`); the person accepting is logged in to
@@ -89,7 +101,7 @@ audit row (`tenant_id={tenantId}`, reason `OPERATOR_PROVISIONING_ROLES_REPLACE`,
 describes `account_roles` of the account's own tenant; the next token issuance reads the new role directly.
 
 **Errors**: 400 `VALIDATION_ERROR` · 400 `SITE_ROLE_NOT_GRANTABLE` · 403 `TENANT_SCOPE_DENIED` ·
-403 `SITE_ROLE_EMAIL_MISMATCH` · 404 `TENANT_NOT_FOUND` · 404 `ACCOUNT_NOT_FOUND` ·
+403 `SITE_ROLE_EMAIL_MISMATCH` · 403 `EMAIL_NOT_VERIFIED` · 404 `TENANT_NOT_FOUND` · 404 `ACCOUNT_NOT_FOUND` ·
 409 `SITE_ROLE_REQUIRES_POOL_ACCOUNT` · 409 `SITE_MEMBERSHIP_REQUIRED` · 401 `UNAUTHORIZED`
 
 ---
@@ -104,8 +116,8 @@ successful no-op (`changed=false`).
 { "roleName": "SELLER", "operatorId": "product-service" }
 ```
 
-Rules 1–3 of grant apply (tenant · grantable pair · pool account). No email check and no membership
-check: removing a role must work for any account that may hold it.
+Rules 1–3 of grant apply (tenant · grantable pair · pool account). No email check, no verification check
+(rule 4b) and no membership check: removing a role must work for any account that may hold it.
 
 🔴 **Revoking a site role never touches the account or the membership.** The account stays `ACTIVE`
 (no lock — ADR-MONO-079 D5: locking would also stop the person shopping and using the fan site), the

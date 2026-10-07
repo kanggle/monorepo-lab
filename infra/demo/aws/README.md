@@ -337,3 +337,22 @@ compose 배선 자체)이 처음 AMI 에 실리는 데는 재굽기가 한 번 �
 `tasks/ready/TASK-MONO-763-*.md` AC-0 참조. 구현·리뷰는 먼저 해도 되지만, 머지와
 재굽기(=배포)는 617 뒤다.
 
+### 데모 메일함 — Mailpit UI 자격 (TASK-MONO-770)
+
+IAM 의 인증 메일·비밀번호 재설정 메일과 ecommerce 알림 메일은 데모에서 `iam-mailpit`(받기만 하고 릴레이하지
+않는다)으로 간다. 웹 UI 는 `http://mail.iam.<데모도메인>/` 이고 **소유자만** 본다 — Traefik basic auth.
+
+```
+/portfolio-demo/mailpit/ui-basicauth-users   (SecureString, htpasswd 한 줄 `<user>:<bcrypt>`)
+```
+
+- 등록(소유자, 한 번): `htpasswd -nbB owner '<데모 전용 비밀번호>'` 의 출력 한 줄을
+  `aws ssm put-parameter --type SecureString --name /portfolio-demo/mailpit/ui-basicauth-users --value '<그 줄>'`.
+  🔴 다른 곳에서 쓰는 비밀번호를 재사용하지 마라 — 이 엣지는 **평문 HTTP** 라 basic auth 자격이 전송 구간에서
+  보인다(소유자 결정 2026-10-07 의 전제).
+- 읽는 것은 같은 `fetch-oauth-secrets.sh`(부팅 계약을 하네스 둘이 이 파일 단위로 스텁하므로 파일을 늘리지
+  않았다)이고, **읽었을 때만** `MAILPIT_UI_ENABLED=true` 를 export 해 라우터를 켠다. 없음·읽기 실패·모양 틀림 →
+  라우터가 **꺼진 채** 뜬다(fail-closed — 인증 없는 메일함으로 떨어지는 갈래가 없다).
+- 권한: `terraform/main.tf` `aws_iam_role_policy.ec2_health` 의 `parameter/${local.name}/mailpit/*` 읽기 —
+  🔴 **apply 가 필요하다**(그 전에는 «읽기 실패» 갈래 = 메일함만 닫힘, 메일 발송은 정상).
+

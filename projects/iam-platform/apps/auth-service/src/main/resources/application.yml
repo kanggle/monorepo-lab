@@ -55,6 +55,15 @@ spring:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 1
 
+  # TASK-MONO-770 — SMTP timeouts only; the connection (spring.mail.host …) comes from the environment.
+  # 🔴 No `spring.mail.host` default here: Boot creates a JavaMailSender as soon as the key exists, which
+  # would turn «enabled but unconfigured» from a boot failure into a silent per-send failure.
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+
 outbox:
   polling:
     interval-ms: ${OUTBOX_POLLING_INTERVAL_MS:1000}
@@ -194,6 +203,22 @@ iam:
     client-secret: ${AUTH_SERVICE_CLIENT_SECRET:secret}
     connect-timeout-ms: ${IAM_INTERNAL_CLIENT_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${IAM_INTERNAL_CLIENT_READ_TIMEOUT_MS:5000}
+  # TASK-MONO-770 (owner decision 2026-10-07) — the password-reset mail, same switch and same SMTP mechanism
+  # as account-service's verification mail (auth-api.md § password-reset/request · Delivery):
+  #   enabled=true            → SmtpEmailSender (standard spring.mail.* — any SMTP endpoint)
+  #   enabled=false, not prod → LoggingEmailSender
+  #   enabled=false, prod     → none → the context fails to start (TASK-BE-242 fail-fast kept)
+  mail:
+    enabled: ${IAM_MAIL_ENABLED:false}
+    from: ${IAM_MAIL_FROM:no-reply@iam.local}
+    # ⚪ No reset page exists on the IdP yet — the link is correct the day one does.
+    password-reset-link-base-url: ${IAM_MAIL_PASSWORD_RESET_LINK_BASE_URL:http://localhost:8081/password-reset}
+
+# TASK-MONO-770 — a mail-server outage must not mark the IdP DOWN (the reset endpoint answers 204 anyway).
+management:
+  health:
+    mail:
+      enabled: false
 
 # TASK-BE-487 (ADR-005 단계 4 — auth-service receiver): the credential/action /internal/auth/**
 # endpoints authenticate with a GAP-issued client_credentials JWT (Authorization: Bearer) ONLY —

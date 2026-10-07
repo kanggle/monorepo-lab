@@ -20,6 +20,8 @@ public interface SellerSiteRoleGateway {
      *
      * @throws com.example.product.domain.exception.SellerInvitationEmailMismatchException  the account is not the
      *         invited email's account
+     * @throws com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException the account is the
+     *         invited email's account but has not verified it (TASK-MONO-770 — ADR-MONO-080 D3 · R1)
      * @throws com.example.product.domain.exception.SellerMemberAccountNotEligibleException not a pool account /
      *         no ACTIVE store membership / unknown account
      * @throws com.example.product.domain.exception.SellerRoleServiceUnavailableException   anything else

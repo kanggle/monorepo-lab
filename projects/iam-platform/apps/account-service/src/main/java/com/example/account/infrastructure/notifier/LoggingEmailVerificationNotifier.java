@@ -2,6 +2,7 @@ package com.example.account.infrastructure.notifier;
 
 import com.example.account.application.port.EmailVerificationNotifier;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -35,11 +36,17 @@ import org.springframework.stereotype.Component;
  * <p>{@code @Profile("!prod")} is evaluated deterministically against the
  * active environment, so the stub is guaranteed to register in any non-prod
  * profile (including {@code e2e}, {@code dev}, {@code test}) and is
- * guaranteed to <strong>not</strong> register in {@code prod}. If a real SMTP
- * adapter is added later, it should be {@code @Profile("prod")} (or
- * unconditional and the stub left as-is) — the two profile predicates are
- * disjoint, so they cannot both be active and the application context will
- * always wire exactly one notifier per environment.</p>
+ * guaranteed to <strong>not</strong> register in {@code prod}.</p>
+ *
+ * <h3>TASK-MONO-770 — and only while mail is off</h3>
+ *
+ * <p>The real adapter ({@link SmtpEmailVerificationNotifier}) is selected by the property
+ * {@code iam.mail.enabled=true}, not by a profile (the demo runs IAM under {@code e2e}, where a
+ * {@code @Profile("prod")} adapter would never run). This stub therefore carries the complementary condition
+ * {@code iam.mail.enabled=false|absent} on top of {@code !prod}: the two conditions are disjoint, so exactly one
+ * notifier is wired in every environment except {@code prod} with mail off — where none is, and the context
+ * fails fast as before. Both conditions are property/profile predicates evaluated against the Environment, not
+ * the bean-registry-order-dependent {@code @ConditionalOnMissingBean} this class was written to avoid.</p>
  *
  * <h3>Failure-safety in prod</h3>
  *
@@ -58,43 +65,14 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @Profile("!prod")
+@ConditionalOnProperty(prefix = "iam.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LoggingEmailVerificationNotifier implements EmailVerificationNotifier {
 
     @Override
     public void sendVerificationEmail(String toEmail, String token) {
         // R4: token MUST NOT appear in the log line. Only the masked
         // recipient address is emitted.
-        log.info("[DEV STUB] Email verification queued — to={}", maskedEmail(toEmail));
-    }
-
-    /**
-     * Masks an email address for safe logging.
-     *
-     * <p>Keeps the first character of the local part, replaces the rest with
-     * {@code ***}, and preserves the domain. Returns {@code "[masked]"} for
-     * any input that is null, missing an {@code @}, or causes an exception.</p>
-     *
-     * <p>Mirrors the masking helper in {@code auth-service}'s
-     * {@code Slf4jEmailSender} (TASK-BE-111) so the dev-stub log format is
-     * consistent across services.</p>
-     */
-    private String maskedEmail(String email) {
-        try {
-            if (email == null) {
-                return "[masked]";
-            }
-            int atIndex = email.indexOf('@');
-            if (atIndex < 0) {
-                return "[masked]";
-            }
-            String local = email.substring(0, atIndex);
-            String domain = email.substring(atIndex);
-            if (local.isEmpty()) {
-                return "[masked]";
-            }
-            return local.charAt(0) + "***" + domain;
-        } catch (RuntimeException e) {
-            return "[masked]";
-        }
+        // Masking rule: RecipientMask (shared with the SMTP adapter since TASK-MONO-770).
+        log.info("[DEV STUB] Email verification queued — to={}", RecipientMask.mask(toEmail));
     }
 }

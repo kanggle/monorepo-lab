@@ -4,6 +4,7 @@ import com.example.product.TestProductServiceApplication;
 import com.example.product.application.service.SellerMemberService;
 import com.example.product.domain.exception.SellerInvitationAlreadyUsedException;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerInvitationExpiredException;
 import com.example.product.domain.exception.SellerInvitationNotFoundException;
 import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
@@ -146,6 +147,8 @@ class SellerMemberControllerSliceTest {
                 {new SellerInvitationAlreadyUsedException(), 409, "SELLER_INVITATION_ALREADY_USED"},
                 {new SellerInvitationExpiredException(), 410, "SELLER_INVITATION_EXPIRED"},
                 {new SellerInvitationEmailMismatchException(), 403, "SELLER_INVITATION_EMAIL_MISMATCH"},
+                // TASK-MONO-770 (ADR-MONO-080 D3 · R1)
+                {new SellerInvitationEmailNotVerifiedException(), 403, "SELLER_INVITATION_EMAIL_NOT_VERIFIED"},
                 {new SellerMemberAccountNotEligibleException(), 409, "SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE"},
                 {new SellerNotActiveException(), 409, "SELLER_NOT_ACTIVE"},
                 {new SellerRoleServiceUnavailableException(), 503, "SERVICE_UNAVAILABLE"},

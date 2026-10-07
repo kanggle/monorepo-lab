@@ -154,10 +154,20 @@
 
 ## POST /api/accounts/signup/verify-email
 
-이메일 소유권 확인. 회원가입 후 발송된 이메일 인증 토큰을 검증한다.
+이메일 소유권 확인. 인증 메일(`POST /signup/resend-verification-email` 이 발송)의 토큰을 검증한다.
 
-비차단 설계: 이 엔드포인트 호출 여부와 무관하게 계정은 ACTIVE 상태로 서비스 이용 가능하다.
-완료 시 `email_verified_at` 필드가 채워진다.
+**로그인·소비자 이용은 비차단이다**: 이 엔드포인트 호출 여부와 무관하게 계정은 ACTIVE 상태로 로그인·쇼핑·팬 이용이
+가능하다. 완료 시 `email_verified_at` 필드가 채워진다.
+
+🔴 **회사 권한이 붙는 쓰기는 이 값을 요구한다** (ADR-MONO-080 D3 · R1, TASK-MONO-770). 풀 계정에 회사 권한이 **붙는 순간**
+(지금 존재하는 것: 셀러 구성원 수락 = [internal/consumer-site-roles.md](internal/consumer-site-roles.md) `site-roles:grant`)
+`email_verified_at` 이 비어 있으면 `403 EMAIL_NOT_VERIFIED` 로 거절된다. 이미 붙은 권한은 소급해 회수하지 않는다 —
+인증은 붙일 때의 증거일 뿐 유지 조건이 아니다(ADR-MONO-080 D5).
+
+**브라우저 경로**: 사람은 이 JSON 엔드포인트를 직접 부르지 않는다. 메일의 링크는 IdP(auth-service) 화면
+`GET /verify-email?token=…` 로 가고, 그 화면이 확인 버튼(`POST /verify-email`)으로 이 엔드포인트를 **서버 측에서**
+호출한다(`/signup` 프록시와 같은 모양 — [auth-api.md § IdP 브라우저 화면 — 이메일 인증](auth-api.md)). 그래서 IAM
+게이트웨이의 public-paths 는 바뀌지 않는다.
 
 **Auth required**: No (토큰 자체가 인증 수단)
 
@@ -207,13 +217,37 @@
 | 401 | `TOKEN_INVALID` | `X-Account-Id` 헤더 누락 (gateway 미인증) |
 | 404 | `ACCOUNT_NOT_FOUND` | 해당 accountId 의 계정이 없음 |
 | 409 | `EMAIL_ALREADY_VERIFIED` | 이미 인증된 이메일 |
+| 422 | `VERIFICATION_EMAIL_UNDELIVERABLE` | **영구 발송 실패** — 메일 서버가 이 주소를 받지 않는다(주소 형식 오류 · 수신자 거부). 재시도해도 같다 (TASK-MONO-770) |
 | 429 | `RATE_LIMITED` | 5분 내 재발송 재시도 |
+| 503 | `VERIFICATION_EMAIL_SEND_FAILED` | **일시 발송 실패** — 메일 서버 연결·인증·시간 초과 등. 잠시 뒤 재시도하면 될 수 있다 (TASK-MONO-770) |
 
 **Side Effects**:
 - 신규 토큰 (UUID v4) 생성 후 Redis 저장 (`email-verify:{token}` TTL 24h)
 - 재발송 레이트 리밋 마커 저장 (`email-verify:rate:{accountId}` TTL 300s, `setIfAbsent`)
-- `EmailVerificationNotifier`로 이메일 전송 (best-effort)
+- `EmailVerificationNotifier`로 이메일 전송 — 🔴 **TASK-MONO-770 부터 best-effort 가 아니다.** 예전에는 발송 실패를 WARN 으로
+  삼키고 204 를 냈다 — 메일이 안 나갔는데 화면은 «보냈다» 고 말하는 상태였고, 인증이 회사 권한의 조건이 된 지금(ADR-MONO-080
+  D3) 그 거짓은 «권한을 못 받음» 으로 보인다(ADR-080 § 새로 생기는 위험). 발송이 실패하면:
+  - 방금 발급한 토큰을 **지운다**(아무도 받지 못한 토큰을 24시간 살려 둘 이유가 없다).
+  - 레이트 리밋 마커를 **되돌린다** — 메일이 나가지 않았으므로 5분을 기다리게 할 이유가 없다(«재시도» 가 바로 가능해야 한다).
+  - 실패의 **종류**를 응답한다: 일시 → `503 VERIFICATION_EMAIL_SEND_FAILED`, 영구 → `422 VERIFICATION_EMAIL_UNDELIVERABLE`.
+    판별은 어댑터가 한다(주소 형식 오류·수신자 거부 = 영구, 그 밖의 모든 실패 = 일시 — 판정 불가는 일시 쪽이다:
+    영구라고 잘못 말하면 될 일을 포기하라고 안내하게 된다, signup.md § 실패의 종류를 구별해 보고한다 와 같은 원칙).
 - Redis 장애 시 레이트 리밋만 fail-open — 토큰 저장 실패는 503
+
+**Delivery (TASK-MONO-770 — 구현체는 설정 하나로 고른다, 프로필이 아니다)**:
+
+| `iam.mail.enabled` | 프로필 | 등록되는 `EmailVerificationNotifier` |
+|---|---|---|
+| `true` | 무관 | **SMTP 어댑터** — 표준 `spring.mail.*`(host · port · username · password · properties)로 아무 SMTP 서버에나 보낸다(데모 = Mailpit, 운영 = 예: AWS SES SMTP 엔드포인트). 공급자별 코드 없음 |
+| `false`/미설정 | `prod` 아님 | 로깅 스텁(수신자 마스킹 · 토큰 미기록) |
+| `false`/미설정 | `prod` | **없음 → 컨텍스트 기동 실패(fail-fast)** — 운영에서 메일을 조용히 버리는 일이 없게(TASK-BE-236 의 보장 유지) |
+
+- 🔴 **왜 프로필이 아니라 설정인가**: 데모는 IAM 을 `SPRING_PROFILES_ACTIVE=e2e` 로 띄운다(`docker-compose.e2e.yml` → `infra/demo`
+  오버라이드). `@Profile("prod")` 어댑터는 데모에서 **영영 돌지 않는다.**
+- 메일 본문의 링크 = `{iam.mail.verification-link-base-url}?token=<token>` (IdP 의 `GET /verify-email` 화면).
+- 발신 주소 = `iam.mail.from`.
+- R4(`rules/traits/regulated.md`): 어댑터는 토큰과 수신 주소 전체를 **로그에 남기지 않는다**(수신자는 마스킹).
+  발송 실패 예외의 메시지도 그대로 남기지 않는다 — SMTP 오류 문구는 수신 주소를 담을 수 있다.
 
 ---
 

@@ -1,6 +1,7 @@
 package com.example.account.application.service;
 
 import com.example.account.application.exception.AccountNotFoundException;
+import com.example.account.application.exception.EmailNotVerifiedException;
 import com.example.account.application.exception.SiteMembershipRequiredException;
 import com.example.account.application.exception.SiteRoleEmailMismatchException;
 import com.example.account.application.exception.SiteRoleNotGrantableException;
@@ -45,6 +46,12 @@ import java.util.Optional;
  *       the check that keeps «whoever holds the invitation link» from becoming a seller (ticket Failure
  *       Scenario 1): the caller knows which address it invited, only this service knows which address the
  *       logged-in account has;</li>
+ *   <li>🔴 TASK-MONO-770 (ADR-MONO-080 D3 · rider R1, amends ADR-MONO-079 D5) — the account's email is
+ *       <b>verified</b> ({@link VerifiedEmailRequirement} → {@code EmailNotVerifiedException}). The rule above
+ *       proves only that the account <i>names</i> the invited address; IAM never checked the person owns it, so
+ *       whoever signed up to the pool with someone else's address could accept that person's invitation. Checked
+ *       before the idempotency short-cut below (a second seller's invitation attaches a new company role even
+ *       when the site role is already held); it never revokes a role already held (ADR-MONO-080 D5);</li>
  *   <li>the account is an ACTIVE member of the site ({@link SiteMembershipRequiredException}) — a grant never
  *       creates a membership (membership = consent, ADR-MONO-078 D3).</li>
  * </ol>
@@ -80,6 +87,13 @@ public class ConsumerSiteRoleWriteUseCase {
                     site.value(), accountId, roleName);
             throw new SiteRoleEmailMismatchException(
                     "The account is not the one the email names; nothing was granted");
+        }
+        try {
+            VerifiedEmailRequirement.require(account);
+        } catch (EmailNotVerifiedException refused) {
+            log.info("site-role grant refused: email not verified (site={}, account={}, role={})",
+                    site.value(), accountId, roleName);
+            throw refused;
         }
         Optional<ConsumerSiteMembership> membership = membershipRepository.find(site, accountId);
         if (membership.filter(ConsumerSiteMembership::isActive).isEmpty()) {

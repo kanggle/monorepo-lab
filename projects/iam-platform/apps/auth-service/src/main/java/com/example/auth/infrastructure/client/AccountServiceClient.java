@@ -6,6 +6,8 @@ import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.exception.SocialSignupEmailRegisteredException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AccountServicePort.EmailVerificationConfirmOutcome;
+import com.example.auth.application.port.AccountServicePort.EmailVerificationRequestOutcome;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
@@ -224,6 +226,91 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getMessage(), e.getClass().getName(),
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    /**
+     * TASK-MONO-770 — see {@link AccountServicePort#requestVerificationEmail}. The public account-api endpoint,
+     * no bearer (the gateway normally injects {@code X-Account-Id}; here the IdP session is the authority).
+     * Not in the retry pipeline: every attempt may send a mail. The body's {@code code} discriminates, never the
+     * status alone (the BE-580 lesson); an unreadable answer is SEND_FAILED — the «retry may help» side.
+     */
+    @Override
+    public EmailVerificationRequestOutcome requestVerificationEmail(String accountId, String tenantId) {
+        try {
+            restClient().post()
+                    .uri("/api/accounts/signup/resend-verification-email")
+                    .headers(h -> {
+                        h.set("X-Account-Id", accountId);
+                        setTenantHeader(h, tenantId);
+                    })
+                    .retrieve()
+                    .toBodilessEntity();
+            return EmailVerificationRequestOutcome.SENT;
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            String code = errorCode(e.getResponseBodyAsString());
+            log.info("verification-mail request answered {} code={}", e.getStatusCode().value(),
+                    code == null ? "<unparsed>" : code);
+            if ("EMAIL_ALREADY_VERIFIED".equals(code)) {
+                return EmailVerificationRequestOutcome.ALREADY_VERIFIED;
+            }
+            if ("RATE_LIMITED".equals(code)) {
+                return EmailVerificationRequestOutcome.RATE_LIMITED;
+            }
+            if ("VERIFICATION_EMAIL_UNDELIVERABLE".equals(code)) {
+                return EmailVerificationRequestOutcome.UNDELIVERABLE;
+            }
+            if ("ACCOUNT_NOT_FOUND".equals(code)) {
+                return EmailVerificationRequestOutcome.NOT_APPLICABLE;
+            }
+            return EmailVerificationRequestOutcome.SEND_FAILED;
+        } catch (RuntimeException e) {
+            log.warn("verification-mail request could not reach account-service: type={}", e.getClass().getName());
+            return EmailVerificationRequestOutcome.SEND_FAILED;
+        }
+    }
+
+    /**
+     * TASK-MONO-770 — see {@link AccountServicePort#confirmEmailVerification}. Public endpoint (the token is the
+     * credential). 🔴 The token is never logged (R4) — only the answer's status and code.
+     */
+    @Override
+    public EmailVerificationConfirmOutcome confirmEmailVerification(String token) {
+        try {
+            restClient().post()
+                    .uri("/api/accounts/signup/verify-email")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("token", token))
+                    .retrieve()
+                    .toBodilessEntity();
+            return EmailVerificationConfirmOutcome.VERIFIED;
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            String code = errorCode(e.getResponseBodyAsString());
+            log.info("verification-link confirm answered {} code={}", e.getStatusCode().value(),
+                    code == null ? "<unparsed>" : code);
+            if ("EMAIL_ALREADY_VERIFIED".equals(code)) {
+                return EmailVerificationConfirmOutcome.ALREADY_VERIFIED;
+            }
+            if ("TOKEN_EXPIRED_OR_INVALID".equals(code) || "VALIDATION_ERROR".equals(code)) {
+                return EmailVerificationConfirmOutcome.INVALID_OR_EXPIRED;
+            }
+            return EmailVerificationConfirmOutcome.UNAVAILABLE;
+        } catch (RuntimeException e) {
+            log.warn("verification-link confirm could not reach account-service: type={}", e.getClass().getName());
+            return EmailVerificationConfirmOutcome.UNAVAILABLE;
+        }
+    }
+
+    /** {@code code} out of an error body, or {@code null} when absent / empty / not JSON («cannot judge»). */
+    private static String errorCode(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode code = objectMapper.readTree(body).get("code");
+            return code != null && code.isTextual() && !code.asText().isBlank() ? code.asText() : null;
+        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            return null;
         }
     }
 

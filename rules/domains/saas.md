@@ -64,6 +64,7 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `SITE_ROLE_EMAIL_MISMATCH` — 내부 사이트 역할 쓰기에서 호출자가 기대한 이메일(초대 주소)이 그 계정의 이메일이 아님 (403)
 - `SITE_ROLE_REQUIRES_POOL_ACCOUNT` — 사이트 자체 계정(풀 밖)에 사이트 역할을 쓰려 함 (409)
 - `SITE_MEMBERSHIP_REQUIRED` — 그 사이트 ACTIVE 멤버십이 없는 풀 계정에 사이트 역할을 쓰려 함 — 쓰기는 멤버십을 만들지 않는다 (409)
+- `EMAIL_NOT_VERIFIED` — 회사 권한이 붙는 쓰기(지금은 사이트 역할 쓰기)에 이메일 인증 안 된 풀 계정 — 로그인·소비자 이용에는 걸지 않는다 (403, ADR-MONO-080 D3)
 
 ### Admin Operations (admin-service 전용)
 
@@ -125,6 +126,8 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `TOKEN_EXPIRED_OR_INVALID` — 이메일 인증 토큰 만료·미존재·이미 소비됨 (400)
 - `EMAIL_ALREADY_VERIFIED` — 해당 계정의 이메일이 이미 인증된 상태 (409)
 - `RATE_LIMITED` — 이메일 재발송 rate limit 초과 (5분 내 1회). `RATE_LIMIT_EXCEEDED`(로그인 rate limit, gateway/auth-service)와 구분. (429)
+- `VERIFICATION_EMAIL_SEND_FAILED` — 인증 메일 일시 발송 실패 — 토큰 폐기 · 재발송 제한 해제, 바로 재시도 가능 (503)
+- `VERIFICATION_EMAIL_UNDELIVERABLE` — 메일 서버가 이 주소를 영구 거부 — 재시도 무의미 (422)
 
 ---
 

@@ -2,6 +2,8 @@ package com.example.account.application.service;
 
 import com.example.account.application.exception.AccountNotFoundException;
 import com.example.account.application.exception.EmailAlreadyVerifiedException;
+import com.example.account.application.exception.EmailDeliveryException;
+import com.example.account.application.exception.VerificationEmailSendFailedException;
 import com.example.account.application.exception.RateLimitedException;
 import com.example.account.application.port.ConsumerPoolFlag;
 import com.example.account.application.port.EmailVerificationNotifier;
@@ -172,20 +174,77 @@ class SendVerificationEmailUseCaseTest {
         verifyNoInteractions(notifier);
     }
 
+    /**
+     * TASK-MONO-770 — the old cell here asserted the opposite («발송 실패는 swallow»): the endpoint said 204 for a
+     * mail that never left. Now: the failure is the answer, the undelivered token is discarded and the slot given
+     * back so «다시 시도» works at once.
+     */
     @Test
-    @DisplayName("이메일 발송 실패는 swallow — 토큰은 이미 저장됨")
-    void execute_notifierFails_swallowsExceptionAfterTokenSaved() {
+    @DisplayName("TASK-MONO-770: 일시 발송 실패 → VerificationEmailSendFailed(TRANSIENT) · 그 토큰 삭제 · 재발송 슬롯 반환")
+    void execute_transientDeliveryFailure_answersAndUndoesIssuance() {
         given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID))
                 .willReturn(Optional.of(unverifiedAccount()));
         given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
                 .willReturn(true);
-        willThrow(new RuntimeException("smtp down"))
+        willThrow(new EmailDeliveryException(EmailDeliveryException.Kind.TRANSIENT, "not sent"))
                 .given(notifier).sendVerificationEmail(eq(EMAIL), anyString());
 
-        // Must not propagate.
+        assertThatThrownBy(() -> useCase.execute(ACCOUNT_ID))
+                .isInstanceOf(VerificationEmailSendFailedException.class)
+                .extracting(e -> ((VerificationEmailSendFailedException) e).getKind())
+                .isEqualTo(EmailDeliveryException.Kind.TRANSIENT);
+
+        ArgumentCaptor<String> saved = ArgumentCaptor.forClass(String.class);
+        verify(tokenStore).save(saved.capture(), anyString(), eq(ACCOUNT_ID), any(Duration.class));
+        verify(tokenStore).delete(saved.getValue());
+        verify(tokenStore).releaseResendSlot(ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: 영구 발송 실패 → VerificationEmailSendFailed(PERMANENT)")
+    void execute_permanentDeliveryFailure_answersPermanent() {
+        given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID))
+                .willReturn(Optional.of(unverifiedAccount()));
+        given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
+                .willReturn(true);
+        willThrow(new EmailDeliveryException(EmailDeliveryException.Kind.PERMANENT, "not sent"))
+                .given(notifier).sendVerificationEmail(eq(EMAIL), anyString());
+
+        assertThatThrownBy(() -> useCase.execute(ACCOUNT_ID))
+                .isInstanceOf(VerificationEmailSendFailedException.class)
+                .extracting(e -> ((VerificationEmailSendFailedException) e).getKind())
+                .isEqualTo(EmailDeliveryException.Kind.PERMANENT);
+        verify(tokenStore).releaseResendSlot(ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: 분류 안 된 실패(포트 계약 위반)는 판정 불가 = TRANSIENT — «포기하라» 고 말하지 않는다")
+    void execute_unclassifiedFailure_isTransient() {
+        given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID))
+                .willReturn(Optional.of(unverifiedAccount()));
+        given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
+                .willReturn(true);
+        willThrow(new IllegalStateException("smtp down"))
+                .given(notifier).sendVerificationEmail(eq(EMAIL), anyString());
+
+        assertThatThrownBy(() -> useCase.execute(ACCOUNT_ID))
+                .isInstanceOf(VerificationEmailSendFailedException.class)
+                .extracting(e -> ((VerificationEmailSendFailedException) e).getKind())
+                .isEqualTo(EmailDeliveryException.Kind.TRANSIENT);
+        verify(tokenStore).releaseResendSlot(ACCOUNT_ID);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: 발송 성공이면 토큰을 지우지도 슬롯을 돌려주지도 않는다 (대조군)")
+    void execute_success_keepsTokenAndSlot() {
+        given(accountRepository.findById(TenantId.FAN_PLATFORM, ACCOUNT_ID))
+                .willReturn(Optional.of(unverifiedAccount()));
+        given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class)))
+                .willReturn(true);
+
         useCase.execute(ACCOUNT_ID);
 
-        verify(tokenStore).save(anyString(), anyString(), eq(ACCOUNT_ID), any(Duration.class));
-        verify(notifier).sendVerificationEmail(eq(EMAIL), anyString());
+        verify(tokenStore, never()).delete(anyString());
+        verify(tokenStore, never()).releaseResendSlot(anyString());
     }
 }

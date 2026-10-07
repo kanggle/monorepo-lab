@@ -93,4 +93,15 @@ public class RedisEmailVerificationTokenStore implements EmailVerificationTokenS
             return true;
         }
     }
+
+    /** TASK-MONO-770 — best-effort, like the acquire side: a Redis failure leaves the marker to its TTL. */
+    @Override
+    public void releaseResendSlot(String accountId) {
+        try {
+            redisTemplate.delete(RATE_KEY_PREFIX + accountId);
+        } catch (DataAccessException e) {
+            log.warn("Resend rate-limit slot release failed (Redis unavailable); the marker expires with its "
+                    + "TTL for accountId={}: {}", accountId, e.getMessage());
+        }
+    }
 }

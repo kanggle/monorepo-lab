@@ -60,6 +60,51 @@ public interface AccountServicePort {
     void signup(String email, String password, String displayName, String tenantId);
 
     /**
+     * TASK-MONO-770 (ADR-MONO-080 D3) — asks account-service to send the verification mail of the signed-in
+     * account ({@code POST /api/accounts/signup/resend-verification-email} with {@code X-Account-Id} /
+     * {@code X-Tenant-Id}), on behalf of the IdP page {@code /email-verification}. Server-side, same reason as
+     * {@link #signup}: the IdP pages and {@code /api/accounts} are different origins.
+     *
+     * <p>Not retried: each call may send a mail. Never throws — every answer, including «could not ask», is an
+     * {@link EmailVerificationRequestOutcome} the page renders (auth-api.md § IdP 브라우저 화면 — 이메일 인증).
+     */
+    EmailVerificationRequestOutcome requestVerificationEmail(String accountId, String tenantId);
+
+    /** What the verification-mail request came back with (auth-api.md § /email-verification). */
+    enum EmailVerificationRequestOutcome {
+        /** 204 — the mail left. */
+        SENT,
+        /** 409 EMAIL_ALREADY_VERIFIED. */
+        ALREADY_VERIFIED,
+        /** 429 RATE_LIMITED — a mail was sent within the last five minutes. */
+        RATE_LIMITED,
+        /** 422 VERIFICATION_EMAIL_UNDELIVERABLE — the mail server refuses this address; retrying cannot help. */
+        UNDELIVERABLE,
+        /** 404 ACCOUNT_NOT_FOUND — e.g. a console operator session (no accounts row). */
+        NOT_APPLICABLE,
+        /** 503 VERIFICATION_EMAIL_SEND_FAILED, or anything that cannot be judged — retrying may help. */
+        SEND_FAILED
+    }
+
+    /**
+     * TASK-MONO-770 — consumes a verification token ({@code POST /api/accounts/signup/verify-email}, public: the
+     * token is the credential) on behalf of the IdP page {@code POST /verify-email}. Not retried, never throws.
+     */
+    EmailVerificationConfirmOutcome confirmEmailVerification(String token);
+
+    /** What the verification-link confirmation came back with (auth-api.md § /verify-email). */
+    enum EmailVerificationConfirmOutcome {
+        /** 200 — {@code email_verified_at} is now set. */
+        VERIFIED,
+        /** 400 TOKEN_EXPIRED_OR_INVALID / VALIDATION_ERROR. */
+        INVALID_OR_EXPIRED,
+        /** 409 EMAIL_ALREADY_VERIFIED. */
+        ALREADY_VERIFIED,
+        /** Anything else — the token was not consumed, the same link works again later. */
+        UNAVAILABLE
+    }
+
+    /**
      * Looks up an account's current status by id, without a tenant — account-service then
      * pins the lookup to {@code fan-platform} (the pre-BE-507 behaviour). Equivalent to
      * {@code getAccountStatus(accountId, null)}.

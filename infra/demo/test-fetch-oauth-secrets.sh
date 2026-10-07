@@ -43,6 +43,14 @@ case "$args" in
   *"--name /portfolio-demo/oauth/microsoft/"*)
     echo "An error occurred (AccessDeniedException) when calling the GetParameter operation: User is not authorized to perform: ssm:GetParameter" >&2
     exit 255 ;;
+  # TASK-MONO-770 — 데모 메일함 자격. FAKE_MAIL_MODE 로 네 갈래를 고른다.
+  *"--name /portfolio-demo/mailpit/ui-basicauth-users"*)
+    case "${FAKE_MAIL_MODE:-ok}" in
+      ok)      echo 'owner:$2y$05$FAKESECRETmailpitHASHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; exit 0 ;;
+      missing) echo "An error occurred (ParameterNotFound) when calling the GetParameter operation: ParameterNotFound" >&2; exit 254 ;;
+      denied)  echo "An error occurred (AccessDeniedException) when calling the GetParameter operation" >&2; exit 255 ;;
+      bad)     printf 'owner:FAKESECRET_two words\n'; exit 0 ;;
+    esac ;;
   *)
     echo "fake aws: unexpected invocation: $args" >&2
     exit 1 ;;
@@ -106,6 +114,33 @@ for secret in FAKE_SECRET_google_cid_9f2a FAKE_SECRET_google_sec_7b31 \
               FAKE_SECRET_naver_cid_4c10 FAKE_SECRET_naver_sec_8e55; do
   n="$(grep -c "$secret" "$OUT_FILE" || true)"
   assert_eq "출력에 '$secret' 없음" "$n" "0"
+done
+
+# ---------------------------------------------------------------------------
+# TASK-MONO-770 — 데모 메일함 자격. 위 첫 실행은 FAKE_MAIL_MODE 기본값(ok)이었다.
+# ---------------------------------------------------------------------------
+echo "[test] 메일함 자격 있음 → MAILPIT_UI_BASICAUTH_USERS · MAILPIT_UI_ENABLED=true"
+assert_eq "MAILPIT_UI_ENABLED" "${MAILPIT_UI_ENABLED:-}" "true"
+assert_eq "MAILPIT_UI_BASICAUTH_USERS" "${MAILPIT_UI_BASICAUTH_USERS:-}" \
+  'owner:$2y$05$FAKESECRETmailpitHASHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+n="$(grep -c 'FAKESECRETmailpit' "$OUT_FILE" || true)"
+assert_eq "🔴 출력에 메일함 자격 없음" "$n" "0"
+
+for mode in missing denied bad; do
+  unset MAILPIT_UI_ENABLED MAILPIT_UI_BASICAUTH_USERS
+  MODE_OUT="$(mktemp)"
+  export FAKE_MAIL_MODE="$mode"
+  fetch_oauth_secrets >"$MODE_OUT" 2>&1
+  echo "[test] 메일함 자격 $mode → 아무것도 export 하지 않는다(라우터 꺼짐 = fail-closed)"
+  assert_unset "MAILPIT_UI_ENABLED ($mode)" MAILPIT_UI_ENABLED
+  assert_unset "MAILPIT_UI_BASICAUTH_USERS ($mode)" MAILPIT_UI_BASICAUTH_USERS
+  warn="$(grep -c '^\[mail\]' "$MODE_OUT" || true)"
+  case "$mode" in
+    missing) assert_eq "메일함 경고 줄 수 ($mode — 조용히)" "$warn" "0" ;;
+    *)       assert_eq "메일함 경고 줄 수 ($mode — 한 줄)" "$warn" "1" ;;
+  esac
+  assert_eq "🔴 출력에 자격 없음 ($mode)" "$(grep -c 'FAKESECRET' "$MODE_OUT" || true)" "0"
+  rm -f "$MODE_OUT"
 done
 
 if [ "$FAIL" -eq 0 ]; then

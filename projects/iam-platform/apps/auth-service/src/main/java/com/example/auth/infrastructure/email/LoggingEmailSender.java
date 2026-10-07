@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.email;
 
 import com.example.auth.application.port.EmailSenderPort;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -36,11 +37,14 @@ import org.springframework.stereotype.Component;
  * <p>{@code @Profile("!prod")} is evaluated deterministically against the
  * active environment, so the stub is guaranteed to register in any non-prod
  * profile (including {@code e2e}, {@code dev}, {@code test}) and is
- * guaranteed to <strong>not</strong> register in {@code prod}. If a real SMTP
- * adapter is added later, it should be {@code @Profile("prod")} (or
- * unconditional and the stub left as-is) — the two profile predicates are
- * disjoint, so they cannot both be active and the application context will
- * always wire exactly one sender per environment.</p>
+ * guaranteed to <strong>not</strong> register in {@code prod}.</p>
+ *
+ * <h3>TASK-MONO-770 — and only while mail is off</h3>
+ *
+ * <p>The real adapter ({@link SmtpEmailSender}) is selected by {@code iam.mail.enabled=true}, not by a profile
+ * (the demo runs IAM under {@code e2e}, where a {@code @Profile("prod")} adapter would never run). This stub
+ * carries the complementary {@code iam.mail.enabled=false|absent} on top of {@code !prod}, so exactly one sender
+ * is wired everywhere except {@code prod} with mail off — where none is, and the context fails fast.</p>
  *
  * <h3>Failure-safety in prod</h3>
  *
@@ -60,6 +64,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @Profile("!prod")
+@ConditionalOnProperty(prefix = "iam.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LoggingEmailSender implements EmailSenderPort {
 
     @Override
@@ -68,7 +73,7 @@ public class LoggingEmailSender implements EmailSenderPort {
         // recipient address is emitted. Subject is logged without the token.
         log.info(
                 "[DEV STUB] Password reset email queued — to={}, subject={}",
-                maskedEmail(toEmail),
+                mask(toEmail),
                 "Password Reset Request"
         );
     }
@@ -83,8 +88,10 @@ public class LoggingEmailSender implements EmailSenderPort {
      * <p>Mirrors the masking helper in {@code account-service}'s
      * {@code LoggingEmailVerificationNotifier} (TASK-BE-236) so the dev-stub
      * log format is consistent across services.</p>
+     *
+     * <p>TASK-MONO-770: package-visible and static so {@link SmtpEmailSender} logs the same format.</p>
      */
-    private String maskedEmail(String email) {
+    static String mask(String email) {
         try {
             if (email == null) {
                 return "[masked]";

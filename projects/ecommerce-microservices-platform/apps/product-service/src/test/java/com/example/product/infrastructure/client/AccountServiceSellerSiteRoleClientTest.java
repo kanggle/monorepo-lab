@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.client;
 
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
+import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
 import com.example.product.domain.exception.SellerRoleServiceUnavailableException;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -75,6 +76,14 @@ class AccountServiceSellerSiteRoleClientTest {
         grantAnswers(403, "SITE_ROLE_EMAIL_MISMATCH");
         assertThatThrownBy(() -> client.grant("ecommerce", ACCOUNT, "member@example.com"))
                 .isInstanceOf(SellerInvitationEmailMismatchException.class);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-770: 403 EMAIL_NOT_VERIFIED → SellerInvitationEmailNotVerifiedException (503 으로 뭉개지 않는다)")
+    void grant_emailNotVerified() {
+        grantAnswers(403, "EMAIL_NOT_VERIFIED");
+        assertThatThrownBy(() -> client.grant("ecommerce", ACCOUNT, "member@example.com"))
+                .isInstanceOf(SellerInvitationEmailNotVerifiedException.class);
     }
 
     @Test
