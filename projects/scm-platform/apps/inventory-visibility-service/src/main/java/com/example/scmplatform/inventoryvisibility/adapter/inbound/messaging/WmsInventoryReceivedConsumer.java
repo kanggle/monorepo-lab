@@ -1,6 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.adapter.inbound.messaging;
 
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
+import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ReceivedLine;
 import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -71,16 +73,21 @@ public class WmsInventoryReceivedConsumer {
                 return;
             }
 
-            // Each line represents a separate SKU at the warehouse location
+            // Each line represents a separate SKU at the warehouse location. All lines of
+            // this event are passed in one call so dedupe (eventId) is checked/marked once
+            // per EVENT, not once per line (TASK-SCM-BE-061 — the previous per-line call
+            // re-passed the same eventId, so line 2+ read as a duplicate and were dropped).
+            List<ReceivedLine> receivedLines = new ArrayList<>(lines.size());
             for (Map<String, Object> line : lines) {
                 String skuId = WmsEnvelopeParser.getStringField(line, "skuId");
                 long qtyReceived = WmsEnvelopeParser.getLongField(line, "qtyReceived");
-
-                applicationService.applyInventoryReceived(
-                        warehouseId, skuId, qtyReceived, warehouseCode,
-                        envelope.eventId(), envelope.occurredAt(),
-                        projectionTenant.id(), TOPIC);
+                receivedLines.add(new ReceivedLine(skuId, qtyReceived));
             }
+
+            applicationService.applyInventoryReceived(
+                    warehouseId, receivedLines, warehouseCode,
+                    envelope.eventId(), envelope.occurredAt(),
+                    projectionTenant.id(), TOPIC);
 
             ack.acknowledge();
         } catch (WmsEnvelopeParser.InvalidEnvelopeException e) {

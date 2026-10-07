@@ -3,6 +3,7 @@ package com.example.scmplatform.inventoryvisibility.adapter.inbound.messaging;
 import com.example.scmplatform.inventoryvisibility.adapter.outbound.batch.StalenessDetectionScheduler;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService;
 import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ConfirmedLine;
+import com.example.scmplatform.inventoryvisibility.application.service.InventoryVisibilityApplicationService.ReceivedLine;
 import com.example.scmplatform.inventoryvisibility.config.ProjectionTenant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -56,7 +57,7 @@ class ProjectionTenantConsumersTest {
         new WmsInventoryReceivedConsumer(service, objectMapper, projectionTenant)
                 .consume(record("wms.inventory.received.v1", "inventory.received", payload), ack);
 
-        verify(service).applyInventoryReceived(eq("wh-1"), eq("sku-1"), eq(3L), isNull(),
+        verify(service).applyInventoryReceived(eq("wh-1"), eq(List.of(new ReceivedLine("sku-1", 3L))), isNull(),
                 any(UUID.class), any(Instant.class), eq(TENANT), anyString());
     }
 

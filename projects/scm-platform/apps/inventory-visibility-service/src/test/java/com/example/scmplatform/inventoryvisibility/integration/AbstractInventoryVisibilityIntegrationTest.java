@@ -237,6 +237,28 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
     protected String receivedEnvelope(UUID eventId, Instant occurredAt,
                                       String warehouseId, String skuId, long qtyReceived,
                                       String warehouseCode) {
+        return receivedEnvelope(eventId, occurredAt, warehouseId,
+                List.of(Map.entry(skuId, qtyReceived)), warehouseCode);
+    }
+
+    /**
+     * As {@link #receivedEnvelope(UUID, Instant, String, String, long)}, with multiple
+     * {@code (skuId, qtyReceived)} lines in one event (TASK-SCM-BE-061 — the multi-line
+     * shape the previous per-line dedupe silently dropped after line 1).
+     */
+    protected String receivedEnvelope(UUID eventId, Instant occurredAt,
+                                      String warehouseId, List<Map.Entry<String, Long>> lines) {
+        return receivedEnvelope(eventId, occurredAt, warehouseId, lines, null);
+    }
+
+    /**
+     * As {@link #receivedEnvelope(UUID, Instant, String, List)}, with the additive
+     * {@code warehouseCode} (ADR-MONO-050 D9 / TASK-SCM-BE-037). Pass {@code null} to omit
+     * the field entirely, mirroring an older wms producer.
+     */
+    protected String receivedEnvelope(UUID eventId, Instant occurredAt,
+                                      String warehouseId, List<Map.Entry<String, Long>> lines,
+                                      String warehouseCode) {
         Map<String, Object> env = baseEnvelope(eventId, "inventory.received",
                 occurredAt, "inventory", warehouseId);
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -244,10 +266,14 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
         if (warehouseCode != null) {
             payload.put("warehouseCode", warehouseCode);
         }
-        Map<String, Object> line = new LinkedHashMap<>();
-        line.put("skuId", skuId);
-        line.put("qtyReceived", qtyReceived);
-        payload.put("lines", List.of(line));
+        List<Map<String, Object>> payloadLines = new ArrayList<>();
+        for (Map.Entry<String, Long> line : lines) {
+            Map<String, Object> l = new LinkedHashMap<>();
+            l.put("skuId", line.getKey());
+            l.put("qtyReceived", line.getValue());
+            payloadLines.add(l);
+        }
+        payload.put("lines", payloadLines);
         env.put("payload", payload);
         return toJson(env);
     }
@@ -299,7 +325,12 @@ public abstract class AbstractInventoryVisibilityIntegrationTest {
         return env;
     }
 
-    private String toJson(Map<String, Object> env) {
+    /**
+     * Visible to subclasses — TASK-SCM-BE-061's malformed-line edge case builds a
+     * custom envelope map by hand (a line missing {@code skuId}) rather than going
+     * through one of the per-eventType builder overloads above.
+     */
+    protected String toJson(Map<String, Object> env) {
         try {
             return objectMapper.writeValueAsString(env);
         } catch (Exception e) {
