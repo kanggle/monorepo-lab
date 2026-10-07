@@ -8,7 +8,7 @@ TASK-MONO-769
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -105,3 +105,15 @@ monorepo
 - AC-4: `git diff origin/main -- docs/adr/ADR-MONO-080-workforce-on-the-consumer-pool.md` = **+36 / −4**. `−` 네 줄(머리말 · Decision 머리 · 갈래 절 마지막 줄 · 대조군 bullet)은 각각 `+` 줄 **앞부분에 글자 그대로** 남아 있다(문장 끝에 덧붙임) — 스크립트로 4/4 확인. D1~D8 · 갈래 표 · 라이더 표 본문 변경 0.
 - 가드: 스테이지 뒤 필수 3종(`check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift`).
 
+---
+
+## 닫기 기록 (2026-10-07 UTC) — 4차원
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4207` | `state=MERGED` · mergeCommit `e8ff3335c` |
+| (b) origin/main 조상 | 참 |
+| (c) 머지 시점 실패 체크 | 66 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-1 ~ AC-4 `[x]` — 동사(«적혀 있다» · «무변경») = PROPOSED 보강 문서로 닫힘 |
+
+- 후속: ADR-080 이 같은 날 **ACCEPTED — A · 직원연결 E1 · 테넌트생성 T1** (#4209, `f7e274ed1`). D9 = T1 의 구현은 `TASK-MONO-773`.

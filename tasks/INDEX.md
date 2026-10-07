@@ -221,13 +221,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-769-adr-080-d9-tenant-creation-entry.md` — **`ADR-MONO-080` PROPOSED 보강 — D9 테넌트 생성의 입구** (REVIEW, 2026-10-07 UTC · 소유자 대화). «조직 만들기»·«테넌트 등록» 통합(T1 콘솔 셸 안 «테넌트 생성» 하나, 추천) / T2 입구 둘 + 첫 관리자 초대 / T3 지금대로 — 정하지 않음. 실측: `/tenants` B2B 테넌트엔 `SUPER_ADMIN` 도 운영자를 못 앉힌다 · D6 셋째 줄 자기모순 · 두 번째 회사 입구 없음. 수락 형식 선택 `· 테넌트생성 <T1|T2|T3>`. 분석=Opus 5.5.
 - `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없었다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. master-service R__01/R__05 + outbound-service R__seed_dev_masterref.sql(WH-MAIN·ECOMMERCE-STORE·SKU 86종) 추가 + `seed-wms.sh` 읽기 검증(§0) — AC-3/4 는 재굽기 뒤 측정.
 - `TASK-MONO-766-demo-corp-has-no-seedable-account-for-operator-creation.md` — **데모에서 신규 운영자 생성을 끝까지 보여줄 수 없다** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 콘솔 `/operators` 생성 사전 게이트는 tenant `demo-corp` 에 이미 등록된 계정을 요구하는데 `account_db.accounts` 의 demo-corp 행이 0이었다(기존 운영자 둘은 `admin_operators` 에만 있음). 자가가입·엔터프라이즈 프로비저닝 API 둘 다 데모 호스트에서 도달 불가(AC-1) — account-service `R__07`/auth-service `R__03` Flyway dev-seed 로 "운영자 아님" 계정 1개 추가. 기존 운영자 행은 무변경(AC-3). AC-4 는 재굽기 뒤 측정.
 - `TASK-MONO-768-wms-has-no-stock-for-ecommerce-skus-at-wh-main.md` — **ecommerce 주문이 wms 출고 주문까지는 가지만 재고 예약에서 멈춘다** (REVIEW, 2026-10-07 UTC · 출처 `TASK-MONO-765` 잔여 격차). `WH-MAIN` 에 존·로케이션이 없고 ecommerce SKU 86종의 `inventory` 행이 0 → `PickingRequestedConsumer` 가 BACKORDERED. master 존·로케이션 + inbound/inventory/admin 미러(SKU id 를 outbound 와 일치 — `EcommerceSeedParityTest` 로 고정, Gradle 입력 선언까지 해야 물었다) + `seed-wms.sh` 1b) 실제 입고 API 로 **SKU 당 ASN 1장**(scm 이 다중 라인 received 의 첫 라인만 반영하는 결함을 피함 — 후속 필요) + 3) 재고 끝 검증. AC-2 = CI IT 판정 · AC-3/4 ⚪ 재굽기 창. 24차 재굽기 전 머지.
 
 
 ## done
+- ✅ `TASK-MONO-769-adr-080-d9-tenant-creation-entry.md` — **DONE 2026-10-07 UTC (4-dim verified)** — impl PR **#4207**, 스쿼시 **`e8ff3335c`** (머지 시점 실패 0/66). ADR-080 PROPOSED 에 D9(테넌트 생성의 입구) 보강 — 같은 날 ADR-080 ACCEPTED `A · 직원연결 E1 · 테넌트생성 T1`(#4209) 로 T1 확정, 구현은 `TASK-MONO-773`.
 - ✅ `TASK-MONO-767-next-font-google-fetch-fails-builds-intermittently.md` — **DONE 2026-10-07 UTC (4-dim verified)** — impl PR **#4201**, 스쿼시 **`f02660e1b`** (머지 시점 실패 0).
 - ✅ `TASK-MONO-746-draft-adr-080-workforce-on-the-consumer-pool.md` — **DONE 2026-10-07 UTC (4-dim verified)** — impl PR **#4205**, 스쿼시 **`5a6eb6a81`** (머지 시점 실패 0).
 - ✅ `TASK-MONO-764-demo-functional-checklist.md` — **DONE 2026-10-06 UTC (4-dim verified)** — 측정 티켓, 결과 PR **#4176** `bdca01274` · **#4178** `7346591f9` (머지 시점 실패 0). 데모 기능 점검표 23차 창 1·2회차: 흐름 16개 PASS 12 · 부분 2 · FAIL 1(ⓒ 765) · ⚪ 1(ⓒ 766). 창 안 수정 3건(FE-105 · PC-FE-308 · FAN-FE-031) · 기안 9건(#4175).
