@@ -1,5 +1,6 @@
 package com.example.erp.approval.infrastructure.masterdata;
 
+import com.example.erp.approval.application.port.outbound.EmployeeLookup;
 import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.domain.request.ApprovalSubject;
 import com.example.erp.approval.domain.request.SubjectType;
@@ -85,6 +86,13 @@ public class MasterDataRestAdapter implements MasterDataPort {
     static final String CAUSE_CLIENT_ERROR = "client_error";
     static final String CAUSE_UNREACHABLE = "unreachable";
 
+    /** Person lookups only: the propagated token is not the use case's caller (TASK-MONO-776). */
+    static final String CAUSE_SUBJECT_MISMATCH = "subject_mismatch";
+
+    /** {@code lookup} tag of {@code approval_person_resolve_failures_total} (TASK-MONO-776). */
+    static final String LOOKUP_ACTOR = "actor";
+    static final String LOOKUP_APPROVER = "approver";
+
     private final RestClient restClient;
     private final MeterRegistry meterRegistry;
 
@@ -100,7 +108,10 @@ public class MasterDataRestAdapter implements MasterDataPort {
         for (String cause : new String[]{CAUSE_NO_CREDENTIALS, CAUSE_TENANT_MISMATCH,
                 CAUSE_AUTH, CAUSE_CLIENT_ERROR, CAUSE_UNREACHABLE}) {
             resolveFailures(cause);
+            personResolveFailures(LOOKUP_ACTOR, cause);
+            personResolveFailures(LOOKUP_APPROVER, cause);
         }
+        personResolveFailures(LOOKUP_ACTOR, CAUSE_SUBJECT_MISMATCH);
     }
 
     @Override
@@ -149,6 +160,90 @@ public class MasterDataRestAdapter implements MasterDataPort {
         }
     }
 
+    // ====================================================================
+    // People (TASK-MONO-776 — approval-api.md § v2.4). Same propagation, same status
+    // classification, same «404 is an answer» rule as the subject check above — only the
+    // counter differs, because «we could not ask who the caller is» and «we could not ask
+    // whether the subject exists» are different incidents on a dashboard.
+    // ====================================================================
+
+    @Override
+    public EmployeeLookup callerEmployee(String callerSub, String tenantId) {
+        return lookupEmployee(LOOKUP_ACTOR, "/api/erp/masterdata/employees/me", "me",
+                callerSub, tenantId);
+    }
+
+    @Override
+    public EmployeeLookup approverRef(String employeeId, String tenantId) {
+        return lookupEmployee(LOOKUP_APPROVER,
+                "/api/erp/masterdata/employees/" + employeeId + "/approver-ref",
+                employeeId, null, tenantId);
+    }
+
+    private EmployeeLookup lookupEmployee(String lookup, String path, String logId,
+                                          String expectedSub, String tenantId) {
+        Jwt caller = currentCallerToken();
+        if (caller == null) {
+            return refusePerson(lookup, CAUSE_NO_CREDENTIALS, logId,
+                    "no bearer token on the SecurityContext");
+        }
+        String callerTenant = caller.getClaimAsString(CLAIM_TENANT_ID);
+        if (tenantId != null && !tenantId.equals(callerTenant)) {
+            return refusePerson(lookup, CAUSE_TENANT_MISMATCH, logId,
+                    "use-case tenant '" + tenantId + "' != propagated token tenant '"
+                            + callerTenant + "'");
+        }
+        // `/me` answers for whoever's token goes out. If that is not the use case's caller,
+        // the answer would be another person's employee — refuse rather than act as them.
+        if (expectedSub != null && !expectedSub.equals(caller.getSubject())) {
+            return refusePerson(lookup, CAUSE_SUBJECT_MISMATCH, logId,
+                    "use-case caller '" + expectedSub + "' != propagated token sub '"
+                            + caller.getSubject() + "'");
+        }
+        try {
+            PersonEnvelope envelope = restClient.get()
+                    .uri(path)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + caller.getTokenValue())
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError,
+                            (req, res) -> {
+                                throw new SubjectResolveHttpException(res.getStatusCode());
+                            })
+                    .body(PersonEnvelope.class);
+            if (envelope == null || envelope.data() == null || envelope.data().id() == null) {
+                // A 2xx without the documented body is a contract defect, not an answer.
+                return refusePerson(lookup, CAUSE_CLIENT_ERROR, logId, "2xx without data.id");
+            }
+            PersonData d = envelope.data();
+            return EmployeeLookup.found(d.id(), d.status(), d.accountId());
+        } catch (SubjectResolveHttpException e) {
+            if (e.status.value() == HttpStatus.NOT_FOUND.value()) {
+                // An ANSWER: no such employee / no employee linked to this account.
+                return EmployeeLookup.notFound();
+            }
+            return refusePerson(lookup, causeFor(e.status), logId,
+                    "masterdata returned " + e.status.value());
+        } catch (Exception e) {
+            return refusePerson(lookup, CAUSE_UNREACHABLE, logId, String.valueOf(e.getMessage()));
+        }
+    }
+
+    private EmployeeLookup refusePerson(String lookup, String cause, String id, String detail) {
+        personResolveFailures(lookup, cause).increment();
+        log.warn("masterdata person resolve failed lookup={} cause={} id={}: {}",
+                lookup, cause, id, detail);
+        return EmployeeLookup.unavailable();
+    }
+
+    private Counter personResolveFailures(String lookup, String cause) {
+        return Counter.builder("approval_person_resolve_failures_total")
+                .description("masterdata person lookups (caller's employee / approver-ref) that "
+                        + "got no answer. A 404 is an answer and is not counted here.")
+                .tag("lookup", lookup)
+                .tag("cause", cause)
+                .register(meterRegistry);
+    }
+
     /**
      * The caller's verified token, or {@code null} when nothing OAuth2-shaped is on the
      * context. {@code ActorAuthenticationToken} (ADR-MONO-058 § D1) extends
@@ -160,6 +255,9 @@ public class MasterDataRestAdapter implements MasterDataPort {
      * is currently the <strong>only</strong> outbound service-to-service caller in the
      * fleet that needs propagation. Promote when a <strong>second</strong> service needs
      * the same six lines — that count, not "it looks generic", is the trigger.
+     * 🔵 TASK-MONO-776: the trigger has fired — erp notification-service's
+     * {@code MasterDataCallerEmployeeAdapter} now carries the same lines. Promotion is a
+     * shared-library change and is a named follow-up, not part of that slice.
      */
     private static Jwt currentCallerToken() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -217,5 +315,14 @@ public class MasterDataRestAdapter implements MasterDataPort {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MasterData(String id, String status) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record PersonEnvelope(PersonData data) {
+    }
+
+    /** Both {@code /employees/me} (full detail) and {@code /approver-ref} carry these three. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record PersonData(String id, String status, String accountId) {
     }
 }

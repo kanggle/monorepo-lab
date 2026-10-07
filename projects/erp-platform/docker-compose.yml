@@ -288,6 +288,9 @@ services:
       KAFKA_BOOTSTRAP: kafka:9092
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://iam.local}
       JWT_JWKS_URI: ${JWT_JWKS_URI:-http://iam.local/oauth2/jwks}
+      # masterdata-service base URL for the inbox recipient predicate
+      # («the employee linked to my sub», GET /employees/me — TASK-MONO-776).
+      ERP_MASTERDATA_BASE_URL: ${ERP_MASTERDATA_BASE_URL:-http://masterdata-service:8080}
     depends_on:
       mysql:
         condition: service_healthy

@@ -114,7 +114,8 @@ class ActorContextAuthPathSliceTest {
         when(service.inbox(any(), anyInt(), anyInt())).thenAnswer(invocation -> {
             boundActor.set(invocation.getArgument(0));
             liveAuthentication.set(SecurityContextHolder.getContext().getAuthentication());
-            return new PageResult<>(List.of(), 0, 20, 0L, 0);
+            return new com.example.erp.approval.application.view.ApprovalInboxView(
+                    new PageResult<>(List.of(), 0, 20, 0L, 0), null);
         });
     }
 

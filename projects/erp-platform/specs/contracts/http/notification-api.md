@@ -44,9 +44,16 @@ All endpoints:
   > caller.sub`**, resolved via masterdata `GET /api/erp/masterdata/employees/me`
   > (caller-token propagation, `masterdata-api.md` § Employee ↔ IAM account link).
   > An unlinked caller sees an **empty** inbox (200, `totalElements = 0`) and every
-  > detail / mark-read is 404 — same existence-leak rule. No new error code. Rows
-  > stored before the approval-side v2.4 change carry account UUIDs as `recipient`;
-  > their handling is decided by the implementing slice (`TASK-MONO-774` § 분할 제안).
+  > detail / mark-read is 404 — same existence-leak rule. No new error code. If masterdata
+  > cannot be asked (401/403/5xx/timeout) the read answers **503 `SERVICE_UNAVAILABLE`**
+  > (platform-common) and counts `notification_recipient_resolve_failures_total{cause}` — never
+  > an empty inbox, which would read as «nothing for you» (TASK-MONO-776).
+  >
+  > **이전 데이터 (소유자 결정 2026-10-07 UTC, `TASK-MONO-776` AC-0: «그대로 두고 데모는
+  > 재시드»)** — approval 쪽 v2.4 구현 이전에 만들어진 알림은 `recipient` 에 **계정 UUID** 를
+  > 가질 수 있다(이전 approval 이 사람 칸에 `sub` 를 넣었으므로). 이전하지 않는다 — 새
+  > 술어로는 그 행이 **누구의 알림함에도 나오지 않는다**(상세 · 읽음 처리도 404). 데모는 신선
+  > 볼륨 재시드로 새 모델의 행만 갖는다.
 - Success envelope: `{ "data": <payload>, "meta": { "timestamp": "<ISO-8601>",
   ... } }`. List responses extend `meta` with `PageMeta` (ADR-MONO-058 § D3 —
   `com.example.common.page.PageResult` adoption added `totalPages`, additive).

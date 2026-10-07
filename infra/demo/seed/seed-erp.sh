@@ -18,8 +18,8 @@
 # 이 헤더는 오랫동안 *"결재함은 이 데모에서 채울 수 없다"* 였다. 네 가지가 맞물려
 # 있었고 하나씩 떨어져 나갔다:
 #
-#   1. 결재함은 `findInbox(tenantId, actorId)` — **호출자가 현재 단계 승인자인 건**만
-#      돌려준다. `actorId` = JWT `sub`. (그대로 — 결함이 아니라 명세다.)
+#   1. 결재함은 **호출자가 현재 단계 승인자인 건**만 돌려준다. 🔵 TASK-MONO-776 이후
+#      «호출자» = JWT `sub` 와 연결된 **직원**(아래 🔵 TASK-MONO-776 절).
 #   2. 라우트 검증이 **자기결재를 거부한다**(`ApprovalRoute.multiStage` →
 #      `SelfApprovalGuard`). 🔴 조회 필터가 아니라 **생성 시점 게이트**다 — 제출자와
 #      승인자가 같으면 결재함이 "비어 보이는" 게 아니라 **넣을 행이 안 만들어진다**.
@@ -48,10 +48,21 @@
 #   맞다: `RecipientResolver` 가 `APPROVAL_SUBMITTED → approverId` 이므로 인앱 알림도
 #   면접관이 쥔 계정으로 간다.
 #
-# 🔵 승인자에 **사원 마스터 id 를 쓰지 않는다** — 예전 방식이 그랬고, 그것이 정확히
-#    결재함이 0 이던 이유다(그 사원으로는 아무도 로그인할 수 없다). 초안 1건만 사원
-#    승인자를 유지한다: 프로덕션에서 실제로 일어나는 형태이고, 면접관이 그 초안을
-#    상신해도 **자기 결재함에 안 뜨는 것이 옳다**(만든 사람은 승인자가 될 수 없다).
+# 🔵 **TASK-MONO-776 (2026-10-07 UTC) — 승인자는 이제 사원 마스터 id 다. 편법을 걷었다.**
+#    예전에는 승인자 칸에 운영자 계정 UUID(`sub`)를 넣었다 — 결재함 술어가 `approver_id =
+#    JWT sub` 였고 그것이 결재함을 채우는 유일한 길이었다. 계약(approval-api.md § v2.4)은
+#    처음부터 «승인자 = 직원 id» 였고, 이제 코드도 그렇다: 결재함 = «내 `sub` 와 **연결된
+#    직원**이 현재 단계 승인자인 건», 상신 때 E3(살아 있는 직원) · 연결 없는 승인자는 422.
+#    ⇒ 시드는 §4b 에서 사원 ↔ 계정을 **실제 제안 → 수락 API** 로 잇고, §6 승인자에 그 사원을
+#    넣는다. 🔴 연결도 두 사람 규칙을 지킨다 — 같은 계정이 제안하고 수락하면 403 이고, 그
+#    실패는 «결재함 0» 으로만 보인다(티켓 Failure Scenario 4).
+#
+#      김본부(EMP-0001, 본사 부장)   ↔ demo@demo.com      — requester 토큰이 제안 · demo 토큰이 수락
+#      이운영(EMP-0002, 운영본부 대리) ↔ requester@demo.com — demo 토큰이 제안 · requester 토큰이 수락
+#
+#    초안 1건은 **연결 없는 사원(박재무)** 을 승인자로 남긴다 — 면접관이 그 초안을 상신하면
+#    422 `APPROVAL_APPROVER_UNLINKED` 를 본다(«결재함에 나타날 사람이 없는 결재는 상신 시점에
+#    거절» — 소유자 결정 2026-10-08). 프로덕션에서 실제로 일어나는 형태를 일부러 하나 둔다.
 #
 # 🔵 직접-DB 로 결재함을 채우지 않은 이유는 그대로다: 그러면 화면은 차지만 **버튼이
 #    동작하지 않는다**(승인이 401/403 이 아니라 "현재 단계가 아니다" 로 거절된다). 빈
@@ -297,6 +308,92 @@ emp EMP-0003 "박재무" FIN G2
 emp EMP-0004 "최사원" OPS G1
 
 # =============================================================================
+# 4b. 사원 ↔ IAM 계정 연결 (TASK-MONO-776 · masterdata-api.md § Employee ↔ IAM account link)
+#
+#    결재함 · 자기결재 · 위임 · 알림이 전부 «내 `sub` 와 연결된 직원» 으로 풀린다. 연결이
+#    없으면 §6 상신은 422(`APPROVAL_APPROVER_UNLINKED`) · 생성은 403(`APPROVAL_ACTOR_NOT_LINKED`)
+#    이다 — 그래서 §6 앞이다.
+#
+#    🔴 두 사람 규칙: 제안자 ≠ 수락자. 수락자는 **연결될 계정 자신**(JWT `sub` = accountId)
+#       이어야 하므로, 제안은 반드시 **다른** 토큰이 한다. 같은 토큰으로 제안 + 수락하는 배치는
+#       서버가 403 `EMPLOYEE_LINK_SELF_ACCEPT` 로 막고, 그 실패는 화면에서 «결재함 0» 으로만
+#       보인다 — 그래서 이 단계의 실패는 전부 `seed_fail` 이다.
+#    🔵 두 토큰 모두 같은 assume 경로(`operator_tenant_assignment` org_scope NULL = 테넌트 전체 ·
+#       ERP_OPERATOR)라 erp.write + 사원 부서 data scope 를 갖는다(TASK-MONO-776 AC-0 정적 실측 ·
+#       라이브 확인은 재굽기 창). 제안이 403 이면 그 가정이 깨진 것이다 — 메시지에 HTTP 를 싣는다.
+#    🔵 멱등: 이미 그 계정으로 연결돼 있으면 `존재`. 다른 계정으로 연결돼 있으면 실패(시드는 남의
+#       연결을 끊지 않는다). PENDING 제안이 남아 있으면(이전 실행이 수락 직전에 죽었다) 새로
+#       제안하지 않고 그 제안을 수락한다.
+# =============================================================================
+ensure_link() { # ensure_link <라벨> <사원 id> <계정 sub> <제안 토큰> <수락 토큰>
+  local label="$1" emp_id="$2" acc="$3" proposer="$4" accepter="$5"
+  [ -n "$emp_id" ] && [ -n "$acc" ] || { seed_fail "$label — 사원 id/계정 sub 가 비어 있습니다"; return 1; }
+  if [ "$proposer" = "$accepter" ]; then
+    seed_fail "$label — 제안 토큰과 수락 토큰이 같습니다(두 사람 규칙 위반 배치)"; return 1
+  fi
+  local linked=""
+  if http GET "$ERP/api/erp/masterdata/employees/$emp_id"; then
+    linked="$(field "$SEED_LAST_BODY" accountId)"
+  else
+    seed_fail "$label — 사원 조회 HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1
+  fi
+  if [ "$linked" = "$acc" ]; then
+    SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  $label"
+    return 0
+  fi
+  if [ -n "$linked" ]; then
+    seed_fail "$label — 사원이 이미 다른 계정($linked)에 연결돼 있습니다(기대 $acc). 시드는 남의 연결을 끊지 않습니다 — erp 볼륨 초기화 후 재시드"
+    return 1
+  fi
+  local pid="" pending=""
+  if with_token "$proposer" http GET "$ERP/api/erp/masterdata/employees/$emp_id/account-link-proposals?size=100"; then
+    pending="$(json_objects "$SEED_LAST_BODY" | grep -F "\"accountId\":\"$acc\"" | grep -F '"status":"PENDING"' | head -1)"
+    pid="$(field "$pending" id)"
+  fi
+  if [ -z "$pid" ]; then
+    if with_token "$proposer" http POST "$ERP/api/erp/masterdata/employees/$emp_id/account-link-proposals" \
+        "{\"accountId\":\"$acc\",\"reason\":\"데모 시드 — 결재함 연결\"}" -H "Idempotency-Key: $(uuid)"; then
+      pid="$(field "$SEED_LAST_BODY" id)"
+    else
+      seed_fail "$label 제안 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"; return 1
+    fi
+  fi
+  [ -n "$pid" ] || { seed_fail "$label — 제안 id 추출 0건"; return 1; }
+  if with_token "$accepter" http POST "$ERP/api/erp/masterdata/account-link-proposals/$pid/accept" \
+      '{}' -H "Idempotency-Key: $(uuid)"; then
+    SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  $label (제안 $pid → 수락)"
+    return 0
+  fi
+  seed_fail "$label 수락 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
+  return 1
+}
+APPROVER_EMP="${EMP[EMP-0001]:-}"   # 김본부 ↔ demo@ (승인자 — 면접관이 로그인하는 계정)
+SUBMITTER_EMP="${EMP[EMP-0002]:-}"  # 이운영 ↔ requester@ (상신자)
+ensure_link "연결 김본부 ↔ demo@"      "$APPROVER_EMP"  "$APPROVER_SUB"  "$REQUESTER_TOKEN" "$SEED_TOKEN"
+ensure_link "연결 이운영 ↔ requester@" "$SUBMITTER_EMP" "$REQUESTER_SUB" "$SEED_TOKEN"      "$REQUESTER_TOKEN"
+
+# 읽기 검증 — 연결이 «썼다» 가 아니라 «읽힌다» 를 잰다. 결재·알림이 실제로 부르는 그
+# 엔드포인트(`/employees/me`)를 두 토큰으로 부른다. 🔴 추출 0건은 «연결 없음» 이 아니라
+# **계측 실패**다(§9 와 같은 규율) — 404 와 추출 실패를 다른 문장으로 낸다.
+verify_me() { # verify_me <라벨> <토큰> <기대 사원 id>
+  local label="$1" tok="$2" want="$3" got=""
+  if with_token "$tok" http GET "$ERP/api/erp/masterdata/employees/me"; then
+    got="$(field "$SEED_LAST_BODY" id)"
+    if [ -z "$got" ]; then
+      seed_fail "$label /me — 200 인데 id 추출 0건(계측 실패) ${SEED_LAST_BODY:0:200}"
+    elif [ "$got" != "$want" ]; then
+      seed_fail "$label /me — '$got' (기대 '$want')"
+    else
+      seed_log "확인  $label /me = $got"
+    fi
+  else
+    seed_fail "$label /me — HTTP $SEED_LAST_STATUS (404 = 연결이 없다) ${SEED_LAST_BODY:0:200}"
+  fi
+}
+verify_me "승인자 demo@"      "$SEED_TOKEN"      "$APPROVER_EMP"
+verify_me "상신자 requester@" "$REQUESTER_TOKEN" "$SUBMITTER_EMP"
+
+# =============================================================================
 # 5. 거래처 — partnerType/paymentTerms.method 는 enum 이다(코드가 권위):
 #    PartnerType = CUSTOMER|SUPPLIER|BOTH,
 #    PaymentMethod = BANK_TRANSFER|CREDIT_CARD|CASH|CHECK.
@@ -313,10 +410,9 @@ ensure_master "거래처 겸업사"     /api/erp/masterdata/business-partners co
 # 6. 결재 요청 — 제목으로 탐지한다(자연키 없음).
 #
 #    subjectId 는 **실재하는 마스터**여야 한다(submit 시 `MasterDataPort` 가 해소한다).
-#    approverId 는 **참조 검증을 받지 않는다** — 실측: `ApprovalApplicationService.submit`
-#    은 `masterDataPort.isSubjectActive(subject, …)` 만 부르고 승인자는 안 본다. 그래서
-#    승인자에 계정 UUID(콘솔 로그인의 `sub`)를 넣을 수 있고, 그것이 결재함을 채우는
-#    유일한 방법이다(결재함 술어가 `approver_id = JWT sub` 이므로).
+#    approverId 는 **연결된 사원 id** 다(TASK-MONO-776) — 상신 때 E3 가 «살아 있고 계정이
+#    연결된 사원» 을 집행한다. 🔵 예전의 편법(승인자 = 운영자 계정 UUID)은 걷었다: 그 값은
+#    이제 E3 에서 `approver_unresolved` 로 거절된다.
 #
 #    🔵 상태를 셋 만든다 — DRAFT 1 · SUBMITTED 2. 목록 화면이 상태 필터를 가지므로
 #       한 가지 상태만 넣으면 필터가 아무것도 증명하지 못한다.
@@ -332,13 +428,16 @@ ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> 
   fi
 
   # 🔴 이미 있는 행의 승인자가 **기대와 다르면 실패로 센다.**
+  # 🔵 TASK-MONO-776: 이번에는 반대 방향이다 — 776 이전 시드는 승인자에 **계정 UUID** 를
+  # 넣었다. 그 볼륨의 행은 새 결재함 술어로 아무에게도 안 보이고(소유자 결정 «그대로 둔다»),
+  # 승인자 변경 API 가 없으므로 볼륨 초기화가 유일한 복구다. 아래 설명(519 시절)도 같은 구조다.
   # TASK-MONO-519 이전 시드는 승인자에 사원 마스터 id 를 넣었다. 그 시절에 만들어진
   # 데모 DB 에 이 시드를 다시 돌리면 제목 탐지가 그 행을 찾아 `존재` 로 세고 조용히
   # 넘어가는데, 결재함은 여전히 **0** 이다 — "생성 0 · 기존 N · 실패 0" 이라는 완벽한
   # 요약과 함께. 결재 요청에는 승인자 변경 API 가 없으므로 여기서 고칠 수도 없다.
   # 그래서 **선언한다**: 볼륨을 지우고 다시 심어야 한다고. 조용한 성공보다 낫다.
   if [ -n "$id" ] && [ -n "$had_approver" ] && [ "$had_approver" != "$approver" ]; then
-    seed_fail "$label — 기존 행의 승인자가 '$had_approver' 입니다(기대 '$approver'). TASK-MONO-519 이전에 심긴 데이터입니다 — 승인자 변경 API 가 없으므로 erp DB 볼륨을 초기화한 뒤 다시 심으십시오"
+    seed_fail "$label — 기존 행의 승인자가 '$had_approver' 입니다(기대 '$approver'). 이전 시드 모델(TASK-MONO-519 이전 사원 id / TASK-MONO-776 이전 계정 UUID)로 심긴 데이터입니다 — 승인자 변경 API 가 없으므로 erp DB 볼륨을 초기화한 뒤 다시 심으십시오"
     return 1
   fi
   if [ -z "$id" ]; then
@@ -373,24 +472,27 @@ ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> 
   return 0
 }
 
-# 🔴 앞의 두 건은 **상신자 토큰으로** 만들고 상신한다. 승인자는 면접관이 로그인하는
-#    계정의 `sub` 다 ⇒ `/erp/approval` 결재함에 그대로 뜬다. 만드는 쪽이 상신자여야
-#    한다는 것이 핵심이다: 라우트는 **생성 시점**에 고정되고 자기결재 검사도 그때
-#    돈다(`ApprovalRoute.multiStage`) — 상신만 남의 토큰으로 해도 소용없다.
+# 🔴 앞의 두 건은 **상신자 토큰으로** 만들고 상신한다(상신자 = 이운영). 승인자는 면접관이
+#    로그인하는 계정과 **연결된 사원**(김본부) ⇒ `/erp/approval` 결재함에 그대로 뜬다. 만드는
+#    쪽이 상신자여야 한다는 것이 핵심이다: 라우트는 **생성 시점**에 고정되고 자기결재 검사도
+#    그때 돈다(`ApprovalRoute.multiStage`, 직원 id 끼리) — 상신만 남의 토큰으로 해도 소용없다.
 with_token "$REQUESTER_TOKEN" \
   ensure_request "결재 운영본부 개편" "운영본부 조직 개편 승인 요청" \
-    DEPARTMENT "${DEPT[OPS]:-}" "$APPROVER_SUB" submit
+    DEPARTMENT "${DEPT[OPS]:-}" "$APPROVER_EMP" submit
 with_token "$REQUESTER_TOKEN" \
   ensure_request "결재 사원 배치"     "최사원 부서 배치 승인 요청" \
-    EMPLOYEE   "${EMP[EMP-0004]:-}" "$APPROVER_SUB" submit
+    EMPLOYEE   "${EMP[EMP-0004]:-}" "$APPROVER_EMP" submit
 
-# 🔵 초안은 **운영자 자신이** 만들고 승인자는 사원 마스터 id 로 남긴다 — 위 헤더의
-#    이유(프로덕션 형태 보존 + 면접관이 상신해도 자기 결재함에 안 뜨는 것이 옳다).
+# 🔵 초안은 **운영자 자신이**(김본부로) 만들고 승인자는 **연결 없는 사원**(박재무)으로 남긴다 —
+#    면접관이 상신하면 422 `APPROVAL_APPROVER_UNLINKED` 가 정상이다(위 헤더 🔵 TASK-MONO-776).
 ensure_request "결재 재무팀 초안"   "재무팀 예산 코드 신설 (초안)" \
   DEPARTMENT "${DEPT[FIN]:-}" "${EMP[EMP-0003]:-}" draft
 
 # =============================================================================
-# 7. 위임 — 위임자는 호출자(`sub`)이고 바디에 없다. 피위임자는 사원 id.
+# 7. 위임 — 위임자는 **호출자와 연결된 사원**(demo@ → 김본부)이고 바디에 없다. 피위임자는
+#    **연결된 사원**(이운영 ↔ requester@; ACTIVE 사원이어야 한다 — TASK-MONO-776).
+#    🔵 이운영은 §6 두 건의 상신자이기도 하다 — 그 두 건을 대결로 승인하려 하면 SoD 로 거절되는
+#    것이 정상이다(피위임자 = 상신자, 직원 id 끼리 비교).
 #    validFrom/validTo 는 **고정 리터럴**이다 — 현재시각 기준이면 2회차 실행이 다른
 #    창을 만들어 멱등이 깨진다(README 규약).
 # =============================================================================
@@ -415,7 +517,7 @@ ensure_delegation() { # ensure_delegation <라벨> <피위임자 id>
   seed_fail "$label — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:200}"
   return 1
 }
-ensure_delegation "위임 이운영에게 전결" "${EMP[EMP-0002]:-}"
+ensure_delegation "위임 이운영에게 전결" "$SUBMITTER_EMP"
 
 # =============================================================================
 # 8. 프로젝션 대기 (AC-3) — `/erp/orgview` 는 read-model-service 를 읽는다.
@@ -467,22 +569,30 @@ fi
 # 🔴 원소 수는 **BFF/API 로** 잰다. 콘솔 `/erp/approval` 은 클라이언트 렌더라 SSR HTML
 #    grep 은 구조적으로 0건이고, 그 0 은 "비어 있다" 와 구별되지 않는다.
 # =============================================================================
+# 🔵 TASK-MONO-776: «승인자가 나» = 승인자가 **나와 연결된 사원**(APPROVER_EMP). 결재함 응답의
+#    `meta.actorEmployeeId` 도 그 사원이어야 한다 — «연결이 결재함까지 닿았다» 의 증거다.
 inbox_expected=""
 if http GET "$ERP/api/erp/approval/requests?size=100"; then
   inbox_expected="$(json_objects "$SEED_LAST_BODY" \
-    | grep -F "\"approverId\":\"$APPROVER_SUB\"" \
+    | grep -F "\"approverId\":\"$APPROVER_EMP\"" \
     | grep -cE '"status":"(SUBMITTED|IN_REVIEW)"' || true)"
 fi
-inbox_actual=""
+inbox_actual=""; inbox_me=""
 if http GET "$ERP/api/erp/approval/inbox?size=100"; then
   inbox_actual="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+  inbox_me="$(field "$SEED_LAST_BODY" actorEmployeeId)"
+fi
+if [ "${inbox_me:-}" != "$APPROVER_EMP" ]; then
+  # ABSENT = 결재함 쪽에서 demo@ 가 «연결 없음» 으로 보인다. §4b `/me` 가 통과했는데 여기서
+  # 깨지면 approval-service 의 호출자 해소가 masterdata 와 다른 답을 듣고 있다.
+  seed_fail "결재함 meta.actorEmployeeId '${inbox_me:-<ABSENT>}' (기대 '$APPROVER_EMP') — demo@ 가 결재함에서 연결된 사원으로 풀리지 않습니다"
 fi
 
 if [ -z "$inbox_expected" ] || [ -z "$inbox_actual" ]; then
   # 🔴 추출 0건은 "0 건" 이 아니라 **계측 실패**다. 같은 값으로 접으면 결함이 초록이 된다.
   seed_fail "결재함 판정 불가 — 기대치 '${inbox_expected:-<추출 실패>}' · 실측 '${inbox_actual:-<추출 실패>}' (마지막 HTTP $SEED_LAST_STATUS)"
 elif [ "$inbox_expected" != "$inbox_actual" ]; then
-  seed_fail "결재함 원소 수 $inbox_actual — 승인자 sub=$APPROVER_SUB 로 대기 중인 행은 $inbox_expected 건입니다. 결재함 술어(approver_id = JWT sub)가 어긋났습니다"
+  seed_fail "결재함 원소 수 $inbox_actual — 승인자 사원=$APPROVER_EMP 로 대기 중인 행은 $inbox_expected 건입니다. 결재함 술어(approver_id = 내 sub 와 연결된 사원)가 어긋났습니다"
 elif [ "$inbox_actual" = "0" ] && [ "$SEED_FAILURES" -gt 0 ]; then
   # 🔴 등식은 성립하지만 **원인을 여기서 진단하지 않는다.** 앞 단계가 이미 실패했으면
   #    0 은 그 실패의 결과이지 별개의 사실이 아니다. 실측(2026-08-12): 레거시 승인자
@@ -494,7 +604,7 @@ elif [ "$inbox_actual" = "0" ]; then
   # 상태다. 즉 데모를 한 번 돌린 DB.
   seed_log "결재함 0건 (대기 행도 0) — 시드 결재가 이미 처리된 DB 입니다. 다시 보려면 볼륨 초기화 후 재시드"
 else
-  seed_log "결재함 $inbox_actual 건 = 대기 행 $inbox_expected 건 (승인자 sub=$APPROVER_SUB) — 상신 → 승인 루프가 닫혀 있습니다"
+  seed_log "결재함 $inbox_actual 건 = 대기 행 $inbox_expected 건 (승인자 사원=$APPROVER_EMP ↔ sub=$APPROVER_SUB) — 상신 → 승인 루프가 닫혀 있습니다"
 fi
 
 # =============================================================================

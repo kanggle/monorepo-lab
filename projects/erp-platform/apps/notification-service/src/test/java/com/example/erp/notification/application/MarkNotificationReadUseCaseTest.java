@@ -1,5 +1,7 @@
 package com.example.erp.notification.application;
 
+import com.example.erp.notification.application.port.outbound.CallerEmployeePort;
+import com.example.erp.notification.application.port.outbound.CallerEmployeePort.CallerEmployee;
 import com.example.erp.notification.application.port.outbound.ClockPort;
 import com.example.erp.notification.application.port.outbound.NotificationMetricsPort;
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
@@ -7,6 +9,7 @@ import com.example.erp.notification.domain.notification.Notification;
 import com.example.erp.notification.domain.notification.NotificationType;
 import com.example.erp.notification.domain.notification.SourceRef;
 import com.example.erp.notification.domain.notification.repository.NotificationRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,7 +36,14 @@ class MarkNotificationReadUseCaseTest {
     @Mock NotificationRepository repository;
     @Mock ClockPort clock;
     @Mock NotificationMetricsPort metrics;
+    @Mock CallerEmployeePort callerEmployee;
     @InjectMocks MarkNotificationReadUseCase useCase;
+
+    /** TASK-MONO-776: account "acc-1" is linked to the recipient employee "emp-1". */
+    @BeforeEach
+    void linked() {
+        lenient().when(callerEmployee.resolve("acc-1", "erp")).thenReturn(CallerEmployee.linked("emp-1"));
+    }
 
     private final Instant created = Instant.parse("2026-06-05T10:00:00Z");
     private final Instant markAt = Instant.parse("2026-06-05T11:00:00Z");
@@ -48,7 +59,7 @@ class MarkNotificationReadUseCaseTest {
         when(repository.findByIdForRecipient("erp", "ntf-1", "emp-1")).thenReturn(Optional.of(n));
         when(clock.now()).thenReturn(markAt);
 
-        Notification result = useCase.markRead("erp", "emp-1", "ntf-1");
+        Notification result = useCase.markRead("erp", "acc-1", "ntf-1");
         assertThat(result.read()).isTrue();
         assertThat(result.readAt()).contains(markAt);
         verify(repository, times(1)).save(n);
@@ -60,7 +71,7 @@ class MarkNotificationReadUseCaseTest {
         n.markRead(markAt); // already read
         when(repository.findByIdForRecipient("erp", "ntf-1", "emp-1")).thenReturn(Optional.of(n));
 
-        Notification result = useCase.markRead("erp", "emp-1", "ntf-1");
+        Notification result = useCase.markRead("erp", "acc-1", "ntf-1");
         assertThat(result.readAt()).contains(markAt);
         // Already-read → no second persist (clock not consulted, readAt preserved).
         verify(repository, never()).save(n);
@@ -69,7 +80,15 @@ class MarkNotificationReadUseCaseTest {
     @Test
     void foreignRecipientIsNotFound() {
         when(repository.findByIdForRecipient("erp", "ntf-9", "emp-1")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> useCase.markRead("erp", "emp-1", "ntf-9"))
+        assertThatThrownBy(() -> useCase.markRead("erp", "acc-1", "ntf-9"))
                 .isInstanceOf(NotificationNotFoundException.class);
+    }
+
+    @Test
+    void unlinkedCallerIsNotFoundTask776() {
+        when(callerEmployee.resolve("acc-x", "erp")).thenReturn(CallerEmployee.notLinked());
+        assertThatThrownBy(() -> useCase.markRead("erp", "acc-x", "ntf-1"))
+                .isInstanceOf(NotificationNotFoundException.class);
+        verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

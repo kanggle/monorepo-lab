@@ -35,4 +35,26 @@ public interface MasterDataPort {
      *         that was TASK-ERP-BE-041.
      */
     boolean isSubjectActive(ApprovalSubject subject, String tenantId);
+
+    /**
+     * The employee linked to the caller's own {@code sub} — masterdata
+     * {@code GET /api/erp/masterdata/employees/me} with the caller's token propagated
+     * (TASK-MONO-776, approval-api.md § v2.4 «호출자의 직원»). {@code NOT_FOUND} = the caller's
+     * account is linked to no employee in this tenant (an answer, not a failure). A
+     * {@code RETIRED} employee is returned as FOUND — the use case decides.
+     *
+     * @param callerSub the use case's caller ({@code ActorContext.actorId()}). Like
+     *                  {@code tenantId}, a consistency input: the adapter refuses the call when
+     *                  it differs from the propagated token's {@code sub}, so «whose employee did
+     *                  we look up» can never silently be someone else's.
+     */
+    EmployeeLookup callerEmployee(String callerSub, String tenantId);
+
+    /**
+     * Approval-line resolution view of an employee — masterdata
+     * {@code GET /api/erp/masterdata/employees/{id}/approver-ref} (no department data scope:
+     * an approver normally sits outside the submitter's scope). Used for the submit-time E3
+     * check of every stage approver and for the {@code delegateId} check.
+     */
+    EmployeeLookup approverRef(String employeeId, String tenantId);
 }

@@ -117,7 +117,14 @@ source of record (`masterdata-service`).
 > after `revoked` never reverts) + **out-of-order tolerant** (a `revoked` before
 > any `delegated` upserts a REVOKED row with the validity window ABSENT — no
 > fabrication, E5). The list is org_scope-subtree-filtered on the **delegator's**
-> department (TASK-ERP-BE-008 read-filter parity). **Still no re-emission / no
+> department (TASK-ERP-BE-008 read-filter parity) — the `delegatorId` is resolved through
+> `employee_proj`, so it must be an **employee id**. 🔵 TASK-MONO-776: until approval-service
+> stored employee ids (approval-api.md § v2.4) it carried the creator's JWT `sub`, which no
+> `employee_proj` row matches, so every grant was invisible under a bounded scope; no
+> read-model code changed — the IT `ac7_…` pins both the old (`sub` → 404) and the new
+> (employee id → in-scope 200 / out-of-scope 404) case. Grants projected before that change
+> keep their `sub` delegator and stay invisible under a bounded scope (owner decision «그대로
+> 둔다», 2026-10-07 UTC). **Still no re-emission / no
 > write-back / no publish (E5 terminal).** Spec: this amendment +
 > `read-model-subscriptions.md` (delegation topics) + `read-model-api.md`
 > (delegation-fact endpoints) + `erp-approval-events.md` § v2.2 (the revoke

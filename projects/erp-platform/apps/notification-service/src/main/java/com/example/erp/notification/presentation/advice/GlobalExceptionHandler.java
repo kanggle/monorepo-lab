@@ -1,6 +1,7 @@
 package com.example.erp.notification.presentation.advice;
 
 import com.example.erp.notification.domain.error.NotificationNotFoundException;
+import com.example.erp.notification.domain.error.RecipientResolveUnavailableException;
 import com.example.erp.notification.presentation.security.ReadAccessDeniedException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
@@ -43,6 +44,17 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNotFound(NotificationNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(NotificationNotFoundException.CODE, e.getMessage()));
+    }
+
+    /**
+     * TASK-MONO-776 — masterdata could not say which employee the caller is. 503, never an
+     * empty inbox (that would read as «nothing for you»). Platform-common code.
+     */
+    @ExceptionHandler(RecipientResolveUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleRecipientUnavailable(
+            RecipientResolveUnavailableException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of(RecipientResolveUnavailableException.CODE, e.getMessage()));
     }
 
     @ExceptionHandler(ReadAccessDeniedException.class)

@@ -200,7 +200,9 @@ realisation. It MUST:
   transaction** as the `Notification` insert + the `processed_events` dedupe
   write (T2 single-aggregate atomic boundary, A7 atomicity).
 - **Serve a read-only in-app inbox** (`rest-api`): the current recipient
-  (employee id = JWT `sub`) lists their own notifications and marks one read
+  (= the employee linked to the caller's JWT `sub` — notification-api.md § v1.1,
+  TASK-MONO-776; masterdata `GET /employees/me`, caller-token propagation) lists their own
+  notifications and marks one read
   (idempotent set). A caller sees / marks **only their own** notifications
   (recipient == caller; § Security inbox scoping).
 - **Record dispatch + read traceability** (E8 / I6 + A2/A3/A7): every
@@ -336,7 +338,8 @@ com.example.erp.notification/
 │   │   ├── ServiceLevelOAuth2Config.java
 │   │   ├── AllowedIssuersValidator.java
 │   │   ├── TenantClaimValidator.java       ← decode-time entitlement-trust dual-accept
-│   │   └── ActorContextResolver.java       ← JWT sub → recipient (employee id)
+│   │   └── ActorContextResolver.java       ← JWT sub (an IAM account, NOT the recipient)
+│   ├── masterdata/MasterDataCallerEmployeeAdapter.java ← sub → linked employee (= recipient), GET /employees/me — TASK-MONO-776
 │   ├── messaging/                          ← @KafkaListener consumers (4 transition + 1 delegated) + @RetryableTopic + manual ACK
 │   └── config/ (KafkaConsumerConfig, JpaConfig, ClockConfig)
 └── presentation/                           ← inbound web adapter (inbox, read-only + mark-read)
@@ -400,7 +403,9 @@ com.example.erp.notification/
   **same** `@Transactional` boundary (T2 / A7 atomicity — no "delivered but not
   deduped" and no "deduped but not delivered").
 - The inbox controller MUST scope every query / mark-read to the caller's own
-  recipient id (recipient == JWT `sub`); cross-recipient access is structurally
+  recipient id (recipient == the employee linked to JWT `sub` — § v1.1, TASK-MONO-776;
+  unlinked → empty inbox / 404; masterdata unreachable → 503 `SERVICE_UNAVAILABLE` +
+  `notification_recipient_resolve_failures_total{cause}`); cross-recipient access is structurally
   impossible (§ Security inbox scoping).
 
 ---
@@ -504,7 +509,8 @@ no compensation (single-step).
 ## REST endpoints (v1.0 — in-app inbox, read-only + mark-read)
 
 All under `/api/erp/notifications/**`. The current recipient's employee id is the
-JWT `sub`. Every business endpoint requires a JWT satisfying the entitlement-trust
+employee linked to the JWT `sub` (notification-api.md § v1.1 — TASK-MONO-776; it used to be
+read as the `sub` itself, an IAM account UUID that never equals an employee id). Every business endpoint requires a JWT satisfying the entitlement-trust
 dual-accept gate (`tenant_id ∈ {erp, *}` ∪ signed `entitled_domains ∋ erp`,
 § Multi-tenancy) **and** the READ authorization gate (`erp.read` scope ∨
 `isOperator()` ∨ entitled — mirrors the masterdata / read-model READ gate so the
@@ -515,7 +521,7 @@ response shapes live in
 
 | Method | Path | Public/Internal | Controller | Purpose |
 |---|---|---|---|---|
-| GET | `/api/erp/notifications` | internal | `NotificationInboxController#list` | current recipient's inbox (paginated; `?unread=&page=&size=`) — recipient-scoped to JWT `sub` |
+| GET | `/api/erp/notifications` | internal | `NotificationInboxController#list` | current recipient's inbox (paginated; `?unread=&page=&size=`) — recipient-scoped to the employee linked to JWT `sub` (§ v1.1) |
 | POST | `/api/erp/notifications/{id}/read` | internal | `NotificationInboxController#markRead` | mark one notification read — **idempotent set** (already-read → no-op 200); 404 `MASTERDATA_NOT_FOUND`-analog `NOTIFICATION_NOT_FOUND` when the id is not the caller's own |
 
 There is **no** notification-creating REST endpoint (notifications are created

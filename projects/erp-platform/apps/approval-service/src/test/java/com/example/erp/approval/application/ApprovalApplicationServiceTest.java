@@ -7,6 +7,7 @@ import com.example.erp.approval.application.command.Commands.SubmitCommand;
 import com.example.erp.approval.application.event.ApprovalEventPublisher;
 import com.example.erp.approval.application.port.outbound.AuthorizationPort;
 import com.example.erp.approval.application.port.outbound.ClockPort;
+import com.example.erp.approval.application.port.outbound.EmployeeLookup;
 import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.domain.audit.ApprovalAuditLog;
 import com.example.erp.approval.domain.audit.ApprovalAuditLogRepository;
@@ -43,6 +44,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -99,6 +101,13 @@ class ApprovalApplicationServiceTest {
                 .thenReturn(List.of());
         lenient().when(requestRepository.saveStages(any()))
                 .thenAnswer(i -> i.getArgument(0));
+        // TASK-MONO-776: these pre-776 tests run on the identity convention — sub "emp-x" is
+        // linked to the ACTIVE employee "emp-x", every approver is ACTIVE and linked. The id
+        // space itself is pinned by PersonIdSpaceTest with DISTINCT account/employee ids.
+        lenient().when(masterDataPort.callerEmployee(anyString(), anyString()))
+                .thenAnswer(i -> EmployeeLookup.found(i.getArgument(0), "ACTIVE", i.getArgument(0)));
+        lenient().when(masterDataPort.approverRef(anyString(), anyString()))
+                .thenAnswer(i -> EmployeeLookup.found(i.getArgument(0), "ACTIVE", i.getArgument(0)));
     }
 
     private ApprovalRequest draftFor(String submitter, String approver) {
@@ -182,6 +191,7 @@ class ApprovalApplicationServiceTest {
         when(requestRepository.findById("appr-1", TENANT)).thenReturn(Optional.of(draft));
         when(masterDataPort.isSubjectActive(any(ApprovalSubject.class), eqTenant()))
                 .thenReturn(true);
+        stubRoute("emp-sub", List.of("emp-app"));
 
         var view = service.submit(new SubmitCommand(SUBMITTER, "appr-1"));
 

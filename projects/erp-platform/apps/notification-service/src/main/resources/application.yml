@@ -108,6 +108,13 @@ erpplatform:
   # scheduler bean is absent (retry.enabled=false) → v1 IN_APP-only behaviour.
   # mode=slack swaps the no-op stub for the real SlackWebhookChannelAdapter.
   notification:
+    # TASK-MONO-776 (notification-api.md § v1.1): the inbox predicate is «recipient ==
+    # the employee linked to my sub», resolved via masterdata GET /employees/me with the
+    # caller's token propagated (same mechanism as approval-service's MasterDataPort).
+    masterdata:
+      base-url: ${ERP_MASTERDATA_BASE_URL:http://masterdata-service:8080}
+      connect-timeout-ms: ${ERP_MASTERDATA_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${ERP_MASTERDATA_READ_TIMEOUT_MS:3000}
     external:
       enabled: ${NOTIFICATION_EXTERNAL_ENABLED:false}
       mode: ${NOTIFICATION_EXTERNAL_MODE:noop}
