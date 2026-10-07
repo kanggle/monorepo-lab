@@ -200,14 +200,7 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     mutates: true,
     note: '그룹 grant 는 각 현재 멤버의 평범한 직접 권한 행으로 fan-out 되며(group_origin 마커), 그룹 멤버십 자체는 평가·격리 축이 아닙니다. 조회에도 group.manage 가 필요하고, 모든 변경은 사유가 필수입니다. 자기가 가진 것보다 높은 역할·스코프 밖 테넌트는 그룹에도 부여할 수 없습니다 (no-escalation).',
   },
-  {
-    label: '권한',
-    href: '/permissions',
-    purpose: '권한 키가 무엇이 있고 어떤 역할이 갖는지 찾아봅니다.',
-    actions: '조회 전용 — 역할을 펼치면 보유 권한 키가 보입니다.',
-    gate: 'operator.manage',
-    mutates: false,
-  },
+  // TASK-PC-FE-315 — 권한 세트 먼저(배정에 실제로 붙는 단위), 그 안의 키(권한)는 다음.
   {
     label: '권한 세트',
     href: '/permission-sets',
@@ -216,6 +209,14 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     gate: 'operator.manage',
     mutates: false,
     note: '「권한」 화면과 같은 데이터를 배정 관점으로 다시 보여주는 것입니다.',
+  },
+  {
+    label: '권한',
+    href: '/permissions',
+    purpose: '권한 키가 무엇이 있고 어떤 역할이 갖는지 찾아봅니다.',
+    actions: '조회 전용 — 역할을 펼치면 보유 권한 키가 보입니다.',
+    gate: 'operator.manage',
+    mutates: false,
   },
   {
     label: '감사 · 보안',
@@ -565,7 +566,7 @@ export interface ScreenAccess {
 }
 
 // 순서는 사이드바 nav(ConsoleSidebarNav.tsx)의 setup-first 순서를 따른다:
-// 운영자 관리 → 권한/권한 세트 → 감사·보안 → 계정 운영 → 조직 계층 → 테넌트 → 구독
+// 운영자 관리 → 권한 세트/권한(TASK-PC-FE-315) → 감사·보안 → 계정 운영 → 조직 계층 → 테넌트 → 구독
 // → 파트너십 (TASK-PC-FE-313: 조직 계층 · 테넌트는 「조직 설정」 그룹으로 옮겨 갔다).
 export const SCREEN_ACCESS: ScreenAccess[] = [
   {
@@ -583,7 +584,7 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
     },
   },
   {
-    screen: '권한 · 권한 세트',
+    screen: '권한 세트 · 권한',
     href: '/permissions',
     gate: 'operator.manage',
     cells: {
