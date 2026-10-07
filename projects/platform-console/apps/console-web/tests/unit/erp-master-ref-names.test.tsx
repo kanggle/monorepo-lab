@@ -102,6 +102,7 @@ import { PoDetailDialog } from '@/features/scm-ops/components/PoDetailDialog';
 // TASK-PC-FE-309 — ERP 결재(approval) 목록·상세의 대상/기안자/결재선/이력/대결 칸.
 import { ApprovalScreen } from '@/features/erp-ops/components/ApprovalScreen';
 import { ApprovalDetail } from '@/features/erp-ops/components/ApprovalDetail';
+import { APPROVAL_SELF_LABEL } from '@/features/erp-ops/components/approval-refs';
 import {
   codeName,
   masterRefLabel,
@@ -999,7 +1000,10 @@ function approvalDetailResponse(over: Record<string, unknown>) {
   };
 }
 
-function renderApprovalDetail(over: Record<string, unknown> = {}) {
+function renderApprovalDetail(
+  over: Record<string, unknown> = {},
+  mySub?: string | null,
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue(
@@ -1009,7 +1013,10 @@ function renderApprovalDetail(over: Record<string, unknown> = {}) {
       }),
     ),
   );
-  return render(<ApprovalDetail id="appr-1" onClose={vi.fn()} />, { wrapper: wrapper() });
+  return render(
+    <ApprovalDetail id="appr-1" onClose={vi.fn()} mySub={mySub} />,
+    { wrapper: wrapper() },
+  );
 }
 
 describe('ERP 결재 상세 — 기안자/결재자/이력/대결 칸 (TASK-PC-FE-309)', () => {
@@ -1071,6 +1078,71 @@ describe('ERP 결재 상세 — 기안자/결재자/이력/대결 칸 (TASK-PC-F
     // approval-detail 컨테이너 전체에도 "appr-1" 문자열이 보이는 텍스트로 없다
     // (testid 속성에만 쓰인다 — 속성은 textContent 에 안 잡힌다).
     expect(container.textContent ?? '').not.toContain('appr-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-311 — 직원 조회가 비었는데 그 id 가 «현재 로그인한 운영자 자신의
+// sub» 와 같으면 `이름 확인 불가` 대신 보정 표기. 티켓이 적시한 4종 그대로.
+// ---------------------------------------------------------------------------
+describe('ERP 결재 — 결재자 칸이 «나 자신» 인 경우 (TASK-PC-FE-311)', () => {
+  it('① 직원 있음 → 직원 이름이 이긴다(mySub 가 같아도 직원 조회 성공이 우선)', async () => {
+    renderApprovalDetail({}, APPR_APPROVER);
+    await screen.findByTestId('approval-detail');
+    // legacy 결재자(approverId=APPR_APPROVER)는 직원 마스터에 있다 — mySub 와
+    // 같은 값이어도 "나" 로 덮이지 않고 실제 직원 이름이 그려진다.
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        'EMP-0002 · 이운영',
+      ),
+    );
+    expect(screen.getByTestId('approval-approverId').textContent).not.toContain(
+      APPROVAL_SELF_LABEL,
+    );
+  });
+
+  it('② 직원 없음 + id === 내 sub → 보정 표기', async () => {
+    const { container } = renderApprovalDetail(
+      { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
+      APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE,
+    );
+    await screen.findByTestId('approval-detail');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        APPROVAL_SELF_LABEL,
+      ),
+    );
+    // 원본 id 는 `title` 에만 남는다 — 보이는 텍스트에는 없다(보정도 id 로
+    // 되돌아가지 않는다는 `masterRefLabel` 계약을 지킨다).
+    expect(container.textContent ?? '').not.toContain(
+      APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE,
+    );
+  });
+
+  it('③ 직원 없음 + 다른 id(mySub 와도 다름) → `이름 확인 불가`(회귀)', async () => {
+    renderApprovalDetail(
+      { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
+      APPR_APPROVER, // 내 sub 는 다른 값 — 직원 마스터에도 없고 mySub 도 아니다.
+    );
+    await screen.findByTestId('approval-detail');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        MASTER_REF_UNRESOLVED,
+      ),
+    );
+  });
+
+  it('④ 내 sub 를 모름(샘플 방문자 등, mySub 없음) → `이름 확인 불가`', async () => {
+    renderApprovalDetail(
+      { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
+      null,
+    );
+    await screen.findByTestId('approval-detail');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        MASTER_REF_UNRESOLVED,
+      ),
+    );
   });
 });
 

@@ -66,26 +66,60 @@ export function ApprovalSubjectRef({
   );
 }
 
+/** 직원 조회가 비었는데 그 id 가 **현재 로그인한 운영자 자신의 sub** 와 같을 때의
+ *  표시(`TASK-PC-FE-311`). 기존 화면 어휘(`masterRefLabel`)에 맞춘 문구. */
+export const APPROVAL_SELF_LABEL = '나 (현재 운영자)';
+
 /**
  * 직원(employee) 참조 한 칸 — 기안자(`submitterId`) / 결재선·결재자(`approverId`,
  * 단계별 또는 legacy) / 이력의 처리자(`actor`) / 대결 대상(`actingForApproverId`)
  * 이 전부 이 모양이다. `field` 는 호출부를 가르는 `data-master-ref` 접미사일 뿐,
  * 조회 방법은 넷 다 같다(`useEmployee`) — 새 포맷을 만들지 않는다.
+ *
+ * ## `TASK-PC-FE-311` — 직원 조회가 비었을 때, «그게 바로 나 아닌가」를 한 번 더 본다
+ *
+ * 결재함(inbox)의 결재자 자리에 라이브 데모 시드가 넣는 값은 **직원 마스터 id 가
+ * 아니라 운영자 로그인 계정의 sub**다(`TASK-PC-FE-309` 배경 — 자기결재 금지 게이트를
+ * 피하려고 시드가 쓰는 편법, `infra/demo/seed/seed-erp.sh` §6). 직원 마스터에 그
+ * id 가 없으므로 `masterRefLabel` 은 정직하게 `이름 확인 불가` 를 그린다 — 그 자체는
+ * 옳다. 하지만 **그 결재함을 보는 사람이 바로 그 결재자**다(결재함은 정의상 "내가
+ * 결재자인 건"만 모은다) — 콘솔 서버는 운영자 세션 토큰으로 "내 sub" 를 이미 알고
+ * 있다. `mySub` 는 그 값을 (서버에서 디코드된 문자열만, 토큰 자체가 아니라) 받은
+ * props 다 — `getErpApprovalState`(`erp-state.ts`) → `ErpApprovalScreen` →
+ * `ApprovalScreen` → `ApprovalDetail` → 여기, 한 방향으로만 흐른다.
+ *
+ * **순서가 핵심이다** — 직원 조회가 **성공하면 그쪽이 항상 이긴다**(보정은 조회가
+ * 실패했을 때의 폴백일 뿐, 실제 직원으로 등록된 결재자를 "나" 로 덮어쓰지 않는다).
+ * 로딩 중에는(`empQ.isLoading`) 아직 "못 찾았다" 가 확정되지 않았으므로 보정도
+ * 먼저 그리지 않는다(결과 확정 뒤 판정). `mySub` 가 없거나(샘플 방문자 등) id 가
+ * 그것과 다르면 기존 그대로 `이름 확인 불가` — 바뀌는 자리는 정확히 "직원 조회
+ * 없음 + id === mySub" 뿐이다.
  */
 export function ApprovalEmployeeRef({
   employeeId,
   field,
+  mySub,
 }: {
   employeeId: string;
   field: string;
+  /** 현재 로그인한 운영자 자신의 sub(없으면 보정을 적용하지 않는다). */
+  mySub?: string | null;
 }) {
   const empQ = useEmployee(employeeId);
   const resolved: MasterRefTarget | undefined = empQ.data
     ? { code: empQ.data.employeeNumber, name: empQ.data.name }
     : undefined;
+  const isMe =
+    !resolved &&
+    !empQ.isLoading &&
+    Boolean(mySub) &&
+    employeeId === mySub;
+  const label = isMe
+    ? APPROVAL_SELF_LABEL
+    : masterRefLabel(employeeId, resolved);
   return (
     <span data-master-ref={`approval.${field}`} title={employeeId}>
-      {masterRefLabel(employeeId, resolved)}
+      {label}
     </span>
   );
 }
