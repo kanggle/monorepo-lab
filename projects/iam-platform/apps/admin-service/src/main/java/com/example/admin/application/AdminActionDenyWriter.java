@@ -249,6 +249,82 @@ public class AdminActionDenyWriter {
     }
 
     /**
+     * TASK-BE-625 (ADR-MONO-047 § 개정 2026-10-07) — best-effort DENIED row for a tenant
+     * placement the actor may not make: it does not administer the SOURCE side (where the
+     * tenant is now) or the DESTINATION side (the target node). NOT fail-closed (A10 override,
+     * mirrors {@link #recordOrgNodeScopeDenied}): the 404 always stands; an audit failure only
+     * logs + bumps {@code admin.audit.tenant_placement_deny_failure}.
+     *
+     * <p>{@code target_type=TENANT}, {@code target_id=<tenantId>} — the same subject as the
+     * SUCCESS row — and the side that failed plus both nodes ride in {@code detail}.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordTenantPlacementDenied(OperatorContext operator,
+                                            ActionCode actionCode,
+                                            String tenantId,
+                                            String side,
+                                            String fromOrgNodeId,
+                                            String toOrgNodeId) {
+        try {
+            AdminActionAuditWriter.OperatorResolved resolved =
+                    AdminActionAuditWriter.resolveOperatorOrFail(operatorLookupPort, operator.operatorId());
+
+            Instant now = Instant.now();
+            String auditId = UUID.randomUUID().toString();
+            String targetType = permissions.targetTypeFor(actionCode);
+            String detail = "TENANT_PLACEMENT_DENIED side=" + side
+                    + " from_org_node_id=" + fromOrgNodeId + " to_org_node_id=" + toOrgNodeId;
+            String targetId = tenantId != null ? tenantId : "-";
+
+            AdminActionJpaEntity entity = AdminActionJpaEntity.create(
+                    auditId,
+                    actionCode != null ? actionCode.name() : "UNKNOWN",
+                    operator.operatorId(),
+                    "UNKNOWN",
+                    resolved.pk(),
+                    Permission.ORG_MANAGE,
+                    targetType,
+                    targetId,
+                    "<tenant_placement_deny>",    // reason: synthetic constant
+                    null,
+                    "denied:" + auditId,
+                    Outcome.DENIED.name(),
+                    detail,
+                    now,
+                    now,
+                    resolved.tenantId(),
+                    resolved.tenantId());         // DENIED rows target the actor's own tenant (no leak)
+            repository.save(entity);
+
+            eventPublisher.publishAdminActionPerformed(new AdminEventPublisher.Envelope(
+                    operator.operatorId(),
+                    operator.jti(),
+                    Permission.ORG_MANAGE,
+                    AdminAuditRequestContext.currentEndpoint(),
+                    AdminAuditRequestContext.currentMethod(),
+                    targetType,
+                    targetId,
+                    Outcome.DENIED,
+                    detail,
+                    now));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to write tenant-placement DENIED audit row (best-effort): "
+                            + "operatorId={} tenantId={} side={}",
+                    operator.operatorId(), tenantId, side, ex);
+            try {
+                Counter counter = Counter.builder("admin.audit.tenant_placement_deny_failure")
+                        .tag("side", side != null ? side : "UNKNOWN")
+                        .register(meterRegistry);
+                if (counter != null) {
+                    counter.increment();
+                }
+            } catch (RuntimeException metricEx) {
+                log.debug("Failed to increment tenant_placement_deny_failure counter", metricEx);
+            }
+        }
+    }
+
+    /**
      * TASK-BE-347 (ADR-MONO-024 D3) — best-effort DENIED row for a grant-menu
      * no-escalation violation (the actor tried to grant a role it may not).
      * NOT fail-closed (A10 override, mirrors {@link #recordCrossTenantDenied}):

@@ -92,6 +92,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.ORG_NODE_CEILING_SET, "ORG_NODE");
         map.put(ActionCode.ORG_ADMIN_GRANT, "ORG_NODE");
         map.put(ActionCode.ORG_ADMIN_REVOKE, "ORG_NODE");
+        // TASK-BE-625 — tenant placement: the TENANT moves, so it is the audit subject.
+        map.put(ActionCode.TENANT_ORG_NODE_ASSIGN, "TENANT");
         // TASK-BE-520 (ADR-MONO-046 D6) — operator-group lifecycle + membership + grant.
         // The GROUP is the audit subject for the member/grant rows too (the affected
         // operator/grant rides in `detail`), mirroring the ORG_ADMIN_GRANT convention above.
@@ -173,7 +175,9 @@ public class AdminActionPermissionRegistry {
                     -> Permission.PARTNERSHIP_MANAGE;
             // TASK-BE-492 (ADR-MONO-047 D5) — every org-node mutation gates on org.manage.
             case ORG_NODE_CREATE, ORG_NODE_UPDATE, ORG_NODE_DELETE, ORG_NODE_CEILING_SET,
-                 ORG_ADMIN_GRANT, ORG_ADMIN_REVOKE -> Permission.ORG_MANAGE;
+                 ORG_ADMIN_GRANT, ORG_ADMIN_REVOKE,
+                 // TASK-BE-625 — tenant placement gates on org.manage too.
+                 TENANT_ORG_NODE_ASSIGN -> Permission.ORG_MANAGE;
             // TASK-BE-520 (ADR-MONO-046 D6) — every operator-group mutation gates on group.manage.
             case GROUP_CREATE, GROUP_UPDATE, GROUP_DELETE, GROUP_MEMBER_ADD, GROUP_MEMBER_REMOVE,
                  GROUP_GRANT_ADD, GROUP_GRANT_REVOKE -> Permission.GROUP_MANAGE;

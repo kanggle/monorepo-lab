@@ -214,6 +214,15 @@ class AdminActionPermissionRegistryTest {
     }
 
     @Test
+    void tenant_org_node_assign_targets_the_tenant_and_gates_on_org_manage() {
+        // TASK-BE-625: the TENANT moves, so it is the audit subject; the gate is org.manage
+        // (not tenant.manage — an ORG_ADMIN, who lacks tenant.manage, is the primary caller).
+        assertThat(registry.targetTypeFor(ActionCode.TENANT_ORG_NODE_ASSIGN)).isEqualTo("TENANT");
+        assertThat(registry.permissionForActionCode(ActionCode.TENANT_ORG_NODE_ASSIGN))
+                .isEqualTo(Permission.ORG_MANAGE);
+    }
+
+    @Test
     void permissionForActionCode_resolves_every_action_code_to_non_null() {
         for (ActionCode code : ActionCode.values()) {
             assertThat(registry.permissionForActionCode(code))

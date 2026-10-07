@@ -476,6 +476,92 @@ root→N 체인 ceiling 교집합. `ORG_ADMIN` grant cap(부여 도메인 ⊆ ef
 
 ---
 
+## Tenant placement (`/internal/tenant-placements/*`) — TASK-BE-625 (ADR-MONO-047 § 개정 2026-10-07)
+
+> 테넌트의 소속(`tenants.org_node_id`)을 읽고 바꾸는 **순수 command** 표면. 누가 바꿀 수 있는지(양쪽 관리자 판정)는 전부 admin-service 가 한다([admin-api.md](../admin-api.md) § Org Hierarchy «테넌트 소속 — 두기 · 옮기기 · 빼기») — 이 표면은 판정하지 않는다. account-service 가 하는 것은 **존재 확인**(테넌트 · 목적지 노드)과 **조건부 쓰기**(`expectedOrgNodeId`)와 **효과 계산**(구독 ∩ 상한)뿐이다.
+>
+> 🔴 **왜 `/internal/tenants/{tenantId}/**` 아래가 아닌가.** 게이트웨이가 `/internal/tenants/**` 를 account-service 로 라우팅하고 path `{tenantId}` ↔ JWT `tenant_id` 만 대조한다([gateway-api.md](../gateway-api.md)). 거기에 소속 쓰기를 두면 테넌트 자신의 워크로드 토큰이 `PUT /internal/tenants/{자기}/org-node` 로 **혼자 노드에서 빠져 상한을 벗어날 수 있다** — ADR 개정이 막은 바로 그 길이다. 그래서 게이트웨이 라우트가 없는 별도 접두사를 쓴다. 이 서브트리도 파일 상단의 `/internal/**` 인증 게이트(IAM `client_credentials` Bearer JWT)를 그대로 받는다.
+
+### Placement effect wire shape (공통)
+
+```json
+{
+  "tenantId": "acme-wms",
+  "fromOrgNodeId": "b3f1…",
+  "toOrgNodeId": "c7a2…",
+  "domainsBefore": ["finance", "wms"],
+  "domainsAfter": ["wms"],
+  "lostDomains": ["finance"],
+  "gainedDomains": []
+}
+```
+
+`domainsBefore = ACTIVE 구독 ∩ effectiveCeiling(from)`, `domainsAfter = ACTIVE 구독 ∩ effectiveCeiling(to)` — 노드가 `null`(무소속)이면 상한 없음(`UNBOUNDED`, D7). 순서는 ACTIVE 구독 목록 순서. 구독 행은 읽기만 한다.
+
+## GET /internal/tenant-placements/{tenantId}
+
+테넌트의 지금 소속. admin-service 가 출발 쪽 판정에 쓴다.
+
+**Response 200**:
+```json
+{ "tenantId": "acme-wms", "orgNodeId": "b3f1…" }
+{ "tenantId": "fan-platform", "orgNodeId": null }
+```
+
+**Errors**: 401 `UNAUTHORIZED`, 404 `TENANT_NOT_FOUND`.
+
+---
+
+## GET /internal/tenant-placements/{tenantId}/preview
+
+소속 변경의 효과 미리보기(쓰기 없음).
+
+**Query parameters**: `orgNodeId` (optional) — 목적지 노드. **생략 = 무소속.**
+
+**Response 200**: placement effect wire shape.
+
+**Errors**: 401 `UNAUTHORIZED`, 404 `TENANT_NOT_FOUND`, 404 `ORG_NODE_NOT_FOUND`(목적지 노드 미존재).
+
+---
+
+## PUT /internal/tenant-placements/{tenantId}
+
+소속 변경 — `Tenant.assignOrgNode()`.
+
+**Request**:
+```json
+{ "orgNodeId": "c7a2…", "expectedOrgNodeId": "b3f1…" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `orgNodeId` | string \| null | Yes(키) | 목적지 노드, `null` = 무소속(빼기). |
+| `expectedOrgNodeId` | string \| null | Yes(키) | admin-service 가 **판정한** 출발 위치(`null` = 무소속). 생략은 `null` 로 읽는다. |
+
+**동작** (한 트랜잭션, 테넌트 행 `SELECT … FOR UPDATE`):
+
+1. 테넌트 없음 → 404 `TENANT_NOT_FOUND`.
+2. 지금 소속 ≠ `expectedOrgNodeId` → 409 `TENANT_ORG_NODE_CONFLICT`(쓰기 없음). 판정하지 않은 출발지에서 테넌트를 빼 오지 못하게 하는 조건이다.
+3. 목적지 노드 없음 → 404 `ORG_NODE_NOT_FOUND`(쓰기 없음). 확인 뒤 커밋 전에 노드가 삭제되면 `tenants.org_node_id` FK 가 커밋을 막고 역시 404 `ORG_NODE_NOT_FOUND`.
+4. 목적지 = 지금 소속 → 쓰기 없음, `changed=false`(멱등).
+5. 아니면 `Tenant.assignOrgNode(목적지)` 저장, `changed=true`.
+
+**Response 200**: placement effect wire shape + `"changed": true|false`.
+
+**Errors**:
+
+| Status | Code | Condition |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 본문 없음 · 형식 오류. |
+| 401 | `UNAUTHORIZED` | Bearer JWT 누락/무효. |
+| 404 | `TENANT_NOT_FOUND` | 테넌트 미존재. |
+| 404 | `ORG_NODE_NOT_FOUND` | 목적지 노드 미존재(경합 삭제 포함). |
+| 409 | `TENANT_ORG_NODE_CONFLICT` | 지금 소속 ≠ `expectedOrgNodeId`. |
+
+> 이벤트 없음 · 감사 행 없음(감사는 admin-service `admin_actions` 가 권위). 토큰의 `entitled_domains` 는 다음 발급부터 새 상한으로 계산된다(D6 seam — `GET /internal/tenants/{tenantId}/entitled-domains` 가 매번 `ACTIVE ∩ ceiling` 을 다시 계산한다).
+
+---
+
 ## Server Constraints (account-service 측)
 
 - 모든 상태 변경은 `AccountStatusMachine.transition()` 경유

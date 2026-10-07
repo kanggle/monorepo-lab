@@ -56,4 +56,13 @@ public interface TenantRepository {
      * A node with tenants may not be deleted — that would strand service-tenants.
      */
     long countByOrgNodeId(OrgNodeId orgNodeId);
+
+    /**
+     * TASK-BE-625 (ADR-MONO-047 § 개정 2026-10-07): the tenant row, write-locked until the
+     * surrounding transaction ends. The placement write compares the current org-node with
+     * the one admin-service authorized against and only then writes — without the lock two
+     * concurrent placements could both pass that comparison and the second would move the
+     * tenant out of a node nobody authorized against.
+     */
+    Optional<Tenant> findByIdForUpdate(TenantId tenantId);
 }

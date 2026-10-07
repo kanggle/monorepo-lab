@@ -296,6 +296,14 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("ORG_NODE_NOT_EMPTY", e.getMessage()));
     }
 
+    /** TASK-BE-625: the tenant's placement moved between admin-service's check and this write. */
+    @ExceptionHandler(com.example.account.application.exception.TenantOrgNodeConflictException.class)
+    public ResponseEntity<ErrorResponse> handleTenantOrgNodeConflict(
+            com.example.account.application.exception.TenantOrgNodeConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_ORG_NODE_CONFLICT", e.getMessage()));
+    }
+
     /**
      * ADR-MONO-047 § D2: activating a domain outside the tenant's effective ceiling. The
      * ceiling narrows entitlement only — it never mints an IAM role (ADR-023 plane separation).

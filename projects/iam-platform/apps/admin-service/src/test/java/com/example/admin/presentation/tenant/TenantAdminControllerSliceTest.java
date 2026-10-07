@@ -83,6 +83,7 @@ class TenantAdminControllerSliceTest {
     @MockitoBean AdminOperatorJpaRepository operatorRepository;
     @MockitoBean AdminActionAuditor adminActionAuditor; // required by RequiresPermissionAspect
     @MockitoBean com.example.admin.application.TenantScopeResolver tenantScopeResolver; // TASK-BE-326
+    @MockitoBean com.example.admin.application.TenantOrgNodePlacementUseCase placementUseCase; // TASK-BE-625
 
     // Pre-created mocks — stubs are set in @BeforeEach to avoid interleaving
     // with when(...).thenReturn(Optional.of(helperMethod())) call chains.
@@ -169,6 +170,53 @@ class TenantAdminControllerSliceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("wms-test"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        // TASK-BE-625 AC-5 regression: no orgNodeId → the pre-existing path, placement untouched.
+        org.mockito.Mockito.verifyNoInteractions(placementUseCase);
+    }
+
+    @Test
+    void create_tenant_with_orgNodeId_goes_through_the_placement_rule() throws Exception {
+        // TASK-BE-625 AC-5: an orgNodeId routes creation through the placement use-case, which
+        // checks the destination BEFORE creating (unit-tested in TenantOrgNodePlacementUseCaseTest).
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+        when(placementUseCase.createTenantUnder(any(), eq("acme-svc"), eq("Acme Svc"), eq("B2B_ENTERPRISE"),
+                eq("erp-div"), eq("onboard under erp"), anyString()))
+                .thenReturn(stubTenant("acme-svc"));
+
+        mockMvc.perform(post("/api/admin/tenants")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "onboard under erp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"erp-div"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenantId").value("acme-svc"));
+
+        org.mockito.Mockito.verify(createTenantUseCase, org.mockito.Mockito.never())
+                .execute(anyString(), anyString(), anyString(), any(), any(), any());
+    }
+
+    @Test
+    void create_tenant_with_out_of_reach_orgNodeId_returns_404_org_node_not_found() throws Exception {
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+        when(placementUseCase.createTenantUnder(any(), anyString(), anyString(), anyString(),
+                eq("ghost"), any(), any()))
+                .thenThrow(new com.example.admin.application.exception.OrgNodeNotFoundException(
+                        "Org node not found: ghost"));
+
+        mockMvc.perform(post("/api/admin/tenants")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "onboard")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"ghost"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORG_NODE_NOT_FOUND"));
     }
 
     @Test

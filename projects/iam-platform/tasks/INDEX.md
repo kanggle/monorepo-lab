@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (READY, 2026-10-07 UTC · `ADR-MONO-047` § 개정). 양쪽 관리자 검사(기존 `TenantScopeGuard` · `OrgNodeScopeGuard` 재사용) · 범위 밖 404 · 감사 · 테넌트 생성의 선택 `orgNodeId` · 격리 대조군. 후속 `TASK-PC-FE-312`. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -121,6 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 ## review
 
 - `TASK-BE-626-operator-list-home-tenant-id.md` — **`GET /api/admin/operators` 항목(+ 같은 DTO 의 `/me`)에 운영자 HOME 테넌트 `homeTenantId`** (REVIEW, 2026-10-08 UTC · 소유자 결정 «A»). 테넌트 목록이 HOME ∪ 배정을 섞어 돌려주는데 소비자가 가를 방법이 없었다 — 그룹 멤버는 HOME 만 받으므로 콘솔 선택기가 배정-only 를 고르면 422. 필드 추가만(판정·쿼리 무변경, 계약 먼저). 대상 시험 9/9 · 43/43(결과 XML 실측). 짝 = platform-console `TASK-PC-FE-319`(같은 PR). 그룹 규칙 확장(B′/B″)은 역할 fan-out 이 멤버 HOME 에 쓰는 결함으로 보류. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (REVIEW, 2026-10-08 UTC · `ADR-MONO-047` § 개정). `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(P2 — 잃는 도메인은 API 가 준다) · 양쪽 관리자 판정(`OrgNodeScopeGuard.requirePlacementAllowed` — 기존 술어 조합) · 범위 밖 404 · 판정한 출발지 조건부 쓰기(409) · `TENANT_ORG_NODE_ASSIGN` 감사 · 테넌트 생성의 선택 `orgNodeId`. 단위·슬라이스 초록, IT 2클래스는 Docker 없음으로 SKIPPED(⚪, CI 첫 실행). 후속 `TASK-PC-FE-312`.
 
 
 

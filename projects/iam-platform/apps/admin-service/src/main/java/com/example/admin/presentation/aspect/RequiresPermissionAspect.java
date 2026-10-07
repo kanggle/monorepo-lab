@@ -312,6 +312,11 @@ public class RequiresPermissionAspect {
             if ("revokeNodeAdmin".equals(name)) return ActionCode.ORG_ADMIN_REVOKE;
             // listNodes / getNode / listSubtreeTenants / listNodeAdmins are reads
         }
+        // TASK-BE-625 — tenant placement write; the DENIED row carries target_type=TENANT.
+        if ("TenantOrgNodePlacementController".equals(simple)) {
+            if ("placeTenant".equals(name)) return ActionCode.TENANT_ORG_NODE_ASSIGN;
+            // previewPlacement is a read
+        }
         // TASK-BE-520 (ADR-MONO-046 D6) — operator-group mutations; each maps to a dedicated
         // action code so the DENIED row carries target_type=GROUP.
         if ("GroupAdminController".equals(simple)) {

@@ -34,4 +34,12 @@ public interface TenantJpaRepository extends JpaRepository<TenantJpaEntity, Stri
 
     /** TASK-BE-491 (invariant I4): tenants attached to this node — the delete guard. */
     long countByOrgNodeId(String orgNodeId);
+
+    /**
+     * TASK-BE-625: {@code SELECT … FOR UPDATE} on one tenant row — the compare-then-write of
+     * a placement change must not interleave with another placement of the same tenant.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM TenantJpaEntity t WHERE t.tenantId = :tenantId")
+    java.util.Optional<TenantJpaEntity> findByIdForUpdate(@Param("tenantId") String tenantId);
 }

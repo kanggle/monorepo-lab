@@ -73,6 +73,7 @@ class OrgNodeHierarchyIntegrationTest extends AbstractIntegrationTest {
     @Autowired private TenantDomainSubscriptionQueryUseCase rawSubscriptionsUseCase;
     @Autowired private TenantDomainSubscriptionMutationUseCase subscriptionMutationUseCase;
     @Autowired private TenantProvisionUseCase tenantProvisionUseCase;
+    @Autowired private com.example.account.application.service.TenantOrgNodePlacementUseCase placementUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
 
     @MockitoBean private AccountOutboxPublisher accountOutboxPublisher;
@@ -335,6 +336,60 @@ class OrgNodeHierarchyIntegrationTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> subscriptionMutationUseCase.changeStatus(
                 ACME, "wms", SubscriptionStatus.ACTIVE, "operator", "op-test", "oops"))
                 .isInstanceOf(SubscriptionDomainOutOfCeilingException.class);
+    }
+
+    // ── 6. TASK-BE-625: the placement write (Tenant.assignOrgNode wired) ─────────
+
+    @Test
+    @DisplayName("BE-625 AC-4: placing a tenant under a ceilinged node narrows its effective domains; "
+            + "taking it out restores them; the subscription rows never change")
+    void placementNarrowsThenDetachRestores() {
+        OrgNode financeOnly = commandUseCase.create("Finance Corp", null,
+                EntitlementCeiling.bounded(List.of("finance")));
+
+        assertThat(entitledDomainsUseCase.effectiveEntitledDomains(ACME)).contains("finance", "wms");
+
+        var attached = placementUseCase.place(ACME, financeOnly.getId().value(), null);
+        assertThat(attached.changed()).isTrue();
+        assertThat(attached.lostDomains()).containsExactly("wms");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT org_node_id FROM tenants WHERE tenant_id = ?", String.class, ACME))
+                .isEqualTo(financeOnly.getId().value());
+        assertThat(entitledDomainsUseCase.effectiveEntitledDomains(ACME))
+                .as("the D6 seam narrows to ACTIVE ∩ ceiling")
+                .containsExactly("finance");
+        assertThat(rawSubscriptionsUseCase.listActive(null, ACME))
+                .as("deny-only: the wms row is still ACTIVE")
+                .extracting(r -> r.domainKey())
+                .contains("finance", "wms");
+
+        var detached = placementUseCase.place(ACME, null, financeOnly.getId().value());
+        assertThat(detached.gainedDomains()).containsExactly("wms");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT org_node_id FROM tenants WHERE tenant_id = ?", String.class, ACME)).isNull();
+        assertThat(entitledDomainsUseCase.effectiveEntitledDomains(ACME)).contains("finance", "wms");
+    }
+
+    @Test
+    @DisplayName("BE-625: a stale authorized source → 409 and the row is untouched; an unknown target → 404")
+    void placementIsConditionalOnTheAuthorizedSource() {
+        OrgNode a = commandUseCase.create("A", null, EntitlementCeiling.unbounded());
+        OrgNode b = commandUseCase.create("B", null, EntitlementCeiling.unbounded());
+        attach(ACME, a.getId());
+
+        assertThatThrownBy(() -> placementUseCase.place(ACME, b.getId().value(), null))
+                .as("admin-service authorized 'ungrouped', but the tenant sits under A")
+                .isInstanceOf(com.example.account.application.exception.TenantOrgNodeConflictException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT org_node_id FROM tenants WHERE tenant_id = ?", String.class, ACME))
+                .isEqualTo(a.getId().value());
+
+        assertThatThrownBy(() -> placementUseCase.place(ACME, "00000000-0000-0000-0000-00000000dead",
+                a.getId().value()))
+                .isInstanceOf(com.example.account.application.exception.OrgNodeNotFoundException.class);
+
+        var again = placementUseCase.place(ACME, a.getId().value(), a.getId().value());
+        assertThat(again.changed()).as("same target = idempotent no-op").isFalse();
     }
 
     @Test
