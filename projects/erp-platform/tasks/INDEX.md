@@ -82,12 +82,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-ERP-BE-044-employee-account-link-model.md` — **masterdata 직원 ↔ IAM 계정 연결 모델 — `employees.account_id` · 연결 제안 표 · 제안/수락/거절/철회/해제 · 🔴 두 사람 규칙(제안자 ≠ 수락자) + bite** (READY, 2026-10-08 UTC · ⏳ 선행 루트 `TASK-MONO-774` S1 머지). 루트 `TASK-MONO-774` S2. 제안 시 IAM 계정 확인 **없음**(소유자 결정 (b)) · `/employees/me` · `/approver-ref` 는 부서 data scope 없음. 후속 = 루트 `TASK-MONO-776`. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
+(empty)
+
 ## review
 
+- `TASK-ERP-BE-044-employee-account-link-model.md` — **masterdata 직원 ↔ IAM 계정 연결 모델 — `employees.account_id` · 연결 제안 표 · 제안/수락/거절/철회/해제 · 🔴 두 사람 규칙(제안자 ≠ 수락자) + bite** (REVIEW, 2026-10-07 UTC, impl PR 대기 · 선행 루트 `TASK-MONO-774` S1 머지 #4228 ✅). 루트 `TASK-MONO-774` S2. `V3` 마이그레이션(생성 열 유니크 = 직원당 PENDING 하나) · 엔드포인트 9개 · 두 사람 규칙은 도메인 `EmployeeAccountLinkProposal#accept` 쪽 — **bite: 그 검사를 끄면 정확히 3건 빨강**(제안 쪽 조기 거절은 켠 채). 단위·슬라이스 **200/0**(새 65). ⚪ IT 9건 작성 · 이 호스트 **9 SKIPPED**(Docker 없음) ⇒ AC-4 의 DB 유니크 절반은 CI 첫 실행이 닫는다. 계약 명시화(additive) 3문서. 후속 = 루트 `TASK-MONO-776`. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 

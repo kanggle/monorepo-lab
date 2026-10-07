@@ -3,6 +3,8 @@ package com.example.erp.masterdata.domain.employee;
 import com.example.erp.masterdata.domain.common.MasterStatus;
 import com.example.erp.masterdata.domain.common.MasterStatusMachine;
 import com.example.erp.masterdata.domain.effectivedate.EffectivePeriod;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkConflictException;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkInvalidException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -54,6 +56,14 @@ public class Employee {
 
     @Column(name = "job_grade_id", length = 36, nullable = false)
     private String jobGradeId;
+
+    /**
+     * IAM account ({@code sub}) that logs in as this employee — {@code null} = not linked
+     * (TASK-ERP-BE-044, masterdata-api.md § Employee ↔ IAM account link). Cross-context
+     * reference: no FK, and the only writer is {@link #linkAccount} via the accept use case.
+     */
+    @Column(name = "account_id", length = 64)
+    private String accountId;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
@@ -125,5 +135,36 @@ public class Employee {
 
     public boolean isActive() {
         return status == MasterStatus.ACTIVE;
+    }
+
+    public boolean isLinked() {
+        return accountId != null;
+    }
+
+    /**
+     * Sets the linked IAM account. Only an {@code ACTIVE}, not-yet-linked employee can be
+     * linked; a {@code RETIRED} employee keeps an existing link (Edge Case) but cannot gain one.
+     */
+    public void linkAccount(String newAccountId, Instant now) {
+        Objects.requireNonNull(newAccountId, "accountId");
+        if (!isActive()) {
+            throw new EmployeeLinkInvalidException("Employee " + id + " is not ACTIVE — cannot link an account");
+        }
+        if (isLinked()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.EMPLOYEE_ALREADY_LINKED,
+                    "Employee " + id + " is already linked to an account");
+        }
+        this.accountId = newAccountId;
+        this.updatedAt = now;
+    }
+
+    /** Clears the link. Retirement does NOT call this — a retired employee's link stays. */
+    public void unlinkAccount(Instant now) {
+        if (!isLinked()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.NOT_LINKED,
+                    "Employee " + id + " is not linked to an account");
+        }
+        this.accountId = null;
+        this.updatedAt = now;
     }
 }

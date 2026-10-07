@@ -47,6 +47,23 @@ public final class Commands {
     public record RetireEmployeeCommand(ActorContext actor, String id, String reason) {
     }
 
+    // ---- Employee ↔ IAM account link (TASK-ERP-BE-044) ----
+    public record ProposeAccountLinkCommand(ActorContext actor, String employeeId,
+                                            String accountId, String reason) {
+    }
+
+    public record AcceptAccountLinkCommand(ActorContext actor, String proposalId) {
+    }
+
+    public record DeclineAccountLinkCommand(ActorContext actor, String proposalId, String reason) {
+    }
+
+    public record RevokeAccountLinkCommand(ActorContext actor, String proposalId, String reason) {
+    }
+
+    public record UnlinkAccountCommand(ActorContext actor, String employeeId, String reason) {
+    }
+
     // ---- JobGrade ----
     public record CreateJobGradeCommand(ActorContext actor, String code, String name,
                                         int displayOrder, LocalDate effectiveFrom) {

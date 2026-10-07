@@ -96,6 +96,63 @@ public final class DomainErrors {
         }
     }
 
+    // ---- Employee ↔ IAM account link (TASK-ERP-BE-044 / TASK-MONO-774) ----
+
+    /** 404 — unknown account-link proposal id. */
+    public static final class EmployeeLinkProposalNotFoundException extends MasterdataDomainException {
+        public EmployeeLinkProposalNotFoundException(String message) {
+            super("EMPLOYEE_LINK_PROPOSAL_NOT_FOUND", message);
+        }
+    }
+
+    /**
+     * 409 — link state collision. {@code details.cause} is one of the closed set in
+     * {@code masterdata-api.md}: {@code employee_already_linked}, {@code account_already_linked},
+     * {@code proposal_pending}, {@code proposal_not_pending}, {@code not_linked}.
+     */
+    public static final class EmployeeLinkConflictException extends MasterdataDomainException {
+        public static final String EMPLOYEE_ALREADY_LINKED = "employee_already_linked";
+        public static final String ACCOUNT_ALREADY_LINKED = "account_already_linked";
+        public static final String PROPOSAL_PENDING = "proposal_pending";
+        public static final String PROPOSAL_NOT_PENDING = "proposal_not_pending";
+        public static final String NOT_LINKED = "not_linked";
+
+        private final String cause;
+
+        public EmployeeLinkConflictException(String cause, String message) {
+            super("EMPLOYEE_LINK_CONFLICT", message, java.util.Map.of("cause", cause));
+            this.cause = cause;
+        }
+
+        /** The {@code details.cause} value — named so it does not shadow {@link Throwable#getCause()}. */
+        public String conflictCause() {
+            return cause;
+        }
+    }
+
+    /** 422 — link target not eligible ({@code details.cause = "employee_not_active"}). */
+    public static final class EmployeeLinkInvalidException extends MasterdataDomainException {
+        public static final String EMPLOYEE_NOT_ACTIVE = "employee_not_active";
+
+        public EmployeeLinkInvalidException(String message) {
+            super("EMPLOYEE_LINK_INVALID", message, java.util.Map.of("cause", EMPLOYEE_NOT_ACTIVE));
+        }
+    }
+
+    /** 403 — accept/decline by a caller whose {@code sub} is not the proposal's account. */
+    public static final class EmployeeLinkNotAddresseeException extends MasterdataDomainException {
+        public EmployeeLinkNotAddresseeException(String message) {
+            super("EMPLOYEE_LINK_NOT_ADDRESSEE", message);
+        }
+    }
+
+    /** 403 — two-person rule: the acceptor is the proposer (or a proposal names the proposer's own account). */
+    public static final class EmployeeLinkSelfAcceptException extends MasterdataDomainException {
+        public EmployeeLinkSelfAcceptException(String message) {
+            super("EMPLOYEE_LINK_SELF_ACCEPT", message);
+        }
+    }
+
     // ---- 503 ----
     public static final class IdempotencyStoreUnavailableException extends MasterdataDomainException {
         public IdempotencyStoreUnavailableException(String message) {

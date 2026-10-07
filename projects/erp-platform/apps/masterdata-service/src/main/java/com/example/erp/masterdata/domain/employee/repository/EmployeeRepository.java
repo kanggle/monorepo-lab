@@ -14,6 +14,18 @@ public interface EmployeeRepository {
 
     Optional<Employee> findByEmployeeNumber(String employeeNumber, String tenantId);
 
+    /** The employee linked to IAM account {@code accountId} in this tenant (at most one — V3 unique). */
+    Optional<Employee> findByAccountId(String accountId, String tenantId);
+
+    /**
+     * Persists a change to {@code employees.account_id} and flushes inside the caller's
+     * transaction, so a concurrent accept that linked the same account to another employee
+     * trips {@code uq_employees_tenant_account} here and is translated to
+     * {@code EMPLOYEE_LINK_CONFLICT} ({@code account_already_linked}) — never a 500
+     * (TASK-ERP-BE-044 Edge Case).
+     */
+    Employee saveAccountLink(Employee employee);
+
     /**
      * Filtered, paginated list with the TRUE total-row count
      * (masterdata-api.md § GET /employees + § PageMeta).

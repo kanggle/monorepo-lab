@@ -37,8 +37,10 @@ All endpoints:
   [`platform/error-handling.md`](../../../../../platform/error-handling.md)
   erp section. `details` follows the `@JsonInclude(NON_NULL)` absent-field
   convention — it is **omitted** for every code that does not document it, never
-  serialized as `null`. The one code that carries it today is
-  `MASTERDATA_REFERENCE_VIOLATION` (see below); `message` is human-readable prose
+  serialized as `null`. The codes that carry it are
+  `MASTERDATA_REFERENCE_VIOLATION` (see below) and — since TASK-ERP-BE-044 —
+  `EMPLOYEE_LINK_CONFLICT` / `EMPLOYEE_LINK_INVALID` (`{ "cause": "<closed-set value>" }`,
+  § Employee ↔ IAM account link); `message` is human-readable prose
   and is **not** a machine-matched value.
 - **`MASTERDATA_REFERENCE_VIOLATION` → `details` shape** (TASK-ERP-BE-038 —
   the field was documented here from the start but was not populated by the
@@ -293,6 +295,12 @@ and those are not enforced here per E5 read-only boundary.)
   `PENDING` 이 아닌 행은 불변(감사 이력).
 - 모든 상태 변화는 append-only `audit_log` 행 + 직원 쪽 변화(`accountId` 설정·해제)는
   `erp.masterdata.employee.changed.v1` 을 같은 Tx 에서 낸다(E8 · A7 — 기존 규약 그대로).
+  🔵 (TASK-ERP-BE-044) 그 이벤트의 `changeKind` 는 **`UPDATED`** 이고 `before`/`after` 에
+  `accountId` 가 실린다 — 새 종류를 만들지 않는다(소비자는 모르는 `changeKind` 를 DLT 로
+  보낸다). 제안·거절·철회는 직원을 바꾸지 않으므로 이벤트가 없다(감사 행만).
+  감사 행 = 사용 사례 하나에 **정확히 한 행**: 제안·거절·철회는
+  `aggregate_type = employee_account_link_proposal`, 수락·해제는 직원을 바꾸므로
+  `aggregate_type = employee`(수락 행의 `after_state` 에 `proposalId` · `proposedBy`).
 
 ### Employee 응답의 `accountId`
 
@@ -347,20 +355,29 @@ and those are not enforced here per E5 read-only boundary.)
 **201**: `EmployeeAccountLinkProposal` —
 `{ "id", "employeeId", "accountId", "status": "PENDING", "proposedBy", "proposedAt", "reason"? }`.
 
+`EmployeeAccountLinkProposal` 전체 모양(TASK-ERP-BE-044 에서 명시 — 위 201 은 그 부분집합):
+`{ "id", "employeeId", "accountId", "status", "proposedBy", "proposedAt", "reason"?,
+"decidedBy"?, "decidedAt"?, "decisionReason"? }`. `?` 필드는 값이 없으면 **ABSENT**
+(`@JsonInclude(NON_NULL)`) — `decided*` 는 `PENDING` 이 아닌 제안에만 있다(`decidedBy` =
+수락·거절한 계정 주인 또는 철회한 인사 권한자).
+
 ### GET /api/erp/masterdata/account-link-proposals/mine
 
 호출자 `sub` 앞으로 온 `PENDING` 제안(수락 화면). Auth: `erp.read`, data scope 없음(자기 앞
-제안). **200**: list 봉투(`EmployeeAccountLinkProposal[]` + 직원 표시용 `employeeName`,
-`employeeNumber`).
+제안). **Query**: `?page=&size=`(기본 0 / 20). **200**: list 봉투(`EmployeeAccountLinkProposal[]`
++ 직원 표시용 `employeeName`, `employeeNumber` — 이 두 필드는 이 엔드포인트에만 실린다),
+최신 제안 먼저.
 
 ### GET /api/erp/masterdata/employees/{id}/account-link-proposals
 
-한 직원의 제안 이력(전 상태). Auth: `erp.read` + 직원 부서 data scope. **200**: list 봉투.
+한 직원의 제안 이력(전 상태). Auth: `erp.read` + 직원 부서 data scope. **Query**:
+`?page=&size=`(기본 0 / 20). **200**: list 봉투, 최신 제안 먼저. **Errors**: 404
+`MASTERDATA_NOT_FOUND`(직원 없음).
 
 ### POST /api/erp/masterdata/account-link-proposals/{proposalId}/accept
 
 수락 — 이 호출이 `employees.account_id` 를 쓰는 **유일한** 경로다. **Headers**:
-`Idempotency-Key` (req). **Request**: `{}`.
+`Idempotency-Key` (req). **Request**: `{}`(본문 생략도 같은 뜻 — 읽지 않는다).
 
 1. 제안 없음 → 404 `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND`.
 2. 호출자 `sub ≠ proposal.accountId` → 403 `EMPLOYEE_LINK_NOT_ADDRESSEE`.
@@ -394,7 +411,8 @@ and those are not enforced here per E5 read-only boundary.)
 
 ### POST /api/erp/masterdata/employees/{id}/account-link/unlink
 
-연결 해제 — `erp.write` + 직원 부서 data scope, **또는** 연결된 계정 주인 본인.
+연결 해제 — `erp.write` + 직원 부서 data scope, **또는** 연결된 계정 주인 본인(이 경로도
+`erp.read` 이상 — 수락과 같은 «이 테넌트의 erp 참여자» 조건, data scope 없음).
 `{ "reason": "<≤256, required>" }`. 연결이 없으면 409 `EMPLOYEE_LINK_CONFLICT`
 (`details.cause = "not_linked"`). **200**: 직원 상세 봉투(`accountId` ABSENT). 다시 연결하려면
 새 제안 → 수락.
