@@ -120,11 +120,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-626-operator-list-home-tenant-id.md` — **`GET /api/admin/operators` 항목(+ 같은 DTO 의 `/me`)에 운영자 HOME 테넌트 `homeTenantId`** (REVIEW, 2026-10-08 UTC · 소유자 결정 «A»). 테넌트 목록이 HOME ∪ 배정을 섞어 돌려주는데 소비자가 가를 방법이 없었다 — 그룹 멤버는 HOME 만 받으므로 콘솔 선택기가 배정-only 를 고르면 422. 필드 추가만(판정·쿼리 무변경, 계약 먼저). 대상 시험 9/9 · 43/43(결과 XML 실측). 짝 = platform-console `TASK-PC-FE-319`(같은 PR). 그룹 규칙 확장(B′/B″)은 역할 fan-out 이 멤버 HOME 에 쓰는 결함으로 보류. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
-
+_(없음)_
 
 ## done
+- ✅ `TASK-BE-626-operator-list-home-tenant-id.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0 · SUCCESS 22). `GET /api/admin/operators` 항목(+ `/me`)에 운영자 HOME 테넌트 `homeTenantId`. AC-4(CI iam 레인) = Build & Test · Integration iam A/B · iam E2E smoke SUCCESS. 라이브 AC 없음. 짝 platform-console `TASK-PC-FE-319` 는 라이브 AC 로 review 잔류.
 - ✅ `TASK-BE-623-hide-social-providers-without-keys.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4166**, 스쿼시 **`85b4c9263`** (머지 시점 실패 0). 키 없는 제공자 버튼 숨김. AC-5 라이브: 로그인 화면 Google · Naver 둘뿐, 두 버튼으로 실제 로그인 성공(23차 창).
 - ✅ `TASK-BE-617-social-login-on-the-consumer-pool.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4165**, 스쿼시 **`71b66135c`** (머지 시점 실패 0). 소셜 로그인을 소비자 계정 풀 규칙으로. 라이브(23차 창 2회차): Google · Naver 가입이 `consumer-pool` 계정 · 팬 → 스토어 재로그인 없이 첫 방문 동의만.
 - ✅ `TASK-BE-611-scope-social-identity-lookup-to-the-client-tenant.md` — **DONE 2026-10-05 UTC (4-dim verified)** — impl PR **#4061**, 스쿼시 **`fa3940bf7`** (머지 시점 실패 0/67). 소셜 신원 조회를 시작 client 의 테넌트로 한정. **AC-2 🟢 21차 창**(Kakao 스텁 · auth-service 재생성 → 원상복구 env 동일): 같은 신원으로 스토어 → 팬 = 신원 2 · 계정 2(테넌트별, account_id 다름) · 스토어 재로그인 대조군 변화 없음.
