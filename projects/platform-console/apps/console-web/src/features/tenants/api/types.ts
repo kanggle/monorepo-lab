@@ -109,6 +109,25 @@ export interface CreateTenantInput {
   tenantId: string;
   displayName: string;
   tenantType: TenantType;
+  /**
+   * Optional org-node to place the new tenant under (TASK-PC-FE-312 /
+   * TASK-BE-625 — admin-api.md § POST /api/admin/tenants `orgNodeId`).
+   * 🔴 ABSENT (not `undefined`-valued, not `null`, not `''`) when the operator
+   *    leaves «소속 노드» empty — the request body must stay byte-identical to
+   *    the pre-312 create (regression, task AC-4).
+   */
+  orgNodeId?: string;
+}
+
+/**
+ * One choice of the create form's «소속 노드 (선택)» select. The tenants
+ * feature's OWN view-model (architecture.md § Forbidden Dependencies — it does
+ * not import `features/org-hierarchy`); `app/(console)/tenants/page.tsx`
+ * composes it from the org-node list server-side.
+ */
+export interface TenantOrgNodeOption {
+  orgNodeId: string;
+  name: string;
 }
 
 // --- update (PATCH /api/admin/tenants/{tenantId}) --------------------------

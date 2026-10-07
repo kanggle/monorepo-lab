@@ -128,6 +128,37 @@ export const OrgAdminGrantSchema = z.object({
 });
 export type OrgAdminGrant = z.infer<typeof OrgAdminGrantSchema>;
 
+// --- tenant placement (TASK-PC-FE-312 / TASK-BE-625) -----------------------
+
+/**
+ * `GET /api/admin/tenants/{tenantId}/org-node/preview` — the effect of putting
+ * a tenant under a node / moving it / taking it out (admin-api.md § «테넌트
+ * 소속» · placement effect wire shape).
+ *
+ * 🔴 `lostDomains` is computed by account-service (the authority on
+ *    subscriptions and ceilings). The console NEVER derives it from
+ *    ceiling ∩ subscriptions itself — an `ORG_ADMIN` cannot read the tenant's
+ *    subscriptions, so a console-side computation would be wrong for exactly
+ *    the actor this screen exists for.
+ */
+export const PlacementEffectSchema = z.object({
+  tenantId: z.string(),
+  fromOrgNodeId: z.string().nullable(),
+  toOrgNodeId: z.string().nullable(),
+  domainsBefore: z.array(z.string()),
+  domainsAfter: z.array(z.string()),
+  lostDomains: z.array(z.string()),
+  gainedDomains: z.array(z.string()),
+});
+export type PlacementEffect = z.infer<typeof PlacementEffectSchema>;
+
+/** `PUT /api/admin/tenants/{tenantId}/org-node` 200 — the effect + `changed`
+ *  (`false` = the tenant was already there; idempotent no-op). */
+export const PlacementResultSchema = PlacementEffectSchema.extend({
+  changed: z.boolean(),
+});
+export type PlacementResult = z.infer<typeof PlacementResultSchema>;
+
 // --- inputs ----------------------------------------------------------------
 
 export interface CreateOrgNodeInput {

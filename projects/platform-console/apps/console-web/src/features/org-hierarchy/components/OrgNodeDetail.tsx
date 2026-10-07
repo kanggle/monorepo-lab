@@ -12,7 +12,6 @@ import {
   effectiveCeilingOf,
 } from '../lib/tree';
 import {
-  useOrgNodeTenants,
   useOrgNodeAdmins,
   useSetCeiling,
   useUpdateOrgNode,
@@ -23,13 +22,15 @@ import {
 import { CeilingEditor } from './CeilingEditor';
 import { OrgAdminPanel } from './OrgAdminPanel';
 import { OrgReasonDialog } from './OrgReasonDialog';
+import { TenantPlacementSection } from './TenantPlacementSection';
 
 /**
  * Org-node detail panel (TASK-PC-FE-237). Shared `DetailHeader` ghost back
  * button + a `<dl>` in the house order 명칭 → 상태(depth / 상한 요약) →
  * 식별자(orgNodeId / parentId) → 날짜(createdAt / updatedAt via
  * `formatDateTime`). Sections: 상한 (`CeilingEditor`), 소속 테넌트
- * (`useOrgNodeTenants` — node + all descendants), 노드 관리자
+ * (`TenantPlacementSection` — node + all descendants, plus add / move /
+ * detach since TASK-PC-FE-312), 노드 관리자
  * (`OrgAdminPanel`). Rename / re-parent / delete actions each go through the
  * reason-capture gate.
  *
@@ -69,7 +70,6 @@ export function OrgNodeDetail({ node, nodes, grantableRoles }: OrgNodeDetailProp
   //    🔴 못 찾으면 `이름 확인 불가` 다(id 로 되돌아가지 않는다 — 276 의 규칙).
   const parent = nodes.find((n) => n.orgNodeId === node.parentId) ?? null;
 
-  const tenants = useOrgNodeTenants(node.orgNodeId);
   const admins = useOrgNodeAdmins(node.orgNodeId);
   const setCeiling = useSetCeiling();
   const update = useUpdateOrgNode();
@@ -231,36 +231,8 @@ export function OrgNodeDetail({ node, nodes, grantableRoles }: OrgNodeDetailProp
         }
       />
 
-      <section aria-labelledby="org-node-tenants-heading" className="space-y-2">
-        <h3
-          id="org-node-tenants-heading"
-          className="text-base font-semibold text-foreground"
-        >
-          소속 테넌트 (하위 노드 포함)
-        </h3>
-        {tenants.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {errText(tenants.error)}
-          </p>
-        ) : tenants.isLoading ? (
-          <p className="text-sm text-muted-foreground">불러오는 중…</p>
-        ) : (tenants.data?.length ?? 0) === 0 ? (
-          <p className="text-sm text-muted-foreground" data-testid="org-node-tenants-empty">
-            이 노드와 하위 노드에 소속된 테넌트가 없습니다.
-          </p>
-        ) : (
-          <ul data-testid="org-node-tenants-list" className="flex flex-wrap gap-2">
-            {tenants.data?.map((t) => (
-              <li
-                key={t}
-                className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground"
-              >
-                {t}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* TASK-PC-FE-312 — the read list + add / move / detach (TASK-BE-625). */}
+      <TenantPlacementSection node={node} nodes={nodes} />
 
       <OrgAdminPanel
         node={node}

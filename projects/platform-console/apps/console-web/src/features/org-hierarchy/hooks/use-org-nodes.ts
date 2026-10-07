@@ -5,13 +5,18 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { z } from 'zod';
 import { apiClient } from '@/shared/api/client';
+import { ApiError } from '@/shared/api/errors';
 import {
   OrgNodeListSchema,
   OrgNodeSchema,
   SubtreeTenantsSchema,
   OrgAdminListSchema,
   OrgAdminGrantSchema,
+  PlacementEffectSchema,
+  PlacementResultSchema,
+  type PlacementEffect,
   type OrgNode,
   type Ceiling,
   type CreateOrgNodeInput,
@@ -197,6 +202,133 @@ export function useGrantOrgAdmin() {
       qc.invalidateQueries({ queryKey: [ORG_NODES_KEY, vars.id, 'admins'] });
       invalidateTree(qc);
     },
+  });
+}
+
+// --- tenant placement (TASK-PC-FE-312 / TASK-BE-625) -------------------------
+
+/** 409 from the placement write (admin-api.md § PUT …/org-node). */
+export const PLACEMENT_CONFLICT_CODE = 'TENANT_ORG_NODE_CONFLICT';
+
+function placementPreviewPath(tenantId: string, toOrgNodeId: string | null) {
+  const base = `/api/tenants/${encPath(tenantId)}/org-node/preview`;
+  return toOrgNodeId === null
+    ? base
+    : `${base}?orgNodeId=${encodeURIComponent(toOrgNodeId)}`;
+}
+
+/**
+ * The previewed effect of a placement (`lostDomains` …), read BEFORE the write
+ * so the confirmation dialog can say what turns off. Never cached across
+ * dialogs (`gcTime: 0`) — a stale preview would describe the wrong ceiling.
+ */
+export function usePlacementPreview(
+  tenantId: string,
+  toOrgNodeId: string | null,
+) {
+  return useQuery({
+    queryKey: [ORG_NODES_KEY, 'placement-preview', tenantId, toOrgNodeId],
+    queryFn: async (): Promise<PlacementEffect> => {
+      const raw = await apiClient.get<unknown>(
+        placementPreviewPath(tenantId, toOrgNodeId),
+      );
+      return PlacementEffectSchema.parse(raw);
+    },
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+export function usePlaceTenant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tenantId,
+      toOrgNodeId,
+      reason,
+    }: {
+      tenantId: string;
+      /** `null` = take the tenant out (무소속). The key is always sent. */
+      toOrgNodeId: string | null;
+      reason: string;
+    }) => {
+      const raw = await apiClient.put<unknown>(
+        `/api/tenants/${encPath(tenantId)}/org-node`,
+        { orgNodeId: toOrgNodeId, reason },
+      );
+      return PlacementResultSchema.parse(raw);
+    },
+    // Every node's subtree-tenant list may have changed (source AND
+    // destination, plus their ancestors) — refetch the whole org-nodes family.
+    onSuccess: () => invalidateTree(qc),
+    // 409 TENANT_ORG_NODE_CONFLICT = someone else moved it first: reload what
+    // the screen shows so the retry starts from the real placement.
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === PLACEMENT_CONFLICT_CODE) {
+        invalidateTree(qc);
+      }
+    },
+  });
+}
+
+const TenantIdPageSchema = z.object({
+  items: z.array(z.object({ tenantId: z.string() })),
+  page: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+});
+
+/** Upper bound on `/api/tenants` pages read for the candidate list
+ *  (100 per page — the producer max). */
+const MAX_TENANT_PAGES = 20;
+
+/**
+ * Tenants the actor could put under a node — built ONLY from reads the console
+ * already has (no new endpoint, TASK-PC-FE-312 AC-0):
+ *
+ *   ① for each top-most node in the actor's reach (`nodes` is the reach-scoped
+ *     flat list; a node whose parent is not in it is a reach root),
+ *     `GET /api/org-nodes/{id}/tenants` — every PLACED tenant an `ORG_ADMIN`
+ *     administers;
+ *   ② `GET /api/tenants` — SUPER_ADMIN only, adds the UNPLACED tenants. Any
+ *     other actor gets a 403 there, which is expected and swallowed (① stands).
+ *
+ * The server stays the authority: whatever is picked is checked again by the
+ * preview and the write (404 when out of reach).
+ */
+export function usePlacementCandidates(nodes: OrgNode[], enabled: boolean) {
+  const ids = new Set(nodes.map((n) => n.orgNodeId));
+  const rootIds = nodes
+    .filter((n) => n.parentId === null || !ids.has(n.parentId))
+    .map((n) => n.orgNodeId)
+    .sort();
+  return useQuery({
+    queryKey: [ORG_NODES_KEY, 'placement-candidates', rootIds],
+    queryFn: async (): Promise<string[]> => {
+      const found = new Set<string>();
+      for (const id of rootIds) {
+        const raw = await apiClient.get<unknown>(
+          `/api/org-nodes/${encPath(id)}/tenants`,
+        );
+        for (const t of SubtreeTenantsSchema.parse(raw).tenantIds) found.add(t);
+      }
+      try {
+        for (let page = 0; page < MAX_TENANT_PAGES; page += 1) {
+          const raw = await apiClient.get<unknown>(
+            `/api/tenants?page=${page}&size=100`,
+          );
+          const parsed = TenantIdPageSchema.parse(raw);
+          for (const t of parsed.items) found.add(t.tenantId);
+          if (parsed.page + 1 >= parsed.totalPages) break;
+        }
+      } catch (err) {
+        // Not SUPER_ADMIN (403) → ① alone is the actor's reach. Anything
+        // else is a real failure and must not be hidden as «no candidates».
+        if (!(err instanceof ApiError && err.status === 403)) throw err;
+      }
+      return [...found].sort();
+    },
+    enabled,
+    staleTime: 0,
   });
 }
 

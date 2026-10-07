@@ -69,6 +69,8 @@ export async function POST(req: Request) {
         tenantId: body.tenantId,
         displayName: body.displayName,
         tenantType: body.tenantType,
+        // TASK-PC-FE-312 — only a chosen node travels; absent/null stays absent.
+        ...(body.orgNodeId ? { orgNodeId: body.orgNodeId } : {}),
       },
       body.reason,
       body.idempotencyKey,

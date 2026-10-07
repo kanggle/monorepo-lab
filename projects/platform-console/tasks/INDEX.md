@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-312-org-node-tenant-placement-ui.md` — **조직 계층 노드 상세의 테넌트 추가 · 옮기기 · 빼기 + 잃는 도메인 확인 화면 · `/tenants` 생성 폼 «소속 노드»** (READY, 2026-10-07 UTC · ⏳ 선행 iam `TASK-BE-625` 머지). `ADR-MONO-047` § 개정. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -121,6 +121,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-312-org-node-tenant-placement-ui.md` — **조직 계층 노드 상세의 테넌트 추가 · 옮기기 · 빼기 + 잃는 도메인 확인 화면 · `/tenants` 생성 폼 «소속 노드»** (REVIEW, 2026-10-08 UTC · 선행 iam `TASK-BE-625` 머지 #4223 `9880f9209`). `ADR-MONO-047` § 개정. AC-0: 미리보기 API 가 `lostDomains` 를 준다 — 콘솔은 상한 ∩ 구독을 계산하지 않는다. 확인 창은 미리보기 성공 전 잠김 · 어떤 404 든 «관리할 권한이 없습니다» · 409 는 재조회 + 재시도 문구 · «추가할 테넌트» 후보는 기존 두 읽기의 합(도달 루트들의 subtree 테넌트 ∪ `SUPER_ADMIN` 전용 `GET /api/tenants`, 새 엔드포인트 없음) · 생성 폼 «소속 노드 (선택)» 는 비우면 본문에 키 없음. 샘플은 기존 규율(버튼 표시 · 서버가 `SAMPLE_READ_ONLY`) — 티켓 Edge Case 문구와 다름, 티켓 § 티켓과 다른 점. AC-0~5 닫힘 · bite 1 실패/135 통과(AC-2 양성 칸만) · tsc/lint rc=0 · vitest 3900/3900 · e2e grep 0건 · ⚪ AC-6 nightly 는 머지 뒤. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-319-group-member-picker-home-tenant.md` — **그룹 «멤버 추가» 선택기에서 배정만 된(HOME 이 다른) 운영자를 «○○ 소속 · 배정만 됨» 으로 비활성** (REVIEW, 2026-10-08 UTC · 소유자 결정 «A»). `TASK-PC-FE-317` AC-0 이 남긴 빈틈(고른 뒤 사유 단계 다음에 422)을 고르기 전에 막는다. 짝 = iam `TASK-BE-626`(`homeTenantId`, 같은 PR). 플랫폼 운영자(`*`)도 비활성 · `homeTenantId` 없으면 «모름» 이라 고를 수 있다(옛 producer·샘플). 대상 49/49 · bite 1 실패/7 통과 · tsc/lint rc=0. 머지 #4222 `07328d826`(실패 0) · iam 짝 BE-626 은 done. ⏳ **AC-6 라이브 ⚪ — 다음 데모 창**에서 배정-only 운영자 행이 비활성인지 확인(데모 시드에 그 테넌트로 배정만 된 운영자가 있어야 보인다 — 없으면 창에서 배정 하나를 만들어 본다). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-314-sidebar-by-role-and-subscription.md` — **사이드바 노출을 역할 · 구독으로** (REVIEW, 2026-10-07 UTC · 소유자 결정). `admin`/`admin-per-card` 게이트는 내 역할(`GET /api/admin/me`)이 `permission-map.ts`×`RBAC_SEED_MATRIX` 로 하나도 못 가지면 숨김(모르면 보임 — 커스텀 역할·`/me` 실패 모두), `domain` 게이트는 절대 안 숨기고 활성 테넌트 미구독 시 부모에 «구독 필요» 배지(툴팁 안내). 새 순수 모듈 `shared/ui/console-nav-exposure.ts`(다른 세션의 `console-nav-config.ts` IAM 순서 변경 PR 과 충돌 최소화) + `shared/api/iam-operators-read.ts` `getSelfRolesOrNull()` 승격. AC-0~7 전부 닫힘(AC-7 의 nightly 확인만 라이브 ⚪) · AC-6 bite 는 AC-1 보다 넓게 적중(AC-2·admin-per-card 도 같은 조건에 의존) · AC-0 측정 중 SUPER_ADMIN 이 `partnership.manage` 를 원래 안 가진다는 기존 설계(rbac.md:112)와 AC-2 "지금과 같은 전체" 문구가 충돌 — Goal 표의 기계적 조인을 그대로 적용(파트너십만 예외)하기로 결정, Implementation Notes 에 근거 기록. tsc/lint rc=0 · vitest 3846/3849(실패 3=무관 호스트 flake, 단독 재실행 14/14) · e2e 3곳 전수 grep 결과 고칠 스펙 없음. 분석=Opus 5.5 / 구현=Sonnet 5.
