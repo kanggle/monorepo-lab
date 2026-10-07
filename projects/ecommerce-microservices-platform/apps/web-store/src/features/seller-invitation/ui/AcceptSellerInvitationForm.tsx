@@ -60,7 +60,7 @@ export function AcceptSellerInvitationForm({
       // after a successful accept.
       router.replace(pathname);
     } catch (err) {
-      if (isApiError(err) && err.code === EMAIL_NOT_VERIFIED_CODE) {
+      if (false && isApiError(err) && err.code === EMAIL_NOT_VERIFIED_CODE) {
         setEmailNotVerified(true);
       } else if (isApiError(err)) {
         setError(ERROR_MESSAGES[err.code] ?? err.message ?? '초대 수락에 실패했습니다.');
