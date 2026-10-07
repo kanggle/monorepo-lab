@@ -201,26 +201,6 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     note: '그룹 grant 는 각 현재 멤버의 평범한 직접 권한 행으로 fan-out 되며(group_origin 마커), 그룹 멤버십 자체는 평가·격리 축이 아닙니다. 조회에도 group.manage 가 필요하고, 모든 변경은 사유가 필수입니다. 자기가 가진 것보다 높은 역할·스코프 밖 테넌트는 그룹에도 부여할 수 없습니다 (no-escalation).',
   },
   {
-    label: '조직 계층',
-    href: '/org-hierarchy',
-    purpose:
-      '회사를 조직 노드(company)로 묶어 트리를 만들고, 노드마다 쓸 수 있는 도메인 상한을 정하며, 노드 관리자를 세웁니다.',
-    actions:
-      '노드 생성 · 이름/부모 변경 · 삭제 · 엔타이틀먼트 상한(ceiling) 설정 · ORG_ADMIN 배정/해제 · 소속 테넌트 조회',
-    gate: 'org.manage',
-    mutates: true,
-    note: '상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다. "상한 없음"과 "빈 상한(아무것도 불가)"은 정반대이니 혼동하지 마세요. 노드는 테넌트를 묶기만 하고 격리하지 않습니다 — 토큰은 여전히 테넌트 하나입니다.',
-  },
-  {
-    label: '테넌트',
-    href: '/tenants',
-    purpose: '테넌트(회사 단위 격리 경계)를 만들고 관리합니다.',
-    actions: '테넌트 생성 · 표시명/상태 변경 · 상세 조회 · 상태/유형 필터',
-    gate: 'tenant.manage',
-    mutates: true,
-    note: '조회에도 같은 권한이 필요해 사실상 SUPER_ADMIN 전용입니다. 상단의 테넌트 전환기(내가 지금 어느 테넌트로 일하는가)와는 다른 화면입니다.',
-  },
-  {
     label: '권한',
     href: '/permissions',
     purpose: '권한 키가 무엇이 있고 어떤 역할이 갖는지 찾아봅니다.',
@@ -256,6 +236,27 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     gate: 'account.read',
     mutates: true,
     note: '내보내기는 audit.read, GDPR 삭제는 account.lock 으로 게이트됩니다(이름과 직관이 어긋나니 주의). GDPR 삭제는 되돌릴 수 없습니다.',
+  },
+  // ── 조직 설정 (TASK-PC-FE-313: 조직 계층 · 테넌트가 IAM 에서 이 그룹으로 옮겨 왔다) ──
+  {
+    label: '조직 계층',
+    href: '/org-hierarchy',
+    purpose:
+      '회사를 조직 노드(company)로 묶어 트리를 만들고, 노드마다 쓸 수 있는 도메인 상한을 정하며, 노드 관리자를 세웁니다.',
+    actions:
+      '노드 생성 · 이름/부모 변경 · 삭제 · 엔타이틀먼트 상한(ceiling) 설정 · ORG_ADMIN 배정/해제 · 소속 테넌트 조회',
+    gate: 'org.manage',
+    mutates: true,
+    note: '상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다. "상한 없음"과 "빈 상한(아무것도 불가)"은 정반대이니 혼동하지 마세요. 노드는 테넌트를 묶기만 하고 격리하지 않습니다 — 토큰은 여전히 테넌트 하나입니다.',
+  },
+  {
+    label: '테넌트',
+    href: '/tenants',
+    purpose: '테넌트(회사 단위 격리 경계)를 만들고 관리합니다.',
+    actions: '테넌트 생성 · 표시명/상태 변경 · 상세 조회 · 상태/유형 필터',
+    gate: 'tenant.manage',
+    mutates: true,
+    note: '조회에도 같은 권한이 필요해 사실상 SUPER_ADMIN 전용입니다. 상단의 테넌트 전환기(내가 지금 어느 테넌트로 일하는가)와는 다른 화면입니다.',
   },
   {
     label: '도메인 구독',
@@ -564,7 +565,8 @@ export interface ScreenAccess {
 }
 
 // 순서는 사이드바 nav(ConsoleSidebarNav.tsx)의 setup-first 순서를 따른다:
-// 운영자 관리 → 테넌트 → 권한/권한 세트 → 감사·보안 → 계정 운영 → 구독 → 파트너십.
+// 운영자 관리 → 권한/권한 세트 → 감사·보안 → 계정 운영 → 조직 계층 → 테넌트 → 구독
+// → 파트너십 (TASK-PC-FE-313: 조직 계층 · 테넌트는 「조직 설정」 그룹으로 옮겨 갔다).
 export const SCREEN_ACCESS: ScreenAccess[] = [
   {
     screen: '운영자 관리',
@@ -578,36 +580,6 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
       TENANT_BILLING_ADMIN: { level: 'none' },
       ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
-    },
-  },
-  {
-    screen: '조직 계층',
-    href: '/org-hierarchy',
-    gate: 'org.manage',
-    cells: {
-      // ROOT 노드 생성 유일 주체는 SUPER_ADMIN(rbac.md § Seed Matrix, ADR-047 D5).
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
-    },
-  },
-  {
-    screen: '테넌트',
-    href: '/tenants',
-    gate: 'tenant.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      // ORG_ADMIN 은 tenant.manage 가 없다 — 노드는 관리하되 테넌트 원장은 못 만진다.
-      ORG_ADMIN: { level: 'none' },
     },
   },
   {
@@ -651,6 +623,36 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       SECURITY_ANALYST: { level: 'none' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'none' },
+    },
+  },
+  {
+    screen: '조직 계층',
+    href: '/org-hierarchy',
+    gate: 'org.manage',
+    cells: {
+      // ROOT 노드 생성 유일 주체는 SUPER_ADMIN(rbac.md § Seed Matrix, ADR-047 D5).
+      SUPER_ADMIN: { level: 'full' },
+      SUPPORT_READONLY: { level: 'none' },
+      SUPPORT_LOCK: { level: 'none' },
+      SECURITY_ANALYST: { level: 'none' },
+      TENANT_ADMIN: { level: 'none' },
+      TENANT_BILLING_ADMIN: { level: 'none' },
+      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
+    },
+  },
+  {
+    screen: '테넌트',
+    href: '/tenants',
+    gate: 'tenant.manage',
+    cells: {
+      SUPER_ADMIN: { level: 'full' },
+      SUPPORT_READONLY: { level: 'none' },
+      SUPPORT_LOCK: { level: 'none' },
+      SECURITY_ANALYST: { level: 'none' },
+      TENANT_ADMIN: { level: 'none' },
+      TENANT_BILLING_ADMIN: { level: 'none' },
+      // ORG_ADMIN 은 tenant.manage 가 없다 — 노드는 관리하되 테넌트 원장은 못 만진다.
       ORG_ADMIN: { level: 'none' },
     },
   },

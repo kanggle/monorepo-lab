@@ -96,6 +96,8 @@ apps/console-web/
 │   │   │   ├── operators/             # ✅ IAM operators 관리 parity 라우트 (in-console nav, TASK-PC-FE-004)
 │   │   │   ├── permissions/           # ✅ IAM RBAC 「권한」 조회 라우트 (TASK-PC-FE-225 nav 스텁 대체, TASK-PC-FE-227 — role→permission-key 카탈로그, read-only, `operator.manage`)
 │   │   │   ├── permission-sets/       # ✅ IAM RBAC 「권한 세트」 조회 라우트 (TASK-PC-FE-225 nav 스텁 대체, TASK-PC-FE-228 — permissions/ 와 같은 role 카탈로그를 "권한 세트"로 재프레이밍, `permission_set_id`=`admin_roles.id`, read-only)
+│   │   │   ├── org-hierarchy/         # ✅ 조직 노드 트리 + 엔타이틀먼트 상한 + ORG_ADMIN ('조직 설정' sidebar 그룹 — TASK-PC-FE-313 가 IAM 에서 옮김; ADR-047; TASK-PC-FE-237)
+│   │   │   ├── tenants/               # ✅ 테넌트(격리 경계) 원장 CRUD ('조직 설정' sidebar 그룹 — TASK-PC-FE-313 가 IAM 에서 옮김; `tenant.manage`; TASK-PC-FE-226)
 │   │   │   ├── subscriptions/         # ✅ 도메인 구독 self-enablement 라우트 ('조직 설정' sidebar 그룹, ADR-023 entitlement-plane; operator token; TASK-PC-FE-183)
 │   │   │   ├── partnerships/          # ✅ cross-org 파트너십 관리 라우트 ('조직 설정' sidebar 그룹, ADR-045 관계-상태 표면; operator token; TASK-PC-FE-187)
 │   │   │   ├── wms/                   # ✅ wms 운영 섹션 (read + alert-ack; in-console nav, Phase 4 slice 1, TASK-PC-FE-007)
