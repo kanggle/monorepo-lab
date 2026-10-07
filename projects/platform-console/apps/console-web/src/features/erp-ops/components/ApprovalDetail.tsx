@@ -27,9 +27,13 @@ function fmt(ts: string | undefined): string {
 export function ApprovalDetail({
   id,
   onClose,
+  mySub,
 }: {
   id: string;
   onClose: () => void;
+  /** The signed-in operator's own `sub` (TASK-PC-FE-311) — threaded into
+   *  every `ApprovalEmployeeRef` below unchanged; see that component. */
+  mySub?: string | null;
 }) {
   const {
     q,
@@ -93,6 +97,7 @@ export function ApprovalDetail({
                 <ApprovalEmployeeRef
                   employeeId={data.submitterId}
                   field="submitterId"
+                  mySub={mySub}
                 />
               </dd>
               {data.reason ? (
@@ -159,6 +164,7 @@ export function ApprovalDetail({
                         <ApprovalEmployeeRef
                           employeeId={stage.approverId}
                           field="stageApproverId"
+                          mySub={mySub}
                         />
                       </span>
                       <span className={statusToneClass(stageTone)}>
@@ -185,6 +191,7 @@ export function ApprovalDetail({
                   <ApprovalEmployeeRef
                     employeeId={data.approverId}
                     field="approverId"
+                    mySub={mySub}
                   />
                 </dd>
               </dl>
@@ -217,7 +224,11 @@ export function ApprovalDetail({
                     </span>{' '}
                     <span className="text-muted-foreground">
                       ·{' '}
-                      <ApprovalEmployeeRef employeeId={h.actor} field="actor" />{' '}
+                      <ApprovalEmployeeRef
+                        employeeId={h.actor}
+                        field="actor"
+                        mySub={mySub}
+                      />{' '}
                       · {h.at}
                       {/* v2.0 — stage annotation */}
                       {h.stage !== undefined
@@ -234,6 +245,7 @@ export function ApprovalDetail({
                         <ApprovalEmployeeRef
                           employeeId={h.actingForApproverId}
                           field="actingForApproverId"
+                          mySub={mySub}
                         />{' '}
                         대신)
                       </span>

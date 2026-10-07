@@ -62,12 +62,16 @@ export interface ApprovalScreenProps {
    * a crash.
    */
   initialSelectedId?: string | null;
+  /** The signed-in operator's own `sub` (TASK-PC-FE-311) — forwarded to
+   *  `ApprovalDetail` unchanged; see `ApprovalEmployeeRef`. */
+  mySub?: string | null;
 }
 
 export function ApprovalScreen({
   initialRequests,
   initialInbox,
   initialSelectedId,
+  mySub,
 }: ApprovalScreenProps) {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -234,6 +238,7 @@ export function ApprovalScreen({
         <ApprovalDetail
           id={selectedId}
           onClose={() => setSelectedId(null)}
+          mySub={mySub}
         />
       )}
     </section>
