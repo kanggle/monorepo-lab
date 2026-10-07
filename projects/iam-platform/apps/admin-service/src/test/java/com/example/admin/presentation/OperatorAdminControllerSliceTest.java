@@ -124,14 +124,16 @@ class OperatorAdminControllerSliceTest {
                         "ACTIVE", List.of("SUPER_ADMIN"), true,
                         Instant.parse("2026-04-24T10:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
-                        null));
+                        null, "*"));
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.operatorId").value("op-actor"))
                 .andExpect(jsonPath("$.email").value("actor@example.com"))
                 .andExpect(jsonPath("$.roles[0]").value("SUPER_ADMIN"))
-                .andExpect(jsonPath("$.totpEnrolled").value(true));
+                .andExpect(jsonPath("$.totpEnrolled").value(true))
+                // TASK-BE-626 — the shared DTO carries the HOME tenant on /me too.
+                .andExpect(jsonPath("$.homeTenantId").value("*"));
     }
 
     @Test
@@ -181,7 +183,7 @@ class OperatorAdminControllerSliceTest {
     void list_operators_returns_page() throws Exception {
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
-                false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null, "acme");
         when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
@@ -192,13 +194,32 @@ class OperatorAdminControllerSliceTest {
     }
 
     @Test
+    void list_operators_items_carry_home_tenant_id() throws Exception {
+        // TASK-BE-626 — the tenant-scoped list mixes HOME and ASSIGNED operators; each item
+        // carries its HOME tenant so a consumer can tell them apart.
+        OperatorQueryService.OperatorSummary home = new OperatorQueryService.OperatorSummary(
+                "op-home", "home@example.com", "Home", "ACTIVE", List.of(),
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null, "acme");
+        OperatorQueryService.OperatorSummary assigned = new OperatorQueryService.OperatorSummary(
+                "op-assigned", "assigned@example.com", "Assigned", "ACTIVE", List.of(),
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null, "demo-corp");
+        when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
+                .thenReturn(new OperatorQueryService.OperatorPage(List.of(home, assigned), 2L, 0, 20, 1));
+
+        mockMvc.perform(get("/api/admin/operators?tenantId=acme").header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].homeTenantId").value("acme"))
+                .andExpect(jsonPath("$.content[1].homeTenantId").value("demo-corp"));
+    }
+
+    @Test
     void list_operators_emits_operatorContext_when_finance_default_account_id_present() throws Exception {
         // TASK-BE-308: operator with non-null financeDefaultAccountId → response item
         // carries operatorContext.defaultAccountId.
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-1", "one@example.com", "One", "ACTIVE", List.of("SUPPORT_LOCK"),
                 false, null, Instant.parse("2026-01-01T00:00:00Z"),
-                "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000");
+                "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000", "acme");
         when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
@@ -215,7 +236,7 @@ class OperatorAdminControllerSliceTest {
         // The whole "operatorContext" substring must NOT appear in the response item.
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-2", "two@example.com", "Two", "ACTIVE", List.of("SUPPORT_LOCK"),
-                false, null, Instant.parse("2026-01-01T00:00:00Z"), null);
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), null, "acme");
         when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 
@@ -232,7 +253,7 @@ class OperatorAdminControllerSliceTest {
         // as absent (mirrors BE-304 registry surface).
         OperatorQueryService.OperatorSummary s = new OperatorQueryService.OperatorSummary(
                 "op-3", "three@example.com", "Three", "ACTIVE", List.of("SUPPORT_LOCK"),
-                false, null, Instant.parse("2026-01-01T00:00:00Z"), "   ");
+                false, null, Instant.parse("2026-01-01T00:00:00Z"), "   ", "acme");
         when(queryService.listOperators(any(), anyInt(), anyInt(), any(), any()))
                 .thenReturn(new OperatorQueryService.OperatorPage(List.of(s), 1L, 0, 20, 1));
 

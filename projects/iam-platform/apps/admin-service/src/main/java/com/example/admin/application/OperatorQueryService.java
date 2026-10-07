@@ -95,7 +95,8 @@ public class OperatorQueryService {
                     op.totpEnrolledAt() != null || enrolledIds.contains(op.internalId()),
                     op.lastLoginAt(),
                     op.createdAt(),
-                    op.financeDefaultAccountId()));
+                    op.financeDefaultAccountId(),
+                    op.tenantId()));
         }
         return new OperatorPage(summaries, rows.totalElements(), rows.page(),
                 rows.size(), rows.totalPages());
@@ -114,7 +115,8 @@ public class OperatorQueryService {
                 totpEnrolled,
                 operator.lastLoginAt(),
                 operator.createdAt(),
-                operator.financeDefaultAccountId());
+                operator.financeDefaultAccountId(),
+                operator.tenantId());
     }
 
     /**
@@ -126,6 +128,12 @@ public class OperatorQueryService {
      * {@code operatorContext} via field-level
      * {@code @JsonInclude(Include.NON_NULL)} — the wire shape's
      * {@code operatorContext} key is omitted, never literal null.
+     *
+     * <p>TASK-BE-626 — {@code homeTenantId} is the operator's HOME tenant
+     * ({@code admin_operators.tenant_id}, {@code '*'} for platform operators). The
+     * tenant-scoped list returns HOME ∪ ASSIGNED operators, so a consumer needs this
+     * to tell them apart (e.g. the console's operator-group member picker — group
+     * membership is HOME-only, {@code GroupAdminUseCase.addMember}).
      */
     public record OperatorSummary(
             String operatorId,
@@ -136,7 +144,8 @@ public class OperatorQueryService {
             boolean totpEnrolled,
             Instant lastLoginAt,
             Instant createdAt,
-            String financeDefaultAccountId
+            String financeDefaultAccountId,
+            String homeTenantId
     ) {}
 
     public record OperatorPage(

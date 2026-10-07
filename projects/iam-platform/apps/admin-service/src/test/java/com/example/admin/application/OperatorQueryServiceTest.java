@@ -165,6 +165,32 @@ class OperatorQueryServiceTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-626: 목록 항목의 homeTenantId = 그 운영자 자신의 HOME 테넌트 (요청 테넌트가 아니다)")
+    void listOperators_carries_each_operators_own_home_tenant() {
+        // caller (home=acme, effective={acme,globex}) lists globex; the page holds one HOME
+        // operator of globex and one operator whose HOME is acme but is ASSIGNED to globex.
+        AdminOperatorPort.OperatorView caller =
+                operator(5L, "multi", "multi@ex.com", "ACTIVE", "acme-corp", null);
+        when(operatorPort.findByOperatorId("multi")).thenReturn(Optional.of(caller));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(eq(5L), eq("acme-corp")))
+                .thenReturn(Set.of("acme-corp", "globex-corp"));
+        AdminOperatorPort.OperatorView homeOp =
+                operator(7L, "g-home", "g@ex.com", "ACTIVE", "globex-corp", null);
+        AdminOperatorPort.OperatorView assignedOp =
+                operator(8L, "a-assigned", "a@ex.com", "ACTIVE", "acme-corp", null);
+        when(operatorPort.findOperatorsPageByTenant(eq("globex-corp"), eq(null), eq(0), eq(20)))
+                .thenReturn(new AdminOperatorPort.OperatorPage(List.of(homeOp, assignedOp), 2L, 0, 20, 1));
+        when(operatorPort.bulkLoadRoleNamesByOperator(anyCollection())).thenReturn(Map.of());
+        when(totpPort.findEnrolledOperatorIds(anyCollection())).thenReturn(Set.of());
+
+        OperatorQueryService.OperatorPage result =
+                service.listOperators(null, 0, 20, "multi", "globex-corp");
+
+        assertThat(result.content()).extracting(OperatorQueryService.OperatorSummary::homeTenantId)
+                .containsExactly("globex-corp", "acme-corp");
+    }
+
+    @Test
     @DisplayName("TASK-MONO-175: effective scope 밖 테넌트 요청은 TenantScopeDenied (403)")
     void listOperators_rejects_tenant_outside_effective_scope() {
         // caller home=acme, no globex assignment → effective={acme}; requests globex.
