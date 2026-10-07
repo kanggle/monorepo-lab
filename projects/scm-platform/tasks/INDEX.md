@@ -82,6 +82,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-SCM-BE-061-received-event-drops-every-line-after-the-first.md` — **`wms.inventory.received.v1` 의 둘째 라인부터 «중복» 으로 버려진다** (READY, 2026-10-07 UTC · 출처 `TASK-MONO-768`). 소비자가 라인마다 같은 `eventId` 로 dedupe 검사·기록 → 라인 1 만 반영, 나머지는 debug 로그뿐(에러·DLT 없음). 형제 `applyInventoryConfirmed` 처럼 이벤트당 한 번으로. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## in-progress
 
