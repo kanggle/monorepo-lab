@@ -20,7 +20,12 @@ export const runtime = 'nodejs';
  * contract § 2.3). The HttpOnly operator token + active tenant are
  * attached server-side in the api layer.
  *
- * - GET  → `listOperators` (read; NO mutation headers).
+ * - GET  → `listOperators` (read; NO mutation headers). TASK-PC-FE-317 —
+ *   an optional `tenantId` query param is passed through verbatim as an
+ *   EXPLICIT override of the active tenant (the operator-group member
+ *   picker's only caller); omitted ⇒ `listOperators` falls back to the
+ *   active tenant exactly as before (byte-identical request for every
+ *   pre-317 caller — operators screen / dashboards / IAM overview).
  * - POST → `createOperator` (mutation; the api layer attaches BOTH
  *   `X-Operator-Reason` AND `Idempotency-Key` per the producer matrix —
  *   the proxy never re-derives the header set). The password is in the
@@ -44,9 +49,10 @@ export async function GET(req: Request) {
   const size = url.searchParams.has('size')
     ? Number(url.searchParams.get('size'))
     : undefined;
+  const tenantId = url.searchParams.get('tenantId') ?? undefined;
 
   try {
-    const result = await listOperators({ status, page, size });
+    const result = await listOperators({ status, page, size, tenantId });
     return NextResponse.json(result);
   } catch (err) {
     return mapError(err, requestId);

@@ -543,6 +543,37 @@ describe('operators-api — §2.5 resilience error mapping', () => {
   });
 });
 
+describe('operators-api — TASK-PC-FE-317 explicit tenantId override (AC-1 / AC-6)', () => {
+  beforeEach(() => {
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');
+    cookieJar.set(TENANT_COOKIE, 'active-tenant-x');
+  });
+
+  it('AC-1: an explicit tenantId param overrides the active tenant in the query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST_200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listOperators({ tenantId: 'group-tenant-y', page: 0, size: 100 });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(new URL(String(url)).searchParams.get('tenantId')).toBe(
+      'group-tenant-y',
+    );
+  });
+
+  it('AC-6: omitting tenantId still sends the active-tenant query param — byte-identical to pre-317', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST_200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listOperators({ page: 0, size: 20 });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(new URL(String(url)).searchParams.get('tenantId')).toBe(
+      'active-tenant-x',
+    );
+  });
+});
+
 describe('operators-api — role tolerance (unknown future role)', () => {
   beforeEach(() => {
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-TOKEN');

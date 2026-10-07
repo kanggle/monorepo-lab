@@ -152,7 +152,13 @@ export async function listOperators(
   // scope; mirror of the audit `tenantId` pattern). The same active tenant is
   // also sent as `X-Tenant-Id` by `callGapOperators`; when none is selected
   // that call blocks with NO_ACTIVE_TENANT before any fetch.
-  const tenant = await getActiveTenant();
+  //
+  // TASK-PC-FE-317 — `params.tenantId` is an explicit OVERRIDE of the active
+  // tenant (used by the operator-group member picker to list the GROUP's
+  // tenant's operators, which may differ from the console's active tenant).
+  // Every pre-317 caller leaves `params.tenantId` undefined, so `tenant` falls
+  // through to `getActiveTenant()` exactly as before — byte-identical request.
+  const tenant = params.tenantId ?? (await getActiveTenant());
   if (tenant) qs.set('tenantId', tenant);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampPageSize(params.size, 20, 100)));

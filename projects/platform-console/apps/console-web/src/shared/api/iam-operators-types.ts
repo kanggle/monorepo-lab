@@ -80,4 +80,15 @@ export interface OperatorListParams {
   status?: OperatorStatus;
   page?: number;
   size?: number;
+  /**
+   * TASK-PC-FE-317 — explicit tenant to scope the list query by (passed as the
+   * producer's `tenantId` query param). Undefined ⇒ the ACTIVE tenant
+   * (`getActiveTenant()`, the pre-317 behaviour) — existing callers that never
+   * set this field see a byte-identical request. Added so the operator-group
+   * member picker can list the GROUP's tenant's operators even when it differs
+   * from the console's active tenant (ADR-MONO-046 D3 — the producer's
+   * add-member check is HOME-only against the group's tenant, not whatever
+   * tenant the operator currently has active).
+   */
+  tenantId?: string;
 }
