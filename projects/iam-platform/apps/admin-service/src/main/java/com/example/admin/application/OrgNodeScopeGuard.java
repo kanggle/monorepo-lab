@@ -2,6 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.OrgNodeNotFoundException;
 import com.example.admin.application.exception.OrgNodeSelfCeilingDeniedException;
+import com.example.admin.application.exception.TenantNotFoundException;
 import com.example.admin.application.orgnode.OrgNodeView;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
@@ -175,6 +176,68 @@ public class OrgNodeScopeGuard {
                             + "'; only a strict ancestor or SUPER_ADMIN may");
         }
         throw new OrgNodeNotFoundException("Org node not found: " + orgNodeId);
+    }
+
+    /** Which side of a tenant placement failed — rides in the DENIED row's {@code detail}. */
+    public static final String SIDE_SOURCE = "SOURCE";
+    public static final String SIDE_DESTINATION = "DESTINATION";
+
+    /**
+     * TASK-BE-625 (ADR-MONO-047 § 개정 2026-10-07, «양쪽을 다 관리하는 사람만») — may the actor
+     * move tenant {@code T} from where it is now to {@code target}? No new evaluator: this only
+     * <em>composes</em> the two predicates that already exist.
+     *
+     * <pre>
+     *   SOURCE       T under node S  → reach.administers(S)
+     *                T ungrouped     → T ∈ effectiveAdminScope(actor, operator.manage)
+     *                                  (= SUPER_ADMIN or TENANT_ADMIN @ T — rider P1; an ungrouped
+     *                                   tenant is in no ORG_ADMIN subtree)
+     *   DESTINATION  target node D   → reach.administers(D)
+     *                target ungrouped → nothing beyond SOURCE
+     * </pre>
+     *
+     * <p><b>SOURCE is checked first, and fails as 404 {@code TENANT_NOT_FOUND}</b> whatever the
+     * destination: an actor that does not administer T must not be able to probe whether some
+     * node exists. A failing DESTINATION is 404 {@code ORG_NODE_NOT_FOUND} — by then the actor
+     * demonstrably administers T, and a missing node and an out-of-reach node look the same.
+     *
+     * <p>Why not {@link TenantScopeGuard#requireTenantInScope}: that is a <b>403</b>
+     * {@code TENANT_SCOPE_DENIED}, which would confirm T exists. This surface follows the
+     * org-node rule (cross-scope is 404). The predicate it wraps —
+     * {@link AdminGrantScopeEvaluator#isTenantInAdminScope} — is used directly instead.
+     *
+     * <p>Why {@code TENANT_ADMIN} counts only for an ungrouped T: if T sits under S, a
+     * tenant owner moving it out alone would escape S's ceiling (Failure Scenario 2). For a
+     * grouped T the source side is S's administrators, full stop.
+     *
+     * @param currentOrgNodeId the tenant's current node as the authority reported it ({@code null} = ungrouped)
+     * @param targetOrgNodeId  destination ({@code null} = detach)
+     * @throws TenantNotFoundException  SOURCE side not administered
+     * @throws OrgNodeNotFoundException DESTINATION side not administered (or node unknown)
+     */
+    public void requirePlacementAllowed(OperatorContext actor, Reach reach, String tenantId,
+                                        String currentOrgNodeId, String targetOrgNodeId,
+                                        ActionCode actionCode) {
+        String actorId = actor == null ? null : actor.operatorId();
+        boolean sourceAdministered = currentOrgNodeId != null
+                ? reach.administers(currentOrgNodeId)
+                : grantScopeEvaluator.isTenantInAdminScope(actorId, Permission.OPERATOR_MANAGE, tenantId);
+        if (!sourceAdministered) {
+            denyPlacementAudited(actor, actionCode, tenantId, SIDE_SOURCE, currentOrgNodeId, targetOrgNodeId);
+            throw new TenantNotFoundException(tenantId);
+        }
+        if (targetOrgNodeId != null && !reach.administers(targetOrgNodeId)) {
+            denyPlacementAudited(actor, actionCode, tenantId, SIDE_DESTINATION, currentOrgNodeId, targetOrgNodeId);
+            throw new OrgNodeNotFoundException("Org node not found: " + targetOrgNodeId);
+        }
+    }
+
+    private void denyPlacementAudited(OperatorContext actor, ActionCode actionCode, String tenantId,
+                                      String side, String from, String to) {
+        if (actor == null) {
+            return;
+        }
+        auditor.recordTenantPlacementDenied(actor, actionCode, tenantId, side, from, to);
     }
 
     /** Best-effort DENIED {@code admin_actions} row; the denial itself always stands (A10 override). */

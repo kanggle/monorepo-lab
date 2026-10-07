@@ -1791,8 +1791,11 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | `tenantId` | string | Y | 정규식 + 예약어 미포함 |
 | `displayName` | string | Y | 1~100자, trim 후 검증 |
 | `tenantType` | enum | Y | `B2C_CONSUMER` \| `B2B_ENTERPRISE` |
+| `orgNodeId` | string \| null | N | (`TASK-BE-625`, `ADR-MONO-047` § 개정 2026-10-07) 새 테넌트를 둘 org-node. **생략 또는 `null` = 무소속(지금과 동일)**. 값이 있으면 [`PUT /api/admin/tenants/{tenantId}/org-node`](#put-apiadmintenantstenantidorg-node) 와 **같은 쓰기 규칙**으로 본다 — 출발 = 무소속(생성자는 이미 `SUPER_ADMIN` 이므로 출발 쪽 통과), 도착 = `administers(actor, orgNodeId)` |
 
 `Idempotency-Key` 헤더는 권장. 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지).
+
+> **`orgNodeId` 가 있을 때의 순서 (`TASK-BE-625`).** ① 도착 쪽 검사 `administers(actor, orgNodeId)` — 실패하면 **아무것도 만들지 않고** `404 ORG_NODE_NOT_FOUND` + best-effort DENIED 행. ② 테넌트 생성(아래 Side Effects 그대로). ③ 소속 쓰기 — `TENANT_ORG_NODE_ASSIGN` 감사 행(출발 `null` → 도착 `orgNodeId`). 🔴 ②와 ③ 은 account-service 의 서로 다른 두 내부 호출이라 한 트랜잭션이 아니다. ① 과 ③ 사이에 노드가 삭제되는 경합(또는 그 사이 account-service 장애)이면 테넌트는 **무소속으로 생성된 채** ③ 의 오류(`404 ORG_NODE_NOT_FOUND` / `503`)가 응답된다 — 재시도는 같은 POST 가 아니라(`409 TENANT_ALREADY_EXISTS`) `PUT /api/admin/tenants/{tenantId}/org-node` 로 한다. 생성 내부 호출(`POST /internal/tenants`)에 노드 칸을 싣지 않은 이유: 그 경로는 게이트웨이의 `/internal/tenants/**` 라우트로 테넌트 워크로드에도 열려 있다([gateway-api.md](gateway-api.md)) — 소속 쓰기를 거기에 얹으면 관리자 검사를 거치지 않는 소속 쓰기 길이 생긴다.
 
 **Response 201**:
 ```json
@@ -1815,12 +1818,14 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | 비-SUPER_ADMIN 운영자 호출 |
+| 404 | `ORG_NODE_NOT_FOUND` | (`orgNodeId` 가 있을 때만) 노드 미존재 또는 actor reach 밖 — 생성 전에 판정되어 아무것도 만들지 않는다. 위 순서 노트의 경합 경우만 예외 |
 | 409 | `TENANT_ALREADY_EXISTS` | 동일 `tenantId` 가 이미 존재 |
 | 503 | `INTEGRATION_UNAVAILABLE` | account-service 호출 CB open |
 
 **Side Effects**:
 - `admin_actions` 에 `action_code=TENANT_CREATE`, `tenant_id='*'` (actor), `target_tenant_id=<신규>`, `target_type='TENANT'`, `target_id=<신규 tenantId>`.
 - Outbox 이벤트 `tenant.created` 발행 ([tenant-events.md](../events/tenant-events.md)).
+- (`orgNodeId` 가 있을 때만) 이어서 `admin_actions` `action_code=TENANT_ORG_NODE_ASSIGN` 한 행 — 모양은 [소속 쓰기의 Side Effects](#put-apiadmintenantstenantidorg-node) 와 같다(`from_org_node_id=null`). `orgNodeId` 가 없으면 이 행은 없다(회귀 — 지금과 동일).
 
 ---
 
@@ -2498,6 +2503,123 @@ actor 의 reach 로 스코프된 노드 **flat array**. SUPER_ADMIN → 전체; 
 | 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
 
 **Side Effects**: `admin_actions` `action_code=ORG_ADMIN_REVOKE`, `target_type='ORG_NODE'`, `target_id=<orgNodeId>`. 이벤트 없음.
+
+---
+
+### 테넌트 소속 — 두기 · 옮기기 · 빼기 (`TASK-BE-625`, `ADR-MONO-047` § 개정 2026-10-07)
+
+테넌트 T 의 소속을 «지금 위치»(노드 S 또는 무소속) → «목적지»(노드 D 또는 무소속)로 바꾸는 **쓰기 하나**. 넣기(무소속 → D) · 옮기기(S → D) · 빼기(S → 무소속)가 모두 이것이다. 소속은 T 의 **관리 범위**(S·D 와 그 조상의 `ORG_ADMIN` 이 T 를 관리하게 된다, D5)와 **유효 상한**(D 의 상한이 T 의 도메인을 좁힌다, D2·D6)을 함께 옮기는 쓰기라, **양쪽을 다 관리하는 actor 만** 할 수 있다.
+
+**판정 — 양쪽 관리자** (단일 결정 지점, 판정 순서대로):
+
+| 쪽 | 조건 | 실패 |
+|---|---|---|
+| 출발 (T 가 노드 S 아래) | `administers(actor, S)` — `SUPER_ADMIN` 또는 S 와 그 조상의 `ORG_ADMIN`. 🔴 T 의 `TENANT_ADMIN` 은 여기 들지 **않는다** — 혼자 S 에서 빼면 S 의 상한을 벗어난다 | `404 TENANT_NOT_FOUND` |
+| 출발 (T 가 무소속) | T 가 actor 의 `operator.manage` 관리 범위 안 — `SUPER_ADMIN` 또는 T 의 `TENANT_ADMIN`(라이더 P1, **무소속 T 에만**). 무소속 T 는 어떤 `ORG_ADMIN` subtree 에도 들지 않는다 | `404 TENANT_NOT_FOUND` |
+| 도착 (목적지 = 노드 D) | `administers(actor, D)` | `404 ORG_NODE_NOT_FOUND` |
+| 도착 (목적지 = 무소속) | 조건 없음 — 출발 쪽만 | — |
+
+- **출발 쪽을 먼저 판정한다.** 출발 쪽이 실패하면 목적지가 무엇이든 응답은 `404 TENANT_NOT_FOUND` 하나다 — 관리하지 않는 테넌트에 대해 «목적지 노드가 있는가» 를 캐 볼 수 없다. 출발 쪽이 실패한 테넌트와 없는 테넌트는 응답으로 구별되지 않는다.
+- **범위 밖은 403 이 아니라 404** + best-effort DENIED `admin_actions` 행(org-node 규율과 같음 — 존재를 흘리지 않는다).
+- 판정 **뒤에** 같은 목적지인지 본다 — 목적지 = 지금 위치여도 판정을 건너뛰지 않는다(건너뛰면 «200 이면 T 가 이미 D 아래» 라는 소속 정보가 관리하지 않는 actor 에게 샌다).
+- `SUPER_ADMIN` 은 모든 노드·테넌트를 관리하므로 (존재하는 대상에 대해) 항상 통과한다(net-zero).
+- 판정과 쓰기 사이에 다른 요청이 소속을 바꾸면 쓰기는 **판정한 출발 쪽**을 조건으로 하므로(내부 계약의 `expectedOrgNodeId`) `409 TENANT_ORG_NODE_CONFLICT` 로 거절된다 — 판정하지 않은 출발지에서 T 를 빼 오는 길이 없다.
+
+#### Placement effect wire shape
+
+소속 변경이 T 의 **유효 도메인**에 미치는 효과(라이더 P2 — 상한은 거절이 아니라 확인). 상한은 deny-only 라 **구독 행은 바뀌지 않는다** — 빼거나 넓은 노드로 옮기면 그대로 돌아온다.
+
+```json
+{
+  "tenantId": "acme-wms",
+  "fromOrgNodeId": "b3f1…",
+  "toOrgNodeId": "c7a2…",
+  "domainsBefore": ["finance", "wms"],
+  "domainsAfter": ["wms"],
+  "lostDomains": ["finance"],
+  "gainedDomains": []
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string | 대상 테넌트 |
+| `fromOrgNodeId` | string \| null | 지금 위치(`null` = 무소속) |
+| `toOrgNodeId` | string \| null | 목적지(`null` = 무소속) |
+| `domainsBefore` | string[] | `ACTIVE 구독 ∩ effectiveCeiling(from)` — 무소속이면 상한 없음(`UNBOUNDED`) |
+| `domainsAfter` | string[] | `ACTIVE 구독 ∩ effectiveCeiling(to)` |
+| `lostDomains` | string[] | `domainsBefore − domainsAfter` — 확인 화면의 «이동하면 꺼지는 도메인» |
+| `gainedDomains` | string[] | `domainsAfter − domainsBefore` |
+
+세 배열은 ACTIVE 구독 목록의 순서를 지킨다. 계산은 account-service(구독·상한의 권위)가 한 번에 한다 — 콘솔이 따로 계산하지 않는 이유는 `ORG_ADMIN` 이 T 의 구독을 읽을 권한(`subscription.manage`)이 없기 때문이다.
+
+### GET /api/admin/tenants/{tenantId}/org-node/preview
+
+소속 변경의 **미리보기**(쓰기 없음). 확인 화면(P2)이 «잃는 도메인» 을 쓰기 **전에** 보여 주려면 효과가 쓰기 전에 읽혀야 한다.
+
+**Auth required**: 운영자 JWT, `@RequiresPermission("org.manage")` + 위 **양쪽 관리자** 판정(쓰기와 같은 판정 — 미리보기로 남의 테넌트의 도메인을 읽을 수 없다).
+
+**Query parameters**:
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `orgNodeId` | string | N | 목적지 노드. **생략 = 무소속(빼기)** |
+
+**Response 200**: [placement effect wire shape](#placement-effect-wire-shape).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `org.manage` 권한 없음 |
+| 404 | `TENANT_NOT_FOUND` | 테넌트 미존재 또는 출발 쪽 판정 실패 |
+| 404 | `ORG_NODE_NOT_FOUND` | 목적지 노드 미존재 또는 도착 쪽 판정 실패 |
+| 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
+
+**Side Effects**: 성공은 감사 행 없음(read-path). 판정 실패는 best-effort DENIED 행(`GET /api/admin/org-nodes/{orgNodeId}` 와 같음).
+
+### PUT /api/admin/tenants/{tenantId}/org-node
+
+테넌트 T 의 소속을 목적지로 바꾼다(넣기 · 옮기기 · 빼기).
+
+**Auth required**: 운영자 JWT, `@RequiresPermission("org.manage")` + 위 **양쪽 관리자** 판정. `X-Operator-Reason` 필수(org-node 쓰기와 같음). `Idempotency-Key` 는 받지 않는다(org-node 쓰기와 같음) — PUT 이 상태 멱등이다.
+
+**Request**:
+```json
+{ "orgNodeId": "c7a2…" }
+{ "orgNodeId": null }
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `orgNodeId` | string \| null | Y(키) | 목적지 노드 UUID, 또는 `null` = 무소속(빼기). **키 자체가 없으면(`{}`) `400`** — `null` 이 «빼기» 이므로 오타 난 키가 조용히 빼기가 되면 안 된다. 본문이 없거나 빈 문자열이어도 `400` |
+
+**Response 200**: [placement effect wire shape](#placement-effect-wire-shape) + `changed`:
+
+```json
+{ "tenantId": "acme-wms", "fromOrgNodeId": "b3f1…", "toOrgNodeId": "c7a2…",
+  "domainsBefore": ["finance", "wms"], "domainsAfter": ["wms"],
+  "lostDomains": ["finance"], "gainedDomains": [], "changed": true }
+```
+
+- **멱등**: 목적지 = 지금 위치면 쓰기 없이 `200` · `changed=false` · `fromOrgNodeId == toOrgNodeId`. 같은 요청을 반복하면 상태는 같고(첫 요청 뒤 T 는 이미 목적지에 있다) 두 번째 응답은 `changed=false` 다.
+- **상한은 거절 사유가 아니다**(P2) — `lostDomains` 가 비어 있지 않아도 쓴다. 확인은 미리보기로 쓰기 **전에** 한다.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 본문 없음 · 형식 오류 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `org.manage` 권한 없음(예: `TENANT_ADMIN` 만 가진 actor) |
+| 404 | `TENANT_NOT_FOUND` | 테넌트 미존재 또는 출발 쪽 판정 실패(존재 미누설) |
+| 404 | `ORG_NODE_NOT_FOUND` | 목적지 노드 미존재 · 도착 쪽 판정 실패 · **판정 뒤 쓰기 전에 노드가 삭제됨**(account-service 의 존재 확인이 권위) |
+| 409 | `TENANT_ORG_NODE_CONFLICT` | 판정과 쓰기 사이에 T 의 소속이 바뀜 — 소속 불변, 다시 시도 |
+| 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
+
+**Side Effects**: `admin_actions` `action_code=TENANT_ORG_NODE_ASSIGN`, `permission_used=org.manage`, `target_type='TENANT'`, `target_id=<tenantId>`, `target_tenant_id=<tenantId>`, `reason=<X-Operator-Reason>`, `detail="from_org_node_id=<S|null> to_org_node_id=<D|null> changed=<true|false>"` — 성공한 요청마다 한 행(no-op 포함, org-node 쓰기와 같음). 판정 실패는 best-effort DENIED 행(`target_type='TENANT'`, `target_id=<tenantId>`, `detail` 에 실패한 쪽 `side=SOURCE|DESTINATION` 과 출발·목적지). 이벤트 없음. admin-service 의 subtree 캐시를 비운다(이 인스턴스) — 다른 인스턴스는 subtree 캐시 TTL(기본 5초) 안에 따라온다.
 
 ---
 

@@ -65,6 +65,7 @@ public class TenantAdminController {
     private final PermissionEvaluator permissionEvaluator;
     private final AdminOperatorJpaRepository operatorRepository;
     private final TenantScopeResolver tenantScopeResolver;
+    private final com.example.admin.application.TenantOrgNodePlacementUseCase placementUseCase;
 
     /**
      * POST /api/admin/tenants
@@ -82,9 +83,16 @@ public class TenantAdminController {
         OperatorContext operator = OperatorContextHolder.require();
         requirePlatformScope(operator);
 
-        TenantSummary result = createTenantUseCase.execute(
-                request.tenantId(), request.displayName(), request.tenantType(),
-                operator, decodeReason(reason), resolveIdempotencyKey(idempotencyKey));
+        // TASK-BE-625: an optional org-node goes through the placement rule (destination
+        // checked BEFORE creation). Absent → the pre-existing path, byte-unchanged.
+        String orgNodeId = request.orgNodeId();
+        TenantSummary result = (orgNodeId == null || orgNodeId.isBlank())
+                ? createTenantUseCase.execute(
+                        request.tenantId(), request.displayName(), request.tenantType(),
+                        operator, decodeReason(reason), resolveIdempotencyKey(idempotencyKey))
+                : placementUseCase.createTenantUnder(
+                        operator, request.tenantId(), request.displayName(), request.tenantType(),
+                        orgNodeId, decodeReason(reason), resolveIdempotencyKey(idempotencyKey));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(TenantResponse.from(result));
     }
@@ -211,10 +219,12 @@ public class TenantAdminController {
 
     // ---- DTOs ---------------------------------------------------------------
 
+    /** {@code orgNodeId} (TASK-BE-625) is optional; absent or null = created ungrouped, as before. */
     public record CreateTenantRequest(
             @NotBlank String tenantId,
             @NotBlank @Size(min = 1, max = 100) String displayName,
-            @NotBlank String tenantType
+            @NotBlank String tenantType,
+            String orgNodeId
     ) {}
 
     public record UpdateTenantRequest(

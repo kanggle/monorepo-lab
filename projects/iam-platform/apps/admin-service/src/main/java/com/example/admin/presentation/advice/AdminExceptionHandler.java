@@ -450,6 +450,14 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("ORG_NODE_SELF_CEILING_DENIED", e.getMessage()));
     }
 
+    // TASK-BE-625 — the tenant moved between the two-sided check and the write; nothing written.
+    @ExceptionHandler(com.example.admin.application.exception.TenantOrgNodeConflictException.class)
+    public ResponseEntity<ErrorResponse> handleTenantOrgNodeConflict(
+            com.example.admin.application.exception.TenantOrgNodeConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_ORG_NODE_CONFLICT", e.getMessage()));
+    }
+
     @ExceptionHandler(com.example.admin.application.exception.OrgAdminGrantOutOfCeilingException.class)
     public ResponseEntity<ErrorResponse> handleOrgAdminGrantOutOfCeiling(
             com.example.admin.application.exception.OrgAdminGrantOutOfCeilingException e) {

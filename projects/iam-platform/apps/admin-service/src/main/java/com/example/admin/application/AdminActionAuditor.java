@@ -150,6 +150,16 @@ public class AdminActionAuditor {
         denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId);
     }
 
+    /** Best-effort tenant-placement deny row (TASK-BE-625); see {@link AdminActionDenyWriter#recordTenantPlacementDenied}. */
+    public void recordTenantPlacementDenied(OperatorContext operator,
+                                            ActionCode actionCode,
+                                            String tenantId,
+                                            String side,
+                                            String fromOrgNodeId,
+                                            String toOrgNodeId) {
+        denyWriter.recordTenantPlacementDenied(operator, actionCode, tenantId, side, fromOrgNodeId, toOrgNodeId);
+    }
+
     /** Best-effort role-grant-forbidden deny row (ADR-024 D3); see {@link AdminActionDenyWriter#recordRoleGrantForbidden}. */
     public void recordRoleGrantForbidden(OperatorContext operator,
                                          ActionCode actionCode,

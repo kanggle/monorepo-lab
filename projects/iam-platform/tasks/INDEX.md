@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (READY, 2026-10-07 UTC · `ADR-MONO-047` § 개정). 양쪽 관리자 검사(기존 `TenantScopeGuard` · `OrgNodeScopeGuard` 재사용) · 범위 밖 404 · 감사 · 테넌트 생성의 선택 `orgNodeId` · 격리 대조군. 후속 `TASK-PC-FE-312`. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
 
@@ -120,7 +120,9 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-_(없음)_
+- `TASK-BE-625-tenant-org-node-placement-api.md` — **테넌트를 org-node 에 두기 · 옮기기 · 빼기 API** (REVIEW, 2026-10-08 UTC · `ADR-MONO-047` § 개정). `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(P2 — 잃는 도메인은 API 가 준다) · 양쪽 관리자 판정(`OrgNodeScopeGuard.requirePlacementAllowed` — 기존 술어 조합) · 범위 밖 404 · 판정한 출발지 조건부 쓰기(409) · `TENANT_ORG_NODE_ASSIGN` 감사 · 테넌트 생성의 선택 `orgNodeId`. 단위·슬라이스 초록, IT 2클래스는 Docker 없음으로 SKIPPED(⚪, CI 첫 실행). 후속 `TASK-PC-FE-312`.
+
+
 
 ## done
 - ✅ `TASK-BE-626-operator-list-home-tenant-id.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0 · SUCCESS 22). `GET /api/admin/operators` 항목(+ `/me`)에 운영자 HOME 테넌트 `homeTenantId`. AC-4(CI iam 레인) = Build & Test · Integration iam A/B · iam E2E smoke SUCCESS. 라이브 AC 없음. 짝 platform-console `TASK-PC-FE-319` 는 라이브 AC 로 review 잔류.

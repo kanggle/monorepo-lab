@@ -105,6 +105,7 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `ORG_NODE_SELF_CEILING_DENIED` — `ORG_ADMIN` 이 **자기 노드**의 ceiling 을 편집 시도 (아래 노드만 좁힐 수 있다 — no-self-escalation) (403)
 - `ORG_NODE_INVARIANT_VIOLATION` — **폴백 전용** (422). 권위가 코드를 비워 보낼 때만 나타나므로 **이 코드가 보이면 두 서비스가 드리프트했다는 뜻**이다
 - `ORG_ADMIN_GRANT_OUT_OF_CEILING` — `ORG_ADMIN` 이 자기 노드 ceiling 밖 도메인을 부여 시도 (422)
+- `TENANT_ORG_NODE_CONFLICT` — 테넌트 소속 쓰기(넣기 · 옮기기 · 빼기)가 판정한 출발 위치와 지금 위치가 달라 거절됨 — 판정과 쓰기 사이에 소속이 바뀌었다. 아무것도 쓰지 않았다 (409)
 
 **cross-org 파트너십** (ADR-MONO-045)
 

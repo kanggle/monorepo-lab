@@ -618,6 +618,7 @@ Owned by `account-service` (authority) and proxied by `admin-service`.
 | ORG_NODE_SELF_CEILING_DENIED | 403 | An `ORG_ADMIN` attempted to edit the ceiling of their own node (they may only narrow ceilings *below* it) — the no-self-escalation guard |
 | ORG_NODE_INVARIANT_VIOLATION | 422 | **Fallback only.** `admin-service` passes the authority's specific code through (`ORG_NODE_CYCLE` / `_DEPTH_EXCEEDED` / `_CEILING_NOT_SUBSET` / `_NOT_EMPTY`); this string appears only when the authority returned a blank/unknown code, so seeing it means the two services have drifted (`OrgNodeInvariantViolationException`) |
 | ORG_ADMIN_GRANT_OUT_OF_CEILING | 422 | An `ORG_ADMIN` attempted to grant a domain outside their node's ceiling |
+| TENANT_ORG_NODE_CONFLICT | 409 | A tenant placement write (attach / move / detach) was refused because the tenant's current org-node is no longer the one the caller authorized against — it changed between the check and the write. Nothing was written; re-read and retry |
 
 ### Cross-org partnerships  (ADR-MONO-045)
 

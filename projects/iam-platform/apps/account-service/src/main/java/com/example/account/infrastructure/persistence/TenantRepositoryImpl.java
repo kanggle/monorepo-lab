@@ -72,4 +72,10 @@ public class TenantRepositoryImpl implements TenantRepository {
     public long countByOrgNodeId(OrgNodeId orgNodeId) {
         return jpaRepository.countByOrgNodeId(orgNodeId.value());
     }
+
+    @Override
+    public Optional<Tenant> findByIdForUpdate(TenantId tenantId) {
+        return jpaRepository.findByIdForUpdate(tenantId.value())
+                .map(TenantJpaEntity::toDomain);
+    }
 }

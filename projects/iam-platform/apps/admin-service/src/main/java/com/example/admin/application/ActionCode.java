@@ -90,6 +90,11 @@ public enum ActionCode {
     ORG_NODE_CEILING_SET,
     ORG_ADMIN_GRANT,
     ORG_ADMIN_REVOKE,
+    // TASK-BE-625 (ADR-MONO-047 § 개정 2026-10-07): a tenant's org-node placement — attach /
+    // move / detach. target_type=TENANT, target_id=<tenantId> (the TENANT is what moves; the
+    // from/to nodes ride in `detail`), permission_used=org.manage. One SUCCESS row per
+    // successful request, no-op included (same as the other org-node writes).
+    TENANT_ORG_NODE_ASSIGN,
     // TASK-BE-520 (ADR-MONO-046 D6): operator-group lifecycle + membership + grant
     // mutations. target_type=GROUP, target_id=<groupId> (the affected member/grant rides in
     // `detail` — the audit subject is the GROUP, mirroring PARTNERSHIP_PARTICIPANT_* /
