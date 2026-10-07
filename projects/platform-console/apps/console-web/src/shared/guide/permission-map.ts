@@ -280,27 +280,6 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     sources: [`${ADMIN_CTRL}/GroupAdminController.java:58-170`, `${API}/groups/**/route.ts`],
   },
   {
-    href: '/org-hierarchy',
-    area: 'iam',
-    gate: { kind: 'admin', permission: 'org.manage' },
-    description: '조직 노드 트리 · 엔타이틀먼트 상한(ceiling) · ORG_ADMIN 배정 · 소속 테넌트.',
-    crud: crud('CRUD'),
-    purpose: '회사(조직 노드) 단위로 테넌트를 묶고 상한을 건다(ADR-MONO-047).',
-    services: ['iam admin-service → account-service (트리 소유)'],
-    sources: [`${ADMIN_CTRL}/OrgNodeAdminController.java:54-149`, `${RBAC}:73 (org.manage)`],
-  },
-  {
-    href: '/tenants',
-    area: 'iam',
-    gate: { kind: 'admin', permission: 'tenant.manage' },
-    description: '테넌트 목록 · 상세 · 생성 · 표시명/상태 변경.',
-    crud: crud('CRU'),
-    crudNote: '삭제 엔드포인트 없음(상태 변경으로 대신).',
-    purpose: '격리 경계(테넌트) 생명주기를 관리한다 — 조회에도 같은 키가 필요해 사실상 SUPER_ADMIN 전용.',
-    services: ['iam admin-service'],
-    sources: [`${ADMIN_CTRL}/tenant/TenantAdminController.java:75,96,120,143`, `${RBAC}:69`],
-  },
-  {
     href: '/permissions',
     area: 'iam',
     gate: { kind: 'admin', permission: 'operator.manage' },
@@ -363,6 +342,28 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   },
 
   // ── 조직 설정 ─────────────────────────────────────────────────────────
+  // TASK-PC-FE-312 — 조직 계층 · 테넌트 moved here from 관리 ▸ IAM (area 'iam' → 'org').
+  {
+    href: '/org-hierarchy',
+    area: 'org',
+    gate: { kind: 'admin', permission: 'org.manage' },
+    description: '조직 노드 트리 · 엔타이틀먼트 상한(ceiling) · ORG_ADMIN 배정 · 소속 테넌트.',
+    crud: crud('CRUD'),
+    purpose: '회사(조직 노드) 단위로 테넌트를 묶고 상한을 건다(ADR-MONO-047).',
+    services: ['iam admin-service → account-service (트리 소유)'],
+    sources: [`${ADMIN_CTRL}/OrgNodeAdminController.java:54-149`, `${RBAC}:73 (org.manage)`],
+  },
+  {
+    href: '/tenants',
+    area: 'org',
+    gate: { kind: 'admin', permission: 'tenant.manage' },
+    description: '테넌트 목록 · 상세 · 생성 · 표시명/상태 변경.',
+    crud: crud('CRU'),
+    crudNote: '삭제 엔드포인트 없음(상태 변경으로 대신).',
+    purpose: '격리 경계(테넌트) 생명주기를 관리한다 — 조회에도 같은 키가 필요해 사실상 SUPER_ADMIN 전용.',
+    services: ['iam admin-service'],
+    sources: [`${ADMIN_CTRL}/tenant/TenantAdminController.java:75,96,120,143`, `${RBAC}:69`],
+  },
   {
     href: '/subscriptions',
     area: 'org',

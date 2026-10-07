@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * IAM tenant-management route (TASK-PC-FE-226 — replaces the TASK-PC-FE-225
- * stub). The `/tenants` nav destination for the IAM ▸ 테넌트 menu item —
+ * stub). The `/tenants` nav destination for the 조직 설정 ▸ 테넌트 menu item (IAM ▸ 테넌트 until TASK-PC-FE-312) —
  * the isolation-boundary CRUD screen (SUPER_ADMIN only for every one of the
  * 4 producer endpoints, list read included).
  *

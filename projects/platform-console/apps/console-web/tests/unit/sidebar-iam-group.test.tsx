@@ -27,7 +27,7 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals the 8-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/테넌트/권한/권한 세트/감사·보안) and pins IAM at the top (TASK-PC-FE-225)', () => {
+  it('clicking IAM drills in: reveals the 7-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/권한/권한 세트/감사·보안) and pins IAM at the top (TASK-PC-FE-225 · TASK-PC-FE-312)', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
@@ -52,10 +52,6 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       'href',
       '/operator-groups',
     );
-    expect(screen.getByTestId('nav-iam-tenants')).toHaveAttribute(
-      'href',
-      '/tenants',
-    );
     expect(screen.getByTestId('nav-iam-permissions')).toHaveAttribute(
       'href',
       '/permissions',
@@ -68,7 +64,24 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     // 계정 운영 (customer-identity plane) is NO LONGER an IAM child
     // (TASK-PC-FE-225 — moved to its own 「고객 신원」 group).
     expect(screen.queryByTestId('nav-accounts')).toBeNull();
+    // TASK-PC-FE-312 — 조직 계층 · 테넌트 are NO LONGER IAM children either
+    // (moved to 「조직 설정」): the drill shows neither, under any testid.
+    expect(screen.queryByTestId('nav-tenants')).toBeNull();
+    expect(screen.queryByTestId('nav-org-hierarchy')).toBeNull();
     const nav = screen.getByRole('navigation');
+    expect(nav.querySelector('a[href="/tenants"]')).toBeNull();
+    expect(nav.querySelector('a[href="/org-hierarchy"]')).toBeNull();
+    expect(
+      Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href')),
+    ).toEqual([
+      '/iam/guide',
+      '/iam',
+      '/operators',
+      '/operator-groups',
+      '/permissions',
+      '/permission-sets',
+      '/audit',
+    ]);
     expect(nav.querySelector('a,button')).toHaveAttribute(
       'data-testid',
       'nav-iam',
@@ -200,22 +213,50 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByTestId('nav-iam-tenants')).not.toHaveAttribute(
-      'aria-current',
-    );
-  });
-
-  it('a deep link to /tenants auto-opens the IAM drill with 테넌트 active', () => {
-    mockPath = '/tenants';
-    render(<ConsoleSidebarNav />);
-    expect(screen.getByTestId('nav-iam-tenants')).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
     expect(screen.getByTestId('nav-iam-permissions')).not.toHaveAttribute(
       'aria-current',
     );
   });
+
+  // --- 「조직 설정」 group (TASK-PC-FE-312 — company structure · subscriptions · partnerships) ---
+
+  it('the 「조직 설정」 group lists 조직 계층 → 테넌트 → 도메인 구독 → 파트너십 as flat top-level links', () => {
+    render(<ConsoleSidebarNav />);
+    const group = screen.getByTestId('nav-group-org-settings');
+    expect(group).toHaveTextContent('조직 설정');
+    const ids = ['nav-org-hierarchy', 'nav-tenants', 'nav-subscriptions', 'nav-partnerships'];
+    const hrefs = ['/org-hierarchy', '/tenants', '/subscriptions', '/partnerships'];
+    ids.forEach((id, i) => {
+      const link = screen.getByTestId(id);
+      expect(link.tagName).toBe('A');
+      expect(link).toHaveAttribute('href', hrefs[i]);
+    });
+    // DOM order = config order (structure first, then what the company bought / agreed).
+    const nav = screen.getByRole('navigation');
+    const order = Array.from(nav.querySelectorAll('a'))
+      .map((a) => a.getAttribute('data-testid'))
+      .filter((t): t is string => t !== null && ids.includes(t));
+    expect(order).toEqual(ids);
+  });
+
+  it.each([
+    ['/tenants', 'nav-tenants'],
+    ['/tenants/demo-corp', 'nav-tenants'],
+    ['/org-hierarchy', 'nav-org-hierarchy'],
+  ])(
+    'a deep link to %s does NOT open the IAM drill — it stays on the top-level list with %s active',
+    (path, active) => {
+      mockPath = path;
+      render(<ConsoleSidebarNav />);
+      expect(screen.getByTestId('nav-iam').tagName).toBe('BUTTON');
+      expect(screen.getByTestId('nav-iam')).not.toHaveAttribute('aria-current');
+      expect(screen.queryByTestId('nav-audit')).toBeNull();
+      expect(screen.getByTestId(active)).toHaveAttribute('aria-current', 'page');
+      expect(
+        screen.getByRole('navigation').querySelectorAll('[aria-current="page"]'),
+      ).toHaveLength(1);
+    },
+  );
 
   it('a deep link to /permissions auto-opens the IAM drill with 권한 active', () => {
     mockPath = '/permissions';

@@ -26,7 +26,7 @@ import { TenantsTable } from './TenantsTable';
  *
  * This screen is functionally UNRELATED to `features/tenant`
  * (`TenantSwitcher` — the operator's own active-tenant session switcher);
- * this is the tenant-resource CRUD surface reached from IAM ▸ 테넌트.
+ * this is the tenant-resource CRUD surface reached from 조직 설정 ▸ 테넌트.
  */
 export interface TenantsScreenProps {
   initial: TenantPage;
