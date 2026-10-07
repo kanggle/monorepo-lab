@@ -8,7 +8,7 @@ TASK-MONO-775
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -98,3 +98,16 @@ monorepo
 - AC-4: `git diff --numstat origin/main -- docs/adr/ADR-MONO-047-org-node-tenant-hierarchy.md` = **+51 / −0** (덧붙이기만).
 - AC-5: 두 티켓 모두 Goal · Scope · AC · Related Specs · Related Contracts · Edge Cases · Failure Scenarios 를 갖고, BE-625 AC-1 이 격리 대조군(실패 쪽 먼저)이다.
 - 가드: 스테이지 뒤 필수 3종 + `check-adr-index-drift.sh`.
+
+---
+
+## 닫기 기록 (2026-10-07 UTC) — 4차원
+
+| 차원 | 결과 |
+|---|---|
+| (a) `gh pr view 4211` | `state=MERGED` · mergeCommit `44fd37dbc` |
+| (b) origin/main 조상 | 참 |
+| (c) 머지 시점 실패 체크 | 66 중 **FAILURE 0** |
+| (d) `# Acceptance Criteria` | AC-1 ~ AC-5 `[x]` — 동사(«적는다» · «무변경» · «갖춘다») = 개정 문서 + 티켓 기안으로 닫힘 |
+
+- 후속: iam `TASK-BE-625`(ready) → console `TASK-PC-FE-312`(ready, BE-625 선행).
