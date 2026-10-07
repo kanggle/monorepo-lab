@@ -4,7 +4,7 @@ TASK-BE-626
 
 # Status
 
-review
+done
 
 # Title
 
@@ -94,3 +94,11 @@ iam-platform
 - 변경: `admin-api.md` 두 절 · `OperatorQueryService.java`(record + 두 생성 지점) · `OperatorSummaryResponse.java` · `OperatorAdminController.java` · `OperatorQueryServiceTest.java`(+1) · `OperatorAdminControllerSliceTest.java`(+1, 생성 지점 5곳 인자 추가).
 - 게이트(워크트리, `./gradlew :projects:iam-platform:apps:admin-service:test --tests OperatorQueryServiceTest --tests OperatorAdminControllerSliceTest`): rc=0 · 결과 XML 실측 `OperatorQueryServiceTest` 9/9 · `OperatorAdminControllerSliceTest` 43/43(새 시험 둘이 결과에 있음 — «0개 실행 rc=0» 아님 확인). 테스트 소스 전체가 컴파일됐으므로 다른 생성 지점 누락 없음. `OperatorAdminIntegrationTest`(Testcontainers)는 CI 에서 — 엄격 JSON 비교 없음(grep 0).
 - AC-4 의 «CI iam 레인 초록» 은 PR 체크로 닫는다.
+
+## CORRECTION — close (2026-10-08 UTC, 4차원 검증)
+
+- **AC-4 닫힘**: PR #4222 머지 시점 체크 `SUCCESS=22 · SKIPPED=45 · FAILURE=0` — 그중 `Build & Test (JDK 21, Linux)` · `Integration (iam A, Testcontainers)` · `Integration (iam B, Testcontainers)` · `E2E smoke (iam docker-compose)` 가 실제로 돌아 SUCCESS. 위 AC 목록의 `[ ]` 는 이 절이 닫는다(본문은 기록 시점 그대로 둔다).
+- (a) `gh pr view 4222` → `MERGED` 2026-10-07T15:35:51Z, squash `07328d826`.
+- (b) `07328d826` 이 `origin/main` 에 있음(close 시점 tip).
+- (c) 머지 직전 체크 실패 0(위 수치, 필수 4종 포함).
+- (d) AC-1~5 전부 닫힘 — 이 티켓엔 «데모 창» 라이브 AC 가 없다(필드 추가 + 시험 + CI 로 끝나는 범위). 짝 `TASK-PC-FE-319` 는 라이브 AC-6 때문에 `review/` 에 남는다.
