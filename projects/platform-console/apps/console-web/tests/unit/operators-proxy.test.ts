@@ -106,6 +106,52 @@ describe('GET /api/operators proxy (list)', () => {
   });
 });
 
+describe('GET /api/operators proxy — TASK-PC-FE-317 tenantId pass-through (AC-1 / AC-6)', () => {
+  it('AC-1: a tenantId query param reaches IAM even when it differs from the active tenant cookie', async () => {
+    cookieJar.set(OPERATOR_COOKIE, 'OP');
+    cookieJar.set(TENANT_COOKIE, 'active-tenant-x'); // the operator's active tenant
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      content: [],
+      totalElements: 0,
+      page: 0,
+      size: 100,
+      totalPages: 0,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await listGET(
+      new Request(
+        'http://console.local/api/operators?tenantId=group-tenant-y&page=0&size=100',
+      ),
+    );
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(new URL(String(url)).searchParams.get('tenantId')).toBe(
+      'group-tenant-y',
+    );
+  });
+
+  it('AC-6: omitting tenantId keeps the request byte-identical to the pre-317 shape (active tenant)', async () => {
+    cookieJar.set(OPERATOR_COOKIE, 'OP');
+    cookieJar.set(TENANT_COOKIE, 'wms');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      content: [],
+      totalElements: 0,
+      page: 0,
+      size: 20,
+      totalPages: 0,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await listGET(
+      new Request('http://console.local/api/operators?page=0&size=20'),
+    );
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0];
+    expect(new URL(String(url)).searchParams.get('tenantId')).toBe('wms');
+  });
+});
+
 describe('POST /api/operators proxy (create) — reason + idempotency', () => {
   it('forwards BOTH X-Operator-Reason + Idempotency-Key to GAP', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'OP');

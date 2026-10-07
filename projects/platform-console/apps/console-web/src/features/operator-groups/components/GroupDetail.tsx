@@ -276,6 +276,8 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
       {addingMember && (
         <GroupMemberDialog
           groupName={group.name}
+          groupTenantId={group.tenantId}
+          existingMemberIds={members.data?.map((m) => m.operatorId) ?? []}
           pending={addMember.isPending}
           error={addMember.isError ? errText(addMember.error) : null}
           onConfirm={(operatorId, reason) => {
