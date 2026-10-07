@@ -23,7 +23,10 @@
 7. auth-service에 credential 생성 요청: 패스워드를 argon2id 해시 후 `credentials` 저장
 8. `account.created` 이벤트 발행 (outbox)
 9. 응답 201: `{ accountId, email, status, createdAt }`
-10. (선택, 미래) 이메일 검증 코드 발송 → Redis `signup:email-verify:{token}` TTL 24h
+10. 이메일 인증은 **가입과 분리된 별도 흐름**이다 — 가입은 메일을 보내지 않는다(가입이 메일 서버 장애에 묶이지 않게).
+    사용자가 IdP 화면 `/email-verification` 에서 인증 메일을 요청하면(`POST /api/accounts/signup/resend-verification-email`)
+    토큰(Redis `email-verify:{token}` TTL 24h)이 담긴 링크가 나가고, 링크(`/verify-email`)가 `email_verified_at` 을 채운다
+    (TASK-MONO-770 — [account-api.md](../contracts/http/account-api.md) · [auth-api.md § IdP 브라우저 화면 — 이메일 인증](../contracts/http/auth-api.md))
 
 **credential 생성의 서비스 간 조율**:
 - 방법 A (동기): account-service가 내부 HTTP로 auth-service에 credential 생성 요청. 실패 시 계정 생성도 롤백.
@@ -36,7 +39,10 @@
 - 패스워드: 최소 8자, 3종 이상 조합. auth-service의 `PasswordPolicy` 도메인 객체가 검증
 - 중복 가입 방어: `signup:dedup:{email_hash}` Redis 5분 TTL (리로드 공격) + DB unique constraint (최종 방어)
 - 가입 직후 상태: `ACTIVE`
-- 이메일 검증: 초기 스코프에서 선택사항 (검증 없이 가입 완료 가능). 검증 필수화는 백로그
+- 이메일 검증: **가입·로그인·소비자 이용에는 필수가 아니다** (검증 없이 가입 완료·로그인·쇼핑·팬 이용 가능 — ADR-MONO-080
+  Alternatives 에서 «로그인에 필수» 는 기각). 🔴 단 **회사 권한이 붙는 쓰기**는 `email_verified_at` 을 요구한다(ADR-MONO-080
+  D3 · R1, TASK-MONO-770) — 지금 그 쓰기는 셀러 구성원 수락(`consumer-site-roles` grant → `403 EMAIL_NOT_VERIFIED`)이고,
+  운영자 초대 수락(TASK-MONO-772)이 같은 술어를 재사용한다. 이미 붙은 권한은 소급 회수하지 않는다(ADR-080 D5)
 
 ## 브라우저 회원가입 화면의 제시 조건 (TASK-BE-581)
 

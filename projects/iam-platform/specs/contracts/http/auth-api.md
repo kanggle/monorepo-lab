@@ -500,6 +500,50 @@ Registered OAuth 2.0 clients. Seeded via Flyway migrations. Managed via admin-se
 
 ---
 
+## IdP 브라우저 화면 — 이메일 인증 (TASK-MONO-770 · ADR-MONO-080 D3)
+
+메일을 **보내는** 화면과 메일의 링크가 **도착하는** 화면, 둘이다. 둘 다 `/login` · `/signup` · `/consent` 와 같은
+`@Order(0)` 폼 체인에 있고(같은 세션 · CSRF 켜짐 · permitAll — 판정은 컨트롤러가 한다), account-service 의 JSON
+엔드포인트를 **서버 측에서** 부른다(`/signup` 프록시와 같은 이유: IdP 화면과 `/api/accounts` 는 다른 오리진이고
+account-service 는 CORS 를 두지 않는다). 데모 엣지(Traefik `iam-oidc` 라우터)는 두 경로를 PathPrefix 로 덮는다
+(가드 (p) 가 템플릿 링크와 대조한다).
+
+### GET · POST /email-verification — 인증 메일 보내기
+
+| 상황 | 화면 |
+|---|---|
+| IdP 세션이 없다(로그인 안 함) | «로그인 세션이 없습니다» — 스토어·팬에 로그인한 브라우저로 다시 열라고 안내. account-service 를 부르지 않는다 |
+| 세션 있음 · GET | 마스킹한 주소 + «인증 메일 보내기» 버튼 |
+| POST → account-service `POST /api/accounts/signup/resend-verification-email` (`X-Account-Id` = 세션의 account id, `X-Tenant-Id` = 세션의 테넌트) | 아래 표 |
+
+| account-service 응답 | 화면 문구(요지) | 재시도 버튼 |
+|---|---|---|
+| 204 | «인증 메일을 보냈습니다 — 메일함의 링크를 여세요(24시간 유효)» | — |
+| 409 `EMAIL_ALREADY_VERIFIED` | «이미 인증된 이메일입니다» | — |
+| 429 `RATE_LIMITED` | «방금 보냈습니다 — 5분 뒤 다시» | — |
+| 503 `VERIFICATION_EMAIL_SEND_FAILED` | 🔴 **«메일을 보내지 못했습니다 — 잠시 뒤 다시 시도하세요»** (ADR-080 § 새로 생기는 위험: «권한을 못 받음» 이 아니라) | 있음 |
+| 422 `VERIFICATION_EMAIL_UNDELIVERABLE` | «이 주소로는 메일을 보낼 수 없습니다» — 재시도 권하지 않음 | — |
+| 404 `ACCOUNT_NOT_FOUND` | «이 계정은 이메일 인증 대상이 아닙니다»(예: 콘솔 운영자 세션) | — |
+| 그 밖(5xx · 연결 실패 · 읽을 수 없는 본문) | «메일을 보내지 못했습니다 — 잠시 뒤 다시» (판정 불가 = 일시) | 있음 |
+
+### GET · POST /verify-email — 메일의 링크가 도착하는 곳
+
+- `GET /verify-email?token=…` 은 **아무것도 바꾸지 않는다** — «이메일 인증 완료» 버튼 하나를 그린다. 메일 보안 스캐너·
+  미리보기가 링크를 먼저 GET 하므로, GET 이 인증을 끝내면 사람이 열기도 전에 토큰이 소비된다.
+- `POST /verify-email`(`token` · CSRF) → account-service `POST /api/accounts/signup/verify-email`(공개 — 토큰이 인증).
+  세션은 필요 없다(링크는 다른 브라우저·기기에서 열릴 수 있다).
+
+| account-service 응답 | 화면 |
+|---|---|
+| 200 | «이메일이 인증되었습니다» |
+| 400 `TOKEN_EXPIRED_OR_INVALID` · `VALIDATION_ERROR` | «링크가 만료되었거나 이미 사용되었습니다» + «인증 메일 다시 받기»(`/email-verification`) 링크 |
+| 409 `EMAIL_ALREADY_VERIFIED` | «이미 인증된 이메일입니다» |
+| 그 밖 | «지금은 확인할 수 없습니다 — 잠시 뒤 다시» (토큰은 소비되지 않았다 — 같은 링크로 다시 된다) |
+
+🔴 R4: 화면·로그 어디에도 토큰을 쓰지 않는다(폼의 hidden 필드만 예외 — 그 페이지의 주인에게 돌려주는 것). 주소는 마스킹한다.
+
+---
+
 ## POST /api/auth/logout
 
 현재 세션 종료. refresh token을 블랙리스트에 등록한다.
@@ -813,6 +857,13 @@ Refresh rotation(`POST /api/auth/refresh`) 경로에서 새 access token이 발�
 | email | string | Y | 재설정 대상 이메일 |
 
 **Response**: 204 No Content
+
+**Delivery (TASK-MONO-770, 소유자 결정 2026-10-07 — 인증 메일과 같은 장치)**: `EmailSenderPort` 구현체는
+`iam.mail.enabled` 하나로 고른다 — `true` 면 표준 `spring.mail.*` 로 보내는 SMTP 어댑터(공급자별 코드 없음),
+`false`/미설정이면 `prod` 가 아닐 때만 로깅 스텁이 뜨고 `prod` 에서는 **아무것도 안 떠 기동이 실패한다**(TASK-BE-242
+의 fail-fast 유지). 링크 = `{iam.mail.password-reset-link-base-url}?token=<token>`. 🔴 응답은 여전히 **언제나 204** 다 —
+이 엔드포인트는 계정 존재 여부를 숨겨야 하므로 발송 실패를 응답으로 드러낼 수 없다(실패는 WARN 로그, 토큰·주소 미기록).
+⚪ 링크가 가리킬 **재설정 화면은 아직 없다**(요청 화면도 없다) — 이 티켓은 «메일이 나간다» 까지다.
 
 ---
 

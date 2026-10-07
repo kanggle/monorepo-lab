@@ -282,6 +282,7 @@ Owned by `product-service`. See `rules/domains/ecommerce.md`.
 | SELLER_INVITATION_EXPIRED | 410 | The seller-member invitation is past its expiry (`SellerInvitationExpiredException`, TASK-MONO-752) |
 | SELLER_INVITATION_ALREADY_USED | 409 | The seller-member invitation was already accepted by another account — invitations are single-use (`SellerInvitationAlreadyUsedException`, TASK-MONO-752) |
 | SELLER_INVITATION_EMAIL_MISMATCH | 403 | The logged-in account's email is not the invitation's email (IAM-verified) — nothing is linked (`SellerInvitationEmailMismatchException`, TASK-MONO-752) |
+| SELLER_INVITATION_EMAIL_NOT_VERIFIED | 403 | The logged-in account's email matches the invitation but the account has not verified it (IAM `EMAIL_NOT_VERIFIED`) — nothing is linked, the invitation stays `PENDING` and can be accepted after verification (`SellerInvitationEmailNotVerifiedException`, TASK-MONO-770 / ADR-MONO-080 D3 · R1) |
 | SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE | 409 | The logged-in account cannot hold the store `SELLER` site role — not a consumer-pool account, or no ACTIVE store membership (`SellerMemberAccountNotEligibleException`, TASK-MONO-752) |
 | IMAGE_LIMIT_EXCEEDED | 422 | Product already has the maximum number of images |
 | DUPLICATE_VARIANT_OPTION | 409 | `POST /api/admin/products/{productId}/variants` would create a second variant with an `optionName` that already exists on this product — natural-key guard, `uq_product_variants_option UNIQUE (product_id, option_name)` (product-service `DuplicateVariantOptionException`, TASK-BE-536) |
@@ -536,6 +537,9 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 | ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
 | ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
 | EMAIL_ALREADY_VERIFIED | 409 | Email already verified; second verify attempt rejected (`EmailAlreadyVerifiedException`) |
+| EMAIL_NOT_VERIFIED | 403 | A write that attaches a company role to a pool account (today: internal site-role grant) refused because the account's `email_verified_at` is not set — nothing is written. Login and consumer use are never gated on it (`EmailNotVerifiedException`, TASK-MONO-770 / ADR-MONO-080 D3) |
+| VERIFICATION_EMAIL_SEND_FAILED | 503 | The verification email could not be sent for a transient reason (SMTP connection / authentication / timeout, or an unclassifiable failure) — the issued token is discarded and the resend rate-limit slot released, so an immediate retry is allowed (`VerificationEmailSendFailedException`, TASK-MONO-770) |
+| VERIFICATION_EMAIL_UNDELIVERABLE | 422 | The mail server refuses this address permanently (malformed address / recipient rejected) — retrying cannot help (`VerificationEmailSendFailedException` with a permanent kind, TASK-MONO-770) |
 | RATE_LIMITED | 429 | Generic rate-limit for account operations (e.g. resend-verify-email) (`RateLimitedException`) |
 | AUTH_SERVICE_UNAVAILABLE | 503 | Upstream `auth-service` unreachable during signup; fail-closed (`AuthServicePort.AuthServiceUnavailable`) |
 | BULK_LIMIT_EXCEEDED | 400 | Bulk provisioning request exceeds the 1 000-item limit (`BulkLimitExceededException`) |

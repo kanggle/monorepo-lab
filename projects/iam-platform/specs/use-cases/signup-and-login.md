@@ -22,7 +22,9 @@
 9. 사용자에게 201 응답: `{ accountId, email, status, createdAt }`
 
 ### Alternative Flow
-- **AF-1**: 이메일 검증 활성화 시, 가입 후 검증 이메일 발송. 검증 완료까지 일부 기능 제한 (미래 스코프)
+- **AF-1**: 가입 뒤 사용자가 IdP 화면 `/email-verification` 에서 인증 메일을 요청하고 링크(`/verify-email`)로 인증한다
+  (TASK-MONO-770). 가입·로그인·소비자 이용은 인증과 무관하게 그대로이고, **회사 권한이 붙는 쓰기**(셀러 구성원 수락 등)만
+  인증을 요구한다 — [signup.md § Business Rules](../features/signup.md)
 
 ### Exception Flow
 - **EF-1**: 이메일 중복 → 409 `ACCOUNT_ALREADY_EXISTS`

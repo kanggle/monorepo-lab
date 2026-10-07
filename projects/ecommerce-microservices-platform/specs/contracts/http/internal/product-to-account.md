@@ -134,6 +134,9 @@ Request: `{ "roleName": "SELLER", "expectedEmail": "<the invitation's email>", "
 becoming a seller member; without IAM's answer nobody is linked (`503` to the person, invitation left
 `PENDING`). Refusals map 1:1 to the accept endpoint's errors (product-api.md § accept):
 `403 SITE_ROLE_EMAIL_MISMATCH` → `SELLER_INVITATION_EMAIL_MISMATCH`;
+`403 EMAIL_NOT_VERIFIED` → `SELLER_INVITATION_EMAIL_NOT_VERIFIED` (TASK-MONO-770 — ADR-MONO-080 D3 · R1: the account
+names the right address but has not proven it owns it; the person verifies through IAM and accepts again — the
+invitation stays `PENDING`);
 `409 SITE_ROLE_REQUIRES_POOL_ACCOUNT` / `409 SITE_MEMBERSHIP_REQUIRED` / `404 ACCOUNT_NOT_FOUND` →
 `SELLER_MEMBER_ACCOUNT_NOT_ELIGIBLE`; anything else (5xx, timeout, other 4xx) → `SERVICE_UNAVAILABLE`.
 The email comparison happens in IAM because IAM owns the account email — product-service never

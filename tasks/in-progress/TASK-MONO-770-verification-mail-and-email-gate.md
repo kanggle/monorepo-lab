@@ -8,7 +8,7 @@ TASK-MONO-770
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
