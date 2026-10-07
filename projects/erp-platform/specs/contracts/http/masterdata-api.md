@@ -334,13 +334,15 @@ and those are not enforced here per E5 read-only boundary.)
    `EMPLOYEE_LINK_INVALID` (`details.cause = "employee_not_active"`).
 3. `accountId == 호출자 sub` → 403 `EMPLOYEE_LINK_SELF_ACCEPT` (두 사람 규칙 — 그 제안은
    어차피 수락될 수 없으므로 일찍 거절한다. 권위 있는 검사는 «수락» 쪽이다).
-4. 계정 존재 — IAM 으로 확인 → 없으면 422 `EMPLOYEE_LINK_INVALID`
-   (`details.cause = "account_not_found"`). 🔴 이 확인의 배선(erp → IAM 워크로드 자격)은
-   아직 없다 — `TASK-MONO-774` § 분할 제안 S2 가 판정한다. 수락 시점에는 IAM 이 서명한
-   토큰 자체가 계정 실재의 증거다.
-5. 직원이 이미 연결됨 / 계정이 이 테넌트의 다른 직원에 연결됨 / 이 직원에 `PENDING` 제안이
+4. 직원이 이미 연결됨 / 계정이 이 테넌트의 다른 직원에 연결됨 / 이 직원에 `PENDING` 제안이
    이미 있음 → 409 `EMPLOYEE_LINK_CONFLICT` (`details.cause ∈ { "employee_already_linked",
    "account_already_linked", "proposal_pending" }`).
+
+🔵 **제안 시점에 IAM 계정 존재를 확인하지 않는다** (소유자 결정 2026-10-08 UTC,
+`TASK-MONO-774` AC-0). `accountId` 는 형식만 본다(빈 값 · 64자 초과 → 400
+`VALIDATION_ERROR`). 연결이 실제로 쓰이는 순간(수락)에는 IAM 이 서명한 토큰의 `sub` 가
+계정 실재의 증거이고, 존재하지 않는 계정 앞 제안은 아무도 수락할 수 없어 «철회» 로만
+치운다. erp 는 IAM 워크로드 자격을 갖지 않는다(FK 없음 · 동기 호출 없음).
 
 **201**: `EmployeeAccountLinkProposal` —
 `{ "id", "employeeId", "accountId", "status": "PENDING", "proposedBy", "proposedAt", "reason"? }`.
@@ -374,9 +376,10 @@ and those are not enforced here per E5 read-only boundary.)
 🔵 수락에 부서 data scope 를 걸지 않는다 — 수락자는 인사 권한자가 아니라 **계정 주인**이다.
 `erp.read` 이상(이 테넌트의 erp 참여자)은 요구한다.
 
-🔵 ADR-MONO-080 R1(회사 권한이 붙는 쓰기에 인증된 이메일)을 수락에 거는가 — erp 토큰에
-`email_verified` 가 없고(현재 access token 클레임에 부재) IAM 조회 배선도 없다. 판정은
-`TASK-MONO-774` § 열린 항목.
+🔵 ADR-MONO-080 R1(회사 권한이 붙는 쓰기에 인증된 이메일)은 수락에 **직접 걸지 않는다**
+(소유자 결정 2026-10-08 UTC) — 간접 게이트로 충분하다: 수락자는 이미 이 테넌트의 erp
+참여자여야 하고(`erp.read` 이상), 그 운영자 권한이 붙을 때 `ADR-MONO-080` D3 가 인증된
+이메일을 본다. 🔴 그 간접 게이트는 `TASK-MONO-772` 가 `done/` 이 된 뒤에 완성된다.
 
 ### POST /api/erp/masterdata/account-link-proposals/{proposalId}/decline
 
@@ -587,7 +590,7 @@ E5; v1 has no inbound enforcement surface here.)
 | `ILLEGAL_STATE` | 422 | aggregate invariant violated at the controller boundary — the unclassified `IllegalStateException` fallback (Platform-Common General). Prefer a domain code above where the failure is a known one |
 | `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND` | 404 | unknown account-link proposal id (TASK-MONO-774) |
 | `EMPLOYEE_LINK_CONFLICT` | 409 | link state collision — `details.cause ∈ { employee_already_linked, account_already_linked, proposal_pending, proposal_not_pending, not_linked }` (TASK-MONO-774) |
-| `EMPLOYEE_LINK_INVALID` | 422 | link target not eligible — `details.cause ∈ { employee_not_active, account_not_found }` (TASK-MONO-774) |
+| `EMPLOYEE_LINK_INVALID` | 422 | link target not eligible — the employee is not `ACTIVE` (`details.cause = "employee_not_active"`) (TASK-MONO-774) |
 | `EMPLOYEE_LINK_NOT_ADDRESSEE` | 403 | accept/decline by a caller whose `sub` is not the proposal's `accountId` (TASK-MONO-774) |
 | `EMPLOYEE_LINK_SELF_ACCEPT` | 403 | two-person rule — the acceptor's `sub` equals the proposer's `sub` (or a proposal names the proposer's own account) (TASK-MONO-774) |
 

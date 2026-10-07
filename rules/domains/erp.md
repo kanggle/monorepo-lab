@@ -62,7 +62,7 @@ erp 도메인에서 공통으로 발생하는 에러는 [../../platform/error-ha
 - `MASTERDATA_PARENT_CYCLE` — 계층 마스터(부서 등)의 순환 참조
 - `EMPLOYEE_LINK_PROPOSAL_NOT_FOUND` — 존재하지 않는 직원 ↔ 계정 연결 제안
 - `EMPLOYEE_LINK_CONFLICT` — 연결 상태 충돌(이미 연결 · 계정 중복 연결 · 대기 제안 중복 · 대기 아님)
-- `EMPLOYEE_LINK_INVALID` — 연결 대상 부적격(직원 비활성 · 계정 부재)
+- `EMPLOYEE_LINK_INVALID` — 연결 대상 부적격(직원 비활성)
 - `EMPLOYEE_LINK_NOT_ADDRESSEE` — 계정 주인이 아닌 호출자의 수락/거절
 - `EMPLOYEE_LINK_SELF_ACCEPT` — 두 사람 규칙 위반(제안자 = 수락자)
 
