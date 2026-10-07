@@ -8,7 +8,7 @@ TASK-MONO-746
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -120,3 +120,12 @@ monorepo
 ## 이탈
 
 - 없음 — 티켓의 산출물은 PROPOSED ADR 이고 구현 · ACCEPT 는 하지 않았다. D7(직원 ↔ 계정)은 티켓 원문에 없던 범위지만 착수 지시가 «ADR 이 다뤄야 할 입력» 으로 명시했다.
+
+---
+
+# 닫기 기록 (2026-10-07 UTC, 4차원 검증)
+
+- (a) PR #4205 `state=MERGED`, squash `5a6eb6a81`.
+- (b) `origin/main` 이 `5a6eb6a81` 를 포함.
+- (c) 머지된 PR 의 `statusCheckRollup` 실패 0 · 대기 0.
+- (d) AC 절을 열어 동사대로 읽음: AC-0~AC-3 전부 [x] — 산출물은 `ADR-MONO-080` PROPOSED 이고 ACCEPT 는 이 티켓의 동사가 아니다(소유자 정확형 수락 대기). AC-3 의 라이브 술어 ⚪ 는 «대상 없음(정적 0) + 라이브 SQL 기록» 으로 AC 가 요구한 닫힘 형태다.

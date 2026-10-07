@@ -9,7 +9,7 @@ community 에 댓글을 **목록으로 읍는** 경로가 없다 — 쓰기(`POS
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -195,3 +195,12 @@ AC-3(DB 격리 축)·AC-4·AC-6 의 IT 레벨 판정은 전적으로 CI 에 있�
 - **계약을 나중에 쓴다** → HARDSTOP-08.
 - **게이트웨이 확인을 생략한다** → 서비스 단위 테스트는 초록인데 브라우저에서 404.
   `TASK-FAN-FE-032` 가 그 공백을 "댓글 없음"으로 그리면 원래 결함과 구별되지 않는다.
+
+---
+
+# 닫기 기록 (2026-10-07 UTC, 4차원 검증)
+
+- (a) PR #4195 `state=MERGED`, squash `b675955d2`.
+- (b) `origin/main` 이 `b675955d2` 를 포함.
+- (c) 머지된 PR 의 `statusCheckRollup` 실패 0 · 대기 0.
+- (d) AC 절을 열어 동사대로 읽음: AC-0~AC-6 전부 [x]. AC-3/4/6 의 IT 축(CI 권위) — #4195 의 `Integration (fan-platform, Testcontainers)` · `E2E (fan-platform v1 live-trio smoke)` SUCCESS(실행됨) 확인.

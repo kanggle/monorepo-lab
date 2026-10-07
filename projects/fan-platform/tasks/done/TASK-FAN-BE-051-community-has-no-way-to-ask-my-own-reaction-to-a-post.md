@@ -9,7 +9,7 @@ community 에 **"이 글에 내가 어떤 반응을 남겼나"** 를 물을 방�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -240,3 +240,12 @@ IT는 로컬에서 **실행되지 않고 스킵된다** — `TASK-FAN-BE-049` �
 - **계약을 나중에 쓴다** → HARDSTOP-08 이 이 티켓을 만든 바로 그 이유다.
 - **게이트웨이 확인을 생략한다** → 서비스 단위 테스트는 초록인데 브라우저에서 필드가 안 온다.
   `TASK-FAN-FE-029` 가 그 공백을 "반응 없음" 으로 그리면 원래 결함과 구별되지 않는다.
+
+---
+
+# 닫기 기록 (2026-10-07 UTC, 4차원 검증)
+
+- (a) PR #4185 `state=MERGED`, squash `28dbefca3`.
+- (b) `origin/main` 이 `28dbefca3` 를 포함.
+- (c) 머지된 PR 의 `statusCheckRollup` 실패 0 · 대기 0.
+- (d) AC 절을 열어 동사대로 읽음: AC-0~AC-6 전부 [x]. AC-3/4/6 의 IT 축은 «CI 권위» 로 적혀 있었다 — #4185 의 `Integration (fan-platform, Testcontainers)` · `E2E (fan-platform v1 live-trio smoke)` 가 SUCCESS 로 실제 실행됨(SKIPPED 아님)을 확인.

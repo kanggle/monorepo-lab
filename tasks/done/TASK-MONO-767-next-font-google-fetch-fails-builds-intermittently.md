@@ -8,7 +8,7 @@ web-store · fan-platform-web 빌드가 `next/font/google` 의 **빌드 시점 G
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -81,7 +81,7 @@ TypeError: Cannot read properties of null (reading '1')
 - [x] **AC-1** — 두 앱 `next build` 가 Google Fonts 호스트 없이 rc=0. → § Implementation ② (fan-platform-web 로컬 rc=0 · web-store 는 기존·무관한 Windows 전용 결함으로 로컬 rc=1, CI(Linux) 는 AC-4 로 측정).
 - [x] **AC-2** — 렌더된 글꼴 동일: 수정 전·후 같은 페이지 스크린숏(또는 computed `font-family`) 대조. → § Implementation ③·⑥. 1차 수정(latin 만)은 한글에서 실측 가능한 차이가 있었다 — **소유자 결정(2026-10-07 UTC)으로 한글도 자체 호스팅**(unicode-range 분할) 하여 해소, 재측정: diff 비제로 채널 8,900→51(약 3%→0.017%), 육안 구분 불가 수준.
 - [x] **AC-3** — `git grep "next/font/google"` 0건, 재도입 방지 가드(정적 검사 한 칸) — 가드가 문다는 bite 포함. → § Implementation ④.
-- [ ] **AC-4** — CI `Frontend lint & build` · `Frontend E2E smoke` 초록. → PR 푸시 후 CI 결과로 닫는다(이 PR 자체의 `statusCheckRollup` 로 확인).
+- [x] **AC-4** — CI `Frontend lint & build` · `Frontend E2E smoke` 초록. (닫기 2026-10-07 UTC: #4201 rollup 둘 다 SUCCESS) → PR 푸시 후 CI 결과로 닫는다(이 PR 자체의 `statusCheckRollup` 로 확인).
 
 # Implementation (2026-10-07 UTC)
 
@@ -170,3 +170,12 @@ TypeError: Cannot read properties of null (reading '1')
 1. **재실행으로 계속 넘긴다** — 머지 시점 빨강이 «flake» 로 정상화되고, 진짜 빨강을 같은 눈으로 본다.
 2. **한 앱만 고친다** — 다른 앱이 같은 이유로 CI 를 계속 깬다.
 3. **글꼴 이름·변수를 바꾼다** — 화면이 조용히 바뀐다(AC-2 가 막는다).
+
+---
+
+# 닫기 기록 (2026-10-07 UTC, 4차원 검증)
+
+- (a) PR #4201 `state=MERGED`, squash `f02660e1b`.
+- (b) `origin/main` 이 `f02660e1b` 를 포함.
+- (c) 머지된 PR 의 `statusCheckRollup` 실패 0 · 대기 0.
+- (d) AC 절을 열어 동사대로 읽음: AC-0~AC-3 [x]. AC-4(`Frontend lint & build` · `Frontend E2E smoke` 초록) — #4201 rollup 에서 둘 다 SUCCESS 확인, 이 닫기에서 체크. AC-2 의 web-store 스크린숏 ⚪ 는 운영 배포로 보강: store/fan 두 사이트가 **같은 해시의 CSS**(`d6aef1ced162a4c2.css`, `@font-face` 484 · `__Noto_Sans_KR`/`fonts.gstatic` 0)를 내려주고 한글 조각 woff2 가 두 호스트에서 200 (2026-10-07 UTC) — 메커니즘이 바이트 동일.
