@@ -11,6 +11,7 @@ import {
   type TenantStatus,
   type CreateTenantInput,
   type UpdateTenantInput,
+  type TenantOrgNodeOption,
 } from '../api/types';
 
 /**
@@ -21,7 +22,8 @@ import {
  * audit reason there — a tenant mutation never fires one-click).
  *
  * `mode='create'`: tenantId (immutable once set, contract § Tenant ID 규칙) +
- * displayName + tenantType.
+ * displayName + tenantType + optional «소속 노드» (TASK-PC-FE-312 — left out
+ * of the draft entirely when empty).
  * `mode='edit'`: displayName + status only — `tenantId`/`tenantType` are
  * read-only (the producer PATCH accepts neither field; a re-assigned
  * `tenant_id` would break the audit trail + external tokens per the
@@ -35,6 +37,12 @@ export interface TenantFormProps {
   onSubmitUpdateDraft?: (draft: UpdateTenantInput) => void;
   serverError?: string | null;
   pending?: boolean;
+  /**
+   * `mode='create'` only — the choices of «소속 노드 (선택)» (TASK-PC-FE-312).
+   * `null` = the org-node list could not be read; the field still renders with
+   * only «소속 없음» (a create never depends on that read).
+   */
+  orgNodeOptions?: TenantOrgNodeOption[] | null;
 }
 
 export function TenantForm({
@@ -44,15 +52,19 @@ export function TenantForm({
   onSubmitUpdateDraft,
   serverError,
   pending = false,
+  orgNodeOptions = null,
 }: TenantFormProps) {
   const tenantIdFieldId = useId();
   const displayNameFieldId = useId();
   const tenantTypeFieldId = useId();
   const statusFieldId = useId();
+  const orgNodeFieldId = useId();
 
   const [tenantId, setTenantId] = useState('');
   const [displayName, setDisplayName] = useState(tenant?.displayName ?? '');
   const [tenantType, setTenantType] = useState<TenantType>('B2C_CONSUMER');
+  // '' = 소속 없음 (the key is then left OUT of the draft — task AC-4).
+  const [orgNodeId, setOrgNodeId] = useState('');
   const [status, setStatus] = useState<TenantStatus>(
     (tenant?.status as TenantStatus) ?? 'ACTIVE',
   );
@@ -75,6 +87,7 @@ export function TenantForm({
         tenantId,
         displayName: displayName.trim(),
         tenantType,
+        ...(orgNodeId !== '' ? { orgNodeId } : {}),
       });
     } else if (mode === 'edit' && onSubmitUpdateDraft) {
       onSubmitUpdateDraft({
@@ -199,6 +212,36 @@ export function TenantForm({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {mode === 'create' && (
+        <div>
+          <label
+            htmlFor={orgNodeFieldId}
+            className="block text-sm font-medium text-foreground"
+          >
+            소속 노드 (선택)
+          </label>
+          <select
+            id={orgNodeFieldId}
+            value={orgNodeId}
+            onChange={(e) => setOrgNodeId(e.target.value)}
+            data-testid="tenant-form-org-node"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <option value="">소속 없음</option>
+            {(orgNodeOptions ?? []).map((n) => (
+              <option key={n.orgNodeId} value={n.orgNodeId}>
+                {n.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {orgNodeOptions === null
+              ? '조직 노드 목록을 불러오지 못했습니다. 비워 두고 등록한 뒤 조직 계층 화면에서 노드에 둘 수 있습니다.'
+              : '비워 두면 어느 노드에도 속하지 않습니다. 고르면 그 노드의 상한이 이 테넌트에 적용됩니다.'}
+          </p>
         </div>
       )}
 

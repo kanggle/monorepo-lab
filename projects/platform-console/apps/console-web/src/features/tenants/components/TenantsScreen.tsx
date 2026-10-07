@@ -8,6 +8,7 @@ import type {
   TenantStatus,
   TenantType,
   CreateTenantInput,
+  TenantOrgNodeOption,
 } from '../api/types';
 import { TenantForm } from './TenantForm';
 import { TenantConfirmDialog } from './TenantConfirmDialog';
@@ -30,9 +31,19 @@ import { TenantsTable } from './TenantsTable';
  */
 export interface TenantsScreenProps {
   initial: TenantPage;
+  /** «소속 노드 (선택)» choices, read server-side by the page
+   *  (TASK-PC-FE-312). `null`/absent = could not be read. */
+  orgNodeOptions?: TenantOrgNodeOption[] | null;
 }
 
-export function TenantsScreen({ initial }: TenantsScreenProps) {
+/** 404 `ORG_NODE_NOT_FOUND` on a create with a node (TASK-BE-625): normally
+ *  nothing was created, but in the documented race the tenant exists UNPLACED
+ *  — the screen cannot tell which, so it says both (admin-api.md § POST
+ *  /api/admin/tenants 순서 노트). */
+const CREATE_ORG_NODE_NOT_FOUND_COPY =
+  '선택한 소속 노드에 둘 수 없습니다 (삭제되었거나 관리 범위 밖). 테넌트가 무소속으로 이미 만들어졌을 수 있으니 목록을 확인하고, 있으면 조직 계층 화면에서 노드에 두세요.';
+
+export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | TenantStatus>('');
   const [tenantTypeFilter, setTenantTypeFilter] = useState<'' | TenantType>('');
   const [query, setQuery] = useState<{
@@ -60,7 +71,9 @@ export function TenantsScreen({ initial }: TenantsScreenProps) {
 
   const createError =
     create.error instanceof ApiError
-      ? messageForCode((create.error as ApiError).code, create.error.message)
+      ? (create.error as ApiError).code === 'ORG_NODE_NOT_FOUND'
+        ? CREATE_ORG_NODE_NOT_FOUND_COPY
+        : messageForCode((create.error as ApiError).code, create.error.message)
       : create.error
         ? '테넌트 등록에 실패했습니다.'
         : null;
@@ -115,6 +128,7 @@ export function TenantsScreen({ initial }: TenantsScreenProps) {
         onSubmitCreateDraft={openCreate}
         serverError={createError}
         pending={create.isPending}
+        orgNodeOptions={orgNodeOptions}
       />
 
       <TenantsTable

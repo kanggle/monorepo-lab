@@ -137,6 +137,59 @@ describe('POST /api/tenants (create)', () => {
     );
   });
 
+  it('TASK-PC-FE-312 — forwards a chosen orgNodeId to the api layer', async () => {
+    createTenant.mockResolvedValue(TENANT);
+    await createPOST(
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'ACME Corp',
+        tenantType: 'B2B_ENTERPRISE',
+        reason: 'r',
+        orgNodeId: 'node-1',
+      }),
+    );
+    expect(createTenant).toHaveBeenCalledWith(
+      {
+        tenantId: 'acme-corp',
+        displayName: 'ACME Corp',
+        tenantType: 'B2B_ENTERPRISE',
+        orgNodeId: 'node-1',
+      },
+      'r',
+      undefined,
+    );
+  });
+
+  it('TASK-PC-FE-312 — orgNodeId: null stays ABSENT downstream (무소속 = the pre-312 create)', async () => {
+    createTenant.mockResolvedValue(TENANT);
+    await createPOST(
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'ACME Corp',
+        tenantType: 'B2B_ENTERPRISE',
+        reason: 'r',
+        orgNodeId: null,
+      }),
+    );
+    const input = createTenant.mock.calls[0][0] as Record<string, unknown>;
+    expect(input).not.toHaveProperty('orgNodeId');
+  });
+
+  it('TASK-PC-FE-312 — 404 ORG_NODE_NOT_FOUND on a create with a node passes through', async () => {
+    createTenant.mockRejectedValue(new ApiError(404, 'ORG_NODE_NOT_FOUND', 'no'));
+    const res = await createPOST(
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'X',
+        tenantType: 'B2C_CONSUMER',
+        reason: 'r',
+        orgNodeId: 'node-x',
+      }),
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('ORG_NODE_NOT_FOUND');
+  });
+
   it('422 on an invalid tenantType', async () => {
     const res = await createPOST(
       post({ tenantId: 'acme-corp', displayName: 'ACME', tenantType: 'BOGUS', reason: 'r' }),

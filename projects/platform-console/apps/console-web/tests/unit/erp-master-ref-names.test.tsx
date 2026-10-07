@@ -56,6 +56,11 @@ vi.mock('@/features/org-hierarchy/hooks/use-org-nodes', () => ({
   useDeleteOrgNode: () => idleMutation,
   useGrantOrgAdmin: () => idleMutation,
   useRevokeOrgAdmin: () => idleMutation,
+  // TASK-PC-FE-312 — the 소속 테넌트 section's placement hooks (same idle stubs).
+  usePlaceTenant: () => ({ ...idleMutation, reset: vi.fn() }),
+  usePlacementCandidates: () => idleQuery,
+  usePlacementPreview: () => idleQuery,
+  PLACEMENT_CONFLICT_CODE: 'TENANT_ORG_NODE_CONFLICT',
 }));
 
 // TASK-PC-FE-309 — `ApprovalScreen`/`ApprovalDetail` 의 참조 칸(대상/기안자/결재선/

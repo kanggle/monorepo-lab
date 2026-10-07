@@ -4,6 +4,10 @@ import {
   SubtreeTenantsSchema,
   OrgAdminListSchema,
   OrgAdminGrantSchema,
+  PlacementEffectSchema,
+  PlacementResultSchema,
+  type PlacementEffect,
+  type PlacementResult,
   type OrgNode,
   type OrgNodeList,
   type SubtreeTenants,
@@ -15,6 +19,11 @@ import {
   type GrantOrgAdminInput,
 } from './types';
 import { callOrgNodes, ORG_NODES_PREFIX } from './org-nodes-client';
+
+/** The placement endpoints live under the TENANT path but are `org.manage`-
+ *  gated org-hierarchy writes (TASK-BE-625) — so they ride the org-nodes
+ *  profile (same degrade class, same `org_nodes` log prefix). */
+const TENANT_PLACEMENT_PREFIX = '/api/admin/tenants';
 
 /**
  * Server-side IAM org-node hierarchy API functions (TASK-PC-FE-237 / ADR-047 /
@@ -176,5 +185,46 @@ export async function revokeOrgNodeAdmin(
       expectNoContent: true,
     },
     () => undefined,
+  );
+}
+
+// 11. placement preview — GET /api/admin/tenants/{tenantId}/org-node/preview --
+//     (TASK-PC-FE-312 / TASK-BE-625). `toOrgNodeId === null` ⇒ the query
+//     parameter is OMITTED (= detach). Same two-sided reach check as the write.
+
+export async function previewTenantPlacement(
+  tenantId: string,
+  toOrgNodeId: string | null,
+): Promise<PlacementEffect> {
+  const qs =
+    toOrgNodeId === null
+      ? ''
+      : `?orgNodeId=${encodeURIComponent(toOrgNodeId)}`;
+  return callOrgNodes(
+    {
+      method: 'GET',
+      path: `${TENANT_PLACEMENT_PREFIX}/${encodeURIComponent(tenantId)}/org-node/preview${qs}`,
+    },
+    (json) => PlacementEffectSchema.parse(json),
+  );
+}
+
+// 12. placement write — PUT /api/admin/tenants/{tenantId}/org-node ------------
+//     Body `{ orgNodeId }` — the KEY is always present; `null` = detach (the
+//     producer 400s a `{}` body so a typo'd key never silently detaches).
+
+export async function placeTenant(
+  tenantId: string,
+  toOrgNodeId: string | null,
+  reason: string,
+): Promise<PlacementResult> {
+  return callOrgNodes(
+    {
+      method: 'PUT',
+      path: `${TENANT_PLACEMENT_PREFIX}/${encodeURIComponent(tenantId)}/org-node`,
+      reason,
+      body: { orgNodeId: toOrgNodeId },
+    },
+    (json) => PlacementResultSchema.parse(json),
   );
 }

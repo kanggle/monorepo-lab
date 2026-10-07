@@ -29,6 +29,9 @@ export {
   listOrgNodeAdmins,
   grantOrgNodeAdmin,
   revokeOrgNodeAdmin,
+  // TASK-PC-FE-312 — tenant placement (TASK-BE-625)
+  previewTenantPlacement,
+  placeTenant,
 } from './api/org-nodes-api';
 
 // Pure lib fns (React-free — unit-testable).
@@ -50,6 +53,8 @@ export {
   OrgAdminSchema,
   OrgAdminListSchema,
   OrgAdminGrantSchema,
+  PlacementEffectSchema,
+  PlacementResultSchema,
   ORG_DOMAIN_KEYS,
   ORG_ADMIN_ROLE,
   MAX_ORG_NODE_DEPTH,
@@ -63,6 +68,8 @@ export type {
   OrgAdmin,
   OrgAdminList,
   OrgAdminGrant,
+  PlacementEffect,
+  PlacementResult,
   OrgDomainKey,
   CreateOrgNodeInput,
   UpdateOrgNodeInput,
