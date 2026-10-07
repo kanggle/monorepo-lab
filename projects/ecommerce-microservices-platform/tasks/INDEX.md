@@ -76,8 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-
-- `TASK-FE-107-seller-invitation-accept-screen.md` — **web-store 셀러 초대 수락 화면** (READY, 2026-10-08 UTC · 출처 `TASK-MONO-770` 남은 판단). 수락 API(`product-api.md:376-415`)를 부르는 화면이 web-store 에 0 — 토큰 입력/`?token=` · 계약 오류 전부의 문구 · `EMAIL_NOT_VERIFIED` → IAM 인증 메일 화면 안내(초대 미소모). 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -85,9 +84,9 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 _(없음)_
 
-
 ## review
 
+- `TASK-FE-107-seller-invitation-accept-screen.md` — **web-store 셀러 초대 수락 화면** (REVIEW, 2026-10-08 UTC · 출처 `TASK-MONO-770` 남은 판단). `POST /api/seller-invitations/accept` 수락 화면 신설(`(store)/seller-invitations/accept`) — `?token=` 미리채움·트림, 계약 오류 9종 전부 고유 문구(표 시험), `EMAIL_NOT_VERIFIED` 전용 분기(인증 메일 링크 + 초대 미소모라 버튼 유지), 비로그인 진입은 기존 미들웨어/로그인 경로로 왕복(새 코드 없음). AC-0 판단: 콘솔 «수락 링크 복사» 는 다른 프로젝트 파일이라 이 티켓에 넣지 않음(후속). `tsc`/`lint` rc=0, `vitest` 는 이 호스트의 기존 Node24×vitest4 기동 불가 한계로 로컬 미실행(CI Node20 권위, AC-6 참조) — bite 는 코드 검사로 판정. ⚪ nightly web-store 확인 · 라이브 수락 1회. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (REVIEW, 2026-10-06 UTC · impl PR **#4183** · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전). bite = CI 런 37479099169 예상 4셀 빨강. ⚪ AC-0/2/3 라이브는 다음 창.
 - `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 원인은 세 후보(ⓐ배포 미반영·ⓑ클레임 없음·ⓒ소셜 가입)가 아니라 **ⓓ** — `TASK-BE-575` 의 pull-through 프로비저닝과 `TASK-MONO-511`(이후 완료)이 살린 `account.created` 이벤트 소비자가 서로 레이스하고, 이벤트 쪽이 거의 항상 먼저 도착해 `email=null` 로 행을 선점한다(`AccountCreatedHandler.java:28` 이 항상 `null` 전달, `UserProfileProvisioner` 의 기존 no-op 이 뒤따르는 pull-through 의 실 이메일을 버림). `UserProfile.assignEmail` + `UserProfileProvisioner.backfillEmailIfMissing` 로 1회 백필 추가, 단위 테스트 추가(`./gradlew :…:user-service:test` BUILD SUCCESSFUL). 라이브 재확인은 AMI 재굽기 이후(AC-4 ⚪ 미체크). impl PR **#4184**. 분석=Opus 5.5 / 구현 권장=Sonnet(실제: Opus 5.5 — 레이스 조건 진단은 복잡 도메인 작업).
 

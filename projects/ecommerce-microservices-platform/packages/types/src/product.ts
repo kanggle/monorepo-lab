@@ -78,3 +78,16 @@ export interface CreateProductResponse {
 export interface UpdateProductResponse {
   id: string;
 }
+
+// Seller invitation accept — TASK-FE-107, contract: product-api.md § POST
+// /api/seller-invitations/accept (:376-415).
+export interface AcceptSellerInvitationRequest {
+  token: string;
+}
+
+export interface AcceptSellerInvitationResponse {
+  sellerId: string;
+  role: string;
+  status: string;
+  joinedAt: string;
+}

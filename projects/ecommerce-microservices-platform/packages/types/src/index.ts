@@ -28,6 +28,8 @@ export type {
   StockAdjustmentResponse,
   CreateProductResponse,
   UpdateProductResponse,
+  AcceptSellerInvitationRequest,
+  AcceptSellerInvitationResponse,
 } from './product';
 
 // Order

@@ -15,6 +15,8 @@ test.describe('인증 필요 라우트 보호 (NextAuth + GAP)', () => {
     { path: '/my/wishlist', label: '위시리스트' },
     { path: '/my/addresses', label: '배송지 관리' },
     { path: '/my/orders', label: '주문 내역' },
+    // TASK-FE-107 AC-4 — seller-invitations/accept 도 보호 경로다.
+    { path: '/seller-invitations/accept', label: '셀러 초대 수락' },
   ];
 
   for (const { path, label } of protectedPaths) {
