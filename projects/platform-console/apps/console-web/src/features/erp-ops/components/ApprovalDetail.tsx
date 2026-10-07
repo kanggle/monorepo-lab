@@ -27,13 +27,14 @@ function fmt(ts: string | undefined): string {
 export function ApprovalDetail({
   id,
   onClose,
-  mySub,
+  myEmployeeId,
 }: {
   id: string;
   onClose: () => void;
-  /** The signed-in operator's own `sub` (TASK-PC-FE-311) — threaded into
-   *  every `ApprovalEmployeeRef` below unchanged; see that component. */
-  mySub?: string | null;
+  /** The caller's linked employee id (inbox `meta.actorEmployeeId` —
+   *  TASK-PC-FE-318, replacing the TASK-PC-FE-311 `mySub` correction) —
+   *  threaded into every `ApprovalEmployeeRef` below to mark «(나)». */
+  myEmployeeId?: string | null;
 }) {
   const {
     q,
@@ -97,7 +98,7 @@ export function ApprovalDetail({
                 <ApprovalEmployeeRef
                   employeeId={data.submitterId}
                   field="submitterId"
-                  mySub={mySub}
+                  myEmployeeId={myEmployeeId}
                 />
               </dd>
               {data.reason ? (
@@ -164,7 +165,8 @@ export function ApprovalDetail({
                         <ApprovalEmployeeRef
                           employeeId={stage.approverId}
                           field="stageApproverId"
-                          mySub={mySub}
+                          myEmployeeId={myEmployeeId}
+                          markUnlinked
                         />
                       </span>
                       <span className={statusToneClass(stageTone)}>
@@ -191,7 +193,8 @@ export function ApprovalDetail({
                   <ApprovalEmployeeRef
                     employeeId={data.approverId}
                     field="approverId"
-                    mySub={mySub}
+                    myEmployeeId={myEmployeeId}
+                    markUnlinked
                   />
                 </dd>
               </dl>
@@ -227,7 +230,7 @@ export function ApprovalDetail({
                       <ApprovalEmployeeRef
                         employeeId={h.actor}
                         field="actor"
-                        mySub={mySub}
+                        myEmployeeId={myEmployeeId}
                       />{' '}
                       · {h.at}
                       {/* v2.0 — stage annotation */}
@@ -245,7 +248,7 @@ export function ApprovalDetail({
                         <ApprovalEmployeeRef
                           employeeId={h.actingForApproverId}
                           field="actingForApproverId"
-                          mySub={mySub}
+                          myEmployeeId={myEmployeeId}
                         />{' '}
                         대신)
                       </span>

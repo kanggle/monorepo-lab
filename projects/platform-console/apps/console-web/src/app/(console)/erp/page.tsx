@@ -2,6 +2,7 @@ import {
   ErpOverviewScreen,
   ErpSectionNotice,
   getErpOverviewState,
+  MyAccountLinkProposalsCard,
 } from '@/features/erp-ops';
 import { resolveErpEligibility } from './_eligibility';
 
@@ -57,5 +58,12 @@ export default async function ErpOverviewPage({
 
   // Per-cell degrade/forbidden are rendered inline by ErpOverviewScreen
   // (so a sibling tile stays mounted) — never a whole-page block (AC-2).
-  return <ErpOverviewScreen state={state} />;
+  // TASK-PC-FE-318 — the account owner's «proposals addressed to me» card
+  // (client, degrades on its own — AC-0 ② placement).
+  return (
+    <>
+      <ErpOverviewScreen state={state} />
+      <MyAccountLinkProposalsCard />
+    </>
+  );
 }

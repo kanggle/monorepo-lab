@@ -12,9 +12,12 @@ import {
   employmentStatusTone,
   type CreateEmployeeInput,
   type UpdateEmployeeInput,
+  type Employee,
   type EmployeeListResponse,
   type ErpListQueryParams,
 } from '../api/types';
+import { AccountLinkBadge } from './AccountLinkBadge';
+import { EmployeeAccountLinkDialog } from './EmployeeAccountLinkDialog';
 import {
   useEmployees,
   useCreateEmployee,
@@ -40,6 +43,11 @@ import { masterRefIndex, masterRefLabel } from '@/shared/lib/master-ref-label';
  * WRITE (TASK-PC-FE-048): when `writable`, gains 직원 추가 + per-row 수정/폐기
  * via the generic `<MasterWriteDialog>`. FK fields (부서/비용센터/직급) are
  * dropdowns sourced from `optionSources` (the section's loaded lists).
+ *
+ * ACCOUNT LINK (TASK-PC-FE-318): every row shows «연결된 계정» («연결됨» /
+ * «연결된 계정 없음» — never the raw account UUID, `AccountLinkBadge`). When
+ * `writable`, a per-row «계정 연결» opens `EmployeeAccountLinkDialog`
+ * (propose / revoke / unlink — the HR side; the owner accepts on `/erp`).
  */
 export interface EmployeeListProps {
   initial?: EmployeeListResponse;
@@ -57,6 +65,7 @@ export function EmployeeList({
     size: initial?.meta.size ?? 20,
   });
   const q = useEmployees(query, initial);
+  const [linkTarget, setLinkTarget] = useState<Employee | null>(null);
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
   const retire = useRetireEmployee();
@@ -122,6 +131,7 @@ export function EmployeeList({
                 <th scope="col" className="p-2">상태</th>
                 <th scope="col" className="p-2">고용상태</th>
                 <th scope="col" className="p-2">부서</th>
+                <th scope="col" className="p-2">연결된 계정</th>
                 <th scope="col" className="p-2">유효기간</th>
                 {writable && <th scope="col" className="p-2">작업</th>}
               </tr>
@@ -171,6 +181,12 @@ export function EmployeeList({
                       )}
                     </td>
                     <td className="p-2">
+                      <AccountLinkBadge
+                        accountId={e.accountId}
+                        testId={`erp-employee-account-${i}`}
+                      />
+                    </td>
+                    <td className="p-2">
                       <EffectivePeriodBadge period={e.effectivePeriod} />
                     </td>
                     {writable && (
@@ -196,6 +212,14 @@ export function EmployeeList({
                             className="text-destructive"
                           >
                             폐기
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setLinkTarget(e)}
+                            data-testid={`erp-employee-link-${i}`}
+                          >
+                            계정 연결
                           </Button>
                         </div>
                       </td>
@@ -237,6 +261,12 @@ export function EmployeeList({
         </>
       )}
       {writable && dialog}
+      {writable && linkTarget && (
+        <EmployeeAccountLinkDialog
+          employee={linkTarget}
+          onClose={() => setLinkTarget(null)}
+        />
+      )}
     </section>
   );
 }

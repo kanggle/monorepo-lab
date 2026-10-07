@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **erp 직원 ↔ 계정 연결 화면 다섯 — «연결된 계정» · 제안 · 내 앞 제안 수락/거절 · 결재선 선택기 «연결된 계정 없음» · 결재함 빈 이유 + 콘솔 계약 § 2.4.8 보정 + `TASK-PC-FE-311` 보정 걷기** (READY, 2026-10-08 UTC · ⏳ 선행 루트 `TASK-MONO-776` `done/`). 루트 `TASK-MONO-774` S4. 결재선은 지금 원시 id 입력 → 직원 선택기. `iam-integration.md:120` 낡은 «콘솔은 쓰지 않는다» 도 같이 고친다. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -121,6 +121,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 (empty)
 
 ## review
+
+- `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **erp 직원 ↔ 계정 연결 화면 다섯 + 콘솔 계약 § 2.4.8 «Employee ↔ IAM account link binding» + `TASK-PC-FE-311` 보정 걷기** (REVIEW, 2026-10-07 UTC · 루트 `TASK-MONO-774` S4 · 소유자 결정: 776 `done/` 을 기다리지 않고 머지된 코드 #4234 `64d6070e6` · #4231 `836a122d9` 위에서 착수). AC-0: 운영자 목록은 계정 UUID 를 안 싣는다 → **계정 ID 입력**(형식만, 계약대로) · 수락 카드는 `/erp` 개요(칸마다 무너짐) · 311 보정은 직원 id 공간에서 발화 불가 → 걷고 «(나)» 를 `meta.actorEmployeeId` 로. BFF 4 라우트 · 직원 목록/상세 «연결된 계정» · 결재선 직원 선택기(미연결 표시, testid 유지) · 결재함 빈 이유 두 문구 · 링크/결재 v2.4 오류 문구(503 은 장애로만) · 공유 `details` 전달(없으면 본문 동일). AC-0~7 닫힘 · bite 1 실패/168 통과(AC-4 선택기 칸만) · tsc/lint rc=0 · vitest 346/346 파일 3948/3948 · e2e grep 0건. ⚪ AC-5 라이브 = 재굽기 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-312-org-node-tenant-placement-ui.md` — **조직 계층 노드 상세의 테넌트 추가 · 옮기기 · 빼기 + 잃는 도메인 확인 화면 · `/tenants` 생성 폼 «소속 노드»** (REVIEW, 2026-10-08 UTC · 선행 iam `TASK-BE-625` 머지 #4223 `9880f9209`). `ADR-MONO-047` § 개정. AC-0: 미리보기 API 가 `lostDomains` 를 준다 — 콘솔은 상한 ∩ 구독을 계산하지 않는다. 확인 창은 미리보기 성공 전 잠김 · 어떤 404 든 «관리할 권한이 없습니다» · 409 는 재조회 + 재시도 문구 · «추가할 테넌트» 후보는 기존 두 읽기의 합(도달 루트들의 subtree 테넌트 ∪ `SUPER_ADMIN` 전용 `GET /api/tenants`, 새 엔드포인트 없음) · 생성 폼 «소속 노드 (선택)» 는 비우면 본문에 키 없음. 샘플은 기존 규율(버튼 표시 · 서버가 `SAMPLE_READ_ONLY`) — 티켓 Edge Case 문구와 다름, 티켓 § 티켓과 다른 점. AC-0~5 닫힘 · bite 1 실패/135 통과(AC-2 양성 칸만) · tsc/lint rc=0 · vitest 3900/3900 · e2e grep 0건 · ⚪ AC-6 nightly 는 머지 뒤. 분석=Opus 5.5 / 구현 권장=Sonnet.
 

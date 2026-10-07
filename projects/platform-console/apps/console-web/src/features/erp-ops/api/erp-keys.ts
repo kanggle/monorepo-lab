@@ -114,6 +114,21 @@ export function businessPartnerDetailKey(
 }
 
 // ---------------------------------------------------------------------------
+// employee ↔ IAM account link (TASK-PC-FE-318). Lives under the `employees`
+// prefix so an employee-master invalidation (create/update/retire) also
+// refreshes it, and a link mutation invalidates `[ERP_KEY, 'employees']` so
+// the list/detail «연결된 계정» cell refreshes with it.
+// ---------------------------------------------------------------------------
+
+export function myAccountLinkProposalsKey() {
+  return [ERP_KEY, 'employees', 'account-link', 'mine'] as const;
+}
+
+export function employeeAccountLinkProposalsKey(employeeId: string) {
+  return [ERP_KEY, 'employees', 'account-link', 'history', employeeId] as const;
+}
+
+// ---------------------------------------------------------------------------
 // read-model — employee org-view (TASK-PC-FE-049)
 // ---------------------------------------------------------------------------
 

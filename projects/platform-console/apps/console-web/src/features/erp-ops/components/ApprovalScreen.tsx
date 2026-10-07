@@ -62,16 +62,20 @@ export interface ApprovalScreenProps {
    * a crash.
    */
   initialSelectedId?: string | null;
-  /** The signed-in operator's own `sub` (TASK-PC-FE-311) — forwarded to
-   *  `ApprovalDetail` unchanged; see `ApprovalEmployeeRef`. */
-  mySub?: string | null;
 }
+
+/** Inbox empty because the caller's account is linked to NO employee
+ *  (`meta.actorEmployeeId` ABSENT — approval v2.4). Must read differently from
+ *  {@link APPROVAL_INBOX_EMPTY_MESSAGE} (TASK-PC-FE-318 Failure Scenario 3). */
+export const APPROVAL_INBOX_UNLINKED_MESSAGE =
+  '내 계정이 직원과 연결되지 않아 결재함이 비어 있습니다. 인사 담당자에게 직원 연결을 요청하세요 — 연결 제안이 오면 ERP 개요 화면에서 수락할 수 있습니다.';
+/** Inbox empty with a linked employee — genuinely nothing to process. */
+export const APPROVAL_INBOX_EMPTY_MESSAGE = '처리할 결재가 없습니다.';
 
 export function ApprovalScreen({
   initialRequests,
   initialInbox,
   initialSelectedId,
-  mySub,
 }: ApprovalScreenProps) {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -94,6 +98,11 @@ export function ApprovalScreen({
 
   const listRows = listResp.data ?? [];
   const inboxRows = inboxResp.data ?? [];
+  // TASK-PC-FE-318 — approval v2.4: the caller's linked employee id. ABSENT ⇔
+  // not linked (the inbox is then empty for THAT reason, not «nothing to do»).
+  // It also marks «(나)» in the detail, replacing the TASK-PC-FE-311 `mySub`
+  // correction.
+  const myEmployeeId = inboxResp.meta?.actorEmployeeId ?? null;
 
   return (
     <section aria-labelledby="approval-heading" data-testid="approval-screen">
@@ -129,12 +138,27 @@ export function ApprovalScreen({
         <h3 className="mb-2 text-sm font-semibold text-foreground">
           내 미결함 (inbox)
         </h3>
-        {inboxRows.length === 0 ? (
+        {inboxQ.isError ? (
+          <p
+            className="text-sm text-destructive"
+            role="status"
+            data-testid="approval-inbox-error"
+          >
+            {approvalErrorMessage(inboxQ.error)}
+          </p>
+        ) : inboxRows.length === 0 && !myEmployeeId ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="approval-inbox-unlinked"
+          >
+            {APPROVAL_INBOX_UNLINKED_MESSAGE}
+          </p>
+        ) : inboxRows.length === 0 ? (
           <p
             className="text-sm text-muted-foreground"
             data-testid="approval-inbox-empty"
           >
-            대기 중인 결재가 없습니다.
+            {APPROVAL_INBOX_EMPTY_MESSAGE}
           </p>
         ) : (
           <ul className="space-y-1" data-testid="approval-inbox-list">
@@ -238,7 +262,7 @@ export function ApprovalScreen({
         <ApprovalDetail
           id={selectedId}
           onClose={() => setSelectedId(null)}
-          mySub={mySub}
+          myEmployeeId={myEmployeeId}
         />
       )}
     </section>

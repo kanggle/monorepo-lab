@@ -17,6 +17,7 @@ import {
 } from '../hooks/use-erp-ops';
 import { EffectivePeriodBadge } from './EffectivePeriodBadge';
 import { RetiredReferenceBadge } from './RetiredReferenceBadge';
+import { AccountLinkBadge } from './AccountLinkBadge';
 import { masterRefLabel } from '@/shared/lib/master-ref-label';
 
 /**
@@ -118,6 +119,17 @@ export function EmployeeDetail({ id, initial }: EmployeeDetailProps) {
           <dt className="text-muted-foreground">유효기간</dt>
           <dd className="text-foreground">
             <EffectivePeriodBadge period={e.effectivePeriod} />
+          </dd>
+        </div>
+        <div>
+          {/* TASK-PC-FE-318 — «연결된 계정»; the raw account UUID is never
+              printed as the label (TASK-PC-FE-309). */}
+          <dt className="text-muted-foreground">연결된 계정</dt>
+          <dd className="text-foreground">
+            <AccountLinkBadge
+              accountId={e.accountId}
+              testId="erp-employee-account"
+            />
           </dd>
         </div>
         <div>

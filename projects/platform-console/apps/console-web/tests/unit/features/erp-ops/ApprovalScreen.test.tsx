@@ -39,6 +39,12 @@ import type {
   ApprovalListResponse,
   ApprovalRequest,
 } from '@/features/erp-ops';
+import {
+  APPROVAL_INBOX_EMPTY_MESSAGE,
+  APPROVAL_INBOX_UNLINKED_MESSAGE,
+} from '@/features/erp-ops/components/ApprovalScreen';
+import { approvalErrorMessage } from '@/features/erp-ops/components/approval-error';
+import { ApiError } from '@/shared/api/errors';
 
 function wrapper() {
   const qc = new QueryClient({
@@ -167,7 +173,23 @@ describe('ApprovalScreen — list + inbox', () => {
     expect(screen.getByTestId('approval-inbox-item-appr-1')).toBeInTheDocument();
   });
 
-  it('empty inbox renders the empty notice (no crash)', () => {
+  it('empty inbox (linked caller) renders the empty notice (no crash)', () => {
+    render(
+      <ApprovalScreen
+        initialRequests={LIST}
+        initialInbox={{
+          data: [],
+          meta: { page: 0, size: 20, totalElements: 0, actorEmployeeId: 'emp-me' },
+        }}
+      />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.getByTestId('approval-inbox-empty')).toBeInTheDocument();
+  });
+
+  // TASK-PC-FE-318 AC-3 — `meta.actorEmployeeId` ABSENT ↔ present-and-empty must
+  // read DIFFERENTLY (Failure Scenario 3: «not linked» folded into «nothing to do»).
+  it('AC-3 — actorEmployeeId ABSENT → «연결되지 않아 비어 있습니다», not the plain empty notice', () => {
     render(
       <ApprovalScreen
         initialRequests={LIST}
@@ -175,7 +197,28 @@ describe('ApprovalScreen — list + inbox', () => {
       />,
       { wrapper: wrapper() },
     );
-    expect(screen.getByTestId('approval-inbox-empty')).toBeInTheDocument();
+    const unlinked = screen.getByTestId('approval-inbox-unlinked');
+    expect(unlinked.textContent).toBe(APPROVAL_INBOX_UNLINKED_MESSAGE);
+    expect(unlinked.textContent).toContain('직원과 연결되지 않아');
+    expect(screen.queryByTestId('approval-inbox-empty')).not.toBeInTheDocument();
+  });
+
+  it('AC-3 — actorEmployeeId present + 0 rows → «처리할 결재가 없습니다» (a different sentence)', () => {
+    render(
+      <ApprovalScreen
+        initialRequests={LIST}
+        initialInbox={{
+          data: [],
+          meta: { page: 0, size: 20, totalElements: 0, actorEmployeeId: 'emp-me' },
+        }}
+      />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.getByTestId('approval-inbox-empty').textContent).toBe(
+      APPROVAL_INBOX_EMPTY_MESSAGE,
+    );
+    expect(screen.queryByTestId('approval-inbox-unlinked')).not.toBeInTheDocument();
+    expect(APPROVAL_INBOX_EMPTY_MESSAGE).not.toBe(APPROVAL_INBOX_UNLINKED_MESSAGE);
   });
 
   it('the status filter is present with all 6 statuses (incl. IN_REVIEW)', () => {
@@ -339,21 +382,65 @@ describe('ApprovalDetail — inline error mapping (graceful, no crash)', () => {
 // create dialog.
 // ===========================================================================
 
+// TASK-PC-FE-318 AC-4 — the approver route is an EMPLOYEE SELECTOR now (it was
+// a raw-id text input). Same testid `approval-create-approver-${idx}`, but a
+// <select> fed by `GET /api/erp/masterdata/employees`; an employee without
+// `accountId` is marked «연결된 계정 없음» (not disabled).
+const EMP = (id: string, num: string, name: string, accountId?: string) => ({
+  id,
+  employeeNumber: num,
+  name,
+  status: 'ACTIVE',
+  employmentStatus: 'EMPLOYED',
+  effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+  ...(accountId ? { accountId } : {}),
+});
+const EMPLOYEES_PAGE = {
+  data: [
+    EMP('emp-a', 'E-A', '김승인', 'acc-a'),
+    EMP('emp-b', 'E-B', '이승인', 'acc-b'),
+    EMP('emp-x', 'E-X', '박미연결'),
+  ],
+  meta: { page: 0, size: 100, totalElements: 3 },
+};
+
+/** fetch mock: employee list for the selector, DRAFT for the create POST. */
+function createDialogFetch() {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/api/erp/masterdata/employees?')) {
+      return Promise.resolve(jsonResponse(EMPLOYEES_PAGE));
+    }
+    if (init?.method === 'POST') {
+      return Promise.resolve(jsonResponse({ data: DRAFT }, 201));
+    }
+    return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+  });
+}
+
+async function openCreateWithEmployees(user: ReturnType<typeof userEvent.setup>) {
+  render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    wrapper: wrapper(),
+  });
+  await user.click(screen.getByTestId('approval-create'));
+  // wait until the selector is fed (enabled select with the employee options).
+  await waitFor(() =>
+    expect(screen.getByTestId('approval-create-approver-0')).toBeEnabled(),
+  );
+  expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('SELECT');
+}
+
 describe('ApprovalScreen — create dialog', () => {
   it('single-stage: gates required fields then POSTs /requests with approverId + Idempotency-Key (legacy)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT }, 201));
+    const fetchMock = createDialogFetch();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
-      wrapper: wrapper(),
-    });
-    await user.click(screen.getByTestId('approval-create'));
+    await openCreateWithEmployees(user);
     expect(screen.getByTestId('approval-create-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('approval-create-submit')).toBeDisabled();
     await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-1');
     await user.type(screen.getByTestId('approval-create-title'), '조직개편');
-    // The first approver row is testid approval-create-approver-0 (replaces old approval-create-approverId).
-    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-a');
+    // The first approver row is testid approval-create-approver-0 — a selector now.
+    await user.selectOptions(screen.getByTestId('approval-create-approver-0'), 'emp-a');
     expect(screen.getByTestId('approval-create-submit')).toBeEnabled();
     await user.click(screen.getByTestId('approval-create-submit'));
     await waitFor(() =>
@@ -379,22 +466,19 @@ describe('ApprovalScreen — create dialog', () => {
   });
 
   it('multi-stage: adding a 2nd row and submitting sends approverIds (not approverId)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT }, 201));
+    const fetchMock = createDialogFetch();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
-      wrapper: wrapper(),
-    });
-    await user.click(screen.getByTestId('approval-create'));
+    await openCreateWithEmployees(user);
     await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-1');
     await user.type(screen.getByTestId('approval-create-title'), '다단계 결재');
     // Fill row 0.
-    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-a');
+    await user.selectOptions(screen.getByTestId('approval-create-approver-0'), 'emp-a');
     // Add a second stage row.
     await user.click(screen.getByTestId('approval-create-add-stage'));
     // Row 1 should now be present.
     expect(screen.getByTestId('approval-create-approver-1')).toBeInTheDocument();
-    await user.type(screen.getByTestId('approval-create-approver-1'), 'emp-b');
+    await user.selectOptions(screen.getByTestId('approval-create-approver-1'), 'emp-b');
     expect(screen.getByTestId('approval-create-submit')).toBeEnabled();
     await user.click(screen.getByTestId('approval-create-submit'));
     await waitFor(() =>
@@ -430,6 +514,96 @@ describe('ApprovalScreen — create dialog', () => {
     // Remove row 1.
     await user.click(screen.getByTestId('approval-create-remove-stage-1'));
     expect(screen.queryByTestId('approval-create-approver-1')).not.toBeInTheDocument();
+  });
+
+  it('🔴 AC-4 — an employee with no linked account is marked «연결된 계정 없음» in the selector (selectable, not disabled)', async () => {
+    vi.stubGlobal('fetch', createDialogFetch());
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    const select = screen.getByTestId('approval-create-approver-0') as HTMLSelectElement;
+    const opt = (v: string) =>
+      Array.from(select.options).find((o) => o.value === v)!;
+    expect(opt('emp-x').textContent).toContain('연결된 계정 없음');
+    expect(opt('emp-x').disabled).toBe(false);
+    expect(opt('emp-a').textContent).not.toContain('연결된 계정 없음');
+    expect(opt('emp-a').textContent).toContain('E-A · 김승인');
+    // picking it shows the row-level warning (and still allows the draft).
+    await user.selectOptions(select, 'emp-x');
+    expect(
+      screen.getByTestId('approval-create-approver-unlinked-0').textContent,
+    ).toContain('연결된 계정 없음');
+    // the raw id is never an option label.
+    expect(Array.from(select.options).some((o) => o.textContent === 'emp-x')).toBe(false);
+  });
+
+  it('employee list unreadable → the row falls back to an employee-id input (same testid) and says so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(errorResponse('DATA_SCOPE_FORBIDDEN', 403)),
+    );
+    const user = userEvent.setup();
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    await screen.findByTestId('approval-create-approvers-fallback');
+    expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('INPUT');
+  });
+});
+
+// ===========================================================================
+// TASK-PC-FE-318 — approval v2.4 refusals: each has its own copy.
+// ===========================================================================
+
+describe('approval v2.4 refusals (TASK-PC-FE-318)', () => {
+  it('🔴 AC-4 — submit 422 APPROVAL_APPROVER_UNLINKED points at the stage (details.stageIndex) in plain words', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).includes('/submit')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'APPROVAL_APPROVER_UNLINKED',
+              message: 'approver has no linked account',
+              details: { stageIndex: 1 },
+            }),
+            { status: 422, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+      if (String(url).includes('/api/erp/approval/requests/')) {
+        return Promise.resolve(jsonResponse({ data: DRAFT }));
+      }
+      return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ApprovalDetail id="appr-draft" onClose={() => {}} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-action-submit')).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId('approval-action-submit'));
+    const err = await screen.findByTestId('approval-action-error');
+    expect(err.textContent).toContain('2단계 결재자에게 연결된 계정이 없어 상신할 수 없습니다');
+    expect(err.textContent).not.toContain('approver has no linked account');
+  });
+
+  it('APPROVAL_ACTOR_NOT_LINKED / ROUTE_INVALID causes / 503 — pairwise-distinct copy; 503 never mentions the link', () => {
+    const m = (code: string, status: number, details?: unknown) =>
+      approvalErrorMessage(new ApiError(status, code, 'm', undefined, details));
+    const actor = m('APPROVAL_ACTOR_NOT_LINKED', 403);
+    const unlinked0 = m('APPROVAL_APPROVER_UNLINKED', 422, { stageIndex: 0 });
+    const self = m('APPROVAL_ROUTE_INVALID', 422, { cause: 'self_approval' });
+    const unresolved = m('APPROVAL_ROUTE_INVALID', 422, { cause: 'approver_unresolved' });
+    const generic = m('APPROVAL_ROUTE_INVALID', 422);
+    const outage = m('SERVICE_UNAVAILABLE', 503);
+    const all = [actor, unlinked0, self, unresolved, generic, outage];
+    expect(new Set(all).size).toBe(all.length);
+    expect(actor).toContain('내 계정이 직원과 연결되어 있지 않아');
+    expect(unlinked0).toContain('1단계 결재자');
+    expect(self).toContain('자기 자신');
+    expect(unresolved).toContain('재직(ACTIVE)');
+    expect(outage).toContain('일시적으로 사용할 수 없습니다');
+    expect(outage).not.toContain('연결');
   });
 });
 

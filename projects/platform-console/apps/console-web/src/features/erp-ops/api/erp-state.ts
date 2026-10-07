@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
-import { getAccessToken } from '@/shared/lib/session';
-import { decodeJwtPayload } from '@/shared/lib/jwt';
 import {
   listDepartments,
   listEmployees,
@@ -27,38 +25,12 @@ import type {
 } from './types';
 import type { ApprovalListResponse } from './approval-types';
 
-/**
- * The signed-in operator's own `sub` (account UUID), display-only
- * (TASK-PC-FE-311). Reused verbatim from the EXACT pattern
- * `(console)/layout.tsx`'s `accountDisplayLabel` already uses for the
- * account-menu label: {@link getAccessToken} (the base IAM OIDC access
- * token, ALWAYS present once `(console)/layout.tsx`'s `isAuthenticated()`
- * gate has passed — unlike the assumed/domain-facing token, which is
- * absent until the operator explicitly switches tenant) decoded
- * verification-free via {@link decodeJwtPayload} (same safety caveat as
- * that call site: NOT a signature check, never an authorization input).
- *
- * AC-0 (task body) verified the base access token's `sub` is the SAME
- * account UUID the demo seed's `APPROVER_SUB` resolves to
- * (`infra/demo/seed/seed-erp.sh` § `jwt_sub "$SEED_TOKEN"`, `SEED_TOKEN`
- * being the assume-tenant exchange's token) — `ADR-MONO-060` option A
- * (ACCEPTED) aligned the assumed token's `sub` to the account UUID, and
- * `AssumeTenantExchangeIntegrationTest` asserts the base and assumed
- * tokens carry the identical `sub` (both equal the account id). Only the
- * `sub` STRING is ever returned here — never the token itself (§ 2.1 /
- * this task's AC-1: the token stays server-side, in the HttpOnly cookie
- * jar `getAccessToken()` reads).
- *
- * A sample visitor ({@link getAccessToken} → null, no session of any
- * kind) and a not-yet-authenticated request both naturally resolve to
- * `null` here — there is no "my sub" to compare against, so the
- * `ApprovalEmployeeRef` correction (below) never fires for them.
- */
-async function getMyOperatorSub(): Promise<string | null> {
-  const token = await getAccessToken();
-  const sub = decodeJwtPayload(token)?.['sub'];
-  return typeof sub === 'string' && sub.trim() !== '' ? sub : null;
-}
+// TASK-PC-FE-318 — `getMyOperatorSub` (TASK-PC-FE-311: decode the base access
+// token's `sub` so the approval screen could label a demo-seed `sub` approver
+// «나») is gone. approval v2.4 (TASK-MONO-776) stores employee ids in every
+// person field and the inbox reports the caller's own employee id
+// (`meta.actorEmployeeId`) — the screen reads that instead. No token is
+// decoded for the approval screen any more.
 
 /**
  * Server-side erp operations state for the FOUR `(console)/erp/**`
@@ -239,17 +211,12 @@ export async function getErpOrgViewState(
 export interface ErpApprovalState extends ErpRouteFlags {
   approvalRequests: ApprovalListResponse | null;
   approvalInbox: ApprovalListResponse | null;
-  /** The signed-in operator's own `sub` — see {@link getMyOperatorSub}
-   *  (TASK-PC-FE-311). `null` for a sample visitor / unauthenticated
-   *  request (no "my sub" to compare against). */
-  mySub: string | null;
 }
 
 const EMPTY_APPROVAL: ErpApprovalState = {
   ...BLOCKED,
   approvalRequests: null,
   approvalInbox: null,
-  mySub: null,
 };
 
 export async function getErpApprovalState(
@@ -257,15 +224,14 @@ export async function getErpApprovalState(
 ): Promise<ErpApprovalState> {
   if (!eligible) return { ...EMPTY_APPROVAL, notEligible: true };
 
-  const mySub = await getMyOperatorSub();
   try {
     const [approvalRequests, approvalInbox] = await Promise.all([
       listApprovalRequests({ page: 0, size: 20 }),
       listApprovalInbox({ page: 0, size: 20 }),
     ]);
-    return { ...BLOCKED, approvalRequests, approvalInbox, mySub };
+    return { ...BLOCKED, approvalRequests, approvalInbox };
   } catch (err) {
-    return { ...EMPTY_APPROVAL, ...flagsForError(err), mySub };
+    return { ...EMPTY_APPROVAL, ...flagsForError(err) };
   }
 }
 

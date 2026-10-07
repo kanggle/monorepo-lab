@@ -352,7 +352,9 @@ export async function callFlatEnvelopeGateway<T>(
         code: e.code,
         path: logPath,
       });
-      throw new ApiError(res.status, e.code, e.message, e.timestamp);
+      // TASK-PC-FE-318 — `details` rides along (erp link `details.cause`,
+      // approval `details.stageIndex`); it is NOT logged above.
+      throw new ApiError(res.status, e.code, e.message, e.timestamp, e.details);
     }
 
     const json = await res.json();

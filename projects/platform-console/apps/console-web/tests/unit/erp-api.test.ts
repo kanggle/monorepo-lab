@@ -424,6 +424,16 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         'createBusinessPartner',
         'updateBusinessPartner',
         'retireBusinessPartner',
+        // TASK-PC-FE-318: employee ↔ IAM account link — 2 reads + 5 writes
+        // (masterdata-api.md § Employee ↔ IAM account link; console contract
+        // § 2.4.8 «Employee ↔ IAM account link binding»).
+        'listMyAccountLinkProposals',
+        'listEmployeeAccountLinkProposals',
+        'proposeAccountLink',
+        'acceptAccountLink',
+        'declineAccountLink',
+        'revokeAccountLink',
+        'unlinkEmployeeAccount',
       ].sort(),
     );
     // Every master has create + update + retire (department also move-parent).
@@ -478,7 +488,9 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     //   (delegations list + delegations/[grantId] detail) = 18 total GET route files.
     // (TASK-PC-FE-138: the 2 erp-direct notification GET routes were removed —
     //  the bell now reads the notification aggregator under /api/console.)
-    expect(getRouteFiles).toBe(18);
+    // + TASK-PC-FE-318: 2 account-link GET routes (employees/[id]/
+    //   account-link-proposals history, account-link-proposals/mine) = 20.
+    expect(getRouteFiles).toBe(20);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16
     // + TASK-PC-FE-051: 2 approval POST routes (requests create, the
@@ -487,7 +499,11 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     //   delegations/{id}/revoke) = 20.
     // (TASK-PC-FE-138: the 1 erp-direct notification POST route (mark-read) was
     //  removed — mark-read now goes through the /api/console aggregator.)
-    expect(postRouteFiles).toBe(20);
+    // + TASK-PC-FE-318: 3 account-link POST route files (propose on the
+    //   employees/[id]/account-link-proposals route, employees/[id]/
+    //   account-link/unlink, account-link-proposals/[proposalId]/[action]
+    //   for accept|decline|revoke) = 23.
+    expect(postRouteFiles).toBe(23);
   });
 });
 

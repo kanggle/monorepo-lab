@@ -45,6 +45,10 @@ export type {
   ErpAreaCount,
   CellStatus as ErpOverviewCellStatus,
 } from './api/overview-state';
+// TASK-PC-FE-318 — «내 계정 앞으로 온 직원 연결 제안» (the account owner's
+// accept/decline surface), composed onto the `/erp` overview page.
+export { MyAccountLinkProposalsCard } from './components/MyAccountLinkProposalsCard';
+export { EmployeeAccountLinkDialog } from './components/EmployeeAccountLinkDialog';
 export { ErpOrgViewScreen } from './components/ErpOrgViewScreen';
 export type { ErpOrgViewScreenProps } from './components/ErpOrgViewScreen';
 export { ErpApprovalScreen } from './components/ErpApprovalScreen';

@@ -29,6 +29,11 @@ export const EmployeeSchema = z
     employmentStatus: z.string().optional(),
     effectivePeriod: EffectivePeriodSchema,
     audit: AuditSchema.optional(),
+    // TASK-PC-FE-318 — the IAM account linked to this employee
+    // (`masterdata-api.md` § Employee 응답의 `accountId`). ABSENT = not
+    // linked (`@JsonInclude(NON_NULL)`). Rendered as «연결됨» / «연결된 계정
+    // 없음», never printed raw as a reference label (TASK-PC-FE-309).
+    accountId: z.string().optional(),
   })
   .passthrough();
 export type Employee = z.infer<typeof EmployeeSchema>;
