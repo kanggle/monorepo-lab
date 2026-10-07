@@ -285,6 +285,10 @@ jobs:
       #    잡의 `if` 가 항상 거짓이 된다 — 배선이 없는데 초록으로 보인다(MONO-619/640 과 같은 함정).
       capture-route-staleness: ${{ steps.filter.outputs.capture-route-staleness }}
       stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
+      # 🔴 TASK-MONO-767 도 MONO-619/640 과 같은 함정을 밟았다 — 이 한 줄 없이 PR 을 올렸고
+      #    필터 스텝 자체는 `no-next-font-google = true` 를 맞게 계산했는데(raw 로그 확인)
+      #    `needs.changes.outputs.no-next-font-google` 는 빈 값이라 잡이 통째로 skipped 였다.
+      no-next-font-google: ${{ steps.filter.outputs.no-next-font-google }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -938,6 +942,19 @@ jobs:
               - '**/Dockerfile'
               - '**/Dockerfile.*'
               - 'scripts/check-stage-inherits-its-contexts.mjs'
+            # TASK-MONO-767: `next/font`'s `google` loader 는 빌드 시점에 Google
+            # Fonts 호스트를 불러 CSS 를 내려받는다 — 응답이 예상과 다르면
+            # `next build` 가 간헐적으로 죽는다(재현/원인은 티켓 본문).
+            # web-store · fan-platform-web 은 `next/font`'s `local` loader +
+            # 커밋된 OFL woff2 로 바꿨다. 도착 경로는 둘 — 소스가 그 import 를
+            # 다시 들이거나, 판정자 자신이 바뀐다. 가드는 트리 전체를 `git grep`
+            # 하므로 어떤 소스 변경도 트리거할 수 있어야 한다.
+            no-next-font-google:
+              - '**/src/**/*.ts'
+              - '**/src/**/*.tsx'
+              - '**/src/*.ts'
+              - '**/src/*.tsx'
+              - 'scripts/check-no-next-font-google.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1421,6 +1438,37 @@ jobs:
 
       - name: Guard — every public hostname in the tree is declared in TEMPLATE.md
         run: bash scripts/check-public-domains.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-767. `next/font`'s `google` loader fetches Google Fonts CSS at
+  # *build time*; an off-shape response (rate limit, transient error) makes
+  # the regex match null and kills the whole build with a TypeError that
+  # looks like flake because the same commit passes on a plain re-run (see
+  # ticket measurements). web-store and fan-platform-web were moved to
+  # `next/font`'s `local` loader + committed OFL woff2 files. This guard
+  # keeps that fix from being reverted (or a third app from reintroducing
+  # the same pattern) — project-agnostic: it names no app, only the literal
+  # import path.
+  # ---------------------------------------------------------------------------
+  no-next-font-google:
+    name: No next/font Google loader (build-time Google Fonts fetch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.no-next-font-google == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-no-next-font-google.sh
+
+      - name: Self-test the predicate (bites on a synthetic tree)
+        run: bash scripts/check-no-next-font-google.sh --self-test
+
+      - name: Guard — next/font Google loader is not reintroduced
+        run: bash scripts/check-no-next-font-google.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가

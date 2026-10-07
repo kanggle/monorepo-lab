@@ -1,0 +1,24 @@
+/* Hand-authored glue around the generated @font-face rules (TASK-MONO-767
+ * owner decision 2026-10-07: self-host Korean glyphs too, unicode-range
+ * split, so a page only downloads the chunks it actually renders).
+ * noto-sans-kr.generated.css is machine-written — see
+ * scripts/gen-noto-sans-kr-fonts-css.mjs. This file is not.
+ */
+@import url('./noto-sans-kr.generated.css');
+
+/* Same metric-adjusted fallback next/font/local previously computed for this
+ * exact font (ascent/descent/line-gap/size-adjust are intrinsic to the font
+ * file bytes, which are unchanged, so these values still apply). Keeps CLS
+ * low while a weight's matching chunk is still loading. */
+@font-face {
+  font-family: 'Noto Sans KR Fallback';
+  src: local('Arial');
+  ascent-override: 110.26%;
+  descent-override: 27.38%;
+  line-gap-override: 0.00%;
+  size-adjust: 105.20%;
+}
+
+:root {
+  --font-noto-sans-kr: 'Noto Sans KR', 'Noto Sans KR Fallback';
+}
