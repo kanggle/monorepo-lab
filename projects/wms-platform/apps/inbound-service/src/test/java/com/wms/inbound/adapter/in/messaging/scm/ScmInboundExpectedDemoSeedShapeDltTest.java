@@ -116,9 +116,12 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
     @Test
     void wmsDevSeed_isLoadedNonVacuously() {
         // Guard against a silently empty fake: the tests below read "unknown" from it.
-        assertThat(wmsSeed.warehouseCodes).containsExactly("WH01");
+        // TASK-MONO-768 added WH-MAIN and the 86 ecommerce SKUs (one multi-row INSERT) after the
+        // WH01 / SKU-APPLE-001 rows — order matters: the tests below take index 0 as "the" seed row.
+        assertThat(wmsSeed.warehouseCodes).containsExactly("WH01", "WH-MAIN");
         assertThat(wmsSeed.partnerCodes).containsExactly("SUP-001");
-        assertThat(wmsSeed.skuCodes).containsExactly("SKU-APPLE-001");
+        assertThat(wmsSeed.skuCodes).hasSize(87).startsWith("SKU-APPLE-001")
+                .contains("c0000000-0000-0000-0000-000000000001", "c0000000-0000-0000-0000-000000000086");
     }
 
     /**
@@ -344,9 +347,9 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
     }
 
     /**
-     * Master read model holding exactly the rows of the wms dev seed file. Every row in that file
-     * is a single-row {@code INSERT INTO <table> (...) VALUES (...)}; the id is the first string
-     * literal of the VALUES tuple, the code the second, and the partner type the third.
+     * Master read model holding exactly the rows of the wms dev seed file. Every statement in that
+     * file is an {@code INSERT INTO <table> (...) VALUES (...)[, (...)…] ON CONFLICT}; in each tuple
+     * the id is the first string literal, the code the second, and the partner type the third.
      */
     static final class WmsDevSeedReadModel implements MasterReadModelPort {
 
@@ -372,34 +375,45 @@ class ScmInboundExpectedDemoSeedShapeDltTest {
             WmsDevSeedReadModel model = new WmsDevSeedReadModel();
             Matcher m = INSERT.matcher(sql);
             while (m.find()) {
-                List<String> literals = new ArrayList<>();
-                Matcher lit = LITERAL.matcher(m.group(2));
-                while (lit.find()) {
-                    literals.add(lit.group(1));
-                }
-                UUID id = UUID.fromString(literals.get(0));
-                switch (m.group(1)) {
-                    case "warehouse_snapshot" -> {
-                        model.warehouseCodes.add(literals.get(1));
-                        model.warehouses.add(new WarehouseSnapshot(id, literals.get(1),
-                                WarehouseSnapshot.Status.valueOf(literals.get(2)), CACHED, 0L));
-                    }
-                    case "sku_snapshot" -> {
-                        model.skuCodes.add(literals.get(1));
-                        model.skus.add(new SkuSnapshot(id, literals.get(1),
-                                SkuSnapshot.TrackingType.valueOf(literals.get(2)),
-                                SkuSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
-                    }
-                    case "partner_snapshot" -> {
-                        model.partnerCodes.add(literals.get(1));
-                        model.partners.add(new PartnerSnapshot(id, literals.get(1),
-                                PartnerSnapshot.PartnerType.valueOf(literals.get(2)),
-                                PartnerSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
-                    }
-                    default -> { }
+                // TASK-MONO-768: the file now also carries multi-row VALUES (the 86 ecommerce
+                // SKUs). The non-greedy group spans every tuple of one statement, so split it —
+                // reading only the first tuple would silently drop 85 rows from this fake.
+                for (String tuple : TUPLE_SEPARATOR.split(m.group(2))) {
+                    model.add(m.group(1), tuple);
                 }
             }
             return model;
+        }
+
+        private static final Pattern TUPLE_SEPARATOR = Pattern.compile("\\)\\s*,\\s*\\(");
+
+        private void add(String table, String tuple) {
+            List<String> literals = new ArrayList<>();
+            Matcher lit = LITERAL.matcher(tuple);
+            while (lit.find()) {
+                literals.add(lit.group(1));
+            }
+            UUID id = UUID.fromString(literals.get(0));
+            switch (table) {
+                case "warehouse_snapshot" -> {
+                    warehouseCodes.add(literals.get(1));
+                    warehouses.add(new WarehouseSnapshot(id, literals.get(1),
+                            WarehouseSnapshot.Status.valueOf(literals.get(2)), CACHED, 0L));
+                }
+                case "sku_snapshot" -> {
+                    skuCodes.add(literals.get(1));
+                    skus.add(new SkuSnapshot(id, literals.get(1),
+                            SkuSnapshot.TrackingType.valueOf(literals.get(2)),
+                            SkuSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
+                }
+                case "partner_snapshot" -> {
+                    partnerCodes.add(literals.get(1));
+                    partners.add(new PartnerSnapshot(id, literals.get(1),
+                            PartnerSnapshot.PartnerType.valueOf(literals.get(2)),
+                            PartnerSnapshot.Status.valueOf(literals.get(3)), CACHED, 0L));
+                }
+                default -> { }
+            }
         }
 
         @Override

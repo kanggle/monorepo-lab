@@ -92,19 +92,28 @@ class ExistingSeedVolumeMigrationOrderIT {
 
             // TASK-MONO-765: WH01 + WH-MAIN (shipping-service default-warehouse-code).
             assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(2);
-            assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(3);
+            // TASK-MONO-768: + WH-MAIN's zone Z-A and its location WH-MAIN-A-01-01-01.
+            assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(4);
+            assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(4);
             assertThat(count(ds, "SELECT count(*) FROM skus")).isEqualTo(3);
             // TASK-MONO-765: + ECOMMERCE-STORE (FulfillmentRequestedConsumer partner).
             assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(4);
 
-            // Not just "3 rows landed" — each one resolves through the chain the
+            // Not just "4 rows landed" — each one resolves through the chain the
             // prefixes exist to order.
             assertThat(count(ds,
                     "SELECT count(*) FROM locations l "
                             + "JOIN zones z ON z.id = l.zone_id "
                             + "JOIN warehouses w ON w.id = z.warehouse_id"))
-                    .isEqualTo(3);
+                    .isEqualTo(4);
+            // TASK-MONO-768: and the new location hangs off WH-MAIN, not WH01.
+            assertThat(count(ds,
+                    "SELECT count(*) FROM locations l "
+                            + "JOIN zones z ON z.id = l.zone_id "
+                            + "JOIN warehouses w ON w.id = z.warehouse_id AND w.id = l.warehouse_id "
+                            + "WHERE w.warehouse_code = 'WH-MAIN' "
+                            + "AND l.location_code = 'WH-MAIN-A-01-01-01'"))
+                    .isEqualTo(1);
 
             // Nothing versioned above the production timeline was applied. This is
             // the property the whole ticket buys, stated directly.
@@ -147,8 +156,9 @@ class ExistingSeedVolumeMigrationOrderIT {
             // not crash or double up.
             // TASK-MONO-765: WH01 + WH-MAIN (shipping-service default-warehouse-code).
             assertThat(count(ds, "SELECT count(*) FROM warehouses")).isEqualTo(2);
-            assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(3);
-            assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(3);
+            // TASK-MONO-768: + WH-MAIN's zone and location.
+            assertThat(count(ds, "SELECT count(*) FROM zones")).isEqualTo(4);
+            assertThat(count(ds, "SELECT count(*) FROM locations")).isEqualTo(4);
             assertThat(count(ds, "SELECT count(*) FROM skus")).isEqualTo(3);
             // TASK-MONO-765: + ECOMMERCE-STORE (FulfillmentRequestedConsumer partner).
             assertThat(count(ds, "SELECT count(*) FROM partners")).isEqualTo(4);
