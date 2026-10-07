@@ -1,11 +1,14 @@
 package com.example.erp.masterdata.infrastructure.persistence.jpa;
 
 import com.example.common.page.PageResult;
+import com.example.common.persistence.DataIntegrityViolations;
 import com.example.erp.masterdata.domain.common.MasterStatus;
 import com.example.erp.masterdata.domain.employee.Employee;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeListFilter;
 import com.example.erp.masterdata.domain.employee.repository.EmployeeRepository;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkConflictException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +34,29 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
     @Override
     public Optional<Employee> findByEmployeeNumber(String employeeNumber, String tenantId) {
         return jpa.findByEmployeeNumberAndTenantId(employeeNumber, tenantId);
+    }
+
+    @Override
+    public Optional<Employee> findByAccountId(String accountId, String tenantId) {
+        return jpa.findByAccountIdAndTenantId(accountId, tenantId);
+    }
+
+    /**
+     * The link path changes only {@code account_id}, so of the two unique indexes on
+     * {@code employees} ({@code uq_employees_tenant_number}, {@code uq_employees_tenant_account})
+     * only the account one can fire here.
+     */
+    @Override
+    public Employee saveAccountLink(Employee employee) {
+        try {
+            return jpa.saveAndFlush(employee);
+        } catch (DataIntegrityViolationException e) {
+            if (DataIntegrityViolations.isUniqueViolation(e)) {
+                throw new EmployeeLinkConflictException(EmployeeLinkConflictException.ACCOUNT_ALREADY_LINKED,
+                        "Account is already linked to another employee in this tenant");
+            }
+            throw e;
+        }
     }
 
     @Override

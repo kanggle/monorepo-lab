@@ -158,10 +158,17 @@ This contract is the v1 forward interface for those v2 consumers.
   "occurredAt": "<ISO-8601 UTC>",
   "actor": "...",
   "before": { "employeeNumber", "name", "departmentId", "costCenterId",
-              "jobGradeId", "status", "effectivePeriod" } | null,
+              "jobGradeId", "accountId", "status", "effectivePeriod" } | null,
   "after":  { ... same shape ... } | null,
   "reason": "...?" }
 ```
+
+> **`accountId` (additive, TASK-ERP-BE-044 / TASK-MONO-774).** The IAM account linked to the
+> employee (`masterdata-api.md` § Employee ↔ IAM account link); JSON `null` when not linked.
+> Linking (accept) and unlinking emit **`changeKind = UPDATED`** with `before.accountId` /
+> `after.accountId` showing the change — no new `changeKind` value is introduced, because the
+> read-model consumer routes an unknown `changeKind` to DLT. `reason` is the unlink reason, and
+> `null` on accept. Consumers that ignore unknown snapshot keys are unaffected.
 
 `erp.masterdata.jobgrade.changed` payload:
 ```json

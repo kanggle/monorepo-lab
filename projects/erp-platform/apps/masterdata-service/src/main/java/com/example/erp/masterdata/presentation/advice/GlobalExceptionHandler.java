@@ -66,7 +66,14 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
             Map.entry("UNAUTHORIZED", HttpStatus.UNAUTHORIZED),
             Map.entry("CONCURRENT_MODIFICATION", HttpStatus.CONFLICT),
             Map.entry("IDEMPOTENCY_STORE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE),
-            Map.entry("ILLEGAL_STATE", HttpStatus.UNPROCESSABLE_ENTITY));
+            Map.entry("ILLEGAL_STATE", HttpStatus.UNPROCESSABLE_ENTITY),
+            // Employee ↔ IAM account link (TASK-ERP-BE-044 / TASK-MONO-774). CONFLICT and
+            // INVALID carry details.cause through the domain arm below.
+            Map.entry("EMPLOYEE_LINK_PROPOSAL_NOT_FOUND", HttpStatus.NOT_FOUND),
+            Map.entry("EMPLOYEE_LINK_CONFLICT", HttpStatus.CONFLICT),
+            Map.entry("EMPLOYEE_LINK_INVALID", HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry("EMPLOYEE_LINK_NOT_ADDRESSEE", HttpStatus.FORBIDDEN),
+            Map.entry("EMPLOYEE_LINK_SELF_ACCEPT", HttpStatus.FORBIDDEN));
 
     /**
      * Resolve a code's status from {@link #STATUS_BY_CODE} — the single place a

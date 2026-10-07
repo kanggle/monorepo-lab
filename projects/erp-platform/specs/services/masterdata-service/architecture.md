@@ -714,6 +714,15 @@ All under `/api/erp/masterdata/**` (gateway, when introduced, rewrites
 | `GET` | `/api/erp/masterdata/employees/{id}` | JWT (`erp.read`) | n/a | detail |
 | `PATCH` | `/api/erp/masterdata/employees/{id}` | JWT (`erp.write`) | required | append revision |
 | `POST` | `/api/erp/masterdata/employees/{id}/retire` | JWT (`erp.write`) | required | retire |
+| `GET` | `/api/erp/masterdata/employees/me` | JWT (`erp.read`) — **no data scope** (the caller reads its own link) | n/a | employee linked to the caller's `sub` (TASK-ERP-BE-044) |
+| `GET` | `/api/erp/masterdata/employees/{id}/approver-ref` | JWT (`erp.read`) — **no data scope** (an approver normally sits outside the submitter's subtree; the department-scoped detail would 403 a valid approval line) | n/a | `{id,status,accountId?}` for approval-line resolution |
+| `POST` | `/api/erp/masterdata/employees/{id}/account-link-proposals` | JWT (`erp.write`) + employee's department scope | required | propose «employee ↔ IAM account» (no IAM existence check) |
+| `GET` | `/api/erp/masterdata/employees/{id}/account-link-proposals` | JWT (`erp.read`) + employee's department scope | n/a | proposal history (all states) |
+| `POST` | `/api/erp/masterdata/employees/{id}/account-link/unlink` | JWT (`erp.write`) + employee's department scope, **or** the linked account's owner (`erp.read`) | required | clear `accountId` |
+| `GET` | `/api/erp/masterdata/account-link-proposals/mine` | JWT (`erp.read`) — **no data scope** (proposals addressed to the caller) | n/a | the caller's PENDING proposals |
+| `POST` | `/api/erp/masterdata/account-link-proposals/{proposalId}/accept` | JWT (`erp.read`) + **account owner** (`sub` = proposal account) + 🔴 **two-person rule** (`sub` ≠ proposer) — no data scope: the acceptor is the account owner, not HR | required | the ONLY writer of `employees.account_id` |
+| `POST` | `/api/erp/masterdata/account-link-proposals/{proposalId}/decline` | JWT (`erp.read`) + **account owner** — no data scope | required | decline |
+| `POST` | `/api/erp/masterdata/account-link-proposals/{proposalId}/revoke` | JWT (`erp.write`) + employee's department scope (need not be the proposer) | required | revoke a PENDING proposal |
 | `POST` | `/api/erp/masterdata/job-grades` | JWT (`erp.write`) | required | create |
 | `GET` | `/api/erp/masterdata/job-grades` | JWT (`erp.read`) | n/a | list |
 | `GET` | `/api/erp/masterdata/job-grades/{id}` | JWT (`erp.read`) | n/a | detail |
@@ -734,7 +743,12 @@ All under `/api/erp/masterdata/**` (gateway, when introduced, rewrites
 
 Endpoint count = 5 masters × (1 create + 1 list + 1 detail + 1 patch +
 1 retire) + 1 Department move-parent = **26 business endpoints** + 2
-actuator probes = **28 total**.
+actuator probes = **28 total**. TASK-ERP-BE-044 (employee ↔ IAM account link,
+`masterdata-api.md` § Employee ↔ IAM account link) adds **9** business endpoints
+→ **35 business endpoints** + 2 actuator probes = **37 total**. Their data model
+(`employees.account_id` + `employee_account_link_proposals`, Flyway `V3`) and the
+two-person rule are specified in the contract; the rule is enforced in the domain
+(`EmployeeAccountLinkProposal#accept`), not only at proposal time.
 
 ---
 

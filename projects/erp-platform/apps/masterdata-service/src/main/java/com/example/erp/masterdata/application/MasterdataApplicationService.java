@@ -2,6 +2,19 @@ package com.example.erp.masterdata.application;
 
 import com.example.common.id.UuidV7;
 import com.example.common.page.PageResult;
+import com.example.erp.masterdata.application.command.Commands.AcceptAccountLinkCommand;
+import com.example.erp.masterdata.application.command.Commands.DeclineAccountLinkCommand;
+import com.example.erp.masterdata.application.command.Commands.ProposeAccountLinkCommand;
+import com.example.erp.masterdata.application.command.Commands.RevokeAccountLinkCommand;
+import com.example.erp.masterdata.application.command.Commands.UnlinkAccountCommand;
+import com.example.erp.masterdata.application.view.EmployeeAccountLinkProposalView;
+import com.example.erp.masterdata.application.view.EmployeeApproverRefView;
+import com.example.erp.masterdata.domain.employee.link.EmployeeAccountLinkProposal;
+import com.example.erp.masterdata.domain.employee.link.repository.EmployeeAccountLinkProposalRepository;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkConflictException;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkInvalidException;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkProposalNotFoundException;
+import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkSelfAcceptException;
 import com.example.erp.masterdata.application.command.Commands.CreateBusinessPartnerCommand;
 import com.example.erp.masterdata.application.command.Commands.CreateCostCenterCommand;
 import com.example.erp.masterdata.application.command.Commands.CreateDepartmentCommand;
@@ -99,6 +112,13 @@ public class MasterdataApplicationService {
     private final ClockPort clock;
     private final MasterdataEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final EmployeeAccountLinkProposalRepository linkProposalRepository;
+
+    /**
+     * {@code audit_log.aggregate_type} for proposal-only transitions (propose / decline / revoke).
+     * Accept and unlink change the EMPLOYEE, so they are audited on {@code employee}.
+     */
+    static final String AGG_LINK_PROPOSAL = "employee_account_link_proposal";
 
     // ====================================================================
     // Department
@@ -331,6 +351,226 @@ public class MasterdataApplicationService {
         authorize(actor, RequiredScope.READ, null);
         return employeeRepository.findAll(actor.tenantId(), filter, page, size)
                 .map(EmployeeView::from);
+    }
+
+    // ====================================================================
+    // Employee ↔ IAM account link (TASK-ERP-BE-044 — masterdata-api.md
+    // § Employee ↔ IAM account link; owner decision 2026-10-08 UTC:
+    // HR proposal + account-owner acceptance, two-person rule).
+    //
+    // Authorization shape: every use case first runs the ROLE gate with no
+    // target (authorize(..., null)) before touching a repository, then — where
+    // the contract applies the employee's department data scope — a second
+    // authorize(...) with that department. /me, /approver-ref, /mine, accept and
+    // decline apply NO department scope by contract (the caller is reading or
+    // deciding about its OWN link, or resolving an approver who normally sits
+    // outside the submitter's scope); they must therefore never route through
+    // getEmployee (Failure Scenario 2).
+    // ====================================================================
+
+    /** {@code GET /employees/me} — the employee linked to the caller's {@code sub}; no data scope. */
+    @Transactional(readOnly = true)
+    public EmployeeView getMyEmployee(ActorContext actor) {
+        authorize(actor, RequiredScope.READ, null);
+        return employeeRepository.findByAccountId(actor.actorId(), actor.tenantId())
+                .map(EmployeeView::from)
+                .orElseThrow(() -> new MasterdataNotFoundException(
+                        "No employee is linked to the calling account in this tenant"));
+    }
+
+    /** {@code GET /employees/{id}/approver-ref} — {@code {id,status,accountId?}}; no data scope. */
+    @Transactional(readOnly = true)
+    public EmployeeApproverRefView getApproverRef(String employeeId, ActorContext actor) {
+        authorize(actor, RequiredScope.READ, null);
+        Employee e = loadOrThrow(employeeRepository::findById, employeeId, actor.tenantId(), "Employee");
+        return EmployeeApproverRefView.from(e);
+    }
+
+    /**
+     * {@code POST /employees/{id}/account-link-proposals}. Contract check order: auth (erp.write +
+     * the employee's department scope) → employee exists / ACTIVE → not the proposer's own account
+     * → no existing link / no other employee on this account / no PENDING proposal. The account's
+     * existence in IAM is deliberately NOT checked (owner decision (b)).
+     */
+    @Transactional
+    public EmployeeAccountLinkProposalView proposeAccountLink(ProposeAccountLinkCommand cmd) {
+        ActorContext actor = cmd.actor();
+        authorize(actor, RequiredScope.WRITE, null);
+        Employee employee = loadOrThrow(employeeRepository::findById, cmd.employeeId(), actor.tenantId(), "Employee");
+        authorize(actor, RequiredScope.WRITE, employee.getDepartmentId());
+        Instant now = clock.now();
+
+        if (!employee.isActive()) {
+            throw new EmployeeLinkInvalidException(
+                    "Employee " + employee.getId() + " is not ACTIVE — cannot propose an account link");
+        }
+        // Early courtesy only — the authoritative two-person check is on accept
+        // (EmployeeAccountLinkProposal#accept). Such a proposal could never be accepted anyway.
+        if (cmd.accountId().equals(actor.actorId())) {
+            throw new EmployeeLinkSelfAcceptException(
+                    "Two-person rule: a proposer cannot propose their own account");
+        }
+        if (employee.isLinked()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.EMPLOYEE_ALREADY_LINKED,
+                    "Employee " + employee.getId() + " is already linked to an account");
+        }
+        if (employeeRepository.findByAccountId(cmd.accountId(), actor.tenantId()).isPresent()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.ACCOUNT_ALREADY_LINKED,
+                    "Account is already linked to another employee in this tenant");
+        }
+        if (linkProposalRepository.findPendingByEmployeeId(employee.getId(), actor.tenantId()).isPresent()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.PROPOSAL_PENDING,
+                    "Employee " + employee.getId() + " already has a PENDING link proposal");
+        }
+
+        EmployeeAccountLinkProposal proposal = EmployeeAccountLinkProposal.propose(UuidV7.randomString(),
+                actor.tenantId(), employee.getId(), cmd.accountId(), actor.actorId(), cmd.reason(), now);
+        // insertPending flushes: a concurrent second proposal that slipped past the read above
+        // hits the DB unique index here and comes back as proposal_pending (AC-4).
+        EmployeeAccountLinkProposal saved = linkProposalRepository.insertPending(proposal);
+
+        audit(actor, AGG_LINK_PROPOSAL, saved.getId(), "PROPOSE_ACCOUNT_LINK",
+                null, snapshot(saved), cmd.reason(), now);
+        return EmployeeAccountLinkProposalView.from(saved);
+    }
+
+    /** {@code GET /account-link-proposals/mine} — PENDING proposals addressed to the caller; no data scope. */
+    @Transactional(readOnly = true)
+    public PageResult<EmployeeAccountLinkProposalView> listMyPendingLinkProposals(ActorContext actor,
+                                                                                  int page, int size) {
+        authorize(actor, RequiredScope.READ, null);
+        return linkProposalRepository.findPendingByAccountId(actor.actorId(), actor.tenantId(), page, size)
+                .map(p -> EmployeeAccountLinkProposalView.withEmployee(p,
+                        employeeRepository.findById(p.getEmployeeId(), actor.tenantId()).orElse(null)));
+    }
+
+    /** {@code GET /employees/{id}/account-link-proposals} — history (all states); erp.read + scope. */
+    @Transactional(readOnly = true)
+    public PageResult<EmployeeAccountLinkProposalView> listEmployeeLinkProposals(String employeeId,
+                                                                                 ActorContext actor,
+                                                                                 int page, int size) {
+        authorize(actor, RequiredScope.READ, null);
+        Employee employee = loadOrThrow(employeeRepository::findById, employeeId, actor.tenantId(), "Employee");
+        authorize(actor, RequiredScope.READ, employee.getDepartmentId());
+        return linkProposalRepository.findByEmployeeId(employee.getId(), actor.tenantId(), page, size)
+                .map(EmployeeAccountLinkProposalView::from);
+    }
+
+    /**
+     * {@code POST /account-link-proposals/{id}/accept} — the ONLY writer of
+     * {@code employees.account_id}. Contract order: proposal exists → caller is the addressee →
+     * 🔴 caller is not the proposer (two-person rule) → PENDING → employee ACTIVE and neither side
+     * already linked. No department scope: the acceptor is the account owner, not HR.
+     */
+    @Transactional
+    public EmployeeView acceptAccountLink(AcceptAccountLinkCommand cmd) {
+        ActorContext actor = cmd.actor();
+        authorize(actor, RequiredScope.READ, null);
+        EmployeeAccountLinkProposal proposal = loadProposalOrThrow(cmd.proposalId(), actor.tenantId());
+        proposal.ensureAcceptableBy(actor.actorId());
+
+        Employee employee = loadOrThrow(employeeRepository::findById, proposal.getEmployeeId(),
+                actor.tenantId(), "Employee");
+        if (!employee.isActive()) {
+            throw new EmployeeLinkInvalidException(
+                    "Employee " + employee.getId() + " is not ACTIVE — cannot accept the link");
+        }
+        if (employee.isLinked()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.EMPLOYEE_ALREADY_LINKED,
+                    "Employee " + employee.getId() + " was linked to an account in the meantime");
+        }
+        if (employeeRepository.findByAccountId(proposal.getAccountId(), actor.tenantId()).isPresent()) {
+            throw new EmployeeLinkConflictException(EmployeeLinkConflictException.ACCOUNT_ALREADY_LINKED,
+                    "Account was linked to another employee in the meantime");
+        }
+        Instant now = clock.now();
+
+        Map<String, Object> before = snapshot(employee);
+        employee.linkAccount(proposal.getAccountId(), now);
+        // flush: a concurrent accept binding the same account elsewhere → account_already_linked.
+        Employee saved = employeeRepository.saveAccountLink(employee);
+        proposal.accept(actor.actorId(), now);
+        linkProposalRepository.save(proposal);
+
+        Map<String, Object> after = snapshot(saved);
+        Map<String, Object> auditAfter = new LinkedHashMap<>(after);
+        auditAfter.put("proposalId", proposal.getId());
+        auditAfter.put("proposedBy", proposal.getProposedBy());
+        audit(actor, MasterdataEventPublisher.AGG_EMPLOYEE, saved.getId(), "ACCEPT_ACCOUNT_LINK",
+                before, auditAfter, null, now);
+        eventPublisher.publishEmployeeChanged(saved, ChangeKind.UPDATED,
+                actor.actorId(), before, after, null);
+        return EmployeeView.from(saved);
+    }
+
+    /** {@code POST /account-link-proposals/{id}/decline} — account owner only; no data scope. */
+    @Transactional
+    public EmployeeAccountLinkProposalView declineAccountLink(DeclineAccountLinkCommand cmd) {
+        ActorContext actor = cmd.actor();
+        authorize(actor, RequiredScope.READ, null);
+        EmployeeAccountLinkProposal proposal = loadProposalOrThrow(cmd.proposalId(), actor.tenantId());
+        Instant now = clock.now();
+
+        Map<String, Object> before = snapshot(proposal);
+        proposal.decline(actor.actorId(), cmd.reason(), now);
+        EmployeeAccountLinkProposal saved = linkProposalRepository.save(proposal);
+
+        audit(actor, AGG_LINK_PROPOSAL, saved.getId(), "DECLINE_ACCOUNT_LINK",
+                before, snapshot(saved), cmd.reason(), now);
+        return EmployeeAccountLinkProposalView.from(saved);
+    }
+
+    /** {@code POST /account-link-proposals/{id}/revoke} — erp.write + the employee's department scope. */
+    @Transactional
+    public EmployeeAccountLinkProposalView revokeAccountLink(RevokeAccountLinkCommand cmd) {
+        ActorContext actor = cmd.actor();
+        authorize(actor, RequiredScope.WRITE, null);
+        EmployeeAccountLinkProposal proposal = loadProposalOrThrow(cmd.proposalId(), actor.tenantId());
+        Employee employee = loadOrThrow(employeeRepository::findById, proposal.getEmployeeId(),
+                actor.tenantId(), "Employee");
+        authorize(actor, RequiredScope.WRITE, employee.getDepartmentId());
+        Instant now = clock.now();
+
+        Map<String, Object> before = snapshot(proposal);
+        proposal.revoke(actor.actorId(), cmd.reason(), now);
+        EmployeeAccountLinkProposal saved = linkProposalRepository.save(proposal);
+
+        audit(actor, AGG_LINK_PROPOSAL, saved.getId(), "REVOKE_ACCOUNT_LINK",
+                before, snapshot(saved), cmd.reason(), now);
+        return EmployeeAccountLinkProposalView.from(saved);
+    }
+
+    /**
+     * {@code POST /employees/{id}/account-link/unlink} — erp.write + the employee's department
+     * scope, OR the linked account's owner. Not linked → 409 {@code not_linked}.
+     */
+    @Transactional
+    public EmployeeView unlinkAccount(UnlinkAccountCommand cmd) {
+        ActorContext actor = cmd.actor();
+        authorize(actor, RequiredScope.READ, null);
+        Employee employee = loadOrThrow(employeeRepository::findById, cmd.employeeId(), actor.tenantId(), "Employee");
+        boolean isAccountOwner = employee.isLinked() && employee.getAccountId().equals(actor.actorId());
+        if (!isAccountOwner) {
+            authorize(actor, RequiredScope.WRITE, employee.getDepartmentId());
+        }
+        Instant now = clock.now();
+
+        Map<String, Object> before = snapshot(employee);
+        employee.unlinkAccount(now);
+        Employee saved = employeeRepository.saveAccountLink(employee);
+
+        Map<String, Object> after = snapshot(saved);
+        audit(actor, MasterdataEventPublisher.AGG_EMPLOYEE, saved.getId(), "UNLINK_ACCOUNT",
+                before, after, cmd.reason(), now);
+        eventPublisher.publishEmployeeChanged(saved, ChangeKind.UPDATED,
+                actor.actorId(), before, after, cmd.reason());
+        return EmployeeView.from(saved);
+    }
+
+    private EmployeeAccountLinkProposal loadProposalOrThrow(String proposalId, String tenantId) {
+        return linkProposalRepository.findById(proposalId, tenantId)
+                .orElseThrow(() -> new EmployeeLinkProposalNotFoundException(
+                        "Account-link proposal not found: " + proposalId));
     }
 
     // ====================================================================
@@ -731,9 +971,23 @@ public class MasterdataApplicationService {
         m.put("departmentId", e.getDepartmentId());
         m.put("costCenterId", e.getCostCenterId());
         m.put("jobGradeId", e.getJobGradeId());
+        // TASK-ERP-BE-044 — additive (erp-masterdata-events.md employee payload `accountId?`).
+        m.put("accountId", e.getAccountId());
         m.put("status", e.getStatus().name());
         m.put("effectiveFrom", e.getEffectiveFrom() == null ? null : e.getEffectiveFrom().toString());
         m.put("effectiveTo", e.getEffectiveTo() == null ? null : e.getEffectiveTo().toString());
+        return m;
+    }
+
+    private static Map<String, Object> snapshot(EmployeeAccountLinkProposal p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("employeeId", p.getEmployeeId());
+        m.put("accountId", p.getAccountId());
+        m.put("status", p.getStatus().name());
+        m.put("proposedBy", p.getProposedBy());
+        m.put("proposedAt", p.getProposedAt() == null ? null : p.getProposedAt().toString());
+        m.put("decidedBy", p.getDecidedBy());
+        m.put("decidedAt", p.getDecidedAt() == null ? null : p.getDecidedAt().toString());
         return m;
     }
 
