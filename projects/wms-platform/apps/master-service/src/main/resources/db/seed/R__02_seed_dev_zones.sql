@@ -56,3 +56,28 @@ INSERT INTO zones (
     'seed-dev'
 )
 ON CONFLICT (warehouse_id, zone_code) DO NOTHING;
+
+-- TASK-MONO-768 (2026-10-07) — one zone under WH-MAIN (R__01, TASK-MONO-765), added
+-- as a separate statement so the WH01 rows above stay byte-identical. WH-MAIN had no
+-- zone and therefore no location, and `inventory.location_id` is NOT NULL — so no
+-- ecommerce SKU could ever be put away there and every ecommerce reservation
+-- backordered. Its location is in R__03; the id is mirrored by inbound-service's
+-- R__seed_dev_masterref.sql (zone_snapshot) — `EcommerceSeedParityTest` pins the pair.
+INSERT INTO zones (
+    id, warehouse_id, zone_code, name, zone_type, status, version,
+    created_at, created_by, updated_at, updated_by
+) VALUES
+(
+    '01910000-0000-7000-8000-000000000201',
+    '01910000-0000-7000-8000-000000000002',
+    'Z-A',
+    'Ecommerce Ambient A',
+    'AMBIENT',
+    'ACTIVE',
+    0,
+    '2026-04-18T00:00:00Z',
+    'seed-dev',
+    '2026-04-18T00:00:00Z',
+    'seed-dev'
+)
+ON CONFLICT (warehouse_id, zone_code) DO NOTHING;

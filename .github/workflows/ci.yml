@@ -468,9 +468,14 @@ jobs:
             # file, not `infra/demo/**` (Failure Scenario 1 — that would wake wms on any
             # demo README edit). `scripts/check-outside-module-input-filter-coverage.sh`
             # keeps this in sync with the Gradle declaration.
+            # TASK-MONO-768: same shape again — inventory-service/build.gradle declares
+            # `inputs.file(rootProject.file('infra/demo/seed/seed-wms.sh'))` for
+            # EcommerceSeedParityTest (pins the WH-MAIN / ecommerce SKU UUIDs the script
+            # formats against the wms seed mirrors). Exact file, same reason as above.
             wms:
               - 'projects/wms-platform/**'
               - 'infra/demo/seed/seed-scm.sh'
+              - 'infra/demo/seed/seed-wms.sh'
             # TASK-MONO-710: third instance of the same shape — order-service/build.gradle
             # declares `inputs.file(rootProject.file('infra/demo/seed/seed-ecommerce.sh'))` on
             # EcommerceOrderDemoSeedTest, the offline sentinel for the demo order seed. Exact

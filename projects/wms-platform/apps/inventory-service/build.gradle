@@ -84,6 +84,31 @@ tasks.register('unitTest', Test) {
     classpath = sourceSets.test.runtimeClasspath
 }
 
+// TASK-MONO-768: EcommerceSeedParityTest reads OTHER modules' dev seeds and the repo-root
+// infra/demo/seed/seed-wms.sh by path. Gradle does not see those reads, so without these
+// declarations an edit to any of them leaves `test` UP-TO-DATE / FROM-CACHE and the parity
+// check never re-runs over exactly the drift it exists to catch — measured while writing it:
+// admin's seed mutated (…2086 → …2087) gave rc=0 with `:inventory-service:test UP-TO-DATE`.
+// (inventory's own seed is already an input — it is on this module's classpath.) Same remedy
+// as inbound-service/build.gradle (TASK-MONO-683); the outside-project entry (seed-wms.sh) is
+// mirrored in ci.yml's `wms` filter, which scripts/check-outside-module-input-filter-coverage.sh
+// keeps in sync.
+tasks.withType(Test).configureEach {
+    inputs.files(
+            rootProject.file('projects/wms-platform/apps/outbound-service/src/main/resources/db/seed/R__seed_dev_masterref.sql'),
+            rootProject.file('projects/wms-platform/apps/inbound-service/src/main/resources/db/seed/R__seed_dev_masterref.sql'),
+            rootProject.file('projects/wms-platform/apps/admin-service/src/main/resources/db/seed/R__seed_dev_masterref.sql'),
+            rootProject.file('projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__01_seed_dev_warehouse.sql'),
+            rootProject.file('projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__02_seed_dev_zones.sql'),
+            rootProject.file('projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__03_seed_dev_locations.sql'),
+            rootProject.file('projects/wms-platform/apps/master-service/src/main/resources/db/seed/R__05_seed_dev_partners.sql'))
+            .withPropertyName('ecommerceSeedParityMirrors')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file('infra/demo/seed/seed-wms.sh'))
+            .withPropertyName('wmsDemoSeedScript')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 tasks.register('integrationTest', Test) {
     description = 'Runs only @Tag("integration") tests (Testcontainers required).'
     group = 'verification'

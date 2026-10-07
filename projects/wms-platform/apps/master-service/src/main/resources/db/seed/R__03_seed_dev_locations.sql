@@ -51,3 +51,35 @@ INSERT INTO locations (
     '2026-04-18T00:00:00Z', 'seed-dev'
 )
 ON CONFLICT (location_code) DO NOTHING;
+
+-- TASK-MONO-768 (2026-10-07) — the one storage location under WH-MAIN, in the zone
+-- R__02 adds. Every ecommerce SKU is put away here by infra/demo/seed/seed-wms.sh
+-- (through the real inbound API, so `wms.inventory.received.v1` reaches scm).
+-- Separate statement: the WH01 rows above are unchanged.
+--
+-- 🔵 The code does not match `Location.CODE_PATTERN` (`^WH\d{2,3}-…`) and cannot:
+-- the parent's code `WH-MAIN` itself is outside `Warehouse.CODE_PATTERN`
+-- (`^WH\d{2,3}$`) — it is the literal ecommerce shipping-service sends, seeded in
+-- R__01 by TASK-MONO-765. `Location.reconstitute` does not re-validate, so the row
+-- loads; only `Location.create` (the REST path, unused here) would reject it. The
+-- `<warehouseCode>-` prefix convention is kept.
+--
+-- Mirrored by inbound-service and inventory-service R__seed_dev_masterref.sql
+-- (location_snapshot) with the same id/code — `EcommerceSeedParityTest` pins that.
+INSERT INTO locations (
+    id, warehouse_id, zone_id, location_code,
+    aisle, rack, level, bin,
+    location_type, capacity_units, status, version,
+    created_at, created_by, updated_at, updated_by
+) VALUES
+(
+    '01910000-0000-7000-8000-000000001101',
+    '01910000-0000-7000-8000-000000000002',
+    '01910000-0000-7000-8000-000000000201',
+    'WH-MAIN-A-01-01-01',
+    '01', '01', '01', NULL,
+    'STORAGE', 100000, 'ACTIVE', 0,
+    '2026-04-18T00:00:00Z', 'seed-dev',
+    '2026-04-18T00:00:00Z', 'seed-dev'
+)
+ON CONFLICT (location_code) DO NOTHING;
