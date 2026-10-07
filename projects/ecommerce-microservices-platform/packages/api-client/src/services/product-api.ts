@@ -11,6 +11,8 @@ import type {
   UpdateProductResponse,
   StockAdjustmentRequest,
   StockAdjustmentResponse,
+  AcceptSellerInvitationRequest,
+  AcceptSellerInvitationResponse,
 } from '@repo/types';
 
 export function createProductApi(client: ApiClient) {
@@ -52,5 +54,13 @@ export function createProductApi(client: ApiClient) {
 
     deleteVariant: (productId: string, variantId: string) =>
       client.delete<void>(`/api/admin/products/${productId}/variants/${variantId}`),
+
+    // Consumer plane (TASK-FE-107) — the invited person accepts with their
+    // own token. Contract: product-api.md § POST /api/seller-invitations/accept.
+    acceptSellerInvitation: (data: AcceptSellerInvitationRequest) =>
+      client.post<AcceptSellerInvitationResponse>(
+        '/api/seller-invitations/accept',
+        data,
+      ),
   };
 }
