@@ -33,6 +33,13 @@ public record OperatorSummaryResponse(
         boolean totpEnrolled,
         Instant lastLoginAt,
         Instant createdAt,
+        /*
+         * TASK-BE-626 — the operator's HOME tenant (admin_operators.tenant_id; '*' for
+         * platform operators). Always present. admin-api.md § GET /api/admin/operators
+         * `homeTenantId` row: the tenant-scoped list mixes HOME and ASSIGNED operators,
+         * and this is how a consumer tells them apart.
+         */
+        String homeTenantId,
         @JsonInclude(JsonInclude.Include.NON_NULL)
         OperatorContextResponse operatorContext
 ) {

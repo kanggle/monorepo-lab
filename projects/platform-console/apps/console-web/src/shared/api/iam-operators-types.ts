@@ -59,6 +59,12 @@ export const OperatorSummarySchema = z.object({
   totpEnrolled: z.boolean().optional(),
   lastLoginAt: z.string().nullable().optional(),
   createdAt: z.string(),
+  // TASK-PC-FE-319 / TASK-BE-626 — the operator's HOME tenant ('*' = platform).
+  // The tenant-scoped list mixes HOME and ASSIGNED operators; comparing this to
+  // the listed tenant tells them apart. Optional: an older producer (or a sample
+  // fixture) without it parses unchanged, and consumers must treat absent as
+  // «unknown», never as «not home».
+  homeTenantId: z.string().optional(),
   // TASK-BE-308 — optional profile carrier; PC-FE-018 consumer reads
   // operatorContext?.defaultAccountId to pre-populate the admin
   // profile-edit dialog with the operator's current value.

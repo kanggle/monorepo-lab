@@ -16,18 +16,15 @@ import { GroupReasonDialog } from './GroupReasonDialog';
  * excludes/disables operators who are already members (AC-3), and shows the
  * chosen operator's name + email in the reason-confirm step.
  *
- * AC-0 producer-mismatch finding (see the task's Implementation Record for
- * the code citation): the list API scopes by `tenantId` HOME **∪**
- * assignment, but `GroupAdminUseCase.addMember` only accepts a member whose
- * HOME tenant (`AdminOperatorJpaEntity.tenantId`) equals the group's tenant —
- * narrower. The list response does NOT expose each operator's home tenantId
- * (`OperatorSummarySchema` has no `tenantId` field), so this picker cannot
- * filter out an assignment-only (non-home) candidate client-side without a
- * producer change (out of scope — task Out of Scope explicitly bars a
- * producer change). An assignment-only pick still surfaces the existing
- * `422 GROUP_MEMBER_TENANT_MISMATCH` verbatim via `error`, exactly as the
- * pre-317 raw-UUID path already did — this is a pre-existing contract gap,
- * not a regression introduced here.
+ * HOME vs ASSIGNED (TASK-PC-FE-317 AC-0 → closed by TASK-PC-FE-319 / TASK-BE-626):
+ * the list API returns operators whose HOME **or** an ASSIGNMENT is the group's
+ * tenant, but `GroupAdminUseCase.addMember` only accepts a member whose HOME
+ * tenant equals the group's tenant (`422 GROUP_MEMBER_TENANT_MISMATCH`). Each
+ * list item now carries `homeTenantId`, so an assignment-only candidate is
+ * shown DISABLED with the reason instead of failing after the reason step.
+ * An item WITHOUT `homeTenantId` (older producer / sample fixture) is treated
+ * as «unknown» and stays selectable — the producer remains the authority, and
+ * a 422 still surfaces verbatim via `error`.
  *
  * SUSPENDED operators (AC-0(b): the producer's `addMember` has no status
  * check) are shown and ARE selectable — the picker does not invent a
@@ -47,6 +44,15 @@ export interface GroupMemberDialogProps {
   error: string | null;
   onConfirm: (operatorId: string, reason: string) => void;
   onCancel: () => void;
+}
+
+/**
+ * TASK-PC-FE-319 — true only when the producer SAID the operator's home is a
+ * different tenant. Absent `homeTenantId` ⇒ unknown ⇒ not blocked (never guess
+ * «not home» from a missing field).
+ */
+function isAssignmentOnly(op: OperatorSummary, groupTenantId: string): boolean {
+  return op.homeTenantId !== undefined && op.homeTenantId !== groupTenantId;
 }
 
 function matchesSearch(op: OperatorSummary, query: string): boolean {
@@ -182,13 +188,14 @@ export function GroupMemberDialog({
               >
                 {filtered.map((op) => {
                   const isMember = existingSet.has(op.operatorId);
+                  const otherHome = !isMember && isAssignmentOnly(op, groupTenantId);
                   const isSelected = selectedOperator?.operatorId === op.operatorId;
                   return (
                     <li key={op.operatorId}>
                       <button
                         type="button"
                         onClick={() => setSelectedOperator(op)}
-                        disabled={isMember}
+                        disabled={isMember || otherHome}
                         aria-pressed={isSelected}
                         data-testid={`group-member-candidate-${op.operatorId}`}
                         className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -206,6 +213,15 @@ export function GroupMemberDialog({
                         {isMember && (
                           <span className="text-xs text-muted-foreground">
                             이미 멤버
+                          </span>
+                        )}
+                        {otherHome && (
+                          <span
+                            data-testid={`group-member-candidate-other-home-${op.operatorId}`}
+                            className="shrink-0 text-xs text-muted-foreground"
+                            title="그룹에는 이 테넌트가 원래 소속(home)인 운영자만 들어갈 수 있습니다"
+                          >
+                            {op.homeTenantId} 소속 · 배정만 됨
                           </span>
                         )}
                       </button>

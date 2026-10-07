@@ -912,9 +912,12 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
   "roles": ["SUPER_ADMIN"],
   "totpEnrolled": true,
   "lastLoginAt": "2026-04-24T10:00:00Z",
-  "createdAt": "2026-01-01T00:00:00Z"
+  "createdAt": "2026-01-01T00:00:00Z",
+  "homeTenantId": "*"
 }
 ```
+
+> **TASK-BE-626**: `homeTenantId` 는 `GET /api/admin/operators` 항목과 **같은 응답 DTO** 를 공유해서 이 응답에도 실린다 — 의미는 아래 § GET /api/admin/operators 의 `homeTenantId` 행과 같다(로그인한 운영자 자신의 HOME 테넌트).
 
 **Errors**:
 
@@ -958,6 +961,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
       "totpEnrolled": false,
       "lastLoginAt": "2026-04-24T10:00:00Z",
       "createdAt": "2026-01-01T00:00:00Z",
+      "homeTenantId": "acme",
       "operatorContext": {
         "defaultAccountId": "acc-uuid-7"
       }
@@ -982,6 +986,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | `totpEnrolled` | boolean | 항상 노출 |
 | `lastLoginAt` | string (ISO-8601) \| absent | 한 번도 로그인하지 않은 운영자는 키 자체 omit |
 | `createdAt` | string (ISO-8601) | 항상 노출 |
+| `homeTenantId` | string | 항상 노출. **TASK-BE-626** — 운영자의 HOME 테넌트(`admin_operators.tenant_id`), 플랫폼 운영자는 `*`. 이 목록은 HOME **또는** 배정(`operator_tenant_assignment`) 으로 그 테넌트에 속한 운영자를 함께 돌려주므로, 소비자가 둘을 가르려면 이 값을 `tenantId` 와 비교한다(`homeTenantId == tenantId` ⇒ HOME, 아니면 배정으로만 속함). 소비 예: 운영자 그룹 «멤버 추가» 선택기 — 그룹 멤버는 HOME 이 그룹 테넌트인 운영자만 받으므로(§ Operator Group Management · `422 GROUP_MEMBER_TENANT_MISMATCH`) 배정으로만 속한 운영자를 고르기 전에 막는다(platform-console TASK-PC-FE-319). 파트너십 참여자(ADR-MONO-045)는 이 목록에 나오지 않는다 — 배정 행이 아니라 별도 참여 테이블이다 |
 | `operatorContext` | object \| **omit** | profile carrier (TASK-BE-308 신규). `admin_operators.finance_default_account_id` 가 NULL 이면 키 자체 omit (field-level `@JsonInclude(Include.NON_NULL)`); 값이 있으면 `{ "defaultAccountId": "<uuid>" }` 형태로 노출. v1 은 `defaultAccountId` 단일 키만 carrying — `me/profile` (TASK-BE-306) + `{operatorId}/profile` (TASK-BE-307) request body 의 carrier 와 동일 shape. console-web admin profile-edit dialog 가 dialog 초기값으로 사용 (TASK-PC-FE-018). v1 finance 단일 카드만 populating; 다른 carrier 키는 별 task 로 컬럼+노출 동시 확장 |
 
 > **carrier shape 대칭성 (TASK-BE-308)**: 본 list 응답의 item-level `operatorContext` 은 다음과 byte-identical 한 shape 를 사용한다:

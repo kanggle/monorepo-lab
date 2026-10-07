@@ -23,6 +23,7 @@ function page(
     email: string;
     displayName: string;
     status: string;
+    homeTenantId?: string;
   }>,
   opts: { page?: number; totalPages?: number } = {},
 ) {
@@ -116,6 +117,48 @@ describe('GroupMemberDialog — AC-3 existing members are excluded from selectio
     const user = userEvent.setup();
     await user.click(row);
     expect(screen.getByTestId('group-member-next')).toBeDisabled();
+  });
+});
+
+describe('GroupMemberDialog — TASK-PC-FE-319 assignment-only operators cannot be picked', () => {
+  it('disables an operator whose homeTenantId is another tenant and says why; a home operator stays selectable', async () => {
+    get.mockResolvedValue(
+      page([
+        { operatorId: 'op-home', email: 'home@x.com', displayName: 'Home', status: 'ACTIVE', homeTenantId: 'acme-corp' },
+        { operatorId: 'op-assigned', email: 'asg@x.com', displayName: 'Assigned', status: 'ACTIVE', homeTenantId: 'demo-corp' },
+        { operatorId: 'op-platform', email: 'plat@x.com', displayName: 'Platform', status: 'ACTIVE', homeTenantId: '*' },
+      ]),
+    );
+    renderDialog({ groupTenantId: 'acme-corp' });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('group-member-candidate-op-assigned')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('group-member-candidate-op-assigned')).toBeDisabled();
+    expect(screen.getByTestId('group-member-candidate-other-home-op-assigned')).toHaveTextContent(
+      'demo-corp 소속 · 배정만 됨',
+    );
+    // platform operators ('*') are not this tenant's home either — the producer 422s them too.
+    expect(screen.getByTestId('group-member-candidate-op-platform')).toBeDisabled();
+    expect(screen.getByTestId('group-member-candidate-op-home')).not.toBeDisabled();
+    expect(screen.queryByTestId('group-member-candidate-other-home-op-home')).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('group-member-candidate-op-assigned'));
+    expect(screen.getByTestId('group-member-next')).toBeDisabled();
+  });
+
+  it('treats a missing homeTenantId as unknown and keeps the operator selectable (never guesses «not home»)', async () => {
+    get.mockResolvedValue(
+      page([{ operatorId: 'op-legacy', email: 'legacy@x.com', displayName: 'Legacy', status: 'ACTIVE' }]),
+    );
+    renderDialog({ groupTenantId: 'acme-corp' });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('group-member-candidate-op-legacy')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('group-member-candidate-op-legacy')).not.toBeDisabled();
+    expect(screen.queryByTestId('group-member-candidate-other-home-op-legacy')).not.toBeInTheDocument();
   });
 });
 

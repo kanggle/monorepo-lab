@@ -120,7 +120,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-_(없음)_
+- `TASK-BE-626-operator-list-home-tenant-id.md` — **`GET /api/admin/operators` 항목(+ 같은 DTO 의 `/me`)에 운영자 HOME 테넌트 `homeTenantId`** (REVIEW, 2026-10-08 UTC · 소유자 결정 «A»). 테넌트 목록이 HOME ∪ 배정을 섞어 돌려주는데 소비자가 가를 방법이 없었다 — 그룹 멤버는 HOME 만 받으므로 콘솔 선택기가 배정-only 를 고르면 422. 필드 추가만(판정·쿼리 무변경, 계약 먼저). 대상 시험 9/9 · 43/43(결과 XML 실측). 짝 = platform-console `TASK-PC-FE-319`(같은 PR). 그룹 규칙 확장(B′/B″)은 역할 fan-out 이 멤버 HOME 에 쓰는 결함으로 보류. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 

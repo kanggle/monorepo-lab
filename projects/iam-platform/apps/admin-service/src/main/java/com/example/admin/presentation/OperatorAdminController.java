@@ -422,6 +422,7 @@ public class OperatorAdminController {
                 summary.totpEnrolled(),
                 summary.lastLoginAt(),
                 summary.createdAt(),
+                summary.homeTenantId(),
                 toOperatorContext(summary.financeDefaultAccountId()));
     }
 
