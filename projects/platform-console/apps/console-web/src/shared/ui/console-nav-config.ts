@@ -157,8 +157,12 @@ export const GROUPS: NavGroup[] = [
           // **setup-first** order — 운영자 관리 (provision the operators)
           // immediately followed by 운영자 그룹 (bulk-grant roles to a group
           // of operators, ADR-MONO-046) — then the permission
-          // surfaces 권한 · 권한 세트 — then 감사·보안 (read-only
+          // surfaces 권한 세트 · 권한 — then 감사·보안 (read-only
           // oversight) last: learn → orient → configure → operate → review.
+          // TASK-PC-FE-315 — 권한 세트 BEFORE 권한: the set is the unit an
+          // assignment actually carries (what you pick when you assign), the
+          // key catalog is what you open to see inside it — the assignable
+          // unit first, its contents second (AWS IAM: Roles before Policies).
           { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide', icon: 'guide' },
           { href: '/iam', label: '개요', testid: 'nav-iam-overview', icon: 'overview' },
           { href: '/operators', label: '운영자 관리', testid: 'nav-operators', icon: 'user' },
@@ -170,19 +174,19 @@ export const GROUPS: NavGroup[] = [
             label: '운영자 그룹',
             testid: 'nav-iam-operator-groups', icon: 'users',
           },
-          // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
-          // equivalent.
-          {
-            href: '/permissions',
-            label: '권한',
-            testid: 'nav-iam-permissions', icon: 'key',
-          },
           // 권한 세트 (real feature = TASK-PC-FE-228) — IAM Policy/Role
           // equivalent.
           {
             href: '/permission-sets',
             label: '권한 세트',
             testid: 'nav-iam-permission-sets', icon: 'lock',
+          },
+          // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
+          // equivalent.
+          {
+            href: '/permissions',
+            label: '권한',
+            testid: 'nav-iam-permissions', icon: 'key',
           },
           { href: '/audit', label: '감사 · 보안', testid: 'nav-audit', icon: 'audit' },
         ],

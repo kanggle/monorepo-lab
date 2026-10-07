@@ -27,7 +27,7 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals the 7-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/권한/권한 세트/감사·보안) and pins IAM at the top (TASK-PC-FE-225 · TASK-PC-FE-313)', () => {
+  it('clicking IAM drills in: reveals the 7-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/권한 세트/권한/감사·보안) and pins IAM at the top (TASK-PC-FE-225 · TASK-PC-FE-313 · TASK-PC-FE-315)', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
@@ -71,6 +71,8 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     const nav = screen.getByRole('navigation');
     expect(nav.querySelector('a[href="/tenants"]')).toBeNull();
     expect(nav.querySelector('a[href="/org-hierarchy"]')).toBeNull();
+    // TASK-PC-FE-315 — 권한 세트 (the unit an assignment carries) before 권한
+    // (the keys inside it).
     expect(
       Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href')),
     ).toEqual([
@@ -78,8 +80,8 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       '/iam',
       '/operators',
       '/operator-groups',
-      '/permissions',
       '/permission-sets',
+      '/permissions',
       '/audit',
     ]);
     expect(nav.querySelector('a,button')).toHaveAttribute(
