@@ -4,6 +4,7 @@ import { OperatorsUnavailableError } from './errors';
 import { callAdminGateway, type AdminGatewayProfile } from './iam-gateway';
 import {
   OperatorPageSchema,
+  OperatorSummarySchema,
   type OperatorPage,
   type OperatorListParams,
 } from './iam-operators-types';
@@ -166,4 +167,41 @@ export async function listOperators(
     { method: 'GET', path: `${OPERATORS_PREFIX}?${qs.toString()}` },
     (json) => OperatorPageSchema.parse(json),
   );
+}
+
+// ---------------------------------------------------------------------------
+// self roles — GET /api/admin/me (TASK-PC-FE-314 promotion)
+//
+//    The sidebar exposure gate's role source (`console-nav-exposure.ts`
+//    `isHrefHiddenFor`, consumed by the `(console)` layout). Promoted HERE —
+//    not into `features/operators/api/*`, which already has its own
+//    `getSelfOperatorIdOrNull` hitting the same endpoint for the self-row UX
+//    gate — because the `(console)` layout is an `app/` route, not a
+//    feature, and `shared/` may not import `features/*`
+//    (architecture.md § Forbidden Dependencies; same promotion rule
+//    `shared/api/rbac-catalog.ts`'s header cites). `OperatorSummarySchema`
+//    (`roles: z.string()[]`) already lives in this module's sibling
+//    `iam-operators-types.ts`, so this is a thin wrapper over the SAME
+//    hardened `callGapOperators` core every operators call rides — no new
+//    HTTP surface, no new schema.
+//
+//    AC-0 ② (task Acceptance Criteria) — fail-graceful to `null` on EVERY
+//    failure mode (401/403/503/timeout/network/schema-parse/unexpected,
+//    AND — per `prepareAdminHeaders` above — no active tenant selected,
+//    which this shared gateway core gates before any fetch for every
+//    `/api/admin/**` call). An outage (or no tenant chosen yet) must never
+//    read as "no permission": the sidebar's caller treats `null` as "show
+//    everything", the SAME posture `getSelfOperatorIdOrNull` already uses.
+// ---------------------------------------------------------------------------
+
+export async function getSelfRolesOrNull(): Promise<string[] | null> {
+  try {
+    const me = await callGapOperators(
+      { method: 'GET', path: '/api/admin/me' },
+      (json) => OperatorSummarySchema.parse(json),
+    );
+    return me.roles;
+  } catch {
+    return null;
+  }
 }

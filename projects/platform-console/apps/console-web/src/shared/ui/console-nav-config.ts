@@ -87,18 +87,36 @@ export function isParent(node: NavNode): node is NavParent {
  * `availableProductKeys` removed (and any group left empty dropped). Ungated nodes always
  * stay. `undefined` = «no registry answer to gate on» → gated parents are hidden too
  * (fail-closed for a gated entry; the ungated nav is unaffected).
+ *
+ * TASK-PC-FE-314 — generalized from «one registry gate» to «registry gate + an optional
+ * per-href hide predicate» so the sidebar can also hide `admin`/`admin-per-card`-gated
+ * items the caller's roles don't satisfy. `isHrefHidden` is the ONE new parameter — the
+ * role/permission computation itself (RBAC matrix join, unknown-role/`/me`-failure
+ * fail-open posture) lives in `console-nav-exposure.ts`, not here, so this file's diff
+ * stays small. `undefined` (every pre-existing caller/test) = nothing beyond the registry
+ * gate is hidden — byte-identical to the old behavior. A parent whose every child is
+ * hidden is dropped (same «empty group is dropped» rule this function already had).
  */
 export function visibleGroups(
   groups: NavGroup[],
   availableProductKeys: readonly string[] | undefined,
+  isHrefHidden?: (href: string) => boolean,
 ): NavGroup[] {
   const allowed = new Set(availableProductKeys ?? []);
+  const hidden = (href: string) => isHrefHidden?.(href) ?? false;
   return groups
     .map((g) => ({
       ...g,
-      items: g.items.filter(
-        (n) => !isParent(n) || n.productKey === undefined || allowed.has(n.productKey),
-      ),
+      items: g.items.reduce<NavNode[]>((acc, n) => {
+        if (isParent(n)) {
+          if (n.productKey !== undefined && !allowed.has(n.productKey)) return acc;
+          const children = n.children.filter((c) => !hidden(c.href));
+          if (children.length > 0) acc.push({ ...n, children });
+          return acc;
+        }
+        if (!hidden(n.href)) acc.push(n);
+        return acc;
+      }, []),
     }))
     .filter((g) => g.items.length > 0);
 }

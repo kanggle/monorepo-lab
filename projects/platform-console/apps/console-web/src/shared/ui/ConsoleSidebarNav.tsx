@@ -10,9 +10,13 @@ import {
   activeHref,
   parentKeyForPath,
   navPathFor,
-  PARENTS,
 } from './console-nav-matching';
 import { NavIcon } from './console-nav-icons';
+import {
+  isHrefHiddenFor,
+  defaultSubscriptionBadgeKeys,
+  type DomainKey,
+} from './console-nav-exposure';
 
 /**
  * TASK-PC-FE-039 — Vercel-style left sidebar navigation. Moves the console
@@ -75,6 +79,27 @@ function ChevronRight() {
   );
 }
 
+/**
+ * TASK-PC-FE-314 AC-0 ④ — the «구독 필요» indicator. Chosen form: a native
+ * `title` tooltip naming the exact destination screen («조직 설정 ▸ 도메인
+ * 구독»), NOT a separate link — the parent row this sits next to is already a
+ * `<button>` (the drill toggle), and a `<button>` may not contain an `<a>`
+ * (invalid/inaccessible nesting). Clicking the parent still drills in, and
+ * each child screen's own existing «구독 필요» guidance (task Out of Scope —
+ * unchanged) is the actionable next step once there.
+ */
+function SubscriptionBadge({ testid }: { testid: string }) {
+  return (
+    <span
+      data-testid={testid}
+      title="활성 테넌트가 이 도메인을 구독하지 않았습니다 — 조직 설정 ▸ 도메인 구독에서 켜세요."
+      className="shrink-0 rounded-sm bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-amber-700 dark:text-amber-400"
+    >
+      구독 필요
+    </span>
+  );
+}
+
 function ChevronLeft() {
   return (
     <svg
@@ -100,11 +125,27 @@ function ChevronLeft() {
  * fan directory, `productKey: 'fan'`). The `(console)` layout passes the registry's
  * products that have a selectable tenant. Omitted (every pre-existing test / caller) = no
  * gated parent rendered, every ungated node exactly as before.
+ *
+ * TASK-PC-FE-314 — `myRoles` (from `GET /api/admin/me`, `null` on a failed/unresolved
+ * call) hides `admin`/`admin-per-card`-gated items the caller's roles don't satisfy
+ * (`console-nav-exposure.ts` `isHrefHiddenFor`); omitted/`null` = show everything, same as
+ * every pre-existing test. `subscribedDomains` (the active tenant's subscribed domains)
+ * drives the «구독 필요» badge on a `domain`-gated parent — never a hide (Goal table); no
+ * active tenant (`undefined`, the default) = no badge anywhere.
  */
 export function ConsoleSidebarNav({
   availableProductKeys,
-}: { availableProductKeys?: readonly string[] } = {}) {
-  const groups = visibleGroups(GROUPS, availableProductKeys);
+  myRoles,
+  subscribedDomains,
+}: {
+  availableProductKeys?: readonly string[];
+  myRoles?: readonly string[] | null;
+  subscribedDomains?: ReadonlySet<DomainKey>;
+} = {}) {
+  const groups = visibleGroups(GROUPS, availableProductKeys, (href) =>
+    isHrefHiddenFor(href, myRoles),
+  );
+  const badgeKeys = defaultSubscriptionBadgeKeys(subscribedDomains);
   const pathname = navPathFor(usePathname() ?? '');
   // Drill state. Initialised from the route so a deep-link into a child route
   // opens its parent; re-synced on every navigation to the current route's
@@ -124,14 +165,22 @@ export function ConsoleSidebarNav({
     setOpenKey(parentKeyForPath(pathname));
   }, [pathname]);
 
-  // A gated parent that is not visible must not open by deep link either.
-  const visibleParentKeys = new Set(
-    groups.flatMap((g) => g.items.filter(isParent).map((p) => p.key)),
-  );
-  const openParent =
-    openKey === null || !visibleParentKeys.has(openKey)
-      ? null
-      : PARENTS.find((p) => p.key === openKey) ?? null;
+  // A gated parent (registry OR, TASK-PC-FE-314, role) that is not visible
+  // must not open by deep link either — and its RENDERED children must be
+  // the FILTERED set, not `PARENTS`' static unfiltered children (TASK-PC-FE-314:
+  // a role can hide only SOME of a parent's children, e.g. IAM's «감사 · 보안»
+  // for a TENANT_ADMIN who keeps «운영자 관리» — the old registry-only gate
+  // never had a partially-hidden parent, so this drilled-in view previously
+  // got away with reading straight from the static `PARENTS` list).
+  const openParent = (() => {
+    if (openKey === null) return null;
+    for (const g of groups) {
+      for (const n of g.items) {
+        if (isParent(n) && n.key === openKey) return n;
+      }
+    }
+    return null;
+  })();
 
   if (openParent) {
     const active = activeHref(openParent.children, pathname);
@@ -153,7 +202,10 @@ export function ConsoleSidebarNav({
         >
           <ChevronLeft />
           <NavIcon name={openParent.icon} />
-          <span className="min-w-0 truncate">{openParent.label}</span>
+          <span className="min-w-0 flex-1 truncate">{openParent.label}</span>
+          {badgeKeys.has(openParent.key) && (
+            <SubscriptionBadge testid={`${openParent.testid}-subscription-badge`} />
+          )}
         </button>
         <div className="ml-1 flex flex-col gap-0.5 border-l border-border pl-3">
           {openParent.children.map((child) => (
@@ -215,6 +267,9 @@ export function ConsoleSidebarNav({
                 >
                   <NavIcon name={node.icon} />
                   <span className="min-w-0 flex-1 truncate">{node.label}</span>
+                  {badgeKeys.has(node.key) && (
+                    <SubscriptionBadge testid={`${node.testid}-subscription-badge`} />
+                  )}
                   <ChevronRight />
                 </button>
               );
@@ -229,7 +284,10 @@ export function ConsoleSidebarNav({
                 className={leafClass(active)}
               >
                 <NavIcon name={node.icon} />
-                <span className="min-w-0 truncate">{node.label}</span>
+                <span className="min-w-0 flex-1 truncate">{node.label}</span>
+                {badgeKeys.has(node.href) && (
+                  <SubscriptionBadge testid={`${node.testid}-subscription-badge`} />
+                )}
               </Link>
             );
           })}

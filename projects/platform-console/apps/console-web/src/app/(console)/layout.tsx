@@ -18,6 +18,8 @@ import {
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import { liveSessionDemoStopRedirect } from '@/shared/lib/live-session-demo-stop';
 import { getCatalog } from '@/features/catalog';
+import { getSelfRolesOrNull } from '@/shared/api/iam-operators-read';
+import type { DomainKey } from '@/shared/guide/permission-map';
 import {
   selectableTenants,
   groupTenantsByCompany,
@@ -175,17 +177,40 @@ export default async function ConsoleLayout({
     ? null
     : accountDisplayLabel(await getIdToken(), await getAccessToken());
   const sampleLoginHref = sampleVisitor ? await buildLoginRedirect() : null;
+
+  // TASK-PC-FE-314 — fire concurrently with the registry fetch below (the SAME
+  // `healthPromise`/`catalogPromise` pattern `dashboards/overview/page.tsx`
+  // documents as TASK-PC-FE-117): two independent BFF round-trips, so the
+  // success-path latency is `max(registry, me)`, not `registry + me`. A sample
+  // visitor (ADR-MONO-074) has no operator session to ask — skip the call
+  // entirely (task Out of Scope: the sample shell shows everything regardless
+  // of what this would answer).
+  const myRolesPromise = sampleVisitor ? null : getSelfRolesOrNull();
+
   let tenants: string[] = [];
   // TASK-MONO-751 — products the registry lists with a selectable tenant; gates the
   // registry-gated sidebar parents (the fan directory — platform operators only, ADR-MONO-079
   // R3). A registry failure leaves it empty: gated entries hide, every other entry is ungated.
   let availableProductKeys: string[] = [];
+  // TASK-PC-FE-314 — the active tenant's subscribed domains (sidebar «구독
+  // 필요» badge source). `undefined` = «don't badge anything» (AC-0 ③ — no
+  // active tenant; also the registry-failure fallback below, by the same
+  // don't-know-don't-badge posture `console-nav-exposure.ts` documents).
+  let subscribedDomains: Set<DomainKey> | undefined;
   try {
     const catalog = await getCatalog();
     tenants = selectableTenants(catalog.products);
     availableProductKeys = catalog.products
       .filter((p) => p.available && p.tenants.length > 0)
       .map((p) => p.productKey);
+    subscribedDomains = activeTenant
+      ? new Set(
+          catalog.products
+            .filter((p) => p.tenants.includes(activeTenant))
+            .map((p) => p.productKey)
+            .filter((k): k is DomainKey => k !== 'iam'),
+        )
+      : undefined;
   } catch (err) {
     // TASK-MONO-690 — this branch only runs past the TASK-MONO-674 guard
     // above (isAuthenticated() true, i.e. BOTH the access AND operator
@@ -201,6 +226,11 @@ export default async function ConsoleLayout({
     if (err instanceof ApiError && err.status === 401) redirect(RE_LOGIN_PATH);
     tenants = []; // degraded — switcher hidden, shell still usable
   }
+
+  // TASK-PC-FE-314 — resolve the roles leg fired above. `null` (failed /
+  // skipped for a sample visitor) ⇒ the sidebar shows everything, unchanged
+  // from before this task.
+  const myRoles = myRolesPromise ? await myRolesPromise : null;
 
   // Org-node (company) grouping for the tenant switcher (TASK-PC-FE-237 /
   // ADR-047). This CANNOT break the shell: any failure (403 for a
@@ -300,7 +330,11 @@ export default async function ConsoleLayout({
       </header>
       <div className="flex flex-1">
         <aside className="hidden w-56 shrink-0 border-r border-border md:block">
-          <ConsoleSidebarNav availableProductKeys={availableProductKeys} />
+          <ConsoleSidebarNav
+            availableProductKeys={availableProductKeys}
+            myRoles={myRoles}
+            subscribedDomains={subscribedDomains}
+          />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">
