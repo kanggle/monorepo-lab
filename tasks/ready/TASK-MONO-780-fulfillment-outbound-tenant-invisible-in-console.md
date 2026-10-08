@@ -47,15 +47,32 @@ monorepo
 
 ⇒ 같은 창고(WH-MAIN)의 같은 흐름이 wms 출고는 ecommerce, scm 노드는 demo-corp 에 있다. 콘솔 운영자는 출고를 볼 길이 없다.
 
+## 🔵 소유자 결정 (2026-10-08 UTC) — ⓑ, 그리고 그것은 **이미 ADR 이 정한 것**이다
+
+> OWNER DECISION: «추천대로 진행» — 갈래 ⓑ(콘솔이 활성 테넌트의 토큰으로 wms 를 조회). 근거는 아래 ADR 대조.
+
+기안 때 ⓐⓑⓒ 를 같은 무게의 선택지로 적었는데, 재측정해 보니 **`ADR-MONO-022` D9 (TASK-MONO-304) 가 이미 답을 갖고 있었다**:
+
+| ADR-022 D9 가 정한 것 | 지금 코드 | 일치 |
+|---|---|---|
+| 풀필먼트 출고의 `tenant_id` = **주문을 낸 고객 테넌트**(facet d — 이벤트 봉투의 tenant) | `FulfillmentRequestedConsumer.java:113,170` `envelope.tenantId()` → `ReceiveOrderCommand` | ✅ |
+| 고객 테넌트 운영자는 **서명된 `tenant_id`** 로 자기 테넌트의 `FULFILLMENT_ECOMMERCE` 주문만 본다 · wms 본래 운영자(`tenant_id=wms`)는 전부 | `SecurityContextCallerScopeProvider.java:68-87`(`wms.oauth2.required-tenant-id`, 기본 `wms` · 데모 `docker-compose.e2e.yml:64` 도 `wms`) | ✅ |
+| «**콘솔은 이미 assume 한 테넌트 토큰을 넘긴다** — no console change» | 콘솔 wms 프록시는 **로그인 IAM OIDC 토큰**을 붙인다(`_proxy.ts:9-13` «NOT the GAP exchanged operator token — the wms gateway requires the IAM OIDC token») | ❌ **어긋난 곳은 여기 하나** |
+
+⇒ 갈래 재평가:
+- **ⓐ 창고 운영사 테넌트로 저장** — D9 의 격리 키를 뒤집는다(ecommerce 운영자가 자기 주문을 못 보게 된다). ADR 개정 없이는 불가 → **기각**.
+- **ⓒ 데모에서만 운영자를 ecommerce 에 배정** — 단독으로는 **효과 없음**: 콘솔이 여전히 demo-corp 로그인 토큰을 보낸다. ⓑ 의 데모 측 보조(배정)로만 의미가 있다.
+- **ⓑ 콘솔이 활성 테넌트 토큰으로 wms 조회** — D9 가 전제한 동작을 코드가 따라가게 한다. 데이터 모델·wms 코드 무변경이 목표.
+
 # Scope
 
 ## In Scope
 
-- **AC-0 = 소유자 결정**: 풀필먼트 출고 주문의 테넌트.
-  - ⓐ 창고 운영사(demo-corp)로 — wms 소비자가 창고/거래처의 테넌트로 적는다. 콘솔·scm 과 한 축이 된다.
-  - ⓑ ecommerce 그대로 두고 콘솔이 볼 수 있게 — 콘솔 wms 프록시가 활성 테넌트로 교환한 토큰을 쓰고, demo@ 에게 ecommerce wms 접근을 준다.
-  - ⓒ 데모 시드만 맞춘다 — 운영자를 ecommerce 에도 배정(코드 무변경, 데모 한정).
-- 결정된 갈래의 구현 + 시험 + 계약 행.
+- **AC-0 = 재측정(구현 위치 판정)** — 🔴 프록시 주석은 «wms 게이트웨이는 IAM OIDC 토큰을 요구한다» 고 한다. 다음을 잰다:
+  1. 콘솔 테넌트 전환(`POST /api/tenant`) 뒤 쿠키에 있는 토큰 중 무엇이 `tenant_id=<활성 테넌트>` 를 싣는가(IAM assume-tenant 교환 토큰인가, GAP 교환 토큰인가) — 발급자(`iss`) · `aud` · `tenant_id` · `entitled_domains` 표.
+  2. wms 게이트웨이가 그 토큰을 받는가(발급자 · audience 검증 file:line). 받으면 구현 = 콘솔 `wms-api.ts` 의 토큰 선택만. 안 받으면 구현 위치가 게이트웨이(허용 발급자/audience) 쪽으로 바뀐다 — 그 경우 보안 영향 표를 먼저 쓰고 소유자에게 다시 묻는다.
+  3. demo@ 의 ecommerce 테넌트 토큰이 `entitled_domains` 에 `wms` 를 싣는가(D9 의 dual-accept 전제). 안 실으면 데모 측 구독/배정(ⓒ 보조)이 필요하다.
+- 판정된 위치의 구현 + 시험(콘솔: 활성 테넌트 토큰이 wms 호출에 실린다 · 활성 테넌트 없음 = 지금 동작 / wms: D9 시험이 이미 있으면 재사용) + 계약 행(`console-integration-contract` § 2.4.5 의 토큰 문장 정정).
 
 ## Out of Scope
 
@@ -63,12 +80,13 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ⓐⓑⓒ 중 소유자 결정(정확형 기록). 각 갈래의 영향 표(바뀌는 서비스 · 계약 · 기존 데이터).
-- [ ] **AC-1** — 결정 갈래 구현 · 단위/IT.
+- [ ] **AC-0** — 위 In Scope 의 재측정 1·2·3 표 + 구현 위치 판정(콘솔만 / 게이트웨이까지). 게이트웨이까지면 보안 영향 표를 쓰고 소유자 재확인 뒤 AC-1 로. (갈래 결정 자체는 위 «소유자 결정» 절에 기록됨 — ⓑ.)
+- [ ] **AC-1** — 판정 위치 구현 · 단위/IT · bite(토큰 선택을 로그인 토큰으로 되돌리면 시험 빨강).
 - [ ] **AC-2** — ⚪ 재굽기 창: 스토어 주문 1건이 콘솔 WMS 출고 목록에 보인다 → `TASK-MONO-765` AC-4 의 WMS 칸을 닫는다.
 
 # Related Specs
 
+- `docs/adr/ADR-MONO-022-ecommerce-wms-fulfillment-integration.md` § D9 (+ facet d)
 - `projects/wms-platform/specs/services/outbound-service/` · `projects/platform-console/specs/` § wms 연동 · `rules/` 멀티테넌시 규칙
 
 # Related Contracts
@@ -77,9 +95,12 @@ monorepo
 
 # Edge Cases
 
-- 이미 `tenant_id=ecommerce` 로 쌓인 출고 행 — ⓐ 이면 이전 데이터 질문이 먼저다(마이그 vs 데모 재시드).
+- demo-corp 로 돌아오면 wms 화면은 지금처럼 demo-corp 출고(`SO-DEMO-0001`)를 보여야 한다 — 활성 테넌트를 따라가는 것이지 «ecommerce 고정» 이 아니다.
+- 활성 테넌트가 wms 구독이 없는 테넌트 — 게이트웨이의 dual-accept 가 거절(403)하면 콘솔은 «이 테넌트는 WMS 를 구독하지 않습니다» 계열로(지금 403 매핑 재사용).
+- scm 노드(demo-corp)와 wms 풀필먼트 출고(ecommerce)의 테넌트가 다른 것은 **D9 상 정상**이다(창고 재고 vs 고객 주문). 데모 동선 문구로만 안내한다.
 
 # Failure Scenarios
 
 1. 콘솔에서 테넌트 필터를 클라이언트 파라미터로 열어 준다 — `TASK-MONO-304` 가 막은 교차 테넌트 읽기를 되살린다.
-2. scm 쪽만 맞추고 wms 를 안 맞춘다 — 축이 다시 갈라진다.
+2. 게이트웨이를 «아무 발급자나» 받게 넓힌다 — 프록시 주석이 지키던 불변식(#569)을 확인 없이 깬다. AC-0 의 2 가 «안 받는다» 면 멈추고 묻는다.
+3. ⓐ 로 우회한다 — ADR-022 D9 의 격리 키를 조용히 뒤집는다.

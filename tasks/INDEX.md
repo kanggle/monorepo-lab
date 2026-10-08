@@ -186,7 +186,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-779-demo-event-relay-only-starts-with-all-four-domains-in-one-call.md` — **데모 이벤트 릴레이가 한 호출에 4도메인일 때만 뜬다 — `/domain/start`·묶음 추가로는 안 뜨고 크로스프로젝트 이벤트가 조용히 0** (READY, 2026-10-08 UTC · 출처 24차 창 관측, `TASK-MONO-760` 추론의 실증).
-- `TASK-MONO-780-fulfillment-outbound-tenant-invisible-in-console.md` — **스토어 주문의 wms 출고(`tenant_id=ecommerce`)가 콘솔 WMS(로그인 토큰 demo-corp)에 영영 안 보인다** (READY, 2026-10-08 UTC · 출처 24차 창 `TASK-MONO-765` AC-4). ⏳ AC-0 = 소유자 결정 ⓐ 창고 운영사 테넌트 / ⓑ 콘솔이 활성 테넌트 토큰 / ⓒ 데모 배정만.
+- `TASK-MONO-780-fulfillment-outbound-tenant-invisible-in-console.md` — **스토어 주문의 wms 출고(`tenant_id=ecommerce`)가 콘솔 WMS(로그인 토큰 demo-corp)에 영영 안 보인다** (READY, 2026-10-08 UTC · 출처 24차 창 `TASK-MONO-765` AC-4). 🔵 소유자 결정 ⓑ(2026-10-08 UTC) = `ADR-MONO-022` D9 가 이미 정한 동작(콘솔이 활성 테넌트 토큰을 wms 에) — 코드가 어긋난 곳은 콘솔 wms 프록시 하나. ⏳ AC-0 = 게이트웨이가 그 토큰을 받는가.
 
 
 
