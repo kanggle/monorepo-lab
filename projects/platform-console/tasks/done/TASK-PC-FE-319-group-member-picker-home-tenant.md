@@ -4,7 +4,7 @@ TASK-PC-FE-319
 
 # Status
 
-review
+done
 
 # Title
 
@@ -92,3 +92,13 @@ platform-console
 - 변경: `shared/api/iam-operators-types.ts` · `features/operator-groups/components/GroupMemberDialog.tsx` · `tests/unit/features/operator-groups/GroupMemberDialog.test.tsx`(+2).
 - 대상 시험 4파일 49/49 · bite 1 실패/7 통과(rc=1) → 복원 8/8 · `tsc --noEmit` rc=0 · `next lint` rc=0.
 - 전량 vitest 는 CI `Frontend unit tests` 단독 레인으로 판정(로컬 동시 부하에서 5s 타임아웃이 나는 것을 313·315 에서 실측).
+
+## CORRECTION — close (2026-10-08 UTC, 4차원 검증)
+
+- **AC-6 닫힘**: 소유자가 2026-10-08 데모 창(24차, i-0445d76661ef0013d)에서 확인했다 — 대화 원문 «확인». 화면: `demo@demo.com` · `demo-corp` 그룹 «멤버 추가» 에서 `Store Staff (demo-corp assignment only)`(`assigned-only@demo.com`, HOME `ecommerce`) 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성. 위 AC 목록의 `[ ]` 는 이 절이 닫는다.
+- 🔵 그 운영자는 원래 시드에 없었다(데모 SUPER_ADMIN 이 관리하는 `demo-corp` 안에 배정-only 조합 0). 소유자 승인으로 같은 창의 iam DB 에 SSM 1회 삽입(다른 세션 실행, 확인 쿼리 3개 기대값 일치), 영구 시드는 iam `TASK-BE-628`(#4246 `276f74d52`) — 다음 굽기부터 기본 포함.
+- 🔴 첫 안내(`ecommerce` 그룹 생성)는 틀렸다: demo 의 SUPER_ADMIN grant 가 `demo-corp` 에 묶여 그룹 생성이 `TENANT_SCOPE_DENIED`. 그룹 변경은 «배정» 이 아니라 «관리 grant» 범위를 본다(`GroupAdminUseCase.java:85,319`).
+- (a) #4222 `MERGED` 2026-10-07T15:35:51Z, squash `07328d826`.
+- (b) `07328d826` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 22 · SKIPPED 45 · FAILURE 0.
+- (d) AC-1~6 전부 닫힘.
