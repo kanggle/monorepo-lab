@@ -46,6 +46,8 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.assertj:assertj-core'
+    // TASK-MONO-778: CallerTokenPropagationTest mocks RestClient.RequestHeadersSpec.
+    testImplementation 'org.mockito:mockito-junit-jupiter'
 }
 
 dependencyManagement {

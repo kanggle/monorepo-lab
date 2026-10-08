@@ -1,6 +1,7 @@
 package com.example.erp.notification.infrastructure.masterdata;
 
 import com.example.erp.notification.application.port.outbound.CallerEmployeePort;
+import com.example.security.servlet.actor.CallerTokenPropagation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -8,13 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,8 +19,9 @@ import java.time.Duration;
 
 /**
  * masterdata {@code GET /api/erp/masterdata/employees/me} with the caller's own bearer token
- * (TASK-MONO-776, notification-api.md § v1.1). Mechanism copied from approval-service's
- * {@code MasterDataRestAdapter} (TASK-ERP-BE-041): propagate the caller's token (a workload
+ * (TASK-MONO-776, notification-api.md § v1.1). Mechanism shared with approval-service's
+ * {@code MasterDataRestAdapter} (TASK-ERP-BE-041) via {@code libs/java-security-servlet}'s
+ * {@link CallerTokenPropagation} (TASK-MONO-778): propagate the caller's token (a workload
  * token would carry {@code tenant_id = erp} and see no {@code demo-corp} employee), classify by
  * status BEFORE decoding, and treat only 404 as an answer.
  *
@@ -35,11 +33,9 @@ import java.time.Duration;
  *       logged at WARN.</li>
  * </ul>
  *
- * <p>🔵 The token-reading helper is now duplicated in two erp services (approval + here). The
- * approval adapter's javadoc named «a second service needs the same lines» as the trigger for
- * promoting it next to {@code libs/java-security-servlet}'s {@code ActorContextResolver}; that
- * trigger has fired. Promotion is a shared-library change and is left to a follow-up
- * (TASK-MONO-776 report) rather than folded into this slice.
+ * <p>The identity check (tenant / subject match) and this adapter's own
+ * {@code CAUSE_IDENTITY_MISMATCH} metric stay here — only the mechanical "read the current
+ * caller's JWT / attach it as Bearer" part is shared.
  */
 @Slf4j
 @Component
@@ -78,7 +74,7 @@ public class MasterDataCallerEmployeeAdapter implements CallerEmployeePort {
 
     @Override
     public CallerEmployee resolve(String callerSub, String tenantId) {
-        Jwt caller = currentCallerToken();
+        Jwt caller = CallerTokenPropagation.currentCallerToken();
         if (caller == null) {
             return refuse(CAUSE_NO_CREDENTIALS, "no bearer token on the SecurityContext");
         }
@@ -92,9 +88,8 @@ public class MasterDataCallerEmployeeAdapter implements CallerEmployeePort {
             return refuse(CAUSE_IDENTITY_MISMATCH, "use-case caller/tenant != propagated token");
         }
         try {
-            Envelope envelope = restClient.get()
-                    .uri("/api/erp/masterdata/employees/me")
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + caller.getTokenValue())
+            Envelope envelope = CallerTokenPropagation.withBearerToken(
+                            restClient.get().uri("/api/erp/masterdata/employees/me"), caller)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, res) -> {
                         throw new StatusException(res.getStatusCode());
@@ -129,11 +124,6 @@ public class MasterDataCallerEmployeeAdapter implements CallerEmployeePort {
                         + "(a 404 = «not linked» is an answer and is not counted)")
                 .tag("cause", cause)
                 .register(meterRegistry);
-    }
-
-    private static Jwt currentCallerToken() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth instanceof JwtAuthenticationToken jwtAuth ? jwtAuth.getToken() : null;
     }
 
     private static final class StatusException extends RuntimeException {
