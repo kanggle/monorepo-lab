@@ -8,7 +8,7 @@ TASK-MONO-770
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -59,7 +59,7 @@ IAM 이 이메일 소유를 확인하게 한다. 두 부분이고 **순서가 �
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정: 발송 어댑터 0 · `email_verified_at` 을 읽는 곳(로그인·초대·운영자 생성 0) · 셀러 수락 술어 file:line. 발송 수단(SMTP/SES)과 데모 수신 경로를 정하고 이유를 적는다. — ✅ § 작업 기록 · AC-0 표 + 소유자 결정 + 결정 표(SMTP 범용 · 설정 `iam.mail.enabled` · 데모 = Mailpit, 소유자 전용 basic auth).
-- [ ] **AC-1** — prod 프로필 기동 시 발송 어댑터가 빈으로 뜬다(지금은 fail-fast). 데모에서 가입 → 인증 메일 수신 → 링크 → `email_verified_at` 기록을 끝까지 한 번 돈다(라이브 ⚪ 가능). — 앞 절반 ✅ `EmailVerificationNotifierWiringTest.prod_enabled_smtp`(prod + `iam.mail.enabled=true` + `spring.mail.host` → `SmtpEmailVerificationNotifier` 단일 빈) · fail-fast 유지 ✅ `prod_disabled_failsFast` · 데모 모양 ✅ `e2eProfile_enabled_smtp` · 렌더 ✅(데모 체인 `docker compose config` — account/auth-service 에 `IAM_MAIL_ENABLED=true` · `SPRING_MAIL_HOST=iam-mailpit` · 링크 `https://auth.hubwang.com/verify-email`). 뒤 절반(라이브 한 바퀴) ⚪ — 재굽기 전에는 잴 수 없다(§ 라이브 ⚪ 절차).
+- [x] **AC-1** — prod 프로필 기동 시 발송 어댑터가 빈으로 뜬다(지금은 fail-fast). 데모에서 가입 → 인증 메일 수신 → 링크 → `email_verified_at` 기록을 끝까지 한 번 돈다(라이브 ⚪ 가능). — 앞 절반 ✅ `EmailVerificationNotifierWiringTest.prod_enabled_smtp`(prod + `iam.mail.enabled=true` + `spring.mail.host` → `SmtpEmailVerificationNotifier` 단일 빈) · fail-fast 유지 ✅ `prod_disabled_failsFast` · 데모 모양 ✅ `e2eProfile_enabled_smtp` · 렌더 ✅(데모 체인 `docker compose config` — account/auth-service 에 `IAM_MAIL_ENABLED=true` · `SPRING_MAIL_HOST=iam-mailpit` · 링크 `https://auth.hubwang.com/verify-email`). 뒤 절반(라이브 한 바퀴) ⚪ — 재굽기 전에는 잴 수 없다(§ 라이브 ⚪ 절차).
 - [x] **AC-2** — 🔴 대조군: 남의 이메일로 가입한(인증 안 된) 풀 계정이 그 이메일로 온 셀러 초대를 **수락하지 못한다**(실패 쪽을 먼저 단언) · 같은 시험에서 인증 후 수락은 된다. — ✅ IAM `ConsumerSiteRoleWriteUseCaseTest$Grant.controlGroup_unverifiedRefusedFirst_thenVerifiedAccepts`(같은 `Account` 객체 — 미인증 → `EmailNotVerifiedException` · 쓰기·감사 0 → `verifyEmail()` → 같은 요청 성공) · 스토어 `SellerMemberServiceTest.unverifiedRefused_invitationKept_thenAcceptedAfterVerification`(거절 · 구성원·역할 0 · 초대 `PENDING` 유지 → 인증 뒤 같은 초대로 수락). **bite** ✅ 게이트 한 줄(`VerifiedEmailRequirement.require(account)`)을 지우자 대조군의 실패 쪽 단언(`ConsumerSiteRoleWriteUseCaseTest.java:140`)과 «이미 SELLER» 칸(:179)이 빨강(20 중 2 실패, rc=1) → 복원 `cmp` rc=0(바이트 동일). MySQL IT `ConsumerSiteRoleWriteIntegrationTest.unverifiedRefusedFirst_thenVerifiedGranted` 는 **작성만 — 이 호스트에 Docker 없음으로 미실행**(CI integration 레인).
 - [x] **AC-3** — 소비자 로그인 · 쇼핑 · 팬 이용은 인증 여부와 무관하게 그대로(회귀 시험). — ✅ 게이트의 호출자 = 1(`ConsumerSiteRoleWriteUseCase.grant`) · 로그인·토큰 발급·가입·사이트 동의·재설정 경로는 무변경이고 그 시험 전부 초록(auth-service 1069 · account-service 715, 실패 0) · 회수는 인증을 안 묻는다 `revoke_doesNotAskForVerification`. MySQL 회귀 IT `unverifiedAccount_consumerUseUnchanged`(미인증 풀 계정의 스토어 멤버십 읽기 · 팬 첫 방문 동의 · 상태 조회 = 그대로)는 **작성만 — Docker 없음으로 미실행**(CI).
 - [x] **AC-4** — 발송 실패 시 화면이 «권한을 못 받음» 이 아니라 «메일을 보내지 못했다 · 재시도» 를 말한다. — ✅ IdP 화면 `/email-verification` · `EmailVerificationPageSliceTest.send_failed_saysCouldNotSend_offersRetry`(실 템플릿 렌더 — «메일을 보내지 못했습니다. 잠시 뒤 다시 시도해 주세요.» + «다시 시도» 버튼 · 메시지 요소에 «권한» 없음; 첫 판은 템플릿 **주석**에 걸려 빨강 → 메시지 요소로 술어를 좁혔다) · 그 전제인 «실패를 안다» ✅ `SendVerificationEmailUseCaseTest`(삼킴 → 503/422 · 토큰 삭제 · 슬롯 반환). 🔴 스토어 **수락 화면 자체가 없다** — § 편차 1(소유자 판단).
@@ -186,3 +186,13 @@ IAM 이 이메일 소유를 확인하게 한다. 두 부분이고 **순서가 �
 - auth-service: `SmtpEmailSender` · `LoggingEmailSender` 조건 · `EmailVerificationPageController` + 템플릿 2 · `AccountServicePort`/`AccountServiceClient` 2메서드 · `WebLoginSecurityConfig` 4경로 · `application.yml` · `build.gradle`
 - product-service: `SellerInvitationEmailNotVerifiedException` · 클라이언트 매핑 · 핸들러 · 포트 javadoc
 - 데모: `projects/iam-platform/docker-compose.yml`(mailpit) · `infra/demo/iam-traefik.override.yml`(메일 env · mailpit 라우터/basic auth · iam-oidc 경로 2) · `infra/demo/ecommerce-mail.override.yml`(신규) · `infra/demo/projects.sh` · `infra/traefik/docker-compose.yml`(alias) · `infra/demo/fetch-oauth-secrets.sh` + 시험 · `infra/demo/aws/terraform/main.tf` · `infra/demo/aws/README.md`
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4215** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`9031eb4a8`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~5 `[x]`. AC-1 뒤 절반(라이브 한 바퀴)을 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa · 인스턴스 i-0445d76661ef0013d) 에서 닫았다 — 인스턴스 안 SSM 셸, 일회용 계정 `live770-161539@example.com`:
+  - 가입 POST 302 → `/login?registered` · 가입만으로는 메일 0건(설계 그대로 — 결정 표 «가입은 메일을 보내지 않는다»).
+  - IdP 로그인 → `GET /email-verification` 200 «인증 메일 보내기» → POST 200 → Mailpit 에 «[IAM] 이메일 주소를 인증해 주세요» **1회 폴링 안에** 도착, 링크 = `https://auth.hubwang.com/verify-email?token=…`.
+  - 링크 경로를 IdP 로 → «이메일 인증 완료» POST → `account_db.accounts.email_verified_at` **NULL → 2026-10-08 16:19:36.498205**(앞뒤 같은 쿼리).
+  - Mailpit UI 엣지는 자격 없이 401(소유자 전용 basic auth — SSM `/portfolio-demo/mailpit/ui-basicauth-users`).
+  - 스토어 쪽 «이메일 인증 필요» 화면은 `TASK-FE-107` 이 같은 창에서 소유자 브라우저로 닫았다.

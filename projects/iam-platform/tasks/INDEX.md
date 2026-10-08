@@ -120,11 +120,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-627-password-reset-pages.md` — **IdP 비밀번호 재설정 화면** (REVIEW, 2026-10-08 UTC). `PasswordResetPageController`(`/password-reset/request` · `/password-reset`) + 템플릿 둘 + `login.html` 링크 + `WebLoginSecurityConfig` 매처 4개 + 데모 Traefik `PathPrefix(\`/password-reset\`)`. AC-1/3/4/5 닫힘(슬라이스 21개 + bite 수행·복원), AC-2(DB round-trip IT)·AC-6 라이브는 이 환경에 Docker 없어 ⚪. 전체 스위트 1090 tests / 0 failures. 분석=Opus 5.5 / 구현=Sonnet.
-
-
+(empty)
 
 ## done
+- ✅ `TASK-BE-627-password-reset-pages.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4232**, 스쿼시 **`7c513ae26`** (머지 시점 실패 0). IdP 비밀번호 재설정 화면 · 로그인 링크 · 데모 경로. CI `PasswordResetIntegrationTest` 초록 · 24차 창 메일→링크→재설정→로그인 라이브 통과.
 - ✅ `TASK-BE-625-tenant-org-node-placement-api.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4223**, 스쿼시 **`9880f9209`** (머지 시점 실패 0 · 통과 34). 테넌트를 org-node 에 두기 · 옮기기 · 빼기 `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(잃는 도메인) · 양쪽 관리자 판정 · 범위 밖 404 · 조건부 쓰기 409 · 테넌트 생성의 선택 `orgNodeId`. IT 는 CI 가 닫음(admin 5 메서드 PASSED · account 134→136). 후속 `TASK-PC-FE-312`.
 - ✅ `TASK-BE-626-operator-list-home-tenant-id.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0 · SUCCESS 22). `GET /api/admin/operators` 항목(+ `/me`)에 운영자 HOME 테넌트 `homeTenantId`. AC-4(CI iam 레인) = Build & Test · Integration iam A/B · iam E2E smoke SUCCESS. 라이브 AC 없음. 짝 platform-console `TASK-PC-FE-319` 는 라이브 AC 로 review 잔류.
 - ✅ `TASK-BE-623-hide-social-providers-without-keys.md` — **DONE 2026-10-06 UTC (4-dim verified)** — impl PR **#4166**, 스쿼시 **`85b4c9263`** (머지 시점 실패 0). 키 없는 제공자 버튼 숨김. AC-5 라이브: 로그인 화면 Google · Naver 둘뿐, 두 버튼으로 실제 로그인 성공(23차 창).

@@ -122,7 +122,6 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **erp 직원 ↔ 계정 연결 화면 다섯 + 콘솔 계약 § 2.4.8 «Employee ↔ IAM account link binding» + `TASK-PC-FE-311` 보정 걷기** (REVIEW, 2026-10-07 UTC · 루트 `TASK-MONO-774` S4 · 소유자 결정: 776 `done/` 을 기다리지 않고 머지된 코드 #4234 `64d6070e6` · #4231 `836a122d9` 위에서 착수). AC-0: 운영자 목록은 계정 UUID 를 안 싣는다 → **계정 ID 입력**(형식만, 계약대로) · 수락 카드는 `/erp` 개요(칸마다 무너짐) · 311 보정은 직원 id 공간에서 발화 불가 → 걷고 «(나)» 를 `meta.actorEmployeeId` 로. BFF 4 라우트 · 직원 목록/상세 «연결된 계정» · 결재선 직원 선택기(미연결 표시, testid 유지) · 결재함 빈 이유 두 문구 · 링크/결재 v2.4 오류 문구(503 은 장애로만) · 공유 `details` 전달(없으면 본문 동일). AC-0~7 닫힘 · bite 1 실패/168 통과(AC-4 선택기 칸만) · tsc/lint rc=0 · vitest 346/346 파일 3948/3948 · e2e grep 0건. ⚪ AC-5 라이브 = 재굽기 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 - `TASK-PC-FE-319-group-member-picker-home-tenant.md` — **그룹 «멤버 추가» 선택기에서 배정만 된(HOME 이 다른) 운영자를 «○○ 소속 · 배정만 됨» 으로 비활성** (REVIEW, 2026-10-08 UTC · 소유자 결정 «A»). `TASK-PC-FE-317` AC-0 이 남긴 빈틈(고른 뒤 사유 단계 다음에 422)을 고르기 전에 막는다. 짝 = iam `TASK-BE-626`(`homeTenantId`, 같은 PR). 플랫폼 운영자(`*`)도 비활성 · `homeTenantId` 없으면 «모름» 이라 고를 수 있다(옛 producer·샘플). 대상 49/49 · bite 1 실패/7 통과 · tsc/lint rc=0. 머지 #4222 `07328d826`(실패 0) · iam 짝 BE-626 은 done. ⏳ **AC-6 라이브 ⚪ — 다음 데모 창**에서 배정-only 운영자 행이 비활성인지 확인(데모 시드에 그 테넌트로 배정만 된 운영자가 있어야 보인다 — 없으면 창에서 배정 하나를 만들어 본다). 분석=Opus 5.5 / 구현 권장=Sonnet.
@@ -131,6 +130,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
+- ✅ `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4235**, 스쿼시 **`1a7220c3c`** (머지 시점 실패 0). erp 직원 ↔ 계정 연결 화면 다섯 · 콘솔 계약 § 2.4.8 · PC-FE-311 보정 걷기(MONO-774 S4). 24차 창 소유자 브라우저 확인.
 - ✅ `TASK-PC-FE-317-group-member-operator-picker.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4218**, 스쿼시 **`8706986b8`** (머지 시점 실패 0). 운영자 그룹 «멤버 추가» 선택기(그룹 테넌트 운영자 검색 · 기존 멤버 비활성 · 100 초과 «더 보기» · 실패 시 UUID 폴백). AC-9 = 소유자 확인(2026-10-09 UTC). AC-0 의 배정-only 빈틈은 `TASK-PC-FE-319`/iam `TASK-BE-626` 이 닫음.
 - ✅ `TASK-PC-FE-321-guide-domain-features-at-a-glance.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4242**, 스쿼시 **`56608bab3`** (머지 시점 실패 0). 콘솔 가이드 «도메인 한눈에» — `shared/guide/domain-features.ts` 하나를 전역 가이드 첫 절 + 6개 도메인 가이드 첫 탭이 같이 쓴다 · 메뉴 링크 드리프트 가드 · 문구 가드 · 리뷰 수정(fan 디렉터리 «플랫폼 운영자 전용» · WMS 출고 항목 정정). AC-10 = 데모 창에서 소유자 확인(2026-10-09 UTC).
 - ✅ `TASK-PC-FE-315-iam-nav-permission-set-before-permission.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4217**, 스쿼시 **`8365d5607`** (머지 시점 실패 0). IAM 드릴에서 «권한 세트» 를 «권한» 앞으로. AC-5 = 데모 창에서 소유자 확인(2026-10-09 UTC).

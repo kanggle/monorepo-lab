@@ -8,7 +8,7 @@ IdP **비밀번호 재설정 화면** — «비밀번호를 잊으셨나요?» �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -77,11 +77,11 @@ backend
   - **데모 엣지 가드 (p)** 발견: `infra/demo/verify-demo-wrapper.sh:809-852` — 로그인/가입 템플릿의 `@{/xxx}` 링크 최상위 세그먼트를 추출해 `iam-traefik.override.yml` 의 `iam-oidc` 라우터 규칙과 자동 대조한다(손으로 센 목록이 아니다). 템플릿에 `@{/password-reset}` · `@{/password-reset/request}` 링크를 넣으면 최상위 세그먼트는 둘 다 `password-reset` 이므로 Traefik 규칙에 `PathPrefix(\`/password-reset\`)` **한 줄**만 추가하면 (p) 가 통과한다(스크립트 자체 수정 불필요). `infra/demo/idp-advertised-path-prefixes.txt`(가드 z20/z21)는 discovery 문서 파생 접두사만 다루며 `/login`·`/signup`류는 명시적으로 범위 밖(파일 주석 36-37행) — `/password-reset` 도 같은 이유로 범위 밖, 이 파일은 손대지 않는다.
   - **scripts/ · 테스트 핀 점검**: `scripts/` 전체에 `email-verification`/`verify-email`/`iam-traefik` 문자열을 거는 가드 없음(grep 0건). 테스트 쪽도 `WebLoginSecurityConfig` 의 `securityMatcher` 목록이나 Traefik 규칙 문자열을 고정하는 테스트 없음(grep 0건) — 업데이트할 기존 핀 없음.
 - [x] **AC-1** — 🔴 존재 비노출: `PasswordResetPageSliceTest#requestSubmit_existingUnknownRateLimited_sameScreen` 이 세 이메일(있는 이메일 역할 · 없는 이메일 역할 · 홍수 제한 역할 — 컨트롤러 입장에선 전부 `execute()` 가 정상 반환하는 동일 분기, `RequestPasswordResetUseCase` Javadoc 이 그 셋을 실제로 흡수함을 보증)을 한 시험에서 돌려 렌더 바이트가 동일함을 단언. 통과.
-- [ ] **AC-2** — ⚪ 유효 토큰 저장 → 로그인 성공/실패 round-trip 은 Testcontainers(MySQL+Redis) IT 가 필요하다 — 이 환경(Windows 호스트, Docker 없음)에서는 실행할 수 없다. 단위 레벨 커버리지(`RequestPasswordResetUseCaseTest`/`ConfirmPasswordResetUseCaseTest`, 기존 — 변경 없음)와 컨트롤러 슬라이스(`PasswordResetPageSliceTest#confirmSubmit_success_redirectsToLogin` 등)는 통과했지만, 실제 DB round-trip 은 미실행. CI 의 `integrationTest` 레인(Docker 가용 호스트)에서 돌아가야 닫힌다.
+- [x] **AC-2** — ⚪ 유효 토큰 저장 → 로그인 성공/실패 round-trip 은 Testcontainers(MySQL+Redis) IT 가 필요하다 — 이 환경(Windows 호스트, Docker 없음)에서는 실행할 수 없다. 단위 레벨 커버리지(`RequestPasswordResetUseCaseTest`/`ConfirmPasswordResetUseCaseTest`, 기존 — 변경 없음)와 컨트롤러 슬라이스(`PasswordResetPageSliceTest#confirmSubmit_success_redirectsToLogin` 등)는 통과했지만, 실제 DB round-trip 은 미실행. CI 의 `integrationTest` 레인(Docker 가용 호스트)에서 돌아가야 닫힌다.
 - [x] **AC-3** — `PasswordResetPageSliceTest#confirmSubmit_tokenInvalid_dropsTokenOffersRequestLink`(만료/사용됨 → 안내 + 요청 화면 링크, 폼 없음) · `#confirmSubmit_policyViolation_keepsTokenNeverRefillsPassword`(정책 문구 · 토큰 hidden 필드 유지 · 제출한 비밀번호 문자열이 화면에 전혀 없음을 단언) 통과.
 - [x] **AC-4** — `PasswordResetPageSecurityChainSliceTest`(REAL `WebLoginSecurityConfig` 체인, Testcontainers 불필요): `postRequestWithoutCsrf_forbidden`/`postConfirmWithoutCsrf_forbidden` → 403 + 유스케이스 미호출, `anonymousGetRequestPage_ok`/`anonymousGetConfirmPage_ok` → 200(로그인 리다이렉트 없음), `postRequestWithCsrf_passesSecurityChain`/`postConfirmWithCsrf_passesSecurityChain` → CSRF 있으면 permitAll 통과. 6/6 통과.
 - [x] **AC-5** — bite 수행(2026-10-08): `PasswordResetPageController.requestSubmit` 에 `if (normalized.contains("ghost")) return requestView("BITE_LEAK", ...)` 를 임시 삽입 → `PasswordResetPageSliceTest` 12개 중 **AC-1 셀 1개만** 빨강(`[existing/unknown screens are byte-identical]` AssertionFailedError), 나머지 11개(정책 위반 등 포함) 그대로 초록. `git diff`로 확인 후 Edit 로 되돌리고(= `git checkout` 미사용) 재실행해 12/12 초록 재확인 — 로그: 분석 세션 scratchpad `be627-bite.log`/`be627-revert.log`.
-- [~] **AC-6** — Traefik 규칙 정적 확인: `infra/demo/iam-traefik.override.yml` 의 `iam-oidc` 라우터에 `PathPrefix(\`/password-reset\`)` 추가 완료(grep 로 확인). ⚪ 라이브 «메일 → 링크 → 재설정 → 로그인» 1회는 데모 재굽기 + Mailpit 접근이 필요해 이 환경에서 수행 불가 — TASK-MONO-770 AC-1 과 같은 창에서 소유자/배포 담당이 닫아야 한다.
+- [x] **AC-6** — Traefik 규칙 정적 확인: `infra/demo/iam-traefik.override.yml` 의 `iam-oidc` 라우터에 `PathPrefix(\`/password-reset\`)` 추가 완료(grep 로 확인). ⚪ 라이브 «메일 → 링크 → 재설정 → 로그인» 1회는 데모 재굽기 + Mailpit 접근이 필요해 이 환경에서 수행 불가 — TASK-MONO-770 AC-1 과 같은 창에서 소유자/배포 담당이 닫아야 한다.
 
 # Related Specs
 
@@ -124,3 +124,10 @@ backend
   이 Windows 호스트에 Docker 가 없어 실행 불가(AC-2 전체 round-trip). 데모 라이브 메일→재설정→로그인
   1회(AC-6)도 재굽기·Mailpit 접근이 필요해 미수행.
 - **AC-0 재측정·가드 (p) 분석, AC-5 bite 절차**: 위 Acceptance Criteria 각 항목 참조.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4232** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`7c513ae26`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0·1·3·4·5 `[x]`. 남은 둘:
+  - **AC-2** — 본문의 «이 환경에서 실행 불가» 는 PR 단계 기록이다. 이후 같은 PR 에 `apps/auth-service/src/test/java/com/example/auth/integration/PasswordResetIntegrationTest.java` 가 추가됐고 PR CI «Integration (iam A, Testcontainers)» · «Integration (iam B, Testcontainers)» **SUCCESS** — DB round-trip 이 CI 에서 돌았다. 아래 AC-6 라이브가 같은 왕복을 실 스택에서 한 번 더 보였다.
+  - **AC-6** — 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa · 인스턴스 i-0445d76661ef0013d), 인스턴스 안 SSM 셸: `/password-reset/request` POST 200(같은 안내) → Mailpit «[IAM] 비밀번호 재설정 안내» 1회 폴링 안에 도착 → 링크 `https://auth.hubwang.com/password-reset?token=…` 경로로 GET 200(폼 `token · newPassword · confirmPassword`) → POST **302 `/login?passwordReset`** → 새 비밀번호 로그인 **302 `/`** · 옛 비밀번호 **302 `/login?error`**.
