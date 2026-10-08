@@ -693,6 +693,88 @@ z43_redir="$(printf '%s\n' "$z43_block" | sed -n 's/^      OAUTH_GOOGLE_REDIRECT
 ok "(z43) auth-service 가 OAUTH_* 16키를 받습니다 · 비밀 미설정 시 빈 문자열 · 리디렉트는 IAM_PUBLIC_URL 파생값"
 
 # ---------------------------------------------------------------------------
+echo "[verify] (z44) 릴레이 기동 판정이 이번 호출의 SET 이 아니라 떠 있는 도메인을 보는가 (TASK-MONO-779)"
+# ---------------------------------------------------------------------------
+# 결함(24차 데모 창, 2026-10-08 UTC 관측): 옛 판정은 `[[ " ${SET[*]} " == *" $d "* ]]` —
+# "이번 호출이 d 를 요청했는가"만 물었다. 묶음 기동(iam·ecommerce·wms) 뒤
+# `/domain/start scm` 으로 넷째를 **나중에** 올리면 그 호출의 SET 은 {scm,iam} 뿐이라
+# ecommerce·wms 가 "없다"로 잘못 판정되고 릴레이는 영원히 안 뜬다 — 넷 다 떠 있는데도.
+#
+# 🔴 **이 가드는 docker 가 없어도 돈다**(정적 구간 — LIVE 게이트 밖). (z44) 는 `demo-up.sh`
+#    의 `domain_running()`·`docker compose up -d` 를 직접 안 부른다 — 대신 `domain_running`
+#    자체를 **스텁으로 치환**하고, `demo-up.sh` 의 판정 구간(GUARD-Z44 anchors)만 추출해서
+#    실행한다. 실제 docker 콜은 (z4)(z5)(z7) 같은 `--live` 칸이 재는 **다른 축**(기동이
+#    실제로 되는가)이고, 여기가 재는 축은 **판정 로직 자체**(어느 입력을 보는가)다.
+#
+# 🔴 **추출이지 재작성이 아니다.** 판정식을 이 가드 안에 손으로 다시 적으면, 다음에
+#    `demo-up.sh` 쪽만 고쳐지고 이 가드는 옛 식을 계속 통과시킨다(그 자체가 공허한
+#    초록이다). 그래서 `GUARD-Z44-BEGIN`..`-END` 사이를 **그 파일에서 그대로** 뽑는다.
+z44_src="$ROOT/infra/demo/demo-up.sh"
+z44_b="$(grep -c -F '# GUARD-Z44-BEGIN' "$z44_src" || true)"
+z44_e="$(grep -c -F '# GUARD-Z44-END'   "$z44_src" || true)"
+[ "$z44_b" = "1" ] && [ "$z44_e" = "1" ] \
+  || fail "(z44) GUARD-Z44 앵커가 begin=${z44_b} end=${z44_e} 입니다(기대 1·1) — 추출 구간이 깨졌습니다."
+
+z44_extract() { # $1=소스파일 → 앵커 사이(앵커 줄 제외)
+  sed -n '/# GUARD-Z44-BEGIN/,/# GUARD-Z44-END/p' "$1" | sed '1d;$d'
+}
+z44_snippet="$(mktemp)"
+z44_extract "$z44_src" > "$z44_snippet"
+[ -s "$z44_snippet" ] || fail "(z44) 추출한 판정 구간이 비어 있습니다 — 앵커는 있는데 본문이 없습니다."
+grepq 'domain_running' "$z44_snippet" \
+  || fail "(z44) 추출한 구간에 domain_running 호출이 없습니다 — 판정이 다른 모양으로 바뀌었는지 확인하세요."
+
+# z44_run <스니펫파일> <지금-떠-있는-도메인(공백구분)> <이번호출SET(공백구분)> → relay_missing 을 공백 구분 1행으로
+# SET 은 새 판정에서는 **안 쓰인다** — 그 "안 씀"이 바로 이 티켓이 고친 것이다(세 시나리오
+# 모두 SET 이 다른데 결과가 같아야 한다).
+z44_run() {
+  local snippet="$1" running="$2" set_arg="$3"
+  (
+    RELAY_DOMAINS=(iam ecommerce wms scm)
+    # shellcheck disable=SC2206
+    SET=($set_arg)
+    local z44_running="$running"
+    domain_running() {
+      case " $z44_running " in
+        *" $1 "*) return 0 ;;
+        *)        return 1 ;;
+      esac
+    }
+    # shellcheck source=/dev/null
+    source "$snippet"
+    printf '%s' "${relay_missing[*]:-}"
+  )
+}
+
+# AC-1 — 넷이 모이는 순서 세 가지. 실제 떠 있는 상태는 **셋 다 "넷 전부 up"** 이고
+# 다른 것은 이번 호출의 SET 뿐이다 — 결과가 셋 다 "missing 없음" 이어야 새 판정이
+# SET 에서 독립적임을 보인 것이다.
+z44_r1="$(z44_run "$z44_snippet" "iam ecommerce wms scm" "iam ecommerce wms scm")"   # 한 번에
+z44_r2="$(z44_run "$z44_snippet" "iam ecommerce wms scm" "scm iam")"                 # 나중에 scm
+z44_r3="$(z44_run "$z44_snippet" "iam ecommerce wms scm" "iam")"                     # 나중에 iam
+[ -z "$z44_r1" ] || fail "(z44) 한 번에 넷을 올린 경우에도 relay_missing=[$z44_r1] — 기존 동작조차 깨졌습니다."
+[ -z "$z44_r2" ] || fail "(z44) 넷 다 떠 있는데 이번 호출 SET={scm,iam} 뿐이라고 relay_missing=[$z44_r2] — SET 을 다시 보고 있습니다(이 티켓의 결함 그대로)."
+[ -z "$z44_r3" ] || fail "(z44) 넷 다 떠 있는데 이번 호출 SET={iam} 뿐이라고 relay_missing=[$z44_r3] — SET 을 다시 보고 있습니다(이 티켓의 결함 그대로)."
+
+# AC-2 — 넷이 안 모였을 때는 지금처럼 이름을 댄다(침묵 금지 유지). SET 은 넷 전부를
+# 요청했지만 scm 만 실제로는 안 떠 있는 상태(예: 기동 실패)를 흉내낸다.
+z44_r4="$(z44_run "$z44_snippet" "iam ecommerce wms" "iam ecommerce wms scm")"
+[ "$z44_r4" = "scm" ] || fail "(z44) scm 만 실제로 안 떠 있는데 relay_missing=[$z44_r4] (기대: scm) — 생략 경고가 엉뚱한 이름을 댑니다."
+
+# AC-3 bite — 판정을 옛 SET 기준으로 되돌리면 (z44) 가 **이 자리에서** 빨개져야 한다.
+z44_bite="$(mktemp)"
+sed 's/domain_running "\$d" || relay_missing+=("\$d")/[[ " ${SET[*]} " == *" $d "* ]] || relay_missing+=("$d")/' \
+  "$z44_snippet" > "$z44_bite"
+cmp -s "$z44_snippet" "$z44_bite" \
+  && fail "(z44) bite 주입 실패 — sed 치환이 스니펫을 바꾸지 못했습니다(패턴이 소스와 더 이상 안 맞습니다)."
+z44_bite_r2="$(z44_run "$z44_bite" "iam ecommerce wms scm" "scm iam")"
+[ -n "$z44_bite_r2" ] || fail "(z44) bite 실패 — 판정을 SET 기준으로 되돌렸는데도 '나중에 scm' 시나리오가 여전히 missing 없음입니다."\
+  $'\n'"→ 가드가 **안 물었습니다.** 이 축을 재지 못한다는 뜻입니다."
+rm -f "$z44_snippet" "$z44_bite"
+
+ok "(z44) relay_missing 이 domain_running() 을 봅니다 — 한 번에·나중에 scm·나중에 iam 셋 다 missing 없음(SET 무관) · scm 만 실제로 안 뜬 경우 missing=[scm] · bite(SET 기준으로 되돌리면 '나중에 scm' 에서 missing=[$z44_bite_r2])"
+
+# ---------------------------------------------------------------------------
 echo "[verify] (n) 부팅 경로가 DEMO_DOMAIN 을 실제로 설정하는가"
 # ---------------------------------------------------------------------------
 # 근거(MONO-366): MONO-358 이 저장소 쪽 계약을 만들었다 — **`DEMO_DOMAIN` 을 주면 그

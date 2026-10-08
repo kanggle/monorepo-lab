@@ -360,10 +360,23 @@ done
 # 마지막에 올린다 — `depends_on` 은 compose 프로젝트 경계를 넘지 못하므로 순서가 대신한다.
 # 🔴 릴레이가 없으면 크로스프로젝트 이벤트는 **한 건도 건너가지 않는다.** 그것이 이 티켓이
 # 고친 결함이고, 그 상태는 어떤 에러도 내지 않으므로 여기서 소리를 내야 한다.
+#
+# 🔴🔴 TASK-MONO-779 — 판정은 **이번 호출의 `SET` 이 아니라 지금 떠 있는 도메인**을 본다.
+# 예전 판정(`[[ " ${SET[*]} " == *" $d "* ]]`)은 "이번 호출이 d 를 요청했는가"만 물었다.
+# 묶음 기동(`demo-core`: iam·ecommerce·wms)으로 뜬 뒤 `/domain/start scm` 으로 넷째
+# 도메인을 **나중에** 올리면, 그 호출의 `SET` 은 {scm}(+하드의존 iam) 뿐이라
+# ecommerce·wms 가 "없다"로 잘못 판정되고 릴레이는 영원히 안 뜬다 — 넷 다 떠 있는데도.
+# 24차 데모 창(2026-10-08 UTC)이 그 상태를 그대로 관측했다(위 Goal 표). `domain_running()`
+# (projects.sh)은 **도커에게 직접 묻는다** — 어느 호출이 어느 도메인을 가져왔는지와
+# 무관하게 옳고, 한 번에 넷을 올리든 나중에 하나씩 모으든 같은 판정에 수렴한다.
+# GUARD-Z44-BEGIN — 가드 (z44, verify-demo-wrapper.sh) 가 이 구간을 그대로 추출해서
+# **실행한다**(이번 호출의 SET 이 아니라 떠 있는 도메인을 보는가). 이 구간 밖으로 옮기면
+# 가드가 공허해진다 — (z41) 의 GUARD-Z34 관례와 같다.
 relay_missing=()
 for d in "${RELAY_DOMAINS[@]}"; do
-  [[ " ${SET[*]} " == *" $d "* ]] || relay_missing+=("$d")
+  domain_running "$d" || relay_missing+=("$d")
 done
+# GUARD-Z44-END
 if [ ${#relay_missing[@]} -eq 0 ]; then
   echo "[demo] up: relay  ($RELAY_COMPOSE)  — 크로스프로젝트 이벤트 릴레이"
   # 릴레이도 격리한다(TASK-MONO-553 A). 네 브로커 중 하나가 못 떠서 릴레이가 실패해도

@@ -283,3 +283,24 @@ compose_files() {
   local slug="$1" f
   for f in ${COMPOSE[$slug]}; do printf '%s\n' "$f"; done
 }
+
+# ---------------------------------------------------------------------------
+# domain_running <slug> — 그 compose 프로젝트(-p <slug>)에 컨테이너가 하나라도 있으면
+# "떠 있음"으로 본다 (단일 출처 — TASK-MONO-779).
+# ---------------------------------------------------------------------------
+# 전에는 `demo-down.sh` 안에 똑같은 정의(`is_running`)가 **따로** 있었다. 이 함수가
+# 지금은 세 자리에서 쓰인다: demo-down.sh 의 부분 종료 잔존 가드(「아직 떠 있는 r」) ·
+# demo-down.sh 의 릴레이 선(先) 종료 판정(「relay 프로젝트가 떠 있는가」) ·
+# demo-up.sh 의 릴레이 기동 판정(「이 RELAY_DOMAINS 원소가 떠 있는가」, 아래). 세 자리가
+# 같은 질문("이 compose 프로젝트에 컨테이너가 남아 있는가")을 각자 answer 하게 두면
+# 한쪽만 고쳐지고 갈라진다 — 이 파일의 머리글이 "드리프트를 원천 차단한다" 라고 적은
+# 바로 그 모양이다.
+#
+# 🔴 **왜 `-a`(전 상태)인가, "running 뿐"(`-q` 단독)이 아니라** — 세 호출자 모두 원하는
+# 질문은 "이 도메인이 기동된 뒤 아직 안 내려갔는가"이지 "이 순간 healthcheck 를
+# 통과했는가"가 아니다. 후자는 이미 각 compose 의 `depends_on: condition:
+# service_healthy`(기동 중)와 릴레이 자신의 `up -d` 성공 여부(`failed+=relay`, 기동 뒤)가
+# 따로 본다. `Exited (0)` 인 init 컨테이너(예: `iam-kafka-init`)가 있는 평범한 정상
+# 상태를 "안 떠 있다"로 오판하면 그 도메인은 **어떤 상태에서도 "떠 있음"이 될 수 없다**
+# (TASK-MONO-551 A 가 같은 함정을 다른 자리에서 겪었다) — 그래서 `-aq`.
+domain_running() { [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$1" 2>/dev/null)" ]; }
