@@ -91,8 +91,12 @@ export function makeProxyErrorMapper(
 
     if (err instanceof ApiError) {
       // Any other status → inline actionable passthrough (no crash).
+      // TASK-PC-FE-318 — the producer's `details` passes through when present
+      // (absent → the body is byte-identical to before).
       return NextResponse.json(
-        { code: err.code, message: err.message },
+        err.details === undefined
+          ? { code: err.code, message: err.message }
+          : { code: err.code, message: err.message, details: err.details },
         { status: err.status },
       );
     }

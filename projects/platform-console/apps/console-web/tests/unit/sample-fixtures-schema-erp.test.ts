@@ -43,6 +43,7 @@ import {
   EmployeeOrgViewDetailResponseSchema,
   DelegationFactListResponseSchema,
   DelegationFactDetailResponseSchema,
+  AccountLinkProposalListResponseSchema,
 } from '@/features/erp-ops/api/types';
 import {
   ApprovalListResponseSchema,
@@ -609,6 +610,49 @@ describe('AC-5 — a representative write is refused with the sample copy', () =
       surface: 'erp_delegation',
       method: 'POST',
       path: '/api/erp/approval/delegations',
+    });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe(SAMPLE_READ_ONLY);
+  });
+});
+
+// TASK-PC-FE-318 — employee ↔ IAM account link in the sample world.
+describe('TASK-PC-FE-318 — account link reads + inbox actorEmployeeId', () => {
+  it('both link reads answer 200 (parse) — the `/erp` card and the HR dialog never 503 a sample visitor', async () => {
+    const mine = erp('/api/erp/masterdata/account-link-proposals/mine?page=0&size=20');
+    expect(mine.status).toBe(200);
+    expect(AccountLinkProposalListResponseSchema.parse(await mine.json()).data).toEqual([]);
+    const history = erp(
+      '/api/erp/masterdata/employees/emp-sample-0001/account-link-proposals?page=0&size=20',
+    );
+    expect(history.status).toBe(200);
+    AccountLinkProposalListResponseSchema.parse(await history.json());
+    expect(
+      erp('/api/erp/masterdata/employees/emp-nope/account-link-proposals').status,
+    ).toBe(404);
+  });
+
+  it('the employee list has BOTH states — linked and «연결된 계정 없음» — so the sample shows the column honestly', async () => {
+    const list = EmployeeListResponseSchema.parse(
+      await erp('/api/erp/masterdata/employees?page=0&size=20').json(),
+    );
+    expect(list.data.some((e) => e.accountId)).toBe(true);
+    expect(list.data.some((e) => !e.accountId)).toBe(true);
+  });
+
+  it('the inbox carries meta.actorEmployeeId (linked sample visitor) — not the «not linked» empty state', async () => {
+    const inbox = ApprovalListResponseSchema.parse(
+      await approval('/api/erp/approval/inbox?page=0&size=20').json(),
+    );
+    expect(inbox.meta.actorEmployeeId).toBe('emp-sample-0001');
+  });
+
+  it('a link write is refused with 403 SAMPLE_READ_ONLY', async () => {
+    const res = sampleResponse({
+      core: 'flat',
+      surface: 'erp',
+      method: 'POST',
+      path: '/api/erp/masterdata/account-link-proposals/prop-1/accept',
     });
     expect(res.status).toBe(403);
     expect(((await res.json()) as { code: string }).code).toBe(SAMPLE_READ_ONLY);

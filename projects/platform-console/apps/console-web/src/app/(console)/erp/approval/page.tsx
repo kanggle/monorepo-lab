@@ -52,7 +52,6 @@ export default async function ErpApprovalPage({
       initialApprovalRequests={state.approvalRequests}
       initialApprovalInbox={state.approvalInbox}
       initialSelectedId={requestId}
-      mySub={state.mySub}
     />
   );
 }

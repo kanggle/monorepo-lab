@@ -38,3 +38,4 @@ export * from './cost-center';
 export * from './business-partner';
 export * from './employee-org-view';
 export * from './delegation-fact';
+export * from './account-link';

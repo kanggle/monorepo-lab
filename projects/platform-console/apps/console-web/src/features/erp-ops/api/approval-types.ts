@@ -102,6 +102,11 @@ export const ApprovalMetaSchema = z
     page: z.number().int().nonnegative().optional(),
     size: z.number().int().positive().optional(),
     totalElements: z.number().int().nonnegative().optional(),
+    // v2.4 (TASK-MONO-776 / TASK-PC-FE-318) — inbox + `?role=` lists only:
+    // the caller's linked employee id. ABSENT ⇔ the caller's account is
+    // linked to no employee (the empty page is then «not linked», NOT
+    // «nothing to process» — the screen must say the two differently).
+    actorEmployeeId: z.string().optional(),
   })
   .passthrough();
 export type ApprovalMeta = z.infer<typeof ApprovalMetaSchema>;

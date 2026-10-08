@@ -27,3 +27,6 @@ export * from './masters/employees-api';
 export * from './masters/job-grades-api';
 export * from './masters/cost-centers-api';
 export * from './masters/business-partners-api';
+// TASK-PC-FE-318 — employee ↔ IAM account link (propose / accept / decline /
+// revoke / unlink + the two reads).
+export * from './masters/account-link-api';

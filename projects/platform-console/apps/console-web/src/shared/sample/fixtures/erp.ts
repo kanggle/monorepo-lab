@@ -194,6 +194,8 @@ export const ERP_EMPLOYEES = [
     status: 'ACTIVE',
     employmentStatus: 'EMPLOYED',
     effectivePeriod: { effectiveFrom: '2021-03-01', effectiveTo: null },
+    // TASK-PC-FE-318 — linked IAM account (the sample visitor's own `ME`).
+    accountId: 'acc-sample-0001',
   },
   {
     id: 'emp-sample-0002',
@@ -205,6 +207,7 @@ export const ERP_EMPLOYEES = [
     status: 'ACTIVE',
     employmentStatus: 'ON_LEAVE',
     effectivePeriod: { effectiveFrom: '2021-06-01', effectiveTo: null },
+    accountId: 'acc-sample-0002',
   },
   {
     // E1 headline case — references the RETIRED dept-sample-0004.
@@ -217,10 +220,15 @@ export const ERP_EMPLOYEES = [
     status: 'ACTIVE',
     employmentStatus: 'SEPARATED',
     effectivePeriod: { effectiveFrom: '2019-05-01', effectiveTo: null },
+    accountId: 'acc-sample-0003',
   },
   {
     // No FK refs at all — the "— (no reference)" rendering path; this is a
     // DIFFERENT case than emp-sample-0003 above (a present-but-retired ref).
+    // TASK-PC-FE-318 — also the one employee with NO linked account (no
+    // `accountId`): the «연결된 계정 없음» path in the employee list, the
+    // approver selector, and appr-sample-0002's CURRENT stage approver (the
+    // ticket's Edge Case — «현재 단계 승인자: 연결된 계정 없음»).
     id: 'emp-sample-0004',
     employeeNumber: 'E-0004',
     name: `최수아${SUFFIX}`,
@@ -232,6 +240,35 @@ export const ERP_EMPLOYEES = [
     effectivePeriod: { effectiveFrom: '2024-01-01', effectiveTo: null },
   },
 ] as const;
+
+// ===========================================================================
+// employee ↔ IAM account link (TASK-PC-FE-318) — the two GET reads. Both
+// answer an EMPTY page: no proposal is pending in the sample world (every
+// write is refused with `403 SAMPLE_READ_ONLY` anyway), and an empty page
+// introduces no new fixture key for the R2ⓐ label rule to classify.
+//   GET /api/erp/masterdata/account-link-proposals/mine
+//   GET /api/erp/masterdata/employees/{id}/account-link-proposals
+// ===========================================================================
+
+const ACCOUNT_LINK_MINE_PATH = '/api/erp/masterdata/account-link-proposals/mine';
+
+function accountLinkFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  const page = intParam(query, 'page', 0);
+  const size = intParam(query, 'size', 20);
+  if (pathname === ACCOUNT_LINK_MINE_PATH) return pageEnvelope([], page, size);
+  const historyMatch = pathname.match(
+    new RegExp(`^${EMPLOYEES_PATH}/([^/]+)/account-link-proposals$`),
+  );
+  if (historyMatch) {
+    const id = decodeURIComponent(historyMatch[1]);
+    if (!ERP_EMPLOYEES.some((e) => e.id === id)) {
+      return fixtureNotFound('MASTERDATA_NOT_FOUND', 'employee not found');
+    }
+    return pageEnvelope([], page, size);
+  }
+  return undefined;
+}
 
 function employeesFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
@@ -587,6 +624,7 @@ function delegationFactsFixture(path: string): unknown {
 function erpFixture(path: string): unknown {
   return (
     departmentsFixture(path) ??
+    accountLinkFixture(path) ??
     employeesFixture(path) ??
     jobGradesFixture(path) ??
     costCentersFixture(path) ??
@@ -770,7 +808,12 @@ function approvalFixture(path: string): unknown {
     const rows = ERP_APPROVAL_REQUESTS.filter(
       (r) => NON_TERMINAL_STATUSES.has(r.status) && currentApprover(r) === ME,
     );
-    return pageEnvelope(rows.map(requestSummary), page, size);
+    // approval v2.4 (TASK-PC-FE-318) — the caller's linked employee id; its
+    // presence is what tells the screen «linked, N to process» apart from
+    // «not linked».
+    return pageEnvelope(rows.map(requestSummary), page, size, {
+      actorEmployeeId: ME,
+    });
   }
 
   const detailMatch = pathname.match(new RegExp(`^${APPROVAL_REQUESTS_PATH}/([^/]+)$`));

@@ -8,14 +8,45 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly timestamp?: string;
+  /**
+   * The producer's error `details` object, when the envelope carried one
+   * (TASK-PC-FE-318 — e.g. erp `EMPLOYEE_LINK_CONFLICT` `details.cause`,
+   * `APPROVAL_APPROVER_UNLINKED` `details.stageIndex`). Optional and additive:
+   * every caller that never passes it sees `undefined`, as before. Never
+   * logged — it can carry producer data.
+   */
+  readonly details?: unknown;
 
-  constructor(status: number, code: string, message: string, timestamp?: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    timestamp?: string,
+    details?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.timestamp = timestamp;
+    this.details = details;
   }
+}
+
+/**
+ * Reads one string/number field out of an {@link ApiError}'s `details`
+ * (TASK-PC-FE-318). Tolerant: a missing / non-object `details` or a field of
+ * another type yields `undefined` — the caller falls back to its generic copy.
+ */
+export function errorDetail(
+  err: unknown,
+  key: string,
+): string | number | undefined {
+  if (!(err instanceof ApiError)) return undefined;
+  const d = err.details;
+  if (d === null || typeof d !== 'object') return undefined;
+  const v = (d as Record<string, unknown>)[key];
+  return typeof v === 'string' || typeof v === 'number' ? v : undefined;
 }
 
 /** Thrown when the registry call times out or the breaker is open. */

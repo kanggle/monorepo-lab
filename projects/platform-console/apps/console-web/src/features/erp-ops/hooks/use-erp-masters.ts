@@ -34,3 +34,5 @@ export * from './masters/use-job-grades';
 export * from './masters/use-cost-centers';
 export * from './masters/use-business-partners';
 export * from './masters/use-employee-org-views';
+// TASK-PC-FE-318 — employee ↔ IAM account link reads + writes.
+export * from './masters/use-account-link';

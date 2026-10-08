@@ -3,15 +3,42 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { APPROVAL_SUBJECT_TYPES } from '../api/approval-types';
-import { useCreateApproval } from '../hooks/use-erp-ops';
+import { ERP_MAX_PAGE_SIZE, type Employee } from '../api/types';
+import { useCreateApproval, useEmployees } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
 import { SUBJECT_LABEL } from './approval-common';
+import { ACCOUNT_UNLINKED_LABEL } from './AccountLinkBadge';
 
 // ===========================================================================
 // Create dialog — DRAFT request.
 // ===========================================================================
 
+/**
+ * One approver option's label (TASK-PC-FE-318 AC-4). An employee without a
+ * linked IAM account is marked «연결된 계정 없음» — NOT disabled: the owner
+ * decision is «미연결 승인자 = 상신 거절, 선택기가 표시» — the producer refuses at
+ * submit with 422 `APPROVAL_APPROVER_UNLINKED` (worded by `approval-error.ts`).
+ * A retired employee stays listed (existing FK-selector rule — nothing hidden)
+ * and is marked; submit refuses it with `approver_unresolved`.
+ */
+export function approverOptionLabel(e: Employee): string {
+  const parts = [`${e.employeeNumber} · ${e.name}`];
+  if (e.status === 'RETIRED') parts.push('폐기된 직원');
+  if (!e.accountId) parts.push(ACCOUNT_UNLINKED_LABEL);
+  return parts.join(' — ');
+}
+
 export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
+  // TASK-PC-FE-318 — the approver route is an EMPLOYEE SELECTOR (was a raw-id
+  // text input). One page of up to ERP_MAX_PAGE_SIZE employees; if the list
+  // cannot be read, the row falls back to the old id input (same testid) so
+  // the dialog still works — the producer is the authority either way.
+  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const employees: Employee[] = employeesQ.data?.data ?? [];
+  const employeeById = new Map(employees.map((e) => [e.id, e]));
+  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
+  const selectorMode = !employeesQ.isError;
+  const employeesLoading = employeesQ.isLoading;
   const [subjectType, setSubjectType] = useState<string>(
     APPROVAL_SUBJECT_TYPES[0],
   );
@@ -160,22 +187,67 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
           <p className="block text-sm font-medium text-foreground">
             결재선 <span aria-hidden="true">*</span>
             <span className="ml-1 text-xs font-normal text-muted-foreground">
-              (순서대로 단계 결재자 입력)
+              (순서대로 단계 결재자 선택)
             </span>
           </p>
+          {employeesQ.isError && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              role="status"
+              data-testid="approval-create-approvers-fallback"
+            >
+              직원 목록을 불러오지 못해 결재자 직원 ID 를 직접 입력합니다.
+            </p>
+          )}
+          {employeesQ.isSuccess && totalEmployees > employees.length && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="approval-create-approvers-truncated"
+            >
+              직원이 많아 처음 {employees.length}명만 표시합니다.
+            </p>
+          )}
           <div className="mt-1 space-y-2">
-            {approverRows.map((row, idx) => (
-              <div key={idx} className="flex items-center gap-2">
+            {approverRows.map((row, idx) => {
+              const picked = row ? employeeById.get(row) : undefined;
+              return (
+              <div key={idx}>
+              <div className="flex items-center gap-2">
                 <span className="w-10 shrink-0 text-xs text-muted-foreground">
                   {idx + 1}단계
                 </span>
-                <input
-                  data-testid={`approval-create-approver-${idx}`}
-                  value={row}
-                  onChange={(e) => setApproverRow(idx, e.target.value)}
-                  className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  placeholder="emp-…"
-                />
+                {selectorMode ? (
+                  <select
+                    data-testid={`approval-create-approver-${idx}`}
+                    aria-label={`${idx + 1}단계 결재자`}
+                    value={row}
+                    disabled={employeesLoading}
+                    onChange={(e) => setApproverRow(idx, e.target.value)}
+                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  >
+                    <option value="">
+                      {employeesLoading ? '직원 목록 불러오는 중…' : '— 결재자 선택 —'}
+                    </option>
+                    {employees.map((e) => (
+                      <option
+                        key={e.id}
+                        value={e.id}
+                        data-unlinked={e.accountId ? undefined : 'true'}
+                      >
+                        {approverOptionLabel(e)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    data-testid={`approval-create-approver-${idx}`}
+                    aria-label={`${idx + 1}단계 결재자 직원 ID`}
+                    value={row}
+                    onChange={(e) => setApproverRow(idx, e.target.value)}
+                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    placeholder="직원 ID"
+                  />
+                )}
                 <button
                   type="button"
                   data-testid={`approval-create-remove-stage-${idx}`}
@@ -187,7 +259,18 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
                   삭제
                 </button>
               </div>
-            ))}
+              {picked && !picked.accountId && (
+                <p
+                  className="ml-12 mt-1 text-xs text-destructive"
+                  data-testid={`approval-create-approver-unlinked-${idx}`}
+                >
+                  이 직원은 {ACCOUNT_UNLINKED_LABEL} — 결재함에서 이 건을 볼 수 없어 상신이
+                  거절됩니다.
+                </p>
+              )}
+              </div>
+              );
+            })}
           </div>
           <button
             type="button"

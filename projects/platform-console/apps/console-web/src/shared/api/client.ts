@@ -28,11 +28,14 @@ async function parseError(res: Response): Promise<ApiError> {
   let code = 'UNKNOWN';
   let message = res.statusText || 'Request failed';
   let timestamp: string | undefined;
+  let details: unknown;
   try {
     const data = (await res.clone().json()) as Record<string, unknown>;
     code = (data.code as string) ?? code;
     message = (data.message as string) ?? message;
     timestamp = data.timestamp as string | undefined;
+    // TASK-PC-FE-318 — the route handlers pass the producer's `details` through.
+    details = data.details;
   } catch {
     /* keep defaults */
   }
@@ -47,7 +50,7 @@ async function parseError(res: Response): Promise<ApiError> {
     // `(console)` shell hears this signal and says it once for them.
     if (code === SAMPLE_READ_ONLY) publishSampleRefusal(code);
   }
-  return new ApiError(res.status, code, message, timestamp);
+  return new ApiError(res.status, code, message, timestamp, details);
 }
 
 async function doFetch(path: string, opts: ApiRequestOptions): Promise<Response> {

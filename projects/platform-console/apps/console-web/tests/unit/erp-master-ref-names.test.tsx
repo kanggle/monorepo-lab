@@ -107,7 +107,7 @@ import { PoDetailDialog } from '@/features/scm-ops/components/PoDetailDialog';
 // TASK-PC-FE-309 — ERP 결재(approval) 목록·상세의 대상/기안자/결재선/이력/대결 칸.
 import { ApprovalScreen } from '@/features/erp-ops/components/ApprovalScreen';
 import { ApprovalDetail } from '@/features/erp-ops/components/ApprovalDetail';
-import { APPROVAL_SELF_LABEL } from '@/features/erp-ops/components/approval-refs';
+import * as approvalRefs from '@/features/erp-ops/components/approval-refs';
 import {
   codeName,
   masterRefLabel,
@@ -923,13 +923,27 @@ const APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE = '0199de70-0000-7000-8000-0000000009ff'
 const APPROVAL_DEPT_LOOKUP: Record<string, { code: string; name: string } | undefined> = {
   [APPR_SUBJ_DEPT]: { code: 'DEPT-OPS', name: '운영본부' },
 };
+// TASK-PC-FE-318 — `accountId` 가 있는 직원 = IAM 계정과 연결됨. 결재자 칸은
+// 연결 없는 직원에 «연결된 계정 없음» 을 덧붙이므로(approval-refs `markUnlinked`),
+// 이름만 재는 위 309 단언이 그대로 서도록 승인자에게는 연결을 준다.
+// `APPR_UNLINKED_APPROVER` 는 연결 없는 승인자(티켓 Edge Case) 대조군이다.
+const APPR_UNLINKED_APPROVER = '0199de70-0000-7000-8000-000000000a05';
 const APPROVAL_EMP_LOOKUP: Record<
   string,
-  { employeeNumber: string; name: string } | undefined
+  { employeeNumber: string; name: string; accountId?: string } | undefined
 > = {
   [APPR_SUBJ_EMP]: { employeeNumber: 'EMP-0004', name: '최사원' },
-  [APPR_SUBMITTER]: { employeeNumber: 'EMP-0003', name: '박재무' },
-  [APPR_APPROVER]: { employeeNumber: 'EMP-0002', name: '이운영' },
+  [APPR_SUBMITTER]: {
+    employeeNumber: 'EMP-0003',
+    name: '박재무',
+    accountId: '0199de70-0000-7000-8000-00000000ac03',
+  },
+  [APPR_APPROVER]: {
+    employeeNumber: 'EMP-0002',
+    name: '이운영',
+    accountId: '0199de70-0000-7000-8000-00000000ac02',
+  },
+  [APPR_UNLINKED_APPROVER]: { employeeNumber: 'EMP-0005', name: '박미연결' },
 };
 
 function renderApprovalList() {
@@ -1007,7 +1021,7 @@ function approvalDetailResponse(over: Record<string, unknown>) {
 
 function renderApprovalDetail(
   over: Record<string, unknown> = {},
-  mySub?: string | null,
+  myEmployeeId?: string | null,
 ) {
   vi.stubGlobal(
     'fetch',
@@ -1019,7 +1033,7 @@ function renderApprovalDetail(
     ),
   );
   return render(
-    <ApprovalDetail id="appr-1" onClose={vi.fn()} mySub={mySub} />,
+    <ApprovalDetail id="appr-1" onClose={vi.fn()} myEmployeeId={myEmployeeId} />,
     { wrapper: wrapper() },
   );
 }
@@ -1087,61 +1101,91 @@ describe('ERP 결재 상세 — 기안자/결재자/이력/대결 칸 (TASK-PC-F
 });
 
 // ---------------------------------------------------------------------------
-// TASK-PC-FE-311 — 직원 조회가 비었는데 그 id 가 «현재 로그인한 운영자 자신의
-// sub» 와 같으면 `이름 확인 불가` 대신 보정 표기. 티켓이 적시한 4종 그대로.
+// TASK-PC-FE-318 AC-5 — `TASK-PC-FE-311` 의 «나 (현재 운영자)» 보정(토큰 `sub`
+// 비교)을 걷었다. 승인자는 이제 직원 id 이고 이름은 직원 조회가 낸다. «나» 는
+// 결재함 `meta.actorEmployeeId`(내 직원 id)로 이름 뒤에 «(나)» 를 덧붙인다.
 // ---------------------------------------------------------------------------
-describe('ERP 결재 — 결재자 칸이 «나 자신» 인 경우 (TASK-PC-FE-311)', () => {
-  it('① 직원 있음 → 직원 이름이 이긴다(mySub 가 같아도 직원 조회 성공이 우선)', async () => {
-    renderApprovalDetail({}, APPR_APPROVER);
+describe('ERP 결재 — 311 보정 걷기 뒤 결재자 칸 (TASK-PC-FE-318 AC-5)', () => {
+  it('① 보정 코드가 없어도 직원 id 승인자는 이름이 보인다', async () => {
+    renderApprovalDetail({}, null);
     await screen.findByTestId('approval-detail');
-    // legacy 결재자(approverId=APPR_APPROVER)는 직원 마스터에 있다 — mySub 와
-    // 같은 값이어도 "나" 로 덮이지 않고 실제 직원 이름이 그려진다.
     await waitFor(() =>
       expect(screen.getByTestId('approval-approverId').textContent).toBe(
         'EMP-0002 · 이운영',
       ),
     );
-    expect(screen.getByTestId('approval-approverId').textContent).not.toContain(
-      APPROVAL_SELF_LABEL,
+  });
+
+  it('② 승인자 == 내 직원 id → 이름 + «(나)» (이름을 덮지 않고 덧붙는다)', async () => {
+    renderApprovalDetail({}, APPR_APPROVER);
+    await screen.findByTestId('approval-detail');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-approverId').textContent).toBe(
+        `EMP-0002 · 이운영 ${approvalRefs.APPROVAL_SELF_SUFFIX}`,
+      ),
     );
   });
 
-  it('② 직원 없음 + id === 내 sub → 보정 표기', async () => {
+  it('🔴 ③ 옛 보정 경로는 사라졌다 — 직원 없음 + id === «내 id» 여도 `이름 확인 불가`, «나 (현재 운영자)» 는 없다', async () => {
     const { container } = renderApprovalDetail(
       { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
       APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE,
     );
     await screen.findByTestId('approval-detail');
     await waitFor(() =>
-      expect(screen.getByTestId('approval-approverId').textContent).toBe(
-        APPROVAL_SELF_LABEL,
+      expect(screen.getByTestId('approval-approverId').textContent).toContain(
+        MASTER_REF_UNRESOLVED,
       ),
     );
-    // 원본 id 는 `title` 에만 남는다 — 보이는 텍스트에는 없다(보정도 id 로
-    // 되돌아가지 않는다는 `masterRefLabel` 계약을 지킨다).
+    expect(container.textContent ?? '').not.toContain('나 (현재 운영자)');
+    expect(
+      (approvalRefs as Record<string, unknown>).APPROVAL_SELF_LABEL,
+    ).toBeUndefined();
+    // 원본 id 는 여전히 보이는 텍스트에 없다.
     expect(container.textContent ?? '').not.toContain(
       APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE,
     );
   });
 
-  it('③ 직원 없음 + 다른 id(mySub 와도 다름) → `이름 확인 불가`(회귀)', async () => {
-    renderApprovalDetail(
-      { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
-      APPR_APPROVER, // 내 sub 는 다른 값 — 직원 마스터에도 없고 mySub 도 아니다.
-    );
+  it('④ 내 직원 id 를 모름(연결 없음 · 샘플) → «(나)» 없음', async () => {
+    renderApprovalDetail({}, null);
     await screen.findByTestId('approval-detail');
     await waitFor(() =>
       expect(screen.getByTestId('approval-approverId').textContent).toBe(
-        MASTER_REF_UNRESOLVED,
+        'EMP-0002 · 이운영',
       ),
     );
+    expect(document.querySelector('[data-self="true"]')).toBeNull();
   });
 
-  it('④ 내 sub 를 모름(샘플 방문자 등, mySub 없음) → `이름 확인 불가`', async () => {
-    renderApprovalDetail(
-      { approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE },
-      null,
+  it('⑤ Edge — 현재 단계 승인자에게 연결된 계정이 없으면 «연결된 계정 없음» 을 덧붙인다(기안자·이력 칸에는 안 붙는다)', async () => {
+    renderApprovalDetail({
+      status: 'IN_REVIEW',
+      approverId: APPR_UNLINKED_APPROVER,
+      stages: [
+        { stageIndex: 0, approverId: APPR_APPROVER, status: 'APPROVED' },
+        { stageIndex: 1, approverId: APPR_UNLINKED_APPROVER, status: 'PENDING' },
+      ],
+      currentStage: 1,
+      totalStages: 2,
+    });
+    const current = await screen.findByTestId('approval-stage-current');
+    await waitFor(() =>
+      expect(current.textContent).toContain(
+        approvalRefs.APPROVAL_APPROVER_UNLINKED_LABEL,
+      ),
     );
+    expect(current.textContent).toContain('박미연결');
+    // 연결된 승인자(0단계)에는 붙지 않는다.
+    expect(screen.getByTestId('approval-stage-0').textContent).not.toContain(
+      approvalRefs.APPROVAL_APPROVER_UNLINKED_LABEL,
+    );
+    // 연결 없는 대상 직원(APPR_SUBJ_EMP)이 있어도 결재자 칸이 아니면 표시하지 않는다.
+    expect(document.querySelectorAll('[data-unlinked="true"]').length).toBe(1);
+  });
+
+  it('⑥ 조회 실패(`이름 확인 불가`) 승인자는 연결 여부를 모르므로 아무것도 덧붙이지 않는다', async () => {
+    renderApprovalDetail({ approverId: APPR_OPERATOR_SUB_NOT_AN_EMPLOYEE });
     await screen.findByTestId('approval-detail');
     await waitFor(() =>
       expect(screen.getByTestId('approval-approverId').textContent).toBe(

@@ -2014,6 +2014,67 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
     console never pre-judges write authority; the producer is the
     authority.
 
+- **Employee ↔ IAM account link binding (TASK-PC-FE-318 — `TASK-MONO-774`
+  S4; producer `masterdata-api.md` § Employee ↔ IAM account link, v1.1
+  additive)**: the five link operations sit **outside** the master write matrix
+  above — they are not create/update/retire of a master, and two of them are
+  **not `erp.write` writes at all**. The producer is authoritative (request /
+  response / error tables canonical there); this binding states the console
+  obligation only.
+
+  | Operation | Who may do it (producer-enforced) | Same-origin proxy (console) | Upstream (`masterdata-service`) | `Idempotency-Key` | `reason` (body) |
+  |---|---|---|---|---|---|
+  | propose | `erp.write` + the employee's department data scope (same rule as any employee write) | `POST /api/erp/masterdata/employees/{id}/account-link-proposals` | `POST .../employees/{id}/account-link-proposals` (`{ accountId, reason? }`) | **required** | `≤256`, optional |
+  | accept | 🔴 **the account owner** (caller `sub == proposal.accountId`, `erp.read` or more, **no** data scope, **not** `erp.write`) — and never the proposer (two-person rule) | `POST /api/erp/masterdata/account-link-proposals/{proposalId}/accept` | `POST .../account-link-proposals/{proposalId}/accept` (`{}`) | **required** | — (no producer slot) |
+  | decline | 🔴 **the account owner** (same gate as accept) | `POST /api/erp/masterdata/account-link-proposals/{proposalId}/decline` | `POST .../{proposalId}/decline` | **required** | `≤256`, optional |
+  | revoke | `erp.write` + the employee's department data scope (need not be the proposer) | `POST /api/erp/masterdata/account-link-proposals/{proposalId}/revoke` | `POST .../{proposalId}/revoke` | **required** | **required** (≤256) |
+  | unlink | `erp.write` + department data scope, **or** the linked account owner | `POST /api/erp/masterdata/employees/{id}/account-link/unlink` | `POST .../employees/{id}/account-link/unlink` | **required** | **required** (≤256) |
+
+  Reads consumed alongside: `GET .../employees/{id}/account-link-proposals`
+  (one employee's proposal history, department data scope) and
+  `GET .../account-link-proposals/mine` (proposals addressed to the caller,
+  no data scope) — same-origin GET proxies at the same paths. Employee list /
+  detail responses carry `accountId` (ABSENT = not linked); the console renders
+  it as «연결됨» / «연결된 계정 없음» and **never prints the raw account UUID as
+  a reference label** (`TASK-PC-FE-309`; the id rides in `title` only, and as an
+  explicit identifier field in the link-management dialog).
+
+  - **Credential — UNCHANGED**: the same domain-facing IAM OIDC token as every
+    erp call; **never** `getOperatorToken()`; no `X-Tenant-Id`. Accept /
+    decline are authorised by the token's own `sub`, so the console needs no
+    second credential for the account-owner writes.
+  - **Account selection**: the console takes the account id as typed input
+    (form-checked only: non-blank, ≤64), because the producer checks form only
+    and no read reachable by an `erp.write` holder yields account UUIDs (the
+    IAM operators list carries `operatorId`, not the account `sub`; the IAM
+    accounts lookup needs a different IAM permission and treats 403 as
+    re-login). The dialog states that existence is not checked and the account
+    owner must accept.
+  - **Errors rendered inline, each with its own copy** (never a crash):
+    `403 EMPLOYEE_LINK_SELF_ACCEPT` (two-person rule — on propose: «your own
+    account»; on accept: «the proposer cannot accept»), `403
+    EMPLOYEE_LINK_NOT_ADDRESSEE`, `409 EMPLOYEE_LINK_CONFLICT` worded by
+    `details.cause` (`employee_already_linked` / `account_already_linked` /
+    `proposal_pending` / `proposal_not_pending` / `not_linked`), `422
+    EMPLOYEE_LINK_INVALID` (`employee_not_active`), `404
+    EMPLOYEE_LINK_PROPOSAL_NOT_FOUND`. `details` is passed through the
+    same-origin proxy unchanged so the cause-specific copy is reachable.
+  - **Sample visitors**: the buttons stay visible; every non-GET is refused
+    server-side with `403 SAMPLE_READ_ONLY` (no client-side hiding). The two
+    GET reads answer from the erp fixture.
+  - **Approval v2.4 consumer obligations (same ticket)**: the inbox's
+    `meta.actorEmployeeId` — **ABSENT** means «the caller's account is linked
+    to no employee», which the console says in different words from «present,
+    zero rows» (nothing to process). `403 APPROVAL_ACTOR_NOT_LINKED`, `422
+    APPROVAL_APPROVER_UNLINKED` (worded with `details.stageIndex` — the stage
+    whose approver has no linked account), `422 APPROVAL_ROUTE_INVALID` worded
+    by `details.cause` (`approver_unresolved` / `self_approval` / …) each get
+    their own copy; a `503` («could not ask who the caller is») is worded as a
+    temporary outage and **never** as a defect of the user's data or link. The
+    approver route input is an employee selector that marks employees without
+    `accountId` «연결된 계정 없음» (selection is not blocked — the producer's
+    submit-time refusal is the authority).
+
 - **erp internal-system producer obligations surfacing (erp domain
   constraint, normative — the erp analog of the scm § 2.4.6 S5 /
   finance § 2.4.7 F5/F7 obligations — contract obligations, NOT UX

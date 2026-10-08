@@ -32,14 +32,12 @@ import { SUBJECT_LABEL } from './approval-common';
  * (`TASK-PC-FE-276` Method A). id 단건 GET 이라 **페이지네이션 함정도 없다** —
  * "목록 밖의 참조" 라는 개념 자체가 없다(276/277 이 목록-기반 조회에서 겪은 함정).
  *
- * 🔴 라이브 데모 시드는 결재함(inbox)을 채우려고 승인자 자리에 **운영자 로그인
- * 계정의 `sub`** 를 넣기도 한다(`infra/demo/seed/seed-erp.sh` §6 실측 주석:
- * "approverId 는 참조 검증을 받지 않는다 ... 그래서 승인자에 계정 UUID(콘솔
- * 로그인의 sub)를 넣을 수 있고, 그것이 결재함을 채우는 유일한 방법이다") — 계약이
- * 정한 "employee id" 를 어기는 **데모 전용 편법**이다. 그 행은 직원 마스터에 없으므로
- * 여기서도 정직하게 `이름 확인 불가` 가 된다 — **id 로 되돌아가지 않는다**
- * (`masterRefLabel` 의 계약, `TASK-PC-FE-276` Edge Case). 이것은 이 컴포넌트의
- * 결함이 아니라 데모 시드의 알려진 한계를 honest 하게 보여주는 것이다.
+ * 🔵 (TASK-PC-FE-318) 한때 데모 시드는 결재함을 채우려고 승인자 자리에 **계정
+ * `sub`** 를 넣었다 — approval v2.4(`TASK-MONO-776`)가 사람 칸을 직원 id 한
+ * 공간으로 묶고 시드를 «직원 ↔ 계정 연결» 로 바꾸면서 그 편법은 사라졌다. 그 이전에
+ * 만들어진 행(계약 § v2.4 «이전 데이터»)은 직원 마스터에 없는 id 라 여기서
+ * 정직하게 `이름 확인 불가` 가 된다 — **id 로 되돌아가지 않는다**
+ * (`masterRefLabel` 의 계약, `TASK-PC-FE-276` Edge Case).
  */
 export function ApprovalSubjectRef({
   subjectType,
@@ -66,9 +64,10 @@ export function ApprovalSubjectRef({
   );
 }
 
-/** 직원 조회가 비었는데 그 id 가 **현재 로그인한 운영자 자신의 sub** 와 같을 때의
- *  표시(`TASK-PC-FE-311`). 기존 화면 어휘(`masterRefLabel`)에 맞춘 문구. */
-export const APPROVAL_SELF_LABEL = '나 (현재 운영자)';
+/** 이 칸의 직원이 바로 나(결재함 `meta.actorEmployeeId`)일 때 이름 뒤에 붙는 표시. */
+export const APPROVAL_SELF_SUFFIX = '(나)';
+/** 결재자 칸의 직원에게 연결된 IAM 계정이 없을 때 이름 뒤에 붙는 표시. */
+export const APPROVAL_APPROVER_UNLINKED_LABEL = '연결된 계정 없음';
 
 /**
  * 직원(employee) 참조 한 칸 — 기안자(`submitterId`) / 결재선·결재자(`approverId`,
@@ -76,50 +75,54 @@ export const APPROVAL_SELF_LABEL = '나 (현재 운영자)';
  * 이 전부 이 모양이다. `field` 는 호출부를 가르는 `data-master-ref` 접미사일 뿐,
  * 조회 방법은 넷 다 같다(`useEmployee`) — 새 포맷을 만들지 않는다.
  *
- * ## `TASK-PC-FE-311` — 직원 조회가 비었을 때, «그게 바로 나 아닌가」를 한 번 더 본다
+ * ## `TASK-PC-FE-318` — `TASK-PC-FE-311` 보정을 걷었다
  *
- * 결재함(inbox)의 결재자 자리에 라이브 데모 시드가 넣는 값은 **직원 마스터 id 가
- * 아니라 운영자 로그인 계정의 sub**다(`TASK-PC-FE-309` 배경 — 자기결재 금지 게이트를
- * 피하려고 시드가 쓰는 편법, `infra/demo/seed/seed-erp.sh` §6). 직원 마스터에 그
- * id 가 없으므로 `masterRefLabel` 은 정직하게 `이름 확인 불가` 를 그린다 — 그 자체는
- * 옳다. 하지만 **그 결재함을 보는 사람이 바로 그 결재자**다(결재함은 정의상 "내가
- * 결재자인 건"만 모은다) — 콘솔 서버는 운영자 세션 토큰으로 "내 sub" 를 이미 알고
- * 있다. `mySub` 는 그 값을 (서버에서 디코드된 문자열만, 토큰 자체가 아니라) 받은
- * props 다 — `getErpApprovalState`(`erp-state.ts`) → `ErpApprovalScreen` →
- * `ApprovalScreen` → `ApprovalDetail` → 여기, 한 방향으로만 흐른다.
+ * 311 은 데모 시드가 승인자 칸에 **계정 `sub`** 를 넣던 시절, «직원 조회 실패 + id
+ * === 내 sub» 일 때 `나 (현재 운영자)` 로 그렸다. approval v2.4(`TASK-MONO-776`)
+ * 이후 사람 칸은 전부 **직원 id** 다 — 직원 조회(`useEmployee`)가 이름을 내고,
+ * 직원 id(UUIDv7)는 어떤 계정 `sub` 와도 같지 않아 그 보정은 영원히 발화하지 않는
+ * 분기가 됐다(AC-0 ③). 토큰 디코드로 얻던 `mySub` 대신, 결재함 응답이 알려 주는
+ * **내 직원 id**(`meta.actorEmployeeId`)를 `myEmployeeId` 로 받아 «(나)» 를 붙인다.
+ * 이름 해소는 그대로 직원 조회가 권위다 — «(나)» 는 이름을 **덮지 않고 덧붙는다**.
  *
- * **순서가 핵심이다** — 직원 조회가 **성공하면 그쪽이 항상 이긴다**(보정은 조회가
- * 실패했을 때의 폴백일 뿐, 실제 직원으로 등록된 결재자를 "나" 로 덮어쓰지 않는다).
- * 로딩 중에는(`empQ.isLoading`) 아직 "못 찾았다" 가 확정되지 않았으므로 보정도
- * 먼저 그리지 않는다(결과 확정 뒤 판정). `mySub` 가 없거나(샘플 방문자 등) id 가
- * 그것과 다르면 기존 그대로 `이름 확인 불가` — 바뀌는 자리는 정확히 "직원 조회
- * 없음 + id === mySub" 뿐이다.
+ * `markUnlinked` (결재자 칸만): 조회된 직원에게 `accountId` 가 없으면 «연결된 계정
+ * 없음» 을 덧붙인다 — 그 결재자는 결재함에서 이 건을 볼 수 없다(상신은 거절되고,
+ * 진행 중 연결이 해제됐다면 아무 결재함에도 안 보인다 — 티켓 Edge Case). 조회가
+ * 실패했으면(`이름 확인 불가`) 연결 여부를 알 수 없으므로 아무것도 덧붙이지 않는다.
  */
 export function ApprovalEmployeeRef({
   employeeId,
   field,
-  mySub,
+  myEmployeeId,
+  markUnlinked = false,
 }: {
   employeeId: string;
   field: string;
-  /** 현재 로그인한 운영자 자신의 sub(없으면 보정을 적용하지 않는다). */
-  mySub?: string | null;
+  /** 내 직원 id(결재함 `meta.actorEmployeeId`). 없으면 «(나)» 를 붙이지 않는다. */
+  myEmployeeId?: string | null;
+  /** 결재자 칸: 연결된 계정이 없는 직원을 표시한다. */
+  markUnlinked?: boolean;
 }) {
   const empQ = useEmployee(employeeId);
   const resolved: MasterRefTarget | undefined = empQ.data
     ? { code: empQ.data.employeeNumber, name: empQ.data.name }
     : undefined;
-  const isMe =
-    !resolved &&
-    !empQ.isLoading &&
-    Boolean(mySub) &&
-    employeeId === mySub;
-  const label = isMe
-    ? APPROVAL_SELF_LABEL
-    : masterRefLabel(employeeId, resolved);
+  const isMe = Boolean(myEmployeeId) && employeeId === myEmployeeId;
+  const unlinked = markUnlinked && Boolean(empQ.data) && !empQ.data?.accountId;
   return (
-    <span data-master-ref={`approval.${field}`} title={employeeId}>
-      {label}
+    <span
+      data-master-ref={`approval.${field}`}
+      title={employeeId}
+      data-self={isMe ? 'true' : undefined}
+      data-unlinked={unlinked ? 'true' : undefined}
+    >
+      {masterRefLabel(employeeId, resolved)}
+      {isMe ? ` ${APPROVAL_SELF_SUFFIX}` : null}
+      {unlinked ? (
+        <span className="ml-1 text-xs text-destructive">
+          · {APPROVAL_APPROVER_UNLINKED_LABEL}
+        </span>
+      ) : null}
     </span>
   );
 }

@@ -15,19 +15,15 @@ export interface ErpApprovalScreenProps {
   /** Deep-link target from `/erp/approval?request=<id>` (notification bell
    *  approval fallback, PC-FE-230) — the request to open on mount. */
   initialSelectedId?: string | null;
-  /** The signed-in operator's own `sub`, server-resolved
-   *  (`getErpApprovalState`, TASK-PC-FE-311) — threaded down to
-   *  `ApprovalEmployeeRef` so a reference cell that is unresolvable in
-   *  the employee master but equals the viewer's own identity renders a
-   *  human label instead of `이름 확인 불가`. */
-  mySub?: string | null;
+  // TASK-PC-FE-318 — the TASK-PC-FE-311 `mySub` prop is gone: «(나)» now
+  // comes from the inbox's `meta.actorEmployeeId` (an employee id, the same
+  // id space as every approval person field — approval v2.4).
 }
 
 export function ErpApprovalScreen({
   initialApprovalRequests,
   initialApprovalInbox,
   initialSelectedId,
-  mySub,
 }: ErpApprovalScreenProps) {
   return (
     <section aria-labelledby="erp-heading">
@@ -43,7 +39,6 @@ export function ErpApprovalScreen({
         initialRequests={initialApprovalRequests ?? undefined}
         initialInbox={initialApprovalInbox ?? undefined}
         initialSelectedId={initialSelectedId ?? null}
-        mySub={mySub ?? null}
       />
     </section>
   );
