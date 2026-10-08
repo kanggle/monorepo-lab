@@ -122,9 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-323-domain-guides-plain-rewrite.md` — **도메인 가이드 6개를 쉬운 말로, 출처 · 근거 표시 제거** (REVIEW, 2026-10-09 UTC · 소유자 결정 · 322 의 후속). 공용 틀 `DomainGuideTabs` 가 «근거» 열을 6개 가이드에 보이던 것을 끔 · 새 시험 `domain-guides-plain.test.tsx`(6×8 탭 번호/파일 이름 0, bite 확인) · 문장은 Sonnet 5 에이전트 6개. 구현자 대조에서 3건 정정(Finance 캡처 누락 · Finance 타일 이름 «미해소» · SCM «scm 만» 이라는 원문부터 낡은 사실). vitest 3987/3987. AC-6 = 소유자 확인 ⚪. 분석=Opus 5.5 / 구현=Opus 5.5 + Sonnet 5.
 
-- `TASK-PC-FE-322-global-guide-plain-rewrite.md` — **전역 콘솔 가이드(/guide) 일곱 탭을 쉬운 말 · 짧은 문장으로, 출처 표시 제거** (REVIEW, 2026-10-09 UTC · 소유자 결정). `sources` 는 데이터에 남아 경로 실재 가드가 계속 문다. 새 시험: 출처 표시 0 · 탭 문장에 티켓/ADR 번호 · 파일 이름 · 줄 번호 0(bite 확인). 공용 `permission-map.ts` 의 화면 문장 13곳도 함께 정리(IAM 가이드도 같이 바뀜). vitest 3975/3975. AC-6 = 소유자 확인 ⚪. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 
 
@@ -133,6 +131,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
+- ✅ `TASK-PC-FE-323-domain-guides-plain-rewrite.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4250**, 스쿼시 **`e326e10bb`** (머지 시점 실패 0). 도메인 가이드 6개 쉬운 말 · «근거» 열 제거 · 6×8 탭 누출 시험(bite 확인) · 대조 정정 3건(Finance 캡처 누락 · 타일 이름 «미해소» · SCM 구독 테넌트도 열림). AC-6 = 소유자 확인.
+- ✅ `TASK-PC-FE-322-global-guide-plain-rewrite.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4249**, 스쿼시 **`9941fb5be`** (머지 시점 실패 0). 전역 콘솔 가이드(/guide) 일곱 탭을 쉬운 말 · 짧은 문장으로, 화면의 출처 표시 제거(`sources` 는 데이터에 남아 경로 실재 가드 유지) · 번호/파일 이름 누출 시험(bite 확인) · 공용 `permission-map.ts` 화면 문장 13곳 정리. AC-6 = 소유자 확인.
 - ✅ `TASK-PC-FE-318-erp-employee-account-link-screens.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4235**, 스쿼시 **`1a7220c3c`** (머지 시점 실패 0). erp 직원 ↔ 계정 연결 화면 다섯 · 콘솔 계약 § 2.4.8 · PC-FE-311 보정 걷기(MONO-774 S4). 24차 창 소유자 브라우저 확인.
 - ✅ `TASK-PC-FE-319-group-member-picker-home-tenant.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0). 그룹 «멤버 추가» 선택기에서 HOME 이 다른(배정만 된) 운영자를 «○○ 소속 · 배정만 됨» 으로 비활성. AC-6 = 24차 데모 창 소유자 확인 — 대상 운영자는 SSM 1회 삽입(영구 시드 iam `TASK-BE-628` #4246).
 - ✅ `TASK-PC-FE-317-group-member-operator-picker.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4218**, 스쿼시 **`8706986b8`** (머지 시점 실패 0). 운영자 그룹 «멤버 추가» 선택기(그룹 테넌트 운영자 검색 · 기존 멤버 비활성 · 100 초과 «더 보기» · 실패 시 UUID 폴백). AC-9 = 소유자 확인(2026-10-09 UTC). AC-0 의 배정-only 빈틈은 `TASK-PC-FE-319`/iam `TASK-BE-626` 이 닫음.

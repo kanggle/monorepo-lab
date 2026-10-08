@@ -4,7 +4,7 @@ TASK-PC-FE-322
 
 # Status
 
-review
+done
 
 # Title
 
@@ -88,3 +88,7 @@ platform-console
 # Failure Scenarios
 
 - 문장을 줄이다 사실이 틀어짐 → 원문 사실(숫자 20분 · 180분 · 1800분 · 계정 이메일)을 그대로 옮기고, 새 사실을 지어내지 않는다.
+
+## CORRECTION
+
+2026-10-08 UTC — **AC-6 닫힘**: 소유자 확인(대화 «확인», 배포된 콘솔에서). 4차원 검증: (a) #4249 MERGED · (b) `9941fb5be` 가 `origin/main` 에 있음 · (c) 머지 시점 실패 0 · 대기 0 · (d) AC-1~AC-5 ✅ + AC-6 ✅. review → done.

@@ -4,7 +4,7 @@ TASK-PC-FE-323
 
 # Status
 
-review
+done
 
 # Title
 
@@ -99,3 +99,7 @@ platform-console
 - AC-4 ✅ 구현자 대조 — 위 3건 정정, 나머지 숫자 · 상태 · 역할 · 메뉴 이름 불변.
 - AC-5 ✅ `tsc --noEmit` rc=0 · `next lint`(바꾼 디렉터리 + 새 시험) rc=0 · vitest 전체 **351/351 파일 · 3987/3987** rc=0 · 각 가이드 axe 시험 초록.
 - AC-6 ⚪ 소유자 확인 대기(배포 후).
+
+## CORRECTION
+
+2026-10-08 UTC — **AC-6 닫힘**: 소유자 확인(대화 «확인», 배포된 콘솔에서). 4차원 검증: (a) #4250 MERGED · (b) `e326e10bb` 가 `origin/main` 에 있음 · (c) 머지 시점 실패 0 · 대기 0 · (d) AC-1~AC-5 ✅ + AC-6 ✅. review → done.
