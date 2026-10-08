@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-324-console-login-misreports-consumer-sso-refusal.md` — **같은 브라우저의 스토어(소비자) SSO 세션 때문에 IdP 가 콘솔 토큰 발급을 거절하는데 콘솔은 «인증 서버에 연결할 수 없습니다» 로 보인다** (READY, 2026-10-08 UTC · 출처 24차 창). 콜백이 풀 tenant 거절을 구분해 «다른 계정 — 로그아웃 후 다시» + 로그아웃 경로.
+(empty)
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -122,10 +122,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-
-
-
-
+- `TASK-PC-FE-324-console-login-misreports-consumer-sso-refusal.md` — **같은 브라우저의 스토어(소비자) SSO 세션 때문에 IdP 가 콘솔 토큰 발급을 거절하는데 콘솔은 «인증 서버에 연결할 수 없습니다» 로 보인다** (REVIEW, 2026-10-09 UTC · 출처 24차 창). AC-0: 콜백이 받는 실제 본문을 측정(IAM `TenantClaimTokenCustomizer.refuseConsumerPoolTenant` + SAS 기본 오류 직렬화 → `{"error":"invalid_grant","error_description":"tenant_id 'consumer-pool' is a reserved storage value and is never issued"}`) · 판별은 그 소스-상수 리터럴 `'consumer-pool'` 문자열 일치(IdP 코드 추가는 범위 밖). AC-1: 새 코드 `sso_wrong_account` + 문구 + `widgets/sso-wrong-account-logout`(기존 `performLogout` 재사용) · 단위/콜백 시험 추가(풀 거절·대조군 3종). 🔴 로그아웃 버튼의 한계를 디컴파일로 확인: 이 실패는 콘솔이 토큰을 받기 전에 나서 `id_token` 쿠키가 없고, SAS `OidcLogoutAuthenticationProvider`(1.4.1) 는 `id_token_hint` 없으면 세션 레지스트리 우회 없이 즉시 `invalid_token` — 그래서 문구가 스토어 탭 로그아웃도 명시. AC-2 bite 확인(분기 제거 → 정확히 1개 빨강 → 복원 22/22). tsc/lint rc=0, vitest 타게팃 44/44 · 전체 351 파일/3997 시험 rc=0. AC-3 = ⚪ 라이브 데모 미측정(다음 창). 분석=Opus 5.5 / 구현=Sonnet(실제: Claude Sonnet 5).
 - `TASK-PC-FE-311-approval-approver-is-me-renders-unresolved.md` — **결재 화면의 결재자 칸이 바로 나 자신인데도 `이름 확인 불가`** (REVIEW, 2026-10-07 UTC · 출처 `TASK-PC-FE-309` · 소유자 결정 «화면 보정»). AC-0: 콘솔 base 접근 토큰(`getAccessToken()`)의 `sub` = 시드 `APPROVER_SUB`(assume-tenant 토큰의 `sub`) — `ADR-MONO-060 A` + `AssumeTenantExchangeIntegrationTest`(base/assumed `sub` 동일 단언)로 확정. `getErpApprovalState`(서버)가 그 `sub` 문자열만 디코드해 `ErpApprovalScreen → ApprovalScreen → ApprovalDetail → ApprovalEmployeeRef` 로 props 전달(토큰 자체는 안 내려간다). `ApprovalEmployeeRef`: 직원 조회 성공이 항상 우선, 로딩 중엔 판정 보류, 그 외 직원 없음+id===내 sub 일 때만 `나 (현재 운영자)`. 단위 테스트 4종(①~④) 추가(`erp-master-ref-names.test.tsx`), 기존 309 테스트 무회귀, tsc/lint/vitest(338/338·3818/3818) rc=0. AC-4(라이브 확인)는 ⚪ — 다음 데모 창. 분석=Opus 5.5 / 구현=Sonnet(실제: Claude Sonnet 5).
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).

@@ -319,6 +319,95 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
   });
 
+  // TASK-PC-FE-324 AC-0/AC-1 — the body shape measured against
+  // `TenantClaimTokenCustomizer.refuseConsumerPoolTenant` (iam-platform
+  // auth-service) + the default SAS token-endpoint error writer: HTTP 400
+  // `{"error":"invalid_grant","error_description":"tenant_id 'consumer-pool'
+  // is a reserved storage value and is never issued"}`.
+  it('🔴 consumer-pool 거절(invalid_grant + pool 문구)은 `sso_wrong_account` 로 간다', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: 'invalid_grant',
+            error_description:
+              "tenant_id 'consumer-pool' is a reserved storage value and is never issued",
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=sso_wrong_account',
+    );
+    expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
+  });
+
+  // 대조군 — 같은 `invalid_grant` 지만 풀 거절이 아닌 경우(만료/재사용 코드)는
+  // 절대 재분류되지 않는다 (Failure Scenario 1).
+  it('🔵 대조군 — 다른 invalid_grant(만료된 code)는 `token_exchange_failed` 로 남는다', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: 'invalid_grant',
+            error_description: 'authorization code expired',
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=token_exchange_failed',
+    );
+  });
+
+  // 대조군 — 네트워크/5xx 실패(응답 본문이 애초에 OAuth2 오류 모양이 아님)도
+  // 재분류되지 않는다.
+  it('🔵 대조군 — 네트워크 실패(fetch 자체가 throw)도 `token_exchange_failed` 로 남는다', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/', opts: {} });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNRESET')));
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=token_exchange_failed',
+    );
+    expect(cookieJar.has(ACCESS_COOKIE)).toBe(false);
+  });
+
+  it('🔵 대조군 — 5xx(본문 없음)도 `token_exchange_failed` 로 남는다', async () => {
+    cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
+    cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/', opts: {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', { status: 503 })),
+    );
+    const req = new Request(
+      'http://console.local/api/auth/callback?code=x&state=s',
+    );
+    const res = await callbackGET(req);
+    expect(res.headers.get('location')).toContain(
+      '/login?error=token_exchange_failed',
+    );
+  });
+
   it('exchange 401 (not_provisioned) → redirect to /onboarding, NO operator cookie, IAM access+refresh KEPT as the onboarding subject_token (TASK-PC-FE-182 / ADR-MONO-044)', async () => {
     cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
     cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });

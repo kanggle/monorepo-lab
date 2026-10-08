@@ -60,6 +60,64 @@ function loginRedirect(appUrl: string, reason: string) {
   return NextResponse.redirect(url.toString());
 }
 
+/**
+ * TASK-PC-FE-324 AC-0 — measured 2026-10-09 (UTC). The refusal this ticket is
+ * about is minted at the IAM token endpoint, not `/oauth2/authorize`: the
+ * browser's existing `auth.hubwang.com` session (a consumer-pool account,
+ * e.g. from a same-browser store login) lets `/oauth2/authorize` complete
+ * silently (SSO reuse, a code IS issued), then
+ * `TenantClaimTokenCustomizer.refuseConsumerPoolTenant` (iam-platform
+ * auth-service `infrastructure/oauth2/TenantClaimTokenCustomizer.java:261-275`)
+ * refuses to mint a token for it:
+ *
+ * ```java
+ * throw new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.INVALID_GRANT,
+ *         "tenant_id '" + TenantContext.CONSUMER_POOL_TENANT_ID
+ *                 + "' is a reserved storage value and is never issued", null));
+ * ```
+ *
+ * Spring Security OAuth2 Authorization Server's default token-endpoint error
+ * writer serialises that as HTTP 400
+ * `{"error":"invalid_grant","error_description":"tenant_id 'consumer-pool' is
+ * a reserved storage value and is never issued"}` — confirmed against the
+ * SAME customizer's refusal shape asserted by iam-platform's own
+ * `AssumeTenantExchangeIntegrationTest.consumerPool_refusedEvenWhenAssigned`
+ * (`.contains("invalid_grant")`) and the sibling `error_description`-based
+ * discriminator already in production for `TOKEN_TENANT_MISMATCH`
+ * (`SasRefreshTokenAuthenticationProvider`, multi-tenancy.md § 202).
+ *
+ * Discriminator decision (AC-0 "문자열 일치 vs IdP 전용 코드"): **string match**,
+ * not a new IdP-side error code — adding a dedicated code would be an
+ * iam-platform change, out of this ticket's (platform-console-owned) scope,
+ * and the existing `error_description` already carries a value anchored to a
+ * source CONSTANT (`TenantContext.CONSUMER_POOL_TENANT_ID = "consumer-pool"`),
+ * not free English prose. The match is therefore narrowed to the quoted
+ * constant value, `'consumer-pool'`, rather than the full sentence — a future
+ * wording edit around it does not silently break this, only a rename of the
+ * reserved tenant id itself would (Edge Case, accepted — that rename is a
+ * breaking, deliberate iam-platform change that would need its own
+ * migration anyway).
+ *
+ * Control (must NOT match): every other `invalid_grant` on this endpoint —
+ * expired/reused code, `TOKEN_TENANT_MISMATCH`, assume-tenant denials — has a
+ * DIFFERENT `error_description` that never contains this literal, so those
+ * keep the generic `token_exchange_failed` message (Scope § In Scope).
+ */
+const CONSUMER_POOL_REFUSAL_MARKER = "'consumer-pool'";
+
+function isConsumerPoolSsoRefusal(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  const { error, error_description: description } = body as {
+    error?: unknown;
+    error_description?: unknown;
+  };
+  return (
+    error === 'invalid_grant' &&
+    typeof description === 'string' &&
+    description.includes(CONSUMER_POOL_REFUSAL_MARKER)
+  );
+}
+
 export async function GET(req: Request) {
   const requestId = newRequestId();
   const env = getServerEnv();
@@ -128,6 +186,16 @@ export async function GET(req: Request) {
         status: upstream.status,
         error: (body as { error?: string }).error,
       });
+      // TASK-PC-FE-324 — distinguish "logged in as the WRONG (consumer-pool)
+      // account" from every other token-exchange failure (expired/reused
+      // code, network/5xx, …). See `isConsumerPoolSsoRefusal` above for the
+      // measured discriminator. Only this one case gets the account-conflict
+      // message + logout affordance — everything else keeps the generic
+      // `token_exchange_failed` copy (Scope § In/Out of Scope).
+      if (isConsumerPoolSsoRefusal(body)) {
+        logger.warn('oidc_token_exchange_consumer_pool_refused', { requestId });
+        return loginRedirect(publicOrigin(env), 'sso_wrong_account');
+      }
       return loginRedirect(publicOrigin(env), 'token_exchange_failed');
     }
 

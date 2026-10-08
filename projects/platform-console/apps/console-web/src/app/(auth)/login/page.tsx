@@ -12,6 +12,7 @@ import {
 import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoLoginCredentials } from '@/widgets/demo-credentials/DemoLoginCredentials';
 import { ForcedReLoginCacheReset } from '@/widgets/forced-relogin-cache-reset/ForcedReLoginCacheReset';
+import { SsoWrongAccountLogout } from '@/widgets/sso-wrong-account-logout/SsoWrongAccountLogout';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,20 @@ const ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: '보안 검증에 실패했습니다. 다시 로그인해주세요.',
   token_exchange_failed:
     '인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.',
+  // TASK-PC-FE-324 — 같은 브라우저의 스토어(소비자) 로그인 세션이 SSO 로 재사용돼
+  // 콘솔 토큰 교환이 거절된 경우(`callback/route.ts` 의
+  // `isConsumerPoolSsoRefusal`). 🔴 아래 «스토어에서도 로그아웃» 문구는 장식이
+  // 아니다 — 이 실패는 콘솔이 토큰을 **한 번도 받은 적이 없는** 지점에서 나므로
+  // `/api/auth/logout` 에 `id_token` 쿠키가 없고, Spring Security OAuth2
+  // Authorization Server 1.4.1 의 `OidcLogoutAuthenticationProvider.authenticate`
+  // 는 `id_token_hint` 가 없으면 세션 레지스트리로 대체하지 않고 바로
+  // `invalid_token` 으로 거절한다(디컴파일로 확인, 2026-10-09 — 바이트코드:
+  // `findByToken(idTokenHint, ID_TOKEN_TOKEN_TYPE)` 결과가 null 이면 즉시
+  // `throwError("invalid_token", "id_token_hint")`, 세션 기반 우회 경로 없음).
+  // 그래서 아래 로그아웃 버튼은 콘솔 쪽 쿠키만 정리할 뿐 `auth.hubwang.com` 의
+  // 소비자 세션을 끝내지 못한다 — 그 세션의 id_token 은 스토어 탭에만 있다.
+  sso_wrong_account:
+    '다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다. 아래에서 로그아웃한 뒤, 스토어(쇼핑몰) 탭에서도 로그아웃하고 운영자 계정으로 다시 로그인하세요.',
   // Gap C (F5): operator-provisioning and transient server-side error codes
   // emitted by callback/route.ts — previously unmapped → silent failure.
   // NOTE (TASK-PC-FE-182 / ADR-MONO-044): the callback no longer emits
@@ -173,6 +188,11 @@ export default async function LoginPage({
             {error}
           </div>
         )}
+        {/* TASK-PC-FE-324 — only on this specific error: a same-browser
+            store/consumer-pool SSO session is what blocked the exchange, so
+            offer the (best-effort — see the widget's header) logout path
+            right next to the explanation. */}
+        {sp.error === 'sso_wrong_account' ? <SsoWrongAccountLogout /> : null}
 
         <Link
           href={loginHref}
