@@ -4,7 +4,7 @@ TASK-PC-FE-313
 
 # Status
 
-review
+done
 
 # Title
 
@@ -104,3 +104,11 @@ platform-console
 - 게이트(워크트리, pnpm `--frozen-lockfile` 설치 후): `tsc --noEmit` rc=0 · `next lint` rc=0(경고 0) · 대상 6파일 84/84.
 - 전량 vitest: 338 파일 중 337 통과 · 3821 중 3818 통과 — 실패 3건은 전부 `LedgerOpsScreen.test.tsx` «계정 탭»(요소 미발견). 이 파일은 nav 를 import 하지 않고 **단독 재실행 53/53 통과** → 전량 병렬 부하에서만 나는 이 티켓 무관 실패로 판정. CI 전량 레인 결과로 다시 확인한다.
 - bite(AC-5): 옛 설정 → `sidebar-iam-group.test.tsx` 5 실패 / 13 통과(rc=1), 새 설정 복원 → 통과.
+
+## CORRECTION — close (2026-10-09 UTC, 4차원 검증)
+
+- **AC-7 닫힘**: 소유자가 **데모 창**에서 사이드바 «조직 설정» 4항목 · IAM 7항목을 눈으로 확인했다(2026-10-09 UTC 대화 — 확인 범위 질문에 «321 가이드, 313 · 315 메뉴» · 장소 «데모 창»). 위 AC 목록의 `[ ]` 는 이 절이 닫는다.
+- (a) #4214 `MERGED` 2026-10-07T10:43:27Z, squash `5e213a8e7`.
+- (b) `5e213a8e7` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 15 · SKIPPED 51 · FAILURE 0.
+- (d) AC-1~7 전부 닫힘.
