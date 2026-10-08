@@ -8,7 +8,7 @@ TASK-PC-FE-314
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -140,3 +140,15 @@ Goal 표를 기계적으로 적용(= `permission-map.ts` 의 기존 `gate` + `RB
 ## e2e 감사 (AC-7)
 
 `tests/e2e`(console-web) + `e2e-smoke`(console-web) + 루트 `tests/federation-hardening-e2e` 전체에서 `nav-` testid 사용처를 grep. 매칭된 것은 `nav-dashboards`(operator 게이트, 이 티켓이 절대 숨기지 않는 종류) · `nav-erp`/`nav-erp-{masters,overview,guide,orgview,approval,delegation}`(전부 `domain` 게이트 — Goal 표에 의해 role 로는 절대 숨지 않는다, 구독 배지만 영향받는데 이 스펙들은 배지를 검사하지 않는다) · `nav-operator-overview`/`nav-domain-health`(둘 다 "존재하지 않아야 한다"는 음의 단언, 이 티켓과 무관) 뿐이다. `nav-tenants`/`nav-org-hierarchy`/`nav-partnerships`/`nav-audit`/`nav-permissions`/`nav-permission-sets`/`nav-operators`/`nav-iam-operator-groups` — 이 티켓으로 역할에 따라 새로 숨을 수 있는 testid 들 — 은 세 디렉터리 어디에도 등장하지 않는다. `overview-consolidation.spec.ts` 가 쓰는 SUPER_ADMIN 시드 계정(`tests/e2e/fixtures/seed.sql`, `admin_operator_roles` 에 SUPER_ADMIN 단일 바인딩만 확인)은 위 AC-0↔AC-2 결정에 따라 `/partnerships` 메뉴를 잃지만, 그 스펙은 `nav-partnerships` 를 전혀 참조하지 않는다. **고칠 스펙 없음.** 머지 뒤 `nightly-e2e.yml` 콘솔 잡 1회 확인은 사람이 해야 하는 라이브 단계라 이 세션에서는 측정 불가(⚪) — INDEX 리뷰 행에 남겨둔다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4219** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`779195d40`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~7 `[x]`. 머지 뒤 nightly 확인 결과를 적는다 — 아래 정정.
+
+## CORRECTION (2026-10-08 UTC) — AC-7 의 e2e grep 은 이 티켓이 깬 스펙을 놓쳤다
+
+- 머지(`779195d40`) 뒤 nightly «Platform Console E2E» 가 **8 회 연속 빨강**이었다 — 매번 같은 1 건: `tests/e2e/overview-consolidation.spec.ts:82` `expect(nav-erp).toHaveText("ERP")` 가 `"ERP구독 필요"` 를 받음(이 티켓의 «구독 필요» 배지가 토글 텍스트에 합쳐짐).
+- 원인: AC-7 grep 의 술어가 «숨겨질 메뉴를 찾는 스펙» 이었고, **메뉴 텍스트를 정확히 단언하는 스펙**은 술어에 없었다. 배지 판정 자체는 옳다(레지스트리 `tenants` = 자격, `TASK-MONO-719`).
+- 고침: `TASK-PC-FE-320`(#4236 `cde64563b`) — 단언을 `/^ERP(구독 필요)?$/` 로. 그 뒤 nightly `37740852093` (`cde64563b`) — «Platform Console E2E full-stack» **success**, 전체 run success.
+- AC-2 의 SUPER_ADMIN «파트너십» 예외(Implementation Notes)는 소유자에게 보고했고 뒤집으라는 지시는 없었다 — 그대로 둔다.

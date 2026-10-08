@@ -8,7 +8,7 @@ nightly 콘솔 e2e 빨강 수정 — `overview-consolidation.spec.ts:82` 가 `na
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -58,7 +58,7 @@ Expected: "ERP"   Received: "ERP구독 필요"
 
 - [x] **AC-0** — 같은 모양의 단언(내비 testid 에 정확한 텍스트) 전수: 콘솔 e2e 디렉터리(`tests/e2e/**` · `e2e-smoke/**`) · 루트 `tests/federation-hardening-e2e/**` 에서 `toHaveText('ERP'|'WMS'|'SCM'|'재무'|'이커머스')` 및 `nav-…` + `toHaveText` — **이 한 줄뿐**.
 - [x] **AC-1** — 단언 수정(위 Scope).
-- [ ] **AC-2** — 머지 뒤 첫 nightly «Platform Console E2E» 초록 확인(⚪ 머지 뒤).
+- [x] **AC-2** — 머지 뒤 첫 nightly «Platform Console E2E» 초록 확인(⚪ 머지 뒤).
 
 # Related Specs
 
@@ -77,3 +77,8 @@ Expected: "ERP"   Received: "ERP구독 필요"
 
 1. `toContainText('ERP')` 로 느슨하게 고친다 — 라벨이 «ERP 관리» 같은 다른 글자로 바뀌어도 통과한다.
 2. 배지를 버튼 밖으로 옮겨 시험을 맞춘다 — 시험 때문에 화면을 바꾸는 것이고, 배지가 어느 메뉴의 것인지 흐려진다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4236** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`cde64563b`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0 · AC-1 `[x]`, AC-2 를 닫는다: nightly `37740852093` (`cde64563b`) — «Platform Console E2E full-stack» **success**, 전체 run success — 8 회 연속 빨강이던 그 잡.

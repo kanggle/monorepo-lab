@@ -8,7 +8,7 @@ TASK-PC-FE-312
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -61,7 +61,7 @@ platform-console
 - [x] **AC-3** — 서버 404 → 권한 문구(존재 추측 없음). → `TenantPlacement.test.tsx` § AC-3 (미리보기 404 `TENANT_NOT_FOUND` · 쓰기 404 `ORG_NODE_NOT_FOUND` · 409 재시도 문구 + 목록 재조회).
 - [x] **AC-4** — 생성 폼: 노드 고르면 본문에 `orgNodeId` · 비우면 본문에 칸 없음(회귀). → `TenantsScreen.test.tsx` (고름 · 비움 · 골랐다 되돌림 · 노드 목록 실패) + `tenants-proxy.test.ts` (전달 · `null` → 없음) + `tenants-api-create-org-node.test.ts` (생산자 본문 3칸 그대로) + `tenants-page.test.tsx` (SSR 이 선택지를 넘김 · 실패해도 화면은 선다).
 - [x] **AC-5** — bite: 확인 창의 «잃는 도메인» 계산을 지우면 AC-2 칸만 빨강. → 렌더 블록을 `false &&` 로 끄고 관련 12 파일 실행: **1 실패 / 135 통과** — 실패는 AC-2 양성 칸 하나뿐(대조군은 통과가 맞다). 되돌린 뒤 전부 통과.
-- [ ] **AC-6** — `tsc` · `lint` · `vitest` 전체 rc=0 · 콘솔 e2e 디렉터리 grep(`org-node`, `org-hierarchy`) 후 영향 확인 · 머지 뒤 첫 nightly 콘솔 잡 확인. → tsc rc=0 · lint rc=0 · vitest 전체 rc=0 (344 파일 · 3900/3900) · e2e grep 0건(아래). ⚪ **머지 뒤 첫 nightly 콘솔 잡 확인만 남음** — 그래서 체크하지 않는다.
+- [x] **AC-6** — `tsc` · `lint` · `vitest` 전체 rc=0 · 콘솔 e2e 디렉터리 grep(`org-node`, `org-hierarchy`) 후 영향 확인 · 머지 뒤 첫 nightly 콘솔 잡 확인. → tsc rc=0 · lint rc=0 · vitest 전체 rc=0 (344 파일 · 3900/3900) · e2e grep 0건(아래). ⚪ **머지 뒤 첫 nightly 콘솔 잡 확인만 남음** — 그래서 체크하지 않는다.
 
 # Related Specs
 
@@ -123,3 +123,8 @@ platform-console
 **티켓과 다른 점**
 - Edge Case «샘플 방문자 — 쓰기 버튼 없음(기존 샘플 규율)»: 실측한 기존 규율은 «버튼은 두고 서버가 `SAMPLE_READ_ONLY` 로 거절»이다(위 AC-0 마지막 항목 — 이 feature 의 생성·삭제·상한·관리자 버튼도 샘플에게 보인다). 새 버튼도 **그 규율을 따랐다**(버튼 표시 · 쓰기는 게이트웨이가 거절 · 셸 배너 + `messageForCode` 문구). 샘플에게만 버튼을 숨기려면 클라이언트가 샘플 여부를 알아야 하는데 지금 그 신호는 서버 레이아웃에만 있다 — 별도 결정이 필요하면 후속 티켓. 샘플의 미리보기는 픽스처가 없어 `503 SAMPLE_NOT_READY`(«이 화면의 샘플 데이터는 준비 중입니다») 로 확인 창이 잠긴다.
 - 노드 이동 선택지는 도달 범위의 모든 노드(지금 노드 포함 — 하위 노드에 있는 테넌트를 이 노드로 직접 올리는 것도 «옮기기»). 같은 위치를 고르면 미리보기가 «바뀌는 것이 없습니다» 를 보인다(서버는 `changed=false` 로 멱등 처리).
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4227** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`dab387e74`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~5 `[x]`. AC-6 의 마지막 칸(머지 뒤 nightly)을 닫는다: 머지 직후 nightly(`dab387e74`)는 빨강이었으나 실패는 **이 티켓과 무관한 1 건**(`overview-consolidation.spec.ts:82`, `TASK-PC-FE-314` 배지 — `TASK-PC-FE-320` 이 고침)이었고, 이 티켓의 표면을 포함한 첫 초록은 nightly `37740852093` (`cde64563b`) — «Platform Console E2E full-stack» **success**, 전체 run success.
