@@ -25,6 +25,8 @@ import {
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
 import { DomainGuideTabs } from '@/shared/guide/DomainGuideTabs';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * ERP 가이드 화면 (TASK-PC-FE-232). 순수 정적 참조 화면 — erp-platform
@@ -49,6 +51,10 @@ export function ErpGuideScreen() {
         panels={{
           overview: (
             <>
+              <DomainFeatureSummary
+                domain={domainFeatureByKey('erp')}
+                testid="erp-guide-domain-features"
+              />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 ERP 콘솔은 <strong>개요 · 가이드 · 마스터 · 통합 조회 · 결재함 ·
                 위임</strong> 6개 화면으로 구성됩니다. 탭마다 각 화면이 보여주는 값의

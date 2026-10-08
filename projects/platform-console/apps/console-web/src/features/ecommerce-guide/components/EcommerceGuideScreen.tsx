@@ -33,6 +33,8 @@ import {
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
 import { DomainGuideTabs } from '@/shared/guide/DomainGuideTabs';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * E-Commerce 가이드 화면 (TASK-PC-FE-184). 순수 정적 참조 화면 — 도메인 서비스
@@ -55,11 +57,16 @@ export function EcommerceGuideScreen() {
         panels={{
           overview: (
             <>
+              <DomainFeatureSummary
+                domain={domainFeatureByKey('ecommerce')}
+                testid="ecommerce-guide-domain-features"
+              />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 E-Commerce 콘솔은 <strong>상품 · 주문 · 배송 · 프로모션 · 사용자 · 셀러 ·
-                알림</strong> 7개 라이브 운영 화면과 개요로 구성됩니다. 탭마다 각 화면이
-                보여주는 상태값의 의미와, 그 뒤의 이커머스 마이크로서비스 구성을 정리한
-                참조입니다. (모든 화면은 도메인 롤로 게이트되며, 「권한 안내」 탭 참조.)
+                정산 · 알림</strong> 8개 라이브 운영 화면과 개요로 구성됩니다. 탭마다 각
+                화면이 보여주는 상태값의 의미와, 그 뒤의 이커머스 마이크로서비스 구성을
+                정리한 참조입니다. (모든 화면은 도메인 롤로 게이트되며, 「권한 안내」 탭
+                참조.)
               </p>
               <GuideReadingPath testid="ecommerce-guide-reading-path">
                 처음이라면 「대표 업무 흐름」 탭의 <strong>주문</strong>과 <strong>배송</strong>부터 보세요 —

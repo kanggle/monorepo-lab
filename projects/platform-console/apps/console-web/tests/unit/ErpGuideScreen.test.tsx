@@ -11,6 +11,7 @@ import {
 } from '@/features/erp-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * ERP 가이드 화면 (TASK-PC-FE-232) — 순수 정적 참조 화면. erp-platform
@@ -21,6 +22,18 @@ import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
  * 단언한다.
  */
 describe('ErpGuideScreen', () => {
+  it('renders the ERP domain-feature summary above the 읽기경로 배너 (TASK-PC-FE-321 AC-3)', () => {
+    render(<ErpGuideScreen />);
+    const panel = screen.getByTestId('erp-guide-tabs-panel-erp-guide-tab-overview');
+    const summary = within(panel).getByTestId('erp-guide-domain-features');
+    const banner = within(panel).getByTestId('erp-guide-reading-path');
+    expect(within(summary).getByText(domainFeatureByKey('erp').oneLine)).toBeInTheDocument();
+    expect(panel.firstElementChild).toBe(summary);
+    expect(
+      summary.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('renders every top-level section', () => {
     render(<ErpGuideScreen />);
     expect(screen.getByTestId('erp-guide')).toBeInTheDocument();

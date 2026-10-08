@@ -14,6 +14,7 @@ import {
 } from '@/features/wms-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183) — 순수 정적 참조 화면. 재고(수량 버킷·예약
@@ -36,6 +37,18 @@ describe('WmsGuideScreen', () => {
     // Points at sections that actually exist on this guide (재고 · 출고).
     expect(within(banner).getByText('재고')).toBeInTheDocument();
     expect(within(banner).getByText('출고')).toBeInTheDocument();
+  });
+
+  it('renders the WMS domain-feature summary above the 읽기경로 배너 (TASK-PC-FE-321 AC-3)', () => {
+    render(<WmsGuideScreen />);
+    const panel = screen.getByTestId('wms-guide-tabs-panel-wms-guide-tab-overview');
+    const summary = within(panel).getByTestId('wms-guide-domain-features');
+    const banner = within(panel).getByTestId('wms-guide-reading-path');
+    expect(within(summary).getByText(domainFeatureByKey('wms').oneLine)).toBeInTheDocument();
+    expect(panel.firstElementChild).toBe(summary);
+    expect(
+      summary.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('cross-links the WMS domain-role note to the IAM guide (TASK-PC-FE-257)', () => {
