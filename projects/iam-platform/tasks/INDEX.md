@@ -120,6 +120,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
+- `TASK-BE-628-demo-assigned-only-operator-seed.md` — **데모 시드에 로그인 불가 · 배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만)** (REVIEW, 2026-10-08 UTC · 소유자 결정 «1»). 콘솔 그룹 «멤버 추가» 의 «ecommerce 소속 · 배정만 됨» 회색 행(platform-console `TASK-PC-FE-319`)을 데모에서 보기 위함 — 기존 시드엔 demo SUPER_ADMIN 이 관리하는 `demo-corp` 안에 그 조합이 없었다. password_hash · oidc_subject NULL · 역할 0 · 배정 정확히 {demo-corp} — `DemoOperatorSeedIntegrationTest` +3 단언. ⏳ AC-5 CI iam 통합 · AC-6 라이브(다음 굽기; 2026-10-08 창엔 소유자 승인으로 SSM 1회 삽입). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-BE-627-password-reset-pages.md` — **IdP 비밀번호 재설정 화면** (REVIEW, 2026-10-08 UTC). `PasswordResetPageController`(`/password-reset/request` · `/password-reset`) + 템플릿 둘 + `login.html` 링크 + `WebLoginSecurityConfig` 매처 4개 + 데모 Traefik `PathPrefix(\`/password-reset\`)`. AC-1/3/4/5 닫힘(슬라이스 21개 + bite 수행·복원), AC-2(DB round-trip IT)·AC-6 라이브는 이 환경에 Docker 없어 ⚪. 전체 스위트 1090 tests / 0 failures. 분석=Opus 5.5 / 구현=Sonnet.
 
 
