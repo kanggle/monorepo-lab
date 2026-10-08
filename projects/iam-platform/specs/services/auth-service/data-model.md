@@ -90,6 +90,33 @@ V0007 (TASK-BE-229)에서 `tenant_id` 컬럼 + 인덱스 swap.
 unique 조회로 기존 연결을 찾고, 미존재 시 신규 row 생성. account 측에서
 provider 연결 목록을 보여줄 때 `account_id` 인덱스로 조회.
 
+### `account_totp`
+
+**신규 (TASK-MONO-771 / ADR-MONO-080 D4 · R3, Flyway `V0043__create_account_totp.sql` — 작성 직전 다음 빈 버전 재확인)** — 계정 평면 2단계 인증(TOTP)의 등록. 화면 · 흐름: [auth-api.md § IdP 브라우저 화면 — 2단계 인증](../../contracts/http/auth-api.md). 집은 auth-service 다 — account-service 는 `2fa_secret` 을 금지 컬럼으로 두고 auth-service 소유로 못박았다([account-service data-model](../account-service/data-model.md), saas S1).
+
+🔴 **키는 `account_id` 하나다** — 계정당 등록 1건. `tenant_id` 로 키를 잡지 않는 이유: 한 사이트 계정이 소비자 풀로 옮겨질 때(`TASK-BE-618` · `TASK-MONO-772`) 바뀌는 것은 자격의 저장 테넌트이지 사람이 아니다 — 등록이 그 이동에서 살아남아야 한다. admin-service break-glass TOTP(`admin_operator_totp`)와는 **별개 표 · 별개 키 공간**이다(이전 · 연결하지 않는다 — [admin-service/security.md](../admin-service/security.md#operator-credential-convergence-task-be-377--adr-mono-035--o2--step-4c)).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `account_id` | VARCHAR(36) | PK | internal | account-service `accounts.id`(UUID) 참조 — FK 없음(서비스 간 FK 금지). 조회 키는 **이것 하나** |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | (M1) 격리 키 — 그 계정 자격(`credentials.tenant_id`)의 저장 테넌트 사본. **조회 술어가 아니다** — 판정은 `account_id` 로만 찾는다(어긋나도 등록이 «안 보이는» 쪽으로 새지 않게: 등록이 안 보이면 2단계 없이 통과한다). 풀 이동이 `credentials.tenant_id` 를 바꿀 때 같은 트랜잭션에서 함께 바꾼다 |
+| `secret_encrypted` | VARBINARY(255) | NOT NULL | **restricted** | TOTP 공유 비밀(160-bit). AES-GCM 256, 매 쓰기 random 12-byte IV, 128-bit tag, 단일 컬럼 `[IV][ciphertext][tag]`. **AAD = `account_id` 의 UTF-8 바이트** — 행 바꿔치기 방어. 방식은 admin-service [security.md § TOTP Secret Encryption](../admin-service/security.md#totp-secret-encryption) 과 같고 **키는 다르다**(`auth.totp.encryption-key`, 서비스별 키) |
+| `secret_key_id` | VARCHAR(64) | NOT NULL, DEFAULT `'v1'` | internal | 이 행을 암호화한 키 id — 키 회전(dual-read + lazy re-encrypt, admin 절차와 같다) |
+| `confirmed_at` | DATETIME(6) | NULL | internal | **NULL = 대기(pending)** — `/mfa/setup` GET 이 만든 비밀, 아직 첫 코드로 확인 안 됨. **대기 행은 어떤 판정도 통과시키지 않는다**(로그인 2단계 · 단계 상승은 `confirmed_at IS NOT NULL` 만 본다). 대기 수명 10분(`created_at` 기준) |
+| `recovery_codes_hashed` | JSON | NULL | **restricted** | 복구 코드 10개의 Argon2id 해시 배열(admin [rbac.md § Recovery Codes Hashing Policy](../admin-service/rbac.md) 와 같은 규칙). 확정 시 생성 · 재발급 시 전체 교체 · 사용 시 해당 원소 제거. 대기 행은 NULL |
+| `last_used_step` | BIGINT | NULL | internal | **재생 방지**(TASK-MONO-771 AC-0 F5) — 마지막으로 받아들인 TOTP time-step 카운터(`floor(unix/30)`). 이 값 이하 step 의 코드는 ±1 창 안이어도 거절. 확정 시 확인 코드의 step 으로 채운다 |
+| `last_used_at` | DATETIME(6) | NULL | internal | 마지막 2단계 성공 시각(TOTP 또는 복구 코드) |
+| `created_at` | DATETIME(6) | NOT NULL | internal | 행(대기) 생성 시각 — 대기 수명 기준 |
+| `updated_at` | DATETIME(6) | NOT NULL | internal | — |
+| `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) — 같은 코드 동시 제출 · 복구 코드 동시 소비 경합에서 한 쪽만 이긴다 |
+
+**인덱스**: PK(`account_id`), `idx_account_totp_tenant (tenant_id)` (M1 — 테넌트 단위 운영 조회용. 판정 경로는 쓰지 않는다)
+
+> **수명 규칙 (TASK-MONO-771)**:
+> - 대기 행은 `/mfa/setup` GET 마다 교체된다(확정된 행은 GET 으로 교체되지 않는다 — 재등록은 관리자 리셋 뒤에만).
+> - 관리자 리셋(`POST /api/admin/accounts/{accountId}/2fa/reset` → auth 내부 명령, S6)은 행을 **삭제**한다. 셀프 해제 경로는 이 티켓 범위 밖이다.
+> - 계정 삭제(GDPR) 시 행 삭제 — 비밀 · 복구 코드는 보존 가치가 없다(regulated R2 · 보존 정책은 auth-service retention 에 따른다).
+
 ### `outbox`
 
 v1 레거시 테이블. 원래 [libs/java-messaging](../../../../../libs/java-messaging)의 `OutboxJpaEntity`(`@Table(name = "outbox")`)가 매핑했으나, TASK-MONO-312 가 그 엔티티를, TASK-MONO-406 이 남은 `OutboxAutoConfiguration` / `OutboxJpaConfig` / `ProcessedEventJpaEntity` 를 삭제했다 — 이제 이 테이블을 매핑하는 엔티티는 **없다**(적용된 Flyway 마이그레이션은 불변이라 스키마에만 잔존; `ddl-auto=validate` 는 매핑된 엔티티만 검증). 현행 아웃박스는 `auth_outbox`(V0027, `AuthOutboxJpaEntity`).
@@ -124,6 +151,7 @@ v1 레거시 테이블. 원래 [libs/java-messaging](../../../../../libs/java-me
 - V0022 / V0025: `credentials.account_type` 추가(BE-329) 후 제거(MONO-263 — ADR-MONO-032 D5 step 4b, roles 단일 축)
 - V0026: `credentials.identity_id` VARCHAR(36) NULL 추가 (TASK-BE-378 / ADR-MONO-035 O3 — 중앙 identity 상관키, value-convention cross-DB ref, additive net-zero, 미매핑·미백필)
 - V0039: `oauth2_authorization(principal_name)` 인덱스 (TASK-BE-601 — 계정 세션 폐기가 principal 이름으로 인가를 찾는다. SAS 는 만료 인가를 지우지 않아 무인덱스면 잠금마다 전표 스캔). 같은 티켓에서 V0004 `processed_events` 가 다시 쓰이기 시작했다 — `account.locked` 소비자의 eventId dedupe(`JdbcEventDedupeAdapter`, `INSERT IGNORE` 영향 행 수로 판정)
+- V0043: `account_totp` 신설 (TASK-MONO-771 S2b — 계정 평면 TOTP, `account_id` PK, 빈 표 ⇒ net-zero). forward-only, `INFORMATION_SCHEMA` 존재 가드. **작성 직전 다음 빈 버전 재확인**(S1 시점 마지막 = V0042)
 - PII 마스킹 컬럼 (`credential_hash`, `device_fingerprint`) 변경 시 down migration 금지 — 단방향만 허용
 
 ---
@@ -132,9 +160,9 @@ v1 레거시 테이블. 원래 [libs/java-messaging](../../../../../libs/java-me
 
 | 등급 | 컬럼 |
 |---|---|
-| **restricted** | `credentials.credential_hash` |
+| **restricted** | `credentials.credential_hash`, `account_totp.secret_encrypted`, `account_totp.recovery_codes_hashed` (TASK-MONO-771) |
 | **confidential** | `credentials.email`, `refresh_tokens.jti`, `refresh_tokens.rotated_from`, `refresh_tokens.device_fingerprint`, `social_identities.provider_user_id`, `social_identities.provider_email`, `device_sessions.device_fingerprint`, `device_sessions.ip_last` |
-| **internal** | `credentials.tenant_id`, `refresh_tokens.tenant_id`, `refresh_tokens.device_id`, `social_identities.tenant_id`, `social_identities.provider`, `social_identities.connected_at`, `social_identities.last_used_at`, 그리고 위에 명시되지 않은 `credentials`, `refresh_tokens`, `social_identities`, `device_sessions`, `outbox`의 모든 컬럼 (예: `device_sessions.device_id`, `account_id`, `user_agent`, `geo_last`, `issued_at`, `last_seen_at`, `revoked_at`, `revoke_reason`) |
+| **internal** | `credentials.tenant_id`, `refresh_tokens.tenant_id`, `refresh_tokens.device_id`, `social_identities.tenant_id`, `social_identities.provider`, `social_identities.connected_at`, `social_identities.last_used_at`, 그리고 위에 명시되지 않은 `credentials`, `refresh_tokens`, `social_identities`, `account_totp`(TASK-MONO-771), `device_sessions`, `outbox`의 모든 컬럼 (예: `device_sessions.device_id`, `account_id`, `user_agent`, `geo_last`, `issued_at`, `last_seen_at`, `revoked_at`, `revoke_reason`) |
 | **public** | 없음 |
 
 [rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R1 준수.

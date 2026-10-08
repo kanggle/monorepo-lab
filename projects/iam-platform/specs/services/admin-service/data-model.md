@@ -278,6 +278,27 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - `participant_scope ⊆ delegated_scope` — 참여자 좁힘은 host 위임을 넘을 수 없다. `delegated_scope` 밖 원소는 파생되지 않는다(초과분 무시, confinement 이 request-time 교집합으로 강제).
 > - **no transitive re-delegation** — participant 는 자신이 파생한 A-scope 를 다시 제3자에게 위임할 수 없다(confused-deputy default deny, [rbac.md](./rbac.md)). participant 는 B 소유 operator 로 한정되며 그 자체가 재-origination 지점이 될 수 없다.
 
+### `tenant_entry_policy`
+
+**신규 (TASK-MONO-771 / ADR-MONO-080 D4 · R2, Flyway `V0047__create_tenant_entry_policy.sql` — 작성 직전 다음 빈 버전 재확인)** — «이 테넌트에 **운영자로** 들어오려면 2단계 인증 필수» 테넌트 단위 플래그. **행 없음 = 꺼짐**(net-zero — 마이그레이션은 빈 표만 만든다). 관리 표면: [admin-api.md § Tenant Entry Policy](../../contracts/http/admin-api.md#tenant-entry-policy-task-mono-771).
+
+**왜 admin 평면인가 (account-service `tenants` 가 아니라)**: 이 값을 읽는 두 진입이 모두 admin-service 안에서 판정된다 — assume-tenant 의 fail-closed 게이트 `GET /internal/operator-assignments/check` **같은 요청 안의 로컬 읽기**(새 서비스 간 호출 0)와 운영자 토큰 교환. account-service `tenants` 에 두면 assume 발급이 fail-soft 로 설계된 account-service 호출에 fail-closed 로 새로 묶이고, 토큰 교환은 hot-path 교차 조회 금지(ADR-MONO-020 § 3.1)에 걸린다. 같은 종류의 «운영자 진입 규칙» 선례도 전부 이 평면이다(`admin_operators.confined_tenant_id` · `tenant_partnership`). 의미도 «테넌트의 소비자 로그인 규칙» 이 아니라 «운영자 진입 조건» 이다.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `tenant_id` | VARCHAR(32) | PK | internal | 정책을 가진 테넌트(M1 격리 키 겸 PK). account-service `tenants.tenant_id` 의 불투명 참조 — **FK 없음**(다른 DB, `operator_tenant_assignment` · `tenant_partnership` 과 같은 형태). 쓰기 때 테넌트 존재를 account-service 로 확인한다(비 hot-path). `CHECK (tenant_id <> '*')` — 플랫폼 sentinel 은 정책을 가질 수 없다 |
+| `require_mfa` | BOOLEAN | NOT NULL | internal | `TRUE` = 운영자 진입에 `amr ∋ mfa` 필수. **끄기는 `FALSE` 로 남긴다**(행 삭제 아님 — 마지막 변경자 · 시각 보존) |
+| `updated_at` | DATETIME(6) | NOT NULL | internal | 마지막 변경 시각 |
+| `updated_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 마지막 변경 운영자. seed/시스템 경로는 NULL. API 는 외부 UUID(`operator_id`)로 노출 |
+| `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) — 동시 토글 경합 |
+
+**인덱스**: PK(`tenant_id`) 하나 — 읽기는 언제나 단건(assume: 선택 테넌트) 또는 운영자 admin 범위의 소수 테넌트 `IN` 조회(토큰 교환).
+
+> **불변식 (TASK-MONO-771)**:
+> - 행 부재 ⟺ `require_mfa = FALSE` 와 같은 판정 — 진입 판정은 «행이 있고 `TRUE`» 일 때만 2단계를 요구한다.
+> - 읽기 실패는 «꺼짐» 이 아니다 — 두 진입 모두 판정을 끝내지 못하면 발급하지 않는다(assume: 내부 엔드포인트 5xx → auth-service fail-closed · 토큰 교환: `500`).
+> - 테넌트는 삭제되지 않고 `SUSPENDED` 만 된다(§ Tenant Lifecycle) ⇒ 고아 행 위험이 낮다. 정지된 테넌트의 정책 행은 그대로 둔다(재개 시 그대로 유효).
+
 ### `admin_actions`
 
 감사 원장. **append-only** ([architecture.md](./architecture.md) Forbidden Dependencies, [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
@@ -441,6 +462,10 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   - `V00NN__create_operator_group_tables.sql` — `operator_group` + `operator_group_member` + `operator_group_grant` 신규. **forward-only**(down 금지 — 그룹/멤버십/grant 는 감사 가치 보유). `uk_operator_group_group_id` UNIQUE(`group_id`) + `uk_operator_group_tenant_name` UNIQUE(`tenant_id`, `name`) + `CHECK (tenant_id <> '*')`; `operator_group_member` FK CASCADE(→ `operator_group.id`, → `admin_operators.id`) + PK(`group_id`, `operator_id`); `operator_group_grant` FK CASCADE(→ `operator_group.id`) + RESTRICT(→ `admin_roles.id`) + `uk_operator_group_grant_natural` UNIQUE(`group_id`, `grant_type`, `role_id`, `tenant_id`) + grant_type/참조 정합 `CHECK`. V0027/V0029 패턴(idempotent `INFORMATION_SCHEMA` 가드, `@var` 금지) 재사용.
   - `V00NN+1__add_group_origin_marker.sql` — `admin_operator_roles.group_origin BIGINT NULL DEFAULT NULL` + `operator_tenant_assignment.group_origin BIGINT NULL DEFAULT NULL`, 각각 FK → `operator_group.id` ON DELETE CASCADE. **forward-only**, **idempotent**(`INFORMATION_SCHEMA` 컬럼 존재 가드), **MySQL-structural**. `NULL`+`DEFAULT NULL` 이라 기존 모든 직접 grant row byte-identical(backward-compatible). 비-Docker shape-pin 테스트가 `group_origin` nullable·default·FK 를 고정한다.
   - `V00NN+2__seed_group_manage_permission.sql` — `group.manage` 권한 키 + `SUPER_ADMIN`/`TENANT_ADMIN`/`ORG_ADMIN` 매핑 seed([rbac.md](./rbac.md) Seed Matrix). `INSERT IGNORE` idempotent. **inert/net-zero** — role→permission 매핑만 추가하고 어떤 operator 에도 배정하지 않으며 그룹을 하나도 만들지 않는다(`V0033__seed_tenant_admin_roles.sql` 와 동일 규율 — 첫 그룹 생성·grant 전엔 fan-out row 0).
+- **TASK-MONO-771 (ADR-MONO-080 D4 · R2)** — 테넌트 진입 정책. 두 마이그레이션(이 슬라이스 S1 은 specs-only; **작성 직전 다음 빈 버전 재확인** — S1 시점 마지막 = `V0046`):
+  - `V0047__create_tenant_entry_policy.sql`(S4) — `tenant_entry_policy` 신규, **빈 표**(행 없음 = 꺼짐 ⇒ net-zero). **forward-only**, `INFORMATION_SCHEMA` 존재 가드(V0027/V0029 패턴, `@var` 금지), `CHECK (tenant_id <> '*')`, `updated_by` FK → `admin_operators.id`.
+  - `V00NN__seed_tenant_security_and_2fa_reset_permissions.sql`(S5 · S6) — `tenant.security.manage`(`SUPER_ADMIN` · `TENANT_ADMIN`) + `account.2fa_reset`(`SUPER_ADMIN` · `SECURITY_ANALYST`) 매핑 seed([rbac.md](./rbac.md) Seed Matrix). `INSERT IGNORE` idempotent, **inert/net-zero** — 어떤 operator 에도 새로 배정하지 않는다.
+  - 🔵 데모 dev 시드(`db/migration-dev/R__seed_demo_operator.sql`)의 `SUPER_ADMIN` `require_2fa` 완화(소유자 결정 OD-5)는 스키마 변경이 아니라 시드 변경이고 S4 에서 한다.
 
 ---
 
@@ -450,7 +475,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 |---|---|
 | **restricted** | `admin_operators.password_hash`, `admin_operators.totp_secret_encrypted` |
 | **confidential** | `admin_operators.email`, `admin_operators.display_name`, `admin_actions.reason` |
-| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼 (**`org_node_id`** 포함 — org-node scope-driver, account-service 소유 `org_node.id` 를 참조하는 불투명 식별자·비-PII·credential 아님, TASK-BE-490/ADR-MONO-047; **`group_origin`** 포함 — fan-out 마커, 같은 서비스 `operator_group.id` FK·비-PII·lifecycle 부기, TASK-BE-519/ADR-MONO-046), **`operator_group`의 모든 컬럼** (TASK-BE-519 — group_id·tenant_id·name·description·audit FK·시각. 비-PII 그룹 메타데이터), **`operator_group_member`의 모든 컬럼** (TASK-BE-519 — group/operator FK·배정 메타), **`operator_group_grant`의 모든 컬럼** (TASK-BE-519 — grant_id·group FK·grant_type·role/tenant 참조·audit 메타. 비-PII grant 템플릿), **`tenant_partnership`의 모든 컬럼** (TASK-BE-476 — host/partner tenant_id·status·`delegated_scope`(도메인/역할 키 집합, PII·credential 아님)·audit FK·시각. 비-PII 관계 메타데이터), **`tenant_partnership_participant`의 모든 컬럼** (TASK-BE-476 — operator FK·`participant_scope`·배정 메타), `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
+| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼 (**`org_node_id`** 포함 — org-node scope-driver, account-service 소유 `org_node.id` 를 참조하는 불투명 식별자·비-PII·credential 아님, TASK-BE-490/ADR-MONO-047; **`group_origin`** 포함 — fan-out 마커, 같은 서비스 `operator_group.id` FK·비-PII·lifecycle 부기, TASK-BE-519/ADR-MONO-046), **`operator_group`의 모든 컬럼** (TASK-BE-519 — group_id·tenant_id·name·description·audit FK·시각. 비-PII 그룹 메타데이터), **`operator_group_member`의 모든 컬럼** (TASK-BE-519 — group/operator FK·배정 메타), **`operator_group_grant`의 모든 컬럼** (TASK-BE-519 — grant_id·group FK·grant_type·role/tenant 참조·audit 메타. 비-PII grant 템플릿), **`tenant_partnership`의 모든 컬럼** (TASK-BE-476 — host/partner tenant_id·status·`delegated_scope`(도메인/역할 키 집합, PII·credential 아님)·audit FK·시각. 비-PII 관계 메타데이터), **`tenant_partnership_participant`의 모든 컬럼** (TASK-BE-476 — operator FK·`participant_scope`·배정 메타), **`tenant_entry_policy`의 모든 컬럼** (TASK-MONO-771 — tenant_id·`require_mfa` 플래그·변경 메타. 비-PII 정책 메타데이터), `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
 | **internal (special)** | `outbox.payload` — `admin.action.performed` envelope을 직렬화하여 포함. `target.displayHint`처럼 **upstream에서 이미 마스킹된** confidential 원본의 파생값을 포함할 수 있다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4 — 중앙 masking utility 경유 강제). 원문 PII는 포함되지 않음을 스펙 레벨에서 보장하므로 분류는 `internal`. 단, `reason` 필드(운영자 입력 원문) 전달 시 소비자 측에서 필요에 따라 추가 필터링을 고려한다. |
 | **public** | 없음 |
 
