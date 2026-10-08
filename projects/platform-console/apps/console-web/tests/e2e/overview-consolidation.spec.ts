@@ -79,7 +79,12 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     // ERP is now a drill TOGGLE (button), not a direct link (PC-FE-076).
     const erp = page.getByTestId('nav-erp');
     await expect(erp).toBeVisible();
-    await expect(erp).toHaveText('ERP');
+    // TASK-PC-FE-320: PC-FE-314 adds a «구독 필요» badge INSIDE the drill toggle when the
+    // active tenant is not entitled to ERP in the registry (a hint, never a hide). Whether
+    // this stack's tenant is entitled is fixture data, not what this test is about, so the
+    // label is pinned exactly and the badge is allowed either way — never `toContainText`,
+    // which would also pass a label that merely starts with something else.
+    await expect(erp).toHaveText(/^ERP(구독 필요)?$/);
     await expect(erp).not.toHaveAttribute('href', '/erp');
     // Drill in → the 4 section children appear.
     await erp.click();
