@@ -8,7 +8,7 @@ web-store **셀러 초대 수락 화면** — 콘솔이 준 초대 토큰으로 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -89,3 +89,11 @@ frontend
 1. `EMAIL_NOT_VERIFIED` 를 일반 «수락 실패» 로 뭉갠다 — 사용자가 인증만 하면 되는 것을 모르고 운영자에게 새 초대를 요구한다.
 2. 503 을 «초대가 잘못됨» 으로 말한다 — 멀쩡한 초대를 버리게 한다.
 3. 로그인 리다이렉트에서 토큰을 잃는다 — 링크로 들어온 사람이 토큰을 다시 받아야 한다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4229** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`0fe56907f`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-1~6 `[x]`. 라이브를 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa · 인스턴스 i-0445d76661ef0013d) 에서 소유자가 브라우저로 한 바퀴 돌았다:
+  - 새 스토어 계정 가입(미인증) → 콘솔(tenant=ecommerce) demo-seller 구성원 초대 → 초대 코드 한 번 표시 · 서버 로그 `seller invitation issued tenant=ecommerce seller=demo-seller` 17:05:11Z.
+  - `store.hubwang.com/seller-invitations/accept?token=…` 수락 → **«이메일 인증이 필요합니다» + 인증 화면 링크**(소유자 확인).
+  - 링크 → IdP 인증 메일 → Mailpit 17:06:55Z → 인증 완료 → **같은 초대** 재수락 성공 «셀러 demo-seller 의 구성원이 되었습니다 · 가입일 2026. 10. 9. 02:08:50(KST)» = 17:08:50Z.

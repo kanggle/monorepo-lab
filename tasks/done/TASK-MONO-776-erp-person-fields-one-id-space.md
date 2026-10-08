@@ -8,7 +8,7 @@ erp 사람 칸을 직원 id 한 공간으로 — approval(결재함 · E3 · 자
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -194,3 +194,10 @@ SELECT 'notification', COUNT(*) FROM erp_notification_db.notification
 - `:approval-service:test` · `:notification-service:test` · `:read-model-service:test` rc=0 — JUnit XML 23/23/28 파일, 210/139/178 tests, 실패·오류·스킵 0. (`:masterdata-service:compileTestJava` 도 함께 rc=0 — 코드 변경 없음.)
 - ⚪ IT(`@Tag("integration")`) 작성만, 미실행 — 이 호스트에 Docker 없음 ⇒ CI 첫 실행: `PersonIdSpaceIntegrationTest`(approval, MySQL) · `RecipientIsLinkedEmployeeIntegrationTest`(notification) · `DelegationFactProjectionIntegrationTest.ac7_…`(read-model). 기존 approval/notification IT 는 masterdata 스텁에 `/employees/me` · `/approver-ref` 를 «같은 id 규약»(sub `emp-x` ↔ 직원 `emp-x`)으로 추가해 의미를 유지했다 — 🔴 그 규약 아래서는 두 id 공간이 겹치므로 결함을 못 본다; 그래서 새 IT 는 `acc-*`/`emp-*` 를 따로 등록한다.
 - 시드: `bash -n infra/demo/seed/seed-erp.sh` rc=0. 시드 전용 하네스/가드: `scripts/` 에 `seed-erp` 를 읽는 가드 0건(grep). ⚪ 라이브(§4b 제안→수락 · `/me` 두 토큰 · §9 등식 + `meta.actorEmployeeId`) = 재굽기 창.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4234** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`64d6070e6`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-1~9 `[x]`. AC-8 의 라이브 ⚪ 를 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa · 인스턴스 i-0445d76661ef0013d) 에서 쟀다(`/domain/start erp` 후 시드 출력):
+  - §4b 연결 2건(김본부↔demo@ · 이운영↔requester@, 제안→수락) · `/me` 두 토큰 = 각 직원 id · 결재함 **2 = 대기 행 2**(승인자 사원 ↔ sub) · 시드가 `meta.actorEmployeeId` = 승인자 사원임을 단언(실패 시 `seed_fail`) · 요약 **생성 22 · 실패 0**.
+  - § «운영 데이터 모집단» SQL(읽기 전용) — 이전 행 **0**: approval_request 0 (DRAFT 제외판도 0) · approval_route_stage 0 · approval_action 0 · delegation_grant 0 · notification 0. 분모(빈 표의 0 이 아님): 직원 4 · 결재 3 · 결재선 3 · 행위 2 · 위임 1 · 알림 3.
