@@ -122,6 +122,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-323-domain-guides-plain-rewrite.md` — **도메인 가이드 6개를 쉬운 말로, 출처 · 근거 표시 제거** (REVIEW, 2026-10-09 UTC · 소유자 결정 · 322 의 후속). 공용 틀 `DomainGuideTabs` 가 «근거» 열을 6개 가이드에 보이던 것을 끔 · 새 시험 `domain-guides-plain.test.tsx`(6×8 탭 번호/파일 이름 0, bite 확인) · 문장은 Sonnet 5 에이전트 6개. 구현자 대조에서 3건 정정(Finance 캡처 누락 · Finance 타일 이름 «미해소» · SCM «scm 만» 이라는 원문부터 낡은 사실). vitest 3987/3987. AC-6 = 소유자 확인 ⚪. 분석=Opus 5.5 / 구현=Opus 5.5 + Sonnet 5.
+
 - `TASK-PC-FE-322-global-guide-plain-rewrite.md` — **전역 콘솔 가이드(/guide) 일곱 탭을 쉬운 말 · 짧은 문장으로, 출처 표시 제거** (REVIEW, 2026-10-09 UTC · 소유자 결정). `sources` 는 데이터에 남아 경로 실재 가드가 계속 문다. 새 시험: 출처 표시 0 · 탭 문장에 티켓/ADR 번호 · 파일 이름 · 줄 번호 0(bite 확인). 공용 `permission-map.ts` 의 화면 문장 13곳도 함께 정리(IAM 가이드도 같이 바뀜). vitest 3975/3975. AC-6 = 소유자 확인 ⚪. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 

@@ -53,28 +53,28 @@ export const STOCK_BUCKETS: StockBucket[] = [
     label: '가용',
     field: 'available_qty',
     pickable: true,
-    desc: '새 출고(피킹)에 즉시 할당 가능한 자유 수량. 예약이 잡히면 이만큼 줄고 예약으로 옮겨간다.',
+    desc: '지금 바로 출고(피킹)에 쓸 수 있는 수량입니다. 예약이 잡히면 이 수량이 줄고 예약으로 옮겨갑니다.',
   },
   {
     key: 'reserved',
     label: '예약',
     field: 'reserved_qty',
     pickable: false,
-    desc: '활성 예약(Reservation)에 이미 잡혀 있으나 아직 출고 확정되지 않은 수량. 출고 확정 시 소진, 취소/만료 시 가용으로 복귀.',
+    desc: '출고를 위해 이미 잡아 둔 수량입니다. 출고가 끝나면 사라지고, 취소되거나 시간이 지나면 다시 가용으로 돌아갑니다.',
   },
   {
     key: 'damaged',
     label: '손상',
     field: 'damaged_qty',
     pickable: false,
-    desc: '격리·판매 불가 재고. 물리적으로 창고에 있어 보유에는 포함되지만 픽업 대상은 아니다.',
+    desc: '팔 수 없는 재고입니다. 창고에 실제로 있어서 보유 수량에는 들어가지만, 출고에는 쓸 수 없습니다.',
   },
   {
     key: 'onHand',
     label: '보유',
     field: 'on_hand (파생)',
     pickable: false,
-    desc: '창고에 물리적으로 존재하는 총량 = 가용 + 예약 + 손상. 저장하지 않고 세 버킷의 합으로 계산한다.',
+    desc: '창고에 실제로 있는 전체 수량입니다 = 가용 + 예약 + 손상. 따로 저장하지 않고 세 수량을 더해 계산합니다.',
   },
 ];
 
@@ -95,18 +95,18 @@ export interface ReservationStage {
 export const RESERVATION_STAGES: ReservationStage[] = [
   {
     step: '예약 (RESERVED)',
-    trigger: '출고 피킹 요청(outbound.picking.requested) → 재고 예약',
-    effect: '가용 −qty · 예약 +qty (가용→예약). 재고 부족이면 예약 실패(inventory.reserve.failed)로 출고가 이월(BACKORDERED).',
+    trigger: '출고에서 피킹을 요청하면 재고가 예약됩니다.',
+    effect: '가용 수량이 줄고 예약 수량이 늘어납니다. 재고가 부족하면 예약에 실패해 출고가 재고부족 이월(BACKORDERED) 상태가 됩니다.',
   },
   {
     step: '확정 (CONFIRMED)',
-    trigger: '출고 확정(outbound.shipping.confirmed) → 예약 소진',
-    effect: '예약 −qty (가용은 이미 예약 시점에 빠졌으므로 불변). 종료 상태.',
+    trigger: '출고가 확정되면 예약이 끝납니다.',
+    effect: '예약 수량만 줄어듭니다(가용은 예약될 때 이미 줄었으므로 그대로입니다). 더는 바뀌지 않는 상태입니다.',
   },
   {
     step: '해제 (RELEASED)',
-    trigger: '출고 취소(outbound.picking.cancelled) · TTL 만료(기본 24h) · 수동 해제',
-    effect: '예약 −qty · 가용 +qty (예약→가용 복귀). 사유: CANCELLED · EXPIRED · MANUAL. 종료 상태.',
+    trigger: '출고가 취소되거나, 일정 시간(기본 24시간)이 지나 자동 만료되거나, 운영자가 직접 해제할 때 일어납니다.',
+    effect: '예약 수량이 줄고 가용 수량이 다시 늘어납니다. 더는 바뀌지 않는 상태입니다.',
   },
 ];
 
@@ -121,32 +121,32 @@ export const INVENTORY_EVENTS: InventoryEvent[] = [
   {
     event: 'inventory.received',
     label: '입고',
-    desc: '입고 적치(inbound.putaway.completed) 결과로 가용 증가.',
+    desc: '입고 처리가 끝나면 가용 수량이 늘어납니다.',
   },
   {
     event: 'inventory.adjusted',
     label: '조정',
-    desc: '사유 코드가 붙은 수동 보정(실사·분실·발견·손상표시·손상폐기·재분류). 한 버킷을 ±.',
+    desc: '실사·분실·발견·손상 처리 등 사유를 남기고 운영자가 직접 수량을 고치는 것입니다.',
   },
   {
     event: 'inventory.transferred',
     label: '이동',
-    desc: '같은 창고 내 두 위치 간 가용 재고 원자적 이동(반출/반입 2 레그).',
+    desc: '같은 창고 안에서 한 위치의 재고를 다른 위치로 옮기는 것입니다.',
   },
   {
     event: 'inventory.reserved',
     label: '예약',
-    desc: '출고 할당 — 가용→예약.',
+    desc: '출고를 위해 재고를 잡아 두는 것입니다(가용→예약).',
   },
   {
     event: 'inventory.released',
     label: '해제',
-    desc: '예약 반환 — 예약→가용(취소·만료·수동).',
+    desc: '취소·만료·수동 해제로 예약을 다시 풀어 주는 것입니다(예약→가용).',
   },
   {
     event: 'inventory.confirmed',
     label: '확정',
-    desc: '출고가 예약 재고를 소진 — 예약 감소.',
+    desc: '출고가 끝나 예약해 둔 재고를 실제로 사용 처리하는 것입니다.',
   },
 ];
 
@@ -163,13 +163,13 @@ export interface LowStockMechanism {
 export const LOW_STOCK_MECHANISMS: LowStockMechanism[] = [
   {
     where: '재고 테이블 "저재고" 배지 / "저재고만" 필터',
-    threshold: '고정 · 가용 ≤ 10',
-    desc: 'admin-service 읽기모델이 투영 시점에 고정 임계(10)로 계산해 저장하는 플래그. SKU별 재주문점이 아니다.',
+    threshold: '고정값 · 가용 10개 이하',
+    desc: '가용 수량이 10개 이하면 자동으로 표시되는 고정 기준입니다. 상품(SKU)마다 다르게 정할 수는 없습니다.',
   },
   {
-    where: '운영자 저재고 알림(inventory.low-detected)',
-    threshold: '설정형 · (창고,SKU) 임계 → 전역 기본',
-    desc: 'inventory-service가 변동 트랜잭션 안에서 설정된 임계(가용 < 임계) 도달 시 발행. 임계 미설정이면 감지 비활성.',
+    where: '운영자 저재고 알림',
+    threshold: '설정 가능 · 창고·상품(SKU)별로 정함, 없으면 전체 기본값',
+    desc: '가용 수량이 미리 정한 기준보다 적어지면 운영자에게 알림이 갑니다. 기준을 정하지 않았으면 알림이 가지 않습니다.',
   },
 ];
 
@@ -179,8 +179,8 @@ export const LOW_STOCK_MECHANISMS: LowStockMechanism[] = [
  * 쓰기 시스템 대비 잠시 과거일 수 있다.
  */
 export const READ_MODEL_NOTE = {
-  title: '읽기모델과 지연 배너',
-  body: '콘솔 재고·출고 표는 쓰기 시스템(inventory/outbound-service)이 아니라, 그 이벤트를 투영한 admin-service 읽기모델을 읽는다(최종 일관성). 투영 지연이 5초를 넘으면 응답에 지연 헤더가 실리고 화면 상단에 "표시값이 잠시 과거일 수 있습니다" 배너가 뜬다 — 값은 정상이며 곧 수렴한다.',
+  title: '표시값이 살짝 늦을 수 있어요',
+  body: '재고·출고 표의 값은 실시간이 아니라 약간의 시간 차를 두고 반영됩니다. 반영이 5초 이상 늦어지면 화면 위에 "표시값이 잠시 과거일 수 있습니다"라는 안내가 뜹니다. 값은 정상이며 금방 최신 값으로 맞춰집니다.',
 } as const;
 
 // ───────────────────────── 출고 (Outbound) ─────────────────────────
@@ -203,49 +203,49 @@ export const ORDER_STATES: OrderState[] = [
     name: 'RECEIVED',
     label: '접수',
     terminal: false,
-    desc: '주문 접수(웹훅/수동). v1에선 같은 트랜잭션에서 즉시 PICKING으로 진행되어 실제로 머무는 걸 볼 일은 없다.',
+    desc: '주문이 접수된 상태입니다. 접수되면 곧바로 피킹중으로 넘어가서, 이 상태에 오래 머무는 것을 보기는 어렵습니다.',
   },
   {
     name: 'PICKING',
     label: '피킹 중',
     terminal: false,
-    desc: '피킹 요청됨(재고 예약 진행). 이 시점부터 주문 라인 불변. 취소 가능.',
+    desc: '재고를 피킹(꺼내기) 중이며, 그만큼 재고가 예약된 상태입니다. 이때부터 주문 내용은 바뀌지 않지만 취소는 할 수 있습니다.',
   },
   {
     name: 'PICKED',
     label: '피킹 완료',
     terminal: false,
-    desc: '전 라인 피킹 확정. 패킹 대기.',
+    desc: '모든 상품의 피킹이 끝나 포장(패킹)을 기다리는 상태입니다.',
   },
   {
     name: 'PACKING',
     label: '패킹 중',
     terminal: false,
-    desc: '포장 유닛 1개 이상 생성(아직 미봉인/미완).',
+    desc: '포장을 진행하고 있는 상태입니다(아직 다 끝나지 않았습니다).',
   },
   {
     name: 'PACKED',
     label: '패킹 완료',
     terminal: false,
-    desc: '전 유닛 봉인 + 전 라인 충족. 출고 확정 대기.',
+    desc: '포장이 모두 끝나 출고 확정을 기다리는 상태입니다.',
   },
   {
     name: 'SHIPPED',
     label: '출고 완료',
     terminal: true,
-    desc: '출고 확정 · 화물(Shipment) 생성. 취소 불가(반품/RMA는 v2). 택배/출고 표에 이때 나타난다.',
+    desc: '출고가 확정되어 택배(화물)가 만들어진 상태입니다. 이 뒤로는 취소할 수 없고, 택배/출고 표에 나타납니다.',
   },
   {
     name: 'CANCELLED',
     label: '취소',
     terminal: true,
-    desc: '출고 전(접수~패킹완료) 취소. 재고 예약은 보상 흐름으로 해제. OUTBOUND_ADMIN 롤 필요.',
+    desc: '출고되기 전(접수~패킹완료 사이)에 취소된 상태입니다. 잡혀 있던 재고 예약은 풀립니다. 취소에는 OUTBOUND_ADMIN 롤이 필요합니다.',
   },
   {
     name: 'BACKORDERED',
     label: '재고부족 이월',
     terminal: true,
-    desc: '재고 부족(INSUFFICIENT_STOCK)으로 예약 실패 → 진행 중단. REST가 아니라 재고 이벤트로만 진입.',
+    desc: '재고가 부족해 예약에 실패하면서 더 진행되지 못한 상태입니다. 화면에서 직접 만들 수 없고, 재고 부족이 감지될 때만 자동으로 생깁니다.',
   },
 ];
 
@@ -260,17 +260,17 @@ export const TMS_STATES: TmsState[] = [
   {
     name: 'PENDING',
     label: '통보 대기',
-    desc: '화물 생성됨 · TMS 통보 미시도(또는 진행 중). 데모엔 TMS mock이 없어 여기 머물며 콘솔에 "수동 TMS 재시도"가 노출된다.',
+    desc: '택배가 만들어졌지만 아직 운송사에 통보하지 않았거나 통보 중인 상태입니다. 데모 환경에서는 운송사 연결이 없어 이 상태로 남는 것이 정상입니다 — 이때 "수동 TMS 재시도" 버튼이 나타납니다.',
   },
   {
     name: 'NOTIFIED',
     label: '통보 완료',
-    desc: 'TMS가 화물 통보를 수신·확인. 운송장번호가 채워진다.',
+    desc: '운송사가 통보를 받아 확인한 상태입니다. 운송장번호가 채워집니다.',
   },
   {
     name: 'NOTIFY_FAILED',
     label: '통보 실패',
-    desc: 'TMS 푸시가 재시도/서킷/벌크헤드를 소진. 수동 재시도 대상.',
+    desc: '운송사에 여러 번 통보를 시도했지만 실패한 상태입니다. 수동 재시도가 필요합니다.',
   },
 ];
 
@@ -279,8 +279,8 @@ export const TMS_STATES: TmsState[] = [
  * 되는 조율 상태머신이다. 운영자가 직접 다루지 않지만 알림·문제 상태의 출처.
  */
 export const SAGA_NOTE = {
-  title: '참고: 출고 사가(Saga)',
-  body: '주문/화물 상태와 별개로, 내부 조율용 사가가 REQUESTED → RESERVED → PICKING_CONFIRMED → PACKING_CONFIRMED → SHIPPED → COMPLETED 로 병렬 진행한다. 예외 상태로 RESERVE_FAILED(재고부족), CANCELLATION_REQUESTED(취소 대기), SHIPPED_NOT_NOTIFIED(출고됐으나 TMS 통보 미완 — 위 데모가 여기), STUCK_RECOVERY_FAILED(재시도 소진)가 있다. 운영자에겐 알림·"점검 필요" 신호로 드러난다.',
+  title: '참고: 출고 사가(saga)',
+  body: '주문·택배 상태와 별도로, 내부 시스템이 출고 과정 전체를 뒤에서 조율합니다. 운영자가 직접 다루는 화면은 아니지만, 재고 부족이나 운송사 통보 실패 같은 문제가 생기면 알림이나 "점검 필요" 표시로 드러납니다.',
 } as const;
 
 // ───────────────────────── 도메인 롤 ─────────────────────────
@@ -300,32 +300,32 @@ export const WMS_ROLES: WmsRole[] = [
   {
     role: 'INVENTORY_READ',
     surface: '재고 조회',
-    desc: '재고 현황 조회 엔드포인트.',
+    desc: '재고 현황을 조회할 수 있습니다.',
   },
   {
     role: 'INVENTORY_WRITE',
     surface: '재고 조정 · 이동',
-    desc: '조정 / 손상표시 / 위치 이동.',
+    desc: '재고를 조정하거나 손상 표시, 위치 이동을 할 수 있습니다.',
   },
   {
     role: 'INVENTORY_ADMIN',
     surface: '재고 고급',
-    desc: '손상 폐기, 예약 버킷 조정, 수동 예약 해제.',
+    desc: '손상 재고 폐기, 예약 수량 조정, 수동 예약 해제를 할 수 있습니다.',
   },
   {
     role: 'OUTBOUND_READ',
     surface: '출고 조회',
-    desc: '출고 주문·택배/출고 조회. assume-tenant 시 주입된다.',
+    desc: '출고 주문과 택배/출고 목록을 조회할 수 있습니다.',
   },
   {
     role: 'OUTBOUND_WRITE',
     surface: '출고 처리',
-    desc: '피킹/패킹/출고 확정.',
+    desc: '피킹, 패킹, 출고 확정을 처리할 수 있습니다.',
   },
   {
     role: 'OUTBOUND_ADMIN',
     surface: '출고 취소',
-    desc: '출고 전 주문 취소.',
+    desc: '출고되기 전인 주문을 취소할 수 있습니다.',
   },
 ];
 
@@ -339,25 +339,25 @@ export const WMS_RECIPES: GuideRecipeData[] = [
   {
     title: '재고가 모자라 출고가 이월(BACKORDERED)됐을 때',
     steps: [
-      '재고 화면(/wms/inventory)에서 해당 SKU 의 가용 버킷을 확인합니다 — 가용이 부족하면 예약이 실패해 출고가 이월됩니다.',
-      '입고 적치나 재고 조정으로 가용 수량을 채웁니다(재고 변동 = 입고/조정).',
-      '이미 BACKORDERED(종료 상태)로 빠진 주문은 되살아나지 않으니, 재고를 채운 뒤 새 출고를 생성해 정상 경로(접수→피킹→…)로 태웁니다.',
+      '재고 화면에서 해당 상품(SKU)의 가용 수량을 확인하세요 — 가용 수량이 부족하면 예약이 실패해 출고가 이월(BACKORDERED)됩니다.',
+      '입고를 받거나 재고를 조정해서 가용 수량을 채웁니다.',
+      '이미 이월된 주문은 다시 진행되지 않으니, 재고를 채운 뒤 새 출고를 만들어 처음부터 다시 진행하세요.',
     ],
   },
   {
     title: '출고를 취소해야 할 때',
     steps: [
-      '출고 화면(/wms/outbound)에서 주문 상태를 확인합니다 — 취소는 출고완료(SHIPPED) 전(접수~패킹완료)에만 가능합니다.',
-      '취소하면 잡혀 있던 재고 예약이 보상 흐름으로 해제되어 가용으로 복귀합니다(예약 RESERVED→RELEASED).',
+      '출고 화면에서 주문 상태를 확인하세요 — 출고완료 전(접수~패킹완료 사이)에만 취소할 수 있습니다.',
+      '취소하면 잡혀 있던 재고 예약이 풀려 다시 가용 수량으로 돌아갑니다.',
       '출고 취소에는 OUTBOUND_ADMIN 롤이 필요합니다.',
     ],
   },
   {
     title: '택배가 운송사에 통보되지 않을 때',
     steps: [
-      '택배/출고 표에서 TMS 통보 상태가 통보 대기(PENDING) 또는 통보 실패(NOTIFY_FAILED)인지 확인합니다.',
-      '"수동 TMS 재시도"로 다시 통보를 시도합니다 — 통보가 완료(NOTIFIED)되면 운송장번호가 채워집니다.',
-      '데모 환경에는 TMS mock 이 없어 통보 대기에 머무는 것이 정상입니다(장애 아님).',
+      '택배/출고 표에서 통보 상태가 통보 대기 또는 통보 실패인지 확인하세요.',
+      '"수동 TMS 재시도" 버튼으로 다시 통보해 보세요 — 통보가 완료되면 운송장번호가 채워집니다.',
+      '데모 환경에서는 운송사 쪽 연결이 없어 통보 대기 상태로 남는 것이 정상입니다 — 문제가 아닙니다.',
     ],
   },
 ];
@@ -374,25 +374,25 @@ export const WMS_GLOSSARY: GlossaryEntry[] = [
     term: 'SKU',
     full: 'Stock Keeping Unit',
     meaning:
-      '재고를 관리하는 최소 상품 단위. 위치·로트와 함께 재고 수량을 식별하는 키가 됩니다.',
+      '재고를 관리하는 최소 상품 단위입니다. 위치·로트와 함께 재고 수량을 구분하는 기준이 됩니다.',
   },
   {
     key: 'TMS',
     term: '운송사 통보 (TMS)',
     full: 'Transportation Management System',
     meaning:
-      '출고 확정된 화물을 택배사에 넘기는 운송 관리 시스템. 통보 대기·완료·실패 상태로 택배/출고 표에 표시됩니다.',
+      '출고된 택배를 운송사(택배사)에 전달하는 시스템입니다. 통보 대기·완료·실패 상태로 택배/출고 표에 표시됩니다.',
   },
   {
     key: 'saga',
     term: '사가 (saga)',
     meaning:
-      '출고의 여러 단계를 뒤에서 조율하는 내부 상태머신. 운영자가 직접 다루지 않지만 알림·"점검 필요" 신호의 출처입니다.',
+      '출고 처리 과정을 뒤에서 조율하는 내부 장치입니다. 운영자가 직접 다루지 않지만, 문제가 생기면 알림이나 "점검 필요" 표시로 드러납니다.',
   },
   {
     key: 'assume-tenant',
     term: '테넌트 선택 (assume-tenant)',
     meaning:
-      '운영자가 특정 테넌트를 골라 그 테넌트의 도메인 권한을 부여받는 동작. 이때 WMS 도메인 롤(재고·출고 읽기/쓰기)이 자동으로 파생됩니다.',
+      '운영자가 특정 회사(테넌트)를 선택해 그 회사에서 쓸 권한을 받는 동작입니다. 이때 WMS 재고·출고 권한이 자동으로 주어집니다.',
   },
 ];

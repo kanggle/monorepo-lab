@@ -57,15 +57,14 @@ export function ErpGuideScreen() {
               />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 ERP 콘솔은 <strong>개요 · 가이드 · 마스터 · 통합 조회 · 결재함 ·
-                위임</strong> 6개 화면으로 구성됩니다. 탭마다 각 화면이 보여주는 값의
-                의미, 그 뒤의 erp-platform 마이크로서비스 구성, 그리고 마스터/직원
-                상태 · 결재 상태머신 · 위임 스코프 · effective-dating(`asOf`) ·
-                read-model 투영 · 알림 통합 개념을 정리한 참조입니다.
+                위임</strong>, 6개 화면으로 이루어져 있습니다. 이 가이드는 각 화면이
+                보여주는 값의 의미와, 마스터/직원 상태 · 결재 상태 · 위임 범위 · 시점
+                조회 · 통합 조회 · 알림 같은 개념을 정리한 참고 자료입니다.
               </p>
               <GuideReadingPath testid="erp-guide-reading-path">
                 처음이라면 「도메인 사용 가이드」의 <strong>콘솔 화면</strong>과 「대표 업무 흐름」의 <strong>결재 상태</strong>부터
                 보세요 — 6개 화면이 무엇을 하고 결재가 어떻게 흐르는지가 먼저입니다.
-                도메인 서비스·마스터/직원 상태·위임 스코프·핵심 개념·용어집은 필요할 때
+                도메인 서비스·마스터/직원 상태·위임 범위·핵심 개념·용어집은 필요할 때
                 찾아보는 참조입니다.
               </GuideReadingPath>
             </>
@@ -81,9 +80,9 @@ export function ErpGuideScreen() {
                 마스터 상태
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                <strong>마스터</strong> 화면(<Mono>/erp/masters</Mono>)의 5종 마스터
-                공통 상태입니다. <Mono>RETIRED</Mono> 는 절대 숨기지 않고 있는 그대로
-                표시됩니다.
+                <strong>마스터</strong> 화면(<Mono>/erp/masters</Mono>)의 5종 마스터가
+                공통으로 갖는 상태입니다. <Mono>RETIRED</Mono> 도 숨기지 않고 그대로
+                보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="erp-guide-master-states-table">
@@ -198,8 +197,8 @@ export function ErpGuideScreen() {
                 콘솔 화면
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                6개 화면 각각이 보여주는 값입니다. <strong>개요</strong>는 마스터
-                카운트에 더해 본인 결재 대기·활성 위임 건수를 함께 집계합니다.
+                6개 화면이 각각 보여주는 값입니다. <strong>개요</strong>는 마스터
+                건수에 내 결재 대기 건수와 활성 위임 건수를 더해 함께 보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="erp-guide-screens-table">
@@ -244,8 +243,8 @@ export function ErpGuideScreen() {
                 자주 하는 작업
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                “이럴 땐 이렇게” — 각 단계는 결재함·위임·마스터 화면의 실제 상태·작업만
-                참조합니다.
+                “이럴 땐 이렇게” — 결재함 · 위임 · 마스터 화면에서 실제로 할 수 있는
+                작업입니다.
               </p>
               <div className="mb-10">
                 {ERP_RECIPES.map((recipe, i) => (
@@ -265,9 +264,10 @@ export function ErpGuideScreen() {
                 결재 상태
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                <strong>결재함</strong> 화면(<Mono>/erp/approval</Mono>)의 결재 요청
-                상태 6종입니다. 경로: <Mono>DRAFT → SUBMITTED → IN_REVIEW(2~N 단계) →
-                APPROVED | REJECTED | WITHDRAWN</Mono>.
+                <strong>결재함</strong> 화면(<Mono>/erp/approval</Mono>)의 결재 요청이
+                가질 수 있는 상태 6가지입니다. 흐름: <Mono>DRAFT → SUBMITTED →
+                IN_REVIEW(2단계 이상일 때) → APPROVED | REJECTED | WITHDRAWN</Mono> 중
+                하나로 끝납니다.
               </p>
               <StateFlow states={APPROVAL_STATUSES} />
               <div className="mb-10 overflow-x-auto">
@@ -364,8 +364,8 @@ export function ErpGuideScreen() {
                 도메인 서비스
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                ERP 는 별도 게이트웨이 없이 4개 producer 로 구성됩니다. 콘솔은 각
-                서비스를 도메인-facing IAM OIDC 토큰으로 직접 호출해 화면을 렌더합니다.
+                ERP 는 4개 서비스로 이루어져 있습니다. 별도의 문지기(게이트웨이) 없이
+                콘솔이 각 서비스를 직접 불러와 화면을 보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="erp-guide-services-table">

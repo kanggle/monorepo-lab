@@ -54,17 +54,16 @@ export function WmsGuideScreen() {
                 testid="wms-guide-domain-features"
               />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
-                WMS 콘솔은 <strong>입고 · 재고 · 출고 · 마스터 · 운영설정</strong> 5개
-                화면과 개요로 구성됩니다. 아래는 그중{' '}
-                <strong>재고(재고 현황)</strong>와{' '}
-                <strong>출고(출고 운영 · 택배/출고)</strong> 화면이 보여주는 값의 의미 —
-                재고의 수량 버킷과 예약 흐름, 출고 주문의 상태 변화 — 를 정리한
-                참조입니다. (모든 화면은 도메인 롤로 게이트되며, 「권한 안내」 탭 참조.)
+                WMS 콘솔에는 <strong>입고 · 재고 · 출고 · 마스터 · 운영설정</strong> 5개
+                화면과 개요가 있습니다. 이 가이드는 그중{' '}
+                <strong>재고</strong> 화면과 <strong>출고</strong> 화면에 나오는 숫자와
+                상태의 뜻을 설명합니다. 화면을 보려면 알맞은 권한이 필요합니다 — 자세한
+                내용은 「권한 안내」 탭에서 확인하세요.
               </p>
               <GuideReadingPath testid="wms-guide-reading-path">
-                처음이라면 「공통 정의 및 용어」의 <strong>재고</strong>와 「대표 업무 흐름」의 <strong>출고</strong>부터
-                읽으세요 — 각 화면이 보여주는 수량 버킷과 주문 상태의 의미입니다. 도메인
-                롤(「권한 안내」)과 용어집은 필요할 때 찾아보는 참조입니다.
+                처음이라면 「공통 정의 및 용어」의 <strong>재고</strong>와 「대표 업무
+                흐름」의 <strong>출고</strong>부터 읽으세요. 권한과 용어 설명은 필요할 때
+                찾아보면 됩니다.
               </GuideReadingPath>
             </>
           ),
@@ -79,8 +78,8 @@ export function WmsGuideScreen() {
                 재고 (재고 현황)
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                <strong>재고</strong> 화면(<Mono>/wms/inventory</Mono>)은 위치·SKU·로트
-                별 현재 수량을 보여줍니다. 핵심은 수량이 4개의 버킷으로 나뉜다는 점입니다.
+                <strong>재고</strong> 화면은 창고 위치·상품(SKU)·로트별로 현재 수량을
+                보여줍니다. 수량은 아래 4개 항목으로 나뉩니다.
               </p>
 
               {/* 수량 버킷 */}
@@ -130,10 +129,10 @@ export function WmsGuideScreen() {
                 </table>
               </div>
               <p className="mb-10 text-sm text-muted-foreground">
-                불변식: <Mono>보유 = 가용 + 예약 + 손상</Mono> — 보유(on-hand)는 저장값이
-                아니라 세 버킷의 합입니다. 모든 버킷은 0 이상이며, 음수로 만드는 연산은{' '}
-                <Mono>INSUFFICIENT_STOCK</Mono> 으로 거부됩니다. 손상은 물리적으로
-                보유에는 포함되지만 픽업 대상이 아닙니다.
+                <Mono>보유 = 가용 + 예약 + 손상</Mono> — 보유는 따로 저장하는 값이 아니라
+                이 세 수량을 더한 값입니다. 수량은 0보다 작아질 수 없어서, 가진 것보다
+                많이 빼려고 하면 처리가 거부됩니다. 손상 재고는 창고에 실제로 있지만
+                출고에는 쓸 수 없습니다.
               </p>
               {/* ───────────────── 용어집 ───────────────── */}
               <h2
@@ -160,8 +159,7 @@ export function WmsGuideScreen() {
                 자주 하는 작업
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                “이럴 땐 이렇게” — 각 단계는 재고·출고 화면의 실제 상태·작업만
-                참조합니다.
+                자주 생기는 상황과 처리 방법을 정리했습니다.
               </p>
               <div className="mb-10">
                 {WMS_RECIPES.map((recipe, i) => (
@@ -175,8 +173,9 @@ export function WmsGuideScreen() {
               {/* 저재고 */}
               <h3 className="mb-2 text-lg font-medium">저재고 (두 가지 의미)</h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                “저재고”는 <strong>서로 다른 두 메커니즘</strong>이며 임계값이 달라 서로
-                불일치할 수 있습니다. 재고 테이블의 배지와 운영자 알림을 혼동하지 마세요.
+                “저재고”를 알려주는 방법은 <strong>두 가지</strong>이고, 기준이 서로 달라
+                결과가 다르게 보일 수 있습니다. 재고 표의 배지와 운영자 알림을 헷갈리지
+                마세요.
               </p>
               <div className="mb-10 grid gap-4 md:grid-cols-2">
                 {LOW_STOCK_MECHANISMS.map((m, i) => (
@@ -201,21 +200,20 @@ export function WmsGuideScreen() {
                 id="wms-guide-roles"
                 className="mb-2 text-xl font-semibold"
               >
-                참고: WMS 도메인 롤
+                WMS 도메인 롤
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                재고·출고 화면은 <strong>WMS 도메인 롤</strong>로 게이트됩니다. 운영자가
-                wms 구독 테넌트로 <strong>테넌트 선택(assume-tenant)</strong> 할 때
-                자동으로 파생되어 주입됩니다. (IAM 콘솔 3화면을 게이트하는 admin-console
-                역할과는 별도 축 —{' '}
+                재고·출고 화면을 보거나 쓰려면 <strong>WMS 권한(롤)</strong>이 있어야
+                합니다. 이 권한은 운영자가 WMS를 쓰는 회사(테넌트)를 선택하면 자동으로
+                주어집니다. IAM 관리 화면의 권한과는 다른 종류입니다 — 자세한 내용은{' '}
                 <Link
                   href="/iam/guide"
                   data-testid="wms-guide-xlink-iam"
                   className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   IAM 가이드
-                </Link>{' '}
-                참조.)
+                </Link>
+                를 참고하세요.
               </p>
               <div className="overflow-x-auto">
                 <table className="data-table" data-testid="wms-guide-roles">
@@ -257,10 +255,9 @@ export function WmsGuideScreen() {
               {/* 예약 흐름 */}
               <h3 className="mb-2 text-lg font-medium">예약 흐름 (가용 ↔ 예약)</h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                출고가 시작되면 재고가 <strong>가용 → 예약</strong>으로 옮겨가고, 출고
-                확정 시 예약이 소진되거나(확정) 취소/만료 시 가용으로 돌아옵니다(해제).
-                예약 상태는 <Mono>RESERVED → CONFIRMED</Mono> 또는{' '}
-                <Mono>RESERVED → RELEASED</Mono> 로만 진행합니다(재활성 없음).
+                출고가 시작되면 재고가 <strong>가용 → 예약</strong>으로 옮겨갑니다. 출고가
+                끝나면 예약이 사라지고(확정), 취소되거나 시간이 지나면 다시 가용으로
+                돌아갑니다(해제). 한 번 확정되거나 해제된 예약은 되돌리지 않습니다.
               </p>
               <ol className="mb-10 space-y-3">
                 {RESERVATION_STAGES.map((s, i) => (
@@ -326,18 +323,18 @@ export function WmsGuideScreen() {
                 출고
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                <strong>출고</strong> 화면(<Mono>/wms/outbound</Mono>)은 출고 운영(주문을
-                피킹→패킹→출고 확정)과 그 결과인 택배/출고 조회를 함께 보여줍니다. 주문은
-                아래 상태머신을 따라 진행합니다.
+                <strong>출고</strong> 화면은 주문을 꺼내기(피킹)→포장(패킹)→출고 확정
+                순서로 처리하고, 처리된 결과를 택배 목록에서 보여줍니다. 주문은 아래
+                순서대로 진행됩니다.
               </p>
 
               {/* 주문 상태머신 */}
               <h3 className="mb-2 text-lg font-medium">주문 상태</h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                정상 경로 6단계 —{' '}
-                <Mono>접수 → 피킹중 → 피킹완료 → 패킹중 → 패킹완료 → 출고완료</Mono> — 와
-                예외 종료 2개(취소 · 재고부족 이월)로 구성됩니다. 피킹·패킹은 각각
-                “진행 중”과 “완료” 두 단계로 나뉩니다.
+                정상적으로는{' '}
+                <Mono>접수 → 피킹중 → 피킹완료 → 패킹중 → 패킹완료 → 출고완료</Mono> 순서로
+                진행합니다. 중간에 <strong>취소</strong>되거나 재고가 모자라{' '}
+                <strong>재고부족 이월</strong>로 끝날 수도 있습니다.
               </p>
               <StateFlow states={ORDER_STATES} />
               <div className="mb-10 overflow-x-auto">
@@ -394,8 +391,8 @@ export function WmsGuideScreen() {
               {/* TMS 통보 상태 */}
               <h3 className="mb-2 text-lg font-medium">택배/출고 · 운송사(TMS) 통보</h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                출고가 확정(<Mono>출고완료</Mono>)되면 화물이 생성되고 택배/출고 표에
-                나타납니다. 이후 운송사(TMS)에 통보되는 별도 상태가 붙습니다.
+                출고가 끝나면(<Mono>출고완료</Mono>) 택배 목록에 나타나고, 운송사에
+                전달하는 과정이 별도로 진행됩니다.
               </p>
               <div className="mb-8 overflow-x-auto">
                 <table className="data-table" data-testid="wms-guide-tms-states">

@@ -11,6 +11,13 @@
  * (`features/ecommerce-guide/data.ts`)와 같은 원칙: 타입 있는 정적 배열 +
  * 정적 화면. 데이터 페치·권한 게이트 없음(콘솔 진입자 누구나 열람).
  *
+ * 🔵 **문장은 처음 보는 사람용이다**(TASK-PC-FE-323) — 쉬운 말, 카드 하나에
+ * 한두 문장. 회계·규제 용어(차변/대변·KYC·대사·FX)는 남겨도 되지만 처음
+ * 나올 때 쉬운 말로 짧게 풀어 쓴다. 클래스/메서드 이름·엔드포인트·필드명 같은
+ * 구현 세부는 화면 운영에 필요하지 않으면 뺀다. 티켓/ADR 번호·파일 이름·
+ * 「출처」 표시는 화면 문장에 쓰지 않는다(`tests/unit/domain-guides-plain.test.tsx`
+ * 가 검사한다).
+ *
  * **SoT** (드리프트 시 이 파일 카피도 동반 갱신):
  *   - 계좌·잔액·거래·KYC: `finance-platform/specs/contracts/http/account-api.md`
  *     + `apps/account-service` 도메인 모델.
@@ -59,16 +66,16 @@ export const DOMAIN_SERVICES: DomainService[] = [
   {
     key: 'account-service',
     name: 'account-service',
-    context: '계좌 · 잔액 · 거래 · KYC/컴플라이언스',
-    desc: '계좌(Account) 애그리거트를 소유. 계좌 개설(PENDING_KYC)·KYC 승급·홀드/캡처/해제·이체·거래 이력을 관리. v1 단일 배포(원장·대사는 ledger-service 로 분리).',
+    context: '계좌 · 잔액 · 거래 · KYC(고객확인)',
+    desc: '계좌를 관리합니다. 계좌 개설(처음엔 KYC 대기 상태) · KYC 인증 올리기 · 자금 묶기(홀드) · 확정(캡처) · 풀기 · 이체 · 거래 내역 조회를 담당합니다.',
     console: '계좌',
   },
   {
     key: 'ledger-service',
     name: 'ledger-service',
-    context: '복식부기 원장 · 회계 기간 · 대사',
-    desc: 'account-service 하위 다운스트림. 회계 계정 코드(ledgerAccountCode) 단위 분개(journal entry)·시산표·회계 기간 마감·외부 명세서 대사(reconciliation)·FX 환율 피드를 소유.',
-    console: '원장 · 개요(집계)',
+    context: '회계 장부(복식부기) · 회계 기간 · 대사',
+    desc: '계좌에서 일어난 거래를 넘겨받아 회계 장부에 기록합니다. 계정별 분개(장부 기록) · 시산표 · 회계 기간 마감 · 외부 명세서와의 대사 · 환율 정보를 관리합니다.',
+    console: '원장 · 개요',
   },
 ];
 
@@ -94,25 +101,25 @@ export const CONSOLE_SCREENS: ConsoleScreen[] = [
     key: 'overview',
     label: '개요',
     route: '/finance',
-    desc: '원장 집계 타일(시산표 inBalance · 미마감 기간 수 · 미해소 대사 차이 수 · FX 피드 신선도) + 운영자 본인의 기본 finance 계좌 단건 스냅샷(상태·통화별 잔액). 계좌 목록 집계는 하지 않는다(finance v1 에 계좌 list/search GET 없음).',
+    desc: '시산표가 맞는지, 마감되지 않은 회계 기간이 몇 개인지, 해소되지 않은 대사 차이가 몇 건인지, 환율 정보가 최신인지를 한눈에 보여줍니다. 내 기본 계좌의 상태와 통화별 잔액도 함께 보입니다. 계좌 전체 목록은 보여주지 않습니다.',
   },
   {
     key: 'guide',
     label: '가이드',
     route: '/finance/guide',
-    desc: '이 화면. 도메인 서비스 구성과 4개 화면이 보여주는 값의 의미를 정적으로 설명한다.',
+    desc: '지금 보고 있는 이 화면입니다. Finance 가 어떤 서비스로 이루어져 있고, 각 화면이 무엇을 보여주는지 설명합니다.',
   },
   {
     key: 'accounts',
     label: '계좌',
     route: '/finance/accounts',
-    desc: '계정(accountId) 조회 → 상태/KYC/통화 상세 + 통화별 잔액(장부/가용/holding) + 페이지네이션된 거래 이력(type·status 필터). accountId 입력 기반(목록/검색 없음 — 정직한 제약).',
+    desc: '계좌 번호를 입력해 조회합니다. 상태 · KYC 레벨 · 통화별 잔액(장부/가용/홀드)과 거래 내역을 볼 수 있습니다. 계좌 목록이나 검색 기능은 없어서, 번호를 알아야 조회할 수 있습니다.',
   },
   {
     key: 'ledger',
     label: '원장',
     route: '/ledger',
-    desc: '시산표(계정별 차변/대변 + 기준통화 총계 + inBalance) · 회계 기간 목록/상세(마감 스냅샷) · 분개(journal entry) id 조회 · 계정코드 드릴(잔액+분개 이력) · 대사 큐(OPEN 해소) · 대사 명세서 상세 · FX 환율 피드/history.',
+    desc: '시산표, 회계 기간별 마감 현황, 장부 기록(분개) 조회, 계정별 잔액과 기록 내역, 대사 대기 목록과 처리, 환율 정보를 확인하고 처리하는 화면입니다.',
   },
 ];
 
@@ -139,31 +146,31 @@ export const ACCOUNT_STATES: AccountState[] = [
     name: 'PENDING_KYC',
     label: 'KYC 대기',
     attention: true,
-    desc: '계좌 개설 직후 초기 상태. KYC 승급(`kyc/upgrade`)이 있어야 ACTIVE 로 전환.',
+    desc: '계좌를 개설하면 처음 갖는 상태입니다. KYC(고객확인) 인증을 올려야 활성 상태로 바뀝니다.',
   },
   {
     name: 'ACTIVE',
     label: '활성',
     attention: false,
-    desc: '정상 거래 가능 상태.',
+    desc: '정상적으로 거래할 수 있는 상태입니다.',
   },
   {
     name: 'RESTRICTED',
     label: '제한',
     attention: true,
-    desc: '일부 기능이 제한된 컴플라이언스 조치 상태.',
+    desc: '규정 준수를 위한 조치로 일부 기능이 제한된 상태입니다.',
   },
   {
     name: 'FROZEN',
     label: '동결',
     attention: true,
-    desc: '전 거래가 차단된 하드 블록 상태. 콘솔은 이를 절대 숨기지 않는다.',
+    desc: '모든 거래가 막힌 상태입니다. 콘솔은 이 상태를 숨기지 않고 그대로 보여줍니다.',
   },
   {
     name: 'CLOSED',
     label: '종료',
     attention: false,
-    desc: '계좌 종료(비활성). 종료 상태 — 거래 이력은 조회 가능.',
+    desc: '계좌가 종료된 상태입니다. 종료 후에도 거래 내역은 볼 수 있습니다.',
   },
 ];
 
@@ -183,9 +190,9 @@ export interface KycLevel {
  * 않는 write 이다).
  */
 export const KYC_LEVELS: KycLevel[] = [
-  { name: 'NONE', label: '미인증', desc: '기본값. 거래 한도가 가장 낮다.' },
-  { name: 'BASIC', label: '기본 인증', desc: '중간 수준의 거래 한도.' },
-  { name: 'FULL', label: '완전 인증', desc: '가장 높은 거래 한도.' },
+  { name: 'NONE', label: '미인증', desc: '아직 인증하지 않은 기본 상태입니다. 거래 한도가 가장 낮습니다.' },
+  { name: 'BASIC', label: '기본 인증', desc: '중간 수준의 거래 한도를 받습니다.' },
+  { name: 'FULL', label: '완전 인증', desc: '가장 높은 거래 한도를 받습니다.' },
 ];
 
 // ───────────────────────── 개념 노트 ─────────────────────────
@@ -195,8 +202,8 @@ export const KYC_LEVELS: KycLevel[] = [
  * 경로다(§ 2.4.7 / § 2.4.7.1 contract obligation).
  */
 export const F5_NOTE = {
-  title: 'F5 — 금액은 항상 문자열(minor units)',
-  body: '계좌 잔액·거래·원장 분개·대사 차액·FX 환율은 전부 정밀도 손실 없는 minor-units **문자열**로 전달된다(KRW=0자리, USD=2자리 등). 콘솔은 `Number()`/`parseFloat()`/`parseInt()` 로 절대 변환하지 않고 `formatMoney(...)` 문자열 조작만으로 스케일 보정 렌더한다 — 큰 금액(예: KRW 1,234,567,890,123)에서 부동소수점 정밀도 손실을 방지하기 위함이다.',
+  title: '금액은 항상 문자열로 표시됩니다',
+  body: '계좌 잔액·거래·장부 기록·대사 차액·환율은 모두 숫자가 아니라 문자열로 전달됩니다(예: 원화는 소수점 없이, 달러는 소수점 둘째 자리까지). 이렇게 하면 아주 큰 금액(예: 1,234,567,890,123원)도 소수점 오차 없이 정확하게 표시됩니다.',
 } as const;
 
 /**
@@ -204,8 +211,8 @@ export const F5_NOTE = {
  * 증명한다.
  */
 export const DOUBLE_ENTRY_NOTE = {
-  title: '복식부기 — 시산표 inBalance',
-  body: '모든 분개(journal entry)는 차변(debit)과 대변(credit) 합계가 항상 같아야 한다는 복식부기 불변식을 따른다. 원장 화면의 시산표(trial balance)는 전 계정의 차변/대변 합계(및 기준통화 KRW 환산 총계)를 집계해 `inBalance` 플래그로 즉시 증명한다 — `false` 면 데이터 정합성 문제이며 절대 숨기지 않는다. 개요의 원장 타일도 이 값을 그대로 표시한다.',
+  title: '복식부기와 시산표',
+  body: '모든 장부 기록(분개)은 차변과 대변의 합계가 항상 같아야 합니다. 이를 복식부기라고 합니다. 원장 화면의 시산표에서 이 합계가 맞는지 바로 확인할 수 있습니다 — 맞지 않으면 데이터에 문제가 있다는 뜻이며, 콘솔은 이를 숨기지 않고 그대로 보여줍니다. 개요 화면의 원장 타일에도 같은 값이 표시됩니다.',
 } as const;
 
 /**
@@ -213,24 +220,24 @@ export const DOUBLE_ENTRY_NOTE = {
  * 노출하고, 운영자가 해소(resolve)한다.
  */
 export const RECONCILIATION_NOTE = {
-  title: '대사 (Reconciliation) — OPEN 큐 · 해소',
-  body: '외부 명세서(예: 은행/PG 정산 파일)를 원장에 대사(matching)한 결과, 매칭되지 않은 외부 항목(UNMATCHED_EXTERNAL)·내부 항목(UNMATCHED_INTERNAL)·금액이 다른 매칭 쌍(AMOUNT_MISMATCH, FX 차액 포함)이 있으면 대사 차이(discrepancy)로 기록된다. 상태는 OPEN(미해소) → RESOLVED(해소) 이며, 개요의 "미해소 대사 차이 수" 타일은 OPEN 상태의 개수를 집계한 것이다. 해소 액션(원장 화면의 유일한 쓰기)은 이 가이드가 아니라 원장 화면(`/ledger`)의 대사 큐에서 수행한다.',
+  title: '대사 — 명세서와 장부 맞춰보기',
+  body: '외부 명세서(예: 은행이나 결제 정산 파일)를 우리 장부와 비교하는 것을 대사라고 합니다. 맞지 않는 내역(외부에만 있거나, 내부에만 있거나, 금액이 다른 경우 — 환율 차이 포함)은 "미해소(OPEN)" 상태로 쌓이고, 운영자가 확인해서 "해소(RESOLVED)" 상태로 바꿉니다. 개요 화면의 "미해소 대사 차이" 타일은 이 미해소 건수를 보여줍니다. 해소 처리는 원장 화면의 대사 목록에서만 할 수 있습니다.',
 } as const;
 
 /**
  * FX 환율 피드 신선도 — 개요/원장 모두 stale 여부를 정직하게 표시한다.
  */
 export const FX_NOTE = {
-  title: 'FX 환율 피드 — 신선도(freshness)',
-  body: '다중 통화 원장은 외부 FX 환율 피드를 주기적으로 폴링해 캐시한다. 각 환율은 `asOf`(기준 시각)·`ageSeconds`(경과)·`stale`(신선도 기준 초과 여부)을 함께 제공하며, 콘솔은 오래된(stale) 환율을 숨기지 않고 그대로 표시한다 — 개요의 FX 타일은 피드 활성화 여부와 오래된 환율 수를 요약한다.',
+  title: '환율 정보',
+  body: '여러 통화를 다루는 장부는 외부에서 환율 정보를 주기적으로 받아와 사용합니다. 각 환율에는 기준 시각과 얼마나 오래됐는지가 함께 표시되며, 오래된 환율도 숨기지 않고 그대로 보여줍니다. 개요 화면의 환율 타일에는 오래된 환율이 몇 개인지가 요약되어 있습니다.',
 } as const;
 
 /**
  * 계좌 화면의 honest 제약 — finance v1 에는 계좌 list/search GET 이 없다.
  */
 export const ACCOUNT_ID_DRIVEN_NOTE = {
-  title: '계좌·원장 분개는 목록 조회가 없다 (id-driven)',
-  body: 'finance v1 은 계좌(account-service)·분개(ledger-service) 모두 list/search GET 을 제공하지 않는다 — 계좌 화면은 accountId 를, 원장의 분개 조회는 entryId 를 입력받는 조회 전용 화면이다. 개요가 "계좌 목록 요약"이 아니라 "운영자 본인의 기본계좌 단건 스냅샷"만 보여주는 이유도 이 제약 때문이다(cross-account 집계·synthetic 합산 금지).',
+  title: '계좌와 장부 기록은 번호로만 조회합니다',
+  body: '계좌 화면은 계좌 번호를, 원장의 장부 기록 조회는 기록 번호를 입력해야 조회할 수 있습니다. 목록이나 검색 기능은 없습니다. 개요 화면이 전체 계좌 목록 대신 내 기본 계좌 하나만 보여주는 것도 같은 이유입니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
@@ -242,27 +249,27 @@ export const ACCOUNT_ID_DRIVEN_NOTE = {
  */
 export const FINANCE_RECIPES: GuideRecipeData[] = [
   {
-    title: '대사 차이를 해소할 때',
+    title: '대사 차이를 해결할 때',
     steps: [
-      '원장 화면(/ledger)의 대사 큐에서 OPEN 상태의 차이를 엽니다.',
-      '차이 유형(외부 미매칭·내부 미매칭·금액 불일치)을 확인합니다 — 금액 불일치에는 FX 차액도 포함됩니다.',
-      '해소하면 상태가 RESOLVED 로 바뀝니다(대사 해소는 원장 화면의 유일한 쓰기). 개요의 "미해소 대사 차이 수" 타일은 OPEN 건수를 셉니다.',
+      '원장 화면(/ledger)의 대사 목록에서 "미해소(OPEN)" 상태인 항목을 엽니다.',
+      '차이의 원인(외부에만 있는 내역 · 내부에만 있는 내역 · 금액이 다른 경우)을 확인합니다 — 금액이 다른 경우에는 환율 차이도 포함될 수 있습니다.',
+      '처리하면 상태가 "해소(RESOLVED)"로 바뀝니다. 개요 화면의 "미해소 대사 차이" 타일은 이 미해소 건수를 보여줍니다.',
     ],
   },
   {
-    title: '시산표가 안 맞을 때 (inBalance = false)',
+    title: '시산표가 맞지 않을 때',
     steps: [
-      '개요의 원장 타일 또는 원장 화면의 시산표에서 inBalance 플래그를 확인합니다.',
-      'false 면 차변/대변 합계가 어긋난 데이터 정합성 문제입니다 — 콘솔은 이를 숨기지 않고 그대로 보여줍니다.',
-      '원장에서 계정별 차변/대변 총계와 분개(journal entry)를 드릴다운해 원인을 찾습니다.',
+      '개요 화면의 원장 타일이나 원장 화면의 시산표에서 합계가 맞는지 확인합니다.',
+      '맞지 않으면 차변과 대변의 합계가 어긋난 것으로, 데이터에 문제가 있다는 뜻입니다. 콘솔은 이를 숨기지 않고 그대로 보여줍니다.',
+      '원장 화면에서 계정별 합계와 개별 장부 기록을 확인해 원인을 찾습니다.',
     ],
   },
   {
     title: '계좌가 거래를 못 할 때',
     steps: [
-      '계좌 화면(/finance/accounts)에서 accountId 로 상태를 조회합니다.',
-      '상태가 동결(FROZEN)·제한(RESTRICTED)이거나 KYC 레벨이 낮으면(NONE/BASIC) 홀드·이체가 차단될 수 있습니다.',
-      'KYC 승급·동결 해제는 콘솔 범위 밖(백엔드 조치)입니다 — 콘솔은 규제 상태를 있는 그대로 표시만 합니다.',
+      '계좌 화면(/finance/accounts)에서 계좌 번호로 상태를 조회합니다.',
+      '상태가 동결이나 제한이거나, KYC 레벨이 낮으면(미인증/기본 인증) 거래가 막힐 수 있습니다.',
+      'KYC 인증을 올리거나 동결을 해제하는 작업은 콘솔에서 할 수 없습니다 — 콘솔은 규제 상태를 있는 그대로 보여주기만 합니다.',
     ],
   },
 ];
@@ -279,31 +286,31 @@ export const FINANCE_GLOSSARY: GlossaryEntry[] = [
     term: 'KYC',
     full: 'Know Your Customer',
     meaning:
-      '고객확인 절차. 레벨(미인증·기본·완전)이 낮으면 거래 한도가 낮거나 홀드·이체가 차단될 수 있습니다.',
+      '고객을 확인하는 절차입니다. 인증 레벨(미인증·기본·완전)이 낮으면 거래 한도가 낮아지거나 거래가 막힐 수 있습니다.',
   },
   {
     key: 'trial-balance',
-    term: '시산표 (trial balance)',
+    term: '시산표',
     meaning:
-      '전 계정의 차변·대변 합계를 집계한 표. inBalance 플래그가 차변=대변임을 즉시 증명하며, false 면 정합성 문제입니다.',
+      '모든 계정의 차변·대변 합계를 모은 표입니다. 둘이 같으면 정상이고, 다르면 장부에 문제가 있다는 뜻입니다.',
   },
   {
     key: 'reconciliation',
-    term: '대사 (reconciliation)',
+    term: '대사',
     meaning:
-      '외부 명세서(은행·PG 정산 파일 등)와 내부 원장을 맞춰보는 것. 불일치는 OPEN 차이로 큐에 쌓이고 운영자가 해소합니다.',
+      '외부 명세서(은행이나 결제 정산 파일 등)와 우리 장부를 비교하는 것입니다. 맞지 않는 내역은 목록에 쌓이고 운영자가 처리합니다.',
   },
   {
     key: 'FX',
     term: 'FX',
     full: 'Foreign Exchange',
     meaning:
-      '외환(환율). 다중 통화 원장은 외부 환율 피드를 캐시하며, 각 환율의 기준 시각·경과·신선도(stale)를 함께 보여줍니다.',
+      '환율입니다. 여러 통화를 다루는 장부는 외부에서 환율을 받아와 사용하며, 각 환율이 언제 적용된 것인지도 함께 보여줍니다.',
   },
   {
     key: 'minor-units',
-    term: '최소 화폐단위 (minor units)',
+    term: '최소 화폐단위',
     meaning:
-      '금액을 정밀도 손실 없이 정수 문자열로 표현하는 단위(원=0자리, 달러=2자리). 콘솔은 이를 숫자로 변환하지 않고 문자열로만 다룹니다.',
+      '금액을 소수점 오차 없이 정확하게 표현하는 방식입니다(원화는 소수점 없이, 달러는 소수점 둘째 자리까지). 콘솔은 이 값을 숫자로 바꾸지 않고 문자열 그대로 다룹니다.',
   },
 ];

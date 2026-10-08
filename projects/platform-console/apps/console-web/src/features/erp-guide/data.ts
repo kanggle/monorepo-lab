@@ -67,29 +67,29 @@ export const DOMAIN_SERVICES: DomainService[] = [
     key: 'masterdata-service',
     name: 'masterdata-service',
     context: '부서 · 직원 · 직급 · 원가센터 · 거래처',
-    desc: '5종 마스터(Master) 애그리거트를 소유. list+detail 10 GET 전부 effective-dating(`asOf`) 지원, create/update/retire(+부서 move-parent) 16 write endpoint. 다른 3개 서비스의 업스트림 원천.',
-    console: '마스터 · 개요(마스터 카운트)',
+    desc: '부서·직원·직급·원가센터·거래처 같은 기준 정보를 등록·수정·폐기합니다. 과거 시점의 상태 조회도 이 서비스가 처리하며, 다른 서비스들은 모두 이 정보를 가져다 씁니다.',
+    console: '마스터 · 개요(마스터 건수)',
   },
   {
     key: 'approval-service',
     name: 'approval-service',
-    context: '다단계 결재 워크플로 · 대결/위임 grant',
-    desc: '결재 요청(ApprovalRequest) 생성·제출·승인·반려·철회, 1~N 단계(stage) 라우팅, 대결(위임) grant/revoke 를 소유. 결재 전이는 notification-service 로 이벤트 fan-out.',
-    console: '결재함 · 위임 · 개요(결재 대기/활성 위임 카운트)',
+    context: '결재 요청과 위임 처리',
+    desc: '결재 요청을 만들고 제출·승인·반려·철회하는 과정을 처리합니다. 여러 단계를 거치는 결재와, 자리를 비울 때의 위임 등록도 이 서비스가 맡습니다. 결재가 진행되면 알림 서비스에 알려 줍니다.',
+    console: '결재함 · 위임 · 개요(결재 대기/활성 위임 건수)',
   },
   {
     key: 'read-model-service',
     name: 'read-model-service',
-    context: '조직도 투영 · 위임 fact 투영',
-    desc: 'masterdata 이벤트를 소비해 직원 조직도(부서 계층 경로 + 원가센터 + 직급)와 위임 grant 상태를 eventually-consistent 하게 투영. 도메인 로직 없음(E5) — 원본은 항상 masterdata/approval.',
-    console: '통합 조회 · 위임 현황(read-only 카드)',
+    context: '직원 조직도 · 위임 현황 조회용 데이터',
+    desc: '기준 정보가 바뀌면 그 내용을 받아 직원 조직도(부서·원가센터·직급)와 위임 현황을 보기 좋은 형태로 만들어 둡니다. 약간의 시간차가 있을 수 있어, 아직 반영되지 않은 내용은 화면에 "동기화 중"으로 표시됩니다.',
+    console: '통합 조회 · 위임 현황(조회 전용 카드)',
   },
   {
     key: 'notification-service',
     name: 'notification-service',
-    context: '결재 전이 인앱 알림',
-    desc: '4개 `erp.approval.*` 전이 이벤트를 소비해 수신자 스코프 인앱 알림을 생성. 콘솔 셸의 알림 벨 aggregator 에 통합되며(ADR-043), ERP 독립 메뉴로는 노출하지 않는다.',
-    console: '(콘솔 셸 알림 벨에 통합 — 독립 화면 없음)',
+    context: '결재 알림',
+    desc: '결재가 제출·승인·반려·철회될 때마다 관련 운영자에게 알림을 보냅니다. ERP 안에 따로 메뉴가 있지는 않고, 콘솔 상단의 알림 벨에서 확인합니다.',
+    console: '(독립 화면 없음 — 알림 벨에서 확인)',
   },
 ];
 
@@ -112,37 +112,37 @@ export const CONSOLE_SCREENS: ConsoleScreen[] = [
     key: 'overview',
     label: '개요',
     route: '/erp',
-    desc: '마스터 5종(부서·직원·직급·원가센터·거래처) 건수 + 결재 대기 건수(본인 inbox) + 활성 위임 건수를 집계한 카운트 타일. 각 타일은 독립적으로 degrade(한 타일의 503/403이 다른 타일을 가리지 않음).',
+    desc: '부서·직원·직급·원가센터·거래처 건수와 내 결재 대기 건수, 활성 위임 건수를 한눈에 보여줍니다. 한 항목에 문제가 생겨도 다른 항목은 그대로 보입니다.',
   },
   {
     key: 'guide',
     label: '가이드',
     route: '/erp/guide',
-    desc: '이 화면. 도메인 서비스 구성과 6개 화면이 보여주는 값의 의미를 정적으로 설명한다.',
+    desc: '지금 보고 있는 이 화면입니다. ERP 의 구성과 각 화면에서 보는 값의 의미를 설명합니다.',
   },
   {
     key: 'masters',
     label: '마스터',
     route: '/erp/masters',
-    desc: '부서·직원·직급·원가센터·거래처 5종 마스터 목록 조회 + 등록/수정/폐기(부서는 추가로 상위부서 이동). 전 목록·상세가 `?asOf=` 시점 조회를 지원(E3 effective-dating).',
+    desc: '부서·직원·직급·원가센터·거래처 목록을 보고 등록·수정·폐기합니다(부서는 상위 부서 변경도 가능). 날짜를 지정하면 과거 시점의 상태도 조회할 수 있습니다.',
   },
   {
     key: 'orgview',
     label: '통합 조회',
     route: '/erp/orgview',
-    desc: 'read-model 이 투영한 직원 조직도 — 직원 + 소속 부서 계층 경로 + 원가센터 + 직급을 한 화면에서 조회. eventually-consistent(투영 지연 시 "동기화 중" 정직 표면).',
+    desc: '직원과 소속 부서, 원가센터, 직급을 한 화면에서 조회합니다. 최신 정보가 반영되기까지 잠깐 시간이 걸릴 수 있으며, 그 사이에는 "동기화 중"으로 표시됩니다.',
   },
   {
     key: 'approval',
     label: '결재함',
     route: '/erp/approval',
-    desc: '결재 요청 생성/제출/승인/반려/철회. 1~N 단계 다단계 라우팅, 현재 단계 진행 타임라인, 대결(위임) 처리 시 실제 승인자 표시.',
+    desc: '결재 요청을 만들어 제출·승인·반려·철회합니다. 여러 단계를 거치는 결재도 지금 어느 단계인지 보여 주고, 위임받은 사람이 처리했으면 실제 처리자도 표시합니다.',
   },
   {
     key: 'delegation',
     label: '위임',
     route: '/erp/delegation',
-    desc: '대결(위임) grant 등록/철회 + read-model 기반 위임 현황(활성/철회 상태, 유효기간, 스코프) 조회.',
+    desc: '자리를 비울 때 대신 결재할 사람을 등록하거나 철회합니다. 지금 위임이 활성인지, 기간과 범위가 어떻게 되는지도 볼 수 있습니다.',
   },
 ];
 
@@ -167,13 +167,13 @@ export const MASTER_STATUSES: StatusVocab[] = [
     name: 'ACTIVE',
     label: '활성',
     attention: false,
-    desc: '현재 유효한 마스터(effectiveTo 가 null 또는 미래).',
+    desc: '지금 유효한 상태입니다.',
   },
   {
     name: 'RETIRED',
     label: '폐기',
     attention: true,
-    desc: '폐기된 마스터(effectiveTo 가 과거). 목록에서 시각적으로 구분되지만 절대 숨겨지지 않는다.',
+    desc: '더 이상 쓰이지 않는 상태입니다. 목록에서 구분되어 보이지만 숨겨지지는 않습니다.',
   },
 ];
 
@@ -182,18 +182,18 @@ export const MASTER_STATUSES: StatusVocab[] = [
  * `features/erp-ops/api/types.KNOWN_EMPLOYMENT_STATUSES` 와 일치.
  */
 export const EMPLOYMENT_STATUSES: StatusVocab[] = [
-  { name: 'EMPLOYED', label: '재직', attention: false, desc: '정상 재직 중.' },
+  { name: 'EMPLOYED', label: '재직', attention: false, desc: '정상적으로 재직 중입니다.' },
   {
     name: 'ON_LEAVE',
     label: '휴직',
     attention: true,
-    desc: '일시적 휴직 상태.',
+    desc: '일시적으로 휴직 중인 상태입니다.',
   },
   {
     name: 'SEPARATED',
     label: '퇴사',
     attention: true,
-    desc: '퇴사 처리됨. 마스터 목록에서 필터링되지 않고 그대로 표시된다(E2 honesty).',
+    desc: '퇴사한 직원입니다. 목록에서 걸러지지 않고 그대로 표시됩니다.',
   },
 ];
 
@@ -217,37 +217,37 @@ export const APPROVAL_STATUSES: ApprovalStatusVocab[] = [
     name: 'DRAFT',
     label: '초안',
     terminal: false,
-    desc: '생성 직후 초기 상태. 제출(submit) 또는 철회(withdraw) 가능.',
+    desc: '결재 요청을 막 만든 상태입니다. 제출하거나 철회할 수 있습니다.',
   },
   {
     name: 'SUBMITTED',
     label: '제출됨',
     terminal: false,
-    desc: '제출되어 첫 단계 승인자의 조치를 대기 중.',
+    desc: '제출되어 첫 번째 승인자의 처리를 기다리는 상태입니다.',
   },
   {
     name: 'IN_REVIEW',
     label: '심사 중',
     terminal: false,
-    desc: '2단계 이상 다단계 라우팅 중 현재 단계가 진행 중(v2.0).',
+    desc: '두 단계 이상인 결재가 진행 중인 상태입니다.',
   },
   {
     name: 'APPROVED',
     label: '승인됨',
     terminal: true,
-    desc: '모든 단계 승인 완료(happy terminal).',
+    desc: '모든 단계가 승인되어 끝난 상태입니다.',
   },
   {
     name: 'REJECTED',
     label: '반려됨',
     terminal: true,
-    desc: '어느 단계에서든 반려되면 즉시 종료.',
+    desc: '어느 단계에서든 반려되면 바로 끝난 상태입니다.',
   },
   {
     name: 'WITHDRAWN',
     label: '철회됨',
     terminal: true,
-    desc: '제출자가 스스로 철회.',
+    desc: '제출한 사람이 스스로 철회한 상태입니다.',
   },
 ];
 
@@ -269,12 +269,12 @@ export const DELEGATION_SCOPES: DelegationScopeVocab[] = [
   {
     name: 'GLOBAL',
     label: '포괄 위임',
-    desc: '위임자(delegator) 명의의 모든 결재 요청에 대해 대결 가능.',
+    desc: '위임한 사람의 모든 결재 요청을 대신 처리할 수 있습니다.',
   },
   {
     name: 'REQUEST',
     label: '건별 위임',
-    desc: '특정 결재 요청(scopeRequestId) 1건에 한정된 대결.',
+    desc: '특정 결재 요청 한 건만 대신 처리할 수 있습니다.',
   },
 ];
 
@@ -285,40 +285,40 @@ export const DELEGATION_SCOPES: DelegationScopeVocab[] = [
  * `?asOf=` 를 지원하며, 콘솔은 이를 first-class `<AsOfPicker>` 로 노출한다.
  */
 export const ASOF_NOTE = {
-  title: 'E3 — Effective-dating (`?asOf=`)',
-  body: '모든 마스터의 list/detail GET 은 `?asOf=<ISO-8601>` 점-in-time 조회를 지원한다. 지정 시 producer 는 "현재 상태"가 아니라 "그 시점의 상태"를 정확히 반환한다(과거 조회에 현재 상태를 대체하는 것은 ERP UX 의 핵심 결함으로 취급). `/erp/masters` 상단 `<AsOfPicker>` 가 이 쿼리를 조작하는 유일한 통제점이며, 개요의 마스터 카운트 타일도 동일한 `asOf` 를 스레딩한다.',
+  title: '날짜를 지정해 과거 상태 조회하기',
+  body: '마스터 화면 위쪽에서 날짜를 지정하면, 지금이 아니라 그 날짜 기준의 상태를 보여줍니다. 날짜를 비워 두면 현재 상태가 보입니다. 개요의 마스터 건수도 같은 날짜를 기준으로 집계됩니다.',
 } as const;
 
 /**
  * 결재 다단계 라우팅 — v2.0 `approverIds` 순서 배열.
  */
 export const APPROVAL_ROUTING_NOTE = {
-  title: '다단계 결재 라우팅 (v2.0)',
-  body: '결재 요청 생성 시 단일 승인자(`approverId`, 레거시) 또는 순서 있는 승인자 배열(`approverIds`, v2.0)을 지정할 수 있다. 후자는 1~N 단계 라우팅을 구성하며, 현재 단계(`currentStage`)의 승인자만 조치(승인/반려/철회) 가능하다. 각 단계 전이는 이력(`history`)에 append-only 로 기록되며, 대결(위임)로 처리된 경우 `actingForApproverId` 로 실제 승인자를 정직하게 표시한다.',
+  title: '여러 단계를 거치는 결재',
+  body: '결재 요청에는 승인자를 한 명만 지정할 수도, 여러 명을 순서대로 지정할 수도 있습니다. 여러 단계인 경우 지금 차례인 승인자만 승인·반려·철회할 수 있습니다. 모든 처리 내용은 이력에 남고, 위임받은 사람이 처리했으면 실제 처리자도 함께 표시됩니다.',
 } as const;
 
 /**
  * 위임(대결) grant — 결재자 부재 시 대신 처리할 수 있는 권한 위임.
  */
 export const DELEGATION_NOTE = {
-  title: '위임 (대결, Delegation)',
-  body: '결재자(approver)가 부재 시 다른 운영자(delegate)가 대신 승인/반려하도록 grant 를 등록할 수 있다. grant 는 포괄(GLOBAL) 또는 건별(REQUEST) 스코프를 가지며, 유효기간(`validFrom`/`validTo`, `validTo` 부재 = 무기한)이 있다. 활성 grant 는 approval-service 가 결재 전이 시 조회하고, read-model 은 그 상태를 개요·위임 현황 화면에 eventually-consistent 하게 투영한다(개요의 "활성 위임" 타일은 `status=ACTIVE` 건수).',
+  title: '위임(대결)',
+  body: '결재자가 자리를 비울 때 다른 운영자가 대신 승인·반려하도록 등록할 수 있습니다. 전체 결재 요청에 대한 위임(포괄)이거나 특정 요청 한 건에 대한 위임(건별)일 수 있고, 기간을 정할 수 있습니다(기간을 정하지 않으면 무기한입니다). 개요의 "활성 위임" 건수는 지금 유효한 위임만 센 값입니다.',
 } as const;
 
 /**
  * 통합 조회 — read-model 의 eventually-consistent 투영, E5 원칙.
  */
 export const READ_MODEL_NOTE = {
-  title: '통합 조회 — read-model 투영 (E5)',
-  body: 'read-model-service 는 masterdata 이벤트를 소비해 직원 조직도(부서 계층 경로 + 원가센터 + 직급)를 투영한다. 도메인 로직을 갖지 않는 순수 투영(E5)이므로 masterdata 대비 지연이 있을 수 있다 — 아직 투영되지 않은 참조는 `null` + `meta.unresolved` 로 "동기화 중" 배지가 표시되며, 절대 조작된 값으로 채워지지 않는다.',
+  title: '통합 조회는 어떻게 만들어지나요',
+  body: '마스터 정보가 바뀌면 그 내용을 받아 직원 조직도를 다시 만들어 보여줍니다. 그래서 마스터 화면보다 반영이 조금 늦을 수 있습니다. 아직 반영되지 않은 부분은 "동기화 중"으로 표시되며, 실제와 다른 값을 억지로 채워 보여주지 않습니다.',
 } as const;
 
 /**
  * 알림 — 결재 전이 이벤트가 콘솔 셸의 벨 aggregator 로 통합된다(ADR-043).
  */
 export const NOTIFICATION_NOTE = {
-  title: '알림 — 결재 전이는 벨 aggregator 로 통합',
-  body: 'approval-service 의 4개 전이 이벤트(제출·승인·반려·철회)는 notification-service 가 소비해 수신자 스코프 인앱 알림을 생성한다. 콘솔은 이를 독립 ERP 메뉴가 아니라 콘솔 셸 상단의 공용 알림 벨에 통합해 노출한다(ADR-043 P2 DECLINED — 도메인별 독립 알림 화면 재발굴 금지). 벨에서 결재 알림을 클릭하면 해당 결재 요청(`/erp/approval`)으로 딥링크된다.',
+  title: '알림은 어떻게 오나요',
+  body: '결재가 제출·승인·반려·철회될 때마다 관련 운영자에게 알림이 갑니다. ERP 안에 따로 알림 메뉴는 없고, 콘솔 상단의 알림 벨에서 다른 도메인 알림과 함께 확인합니다. 알림을 클릭하면 해당 결재 요청으로 바로 이동합니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
@@ -332,24 +332,24 @@ export const ERP_RECIPES: GuideRecipeData[] = [
     title: '결재가 반려됐을 때 다시 올리기',
     steps: [
       '결재함(/erp/approval)에서 반려된(REJECTED) 요청의 사유를 이력에서 확인합니다.',
-      '반려는 종료 상태라 되돌릴 수 없으니, 내용을 고쳐 새 결재 요청을 생성합니다(DRAFT).',
-      '제출(submit)하면 첫 단계 승인자부터 다시 라우팅됩니다(2단계 이상이면 IN_REVIEW 로 진행).',
+      '반려는 끝난 상태라 되돌릴 수 없으니, 내용을 고쳐 새 결재 요청을 만듭니다(DRAFT).',
+      '제출하면 첫 번째 승인자부터 다시 진행됩니다(단계가 여러 개면 IN_REVIEW 상태가 됩니다).',
     ],
   },
   {
     title: '자리를 비울 때 결재를 위임하기',
     steps: [
-      '위임 화면(/erp/delegation)에서 대결(위임) grant 를 등록합니다.',
-      '포괄(GLOBAL) 또는 건별(REQUEST) 스코프와 유효기간(validFrom/validTo, validTo 부재=무기한)을 정합니다.',
-      '활성 grant 가 있으면 대리인이 대신 승인/반려할 수 있고, 처리 시 실제 승인자가 정직하게 표시됩니다(actingForApproverId).',
+      '위임 화면(/erp/delegation)에서 위임을 등록합니다.',
+      '전체(GLOBAL) 또는 건별(REQUEST) 범위와 기간을 정합니다. 기간을 정하지 않으면 무기한입니다.',
+      '위임이 활성 상태면 대리인이 대신 승인·반려할 수 있고, 처리하면 실제 처리자도 함께 표시됩니다.',
     ],
   },
   {
     title: '과거 시점의 조직 상태를 조회할 때',
     steps: [
-      '마스터 화면(/erp/masters) 상단의 시점 선택기(AsOfPicker)에 조회할 날짜를 지정합니다.',
-      '그러면 "현재"가 아니라 "그 시점"의 마스터 상태가 정확히 반환됩니다(effective-dating).',
-      '개요의 마스터 카운트 타일도 같은 asOf 를 따라 집계됩니다.',
+      '마스터 화면(/erp/masters) 위쪽의 날짜 선택기에서 조회할 날짜를 지정합니다.',
+      '그러면 지금이 아니라 그 날짜 기준의 상태를 보여줍니다.',
+      '개요의 마스터 건수도 같은 날짜를 기준으로 집계됩니다.',
     ],
   },
 ];

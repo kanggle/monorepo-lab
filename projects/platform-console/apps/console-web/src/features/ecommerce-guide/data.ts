@@ -11,6 +11,10 @@
  * (`features/wms-guide/data.ts`, TASK-PC-FE-183)와 같은 원칙: 타입 있는 정적
  * 배열 + 정적 화면. 데이터 페치·권한 게이트 없음(콘솔 진입자 누구나 열람).
  *
+ * 🔵 **문장은 처음 보는 사람용이다**(TASK-PC-FE-323) — 쉬운 말, 카드/행 하나에
+ * 한두 문장. 티켓 번호·ADR 번호·파일 경로·「출처」 표시는 화면 문장에 쓰지 않는다
+ * (`tests/unit/domain-guides-plain.test.tsx` 가 검사한다).
+ *
  * **SoT** (드리프트 시 이 파일 카피도 동반 갱신):
  *   - 도메인 enum/상태머신: `projects/ecommerce-microservices-platform/apps/
  *     {product,order,payment,shipping,promotion,user,notification}-service`
@@ -56,70 +60,70 @@ export const DOMAIN_SERVICES: DomainService[] = [
     key: 'product',
     name: 'product-service',
     context: '상품 · 재고 · 셀러',
-    desc: '상품 마스터(등록/수정/삭제)·variant(옵션)·카테고리·가격·재고, 그리고 셀러 애그리거트를 소유.',
+    desc: '상품을 등록·수정·삭제하고, 옵션(variant)·카테고리·가격·재고와 셀러 정보를 관리합니다.',
     console: '상품 · 셀러',
   },
   {
     key: 'order',
     name: 'order-service',
     context: '주문',
-    desc: '주문 애그리거트 생명주기를 소유. 주문 검증·접수 후 결제 이벤트에 반응해 상태를 전이.',
+    desc: '주문이 접수되고 끝날 때까지 전체 흐름을 관리합니다. 결제 결과에 따라 주문 상태가 바뀝니다.',
     console: '주문',
   },
   {
     key: 'payment',
     name: 'payment-service',
     context: '결제',
-    desc: 'OrderPlaced 시 PENDING 결제 생성 → Toss Payments PG 로 승인, 환불 처리. 콘솔 전용 화면 없음(주문 상태로 간접 노출).',
+    desc: '주문이 들어오면 결제를 만들고 Toss Payments 로 승인·환불을 처리합니다. 전용 화면은 없고 주문 상태로 결과가 보입니다.',
     console: '— (주문에 반영)',
   },
   {
     key: 'shipping',
     name: 'shipping-service',
     context: '배송',
-    desc: 'OrderConfirmed 시 배송 생성, 선형 상태머신 강제, 운송장 추적 갱신.',
+    desc: '주문이 확정되면 배송을 만들고, 정해진 순서대로만 진행되게 하며 운송장 배송 현황을 갱신합니다.',
     console: '배송',
   },
   {
     key: 'promotion',
     name: 'promotion-service',
     context: '프로모션 · 쿠폰',
-    desc: '프로모션 CRUD + 쿠폰 발급/생명주기, 할인 계산.',
+    desc: '프로모션을 등록·관리하고 쿠폰을 발급하며 할인 금액을 계산합니다.',
     console: '프로모션',
   },
   {
     key: 'user',
     name: 'user-service',
     context: '사용자 프로필',
-    desc: 'IAM `account.created` 로 최소 프로필 생성, 프로필·배송지 CRUD, 탈퇴/익명화 반응.',
+    desc: '회원 가입 시 기본 프로필을 만들고, 프로필·배송지를 관리하며 탈퇴 시 정보를 처리합니다.',
     console: '사용자',
   },
   {
     key: 'notification',
     name: 'notification-service',
     context: '알림',
-    desc: '소비 전용. 주문/결제/배송/인증 이벤트를 이메일·SMS·푸시로 발송. 템플릿·수신 설정 관리.',
+    desc: '주문·결제·배송·가입 알림을 이메일·SMS·푸시로 보냅니다. 알림 템플릿과 수신 설정을 관리합니다.',
     console: '알림',
   },
   {
     key: 'settlement',
     name: 'settlement-service',
     context: '정산',
-    desc: '셀러별 라인 단위 수수료 적립, 기간 마감 → 셀러 정산금 지급.',
+    desc: '셀러별로 수수료를 쌓아두고, 정해진 기간이 끝나면 정산금을 지급합니다.',
     console: '정산',
   },
   {
     key: 'review',
     name: 'review-service',
     context: '리뷰 · 평점',
-    desc: '구매 검증 리뷰 CRUD, 평균 평점 캐시.',
+    desc: '구매한 사람만 쓸 수 있는 리뷰를 관리하고 평균 평점을 계산합니다.',
     console: '—',
   },
   {
     key: 'search',
     name: 'search-service',
     context: '검색 · 색인',
-    desc: '상품/리뷰 이벤트로 Elasticsearch 색인 구축, 검색 질의 API.',
+    desc: '상품·리뷰 정보를 모아 검색할 수 있게 합니다.',
     console: '—',
   },
 ];
@@ -153,42 +157,42 @@ export const ORDER_STATES: OrderState[] = [
     label: '대기',
     terminal: false,
     operatorActionable: true,
-    desc: '주문 접수, 결제 대기. 결제 완료(PaymentCompleted) 시 자동 확정. 운영자는 확정 또는 취소 가능.',
+    desc: '주문이 접수되어 결제를 기다리는 상태입니다. 결제가 끝나면 자동으로 확정됩니다. 운영자는 확정하거나 취소할 수 있습니다.',
   },
   {
     name: 'CONFIRMED',
     label: '확정',
     terminal: false,
     operatorActionable: true,
-    desc: '결제 완료로 확정됨 → 배송 서비스가 배송 생성. 운영자는 취소만 가능(확정 전으로 되돌릴 수 없음).',
+    desc: '결제가 끝나 확정된 상태입니다. 배송이 자동으로 준비됩니다. 운영자는 취소만 할 수 있고 대기 상태로 되돌릴 수는 없습니다.',
   },
   {
     name: 'SHIPPED',
     label: '배송중',
     terminal: false,
     operatorActionable: false,
-    desc: '배송이 발송됨. 배송 상태변경(ShippingStatusChanged)이 구동하는 read-only 상태 — 운영자가 직접 못 바꾼다.',
+    desc: '배송이 발송되어 운송 중인 상태입니다. 배송 쪽 상태가 바뀌면서 자동으로 바뀌며, 운영자가 직접 바꿀 수 없습니다.',
   },
   {
     name: 'DELIVERED',
     label: '배송완료',
     terminal: true,
     operatorActionable: false,
-    desc: '배송 완료. 배송 return-leg 이 구동하는 정상 종료 상태(read-only).',
+    desc: '배송이 완료된 상태입니다. 배송이 끝나면 자동으로 바뀌며, 더 이상 바뀌지 않습니다.',
   },
   {
     name: 'CANCELLED',
     label: '취소',
     terminal: true,
     operatorActionable: false,
-    desc: '주문 취소(운영자·사용자·결제 타임아웃). 결제가 캡처됐으면 환불/보이드 보상. 종료.',
+    desc: '주문이 취소된 상태입니다(운영자 · 구매자 · 결제 시간 초과로 취소될 수 있습니다). 결제가 이미 이뤄졌다면 환불됩니다.',
   },
   {
     name: 'STUCK_RECOVERY_FAILED',
     label: '복구실패',
     terminal: true,
     operatorActionable: false,
-    desc: '결제 미완 주문의 자동취소 보상을 co-commit 하지 못한 방어적 폴백 종료(정상 경로에선 거의 안 보임). 종료.',
+    desc: '결제가 끝나지 않은 주문을 자동으로 취소하는 과정에서 문제가 생겨 멈춘 상태입니다. 정상적으로는 거의 생기지 않습니다.',
   },
 ];
 
@@ -197,8 +201,8 @@ export const ORDER_STATES: OrderState[] = [
  * 상태의 존재를 설명한다.
  */
 export const ORDER_LIFECYCLE_NOTE = {
-  title: '결제 구동 확정과 재고부족 이월(BACKORDERED)',
-  body: '주문은 결제로 구동된다: 접수(PENDING) 시 결제 서비스가 PENDING 결제를 만들고 Toss PG 승인 후 PaymentCompleted 를 발행 → 주문이 CONFIRMED 로 확정된다. 확정 시 상품 서비스가 전부-아니면-전무 재고 예약을 시도하며, 한 라인이라도 부족하면 주문은 백엔드에서 BACKORDERED(재고부족 이월, 재고 차감 없음)로 이동한다 — 이후 재입고 시 FIFO 재예약으로 CONFIRMED 가 된다. BACKORDERED 는 취소 가능하지만 콘솔 주문 화면의 상태 선택지에는 나타나지 않으며(백엔드 전용), 읽기 API 로만 관측된다.',
+  title: '결제가 끝나면 자동으로 확정됩니다 (재고부족 이월: BACKORDERED)',
+  body: '주문은 결제가 끝나야 확정됩니다. 결제가 승인되면 주문이 자동으로 확정(CONFIRMED)되고, 이때 재고를 확보합니다. 재고가 부족하면 주문은 재고부족 이월(BACKORDERED) 상태가 되어 재고를 차감하지 않고 기다립니다 — 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 이 상태는 취소할 수 있지만 콘솔 화면의 상태 목록에는 나타나지 않고, 조회로만 확인할 수 있습니다.',
 } as const;
 
 // ───────────────────────── 결제 (Payment) ─────────────────────────
@@ -219,32 +223,32 @@ export const PAYMENT_STATES: PaymentState[] = [
   {
     name: 'PENDING',
     label: '대기',
-    desc: 'OrderPlaced 로 생성된 미승인 결제(orderId 로 멱등). PG 승인 대기.',
+    desc: '주문이 들어오면 만들어지는, 아직 승인되지 않은 결제입니다. 승인을 기다리는 상태입니다.',
   },
   {
     name: 'COMPLETED',
     label: '완료',
-    desc: 'PG 승인 완료 → PaymentCompleted 발행 → 주문 확정. 환불은 이 상태에서만 가능.',
+    desc: '결제 승인이 끝나 주문이 확정됩니다. 환불은 이 상태에서만 가능합니다.',
   },
   {
     name: 'FAILED',
     label: '실패',
-    desc: 'PG 측 거절(4xx). 재시도 없음. 주문은 취소로 이어진다.',
+    desc: '결제가 거절된 상태입니다. 다시 시도하지 않으며 주문은 취소로 이어집니다.',
   },
   {
     name: 'PARTIALLY_REFUNDED',
     label: '부분환불',
-    desc: '일부 금액 환불됨(잔액 존재).',
+    desc: '결제 금액의 일부만 환불된 상태입니다.',
   },
   {
     name: 'REFUNDED',
     label: '환불완료',
-    desc: '전액 환불 완료. 종료.',
+    desc: '결제 금액 전체가 환불된 상태입니다. 더 이상 바뀌지 않습니다.',
   },
   {
     name: 'VOIDED',
     label: '보이드',
-    desc: '캡처된 적 없는 PENDING 결제의 시스템 머니-세이프 취소(확정 전 주문 취소). FAILED(PG 거절)와 구분 — 환불 채무 없음. 종료.',
+    desc: '아직 돈이 빠져나가지 않은 결제가 주문 취소와 함께 취소된 상태입니다. 환불할 금액이 없습니다. 더 이상 바뀌지 않습니다.',
   },
 ];
 
@@ -269,25 +273,25 @@ export const SHIPPING_STATES: ShippingState[] = [
     name: 'PREPARING',
     label: '준비중',
     terminal: false,
-    desc: 'OrderConfirmed 로 생성된 배송. 발송 대기.',
+    desc: '주문이 확정되면 만들어지는 배송입니다. 발송을 기다리는 상태입니다.',
   },
   {
     name: 'SHIPPED',
     label: '발송',
     terminal: false,
-    desc: '발송됨. 이 전이에는 운송사+운송장번호가 필수. 주문을 CONFIRMED→SHIPPED 로 되돌려 반영.',
+    desc: '발송된 상태입니다. 발송 처리에는 운송사와 운송장번호가 반드시 필요합니다. 주문 상태도 함께 배송중으로 바뀝니다.',
   },
   {
     name: 'IN_TRANSIT',
     label: '배송중',
     terminal: false,
-    desc: '운송 중. 운송장 추적 갱신(refresh-tracking)으로 상태를 최신화.',
+    desc: '운송 중인 상태입니다. 운송장 조회로 최신 상태를 확인할 수 있습니다.',
   },
   {
     name: 'DELIVERED',
     label: '배송완료',
     terminal: true,
-    desc: '수령 완료. 주문을 DELIVERED 로 반영. 종료 상태.',
+    desc: '수령이 완료된 상태입니다. 주문 상태도 함께 배송완료로 바뀝니다. 더 이상 바뀌지 않습니다.',
   },
 ];
 
@@ -295,8 +299,8 @@ export const SHIPPING_STATES: ShippingState[] = [
  * WMS 연계(ADR-MONO-022) 안내 — 이커머스 배송이 WMS 풀필먼트로 라우팅된 경우.
  */
 export const SHIPPING_WMS_NOTE = {
-  title: 'WMS 라우팅 배송과 재고 차감',
-  body: '주문이 WMS 풀필먼트로 라우팅되면(wmsRouted) 배송 행에 "WMS 재고 차감" 토글이 뜬다. 발송(SHIPPED) 확정 시 토글을 켜면 이커머스가 `ecommerce.shipping.manual-confirm-requested.v1` 를 발행해 WMS 가 물리 재고를 차감한다. 게이트의 최종 권위는 producer 이며 콘솔은 wmsRouted 행에만 토글을 노출한다. 목록/상세 DTO 는 운송사·운송장번호가 비어 있으면 `null` 을 주며 콘솔은 `—` 로 렌더한다.',
+  title: 'WMS 창고와 연결된 배송의 재고 차감',
+  body: '주문이 WMS 창고를 거쳐 가는 경우, 배송 목록에 "WMS 재고 차감" 토글이 나타납니다. 발송 처리를 할 때 이 토글을 켜면 WMS 창고에서 실제 재고가 차감됩니다. 운송사·운송장번호가 비어 있으면 화면에는 "—" 로 표시됩니다.',
 } as const;
 
 // ───────────────────────── 상품 (Product) ─────────────────────────
@@ -312,17 +316,17 @@ export const PRODUCT_STATES: ProductState[] = [
   {
     name: 'ON_SALE',
     label: '판매중',
-    desc: '판매 노출. 정상 판매 상태.',
+    desc: '판매 중인 정상 상태입니다.',
   },
   {
     name: 'SOLD_OUT',
     label: '품절',
-    desc: '재고 소진. 주의 필요 상태(운영자가 재고 조정으로 복귀).',
+    desc: '재고가 다 팔린 상태입니다. 재고를 다시 채우면 판매중으로 돌아갑니다.',
   },
   {
     name: 'HIDDEN',
     label: '숨김',
-    desc: '비노출. 판매 목록에서 감춘 비활성 상태.',
+    desc: '판매 목록에서 숨겨진 상태입니다.',
   },
 ];
 
@@ -340,22 +344,22 @@ export const PRODUCT_CONCEPTS: ProductConcept[] = [
   {
     key: 'variant',
     term: 'variant (옵션)',
-    desc: 'SKU/옵션 단위 — `optionName·stock·additionalPrice`. 상품 등록에 최소 1개 필수. 옵션 수정은 optionName·추가금만(재고 제외).',
+    desc: '색상·사이즈 같은 상품의 옵션 단위입니다. 상품을 등록할 때 최소 1개가 필요합니다. 옵션 이름과 추가금은 수정할 수 있지만, 재고는 따로 조정합니다.',
   },
   {
     key: 'stock',
     term: '재고 조정',
-    desc: '재고는 variant 별로 분리 조정 — 부호 있는 증감(quantity)+사유(reason)로 조정, 음수 재고 불가.',
+    desc: '재고는 옵션(variant)별로 따로 조정합니다. 늘리거나 줄일 때마다 사유를 함께 적어야 하고, 재고가 음수가 될 수는 없습니다.',
   },
   {
     key: 'image',
     term: '이미지',
-    desc: '`sortOrder·isPrimary` 를 갖는 이미지 목록. presigned(S3 방식) 업로드로 관리(별도 이미지 매니저).',
+    desc: '상품 이미지 목록입니다. 보여주는 순서를 정하고 대표 이미지를 지정할 수 있습니다.',
   },
   {
     key: 'seller',
     term: '셀러 소유',
-    desc: '상품은 `sellerId` 로 셀러에 귀속되며, 정산은 라인별로 그 셀러에 수수료를 적립한다.',
+    desc: '상품은 등록한 셀러에게 귀속되며, 판매되면 그 셀러에게 수수료가 쌓입니다.',
   },
 ];
 
@@ -376,17 +380,17 @@ export const PROMOTION_STATES: PromotionState[] = [
   {
     name: 'SCHEDULED',
     label: '예정',
-    desc: '시작일 이전. 아직 적용 안 됨.',
+    desc: '시작일 이전입니다. 아직 적용되지 않습니다.',
   },
   {
     name: 'ACTIVE',
     label: '진행중',
-    desc: '시작~종료 사이. 할인 적용·쿠폰 발급 가능.',
+    desc: '시작일과 종료일 사이입니다. 할인 적용과 쿠폰 발급이 가능합니다.',
   },
   {
     name: 'ENDED',
     label: '종료',
-    desc: '종료일 이후. 완료.',
+    desc: '종료일이 지났습니다. 끝난 프로모션입니다.',
   },
 ];
 
@@ -395,12 +399,12 @@ export const DISCOUNT_TYPES: { name: string; label: string; desc: string }[] = [
   {
     name: 'FIXED',
     label: '정액',
-    desc: '고정 금액 할인(discountValue 원).',
+    desc: '정해진 금액을 깎아주는 할인입니다.',
   },
   {
     name: 'PERCENTAGE',
     label: '정률',
-    desc: '비율 할인(discountValue %). `maxDiscountAmount` 상한을 둘 수 있다.',
+    desc: '정해진 비율(%)로 깎아주는 할인입니다. 최대로 깎아주는 금액에 상한을 둘 수 있습니다.',
   },
 ];
 
@@ -409,8 +413,8 @@ export const DISCOUNT_TYPES: { name: string; label: string; desc: string }[] = [
  * (issuedCount/maxIssuanceCount)를 보여주며, 개별 쿠폰 상태는 백엔드 전용.
  */
 export const COUPON_NOTE = {
-  title: '쿠폰 발급과 생명주기',
-  body: '프로모션 상세에서 대상 사용자(userIds)에게 쿠폰을 발급한다(발급 카운트가 최대 발급수 maxIssuanceCount 를 넘지 못함). 개별 쿠폰은 백엔드에서 발급(ISSUED) → 주문 시 사용(USED) → 주문 취소 시 사용복구(USED→ISSUED) 또는 만료(EXPIRED) 로 흐른다. 콘솔은 프로모션 단위 발급 현황만 보여주고 개별 쿠폰 상태는 노출하지 않는다.',
+  title: '쿠폰 발급',
+  body: '프로모션 상세 화면에서 대상 고객에게 쿠폰을 발급할 수 있습니다. 발급 수는 미리 정한 최대 발급 수를 넘지 못합니다. 쿠폰은 발급된 뒤 주문에 쓰이고, 주문이 취소되면 다시 쓸 수 있게 되거나 기간이 지나면 만료됩니다. 콘솔에는 프로모션별 발급 현황만 보이고, 쿠폰 하나하나의 상태는 보이지 않습니다.',
 } as const;
 
 // ───────────────────────── 셀러 (Seller) ─────────────────────────
@@ -435,25 +439,25 @@ export const SELLER_STATES: SellerState[] = [
     name: 'PENDING_PROVISIONING',
     label: '프로비저닝 대기',
     actions: '프로비저닝',
-    desc: '온보딩 직후(IAM 셀러-운영자 계정 fail-soft 발급). 프로비저닝하면 ACTIVE.',
+    desc: '셀러로 등록된 직후의 상태입니다. 준비를 마치면 활성 상태가 됩니다.',
   },
   {
     name: 'ACTIVE',
     label: '활성',
     actions: '정지 · 종료',
-    desc: '정상 영업. 정지(가역) 또는 종료(비가역) 가능.',
+    desc: '정상적으로 영업 중인 상태입니다. 정지(되돌릴 수 있음) 또는 종료(되돌릴 수 없음)할 수 있습니다.',
   },
   {
     name: 'SUSPENDED',
     label: '정지',
     actions: '종료',
-    desc: '되돌릴 수 있는 잠금. 종료로만 이어지거나 다시 활성화.',
+    desc: '일시적으로 막힌 상태입니다. 다시 활성화하거나 종료할 수 있습니다.',
   },
   {
     name: 'CLOSED',
     label: '종료',
     actions: '—',
-    desc: '종료(비가역). 백킹 계정 비활성. 종료 상태.',
+    desc: '완전히 종료된 상태입니다(되돌릴 수 없음). 더 이상 바뀌지 않습니다.',
   },
 ];
 
@@ -470,17 +474,17 @@ export const USER_STATES: UserState[] = [
   {
     name: 'ACTIVE',
     label: '활성',
-    desc: '정상 회원.',
+    desc: '정상 회원입니다.',
   },
   {
     name: 'SUSPENDED',
     label: '정지',
-    desc: '일시 정지된 회원.',
+    desc: '일시 정지된 회원입니다.',
   },
   {
     name: 'WITHDRAWN',
     label: '탈퇴',
-    desc: '탈퇴 회원. 유예 후 PII 익명화(이메일·이름이 null 로 바뀜).',
+    desc: '탈퇴한 회원입니다. 일정 기간이 지나면 이메일·이름 같은 개인정보가 사라집니다.',
   },
 ];
 
@@ -489,8 +493,8 @@ export const USER_STATES: UserState[] = [
  * 비어 있을 수 있음을 설명.
  */
 export const USER_NOTE = {
-  title: '읽기 전용 · 익명화된 프로필',
-  body: '콘솔 사용자 화면은 조회 전용이다(상태 변경 없음). 이메일·이름은 null 일 수 있다 — IAM `account.created` 후 첫 프로필 수정 전의 최소 프로필이거나, 탈퇴/익명화된 계정(ADR-MONO-037)이 그렇다. 이런 행도 목록에서 걸러지지 않으므로 `—` 로 렌더한다.',
+  title: '읽기 전용 · 비어 있을 수 있는 정보',
+  body: '사용자 화면은 조회만 가능하고 상태를 바꿀 수 없습니다. 이메일이나 이름이 비어 있는 회원도 있습니다 — 가입 직후 아직 정보를 입력하지 않았거나, 탈퇴해서 개인정보가 사라진 경우입니다. 이런 경우 화면에는 "—" 로 표시됩니다.',
 } as const;
 
 // ───────────────────────── 알림 (Notification) ─────────────────────────
@@ -537,8 +541,8 @@ export const NOTIFICATION_CHANNELS: { name: string; label: string }[] = [
  * 인증 이벤트 → 발송)이며 콘솔은 템플릿 관리 표면(삭제 없음)만 흡수한다.
  */
 export const NOTIFICATION_NOTE = {
-  title: '템플릿 불변 필드와 발송 서비스',
-  body: 'notification-service 는 소비 전용 서비스로, 4개 상위 서비스(주문/결제/배송/인증)의 이벤트를 이메일·SMS·푸시로 발송하고 채널별 수신 설정(opt-out)을 지킨다. 콘솔은 템플릿 관리(목록/생성/수정, 삭제 없음)만 담당한다. 템플릿의 **타입·채널은 생성 후 불변**이며, 수정은 제목(subject)·본문(body)만 가능하다 — 본문의 변수 치환으로 발송 내용을 채운다.',
+  title: '알림 발송과 템플릿 수정 규칙',
+  body: '주문·결제·배송·가입 관련 알림을 이메일·SMS·푸시로 보냅니다. 수신을 꺼둔 사람에게는 보내지 않습니다. 콘솔에서는 템플릿을 조회·생성·수정할 수 있지만 삭제는 할 수 없습니다. 템플릿의 타입과 채널은 한번 만들면 바꿀 수 없고, 제목과 본문만 수정할 수 있습니다.',
 } as const;
 
 // ───────────────────────── 도메인 롤 ─────────────────────────
@@ -550,8 +554,8 @@ export const NOTIFICATION_NOTE = {
  * 가이드의 admin-console 역할과는 다른 축(도메인 롤).
  */
 export const ECOMMERCE_ROLE_NOTE = {
-  title: 'E-Commerce 도메인 롤 (단일 ECOMMERCE_OPERATOR)',
-  body: 'E-Commerce 화면은 단일 도메인 롤 `ECOMMERCE_OPERATOR` 으로 게이트된다. 운영자가 ecommerce 구독 테넌트로 테넌트 선택(assume-tenant)할 때 자동 파생되어 주입되며(auth-service OperatorRoleDerivation), 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 이 하나의 롤로 동일하게 열린다. WMS 처럼 화면별 세분 롤(READ/WRITE)은 없다. ecommerce 구독이 없거나 롤이 없으면 도메인 게이트웨이가 403 을 반환하고 콘솔은 "접근 권한이 없습니다"로 표시한다. (IAM 콘솔을 게이트하는 admin-console 역할과는 별도 축 — IAM 가이드 참조.)',
+  title: 'E-Commerce 권한 (ECOMMERCE_OPERATOR 하나)',
+  body: 'E-Commerce 화면은 ECOMMERCE_OPERATOR 라는 권한 하나로만 열립니다. 회사(테넌트)를 선택하면 이 권한이 자동으로 부여되고, 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 똑같이 이 권한으로 열립니다. WMS 처럼 화면마다 권한이 따로 나뉘어 있지 않습니다. 이 권한이 없으면 "접근 권한이 없습니다" 라는 안내가 나옵니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
@@ -564,27 +568,27 @@ export const ECOMMERCE_ROLE_NOTE = {
 export const ECOMMERCE_RECIPES: GuideRecipeData[] = [
   {
     title: '환불 요청이 들어왔을 때',
-    intro: '결제 전용 화면이 없어 환불은 주문 취소의 보상으로 처리됩니다.',
+    intro: '결제 전용 화면이 없어, 환불은 주문을 취소하면서 함께 처리됩니다.',
     steps: [
       '주문 화면(/ecommerce/orders)에서 해당 주문을 엽니다 — 운영자는 대기(PENDING)·확정(CONFIRMED) 상태에서만 취소할 수 있습니다.',
-      '취소하면 캡처된 결제가 있으면 환불/보이드 보상이 자동으로 걸립니다(확정 전 미캡처 건은 보이드, 채무 없음).',
-      '환불 결과는 결제 상태(환불완료 REFUNDED · 부분환불 PARTIALLY_REFUNDED)로 관측되며, 콘솔에는 주문 상태(취소)로 간접 표시됩니다.',
+      '주문을 취소하면 결제가 이미 되어 있던 경우 자동으로 환불되고, 아직 결제가 되지 않았던 경우에는 그대로 취소됩니다.',
+      '환불이 끝나면 결제 상태가 환불완료 또는 부분환불로 바뀌고, 주문 화면에는 취소 상태로 표시됩니다.',
     ],
   },
   {
     title: '주문을 발송 처리할 때',
     steps: [
       '배송 화면(/ecommerce/shippings)에서 준비중(PREPARING) 배송을 엽니다.',
-      '발송(SHIPPED)하려면 운송사와 운송장번호가 반드시 있어야 합니다 — 없으면 거부됩니다. 발송하면 주문도 배송중(SHIPPED)으로 반영됩니다.',
-      'WMS 풀필먼트로 라우팅된 주문(wmsRouted)이면 "WMS 재고 차감" 토글을 켜 물리 재고를 차감합니다.',
+      '발송(SHIPPED) 처리하려면 운송사와 운송장번호가 반드시 있어야 합니다 — 없으면 처리되지 않습니다. 발송하면 주문도 배송중(SHIPPED)으로 함께 바뀝니다.',
+      'WMS 창고를 거쳐 가는 주문이면 "WMS 재고 차감" 토글을 켜서 실제 재고를 차감합니다.',
     ],
   },
   {
     title: '셀러를 정지하거나 종료할 때',
     steps: [
-      '셀러 화면(/ecommerce/sellers)에서 대상 셀러의 상태를 확인합니다 — 셀러는 수정/삭제가 없고 상태 전이로만 바뀝니다.',
-      '활성(ACTIVE)에서 정지(SUSPENDED, 가역) 또는 종료(CLOSED, 비가역)를 고릅니다.',
-      '종료는 되돌릴 수 없고 백킹 계정이 비활성화됩니다(테넌트별 default 셀러는 항상 활성 유지).',
+      '셀러 화면(/ecommerce/sellers)에서 대상 셀러의 상태를 확인합니다 — 셀러는 수정·삭제가 없고 상태 전이로만 바뀝니다.',
+      '활성(ACTIVE) 상태에서 정지(SUSPENDED, 되돌릴 수 있음) 또는 종료(CLOSED, 되돌릴 수 없음)를 선택합니다.',
+      '종료는 되돌릴 수 없고 관련 계정도 함께 비활성화됩니다(테넌트별 기본 셀러는 항상 활성 상태로 유지됩니다).',
     ],
   },
 ];
@@ -600,31 +604,31 @@ export const ECOMMERCE_GLOSSARY: GlossaryEntry[] = [
     key: 'variant',
     term: '옵션 (variant)',
     meaning:
-      '상품의 SKU·옵션 단위(색·사이즈 등). 상품 등록에 최소 1개가 필요하고, 재고는 옵션별로 분리해 조정합니다.',
+      '상품의 색·사이즈 같은 옵션 단위입니다. 상품 등록에 최소 1개가 필요하고, 재고는 옵션별로 따로 조정합니다.',
   },
   {
     key: 'SKU',
     term: 'SKU',
     full: 'Stock Keeping Unit',
-    meaning: '재고를 관리하는 최소 상품 단위. 옵션(variant)마다 별도 재고를 가집니다.',
+    meaning: '재고를 관리하는 최소 상품 단위입니다. 옵션(variant)마다 재고를 따로 가집니다.',
   },
   {
     key: 'PG',
     term: '결제대행 (PG)',
     full: 'Payment Gateway',
     meaning:
-      '카드·간편결제를 처리하는 결제 게이트웨이(여기선 Toss Payments). 결제 승인과 환불이 이 경로로 이뤄집니다.',
+      '카드·간편결제를 대신 처리해 주는 곳입니다(여기선 Toss Payments). 결제 승인과 환불이 이 곳을 통해 이뤄집니다.',
   },
   {
     key: 'backorder',
     term: '재고부족 이월 (BACKORDERED)',
     meaning:
-      '확정 시 재고가 모자라면 주문이 빠지는 상태. 재입고되면 FIFO 재예약으로 다시 확정됩니다. 콘솔 상태 선택지엔 없고 읽기로만 보입니다.',
+      '주문을 확정할 때 재고가 모자라 잠시 미뤄지는 상태입니다. 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 콘솔 상태 목록에는 없고 조회로만 보입니다.',
   },
   {
     key: 'assume-tenant',
     term: '테넌트 선택 (assume-tenant)',
     meaning:
-      '운영자가 ecommerce 구독 테넌트를 골라 ECOMMERCE_OPERATOR 롤을 부여받는 동작. 7개 운영 화면이 모두 이 하나의 롤로 열립니다.',
+      '운영자가 회사(테넌트)를 고르면 ECOMMERCE_OPERATOR 권한이 자동으로 부여되는 것을 말합니다. 7개 운영 화면이 모두 이 권한으로 열립니다.',
   },
 ];
