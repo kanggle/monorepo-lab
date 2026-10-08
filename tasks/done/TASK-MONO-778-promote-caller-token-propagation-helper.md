@@ -8,7 +8,7 @@ TASK-MONO-778
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -82,3 +82,8 @@ monorepo
 1. 라이브러리에 erp 용어가 섞인다 — HARDSTOP-03.
 2. 승격하면서 신원 대조까지 라이브러리로 옮긴다 — 서비스마다 다른 거절 원인 이름 · 계측이 한 이름으로 뭉개진다.
 3. 소비자 하나만 옮긴다 — 사본이 하나 남아 이 티켓의 목적이 사라진다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4239** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`2fbe4ed0b`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~5 `[x]`. CI 로 미룬 erp 통합 잡 «Integration (erp-platform, Testcontainers)» **pass**, 라이브러리 시험(`java-security-servlet:test` · `CallerTokenPropagationTest`)이 CI 빌드 잡 로그에 찍힌 것 확인. 머지 뒤 nightly `37759388925` (`2fbe4ed0b`) success.
