@@ -177,7 +177,7 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     actions: '현황 카드 조회 → 각 화면으로 이동',
     gate: '카드별로 다름',
     mutates: false,
-    note: '권한이 없는 카드만 "권한 없음"으로 표시되고 나머지는 정상 렌더됩니다.',
+    note: '권한이 없는 카드만 "권한 없음"이라고 표시되고, 나머지는 그대로 보입니다.',
   },
   {
     label: '운영자 관리',
@@ -193,22 +193,22 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     label: '운영자 그룹',
     href: '/operator-groups',
     purpose:
-      '여러 운영자를 named 그룹으로 묶어 역할·테넌트 배정을 한 번에 부여합니다 (ADR-MONO-046).',
+      '여러 운영자를 그룹으로 묶어 역할·테넌트 배정을 한 번에 줄 수 있습니다.',
     actions:
-      '그룹 생성 · 이름/설명 변경 · 삭제 · 멤버 추가/제거 · 그룹 grant(역할/tenant-assignment) 추가/회수',
+      '그룹 만들기 · 이름/설명 변경 · 삭제 · 멤버 추가/제거 · 그룹에 역할·테넌트 배정 추가/회수',
     gate: 'group.manage',
     mutates: true,
-    note: '그룹 grant 는 각 현재 멤버의 평범한 직접 권한 행으로 fan-out 되며(group_origin 마커), 그룹 멤버십 자체는 평가·격리 축이 아닙니다. 조회에도 group.manage 가 필요하고, 모든 변경은 사유가 필수입니다. 자기가 가진 것보다 높은 역할·스코프 밖 테넌트는 그룹에도 부여할 수 없습니다 (no-escalation).',
+    note: '그룹에 준 권한은 그 순간 멤버 각자에게도 똑같이 적용됩니다. 조회에도 group.manage 권한이 필요하고, 모든 변경에는 사유를 적어야 합니다. 자기가 가진 것보다 높은 역할이나 범위 밖 테넌트는 그룹에도 줄 수 없습니다.',
   },
   // TASK-PC-FE-315 — 권한 세트 먼저(배정에 실제로 붙는 단위), 그 안의 키(권한)는 다음.
   {
     label: '권한 세트',
     href: '/permission-sets',
-    purpose: '테넌트 배정에 붙일 수 있는 권한 묶음(= 역할)을 봅니다.',
+    purpose: '테넌트 배정에 붙는 권한 묶음(= 역할)을 봅니다.',
     actions: '조회 전용 — 세트를 펼치면 포함된 권한 키가 보입니다.',
     gate: 'operator.manage',
     mutates: false,
-    note: '「권한」 화면과 같은 데이터를 배정 관점으로 다시 보여주는 것입니다.',
+    note: '「권한」 화면과 같은 내용을 배정 관점에서 다시 보여줍니다.',
   },
   {
     label: '권한',
@@ -236,7 +236,7 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
       '이메일 검색 · 잠금/해제 · 여러 건 일괄 잠금 · 세션 강제 종료 · 데이터 내보내기 · GDPR 삭제',
     gate: 'account.read',
     mutates: true,
-    note: '내보내기는 audit.read, GDPR 삭제는 account.lock 으로 게이트됩니다(이름과 직관이 어긋나니 주의). GDPR 삭제는 되돌릴 수 없습니다.',
+    note: '내보내기는 audit.read 권한이, GDPR 삭제는 account.lock 권한이 필요합니다(이름만 보면 헷갈리기 쉬우니 주의하세요). GDPR 삭제는 되돌릴 수 없습니다.',
   },
   // ── 조직 설정 (TASK-PC-FE-313: 조직 계층 · 테넌트가 IAM 에서 이 그룹으로 옮겨 왔다) ──
   {
@@ -248,7 +248,7 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
       '노드 생성 · 이름/부모 변경 · 삭제 · 엔타이틀먼트 상한(ceiling) 설정 · ORG_ADMIN 배정/해제 · 소속 테넌트 조회',
     gate: 'org.manage',
     mutates: true,
-    note: '상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 할 뿐 부여하지 않습니다. "상한 없음"과 "빈 상한(아무것도 불가)"은 정반대이니 혼동하지 마세요. 노드는 테넌트를 묶기만 하고 격리하지 않습니다 — 토큰은 여전히 테넌트 하나입니다.',
+    note: '상한은 하위 테넌트가 쓸 수 있는 도메인을 좁히기만 하고, 새로 부여하지 않습니다. "상한 없음"과 "빈 상한(아무것도 못 씀)"은 정반대이니 헷갈리지 마세요. 노드는 테넌트를 묶어줄 뿐이고, 로그인할 때 고르는 테넌트는 여전히 하나입니다.',
   },
   {
     label: '테넌트',
@@ -384,7 +384,7 @@ export interface PermissionKey {
 
 export const PERMISSION_KEYS: PermissionKey[] = [
   { key: 'account.read', desc: '계정 목록을 조회합니다.' },
-  { key: 'account.lock', desc: '계정을 잠급니다. GDPR 삭제도 이 키로 게이트됩니다.' },
+  { key: 'account.lock', desc: '계정을 잠급니다. GDPR 삭제도 이 키가 필요합니다.' },
   { key: 'account.unlock', desc: '계정 잠금을 풉니다.' },
   {
     key: 'account.force_logout',
@@ -392,7 +392,7 @@ export const PERMISSION_KEYS: PermissionKey[] = [
   },
   {
     key: 'audit.read',
-    desc: '감사 로그를 조회합니다. 계정 데이터 내보내기도 이 키로 게이트됩니다.',
+    desc: '감사 로그를 조회합니다. 계정 데이터 내보내기도 이 키가 필요합니다.',
   },
   {
     key: 'security.event.read',
@@ -743,7 +743,7 @@ export const IAM_RECIPES: GuideRecipeData[] = [
     steps: [
       '「권한」 화면에서 그 운영자가 가진 역할과 그 역할의 권한 키를 확인합니다.',
       '「3. 레퍼런스」의 접근 매트릭스에서 그 메뉴가 요구하는 키(열리는 조건)와 대조합니다.',
-      '키가 없으면 「운영자 관리」에서 역할을 조정합니다 — 단, 자기가 가진 것보다 높은 역할은 부여할 수 없습니다(no-escalation).',
+      '키가 없으면 「운영자 관리」에서 역할을 조정합니다. 단, 자기가 가진 것보다 높은 역할은 줄 수 없습니다.',
     ],
   },
 ];
@@ -773,6 +773,6 @@ export const IAM_GLOSSARY: GlossaryEntry[] = [
     key: 'no-escalation',
     term: 'no-escalation',
     meaning:
-      '자기가 가진 것보다 높은 역할이나 스코프 밖 테넌트를 남에게(또는 그룹에) 줄 수 없다는 원칙. SUPER_ADMIN 은 아무도 부여할 수 없습니다.',
+      '자기가 가진 것보다 높은 역할이나 범위 밖 테넌트를 남에게(또는 그룹에) 줄 수 없다는 원칙. SUPER_ADMIN 은 아무도 부여할 수 없습니다.',
   },
 ];

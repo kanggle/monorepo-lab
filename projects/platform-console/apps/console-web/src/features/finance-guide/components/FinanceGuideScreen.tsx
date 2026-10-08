@@ -52,13 +52,13 @@ export function FinanceGuideScreen() {
               />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 Finance 콘솔은 <strong>개요 · 가이드 · 계좌 · 원장</strong> 4개 화면으로
-                구성됩니다. 탭마다 각 화면이 보여주는 값의 의미, 그 뒤의
-                finance-platform 마이크로서비스 구성, 그리고 규제 계좌 상태 · KYC ·
-                금액 표현(F5) · 복식부기 · 대사 · FX 신선도 개념을 정리한 참조입니다.
+                구성됩니다. 탭마다 각 화면이 보여주는 값의 의미, 그 뒤의 서비스
+                구성, 그리고 계좌 상태 · KYC · 금액 표시 방식 · 복식부기 · 대사 ·
+                환율 같은 개념을 쉽게 정리해 두었습니다.
               </p>
               <GuideReadingPath testid="finance-guide-reading-path">
                 처음이라면 「도메인 사용 가이드」의 <strong>콘솔 화면</strong>과 「공통 정의 및 용어」의 <strong>계좌 상태</strong>부터
-                보세요 — 개요·계좌·원장이 무엇을 보여주고 규제 계좌 상태가 무슨 뜻인지가
+                보세요 — 개요·계좌·원장이 무엇을 보여주고 계좌 상태가 무슨 뜻인지가
                 먼저입니다. 도메인 서비스·KYC·핵심 개념·용어집은 필요할 때 찾아보는
                 참조입니다.
               </GuideReadingPath>
@@ -190,8 +190,8 @@ export function FinanceGuideScreen() {
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
                 4개 화면 각각이 보여주는 값입니다. <strong>개요</strong>는 계좌 목록을
-                집계하지 않고(finance v1 에 계좌 list/search GET 없음), 원장
-                browsable read + 운영자 본인의 기본계좌 단건 스냅샷만 보여줍니다.
+                보여주지 않고, 원장의 요약 정보와 내 기본 계좌 하나의 상태만
+                보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="finance-guide-screens-table">
@@ -264,8 +264,8 @@ export function FinanceGuideScreen() {
                 도메인 서비스
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                Finance 는 별도 게이트웨이 없이 2개 producer 로 구성됩니다. 콘솔은 각
-                서비스를 도메인-facing IAM OIDC 토큰으로 직접 호출해 화면을 렌더합니다.
+                Finance 는 2개 서비스로 구성됩니다. 콘솔은 로그인 정보를 가지고 각
+                서비스에 직접 물어 화면을 보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="finance-guide-services-table">

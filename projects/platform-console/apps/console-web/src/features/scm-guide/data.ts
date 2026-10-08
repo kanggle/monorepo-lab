@@ -61,29 +61,29 @@ export const DOMAIN_SERVICES: DomainService[] = [
   {
     key: 'gateway',
     name: 'gateway-service',
-    context: '엣지 · 인증/라우팅',
-    desc: 'scm 단일 엣지 게이트웨이(Spring Cloud Gateway). JWT `tenant_id ∈ {scm, *}` 검증(단일테넌트 fail-closed) + entitlement 이중수용 후, 아래 3개 producer 로 라우팅.',
+    context: '입구 · 인증',
+    desc: '로그인 정보를 확인하고, 요청을 맞는 서비스로 전달합니다.',
     console: '— (전 화면 경유)',
   },
   {
     key: 'procurement',
     name: 'procurement-service',
     context: '발주 · 구매',
-    desc: '발주(PurchaseOrder) 애그리거트를 소유. DRAFT→제출→확정→입고→정산 생명주기, 공급사 확인(ack)·부분입고·정산을 관리.',
+    desc: '발주를 만들고 관리합니다. 제출부터 입고, 정산까지 전체 과정을 처리합니다.',
     console: '조달',
   },
   {
     key: 'inventory-visibility',
     name: 'inventory-visibility-service',
     context: '재고 가시성',
-    desc: '다중 노드(창고/매장) 재고를 이벤트로 투영한 교차 조회 읽기모델. 모든 응답에 S5 경고("발주 결정 근거 아님")를 상시 부착.',
+    desc: '여러 창고·매장의 재고를 한눈에 모아 보여줍니다. 발주 결정의 근거로는 쓸 수 없다는 경고가 항상 함께 표시됩니다.',
     console: '재고',
   },
   {
     key: 'demand-planning',
     name: 'demand-planning-service',
     context: '수요계획 · 보충',
-    desc: 'wms 저재고 알림을 소비해 보충 추천(SUGGESTED)을 생성, 운영자 승인 시 DRAFT 발주로 물질화(ADR-MONO-027 루프). 재주문 정책·공급사 매핑 시드를 소유.',
+    desc: '창고의 재고 부족 알림을 받아 보충 추천을 만듭니다. 운영자가 승인하면 발주 초안이 만들어집니다. 재주문 기준과 공급사 정보도 관리합니다.',
     console: '보충 계획 · 보충 계획 설정',
   },
 ];
@@ -114,55 +114,55 @@ export const PO_STATES: PoState[] = [
     name: 'DRAFT',
     label: '초안',
     terminal: false,
-    desc: '발주 초안(제출 전, 수정 가능). 보충 추천 승인이 만드는 PO 가 이 상태로 태어난다.',
+    desc: '아직 제출하지 않은 초안입니다. 수정할 수 있고, 보충 추천을 승인하면 이 상태로 발주가 만들어집니다.',
   },
   {
     name: 'SUBMITTED',
     label: '제출',
     terminal: false,
-    desc: '공급사에 제출됨. 공급사 확인(ack) 대기.',
+    desc: '공급사에 제출되어 확인을 기다리는 상태입니다.',
   },
   {
     name: 'ACKNOWLEDGED',
     label: '접수',
     terminal: false,
-    desc: '공급사가 발주를 접수(ack).',
+    desc: '공급사가 발주를 확인했습니다.',
   },
   {
     name: 'CONFIRMED',
     label: '확정',
     terminal: false,
-    desc: '공급사가 납기·수량을 확정, 입고 대기. 확정(confirm) 액션은 roles∋OPERATOR 를 요구한다.',
+    desc: '공급사가 납기와 수량을 확정해 입고를 기다리는 상태입니다. 확정 처리에는 운영자 권한이 필요합니다.',
   },
   {
     name: 'PARTIALLY_RECEIVED',
     label: '부분입고',
     terminal: false,
-    desc: '발주 라인의 일부 수량만 입고됨.',
+    desc: '주문한 수량 중 일부만 입고되었습니다.',
   },
   {
     name: 'RECEIVED',
     label: '입고',
     terminal: false,
-    desc: '전 라인 입고 완료.',
+    desc: '주문한 수량이 모두 입고되었습니다.',
   },
   {
     name: 'SETTLED',
     label: '정산',
     terminal: false,
-    desc: '입고분 정산 완료.',
+    desc: '입고된 내용의 정산까지 끝났습니다.',
   },
   {
     name: 'CLOSED',
     label: '마감',
     terminal: true,
-    desc: '발주 종료(비활성). 종료 상태.',
+    desc: '발주가 종료되어 더 이상 진행되지 않습니다.',
   },
   {
     name: 'CANCELED',
     label: '취소',
     terminal: true,
-    desc: '발주 취소. 종료 상태.',
+    desc: '발주가 취소되었습니다.',
   },
 ];
 
@@ -170,8 +170,8 @@ export const PO_STATES: PoState[] = [
  * 콘솔 발주가 읽기 전용이라는 점 + 보충 승인만이 DRAFT 를 만든다는 점을 명시.
  */
 export const PO_NOTE = {
-  title: '콘솔 발주는 읽기 전용 · 보충 승인이 DRAFT 를 만든다',
-  body: '콘솔 SCM 조달 화면의 발주 목록은 조회 전용이다 — 제출(SUBMIT)·확정(CONFIRM)·입고(RECEIVE) 등 쓰기는 조달(procurement) 백엔드의 책임이다. 콘솔에서 발주 생성을 촉발하는 유일한 경로는 보충 추천 **승인**이며, 승인 시 procurement 는 **DRAFT** 발주만 만들고(그 이상 자동 진행 없음, ADR-MONO-027 D5), 이후 제출·확정(확정은 roles∋OPERATOR 필요)은 조달에서 별도로 진행한다.',
+  title: '콘솔의 발주 목록은 조회만 가능합니다',
+  body: '조달 화면의 발주 목록은 조회 전용입니다 — 제출·확정·입고 같은 처리는 발주를 직접 다루는 쪽에서 이루어집니다. 콘솔에서 새 발주를 만드는 유일한 방법은 보충 추천을 승인하는 것이며, 이때는 초안(DRAFT) 상태로만 만들어집니다. 이후 제출과 확정(확정에는 운영자 권한 필요)은 조달 쪽에서 별도로 진행합니다.',
 } as const;
 
 // ───────────────────────── 재고 가시성 (Inventory Visibility) ─────────────
@@ -192,17 +192,17 @@ export const STALENESS_STATES: StalenessState[] = [
   {
     name: 'FRESH',
     label: '최신',
-    desc: '노드 스냅샷이 최근 이벤트로 갱신됨. 정상.',
+    desc: '최근 정보로 갱신되어 있습니다. 정상 상태입니다.',
   },
   {
     name: 'STALE',
     label: '지연',
-    desc: '스냅샷이 오래됨(이벤트 투영 지연). 주의 — 값이 최신이 아닐 수 있다.',
+    desc: '정보가 갱신되지 않아 오래되었습니다. 값이 최신이 아닐 수 있으니 주의하세요.',
   },
   {
     name: 'UNREACHABLE',
     label: '도달불가',
-    desc: '노드 프로브 실패. 해당 노드 재고를 신뢰할 수 없음.',
+    desc: '해당 위치와 연결할 수 없습니다. 이 재고 수치는 믿을 수 없습니다.',
   },
 ];
 
@@ -211,16 +211,16 @@ export const STALENESS_STATES: StalenessState[] = [
  * 않고 재고 스냅샷이 보일 때 상단에 노출한다(`features/scm-ops` S5Warning).
  */
 export const S5_NOTE = {
-  title: '재고 가시성 S5 — 발주 결정 근거가 아니다',
-  body: 'inventory-visibility 응답에는 항상 `Not for procurement decisions (S5)` 경고가 붙는다(계약 의무 — 콘솔은 이 문자열을 숨기거나 지우지 않고 재고 스냅샷 상단에 노출한다). 이 스냅샷은 다중 노드(창고/매장) 재고를 이벤트로 투영한 최종 일관성 읽기모델이라 순간적으로 과거일 수 있고, 실제 발주/재고 차감의 권위는 wms inventory-service 다. 재고 화면의 스냅샷과 개요의 재고 스냅샷 카운트에 이 경고가 함께 뜬다.',
+  title: 'S5 경고 — 발주 결정의 근거로 쓸 수 없습니다',
+  body: '재고 화면에는 이 경고가 항상 함께 표시됩니다. 여러 창고·매장의 재고를 모아 보여주는 화면이라 실제와 약간의 시간 차이가 있을 수 있고, 정확한 재고와 발주 결정은 창고(WMS) 쪽 정보를 기준으로 해야 합니다.',
 } as const;
 
 /**
  * 노드(Node) 개념 + 교차 조회 안내.
  */
 export const NODE_NOTE = {
-  title: '노드(Node)와 교차 조회',
-  body: '노드는 재고를 보유하는 물리 위치(창고·매장 등, nodeType)다. inventory-visibility 는 SKU 별로 여러 노드의 수량을 합산해 교차 조회를 제공한다(재고 화면의 스냅샷·SKU 분해·노드 목록). 노드별 staleness 로 어느 노드 데이터가 지연/도달불가인지 구분하며, 지연/도달불가 노드가 있으면 합산 수량을 그만큼 낮은 신뢰로 읽어야 한다.',
+  title: '노드(Node)란 무엇인가요',
+  body: '노드는 창고나 매장처럼 재고를 보관하는 장소를 뜻합니다. 재고 화면은 상품(SKU)별로 여러 노드의 수량을 모두 더해 보여줍니다. 지연·도달불가 상태인 노드가 있으면 합산된 수량도 그만큼 덜 믿을 수 있습니다.',
 } as const;
 
 // ───────────────────────── 보충 추천 (Replenishment) ─────────────────────────
@@ -247,28 +247,28 @@ export const SUGGESTION_STATES: SuggestionState[] = [
     label: '추천',
     terminal: false,
     operatorActionable: true,
-    desc: 'wms 저재고 알림으로 생성된 미결 추천(source=ALERT). 운영자 승인 또는 기각 대기. 트리거 가용재고가 추천 사유로 기록된다.',
+    desc: '창고의 재고 부족 알림으로 만들어진 추천입니다. 운영자의 승인이나 기각을 기다립니다.',
   },
   {
     name: 'APPROVED',
     label: '승인',
     terminal: false,
     operatorActionable: true,
-    desc: '운영자가 승인, DRAFT 발주 물질화 진행 중(과도기 상태).',
+    desc: '운영자가 승인해 발주로 만들어지는 중입니다.',
   },
   {
     name: 'MATERIALIZED',
     label: '물질화',
     terminal: true,
     operatorActionable: false,
-    desc: '승인이 DRAFT 발주를 만든 정상 종료. materializedPoId 로 발주와 연결. 재승인해도 같은 PO 를 반환(멱등).',
+    desc: '승인을 통해 발주가 만들어진 상태입니다. 다시 승인을 눌러도 같은 발주를 가리킵니다.',
   },
   {
     name: 'DISMISSED',
     label: '기각',
     terminal: true,
     operatorActionable: false,
-    desc: '운영자가 기각한 종료. 미결 추천 가드가 해제된다. 재기각해도 변화 없음(멱등).',
+    desc: '운영자가 기각한 상태입니다. 다시 기각을 눌러도 변화가 없습니다.',
   },
 ];
 
@@ -277,8 +277,8 @@ export const SUGGESTION_STATES: SuggestionState[] = [
  * 화면이 서 있는 전체 흐름을 설명한다.
  */
 export const REPLENISHMENT_LOOP_NOTE = {
-  title: '보충 루프 (ADR-MONO-027): 저재고 알림 → 추천 → DRAFT 발주',
-  body: '① wms inventory-service 가 가용재고 < 임계에 도달하면 저재고 알림(`wms.inventory.alert.v1`)을 발행한다. ② demand-planning 이 이를 소비해 해당 SKU 의 재주문 정책(reorderPoint)과 비교하고, 미달이면 보충 추천(SUGGESTED · 추천수량=reorderQty · source=ALERT · 트리거 가용재고 기록)을 만든다. ③ 운영자가 콘솔 보충 화면에서 승인하면 공급사 매핑(sku_supplier_map)을 해석해 procurement 가 DRAFT 발주를 생성하고 추천은 MATERIALIZED 로 종료된다. ④ 그 DRAFT 발주의 제출·확정은 조달에서 별도로 진행한다. 공급사 매핑이 없으면 승인이 422(SKU_SUPPLIER_UNMAPPED)로 막히고 추천은 SUGGESTED 로 남으므로, 설정 화면에서 매핑을 먼저 등록해야 한다.',
+  title: '보충 흐름: 재고 부족 알림 → 추천 → 발주 초안',
+  body: '① 창고(WMS)의 재고가 기준보다 부족해지면 알림이 발생합니다. ② SCM 이 이 알림을 받아 해당 상품의 재주문 기준과 비교하고, 기준에 못 미치면 보충 추천(추천)을 만듭니다. ③ 운영자가 보충 화면에서 승인하면 등록된 공급사 정보를 바탕으로 발주 초안이 만들어지고, 추천은 완료(물질화) 상태로 바뀝니다. ④ 이후 발주의 제출과 확정은 조달 화면에서 따로 진행합니다. 해당 상품에 공급사 정보가 등록되어 있지 않으면 승인이 막히니, 설정 화면에서 공급사를 먼저 등록해야 합니다.',
 } as const;
 
 // ───────────────────────── 설정 (Config) ─────────────────────────
@@ -301,19 +301,19 @@ export const POLICY_FIELDS: ConfigField[] = [
     key: 'reorderPoint',
     field: 'reorderPoint',
     label: '재주문점',
-    desc: '가용재고가 이 값 아래로 떨어지면 보충 추천 대상이 된다(루프 ②의 임계). 비음수 정수.',
+    desc: '재고가 이 수량 아래로 떨어지면 보충 추천 대상이 됩니다. 0 이상의 정수로 입력합니다.',
   },
   {
     key: 'safetyStock',
     field: 'safetyStock',
     label: '안전재고',
-    desc: '수요 변동 대비 완충 재고. 비음수 정수.',
+    desc: '수요 변화에 대비해 여유로 두는 재고입니다. 0 이상의 정수로 입력합니다.',
   },
   {
     key: 'reorderQty',
     field: 'reorderQty',
     label: '발주수량',
-    desc: '추천/발주 시 채우는 수량(추천수량의 근거값). 양의 정수.',
+    desc: '추천이나 발주로 채우는 수량입니다. 1 이상의 정수로 입력합니다.',
   },
 ];
 
@@ -327,25 +327,25 @@ export const SUPPLIER_FIELDS: ConfigField[] = [
     key: 'supplierId',
     field: 'supplierId',
     label: '공급사',
-    desc: '발주 대상 공급사 식별자. v1 은 자유텍스트/uuid — 공급사 마스터가 없는 최소 대체(ADR-MONO-027 D3), 실존 공급사 조회 없음.',
+    desc: '발주를 보낼 공급사를 나타내는 값입니다. 자유롭게 입력하며, 실제 존재하는 공급사인지는 따로 확인하지 않습니다.',
   },
   {
     key: 'defaultOrderQty',
     field: 'defaultOrderQty',
     label: '기본발주수량',
-    desc: '이 매핑의 기본 발주 수량. 양의 정수.',
+    desc: '이 공급사에 기본으로 발주할 수량입니다. 1 이상의 정수로 입력합니다.',
   },
   {
     key: 'leadTimeDays',
     field: 'leadTimeDays',
     label: '리드타임(일)',
-    desc: '발주~입고 예상 소요일. 비음수 정수.',
+    desc: '발주 후 입고까지 걸리는 예상 일수입니다. 0 이상의 정수로 입력합니다.',
   },
   {
     key: 'currency',
     field: 'currency',
     label: '통화',
-    desc: '3-letter ISO-4217 코드(KRW·USD·… ). 대문자 입력.',
+    desc: '통화 코드입니다(KRW · USD 등). 대문자로 입력합니다.',
   },
 ];
 
@@ -353,8 +353,8 @@ export const SUPPLIER_FIELDS: ConfigField[] = [
  * 설정 화면의 SKU-단위 upsert · 404=미설정 빈 상태 안내.
  */
 export const CONFIG_NOTE = {
-  title: '설정: 재주문 정책 · 공급사 매핑 (SKU 단위 upsert)',
-  body: '설정 화면은 SKU 코드 단위로 재주문 정책과 공급사 매핑을 조회(GET)·저장(PUT upsert)한다. 목록 라우트가 없어(producer 가 per-SKU GET/PUT 만 제공) 운영자가 SKU 코드를 입력하면 두 행을 함께 GET 한다. 미설정 SKU 의 GET 404(POLICY_NOT_FOUND / MAPPING_NOT_FOUND)는 오류가 아니라 "아직 미설정 → PUT 으로 생성" 빈 상태다. 이 두 설정이 보충 루프의 ②(정책)과 ③(공급사 매핑)을 구동한다.',
+  title: '설정은 상품(SKU) 단위로 저장합니다',
+  body: '설정 화면은 상품(SKU) 코드를 입력해 재주문 정책과 공급사 매핑을 함께 조회하고 저장합니다. 아직 설정하지 않은 상품은 빈 화면으로 보이는데, 오류가 아니라 처음 등록하면 되는 상태입니다. 이 두 설정이 보충 추천과 발주 초안 생성을 결정합니다.',
 } as const;
 
 // ───────────────────────── 도메인 롤 · 단일테넌트 ─────────────────────────
@@ -365,8 +365,8 @@ export const CONFIG_NOTE = {
  * 롤 다수)와 달리 단일 coarse 롤 하나뿐 — E-Commerce 의 단일 ADMIN 과 유사.
  */
 export const SCM_ROLE_NOTE = {
-  title: 'SCM 도메인 롤 (단일 SCM_OPERATOR) · 단일테넌트',
-  body: 'SCM 은 v1 단일테넌트 도메인이다 — scm-gateway 는 JWT `tenant_id ∈ {scm, *}` 만 허용하고(다른 테넌트는 403 TENANT_FORBIDDEN), 운영자는 콘솔 테넌트 스위처에서 `scm` 을 선택(assume-tenant)해야 도메인 토큰이 tenant_id=scm 으로 발급된다. 이때 auth-service OperatorRoleDerivation 이 단일 도메인 롤 `SCM_OPERATOR` 를 파생한다(WMS 의 화면별 세분 롤과 달리 하나뿐, E-Commerce 의 단일 ADMIN 과 유사). demand-planning(보충·설정)은 테넌트 게이트만으로 열리고 별도 롤 체크가 없으나, 조달의 발주 확정(confirm)은 roles∋OPERATOR 를 요구한다. (콘솔 자체를 게이트하는 admin-console 역할과는 다른 축 — IAM 가이드 참조.)',
+  title: 'SCM 권한 안내',
+  body: '콘솔에서 SCM 을 구독한 테넌트(예: 데모의 demo-corp)를 고르면 SCM 화면이 열리고, SCM 운영자(SCM_OPERATOR) 권한이 자동으로 주어집니다. WMS 처럼 화면별로 권한이 나뉘어 있지 않고 이 권한 하나뿐입니다. 보충 · 설정 화면은 테넌트만 맞으면 열리고, 조달 화면의 발주 확정만 운영자 역할을 따로 확인합니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
@@ -379,25 +379,25 @@ export const SCM_RECIPES: GuideRecipeData[] = [
   {
     title: '보충 추천을 승인해 발주로 만들 때',
     steps: [
-      '보충 화면(/scm/replenishment)에서 추천(SUGGESTED) 항목을 엽니다 — 추천·승인 상태에서만 승인/기각할 수 있습니다.',
-      '승인하면 공급사 매핑을 해석해 DRAFT 발주가 생성되고 추천은 물질화(MATERIALIZED)로 종료됩니다.',
-      '공급사 매핑이 없으면 승인이 막히니(SKU_SUPPLIER_UNMAPPED), 설정 화면에서 그 SKU 의 매핑을 먼저 등록합니다.',
+      '보충 화면에서 추천 상태인 항목을 엽니다 — 추천 · 승인 상태에서만 승인하거나 기각할 수 있습니다.',
+      '승인하면 등록된 공급사 정보를 바탕으로 발주 초안이 만들어지고, 추천은 물질화 상태로 바뀝니다.',
+      '공급사 정보가 등록되어 있지 않으면 승인할 수 없으니, 설정 화면에서 해당 상품의 공급사를 먼저 등록합니다.',
     ],
   },
   {
     title: '보충 추천이 자동으로 안 생길 때',
     steps: [
-      '설정 화면(/scm/config)에서 해당 SKU 의 재주문점(reorderPoint)이 설정돼 있는지 확인합니다.',
-      'wms 가용재고가 재주문점 아래로 떨어져야 추천이 생성됩니다(보충 루프 ②).',
-      '공급사 매핑도 함께 등록해야 나중에 승인 시 DRAFT 발주까지 이어집니다(루프 ③).',
+      '설정 화면에서 해당 상품의 재주문점이 설정되어 있는지 확인합니다.',
+      '창고 재고가 재주문점 아래로 떨어져야 추천이 만들어집니다.',
+      '공급사 정보도 함께 등록해야 나중에 승인했을 때 발주까지 이어집니다.',
     ],
   },
   {
-    title: '재고 스냅샷이 미덥지 않을 때',
+    title: '재고 수치를 믿기 어려울 때',
     steps: [
-      '재고 화면에서 노드별 신선도(staleness)를 확인합니다 — 지연(STALE)·도달불가(UNREACHABLE) 노드가 있으면 합산 수량을 그만큼 낮은 신뢰로 읽습니다.',
-      '이 스냅샷에는 항상 S5 경고가 붙습니다 — 발주 결정의 근거로 쓰지 않습니다.',
-      '실제 재고 차감·발주의 권위는 wms inventory-service 이며, 이 스냅샷은 최종 일관성 읽기모델이라 순간적으로 과거일 수 있습니다.',
+      '재고 화면에서 노드별 신선도를 확인합니다 — 지연(STALE)·도달불가(UNREACHABLE) 상태인 노드가 있으면 합산 수량을 그만큼 덜 믿어야 합니다.',
+      '이 화면에는 항상 경고가 함께 표시됩니다 — 발주 결정의 근거로는 쓰지 않습니다.',
+      '정확한 재고와 발주 처리 기준은 창고(WMS) 쪽 정보입니다. 이 화면은 여러 곳을 모아 보여주는 터라 실제와 약간 차이가 있을 수 있습니다.',
     ],
   },
 ];
@@ -414,25 +414,25 @@ export const SCM_GLOSSARY: GlossaryEntry[] = [
     term: '발주 (PO)',
     full: 'Purchase Order',
     meaning:
-      '공급사에 물품을 주문하는 구매 문서. 초안→제출→접수→확정→…→정산 생명주기를 따르며, 콘솔의 발주 목록은 읽기 전용입니다.',
+      '공급사에 물품을 주문하는 문서입니다. 초안부터 정산까지 여러 단계를 거치며, 콘솔에서는 조회만 할 수 있습니다.',
   },
   {
     key: 'S5',
     term: 'S5 경고',
     meaning:
-      '재고 가시성 응답에 항상 붙는 계약상 경고 — "이 재고 스냅샷을 발주 결정의 근거로 쓰지 말라"는 뜻입니다. 콘솔은 이 문자열을 숨기지 않습니다.',
+      '재고 화면에 항상 함께 표시되는 경고로, 이 수치를 발주 결정의 근거로 쓰지 말라는 뜻입니다.',
   },
   {
     key: 'staleness',
     term: '신선도 (staleness)',
     meaning:
-      '노드 재고 스냅샷이 얼마나 최신인지 — 최신(FRESH)·지연(STALE)·도달불가(UNREACHABLE). 지연/도달불가 노드는 데이터를 신뢰하기 어렵습니다.',
+      '재고 정보가 얼마나 최신인지를 나타냅니다 — 최신(FRESH) · 지연(STALE) · 도달불가(UNREACHABLE). 지연이나 도달불가 상태는 믿기 어렵습니다.',
   },
   {
     key: 'SKU',
     term: 'SKU',
     full: 'Stock Keeping Unit',
     meaning:
-      '재고·발주를 관리하는 최소 상품 단위. 재주문 정책과 공급사 매핑을 이 단위로 설정합니다.',
+      '재고와 발주를 관리하는 상품의 최소 단위입니다. 재주문 기준과 공급사 정보도 이 단위로 설정합니다.',
   },
 ];

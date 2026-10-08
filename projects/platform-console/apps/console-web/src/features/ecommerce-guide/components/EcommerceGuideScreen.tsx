@@ -86,8 +86,8 @@ export function EcommerceGuideScreen() {
                 상품
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                <strong>상품</strong> 화면(<Mono>/ecommerce/products</Mono>)은 상품 마스터와
-                옵션(variant)·재고를 다룹니다. 판매 상태는 3가지입니다.
+                <strong>상품</strong> 화면(<Mono>/ecommerce/products</Mono>)은 상품 정보와
+                옵션(variant)·재고를 관리합니다. 판매 상태는 3가지입니다.
               </p>
               <div className="mb-6 overflow-x-auto">
                 <table className="data-table" data-testid="ecommerce-guide-product-states">
@@ -134,7 +134,8 @@ export function EcommerceGuideScreen() {
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 <strong>프로모션</strong> 화면(<Mono>/ecommerce/promotions</Mono>)의 상태는
-                저장값이 아니라 시작/종료일과 현재시각으로 <strong>파생</strong>됩니다.
+                따로 저장되지 않고, 시작일·종료일과 지금 시각을 비교해
+                <strong>자동으로</strong> 정해집니다.
               </p>
               <div className="mb-6 overflow-x-auto">
                 <table
@@ -374,7 +375,7 @@ export function EcommerceGuideScreen() {
                 id="ecommerce-guide-roles"
                 className="mb-2 text-xl font-semibold"
               >
-                참고: E-Commerce 도메인 롤
+                E-Commerce 권한 안내
               </h2>
               <div data-testid="ecommerce-guide-roles">
                 <NoteCard
@@ -396,11 +397,12 @@ export function EcommerceGuideScreen() {
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 <strong>주문</strong> 화면(<Mono>/ecommerce/orders</Mono>)의 주문은 아래
-                상태머신을 따릅니다. 정상 경로는{' '}
+                흐름을 따릅니다. 정상 경로는{' '}
                 <Mono>대기 → 확정 → 배송중 → 배송완료</Mono> 이며, 예외 종료로 취소 ·
-                복구실패가 있습니다. <strong>운영자가 바꿀 수 있는 상태</strong>와{' '}
-                <strong>이벤트가 구동하는 읽기 전용 상태</strong>를 구분하세요 —
-                배송중/배송완료는 배송 서비스가 구동하며 운영자가 직접 못 바꿉니다.
+                복구실패가 있습니다. <strong>운영자가 직접 바꿀 수 있는 상태</strong>와{' '}
+                <strong>자동으로 바뀌는 읽기 전용 상태</strong>를 구분하세요 —
+                배송중/배송완료는 배송이 진행되면서 자동으로 바뀌며 운영자가 직접
+                바꿀 수 없습니다.
               </p>
               <StateFlow states={ORDER_STATES} />
               <div className="mb-10 overflow-x-auto">
@@ -503,9 +505,9 @@ export function EcommerceGuideScreen() {
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 <strong>배송</strong> 화면(<Mono>/ecommerce/shippings</Mono>)의 배송은{' '}
-                <strong>엄격 선형</strong> 상태머신입니다 — 각 상태의 후속은 하나뿐이라
-                콘솔은 한 방향 전이만 노출합니다. <Mono>준비중 → 발송 → 배송중 → 배송완료</Mono>.
-                발송 전이에는 운송사 + 운송장번호가 필수입니다.
+                <strong>정해진 순서대로만</strong> 진행됩니다 — 각 단계는 바로 다음
+                단계로만 넘어갈 수 있습니다. <Mono>준비중 → 발송 → 배송중 → 배송완료</Mono>.
+                발송 처리에는 운송사와 운송장번호가 꼭 필요합니다.
               </p>
               <StateFlow states={SHIPPING_STATES} />
               <div className="mb-10 overflow-x-auto">
@@ -570,8 +572,8 @@ export function EcommerceGuideScreen() {
                 도메인 서비스
               </h2>
               <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                E-Commerce 는 이벤트로 협업하는 여러 마이크로서비스로 나뉩니다. 콘솔은 이
-                중 7개 서비스의 운영자 API 를 호출해 화면을 렌더합니다.
+                E-Commerce 는 여러 개의 서비스로 나뉘어 있고, 서로 메시지를 주고받으며
+                동작합니다. 콘솔은 이 중 7개 서비스에서 정보를 가져와 화면에 보여줍니다.
               </p>
               <div className="mb-10 overflow-x-auto">
                 <table className="data-table" data-testid="ecommerce-guide-services-table">

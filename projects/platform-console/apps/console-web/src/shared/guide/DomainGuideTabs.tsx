@@ -48,7 +48,7 @@ type AuthoredTab = Exclude<DomainGuideTabKey, 'menus' | 'procedures'>;
 function NoInfo({ what }: { what: string }) {
   return (
     <p className="text-sm text-muted-foreground" data-testid="guide-no-info">
-      정보 없음 — 이 도메인에 대해 저장소가 {what}을(를) 따로 기록하고 있지 않습니다.
+      정보 없음 — 이 도메인에는 따로 정리된 {what}이(가) 없습니다.
     </p>
   );
 }
@@ -109,7 +109,7 @@ export function DomainGuideTabs({
           'menus',
           <>
             <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-              사이드바의 {domainLabel} 메뉴 전부 — 권한·기능 매핑 표에서 만들어집니다.
+              사이드바의 {domainLabel} 메뉴를 하나씩 설명합니다.
             </p>
             <MenuDescriptions areas={areas} testid={`${prefix}-menu-cards`} />
           </>,
@@ -118,7 +118,7 @@ export function DomainGuideTabs({
           'procedures',
           <>
             <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-              각 메뉴를 여는 방법 · 필요한 권한 · 그 화면에서 할 수 있는 조작입니다.
+              메뉴마다 여는 방법 · 필요한 권한 · 할 수 있는 일입니다.
             </p>
             <MenuProcedures areas={areas} testid={`${prefix}-menu-procedures`} />
           </>,
@@ -127,13 +127,14 @@ export function DomainGuideTabs({
           'permissions',
           <>
             {panels.permissions}
-            <h2 className="mb-2 mt-8 text-lg font-semibold">메뉴별 권한 (권한·기능 매핑 표)</h2>
+            <h2 className="mb-2 mt-8 text-lg font-semibold">메뉴별 권한</h2>
             <PermissionMapTable
               areas={areas}
               testid={`${prefix}-map`}
-              caption={`${domainLabel} 권한·기능 매핑`}
+              caption={`${domainLabel} 메뉴별 권한`}
+              showSources={false}
             />
-            <h2 className="mb-2 mt-8 text-lg font-semibold">알려진 불일치 · 특수 케이스</h2>
+            <h2 className="mb-2 mt-8 text-lg font-semibold">알아 둘 예외</h2>
             <KnownMismatches areas={areas} testid={`${prefix}-mismatches`} />
           </>,
         ),
