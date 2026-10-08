@@ -44,6 +44,31 @@ interface SwitchResult {
  * data; not entitled → the section's forbidden/not-eligible state). The query
  * invalidations cover any client-side tenant-scoped queries on the page.
  */
+
+/**
+ * TASK-MONO-780 — the wms sections' client query roots. Literals, not imports:
+ * `shared/` may not import `features/` (architecture.md § Forbidden
+ * Dependencies). `tests/unit/use-tenant-switch.test.tsx` pins them against the
+ * features' own key builders, so a rename there turns that test red instead of
+ * silently reopening the stale-list defect below.
+ *
+ * WHY THESE: the wms lists (`wms-ops` inventory/alerts/shipments/asns/refs,
+ * `wms-outbound-ops` orders) are seeded from the server render (initialData +
+ * staleTime 30s + `refetchOnMount: false`) and keyed WITHOUT a tenant slot —
+ * the same shape PC-FE-044 fixed for `['operators']`/`['audit']`. The server
+ * side already re-scopes on a switch (the wms gateway core sends
+ * `getDomainFacingToken()` = the assumed token of the new tenant), but React
+ * Query ignores the refreshed initialData for an existing key, so the previous
+ * tenant's rows stay on screen. That is exactly «the WMS 출고 list still shows
+ * demo-corp's `SO-DEMO-0001` after switching to ecommerce».
+ *
+ * Inactive entries are REMOVED (not just invalidated): with `refetchOnMount:
+ * false` an invalidated-but-inactive entry is shown as-is on the next visit,
+ * so the old tenant's rows would come back the moment the operator navigates
+ * to the section. Removed, the next mount seeds from the new server render.
+ */
+export const WMS_TENANT_SCOPED_QUERY_ROOTS = ['wms-ops', 'wms-outbound-ops'] as const;
+
 export function useTenantSwitch() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -64,6 +89,10 @@ export function useTenantSwitch() {
       // rows across tenants).
       qc.invalidateQueries({ queryKey: ['operators'] });
       qc.invalidateQueries({ queryKey: ['audit'] });
+      for (const root of WMS_TENANT_SCOPED_QUERY_ROOTS) {
+        qc.removeQueries({ queryKey: [root], type: 'inactive' });
+        qc.invalidateQueries({ queryKey: [root] });
+      }
       router.refresh();
     },
   });

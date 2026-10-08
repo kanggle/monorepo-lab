@@ -25,8 +25,11 @@ import { WMS_DEFAULT_PAGE_SIZE, WMS_MAX_PAGE_SIZE } from './types';
  * validate it against IAM JWKS and enforce `tenant_id=wms` from the JWT
  * claim itself). wms has NO token-exchange.
  *
- * Therefore this client uses `getAccessToken()` (the GAP-session HttpOnly
- * cookie) and NEVER `getOperatorToken()`. This is the EXACT INVERSE of the
+ * Therefore this client uses the domain-facing IAM OIDC token
+ * (`getDomainFacingToken()` in the shared core `shared/api/wms-gateway.ts` —
+ * the active tenant's assumed token, else the login token; ADR-MONO-020 D4)
+ * and NEVER `getOperatorToken()`. (TASK-MONO-780: this line said
+ * `getAccessToken()` — true before TASK-MONO-158, stale since.) This is the EXACT INVERSE of the
  * IAM `features/{accounts,audit,operators,dashboards}` clients — and that is
  * correct: the #569 trust-boundary invariant is GAP-domain-scoped (it
  * forbids the IAM OIDC token on GAP's `/api/admin/**` because IAM requires
@@ -37,7 +40,9 @@ import { WMS_DEFAULT_PAGE_SIZE, WMS_MAX_PAGE_SIZE } from './types';
  * `getOperatorToken` path MUST be absent for wms).
  *
  * Tenant invariant (§ 2.4.5): wms resolves the tenant from the JWT
- * `tenant_id` claim (`=wms`) — NOT an `X-Tenant-Id` header (the GAP
+ * `tenant_id` claim (`=wms` for a native operator; a customer tenant such as
+ * `ecommerce` is admitted via `entitled_domains` and scoped to its own rows —
+ * ADR-MONO-022 § D9) — NOT an `X-Tenant-Id` header (the GAP
  * mechanism) and NOT a producer `admin_operators.tenant_id` lookup. The
  * console therefore does NOT send `X-Tenant-Id` to wms; the tenant rides
  * inside the IAM OIDC token. wms rejects cross-tenant producer-side.

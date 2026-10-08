@@ -5,7 +5,9 @@
  * NON-IAM federated domain (ADR-MONO-013 Phase 4 slice 1).
  *
  * Auth divergence (console-integration-contract § 2.4.5): this feature's
- * server client uses the **IAM OIDC access token** (`getAccessToken()`),
+ * server client uses the **domain-facing IAM OIDC token**
+ * (`getDomainFacingToken()` — the active tenant's assumed token, else the
+ * login token; TASK-MONO-780 corrected the `getAccessToken()` named here),
  * NEVER the IAM exchanged operator token (`getOperatorToken()`) — the
  * #569 invariant is GAP-domain-scoped. Per-domain credential selection is
  * a first-class contract element.
