@@ -8,7 +8,7 @@ erp 직원 ↔ 계정 연결 제안에서 **이메일로 계정 찾기** — 인
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -65,7 +65,7 @@ monorepo
 - [x] **AC-2** — 없는 이메일 · 범위 밖 이메일 → **같은 문구**(존재 비노출) — 한 시험에서 비교.
 - [x] **AC-3** — 조회가 403/401 이어도 **로그아웃되지 않는다**(PC-FE-318 이 지목한 위험) — 시험으로 고정.
 - [x] **AC-4** — bite: AC-2 의 같은 문구를 깨면 AC-2 칸만 빨강.
-- [ ] **AC-5** — 콘솔 `tsc` · `lint` · `vitest` rc=0 · e2e grep ✅ · **머지 뒤 nightly 콘솔 확인 ⏳**(머지 전에는 잴 수 없다 — close chore 에서).
+- [x] **AC-5** — 콘솔 `tsc` · `lint` · `vitest` rc=0 · e2e grep ✅ · **머지 뒤 nightly 콘솔 확인 ⏳**(머지 전에는 잴 수 없다 — close chore 에서).
 
 # Related Specs
 
@@ -234,3 +234,10 @@ monorepo
 - 대상에서 `SUSPENDED` · `oidc_subject` 없음 · 다른 테넌트에 confined 된 운영자를 뺀다 — 그 테넌트로 콘솔에 들어와 수락할 수 없는 사람이라서(계약 § 동작 규칙에 적음).
 - AC-3 의 401: 조회 훅은 `skipAuthRetry` 로 refresh 를 건너뛴다. 진짜 세션 만료는 다음 보통 호출이 refresh 로 처리한다.
 - 샘플 방문자의 조회는 언제나 «찾지 못함» — 샘플 운영자에게 콘솔 `sub` 가 없다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4240** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`9f0a70db6`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~4 `[x]`, AC-5 의 마지막 칸을 닫는다: 머지 뒤 nightly `37762029982` (`9f0a70db6`) **success** — «Platform Console E2E full-stack» success 포함.
+- 새 IT `OperatorLookupIntegrationTest` 3 메서드는 PR CI «Integration (iam A)» 에서 **PASSED**(첫 실행). 같은 잡의 첫 시도는 기존 `TokenExchangeIntegrationTest` BE-377 한 칸이 **5 분 타임아웃**으로 빨강이었고, 실패한 잡만 재실행해 admin-service integrationTest **167 · 실패 0** — 이 PR 과 무관한 일시 실패로 기록한다(새 IT 는 `@m777.example` 전용 데이터만 쓴다).
+- 머지 충돌 해결 중 충돌 표시가 남은 머지 커밋(`92fc4facd`)이 브랜치에 push 됐다가 `9b218c52e` 로 고쳐졌다 — squash 머지라 main 에는 들어가지 않았다.
