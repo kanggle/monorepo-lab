@@ -8,7 +8,7 @@ TASK-MONO-774
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -31,7 +31,7 @@ monorepo
 
 - **선행**: 없음 — 단, AC-0 에서 «연결을 누가 쓰나» 를 **«D6 초대 수락의 부산물»** 로 고르면 `TASK-MONO-772` `done/` 이 선행이다.
 - 관련: `TASK-PC-FE-311`(콘솔 «나 (현재 운영자)» 보정 — 이 티켓이 걷는다) · `TASK-PC-FE-309`
-- 🔵 **2026-10-08 UTC 갱신** — 이 티켓은 **우산 티켓**이다(소유자 결정 1). 자기 PR = S1(AC-0 + 계약). 후속 슬라이스: `projects/erp-platform` `TASK-ERP-BE-044`(S2) → 루트 `TASK-MONO-776`(S3) → `projects/platform-console` `TASK-PC-FE-318`(S4). 세 슬라이스가 `done/` 이 되기 전에는 `review/` 로 옮기지 않는다.
+- 🔵 **2026-10-07 UTC 갱신** — 이 티켓은 **우산 티켓**이다(소유자 결정 1). 자기 PR = S1(AC-0 + 계약). 후속 슬라이스: `projects/erp-platform` `TASK-ERP-BE-044`(S2) → 루트 `TASK-MONO-776`(S3) → `projects/platform-console` `TASK-PC-FE-318`(S4). 세 슬라이스가 `done/` 이 되기 전에는 `review/` 로 옮기지 않는다.
 - 🔴 **R1 간접 게이트의 의존** — 수락에 인증 이메일을 직접 걸지 않는 결정(소유자 결정 3)은 `TASK-MONO-772` 가 `done/` 이 된 뒤에야 완성된다. 그 전에는 «erp 참여자가 됐을 때 이메일이 인증돼 있었다» 가 보장되지 않는다. ⓒ 를 고르지 않았으므로 772 는 **구현 선행이 아니다** — 이 게이트의 **완성 조건**이다.
 
 # Goal
@@ -60,10 +60,10 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정(위 file:line 전부) + 🔴 **소유자 결정: 연결을 누가 쓰나** — ⓐ 인사 담당(erp 권한) · ⓑ 본인 수락 · ⓒ D6 초대 수락의 부산물(772 선행) — 선택지와 추천을 내고 결정을 받는다. 다른 도메인 사람 마스터 모집단을 센다.
-- [ ] **AC-1** — 🔴 «전» 상태를 먼저 단언: 계약대로 승인자 = 직원 id 로 상신하면 결재함이 0 이 된다(현재) → 구현 뒤 연결된 계정으로 결재함에 보인다.
-- [ ] **AC-2** — E3: 살아 있지 않은 직원 · 존재하지 않는 직원을 승인자로 상신 → 거절.
-- [ ] **AC-3** — 자기결재: 내 계정과 연결된 직원을 승인자로 → 거절(지금은 다른 id 공간이라 통과한다 — 그 «전» 도 단언).
-- [ ] **AC-4** — 연결 없는 직원(`account_id` NULL)은 승인자로 지정될 수는 있으나 결재함에 나타날 사람이 없다는 것을 화면이 말한다(또는 상신 거절 — AC-0 에서 결정).
+- [x] **AC-1** — 🔴 «전» 상태를 먼저 단언: 계약대로 승인자 = 직원 id 로 상신하면 결재함이 0 이 된다(현재) → 구현 뒤 연결된 계정으로 결재함에 보인다.
+- [x] **AC-2** — E3: 살아 있지 않은 직원 · 존재하지 않는 직원을 승인자로 상신 → 거절.
+- [x] **AC-3** — 자기결재: 내 계정과 연결된 직원을 승인자로 → 거절(지금은 다른 id 공간이라 통과한다 — 그 «전» 도 단언).
+- [x] **AC-4** — 연결 없는 직원(`account_id` NULL)은 승인자로 지정될 수는 있으나 결재함에 나타날 사람이 없다는 것을 화면이 말한다(또는 상신 거절 — AC-0 에서 결정).
 - [ ] **AC-5** — 데모 시드 재굽기 뒤 결재함이 편법 없이 채워지고, `TASK-PC-FE-311` 보정 코드가 제거돼도 화면이 이름을 보인다(라이브 ⚪ 가능).
 
 # Related Specs
@@ -89,9 +89,9 @@ monorepo
 
 ---
 
-# AC-0 기록 (2026-10-08 UTC · 기준 `origin/main` `4cd6c9c85`)
+# AC-0 기록 (2026-10-07 UTC · 기준 `origin/main` `4cd6c9c85`)
 
-## 소유자 결정 (2026-10-08 UTC, 오케스트레이터 경유 — 원문 그대로)
+## 소유자 결정 (2026-10-07 UTC, 오케스트레이터 경유 — 원문 그대로)
 
 1. «연결을 누가 쓰나» = **ⓑ 인사 제안 + 본인 수락**. An `erp.write` holder (within department data scope, same as other employee writes) PROPOSES «employee E ↔ account A»; the link takes effect only when the owner of account A (JWT `sub` = A) ACCEPTS it. Not ⓐ (HR alone) and not ⓒ (by-product of the D6 invite; so TASK-MONO-772 is NOT a prerequisite).
    - 🔴 Required consequence (orchestrator, reported to owner): the proposer and the accepting account must differ (two-person rule). Without it, an HR user proposes their OWN account for the CFO employee, accepts it themselves, and takes the CFO's approval inbox — ⓑ would collapse into ⓐ. Reject acceptance when acceptor `sub` == proposer `sub` (new error code). Add a test that fails without this rule (bite).
@@ -99,7 +99,7 @@ monorepo
 
 ⇒ **선행** 표기 정정: ⓒ 가 아니므로 `TASK-MONO-772` 는 선행이 **아니다**.
 
-### 소유자 결정 2차 (2026-10-08 UTC, 오케스트레이터 경유 — 원문 그대로)
+### 소유자 결정 2차 (2026-10-07 UTC, 오케스트레이터 경유 — 원문 그대로)
 
 > 소유자 결정 (2026-10-08 UTC) — 세 가지 모두 추천안:
 > 1. 나누기 = «S1 먼저 머지 + S2~S4 티켓». MONO-774 는 상위(우산) 티켓으로 in-progress 에 남는다(review 로 옮기지 마라). S1 은 이 브랜치로 PR 이 된다.
@@ -132,7 +132,7 @@ monorepo
 3. 🔴 **직원 상세 조회는 그 직원의 부서로 data scope 를 건다**(`MasterdataApplicationService.java:323` `authorize(actor, READ, e.getDepartmentId())`). 승인자는 보통 상신자의 scope 밖(상위 부서)에 있으므로, E3 를 기존 상세로 풀면 정상 결재선이 «승인자 확인 불가» 로 거절된다 ⇒ 계약에 scope 없는 최소 조회 `GET /employees/{id}/approver-ref` 를 넣었다. (목록 `GET /employees` 는 `READ, null` — scope 를 안 건다: `:331`.)
 4. 🔴 **erp → IAM 계정 확인 배선이 없다.** account-service `/internal/**` 는 `internal.invoke` 스코프 토큰만 받는다(`SecurityConfig.java:59, 128`). erp 의 유일한 OAuth 클라이언트 `erp-platform-internal-services-client` 는 `erp.read`/`erp.write` 뿐이다(`iam-integration.md:61`). 선례: `V0036__seed_product_service_workload_client.sql`(ecommerce product-service 전용 워크로드 클라이언트). ⇒ 제안 시점 IAM 확인은 **iam 마이그레이션 + erp 어댑터 + compose/데모 배선**을 부른다 — ✅ 소유자 결정 2차 2 로 **하지 않는다**(배선 불필요).
 5. 🔵 **access token 에 `email_verified` 가 없다.** auth-service 에서 그 이름은 UserInfo 매퍼에만 있다(`OidcUserInfoMapper.java:88`); 토큰 커스터마이저가 싣는 클레임은 `tenant_id`/`tenant_type` 계열. ⇒ R1 은 간접 게이트로 결정(§ 열린 항목, 소유자 결정 2차 3).
-6. 🔵 콘솔은 erp masterdata 를 이미 **쓴다** — 다섯 마스터 모두 create · update · retire 가 같은 행렬을 따른다(`console-integration-contract.md:1960-1979`, 부서는 move-parent 까지; 직원 BFF `app/api/erp/masterdata/employees/route.ts:30` · `[id]/route.ts:36` · `[id]/retire/route.ts:15`). `iam-integration.md:120` 은 아직 «write/mutation 미소비» 라고 적는다 — **낡은 문장**이다(이 PR 은 안 고쳤다). 제안·수락·거절·철회·해제는 그 행렬에 **없는 다섯 동작**이고 수락·거절은 `erp.write` 가 아니라 «계정 주인» 이 하는 첫 쓰기다 ⇒ 콘솔 슬라이스가 § 2.4.8 에 행을 더하고 그 낡은 문장도 함께 고친다. (🔴 첫 판의 «콘솔 쓰기는 부서뿐 · 직원 쓰기 없음» 은 **틀렸다** — 계약 표의 부서 예시만 보고 «the template every master follows» 를 놓쳤다. 2026-10-08 UTC 정정.)
+6. 🔵 콘솔은 erp masterdata 를 이미 **쓴다** — 다섯 마스터 모두 create · update · retire 가 같은 행렬을 따른다(`console-integration-contract.md:1960-1979`, 부서는 move-parent 까지; 직원 BFF `app/api/erp/masterdata/employees/route.ts:30` · `[id]/route.ts:36` · `[id]/retire/route.ts:15`). `iam-integration.md:120` 은 아직 «write/mutation 미소비» 라고 적는다 — **낡은 문장**이다(이 PR 은 안 고쳤다). 제안·수락·거절·철회·해제는 그 행렬에 **없는 다섯 동작**이고 수락·거절은 `erp.write` 가 아니라 «계정 주인» 이 하는 첫 쓰기다 ⇒ 콘솔 슬라이스가 § 2.4.8 에 행을 더하고 그 낡은 문장도 함께 고친다. (🔴 첫 판의 «콘솔 쓰기는 부서뿐 · 직원 쓰기 없음» 은 **틀렸다** — 계약 표의 부서 예시만 보고 «the template every master follows» 를 놓쳤다. 2026-10-07 UTC 정정.)
 7. 🔵 `TASK-PC-FE-311`(«나 (현재 운영자)» 보정)은 아직 `review/` 다 — 코드: `approval-refs.tsx:70-79` · `ApprovalScreen.tsx:65` · `ApprovalDetail.tsx:34` · `ErpApprovalScreen.tsx:19` · `erp-state.ts:32, 243`. 걷기는 콘솔 슬라이스가 그 티켓의 닫힘 상태를 보고 한다.
 
 ## 다른 도메인의 «사람 마스터» 모집단 (Out of Scope — 세기만)
@@ -148,7 +148,7 @@ monorepo
 
 🔵 wms 의 사람 칸(`*_by` · `actor_id`, 15 파일 44 곳)은 JWT 행위자를 **그대로** 적는다 — 도메인 사람 마스터를 거치지 않으므로 «두 id 공간» 이 없다. ⇒ 다른 도메인 모집단 = **wms `admin_user` 하나**.
 
-🔵 **후속 후보 (티켓으로 만들지 않는다 — 오케스트레이터 지시 2026-10-08 UTC)**: **«wms `admin_user` ↔ IAM 계정 — 연결이 필요한가 판정»**. 착수한다면 AC-0 = wms 의 어떤 결정 경로가 `admin_user.id` 를 JWT `sub` 와 비교하는가를 먼저 센다; 0 이면 연결 불필요로 닫는다. 이 줄이 그 후보의 유일한 기록이다 — 이 우산 티켓이 닫힐 때 살아 있는 집으로 옮겨야 한다.
+🔵 **후속 후보 (티켓으로 만들지 않는다 — 오케스트레이터 지시 2026-10-07 UTC)**: **«wms `admin_user` ↔ IAM 계정 — 연결이 필요한가 판정»**. 착수한다면 AC-0 = wms 의 어떤 결정 경로가 `admin_user.id` 를 JWT `sub` 와 비교하는가를 먼저 센다; 0 이면 연결 불필요로 닫는다. 이 줄이 그 후보의 유일한 기록이다 — 이 우산 티켓이 닫힐 때 살아 있는 집으로 옮겨야 한다.
 
 ## 🔴 STOP — 한 PR 이 감당할 크기가 아니다 (분할 제안)
 
@@ -170,3 +170,22 @@ monorepo
 
 - ✅ ~~R1(인증된 이메일)을 수락에 거는가~~ — **결정됨: 간접 게이트로 충분** (소유자 결정 2차 3). 근거: 수락자는 이미 이 테넌트의 erp 참여자여야 하고(수락 = `erp.read` 이상), 그 운영자 측면이 붙는 순간이 `ADR-MONO-080` D3 가 무는 자리다. 🔴 **의존**: 그 간접 게이트는 `TASK-MONO-772` `done/` 뒤에 완성된다(§ Dependency Markers). 이 우산 티켓을 닫을 때 772 의 상태를 다시 본다 — 772 가 아직 안 끝났으면 «R1 미완성» 을 닫기 기록에 적는다.
 - ✅ S2~S4 티켓 기안 — 오케스트레이터가 번호를 줬다(`TASK-ERP-BE-044` · `TASK-MONO-776` · `TASK-PC-FE-318`), 이 커밋이 셋을 `ready/` 로 기안했다.
+
+# 우산 정리 — S1~S4 머지 (2026-10-08 UTC, `date -u` 실측)
+
+| 슬라이스 | 티켓 | PR · 스쿼시 | 상태 |
+|---|---|---|---|
+| S1 계약 · AC-0 | 이 티켓 | #4228 `e27acc829` | 머지 |
+| S2 masterdata 연결 모델 · 2인 규칙 | `TASK-ERP-BE-044` | #4231 `836a122d9` | done (IT 9 CI PASSED) |
+| S3 approval · notification · read-model · 데모 시드 | `TASK-MONO-776` | #4234 `64d6070e6` | review — AC-8 시드 라이브 ⚪ 재굽기 창 (IT 26 CI PASSED) |
+| S4 콘솔 다섯 표면 | `TASK-PC-FE-318` | #4235 `1a7220c3c` | review — nightly · 라이브 ⚪ |
+
+- **AC-1 · AC-3** — S3 의 «전» 단언(옛 코드 초록 → 새 코드 빨강) + `PersonIdSpaceIntegrationTest`(CI 13 PASSED)로 닫힘.
+- **AC-2** — S3 `approverUnresolved` · IT `missingApprover`/`retiredApprover`.
+- **AC-4** — 소유자 결정 «상신 거절»: S3 422 `APPROVAL_APPROVER_UNLINKED` + S4 선택기 «연결된 계정 없음»(bite: 끄면 AC-4 한 칸만 빨강).
+- **AC-5** — ⚪ 재굽기 창(데모 결재함이 편법 없이 찬다 · PC-FE-311 보정 없이 이름 표시). 그래서 이 티켓은 `review/` 에 머문다.
+- 같은 정리에서 `infra/demo/seed/seed-erp.sh` 머리말의 낡은 «알림함 0 · BE-043 정지» 문단을 고쳤다(BE-043 done, 매퍼 강제 제거됨).
+
+## 날짜 정정 (2026-10-08 UTC)
+
+이 티켓의 «2026-10-08 UTC» 표기 6 곳은 실제 UTC 로 **2026-10-07** 이었다(호스트 KST 의 날짜를 UTC 로 적은 오케스트레이터 실수 — `date -u` 로 확인). 위 본문에서 고쳤다. 단 «소유자 결정 2차» 인용문(`> 소유자 결정 (2026-10-08 UTC)`)은 원문 그대로 두었다 — 같은 날 UTC 10-07 의 결정이다. 같은 실수가 frozen 파일(`TASK-BE-625` done · `TASK-FE-107` · `TASK-BE-627` · `TASK-MONO-776` review)에도 있으나 그 파일들은 고칠 수 없다.

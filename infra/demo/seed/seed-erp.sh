@@ -68,12 +68,12 @@
 #    동작하지 않는다**(승인이 401/403 이 아니라 "현재 단계가 아니다" 로 거절된다). 빈
 #    화면보다 나쁜 것은 **눌리는데 실패하는 화면**이다. 이제는 그럴 필요 자체가 없다.
 #
-# 🔴 **알림함(erp notification-service)은 아직 0 이고, 그것은 이 시드 탓이 아니다.**
-#    `EnvelopeToCommandMapper` L67 이 `tenantId == "erp"` 를 강제하는데 데모 이벤트는
-#    `demo-corp` 를 싣는다 ⇒ `erp.approval.*` 이 전량 DLT 로 간다. 콘솔
-#    `/erp/delegation` 의 read-model 뷰가 비는 것과 **같은 관문**이다(소비자 2개가 같은
-#    코드를 갖는다). 결정은 `ADR-ERP-001`(Proposed)이 쥐고 있고 실행은
-#    `TASK-ERP-BE-043` 이 HARDSTOP-09 로 정지 중이다 — **여기서 우회하지 않는다.**
+# 🔵 **알림함(erp notification-service) 관문은 닫혔다.** 예전 이 자리의 문단은
+#    `EnvelopeToCommandMapper` 가 `tenantId == "erp"` 를 강제해 `demo-corp` 이벤트가 전량
+#    DLT 로 간다고 적었다 — `TASK-ERP-BE-043`(done)이 그 강제를 걷었다(매퍼 javadoc «used to
+#    require»). 이제 알림 수신자는 «내 `sub` 와 연결된 직원» 으로 풀린다(`TASK-MONO-776`,
+#    notification-api.md § v1.1) ⇒ 알림함이 차려면 아래 §4b 의 직원 ↔ 계정 연결이 먼저다.
+#    (2026-10-08 UTC 정정, `TASK-MONO-774` 정리)
 #
 # 🔵 ③ 이 해소되면서 **눈에 안 보이던 절반이 함께 고쳐졌다**: 게이트웨이 6/6 이
 #    `X-User-Id ← sub` 이므로, 필터가 0건인 도메인(finance·scm·wms)도 감사 기록의
