@@ -85,6 +85,13 @@ vi.mock('@/widgets/demo-credentials/DemoLoginCredentials', () => ({
   DemoLoginCredentials: () => null,
 }));
 
+// TASK-PC-FE-324 — `SsoWrongAccountLogout` calls `performLogout` (fetch +
+// `window.location.assign`) on click; this suite only renders, never clicks,
+// but the EXPECTED-loop below mounts it for `sso_wrong_account` so the import
+// must resolve to something render-safe.
+const performLogoutMock = vi.fn();
+vi.mock('@/features/auth', () => ({ performLogout: performLogoutMock }));
+
 /**
  * 코드 → 방문자가 보게 되는 문장. **이것이 계약이다.**
  * 🔴 여기를 고칠 때는 소스(`(auth)/login/page.tsx`)를 같이 고쳐야 하는데,
@@ -100,6 +107,9 @@ const EXPECTED: Record<string, string> = {
     '아직 소속된 조직이 없습니다. 다시 로그인하면 조직 만들기로 안내됩니다.',
   operator_exchange_unavailable:
     '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  // TASK-PC-FE-324
+  sso_wrong_account:
+    '다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다. 아래에서 로그아웃한 뒤, 스토어(쇼핑몰) 탭에서도 로그아웃하고 운영자 계정으로 다시 로그인하세요.',
   [SESSION_EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.',
 };
 
@@ -183,6 +193,39 @@ describe('/login 에러 문구 — 의미 (리터럴이 아니라 «무엇을 �
   it('🔴 `session_expired` 는 «로그아웃됐다» 는 사실을 말한다 (반짝임만 남기지 않는다)', async () => {
     await renderLogin({ error: SESSION_EXPIRED });
     expect(alertText()).toContain('세션이 만료');
+  });
+
+  // TASK-PC-FE-324
+  it('🔴 `sso_wrong_account` 는 «다른 계정» 과 스토어 로그아웃까지 말한다', async () => {
+    await renderLogin({ error: 'sso_wrong_account' });
+    const t = alertText()!;
+    expect(t).toContain('다른 계정');
+    expect(t).toContain('스토어');
+  });
+});
+
+describe('/login — `sso_wrong_account` 전용 로그아웃 버튼 (TASK-PC-FE-324)', () => {
+  it('🔴 이 코드에서만 로그아웃 버튼이 렌더된다', async () => {
+    await renderLogin({ error: 'sso_wrong_account' });
+    expect(screen.getByTestId('sso-wrong-account-logout')).toBeInTheDocument();
+  });
+
+  it('🔵 대조군 — 다른 코드(`token_exchange_failed`)에서는 안 보인다', async () => {
+    await renderLogin({ error: 'token_exchange_failed' });
+    expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
+  });
+
+  it('🔵 대조군 — 에러가 없으면 안 보인다', async () => {
+    await renderLogin();
+    expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
+  });
+
+  it('🔴 클릭하면 기존 로그아웃 메커니즘(`performLogout`)을 그대로 재사용한다', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    await renderLogin({ error: 'sso_wrong_account' });
+    performLogoutMock.mockClear();
+    await userEvent.click(screen.getByTestId('sso-wrong-account-logout'));
+    expect(performLogoutMock).toHaveBeenCalledTimes(1);
   });
 });
 
