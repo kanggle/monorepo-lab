@@ -73,7 +73,7 @@
 | Google OAuth 2.0 | 소셜 로그인 (선택) | `GOOGLE_CLIENT_ID` 존재 시 |
 | Apple Sign In | 소셜 로그인 (선택) | `APPLE_CLIENT_ID` 존재 시 |
 | Kakao OAuth | 소셜 로그인 (선택) | `KAKAO_CLIENT_ID` 존재 시 |
-| 이메일/SMS provider | 비밀번호 재설정·2FA (선택, 미래) | 미정 |
+| 이메일/SMS provider | 비밀번호 재설정 · 2단계 등록 알림 메일(TASK-MONO-771). 2단계 수단 자체는 **TOTP** 라 외부 provider 가 없다(SMS 는 ADR-MONO-080 R3 밖) | 메일 = `TASK-MONO-770` `EmailSenderPort`(`iam.mail.enabled`) · SMS = 없음 |
 
 OAuth는 백로그 (TASK-BE-008 이후). 초기 골든패스는 이메일·패스워드만.
 

@@ -18,6 +18,8 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 
 > **TASK-MONO-299 (ADR-MONO-040 Phase 3 part B 2026-06-18)** — 운영자 row 조회는 **account_id 단독**이다. Phase 2 의 임시 **DUAL-KEY** email fallback 과 `X-Subject-Email` 헤더는 **제거**되었다. part A(TASK-MONO-298)가 `admin_operators.oidc_subject` 를 account_id 로 backfill 했으므로 admin-service 는 `oidcSubject`(=account_id, SAS `sub`)로 직접 조회한다. (실배포 전제: part-A backfill 이 선행돼야 한다 — 미migrate 운영자는 fallback 제거 후 fail-closed 된다.)
 
+> **TASK-MONO-771 (ADR-MONO-080 D4 · R2, 소유자 결정 OD-2 · OD-3)** — 응답에 `mfaRequired` 필드가 **additive** 로 추가된다(아래 표 · 판정 규칙 6). 기존 `assigned` · `orgScope` · `delegatedScope` 의 판정과 상태코드는 불변이다. 요구 여부만 admin-service 가 계산하고, subject `amr` 과의 비교는 auth-service 가 한다([auth-api.md § Assume-Tenant Exchange](../auth-api.md) 2단계 게이트). 같은 요청 안의 admin-service **로컬** 읽기(`tenant_entry_policy` · `admin_roles.require_2fa`)라 새 서비스 간 호출이 없다.
+
 **Query Parameters**:
 
 | 파라미터 | 타입 | 필수 | 설명 |
@@ -29,7 +31,8 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 ```json
 {
   "assigned": true,
-  "orgScope": ["dept-sales"]
+  "orgScope": ["dept-sales"],
+  "mfaRequired": true
 }
 ```
 
@@ -45,6 +48,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 |---|---|---|
 | `assigned` | boolean | 운영자의 effective tenant scope 가 `tenantId` 를 포함하면 `true`, 아니면 `false` |
 | `orgScope` | array\<string\> \| null | **TASK-BE-338 (ADR-MONO-020 D3 amendment) — additive.** 선택된 assignment 의 per-assignment **데이터-스코프**(운영자가 그 테넌트에서 act 가능한 부서 **subtree-root id** 들). `null` ⟺ `["*"]` = 테넌트 전체(**net-zero** 기본) — `org_scope` 컬럼 미설정, 명시적 assignment row 부재(legacy home-tenant / platform-scope), 그리고 모든 `assigned=false` 케이스에서 `null`. 명시적 빈 배열 `[]` = zero-scope(NULL 과 구분, verbatim 반환). auth-service 가 `null`/empty/부재 → `["*"]` 로 기본 처리(graceful, 구버전 admin 호환). |
+| `mfaRequired` | boolean | **TASK-MONO-771 — additive, 200 응답에 항상 실린다**(`true`/`false`, 생략 없음). `assigned=true` 일 때 = **선택 테넌트의 진입 정책**(`tenant_entry_policy.require_mfa`, 행 없음 = `false`) **∨ 운영자가 `require_2fa=TRUE` 역할을 하나라도 보유**(`anyRoleRequires2fa` — OD-2: 역할 플래그는 assume 에서도 문다). `assigned=false` 면 `false`(판정할 것이 없다 — 어차피 거절). 🔴 **auth-service 는 이 필드의 부재를 `true` 로 읽는다**(fail-closed — 구버전 admin 과의 어긋남이 2단계 없는 발급으로 새지 않게. 2단계를 거친 subject 는 그래도 통과한다). 판정 규칙 6 |
 | `delegatedScope` | object `{domains:[], roles:[]}` \| absent | **TASK-BE-477 (ADR-MONO-045 D3/D5) — additive.** 오직 **파트너십-파생 host reach** 케이스에만 존재하는 cross-org confinement 블록: partner 테넌트 B 의 participant 인 운영자가 host 테넌트 A(=`tenantId`)를 assume 할 때 얻는 **capped** 도메인-운영 스코프 = `delegated_scope ∩ participant_scope ∩ host-holds`. **정상(비-파트너십) assignment 와 모든 `assigned=false` 케이스에는 이 필드가 부재**한다(`@JsonInclude(NON_NULL)` 로 omit — 기존 `{assigned, orgScope}` shape 은 byte-불변). auth-service(step 2b)가 이 값으로 assume-tenant 토큰의 `entitled_domains` 를 `domains` 와 교집합하고 role 을 `roles` 로 캡한다. **admin scope 는 절대 확장되지 않는다** — cross-org actor 는 host 에서 `effectiveAdminScope` 공집합(→ `/api/admin/**` 403). 이 필드가 실린다고 해서 운영자가 host 를 administer 할 수 있는 것은 아니다. |
 
 **판정 규칙** (server-side, admin-service):
@@ -55,6 +59,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 4. `tenantId` blank → `assigned=false`, `orgScope=null`.
 0. **`admin_operators.confined_tenant_id` — 한 테넌트로 묶인 운영자 (`TASK-MONO-751`, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로»).** 운영자 행을 찾고 ACTIVE 를 확인한 직후, **2번(platform-scope)보다 먼저**: 이 컬럼이 비-NULL 이고 `tenantId` 와 다르면 `assigned=false`. 같으면 나머지 규칙이 그대로 판정한다(좁히기만 — 열지 않는다). `NULL`(기존 모든 운영자)은 이 규칙에 걸리지 않는다. 쓰는 곳: 데모 플랫폼 운영자(`'*'`, `confined_tenant_id='fan-platform'`) — `fan-platform` 만 assume 가능.
 5. **`tenantId == fan-platform` — 플랫폼 운영자 전용 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3).** 2번(platform-scope)에 걸리지 않은 운영자 — 즉 **고객사 운영자** — 는 `fan-platform` 에 대해 **항상 `assigned=false`** 다. assignment row 가 있어도(이 surface 가 생기기 전에 만들어졌든 직접 SQL 이든), 파트너십-파생 host reach(3·`delegatedScope`) 가 있어도 같다 — 이 판정은 3번과 파트너십 분기 **앞에서** 내려진다. 이유: `fan-platform` 이 `fan` 도메인을 구독하므로 이 테넌트를 assume 한 토큰은 `FAN_OPERATOR` 를 파생받고, 그 역할로 열리는 길(artist-service 디렉터리 관리)은 플랫폼 운영자 몫으로만 열렸다. 플랫폼 운영자는 2번으로 지금처럼 `assigned=true`.
+6. **`mfaRequired` — 2단계 요구 (`TASK-MONO-771`, `ADR-MONO-080` D4 · R2, 소유자 결정 OD-2).** 위 규칙들이 `assigned=true` 를 낸 **뒤에** 계산한다(`assigned` 판정을 바꾸지 않는다): `mfaRequired = tenant_entry_policy(tenantId).require_mfa ∨ anyRoleRequires2fa(운영자)`. 정책 행이 없으면 `false`(꺼짐). **경로 불문** — 2(플랫폼 `'*'`) · 3(assignment) · 파트너십 host reach 어느 길로 `assigned=true` 가 나와도 정책은 «들어가는 테넌트» 의 것이다. `assigned=false` 는 언제나 `mfaRequired=false`. 정책 · 역할 읽기 실패는 이 엔드포인트의 5xx 다(→ auth-service fail-closed, 아래 Caller Constraints) — `false` 로 메우지 않는다.
 
 **Side Effect**: 없음 (read-only — `admin_actions` row 미기록).
 
@@ -65,7 +70,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 | 401 `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 (`/internal/**` 체인 fail-closed) |
 | 400 `VALIDATION_ERROR` | `oidcSubject`/`tenantId` 파라미터 누락 |
 
-운영자 미존재/비-ACTIVE/미할당은 모두 `200 {assigned:false}` 로 응답한다 (열거 방어; 별도 4xx 로 구분하지 않는다).
+운영자 미존재/비-ACTIVE/미할당은 모두 `200 {assigned:false}` 로 응답한다 (열거 방어; 별도 4xx 로 구분하지 않는다). 이 경우 `mfaRequired` 는 `false` 다 — 2단계 요구 여부가 운영자 존재를 드러내지 않게.
 
 ---
 
@@ -116,5 +121,5 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 - 타임아웃: 연결 3s, 읽기 5s (account edge 와 동일 정책)
 - 재시도: 2회 (지수 백오프 + jitter). 4xx 는 재시도 금지
 - Circuit breaker: 실패율 50% / 10초 sliding window → open → half-open
-- **⚠️ fail-CLOSED**: admin-service 장애 시(`assigned=false` / 4xx / 5xx / circuit-open / timeout / IO 모두) **assume-tenant 발급 거부** (`AssumeTenantDeniedException` → RFC 8693 `invalid_grant` / 400, 토큰 미발급). 이 게이트는 **절대 fail-soft 하지 않는다** — account-service `entitled_domains` 도출(fail-soft)과 정반대 정책이다. 인가 게이트이므로 가용성에 의존해 토큰을 발급해서는 안 된다 (격리 위반 = isolation breach).
+- **⚠️ fail-CLOSED**: admin-service 장애 시(`assigned=false` / 4xx / 5xx / circuit-open / timeout / IO 모두) **assume-tenant 발급 거부** (`AssumeTenantDeniedException` → RFC 8693 `invalid_grant` / 400, 토큰 미발급). **`assigned=true` 여도 `mfaRequired` 가 `true` 이거나 부재이고 subject `amr` 에 `mfa` 가 없으면 거부** — `invalid_grant` + `error_description=insufficient_user_authentication`(TASK-MONO-771; 장애 거부와 **다른** 고정 상수 — 장애를 «2단계 필요» 로 보이게 하지 않는다). 이 게이트는 **절대 fail-soft 하지 않는다** — account-service `entitled_domains` 도출(fail-soft)과 정반대 정책이다. 인가 게이트이므로 가용성에 의존해 토큰을 발급해서는 안 된다 (격리 위반 = isolation breach).
 - **감사 기록 없음**: read 이므로 "audit first" 가 적용되지 않는다 (admin-to-account 의 lock/unlock 명령과 다름).

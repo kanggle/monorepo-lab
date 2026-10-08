@@ -222,3 +222,59 @@ monorepo
 | **HS-C** (계약 부재) | assume-tenant 의 2단계 거절 판별자 | `auth-api.md:189-193, 266` | 콘솔이 단계 상승을 시작할 근거가 없다(F3). 문구 매칭은 취약 — 고정 상수로 계약에 적는다(RFC 6749 § 5.2 의 `invalid_grant` 유지 + 고정 `error_description` 상수, RFC 9470 어휘 `insufficient_user_authentication` 권고) | S1 |
 | **HS-D** (계약 부재) | 계정 평면 TOTP 의 명세 0 | auth `overview.md:43` · `dependencies.md:76` 는 «미래 · 미정» 뿐 | 집은 이미 정해져 있다 — `account-service/data-model.md:43` 이 `2fa_secret` 을 **auth-service 소유**(S1 규칙)로 못박는다. 표 · 화면 · 엔드포인트 명세가 없다 | S1 |
 | **HS-E** (AC 빈틈 — 명세 충돌 아님) | AC-1 단독은 구멍을 닫지 않는다(F2) | 티켓 AC-1 · ADR-080 R2 원문 | OD-2 의 답 없이 S4 를 닫으면 «초록인데 열린» 상태 | OD-2 답 → S4 AC-1b 추가 또는 수용 기록 |
+
+---
+
+## S1 기록 (2026-10-08 UTC)
+
+> 분석 · 작성 = Opus 5.5 (api-designer) · **코드 · 마이그레이션 0** — 문서만. AC 체크박스는 건드리지 않았다. `scripts/check-jwt-claims-registry.sh` 는 이 세션에서 **실행하지 못했다**(셸 없음) — 아래 «가드» 줄은 스크립트 원문을 읽고 판정한 것이다.
+
+### 바꾼 파일 · 절
+
+| 파일 | 절 |
+|---|---|
+| `platform/contracts/jwt-standard-claims.md` | § Standard Claims — **`amr` 행** 추가(`org_scope` 다음) · § Change Rule › Change log 맨 위 2026-10-08 항목 |
+| `projects/iam-platform/specs/contracts/http/auth-api.md` | `GET /oauth2/authorize` 파라미터 표(`acr_values`) · Assume-Tenant Exchange(2단계 게이트 bullet · Assumed Token Claims `amr` 행 · Assume-Tenant Errors 표에 `insufficient_user_authentication` 행 + 판별자 규칙) · Token Claims 표 `amr` 행 · Scope ↔ Claim 표 · `/oauth2/token` Errors 표 · **신규 § IdP 브라우저 화면 — 2단계 인증 (TOTP)**(폼·소셜 공통 2단계 · `/mfa/challenge` · 단계 상승 `acr_values=mfa` · `/mfa/setup` 등록(OD-4 전제 + 알림 메일) · `/mfa` · `/mfa/recovery-codes` · 관리자 리셋 포인터) |
+| `projects/iam-platform/specs/contracts/http/internal/auth-to-admin.md` | `GET /internal/operator-assignments/check` — TASK-MONO-771 머리 노트 · 응답 예 · 필드 표 `mfaRequired` 행 · 판정 규칙 6 · 열거 방어 문장 · Caller Constraints fail-closed bullet |
+| `projects/iam-platform/specs/contracts/http/admin-api.md` | Authentication › Exceptions 표(token-exchange 행) · § POST /api/admin/auth/token-exchange(Errors 표 `403 MFA_REQUIRED` · `500 INTERNAL_ERROR` 행 + «2단계 요구» 규칙 · 401 과의 분리 · 적용 시점) · **신규 § POST /api/admin/accounts/{accountId}/2fa/reset**(OD-6) · **신규 § Tenant Entry Policy**(GET · PUT `/api/admin/tenants/{tenantId}/entry-policy`, OD-1 · OD-3 · OD-4) |
+| `projects/iam-platform/specs/services/admin-service/rbac.md` | § Permission Keys 표(`tenant.security.manage` · `account.2fa_reset`) · § Seed Roles(SUPER_ADMIN · SECURITY_ANALYST · TENANT_ADMIN 행) · § Seed Matrix 2행 + TASK-MONO-771 노트 |
+| `projects/iam-platform/specs/services/admin-service/security.md` | § IAM OIDC Subject-Token Validation 표 7번 행(`amr` 추출) · 신규 § Second-Factor Requirement · § Operator Credential Convergence 의 O4 문장(구 :230-231) 취소선 + 정정(HS-A) |
+| `projects/iam-platform/specs/services/admin-service/data-model.md` | 신규 § `tenant_entry_policy` · § Migration Strategy TASK-MONO-771 항목 · § Data Classification Summary |
+| `projects/iam-platform/specs/services/auth-service/data-model.md` | 신규 § `account_totp`(HS-D) · § Migration Strategy V0043 · § Data Classification Summary |
+| `projects/iam-platform/specs/services/auth-service/overview.md` · `dependencies.md` | Change Drivers 3 포인터 · 외부 provider 표의 «2FA (미래, 미정)» 행 정정 |
+| `projects/platform-console/specs/contracts/console-integration-contract.md` | § 2.6 Fail-closed mapping(`403 MFA_REQUIRED` → `/api/auth/step-up` · «401 만 운영자 아님» · 루프 상한) · § 2.6.1 재교환 403 행 · § 2.7 Default active tenant 문장 · § 2.7 Fail-closed switch(`mfa_required` 행, `denied` 보다 먼저) · 신규 § 2.4.3.3 진입 정책 토글(OD-1 두 자리) |
+| `platform/error-handling.md` | Admin `[domain: saas]` — `MFA_REQUIRED`(403) 신규 · `TOTP_NOT_ENROLLED` 설명 확장 · Auth / Token — `OAUTH_INVALID_GRANT` 행에 고정 `error_description` 판별자 규칙(`insufficient_user_authentication`) |
+| `rules/domains/saas.md` | Standard Error Codes › Admin 목록 — `MFA_REQUIRED` 추가 · `TOTP_NOT_ENROLLED` 설명 확장 |
+| `docs/adr/ADR-MONO-035-…md` | § Amendments 맨 위 2026-10-08 항목(O4 의 deferred 후속을 080 D4 가 집행 · break-glass TOTP 불변). Status 불변 |
+| `docs/adr/ADR-MONO-032-…md` | § 6 끝 «Note 2026-10-08» 인용 블록(D4-B 를 080 D4 가 집행). Status 불변 |
+
+**가드**: 새 행은 `| \`amr\` | string[] | Conditional | … |` 로 시작한다 — `check-jwt-claims-registry.sh` 의 문서 쪽 파서(`^\| *\`[a-z_]+\` *\|` → 첫 칸 추출)가 `amr` 을 등록으로 센다. 코드 쪽은 아직 `amr` 을 mint 하지 않으므로 지금도 초록이고, S2b 가 `.claim("amr", …)` 또는 `private static final String X = "amr";` 상수로 mint 해도 초록이다.
+
+### 슬라이스 행과 다른 것 · 이유
+
+1. **rbac.md · `platform/error-handling.md` · `rules/domains/saas.md` 를 더 고쳤다** — S1 행에 없다. rbac.md 는 «다른 키는 본 문서 업데이트 없이 도입 금지», error-handling.md 는 «Error codes must be registered in this document before use», saas.md 는 그 교차참조 의무다. 새 권한 키 둘과 새 코드 `MFA_REQUIRED` 를 계약에 쓰는 순간 이 셋이 같은 PR 에 있어야 한다.
+2. **auth-service `overview.md` · `dependencies.md` 한 줄씩** — HS-D 가 «미래 · 미정» 이라 지적한 두 줄.
+3. **`mfaRequired` 부재 = «요구» 로 읽기**(AC-0 § 2 의 «부재 = 거절» 을 좁힘) — 결과는 같다(2단계 없는 subject 는 거절), 다만 2단계를 거친 subject 까지 거절하지는 않는다.
+4. **토큰 교환의 요구 판정 읽기 실패 = `500 INTERNAL_ERROR`** — 401 · 403 어느 쪽으로 메워도 콘솔이 엉뚱한 화면(온보딩 · 단계 상승)으로 보낸다.
+5. **`tenant_entry_policy.version` = INT**(초안은 BIGINT) — 형제 표(`tenant_partnership.version`) 규약. `CHECK (tenant_id <> '*')` 추가.
+6. **`account_totp` 에 `tenant_id` 컬럼**(조회 키 아님) — multi-tenant M1 «신규 테이블 = `tenant_id` NOT NULL». 키 · 조회는 HS-D 대로 `account_id` 하나.
+7. **리셋의 하류 내부 계약(admin → auth)은 쓰지 않았다** — 슬라이스 표가 S6 에 `internal/` 계약을 둔다. 공개 표면(`POST /api/admin/accounts/{accountId}/2fa/reset`)만 S1.
+
+### 소유자가 볼 만한 문구 선택
+
+- **`amr` 값**: 소셜 로그인 = **`[]`**(이 계약에서 유일하게 `[]` 를 내는 자리 — OD-7 «항상» 과 «소셜은 수단 값 없이» 를 함께 지키려면 이것뿐), 복구 코드 = `["pwd","mfa"]`(`otp` 아님 — 인증 앱 코드가 아니므로). 판정은 `"mfa" ∈ amr` 하나라 어느 쪽도 진입 결과를 바꾸지 않는다.
+- **단계 상승 수단 = `acr_values=mfa`**(RFC 9470 모양) + 콘솔 경로 `GET /api/auth/step-up`. `acr` 클레임은 싣지 않는다.
+- **새 권한 키 이름**: `tenant.security.manage`(OD-1 가칭 그대로) · `account.2fa_reset`(기존 감사 어휘 `auth.2fa_enroll` 과 맞춤). 에러 코드 `MFA_REQUIRED`(HS-B 그대로).
+- **OD-3 와 홈 `'*'`**: 홈이 `'*'` 인 플랫폼 운영자는 OD-3 항이 assignment 행만 본다(`'*'` 는 정책을 가질 수 없다) — 플랫폼 운영자의 2단계는 역할 플래그와 assume 게이트가 문다. 데모(OD-5, `SUPER_ADMIN` 완화 + `confined_tenant_id=fan-platform`)에서 `fan-platform` 정책을 켜면 **토큰 교환은 통과하고 assume 이 거절**된다 — 데모의 «2단계는 정책 토글로 보인다» 는 assume 거절 → 스위처의 단계 상승 제안으로 나타난다.
+- **`/mfa/challenge` 5회 실패 → 1단계부터 다시**(계정 잠금 없음 — BE-599 소유자 결정과 같은 이유). 무차별 대입 상한으로 고른 값.
+- **등록 알림 메일 발송 실패는 등록을 되돌리지 않는다**(WARN 로그만).
+- **리셋은 세션을 끊지 않는다** · 리셋 대상에 등록이 없으면 `404 TOTP_NOT_ENROLLED`.
+- **콘솔 기본 테넌트 assume 이 `mfa_required` 로 거절돼도 자동 단계 상승은 하지 않는다**(로그인은 활성 테넌트 없이 성공, 스위처가 제안).
+
+### S1 에 넣지 않은 것
+
+- 셀프 2단계 **해제** 경로(Edge Case · OD 어디에도 없음) — 재등록은 관리자 리셋 뒤에만.
+- 등록 · 리셋 **이벤트**(`auth-events.md` · `admin-events.md` 의 새 이벤트 타입) — 소비자 없음. 감사는 `admin_actions`(리셋 · 정책)로 남는다.
+- `features/authentication.md` · `features/oauth-social-login.md` 의 흐름 서술 갱신 — 계약(auth-api)이 정본이고, 기능 문서 갱신은 S2b 에서.
+- 진입 정책 토글의 «미등록 N명» 사전 점검(S5 선택 AC) — 생산자 읽기가 아직 없다.
+- admin → auth 리셋 내부 계약(S6) · 데모 시드 완화(OD-5, S4) · 시드 주석 F4 정정(S4).

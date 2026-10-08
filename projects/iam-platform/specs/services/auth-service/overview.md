@@ -40,7 +40,7 @@ Identity & Access Management에서 "로그인이 성공했는가?"에 대한 유
 
 1. **새 인증 방식 도입** — OAuth 2.0 제공자 추가 (Google, Apple, Kakao), SAML SSO, WebAuthn
 2. **토큰 정책 변경** — access token TTL, refresh token rotation 주기, 서명 알고리즘 교체
-3. **2FA 요구사항** — TOTP, SMS OTP, 인증기 앱 연동
+3. **2FA 요구사항** — TOTP, SMS OTP, 인증기 앱 연동. 🔵 TOTP 는 TASK-MONO-771(ADR-MONO-080 D4 · R3)이 계정 평면에 들였다 — 화면 · 흐름 [auth-api.md § IdP 브라우저 화면 — 2단계 인증](../../contracts/http/auth-api.md) · 표 [data-model.md § `account_totp`](./data-model.md#account_totp) · 토큰 `amr`. SMS · 패스키는 R3 밖
 4. **비밀번호 정책 변경** — 최소 길이, 복잡도, 해시 알고리즘 업그레이드 (argon2id → argon2 최신판)
 5. **보안 인시던트 대응** — 대량 revoke, 키 교체, suspicious 기준 강화
 6. **규제 요구** — 로그인 기록 보존 기간 변경, 삭제 요청 처리

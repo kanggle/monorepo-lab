@@ -560,7 +560,7 @@ Owned by `auth-service` (Spring Authorization Server).
 | TOKEN_EXPIRED_OR_INVALID | 401 | Bearer token malformed, signature invalid, or expired (combined fallback) |
 | TOKEN_REUSE_DETECTED | 401 | Refresh token reuse detected (RT rotation invariant); published as audit event `auth.token.reuse.detected`. Prior catalog alias `TOKEN_REUSE` removed in TASK-MONO-052 — only this canonical form is emitted |
 | TOKEN_TENANT_MISMATCH | 403 | Token `tenant_id` claim does not match the targeted resource tenant |
-| OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2) |
+| OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2). On the wire the OAuth `error` stays `invalid_grant`; where clients must branch on the cause, a **fixed `error_description` constant** discriminates it — `TOKEN_TENANT_MISMATCH` (refresh), and `insufficient_user_authentication` (assume-tenant exchange refused because the selected tenant requires a second factor the subject token lacks — RFC 9470 vocabulary, TASK-MONO-771). A fixed constant is matched by whole-value equality; no other `invalid_grant` may reuse it |
 | OAUTH_INVALID_CLIENT | 401 | OAuth2 client authentication failed |
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
@@ -658,7 +658,8 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | REASON_REQUIRED | 400 | `X-Operator-Reason` header missing on an audited admin action (`ReasonRequiredException`) |
 | INVALID_BOOTSTRAP_TOKEN | 401 | Bootstrap token missing, expired, or already consumed (`InvalidBootstrapTokenException`) |
 | INVALID_2FA_CODE | 401 | TOTP code is invalid or expired (`InvalidTwoFaCodeException`) |
-| TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`) |
+| TOTP_NOT_ENROLLED | 404 | TOTP enrollment required before recovery-code regeneration (`TotpNotEnrolledException`). Also returned by the account second-factor reset when the target account has no enrolment to reset (TASK-MONO-771) |
+| MFA_REQUIRED | 403 | The operator-token exchange refused because a second factor is required and the presented identity token does not carry one (`"mfa" ∉ amr`, `platform/contracts/jwt-standard-claims.md`) — required by a role flag or by the entry policy of a tenant in the operator's admin scope (TASK-MONO-771). **Not** an authentication failure: the caller *is* a resolved operator, so a client must route it to a step-up flow and must never read it as «not an operator» (that is `TOKEN_INVALID` 401 only) |
 | INVALID_REFRESH_TOKEN | 401 | Admin refresh token invalid (operator portal login) (`InvalidRefreshTokenException`). Same string as Platform-Common Authentication — admin-service-local emission |
 | REFRESH_TOKEN_REUSE_DETECTED | 401 | Admin refresh token reuse detected; chain invalidated (`RefreshTokenReuseDetectedException`) |
 | TOKEN_REVOKED | 401 | Operator access token has been explicitly revoked (`TokenRevokedException`). Same string as Platform-Common — admin-service-local emission |

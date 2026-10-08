@@ -25,7 +25,7 @@ base path: `/api/admin`
 | Method | Path | 대체 인증 | X-Operator-Reason |
 |---|---|---|---|
 | `POST` | `/api/admin/auth/login` | 없음 (username + password + 선택적 TOTP 코드 body) | 요구 없음 |
-| `POST` | `/api/admin/auth/token-exchange` | **IAM OIDC `platform-console-web` subject token 필수** (RFC 8693 body) | 요구 없음 |
+| `POST` | `/api/admin/auth/token-exchange` | **IAM OIDC `platform-console-web` subject token 필수** (RFC 8693 body). 2단계 요구 운영자는 subject `amr ∋ mfa` 도 필수(TASK-MONO-771 — 아래 § token-exchange) | 요구 없음 |
 | `POST` | `/api/admin/auth/2fa/enroll` | **bootstrap token 필수** | 요구 없음 |
 | `POST` | `/api/admin/auth/2fa/verify` | **bootstrap token 필수** | 요구 없음 |
 | `POST` | `/api/admin/auth/refresh` | 없음 (refresh JWT body) | 요구 없음 |
@@ -568,11 +568,24 @@ platform-console 이 보유한 **IAM OIDC `platform-console-web` access token**
 | 400 | `VALIDATION_ERROR` | `subject_token` 누락 |
 | 400 | `BAD_REQUEST` | `grant_type` 또는 `subject_token_type` 가 RFC 8693 지정 값과 불일치 |
 | 401 | `TOKEN_INVALID` | subject token 서명/`iss`/`aud`/`exp`/`nbf` 검증 실패, `platform-console-web` 가 아닌 client 에 발급된 토큰, IAM OIDC access token 이 아님(예: operator/bootstrap 토큰 제시), auth-service JWKS 도달 불가, **또는** OIDC subject 에 매핑되는 활성 `admin_operators` row 부재(미매핑/비활성/잠금 — fail-closed, 토큰 미발급) |
+| 403 | `MFA_REQUIRED` | **TASK-MONO-771 (ADR-MONO-080 D4 · R2, 소유자 결정 OD-2 · OD-3)** — subject token 검증과 운영자 해석을 **모두 통과한 뒤**, 아래 «2단계 요구» 가 참이고 subject token 의 `amr` 에 `mfa` 가 없다(`amr` 부재 포함). operator token 미발급 |
+| 500 | `INTERNAL_ERROR` | **TASK-MONO-771** — 2단계 요구 여부를 계산하는 로컬 읽기 실패(아래). operator token 미발급 |
 
 > **Fail-closed invariant**: subject token 검증 또는 operator 해석의
 > 어떠한 모호함도 `401 TOKEN_INVALID`(기존 `OperatorUnauthorizedException`)로
 > 귀결되며 **operator token 은 절대 발급되지 않는다**. OIDC token 으로부터
 > 스코프가 상승하는 경로는 존재하지 않는다.
+
+**2단계 요구 (TASK-MONO-771)** — 아래 둘 중 하나라도 참이면 요구한다:
+
+1. **역할 (R2 · OD-2)**: 운영자가 `admin_roles.require_2fa = TRUE` 인 역할을 하나라도 보유(`anyRoleRequires2fa` — 지금은 break-glass `/login` 만 보던 그 플래그를 주 경로에서도 문다).
+2. **테넌트 진입 정책 (OD-3)**: 운영자의 **admin 범위** — 홈 테넌트(`admin_operators.tenant_id`) ∪ `operator_tenant_assignment` 행의 테넌트 — 중 하나라도 [진입 정책](#tenant-entry-policy-task-mono-771)이 켜져 있다(`tenant_entry_policy.require_mfa = TRUE`). **파트너십 host reach 는 넣지 않는다** — 파트너십은 admin 범위를 넓히지 않는다(ADR-MONO-045, 위 § Partnership Management). 그 테넌트로의 **assume** 은 assume-tenant 게이트가 따로 막는다([auth-to-admin.md](internal/auth-to-admin.md) `mfaRequired`). 홈이 `'*'`(플랫폼 범위)인 운영자에게 `'*'` 는 정책을 가질 수 없는 값이라(정책 행은 `'*'` 를 받지 않는다) 이 항은 assignment 행만 본다 — 플랫폼 운영자의 2단계는 1번(역할)과 assume 게이트가 문다.
+
+판정 술어는 `"mfa" ∈ amr` 하나다([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `amr` 행) — 수단 값(`otp` 등)을 읽지 않는다. 요구 여부를 계산하는 읽기(역할 · 정책 · assignment — 모두 admin_db 로컬)가 실패하면 **발급하지 않는다**(fail-closed) — 응답은 `500 INTERNAL_ERROR` 다. 🔴 `401` 로도 `403 MFA_REQUIRED` 로도 메우지 않는다: 판정을 끝내지 못한 것을 «운영자 아님» 이나 «2단계 필요» 로 보이게 하면 콘솔이 엉뚱한 화면으로 보낸다(콘솔은 5xx 를 «세션 불가» 로 읽는다 — § 2.6).
+
+🔴 **`403 MFA_REQUIRED` 는 «운영자 아님» 이 아니다.** 콘솔은 **`401` 만** «운영자 아님 → `/onboarding`» 으로 읽는다. 이 403 을 받으면 IAM 2단계 단계 상승으로 보낸다([console-integration-contract.md § 2.6](../../../../platform-console/specs/contracts/console-integration-contract.md)) — 401 로 내면 `SUPER_ADMIN` 이 온보딩(테넌트 생성) 화면으로 오도된다(TASK-MONO-771 AC-0 F1). 이 403 은 subject token 의 주인에게만 돌아가고, 그 사람은 이미 운영자로 해석됐으므로 운영자 존재를 새로 드러내지 않는다. 응답 본문은 공통 에러 형식 그대로이며 **어느 항(역할 · 정책 · 어느 테넌트)이 요구했는지 싣지 않는다**.
+
+정책 · 역할 변경은 **다음 교환부터** 적용된다(admin-service 로컬 읽기, 캐시 없음). 이미 발급된 operator token 은 만료(≤ `admin.jwt.access-token-ttl-seconds`)까지 유효하다 — 콘솔은 IAM refresh 마다 재교환하므로 그 시점에 걸린다.
 
 **Side Effects**: 없음 (`admin_actions` 기록 없음 — `/login` 과 달리 이
 엔드포인트는 자체 감사 row 를 남기지 않는다. 후속 operator 명령이 각자의 감사
@@ -892,6 +905,63 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN |
 
 **Side Effects**: 이 조회 자체가 **meta-audit**로 기록됨 (admin_actions에 action_code=DATA_EXPORT, outcome=SUCCESS). PII가 마스킹되지 않은 원본 데이터 접근이므로 감사 추적 필수.
+
+---
+
+## POST /api/admin/accounts/{accountId}/2fa/reset
+
+**TASK-MONO-771 (ADR-MONO-080 D4, 티켓 Edge Case 2 · 소유자 결정 OD-6).** 계정 평면 2단계 인증(auth-service `account_totp` — [auth-api.md § IdP 브라우저 화면 — 2단계 인증](auth-api.md))을
+지운다. 인증 앱과 복구 코드를 모두 잃은 사람을 위한 길이다. 운영자 break-glass TOTP(`admin_operator_totp`)와는 무관하다.
+
+**Auth required**: Yes (operator token, `token_type=admin`)
+**Required permission**: `account.2fa_reset` (신규 — [rbac.md](../../services/admin-service/rbac.md#permission-keys))
+**Granted to roles**: `SUPER_ADMIN`, `SECURITY_ANALYST` — **플랫폼 범위 grant(`tenant_id='*'`)만**. `TENANT_ADMIN` 은 이 키를 갖지 않는다.
+
+🔴 **플랫폼 전용인 이유 (OD-6)**: 계정은 `ADR-MONO-080` 뒤 **개인 풀 계정**이다 — 리셋은 그 사람의 회사 진입뿐 아니라 쇼핑 · 팬 로그인 보안까지 바꾼다. 회사 관리자에게
+그 사람의 개인 계정 보안을 내리는 권한을 주지 않는다(D5 «회수는 측면만» 과 같은 이유). 키를 가졌어도 grant 가 플랫폼 범위가 아니면 `403 TENANT_SCOPE_DENIED`(2차 방어 —
+`tenant.manage` 의 inline platform-scope 검사와 같은 모양).
+
+**Headers**:
+- `Authorization: Bearer <operator-token>`
+- `X-Operator-Reason: string (required, 감사 사유)`
+- `Idempotency-Key: string (required)` — § lock 과 같은 규칙(`(actor_id, action_code, idempotency_key)` 재사용 → `409 IDEMPOTENCY_KEY_CONFLICT`)
+
+`X-Tenant-Id` 는 보내지 않는다(보내도 무시) — 대상은 계정 id 하나이고 테넌트로 좁히지 않는다(플랫폼 전용).
+
+**Request**:
+```json
+{
+  "reason": "string (required, 상세 사유 — 본인 확인 근거)",
+  "ticketId": "string (optional)"
+}
+```
+
+**Response 200**:
+```json
+{
+  "accountId": "string",
+  "operatorId": "string",
+  "resetAt": "2026-10-08T10:00:00Z",
+  "auditId": "string (admin_actions.id)"
+}
+```
+
+**효과**: 그 계정의 `account_totp` 행(비밀 · 복구 코드 · 대기 행 포함)을 지운다. **세션은 끊지 않는다**(이미 2단계를 거친 세션은 그대로 — 탈취 의심이면 `POST /api/admin/sessions/{accountId}/revoke` 를 따로 부른다). 다음 로그인은 등록 없는 계정의 흐름이고, 정책이 켜진 진입에서 거절되면 등록 화면으로 간다 — 그 등록은 인증된 이메일을 요구하고 등록 알림 메일을 보낸다(OD-4). 하류 호출은 admin-service → auth-service 내부 명령(계약은 `TASK-MONO-771` S6 에서 `internal/admin-to-auth.md` 에 쓴다).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `account.2fa_reset` 미보유 |
+| 403 | `TENANT_SCOPE_DENIED` | 키를 가졌으나 grant 가 플랫폼 범위(`'*'`)가 아님 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 또는 body `reason` 누락 |
+| 404 | `ACCOUNT_NOT_FOUND` | 계정 미존재 |
+| 404 | `TOTP_NOT_ENROLLED` | 지울 등록이 없다(대기 행도 없음) — 리셋할 것이 없다는 사실을 운영자에게 보인다(플랫폼 전용 표면이라 열거 방어 대상 아님) |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자 · 같은 키로 이미 실행 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | auth-service 호출 실패 |
+
+**Side Effects**: `admin_actions` — `action_code=ACCOUNT_2FA_RESET`, `permission_used=account.2fa_reset`, `target_type=ACCOUNT`, `target_id=<accountId>`, `outcome=SUCCESS|FAILURE`(하류 실패도 행을 남긴다 — A10 fail-closed, § lock 과 같다) + `admin.action.performed` outbox.
 
 ---
 
@@ -1975,6 +2045,82 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 - `status: ACTIVE → SUSPENDED` → `admin_actions: action_code=TENANT_SUSPEND` + outbox `tenant.suspended`.
 - `status: SUSPENDED → ACTIVE` → `admin_actions: action_code=TENANT_REACTIVATE` + outbox `tenant.reactivated`.
 - 동일 status 로의 PATCH 는 no-op (200 반환, audit/event 미발행).
+
+---
+
+## Tenant Entry Policy (TASK-MONO-771)
+
+**ADR-MONO-080 D4 · 라이더 R2 · 소유자 결정 OD-1.** «이 테넌트에 **운영자로** 들어오려면 2단계 인증이 필요하다» 는 테넌트 단위 플래그. 저장은 admin-service
+[`tenant_entry_policy`](../../services/admin-service/data-model.md#tenant_entry_policy) — **행 없음 = 꺼짐**. 소비자 사이트 로그인과는 **무관**하다(이 플래그는 운영자 평면의 진입 조건이지
+테넌트의 소비자 로그인 규칙이 아니다).
+
+이 플래그가 무는 곳은 둘이다:
+
+| 진입 | 무엇을 보나 | 거절 |
+|---|---|---|
+| assume-tenant (`POST /oauth2/token`, token-exchange) | **선택 테넌트**의 정책 | `400 invalid_grant` + `error_description=insufficient_user_authentication` ([auth-api.md](auth-api.md) · [auth-to-admin.md](internal/auth-to-admin.md) `mfaRequired`) |
+| 운영자 토큰 교환 (`POST /api/admin/auth/token-exchange`) | 운영자의 홈 ∪ assignment 테넌트 중 **하나라도** (OD-3) | `403 MFA_REQUIRED` (위 § token-exchange) |
+
+**전이 (소유자 결정 OD-4)**: 시간 유예 없음 — 켜는 순간부터 다음 진입이 판정된다. 2단계를 등록하지 않은 운영자는 거절을 받고, 콘솔이 그 거절을 IAM 2단계
+등록 · 검증 화면으로 보낸다([auth-api.md § IdP 브라우저 화면 — 2단계 인증](auth-api.md) § 단계 상승). 비밀번호로 로그인할 수 있는 사람은 아무도 잠기지 않는다.
+이미 발급된 운영자 토큰 · assume 토큰은 만료까지 유효하다(다음 교환 · 다음 assume 에서 걸린다).
+
+**권한 (OD-1)**: 새 권한 키 **`tenant.security.manage`** — `SUPER_ADMIN`(모든 테넌트) · `TENANT_ADMIN`(**그 grant 의 테넌트만** — D2 `TenantScopeGuard`, 대상 = path `tenantId`). 카탈로그 · seed 행렬: [rbac.md](../../services/admin-service/rbac.md#permission-keys). 읽기도 같은 키로 게이트한다(`tenant.manage` · `org.manage` 읽기 규약).
+
+### GET /api/admin/tenants/{tenantId}/entry-policy
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `tenant.security.manage`
+**Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
+**Headers**: `Authorization`, `X-Tenant-Id: <활성 테넌트>` (권장 — 대상은 path `tenantId` 이고 confinement 판정도 path 로 한다)
+
+**Response 200**:
+```json
+{
+  "tenantId": "acme-corp",
+  "requireMfa": true,
+  "updatedAt": "2026-10-08T10:00:00Z",
+  "updatedBy": "operator UUID v7 | null"
+}
+```
+
+- 행이 없으면 `{ "tenantId": "<path>", "requireMfa": false, "updatedAt": null, "updatedBy": null }` — 404 가 아니다(꺼짐은 정상 상태).
+- `updatedBy` 는 `admin_operators.operator_id`(외부 UUID). 내부 BIGINT PK 는 노출하지 않는다.
+- 성공 읽기는 감사 행을 남기지 않는다(BE-486 read-path 규약). 403 은 best-effort DENIED 행.
+
+### PUT /api/admin/tenants/{tenantId}/entry-policy
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `tenant.security.manage`
+**Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
+**Headers**: `Authorization`, `X-Operator-Reason: <required>`, `X-Tenant-Id: <활성 테넌트>`. **`Idempotency-Key` 없음** — 멱등 full-replace PUT(org-scope PUT 과 같은 규약).
+
+**Request**:
+```json
+{ "requireMfa": true }
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `requireMfa` | boolean | Y | `true` = 켜기 · `false` = 끄기. 누락 · 비-boolean → `400 VALIDATION_ERROR` |
+
+**Response 200**: GET 응답과 같은 모양(변경 후 상태).
+
+- **끄기는 행을 지우지 않는다** — `require_mfa = FALSE` 로 남겨 마지막 변경자 · 시각을 보존한다(행 없음 = 한 번도 켠 적 없음).
+- **테넌트 존재 확인**: 쓰기 전에 account-service 로 대상 테넌트가 있는지 확인한다(비 hot-path — 쓰기에서만). 없으면 `404 TENANT_NOT_FOUND`, account-service 장애면 `503` — **쓰지 않는다**(fail-closed: 없는 테넌트에 고아 행을 남기지 않는다). 읽기(GET · 진입 판정)는 이 확인을 하지 않는다.
+- `tenantId = '*'` · 정규식 위반 → `400 VALIDATION_ERROR`(`'*'` 는 정책을 가질 수 없다 — 플랫폼 범위의 2단계는 역할 플래그 `require_2fa` 가 문다).
+
+**Side Effects**: 성공한 PUT 마다(같은 값으로의 no-op 포함) `admin_actions` 한 행 — `action_code=TENANT_ENTRY_POLICY_SET`, `permission_used=tenant.security.manage`, `target_type=TENANT`, `target_id=<tenantId>`, `target_tenant_id=<tenantId>`, `downstream_detail = "requireMfa <이전>→<이후>"`(이전이 행 없음이면 `none→true`) + `admin.action.performed` outbox. 도메인 이벤트는 발행하지 않는다(소비자 없음 — 진입 판정은 같은 서비스의 로컬 읽기다).
+
+**Errors** (GET/PUT 공통):
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `tenant.security.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | `TENANT_ADMIN` 이 자기 grant 테넌트가 아닌 `tenantId` 를 지정 (D2) |
+| 400 | `REASON_REQUIRED` | (PUT) `X-Operator-Reason` 누락 |
+| 400 | `VALIDATION_ERROR` | `requireMfa` 누락/형식 오류, `tenantId` 가 `'*'` 이거나 정규식 위반 |
+| 404 | `TENANT_NOT_FOUND` | (PUT) 대상 테넌트 미등록 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | (PUT) 테넌트 존재 확인 실패 — 쓰지 않음 |
 
 ---
 

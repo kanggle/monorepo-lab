@@ -78,6 +78,7 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 | `code_challenge_method` | Y | `S256` 고정 |
 | `state` | 권장 | CSRF 방어용 opaque 값 |
 | `prompt` | N | 공백 구분 OIDC prompt 목록. **`create` 를 포함하면 registration hint** (TASK-BE-578, 아래) |
+| `acr_values` | N | 공백 구분. **`mfa` 토큰을 포함하면 2단계 상승 요청** (TASK-MONO-771, 아래 § IdP 브라우저 화면 — 2단계 인증 § 단계 상승). 그 밖의 값은 무시한다 |
 
 **Response**: 302 redirect to `redirect_uri?code=...&state=...`
 
@@ -153,6 +154,7 @@ signIn('iam', { callbackUrl: '/' }, { prompt: 'create' });
 - **subject_token**: auth-service 자신이 발급한 base IAM OIDC access token. auth-service 의 자기 `JwtDecoder`(자신이 서명한 동일 JWKS)로 검증한다. `sub`(account_id) + base `tenant_id` 추출. 검증 실패(만료/무효 서명/issuer 불일치 등) → `invalid_grant`.
 - **선택된 tenant**: RFC 8693 **`audience`** 파라미터로 운반한다 (`resource` 는 사용하지 않음).
 - **assignment 게이트 (fail-CLOSED)**: admin-service `GET /internal/operator-assignments/check?oidcSubject=<sub>&tenantId=<audience>` 가 `assigned=true` 를 반환할 때만 발급한다. 미할당 / 알 수 없는 subject / 비-ACTIVE 운영자 / **admin-service 장애·circuit-open·timeout** 모두 → **토큰 미발급**, `invalid_grant`. ([auth-to-admin.md](./internal/auth-to-admin.md) — fail-closed)
+- **2단계 게이트 (fail-CLOSED, TASK-MONO-771 · ADR-MONO-080 D4)**: 같은 응답의 `mfaRequired` 가 `true`(또는 **필드 부재** — `true` 로 읽는다)이고 subject_token 의 `amr` 에 `mfa` 가 없으면(`amr` 부재 포함) **토큰 미발급** — `400 invalid_grant` + **`error_description=insufficient_user_authentication`**(고정 상수, 아래 Errors). 판정 술어는 `"mfa" ∈ amr` 하나다([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `amr` 행). 요구 여부(`mfaRequired`)는 admin-service 가 계산하고, 비교는 발급자인 auth-service 가 한다 — 정책은 «들어가는 테넌트» 의 것이라 assignment · 플랫폼 `'*'` · 파트너십 host reach 어느 길이든 같다.
 - **`entitled_domains` (fail-SOFT, least-privilege)**: 선택된 tenant 의 ACTIVE subscriptions **만** (다른 assignment 와의 union 없음 — D3). account-service 장애 시 claim 을 **생략**하고 토큰은 발급한다 (fail-soft; 도메인은 `tenant_id` 게이트로 fallback). keystone `populateEntitledDomains` 재사용.
 
 **Request 예** (form-urlencoded):
@@ -185,13 +187,17 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `tenant_type` | 선택된 customer tenant 의 type (`B2B_ENTERPRISE`) |
 | `entitled_domains` | 선택된 tenant 의 ACTIVE subscriptions **만** (fail-soft 시 생략) |
 | `email` | **없음.** 아래 § Scope ↔ Claim 참조 — 이 grant 는 `email` 을 싣지 않는다 |
+| `amr` | subject_token 의 `amr` 을 **그대로 복사**(TASK-MONO-771). subject 에 없으면 생략. 판정은 발급 **전에** 끝났다(위 2단계 게이트) — 이 복사는 하류 가시성용이다. **workload assume(`client_credentials` subject)에는 싣지 않는다** |
 
 **Assume-Tenant Errors**:
 
-| Status | 에러 코드 | 조건 |
-|---|---|---|
-| 400 | `invalid_grant` | subject_token 무효/만료, **assignment 미할당**, **admin-service 장애/circuit-open/timeout** |
-| 400 | `invalid_request` | `audience` 누락/malformed, `subject_token`/`subject_token_type` 누락 |
+| Status | 에러 코드 | `error_description` | 조건 |
+|---|---|---|---|
+| 400 | `invalid_grant` | (자유 문구) | subject_token 무효/만료, **assignment 미할당**, **admin-service 장애/circuit-open/timeout** |
+| 400 | `invalid_grant` | **`insufficient_user_authentication`** (고정 상수) | **2단계 필요** — 위 2단계 게이트: `mfaRequired` 이고 subject `amr` 에 `mfa` 없음 (TASK-MONO-771) |
+| 400 | `invalid_request` | (자유 문구) | `audience` 누락/malformed, `subject_token`/`subject_token_type` 누락 |
+
+🔴 **판별자는 `error_description` 의 값 전체 일치다**(TASK-MONO-771 HS-C). RFC 6749 § 5.2 가 토큰 엔드포인트의 `error` 를 닫힌 목록으로 두므로 `error` 는 `invalid_grant` 그대로 두고, «2단계 필요» 는 고정 상수 `insufficient_user_authentication`(RFC 9470 의 어휘)으로 가른다 — 기존 `TOKEN_TENANT_MISMATCH` 와 같은 방식. **다른 어떤 `invalid_grant` 도 이 값을 `error_description` 으로 쓰지 않는다**(쓰면 콘솔이 미할당을 단계 상승으로 오독한다). 부분 일치 · 대소문자 무시 매칭 금지. 이 상수를 받은 클라이언트는 미할당이 아니라 **할당은 됐고 2단계가 모자란** 것으로 읽는다 — 운영자는 이미 «할당됨» 판정을 통과했으므로 이 구분이 운영자 존재를 새로 드러내지 않는다(subject_token 의 주인에게만 돌아간다).
 
 **Response 200**:
 ```json
@@ -229,6 +235,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `tenant_id` | 테넌트 slug (필수 — 누락 시 발급 거부) |
 | `tenant_type` | `B2C_CONSUMER` \| `B2B_ENTERPRISE` (필수) |
 | `email` | 계정 이메일 — **`email` scope 가 승인된 경우에만** (§ Scope ↔ Claim) |
+| `amr` | 로그인 수단 (RFC 8176, TASK-MONO-771). **모든 로그인에 싣는다**(소유자 결정 OD-7): 비밀번호 `["pwd"]` · 비밀번호+인증 앱 `["pwd","otp","mfa"]` · 비밀번호+복구 코드 `["pwd","mfa"]` · 소셜 `[]` · 소셜+인증 앱 `["otp","mfa"]`. `refresh_token` 그랜트는 **로그인 때 값을 그대로** 싣는다. 정본: [jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `amr` 행 |
 
 #### Scope ↔ Claim (TASK-BE-577)
 
@@ -242,7 +249,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `openid` | `sub`, `iss`, `iat`, `exp` (표준) | access token + id token |
 | `email` | **`email`** (계정 이메일) | access token + id token |
 | `profile` | **없음** — 아래 참조 | — |
-| (scope 무관) | `tenant_id`, `tenant_type`, `roles`, `entitled_domains` | access token + id token |
+| (scope 무관) | `tenant_id`, `tenant_type`, `roles`, `entitled_domains`, `amr` (TASK-MONO-771) | access token + id token |
 
 - **`email` 은 scope 로 게이트된다.** scope 없이 발급된 토큰에는 클레임이 없다. 동의가
   이 채널을 PII 의 정당한 경로로 만드는 근거이므로(ADR-MONO-037 P1), 무조건 실으면
@@ -263,7 +270,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 
 | Status | 에러 코드 | 조건 |
 |---|---|---|
-| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 (위 Assume-Tenant Exchange 참조) |
+| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 / **2단계 필요(`error_description=insufficient_user_authentication`, TASK-MONO-771)** (위 Assume-Tenant Exchange 참조) |
 | 400 | `invalid_request` | PKCE 미포함, assume-tenant `audience` 누락/malformed |
 | 401 | `invalid_client` | client 인증 실패 |
 | 401 | `unauthorized_client` | 해당 grant_type 미허용 client |
@@ -541,6 +548,97 @@ account-service 는 CORS 를 두지 않는다). 데모 엣지(Traefik `iam-oidc`
 | 그 밖 | «지금은 확인할 수 없습니다 — 잠시 뒤 다시» (토큰은 소비되지 않았다 — 같은 링크로 다시 된다) |
 
 🔴 R4: 화면·로그 어디에도 토큰을 쓰지 않는다(폼의 hidden 필드만 예외 — 그 페이지의 주인에게 돌려주는 것). 주소는 마스킹한다.
+
+---
+
+## IdP 브라우저 화면 — 2단계 인증 (TOTP) (TASK-MONO-771 · ADR-MONO-080 D4 · R3)
+
+계정 평면의 2단계 인증. 수단은 **TOTP**(RFC 6238 · SHA1 · 6자리 · 30초) + **1회용 복구 코드 10개**. 저장은 auth-service
+[`account_totp`](../../services/auth-service/data-model.md#account_totp) — **`account_id` 키**(풀 이동 뒤에도 등록이 산다). 화면은
+`/login` · `/signup` · `/email-verification` 과 같은 `@Order(0)` 폼 체인(같은 세션 · CSRF 켜짐 · permitAll — 판정은 컨트롤러가 한다)이고,
+데모 엣지(Traefik `iam-oidc` 라우터)는 `PathPrefix(\`/mfa\`)` 하나로 덮는다.
+
+🔵 admin-service 의 break-glass TOTP(`admin_operator_totp`, `POST /api/admin/auth/login`)와 **다른 것**이다 — 주 경로 = 이 계정 TOTP,
+비상 경로 = break-glass TOTP. 둘은 비밀 · 저장소 · 검증 위치가 분리되고 계산 코드만 공유한다(이유: break-glass 는 IdP 장애 때 쓰는 길이라
+IdP 에 묶이면 함께 죽는다 — [admin-service/security.md § Operator Credential Convergence](../../services/admin-service/security.md#operator-credential-convergence-task-be-377--adr-mono-035--o2--step-4c)).
+
+### 로그인 흐름의 2단계 — 폼 · 소셜 공통
+
+1단계(폼 `POST /login` 성공 · 소셜 콜백 성공) 뒤, 계정에 **확정된** 등록(`account_totp.confirmed_at IS NOT NULL`)이 있으면 302 `/mfa/challenge`.
+
+- 🔴 **판정 지점은 두 생산자 뒤 공통 한 곳이다.** 폼에만 두면 같은 계정이 소셜 로그인으로 2단계 없이 들어온다(옆문). 등록된 계정은 어느 1단계로
+  들어와도 같은 `/mfa/challenge` 를 거친다.
+- 2단계를 통과하기 전의 세션은 **«1단계만 통과»** 다 — `/oauth2/authorize` 는 code 를 내지 않고 `/mfa/challenge` 로 되돌린다. 저장된
+  `/oauth2/authorize` 요청은 소비되지 않는다(통과하면 그대로 재개).
+- **등록이 없는 계정은 지금과 같다**(티켓 AC-3) — 같은 화면, 같은 리다이렉트. 바뀌는 것은 토큰에 `amr`(`["pwd"]` 또는 `[]`)이 하나 붙는 것뿐이다.
+- 계정 상태 규칙(§ POST /login — TASK-BE-600)은 1단계에서 이미 판정됐다. 2단계는 그 판정을 다시 하지 않는다.
+
+### GET · POST /mfa/challenge — 두 번째 단계
+
+| 상황 | 화면 / 결과 |
+|---|---|
+| 세션에 1단계 통과 기록이 없다 | 302 `/login` |
+| GET | 6자리 코드 입력 폼 + «복구 코드로 하기» 입력(같은 폼의 다른 필드 — submit 버튼 1개) + «취소» |
+| POST `code` 일치(±1 step) **이고** 그 time-step 이 계정의 `last_used_step` 보다 크다 | `last_used_step` 갱신 → 세션 `amr` = 1단계 수단 + `otp` + `mfa` → 저장된 authorize 로 302 |
+| POST `recoveryCode` 가 남은 해시 중 하나와 일치 | 그 코드 소비(1회용) → 세션 `amr` = 1단계 수단 + `mfa` → 저장된 authorize 로 302. 남은 복구 코드가 2개 이하면 다음 화면에 재발급 안내 |
+| 코드 불일치 · **이미 쓴 time-step 의 코드**(재생) · 형식 오류 | «코드가 맞지 않습니다» — 재입력. 재생과 오답을 화면에서 구별하지 않는다 |
+| 같은 «1단계만 통과» 세션에서 **5회 실패** | 그 세션의 1단계 통과 기록을 지우고 302 `/login` — 비밀번호부터 다시. 계정은 잠그지 않는다(BE-599 소유자 결정과 같은 이유: 공유 데모 계정이 남의 오답으로 막히면 안 된다) |
+| `account_totp` 읽기 실패(DB 장애 등) | «지금은 확인할 수 없습니다 — 잠시 뒤 다시» — **통과시키지 않는다**(fail-closed) |
+| «취소» | 저장된 authorize 요청의 `redirect_uri` 로 `error=access_denied` · `error_description=mfa_cancelled` · `state` (OIDC Core 3.1.2.6). 저장된 요청이 없으면 302 `/login` |
+
+🔴 **재생 방지**: 받아들인 코드의 time-step 을 `account_totp.last_used_step` 에 남기고, 그 이하 step 의 코드는 창(±1) 안이어도 거절한다.
+admin-service break-glass 검증기에는 이 장치가 없다(TASK-MONO-771 AC-0 F5) — 그쪽은 이 티켓 밖이다.
+
+### 단계 상승 — 이미 로그인한 세션에 2단계를 더한다
+
+클라이언트(콘솔)가 2단계 증거가 필요할 때 `/oauth2/authorize` 를 **`acr_values=mfa`** 로 다시 시작한다(PKCE · `state` 는 평소 로그인과 같다).
+RFC 9470 의 단계 상승 모양이다. 이 IdP 가 해석하는 `acr_values` 토큰은 `mfa` 하나이고, 토큰에 `acr` 클레임은 싣지 않는다 — 증거는 `amr` 이다.
+
+| 세션 상태 | 결과 |
+|---|---|
+| IdP 세션 없음 | 평소 로그인(1단계 → 등록돼 있으면 `/mfa/challenge`) → 아래 행으로 이어진다 |
+| 세션 `amr` 에 이미 `mfa` | 화면 없이 code 발급(평소 SSO) |
+| `mfa` 없음 · 확정된 등록 있음 | `/mfa/challenge` → 통과 → code |
+| `mfa` 없음 · 등록 없음 | `/mfa/setup` → 등록 확정(첫 코드 검증이 곧 두 번째 단계다) → code |
+
+- 단계 상승으로 바뀐 세션 `amr` 은 그 **뒤에** 발급되는 code · 토큰에만 실린다. 이미 발급된 토큰은 그대로다.
+- `acr_values` 에 `mfa` 가 **없는** 요청은 지금과 같다 — 등록 없는 계정에게 등록을 강요하지 않는다(소비자 로그인 불변).
+- 🔵 「운영자 진입에 2단계가 필요하다」 를 판정하는 것은 이 화면이 아니다 — admin-service(토큰 교환 `403 MFA_REQUIRED`)와
+  assume-tenant(`insufficient_user_authentication`)가 판정하고, 클라이언트는 그 거절을 받고 여기로 온다.
+
+### GET · POST /mfa/setup — 등록
+
+**전제 (소유자 결정 OD-4)**: ① IdP 세션에 1단계 통과 기록 ② **인증된 이메일** — `TASK-MONO-770` 의 공용 술어(account-service
+`accounts.email_verified_at IS NOT NULL`)를 그대로 쓴다. 비밀번호만 가진 공격자가 피해자보다 먼저 등록하는 것(TOFU)을 메일함 접근까지 요구해 막는다.
+시간 유예는 없다 — 정책이 켜진 진입은 거절되고, 거절이 곧 이 화면으로 가는 길이다.
+
+| 상황 | 화면 |
+|---|---|
+| 1단계 통과 세션 없음 | 302 `/login` |
+| 이메일 미인증 | «2단계 인증을 등록하려면 먼저 이메일을 인증해야 합니다» + `/email-verification` 링크 + «취소». **비밀을 만들지 않는다** |
+| 인증 여부 조회 실패 | «지금은 확인할 수 없습니다 — 잠시 뒤 다시» (fail-closed — 등록하지 않는다) |
+| 확정된 등록이 이미 있다 | «이미 등록되어 있습니다» + `/mfa` 링크. 다시 등록하려면 관리자 리셋이 먼저다(셀프 해제는 이 티켓 범위 밖) |
+| GET (위 셋이 아님) | **대기(pending) 비밀**을 새로 만들어 저장(`confirmed_at = NULL`, 이전 대기 행은 교체) → `otpauth://totp/<issuer 표시명>:<마스킹한 이메일>?secret=…&issuer=<issuer 표시명>&algorithm=SHA1&digits=6&period=30` 의 QR + 수동 입력 키 + 6자리 확인 입력 |
+| POST `code` 가 대기 비밀과 일치(±1 step) | 확정(`confirmed_at = now`, `last_used_step` = 그 step) + 복구 코드 10개 생성(Argon2id 해시만 저장) → **복구 코드를 이 응답에 한 번만** 표시 → 세션 `amr` 에 `otp` · `mfa` 추가 → «계속»(저장된 authorize 가 있으면 재개, 없으면 `/mfa`) |
+| POST `code` 불일치 · 대기 행 없음/만료 | «코드가 맞지 않습니다» — 같은 QR 로 재입력(대기 행이 없으면 GET 으로 다시) |
+
+- **등록 알림 메일 (OD-4)**: 확정 직후 인증된 주소로 «새 2단계 인증 수단이 등록되었습니다 — 본인이 아니라면 …» 을 보낸다. 발송 장치는
+  `TASK-MONO-770` 의 `EmailSenderPort`(`iam.mail.enabled`) 그대로. 🔵 발송 실패는 등록을 되돌리지 않는다(WARN 로그, 주소·코드 미기록) — 등록은 이미
+  인증된 메일함 소유를 전제로 통과했고, 알림은 그 위의 사후 감지다.
+- 대기 비밀은 아무 판정도 통과시키지 않는다 — `/mfa/challenge` 와 단계 상승은 **확정된** 등록만 본다. 대기 행의 수명은 10분(넘으면 확인 시 «코드가 맞지 않습니다»).
+- 🔴 R4: 비밀(평문 · Base32) · otpauth URI · 복구 코드 평문은 응답 본문에만 — 로그 · 이벤트 · 감사 어디에도 쓰지 않는다.
+
+### GET /mfa · POST /mfa/recovery-codes — 상태와 복구 코드 재발급
+
+- `GET /mfa`: 1단계 통과 세션이면 «등록됨 / 안 됨» + 남은 복구 코드 수 + 등록 · 재발급 링크. 세션 없으면 302 `/login`.
+- `POST /mfa/recovery-codes`(CSRF): 세션 `amr` 에 `mfa` 가 있고 확정된 등록이 있을 때만 — 10개를 새로 만들어 **전부 교체**(이전 코드 즉시 무효) 하고 한 번만 표시.
+  `mfa` 가 없는 세션은 `/mfa/challenge` 를 먼저 거친다(재발급은 2단계를 통과한 세션의 권리).
+
+### 기기 분실 — 관리자 리셋
+
+인증 앱과 복구 코드를 모두 잃으면 플랫폼 관리자가 리셋한다 — [admin-api.md § POST /api/admin/accounts/{accountId}/2fa/reset](./admin-api.md#post-apiadminaccountsaccountid2fareset)
+(소유자 결정 OD-6: `SUPER_ADMIN` · `SECURITY_ANALYST` 만). 리셋은 그 계정의 `account_totp` 행을 지운다 — 다음 로그인은 등록 없는 계정의 흐름이고,
+정책이 켜진 진입에서 거절되면 `/mfa/setup` 으로 간다(위 전제 그대로 — 인증된 이메일 + 등록 알림 메일). admin → auth 내부 계약은 S6 에서 쓴다.
 
 ---
 

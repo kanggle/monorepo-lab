@@ -159,6 +159,7 @@ token 검증 정책을 규정한다. operator token **발급**은 기존 login-s
 | 4 | **`exp`** 미만료, **`nbf`** 도래 (둘 다 아래 clock-skew 허용 범위 내). | `401` |
 | 5 | **IAM OIDC access token 형태 확인** — `token_type` claim 부재. IAM OIDC access token 은 `token_type` 커스텀 claim 을 싣지 않는다 ([auth-api.md Token Claims](../../contracts/http/auth-api.md)); `token_type` 가 존재하면(=admin/admin_refresh/admin_bootstrap 등 admin-service 자체 발급 토큰) **거부** — operator/bootstrap 토큰을 subject token 으로 우회 제시하는 경로 차단. | `401` |
 | 6 | **`sub`** 존재 (account_id UUID). 부재 시 거부. | `401` |
+| 7 | **`amr` 추출** (TASK-MONO-771) — 검증이 아니라 **추출**이다: 1~6 을 통과한 토큰에서 `amr`(string[], [jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `amr` 행)을 읽어 운영자 해석 결과와 함께 넘긴다. 부재 · 배열 아님 · 원소가 문자열 아님 → **빈 집합**(=«2단계 없음», fail-closed)으로 읽는다 — 그 자체로 `401` 이 아니다(`amr` 이 없던 시절 토큰도 운영자 해석까지는 같게 간다). 쓰이는 술어는 `"mfa" ∈ amr` 하나뿐(아래 § Second-Factor Requirement). 🔴 이 포트(`IamOidcSubjectTokenValidator`)는 셀프 온보딩 입구도 쓴다 — 반환형이 «`sub` + `amr`» 로 바뀌어도 그쪽 판정은 `sub` 만 본다 | 없음 (빈 집합) |
 
 ### Clock-Skew Tolerance
 
@@ -191,6 +192,19 @@ token 검증 정책을 규정한다. operator token **발급**은 기존 login-s
   의 `tenant_id`/`tenant_type` 등 어떤 claim 도 스코프 결정에 사용하지 않으며,
   OIDC token 으로 스코프가 상승하는 경로는 존재하지 않는다 (task Failure
   Scenario "Scope leak").
+
+### Second-Factor Requirement (TASK-MONO-771 / ADR-MONO-080 D4 · R2)
+
+운영자 해석이 **성공한 뒤** 판정한다(순서: 1~6 검증 → 운영자 해석 → 이 판정). 요구 = ① 운영자 역할 중 `require_2fa = TRUE` 가 하나라도
+(`anyRoleRequires2fa` — 지금까지 break-glass `AdminLoginService` 만 읽던 플래그를 주 경로에서도 문다, 소유자 결정 OD-2) **또는** ② 운영자의 admin 범위
+(홈 `admin_operators.tenant_id` ∪ `operator_tenant_assignment` 행 — 파트너십 제외) 중 하나라도 `tenant_entry_policy.require_mfa = TRUE` (OD-3).
+요구가 참이고 `"mfa" ∉ amr` 이면 **`403 MFA_REQUIRED`**, operator token 미발급([admin-api.md § token-exchange](../../contracts/http/admin-api.md)).
+
+- **`401` 과 섞지 않는다.** `401 TOKEN_INVALID` 는 «검증 실패 또는 운영자 아님» 하나만 뜻한다 — 콘솔은 그것을 «운영자 아님 → 온보딩» 으로 읽는다. 2단계 부족을 401 로 내면
+  `SUPER_ADMIN` 이 온보딩 화면으로 오도된다(TASK-MONO-771 AC-0 F1).
+- 요구 판정용 읽기(역할 · 정책 · assignment) 실패 → `500 INTERNAL_ERROR`, 미발급(fail-closed). 401 · 403 으로 메우지 않는다.
+- 같은 요구의 다른 절반 — assume-tenant — 은 auth-service 가 발급자로서 비교하고, admin-service 는 `GET /internal/operator-assignments/check` 응답의
+  `mfaRequired` 로 요구만 알린다([auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md)). 두 진입 모두 술어는 `"mfa" ∈ amr` 하나.
 
 ### Replay / Lifetime
 
@@ -227,8 +241,18 @@ ADR-MONO-032 D5 step 4 는 운영자를 **통합 IAM OIDC credential** 로 수�
 - **OIDC↔operator 링크 키는 `oidc_subject` 불변**(data-model §OIDC Subject ↔ Operator Link Key);
   token-exchange 가 OIDC subject → operator 를 결정적·fail-closed 로 해석한다. 비밀번호 강등이 이
   해석 경로를 넓히지 않는다.
-- **TOTP/2FA 는 admin-service-internal 불변**(`admin_operator_totp`; O4) — step 4 에서 OIDC base
-  로그인에 접히지 않는다(OIDC-side step-up 은 ADR-MONO-032 D4-B deferred).
+- ~~**TOTP/2FA 는 admin-service-internal 불변**(`admin_operator_totp`; O4) — step 4 에서 OIDC base
+  로그인에 접히지 않는다(OIDC-side step-up 은 ADR-MONO-032 D4-B deferred).~~
+  **정정 (TASK-MONO-771, 2026-10-08 UTC — ADR-MONO-080 D4 가 그 deferred 후속을 집행한다).** 위 문장은 ADR-MONO-035 step 4 의 범위
+  문장이었고, OIDC 쪽 2단계는 ADR-MONO-032 D4-B 로 **미뤄져** 있었다. ADR-MONO-080 D4(ACCEPTED 2026-10-07)가 그 미룬 일을 정했다:
+  - **주 경로의 2단계는 IAM(auth-service) 계정 평면 TOTP 다** — `account_totp`, 로그인 흐름의 두 번째 단계, 토큰 `amr`
+    ([auth-api.md § IdP 브라우저 화면 — 2단계 인증](../../contracts/http/auth-api.md)). 운영자 토큰 교환은 그 `amr` 을 읽는다(위 § Second-Factor Requirement).
+  - **`admin_operator_totp` 는 break-glass 전용으로 남는다** — `POST /api/admin/auth/login`(IdP 불가용 시 비상 로컬 로그인)의 2단계. 이전도 연결도 하지 않는다:
+    break-glass 가 계정 TOTP 를 내부 호출로 검증하면 IdP 장애 때 break-glass 도 함께 죽는다(O6 가용성 불변식). 비밀의 키 공간도 다르다(AAD = 운영자
+    BIGINT PK vs `account_id`). 공유하는 것은 RFC 6238 **계산 코드**뿐이다(`libs/java-security` 승격 — TASK-MONO-771 S2a).
+  - 즉 «같은 목적의 수단 둘» 이 아니라 **«목적이 다른 둘»** 이다: 주 경로 = 계정 TOTP, 비상 = break-glass TOTP. 콘솔 안내 문구도 그렇게 쓴다.
+  - 데모 dev 시드는 `SUPER_ADMIN` 의 `require_2fa` 를 완화한다(소유자 결정 OD-5 — e2e 픽스처 선례와 같은 모양, 데모의 2단계는 테넌트 진입 정책 토글로 보인다).
+    그 시드 변경과 시드 주석의 «토큰 교환은 2FA 를 안 본다» 정정은 강제 슬라이스(S4)에서 한다.
 
 ---
 
