@@ -371,7 +371,7 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   | Domain binding | `/api/admin/**` credential | Mechanism | Authority |
   |---|---|---|---|
   | IAM (§§ 2.4.1–2.4.4) | the **exchanged operator token** (`token_type=admin`, `iss=admin-service`), `getOperatorToken()` | server-side RFC 8693 token exchange (§ 2.6) | ADR-MONO-014; the **#569 trust-boundary invariant** (§ 2.1) — the IAM OIDC access token is **never** sent to IAM's `/api/admin/**` |
-  | **wms (§ 2.4.5, this binding)** | the **IAM OIDC access token** itself (`getAccessToken()`, the IAM-session HttpOnly cookie from FE-001) | sent **directly** as `Authorization: Bearer <IAM OIDC access token>` | wms `admin-service-api.md` § Global Conventions + `iam-integration.md`: RS256 JWT issued by IAM per ADR-001, validated against IAM JWKS by the wms gateway + admin-service; **`tenant_id=wms` enforced producer-side from the JWT claim**. wms has **no** token-exchange and **requires** the IAM OIDC token |
+  | **wms (§ 2.4.5, this binding)** | an **IAM OIDC access token** — specifically the **domain-facing** one, `getDomainFacingToken()` (§ 2.7): the **active tenant's assumed token** when a tenant is selected, else the login token (`getAccessToken()`, the IAM-session HttpOnly cookie from FE-001) | sent **directly** as `Authorization: Bearer <IAM OIDC access token>` | wms `admin-service-api.md` § Global Conventions + `iam-integration.md`: RS256 JWT issued by IAM per ADR-001, validated against IAM JWKS by the wms gateway + admin-service; the tenant gate admits **`tenant_id=wms`, or any tenant whose signed `entitled_domains` contains `wms`** (dual-accept, ADR-MONO-019 § D5) and wms then scopes reads to that tenant (ADR-MONO-022 § D9). wms has **no** token-exchange of its own and **requires** an IAM OIDC token |
 
   **The #569 trust-boundary invariant is IAM-domain-scoped and does NOT
   generalise to wms.** #569 forbids the IAM OIDC access token on **IAM's**
@@ -383,8 +383,18 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   issuer/type — and it would misapply the IAM-domain auth model), nor (b)
   wrongly treat "a IAM token on an admin path" as a universal #569 violation
   (it is the *required* wms credential). The console's `features/wms-ops`
-  client uses `getAccessToken()` and **never** `getOperatorToken()`
-  (asserted by test — the inverse of the FE-002..006 assertion). Future
+  and `features/wms-outbound-ops` clients use `getDomainFacingToken()` and
+  **never** `getOperatorToken()` (asserted by test — the inverse of the
+  FE-002..006 assertion). 🔴 **Which IAM OIDC token matters** (TASK-MONO-780):
+  after a tenant switch the bearer is the **assumed token of the active
+  tenant**, so the wms rows follow the selection (switch to `ecommerce` ⇒
+  ecommerce's fulfillment orders; back to `demo-corp` ⇒ demo-corp's) —
+  pinned by `tests/unit/wms-active-tenant-token.test.ts`. This sentence
+  previously named `getAccessToken()`, which stopped being true at
+  TASK-MONO-158 (§ 2.7) and was read by the 24th demo window as «wms always
+  gets the login token». Client-side caches must follow the switch as well
+  (`useTenantSwitch` drops the wms query roots — the server render alone does
+  not reach an already-seeded React Query entry). Future
   finance/erp console sections (Phase 5/6) inherit **this stated rule**: each
   new § 2.4.x binding declares its credential explicitly, against its
   producer's auth contract — not a guess copied from another domain.
@@ -414,7 +424,10 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
     inline non-crashing "not available" state, § 2.5 — never a re-login loop).
     This is derived entirely producer-side from the signed `tenant_id` claim;
     the console still sends **no** `X-Tenant-Id`. Native wms (`tenant_id=wms`)
-    and platform (`*`) operators are unrestricted (full visibility), unchanged.
+    operators are unrestricted (full visibility), unchanged. *(Corrected by
+    TASK-MONO-780: this line also listed platform (`*`) as unrestricted;
+    ADR-MONO-064 § D3 made a `*` caller `restrictedTo("*")`, i.e. it sees
+    nothing — `SecurityContextCallerScopeProvider`.)*
 
 - **Mutation discipline (alert-ack only)**:
   `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` requires an
