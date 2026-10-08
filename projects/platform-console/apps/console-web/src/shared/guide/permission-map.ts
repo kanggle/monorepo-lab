@@ -219,10 +219,10 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     area: 'platform',
     gate: {
       kind: 'operator',
-      note: '셸 진입(로그인)만 요구. 카드별 도메인 데이터는 각 도메인 게이트가 따로 판정. 제품·테넌트 섹션의 레지스트리 읽기도 같은 셸 진입 게이트 — GET /api/admin/console/registry 에 @RequiresPermission 없음(TASK-PC-FE-310).',
+      note: '로그인만 하면 열린다. 카드마다 보이는 도메인 데이터는 그 도메인 권한에 따라 다르다.',
     },
     description:
-      '5개 도메인 요약 카드 + 도메인 상태 요약(→ 도메인 상태 화면) + 「제품·테넌트 전체」 섹션(구 /console 카탈로그 그리드, TASK-PC-FE-310 으로 이 화면 안에 접힘 — 테넌트 미선택 시 직접 노출).',
+      '5개 도메인 요약 카드 · 도메인 상태 요약 · 「제품·테넌트 전체」(테넌트를 고르지 않았으면 바로 펼쳐 보인다).',
     crud: R,
     purpose: '운영자가 로그인 직후 전체 상태를 한눈에 보고, 제품·테넌트를 골라 들어간다.',
     services: ['console-web 서버 합성 (operator-overview · domain-health → 각 도메인)', 'iam admin-service (console registry)'],
@@ -275,7 +275,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     gate: { kind: 'admin', permission: 'group.manage' },
     description: '운영자 그룹 CRUD · 멤버 · 그룹 grant(fan-out).',
     crud: crud('CRUD'),
-    purpose: '여러 운영자에게 역할·테넌트 배정을 한 번에 부여한다(ADR-MONO-046).',
+    purpose: '여러 운영자에게 역할·테넌트 배정을 한 번에 부여한다.',
     services: ['iam admin-service'],
     sources: [`${ADMIN_CTRL}/GroupAdminController.java:58-170`, `${API}/groups/**/route.ts`],
   },
@@ -289,7 +289,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     services: ['iam admin-service'],
     sources: [`${ADMIN_CTRL}/RoleAdminController.java:57,74`, `${RBAC}:68,80 (TASK-BE-486)`],
     mismatch:
-      '읽기 전용 화면인데 `operator.manage`(관리 키)로 게이트된다 — 전용 읽기 키 없이 기존 키를 재사용한 결정(rbac.md:80, TASK-BE-486). 그래서 조회 전용 역할(SUPPORT_READONLY)은 권한 카탈로그를 볼 수 없고, 운영자를 관리할 수 있는 역할만 볼 수 있다.',
+      '보기만 하는 화면인데 운영자 관리 권한(`operator.manage`)이 있어야 열린다. 그래서 조회 전용 역할(SUPPORT_READONLY)은 이 화면을 볼 수 없다.',
   },
   {
     href: '/permission-sets',
@@ -301,7 +301,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     services: ['iam admin-service'],
     sources: [`${ADMIN_CTRL}/RoleAdminController.java:57`, `${RBAC}:80`],
     mismatch:
-      '「권한」과 같은 특수 케이스 — 읽기 전용이지만 `operator.manage` 게이트(rbac.md:80). 별도 엔드포인트 없이 `GET /api/admin/roles` 를 권한 세트 관점으로 다시 보여준다.',
+      '「권한」과 같다 — 보기만 하는 화면인데 운영자 관리 권한(`operator.manage`)이 있어야 열린다.',
   },
   {
     href: '/audit',
@@ -338,7 +338,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       `${ADMIN_CTRL}/SessionAdminController.java:32`,
     ],
     mismatch:
-      '목록 GET 은 `@RequiresPermission` 애노테이션이 아니라 메서드 안의 인라인 검사다(이메일 분기가 무권한이라 일괄 애노테이션 불가). 내보내기는 audit.read, GDPR 삭제는 account.lock 으로 게이트돼 이름과 직관이 어긋난다.',
+      '권한 이름이 하는 일과 어긋난다 — 데이터 내보내기는 감사 조회 권한(`audit.read`), GDPR 삭제는 계정 잠금 권한(`account.lock`)이 있어야 한다.',
   },
 
   // ── 조직 설정 ─────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     gate: { kind: 'admin', permission: 'org.manage' },
     description: '조직 노드 트리 · 엔타이틀먼트 상한(ceiling) · ORG_ADMIN 배정 · 소속 테넌트.',
     crud: crud('CRUD'),
-    purpose: '회사(조직 노드) 단위로 테넌트를 묶고 상한을 건다(ADR-MONO-047).',
+    purpose: '회사(조직 노드) 단위로 테넌트를 묶고 상한을 건다.',
     services: ['iam admin-service → account-service (트리 소유)'],
     sources: [`${ADMIN_CTRL}/OrgNodeAdminController.java:54-149`, `${RBAC}:73 (org.manage)`],
   },
@@ -385,11 +385,11 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     description: '회사 간 파트너십 초대 · 수락 · 일시중지 · 재개 · 종료 · 참여 운영자 배정/해제.',
     crud: crud('CRUD'),
     crudNote: '삭제 = 참여 운영자 해제. 파트너십 자체는 종료(상태 전이).',
-    purpose: '다른 회사에 우리 테넌트 운영 일부를 위임하거나 위임받는다(ADR-MONO-045).',
+    purpose: '다른 회사에 우리 테넌트 운영 일부를 위임하거나 위임받는다.',
     services: ['iam admin-service'],
     sources: [`${ADMIN_CTRL}/PartnershipAdminController.java:50-158`, `${RBAC}:72,112`],
     mismatch:
-      'SUPER_ADMIN 도 이 키가 없다(rbac.md:112) — 파트너십은 두 고객 테넌트 사이의 관계이고 플랫폼은 당사자가 아니라는 설계. 그래서 SUPER_ADMIN 인 데모 계정은 이 화면에서 403 을 받는다.',
+      '최고 관리자(SUPER_ADMIN)도 이 권한이 없다 — 파트너십은 두 고객 회사 사이의 일이라 플랫폼은 끼지 않는다. 그래서 데모 계정으로는 이 화면이 열리지 않는다.',
   },
 
   // ── WMS ───────────────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       kind: 'domain',
       domain: 'wms',
       roles: WMS_ROLES,
-      extra: '주문 취소는 OUTBOUND_ADMIN(wms-guide WMS_ROLES) — assume-tenant 파생 롤은 ADMIN-tier 를 제외한다(OperatorRoleDerivation.java:28-33)',
+      extra: '주문 취소는 OUTBOUND_ADMIN 이 필요하다 — 테넌트를 골라 받는 역할에는 ADMIN 등급이 들어 있지 않다',
     },
     description: '출고 주문 · 피킹/패킹/출고 확정 · 택배(출고) · 운송사 통보 재시도.',
     crud: crud('RU'),
@@ -471,7 +471,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
     description: '운영 설정(예약 TTL·저재고 임계치 등) + 읽기 모델 프로젝션 상태 조회.',
     crud: R,
-    crudNote: '설정 변경(WRITE)은 이 화면의 범위 밖(page.tsx 헤더).',
+    crudNote: '설정 변경은 이 화면에서 할 수 없다.',
     purpose: '창고 운영 파라미터와 읽기 모델 지연을 확인한다.',
     services: [`${WMS_GW} → admin-service (/settings · /operations/projection-status)`],
     sources: [`${PAGES}/wms/operations/page.tsx:37-39 (READ-ONLY)`, `${API}/wms/settings/route.ts (GET)`],
@@ -747,7 +747,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     },
     description: '소속사 목록 · 등록 · 이름 변경 · 보관 · 스토어 셀러 연결.',
     crud: crud('RCU'),
-    crudNote: '삭제 없음 — 보관(ARCHIVED). 셀러 연결은 스토어 확인이 배선될 때까지(TASK-MONO-759) 503 으로 거절된다.',
+    crudNote: '삭제 없음 — 보관(ARCHIVED). 셀러 연결은 아직 준비 중이라 거절된다.',
     purpose: '팬 플랫폼의 소속사 디렉터리를 관리한다.',
     services: ['fan gateway-service → artist-service (소속사)'],
     sources: [
@@ -764,7 +764,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     gate: { kind: 'domain', domain: 'fan', roles: ['FAN_OPERATOR'], extra: '플랫폼 운영자 전용(R3)' },
     description: '아티스트 목록(공개만) · 등록 · 프로필 수정 · 공개/보관 · 소속 변경.',
     crud: crud('RCU'),
-    crudNote: '목록은 PUBLISHED 만 — 초안·보관은 ID 로 연다. 대리 저작(ARTIST_POST)은 없다(ADR-MONO-059).',
+    crudNote: '목록은 PUBLISHED 만 — 초안·보관은 ID 로 연다. 운영자가 아티스트 대신 글을 쓰는 기능은 없다.',
     purpose: '아티스트 디렉터리와 소속을 관리한다.',
     services: ['fan gateway-service → artist-service (아티스트)'],
     sources: [

@@ -105,6 +105,32 @@ describe('GlobalGuideScreen', () => {
     expect(bad, 'cited paths that do not exist').toEqual([]);
   });
 
+  it('shows no source citations — «출처는 생략» (TASK-PC-FE-322 AC-2)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    const guide = screen.getByTestId('global-guide');
+    expect(within(guide).queryByText(/^출처$/)).not.toBeInTheDocument();
+    expect(within(guide).queryByRole('columnheader', { name: '출처' })).not.toBeInTheDocument();
+    expect(within(guide).queryByRole('columnheader', { name: '근거' })).not.toBeInTheDocument();
+    // a cited path from data.ts must not leak into the rendered page
+    expect(guide.textContent).not.toContain('infra/demo/README.md');
+  });
+
+  it('the rewritten tabs carry no file paths, line numbers or ticket ids (TASK-PC-FE-322 AC-3)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    // 「도메인 한눈에」 is TASK-PC-FE-321's own data — out of this ticket's scope.
+    const rewritten = GLOBAL_GUIDE_TABS.map((t) => t.id).filter((id) => id !== 'global-guide-domains');
+    expect(rewritten).toHaveLength(7);
+    const leaks: string[] = [];
+    for (const id of rewritten) {
+      const text = screen.getByTestId(`global-guide-tabs-panel-${id}`).textContent ?? '';
+      for (const re of [/TASK-[A-Z]/, /ADR-[A-Z]/, /\.(md|sql|tsx?|ya?ml|sh|py)\b/, /:\d+(-\d+)?\b/]) {
+        const m = text.match(re);
+        if (m) leaks.push(`${id}: ${m[0]}`);
+      }
+    }
+    expect(leaks).toEqual([]);
+  });
+
   it('the service table lists each project exactly as its apps/ directory', () => {
     for (const g of DOMAIN_SERVICE_GROUPS) {
       for (const app of g.apps) {

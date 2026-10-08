@@ -122,6 +122,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-322-global-guide-plain-rewrite.md` — **전역 콘솔 가이드(/guide) 일곱 탭을 쉬운 말 · 짧은 문장으로, 출처 표시 제거** (REVIEW, 2026-10-09 UTC · 소유자 결정). `sources` 는 데이터에 남아 경로 실재 가드가 계속 문다. 새 시험: 출처 표시 0 · 탭 문장에 티켓/ADR 번호 · 파일 이름 · 줄 번호 0(bite 확인). 공용 `permission-map.ts` 의 화면 문장 13곳도 함께 정리(IAM 가이드도 같이 바뀜). vitest 3975/3975. AC-6 = 소유자 확인 ⚪. 분석=Opus 5.5 / 구현=Opus 5.5.
+
 
 
 - `TASK-PC-FE-311-approval-approver-is-me-renders-unresolved.md` — **결재 화면의 결재자 칸이 바로 나 자신인데도 `이름 확인 불가`** (REVIEW, 2026-10-07 UTC · 출처 `TASK-PC-FE-309` · 소유자 결정 «화면 보정»). AC-0: 콘솔 base 접근 토큰(`getAccessToken()`)의 `sub` = 시드 `APPROVER_SUB`(assume-tenant 토큰의 `sub`) — `ADR-MONO-060 A` + `AssumeTenantExchangeIntegrationTest`(base/assumed `sub` 동일 단언)로 확정. `getErpApprovalState`(서버)가 그 `sub` 문자열만 디코드해 `ErpApprovalScreen → ApprovalScreen → ApprovalDetail → ApprovalEmployeeRef` 로 props 전달(토큰 자체는 안 내려간다). `ApprovalEmployeeRef`: 직원 조회 성공이 항상 우선, 로딩 중엔 판정 보류, 그 외 직원 없음+id===내 sub 일 때만 `나 (현재 운영자)`. 단위 테스트 4종(①~④) 추가(`erp-master-ref-names.test.tsx`), 기존 309 테스트 무회귀, tsc/lint/vitest(338/338·3818/3818) rc=0. AC-4(라이브 확인)는 ⚪ — 다음 데모 창. 분석=Opus 5.5 / 구현=Sonnet(실제: Claude Sonnet 5).
