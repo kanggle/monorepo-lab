@@ -8,9 +8,9 @@ import type { DomainFeatures } from './domain-features';
  *
  * 링크 항목(`href` 있음)은 그 메뉴로 이동하는 `<Link>` 로, 콘솔 밖 항목
  * (`outsideConsole: true`)은 이동 없는 텍스트 + 「콘솔 밖」 표시로 렌더한다. fan
- * 디렉터리처럼 실제 메뉴가 있어도 플랫폼 운영자만 보이는 항목은 데이터의 `text` 자체에
- * 그 사실을 적고 `outsideConsole: true`(href 없음)로 둔다 — 고객사 운영자 ·
- * 방문자에게는 죽은 링크를 보여주지 않는다(Edge Case).
+ * 디렉터리처럼 콘솔 메뉴가 **있지만** 플랫폼 운영자만 보이는 항목은 `platformOnly: true`
+ * (href 없음)로 두고 「플랫폼 운영자 전용」 표시를 단다 — 고객사 운영자 · 방문자에게
+ * 죽은 링크를 보여주지 않으면서, 콘솔 밖이라고 거짓으로 말하지도 않는다(Edge Case).
  */
 export function DomainFeatureSummary({
   domain,
@@ -55,6 +55,14 @@ export function DomainFeatureSummary({
                       data-testid={`${testid}-group-${gi}-item-${ii}-outside`}
                     >
                       콘솔 밖
+                    </span>
+                  )}
+                  {item.platformOnly && (
+                    <span
+                      className="ml-1.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                      data-testid={`${testid}-group-${gi}-item-${ii}-platform-only`}
+                    >
+                      플랫폼 운영자 전용
                     </span>
                   )}
                 </li>

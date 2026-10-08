@@ -35,6 +35,30 @@ describe('domain-features ↔ nav (drift)', () => {
     expect(bad, `outsideConsole items that still carry an href:\n${bad.join('\n')}`).toEqual([]);
   });
 
+  it('platformOnly items carry no href and are not also marked outsideConsole', () => {
+    // platformOnly = «a console screen exists but only platform operators see it»;
+    // outsideConsole = «no console screen». An item cannot be both — the second would be false.
+    const bad = allItems()
+      .filter(({ item }) => item.platformOnly === true && (item.href !== undefined || item.outsideConsole === true))
+      .map(({ domain, group, item }) => `${domain}/${group}: "${item.text}"`);
+    expect(bad, `platformOnly items with an href or an outsideConsole flag:\n${bad.join('\n')}`).toEqual([]);
+  });
+
+  it('a domain with platformOnly items really has a registry-gated (productKey) sidebar parent', () => {
+    // Keeps the «there IS a console screen, platform operators only» claim true: if the
+    // gate is removed (everyone sees it → link it) or the parent is deleted (no screen →
+    // outsideConsole), this goes red.
+    const gatedKeys = GROUPS.flatMap((g) =>
+      g.items.filter(isParent).filter((p) => p.productKey !== undefined).map((p) => p.key),
+    );
+    const claiming = [
+      ...new Set(allItems().filter(({ item }) => item.platformOnly === true).map(({ domain }) => domain)),
+    ];
+    const unbacked = claiming.filter((k) => !gatedKeys.includes(k));
+    expect(unbacked, `domains claiming platform-only screens without a gated parent: ${unbacked.join(', ')}`).toEqual([]);
+    expect(claiming.length, 'non-vacuity: at least one platformOnly domain today (fan)').toBeGreaterThan(0);
+  });
+
   it('every sidebar domain drill parent has a domain-features entry (AC-4c)', () => {
     // Derived from GROUPS itself — not hardcoded — so a new drill parent
     // (any group, not just 「도메인 운영」) trips this the moment it's added,

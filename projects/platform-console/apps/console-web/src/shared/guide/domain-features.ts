@@ -47,6 +47,13 @@ export interface DomainFeatureItem {
   href?: string;
   /** 콘솔 화면이 없는 기능(다른 앱의 화면, 또는 콘솔 범위 밖의 백엔드 동작). href 없음(AC-4b). */
   outsideConsole?: boolean;
+  /**
+   * 콘솔 화면은 **있지만** 플랫폼 운영자에게만 보이는 기능(레지스트리 게이트 `productKey`
+   * 부모 — 예: fan 디렉터리). 고객사 운영자 · 방문자에겐 그 메뉴가 없으므로 링크를 달지
+   * 않는다(href 없음). «콘솔 밖» 과 다르다 — 콘솔 밖이라고 적으면 거짓이다.
+   * 드리프트 가드가 «그 도메인에 productKey 게이트 부모가 실제로 있다» 를 확인한다.
+   */
+  platformOnly?: boolean;
 }
 
 export interface DomainFeatureGroup {
@@ -168,7 +175,10 @@ const WMS: DomainFeatures = {
           text: '주문을 피킹 → 패킹 → 출고까지 진행 — 쇼핑몰(이커머스) 주문도 같은 화면에서 처리한다',
           href: '/wms/outbound',
         },
-        { text: '출고가 확정되면 운송사(배송)에 자동으로 통보하고, 실패하면 재시도한다', href: '/wms/outbound' },
+        { text: '출고 확정 건의 운송사 · 송장 번호 · 출고 시각 조회', href: '/wms/outbound' },
+        // 운송사 자동 통보 · 재시도는 공급망(SCM) 물류 쪽 백엔드 동작이다 — 이 콘솔 화면은
+        // 확정된 출고를 «보여주기만» 한다(WmsShipmentsScreen: carrier / tracking / shipped-at).
+        { text: '출고가 확정되면 운송사에 자동으로 배차를 요청한다(공급망 물류가 처리)', outsideConsole: true },
       ],
     },
     {
@@ -390,7 +400,8 @@ const ECOMMERCE: DomainFeatures = {
  * fan 은 도메인 가이드가 없다(Scope — 신설 안 함). 디렉터리(소속사·아티스트·그룹)는
  * 사이드바에 있지만 **플랫폼 운영자 전용**(`console-nav-config.ts` productKey: 'fan',
  * `permission-map.ts` /fan/* extra 주석, ADR-MONO-079 R3) — 고객사 운영자 · 방문자에겐
- * 보이지 않으므로 href 를 달지 않고 문구로만 안내한다(Edge Case).
+ * 보이지 않으므로 href 를 달지 않고 `platformOnly` 로 표시한다(Edge Case). 🔴 «콘솔 밖»
+ * (`outsideConsole`) 으로 적으면 안 된다 — 콘솔 화면이 실제로 있으니 거짓이 된다.
  * 커뮤니티 · 멤버십 · 알림은 콘솔 화면이 전혀 없다(그 운영자도 못 본다,
  * `projects/fan-platform/specs/contracts/http/community-api.md:11-17`,
  * `membership-api.md:13-19`) — fan-platform-web 전용. 소속사/아티스트/팬덤은
@@ -403,11 +414,11 @@ const FAN: DomainFeatures = {
     '아티스트와 그룹을 소개하고, 팬은 커뮤니티와 유료 멤버십으로 더 가까이 다가갑니다.',
   groups: [
     {
-      title: '아티스트 디렉터리 (플랫폼 운영자 전용 화면)',
+      title: '아티스트 디렉터리',
       items: [
-        { text: '소속사 등록과 이름 변경, 보관 (플랫폼 운영자 전용 화면)', outsideConsole: true },
-        { text: '아티스트 프로필 · 소속 · 공개 상태 관리 (플랫폼 운영자 전용 화면)', outsideConsole: true },
-        { text: '그룹 생성과 소속 관리 (플랫폼 운영자 전용 화면)', outsideConsole: true },
+        { text: '소속사 등록과 이름 변경, 보관', platformOnly: true },
+        { text: '아티스트 프로필 · 소속 · 공개 상태 관리', platformOnly: true },
+        { text: '그룹 생성과 소속 관리', platformOnly: true },
       ],
     },
     {

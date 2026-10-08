@@ -66,6 +66,17 @@ describe('GlobalGuideScreen', () => {
     }
   });
 
+  it('marks the fan directory «플랫폼 운영자 전용», never «콘솔 밖» — the screens exist, only gated (TASK-PC-FE-321)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    const fan = screen.getByTestId('global-guide-domain-fan-summary');
+    const directory = within(fan).getByTestId('global-guide-domain-fan-summary-group-0');
+    expect(directory).toHaveTextContent('아티스트 디렉터리');
+    expect(within(directory).getAllByText('플랫폼 운영자 전용').length).toBeGreaterThan(0);
+    expect(within(directory).queryByText('콘솔 밖')).not.toBeInTheDocument();
+    // and no dead link for customer operators / visitors
+    expect(within(directory).queryAllByRole('link')).toHaveLength(0);
+  });
+
   it('renders with NO backend call — a static page for logged-out sample visitors (AC-1)', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
