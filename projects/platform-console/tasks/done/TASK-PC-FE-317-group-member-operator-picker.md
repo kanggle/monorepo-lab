@@ -4,7 +4,7 @@ TASK-PC-FE-317
 
 # Status
 
-review
+done
 
 # Title
 
@@ -148,3 +148,12 @@ if (!group.getTenantId().equals(target.getTenantId())) {
 - `npx next lint` → rc=0 ("No ESLint warnings or errors").
 - `npx vitest run`(전량) → **rc=1** — Test Files 8 failed | 331 passed (339), Tests 13 failed | 3818 passed (3831). 실패 13건은 `LedgerOpsScreen.test.tsx` · `OperatorsScreen.test.tsx`(4) · `ProductForm.test.tsx` · `SeedConfigScreen.test.tsx`(2) · `WmsInventoryScreen.test.tsx` · `CreateOrganizationForm.test.tsx`(2) · `DepartmentWriteDialog.test.tsx` · `TenantDetail.test.tsx` — 이 작업이 건드린 파일과 전부 무관(`GroupMemberDialog`/`operator-groups`/`operators-api`/`operators-proxy` 는 전량 통과). 8개 파일만 단독 재실행 → **rc=0, 123/123 전량 통과** — 전량 동시실행 시의 부하-유발 flake(동시 실행 시 격리 실패)로 확인, `TASK-PC-FE-313` 리뷰 기록의 동일 패턴("`LedgerOpsScreen` 부하 실패, 단독 53/53 무관"). 이 작업이 신규로 깬 시험은 0건.
 - 신규/변경 시험만: `operators-api.test.ts` 24/24 · `operators-proxy.test.ts` 14/14 · `features/operator-groups/GroupMemberDialog.test.tsx` 6/6(신규) · `features/operator-groups/OperatorGroupsScreen.test.tsx` 6/6 — 전부 GREEN.
+
+## CORRECTION — close (2026-10-09 UTC, 4차원 검증)
+
+- **AC-9 닫힘**: 소유자가 실제 그룹에 선택기로 멤버를 추가해 확인했다(2026-10-09 UTC 대화 원문 «TASK-PC-FE-317 확인.» — 같은 날 313 · 315 · 321 확인은 «데모 창» 이라고 답했다). 위 AC 목록의 `[ ]` 는 이 절이 닫는다.
+- AC-0 이 남긴 빈틈(배정-only 운영자 422)은 `TASK-PC-FE-319` + iam `TASK-BE-626` 이 닫았다(#4222).
+- (a) #4218 `MERGED` 2026-10-07T13:19:13Z, squash `8706986b8`.
+- (b) `8706986b8` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 13 · SKIPPED 53 · FAILURE 0.
+- (d) AC-0~9 전부 닫힘.
