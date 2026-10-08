@@ -27,6 +27,8 @@ import {
   TerminalCell,
 } from '@/shared/ui/guide-primitives';
 import { DomainGuideTabs } from '@/shared/guide/DomainGuideTabs';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * SCM 가이드 화면 (TASK-PC-FE-188). 순수 정적 참조 화면 — scm-platform 도메인
@@ -89,9 +91,13 @@ export function ScmGuideScreen() {
         panels={{
           overview: (
             <>
+              <DomainFeatureSummary
+                domain={domainFeatureByKey('scm')}
+                testid="scm-guide-domain-features"
+              />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
-                SCM 콘솔은 <strong>개요(발주 · 재고 가시성) · 보충 · 설정</strong> 3개
-                화면으로 구성됩니다. 탭마다 각 화면이 보여주는 값의 의미와 상태머신, 그
+                SCM 콘솔은 <strong>개요 · 조달 · 재고 · 보충 계획 · 보충 계획 설정</strong>{' '}
+                5개 화면으로 구성됩니다. 탭마다 각 화면이 보여주는 값의 의미와 상태머신, 그
                 뒤의 scm-platform 마이크로서비스 구성, 그리고 저재고 알림에서 발주까지
                 이어지는 보충 루프를 정리한 참조입니다. (SCM 은 단일테넌트 도메인이며,
                 접근은 「권한 안내」 탭의 롤 참조.)

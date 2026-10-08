@@ -9,6 +9,7 @@ import {
 } from '@/features/finance-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * Finance 가이드 화면 (TASK-PC-FE-229) — 순수 정적 참조 화면. finance-platform
@@ -18,6 +19,18 @@ import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
  * 단언한다.
  */
 describe('FinanceGuideScreen', () => {
+  it('renders the Finance domain-feature summary above the 읽기경로 배너 (TASK-PC-FE-321 AC-3)', () => {
+    render(<FinanceGuideScreen />);
+    const panel = screen.getByTestId('finance-guide-tabs-panel-finance-guide-tab-overview');
+    const summary = within(panel).getByTestId('finance-guide-domain-features');
+    const banner = within(panel).getByTestId('finance-guide-reading-path');
+    expect(within(summary).getByText(domainFeatureByKey('finance').oneLine)).toBeInTheDocument();
+    expect(panel.firstElementChild).toBe(summary);
+    expect(
+      summary.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('renders every top-level section', () => {
     render(<FinanceGuideScreen />);
     expect(screen.getByTestId('finance-guide')).toBeInTheDocument();

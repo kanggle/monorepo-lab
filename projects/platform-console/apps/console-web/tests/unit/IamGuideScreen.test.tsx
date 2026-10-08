@@ -13,6 +13,7 @@ import {
 } from '@/features/iam-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * IAM 가이드 화면 (TASK-PC-FE-163, 재구성 TASK-PC-FE-238) — 순수 정적 참조 화면.
@@ -25,6 +26,18 @@ import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
  *   - WCAG AA axe-clean
  */
 describe('IamGuideScreen', () => {
+  /* ── TASK-PC-FE-321 — 도메인 요약(«도메인 한눈에»)이 첫 탭 맨 위에 있다 ────── */
+
+  it('renders the IAM domain-feature summary at the top of the overview tab (TASK-PC-FE-321 AC-3)', () => {
+    render(<IamGuideScreen />);
+    const panel = screen.getByTestId('iam-guide-tabs-panel-iam-guide-tab-overview');
+    const summary = within(panel).getByTestId('iam-guide-domain-features');
+    const domain = domainFeatureByKey('iam');
+    expect(within(summary).getByText(domain.oneLine)).toBeInTheDocument();
+    // the summary is the first element inside the overview panel
+    expect(panel.firstElementChild).toBe(summary);
+  });
+
   /* ── 1. 개념 ─────────────────────────────────────────────── */
 
   it('renders the four account hats (①~④) in order', () => {

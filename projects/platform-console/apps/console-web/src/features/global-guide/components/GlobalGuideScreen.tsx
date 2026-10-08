@@ -13,6 +13,8 @@ import {
   RBAC_SEED_MATRIX,
   RBAC_SEED_MATRIX_SOURCE,
 } from '@/shared/guide/permission-map';
+import { DOMAIN_FEATURES } from '@/shared/guide/domain-features';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
 import {
   ARCHITECTURE_FACTS,
   BUSINESS_FLOWS,
@@ -33,6 +35,7 @@ import {
  */
 
 export const GLOBAL_GUIDE_TABS = [
+  { id: 'global-guide-domains', label: '도메인 한눈에' },
   { id: 'global-guide-architecture', label: '시스템 아키텍처' },
   { id: 'global-guide-services', label: '도메인별 서비스 구성' },
   { id: 'global-guide-servers', label: '서버 구성' },
@@ -76,6 +79,28 @@ function H2({ children }: { children: string }) {
 
 export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }) {
   const content: Record<(typeof GLOBAL_GUIDE_TABS)[number]['id'], ReactNode> = {
+    'global-guide-domains': (
+      <>
+        <H2>도메인 한눈에</H2>
+        <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+          7개 도메인이 하는 일을 한 줄과 주요 기능으로 모았습니다. 메뉴로 가는 항목은
+          눌러서 바로 열 수 있고, 콘솔에 화면이 없는 기능은 「콘솔 밖」 표시가 붙습니다.
+        </p>
+        {DOMAIN_FEATURES.map((d) => (
+          <section
+            key={d.key}
+            aria-labelledby={`global-guide-domain-${d.key}-heading`}
+            className="mb-10"
+            data-testid={`global-guide-domain-${d.key}`}
+          >
+            <h3 id={`global-guide-domain-${d.key}-heading`} className="mb-2 text-lg font-medium">
+              {d.label}
+            </h3>
+            <DomainFeatureSummary domain={d} testid={`global-guide-domain-${d.key}-summary`} />
+          </section>
+        ))}
+      </>
+    ),
     'global-guide-architecture': (
       <>
         <H2>시스템 아키텍처</H2>

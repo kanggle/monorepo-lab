@@ -10,6 +10,7 @@ import {
   STARTUP_STEPS,
 } from '@/features/global-guide/data';
 import { navLeaves } from '@/shared/guide/permission-map';
+import { DOMAIN_FEATURES } from '@/shared/guide/domain-features';
 import { SCREEN_COVERAGE } from '@/shared/sample/coverage';
 import { runAxe } from '../a11y/axe-helper';
 import { citedPath, citedPathExists } from '../helpers/cited-path';
@@ -17,6 +18,8 @@ import { citedPath, citedPathExists } from '../helpers/cited-path';
 /**
  * TASK-PC-FE-298 — 전역 가이드(/guide). 7개 탭 · 백엔드 호출 0 · 모든 인프라 사실에 인용 +
  * 인용된 경로 실재 · 전체 메뉴 표가 사이드바 전부를 덮음.
+ *
+ * TASK-PC-FE-321 — 맨 앞에 새 탭 「도메인 한눈에」가 추가되어 8개 탭이 됐다(AC-2).
  */
 const EMAIL = 'visitor-guide@example.test';
 
@@ -26,10 +29,11 @@ afterEach(() => {
 });
 
 describe('GlobalGuideScreen', () => {
-  it('has the 7 tabs the ticket lists, in order (AC-1)', () => {
+  it('has the 8 tabs the ticket lists, 「도메인 한눈에」 first (TASK-PC-FE-321 AC-2)', () => {
     render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
     const tabs = within(screen.getByTestId('global-guide-tabs-list')).getAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual([
+      '도메인 한눈에',
       '시스템 아키텍처',
       '도메인별 서비스 구성',
       '서버 구성',
@@ -38,9 +42,27 @@ describe('GlobalGuideScreen', () => {
       '대표 업무 흐름',
       '서버 기동·종료 방식',
     ]);
-    expect(GLOBAL_GUIDE_TABS).toHaveLength(7);
+    expect(GLOBAL_GUIDE_TABS).toHaveLength(8);
     for (const t of GLOBAL_GUIDE_TABS) {
       expect(screen.getByTestId(`global-guide-tabs-panel-${t.id}`)).toHaveAttribute('role', 'tabpanel');
+    }
+  });
+
+  it('「도메인 한눈에」 renders the 7 domains in data order, each with its items (TASK-PC-FE-321 AC-2)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    expect(DOMAIN_FEATURES).toHaveLength(7);
+    const panel = screen.getByTestId('global-guide-tabs-panel-global-guide-domains');
+    // headings appear in data order
+    const headings = within(panel)
+      .getAllByRole('heading', { level: 3 })
+      .map((h) => h.textContent);
+    expect(headings).toEqual(DOMAIN_FEATURES.map((d) => d.label));
+    for (const d of DOMAIN_FEATURES) {
+      const summary = within(panel).getByTestId(`global-guide-domain-${d.key}-summary`);
+      expect(within(summary).getByText(d.oneLine)).toBeInTheDocument();
+      // at least the first item of the first group renders
+      const firstItem = d.groups[0].items[0];
+      expect(within(summary).getByText(firstItem.text)).toBeInTheDocument();
     }
   });
 
@@ -100,19 +122,20 @@ describe('GlobalGuideScreen', () => {
   it('keyboard: ArrowRight / End / Home move the selected tab (roving tabindex)', () => {
     render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
     const tabs = within(screen.getByTestId('global-guide-tabs-list')).getAllByRole('tab');
+    const last = tabs.length - 1; // 8 tabs since TASK-PC-FE-321 (도메인 한눈에 prepended)
     fireEvent.keyDown(tabs[0], { key: 'ArrowRight' });
     expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
     expect(tabs[1]).toHaveAttribute('tabIndex', '0');
     expect(tabs[0]).toHaveAttribute('tabIndex', '-1');
-    expect(screen.getByTestId('global-guide-tabs-panel-global-guide-services')).not.toHaveAttribute('hidden');
-    expect(screen.getByTestId('global-guide-tabs-panel-global-guide-architecture')).toHaveAttribute('hidden');
+    expect(screen.getByTestId('global-guide-tabs-panel-global-guide-architecture')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('global-guide-tabs-panel-global-guide-domains')).toHaveAttribute('hidden');
     fireEvent.keyDown(tabs[1], { key: 'End' });
-    expect(tabs[6]).toHaveAttribute('aria-selected', 'true');
-    fireEvent.keyDown(tabs[6], { key: 'ArrowRight' });
+    expect(tabs[last]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(tabs[last], { key: 'ArrowRight' });
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true'); // wraps
     fireEvent.keyDown(tabs[0], { key: 'ArrowLeft' });
-    expect(tabs[6]).toHaveAttribute('aria-selected', 'true'); // wraps back
-    fireEvent.keyDown(tabs[6], { key: 'Home' });
+    expect(tabs[last]).toHaveAttribute('aria-selected', 'true'); // wraps back
+    fireEvent.keyDown(tabs[last], { key: 'Home' });
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
   });
 

@@ -6,6 +6,8 @@ import {
   NoteCard,
 } from '@/shared/ui/guide-primitives';
 import { DomainGuideTabs } from '@/shared/guide/DomainGuideTabs';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 import {
   ACCOUNT_HATS,
   AUTH_PLANE_DISJOINT,
@@ -93,6 +95,10 @@ export function IamGuideScreen() {
         panels={{
           overview: (
             <>
+              <DomainFeatureSummary
+                domain={domainFeatureByKey('iam')}
+                testid="iam-guide-domain-features"
+              />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 IAM 은 <strong>누가 콘솔의 어떤 메뉴를 쓸 수 있는지</strong>를 정하는
                 곳입니다. 처음이라면 <strong>1</strong>(「공통 정의 및 용어」)과 <strong>2</strong>(「도메인 사용 가이드」)만

@@ -11,6 +11,7 @@ import {
 } from '@/features/scm-guide/data';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * SCM 가이드 화면 (TASK-PC-FE-188) — 순수 정적 참조 화면. scm-platform 도메인
@@ -19,6 +20,18 @@ import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
  * 와 동일 정책 — 설명 텍스트가 아니라 testid/구조를 단언한다.
  */
 describe('ScmGuideScreen', () => {
+  it('renders the SCM domain-feature summary above the 읽기경로 배너 (TASK-PC-FE-321 AC-3)', () => {
+    render(<ScmGuideScreen />);
+    const panel = screen.getByTestId('scm-guide-tabs-panel-scm-guide-tab-overview');
+    const summary = within(panel).getByTestId('scm-guide-domain-features');
+    const banner = within(panel).getByTestId('scm-guide-reading-path');
+    expect(within(summary).getByText(domainFeatureByKey('scm').oneLine)).toBeInTheDocument();
+    expect(panel.firstElementChild).toBe(summary);
+    expect(
+      summary.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('renders every top-level section', () => {
     render(<ScmGuideScreen />);
     expect(screen.getByTestId('scm-guide')).toBeInTheDocument();

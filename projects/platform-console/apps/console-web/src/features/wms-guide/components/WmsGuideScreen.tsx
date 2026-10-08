@@ -22,6 +22,8 @@ import {
   StateFlow,
 } from '@/shared/ui/guide-primitives';
 import { DomainGuideTabs } from '@/shared/guide/DomainGuideTabs';
+import { DomainFeatureSummary } from '@/shared/guide/DomainFeatureSummary';
+import { domainFeatureByKey } from '@/shared/guide/domain-features';
 
 /**
  * WMS 가이드 화면 (TASK-PC-FE-183). 순수 정적 참조 화면 — 재고(수량 버킷·예약
@@ -47,12 +49,17 @@ export function WmsGuideScreen() {
         panels={{
           overview: (
             <>
+              <DomainFeatureSummary
+                domain={domainFeatureByKey('wms')}
+                testid="wms-guide-domain-features"
+              />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
-                WMS 콘솔은 <strong>재고(재고 현황)</strong>와{' '}
-                <strong>출고(출고 운영 · 택배/출고)</strong> 두 라이브 화면과 개요로
-                구성됩니다. 아래는 각 화면이 보여주는 값의 의미 — 재고의 수량 버킷과 예약
-                흐름, 출고 주문의 상태 변화 — 를 정리한 참조입니다. (모든 화면은 도메인
-                롤로 게이트되며, 「권한 안내」 탭 참조.)
+                WMS 콘솔은 <strong>입고 · 재고 · 출고 · 마스터 · 운영설정</strong> 5개
+                화면과 개요로 구성됩니다. 아래는 그중{' '}
+                <strong>재고(재고 현황)</strong>와{' '}
+                <strong>출고(출고 운영 · 택배/출고)</strong> 화면이 보여주는 값의 의미 —
+                재고의 수량 버킷과 예약 흐름, 출고 주문의 상태 변화 — 를 정리한
+                참조입니다. (모든 화면은 도메인 롤로 게이트되며, 「권한 안내」 탭 참조.)
               </p>
               <GuideReadingPath testid="wms-guide-reading-path">
                 처음이라면 「공통 정의 및 용어」의 <strong>재고</strong>와 「대표 업무 흐름」의 <strong>출고</strong>부터
