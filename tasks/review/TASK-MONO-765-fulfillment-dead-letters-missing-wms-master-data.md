@@ -214,14 +214,14 @@ DLT 로 가지 않고 정상적으로 outbound order 로 들어간다(재굽기 
 - [x] **AC-2** — 거래처 `ECOMMERCE-STORE`(`canReceive()=true`) + 창고(실제 전송 코드) +
       ecommerce 주문 가능 SKU 전부를 시드에 추가한다. LOT 추적 SKU 라면 LOT 도 함께.
       → 위 "AC-2 — 적용한 변경". LOT 은 불필요(이 경로의 `lotNo` 는 항상 null, 실측 확정).
-- [ ] **AC-3** — 재굽기·apply 뒤, 새 스토어 주문 1건이 wms DLT 로 가지 않고 outbound order
+- [x] **AC-3** — 재굽기·apply 뒤, 새 스토어 주문 1건이 wms DLT 로 가지 않고 outbound order
       로 들어간다(`outbound_order` 행 생성 · DLT 증가 없음). ⏳ **재굽기 필요 — 오케스트레이터가
       재굽기 창에서 측정.** 정적 변경(시드·Flyway)은 이 PR 에 포함돼 있다.
 - [ ] **AC-4** — wms 출고·재고 콘솔 화면과 scm 재고 가시성(`TASK-MONO-762`)이 그 주문을
       반영한다(762 연장 측정). ⏳ **재굽기 필요 — 오케스트레이터가 재굽기 창에서 측정.**
       🔴 위 "잔여 격차" 메모 참고 — inventory-service 자신의 미러가 아직 이 SKU 들을
       모르므로 이 AC 는 재굽기 뒤에도 바로 안 닫힐 수 있다.
-- [ ] **AC-5 (판정 보류)** — 기존 DLT 4건의 처리 방향(replay vs 폐기)은 **이 티켓에서
+- [x] **AC-5 (판정 보류)** — 기존 DLT 4건의 처리 방향(replay vs 폐기)은 **이 티켓에서
       정하지 않는다** — Edge Cases 에 옵션만 남기고 소유자 결정으로 넘긴다. ⚪ 소유자 결정
       대기 — 이 티켓이 바꾸는 것은 **앞으로의** 요청뿐이다.
 
@@ -259,3 +259,10 @@ DLT 로 가지 않고 정상적으로 outbound order 로 들어간다(재굽기 
   같은 증상(DLT)이 재발한다.
 - **코드 레벨에서 fallback/기본 매핑을 임의로 추가한다** — 이 티켓은 시드 데이터 문제로
   진단했다(코드는 올바르다); 코드 변경이 필요하다고 판단되면 범위를 다시 연다.
+
+# 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa) — 측정 기록 (2026-10-08 UTC) · 🔴 AC-4 하나가 남아 `review/` 유지
+
+- **AC-3 ✅** — 스토어 주문이 DLT 로 가지 않고 출고 주문이 된다: 시드 주문 3건 + 소유자 스토어 주문 1건(18:44:48Z) → `outbound_order` `source=FULFILLMENT_ECOMMERCE` **4행 PICKING** · `ecommerce.fulfillment.requested.v1` 소비 lag 0 · wms DLT/DLQ 토픽 29개 **전부 0**(`ecommerce.fulfillment.requested.v1.DLT` 토픽 자체가 없다).
+  - 🔴 처음 잰 값은 거짓 통과였다: 릴레이가 없어 요청이 wms 에 **도착하지 않았다**(ecommerce-kafka 3 · wms-kafka 0). 릴레이를 띄운 뒤 잰 값이 위다 → `TASK-MONO-779`.
+- **AC-4 ◐ (닫지 않음)** — scm 쪽 ✅: 콘솔 SCM → 재고에 WH-MAIN 노드와 ecommerce SKU(수량 100) 표시(소유자 화면) · DB 86행. **WMS 콘솔 쪽 ❌**: 콘솔 WMS 출고 목록이 `SO-DEMO-0001`(demo-corp) 1건만 보인다 — 풀필먼트 출고는 `tenant_id=ecommerce` 이고 콘솔 wms 프록시는 로그인 토큰(demo-corp)으로만 조회한다(테넌트를 바꿔도 같음, 소유자 확인). 이 티켓의 시드 결함이 아니라 테넌트 축 결정 공백이다 → **`TASK-MONO-780`(소유자 결정)** 이 닫히면 그 창에서 이 칸을 닫는다.
+- **AC-5 ✅ (판정할 대상 소멸)** — 이 AC 가 넘긴 «기존 DLT 4건 replay vs 폐기» 는 24차 apply 가 인스턴스를 교체하면서(신선 볼륨) 그 4건이 함께 사라졌다 — 지금 DLT 0. 결정할 데이터가 남지 않았다.

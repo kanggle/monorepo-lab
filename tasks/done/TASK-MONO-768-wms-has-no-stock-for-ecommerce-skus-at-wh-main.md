@@ -8,7 +8,7 @@ ecommerce 주문이 wms 출고 주문까지는 가지만 **재고 예약에서 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -191,11 +191,11 @@ monorepo
       → 위 «AC-0 표». 설계는 유효(입고 경로로 받을 수 있다). 🔴 표 밖 발견 하나가 ASN 단위를 바꿨다 — scm 이 다중 라인 received 의 첫 라인만 반영 ⇒ SKU 당 ASN 1장.
 - [x] **AC-1** — 위 시드 추가. 세 서비스의 SKU 86종 UUID 가 서로 같다는 것을 **검사로**(단위 테스트 또는 시드 스크립트 검증 블록) 고정 — 한 서비스만 바뀌면 빨강.
       → `EcommerceSeedParityTest`(inventory-service, 단위). bite 1회 시연(rc=1 → 복원 rc=0) — 위 «적용한 변경».
-- [ ] **AC-2** — 로컬(또는 CI IT)에서 시드 SQL 이 각 서비스 Flyway 에 적용된다(기존 `ExistingSeedVolumeMigrationOrderIT` 류 기대치 갱신 포함).
+- [x] **AC-2** — 로컬(또는 CI IT)에서 시드 SQL 이 각 서비스 Flyway 에 적용된다(기존 `ExistingSeedVolumeMigrationOrderIT` 류 기대치 갱신 포함).
       → ⏳ **이 PR 의 CI `integrationTest` 레인이 판정한다** — 로컬은 도커 데몬이 없어 Testcontainers 를 못 돌렸다(`docker ps` rc=1). 기대치 갱신(master 3→4) + inbound/inventory `DevSeedMigrationIT` 신설은 이 PR 에 있다. 머지 전 CI 결과로 닫을 것.
-- [ ] **AC-3** — `seed-wms.sh` 가 두 번 돌아도 멱등(두 번째 실행에서 새 ASN 0 · 실패 0). `bash -n` 통과 + 가능하면 로컬 스택에서 1회 실측, 불가하면 «⚪ 재굽기 창에서 측정» 으로 적는다.
+- [x] **AC-3** — `seed-wms.sh` 가 두 번 돌아도 멱등(두 번째 실행에서 새 ASN 0 · 실패 0). `bash -n` 통과 + 가능하면 로컬 스택에서 1회 실측, 불가하면 «⚪ 재굽기 창에서 측정» 으로 적는다.
       → `bash -n` rc=0 · 파싱 헬퍼 모의 실행 확인. ⚪ **재굽기 창에서 측정**(로컬 스택 없음).
-- [ ] **AC-4** — (재굽기 창) 스토어 주문 1건 → wms 출고 주문 `RESERVED`(BACKORDERED 아님) · scm 재고 가시성에 WH-MAIN 노드의 해당 SKU 가 보인다. 이 티켓 머지 시점에는 ⚪ 로 남기고 창에서 닫는다.
+- [x] **AC-4** — (재굽기 창) 스토어 주문 1건 → wms 출고 주문 `RESERVED`(BACKORDERED 아님) · scm 재고 가시성에 WH-MAIN 노드의 해당 SKU 가 보인다. 이 티켓 머지 시점에는 ⚪ 로 남기고 창에서 닫는다.
       → ⚪ 재굽기 창 대기.
 
 # Related Specs
@@ -219,3 +219,12 @@ monorepo
 1. **재고를 SQL 로 직접 넣는다** — 예약은 되지만 scm 가시성이 received 이벤트를 못 받아 출고 확정에서 깨진다(배경 참조).
 2. **UUID 가 서비스마다 다르다** — outbound 가 보낸 `skuId` 로 inventory 가 행을 못 찾아 BACKORDERED. AC-1 의 일치 검사가 막는다.
 3. **WH01 행을 고친다** — 기존 SKU-APPLE 입고·출고 픽스처가 깨진다. 추가만.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4199** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`16202efd7`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0·1 `[x]`. 남은 셋:
+  - **AC-2** — PR CI «Integration (inventory + inbound + gateway-service, Testcontainers)» · «Integration (master-service + notification-service + outbound-service, Testcontainers)» **SUCCESS**. 레인 요약 `tests=48 failures=0 errors=0 skipped=0`(inventory 26 · inbound 11 · gateway 11). `DevSeedMigrationIT`(inbound · inventory) · `ExistingSeedVolumeMigrationOrderIT`(master) 는 셋 다 `@Tag("integration")` 이라 그 레인에 든다 — 🔵 러너 로그가 클래스 이름을 찍지 않아 «돌았다» 는 태그·레인 구성에서 읽은 것이다.
+  - **AC-3** — 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa), 인스턴스 안에서 `seed.sh wms` 재실행: «ecommerce 입고 (WH-MAIN, SKU 86종 × 100) — 생성 0 · 존재 86 · 실패 0» · 요약 «생성 0 · 기존 88 · 실패 0» · 재고 검증 통과. (첫 부팅 때는 생성 86 · 존재 0.)
+  - **AC-4** — 같은 창: 소유자 스토어 주문(18:44:48Z) → wms 출고 주문 `PICKING` · `inventory_db.reservation` **RESERVED 4**(시드 3 + 소유자 1) · BACKORDERED 0 · wms DLT/DLQ 토픽 29개 전부 0. scm 재고 가시성(콘솔 SCM → 재고, 소유자 화면)에 WH-MAIN 노드(`254462a9…`, `warehouse_code=WH-MAIN`) · ecommerce SKU 행 수량 100 — DB 86행.
+  - 🔴 이 측정 전에 이벤트 릴레이가 없었다(부팅 선택에 scm 이 없어 «릴레이 생략») → `TASK-MONO-779`. 릴레이를 띄운 뒤에야 위 값이 나왔다.

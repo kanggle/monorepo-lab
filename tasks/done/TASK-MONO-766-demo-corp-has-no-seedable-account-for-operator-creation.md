@@ -4,7 +4,7 @@ TASK-MONO-766
 
 # Status
 
-review
+done
 
 # Title
 
@@ -196,7 +196,7 @@ R__05, admin-service R__seed_demo_operator.sql 등). 그래서 이 티켓도 같
       grep 확인). `git diff`로 기존 R__seed_demo_operator.sql 등 admin-service 파일이
       **0줄 변경**임을 확인했다 — diff 자체가 "동일함"의 증거다. 라이브 전후 DB 값
       대조는 재굽기 뒤 가능(AC-4 와 같은 창).
-- [ ] **AC-4 (라이브 확인 — ⏳ 다음 창)** — 재굽기 뒤, 콘솔 `/operators` 생성 폼에서 그
+- [x] **AC-4 (라이브 확인 — ⏳ 다음 창)** — 재굽기 뒤, 콘솔 `/operators` 생성 폼에서 그
       계정 이메일을 입력하면 사전 게이트를 통과하고, 역할 하나(예: `SUPPORT_READONLY`)를
       부여해 운영자 생성이 실제로 끝난다. 이 AC 는 이 티켓이 ready→done 되는 시점에 닫히지
       않을 수 있다 — 라이브 창이 선행이면 ⚪ + 이유로 남긴다. ⏳ **오케스트레이터가 재굽기
@@ -232,3 +232,9 @@ R__05, admin-service R__seed_demo_operator.sql 등). 그래서 이 티켓도 같
   다르면 잘못된 축에 데이터가 들어간다(AC-1 이 이것을 막는다).
 - **기존 demo-corp 운영자 행을 "정리"하며 같이 건드린다** — Out of Scope 위반, 다른 창의
   전제를 깬다.
+
+# 닫기 — 4차원 검증 (2026-10-08 UTC, `date -u` 실측)
+
+- (a) PR **#4190** `state=MERGED` · (b) `origin/main` 에 스쿼시 **`fed949d5c`** · (c) 머지 시점 `statusCheckRollup` 실패 **0**.
+- (d) AC-0~3 `[x]`. AC-4 를 24차 데모 창(ami-01f1b4b56e4f9e51a · 1c8e203aa) 에서 소유자가 브라우저로 닫았다: 사전 확인 `account_db.accounts` 에 `newhire@demo-corp.example` = `demo-corp · ACTIVE`, `admin_operators` 0행 → 콘솔 `/operators` «운영자 등록»(테넌트 demo-corp · 역할 `SUPPORT_READONLY` · break-glass 비움) → 목록에 `newhire@demo-corp.example · ACTIVE · SUPPORT_READONLY · 2026. 10. 9. 04:05:51(KST)` = 19:05:51Z.
+- AC-3 의 라이브 전후 대조: 같은 목록에서 `demo@demo.com` · `requester@demo.com` 둘 다 `ACTIVE · SUPER_ADMIN` 그대로.
