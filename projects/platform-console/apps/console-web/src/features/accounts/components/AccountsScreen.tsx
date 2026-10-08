@@ -35,7 +35,8 @@ import {
  * (lock/unlock/bulk-lock/revoke-session/gdpr-delete) is reason-gated +
  * confirm-gated via {@link ConfirmActionDialog}; gdpr-delete double-confirms
  * with a typed phrase. Export is a server download (no PII into client
- * state). 401/403 → the shared api client forces re-login; 503/timeout →
+ * state). 401 → the shared api client refreshes, then forces re-login; 403 →
+ * the forbidden / inline state (never a re-login — TASK-MONO-777 AC-0 (c)); 503/timeout →
  * this section degrades only (the console shell stays intact).
  *
  * The `Idempotency-Key` is generated ONCE per confirmed action

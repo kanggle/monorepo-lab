@@ -79,6 +79,17 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 
 > **TASK-BE-486 (role/permission 읽기 API 권한 키 결정)**: 콘솔 「권한」/「권한 세트」 화면용 read-only 조회 API(`GET /api/admin/roles`, `GET /api/admin/permissions`)는 **신규 키를 도입하지 않고 기존 `operator.manage` 를 재사용**한다. 근거: (1) 가장 가까운 형제 `GET /api/admin/operators/grantable-roles`(role 카탈로그 read)가 이미 `operator.manage` 게이트, (2) role/permission 카탈로그는 운영자 관리(역할 부여)의 참조 데이터로 동일 독자층이 소비, (3) `operator.manage` 는 이미 `SUPER_ADMIN`(V0022)·`TENANT_ADMIN`(V0033)에 seed 되어 **seed 매트릭스 변경 0** — read-only 이므로 role 정의 자체가 자주 바뀌지 않아 별도 캐시·별도 키 불필요. `GET /api/admin/permissions` 의 catalog 는 코드 canonical(`Permission.catalog()`)에서 노출하며 `<missing>` sentinel 은 제외한다.
 
+### 권한 키 없이 테넌트 게이트만 거는 읽기
+
+아래 읽기는 **권한 키를 요구하지 않는다** — 위 카탈로그 · Seed Roles 행렬 · `@RequiresPermission` 선언 어디에도 나오지 않는다(GET 은 deny-default 가드 대상이 아니다, `RequiresPermissionAspect`). 운영자 토큰 + `QueryTenantScopeGate`(home ∪ 배정)만 건다.
+
+| endpoint | 권한 키 | 테넌트 게이트 | 범위 밖 응답 | 근거 |
+|---|---|---|---|---|
+| `GET /api/admin/accounts` (`email` 있음) | 없음 | `QueryTenantScopeGate` | `403 TENANT_SCOPE_DENIED` | 기존 동작 — SUPPORT_LOCK 이 잠글 계정을 찾는 길(TASK-BE-357) |
+| `GET /api/admin/operators/lookup` | 없음 | `QueryTenantScopeGate` | **`200 {"content":[]}`** — «없음» 과 바이트 동일 | **TASK-MONO-777** 소유자 결정(2026-10-08 UTC, «L2 운영자 이메일 조회»): erp 인사 담당자가 연결할 계정 id(`oidc_subject`)를 이메일로 찾는다. 이메일 정확 일치 · 한 테넌트 · 열거 불가. 범위 밖 DENIED 감사 행은 남는다(`ACCOUNT_SEARCH` 재사용, D3) |
+
+새 행을 더하는 것은 «권한 키 없는 읽기» 를 하나 더 여는 결정이다 — 소유자 결정 없이 더하지 않는다.
+
 ---
 
 ## Seed Roles

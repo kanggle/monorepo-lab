@@ -12,7 +12,9 @@ export const runtime = 'nodejs';
  * operator token + active tenant are attached server-side in
  * `searchAccounts()`.
  *
- * 401/403 → client API client triggers refresh→re-login.
+ * 401 → 401: the client API client triggers refresh → re-login. 403 → 403
+ * (passed through; the client renders it inline / as a forbidden state — a 403
+ * never logs out, TASK-MONO-777 AC-0 (c)).
  * 503/timeout → 503 so the client renders a degraded accounts section.
  * 400 NO_ACTIVE_TENANT → 400 so the client renders the tenant gate.
  */

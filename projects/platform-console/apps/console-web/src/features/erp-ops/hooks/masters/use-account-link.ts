@@ -13,6 +13,10 @@ import {
   myAccountLinkProposalsKey,
 } from '../../api/erp-keys';
 import { invalidateMaster } from '../use-erp-shared';
+import {
+  OperatorLookupResponseSchema,
+  type OperatorLookupResponse,
+} from '@/shared/api/iam-operator-lookup-types';
 
 /**
  * erp employee ↔ IAM account link hooks (TASK-PC-FE-318 — `TASK-MONO-774` S4).
@@ -104,6 +108,31 @@ export function useAccountLinkProposalAction(action: AccountLinkProposalAction) 
         },
       ),
     onSuccess: () => invalidateMaster(qc, 'employees'),
+  });
+}
+
+/**
+ * TASK-MONO-777 — «이메일로 찾기»: the IAM operator e-mail lookup through the
+ * same-origin `/api/operators/lookup` proxy (console contract § 2.4.8
+ * «Account selection»). Runs only once an e-mail has been SUBMITTED (`null` =
+ * idle). 🔴 `skipAuthRetry`: a 401 from this helper read must not run the
+ * client's refresh → `/login` redirect — the dialog renders it inline and the
+ * typed-id fallback stays usable (AC-3). A 403 never logs out anyway (only 401
+ * does, `shared/api/client.ts`).
+ */
+export function useOperatorEmailLookup(submittedEmail: string | null) {
+  return useQuery({
+    queryKey: ['iam', 'operator-lookup', submittedEmail ?? ''],
+    queryFn: async (): Promise<OperatorLookupResponse> => {
+      const raw = await apiClient.get<unknown>(
+        `/api/operators/lookup?email=${encodeURIComponent(submittedEmail as string)}`,
+        { skipAuthRetry: true },
+      );
+      return OperatorLookupResponseSchema.parse(raw);
+    },
+    enabled: Boolean(submittedEmail && submittedEmail.trim()),
+    staleTime: 0,
+    retry: false,
   });
 }
 

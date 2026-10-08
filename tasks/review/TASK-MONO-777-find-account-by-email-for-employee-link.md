@@ -8,7 +8,7 @@ erp 직원 ↔ 계정 연결 제안에서 **이메일로 계정 찾기** — 인
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -60,12 +60,12 @@ monorepo
 
 # Acceptance Criteria
 
-- [x] **AC-0** — (→ § AC-0 기록 · 🔴 결론 = **STOP, 소유자 결정 대기**) 위 표의 모순을 실측으로 푼다: erp.write 만 가진 콘솔 운영자 토큰으로 `GET /api/admin/accounts?email=` 가 어떻게 답하는지(코드 경로 file:line + 시험), 계정이 사는 테넌트와 erp 테넌트의 관계, 콘솔 403 처리 경로. 결론과 고른 길을 적는다.
-- [ ] **AC-1** — 대화상자에서 이메일 입력 → 계정 하나를 골라 제안까지(렌더 DOM 시험).
-- [ ] **AC-2** — 없는 이메일 · 범위 밖 이메일 → **같은 문구**(존재 비노출) — 한 시험에서 비교.
-- [ ] **AC-3** — 조회가 403/401 이어도 **로그아웃되지 않는다**(PC-FE-318 이 지목한 위험) — 시험으로 고정.
-- [ ] **AC-4** — bite: AC-2 의 같은 문구를 깨면 AC-2 칸만 빨강.
-- [ ] **AC-5** — 콘솔 `tsc` · `lint` · `vitest` rc=0 · e2e grep · 머지 뒤 nightly 콘솔 확인.
+- [x] **AC-0** — (→ § AC-0 기록 · 결론 = 멈춤 → **소유자 결정 «L2» (2026-10-08 UTC)** → § 구현 기록) 위 표의 모순을 실측으로 푼다: erp.write 만 가진 콘솔 운영자 토큰으로 `GET /api/admin/accounts?email=` 가 어떻게 답하는지(코드 경로 file:line + 시험), 계정이 사는 테넌트와 erp 테넌트의 관계, 콘솔 403 처리 경로. 결론과 고른 길을 적는다.
+- [x] **AC-1** — 대화상자에서 이메일 입력 → 계정 하나를 골라 제안까지(렌더 DOM 시험). → § 구현 기록 AC 표.
+- [x] **AC-2** — 없는 이메일 · 범위 밖 이메일 → **같은 문구**(존재 비노출) — 한 시험에서 비교.
+- [x] **AC-3** — 조회가 403/401 이어도 **로그아웃되지 않는다**(PC-FE-318 이 지목한 위험) — 시험으로 고정.
+- [x] **AC-4** — bite: AC-2 의 같은 문구를 깨면 AC-2 칸만 빨강.
+- [ ] **AC-5** — 콘솔 `tsc` · `lint` · `vitest` rc=0 · e2e grep ✅ · **머지 뒤 nightly 콘솔 확인 ⏳**(머지 전에는 잴 수 없다 — close chore 에서).
 
 # Related Specs
 
@@ -168,3 +168,69 @@ monorepo
 ## bite (AC-0 의 새 시험)
 
 `AccountAdminController.java` 이메일 분기에 `account.read` 검사를 한 줄 넣고 `AccountAdminControllerSliceTest` 를 돌렸다 → rc=1, **17 중 정확히 1 실패**: 새 칸 «`search_withEmail_operatorWithNoPermissions_returns_200_in_resolved_tenant` — Status expected:<200> but was:<403>». 🔴 기존 `search_withEmail_delegates_to_search_client` 는 **초록 그대로** — 그 칸이 이 성질을 지키지 못했다는 증거다. Edit 로 되돌린 뒤(`git diff -- …/src/main` 0줄) 17/17 rc=0.
+
+## 소유자 결정 (2026-10-08 UTC, 오케스트레이터 경유 — 원문 그대로)
+
+> 소유자 결정: «L2 운영자 이메일 조회 (추천)» — 새 읽기 하나: 활성 테넌트의 운영자를 이메일로 정확히 찾아 `{accountId = oidc_subject, displayName, tenantId}`. 권한은 지금 이메일 검색과 같은 모양(권한 키 없음 · 같은 테넌트 게이트 · «없음» 과 «범위 밖» 은 같은 빈 답). 권한 표 변경 없음.
+
+반영: 위 선택지 표의 L2 를 고른 것. 아래 구현 기록이 이 문장의 다섯 요소(새 읽기 하나 · 응답 세 칸 · 권한 키 없음 · 같은 테넌트 게이트 · 빈 답 동일)를 각각 어디서 지키는지 적는다.
+
+---
+
+# 구현 기록 (2026-10-08 UTC)
+
+## 계약 먼저
+
+- **iam `admin-api.md` § `GET /api/admin/operators/lookup`** (신설, `GET /api/admin/operators` 절 바로 뒤). 경로 이유: 찾는 것이 운영자 측면이라 `operators` 계열 · 정적 세그먼트 형제 `grantable-roles` 와 같은 모양 · `GET /operators/{operatorId}` 맨 경로가 없어 충돌 없음. `GET /operators?email=` 로 목록에 얹지 않은 이유: 그 목록의 `@RequiresPermission(operator.manage)` 선언을 걷어야 한다(권한 매핑 변경 — 결정이 막는다). 응답 `200 {"content":[{accountId, displayName, tenantId}]}` · `tenantId` = 그 운영자의 HOME 테넌트 · 없음/범위 밖 = **`200 {"content":[]}` 바이트 동일**(404 도 403 도 아님) · 오류 = `401 TOKEN_INVALID` · `400 VALIDATION_ERROR`(email 없음) 뿐.
+- **iam `rbac.md` § «권한 키 없이 테넌트 게이트만 거는 읽기»** (신설) — 기존 accounts 이메일 분기와 새 조회 두 행. 🔴 권한 키 카탈로그 · Seed Roles 행렬 · `@RequiresPermission` 선언 · `RequiresPermissionAspect` · `AdminActionPermissionRegistry` **무변경**(`git diff` 로 확인).
+- **콘솔 `console-integration-contract.md` § 2.4.8 «Account selection»** — «직접 입력만» 판단을 대체: 이메일로 찾기 · 프록시 행(`GET /api/operators/lookup` → `GET /api/admin/operators/lookup`, 자격 = 교환된 운영자 토큰) · 존재 비노출 · 로그아웃 없음 · 여러 건 · 샘플 방문자.
+
+## 구현 (file:line 은 이 커밋 기준)
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| iam 저장소 | `admin-service/.../persistence/rbac/AdminOperatorJpaRepository.java` `findLookupCandidatesInTenant` · `findLookupCandidatesAnyTenant` | 이메일 일치 · `status='ACTIVE'` · `oidcSubject IS NOT NULL` · HOME ∪ ASSIGNED(목록 `findByTenantScope` 와 같은 소속 술어) / `'*'` 은 전 테넌트 |
+| iam 포트·어댑터 | `AdminOperatorPort.findLookupCandidates` + `OperatorLookupView` · `JpaAdminOperatorAdapter.findLookupCandidates` | `confined_tenant_id` 가 다른 테넌트면 제외(TASK-MONO-751 — 그 테넌트에 못 들어오는 사람) · HOME 테넌트 오름차순 |
+| iam 유스케이스 | `admin-service/.../application/OperatorEmailLookupUseCase.java` | 이메일 정규화(trim · 소문자) · 빈 값 → `IllegalArgumentException`(→ 400) · **`QueryTenantScopeGate.resolve` 재사용**(새 판정기 없음) · `TenantScopeDeniedException` → **빈 목록**. 성공 read 감사 행 없음. 범위 밖 DENIED 행은 게이트가 기존대로 best-effort 기록 — `ActionCode.ACCOUNT_SEARCH` 재사용(새 action code 는 `AdminActionPermissionRegistry` 의 exhaustive 매핑을 요구 = 권한 매핑 등록 → 만들지 않음) |
+| iam 컨트롤러 | `admin-service/.../presentation/OperatorLookupController.java` | `GET /api/admin/operators/lookup` · **`@RequiresPermission` 없음**(GET 이라 deny-default 가드 대상 아님) · 별도 컨트롤러(기존 `OperatorAdminController` 슬라이스 시험의 빈 목록을 안 건드리게) |
+| 콘솔 공유 | `shared/api/iam-operator-lookup-types.ts`(zod, 클라이언트 안전) · `shared/api/iam-operator-lookup.ts`(서버 — `callGapOperators` = operators 프로필, `forbiddenMode: 'generic'`, 활성 테넌트를 `tenantId` 로) | erp-ops 피처가 IAM 표면을 쓰므로 `shared/` (피처 간 import 금지) |
+| 콘솔 프록시 | `app/api/operators/lookup/route.ts` | 빈 email → 400(상류 호출 없음) · 오류는 operators `mapError` — **403 은 403 그대로** |
+| 콘솔 샘플 | `shared/sample/fixtures/iam.ts` `operatorsFixture` | `/api/admin/operators/lookup` → `{ content: [] }`(샘플 운영자에게 콘솔 `sub` 가 없다 — 지어낸 id 를 내지 않는다) |
+| 콘솔 훅 | `features/erp-ops/hooks/masters/use-account-link.ts` `useOperatorEmailLookup` | 제출된 이메일에만 실행 · 🔴 `skipAuthRetry: true` — 이 보조 조회의 401 이 refresh → `/login` 을 돌리지 않는다 |
+| 콘솔 문구 | `features/erp-ops/components/account-link-error.ts` | `ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE` 하나(없음 = 범위 밖, 방어로 `403 TENANT_SCOPE_DENIED` 도 같은 문장) · `ACCOUNT_LOOKUP_FAILED_MESSAGE`(403/401/503 — «직접 입력할 수 있습니다») |
+| 콘솔 화면 | `features/erp-ops/components/EmployeeAccountLinkDialog.tsx` | 연결 제안 칸 위에 «이메일로 찾기» 입력 + «찾기» · 결과마다 이름 + «<테넌트> 테넌트»(`*` → «플랫폼») · 고르면 계정 ID 칸이 채워짐(`aria-pressed`) · 결과 없음/실패는 **한 요소**(`erp-account-link-lookup-message`) · 직접 입력 유지(도움말 문장 갱신) |
+| 낡은 주석 셋 | `shared/api/iam-accounts-read.ts` · `app/api/accounts/route.ts` · `features/accounts/components/AccountsScreen.tsx` | «401/403 → 재로그인» → «401 만 refresh → 재로그인, 403 은 인라인/권한 없음 상태» (AC-0 (c) 실측) |
+
+## AC ↔ 닫는 시험
+
+| AC | 시험 |
+|---|---|
+| AC-1 | `tests/unit/features/erp-ops/AccountLookup.test.tsx` › «AC-1 — e-mail → pick the result → the account-id field is filled → propose POSTs that id» (렌더 DOM, 실제 api-client · fetch 만 mock) |
+| AC-2 | 같은 파일 › «🔴 AC-2 — «no such e-mail» and «out of scope» read the SAME sentence in the SAME element» — 한 시험 안에서 세 경우(모르는 이메일 200 빈 답 · 생산자 범위 밖 200 빈 답 · 방어용 `403 TENANT_SCOPE_DENIED`)의 `outerHTML` 까지 같다. iam 쪽: `OperatorLookupControllerSliceTest` › `out_of_scope_tenant_is_byte_identical_to_not_found`(상태 · 본문 · Content-Type 동일, 실제 유스케이스) |
+| AC-3 | `AccountLookup.test.tsx` › «🔴 AC-3 — a 403 or 401 from the lookup never logs out» — `/api/auth/refresh` 호출 0 · 대화상자 유지 · 직접 입력 후 «제안» 활성. `tests/unit/operator-lookup-proxy.test.ts` › «🔴 AC-3 — a producer 403 stays 403 (never rewritten to 401)» |
+| AC-4 | 아래 «bite» |
+| AC-5 | 아래 «검증» · ⏳ nightly 는 머지 뒤 |
+| 결정 «권한 키 없음» | `OperatorLookupControllerSliceTest` › `zero_permission_operator_gets_200_and_no_denied_row`(RBAC aspect 를 띄운 채, 권한 0) |
+| Edge 여러 테넌트 | `AccountLookup.test.tsx` › «Edge — several hits show their tenant…» · `JpaAdminOperatorAdapterLookupTest`(정렬 · confined 제외 · `'*'`) |
+| Edge 이미 연결된 계정 | `AccountLookup.test.tsx` › «Edge — picking an already-linked account → the producer 409 account_already_linked copy» |
+
+## bite
+
+- **AC-4 (콘솔)**: `accountLookupErrorMessage` 의 `TENANT_SCOPE_DENIED` 분기를 다른 문장(«이 테넌트는 조회 범위 밖입니다.»)으로 바꾸고 `tests/unit/features/erp-ops` + `operator-lookup-proxy` + `erp-account-link-proxy` 를 돌렸다 → rc=1, **126 중 정확히 1 실패**: «🔴 AC-2 — … SAME sentence in the SAME element». Edit 로 되돌림(잔존 `BITE-777` grep 0).
+- **iam**: `OperatorEmailLookupUseCase` 의 catch 에서 예외를 다시 던지게 하고 `OperatorLookupControllerSliceTest` → rc=1, **6 중 정확히 1 실패**: `out_of_scope_tenant_is_byte_identical_to_not_found`(«expected: 200 but was: 403»). Edit 로 되돌림 — 🔴 되돌릴 때 줄바꿈 하나가 빠진 것을 Read 로 잡아 고쳤다(AC-0 bite 때와 같은 실수, 두 번째).
+- AC-3 시험이 무는가(실행하지 않고 추론): `skipAuthRetry` 를 빼면 jsdom 에서 401 → `refreshSession()` 이 `/api/auth/refresh` 를 부르고, 시험이 그 호출 0 을 단언하므로 빨강이다.
+
+## 검증 (각각 따로 · rc 를 파일로)
+
+- iam `./gradlew :projects:iam-platform:apps:admin-service:test` rc=0 — XML **151 묶음 · 954 시험 · 실패 0 · 오류 0 · 건너뜀 58**(새 `OperatorLookupControllerSliceTest` 6 · `JpaAdminOperatorAdapterLookupTest` 2 · `AccountAdminControllerSliceTest` 17 포함). bite 복원 뒤 재실행은 `FROM-CACHE`(입력이 bite 전 초록 실행과 바이트 동일).
+- ⚪ `OperatorLookupIntegrationTest`(새 IT — 실제 MySQL 에서 JPQL 소속 술어 · ACTIVE · `oidc_subject` 필터 · 역할 0 운영자 · 범위 밖 빈 답): `@Tag("integration")` 이라 `test` 태스크 밖이고 이 호스트엔 Docker 가 없다 — **컴파일만 확인**(`compileTestJava` 통과), 실행은 CI.
+- 콘솔 `npx tsc --noEmit` rc=0 · `npm run lint` rc=0(«No ESLint warnings or errors») · `npx vitest run`(전체) rc=0 — **348/348 파일 · 3956/3956 시험**(직전 PC-FE-318 기록 346 · 3948 + 새 파일 2 · 시험 8).
+- e2e grep(변경 뒤): `erp-account-link|계정 ID|로그인 계정 ID|operators/lookup|이메일로 찾기|account-link` → console `e2e-smoke/**` · `tests/e2e/**` · 루트 `tests/federation-hardening-e2e/**` **0건**(바뀐 도움말 문장 · 새 testid · 손댄 요소의 `toHaveText` 모두 없음). 대조 `approval-screen|nav-erp` = 11건(2 파일) — 술어는 비어 있지 않다.
+
+## 티켓 · 지시와 다른 점
+
+- 범위 밖 DENIED 감사 행의 action code 는 새 코드가 아니라 `ACCOUNT_SEARCH` 재사용 — 새 코드는 권한 레지스트리 매핑 등록을 요구한다(위 표).
+- `content` 는 배열이다(소유자 문장은 한 건 모양) — 같은 이메일이 HOME 운영자와 다른 테넌트에서 배정된 운영자 둘로 걸릴 수 있어서(Edge Case «같은 이메일이 여러 테넌트에»). 각 항목의 세 칸은 문장 그대로.
+- 대상에서 `SUSPENDED` · `oidc_subject` 없음 · 다른 테넌트에 confined 된 운영자를 뺀다 — 그 테넌트로 콘솔에 들어와 수락할 수 없는 사람이라서(계약 § 동작 규칙에 적음).
+- AC-3 의 401: 조회 훅은 `skipAuthRetry` 로 refresh 를 건너뛴다. 진짜 세션 만료는 다음 보통 호출이 refresh 로 처리한다.
+- 샘플 방문자의 조회는 언제나 «찾지 못함» — 샘플 운영자에게 콘솔 `sub` 가 없다.

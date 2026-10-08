@@ -87,6 +87,25 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public List<OperatorLookupView> findLookupCandidates(String tenantId, String email) {
+        boolean anyTenant = "*".equals(tenantId);
+        List<AdminOperatorJpaEntity> rows = anyTenant
+                ? operatorRepository.findLookupCandidatesAnyTenant(email)
+                : operatorRepository.findLookupCandidatesInTenant(tenantId, email);
+        List<OperatorLookupView> out = new ArrayList<>(rows.size());
+        for (AdminOperatorJpaEntity e : rows) {
+            // TASK-MONO-751: a confined operator can assume only its confined tenant.
+            if (!anyTenant && e.getConfinedTenantId() != null
+                    && !e.getConfinedTenantId().equals(tenantId)) {
+                continue;
+            }
+            out.add(new OperatorLookupView(e.getOidcSubject(), e.getDisplayName(), e.getTenantId()));
+        }
+        out.sort(java.util.Comparator.comparing(OperatorLookupView::tenantId));
+        return out;
+    }
+
+    @Override
     public OperatorView createOperator(NewOperator row) {
         AdminOperatorJpaEntity entity = AdminOperatorJpaEntity.create(
                 row.operatorId(), row.email(), row.passwordHash(), row.displayName(),

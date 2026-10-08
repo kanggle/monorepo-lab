@@ -328,6 +328,12 @@ function operatorsFixture(path: string): unknown {
   if (pathname === `${OPERATORS_PATH}/grantable-roles`) {
     return { roles: IAM_GRANTABLE_ROLES };
   }
+  // TASK-MONO-777 — the operator e-mail lookup. No sample operator carries a
+  // console `sub` (the account id the erp link needs), so every e-mail answers
+  // the producer's «not found» shape — never an invented account id.
+  if (pathname === `${OPERATORS_PATH}/lookup`) {
+    return { content: [] };
+  }
   const assignmentsMatch = pathname.match(
     new RegExp(`^${OPERATORS_PATH}/([^/]+)/assignments$`),
   );

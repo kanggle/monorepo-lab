@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (IN-PROGRESS, 🔴 AC-0 에서 멈춤 — 소유자 결정 대기, 2026-10-08 UTC). 실측: 권한은 막지 않는다(이메일 분기 권한 0 · 403 은 로그아웃 아님 — PC-FE-318 판단 1 의 두 근거 다 틀림). 🔴 대신 그 검색은 활성 테넌트의 **계정 행**을 찾고 연결이 필요한 것은 **콘솔 `sub`(= 운영자 `oidc_subject`)** — 데모 `demo@`·`requester@` 는 계정 행이 없어 항상 «찾지 못함», 772(풀 직원) 뒤엔 구조적으로 못 찾는다. 선택지 L1~L5, 추천 L2(운영자 측면 이메일 조회 · 권한 키 없음 · 같은 테넌트 게이트). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -221,6 +220,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (REVIEW, 2026-10-08 UTC). AC-0 실측: 기존 계정 이메일 검색은 권한은 열려 있으나 **계정 행**을 찾아 연결에 필요한 콘솔 `sub` 를 못 준다(데모 `demo@`·`requester@` 0건) → 소유자 결정 **«L2 운영자 이메일 조회»**. iam 새 읽기 `GET /api/admin/operators/lookup`(권한 키 없음 · `QueryTenantScopeGate` 재사용 · 없음 = 범위 밖 = `200 {"content":[]}`) + 콘솔 «이메일로 찾기»(직접 입력 유지 · 403/401 로그아웃 없음). 권한 행렬 · aspect · 레지스트리 무변경. ⏳ 머지 뒤 nightly 콘솔 · ⚪ 새 IT 는 CI. 분석=Opus 5.5.
 - `TASK-MONO-774-erp-employee-account-link.md` — **`ADR-MONO-080` D7 = E1 우산 — erp 직원 ↔ IAM 계정 연결** (REVIEW, 2026-10-08 UTC). S1 #4228 · S2 `TASK-ERP-BE-044` done · S3 `TASK-MONO-776` review · S4 `TASK-PC-FE-318` review — 넷 다 머지. AC-1~4 는 S3·S4 시험으로 닫힘, AC-5 라이브 ⚪ 재굽기 창. 분석=Opus 5.5.
 - `TASK-MONO-776-erp-person-fields-one-id-space.md` — **erp 사람 칸을 직원 id 한 공간으로 — approval · notification · read-model(위임 scope) · 데모 시드 한 PR** (REVIEW, 2026-10-07 UTC · `TASK-MONO-774` S3). 결재함/`?role=`/위임 목록 = «내 `sub` 와 연결된 직원» · 상신 E3(`approver_unresolved` · `APPROVAL_APPROVER_UNLINKED`) · 미연결 호출자 403 `APPROVAL_ACTOR_NOT_LINKED` / 빈 페이지 + `meta.actorEmployeeId` · `/me` 장애 = 503 · 이력 actor = 직원, `audit_log.actor` = `sub` · 알림 수신자 술어 동일 · read-model 코드 0(IT 만). 소유자 결정 «기존 행 = 그대로 두고 데모는 재시드»(계약 «이전 데이터» · 셀 SQL 은 티켓). 시드 §4b 교차 제안→수락 · §9 `meta.actorEmployeeId`. «전/후» 기록. IT ⚪ CI 첫 실행 · 시드 라이브 ⚪ 재굽기. 후속 = console `TASK-PC-FE-318`.
 - `TASK-MONO-770-verification-mail-and-email-gate.md` — **`ADR-MONO-080` 단계 1 (D3 · R1) — 인증 메일을 실제로 보낸다 + 회사 권한이 붙는 쓰기에 인증된 이메일 필수** (REVIEW, 2026-10-07 UTC). 범용 SMTP 어댑터(`iam.mail.enabled`, 프로필 아님 — 데모 IAM 은 e2e) · prod+꺼짐 fail-fast 유지 · 발송 실패 = 503/422 응답 · IdP 화면 `/email-verification` · `/verify-email` · 셀러 수락 규칙 4b `403 EMAIL_NOT_VERIFIED`(공용 술어 `VerifiedEmailRequirement` — 772 재사용) · 재설정 메일도 같은 장치(소유자 결정) · 데모 Mailpit(소유자 전용 basic auth, SSM 자격, 기본 꺼짐). 🔴 스토어 수락 화면 없음 = 소유자 판단 · IT 는 Docker 없음으로 미실행 · AC-1 라이브 ⚪ 재굽기 + SSM 등록 + `terraform apply` 뒤.
