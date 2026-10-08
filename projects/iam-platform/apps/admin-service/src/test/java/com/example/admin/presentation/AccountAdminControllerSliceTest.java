@@ -371,6 +371,31 @@ class AccountAdminControllerSliceTest {
                 .andExpect(jsonPath("$.content[0].email").value("a@example.com"));
     }
 
+    /**
+     * TASK-MONO-777 AC-0 (a) — the email single-lookup is reachable by an operator that holds
+     * NO admin permission at all (e.g. a console operator whose only domain grant is erp.write,
+     * which is an assume-tenant scope, not an admin-service permission). {@link #grantAll}
+     * grants everything, so {@link #search_withEmail_delegates_to_search_client} could not tell
+     * a permission-free branch from a permitted one; this test revokes every permission first.
+     * It also pins WHICH tenant is searched: the one the scope gate resolved — never a pool.
+     */
+    @Test
+    void search_withEmail_operatorWithNoPermissions_returns_200_in_resolved_tenant() throws Exception {
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
+        when(queryTenantScopeGate.resolve(any(), eq("demo-corp"), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("demo-corp", false));
+        var items = List.of(new AccountServiceClient.AccountSummaryItem(
+                "acc-dc", "hire@demo-corp.example", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
+        when(accountServiceClient.search(eq("demo-corp"), eq("hire@demo-corp.example")))
+                .thenReturn(new AccountServiceClient.AccountSearchResponse(items, 1L, 0, 20, 1));
+
+        mockMvc.perform(get("/api/admin/accounts?email=hire@demo-corp.example&tenantId=demo-corp")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value("acc-dc"));
+    }
+
     @Test
     void search_outOfScopeTenant_returns_403_tenant_scope_denied() throws Exception {
         // TASK-BE-357: a non-platform operator requesting a tenant outside its effective

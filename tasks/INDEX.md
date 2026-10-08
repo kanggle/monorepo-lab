@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **`ADR-MONO-080` 단계 2 (D4 · R2 · R3) — IAM 로그인 TOTP + 토큰 교환 · assume-tenant 정책 검사** (READY, ⏳ AC-0 = 770 `done/`). 지금은 `SUPER_ADMIN` 도 주 경로로 2FA 없이 들어온다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (READY, 2026-10-08 UTC · 출처 `TASK-PC-FE-318` 후속). 지금은 UUID 직접 입력. 🔴 PC-FE-318 판단(«별도 IAM 권한 필요»)과 계약(`GET /api/admin/accounts?email=` 은 `account.read` 불필요)이 어긋남 — AC-0 이 먼저 잰다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-778-promote-caller-token-propagation-helper.md` — **호출자 토큰 전달 도우미를 `libs/java-security-servlet` 로** (READY, 2026-10-08 UTC · 출처 `TASK-MONO-776` 후속). 코드가 정한 승격 트리거(«두 번째 서비스가 같은 여섯 줄») 발화 — erp approval · notification 두 사본. 토큰 바이트 동일 전달(`amr` 보존 — 771 접점). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
@@ -208,6 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (IN-PROGRESS, 🔴 AC-0 에서 멈춤 — 소유자 결정 대기, 2026-10-08 UTC). 실측: 권한은 막지 않는다(이메일 분기 권한 0 · 403 은 로그아웃 아님 — PC-FE-318 판단 1 의 두 근거 다 틀림). 🔴 대신 그 검색은 활성 테넌트의 **계정 행**을 찾고 연결이 필요한 것은 **콘솔 `sub`(= 운영자 `oidc_subject`)** — 데모 `demo@`·`requester@` 는 계정 행이 없어 항상 «찾지 못함», 772(풀 직원) 뒤엔 구조적으로 못 찾는다. 선택지 L1~L5, 추천 L2(운영자 측면 이메일 조회 · 권한 키 없음 · 같은 테넌트 게이트). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
