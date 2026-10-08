@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-PC-FE-324-console-login-misreports-consumer-sso-refusal.md` — **같은 브라우저의 스토어(소비자) SSO 세션 때문에 IdP 가 콘솔 토큰 발급을 거절하는데 콘솔은 «인증 서버에 연결할 수 없습니다» 로 보인다** (READY, 2026-10-08 UTC · 출처 24차 창). 콜백이 풀 tenant 거절을 구분해 «다른 계정 — 로그아웃 후 다시» + 로그아웃 경로.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 

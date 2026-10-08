@@ -185,6 +185,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **`ADR-MONO-080` 단계 2 (D4 · R2 · R3) — IAM 로그인 TOTP + 토큰 교환 · assume-tenant 정책 검사** (READY, ⏳ AC-0 = 770 `done/`). 지금은 `SUPER_ADMIN` 도 주 경로로 2FA 없이 들어온다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-779-demo-event-relay-only-starts-with-all-four-domains-in-one-call.md` — **데모 이벤트 릴레이가 한 호출에 4도메인일 때만 뜬다 — `/domain/start`·묶음 추가로는 안 뜨고 크로스프로젝트 이벤트가 조용히 0** (READY, 2026-10-08 UTC · 출처 24차 창 관측, `TASK-MONO-760` 추론의 실증).
+- `TASK-MONO-780-fulfillment-outbound-tenant-invisible-in-console.md` — **스토어 주문의 wms 출고(`tenant_id=ecommerce`)가 콘솔 WMS(로그인 토큰 demo-corp)에 영영 안 보인다** (READY, 2026-10-08 UTC · 출처 24차 창 `TASK-MONO-765` AC-4). ⏳ AC-0 = 소유자 결정 ⓐ 창고 운영사 테넌트 / ⓑ 콘솔이 활성 테넌트 토큰 / ⓒ 데모 배정만.
 
 
 
@@ -217,12 +219,12 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없었다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. master-service R__01/R__05 + outbound-service R__seed_dev_masterref.sql(WH-MAIN·ECOMMERCE-STORE·SKU 86종) 추가 + `seed-wms.sh` 읽기 검증(§0) — AC-3/4 는 재굽기 뒤 측정.
-- `TASK-MONO-766-demo-corp-has-no-seedable-account-for-operator-creation.md` — **데모에서 신규 운영자 생성을 끝까지 보여줄 수 없다** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 콘솔 `/operators` 생성 사전 게이트는 tenant `demo-corp` 에 이미 등록된 계정을 요구하는데 `account_db.accounts` 의 demo-corp 행이 0이었다(기존 운영자 둘은 `admin_operators` 에만 있음). 자가가입·엔터프라이즈 프로비저닝 API 둘 다 데모 호스트에서 도달 불가(AC-1) — account-service `R__07`/auth-service `R__03` Flyway dev-seed 로 "운영자 아님" 계정 1개 추가. 기존 운영자 행은 무변경(AC-3). AC-4 는 재굽기 뒤 측정.
-- `TASK-MONO-768-wms-has-no-stock-for-ecommerce-skus-at-wh-main.md` — **ecommerce 주문이 wms 출고 주문까지는 가지만 재고 예약에서 멈춘다** (REVIEW, 2026-10-07 UTC · 출처 `TASK-MONO-765` 잔여 격차). `WH-MAIN` 에 존·로케이션이 없고 ecommerce SKU 86종의 `inventory` 행이 0 → `PickingRequestedConsumer` 가 BACKORDERED. master 존·로케이션 + inbound/inventory/admin 미러(SKU id 를 outbound 와 일치 — `EcommerceSeedParityTest` 로 고정, Gradle 입력 선언까지 해야 물었다) + `seed-wms.sh` 1b) 실제 입고 API 로 **SKU 당 ASN 1장**(scm 이 다중 라인 received 의 첫 라인만 반영하는 결함을 피함 — 후속 필요) + 3) 재고 끝 검증. AC-2 = CI IT 판정 · AC-3/4 ⚪ 재굽기 창. 24차 재굽기 전 머지.
+- `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없었다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. master-service R__01/R__05 + outbound-service R__seed_dev_masterref.sql(WH-MAIN·ECOMMERCE-STORE·SKU 86종) 추가 + `seed-wms.sh` 읽기 검증(§0) — AC-3/4 는 재굽기 뒤 측정. 🔵 24차 창(2026-10-08 UTC): AC-3·5 닫힘, **AC-4 의 WMS 콘솔 칸만 남음 → `TASK-MONO-780`(소유자 결정)**.
 
 
 ## done
+- ✅ `TASK-MONO-768-wms-has-no-stock-for-ecommerce-skus-at-wh-main.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4199**, 스쿼시 **`16202efd7`** (머지 시점 실패 0). WH-MAIN ecommerce SKU 86종 재고 시드. CI IT 초록 · 시드 재실행 멱등 · 24차 창 스토어 주문 RESERVED · scm WH-MAIN 표시.
+- ✅ `TASK-MONO-766-demo-corp-has-no-seedable-account-for-operator-creation.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4190**, 스쿼시 **`fed949d5c`** (머지 시점 실패 0). demo-corp «운영자 아님» 계정 시드. 24차 창: 콘솔에서 `newhire@demo-corp.example` → `SUPPORT_READONLY` 운영자 생성 완료(소유자).
 - ✅ `TASK-MONO-770-verification-mail-and-email-gate.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4215**, 스쿼시 **`9031eb4a8`** (머지 시점 실패 0). 인증 메일 실제 발송 + 회사 권한 쓰기의 이메일 인증 게이트(ADR-MONO-080 단계 1). 24차 창에서 가입→`/email-verification`→Mailpit→링크→`email_verified_at` 기록 라이브 통과.
 - ✅ `TASK-MONO-776-erp-person-fields-one-id-space.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4234**, 스쿼시 **`64d6070e6`** (머지 시점 실패 0). erp 사람 칸을 직원 id 한 공간으로(approval · notification · read-model · 시드). 24차 창: 시드 편법 없이 결재함 2=대기 2, 이전 행 SQL 6표 전부 0.
 - ✅ `TASK-MONO-774-erp-employee-account-link.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4228**, 스쿼시 **`e27acc829`** (머지 시점 실패 0). ADR-MONO-080 D7 = E1 우산 — erp 직원 ↔ IAM 계정 연결(S1 #4228 · S2 ERP-BE-044 · S3 MONO-776 · S4 PC-FE-318). 24차 창: 결재함 편법 없이 참 · 보정 코드 없이 이름 표시(소유자 확인).
