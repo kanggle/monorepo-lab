@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **`ADR-MONO-080` 단계 2 (D4 · R2 · R3) — IAM 로그인 TOTP + 토큰 교환 · assume-tenant 정책 검사** (READY, ⏳ AC-0 = 770 `done/`). 지금은 `SUPER_ADMIN` 도 주 경로로 2FA 없이 들어온다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-779-demo-event-relay-only-starts-with-all-four-domains-in-one-call.md` — **데모 이벤트 릴레이가 한 호출에 4도메인일 때만 뜬다 — `/domain/start`·묶음 추가로는 안 뜨고 크로스프로젝트 이벤트가 조용히 0** (READY, 2026-10-08 UTC · 출처 24차 창 관측, `TASK-MONO-760` 추론의 실증).
 - `TASK-MONO-780-fulfillment-outbound-tenant-invisible-in-console.md` — **스토어 주문의 wms 출고(`tenant_id=ecommerce`)가 콘솔 WMS(로그인 토큰 demo-corp)에 영영 안 보인다** (READY, 2026-10-08 UTC · 출처 24차 창 `TASK-MONO-765` AC-4). 🔵 소유자 결정 ⓑ(2026-10-08 UTC) = `ADR-MONO-022` D9 가 이미 정한 동작(콘솔이 활성 테넌트 토큰을 wms 에) — 코드가 어긋난 곳은 콘솔 wms 프록시 하나. ⏳ AC-0 = 게이트웨이가 그 토큰을 받는가.
 
 
@@ -220,6 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-765-fulfillment-dead-letters-missing-wms-master-data.md` — **ecommerce→wms 풀필먼트 요청이 전량 DLT** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). `FulfillmentRequestedConsumer` 가 요구하는 거래처(`ECOMMERCE-STORE`)·창고(`WH-MAIN`)·SKU 전수가 `infra/demo/seed/seed-wms.sh` 에 없었다(`SKU-APPLE-001` 하나뿐) — 매번 `IllegalArgumentException` → DLT, lag 0. master-service R__01/R__05 + outbound-service R__seed_dev_masterref.sql(WH-MAIN·ECOMMERCE-STORE·SKU 86종) 추가 + `seed-wms.sh` 읽기 검증(§0) — AC-3/4 는 재굽기 뒤 측정. 🔵 24차 창(2026-10-08 UTC): AC-3·5 닫힘, **AC-4 의 WMS 콘솔 칸만 남음 → `TASK-MONO-780`(소유자 결정)**.
+- `TASK-MONO-779-demo-event-relay-only-starts-with-all-four-domains-in-one-call.md` — **데모 이벤트 릴레이가 한 호출에 4도메인일 때만 뜬다 — `/domain/start`·묶음 추가로는 안 뜨고 크로스프로젝트 이벤트가 조용히 0** (REVIEW, 2026-10-08 UTC · 출처 24차 창 관측, `TASK-MONO-760` 추론의 실증). 판정을 `SET`(이번 호출의 요청 집합)에서 `projects.sh` 의 신설 `domain_running()`(지금 떠 있는 도메인)으로 교체 — `demo-down.sh` 의 중복 `is_running()` 도 같은 함수로 정리. 정적 가드 (z44, `verify-demo-wrapper.sh`) 가 `demo-up.sh` 의 판정 구간을 그대로 추출해 세 순서(한 번에·나중에 scm·나중에 iam) + 미달 시 경고 + bite 를 셀 단위로 검증(docker 데몬 불필요). ⏳ **AC-4 는 라이브 재굽기 창 필요 — 다음 데모 창.**
 
 
 ## done

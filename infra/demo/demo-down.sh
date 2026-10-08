@@ -30,8 +30,10 @@ set -a; source "$HERE/demo.env"; set +a
 
 KEEP_TRAEFIK="${KEEP_TRAEFIK:-0}"
 
-# 도메인 -p <slug> 스택에 컨테이너가 하나라도 있으면 "떠 있음"으로 본다.
-is_running() { [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$1" 2>/dev/null)" ]; }
+# 🔵 TASK-MONO-779 — `is_running` 은 더 이상 여기서 정의하지 않는다. `projects.sh` 의
+# `domain_running()` 이 같은 정의(`docker ps -aq --filter label=com.docker.compose.project=…`)
+# 의 단일 출처다 — demo-up.sh 의 릴레이 기동 판정도 지금은 그 함수를 쓴다. 두 곳에 같은
+# 사실을 따로 적어 두면 다음에 한쪽만 고쳐진다(이 파일 머리글 § 단일 출처 원칙 그대로).
 
 # 종료 대상 집합 결정 — 인자 없으면 전체, 있으면 그 도메인만(부분 종료).
 declare -A DOWNSET=()
@@ -52,7 +54,7 @@ if [ "$PARTIAL" = "1" ]; then
   for x in "${!DOWNSET[@]}"; do
     for r in "${!COMPOSE[@]}"; do
       [ -n "${DOWNSET[$r]+x}" ] && continue     # r 도 내려가는 중이면 무관
-      is_running "$r" || continue               # r 이 안 떠 있으면 무관
+      domain_running "$r" || continue           # r 이 안 떠 있으면 무관
       for d in ${DEPS[$r]:-}; do
         if [ "$d" = "$x" ]; then
           echo "[demo] $x 유지 — 아직 떠 있는 $r 이 하드-의존함"
@@ -72,7 +74,7 @@ fi
 for x in "${!DOWNSET[@]}"; do
   case " ${RELAY_DOMAINS[*]} " in
     *" $x "*)
-      if [ -n "$(docker ps -aq --filter 'label=com.docker.compose.project=relay' 2>/dev/null)" ]; then
+      if domain_running relay; then
         echo "[demo] down: relay (크로스프로젝트 이벤트 릴레이 — 네트워크 소유자보다 먼저)"
         docker compose -p relay -f "$ROOT/$RELAY_COMPOSE" down --remove-orphans || true
       fi
