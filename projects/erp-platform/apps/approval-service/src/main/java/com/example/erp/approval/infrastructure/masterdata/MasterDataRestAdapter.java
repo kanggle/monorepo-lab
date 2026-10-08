@@ -4,17 +4,14 @@ import com.example.erp.approval.application.port.outbound.EmployeeLookup;
 import com.example.erp.approval.application.port.outbound.MasterDataPort;
 import com.example.erp.approval.domain.request.ApprovalSubject;
 import com.example.erp.approval.domain.request.SubjectType;
+import com.example.security.servlet.actor.CallerTokenPropagation;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -31,7 +28,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * masterdata-service is an independent OIDC <strong>resource server</strong> behind the
  * gateway ({@code ServiceLevelOAuth2Config}), not an unauthenticated internal endpoint.
  * This adapter therefore forwards the <strong>caller's own bearer token</strong>, read off
- * the request-scoped {@link JwtAuthenticationToken} the resource-server filter installed.
+ * the request-scoped JWT the resource-server filter installed via
+ * {@link CallerTokenPropagation#currentCallerToken()} and attached unchanged via
+ * {@link CallerTokenPropagation#withBearerToken}. That mechanism was promoted to
+ * {@code libs/java-security-servlet} once a second service — erp notification-service's
+ * {@code MasterDataCallerEmployeeAdapter} — needed the same lines (TASK-MONO-778); the
+ * identity check below and its own failure-cause metrics stayed here.
  *
  * <p>Propagation is the chosen mechanism over a {@code client_credentials} workload token
  * because the workload token is issued with {@code tenant_id = erp} and therefore cannot
@@ -116,7 +118,7 @@ public class MasterDataRestAdapter implements MasterDataPort {
 
     @Override
     public boolean isSubjectActive(ApprovalSubject subject, String tenantId) {
-        Jwt caller = currentCallerToken();
+        Jwt caller = CallerTokenPropagation.currentCallerToken();
         if (caller == null) {
             return refuse(CAUSE_NO_CREDENTIALS, subject,
                     "no bearer token on the SecurityContext — the masterdata call would go out "
@@ -131,9 +133,8 @@ public class MasterDataRestAdapter implements MasterDataPort {
 
         String path = pathFor(subject.subjectType()) + subject.subjectId();
         try {
-            MasterEnvelope envelope = restClient.get()
-                    .uri(path)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + caller.getTokenValue())
+            MasterEnvelope envelope = CallerTokenPropagation.withBearerToken(
+                            restClient.get().uri(path), caller)
                     .retrieve()
                     // Classify by status BEFORE decoding: an error body is not a
                     // MasterEnvelope, and letting it fall through to the decoder would
@@ -182,7 +183,7 @@ public class MasterDataRestAdapter implements MasterDataPort {
 
     private EmployeeLookup lookupEmployee(String lookup, String path, String logId,
                                           String expectedSub, String tenantId) {
-        Jwt caller = currentCallerToken();
+        Jwt caller = CallerTokenPropagation.currentCallerToken();
         if (caller == null) {
             return refusePerson(lookup, CAUSE_NO_CREDENTIALS, logId,
                     "no bearer token on the SecurityContext");
@@ -201,9 +202,8 @@ public class MasterDataRestAdapter implements MasterDataPort {
                             + caller.getSubject() + "'");
         }
         try {
-            PersonEnvelope envelope = restClient.get()
-                    .uri(path)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + caller.getTokenValue())
+            PersonEnvelope envelope = CallerTokenPropagation.withBearerToken(
+                            restClient.get().uri(path), caller)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError,
                             (req, res) -> {
@@ -242,29 +242,6 @@ public class MasterDataRestAdapter implements MasterDataPort {
                 .tag("lookup", lookup)
                 .tag("cause", cause)
                 .register(meterRegistry);
-    }
-
-    /**
-     * The caller's verified token, or {@code null} when nothing OAuth2-shaped is on the
-     * context. {@code ActorAuthenticationToken} (ADR-MONO-058 § D1) extends
-     * {@link JwtAuthenticationToken}, so the erp actor principal is covered by this check
-     * without the adapter depending on the actor type.
-     *
-     * <p>Kept local to erp rather than promoted next to
-     * {@code libs/java-security-servlet}'s {@code ActorContextResolver}: approval-service
-     * is currently the <strong>only</strong> outbound service-to-service caller in the
-     * fleet that needs propagation. Promote when a <strong>second</strong> service needs
-     * the same six lines — that count, not "it looks generic", is the trigger.
-     * 🔵 TASK-MONO-776: the trigger has fired — erp notification-service's
-     * {@code MasterDataCallerEmployeeAdapter} now carries the same lines. Promotion is a
-     * shared-library change and is a named follow-up, not part of that slice.
-     */
-    private static Jwt currentCallerToken() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth instanceof JwtAuthenticationToken jwtAuth) {
-            return jwtAuth.getToken();
-        }
-        return null;
     }
 
     /** 401/403 are their own signal; any other non-404 4xx is a contract/routing defect. */
