@@ -248,4 +248,57 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-BE-628 — the assigned-only demo operator (R__seed_demo_assigned_only_operator.sql):
+    // HOME ecommerce, ASSIGNED demo-corp, no way to log in. It exists so the console's
+    // group member picker has a real «배정만 됨» row inside a tenant the demo operator
+    // administers (demo-corp).
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("seed: demo-assigned-only exists, ACTIVE, HOME ecommerce, and has NO login path (password_hash and oidc_subject both NULL)")
+    void assignedOnlyOperatorSeededWithoutLogin() {
+        List<String> rows = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', tenant_id, email, status,
+                                 password_hash IS NULL, oidc_subject IS NULL)
+                  FROM admin_operators WHERE operator_id = 'demo-assigned-only'
+                """, String.class);
+
+        // A non-NULL login column turns a display-only fixture into an account on a demo
+        // whose admin credentials are public.
+        assertThat(rows).containsExactly("ecommerce|assigned-only@demo.com|ACTIVE|1|1");
+    }
+
+    @Test
+    @DisplayName("seed: demo-assigned-only holds NO role and is assigned to exactly {demo-corp}")
+    void assignedOnlyOperatorHasNoRoleAndOnlyTheDemoCorpAssignment() {
+        Integer roles = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM admin_operator_roles g
+                  JOIN admin_operators o ON o.id = g.operator_id
+                 WHERE o.operator_id = 'demo-assigned-only'
+                """, Integer.class);
+        List<String> tenants = jdbcTemplate.queryForList("""
+                SELECT a.tenant_id FROM operator_tenant_assignment a
+                  JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = 'demo-assigned-only'
+                 ORDER BY a.tenant_id
+                """, String.class);
+
+        assertThat(roles).as("a role row would make this fixture an operator with permissions").isZero();
+        assertThat(tenants).as("HOME stays ecommerce; demo-corp is the ONLY assignment").containsExactly("demo-corp");
+    }
+
+    @Test
+    @DisplayName("demo-operator listing demo-corp sees demo-assigned-only with homeTenantId=ecommerce (the row the picker greys out)")
+    void demoCorpOperatorListShowsAssignedOnlyWithItsHomeTenant() throws Exception {
+        mockMvc.perform(get("/api/admin/operators?tenantId=demo-corp&size=100")
+                        .header("Authorization", bearer("demo-operator")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.operatorId == 'demo-assigned-only')].homeTenantId")
+                        .value("ecommerce"))
+                // control: the demo operator itself is HOME in demo-corp
+                .andExpect(jsonPath("$.content[?(@.operatorId == 'demo-operator')].homeTenantId")
+                        .value("demo-corp"));
+    }
 }
