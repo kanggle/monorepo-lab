@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **`ADR-MONO-080` 단계 2 (D4 · R2 · R3) — IAM 로그인 TOTP + 토큰 교환 · assume-tenant 정책 검사** (READY, ⏳ AC-0 = 770 `done/`). 지금은 `SUPER_ADMIN` 도 주 경로로 2FA 없이 들어온다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (READY, ⏳ AC-0 = 770 · 771 `done/`). `TASK-MONO-334` 대체. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 `done/`). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (READY, 2026-10-08 UTC · 출처 `TASK-PC-FE-318` 후속). 지금은 UUID 직접 입력. 🔴 PC-FE-318 판단(«별도 IAM 권한 필요»)과 계약(`GET /api/admin/accounts?email=` 은 `account.read` 불필요)이 어긋남 — AC-0 이 먼저 잰다. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -218,6 +217,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-777-find-account-by-email-for-employee-link.md` — **직원 ↔ 계정 연결 제안에서 이메일로 계정 찾기** (REVIEW, 2026-10-08 UTC). AC-0 실측: 기존 계정 이메일 검색은 권한은 열려 있으나 **계정 행**을 찾아 연결에 필요한 콘솔 `sub` 를 못 준다(데모 `demo@`·`requester@` 0건) → 소유자 결정 **«L2 운영자 이메일 조회»**. iam 새 읽기 `GET /api/admin/operators/lookup`(권한 키 없음 · `QueryTenantScopeGate` 재사용 · 없음 = 범위 밖 = `200 {"content":[]}`) + 콘솔 «이메일로 찾기»(직접 입력 유지 · 403/401 로그아웃 없음). 권한 행렬 · aspect · 레지스트리 무변경. ⏳ 머지 뒤 nightly 콘솔 · ⚪ 새 IT 는 CI. 분석=Opus 5.5.
 - `TASK-MONO-778-promote-caller-token-propagation-helper.md` — **호출자 토큰 전달 도우미를 `libs/java-security-servlet` 로** (REVIEW, 2026-10-08 UTC · 출처 `TASK-MONO-776` 후속). 코드가 정한 승격 트리거(«두 번째 서비스가 같은 여섯 줄») 발화 — erp approval · notification 두 사본을 신설 `CallerTokenPropagation`(currentCallerToken/withBearerToken) 으로 교체, 신원 대조·실패 계측은 서비스에 남김. 토큰 바이트 동일 전달 시험으로 고정(`amr` 보존 — 771 접점). AC-0 재측정: 패턴 사본 3건 전부 erp 안(erp 밖 0) · 라이브러리 소비자 19모듈. 라이브러리 5시험 + 두 서비스 기존 시험(23+23) 전부 초록, HARDSTOP-03 grep 0건. erp 통합 잡은 CI 위임. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-774-erp-employee-account-link.md` — **`ADR-MONO-080` D7 = E1 우산 — erp 직원 ↔ IAM 계정 연결** (REVIEW, 2026-10-08 UTC). S1 #4228 · S2 `TASK-ERP-BE-044` done · S3 `TASK-MONO-776` review · S4 `TASK-PC-FE-318` review — 넷 다 머지. AC-1~4 는 S3·S4 시험으로 닫힘, AC-5 라이브 ⚪ 재굽기 창. 분석=Opus 5.5.
 - `TASK-MONO-776-erp-person-fields-one-id-space.md` — **erp 사람 칸을 직원 id 한 공간으로 — approval · notification · read-model(위임 scope) · 데모 시드 한 PR** (REVIEW, 2026-10-07 UTC · `TASK-MONO-774` S3). 결재함/`?role=`/위임 목록 = «내 `sub` 와 연결된 직원» · 상신 E3(`approver_unresolved` · `APPROVAL_APPROVER_UNLINKED`) · 미연결 호출자 403 `APPROVAL_ACTOR_NOT_LINKED` / 빈 페이지 + `meta.actorEmployeeId` · `/me` 장애 = 503 · 이력 actor = 직원, `audit_log.actor` = `sub` · 알림 수신자 술어 동일 · read-model 코드 0(IT 만). 소유자 결정 «기존 행 = 그대로 두고 데모는 재시드»(계약 «이전 데이터» · 셀 SQL 은 티켓). 시드 §4b 교차 제안→수락 · §9 `meta.actorEmployeeId`. «전/후» 기록. IT ⚪ CI 첫 실행 · 시드 라이브 ⚪ 재굽기. 후속 = console `TASK-PC-FE-318`.

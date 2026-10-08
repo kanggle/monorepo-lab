@@ -72,6 +72,18 @@ public interface AdminOperatorPort {
     OperatorPage findOperatorsPageByTenant(String tenantId, String statusFilter, int page, int size);
 
     /**
+     * TASK-MONO-777 — {@code GET /api/admin/operators/lookup}: operators of {@code tenantId}
+     * (HOME ∪ ASSIGNED; {@code '*'} = every tenant) with this normalized {@code email} who can
+     * enter that tenant through the console: {@code status = ACTIVE}, {@code oidc_subject}
+     * present, and {@code confined_tenant_id} null or {@code tenantId} (TASK-MONO-751; ignored
+     * for {@code '*'}). Sorted by HOME tenant ascending.
+     */
+    List<OperatorLookupView> findLookupCandidates(String tenantId, String email);
+
+    /** TASK-MONO-777 — projection for the operator e-mail lookup. */
+    record OperatorLookupView(String oidcSubject, String displayName, String tenantId) {}
+
+    /**
      * Persist a new operator row + flush. On {@code (tenant_id, email)} unique
      * constraint collision, throws {@link OperatorEmailConflictException}
      * directly (matches the legacy

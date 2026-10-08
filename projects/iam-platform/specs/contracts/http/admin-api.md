@@ -1009,6 +1009,64 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 ---
 
+## GET /api/admin/operators/lookup
+
+**TASK-MONO-777 (2026-10-08 UTC, 소유자 결정 «L2 운영자 이메일 조회»)** — 활성 테넌트의 **운영자**를 이메일로 정확히 찾아, 그 사람이 콘솔에 들고 오는 계정 id(`admin_operators.oidc_subject` = 콘솔 OIDC/assume 토큰의 `sub`, `ADR-MONO-060` A)를 돌려준다. 소비자: erp 직원 ↔ 계정 연결 제안(platform-console `console-integration-contract.md` § 2.4.8) — 인사 담당자가 계정 UUID 를 직접 치지 않게.
+
+**왜 `GET /api/admin/accounts?email=` 가 아닌가**: 그 검색은 활성 테넌트의 `account_db` **계정 행**을 찾는다. 연결이 필요한 값은 **운영자 측면의 `oidc_subject`** 이고, 콘솔 자격이 `iam` 테넌트에 있는 운영자(데모 시드 운영자)·셀프 온보딩 운영자·`ADR-MONO-080` 풀 직원은 회사 테넌트에 계정 행이 없어 그 검색이 못 찾는다(실측 — 루트 `TASK-MONO-777` § AC-0 (b)).
+
+**왜 이 경로인가**: 찾는 대상이 운영자 측면이므로 `operators` 계열에 둔다. 정적 세그먼트 형제 `GET /api/admin/operators/grantable-roles` 와 같은 모양이고, `GET /api/admin/operators/{operatorId}` 맨 경로는 없어 경로 변수와 충돌하지 않는다. `GET /api/admin/operators?email=` 로 목록에 분기를 얹지 않은 이유: 그 목록은 `@RequiresPermission(operator.manage)` 로 선언돼 있어, 권한 없는 분기를 넣으려면 그 선언을 걷고 수동 검사로 바꿔야 한다(권한 매핑 변경) — 소유자 결정은 «권한 표 변경 없음» 이다.
+
+**Auth required**: Yes (operator token, `token_type=admin`)
+**Required permission**: **없음** — `GET /api/admin/accounts` 의 `email` 분기와 같은 모양(권한 키 없음 · 테넌트 게이트만). GET 이므로 `@RequiresPermission` deny-default 가드(변이 전용) 대상이 아니다.
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `email` | string (**required**) | 정확 일치(앞뒤 공백 제거 · 소문자화 후 비교 — `admin_operators.email` 은 정규화 저장). 비었거나 없으면 `400 VALIDATION_ERROR` |
+| `tenantId` | string (optional) | 찾을 테넌트(활성 테넌트). 생략 → 운영자 자신의 홈 테넌트. `QueryTenantScopeGate`(home ∪ 배정, TASK-BE-326 — `GET /api/admin/accounts` · `GET /api/admin/audit` 와 같은 판정기)로 해석한다. `*` 는 플랫폼 운영자 전용(전 테넌트) |
+
+**동작 규칙**:
+- 대상 = 해석된 테넌트에 **속한** 운영자(HOME `admin_operators.tenant_id == tenantId` **또는** `operator_tenant_assignment` 배정 — `GET /api/admin/operators` 와 같은 소속 술어) 중 `email` 이 일치하고, **`status = ACTIVE`** · **`oidc_subject` 있음**(콘솔 로그인이 이어진 운영자) · `confined_tenant_id` 가 없거나 그 테넌트(TASK-MONO-751 — 그 테넌트에 들어올 수 있는 사람)인 행. 이 셋이 아니면 그 테넌트에 콘솔로 들어와 연결을 **수락할 수 없는** 사람이므로 돌려주지 않는다.
+- 같은 이메일이 HOME 운영자와 다른 테넌트에서 배정된 운영자 둘로 걸릴 수 있다 → `content` 는 배열이고 항목마다 `tenantId`(그 운영자의 HOME 테넌트)를 싣는다. 정렬 = `tenantId` 오름차순(결정적).
+- 🔴 **«없음» 과 «범위 밖» 은 같은 응답이다** — 일치 0건, 그리고 일반 운영자가 effective scope 밖의 `tenantId` 를 지정한 경우 모두 **`200 {"content":[]}`**(바이트 동일). `GET /api/admin/accounts` 는 범위 밖을 `403 TENANT_SCOPE_DENIED` 로 답하지만, 이 조회는 소유자 결정으로 그 구별을 응답에서 지운다(존재 비노출 — 어떤 테넌트 이름이 범위 안인지도 응답으로 캐지 못한다).
+- 감사: 성공 read 는 감사 행 없음(BE-486 read-path 규약). 범위 밖은 응답은 빈 200 이지만 게이트가 기존대로 best-effort DENIED `admin_actions` 1행을 남긴다(`action_code=ACCOUNT_SEARCH` 재사용 — 같은 «이메일로 계정 id 찾기» 행위이고 새 action code 는 권한 레지스트리 매핑을 요구하므로 만들지 않는다 · `downstream_detail` 에 시도한 테넌트). probe 는 응답으로는 안 보이고 감사에는 남는다(rbac.md D3).
+
+**Response 200**:
+```json
+{
+  "content": [
+    {
+      "accountId": "0199de70-0000-7000-8000-00000000ad03",
+      "displayName": "Demo Operator",
+      "tenantId": "demo-corp"
+    }
+  ]
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `accountId` | string | `admin_operators.oidc_subject` — 콘솔 토큰의 `sub`. erp `employees.account_id` 에 넣는 값 |
+| `displayName` | string | 운영자 표시 이름 |
+| `tenantId` | string | 그 운영자의 HOME 테넌트(`admin_operators.tenant_id`, 플랫폼 운영자는 `*`). 배정으로만 속한 운영자는 조회 테넌트와 다르다 |
+
+`operatorId` · `email` · 역할은 싣지 않는다 — 연결에 필요한 것만.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 400 | `VALIDATION_ERROR` | `email` 없음/공백 |
+
+`403` 은 없다(권한 키 없음 · 범위 밖은 빈 200).
+
+**Side Effects**: 없음 (read) — 범위 밖일 때의 best-effort DENIED 감사 1행 외.
+
+---
+
 ## GET /api/admin/operators/grantable-roles
 
 **TASK-BE-388 (ADR-MONO-024 D3 read mirror)** — 호출 운영자가 **부여 가능한** seed role 이름 배열을 반환한다. 운영자 생성(`POST /api/admin/operators`) / 역할편집(`PATCH /api/admin/operators/{operatorId}/roles`) 폼이 부여 **불가**한 role 을 애초에 노출하지 않도록 하는 **read 힌트**다. 판정 규칙은 grant 강제 결정지점인 `RoleGrantGuard`(ADR-MONO-024 D3, `requireGrantable`)와 **동일 SoT** 이며, 본 엔드포인트는 그 규칙의 부작용 없는(감사 미기록) read 미러다. **최종 강제는 여전히 producer 측 `RoleGrantGuard` 의 `403 ROLE_GRANT_FORBIDDEN`** (본 엔드포인트는 힌트일 뿐, 우회 시 생성/편집에서 여전히 거부됨).

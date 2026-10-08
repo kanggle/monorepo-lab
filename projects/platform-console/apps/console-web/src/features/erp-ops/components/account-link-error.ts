@@ -43,6 +43,34 @@ function conflictMessage(err: unknown): string {
   }
 }
 
+/**
+ * TASK-MONO-777 «이메일로 찾기» copy.
+ *
+ * 🔴 ONE sentence for «no such operator» AND «tenant out of scope» — the IAM
+ * producer already answers both with the same empty list, and the dialog must
+ * not re-introduce the distinction (existence non-disclosure, AC-2). The
+ * sentence also says what to do next: the typed-id fallback.
+ */
+export const ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE =
+  '이 이메일로 이 테넌트에서 연결할 수 있는 계정을 찾지 못했습니다. 이메일을 확인하거나 계정 ID 를 직접 입력하세요.';
+
+/** Lookup failed for a reason that is NOT about the e-mail (403/401/503/…). */
+export const ACCOUNT_LOOKUP_FAILED_MESSAGE =
+  '지금은 이메일로 계정을 찾을 수 없습니다. 계정 ID 를 직접 입력할 수 있습니다.';
+
+export function accountLookupErrorMessage(err: unknown): string {
+  // Defence in depth: the producer answers out-of-scope with an empty list, but
+  // should a `403 TENANT_SCOPE_DENIED` ever reach here it must read EXACTLY like
+  // «not found» — a different sentence would tell the user the tenant exists.
+  if (err instanceof ApiError && err.code === 'TENANT_SCOPE_DENIED') {
+    return ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE;
+  }
+  if (err instanceof ApiError && err.status === 400 && err.code === 'NO_ACTIVE_TENANT') {
+    return '테넌트를 먼저 선택하세요.';
+  }
+  return ACCOUNT_LOOKUP_FAILED_MESSAGE;
+}
+
 export function accountLinkErrorMessage(err: unknown, op: AccountLinkOp): string {
   if (err instanceof ErpUnavailableError) return ACCOUNT_LINK_UNAVAILABLE_MESSAGE;
   if (err instanceof ApiError) {

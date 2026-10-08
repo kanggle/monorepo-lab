@@ -110,4 +110,35 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     Page<AdminOperatorJpaEntity> findByTenantScope(@Param("tenantId") String tenantId,
                                                    @Param("status") String status,
                                                    Pageable pageable);
+
+    /**
+     * TASK-MONO-777 — {@code GET /api/admin/operators/lookup}: the ACTIVE, console-linked
+     * ({@code oidc_subject} present) operators of tenant {@code tenantId} — same HOME ∪
+     * ASSIGNED membership predicate as {@link #findByTenantScope} — whose normalized email
+     * equals {@code email}. The {@code confined_tenant_id} filter (TASK-MONO-751) is applied
+     * in the adapter so this query keeps the membership predicate byte-identical to the list.
+     */
+    @Query("""
+            SELECT o FROM AdminOperatorJpaEntity o
+            WHERE o.email = :email
+              AND o.status = 'ACTIVE'
+              AND o.oidcSubject IS NOT NULL
+              AND ( o.tenantId = :tenantId
+                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+            """)
+    List<AdminOperatorJpaEntity> findLookupCandidatesInTenant(@Param("tenantId") String tenantId,
+                                                              @Param("email") String email);
+
+    /**
+     * TASK-MONO-777 — the platform-scope ({@code '*'}) form of
+     * {@link #findLookupCandidatesInTenant}: every tenant.
+     */
+    @Query("""
+            SELECT o FROM AdminOperatorJpaEntity o
+            WHERE o.email = :email
+              AND o.status = 'ACTIVE'
+              AND o.oidcSubject IS NOT NULL
+            """)
+    List<AdminOperatorJpaEntity> findLookupCandidatesAnyTenant(@Param("email") String email);
 }

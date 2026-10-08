@@ -8,11 +8,16 @@ import type { Employee, EmployeeAccountLinkProposal } from '../api/types';
 import {
   useAccountLinkProposalAction,
   useEmployeeAccountLinkProposals,
+  useOperatorEmailLookup,
   useProposeAccountLink,
   useUnlinkEmployeeAccount,
 } from '../hooks/use-erp-ops';
 import { newIdemKey } from '../hooks/use-approval-detail';
-import { accountLinkErrorMessage } from './account-link-error';
+import {
+  ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE,
+  accountLinkErrorMessage,
+  accountLookupErrorMessage,
+} from './account-link-error';
 import { AccountLinkBadge } from './AccountLinkBadge';
 
 /**
@@ -25,9 +30,13 @@ import { AccountLinkBadge } from './AccountLinkBadge';
  * offers accept/decline (the producer would refuse an HR user anyway: 403
  * `EMPLOYEE_LINK_NOT_ADDRESSEE` / `EMPLOYEE_LINK_SELF_ACCEPT`).
  *
- * Account selection (AC-0 ①): typed account id, form-checked only (1~64) —
- * the producer does not check IAM existence at proposal time and no read an
- * `erp.write` holder can reach yields account UUIDs. The dialog SAYS so.
+ * Account selection (TASK-MONO-777 — console contract § 2.4.8): «이메일로 찾기»
+ * over the IAM operator e-mail lookup fills the account-id field with the
+ * chosen operator's console `sub`; the typed account id (form-checked only,
+ * 1~64) stays as the fallback — the producer does not check IAM existence at
+ * proposal time, and the dialog SAYS so. «Not found» and «out of scope» share
+ * ONE sentence (existence non-disclosure); a failed lookup (403/401/503) is
+ * inline only and never logs the user out.
  *
  * The producer is the authority for every write (E6 fail-CLOSED): no button is
  * hidden by the console; a 403 / 409 / 422 renders inline with its own copy.
@@ -58,6 +67,9 @@ export function EmployeeAccountLinkDialog({
   const unlink = useUnlinkEmployeeAccount();
 
   const [accountId, setAccountId] = useState('');
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const lookup = useOperatorEmailLookup(submittedEmail);
   const [proposeReason, setProposeReason] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
   const [unlinkReason, setUnlinkReason] = useState('');
@@ -97,6 +109,22 @@ export function EmployeeAccountLinkDialog({
       },
     );
   }
+
+  function onLookup() {
+    const email = lookupEmail.trim();
+    if (!email) return;
+    setSubmittedEmail(email);
+  }
+
+  const lookupDone = submittedEmail !== null && !lookup.isFetching;
+  const lookupHits = lookupDone && lookup.isSuccess ? lookup.data.content : [];
+  const lookupMessage: string | null = !lookupDone
+    ? null
+    : lookup.isError
+      ? accountLookupErrorMessage(lookup.error)
+      : lookupHits.length === 0
+        ? ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE
+        : null;
 
   function onRevoke() {
     if (!pending || !revokeReason.trim() || pendingAny) return;
@@ -260,6 +288,72 @@ export function EmployeeAccountLinkDialog({
           <section className="mt-4" data-testid="erp-account-link-propose-section">
             <h3 className="text-sm font-semibold text-foreground">연결 제안</h3>
             <label
+              htmlFor="erp-account-link-lookup-email"
+              className="mt-2 block text-sm font-medium text-foreground"
+            >
+              이메일로 찾기
+            </label>
+            <div className="mt-1 flex gap-2">
+              <input
+                id="erp-account-link-lookup-email"
+                data-testid="erp-account-link-lookup-email"
+                type="email"
+                value={lookupEmail}
+                onChange={(e) => setLookupEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onLookup();
+                  }
+                }}
+                maxLength={254}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <Button
+                variant="secondary"
+                onClick={onLookup}
+                disabled={!lookupEmail.trim() || lookup.isFetching}
+                data-testid="erp-account-link-lookup-submit"
+              >
+                {lookup.isFetching ? '찾는 중…' : '찾기'}
+              </Button>
+            </div>
+            {lookupMessage !== null ? (
+              // ONE element for every «no result» outcome — «not found» and «out
+              // of scope» must not differ even in markup (AC-2).
+              <p
+                className={`mt-1 text-sm ${
+                  lookupMessage === ACCOUNT_LOOKUP_NOT_FOUND_MESSAGE
+                    ? 'text-muted-foreground'
+                    : 'text-destructive'
+                }`}
+                role="status"
+                data-testid="erp-account-link-lookup-message"
+              >
+                {lookupMessage}
+              </p>
+            ) : null}
+            {lookupDone && lookupHits.length > 0 ? (
+              <ul className="mt-1 space-y-1" data-testid="erp-account-link-lookup-results">
+                {lookupHits.map((hit, idx) => (
+                  <li key={`${hit.accountId}-${hit.tenantId}`}>
+                    <button
+                      type="button"
+                      onClick={() => setAccountId(hit.accountId)}
+                      aria-pressed={accountId.trim() === hit.accountId}
+                      data-testid={`erp-account-link-lookup-result-${idx}`}
+                      className="w-full rounded-md border border-border px-3 py-1 text-left text-sm hover:bg-muted aria-pressed:border-primary"
+                    >
+                      {hit.displayName || '이름 없음'}{' '}
+                      <span className="text-xs text-muted-foreground">
+                        · {hit.tenantId === '*' ? '플랫폼' : hit.tenantId} 테넌트
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <label
               htmlFor="erp-account-link-account-id"
               className="mt-2 block text-sm font-medium text-foreground"
             >
@@ -278,8 +372,8 @@ export function EmployeeAccountLinkDialog({
               id="erp-account-link-account-id-help"
               className="mt-1 text-xs text-muted-foreground"
             >
-              그 사람의 로그인 계정 ID 를 입력하세요. 계정이 실제로 있는지는 제안할 때
-              확인하지 않으며, 계정 주인이 로그인해 수락해야 연결됩니다.
+              위에서 찾은 계정을 고르면 채워집니다. 직접 입력해도 됩니다. 계정이 실제로
+              있는지는 제안할 때 확인하지 않으며, 계정 주인이 로그인해 수락해야 연결됩니다.
             </p>
             <label
               htmlFor="erp-account-link-propose-reason"

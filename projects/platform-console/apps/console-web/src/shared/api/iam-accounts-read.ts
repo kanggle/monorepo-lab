@@ -56,8 +56,11 @@ import {
  * reason / missing key is rejected before any fetch; the api layer NEVER
  * fabricates a reason).
  *
- * Resilience (§ 2.5): AbortController hard timeout; 401/403 → `ApiError` (forced
- * re-login — `forbiddenMode: 'auth'`); 503/timeout → {@link
+ * Resilience (§ 2.5): AbortController hard timeout; 401/403 → `ApiError` with
+ * that status (`forbiddenMode: 'auth'` = the 403 carries only the producer code
+ * and a fixed message). 🔵 Only a **401** ends in re-login — in the browser
+ * client (`shared/api/client.ts`: refresh, then `/login` on failure); a 403
+ * stays an inline/forbidden state (measured, TASK-MONO-777 AC-0 (c)); 503/timeout → {@link
  * AccountsUnavailableError} (accounts section degrades only); 400/404/409/422 →
  * `ApiError` (inline actionable). Logging: structured, server-side only; the
  * operator token and account PII (emails) are NEVER logged (redacted).

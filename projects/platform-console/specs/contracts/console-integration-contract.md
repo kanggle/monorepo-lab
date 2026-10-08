@@ -2043,13 +2043,40 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
     erp call; **never** `getOperatorToken()`; no `X-Tenant-Id`. Accept /
     decline are authorised by the token's own `sub`, so the console needs no
     second credential for the account-owner writes.
-  - **Account selection**: the console takes the account id as typed input
-    (form-checked only: non-blank, ≤64), because the producer checks form only
-    and no read reachable by an `erp.write` holder yields account UUIDs (the
-    IAM operators list carries `operatorId`, not the account `sub`; the IAM
-    accounts lookup needs a different IAM permission and treats 403 as
-    re-login). The dialog states that existence is not checked and the account
-    owner must accept.
+  - **Account selection (TASK-MONO-777 — supersedes the TASK-PC-FE-318
+    «typed input only» reading)**: the dialog offers **«이메일로 찾기»** over the
+    IAM read `GET /api/admin/operators/lookup?email=&tenantId=<active tenant>`
+    (iam `admin-api.md` § same name — owner decision 2026-10-08 UTC «L2»: no
+    permission key, the same tenant gate as the accounts e-mail lookup). It
+    returns the operators of the active tenant with that e-mail as
+    `{ accountId, displayName, tenantId }` — `accountId` is the operator's
+    `oidc_subject`, i.e. the `sub` the person carries into the console, which
+    is exactly the value the link needs. (The IAM accounts e-mail lookup was
+    measured NOT to answer this: it returns `account_db` rows of the tenant,
+    and operators whose console credential lives in the `iam` tenant or the
+    consumer pool have none there — root `TASK-MONO-777` § AC-0 (b).) Picking a
+    result fills the account-id field; **typed input stays** as the fallback
+    (form-checked only: non-blank, ≤64 — the producer checks form only). The
+    dialog still states that existence is not checked at proposal time and the
+    account owner must accept.
+
+    | Operation | Who | Same-origin proxy (console) | Upstream (iam `admin-service`) | Credential |
+    |---|---|---|---|---|
+    | operator e-mail lookup | any console operator (no permission key) | `GET /api/operators/lookup?email=` | `GET /api/admin/operators/lookup?email=&tenantId=` | exchanged operator token (`getOperatorToken()`) + active tenant — the IAM `/api/admin/**` credential, NOT the domain-facing erp token |
+
+    - **Existence non-disclosure**: the producer answers «no such operator»
+      and «tenant out of scope» with the same `200 {"content":[]}`; the
+      dialog renders both with ONE copy and never says which.
+    - **No logout from the lookup**: a `403` (any code) or `401` from this read
+      renders inline (typed input stays usable) — the proxy passes `403`
+      through as `403` (never rewritten to `401`), and the client calls it
+      with `skipAuthRetry` so even a `401` does not run the refresh → `/login`
+      redirect. A real session expiry still surfaces on the next ordinary call.
+    - **Several hits**: each row shows its `tenantId` (the operator's HOME
+      tenant — an operator assigned from another tenant can appear beside a
+      home operator with the same e-mail).
+    - **Sample visitors**: the lookup answers `{ content: [] }` from the
+      operators fixture (no sample operator carries a console `sub`).
   - **Errors rendered inline, each with its own copy** (never a crash):
     `403 EMPLOYEE_LINK_SELF_ACCEPT` (two-person rule — on propose: «your own
     account»; on accept: «the proposer cannot accept»), `403
