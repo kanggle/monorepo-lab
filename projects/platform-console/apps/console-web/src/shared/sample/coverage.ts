@@ -69,6 +69,10 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'iam', surface: 'tenants', status: 'ready', owner: IAM },
   { core: 'iam', surface: 'org_nodes', status: 'ready', owner: IAM },
   { core: 'iam', surface: 'groups', status: 'ready', owner: IAM },
+  // TASK-MONO-771 S5 — the tenant entry-policy control. 🔵 `pending` on purpose: no
+  // sample fixture yet, so a sample visitor's call answers 503 SAMPLE_NOT_READY, which
+  // the control maps to its own degraded note (the tenant detail page stays `ready`).
+  { core: 'iam', surface: 'tenant_entry_policy', status: 'pending', owner: 'TASK-MONO-771' },
 
   // ── ecommerce (`callEcommerceGateway`) — TASK-PC-FE-284 ────────────────────
   { core: 'ecommerce', surface: 'ecommerce', status: 'ready', owner: ECOMMERCE },
@@ -217,6 +221,8 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/subscriptions': 'ready',
   '/tenants': 'ready',
   '/tenants/[tenantId]': 'ready',
+  // TASK-MONO-771 S5 — pending: its only data is the `tenant_entry_policy` surface (no fixture).
+  '/security-settings': 'pending',
 
   // ecommerce — TASK-PC-FE-284
   '/ecommerce': 'ready',

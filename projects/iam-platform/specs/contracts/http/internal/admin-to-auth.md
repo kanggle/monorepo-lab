@@ -1,6 +1,6 @@
 # Internal HTTP Contract: admin-service → auth-service
 
-admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / refresh token revoke를 요청한다.
+admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / refresh token revoke를 요청한다. (TASK-MONO-771 S5: 테넌트 진입 정책 사전 점검용 계정 2단계 등록 여부 읽기 한 건 추가.)
 
 **호출 방향**: admin-service (client) → auth-service (server)
 **노출 경로**: `/internal/auth/*`
@@ -124,6 +124,36 @@ admin-service 는 out-of-scope 테넌트 요청을 auth 도달 전에 `403 TENAN
 > **Tenant scoping (CRITICAL)** — `(tenantId, email)` 복합 unique 키로 조회한다. tenant miss 시 `findAllByEmail` 로 **모호성만 판정**하며, 2건 이상이면 `null` 로 fail-soft(다른 tenant 의 account 로 잘못 해석하지 않음). 잘못된 `oidc_subject` 는 운영자를 mis-authorize 하므로 이 스코핑이 정확성의 핵심이다.
 
 > **Caller fail-soft** (admin-service backfill 측) — 호출 실패(타임아웃·5xx·circuit-open·IO 모두) 또는 `accountId=null` → 해당 운영자의 `oidc_subject` 를 **변경하지 않고** 다음 실행에서 재시도한다(RETAINED email fallback 으로 계속 해석 가능). `AuthServiceClient.resolveOperatorAccountId` 가 예외를 삼키고 `Optional.empty()` 를 반환한다.
+
+---
+
+## POST /internal/auth/second-factor/enrolment-status
+
+**TASK-MONO-771 S5** — 주어진 계정들 중 **확정된 계정 2단계(TOTP)** 가 있는 계정을 돌려준다. admin-service 의 테넌트 진입 정책 **사전 점검**([admin-api.md § Tenant Entry Policy › enrolment-summary](../admin-api.md))만 부른다 — 토큰 교환 · assume 게이트(hot path)는 부르지 않는다.
+
+**Request**:
+```json
+{ "accountIds": ["01928c4a-…", "01928c4b-…"] }
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `accountIds` | string[] | 필수(빈 배열 허용). 공백 · 중복은 서버가 접는다. **고유 id 500개 초과 → `400 VALIDATION_ERROR`**(잘라서 답하지 않는다 — 호출자가 나눠 부른다) |
+
+**Response 200**:
+```json
+{ "enrolledAccountIds": ["01928c4b-…"] }
+```
+
+- `enrolledAccountIds` ⊆ 요청 `accountIds`. **확정**(`account_totp.confirmed_at IS NOT NULL`)만 — 등록 대기(미완료 `/mfa/setup`) 행은 2단계가 아니므로 넣지 않는다. 행 없음 = 미등록.
+- 집합 소속만 답한다 — 비밀 · 복구 코드 · 시각은 내보내지 않는다. Side Effect 없음(read-only).
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `accountIds` 누락 · 500개 초과 |
+| 401 | `UNAUTHORIZED` | `internal.invoke` client_credentials JWT 없음/무효 (위 § 인증) |
+
+> **Caller fail-closed** (admin-service) — 호출 실패(타임아웃 · 5xx · circuit-open · IO · 4xx) → `DownstreamFailureException` → 사전 점검 엔드포인트 `503`. «0명 미등록» 같은 숫자로 메우지 않는다(정책을 켜려는 관리자를 오도한다). `AuthServiceClient.enrolledAmong` · `SecondFactorEnrolmentAdapter`(500개씩 분할).
 
 ---
 

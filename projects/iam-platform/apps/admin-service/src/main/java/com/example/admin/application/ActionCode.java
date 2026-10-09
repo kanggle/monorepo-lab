@@ -106,5 +106,11 @@ public enum ActionCode {
     GROUP_MEMBER_ADD,
     GROUP_MEMBER_REMOVE,
     GROUP_GRANT_ADD,
-    GROUP_GRANT_REVOKE
+    GROUP_GRANT_REVOKE,
+    // TASK-MONO-771 S5 (ADR-MONO-080 D4, OD-1): the tenant entry policy («entering this tenant as an
+    // operator requires a second factor») set on/off (PUT /api/admin/tenants/{tenantId}/entry-policy).
+    // target_type=TENANT, target_id=<tenantId>, target_tenant_id=<tenantId>,
+    // permission_used=tenant.security.manage, detail = "requireMfa <before>→<after>" (before = none when
+    // no row existed). One SUCCESS row per successful PUT, a same-value no-op included (admin-api.md).
+    TENANT_ENTRY_POLICY_SET
 }

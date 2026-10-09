@@ -4,11 +4,11 @@
 
 | 대상 | 목적 | 경로 | 계약 |
 |---|---|---|---|
-| `auth-service` | 강제 로그아웃, refresh token 강제 revoke | `POST /internal/auth/sessions/{id}/revoke`, `POST /internal/auth/accounts/{id}/force-logout` | [../../contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) |
+| `auth-service` | 강제 로그아웃, refresh token 강제 revoke · (TASK-MONO-771 S5) 테넌트 진입 정책 사전 점검용 계정 2단계 등록 여부 **읽기**(fail-closed → 503, hot path 아님) | `POST /internal/auth/sessions/{id}/revoke`, `POST /internal/auth/accounts/{id}/force-logout`, `POST /internal/auth/second-factor/enrolment-status` | [../../contracts/http/internal/admin-to-auth.md](../../contracts/http/internal/) |
 | `account-service` | 계정 lock / unlock / delete | `POST /internal/accounts/{id}/lock`, `POST .../unlock`, `POST .../delete` | [../../contracts/http/internal/admin-to-account.md](../../contracts/http/internal/) |
 | `security-service` (read-only) | 로그인 이력·의심 이벤트 조회 | `GET /internal/security/login-history`, `GET /internal/security/suspicious-events` | security-service의 query 엔드포인트 |
 
-**모든 호출에 반드시 `Idempotency-Key` 헤더 = admin command request ID** ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1). 타임아웃 3s 연결 / 10s 읽기, 재시도 2회, circuit breaker 적용.
+**모든 명령(쓰기) 호출에 반드시 `Idempotency-Key` 헤더 = admin command request ID** (부작용 없는 읽기 — `account-id-by-email` · `second-factor/enrolment-status` — 는 대상 아님) ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T1). 타임아웃 3s 연결 / 10s 읽기, 재시도 2회, circuit breaker 적용.
 
 ## Internal HTTP (incoming)
 

@@ -249,6 +249,12 @@ export const GROUPS: NavGroup[] = [
       // tenant owner (TENANT_ADMIN, partnership.manage) manages cross-org
       // partnerships for their tenant, alongside the domain subscriptions.
       { href: '/partnerships', label: '파트너십', testid: 'nav-partnerships', icon: 'partnership' },
+      // TASK-MONO-771 S5 (console-integration-contract § 2.4.3.3, OD-1) — 보안 설정: the
+      // tenant's own «운영자 진입 2단계 인증» policy, set by its TENANT_ADMIN for the active
+      // tenant. A company-level decision (what the company REQUIRES), so it sits here with
+      // 구독 · 파트너십, not in the IAM drill. Hidden for roles without tenant.security.manage
+      // by the role-exposure gate (permission-map `admin` row) — the producer 403 stays the authority.
+      { href: '/security-settings', label: '보안 설정', testid: 'nav-security-settings', icon: 'lock' },
     ],
   },
   {

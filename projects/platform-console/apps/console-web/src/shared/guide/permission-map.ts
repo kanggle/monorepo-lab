@@ -82,6 +82,8 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'partnership.manage':    row(0, 0, 0, 0, 1, 0, 0),
   'org.manage':            row(1, 0, 0, 0, 0, 0, 1),
   'group.manage':          row(1, 0, 0, 0, 1, 0, 1),
+  // TASK-MONO-771 S5 (OD-1) — rbac.md § Seed Matrix `tenant.security.manage` (V0048).
+  'tenant.security.manage': row(1, 0, 0, 0, 1, 0, 0),
 };
 
 /* ─────────────────────────── 데모 테스트 계정 ─────────────────────────── */
@@ -390,6 +392,24 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     sources: [`${ADMIN_CTRL}/PartnershipAdminController.java:50-158`, `${RBAC}:72,112`],
     mismatch:
       '최고 관리자(SUPER_ADMIN)도 이 권한이 없다 — 파트너십은 두 고객 회사 사이의 일이라 플랫폼은 끼지 않는다. 그래서 데모 계정으로는 이 화면이 열리지 않는다.',
+  },
+  {
+    href: '/security-settings',
+    area: 'org',
+    gate: { kind: 'admin', permission: 'tenant.security.manage' },
+    description: '활성 테넌트의 운영자 진입 2단계 인증 켜기 · 끄기 (켜기 전 미등록 인원 사전 점검).',
+    crud: crud('RU'),
+    crudNote: '수정 = 정책 켜기/끄기(전체 교체 PUT, 사유 필수). 끄면 행이 지워지지 않고 「사용 안 함」으로 남는다.',
+    purpose: '회사가 자기 테넌트에 운영자로 들어오는 조건(2단계 인증)을 직접 건다 — 미등록 운영자는 잠기지 않고 등록 화면으로 안내된다.',
+    services: ['iam admin-service (→ auth-service: 등록 현황 사전 점검)'],
+    sources: [
+      `${ADMIN_CTRL}/TenantEntryPolicyController.java`,
+      `${API}/tenants/[tenantId]/entry-policy/route.ts (GET,PUT)`,
+      `${API}/tenants/[tenantId]/entry-policy/enrolment-summary/route.ts (GET)`,
+      `${RBAC}:75 (tenant.security.manage)`,
+    ],
+    mismatch:
+      '활성 테넌트가 플랫폼 스코프(*)이면 정책을 둘 테넌트가 없어 테넌트 상세로 안내한다 — 데모 계정(SUPER_ADMIN)은 테넌트 상세에서 같은 토글을 쓴다.',
   },
 
   // ── WMS ───────────────────────────────────────────────────────────────

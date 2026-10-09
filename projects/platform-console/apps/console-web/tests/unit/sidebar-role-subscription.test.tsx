@@ -49,6 +49,21 @@ describe('AC-1 — TENANT_ADMIN + TENANT_BILLING_ADMIN (새 B2B 관리자)', () 
   });
 });
 
+describe('TASK-MONO-771 S5 — 보안 설정 (tenant.security.manage)', () => {
+  it.each([
+    [['TENANT_ADMIN'], true],
+    [['SUPER_ADMIN'], true],
+    [['TENANT_BILLING_ADMIN'], false],
+    [['ORG_ADMIN'], false],
+    [['SUPPORT_READONLY', 'SECURITY_ANALYST'], false],
+  ])('%j → 보안 설정 visible=%s', (roles, visible) => {
+    render(<ConsoleSidebarNav myRoles={roles} />);
+    const item = screen.queryByTestId('nav-security-settings');
+    if (visible) expect(item).toHaveAttribute('href', '/security-settings');
+    else expect(item).toBeNull();
+  });
+});
+
 describe('AC-2 (대조군) — SUPER_ADMIN · ORG_ADMIN', () => {
   it('SUPER_ADMIN: 조직 설정 그룹 — 테넌트 · 조직 계층 · 구독 모두 있음, 단 파트너십은 예외', () => {
     render(<ConsoleSidebarNav myRoles={['SUPER_ADMIN']} />);

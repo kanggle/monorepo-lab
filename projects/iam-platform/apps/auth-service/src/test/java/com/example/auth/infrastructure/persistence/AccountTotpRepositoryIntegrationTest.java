@@ -122,4 +122,21 @@ class AccountTotpRepositoryIntegrationTest {
 
         assertThat(repository.findByAccountId(account).orElseThrow().getSecretCiphertext()).containsExactly(2);
     }
+
+    @Test
+    @DisplayName("S5 사전 점검: findConfirmedAccountIds = 확정 행만 (대기·없음 제외) · IN 한 번")
+    void findConfirmedAccountIds_confirmedOnly() {
+        String confirmed = "0199de70-0000-7000-8000-000000000774";
+        String pending = "0199de70-0000-7000-8000-000000000775";
+        String absent = "0199de70-0000-7000-8000-000000000776";
+        repository.save(AccountTotp.pending(confirmed, "fan-platform", new byte[]{1}, "v1", T0));
+        AccountTotp toConfirm = repository.findByAccountId(confirmed).orElseThrow();
+        toConfirm.confirm(1L, List.of("h"), T0);
+        repository.save(toConfirm);
+        repository.save(AccountTotp.pending(pending, "fan-platform", new byte[]{2}, "v1", T0));
+
+        assertThat(repository.findConfirmedAccountIds(List.of(confirmed, pending, absent)))
+                .containsExactly(confirmed);
+        assertThat(repository.findConfirmedAccountIds(List.of())).isEmpty();
+    }
 }
