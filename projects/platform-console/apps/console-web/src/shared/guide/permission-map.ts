@@ -86,6 +86,34 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'tenant.security.manage': row(1, 0, 0, 0, 1, 0, 0),
 };
 
+/**
+ * Does ANY of `myRoles` hold `permission` per the RBAC seed matrix above? An
+ * unknown role (custom role / a seed-matrix addition this copy hasn't caught
+ * up with yet) is treated as HOLDING it — fails OPEN, "don't know ⇒ don't
+ * hide/degrade". Single source for every permission-by-role check in this
+ * app: `console-nav-exposure.ts`'s sidebar gate and {@link accountsAccessTier}
+ * below both call this rather than keeping a second copy (TASK-PC-FE-326 —
+ * before this task `console-nav-exposure.ts` had its own copy).
+ */
+export function hasPermission(
+  myRoles: readonly string[],
+  permission: string,
+): boolean {
+  const known = new Set<string>(RBAC_ROLES);
+  return myRoles.some((role) => {
+    if (!known.has(role)) return true;
+    return RBAC_SEED_MATRIX[permission]?.[role as RbacRole] === true;
+  });
+}
+
+/** Does ANY of `myRoles` hold ANY of `permissions`? */
+export function hasAnyPermission(
+  myRoles: readonly string[],
+  permissions: readonly string[],
+): boolean {
+  return permissions.some((p) => hasPermission(myRoles, p));
+}
+
 /* ─────────────────────────── 데모 테스트 계정 ─────────────────────────── */
 
 // TASK-MONO-751 — `fan` is the fan DIRECTORY (agencies · artists · groups), reachable by
@@ -123,8 +151,8 @@ export type PermissionGate =
   | { kind: 'operator'; note: string }
   /** admin-service `@RequiresPermission`(또는 동등한 인라인 검사). */
   | { kind: 'admin'; permission: string; extra?: string }
-  /** 카드마다 다른 키로 부분 게이트되는 개요. */
-  | { kind: 'admin-per-card'; permissions: string[] }
+  /** 카드마다(또는 동작마다) 다른 키로 부분 게이트되는 화면 — 키 중 하나라도 있으면 열린다. */
+  | { kind: 'admin-per-card'; permissions: string[]; extra?: string }
   /** 도메인 롤 — assume-tenant 시 구독 도메인에서 파생. */
   | { kind: 'domain'; domain: DomainKey; roles: string[]; extra?: string };
 
@@ -324,23 +352,36 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/accounts',
     area: 'customer-identity',
+    // TASK-PC-FE-326 — OR-gated (admin-per-card), not a single `account.read`
+    // gate: a caller holding ONLY account.lock/unlock/force_logout (no
+    // account.read — e.g. SUPPORT_LOCK, SECURITY_ANALYST) still opens this
+    // screen, in an email-search-only mode (see `accountsAccessTier()`
+    // below) — the backend already supports this (rbac.md:90, TASK-BE-357).
     gate: {
-      kind: 'admin',
-      permission: 'account.read',
+      kind: 'admin-per-card',
+      permissions: [
+        'account.read',
+        'account.lock',
+        'account.unlock',
+        'account.force_logout',
+      ],
       extra: '잠금/일괄잠금/GDPR 삭제=account.lock · 해제=account.unlock · 세션 종료=account.force_logout · 내보내기=audit.read',
     },
-    description: '소비자 계정 검색 · 잠금/해제 · 일괄 잠금 · 세션 강제 종료 · 데이터 내보내기 · GDPR 삭제.',
+    description:
+      '소비자 계정 검색 · 잠금/해제 · 일괄 잠금 · 세션 강제 종료 · 데이터 내보내기 · GDPR 삭제. account.read 가 없으면 전체 목록 없이 이메일 검색만 연다.',
     crud: crud('RUD'),
-    crudNote: '생성 없음. 삭제 = GDPR 삭제(되돌릴 수 없음).',
+    crudNote:
+      '생성 없음. 삭제 = GDPR 삭제(되돌릴 수 없음). account.read 없는 이메일 검색 모드는 단건 조회뿐 — 전체 목록(R)이 아니다.',
     purpose: '서비스 전체가 공유하는 소비자 계정을 지원·보안 목적으로 제어한다.',
     services: ['iam admin-service → account-service · auth-service(세션)'],
     sources: [
-      `${ADMIN_CTRL}/AccountAdminController.java:72 (GET — 인라인 account.read 검사, 애노테이션 아님), 140,164,185`,
+      `${ADMIN_CTRL}/AccountAdminController.java:72 (GET — 인라인 account.read 검사, 애노테이션 아님), 93 (email 단건 조회는 권한 불필요), 140,164,185`,
       `${ADMIN_CTRL}/AdminGdprController.java:31,56`,
       `${ADMIN_CTRL}/SessionAdminController.java:32`,
+      `${RBAC}:90 (email 단건 조회는 권한 키 없음 — SUPPORT_LOCK 이 잠글 계정을 찾는 길, TASK-BE-357)`,
     ],
     mismatch:
-      '권한 이름이 하는 일과 어긋난다 — 데이터 내보내기는 감사 조회 권한(`audit.read`), GDPR 삭제는 계정 잠금 권한(`account.lock`)이 있어야 한다.',
+      '권한 이름이 하는 일과 어긋난다 — 데이터 내보내기는 감사 조회 권한(`audit.read`), GDPR 삭제는 계정 잠금 권한(`account.lock`)이 있어야 한다. 잠금/해제/세션종료 권한만 있고 account.read 가 없는 역할(SUPPORT_LOCK · SECURITY_ANALYST)은 전체 목록 없이 이메일 검색으로만 이 화면을 연다.',
   },
 
   // ── 조직 설정 ─────────────────────────────────────────────────────────
@@ -812,6 +853,48 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
 ];
 
 /* ─────────────────────────── 파생 ─────────────────────────── */
+
+/**
+ * TASK-PC-FE-326 — which mode of `/accounts` a caller may use.
+ *   - `'full'`        — holds `account.read`; the full paginated list opens
+ *                       (unchanged behaviour).
+ *   - `'search-only'` — lacks `account.read` but holds at least one of the
+ *                       OTHER `/accounts` gate permissions
+ *                       (`account.lock`/`account.unlock`/
+ *                       `account.force_logout` — e.g. SUPPORT_LOCK,
+ *                       SECURITY_ANALYST). The caller can still look an
+ *                       account up by email — `GET /api/admin/accounts` with
+ *                       `email` needs no permission key, only the
+ *                       tenant-scope gate (rbac.md:90, TASK-BE-357) — to then
+ *                       act on it.
+ *   - `'none'`         — holds none of the four; today's hidden+forbidden
+ *                       behaviour (unchanged).
+ *
+ * Reads the SAME `/accounts` row's `admin-per-card` `permissions` list this
+ * module already defines above for the nav gate — never a second
+ * hand-written permission list (task Scope constraint).
+ *
+ * `myRoles` null/undefined (unresolved or a failed `GET /api/admin/me`)
+ * fails OPEN to `'full'` — the SAME "don't know ⇒ don't hide/degrade"
+ * posture `console-nav-exposure.ts`'s nav gate uses: an outage must not
+ * newly degrade a screen a prior request could open. The page then attempts
+ * the full list exactly as it did before this task; the producer stays the
+ * final authority either way.
+ */
+export type AccountsAccessTier = 'full' | 'search-only' | 'none';
+
+export function accountsAccessTier(
+  myRoles: readonly string[] | null | undefined,
+): AccountsAccessTier {
+  if (!myRoles) return 'full';
+  if (hasPermission(myRoles, 'account.read')) return 'full';
+  const row = PERMISSION_MAP.find((r) => r.href === '/accounts');
+  const searchKeys =
+    row && row.gate.kind === 'admin-per-card'
+      ? row.gate.permissions.filter((p) => p !== 'account.read')
+      : [];
+  return hasAnyPermission(myRoles, searchKeys) ? 'search-only' : 'none';
+}
 
 export type Access = 'yes' | 'partial' | 'no';
 

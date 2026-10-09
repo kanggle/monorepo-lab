@@ -65,6 +65,18 @@ describe('isHrefHiddenFor — admin / admin-per-card gate (AC-1/AC-2/AC-5)', () 
     expect(isHrefHiddenFor('/iam', ['TENANT_BILLING_ADMIN'])).toBe(true);
   });
 
+  it('TASK-PC-FE-326: /accounts is admin-per-card too — SUPPORT_LOCK (no account.read, holds lock/unlock/force_logout) sees it', () => {
+    expect(isHrefHiddenFor('/accounts', ['SUPPORT_LOCK'])).toBe(false);
+    expect(isHrefHiddenFor('/accounts', ['SECURITY_ANALYST'])).toBe(false);
+    expect(isHrefHiddenFor('/accounts', ['SUPER_ADMIN'])).toBe(false);
+    expect(isHrefHiddenFor('/accounts', ['SUPPORT_READONLY'])).toBe(false);
+  });
+
+  it('TASK-PC-FE-326: a role holding NONE of the four /accounts permissions is still hidden', () => {
+    // TENANT_BILLING_ADMIN holds only subscription.manage.
+    expect(isHrefHiddenFor('/accounts', ['TENANT_BILLING_ADMIN'])).toBe(true);
+  });
+
   it('domain-gated hrefs are NEVER hidden by role, regardless of roles', () => {
     expect(isHrefHiddenFor('/wms', [])).toBe(false);
     expect(isHrefHiddenFor('/wms', ['SUPPORT_LOCK'])).toBe(false);

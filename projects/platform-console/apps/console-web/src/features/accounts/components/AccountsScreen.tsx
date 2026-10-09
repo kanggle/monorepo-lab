@@ -51,16 +51,35 @@ import {
  * ({@link BulkLockResult}) and the empty-state paragraph
  * ({@link AccountsEmptyState}) are prop-driven presentational siblings; the
  * pending-action model + confirm copy live in `accounts-screen-helpers`.
+ *
+ * TASK-PC-FE-326 — `searchOnly` (caller holds account.lock/unlock/
+ * force_logout but NOT account.read, e.g. SUPPORT_LOCK/SECURITY_ANALYST):
+ * `initial` is `null` (the page never calls the unfiltered list — it would
+ * only 403) and the unfiltered-list branch of {@link useAccountsSearch} is
+ * disabled until the operator submits a non-empty email (the backend's
+ * email lookup needs no permission key — rbac.md:90, TASK-BE-357). Before a
+ * search is submitted a prompt renders instead of the table/empty-state.
  */
 
-export function AccountsScreen({ initial }: { initial: AccountPage }) {
+export function AccountsScreen({
+  initial,
+  searchOnly = false,
+}: {
+  initial: AccountPage | null;
+  searchOnly?: boolean;
+}) {
   const [emailInput, setEmailInput] = useState('');
   const [query, setQuery] = useState<AccountsQuery>({
-    page: initial.page,
-    size: initial.size,
+    page: initial?.page ?? 0,
+    size: initial?.size ?? 20,
   });
 
-  const search = useAccountsSearch(query, query.page === initial.page && !query.email ? initial : undefined);
+  const hasEmailQuery = !!query.email;
+  const search = useAccountsSearch(
+    query,
+    initial && query.page === initial.page && !query.email ? initial : undefined,
+    { enabled: searchOnly ? hasEmailQuery : true },
+  );
   const page = search.data;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -180,12 +199,13 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = emailInput.trim();
+    const size = initial?.size ?? 20;
     setSelected(new Set());
     setBulkResult(null);
     setQuery(
       trimmed === ''
-        ? { page: 0, size: initial.size }
-        : { email: trimmed, page: 0, size: initial.size },
+        ? { page: 0, size }
+        : { email: trimmed, page: 0, size },
     );
   }
 
@@ -217,6 +237,7 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
         onSubmit={submitSearch}
         selectedCount={selected.size}
         onBulkLock={() => openAction('bulk-lock', undefined, [...selected])}
+        searchOnly={searchOnly}
       />
 
       {search.isError && !isForbidden(search.error) && (
@@ -246,7 +267,16 @@ export function AccountsScreen({ initial }: { initial: AccountPage }) {
         </div>
       )}
 
-      {!page || rows.length === 0 ? (
+      {searchOnly && !hasEmailQuery ? (
+        <p
+          role="status"
+          data-testid="accounts-search-only-prompt"
+          className="text-sm text-muted-foreground"
+        >
+          이 역할은 전체 계정 목록을 볼 수 없습니다. 이메일로 검색해 계정을
+          찾은 뒤 잠금 · 해제 · 세션 종료 등을 수행하세요.
+        </p>
+      ) : !page || rows.length === 0 ? (
         <AccountsEmptyState
           isError={search.isError}
           error={search.error}

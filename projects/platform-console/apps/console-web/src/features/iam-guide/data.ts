@@ -632,13 +632,15 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
   {
     screen: '계정 운영',
     href: '/accounts',
-    gate: 'account.read',
+    gate: 'account.read (또는 lock/unlock/force_logout = 이메일 검색만)',
     cells: {
       SUPER_ADMIN: { level: 'full' },
       SUPPORT_READONLY: { level: 'full', note: '조회만' },
-      // account.lock/unlock 은 있으나 account.read 가 없어 목록 화면은 열 수 없다.
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
+      // TASK-PC-FE-326 — account.read 는 없지만 lock/unlock/force_logout 이
+      // 있어 전체 목록 없이 이메일 검색으로 화면이 열린다(rbac.md:90,
+      // TASK-BE-357 — email 단건 조회는 권한 키가 필요 없다).
+      SUPPORT_LOCK: { level: 'partial', note: '이메일 검색만(목록 없음)' },
+      SECURITY_ANALYST: { level: 'partial', note: '이메일 검색만(세션 종료 전용)' },
       TENANT_ADMIN: { level: 'none' },
       TENANT_BILLING_ADMIN: { level: 'none' },
       ORG_ADMIN: { level: 'none' },

@@ -1,5 +1,9 @@
-import { getAccountsListState } from '@/features/accounts';
-import { AccountsScreen } from '@/features/accounts';
+import {
+  getAccountsListState,
+  getAccountsAccessTier,
+  getAccountsSearchOnlyState,
+  AccountsScreen,
+} from '@/features/accounts';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
@@ -19,8 +23,47 @@ export const dynamic = 'force-dynamic';
  *     `X-Tenant-Id`).
  *   - 503 / timeout → a degraded notice; the console shell stays intact
  *     (the `(console)` layout still renders around this).
+ *
+ * TASK-PC-FE-326 — a caller who holds account.lock/unlock/force_logout but
+ * NOT account.read (SUPPORT_LOCK, SECURITY_ANALYST) never reaches the
+ * unfiltered-list call above at all: `getAccountsAccessTier()` is checked
+ * FIRST, and a `'search-only'` tier renders the email-search-only screen
+ * instead (the unfiltered list would only 403). `'full'`/`'none'` fall
+ * through to the unchanged `getAccountsListState()` path.
  */
 export default async function AccountsPage() {
+  const tier = await getAccountsAccessTier();
+
+  if (tier === 'search-only') {
+    const { noTenant } = await getAccountsSearchOnlyState();
+    if (noTenant) {
+      return (
+        <section aria-labelledby="accounts-heading">
+          <h1 id="accounts-heading" className="mb-6 text-2xl font-semibold">
+            계정 운영
+          </h1>
+          {await NoTenantNotice({
+            testId: 'accounts-no-tenant',
+            description: (
+              <>
+                계정 운영 작업은 테넌트 범위로 수행됩니다. 상단의 테넌트
+                스위처에서 테넌트를 선택한 뒤 다시 시도하세요.
+              </>
+            ),
+          })}
+        </section>
+      );
+    }
+    return (
+      <section aria-labelledby="accounts-heading">
+        <h1 id="accounts-heading" className="mb-6 text-2xl font-semibold">
+          계정 운영
+        </h1>
+        <AccountsScreen initial={null} searchOnly />
+      </section>
+    );
+  }
+
   const state = await getAccountsListState({ page: 0, size: 20 });
 
   if (state.noTenant) {
