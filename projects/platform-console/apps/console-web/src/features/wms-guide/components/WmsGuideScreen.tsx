@@ -33,7 +33,7 @@ import { domainFeatureByKey } from '@/shared/guide/domain-features';
  *
  * TASK-PC-FE-298 — 기존 섹션을 **그대로 옮겨** 8개 탭(`DomainGuideTabs`)으로 재구성했다
  * (재작성 아님 — `git diff -w` 로 보면 이동만 보인다). 페이지 내 목차(GuideToc)는 탭
- * 목록이 대신한다. 「메뉴별 설명」·「메뉴별 사용 절차」는 권한·기능 매핑 표에서 생성된다.
+ * 목록이 대신한다. 「메뉴 안내」는 권한·기능 매핑 표에서 생성된다.
  */
 
 export function WmsGuideScreen() {
@@ -61,8 +61,8 @@ export function WmsGuideScreen() {
                 내용은 「권한 안내」 탭에서 확인하세요.
               </p>
               <GuideReadingPath testid="wms-guide-reading-path">
-                처음이라면 「공통 정의 및 용어」의 <strong>재고</strong>와 「대표 업무
-                흐름」의 <strong>출고</strong>부터 읽으세요. 권한과 용어 설명은 필요할 때
+                처음이라면 「공통 정의 및 용어」의 <strong>재고</strong>와 「상태
+                변화」의 <strong>출고</strong>부터 읽으세요. 권한과 용어 설명은 필요할 때
                 찾아보면 됩니다.
               </GuideReadingPath>
             </>

@@ -328,21 +328,28 @@ describe('IamGuideScreen', () => {
 
 // TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
 // standard guide tabs; each section id must now live inside the expected panel.
-describe('IamGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
-  it('organises the existing sections into the 8 standard tabs', () => {
+describe('IamGuideScreen — standard guide tabs (TASK-PC-FE-298 · 329)', () => {
+  it('organises the existing sections into the standard tabs', () => {
     render(<IamGuideScreen />);
     expectDomainGuideTabs('iam-guide', {
       terms: [
         'iam-guide-concepts',
         'iam-guide-glossary'
       ],
+      // TASK-PC-FE-329 — «2. 메뉴 사용법» opens 「메뉴 안내」; the onboarding sequence (a to-do
+      // order, not a state change) joined the recipes in 「자주 하는 작업」.
       usage: [
-        'iam-guide-recipes',
+        'iam-guide-recipes'
+      ],
+      menus: [
         'iam-guide-usage'
       ],
       permissions: [
         'iam-guide-reference'
       ]
     });
+    const panel = (k: string) => screen.getByTestId(`iam-guide-tabs-panel-iam-guide-tab-${k}`);
+    expect(panel('usage').contains(screen.getByTestId('iam-guide-delegation-0'))).toBe(true);
+    expect(panel('flows').contains(screen.getByTestId('iam-guide-no-state-flow'))).toBe(true);
   });
 });

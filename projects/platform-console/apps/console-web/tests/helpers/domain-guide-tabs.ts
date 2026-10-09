@@ -7,7 +7,7 @@ import {
 } from '@/shared/guide/DomainGuideTabs';
 
 /**
- * TASK-PC-FE-298 — 도메인 가이드 6개의 공통 단언: 8개 탭이 정해진 이름·순서로 있고,
+ * TASK-PC-FE-298 — 도메인 가이드 6개의 공통 단언: 탭(PC-FE-329 이후 7개)이 정해진 이름·순서로 있고,
  * 기존 섹션(id)이 **기대한 탭 패널 안으로 옮겨졌는지**. 이것이 PC-FE-255 의 페이지 내
  * 목차(GuideToc) 단언을 대체한다 — 목차는 탭 목록이 대신한다.
  */
@@ -33,8 +33,14 @@ export function expectDomainGuideTabs(
       expect(panel.contains(el), `section #${id} lives in the ${key} tab`).toBe(true);
     }
   }
-  // the generated tabs are populated from the permission map
-  expect(screen.getByTestId(`${prefix}-menu-cards`).children.length).toBeGreaterThan(0);
-  expect(screen.getByTestId(`${prefix}-menu-procedures`).children.length).toBeGreaterThan(0);
+  // the generated tab is populated from the permission map — TASK-PC-FE-329: one 「메뉴 안내」
+  // card per menu now carries what the old «메뉴별 사용 절차» tab added (여는 곳 · 필요한 권한).
+  const cards = screen.getByTestId(`${prefix}-menu-cards`);
+  expect(cards.children.length).toBeGreaterThan(0);
+  for (const card of Array.from(cards.children)) {
+    expect(card).toHaveTextContent('여는 곳');
+    expect(card).toHaveTextContent('필요한 권한');
+  }
+  expect(screen.queryByTestId(`${prefix}-menu-procedures`)).toBeNull();
   expect(screen.getByTestId(`${prefix}-map`)).toBeInTheDocument();
 }
