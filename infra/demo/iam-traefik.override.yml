@@ -341,6 +341,16 @@ services:
       # 아무도 안 지킨다.
       ADMIN_OIDC_ISSUER: ${IAM_PUBLIC_URL:-http://iam.local}
       ADMIN_OIDC_JWKS_URI: http://auth-service:8081/internal/auth/jwks
+      # -----------------------------------------------------------------------
+      # 데모 전용 SUPER_ADMIN require_2fa 완화 (TASK-MONO-771 S4 · 소유자 결정 OD-5)
+      # -----------------------------------------------------------------------
+      # S4 부터 토큰 교환 · assume 이 `require_2fa` 역할 보유자에게 `amr ∋ mfa` 를 요구한다. 데모 운영자 둘은
+      # SUPER_ADMIN 이라, 이 줄이 없으면 면접관이 인증 앱을 등록해야 콘솔에 들어온다. 완화는 이 오버레이가
+      # 추가하는 Flyway 위치 `db/migration-demo` 의 R__ 한 파일뿐이다 — 어떤 프로필 yml 도 그 위치를 싣지
+      # 않으므로 개발자 로컬(기본 프로필) · CI e2e · nightly · 운영은 완화되지 않는다(admin-service
+      # `DemoOnlyRequire2faRelaxationTest` 가 고정). 데모의 2단계는 테넌트 진입 정책 토글로 보인다.
+      # 🔴 `docker-compose.e2e.yml`(CI 소유)에 넣지 않는다 — 넣으면 CI 의 강제가 꺼진다.
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/migration-dev,classpath:db/migration-demo
     networks:
       iam-e2e: null
       traefik-net:

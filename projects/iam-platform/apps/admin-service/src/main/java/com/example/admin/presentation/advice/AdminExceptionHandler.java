@@ -196,6 +196,25 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("BAD_REQUEST", e.getMessage()));
     }
 
+    // TASK-MONO-771 (admin-api.md § token-exchange) — second factor required, subject amr lacks "mfa".
+    // 403, never 401: the console reads ONLY 401 as «not an operator → /onboarding» (AC-0 F1).
+    @ExceptionHandler(com.example.admin.application.exception.MfaRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleMfaRequired(
+            com.example.admin.application.exception.MfaRequiredException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("MFA_REQUIRED", e.getMessage()));
+    }
+
+    // TASK-MONO-771 — the requirement read failed: fail-closed 500, never filled in as 401 / 403 / «not
+    // required» (admin-api.md § token-exchange; auth-to-admin.md rule 6 — auth-service denies on any 5xx).
+    @ExceptionHandler(com.example.admin.application.exception.SecondFactorRequirementUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleSecondFactorRequirementUnavailable(
+            com.example.admin.application.exception.SecondFactorRequirementUnavailableException e) {
+        log.error("fail-closed: second-factor requirement read failed, nothing issued", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
+    }
+
     @ExceptionHandler(EnrollmentRequiredException.class)
     public ResponseEntity<EnrollmentRequiredResponse> handleEnrollmentRequired(
             EnrollmentRequiredException e) {

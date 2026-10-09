@@ -38,10 +38,15 @@
 --   4. admin_db.admin_operator_roles — bind e2e-super-admin to the
 --      SUPER_ADMIN role row (V0006 seeded), copying tenant_id='*'.
 --   5. admin_db.admin_roles — relax `require_2fa` on SUPER_ADMIN to FALSE so
---      the token-exchange path (which does NOT enforce 2FA — security.md
---      §GAP OIDC subject-token flow) can mint operator tokens without TOTP
---      enrollment. This is a per-environment runtime tweak; the production
---      profile keeps require_2fa=TRUE (V0013 default).
+--      the e2e SUPER_ADMIN logs in WITHOUT enrolling a second factor. Since
+--      TASK-MONO-771 S4 the token exchange AND assume-tenant DO enforce the
+--      flag on the primary (OIDC) path (admin-service security.md
+--      § Second-Factor Requirement: a `require_2fa` role without `amr ∋ mfa`
+--      → 403 MFA_REQUIRED / invalid_grant insufficient_user_authentication);
+--      this harness's form-fill login (fixtures/login.ts) has no TOTP step, so
+--      this relaxation is what keeps it green. Per-environment runtime tweak;
+--      the production profile keeps require_2fa=TRUE (V0013 default). Tenant
+--      entry policies stay off here (V0047 `tenant_entry_policy` is empty).
 --   6. (moved to seed-finance.sql per TASK-MONO-132) — the finance schema
 --      row for tenant `fan-platform` (PC-FE-016 click sequence target) is
 --      now applied at workflow phase 2.5 after finance-account-service
@@ -118,10 +123,11 @@ INSERT IGNORE INTO credentials (
 -- ---------------------------------------------------------------------------
 USE `admin_db`;
 
--- 5. Relax SUPER_ADMIN require_2fa for the e2e environment ONLY. Per
---    `security.md §GAP OIDC subject-token flow` the token-exchange path
---    bypasses 2FA — but the role's require_2fa flag also gates other login
---    paths. Relaxing it here for the test container keeps both paths green.
+-- 5. Relax SUPER_ADMIN require_2fa for the e2e environment ONLY. The flag
+--    gates the break-glass password login AND — since TASK-MONO-771 S4 — the
+--    OIDC token exchange and assume-tenant (security.md § Second-Factor
+--    Requirement). The harness logs in without a TOTP step, so relaxing it
+--    here for the test container keeps every path green.
 UPDATE admin_roles
    SET require_2fa = FALSE
  WHERE name = 'SUPER_ADMIN';

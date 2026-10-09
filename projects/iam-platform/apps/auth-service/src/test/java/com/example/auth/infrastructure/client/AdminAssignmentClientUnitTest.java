@@ -81,6 +81,46 @@ class AdminAssignmentClientUnitTest {
 
     // ── TASK-BE-338: orgScope parsing ───────────────────────────────────────────
 
+    // ── TASK-MONO-771 S4 — mfaRequired (auth-to-admin.md: absent ⇒ required, fail-closed) ──
+
+    private void stubBody(String json) {
+        wireMockServer.stubFor(get(urlPathEqualTo(CHECK_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)));
+    }
+
+    @Test
+    @DisplayName("MONO-771: mfaRequired=false → false")
+    void mfaRequired_false() {
+        stubBody("{\"assigned\":true,\"mfaRequired\":false}");
+        assertThat(client.resolveAssignment(SUBJECT, TENANT).mfaRequired()).isFalse();
+    }
+
+    @Test
+    @DisplayName("MONO-771: mfaRequired=true → true")
+    void mfaRequired_true() {
+        stubBody("{\"assigned\":true,\"mfaRequired\":true}");
+        assertThat(client.resolveAssignment(SUBJECT, TENANT).mfaRequired()).isTrue();
+    }
+
+    @Test
+    @DisplayName("MONO-771 fail-closed: mfaRequired ABSENT (older admin) → read as true")
+    void mfaRequired_absent_readAsTrue() {
+        stubBody("{\"assigned\":true}");
+        assertThat(client.resolveAssignment(SUBJECT, TENANT).mfaRequired()).isTrue();
+    }
+
+    @Test
+    @DisplayName("MONO-771 fail-closed: mfaRequired null / non-boolean (\"false\" string) → read as true")
+    void mfaRequired_nonBoolean_readAsTrue() {
+        assertThat(AdminAssignmentClient.parseMfaRequired(null)).isTrue();
+        assertThat(AdminAssignmentClient.parseMfaRequired("false")).isTrue();
+        assertThat(AdminAssignmentClient.parseMfaRequired(0)).isTrue();
+        assertThat(AdminAssignmentClient.parseMfaRequired(Boolean.FALSE)).isFalse();
+    }
+
     @Test
     @DisplayName("BE-338: orgScope 배열 파싱 → AssignmentResult.orgScope=[dept-sales]")
     void parsesOrgScope_populated() {

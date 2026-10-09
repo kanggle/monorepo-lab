@@ -87,6 +87,64 @@ class OperatorAssignmentCheckControllerSliceTest {
                 .andExpect(jsonPath("$.assigned").value(false));
     }
 
+    // ── TASK-MONO-771 S4 (auth-to-admin.md `mfaRequired`, rule 6) ─────────────────────────────
+
+    @Test
+    @DisplayName("MONO-771: mfaRequired=true → serialized true")
+    void mfaRequiredTrue_serialized() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null, null, true));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.mfaRequired").value(true));
+    }
+
+    @Test
+    @DisplayName("MONO-771: mfaRequired=false is PRESENT as false (never omitted — auth-service reads absent as true)")
+    void mfaRequiredFalse_presentNotOmitted() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null, null, false));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mfaRequired").exists())
+                .andExpect(jsonPath("$.mfaRequired").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-771: assigned=false → mfaRequired=false (present)")
+    void assignedFalse_mfaRequiredFalse() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("globex")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(false, null, null));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "globex"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(false))
+                .andExpect(jsonPath("$.mfaRequired").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-771: requirement read failed → 500 (auth-service denies on any 5xx), never a 200")
+    void requirementReadFailure_returns500() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willThrow(new com.example.admin.application.exception.SecondFactorRequirementUnavailableException(
+                        new RuntimeException("db down")));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+    }
+
     @Test
     @DisplayName("tenantId 파라미터 누락 → 400")
     void missingTenantId_returns400() throws Exception {

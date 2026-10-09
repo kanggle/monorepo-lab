@@ -69,7 +69,8 @@ public class OperatorAssignmentCheckController {
         OperatorAssignmentCheckUseCase.Result result =
                 checkUseCase.check(oidcSubject, tenantId);
         return ResponseEntity.ok(new AssignmentCheckResponse(
-                result.assigned(), result.orgScope(), DelegatedScopeDto.from(result.delegatedScope())));
+                result.assigned(), result.orgScope(), DelegatedScopeDto.from(result.delegatedScope()),
+                result.mfaRequired()));
     }
 
     /**
@@ -90,7 +91,11 @@ public class OperatorAssignmentCheckController {
             // Field-level NON_NULL so the delegatedScope block is OMITTED for
             // non-partnership assignments — WITHOUT altering the existing orgScope
             // serialization (which relies on the profile-level inclusion config).
-            @JsonInclude(JsonInclude.Include.NON_NULL) DelegatedScopeDto delegatedScope) {}
+            @JsonInclude(JsonInclude.Include.NON_NULL) DelegatedScopeDto delegatedScope,
+            // TASK-MONO-771 (auth-to-admin.md rule 6) — ALWAYS present (primitive, never omitted):
+            // auth-service reads an ABSENT field as `true` (fail-closed), so omission would refuse
+            // every subject without "mfa".
+            boolean mfaRequired) {}
 
     /** The additive cross-org {@code {domains, roles}} confinement block. */
     public record DelegatedScopeDto(List<String> domains, List<String> roles) {

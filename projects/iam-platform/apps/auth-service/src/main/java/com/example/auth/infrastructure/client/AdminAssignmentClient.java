@@ -171,10 +171,19 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
         // object (partnership-derived host reach only). Absent/null/non-object →
         // null (net-zero — a normal assignment or an older admin). The customizer's
         // assume-tenant branch caps the token when this is non-null.
+        // TASK-MONO-771 S4 (auth-to-admin.md `mfaRequired`, Caller Constraints): an ABSENT or
+        // non-boolean field reads as TRUE — fail-closed against an older admin that does not compute
+        // it. A subject that carries "mfa" still passes; one that does not is refused.
         return new AssignmentResult(
                 isAssigned,
                 parseOrgScope(body.get("orgScope")),
-                parseDelegatedScope(body.get("delegatedScope")));
+                parseDelegatedScope(body.get("delegatedScope")),
+                parseMfaRequired(body.get("mfaRequired")));
+    }
+
+    /** {@code mfaRequired}: only an explicit JSON {@code false} reads as «not required». */
+    static boolean parseMfaRequired(Object raw) {
+        return !(raw instanceof Boolean b) || b;
     }
 
     private static List<String> parseOrgScope(Object raw) {

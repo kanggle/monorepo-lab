@@ -44,10 +44,16 @@
 -- `operator_exchange_unavailable`, the SAME text a load-induced 5s timeout
 -- produces. Keep the two values literal and identical.
 --
--- 2FA: not relaxed here, and not needed. `require_2fa` (TRUE for SUPER_ADMIN
--- since V0013) gates the password+TOTP admin login path; the console reaches
--- the operator plane through the OIDC token exchange, which enforces only
--- `status = 'ACTIVE'` (TokenExchangeService).
+-- 2FA: NOT relaxed here — on purpose. `require_2fa` (TRUE for SUPER_ADMIN since
+-- V0013) is enforced, since TASK-MONO-771 S4, on the OIDC token exchange AND on
+-- assume-tenant too (admin-service security.md § Second-Factor Requirement): a
+-- SUPER_ADMIN without `amr ∋ mfa` gets 403 MFA_REQUIRED / invalid_grant
+-- insufficient_user_authentication. This file runs in the DEFAULT profile
+-- (developers' local DBs, CI e2e) as well, so relaxing here would relax all of
+-- them. The portfolio demo's relaxation (owner decision OD-5) lives in
+-- `db/migration-demo/R__demo_relax_super_admin_require_2fa.sql`, loaded ONLY by
+-- `infra/demo/iam-traefik.override.yml`. Locally without that location these
+-- two SUPER_ADMIN identities must enrol a second factor (IdP `/mfa/setup`).
 
 -- ---------------------------------------------------------------------------
 -- 1. The operator. Home tenant = demo-corp.
@@ -181,9 +187,12 @@ SELECT o.id, 'ecommerce', NOW(6), NULL, NULL
 -- because the asymmetry otherwise reads as an omission and gets re-investigated.
 --
 -- 🔵 SUPER_ADMIN is granted (below) for parity, not because the seed needs it:
--- the assume-tenant exchange enforces only `status = 'ACTIVE'` and derives the
--- ERP_OPERATOR role from demo-corp's entitlements. It is here so that logging in
--- as this identity reaches the console shell rather than a broken half-screen.
+-- the assume-tenant exchange derives the ERP_OPERATOR role from demo-corp's
+-- entitlements. It is here so that logging in as this identity reaches the
+-- console shell rather than a broken half-screen. ⚠️ Since TASK-MONO-771 S4 the
+-- role also makes assume-tenant (seed-erp.sh's `operator_token`) require
+-- `amr ∋ mfa` — the demo passes only because of the demo-only OD-5 relaxation
+-- (`db/migration-demo`, see the 2FA note at the top of this file).
 -- ===========================================================================
 INSERT INTO admin_operators (
     operator_id, tenant_id, email, password_hash, display_name, status,

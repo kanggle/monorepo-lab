@@ -58,7 +58,9 @@ class ConfinedOperatorAssumeGateTest {
     private OperatorAssignmentCheckUseCase gate() {
         return new OperatorAssignmentCheckUseCase(
                 tenantScopeResolver, assignmentPort, new OperatorOidcSubjectResolver(operatorPort),
-                partnershipPort, new UnboundedHostEntitledScopeResolver());
+                partnershipPort, new UnboundedHostEntitledScopeResolver(),
+                // TASK-MONO-771 S4: no tenant has an entry policy in this suite (row absent = off).
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()));
     }
 
     @Test

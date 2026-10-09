@@ -239,6 +239,69 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
         return mockMvc.perform(request);
     }
 
+    // ── TASK-MONO-771 S4 — mfaRequired on the real V0047 table + V0013 role flag ─────────────
+
+    @org.junit.jupiter.api.AfterEach
+    void clearMfaFixtures() {
+        jdbcTemplate.update("DELETE FROM tenant_entry_policy");
+        jdbcTemplate.update("""
+                DELETE b FROM admin_operator_roles b
+                  JOIN admin_operators o ON o.id = b.operator_id
+                 WHERE o.operator_id = ?
+                """, SUPER_UUID);
+    }
+
+    @Test
+    @DisplayName("MONO-771: V0047 empty + no require_2fa role → mfaRequired=false, present (net-zero)")
+    void mfaRequired_netZero() throws Exception {
+        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.mfaRequired").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-771 AC-2: policy row ON for globex → mfaRequired=true there; acme-corp (no row) control → false")
+    void mfaRequired_policyOnTenant_vsControl() throws Exception {
+        jdbcTemplate.update("INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, updated_by, version)"
+                + " VALUES ('globex', TRUE, NOW(6), NULL, 0)");
+        check(OP_SUBJECT, "globex").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.mfaRequired").value(true));
+        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+                .andExpect(jsonPath("$.mfaRequired").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-771: a policy row with require_mfa=FALSE is «off»")
+    void mfaRequired_policyRowOff() throws Exception {
+        jdbcTemplate.update("INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, updated_by, version)"
+                + " VALUES ('globex', FALSE, NOW(6), NULL, 0)");
+        check(OP_SUBJECT, "globex").andExpect(jsonPath("$.mfaRequired").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-771 AC-1b (F2): platform '*' operator bound to SUPER_ADMIN (V0013 require_2fa) → mfaRequired=true for any tenant")
+    void mfaRequired_platformSuperAdmin() throws Exception {
+        jdbcTemplate.update("""
+                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+                SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
+                  FROM admin_operators o JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
+                 WHERE o.operator_id = ?
+                """, SUPER_UUID);
+        check(SUPER_SUBJECT, "initech").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.mfaRequired").value(true));
+    }
+
+    @Test
+    @DisplayName("MONO-771: V0047 CHECK (tenant_id <> '*') — the platform sentinel cannot hold a policy")
+    void v0047_rejectsPlatformSentinel() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbcTemplate.update(
+                        "INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, version)"
+                                + " VALUES ('*', TRUE, NOW(6), 0)"))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private org.springframework.test.web.servlet.ResultActions check(String subject, String tenantId)

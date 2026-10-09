@@ -1,5 +1,6 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.MfaRequiredException;
 import com.example.admin.application.exception.SubjectTokenInvalidException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.IamOidcSubjectTokenValidator;
@@ -29,6 +30,9 @@ import org.springframework.stereotype.Service;
  *       request time from {@code admin_operators.tenant_id} (ADR-002 sentinel)
  *       by the existing RBAC/tenant evaluators; this service merely mints the
  *       canonical operator token for the resolved operator UUID.</li>
+ *   <li>TASK-MONO-771 S4 — a second factor is required ({@link OperatorSecondFactorRequirement})
+ *       and the subject token's {@code amr} lacks {@code "mfa"} → {@code 403 MFA_REQUIRED}, no
+ *       token minted; the requirement read failed → {@code 500}, no token minted.</li>
  * </ul>
  *
  * <p>No {@code admin_actions} row is written here (admin-api.md
@@ -57,6 +61,8 @@ public class TokenExchangeService {
     // TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): the SHARED account_id-only resolver
     // — the SAME resolution the assume-tenant gate uses.
     private final OperatorOidcSubjectResolver operatorResolver;
+    // TASK-MONO-771 S4: the shared requirement (the assume-tenant gate uses the SAME component).
+    private final OperatorSecondFactorRequirement secondFactorRequirement;
 
     /**
      * Exchanges a validated GAP OIDC subject token for an operator access
@@ -72,7 +78,9 @@ public class TokenExchangeService {
     public ExchangeResult exchange(String subjectToken) {
         // 1. Validate the subject token against auth-service JWKS
         //    (iss/aud/exp/nbf/RS256 + token_type-absent guard). Fail-closed.
-        String oidcSubject = subjectTokenValidator.validateAndExtractSubject(subjectToken);
+        //    TASK-MONO-771: the same validation also hands back the token's `amr` (extracted, row 7).
+        IamOidcSubjectTokenValidator.ValidatedSubject subject = subjectTokenValidator.validate(subjectToken);
+        String oidcSubject = subject.subject();
 
         // 2. Resolve the OIDC subject → admin_operators row, FAIL-CLOSED,
         //    account_id-only (ADR-MONO-040 Phase 3 part B). The validated sub IS the
@@ -93,6 +101,17 @@ public class TokenExchangeService {
                     operator.status());
             throw new SubjectTokenInvalidException(
                     "Operator is not active");
+        }
+
+        // 2b. TASK-MONO-771 S4 (ADR-MONO-080 D4 · R2, OD-2 · OD-3) — second-factor requirement, decided
+        //     only AFTER the operator resolved (so 403 never reveals an operator that 401 would hide).
+        //     Required (role flag ∨ any policy-ON tenant in home ∪ assignments) and "mfa" ∉ amr
+        //     → 403 MFA_REQUIRED, NOT 401 (the console reads only 401 as «not an operator», AC-0 F1).
+        //     A subject that already carries "mfa" needs no requirement read at all. A failed read
+        //     → 500 (SecondFactorRequirementUnavailableException) — never «not required».
+        if (!subject.hasSecondFactor() && secondFactorRequirement.requiredForTokenExchange(operator)) {
+            log.debug("token-exchange refused: second factor required, subject amr lacks mfa");
+            throw new MfaRequiredException();
         }
 
         // 3. Mint the canonical operator token via the SHARED issuer (same

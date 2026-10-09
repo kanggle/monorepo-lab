@@ -19,8 +19,24 @@ package com.example.admin.application.port;
 public interface IamOidcSubjectTokenValidator {
 
     /**
+     * TASK-MONO-771 (security.md § IAM OIDC Subject-Token Validation row 7) — validates the subject
+     * token end-to-end and returns the verified {@code sub} together with the token's {@code amr}.
+     *
+     * <p>{@code amr} is <b>extracted</b>, not validated: absent, not an array, or non-string elements
+     * all read as an empty set (= «no second factor», fail-closed) — never a {@code 401} by itself.
+     *
+     * @throws com.example.admin.application.exception.SubjectTokenInvalidException
+     *         on exactly the failures {@link #validateAndExtractSubject} lists (fail-closed)
+     */
+    ValidatedSubject validate(String subjectToken);
+
+    /**
      * Validates the subject token end-to-end and returns the verified OIDC
      * subject (the {@code sub} claim = auth-service account_id UUID).
+     *
+     * <p>TASK-MONO-771: kept as the {@code sub}-only view of {@link #validate} — the self-service
+     * onboarding entry ({@code OnboardingController}) reads {@code sub} only and its decision does
+     * not change with {@code amr} (security.md row 7).
      *
      * @param subjectToken the raw GAP OIDC access token (RFC 8693
      *                      {@code subject_token})
@@ -30,5 +46,28 @@ public interface IamOidcSubjectTokenValidator {
      *         access token (carries a {@code token_type} claim), {@code sub}
      *         is absent, or the auth-service JWKS is unreachable (fail-closed)
      */
-    String validateAndExtractSubject(String subjectToken);
+    default String validateAndExtractSubject(String subjectToken) {
+        return validate(subjectToken).subject();
+    }
+
+    /**
+     * The verified subject + its RFC 8176 authentication methods.
+     *
+     * @param subject the verified, non-blank {@code sub} (account_id)
+     * @param amr     the token's {@code amr} values; never {@code null} (absent ⇒ empty)
+     */
+    record ValidatedSubject(String subject, java.util.Set<String> amr) {
+
+        /** The one value a reader looks at (jwt-standard-claims.md § {@code amr}). */
+        public static final String MFA = "mfa";
+
+        public ValidatedSubject {
+            amr = amr == null ? java.util.Set.of() : java.util.Set.copyOf(amr);
+        }
+
+        /** {@code "mfa" ∈ amr} — the only predicate (never the means values such as {@code otp}). */
+        public boolean hasSecondFactor() {
+            return amr.contains(MFA);
+        }
+    }
 }
