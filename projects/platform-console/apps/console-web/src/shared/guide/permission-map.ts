@@ -55,6 +55,22 @@ export const RBAC_ROLES = [
 export type RbacRole = (typeof RBAC_ROLES)[number];
 
 /**
+ * TASK-PC-FE-327 — 역할마다 «누가 쓰는 역할인가»를 한 마디로. 역할별 권한 표의 열 머리에
+ * 역할 이름 아래 붙는다. `Record<RbacRole, …>` 라서 역할이 늘면 여기를 채우기 전엔 타입이
+ * 빨개진다. 근거 = `rbac.md` § Seed Roles 의 «의도» 열(CS L1 · CS L2 · 보안팀 · 테넌트/조직
+ * 위임관리자 · entitlement 관리자)을 화면 말로 옮긴 것.
+ */
+export const RBAC_ROLE_NATURE: Readonly<Record<RbacRole, string>> = {
+  SUPER_ADMIN: '플랫폼 전체 관리자',
+  SUPPORT_READONLY: 'CS 1선 (조회만)',
+  SUPPORT_LOCK: 'CS 2선 (계정 제어)',
+  SECURITY_ANALYST: '보안팀',
+  TENANT_ADMIN: '고객사 관리자',
+  TENANT_BILLING_ADMIN: '고객사 구독 담당',
+  ORG_ADMIN: '고객사 조직(본사) 관리자',
+};
+
+/**
  * `rbac.md` § Seed Matrix (role × permission) 를 **그대로** 옮긴 것.
  * 열 순서 = `RBAC_ROLES`. ✅=true / ❌=false.
  */

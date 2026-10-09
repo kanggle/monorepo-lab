@@ -9,7 +9,7 @@ import {
   SHUTDOWN_RULES,
   STARTUP_STEPS,
 } from '@/features/global-guide/data';
-import { navLeaves } from '@/shared/guide/permission-map';
+import { navLeaves, RBAC_ROLES, RBAC_ROLE_NATURE } from '@/shared/guide/permission-map';
 import { DOMAIN_FEATURES } from '@/shared/guide/domain-features';
 import { SCREEN_COVERAGE } from '@/shared/sample/coverage';
 import { runAxe } from '../a11y/axe-helper';
@@ -154,6 +154,21 @@ describe('GlobalGuideScreen', () => {
     const mismatches = screen.getByTestId('global-guide-mismatches');
     expect(mismatches).toHaveTextContent('/permissions');
     expect(mismatches).toHaveTextContent('/permission-sets');
+  });
+
+  it('every role column header names the role AND what kind of person holds it (TASK-PC-FE-327)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    for (const r of RBAC_ROLES) {
+      const th = screen.getByTestId(`global-guide-rbac-role-${r}`);
+      expect(th).toHaveTextContent(r);
+      expect(RBAC_ROLE_NATURE[r].trim()).not.toBe('');
+      expect(th).toHaveTextContent(RBAC_ROLE_NATURE[r]);
+    }
+    // The owner's own wording for the platform roles (rbac.md «CS L1 · CS L2 · 보안팀»).
+    expect(screen.getByTestId('global-guide-rbac-role-SUPER_ADMIN')).toHaveTextContent('플랫폼 전체 관리자');
+    expect(screen.getByTestId('global-guide-rbac-role-SUPPORT_READONLY')).toHaveTextContent('CS 1선');
+    expect(screen.getByTestId('global-guide-rbac-role-SUPPORT_LOCK')).toHaveTextContent('CS 2선');
+    expect(screen.getByTestId('global-guide-rbac-role-SECURITY_ANALYST')).toHaveTextContent('보안팀');
   });
 
   it('keyboard: ArrowRight / End / Home move the selected tab (roving tabindex)', () => {

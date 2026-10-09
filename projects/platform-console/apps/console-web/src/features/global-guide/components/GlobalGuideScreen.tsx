@@ -10,6 +10,7 @@ import {
 import {
   DEMO_TEST_ACCOUNT,
   RBAC_ROLES,
+  RBAC_ROLE_NATURE,
   RBAC_SEED_MATRIX,
 } from '@/shared/guide/permission-map';
 import { DOMAIN_FEATURES } from '@/shared/guide/domain-features';
@@ -279,7 +280,12 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
               <tr className="text-left">
                 <th scope="col" className="p-2">권한</th>
                 {RBAC_ROLES.map((r) => (
-                  <th key={r} scope="col" className="p-2 font-mono text-[11px]">{r}</th>
+                  <th key={r} scope="col" className="p-2 align-bottom" data-testid={`global-guide-rbac-role-${r}`}>
+                    <span className="block font-mono text-[11px]">{r}</span>
+                    <span className="block text-[11px] font-normal text-muted-foreground">
+                      {RBAC_ROLE_NATURE[r]}
+                    </span>
+                  </th>
                 ))}
               </tr>
             </thead>
