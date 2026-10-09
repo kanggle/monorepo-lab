@@ -23,7 +23,7 @@ They must not become a container for service-specific business logic.
 | `libs/java-messaging` | messaging / outbox transport scaffolding (ADR-MONO-004) | event producers + consumers |
 | `libs/java-notification` | notification contract + client (ADR-MONO-043) | notification producers |
 | `libs/java-observability` | tracing / metrics helpers | most services |
-| `libs/java-security` | JWT signing/verification, password hashing | auth-side services |
+| `libs/java-security` | JWT signing/verification, password hashing, TOTP (RFC 6238) code generation/verification | auth-side services |
 | `libs/java-test-support` | test fixtures + helpers | test source sets |
 | `libs/java-web` | **framework-agnostic** web primitives — safe on both servlet and reactive classpaths | servlet services + gateways |
 | `libs/java-web-servlet` | servlet-only web helpers | servlet services |
