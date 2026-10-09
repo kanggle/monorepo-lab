@@ -8,7 +8,7 @@ TASK-MONO-771
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -640,3 +640,11 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 - `a86559f86` 의 iam A: 195 중 1 실패 — `TokenExchangeIntegrationTest` «BE-377 … local-login → 401». 이번엔 500 이 아니라 **응답은 맞는 401 인데 5분 타임아웃**(`12:14:59` 직전 시험 통과 → `12:22:04` 응답). S5 에서 둔 `@DirtiesContext(AFTER_CLASS)` 완화는 **원인이 아니었다**(증상이 살아남음).
 - 가설: Gradle 테스트 JVM 기본 힙 512 MiB(어디서도 `maxHeapSize` 미설정 — `gradle.properties` 의 `-Xmx2048m` 은 데몬 것) × 이 요청의 Argon2id 더미 검증 `m=65536`(64 MiB). 천장 근처에서 Error(→500, 스택 없음) 또는 GC 스래싱(→타임아웃) — 두 증상을 하나로 설명한다.
 - 조치: `projects/iam-platform/build.gradle` `integrationTest` 에 `maxHeapSize = '1536m'` · 진단을 **항상** 찍게(요청 전 힙 · 응답 시간). 🔴 초록 한 번은 판정이 아니다 — 진단 줄의 «before login heap used/max» 가 천장 근처였는지로 가설을 판정한다(다음 런 로그).
+- 판정(`e6d04a528` iam A, 초록): `before login heap used=725MiB total=957MiB max=1536MiB` · `login answered 401 in 1269ms`. 요청 직전 사용량이 **옛 천장 512 MiB 를 넘었다** — 가설을 강하게 지지한다. 🔴 단 `used` 는 수거 전 쓰레기를 포함하므로 «살아 있는 집합 > 512» 의 증명은 아니다. 재발하면 이 진단 줄이 다시 판정한다.
+
+# review 이동 기록 (2026-10-09 UTC)
+
+- 슬라이스 전부 머지: S1 #4257 · S2a #4258 · S2b #4260 · S2c #4261 · S3 #4262 · S4 #4263 · S5 #4266(`b7c389421`) · S6 #4268(`7f401f764`). 각 PR 머지 시점 CI 실패 0(S6 은 두 번째 헤드 `e6d04a528` 에서 26 pass · 0 fail).
+- AC: AC-0 · AC-1 · AC-2 · AC-4 ✅(AC-4 는 «시험» 칸). ⚪ **AC-3**(소비자 로그인은 TOTP 미등록이면 지금과 같다) — 라이브 창에서 판정. ⚪ S5 · S6 라이브(콘솔 토글 · 실제 리셋 → 재등록).
+- ⏳ `done/` 게이트 = 다음 데모 창(25차 재굽기 뒤) AC-3 라이브. `TASK-MONO-772` 는 이 티켓 `done/` 을 선행으로 둔다.
+- 소유자 판단 대기(AC 아님): 콘솔 리셋 화면 · 리셋 알림 메일.
