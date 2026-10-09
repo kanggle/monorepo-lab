@@ -139,6 +139,14 @@ describe('GlobalGuideScreen', () => {
     }
   });
 
+  it('the 전체 메뉴 소개 table keeps its «뎁스» column — only the domain guides drop it (TASK-PC-FE-330)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    const headers = within(screen.getByTestId('global-guide-map'))
+      .getAllByRole('columnheader', { hidden: true })
+      .map((h) => h.textContent);
+    expect(headers).toContain('뎁스');
+  });
+
   it('the 전체 메뉴 소개 table covers every sidebar leaf', () => {
     render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
     const table = screen.getByTestId('global-guide-map');
