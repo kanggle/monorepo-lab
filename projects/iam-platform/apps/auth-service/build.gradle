@@ -56,6 +56,15 @@ dependencies {
 
     // RestClient (Spring 6.1+)
 
+    // TASK-MONO-771 S2c (owner decision 2026-10-09) — QR for /mfa/setup. `core` only (3.5.4, the current
+    // release on Maven Central as of this PR — verified against repo1.maven.org/.../core/maven-metadata.xml,
+    // not assumed): it carries the QR encoder (BitMatrix) with no AWT/Swing or servlet dependency of its own.
+    // The BitMatrix -> PNG step is done by this module's own QrCodePngEncoder (java.awt.image.BufferedImage +
+    // ImageIO, both JDK-standard) so the heavier `javase` extra (AWT image helpers meant for desktop/CLI tools)
+    // never reaches the production classpath — it is added testImplementation-only below, to decode a QR back
+    // to text and prove round-trip equality in the slice test.
+    implementation 'com.google.zxing:core:3.5.4'
+
     // Test
     // TASK-BE-078: AbstractIntegrationTest lives in testFixtures source set so
     // Testcontainers classes stay out of the production classpath.
@@ -70,6 +79,9 @@ dependencies {
     testImplementation 'com.jayway.jsonpath:json-path'
     testImplementation 'org.awaitility:awaitility'
     testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    // TASK-MONO-771 S2c — QR decode-back-to-text in MfaPageSliceTest only (BufferedImageLuminanceSource +
+    // MultiFormatReader). Test-only: production QR *encoding* needs only `core` (above).
+    testImplementation 'com.google.zxing:javase:3.5.4'
     // H2 for SAS slice tests (no Testcontainers MySQL required)
     testRuntimeOnly 'com.h2database:h2'
 }

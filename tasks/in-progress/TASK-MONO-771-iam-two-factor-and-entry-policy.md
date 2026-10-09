@@ -332,3 +332,63 @@ monorepo
 4. **«취소»** — `/mfa/setup` 의 «취소» 의미는 계약에 없다. `/mfa/challenge` 의 취소와 같게(보관 authorize 의 등록 redirect_uri 로 `access_denied` · `mfa_cancelled`) 했다.
 5. **복구 코드 «2개 이하면 다음 화면에 재발급 안내»** — 재개 전에 안내 화면 + «계속» 을 한 번 보인다.
 6. 마이그레이션의 «`INFORMATION_SCHEMA` 존재 가드» 는 `CREATE TABLE IF NOT EXISTS` 로 했다.
+
+---
+
+## S2c 기록 (2026-10-09 UTC)
+
+> 구현 = Opus 5.5 (backend-engineer) · worktree `feat/mono-771-s2c-qr-lib-calculator`(origin/main `1e54a2cb0`, S2a #4258 · S2b #4260 포함). 범위 = auth-service 뿐(platform-console 은 S3 가 별도 worktree 에서 다룬다 — 이 PR 은 건드리지 않았다). AC 체크박스는 건드리지 않았다.
+
+> OWNER DECISION (2026-10-09 UTC, FINAL): (1) QR 을 zxing(`com.google.zxing:core`, 서버 측 PNG)으로 등록 화면에 추가한다. (2) S2b 의 인증된 이메일 읽기 방식(기존 계약 둘을 체인, fail-closed)을 그대로 수용한다.
+
+### 바꾼 파일
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| infrastructure | `infrastructure/totp/Rfc6238TotpCodeCalculator.java` | S2b 의 손수 HMAC-SHA1 · Base32 구현을 지우고 `libs/java-security` `TotpCodeGenerator` 로 위임하는 얇은 어댑터로 교체(포트 `TotpCodeCalculator` 불변 — AC-0 § 3, S2b 의 예고대로). 클래스 이름은 유지했다(`AccountSecondFactorServiceTest:66` 이 이 클래스를 직접 `new` 한다 — 이름을 바꾸면 그 시험도 바꿔야 해서 교체 자체와 무관한 diff 가 늘어난다) |
+| infrastructure (신규) | `infrastructure/totp/QrCodePngEncoder.java` | `otpauth://` URI → QR PNG → `data:image/png;base64,...`. zxing **`core` 만**(BitMatrix) — BitMatrix→BufferedImage 변환은 이 클래스가 직접 한다(zxing `javase` 는 test 전용, 아래 설계 요지) |
+| presentation | `presentation/MfaPageController.java` | `pendingView` 가 `qrDataUri` 모델 속성을 추가로 싣는다. QR 인코딩 실패는 `safePendingView` 로 감싸 기존 fail-closed 관행(`"UNAVAILABLE"` · 503)과 같게 — 기존 503/read-failure 분기들과 같은 모양 |
+| 템플릿 | `templates/mfa-setup.html` | PENDING·WRONG_CODE 분기에 `<img id="mfa-setup-qr">`(한국어 alt, `data:` URI) 추가, 안내 문구를 «QR 스캔, 안 되면 수동 키»로 조정. 수동 입력 키 · `otpauth://` 링크는 그대로(폴백) |
+| build | `apps/auth-service/build.gradle` | `implementation 'com.google.zxing:core:3.5.4'`(운영) · `testImplementation 'com.google.zxing:javase:3.5.4'`(시험 전용 — QR 디코드) |
+| 시험 | `infrastructure/totp/Rfc6238TotpCodeCalculatorTest.java` | RFC 6238 벡터는 그대로 — 이제 «교체 전후 동일» 의 증거문. 설명만 교체 완료 시점으로 갱신 |
+| 시험 | `presentation/MfaPageSliceTest.java` | 신규 3건: QR PNG 를 zxing(`javase`)으로 디코드해 `otpauth://` URI 와 바이트 그대로 일치 · 계정 둘의 QR 이 서로 다른 비밀을 담고 서로의 시크릿 문자열을 포함하지 않음(격리) · 세션 없음 → `/login`(서비스 호출 0). 기존 `setup_unverifiedEmail` 에 `doesNotContain("data:image/png;base64")` 단언 추가(«대기 없음 → QR 도 없다») |
+
+### 설계 요지 — QR 전달 방식과 그 보안 근거
+
+**선택: 같은 `/mfa/setup` 응답에 인라인 `data:` URI로 삽입. 별도 엔드포인트를 만들지 않았다.**
+
+과업이 제시한 두 선택지(인라인 `data:` URI ↔ 현재 세션의 대기 등록만 내려주는 전용 `GET` 엔드포인트) 중 인라인을 고른 이유 — 요구된 세 속성이 **설계로 증명**되지, 별도로 다시 구현해 맞출 필요가 없다:
+
+1. **임의 계정의 비밀을 절대 안 준다** — QR 은 그 요청의 `AccountSecondFactorService.startEnrollment` 호출이 방금 만든 `otpauthUri` 를 그대로 인코딩한다. 계정을 고르는 파라미터·캐시 키 자체가 없다 — 공격 표면이 "없음"이지 "막음"이 아니다. (시험로 보강: `setup_pending_qrIsolatedPerAccount`.)
+2. **캐싱 헤더를 따로 신경 쓸 필요가 없다** — Spring Security 의 기본 헤더 writer 가 이 `@Order(0)` 체인의 모든 응답에 `Cache-Control: no-cache, no-store` 를 이미 찍는다(S1/S2b 가 깐 체인, 다른 설정 없음). 둘째 응답이 없으니 둘째로 표시할 것도 없다.
+3. **페이지와 같은 보안 체인 · CSRF 규칙** — 새 요청이 아니므로 이미 그 페이지가 지키는 규칙(세션 검사, CSRF — 이 GET 자체는 CSRF 대상이 아니지만 폼의 POST 는 그대로) 그 자체다. 전용 엔드포인트였다면 "같은 체인에 올리고, 같은 404/캐시 규칙을 새로 만들고, 그 전부가 맞는지 또 시험한다"를 다시 해야 했다.
+
+대가: 이미지가 매 `GET`/오답 재시도마다 base64 로 다시 인코딩되어 응답 본문에 들어간다(정적 리소스처럼 따로 캐시되지 않는다) — 이 페이지의 방문 빈도(계정당 사실상 1회 등록)에서는 무시할 비용으로 판단했다.
+
+**"대기 등록 없음 → 404/페이지 관행" 의 해석**: 이 아키텍처의 기존 관행은 404 가 아니라 **리다이렉트·에러 뷰**다(세션 없음 → `/login`, 이미 등록됨 → 안내 뷰 등 — `MfaPageController` 전체가 그렇다). QR 도 같다: PENDING_CREATED 가 아닌 모든 분기(`ALREADY_ENROLLED` · `EMAIL_NOT_VERIFIED` · `UNAVAILABLE` · 세션 없음)는 `qrDataUri` 자체를 모델에 올리지 않으므로 화면에 QR 이 없다 — 새 404 분기를 만들지 않고 기존 관행을 그대로 이어받았다(시험: `setup_unverifiedEmail`, `setup_noSession_redirectsLogin`).
+
+**zxing 버전 — `3.5.4`**: Maven Central `core`/`javase` 의 `maven-metadata.xml` 을 이 세션에서 직접 조회해 확인한 **현재 최신 릴리스**(`<release>3.5.4</release>`, 두 아티팩트 동일) — 추정이 아니다. `core` 만 운영 의존성으로 선언했다(과업 지시 그대로); `javase` 는 AWT 데스크톱 헬퍼 모음이라 운영 클래스패스에 올릴 이유가 없고, QR 을 다시 텍스트로 디코드해 왕복을 증명하는 **시험에서만** 쓴다. BitMatrix→PNG 변환은 `QrCodePngEncoder` 가 `java.awt.image.BufferedImage` + `ImageIO`(JDK 표준)로 직접 한다.
+
+**QR 인코딩 실패의 처리**: 거의 도달하지 않는 경로(짧고 유효한 `otpauth://` 문자열의 인코딩/PNG 기록 실패)지만, 다른 모든 읽기/쓰기 실패와 같은 모양으로 fail-closed 시켰다 — `safePendingView` 가 `RuntimeException` 을 잡아 `"UNAVAILABLE"`/503 으로 떨어뜨린다(비밀을 노출하는 대신 "지금은 확인할 수 없습니다").
+
+### 명세와 다르게 · 명세가 말하지 않아 고른 것 (오케스트레이터 확인 요망)
+
+1. 계약(`auth-api.md` § /mfa/setup)은 "QR + 수동 입력 키"만 말하고 QR 의 **전달 방식**(인라인 vs 전용 엔드포인트)은 말하지 않는다 — 위 설계 요지의 선택은 과업 지시의 선택지 안에서 구현자가 고른 것이다.
+2. QR 이미지 크기(240×240px)·오류 정정 레벨(M)·여백(zxing 기본 4모듈)은 계약에 없다 — 실제 폰 카메라로 스캔 가능한 표준값을 썼다(라이브 스캔은 미검증 — 아래 ⚪).
+
+### 검증 (rc 는 `cmd > file 2>&1; echo rc=$?`)
+
+| 무엇 | 결과 |
+|---|---|
+| `./gradlew :libs:java-security:test` | rc=0 |
+| `./gradlew :projects:iam-platform:apps:auth-service:compileTestJava` | rc=0 |
+| `./gradlew :projects:iam-platform:apps:auth-service:test`(단위 레인 전체) | rc=0 — `MfaPageSliceTest` 18건(기존 15 + 신규 3) 전부 통과, 전체 레인 그대로 green(이전 S2b 기록의 1151건 모집단에 신규 3건 추가, 실패 0) |
+| `bash scripts/check-jwt-claims-registry.sh` | rc=0 |
+| Maven Central `core`/`javase` `maven-metadata.xml` 조회(버전 확인용, 가드 아님) | 둘 다 `<release>3.5.4</release>` 확인 |
+| 가드 3종(스테이지 뒤) | `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` — 아래 실행 |
+
+### ⚪ 열린 것
+
+- ⚪ 라이브 QR 스캔(실제 인증 앱 카메라) 미검증 — zxing 왕복(인코드→디코드)은 시험으로 고정했지만, 실제 카메라 조건(초점·조명·앱별 디코더)에서의 스캔은 라이브 데모/브라우저 세션에서만 확인 가능하다.
+- ⚪ `AccountTotpRepositoryIntegrationTest`(S2b 가 연 Docker 의존 ⚪) — 이 슬라이스에서 변경 없음, 여전히 CI 첫 실행 대기.
+- ⚪ 새 third-party 의존성(`zxing`) 에 대한 라이선스/의존성 중앙 가드 — 저장소에 그런 가드가 없음을 확인했다(`scripts/` 전체를 훑어 의존성·라이선스 이름의 가드 0건, 버전 카탈로그 파일(`gradle/libs.versions.toml`) 없음 — 각 모듈 `build.gradle` 에 정확한 버전을 직접 박는 것이 기존 관행, 이 PR 도 그 관행을 따랐다).

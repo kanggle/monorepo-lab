@@ -8,6 +8,11 @@ import com.example.auth.application.AccountSecondFactorService.StartEnrollmentOu
 import com.example.auth.application.AccountSecondFactorService.StartEnrollmentResult;
 import com.example.auth.application.AccountSecondFactorService.VerificationOutcome;
 import com.example.auth.domain.session.PrincipalDetailKeys;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.MultiFormatReader;
+import com.google.zxing.Result;
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
+import com.google.zxing.common.HybridBinarizer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +41,19 @@ import org.thymeleaf.spring6.view.ThymeleafViewResolver;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -222,7 +233,18 @@ class MfaPageSliceTest {
 
         assertThat(r.getResponse().getStatus()).isEqualTo(403);
         assertThat(html(r)).contains("먼저 이메일을 인증해야 합니다").contains("href=\"/email-verification\"")
-                .doesNotContain("manual-key").doesNotContain("otpauth://");
+                .doesNotContain("manual-key").doesNotContain("otpauth://")
+                .as("no pending enrollment → no QR either (TASK-MONO-771 S2c)")
+                .doesNotContain("data:image/png;base64");
+    }
+
+    @Test
+    @DisplayName("세션 없음 → 302 /login · 서비스 호출 없음 (QR 이 걸린 pending 비밀도 만들지 않는다)")
+    void setup_noSession_redirectsLogin() throws Exception {
+        assertThat(perform(get("/mfa/setup")).getResponse().getRedirectedUrl()).isEqualTo("/login");
+        assertThat(perform(post("/mfa/setup").param("code", "123456")).getResponse().getRedirectedUrl())
+                .isEqualTo("/login");
+        verifyNoInteractions(service);
     }
 
     @Test
@@ -238,6 +260,42 @@ class MfaPageSliceTest {
                         + "&amp;algorithm=SHA1&amp;digits=6&amp;period=30")
                 .doesNotContain("member@example.com")
                 .contains("id=\"mfa-setup-submit\"");
+    }
+
+    @Test
+    @DisplayName("🔴 QR(zxing) PNG 을 다시 디코드하면 수동 입력 키와 같은 otpauth URI 그대로 (TASK-MONO-771 S2c)")
+    void setup_pending_qrDecodesToOtpauthUri() throws Exception {
+        when(service.startEnrollment(ACCOUNT, "fan-platform"))
+                .thenReturn(new StartEnrollmentResult(StartEnrollmentOutcome.PENDING_CREATED, "GEZDGNBVGY3TQOJQ"));
+
+        String html = html(perform(get("/mfa/setup").principal(passwordSession())));
+
+        assertThat(html).contains("id=\"mfa-setup-qr\"").contains("src=\"data:image/png;base64,")
+                .contains("alt=\"2단계 인증 등록용 QR 코드");
+        assertThat(decodeQr(html)).isEqualTo(
+                "otpauth://totp/IAM:m***@example.com?secret=GEZDGNBVGY3TQOJQ&issuer=IAM"
+                        + "&algorithm=SHA1&digits=6&period=30");
+    }
+
+    @Test
+    @DisplayName("🔴 다른 계정의 QR 은 다른 비밀을 담는다 — 한 세션의 QR 이 남의 비밀로 새지 않는다 (TASK-MONO-771 S2c)")
+    void setup_pending_qrIsolatedPerAccount() throws Exception {
+        String accountB = "0199de70-0000-7000-8000-000000000772";
+        when(service.startEnrollment(ACCOUNT, "fan-platform"))
+                .thenReturn(new StartEnrollmentResult(StartEnrollmentOutcome.PENDING_CREATED, "GEZDGNBVGY3TQOJQ"));
+        when(service.startEnrollment(accountB, "fan-platform"))
+                .thenReturn(new StartEnrollmentResult(StartEnrollmentOutcome.PENDING_CREATED, "MFRGGZDFMZTWQ2LK"));
+
+        String htmlA = html(perform(get("/mfa/setup").principal(passwordSession())));
+        session = new MockHttpSession(); // a second session — nothing of account A's carries over
+        String htmlB = html(perform(get("/mfa/setup")
+                .principal(session(new ArrayList<>(List.of("pwd")), accountB, "other@example.com"))));
+
+        String qrA = decodeQr(htmlA);
+        String qrB = decodeQr(htmlB);
+        assertThat(qrA).contains("secret=GEZDGNBVGY3TQOJQ").doesNotContain("MFRGGZDFMZTWQ2LK");
+        assertThat(qrB).contains("secret=MFRGGZDFMZTWQ2LK").doesNotContain("GEZDGNBVGY3TQOJQ");
+        assertThat(qrA).isNotEqualTo(qrB);
     }
 
     @Test
@@ -305,6 +363,19 @@ class MfaPageSliceTest {
         return result.getResponse().getContentAsString(StandardCharsets.UTF_8);
     }
 
+    private static final Pattern QR_SRC = Pattern.compile("id=\"mfa-setup-qr\"[^>]*src=\"data:image/png;base64,([^\"]+)\"");
+
+    /** Extracts the {@code <img id="mfa-setup-qr">} data URI from rendered HTML and decodes it back to text. */
+    private static String decodeQr(String html) throws Exception {
+        Matcher m = QR_SRC.matcher(html);
+        assertThat(m.find()).as("mfa-setup-qr <img> present").isTrue();
+        byte[] png = Base64.getDecoder().decode(m.group(1));
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(png));
+        BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(new BufferedImageLuminanceSource(image)));
+        Result result = new MultiFormatReader().decode(bitmap);
+        return result.getText();
+    }
+
     /** Parks an authorize request in the session's standard request cache, as the gate does. */
     private void park() {
         MockHttpServletRequest authorize = new MockHttpServletRequest("GET", "/oauth2/authorize");
@@ -351,14 +422,18 @@ class MfaPageSliceTest {
     }
 
     private static Authentication session(ArrayList<String> amr) {
+        return session(amr, ACCOUNT, "member@example.com");
+    }
+
+    private static Authentication session(ArrayList<String> amr, String accountId, String email) {
         Map<String, Object> details = new HashMap<>();
         details.put(PrincipalDetailKeys.TENANT_ID, "fan-platform");
         details.put(PrincipalDetailKeys.TENANT_TYPE, "B2C_CONSUMER");
-        details.put(PrincipalDetailKeys.ACCOUNT_ID, ACCOUNT);
-        details.put(PrincipalDetailKeys.EMAIL, "member@example.com");
+        details.put(PrincipalDetailKeys.ACCOUNT_ID, accountId);
+        details.put(PrincipalDetailKeys.EMAIL, email);
         details.put(PrincipalDetailKeys.AMR, amr);
         UsernamePasswordAuthenticationToken token = UsernamePasswordAuthenticationToken.authenticated(
-                "member@example.com", null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
         token.setDetails(details);
         return token;
     }
