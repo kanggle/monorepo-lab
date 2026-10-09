@@ -12,10 +12,10 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * TASK-MONO-771 S2b — the local RFC 6238 calculator, pinned by RFC 6238 Appendix B (SHA-1 seed
+ * TASK-MONO-771 S2c — the {@code libs/java-security}-backed adapter, pinned by RFC 6238 Appendix B (SHA-1 seed
  * {@code "12345678901234567890"}; the 8-digit vectors truncated to the 6 digits this IdP uses = the same value mod
- * 10^6). 🔵 When the adapter is swapped for the {@code libs/java-security} calculator (after S2a), these vectors
- * are the equivalence check.
+ * 10^6). 🔵 These are the same vectors the S2b local implementation was pinned by — proving the swap to
+ * {@link com.example.security.totp.TotpCodeGenerator} changed nothing observable.
  */
 @DisplayName("RFC 6238 TOTP 계산 (TASK-MONO-771 S2b)")
 class Rfc6238TotpCodeCalculatorTest {

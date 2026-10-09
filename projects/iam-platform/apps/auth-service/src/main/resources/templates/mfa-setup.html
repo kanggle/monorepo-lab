@@ -32,7 +32,9 @@
     </th:block>
 
     <th:block th:if="${result == 'PENDING' or result == 'WRONG_CODE'}">
-        <p class="consent-text">인증 앱(Google Authenticator 등)에서 아래 키를 추가한 뒤, 앱에 표시된 6자리 코드를 입력하세요.</p>
+        <p class="consent-text">인증 앱(Google Authenticator 등)으로 아래 QR 코드를 스캔하세요. 스캔할 수 없으면 수동 입력 키를 사용하세요.</p>
+        <img id="mfa-setup-qr" th:src="${qrDataUri}" alt="2단계 인증 등록용 QR 코드 — 인증 앱으로 스캔하세요. 스캔할 수 없으면 아래 수동 입력 키를 사용하세요."
+             width="240" height="240"/>
         <label for="manual-key">수동 입력 키</label>
         <input type="text" id="manual-key" readonly="readonly" th:value="${manualKey}"/>
         <p class="hint"><a id="otpauth-link" th:href="${otpauthUri}" href="#">이 기기의 인증 앱에서 열기</a></p>

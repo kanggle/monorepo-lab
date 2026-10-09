@@ -11,6 +11,7 @@ import com.example.auth.infrastructure.security.LoginBranding;
 import com.example.auth.infrastructure.security.PendingSiteConsentStore;
 import com.example.auth.infrastructure.security.SecondFactorSession;
 import com.example.auth.infrastructure.security.SecondFactorSession.FirstFactor;
+import com.example.auth.infrastructure.totp.QrCodePngEncoder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -170,7 +171,7 @@ public class MfaPageController {
             case ALREADY_ENROLLED -> setupView("ALREADY_ENROLLED", HttpStatus.OK);
             case EMAIL_NOT_VERIFIED -> setupView("EMAIL_NOT_VERIFIED", HttpStatus.FORBIDDEN);
             case UNAVAILABLE -> setupView("UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE);
-            case PENDING_CREATED -> pendingView(null, started.base32Secret(), session.get(), HttpStatus.OK);
+            case PENDING_CREATED -> safePendingView(null, started.base32Secret(), session.get());
         };
     }
 
@@ -201,7 +202,7 @@ public class MfaPageController {
                 key = Optional.empty();
             }
             // Same QR / key again when the pending secret is still alive; else back to GET for a new one.
-            return key.map(k -> pendingView("WRONG_CODE", k, first, HttpStatus.OK))
+            return key.map(k -> safePendingView("WRONG_CODE", k, first))
                     .orElseGet(() -> setupView("PENDING_GONE", HttpStatus.OK));
         }
         // The first code from the app IS the second step (auth-api.md § 단계 상승 — 등록 없음).
@@ -279,10 +280,29 @@ public class MfaPageController {
                 .orElseGet(() -> redirect("/login"));
     }
 
+    /**
+     * {@link #pendingView}, with QR encoding failures (see {@link QrCodePngEncoder}) falling back to the same
+     * fail-closed {@code "UNAVAILABLE"} view every other read/write failure on this controller does, instead of
+     * an uncaught exception reaching the default error page.
+     */
+    private ModelAndView safePendingView(String result, String base32Secret, FirstFactor session) {
+        try {
+            return pendingView(result, base32Secret, session, HttpStatus.OK);
+        } catch (RuntimeException e) {
+            log.warn("mfa setup: QR encode failed — falling back (fail-closed): {}", e.getClass().getSimpleName());
+            return setupView("UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     private ModelAndView pendingView(String result, String base32Secret, FirstFactor session, HttpStatus status) {
         ModelAndView mav = setupView(result == null ? "PENDING" : result, status);
+        String uri = otpauthUri(base32Secret, session.email());
         mav.addObject("manualKey", groupKey(base32Secret));
-        mav.addObject("otpauthUri", otpauthUri(base32Secret, session.email()));
+        mav.addObject("otpauthUri", uri);
+        // TASK-MONO-771 S2c (owner decision 2026-10-09) — QR for THIS session's pending secret only (see
+        // QrCodePngEncoder javadoc for why embedding it here, rather than a dedicated endpoint, is what makes
+        // "never another session's secret" and "no caching headers" true by construction).
+        mav.addObject("qrDataUri", QrCodePngEncoder.dataUri(uri));
         return mav;
     }
 
