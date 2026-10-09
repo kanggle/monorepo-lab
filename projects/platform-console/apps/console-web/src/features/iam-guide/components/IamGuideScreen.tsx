@@ -173,7 +173,7 @@ export function IamGuideScreen() {
                 하나는 <strong>IAM 메뉴를 여는 권한</strong>, 다른 하나는{' '}
                 <strong>도메인 화면을 여는 권한</strong>입니다. 생기는 방식이 다릅니다.
               </p>
-              <div className="mb-4 grid gap-4 md:grid-cols-2">
+              <div className="mb-4 grid gap-4">
                 {AUTH_PLANES.map((plane, i) => (
                   <Card key={plane.koName} data-testid={`iam-guide-plane-${i}`}>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -312,7 +312,7 @@ export function IamGuideScreen() {
                 역할을 받은 뒤, 실제 도달 범위는 아래 세 가지가 각각 독립적으로 정합니다.
                 모두 「운영자 관리」 화면에서 다룹니다.
               </p>
-              <div className="mb-10 grid gap-4 md:grid-cols-3">
+              <div className="mb-10 grid gap-4">
                 {OPERATOR_ONBOARDING_AXES.map((axis) => (
                   <Card
                     key={axis.term}
@@ -354,7 +354,7 @@ export function IamGuideScreen() {
               </p>
 
               <h3 className="mb-4 text-lg font-medium">역할 7종 (IAM 메뉴를 여는 권한)</h3>
-              <div className="mb-10 grid gap-4 md:grid-cols-2">
+              <div className="mb-10 grid gap-4">
                 {SEED_ROLES.map((role) => (
                   <Card key={role.name} data-testid={`iam-guide-role-${role.name}`}>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -548,7 +548,7 @@ export function IamGuideScreen() {
                   </li>
                 ))}
               </ol>
-              <div className="mb-10 grid gap-3 md:grid-cols-2">
+              <div className="mb-10 grid gap-3">
                 {DELEGATION_GUARDS.map((g) => (
                   <Card key={g.name} className="bg-muted/40">
                     <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>

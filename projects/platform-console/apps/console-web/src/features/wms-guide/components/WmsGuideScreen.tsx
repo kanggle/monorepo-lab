@@ -177,7 +177,7 @@ export function WmsGuideScreen() {
                 결과가 다르게 보일 수 있습니다. 재고 표의 배지와 운영자 알림을 헷갈리지
                 마세요.
               </p>
-              <div className="mb-10 grid gap-4 md:grid-cols-2">
+              <div className="mb-10 grid gap-4">
                 {LOW_STOCK_MECHANISMS.map((m, i) => (
                   <Card key={m.where} data-testid={`wms-guide-lowstock-${i}`}>
                     <p className="mb-1 text-sm font-medium text-foreground">
