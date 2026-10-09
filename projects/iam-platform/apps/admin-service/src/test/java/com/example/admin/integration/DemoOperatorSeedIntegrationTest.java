@@ -301,4 +301,92 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.content[?(@.operatorId == 'demo-operator')].homeTenantId")
                         .value("demo-corp"));
     }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-MONO-781 — the CS 2nd-line demo operator (R__seed_demo_cs_operator.sql):
+    // HOME ecommerce, SUPPORT_LOCK bound to ecommerce, confined to ecommerce. It exists so
+    // the console's email-search-only «계정 운영» mode (TASK-PC-FE-326) can be shown.
+    // ---------------------------------------------------------------------------------
+
+    /** == the CS operator's `iam`-tenant credential account_id (auth-service migration-dev). */
+    private static final String CS_OIDC_SUBJECT = "0199de70-0000-7000-8000-00000000ad08";
+
+    @Autowired
+    com.example.admin.application.OperatorAssignmentCheckUseCase assignmentCheck;
+
+    @Test
+    @DisplayName("seed: demo-cs exists, ACTIVE, HOME ecommerce, confined to ecommerce, with its own login's oidc_subject")
+    void csOperatorSeeded() {
+        List<String> rows = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', tenant_id, email, status, oidc_subject, confined_tenant_id)
+                  FROM admin_operators WHERE operator_id = 'demo-cs'
+                """, String.class);
+
+        assertThat(rows).containsExactly("ecommerce|cs@demo.com|ACTIVE|" + CS_OIDC_SUBJECT + "|ecommerce");
+    }
+
+    @Test
+    @DisplayName("seed: demo-cs holds exactly SUPPORT_LOCK bound to ecommerce (a SITE grant, not '*') and no assignment row")
+    void csOperatorHoldsExactlySiteScopedSupportLock() {
+        List<String> grants = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', r.name, g.tenant_id)
+                  FROM admin_operator_roles g
+                  JOIN admin_operators o ON o.id = g.operator_id
+                  JOIN admin_roles r ON r.id = g.role_id
+                 WHERE o.operator_id = 'demo-cs'
+                 ORDER BY r.name, g.tenant_id
+                """, String.class);
+        Integer assignments = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM operator_tenant_assignment a
+                  JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = 'demo-cs'
+                """, Integer.class);
+
+        // '*' would make every lock a whole-account lock across sites (TASK-BE-621); any
+        // other role widens CS 2nd-line past account control.
+        assertThat(grants).containsExactly("SUPPORT_LOCK|ecommerce");
+        assertThat(assignments).as("the home tenant is already in scope; an assignment only widens it").isZero();
+    }
+
+    @Test
+    @DisplayName("demo-cs authenticates: GET /api/admin/me → 200 with roles = [SUPPORT_LOCK]")
+    void csOperatorAuthenticatesWithSupportLock() throws Exception {
+        mockMvc.perform(get("/api/admin/me").header("Authorization", bearer("demo-cs")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(1))
+                .andExpect(jsonPath("$.roles[0]").value("SUPPORT_LOCK"));
+    }
+
+    @Test
+    @DisplayName("demo-cs is denied the unfiltered account list (no account.read) — the reason the console opens search-only")
+    void csOperatorIsDeniedTheUnfilteredAccountList() throws Exception {
+        mockMvc.perform(get("/api/admin/accounts").header("Authorization", bearer("demo-cs")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+    }
+
+    /**
+     * 🔴 The DISCLOSED trade-off (owner decision A, 2026-10-09 UTC), admin side: the assume
+     * gate admits demo-cs into `ecommerce` with NO second factor and no partnership cap. Once
+     * admitted, auth-service derives the assumed token's roles from `ecommerce`'s ACTIVE
+     * subscriptions — that half is pinned by auth-service DemoCsOperatorDerivedRolesTest
+     * (ECOMMERCE_OPERATOR + the WMS operator tier). If this ever answers assigned=false for
+     * `ecommerce`, the CS identity can no longer reach «계정 운영» at all; if it answers
+     * true for demo-corp, it would receive all five domain OPERATOR roles.
+     */
+    @Test
+    @DisplayName("assume gate: demo-cs may assume exactly ecommerce (no 2FA, no cap), and is refused demo-corp / fan-platform")
+    void csOperatorMayAssumeOnlyEcommerce() {
+        var ecommerce = assignmentCheck.check(CS_OIDC_SUBJECT, "ecommerce");
+        assertThat(ecommerce.assigned()).isTrue();
+        assertThat(ecommerce.mfaRequired())
+                .as("SUPPORT_LOCK require_2fa=FALSE and no tenant_entry_policy row is seeded")
+                .isFalse();
+        assertThat(ecommerce.delegatedScope())
+                .as("a normal (home) admission — no partnership cap narrows the derived roles")
+                .isNull();
+
+        assertThat(assignmentCheck.check(CS_OIDC_SUBJECT, "demo-corp").assigned()).isFalse();
+        assertThat(assignmentCheck.check(CS_OIDC_SUBJECT, "fan-platform").assigned()).isFalse();
+    }
 }
