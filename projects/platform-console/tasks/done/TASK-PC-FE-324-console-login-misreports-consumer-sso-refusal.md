@@ -8,7 +8,7 @@ TASK-PC-FE-324
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -84,7 +84,7 @@ grantType=authorization_code, clientId=platform-console-web
   - 콜백 라우트 시험(`tests/unit/auth-routes.test.ts`): 풀 거절→`sso_wrong_account` / 다른 `invalid_grant`(만료 코드)→`token_exchange_failed`(대조군, Failure Scenario 1) / 네트워크 실패(fetch throw)→`token_exchange_failed` / 5xx(본문 없음)→`token_exchange_failed`.
 
 - [x] **AC-2** — bite: 구분 분기(`isConsumerPoolSsoRefusal` 호출 + `sso_wrong_account` 리다이렉트)를 지우고 `tests/unit/auth-routes.test.ts` 를 돌렸다 — **정확히 1개**(풀 거절 시험)만 빨강, 나머지 21개는 그대로 초록. 분기를 되돌리자 22/22 초록으로 복귀. (일회성 — diff 는 커밋에 남지 않음, 이 레코드가 증거.)
-- [ ] **AC-3** — ⚪ 데모 창: 스토어 로그인 → 같은 브라우저 콘솔 로그인 → 새 문구 → 로그아웃 → demo@ 로그인 성공. **측정 안 함** — 이 구현 세션은 실제 데모 환경(IAM+콘솔+스토어 기동)을 띄우지 않았다. AC-1 의 디컴파일 근거가 이미 "로그아웃 버튼 단독으로는 IdP 세션이 안 끝난다" 를 보여주므로, AC-3 을 측정하더라도 "로그아웃 → 성공" 한 줄로는 안 끝나고 스토어 탭 로그아웃까지 밟아야 재현될 것 — 다음 데모 창에서 그 전제로 측정할 것.
+- [x] **AC-3** — ⚪→✅ 25차 데모 창(2026-10-09 UTC) 라이브 측정. 1차 시도는 스토어에서 `demo@demo.com` 로 로그인한 채 콘솔 로그인 → IAM 이 **콘솔 자격을 이미 쥔 그 계정**의 재인증을 요구하는 화면을 보였다(`TASK-BE-610` 재인증 — auth 로그 `re-authentication required (TASK-BE-610)`) — 이것은 이 AC 의 측정이 아니다(소비자 풀 거절이 아니라 다른 경로). 2차 시도: 새 소비자 계정 `shopper1@demo.com`(이메일 미인증)으로 스토어 로그인 → 콘솔 로그인 → 이 티켓이 만든 새 문구 «다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다…» + 로그아웃 버튼이 보였다(auth 로그 `SECURITY: refused to mint a token whose tenant_id is the reserved pool value … platform-console-web`). AC-1 의 디컴파일 근거대로 콘솔 로그아웃 버튼 단독으로는 IdP 세션이 끝나지 않았다(설계대로 — `SsoWrongAccountLogout.tsx` 에 문서화됨); 소유자가 스토어 탭에서 로그아웃한 뒤 콘솔 로그인이 IAM 폼을 보였고 `demo@demo.com` 이 콘솔 토큰을 받았다(auth_db: code 19:19:15Z · token 19:19:16Z). AC 가 요구하는 전체 경로(새 문구 → 로그아웃 안내 → 성공)가 라이브로 성립했다 — 아래 § 25차 창 측정 기록.
 
 # Related Specs
 
@@ -125,3 +125,9 @@ grantType=authorization_code, clientId=platform-console-web
 
 - e2e: `e2e-smoke/login-page.spec.ts` 가 `provider_error`/`invalid_state`/`state_mismatch`/`token_exchange_failed` 를 검사하지만 이 코드들의 문구·동작을 바꾸지 않았다(새 코드만 추가) — 깨지지 않는다. `sso_wrong_account` 자체의 e2e 커버리지는 없음(범위 밖 — AC-3 참조).
 - iam-platform 쪽 코드는 **전혀 건드리지 않았다** — 소유 범위(platform-console) 를 지켰고, Out of Scope(`prompt=login` 등 IdP authorize 변경) 도 손대지 않았다.
+
+# 25차 데모 창 측정 기록 (2026-10-09 UTC, AMI `ami-03cc7efda4b0a7809`) — AC-3 닫음
+
+- 1차(demo@demo.com, 콘솔 자격 보유 계정) — `TASK-BE-610` 재인증 경로를 밟아 이 AC 의 측정이 아님.
+- 2차(shopper1@demo.com, 신규 소비자 계정) — 새 문구 + 로그아웃 버튼 노출(auth 로그로 거절 지점 재확인). 콘솔 로그아웃만으로는 IdP 세션이 안 끝남(설계대로, AC-1 디컴파일 근거와 일치) → 스토어 탭 로그아웃 후 콘솔 재로그인 → `demo@demo.com` 콘솔 토큰 발급 성공(19:19:16Z).
+- 이 티켓의 전체 AC(0~3) 가 닫혔다.

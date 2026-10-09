@@ -4,7 +4,7 @@ TASK-BE-628
 
 # Status
 
-review
+done
 
 # Title
 
@@ -65,8 +65,8 @@ iam-platform
 - [x] **AC-2** — 로그인 불가: `password_hash` · `oidc_subject` 둘 다 NULL, 역할 행 0 — IT 단언.
 - [x] **AC-3** — 배정은 정확히 `{demo-corp}` — IT 단언(넓어지는 쪽도 빨강).
 - [x] **AC-4** — `GET /api/admin/operators?tenantId=demo-corp` 가 이 운영자를 `homeTenantId=ecommerce` 로 돌려준다 — IT 단언.
-- [ ] **AC-5** — CI iam 통합 레인(`Integration (iam A/B)`) 초록.
-- [ ] **AC-6** — 다음 데모 굽기 뒤 창에서 그 행이 회색으로 보인다(= `TASK-PC-FE-319` AC-6 과 같은 관찰). ⚪ 허용 — 2026-10-08 창의 SSM 1회분으로 먼저 본 결과는 Implementation Record 에.
+- [x] **AC-5** — CI iam 통합 레인(`Integration (iam A/B)`) 초록. impl PR **#4246** `statusCheckRollup` 확인: `Integration (iam A, Testcontainers) / integration` SUCCESS · `Integration (iam B, Testcontainers) / integration` SUCCESS(둘 다).
+- [x] **AC-6** — 다음 데모 굽기 뒤 창에서 그 행이 회색으로 보인다(= `TASK-PC-FE-319` AC-6 과 같은 관찰). ⚪→✅ 25차 데모 창(2026-10-09 UTC, AMI `ami-03cc7efda4b0a7809` 재굽기) 라이브: 소유자가 demo-corp 에 그룹을 만들고 «멤버 추가» 에서 `Store Staff (demo-corp assignment only)`(`assigned-only@demo.com`, HOME ecommerce) 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인했다.
 
 # Related Specs
 
@@ -92,3 +92,9 @@ iam-platform
 - 변경: 새 `R__seed_demo_assigned_only_operator.sql` · `DemoOperatorSeedIntegrationTest.java`(+3).
 - 라이브 1회분: 같은 SQL 을 2026-10-08 창(i-0445d76661ef0013d)의 iam DB 에 SSM 으로 넣기를 소유자가 승인 → 그 창을 운영 중인 다른 세션에 실행 요청. 결과는 PR · `TASK-PC-FE-319` 쪽에 기록.
 - IT 는 Testcontainers 라 CI iam 통합 레인에서 판정(AC-5).
+
+# 25차 데모 창 측정 기록 (2026-10-09 UTC, AMI `ami-03cc7efda4b0a7809`) — AC-5·6 닫음
+
+- **AC-5** — impl PR #4246 머지 시점 `statusCheckRollup`: `Integration (iam A, Testcontainers) / integration` = SUCCESS, `Integration (iam B, Testcontainers) / integration` = SUCCESS. 둘 다 초록.
+- **AC-6** — 재굽기(AMI 핀 갱신, 25차)로 이 시드가 데모 이미지에 실제로 올라간 뒤, 소유자가 demo-corp 에 그룹을 만들어 «멤버 추가» 화면에서 `assigned-only@demo.com`(HOME ecommerce) 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인했다.
+- 이 티켓의 전체 AC(1~6) 가 닫혔다.
