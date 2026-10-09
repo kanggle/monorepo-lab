@@ -185,6 +185,22 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("MONO-771 S4: assigned but mfaRequired=true, base token without mfa → 400 invalid_grant + insufficient_user_authentication")
+    void mfaRequired_baseTokenWithoutMfa_refusedOnTheWire() throws Exception {
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, true));
+
+        String base = mintBaseToken("assume-op-771");
+        MvcResult result = assumeTenant(base, SELECTED_TENANT);
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(body.get("error_description").asText()).isEqualTo("insufficient_user_authentication");
+        assertThat(body.has("access_token")).isFalse();
+    }
+
+    @Test
     @DisplayName("happy: assigned + subscription → tenant_id=selected + entitled_domains, NO refresh_token, same iss")
     void happyPath() throws Exception {
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))

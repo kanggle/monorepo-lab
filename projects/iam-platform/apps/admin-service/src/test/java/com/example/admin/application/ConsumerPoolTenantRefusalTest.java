@@ -87,7 +87,9 @@ class ConsumerPoolTenantRefusalTest {
     void assignmentCheck_pool_notAssigned_evenForPlatformScopeWithRow() {
         OperatorAssignmentCheckUseCase useCase = new OperatorAssignmentCheckUseCase(
                 tenantScopeResolver, assignmentPort, new OperatorOidcSubjectResolver(operatorPort),
-                partnershipPort, new UnboundedHostEntitledScopeResolver());
+                partnershipPort, new UnboundedHostEntitledScopeResolver(),
+                // TASK-MONO-771 S4: no tenant has an entry policy in this suite (row absent = off).
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()));
         // the "row exists" / "platform scope" inputs that would otherwise say yes
         lenient().when(operatorPort.findByOidcSubject(OIDC_SUBJECT))
                 .thenReturn(Optional.of(operator(AdminOperator.PLATFORM_TENANT_ID)));

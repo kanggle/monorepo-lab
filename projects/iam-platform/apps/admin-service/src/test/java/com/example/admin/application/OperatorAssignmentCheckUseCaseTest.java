@@ -65,7 +65,9 @@ class OperatorAssignmentCheckUseCaseTest {
         // the SAME component the login-time exchange uses — not a stubbed-away mock.
         OperatorOidcSubjectResolver resolver = new OperatorOidcSubjectResolver(operatorPort);
         useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort, resolver,
-                partnershipPort, new UnboundedHostEntitledScopeResolver());
+                partnershipPort, new UnboundedHostEntitledScopeResolver(),
+                // TASK-MONO-771 S4: no tenant has an entry policy in this suite (row absent = off).
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()));
     }
 
     private AdminOperatorPort.OperatorView operator(String tenantId, String status, long internalId) {

@@ -75,7 +75,7 @@ public class IamOidcJwksSubjectTokenValidator implements IamOidcSubjectTokenVali
     }
 
     @Override
-    public String validateAndExtractSubject(String subjectToken) {
+    public ValidatedSubject validate(String subjectToken) {
         if (subjectToken == null || subjectToken.isBlank()) {
             throw new SubjectTokenInvalidException("subject_token is missing");
         }
@@ -112,7 +112,23 @@ public class IamOidcJwksSubjectTokenValidator implements IamOidcSubjectTokenVali
         if (subject == null || subject.isBlank()) {
             throw new SubjectTokenInvalidException("Subject token has no sub claim");
         }
-        return subject;
+        // TASK-MONO-771 (security.md row 7): EXTRACT amr — not a validation step. Anything but a
+        // list of strings reads as the empty set (= no second factor, fail-closed); never a 401.
+        return new ValidatedSubject(subject, readAmr(claims.get("amr")));
+    }
+
+    /** {@code amr} as a set of non-blank strings; absent / non-array / non-string elements ⇒ ignored. */
+    static Set<String> readAmr(Object raw) {
+        if (!(raw instanceof java.util.Collection<?> values)) {
+            return Set.of();
+        }
+        java.util.LinkedHashSet<String> amr = new java.util.LinkedHashSet<>();
+        for (Object v : values) {
+            if (v instanceof String s && !s.isBlank()) {
+                amr.add(s);
+            }
+        }
+        return amr;
     }
 
     /** Reads the JWS header {@code kid} without trusting the (yet-unverified) body. */

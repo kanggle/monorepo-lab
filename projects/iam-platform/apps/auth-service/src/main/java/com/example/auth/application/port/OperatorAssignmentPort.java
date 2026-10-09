@@ -75,14 +75,25 @@ public interface OperatorAssignmentPort {
      *                       {@code roles} to the delegated {@code roles} verbatim (never
      *                       re-deriving from the entitled domains).
      */
-    record AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
+    record AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope,
+                            boolean mfaRequired) {
+
+        /**
+         * TASK-MONO-771 — a result admin-service answered with {@code mfaRequired=false}. Only for
+         * callers that construct a result directly (tests); the production adapter
+         * ({@code AdminAssignmentClient}) always sets {@code mfaRequired} from the response and reads
+         * an ABSENT field as {@code true} (auth-to-admin.md — fail-closed).
+         */
+        public AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
+            this(assigned, orgScope, delegatedScope, false);
+        }
 
         /**
          * Back-compat convenience for a normal (non-partnership) assignment — a
-         * two-field result with no cross-org cap.
+         * two-field result with no cross-org cap ({@code mfaRequired=false}, as above).
          */
         public AssignmentResult(boolean assigned, List<String> orgScope) {
-            this(assigned, orgScope, null);
+            this(assigned, orgScope, null, false);
         }
     }
 

@@ -470,6 +470,65 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
+    // --- TASK-MONO-771 S4 — second factor on the exchange (V0013 role flag + V0047 policy) ---
+
+    @org.junit.jupiter.api.AfterEach
+    void clearMfaFixtures() {
+        jdbcTemplate.update("DELETE FROM tenant_entry_policy");
+        jdbcTemplate.update("""
+                DELETE b FROM admin_operator_roles b
+                  JOIN admin_operators o ON o.id = b.operator_id
+                 WHERE o.operator_id = ?
+                """, SUPER_OP_UUID);
+    }
+
+    private void bindSuperAdminRole(String operatorUuid) {
+        jdbcTemplate.update("""
+                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+                SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
+                  FROM admin_operators o JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
+                 WHERE o.operator_id = ?
+                """, operatorUuid);
+    }
+
+    @Test
+    @DisplayName("MONO-771 AC-1: SUPER_ADMIN (require_2fa, V0013) + amr=[pwd] → 403 MFA_REQUIRED, no token")
+    void ac1_superAdminWithoutMfa_403() throws Exception {
+        bindSuperAdminRole(SUPER_OP_UUID);
+        String subject = sign(oidcToken(SUPER_OP_OIDC).claim("amr", java.util.List.of("pwd")));
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(subject)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MFA_REQUIRED"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("MONO-771 AC-1: SUPER_ADMIN + amr=[pwd,otp,mfa] → 200 operator token")
+    void ac1_superAdminWithMfa_200() throws Exception {
+        bindSuperAdminRole(SUPER_OP_UUID);
+        String subject = sign(oidcToken(SUPER_OP_OIDC).claim("amr", java.util.List.of("pwd", "otp", "mfa")));
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(subject)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("MONO-771 OD-3: operator's home tenant has its entry policy ON (V0047 row) → 403 MFA_REQUIRED without mfa")
+    void od3_homePolicyOn_403() throws Exception {
+        jdbcTemplate.update("INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, updated_by, version)"
+                + " VALUES ('wms', TRUE, NOW(6), NULL, 0)");
+        String subject = sign(oidcToken(MAPPED_OP_OIDC).claim("amr", java.util.List.of("pwd")));
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(subject)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MFA_REQUIRED"));
+    }
+
     // --- Regression: ADR-014 D1 Option A stays rejected -------------------
 
     @Test

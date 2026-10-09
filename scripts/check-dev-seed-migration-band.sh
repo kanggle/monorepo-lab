@@ -92,8 +92,12 @@ fail=0
 # Anything else under src/main/resources/db/ is an error, not a skip — see the
 # LOCATION INVENTORY below.
 # ---------------------------------------------------------------------------
+# · migration-demo (TASK-MONO-771 S4, 2026-10-09) — iam admin-service only; the
+#   portfolio-demo overlay (`infra/demo/iam-traefik.override.yml`) ADDS it to
+#   SPRING_FLYWAY_LOCATIONS next to db/migration + db/migration-dev, so it joins the
+#   same sequence ⇒ dev, judged. Today it holds one R__ (unversioned) file only.
 PROD_KINDS=(migration)
-DEV_KINDS=(migration-dev seed)
+DEV_KINDS=(migration-dev seed migration-demo)
 INERT_KINDS=(migration-h2)
 
 kind_class() {

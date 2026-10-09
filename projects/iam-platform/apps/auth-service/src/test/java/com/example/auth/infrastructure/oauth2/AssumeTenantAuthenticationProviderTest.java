@@ -296,6 +296,95 @@ class AssumeTenantAuthenticationProviderTest {
         verify(tokenGenerator, never()).generate(any());
     }
 
+    // ── TASK-MONO-771 S4 — second-factor gate (auth-api.md § Assume-Tenant Exchange, OD-2) ──────
+
+    private Jwt subjectWithAmr(java.util.List<String> amr) {
+        Jwt.Builder b = Jwt.withTokenValue(SUBJECT_TOKEN)
+                .header("alg", "RS256")
+                .subject(OIDC_SUBJECT)
+                .claim("tenant_id", "iam")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300));
+        if (amr != null) {
+            b.claim("amr", amr);
+        }
+        return b.build();
+    }
+
+    private void stubMint() {
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(1800)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+    }
+
+    private static void assertInsufficientUserAuthentication(Throwable e) {
+        assertThat(e).isInstanceOf(OAuth2AuthenticationException.class);
+        var error = ((OAuth2AuthenticationException) e).getError();
+        assertThat(error.getErrorCode()).isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+        // whole-value equality — the contract's fixed discriminator (HS-C)
+        assertThat(error.getDescription()).isEqualTo("insufficient_user_authentication");
+    }
+
+    @Test
+    @DisplayName("AC-1b (F2): platform operator, mfaRequired=true, amr=[pwd] → invalid_grant + insufficient_user_authentication, no mint")
+    void mfaRequired_withoutMfa_refused() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectWithAmr(java.util.List.of("pwd")));
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, true));
+
+        assertThatThrownBy(() -> provider.authenticate(exchange()))
+                .satisfies(AssumeTenantAuthenticationProviderTest::assertInsufficientUserAuthentication);
+        verify(tokenGenerator, never()).generate(any());
+    }
+
+    @Test
+    @DisplayName("AC-1b: mfaRequired=true and NO amr claim → refused (absent = no second factor)")
+    void mfaRequired_amrAbsent_refused() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectWithAmr(null));
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, true));
+
+        assertThatThrownBy(() -> provider.authenticate(exchange()))
+                .satisfies(AssumeTenantAuthenticationProviderTest::assertInsufficientUserAuthentication);
+        verify(tokenGenerator, never()).generate(any());
+    }
+
+    @Test
+    @DisplayName("AC-1b / AC-2: mfaRequired=true and amr ∋ mfa → minted")
+    void mfaRequired_withMfa_minted() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN))
+                .thenReturn(subjectWithAmr(java.util.List.of("pwd", "otp", "mfa")));
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, true));
+        stubMint();
+
+        assertThat(provider.authenticate(exchange())).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
+    }
+
+    @Test
+    @DisplayName("AC-2 control: tenant without policy (mfaRequired=false) → same amr=[pwd] subject is minted")
+    void mfaNotRequired_controlTenant_minted() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectWithAmr(java.util.List.of("pwd")));
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false));
+        stubMint();
+
+        assertThat(provider.authenticate(exchange())).isInstanceOf(OAuth2AccessTokenAuthenticationToken.class);
+    }
+
+    @Test
+    @DisplayName("MONO-771: the not-assigned refusal does NOT carry insufficient_user_authentication (distinct discriminator)")
+    void notAssigned_isNotTheStepUpDiscriminator() {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(subjectWithAmr(java.util.List.of("pwd")));
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT))
+                .thenThrow(new AssumeTenantDeniedException("operator is not assigned to the selected tenant"));
+
+        assertThatThrownBy(() -> provider.authenticate(exchange()))
+                .satisfies(e -> assertThat(((OAuth2AuthenticationException) e).getError().getDescription())
+                        .isNotEqualTo("insufficient_user_authentication"));
+    }
+
     @Test
     @DisplayName("supports() → AssumeTenantAuthenticationToken 만 true")
     void supportsOnlyAssumeTenantToken() {

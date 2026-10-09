@@ -106,6 +106,43 @@ class IamOidcJwksSubjectTokenValidatorTest {
         assertThat(validator.validateAndExtractSubject(token)).isEqualTo("acc-uuid-0001");
     }
 
+    // ── TASK-MONO-771 S4 — amr is EXTRACTED (security.md row 7), never a 401 by itself ─────────
+
+    @Test
+    @DisplayName("MONO-771: amr [pwd,otp,mfa] → extracted; hasSecondFactor=true")
+    void amrWithMfa_extracted() {
+        String token = baseToken().claim("amr", java.util.List.of("pwd", "otp", "mfa"))
+                .signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+        var v = validator.validate(token);
+        assertThat(v.subject()).isEqualTo("acc-uuid-0001");
+        assertThat(v.amr()).containsExactlyInAnyOrder("pwd", "otp", "mfa");
+        assertThat(v.hasSecondFactor()).isTrue();
+    }
+
+    @Test
+    @DisplayName("MONO-771: amr [pwd] → no second factor; the means value 'otp' alone is never read as mfa")
+    void amrWithoutMfa_noSecondFactor() {
+        String token = baseToken().claim("amr", java.util.List.of("pwd", "otp"))
+                .signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+        assertThat(validator.validate(token).hasSecondFactor()).isFalse();
+    }
+
+    @Test
+    @DisplayName("MONO-771: amr absent / not an array / non-string elements → empty set, still validates (no 401)")
+    void amrMalformedOrAbsent_emptySet() {
+        String absent = baseToken().signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+        String scalar = baseToken().claim("amr", "mfa")
+                .signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+        String numbers = baseToken().claim("amr", java.util.List.of(1, 2))
+                .signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+        for (String t : java.util.List.of(absent, scalar, numbers)) {
+            var v = validator.validate(t);
+            assertThat(v.subject()).isEqualTo("acc-uuid-0001");
+            assertThat(v.amr()).isEmpty();
+            assertThat(v.hasSecondFactor()).isFalse();
+        }
+    }
+
     @Test
     @DisplayName("wrong signature (different key) → 401 fail-closed")
     void wrongSignature_rejected() throws Exception {

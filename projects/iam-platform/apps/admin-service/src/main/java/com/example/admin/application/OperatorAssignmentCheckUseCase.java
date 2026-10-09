@@ -61,6 +61,8 @@ public class OperatorAssignmentCheckUseCase {
     // TASK-BE-477 (ADR-MONO-045 D3/D5): the cross-org partnership confinement inputs.
     private final TenantPartnershipPort partnershipPort;
     private final HostEntitledScopeResolver hostEntitledScopeResolver;
+    // TASK-MONO-771 S4: the shared second-factor requirement (the token exchange uses the SAME one).
+    private final OperatorSecondFactorRequirement secondFactorRequirement;
 
     /**
      * Boolean convenience kept for callers that need only the assignment verdict.
@@ -71,7 +73,8 @@ public class OperatorAssignmentCheckUseCase {
      *         {@code tenantId}; {@code false} fail-closed otherwise
      */
     public boolean isAssigned(String oidcSubject, String tenantId) {
-        return check(oidcSubject, tenantId).assigned();
+        // The assignment verdict only — no second-factor requirement read (TASK-MONO-771).
+        return resolve(oidcSubject, tenantId).result().assigned();
     }
 
     /**
@@ -96,16 +99,38 @@ public class OperatorAssignmentCheckUseCase {
      *         ({@code null} when unset / not assigned)
      */
     public Result check(String oidcSubject, String tenantId) {
+        Resolution resolution = resolve(oidcSubject, tenantId);
+        if (!resolution.result().assigned()) {
+            // auth-to-admin.md: assigned=false ⇒ mfaRequired=false, always — the requirement must not
+            // reveal operator existence beyond the boolean.
+            return resolution.result();
+        }
+        // TASK-MONO-771 S4 (auth-to-admin.md rule 6, OD-2): computed AFTER assigned=true, without
+        // changing it — the selected tenant's entry policy ∨ the operator's require_2fa role flag. Path
+        // independent: platform '*' (step 2 — this is what closes AC-0 F2), assignment (3) and partnership
+        // host reach (5) all reach here. A read failure propagates (→ 5xx → auth-service denies).
+        boolean mfaRequired = secondFactorRequirement.requiredForAssume(resolution.operator(), tenantId);
+        return resolution.result().withMfaRequired(mfaRequired);
+    }
+
+    /** The assignment verdict (rules 0-5) + the resolved operator row (null when not assigned). */
+    private record Resolution(Result result, AdminOperatorPort.OperatorView operator) {
+        static Resolution denied() {
+            return new Resolution(Result.notAssigned(), null);
+        }
+    }
+
+    private Resolution resolve(String oidcSubject, String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             // Blank/malformed selected tenant never resolves to an assignment.
-            return Result.notAssigned();
+            return Resolution.denied();
         }
         if (AdminOperator.isConsumerPool(tenantId)) {
             // TASK-BE-614: the consumer-pool tenant is never an assume target — not even for a
             // platform-scope operator, and not even if an assignment row to it exists (rows
             // created before ManageOperatorAssignmentUseCase refused it). auth-service refuses
             // it independently; this keeps the gate's own answer honest.
-            return Result.notAssigned();
+            return Resolution.denied();
         }
 
         // 1. Resolve admin_operators row, FAIL-CLOSED, account_id-only (ADR-040
@@ -118,11 +143,11 @@ public class OperatorAssignmentCheckUseCase {
         if (operator == null) {
             log.debug("assignment-check fail-closed: no admin_operators row for the OIDC subject "
                     + "(account_id)");
-            return Result.notAssigned();
+            return Resolution.denied();
         }
         if (!"ACTIVE".equals(operator.status())) {
             log.debug("assignment-check fail-closed: operator status={} (not ACTIVE)", operator.status());
-            return Result.notAssigned();
+            return Resolution.denied();
         }
 
         // 1b. TASK-MONO-751 — per-operator confinement (admin_operators.confined_tenant_id),
@@ -134,13 +159,13 @@ public class OperatorAssignmentCheckUseCase {
         if (isConfinedAway(operator.confinedTenantId(), tenantId)) {
             log.debug("assignment-check: operator confined to tenant={}; tenant={} refused",
                     operator.confinedTenantId(), tenantId);
-            return Result.notAssigned();
+            return Resolution.denied();
         }
 
         // 2. Platform-scope sentinel → assigned to any non-blank tenant. No
         // explicit assignment row, so org_scope defaults to null (→ ["*"]).
         if (AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())) {
-            return new Result(true, null, null);
+            return new Resolution(new Result(true, null, null), operator);
         }
 
         // 2b. TASK-MONO-750 (ADR-MONO-079 D4-A, rider R3): `fan-platform` is assumable by a
@@ -153,7 +178,7 @@ public class OperatorAssignmentCheckUseCase {
         if (AdminOperator.isPlatformOperatorOnlyTenant(tenantId)) {
             log.debug("assignment-check: tenant={} is platform-operator-only; operator home={} refused",
                     tenantId, operator.tenantId());
-            return Result.notAssigned();
+            return Resolution.denied();
         }
 
         // 3. Dual-read effective scope: assignment rows ∪ {legacy home tenant}.
@@ -164,7 +189,7 @@ public class OperatorAssignmentCheckUseCase {
             // (unset column OR legacy-home/platform with no explicit row). A normal
             // assignment carries NO delegatedScope block (partnership-only, additive).
             List<String> orgScope = assignmentPort.findOrgScope(operator.internalId(), tenantId);
-            return new Result(true, orgScope, null);
+            return new Resolution(new Result(true, orgScope, null), operator);
         }
 
         // 5. TASK-BE-477 (ADR-MONO-045 D3/D5) — cross-org partnership branch (additive).
@@ -175,9 +200,9 @@ public class OperatorAssignmentCheckUseCase {
         // assume-tenant token's entitled domains/roles; admin scope is NEVER widened).
         DelegatedScope delegated = resolveCrossOrgDelegatedScope(operator, tenantId);
         if (delegated != null) {
-            return new Result(true, null, delegated);
+            return new Resolution(new Result(true, null, delegated), operator);
         }
-        return Result.notAssigned();
+        return Resolution.denied();
     }
 
     /**
@@ -247,9 +272,23 @@ public class OperatorAssignmentCheckUseCase {
      * @param orgScope the selected assignment's department subtree-root ids, or
      *                 {@code null} when unset / not assigned (→ {@code ["*"]})
      */
-    public record Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
+    public record Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope,
+                         boolean mfaRequired) {
+
+        /**
+         * The assignment verdict before the TASK-MONO-771 requirement is attached ({@code mfaRequired=false}).
+         * Production code attaches the computed value through {@link #withMfaRequired} in {@link #check}.
+         */
+        public Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
+            this(assigned, orgScope, delegatedScope, false);
+        }
+
         static Result notAssigned() {
-            return new Result(false, null, null);
+            return new Result(false, null, null, false);
+        }
+
+        Result withMfaRequired(boolean required) {
+            return new Result(assigned, orgScope, delegatedScope, required);
         }
     }
 

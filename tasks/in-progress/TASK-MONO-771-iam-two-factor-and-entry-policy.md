@@ -54,8 +54,8 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정: `anyRoleRequires2fa` 호출자 = `AdminLoginService` 하나 · `require_2fa = TRUE` 역할(`SUPER_ADMIN` · `SECURITY_ANALYST`) · auth-service 의 TOTP 참조 0. 정책 플래그의 집을 정하고 이유를 적는다.
-- [ ] **AC-1** — 🔴 «전» 상태를 먼저 단언하는 시험: `require_2fa` 역할 운영자가 OIDC 토큰 교환으로 2단계 없이 운영자 토큰을 **받는다**(현재) → 구현 뒤 **받지 못한다**.
-- [ ] **AC-2** — «2단계 필수» 테넌트로 assume 할 때 `amr` 에 2단계가 없으면 거절 · 다른 테넌트는 무영향(대조군).
+- [x] **AC-1** — 🔴 «전» 상태를 먼저 단언하는 시험: `require_2fa` 역할 운영자가 OIDC 토큰 교환으로 2단계 없이 운영자 토큰을 **받는다**(현재) → 구현 뒤 **받지 못한다**.
+- [x] **AC-2** — «2단계 필수» 테넌트로 assume 할 때 `amr` 에 2단계가 없으면 거절 · 다른 테넌트는 무영향(대조군).
 - [ ] **AC-3** — 소비자 로그인은 TOTP 를 등록하지 않으면 지금과 같다.
 - [ ] **AC-4** — 기존 운영자 전이 경로(유예 또는 등록 유도)가 시험 또는 라이브로 확인된다.
 
@@ -392,3 +392,86 @@ monorepo
 - ⚪ 라이브 QR 스캔(실제 인증 앱 카메라) 미검증 — zxing 왕복(인코드→디코드)은 시험으로 고정했지만, 실제 카메라 조건(초점·조명·앱별 디코더)에서의 스캔은 라이브 데모/브라우저 세션에서만 확인 가능하다.
 - ⚪ `AccountTotpRepositoryIntegrationTest`(S2b 가 연 Docker 의존 ⚪) — 이 슬라이스에서 변경 없음, 여전히 CI 첫 실행 대기.
 - ⚪ 새 third-party 의존성(`zxing`) 에 대한 라이선스/의존성 중앙 가드 — 저장소에 그런 가드가 없음을 확인했다(`scripts/` 전체를 훑어 의존성·라이선스 이름의 가드 0건, 버전 카탈로그 파일(`gradle/libs.versions.toml`) 없음 — 각 모듈 `build.gradle` 에 정확한 버전을 직접 박는 것이 기존 관행, 이 PR 도 그 관행을 따랐다).
+
+
+---
+
+## S4 기록 (2026-10-09 UTC)
+
+> 구현 = Opus 5.5 (backend-engineer) · worktree `feat/mono-771-s4-enforce`(origin/main `1a9b42333`, S1 · S2a · S2b · S2c · S3 포함). 범위 = S4 행 그대로 — 정책 관리 API/UI 는 S5. AC-1 · AC-2 는 **로컬에서 통과한 단위 · 슬라이스 증거**로 체크했다(아래). 통합 시험(Testcontainers)은 이 호스트에 Docker 가 없어 **CI 첫 실행** ⚪.
+
+### 바꾼 파일
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| admin 마이그레이션 | `db/migration/V0047__create_tenant_entry_policy.sql` | 빈 표(행 없음 = 꺼짐) · `CHECK (tenant_id <> '*')` · `updated_by` FK · `version INT` |
+| admin port · JPA | `application/port/TenantEntryPolicyPort` · `infrastructure/persistence/TenantEntryPolicy{JpaEntity,JpaRepository,PortImpl}` | 읽기 전용(`IN` 한 번). `'*'`·공백은 묻지 않는다. 읽기 실패는 «꺼짐» 으로 삼키지 않고 전파 |
+| admin 판정 | `application/OperatorSecondFactorRequirement`(신규) | 두 진입이 **같은 한 곳**에서 요구를 계산: 교환 = 역할 `require_2fa` ∨ (홈 ∪ assignment 행) 중 정책 ON(파트너십 미독 · 홈 `'*'` 기여 없음) / assume = 선택 테넌트 정책 ∨ 역할. 모든 읽기 실패 → `SecondFactorRequirementUnavailableException` |
+| admin 교환 | `TokenExchangeService` · `IamOidcSubjectTokenValidator`(+`IamOidcJwksSubjectTokenValidator`) · `MfaRequiredException` · `AdminExceptionHandler` | 포트에 `validate()` → `ValidatedSubject(sub, amr)`(추출 — 부재 · 배열 아님 · 비문자열 = 빈 집합). 운영자 해석 **뒤** `"mfa" ∉ amr ∧ 요구` → `403 MFA_REQUIRED`, 읽기 실패 → `500 INTERNAL_ERROR`. `amr ∋ mfa` 면 요구 읽기 자체를 하지 않는다. 401 의미 불변 |
+| admin assume 게이트 | `OperatorAssignmentCheckUseCase` · `OperatorAssignmentCheckController` | `assigned=true` 뒤에만 `mfaRequired` 계산(규칙 6, 경로 불문 — 플랫폼 `'*'` 포함 ⇒ F2 닫힘). `assigned=false` ⇒ `false`, 요구 읽기 0. 응답 필드는 primitive — 생략 없음 |
+| 온보딩 | 코드 변경 0 | `OnboardingController` 는 그대로 `validateAndExtractSubject`(이제 포트의 default = `validate().subject()`) — `amr` 을 보지 않는다 |
+| auth | `OperatorAssignmentPort.AssignmentResult`(+`mfaRequired`) · `AdminAssignmentClient` · `AssumeTenantAuthenticationProvider` | 클라이언트: 명시적 JSON `false` 만 «불요», 부재 · null · 비불리언 = `true`(fail-closed). provider: 배정 게이트 뒤 `mfaRequired ∧ ¬hasSecondFactor(amr)` → `invalid_grant` + `error_description=insufficient_user_authentication`(고정 상수) |
+| 데모(OD-5) | `db/migration-demo/R__demo_relax_super_admin_require_2fa.sql`(신규 위치) · `infra/demo/iam-traefik.override.yml`(admin-service `SPRING_FLYWAY_LOCATIONS`) | 아래 § OD-5 |
+| F4 문구 | `db/migration-dev/R__seed_demo_operator.sql`(주석 2곳, 문장 불변) · console e2e `fixtures/seed.sql`(주석 2곳) | «토큰 교환은 2FA 를 안 본다» → S4 이후 사실로 정정. 세 번째(`admin-service/security.md:230-231`)는 S1 이 이미 정정 |
+
+### OD-5 — 완화가 닿는 곳 (데모 전용 seam)
+
+AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 — 거기서 완화하면 개발자 로컬 · CI e2e 까지 완화된다. 그래서 **새 Flyway 위치 `db/migration-demo`** 에 R__ 한 파일(SUPER_ADMIN `require_2fa=FALSE`)을 두고, 그 위치를 **데모 오버레이만** 싣는다(`wms-devseed.override.yml` 의 `SPRING_FLYWAY_LOCATIONS` 와 같은 기전).
+
+| 프로필 / 실행 | flyway locations | SUPER_ADMIN `require_2fa` |
+|---|---|---|
+| 포트폴리오 데모 (`infra/demo/iam-traefik.override.yml`, e2e 프로필 위 env 덮어쓰기) | migration + migration-dev + **migration-demo** | **FALSE** (완화) |
+| 기본 프로필 (개발자 로컬) · `dev` | migration + migration-dev | TRUE |
+| `e2e` (CI · nightly 의 IAM 컨테이너) | migration + migration-dev | TRUE — 단 console · federation e2e 하네스는 **자기 픽스처**에서 런타임 완화(기존 선례, 불변) |
+| `test` (admin IT) | migration + migration-dev | TRUE |
+| `prod` | migration | TRUE |
+
+정책 표(V0047)는 데모에서도 그대로 문다 — 데모의 2단계는 테넌트 정책 토글(S5)로 보인다. 고정: `DemoOnlyRequire2faRelaxationTest`(4건 — V0013 TRUE · migration/migration-dev 에 완화문 0 · 어떤 프로필 yml 도 `db/migration-demo` 를 싣지 않음 · prod = `db/migration` 단독 · 그 위치를 싣는 저장소 파일은 데모 오버레이뿐이고 CI 하네스 compose 는 아님). 🔴 결과: 데모 오버레이 없이 로컬 기본 프로필로 띄운 개발자는 `demo@demo.com` 으로 콘솔에 들어가려면 2단계를 등록해야 한다(의도 — OD-5 는 «데모 시드만»).
+
+### 검증 (rc 는 `cmd > file 2>&1; echo rc=$?`)
+
+| 무엇 | 결과 |
+|---|---|
+| 🔴 AC-1 «전» | 변경 **전** 코드에 임시 시험(`require_2fa` 역할 운영자 · 토큰 `amr` 에 mfa 없음 → `exchange()` 가 토큰을 **돌려준다** 단언) — rc=0, 1/1 통과(= 구멍이 실재). 변경 **뒤** 같은 단언(새 포트 API 로만 맞춤) → rc=1, `MfaRequiredException` 으로 RED. 그 뒤 임시 시험을 지우고 «거절» 단언(`TokenExchangeServiceTest` S4 절)으로 대체 |
+| `:admin-service:test` | rc=0 — 153 클래스 · 979건 · 실패 0 · skip 58(Docker 조건부) |
+| `:auth-service:test` | rc=0 — 146 클래스 · 1163건 · 실패 0 · skip 33 |
+| `compileTestJava` (admin · auth, 통합 소스 포함) | rc=0 |
+| `bash scripts/check-jwt-claims-registry.sh` | rc=0 («all 7 claims … registered») |
+| `bash infra/demo/verify-demo-wrapper.sh` (정적) | rc=0 — «정적 검증 PASS», FAIL 0. `--live` 미실행 ⚪ |
+| 🔴 bite 1 — 교환 게이트 통째 제거(`if (false)`) | admin 전체에서 **`TokenExchangeServiceTest` 의 S4 시험 7건만** RED(AC-1 ×2 · OD-3 ×3 · 읽기 실패 ×2) → 복원 |
+| 🔴 bite 1b — 교환에서 `amr` 항만 제거(요구면 무조건 거절) | **2건만** RED(`amr ∋ mfa → 발급` · OD-3 의 mfa 재교환) → 복원 |
+| 🔴 bite 2 — auth provider 비교 제거 | auth 전체에서 **AC-1b 2건만** RED(`amr=[pwd]` · `amr` 부재) → 복원. AC-2 «대조군 발급» 은 비교가 없어도 초록이 정상(거절 쪽 단언이 무는 자리) |
+| 🔴 bite 3 — OD-5 완화문을 `migration-dev/R__seed_demo_operator.sql` 에 덧붙임 | `DemoOnlyRequire2faRelaxationTest` 1건 RED → 복원(주석 변경만 남음 확인) |
+| 필수 가드 3종(`git add` 뒤) | `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` 전부 rc=0. `scripts/` 추가 · 삭제 없음 |
+
+### 증거 지도 (AC ↔ 시험)
+
+- **AC-1**: `TokenExchangeServiceTest`(역할 + `[pwd]` / `amr` 부재 → `MfaRequiredException` · `amr ∋ mfa` → 발급 · 대조군 발급 · 401 불변 ×2) + `AdminLoginControllerSliceTest`(HTTP 매핑: `403 MFA_REQUIRED` · `500 INTERNAL_ERROR` · `401 TOKEN_INVALID` 불변) + `IamOidcJwksSubjectTokenValidatorTest`(추출 3건) — 로컬 통과. IT `TokenExchangeIntegrationTest`(SUPER_ADMIN 실제 V0013 플래그 × `amr` 왕복 · 홈 정책 행) ⚪ CI.
+- **AC-1b (OD-2 · F2)**: `OperatorAssignmentCheckMfaRequiredTest`(플랫폼 `'*'` SUPER_ADMIN → `assigned ∧ mfaRequired`) + `AssumeTenantAuthenticationProviderTest`(거절 · 고정 판별자 전체 일치 · mfa 면 발급). IT `OperatorAssignmentCheckIntegrationTest` · `AssumeTenantExchangeIntegrationTest`(실 `/oauth2/token` 응답 본문) ⚪ CI.
+- **AC-2**: `OperatorAssignmentCheckMfaRequiredTest`(정책 ON 테넌트 true · 같은 운영자 대조 테넌트 false · 플랫폼/파트너십 경로 불문) + provider(대조군 `mfaRequired=false` → 발급) + `OperatorAssignmentCheckControllerSliceTest`(필드 항상 존재 · 읽기 실패 500). IT(V0047 실표 · `require_mfa=FALSE` 행 = 꺼짐 · `CHECK '*'`) ⚪ CI.
+- **OD-3**: 배정 테넌트 정책 ON → 403 · 홈 `'*'` 기여 없음(질의 인자 캡처) · 파트너십 host 미질의.
+- **fail-closed**: `mfaRequired` 부재 · null · 비불리언 → true(`AdminAssignmentClientUnitTest` 4건) · 요구 읽기 실패 → 500(교환) / 5xx(내부 체크).
+- **온보딩 불변**: `OnboardingControllerSecondFactorRegressionTest` — 포트의 실제 구현(람다)을 거쳐 `amr=[pwd]` 인 호출자가 그대로 201.
+
+### e2e / nightly 영향 (grep 으로 판정 — 실행 아님)
+
+| 스위트 | 로그인 신원 | S4 뒤 |
+|---|---|---|
+| console e2e(nightly) — `projects/platform-console/.../tests/e2e/fixtures/seed.sql` | `e2e-super-admin`(`'*'`, SUPER_ADMIN) · `e2e-target-operator`(역할 없음) | 픽스처 § 5 가 SUPER_ADMIN 을 이미 완화 → 역할 항 거짓, 정책 표 비어 있음 ⇒ 교환 · assume 모두 이전과 같다. 픽스처는 **주석만** 정정 |
+| federation-hardening e2e — `tests/federation-hardening-e2e/fixtures/seed.sql` | SUPER_ADMIN(`'*'`) + 위임 TENANT_ADMIN 들 | 같은 완화가 있고(§ 5), TENANT_ADMIN 은 `require_2fa=FALSE` ⇒ 무영향. 변경 없음 |
+| `scripts/console-demo/seed/01-iam.sql`(로컬 콘솔 데모) | SUPER_ADMIN | 이미 완화 ⇒ 무영향 |
+| 포트폴리오 데모 `infra/demo/seed/lib.sh` `operator_token`(assume `demo-corp` · demo@/requester@) | SUPER_ADMIN 둘 | OD-5 완화(데모 오버레이)로 통과. 오버레이가 빠지면 이 시드가 `invalid_grant insufficient_user_authentication` 으로 실패한다 — 주석에 명기 |
+| e2e 스펙 디렉터리에서 `demo@demo.com` · `requester@` · `platform@` 사용 | — | 0건(grep) |
+
+### 명세와 다르게 · 명세가 말하지 않아 고른 것
+
+1. **V0047 존재 가드** — data-model 은 «`INFORMATION_SCHEMA` 존재 가드(V0027/V0029 패턴, `@var` 금지)» 라 적었는데 V0029 패턴 자체가 `@var` 를 쓴다. 표 생성이라 `CREATE TABLE IF NOT EXISTS` 로 했다(S2b 의 V0043 과 같은 선택).
+2. **`amr ∋ mfa` 인 교환은 요구 읽기를 하지 않는다** — 결과는 계약과 같고(요구 여부와 무관하게 발급), 읽기 실패로 2단계를 거친 운영자까지 500 을 받는 일을 없앤다.
+3. **auth `AssignmentResult` 의 back-compat 생성자(2·3 인자)는 `mfaRequired=false`** — 시험이 직접 만드는 결과용. 운영 경로(`AdminAssignmentClient`)는 항상 응답에서 읽고 부재를 `true` 로 읽는다.
+4. **데모 완화의 집** — OD-5 문구는 «데모 dev 시드» 인데 그 파일(`migration-dev`)은 기본 프로필에서도 돈다(AC-0). 그래서 데모 전용 위치를 새로 만들었다(위 § OD-5). 소유자 결정의 의도(«데모만»)를 지키는 해석이며, 결과로 로컬 기본 프로필의 데모 신원은 완화되지 **않는다**.
+
+### ⚪ 열린 것
+
+- ⚪ CI 첫 실행: `TokenExchangeIntegrationTest`(S4 3건) · `OperatorAssignmentCheckIntegrationTest`(S4 5건 — V0047 · CHECK) · `AssumeTenantExchangeIntegrationTest`(S4 1건, 실 HTTP 본문).
+- ⚪ 라이브(데모 실기동 · 콘솔 단계 상승 왕복 · 데모 재부팅 뒤 R__ 적용) 미실행. 머지 뒤 nightly e2e 1회 확인 권장(console · federation).
+- ⚪ AC-3 · AC-4 는 이 슬라이스 밖(S2b 증거 · S5).

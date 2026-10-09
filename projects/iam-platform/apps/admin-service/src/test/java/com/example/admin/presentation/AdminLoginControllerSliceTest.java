@@ -102,6 +102,46 @@ class AdminLoginControllerSliceTest {
         verifyAuditOutcome(Outcome.FAILURE, false);
     }
 
+    // ── TASK-MONO-771 S4 — token-exchange HTTP mapping (admin-api.md § token-exchange Errors) ──
+
+    private static final String EXCHANGE_BODY = "{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\","
+            + "\"subject_token\":\"h.p.s\","
+            + "\"subject_token_type\":\"urn:ietf:params:oauth:token-type:access_token\"}";
+
+    @Test
+    void tokenExchange_mfaRequired_maps403MfaRequired_not401() throws Exception {
+        when(tokenExchangeService.exchange("h.p.s"))
+                .thenThrow(new com.example.admin.application.exception.MfaRequiredException());
+
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType(MediaType.APPLICATION_JSON).content(EXCHANGE_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MFA_REQUIRED"));
+    }
+
+    @Test
+    void tokenExchange_requirementReadFailure_maps500InternalError() throws Exception {
+        when(tokenExchangeService.exchange("h.p.s"))
+                .thenThrow(new com.example.admin.application.exception.SecondFactorRequirementUnavailableException(
+                        new RuntimeException("db down")));
+
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType(MediaType.APPLICATION_JSON).content(EXCHANGE_BODY))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+    }
+
+    @Test
+    void tokenExchange_unmapped_still401TokenInvalid() throws Exception {
+        when(tokenExchangeService.exchange("h.p.s"))
+                .thenThrow(new com.example.admin.application.exception.SubjectTokenInvalidException("no operator"));
+
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType(MediaType.APPLICATION_JSON).content(EXCHANGE_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+    }
+
     @Test
     void validTotpReturns200WithTokenAndTwofaUsedTrue() throws Exception {
         when(loginService.login(eq(OPERATOR_ID), eq("devpassword123!"), eq("123456"), isNull()))

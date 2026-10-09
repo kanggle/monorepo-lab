@@ -80,6 +80,13 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
     /** Customer tenants are enterprise tenants (multi-tenancy.md). */
     static final String CUSTOMER_TENANT_TYPE = "B2B_ENTERPRISE";
 
+    /**
+     * TASK-MONO-771 (auth-api.md § Assume-Tenant Errors, HS-C) — the FIXED {@code error_description} of the
+     * «second factor required» refusal. Clients match it by whole-value equality; no other
+     * {@code invalid_grant} in this service may use it (or the console would read «not assigned» as «step up»).
+     */
+    public static final String INSUFFICIENT_USER_AUTHENTICATION = "insufficient_user_authentication";
+
     private final JwtDecoder subjectTokenDecoder;
     private final OperatorAssignmentPort operatorAssignmentPort;
     private final OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
@@ -135,8 +142,8 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
             // TASK-MONO-771 (jwt-standard-claims.md § amr): the validated subject's login methods, copied
-            // onto the assumed token for downstream visibility. NO decision is made on it here — the
-            // second-factor gate on this exchange is S4 (ADR-MONO-080 D4); null = the subject carried none.
+            // onto the assumed token for downstream visibility, and compared with admin-service's
+            // `mfaRequired` in step 2c below (S4, ADR-MONO-080 D4); null = the subject carried none.
             subjectAmr = AuthenticationMethods.read(subjectJwt.getClaims().get("amr"));
             // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
             // no longer preserved from the subject token (TASK-BE-370) — the base
@@ -163,6 +170,7 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // grant for the customizer to inject.
         java.util.List<String> orgScope;
         OperatorAssignmentPort.DelegatedScope delegatedScope;
+        boolean mfaRequired;
         try {
             // TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): account_id-only — the
             // validated `sub` IS the account UUID and admin_operators.oidc_subject is
@@ -176,9 +184,22 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
             // entitled_domains/roles to the delegated slice. null for a normal
             // assignment → the BE-338/376 path stays byte-unchanged.
             delegatedScope = assignment.delegatedScope();
+            mfaRequired = assignment.mfaRequired();
         } catch (AssumeTenantDeniedException e) {
             log.debug("assume-tenant: assignment gate denied (fail-closed): {}", e.getMessage());
             throw invalidGrant("operator is not assigned to the selected tenant");
+        }
+
+        // --- 2c. TASK-MONO-771 S4 — second-factor gate (ADR-MONO-080 D4 · R2, OD-2). ---
+        // admin-service computed the requirement (selected tenant's entry policy ∨ require_2fa role, on
+        // every path — platform '*' included, which closes AC-0 F2); the ISSUER compares it with the
+        // subject's amr. The predicate is "mfa" ∈ amr only. An absent field already reads as required
+        // (AdminAssignmentClient). Refusal = invalid_grant + the FIXED error_description, distinct from
+        // the not-assigned / admin-down refusals above, so the console can offer step-up instead.
+        if (mfaRequired && !AuthenticationMethods.hasSecondFactor(subjectAmr)) {
+            log.debug("assume-tenant: second factor required for tenant={}, subject amr lacks mfa",
+                    selectedTenantId);
+            throw invalidGrant(INSUFFICIENT_USER_AUTHENTICATION);
         }
 
         // --- 3. Mint through the shared JwtGenerator + TenantClaimTokenCustomizer. ---
