@@ -102,7 +102,7 @@ export function ScmGuideScreen() {
                 관한 내용은 「권한 안내」 탭을 참고하세요.
               </p>
               <GuideReadingPath testid="scm-guide-reading-path">
-                처음이라면 「대표 업무 흐름」 탭의 <strong>발주</strong>와 <strong>보충 추천</strong>부터
+                처음이라면 「상태 변화」 탭의 <strong>발주</strong>와 <strong>보충 추천</strong>부터
                 보세요 — 재고 부족 알림에서 발주까지 이어지는 흐름이 SCM 의 핵심입니다.
                 나머지 탭은 필요할 때 찾아보면 됩니다.
               </GuideReadingPath>

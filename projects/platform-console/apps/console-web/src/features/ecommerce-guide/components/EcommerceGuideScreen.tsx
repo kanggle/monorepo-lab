@@ -69,7 +69,7 @@ export function EcommerceGuideScreen() {
                 참조.)
               </p>
               <GuideReadingPath testid="ecommerce-guide-reading-path">
-                처음이라면 「대표 업무 흐름」 탭의 <strong>주문</strong>과 <strong>배송</strong>부터 보세요 —
+                처음이라면 「상태 변화」 탭의 <strong>주문</strong>과 <strong>배송</strong>부터 보세요 —
                 주문이 어떻게 흐르고 배송이 어떻게 이어지는지가 핵심입니다. 나머지
                 상품·프로모션·셀러·사용자·알림은 필요할 때 찾아보는 참조입니다.
               </GuideReadingPath>

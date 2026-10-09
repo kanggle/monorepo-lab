@@ -155,23 +155,27 @@ describe('ErpGuideScreen', () => {
 
 // TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
 // standard guide tabs; each section id must now live inside the expected panel.
-describe('ErpGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
-  it('organises the existing sections into the 8 standard tabs', () => {
+describe('ErpGuideScreen — standard guide tabs (TASK-PC-FE-298 · 329)', () => {
+  it('organises the existing sections into the standard tabs', () => {
     render(<ErpGuideScreen />);
     expectDomainGuideTabs('erp-guide', {
       terms: [
         'erp-guide-master-states',
         'erp-guide-employment-states',
+        // TASK-PC-FE-329 — a definition, not a state change: moved out of 「상태 변화」.
+        'erp-guide-delegation-scopes',
         'erp-guide-concepts',
         'erp-guide-glossary'
       ],
+      // TASK-PC-FE-329 — 「자주 하는 작업」 holds the recipes; the screen table opens 「메뉴 안내」.
       usage: [
+        'erp-guide-recipes'
+      ],
+      menus: [
         'erp-guide-screens'
       ],
       flows: [
-        'erp-guide-recipes',
-        'erp-guide-approval-states',
-        'erp-guide-delegation-scopes'
+        'erp-guide-approval-states'
       ],
       services: [
         'erp-guide-services'

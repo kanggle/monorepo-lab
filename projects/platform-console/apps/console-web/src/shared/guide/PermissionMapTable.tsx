@@ -12,7 +12,7 @@ import {
 } from './permission-map';
 
 /**
- * TASK-PC-FE-298 — 권한·기능 매핑 표와 그 파생 뷰(메뉴별 설명 · 메뉴별 사용 절차 ·
+ * TASK-PC-FE-298 — 권한·기능 매핑 표와 그 파생 뷰(메뉴 안내 카드 ·
  * 알려진 불일치). 전부 `resolvePermissionMap()` 한 곳에서 읽는다 — 도메인 가이드 6개와
  * 전역 가이드가 같은 행을 보여주므로 한 행을 고치면 모든 화면이 같이 바뀐다.
  * 순수 서버 컴포넌트, 데이터 페치 없음(샘플 방문자도 그대로 본다).
@@ -29,7 +29,7 @@ const SAMPLE_LABEL: Record<ScreenStatus, string> = {
   pending: '준비 중',
 };
 
-/** 절차 문장용 — 「로그인하지 않았다면 …」 뒤에 붙는다. */
+/** 메뉴 안내 카드의 «필요한 권한» 줄 — 「로그인하지 않았다면 …」 뒤에 붙는다. */
 const SAMPLE_VISIT: Record<ScreenStatus, string> = {
   static: '같은 정적 화면이 그대로 열립니다',
   ready: '샘플 데이터로 열립니다',
@@ -195,8 +195,21 @@ export function PermissionMapTable({
   );
 }
 
-/** 메뉴별 설명 — 표보다 읽기 쉬운 카드형(도메인 가이드 탭용). */
+/**
+ * 메뉴 안내 — 메뉴 하나에 카드 하나: 여는 곳 · 필요한 권한 · 화면 내용 · 용도 · 할 수 있는 조작.
+ * 문장은 전부 매핑 행(설명 · CRUD · 게이트)에서 조립한다 — 화면에 없는 버튼을 지어내지 않기
+ * 위해 손으로 쓴 줄이 없다.
+ *
+ * TASK-PC-FE-329 — 옛 「메뉴별 설명」 카드와 「메뉴별 사용 절차」(번호형 4단계)를 이 카드
+ * 하나로 합쳤다. 절차의 3·4단계는 설명 카드 문장의 반복이었고, 절차에만 있던 것은 «여는 곳»
+ * 과 «필요한 권한» 두 줄뿐이었다.
+ */
 export function MenuDescriptions({ areas, testid }: { areas: MapArea[]; testid: string }) {
+  const line = (label: string, body: ReactNode) => (
+    <p className="mt-1 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">{label}</span> · {body}
+    </p>
+  );
   return (
     <div className="grid gap-4" data-testid={testid}>
       {rowsFor(areas).map((r) => (
@@ -205,52 +218,17 @@ export function MenuDescriptions({ areas, testid }: { areas: MapArea[]; testid: 
             {r.label} <span className="ml-1 font-mono text-[11px] font-normal text-muted-foreground">{r.href}</span>
           </p>
           <p className="mb-2 text-sm text-muted-foreground">{r.description}</p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">용도</span> · {r.purpose}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">할 수 있는 조작</span> · {crudText(r.crud)}
-            {r.crudNote ? ` (${r.crudNote})` : ''}
-          </p>
+          {line('여는 곳', `사이드바 「${r.path.join(' › ')}」`)}
+          {line(
+            '필요한 권한',
+            r.gate.kind === 'public'
+              ? '없음 — 로그인하지 않아도 열립니다'
+              : `${gateLabel(r.gate)}${'extra' in r.gate && r.gate.extra ? ` (${r.gate.extra})` : ''} · 로그인하지 않았다면 ${SAMPLE_VISIT[r.sample]}`,
+          )}
+          {line('용도', r.purpose)}
+          {line('할 수 있는 조작', `${crudText(r.crud)}${r.crudNote ? ` (${r.crudNote})` : ''}`)}
         </Card>
       ))}
-    </div>
-  );
-}
-
-/**
- * 메뉴별 사용 절차 — 각 메뉴를 여는 방법 · 필요한 권한 · 그 화면에서 할 수 있는 조작을
- * 번호형 절차로. 문장은 전부 매핑 행(설명 · CRUD · 게이트)에서 조립한다 — 화면에 없는
- * 버튼을 지어내지 않기 위해 손으로 쓴 단계가 없다.
- */
-export function MenuProcedures({ areas, testid }: { areas: MapArea[]; testid: string }) {
-  return (
-    <div data-testid={testid}>
-      {rowsFor(areas).map((r) => {
-        const steps = [
-          `사이드바 「${r.path.join(' › ')}」 를 누릅니다 (${r.href}).`,
-          r.gate.kind === 'public'
-            ? '권한이 필요 없습니다 — 로그인하지 않아도 열립니다.'
-            : `필요한 권한: ${gateLabel(r.gate)}${'extra' in r.gate && r.gate.extra ? ` (${r.gate.extra})` : ''}. 로그인하지 않았다면 ${SAMPLE_VISIT[r.sample]}.`,
-          `화면 내용: ${r.description}`,
-          `할 수 있는 조작: ${crudText(r.crud)}${r.crudNote ? ` — ${r.crudNote.replace(/\.$/, '')}` : ''}.`,
-        ];
-        return (
-          <Card key={r.href} className="mb-4" data-testid={`${testid}-${r.href}`}>
-            <p className="mb-3 text-sm font-semibold text-foreground">{r.label}</p>
-            <ol className="space-y-2">
-              {steps.map((s, i) => (
-                <li key={s} className="flex gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                    {i + 1}
-                  </span>
-                  <p className="text-sm text-muted-foreground">{s}</p>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        );
-      })}
     </div>
   );
 }

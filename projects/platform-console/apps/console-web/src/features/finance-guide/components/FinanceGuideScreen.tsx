@@ -43,6 +43,55 @@ export function FinanceGuideScreen() {
         prefix="finance-guide"
         areas={['finance']}
         domainLabel="Finance"
+        menusIntro={
+          <>
+              {/* ───────────────── 콘솔 화면 맵 ───────────────── */}
+              <h2
+                id="finance-guide-screens"
+                data-testid="finance-guide-screens"
+                className="mb-2 text-xl font-semibold"
+              >
+                콘솔 화면
+              </h2>
+              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+                4개 화면 각각이 보여주는 값입니다. <strong>개요</strong>는 계좌 목록을
+                보여주지 않고, 원장의 요약 정보와 내 기본 계좌 하나의 상태만
+                보여줍니다.
+              </p>
+              <div className="mb-10 overflow-x-auto">
+                <table className="data-table" data-testid="finance-guide-screens-table">
+                  <caption className="sr-only">Finance 콘솔 화면</caption>
+                  <thead>
+                    <tr className="text-left">
+                      <th scope="col" className="p-2">
+                        화면 (라우트)
+                      </th>
+                      <th scope="col" className="p-2">
+                        보여주는 값
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CONSOLE_SCREENS.map((s) => (
+                      <tr
+                        key={s.key}
+                        data-testid={`finance-guide-screen-${s.key}`}
+                        className="border-b border-border"
+                      >
+                        <StateTh label={s.label} name={s.route} />
+                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <NoteCard
+                title={ACCOUNT_ID_DRIVEN_NOTE.title}
+                body={ACCOUNT_ID_DRIVEN_NOTE.body}
+              />
+          </>
+        }
         panels={{
           overview: (
             <>
@@ -57,7 +106,7 @@ export function FinanceGuideScreen() {
                 환율 같은 개념을 쉽게 정리해 두었습니다.
               </p>
               <GuideReadingPath testid="finance-guide-reading-path">
-                처음이라면 「도메인 사용 가이드」의 <strong>콘솔 화면</strong>과 「공통 정의 및 용어」의 <strong>계좌 상태</strong>부터
+                처음이라면 「메뉴 안내」의 <strong>콘솔 화면</strong>과 「공통 정의 및 용어」의 <strong>계좌 상태</strong>부터
                 보세요 — 개요·계좌·원장이 무엇을 보여주고 계좌 상태가 무슨 뜻인지가
                 먼저입니다. 도메인 서비스·KYC·핵심 개념·용어집은 필요할 때 찾아보는
                 참조입니다.
@@ -180,56 +229,6 @@ export function FinanceGuideScreen() {
           ),
           usage: (
             <>
-              {/* ───────────────── 콘솔 화면 맵 ───────────────── */}
-              <h2
-                id="finance-guide-screens"
-                data-testid="finance-guide-screens"
-                className="mb-2 text-xl font-semibold"
-              >
-                콘솔 화면
-              </h2>
-              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                4개 화면 각각이 보여주는 값입니다. <strong>개요</strong>는 계좌 목록을
-                보여주지 않고, 원장의 요약 정보와 내 기본 계좌 하나의 상태만
-                보여줍니다.
-              </p>
-              <div className="mb-10 overflow-x-auto">
-                <table className="data-table" data-testid="finance-guide-screens-table">
-                  <caption className="sr-only">Finance 콘솔 화면</caption>
-                  <thead>
-                    <tr className="text-left">
-                      <th scope="col" className="p-2">
-                        화면 (라우트)
-                      </th>
-                      <th scope="col" className="p-2">
-                        보여주는 값
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CONSOLE_SCREENS.map((s) => (
-                      <tr
-                        key={s.key}
-                        data-testid={`finance-guide-screen-${s.key}`}
-                        className="border-b border-border"
-                      >
-                        <StateTh label={s.label} name={s.route} />
-                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <NoteCard
-                title={ACCOUNT_ID_DRIVEN_NOTE.title}
-                body={ACCOUNT_ID_DRIVEN_NOTE.body}
-              />
-            </>
-          ),
-          permissions: null,
-          flows: (
-            <>
               {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
               <h2
                 id="finance-guide-recipes"
@@ -252,6 +251,13 @@ export function FinanceGuideScreen() {
                 ))}
               </div>
             </>
+          ),
+          permissions: null,
+          flows: (
+            <p className="max-w-3xl text-sm text-muted-foreground" data-testid="finance-guide-no-state-flow">
+              Finance 화면에는 한 건이 여러 상태를 차례로 거쳐 가는 흐름이 없습니다. 계좌가 가질
+              수 있는 상태 5가지의 뜻은 「공통 정의 및 용어」의 <strong>계좌 상태</strong>에 있습니다.
+            </p>
           ),
           services: (
             <>

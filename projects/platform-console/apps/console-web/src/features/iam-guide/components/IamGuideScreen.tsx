@@ -92,6 +92,85 @@ export function IamGuideScreen() {
         prefix="iam-guide"
         areas={['iam', 'customer-identity', 'org']}
         domainLabel="IAM"
+        menusIntro={
+          <>
+              {/* ═════════════════ 2. 메뉴 사용법 ═════════════════ */}
+              <PartHeading id="iam-guide-usage" num="2.">
+                메뉴 사용법
+              </PartHeading>
+              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+                각 메뉴가 무엇을 하는 곳이고, 무엇을 할 수 있고, 무엇이 있어야 열리는지.
+                권한 키의 뜻은 <strong>3. 레퍼런스</strong>에서 찾아보세요.
+              </p>
+              <div className="mb-4 overflow-x-auto">
+                <table className="data-table" data-testid="iam-guide-menus">
+                  <caption className="sr-only">IAM 관련 콘솔 메뉴 사용법</caption>
+                  <thead>
+                    <tr className="text-left">
+                      <th scope="col" className="p-2">
+                        메뉴
+                      </th>
+                      <th scope="col" className="p-2">
+                        하는 일
+                      </th>
+                      <th scope="col" className="p-2">
+                        할 수 있는 작업
+                      </th>
+                      <th scope="col" className="p-2">
+                        열리는 조건
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CONSOLE_MENUS.map((menu) => (
+                      <tr
+                        key={menu.href}
+                        data-testid={`iam-guide-menu-${menu.href}`}
+                        className="border-b border-border"
+                      >
+                        <th scope="row" className="p-2 text-left align-top">
+                          <span className="block text-sm font-medium text-foreground">
+                            {menu.label}
+                          </span>
+                          <span className="mt-0.5 block font-mono text-[11px] font-normal text-muted-foreground">
+                            {menu.href}
+                          </span>
+                          <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+                            {menu.stub ? '준비 중' : menu.mutates ? '변경 가능' : '조회 전용'}
+                          </span>
+                        </th>
+                        <td className="p-2 align-top text-sm text-muted-foreground">
+                          {menu.purpose}
+                        </td>
+                        <td className="p-2 align-top text-sm text-muted-foreground">
+                          {menu.actions}
+                          {menu.note && (
+                            <span className="mt-1 block text-[11px] leading-tight text-muted-foreground">
+                              {menu.note}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 align-top text-sm">
+                          {menu.gate === '—' ? (
+                            <span className="text-muted-foreground">누구나</span>
+                          ) : menu.gate === '카드별로 다름' ? (
+                            <span className="text-muted-foreground">{menu.gate}</span>
+                          ) : (
+                            <Mono>{menu.gate}</Mono>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
+                권한이 없어도 메뉴는 보입니다 — 콘솔은 메뉴를 미리 숨기지 않고, 열었을 때
+                안내 문구를 보여줍니다. 어떤 역할이 어떤 메뉴를 여는지는{' '}
+                <strong>3. 레퍼런스</strong>의 접근 매트릭스에 있습니다.
+              </p>
+          </>
+        }
         panels={{
           overview: (
             <>
@@ -101,7 +180,7 @@ export function IamGuideScreen() {
               />
               <p className="mb-10 max-w-3xl text-sm text-muted-foreground">
                 IAM 은 <strong>누가 콘솔의 어떤 메뉴를 쓸 수 있는지</strong>를 정하는
-                곳입니다. 처음이라면 <strong>1</strong>(「공통 정의 및 용어」)과 <strong>2</strong>(「도메인 사용 가이드」)만
+                곳입니다. 처음이라면 <strong>1</strong>(「공통 정의 및 용어」)과 <strong>2</strong>(「메뉴 안내」)만
                 읽으세요 — <strong>3</strong>(「권한 안내」)은 역할 · 권한 키 · 도메인 롤을 찾아보는 표입니다.
               </p>
             </>
@@ -230,81 +309,6 @@ export function IamGuideScreen() {
                   />
                 ))}
               </div>
-              {/* ═════════════════ 2. 메뉴 사용법 ═════════════════ */}
-              <PartHeading id="iam-guide-usage" num="2.">
-                메뉴 사용법
-              </PartHeading>
-              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                각 메뉴가 무엇을 하는 곳이고, 무엇을 할 수 있고, 무엇이 있어야 열리는지.
-                권한 키의 뜻은 <strong>3. 레퍼런스</strong>에서 찾아보세요.
-              </p>
-              <div className="mb-4 overflow-x-auto">
-                <table className="data-table" data-testid="iam-guide-menus">
-                  <caption className="sr-only">IAM 관련 콘솔 메뉴 사용법</caption>
-                  <thead>
-                    <tr className="text-left">
-                      <th scope="col" className="p-2">
-                        메뉴
-                      </th>
-                      <th scope="col" className="p-2">
-                        하는 일
-                      </th>
-                      <th scope="col" className="p-2">
-                        할 수 있는 작업
-                      </th>
-                      <th scope="col" className="p-2">
-                        열리는 조건
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CONSOLE_MENUS.map((menu) => (
-                      <tr
-                        key={menu.href}
-                        data-testid={`iam-guide-menu-${menu.href}`}
-                        className="border-b border-border"
-                      >
-                        <th scope="row" className="p-2 text-left align-top">
-                          <span className="block text-sm font-medium text-foreground">
-                            {menu.label}
-                          </span>
-                          <span className="mt-0.5 block font-mono text-[11px] font-normal text-muted-foreground">
-                            {menu.href}
-                          </span>
-                          <span className="mt-1 inline-block rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
-                            {menu.stub ? '준비 중' : menu.mutates ? '변경 가능' : '조회 전용'}
-                          </span>
-                        </th>
-                        <td className="p-2 align-top text-sm text-muted-foreground">
-                          {menu.purpose}
-                        </td>
-                        <td className="p-2 align-top text-sm text-muted-foreground">
-                          {menu.actions}
-                          {menu.note && (
-                            <span className="mt-1 block text-[11px] leading-tight text-muted-foreground">
-                              {menu.note}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 align-top text-sm">
-                          {menu.gate === '—' ? (
-                            <span className="text-muted-foreground">누구나</span>
-                          ) : menu.gate === '카드별로 다름' ? (
-                            <span className="text-muted-foreground">{menu.gate}</span>
-                          ) : (
-                            <Mono>{menu.gate}</Mono>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mb-10 max-w-3xl text-xs text-muted-foreground">
-                권한이 없어도 메뉴는 보입니다 — 콘솔은 메뉴를 미리 숨기지 않고, 열었을 때
-                안내 문구를 보여줍니다. 어떤 역할이 어떤 메뉴를 여는지는{' '}
-                <strong>3. 레퍼런스</strong>의 접근 매트릭스에 있습니다.
-              </p>
               <h3 className="mb-2 text-lg font-medium">
                 운영자가 어디까지 일할 수 있는지 정하는 3가지
               </h3>
@@ -337,6 +341,35 @@ export function IamGuideScreen() {
                       </span>
                       {axis.ecommerceNote}
                     </p>
+                  </Card>
+                ))}
+              </div>
+              <h3 className="mb-2 text-lg font-medium">운영자를 온보딩하는 흐름</h3>
+              <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+                플랫폼 운영자 → 회사 관리자 → 직원 순으로 권한이 내려갑니다.
+              </p>
+              <ol className="mb-4 space-y-3">
+                {DELEGATION_CHAIN.map((step, i) => (
+                  <li
+                    key={step.actor}
+                    className="flex gap-3"
+                    data-testid={`iam-guide-delegation-${i}`}
+                  >
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{step.actor}</p>
+                      <p className="text-sm text-muted-foreground">{step.action}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="mb-10 grid gap-3">
+                {DELEGATION_GUARDS.map((g) => (
+                  <Card key={g.name} className="bg-muted/40">
+                    <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>
+                    <p className="text-sm text-muted-foreground">{g.desc}</p>
                   </Card>
                 ))}
               </div>
@@ -526,37 +559,10 @@ export function IamGuideScreen() {
             </>
           ),
           flows: (
-            <>
-              <h3 className="mb-2 text-lg font-medium">운영자를 온보딩하는 흐름</h3>
-              <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                플랫폼 운영자 → 회사 관리자 → 직원 순으로 권한이 내려갑니다.
-              </p>
-              <ol className="mb-4 space-y-3">
-                {DELEGATION_CHAIN.map((step, i) => (
-                  <li
-                    key={step.actor}
-                    className="flex gap-3"
-                    data-testid={`iam-guide-delegation-${i}`}
-                  >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{step.actor}</p>
-                      <p className="text-sm text-muted-foreground">{step.action}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              <div className="mb-10 grid gap-3">
-                {DELEGATION_GUARDS.map((g) => (
-                  <Card key={g.name} className="bg-muted/40">
-                    <p className="mb-1 text-sm font-medium text-foreground">{g.name}</p>
-                    <p className="text-sm text-muted-foreground">{g.desc}</p>
-                  </Card>
-                ))}
-              </div>
-            </>
+            <p className="max-w-3xl text-sm text-muted-foreground" data-testid="iam-guide-no-state-flow">
+              IAM 가이드에는 한 건이 여러 상태를 차례로 거쳐 가는 흐름을 따로 정리하지 않았습니다.
+              운영자를 온보딩하는 순서는 「자주 하는 작업」에 있습니다.
+            </p>
           ),
           services: null,
         }}

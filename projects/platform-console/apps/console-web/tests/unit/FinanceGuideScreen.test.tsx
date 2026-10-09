@@ -115,8 +115,8 @@ describe('FinanceGuideScreen', () => {
 
 // TASK-PC-FE-298 — the existing sections are MOVED (not rewritten) into the 8
 // standard guide tabs; each section id must now live inside the expected panel.
-describe('FinanceGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => {
-  it('organises the existing sections into the 8 standard tabs', () => {
+describe('FinanceGuideScreen — standard guide tabs (TASK-PC-FE-298 · 329)', () => {
+  it('organises the existing sections into the standard tabs', () => {
     render(<FinanceGuideScreen />);
     expectDomainGuideTabs('finance-guide', {
       terms: [
@@ -125,15 +125,22 @@ describe('FinanceGuideScreen — 8 standard guide tabs (TASK-PC-FE-298)', () => 
         'finance-guide-concepts',
         'finance-guide-glossary'
       ],
+      // TASK-PC-FE-329 — 「자주 하는 작업」 holds the recipes; the screen table opens 「메뉴 안내」;
+      // Finance has no state flow, so 「상태 변화」 says so and points at 계좌 상태 (terms).
       usage: [
-        'finance-guide-screens'
-      ],
-      flows: [
         'finance-guide-recipes'
+      ],
+      menus: [
+        'finance-guide-screens'
       ],
       services: [
         'finance-guide-services'
       ]
     });
+    expect(
+      screen
+        .getByTestId('finance-guide-tabs-panel-finance-guide-tab-flows')
+        .contains(screen.getByTestId('finance-guide-no-state-flow')),
+    ).toBe(true);
   });
 });

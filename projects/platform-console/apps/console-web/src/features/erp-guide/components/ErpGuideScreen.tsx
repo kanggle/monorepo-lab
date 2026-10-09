@@ -48,6 +48,51 @@ export function ErpGuideScreen() {
         prefix="erp-guide"
         areas={['erp']}
         domainLabel="ERP"
+        menusIntro={
+          <>
+              {/* ───────────────── 콘솔 화면 맵 ───────────────── */}
+              <h2
+                id="erp-guide-screens"
+                data-testid="erp-guide-screens"
+                className="mb-2 text-xl font-semibold"
+              >
+                콘솔 화면
+              </h2>
+              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+                6개 화면이 각각 보여주는 값입니다. <strong>개요</strong>는 마스터
+                건수에 내 결재 대기 건수와 활성 위임 건수를 더해 함께 보여줍니다.
+              </p>
+              <div className="mb-10 overflow-x-auto">
+                <table className="data-table" data-testid="erp-guide-screens-table">
+                  <caption className="sr-only">ERP 콘솔 화면</caption>
+                  <thead>
+                    <tr className="text-left">
+                      <th scope="col" className="p-2">
+                        화면 (라우트)
+                      </th>
+                      <th scope="col" className="p-2">
+                        보여주는 값
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CONSOLE_SCREENS.map((s) => (
+                      <tr
+                        key={s.key}
+                        data-testid={`erp-guide-screen-${s.key}`}
+                        className="border-b border-border"
+                      >
+                        <StateTh label={s.label} name={s.route} />
+                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <NoteCard title={ASOF_NOTE.title} body={ASOF_NOTE.body} />
+          </>
+        }
         panels={{
           overview: (
             <>
@@ -62,7 +107,7 @@ export function ErpGuideScreen() {
                 조회 · 통합 조회 · 알림 같은 개념을 정리한 참고 자료입니다.
               </p>
               <GuideReadingPath testid="erp-guide-reading-path">
-                처음이라면 「도메인 사용 가이드」의 <strong>콘솔 화면</strong>과 「대표 업무 흐름」의 <strong>결재 상태</strong>부터
+                처음이라면 「메뉴 안내」의 <strong>콘솔 화면</strong>과 「상태 변화」의 <strong>결재 상태</strong>부터
                 보세요 — 6개 화면이 무엇을 하고 결재가 어떻게 흐르는지가 먼저입니다.
                 도메인 서비스·마스터/직원 상태·위임 범위·핵심 개념·용어집은 필요할 때
                 찾아보는 참조입니다.
@@ -161,6 +206,46 @@ export function ErpGuideScreen() {
                   </tbody>
                 </table>
               </div>
+              {/* ───────────────── 위임 스코프 ───────────────── */}
+              <h2
+                id="erp-guide-delegation-scopes"
+                data-testid="erp-guide-delegation-scopes"
+                className="mb-2 text-xl font-semibold"
+              >
+                위임 스코프
+              </h2>
+              <div className="mb-10 overflow-x-auto">
+                <table
+                  className="data-table"
+                  data-testid="erp-guide-delegation-scopes-table"
+                >
+                  <caption className="sr-only">위임 스코프</caption>
+                  <thead>
+                    <tr className="text-left">
+                      <th scope="col" className="p-2">
+                        스코프
+                      </th>
+                      <th scope="col" className="p-2">
+                        의미
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DELEGATION_SCOPES.map((s) => (
+                      <tr
+                        key={s.name}
+                        data-testid={`erp-guide-delegation-scope-${s.name}`}
+                        className="border-b border-border"
+                      >
+                        <StateTh label={s.label} name={s.name} />
+                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <NoteCard title={DELEGATION_NOTE.title} body={DELEGATION_NOTE.body} />
               {/* ───────────────── 개념 노트 ───────────────── */}
               <h2
                 id="erp-guide-concepts"
@@ -188,52 +273,6 @@ export function ErpGuideScreen() {
           ),
           usage: (
             <>
-              {/* ───────────────── 콘솔 화면 맵 ───────────────── */}
-              <h2
-                id="erp-guide-screens"
-                data-testid="erp-guide-screens"
-                className="mb-2 text-xl font-semibold"
-              >
-                콘솔 화면
-              </h2>
-              <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
-                6개 화면이 각각 보여주는 값입니다. <strong>개요</strong>는 마스터
-                건수에 내 결재 대기 건수와 활성 위임 건수를 더해 함께 보여줍니다.
-              </p>
-              <div className="mb-10 overflow-x-auto">
-                <table className="data-table" data-testid="erp-guide-screens-table">
-                  <caption className="sr-only">ERP 콘솔 화면</caption>
-                  <thead>
-                    <tr className="text-left">
-                      <th scope="col" className="p-2">
-                        화면 (라우트)
-                      </th>
-                      <th scope="col" className="p-2">
-                        보여주는 값
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CONSOLE_SCREENS.map((s) => (
-                      <tr
-                        key={s.key}
-                        data-testid={`erp-guide-screen-${s.key}`}
-                        className="border-b border-border"
-                      >
-                        <StateTh label={s.label} name={s.route} />
-                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <NoteCard title={ASOF_NOTE.title} body={ASOF_NOTE.body} />
-            </>
-          ),
-          permissions: null,
-          flows: (
-            <>
               {/* ───────────────── 자주 하는 작업 (레시피) ───────────────── */}
               <h2
                 id="erp-guide-recipes"
@@ -255,6 +294,11 @@ export function ErpGuideScreen() {
                   />
                 ))}
               </div>
+            </>
+          ),
+          permissions: null,
+          flows: (
+            <>
               {/* ───────────────── 결재 상태머신 ───────────────── */}
               <h2
                 id="erp-guide-approval-states"
@@ -311,46 +355,6 @@ export function ErpGuideScreen() {
                 title={APPROVAL_ROUTING_NOTE.title}
                 body={APPROVAL_ROUTING_NOTE.body}
               />
-              {/* ───────────────── 위임 스코프 ───────────────── */}
-              <h2
-                id="erp-guide-delegation-scopes"
-                data-testid="erp-guide-delegation-scopes"
-                className="mb-2 text-xl font-semibold"
-              >
-                위임 스코프
-              </h2>
-              <div className="mb-10 overflow-x-auto">
-                <table
-                  className="data-table"
-                  data-testid="erp-guide-delegation-scopes-table"
-                >
-                  <caption className="sr-only">위임 스코프</caption>
-                  <thead>
-                    <tr className="text-left">
-                      <th scope="col" className="p-2">
-                        스코프
-                      </th>
-                      <th scope="col" className="p-2">
-                        의미
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DELEGATION_SCOPES.map((s) => (
-                      <tr
-                        key={s.name}
-                        data-testid={`erp-guide-delegation-scope-${s.name}`}
-                        className="border-b border-border"
-                      >
-                        <StateTh label={s.label} name={s.name} />
-                        <td className="p-2 text-sm text-muted-foreground">{s.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <NoteCard title={DELEGATION_NOTE.title} body={DELEGATION_NOTE.body} />
             </>
           ),
           services: (
