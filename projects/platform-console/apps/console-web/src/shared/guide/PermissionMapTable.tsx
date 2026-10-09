@@ -198,7 +198,7 @@ export function PermissionMapTable({
 /** 메뉴별 설명 — 표보다 읽기 쉬운 카드형(도메인 가이드 탭용). */
 export function MenuDescriptions({ areas, testid }: { areas: MapArea[]; testid: string }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2" data-testid={testid}>
+    <div className="grid gap-4" data-testid={testid}>
       {rowsFor(areas).map((r) => (
         <Card key={r.href} data-testid={`${testid}-${r.href}`}>
           <p className="mb-1 text-sm font-semibold text-foreground">

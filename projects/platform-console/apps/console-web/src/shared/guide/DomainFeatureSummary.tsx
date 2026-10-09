@@ -24,7 +24,7 @@ export function DomainFeatureSummary({
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground" data-testid={`${testid}-oneline`}>
         {domain.oneLine}
       </p>
-      <div className="mb-8 grid gap-4 md:grid-cols-2">
+      <div className="mb-8 grid gap-4">
         {domain.groups.map((group, gi) => (
           <div
             key={group.title}

@@ -52,7 +52,7 @@ export const GLOBAL_GUIDE_TABS = [
 
 function FactCards({ facts, testid }: { facts: GuideFact[]; testid: string }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2" data-testid={testid}>
+    <div className="grid gap-4" data-testid={testid}>
       {facts.map((f, i) => (
         <Card key={f.title} data-testid={`${testid}-${i}`}>
           <p className="mb-1 text-sm font-semibold text-foreground">{f.title}</p>

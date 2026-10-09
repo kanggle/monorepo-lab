@@ -116,7 +116,7 @@ export function EcommerceGuideScreen() {
                   </tbody>
                 </table>
               </div>
-              <div className="mb-10 grid gap-4 md:grid-cols-2">
+              <div className="mb-10 grid gap-4">
                 {PRODUCT_CONCEPTS.map((c) => (
                   <Card key={c.key} data-testid={`ecommerce-guide-product-concept-${c.key}`}>
                     <p className="mb-1 text-sm font-medium text-foreground">{c.term}</p>
@@ -168,7 +168,7 @@ export function EcommerceGuideScreen() {
                 </table>
               </div>
               <h3 className="mb-3 text-lg font-medium">할인 종류</h3>
-              <div className="mb-6 grid gap-4 md:grid-cols-2">
+              <div className="mb-6 grid gap-4">
                 {DISCOUNT_TYPES.map((d) => (
                   <Card key={d.name} data-testid={`ecommerce-guide-discount-${d.name}`}>
                     <p className="mb-1 text-sm font-medium text-foreground">
