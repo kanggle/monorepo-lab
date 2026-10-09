@@ -14,6 +14,14 @@ vi.mock('@/features/tenants', () => ({
     <div data-testid="tenant-detail-screen" data-tenant-id={tenant.tenantId} />
   ),
 }));
+// TASK-MONO-771 S5 — the entry-policy control under the detail (its own SSR state).
+const getEntryPolicyState = vi.fn();
+vi.mock('@/features/tenant-entry-policy', () => ({
+  getEntryPolicyState: (a: unknown) => getEntryPolicyState(a),
+  EntryPolicySection: ({ tenantId }: { tenantId: string }) => (
+    <div data-testid="entry-policy-section" data-tenant-id={tenantId} />
+  ),
+}));
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -31,6 +39,8 @@ const params = (tenantId: string) => ({ params: Promise.resolve({ tenantId }) })
 
 beforeEach(() => {
   getTenantDetailState.mockReset();
+  getEntryPolicyState.mockReset();
+  getEntryPolicyState.mockResolvedValue({ policy: null });
   notFoundSpy.mockClear();
 });
 
@@ -102,5 +112,22 @@ describe('TenantDetailPage — SSR gating', () => {
       'data-tenant-id',
       'acme-corp',
     );
+    // TASK-MONO-771 S5 — the entry-policy control for THIS tenant renders under it.
+    expect(getEntryPolicyState).toHaveBeenCalledWith('acme-corp');
+    expect(getByTestId('entry-policy-section')).toHaveAttribute('data-tenant-id', 'acme-corp');
+  });
+
+  it('TASK-MONO-771 S5 — does not read the entry policy when the tenant itself did not resolve', async () => {
+    getTenantDetailState.mockResolvedValue({
+      tenant: null,
+      degraded: false,
+      noTenant: false,
+      permissionError: { code: 'PERMISSION_DENIED', message: 'no' },
+      notFound: false,
+    });
+    const ui = await TenantDetailPage(params('acme-corp'));
+    const { queryByTestId } = render(ui);
+    expect(getEntryPolicyState).not.toHaveBeenCalled();
+    expect(queryByTestId('entry-policy-section')).toBeNull();
   });
 });

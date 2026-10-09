@@ -88,6 +88,17 @@ public final class Permission {
      */
     public static final String GROUP_MANAGE = "group.manage";
 
+    /**
+     * TASK-MONO-771 S5 (ADR-MONO-080 D4 · R2, owner decision OD-1): the tenant ENTRY POLICY —
+     * read / turn on / turn off «entering this tenant as an operator requires a second factor»
+     * ({@code GET|PUT /api/admin/tenants/{tenantId}/entry-policy}). Held by {@code SUPER_ADMIN}
+     * (every tenant) and {@code TENANT_ADMIN} (its grant's tenant only — D2
+     * {@code TenantScopeGuard}, target = the path {@code tenantId}). Kept SEPARATE from
+     * {@link #TENANT_MANAGE}: giving a tenant admin that key would also open tenant create /
+     * suspend (rbac.md § Permission Keys).
+     */
+    public static final String TENANT_SECURITY_MANAGE = "tenant.security.manage";
+
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
 
@@ -117,7 +128,8 @@ public final class Permission {
             TENANT_ADMIN_DELEGATE,
             PARTNERSHIP_MANAGE,
             ORG_MANAGE,
-            GROUP_MANAGE);
+            GROUP_MANAGE,
+            TENANT_SECURITY_MANAGE);
 
     /** @return the canonical permission-key catalog (immutable, rbac.md order). */
     public static List<String> catalog() {

@@ -11,7 +11,9 @@ import java.util.Set;
  * <p><b>Row absent ⟺ off.</b> Only a row with {@code require_mfa = TRUE} counts. A read failure is NOT
  * «off» — the implementation lets it propagate and the caller fails closed (data-model.md invariant).
  *
- * <p>Read-only in S4. The management surface (admin-api.md § Tenant Entry Policy) is S5.
+ * <p>This is the ENTRY-DECISION read (token exchange · assume-tenant, S4) and deliberately stays a single
+ * method. The management surface's read/write (admin-api.md § Tenant Entry Policy, S5) is the separate
+ * {@link TenantEntryPolicyManagementPort} — the gate never needs a write handle.
  */
 public interface TenantEntryPolicyPort {
 

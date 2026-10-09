@@ -317,6 +317,11 @@ public class RequiresPermissionAspect {
             if ("placeTenant".equals(name)) return ActionCode.TENANT_ORG_NODE_ASSIGN;
             // previewPlacement is a read
         }
+        // TASK-MONO-771 S5 — the tenant entry-policy write; the DENIED row carries target_type=TENANT.
+        if ("TenantEntryPolicyController".equals(simple)) {
+            if ("setEntryPolicy".equals(name)) return ActionCode.TENANT_ENTRY_POLICY_SET;
+            // getEntryPolicy is a read
+        }
         // TASK-BE-520 (ADR-MONO-046 D6) — operator-group mutations; each maps to a dedicated
         // action code so the DENIED row carries target_type=GROUP.
         if ("GroupAdminController".equals(simple)) {

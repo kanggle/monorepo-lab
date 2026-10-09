@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantDetailState, TenantDetail } from '@/features/tenants';
+import { EntryPolicySection, getEntryPolicyState } from '@/features/tenant-entry-policy';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
@@ -90,5 +91,15 @@ export default async function TenantDetailPage({
     );
   }
 
-  return <TenantDetail tenant={state.tenant} />;
+  // TASK-MONO-771 S5 (§ 2.4.3.3, OD-1) — the «운영자 진입 2단계 인증» row on the
+  // tenant detail. Fetched only once the tenant itself resolved; its own
+  // 403 / 503 degrade only this control, never the detail above it.
+  const entryPolicy = await getEntryPolicyState(state.tenant.tenantId);
+
+  return (
+    <>
+      <TenantDetail tenant={state.tenant} />
+      <EntryPolicySection tenantId={state.tenant.tenantId} state={entryPolicy} />
+    </>
+  );
 }

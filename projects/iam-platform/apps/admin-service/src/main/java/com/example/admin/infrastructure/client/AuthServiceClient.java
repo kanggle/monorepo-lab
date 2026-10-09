@@ -154,6 +154,54 @@ public class AuthServiceClient {
         }
     }
 
+    /**
+     * TASK-MONO-771 S5 — of {@code accountIds} (≤ 500, the caller chunks), the ones with a CONFIRMED account
+     * second factor ({@code POST /internal/auth/second-factor/enrolment-status}, admin-to-auth.md). Feeds the
+     * entry-policy pre-check only — off the hot path.
+     *
+     * <p><b>FAIL-CLOSED</b> (the opposite of {@link #resolveOperatorAccountId}): any failure throws
+     * {@link DownstreamFailureException} (→ 503). Swallowing it would report «nobody enrolled» or «everybody
+     * enrolled», both of which mislead the operator about to turn a policy on.
+     */
+    @Retry(name = "authService")
+    @CircuitBreaker(name = "authService")
+    public java.util.Set<String> enrolledAmong(java.util.List<String> accountIds) {
+        try {
+            EnrolmentStatusResponse resp = restClient.post()
+                    .uri("/internal/auth/second-factor/enrolment-status")
+                    .headers(h -> {
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                    })
+                    .body(Map.of("accountIds", accountIds))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, r) -> {
+                        throw HttpClientErrorException.create(
+                                r.getStatusCode(), r.getStatusText(),
+                                r.getHeaders(), r.getBody().readAllBytes(), null);
+                    })
+                    .body(EnrolmentStatusResponse.class);
+            if (resp == null || resp.enrolledAccountIds() == null) {
+                throw new DownstreamFailureException("auth-service enrolment-status: empty body", null);
+            }
+            return new java.util.LinkedHashSet<>(resp.enrolledAccountIds());
+        } catch (DownstreamFailureException e) {
+            throw e;
+        } catch (RestClientResponseException e) {
+            log.warn("auth-service enrolment-status returned {}", e.getStatusCode());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new NonRetryableDownstreamException("auth-service error " + e.getStatusCode().value(), e);
+            }
+            throw new DownstreamFailureException("auth-service error " + e.getStatusCode().value(), e);
+        } catch (Exception e) {
+            log.error("auth-service enrolment-status failed", e);
+            throw new DownstreamFailureException("auth-service unavailable", e);
+        }
+    }
+
+    /** TASK-MONO-771 S5 — response of {@code POST /internal/auth/second-factor/enrolment-status}. */
+    public record EnrolmentStatusResponse(java.util.List<String> enrolledAccountIds) {}
+
     public record ForceLogoutResponse(
             String accountId,
             Integer revokedTokenCount,

@@ -2085,7 +2085,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 - 행이 없으면 `{ "tenantId": "<path>", "requireMfa": false, "updatedAt": null, "updatedBy": null }` — 404 가 아니다(꺼짐은 정상 상태).
 - `updatedBy` 는 `admin_operators.operator_id`(외부 UUID). 내부 BIGINT PK 는 노출하지 않는다.
-- 성공 읽기는 감사 행을 남기지 않는다(BE-486 read-path 규약). 403 은 best-effort DENIED 행.
+- 성공 읽기는 감사 행을 남기지 않는다(BE-486 read-path 규약). `403 PERMISSION_DENIED`(키 없음)는 best-effort DENIED 행(`RequiresPermissionAspect`), `403 TENANT_SCOPE_DENIED`(범위 밖 테넌트)는 행을 남기지 않는다 — `X-Tenant-Id` 읽기의 MONO-737 규약(`TenantScopeGuard.requireTenantReadable`)과 같다. (S5 구현에서 이 문장을 정밀화: 두 403 의 감사 처리가 다르다.)
 
 ### PUT /api/admin/tenants/{tenantId}/entry-policy
 
@@ -2121,6 +2121,38 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | 400 | `VALIDATION_ERROR` | `requireMfa` 누락/형식 오류, `tenantId` 가 `'*'` 이거나 정규식 위반 |
 | 404 | `TENANT_NOT_FOUND` | (PUT) 대상 테넌트 미등록 |
 | 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | (PUT) 테넌트 존재 확인 실패 — 쓰지 않음 |
+| 409 | `OPTIMISTIC_LOCK_CONFLICT` | (PUT) 같은 테넌트 정책을 동시에 쓴 다른 요청이 먼저 커밋됨(행의 `version`, 첫 쓰기 경합 포함) — 다시 읽고 재시도 |
+
+### GET /api/admin/tenants/{tenantId}/entry-policy/enrolment-summary
+
+**TASK-MONO-771 S5 — 켜기 전 사전 점검**(티켓 AC-0 § 4 · OD-4). 정책을 켜기 전에 «이 테넌트 운영자 중 2단계를 아직 등록하지 않은 사람이 몇 명인가» 를 보여 주기 위한 **조언용 읽기**다. 진입 판정(토큰 교환 · assume)은 이 읽기를 하지 않는다.
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `tenant.security.manage` (GET entry-policy 와 같은 키 · 같은 범위 규칙)
+**Headers**: `Authorization`, `X-Tenant-Id: <활성 테넌트>`
+
+**Response 200**:
+```json
+{ "tenantId": "acme-corp", "operators": 12, "enrolled": 7, "notEnrolled": 4, "unlinked": 1 }
+```
+
+| 필드 | 의미 |
+|---|---|
+| `operators` | 이 테넌트의 **ACTIVE** 운영자 수 — 홈 테넌트 = `tenantId` **또는** `operator_tenant_assignment` 행이 있는 운영자(`GET /api/admin/operators?tenantId=` 와 같은 소속 술어). 플랫폼(`'*'`) 운영자 · 파트너십 참여자는 이 테넌트의 소속이 아니라 세지 않는다 |
+| `enrolled` | 계정 연결(`oidc_subject`)이 있고 auth-service 에 **확정된** 계정 2단계가 있는 운영자(등록 대기 중인 미완료 `/mfa/setup` 은 등록이 아니다) |
+| `notEnrolled` | 계정 연결이 있고 확정된 2단계가 없는 운영자 — 정책을 켜면 **다음 진입 때 등록 화면으로 안내될** 사람 수 |
+| `unlinked` | 계정 연결이 없는 운영자 — 토큰 교환이 이 운영자를 해석하지 못하므로(account_id 단독 해석) 정책이 바꾸는 것이 없다 |
+
+`operators = enrolled + notEnrolled + unlinked`. 등록 여부는 admin-service → auth-service [`POST /internal/auth/second-factor/enrolment-status`](internal/admin-to-auth.md) 로 읽는다(500 개씩 나눠 호출).
+
+- 감사 행 없음(읽기). `403` 의 감사 처리는 GET entry-policy 와 같다.
+- **fail-closed**: auth-service 를 읽지 못하면 숫자를 지어내지 않고 `503` — 콘솔은 숫자 없이 확인 문구만 보인다(토글 자체는 막지 않는다).
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` | GET entry-policy 와 같다 |
+| 400 | `VALIDATION_ERROR` | `tenantId` 가 `'*'` 이거나 정규식 위반 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | auth-service 등록 여부 읽기 실패 |
 
 ---
 

@@ -112,6 +112,20 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
                                                    Pageable pageable);
 
     /**
+     * TASK-MONO-771 S5 — the entry-policy pre-check roster: the {@code oidc_subject} (IAM account id, possibly
+     * {@code null}) of every ACTIVE operator of {@code tenantId}, with the SAME home ∪ assignment membership
+     * predicate as {@link #findByTenantScope}. One element per operator.
+     */
+    @Query("""
+            SELECT o.oidcSubject FROM AdminOperatorJpaEntity o
+            WHERE o.status = 'ACTIVE'
+              AND ( o.tenantId = :tenantId
+                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+            """)
+    List<String> findActiveOidcSubjectsInTenantScope(@Param("tenantId") String tenantId);
+
+    /**
      * TASK-MONO-777 — {@code GET /api/admin/operators/lookup}: the ACTIVE, console-linked
      * ({@code oidc_subject} present) operators of tenant {@code tenantId} — same HOME ∪
      * ASSIGNED membership predicate as {@link #findByTenantScope} — whose normalized email

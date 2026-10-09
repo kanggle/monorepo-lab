@@ -278,6 +278,16 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     mutates: true,
     note: 'SUPER_ADMIN 도 열 수 없습니다 — 파트너십은 두 고객사 사이의 관계이고 플랫폼은 당사자가 아니기 때문입니다.',
   },
+  // TASK-MONO-771 S5 (OD-1) — 테넌트 진입 정책. 테넌트 상세(SUPER_ADMIN)에도 같은 토글이 있다.
+  {
+    label: '보안 설정',
+    href: '/security-settings',
+    purpose: '내 테넌트에 운영자로 들어올 때 2단계 인증을 요구할지 정합니다.',
+    actions: '운영자 진입 2단계 인증 켜기 · 끄기 (켜기 전에 미등록 인원을 보여 줍니다)',
+    gate: 'tenant.security.manage',
+    mutates: true,
+    note: '켜도 아무도 잠기지 않습니다 — 2단계를 등록하지 않은 운영자는 다음 진입 때 등록 화면으로 안내됩니다. 소비자 로그인과는 무관합니다.',
+  },
   {
     label: '가이드',
     href: '/iam/guide',
@@ -426,6 +436,11 @@ export const PERMISSION_KEYS: PermissionKey[] = [
     key: 'group.manage',
     desc: '운영자 그룹을 만들고 멤버를 관리하며, 역할·테넌트 배정을 그룹 멤버 전원에게 한 번에 부여합니다(조회에도 필요).',
   },
+  {
+    // TASK-MONO-771 S5 (rbac.md:75 · V0048)
+    key: 'tenant.security.manage',
+    desc: '테넌트의 운영자 진입 2단계 인증 정책을 보고 켜고 끕니다. TENANT_ADMIN 은 자기 테넌트만.',
+  },
 ];
 
 /** admin-console RBAC seed role (rbac.md § Seed Roles). */
@@ -473,6 +488,7 @@ export const SEED_ROLES: SeedRole[] = [
       // ADR-MONO-046 D6 (rbac.md:90, § Seed Matrix :114) — TASK-PC-FE-298 이 권한·기능
       // 매핑 표를 rbac.md 와 대조하다 이 화면에서 빠져 있던 것을 찾았다.
       'group.manage',
+      'tenant.security.manage', // rbac.md:128 (TASK-MONO-771 S5, V0048)
     ],
     elevated: true,
   },
@@ -516,6 +532,7 @@ export const SEED_ROLES: SeedRole[] = [
       'tenant.admin.delegate',
       'partnership.manage',
       'group.manage', // rbac.md:94 (ADR-MONO-046 D6) — TASK-PC-FE-298
+      'tenant.security.manage', // rbac.md:128 (TASK-MONO-771 S5, V0048) — 자기 테넌트의 진입 정책
     ],
   },
   {
@@ -688,6 +705,22 @@ export const SCREEN_ACCESS: ScreenAccess[] = [
       TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
       TENANT_BILLING_ADMIN: { level: 'none' },
       // 의도적(ADR-047 v1 한계) — ORG_ADMIN 은 partnership.manage 도 없다.
+      ORG_ADMIN: { level: 'none' },
+    },
+  },
+  {
+    // TASK-MONO-771 S5 (OD-1) — 테넌트 진입 정책. SUPER_ADMIN 은 테넌트 상세에서도 같은 토글.
+    screen: '보안 설정',
+    href: '/security-settings',
+    gate: 'tenant.security.manage',
+    cells: {
+      SUPER_ADMIN: { level: 'full', note: '모든 테넌트' },
+      SUPPORT_READONLY: { level: 'none' },
+      SUPPORT_LOCK: { level: 'none' },
+      SECURITY_ANALYST: { level: 'none' },
+      TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
+      TENANT_BILLING_ADMIN: { level: 'none' },
+      // 의도적(OD-1) — org-node subtree 단위 위임은 정하지 않았다(rbac.md:141).
       ORG_ADMIN: { level: 'none' },
     },
   },

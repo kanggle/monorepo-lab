@@ -57,7 +57,7 @@ monorepo
 - [x] **AC-1** — 🔴 «전» 상태를 먼저 단언하는 시험: `require_2fa` 역할 운영자가 OIDC 토큰 교환으로 2단계 없이 운영자 토큰을 **받는다**(현재) → 구현 뒤 **받지 못한다**.
 - [x] **AC-2** — «2단계 필수» 테넌트로 assume 할 때 `amr` 에 2단계가 없으면 거절 · 다른 테넌트는 무영향(대조군).
 - [ ] **AC-3** — 소비자 로그인은 TOTP 를 등록하지 않으면 지금과 같다.
-- [ ] **AC-4** — 기존 운영자 전이 경로(유예 또는 등록 유도)가 시험 또는 라이브로 확인된다.
+- [x] **AC-4** — 기존 운영자 전이 경로(유예 또는 등록 유도)가 시험 또는 라이브로 확인된다. *(S5 — 「시험」으로 확인: 아래 § S5 기록 › AC-4 증거 사슬. 라이브 ⚪)*
 
 # Related Specs
 
@@ -475,3 +475,90 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 - ⚪ CI 첫 실행: `TokenExchangeIntegrationTest`(S4 3건) · `OperatorAssignmentCheckIntegrationTest`(S4 5건 — V0047 · CHECK) · `AssumeTenantExchangeIntegrationTest`(S4 1건, 실 HTTP 본문).
 - ⚪ 라이브(데모 실기동 · 콘솔 단계 상승 왕복 · 데모 재부팅 뒤 R__ 적용) 미실행. 머지 뒤 nightly e2e 1회 확인 권장(console · federation).
 - ⚪ AC-3 · AC-4 는 이 슬라이스 밖(S2b 증거 · S5).
+
+---
+
+## S5 기록 (2026-10-09 UTC)
+
+> 구현 = Opus 5.5 (backend-engineer) · worktree `feat/mono-771-s5-entry-policy`(origin/main `7753bb5a8`, S1 · S2a · S2b · S2c · S3 · S4 포함). **AC-4 를 체크했다** — 티켓 문구가 «시험 **또는** 라이브» 이고, 아래 사슬의 모든 고리가 이 세션에서 로컬 통과한 시험이다(라이브 ⚪). 다른 AC 체크박스는 건드리지 않았다. Status 는 `in-progress` 유지.
+
+### 바꾼 파일
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| admin 권한 · 감사 | `domain/rbac/Permission`(`TENANT_SECURITY_MANAGE` + 카탈로그) · `application/ActionCode`(`TENANT_ENTRY_POLICY_SET`) · `AdminActionPermissionRegistry`(target `TENANT`, permission `tenant.security.manage`) · `RequiresPermissionAspect`(PUT 의 DENIED 행 action code) | 새 키는 `tenant.manage` 와 분리(OD-1 — TENANT_ADMIN 에게 생성 · 정지를 열지 않는다) |
+| admin seed | `db/migration/V0048__seed_tenant_security_manage_permission.sql` | `SUPER_ADMIN` · `TENANT_ADMIN` 매핑만(inert). `account.2fa_reset` 은 **S6 로 미룸**(아래 § 명세와 다르게 1) |
+| admin port · JPA | `application/port/TenantEntryPolicyManagementPort`(신규 — find · save · `EntryPolicyView`) · `TenantEntryPolicyPort`(S4 읽기 그대로, 1-메서드 유지) · `infrastructure/persistence/TenantEntryPolicy{JpaEntity,PortImpl}`(두 포트를 한 어댑터가 구현 ⇒ 관리 API 가 쓴 행 = 진입 판정이 읽는 행) | 첫 쓰기 = `persist`(PK 지정 · primitive `@Version` 이라 Spring Data `save` 는 merge 로 간다), 첫 쓰기 경합 · 갱신 경합 모두 `ObjectOptimisticLockingFailureException` → 409 |
+| admin 관리 API | `application/TenantEntryPolicyUseCase` · `presentation/TenantEntryPolicyController` | GET/PUT 계약 그대로. 순서: id 검증(`'*'`·정규식 → 400) → `TenantScopeGuard`(PUT=DENIED 행 · GET=행 없음) → account-service 존재 확인(404/503, **안 씀**) → 쓰기 → 감사 `TENANT_ENTRY_POLICY_SET` «requireMfa 이전→이후»(이전 없음 = `none`, no-op 포함 매번) |
+| admin 사전 점검 | `application/TenantEntryPolicyPrecheckUseCase` · port `SecondFactorEnrolmentPort` · `infrastructure/client/SecondFactorEnrolmentAdapter`(500개 분할) · `AuthServiceClient.enrolledAmong`(fail-closed) · `AdminOperatorJpaRepository.findActiveOidcSubjectsInTenantScope`(운영자 목록과 같은 홈 ∪ 배정 술어, ACTIVE) | `GET .../entry-policy/enrolment-summary` → `{operators, enrolled, notEnrolled, unlinked}` |
+| auth 사전 점검 | `application/SecondFactorEnrolmentStatusQuery`(500 상한 · 확정만) · `presentation/InternalSecondFactorStatusController`(`POST /internal/auth/second-factor/enrolment-status`) · `AccountTotpRepository.findConfirmedAccountIds`(default 루프) + `AccountTotpRepositoryImpl`/`AccountTotpJpaRepository`(IN 한 번, `confirmed_at IS NOT NULL`) | `/internal/auth/**` 의 기존 `internal.invoke` JWT 게이트 아래 |
+| console | `features/tenant-entry-policy/**`(client profile `tenant_entry_policy` · api · SSR state · `EntryPolicyPanel` · `EntryPolicySection` · hooks) · BFF `app/api/tenants/[tenantId]/entry-policy/{route.ts, enrolment-summary/route.ts}` · `(console)/tenants/[tenantId]/page.tsx`(상세 아래 토글) · 신규 `(console)/security-settings/page.tsx` | 아래 § 콘솔 |
+| console 원장 | `console-nav-config.ts`(「조직 설정」 끝에 보안 설정) · `permission-map.ts`(행 + `RBAC_SEED_MATRIX` `tenant.security.manage`) · `iam-guide/data.ts`(키 · 두 역할 · 메뉴 · 접근 매트릭스) · `sample/coverage.ts`(surface · screen 모두 `pending`) · `shared/api/errors.ts`(`OPTIMISTIC_LOCK_CONFLICT` 문구) | 드리프트 가드들이 요구하는 사본 |
+| 계약 · 명세 (먼저) | `admin-api.md`(§ enrolment-summary 신규 · PUT 409 행 · GET 403 감사 문장 정밀화) · `internal/admin-to-auth.md`(§ enrolment-status 신규) · `console-integration-contract.md` § 2.4.3.3(사전 점검 · 콘솔 표면) · `rbac.md`(키 엔드포인트 · seed 노트) · `admin-service/data-model.md`(seed 두 장으로) · `admin-service/dependencies.md`(auth 읽기 + Idempotency-Key 는 명령에만) | |
+| 시험 | admin `TenantEntryPolicyUseCaseTest`(12) · `TenantEntryPolicyControllerSliceTest`(10) · `TenantEntryPolicyPrecheckUseCaseTest`(5) · `TenantEntryPolicyTransitionChainTest`(1, AC-4) · `SecondFactorEnrolmentAdapterTest`(2) · `AdminActionPermissionRegistryTest`(+1) · IT `TenantEntryPolicyIntegrationTest`(`@Tag("integration")`, 7) · `TenantAdminRoleSeedIntegrationTest`(기대 집합 + `tenant.security.manage`) / auth `SecondFactorEnrolmentStatusQueryTest`(4) · `InternalSecondFactorStatusControllerSliceTest`(3) · `AccountTotpRepositoryIntegrationTest`(+1) / console `entry-policy-{panel,proxy,client,state}` · `security-settings-page` · `tenants-detail-page`(+1) · `sidebar-iam-group`(조직 설정 순서) · `sidebar-role-subscription`(+5 역할 노출) | |
+
+### AC-4 증거 사슬 (OD-4 «등록 유도 · 유예 없음»)
+
+| 고리 | 무엇을 증명 | 시험 (전부 이 세션 로컬 통과) |
+|---|---|---|
+| ① 켜기 | 관리 API 가 쓴 행을 진입 판정이 그대로 읽는다 | `TenantEntryPolicyTransitionChainTest`(실 `TenantEntryPolicyUseCase` · `OperatorSecondFactorRequirement` · `TokenExchangeService`, 공유 인메모리 표) |
+| ② 거절 = 구별된 응답 | 정책 ON 직후 `amr=[pwd]` 교환 → `MfaRequiredException`(403 `MFA_REQUIRED`, 401 아님) · assume 요구 ON(형제 테넌트는 OFF — 대조군) | 같은 시험 + S4 `AdminLoginControllerSliceTest`(HTTP 매핑) |
+| ③ 거절 → 단계 상승 | 콘솔이 403 `MFA_REQUIRED` 를 `/api/auth/step-up` → `authorize?acr_values=mfa` 로(온보딩 아님) | S3 `mfa-step-up-routes.test.ts`(🔴 403 → step-up · 🔴🔴 401 만 온보딩) |
+| ④ 단계 상승 → 등록 | `acr_values=mfa` · 확정 등록 없음 → `/mfa/setup` | S2b `AuthorizeSecondFactorGateTest`(«등록 없음 → /mfa/setup») |
+| ⑤ 등록 전제 | 인증된 이메일 없으면 등록 안 됨(OD-4 TOFU 완화) | S2b/S2c `MfaPageSliceTest`(`setup_unverifiedEmail`) |
+| ⑥ 등록 뒤 | `amr=[pwd,otp,mfa]` → 같은 운영자 발급 · 끄면 `[pwd]` 로 다시 발급 | `TenantEntryPolicyTransitionChainTest` |
+| (CI) 실 쓰기 경로 | 실 MySQL: PUT ON → 교환 403 `MFA_REQUIRED` → mfa 200 → PUT OFF → 200 | `TenantEntryPolicyIntegrationTest.ac4_transitionThroughTheRealWritePath` ⚪ CI 첫 실행 |
+
+🔵 사슬은 **한 프로세스의 한 시험이 아니다** — 서비스 경계마다 그 서비스의 시험이 문다(①②⑥ admin · ③ console · ④⑤ auth). 고리 사이의 접합(admin 403 코드 ↔ 콘솔이 읽는 코드, `acr_values=mfa` 문자열)은 S1 계약과 각 슬라이스의 시험이 같은 상수를 고정한다.
+
+### 콘솔
+
+- **테넌트 상세**(`SUPER_ADMIN`): 상세 아래 «운영자 진입 2단계 인증» 패널. 테넌트가 해소된 뒤에만 정책을 읽고, 그 403/503 은 패널만 바꾼다(상세 불변).
+- **«보안 설정»** `/security-settings`(「조직 설정」 그룹 끝, `TENANT_ADMIN`): 활성 테넌트 = path. 테넌트 없음 → 테넌트 게이트, `*` → «테넌트 상세로» 안내(정책 읽기 0).
+- **노출**: nav 는 역할 seed 행렬로 숨김(`TENANT_ADMIN` · `SUPER_ADMIN` 보임 / `TENANT_BILLING_ADMIN` · `ORG_ADMIN` · CS 역할 숨김). 403 이면 토글 자체를 그리지 않고 «권한 없음».
+- **확인창**: 사유 필수 · `Idempotency-Key` 없음. 켜기 = 계약 고정 문구(«잠긴다» 없음) + 사전 점검 «운영자 N명 중 2단계 미등록 M명» — **읽기 실패면 숫자 없이**(0 을 지어내지 않음, 토글은 막지 않음) + 지금 세션 `amr` 에 `mfa` 가 없으면 «본인도 다음 진입 때» 경고 + IAM 2단계 ≠ break-glass 2단계 한 줄. 끄기 = 사전 점검 없음.
+
+### 검증 (rc 는 `cmd > file 2>&1; echo rc=$?`)
+
+| 무엇 | 결과 |
+|---|---|
+| `./gradlew :projects:iam-platform:apps:admin-service:test` | rc=0 — 158 클래스 · 1010건 · 실패 0 · skip 58(Docker 조건부) |
+| `./gradlew :projects:iam-platform:apps:auth-service:test` | rc=0 — 148 클래스 · 1170건 · 실패 0 · skip 33 |
+| `compileTestJava`(admin · auth, 통합 소스 포함) | rc=0 |
+| console `pnpm install --frozen-lockfile` | rc=0 |
+| console `npx tsc --noEmit` | rc=0 |
+| console `npm run lint` | rc=0 («No ESLint warnings or errors») |
+| console 대상 12 파일(신규 5 + 영향 7) `npx vitest run …` | rc=0 — 175건 |
+| console 전체 `npx vitest run` | 1회차 rc=1 — 무관한 3 파일 5건이 **5초 타임아웃**(`OperatorsScreen` · `AccountLookup` · `TenantsScreen`, 이 PR 이 건드리지 않은 화면) → 그 3 파일 단독 rc=0(28건) → 전체를 `--maxWorkers=4 --minWorkers=1` 로 재실행 **rc=0 — 361 파일 · 4099건**. 호스트 부하 타임아웃(기존 함정)으로 판정 |
+| `bash scripts/check-dev-seed-migration-band.sh` · `check-flyway-unresolvable-placeholder.sh` · `check-flyway-version-collision.sh` (스테이지 뒤) | 셋 다 rc=0 |
+| e2e / nightly 영향(grep, 실행 아님) | console `tests/e2e` · `e2e-smoke` · `tests/federation-hardening-e2e/specs` 에서 `/tenants/` · `tenant-detail` · `nav-partnerships` · `조직 설정` · `security-settings` · `entry-policy` 참조 0건 |
+| 🔴 bite 1 — PUT 의 `requireTenantInScope` 제거 | admin `*TenantEntryPolicy*` 중 **`otherTenant_denied` 1건만** RED → 복원 → GREEN. (처음엔 엄격 stub 이 «쓰이지 않은 범위 stub» 으로 6건을 함께 붉혔다 — 양성 경로의 범위 stub 을 전제(lenient)로, 거절 쪽만 엄격으로 나눠 bite 가 정확히 한 시험만 물게 했다) |
+| 🔴 bite 2 — 콘솔 사전 점검 실패 문구를 «미등록 0명» 으로 | `entry-policy-panel.test.tsx` 중 **«503 → 숫자 없음» 1건만** RED → 복원 → GREEN |
+| 필수 가드 3종(`git add` 뒤) | `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` — 커밋 직전 실행, 결과는 PR 본문. `scripts/` 추가 · 삭제 없음 |
+
+### 명세와 다르게 · 명세가 말하지 않아 고른 것 (오케스트레이터 확인 요망)
+
+1. **seed 를 두 장으로** — data-model 은 `tenant.security.manage` + `account.2fa_reset` 한 장(S5·S6)이라 적었다. S5 는 `V0048` 에 `tenant.security.manage` 만 넣었다: 엔드포인트 · 코드 상수 없이 `account.2fa_reset` 을 먼저 시드하면 `GET /api/admin/roles` 가 `GET /api/admin/permissions`(코드 카탈로그)에 없는 키를 보인다. data-model · rbac 노트를 그에 맞게 고쳤다.
+2. **GET 의 403 감사** — 계약은 «403 은 best-effort DENIED 행» 한 문장. 구현은 `PERMISSION_DENIED`(키 없음)=DENIED 행(aspect), `TENANT_SCOPE_DENIED`(범위 밖)=행 없음(MONO-737 읽기 규약 `requireTenantReadable`). 계약 문장을 이 구분으로 정밀화했다.
+3. **사전 점검 = 새 계약 두 개** — S1 은 사전 점검을 «생산자 읽기가 아직 없다» 로 미뤘고 콘솔 계약도 «producer 가 정의할 때까지 계약 아님» 이었다. 이 PR 이 **계약을 먼저 쓰고** 구현했다: admin `GET .../entry-policy/enrolment-summary` + admin→auth `POST /internal/auth/second-factor/enrolment-status`. 모집단 = 테넌트의 ACTIVE 운영자(홈 ∪ 배정 — 운영자 목록과 같은 술어), 플랫폼 `'*'` · 파트너십 참여자 제외, `unlinked`(계정 연결 없음) 별도. auth 읽기 실패 = 503(숫자를 지어내지 않음).
+4. **포트 분리** — S4 의 1-메서드 `TenantEntryPolicyPort` 에 쓰기를 더하면 그것을 람다로 만드는 기존 시험 4개가 깨진다. 진입 판정 읽기(`TenantEntryPolicyPort`)와 관리 읽기/쓰기(`TenantEntryPolicyManagementPort`)를 나누고 한 JPA 어댑터가 둘 다 구현한다(판정은 쓰기 핸들을 갖지 않는다).
+5. **PUT 트랜잭션 안의 존재 확인** — 원격 호출이 DB 트랜잭션 안에 있다(`UpdateTenantUseCase` 선례). 순서상 존재 확인이 쓰기보다 먼저라 실패 시 아무것도 쓰이지 않는다. `TenantOrgNodePlacementUseCase` 처럼 트랜잭션 밖으로 빼려면 쓰기+감사를 별도 빈으로 떼야 한다 — 이 슬라이스에선 하지 않았다.
+6. **«보안 설정» 의 nav 자리** — 계약은 «새 `(console)` 페이지» 까지만. 「조직 설정」(회사가 정하는 것 — 구독 · 파트너십 옆)에 두었다. IAM 드릴의 7개 고정 순서 시험을 건드리지 않는 자리이기도 하다.
+7. **샘플 모드** — 새 surface `tenant_entry_policy` · 화면 `/security-settings` 를 `pending` 으로 등록(fixture 없음). 샘플 방문자는 테넌트 상세에서 패널만 «불러올 수 없음» 을 본다.
+
+### ⚪ 열린 것
+
+- ⚪ CI 첫 실행: `TenantEntryPolicyIntegrationTest`(7 — V0048 holder 집합 · 실 쓰기 → 실 교환 AC-4 · 범위 밖 403 · `'*'` 400 · 없는 테넌트 404 · 사전 점검 실 roster 질의 × WireMock auth · auth 500 → 503) · `TenantAdminRoleSeedIntegrationTest`(기대 집합 변경) · `AccountTotpRepositoryIntegrationTest.findConfirmedAccountIds_confirmedOnly`. 이 호스트에 Docker 없음.
+- ⚪ 라이브(데모 실기동 · 실제 토글 → 실제 등록 왕복) 미실행. 머지 뒤 nightly e2e 1회 확인 권장.
+- ⚪ 샘플 fixture(`tenant_entry_policy`) — `pending` 으로 둠.
+- ⚪ S6(계정 TOTP 리셋 · `account.2fa_reset` seed) 미착수.
+
+### S5 CI 1회차 (PR #4266, run 37917869840 «Integration (iam A, Testcontainers)») — 3 실패 진단 · 조치
+
+| # | 실패 | 원인 (로그 근거) | 조치 |
+|---|---|---|---|
+| 1 | `TenantEntryPolicyIntegrationTest` GET off → `$.updatedAt` 없음 | 응답 본문 `{"tenantId":"s5-tenant-x","requireMfa":false}` — `application-test.yml:47` `default-property-inclusion: non_null` 이 null 키를 지웠다. 계약은 «키 항상 존재, 미설정이면 null». slice 시험은 test 프로필이 아니라 못 잡았다 | **코드 수정**: `EntryPolicyResponse` 에 `@JsonInclude(ALWAYS)` — 전역 설정과 무관하게 계약 모양. slice 시험에 `spring.jackson.default-property-inclusion=non_null` 을 걸어 같은 조건을 재현. bite(애노테이션 제거) → slice 의 GET-off 1건만 RED → 복원 GREEN |
+| 2 | `unknownTenant_404` 가 403 | 응답 `TENANT_SCOPE_DENIED … 's5-ghost'`. `admin_operator_roles` PK 가 `(operator_id, role_id)`(V0004:48) — ADMIN_X 에 TENANT_ADMIN 두 번째 행(`s5-ghost`)을 `INSERT IGNORE` 한 것이 **조용히 버려졌다**. 시험의 전제가 스키마상 불가능 | **시험 수정**(시험이 틀렸다): `s5-ghost` 에 grant 된 별도 TENANT_ADMIN 운영자로 PUT → 범위 통과 → account-service 404 → 404 |
+| 3 | `TokenExchangeIntegrationTest` BE-377 로컬 로그인 401 기대 → 500 `INTERNAL_ERROR` | `Resolved Exception = jakarta.servlet.ServletException` — DispatcherServlet 이 **`Exception` 이 아닌 `Throwable`(Error)** 을 감쌀 때만 나오는 형태(`RuntimeException` 이면 그 타입이 그대로 찍힌다). 로그 · 업로드 보고서 어디에도 스택 없음. 그 경로(null 해시 → Argon2 m=64MiB 더미 verify → `InvalidCredentialsException`)에 S5 코드는 없다. main 의 같은 잡은 base `7753bb5a8` 포함 최근 7회 모두 success. S5 가 이 JVM 에 더한 것은 상주 Spring 컨텍스트 하나(`TenantEntryPolicyIntegrationTest`, 고유 WireMock `@DynamicPropertySource` — 알파벳 순서상 TokenExchange 바로 앞 클래스군). 추정 = 캐시된 컨텍스트로 힙이 차 있는 상태에서 64MiB Argon2 할당이 `OutOfMemoryError` (예전 이 시험의 5분 타임아웃 flake 와 같은 계열 — GC 압박). **증명 아님**(스택 없음) | ① `TenantEntryPolicyIntegrationTest` 에 `@DirtiesContext(AFTER_CLASS)` — S5 이전의 상주 컨텍스트 수로 되돌림. ② BE-377 시험에 **진단만** 추가(5xx 일 때 힙 used/total/max 와 resolved exception 스택을 stdout 으로) — 단언 불변. 재발 시 Error 이름이 로그에 남는다 |
+
+검증: admin `compileTestJava` rc=0 · `:admin-service:test` rc=0(1010건 · 실패 0 · skip 58). IT 는 Docker 없음 → CI 재실행 대기.

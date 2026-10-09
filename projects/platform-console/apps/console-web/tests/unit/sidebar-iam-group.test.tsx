@@ -222,12 +222,19 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
 
   // --- 「조직 설정」 group (TASK-PC-FE-313 — company structure · subscriptions · partnerships) ---
 
-  it('the 「조직 설정」 group lists 조직 계층 → 테넌트 → 도메인 구독 → 파트너십 as flat top-level links', () => {
+  it('the 「조직 설정」 group lists 조직 계층 → 테넌트 → 도메인 구독 → 파트너십 → 보안 설정 as flat top-level links', () => {
     render(<ConsoleSidebarNav />);
     const group = screen.getByTestId('nav-group-org-settings');
     expect(group).toHaveTextContent('조직 설정');
-    const ids = ['nav-org-hierarchy', 'nav-tenants', 'nav-subscriptions', 'nav-partnerships'];
-    const hrefs = ['/org-hierarchy', '/tenants', '/subscriptions', '/partnerships'];
+    // TASK-MONO-771 S5 — 보안 설정 (the tenant's own «운영자 진입 2단계 인증») closes the group.
+    const ids = [
+      'nav-org-hierarchy',
+      'nav-tenants',
+      'nav-subscriptions',
+      'nav-partnerships',
+      'nav-security-settings',
+    ];
+    const hrefs = ['/org-hierarchy', '/tenants', '/subscriptions', '/partnerships', '/security-settings'];
     ids.forEach((id, i) => {
       const link = screen.getByTestId(id);
       expect(link.tagName).toBe('A');

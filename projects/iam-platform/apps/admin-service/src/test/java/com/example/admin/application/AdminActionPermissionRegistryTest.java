@@ -223,6 +223,15 @@ class AdminActionPermissionRegistryTest {
     }
 
     @Test
+    void tenant_entry_policy_set_targets_the_tenant_and_gates_on_its_own_key() {
+        // TASK-MONO-771 S5 (OD-1): the policy is the tenant's; the key is tenant.security.manage,
+        // NOT tenant.manage (a TENANT_ADMIN holds the former and must not get the latter).
+        assertThat(registry.targetTypeFor(ActionCode.TENANT_ENTRY_POLICY_SET)).isEqualTo("TENANT");
+        assertThat(registry.permissionForActionCode(ActionCode.TENANT_ENTRY_POLICY_SET))
+                .isEqualTo(Permission.TENANT_SECURITY_MANAGE);
+    }
+
+    @Test
     void permissionForActionCode_resolves_every_action_code_to_non_null() {
         for (ActionCode code : ActionCode.values()) {
             assertThat(registry.permissionForActionCode(code))

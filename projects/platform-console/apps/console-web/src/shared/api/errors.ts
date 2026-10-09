@@ -1161,6 +1161,11 @@ const MESSAGES: Record<string, string> = {
     'tenant-assignment grant 가 본인이 관리할 수 있는 테넌트 범위를 초과합니다. 자기 스코프 이내 테넌트만 부여할 수 있습니다.',
   ROLE_GRANT_FORBIDDEN:
     '본인이 보유하지 않은 역할은 그룹에 부여할 수 없습니다 (no-escalation). SUPER_ADMIN 은 그룹 grant 로 부여할 수 없습니다.',
+  // --- tenant entry policy (TASK-MONO-771 S5 / § 2.4.3.3) ------------------
+  // (`PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` / `REASON_REQUIRED` /
+  // `VALIDATION_ERROR` / `TENANT_NOT_FOUND` are already mapped above.)
+  OPTIMISTIC_LOCK_CONFLICT:
+    '다른 운영자가 방금 같은 설정을 바꿨습니다. 화면을 새로고침한 뒤 다시 시도하세요.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

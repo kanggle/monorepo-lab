@@ -6,8 +6,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * TASK-MONO-771 — {@link AccountTotpRepository} over JPA.
@@ -40,6 +43,15 @@ public class AccountTotpRepositoryImpl implements AccountTotpRepository {
         }
         managed.apply(totp);
         return jpaRepository.saveAndFlush(managed).toDomain();
+    }
+
+    /** S5 — one {@code IN} read instead of the interface default's per-id loop. */
+    @Override
+    public Set<String> findConfirmedAccountIds(Collection<String> accountIds) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return Set.of();
+        }
+        return new LinkedHashSet<>(jpaRepository.findConfirmedAccountIds(accountIds));
     }
 
     @Override
