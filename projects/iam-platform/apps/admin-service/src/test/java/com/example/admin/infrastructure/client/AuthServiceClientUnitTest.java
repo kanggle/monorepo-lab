@@ -159,4 +159,49 @@ class AuthServiceClientUnitTest {
     void resolveOperatorAccountId_blankEmail_returnsEmptyWithoutCall() {
         assertThat(client.resolveOperatorAccountId("  ", "acme-corp")).isEmpty();
     }
+    // ── TASK-MONO-771 S6: resetSecondFactor (FAIL-CLOSED, two distinguishable 404s) ──
+
+    private static final String RESET_PATH = "/internal/auth/accounts/acc-1/second-factor/reset";
+
+    @Test
+    @DisplayName("resetSecondFactor — 200 → 응답 · Bearer · Idempotency-Key · X-Operator-ID 헤더, X-Tenant-Id 없음")
+    void resetSecondFactor_200() {
+        wireMockServer.stubFor(post(urlPathMatching(RESET_PATH))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"resetAt\":\"2026-10-09T03:00:00Z\",\"wasConfirmed\":true}")));
+
+        AuthServiceClient.SecondFactorResetResponse r = client.resetSecondFactor("acc-1", "op-1", "lost", "idem-1");
+
+        assertThat(r.accountId()).isEqualTo("acc-1");
+        assertThat(r.wasConfirmed()).isTrue();
+        wireMockServer.verify(postRequestedFor(urlPathMatching(RESET_PATH))
+                .withHeader("Authorization", equalTo("Bearer test-jwt"))
+                .withHeader("Idempotency-Key", equalTo("idem-1"))
+                .withHeader("X-Operator-ID", equalTo("op-1"))
+                .withoutHeader("X-Tenant-Id"));
+    }
+
+    @Test
+    @DisplayName("resetSecondFactor — 404 TOTP_NOT_ENROLLED → NonRetryable(404, code) — 두 404 를 구별한다")
+    void resetSecondFactor_404_carriesCode() {
+        wireMockServer.stubFor(post(urlPathMatching(RESET_PATH))
+                .willReturn(aResponse().withStatus(404).withHeader("Content-Type", "application/json")
+                        .withBody("{\"code\":\"TOTP_NOT_ENROLLED\",\"message\":\"none\"}")));
+
+        assertThatThrownBy(() -> client.resetSecondFactor("acc-1", "op-1", "lost", "idem-1"))
+                .isInstanceOfSatisfying(NonRetryableDownstreamException.class, e -> {
+                    assertThat(e.getHttpStatus()).isEqualTo(404);
+                    assertThat(e.getErrorCode()).isEqualTo("TOTP_NOT_ENROLLED");
+                });
+    }
+
+    @Test
+    @DisplayName("resetSecondFactor — 5xx → DownstreamFailureException (재시도 대상)")
+    void resetSecondFactor_5xx() {
+        wireMockServer.stubFor(post(urlPathMatching(RESET_PATH)).willReturn(aResponse().withStatus(503)));
+
+        assertThatThrownBy(() -> client.resetSecondFactor("acc-1", "op-1", "lost", "idem-1"))
+                .isInstanceOf(DownstreamFailureException.class)
+                .isNotInstanceOf(NonRetryableDownstreamException.class);
+    }
 }

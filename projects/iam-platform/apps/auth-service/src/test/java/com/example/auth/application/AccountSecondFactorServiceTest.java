@@ -237,6 +237,36 @@ class AccountSecondFactorServiceTest {
         assertThat(service.verifyRecoveryCode(ACCOUNT, fresh.get(0)).accepted()).isTrue();
     }
 
+    // ------------------------------------------------------------------ S6: administrator reset
+
+    @Test
+    @DisplayName("🔴 S6: 관리자 리셋 뒤 = «등록 없음» — 게이트가 묻는 술어 false · 옛 코드 · 복구 코드 무효 · 재등록 가능(OD-4 전제 다시)")
+    void afterAdminReset_accountIsNotEnrolled_andCanEnrolAgain() {
+        String oldSecret = enrolled();
+        String oldRecoveryCode = enrolledCodes.get(0);
+        assertThat(service.hasConfirmedEnrollment(ACCOUNT)).isTrue();
+
+        AccountSecondFactorResetUseCase reset = new AccountSecondFactorResetUseCase(repo, accountServicePort, clock);
+        AccountSecondFactorResetUseCase.Result result = reset.reset(ACCOUNT, "op-s6");
+
+        assertThat(result.outcome()).isEqualTo(AccountSecondFactorResetUseCase.Outcome.RESET);
+        assertThat(result.wasConfirmed()).isTrue();
+        // The exact predicate AuthorizeSecondFactorGate routes on: false → a step-up / policy entry goes to
+        // /mfa/setup (AuthorizeSecondFactorGateTest.stepUp_notEnrolled_goesToSetup), not /mfa/challenge.
+        assertThat(service.hasConfirmedEnrollment(ACCOUNT)).isFalse();
+        assertThat(service.status(ACCOUNT).enrolled()).isFalse();
+        clock.now = T0.plusSeconds(60);
+        assertThat(service.verifyAuthenticatorCode(ACCOUNT, codeNow(oldSecret)))
+                .as("the lost app's codes no longer pass").isEqualTo(VerificationOutcome.NOT_ENROLLED);
+        assertThat(service.verifyRecoveryCode(ACCOUNT, oldRecoveryCode).accepted())
+                .as("the lost recovery codes no longer pass").isFalse();
+
+        // Re-enrolment is open again, with the OD-4 precondition asked afresh (enrolled() stubbed VERIFIED).
+        StartEnrollmentResult again = service.startEnrollment(ACCOUNT, "fan-platform");
+        assertThat(again.outcome()).isEqualTo(StartEnrollmentOutcome.PENDING_CREATED);
+        assertThat(again.base32Secret()).isNotEqualTo(oldSecret);
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private String enrolledSecret;

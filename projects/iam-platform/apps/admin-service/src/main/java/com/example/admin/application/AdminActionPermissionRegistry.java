@@ -106,6 +106,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.GROUP_GRANT_REVOKE, "GROUP");
         // TASK-MONO-771 S5 — the tenant entry policy belongs to the TENANT it governs.
         map.put(ActionCode.TENANT_ENTRY_POLICY_SET, "TENANT");
+        // TASK-MONO-771 S6 — the account whose second factor is reset is the audit subject.
+        map.put(ActionCode.ACCOUNT_2FA_RESET, "ACCOUNT");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -185,6 +187,8 @@ public class AdminActionPermissionRegistry {
                  GROUP_GRANT_ADD, GROUP_GRANT_REVOKE -> Permission.GROUP_MANAGE;
             // TASK-MONO-771 S5 (OD-1) — the entry policy has its own key, not tenant.manage.
             case TENANT_ENTRY_POLICY_SET -> Permission.TENANT_SECURITY_MANAGE;
+            // TASK-MONO-771 S6 (OD-6) — the account second-factor reset has its own platform-only key.
+            case ACCOUNT_2FA_RESET -> Permission.ACCOUNT_2FA_RESET;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;

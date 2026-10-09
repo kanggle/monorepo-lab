@@ -322,6 +322,13 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
         String loginBody = """
                 {"operatorId":"%s","password":"AnyPass1!"}
                 """.formatted(OIDC_ONLY_OP_UUID);
+        // Diagnostic (TASK-MONO-771 S6 CI): the S6 run did not 500 — this request took >5m and
+        // hit the timeout. Print the heap before and the elapsed time after on every run, so the
+        // heap-ceiling hypothesis (see iam-platform/build.gradle maxHeapSize) is measured, not assumed.
+        Runtime heap = Runtime.getRuntime();
+        System.out.printf("BE-377 diagnostic: before login heap used=%dMiB total=%dMiB max=%dMiB%n",
+                (heap.totalMemory() - heap.freeMemory()) >> 20, heap.totalMemory() >> 20, heap.maxMemory() >> 20);
+        long startNanos = System.nanoTime();
         mockMvc.perform(post("/api/admin/auth/login")
                         .contentType("application/json")
                         .content(loginBody))
@@ -331,6 +338,8 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
                 // the heap so a recurrence names the Error (suspected: OutOfMemoryError in the 64 MiB
                 // Argon2 dummy verify). Assertions below are unchanged.
                 .andDo(r -> {
+                    System.out.printf("BE-377 diagnostic: login answered %d in %dms%n",
+                            r.getResponse().getStatus(), (System.nanoTime() - startNanos) / 1_000_000);
                     if (r.getResponse().getStatus() >= 500 && r.getResolvedException() != null) {
                         Runtime rt = Runtime.getRuntime();
                         System.out.printf("BE-377 diagnostic: heap used=%dMiB total=%dMiB max=%dMiB%n",

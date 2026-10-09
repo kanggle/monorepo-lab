@@ -100,6 +100,8 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'group.manage':          row(1, 0, 0, 0, 1, 0, 1),
   // TASK-MONO-771 S5 (OD-1) — rbac.md § Seed Matrix `tenant.security.manage` (V0048).
   'tenant.security.manage': row(1, 0, 0, 0, 1, 0, 0),
+  // TASK-MONO-771 S6 (OD-6) — rbac.md § Seed Matrix `account.2fa_reset` (V0049). 플랫폼 역할만.
+  'account.2fa_reset':      row(1, 0, 0, 1, 0, 0, 0),
 };
 
 /**

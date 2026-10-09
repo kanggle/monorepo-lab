@@ -946,7 +946,11 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 }
 ```
 
-**효과**: 그 계정의 `account_totp` 행(비밀 · 복구 코드 · 대기 행 포함)을 지운다. **세션은 끊지 않는다**(이미 2단계를 거친 세션은 그대로 — 탈취 의심이면 `POST /api/admin/sessions/{accountId}/revoke` 를 따로 부른다). 다음 로그인은 등록 없는 계정의 흐름이고, 정책이 켜진 진입에서 거절되면 등록 화면으로 간다 — 그 등록은 인증된 이메일을 요구하고 등록 알림 메일을 보낸다(OD-4). 하류 호출은 admin-service → auth-service 내부 명령(계약은 `TASK-MONO-771` S6 에서 `internal/admin-to-auth.md` 에 쓴다).
+**사유 (S6 구현으로 정밀화)**: `X-Operator-Reason` 헤더 **와** body `reason` 이 **둘 다** 필요하다(아래 `400 REASON_REQUIRED` 행의 «또는 누락» = 어느 한쪽이라도 없으면) — § bulk-lock 과 같은 모양이다. 감사 행의 `reason` 은 body `reason`(상세 사유 — 본인 확인 근거)이고, `ticketId` 는 body 의 것이다. 헤더는 «사유 없는 명령은 들어오지 않는다» 의 관문이다.
+
+**처리 순서**: 권한(`account.2fa_reset`, 없으면 `403 PERMISSION_DENIED` + DENIED 행) → 사유 → 플랫폼 범위(아니면 `403 TENANT_SCOPE_DENIED` + DENIED 행, 하류 호출 없음) → `Idempotency-Key` 재사용 검사(`409`) → `IN_PROGRESS` 감사 행 → auth-service 내부 명령 → 감사 완료 행(`SUCCESS` · `FAILURE`).
+
+**효과**: 그 계정의 `account_totp` 행(비밀 · 복구 코드 · 대기 행 포함)을 지운다. **세션은 끊지 않는다**(이미 2단계를 거친 세션은 그대로 — 탈취 의심이면 `POST /api/admin/sessions/{accountId}/revoke` 를 따로 부른다). 다음 로그인은 등록 없는 계정의 흐름이고, 정책이 켜진 진입에서 거절되면 등록 화면으로 간다 — 그 등록은 인증된 이메일을 요구하고 등록 알림 메일을 보낸다(OD-4). 하류 호출은 admin-service → auth-service 내부 명령 [`POST /internal/auth/accounts/{accountId}/second-factor/reset`](internal/admin-to-auth.md#post-internalauthaccountsaccountidsecond-factorreset)(TASK-MONO-771 S6). 성공 감사 행의 `downstream_detail` = `wasConfirmed=true|false`(`false` = 미완료 등록의 대기 행만 지웠다).
 
 **Errors**:
 
@@ -956,10 +960,11 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 403 | `PERMISSION_DENIED` | `account.2fa_reset` 미보유 |
 | 403 | `TENANT_SCOPE_DENIED` | 키를 가졌으나 grant 가 플랫폼 범위(`'*'`)가 아님 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 또는 body `reason` 누락 |
-| 404 | `ACCOUNT_NOT_FOUND` | 계정 미존재 |
-| 404 | `TOTP_NOT_ENROLLED` | 지울 등록이 없다(대기 행도 없음) — 리셋할 것이 없다는 사실을 운영자에게 보인다(플랫폼 전용 표면이라 열거 방어 대상 아님) |
+| 400 | `VALIDATION_ERROR` | `Idempotency-Key` 누락 |
+| 404 | `ACCOUNT_NOT_FOUND` | 계정 미존재 — 🔵 S6: 지울 행이 **없을 때만** 판정된다(auth-service 가 그때 account-service 에 묻는다). 행이 있으면 계정 존재와 무관하게 지운다(삭제된 계정에 남은 비밀도 지워지는 편이 옳다) |
+| 404 | `TOTP_NOT_ENROLLED` | 지울 등록이 없다(대기 행도 없음) — 리셋할 것이 없다는 사실을 운영자에게 보인다(플랫폼 전용 표면이라 열거 방어 대상 아님). 🔵 S6: 하류 재시도가 «이미 지운» 뒤에 닿은 경우도 이 코드다 — [admin-to-auth.md § 멱등](internal/admin-to-auth.md#post-internalauthaccountsaccountidsecond-factorreset) |
 | 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자 · 같은 키로 이미 실행 |
-| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | auth-service 호출 실패 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | auth-service 호출 실패(🔵 S6: 행이 없을 때 auth-service 의 account-service 읽기 실패 포함 — 아무것도 지워지지 않았다) |
 
 **Side Effects**: `admin_actions` — `action_code=ACCOUNT_2FA_RESET`, `permission_used=account.2fa_reset`, `target_type=ACCOUNT`, `target_id=<accountId>`, `outcome=SUCCESS|FAILURE`(하류 실패도 행을 남긴다 — A10 fail-closed, § lock 과 같다) + `admin.action.performed` outbox.
 

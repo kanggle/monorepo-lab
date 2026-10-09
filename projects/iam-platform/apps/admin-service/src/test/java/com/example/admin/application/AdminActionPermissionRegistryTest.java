@@ -232,6 +232,15 @@ class AdminActionPermissionRegistryTest {
     }
 
     @Test
+    void account_2fa_reset_targets_the_account_and_gates_on_its_own_platform_key() {
+        // TASK-MONO-771 S6 (OD-6): the reset is about an ACCOUNT; its key is account.2fa_reset (platform roles only),
+        // not account.lock (SUPPORT_LOCK holds that one and must not reset second factors).
+        assertThat(registry.targetTypeFor(ActionCode.ACCOUNT_2FA_RESET)).isEqualTo("ACCOUNT");
+        assertThat(registry.permissionForActionCode(ActionCode.ACCOUNT_2FA_RESET))
+                .isEqualTo(Permission.ACCOUNT_2FA_RESET);
+    }
+
+    @Test
     void permissionForActionCode_resolves_every_action_code_to_non_null() {
         for (ActionCode code : ActionCode.values()) {
             assertThat(registry.permissionForActionCode(code))

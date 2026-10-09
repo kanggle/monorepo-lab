@@ -441,6 +441,11 @@ export const PERMISSION_KEYS: PermissionKey[] = [
     key: 'tenant.security.manage',
     desc: '테넌트의 운영자 진입 2단계 인증 정책을 보고 켜고 끕니다. TENANT_ADMIN 은 자기 테넌트만.',
   },
+  {
+    // TASK-MONO-771 S6 (rbac.md:76 · V0049, OD-6)
+    key: 'account.2fa_reset',
+    desc: '인증 앱과 복구 코드를 모두 잃은 사람의 계정 2단계 인증을 지웁니다. 플랫폼 역할(SUPER_ADMIN · SECURITY_ANALYST)만 — 테넌트 관리자는 갖지 않습니다.',
+  },
 ];
 
 /** admin-console RBAC seed role (rbac.md § Seed Roles). */
@@ -489,6 +494,7 @@ export const SEED_ROLES: SeedRole[] = [
       // 매핑 표를 rbac.md 와 대조하다 이 화면에서 빠져 있던 것을 찾았다.
       'group.manage',
       'tenant.security.manage', // rbac.md:128 (TASK-MONO-771 S5, V0048)
+      'account.2fa_reset', // rbac.md:129 (TASK-MONO-771 S6, V0049)
     ],
     elevated: true,
   },
@@ -519,7 +525,12 @@ export const SEED_ROLES: SeedRole[] = [
     scope: 'platform',
     intent:
       '감사 · 보안 이벤트를 보고 의심 세션을 끊습니다. 계정 잠금은 CS 를 거칩니다.',
-    permissions: ['audit.read', 'security.event.read', 'account.force_logout'],
+    permissions: [
+      'audit.read',
+      'security.event.read',
+      'account.force_logout',
+      'account.2fa_reset', // rbac.md:129 (TASK-MONO-771 S6, V0049)
+    ],
   },
   {
     name: 'TENANT_ADMIN',

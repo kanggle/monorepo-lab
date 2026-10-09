@@ -199,6 +199,80 @@ public class AuthServiceClient {
         }
     }
 
+    /**
+     * TASK-MONO-771 S6 (owner decision OD-6) — delete one account's account-plane second factor
+     * ({@code POST /internal/auth/accounts/{accountId}/second-factor/reset}, admin-to-auth.md). Called only by
+     * {@code AccountSecondFactorResetUseCase} AFTER permission, platform scope, reason and the IN_PROGRESS audit row.
+     *
+     * <p><b>FAIL-CLOSED</b>, like {@link #forceLogout}: any non-2xx is an exception. A 4xx is
+     * {@link NonRetryableDownstreamException} carrying the status AND the body {@code code}, because this endpoint
+     * answers two different 404s ({@code TOTP_NOT_ENROLLED} · {@code ACCOUNT_NOT_FOUND}) that the public contract
+     * surfaces separately. 5xx / IO / timeout → {@link DownstreamFailureException} (retried by {@code @Retry}; see the
+     * contract's «멱등» note for what a retry after a lost 200 looks like).
+     */
+    @Retry(name = "authService")
+    @CircuitBreaker(name = "authService")
+    public SecondFactorResetResponse resetSecondFactor(String accountId,
+                                                       String operatorId,
+                                                       String reason,
+                                                       String idempotencyKey) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reason", reason);
+        body.put("operatorId", operatorId);
+        try {
+            SecondFactorResetResponse resp = restClient.post()
+                    .uri("/internal/auth/accounts/{accountId}/second-factor/reset", accountId)
+                    .headers(h -> {
+                        h.add("Idempotency-Key", idempotencyKey);
+                        h.add("X-Operator-ID", operatorId);
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        h.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                    })
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, r) -> {
+                        throw HttpClientErrorException.create(
+                                r.getStatusCode(), r.getStatusText(),
+                                r.getHeaders(), r.getBody().readAllBytes(), null);
+                    })
+                    .body(SecondFactorResetResponse.class);
+            if (resp == null) {
+                throw new DownstreamFailureException("auth-service second-factor reset: empty body", null);
+            }
+            return resp;
+        } catch (DownstreamFailureException e) {
+            throw e;
+        } catch (RestClientResponseException e) {
+            log.warn("auth-service second-factor reset returned {}", e.getStatusCode());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new NonRetryableDownstreamException(
+                        "auth-service error " + e.getStatusCode().value(), e,
+                        e.getStatusCode().value(), errorCodeOf(e.getResponseBodyAsByteArray()));
+            }
+            throw new DownstreamFailureException("auth-service error " + e.getStatusCode().value(), e);
+        } catch (Exception e) {
+            log.error("auth-service second-factor reset failed", e);
+            throw new DownstreamFailureException("auth-service unavailable", e);
+        }
+    }
+
+    /** {@code code} of a downstream error body ({@code {"code":"..."}}), or {@code null} when absent/unparseable. */
+    private static String errorCodeOf(byte[] body) {
+        if (body == null || body.length == 0) return null;
+        try {
+            com.fasterxml.jackson.databind.JsonNode code = ERROR_BODY_READER.readTree(body).get("code");
+            return code != null && code.isTextual() ? code.asText() : null;
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper ERROR_BODY_READER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** TASK-MONO-771 S6 — response of {@code POST /internal/auth/accounts/{accountId}/second-factor/reset}. */
+    public record SecondFactorResetResponse(String accountId, Instant resetAt, Boolean wasConfirmed) {}
+
     /** TASK-MONO-771 S5 — response of {@code POST /internal/auth/second-factor/enrolment-status}. */
     public record EnrolmentStatusResponse(java.util.List<String> enrolledAccountIds) {}
 

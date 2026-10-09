@@ -551,7 +551,7 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 - ⚪ CI 첫 실행: `TenantEntryPolicyIntegrationTest`(7 — V0048 holder 집합 · 실 쓰기 → 실 교환 AC-4 · 범위 밖 403 · `'*'` 400 · 없는 테넌트 404 · 사전 점검 실 roster 질의 × WireMock auth · auth 500 → 503) · `TenantAdminRoleSeedIntegrationTest`(기대 집합 변경) · `AccountTotpRepositoryIntegrationTest.findConfirmedAccountIds_confirmedOnly`. 이 호스트에 Docker 없음.
 - ⚪ 라이브(데모 실기동 · 실제 토글 → 실제 등록 왕복) 미실행. 머지 뒤 nightly e2e 1회 확인 권장.
 - ⚪ 샘플 fixture(`tenant_entry_policy`) — `pending` 으로 둠.
-- ⚪ S6(계정 TOTP 리셋 · `account.2fa_reset` seed) 미착수.
+- ~~⚪ S6(계정 TOTP 리셋 · `account.2fa_reset` seed) 미착수.~~ → S6 구현됨 — 아래 § S6 기록.
 
 ### S5 CI 1회차 (PR #4266, run 37917869840 «Integration (iam A, Testcontainers)») — 3 실패 진단 · 조치
 
@@ -562,3 +562,81 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 | 3 | `TokenExchangeIntegrationTest` BE-377 로컬 로그인 401 기대 → 500 `INTERNAL_ERROR` | `Resolved Exception = jakarta.servlet.ServletException` — DispatcherServlet 이 **`Exception` 이 아닌 `Throwable`(Error)** 을 감쌀 때만 나오는 형태(`RuntimeException` 이면 그 타입이 그대로 찍힌다). 로그 · 업로드 보고서 어디에도 스택 없음. 그 경로(null 해시 → Argon2 m=64MiB 더미 verify → `InvalidCredentialsException`)에 S5 코드는 없다. main 의 같은 잡은 base `7753bb5a8` 포함 최근 7회 모두 success. S5 가 이 JVM 에 더한 것은 상주 Spring 컨텍스트 하나(`TenantEntryPolicyIntegrationTest`, 고유 WireMock `@DynamicPropertySource` — 알파벳 순서상 TokenExchange 바로 앞 클래스군). 추정 = 캐시된 컨텍스트로 힙이 차 있는 상태에서 64MiB Argon2 할당이 `OutOfMemoryError` (예전 이 시험의 5분 타임아웃 flake 와 같은 계열 — GC 압박). **증명 아님**(스택 없음) | ① `TenantEntryPolicyIntegrationTest` 에 `@DirtiesContext(AFTER_CLASS)` — S5 이전의 상주 컨텍스트 수로 되돌림. ② BE-377 시험에 **진단만** 추가(5xx 일 때 힙 used/total/max 와 resolved exception 스택을 stdout 으로) — 단언 불변. 재발 시 Error 이름이 로그에 남는다 |
 
 검증: admin `compileTestJava` rc=0 · `:admin-service:test` rc=0(1010건 · 실패 0 · skip 58). IT 는 Docker 없음 → CI 재실행 대기.
+
+---
+
+## S6 기록 (2026-10-09 UTC)
+
+> 구현 = Opus 5.5 (backend-engineer) · worktree `feat/mono-771-s6-totp-reset`(origin/main `b7c389421`, S1~S5 포함). 범위 = 슬라이스 행 S6(티켓 Edge Case 2 · OD-6). **AC 체크박스는 건드리지 않았다**(S6 는 Edge Case 라 티켓 AC 가 없다). Status 는 `in-progress` 유지.
+
+### 계약 먼저 — 쓴 것 · 고친 것
+
+| 파일 | 무엇 |
+|---|---|
+| `specs/contracts/http/internal/admin-to-auth.md` | **신규 § `POST /internal/auth/accounts/{accountId}/second-factor/reset`** — 인증 = 기존 `/internal/auth/**` `internal.invoke` 워크로드 JWT(없음 · 무효 · 사용자 토큰 → `401 UNAUTHORIZED`) · 헤더 `Idempotency-Key` · `X-Operator-ID`(상관용) · `X-Tenant-Id` 안 읽음 · body `{reason, operatorId}` · **판정 순서**: 행 있음(확정 · 대기 불문) → 삭제 → `200 {accountId, resetAt, wasConfirmed}` / 행 없음 → 그때만 account-service `status-with-tenant` → `404 ACCOUNT_NOT_FOUND` · `404 TOTP_NOT_ENROLLED` · 읽기 실패 `503 SERVICE_UNAVAILABLE` · «멱등» 절(상태 멱등 · 응답 비멱등 — 재시도가 «이미 지운» 뒤 닿으면 `404 TOTP_NOT_ENROLLED`) · Caller fail-closed 매핑 · 이벤트 · 메일 없음 |
+| `specs/contracts/http/admin-api.md` § `POST /api/admin/accounts/{accountId}/2fa/reset` | S1 공개 계약을 **정밀화**(아래 «S1 과 다른 것») — 사유 두 개 필수 · 처리 순서 · 하류 링크 · `downstream_detail` · Errors 표의 `400 VALIDATION_ERROR` 행과 404 · 503 행 주석. 경로 · 메서드 · 권한 · 상태 코드 집합 · 응답 모양은 **불변** |
+| `specs/contracts/http/internal/auth-to-account.md` | 신규 § «계정 존재 여부 — 2단계 인증 리셋의 지울 것 없음 구별»(새 엔드포인트 아님 — 기존 `status-with-tenant` 의 이 호출자 사용 기록, S2b 의 이메일 절과 같은 형식) |
+| `specs/services/admin-service/rbac.md` | TASK-MONO-771 노트에 S6 seed 파일 이름(`V0049`) · 키 상수 이름. Permission Keys · Seed Roles · Seed Matrix 는 S1 이 이미 맞게 적어 둠(불변) |
+| `specs/services/admin-service/data-model.md` | Migration Strategy 의 S6 seed 파일 이름 |
+
+### 바꾼 코드
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| admin seed | `db/migration/V0049__seed_account_2fa_reset_permission.sql` | `SUPER_ADMIN` · `SECURITY_ANALYST` → `account.2fa_reset` (`INSERT IGNORE`, 매핑만 — inert/net-zero). 다음 빈 번호 실측: `db/migration` 마지막 `V0048`, `migration-dev` 는 `V0014/V0023/V0028` + R__ |
+| admin 권한 · 감사 | `domain/rbac/Permission.java:110,143`(상수 + 카탈로그 끝 — rbac.md 순서) · `application/ActionCode`(`ACCOUNT_2FA_RESET`) · `AdminActionPermissionRegistry`(target `ACCOUNT`, permission `account.2fa_reset`) · `RequiresPermissionAspect`(DENIED 행 action code) | S5 의 `tenant.security.manage` 추가와 같은 다섯 자리 |
+| admin 표면 | `presentation/AccountSecondFactorAdminController.java:41`(`@RequiresPermission(ACCOUNT_2FA_RESET)`) · `:48`(헤더 사유) · `:51`(body 사유) · dto 2 | `AccountAdminController` 와 같은 경로 접두지만 **분리** — 그쪽은 `QueryTenantScopeGate` + 하류 `X-Tenant-Id` 이고 이쪽은 플랫폼 전용 · `X-Tenant-Id` 미독 |
+| admin 유스케이스 | `application/AccountSecondFactorResetUseCase.java` — `:52` 플랫폼 범위(OD-6 2차 게이트, `OperatorLookupPort` · 아니면 `TENANT_SCOPE_DENIED` + DENIED 행) → `:56` 키 재사용 409 → `:63` IN_PROGRESS → 하류 → SUCCESS(`wasConfirmed=…`) / FAILURE · `:78` auth 404 코드 → 공개 404 둘 | `AccountAdminUseCase`(lock) 의 A10 모양 그대로 |
+| admin 포트 · 클라이언트 | `application/port/AccountSecondFactorResetPort` · `infrastructure/client/AccountSecondFactorResetAdapter` · `AuthServiceClient.resetSecondFactor`(Bearer · `Idempotency-Key` · `X-Operator-ID`, 4xx 는 status + body `code` 를 싣는 `NonRetryableDownstreamException` — 두 404 를 가르려고) | 형제 `forceLogout` 의 클라이언트 · 시스템 자격 · 헤더 패턴 복사. 🔵 `SessionAdminUseCase` 처럼 클라이언트를 유스케이스가 직접 import 하지 않고 포트를 뒀다(S5 `SecondFactorEnrolmentPort` 와 같음) |
+| admin 예외 | `AccountSecondFactorNotEnrolledException extends TotpNotEnrolledException` + `AdminExceptionHandler` 핸들러 | 같은 공개 코드 `TOTP_NOT_ENROLLED`, 다른 문구(부모 핸들러 문구가 «재발급 전 등록 필요» 로 고정돼 있다) |
+| auth 유스케이스 | `application/AccountSecondFactorResetUseCase.java:57`(행 조회) · `:60`(삭제) · `:66`(행 없을 때만 존재 확인) | 권한 재판정 없음 — 워크로드 게이트가 호출자를 가른다 |
+| auth 표면 | `presentation/InternalSecondFactorResetController.java:44-48`(결과 → 200 / 404 둘, 503 은 기존 `AuthExceptionHandler`) | `/internal/auth/**` 기존 체인 아래 — `SecurityConfig` 변경 0 |
+| console 원장 사본 | `shared/guide/permission-map.ts`(`RBAC_SEED_MATRIX` 행) · `features/iam-guide/data.ts`(`PERMISSION_KEYS` 항목 · `SUPER_ADMIN` · `SECURITY_ANALYST` 권한 목록) | 아래 «슬라이스 행과 다른 것 2» |
+
+### S1 공개 계약 · 슬라이스 행과 다른 것 (이유)
+
+1. **사유 = 헤더 와 body 둘 다 필수** — S1 의 «`X-Operator-Reason` 또는 body `reason` 누락 → 400» 을 문자 그대로(어느 한쪽이라도 없으면) 읽었다. lock 은 «헤더 또는 body 중 하나» 로 구현돼 있어 같은 문장이 두 뜻으로 읽힌다 — 그래서 계약에 «둘 다» 를 명시했다. 감사 `reason` = body(상세 · 본인 확인 근거), bulk-lock 과 같은 모양.
+2. **console 원장 사본 갱신** — 슬라이스 행은 admin · auth · `internal/` 계약뿐이다. 그러나 `permission-map.ts` 머리 주석이 «rbac.md 를 바꾸는 PR 은 이 파일도 함께» 이고, seed 가 실재하게 된 순간 사본이 SUPER_ADMIN · SECURITY_ANALYST 의 실제 권한을 덜 말한다. 화면 · nav 변경 0(이 키로 게이트되는 nav 항목 없음).
+3. **`ACCOUNT_NOT_FOUND` 의 판정 자리** — S1 은 «계정 미존재» 만 적었다. 판정은 auth-service 가, **지울 행이 없을 때만** 한다(행이 있으면 계정 존재와 무관하게 지운다 — 삭제된 계정에 남은 비밀은 지워지는 편이 옳다). admin 쪽에 존재 확인을 두지 않은 이유: admin → account 계약에 «어느 테넌트든» 계정 읽기가 없다(`/status` 는 헤더 없으면 `fan-platform` 고정 — 풀 계정을 못 찾는다). auth 는 그 읽기(`status-with-tenant`)를 이미 계약으로 갖고 있다(S2b).
+4. **읽기 실패 = 503**(행 없음 + account-service 장애) — «계정 없음» · «등록 없음» 중 하나로 메우지 않는다. 어느 쪽이든 아무것도 지워지지 않았다.
+5. **재시도 뒤의 404** — admin 의 `@Retry`(5xx · 타임아웃에만)가 «첫 시도가 지웠는데 응답만 잃은» 경우에 닿으면 `404 TOTP_NOT_ENROLLED` + `FAILURE` 행이 된다. 서버가 `Idempotency-Key` 로 첫 응답을 재생하게 만들지 않았다 — 리셋은 드문 수동 명령이고 틀리는 것은 응답 하나, 상태(등록 없음)는 옳다. 계약 «멱등» 절에 적었다.
+6. **플랫폼 범위 판정 = 운영자 홈 `'*'`** — rbac.md 는 «플랫폼 범위 grant(`tenant_id='*'`)» 라 적었다. 코드의 기존 «플랫폼 운영자» 술어는 전부 운영자 홈(`AdminOperator.isPlatformScope` · `QueryTenantScopeGate`)이다 — 계약이 «`tenant.manage` 의 inline platform-scope 검사와 같은 모양» 이라 지시하므로 그 술어를 그대로 썼다. grant 행의 `tenant_id` 를 따로 읽지 않는다: `V0026` 이 기존 행을 홈으로 맞췄지만 그 뒤의 grant 가 언제나 홈과 같은지는 **재지 않았다**(홈 `'*'` 인데 grant 가 테넌트인 `SECURITY_ANALYST` 는 여기서 통과한다 — `tenant.manage` 와 같은 판정). 그 경우를 막아야 한다면 rbac.md 문구 쪽을 grant 기준으로 바꾸는 별도 결정이다.
+
+### 검증 (rc 는 `cmd > file 2>&1; echo rc=$?`)
+
+| 무엇 | 결과 |
+|---|---|
+| `compileTestJava`(admin · auth, 통합 소스 포함) | rc=0 |
+| `./gradlew :projects:iam-platform:apps:admin-service:test` | rc=0 — 160 클래스 · 1032건 · 실패 0 · skip 58(Docker 조건부) |
+| `./gradlew :projects:iam-platform:apps:auth-service:test` | rc=0 — 151 클래스 · 1184건 · 실패 0 · skip 33 |
+| 신규 · 변경 시험 (admin) | `AccountSecondFactorResetUseCaseTest` 9 · `AccountSecondFactorAdminControllerSliceTest` 9 · `AuthServiceClientUnitTest` +3(13) · `AdminActionPermissionRegistryTest` +1(24) · `PermissionCatalogTest`(카탈로그 = 반사 상수 집합, 그대로 통과) — 전부 통과 |
+| 신규 · 변경 시험 (auth) | `AccountSecondFactorResetUseCaseTest` 5 · `InternalSecondFactorResetControllerSliceTest` 5 · `InternalSecondFactorResetAuthSliceTest` 3(Bearer 없음 401 · `internal.invoke` 없는 토큰 401 — 둘 다 유스케이스 미호출 · 워크로드 토큰 200) · `AccountSecondFactorServiceTest` +1(14) — 전부 통과 |
+| 🔴 «리셋 뒤 = 등록 유도» | `AccountSecondFactorServiceTest.afterAdminReset_accountIsNotEnrolled_andCanEnrolAgain` — 실제 서비스 + 실제 리셋 유스케이스 + 같은 인메모리 표: 리셋 뒤 `hasConfirmedEnrollment=false`(= `AuthorizeSecondFactorGate` 가 읽는 술어 — `false` + `acr_values=mfa` → `/mfa/setup` 은 S2b `AuthorizeSecondFactorGateTest.stepUp_notEnrolled_goesToSetup`) · `status().enrolled=false` · 잃은 앱의 코드 `NOT_ENROLLED` · 잃은 복구 코드 거절 · `startEnrollment` 다시 `PENDING_CREATED`(OD-4 전제 재질의) |
+| 🔴 bite — admin 플랫폼 범위 게이트 제거 | 처음엔 S6 유스케이스 시험 9건 중 8건이 RED — 원인은 STRICT_STUBS «쓰이지 않은 stub»(S5 bite 1 과 같은 현상). 양성 경로의 운영자 조회 stub 을 전제(lenient)로 바꾼 뒤 재실행 → **`tenantScopedHolder_denied` · `unknownOperator_denied` 2건만** RED → 복원 → GREEN |
+| console `pnpm install --frozen-lockfile` · `npx tsc --noEmit` | 둘 다 rc=0 |
+| console `npx vitest run` permission-map-drift · IamGuideScreen · sidebar-role-subscription | rc=0 — 3 파일 · 51건 |
+| 가드(스테이지 뒤) | 커밋 직전 실행 — 결과는 PR 본문. `scripts/` 추가 · 삭제 없음 |
+
+### 권한 대조군 (OD-6) — 어디서 무는가
+
+| 행위자 | 기대 | 시험 |
+|---|---|---|
+| `SUPER_ADMIN`(`'*'`) | 200 · auth 1회 · SUCCESS 행 | IT `platformRoles_allowed` ⚪ CI |
+| `SECURITY_ANALYST`(`'*'`) | 200 · auth 1회 · SUCCESS 행 | 같은 IT ⚪ CI |
+| `TENANT_ADMIN` · `SUPPORT_READONLY` · `SUPPORT_LOCK` · `TENANT_BILLING_ADMIN` | 403 `PERMISSION_DENIED` · auth 0회 · DENIED 행(`permission_used=account.2fa_reset`) | IT `otherRoles_denied` ⚪ CI + slice `noPermission_403`(키 판정이 `account.2fa_reset` 으로 일어남) 로컬 통과 |
+| 고객 테넌트 홈 `SECURITY_ANALYST` | 403 `TENANT_SCOPE_DENIED` · auth 0회 | IT `tenantHomedAnalyst_scopeDenied` ⚪ CI + 유스케이스 `tenantScopedHolder_denied` 로컬 통과 |
+| seed 보유 집합 | 정확히 `{SECURITY_ANALYST, SUPER_ADMIN}` | IT `seed_holders` ⚪ CI |
+| `ORG_ADMIN` | 403(키 미보유) | 대조군 IT 에 넣지 않았다 — 노드 grant(`org_node_id`)가 필요한 역할이라 시드가 다르다. seed 보유 집합 단언이 «ORG_ADMIN 미보유» 를 이미 덮는다 |
+
+### ⚪ 열린 것
+
+- ⚪ **CI 첫 실행**: `AccountSecondFactorResetIntegrationTest`(`@Tag("integration")`, 실 MySQL V0049 + 실 `PermissionEvaluator` + WireMock auth — 권한 대조군 8칸 · seed 보유 집합 · auth 404 → FAILURE 행). 이 호스트에 Docker 데몬 없음.
+- ⚪ 라이브(데모 · 실제 리셋 → 실제 재등록) 미실행.
+- ⚪ **콘솔 리셋 화면 없음** — 공개 API 만 있다. 계정 상세의 «2단계 인증 리셋» 버튼은 콘솔 계약(`console-integration-contract.md`)에 자리가 없어 이 슬라이스에서 만들지 않았다(소유자 · 후속 판단).
+- ⚪ **리셋 알림 메일 없음** — 계약(S1 «등록 · 리셋 이벤트 — 소비자 없음»)대로. 본인이 모르는 리셋을 알리는 메일(등록 알림 메일과 대칭)은 보안상 권할 만하나 계약 밖이라 넣지 않았다 — 소유자 판단.
+
+### CI 1차 — BE-377 재발 (S6 와 무관한 기존 시험)
+
+- `a86559f86` 의 iam A: 195 중 1 실패 — `TokenExchangeIntegrationTest` «BE-377 … local-login → 401». 이번엔 500 이 아니라 **응답은 맞는 401 인데 5분 타임아웃**(`12:14:59` 직전 시험 통과 → `12:22:04` 응답). S5 에서 둔 `@DirtiesContext(AFTER_CLASS)` 완화는 **원인이 아니었다**(증상이 살아남음).
+- 가설: Gradle 테스트 JVM 기본 힙 512 MiB(어디서도 `maxHeapSize` 미설정 — `gradle.properties` 의 `-Xmx2048m` 은 데몬 것) × 이 요청의 Argon2id 더미 검증 `m=65536`(64 MiB). 천장 근처에서 Error(→500, 스택 없음) 또는 GC 스래싱(→타임아웃) — 두 증상을 하나로 설명한다.
+- 조치: `projects/iam-platform/build.gradle` `integrationTest` 에 `maxHeapSize = '1536m'` · 진단을 **항상** 찍게(요청 전 힙 · 응답 시간). 🔴 초록 한 번은 판정이 아니다 — 진단 줄의 «before login heap used/max» 가 천장 근처였는지로 가설을 판정한다(다음 런 로그).
