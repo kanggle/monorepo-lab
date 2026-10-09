@@ -152,6 +152,19 @@ tasks.named('test') {
     inputs.file(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev/R__05_seed_demo_corp_tenant_and_consumer_accounts.sql'))
             .withPropertyName('demoConsumerAccountSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // TASK-MONO-781: DemoCsOperatorSeedTest pins the CS operator's link key, home tenant,
+    // SUPPORT_LOCK@ecommerce grant and confinement against this sibling file, and
+    // DemoCsOperatorDerivedRolesTest recomputes its disclosed domain roles from it plus EVERY
+    // account-service migration that writes tenant_domain_subscription — same blind spot.
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_cs_operator.sql'))
+            .withPropertyName('demoCsOperatorSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration'))
+            .withPropertyName('accountServiceProdMigrationsForDemoRoles')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration-dev'))
+            .withPropertyName('accountServiceDevMigrationsForDemoRoles')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // TASK-BE-581 — same blind spot, different task. OAuthClientTenantReferenceIntegrationTest

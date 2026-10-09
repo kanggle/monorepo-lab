@@ -715,6 +715,12 @@ IAM 는 두 가지 producer-side 선행물을 제공한다.
 - `admin_operators.confined_tenant_id`(TASK-MONO-751, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로») 가 비-NULL 인 운영자는
   그 **한 테넌트만** assume 할 수 있고 레지스트리에도 그 테넌트만 나온다 — `'*'` 의 «모든 테넌트» 보다 먼저 적용되는 좁히기.
   데모 플랫폼 운영자(`platform@demo.com`)는 `fan-platform` 에 묶여 있다. NULL = 기존 동작.
+  데모 CS 2선 운영자(`cs@demo.com`, TASK-MONO-781 — 홈 `ecommerce` · `SUPPORT_LOCK`@`ecommerce`)는 `ecommerce` 에 묶여 있다.
+  사이트 운영자이므로 잠금·해제는 그 사이트 멤버십에만 걸린다(위 § 5 «사이트 테넌트로 계정을 찾는 표면»).
+  🔴 공개된 트레이드오프(2026-10-09 UTC 소유자 결정 A): assume 토큰의 역할은 RBAC 행이 아니라 **선택한 테넌트의
+  ACTIVE 구독**에서 파생되므로(ADR-MONO-035), 이 운영자는 `ecommerce` 를 고르는 순간 그 테넌트의 `ecommerce` · `wms`
+  구독이 주는 도메인 운영 역할(`ECOMMERCE_OPERATOR` · WMS 운영 역할, 쓰기 포함)도 함께 받는다. 홈 테넌트에 대해 이 파생을
+  좁히는 장치는 없다(`operator_tenant_assignment.permission_set_id` 는 assume 경로에서 읽히지 않는다).
 - 6 federated domains (`iam` + `wms` + `scm` + `erp` + `finance` + `ecommerce`)
   는 모두 V1 live 이며 `available:true` 로 노출된다 (TASK-BE-305 2026-05-21
   reality-alignment — finance Phase 5 COMPLETE 2026-05-19/20 + erp Phase 6
