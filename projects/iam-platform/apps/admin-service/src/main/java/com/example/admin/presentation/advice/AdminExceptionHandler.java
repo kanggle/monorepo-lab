@@ -146,6 +146,17 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                         "TOTP enrollment is required before recovery-code regeneration"));
     }
 
+    /**
+     * TASK-MONO-771 S6 — the account named in {@code POST /api/admin/accounts/{accountId}/2fa/reset} has nothing to
+     * reset. Same public code as the operator break-glass case above (the subclass is matched first), own message.
+     */
+    @ExceptionHandler(com.example.admin.application.exception.AccountSecondFactorNotEnrolledException.class)
+    public ResponseEntity<ErrorResponse> handleAccountSecondFactorNotEnrolled(
+            com.example.admin.application.exception.AccountSecondFactorNotEnrolledException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("TOTP_NOT_ENROLLED", e.getMessage()));
+    }
+
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

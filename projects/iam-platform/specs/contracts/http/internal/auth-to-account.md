@@ -337,6 +337,16 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 ---
 
+## 계정 존재 여부 — 2단계 인증 리셋의 «지울 것 없음» 구별 (TASK-MONO-771 S6)
+
+> **새 엔드포인트가 아니다** — 위 `GET /internal/accounts/{accountId}/status-with-tenant` 를 이 호출자가 쓰는 방식의 기록이다.
+
+**호출 시점 (auth-service)**: admin → auth 내부 명령 [`POST /internal/auth/accounts/{accountId}/second-factor/reset`](./admin-to-auth.md#post-internalauthaccountsaccountidsecond-factorreset) 에서, 지울 `account_totp` 행이 **없을 때만**(`AccountSecondFactorResetUseCase`). 행이 있으면 묻지 않고 지운다.
+
+**매핑** (`AccountServicePort.getAccountStatusAndTenant` 그대로): `404` → 내부 명령 `404 ACCOUNT_NOT_FOUND` · 200 → `404 TOTP_NOT_ENROLLED` · 그 밖(4xx · 5xx · 타임아웃 · circuit-open) → `AccountServiceUnavailableException` → `503 SERVICE_UNAVAILABLE`(«계정 없음» 과 «등록 없음» 중 하나로 추측하지 않는다 — 어느 쪽이든 아무것도 지워지지 않았다). 읽기, 멱등.
+
+---
+
 ## Caller Constraints (auth-service 측)
 
 - 타임아웃: 연결 3s, 읽기 5s

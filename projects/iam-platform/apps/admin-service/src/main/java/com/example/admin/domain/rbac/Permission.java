@@ -99,6 +99,16 @@ public final class Permission {
      */
     public static final String TENANT_SECURITY_MANAGE = "tenant.security.manage";
 
+    /**
+     * TASK-MONO-771 S6 (ADR-MONO-080 D4, ticket Edge Case 2, owner decision OD-6): reset ANOTHER account's
+     * account-plane second factor (auth-service {@code account_totp}) —
+     * {@code POST /api/admin/accounts/{accountId}/2fa/reset}. Held by the PLATFORM roles {@code SUPER_ADMIN} and
+     * {@code SECURITY_ANALYST} only (V0049), and effective only for a platform-scope ({@code '*'}) operator — the
+     * use case re-checks that inline. {@code TENANT_ADMIN} never holds it: accounts are personal pool accounts, so a
+     * reset changes that person's shopping / fan login security too (rbac.md § Permission Keys).
+     */
+    public static final String ACCOUNT_2FA_RESET = "account.2fa_reset";
+
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
 
@@ -129,7 +139,8 @@ public final class Permission {
             PARTNERSHIP_MANAGE,
             ORG_MANAGE,
             GROUP_MANAGE,
-            TENANT_SECURITY_MANAGE);
+            TENANT_SECURITY_MANAGE,
+            ACCOUNT_2FA_RESET);
 
     /** @return the canonical permission-key catalog (immutable, rbac.md order). */
     public static List<String> catalog() {

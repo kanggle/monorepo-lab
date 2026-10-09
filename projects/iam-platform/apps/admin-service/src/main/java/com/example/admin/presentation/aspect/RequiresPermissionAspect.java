@@ -277,6 +277,10 @@ public class RequiresPermissionAspect {
             if ("bulkLock".equals(name)) return ActionCode.ACCOUNT_LOCK;
         }
         if ("SessionAdminController".equals(simple)) return ActionCode.SESSION_REVOKE;
+        // TASK-MONO-771 S6 — the account second-factor reset; the DENIED row carries target_type=ACCOUNT.
+        if ("AccountSecondFactorAdminController".equals(simple)) {
+            if ("resetSecondFactor".equals(name)) return ActionCode.ACCOUNT_2FA_RESET;
+        }
         if ("AuditController".equals(simple)) return ActionCode.AUDIT_QUERY;
         // TASK-BE-083 — operator management controller; each endpoint maps to a
         // dedicated action code so DENIED rows carry the correct target semantics.

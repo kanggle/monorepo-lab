@@ -1,6 +1,6 @@
 # Internal HTTP Contract: admin-service → auth-service
 
-admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / refresh token revoke를 요청한다. (TASK-MONO-771 S5: 테넌트 진입 정책 사전 점검용 계정 2단계 등록 여부 읽기 한 건 추가.)
+admin-service가 운영자 명령으로 auth-service에 강제 로그아웃 / refresh token revoke를 요청한다. (TASK-MONO-771 S5: 테넌트 진입 정책 사전 점검용 계정 2단계 등록 여부 읽기 한 건 추가. S6: 계정 2단계 인증 리셋 명령 한 건 추가.)
 
 **호출 방향**: admin-service (client) → auth-service (server)
 **노출 경로**: `/internal/auth/*`
@@ -154,6 +154,67 @@ admin-service 는 out-of-scope 테넌트 요청을 auth 도달 전에 `403 TENAN
 | 401 | `UNAUTHORIZED` | `internal.invoke` client_credentials JWT 없음/무효 (위 § 인증) |
 
 > **Caller fail-closed** (admin-service) — 호출 실패(타임아웃 · 5xx · circuit-open · IO · 4xx) → `DownstreamFailureException` → 사전 점검 엔드포인트 `503`. «0명 미등록» 같은 숫자로 메우지 않는다(정책을 켜려는 관리자를 오도한다). `AuthServiceClient.enrolledAmong` · `SecondFactorEnrolmentAdapter`(500개씩 분할).
+
+---
+
+## POST /internal/auth/accounts/{accountId}/second-factor/reset
+
+**TASK-MONO-771 S6** (티켓 Edge Case 2 · 소유자 결정 OD-6) — 계정 평면 2단계 인증(`account_totp`)을 **지운다**. 공개 표면 [admin-api.md § POST /api/admin/accounts/{accountId}/2fa/reset](../admin-api.md#post-apiadminaccountsaccountid2fareset) 의 하류 명령이다 — admin-service 가 권한(`account.2fa_reset`) · 플랫폼 범위 · 사유 · 감사를 끝낸 뒤에만 부른다. 이 엔드포인트는 그 판단을 다시 하지 않는다(누가 불렀는지는 위 § 인증의 `internal.invoke` 워크로드 자격이 가른다 — 사용자 토큰 · 자격 없는 호출은 `401`).
+
+**Path Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `accountId` | string | 대상 계정(`account_totp.account_id` — 키이자 유일한 조회 술어, auth data-model § `account_totp`) |
+
+**Headers**:
+- `Idempotency-Key: {admin 요청의 Idempotency-Key}` (필수 — 로그 상관용. 서버는 키를 저장하지 않는다, 아래 «멱등»)
+- `X-Operator-ID: {operator_id}` (감사 추적용 — 서버 로그에 남는다)
+
+`X-Tenant-Id` 는 보내지 않는다(보내도 무시) — 대상은 계정 id 하나이고 테넌트로 좁히지 않는다(공개 표면이 플랫폼 전용).
+
+**Request**:
+```json
+{
+  "reason": "string (운영자 사유)",
+  "operatorId": "string"
+}
+```
+
+**판정 순서**:
+
+1. `account_totp` 행이 **있으면**(확정 · 대기 불문) 그 행을 지운다 → `200`. 비밀 · 복구 코드 해시 · 재생 방지 카운터가 함께 사라진다. 세션 · 토큰은 건드리지 않는다.
+2. 행이 **없으면** 지울 것이 없다. 운영자에게 «계정 없음» 과 «등록 없음» 을 구별해 주려고 그때만 account-service `GET /internal/accounts/{accountId}/status-with-tenant`([auth-to-account.md](./auth-to-account.md#get-internalaccountsaccountidstatus-with-tenant))를 묻는다 — `404` → `404 ACCOUNT_NOT_FOUND`, 계정 있음 → `404 TOTP_NOT_ENROLLED`, 읽기 실패 → `503 SERVICE_UNAVAILABLE`(추측으로 메우지 않는다 — 어느 쪽이든 아무것도 지워지지 않았다).
+
+**Response 200**:
+```json
+{
+  "accountId": "string",
+  "resetAt": "2026-10-09T10:00:00Z",
+  "wasConfirmed": true
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `accountId` | string | 요청 그대로 |
+| `resetAt` | string (ISO-8601) | 행을 지운 시각 |
+| `wasConfirmed` | boolean | 지운 행이 **확정** 등록이었나(`false` = 미완료 `/mfa/setup` 의 대기 행만 있었다). admin-service 가 감사 `downstream_detail` 에 싣는다 — 비밀 · 코드 · 시각 외의 정보는 내보내지 않는다 |
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | `internal.invoke` client_credentials JWT 없음/무효 · scope 없는 토큰(사용자 토큰) (위 § 인증) |
+| 404 | `ACCOUNT_NOT_FOUND` | 행 없음 + account-service 에 그 계정 없음 |
+| 404 | `TOTP_NOT_ENROLLED` | 행 없음 + 계정은 있음 — 리셋할 것이 없다 |
+| 503 | `SERVICE_UNAVAILABLE` | 행 없음 + account-service 읽기 실패(위 2) |
+
+**멱등**: 결과 상태는 멱등이다(두 번째 호출 뒤에도 «등록 없음»). 응답은 아니다 — 같은 계정의 두 번째 호출은 `404 TOTP_NOT_ENROLLED` 다(공개 계약이 «리셋할 것이 없다» 를 운영자에게 보이기로 했다). 그래서 admin-service 의 재시도(아래 Caller Constraints, 5xx · 타임아웃에만)가 «첫 시도가 실제로는 지웠는데 응답만 잃은» 경우에 닿으면 운영자는 `404 TOTP_NOT_ENROLLED` 와 `FAILURE` 감사 행을 본다 — 상태는 옳다(등록 없음). 서버가 `Idempotency-Key` 를 저장해 첫 응답을 재생하지 않는 이유: 리셋은 드물고(플랫폼 운영자의 수동 명령), 잘못 보이는 것은 응답 하나뿐이며 상태는 틀리지 않는다.
+
+**Side Effects**: `account_totp` 한 행 삭제(있을 때만). 이벤트 · 메일 없음(S1 «등록 · 리셋 이벤트 — 소비자 없음»). 감사의 집은 admin-service `admin_actions`(`ACCOUNT_2FA_RESET`)이고, 여기서는 `INFO` 로그(`accountId` · `operatorId` · `wasConfirmed`, 비밀 없음)만 남긴다.
+
+> **Caller fail-closed** (admin-service) — 2xx 외 응답은 전부 실패다: `404` 는 코드대로(`TOTP_NOT_ENROLLED` → 공개 `404 TOTP_NOT_ENROLLED`, `ACCOUNT_NOT_FOUND` → 공개 `404 ACCOUNT_NOT_FOUND`), 그 밖 4xx · 5xx · 타임아웃 · IO → `DownstreamFailureException` → 공개 `503 DOWNSTREAM_ERROR`, circuit-open → `503 CIRCUIT_OPEN`. 어느 실패든 `admin_actions` 에 `FAILURE` 완료 행을 남긴다(A10). `AuthServiceClient.resetSecondFactor` · `AccountSecondFactorResetAdapter`.
 
 ---
 

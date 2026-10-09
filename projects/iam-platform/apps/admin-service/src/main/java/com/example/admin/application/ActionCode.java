@@ -112,5 +112,10 @@ public enum ActionCode {
     // target_type=TENANT, target_id=<tenantId>, target_tenant_id=<tenantId>,
     // permission_used=tenant.security.manage, detail = "requireMfa <before>→<after>" (before = none when
     // no row existed). One SUCCESS row per successful PUT, a same-value no-op included (admin-api.md).
-    TENANT_ENTRY_POLICY_SET
+    TENANT_ENTRY_POLICY_SET,
+    // TASK-MONO-771 S6 (ADR-MONO-080 D4, OD-6): reset another account's account-plane second factor
+    // (POST /api/admin/accounts/{accountId}/2fa/reset → auth-service internal command). target_type=ACCOUNT,
+    // target_id=<accountId>, permission_used=account.2fa_reset, detail = "wasConfirmed=<bool>" on SUCCESS.
+    // IN_PROGRESS → SUCCESS|FAILURE like ACCOUNT_LOCK (a downstream failure still leaves a FAILURE row — A10).
+    ACCOUNT_2FA_RESET
 }
