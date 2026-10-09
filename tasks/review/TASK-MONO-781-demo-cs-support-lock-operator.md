@@ -140,3 +140,18 @@ monorepo
 ## 재굽기
 
 **필요**(AC-0 4). 재굽기 전에는 데모에 이 계정이 없다 — 그래서 공개(론처 · 가이드)는 `TASK-MONO-782` 의 AC-0(배포 AMI 의 `REPO_COMMIT` 이 이 PR 스쿼시의 자손인가) 뒤로 미뤘다.
+
+---
+
+## CORRECTION — AC-4 닫힘 (2026-10-09 UTC, CI 로그 실측)
+
+- **AC-4 닫힘**: 위 AC 목록의 AC-4 는 «실행 ⚪ → CI `Integration` 레인이 판정» 으로 열려 있었다. #4277 의 `Integration (iam A, Testcontainers) / integration` 잡(job `113968465883`) 로그를 열어 확인했다 — `DemoOperatorSeedIntegrationTest` 16칸 전부 `PASSED`, 그중 이 태스크가 더한 `demo-cs` 5칸이 실제로 실행됐다:
+  - `demo-cs authenticates: GET /api/admin/me → 200 with roles = [SUPPORT_LOCK]`
+  - `assume gate: demo-cs may assume exactly ecommerce (no 2FA, no cap), and is refused demo-corp / fan-platform`
+  - `seed: demo-cs holds exactly SUPPORT_LOCK bound to ecommerce (a SITE grant, not '*') and no assignment row`
+  - `seed: demo-cs exists, ACTIVE, HOME ecommerce, confined to ecommerce, with its own login's oidc_subject`
+  - `demo-cs is denied the unfiltered account list (no account.read) — the reason the console opens search-only`
+  - 🔴 잡이 초록이라는 것만으로 닫지 않았다 — 클래스 이름과 각 칸의 `PASSED` 줄을 로그에서 직접 셌다(iam B 샤드 로그엔 이 클래스가 0줄).
+- #4277 `MERGED` 2026-10-09T19:21:23Z, squash `53e44f3e5`, 머지 시점 체크 SUCCESS 16 · SKIPPED 51 · FAILURE 0.
+- **아직 열린 것**: AC-5(재굽기 뒤 라이브) — `TASK-MONO-782` AC-1 이 잰다. 그래서 이 태스크는 review 에 남는다.
+
