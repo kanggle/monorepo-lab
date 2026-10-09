@@ -8,7 +8,7 @@ TASK-PC-FE-329
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -103,3 +103,11 @@ platform-console
 
 - 이름만 바꾸고 내용을 안 옮기는 경우 → Finance·ERP 「상태 변화」 탭에 자주 하는 작업이 뜨는 모순. 섹션 배치 시험이 잡는다.
 - 메뉴 안내 카드에서 «여는 곳» / «필요한 권한» 이 빠지는 경우 → 공용 헬퍼가 카드마다 두 줄을 단언(bite 확인).
+
+## CORRECTION — close (2026-10-10 UTC, 4차원 검증)
+
+- **AC-6 닫힘**: 소유자가 데모 창에서 도메인 가이드 7탭 구성과 Finance·ERP·IAM 내용 배치를 눈으로 확인했다(2026-10-10 UTC 대화 — «PC-FE-329 PC-FE-330 확인»). 위 AC 목록의 ⚪ 는 이 절이 닫는다.
+- (a) #4273 `MERGED` 2026-10-09T14:56:18Z, squash `cb4b15790`.
+- (b) `cb4b15790` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 14 · SKIPPED 52 · FAILURE 0.
+- (d) AC-0~6 전부 닫힘.

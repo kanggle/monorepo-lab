@@ -8,7 +8,7 @@ TASK-PC-FE-330
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -71,3 +71,11 @@ platform-console
 
 - 머리 칸만 끄고 행 칸을 남기면 열이 한 칸씩 밀린다 → 같은 prop 이 두 곳을 함께 끈다.
 - 전역 가이드까지 뎁스가 사라지는 경우 → 대조 시험이 잡는다.
+
+## CORRECTION — close (2026-10-10 UTC, 4차원 검증)
+
+- **AC-5 닫힘**: 소유자가 데모 창에서 도메인 가이드 «메뉴별 권한» 표에 뎁스 열이 없는 것을 눈으로 확인했다(2026-10-10 UTC 대화 — «PC-FE-329 PC-FE-330 확인»). 위 AC 목록의 ⚪ 는 이 절이 닫는다.
+- (a) #4274 `MERGED` 2026-10-09T15:44:40Z, squash `63e4c277b`.
+- (b) `63e4c277b` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 12 · SKIPPED 54 · FAILURE 0.
+- (d) AC-1~5 전부 닫힘.
