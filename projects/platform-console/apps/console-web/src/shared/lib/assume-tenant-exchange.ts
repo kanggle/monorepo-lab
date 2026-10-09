@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { getServerEnv } from '@/shared/config/env';
 import { logger, newRequestId } from '@/shared/lib/logger';
-import { AssumeTenantError } from '@/shared/api/errors';
+import {
+  AssumeTenantError,
+  ASSUME_MFA_REQUIRED_DESCRIPTION,
+  MFA_REQUIRED_CODE,
+} from '@/shared/api/errors';
 
 /**
  * Server-only RFC 8693 **assume-tenant** token exchange: the operator's base
@@ -42,6 +46,9 @@ import { AssumeTenantError } from '@/shared/api/errors';
  *   - `400 invalid_grant` (assignment-denied / subject-invalid / producer's
  *     admin-service leg unavailable — the D2 fail-CLOSED gate)
  *     → `AssumeTenantError('denied')` (switch rejected, prior selection kept).
+ *   - `400 invalid_grant` + `error_description` exactly
+ *     `insufficient_user_authentication` (TASK-MONO-771) → `'mfa_required'`
+ *     — checked first; every other `invalid_grant` stays `'denied'`.
  *   - `400 invalid_request` (missing/blank `audience`) → `'invalid'`.
  *   - `5xx` / timeout / network / unexpected response shape → `'unavailable'`.
  */
@@ -144,8 +151,29 @@ export async function exchangeForAssumedToken(
       // `invalid_grant` = the fail-CLOSED gate (assignment-denied / subject
       // invalid / producer admin-service unavailable) → switch REJECTED.
       // `invalid_request` = bad/blank audience → client request defect.
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      const oauthError = body.error;
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: unknown;
+        error_description?: unknown;
+      };
+      const oauthError = typeof body.error === 'string' ? body.error : undefined;
+      // TASK-MONO-771 (§ 2.7) — the second-factor refusal, decided BEFORE the
+      // `denied` default below. 🔴 Whole-value equality on BOTH fields: a
+      // substring / case-insensitive match would turn an unassigned tenant
+      // into a step-up offer that can never succeed.
+      if (
+        oauthError === 'invalid_grant' &&
+        body.error_description === ASSUME_MFA_REQUIRED_DESCRIPTION
+      ) {
+        logger.warn('assume_tenant_mfa_required', {
+          requestId,
+          tenant: selectedTenant,
+        });
+        throw new AssumeTenantError(
+          'mfa_required',
+          MFA_REQUIRED_CODE,
+          'assume-tenant requires a second factor',
+        );
+      }
       if (oauthError === 'invalid_request') {
         logger.warn('assume_tenant_invalid_request', {
           requestId,

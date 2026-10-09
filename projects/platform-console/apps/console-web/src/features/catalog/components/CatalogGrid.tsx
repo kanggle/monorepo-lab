@@ -1,6 +1,8 @@
 'use client';
 
 import { useTenantSwitch } from '@/shared/api/use-tenant-switch';
+import { isMfaRequiredError } from '@/shared/api/errors';
+import { StepUpOffer } from '@/shared/ui/StepUpOffer';
 import type { RegistryProduct, ProductKey } from '@/shared/api/registry-types';
 import { ServiceTile, type TileTone } from './ServiceTile';
 
@@ -46,18 +48,29 @@ export function CatalogGrid({ products, healthByDomain }: CatalogGridProps) {
   };
 
   return (
-    <ul
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-      data-testid="catalog-grid"
-    >
-      {products.map((product) => (
-        <ServiceTile
-          key={product.productKey}
-          product={product}
-          tone={healthByDomain?.[product.productKey]}
-          onSelectTenant={onSelectTenant}
-        />
-      ))}
-    </ul>
+    <>
+      {/* TASK-MONO-771 (§ 2.7) — a tenant row is a switch surface too, and for a
+          single-tenant operator it is the ONLY one (the top switcher renders a
+          static label then). Without this, a `mfa_required` refusal here would
+          be silent and the step-up offer unreachable. */}
+      {switchTenant.isError && isMfaRequiredError(switchTenant.error) ? (
+        <div className="mb-3">
+          <StepUpOffer />
+        </div>
+      ) : null}
+      <ul
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        data-testid="catalog-grid"
+      >
+        {products.map((product) => (
+          <ServiceTile
+            key={product.productKey}
+            product={product}
+            tone={healthByDomain?.[product.productKey]}
+            onSelectTenant={onSelectTenant}
+          />
+        ))}
+      </ul>
+    </>
   );
 }

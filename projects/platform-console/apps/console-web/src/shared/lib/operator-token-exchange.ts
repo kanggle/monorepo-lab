@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getServerEnv } from '@/shared/config/env';
 import { resolveBackendUrl } from '@/shared/config/demo-backend';
 import { logger, newRequestId } from '@/shared/lib/logger';
-import { OperatorExchangeError } from '@/shared/api/errors';
+import { OperatorExchangeError, MFA_REQUIRED_CODE } from '@/shared/api/errors';
 
 /**
  * Server-only RFC 8693 token exchange: IAM OIDC `platform-console-web`
@@ -30,6 +30,9 @@ import { OperatorExchangeError } from '@/shared/api/errors';
  *   - Hard timeout (`TOKEN_EXCHANGE_TIMEOUT_MS`) via AbortController.
  *   - `401 TOKEN_INVALID` → `OperatorExchangeError('fail_closed')`
  *     (operator not provisioned / subject invalid → forced re-login).
+ *   - `403 MFA_REQUIRED` → `OperatorExchangeError('mfa_required')`
+ *     (TASK-MONO-771 — a resolved operator lacking `amr ∋ mfa` → step-up).
+ *     Any other `403` → `unavailable`, exactly as before.
  *   - `400` / `5xx` / timeout / network / unexpected `tokenType`
  *     → `OperatorExchangeError('unavailable')` (session-unavailable; the
  *     console never falls back to the IAM token on the operator boundary —
@@ -110,6 +113,32 @@ export async function exchangeForOperatorToken(
         'fail_closed',
         body.code ?? 'TOKEN_INVALID',
         'operator token exchange rejected (not provisioned / subject invalid)',
+      );
+    }
+
+    if (res.status === 403) {
+      const body = (await res.json().catch(() => ({}))) as { code?: string };
+      if (body.code === MFA_REQUIRED_CODE) {
+        // TASK-MONO-771 (§ 2.6) — a RESOLVED operator whose token lacks
+        // `amr ∋ mfa`. Distinct from the 401 above on purpose: the caller
+        // steps up; it must never read this as «not an operator».
+        logger.warn('operator_exchange_mfa_required', { requestId, status: 403 });
+        throw new OperatorExchangeError(
+          'mfa_required',
+          MFA_REQUIRED_CODE,
+          'operator token exchange requires a second factor',
+        );
+      }
+      // Any other 403 is not in the producer contract → unavailable (as before).
+      logger.warn('operator_exchange_unavailable', {
+        requestId,
+        status: 403,
+        code: body.code,
+      });
+      throw new OperatorExchangeError(
+        'unavailable',
+        body.code ?? 'HTTP_403',
+        'operator token exchange returned 403',
       );
     }
 

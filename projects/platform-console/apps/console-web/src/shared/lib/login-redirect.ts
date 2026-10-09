@@ -97,6 +97,22 @@ export function buildSessionRefreshRedirectFor(raw: string | null): string {
   return `${SESSION_REFRESH_PATH}?redirect=${encodeURIComponent(raw)}`;
 }
 
+/** 2단계 단계 상승 라우트(`GET`) — `TASK-MONO-771`, 계약 § 2.6. */
+export const STEP_UP_PATH = '/api/auth/step-up';
+
+/**
+ * 복귀 경로 → 단계 상승 라우트 목적지 (`TASK-MONO-771`, § 2.6 / § 2.6.1 / § 2.7).
+ *
+ * 계약이 `<path>` = «§ 2.6.1 produce-side predicate» 라 적었으므로 술어는
+ * {@link isGuardReturnPath} 하나다 — 거절된 경로는 파라미터 없이 보낸다(라우트가 `/`
+ * 로 복귀시킨다). 콜백 · 갱신 라우트 · 브라우저 클라이언트 · 스위처가 모두 이 함수로
+ * 만든다(한 곳만 고쳐 다른 곳이 조용히 열리는 모양을 막는다).
+ */
+export function buildStepUpRedirectFor(raw: string | null): string {
+  if (!isGuardReturnPath(raw)) return STEP_UP_PATH;
+  return `${STEP_UP_PATH}?redirect=${encodeURIComponent(raw)}`;
+}
+
 /**
  * 갱신 라우트가 **쿼리에서 읽은** `redirect` → 복귀 경로 (CONSUME 측, 공격자 입력).
  *

@@ -38,7 +38,7 @@ import { logger } from '@/shared/lib/logger';
  *   - `no_refresh_token`         → nothing touched.
  *   - `grant_rejected`           → nothing touched (the caller decides whether to clear —
  *                                  a rotation-race loser must NOT delete the winner's cookies).
- *   - `operator_not_provisioned` / `operator_unavailable`
+ *   - `operator_not_provisioned` / `operator_mfa_required` / `operator_unavailable`
  *                                → rotated IAM cookies set, operator session (+ tenant pair)
  *                                  dropped. The caller decides whether to drop IAM too.
  *   - `error`                    → nothing touched (thrown before any cookie was set).
@@ -101,6 +101,8 @@ export type RefreshOutcome =
       rotationSuspect: boolean;
     }
   | { kind: 'operator_not_provisioned' }
+  /** TASK-MONO-771 — re-exchange `403 MFA_REQUIRED` (a resolved operator lacking `amr ∋ mfa`). */
+  | { kind: 'operator_mfa_required' }
   | { kind: 'operator_unavailable' }
   | { kind: 'error' };
 
@@ -206,14 +208,16 @@ export async function refreshSessionCookies(
       operatorToken = op.accessToken;
     } catch (err) {
       clearOperatorSession(jar);
-      const failClosed =
-        err instanceof OperatorExchangeError && err.reason === 'fail_closed';
-      logger.warn('refresh_reexchange_failed', {
-        requestId,
-        via,
-        reason: failClosed ? 'fail_closed' : 'unavailable',
-      });
-      return { kind: failClosed ? 'operator_not_provisioned' : 'operator_unavailable' };
+      const reason =
+        err instanceof OperatorExchangeError ? err.reason : 'unavailable';
+      logger.warn('refresh_reexchange_failed', { requestId, via, reason });
+      // TASK-MONO-771 (§ 2.6.1) — `403 MFA_REQUIRED` is its own outcome: the
+      // caller steps up. 🔴 It is NEVER folded into `operator_not_provisioned`
+      // (that one sends the browser to `/onboarding`).
+      if (reason === 'mfa_required') return { kind: 'operator_mfa_required' };
+      return {
+        kind: reason === 'fail_closed' ? 'operator_not_provisioned' : 'operator_unavailable',
+      };
     }
 
     // --- Re-assume the active tenant (ADR-MONO-020 D4 / § 2.7) ------------

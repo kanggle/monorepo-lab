@@ -110,6 +110,8 @@ const EXPECTED: Record<string, string> = {
   // TASK-PC-FE-324
   sso_wrong_account:
     '다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다. 아래에서 로그아웃한 뒤, 스토어(쇼핑몰) 탭에서도 로그아웃하고 운영자 계정으로 다시 로그인하세요.',
+  // TASK-MONO-771 S3 — the § 2.6 loop bound + IAM «취소» on the second factor.
+  mfa_required: '2단계 인증을 마쳐야 콘솔에 들어올 수 있습니다.',
   [SESSION_EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.',
 };
 

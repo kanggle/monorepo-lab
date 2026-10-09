@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useTenantSwitch } from '@/shared/api/use-tenant-switch';
+import { isMfaRequiredError } from '@/shared/api/errors';
+import { StepUpOffer } from '@/shared/ui/StepUpOffer';
 import type { CompanyGroup } from '../lib/tenant-options';
 
 interface Props {
@@ -134,11 +136,16 @@ export function TenantSwitcher({
           ))
         )}
       </select>
-      {switchTenant.isError && (
-        <span role="alert" className="text-xs text-destructive">
-          전환 실패
-        </span>
-      )}
+      {/* TASK-MONO-771 (§ 2.7) — the `mfa_required` refusal gets the step-up
+          offer; every other refusal keeps the generic «전환 실패». */}
+      {switchTenant.isError &&
+        (isMfaRequiredError(switchTenant.error) ? (
+          <StepUpOffer />
+        ) : (
+          <span role="alert" className="text-xs text-destructive">
+            전환 실패
+          </span>
+        ))}
     </div>
   );
 }

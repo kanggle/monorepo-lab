@@ -6,6 +6,7 @@ import {
   RegistryUnavailableError,
   ApiError,
   AssumeTenantError,
+  MFA_REQUIRED_CODE,
 } from '@/shared/api/errors';
 import {
   TENANT_COOKIE,
@@ -40,7 +41,9 @@ export const runtime = 'nodejs';
  * X-Tenant-Id alone does nothing — the domain gates trust the SIGNED claims,
  * so the switch MUST mint the assumed token (ADR-020 D4 / the A↔B proof).
  *
- * Fail-closed switch (§ 2.7 / AC-3): assume-tenant `denied` (the D2
+ * Fail-closed switch (§ 2.7 / AC-3): assume-tenant `mfa_required`
+ * (TASK-MONO-771 — `invalid_grant` + `insufficient_user_authentication`) →
+ * 403 `MFA_REQUIRED`, no cookie change, checked first; `denied` (the D2
  * assignment gate / subject invalid) → 403, NO cookie change (prior selection
  * + assumed token preserved); `invalid` → 422; `unavailable` → 503; missing
  * base token → 401. Never logs the token; never falls back to the base token
@@ -156,6 +159,15 @@ export async function POST(req: Request) {
       // Fail-closed: the prior selection + assumed token are PRESERVED on
       // every failure (no cookie change). Never fall back to the base token
       // on the selected-tenant boundary.
+      // TASK-MONO-771 (§ 2.7) — `mfa_required` BEFORE `denied`: a distinct
+      // answer so the switcher can offer the step-up. No cookie change.
+      if (err.reason === 'mfa_required') {
+        logger.warn('tenant_switch_assume_mfa_required', { requestId, tenant });
+        return NextResponse.json(
+          { code: MFA_REQUIRED_CODE, message: 'second factor required for this tenant' },
+          { status: 403 },
+        );
+      }
       if (err.reason === 'denied') {
         logger.warn('tenant_switch_assume_denied', { requestId, tenant });
         return NextResponse.json(
