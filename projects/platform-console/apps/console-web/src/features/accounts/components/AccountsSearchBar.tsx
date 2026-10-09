@@ -16,6 +16,10 @@ export interface AccountsSearchBarProps {
   onSubmit: (e: FormEvent) => void;
   selectedCount: number;
   onBulkLock: () => void;
+  /** TASK-PC-FE-326 — no account.read: clearing the box does NOT fall back
+   *  to a full list (there is none to fall back to), so the placeholder
+   *  must not imply it does. */
+  searchOnly?: boolean;
 }
 
 export function AccountsSearchBar({
@@ -24,6 +28,7 @@ export function AccountsSearchBar({
   onSubmit,
   selectedCount,
   onBulkLock,
+  searchOnly = false,
 }: AccountsSearchBarProps) {
   return (
     <form
@@ -44,7 +49,7 @@ export function AccountsSearchBar({
           type="email"
           value={emailInput}
           onChange={(e) => onEmailInputChange(e.target.value)}
-          placeholder="비우면 전체 목록"
+          placeholder={searchOnly ? '정확한 이메일 입력(목록 없음)' : '비우면 전체 목록'}
           data-testid="accounts-search-input"
           className="mt-1 w-72 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />

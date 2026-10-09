@@ -249,8 +249,10 @@ describe('IamGuideScreen', () => {
     // 테넌트 = tenant.manage → SUPER_ADMIN only (read is gated by the same key).
     expect(at('/tenants').SUPER_ADMIN.level).toBe('full');
     expect(at('/tenants').TENANT_ADMIN.level).toBe('none');
-    // 계정 운영 = account.read → SUPPORT_LOCK cannot open (lock w/o read).
-    expect(at('/accounts').SUPPORT_LOCK.level).toBe('none');
+    // 계정 운영 = account.read for the full list; TASK-PC-FE-326 — SUPPORT_LOCK
+    // lacks account.read but holds lock/unlock/force_logout, so it opens in
+    // email-search-only mode (partial), not hidden entirely.
+    expect(at('/accounts').SUPPORT_LOCK.level).toBe('partial');
     // 감사·보안 → SUPPORT_LOCK is 기본만(partial); security.event.read holders full.
     expect(at('/audit').SUPPORT_LOCK.level).toBe('partial');
     expect(at('/audit').SECURITY_ANALYST.level).toBe('full');

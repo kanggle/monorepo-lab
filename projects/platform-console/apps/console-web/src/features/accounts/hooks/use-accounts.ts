@@ -68,6 +68,11 @@ async function querySearch(
 export function useAccountsSearch(
   params: AccountSearchParams,
   initial?: AccountPage,
+  // TASK-PC-FE-326 — `enabled: false` lets the search-only `/accounts` mode
+  // (no `account.read`) sit idle until the operator actually submits an
+  // email: the unfiltered-list branch this hook falls back to when `email`
+  // is absent would only 403 for that caller.
+  options?: { enabled?: boolean },
 ) {
   return useQuery({
     queryKey: searchKey(params),
@@ -80,6 +85,7 @@ export function useAccountsSearch(
     // explicit user retry, not an automatic background poll.
     staleTime: initial ? 30_000 : 0,
     refetchOnMount: initial ? false : true,
+    enabled: options?.enabled ?? true,
   });
 }
 
