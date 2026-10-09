@@ -78,6 +78,13 @@ public class LoggingEmailSender implements EmailSenderPort {
         );
     }
 
+    /** TASK-MONO-771 — the enrollment notice; the dev stub logs only the masked recipient. */
+    @Override
+    public void sendSecondFactorEnrolledNotice(String toEmail) {
+        log.info("[DEV STUB] Second-factor enrollment notice queued — to={}, subject={}",
+                mask(toEmail), "Second factor enrolled");
+    }
+
     /**
      * Masks an email address for safe logging.
      *

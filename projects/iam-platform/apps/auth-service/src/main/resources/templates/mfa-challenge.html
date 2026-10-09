@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-MONO-771 S2b (ADR-MONO-080 D4) — the second step after form AND social login (auth-api.md §
+         GET · POST /mfa/challenge). MfaPageController. Wrong, replayed and malformed codes read the same. -->
+    <title>2단계 인증</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<main class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('2단계 인증', '인증 앱의 6자리 코드를 입력하세요')}"></div>
+
+    <th:block th:switch="${result}">
+        <div th:case="'WRONG_CODE'" class="error" id="mfa-result" role="alert">코드가 맞지 않습니다. 다시 입력해 주세요.</div>
+        <div th:case="'UNAVAILABLE'" class="error" id="mfa-result" role="alert">지금은 확인할 수 없습니다. 잠시 뒤 다시 시도해 주세요.</div>
+        <div th:case="'RECOVERY_LOW'" class="notice" id="mfa-result" role="status">
+            복구 코드로 인증했습니다. 남은 복구 코드가 <span th:text="${remaining}">2</span>개입니다 —
+            <a href="/mfa" th:href="@{/mfa}">2단계 인증 관리</a>에서 새 복구 코드를 받아 두세요.
+        </div>
+    </th:block>
+
+    <th:block th:if="${result == 'RECOVERY_LOW'}">
+        <a class="social" id="mfa-continue" th:href="${continueUrl}" href="/mfa">계속</a>
+    </th:block>
+
+    <th:block th:unless="${result == 'RECOVERY_LOW'}">
+        <form action="/mfa/challenge" th:action="@{/mfa/challenge}" method="post" data-busy-label="확인하는 중…">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <label for="code">인증 코드</label>
+            <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+                   pattern="[0-9 ]*" maxlength="7"/>
+            <label for="recoveryCode">또는 복구 코드</label>
+            <input type="text" id="recoveryCode" name="recoveryCode" autocomplete="off" maxlength="9"
+                   placeholder="ABCD-EFGH"/>
+            <p class="hint">인증 앱을 쓸 수 없으면 복구 코드 하나를 입력하세요. 복구 코드는 한 번만 쓸 수 있습니다.</p>
+            <button type="submit" class="primary" id="mfa-submit">확인</button>
+        </form>
+        <form action="/mfa/challenge" th:action="@{/mfa/challenge}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <input type="hidden" name="action" value="cancel"/>
+            <button type="submit" class="secondary" id="mfa-cancel">취소</button>
+        </form>
+    </th:block>
+</main>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

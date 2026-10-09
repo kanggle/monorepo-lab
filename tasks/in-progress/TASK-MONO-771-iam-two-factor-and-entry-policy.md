@@ -278,3 +278,57 @@ monorepo
 - `features/authentication.md` · `features/oauth-social-login.md` 의 흐름 서술 갱신 — 계약(auth-api)이 정본이고, 기능 문서 갱신은 S2b 에서.
 - 진입 정책 토글의 «미등록 N명» 사전 점검(S5 선택 AC) — 생산자 읽기가 아직 없다.
 - admin → auth 리셋 내부 계약(S6) · 데모 시드 완화(OD-5, S4) · 시드 주석 F4 정정(S4).
+
+---
+
+## S2b 기록 (2026-10-09 UTC)
+
+> 구현 = Opus 5.5 (backend-engineer) · worktree `feat/mono-771-s2b-account-totp-amr`(origin/main `c5ea39a02`). **강제 없음** — 토큰 교환 · assume 어디에서도 거절을 넣지 않았다(S4). AC-1 · AC-2 · AC-4 체크박스는 건드리지 않았다. AC-3 도 체크하지 않았다(아래 증거는 단위 · 슬라이스 수준, 라이브 ⚪ — 오케스트레이터 판단).
+
+### 바꾼 파일
+
+| 층 | 파일 | 무엇 |
+|---|---|---|
+| 마이그레이션 | `auth-service/.../db/migration/V0043__create_account_totp.sql` | `account_totp`(data-model 그대로 · `account_id` PK · `tenant_id` M1 · 대기/확정 · `last_used_step` · JSON 복구 코드 해시) · 빈 표 ⇒ net-zero |
+| domain | `domain/mfa/AccountTotp` · `domain/repository/AccountTotpRepository` · `domain/session/AuthenticationMethods`(RFC 8176 어휘 + `"mfa" ∈ amr`) · `PrincipalDetailKeys.AMR` | 재생 방지 술어 `isStepFresh` 는 이 한 곳 |
+| application | `AccountSecondFactorService` · port `TotpCodeCalculator`(🔵 S2a 머지 뒤 `libs/java-security` 계산기로 어댑터 교체 — 주석 명기) · port `TotpSecretCipher` · `EmailSenderPort.sendSecondFactorEnrolledNotice` · `AccountServicePort.getEmailVerificationState` | 등록 · 검증(±1, F5) · 복구 코드(Argon2id `PasswordHasher`) · 재발급 · 알림 메일(실패해도 등록 유지) |
+| infrastructure | `totp/Rfc6238TotpCodeCalculator`(로컬 RFC 6238 — admin 내부 복사 아님) · `totp/AesGcmTotpSecretCipher` + `TotpProperties` + `config/TotpConfig`(`auth.totp.*`, AAD=`account_id`, 키 회전 dual-read + lazy re-encrypt) · `persistence/AccountTotp{JpaEntity,JpaRepository,RepositoryImpl}`(낙관적 락) · `client/AccountServiceClient`(인증 이메일 읽기) · `email/{Smtp,Logging}EmailSender` · `security/SecondFactorSession` · `oauth2/AuthorizeSecondFactorGate` + `AuthorizationServerConfig`(테넌트 게이트 **뒤**) · `config/WebLoginSecurityConfig`(`/mfa/**` 폼 체인) | |
+| amr 발급 | `security/CredentialAuthenticationProvider`(`["pwd"]`) · `presentation/SocialLoginBrowserController`(`[]`) · `oauth2/TenantClaimTokenCustomizer`(`CLAIM_AMR` — code · id_token · refresh, assume 복사) · `oauth2/AssumeTenantAuthentication{Provider,Token}`(subject `amr` 운반) | workload · `client_credentials` 미발급 |
+| presentation | `MfaPageController` · `templates/mfa-challenge.html` · `mfa-setup.html` · `mfa.html` | |
+| 설정 · 데모 | `application.yml`(`auth.totp.*`, dev 전용 placeholder 키) · `infra/demo/iam-traefik.override.yml`(`PathPrefix(/mfa)`) | |
+| 명세 | `specs/contracts/http/internal/auth-to-account.md`(새 § 인증된 이메일 여부 — 기존 두 계약 읽기의 사용 기록) · `specs/features/authentication.md`(S1 이 S2b 로 미룬 흐름 서술) | |
+
+### 설계 요지
+
+- **F6**: 2단계 판정은 생산자가 아니라 **`/oauth2/authorize` 앞 한 곳**(`AuthorizeSecondFactorGate`, `AuthorizeSessionTenantGate` 바로 뒤)이다. 폼 · 소셜 두 생산자 모두 그 엔드포인트로 끝나므로 어느 1단계로 와도 확정 등록이 있으면 `/mfa/challenge`. authorize 요청은 **표준** `HttpSessionRequestCache` 에 보관(로그인 continuation — 5회 실패 뒤 재로그인이 같은 요청 · 같은 client 테넌트로 재개되도록).
+- **refresh 의 amr 유지**: 커스터마이저는 `details.amr` 을 읽고, refresh 컨텍스트의 principal 은 authorize 시점에 `OAuth2Authorization` 에 저장된 그 `Authentication` 이다 ⇒ 로그인 때 값이 그대로 나간다. 2단계 통과는 세션 principal 을 **교체**(amr 확장 + 세션 id 회전)한 뒤 보관된 authorize 를 재개하므로 새 인가에 확장된 값이 저장된다.
+- **AC-3**: 확정 등록이 없고 `acr_values=mfa` 도 없으면 게이트는 아무것도 하지 않는다 — 같은 화면 · 같은 리다이렉트. 바뀌는 것은 토큰의 `amr` 클레임 하나(OD-7).
+
+### 검증 (rc 는 `cmd > file 2>&1; echo rc=$?`)
+
+| 무엇 | 결과 |
+|---|---|
+| 🔴 «전» 단언 | `TenantClaimAmrTest` 를 커스터마이저 변경 **전에** 실행 — 5건 중 4건 RED(code · id_token · refresh · 소셜 `[]`: `amr` 클레임 없음), «details 에 amr 없음 → 생략» 1건 GREEN. 변경 뒤 전부 GREEN |
+| 신규 · 변경 시험 9 클래스(105건) | rc=0 — `TenantClaimAmrTest` 8 · `Rfc6238TotpCodeCalculatorTest` 8(RFC 6238 부록 B SHA-1) · `AesGcmTotpSecretCipherTest` 4 · `AccountTotpTest` 4 · `AccountSecondFactorServiceTest` 13 · `AuthorizeSecondFactorGateTest` 9 · `MfaPageSliceTest` 15 · `SocialLoginBrowserControllerTest` 15 · `CredentialAuthenticationProviderTest` 29 |
+| 🔴 bite (F5) | `AccountSecondFactorService.matchingFreshStep` 의 `isStepFresh` 검사를 지움 → S2b 시험 61건 중 **`challenge_replayRefused` 1건만 RED** → 복원 |
+| `./gradlew :projects:iam-platform:apps:auth-service:test` (단위 레인 전체) | rc=0 — 146 클래스 · 1151건 · 실패 0 · skip 33(Docker 조건부). 전체 컨텍스트 H2 `OAuth2AuthorizationServerSliceTest` 17건 포함(새 게이트 · 엔티티 · `auth.totp.*` 빈 배선이 부팅함을 확인) |
+| `compileTestJava`(통합 소스 포함) | rc=0 |
+| `bash scripts/check-jwt-claims-registry.sh` | rc=0 — «all 7 claims … registered»(`amr` 포함) |
+| `bash infra/demo/verify-demo-wrapper.sh` | 가드 (p): 라우터 변경 **전** FAIL «`/mfa`» → 변경 뒤 ok. 전체 실행 결과: rc=0 — «정적 검증 PASS» 63칸 · FAIL 0. `--live`(실기동)는 Docker 없음으로 미실행 ⚪ |
+| 필수 가드 3종(스테이지 뒤) | `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` 전부 rc=0. `scripts/` 추가 · 삭제 없음 |
+
+### ⚪ 열린 것
+
+- ⚪ **`AccountTotpRepositoryIntegrationTest`**(`@Tag("integration")`, MySQL Testcontainers — V0043 × `ddl-auto=validate` 왕복 · JSON · 낙관적 락 · 대기 교체): 이 호스트에 Docker 데몬 없음 ⇒ **CI 첫 실행**.
+- ⚪ 라이브(데모 · 브라우저 · 실제 인증 앱) 미실행 — 폼/소셜 → challenge → code → 토큰 `amr` 의 실제 왕복은 시험 수준 증거뿐.
+- ⚪ **QR 이미지 없음** — 계약(§ /mfa/setup)은 «QR + 수동 입력 키» 인데, auth-service 에 QR 라이브러리가 없다. 새 서드파티 의존성 선택은 이 슬라이스에서 하지 않았고, 수동 입력 키(4자 묶음) + `otpauth://` 링크만 그린다. 라이브러리 추가(예: zxing) 여부는 소유자 · 후속 판단.
+- ⚪ S2a 머지 뒤: `Rfc6238TotpCodeCalculator` → `libs/java-security` 계산기 어댑터로 교체(포트 불변, RFC 벡터 시험이 동치 검사).
+
+### 명세와 다르게 · 명세가 말하지 않아 고른 것 (오케스트레이터 확인 요망)
+
+1. **인증된 이메일 읽기 경로** — 계약(OD-4)은 술어(`email_verified_at IS NOT NULL`)만 정하고 auth-service 가 그것을 **어떻게 읽는지**는 정하지 않았다(`auth-to-account.md` 에 해당 호출 없음, 기존 `getAccountProfile` 이 부르는 `/internal/accounts/{id}/profile` 은 account-service 에 **존재하지 않는다**). 새 엔드포인트를 만들지 않고 이미 계약된 두 읽기(`status-with-tenant` → `GET /internal/tenants/{t}/accounts/{id}` 의 `emailVerifiedAt`)를 조합했고, 그 사용을 `auth-to-account.md` 새 절에 기록했다. `NOT_APPLICABLE`(accounts 행 없음)도 «미인증» 으로 막는다.
+2. **키 설정 이름** — data-model 은 `auth.totp.encryption-key` 라 적었지만 `secret_key_id` 회전을 지원하려고 admin 과 같은 모양 `auth.totp.encryption-key-id` + `auth.totp.encryption-keys.<kid>` 로 했다. 기본값은 dev 전용 placeholder(admin 과 같은 관행) — 실 환경은 `AUTH_TOTP_V1_KEY` 를 덮어써야 한다.
+3. **`prompt=none` · POST authorize** — 계약이 말하지 않는다. 화면을 보일 수 없으므로 그 요청의 principal 만 비워 SAS 가 `login_required` 로 답하게 했다(code 없음, 세션은 유지).
+4. **«취소»** — `/mfa/setup` 의 «취소» 의미는 계약에 없다. `/mfa/challenge` 의 취소와 같게(보관 authorize 의 등록 redirect_uri 로 `access_denied` · `mfa_cancelled`) 했다.
+5. **복구 코드 «2개 이하면 다음 화면에 재발급 안내»** — 재개 전에 안내 화면 + «계속» 을 한 번 보인다.
+6. 마이그레이션의 «`INFORMATION_SCHEMA` 존재 가드» 는 `CREATE TABLE IF NOT EXISTS` 로 했다.

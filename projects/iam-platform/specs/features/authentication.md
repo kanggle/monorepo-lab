@@ -30,6 +30,17 @@
 6. 성공 시: access token(RS256, 30분) + refresh token(7일) 발급
 7. `auth.login.succeeded` / `auth.login.failed` / `auth.login.attempted` 이벤트 발행 (outbox)
 
+### 2단계 인증 (TOTP) — 등록한 계정만 (TASK-MONO-771 · ADR-MONO-080 D4)
+
+정본은 [auth-api.md § IdP 브라우저 화면 — 2단계 인증 (TOTP)](../contracts/http/auth-api.md). 요지:
+
+1. 1단계(폼 `POST /login` 또는 소셜 콜백)는 지금과 같다. 세션 principal 의 `amr` 이 폼 `["pwd"]` · 소셜 `[]` 로 시작한다.
+2. 두 경로가 모두 도착하는 `/oauth2/authorize` 앞 **한 곳**(`AuthorizeSecondFactorGate`)에서, 계정에 **확정된** 등록이 있고 세션 `amr` 에
+   `mfa` 가 없으면 code 대신 `/mfa/challenge` 로 보낸다(authorize 요청은 보관). 소셜 로그인도 같은 화면을 거친다 — 판정을 생산자 하나에만 두면 다른 쪽이 옆문이 된다.
+3. 인증 앱 코드(±1 step, `last_used_step` 재생 방지) 또는 1회용 복구 코드가 맞으면 세션 `amr` 에 `otp`·`mfa`(복구 코드는 `mfa` 만)를 더하고 보관한 authorize 를 재개한다. 5회 실패면 1단계부터 다시(계정 잠금 없음).
+4. 토큰의 `amr` 은 로그인 때 값이고 refresh 에서도 그대로다(저장된 인가의 principal). 등록이 **없는** 계정은 흐름이 지금과 같고 토큰에 `amr` 클레임 하나가 붙을 뿐이다.
+5. 등록(`/mfa/setup`)은 인증된 이메일이 전제이고, 확정 시 알림 메일을 보낸다. 2단계를 **요구**하는 정책(운영자 토큰 교환 · assume-tenant)은 이 흐름이 아니라 TASK-MONO-771 S4 가 건다.
+
 ### 토큰 갱신 (Refresh Token Rotation)
 
 1. 사용자가 `POST /api/auth/refresh` 에 현재 refresh token 전송

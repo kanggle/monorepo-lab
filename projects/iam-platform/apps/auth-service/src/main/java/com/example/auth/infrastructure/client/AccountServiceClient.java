@@ -8,6 +8,7 @@ import com.example.auth.application.exception.SocialSignupEmailRegisteredExcepti
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationConfirmOutcome;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationRequestOutcome;
+import com.example.auth.application.port.AccountServicePort.EmailVerificationState;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.application.result.AccountStatusWithTenantLookupResult;
@@ -496,6 +497,65 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getCause() == null ? "null" : e.getCause().getMessage(),
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    /**
+     * TASK-MONO-771 — see {@link AccountServicePort#getEmailVerificationState}. Two contracted reads: the
+     * account's own tenant ({@code status-with-tenant}, the tenant is an OUTPUT — never guessed from the
+     * session), then the account record in that tenant ({@code emailVerifiedAt}). A 404 on either is
+     * NOT_APPLICABLE; anything that is not a usable answer throws (the caller refuses the enrollment).
+     */
+    @Override
+    public EmailVerificationState getEmailVerificationState(String accountId) {
+        Optional<AccountStatusWithTenantLookupResult> located = getAccountStatusAndTenant(accountId);
+        if (located.isEmpty()) {
+            return EmailVerificationState.NOT_APPLICABLE;
+        }
+        String tenantId = located.get().tenantId();
+        try {
+            return callResilient(() -> doGetEmailVerificationState(tenantId, accountId));
+        } catch (HttpClientErrorException.NotFound e) {
+            return EmailVerificationState.NOT_APPLICABLE;
+        } catch (HttpClientErrorException e) {
+            log.warn("Account service account-record lookup returned client error {} — treating as a failed "
+                    + "lookup (fail-closed)", e.getStatusCode());
+            throw new AccountServiceUnavailableException(
+                    "Account service account-record lookup rejected: " + e.getStatusCode(), e);
+        } catch (RuntimeException e) {
+            log.error("Account service account-record lookup failed after retries: type={} causeType={}",
+                    e.getClass().getName(),
+                    e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
+            throw new AccountServiceUnavailableException("Account service is unavailable", e);
+        }
+    }
+
+    private EmailVerificationState doGetEmailVerificationState(String tenantId, String accountId) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = restClient().get()
+                    .uri("/internal/tenants/{tenantId}/accounts/{accountId}", tenantId, accountId)
+                    .headers(h -> {
+                        h.setBearerAuth(tokenProvider.currentBearer());
+                        setTenantHeader(h, tenantId);
+                    })
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, MAP_4XX)
+                    .body(Map.class);
+            // A 200 without the account id is not an answer about THIS account — fail closed. The
+            // emailVerifiedAt key is serialized even when null (the record field), so its absence would
+            // also be an unreadable answer; a present null means «not verified».
+            if (body == null || !body.containsKey("emailVerifiedAt")) {
+                throw new IllegalStateException("account record response had no emailVerifiedAt field");
+            }
+            Object verifiedAt = body.get("emailVerifiedAt");
+            return verifiedAt != null && !String.valueOf(verifiedAt).isBlank()
+                    ? EmailVerificationState.VERIFIED
+                    : EmailVerificationState.NOT_VERIFIED;
+        } catch (HttpClientErrorException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Account service communication error", e);
         }
     }
 

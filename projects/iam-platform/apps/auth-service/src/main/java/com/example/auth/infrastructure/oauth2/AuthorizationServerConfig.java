@@ -189,7 +189,10 @@ public class AuthorizationServerConfig {
             AccountServicePort accountServicePort,
             // TASK-BE-616: where the gate parks a pool principal's authorize for the first-visit
             // consent page (the same bean the page reads it back from).
-            PendingSiteConsentStore pendingSiteConsentStore) throws Exception {
+            PendingSiteConsentStore pendingSiteConsentStore,
+            // TASK-MONO-771 S2b: the second-factor gate asks whether the session's account has a
+            // confirmed enrollment (both login producers end here — F6).
+            com.example.auth.application.AccountSecondFactorService accountSecondFactorService) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -308,6 +311,13 @@ public class AuthorizationServerConfig {
                                 accountServicePort,
                                 pendingSiteConsentStore)),
                         Customizer.withDefaults())
+                // TASK-MONO-771 S2b: second-factor gate, directly AFTER the tenant gate (added later →
+                // configured later → same order, later in the stable-sorted filter list). When the tenant
+                // gate empties the principal, this one has nothing to hold back.
+                .with(new AuthorizeSecondFactorGateConfigurer(new AuthorizeSecondFactorGate(
+                                authorizationServerSettings.getAuthorizationEndpoint(),
+                                accountSecondFactorService)),
+                        Customizer.withDefaults())
                 .authorizeHttpRequests(authorize ->
                         authorize.anyRequest().authenticated())
                 // TASK-MONO-046-1: scope the LoginUrlAuthenticationEntryPoint redirect
@@ -413,6 +423,26 @@ public class AuthorizationServerConfig {
         @Override
         public void configure(HttpSecurity http) {
             http.addFilterBefore(gate, OAuth2AuthorizationEndpointFilter.class);
+        }
+    }
+
+    /**
+     * TASK-MONO-771 S2b — places {@link AuthorizeSecondFactorGate} in front of the authorization endpoint,
+     * after {@link AuthorizeSessionTenantGate}: it is relative to the tenant gate's class, which is registered
+     * by the time this configurer runs (configurers apply in the order they were added).
+     */
+    static final class AuthorizeSecondFactorGateConfigurer
+            extends AbstractHttpConfigurer<AuthorizeSecondFactorGateConfigurer, HttpSecurity> {
+
+        private final AuthorizeSecondFactorGate gate;
+
+        AuthorizeSecondFactorGateConfigurer(AuthorizeSecondFactorGate gate) {
+            this.gate = gate;
+        }
+
+        @Override
+        public void configure(HttpSecurity http) {
+            http.addFilterAfter(gate, AuthorizeSessionTenantGate.class);
         }
     }
 

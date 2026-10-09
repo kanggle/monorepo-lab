@@ -14,6 +14,7 @@ import com.example.auth.application.exception.UnsupportedProviderException;
 import com.example.auth.application.result.BrowserLoginResolution;
 import com.example.auth.application.result.OAuthAuthorizeResult;
 import com.example.auth.domain.oauth.OAuthProvider;
+import com.example.auth.domain.session.AuthenticationMethods;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
@@ -236,6 +237,11 @@ public class SocialLoginBrowserController {
         // yields an email-less token while a form login yields one — the same account,
         // two different tokens, decided by how the user happened to sign in.
         details.put(PrincipalDetailKeys.EMAIL, login.email());
+        // TASK-MONO-771 (jwt-standard-claims.md § amr): an external provider authenticated this person, by no
+        // factor this IdP verified → amr [] (the contract's one deliberate empty array — not omitted). The
+        // second step for an enrolled account is NOT decided here: it is decided once, after BOTH producers,
+        // at the authorize gate (AuthorizeSecondFactorGate) — F6, so this path cannot become the side door.
+        details.put(PrincipalDetailKeys.AMR, AuthenticationMethods.external());
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(

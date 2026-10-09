@@ -291,7 +291,11 @@ services:
       #   path) — PathPrefix matches both since one is a sub-path of the other. Same failure mode:
       #   missing this, the link in every password-reset mail 404s at the iam gateway. Guard (p)
       #   derives its top-level segment from both templates' `@{/password-reset...}` links.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/password-reset`) || PathPrefix(`/.well-known`))"
+      # 🔵 `/mfa` (TASK-MONO-771 S2b, ADR-MONO-080 D4) — the second-factor pages `/mfa/challenge` (where the
+      #   authorize gate sends an enrolled account after form OR social login), `/mfa/setup`, `/mfa` and
+      #   `/mfa/recovery-codes`; one PathPrefix covers all four (auth-api.md § 2단계 인증). Missing it, every
+      #   enrolled login would 302 into a 404 at the iam gateway. Guard (p) bit on `/mfa` before this line.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/password-reset`) || PathPrefix(`/mfa`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"

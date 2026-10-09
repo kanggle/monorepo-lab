@@ -42,6 +42,18 @@ public final class PrincipalDetailKeys {
      */
     public static final String EMAIL = "email";
 
+    /**
+     * TASK-MONO-771 (ADR-MONO-080 D4) — how the session authenticated: an RFC 8176 {@code amr} value list
+     * ({@link AuthenticationMethods}). Written by the two login producers (form {@code ["pwd"]}, social
+     * {@code []}) and widened by the second step ({@code /mfa/challenge}, {@code /mfa/setup}); read by
+     * {@code TenantClaimTokenCustomizer} (the {@code amr} claim) and by the authorize second-factor gate.
+     *
+     * <p>🔴 The value MUST be a mutable {@code java.util.ArrayList} — the same SAS
+     * {@code SecurityJackson2Modules} allowlist trap as the details map itself ({@code List.of} is not
+     * allowlisted and breaks the {@code /oauth2/token} read-back of the stored authorization).
+     */
+    public static final String AMR = "amr";
+
     private PrincipalDetailKeys() {
     }
 }
