@@ -15,8 +15,9 @@
  *   - `permission-map.ts` `PERMISSION_MAP` — the href → `gate` table (already
  *     the single source `tests/unit/permission-map-drift.test.ts` pins against
  *     the nav tree).
- *   - `permission-map.ts` `RBAC_SEED_MATRIX` / `RBAC_ROLES` — the role ×
- *     permission seed table (rbac.md copy).
+ *   - `permission-map.ts` `hasPermission()` — the role × permission seed
+ *     table (rbac.md copy, `RBAC_SEED_MATRIX`/`RBAC_ROLES`) lookup, shared
+ *     with that module's own `accountsAccessTier()` (TASK-PC-FE-326).
  *   - the caller's roles (`GET /api/admin/me` `roles[]`, promoted to
  *     `shared/api/iam-operators-read.ts` — see that module's
  *     `getSelfRolesOrNull`) and the active tenant's subscribed domains (the
@@ -32,33 +33,21 @@ import {
 } from './console-nav-config';
 import {
   PERMISSION_MAP,
-  RBAC_ROLES,
-  RBAC_SEED_MATRIX,
+  hasPermission,
   type DomainKey,
   type PermissionGate,
-  type RbacRole,
 } from '@/shared/guide/permission-map';
 
 const GATE_BY_HREF: ReadonlyMap<string, PermissionGate> = new Map(
   PERMISSION_MAP.map((row) => [row.href, row.gate]),
 );
 
-const KNOWN_ROLES: ReadonlySet<string> = new Set(RBAC_ROLES);
-
-/**
- * Does ANY of the caller's roles hold `permission` (per the RBAC seed
- * matrix)? AC-0 ① — a role the seed matrix doesn't know (custom role / a
- * future seed-matrix addition this copy hasn't caught up with yet) is NOT
- * treated as lacking the permission — we don't know, so we don't hide
- * (the task Goal's own principle: hiding is a screen convenience, the server
- * is the real gate).
- */
-function hasPermission(myRoles: readonly string[], permission: string): boolean {
-  return myRoles.some((role) => {
-    if (!KNOWN_ROLES.has(role)) return true;
-    return RBAC_SEED_MATRIX[permission]?.[role as RbacRole] === true;
-  });
-}
+// AC-0 ① — `hasPermission` (imported above) is the single source for "does
+// ANY of the caller's roles hold this permission" (fails OPEN on an unknown
+// role — the task Goal's own principle: hiding is a screen convenience, the
+// server is the real gate). TASK-PC-FE-326 moved the implementation into
+// `permission-map.ts` so `accountsAccessTier()` there can reuse it too,
+// rather than this module keeping its own copy.
 
 /**
  * TASK-PC-FE-314 AC-0 ①② — whether `href` should be hidden for a caller whose

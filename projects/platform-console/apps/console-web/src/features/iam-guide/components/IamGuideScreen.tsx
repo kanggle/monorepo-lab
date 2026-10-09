@@ -445,8 +445,10 @@ export function IamGuideScreen() {
               <ul className="mb-10 max-w-3xl list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                 <li>
                   <strong className="text-foreground">계정 운영</strong> 은{' '}
-                  <PermChip label="account.read" /> 로 열립니다. 잠금 권한만 가진
-                  SUPPORT_LOCK 은 목록을 열 수 없습니다.
+                  <PermChip label="account.read" /> 가 있으면 전체 목록이
+                  열립니다. 잠금/해제/세션종료 권한만 있는 SUPPORT_LOCK ·
+                  SECURITY_ANALYST 는 전체 목록은 못 보지만, 이메일로 검색해
+                  계정을 찾아 그 작업만 할 수 있습니다.
                 </li>
                 <li>
                   <strong className="text-foreground">감사 · 보안</strong> 의 로그인 이력 ·

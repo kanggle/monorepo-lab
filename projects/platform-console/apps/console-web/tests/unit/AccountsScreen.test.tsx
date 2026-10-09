@@ -319,6 +319,78 @@ describe('AccountsScreen — export & degrade', () => {
   });
 });
 
+describe('AccountsScreen — searchOnly mode (TASK-PC-FE-326)', () => {
+  it('renders a prompt — not the table, not the empty-state — before any search is submitted, and never fetches the unfiltered list', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<AccountsScreen initial={null} searchOnly />, { wrapper: wrapper() });
+
+    expect(screen.getByTestId('accounts-search-only-prompt')).toBeInTheDocument();
+    expect(screen.queryByTestId('accounts-table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('accounts-empty')).not.toBeInTheDocument();
+    // bite target: no email yet ⇒ the hook must stay disabled — the
+    // unfiltered-list branch would only 403 for this caller.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('submitting an email fetches ONLY the email-scoped query and renders the result row', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ ...PAGE, content: [PAGE.content[0]] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={null} searchOnly />, { wrapper: wrapper() });
+
+    await user.type(screen.getByTestId('accounts-search-input'), 'alice@x.com');
+    await user.click(screen.getByTestId('accounts-search-submit'));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/accounts?email=alice%40x.com'),
+        expect.anything(),
+      ),
+    );
+    expect(await screen.findByTestId('account-row-acc-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('accounts-search-only-prompt')).not.toBeInTheDocument();
+  });
+
+  it('the held action (lock) still works on a search-only result row', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ ...PAGE, content: [PAGE.content[0]] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={null} searchOnly />, { wrapper: wrapper() });
+
+    await user.type(screen.getByTestId('accounts-search-input'), 'alice@x.com');
+    await user.click(screen.getByTestId('accounts-search-submit'));
+    await screen.findByTestId('account-row-acc-1');
+
+    await user.click(screen.getByTestId('action-lock-acc-1'));
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument();
+  });
+
+  it('clearing the search box back to empty returns to the prompt (no fallback to a full list)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ ...PAGE, content: [PAGE.content[0]] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={null} searchOnly />, { wrapper: wrapper() });
+
+    await user.type(screen.getByTestId('accounts-search-input'), 'alice@x.com');
+    await user.click(screen.getByTestId('accounts-search-submit'));
+    await screen.findByTestId('account-row-acc-1');
+    fetchMock.mockClear();
+
+    await user.clear(screen.getByTestId('accounts-search-input'));
+    await user.click(screen.getByTestId('accounts-search-submit'));
+
+    expect(screen.getByTestId('accounts-search-only-prompt')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('AccountsScreen — accessibility (WCAG AA)', () => {
   it('the confirm dialog is axe-clean and keyboard-dismissable', async () => {
     const user = userEvent.setup();

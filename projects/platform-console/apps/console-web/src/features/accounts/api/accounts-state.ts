@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getActiveTenant } from '@/shared/lib/session';
+import { getSelfRolesOrNull } from '@/shared/api/iam-operators-read';
+import {
+  accountsAccessTier,
+  type AccountsAccessTier,
+} from '@/shared/guide/permission-map';
 import { ApiError, AccountsUnavailableError } from '@/shared/api/errors';
 import { searchAccounts } from './accounts-api';
 import type { AccountPage, AccountSearchParams } from './types';
@@ -67,4 +72,29 @@ export async function getAccountsListState(
     // A genuine producer 400/404/422 list error → degrade rather than crash.
     return { page: null, degraded: true, noTenant: false, forbidden: false, query };
   }
+}
+
+/**
+ * TASK-PC-FE-326 — which mode of `/accounts` the signed-in caller may use
+ * (see `accountsAccessTier()` doc, `shared/guide/permission-map.ts`). The
+ * page calls this FIRST: `'full'`/`'none'` keep today's behaviour verbatim
+ * (fall through to {@link getAccountsListState}, which 403s into the
+ * `forbidden` state for `'none'`); `'search-only'` skips the unfiltered-list
+ * call entirely (it would only 403) and renders the email-search-only
+ * screen instead.
+ */
+export async function getAccountsAccessTier(): Promise<AccountsAccessTier> {
+  const roles = await getSelfRolesOrNull();
+  return accountsAccessTier(roles);
+}
+
+export interface AccountsSearchOnlyState {
+  /** Same "select a tenant first" gate as the full-list path — the email
+   *  search is tenant-scoped too (TASK-BE-357). */
+  noTenant: boolean;
+}
+
+export async function getAccountsSearchOnlyState(): Promise<AccountsSearchOnlyState> {
+  const tenant = await getActiveTenant();
+  return { noTenant: !tenant };
 }
