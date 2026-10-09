@@ -82,11 +82,19 @@ export function PermissionMapTable({
   testid,
   caption = '권한·기능 매핑 표',
   showSources = true,
+  showDepth = true,
 }: {
   areas?: MapArea[];
   testid: string;
   caption?: string;
   showSources?: boolean;
+  /**
+   * TASK-PC-FE-330 — the «뎁스» column. Kept for the global guide's whole-sidebar table
+   * (「전체 메뉴 소개」), where 1-/2-depth shows how the menu tree is shaped; the domain
+   * guides' «메뉴별 권한» turns it off (owner decision 2026-10-10 UTC — the 메뉴명 cell
+   * already shows the sidebar path under each name).
+   */
+  showDepth?: boolean;
 }) {
   const rows = rowsFor(areas);
   return (
@@ -95,7 +103,7 @@ export function PermissionMapTable({
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="text-left">
-            <th scope="col" className="w-12 whitespace-nowrap p-2">뎁스</th>
+            {showDepth && <th scope="col" className="w-12 whitespace-nowrap p-2">뎁스</th>}
             <th scope="col" className="w-36 p-2">메뉴명</th>
             <th scope="col" className="w-44 p-2">라우트</th>
             <th scope="col" className="w-56 p-2">권한 코드</th>
@@ -126,7 +134,7 @@ export function PermissionMapTable({
               data-testid={`${testid}-row-${r.href}`}
               className="border-b border-border align-top"
             >
-              <td className="p-2 text-xs text-muted-foreground">{r.depth}</td>
+              {showDepth && <td className="p-2 text-xs text-muted-foreground">{r.depth}</td>}
               <th scope="row" className="p-2 text-left">
                 <span className="font-medium text-foreground">{r.label}</span>
                 <span className="block text-[11px] font-normal text-muted-foreground">

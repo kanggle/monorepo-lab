@@ -133,6 +133,7 @@ export function DomainGuideTabs({
               testid={`${prefix}-map`}
               caption={`${domainLabel} 메뉴별 권한`}
               showSources={false}
+              showDepth={false}
             />
             <h2 className="mb-2 mt-8 text-lg font-semibold">알아 둘 예외</h2>
             <KnownMismatches areas={areas} testid={`${prefix}-mismatches`} />

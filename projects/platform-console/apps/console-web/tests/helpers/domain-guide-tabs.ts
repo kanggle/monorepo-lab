@@ -42,5 +42,10 @@ export function expectDomainGuideTabs(
     expect(card).toHaveTextContent('필요한 권한');
   }
   expect(screen.queryByTestId(`${prefix}-menu-procedures`)).toBeNull();
-  expect(screen.getByTestId(`${prefix}-map`)).toBeInTheDocument();
+  const map = screen.getByTestId(`${prefix}-map`);
+  // TASK-PC-FE-330 — 「메뉴별 권한」 has no «뎁스» column in a domain guide.
+  // `hidden: true` — the table sits in the 「권한 안내」 panel, which is not the selected tab.
+  const headers = within(map).getAllByRole('columnheader', { hidden: true }).map((h) => h.textContent);
+  expect(headers).toContain('메뉴명');
+  expect(headers).not.toContain('뎁스');
 }
