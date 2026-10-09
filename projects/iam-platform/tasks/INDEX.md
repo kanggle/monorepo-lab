@@ -120,9 +120,8 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-628-demo-assigned-only-operator-seed.md` — **데모 시드에 로그인 불가 · 배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만)** (REVIEW, 2026-10-08 UTC · 소유자 결정 «1»). 콘솔 그룹 «멤버 추가» 의 «ecommerce 소속 · 배정만 됨» 회색 행(platform-console `TASK-PC-FE-319`)을 데모에서 보기 위함 — 기존 시드엔 demo SUPER_ADMIN 이 관리하는 `demo-corp` 안에 그 조합이 없었다. password_hash · oidc_subject NULL · 역할 0 · 배정 정확히 {demo-corp} — `DemoOperatorSeedIntegrationTest` +3 단언. ⏳ AC-5 CI iam 통합 · AC-6 라이브(다음 굽기; 2026-10-08 창엔 소유자 승인으로 SSM 1회 삽입). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 ## done
+- ✅ `TASK-BE-628-demo-assigned-only-operator-seed.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4246**, 스쿼시 **`276f74d52`** (머지 시점 실패 0 · iam A/B 통합 레인 SUCCESS). 데모 시드에 로그인 불가·배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만) — 콘솔 그룹 «멤버 추가» 의 비활성 행을 데모에서 보기 위함. 25차 창 재굽기 뒤 라이브: 소유자가 demo-corp 그룹 «멤버 추가» 에서 `assigned-only@demo.com` 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인(AC-6).
 - ✅ `TASK-BE-627-password-reset-pages.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4232**, 스쿼시 **`7c513ae26`** (머지 시점 실패 0). IdP 비밀번호 재설정 화면 · 로그인 링크 · 데모 경로. CI `PasswordResetIntegrationTest` 초록 · 24차 창 메일→링크→재설정→로그인 라이브 통과.
 - ✅ `TASK-BE-625-tenant-org-node-placement-api.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4223**, 스쿼시 **`9880f9209`** (머지 시점 실패 0 · 통과 34). 테넌트를 org-node 에 두기 · 옮기기 · 빼기 `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(잃는 도메인) · 양쪽 관리자 판정 · 범위 밖 404 · 조건부 쓰기 409 · 테넌트 생성의 선택 `orgNodeId`. IT 는 CI 가 닫음(admin 5 메서드 PASSED · account 134→136). 후속 `TASK-PC-FE-312`.
 - ✅ `TASK-BE-626-operator-list-home-tenant-id.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4222**, 스쿼시 **`07328d826`** (머지 시점 실패 0 · SUCCESS 22). `GET /api/admin/operators` 항목(+ `/me`)에 운영자 HOME 테넌트 `homeTenantId`. AC-4(CI iam 레인) = Build & Test · Integration iam A/B · iam E2E smoke SUCCESS. 라이브 AC 없음. 짝 platform-console `TASK-PC-FE-319` 는 라이브 AC 로 review 잔류.

@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-FE-108-signup-then-first-store-login-fails-configuration-error.md` — **가입 직후 이어지는 첫 스토어 로그인이 «인증 서버 설정에 문제가 있습니다» (NextAuth `Configuration`) 로 실패 — 재시도는 성공** (READY, 2026-10-09 UTC · 출처 25차 데모 창). `shopper1@demo.com` 가입(18:25:08Z) 뒤 첫 로그인은 code 발급(18:25:19Z)·access_token NULL(교환 안 됨/실패), 재시도(18:39:46Z)는 즉시 토큰 발급. 이메일 미인증은 원인 아님(재시도 때도 미인증인데 성공). AC-0 = 재현 + 실제 NextAuth 에러 타입 재측정(가정 금지). 분석=Opus 5.5 / 구현 권장=Opus(인증 흐름).
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 

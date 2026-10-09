@@ -8,7 +8,7 @@ TASK-MONO-779
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -77,7 +77,7 @@ monorepo
 - [x] **AC-1** — In Scope 1·2 구현: `projects.sh` 에 `domain_running()` 단일 출처를 두고, `demo-up.sh` 의 릴레이 판정이 `SET` 대신 그것을 본다(`demo-down.sh` 의 기존 `is_running()` 중복도 같은 함수로 정리). 셸 단위 시험(`verify-demo-wrapper.sh` (z44), `demo-up.sh` 의 `GUARD-Z44` 구간을 **그대로 추출**해 실행) 으로 넷이 모이는 순서 세 가지를 검증: 한 번에(SET={iam,ecommerce,wms,scm}) · 나중에 scm(SET={scm,iam}, 실제로는 넷 다 up) · 나중에 iam(SET={iam}, 실제로는 넷 다 up) — 셋 다 `relay_missing` 이 빈 상태로 나왔다(SET 과 무관).
 - [x] **AC-2** — 같은 (z44) 안에서 scm 만 실제로 안 떠 있는 시나리오(SET 은 넷 전부지만 running={iam,ecommerce,wms})를 돌려 `relay_missing=[scm]` 을 확인했다 — 생략 경고(`demo-up.sh:389` `⚠ 이벤트 릴레이 생략`)는 그대로 살아 있고 이름을 정확히 댄다.
 - [x] **AC-3** — bite 1회: (z44) 가 추출한 판정 구간을 `sed` 로 옛 식(`[[ " ${SET[*]} " == *" $d "* ]]`)으로 되돌려 "나중에 scm" 시나리오를 다시 돌리면 `relay_missing=[ecommerce wms]`(비어있지 않음) — 가드가 **물었다**. 되돌리기 전(현재 코드)에는 같은 시나리오가 비어 있었다. (로컬에서 동일 추출·실행 로직으로 직접 재현 — 아래 구현 기록의 "bite 재현" 참조. docker 데몬이 없는 로컬 환경이라 전체 `verify-demo-wrapper.sh`(docker compose render 를 쓰는 앞선 칸들 포함)를 처음부터 끝까지는 못 돌렸다 — CI 의 `demo-wrapper-smoke` 잡이 전체 실행을 검증한다.)
-- [ ] **AC-4** — ⚪ 재굽기 창: 기본 묶음으로 부팅 → `/domain/start scm` → `demo-event-relay` healthy · 시드 풀필먼트가 wms 로 건너감. 라이브 AWS 데모 호스트 + AMI 재굽기가 필요해 이 구현 세션에서는 측정하지 못했다 — 다음 데모 창에서 소유자가 관측해야 한다.
+- [x] **AC-4** — ⚪→✅ 25차 데모 창(2026-10-09 UTC, AMI `ami-03cc7efda4b0a7809`) 라이브 재굽기에서 측정: 5묶음(console·store·store-fulfillment·console-wms·console-scm) 한 호출 부팅 뒤 `demo-event-relay` healthy(iam 15·ecommerce 32·wms 16·scm 9 컨테이너). 소유자가 `/domain/stop {"name":"scm"}`(SSM `ce3f1b3c…`: `[demo] down: relay` → `[demo] down: scm`) 뒤 `/domain/start {"name":"scm"}`(SSM `a149eace…`: `[demo] up: iam … up: scm … up: relay`) 를 실행 — 부분 종료·재기동 양쪽에서 `domain_running()` 판정이 릴레이를 따라갔다(내려갈 때 먼저 내리고, 다시 모이자 다시 떴다). 재기동 뒤 `demo-event-relay` Up 3 minutes (healthy). 스토어 주문 `84acdba9-d5e1-4458-9f5d-e2d1499e3f83` 가 wms 출고 `01a121d9-…`(tenant ecommerce, source FULFILLMENT_ECOMMERCE, PICKING) 로 18:07:50Z 에 건너갔다 — scm 재기동(약 18:01Z) **뒤** 다. 아래 § 25차 창 측정 기록 참조. (참고: 에이전트의 첫 `/domain/stop` 호출은 자동모드 분류기가 막아 소유자가 직접 실행했다 — 판정에는 영향 없음.)
 
 # Related Specs
 
@@ -142,6 +142,13 @@ monorepo
 ## 못 한 것
 
 - AC-4(라이브 재굽기 창) — AWS 데모 호스트 + AMI 재굽기가 필요해 이 세션에서 측정 불가.
-  다음 데모 창에서 소유자가 관측.
+  다음 데모 창에서 소유자가 관측. → 25차 창에서 닫음(아래).
 - `verify-demo-wrapper.sh --live` 전체 실행 — 로컬에 docker 데몬 없음. (z44) 자체는
   데몬 없이 돌므로 영향 없음(위 참조).
+
+# 25차 데모 창 측정 기록 (2026-10-09 UTC, AMI `ami-03cc7efda4b0a7809` · RepoCommit `e2a0c7eb5` · i-00aa62a02a32c03b9)
+
+- 오케스트레이터(SSM/DB 읽기) + 소유자(화면) 합동 측정. 5묶음 한 호출 부팅 → `demo-event-relay` healthy(iam 15 · ecommerce 32 · wms 16 · scm 9 컨테이너).
+- 소유자가 `/domain/stop {"name":"scm"}` → `/domain/start {"name":"scm"}` 를 실행해 **부분 종료 후 재기동** 경로까지 실측(이 티켓이 AC-1에서 셸로만 검증했던 "나중에 scm" 순서의 라이브 대응) — SSM 로그가 `down: relay` 뒤 `down: scm`, 그리고 `up: iam … up: scm … up: relay` 순서를 보였다. 재기동 뒤 `demo-event-relay` Up 3 minutes (healthy).
+- 스토어 주문 `84acdba9-d5e1-4458-9f5d-e2d1499e3f83` → wms 출고 `01a121d9-…`(tenant ecommerce, source FULFILLMENT_ECOMMERCE, PICKING) 18:07:50Z 생성 — scm 재기동(~18:01Z) **뒤**. 릴레이가 넷이 모일 때마다(기동 호출과 무관하게) 뜬다는 AC-1·AC-2 의 판정을 라이브로 확인했다.
+- AC-4 ✅ 로 닫음 — 이 티켓의 남은 AC 없음.
