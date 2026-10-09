@@ -66,6 +66,12 @@ subprojects {
         testClassesDirs = sourceSets.test.output.classesDirs
         classpath = sourceSets.test.runtimeClasspath
         jvmArgs '-XX:+EnableDynamicAgentLoading'
+        // TASK-MONO-771 S6: Gradle's forked test JVM defaults to a 512 MiB heap. The Spring
+        // context cache holds many contexts across ~195 tests, and admin-service's
+        // break-glass login runs an Argon2id verify at m=65536 KiB (64 MiB per call).
+        // Near the ceiling that one request either threw an Error (500, no stack trace)
+        // or GC-thrashed past the 5m timeout (TokenExchangeIntegrationTest BE-377).
+        maxHeapSize = '1536m'
         systemProperty 'junit.jupiter.execution.timeout.default', '5m'
 
         testLogging {

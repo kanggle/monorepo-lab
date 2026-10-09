@@ -634,3 +634,9 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 - ⚪ 라이브(데모 · 실제 리셋 → 실제 재등록) 미실행.
 - ⚪ **콘솔 리셋 화면 없음** — 공개 API 만 있다. 계정 상세의 «2단계 인증 리셋» 버튼은 콘솔 계약(`console-integration-contract.md`)에 자리가 없어 이 슬라이스에서 만들지 않았다(소유자 · 후속 판단).
 - ⚪ **리셋 알림 메일 없음** — 계약(S1 «등록 · 리셋 이벤트 — 소비자 없음»)대로. 본인이 모르는 리셋을 알리는 메일(등록 알림 메일과 대칭)은 보안상 권할 만하나 계약 밖이라 넣지 않았다 — 소유자 판단.
+
+### CI 1차 — BE-377 재발 (S6 와 무관한 기존 시험)
+
+- `a86559f86` 의 iam A: 195 중 1 실패 — `TokenExchangeIntegrationTest` «BE-377 … local-login → 401». 이번엔 500 이 아니라 **응답은 맞는 401 인데 5분 타임아웃**(`12:14:59` 직전 시험 통과 → `12:22:04` 응답). S5 에서 둔 `@DirtiesContext(AFTER_CLASS)` 완화는 **원인이 아니었다**(증상이 살아남음).
+- 가설: Gradle 테스트 JVM 기본 힙 512 MiB(어디서도 `maxHeapSize` 미설정 — `gradle.properties` 의 `-Xmx2048m` 은 데몬 것) × 이 요청의 Argon2id 더미 검증 `m=65536`(64 MiB). 천장 근처에서 Error(→500, 스택 없음) 또는 GC 스래싱(→타임아웃) — 두 증상을 하나로 설명한다.
+- 조치: `projects/iam-platform/build.gradle` `integrationTest` 에 `maxHeapSize = '1536m'` · 진단을 **항상** 찍게(요청 전 힙 · 응답 시간). 🔴 초록 한 번은 판정이 아니다 — 진단 줄의 «before login heap used/max» 가 천장 근처였는지로 가설을 판정한다(다음 런 로그).
