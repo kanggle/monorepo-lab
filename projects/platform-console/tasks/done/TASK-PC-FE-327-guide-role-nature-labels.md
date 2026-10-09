@@ -8,7 +8,7 @@ TASK-PC-FE-327
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -85,3 +85,11 @@ platform-console
 
 - 역할이 추가되었는데 성격이 빠지는 경우 → `Record<RbacRole, string>` 타입 오류로 빌드가 막힌다.
 - 성격 문구가 화면 쉬운 말 가드(파일 경로 · 티켓 번호 금지)에 걸리는 경우 → 전체 vitest 에 포함된 `GlobalGuideScreen` 가드가 잡는다(통과 확인).
+
+## CORRECTION — close (2026-10-09 UTC, 4차원 검증)
+
+- **AC-5 닫힘**: 소유자가 데모 창에서 역할별 권한 표 열 머리의 역할 성격을 눈으로 확인했다(2026-10-09 UTC 대화 — «PC-FE-327 확인했어»). 위 AC 목록의 ⚪ 는 이 절이 닫는다.
+- (a) #4267 `MERGED` 2026-10-09T12:17:29Z, squash `a7076c360`.
+- (b) `a7076c360` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 12 · SKIPPED 54 · FAILURE 0.
+- (d) AC-1~5 전부 닫힘.
