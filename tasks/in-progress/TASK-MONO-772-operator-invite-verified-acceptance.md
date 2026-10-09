@@ -261,3 +261,72 @@ monorepo
 | OD-5 · OD-6 | **둘 다 772 에서 손대지 않는다** — `iam` 자격에 묶인 회사 운영자 4명 이동은 후속 여부를 따로 · 퇴사/정지 문구는 773 비운영자 셸에서 | 772 범위 = 셀프 온보딩 운영자 이동만 |
 
 - AC-0 ✅ — 네 측정 · F1~F19 · 구현자 결정 D-1~D-8 · 슬라이스 S1~S7 · OD 확정. 🔵 정적 재측정 «사이트 계정으로 남은 셀프 온보딩 운영자 = 0» 은 라이브 ⚪(다음 데모 창 질의는 위 기록에).
+
+---
+
+# S1 기록 (2026-10-09 UTC)
+
+> 분석=Opus 5.5 (api-designer) · **코드 0 · 계약/명세만** · worktree `feat/mono-772-operator-invite`. ⚠️ 날짜는 호스트 날짜다 — 이 세션에서 `date -u` 를 돌리지 못했다(AC-0 기록과 같은 단서).
+> AC 체크박스는 건드리지 않았다. 이 슬라이스의 완료 조건(§ 3 표 S1 행): ① HS-A · HS-B 처리가 계약에 보인다 ② 새 코드가 error-handling 에 먼저 등록 ③ rbac 새 권한 키 없음 — 아래 § 1 · § 2 가 그 근거다.
+
+## 1. 쓴 것 (파일 · 절)
+
+| 파일 | 절 | 무엇 |
+|---|---|---|
+| `projects/iam-platform/specs/contracts/http/admin-api.md` | § POST /api/admin/operators | D-7 «TASK-MONO-772» 블록 — 비-`'*'` → `422 OPERATOR_INVITATION_REQUIRED`(S7 부터) · 334 블록에 «대체됨» 표시(본문은 S7 머지 전 동작으로 남김) · 오류표 갱신 |
+| 〃 | **§ Operator Invitation (신설)** | 규칙 표(R4 · 상태 · 대기 하나 · 전달 OD-4 · 재발송 OD-4 · `'*'` 거절 · 권한 · 🔴 OD-1 한 사람 = 한 회사 + «773 전 ADR» 문장) · 공통 item 모양 · `POST`/`GET /api/admin/operator-invitations` · `POST …/{id}:cancel` · `POST …/{id}:resend` · «수락 — 이 표면이 아니다» 요약 |
+| `internal/auth-to-admin.md` | 머리글 · § facet · **신설 3절** | 노출 경로 · 쓰기 edge 하나 생김 기록 · facet 에 `axes` 파라미터(S6 — 이동기 `axes=IDENTITY`) · `GET /internal/operators/console-eligibility`(D-5) · `POST /internal/operator-invitations/preview` · `POST /internal/operator-invitations/accept`(D-3 판정표 · 트랜잭션이 쓰는 행 · 감사 행 · F19 `accountId` 기록) |
+| `internal/admin-to-account.md` | 머리글 · `excludePoolMembers` · **신설 2절** | `excludePoolMembers` 퇴역 예정(S7) · `POST /internal/accounts/{accountId}/verified-email:match`(F3 — 술어 사본 대신 판정 엔드포인트, 사이트 역할 쓰기와 같은 순서) · `POST /internal/notifications/operator-invitation`(OD-4 — 770 발송기 재사용) |
+| `internal/auth-to-account.md` | 머리글 · **신설 1절** | `POST /internal/consumer-pool/signups`(OD-3 — 사이트 없는 풀 가입: 멤버십 · `account.created` 없음) |
+| `internal/account-internal-provisioning.md` | 머리글 블록 | 🔴 OD-2 — 기계 · 시스템 계정 전용, 사람 운영자의 입구 아님, ADR-080 D6 둘째 줄의 읽기 |
+| `internal/account-maintenance-internal.md` · `internal/auth-internal.md` | `OPERATOR_FACETED` 행 · 이동 판정 6 | S6 부터 신원 축만(D-6) |
+| `auth-api.md` | **신설 2절** · 토큰 오류표 | § IdP 브라우저 화면 — 운영자 초대 수락(`/operator-invitations/accept` · `/signup`) · § 풀 계정의 콘솔 토큰 — 운영자 측면이 있을 때만(D-5 · 615 D-5 개정 · 두 거절 상수) |
+| `onboarding-api.md` | 오류표 · «772 와 온보딩» | 측면 없는 풀 계정에 계속 닫힘(F9) · 🔴 이미 측면 있는 호출자 = 테넌트 생성 **전** `409 OPERATOR_ALREADY_PROVISIONED`(아래 § 3 결정 S1-11) |
+| `specs/services/admin-service/data-model.md` | `admin_operators` 링크 키 노트 · **`operator_invitation` 신설** | `oidc_subject` 를 채우는 셋째 길 = 수락(F1) · 표 DDL(해시만 · 읽을 때 만료 · 세 상태 · `pending_key` 생성 컬럼 · 불변식) |
+| `specs/services/admin-service/rbac.md` | `operator.manage` 행 | 대상 endpoint 목록에 초대 넷 추가 — **새 키 없음 · seed 행렬 무변경** |
+| `specs/features/multi-tenancy.md` | § Internal Provisioning API(신설 소절) · § 2 · § 3 표 · § 3 AC-6 문단 · § 4 콘솔 행 · § 4 615 문단 · § 7 표 · **§ 8 신설** | OD-2 읽기 · OD-3 사이트 없는 가입 갈래 · 셀프 온보딩 운영자 행 → 772 S6 / 신원 연결 행 · OD-5 기록 · F10(거절은 데이터로 걷힌다) · 콘솔 행 · 615 D-5 개정 · 772 시험 자리 3행 · § 8 문 넷 표 + OD-1 |
+| `projects/platform-console/specs/contracts/console-integration-contract.md` | § 2.4.3 표 · 헤더 행렬 · «등록 → 초대» 블릿 · 334 사전 게이트 퇴역 · Resilience · **§ 2.6.3 신설** · § 3 노트 | 행 2 = `*` 전용 · 행 11–14 · 초대 화면 의무(대기 목록 · `delivery` 표시 · 취소 · 재발송 · 토큰 비노출) · 콜백/refresh 의 세 갈래(F5 — `operator_check_unavailable`) · § 3 12행은 그대로(카운트 16 유지) |
+| `platform/error-handling.md` · `rules/domains/saas.md` | Account · Auth/Token(OAUTH_INVALID_GRANT 설명) · Admin · Console 절 | 새 코드 등록(아래 § 2) · `EMAIL_NOT_VERIFIED` · `CONSUMER_POOL_DISABLED` · `POOL_MOVE_OPERATOR_FACETED` 설명 갱신 |
+| `docs/adr/ADR-MONO-035-…md` · `ADR-MONO-044-…md` | Amendments / Amendment note | «080 D6 이 § 8 을 대체» · «080 D6 이 D5 의 전개를 바꾼다» — **본문 · 상태 불변**(덧붙임만) |
+
+## 2. 새 엔드포인트 · 코드 · 키
+
+**엔드포인트 (12 — 공개 4 · IdP 화면 2 · 내부 6)**: 공개(운영자 토큰) `POST`/`GET /api/admin/operator-invitations` · `POST /api/admin/operator-invitations/{id}:cancel` · `POST …/{id}:resend` — IdP 화면 `GET·POST /operator-invitations/accept` · `GET·POST /operator-invitations/signup` — 내부 `GET /internal/operators/console-eligibility`(auth→admin) · `POST /internal/operator-invitations/preview` · `POST /internal/operator-invitations/accept`(auth→admin) · `POST /internal/accounts/{id}/verified-email:match` · `POST /internal/notifications/operator-invitation`(admin→account) · `POST /internal/consumer-pool/signups`(auth→account). 기존 변경: `GET /internal/operators/facet` + `axes`(가산) · `POST /api/admin/operators` 좁힘(S7) · `POST /api/admin/onboarding/organizations` + 409(S3).
+
+**새 HTTP 오류 코드 (14 — admin 10 · account 3 · console 1)** — 전부 `platform/error-handling.md` 에 먼저 등록, saas 도메인 코드는 `rules/domains/saas.md` 에도: admin — `OPERATOR_INVITATION_REQUIRED`(422) · `OPERATOR_INVITATION_NOT_FOUND`(404) · `OPERATOR_INVITATION_EXPIRED`(410) · `OPERATOR_INVITATION_ALREADY_USED`(409) · `OPERATOR_INVITATION_ALREADY_PENDING`(409) · `OPERATOR_INVITATION_NOT_PENDING`(409) · `OPERATOR_INVITATION_EMAIL_MISMATCH`(403) · `OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE`(403) · `OPERATOR_INVITATION_INVALIDATED`(409) · `OPERATOR_ALREADY_PROVISIONED`(409, OD-1). account — `ACCOUNT_EMAIL_MISMATCH`(403) · `INVITATION_EMAIL_SEND_FAILED`(503) · `INVITATION_EMAIL_UNDELIVERABLE`(422). console — `OPERATOR_CHECK_UNAVAILABLE`(503). 재사용: `EMAIL_NOT_VERIFIED`(770 공용 이름, admin 이 그대로 통과).
+🔵 가드 관계: `check-error-code-registry.sh` 는 코드→문서 한 방향이라 문서 행을 먼저 넣어도 초록이다. `check-domain-error-code-registry.sh` 는 saas.md 의 코드가 registry 에 있어야 하는데 — 전부 넣었다.
+
+**새 `error_description` 상수 (1)**: `operator_eligibility_unavailable`(값 전체 일치 · `'consumer-pool'` 미포함). «측면 없음» 거절 문구는 **바이트 불변**.
+
+**권한 키**: 새 키 **0** — `operator.manage` 재사용, seed 행렬 무변경(771 S1 의 «rbac 무변경 확인» 과 같은 모양). JWT 클레임: 새 것 0(`jwt-standard-claims.md` 무변경 → `check-jwt-claims-registry.sh` 무관).
+
+**새 설정 키 (구현 몫)**: admin `admin.operator-invitation.ttl`(기본 `P7D`) · account `iam.mail.operator-invitation-link-base-url` · auth `iam.operator-invitation.console-url`.
+
+## 3. AC-0 결정 · OD 가 정하지 않아 S1 이 정한 것 (🔴 = 소유자가 볼 만한 것)
+
+| # | 결정 | 왜 | 어디 |
+|---|---|---|---|
+| S1-1 🔴 | **authorize 게이트는 풀 principal × 콘솔 client 에서도 BE-610 조건부 재인증을 먼저 한다** — 세션 테넌트가 이제 `iam` 으로 계산돼도 «= client 테넌트 → 통과» 로 단락시키지 않는다 | AC-0 F4 는 «게이트 `PASS`» 라 적었다. 그대로 하면 `iam` 자격 + 풀 계정을 함께 가진 사람(`demo@demo.com`)이 재인증 없이 **풀 principal** 로 콘솔에 들어와 «측면 없음» 거절(`sso_wrong_account`)을 받는다 — BE-610 회귀. F4 의 원래 걱정(풀-사이트 분기의 무한 반복)은 콘솔 client 가 그 분기를 타지 않으면 막힌다 | `auth-api.md` § 풀 계정의 콘솔 토큰 · `multi-tenancy.md` § 4 |
+| S1-2 | 수락 판정 순서: **이미 `ACCEPTED` 확인을 만료보다 먼저** | 셀러 구성원 초대 선례 순서. D-3 은 만료를 먼저 적었으나 같은 계정 재제출(만료 시각 지난 뒤)을 200 으로 답하려면 이 순서가 맞다. 다른 계정의 결과는 어느 순서든 거절 | `auth-to-admin.md` § accept 판정 2 · 3 |
+| S1-3 | 풀 아님(사이트 · `iam` · B2B) · 계정 없음 · 비-ACTIVE 는 account-service 가 한 답(`404`)으로 — admin 은 `403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` 하나로 | 구별하려면 테넌트 없는 계정 조회가 새로 필요(격리 회귀 방지 위반). 호출자에게 필요한 답은 하나 | `admin-to-account.md` § verified-email:match |
+| S1-4 | 수락 시 근거 재판정(D-3 5)을 **한 코드** `OPERATOR_INVITATION_INVALIDATED` 로 — 테넌트 비활성 · 초대자 비활성 · D2 범위 · D3 메뉴 | 피초대자에게는 «초대한 쪽이 다시 보내야 한다» 하나가 의미. 발급 때는 테넌트 **존재**만, `ACTIVE` 는 수락 때 | `auth-to-admin.md` · `admin-api.md` 발급 처리 6 |
+| S1-5 | 수락 때 `(tenant_id, email)` 운영자 존재도 본다 → `409 OPERATOR_EMAIL_CONFLICT` | 발급 뒤 다른 길로 생겼을 수 있다(V0025 UNIQUE 를 원시 DB 오류로 내지 않는다) | § accept 판정 7 |
+| S1-6 | **미리보기 읽기** `POST /internal/operator-invitations/preview` 신설 | IdP 화면이 «무엇을 · 어느 주소로» 를 그리고 만료 · 수락됨을 미리 말하기 위해. 토큰 보유자에게 회사 · 역할 · 마스킹 주소를 보인다(링크의 주인 = 피초대자) | `auth-to-admin.md` |
+| S1-7 🔴 | **수락 화면에서 시작한 폼 로그인은 `consumer-pool` 자격만 고른다** · 소셜 로그인은 이 화면에서 시작하지 않는다 | «시작 client 없음 → 교차 조회» 를 쓰면 `iam` + 풀 이메일이 `LOGIN_TENANT_AMBIGUOUS`, `iam` 만 고르면 수락할 수 없는 principal. 소셜은 client 테넌트가 필요한데 이 화면엔 client 가 없다 — 소셜만 가진 풀 계정은 스토어 · 팬에 로그인한 브라우저로 링크를 다시 연다 | `auth-api.md` § 운영자 초대 수락 |
+| S1-8 | `displayName` 은 **초대자가 정한다**(필수, 1–64자) | 운영자 행의 `display_name` NOT NULL. 수락 화면에서 받는 안은 화면 · 검증이 하나 더 늘 뿐 | `admin-api.md` 발급 |
+| S1-9 | 재발송: **재발송 actor 기준 D3 재판정 · `invited_by` 를 재발송자로 교체** · 취소 · 재발송 모두 `Idempotency-Key` 없음 · 이미 취소된 것의 취소 = 200 no-op · 수락된 것의 취소/재발송 = `409 …NOT_PENDING` | 살아 있는 토큰을 낸 사람이 부여의 책임자. 재발송 재전송은 토큰을 한 번 더 돌릴 뿐 | `admin-api.md` |
+| S1-10 | 메일: admin 이 토큰 **원문**을 account 내부 호출에 실어 보내고 account 가 링크를 만든다(저장 · 로그 금지) · 발송 재시도 없음 · 결과는 초대 행 `delivery` 에 · 발송은 **커밋 뒤** | OD-4 «770 발송기 재사용» 의 모양. 링크 베이스 URL 은 이미 IdP 링크를 만드는 account-service 설정 옆에 둔다 | `admin-to-account.md` § notifications |
+| S1-11 🔴 | **셀프 온보딩: 이미 운영자 측면이 있는 호출자 → 테넌트 생성 전 `409 OPERATOR_ALREADY_PROVISIONED`** | 지금 코드는 테넌트를 만든 뒤 `oidc_subject` UNIQUE 에 걸려 정지된 빈 테넌트를 남긴다(`FirstAdminProvisioner.java:93-95` — 기존 `iam` 운영자도 같다). 772 가 측면 있는 풀 계정에 콘솔 토큰을 주면서 모집단이 넓어진다. OD-1 과 같은 술어 · 같은 코드. **OD-1 문장은 초대만 말했으므로 범위 확장이다** — 소유자가 «772 에서 온보딩은 건드리지 않는다» 면 이 행과 계약 줄을 걷고 773 으로 넘긴다. 슬라이스 S3 | `onboarding-api.md` |
+| S1-12 | 거절된 수락은 `admin_actions` 에 남지 않는다(주체 `operator_id NOT NULL` — 수락자는 운영자가 아니다) · 성공 수락의 감사 주체 = 새 운영자 · `permission_used`/`reason` = `<self_invitation_accept>` | 원장 스키마 그대로. 거절은 구조화 로그 | `auth-to-admin.md` · `data-model.md` |
+| S1-13 | 콘솔: 판정 실패 상수 → 새 로그인 오류 코드 `operator_check_unavailable` · refresh 는 **쿠키 유지**(IAM 이 refresh 토큰을 돌리기 전에 실패) · BFF `503 OPERATOR_CHECK_UNAVAILABLE` · 측면 없는 refresh 는 기존 «그 밖의 IAM 4xx» → `session_expired`(OD-6 그대로) | F5. `token_exchange_failed` 로 뭉개면 네트워크 실패와 구별이 사라진다 | 콘솔 § 2.6.3 |
+| S1-14 | `operator_invitation.pending_key` 생성 컬럼 UNIQUE 로 «대기 하나» 를 DB 에서 지킨다(권고 — 다른 수단이면 같은 불변식을 DB 가 지켜야 한다) | D-2 는 «애플리케이션 검사 + 낙관적 락» 이었으나 락은 **다른 행**의 동시 INSERT 를 막지 못한다 | `data-model.md` |
+| S1-15 | facet 에 `axes` 파라미터(생략 = 둘 다, byte-불변) | D-6 «`oidc_subject` 축만 해제» 를 응답 확장(어느 축이 맞았나 — 측면 존재를 boolean 너머로 드러냄) 없이 하기 위해 | `auth-to-admin.md` § facet |
+
+## 4. 열린 질문 (S1 이 답하지 않은 것)
+
+1. 🔴 **334 로 만든 회사 운영자(`oidc_subject` NULL — F1)는 OIDC 로 들어올 길이 772 뒤에도 없다** — 같은 테넌트 · 같은 이메일로 다시 초대하면 `409 OPERATOR_EMAIL_CONFLICT`(발급 · 수락 모두). 기존 행에 수락으로 `oidc_subject` 를 «붙이는» 길은 이 계약에 없다(새 행만 만든다). 정적 모집단은 S2 AC-0 에서 재라(데모 시드에는 그런 행이 없어 보이나 — AC-0 측정 4 는 소비자 사이트 축만 쟀다). 대상이 0 이 아니면 «기존 운영자 행에 수락 연결» 을 772 에 넣을지 후속으로 뺄지 소유자 판단.
+2. **사이트 없는 풀 principal 세션에서 `/email-verification` 이 계정을 찾는가** — 그 화면은 `X-Tenant-Id` = 세션 테넌트로 부르는데 사이트 없는 풀 세션의 테넌트 값에서 account-service 재발송 조회가 되는지 실측 전이다. S3 확인 항목으로 계약에 적었다(`auth-api.md` § signup 끝).
+3. 셀프 온보딩 운영자 이동(S6) 뒤 **이동 전 콘솔 세션**: 그 사람의 기존 SAS 세션 principal 은 사이트 principal 이고 refresh 미러 행 테넌트는 사이트다 — 이동 후 refresh 가 지금처럼 이어지는지(이동기 «이동 전 세션» 규칙은 소비자 client 기준으로 쓰였다) S6 AC-0 에서 확인.
+4. OD-1 의 다회사 ADR 은 773 착수 전 — 이 계약의 `OPERATOR_ALREADY_PROVISIONED` · `oidc_subject` UNIQUE · 온보딩 409(S1-11)가 그 ADR 의 입력이다.
+
+- 🟢 **소유자 결정 2026-10-09 UTC — S1-11 «772 에서 먼저 409 로 막기»** 확정: 이미 운영자 측면이 있는 호출자의 셀프 온보딩은 테넌트 생성 **전에** `409 OPERATOR_ALREADY_PROVISIONED`. 다회사 ADR(773 전)에서 다시 열 수 있다.

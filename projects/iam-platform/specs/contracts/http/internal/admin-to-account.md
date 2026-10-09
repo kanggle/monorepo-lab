@@ -3,7 +3,7 @@
 admin-service가 운영자 명령으로 account-service에 계정 상태 변경(lock/unlock/delete)을 요청한다.
 
 **호출 방향**: admin-service (client) → account-service (server)
-**노출 경로**: `/internal/accounts/*`
+**노출 경로**: `/internal/accounts/*` · `/internal/notifications/operator-invitation`(TASK-MONO-772)
 **인증** (TASK-BE-318b 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <IAM client_credentials JWT>` — admin-service 가 `admin-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 정적 `X-Internal-Token` 은 제거됨.
 
 ---
@@ -78,7 +78,7 @@ admin-service 는 `QueryTenantScopeGate` (읽기 경로와 공유) 로 행위자
 |---|---|---|
 | `email` | string (required) | 조회할 이메일 (정확 일치 — `(tenant_id, email)` 유니크 인덱스, 부분/LIKE 검색 아님) |
 | `tenantId` | string (**required**, TASK-BE-357) | 조회 대상 테넌트. 특정 테넌트 → 해당 테넌트 내 정확 일치(0 또는 1행). `*` (SUPER_ADMIN 전용) → 전 테넌트에서 동일 이메일 매칭(테넌트마다 별도 행이 있을 수 있어 0..N행). 누락/공백 → `400 VALIDATION_ERROR`. |
-| `excludePoolMembers` | boolean (optional, default `false`, TASK-BE-615) | `true` → 그 테넌트의 **자기 계정만**(소비자 계정 풀 멤버 제외 — `iam.consumer-pool.enabled` 와 무관하게 풀 이전 쿼리). admin-service `CreateOperatorUseCase` 의 «대상 테넌트에 가입 계정이 있나» 확인이 보낸다(소유자 결정 2026-10-01: 운영자 생성은 옛 규칙 — 운영자 계정 규칙은 `ADR-MONO-080` 후보 `TASK-MONO-746` 의 몫). 콘솔 계정 운영 검색은 보내지 않는다 — [multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) 대로 풀 멤버 포함. 목록 분기(`email` 없음)에도 같은 뜻 |
+| `excludePoolMembers` | boolean (optional, default `false`, TASK-BE-615) | 🔴 **퇴역 예정 (`TASK-MONO-772` S7)**: 유일한 호출자인 운영자 생성의 334 확인이 사라진다([admin-api.md § POST /api/admin/operators](../admin-api.md) «TASK-MONO-772» 블록 — 비-`'*'` 생성은 `422`, `'*'` 는 확인 대상이 아님). S7 이 호출자와 함께 이 파라미터를 걷는다(죽은 계약을 남기지 않는다). 그 전까지 다음 뜻 그대로 — `true` → 그 테넌트의 **자기 계정만**(소비자 계정 풀 멤버 제외 — `iam.consumer-pool.enabled` 와 무관하게 풀 이전 쿼리). admin-service `CreateOperatorUseCase` 의 «대상 테넌트에 가입 계정이 있나» 확인이 보낸다(소유자 결정 2026-10-01: 운영자 생성은 옛 규칙 — 운영자 계정 규칙은 `ADR-MONO-080` 후보 `TASK-MONO-746` 의 몫). 콘솔 계정 운영 검색은 보내지 않는다 — [multi-tenancy.md § 소비자 계정 풀 § 5](../../features/multi-tenancy.md) 대로 풀 멤버 포함. 목록 분기(`email` 없음)에도 같은 뜻 |
 
 **Response 200** (특정 테넌트 단건 매칭):
 ```json
@@ -305,6 +305,107 @@ GDPR/PIPA 삭제권. 계정 상태를 DELETED로 전이하고 PII를 즉시 마�
 ```
 
 **Errors**: 404 `ACCOUNT_NOT_FOUND` (cross-tenant 대상 포함, BE-467)
+
+---
+
+## POST /internal/accounts/{accountId}/verified-email:match — 인증된 이메일 일치 판정 (TASK-MONO-772)
+
+**ADR-MONO-080 D3 · D6 · 772 AC-0 F3 · 구현자 결정 D-3.** «이 계정은 **이 이메일을 인증한 풀 계정**인가» 를 account-service 가 판정한다. 호출자: admin-service 운영자 초대 수락
+([auth-to-admin.md § accept](./auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) 판정 4).
+
+🔴 **왜 새 엔드포인트인가 (사본을 만들지 않는다)**: `TASK-MONO-770` 의 공용 술어 `VerifiedEmailRequirement` 는 account-service 안에 있고 account-service 도메인 `Account` 를 받는다 —
+admin-service 가 그대로 부를 수 없다. 771 은 auth-service 에서 같은 술어를 읽기 둘로 **다시 만들었다**(771 S2b). 772 는 그러지 않는다: 판정을 account-service 의 한 자리에 두고,
+셀러 구성원 수락의 사이트 역할 쓰기([consumer-site-roles.md](./consumer-site-roles.md) 규칙 3 · 4 · 4b)와 **같은 순서 · 같은 술어**로 답한다. 술어가 바뀌면 두 호출자가 함께 바뀐다.
+이름은 운영자를 말하지 않는다 — «회사 권한이 붙는 쓰기 전에 묻는 이메일 판정» 이라 다른 호출자(예: `TASK-MONO-773`)도 같은 질문이면 이것을 쓴다.
+
+**Path Parameters**: `accountId` — 판정할 계정 id(admin-service 가 auth-service 로부터 받은 IdP 세션 principal 의 id).
+
+**Headers**: `X-Tenant-Id` 를 보내지 않는다(계정은 `consumer-pool` 로만 찾는다 — 아래).
+
+**Request**:
+```json
+{ "expectedEmail": "person@example.com" }
+```
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `expectedEmail` | string | Y | ≤ 320. 호출자의 초대가 향한 주소. account-service 가 계정 자신의 이메일과 비교한다(trim · 대소문자 무시) — 계정 이메일은 여기 산다, 호출자에 있지 않다 |
+
+**판정 (read-only) — 처음 실패한 것이 답한다**:
+
+1. 계정을 `findById(CONSUMER_POOL, accountId)` 로 찾는다 — **풀 계정이 아니면 찾지 않는다**(테넌트 없는 조회를 새로 만들지 않는다, [multi-tenancy.md § 격리 회귀 방지](../../../features/multi-tenancy.md#격리-회귀-방지)). 없음 · 풀 밖(사이트 계정 · B2B 계정) · `status ≠ ACTIVE` → `404 ACCOUNT_NOT_FOUND`. 세 경우를 구별하지 않는다 — 호출자에게 필요한 답은 «붙일 수 있는 풀 계정이 아니다» 하나다.
+2. `expectedEmail` = 계정 이메일 → 아니면 `403 ACCOUNT_EMAIL_MISMATCH`.
+3. **`VerifiedEmailRequirement.require(account)`** — `accounts.email_verified_at` 이 있어야 한다 → 아니면 `403 EMAIL_NOT_VERIFIED`(770 의 공용 이름 · 공용 예외 그대로).
+
+- 2 가 3 보다 먼저 — 사이트 역할 쓰기의 4 → 4b 와 같다(틀린 주소가 더 구체적인 답).
+- 🔴 이 판정은 **붙일 때의 증거**다 — 인증은 유지 조건이 아니다(ADR-080 D5). 이 엔드포인트는 무엇도 회수하지 않고 무엇도 쓰지 않는다.
+
+**Response 200**:
+```json
+{ "accountId": "0199de70-…", "emailVerifiedAt": "2026-10-09T10:00:00Z" }
+```
+
+**Side effects**: 없음 — 감사 행 · 이벤트 · 변이 없음. 로그에 `expectedEmail` 을 쓰지 않는다(R4).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 |
+| 400 | `VALIDATION_ERROR` | `expectedEmail` 누락 · 길이 초과 |
+| 404 | `ACCOUNT_NOT_FOUND` | ACTIVE 풀 계정으로는 없다 |
+| 403 | `ACCOUNT_EMAIL_MISMATCH` | 계정 이메일 ≠ `expectedEmail` |
+| 403 | `EMAIL_NOT_VERIFIED` | 이메일은 맞지만 인증되지 않았다 |
+
+**admin-service 매핑**: `404` → 수락 `403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` · `403 ACCOUNT_EMAIL_MISMATCH` → `403 OPERATOR_INVITATION_EMAIL_MISMATCH` · `403 EMAIL_NOT_VERIFIED` → `403 EMAIL_NOT_VERIFIED` ·
+그 밖의 4xx · 5xx · 타임아웃 · circuit-open · `emailVerifiedAt` 없는 200 → `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN`(**fail-closed** — 판정 없이 붙이지 않는다). 읽기라 아래 Caller Constraints 의 재시도를 탄다.
+
+---
+
+## POST /internal/notifications/operator-invitation — 운영자 초대 메일 (TASK-MONO-772)
+
+**ADR-MONO-080 D6 · 소유자 결정 OD-4 («770 발송기 재사용 · 발송 실패는 화면에 · 재발송 = 같은 초대에 새 토큰»).** admin-service 에는 메일 발송 어댑터가 없다(772 AC-0 F14).
+셋째 발송기 사본을 만들지 않고, account-service 의 `TASK-MONO-770` 발송 장치(`iam.mail.enabled` 로 고르는 SMTP 어댑터 · 로깅 스텁 · prod fail-fast — [account-api.md § resend-verification-email «Delivery»](../account-api.md))로 보낸다.
+호출자: admin-service 초대 발급 · 재발송([admin-api.md § Operator Invitation](../admin-api.md#operator-invitation-task-mono-772)) — 초대 행이 **커밋된 뒤**.
+
+**Request**:
+```json
+{
+  "to": "person@example.com",
+  "token": "string (초대 토큰 원문)",
+  "tenantId": "acme-corp",
+  "inviterDisplayName": "김관리",
+  "expiresAt": "2026-10-17T10:00:00Z"
+}
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `to` | Y | 수신 주소(초대 이메일) |
+| `token` | Y | 초대 토큰 **원문**. 🔴 account-service 는 이것을 메일 본문의 링크에만 쓴다 — **저장 · 로그 · 이벤트 · 응답 어디에도 남기지 않는다**(R4 · 772 R4 «토큰 원문 미저장» 은 이 서비스에도 걸린다) |
+| `tenantId` | Y | 초대 테넌트 — 메일 본문의 회사 이름은 account-service 가 자기 `tenants.display_name` 에서 읽는다(없거나 실패하면 `tenantId`) |
+| `inviterDisplayName` | N | 메일 본문의 «누가 초대했나». 없으면 문장을 뺀다 |
+| `expiresAt` | Y | 메일 본문의 «언제까지» |
+
+- 링크 = `{iam.mail.operator-invitation-link-base-url}?token=<token>` — IdP 의 `GET /operator-invitations/accept` 화면([auth-api.md](../auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6)). 새 설정 키 하나(`verification-link-base-url` 과 같은 부류). 발신 주소 = `iam.mail.from`.
+- 실패의 **종류**는 770 과 같은 분류로 답한다 — 주소 형식 오류 · 수신자 거부 = 영구, 그 밖의 모든 실패(판정 불가 포함) = 일시.
+- 로깅 스텁(`iam.mail.enabled=false`, 비-prod)은 수신자 마스킹 · 토큰 미기록으로 로그 한 줄을 남기고 `204` 다 — 데모의 Mailpit 경로는 `iam.mail.enabled=true` 다.
+
+**Response 204 No Content** — 보냈다.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 |
+| 400 | `VALIDATION_ERROR` | 필드 누락 · 형식 오류 |
+| 422 | `INVITATION_EMAIL_UNDELIVERABLE` | **영구 발송 실패** — 메일 서버가 이 주소를 받지 않는다. 다시 보내도 같다 |
+| 503 | `INVITATION_EMAIL_SEND_FAILED` | **일시 발송 실패** — 연결 · 인증 · 시간 초과 · 판정 불가. 다시 보내면 될 수 있다 |
+
+**Side effects**: 메일 한 통. 이벤트 · 감사 행 없음(감사는 admin-service `admin_actions` 가 권위).
+
+**admin-service 매핑 (발송 결과 → 초대 행 `delivery.status`)**: `204` → `SENT` · `422` → `FAILED_PERMANENT` · `503` · 그 밖 · 타임아웃 · circuit-open → `FAILED_TRANSIENT`(판정 불가는 일시 쪽 — 영구라고 잘못 말하면 될 일을 포기하게 한다).
+🔴 **재시도하지 않는다**(아래 Caller Constraints 의 «재시도 2회» 의 예외) — 메일은 멱등이 아니다. 같은 링크가 두 번 가는 것보다 «다시 보내기» 가 사람 손에 있는 편이 낫다(OD-4 «발송 실패는 화면에»).
 
 ---
 

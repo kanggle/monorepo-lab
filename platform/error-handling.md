@@ -537,13 +537,16 @@ Owned by `account-service` (Identity Platform — multi-tenant account lifecycle
 | ACCOUNT_STATUS_UNKNOWN | 500 | Account status is in an unexpected value (defensive guard, audit candidate) |
 | ACCOUNT_SERVICE_UNREACHABLE | 503 | Internal `account-service` call failed (per `integration-heavy.md` I3); transient |
 | EMAIL_ALREADY_VERIFIED | 409 | Email already verified; second verify attempt rejected (`EmailAlreadyVerifiedException`) |
-| EMAIL_NOT_VERIFIED | 403 | A write that attaches a company role to a pool account (today: internal site-role grant) refused because the account's `email_verified_at` is not set — nothing is written. Login and consumer use are never gated on it (`EmailNotVerifiedException`, TASK-MONO-770 / ADR-MONO-080 D3) |
+| EMAIL_NOT_VERIFIED | 403 | A write that attaches a company role to a pool account (today: internal site-role grant; the internal verified-email match that operator-invitation acceptance asks before attaching an operator facet — TASK-MONO-772) refused because the account's `email_verified_at` is not set — nothing is written. Login and consumer use are never gated on it (`EmailNotVerifiedException`, TASK-MONO-770 / ADR-MONO-080 D3). `admin-service` passes the same string through unchanged on operator-invitation acceptance (one code, one row) |
+| ACCOUNT_EMAIL_MISMATCH | 403 | Internal verified-email match refused: the caller's `expectedEmail` (the invitation's address) is not the pool account's own email — the generic counterpart of `SITE_ROLE_EMAIL_MISMATCH` for callers that are not the site-role writer (today: operator-invitation acceptance). Read-only, nothing is written (TASK-MONO-772 / ADR-MONO-080 D6) |
+| INVITATION_EMAIL_SEND_FAILED | 503 | The operator-invitation email could not be sent for a transient reason (SMTP connection / authentication / timeout, or an unclassifiable failure) — the caller keeps the invitation and may resend. Same classification as `VERIFICATION_EMAIL_SEND_FAILED` (TASK-MONO-772, owner decision OD-4) |
+| INVITATION_EMAIL_UNDELIVERABLE | 422 | The mail server refuses the operator-invitation address permanently (malformed address / recipient rejected) — resending cannot help (TASK-MONO-772) |
 | VERIFICATION_EMAIL_SEND_FAILED | 503 | The verification email could not be sent for a transient reason (SMTP connection / authentication / timeout, or an unclassifiable failure) — the issued token is discarded and the resend rate-limit slot released, so an immediate retry is allowed (`VerificationEmailSendFailedException`, TASK-MONO-770) |
 | VERIFICATION_EMAIL_UNDELIVERABLE | 422 | The mail server refuses this address permanently (malformed address / recipient rejected) — retrying cannot help (`VerificationEmailSendFailedException` with a permanent kind, TASK-MONO-770) |
 | RATE_LIMITED | 429 | Generic rate-limit for account operations (e.g. resend-verify-email) (`RateLimitedException`) |
 | AUTH_SERVICE_UNAVAILABLE | 503 | Upstream `auth-service` unreachable during signup; fail-closed (`AuthServicePort.AuthServiceUnavailable`) |
 | BULK_LIMIT_EXCEEDED | 400 | Bulk provisioning request exceeds the 1 000-item limit (`BulkLimitExceededException`) |
-| CONSUMER_POOL_DISABLED | 409 | A consumer-pool maintenance run was refused as a whole because the consumer-pool feature flag is off — nothing was written (`ConsumerPoolDisabledException`) |
+| CONSUMER_POOL_DISABLED | 409 | A consumer-pool maintenance run — or a site-less pool signup (operator-invitation signup, TASK-MONO-772) — was refused as a whole because the consumer-pool feature flag is off — nothing was written (`ConsumerPoolDisabledException`) |
 | SITE_ROLE_NOT_GRANTABLE | 400 | Internal site-role grant/revoke for a `(site, role)` pair outside the closed grantable list, or on a tenant that is not a consumer site — nothing is written (`SiteRoleNotGrantableException`, TASK-MONO-752) |
 | SITE_ROLE_EMAIL_MISMATCH | 403 | Internal site-role grant refused: the caller's `expectedEmail` (the invitation's address) is not the pool account's own email — nothing is written (`SiteRoleEmailMismatchException`, TASK-MONO-752) |
 | SITE_ROLE_REQUIRES_POOL_ACCOUNT | 409 | Internal site-role grant/revoke on an account of the site itself (not yet in the consumer pool) — a site account cannot hold consumer site roles (`SiteRoleRequiresPoolAccountException`, TASK-MONO-752) |
@@ -560,7 +563,7 @@ Owned by `auth-service` (Spring Authorization Server).
 | TOKEN_EXPIRED_OR_INVALID | 401 | Bearer token malformed, signature invalid, or expired (combined fallback) |
 | TOKEN_REUSE_DETECTED | 401 | Refresh token reuse detected (RT rotation invariant); published as audit event `auth.token.reuse.detected`. Prior catalog alias `TOKEN_REUSE` removed in TASK-MONO-052 — only this canonical form is emitted |
 | TOKEN_TENANT_MISMATCH | 403 | Token `tenant_id` claim does not match the targeted resource tenant |
-| OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2). On the wire the OAuth `error` stays `invalid_grant`; where clients must branch on the cause, a **fixed `error_description` constant** discriminates it — `TOKEN_TENANT_MISMATCH` (refresh), and `insufficient_user_authentication` (assume-tenant exchange refused because the selected tenant requires a second factor the subject token lacks — RFC 9470 vocabulary, TASK-MONO-771). A fixed constant is matched by whole-value equality; no other `invalid_grant` may reuse it |
+| OAUTH_INVALID_GRANT | 400 | OAuth2 grant is invalid (RFC 6749 §5.2). On the wire the OAuth `error` stays `invalid_grant`; where clients must branch on the cause, a **fixed `error_description` constant** discriminates it — `TOKEN_TENANT_MISMATCH` (refresh), and `insufficient_user_authentication` (assume-tenant exchange refused because the selected tenant requires a second factor the subject token lacks — RFC 9470 vocabulary, TASK-MONO-771), and `operator_eligibility_unavailable` (a consumer-pool principal's console-client token refused because the operator-facet check could not be answered — fail-closed, distinct from the «no operator facet» refusal whose description is unchanged, TASK-MONO-772). A fixed constant is matched by whole-value equality; no other `invalid_grant` may reuse it |
 | OAUTH_INVALID_CLIENT | 401 | OAuth2 client authentication failed |
 | OAUTH_INSUFFICIENT_SCOPE | 403 | Token scope does not cover the requested resource |
 | LOGIN_RATE_LIMITED | 429 | Per-IP / per-account login attempt threshold exceeded |
@@ -575,7 +578,7 @@ Owned by `auth-service` (Spring Authorization Server).
 | EMAIL_REQUIRED | 422 | OAuth provider did not return email; `email` scope required (`OAuthEmailRequiredException`) |
 | PROVIDER_ERROR | 502 | OAuth provider returned an error during token exchange (infra-layer, `OAuthProviderException`) |
 | PASSWORD_POLICY_VIOLATION | 400 | Password does not meet complexity policy (`PasswordPolicyViolationException`) — also emitted by admin-service for operator password changes |
-| POOL_MOVE_OPERATOR_FACETED | 409 | Internal credential move into the consumer pool refused: the account carries an operator facet (an operator's subject or linked identity), so it must not be moved in this step. Nothing was written |
+| POOL_MOVE_OPERATOR_FACETED | 409 | Internal credential move into the consumer pool refused: the account carries an operator facet (an operator's subject or linked identity), so it must not be moved in this step. Nothing was written. From TASK-MONO-772 S6 the mover asks the linked-identity axis only — self-onboarded operators (subject axis) are moved with the same id |
 | POOL_MOVE_SOCIAL_LINKED | 409 | Internal credential move into the consumer pool refused: the account has linked social identities, which are not moved in this step. Nothing was written |
 | POOL_MOVE_CREDENTIAL_EXISTS | 409 | Internal credential move into the consumer pool refused: a pool credential with the same email already exists for another account. Nothing was written |
 | POOL_MOVE_CREDENTIAL_TENANT_MISMATCH | 409 | Internal credential move into the consumer pool refused: the account's credential lives in neither the pool nor the named site tenant. Nothing was written |
@@ -683,6 +686,16 @@ Owned by `admin-service` (operator portal — operator lifecycle, 2FA, audit-log
 | OPERATOR_ALREADY_LINKED | 409 | The operator is already linked to an account identity |
 | IDENTITY_LINK_EMAIL_MISMATCH | 422 | The operator's email does not match the account identity being linked |
 | ACCOUNT_IDENTITY_UNRESOLVABLE | 422 | The operator's account identity could not be resolved from the authority |
+| OPERATOR_INVITATION_REQUIRED | 422 | `POST /api/admin/operators` with a non-platform `tenantId` — company operators are created only by invitation → verified self-acceptance; only the `'*'` platform-scope create remains. Nothing is created (TASK-MONO-772 / ADR-MONO-080 D6, supersedes the TASK-MONO-334 precondition) |
+| OPERATOR_INVITATION_NOT_FOUND | 404 | Operator invitation unknown — for acceptance/preview: no invitation for the token's hash, a cancelled one, or a token superseded by a resend (not distinguished — enumeration-safe); for management: unknown id or outside the caller's admin-grant scope (TASK-MONO-772) |
+| OPERATOR_INVITATION_EXPIRED | 410 | The operator invitation is past its expiry (default `P7D`, evaluated at read time) — the inviter's resend issues a new link (TASK-MONO-772) |
+| OPERATOR_INVITATION_ALREADY_USED | 409 | The operator invitation was already accepted by another account — invitations are single-use (a re-submit by the same account answers 200) (TASK-MONO-772) |
+| OPERATOR_INVITATION_ALREADY_PENDING | 409 | A pending invitation for the same `(tenant, email)` already exists (expired ones included) — resend it instead of issuing another (TASK-MONO-772) |
+| OPERATOR_INVITATION_NOT_PENDING | 409 | Cancel/resend refused because the invitation is no longer `PENDING` (accepted, cancelled, or a concurrent change won) (TASK-MONO-772) |
+| OPERATOR_INVITATION_EMAIL_MISMATCH | 403 | Acceptance refused: the logged-in pool account's email is not the invitation's address — nothing is written, the invitation stays `PENDING` (TASK-MONO-772) |
+| OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE | 403 | Acceptance refused: the logged-in account is not an ACTIVE consumer-pool (personal) account — site, `iam`-credential and B2B accounts cannot accept. Nothing is written (TASK-MONO-772 / ADR-MONO-080 D6) |
+| OPERATOR_INVITATION_INVALIDATED | 409 | Acceptance refused because the invitation's basis no longer holds — the tenant is not `ACTIVE`, the inviter is no longer `ACTIVE`, or the invited tenant/roles are no longer within the inviter's admin-grant scope / grant menu (ADR-MONO-024 D2/D3 re-checked at acceptance). Nothing is written; the inviting side must re-issue (TASK-MONO-772) |
+| OPERATOR_ALREADY_PROVISIONED | 409 | Operator-invitation acceptance — or self-service onboarding, checked before the tenant is created — refused because the account already carries an operator facet (`admin_operators.oidc_subject` is platform-unique) — one person = one company until the multi-company operator model is decided by ADR before TASK-MONO-773 (owner decision OD-1, TASK-MONO-772). Nothing is written |
 | OPTIMISTIC_LOCK_CONFLICT | 409 | Optimistic-lock collision on `admin_operators.version`. **Registered intentional alias** of Platform-Common `CONFLICT` / `CONCURRENT_MODIFICATION` (same 409 shape) — `admin-service` overrides the parent handler's mapping so the code matches what `admin-api.md` mandates for this surface (TASK-BE-306; alias precedent TASK-MONO-244) |
 
 > `CURRENT_PASSWORD_MISMATCH` is emitted by this service but is documented under Platform-Common Authentication — TASK-MONO-350 promoted it there when IAM `auth-service` became a second emitter with identical semantics (400, `CurrentPasswordMismatchException`). One code, one row: registering it in two sections is how a shared code drifts to two different statuses.
@@ -731,11 +744,12 @@ downstream domain reads; most failure surfaces are degraded-card `reason` values
 `200 OK` envelope (governed by `console-integration-contract.md`, a distinct namespace
 from this HTTP-error-code registry — e.g. `TIMEOUT`, `DOWNSTREAM_ERROR`, `MISSING_PREREQUISITE`).
 The HTTP-level error surface reuses Platform-Common auth codes (`TOKEN_INVALID` 401,
-`TOKEN_REVOKED` 401); the one net-new console-specific HTTP code is below.
+`TOKEN_REVOKED` 401); the net-new console-specific HTTP codes are below (`NO_ACTIVE_TENANT` from the composition routes; `OPERATOR_CHECK_UNAVAILABLE` from the console's own session route, TASK-MONO-772).
 
 | Code | HTTP | Description |
 |---|---|---|
 | NO_ACTIVE_TENANT | 400 | No active tenant selected in the console session on a tenant-scoped composition request; the route fails closed before any downstream call. Frontend message-mapped (TASK-MONO-249) |
+| OPERATOR_CHECK_UNAVAILABLE | 503 | `console-web` session route (`POST /api/auth/refresh`): IAM refused the console token with the fixed `error_description=operator_eligibility_unavailable` — it could not ask whether the personal account is an operator. Transient; the session cookies are kept. Distinct from the «wrong (consumer) account» refusal (`console-integration-contract.md` § 2.6.3, TASK-MONO-772) |
 
 ## Community  `[domain: fan-platform]`
 

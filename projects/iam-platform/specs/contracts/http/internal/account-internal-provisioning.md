@@ -17,6 +17,18 @@ or the caller must hold a platform-scope `SUPER_ADMIN` role.
 > **Defense-in-depth**: Even when the gateway validates the scope (TASK-BE-230), this service
 > re-validates the `X-Tenant-Id` header (or JWT claim) against the path `{tenantId}`.
 
+> 🔴 **Machine / system accounts only — not the way to make a human operator (TASK-MONO-772, owner decision OD-2,
+> reading of ADR-MONO-080 D6).** The account-creating endpoints here (`POST …/accounts`, bulk) create **machine and system
+> accounts** — e.g. the ecommerce seller operating account (`seller+<tenant>+<sellerId>@marketplace.local`, which no person logs
+> in to) and a B2B tenant's system accounts. They stay as they are (no code change). A **human** company employee becomes an
+> operator only by **invitation → verified self-acceptance** with their personal (consumer-pool) account
+> ([admin-api.md § Operator Invitation](../admin-api.md#operator-invitation-task-mono-772)); there is no path that attaches an operator
+> facet to an account created here. This is a **caller contract**, not something the endpoint judges — a «human» flag in the
+> request was rejected because it would be the caller's own claim. ADR-MONO-080 D6's «internal provisioning becomes a pool-account
+> invitation» is read as: *the way a person joins a company tenant* changes from a site account to a pool-account invitation;
+> this machine-account path is not what that sentence addresses. Rationale and measurement:
+> [multi-tenancy.md § Internal Provisioning API «기계 · 시스템 계정 전용»](../../../features/multi-tenancy.md#기계--시스템-계정-전용--사람-운영자의-입구가-아니다-adr-mono-080-d6-해석--소유자-결정-od-2-task-mono-772).
+
 ---
 
 ## Common Request Headers
