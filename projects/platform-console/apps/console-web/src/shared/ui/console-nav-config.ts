@@ -141,117 +141,16 @@ export const GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: '관리',
-    items: [
-      {
-        // TASK-PC-FE-225 — orthodox IAM taxonomy: this drill parent is now the
-        // **workforce plane** only (AWS IAM / GCP Cloud IAM equivalent) —
-        // 운영자 (workforce identity, IAM User) · 운영자 그룹 (IAM User Group /
-        // Google Group, ADR-MONO-046) · 권한 (Action/Permission) · 권한 세트
-        // (IAM Policy/Role). The consumer-facing 계정(/accounts) surface moved
-        // OUT to its own 「고객 신원」 group below (Cognito / Identity Platform
-        // equivalent) — nav placement only, route/features unchanged
-        // (Catalog iam.baseRoute stays /accounts, FE-002).
-        // TASK-PC-FE-313 — 조직 계층 · 테넌트 moved OUT to 「조직 설정」 below
-        // for the same reason: they model the company structure (AWS
-        // Organizations, not AWS IAM), not who may do what.
-        key: 'iam',
-        label: 'IAM',
-        testid: 'nav-iam', icon: 'shield',
-        children: [
-          // TASK-PC-FE-297 (owner decision 2026-09-24 UTC) — 가이드 FIRST, then
-          // 개요, in EVERY domain. This deliberately reverses the earlier
-          // 개요→가이드 order (TASK-PC-FE-180 put the LIVE 개요 first as the
-          // operator landing): the console is now read first by portfolio
-          // visitors (ADR-MONO-074 sample mode), and the guide — static, no
-          // backend call — is the orientation they need before a live
-          // snapshot means anything. Route landing is unchanged (`/iam` still
-          // renders 개요; deep links still activate the matching child); only
-          // the DOM order of the two siblings flipped (testids
-          // `nav-iam-guide` / `nav-iam-overview` unchanged).
-          // 가이드(/iam/guide) = the static RBAC reference; 개요(/iam —
-          // TASK-PC-FE-180) = the LIVE operator snapshot (운영자·계정·감사 현황).
-          // Then the workforce-plane management (write) surfaces in
-          // **setup-first** order — 운영자 관리 (provision the operators)
-          // immediately followed by 운영자 그룹 (bulk-grant roles to a group
-          // of operators, ADR-MONO-046) — then the permission
-          // surfaces 권한 세트 · 권한 — then 감사·보안 (read-only
-          // oversight) last: learn → orient → configure → operate → review.
-          // TASK-PC-FE-315 — 권한 세트 BEFORE 권한: the set is the unit an
-          // assignment actually carries (what you pick when you assign), the
-          // key catalog is what you open to see inside it — the assignable
-          // unit first, its contents second (AWS IAM: Roles before Policies).
-          { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide', icon: 'guide' },
-          { href: '/iam', label: '개요', testid: 'nav-iam-overview', icon: 'overview' },
-          { href: '/operators', label: '운영자 관리', testid: 'nav-operators', icon: 'user' },
-          // 운영자 그룹 (TASK-PC-FE-250 / ADR-MONO-046) — IAM User Group /
-          // Google Group equivalent: bundle operators + bulk-grant roles /
-          // tenant-assignments (fan-out).
-          {
-            href: '/operator-groups',
-            label: '운영자 그룹',
-            testid: 'nav-iam-operator-groups', icon: 'users',
-          },
-          // 권한 세트 (real feature = TASK-PC-FE-228) — IAM Policy/Role
-          // equivalent.
-          {
-            href: '/permission-sets',
-            label: '권한 세트',
-            testid: 'nav-iam-permission-sets', icon: 'lock',
-          },
-          // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
-          // equivalent.
-          {
-            href: '/permissions',
-            label: '권한',
-            testid: 'nav-iam-permissions', icon: 'key',
-          },
-          { href: '/audit', label: '감사 · 보안', testid: 'nav-audit', icon: 'audit' },
-        ],
-      },
-    ],
-  },
-  {
-    // TASK-PC-FE-225 — the consumer-facing / B2C identity plane (AWS Cognito
-    // / GCP Identity Platform equivalent), split OUT of the workforce IAM
-    // group above (orthodox IAM taxonomy: workforce plane vs. customer
-    // identity plane are distinct surfaces even though both are "identity").
-    // A single flat leaf today (계정 운영, unchanged route/features/gating —
-    // nav placement only); not a drill parent since it has one destination.
-    label: '고객 신원',
-    testid: 'nav-group-customer-identity',
-    items: [
-      { href: '/accounts', label: '계정 운영', testid: 'nav-accounts', icon: 'identity' },
-    ],
-  },
-  {
-    // Entitlement plane (ADR-MONO-023) — kept as its own group, distinct from
-    // the IAM identity plane above: a tenant owner (TENANT_BILLING_ADMIN)
-    // self-enables domains for their tenant (TASK-PC-FE-183, the piece that
-    // makes self-service onboarding PC-FE-182 usable).
-    // TASK-PC-FE-313 — one rule for the split: 「조직 설정」 = what the
-    // company IS, BOUGHT and AGREED (structure · subscriptions · partnerships;
-    // AWS Organizations + Billing), IAM = who may do what. So 조직 계층 and
-    // 테넌트 joined this group, structure first: a company (org node) sits
-    // above its service-tenants, and a tenant must exist before it subscribes
-    // or partners. Routes and features unchanged — nav placement only.
-    label: '조직 설정',
-    testid: 'nav-group-org-settings',
-    items: [
-      // 조직 계층 (TASK-PC-FE-237 / ADR-047) — company → service → domain
-      // 3-axis hierarchy (org-node tree + entitlement ceiling + ORG_ADMIN).
-      { href: '/org-hierarchy', label: '조직 계층', testid: 'nav-org-hierarchy', icon: 'hierarchy' },
-      // 테넌트 (real feature = TASK-PC-FE-226) — isolation boundary,
-      // AWS account / GCP project equivalent.
-      { href: '/tenants', label: '테넌트', testid: 'nav-tenants', icon: 'building' },
-      { href: '/subscriptions', label: '도메인 구독', testid: 'nav-subscriptions', icon: 'subscription' },
-      // Cross-org partner delegation (ADR-MONO-045 §3.4 / TASK-PC-FE-187) — a
-      // tenant owner (TENANT_ADMIN, partnership.manage) manages cross-org
-      // partnerships for their tenant, alongside the domain subscriptions.
-      { href: '/partnerships', label: '파트너십', testid: 'nav-partnerships', icon: 'partnership' },
-    ],
-  },
-  {
+    // TASK-PC-FE-325 (owner decision 2026-10-09 UTC) — group order is now
+    // 가이드 · 개요 → 도메인 운영 → 관리 → 조직 설정 → 고객 신원: the daily
+    // work surface first, administration and rarely-touched settings after it
+    // (GCP / Azure put products above IAM & settings the same way). This
+    // replaces the earlier setup-first order (관리 → 고객 신원 → 조직 설정 →
+    // 도메인 운영), whose «a tenant must exist before it operates» rationale
+    // still holds for the onboarding flow (OnboardingWhatHappens) but not for
+    // where the eye lands. 고객 신원 is last because only platform CS /
+    // security roles see it at all (account.* keys); for everyone else it is
+    // hidden (TASK-PC-FE-314), so its position only matters to them.
     label: '도메인 운영',
     items: [
       {
@@ -464,6 +363,117 @@ export const GROUPS: NavGroup[] = [
           { href: '/fan/groups', label: '그룹', testid: 'nav-fan-groups', icon: 'users' },
         ],
       },
+    ],
+  },
+  {
+    label: '관리',
+    items: [
+      {
+        // TASK-PC-FE-225 — orthodox IAM taxonomy: this drill parent is now the
+        // **workforce plane** only (AWS IAM / GCP Cloud IAM equivalent) —
+        // 운영자 (workforce identity, IAM User) · 운영자 그룹 (IAM User Group /
+        // Google Group, ADR-MONO-046) · 권한 (Action/Permission) · 권한 세트
+        // (IAM Policy/Role). The consumer-facing 계정(/accounts) surface moved
+        // OUT to its own 「고객 신원」 group below (Cognito / Identity Platform
+        // equivalent) — nav placement only, route/features unchanged
+        // (Catalog iam.baseRoute stays /accounts, FE-002).
+        // TASK-PC-FE-313 — 조직 계층 · 테넌트 moved OUT to 「조직 설정」 below
+        // for the same reason: they model the company structure (AWS
+        // Organizations, not AWS IAM), not who may do what.
+        key: 'iam',
+        label: 'IAM',
+        testid: 'nav-iam', icon: 'shield',
+        children: [
+          // TASK-PC-FE-297 (owner decision 2026-09-24 UTC) — 가이드 FIRST, then
+          // 개요, in EVERY domain. This deliberately reverses the earlier
+          // 개요→가이드 order (TASK-PC-FE-180 put the LIVE 개요 first as the
+          // operator landing): the console is now read first by portfolio
+          // visitors (ADR-MONO-074 sample mode), and the guide — static, no
+          // backend call — is the orientation they need before a live
+          // snapshot means anything. Route landing is unchanged (`/iam` still
+          // renders 개요; deep links still activate the matching child); only
+          // the DOM order of the two siblings flipped (testids
+          // `nav-iam-guide` / `nav-iam-overview` unchanged).
+          // 가이드(/iam/guide) = the static RBAC reference; 개요(/iam —
+          // TASK-PC-FE-180) = the LIVE operator snapshot (운영자·계정·감사 현황).
+          // Then the workforce-plane management (write) surfaces in
+          // **setup-first** order — 운영자 관리 (provision the operators)
+          // immediately followed by 운영자 그룹 (bulk-grant roles to a group
+          // of operators, ADR-MONO-046) — then the permission
+          // surfaces 권한 세트 · 권한 — then 감사·보안 (read-only
+          // oversight) last: learn → orient → configure → operate → review.
+          // TASK-PC-FE-315 — 권한 세트 BEFORE 권한: the set is the unit an
+          // assignment actually carries (what you pick when you assign), the
+          // key catalog is what you open to see inside it — the assignable
+          // unit first, its contents second (AWS IAM: Roles before Policies).
+          { href: '/iam/guide', label: '가이드', testid: 'nav-iam-guide', icon: 'guide' },
+          { href: '/iam', label: '개요', testid: 'nav-iam-overview', icon: 'overview' },
+          { href: '/operators', label: '운영자 관리', testid: 'nav-operators', icon: 'user' },
+          // 운영자 그룹 (TASK-PC-FE-250 / ADR-MONO-046) — IAM User Group /
+          // Google Group equivalent: bundle operators + bulk-grant roles /
+          // tenant-assignments (fan-out).
+          {
+            href: '/operator-groups',
+            label: '운영자 그룹',
+            testid: 'nav-iam-operator-groups', icon: 'users',
+          },
+          // 권한 세트 (real feature = TASK-PC-FE-228) — IAM Policy/Role
+          // equivalent.
+          {
+            href: '/permission-sets',
+            label: '권한 세트',
+            testid: 'nav-iam-permission-sets', icon: 'lock',
+          },
+          // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
+          // equivalent.
+          {
+            href: '/permissions',
+            label: '권한',
+            testid: 'nav-iam-permissions', icon: 'key',
+          },
+          { href: '/audit', label: '감사 · 보안', testid: 'nav-audit', icon: 'audit' },
+        ],
+      },
+    ],
+  },
+  {
+    // Entitlement plane (ADR-MONO-023) — kept as its own group, distinct from
+    // the IAM identity plane above: a tenant owner (TENANT_BILLING_ADMIN)
+    // self-enables domains for their tenant (TASK-PC-FE-183, the piece that
+    // makes self-service onboarding PC-FE-182 usable).
+    // TASK-PC-FE-313 — one rule for the split: 「조직 설정」 = what the
+    // company IS, BOUGHT and AGREED (structure · subscriptions · partnerships;
+    // AWS Organizations + Billing), IAM = who may do what. So 조직 계층 and
+    // 테넌트 joined this group, structure first: a company (org node) sits
+    // above its service-tenants, and a tenant must exist before it subscribes
+    // or partners. Routes and features unchanged — nav placement only.
+    label: '조직 설정',
+    testid: 'nav-group-org-settings',
+    items: [
+      // 조직 계층 (TASK-PC-FE-237 / ADR-047) — company → service → domain
+      // 3-axis hierarchy (org-node tree + entitlement ceiling + ORG_ADMIN).
+      { href: '/org-hierarchy', label: '조직 계층', testid: 'nav-org-hierarchy', icon: 'hierarchy' },
+      // 테넌트 (real feature = TASK-PC-FE-226) — isolation boundary,
+      // AWS account / GCP project equivalent.
+      { href: '/tenants', label: '테넌트', testid: 'nav-tenants', icon: 'building' },
+      { href: '/subscriptions', label: '도메인 구독', testid: 'nav-subscriptions', icon: 'subscription' },
+      // Cross-org partner delegation (ADR-MONO-045 §3.4 / TASK-PC-FE-187) — a
+      // tenant owner (TENANT_ADMIN, partnership.manage) manages cross-org
+      // partnerships for their tenant, alongside the domain subscriptions.
+      { href: '/partnerships', label: '파트너십', testid: 'nav-partnerships', icon: 'partnership' },
+    ],
+  },
+  {
+    // TASK-PC-FE-225 — the consumer-facing / B2C identity plane (AWS Cognito
+    // / GCP Identity Platform equivalent), split OUT of the workforce IAM
+    // group above (orthodox IAM taxonomy: workforce plane vs. customer
+    // identity plane are distinct surfaces even though both are "identity").
+    // A single flat leaf today (계정 운영, unchanged route/features/gating —
+    // nav placement only); not a drill parent since it has one destination.
+    label: '고객 신원',
+    testid: 'nav-group-customer-identity',
+    items: [
+      { href: '/accounts', label: '계정 운영', testid: 'nav-accounts', icon: 'identity' },
     ],
   },
 ];

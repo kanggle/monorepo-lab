@@ -444,15 +444,18 @@ const FAN: DomainFeatures = {
   ],
 };
 
-/** 데이터 순서 = 사이드바 순서(관리 ▸ IAM → 도메인 운영 ▸ WMS·SCM·Finance·ERP·E-Commerce·fan). */
+/**
+ * 데이터 순서 = 사이드바 순서(도메인 운영 ▸ WMS·SCM·Finance·ERP·E-Commerce·fan → 관리 ▸ IAM).
+ * TASK-PC-FE-325 — 사이드바가 도메인 운영을 관리 앞으로 올리면서 IAM 을 맨 끝으로 옮겼다.
+ */
 export const DOMAIN_FEATURES: readonly DomainFeatures[] = [
-  IAM,
   WMS,
   SCM,
   FINANCE,
   ERP,
   ECOMMERCE,
   FAN,
+  IAM,
 ];
 
 export function domainFeatureByKey(key: DomainFeatureKey): DomainFeatures {

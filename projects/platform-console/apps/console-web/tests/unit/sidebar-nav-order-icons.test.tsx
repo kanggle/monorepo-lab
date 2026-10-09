@@ -60,6 +60,34 @@ describe('2뎁스 순서 — 가이드 → 개요 in all six domains (AC-1)', ()
   });
 });
 
+describe('1뎁스 그룹 순서 — 도메인 운영 → 관리 → 조직 설정 → 고객 신원 (TASK-PC-FE-325)', () => {
+  it('the config lists the groups in the owner-decided order', () => {
+    expect(GROUPS.map((g) => g.label ?? null)).toEqual([
+      null, // 가이드 · 개요 (unlabelled top group)
+      '도메인 운영',
+      '관리',
+      '조직 설정',
+      '고객 신원',
+    ]);
+  });
+
+  it('the rendered sidebar puts one representative item of each group in that order', () => {
+    render(<ConsoleSidebarNav />);
+    const order = Array.from(
+      screen.getByRole('navigation').querySelectorAll('[data-testid]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    const wanted = [
+      'nav-global-guide',
+      'nav-dashboards',
+      'nav-wms',
+      'nav-iam',
+      'nav-org-hierarchy',
+      'nav-accounts',
+    ];
+    expect(order.filter((id) => wanted.includes(id ?? ''))).toEqual(wanted);
+  });
+});
+
 describe('sidebar icons (AC-2)', () => {
   it('every top-level item carries exactly one decorative icon', () => {
     render(<ConsoleSidebarNav />);
