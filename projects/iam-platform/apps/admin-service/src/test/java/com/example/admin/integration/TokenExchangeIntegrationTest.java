@@ -325,6 +325,19 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/admin/auth/login")
                         .contentType("application/json")
                         .content(loginBody))
+                // Diagnostic only (TASK-MONO-771 S5 CI): this request once answered 500 with
+                // Resolved Exception = ServletException — DispatcherServlet's wrapper for a non-Exception
+                // Throwable (an Error) — and the CI log carried no stack trace. Print the cause chain and
+                // the heap so a recurrence names the Error (suspected: OutOfMemoryError in the 64 MiB
+                // Argon2 dummy verify). Assertions below are unchanged.
+                .andDo(r -> {
+                    if (r.getResponse().getStatus() >= 500 && r.getResolvedException() != null) {
+                        Runtime rt = Runtime.getRuntime();
+                        System.out.printf("BE-377 diagnostic: heap used=%dMiB total=%dMiB max=%dMiB%n",
+                                (rt.totalMemory() - rt.freeMemory()) >> 20, rt.totalMemory() >> 20, rt.maxMemory() >> 20);
+                        r.getResolvedException().printStackTrace(System.out);
+                    }
+                })
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }

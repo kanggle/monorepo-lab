@@ -55,7 +55,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SliceTestSecurityConfig.class, AdminExceptionHandler.class,
         RequiresPermissionAspect.class,
         TenantEntryPolicyControllerSliceTest.JwtBeans.class})
-@TestPropertySource(properties = {"admin.jwt.expected-token-type=admin"})
+// default-property-inclusion=non_null mirrors application-test.yml (the IT profile): the contract's
+// «every key present, null when never set» must hold under that global setting too (first CI run of S5).
+@TestPropertySource(properties = {"admin.jwt.expected-token-type=admin",
+        "spring.jackson.default-property-inclusion=non_null"})
 class TenantEntryPolicyControllerSliceTest {
 
     private static OperatorJwtTestFixture jwt;

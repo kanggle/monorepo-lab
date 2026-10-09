@@ -7,6 +7,7 @@ import com.example.admin.application.port.TenantEntryPolicyManagementPort.EntryP
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -90,7 +91,13 @@ public class TenantEntryPolicyController {
         }
     }
 
-    /** GET / PUT response — every key always present ({@code null} when the policy was never set). */
+    /**
+     * GET / PUT response — every key always present ({@code null} when the policy was never set), as
+     * admin-api.md § Tenant Entry Policy shows. {@code ALWAYS} is explicit so the wire shape does not depend on
+     * the ObjectMapper's global inclusion (the {@code test} profile sets {@code non_null}, which dropped
+     * {@code updatedAt}/{@code updatedBy} in the first CI run).
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     public record EntryPolicyResponse(String tenantId, boolean requireMfa, Instant updatedAt, String updatedBy) {
         static EntryPolicyResponse from(EntryPolicyView v) {
             return new EntryPolicyResponse(v.tenantId(), v.requireMfa(), v.updatedAt(), v.updatedByOperatorId());

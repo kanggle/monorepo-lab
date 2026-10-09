@@ -67,6 +67,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Testcontainers
 @ActiveProfiles("test")
 @Tag("integration")
+// Its @DynamicPropertySource (own WireMock) makes this a context no other class shares; close it after the class
+// instead of leaving one more resident ApplicationContext in the integrationTest JVM. The first CI run of S5 saw
+// TokenExchangeIntegrationTest's BE-377 login (a 64 MiB Argon2 verify) end in an Error (500 via ServletException)
+// right after this class — the suspected cause is heap pressure from cached contexts, which this class had added to.
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class TenantEntryPolicyIntegrationTest extends AbstractIntegrationTest {
 
     @Container
@@ -88,6 +94,7 @@ class TenantEntryPolicyIntegrationTest extends AbstractIntegrationTest {
     private static final String ADMIN_X_UUID = "00000000-0000-7000-8000-0000000c5a01";
     private static final String MEMBER_X_UUID = "00000000-0000-7000-8000-0000000c5a02";
     private static final String MEMBER_X_OIDC = "oidc-sub-s5-member-x";
+    private static final String GHOST_ADMIN_UUID = "00000000-0000-7000-8000-0000000c5a03";
 
     @BeforeAll
     static void setupShared() throws Exception {
@@ -300,26 +307,28 @@ class TenantEntryPolicyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("unknown tenant (account-service 404) → 404 TENANT_NOT_FOUND, no orphan row — needs a SUPER_ADMIN-reach actor")
+    @DisplayName("unknown tenant (account-service 404) → 404 TENANT_NOT_FOUND, no orphan row — actor in scope for that tenant")
     void unknownTenant_404() throws Exception {
-        // tenant-x's admin is out of scope for s5-ghost (403 would win); widen its grant for this case only.
+        // The actor must be IN scope for s5-ghost, otherwise the scope 403 wins before the existence check.
+        // A second TENANT_ADMIN granted on s5-ghost — NOT a second grant row on ADMIN_X: admin_operator_roles is
+        // keyed (operator_id, role_id), so one operator holds TENANT_ADMIN for exactly one tenant and an
+        // INSERT IGNORE of a second TENANT_ADMIN row is silently dropped (the first CI run of this test did that).
+        seedOperator(GHOST_ADMIN_UUID, "s5-ghost", null);
         jdbcTemplate.update("""
                 INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
                 SELECT o.id, r.id, 's5-ghost', NOW(6), NULL
                   FROM admin_operators o JOIN admin_roles r ON r.name = 'TENANT_ADMIN'
                  WHERE o.operator_id = ?
-                """, ADMIN_X_UUID);
-        try {
-            putPolicy("s5-ghost", "{\"requireMfa\":true}")
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("TENANT_NOT_FOUND"));
-            assertThat(policyRows("s5-ghost")).isZero();
-        } finally {
-            jdbcTemplate.update("""
-                    DELETE b FROM admin_operator_roles b JOIN admin_operators o ON o.id = b.operator_id
-                     WHERE o.operator_id = ? AND b.tenant_id = 's5-ghost'
-                    """, ADMIN_X_UUID);
-        }
+                """, GHOST_ADMIN_UUID);
+
+        mockMvc.perform(put("/api/admin/tenants/s5-ghost/entry-policy")
+                        .header("Authorization", "Bearer " + jwt.operatorToken(GHOST_ADMIN_UUID))
+                        .header("X-Operator-Reason", "s5-it")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requireMfa\":true}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TENANT_NOT_FOUND"));
+        assertThat(policyRows("s5-ghost")).isZero();
     }
 
     @Test

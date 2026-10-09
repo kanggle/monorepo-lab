@@ -552,3 +552,13 @@ AC-0 § 1 대로 `db/migration-dev` 는 **기본 프로필에서도** 돈다 —
 - ⚪ 라이브(데모 실기동 · 실제 토글 → 실제 등록 왕복) 미실행. 머지 뒤 nightly e2e 1회 확인 권장.
 - ⚪ 샘플 fixture(`tenant_entry_policy`) — `pending` 으로 둠.
 - ⚪ S6(계정 TOTP 리셋 · `account.2fa_reset` seed) 미착수.
+
+### S5 CI 1회차 (PR #4266, run 37917869840 «Integration (iam A, Testcontainers)») — 3 실패 진단 · 조치
+
+| # | 실패 | 원인 (로그 근거) | 조치 |
+|---|---|---|---|
+| 1 | `TenantEntryPolicyIntegrationTest` GET off → `$.updatedAt` 없음 | 응답 본문 `{"tenantId":"s5-tenant-x","requireMfa":false}` — `application-test.yml:47` `default-property-inclusion: non_null` 이 null 키를 지웠다. 계약은 «키 항상 존재, 미설정이면 null». slice 시험은 test 프로필이 아니라 못 잡았다 | **코드 수정**: `EntryPolicyResponse` 에 `@JsonInclude(ALWAYS)` — 전역 설정과 무관하게 계약 모양. slice 시험에 `spring.jackson.default-property-inclusion=non_null` 을 걸어 같은 조건을 재현. bite(애노테이션 제거) → slice 의 GET-off 1건만 RED → 복원 GREEN |
+| 2 | `unknownTenant_404` 가 403 | 응답 `TENANT_SCOPE_DENIED … 's5-ghost'`. `admin_operator_roles` PK 가 `(operator_id, role_id)`(V0004:48) — ADMIN_X 에 TENANT_ADMIN 두 번째 행(`s5-ghost`)을 `INSERT IGNORE` 한 것이 **조용히 버려졌다**. 시험의 전제가 스키마상 불가능 | **시험 수정**(시험이 틀렸다): `s5-ghost` 에 grant 된 별도 TENANT_ADMIN 운영자로 PUT → 범위 통과 → account-service 404 → 404 |
+| 3 | `TokenExchangeIntegrationTest` BE-377 로컬 로그인 401 기대 → 500 `INTERNAL_ERROR` | `Resolved Exception = jakarta.servlet.ServletException` — DispatcherServlet 이 **`Exception` 이 아닌 `Throwable`(Error)** 을 감쌀 때만 나오는 형태(`RuntimeException` 이면 그 타입이 그대로 찍힌다). 로그 · 업로드 보고서 어디에도 스택 없음. 그 경로(null 해시 → Argon2 m=64MiB 더미 verify → `InvalidCredentialsException`)에 S5 코드는 없다. main 의 같은 잡은 base `7753bb5a8` 포함 최근 7회 모두 success. S5 가 이 JVM 에 더한 것은 상주 Spring 컨텍스트 하나(`TenantEntryPolicyIntegrationTest`, 고유 WireMock `@DynamicPropertySource` — 알파벳 순서상 TokenExchange 바로 앞 클래스군). 추정 = 캐시된 컨텍스트로 힙이 차 있는 상태에서 64MiB Argon2 할당이 `OutOfMemoryError` (예전 이 시험의 5분 타임아웃 flake 와 같은 계열 — GC 압박). **증명 아님**(스택 없음) | ① `TenantEntryPolicyIntegrationTest` 에 `@DirtiesContext(AFTER_CLASS)` — S5 이전의 상주 컨텍스트 수로 되돌림. ② BE-377 시험에 **진단만** 추가(5xx 일 때 힙 used/total/max 와 resolved exception 스택을 stdout 으로) — 단언 불변. 재발 시 Error 이름이 로그에 남는다 |
+
+검증: admin `compileTestJava` rc=0 · `:admin-service:test` rc=0(1010건 · 실패 0 · skip 58). IT 는 Docker 없음 → CI 재실행 대기.
