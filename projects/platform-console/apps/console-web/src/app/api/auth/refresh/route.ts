@@ -8,8 +8,10 @@ import {
   hasCompleteSession,
 } from '@/shared/lib/session-refresh';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
+import { MFA_REQUIRED_CODE } from '@/shared/api/errors';
 import {
   buildLoginRedirectFor,
+  buildStepUpRedirectFor,
   resolveRefreshReturnPath,
   SESSION_REFRESH_PATH,
   REFRESH_RETRY_PARAM,
@@ -110,6 +112,14 @@ export async function POST(req: Request): Promise<NextResponse> {
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
         { status: 401 },
       );
+    case 'operator_mfa_required':
+      // TASK-MONO-771 (§ 2.6.1) — callback parity: the operator session was
+      // dropped, the rotated IAM cookies stay; the browser client navigates
+      // to `GET /api/auth/step-up` on this code (`shared/api/client.ts`).
+      return NextResponse.json(
+        { code: MFA_REQUIRED_CODE, message: 'second factor required' },
+        { status: 403 },
+      );
     case 'operator_not_provisioned':
     case 'operator_unavailable':
       // Whole session — no stale operator token, no GAP-token fallback.
@@ -203,6 +213,12 @@ export async function GET(req: Request): Promise<NextResponse> {
       // session was dropped; the rotated IAM cookies stay (onboarding needs
       // them as its subject_token).
       return to('/onboarding');
+
+    case 'operator_mfa_required':
+      // TASK-MONO-771 (§ 2.6.1) — e.g. a tenant's entry policy was switched on
+      // mid-session. Callback parity: operator session dropped, rotated IAM
+      // cookies kept → step-up. 🔴 Never `/onboarding` (that is the `401` above).
+      return to(buildStepUpRedirectFor(target));
 
     case 'operator_unavailable':
       clearFullSession(jar);

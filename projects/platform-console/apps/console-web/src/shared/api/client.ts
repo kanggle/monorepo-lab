@@ -1,4 +1,5 @@
-import { ApiError, messageForCode } from './errors';
+import { ApiError, messageForCode, MFA_REQUIRED_CODE } from './errors';
+import { buildStepUpRedirectFor } from '@/shared/lib/login-redirect';
 import { isSampleErrorCode, SAMPLE_READ_ONLY } from '@/shared/sample/codes';
 import { publishSampleRefusal } from '@/shared/lib/sample-refusal';
 
@@ -13,6 +14,8 @@ import { publishSampleRefusal } from '@/shared/lib/sample-refusal';
  * - Always sends cookies (`credentials: 'include'`).
  * - On 401, attempts a single refresh via `/api/auth/refresh` then retries.
  * - On refresh failure, redirects to `/login?redirect=<current>`.
+ * - On refresh `403 MFA_REQUIRED` (TASK-MONO-771), navigates to
+ *   `/api/auth/step-up?redirect=<current>` instead.
  */
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
@@ -69,19 +72,30 @@ async function doFetch(path: string, opts: ApiRequestOptions): Promise<Response>
   });
 }
 
-let inflightRefresh: Promise<boolean> | null = null;
+/**
+ * `ok` — refreshed; `mfa_required` — the operator re-exchange answered
+ * `403 MFA_REQUIRED` (TASK-MONO-771, contract § 2.6.1); `failed` — anything else.
+ */
+type RefreshResult = 'ok' | 'mfa_required' | 'failed';
 
-async function refreshSession(): Promise<boolean> {
+let inflightRefresh: Promise<RefreshResult> | null = null;
+
+async function refreshSession(): Promise<RefreshResult> {
   if (inflightRefresh) return inflightRefresh;
-  inflightRefresh = (async () => {
+  inflightRefresh = (async (): Promise<RefreshResult> => {
     try {
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
       });
-      return res.ok;
+      if (res.ok) return 'ok';
+      if (res.status === 403) {
+        const body = (await res.json().catch(() => ({}))) as { code?: unknown };
+        if (body.code === MFA_REQUIRED_CODE) return 'mfa_required';
+      }
+      return 'failed';
     } catch {
-      return false;
+      return 'failed';
     } finally {
       setTimeout(() => {
         inflightRefresh = null;
@@ -97,6 +111,13 @@ function redirectToLogin() {
   window.location.assign(`/login?redirect=${encodeURIComponent(current)}`);
 }
 
+/** TASK-MONO-771 (§ 2.6.1) — the browser client's step-up navigation. */
+function redirectToStepUp() {
+  if (!isBrowser()) return;
+  const current = window.location.pathname + window.location.search;
+  window.location.assign(buildStepUpRedirectFor(current));
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   opts: ApiRequestOptions = {},
@@ -105,8 +126,13 @@ export async function apiFetch<T = unknown>(
 
   if (res.status === 401 && !opts.skipAuthRetry && isBrowser()) {
     const refreshed = await refreshSession();
-    if (refreshed) {
+    if (refreshed === 'ok') {
       res = await doFetch(path, opts);
+    } else if (refreshed === 'mfa_required') {
+      // Never `/login` and never `/onboarding` — the operator needs a second
+      // factor, not a new identity (contract § 2.6.1).
+      redirectToStepUp();
+      throw new ApiError(403, MFA_REQUIRED_CODE, 'Second factor required');
     } else {
       redirectToLogin();
       throw new ApiError(401, 'TOKEN_INVALID', 'Session expired');

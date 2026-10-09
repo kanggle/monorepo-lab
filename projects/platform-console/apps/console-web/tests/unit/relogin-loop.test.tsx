@@ -142,6 +142,21 @@ describe('재로그인 루프 (TASK-PC-FE-278)', () => {
     );
   });
 
+  // TASK-MONO-771 S3 — `mfa_required` 도 «사유를 보여야 하는» 착지점이다(계약 § 2.6
+  // «reason shown»). 스위처가 시작한 단계 상승을 IAM 에서 «취소» 하면 세션이 살아 있는
+  // 채로 여기 오고, 단락 회로가 그 사유를 삼킨다. 위 `state_mismatch` 대조군은 그대로
+  // 단락 회로를 탄다 — 특별한 것은 이 둘뿐이다.
+  it('🔴 `mfa_required` 는 쿠키가 남아 있어도 되튕기지 않고 사유를 보인다', async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+
+    await renderLogin({ error: 'mfa_required' });
+
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('host')).toHaveTextContent(
+      '2단계 인증을 마쳐야 콘솔에 들어올 수 있습니다.',
+    );
+  });
+
   it('🔵 마커 상수와 401 지점들이 쓰는 경로가 어긋나지 않는다', () => {
     expect(RE_LOGIN_PATH).toBe(`/login?error=${SESSION_EXPIRED}`);
     expect(RE_LOGIN_PATH).toBe('/login?error=session_expired');

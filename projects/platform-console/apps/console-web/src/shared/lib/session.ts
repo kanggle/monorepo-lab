@@ -51,6 +51,11 @@ export const ID_TOKEN_COOKIE = 'console_id_token';
 /** Short-lived PKCE/state cookies used only between /login and /callback. */
 export const PKCE_VERIFIER_COOKIE = 'console_pkce_verifier';
 export const OAUTH_STATE_COOKIE = 'console_oauth_state';
+/** TASK-MONO-771 — the step-up marker (§ 2.6 «loop bound»). Holds the `state`
+ *  of the ONE authorization request `GET /api/auth/step-up` started (HttpOnly,
+ *  transient). The callback reads it once and deletes it: a callback whose
+ *  `state` equals it and still gets `403 MFA_REQUIRED` does NOT step up again. */
+export const STEP_UP_MARKER_COOKIE = 'console_oauth_step_up';
 
 /**
  * Token / session cookies (access / refresh / operator-token / active-tenant).

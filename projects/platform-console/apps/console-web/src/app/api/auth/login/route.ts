@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getServerEnv } from '@/shared/config/env';
-import {
-  generateCodeVerifier,
-  deriveCodeChallenge,
-  generateState,
-} from '@/shared/lib/pkce';
-import {
-  PKCE_VERIFIER_COOKIE,
-  OAUTH_STATE_COOKIE,
-  transientCookieOpts,
-  clearFullSession,
-} from '@/shared/lib/session';
+import { clearFullSession } from '@/shared/lib/session';
+import { startAuthorization } from '@/shared/lib/oidc-authorize';
 import { sanitizeReturnPath } from '@/shared/lib/return-path';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
@@ -40,19 +31,6 @@ export async function GET(req: Request) {
   // PC-FE-253).
   const postLoginPath = sanitizeReturnPath(searchParams.get('redirect'));
 
-  const verifier = generateCodeVerifier();
-  const challenge = await deriveCodeChallenge(verifier);
-  const state = generateState();
-
-  const authorizeUrl = new URL(`${env.OIDC_ISSUER_URL}/oauth2/authorize`);
-  authorizeUrl.searchParams.set('response_type', 'code');
-  authorizeUrl.searchParams.set('client_id', env.OIDC_CLIENT_ID);
-  authorizeUrl.searchParams.set('redirect_uri', env.OIDC_REDIRECT_URI);
-  authorizeUrl.searchParams.set('scope', env.OIDC_SCOPE);
-  authorizeUrl.searchParams.set('code_challenge', challenge);
-  authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-  authorizeUrl.searchParams.set('state', state);
-
   const jar = await cookies();
 
   // 🔴🔴 TASK-PC-FE-278 — 재로그인을 **시작하는 순간** 옛 세션을 버린다.
@@ -70,14 +48,12 @@ export async function GET(req: Request) {
   //    `clearFullSession` 은 세션 쿠키만 건드리지만, 그 사실에 기대지 말고 여기서 끝낸다.
   clearFullSession(jar);
 
-  jar.set(PKCE_VERIFIER_COOKIE, verifier, transientCookieOpts);
-  // state cookie carries both the CSRF token and the post-login target.
-  jar.set(
-    OAUTH_STATE_COOKIE,
-    `${state}|${postLoginPath}`,
-    transientCookieOpts,
-  );
+  // PKCE verifier + `state|<postLoginPath>` cookies — the same function the
+  // step-up route uses (TASK-MONO-771), here without `acr_values`.
+  const authorizeUrl = await startAuthorization(jar, env, postLoginPath, {
+    stepUp: false,
+  });
 
   logger.info('oidc_login_initiated', { requestId });
-  return NextResponse.redirect(authorizeUrl.toString());
+  return NextResponse.redirect(authorizeUrl);
 }

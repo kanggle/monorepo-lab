@@ -47,6 +47,10 @@ const ERROR_MESSAGES: Record<string, string> = {
     '아직 소속된 조직이 없습니다. 다시 로그인하면 조직 만들기로 안내됩니다.',
   operator_exchange_unavailable:
     '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  // TASK-MONO-771 (contract § 2.6) — 단계 상승을 한 번 했는데도 토큰 교환이 여전히
+  // `403 MFA_REQUIRED` 인 경우(루프 상한), 또는 IAM 2단계 화면에서 «취소» 한 경우.
+  // 문구는 계약의 «reason shown» 문장 그대로다.
+  mfa_required: '2단계 인증을 마쳐야 콘솔에 들어올 수 있습니다.',
   // TASK-PC-FE-278 — 백엔드가 `401` 을 내서 **강제 재로그인**으로 꺾인 경우.
   // 🔴 이 코드는 `(console)` 아래 53개 지점이 붙이는 마커다({@link SESSION_EXPIRED}).
   // 🔴 TASK-PC-FE-299 AC-4 — 이 기본 문구는 **원인 불명**(일반 세션 만료) 또는 데모
@@ -119,7 +123,12 @@ export default async function LoginPage({
   //    마커가 붙어 있으면 쿠키가 남아 있어도 로그인 화면을 보여준다. 그 쿠키는
   //    백엔드가 이미 거절한 것이므로 "인증됨" 의 증거가 아니다.
   const forcedReLogin = sp.error === SESSION_EXPIRED;
-  if (!forcedReLogin && (await isAuthenticated())) redirect('/dashboards/overview');
+  // TASK-MONO-771 (§ 2.6) — `mfa_required` must be SHOWN («reason shown»). It
+  // can arrive while a full session still exists (IAM «취소» on a step-up the
+  // tenant switcher started), and the short-circuit would swallow it. It is
+  // not a forced re-login: no cache reset, no demo-state read.
+  const reasonMustShow = forcedReLogin || sp.error === 'mfa_required';
+  if (!reasonMustShow && (await isAuthenticated())) redirect('/dashboards/overview');
 
   // The demo-state signal is asked ONLY on a forced re-login landing (the
   // marker) — a plain /login visit never pays the control-plane round trip.

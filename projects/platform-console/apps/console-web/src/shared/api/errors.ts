@@ -49,6 +49,31 @@ export function errorDetail(
   return typeof v === 'string' || typeof v === 'number' ? v : undefined;
 }
 
+/**
+ * TASK-MONO-771 — the console's one code for «a second factor is required».
+ *
+ * - The IAM operator token exchange answers it verbatim (`403 MFA_REQUIRED`,
+ *   admin-api.md § token-exchange).
+ * - The console answers it from `POST /api/tenant` (assume refused with
+ *   {@link ASSUME_MFA_REQUIRED_DESCRIPTION}) and from `POST /api/auth/refresh`
+ *   (operator re-exchange refused) — console-integration-contract § 2.6.1 / § 2.7.
+ */
+export const MFA_REQUIRED_CODE = 'MFA_REQUIRED';
+
+/**
+ * The fixed `error_description` the IAM assume-tenant exchange carries on its
+ * second-factor refusal (`400 invalid_grant`, auth-api.md § Assume-Tenant
+ * Exchange — RFC 9470 vocabulary). 🔴 Compared by **whole-value equality**
+ * (contract § 2.7): a substring / case-insensitive match would turn an
+ * unassigned tenant into a step-up loop.
+ */
+export const ASSUME_MFA_REQUIRED_DESCRIPTION = 'insufficient_user_authentication';
+
+/** Whether a browser-side API error is the console's «2단계 인증 필요» answer. */
+export function isMfaRequiredError(err: unknown): boolean {
+  return err instanceof ApiError && err.code === MFA_REQUIRED_CODE;
+}
+
 /** Thrown when the registry call times out or the breaker is open. */
 export class RegistryUnavailableError extends Error {
   readonly reason: 'timeout' | 'circuit_open' | 'downstream' | 'unauthorized';
@@ -71,12 +96,17 @@ export class RegistryUnavailableError extends Error {
  *   - `unavailable` — `400`/`5xx`/timeout/network/unexpected `tokenType`:
  *     session-unavailable. NO operator cookie; the console never falls back
  *     to the IAM OIDC token on the operator boundary (the #569 defect).
+ *   - `mfa_required` — IAM returned `403 MFA_REQUIRED` (TASK-MONO-771): the
+ *     caller IS a resolved operator, but a second factor is required and the
+ *     IAM token's `amr` lacks `mfa`. The caller steps up
+ *     (`GET /api/auth/step-up`, § 2.6). 🔴 NEVER the «not an operator»
+ *     branch — only `fail_closed` (a `401`) means «not an operator».
  *
  * No `subject_token`/operator token value is ever placed in this error or
  * logged (security invariant).
  */
 export class OperatorExchangeError extends Error {
-  readonly reason: 'fail_closed' | 'unavailable';
+  readonly reason: 'fail_closed' | 'mfa_required' | 'unavailable';
   readonly code: string;
   constructor(
     reason: OperatorExchangeError['reason'],
@@ -113,12 +143,18 @@ export class OperatorExchangeError extends Error {
  *   - `unavailable` — `5xx` / timeout / network / unexpected response shape
  *     (`token_type` ≠ `Bearer`, absent `access_token`): the exchange could not
  *     complete → `/api/tenant` 503. No partial/stale assumed-token state.
+ *   - `mfa_required` — producer `400 invalid_grant` whose `error_description`
+ *     is EXACTLY {@link ASSUME_MFA_REQUIRED_DESCRIPTION} (TASK-MONO-771,
+ *     § 2.7): the selected tenant requires a second factor (or the operator
+ *     holds a `require_2fa` role) and the base token's `amr` lacks `mfa` →
+ *     `/api/tenant` 403 `MFA_REQUIRED`, no cookie change; the switcher offers
+ *     the step-up. Decided BEFORE `denied`, by whole-value equality only.
  *
  * No `subject_token` / assumed token value is ever placed in this error or
  * logged (security invariant — mirrors {@link OperatorExchangeError}).
  */
 export class AssumeTenantError extends Error {
-  readonly reason: 'denied' | 'invalid' | 'unavailable';
+  readonly reason: 'denied' | 'mfa_required' | 'invalid' | 'unavailable';
   readonly code: string;
   constructor(
     reason: AssumeTenantError['reason'],

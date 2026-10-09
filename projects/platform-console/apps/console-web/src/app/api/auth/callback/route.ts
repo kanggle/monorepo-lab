@@ -9,9 +9,11 @@ import {
   ID_TOKEN_COOKIE,
   PKCE_VERIFIER_COOKIE,
   OAUTH_STATE_COOKIE,
+  STEP_UP_MARKER_COOKIE,
   tokenCookieOpts,
   clearOperatorSession,
 } from '@/shared/lib/session';
+import { buildStepUpRedirectFor } from '@/shared/lib/login-redirect';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
@@ -41,6 +43,10 @@ export const runtime = 'nodejs';
  *      and the IAM token cookies are cleared — there is no partial authed
  *      state and the IAM token can never be used as an `/api/admin/**`
  *      credential (the #569 defect this closes).
+ *      TASK-MONO-771: exchange `403 MFA_REQUIRED` → `/api/auth/step-up`
+ *      (IAM cookies kept), or — when this callback answers the step-up's own
+ *      request — `/login?error=mfa_required` (the loop bound). Only the `401`
+ *      goes to `/onboarding`.
  *   5. Clears the transient PKCE/state cookies and 302s to the post-login
  *      path carried by the state cookie.
  */
@@ -118,6 +124,16 @@ function isConsumerPoolSsoRefusal(body: unknown): boolean {
   );
 }
 
+/**
+ * TASK-MONO-771 — IAM's «취소» on its second-factor screens redirects here with
+ * `error=access_denied` + `error_description=mfa_cancelled` (auth-api.md
+ * § /mfa/challenge «취소», OIDC Core 3.1.2.6). Whole-value equality on both —
+ * every other provider error keeps `provider_error`.
+ */
+function isSecondFactorCancel(error: string, description: string | null): boolean {
+  return error === 'access_denied' && description === 'mfa_cancelled';
+}
+
 export async function GET(req: Request) {
   const requestId = newRequestId();
   const env = getServerEnv();
@@ -130,12 +146,22 @@ export async function GET(req: Request) {
 
   const verifier = jar.get(PKCE_VERIFIER_COOKIE)?.value;
   const stateCookie = jar.get(OAUTH_STATE_COOKIE)?.value;
+  const stepUpMarker = jar.get(STEP_UP_MARKER_COOKIE)?.value;
 
-  // Always clear transient cookies — single-use.
+  // Always clear transient cookies — single-use. (The step-up marker too: it
+  // bounds ONE authorization request, never the next one.)
   jar.delete(PKCE_VERIFIER_COOKIE);
   jar.delete(OAUTH_STATE_COOKIE);
+  jar.delete(STEP_UP_MARKER_COOKIE);
 
   if (oauthError) {
+    // TASK-MONO-771 (§ 2.6) — IAM's own «취소» on its second-factor page
+    // answers `access_denied` + `mfa_cancelled` (auth-api.md § /mfa/challenge).
+    // It lands where the loop bound lands, with the same reason.
+    if (isSecondFactorCancel(oauthError, searchParams.get('error_description'))) {
+      logger.info('oidc_second_factor_cancelled', { requestId });
+      return loginRedirect(publicOrigin(env), 'mfa_required');
+    }
     logger.warn('oidc_provider_error', { requestId, oauthError });
     return loginRedirect(publicOrigin(env), 'provider_error');
   }
@@ -235,14 +261,37 @@ export async function GET(req: Request) {
     } catch (err) {
       const notProvisioned =
         err instanceof OperatorExchangeError && err.reason === 'fail_closed';
+      const mfaRequired =
+        err instanceof OperatorExchangeError && err.reason === 'mfa_required';
 
       // Whatever the failure: NO operator cookie is set, and any prior
       // active-tenant selection (+ its coupled assumed token) is dropped so a
       // failed exchange never leaves a stale tenant pointing at a session with
       // no operator credential (TASK-PC-FE-036). `isAuthenticated()` requires
-      // BOTH cookies, so neither branch below can reach the `(console)` shell.
+      // BOTH cookies, so no branch below can reach the `(console)` shell.
       clearOperatorSession(jar);
 
+      if (mfaRequired) {
+        // TASK-MONO-771 (§ 2.6) — exchange `403 MFA_REQUIRED`: the caller IS a
+        // resolved operator; a second factor is missing. 🔴 Step-up, NEVER
+        // onboarding — routing this to `/onboarding` would send a SUPER_ADMIN
+        // to the tenant-creation shell. The IAM cookies are KEPT (§ 2.6).
+        //
+        // Loop bound: one automatic step-up per login. A callback for the
+        // request the step-up route itself started (marker === state) that is
+        // STILL refused does not step up again.
+        if (stepUpMarker !== undefined && stepUpMarker === state) {
+          logger.warn('operator_exchange_mfa_required_after_step_up', { requestId });
+          return loginRedirect(publicOrigin(env), 'mfa_required');
+        }
+        logger.info('operator_exchange_mfa_required_to_step_up', { requestId });
+        return NextResponse.redirect(
+          new URL(buildStepUpRedirectFor(postLoginPath), publicOrigin(env)).toString(),
+        );
+      }
+
+      // 🔴 Only a `401` (`fail_closed`) means «not an operator» (§ 2.6,
+      // TASK-MONO-771) — the predicate below must stay on that reason alone.
       if (notProvisioned) {
         // fail_closed (exchange 401) = a VALID IAM login that is simply not
         // an operator of any tenant yet. Instead of bouncing to re-login, send
