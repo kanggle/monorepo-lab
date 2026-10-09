@@ -8,7 +8,7 @@ TASK-PC-FE-325
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -77,3 +77,11 @@ platform-console
 
 - 그룹 블록을 옮기다 항목이 빠지거나 겹치는 경우 → `permission-map-drift`·`domain-features-drift` 시험이 nav 의 모든 href 를 대조하므로 빨강이 된다(통과 확인).
 - 주석의 «위/아래» 표현이 새 순서와 어긋나는 경우 → 「고객 신원」은 관리 그룹 «아래», 「조직 설정」은 IAM «아래» 라는 기존 주석이 새 순서에서도 그대로 참임을 확인했다.
+
+## CORRECTION — close (2026-10-09 UTC, 4차원 검증)
+
+- **AC-6 닫힘**: 소유자가 데모 창에서 사이드바 1뎁스 순서(가이드 · 개요 → 도메인 운영 → 관리 → 조직 설정 → 고객 신원)를 눈으로 확인했다(2026-10-09 UTC 대화 — «PC-FE-325: 메뉴 순서는 확인함»). 위 AC 목록의 ⚪ 는 이 절이 닫는다.
+- (a) #4264 `MERGED` 2026-10-09T10:30:50Z, squash `e19e8163d`.
+- (b) `e19e8163d` 이 `origin/main` 에 있음.
+- (c) 머지 시점 체크 SUCCESS 12 · SKIPPED 54 · FAILURE 0.
+- (d) AC-1~6 전부 닫힘.
