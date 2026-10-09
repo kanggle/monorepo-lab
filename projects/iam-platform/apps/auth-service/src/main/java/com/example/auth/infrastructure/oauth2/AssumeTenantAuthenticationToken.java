@@ -29,6 +29,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final List<String> orgScope;
     private final DelegatedScope delegatedScope;
     private final String subjectAccountId;
+    private final List<String> subjectAmr;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -120,7 +121,29 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            List<String> orgScope,
                                            DelegatedScope delegatedScope,
                                            String subjectAccountId) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId, selectedTenantType,
+                orgScope, delegatedScope, subjectAccountId, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-MONO-771, ADR-MONO-080 D4) — additionally carries the validated subject
+     * token's {@code amr} claim, which the customizer copies verbatim onto the assumed token
+     * (jwt-standard-claims.md § {@code amr}: «Assume-tenant: copied verbatim from the validated subject
+     * token; omitted when the subject token carried none»). Same {@code getAuthorizationGrant()} route as
+     * {@link #getSubjectAccountId()} — the token-exchange principal is the client, whose {@code details}
+     * carry no login methods. {@code null} = the subject token had no {@code amr} claim.
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           List<String> orgScope,
+                                           DelegatedScope delegatedScope,
+                                           String subjectAccountId,
+                                           List<String> subjectAmr) {
         super(Collections.emptyList());
+        this.subjectAmr = subjectAmr;
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
         this.subjectTokenType = subjectTokenType;
@@ -196,5 +219,13 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public String getSubjectAccountId() {
         return subjectAccountId;
+    }
+
+    /**
+     * TASK-MONO-771 — the validated subject token's {@code amr} claim ({@code null} when it carried none). A copy
+     * for downstream visibility only: S2b enforces nothing on it (the assume-tenant second-factor gate is S4).
+     */
+    public List<String> getSubjectAmr() {
+        return subjectAmr;
     }
 }

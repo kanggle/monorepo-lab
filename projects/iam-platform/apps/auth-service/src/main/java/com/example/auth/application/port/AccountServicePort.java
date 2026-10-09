@@ -87,6 +87,23 @@ public interface AccountServicePort {
     }
 
     /**
+     * TASK-MONO-771 (owner decision OD-4) — is the account's email verified? The precondition of
+     * {@code /mfa/setup}: the TASK-MONO-770 shared predicate, account-service {@code accounts.email_verified_at IS
+     * NOT NULL}, read without inventing a new endpoint — {@code GET /internal/accounts/{id}/status-with-tenant}
+     * (the account's own tenant, auth-to-account.md) then {@code GET /internal/tenants/{tenant}/accounts/{id}}
+     * ({@code emailVerifiedAt}, account-internal-provisioning.md).
+     *
+     * @return {@link EmailVerificationState#NOT_APPLICABLE} when account-service has no such account (404 —
+     *         e.g. a console operator credential with no accounts row)
+     * @throws com.example.auth.application.exception.AccountServiceUnavailableException when the answer could
+     *         not be read — the caller fails CLOSED (no enrollment)
+     */
+    EmailVerificationState getEmailVerificationState(String accountId);
+
+    /** Answer of {@link #getEmailVerificationState(String)}. */
+    enum EmailVerificationState { VERIFIED, NOT_VERIFIED, NOT_APPLICABLE }
+
+    /**
      * TASK-MONO-770 — consumes a verification token ({@code POST /api/accounts/signup/verify-email}, public: the
      * token is the credential) on behalf of the IdP page {@code POST /verify-email}. Not retried, never throws.
      */

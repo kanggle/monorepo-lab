@@ -133,6 +133,18 @@ public class WebLoginSecurityConfig {
                         new AntPathRequestMatcher("/password-reset/request", "POST"),
                         new AntPathRequestMatcher("/password-reset", "GET"),
                         new AntPathRequestMatcher("/password-reset", "POST"),
+                        // TASK-MONO-771 S2b (ADR-MONO-080 D4): the second-factor pages. On THIS chain because
+                        // they act on the same session SecurityContext as /oauth2/authorize (the challenge
+                        // widens the session's amr, then resumes the parked authorize) and their POSTs carry
+                        // CSRF like /login. permitAll on purpose, like /consent: MfaPageController makes every
+                        // check (no first-step session → /login) — an entry-point redirect would park the page
+                        // itself as the login continuation and lose the parked authorize.
+                        new AntPathRequestMatcher("/mfa", "GET"),
+                        new AntPathRequestMatcher("/mfa/challenge", "GET"),
+                        new AntPathRequestMatcher("/mfa/challenge", "POST"),
+                        new AntPathRequestMatcher("/mfa/setup", "GET"),
+                        new AntPathRequestMatcher("/mfa/setup", "POST"),
+                        new AntPathRequestMatcher("/mfa/recovery-codes", "POST"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

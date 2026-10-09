@@ -165,6 +165,10 @@ class SocialLoginBrowserControllerTest {
         assertThat(map).containsEntry("tenant_id", "ecommerce")
                 .containsEntry("tenant_type", "B2C_CONSUMER")
                 .containsEntry("account_id", "acc-1");
+        // TASK-MONO-771: an external provider → amr [] (present, empty — never omitted), a MUTABLE ArrayList
+        // (the details-map allowlist). The second step is decided at the authorize gate, not here (F6).
+        assertThat(map.get("amr")).isInstanceOf(java.util.ArrayList.class);
+        assertThat((java.util.List<?>) map.get("amr")).isEmpty();
 
         // command passed to the use case carries the browser callback URI + session ctx
         ArgumentCaptor<OAuthCallbackCommand> cmd = ArgumentCaptor.forClass(OAuthCallbackCommand.class);

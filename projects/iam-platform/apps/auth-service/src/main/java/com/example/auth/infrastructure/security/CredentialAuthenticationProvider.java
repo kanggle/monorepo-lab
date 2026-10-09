@@ -11,6 +11,7 @@ import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
+import com.example.auth.domain.session.AuthenticationMethods;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.tenant.TenantContext;
@@ -447,6 +448,10 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         details.put(PrincipalDetailKeys.TENANT_TYPE, tenantType);
         details.put(PrincipalDetailKeys.ACCOUNT_ID, credential.getAccountId());
         details.put(PrincipalDetailKeys.EMAIL, credential.getEmail());
+        // TASK-MONO-771 (OD-7 «항상»): the first factor was this IdP's password → amr ["pwd"]. A mutable
+        // ArrayList (allowlist). The second step, when the account has a confirmed enrollment, is decided
+        // AFTER both producers — at the authorize gate (AuthorizeSecondFactorGate) — never here (F6).
+        details.put(PrincipalDetailKeys.AMR, AuthenticationMethods.password());
 
         UsernamePasswordAuthenticationToken authenticated =
                 new UsernamePasswordAuthenticationToken(

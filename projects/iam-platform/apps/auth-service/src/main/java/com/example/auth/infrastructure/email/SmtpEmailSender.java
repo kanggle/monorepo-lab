@@ -67,6 +67,38 @@ public class SmtpEmailSender implements EmailSenderPort {
         log.info("Password reset email sent — to={}", LoggingEmailSender.mask(toEmail));
     }
 
+    /**
+     * TASK-MONO-771 (owner decision OD-4) — the «new second factor enrolled» notice. No secret, no code, no
+     * acting link in the body (R4). Same failure wrapping as the reset mail: fixed message, no cause.
+     */
+    @Override
+    public void sendSecondFactorEnrolledNotice(String toEmail) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(toEmail);
+        message.setSubject(MFA_ENROLLED_SUBJECT);
+        message.setText(MFA_ENROLLED_BODY);
+        try {
+            mailSender.send(message);
+        } catch (MailException e) {
+            log.warn("Second-factor enrollment notice failed — to={} type={}",
+                    LoggingEmailSender.mask(toEmail), e.getClass().getSimpleName());
+            throw new EmailSendException("second-factor enrollment notice was not sent");
+        }
+        log.info("Second-factor enrollment notice sent — to={}", LoggingEmailSender.mask(toEmail));
+    }
+
+    static final String MFA_ENROLLED_SUBJECT = "[IAM] 새 2단계 인증 수단이 등록되었습니다";
+
+    static final String MFA_ENROLLED_BODY = """
+            안녕하세요.
+
+            방금 이 계정에 새 2단계 인증 수단(인증 앱)이 등록되었습니다.
+            본인이 등록했다면 이 메일은 무시하셔도 됩니다.
+
+            본인이 아니라면 비밀번호를 바로 재설정하고, 관리자에게 2단계 인증 초기화를 요청하세요.
+            """;
+
     String link(String token) {
         return UriComponentsBuilder.fromUriString(linkBaseUrl)
                 .queryParam("token", token)

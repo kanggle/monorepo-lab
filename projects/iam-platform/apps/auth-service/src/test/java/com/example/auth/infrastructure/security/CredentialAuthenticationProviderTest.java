@@ -272,6 +272,9 @@ class CredentialAuthenticationProviderTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> details = (Map<String, Object>) result.getDetails();
         assertThat(details).containsEntry("tenant_id", "fan-platform");
+        // TASK-MONO-771: the first factor was this IdP's password → amr ["pwd"], a MUTABLE ArrayList (allowlist).
+        assertThat(details.get("amr")).isInstanceOf(java.util.ArrayList.class);
+        assertThat(details.get("amr")).isEqualTo(List.of("pwd"));
     }
 
     // ---------------------------------------------------------------------------------

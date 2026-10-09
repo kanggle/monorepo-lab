@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-MONO-771 S2b — second-factor status + recovery-code regeneration (auth-api.md § GET /mfa ·
+         POST /mfa/recovery-codes). R4: regenerated codes appear in this response only. -->
+    <title>2단계 인증 관리</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<main class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('2단계 인증 관리', null)}"></div>
+
+    <div th:if="${result == 'UNAVAILABLE'}" class="error" id="mfa-status" role="alert">지금은 확인할 수 없습니다. 잠시 뒤 다시 시도해 주세요.</div>
+
+    <th:block th:unless="${result == 'UNAVAILABLE'}">
+        <th:block th:if="${enrolled}">
+            <p class="consent-text" id="mfa-status">
+                2단계 인증이 <strong>등록되어 있습니다</strong>. 남은 복구 코드: <span id="mfa-remaining" th:text="${remaining}">10</span>개
+            </p>
+            <th:block th:if="${result == 'REGENERATED'}">
+                <div class="notice" role="status">새 복구 코드입니다 — 이전 코드는 더 이상 쓸 수 없습니다. 이 화면에서 한 번만 보여 드립니다.</div>
+                <ul id="recovery-codes">
+                    <li th:each="c : ${recoveryCodes}" th:text="${c}">ABCD-EFGH</li>
+                </ul>
+            </th:block>
+            <form action="/mfa/recovery-codes" th:action="@{/mfa/recovery-codes}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit" class="secondary" id="regenerate-recovery-codes">복구 코드 새로 받기</button>
+            </form>
+        </th:block>
+        <th:block th:unless="${enrolled}">
+            <p class="consent-text" id="mfa-status">2단계 인증이 <strong>등록되어 있지 않습니다</strong>.</p>
+            <a class="social" id="mfa-enroll" href="/mfa/setup" th:href="@{/mfa/setup}">2단계 인증 등록</a>
+        </th:block>
+    </th:block>
+</main>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

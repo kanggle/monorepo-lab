@@ -321,6 +321,22 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 ---
 
+## 인증된 이메일 여부 — 2단계 인증 등록 전제 (TASK-MONO-771 S2b · 소유자 결정 OD-4)
+
+> **새 엔드포인트가 아니다** — 이미 계약된 두 읽기를 이 호출자가 쓰는 방식의 기록이다. 술어는 `TASK-MONO-770` 의 공용 술어
+> (`accounts.email_verified_at IS NOT NULL`)이고, [auth-api.md § GET · POST /mfa/setup](../auth-api.md) 의 전제다.
+
+**호출 시점 (auth-service)**: `GET /mfa/setup` 에서, 확정된 등록이 **없을 때만**(`AccountSecondFactorService.startEnrollment`). 로그인 · 2단계 검증 · 토큰 발급 경로는 이 호출을 하지 않는다.
+
+1. `GET /internal/accounts/{accountId}/status-with-tenant`(위 절) — 계정의 **자기** 테넌트(출력값, 세션에서 추측하지 않는다). 404 → `NOT_APPLICABLE`.
+2. `GET /internal/tenants/{tenantId}/accounts/{accountId}`([account-internal-provisioning.md](./account-internal-provisioning.md#get-internaltenantstenantidaccountsaccountid)) — `X-Tenant-Id` = 1 의 테넌트. 응답의 `emailVerifiedAt` 이 값이면 `VERIFIED`, `null` 이면 `NOT_VERIFIED`, 404 → `NOT_APPLICABLE`.
+
+**auth-service 매핑 규약** (`AccountServicePort.getEmailVerificationState`): 그 밖의 4xx · 5xx · 타임아웃 · circuit-open · `emailVerifiedAt` 키가 없는 200 →
+`AccountServiceUnavailableException` → 화면 «지금은 확인할 수 없습니다» (**fail-closed — 비밀을 만들지 않는다**). `NOT_VERIFIED` 와 `NOT_APPLICABLE`(인증할
+메일함이 없는 계정 — 예: accounts 행이 없는 콘솔 운영자 자격)는 둘 다 «먼저 이메일을 인증해야 합니다» 다. 재시도 파이프라인은 위 GET 들과 같다(읽기, 멱등).
+
+---
+
 ## Caller Constraints (auth-service 측)
 
 - 타임아웃: 연결 3s, 읽기 5s

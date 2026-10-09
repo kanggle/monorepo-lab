@@ -34,4 +34,16 @@ public interface EmailSenderPort {
      * @throws EmailSendException if the underlying transport fails
      */
     void sendPasswordResetEmail(String toEmail, String resetToken);
+
+    /**
+     * TASK-MONO-771 (owner decision OD-4) — «a new second-factor method was enrolled on your account; if this was
+     * not you, …», sent to the account's (verified) address right after an enrollment is confirmed. The mail
+     * carries no secret, no code and no link that acts.
+     *
+     * <p>Best-effort by contract (auth-api.md § /mfa/setup): a failure never undoes the enrollment — the caller
+     * catches {@link EmailSendException} and logs a WARN without the address.
+     *
+     * @throws EmailSendException if the underlying transport fails
+     */
+    void sendSecondFactorEnrolledNotice(String toEmail);
 }

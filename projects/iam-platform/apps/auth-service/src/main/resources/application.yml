@@ -186,6 +186,16 @@ auth:
     base-url: ${ADMIN_SERVICE_URL:http://localhost:8084}
     connect-timeout-ms: ${ADMIN_SERVICE_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${ADMIN_SERVICE_READ_TIMEOUT:5000}
+  # TASK-MONO-771 (ADR-MONO-080 D4 · R3) — the account-plane second factor (account_totp). A PER-SERVICE key,
+  # distinct from admin-service's break-glass admin.totp.* (data-model.md § account_totp). Same shape as admin's:
+  # the active kid seals new writes; rows on another kid are re-encrypted lazily on their next successful use.
+  # The v1 default is a fixed DEV-ONLY placeholder (32 bytes) so local / CI / demo boots need no secret;
+  # override AUTH_TOTP_V1_KEY in any real environment (regulated R9 — KMS/Vault later, as admin's plan).
+  totp:
+    issuer: ${AUTH_TOTP_ISSUER:IAM}
+    encryption-key-id: ${AUTH_TOTP_ACTIVE_KID:v1}
+    encryption-keys:
+      v1: ${AUTH_TOTP_V1_KEY:QVVUSF9ERVZfT05MWV9UT1RQX0tFWV8zMl9CWVRFUyE=}
 
 # TASK-BE-318c (ADR-005 단계 3c): outbound /internal/accounts/** calls (status / social-signup /
 # profile) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated). auth-service

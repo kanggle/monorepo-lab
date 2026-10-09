@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AssumeTenantDeniedException;
 import com.example.auth.application.port.OperatorAssignmentPort;
+import com.example.auth.domain.session.AuthenticationMethods;
 import com.example.auth.domain.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -129,9 +130,14 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
         // --- 1. Validate the subject token (auth-service's own JWKS) — fail-closed. ---
         String oidcSubject;
+        java.util.List<String> subjectAmr;
         try {
             Jwt subjectJwt = subjectTokenDecoder.decode(exchange.getSubjectToken());
             oidcSubject = subjectJwt.getSubject();
+            // TASK-MONO-771 (jwt-standard-claims.md § amr): the validated subject's login methods, copied
+            // onto the assumed token for downstream visibility. NO decision is made on it here — the
+            // second-factor gate on this exchange is S4 (ADR-MONO-080 D4); null = the subject carried none.
+            subjectAmr = AuthenticationMethods.read(subjectJwt.getClaims().get("amr"));
             // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): the operator's domain roles are
             // no longer preserved from the subject token (TASK-BE-370) — the base
             // operator token has no domain-role set to preserve. The customizer's
@@ -202,7 +208,7 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // X-User-Id <- sub).
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope, oidcSubject);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope, oidcSubject, subjectAmr);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is

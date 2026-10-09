@@ -3,6 +3,7 @@ package com.example.auth.infrastructure.oauth2;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
+import com.example.auth.domain.session.AuthenticationMethods;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
@@ -174,6 +175,16 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
 
     /** OIDC scope whose grant authorizes the {@link #CLAIM_EMAIL} claim. */
     private static final String SCOPE_EMAIL = "email";
+
+    /**
+     * TASK-MONO-771 (ADR-MONO-080 D4; jwt-standard-claims.md § {@code amr}, RFC 8176) — how the person behind
+     * the token authenticated. Emitted on every identity-bearing token (owner decision OD-7 «항상»):
+     * {@code authorization_code} access + id token from the principal's {@code details.amr}, {@code refresh_token}
+     * from the SAME stored principal (the original login's value — the authentication did not recur), and the
+     * operator assume-tenant token as a verbatim copy of the validated subject token's claim. Never on
+     * {@code client_credentials} nor a workload assume. The only reader predicate is {@code "mfa" ∈ amr}.
+     */
+    private static final String CLAIM_AMR = "amr";
 
     /**
      * TASK-BE-324: account-service port used to resolve {@code entitled_domains} at
@@ -397,6 +408,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // turns out — the email is a property of who logged in, not of which branch
         // resolved their tenant.
         populateEmail(context, principal);
+
+        // TASK-MONO-771: the `amr` claim — also a property of who logged in (and how), not of the tenant
+        // branch below, so it is placed before the pool-principal early return and reaches that path too.
+        populateAmr(context, principal);
 
         String tenantId = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_ID);
         String tenantType = extractTenantAttribute(principal, PrincipalDetailKeys.TENANT_TYPE);
@@ -669,6 +684,33 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     }
 
     /**
+     * TASK-MONO-771 (ADR-MONO-080 D4) — the {@code amr} claim on the identity-bearing grants
+     * ({@code authorization_code} access + id token, and {@code refresh_token} through the same method).
+     *
+     * <p><b>Source = the principal's {@code details.amr}</b>, written by the two login producers (form
+     * {@code ["pwd"]}, social {@code []}) and widened by the second step. On {@code refresh_token} the principal
+     * is the {@code Authentication} stored in the {@code OAuth2Authorization} at authorize time, so the token
+     * carries the <b>original login's</b> value unchanged — the console re-exchanges with every rotated token,
+     * and an operator who passed the second step must not lose {@code mfa} one access-TTL later.
+     *
+     * <p>An empty list is emitted as {@code []} (social login — «authenticated, by no factor this IdP
+     * verified»), never omitted. A principal with no {@code amr} detail at all (an authorization stored before
+     * this change, or the client-metadata fallback) omits the claim, which every reader reads as «no second
+     * factor» — degrading, not failing. Copied into a fresh {@link java.util.ArrayList} (allowlist).
+     */
+    private void populateAmr(JwtEncodingContext context, Authentication principal) {
+        if (principal == null || !(principal.getDetails() instanceof java.util.Map<?, ?> details)) {
+            return;
+        }
+        java.util.List<String> amr = AuthenticationMethods.read(details.get(PrincipalDetailKeys.AMR));
+        if (amr == null) {
+            return;
+        }
+        context.getClaims().claim(CLAIM_AMR, new java.util.ArrayList<>(amr));
+        log.debug("TenantClaimTokenCustomizer: injected amr={}", amr);
+    }
+
+    /**
      * TASK-BE-327 (ADR-MONO-020 § 3.3 step 2, D2+D3): assume-tenant exchange
      * branch. The SELECTED tenant + its {@code tenant_type} are carried on the
      * {@link AssumeTenantAuthenticationToken} (the context's authorizationGrant),
@@ -749,12 +791,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         java.util.List<String> orgScope = null;
         DelegatedScope delegatedScope = null;
         String subjectAccountId = null;
+        java.util.List<String> subjectAmr = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
             orgScope = grant.getOrgScope();
             delegatedScope = grant.getDelegatedScope();
             subjectAccountId = grant.getSubjectAccountId();
+            subjectAmr = grant.getSubjectAmr();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -772,6 +816,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 .claim("tenant_type", selectedTenantType);
         log.debug("TenantClaimTokenCustomizer: assume-tenant — injected tenant_id={}, tenant_type={}",
                 selectedTenantId, selectedTenantType);
+
+        // TASK-MONO-771 (jwt-standard-claims.md § amr): the validated subject token's amr, VERBATIM — the
+        // operator authenticated once, at login; the exchange is not an authentication event. Omitted when
+        // the subject token carried none. Placed before the cross-org early return so both paths copy it.
+        // (The workload branch never gets here — a workload did not authenticate as a person.)
+        if (subjectAmr != null) {
+            context.getClaims().claim(CLAIM_AMR, new java.util.ArrayList<>(subjectAmr));
+        }
 
         // TASK-BE-338 (ADR-MONO-020 D3 amendment): membership-derived data-scope —
         // the v2 replacement for the TASK-BE-337 hardcoded ["*"] bridge. The
