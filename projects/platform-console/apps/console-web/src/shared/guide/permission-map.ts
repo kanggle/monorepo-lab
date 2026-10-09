@@ -149,8 +149,8 @@ export type PermissionGate =
   | { kind: 'operator'; note: string }
   /** admin-service `@RequiresPermission`(또는 동등한 인라인 검사). */
   | { kind: 'admin'; permission: string; extra?: string }
-  /** 카드마다 다른 키로 부분 게이트되는 개요. */
-  | { kind: 'admin-per-card'; permissions: string[] }
+  /** 카드마다(또는 동작마다) 다른 키로 부분 게이트되는 화면 — 키 중 하나라도 있으면 열린다. */
+  | { kind: 'admin-per-card'; permissions: string[]; extra?: string }
   /** 도메인 롤 — assume-tenant 시 구독 도메인에서 파생. */
   | { kind: 'domain'; domain: DomainKey; roles: string[]; extra?: string };
 
@@ -363,6 +363,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
         'account.unlock',
         'account.force_logout',
       ],
+      extra: '잠금/일괄잠금/GDPR 삭제=account.lock · 해제=account.unlock · 세션 종료=account.force_logout · 내보내기=audit.read',
     },
     description:
       '소비자 계정 검색 · 잠금/해제 · 일괄 잠금 · 세션 강제 종료 · 데이터 내보내기 · GDPR 삭제. account.read 가 없으면 전체 목록 없이 이메일 검색만 연다.',
