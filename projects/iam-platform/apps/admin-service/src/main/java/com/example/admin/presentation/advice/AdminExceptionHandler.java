@@ -381,6 +381,17 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("TENANT_NOT_FOUND", e.getMessage()));
     }
 
+    /**
+     * TASK-MONO-772 — the operator-invitation family (admin-api.md § Operator Invitation). Each subclass fixes its
+     * own code and status in its constructor, so this one handler serves S2's refusals and S3's.
+     */
+    @ExceptionHandler(com.example.admin.application.exception.OperatorInvitationException.class)
+    public ResponseEntity<ErrorResponse> handleOperatorInvitation(
+            com.example.admin.application.exception.OperatorInvitationException e) {
+        return ResponseEntity.status(e.getHttpStatus())
+                .body(ErrorResponse.of(e.getCode(), e.getMessage()));
+    }
+
     // TASK-BE-343 (ADR-MONO-023 D3) — subscription management delegation errors
     // (account-service 404/409 surfaced unchanged to the operator).
     @ExceptionHandler(SubscriptionNotFoundException.class)

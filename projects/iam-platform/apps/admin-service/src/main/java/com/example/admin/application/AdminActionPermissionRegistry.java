@@ -108,6 +108,10 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.TENANT_ENTRY_POLICY_SET, "TENANT");
         // TASK-MONO-771 S6 — the account whose second factor is reset is the audit subject.
         map.put(ActionCode.ACCOUNT_2FA_RESET, "ACCOUNT");
+        // TASK-MONO-772 S2 — the invitation is the audit subject (not the not-yet-existing operator).
+        map.put(ActionCode.OPERATOR_INVITATION_CREATE, "OPERATOR_INVITATION");
+        map.put(ActionCode.OPERATOR_INVITATION_CANCEL, "OPERATOR_INVITATION");
+        map.put(ActionCode.OPERATOR_INVITATION_RESEND, "OPERATOR_INVITATION");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -166,7 +170,10 @@ public class AdminActionPermissionRegistry {
                  // TASK-BE-347 (ADR-MONO-024 D3-i) — assignment create/remove gate on operator.manage
                  OPERATOR_ASSIGNMENT_CREATE, OPERATOR_ASSIGNMENT_DELETE,
                  // TASK-BE-373 (ADR-MONO-034 U3) — operator↔identity link/unlink gate on operator.manage
-                 OPERATOR_IDENTITY_LINK, OPERATOR_IDENTITY_UNLINK -> Permission.OPERATOR_MANAGE;
+                 OPERATOR_IDENTITY_LINK, OPERATOR_IDENTITY_UNLINK,
+                 // TASK-MONO-772 S2 — the invitation surface reuses operator.manage (S1: no new key)
+                 OPERATOR_INVITATION_CREATE, OPERATOR_INVITATION_CANCEL, OPERATOR_INVITATION_RESEND
+                    -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
             case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
             // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management

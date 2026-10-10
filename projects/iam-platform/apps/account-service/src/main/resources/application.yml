@@ -148,6 +148,9 @@ iam:
     from: ${IAM_MAIL_FROM:no-reply@iam.local}
     # The IdP page the mail links to (auth-service GET /verify-email); `?token=…` is appended.
     verification-link-base-url: ${IAM_MAIL_VERIFICATION_LINK_BASE_URL:http://localhost:8081/verify-email}
+    # TASK-MONO-772 — the IdP page the operator-invitation mail links to (auth-service
+    # GET /operator-invitations/accept, TASK-MONO-772 S3); `?token=…` is appended. The token is never stored here.
+    operator-invitation-link-base-url: ${IAM_MAIL_OPERATOR_INVITATION_LINK_BASE_URL:http://localhost:8081/operator-invitations/accept}
   internal-client:
     token-uri: ${OIDC_TOKEN_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/token}
     client-id: ${ACCOUNT_SERVICE_CLIENT_ID:account-service-client}

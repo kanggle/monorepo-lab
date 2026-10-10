@@ -145,6 +145,10 @@ admin:
     # in prod). dev placeholder is a fixed 32B key for local boot only.
     encryption-keys:
       v1: ${ADMIN_TOTP_V1_KEY:REVWX09OTFlfVE9UUF9LRVlfMzJfQllURVNfISEhWFg=}
+  # TASK-MONO-772 (ADR-MONO-080 rider R4) — how long an operator invitation's link lives after it is issued or
+  # resent (ISO-8601 duration). Expiry is judged at read time from operator_invitation.expires_at — no job.
+  operator-invitation:
+    ttl: ${ADMIN_OPERATOR_INVITATION_TTL:P7D}
   downstream:
     connect-timeout-ms: ${DOWNSTREAM_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${DOWNSTREAM_READ_TIMEOUT:10000}
