@@ -383,3 +383,94 @@ monorepo
 | S4-4 | 콜백의 `loginRedirect` 사유 · `/login` 맵 키는 상수 대신 **리터럴** `'operator_check_unavailable'` | `login-error-messages.test.tsx` 의 두 가드(«모든 `loginRedirect` 사유에 전용 문구» · «맵 키 집합 양방향 일치»)가 리터럴을 읽는다 — 상수를 쓰면 첫 가드는 이 사유를 **못 보고** 초록이 된다. 값은 공용 모듈 상수와 같음을 시험이 대조 |
 
 - 그 밖: 오류 코드 · JWT 클레임 · rbac 무변경(새 HTTP 오류 코드 0 — `VALIDATION_ERROR` 재사용, 콘솔 BFF 코드 `OPERATOR_CHECK_UNAVAILABLE` 은 S1 이 이미 등록).
+---
+
+# S2 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `feat/mono-772-s2-invite-issue`(origin/main `eed3329ed`). 🔵 AC 체크박스는 건드리지 않았다 — § 3 표의 S2 행은 «티켓 AC — (기반)» 이다. S4(풀 운영자 콘솔 토큰)는 병렬 worktree 의 일이라 손대지 않았다.
+
+## 0. 이 슬라이스의 AC-0 — 334 경로로 생긴 `oidc_subject` NULL 운영자 수 (S1 열린 질문 1)
+
+| 잰 것 | 결과 | 근거 |
+|---|---|---|
+| 334 경로(`POST /api/admin/operators` → `CreateOperatorUseCase`)를 타는 시드 · 마이그레이션 · 데모 스크립트 | **0** — 저장소의 운영자 행은 전부 SQL 로 직접 들어간다. 그 API 를 부르는 것은 런타임 호출자(콘솔)와 시험뿐 | `INSERT INTO admin_operators` 전수(`*.sql`): admin `migration-dev` 7행 · `scripts/console-demo/seed/01-iam.sql` · e2e/federation 픽스처 — 어느 것도 API 를 거치지 않음. `api/admin/operators` 를 POST 하는 스크립트 0 |
+| 회사(비-`'*'`) 운영자 중 `oidc_subject` NULL — 데모 시드 | **1** — `demo-assigned-only`(`ecommerce`). 단 334 가 아니라 BE-628 의 **직접 SQL**이고, «로그인 길 없음» 이 그 시드의 설계다 | `R__seed_demo_assigned_only_operator.sql:24-25, 48-51` |
+| 같은 조건 — dev 마이그레이션 | 0 — `V0014`/`V0023` 운영자는 SUPER_ADMIN → V0025 가 `'*'` 로 옮기고 V0028 이 `oidc_subject` 를 채운다 | `V0025…sql:26-33` · `V0028…sql:21-28` |
+| 라이브 | ⚪ — 다음 창 질의: `SELECT COUNT(*) FROM admin_operators o WHERE o.tenant_id <> '*' AND o.oidc_subject IS NULL AND EXISTS (SELECT 1 FROM admin_actions a WHERE a.action_code = 'OPERATOR_CREATE' AND a.outcome = 'SUCCESS' AND a.target_id = o.operator_id)` — 생성 감사 행이 있는 것 = API 로 생긴 것(083 · 334 둘 다 `oidc_subject` 를 쓰지 않는다). 데모는 재굽기마다 신선 볼륨이라 구조적으로 «콘솔에서 누가 만든 만큼» | — |
+
+⇒ 정적 0 이라 «기존 운영자 행에 수락으로 `oidc_subject` 붙이기» 를 S2/S3 에 넣을 근거는 아직 없다. 라이브가 0 이 아니면 소유자 판단(S1 열린 질문 1 그대로).
+
+## 1. 쓴 것
+
+| 무엇 | 파일 |
+|---|---|
+| Flyway **`V0050__create_operator_invitation.sql`** (다음 빈 번호 재확인 — prod 최고 V0049, `migration-dev` 는 V0014/V0023/V0028 + R__ 뿐) | `apps/admin-service/src/main/resources/db/migration/V0050__create_operator_invitation.sql` |
+| 엔티티 · 리포지토리(조건부 UPDATE 셋, native) · 포트 · 어댑터 | `infrastructure/persistence/OperatorInvitationJpaEntity.java` · `…JpaRepository.java` · `…PortImpl.java` · `application/port/OperatorInvitationPort.java` |
+| 관리 유스케이스(오케스트레이션) · 트랜잭션 절반 · 토큰 · 명령/결과 | `application/OperatorInvitationUseCase.java` · `OperatorInvitationWriter.java` · `OperatorInvitationTokens.java` · `CreateOperatorInvitationCommand.java` · `OperatorInvitationResult.java` · `OperatorInvitationPageResult.java` |
+| 컨트롤러 · DTO | `presentation/OperatorInvitationController.java` · `dto/CreateOperatorInvitationRequest.java` · `dto/OperatorInvitationResponse.java` · `dto/OperatorInvitationListResponse.java` |
+| 오류 가족(서브클래스가 `super("CODE", status, …)` — 레지스트리 가드가 본다) · 핸들러 1개 | `application/exception/OperatorInvitationException.java` + `…NotFound` · `…AlreadyPending` · `…NotPending` · `AdminExceptionHandler.handleOperatorInvitation` |
+| 감사 코드 셋 · target_type · 권한 · aspect DENIED 매핑 | `ActionCode` (`OPERATOR_INVITATION_CREATE/CANCEL/RESEND`) · `AdminActionPermissionRegistry` · `RequiresPermissionAspect` |
+| D2 판정 지점에 «답만 주는» 메서드 | `TenantScopeGuard.isTenantInScope` (규칙은 그대로 한 곳) |
+| admin → account 어댑터 둘 | `infrastructure/client/AccountServiceInvitationClient.java` (`VerifiedEmailMatchPort` · `OperatorInvitationMailPort`) |
+| account: 판정 · 메일 · 컨트롤러 · 포트 · 어댑터 둘 · 예외 둘 · 핸들러 둘 | `application/service/VerifiedEmailMatchUseCase.java` · `SendOperatorInvitationMailUseCase.java` · `presentation/internal/OperatorInvitationSupportController.java` · `application/port/OperatorInvitationNotifier.java` · `infrastructure/notifier/SmtpOperatorInvitationNotifier.java` · `LoggingOperatorInvitationNotifier.java` · `AccountEmailMismatchException` · `InvitationEmailSendFailedException` |
+| 설정 키 | admin `admin.operator-invitation.ttl`(`ADMIN_OPERATOR_INVITATION_TTL`, 기본 `P7D`) · account `iam.mail.operator-invitation-link-base-url`(`IAM_MAIL_OPERATOR_INVITATION_LINK_BASE_URL`) · 데모 오버레이 `infra/demo/iam-traefik.override.yml` 에 그 env (코드 기본값 `localhost:8081` 이 데모 메일 링크가 되지 않게) |
+| 명세 | `specs/services/admin-service/data-model.md` § `operator_invitation` — 구현 노트(상태 CHECK · FK 동작 · `pending_key` 미매핑 · `version` 은 `@Version` 아님) |
+
+## 2. 계약 대비 근거 (file:line)
+
+| 계약 | 구현 |
+|---|---|
+| 발급 순서 1–10 (권한 → 사유 → 키 → 본문 → D2 → 역할·D3 → 키 재사용 → 테넌트 → 충돌 → 행+감사 → 커밋 뒤 메일) | 권한 = `@RequiresPermission`(컨트롤러) · 사유 = `ControllerReasonSupport.requireReason` · 본문은 **유스케이스에서** 검증(`@Valid` 는 aspect 보다 먼저 돌아 권한 없는 호출자에게 400 을 준다) `OperatorInvitationUseCase.java:83` · D2 `:89` · D3 `:94` · 키 `:97` · 테넌트 `:103` · 행+감사(한 트랜잭션) `:106` → `OperatorInvitationWriter.java:73-92` · 메일 `:110` |
+| R4 — SHA-256 hex 만 저장 · 원문 미저장/미로그/미응답 | `OperatorInvitationWriter.java:85` · 엔티티에 원문 필드 없음 · 응답 타입에 토큰·해시·링크 필드 없음(`OperatorInvitationResponse`) · 원문을 싣는 record 둘은 `toString` 이 가린다 |
+| 만료는 읽을 때 · `EXPIRED` 는 값 아님 | `OperatorInvitationResult.isExpired` · DB `CHECK (status IN (…))` 에 `EXPIRED` 없음 |
+| 대기 하나 — 앱 검사 + DB | `OperatorInvitationWriter.java:76` · 경합 = `uk_operator_invitation_pending_key`(`OperatorInvitationPortImpl` 이 그 제약 이름으로 409 번역) |
+| 재발송 = 같은 행 · 옛 해시 덮어씀 · `invited_by` = 재발송자 · 버전으로 겨룸 · 재발송 actor 기준 D3 | `OperatorInvitationWriter.java:135-136` · `OperatorInvitationJpaRepository.rotateIfPending` · D3 `OperatorInvitationUseCase.java:190` · 테넌트 `:191` |
+| 취소/재발송: 없음 · 범위 밖 = 한 404 | `OperatorInvitationUseCase.java:206` |
+| 취소: CANCELLED = 200 no-op(감사 없음) · ACCEPTED = 409 · 경합 | `OperatorInvitationUseCase.cancel` · `OperatorInvitationWriter.java:108` |
+| 메일 실패 ≠ 오류 · 재시도 없음 · 결과를 행에 | `OperatorInvitationUseCase.deliver` · `AccountServiceInvitationClient.send`(재시도·차단기 없음) · `recordDelivery` 는 **토큰 해시로 키**(재발송이 이미 바꾼 토큰의 결과가 새 토큰 결과를 덮지 않게) |
+| verified-email:match 판정 순서 (풀·ACTIVE → 이메일 → 770 술어) · 한 404 | `VerifiedEmailMatchUseCase.java:48` · `:55`(`ConsumerSiteRoleWriteUseCase.sameEmail` 재사용 — 같은 술어) · `:61`(`VerifiedEmailRequirement.require` 그대로) |
+| admin 매핑 (404/403/403 → 결과값 · 그 밖 · 200-증거없음 → fail-closed 예외) | `AccountServiceInvitationClient.match` — 거절 셋은 **값**으로 돌려 retry/차단기가 결함으로 세지 않는다 |
+| 메일 엔드포인트: 링크 = base?token · 저장 0 · 770 분류 | `SmtpOperatorInvitationNotifier.link` · `SmtpFailureClassifier` 공유 · 배선은 770 과 같은 조건(켜짐 → SMTP, 꺼짐+비prod → 스텁, 꺼짐+prod → 기동 실패) |
+
+## 3. 시험
+
+| 층 | 클래스 | 결과 (로컬) |
+|---|---|---|
+| admin 단위 | `OperatorInvitationUseCaseTest`(18) · `OperatorInvitationWriterTest`(6) · `OperatorInvitationTokensTest`(2) · `AccountServiceInvitationClientTest`(5, WireMock) | 초록 |
+| admin 슬라이스 | `OperatorInvitationControllerSliceTest`(6) — `non_null` 프로필에서도 null 키 존재 · 권한 없음이 본문 오류보다 먼저 · 응답에 `token`/`hash`/`link` 문자열 0 | 초록 |
+| admin IT `@Tag("integration")` | `OperatorInvitationIntegrationTest`(6) — 수명주기(발급 → 목록 → 재발송 해시 회전 · 옛 해시 행 0 → 취소 → 재취소 no-op(감사 1행 유지) → 취소 뒤 재발송 409) · 저장 해시 = 메일로 나간 토큰의 SHA-256 · 응답·로그(루트 로거 ListAppender, 비공허 단언 포함)에 토큰·해시 0 · 중복 대기 409 + **원시 INSERT 를 DB 유니크가 거절** + 취소 뒤 자리 빔 · D3(SUPPORT_LOCK/SUPER_ADMIN 403, 대조군 TENANT_ADMIN 201) · D2(범위 밖 403 행 0 · 남의 초대 취소/재발송 404 · 목록 403) · `'*'` 400 · 미등록 테넌트 404 · 키 재사용 409 · 운영자 이메일 409 · 메일 503/422 → 201 + FAILED_* (재시도 0) | ⚪ **로컬 미실행 — Docker 없음**(`docker info` 실패). CI 가 권위 |
+| account 단위 | `VerifiedEmailMatchUseCaseTest`(4, 🔴 대조군: 같은 계정·같은 주소 — 미인증 거절 먼저, 인증되면 일치) · `SendOperatorInvitationMailUseCaseTest`(3) · `OperatorInvitationNotifierTest`(5 — 본문 링크·로그 마스킹(로거 ListAppender)·배선) | 초록 |
+| account 슬라이스 | `OperatorInvitationSupportControllerSliceTest`(6) | 초록 |
+| account IT `@Tag("integration")` | `OperatorInvitationSupportIntegrationTest`(3) — 실 풀 가입 계정으로 미인증 403 → 인증 뒤 200 · 불일치 403 · 없는 id / LOCKED 404 · 메일 204 | ⚪ 로컬 미실행 — Docker 없음 |
+
+**bite (보안 술어 하나)**: `VerifiedEmailMatchUseCase` 의 `VerifiedEmailRequirement.require(account)` 를 무력화 → `VerifiedEmailMatchUseCaseTest` 4 중 **대조군 1칸만** 빨강(`4 tests completed, 1 failed`) → 되돌림 → 초록. 🔵 admin 쪽 bite(초대 조회의 범위 술어 `isTenantInScope` 무력화)도 시도했으나 **자동 모드 분류기가 그 편집을 막았다**(«Security Weaken»). 우회하지 않았다 — 필요하면 사람이 같은 편집(`OperatorInvitationUseCase.java:206` 조건을 `false &&` 로)으로 `OperatorInvitationUseCaseTest$CancelResend.outOfScope_is404` 가 빨개지는지 보면 된다.
+
+## 4. S1 계약과 다른 점 · 계약이 말하지 않아 정한 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S2-1 | `Idempotency-Key` 길이 상한 100 (넘으면 `400 VALIDATION_ERROR`) | 계약에 상한이 없고 `admin_actions.idempotency_key` 가 `VARCHAR(100)` — 넘는 키는 감사 INSERT 에서 500 이 된다 |
+| S2-2 | 재발송 때 초대의 역할이 그 사이 **삭제됐으면** `400 ROLE_NOT_FOUND` | 재발송 오류표에 없는 코드. 역할 행은 시드라 실제로 지워지지 않는다 — 계약 행을 늘리지 않고 기록만 |
+| S2-3 | 재발송이 `delivery` 를 먼저 비우고 새 시도 결과를 쓴다 | 옛 결과는 죽은 토큰의 것이다. 계약의 «마지막 시도의 결과» 와 같은 뜻 |
+| S2-4 | 메일 어댑터에 **circuit breaker 도 없다** | 계약은 «circuit-open → FAILED_TRANSIENT» 매핑을 적었지만 차단기를 요구하지는 않는다. 실패가 이미 답이라 빨리 실패해서 지킬 것이 없다 |
+| S2-5 | `tenantId` 형식 = account-service `TenantId` 패턴 `^[a-z][a-z0-9-]{1,31}$` | 계약 «1–32자 테넌트 slug» 의 구체화 — 권위(account)의 규칙을 그대로 |
+| S2-6 | 본문 검증을 `@Valid` 가 아니라 유스케이스에서 | 계약 순서(권한 → 사유 → 키 → 본문). `@Valid` 는 인자 해석 때 돌아 aspect 보다 먼저 400 을 낸다 — 기존 `POST /operators` 는 그 순서가 뒤집혀 있다(이 슬라이스는 손대지 않음) |
+
+계약 본문(`admin-api.md` · `admin-to-account.md`)은 고치지 않았다 — 위 여섯은 계약이 정하지 않은 빈칸이거나 기록으로 충분하다.
+
+## 5. 열린 것 (S3 이후)
+
+1. 🔴 데모 메일의 링크 `…/operator-invitations/accept` 는 **S3 가 IdP 화면과 `iam-oidc` 라우터 PathPrefix 를 더할 때까지 404** 다. 오버레이 env 는 이 PR 이 넣었다 — S3 는 라우터만 넓히면 된다.
+2. `VerifiedEmailMatchPort` 는 어댑터까지 있고 소비자가 아직 없다 — S3 수락 유스케이스가 부른다(매핑: `NOT_ELIGIBLE → 403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` · `EMAIL_MISMATCH → 403 OPERATOR_INVITATION_EMAIL_MISMATCH` · `NOT_VERIFIED → 403 EMAIL_NOT_VERIFIED`, 예외 → 503). 수락의 조건부 갱신은 `token_hash` 까지 조건에 넣는다(`data-model.md` 불변식) — `OperatorInvitationJpaRepository` 에 S3 가 더한다.
+3. S3 의 거절 코드는 `OperatorInvitationException` 서브클래스로 더하면 핸들러를 건드리지 않는다.
+4. 라이브 ⚪ 두 개: § 0 질의 · 데모 Mailpit 에서 초대 메일 1통(링크 base 가 `iam.<domain>` 인지).
+
+### CI 1차 — 원문 토큰이 DEBUG 로그에 실렸다 (2026-10-10 UTC)
+
+- iam A `OperatorInvitationIntegrationTest` 수명주기 1건 실패: 루트 로거 포획에 원문 토큰이 있었다. 출처 = Spring 메시지 컨버터의 DEBUG `Writing [{to=…, token=<원문>, …}]` — admin 의 `AccountServiceInvitationClient` 가 본문을 `Map` 으로 보내 `toString` 에 토큰 · 주소가 그대로 찍혔다. 운영 프로필은 root INFO 라 평소엔 안 찍히지만 **로그 레벨에 기대는 비밀 보호는 보호가 아니다**(시험이 바로 그것을 잡았다).
+- 조치(오케스트레이터): 두 본문을 `MailRequest` · `MatchRequest` 레코드로 — `toString` 이 토큰 `<redacted>` · 주소 `<masked>`. account 쪽 수신 레코드(`OperatorInvitationMailRequest`)가 이미 같은 방식이었다. `inviterDisplayName` 부재 시 생략은 `@JsonInclude(NON_NULL)` 로 유지. 단위 시험 2개 추가(toString 무노출 · 생략 모양), 7/7 통과.
+
+### CI 2차 — 토큰은 사라졌고 해시가 남았다 (2026-10-10 UTC)
+
+- 같은 시험이 이번엔 `token_hash` 를 잡았다. 출처 = Hibernate flush 의 DEBUG «Listing entities:» 덤프(`org.hibernate.internal.util.EntityPrinter`) — **모든 엔티티의 전 상태**(운영자 이메일 · 이 해시)를 찍는다. `test` 프로필은 `logback-spring.xml` 에 root 가 없어 logback 기본 DEBUG 가 적용됐다(다른 프로필은 전부 INFO).
+- 조치: admin `logback-spring.xml` 에 그 로거를 **모든 프로필에서 OFF** — regulated R4(자격 해시 · 이메일 로그 금지)를 로그 레벨에 기대지 않게. ⚪ 같은 덤프는 다른 서비스에도 있을 수 있다(이 PR 은 admin 만) — 후속 판단.

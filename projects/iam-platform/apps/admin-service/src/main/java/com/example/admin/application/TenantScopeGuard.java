@@ -63,6 +63,17 @@ public class TenantScopeGuard {
     }
 
     /**
+     * TASK-MONO-772 S2 — the same {@code target ∈ effectiveAdminScope} rule as a plain answer: no row, no throw.
+     * For a surface whose contract answers «out of scope» with a 404 instead of a 403 (an operator invitation
+     * outside the actor's scope is indistinguishable from a missing one — enumeration-safe), so the caller picks
+     * the exception. The rule itself stays here, the one D2 decision site.
+     */
+    public boolean isTenantInScope(OperatorContext actor, String permission, String targetTenantId) {
+        String actorId = actor == null ? null : actor.operatorId();
+        return grantScopeEvaluator.isTenantInAdminScope(actorId, permission, targetTenantId);
+    }
+
+    /**
      * TASK-MONO-737 — the READ-path twin of {@link #requireTenantInScope}: the same
      * {@code target ∈ effectiveAdminScope} rule, but no DENIED row (reads write no audit
      * row, BE-486 — the same shape as {@code GroupAdminUseCase.requireGroupReadable403}).

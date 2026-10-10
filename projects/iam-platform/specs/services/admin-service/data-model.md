@@ -338,6 +338,8 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 
 **인덱스**: `uk_operator_invitation_invitation_id` · `uk_operator_invitation_token_hash`(수락 · 미리보기의 단건 조회) · `uk_operator_invitation_pending_key` · `idx_operator_invitation_tenant_status_created (tenant_id, status, created_at)`(관리 목록).
 
+> **구현 (TASK-MONO-772 S2, `V0050__create_operator_invitation.sql`)**: 위 표 그대로에 두 가지를 더했다 — `CHECK (status IN ('PENDING','ACCEPTED','CANCELLED'))`(손으로 쓴 SQL 이 넷째 값을 만들지 못하게) · FK 동작(`invited_by` = `RESTRICT` — 운영자는 지우지 않는다, `accepted_operator_id` · `cancelled_by` = `SET NULL` — 형제 표와 같다). `pending_key` 는 `STORED` 생성 컬럼이고 JPA 가 매핑하지 않는다(쓰지도 읽지도 않고 UNIQUE 키만 맡는다). `version` 은 JPA `@Version` 이 아니다 — 상태 변화는 전부 조건부 UPDATE(`… WHERE status = 'PENDING' [AND version = ?]`, 영향 행 수가 판정)이고 그 문장이 직접 `version + 1` 한다.
+
 > **불변식 (TASK-MONO-772)**:
 > - 🔴 **1회용**: 수락은 `UPDATE … SET status = 'ACCEPTED', … WHERE id = ? AND status = 'PENDING' AND token_hash = ?` 의 영향 행이 1 일 때만 이긴다. 0 이면 다시 읽어 답한다(같은 계정의 재제출 = 200 · 그 밖 = 409/404) — 동시 수락 둘 중 하나만 운영자를 만든다.
 > - **거절은 아무것도 쓰지 않는다** — 미인증 · 다른 이메일 · 만료 · 근거 무효 · 이미 운영자(OD-1)는 초대를 `PENDING` 그대로 둔다. 맞는 사람이 나중에 수락할 수 있다.

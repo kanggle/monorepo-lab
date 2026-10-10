@@ -307,6 +307,10 @@ services:
       <<: [*iam-oidc, *iam-mail]
       # TASK-MONO-770 — the verification mail's link lands on the IdP page GET /verify-email.
       IAM_MAIL_VERIFICATION_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/verify-email
+      # TASK-MONO-772 S2 — the operator-invitation mail's link lands on the IdP page GET /operator-invitations/accept
+      # (the page and its iam-oidc router PathPrefix arrive with S3). Without this line the code default
+      # (localhost:8081) would be the link a demo mail carries.
+      IAM_MAIL_OPERATOR_INVITATION_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/operator-invitations/accept
     networks:
       iam-e2e: null
       traefik-net:

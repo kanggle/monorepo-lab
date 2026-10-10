@@ -160,6 +160,32 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("VERIFICATION_EMAIL_SEND_FAILED", e.getMessage()));
     }
 
+    /**
+     * TASK-MONO-772 S2 — verified-email:match: an ACTIVE pool account whose email is not the expected one.
+     * The message never quotes either address (R4).
+     */
+    @ExceptionHandler(com.example.account.application.exception.AccountEmailMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleAccountEmailMismatch(
+            com.example.account.application.exception.AccountEmailMismatchException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ACCOUNT_EMAIL_MISMATCH", e.getMessage()));
+    }
+
+    /**
+     * TASK-MONO-772 S2 — the operator-invitation mail did not leave. Transient → 503 (a resend may work),
+     * permanent → 422 (the mail server refuses the address). admin-service maps them onto {@code delivery.status}.
+     */
+    @ExceptionHandler(com.example.account.application.exception.InvitationEmailSendFailedException.class)
+    public ResponseEntity<ErrorResponse> handleInvitationEmailSendFailed(
+            com.example.account.application.exception.InvitationEmailSendFailedException e) {
+        if (e.getKind() == EmailDeliveryException.Kind.PERMANENT) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(ErrorResponse.of("INVITATION_EMAIL_UNDELIVERABLE", e.getMessage()));
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("INVITATION_EMAIL_SEND_FAILED", e.getMessage()));
+    }
+
     /** TASK-MONO-752 — a site account (not in the consumer pool) cannot hold consumer site roles. */
     @ExceptionHandler(SiteRoleRequiresPoolAccountException.class)
     public ResponseEntity<ErrorResponse> handleSiteRoleRequiresPoolAccount(SiteRoleRequiresPoolAccountException e) {

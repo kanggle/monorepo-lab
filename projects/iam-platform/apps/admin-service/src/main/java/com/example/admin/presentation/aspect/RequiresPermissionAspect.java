@@ -326,6 +326,13 @@ public class RequiresPermissionAspect {
             if ("setEntryPolicy".equals(name)) return ActionCode.TENANT_ENTRY_POLICY_SET;
             // getEntryPolicy is a read
         }
+        // TASK-MONO-772 S2 — the operator-invitation writes; the DENIED row carries target_type=OPERATOR_INVITATION.
+        if ("OperatorInvitationController".equals(simple)) {
+            if ("createInvitation".equals(name)) return ActionCode.OPERATOR_INVITATION_CREATE;
+            if ("cancelInvitation".equals(name)) return ActionCode.OPERATOR_INVITATION_CANCEL;
+            if ("resendInvitation".equals(name)) return ActionCode.OPERATOR_INVITATION_RESEND;
+            // listInvitations is a read
+        }
         // TASK-BE-520 (ADR-MONO-046 D6) — operator-group mutations; each maps to a dedicated
         // action code so the DENIED row carries target_type=GROUP.
         if ("GroupAdminController".equals(simple)) {

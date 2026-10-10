@@ -117,5 +117,13 @@ public enum ActionCode {
     // (POST /api/admin/accounts/{accountId}/2fa/reset → auth-service internal command). target_type=ACCOUNT,
     // target_id=<accountId>, permission_used=account.2fa_reset, detail = "wasConfirmed=<bool>" on SUCCESS.
     // IN_PROGRESS → SUCCESS|FAILURE like ACCOUNT_LOCK (a downstream failure still leaves a FAILURE row — A10).
-    ACCOUNT_2FA_RESET
+    ACCOUNT_2FA_RESET,
+    // TASK-MONO-772 S2 (ADR-MONO-080 D6 · R4): the operator invitation's management surface
+    // (POST /api/admin/operator-invitations · :cancel · :resend). target_type=OPERATOR_INVITATION,
+    // target_id=<invitationId>, target_tenant_id=<invitation tenant>, permission_used=operator.manage. Neither the
+    // email nor the token rides in the row (the email is on the invitation row; the token is stored nowhere). CANCEL
+    // writes a row only when it actually moved PENDING → CANCELLED. S3 adds the acceptance's own code.
+    OPERATOR_INVITATION_CREATE,
+    OPERATOR_INVITATION_CANCEL,
+    OPERATOR_INVITATION_RESEND
 }
