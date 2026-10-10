@@ -11,7 +11,11 @@
     :root { color-scheme: light dark; }
     body { font-family: system-ui, sans-serif; max-width: 1080px; margin: 6vh auto; padding: 0 20px; line-height: 1.6; }
     h1 { font-size: 1.6rem; margin-bottom: .3rem; }
-    .lede { opacity: .85; margin-top: 0; }
+    .lede { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+    .lede li { display: flex; gap: 12px; align-items: baseline; }
+    .lede .lk { flex: none; width: 7.5em; font-size: .78rem; font-weight: 600; opacity: .6; }
+    .lede .lsub { display: block; font-size: .86rem; opacity: .65; }
+    @media (max-width: 520px) { .lede li { flex-direction: column; gap: 0; } }
     .card { border: 1px solid #8883; border-radius: 14px; padding: 24px; margin-top: 24px; }
     button { font-size: 1rem; padding: 12px 22px; border-radius: 10px; border: 0; cursor: pointer; }
     #start { background: #2563eb; color: #fff; }
@@ -188,12 +192,14 @@
        짧습니다" 라고만 쓴다. 잰 뒤에 숫자를 넣어라 — 지금 넣으면 그것은 이 저장소가
        반복해서 밟은 "잰 적 없는 숫자" 이고, 방문자를 틀린 시점에 포기시킨다.
   -->
-  <p class="lede">
-    세 화면은 <strong>지금 바로, 로그인 없이</strong> 둘러볼 수 있습니다 — 서버를 켜지 않아도 됩니다.
-    글쓰기·주문·운영 같은 <strong>로그인 후 기능</strong>이 필요할 때만 해당 카드의 「데모 서버 켜기」로 서버를 켜세요
-    (필요한 서비스만 기동합니다 · 전부를 올릴 때가 <strong>약 10분</strong>, 묶음 하나는 그보다 짧습니다).
-    다 쓴 뒤에는 같은 자리의 「데모 서버 끄기」로 그 묶음만 끌 수 있고, 20분간 활동이 없으면 자동으로 종료됩니다.
-  </p>
+  <!-- TASK-MONO-786 — 한 문단이던 안내를 «둘러보기 → 켜기 → 끄기» 세 줄로 나눴다. 문장의 사실(숫자 포함)은 그대로다. -->
+  <ul class="lede">
+    <li><span class="lk">둘러보기</span><span><strong>지금 바로, 로그인 없이</strong> 세 화면을 볼 수 있습니다. 서버를 켜지 않아도 됩니다.</span></li>
+    <li><span class="lk">로그인 후 기능</span><span>글쓰기·주문·운영이 필요할 때만 해당 카드의 「데모 서버 켜기」를 누르세요.
+      <span class="lsub">필요한 서비스만 기동합니다 · 전부 올릴 때 <strong>약 10분</strong>, 묶음 하나는 그보다 짧습니다.</span></span></li>
+    <li><span class="lk">끄기</span><span>같은 자리의 「데모 서버 끄기」로 그 묶음만 끕니다.
+      <span class="lsub">20분간 활동이 없으면 자동으로 종료됩니다.</span></span></li>
+  </ul>
 
   <!--
     부팅 프로브 선언 (TASK-MONO-627). 🔴 **방문자 표면이 아니다.**
