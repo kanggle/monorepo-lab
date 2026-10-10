@@ -29,8 +29,6 @@ import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -58,7 +56,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li><b>confinement</b>: tenant-x admin patches the tenant-y operator → 403
  *       {@code TENANT_SCOPE_DENIED} + a DENIED {@code admin_actions} row recording the
  *       attempted tenant; no role mutation occurs.</li>
- *   <li><b>create confinement</b>: tenant-x admin creates in tenant-y → 403; in tenant-x → 201.</li>
+ *   <li><b>create confinement</b> (TASK-MONO-772 S7): a company create is invitation-only — tenant-x admin → tenant-y
+ *       and → tenant-x are both {@code 422 OPERATOR_INVITATION_REQUIRED}; → {@code '*'} stays {@code 403}.</li>
  * </ol>
  */
 @SpringBootTest
@@ -121,18 +120,10 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
     @Autowired
     JdbcTemplate jdbcTemplate;
 
-    // TASK-MONO-334: operator-create probes account-service for the target email's
-    // tenant account. account-service is not booted here (dead port) — mock the
-    // client so the in-scope create (→ 201) proceeds. The out-of-scope create (→ 403)
-    // throws at the tenant-scope guard BEFORE the probe, so it is unaffected either way.
+    // account-service is not booted here (dead port). Since TASK-MONO-772 S7 the operator create never calls it
+    // (company tenants are refused first, '*' never had an account probe) — the mock stays to keep that visible.
     @MockitoBean
     AccountServiceClient accountServiceClient;
-
-    @BeforeEach
-    void stubAccountExists() {
-        when(accountServiceClient.searchSiteAccounts(anyString(), anyString()))
-                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
-    }
 
     @BeforeEach
     void seedActors() {
@@ -191,7 +182,7 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
     }
 
     @Test
-    @DisplayName("create confinement: tenant-x admin creates in tenant-y → 403; in tenant-x → 201")
+    @DisplayName("create confinement (772 S7): tenant-x admin → tenant-y · tenant-x 둘 다 422 OPERATOR_INVITATION_REQUIRED · '*' 는 403, 행 0")
     void tenantXAdmin_createConfinement() throws Exception {
         String emailY = "new-y-" + System.currentTimeMillis() + "@example.com";
         mockMvc.perform(post("/api/admin/operators")
@@ -203,8 +194,8 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
                                 {"email":"%s","displayName":"New Y","password":"StrongPass1!",
                                  "roles":["SUPPORT_READONLY"],"tenantId":"tenant-y"}
                                 """.formatted(emailY)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_INVITATION_REQUIRED"));
 
         String emailX = "new-x-" + System.currentTimeMillis() + "@example.com";
         mockMvc.perform(post("/api/admin/operators")
@@ -216,7 +207,25 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
                                 {"email":"%s","displayName":"New X","password":"StrongPass1!",
                                  "roles":["SUPPORT_READONLY"],"tenantId":"tenant-x"}
                                 """.formatted(emailX)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_INVITATION_REQUIRED"));
+
+        String emailP = "new-p-" + System.currentTimeMillis() + "@example.com";
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer(TENANT_X_ADMIN_UUID))
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "conf-create-p-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","displayName":"New P","password":"StrongPass1!",
+                                 "roles":["SUPPORT_READONLY"],"tenantId":"*"}
+                                """.formatted(emailP)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+
+        Integer created = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE email IN (?, ?, ?)", Integer.class, emailY, emailX, emailP);
+        assertThat(created).isZero();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

@@ -1,13 +1,12 @@
 package com.example.admin.application;
 
-import com.example.admin.application.exception.OperatorAccountNotFoundException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
+import com.example.admin.application.exception.OperatorInvitationRequiredException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
-import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.common.id.UuidV7;
 import com.example.security.password.PasswordHasher;
 import lombok.RequiredArgsConstructor;
@@ -33,14 +32,20 @@ public class CreateOperatorUseCase {
     private final OperatorLookupPort operatorLookupPort;
     private final TenantScopeGuard tenantScopeGuard;
     private final RoleGrantGuard roleGrantGuard;
-    private final AccountServiceClient accountServiceClient;
 
     /**
-     * Creates a new operator.
+     * Creates a new <b>platform-scope</b> ({@code tenantId='*'}) operator.
      *
-     * <p>TASK-BE-249: {@code tenantId} is now required. Defense-in-depth rule:
-     * a non-platform-scope operator cannot create a platform-scope ({@code "*"})
-     * operator (spec §Implementation Notes).
+     * <p>TASK-MONO-772 S7 (ADR-MONO-080 D6 · implementer decision D-7): a company (non-{@code '*'}) operator
+     * is no longer created here — the only door is the invitation → verified self-acceptance
+     * ({@code OperatorInvitationUseCase} / {@code OperatorInvitationAcceptanceUseCase}). A non-{@code '*'}
+     * {@code tenantId} is refused with {@code 422 OPERATOR_INVITATION_REQUIRED} before anything is read,
+     * written or called — whoever the actor is. This REPLACES the TASK-MONO-334 "a signed-up account must
+     * exist in the target tenant" precondition (and its account-service search), which only ever applied
+     * to non-{@code '*'} creates. {@code '*'} stays (ADR-MONO-080 D1 — platform administrators, bootstrap).
+     *
+     * <p>TASK-BE-249: a non-platform-scope operator cannot create a platform-scope operator
+     * (defense in depth, best-effort DENIED audit — TASK-BE-262).
      */
     @Transactional
     public CreateOperatorResult createOperator(String email,
@@ -49,8 +54,14 @@ public class CreateOperatorUseCase {
                                                List<String> roleNames,
                                                OperatorContext actor,
                                                String reason,
-                                               String tenantId,
-                                               Boolean reuseExistingIdentity) {
+                                               String tenantId) {
+        // TASK-MONO-772 S7: company operators come only by invitation. No audit row (nothing was
+        // attempted against a tenant), no downstream call, no DB read.
+        if (!AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
+            throw new OperatorInvitationRequiredException(
+                    "Company operators are created only by invitation; direct create accepts tenantId='*' only");
+        }
+
         // --- TASK-BE-249: resolve actor's tenantId for scope guard ---
         String actorTenantId = operatorLookupPort.findByOperatorId(actor.operatorId())
                 .map(OperatorLookupPort.OperatorLookupRef::tenantId)
@@ -59,7 +70,7 @@ public class CreateOperatorUseCase {
 
         // Defense-in-depth: non-platform-scope operators cannot create platform-scope operators.
         // TASK-BE-262: record a best-effort DENIED audit row before throwing.
-        if (AdminOperator.PLATFORM_TENANT_ID.equals(tenantId) && !actorIsPlatformScope) {
+        if (!actorIsPlatformScope) {
             auditor.recordCrossTenantDenied(
                     actor,
                     actorTenantId,
@@ -81,30 +92,6 @@ public class CreateOperatorUseCase {
         String normalizedEmail = email == null ? null : email.trim().toLowerCase();
         if (normalizedEmail != null && operatorPort.existsByTenantIdAndEmail(tenantId, normalizedEmail)) {
             throw new OperatorEmailConflictException("Operator email already exists");
-        }
-
-        // TASK-MONO-334 (ADR-MONO-035 amendment): operator-create now REQUIRES a
-        // pre-existing signed-up account for this email in the target tenant — that
-        // account's unified IAM (OIDC) credential is the operator's primary login.
-        // This SUPERSEDES the TASK-PC-FE-179 fail-soft advisory: a "dangling"
-        // account-less operator is no longer creatable (even with a break-glass
-        // password — break-glass is now only a secondary login for an operator whose
-        // account already exists). Platform-scope ('*') is EXEMPT: there is no
-        // account_db tenant row for '*' to verify against (SUPER_ADMIN bootstrap).
-        // account-service unavailability propagates as DownstreamFailureException →
-        // 503 DOWNSTREAM_ERROR: fail-CLOSED — we never create an unverified operator.
-        // TASK-BE-615 AC-8 (owner decision 2026-10-01): the check counts the target tenant's OWN
-        // accounts only — a consumer-pool member of that site (TASK-BE-614 widened the console search
-        // to include them) does NOT pass, so the next line never mints a site-tenant identity beside a
-        // pool account. Operator-account rules change only with ADR-MONO-080 (TASK-MONO-746).
-        if (normalizedEmail != null && !AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
-            AccountServiceClient.AccountSearchResponse accounts =
-                    accountServiceClient.searchSiteAccounts(tenantId, normalizedEmail);
-            boolean accountExists = accounts != null && accounts.totalElements() > 0;
-            if (!accountExists) {
-                throw new OperatorAccountNotFoundException(
-                        "No signed-up account exists for this email in the target tenant");
-            }
         }
 
         Map<String, AdminOperatorPort.RoleView> resolvedRoles = operatorPort.resolveRolesByName(roleNames);
@@ -139,24 +126,9 @@ public class CreateOperatorUseCase {
         }
         operatorPort.saveOperatorRoles(bindings);
 
-        // ADR-MONO-034 U4 (step 3d): attach the new operator to a central identity so
-        // post-step-3 operators stop the identity divergence. Fail-soft (the OPPOSITE
-        // of the 3c link's fail-closed): the operator-create must NOT hard-fail on
-        // identity-infra unavailability — the operator can be linked later via the
-        // explicit 3c surface.
-        //
-        // Platform-scope ('*') operators are SKIPPED: there is no account_db tenant
-        // row for '*', so the central identities FK (within account_db) would have no
-        // tenant to anchor — platform operators stay unlinked (link manually via 3c if
-        // ever needed).
-        if (!AdminOperator.PLATFORM_TENANT_ID.equals(tenantId)) {
-            String identityId = accountServiceClient.resolveOrCreateIdentity(
-                    tenantId, normalizedEmail,
-                    reuseExistingIdentity != null && reuseExistingIdentity);  // fail-soft → may be null
-            if (identityId != null) {
-                operatorPort.linkIdentity(created.internalId(), identityId, now);
-            }
-        }
+        // ADR-MONO-034 U4 (step 3d) identity resolve-or-link is NOT done here: it was always skipped for
+        // '*' (no account_db tenant row to anchor the identity), and '*' is now the only tenant this
+        // use case creates (TASK-MONO-772 S7). Platform operators stay unlinked (link manually via 3c).
 
         String auditId = auditor.newAuditId();
         auditor.record(new AdminActionAuditor.AuditRecord(
@@ -185,42 +157,6 @@ public class CreateOperatorUseCase {
                 created.createdAt(),
                 auditId,
                 tenantId);
-    }
-
-    /**
-     * Backward-compat overload for call sites predating TASK-BE-374
-     * ({@code reuseExistingIdentity} added). Defaults the identity-reuse opt-in to
-     * {@code false} (no silent merge — ADR-034 U3).
-     *
-     * @deprecated Supply {@code reuseExistingIdentity} explicitly (TASK-BE-374).
-     */
-    @Deprecated
-    @Transactional
-    public CreateOperatorResult createOperator(String email,
-                                               String displayName,
-                                               String password,
-                                               List<String> roleNames,
-                                               OperatorContext actor,
-                                               String reason,
-                                               String tenantId) {
-        return createOperator(email, displayName, password, roleNames, actor, reason, tenantId, false);
-    }
-
-    /**
-     * Backward-compat overload for call sites predating TASK-BE-249.
-     * Defaults {@code tenantId} to {@code "fan-platform"}.
-     *
-     * @deprecated Supply {@code tenantId} explicitly.
-     */
-    @Deprecated
-    @Transactional
-    public CreateOperatorResult createOperator(String email,
-                                               String displayName,
-                                               String password,
-                                               List<String> roleNames,
-                                               OperatorContext actor,
-                                               String reason) {
-        return createOperator(email, displayName, password, roleNames, actor, reason, "fan-platform", false);
     }
 
     public record CreateOperatorResult(

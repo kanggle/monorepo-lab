@@ -152,8 +152,9 @@ public class OperatorAdminController {
                 body.roles(),
                 OperatorContextHolder.require(),
                 reason,
-                body.tenantId(),                  // TASK-BE-249
-                body.reuseExistingIdentity());    // TASK-BE-374 (ADR-034 U4 — identity reuse opt-in)
+                body.tenantId());                 // TASK-BE-249 · TASK-MONO-772 S7: '*' only (else 422)
+        // TASK-BE-374 `reuseExistingIdentity` is still accepted on the wire (admin-api.md) but has no effect:
+        // identity linking was always skipped for '*', the only tenant this endpoint creates since 772 S7.
 
         CreateOperatorResponse response = new CreateOperatorResponse(
                 result.operatorId(),

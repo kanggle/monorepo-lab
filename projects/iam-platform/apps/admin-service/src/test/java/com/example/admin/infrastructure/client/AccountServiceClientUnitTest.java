@@ -124,21 +124,14 @@ class AccountServiceClientUnitTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-615 AC-8: searchSiteAccounts 는 excludePoolMembers=true 를 보내고, search(콘솔)는 보내지 않는다")
-    void searchSiteAccounts_sendsExcludePoolMembers_searchDoesNot() {
+    @DisplayName("TASK-MONO-772 S7: 퇴역한 excludePoolMembers 는 어떤 검색에도 실리지 않는다")
+    void search_neverSendsRetiredExcludePoolMembers() {
         wireMock.stubFor(get(urlPathEqualTo("/internal/accounts"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"content\":[],\"totalElements\":0,\"page\":0,\"size\":20,\"totalPages\":0}")));
 
-        client.searchSiteAccounts("ecommerce", "foo+bar@x.com");
-        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
-                .withQueryParam("email", equalTo("foo+bar@x.com"))
-                .withQueryParam("tenantId", equalTo("ecommerce"))
-                .withQueryParam("excludePoolMembers", equalTo("true")));
-
-        wireMock.resetRequests();
         client.search("ecommerce", "plain@example.com");
         wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/accounts"))
                 .withQueryParam("tenantId", equalTo("ecommerce"))

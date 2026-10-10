@@ -32,8 +32,7 @@ import java.util.Base64;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -118,12 +117,9 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     PasswordHasher passwordHasher;
 
-    // TASK-MONO-334: operator-create now probes account-service for the target
-    // email's tenant account. account-service is not booted in this test (base-url
-    // is a dead port), so mock the client: default the probe to "exists" so the
-    // create/list/patch flows proceed; the 422 test overrides it to "absent".
-    // (resolveOrCreateIdentity stays unstubbed → null → operator born unlinked,
-    // matching the prior dead-port fail-soft behavior.)
+    // account-service is not booted in this test (base-url is a dead port). Since TASK-MONO-772 S7 the operator
+    // create never calls it — '*' is the only created tenant and its identity link was always skipped; a company
+    // tenant is refused before any call. The mock stays so the S7 cell can assert «no call at all».
     @MockitoBean
     AccountServiceClient accountServiceClient;
 
@@ -131,13 +127,6 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
 
     private String superAdminToken() {
         return "Bearer " + jwt.operatorToken(SUPER_ADMIN_UUID);
-    }
-
-    @BeforeEach
-    void stubAccountExists() {
-        // Default: the target email HAS a signed-up account in the tenant (totalElements=1).
-        when(accountServiceClient.searchSiteAccounts(anyString(), anyString()))
-                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 1, 0, 1, 1));
     }
 
     @BeforeEach
@@ -175,39 +164,42 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("MONO-334: POST /operators with an email that has no tenant account → 422 OPERATOR_ACCOUNT_NOT_FOUND")
-    void createOperator_accountNotFound_returns422() throws Exception {
-        String ghostEmail = "ghost-" + System.currentTimeMillis() + "@example.com";
-        // Override the default "exists" stub for this email → definitively absent.
-        when(accountServiceClient.searchSiteAccounts("fan-platform", ghostEmail))
-                .thenReturn(new AccountServiceClient.AccountSearchResponse(List.of(), 0, 0, 1, 0));
+    @DisplayName("🔴 772 S7: POST /operators 비-'*' 테넌트 → 422 OPERATOR_INVITATION_REQUIRED — SUPER_ADMIN 이어도 · 행 0 · 생성 감사 0 · account-service 호출 0")
+    void createOperator_companyTenant_returns422_invitationRequired() throws Exception {
+        String staffEmail = "staff-" + System.currentTimeMillis() + "@example.com";
+        long createAuditsBefore = adminActionRepository.findAll().stream()
+                .filter(r -> "OPERATOR_CREATE".equals(r.getActionCode())).count();
 
         String body = """
                 {
                   "email": "%s",
-                  "displayName": "Ghost Op",
+                  "displayName": "Staff Op",
+                  "password": "StrongPass1!",
                   "roles": ["SUPPORT_LOCK"],
                   "tenantId": "fan-platform"
                 }
-                """.formatted(ghostEmail);
+                """.formatted(staffEmail);
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", superAdminToken())
                         .header("X-Operator-Reason", "provisioning")
-                        .header("Idempotency-Key", "idemp-ghost-1")
+                        .header("Idempotency-Key", "idemp-s7-company-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("OPERATOR_ACCOUNT_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("OPERATOR_INVITATION_REQUIRED"));
 
-        // Fail-closed: no operator row was persisted for the ghost email.
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM admin_operators WHERE email = ?", Integer.class, ghostEmail);
+                "SELECT COUNT(*) FROM admin_operators WHERE email = ?", Integer.class, staffEmail);
         assertThat(count).isZero();
+        assertThat(adminActionRepository.findAll().stream()
+                .filter(r -> "OPERATOR_CREATE".equals(r.getActionCode())).count())
+                .isEqualTo(createAuditsBefore);
+        verifyNoInteractions(accountServiceClient);
     }
 
     @Test
-    @DisplayName("POST /operators → 201, list reflects new row, PATCH roles replaces bindings")
+    @DisplayName("대조군(772 S7): POST /operators '*' → 201, list reflects new row, PATCH roles replaces bindings")
     void createThenListThenPatchRoles() throws Exception {
         // --- create
         String createdEmail = "fresh-" + System.currentTimeMillis() + "@example.com";
@@ -217,7 +209,7 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                   "displayName": "Fresh Op",
                   "password": "StrongPass1!",
                   "roles": ["SUPPORT_LOCK"],
-                  "tenantId": "fan-platform"
+                  "tenantId": "*"
                 }
                 """.formatted(createdEmail);
 
@@ -306,28 +298,22 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("TASK-BE-289 WI-2: patch-roles on a non-fan-platform operator stamps the operator's tenant_id (not legacy 'fan-platform')")
     void patchRoles_nonFanPlatformOperator_bindingTenantMatchesOperatorTenant() throws Exception {
-        // SUPER_ADMIN (platform scope) provisions an operator into "tenant-x".
+        // An operator homed in "tenant-x". Since TASK-MONO-772 S7 a company operator can no longer be created via
+        // POST /operators (invitation only), so the row is seeded directly — what this test pins is patch-roles.
         String email = "tenantx-" + System.currentTimeMillis() + "@example.com";
-        String createBody = """
-                {
-                  "email": "%s",
-                  "displayName": "Tenant X Op",
-                  "password": "StrongPass1!",
-                  "roles": ["SUPPORT_LOCK"],
-                  "tenantId": "tenant-x"
-                }
-                """.formatted(email);
-
-        String response = mockMvc.perform(post("/api/admin/operators")
-                        .header("Authorization", superAdminToken())
-                        .header("X-Operator-Reason", "provisioning")
-                        .header("Idempotency-Key", "idemp-tenantx-1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createBody))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        String operatorUuid = extract(response, "\"operatorId\":\"", "\"");
-        assertThat(operatorUuid).isNotBlank();
+        String operatorUuid = java.util.UUID.randomUUID().toString();
+        jdbcTemplate.update("""
+                INSERT INTO admin_operators
+                  (operator_id, tenant_id, email, password_hash, display_name, status,
+                   created_at, updated_at, version)
+                VALUES (?, 'tenant-x', ?, NULL, 'Tenant X Op', 'ACTIVE', NOW(6), NOW(6), 0)
+                """, operatorUuid, email);
+        jdbcTemplate.update("""
+                INSERT INTO admin_operator_roles (operator_id, role_id, granted_at, granted_by, tenant_id)
+                SELECT o.id, r.id, NOW(6), NULL, o.tenant_id
+                  FROM admin_operators o CROSS JOIN admin_roles r
+                 WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
+                """, operatorUuid);
 
         String operatorTenant = jdbcTemplate.queryForObject(
                 "SELECT tenant_id FROM admin_operators WHERE operator_id = ?",
@@ -366,7 +352,7 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                   "displayName": "First",
                   "password": "StrongPass1!",
                   "roles": [],
-                  "tenantId": "fan-platform"
+                  "tenantId": "*"
                 }
                 """.formatted(duplicateEmail);
 

@@ -134,6 +134,8 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         membership("ecommerce", STORE_ONLY, "\"ACTIVE\"");
         membership("fan-platform", STORE_ONLY, "null");
         membership("ecommerce", OPERATOR, "\"ACTIVE\"");
+        // TASK-MONO-772 S7 (AC-3 fan cell): the faceted pool operator is a fan member too.
+        membership("fan-platform", OPERATOR, "\"ACTIVE\"");
         membership("ecommerce", UNANSWERED, "\"ACTIVE\"");
         membership("ecommerce", DUAL_POOL, "\"ACTIVE\"");
 
@@ -494,15 +496,21 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
     /**
      * AC-2's control (same test class, same path) and AC-3: a faceted pool operator gets the console token
      * (tenant {@code iam}, its own {@code sub}, no roles) and refreshes it; after the operator row is suspended
-     * the NEXT refresh is refused with the «no facet» text, while the same account's store session is untouched.
+     * the NEXT refresh is refused with the «no facet» text, while the same account's store AND fan sessions are
+     * untouched — refresh and a fresh login both (TASK-MONO-772 S7 added the fan cell: AC-3 names «스토어 · 팬»).
      */
     @Test
-    @DisplayName("772 AC-2 대조군 · AC-3: 측면 있는 풀 운영자 → 콘솔 토큰(iam · sub=풀 계정 · roles 없음) → refresh 200(iam) → 측면 회수 → 다음 refresh 400(BE-614 문구) · 같은 계정 스토어 refresh 는 200")
+    @DisplayName("772 AC-2 대조군 · AC-3: 측면 있는 풀 운영자 → 콘솔 토큰(iam · sub=풀 계정 · roles 없음) → refresh 200(iam) → 측면 회수 → 다음 refresh 400(BE-614 문구) · 같은 계정 스토어 · 팬 refresh 200 · 팬 새 로그인 200")
     void facetedPoolOperator_consoleToken_thenRevoked_refreshRefused_storeUnaffected() throws Exception {
         Pkce storePkce = Pkce.create();
         MockHttpSession session = loginThrough(OPERATOR_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce);
         JsonNode storeTokens = exchange(authorizeExpectingCode(session, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce),
                 STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce, 200);
+        // The fan site too (S7 — AC-3's «팬 로그인»): single sign-on from the same IAM session.
+        Pkce fanPkce = Pkce.create();
+        JsonNode fanTokens = exchange(authorizeExpectingCode(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce),
+                FAN_CLIENT_ID, FAN_REDIRECT_URI, fanPkce, 200);
+        assertThat(claim(fanTokens.get("access_token").asText(), "tenant_id")).isEqualTo("fan-platform");
 
         // Console: single sign-on (no /login — no iam credential, BE-610), and a console token.
         Pkce consolePkce = Pkce.create();
@@ -533,6 +541,24 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         JsonNode store = refreshStore(storeTokens.get("refresh_token").asText(), 200);
         assertThat(claim(store.get("access_token").asText(), "tenant_id")).isEqualTo("ecommerce");
         assertThat(claim(store.get("access_token").asText(), "sub")).isEqualTo(OPERATOR);
+
+        // 🔴 772 AC-3 fan cell (S7) — the fan session of the same pool account: refresh 200, and a NEW fan login
+        // in the same browser (the session that just lost the console) still gets a fan code and token.
+        JsonNode fanRefreshed = refreshFan(fanTokens.get("refresh_token").asText(), 200);
+        assertThat(claim(fanRefreshed.get("access_token").asText(), "tenant_id")).isEqualTo("fan-platform");
+        assertThat(claim(fanRefreshed.get("access_token").asText(), "sub")).isEqualTo(OPERATOR);
+        Pkce fanAgainPkce = Pkce.create();
+        JsonNode fanAgain = exchange(authorizeExpectingCode(session, FAN_CLIENT_ID, FAN_REDIRECT_URI, fanAgainPkce),
+                FAN_CLIENT_ID, FAN_REDIRECT_URI, fanAgainPkce, 200);
+        String fanAgainAccess = fanAgain.get("access_token").asText();
+        assertThat(claim(fanAgainAccess, "tenant_id")).isEqualTo("fan-platform").isNotEqualTo("iam");
+        assertThat(claim(fanAgainAccess, "sub")).isEqualTo(OPERATOR);
+        // …while the console, in that same browser, still gets no token (the refusal is per client, not per account).
+        Pkce consoleAgainPkce = Pkce.create();
+        JsonNode consoleAgain = exchange(
+                authorizeExpectingCode(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consoleAgainPkce),
+                CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consoleAgainPkce, 400);
+        assertThat(consoleAgain.get("error_description").asText()).isEqualTo(NO_FACET_TEXT);
         // admin-service was asked on every console issuance (code + id token, refresh, refused refresh).
         adminService.verify(WireMock.moreThanOrExactly(3),
                 WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
@@ -703,6 +729,19 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
         assertThat(result.getResponse().getStatus())
                 .as("refresh status — body: " + result.getResponse().getContentAsString())
+                .isEqualTo(expectedStatus);
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode refreshFan(String refreshToken, int expectedStatus) throws Exception {
+        MvcResult result = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", refreshToken)
+                        .param("client_id", FAN_CLIENT_ID))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as("fan refresh status — body: " + result.getResponse().getContentAsString())
                 .isEqualTo(expectedStatus);
         return objectMapper.readTree(result.getResponse().getContentAsString());
     }

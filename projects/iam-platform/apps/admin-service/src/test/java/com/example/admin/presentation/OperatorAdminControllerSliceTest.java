@@ -8,7 +8,7 @@ import com.example.admin.application.PatchOperatorRoleUseCase;
 import com.example.admin.application.PatchOperatorStatusUseCase;
 import com.example.admin.application.UpdateOwnOperatorProfileUseCase;
 import com.example.admin.application.exception.CurrentPasswordMismatchException;
-import com.example.admin.application.exception.OperatorAccountNotFoundException;
+import com.example.admin.application.exception.OperatorInvitationRequiredException;
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.OperatorUnauthorizedException;
@@ -283,14 +283,14 @@ class OperatorAdminControllerSliceTest {
 
     @Test
     void create_operator_returns_201() throws Exception {
-        // TASK-BE-249: use 7-arg method signature
+        // TASK-BE-249 · TASK-MONO-772 S7: 7-arg signature (reuseExistingIdentity no longer reaches the use case)
         when(createOperatorUseCase.createOperator(
-                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any()))
+                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString()))
                 .thenReturn(new CreateOperatorUseCase.CreateOperatorResult(
                         "op-new", "new@example.com", "New", "ACTIVE",
                         List.of("SUPPORT_LOCK"), false,
                         Instant.parse("2026-04-24T10:00:00Z"),
-                        "audit-new", "fan-platform"));
+                        "audit-new", "*"));  // TASK-MONO-772 S7: '*' is the only created tenant
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -303,20 +303,20 @@ class OperatorAdminControllerSliceTest {
                                   "displayName": "New",
                                   "password": "StrongPass1!",
                                   "roles": ["SUPPORT_LOCK"],
-                                  "tenantId": "fan-platform"
+                                  "tenantId": "*"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.operatorId").value("op-new"))
                 .andExpect(jsonPath("$.auditId").value("audit-new"))
-                .andExpect(jsonPath("$.tenantId").value("fan-platform"));
+                .andExpect(jsonPath("$.tenantId").value("*"));
     }
 
     @Test
     void create_operator_duplicate_email_returns_409() throws Exception {
         doThrow(new OperatorEmailConflictException("dup"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -336,14 +336,13 @@ class OperatorAdminControllerSliceTest {
                 .andExpect(jsonPath("$.code").value("OPERATOR_EMAIL_CONFLICT"));
     }
 
-    // TASK-MONO-334 (ADR-MONO-035 amendment) — the target email has no signed-up
-    // account in the tenant → 422 OPERATOR_ACCOUNT_NOT_FOUND (distinct from the 409
-    // email-conflict above).
+    // TASK-MONO-772 S7 — a non-'*' (company) tenant → 422 OPERATOR_INVITATION_REQUIRED: company operators come
+    // only by invitation. Replaces the TASK-MONO-334 OPERATOR_ACCOUNT_NOT_FOUND cell (that check is gone).
     @Test
-    void create_operator_account_not_found_returns_422() throws Exception {
-        doThrow(new OperatorAccountNotFoundException("No signed-up account exists for this email in the target tenant"))
+    void create_operator_company_tenant_returns_422_invitation_required() throws Exception {
+        doThrow(new OperatorInvitationRequiredException("Company operators are created only by invitation"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -352,22 +351,22 @@ class OperatorAdminControllerSliceTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "email": "ghost@example.com",
-                                  "displayName": "Ghost",
+                                  "email": "staff@example.com",
+                                  "displayName": "Staff",
                                   "password": "StrongPass1!",
                                   "roles": [],
                                   "tenantId": "fan-platform"
                                 }
                                 """))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("OPERATOR_ACCOUNT_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("OPERATOR_INVITATION_REQUIRED"));
     }
 
     @Test
     void create_operator_unknown_role_returns_400() throws Exception {
         doThrow(new RoleNotFoundException("GHOST"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
@@ -432,7 +431,7 @@ class OperatorAdminControllerSliceTest {
         // TASK-BE-249: non-platform-scope actor trying to create tenantId='*' → 403
         doThrow(new com.example.admin.application.exception.TenantScopeDeniedException("platform-scope only"))
                 .when(createOperatorUseCase).createOperator(
-                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString(), any());
+                        anyString(), anyString(), anyString(), any(), any(), anyString(), anyString());
 
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())

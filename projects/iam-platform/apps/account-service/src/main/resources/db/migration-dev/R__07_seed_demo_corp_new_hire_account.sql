@@ -1,4 +1,17 @@
 -- =============================================================================
+-- 🔴 TASK-MONO-772 S7 (2026-10-10 UTC) — 이 시드가 시연하던 길은 사라졌다. 파일은 일부러 남긴다.
+--   · 아래 헤더가 말하는 «`/operators` 생성 폼 + 대상 테넌트 가입 계정 필수»(TASK-MONO-334)는
+--     ADR-MONO-080 D6 으로 대체됐다 — 비-'*' 운영자 직접 생성은 이제 `422 OPERATOR_INVITATION_REQUIRED`,
+--     회사 운영자는 초대 → 인증된 «풀» 계정의 본인 수락으로만 생긴다. 이 계정은 `demo-corp` **사이트**
+--     계정이라 초대를 수락할 수도 없다(수락 판정이 풀 계정만 받는다 — `verified-email:match` 404).
+--   · 그런데도 지우지 않는 이유: 이 R__ 는 이미 데모 · 개발 볼륨에 «적용됨» 으로 기록돼 있다.
+--     적용된 repeatable 을 지우면 Flyway validate 가 «applied migration not resolved locally» 로
+--     기동을 막는다 — 이 서비스는 `ignore-migration-patterns` 를 설정하지 않았다(설정 grep 0), 저장소에
+--     R__ 를 지운 선례도 없다(`git log --diff-filter=D` 0). 행 자체는 무해하다(INSERT IGNORE 1행,
+--     운영자 측면 없음 · 수락 불가). 짝 파일 auth-service `R__03_seed_demo_corp_new_hire_credential.sql`
+--     도 같은 이유로 남는다. 정리(파일 삭제 + 볼륨 정리 절차)는 별도 결정 몫.
+-- =============================================================================
+-- =============================================================================
 -- REPEATABLE (R__) — see R__05's header for the full R__-vs-versioned rationale
 -- (TASK-MONO-524/207/531); the short version: a repeatable carries no version,
 -- so it can never collide with or out-of-order a production migration number.
