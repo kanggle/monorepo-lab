@@ -28,6 +28,7 @@ platform-console
 
 # Dependency Markers
 
+- **선행 (2026-10-10 UTC 소유자 결정 «773 뒤로 미룸»)**: `TASK-MONO-773` `done/` — ⏳ **DO NOT START** 그 전에는. 773 이 운영자 측면 없는 풀 계정을 거절 대신 «비운영자 셸» 로 들이면 이 티켓의 실패(`sso_wrong_account`) 자체가 사라질 수 있다(772 F7). AC-0 의 첫 질문은 «773 뒤에도 `sso_wrong_account` 에 닿는 사람이 남는가» 다 — 0 이면 구현 없이 종결.
 - 출처: 25차 데모 창(2026-10-09 UTC) — `TASK-PC-FE-324` 가 만든 `sso_wrong_account` 안내를 실제로 밟다가 발견.
 - 관련: `TASK-PC-FE-324`(done — `sso_wrong_account` 코드·문구·로그아웃 버튼 도입) · `widgets/sso-wrong-account-logout/SsoWrongAccountLogout.tsx`(한계 문서화) · `TASK-BE-610` 계열(콘솔 재인증).
 
@@ -78,3 +79,12 @@ platform-console
 1. IdP(auth-service) 코드를 이 티켓(platform-console 소유) 범위에서 바로 바꾼다 — 크로스 프로젝트 원자적 PR 이 아니라 별도 ADR/티켓이 맞다(`CLAUDE.md` Cross-Project Changes).
 2. "시크릿 창을 쓰라" 를 안내문에 추가하는 것으로 끝낸다 — 증상을 가릴 뿐 탈출구를 만들지 않는다.
 3. AC-0 없이 `prompt=login` 강제부터 넣는다 — 스토어 자체의 SSO 편의(같은 브라우저에서 콘솔·스토어 전환)를 조사 없이 깰 수 있다.
+
+---
+
+# 미룸 기록 (2026-10-10 UTC)
+
+- 재측정: 772 뒤 `sso_wrong_account` 에 닿는 모집단 = **운영자 측면이 없는 풀 계정**뿐이다 — 콘솔 교환에서 측면이 없으면 `tenant_id` 를 풀 값으로 남겨 `refuseConsumerPoolTenant` 가 `invalid_grant`(`'consumer-pool'` 문구)로 거절한다(`TenantClaimTokenCustomizer.java:628-636, 309-323`) → 콘솔이 그 문구로 `sso_wrong_account` 를 고른다(`console-web/src/app/api/auth/callback/route.ts:113-126`).
+- 773(ADR-080 D9 = T1)은 바로 그 모집단을 «비운영자 셸» 로 들인다(773 AC-1). 그러면 콘솔이 IdP 로그인 결과(그리고 `id_token`)를 받을 수 있어 RP 로그아웃이 다시 성립할 가능성이 크다 — 지금 IdP 로그아웃 표면을 새로 만들면 773 뒤 쓸모가 줄어든다(772 F7).
+- 소유자 결정: **773 뒤로 미룸**. 773 쪽에 «비운영자 셸의 콘솔 로그아웃이 IAM 세션까지 끝낸다 · `sso_wrong_account` 에 닿는 경로가 남는지 확인» AC 를 더했다.
+
