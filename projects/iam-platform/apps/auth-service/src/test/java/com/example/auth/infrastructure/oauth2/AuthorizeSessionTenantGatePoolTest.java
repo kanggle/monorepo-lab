@@ -254,6 +254,24 @@ class AuthorizeSessionTenantGatePoolTest {
         verifyNoInteractions(accountServicePort);
     }
 
+    /**
+     * TASK-MONO-772 S4 (S1-1) — the two console cells above are the bite for S1-1: the session tenant of a pool
+     * principal on the console is now {@code iam} ({@link AuthorizationSessionTenant}), so a gate that compared
+     * session tenant with client tenant BEFORE the BE-610 check would pass the dual-credential person through
+     * (the cell above would go green → red). This cell pins the loop-free side: a failed credential lookup
+     * passes, as before 772 — it never re-authenticates a pool operator into an endless login.
+     */
+    @Test
+    @DisplayName("772 S4 (S1-1): 콘솔 client · 풀 세션 · iam 자격 조회 실패 → 통과(재인증 고리 없음) · 사이트 조회 없음")
+    void poolSession_console_credentialLookupFails_passes_noLoop() throws Exception {
+        stubClient("platform-console-web", "iam");
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenThrow(new RuntimeException("db down"));
+        Authentication session = principal("consumer-pool");
+
+        assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+        verifyNoInteractions(accountServicePort);
+    }
+
     @Test
     @DisplayName("AC-2 대조군: 묶이지 않은 사이트 계정 세션(ecommerce) → 팬 client 는 지금처럼 재인증 · 풀 조회 0")
     void siteSession_otherConsumerSite_stillReauthenticates() throws Exception {

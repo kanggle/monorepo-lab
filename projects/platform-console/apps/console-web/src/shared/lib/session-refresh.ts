@@ -17,6 +17,7 @@ import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
 import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger } from '@/shared/lib/logger';
+import { isOperatorEligibilityUnavailable } from '@/shared/lib/iam-token-refusal';
 
 /**
  * The single IAM refresh + re-exchange sequence, shared by BOTH refresh entry
@@ -38,6 +39,8 @@ import { logger } from '@/shared/lib/logger';
  *   - `no_refresh_token`         → nothing touched.
  *   - `grant_rejected`           → nothing touched (the caller decides whether to clear —
  *                                  a rotation-race loser must NOT delete the winner's cookies).
+ *   - `operator_check_unavailable` → nothing touched (TASK-MONO-772 S4 — IAM did not rotate;
+ *                                  the caller keeps every cookie, § 2.6.3).
  *   - `operator_not_provisioned` / `operator_mfa_required` / `operator_unavailable`
  *                                → rotated IAM cookies set, operator session (+ tenant pair)
  *                                  dropped. The caller decides whether to drop IAM too.
@@ -100,6 +103,11 @@ export type RefreshOutcome =
       /** IAM `400 invalid_grant` — the token may have been rotated by a concurrent refresh. */
       rotationSuspect: boolean;
     }
+  /**
+   * TASK-MONO-772 S4 — IAM `400 invalid_grant` with `error_description` exactly
+   * `operator_eligibility_unavailable` (§ 2.6.3): nothing touched, cookies kept.
+   */
+  | { kind: 'operator_check_unavailable' }
   | { kind: 'operator_not_provisioned' }
   /** TASK-MONO-771 — re-exchange `403 MFA_REQUIRED` (a resolved operator lacking `amr ∋ mfa`). */
   | { kind: 'operator_mfa_required' }
@@ -148,6 +156,15 @@ export async function refreshSessionCookies(
 
     if (!upstream.ok) {
       const body = (await upstream.json().catch(() => ({}))) as { error?: unknown };
+      // TASK-MONO-772 S4 (§ 2.6.3) — IAM could not ask admin-service whether this
+      // personal account is an operator. Transient and NOT a rotation race: IAM
+      // refused before issuing anything, so the refresh token was not rotated —
+      // nothing is touched and the caller keeps the cookies. Checked before the
+      // generic `invalid_grant` → `rotationSuspect` classification below.
+      if (upstream.status === 400 && isOperatorEligibilityUnavailable(body)) {
+        logger.warn('refresh_operator_check_unavailable', { requestId, via });
+        return { kind: 'operator_check_unavailable' };
+      }
       const oauthError = typeof body.error === 'string' ? body.error : undefined;
       const rotationSuspect = upstream.status === 400 && oauthError === 'invalid_grant';
       logger.warn('refresh_failed', {

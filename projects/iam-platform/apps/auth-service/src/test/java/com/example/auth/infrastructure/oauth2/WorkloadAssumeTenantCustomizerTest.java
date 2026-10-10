@@ -54,7 +54,7 @@ class WorkloadAssumeTenantCustomizerTest {
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort);
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED);
     }
 
     private JwtClaimsSet.Builder claims() {

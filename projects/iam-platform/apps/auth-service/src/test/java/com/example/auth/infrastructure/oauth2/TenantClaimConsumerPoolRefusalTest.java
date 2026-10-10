@@ -46,7 +46,7 @@ class TenantClaimConsumerPoolRefusalTest {
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort);
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED);
     }
 
     private static RegisteredClient client(String clientName, AuthorizationGrantType grantType) {

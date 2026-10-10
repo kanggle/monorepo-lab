@@ -35,6 +35,10 @@ import java.util.Map;
  * comparison here must answer the site too: a store authorization compares with {@code ecommerce},
  * a fan authorization with {@code fan-platform} — a store refresh token can never satisfy a fan
  * comparison ({@code TOKEN_TENANT_MISMATCH} kept, AC-5). Every non-pool principal: byte-unchanged.
+ *
+ * <p><b>TASK-MONO-772 S4 — consumer-pool principal on the console.</b> Mapped onto {@code iam}
+ * ({@link #mapsPoolPrincipalToConsole}), in its own branch — the console token a faceted pool operator
+ * receives carries {@code iam}, and so do its mirror rows.
  */
 final class AuthorizationSessionTenant {
 
@@ -74,6 +78,14 @@ final class AuthorizationSessionTenant {
                     // Trimmed like the claim the issuer mints for it, so the mirror rows agree.
                     return clientTenant.trim();
                 }
+                if (TenantContext.isConsumerPool(tenantId) && mapsPoolPrincipalToConsole(clientTenant)) {
+                    // TASK-MONO-772 S4 — a pool principal on the console: the token the issuer mints for
+                    // it (only when admin-service says it has a live operator facet) carries `iam`, so
+                    // the mirror rows carry `iam` and a refresh must compare with `iam`. A SEPARATE
+                    // branch from the site mapping above (772 AC-0 F4): putting `iam` into
+                    // poolPrincipalMapsTo would send the authorize gate down the consumer-site branch.
+                    return TenantContext.CONSOLE_TENANT_ID;
+                }
                 return tenantId;
             }
         }
@@ -103,6 +115,20 @@ final class AuthorizationSessionTenant {
      */
     static boolean mapsPoolPrincipalTo(String clientTenant) {
         return TenantContext.poolPrincipalMapsTo(clientTenant);
+    }
+
+    /**
+     * TASK-MONO-772 S4 (auth-api.md § 풀 계정의 콘솔 토큰; ADR-MONO-080 D6) — whether {@code clientTenant} is the
+     * console's tenant ({@link TenantContext#CONSOLE_TENANT_ID}), the one client a pool principal is mapped onto
+     * as {@code iam} rather than as a consumer site.
+     *
+     * <p>Mapping is not admission here either: the issuer mints the console token only when admin-service
+     * confirms a live operator facet ({@code TenantClaimTokenCustomizer}); without one the claim stays the pool
+     * value and the TASK-BE-614 refusal mints nothing. This rule is I/O-free on purpose — the three readers
+     * (claim, mirror row, gate) must agree on one value, and the facet answer is the issuer's alone.
+     */
+    static boolean mapsPoolPrincipalToConsole(String clientTenant) {
+        return clientTenant != null && TenantContext.CONSOLE_TENANT_ID.equals(clientTenant.trim());
     }
 
     private static String nonBlank(Object value) {

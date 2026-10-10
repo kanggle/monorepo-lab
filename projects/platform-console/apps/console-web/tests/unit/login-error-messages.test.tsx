@@ -112,6 +112,8 @@ const EXPECTED: Record<string, string> = {
     '다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다. 아래에서 로그아웃한 뒤, 스토어(쇼핑몰) 탭에서도 로그아웃하고 운영자 계정으로 다시 로그인하세요.',
   // TASK-MONO-771 S3 — the § 2.6 loop bound + IAM «취소» on the second factor.
   mfa_required: '2단계 인증을 마쳐야 콘솔에 들어올 수 있습니다.',
+  // TASK-MONO-772 S4 — contract § 2.6.3 (IAM `operator_eligibility_unavailable`).
+  operator_check_unavailable: '운영자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.',
   [SESSION_EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.',
 };
 
@@ -219,6 +221,17 @@ describe('/login — `sso_wrong_account` 전용 로그아웃 버튼 (TASK-PC-FE-
 
   it('🔵 대조군 — 에러가 없으면 안 보인다', async () => {
     await renderLogin();
+    expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
+  });
+
+  // TASK-MONO-772 S4 (§ 2.6.3, AC-0 F5) — an admin-service outage is NOT «wrong account»:
+  // its own copy, and no logout affordance (the account may well be right).
+  it('🔴 772: `operator_check_unavailable` 은 로그아웃 버튼 없이 «운영자 권한 확인 실패» 를 말한다 — «다른 계정» 이 아니다', async () => {
+    await renderLogin({ error: 'operator_check_unavailable' });
+    const t = alertText()!;
+    expect(t).toContain('운영자 권한을 확인하지 못했습니다');
+    expect(t).not.toContain('다른 계정');
+    expect(t).not.toContain('로그아웃');
     expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
   });
 

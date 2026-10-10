@@ -56,7 +56,7 @@ class TenantClaimAmrTest {
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort);
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED);
     }
 
     @Test

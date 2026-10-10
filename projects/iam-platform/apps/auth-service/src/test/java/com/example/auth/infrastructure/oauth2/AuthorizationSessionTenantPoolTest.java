@@ -68,11 +68,30 @@ class AuthorizationSessionTenantPoolTest {
                 .isEqualTo("fan-platform");
     }
 
+    /**
+     * TASK-MONO-772 S4 — CHANGED EXPECTATION. Under TASK-BE-615 the console row read «not mapped (pool value)».
+     * A faceted pool operator's console token now carries {@code iam}, so the mirror rows do too, and the refresh
+     * comparison must answer {@code iam}. The site mapping ({@code mapsPoolPrincipalTo}) still excludes the
+     * console — that is a separate branch (772 AC-0 F4).
+     */
     @Test
-    @DisplayName("콘솔(iam) · 풀 테넌트 client · client 테넌트 없음 → 사상하지 않는다(풀 값 그대로 — 발급은 거절된다)")
-    void consoleOrPoolOrNoClient_notMapped() {
+    @DisplayName("772 S4: 콘솔(iam) client → 세션 테넌트 iam (풀-사이트 매핑과 별개 갈래) · 인가·refresh 비교값 모두")
+    void console_mapsToIam_separateBranch() {
         Authentication pool = principal("consumer-pool");
-        assertThat(AuthorizationSessionTenant.of(pool, "iam")).isEqualTo("consumer-pool");
+        assertThat(AuthorizationSessionTenant.of(pool, "iam")).isEqualTo("iam");
+        assertThat(AuthorizationSessionTenant.of(pool, " iam ")).isEqualTo("iam");
+        assertThat(AuthorizationSessionTenant.of(authorizationFor("platform-console-web", pool), "iam"))
+                .isEqualTo("iam");
+        assertThat(AuthorizationSessionTenant.mapsPoolPrincipalTo("iam"))
+                .as("the consumer-site mapping still excludes the console — no re-login loop").isFalse();
+        assertThat(AuthorizationSessionTenant.mapsPoolPrincipalToConsole("iam")).isTrue();
+        assertThat(AuthorizationSessionTenant.mapsPoolPrincipalToConsole("ecommerce")).isFalse();
+    }
+
+    @Test
+    @DisplayName("풀 테넌트 client · client 테넌트 없음 → 사상하지 않는다(풀 값 그대로 — 발급은 거절된다)")
+    void poolOrNoClient_notMapped() {
+        Authentication pool = principal("consumer-pool");
         assertThat(AuthorizationSessionTenant.of(pool, "consumer-pool")).isEqualTo("consumer-pool");
         assertThat(AuthorizationSessionTenant.of(pool, null)).isEqualTo("consumer-pool");
     }

@@ -10,6 +10,10 @@ import {
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import { MFA_REQUIRED_CODE } from '@/shared/api/errors';
 import {
+  OPERATOR_CHECK_UNAVAILABLE,
+  OPERATOR_CHECK_UNAVAILABLE_CODE,
+} from '@/shared/lib/iam-token-refusal';
+import {
   buildLoginRedirectFor,
   buildStepUpRedirectFor,
   resolveRefreshReturnPath,
@@ -112,6 +116,15 @@ export async function POST(req: Request): Promise<NextResponse> {
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
         { status: 401 },
       );
+    case 'operator_check_unavailable':
+      // TASK-MONO-772 S4 (§ 2.6.3) — transient: IAM could not ask whether this
+      // personal account is an operator, and did NOT rotate the refresh token.
+      // Every cookie is kept; not the rotation-race retry (that is for a plain
+      // `invalid_grant`). The browser client shows the reason on `/login`.
+      return NextResponse.json(
+        { code: OPERATOR_CHECK_UNAVAILABLE_CODE, message: 'operator check unavailable' },
+        { status: 503 },
+      );
     case 'operator_mfa_required':
       // TASK-MONO-771 (§ 2.6.1) — callback parity: the operator session was
       // dropped, the rotated IAM cookies stay; the browser client navigates
@@ -206,6 +219,18 @@ export async function GET(req: Request): Promise<NextResponse> {
       // succeed. A 4xx rejection is final → no partial state (§ 2.6).
       if (outcome.status < 500) clearFullSession(jar);
       return sessionExpired();
+
+    case 'operator_check_unavailable': {
+      // TASK-MONO-772 S4 (§ 2.6.3) — transient: cookies KEPT (IAM did not rotate
+      // the refresh token), the reason is shown, the destination travels along.
+      // Outside the guard, so no loop; the next guard visit refreshes again.
+      const url = new URL('/login', origin);
+      url.searchParams.set('error', OPERATOR_CHECK_UNAVAILABLE);
+      if (target !== '/') url.searchParams.set('redirect', target);
+      const res = NextResponse.redirect(url.toString());
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
 
     case 'operator_not_provisioned':
       // Callback parity (§ 2.6 / ADR-MONO-044): a valid IAM login that is not

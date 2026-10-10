@@ -720,7 +720,7 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 
 | 풀 principal | 콘솔 토큰 (`authorization_code` · `refresh_token`) |
 |---|---|
-| **살아 있는 운영자 측면 있음** — admin-service [`GET /internal/operators/console-eligibility`](./internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772) `eligible=true`(= `admin_operators.oidc_subject = sub ∧ status = ACTIVE`, 토큰 교환과 같은 술어) | **발급** — `sub` = 풀 계정 id · `tenant_id = iam` · `tenant_type` · `email` · `amr` 은 다른 콘솔 토큰과 같은 규칙 · `roles` 없음(콘솔 client 는 역할을 주지 않는다 — 운영자 권한은 admin 토큰 교환에서 온다) · `entitled_domains` 없음 |
+| **살아 있는 운영자 측면 있음** — admin-service [`GET /internal/operators/console-eligibility`](./internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772) `eligible=true`(= `admin_operators.oidc_subject = sub ∧ status = ACTIVE`, 토큰 교환과 같은 술어) | **발급** — `sub` = 풀 계정 id · `tenant_id = iam` · `tenant_type` = 콘솔 client 의 등록값(`oauth_clients.tenant_type`, 지금 `B2B_ENTERPRISE` — principal 테넌트가 없는 콘솔 토큰이 받는 값과 같은 출처. 772 S4 정밀화: 이 클레임을 읽는 소비자는 없다) · `email` · `amr` 은 다른 콘솔 토큰과 같은 규칙 · `roles` 없음(콘솔 client 는 역할을 주지 않는다 — 운영자 권한은 admin 토큰 교환에서 온다) · `entitled_domains` 없음 |
 | 측면 없음 · 측면이 `ACTIVE` 아님(퇴사 · 정지) | **거절** — `400 invalid_grant`, `error_description` = 지금 문구 **그대로**(`tenant_id 'consumer-pool' is a reserved storage value and is never issued` — 바이트 불변. 콘솔 `TASK-PC-FE-324` 의 `sso_wrong_account` 판별이 이 문구의 `'consumer-pool'` 에 걸려 있다) |
 | 판정을 못 받음(admin-service 4xx · 5xx · 타임아웃 · circuit-open · 본문 이상) | **거절(fail-closed)** — `400 invalid_grant`, **`error_description=operator_eligibility_unavailable`**(고정 상수 — 값 전체 일치로 가른다. `'consumer-pool'` 을 포함하지 않는다: 장애를 «다른 계정으로 로그인돼 있다» 로 보이게 하지 않는다, 772 AC-0 F5) |
 
@@ -730,7 +730,7 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 - 2단계: 풀 운영자의 콘솔 로그인도 로그인 흐름의 2단계(§ IdP 브라우저 화면 — 2단계 인증)를 거친다. 교환 · assume 의 2단계 요구(TASK-MONO-771)는 그대로 문다 — TOTP 는 `account_id` 키라 풀 이동 뒤에도 산다.
 - **열지 않는 것**: 측면 **없는** 풀 계정의 콘솔 토큰 · 그래서 셀프 온보딩(`/onboarding` — 콘솔 토큰 필요)도 풀 계정에 계속 닫혀 있다. 그 개방(비운영자 셸 · ADR-MONO-044 D4 인증 이메일 트러스트 게이트)은 `TASK-MONO-773` 이 한다(ADR-080 D9 = T1). 773 이 넓힐 때 바꾸는 곳은 위 표의 «측면 없음» 행 한 곳이다 — 두 거절 상수는 그대로 둔다.
 - `consumer-pool` 은 여전히 어떤 토큰에도 나오지 않는다. 새 클레임 없음([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) 무변경).
-- 🔵 **구현 = `TASK-MONO-772` S4.** 그 전까지는 위 § 소비자 계정 풀 § 4 의 615 동작(풀 principal 의 콘솔 토큰 없음)이다.
+- 🔵 **구현 = `TASK-MONO-772` S4.** 판정 지점은 발급자 한 곳(`TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole`)이다 — `id_token` 도 같은 발급자를 지나므로 한 번의 발급에서 admin-service 에 두 번(access · id) 물을 수 있다(캐시 없음 규칙 그대로). refresh 에서 거절은 SAS refresh provider 가 access token 을 만드는 단계에서 나므로 refresh 토큰은 회전되지 않는다(콘솔 § 2.6.3 «쿠키 유지» 의 전제).
 
 ---
 

@@ -55,6 +55,9 @@ import java.util.Optional;
  *       operator — issuance refuses), re-authentication when it is not a consumer site; TASK-BE-616 — and the
  *       first-visit consent page when it is a consumer site the account has never joined, TASK-BE-619 — or
  *       left itself ({@link #consumerSiteDecision});</li>
+ *   <li>TASK-MONO-772 S4 — a consumer-pool principal on the console client → the TASK-BE-610 rule above,
+ *       evaluated BEFORE the session-tenant comparison (which now reads {@code iam} for it); the issuer, not
+ *       this gate, decides whether a console token is minted (operator facet);</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -193,6 +196,17 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
         if (AuthorizationSessionTenant.isPoolPrincipal(principal)
                 && AuthorizationSessionTenant.mapsPoolPrincipalTo(clientTenant)) {
             return consumerSiteDecision(principal, clientTenant, clientId);
+        }
+        if (AuthorizationSessionTenant.isPoolPrincipal(principal)
+                && AuthorizationSessionTenant.mapsPoolPrincipalToConsole(clientTenant)) {
+            // TASK-MONO-772 S4 (S1-1) — the session tenant of a pool principal on the console is now
+            // computed as `iam` (AuthorizationSessionTenant), which would short-circuit to PASS below and
+            // skip the TASK-BE-610 check. Run that check first, exactly as before 772: a person who also
+            // holds an `iam` credential re-authenticates (the console form then picks that credential);
+            // anyone else passes, and the issuer decides the token by the operator facet. No re-login
+            // loop (772 AC-0 F4): the consumer-site branch above is never taken for the console.
+            return holdsConsoleCredential(principal, TenantContext.CONSUMER_POOL_TENANT_ID, clientId)
+                    ? Decision.REAUTHENTICATE : Decision.PASS;
         }
         String sessionTenant = AuthorizationSessionTenant.of(principal, clientTenant);
         if (clientTenant.equals(sessionTenant)) {
