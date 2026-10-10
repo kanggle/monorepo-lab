@@ -90,3 +90,39 @@ ecommerce-microservices-platform
 1. "이메일 미인증이 원인" 으로 다시 가정하고 그 경로만 고친다 — 재시도 성공 사실이 이미 이 가정을 반증한다.
 2. 원인이 IAM 가입 리다이렉트 모양(크로스 프로젝트)인데 스토어 쪽 쿠키 설정만 넓혀 덮는다 — 증상은 가려지고 다른 클라이언트(콘솔 등)의 같은 경로는 안 고쳐진다.
 3. AC-0 없이 "쿠키 수명을 늘린다" 류의 추측 수정부터 한다 — 재현 없이는 고쳤는지 알 수 없다.
+
+---
+
+# AC-0 착수 시도 기록 (2026-10-10 UTC) — 🔴 재현 못 함 → `ready/` 유지
+
+재현 수단 둘 다 없다: 로컬 Docker 데몬 꺼짐(`npipe:////./pipe/docker_engine` 없음) · 데모 창 닫힘(인스턴스 정지). 스토어는 Vercel 에서 돌아 **실제 NextAuth 오류 원문은 Vercel Runtime Logs 에만** 있고, 2026-10-09 18:25Z 의 줄은 보존 기간이 지났을 가능성이 크며 이 호스트엔 `vercel` CLI 가 없다. 그래서 아래는 **정적 추적과 25차 창 기록의 시각 대조**이고, 원인 판정이 아니다.
+
+## 확정된 것 (코드 · 기록)
+
+| 사실 | 근거 |
+|---|---|
+| 스토어 화면의 `Configuration` 은 원인 하나를 가리키지 않는다 — 콜백에서 난 오류 중 클라이언트 안전 목록 밖의 것은 **전부** `Configuration` 으로 바뀐다. state/PKCE 쿠키 문제(`InvalidCheck`)와 토큰 엔드포인트 거절(`invalid_grant`) 둘 다 `CallbackRouteError` 로 감싸여 같은 화면이 된다 | `@auth/core`(next-auth `5.0.0-beta.25`) `lib/actions/callback/index.js:385-390` · `lib/index.js:130-131` · `errors.js:393` |
+| state · PKCE 쿠키 수명 = **15분** | `@auth/core` `lib/actions/callback/oauth/checks.js:5, 89` · 스토어 `checks: ['pkce', 'state']`(`auth.ts:88`) |
+| 🔴 **15분 만료 가설은 기각** — 가입 안내(`shopper1@demo.com`, «새 시크릿 창») 메시지 18:23:02Z → 계정 생성 18:25:08Z → 코드 발급 18:25:19Z. 스토어에서 가입을 누른 시각부터 코드까지 **3분 미만** | 25차 창 대화 기록 시각 · auth_db · account_db |
+| 🔴 **사이트 소속 거절(`invalid_grant`, `refusePoolPrincipal`)은 기각** — 그 거절은 INFO 로그를 남기는데(`TenantClaimTokenCustomizer.java:682-685`), 18:24Z 이후 auth-service 로그(INFO 포함, 같은 창에서 INFO 줄이 찍히는 것 확인)에 `Credential created` 한 줄뿐이었다 ⇒ 토큰 발급 단계(커스터마이저)까지 **오지 않았다** | 25차 창 `docker logs --since 2026-10-09T18:24:00Z iam-auth-service-1` |
+| 가입 뒤 IAM 흐름 = `/login?registered` → 로그인 → 저장된 authorize 요청 재개 → 코드 | `SignupPageController.java:191` · `AuthorizationServerConfig.java:391-398`(`prompt=create` → `/signup` 진입점) |
+
+## 남은 후보 — 둘 다 «스토어가 가진 state/verifier 가 코드를 만든 authorize 요청과 짝이 아니다» 로 모인다
+
+| 후보 | 기전 | 지금 판별 못 하는 이유 |
+|---|---|---|
+| **H-A 스토어 콜백에서 끊김** (`InvalidCheck`) | state 또는 PKCE 쿠키가 없거나 다른 값 — 토큰 요청을 아예 안 보낸다(auth-service 로그 0 과 맞다) | Vercel 로그 원문 필요 |
+| **H-B 토큰 엔드포인트에서 끊김** (SAS PKCE/redirect_uri 검증 `invalid_grant`) | verifier 가 다른 authorize 요청의 것 — SAS 는 이 거절을 DEBUG 로만 남긴다(로그 0 과 **역시** 맞다) | 같음 |
+
+짝이 어긋나는 경로로 코드에서 보이는 것 (🔵 가능성이지 원인 판정 아님):
+1. **스토어 `/signup` 의 이중 `signIn`** — 마운트 시 자동 `signup()`(`app/(auth)/signup/page.tsx:46-50`, ref 로 한 번만) **그리고** 리다이렉트가 도는 동안 보이는 «IAM 으로 이동» 버튼(`:59-66`)이 같은 `signIn` 을 다시 부른다. 두 번 부르면 쿠키 쓰기 순서와 IAM 이 마지막으로 저장한 authorize 요청 순서가 어긋날 수 있다. 재시도(18:39Z)는 `/login` 의 단일 클릭이라 어긋날 여지가 없다.
+2. **시크릿 창의 공유 쿠키 통** — Chrome 시크릿 창은 열린 시크릿 창끼리 쿠키를 같이 쓴다. 그 통에는 직전(18:19Z) 콘솔 로그인의 IAM 세션이 있었다. 이 경우 스토어 authorize 는 `AuthorizeSessionTenantGate` 를 지나며(`AuthorizeSessionTenantGate.java:160-172`) 재인증으로 바뀐다 — 저장 요청과 쿠키의 순서에 끼어들 수 있는 또 하나의 경로다.
+
+## 다음 데모 창 절차 (AC-0 를 닫는 재현)
+
+1. 🔴 **새 브라우저 프로필 또는 시크릿 창을 전부 닫은 뒤** 새 시크릿 창 하나 — 대조군: 공유 쿠키 통 없음.
+2. 스토어 `/signup` → 자동 이동만 기다린다(버튼 누르지 않음) → 새 이메일로 가입 → 로그인. 성공/실패 기록.
+3. 같은 조건에서 `/signup` 에서 **«IAM 으로 이동» 버튼을 바로 한 번 더** 누른다 → 가입 → 로그인. 성공/실패 기록(후보 1 판별).
+4. 25차 창 순서 재연: 시크릿 창에서 콘솔 로그인(콘솔 자격 계정) → 그 상태로 스토어 가입 → 로그인(후보 2 판별).
+5. 🔴 실패가 나면 **바로** Vercel 대시보드 → 스토어 프로젝트 → Runtime Logs 에서 그 시각의 `[auth][error]` 줄(오류 타입 + cause)을 복사한다. 보존 기간이 짧아 나중엔 없다. 동시에 auth-service 로그와 `oauth2_authorization`(client · 코드 발급 · `access_token_issued_at`) 행.
+
