@@ -147,9 +147,19 @@
 
     /* 로그인 계정 (TASK-MONO-561) */
     .creds h2 { font-size: 1.05rem; margin: 0 0 4px; }
-    .creds p { margin: 0 0 14px; font-size: .92rem; }
-    .crow { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
-    .crow dt { width: 68px; flex: none; font-size: .85rem; opacity: .7; }
+    .creds > p { margin: 0 0 16px; font-size: .92rem; }
+    /* 계정 세 개를 «어떤 계정을 언제 쓰나» 로 읽히게 — 카드 한 장 = 계정 하나(이름 · 용도 · 자격 · 로그인 후 할 일). */
+    .accts { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; align-items: start; }
+    .acct { border: 1px solid #8883; border-radius: 12px; padding: 16px 18px; }
+    .acct.main { border-color: #2563eb80; }
+    .acct h3 { font-size: .98rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .acct .tag { font-size: .72rem; font-weight: 500; padding: 1px 8px; border-radius: 999px; background: #2563eb2e; color: #2563eb; }
+    .acct .use { font-size: .86rem; opacity: .8; margin: 4px 0 10px; }
+    .acct ol { margin: 12px 0 0; padding-left: 1.2em; font-size: .84rem; }
+    .acct li + li { margin-top: 6px; }
+    .acct .note { font-size: .78rem; opacity: .6; margin: 8px 0 0; }
+    .crow { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .crow dt { width: 60px; flex: none; font-size: .85rem; opacity: .7; }
     .crow dd { margin: 0; display: flex; align-items: center; gap: 8px; }
     .crow code { font-size: 1rem; padding: 4px 10px; border-radius: 7px; background: #8882; user-select: all; }
     .copy { font-size: .78rem; padding: 5px 11px; background: #8883; }
@@ -361,81 +371,90 @@
   -->
   <div class="card creds">
     <h2>로그인 계정</h2>
-    <p>공개 둘러보기에는 <strong>필요 없습니다.</strong> 글쓰기·주문·운영 기능을 쓸 때 세 화면 모두 <strong>같은 계정</strong>으로 들어갑니다.</p>
-    <dl style="margin:0">
-      <div class="crow">
-        <dt>이메일</dt>
-        <dd><code id="c-email">demo@demo.com</code><button class="copy" data-copy="c-email">복사</button></dd>
-      </div>
-      <div class="crow">
-        <dt>비밀번호</dt>
-        <dd><code id="c-pass">Demo1234!</code><button class="copy" data-copy="c-pass">복사</button></dd>
-      </div>
-    </dl>
-    <!--
-      🔴 이 줄은 장식이 아니다. `seed/lib.sh` 가 실측으로 적어 뒀다: 이 계정은 각 도메인
-      테넌트에서 CUSTOMER 일 뿐이라 /api/admin/** 에 그대로 가면 **전부 403**(실측 6/6).
-      운영자 권한은 계정에 붙어 있지 않고 **demo-corp 를 assume 하는 순간 파생된다**
-      (OperatorRoleDerivation.fromEntitledDomains — demo-corp 가 5개 도메인을 구독한다).
-    -->
-    <p class="hint" style="margin-top:14px">
-      콘솔에 로그인한 뒤 <strong>테넌트를 <code>demo-corp</code> 로 선택</strong>하세요.
-      5개 도메인(이커머스 · WMS · SCM · ERP · 재무)의 운영자 권한은 그 시점에 부여됩니다.
-      <br />
-      단, <strong>이커머스 화면(<code>/ecommerce/*</code>)의 목록은 테넌트 <code>ecommerce</code> 에서 보입니다</strong> —
-      권한은 <code>demo-corp</code> 에서 파생되지만 데이터 스코프는 JWT 의 <code>tenant_id</code> 를 따르기 때문입니다.
-      <code>demo-corp</code> 인 채로 상품 목록을 열면 빈 목록이 나옵니다(2026-09-11 실측).
-    </p>
+    <p>공개 둘러보기에는 <strong>필요 없습니다.</strong> 글쓰기·주문·운영 기능을 쓸 때만 로그인하세요 — 보통은 <strong>첫 번째 계정 하나면 충분합니다.</strong></p>
+    <div class="accts">
+      <section class="acct main">
+        <h3>기본 데모 계정 <span class="tag">추천</span></h3>
+        <p class="use">스토어 · 팬 · 콘솔 세 화면 모두 이 계정 하나로 들어갑니다.</p>
+        <dl style="margin:0">
+          <div class="crow">
+            <dt>이메일</dt>
+            <dd><code id="c-email">demo@demo.com</code><button class="copy" data-copy="c-email">복사</button></dd>
+          </div>
+          <div class="crow">
+            <dt>비밀번호</dt>
+            <dd><code id="c-pass">Demo1234!</code><button class="copy" data-copy="c-pass">복사</button></dd>
+          </div>
+        </dl>
+        <!--
+          🔴 아래 단계는 장식이 아니다. `seed/lib.sh` 가 실측으로 적어 뒀다: 이 계정은 각 도메인
+          테넌트에서 CUSTOMER 일 뿐이라 /api/admin/** 에 그대로 가면 **전부 403**(실측 6/6).
+          운영자 권한은 계정에 붙어 있지 않고 **demo-corp 를 assume 하는 순간 파생된다**
+          (OperatorRoleDerivation.fromEntitledDomains — demo-corp 가 5개 도메인을 구독한다).
+        -->
+        <ol>
+          <li>콘솔에 로그인한 뒤 <strong>테넌트를 <code>demo-corp</code> 로 선택</strong> → 5개 도메인(이커머스 · WMS · SCM · ERP · 재무)의 운영자 권한이 부여됩니다.</li>
+          <li><strong>이커머스 화면(<code>/ecommerce/*</code>)</strong>의 목록을 볼 때는 테넌트를 <code>ecommerce</code> 로 바꾸세요. <code>demo-corp</code> 인 채로 열면 빈 목록이 나옵니다.</li>
+        </ol>
+        <p class="note">권한은 <code>demo-corp</code> 에서 파생되지만 데이터 스코프는 JWT 의 <code>tenant_id</code> 를 따르기 때문입니다(2026-09-11 실측).</p>
+      </section>
 
-    <!--
-      권한 부족 시연 계정 (TASK-MONO-730, 재굽기 후 — TASK-BE-597 #4001 이 시딩).
+      <!--
+        플랫폼 운영자 계정 (TASK-MONO-751, 2026-10-03 소유자 결정 «플랫폼 운영자 데모 계정 시드» — 재굽기 후).
 
-      🔴 위 계정과 달리 **역할이 없다**(admin_operator_roles 0행) — 로그인·콘솔 셸 진입은
-      되지만 게이트된 화면은 전부 403 이다. `/partnerships` 는 위 demo@demo.com(SUPER_ADMIN)
-      도 설계상 403 이므로(ADR-MONO-045) 그 화면 하나로는 이 계정과 구별되지 않는다 — 그래서
-      아래 문구는 「대부분 메뉴」라고만 말한다.
-      🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-viewer-email"` 을
-      `R__seed_demo_viewer_operator_credential.sql` 의 이메일 컬럼과 대조한다.
-    -->
-    <p class="hint" style="margin-top:18px">
-      <strong>권한 부족 화면 시연용</strong> 계정도 있습니다. 로그인하면 콘솔 셸에는 들어가지만
-      역할이 없어 운영자 · 감사 · 테넌트 등 <strong>대부분의 메뉴에서 403 「권한 없음」</strong>을
-      봅니다(<code>/partnerships</code> 는 위 계정도 설계상 403 이라 이 계정만의 특징은 아닙니다).
-    </p>
-    <dl style="margin:0">
-      <div class="crow">
-        <dt>이메일</dt>
-        <dd><code id="c-viewer-email">viewer@demo.com</code><button class="copy" data-copy="c-viewer-email">복사</button></dd>
-      </div>
-      <div class="crow">
-        <dt>비밀번호</dt>
-        <dd><code id="c-viewer-pass">Demo1234!</code><button class="copy" data-copy="c-viewer-pass">복사</button></dd>
-      </div>
-    </dl>
+        🔴 팬 디렉터리(소속사 · 아티스트 · 그룹) 화면은 **플랫폼 운영자만** 연다(ADR-MONO-079 라이더 R3).
+        위 demo@demo.com 은 고객사(demo-corp) 운영자라 그 메뉴가 보이지 않는다. 이 계정은 홈 테넌트가
+        플랫폼 스코프(`*`)이고 관리 역할은 없다(admin_operator_roles 0행) — IAM 관리 화면은 403 이다.
+        🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-platform-email"` 을
+        `R__seed_demo_platform_operator_credential.sql` 의 이메일 컬럼과 대조한다.
+      -->
+      <section class="acct">
+        <h3>플랫폼 운영자</h3>
+        <p class="use">팬 디렉터리(소속사 · 아티스트 · 그룹) 관리를 볼 때 씁니다.</p>
+        <dl style="margin:0">
+          <div class="crow">
+            <dt>이메일</dt>
+            <dd><code id="c-platform-email">platform@demo.com</code><button class="copy" data-copy="c-platform-email">복사</button></dd>
+          </div>
+          <div class="crow">
+            <dt>비밀번호</dt>
+            <dd><code id="c-platform-pass">Demo1234!</code><button class="copy" data-copy="c-platform-pass">복사</button></dd>
+          </div>
+        </dl>
+        <ol>
+          <li>콘솔에 로그인한 뒤 <strong>테넌트를 <code>fan-platform</code> 으로 선택</strong> → 「팬 디렉터리」 메뉴가 열립니다.</li>
+        </ol>
+      </section>
 
-    <!--
-      플랫폼 운영자 계정 (TASK-MONO-751, 2026-10-03 소유자 결정 «플랫폼 운영자 데모 계정 시드» — 재굽기 후).
+      <!--
+        권한 부족 시연 계정 (TASK-MONO-730, 재굽기 후 — TASK-BE-597 #4001 이 시딩).
 
-      🔴 팬 디렉터리(소속사 · 아티스트 · 그룹) 화면은 **플랫폼 운영자만** 연다(ADR-MONO-079 라이더 R3).
-      위 demo@demo.com 은 고객사(demo-corp) 운영자라 그 메뉴가 보이지 않는다. 이 계정은 홈 테넌트가
-      플랫폼 스코프(`*`)이고 관리 역할은 없다(admin_operator_roles 0행) — IAM 관리 화면은 403 이다.
-      🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-platform-email"` 을
-      `R__seed_demo_platform_operator_credential.sql` 의 이메일 컬럼과 대조한다.
-    -->
-    <p class="hint" style="margin-top:18px">
-      <strong>팬 디렉터리(소속사 · 아티스트 · 그룹) 관리</strong>는 플랫폼 운영자 계정으로 봅니다.
-      로그인한 뒤 <strong>테넌트를 <code>fan-platform</code> 으로 선택</strong>하면 「팬 디렉터리」 메뉴가 열립니다.
-    </p>
-    <dl style="margin:0">
-      <div class="crow">
-        <dt>이메일</dt>
-        <dd><code id="c-platform-email">platform@demo.com</code><button class="copy" data-copy="c-platform-email">복사</button></dd>
-      </div>
-      <div class="crow">
-        <dt>비밀번호</dt>
-        <dd><code id="c-platform-pass">Demo1234!</code><button class="copy" data-copy="c-platform-pass">복사</button></dd>
-      </div>
-    </dl>
+        🔴 위 기본 계정과 달리 **역할이 없다**(admin_operator_roles 0행) — 로그인·콘솔 셸 진입은
+        되지만 게이트된 화면은 전부 403 이다. `/partnerships` 는 demo@demo.com(SUPER_ADMIN)
+        도 설계상 403 이므로(ADR-MONO-045) 그 화면 하나로는 이 계정과 구별되지 않는다 — 그래서
+        아래 문구는 「대부분 메뉴」라고만 말한다.
+        🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-viewer-email"` 을
+        `R__seed_demo_viewer_operator_credential.sql` 의 이메일 컬럼과 대조한다.
+      -->
+      <section class="acct">
+        <h3>권한 없음 시연</h3>
+        <p class="use">「권한 없음(403)」 화면을 보여 줄 때 씁니다.</p>
+        <dl style="margin:0">
+          <div class="crow">
+            <dt>이메일</dt>
+            <dd><code id="c-viewer-email">viewer@demo.com</code><button class="copy" data-copy="c-viewer-email">복사</button></dd>
+          </div>
+          <div class="crow">
+            <dt>비밀번호</dt>
+            <dd><code id="c-viewer-pass">Demo1234!</code><button class="copy" data-copy="c-viewer-pass">복사</button></dd>
+          </div>
+        </dl>
+        <ol>
+          <li>콘솔 셸에는 들어가지만 역할이 없어 운영자 · 감사 · 테넌트 등 <strong>대부분의 메뉴가 403</strong> 입니다.</li>
+        </ol>
+        <p class="note"><code>/partnerships</code> 는 기본 계정도 설계상 403 이라 이 계정만의 특징은 아닙니다.</p>
+      </section>
+    </div>
   </div>
 
   <!--
