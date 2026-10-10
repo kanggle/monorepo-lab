@@ -4,7 +4,7 @@ TASK-MONO-785
 
 # Status
 
-review — 구현 완료(2026-10-10 UTC). 론처 마크업 · CSS 만 바뀌고 계정 값은 그대로다.
+done (2026-10-10 UTC — 4차원 검증: #4293 `f499e7e43` MERGED · main tip 일치 · 머지 전 실패 0 · AC-1~4 닫힘) ‖ 직전: review — 구현 완료(2026-10-10 UTC). 론처 마크업 · CSS 만 바뀌고 계정 값은 그대로다.
 
 # Title
 
