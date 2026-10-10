@@ -132,7 +132,7 @@ account_db 트랜잭션 **마지막 단계**로 부른다. 옮기는 것은 **`c
 | 3 | 자격 행의 `tenant_id` ≠ `siteTenantId` | `409 POOL_MOVE_CREDENTIAL_TENANT_MISMATCH` | 없음 |
 | 4 | 그 계정의 `social_identities` 행이 **하나라도** 있다(테넌트 무관) | `409 POOL_MOVE_SOCIAL_LINKED` | 없음 |
 | 5 | 같은 이메일의 `consumer-pool` 자격(다른 계정)이 있다 | `409 POOL_MOVE_CREDENTIAL_EXISTS` | 없음 |
-| 6 | admin-service 가 운영자 측면이라 답했다([auth-to-admin.md § facet](./auth-to-admin.md#get-internaloperatorsfacet--운영자-측면-판정-task-be-618)) — `accountId` 와 자격 행의 `identity_id` 로 묻는다 | `409 POOL_MOVE_OPERATOR_FACETED` | 없음 |
+| 6 | admin-service 가 운영자 측면이라 답했다([auth-to-admin.md § facet](./auth-to-admin.md#get-internaloperatorsfacet--운영자-측면-판정-task-be-618)) — `accountId` 와 자격 행의 `identity_id` 로 묻는다. 🔵 **`TASK-MONO-772` S6 부터 `axes=IDENTITY`** — 셀프 온보딩 운영자(`oidc_subject` = 이 계정 id)는 더는 이 판정에 걸리지 않고 같은 id 로 옮겨진다(ADR-MONO-080 D6 넷째 줄 · 772 구현자 결정 D-6). 신원 연결 축만 남는다 | `409 POOL_MOVE_OPERATOR_FACETED` | 없음 |
 | 7 | admin-service 에 물을 수 없다(5xx · 타임아웃 · circuit-open · 본문 이상) | `503 SERVICE_UNAVAILABLE` | 없음 — **fail-closed** |
 | 8 | 그 밖 | `200 {"moved": true, "alreadyInPool": false}` | `credentials.tenant_id = 'consumer-pool'`, `version + 1`(동시에 옛 값을 들고 있던 저장은 낙관적 락으로 실패) |
 

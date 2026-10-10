@@ -1552,7 +1552,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 ## POST /api/admin/operators
 
-신규 운영자 계정 생성.
+신규 운영자 계정 생성. 🔴 **`TASK-MONO-772` 부터 플랫폼 범위(`tenantId='*'`) 운영자 전용이다** — 회사(비-`'*'`) 테넌트의 운영자는 [§ Operator Invitation](#operator-invitation-task-mono-772) 으로만 생긴다(아래 «TASK-MONO-772» 블록).
 
 **Auth required**: Yes (operator token, `token_type=admin`)
 **Required permission**: `operator.manage`
@@ -1579,7 +1579,15 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 > **TASK-BE-377 (ADR-MONO-035 O2 / step 4c)** — `password` (optional): 누락/공백이면 운영자는 **OIDC-only**(`admin_operators.password_hash = NULL`)로 생성된다 — PRIMARY 로그인은 통합 IAM OIDC credential(`token-exchange` 경유). 제공되면 break-glass 로컬 비밀번호로 hash 되어 잔존하며 정책(≥10자, 영문+숫자+특수문자)을 강제한다. OIDC-only 운영자는 `POST /api/admin/auth/login` 으로 로그인할 수 없고(`401 INVALID_CREDENTIALS`) OIDC 로만 인증한다 (security.md §Operator Credential Convergence).
 
-> **TASK-MONO-334 (ADR-MONO-035 amendment) — 가입 계정 선행 조건**: `email` 은 대상 `tenantId` 에 **이미 가입된 계정**이어야 한다. producer 는 생성 전 account-service `GET /internal/accounts?email&tenantId` 로 존재를 확인하고, 계정이 없으면 `422 OPERATOR_ACCOUNT_NOT_FOUND` 로 거부한다 — 운영자의 PRIMARY 로그인이 그 계정의 통합 IAM credential 이기 때문. 이는 TASK-PC-FE-179 의 fail-soft advisory 를 **대체**한다: break-glass `password` 가 있어도 계정 없는 "허수 운영자"는 더 이상 생성되지 않는다(break-glass 는 이제 이미 계정이 존재하는 운영자의 secondary 로그인일 뿐). **`tenantId='*'`(플랫폼 스코프)는 면제** — account_db 에 `*` tenant 행이 없어 확인 대상이 없다(SUPER_ADMIN 부트스트랩; `FirstAdminProvisioner` self-service 온보딩 경로는 이 use-case 를 거치지 않으므로 무관). account-service 불가용 시 **fail-closed**: `503 DOWNSTREAM_ERROR` 로 거부하고 운영자를 생성하지 않는다.
+> **TASK-MONO-772 (ADR-MONO-080 D6 · 구현자 결정 D-7) — `'*'` 전용으로 좁힌다 · 아래 `TASK-MONO-334` 블록을 대체한다.**
+> - `tenantId` 가 `'*'` 가 **아니면** → **`422 OPERATOR_INVITATION_REQUIRED`**. 아무것도 만들지 않고 account-service 도 부르지 않는다. 회사 운영자의 입구는 초대 하나다([§ Operator Invitation](#operator-invitation-task-mono-772)).
+> - 판정 순서: `operator.manage` → 사유 · 본문 검증 → `tenantId='*'` 이면 기존 플랫폼 범위 규칙(비-플랫폼 actor → `403 TENANT_SCOPE_DENIED`) → 비-`'*'` 이면 `422`(actor 와 무관). ADR-024 D2 · D3 검사(`TenantScopeGuard` · `RoleGrantGuard`)는 `'*'` 생성에 지금처럼 걸린다.
+> - **왜 «선행 계정 조건만 지우기» 가 아닌가**: ADR-080 D6 은 334 규칙을 «초대 → 인증된 본인 수락» 으로 **대체**한다. 전제(가입 계정)만 지우고 생성을 남기면 334 가 닫은 «계정 없는 운영자» 가 다시 열린다. `'*'` 는 ADR-080 D1(플랫폼 관리자 분리 · 부트스트랩)이라 남긴다.
+> - **잃는 것 (실측, 772 AC-0 F1)**: 회사 테넌트에 **break-glass 비밀번호 전용** 운영자를 새로 만들 수 없다. OIDC 쪽으로는 잃는 것이 없다 — 334 로 만든 운영자는 `oidc_subject` 를 받지 않아 원래 OIDC 주 경로로 로그인할 수 없었다(채우는 곳은 셀프 온보딩 · 일회성 백필뿐). 이미 있는 운영자 행은 바뀌지 않는다.
+> - 334 의 확인(account-service `GET /internal/accounts?email&tenantId&excludePoolMembers=true` · `422 OPERATOR_ACCOUNT_NOT_FOUND` · 그 확인의 `503 DOWNSTREAM_ERROR`)은 이 엔드포인트에서 **사라진다**. `excludePoolMembers` 파라미터와 콘솔 사전 게이트도 호출자가 없어져 같은 슬라이스에서 걷는다([admin-to-account.md](internal/admin-to-account.md#get-internalaccountsemail) · 콘솔 § 2.4.3).
+> - 🔵 **구현 = `TASK-MONO-772` S7.** 그 슬라이스가 머지되기 전까지는 아래 334 동작이 그대로다(콘솔이 비-`'*'` 생성을 더 부르지 않게 된 뒤 — S5 — 에 걷는다).
+>
+> **~~TASK-MONO-334~~ (위 `TASK-MONO-772` 블록이 대체 — 772 S7 머지 전까지의 동작으로만 남는다) (ADR-MONO-035 amendment) — 가입 계정 선행 조건**: `email` 은 대상 `tenantId` 에 **이미 가입된 계정**이어야 한다. producer 는 생성 전 account-service `GET /internal/accounts?email&tenantId` 로 존재를 확인하고, 계정이 없으면 `422 OPERATOR_ACCOUNT_NOT_FOUND` 로 거부한다 — 운영자의 PRIMARY 로그인이 그 계정의 통합 IAM credential 이기 때문. 이는 TASK-PC-FE-179 의 fail-soft advisory 를 **대체**한다: break-glass `password` 가 있어도 계정 없는 "허수 운영자"는 더 이상 생성되지 않는다(break-glass 는 이제 이미 계정이 존재하는 운영자의 secondary 로그인일 뿐). **`tenantId='*'`(플랫폼 스코프)는 면제** — account_db 에 `*` tenant 행이 없어 확인 대상이 없다(SUPER_ADMIN 부트스트랩; `FirstAdminProvisioner` self-service 온보딩 경로는 이 use-case 를 거치지 않으므로 무관). account-service 불가용 시 **fail-closed**: `503 DOWNSTREAM_ERROR` 로 거부하고 운영자를 생성하지 않는다.
 
 > **TASK-BE-374 (ADR-MONO-034 U4 / U6 step 3d)** — `reuseExistingIdentity` (optional, nullable; 누락 시 `false`): 중앙 identities 레지스트리(account-service, step 3a)에서 동일 `(tenantId, email)` identity 가 **이미 존재할 때** 그 identity 를 **재사용**할지에 대한 명시적 opt-in. 신규 운영자 생성 직후 account-service `POST /internal/tenants/{tenantId}/identities:resolveOrCreate` 를 호출해 identity 를 resolve-or-create 하고 그 `identity_id` 를 `admin_operators.identity_id` 에 링크한다 — step 3 이후 생성되는 모든 운영자가 중앙 identity 에 연결되어 identity divergence 가 멈춘다.
 > - **no silent merge (U3)**: identity 가 이미 존재하지만 `reuseExistingIdentity` 가 `false`/누락이면, account-service 는 `EXISTS_NOT_REUSED`(identityId=null)를 반환하고 운영자는 **unlinked** 로 생성된다(나중에 `identity:link` step-3c surface 로 명시 링크). 이메일 일치만으로 자동 병합되지 않는다.
@@ -1611,12 +1619,217 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 403 | `TENANT_SCOPE_DENIED` | 비-플랫폼 스코프 운영자가 `tenantId='*'` 운영자 생성 시도 (TASK-BE-249); 또는 actor 가 `body.tenantId` 에 대한 admin-grant 스코프 밖 (ADR-024 D2, step-1) |
 | 403 | `ROLE_GRANT_FORBIDDEN` | **TASK-BE-347 (ADR-024 D3)** — 비-플랫폼 actor 가 `SUPER_ADMIN` 또는 자신이 보유하지 않은 권한을 가진 role 을 부여 시도 (≤-own grant-menu) |
 | 409 | `OPERATOR_EMAIL_CONFLICT` | 동일 (tenant_id, email) 운영자 이미 존재 |
-| 422 | `OPERATOR_ACCOUNT_NOT_FOUND` | **TASK-MONO-334** — `email` 이 대상 `tenantId` 에 가입된 계정이 아님 (`*` 플랫폼 스코프는 면제) |
-| 503 | `DOWNSTREAM_ERROR` | **TASK-MONO-334** — account-service 불가용으로 가입 계정 여부를 확인 불가 (fail-closed, 미생성) |
+| 422 | `OPERATOR_INVITATION_REQUIRED` | **TASK-MONO-772 (S7 부터)** — `tenantId` 가 `'*'` 가 아니다. 회사 운영자는 [§ Operator Invitation](#operator-invitation-task-mono-772) 으로만 생긴다. 미생성 · 하류 호출 없음 |
+| 422 | ~~`OPERATOR_ACCOUNT_NOT_FOUND`~~ | **TASK-MONO-334 — 772 S7 머지 전까지만.** `email` 이 대상 `tenantId` 에 가입된 계정이 아님 (`*` 플랫폼 스코프는 면제). S7 뒤 이 엔드포인트는 이 코드를 내지 않는다(코드 자체는 `identity:link` 가 계속 쓴다) |
+| 503 | ~~`DOWNSTREAM_ERROR`~~ | **TASK-MONO-334 — 772 S7 머지 전까지만.** account-service 불가용으로 가입 계정 여부를 확인 불가 (fail-closed, 미생성). S7 뒤 `'*'` 생성은 account-service 를 부르지 않는다(identity 링크는 `'*'` 에서 생략 — 아래 BE-374) |
 | 400 | `ROLE_NOT_FOUND` | `roles` 배열에 존재하지 않는 role 이름 포함 |
 | 400 | `VALIDATION_ERROR` | email 형식 오류 / password 정책 위반 / displayName 길이 초과 / tenantId 누락 또는 32자 초과 |
 
 **Side Effects**: 성공 시 `admin_actions`에 `action_code=OPERATOR_CREATE, tenant_id=actor.tenantId, target_tenant_id=body.tenantId` 기록. **TASK-BE-374**: 비-`*` tenant 의 경우 identity resolve-or-create + `admin_operators.identity_id` 링크가 같은 트랜잭션에서 수행됨(fail-soft — identity 호출 실패 시 unlinked 로 생성, 별도 audit row 없음 — OPERATOR_CREATE 가 provisioning 행위를 이미 커버). `403 TENANT_SCOPE_DENIED` 시 `admin_actions`에 `outcome=DENIED, tenant_id=actor's, target_tenant_id=actor's, downstream_detail`에 시도한 `body.tenantId` 기록 — best-effort 쓰기 (TASK-BE-262). 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
+
+---
+
+## Operator Invitation (TASK-MONO-772)
+
+**ADR-MONO-080 D6 · 라이더 R4 · 소유자 결정 OD-1 ~ OD-4 (2026-10-09 UTC).** 회사(비-`'*'`) 테넌트의 운영자는 **초대 → 인증된 본인 수락** 으로만 생긴다.
+운영자 관리자가 이메일로 초대하고, 그 이메일을 **인증한 개인(풀) 계정**이 IdP 에 **로그인한 상태로** 수락하면 운영자 측면(`admin_operators` 행)이 생긴다.
+이메일 일치만으로는 붙지 않는다(ADR-MONO-034 § 1.3 · ADR-MONO-080 D3). `TASK-MONO-334` 의 «대상 테넌트에 가입 계정이 있어야» 규칙을 **대체**한다(위 § POST /api/admin/operators).
+
+| 무엇 | 어디 |
+|---|---|
+| 저장 | admin-service [`operator_invitation`](../../services/admin-service/data-model.md#operator_invitation) |
+| 관리(발급 · 목록 · 취소 · 재발송) | 이 절 — 운영자 토큰, `operator.manage` |
+| 수락 화면 | IdP — [auth-api.md § IdP 브라우저 화면 — 운영자 초대 수락](auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6) (OD-3: 콘솔이 아니다 — 측면 없는 풀 계정은 콘솔 토큰을 못 받는다) |
+| 수락 판정 | auth → admin [`POST /internal/operator-invitations/accept`](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) — 계정 판정은 admin → account [`POST /internal/accounts/{accountId}/verified-email:match`](internal/admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772) |
+| 초대 메일 | admin → account [`POST /internal/notifications/operator-invitation`](internal/admin-to-account.md#post-internalnotificationsoperator-invitation--운영자-초대-메일-task-mono-772) (OD-4: `TASK-MONO-770` 발송기 재사용) |
+
+**규칙**:
+
+| 규칙 | 내용 |
+|---|---|
+| 1회용 · 만료 · 원문 미저장 (R4) | 토큰 = `SecureRandom` 32바이트 → base64url. 서버는 **SHA-256 hex 만** 저장한다(셀러 구성원 초대와 같은 계산). 만료 `expires_at = 발급(또는 재발송) 시각 + admin.operator-invitation.ttl`(ISO-8601, 기본 `P7D`). **만료는 읽을 때 판정**한다 — `EXPIRED` 는 상태값이 아니고 정리 잡도 없다. 응답의 `expired` 는 읽은 시각의 판정이다 |
+| 상태 | `PENDING` → `ACCEPTED`(수락) · `PENDING` → `CANCELLED`(취소). 되돌림 없음. 수락은 조건부 갱신(`… WHERE id = ? AND status = 'PENDING'`)으로 **한 번만** 이긴다 |
+| 대기 하나 | `(tenant_id, email)` 에 `PENDING` 은 **최대 한 행**(만료된 `PENDING` 포함 — 다시 보내려면 재발송). 이미 그 테넌트의 운영자인 이메일은 초대하지 않는다 |
+| 전달 (OD-4) | **메일** — account-service 의 `TASK-MONO-770` 발송기를 내부 호출로 쓴다. 🔴 링크(토큰)는 초대자에게 **돌려주지 않는다** — 응답 · 목록 · 감사 · 로그 어디에도 없다. 발송이 실패해도 초대 행은 남고, 응답 · 목록의 `delivery` 가 그것을 보인다 → 재발송 |
+| 재발송 (OD-4) | **같은 행**에 새 토큰 · 새 만료. 옛 해시를 덮어쓰므로 **옛 링크는 죽는다**(수락 → `404`). 새 행 + 옛 행 취소는 하지 않는다(«대기 하나» 를 깨기 쉽다) |
+| 대상 테넌트 | `'*'` 거절(`400 VALIDATION_ERROR`) — 플랫폼 관리자는 초대로 생기지 않는다(ADR-080 D1). 등록된 테넌트여야 한다(발급 · 재발송 때 account-service 로 확인). **운영자가 0명인 테넌트도 받는다** — `SUPER_ADMIN` 이 새 테넌트의 첫 관리자를 초대하는 길(`TASK-MONO-773` 의 «관리자 대기» 가 이것을 쓴다) |
+| 권한 | **새 키 없음** — `operator.manage`([rbac.md](../../services/admin-service/rbac.md#permission-keys)). 범위(ADR-024 D2 `TenantScopeGuard`, 대상 = 초대 테넌트)와 역할 무상승(D3 `RoleGrantGuard`)은 `POST /api/admin/operators` 와 같은 규칙이고, **수락 때 한 번 더** 판정한다(7일 사이 초대자의 권한이 줄었을 수 있다) |
+| 🔴 한 사람 = 한 회사 (OD-1) | 772 에서 계정 하나는 운영자 행 **하나**까지다 — `admin_operators.oidc_subject` 가 플랫폼 전역 UNIQUE 이고 토큰 교환이 `sub` 로 한 행만 찾는다(772 AC-0 F2). 이미 운영자 측면이 있는 계정이 **두 번째 회사** 초대를 수락하면 `409 OPERATOR_ALREADY_PROVISIONED`(아무것도 쓰지 않는다 · 초대는 `PENDING` 그대로). 발급 단계에서는 막지 않는다 — 초대는 이메일에 가고, 누가(어느 계정이) 수락할지는 발급 때 모른다. 🔴 **다회사 운영자 모델은 `TASK-MONO-773` 착수 전 ADR 로 정한다**(ADR-080 개정 또는 새 ADR — 772 AC-0 OD-1 의 (b) 한 행 + 회사별 역할 · (c) 회사마다 행). 그 결정 전까지 772 Edge Case «같은 사람이 여러 회사에 초대» 는 **미충족 · 기록**이다 |
+
+**공통 응답 항목 (invitation item)** — 발급 · 목록 · 취소 · 재발송이 같은 모양을 쓴다:
+
+```json
+{
+  "invitationId": "string (UUID v7)",
+  "tenantId": "acme-corp",
+  "email": "person@example.com",
+  "displayName": "홍길동",
+  "roles": ["SUPPORT_LOCK"],
+  "status": "PENDING",
+  "expired": false,
+  "expiresAt": "2026-10-17T10:00:00Z",
+  "createdAt": "2026-10-10T10:00:00Z",
+  "invitedBy": "operator UUID v7",
+  "delivery": { "status": "SENT", "attemptedAt": "2026-10-10T10:00:01Z" },
+  "acceptedAt": null,
+  "acceptedOperatorId": null,
+  "cancelledAt": null
+}
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `email` | 초대한 주소(앞뒤 공백 제거 · 소문자). 수락 판정의 «기대 이메일» |
+| `displayName` | 수락 때 만들어질 운영자 행의 `display_name`(1–64자, 초대자가 정한다) |
+| `roles` | 수락 때 부여될 역할(그 테넌트 범위 grant). 수락 때 초대자 기준으로 다시 판정한다 |
+| `status` | `PENDING` · `ACCEPTED` · `CANCELLED` |
+| `expired` | `status = PENDING` 이고 `expiresAt ≤ 읽은 시각` 이면 `true`. 그 밖엔 `false`(`ACCEPTED`/`CANCELLED` 는 만료를 따지지 않는다) |
+| `invitedBy` | 지금 살아 있는 토큰을 낸 운영자(`admin_operators.operator_id`) — **재발송하면 재발송한 운영자로 바뀐다**(수락 때 그 사람 기준으로 재판정 — 아래 § 재발송) |
+| `delivery.status` | 마지막 발송 시도의 결과: `SENT` · `FAILED_TRANSIENT`(메일 서버 연결 · 인증 · 시간 초과 · 판정 불가 — 다시 보내면 될 수 있다) · `FAILED_PERMANENT`(이 주소를 받지 않는다 — 다시 보내도 같다). 판별은 account-service 발송기가 한다(`TASK-MONO-770` 과 같은 분류). `ACCEPTED`/`CANCELLED` 행도 마지막 시도 값을 그대로 보인다 |
+| `acceptedOperatorId` | 수락으로 생긴 운영자의 `operator_id`. `ACCEPTED` 일 때만 |
+
+🔴 응답 어디에도 **토큰 · 토큰 해시 · 링크가 없다.** 수락한 계정 id 도 이 관리 표면에는 싣지 않는다(운영자 행의 `oidc_subject` 와 같은 값 — 감사 행에만 남는다, 아래 § 수락).
+
+### POST /api/admin/operator-invitations
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `operator.manage`
+**Granted to roles**: `SUPER_ADMIN` · `TENANT_ADMIN`(자기 grant 테넌트 한정 — D2) · `operator.manage` 를 가진 그 밖의 위임 역할
+**Headers**: `Authorization`, `X-Operator-Reason` (required), **`Idempotency-Key` (required)** — `POST /api/admin/operators` 와 같은 규칙(`(actor_id, action_code, idempotency_key)` 재사용 → `409 IDEMPOTENCY_KEY_CONFLICT`). `X-Tenant-Id` 는 판정에 쓰지 않는다(대상 = 본문 `tenantId`).
+
+**Request**:
+```json
+{
+  "email": "person@example.com",
+  "displayName": "홍길동",
+  "roles": ["SUPPORT_LOCK"],
+  "tenantId": "acme-corp"
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `email` | string | Y | 이메일 형식, ≤ 255. 저장 전 trim · 소문자 |
+| `displayName` | string | Y | 1–64자 (`POST /api/admin/operators` 와 같다) |
+| `roles` | array\<string\> | Y | `POST /api/admin/operators` 의 `roles` 와 같은 검증. 없는 역할 → `400 ROLE_NOT_FOUND` |
+| `tenantId` | string | Y | 1–32자 테넌트 slug. **`'*'` → `400 VALIDATION_ERROR`** |
+
+**처리 순서** (처음 실패한 것이 답한다 · 거절은 초대 행을 쓰지 않는다):
+
+1. `operator.manage` — 없으면 `403 PERMISSION_DENIED`(DENIED 행, `RequiresPermissionAspect`).
+2. `X-Operator-Reason` → `400 REASON_REQUIRED` · `Idempotency-Key` 누락 → `400 VALIDATION_ERROR` · 본문 검증 → `400 VALIDATION_ERROR`.
+3. 범위(D2) — actor 의 admin-grant 범위가 `tenantId` 를 덮지 않으면 `403 TENANT_SCOPE_DENIED`(best-effort DENIED 행 — `POST /api/admin/operators` 의 BE-262 와 같다).
+4. 역할 — 없는 이름 `400 ROLE_NOT_FOUND` → 무상승(D3) `403 ROLE_GRANT_FORBIDDEN`(DENIED 행).
+5. `Idempotency-Key` 재사용 → `409 IDEMPOTENCY_KEY_CONFLICT`.
+6. 테넌트 존재 — account-service 로 확인(비 hot-path). 없으면 `404 TENANT_NOT_FOUND`, 확인 실패면 `503 DOWNSTREAM_ERROR` · `CIRCUIT_OPEN` — **쓰지 않는다**(fail-closed: 없는 테넌트로 가는 초대를 남기지 않는다). 상태(`ACTIVE` 여부)는 여기서 보지 않는다 — 수락 때 본다.
+7. 그 테넌트에 같은 이메일의 운영자 행이 이미 있다(`admin_operators (tenant_id, email)`) → `409 OPERATOR_EMAIL_CONFLICT`.
+8. 같은 `(tenant_id, email)` 의 `PENDING` 초대가 있다(만료 포함) → `409 OPERATOR_INVITATION_ALREADY_PENDING` — 콘솔은 그 행의 재발송을 권한다.
+9. 한 트랜잭션: 초대 행(`PENDING`, 해시 · 만료) + 감사 행 `OPERATOR_INVITATION_CREATE`(`SUCCESS`). 커밋.
+10. **커밋 뒤** 메일 발송(admin → account). 결과를 초대 행의 `delivery` 에 적는다(별도 짧은 트랜잭션). 🔴 발송 실패는 **오류 응답이 아니다** — `201` + `delivery.status = FAILED_*`. 커밋 전에 보내지 않는 이유: 롤백된 초대의 링크가 메일함에 남지 않게.
+
+**Response 201**: invitation item + `"auditId": "string (admin_actions.id)"`.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 `tenantId` 에 대한 admin-grant 범위 밖 (ADR-024 D2) |
+| 403 | `ROLE_GRANT_FORBIDDEN` | 비-플랫폼 actor 가 `SUPER_ADMIN` 또는 자기가 갖지 않은 권한의 역할을 초대에 실음 (ADR-024 D3) |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
+| 400 | `VALIDATION_ERROR` | `Idempotency-Key` 누락 · 이메일 형식 · `displayName` 길이 · `tenantId` 누락/형식/`'*'` |
+| 400 | `ROLE_NOT_FOUND` | `roles` 에 없는 역할 |
+| 404 | `TENANT_NOT_FOUND` | 대상 테넌트 미등록 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자 · 같은 키로 이미 실행 |
+| 409 | `OPERATOR_EMAIL_CONFLICT` | 그 테넌트에 같은 이메일의 운영자가 이미 있다 |
+| 409 | `OPERATOR_INVITATION_ALREADY_PENDING` | 같은 테넌트 · 같은 이메일의 대기 초대가 있다(만료 포함) — 재발송으로 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | 테넌트 존재 확인 실패 — 쓰지 않음 |
+
+**Side Effects**: `admin_actions` — `action_code=OPERATOR_INVITATION_CREATE`, `permission_used=operator.manage`, `target_type=OPERATOR_INVITATION`, `target_id=<invitationId>`, `target_tenant_id=<tenantId>`, `outcome=SUCCESS` + `admin.action.performed` outbox. 감사 행에 이메일 · 토큰을 싣지 않는다(이메일은 초대 행에 있다). 발송 결과는 감사 행이 아니라 초대 행의 `delivery` 와 구조화 로그(수신자 마스킹)에 남는다.
+
+### GET /api/admin/operator-invitations
+
+**Auth required**: Yes · **Required permission**: `operator.manage` · **Headers**: `Authorization`. 읽기 — 감사 행 없음.
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string (optional) | 조회할 테넌트. 생략 시 운영자 자신의 home 테넌트. `*` 는 플랫폼 범위 운영자 전용(전체 테넌트). 범위 규칙은 `GET /api/admin/operators` 의 `tenantId` 와 **같다**(effective scope 밖 → `403 TENANT_SCOPE_DENIED`). 콘솔은 활성 테넌트를 보낸다 |
+| `status` | string (optional) | `PENDING`(기본) · `ACCEPTED` · `CANCELLED`. 만료된 `PENDING` 은 `PENDING` 에 `expired=true` 로 나온다 |
+| `page` · `size` | int | 기본 0 · 20, `size` ≤ 100 |
+
+**Response 200**: `{ "content": [invitation item…], "totalElements", "page", "size", "totalPages" }` — `createdAt` 내림차순.
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조 |
+| 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 비-플랫폼 운영자가 effective scope 밖의 `tenantId` 지정 |
+| 400 | `VALIDATION_ERROR` | `size` > 100 · `status` 값 오류 |
+
+### POST /api/admin/operator-invitations/{invitationId}:cancel
+
+**Auth required**: Yes · **Required permission**: `operator.manage`
+**Headers**: `Authorization`, `X-Operator-Reason` (required). **`Idempotency-Key` 없음** — 같은 취소의 재전송은 아래 멱등 규칙이 답한다.
+
+**처리 순서**: 권한 → 사유 → 초대 조회 — 없거나 **actor 의 admin-grant 범위 밖 테넌트**의 초대면 `404 OPERATOR_INVITATION_NOT_FOUND`(열거 방지 — 운영자 그룹의 `GROUP_NOT_FOUND` 와 같은 모양) → 상태:
+
+| 지금 상태 | 결과 |
+|---|---|
+| `PENDING`(만료 포함) | `CANCELLED` 로 조건부 갱신 → `200` + item. 그 사이 수락이 이겼으면 `409 OPERATOR_INVITATION_NOT_PENDING` |
+| `CANCELLED` | `200` + item — 멱등 no-op, 감사 행 없음 |
+| `ACCEPTED` | `409 OPERATOR_INVITATION_NOT_PENDING` — 수락된 초대는 취소하지 않는다. 그 사람을 빼려면 운영자 상태 변경(`PATCH …/{operatorId}/status`) · 역할 · 배정 회수다(ADR-080 D5 — 회수는 측면만) |
+
+취소된 초대의 링크로 수락하면 `404`(없는 초대와 구별하지 않는다 — 아래 § 수락).
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `operator.manage` 없음 |
+| 400 | `REASON_REQUIRED` | 사유 누락 |
+| 404 | `OPERATOR_INVITATION_NOT_FOUND` | 없거나 범위 밖 |
+| 409 | `OPERATOR_INVITATION_NOT_PENDING` | `ACCEPTED`(또는 취소 중 수락이 이김) |
+
+**Side Effects**: 전이했을 때만 `admin_actions` — `action_code=OPERATOR_INVITATION_CANCEL`, `target_type=OPERATOR_INVITATION`, `target_id=<invitationId>`, `target_tenant_id=<초대 테넌트>` + outbox.
+
+### POST /api/admin/operator-invitations/{invitationId}:resend
+
+**Auth required**: Yes · **Required permission**: `operator.manage`
+**Headers**: `Authorization`, `X-Operator-Reason` (required). **`Idempotency-Key` 없음** — 재전송은 토큰을 한 번 더 돌릴 뿐이다(가장 나중 메일의 링크만 산다).
+
+**처리 순서**: 권한 → 사유 → 초대 조회(없거나 범위 밖 → `404 OPERATOR_INVITATION_NOT_FOUND`) → `PENDING` 아님 → `409 OPERATOR_INVITATION_NOT_PENDING` →
+**재발송하는 actor 기준** 무상승 재판정(D3 — 초대의 `roles` 를 actor 가 부여할 수 있어야 한다, 아니면 `403 ROLE_GRANT_FORBIDDEN`) → 테넌트 존재 확인(`404 TENANT_NOT_FOUND` · `503`, 쓰지 않음) →
+한 트랜잭션: **같은 행**에 새 토큰 해시 · `expires_at = 지금 + ttl` · `invited_by = actor` · `version + 1`(동시 수락 · 동시 재발송과는 조건부 갱신으로 겨룬다 — 진 쪽은 `409 OPERATOR_INVITATION_NOT_PENDING`) + 감사 행 → 커밋 → 메일 → `delivery` 기록.
+
+- 🔴 **옛 링크는 죽는다** — 해시를 덮어쓰므로 옛 토큰의 수락은 `404 OPERATOR_INVITATION_NOT_FOUND` 다.
+- **만료된 초대를 살리는 길이 이것이다**(새 만료). 발송 실패를 다시 시도하는 길도 이것이다.
+- `invited_by` 를 재발송한 actor 로 바꾸는 이유: 살아 있는 토큰을 낸 사람이 그 역할 부여의 책임자다 — 수락 때의 D3 재판정도 그 사람 기준이다.
+
+**Response 200**: invitation item(새 `expiresAt` · `delivery`). 발송 실패도 `200`(`delivery.status = FAILED_*`).
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `operator.manage` 없음 |
+| 403 | `ROLE_GRANT_FORBIDDEN` | 재발송 actor 가 초대 역할을 부여할 수 없다 |
+| 400 | `REASON_REQUIRED` | 사유 누락 |
+| 404 | `OPERATOR_INVITATION_NOT_FOUND` | 없거나 범위 밖 |
+| 404 | `TENANT_NOT_FOUND` | 초대 테넌트가 더는 등록돼 있지 않다 |
+| 409 | `OPERATOR_INVITATION_NOT_PENDING` | `ACCEPTED` · `CANCELLED` · 동시 갱신에 졌다 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | 테넌트 존재 확인 실패 — 토큰을 돌리지 않음 |
+
+**Side Effects**: `admin_actions` — `action_code=OPERATOR_INVITATION_RESEND`, `target_type=OPERATOR_INVITATION`, `target_id=<invitationId>`, `target_tenant_id=<초대 테넌트>` + outbox.
+
+### 수락 — 이 표면이 아니다
+
+수락은 운영자 토큰을 가진 사람이 하는 일이 아니다(수락하는 사람은 **아직 운영자가 아니다**). IdP 화면이 받고, auth-service 가 admin-service 내부 엔드포인트
+[`POST /internal/operator-invitations/accept`](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) 를 부른다. 판정 순서 · 거절 코드 · 수락이 만드는 행은 그 절이 정본이다. 요약:
+
+- 호출자 = **IdP 세션의 풀 계정**(요청 본문은 계정을 말하지 않는다). 그 계정이 풀 계정이고 · 이메일이 초대 이메일과 같고 · 그 이메일이 **인증됐을 때만** 붙는다(판정은 account-service — `TASK-MONO-770` 의 공용 술어 `VerifiedEmailRequirement` 를 그 자리에서 부른다. 사본을 만들지 않는다).
+- 초대 테넌트 `ACTIVE` · 초대자(`invitedBy`) 아직 `ACTIVE` · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3) · 초대 테넌트가 **지금도** 초대자의 범위 안(D2).
+- 만들어지는 것: 운영자 행(홈 = 초대 테넌트 · `password_hash` NULL · **`oidc_subject` = 수락한 계정 id**) · 역할 grant(테넌트 = 초대 테넌트) · 초대 `ACCEPTED`. `oidc_subject` 를 쓰는 것이 «로그인 문» 이다 — 이 행이 있어야 토큰 교환이 그 계정을 운영자로 해석하고, IdP 가 그 풀 계정에 콘솔 토큰을 준다([auth-api.md § 풀 계정의 콘솔 토큰](auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).
+- `amr ∋ mfa` 는 수락에서 요구하지 않는다 — 측면을 **만드는** 일이고, 2단계 진입 조건은 토큰 교환 · assume 이 문다(TASK-MONO-771).
 
 ---
 

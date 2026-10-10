@@ -3,7 +3,7 @@
 auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조회한다.
 
 **호출 방향**: auth-service (client) → account-service (server)
-**노출 경로**: `/internal/accounts/*` — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
+**노출 경로**: `/internal/accounts/*` · `/internal/consumer-pool/signups`(TASK-MONO-772) — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
 **인증** (TASK-BE-318c 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <IAM client_credentials JWT>` — auth-service 가 `auth-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 정적 `X-Internal-Token` 은 제거됨. JWT 미제시/무효 시 모든 `/internal/**` 요청은 401 `UNAUTHORIZED` 로 fail-closed.
 
 > **TASK-BE-063 (credential ownership)** — credential 데이터는 이제 auth-service 가 소유한다. 과거의 `GET /internal/accounts/credentials` 엔드포인트는 제거되었다. auth-service 는 로그인 시 로컬 `CredentialRepository` 로 credential 을 조회하고, 본 문서의 status 엔드포인트로 계정 활성 여부만 확인한다. credential 쓰기 경로는 [auth-internal.md](./auth-internal.md) 참조.
@@ -344,6 +344,50 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 **호출 시점 (auth-service)**: admin → auth 내부 명령 [`POST /internal/auth/accounts/{accountId}/second-factor/reset`](./admin-to-auth.md#post-internalauthaccountsaccountidsecond-factorreset) 에서, 지울 `account_totp` 행이 **없을 때만**(`AccountSecondFactorResetUseCase`). 행이 있으면 묻지 않고 지운다.
 
 **매핑** (`AccountServicePort.getAccountStatusAndTenant` 그대로): `404` → 내부 명령 `404 ACCOUNT_NOT_FOUND` · 200 → `404 TOTP_NOT_ENROLLED` · 그 밖(4xx · 5xx · 타임아웃 · circuit-open) → `AccountServiceUnavailableException` → `503 SERVICE_UNAVAILABLE`(«계정 없음» 과 «등록 없음» 중 하나로 추측하지 않는다 — 어느 쪽이든 아무것도 지워지지 않았다). 읽기, 멱등.
+
+---
+
+## POST /internal/consumer-pool/signups — 사이트 없는 풀 가입 (TASK-MONO-772)
+
+**ADR-MONO-080 D6 · 소유자 결정 OD-3 («IdP 수락 화면에서 사이트 없는 풀 가입»).** 풀 계정이 없는 운영자 피초대자가 IdP 화면
+[`/operator-invitations/signup`](../auth-api.md#get--post-operator-invitationssignup--사이트-없는-풀-가입-소유자-결정-od-3) 에서 가입할 때 auth-service 가 부른다(서버 측 — `/signup` 프록시와 같은 이유).
+소비자 client 의 가입(`POST /api/accounts/signup`)과 다른 점은 하나다: 🔴 **사이트 멤버십을 만들지 않고 `account.created` 를 내지 않는다** — 직원이 회사 초대를 받으려고 스토어 · 팬 회원이 되지 않는다(772 AC-0 F8).
+그 사람이 나중에 소비자 사이트에 처음 오면 지금처럼 그 사이트 동의 화면 → 멤버십 → 그 사이트로 `account.created` 1회([multi-tenancy.md § 소비자 계정 풀 § 4 · § 6](../../../features/multi-tenancy.md#4-로그인--authorize--토큰)).
+
+**노출 · 인증**: `/internal/consumer-pool/*` — [account-maintenance-internal.md](./account-maintenance-internal.md) 와 같은 사슬(IAM `client_credentials` Bearer JWT · **`internal.invoke` scope 필수** — `auth-service-client` 가 가진다). 게이트웨이 퍼블릭 라우트 없음.
+
+**Request**:
+```json
+{
+  "email": "person@example.com",
+  "password": "string",
+  "displayName": "string (optional, max 100)",
+  "locale": "string (optional, default 'ko-KR')",
+  "timezone": "string (optional, default 'Asia/Seoul')"
+}
+```
+
+검증은 [account-api.md § POST /api/accounts/signup](../account-api.md#post-apiaccountssignup) 과 같다(이메일 형식 · `PasswordPolicy`). 테넌트를 받지 않는다 — 계정은 언제나 `consumer-pool` 에 태어난다.
+
+**동작 (한 account_db 트랜잭션)** — 소비자 가입의 풀 경로와 같은 순서에서 멤버십 · 이벤트만 뺀다:
+
+1. 같은 이메일의 `consumer-pool` 계정이 있다 → `409 ACCOUNT_ALREADY_EXISTS`(«로그인하세요»).
+2. 같은 이메일의 **소비자 사이트 계정**(078 이전 사이트별 계정)이 있다 → 풀 가입을 받지 않는다 — [multi-tenancy.md § 소비자 계정 풀 § 2](../../../features/multi-tenancy.md#2-가입--소비자-client-의-새-가입은-풀로) 의 공존 금지, **지금 소비자 가입이 이 경우에 내는 응답과 같은 코드**(새 코드를 만들지 않는다).
+3. `accounts`(`tenant_id = consumer-pool`, `ACTIVE`) · `profiles` · 중앙 신원 mint(`identities`, born-unified — 소비자 가입과 같다) → auth-service `POST /internal/auth/credentials`(`tenantId = consumer-pool`, `identityId`) — 자격 생성 실패는 가입 전체 실패(소비자 가입과 같다).
+4. **쓰지 않는 것**: `consumer_site_memberships` 행 · `account.created` outbox.
+
+- `iam.consumer-pool.enabled` 가 꺼져 있으면 → `409 CONSUMER_POOL_DISABLED`(풀 계정을 만들 길이 없는 배치 — [account-maintenance-internal.md](./account-maintenance-internal.md) 와 같은 코드).
+- 인증 메일은 이 엔드포인트가 보내지 않는다 — 수락 화면이 `EMAIL_NOT_VERIFIED` 를 받으면 `/email-verification` 으로 안내한다(그 화면이 세션 계정에 보낸다).
+- Rate limit · `signup:dedup` 은 소비자 가입과 같은 장치를 쓴다(`429 RATE_LIMITED`).
+
+**Response 201**:
+```json
+{ "accountId": "string (UUID)", "email": "string", "status": "ACTIVE", "createdAt": "2026-10-10T10:00:00Z" }
+```
+
+**Errors**: `400`/`422 VALIDATION_ERROR`(형식 · 비밀번호 정책 — 소비자 가입과 같은 status) · `409 ACCOUNT_ALREADY_EXISTS` · 2 의 공존 금지 응답 · `409 CONSUMER_POOL_DISABLED` · `429 RATE_LIMITED` · `503 AUTH_SERVICE_UNAVAILABLE`(자격 생성 실패) · `401 UNAUTHORIZED`.
+
+**auth-service 매핑**: 재시도하지 않는다(쓰기). 4xx 는 위 화면 표대로, 5xx · 타임아웃 · circuit-open → «지금은 가입할 수 없습니다».
 
 ---
 

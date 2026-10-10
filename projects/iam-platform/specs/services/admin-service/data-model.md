@@ -78,6 +78,12 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > 도입한다. dev/test seed 는 Flyway dev migration 또는 IT seed 에서 직접
 > 설정한다.
 >
+> **TASK-MONO-772 (ADR-MONO-080 D6) — 채우는 길이 셋이 된다**: 셀프 온보딩(`FirstAdminProvisioner`) · 일회성 백필(`OperatorOidcSubjectBackfillUseCase`) ·
+> 그리고 **운영자 초대 수락**([`operator_invitation`](#operator_invitation) — 수락한 풀 계정 id 를 새 운영자 행의 `oidc_subject` 에 쓴다). 이것이 회사 운영자의 «로그인 문»
+> 이다 — `POST /api/admin/operators`(334 경로)는 이 칸을 쓰지 않아 그렇게 만든 운영자는 OIDC 주 경로로 로그인할 수 없었다(772 AC-0 F1). 🔴 이 칸의 플랫폼 전역
+> UNIQUE 는 772 에서 그대로다 — 그래서 한 계정은 운영자 행 하나까지다(소유자 결정 OD-1, 두 번째 회사 수락 = `409 OPERATOR_ALREADY_PROVISIONED`). 다회사 모델은
+> `TASK-MONO-773` 착수 전 ADR 이 정한다(그 결정이 이 UNIQUE 를 바꿀 수 있다).
+>
 > **TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — account_id 단독으로 정착**: 위
 > 근거대로 `oidc_subject` 는 account_id UUID 이다. 과거 시드/프로비저닝은 운영자
 > email 을 채웠으나(federation `seed.sql`, dev V0028 일부), part A(TASK-MONO-298)가
@@ -298,6 +304,47 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - 행 부재 ⟺ `require_mfa = FALSE` 와 같은 판정 — 진입 판정은 «행이 있고 `TRUE`» 일 때만 2단계를 요구한다.
 > - 읽기 실패는 «꺼짐» 이 아니다 — 두 진입 모두 판정을 끝내지 못하면 발급하지 않는다(assume: 내부 엔드포인트 5xx → auth-service fail-closed · 토큰 교환: `500`).
 > - 테넌트는 삭제되지 않고 `SUSPENDED` 만 된다(§ Tenant Lifecycle) ⇒ 고아 행 위험이 낮다. 정지된 테넌트의 정책 행은 그대로 둔다(재개 시 그대로 유효).
+
+### `operator_invitation`
+
+**신규 (TASK-MONO-772 / ADR-MONO-080 D6 · 라이더 R4 · 구현자 결정 D-1 · D-2, Flyway `V0050__create_operator_invitation.sql` — 작성 직전 다음 빈 버전 재확인)** — 회사 운영자 초대.
+관리 표면: [admin-api.md § Operator Invitation](../../contracts/http/admin-api.md#operator-invitation-task-mono-772) · 수락: [auth-to-admin.md § accept](../../contracts/http/internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772).
+
+**왜 admin-service 인가 (account-service 가 아니라, D-1)**: 수락이 만드는 것(운영자 행 · 역할 grant · 배정)이 전부 admin 평면이라 **한 트랜잭션**에 들어간다. ADR-024 D2 · D3 검사(`TenantScopeGuard` · `RoleGrantGuard`)도 이 서비스에 있다. 선례도 같다 — 셀러 구성원 초대는 측면을 소유한 서비스(product-service)에 산다. 대가: 이메일 · 인증 판정은 account-service 에 묻는다(수락 1회, 비 hot-path).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `id` | BIGINT | PK, AUTO_INCREMENT | internal | 내부 PK |
+| `invitation_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7 — API 의 `invitationId` |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | 초대 테넌트(M1 격리 키). account-service `tenants` 의 불투명 참조 — **FK 없음**(다른 DB, `tenant_entry_policy` 와 같은 형태). `CHECK (tenant_id <> '*')` — 플랫폼 관리자는 초대로 생기지 않는다(ADR-080 D1) |
+| `email` | VARCHAR(255) | NOT NULL | **confidential** | 초대 주소(trim · 소문자). PII (R1). 수락 판정의 기대 이메일 |
+| `display_name` | VARCHAR(120) | NOT NULL | **confidential** | 수락 때 만들 운영자 행의 `display_name` |
+| `roles` | VARCHAR(512) | NOT NULL | internal | 수락 때 부여할 역할 이름 목록(쉼표 구분 · 정렬). 역할 행 FK 를 두지 않는 이유: 초대는 «부여의 약속» 이고 판정은 수락 때 다시 한다(D3 재검) — 그 사이 역할이 없어지면 수락이 `OPERATOR_INVITATION_INVALIDATED` 로 거절된다 |
+| `token_hash` | CHAR(64) | UNIQUE, NOT NULL | **restricted** | 토큰의 **SHA-256 hex**. 🔴 원문은 어디에도 저장하지 않는다(R4 · 셀러 `SellerMemberService` 와 같은 계산). 재발송은 이 값을 **덮어쓴다** — 옛 링크는 그 순간 죽는다 |
+| `status` | VARCHAR(16) | NOT NULL | internal | `PENDING` · `ACCEPTED` · `CANCELLED`. 🔴 `EXPIRED` 는 값이 아니다 — 만료는 `expires_at` 으로 **읽을 때** 판정한다(스케줄러 · 정리 잡 없음) |
+| `expires_at` | DATETIME(6) | NOT NULL | internal | 발급 · 재발송 시각 + `admin.operator-invitation.ttl`(기본 `P7D`) |
+| `invited_by` | BIGINT | NOT NULL, FK → `admin_operators.id` | internal | 살아 있는 토큰을 낸 운영자(재발송하면 재발송한 운영자). 수락 때 D2 · D3 재판정의 기준. API 는 외부 UUID 로 노출 |
+| `last_delivery_status` | VARCHAR(20) | NULL | internal | 마지막 메일 발송 결과 `SENT` · `FAILED_TRANSIENT` · `FAILED_PERMANENT`. NULL = 아직 시도 전(커밋과 발송 사이) |
+| `last_delivery_at` | DATETIME(6) | NULL | internal | 마지막 발송 시도 시각 |
+| `accepted_at` | DATETIME(6) | NULL | internal | `ACCEPTED` 일 때 |
+| `accepted_account_id` | VARCHAR(36) | NULL | internal | 수락한 풀 계정 id(= 만든 운영자의 `oidc_subject`). 같은 계정의 재제출을 200 으로 답하는 판정 키. 관리 API 응답에는 싣지 않는다 |
+| `accepted_operator_id` | BIGINT | NULL, FK → `admin_operators.id` | internal | 수락으로 생긴 운영자 |
+| `cancelled_at` | DATETIME(6) | NULL | internal | `CANCELLED` 일 때 |
+| `cancelled_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 취소한 운영자 |
+| `pending_key` | VARCHAR(300) | **생성 컬럼**, UNIQUE | internal | `CASE WHEN status = 'PENDING' THEN CONCAT(tenant_id, '|', email) END` — «`(tenant_id, email)` 에 `PENDING` 은 하나» 를 DB 가 지킨다(MySQL 은 부분 UNIQUE 가 없다 · 다중 NULL 허용). 애플리케이션 검사(`409 OPERATOR_INVITATION_ALREADY_PENDING`)가 먼저 답하고, 경합은 이 제약이 막는다. 구현이 다른 수단을 고르면 그 수단이 같은 불변식을 DB 에서 지켜야 한다 |
+| `created_at` | DATETIME(6) | NOT NULL | internal | — |
+| `updated_at` | DATETIME(6) | NOT NULL | internal | — |
+| `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) — 재발송 · 취소 · 수락 경합 |
+
+**인덱스**: `uk_operator_invitation_invitation_id` · `uk_operator_invitation_token_hash`(수락 · 미리보기의 단건 조회) · `uk_operator_invitation_pending_key` · `idx_operator_invitation_tenant_status_created (tenant_id, status, created_at)`(관리 목록).
+
+> **불변식 (TASK-MONO-772)**:
+> - 🔴 **1회용**: 수락은 `UPDATE … SET status = 'ACCEPTED', … WHERE id = ? AND status = 'PENDING' AND token_hash = ?` 의 영향 행이 1 일 때만 이긴다. 0 이면 다시 읽어 답한다(같은 계정의 재제출 = 200 · 그 밖 = 409/404) — 동시 수락 둘 중 하나만 운영자를 만든다.
+> - **거절은 아무것도 쓰지 않는다** — 미인증 · 다른 이메일 · 만료 · 근거 무효 · 이미 운영자(OD-1)는 초대를 `PENDING` 그대로 둔다. 맞는 사람이 나중에 수락할 수 있다.
+> - **재발송 = 같은 행**: `token_hash` · `expires_at` · `invited_by` 를 바꾸고 `version + 1`. 새 행을 만들지 않는다.
+> - 토큰 원문 · 해시는 응답 · 감사 · 로그 · 이벤트 어디에도 나오지 않는다.
+> - 행을 지우지 않는다 — `ACCEPTED` · `CANCELLED` 는 기록으로 남는다(관리 목록의 상태 필터).
+> - 감사: 발급 · 취소 · 재발송 · 수락은 `admin_actions`(`target_type = OPERATOR_INVITATION`)에 남는다. 수락 행의 주체(`operator_id`)는 **수락으로 생긴 운영자**다 — 거절된 수락은 주체가 없어 `admin_actions` 에 남지 않는다(구조화 로그).
 
 ### `admin_actions`
 

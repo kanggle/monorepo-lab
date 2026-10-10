@@ -283,6 +283,21 @@ WMS·ERP 등 enterprise tenant는 **자체 가입 페이지를 두지 않고** �
 - 이메일 unique index는 `(tenant_id, email)` 기준 → 같은 이메일이 `fan-platform`과 `wms`에 동시에 존재 가능
 - 모든 mutation은 `admin_actions`에 기록(`OPERATOR_PROVISIONING_*` action_code) — internal 호출이라도 감사 의무 동일
 
+### 기계 · 시스템 계정 전용 — 사람 운영자의 입구가 아니다 (ADR-MONO-080 D6 해석 · 소유자 결정 OD-2, `TASK-MONO-772`)
+
+ADR-MONO-080 D6 둘째 줄은 «내부 프로비저닝(회사 테넌트에 사이트 계정을 만드는 길)은 **풀 계정 초대**로 바뀐다 — 새 사이트 계정을 만들지 않는다» 이다. 772 AC-0 실측(F12):
+이 엔드포인트의 저장소 안 운영 호출자는 **이커머스 product-service 셀러 기계 계정** 하나이고(`seller+<tenant>+<sellerId>@marketplace.local` — 사람이 로그인하지 않는다),
+셀러 계정은 옮기지 않기로 소유자가 정했다(2026-10-02 — 아래 § 소비자 계정 풀 § 3 운영자 측면 표). **사람 직원을 이 엔드포인트로 만드는 호출자는 없다.** 문장을 글자 그대로
+구현하면(사이트 계정 생성 금지) 셀러 온보딩과 B2B 시스템 계정(ADR-MONO-078 D1 — B2B 는 테넌트별 계정)이 깨진다.
+
+**해석 (소유자 결정 OD-2, 2026-10-09 UTC) — 엔드포인트는 그대로 둔다. 코드 변경 0.**
+
+- `POST /internal/tenants/{tenantId}/accounts`(와 같은 부류의 벌크 생성)는 **기계 · 시스템 계정 전용**이다 — 셀러 운영 계정 · B2B 테넌트의 시스템 계정 같은, 사람이 IAM 에 로그인하지 않는 계정.
+- 🔴 **사람 운영자(회사 직원)의 입구는 초대 하나다** — [admin-api.md § Operator Invitation](../contracts/http/admin-api.md#operator-invitation-task-mono-772): 운영자 관리자가 이메일로 초대 → 그 이메일을 인증한 **개인(풀) 계정**이 로그인한 상태로 수락 → 운영자 측면. 사람 직원을 이 엔드포인트로 만들어 운영자 측면을 붙이는 경로는 없다(`POST /api/admin/operators` 의 비-`'*'` 생성도 772 S7 부터 `422 OPERATOR_INVITATION_REQUIRED`).
+- 이 구분은 **호출자 계약**이다 — 엔드포인트가 «사람인가» 를 판정하지 않는다. 요청에 «사람» 판별 플래그를 두는 안은 기각했다(호출자 자기 신고라 막는 힘이 없다 — OD-2 (c)). 막는 힘은 «이 엔드포인트로 만든 계정에 운영자 측면을 붙이는 길이 없다» 에 있다: 측면은 초대 수락만 만들고, 수락은 **풀 계정**만 받는다.
+- ADR-080 D6 둘째 줄의 «풀 계정 초대로 바뀐다» 는 이렇게 읽는다: **사람 직원을 회사 테넌트에 넣는 길**이 사이트 계정 생성에서 풀 계정 초대로 바뀐다. 기계 계정을 만드는 이 엔드포인트의 길은 그 문장의 대상이 아니다.
+- 계약 정본: [account-internal-provisioning.md](../contracts/http/internal/account-internal-provisioning.md) 머리글.
+
 ---
 
 ## Cross-Tenant Security Rules
@@ -404,6 +419,11 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 #### 2. 가입 — 소비자 client 의 새 가입은 풀로
 
 - 소비자 client 에서 오는 폼·소셜 가입은 풀 계정을 만들고, 그 client 의 사이트 멤버십을 **같이** 만든다(가입 = 그 사이트 이용 동의).
+- 🔵 **사이트 없는 풀 가입 — 운영자 초대 수락 화면의 갈래 (`TASK-MONO-772`, 소유자 결정 OD-3)**: 풀 계정이 없는 운영자 피초대자는 IdP 수락 화면
+  ([auth-api.md § `/operator-invitations/signup`](../contracts/http/auth-api.md#get--post-operator-invitationssignup--사이트-없는-풀-가입-소유자-결정-od-3))에서 **풀 계정만** 만든다 —
+  사이트 멤버십 · `account.created` 없음(직원이 회사 초대를 받으려고 스토어 · 팬 회원이 되지 않는다). 내부 계약: [auth-to-account.md § `POST /internal/consumer-pool/signups`](../contracts/http/internal/auth-to-account.md#post-internalconsumer-poolsignups--사이트-없는-풀-가입-task-mono-772).
+  아래 공존 금지(같은 이메일의 사이트별 계정)는 이 갈래에도 그대로 걸린다. 그 사람이 나중에 소비자 사이트에 처음 오면 § 4 의 동의 화면 → 멤버십 → 그 사이트로
+  `account.created` 1회 — 소비자 가입으로 생긴 계정의 «다른 사이트 첫 방문» 과 같은 길이다(§ 6 «사이트마다 한 번» 그대로). 이 갈래는 가산이다 — 소비자 client 의 가입 규칙은 바뀌지 않는다.
 - 🔴 **같은 이메일의 사이트별 계정이 이미 있으면 풀 가입을 받지 않는다** — 대신 «그 이메일로 로그인한 뒤 전환» 으로 안내한다.
   받으면 같은 이메일에 풀 계정과 사이트별 계정이 공존하고, 로그인 폼은 둘 중 하나의 비밀번호만 검사할 수 있다 — 남이 그 이메일로 풀 계정을
   만들면 **원래 주인이 자기 사이트 계정에 못 들어간다**. 가입 화면의 «이미 가입된 이메일» 은 지금 가입이 이미 내는 응답과 같은 부류다(새 열거 경로가 아니다).
@@ -448,14 +468,19 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   | 계정 | 이동 단계 | 왜 그 단계까지 기다리나 |
   |---|---|---|
   | 이커머스 **셀러**(`ADR-MONO-042`, `SELLER` 역할) | ~~`TASK-MONO-745`~~ → **옮기지 않는다**(2026-10-02 소유자 결정: 셀러 계정은 사람이 로그인하지 않는 기계 계정 — 사람 계정 연결은 `ADR-MONO-079`, `TASK-MONO-747`). 아래 칸은 당시의 근거 | product-service 가 셀러를 `(tenant_id, seller)` 로 찾고 상태 이벤트를 `(tenantId, accountId)` 로 소비한다 — 그 두 곳을 먼저 «계정 id» 로 고쳐야 옮겨도 셀러를 놓치지 않는다. 옮긴 뒤 `SELLER` 는 `consumer_site_roles(account, ecommerce, SELLER)` 로 가고, 스토어 토큰은 시드와 **합쳐** `["CUSTOMER","SELLER"]` 가 된다(§ 4 역할 규칙) |
-  | 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자 `oidc_subject` 가 이 계정 id) | `ADR-MONO-080` 후보(`TASK-MONO-746`) | 운영자 규칙(«운영자는 대상 테넌트 계정에만», `TASK-MONO-334`)을 바꾸는 결정이 먼저다 |
+  | 셀프 온보딩 운영자(`ADR-MONO-044` D5 — 운영자 `oidc_subject` 가 이 계정 id) | ~~`ADR-MONO-080` 후보(`TASK-MONO-746`)~~ → **`TASK-MONO-772` S6**(ADR-MONO-080 D6 넷째 줄 · 구현자 결정 D-6): 기존 이동기를 다시 돌리되 운영자 측면 판정에서 **`oidc_subject` 축만 푼다**(admin `GET /internal/operators/facet?axes=IDENTITY` — [auth-to-admin.md](../contracts/http/internal/auth-to-admin.md#get-internaloperatorsfacet--운영자-측면-판정-task-be-618)). **같은 id** 로 옮기므로 `admin_operators.oidc_subject` 쓰기 0 · 같은 `sub` 로 콘솔에 들어온다 · TOTP(`account_id` 키) · 주문 · 팔로우 그대로. 🔴 풀 세션의 콘솔 토큰(§ 4 콘솔 행, 772 S4)이 **먼저** 머지돼야 한다 — 옮긴 순간 그 사람의 세션은 풀 principal 이다 | (당시) 운영자 규칙(«운영자는 대상 테넌트 계정에만», `TASK-MONO-334`)을 바꾸는 결정이 먼저였다 — ADR-MONO-080 D6 이 그 결정이다(초대 → 인증된 본인 수락, [admin-api.md § Operator Invitation](../contracts/http/admin-api.md#operator-invitation-task-mono-772)) |
+  | 운영자 **신원 연결**만 있는 계정(ADR-MONO-034 U3 — `admin_operators.identity_id` 가 이 계정의 신원, 334 생성이 붙인다) | **옮기지 않는다**(772 S6 뒤에도 이동기가 건너뛴다 — `axes=IDENTITY`) | 772 AC-0 F11 — ADR D6 이 옮기라고 한 것은 셀프 온보딩 축뿐이다. 소비자 사이트 테넌트에 334 로 만든 운영자는 정적 0 |
 
-  옮기기 전까지 이 계정들은 지금처럼 동작한다. 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)은 080 이 바꾸기 전까지 **사이트 테넌트에** 계정을 만든다.
+  옮기기 전까지 이 계정들은 지금처럼 동작한다. 내부 프로비저닝(`/internal/tenants/{tenantId}/accounts`)은 사이트 테넌트에 계정을 만든다 — 🔵 ADR-MONO-080 D6 둘째 줄은 이 엔드포인트를 바꾸지 않는다(소유자 결정 OD-2: **기계 · 시스템 계정 전용**, 사람 운영자의 입구는 초대 — 위 § Internal Provisioning API «기계 · 시스템 계정 전용»).
+  🔵 **`iam` 자격에 묶인 회사 운영자**(데모 `demo-requester` · `demo-viewer` · `demo-cs` · `demo-operator`, 772 AC-0 F15)는 772 에서 옮기지 않는다(소유자 결정 OD-5) — 이 표의 대상(소비자 사이트 계정)도 아니다. 옮길지는 후속 판단이다.
   팬 `ARTIST` 역할(`ADR-MONO-059`)은 운영자 측면이 아니라 팬 사이트 역할이다 — § 3 의 이동에서 `consumer_site_roles(account, fan-platform, ARTIST)` 로 간다(id 가 그대로라 `artists.account_id` 는 무변경).
 - **옮기기 전, 운영자 측면 계정의 이메일로 소비자 client 풀 가입이 오면 거절한다** (구현자 기본값 — `TASK-BE-614` AC-6, 소유자가 한 줄로 뒤집을 수 있다).
   § 2 의 공존 금지와 같은 이유다: 받으면 같은 이메일에 풀 계정과 사이트 계정이 공존해, 스토어 폼 로그인(풀 먼저)이 그 사람의 사이트 계정 비밀번호를 거절하고
   콘솔 교차 조회가 `LOGIN_TENANT_AMBIGUOUS` 로 막힌다 — 그리고 이메일 인증이 없으니 **남이** 그 이메일로 가입만 해도 그렇게 된다. 거절의 대가는 그 사람이
   자기 단계(745 / 080)까지 그 이메일로 다른 소비자 사이트에 못 들어간다는 것이다.
+  🔵 **`TASK-MONO-772` 에서 이 거절을 «걷는» 방법은 코드가 아니라 데이터다**(772 AC-0 F10): 거절은 «소비자 사이트에 그 이메일의 사이트 계정이 있다» 는 **§ 2 의 일반 규칙**이고,
+  운영자 전용 조회가 따로 없다. 그 계정을 풀로 옮기면(위 표 — 772 S6) 사이트 계정이 사라지므로 거절도 저절로 사라진다. 🔴 그 규칙을 지우지 않는다 — 지우면 두 사이트 계정 ·
+  소셜 연결 계정의 공존 금지까지 사라진다. 소셜 신원이 있는 셀프 온보딩 운영자는 이동기가 계속 건너뛰므로(`SOCIAL_LINKED`, § 3 표) 그 사람의 거절은 **남는다**(정적 0 — 라이브 모집단은 772 기록).
 
 #### 4. 로그인 · authorize · 토큰
 
@@ -464,7 +489,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 | 소비자 | 풀 계정, 그 사이트 멤버십 **있음** | 폼 없이 그 사이트 토큰 — `sub` = 풀 계정 id, `tenant_id` = 그 사이트, `roles` = 그 사이트 역할만 |
 | 소비자 | 풀 계정, 멤버십 **없음** | 그 사이트 **동의 화면 한 번**(`TASK-BE-616`) → 멤버십 생성 → 토큰 |
 | 소비자 | 사이트별 계정(묶이지 않음) | **지금 그대로** — 테넌트가 다르면 재인증(위 SSO 표) |
-| 콘솔 | 풀 계정 | 위 SSO 표의 콘솔 행 그대로(D1). 풀 계정은 운영자 권한을 주지 않는다 |
+| 콘솔 | 풀 계정 | 위 SSO 표의 콘솔 행 그대로(D1) — 같은 이메일의 `iam` 자격이 있으면 재인증(BE-610), 아니면 통과. 🔵 **발급은 `TASK-MONO-772` 부터 운영자 측면으로 갈린다**: **살아 있는 운영자 측면이 있는**(`admin_operators.oidc_subject = 계정 id ∧ ACTIVE`) 풀 계정만 콘솔 토큰(`tenant_id = iam`, 역할 없음)을 받고, 없으면 지금처럼 `invalid_grant`(문구 불변), 판정을 못 받으면 `invalid_grant` + `operator_eligibility_unavailable`(fail-closed) — [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6). 풀 계정 자체는 여전히 운영자 권한을 주지 않는다 — 권한은 운영자 측면(admin 토큰 교환)에서 온다 |
 
 - 폼 로그인의 자격 선택: 소비자 client 는 **풀 자격을 먼저**, 없으면 그 client 테넌트의 사이트별 자격을 찾는다. § 2 의 가입 거절과 § 3 의 이동이
   «같은 이메일에 풀 자격과 사이트별 자격이 공존» 을 막으므로 순서가 결과를 바꾸지 않는다 — 🔴 공존이 생기면 그것이 결함이다(`TASK-BE-615` 의 대조군).
@@ -477,6 +502,12 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   따로 있어 `LOGIN_TENANT_AMBIGUOUS` 로 막히던 사람이 **묶은 뒤에는** 하나로 풀린다 — 행동 변경이므로 `TASK-BE-615` 가 시험으로 고정한다.
   🔵 `TASK-BE-615` 구현: 교차 조회는 풀 자격 하나로 풀려 **로그인은 된다**. 그러나 콘솔 세션 테넌트는 `consumer-pool` 그대로라(풀 principal 을 콘솔로는
   사상하지 않는다 — D1) 발급자가 `consumer-pool` 발급을 거절한다(`TASK-BE-614` 게이트) — **콘솔 토큰은 없다**(`invalid_grant`). 풀 계정의 운영자 경로는 `ADR-MONO-080` 후보(`TASK-MONO-746`).
+  → **`TASK-MONO-772` 이후 (615 D-5 개정 — ADR-MONO-080 D6 셋째 줄, 구현자 결정 D-5 = P1)**: **운영자 측면이 있는 풀 계정만** 콘솔 토큰을 받는다. 세션 테넌트 함수(`AuthorizationSessionTenant` —
+  발급자 · authorize 게이트 · refresh 미러 행이 같이 쓴다)에 «풀 principal × 콘솔 client → `iam`» 갈래를 **풀-사이트 갈래와 따로** 두고, 측면 판정(I/O)은 발급자가 admin-service 에
+  매번 묻는다(`GET /internal/operators/console-eligibility` — 토큰 교환과 같은 술어 `oidc_subject = 계정 id ∧ ACTIVE`). 측면 없음 → 위 거절 그대로(문구 바이트 불변 — 콘솔
+  `sso_wrong_account` 판별) · 판정 실패 → `operator_eligibility_unavailable` · refresh 마다 다시 묻는다(퇴사 → 다음 refresh 부터 콘솔 토큰 없음, 772 AC-3). authorize 게이트의 콘솔
+  판정(BE-610 조건부 재인증 → 아니면 통과)은 그대로다. 🔴 **측면 없는 풀 계정에는 여전히 콘솔 토큰이 없다** — 그래서 셀프 온보딩(`/onboarding`, 인증 이메일 게이트 없음)도 계속
+  닫혀 있다. 그 개방은 `TASK-MONO-773`(ADR-080 D9 = T1 · ADR-044 D4 트러스트 게이트) 몫이다. 정본: [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6).
 - **멤버십 없는 사이트 — `TASK-BE-616` 전까지의 결과 (`TASK-BE-615` 결정)**: authorize 는 재인증하지 않고 코드를 준다(재인증하면 그 client 의 폼이
   풀 자격을 먼저 골라 같은 세션 → 같은 게이트 → 무한 반복). **토큰 엔드포인트가 `invalid_grant` 로 거절**한다 — 토큰 없음 · 루프 없음. 616 의 동의 화면이 이 자리에 들어온다.
   멤버십 조회 실패도 토큰 없음(fail-closed). 갱신 때마다 다시 묻는다 — 멤버십이 `LEFT` 가 되면 다음 refresh 부터 토큰이 없다.
@@ -582,6 +613,29 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 이동한 계정이 같은 비밀번호로 같은 `sub` · 이동 전 refresh 가 계속 된다 | `TASK-BE-618` — auth-service `ConsumerPoolLegacyMoveIntegrationTest` |
 | 사이트 운영자의 삭제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 삭제 · 본인 탈퇴는 재동의로 복귀, 운영자 탈퇴는 아님 | `TASK-BE-619` — account-service `ConsumerSiteLeaveIntegrationTest` · `PoolMemberSiteSurfacesIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(SELF → 동의 화면 · OPERATOR → 통과·발급 거절) |
 | 사이트 운영자의 잠금·해제 = 그 사이트 멤버십만 · 다른 사이트 · 계정 무변경 · 플랫폼(`*`)만 계정 잠금 · `LOCKED` 는 동의·본인 탈퇴로 안 열림 | `TASK-BE-621` — account-service `ConsumerSiteLockIntegrationTest`; auth-service `AuthorizeSessionTenantGatePoolTest`(LOCKED → 통과·발급 거절, 동의 화면 없음); admin-service `AccountAdminControllerSliceTest`(플랫폼 스코프 → `*` · 사이트 운영자 → 활성 테넌트) · `AccountAdminUseCaseTest`(감사 `SITE_MEMBERSHIP_LOCKED`) |
+| 운영자 측면은 초대 → **인증된 본인** 수락으로만 붙는다 — 미인증 · 다른 이메일 · 만료 · 재사용 수락은 거절, 같은 시험에서 인증된 본인만 성공 (§ 8) | `TASK-MONO-772` S3 — 772 AC-1 대조군(같은 초대, 실패 셋 먼저) · bite: 인증 술어 제거 → 미인증 칸만 빨강 |
+| 운영자 측면 **없는** 풀 계정은 콘솔 토큰을 받지 못한다 · 있는 풀 계정은 받는다 · 판정 실패 문구 ≠ `consumer-pool` 문구 · 콘솔 authorize 가 재인증 고리를 돌지 않는다 (§ 4 콘솔 행) | `TASK-MONO-772` S4 — 772 AC-2 · AC-3 |
+| 셀프 온보딩 운영자가 같은 `sub` 로 풀로 옮겨지고 콘솔에 들어온다 · 그 이메일의 풀 가입 거절이 사라진다 · 소셜 연결 운영자는 그대로 (§ 3 표) | `TASK-MONO-772` S6 — 772 AC-5 |
+
+#### 8. 운영자 측면 — 초대 → 인증된 본인 수락 (ADR-MONO-080 D6, `TASK-MONO-772`)
+
+> 계약이 먼저다(772 S1). 구현은 772 S2 ~ S7. 정본: [admin-api.md § Operator Invitation](../contracts/http/admin-api.md#operator-invitation-task-mono-772) ·
+> [auth-to-admin.md § accept](../contracts/http/internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) · [auth-api.md § IdP 브라우저 화면 — 운영자 초대 수락](../contracts/http/auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6).
+
+목표 모델(ADR-MONO-080 «개인 계정 + 회사 권한»)에서 회사 소속은 **계정이 아니라 운영자 측면**(`admin_operators` 행 — 홈 테넌트 = 회사)에 있다(ADR-080 D5). 772 는 그 측면이 생기는 길을 하나로 만든다:
+
+| 문 | 772 이전 | 772 이후 |
+|---|---|---|
+| 측면 생성 | `POST /api/admin/operators` — 대상 테넌트에 **가입 계정**이 있어야(`TASK-MONO-334`, 풀 멤버는 세지 않음). 만든 운영자는 `oidc_subject` 가 비어 OIDC 로 로그인할 수 없었다 | **초대 → 인증된 본인 수락**. 수락이 `oidc_subject` = 수락한 풀 계정 id 를 쓴다. `POST /api/admin/operators` 는 `'*'`(플랫폼 관리자) 생성만 |
+| 로그인 | 풀 세션 = 콘솔 토큰 없음(`TASK-BE-615` D-5) | 측면 있는 풀 계정만 콘솔 토큰(§ 4 콘솔 행) |
+| 셀프 온보딩 운영자 | 사이트 계정에 남음 · 그 이메일의 풀 가입 거절 | 같은 id 로 풀로 이동(§ 3 표) — 거절은 데이터로 사라진다 |
+| 셀프 온보딩 자체(풀 계정) | 콘솔 토큰이 없어 못 함 | **여전히 못 함** — 773 이 연다(인증 이메일 트러스트 게이트와 함께) |
+
+- 🔴 **이메일 일치만으로는 붙지 않는다** — 수락은 IdP 에 로그인한 풀 계정이 하고, account-service 가 «그 계정의 이메일 = 초대 이메일 ∧ **인증됨**» 을 판정한다(`TASK-MONO-770` 의 공용 술어 — ADR-080 D3 · ADR-034 § 1.3). «인증» 은 **붙일 때의 증거**이지 유지 조건이 아니다(D5) — 퇴사는 측면 회수(운영자 상태 · 역할 · 배정)이고 계정 잠금이 아니다. 퇴사자의 스토어 · 팬 로그인은 그대로다.
+- 🔴 **한 사람 = 한 회사 (소유자 결정 OD-1, 2026-10-09 UTC)** — 772 의 저장 모양은 계정 하나에 운영자 행 하나다(`oidc_subject` 플랫폼 전역 UNIQUE · 교환이 `sub` 로 한 행 · 역할 grant PK `(operator_id, role_id)` — 772 AC-0 F2). 이미 측면이 있는 계정의 두 번째 회사 수락은 `409 OPERATOR_ALREADY_PROVISIONED`. **다회사 운영자 모델은 `TASK-MONO-773` 착수 전 ADR 로 정한다** — 그 전까지 «같은 사람이 여러 회사에 초대» 는 미충족이다(773 AC-3 «두 번째 회사» 도 그 ADR 에 묶인다). 파트너십(ADR-MONO-045)은 이 제약과 별개다 — 협력사 직원은 **자기 회사(B)의 운영자 행**으로 A 에 들어간다.
+- **사이트 없는 풀 가입 (OD-3)** — 풀 계정이 없는 피초대자는 수락 화면에서 풀 계정만 만든다(§ 2 갈래). 사이트 멤버십 · `account.created` 없음.
+- **내부 프로비저닝은 그대로 (OD-2)** — 기계 · 시스템 계정 전용, 사람 운영자의 입구가 아니다(위 § Internal Provisioning API).
+- **회수 장치는 그대로 (ADR-080 D5)** — 운영자 상태(`SUSPENDED`) · 역할 · 배정 · 그룹 · 파트너십 해지가 측면 위에서 돈다. 콘솔 토큰은 다음 refresh, 운영자 토큰은 다음 교환, assume 토큰은 다음 assume 부터 없다 — 이미 발급된 토큰은 만료(TTL)까지 산다.
 
 ### 격리 회귀 방지
 
