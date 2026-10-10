@@ -330,3 +330,56 @@ monorepo
 4. OD-1 의 다회사 ADR 은 773 착수 전 — 이 계약의 `OPERATOR_ALREADY_PROVISIONED` · `oidc_subject` UNIQUE · 온보딩 409(S1-11)가 그 ADR 의 입력이다.
 
 - 🟢 **소유자 결정 2026-10-09 UTC — S1-11 «772 에서 먼저 409 로 막기»** 확정: 이미 운영자 측면이 있는 호출자의 셀프 온보딩은 테넌트 생성 **전에** `409 OPERATOR_ALREADY_PROVISIONED`. 다회사 ADR(773 전)에서 다시 열 수 있다.
+
+---
+
+# S4 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `feat/mono-772-s4-pool-console-token`(origin/main `eed3329ed`). S2(초대 발급 · `operator_invitation` · account 판정/메일)는 병렬 worktree 몫이라 손대지 않았다 — admin 쪽은 **새 컨트롤러 · 새 유스케이스 파일**로만 넣어 S2 와 같은 파일을 건드리지 않는다(`AdminExceptionHandler` · 오류 코드 카탈로그 · 내부 보안 설정 무변경 — 새 경로는 기존 `/internal/**` 체인이 그대로 덮는다).
+> 날짜는 `date -u +%F` 로 적었다.
+
+## 1. 판정 지점 (한 곳)
+
+| 무엇 | 어디 |
+|---|---|
+| 🔴 **콘솔 토큰을 줄지 정하는 유일한 자리** | auth `TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole` `:583`(호출 `:450-451`, admin 질의 `:589`, 판정 실패 거절 `:597`) — `authorization_code` · `refresh_token`(+ 같은 발급의 `id_token`) 모두 여기를 지난다. 부적격이면 클레임에 풀 값을 남겨 기존 `refuseConsumerPoolTenant` 가 **문구 그대로** 거절한다(문구 상수는 한 글자도 안 바뀜). 773 이 «비운영자 셸» 로 넓힐 때 바꿀 곳도 이 메서드의 부적격 갈래 하나 |
+| 세션 테넌트(F4) | `AuthorizationSessionTenant.of` `:81` + `mapsPoolPrincipalToConsole` `:130` — «풀 principal × 콘솔 → `iam`» 을 **풀-사이트 갈래와 따로**. `TenantContext.poolPrincipalMapsTo` 무변경(`iam` 여전히 제외) ⇒ 게이트가 소비자 사이트 분기를 타지 않는다 = 재인증 고리 없음 |
+| authorize 게이트(S1-1) | `AuthorizeSessionTenantGate.decide` `:200-209` — 풀 principal × 콘솔이면 세션 테넌트 비교(`iam` = `iam` → PASS) **전에** BE-610 `holdsConsoleCredential` 을 먼저 돈다. 같은 이메일에 `iam` 자격 → 재인증, 조회 실패 → 통과(고리 없음, 772 전과 같다) |
+| admin 술어 | `OperatorConsoleEligibilityQueryUseCase.isConsoleEligible` `:34-37` — 토큰 교환과 **같은 공용 resolver**(`OperatorOidcSubjectResolver`) + `status = ACTIVE`. 상태 무관 facet 읽기 · 신원 축은 묻지 않는다 |
+| admin 엔드포인트 | `OperatorConsoleEligibilityController` — `GET /internal/operators/console-eligibility?accountId=` → 항상 `200 {eligible}`, 누락 · 공백 `400 VALIDATION_ERROR` |
+| auth 클라이언트 | `AdminConsoleEligibilityClient` — facet 클라이언트와 같은 base URL · 타임아웃 · 워크로드 Bearer, **별도 breaker `adminConsoleEligibility`**. `{eligible: bool}` 아닌 모든 것 → `OperatorEligibilityUnavailableException` |
+| 콘솔 | 공용 술어 `shared/lib/iam-token-refusal.ts`(값 전체 일치) · 콜백(`'consumer-pool'` 행보다 **먼저**) → `operator_check_unavailable` · refresh 공용 시퀀스에 새 결과 `operator_check_unavailable`(아무 쿠키도 안 건드림, 회전 경합 재시도 아님) · `POST` → `503 OPERATOR_CHECK_UNAVAILABLE` · `GET` → `/login?error=operator_check_unavailable&redirect=<target>` · 브라우저 클라이언트가 그 503 에서 사유를 들고 `/login` · `/login` 문구(계약 문장 그대로) + 쿠키가 남아 있어도 사유를 보인다 |
+
+## 2. 시험 · 로컬 결과
+
+| 시험 | 무엇을 단언 | 로컬 |
+|---|---|---|
+| auth `TenantClaimPoolPrincipalTest` (+7 칸) | 🔴 AC-2: 측면 없는 풀 계정 → `invalid_grant` · 문구 **바이트 일치** · 사이트 멤버십 · 역할 조회 0 / 대조군: 측면 있음 → `tenant_id=iam` · `tenant_type=B2B_ENTERPRISE` · `sub`=풀 계정 · `roles`·`entitled_domains` 없음 / id_token 도 `iam` / AC-3: refresh 마다 재질의 — 1회차 `iam`, 회수 뒤 2회차 거절(같은 문구) · 질의 2회 / AC-3 대조군: 같은 계정 스토어 토큰은 콘솔 적격을 묻지도 않는다 / 판정 실패(authorize · refresh) → `operator_eligibility_unavailable` 값 전체 · `'consumer-pool'` 미포함 | ✅ 17/17 |
+| auth `AdminConsoleEligibilityClientUnitTest` (신규, WireMock) | `true`/`false` · `accountId` 쿼리 · Bearer / 필드 없음 · 문자열 `"true"` · 401 · 503 · 연결 끊김 → 전부 판정 불가 | ✅ 7/7 |
+| auth `AuthorizationSessionTenantPoolTest` | 콘솔 → `iam`(세션 · refresh 비교값) · `mapsPoolPrincipalTo("iam")` 는 여전히 false(고리 없음) — 615 칸 «콘솔은 사상 안 함» 을 **기대값 변경**으로 갈음(javadoc 에 이유) | ✅ 5/5 |
+| auth `AuthorizeSessionTenantGatePoolTest` (+1) | 기존 두 콘솔 칸(BE-610 iam 자격 없음 → 통과 · 있음 → 재인증)이 S1-1 의 bite 다 — 게이트가 비교를 먼저 하면 «있음 → 재인증» 칸이 빨개진다. 새 칸: 자격 조회 실패 → 통과(고리 없음) | ✅ 15/15 |
+| auth 나머지 customizer 시험 5개 | 생성자 2-인자. 콘솔 적격을 묻지 않아야 하는 경로엔 `ConsoleEligibilityStubs.NOT_ASKED`(호출되면 `AssertionError` — 발급자의 `RuntimeException` 캐치가 삼키지 못한다) | ✅ (auth `:test` 전체 초록) |
+| auth `ConsumerPoolSsoIntegrationTest` (IT, admin WireMock 추가) | 🔴 AC-2: 측면 없는 풀 계정 → 콘솔 authorize 는 코드(재로그인 없음), 토큰 `400 invalid_grant` · 문구 바이트 일치 · **admin 에 실제로 물었다** / 대조군 + AC-3: 측면 있는 풀 운영자 → 콘솔 토큰(`iam` · `sub` · `roles` 없음 · id_token `iam` · 미러 행 `iam`) → refresh 200(`iam`) → 회수(WireMock 시나리오) → 다음 refresh `400` 같은 문구 → **같은 계정의 스토어 refresh 200**(`ecommerce`, 같은 `sub`) / F5: admin 503 → `operator_eligibility_unavailable` / S1-1 · BE-610: 풀 세션 + 같은 이메일 `iam` 자격 → 콘솔 authorize `/login` · admin 질의 0 | ⚪ **로컬 미실행 — Docker 없음**(`docker info` → pipe 없음). 컴파일만 확인. CI `integrationTest` 레인 몫 |
+| admin `OperatorConsoleEligibilityQueryUseCaseTest` · `…ControllerSliceTest` (신규) | ACTIVE → true · SUSPENDED/LOCKED/DISABLED → false · 행 없음 → false · facet 읽기 안 씀 · 빈 id → 조회 없이 false / 200 true·false · 누락 400 · 공백 400 `VALIDATION_ERROR` | ✅ 4/4 · 4/4 |
+| admin `OperatorAssignmentCheckIntegrationTest` (+4, 같은 컨텍스트) | 실제 `admin_operators` 행: ACTIVE → true · 🔴 SUSPENDED → false(**같은 행에 facet 은 true** — 질문이 다르면 술어도 다르다) · 행 없음 · 신원 id 만 → false · 공백 400 | ⚪ 로컬 미실행(Docker) |
+| console vitest (신규 2 파일 + 기존 3 파일 칸 추가) | 상수 값 · 값 전체 일치(포함 · 접두 · 다른 error 는 아님) / 콜백 → `operator_check_unavailable`, PC-FE-324 문구는 그대로 `sso_wrong_account`, «포함» 문구는 `token_exchange_failed` / POST 503 · 쿠키 삭제 0 · IAM 호출 1회(재교환 없음) · 맨 `invalid_grant` 는 여전히 307 `retry=1` / GET → `/login?error=…&redirect=/accounts` · 쿠키 삭제 0 · `no-store` · 측면 없는 refresh 는 여전히 `session_expired` / 브라우저 클라이언트 503 → 사유 있는 `/login` · 다른 503 은 사유 없는 `/login` / `/login` 문구 핀 · 로그아웃 위젯 없음 · 쿠키가 있어도 단락 안 함 | ✅ `tsc --noEmit` 0 · 관련 10 파일 초록 |
+
+**bite (둘 다 되돌린 뒤 `git diff` 에 표식 0 확인)**:
+- 🔴 auth — `customizeForPoolPrincipalOnConsole` 의 admin 질의를 `eligible = true` 로 바꿈(= 실패 시나리오 2 «풀 계정 전부에 콘솔 토큰») → `TenantClaimPoolPrincipalTest` 17 중 6 빨강, 그중 **AC-2 칸이 `Expecting actual not to be null`(예외 없음 = 토큰이 나왔다)** 로 빨강 · AC-3 · 판정 실패 두 칸도 같은 이유로 빨강(나머지 둘은 STRICT_STUBS 불필요 stub). 복원 → 17/17.
+- console — 콜백의 새 분기를 `false &&` 로 끔 → 콜백 칸만 빨강(→ `token_exchange_failed`). 복원 → 초록.
+
+## 3. AC 판정
+
+- **AC-2 — 체크하지 않았다.** 토큰 단계 단언은 둘이다: 발급자 단위 시험(로컬 ✅, AC-2 칸이 bite 로 빨개짐을 확인)과 브라우저 경로 IT(토큰 엔드포인트 `400` + admin 에 물었음 — ⚪ Docker 없어 로컬 미실행). AC 문장의 «토큰 · 관리 API 로 단언» 중 «관리 API» 쪽은 이 슬라이스에 새로 쓴 단언이 없다 — 토큰이 없으면 교환 입력이 없고, 측면 없는 `sub` 의 교환 `401` 은 기존 `TokenExchangeService` 시험의 몫이다. ⇒ CI `integrationTest` 초록을 본 뒤 닫는 쪽(close chore 의 4번째 차원)으로 둔다.
+- **AC-3 — 체크하지 않았다.** «퇴사 뒤 스토어 로그인 그대로 · 콘솔 토큰 없음» 은 단위(로컬 ✅)와 IT(⚪)가 같은 시험 안에서 단언한다. 퇴사의 실제 장치(`PATCH …/status` → SUSPENDED)는 admin IT 의 SUSPENDED → `eligible=false`(⚪)로, auth IT 는 WireMock 시나리오로 잇는다 — 두 서비스를 한 번에 태운 종단은 없다. **팬** 로그인은 따로 단언하지 않았다(스토어와 같은 풀-사이트 갈래, AC-3 대조군은 스토어). ⇒ AC-2 와 같이 CI IT 초록 뒤 판정.
+
+## 4. S1 계약과 다르게 / 계약을 고친 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S4-1 | `auth-api.md` § 풀 계정의 콘솔 토큰 발급 행 — `tenant_type` 을 «다른 콘솔 토큰과 같은 규칙» 에서 **«콘솔 client 등록값(`B2B_ENTERPRISE`)»** 으로 정밀화 | `iam` 자격 콘솔 토큰의 `tenant_type` 은 로그인 때 `TenantTypeResolver("iam")` 이 정하는데 account-service 에 `iam` 테넌트 행이 없어(마이그레이션 grep 0) 해석기의 기본값으로 떨어진다 — «같은 규칙» 을 글자대로 따르면 그 기본값을 복제하는 셈이다. 발급자가 principal 테넌트 없는 콘솔 토큰에 쓰는 출처(client 등록값)를 골랐다. 콘솔 · admin 어디에도 이 클레임을 읽는 소비자 없음(grep 0) |
+| S4-2 | `auth-api.md` 같은 절 «구현 = S4» 줄 — 판정 지점 이름 · `id_token` 으로 한 발급에 질의 2회 가능 · refresh 거절이 회전 전에 난다는 사실을 적음 | 콘솔 § 2.6.3 «쿠키 유지» 의 전제를 코드에서 확인(`SasRefreshTokenAuthenticationProvider` 가 access token 생성 `:325` 뒤에야 refresh 토큰을 만든다)한 것을 계약에 남김 |
+| S4-3 | 콘솔 계약 § 2.6.3 «Console implementation slice: 772 S5» → **S4** + 브라우저 클라이언트 · `/login` 단락 규칙 두 줄 추가 | 오케스트레이터 지시로 콘솔 콜백 · refresh 분기를 발급자와 같은 PR 에 넣었다(새 거절이 그것을 `token_exchange_failed` 로 읽는 콘솔에 닿는 창을 없앰). 계약이 정하지 않았던 둘을 정함: 브라우저 클라이언트가 503 에서 사유를 들고 `/login` 으로 감 · `/login` 이 쿠키가 남아 있어도 이 사유를 삼키지 않음(`mfa_required` 와 같은 이유 — refresh 가 쿠키를 지우지 않으므로) |
+| S4-4 | 콜백의 `loginRedirect` 사유 · `/login` 맵 키는 상수 대신 **리터럴** `'operator_check_unavailable'` | `login-error-messages.test.tsx` 의 두 가드(«모든 `loginRedirect` 사유에 전용 문구» · «맵 키 집합 양방향 일치»)가 리터럴을 읽는다 — 상수를 쓰면 첫 가드는 이 사유를 **못 보고** 초록이 된다. 값은 공용 모듈 상수와 같음을 시험이 대조 |
+
+- 그 밖: 오류 코드 · JWT 클레임 · rbac 무변경(새 HTTP 오류 코드 0 — `VALIDATION_ERROR` 재사용, 콘솔 BFF 코드 `OPERATOR_CHECK_UNAVAILABLE` 은 S1 이 이미 등록).

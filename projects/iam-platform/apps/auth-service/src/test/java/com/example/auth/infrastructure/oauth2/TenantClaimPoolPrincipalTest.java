@@ -1,7 +1,9 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
+import com.example.auth.application.exception.OperatorEligibilityUnavailableException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.OperatorConsoleEligibilityPort;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.infrastructure.oauth2.persistence.OAuthClientMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,12 +55,13 @@ class TenantClaimPoolPrincipalTest {
     @Mock private JwtEncodingContext context;
     @Mock private Authentication principal;
     @Mock private AccountServicePort accountServicePort;
+    @Mock private OperatorConsoleEligibilityPort consoleEligibilityPort;
 
     private TenantClaimTokenCustomizer customizer;
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort);
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, consoleEligibilityPort);
     }
 
     private static RegisteredClient client(String clientId, String tenant, String type) {
@@ -236,22 +239,118 @@ class TenantClaimPoolPrincipalTest {
         assertInvalidGrant(catchThrowable(() -> customizer.customize(context)));
     }
 
-    // ── console (D1) — not mapped; the TASK-BE-614 issuer refusal still fires ────────────────────
+    // ── console — TASK-MONO-772 S4 (ADR-MONO-080 D6): a console token ONLY with a live operator facet ─────
+
+    /** The TASK-BE-614 refusal text — byte-for-byte; the console's sso_wrong_account reads its 'consumer-pool'. */
+    private static final String NO_FACET_TEXT =
+            "tenant_id 'consumer-pool' is a reserved storage value and is never issued";
+
+    private static RegisteredClient console() {
+        return client("platform-console-web", "iam", "B2B_ENTERPRISE");
+    }
+
+    private static String description(Throwable t) {
+        return ((OAuth2AuthenticationException) t).getError().getDescription();
+    }
 
     @Test
-    @DisplayName("AC-3: 콘솔 client(iam) + 풀 principal → 사상하지 않는다 → consumer-pool 발급 거절(BE-614) · 멤버십 조회 없음")
-    void consoleClient_poolPrincipal_refusedByIssuerGate() {
-        poolSessionOn(client("platform-console-web", "iam", "B2B_ENTERPRISE"),
-                AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
-        // the pre-615 per-site legs still run before the refusal (byte-unchanged for this path)
-        when(accountServicePort.listEntitledDomains("consumer-pool")).thenReturn(List.of());
-        when(accountServicePort.listAccountRoles("consumer-pool", POOL_ACCOUNT)).thenReturn(List.of());
+    @DisplayName("🔴 AC-2: 운영자 측면 없는 풀 계정 → 콘솔 토큰 없음 · invalid_grant · 문구는 BE-614 그대로(바이트 불변) · 사이트 멤버십·역할 조회 없음")
+    void console_noFacet_noToken_byteUnchangedRefusal() {
+        poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(false);
 
         Throwable t = catchThrowable(() -> customizer.customize(context));
 
         assertInvalidGrant(t);
-        assertThat(((OAuth2AuthenticationException) t).getError().getDescription()).contains("consumer-pool");
+        assertThat(description(t)).isEqualTo(NO_FACET_TEXT);
         verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
+        verify(accountServicePort, never()).listAccountRoles(anyString(), anyString());
+        verify(accountServicePort, never()).listEntitledDomains(any());
+    }
+
+    @Test
+    @DisplayName("대조군: 살아 있는 운영자 측면 있는 풀 계정 → 콘솔 토큰 · tenant_id=iam · sub=풀 계정 · roles·entitled_domains 없음")
+    void console_liveFacet_mintsConsoleToken() {
+        JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE,
+                OAuth2TokenType.ACCESS_TOKEN);
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true);
+
+        customizer.customize(context);
+
+        JwtClaimsSet built = claims.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("iam").isNotEqualTo("consumer-pool");
+        assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
+        assertThat(built.getSubject()).isEqualTo(POOL_ACCOUNT);
+        assertThat(built.getClaims()).doesNotContainKeys("roles", "entitled_domains");
+        verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("id_token 도 같다 — 측면 있으면 tenant_id=iam")
+    void console_liveFacet_idToken() {
+        JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE,
+                new OAuth2TokenType("id_token"));
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true);
+
+        customizer.customize(context);
+
+        assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("iam");
+    }
+
+    @Test
+    @DisplayName("AC-3: refresh 마다 다시 묻는다 — 측면 있으면 iam, 회수(비-ACTIVE·삭제) 뒤 같은 principal 의 refresh 는 거절(BE-614 문구)")
+    void console_refresh_reasksEveryTime_revokedFacetRefused() {
+        JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.REFRESH_TOKEN,
+                OAuth2TokenType.ACCESS_TOKEN);
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true, false);
+
+        customizer.customize(context);
+        assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("iam");
+
+        // The operator row was suspended / removed between the two refreshes.
+        Throwable t = catchThrowable(() -> customizer.customize(context));
+        assertInvalidGrant(t);
+        assertThat(description(t)).isEqualTo(NO_FACET_TEXT);
+        verify(consoleEligibilityPort, org.mockito.Mockito.times(2)).isConsoleEligible(POOL_ACCOUNT);
+    }
+
+    @Test
+    @DisplayName("AC-3 대조군: 같은 풀 계정의 스토어 토큰은 측면과 무관 — 콘솔 적격을 묻지도 않는다")
+    void storeToken_unaffectedByFacet() {
+        JwtClaimsSet.Builder claims = poolSessionOn(store(), AuthorizationGrantType.REFRESH_TOKEN,
+                OAuth2TokenType.ACCESS_TOKEN);
+        when(accountServicePort.getConsumerSiteMembership("ecommerce", POOL_ACCOUNT)).thenReturn(member("ecommerce"));
+        when(accountServicePort.listEntitledDomains("ecommerce")).thenReturn(List.of());
+
+        customizer.customize(context);
+
+        assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("ecommerce");
+        verify(consoleEligibilityPort, never()).isConsoleEligible(anyString());
+    }
+
+    @Test
+    @DisplayName("판정 실패 → invalid_grant · error_description=operator_eligibility_unavailable(값 전체) · 'consumer-pool' 미포함 (fail-closed, F5)")
+    void console_lookupFailure_distinctRefusal() {
+        poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT))
+                .thenThrow(new OperatorEligibilityUnavailableException("down", null));
+
+        Throwable t = catchThrowable(() -> customizer.customize(context));
+
+        assertInvalidGrant(t);
+        assertThat(description(t)).isEqualTo("operator_eligibility_unavailable").doesNotContain("consumer-pool");
+    }
+
+    @Test
+    @DisplayName("refresh 중 판정 실패도 같은 별도 거절 (토큰 회전 전에 실패 — S1-13)")
+    void console_refreshLookupFailure_distinctRefusal() {
+        poolSessionOn(console(), AuthorizationGrantType.REFRESH_TOKEN, OAuth2TokenType.ACCESS_TOKEN);
+        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenThrow(new IllegalStateException("odd"));
+
+        Throwable t = catchThrowable(() -> customizer.customize(context));
+
+        assertInvalidGrant(t);
+        assertThat(description(t)).isEqualTo("operator_eligibility_unavailable");
     }
 
     // ── AC-9 control — a per-site principal never takes the pool path ─────────────────────────

@@ -80,6 +80,8 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
             .withExposedPorts(6379);
 
     static WireMockServer accountService;
+    /** TASK-MONO-772 S4 — admin-service's console-eligibility read (auth-to-admin.md). */
+    static WireMockServer adminService;
 
     private static final String PASSWORD = "PoolSsoPassw0rd!";
     private static final String BOTH = "0199de70-0000-7000-8000-0000000b0615";
@@ -93,6 +95,17 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
     private static final String DECLINER = "0199de70-0000-7000-8000-0000000f0616";
     private static final String DECLINER_EMAIL = "pool-decline-616@example.com";
     private static final String FAN_CONSENT = "fan-consent-616";
+    /** TASK-MONO-772 S4 — a pool account with a live operator facet (ACTIVE operator, oidc_subject = this id). */
+    private static final String OPERATOR = "0199de70-0000-7000-8000-000000a10772";
+    private static final String OPERATOR_EMAIL = "pool-operator-772@example.com";
+    private static final String FACET = "facet-772";
+    /** TASK-MONO-772 S4 — a pool account whose eligibility admin-service cannot answer (503). */
+    private static final String UNANSWERED = "0199de70-0000-7000-8000-000000b10772";
+    private static final String UNANSWERED_EMAIL = "pool-unanswered-772@example.com";
+    /** TASK-BE-610 dual credential: a pool credential AND an `iam` credential under one email. */
+    private static final String DUAL_POOL = "0199de70-0000-7000-8000-000000c10772";
+    private static final String DUAL_IAM = "0199de70-0000-7000-8000-000000d10772";
+    private static final String DUAL_EMAIL = "pool-dual-772@example.com";
 
     private static final String STORE_CLIENT_ID = "ecommerce-web-store-client";
     private static final String STORE_CLIENT_SECRET = "ecommerce-dev";
@@ -110,7 +123,7 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         accountService = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         accountService.start();
         registry.add("auth.account-service.base-url", accountService::baseUrl);
-        for (String accountId : List.of(BOTH, STORE_ONLY, NEW_SHOPPER, DECLINER)) {
+        for (String accountId : List.of(BOTH, STORE_ONLY, NEW_SHOPPER, DECLINER, OPERATOR, UNANSWERED, DUAL_POOL)) {
             accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/accounts/" + accountId + "/status"))
                     .willReturn(json("""
                             { "accountId": "%s", "status": "ACTIVE", "statusChangedAt": "2026-10-01T00:00:00Z" }
@@ -120,6 +133,24 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         membership("fan-platform", BOTH, "\"ACTIVE\"");
         membership("ecommerce", STORE_ONLY, "\"ACTIVE\"");
         membership("fan-platform", STORE_ONLY, "null");
+        membership("ecommerce", OPERATOR, "\"ACTIVE\"");
+        membership("ecommerce", UNANSWERED, "\"ACTIVE\"");
+        membership("ecommerce", DUAL_POOL, "\"ACTIVE\"");
+
+        // ── TASK-MONO-772 S4 — admin-service console-eligibility ──
+        adminService = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+        adminService.start();
+        registry.add("auth.admin-service.base-url", adminService::baseUrl);
+        eligibility(BOTH, json("{ \"eligible\": false }"));
+        eligibility(DUAL_POOL, json("{ \"eligible\": false }"));
+        eligibility(UNANSWERED, WireMock.aResponse().withStatus(503));
+        // OPERATOR: eligible until the operator row is suspended (scenario state REVOKED) — what admin-service's
+        // predicate (oidc_subject = id ∧ status = ACTIVE) answers after PATCH …/status.
+        adminService.stubFor(eligibilityRequest(OPERATOR).inScenario(FACET)
+                .whenScenarioStateIs(com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED)
+                .willReturn(json("{ \"eligible\": true }")));
+        adminService.stubFor(eligibilityRequest(OPERATOR).inScenario(FACET).whenScenarioStateIs("REVOKED")
+                .willReturn(json("{ \"eligible\": false }")));
 
         // ── TASK-BE-616 ──
         // NEW_SHOPPER: signs up at the store (pool account + store membership), then visits fan for the
@@ -167,6 +198,16 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         return WireMock.aResponse().withStatus(200).withHeader("Content-Type", "application/json").withBody(body);
     }
 
+    private static com.github.tomakehurst.wiremock.client.MappingBuilder eligibilityRequest(String accountId) {
+        return WireMock.get(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
+                .withQueryParam("accountId", WireMock.equalTo(accountId));
+    }
+
+    private static void eligibility(String accountId,
+                                    com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder answer) {
+        adminService.stubFor(eligibilityRequest(accountId).willReturn(answer));
+    }
+
     private static void membership(String site, String accountId, String statusJson) {
         accountService.stubFor(WireMock.get(WireMock.urlPathEqualTo(
                         "/internal/tenants/" + site + "/consumer-members/" + accountId))
@@ -180,6 +221,9 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
     static void stopAccountService() {
         if (accountService != null && accountService.isRunning()) {
             accountService.stop();
+        }
+        if (adminService != null && adminService.isRunning()) {
+            adminService.stop();
         }
     }
 
@@ -197,6 +241,8 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
         accountService.resetRequests();
         accountService.resetScenarios();
+        adminService.resetRequests();
+        adminService.resetScenarios();
         credentialJpaRepository.deleteAll();
         String hash = new Argon2idPasswordHasher().hash(PASSWORD);
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
@@ -205,6 +251,14 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
                 STORE_ONLY, "consumer-pool", STORE_ONLY_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
         credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                 DECLINER, "consumer-pool", DECLINER_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                OPERATOR, "consumer-pool", OPERATOR_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                UNANSWERED, "consumer-pool", UNANSWERED_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                DUAL_POOL, "consumer-pool", DUAL_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
+        credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
+                DUAL_IAM, "iam", DUAL_EMAIL, CredentialHash.argon2id(hash), Instant.now())));
     }
 
     // ── AC-1 ──────────────────────────────────────────────────────────────────────────────────
@@ -398,8 +452,14 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
 
     // ── AC-3 ──────────────────────────────────────────────────────────────────────────────────
 
+    /**
+     * TASK-MONO-772 S4 — 🔴 AC-2 (the closed path, asserted at the token endpoint). Strengthened from the
+     * TASK-BE-615 cell of the same name: the refusal text is asserted byte-for-byte (the console's
+     * {@code sso_wrong_account} discriminator reads it) and admin-service was actually ASKED — so the 400 is the
+     * «no facet» answer, not an outage that happens to look the same.
+     */
     @Test
-    @DisplayName("AC-3: 풀 세션 → 콘솔 client(iam 자격 없음): BE-610 대로 재로그인 없이 코드, 토큰은 400(consumer-pool 발급 거절 — 운영자 권한 없음)")
+    @DisplayName("🔴 AC-2: 운영자 측면 없는 풀 계정 → 콘솔: 재로그인 없이 코드, 토큰은 400 invalid_grant · BE-614 문구 바이트 불변 · admin 에 물었다")
     void poolSession_onConsole_noConsoleToken() throws Exception {
         MockHttpSession session = loginThrough(BOTH_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
 
@@ -407,6 +467,10 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         String code = authorizeExpectingCode(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce);
         JsonNode error = exchange(code, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce, 400);
         assertThat(error.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(error.get("error_description").asText()).isEqualTo(NO_FACET_TEXT);
+        assertThat(error.has("access_token")).isFalse();
+        adminService.verify(WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
+                .withQueryParam("accountId", WireMock.equalTo(BOTH)));
     }
 
     @Test
@@ -416,8 +480,89 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
         MockHttpSession session = loginThrough(BOTH_EMAIL, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce);
 
         String code = authorizeExpectingCode(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce);
-        assertThat(exchange(code, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce, 400)
-                .get("error").asText()).isEqualTo("invalid_grant");
+        JsonNode error = exchange(code, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce, 400);
+        assertThat(error.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(error.get("error_description").asText()).isEqualTo(NO_FACET_TEXT);
+    }
+
+    // ── TASK-MONO-772 S4 — a console token only with a live operator facet ─────────────────────────
+
+    /** The TASK-BE-614 refusal text — byte-for-byte (auth-api.md § 풀 계정의 콘솔 토큰, «측면 없음» row). */
+    private static final String NO_FACET_TEXT =
+            "tenant_id 'consumer-pool' is a reserved storage value and is never issued";
+
+    /**
+     * AC-2's control (same test class, same path) and AC-3: a faceted pool operator gets the console token
+     * (tenant {@code iam}, its own {@code sub}, no roles) and refreshes it; after the operator row is suspended
+     * the NEXT refresh is refused with the «no facet» text, while the same account's store session is untouched.
+     */
+    @Test
+    @DisplayName("772 AC-2 대조군 · AC-3: 측면 있는 풀 운영자 → 콘솔 토큰(iam · sub=풀 계정 · roles 없음) → refresh 200(iam) → 측면 회수 → 다음 refresh 400(BE-614 문구) · 같은 계정 스토어 refresh 는 200")
+    void facetedPoolOperator_consoleToken_thenRevoked_refreshRefused_storeUnaffected() throws Exception {
+        Pkce storePkce = Pkce.create();
+        MockHttpSession session = loginThrough(OPERATOR_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce);
+        JsonNode storeTokens = exchange(authorizeExpectingCode(session, STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce),
+                STORE_CLIENT_ID, STORE_REDIRECT_URI, storePkce, 200);
+
+        // Console: single sign-on (no /login — no iam credential, BE-610), and a console token.
+        Pkce consolePkce = Pkce.create();
+        JsonNode console = exchange(authorizeExpectingCode(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce),
+                CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce, 200);
+        String consoleAccess = console.get("access_token").asText();
+        assertThat(claim(consoleAccess, "tenant_id")).isEqualTo("iam").isNotEqualTo("consumer-pool");
+        assertThat(claim(consoleAccess, "tenant_type")).isEqualTo("B2B_ENTERPRISE");
+        assertThat(claim(consoleAccess, "sub")).isEqualTo(OPERATOR);
+        assertThat(roles(consoleAccess)).isEmpty();
+        assertThat(claim(console.get("id_token").asText(), "tenant_id")).isEqualTo("iam");
+        String consoleRefresh = console.get("refresh_token").asText();
+        assertThat(refreshTokenRepository.findByJti(consoleRefresh).orElseThrow().getTenantId())
+                .as("the mirror row carries the claim — iam").isEqualTo("iam");
+
+        // Refresh while the facet is live: 200, still iam (the session-tenant comparison answers iam).
+        JsonNode refreshed = refreshConsole(consoleRefresh, 200);
+        assertThat(claim(refreshed.get("access_token").asText(), "tenant_id")).isEqualTo("iam");
+        String rotated = refreshed.get("refresh_token").asText();
+
+        // The operator leaves (row suspended): the next console refresh gets no token.
+        adminService.setScenarioState(FACET, "REVOKED");
+        JsonNode refused = refreshConsole(rotated, 400);
+        assertThat(refused.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(refused.get("error_description").asText()).isEqualTo(NO_FACET_TEXT);
+
+        // ADR-MONO-080 D5 — the store session of the same pool account is untouched by the revocation.
+        JsonNode store = refreshStore(storeTokens.get("refresh_token").asText(), 200);
+        assertThat(claim(store.get("access_token").asText(), "tenant_id")).isEqualTo("ecommerce");
+        assertThat(claim(store.get("access_token").asText(), "sub")).isEqualTo(OPERATOR);
+        // admin-service was asked on every console issuance (code + id token, refresh, refused refresh).
+        adminService.verify(WireMock.moreThanOrExactly(3),
+                WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
+                        .withQueryParam("accountId", WireMock.equalTo(OPERATOR)));
+    }
+
+    @Test
+    @DisplayName("772 F5: 판정을 못 받음(admin 503) → 400 invalid_grant · error_description=operator_eligibility_unavailable(값 전체) · 'consumer-pool' 미포함")
+    void eligibilityUnanswered_distinctRefusal() throws Exception {
+        MockHttpSession session = loginThrough(UNANSWERED_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
+
+        Pkce consolePkce = Pkce.create();
+        String code = authorizeExpectingCode(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce);
+        JsonNode error = exchange(code, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, consolePkce, 400);
+        assertThat(error.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(error.get("error_description").asText())
+                .isEqualTo("operator_eligibility_unavailable").doesNotContain("consumer-pool");
+    }
+
+    @Test
+    @DisplayName("772 S1-1 · BE-610: 풀 세션인데 같은 이메일에 iam 자격 → 콘솔 authorize 는 재인증(/login) · 코드 없음 · admin 에 묻지 않는다")
+    void dualCredential_poolSession_consoleReauthenticates() throws Exception {
+        MockHttpSession session = loginThrough(DUAL_EMAIL, STORE_CLIENT_ID, STORE_REDIRECT_URI, Pkce.create());
+
+        MvcResult console = mockMvc.perform(authorize(session, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, Pkce.create()))
+                .andExpect(status().is3xxRedirection()).andReturn();
+
+        assertThat(console.getResponse().getHeader("Location")).endsWith("/login").doesNotContain("code=");
+        adminService.verify(0, WireMock.getRequestedFor(
+                WireMock.urlPathEqualTo("/internal/operators/console-eligibility")));
     }
 
     // ── AC-4 (owner decision: logout ends the WHOLE IAM session) ──────────────────────────────
@@ -558,6 +703,19 @@ class ConsumerPoolSsoIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
         assertThat(result.getResponse().getStatus())
                 .as("refresh status — body: " + result.getResponse().getContentAsString())
+                .isEqualTo(expectedStatus);
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode refreshConsole(String refreshToken, int expectedStatus) throws Exception {
+        MvcResult result = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", refreshToken)
+                        .param("client_id", CONSOLE_CLIENT_ID))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as("console refresh status — body: " + result.getResponse().getContentAsString())
                 .isEqualTo(expectedStatus);
         return objectMapper.readTree(result.getResponse().getContentAsString());
     }

@@ -13,6 +13,7 @@ import { DemoBackendNotice } from '@/widgets/demo-notice/DemoBackendNotice';
 import { DemoLoginCredentials } from '@/widgets/demo-credentials/DemoLoginCredentials';
 import { ForcedReLoginCacheReset } from '@/widgets/forced-relogin-cache-reset/ForcedReLoginCacheReset';
 import { SsoWrongAccountLogout } from '@/widgets/sso-wrong-account-logout/SsoWrongAccountLogout';
+import { OPERATOR_CHECK_UNAVAILABLE } from '@/shared/lib/iam-token-refusal';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,14 @@ const ERROR_MESSAGES: Record<string, string> = {
     '아직 소속된 조직이 없습니다. 다시 로그인하면 조직 만들기로 안내됩니다.',
   operator_exchange_unavailable:
     '인증 서버 일시 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  // TASK-MONO-772 S4 (contract § 2.6.3) — IAM 이 개인(풀) 계정의 운영자 여부를
+  // admin-service 에 묻지 못해 토큰을 내지 않은 경우(`operator_eligibility_unavailable`).
+  // 🔴 «다른 계정» 이 아니다 — 계정은 맞을 수 있으므로 로그아웃 위젯을 붙이지 않는다
+  // (`sso_wrong_account` 와 다른 코드 · 다른 문구). 문구는 계약 문장 그대로다.
+  // 키는 리터럴로 둔다 — `login-error-messages.test.tsx` 의 키 집합 술어가 리터럴 키를 읽는다
+  // (값은 `iam-token-refusal.ts` 의 `OPERATOR_CHECK_UNAVAILABLE` 과 같다 — 그 시험이 대조한다).
+  operator_check_unavailable:
+    '운영자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.',
   // TASK-MONO-771 (contract § 2.6) — 단계 상승을 한 번 했는데도 토큰 교환이 여전히
   // `403 MFA_REQUIRED` 인 경우(루프 상한), 또는 IAM 2단계 화면에서 «취소» 한 경우.
   // 문구는 계약의 «reason shown» 문장 그대로다.
@@ -127,7 +136,11 @@ export default async function LoginPage({
   // can arrive while a full session still exists (IAM «취소» on a step-up the
   // tenant switcher started), and the short-circuit would swallow it. It is
   // not a forced re-login: no cache reset, no demo-state read.
-  const reasonMustShow = forcedReLogin || sp.error === 'mfa_required';
+  // TASK-MONO-772 S4 (§ 2.6.3) — `operator_check_unavailable` keeps every cookie
+  // (IAM did not rotate), so a complete session may still be present when the
+  // browser client lands here; the reason must be shown, not swallowed.
+  const reasonMustShow =
+    forcedReLogin || sp.error === 'mfa_required' || sp.error === OPERATOR_CHECK_UNAVAILABLE;
   if (!reasonMustShow && (await isAuthenticated())) redirect('/dashboards/overview');
 
   // The demo-state signal is asked ONLY on a forced re-login landing (the

@@ -17,6 +17,7 @@ import { buildStepUpRedirectFor } from '@/shared/lib/login-redirect';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
+import { isOperatorEligibilityUnavailable } from '@/shared/lib/iam-token-refusal';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -212,6 +213,16 @@ export async function GET(req: Request) {
         status: upstream.status,
         error: (body as { error?: string }).error,
       });
+      // TASK-MONO-772 S4 (§ 2.6.3) — IAM could not ask admin-service whether
+      // this personal account is an operator (fail-closed). Checked BEFORE the
+      // `'consumer-pool'` row: it is not «wrong account», and the account may
+      // well be right — no logout affordance, its own message.
+      if (isOperatorEligibilityUnavailable(body)) {
+        logger.warn('oidc_token_exchange_operator_check_unavailable', { requestId });
+        // Literal reason (= OPERATOR_CHECK_UNAVAILABLE): the login-page suite's
+        // «every loginRedirect reason has its own copy» gate reads literals.
+        return loginRedirect(publicOrigin(env), 'operator_check_unavailable');
+      }
       // TASK-PC-FE-324 — distinguish "logged in as the WRONG (consumer-pool)
       // account" from every other token-exchange failure (expired/reused
       // code, network/5xx, …). See `isConsumerPoolSsoRefusal` above for the

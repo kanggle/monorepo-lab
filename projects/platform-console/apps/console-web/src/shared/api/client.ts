@@ -2,6 +2,10 @@ import { ApiError, messageForCode, MFA_REQUIRED_CODE } from './errors';
 import { buildStepUpRedirectFor } from '@/shared/lib/login-redirect';
 import { isSampleErrorCode, SAMPLE_READ_ONLY } from '@/shared/sample/codes';
 import { publishSampleRefusal } from '@/shared/lib/sample-refusal';
+import {
+  OPERATOR_CHECK_UNAVAILABLE,
+  OPERATOR_CHECK_UNAVAILABLE_CODE,
+} from '@/shared/lib/iam-token-refusal';
 
 /**
  * The ONLY backend entry point for client components (architecture.md
@@ -16,6 +20,9 @@ import { publishSampleRefusal } from '@/shared/lib/sample-refusal';
  * - On refresh failure, redirects to `/login?redirect=<current>`.
  * - On refresh `403 MFA_REQUIRED` (TASK-MONO-771), navigates to
  *   `/api/auth/step-up?redirect=<current>` instead.
+ * - On refresh `503 OPERATOR_CHECK_UNAVAILABLE` (TASK-MONO-772 S4, § 2.6.3),
+ *   navigates to `/login?error=operator_check_unavailable&redirect=<current>`
+ *   — the reason is shown; the BFF kept every cookie.
  */
 
 export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
@@ -74,9 +81,11 @@ async function doFetch(path: string, opts: ApiRequestOptions): Promise<Response>
 
 /**
  * `ok` — refreshed; `mfa_required` — the operator re-exchange answered
- * `403 MFA_REQUIRED` (TASK-MONO-771, contract § 2.6.1); `failed` — anything else.
+ * `403 MFA_REQUIRED` (TASK-MONO-771, contract § 2.6.1); `operator_check_unavailable`
+ * — IAM could not ask whether the personal account is an operator (TASK-MONO-772,
+ * § 2.6.3); `failed` — anything else.
  */
-type RefreshResult = 'ok' | 'mfa_required' | 'failed';
+type RefreshResult = 'ok' | 'mfa_required' | 'operator_check_unavailable' | 'failed';
 
 let inflightRefresh: Promise<RefreshResult> | null = null;
 
@@ -92,6 +101,10 @@ async function refreshSession(): Promise<RefreshResult> {
       if (res.status === 403) {
         const body = (await res.json().catch(() => ({}))) as { code?: unknown };
         if (body.code === MFA_REQUIRED_CODE) return 'mfa_required';
+      }
+      if (res.status === 503) {
+        const body = (await res.json().catch(() => ({}))) as { code?: unknown };
+        if (body.code === OPERATOR_CHECK_UNAVAILABLE_CODE) return 'operator_check_unavailable';
       }
       return 'failed';
     } catch {
@@ -109,6 +122,15 @@ function redirectToLogin() {
   if (!isBrowser()) return;
   const current = window.location.pathname + window.location.search;
   window.location.assign(`/login?redirect=${encodeURIComponent(current)}`);
+}
+
+/** TASK-MONO-772 S4 (§ 2.6.3) — the reason travels with the bounce. */
+function redirectToLoginWithOperatorCheckUnavailable() {
+  if (!isBrowser()) return;
+  const current = window.location.pathname + window.location.search;
+  window.location.assign(
+    `/login?error=${OPERATOR_CHECK_UNAVAILABLE}&redirect=${encodeURIComponent(current)}`,
+  );
 }
 
 /** TASK-MONO-771 (§ 2.6.1) — the browser client's step-up navigation. */
@@ -133,6 +155,9 @@ export async function apiFetch<T = unknown>(
       // factor, not a new identity (contract § 2.6.1).
       redirectToStepUp();
       throw new ApiError(403, MFA_REQUIRED_CODE, 'Second factor required');
+    } else if (refreshed === 'operator_check_unavailable') {
+      redirectToLoginWithOperatorCheckUnavailable();
+      throw new ApiError(503, OPERATOR_CHECK_UNAVAILABLE_CODE, 'Operator check unavailable');
     } else {
       redirectToLogin();
       throw new ApiError(401, 'TOKEN_INVALID', 'Session expired');
