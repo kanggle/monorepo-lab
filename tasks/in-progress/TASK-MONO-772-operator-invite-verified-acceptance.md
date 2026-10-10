@@ -63,7 +63,7 @@ monorepo
 - [x] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
 - [ ] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
 - [ ] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
-- [ ] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
+- [x] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
 - [x] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
 
 # Related Specs
@@ -734,3 +734,5 @@ monorepo
 
 - `account-maintenance-internal.md` · `error-handling.md`(`POOL_MOVE_OPERATOR_FACETED` 설명) 는 S1 이 이미 «S6 부터 신원 축만» 으로 적어 두어 고치지 않았다.
 - 로그: 새 로그 줄은 client id · 세션 테넌트 · (게이트 조회 실패 시) 예외만 — 이메일 · 토큰 · 해시 없음.
+
+- AC-5 ✅ (2026-10-10 UTC — 오케스트레이터): #4285 CI 에서 실제로 돈 시험 — iam A `OperatorAssignmentCheckIntegrationTest` «🔴 S6 (AC-5) 셀프 온보딩 운영자(oidc_subject 축)» · «S6 대조군(F11)», iam B auth `ConsumerPoolLegacyMoveIntegrationTest` «🔴 772 AC-5 — 이동 전 콘솔(사이트 principal) 세션 거절 → 재로그인 = 같은 sub», account «🔴 772 AC-5 — 같은 id 로 풀 이동 · 사이트 계정 거절 해제(F10)» 전부 PASSED.
