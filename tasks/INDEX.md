@@ -218,12 +218,12 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-786-launcher-lede-readable.md` — **론처 상단 안내를 «둘러보기 → 로그인 후 기능 → 끄기» 세 줄로** (REVIEW, 2026-10-10 UTC · 소유자 요청). 라벨 + 본문 + 보충 작은 글씨, 좁으면 라벨이 위로. 사실 · 숫자(약 10분 · 20분) 무변경, 새 숫자 없음. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 - `TASK-MONO-781-demo-cs-support-lock-operator.md` — **데모 CS 2선 운영자 `cs@demo.com` — 홈 `ecommerce` · `SUPPORT_LOCK`@`ecommerce`(사이트 잠금)** (REVIEW, 2026-10-09 UTC · `TASK-PC-FE-326` 라이브 확인용). 🔴 AC-0: 콘솔은 고른 테넌트를 항상 assume 하고 토큰 역할은 그 테넌트 구독에서 파생 → 이 계정은 `ecommerce` 의 이커머스·WMS 운영 역할(쓰기 포함)도 받는다, 좁히는 장치 없음 → **소유자 결정 A = 시드 + 공개**(B=ADR-035 변경 · C=가짜 사이트 기각). 핀 = auth-service `DemoCsOperatorDerivedRolesTest`(account-service 전 마이그레이션에서 구독 재계산 → 운영 파생으로 역할 9개 정확 비교) · `DemoCsOperatorSeedTest` · admin IT 5칸. bite 2종. ⏳ **AC-4 = CI IT(Docker 없음) · AC-5 = 재굽기 뒤 라이브** — 공개(론처 · 가이드)는 `TASK-MONO-782`.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (REVIEW, 2026-10-10 UTC). 슬라이스 전부 머지(#4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286), AC-0~6 ✅(CI 통합 시험 근거). ⏳ `done/` 전 라이브 ⚪: 셀프 온보딩 운영자 수 질의 · 초대 메일 1통 · 초대 → 수락 종단. 🔴 후속 `TASK-MONO-773` 은 **착수 전 다회사 운영자 ADR**(OD-1). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done
+- ✅ `TASK-MONO-786-launcher-lede-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4295**(`69af06d0c`, 머지 시점 실패 0). 론처 상단 안내를 «둘러보기 → 로그인 후 기능 → 끄기» 세 줄(라벨 + 본문 + 보충)로. 사실 · 숫자 무변경.
 - ✅ `TASK-MONO-785-launcher-login-accounts-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4293**(`f499e7e43`, 머지 시점 실패 0 · Demo wrapper smoke pass). 론처 「로그인 계정」 을 계정별 카드 3장(기본 데모 · 플랫폼 운영자 · 권한 없음 시연)으로 정리 — 용도 · 자격 · 로그인 후 단계 · 보충. 계정 값 · (z11) 무변경. 후속 `TASK-MONO-782` 는 네 번째 카드로.
 - ✅ `TASK-MONO-783-draft-adr-082-multi-company-operator-model.md` — **DONE 2026-10-10 UTC (4-dim verified)** — PROPOSED **#4288**(`3e0fd511b`) · ACCEPT **#4289**(`e4bea92d2`) (머지 시점 실패 0, 둘 다). `ADR-MONO-082` ACCEPTED — **b**(운영자 행 하나 + 회사별 소속 · 역할, 라이더 R1~R4 기본값). 단계 티켓 `TASK-MONO-784` · `TASK-MONO-773` 선행에 784.
 - ✅ `TASK-MONO-771-iam-two-factor-and-entry-policy.md` — **DONE 2026-10-09 UTC (4-dim verified)** — 슬라이스 S1~S6 전부 머지 · 실패 0 — S1 **#4257**(`c5ea39a02`) · S2a **#4258**(`ef94c373e`) · S2b **#4260**(`fe0e7c77b`) · S2c **#4261**(`4913638cf`) · S3 **#4262**(`1a9b42333`) · S4 **#4263**(`7753bb5a8`) · S5 **#4266**(`b7c389421`) · S6 **#4268**(`7f401f764`). `ADR-MONO-080` 단계 2 — IAM 로그인 TOTP · `amr` 발급 · 토큰교환/assume 2단계 강제 · 테넌트 진입 정책 · 콘솔 step-up · 계정 TOTP 리셋. 25차 창 라이브: 소비자 로그인(demo@·shopper1@) 2단계 화면 없이 그대로(AC-3). `TASK-MONO-772` 선행 해소.
