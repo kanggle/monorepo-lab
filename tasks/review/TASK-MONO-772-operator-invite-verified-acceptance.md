@@ -8,7 +8,7 @@ TASK-MONO-772
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -61,8 +61,8 @@ monorepo
 - [x] **AC-0** — 착수 시 재측정: 334 규칙 file:line · 615 D-5 거절 지점 · 온보딩 audience 요구 · 사이트 계정으로 남은 셀프 온보딩 운영자 수(정적 · 라이브 ⚪ 가능).
 - [x] **AC-1** — 🔴 대조군: 인증 안 된 계정 · 다른 이메일 계정 · 만료/재사용 초대 → 수락 거절. 같은 시험에서 인증된 본인 수락만 성공.
 - [x] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
-- [ ] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
-- [ ] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
+- [x] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
+- [x] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
 - [x] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
 - [x] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
 
@@ -812,3 +812,11 @@ monorepo
 
 - **AC-3** — 남았던 «팬 로그인» 칸을 채웠다: auth IT 한 시험 안에서 회수 뒤 팬 refresh 200 · 팬 새 로그인 200 · 콘솔 400. 스토어 · 콘솔 쪽은 #4281 CI 가 이미 단언. ⇒ 이 PR 의 CI iam B `ConsumerPoolSsoIntegrationTest` 초록 뒤 판정.
 - **AC-4** — admin IT 두 칸(해지 · SUSPENDED · 참여자 제외 → 다음 판정 거절, 대조군 홈 회사 · 콘솔 적격 유지). ⇒ CI iam A `PartnershipCrossOrgLeakIntegrationTest` 초록 뒤 판정. 라이브 ⚪.
+
+# review 이동 기록 (2026-10-10 UTC)
+
+- AC-3 ✅: #4286 CI iam B `ConsumerPoolSsoIntegrationTest` «772 AC-2 대조군 · AC-3» PASSED — 측면 회수 뒤 콘솔 refresh/authorize 거절 · 같은 풀 계정의 **스토어 · 팬** refresh 200 · 팬 새 로그인 200(같은 `sub`).
+- AC-4 ✅: #4286 CI iam A `PartnershipCrossOrgLeakIntegrationTest` «🔴 772 AC-4 파트너십 해지 → 협력사 직원(풀 계정 운영자) 다음 assignment check assigned=false» · «SUSPENDED · 참여자 제외» PASSED. 🔵 이미 발급된 assume 토큰은 TTL 까지 산다(F13 — 잔여 창 기록).
+- 슬라이스 전부 머지: AC-0·S1 #4280 · S4 #4281 · S2 #4282 · S3 #4283 · S5 #4284 · S6 #4285 · S7 #4286. 각 PR 머지 시점 CI 실패 0.
+- AC-0~6 전부 ✅. ⚪ 라이브(AC 아님): AC-0 측정 4 질의(사이트 계정 셀프 온보딩 운영자 수) · 데모 Mailpit 초대 메일 1통 · 초대 → 수락 종단(AC-6 라이브).
+- 후속 판단(AC 아님): newhire R__ 시드 파일 삭제 + 볼륨 정리 · Hibernate EntityPrinter OFF 를 다른 서비스로 · `AspectCoverageTest` 공허 의심(`classpath:` 단일 루트) · S3-6~9 계약 메모(분류기 차단, 태스크 파일에만) · TASK-PC-FE-331 재평가(F7) · 🔴 OD-1 다회사 운영자 ADR = **773 착수 전**.
