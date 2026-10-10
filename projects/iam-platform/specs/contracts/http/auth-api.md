@@ -270,7 +270,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 
 | Status | 에러 코드 | 조건 |
 |---|---|---|
-| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 / **2단계 필요(`error_description=insufficient_user_authentication`, TASK-MONO-771)** (위 Assume-Tenant Exchange 참조), **풀 principal 의 콘솔 토큰 거절(TASK-MONO-772)** — 운영자 측면 없음 = 기존 `consumer-pool` 문구 그대로 · 측면 판정 실패 = **`error_description=operator_eligibility_unavailable`**(고정 상수, 아래 § 풀 계정의 콘솔 토큰) |
+| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 / **2단계 필요(`error_description=insufficient_user_authentication`, TASK-MONO-771)** (위 Assume-Tenant Exchange 참조), **풀 principal 의 콘솔 토큰 거절(TASK-MONO-772)** — 운영자 측면 없음 = 기존 `consumer-pool` 문구 그대로 · 측면 판정 실패 = **`error_description=operator_eligibility_unavailable`**(고정 상수, 아래 § 풀 계정의 콘솔 토큰) · **풀 이동 전에 열린 콘솔 세션(772 S6) = `error_description=session_predates_pool_move`**(고정 상수, 같은 절) |
 | 400 | `invalid_request` | PKCE 미포함, assume-tenant `audience` 누락/malformed |
 | 401 | `invalid_client` | client 인증 실패 |
 | 401 | `unauthorized_client` | 해당 grant_type 미허용 client |
@@ -732,6 +732,11 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 - 2단계: 풀 운영자의 콘솔 로그인도 로그인 흐름의 2단계(§ IdP 브라우저 화면 — 2단계 인증)를 거친다. 교환 · assume 의 2단계 요구(TASK-MONO-771)는 그대로 문다 — TOTP 는 `account_id` 키라 풀 이동 뒤에도 산다.
 - **열지 않는 것**: 측면 **없는** 풀 계정의 콘솔 토큰 · 그래서 셀프 온보딩(`/onboarding` — 콘솔 토큰 필요)도 풀 계정에 계속 닫혀 있다. 그 개방(비운영자 셸 · ADR-MONO-044 D4 인증 이메일 트러스트 게이트)은 `TASK-MONO-773` 이 한다(ADR-080 D9 = T1). 773 이 넓힐 때 바꾸는 곳은 위 표의 «측면 없음» 행 한 곳이다 — 두 거절 상수는 그대로 둔다.
 - `consumer-pool` 은 여전히 어떤 토큰에도 나오지 않는다. 새 클레임 없음([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) 무변경).
+- 🔴 **풀 이동 전에 열린 콘솔 세션은 이동 뒤 다시 쓰지 않는다 (`TASK-MONO-772` S6 — S1 열린 질문 3).** 셀프 온보딩 운영자(ADR-MONO-044 D5)는 이동 전 콘솔에 **사이트 principal** 로 들어왔고(콘솔 폼의 교차 조회가 사이트 자격을 고른다), 그 세션의 콘솔 토큰은 `tenant_id` = 그 사이트였다. SAS 세션은 열릴 때의 principal 을 그대로 들고 있으므로, 이동기가 자격을 풀로 옮긴 뒤(같은 계정 id)에도 그 세션의 refresh · IdP 브라우저 세션 재사용은 **계정이 더는 살지 않는 사이트**를 `tenant_id` 로 싣는 콘솔 토큰을 계속 낸다 — 운영자 측면도 묻지 않은 채(위 표는 풀 principal 에만 묻는다). 그래서:
+  - 발급자 — **풀이 아닌 · `iam` 이 아닌 principal × 콘솔 client** 이고 그 계정의 자격이 **지금 `consumer-pool` 에 있으면** 거절: `400 invalid_grant`, **`error_description=session_predates_pool_move`**(고정 상수 — `'consumer-pool'` 미포함 · `operator_eligibility_unavailable` 아님). access token 을 만드는 단계라 refresh 토큰은 회전되지 않는다. 자격이 아직 그 사이트에 있으면(이동 전) **772 전 그대로** 발급한다. 자격 조회 실패는 토큰 없음(fail-closed).
+  - authorize 게이트 — 같은 조건이면 **재인증**(`/login`). 콘솔 폼의 교차 조회가 이제 풀 자격을 고르므로 재개된 authorize 는 풀 principal 이고 위 표의 S4 갈래를 탄다 — 재인증 고리 없음. 자격 조회 실패는 통과(BE-610 과 같은 규칙 — 발급자가 여전히 거절한다).
+  - 콘솔이 읽는 모양 — 콘솔 계약 § 2.6.3 의 «그 밖의 `invalid_grant`» 행 그대로: refresh → `session_expired`(다시 로그인) · 콜백 → `token_exchange_failed`. 콘솔 변경 없음. 콜백 갈래는 게이트가 재인증하므로 자격 조회가 실패했을 때만 닿는다.
+  - 소비자 사이트 client 의 이동 전 세션은 **건드리지 않는다** — 그 세션의 토큰 테넌트(그 사이트)는 이미 풀 principal 의 목표 모양이다([auth-internal.md § consumer-pool/moves «옮기지 않는 것»](./internal/auth-internal.md#post-internalauthconsumer-poolmoves--자격을-풀로-옮긴다-task-be-618)).
 - 🔵 **구현 = `TASK-MONO-772` S4.** 판정 지점은 발급자 한 곳(`TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole`)이다 — `id_token` 도 같은 발급자를 지나므로 한 번의 발급에서 admin-service 에 두 번(access · id) 물을 수 있다(캐시 없음 규칙 그대로). refresh 에서 거절은 SAS refresh provider 가 access token 을 만드는 단계에서 나므로 refresh 토큰은 회전되지 않는다(콘솔 § 2.6.3 «쿠키 유지» 의 전제).
 
 ---

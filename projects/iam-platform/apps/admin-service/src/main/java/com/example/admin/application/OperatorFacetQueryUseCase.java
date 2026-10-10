@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 /**
  * TASK-BE-618 (ADR-MONO-078 A; auth-to-admin.md § GET /internal/operators/facet) — does this consumer
  * account carry an <b>operator facet</b>?
@@ -20,6 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
  *       moving the identity row into the pool would make that operator's identity a pool identity.</li>
  * </ul>
  *
+ * <p><b>TASK-MONO-772 S6 — the caller picks the axes</b> ({@link OperatorFacetAxis}). Omitted = both, the
+ * behaviour above byte-unchanged. The mover asks {@link OperatorFacetAxis#IDENTITY} only, so a self-onboarded
+ * operator is moved under the same id (ADR-MONO-080 D6 · 772 D-6); the predicate of each axis does not change.
+ *
  * <p>Read-only — no {@code admin_actions} row (same rule as the assignment check). The answer is a single
  * boolean: which axis matched is not disclosed.
  */
@@ -29,8 +35,24 @@ public class OperatorFacetQueryUseCase {
 
     private final AdminOperatorPort adminOperatorPort;
 
+    /** Both axes — the pre-772 behaviour. */
     @Transactional(readOnly = true)
     public boolean isOperatorFaceted(String accountId, String identityId) {
-        return adminOperatorPort.existsOperatorFacet(accountId, identityId);
+        return isOperatorFaceted(accountId, identityId, OperatorFacetAxis.all());
+    }
+
+    /**
+     * @param axes the axes to ask — non-empty ({@link OperatorFacetAxis#parse} never returns an empty set);
+     *             an empty set answers {@code false}
+     */
+    @Transactional(readOnly = true)
+    public boolean isOperatorFaceted(String accountId, String identityId, Set<OperatorFacetAxis> axes) {
+        boolean bySubject = axes.contains(OperatorFacetAxis.OIDC_SUBJECT)
+                && adminOperatorPort.existsOperatorBySubject(accountId);
+        if (bySubject) {
+            return true;
+        }
+        return axes.contains(OperatorFacetAxis.IDENTITY)
+                && adminOperatorPort.existsOperatorByIdentity(identityId);
     }
 }

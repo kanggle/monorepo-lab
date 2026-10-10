@@ -110,6 +110,9 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 > 계정 id 가 그대로라 `admin_operators.oidc_subject` 를 다시 쓸 것이 없고(쓰기 0), 같은 사람이 같은 `sub` 로 콘솔에 들어온다(772 AC-5 — 풀 세션의 콘솔 토큰은
 > [auth-api.md § 풀 계정의 콘솔 토큰](../auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6), 🔴 그 절의 구현(S4)이 S6 보다 **먼저** 머지돼야 한다 — 옮긴 순간 그 사람의 세션은 풀 principal 이다).
 > 신원 축(소비자 사이트 테넌트에 334 로 만들어 신원이 연결된 운영자 — 정적 0)은 계속 건너뛴다(772 AC-0 F11). 이 엔드포인트의 판정 자체는 바뀌지 않는다 — 바뀌는 것은 호출자가 고르는 축이다.
+>
+> 🔵 **구현 = 772 S6.** `axes` 의 원소는 대문자 이름 그대로(앞뒤 공백만 무시), **빈 값 · 빈 원소(`IDENTITY,`) 도 `400 VALIDATION_ERROR`** 다 — «아무 축도 묻지 않음» 을 `false` 로 답하면 이동기가 운영자 계정을 옮기게 되므로 닫힌 쪽(거절)을 고른다. 오류 메시지는 제출된 값을 싣지 않는다.
+> 배포 순서: auth-service 가 먼저 나가 이 파라미터를 모르는 admin-service 에 보내도 admin 은 그것을 무시하고 두 축으로 답한다(= 772 전의 «셀프 온보딩 운영자는 건너뜀») — 보수 쪽이라 순서 제약이 없다.
 
 **Side Effect**: 없음 (read-only — `admin_actions` row 미기록).
 
@@ -118,7 +121,7 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 | Status | 조건 |
 |---|---|
 | 401 `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 (`/internal/**` 체인 fail-closed) |
-| 400 `VALIDATION_ERROR` | `accountId` 누락 |
+| 400 `VALIDATION_ERROR` | `accountId` 누락 · `axes` 에 모르는 값 · 빈 값 · 빈 원소(772 S6) |
 
 **Caller (auth-service) — fail-CLOSED**: 아래 Caller Constraints 와 같은 타임아웃·재시도·circuit breaker(별도 breaker 이름 — 이동 배치의 실패가 assume-tenant 게이트를
 열지 않는다). 답을 못 받으면(4xx · 5xx · 타임아웃 · circuit-open · 본문 이상) **옮기지 않는다** → `503 SERVICE_UNAVAILABLE`. 모른 채 옮기면 운영자 계정을 풀로 끌고 간다.

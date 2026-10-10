@@ -108,12 +108,18 @@ public interface AdminOperatorPort {
     List<OperatorOidcSubjectView> findOperatorsWithOidcSubject();
 
     /**
-     * TASK-BE-618 (auth-to-admin.md § GET /internal/operators/facet) — whether ANY operator row,
-     * in any status, carries an operator facet of this consumer account: {@code oidc_subject =
-     * accountId}, or (when {@code identityId} is non-blank) {@code identity_id = identityId}.
-     * Read-only. A blank {@code accountId} matches nothing on that axis.
+     * TASK-BE-618 (auth-to-admin.md § GET /internal/operators/facet) — the {@code OIDC_SUBJECT} axis: whether
+     * ANY operator row, in any status, has {@code oidc_subject = accountId}. Read-only. A blank / null
+     * {@code accountId} matches nothing. (TASK-MONO-772 S6 split the former two-axis method per axis — the
+     * caller picks the axes.)
      */
-    boolean existsOperatorFacet(String accountId, String identityId);
+    boolean existsOperatorBySubject(String accountId);
+
+    /**
+     * TASK-BE-618 — the {@code IDENTITY} axis: whether ANY operator row, in any status, has
+     * {@code identity_id = identityId}. Read-only. A blank / null {@code identityId} matches nothing.
+     */
+    boolean existsOperatorByIdentity(String identityId);
 
     /**
      * TASK-MONO-298 (ADR-MONO-040 Phase 3 part A) — set

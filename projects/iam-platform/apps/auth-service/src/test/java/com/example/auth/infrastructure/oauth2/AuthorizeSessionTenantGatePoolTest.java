@@ -272,6 +272,58 @@ class AuthorizeSessionTenantGatePoolTest {
         verifyNoInteractions(accountServicePort);
     }
 
+    // ── TASK-MONO-772 S6 (open question 3) — a console browser session that predates the pool move ──────────
+
+    private static Credential credentialIn(String tenant) {
+        Credential credential = mock(Credential.class);
+        when(credential.getTenantId()).thenReturn(tenant);
+        return credential;
+    }
+
+    @Test
+    @DisplayName("🔴 772 S6: 콘솔 client · 이동 전 사이트(팬) 세션 · 자격이 이제 풀 → 재인증 (옛 사이트 principal 로 코드를 내지 않는다)")
+    void preMoveSiteSession_console_credentialMovedToPool_reauthenticates() throws Exception {
+        stubClient("platform-console-web", "iam");
+        Credential credential = credentialIn("consumer-pool");
+        when(credentialRepository.findByAccountId(POOL_ACCOUNT)).thenReturn(Optional.of(credential));
+
+        assertThat(runAuthorize(principal("fan-platform"), "platform-console-web")).isNull();
+        verifyNoInteractions(accountServicePort);
+    }
+
+    @Test
+    @DisplayName("🔴 772 S6 대조군: 콘솔 client · 사이트 세션 · 자격이 아직 그 사이트 → 772 전처럼 통과 (셀프 온보딩 운영자, 이동 전)")
+    void siteSession_console_notMoved_passesAsBefore() throws Exception {
+        stubClient("platform-console-web", "iam");
+        Credential credential = credentialIn("fan-platform");
+        when(credentialRepository.findByAccountId(POOL_ACCOUNT)).thenReturn(Optional.of(credential));
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
+        Authentication session = principal("fan-platform");
+
+        assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+    }
+
+    @Test
+    @DisplayName("772 S6: 콘솔 client · 사이트 세션 · 자격 조회 실패 → 통과(재인증 고리 없음 — 발급자가 여전히 거절한다)")
+    void siteSession_console_movedLookupFails_passes_noLoop() throws Exception {
+        stubClient("platform-console-web", "iam");
+        when(credentialRepository.findByAccountId(POOL_ACCOUNT)).thenThrow(new RuntimeException("db down"));
+        when(credentialRepository.findByTenantIdAndEmail("iam", EMAIL)).thenReturn(Optional.empty());
+        Authentication session = principal("fan-platform");
+
+        assertThat(runAuthorize(session, "platform-console-web")).isSameAs(session);
+    }
+
+    @Test
+    @DisplayName("772 S6 대조군: 같은 이동 전 사이트 세션이라도 팬(사이트) client 는 자격을 보지 않는다 — BE-618 «이동 전 세션 유지»")
+    void preMoveSiteSession_siteClient_noCredentialRead() throws Exception {
+        stubClient("fan", "fan-platform");
+        Authentication session = principal("fan-platform");
+
+        assertThat(runAuthorize(session, "fan")).isSameAs(session);
+        verifyNoInteractions(accountServicePort, credentialRepository);
+    }
+
     @Test
     @DisplayName("AC-2 대조군: 묶이지 않은 사이트 계정 세션(ecommerce) → 팬 client 는 지금처럼 재인증 · 풀 조회 0")
     void siteSession_otherConsumerSite_stillReauthenticates() throws Exception {

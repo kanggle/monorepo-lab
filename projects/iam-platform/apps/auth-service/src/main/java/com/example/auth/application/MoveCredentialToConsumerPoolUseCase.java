@@ -35,6 +35,15 @@ import java.util.Optional;
  * → social identities → a pool credential with the same email → operator facet (admin-service, fail-CLOSED)
  * → move. Every refusal writes nothing. Idempotent: a second call after a successful move answers
  * {@link Outcome#ALREADY_IN_POOL}, which is what completes the «auth committed, account rolled back» window.
+ *
+ * <p><b>TASK-MONO-772 S6 (ADR-MONO-080 D6 fourth line · implementer decision D-6)</b> — the operator facet is the
+ * <b>identity axis only</b> ({@link OperatorFacetPort}, {@code axes=IDENTITY}). An ADR-MONO-044 D5 self-onboarded
+ * operator ({@code admin_operators.oidc_subject} = this account id) is now moved like any single-site account:
+ * the account id does not change, so the operator row needs no write and the same {@code sub} reaches it from a
+ * pool session (772 S4 console token). A social-linked one is still refused here ({@link Outcome#SOCIAL_LINKED}
+ * — step 4, unchanged), and an operator identity link still is ({@link Outcome#OPERATOR_FACETED}). Console
+ * sessions opened BEFORE the move are not reused afterwards — {@code TenantClaimTokenCustomizer} /
+ * {@code AuthorizeSessionTenantGate} send them back to a login (772 S6 open question 3).
  */
 @Slf4j
 @Service

@@ -90,10 +90,15 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
     private static final String OPERATOR = "0199de70-0000-7000-8000-0000000c0618";
     private static final String ADMIN_DOWN = "0199de70-0000-7000-8000-0000000d0618";
     private static final String NO_CREDENTIAL = "0199de70-0000-7000-8000-0000000e0618";
+    /** TASK-MONO-772 S6 — an ADR-MONO-044 D5 self-onboarded operator whose credential is still a fan site one. */
+    private static final String SELF_ONBOARDED = "0199de70-0000-7000-8000-0000000f0772";
+    private static final String SELF_ONBOARDED_EMAIL = "self-onboarded-772@example.com";
     private static final String FAN = "fan-platform";
 
     private static final String FAN_CLIENT_ID = "demo-spa-client";
     private static final String FAN_REDIRECT_URI = "http://localhost:3000/callback";
+    private static final String CONSOLE_CLIENT_ID = "platform-console-web";
+    private static final String CONSOLE_REDIRECT_URI = "http://localhost:3000/api/auth/callback";
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -127,14 +132,38 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
         facet(MOVER, "false");
         facet(SOCIAL, "false");
         facet(OPERATOR, "true");
+
+        // ── TASK-MONO-772 S6 — a self-onboarded operator (admin_operators.oidc_subject = SELF_ONBOARDED) ──
+        // Asked with axes=IDENTITY, admin answers false (the subject axis is not asked) — the row the both-axes
+        // question would have answered true for. Console eligibility (the exchange's predicate) is true: the
+        // operator row is untouched by the move, the account id — its sub — unchanged.
+        facet(SELF_ONBOARDED, "false");
+        downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/accounts/" + SELF_ONBOARDED + "/status"))
+                .willReturn(json("""
+                        { "accountId": "%s", "status": "ACTIVE", "statusChangedAt": "2026-10-01T00:00:00Z" }
+                        """.formatted(SELF_ONBOARDED))));
+        downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo(
+                        "/internal/tenants/fan-platform/accounts/" + SELF_ONBOARDED + "/roles"))
+                .willReturn(json("""
+                        { "accountId": "%s", "tenantId": "fan-platform", "roles": ["FAN"] }
+                        """.formatted(SELF_ONBOARDED))));
+        downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
+                .withQueryParam("accountId", WireMock.equalTo(SELF_ONBOARDED))
+                .willReturn(json("{ \"eligible\": true }")));
         downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/operators/facet"))
                 .withQueryParam("accountId", WireMock.equalTo(ADMIN_DOWN))
                 .willReturn(WireMock.aResponse().withStatus(500)));
     }
 
+    /**
+     * TASK-MONO-772 S6 — every facet stub REQUIRES {@code axes=IDENTITY}: a mover that stopped sending it would
+     * match no stub, get WireMock's 404 and answer 503 (fail-closed) — so each cell of this class also pins the
+     * axis the mover asks.
+     */
     private static void facet(String accountId, String faceted) {
         downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/operators/facet"))
                 .withQueryParam("accountId", WireMock.equalTo(accountId))
+                .withQueryParam("axes", WireMock.equalTo("IDENTITY"))
                 .willReturn(json("{ \"operatorFaceted\": " + faceted + " }")));
     }
 
@@ -163,14 +192,15 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
         Mockito.when(gapTokenProvider.currentBearer()).thenReturn("test-jwt");
         downstream.resetRequests();
         credentialJpaRepository.deleteAll();
-        jdbcTemplate.update("DELETE FROM social_identities WHERE account_id IN (?, ?, ?, ?)",
-                MOVER, SOCIAL, OPERATOR, ADMIN_DOWN);
+        jdbcTemplate.update("DELETE FROM social_identities WHERE account_id IN (?, ?, ?, ?, ?)",
+                MOVER, SOCIAL, OPERATOR, ADMIN_DOWN, SELF_ONBOARDED);
         String hash = new Argon2idPasswordHasher().hash(PASSWORD);
         for (String[] row : List.of(
                 new String[]{MOVER, MOVER_EMAIL},
                 new String[]{SOCIAL, "legacy-social-618@example.com"},
                 new String[]{OPERATOR, "legacy-operator-618@example.com"},
-                new String[]{ADMIN_DOWN, "legacy-admin-down-618@example.com"})) {
+                new String[]{ADMIN_DOWN, "legacy-admin-down-618@example.com"},
+                new String[]{SELF_ONBOARDED, SELF_ONBOARDED_EMAIL})) {
             // The pre-ADR-MONO-078 shape: a credential in the SITE tenant.
             credentialJpaRepository.save(CredentialJpaEntity.fromDomain(Credential.create(
                     row[0], FAN, row[1], CredentialHash.argon2id(hash), Instant.now())));
@@ -298,6 +328,161 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
         assertThat(body.get("moved").asBoolean()).isFalse();
         assertThat(body.get("alreadyInPool").asBoolean()).isFalse();
         downstream.verify(0, WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/facet")));
+    }
+
+    // ── TASK-MONO-772 S6 — AC-5: a self-onboarded operator moves under the same id ───────────────────
+
+    /**
+     * 772 AC-5 (auth half) and the slice's open question 3. Before the move: the console's cross-tenant form login
+     * resolves the FAN SITE credential and the console token carries the site (the pre-772 shape). The move asks
+     * admin-service the identity axis only and moves the credential (same account id — no operator-row write).
+     * After it: the console session opened before the move is NOT reused — its refresh is refused with
+     * {@code session_predates_pool_move} (no token naming the old site), and its browser session is sent back to
+     * {@code /login}; the fresh login resolves the POOL credential and, through the 772 S4 path, gets a console
+     * token for the SAME {@code sub} with {@code tenant_id=iam}. No re-login loop.
+     */
+    @Test
+    @DisplayName("🔴 772 AC-5: 셀프 온보딩 운영자 — 이동 전 콘솔(사이트 principal) → 이동(axes=IDENTITY, 같은 id) → 이동 전 콘솔 refresh 400(session_predates_pool_move) · 그 세션 authorize 는 /login → 다시 로그인하면 풀 principal · 같은 sub · tenant_id=iam")
+    void selfOnboardedOperator_movedUnderSameId_consoleRelogsInAsPoolPrincipal() throws Exception {
+        // 1. Before the move: the console login of a self-onboarded operator (site credential, cross-tenant lookup).
+        Pkce before = Pkce.create();
+        MockHttpSession oldSession = loginThrough(SELF_ONBOARDED_EMAIL, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, before);
+        JsonNode oldTokens = exchange(authorizeExpectingCode(oldSession, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, before),
+                CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, before, 200);
+        String oldAccess = oldTokens.get("access_token").asText();
+        assertThat(claim(oldAccess, "sub")).isEqualTo(SELF_ONBOARDED);
+        assertThat(claim(oldAccess, "tenant_id")).as("pre-772 shape: the site, not iam").isEqualTo(FAN);
+        String oldRefresh = oldTokens.get("refresh_token").asText();
+        // Control (before the move): that session refreshes as it always did.
+        String oldRotated = refresh(oldRefresh, CONSOLE_CLIENT_ID, 200).get("refresh_token").asText();
+        downstream.verify(0, WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility")));
+
+        // 2. The move — identity axis only; the self-onboarded operator is no longer refused.
+        MvcResult moved = move(SELF_ONBOARDED);
+        assertThat(moved.getResponse().getStatus())
+                .as("move status — body: " + moved.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(objectMapper.readTree(moved.getResponse().getContentAsString()).get("moved").asBoolean()).isTrue();
+        assertThat(credentialTenant(SELF_ONBOARDED)).isEqualTo("consumer-pool");
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM credentials WHERE account_id = ?",
+                Integer.class, SELF_ONBOARDED)).as("same account id — one row, moved in place").isEqualTo(1);
+        downstream.verify(WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/facet"))
+                .withQueryParam("accountId", WireMock.equalTo(SELF_ONBOARDED))
+                .withQueryParam("axes", WireMock.equalTo("IDENTITY")));
+
+        // 3. Open question 3 — the console session from before the move: no token naming the old site.
+        JsonNode refused = refresh(oldRotated, CONSOLE_CLIENT_ID, 400);
+        assertThat(refused.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(refused.get("error_description").asText())
+                .isEqualTo("session_predates_pool_move").doesNotContain("consumer-pool");
+        Pkce after = Pkce.create();
+        MvcResult bounced = mockMvc.perform(authorize(oldSession, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, after))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        assertThat(bounced.getResponse().getHeader("Location"))
+                .as("the stale browser session is re-authenticated, not reused").endsWith("/login");
+
+        // 4. Logging in again in THAT browser (the bounce saved this authorize): the pool credential, the 772 S4
+        //    console token, the same sub.
+        MvcResult relogin = mockMvc.perform(post("/login")
+                        .session((MockHttpSession) bounced.getRequest().getSession(false))
+                        .with(csrf())
+                        .param("username", SELF_ONBOARDED_EMAIL)
+                        .param("password", PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(relogin.getResponse().getRedirectedUrl())
+                .as("the login resumes the saved console authorize").contains("/oauth2/authorize")
+                .contains("client_id=" + CONSOLE_CLIENT_ID);
+        MockHttpSession newSession = (MockHttpSession) relogin.getRequest().getSession(false);
+        JsonNode newTokens = exchange(authorizeExpectingCode(newSession, CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, after),
+                CONSOLE_CLIENT_ID, CONSOLE_REDIRECT_URI, after, 200);
+        String newAccess = newTokens.get("access_token").asText();
+        assertThat(claim(newAccess, "sub")).as("AC-5: the same sub — the operator row's oidc_subject still matches")
+                .isEqualTo(SELF_ONBOARDED);
+        assertThat(claim(newAccess, "tenant_id")).isEqualTo("iam").isNotEqualTo("consumer-pool");
+        assertThat(roles(newAccess)).isEmpty();
+        downstream.verify(WireMock.moreThanOrExactly(1),
+                WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
+                        .withQueryParam("accountId", WireMock.equalTo(SELF_ONBOARDED)));
+        // And it refreshes (no loop, no stale-session refusal: the new session is a pool principal).
+        JsonNode refreshed = refresh(newTokens.get("refresh_token").asText(), CONSOLE_CLIENT_ID, 200);
+        assertThat(claim(refreshed.get("access_token").asText(), "tenant_id")).isEqualTo("iam");
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers — the browser path (ConsumerPoolSsoIntegrationTest shape)
+    // -----------------------------------------------------------------------
+
+    private MockHttpServletRequestBuilder authorize(MockHttpSession session, String clientId, String redirectUri,
+                                                    Pkce pkce) {
+        var builder = get("/oauth2/authorize")
+                .accept(MediaType.TEXT_HTML)
+                .queryParam("response_type", "code")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("scope", "openid profile email")
+                .queryParam("code_challenge", pkce.challenge())
+                .queryParam("code_challenge_method", "S256")
+                .queryParam("state", "mono-772-s6");
+        return session != null ? builder.session(session) : builder;
+    }
+
+    private MockHttpSession loginThrough(String email, String clientId, String redirectUri, Pkce pkce)
+            throws Exception {
+        MvcResult start = mockMvc.perform(authorize(null, clientId, redirectUri, pkce))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(start.getResponse().getHeader("Location")).endsWith("/login");
+        MockHttpSession saved = (MockHttpSession) start.getRequest().getSession(false);
+        MvcResult login = mockMvc.perform(post("/login")
+                        .session(saved)
+                        .with(csrf())
+                        .param("username", email)
+                        .param("password", PASSWORD))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        assertThat(login.getResponse().getRedirectedUrl())
+                .contains("/oauth2/authorize")
+                .contains("client_id=" + clientId);
+        return (MockHttpSession) login.getRequest().getSession(false);
+    }
+
+    private String authorizeExpectingCode(MockHttpSession session, String clientId, String redirectUri, Pkce pkce)
+            throws Exception {
+        MvcResult result = mockMvc.perform(authorize(session, clientId, redirectUri, pkce))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String location = result.getResponse().getHeader("Location");
+        assertThat(location).as("a code, not a /login bounce").startsWith(redirectUri).contains("code=");
+        return queryParam(location, "code");
+    }
+
+    private JsonNode exchange(String code, String clientId, String redirectUri, Pkce pkce, int expectedStatus)
+            throws Exception {
+        MvcResult token = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "authorization_code")
+                        .param("code", code)
+                        .param("redirect_uri", redirectUri)
+                        .param("code_verifier", pkce.verifier())
+                        .param("client_id", clientId))
+                .andReturn();
+        assertThat(token.getResponse().getStatus())
+                .as("token status — body: " + token.getResponse().getContentAsString())
+                .isEqualTo(expectedStatus);
+        return objectMapper.readTree(token.getResponse().getContentAsString());
+    }
+
+    private JsonNode refresh(String refreshToken, String clientId, int expectedStatus) throws Exception {
+        MvcResult result = mockMvc.perform(post("/oauth2/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("grant_type", "refresh_token")
+                        .param("refresh_token", refreshToken)
+                        .param("client_id", clientId))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as("refresh status — body: " + result.getResponse().getContentAsString())
+                .isEqualTo(expectedStatus);
+        return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
     // -----------------------------------------------------------------------

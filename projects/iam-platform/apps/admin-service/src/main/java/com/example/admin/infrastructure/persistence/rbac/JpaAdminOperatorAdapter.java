@@ -130,12 +130,13 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
-    public boolean existsOperatorFacet(String accountId, String identityId) {
-        boolean bySubject = accountId != null && !accountId.isBlank()
+    public boolean existsOperatorBySubject(String accountId) {
+        return accountId != null && !accountId.isBlank()
                 && operatorRepository.existsByOidcSubject(accountId);
-        if (bySubject) {
-            return true;
-        }
+    }
+
+    @Override
+    public boolean existsOperatorByIdentity(String identityId) {
         return identityId != null && !identityId.isBlank()
                 && operatorRepository.existsByIdentityId(identityId);
     }

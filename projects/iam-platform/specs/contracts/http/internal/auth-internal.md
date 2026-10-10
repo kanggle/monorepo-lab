@@ -149,7 +149,7 @@ account_db 트랜잭션 **마지막 단계**로 부른다. 옮기는 것은 **`c
   그 가입은 같은 이메일의 풀 계정에 막혀 그 사람의 소셜 로그인이 끊긴다. 옮기지 않고 계정만 옮겨도 신원 행과 계정의 테넌트가 갈린다. 그래서 신원이 있는 계정은
   판정 4 로 **통째로** 건너뛴다(정정 ②). 🔵 `TASK-BE-617` 결정(2026-10-05 UTC): 소셜 조회를 풀-먼저로 바꿨지만 판정 4 는 **그대로 둔다** — 그 계정들은 사이트 계정으로
   남고 사이트 신원 그대로 로그인된다(근거 · 되살리는 조건: `multi-tenancy.md` § 3 표의 `social_identities` 행).
-- `oauth2_authorization`(SAS 세션) — 이동 전 세션의 principal 은 사이트 principal 로 남는다.
+- `oauth2_authorization`(SAS 세션) — 이동 전 세션의 principal 은 사이트 principal 로 남는다. 🔵 **`TASK-MONO-772` S6**: 소비자 사이트 client 의 그 세션은 위 `refresh_tokens` 와 같은 이유로 그대로 쓰인다. **콘솔 client 의 그 세션(셀프 온보딩 운영자)은 이동 뒤 다시 쓰이지 않는다** — 그 토큰의 `tenant_id` 는 이제 계정이 살지 않는 사이트이므로, 발급자가 `invalid_grant`(`session_predates_pool_move`)로 거절하고 authorize 게이트가 재인증한다. 이 엔드포인트가 세션 행을 쓰는 것은 아니다(쓰기는 여전히 `credentials.tenant_id` 하나) — 판정은 발급 · authorize 때 자격의 지금 테넌트를 읽어서 한다([auth-api.md § 풀 계정의 콘솔 토큰](../auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).
 
 **Side Effect**: 이벤트 없음. 감사는 구조화 로그(계정 id · 사이트 · 결과) — 이메일은 싣지 않는다.
 

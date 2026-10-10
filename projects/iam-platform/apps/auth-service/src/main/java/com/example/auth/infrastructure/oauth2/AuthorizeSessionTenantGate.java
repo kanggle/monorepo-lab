@@ -58,6 +58,9 @@ import java.util.Optional;
  *   <li>TASK-MONO-772 S4 — a consumer-pool principal on the console client → the TASK-BE-610 rule above,
  *       evaluated BEFORE the session-tenant comparison (which now reads {@code iam} for it); the issuer, not
  *       this gate, decides whether a console token is minted (operator facet);</li>
+ *   <li>TASK-MONO-772 S6 — a non-pool principal of another tenant on the console client whose credential has
+ *       since moved into the consumer pool (a session opened before the move) → re-authentication
+ *       ({@link #credentialMovedToPool});</li>
  *   <li>session tenant ({@link AuthorizationSessionTenant} — the rule the token claim uses)
  *       equals the client's tenant → untouched;</li>
  *   <li>anything else, including the platform scope {@code '*'} → re-authentication.</li>
@@ -213,6 +216,9 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
             return Decision.PASS;
         }
         if (TenantContext.CONSOLE_TENANT_ID.equals(clientTenant)) {
+            if (credentialMovedToPool(principal, sessionTenant, clientId)) {
+                return Decision.REAUTHENTICATE;
+            }
             return holdsConsoleCredential(principal, sessionTenant, clientId)
                     ? Decision.REAUTHENTICATE : Decision.PASS;
         }
@@ -308,6 +314,42 @@ final class AuthorizeSessionTenantGate extends OncePerRequestFilter {
                     sessionTenant, clientId);
         }
         return holds;
+    }
+
+    /**
+     * TASK-MONO-772 S6 (772 S1 open question 3) — a browser session opened while the account was a consumer
+     * <b>site</b> account (an ADR-MONO-044 D5 self-onboarded operator on the console), reused after the mover put
+     * the credential into the pool under the same id. Reusing it would keep minting console codes for the old site
+     * principal; the issuer refuses those ({@code TenantClaimTokenCustomizer} — {@code session_predates_pool_move}),
+     * so passing here would only park the person on a token error until the IdP session ended. Re-authentication
+     * instead: the console form's cross-tenant lookup now finds the POOL credential, the resumed authorize carries
+     * a pool principal, takes the 772 S4 branch above and does not come back here — no loop.
+     *
+     * <p>Only for a non-pool principal of another tenant on the console (this branch). A failed lookup does not
+     * re-authenticate (same rule as {@link #holdsConsoleCredential} — the issuer still refuses, fail-closed).
+     */
+    private boolean credentialMovedToPool(Authentication principal, String sessionTenant, String clientId) {
+        String accountId = principal.getDetails() instanceof Map<?, ?> details
+                && details.get(PrincipalDetailKeys.ACCOUNT_ID) instanceof String s && !s.isBlank() ? s : null;
+        if (accountId == null) {
+            return false;
+        }
+        boolean moved;
+        try {
+            moved = credentialRepository.findByAccountId(accountId)
+                    .map(credential -> TenantContext.isConsumerPool(credential.getTenantId()))
+                    .orElse(false);
+        } catch (RuntimeException e) {
+            log.warn("authorize: credential lookup failed for a {} session on console client {} — session reused "
+                    + "(the issuer still refuses a moved account's stale session) (TASK-MONO-772 S6)",
+                    sessionTenant, clientId, e);
+            return false;
+        }
+        if (moved) {
+            log.info("authorize: {} session on console client {} predates the account's move into the consumer "
+                    + "pool — re-authentication required (TASK-MONO-772 S6)", sessionTenant, clientId);
+        }
+        return moved;
     }
 
     /**
