@@ -28,7 +28,26 @@ public interface OperatorInvitationPort {
                           long invitedByInternalId, String invitedByOperatorId,
                           String lastDeliveryStatus, Instant lastDeliveryAt,
                           Instant acceptedAt, String acceptedOperatorId,
-                          Instant cancelledAt, Instant createdAt, int version, String tokenHash) {}
+                          Instant cancelledAt, Instant createdAt, int version, String tokenHash,
+                          /**
+                           * TASK-MONO-772 S3 — the pool account that accepted ({@code accepted_account_id}), or
+                           * {@code null} while not accepted. The acceptance's «same account resubmits → 200» rule
+                           * compares against it.
+                           */
+                          String acceptedAccountId) {
+
+        /** The S2 shape — not accepted ({@code acceptedAccountId = null}). */
+        public InvitationView(long internalId, String invitationId, String tenantId, String email,
+                              String displayName, List<String> roles, String status, Instant expiresAt,
+                              long invitedByInternalId, String invitedByOperatorId,
+                              String lastDeliveryStatus, Instant lastDeliveryAt,
+                              Instant acceptedAt, String acceptedOperatorId,
+                              Instant cancelledAt, Instant createdAt, int version, String tokenHash) {
+            this(internalId, invitationId, tenantId, email, displayName, roles, status, expiresAt,
+                    invitedByInternalId, invitedByOperatorId, lastDeliveryStatus, lastDeliveryAt,
+                    acceptedAt, acceptedOperatorId, cancelledAt, createdAt, version, tokenHash, null);
+        }
+    }
 
     record InvitationPage(List<InvitationView> content, long totalElements, int page, int size, int totalPages) {}
 
@@ -56,4 +75,24 @@ public interface OperatorInvitationPort {
 
     /** Records the result of the mail for the token whose hash is {@code tokenHash} (no-op if since rotated). */
     void recordDelivery(long internalId, String tokenHash, String deliveryStatus, Instant at);
+
+    // ── TASK-MONO-772 S3 — the acceptance ───────────────────────────────────
+
+    /**
+     * The invitation whose CURRENT token hashes to {@code tokenHash} (any status). A token a resend replaced
+     * hashes to nothing — the old link is dead.
+     */
+    Optional<InvitationView> findByTokenHash(String tokenHash);
+
+    /**
+     * The acceptance's claim — {@code PENDING → ACCEPTED} with {@code accepted_at} / {@code accepted_account_id},
+     * guarded by status AND the token hash that was presented AND «not expired at {@code at}» (data-model.md
+     * invariant). 0 rows ⇒ a concurrent accept / cancel / resend won, or the invitation expired meanwhile.
+     *
+     * @return {@code true} when this call made the transition
+     */
+    boolean acceptIfPending(long internalId, String tokenHash, String accountId, Instant at);
+
+    /** Writes {@code accepted_operator_id} on a row this transaction just accepted. */
+    void recordAcceptedOperator(long internalId, long operatorInternalId, Instant at);
 }

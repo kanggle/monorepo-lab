@@ -46,6 +46,9 @@ class AspectCoverageTest {
             MetadataReader mr = factory.getMetadataReader(r);
             String name = mr.getClassMetadata().getClassName();
             if (!name.startsWith(BASE_PACKAGE) || name.contains("$")) continue;
+            // TASK-MONO-772 S3: `/internal/**` controllers are service-to-service (client_credentials chain), not
+            // operator API — the runtime guardrail excludes this package identically (RequiresPermissionAspect).
+            if (name.startsWith(BASE_PACKAGE + ".internal.")) continue;
 
             Class<?> c;
             try { c = Class.forName(name); } catch (Throwable t) { continue; }

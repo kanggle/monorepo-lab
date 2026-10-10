@@ -168,4 +168,18 @@ class LoginPageSignupLinkSliceTest {
         assertThat(html).contains(ALWAYS_PRESENT_MARKER);
         assertThat(html).doesNotContain(SIGNUP_LINK_TEXT);
     }
+
+    @Test
+    @DisplayName("TASK-MONO-772 S3 (S1-7): 운영자 초대 수락으로 이어지는 로그인 → 소비자 /signup 링크 없음 (수락 화면이 자기 가입을 낸다) · 폼은 그대로")
+    void invitationAcceptanceLogin_offersNoConsumerSignup() throws Exception {
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution("fan-platform", "B2C", null));
+        when(savedRequestTenantResolver.continuesToOperatorInvitationAcceptance(any(), any())).thenReturn(true);
+
+        String html = mockMvc.perform(get("/login").with(csrfAttribute()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains(ALWAYS_PRESENT_MARKER).doesNotContain(SIGNUP_LINK_TEXT);
+    }
 }

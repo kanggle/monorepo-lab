@@ -378,7 +378,7 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 
 - `iam.consumer-pool.enabled` 가 꺼져 있으면 → `409 CONSUMER_POOL_DISABLED`(풀 계정을 만들 길이 없는 배치 — [account-maintenance-internal.md](./account-maintenance-internal.md) 와 같은 코드).
 - 인증 메일은 이 엔드포인트가 보내지 않는다 — 수락 화면이 `EMAIL_NOT_VERIFIED` 를 받으면 `/email-verification` 으로 안내한다(그 화면이 세션 계정에 보낸다).
-- Rate limit · `signup:dedup` 은 소비자 가입과 같은 장치를 쓴다(`429 RATE_LIMITED`).
+- Rate limit · `signup:dedup` 은 소비자 가입과 같은 장치를 쓴다(`429 RATE_LIMITED`). 🔵 **772 S3 실측** — account-service 코드에는 가입 rate limit · `signup:dedup` 구현이 **없다**(소비자 가입의 IP 당 rate limit 은 게이트웨이의 것이고 — `gateway-service/redis-keys.md` `signup` — `signup:dedup` 은 명세에만 있다). IdP 의 `/signup` 프록시도 게이트웨이를 거치지 않고 account-service 를 서버 측에서 부르므로, «같은 장치» 는 지금 **둘 다 없음**이다. 이 엔드포인트는 새 장치를 만들지 않았다(내부 경로 · 워크로드 JWT 필수 · 같은 이메일 두 번째 가입은 `409`). auth-service 는 `429` 를 «잠시 뒤 다시» 로 보인다.
 
 **Response 201**:
 ```json

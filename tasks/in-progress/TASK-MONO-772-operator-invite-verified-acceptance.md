@@ -474,3 +474,103 @@ monorepo
 
 - 같은 시험이 이번엔 `token_hash` 를 잡았다. 출처 = Hibernate flush 의 DEBUG «Listing entities:» 덤프(`org.hibernate.internal.util.EntityPrinter`) — **모든 엔티티의 전 상태**(운영자 이메일 · 이 해시)를 찍는다. `test` 프로필은 `logback-spring.xml` 에 root 가 없어 logback 기본 DEBUG 가 적용됐다(다른 프로필은 전부 INFO).
 - 조치: admin `logback-spring.xml` 에 그 로거를 **모든 프로필에서 OFF** — regulated R4(자격 해시 · 이메일 로그 금지)를 로그 레벨에 기대지 않게. ⚪ 같은 덤프는 다른 서비스에도 있을 수 있다(이 PR 은 admin 만) — 후속 판단.
+
+---
+
+# S3 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `feat/mono-772-s3-accept`(origin/main `ad731c565` — S1 · S2 · S4 머지 뒤). 날짜는 `date -u +%F`.
+> 🔵 AC 체크박스는 건드리지 않았다 — AC-1 · AC-6 을 «AC 가 말한 동사대로» 단언하는 시험의 DB 판(IT)은 Docker 가 필요해 로컬에서 돌지 않았다(§ 4). CI `integrationTest` 초록을 본 뒤 오케스트레이터가 판정한다.
+
+## 1. 쓴 것
+
+| 서비스 | 무엇 | 파일 |
+|---|---|---|
+| admin | 내부 엔드포인트 둘 `POST /internal/operator-invitations/preview` · `/accept`(요청 레코드 = 토큰을 가리는 `toString`) | `presentation/internal/OperatorInvitationAcceptanceController.java` |
+| admin | 판정 순서(계약 1–8) · 경합 답 · 실패 로그 한 줄 · 신원 링크 fail-soft | `application/OperatorInvitationAcceptanceUseCase.java` |
+| admin | 🔴 한 트랜잭션(선점 → 운영자 행 → `oidc_subject` → 역할 → 배정 → `accepted_operator_id` → 감사) | `application/OperatorInvitationAcceptanceWriter.java` |
+| admin | 선점 조건부 갱신(`PENDING ∧ token_hash ∧ expires_at > 지금`) · `accepted_operator_id` · 토큰 해시 조회 · `InvitationView.acceptedAccountId` | `OperatorInvitationJpaRepository` · `OperatorInvitationPortImpl` · `port/OperatorInvitationPort` |
+| admin | 거절 코드 7개를 `OperatorInvitationException` 서브클래스로(핸들러 무변경 — S2 열린 것 3) — `…EXPIRED` 410 · `…ALREADY_USED` 409 · `…EMAIL_MISMATCH` 403 · `…ACCOUNT_NOT_ELIGIBLE` 403 · `…INVALIDATED` 409 · `OPERATOR_ALREADY_PROVISIONED` 409 · `EMAIL_NOT_VERIFIED` 403 | `application/exception/*` |
+| admin | 감사 코드 `OPERATOR_INVITATION_ACCEPT` · `<self_invitation_accept>`(permission_used = reason) · target_type | `ActionCode` · `AdminActionAuditor` · `AdminActionPermissionRegistry` |
+| admin | 신원 링크 포트(응용 계층이 HTTP 클라이언트를 직접 import 하지 않게) | `port/OperatorIdentityResolvePort` · `infrastructure/client/AccountServiceOperatorIdentityAdapter` |
+| admin | 🔴 S1-11 — 측면 있는 호출자의 셀프 온보딩 → **테넌트 생성 전** `409 OPERATOR_ALREADY_PROVISIONED`(교환과 같은 `OperatorOidcSubjectResolver`, 상태 무관) | `application/SelfServiceOnboardingUseCase.java` |
+| account | `POST /internal/consumer-pool/signups` — 풀 계정 · 프로필 · 신원 · 풀 자격만, 🔴 멤버십 · `account.created` 없음 · 공존 금지 그대로 · 풀 꺼짐 409 | `ConsumerPoolSignupUseCase` · `ConsumerPoolSignupController` · `ConsumerPoolSignupRequest` · `ConsumerPoolSignupCommand`(둘 다 비밀번호 · 이메일을 가리는 `toString`) |
+| auth | IdP 화면 `GET·POST /operator-invitations/accept` · `GET·POST /operator-invitations/signup` + 템플릿 둘 · `@Order(0)` 폼 체인 매처 넷 | `presentation/OperatorInvitationPageController.java` · `templates/operator-invitation-{accept,signup}.html` · `WebLoginSecurityConfig` |
+| auth | 🔴 S1-7 — 수락 화면이 자신을 로그인 계속 지점(saved request)으로 저장 → 폼 로그인 provider 가 그 계속 지점에서는 **풀 자격만** 조회 · `/login` 은 그때 소셜 버튼 · 소비자 `/signup` 링크를 숨김 | `infrastructure/security/OperatorInvitationContinuation.java` · `SavedRequestTenantResolver.continuesToOperatorInvitationAcceptance` · `CredentialAuthenticationProvider.resolveCredential` · `LoginPageController` |
+| auth | 클라이언트 둘 — admin(미리보기 = 읽기 재시도 · 수락 = 🔴 재시도 없음 · 별도 breaker `adminOperatorInvitation` · 거절은 값) · account(가입 = 재시도 · breaker 없음) | `AdminOperatorInvitationClient` · `AccountServicePoolSignupClient` · 포트 `OperatorInvitationAcceptancePort` · `ConsumerPoolSignupPort` |
+| auth | 설정 `iam.operator-invitation.console-url`(`IAM_OPERATOR_INVITATION_CONSOLE_URL`, 기본 `http://localhost:3000`) | `application.yml` |
+| demo | `iam-oidc` 라우터에 `PathPrefix(/operator-invitations)` + `PathPrefix(/logout)`(§ 6 S3-4) · auth-service env `IAM_OPERATOR_INVITATION_CONSOLE_URL`(기본 `https://console.hubwang.com`) | `infra/demo/iam-traefik.override.yml` |
+| 계약 | `auth-api.md` § 운영자 초대 수락(2단계 정정 · 가입 409 한 화면 · `/email-verification` 확인 결과 · `/logout` 라우팅 · 세션 없음/비풀 POST 행) · `auth-to-account.md`(rate limit 실측) | § 6 |
+
+## 2. 트랜잭션 경계
+
+- **admin 수락 = admin_db 트랜잭션 하나**(`OperatorInvitationAcceptanceWriter.accept`, `@Transactional`): ① 선점 `UPDATE … SET status='ACCEPTED', accepted_at, accepted_account_id WHERE id ∧ status='PENDING' ∧ token_hash ∧ expires_at > :now`(영향 행 0 → `ClaimLost`, 아무것도 안 씀) ② 운영자 행(홈 = 초대 테넌트 · `password_hash` NULL · ACTIVE) ③ `oidc_subject = accountId` ④ 역할 grant(테넌트 = 초대 테넌트) ⑤ 전체 테넌트 배정 ⑥ `accepted_operator_id` ⑦ 감사 행(+ outbox, `recordWithPermission` 은 같은 트랜잭션에 합류). 하나라도 실패하면 일곱 다 롤백.
+- **트랜잭션 밖**: 판정 1–7(읽기 · account-service 판정 · 테넌트 읽기)은 트랜잭션 **전**, 경합 재판독(`ClaimLost` · UNIQUE 위반)은 롤백된 트랜잭션 **뒤**의 새 읽기(REPEATABLE READ 스냅숏이 승자의 커밋을 못 보는 것을 피함), 신원 링크는 커밋 **뒤** fail-soft.
+- **account 가입 = account_db 트랜잭션 하나**(`ConsumerPoolSignupUseCase`): 계정 · 프로필 · (신원 mint 는 기존대로 REQUIRES_NEW, fail-soft) · auth-service 자격 생성 — 자격 실패면 전체 롤백(소비자 가입과 같다).
+- **온보딩 S1-11**: 판정은 테넌트 생성(교차 서비스 쓰기) **전**의 읽기 하나 — 거절이면 보상할 것이 없다.
+
+## 3. 시험 · 로컬 결과
+
+| 시험 | 무엇을 단언 | 로컬 |
+|---|---|---|
+| admin `OperatorInvitationAcceptanceUseCaseTest` (17) | 🔴 **AC-1 대조군(한 메서드 · 같은 초대)**: 미인증 → 403 `EMAIL_NOT_VERIFIED` · 다른 이메일 → 403 · 풀 아님 → 403 · **트랜잭션 0회** → 같은 초대 만료 → 410(인증된 본인도 · 판정 안 물음) · 취소 → 404 · 남이 수락 → 409 · **인증된 본인만** writer 에 닿고 그 `accountId` 가 subject / 순서 · 경합: 모르는 토큰 404 · 같은 계정 재제출 200(만료 뒤에도, S1-2) · 판정 못 받음 → 503 그대로(fail-closed) · OD-1(SUSPENDED 측면도) 409 · 이메일 충돌 409 · 선점 패배(이긴 쪽 = 같은 계정 → 200 · 다른 계정 → 409 · 재발송 → 404) · `oidc_subject` UNIQUE 경합 → OD-1 409 / D-3 5: 테넌트 SUSPENDED · 초대자 SUSPENDED · D2 범위 이탈 · 🔴 D3 초대자 권한 축소 → 전부 409 INVALIDATED, 쓰기 없음 / preview: 마스킹 `p*****@` · fail-soft 표시명 · 만료 200 · 취소 404 | ✅ 17/17 |
+| admin `OperatorInvitationAcceptanceWriterTest` (2) | 쓰기 순서 · 운영자 행 모양(비밀번호 NULL · ACTIVE · 초대 테넌트) · `oidc_subject` = 계정 · grant 테넌트 = 초대 테넌트 · `granted_by` = 토큰 발급자 · 감사 행(주체 = 새 운영자 · `<self_invitation_accept>` · `accountId=` · 이메일/해시 없음) / 선점 패배 → 그 밖 쓰기 0 | ✅ 2/2 |
+| admin `OperatorInvitationAcceptanceControllerSliceTest` (5) | 응답 모양(`tenantDisplayName: null` 키 유지) · 거절 코드 → 계약 status · 요청 레코드 `toString` 무노출 | ✅ 5/5 |
+| admin `SelfServiceOnboardingUseCaseTest` (+2) | 🔴 S1-11: 측면(SUSPENDED) 있는 호출자 → 409 · 테넌트 · 프로비저너 호출 0 / 대조군: 측면 없음 → 그대로 온보딩 | ✅ 5/5 |
+| admin `OperatorInvitationAcceptanceIntegrationTest` (5, `@Tag("integration")`) | 🔴 **AC-1 DB 판**: 한 초대 — 피초대자 계정 미인증(WireMock 시나리오) 403 · 다른 이메일 403 · 사이트 계정 403 · 같은 초대 만료(SQL) 410 → 각 단계마다 **운영자 행 0 · grant 0 · `oidc_subject` 0 · 감사 0 · 초대 PENDING** → 인증된 본인 200 → `oidc_subject` = 계정 · 홈/grant/배정 = 초대 테넌트 · 비밀번호 NULL · ACCEPTED · `accepted_account_id` · 감사 행 1 → 다른 계정 재사용 409(운영자 1) → 본인 재제출 200 alreadyAccepted · 취소된 초대 404 · 로그에 토큰/해시 0(비공허) / 🔴 **AC-6**: 셀프 온보딩(JWKS 서명 사용자 토큰) → 새 조직 관리자가 S2 API 로 초대 → preview → 수락 전 콘솔 적격 false → 수락 → **콘솔 적격 true · 운영자 토큰 교환 200** → 그 사람의 두 번째 회사 수락 409 OD-1 → 그 사람의 셀프 온보딩 409(테넌트 생성 호출 0) / D3: 초대자 grant 회수 → 409 INVALIDATED · 쓰기 0 / 동시 수락 두 계정 → 200 하나 · 409 하나 · 운영자 1 · 감사 1 / preview 읽기만 | ⚪ **로컬 미실행 — Docker 없음**(S2 · S4 와 같은 호스트). 컴파일 확인. CI `integrationTest` 몫 |
+| account `ConsumerPoolSignupUseCaseTest` (7) | 🔴 풀 계정 · 풀 자격 · 신원 · **멤버십 insert 0 · 이벤트 퍼블리셔 상호작용 0** / 풀 중복 · 사이트 계정 공존 → 409, 아무것도 안 만듦 / 풀 꺼짐 409 / 약한 비밀번호 / 자격 경합 409 / 명령 `toString` 무노출 | ✅ 7/7 |
+| account `ConsumerPoolSignupControllerSliceTest` (4) | 201 모양 · `X-Tenant-Id` 무시 · 형식 4xx `VALIDATION_ERROR` · 409 둘 · 요청 `toString` 무노출 | ✅ 4/4 |
+| account `SendVerificationEmailUseCaseTest` (+1) | 사이트 없는 풀 세션(`consumer-pool`, 풀 켜짐) → 정확 조회로 계정을 찾고 메일 발송 · 멤버십 확장 조회 0(§ 5) | ✅ 10/10 |
+| account `ConsumerPoolSiteLessSignupIntegrationTest` (2, IT) | 실 MySQL: 가입 → `consumer-pool` · 멤버십 행 0 · `account.created` outbox 0 · 풀 자격 → 같은 계정 `verified-email:match` 403 → 인증 뒤 200(AC-6 계정 쪽 절반) / 중복 · 사이트 공존 409 | ⚪ 로컬 미실행 — Docker 없음 |
+| auth `OperatorInvitationPageSliceTest` (11, 실제 템플릿) | 🔴 GET 은 수락을 부르지 않는다 · 세션 없음 → 로그인 · 가입 링크 + **수락 화면이 saved request 로 저장**(경로 = `/operator-invitations/accept?token=`) · 풀 세션 → 수락 폼(토큰 hidden 1회 · `accountId` 필드 없음) · 비풀 세션(사이트 · iam) → 거절 화면 · admin 호출 0 / 🔴 **POST 의 accountId = 세션 principal** — 폼의 `accountId=someone-elses-account` 는 무시 · 비풀/세션 없음 POST → admin 호출 0 / admin 답 11개 각 화면 · 미인증 → `/email-verification` 링크 · 장애 → 다시 시도(토큰 hidden) · 최종 화면에 토큰 0 / 가입 201 → `/login?registered` + 계속 지점 · 409 한 문구 · 형식 · 불일치 → 포트 호출 0 | ✅ 11/11 |
+| auth `OperatorInvitationPageSecurityChainSliceTest` (3, 실제 `WebLoginSecurityConfig`) | 비로그인 GET 둘 → 200(진입점 리다이렉트 없음) · CSRF 없는 POST 둘 → 403 · 포트 호출 0 · CSRF 있는 비로그인 POST → 컨트롤러 401 | ✅ 3/3 |
+| auth `CredentialAuthenticationProviderInvitationTest` (3) | 🔴 S1-7: 수락 계속 지점 · 같은 이메일 iam 자격도 있음 → **풀 자격** 로그인(교차 조회 0) / 풀 자격 없음 → 오답과 같은 `BadCredentials`(iam 자격을 고르지 않음, 해시 검증 0) / 대조군: 계속 지점이 아니면 교차 조회 그대로(iam + 풀 = 모호 → 거절) | ✅ 3/3 |
+| auth `AdminOperatorInvitationClientUnitTest` (6, WireMock) · `AccountServicePoolSignupClientUnitTest` (3) | 토큰은 POST 본문 · Bearer · 거절 9개 = 값 · 🔴 수락 503 → UNAVAILABLE + **요청 1회**(재시도 없음) · 모르는 4xx · 읽을 수 없는 200 → UNAVAILABLE / 가입 응답 매핑 · `X-Tenant-Id` 없음 · 본문 `toString` 무노출 | ✅ 6/6 · 3/3 |
+| auth `LoginPageSignupLinkSliceTest` (+1) | 수락으로 이어지는 로그인 → 소비자 `/signup` 링크 없음(폼은 그대로) | ✅ 6/6 |
+| 서비스 전체 `:test` | admin 1105 · account 754 · auth 1234 (skip = Docker IT) | ✅ 실패 0 |
+
+**bite**: 🔵 admin 의 인증 술어 bite(`requireVerifiedOwner` 의 `NOT_VERIFIED` 갈래를 무력화 → AC-1 대조군의 ① 칸만 빨개지는지)를 시도했으나 **자동 모드 분류기가 그 편집을 막았다**(«Security Weaken»). 우회하지 않았다. 이메일 일치 술어 bite 도 같은 이유로 시도하지 않았다. 남은 근거 = 대조군 시험 자체(같은 시험에서 거절 셋이 먼저 빨갛게 단언되고 본인만 성공) + S2 의 account 쪽 bite(`VerifiedEmailRequirement.require` 무력화 → `VerifiedEmailMatchUseCaseTest` 대조군 1칸 빨강, S2 기록 § 3). 사람이 할 때: `OperatorInvitationAcceptanceUseCase.requireVerifiedOwner` 의 `case NOT_VERIFIED -> throw …` 를 `case NOT_VERIFIED -> { }` 로 바꾸면 `OperatorInvitationAcceptanceUseCaseTest$ControlGroup` 이 ① 단언(`EMAIL_NOT_VERIFIED`)에서 빨개져야 한다.
+
+**가드 (스테이지 뒤)**: 필수 셋(`check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift`) · `check-flyway-version-collision` · `check-flyway-unresolvable-placeholder` · `check-dev-seed-migration-band` · `check-error-code-registry` · `check-domain-error-code-registry` · `check-internal-caller-addresses` · `check-jwt-claims-registry` 전부 rc=0. `scripts/` 추가 · 삭제 없음. 새 HTTP 오류 코드 0(전부 S1 등록분) · Flyway 0 · JWT 클레임 0 · 권한 키 0.
+`infra/demo/verify-demo-wrapper.sh`(정적): 🔵 가드 **(p)** ok — «브라우저 표면 경로 전부 라우팅됨 (consent email-verification login **logout** mfa **operator-invitations** password-reset signup verify-email)». 전체 실행은 로컬 900s 제한에 (z15) 에서 끊겼다(그 전 70칸 ok · FAIL 0) — (z20)(라우터 ⊇ discovery 핀)은 같은 술어를 손으로 돌려 «빠진 것 없음» 확인. CI 의 데모 가드 잡이 권위.
+
+## 4. AC 판정
+
+- **AC-1 — 체크하지 않았다.** AC 동사 «같은 시험에서 거절 … 인증된 본인 수락만 성공» 은 두 시험이 단언한다: 단위(✅ 로컬 — 술어 입력은 포트 값)와 DB IT(⚪ — 실 `admin_operators` · grant · 감사 행 0 을 거절마다 셈). IT 의 «미인증» 은 account-service 의 답(WireMock)이다 — 그 답을 만드는 술어 자체는 account IT(S2 `OperatorInvitationSupportIntegrationTest`)가 실 계정 행으로 단언한다. 한 JVM 에서 두 서비스를 함께 태우는 시험은 없다. ⇒ CI `integrationTest` 초록 뒤 판정.
+- **AC-6 — 체크하지 않았다.** 종단은 둘로 나뉜다: admin IT(셀프 온보딩 → 초대 → 수락 → S4 적격 true → 토큰 교환 200)와 account IT(사이트 없는 가입 → 미인증 403 → 인증 → 200). IdP 화면은 auth 슬라이스가 잇는다. 셋 다 CI 몫(IT 둘 ⚪). 라이브 ⚪ 는 773 뒤(AC-0 F18).
+
+## 5. 열린 질문 2 — 사이트 없는 풀 세션의 `/email-verification` (S1 기록 § 4-2)
+
+**고칠 것 없음 — 정적 추적 + 단위 시험.** ① 폼 로그인 provider 는 세션 principal 의 `tenant_id` 에 **자격의 테넌트**를 싣는다(`CredentialAuthenticationProvider` — 풀 자격이면 `consumer-pool`, 시작 client 무관). ② `/email-verification` 은 그 값을 `X-Tenant-Id` 로 account-service 재발송에 보낸다(`EmailVerificationPageController.send`). ③ account-service 는 `TenantId.fromHeaderOrDefault("consumer-pool")` → `SiteAccountLookup.find` — 입력이 `consumer-pool` 이면 **정확 일치 `findById(consumer-pool, id)`**(멤버십 확장을 타지 않으므로 멤버십 없는 계정도 찾는다). ④ 토큰에는 계정 자신의 테넌트가 실려 `/verify-email` 도 같은 행을 찾는다. 시험: account `SendVerificationEmailUseCaseTest.execute_siteLessPoolSession_findsThePoolAccount`(새) · auth `EmailVerificationPageSliceTest`(기존 — 풀 세션 → `consumer-pool` 로 요청). 계약 `auth-api.md` § signup 의 «S3 확인 항목» 줄을 결과로 바꿨다.
+
+## 6. S1 계약과 다르게 · 계약이 정하지 않아 정한 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S3-1 | 🔴 `auth-api.md` «2단계를 등록한 계정은 로그인 흐름의 2단계(`/mfa/challenge`)를 그대로 거친다» → **정정: 수락 화면으로 이어지는 로그인에는 2단계가 끼지 않는다** | 2단계는 폼 로그인이 아니라 authorize 게이트(`AuthorizeSecondFactorGate`)가 정하는데, 이 로그인의 계속 지점은 `/oauth2/authorize` 가 아니다. 수락은 `amr ∋ mfa` 를 요구하지 않으므로(D-3) 결과가 맞다 — 등록 계정의 2단계는 수락 뒤 콘솔 로그인의 authorize 와 교환 · assume(771)에서 문다. 2단계를 수락에 끼우려면 폼 체인에 새 게이트가 필요하다(소유자가 원하면 D-3 의 «한 줄» 과 함께) |
+| S3-2 | `auth-api.md` 가입 응답표의 두 행(«이미 IAM 계정» · «스토어 · 팬 계정으로 쓰임»)을 **한 화면**으로 | 공존 금지는 «새 코드를 만들지 않는다 — 소비자 가입과 같은 응답» 이라 account-service 의 답이 둘 다 `409 ACCOUNT_ALREADY_EXISTS` 다. auth-service 는 둘을 구별할 수 없고, 구별하면 «이 주소에 사이트 계정이 있다» 는 새 열거 채널이 된다(§ 2 마지막 문장) |
+| S3-3 | 수락 화면으로 이어지는 `/login` 은 **소셜 버튼 · 소비자 `/signup` 링크를 숨긴다** | 계약(S1-7)은 «소셜은 이 화면에서 시작하지 않는다» 만 적었는데 «로그인» 버튼이 가는 `/login` 이 그 버튼들을 보였다. 소셜은 시작 client 가 없으면 테넌트를 못 정하고, 소비자 `/signup` 은 사이트 멤버십을 만든다(OD-3 이 피하려던 것) |
+| S3-4 | 데모 라우터에 `PathPrefix(/logout)` 추가 | 수락 화면의 «로그아웃»(비풀 세션 · 이메일 불일치)은 폼 체인 `POST /logout` 인데, 지금까지 어느 템플릿도 그 경로를 링크하지 않아 데모 엣지가 라우팅하지 않았다(가드 (p) 가 템플릿 링크에서 파생해 문다). iam 게이트웨이에는 `/logout` 이 없다(API 는 `/api/`) |
+| S3-5 | POST 에 세션이 없으면 `401` + 로그인 화면(계속 지점 다시 저장), 비풀 세션이면 `403` + 거절 화면 — admin 을 부르지 않는다 | 계약의 POST 표는 admin 응답만 적었다. GET 의 같은 규칙을 POST 에도 |
+| S3-6 | 조건부 갱신에 `expires_at > 지금` 도 넣었다(계약 8 은 `status ∧ token_hash`) | 오케스트레이터 지시(«PENDING ∧ token_hash ∧ not expired»). 3 과 8 사이에 만료되면 영향 행 0 → 다시 읽어 여전히 `PENDING` 이면 `410` |
+| S3-7 | 초대 테넌트가 account-service 에 **없음**(404) · 초대 역할이 그 사이 **지워짐** → `409 …INVALIDATED`(읽기 실패 5xx 만 503) | 계약 5 는 «테넌트 `ACTIVE` · 읽기 실패 → 503» 만. 없는 테넌트는 «ACTIVE 아님», 없는 역할은 «부여 메뉴 밖» 과 같은 결론 |
+| S3-8 | 역할 grant · 배정의 `granted_by` = **살아 있는 토큰을 낸 운영자**(`invited_by`) | 계약 미정. S1-9 «살아 있는 토큰을 낸 사람이 부여의 책임자» 와 같은 읽기(셀프 온보딩은 시스템 기원이라 NULL) |
+| S3-9 | 감사 행 `idempotency_key` = `invitation-accept:<invitationId>` | 계약 미정. 주체가 새 운영자라 `(actor, action, key)` 인덱스에 충돌 없음 |
+| S3-10 | 신원 링크를 포트(`OperatorIdentityResolvePort`)로 | `FirstAdminProvisioner` 선례는 응용 계층이 `AccountServiceClient` 를 직접 import 한다 — 새 코드는 계층 규칙(응용 → 인프라 직접 의존 금지)대로 |
+| S3-11 | 사이트 없는 가입의 rate limit 장치를 만들지 않았다 | 계약 «소비자 가입과 같은 장치» 를 실측하니 account-service 에 가입 rate limit · `signup:dedup` 구현이 없다(IP 제한은 게이트웨이의 것, IdP `/signup` 프록시도 게이트웨이를 안 거친다). `auth-to-account.md` 에 실측을 적었다 |
+| S3-12 | `/operator-invitations/signup` GET 도 수락 화면을 계속 지점으로 저장 | 가입 화면의 «이미 계정이 있으신가요? 로그인» 도 수락 화면으로 돌아와야 한다(201 뒤와 같은 장치) |
+
+🔵 S3-6 ~ S3-9 를 `auth-to-admin.md` § accept 끝에 «구현이 정한 것» 으로 덧붙이려던 편집은 **자동 모드 분류기가 막았다**(«Security Weaken» — 직전 bite 시도 뒤 같은 세션). 우회하지 않고 이 표에만 남겼다 — 계약에 옮길지는 오케스트레이터 판단.
+
+## 7. 열린 것
+
+1. ⚪ CI `integrationTest` — admin `OperatorInvitationAcceptanceIntegrationTest` 5 · account `ConsumerPoolSiteLessSignupIntegrationTest` 2. AC-1 · AC-6 판정은 그 초록 뒤.
+2. ⚪ 라이브 — 데모 Mailpit 의 초대 메일 링크 → `https://auth.hubwang.com/operator-invitations/accept?token=…` 가 200 인지(이 PR 이 라우터를 넓혔다) · «콘솔로 가기» 가 `https://console.hubwang.com` 인지.
+3. 🔵 수락 성공 뒤 같은 브라우저의 콘솔 로그인 — 세션 principal 이 풀 계정이고 이제 측면이 있으니 S4 발급자가 콘솔 토큰을 준다(S4 단위 · IT 가 그 갈래를 단언). 이 둘을 한 브라우저 흐름으로 잇는 시험은 없다(e2e 는 S5 몫).
+4. 🔵 S3-1(수락 로그인에 2단계 없음)은 D-3 의 결론과 같지만, 소유자가 «수락도 2단계» 를 원하면 폼 체인에 게이트가 하나 생긴다.
+
+### CI 1차 — 내부 POST 가 운영자 RBAC 가드레일에 걸렸다 (2026-10-10 UTC)
+
+- iam A `OperatorInvitationAcceptanceIntegrationTest` 5건 전부 500. 원인: `RequiresPermissionAspect.denyUnannotatedMutation` 이 `presentation..*` 의 **모든** POST 를 운영자 API 로 보고, `@RequiresPermission` 없는 내부 POST(`/internal/operator-invitations/{preview,accept}`)를 거절하려다 DENIED 감사에서 운영자 행을 못 찾아 `AuditFailureException` → 500. 슬라이스 시험은 애스펙트를 안 올려 못 봤다.
+- 조치(오케스트레이터): 가드레일 포인트컷에서 `presentation.internal..*` 제외 — `/internal/**` 은 자기 `@Order(0)` 체인(client_credentials · `internal.invoke`)이 인증하고 운영자 주체가 없다. 빌드 시점 가드(`AspectCoverageTest`)도 같은 패키지를 같은 이유로 건너뛴다. 🔵 기존 내부 POST `operator-oidc-subject-backfill` 도 같은 잠복 500 뒤에 있었다.
+- ⚪ 후속 의심(미측정): `AspectCoverageTest` 가 `classpath:`(별표 없음)로 스캔해 첫 classpath 루트만 볼 수 있다 — 그러면 main 클래스를 안 읽는 공허한 가드다. 내부 POST 컨트롤러가 있는데도 로컬에서 통과한 것이 그 신호.

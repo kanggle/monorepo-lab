@@ -223,6 +223,11 @@ iam:
     from: ${IAM_MAIL_FROM:no-reply@iam.local}
     # TASK-BE-627: the reset page this link lands on now exists (PasswordResetPageController).
     password-reset-link-base-url: ${IAM_MAIL_PASSWORD_RESET_LINK_BASE_URL:http://localhost:8081/password-reset}
+  # TASK-MONO-772 S3 (auth-api.md § 운영자 초대 수락) — where the acceptance page's «콘솔로 가기» points after a
+  # successful acceptance. The demo overlay sets it (infra/demo/iam-traefik.override.yml); the default is the
+  # local console dev server.
+  operator-invitation:
+    console-url: ${IAM_OPERATOR_INVITATION_CONSOLE_URL:http://localhost:3000}
 
 # TASK-MONO-770 — a mail-server outage must not mark the IdP DOWN (the reset endpoint answers 204 anyway).
 management:

@@ -1,5 +1,6 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.OperatorAlreadyProvisionedException;
 import com.example.admin.application.port.TenantProvisioningPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,8 @@ public class SelfServiceOnboardingUseCase {
 
     private final TenantProvisioningPort tenantPort;
     private final FirstAdminProvisioner firstAdminProvisioner;
+    /** TASK-MONO-772 S3 (S1-11) — the same OIDC-subject → operator lookup the token exchange uses. */
+    private final OperatorOidcSubjectResolver oidcSubjectResolver;
 
     /**
      * @param tenantId         the requested tenant slug (validated {@code ^[a-z][a-z0-9-]{1,31}$} at the DTO)
@@ -49,6 +52,16 @@ public class SelfServiceOnboardingUseCase {
      */
     public Result onboard(String tenantId, String organizationName, String callerAccountId,
                           String callerEmail, String callerDisplayName) {
+        // TASK-MONO-772 S3 (onboarding-api.md 409 · owner decision OD-1 · S1-11): a caller who already has an operator
+        // facet (oidc_subject = sub, ANY status) is refused BEFORE the tenant exists. Without this the tenant was
+        // created first and the provisioner's oidc_subject write then hit the platform-global UNIQUE (V0027), leaving
+        // a SUSPENDED empty tenant behind as «compensation». One person = one company in 772 — the same predicate and
+        // code as the invitation acceptance (step 6).
+        if (callerAccountId != null && !callerAccountId.isBlank()
+                && oidcSubjectResolver.resolve(callerAccountId).isPresent()) {
+            throw new OperatorAlreadyProvisionedException("This account already has an operator facet");
+        }
+
         // D1 step 1: create the tenant (cross-service). A duplicate slug surfaces as
         // TenantAlreadyExistsException (409) from the port — no compensation needed
         // (nothing was created).

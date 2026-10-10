@@ -247,6 +247,10 @@ services:
       # map; same switch as account-service). TASK-BE-627 added the page this link lands on + the
       # `/password-reset` PathPrefix above.
       IAM_MAIL_PASSWORD_RESET_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/password-reset
+      # TASK-MONO-772 S3 — the acceptance page's «콘솔로 가기» after a successful acceptance. The visitor console is
+      # Vercel (`https://console.hubwang.com`, demo-up.sh), not a demo-host container. Without this line the code
+      # default (`http://localhost:3000`) would be the button a demo invitee presses.
+      IAM_OPERATOR_INVITATION_CONSOLE_URL: ${IAM_OPERATOR_INVITATION_CONSOLE_URL:-https://console.hubwang.com}
     networks:
       iam-e2e: null
       traefik-net:
@@ -295,7 +299,16 @@ services:
       #   authorize gate sends an enrolled account after form OR social login), `/mfa/setup`, `/mfa` and
       #   `/mfa/recovery-codes`; one PathPrefix covers all four (auth-api.md § 2단계 인증). Missing it, every
       #   enrolled login would 302 into a 404 at the iam gateway. Guard (p) bit on `/mfa` before this line.
-      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/password-reset`) || PathPrefix(`/mfa`) || PathPrefix(`/.well-known`))"
+      # 🔵 `/operator-invitations` (TASK-MONO-772 S3, ADR-MONO-080 D6) — the operator-invitation acceptance page
+      #   (`/operator-invitations/accept?token=…`, where every invitation mail's link lands — the account-service
+      #   env `IAM_MAIL_OPERATOR_INVITATION_LINK_BASE_URL` below has pointed there since S2) and its site-less pool
+      #   signup (`/operator-invitations/signup`); one PathPrefix covers both. Missing it, every invitation link
+      #   404s at the iam gateway. Guard (p) derives the prefix from the template's `@{/operator-invitations/…}`.
+      # 🔵 `/logout` (TASK-MONO-772 S3) — the acceptance page's «로그아웃» (a signed-in store/fan or console
+      #   session cannot accept; it must sign out and reopen the link). Spring Security's form-chain logout
+      #   (`POST /logout` → `/login?logout`) was never linked from a template before, so nothing routed it; the
+      #   iam gateway has no `/logout` (its API is under `/api/`), so this prefix takes nothing from it.
+      - "traefik.http.routers.iam-oidc.rule=Host(`iam.${DEMO_DOMAIN:-local}`) && (PathPrefix(`/oauth2`) || PathPrefix(`/connect`) || PathPrefix(`/login`) || PathPrefix(`/logout`) || PathPrefix(`/signup`) || PathPrefix(`/consent`) || PathPrefix(`/email-verification`) || PathPrefix(`/verify-email`) || PathPrefix(`/password-reset`) || PathPrefix(`/mfa`) || PathPrefix(`/operator-invitations`) || PathPrefix(`/.well-known`))"
       - "traefik.http.routers.iam-oidc.priority=1000"
       - "traefik.http.routers.iam-oidc.entrypoints=web"
       - "traefik.http.services.iam-oidc.loadbalancer.server.port=8081"
@@ -308,7 +321,7 @@ services:
       # TASK-MONO-770 — the verification mail's link lands on the IdP page GET /verify-email.
       IAM_MAIL_VERIFICATION_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/verify-email
       # TASK-MONO-772 S2 — the operator-invitation mail's link lands on the IdP page GET /operator-invitations/accept
-      # (the page and its iam-oidc router PathPrefix arrive with S3). Without this line the code default
+      # (the page and its iam-oidc router PathPrefix arrived with S3). Without this line the code default
       # (localhost:8081) would be the link a demo mail carries.
       IAM_MAIL_OPERATOR_INVITATION_LINK_BASE_URL: ${IAM_PUBLIC_URL:-http://iam.local}/operator-invitations/accept
     networks:

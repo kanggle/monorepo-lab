@@ -102,6 +102,30 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
         repository.recordDelivery(internalId, tokenHash, deliveryStatus, at);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<InvitationView> findByTokenHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.isBlank()) {
+            return Optional.empty();
+        }
+        return repository.findByTokenHash(tokenHash).map(e -> toViews(List.of(e)).get(0));
+    }
+
+    @Override
+    @Transactional
+    public boolean acceptIfPending(long internalId, String tokenHash, String accountId, Instant at) {
+        return repository.acceptIfPending(internalId, tokenHash, accountId, at) == 1;
+    }
+
+    @Override
+    @Transactional
+    public void recordAcceptedOperator(long internalId, long operatorInternalId, Instant at) {
+        if (repository.recordAcceptedOperator(internalId, operatorInternalId, at) != 1) {
+            // The claim above moved this very row to ACCEPTED in the same transaction — 0 here is a defect.
+            throw new IllegalStateException("accepted invitation row not found for accepted_operator_id");
+        }
+    }
+
     // ── mapping ──────────────────────────────────────────────────────────────
 
     static String joinRoles(List<String> roles) {
@@ -154,7 +178,8 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
                     e.getLastDeliveryStatus(), e.getLastDeliveryAt(),
                     e.getAcceptedAt(),
                     e.getAcceptedOperatorId() == null ? null : uuidById.get(e.getAcceptedOperatorId()),
-                    e.getCancelledAt(), e.getCreatedAt(), e.getVersion(), e.getTokenHash()));
+                    e.getCancelledAt(), e.getCreatedAt(), e.getVersion(), e.getTokenHash(),
+                    e.getAcceptedAccountId()));
         }
         return out;
     }

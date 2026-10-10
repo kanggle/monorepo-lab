@@ -112,6 +112,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.OPERATOR_INVITATION_CREATE, "OPERATOR_INVITATION");
         map.put(ActionCode.OPERATOR_INVITATION_CANCEL, "OPERATOR_INVITATION");
         map.put(ActionCode.OPERATOR_INVITATION_RESEND, "OPERATOR_INVITATION");
+        // TASK-MONO-772 S3 — the acceptance's subject is the invitation too (its target_id is the invitation id).
+        map.put(ActionCode.OPERATOR_INVITATION_ACCEPT, "OPERATOR_INVITATION");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -199,6 +201,8 @@ public class AdminActionPermissionRegistry {
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;
+            // TASK-MONO-772 S3 — a self flow, not a permission-key evaluation (auth-to-admin.md § accept).
+            case OPERATOR_INVITATION_ACCEPT -> AdminActionAuditor.PERMISSION_SELF_INVITATION_ACCEPT;
         };
     }
 }

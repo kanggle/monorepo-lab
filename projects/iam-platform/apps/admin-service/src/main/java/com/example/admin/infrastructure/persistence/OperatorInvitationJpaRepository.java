@@ -20,6 +20,9 @@ public interface OperatorInvitationJpaRepository extends JpaRepository<OperatorI
 
     Optional<OperatorInvitationJpaEntity> findByInvitationId(String invitationId);
 
+    /** TASK-MONO-772 S3 — the row whose CURRENT token hashes to this value ({@code uk_operator_invitation_token_hash}). */
+    Optional<OperatorInvitationJpaEntity> findByTokenHash(String tokenHash);
+
     boolean existsByTenantIdAndEmailAndStatus(String tenantId, String email, String status);
 
     Page<OperatorInvitationJpaEntity> findByTenantIdAndStatusOrderByCreatedAtDesc(
@@ -63,4 +66,27 @@ public interface OperatorInvitationJpaRepository extends JpaRepository<OperatorI
             nativeQuery = true)
     int recordDelivery(@Param("id") long id, @Param("tokenHash") String tokenHash,
                        @Param("status") String status, @Param("at") Instant at);
+
+    /**
+     * TASK-MONO-772 S3 — the acceptance's claim: {@code PENDING → ACCEPTED}. 🔴 Three guards in one statement
+     * (data-model.md § {@code operator_invitation} invariant): still {@code PENDING}, the token that was presented
+     * is still the row's token (a resend between the read and this write kills the old link — it must not accept),
+     * and not expired at {@code :at}. 0 rows ⇒ one of the three no longer holds; the caller re-reads to say which.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "UPDATE operator_invitation"
+            + "   SET status = 'ACCEPTED', accepted_at = :at, accepted_account_id = :accountId,"
+            + "       updated_at = :at, version = version + 1"
+            + " WHERE id = :id AND status = 'PENDING' AND token_hash = :tokenHash AND expires_at > :at",
+            nativeQuery = true)
+    int acceptIfPending(@Param("id") long id, @Param("tokenHash") String tokenHash,
+                        @Param("accountId") String accountId, @Param("at") Instant at);
+
+    /** TASK-MONO-772 S3 — the operator the acceptance just created, on the row it just accepted. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "UPDATE operator_invitation"
+            + "   SET accepted_operator_id = :operatorId, updated_at = :at"
+            + " WHERE id = :id AND status = 'ACCEPTED'",
+            nativeQuery = true)
+    int recordAcceptedOperator(@Param("id") long id, @Param("operatorId") long operatorId, @Param("at") Instant at);
 }

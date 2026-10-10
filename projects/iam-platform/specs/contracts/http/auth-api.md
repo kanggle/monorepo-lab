@@ -649,7 +649,7 @@ RFC 9470 의 단계 상승 모양이다. 이 IdP 가 해석하는 `acr_values` �
 토큰을 받지 못한다(아래 § 풀 계정의 콘솔 토큰). 그걸 열면 셀프 온보딩(`/onboarding`, 인증 이메일 게이트 없음)까지 풀 계정 전부에 열린다 — 그것은 `TASK-MONO-773` 의 일이다(772 AC-0 F9).
 
 화면은 `/login` · `/signup` · `/email-verification` · `/mfa/*` 와 같은 `@Order(0)` 폼 체인(같은 세션 · CSRF 켜짐 · permitAll — 판정은 컨트롤러가 한다)이고, admin-service ·
-account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-oidc` 라우터)는 `PathPrefix(\`/operator-invitations\`)` 하나로 덮는다.
+account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-oidc` 라우터)는 `PathPrefix(\`/operator-invitations\`)` 하나로 덮는다(772 S3 — 화면의 «로그아웃»(`POST /logout`, 폼 체인)을 위해 `PathPrefix(\`/logout\`)` 도 더했다: 그 경로는 지금까지 어느 템플릿도 링크하지 않아 라우팅되지 않았다).
 
 ### GET · POST /operator-invitations/accept — 초대 수락
 
@@ -672,13 +672,15 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 **로그인 — 수락 화면에서 시작한 로그인은 풀 자격만 고른다**: 저장된 요청이 이 화면(`/operator-invitations/accept`)인 폼 로그인은 **`consumer-pool` 자격을 고른다** — 없으면 로그인 실패(오답 비밀번호와 같은 `/login?error`).
 [multi-tenancy.md § 로그인 가능한 계정과 client](../../features/multi-tenancy.md#로그인-가능한-계정과-client-task-be-604) 표의 «시작 client 없음 → 교차 테넌트 조회» 를 이 경로에서 쓰지 않는 이유:
 같은 이메일의 `iam` 자격이 있는 사람은 교차 조회가 `LOGIN_TENANT_AMBIGUOUS` 로 막히고, `iam` 자격만 고르면 수락할 수 없는 principal 이 된다. 소셜 로그인은 이 화면에서 시작하지 않는다(소셜 로그인의 테넌트는 시작 client 에서 나오는데 이 화면에는 client 가 없다 — 소셜만 가진 풀 계정은 스토어 · 팬에서 로그인한 브라우저로 이 링크를 다시 연다).
-2단계를 등록한 계정은 로그인 흐름의 2단계(`/mfa/challenge`)를 그대로 거친다.
+🔵 **772 S3 정정** — 이 로그인에는 2단계(`/mfa/challenge`)가 끼어들지 않는다. 2단계는 로그인 폼이 아니라 **authorize 게이트**(`AuthorizeSecondFactorGate`)가 정하는데, 이 로그인의 계속 지점은 `/oauth2/authorize` 가 아니라 이 화면이다. 수락 자체는 `amr ∋ mfa` 를 요구하지 않으므로(구현자 결정 D-3, [auth-to-admin.md § accept](./internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772)) 맞는 결과다 — 등록 계정의 2단계는 수락 뒤 **콘솔 로그인**의 authorize 에서, 그리고 교환 · assume 의 2단계 요구(TASK-MONO-771)에서 그대로 문다.
+수락 화면으로 이어지는 `/login` 은 소셜 버튼과 소비자 `/signup` 링크를 보이지 않는다(위 이유 — 소셜은 시작 client 가 필요하고, 가입은 아래 사이트 없는 가입이 맡는다). 구현: 수락 화면이 자신을 로그인 계속 지점(saved request)으로 저장하고, 폼 로그인 provider 는 그 계속 지점을 보고 풀 자격만 조회한다(`CredentialAuthenticationProvider` · `OperatorInvitationContinuation`).
 
 **POST — admin-service 응답별 화면**:
 
 | 응답 | 화면 (요지) | 재시도 |
 |---|---|---|
 | `200` | «{회사}의 운영자가 되었습니다» + **«콘솔로 가기»**(설정 `iam.operator-invitation.console-url`) — 이제 운영자 측면이 있으니 같은 세션으로 콘솔 토큰이 나온다(아래 § 풀 계정의 콘솔 토큰) | — |
+| (admin 을 부르기 전) IdP 세션 없음 · 풀이 아닌 세션 | 세션 없음 → `401` + GET 의 «로그인» 화면(수락 화면이 다시 로그인 계속 지점이 된다) · 풀이 아님 → `403` + «풀 계정이 아니다» 화면. 둘 다 admin-service 를 부르지 않는다(772 S3) | — |
 | `200` · `alreadyAccepted` | «이미 수락했습니다» + 콘솔 링크 | — |
 | `403 EMAIL_NOT_VERIFIED` | «이 초대를 받으려면 먼저 이메일을 인증해야 합니다» + **`/email-verification`** 링크 — «인증 메일의 링크를 연 뒤 이 초대 링크를 다시 여세요». 초대는 그대로 남는다 | 인증 뒤 같은 링크 |
 | `403 OPERATOR_INVITATION_EMAIL_MISMATCH` | «초대받은 주소({마스킹})와 지금 계정의 주소가 다릅니다 — 그 주소의 계정으로 로그인하세요» + 로그아웃 | — |
@@ -704,12 +706,12 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 | account-service 응답 | 화면 |
 |---|---|
 | `201` | `/login` 으로 — 저장된 요청 = `/operator-invitations/accept?token=…`(로그인 뒤 수락 화면으로 돌아온다). 수락 화면은 미인증 이메일에 `EMAIL_NOT_VERIFIED` 안내를 보인다 |
-| `409 ACCOUNT_ALREADY_EXISTS` | «이미 IAM 계정이 있는 주소입니다 — 로그인하세요» + 로그인 링크(같은 저장 요청) |
-| 그 이메일의 **소비자 사이트 계정**이 있어 풀 가입을 받지 않는 경우([multi-tenancy.md § 소비자 계정 풀 § 2](../../features/multi-tenancy.md#2-가입--소비자-client-의-새-가입은-풀로) 공존 금지 — 지금 소비자 가입이 내는 응답 그대로) | «이 주소는 스토어 · 팬 계정으로 이미 쓰이고 있습니다 — 그 계정으로 로그인한 뒤 다시 여세요» |
+| `409 ACCOUNT_ALREADY_EXISTS` — 같은 이메일의 풀 계정, **또는** 그 이메일의 **소비자 사이트 계정**이 있어 풀 가입을 받지 않는 경우([multi-tenancy.md § 소비자 계정 풀 § 2](../../features/multi-tenancy.md#2-가입--소비자-client-의-새-가입은-풀로) 공존 금지 — 지금 소비자 가입이 내는 응답 그대로) | 🔵 **772 S3 정정 — 한 화면**: «이미 사용 중인 주소입니다. IAM 계정이 있으면 로그인하세요. 스토어 · 팬 계정으로 쓰이는 주소라면 그 계정으로 로그인한 브라우저에서 초대 링크를 다시 여세요» + 로그인 링크(같은 저장 요청). S1 은 둘을 다른 화면으로 적었으나, 공존 금지가 «새 코드를 만들지 않는다 — 소비자 가입과 같은 응답» 이므로 account-service 의 답은 **같은 `409 ACCOUNT_ALREADY_EXISTS`** 이고 auth-service 는 둘을 구별할 수 없다(구별하려면 새 열거 채널이 생긴다 — § 2 마지막 문장) |
 | `422 VALIDATION_ERROR` | 입력 오류 표시(`/signup` 과 같다) |
 | `429` · 그 밖 · 연결 실패 | «지금은 가입할 수 없습니다 — 잠시 뒤 다시» |
 
-- 🔵 이 경로가 만든 계정의 첫 세션은 **사이트 없는 풀 principal** 이다. `/email-verification`(인증 메일 보내기)은 이 세션에서도 동작해야 한다 — 그 화면은 `X-Tenant-Id` = 세션의 테넌트로 부른다. 🔴 사이트 없는 풀 principal 의 세션 테넌트에서 account-service 재발송이 계정을 찾는지는 **S3 의 확인 항목**이다(못 찾으면 S3 이 그 조회를 고친다 — 수락의 인증 전제가 이 화면에 달려 있다).
+- 🔵 이 경로가 만든 계정의 첫 세션은 **사이트 없는 풀 principal** 이다. `/email-verification`(인증 메일 보내기)은 이 세션에서도 동작해야 한다 — 그 화면은 `X-Tenant-Id` = 세션의 테넌트로 부른다. ✅ **772 S3 확인 — 고칠 것 없음**: 폼 로그인 provider 는 세션 principal 의 `tenant_id` 를 **자격의 테넌트**로 싣는다(풀 자격 → `consumer-pool`, 시작 client 와 무관). account-service 재발송은 그 값으로 `SiteAccountLookup.find` 를 부르고, 입력이 `consumer-pool` 이면 **정확 일치 `findById(consumer-pool, id)`** 다(사이트 멤버십 확장을 타지 않는다 — 멤버십이 없는 사이트 없는 계정도 찾는다). 토큰에도 계정 자신의 테넌트(`consumer-pool`)가 실리므로 `/verify-email` 도 같다. 시험: account `SendVerificationEmailUseCaseTest.execute_siteLessPoolSession_findsThePoolAccount` · auth `EmailVerificationPageSliceTest`(풀 세션 → `consumer-pool` 로 요청).
+- 🔵 가입 화면에서 «로그인» 을 눌러도 로그인 뒤 수락 화면으로 돌아온다 — GET 이 수락 화면을 로그인 계속 지점으로 저장한다(201 뒤와 같은 장치).
 
 ---
 

@@ -67,10 +67,15 @@ public class LoginPageController {
             HttpServletResponse response,
             Model model) {
         model.addAttribute("branding", loginBrandingResolver.resolve(request, response));
+        // TASK-MONO-772 S3 (S1-7, auth-api.md § 운영자 초대 수락): a login that continues to the operator-invitation
+        // acceptance page picks the consumer-pool credential only, and social login is not started from it (its
+        // tenant comes from an initiating client, and this flow has none). So: no social buttons, and no consumer
+        // /signup link — the acceptance page offers its own site-less signup.
+        boolean invitationLogin = savedRequestTenantResolver.continuesToOperatorInvitationAcceptance(request, response);
         // TASK-BE-623: only providers with real (non-demo-default) credentials get a
         // button — the predicate itself lives in OAuthProperties (infrastructure), not
         // here and not in the template.
-        model.addAttribute("providers", configuredProviders());
+        model.addAttribute("providers", invitationLogin ? List.of() : configuredProviders());
         model.addAttribute("error", error);
         model.addAttribute("loggedOut", logout != null);
         // TASK-BE-470: the signup page redirects here with ?registered on success.
@@ -84,7 +89,7 @@ public class LoginPageController {
         // real ACTIVE tenant and still see the link (TASK-BE-470 preserved).
         String tenantId = savedRequestTenantResolver.resolve(request, response).tenantId();
         model.addAttribute("signupAvailable",
-                tenantSignupEligibilityPort.isSignupOffered(tenantId));
+                !invitationLogin && tenantSignupEligibilityPort.isSignupOffered(tenantId));
         // The password form posts to the form-login filter's default URL.
         model.addAttribute("passwordFormAction", "/login");
         return "login";
