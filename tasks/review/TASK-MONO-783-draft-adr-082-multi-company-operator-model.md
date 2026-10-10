@@ -8,7 +8,7 @@ TASK-MONO-783
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -76,3 +76,11 @@ monorepo
 
 1. 갈래 비교가 스키마만 보고 토큰 교환 · assume 의 «어느 회사로» 질문을 빠뜨린다 — 773 구현 중에 다시 HARDSTOP-09.
 2. 추천이 소유자 결정처럼 적힌다 — 귀속 오류(`ADR-MONO-080` § ACCEPT 게이트 기록).
+
+---
+
+# 리뷰 이동 기록 (2026-10-10 UTC)
+
+- PROPOSED PR #4288(`3e0fd511b`) 머지. 소유자 정확형 `ADR-MONO-082 ACCEPTED — b` 도착 → ACCEPT PR 에서 ADR 상태 · INDEX · § ACCEPT 게이트 기록 · § 라이더 대조(R1~R4 기본값) · § ACCEPT 가 만든 새 의무를 적었다.
+- 단계 티켓 `TASK-MONO-784`(갈래 b 구현, 선행 772 `done/`) 기안 · `TASK-MONO-773` 에 784 선행과 AC-3 의 b 행 기대값을 더했다.
+- AC-1~4 는 PROPOSED PR 에서 닫혔다(위 체크 표시의 근거).

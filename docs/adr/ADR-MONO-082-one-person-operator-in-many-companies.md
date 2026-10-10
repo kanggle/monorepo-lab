@@ -1,13 +1,15 @@
 # ADR-MONO-082 — 한 사람 · 여러 회사의 운영자: **운영자 행 하나에 회사별 소속**인가, **회사마다 행**인가
 
-**Status:** PROPOSED
-**Date:** 2026-10-10
+**Status:** ACCEPTED
+**Date:** 2026-10-10 (PROPOSED · 같은 날 ACCEPTED — 갈래 b)
 **주관 티켓:** `TASK-MONO-783`
 **Decision driver:** 소유자 결정 `TASK-MONO-772` OD-1(2026-10-09 UTC, «772 는 한 사람 = 한 회사 (추천)») — 그 결정이 «다회사 운영자 모델은 **`TASK-MONO-773` 착수 전 ADR** 로 정한다» 를 함께 적었다(772 § 소유자 결정 확정 · `admin-api.md:1658` · `multi-tenancy.md:635`). `TASK-MONO-773` AC-3(«이미 운영자인 계정이 두 번째 회사를 생성») 이 이 결정에 묶인다.
 **Supersedes:** 없음
 **Related:** [`ADR-MONO-080`](ADR-MONO-080-workforce-on-the-consumer-pool.md) (A — D1 플랫폼 관리자 분리 · D5 회수 = 측면만 · D6 초대 → 인증된 본인 수락 · D9 = T1 «두 번째 회사») · [`ADR-MONO-020`](ADR-MONO-020-operator-multitenant-assignment.md) (D1 `operator_tenant_assignment` · D2 assume-tenant · 🔴 D5 «배정마다 권한 세트» — ACCEPTED, 평가에 미구현) · [`ADR-MONO-014`](ADR-MONO-014-platform-console-operator-auth-token-exchange.md) (D3 «결정적 · 운영자 행이 권위») · [`ADR-MONO-024`](ADR-MONO-024-tenant-admin-delegation.md) (D2 관리 범위 = 역할 행의 `tenant_id`) · [`ADR-MONO-035`](ADR-MONO-035-operator-auth-unification-model.md) (O1 — assume 토큰의 역할은 구독에서 파생) · [`ADR-MONO-044`](ADR-MONO-044-self-service-tenant-onboarding.md) (D2 감금 · D4 신원당 상한 · D5 측면 · D7 «한 신원 여러 조직» 미룸) · [`ADR-MONO-045`](ADR-MONO-045-cross-org-partner-delegation.md) (D6 관계 단위 회수 · D7 «한 계정에 측면 여럿») · [`ADR-MONO-046`](ADR-MONO-046-operator-group-model.md) (그룹 멤버 = 그 테넌트가 홈인 운영자) · [`ADR-MONO-060`](ADR-MONO-060-assumed-token-subject-identity.md) (A — assume 토큰 `sub` = 계정 UUID) · `TASK-MONO-772`(F2 · OD-1 · S1-11 · S6) · `TASK-MONO-773`
 
-> 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-082 ACCEPTED — <a|b|c>`** 로만 넘어간다(§ 수락 형식). «진행» · «좋아» · 갈래 letter 만 있는 문장 · 추천과 같은 선택창 응답은 수락이 아니다.
+> 🟢 **ACCEPTED — 갈래 b** (2026-10-10 UTC, 소유자 정확형 `ADR-MONO-082 ACCEPTED — b`). 이름 · `ACCEPTED` · 갈래 letter 세 요건이 한 문장에 도착했다.
+> 🔴 **라이더 뒤집기는 공급되지 않았다** — R1~R4 는 구현자 기본값 그대로다(§ 라이더 대조). 단계 티켓은 이 ACCEPT PR 안에서 기안했다(§ ACCEPT 가 만든 새 의무). 아래 PROPOSED 시점 본문은 **바이트 그대로** — ACCEPT 는 확정이지 재결정이 아니다.
+> (PROPOSED 시점 머리말) 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-082 ACCEPTED — <a|b|c>`** 로만 넘어간다(§ 수락 형식). «진행» · «좋아» · 갈래 letter 만 있는 문장 · 추천과 같은 선택창 응답은 수락이 아니다.
 > 이 문서는 구현을 인가하지 않는다. 단계 티켓은 ACCEPT PR 안에서 기안한다(ADR-080 § ACCEPT 가 만든 새 의무와 같은 모양).
 
 ---
@@ -242,3 +244,30 @@ ADR-MONO-082 ACCEPTED — <a|b|c>
 | 날짜 (UTC) | 상태 | 내용 | 근거 |
 |---|---|---|---|
 | 2026-10-10 | PROPOSED | 772 F2 의 세 벽을 재측정 — 셋 다 그대로(`V0027:74` · `TokenExchangeService.java:89-96` · `V0004:48`). 넷째 벽(WI-2 «역할 행 = 홈», `V0026:20-23`)과 **이미 있는 다회사 기전**(ADR-020 배정 — 도메인 역할은 구독 파생으로 회사 무관 · `permission_set_id` 평가 미사용 · 관리 읽기는 «상속», 쓰기는 0 · 스위처는 이미 배정 ∪ 홈)을 더함. D1~D6 · 갈래 a/b/c · 추천 b(구현자 선호) · 라이더 R1~R4(b 만) · 773 AC-3 갈래별 닫기 | `TASK-MONO-783` · 위 Context 실측 |
+| 2026-10-10 | PROPOSED → **ACCEPTED (b)** | 소유자 정확형 `ADR-MONO-082 ACCEPTED — b`. D1~D6 본문은 **바이트 그대로**. 라이더 뒤집기 미공급 → R1~R4 기본값. 단계 티켓 `TASK-MONO-784` 기안 · `TASK-MONO-773` 선행에 784 추가 · AC-3 을 D6 b 행으로 | 소유자(이 대화) · § ACCEPT 게이트 기록 |
+
+## ACCEPT 게이트 기록 (2026-10-10 UTC)
+
+- PROPOSED PR(#4288) 머지 뒤, 정확형 문장을 요청한 다음 메시지로 *«ADR-MONO-082 ACCEPTED — b»* 가 도착했다. 선택창은 쓰지 않았다 — 소유자가 문장을 직접 보냈다. ACCEPT 는 그 메시지에 귀속된다.
+- 갈래 b 는 § 추천(구현자 선호)과 같다. 추천이 결정으로 바뀐 근거는 그 문장이지 추천이 아니다.
+- 소유자가 정하는 것 넷 중: ① = **b** · ② 라이더 = 뒤집기 없음(기본값) · ③ 해당 없음(c 전용) · ④ 신원당 상한 **값**은 여전히 열림 — `TASK-MONO-773` AC-0 몫(D4).
+
+## 라이더 대조 (ACCEPT 시점)
+
+수락 문장에 라이더 뒤집기 문구가 없다. 아래 기본값이 **구현자의 선택**으로 남는다 — 소유자가 한 줄로 뒤집을 수 있고, 그때 걸리는 티켓의 AC 를 고친다.
+
+| 번호 | 적용되는 기본값 | 걸리는 티켓 |
+|---|---|---|
+| R1 | 홈(`admin_operators.tenant_id`)은 남기되 판정에서 읽지 않는다 · 떠나도 값 그대로 | `TASK-MONO-784` |
+| R2 | 역할 행 없는 배정 테넌트의 관리 평면 권한 = **0**(상속 끊음) · 도메인 평면 그대로 | `TASK-MONO-784` |
+| R3 | 행 전체 정지는 소속 하나일 때만 회사 관리자, 둘 이상이면 `SUPER_ADMIN` 만 · 회사 관리자의 퇴사 = «이 회사에서 내보내기» | `TASK-MONO-784` |
+| R4 | `permission_set_id` 미사용 유지 · 소속 역할 = 역할 행의 테넌트 축 | `TASK-MONO-784` |
+
+## ACCEPT 가 만든 새 의무 — 티켓으로 기안했다
+
+| 티켓 | 무엇 | 선행(AC-0) |
+|---|---|---|
+| `TASK-MONO-784` | 갈래 **b** — admin-service 관리 평면을 회사별 소속으로: 역할 PK `(operator_id, role_id, tenant_id)` · WI-2 폐기 · 권한 평가 · 캐시 · 읽기 게이트를 행동 테넌트 축으로 · 정지(R3) · 역할 변경을 회사 축으로 · «이 회사에서 내보내기» · 파트너십 · 그룹 술어를 소속 집합으로 · 두 409(OD-1 · S1-11)를 «소속 추가» 로 · D2 거절 · 계약(`admin-api.md` · `rbac.md` · `data-model.md` · `console-registry-api.md:282-283` 정정) · 시드 · ADR-020 · ADR-024 덧붙임 | 772 `done/` (OD-1 409 와 S1-11 이 772 의 산출물이고, 772 AC-6 IT 칸을 바뀐 기대값으로 고친다) |
+| `TASK-MONO-773` (개정) | AC-3 = D6 **b** 행 — 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 바이트 불변 · 상한 초과 거절 | 772 · **784** `done/` |
+
+- `ADR-MONO-020` · `ADR-MONO-024` 에 «082 b 가 D5 · 역할 행 의미를 바꾼다» 덧붙임은 784 의 계약 단계에서 한다(이 PR 은 결정만 싣는다 — 두 ADR 본문은 그때도 바이트 그대로).
