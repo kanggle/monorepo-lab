@@ -7,6 +7,7 @@ import com.example.admin.application.port.VerifiedEmailMatchPort;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -21,8 +22,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * TASK-MONO-772 S2 — the two account-service calls of the operator invitation (admin-to-account.md):
@@ -38,6 +37,11 @@ import java.util.Map;
  *
  * <p>R4: the request body carries the raw token; nothing here logs a body, a URL with the token, the recipient,
  * or {@code expectedEmail}. Log lines name the endpoint and the status only.
+ *
+ * <p>🔴 The bodies are records with a redacting {@code toString}, never a {@code Map}: Spring's message converter
+ * logs {@code Writing [<body.toString()>]} at DEBUG, and a {@code Map} prints the raw token and the address
+ * (measured — the S2 CI integration lane captured the token at the root logger). The account-service side already
+ * redacts the same way ({@code OperatorInvitationMailRequest}).
  */
 @Slf4j
 @Component
@@ -76,7 +80,7 @@ public class AccountServiceInvitationClient implements VerifiedEmailMatchPort, O
                         h.setBearerAuth(tokenProvider.currentBearer());
                         h.setContentType(MediaType.APPLICATION_JSON);
                     })
-                    .body(Map.of("expectedEmail", expectedEmail))
+                    .body(new MatchRequest(expectedEmail))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, ERROR_RAISER)
                     .body(MatchResponse.class);
@@ -112,14 +116,13 @@ public class AccountServiceInvitationClient implements VerifiedEmailMatchPort, O
 
     @Override
     public DeliveryStatus send(InvitationMail mail) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("to", mail.to());
-        body.put("token", mail.token());
-        body.put("tenantId", mail.tenantId());
-        if (mail.inviterDisplayName() != null && !mail.inviterDisplayName().isBlank()) {
-            body.put("inviterDisplayName", mail.inviterDisplayName());
-        }
-        body.put("expiresAt", mail.expiresAt() == null ? null : mail.expiresAt().toString());
+        MailRequest body = new MailRequest(
+                mail.to(),
+                mail.token(),
+                mail.tenantId(),
+                mail.inviterDisplayName() != null && !mail.inviterDisplayName().isBlank()
+                        ? mail.inviterDisplayName() : null,
+                mail.expiresAt() == null ? null : mail.expiresAt().toString());
         try {
             restClient.post()
                     .uri(NOTIFICATION_PATH)
@@ -167,4 +170,24 @@ public class AccountServiceInvitationClient implements VerifiedEmailMatchPort, O
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MatchResponse(String accountId, Instant emailVerifiedAt) {}
+
+    /** {@code verified-email:match} body — the address never reaches a log line via {@code toString}. */
+    record MatchRequest(String expectedEmail) {
+        @Override
+        public String toString() {
+            return "MatchRequest[expectedEmail=<masked>]";
+        }
+    }
+
+    /**
+     * {@code notifications/operator-invitation} body. {@code inviterDisplayName} is omitted when absent (the
+     * contract field is optional), exactly as the previous map did.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record MailRequest(String to, String token, String tenantId, String inviterDisplayName, String expiresAt) {
+        @Override
+        public String toString() {
+            return "MailRequest[to=<masked>, token=<redacted>, tenantId=" + tenantId + ", expiresAt=" + expiresAt + "]";
+        }
+    }
 }

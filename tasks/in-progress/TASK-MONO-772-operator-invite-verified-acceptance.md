@@ -464,3 +464,8 @@ monorepo
 2. `VerifiedEmailMatchPort` 는 어댑터까지 있고 소비자가 아직 없다 — S3 수락 유스케이스가 부른다(매핑: `NOT_ELIGIBLE → 403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` · `EMAIL_MISMATCH → 403 OPERATOR_INVITATION_EMAIL_MISMATCH` · `NOT_VERIFIED → 403 EMAIL_NOT_VERIFIED`, 예외 → 503). 수락의 조건부 갱신은 `token_hash` 까지 조건에 넣는다(`data-model.md` 불변식) — `OperatorInvitationJpaRepository` 에 S3 가 더한다.
 3. S3 의 거절 코드는 `OperatorInvitationException` 서브클래스로 더하면 핸들러를 건드리지 않는다.
 4. 라이브 ⚪ 두 개: § 0 질의 · 데모 Mailpit 에서 초대 메일 1통(링크 base 가 `iam.<domain>` 인지).
+
+### CI 1차 — 원문 토큰이 DEBUG 로그에 실렸다 (2026-10-10 UTC)
+
+- iam A `OperatorInvitationIntegrationTest` 수명주기 1건 실패: 루트 로거 포획에 원문 토큰이 있었다. 출처 = Spring 메시지 컨버터의 DEBUG `Writing [{to=…, token=<원문>, …}]` — admin 의 `AccountServiceInvitationClient` 가 본문을 `Map` 으로 보내 `toString` 에 토큰 · 주소가 그대로 찍혔다. 운영 프로필은 root INFO 라 평소엔 안 찍히지만 **로그 레벨에 기대는 비밀 보호는 보호가 아니다**(시험이 바로 그것을 잡았다).
+- 조치(오케스트레이터): 두 본문을 `MailRequest` · `MatchRequest` 레코드로 — `toString` 이 토큰 `<redacted>` · 주소 `<masked>`. account 쪽 수신 레코드(`OperatorInvitationMailRequest`)가 이미 같은 방식이었다. `inviterDisplayName` 부재 시 생략은 `@JsonInclude(NON_NULL)` 로 유지. 단위 시험 2개 추가(toString 무노출 · 생략 모양), 7/7 통과.

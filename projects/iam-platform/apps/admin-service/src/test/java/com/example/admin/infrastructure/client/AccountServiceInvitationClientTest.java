@@ -135,4 +135,28 @@ class AccountServiceInvitationClientTest {
         wireMock.stubFor(post(urlPathEqualTo(path)).willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
         assertThat(client.send(mail())).isEqualTo(DeliveryStatus.FAILED_TRANSIENT);
     }
+
+    @Test
+    @DisplayName("🔴 본문 toString 은 토큰 · 주소를 싣지 않는다 — 메시지 컨버터가 DEBUG 로 찍는 것이 이 문자열이다(S2 CI 실측)")
+    void bodies_redactOnToString() {
+        String mailBody = new AccountServiceInvitationClient.MailRequest(
+                "person@example.com", "raw-token-xyz", "acme-corp", "김관리", "2026-10-17T10:00:00Z").toString();
+        assertThat(mailBody).doesNotContain("raw-token-xyz").doesNotContain("person@example.com").contains("acme-corp");
+
+        String matchBody = new AccountServiceInvitationClient.MatchRequest("person@example.com").toString();
+        assertThat(matchBody).doesNotContain("person@example.com");
+    }
+
+    @Test
+    @DisplayName("inviterDisplayName 이 없으면 본문에서 빠진다(맵 시절과 같은 모양)")
+    void mail_omitsAbsentInviterName() {
+        wireMock.stubFor(post(urlPathEqualTo("/internal/notifications/operator-invitation"))
+                .willReturn(aResponse().withStatus(204)));
+        client.send(new OperatorInvitationMailPort.InvitationMail("person@example.com", "raw-token-xyz", "acme-corp",
+                " ", Instant.parse("2026-10-17T10:00:00Z")));
+        wireMock.verify(postRequestedFor(urlPathEqualTo("/internal/notifications/operator-invitation"))
+                .withRequestBody(equalToJson("""
+                        {"to":"person@example.com","token":"raw-token-xyz","tenantId":"acme-corp",
+                         "expiresAt":"2026-10-17T10:00:00Z"}""")));
+    }
 }
