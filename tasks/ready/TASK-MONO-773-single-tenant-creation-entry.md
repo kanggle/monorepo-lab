@@ -65,6 +65,7 @@ monorepo
 - [ ] **AC-4** — `SUPER_ADMIN` 이 생성 + 첫 관리자 이메일 → 테넌트 «관리자 대기» + 초대 · 수락 뒤 활성 · 만료 시 정리 규칙대로. 🔴 관리자 없는 활성 테넌트가 생기지 않는다(ADR-044 D3).
 - [ ] **AC-5** — `/onboarding` 직접 접근 · 콜백의 «운영자 아님» 분기 → 새 화면으로.
 - [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(`/onboarding`, `onboarding-` testid) 후 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인.
+- [ ] **AC-7** — (`TASK-PC-FE-331` 미룸, 2026-10-10 UTC 소유자 결정) 운영자 측면 없는 풀 계정이 비운영자 셸에서 콘솔 로그아웃 → **IAM 세션까지 끝나** 다른 계정(운영자)으로 로그인할 수 있다(스토어 탭 없이). 그리고 773 뒤에도 콘솔 콜백의 `sso_wrong_account` 분기(`console-web/src/app/api/auth/callback/route.ts:113-126`)에 닿는 모집단이 남는지 적는다 — 0 이면 PC-FE-331 은 구현 없이 종결 근거.
 
 # Related Specs
 
