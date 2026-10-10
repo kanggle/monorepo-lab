@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- TASK-MONO-772 S3 (owner decision OD-3) — the site-less pool signup for an operator invitee.
+         OperatorInvitationPageController; auth-api.md § GET · POST /operator-invitations/signup.
+         It creates an IAM (consumer-pool) account ONLY — no store / fan membership. The token rides in a hidden
+         field only, to come back to the acceptance page after login; the signup itself does not judge it. -->
+    <title>IAM 계정 만들기</title>
+    <style th:replace="~{fragments/auth-page :: styles}"></style>
+</head>
+<body th:style="|--brand: ${branding.primaryColor()}|">
+<div class="card">
+    <div th:replace="~{fragments/auth-page :: brand-header('IAM 계정 만들기', null)}"></div>
+
+    <p class="hint" id="signup-scope">
+        회사 초대를 받기 위한 개인(IAM) 계정을 만듭니다. 스토어 · 팬 사이트에는 가입되지 않습니다.
+        초대받은 주소로 가입한 뒤 그 주소를 인증해야 초대를 수락할 수 있습니다.
+    </p>
+
+    <div class="error" id="form-error" th:if="${error != null}" th:text="${error}" role="alert">error</div>
+    <div class="error" id="client-error" role="alert" hidden></div>
+
+    <form th:action="@{/operator-invitations/signup}" method="post" id="signup-form" data-busy-label="가입 중…">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+        <input type="hidden" name="token" th:value="${token}"/>
+
+        <label for="email">이메일</label>
+        <input type="email" id="email" name="email" autocomplete="email" th:value="${email}" required autofocus
+               th:aria-describedby="${error != null} ? 'form-error' : null"/>
+
+        <label for="displayName">표시 이름 <span style="color:#666">(선택)</span></label>
+        <input type="text" id="displayName" name="displayName" autocomplete="name"
+               th:value="${displayName}" maxlength="100"/>
+
+        <label for="password">비밀번호</label>
+        <div class="password-field">
+            <input type="password" id="password" name="password" autocomplete="new-password" required
+                   aria-describedby="password-hint"/>
+            <button type="button" class="password-toggle" data-password-toggle
+                    aria-controls="password" aria-pressed="false" aria-label="비밀번호 표시" hidden>표시</button>
+        </div>
+        <p class="hint" id="password-hint">8자 이상, 대문자·소문자·숫자·특수문자 중 3종 이상.</p>
+
+        <label for="confirmPassword">비밀번호 확인</label>
+        <div class="password-field">
+            <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" required/>
+            <button type="button" class="password-toggle" data-password-toggle
+                    aria-controls="confirmPassword" aria-pressed="false" aria-label="비밀번호 확인 표시" hidden>표시</button>
+        </div>
+
+        <button type="submit" class="primary">IAM 계정 만들기</button>
+    </form>
+
+    <div class="footer">
+        이미 IAM 계정이 있으신가요? <a id="signup-login" th:href="@{/login}">로그인</a>
+    </div>
+</div>
+<script th:inline="none">
+    (function () {
+        var form = document.getElementById('signup-form');
+        var box = document.getElementById('client-error');
+        form.addEventListener('submit', function (e) {
+            var pw = document.getElementById('password').value;
+            var cpw = document.getElementById('confirmPassword').value;
+            var message = null;
+            if (pw.length < 8) {
+                message = '비밀번호는 8자 이상이어야 합니다.';
+            } else if (pw !== cpw) {
+                message = '비밀번호가 일치하지 않습니다.';
+            }
+            if (message) {
+                e.preventDefault();
+                box.textContent = message;
+                box.hidden = false;
+            } else {
+                box.hidden = true;
+            }
+        });
+    })();
+</script>
+<script th:replace="~{fragments/auth-page :: enhance}"></script>
+</body>
+</html>

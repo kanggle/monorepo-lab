@@ -197,12 +197,27 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      *       TASK-MONO-386 measured that population at zero, and the session it produced was
      *       unusable anyway (no seeded role on the storefront, gateway tenant gate). Such a
      *       person signs up in the client's tenant instead ({@code (tenant_id, email)} unique).</li>
+     *   <li><b>No initiating client, continuing to the operator-invitation acceptance page</b>
+     *       (TASK-MONO-772 S1-7, auth-api.md § 운영자 초대 수락) — the {@code consumer-pool} credential ONLY;
+     *       none → {@code CREDENTIALS_INVALID}, the wrong-password answer. Not the cross-tenant lookup below: a
+     *       person who also holds an {@code iam} credential with this email would be refused as
+     *       {@code LOGIN_TENANT_AMBIGUOUS}, and picking the {@code iam} one would give a principal that cannot
+     *       accept (only a pool account can).</li>
      *   <li><b>No initiating client</b> ({@code clientTenant == null}: no saved
      *       {@code /oauth2/authorize}, or no request bound) — the cross-tenant lookup, unchanged:
      *       one match wins, several fail closed as {@code LOGIN_TENANT_AMBIGUOUS}.</li>
      * </ol>
      */
-    private Lookup resolveCredential(String email, String clientTenant) {
+    private Lookup resolveCredential(String email, String clientTenant, boolean poolOnly) {
+        if (clientTenant == null && poolOnly) {
+            return credentialRepository.findPoolCredentialByEmail(email)
+                    .map(Lookup::found)
+                    .orElseGet(() -> {
+                        log.debug("form-login for the operator-invitation acceptance: no consumer-pool credential "
+                                + "for emailHash=<redacted> — refused (TASK-MONO-772 S1-7)");
+                        return Lookup.failed(REASON_CREDENTIALS_INVALID);
+                    });
+        }
         if (clientTenant != null) {
             Optional<Credential> pool = poolCredentialFor(email, clientTenant);
             if (pool.isPresent()) {
@@ -327,6 +342,19 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
      * {@code fan-platform} and then fell back. With the fallback now limited to the console,
      * that substitute would have turned "no client" into "a consumer client".
      */
+    /**
+     * TASK-MONO-772 S3 (S1-7) — whether this login continues to the operator-invitation acceptance page (then only
+     * the pool credential is considered). {@code false} with no request bound.
+     */
+    private boolean continuesToInvitationAcceptance() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
+            return false;
+        }
+        return savedRequestTenantResolver.continuesToOperatorInvitationAcceptance(
+                servletAttrs.getRequest(), servletAttrs.getResponse());
+    }
+
     private String resolveClientTenant() {
         RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
         if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
@@ -353,7 +381,8 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         String emailHash = LoginHashes.emailHash(email);
         String clientTenant = resolveClientTenant();
 
-        Lookup lookup = resolveCredential(email, clientTenant);
+        Lookup lookup = resolveCredential(email, clientTenant,
+                clientTenant == null && continuesToInvitationAcceptance());
         if (lookup.credential() == null) {
             // No single identity: accountId=null (contract), tenant = the login's own tenant
             // context. Same exception as a wrong password — no enumeration via the response.

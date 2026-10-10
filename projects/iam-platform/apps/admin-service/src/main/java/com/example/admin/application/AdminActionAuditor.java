@@ -63,6 +63,13 @@ public class AdminActionAuditor {
     /** TASK-BE-306: reason constant stamped on self-serve profile mutation audit rows
      *  (no X-Operator-Reason header — admin-api.md §X-Operator-Reason in Exceptions sub-tree). */
     public static final String REASON_SELF_PROFILE_UPDATE = "<self_profile_update>";
+    /**
+     * TASK-MONO-772 S3 — the operator-invitation acceptance (auth-to-admin.md § accept): the self-flow constant
+     * stamped on BOTH {@code permission_used} and {@code reason} of the SUCCESS row — the accepting person was not
+     * an operator before this write, so no permission key was evaluated and no {@code X-Operator-Reason} exists.
+     */
+    public static final String PERMISSION_SELF_INVITATION_ACCEPT = "<self_invitation_accept>";
+    public static final String REASON_SELF_INVITATION_ACCEPT = "<self_invitation_accept>";
 
     private final AdminActionAuditWriter writer;
     private final AdminActionDenyWriter denyWriter;

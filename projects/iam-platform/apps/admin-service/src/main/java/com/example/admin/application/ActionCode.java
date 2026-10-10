@@ -125,5 +125,11 @@ public enum ActionCode {
     // writes a row only when it actually moved PENDING → CANCELLED. S3 adds the acceptance's own code.
     OPERATOR_INVITATION_CREATE,
     OPERATOR_INVITATION_CANCEL,
-    OPERATOR_INVITATION_RESEND
+    OPERATOR_INVITATION_RESEND,
+    // TASK-MONO-772 S3 (auth-to-admin.md § accept): a pool account accepted an operator invitation — the operator row,
+    // its role grants and its assignment were written in the same transaction. SUCCESS rows only (a refused acceptance
+    // has no operator to be the actor — S1-12, it is a structured log line). operator_id = the operator just created,
+    // permission_used = reason = <self_invitation_accept>, target_type=OPERATOR_INVITATION, target_id=<invitationId>,
+    // target_tenant_id=<invitation tenant>, detail = "accountId=<accountId>" (F19 — 774 reads (account, tenant, operator)).
+    OPERATOR_INVITATION_ACCEPT
 }

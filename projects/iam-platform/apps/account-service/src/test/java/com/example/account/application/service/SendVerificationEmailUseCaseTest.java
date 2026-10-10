@@ -247,4 +247,22 @@ class SendVerificationEmailUseCaseTest {
         verify(tokenStore, never()).delete(anyString());
         verify(tokenStore, never()).releaseResendSlot(anyString());
     }
+
+    @Test
+    @DisplayName("TASK-MONO-772 S3: 사이트 없는 풀 세션(X-Tenant-Id=consumer-pool, 풀 켜짐) → 풀 계정을 정확히 찾아 인증 메일을 보낸다 — 멤버십 조회 없음")
+    void execute_siteLessPoolSession_findsThePoolAccount() {
+        // The IdP /email-verification page sends the session's tenant — for a pool principal (site-less signup from
+        // /operator-invitations/signup included) that is consumer-pool. SiteAccountLookup: input consumer-pool →
+        // exact findById(consumer-pool, id), never the site-membership widening (that account has no membership).
+        given(consumerPoolFlag.isEnabled()).willReturn(true);
+        given(accountRepository.findById(TenantId.CONSUMER_POOL, ACCOUNT_ID))
+                .willReturn(Optional.of(unverifiedAccount(TenantId.CONSUMER_POOL)));
+        given(tokenStore.tryAcquireResendSlot(eq(ACCOUNT_ID), any(Duration.class))).willReturn(true);
+
+        useCase.execute(ACCOUNT_ID, TenantId.CONSUMER_POOL);
+
+        verify(tokenStore).save(anyString(), eq("consumer-pool"), eq(ACCOUNT_ID), any(Duration.class));
+        verify(notifier).sendVerificationEmail(eq(EMAIL), anyString());
+        verify(accountRepository, never()).findByIdInSiteIncludingPoolMembers(any(), anyString());
+    }
 }

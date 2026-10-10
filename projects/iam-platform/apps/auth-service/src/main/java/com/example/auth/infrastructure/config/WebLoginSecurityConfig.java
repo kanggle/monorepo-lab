@@ -145,6 +145,17 @@ public class WebLoginSecurityConfig {
                         new AntPathRequestMatcher("/mfa/setup", "GET"),
                         new AntPathRequestMatcher("/mfa/setup", "POST"),
                         new AntPathRequestMatcher("/mfa/recovery-codes", "POST"),
+                        // TASK-MONO-772 S3 (ADR-MONO-080 D6): the operator-invitation acceptance page and its site-less
+                        // pool signup. On THIS chain because the acceptance acts for the signed-in session principal
+                        // (the same SecurityContext /oauth2/authorize reads) and both POSTs carry CSRF like /login.
+                        // permitAll on purpose, like /consent and /email-verification: OperatorInvitationPageController
+                        // makes every check (no session → it parks itself as the login continuation and says «log in»;
+                        // a non-pool session → «only a personal account»). An entry-point redirect would park the page
+                        // with no way for the login to know it must pick the pool credential (S1-7).
+                        new AntPathRequestMatcher("/operator-invitations/accept", "GET"),
+                        new AntPathRequestMatcher("/operator-invitations/accept", "POST"),
+                        new AntPathRequestMatcher("/operator-invitations/signup", "GET"),
+                        new AntPathRequestMatcher("/operator-invitations/signup", "POST"),
                         new AntPathRequestMatcher("/logout", "POST")))
                 .authenticationManager(authenticationManager)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

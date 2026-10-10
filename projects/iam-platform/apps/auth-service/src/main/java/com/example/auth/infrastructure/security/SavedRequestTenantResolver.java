@@ -109,6 +109,17 @@ public class SavedRequestTenantResolver {
         return Optional.ofNullable(registeredClientRepository.findByClientId(clientId));
     }
 
+    /**
+     * TASK-MONO-772 S3 (S1-7) — whether the login in progress continues to the IdP operator-invitation acceptance
+     * page ({@link OperatorInvitationContinuation}). Such a login has no initiating client by construction (the
+     * saved request is not an {@code /oauth2/authorize}), so {@link #initiatingClientTenant} is empty for it; this
+     * tells the form-login provider to pick the {@code consumer-pool} credential only.
+     */
+    public boolean continuesToOperatorInvitationAcceptance(HttpServletRequest request,
+                                                           HttpServletResponse response) {
+        return OperatorInvitationContinuation.isAcceptanceContinuation(requestCache.getRequest(request, response));
+    }
+
     private String extractClientId(SavedRequest saved) {
         if (saved == null) {
             return null;

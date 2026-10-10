@@ -1,5 +1,7 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.OperatorAlreadyProvisionedException;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.TenantProvisioningPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +14,10 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import java.util.Optional;
 
 /**
  * TASK-BE-474 (ADR-MONO-044 D1/D3) — orchestration + fail-closed compensation.
@@ -23,8 +28,9 @@ class SelfServiceOnboardingUseCaseTest {
 
     private final TenantProvisioningPort tenantPort = mock(TenantProvisioningPort.class);
     private final FirstAdminProvisioner provisioner = mock(FirstAdminProvisioner.class);
+    private final AdminOperatorPort operatorPort = mock(AdminOperatorPort.class);
     private final SelfServiceOnboardingUseCase useCase =
-            new SelfServiceOnboardingUseCase(tenantPort, provisioner);
+            new SelfServiceOnboardingUseCase(tenantPort, provisioner, new OperatorOidcSubjectResolver(operatorPort));
 
     @Test
     @DisplayName("D1: creates the tenant (B2B) then mints the first admin; no compensation on success")
@@ -68,5 +74,37 @@ class SelfServiceOnboardingUseCaseTest {
 
         assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner"))
                 .isSameAs(boom);
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-772 S1-11 (OD-1): 이미 운영자 측면이 있는 호출자 → 테넌트를 만들기 전에 409 OPERATOR_ALREADY_PROVISIONED · 아무것도 생성·보상 안 함")
+    void alreadyFaceted_refusedBeforeTenantCreation() {
+        when(operatorPort.findByOidcSubject("acc-1")).thenReturn(Optional.of(new AdminOperatorPort.OperatorView(
+                7L, "op-existing", "other-corp", "owner@acme.com", null, "Owner", "SUSPENDED",
+                null, null, null, null, null, null)));
+
+        assertThatThrownBy(() -> useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner"))
+                .isInstanceOf(OperatorAlreadyProvisionedException.class)
+                .satisfies(e -> {
+                    OperatorAlreadyProvisionedException ex = (OperatorAlreadyProvisionedException) e;
+                    assertThat(ex.getCode()).isEqualTo("OPERATOR_ALREADY_PROVISIONED");
+                    assertThat(ex.getHttpStatus()).isEqualTo(409);
+                });
+
+        // the facet is SUSPENDED and still counts (any status). No tenant, no compensation, no provisioning.
+        verifyNoInteractions(tenantPort, provisioner);
+    }
+
+    @Test
+    @DisplayName("S1-11 대조군: 측면 없는 호출자는 그대로 온보딩된다(같은 질의가 비어 있음)")
+    void noFacet_proceeds() {
+        when(operatorPort.findByOidcSubject("acc-1")).thenReturn(Optional.empty());
+        when(provisioner.provision(eq(TENANT), any(), any(), any()))
+                .thenReturn(new FirstAdminProvisioner.Result("op-uuid", 42L));
+
+        useCase.onboard(TENANT, "Acme Corp", "acc-1", "owner@acme.com", "Owner");
+
+        verify(operatorPort).findByOidcSubject("acc-1");
+        verify(tenantPort).create(eq(TENANT), eq("Acme Corp"), eq("B2B_ENTERPRISE"));
     }
 }
