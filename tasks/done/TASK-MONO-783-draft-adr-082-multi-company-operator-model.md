@@ -8,7 +8,7 @@ TASK-MONO-783
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -84,3 +84,7 @@ monorepo
 - PROPOSED PR #4288(`3e0fd511b`) 머지. 소유자 정확형 `ADR-MONO-082 ACCEPTED — b` 도착 → ACCEPT PR 에서 ADR 상태 · INDEX · § ACCEPT 게이트 기록 · § 라이더 대조(R1~R4 기본값) · § ACCEPT 가 만든 새 의무를 적었다.
 - 단계 티켓 `TASK-MONO-784`(갈래 b 구현, 선행 772 `done/`) 기안 · `TASK-MONO-773` 에 784 선행과 AC-3 의 b 행 기대값을 더했다.
 - AC-1~4 는 PROPOSED PR 에서 닫혔다(위 체크 표시의 근거).
+
+# 완료 기록 (2026-10-10 UTC, 4-dim verified)
+
+- PROPOSED #4288 `3e0fd511b` · ACCEPT #4289 `e4bea92d2` — 둘 다 MERGED · 머지 시점 실패 0/66 · origin/main tip = `e4bea92d2`. AC-1~4 ✅(본문 확인).
