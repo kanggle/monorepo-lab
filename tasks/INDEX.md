@@ -205,6 +205,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-783-draft-adr-082-multi-company-operator-model.md` — **`ADR-MONO-082` 기안 — 한 사람 · 여러 회사의 운영자 모델** (IN-PROGRESS, 2026-10-10 UTC). `TASK-MONO-772` OD-1 의 «773 착수 전 ADR». 지금 스키마는 `sub` 하나에 운영자 행 하나(`V0027` 전역 UNIQUE · 교환 한 행 · 역할 바인딩 PK). 🔴 `TASK-MONO-773` AC-3 이 이 ACCEPT 에 묶인다. 분석=Opus 5.5 / 구현 권장=Opus.
+
 
 
 
