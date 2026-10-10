@@ -239,6 +239,49 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
         return mockMvc.perform(request);
     }
 
+    // ── TASK-MONO-772 S4 — GET /internal/operators/console-eligibility on the real admin_operators rows ──
+    // Same context on purpose. The predicate is the token exchange's (oidc_subject = accountId ∧ ACTIVE) —
+    // the same SUSPENDED row the facet read above answers TRUE for answers FALSE here (the two questions differ).
+
+    @Test
+    @DisplayName("MONO-772 S4: ACTIVE 운영자의 oidc_subject → eligible=true")
+    void consoleEligibility_activeOperator() throws Exception {
+        seedFacetOperators();
+        consoleEligibility(FACET_SUBJECT).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true));
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-772 S4 (AC-3): SUSPENDED 운영자 → eligible=false — 같은 행에 facet 은 true (질문이 다르면 술어도 다르다)")
+    void consoleEligibility_suspendedOperator_false_whileFacetTrue() throws Exception {
+        seedFacetOperators();
+        consoleEligibility(SUSPENDED_SUBJECT).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false));
+        facet(SUSPENDED_SUBJECT, null).andExpect(jsonPath("$.operatorFaceted").value(true));
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-772 S4 (AC-2): 운영자 행 없는 계정 → eligible=false · 신원 축만 맞는 계정도 false")
+    void consoleEligibility_noOperator_false_identityAxisNotAsked() throws Exception {
+        seedFacetOperators();
+        consoleEligibility(UNKNOWN_SUBJECT).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false));
+        // FACET_IDENTITY is the identity_id of an operator — passing it as an accountId matches nothing.
+        consoleEligibility(FACET_IDENTITY).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false));
+    }
+
+    @Test
+    @DisplayName("MONO-772 S4: accountId 공백 → 400 VALIDATION_ERROR")
+    void consoleEligibility_blank_400() throws Exception {
+        consoleEligibility(" ").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions consoleEligibility(String accountId) throws Exception {
+        return mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", accountId));
+    }
+
     // ── TASK-MONO-771 S4 — mfaRequired on the real V0047 table + V0013 role flag ─────────────
 
     @org.junit.jupiter.api.AfterEach

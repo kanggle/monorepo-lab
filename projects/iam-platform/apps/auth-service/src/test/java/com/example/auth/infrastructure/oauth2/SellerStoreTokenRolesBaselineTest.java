@@ -61,7 +61,7 @@ class SellerStoreTokenRolesBaselineTest {
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort);
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED);
     }
 
     private static RegisteredClient storeClient() {
