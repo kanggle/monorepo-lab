@@ -121,7 +121,7 @@ const IAM: DomainFeatures = {
     {
       title: '운영자 권한',
       items: [
-        { text: '운영자 등록, 테넌트 배정과 부서 단위 데이터 범위 설정', href: '/operators' },
+        { text: '운영자 초대(대기 초대 취소·재발송), 테넌트 배정과 부서 단위 데이터 범위 설정', href: '/operators' },
         { text: '운영자 그룹으로 여러 사람에게 역할·테넌트 배정을 한 번에 부여', href: '/operator-groups' },
         { text: '배정에 붙는 권한 묶음(권한 세트) 열람', href: '/permission-sets' },
         { text: '권한 키 카탈로그 열람', href: '/permissions' },

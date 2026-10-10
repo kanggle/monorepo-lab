@@ -110,6 +110,7 @@ const MACHINE_KEYS = new Set([
   'tenantIds', // org-node subtree tenant id array
   'myRole', // partnership side discriminant ('host' | 'partner')
   'grantableRoles', // operators grantable-roles endpoint — role-name array (label-guard document key only; not a wire field of any schema)
+  'invitedBy', // TASK-MONO-772 S5 — operator invitation: the inviting operator's id (an id without the `Id` suffix)
   // TASK-PC-FE-284 — ecommerce domain fixtures. All enum/code/formatted values
   // a parser, `StatusBadge`-like element or a copy-paste search key reads —
   // never free prose.

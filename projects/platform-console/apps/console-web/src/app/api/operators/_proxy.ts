@@ -170,6 +170,40 @@ export const AssignmentReasonBodySchema = z
   .strict();
 export type AssignmentReasonBody = z.infer<typeof AssignmentReasonBodySchema>;
 
+/**
+ * invite (TASK-MONO-772 S5 — § 2.4.3 row 11): the draft + reason +
+ * idempotencyKey (BOTH headers, like create). `tenantId='*'` is refused here
+ * (422, no producer call) — the platform scope is never an invitation target
+ * (ADR-MONO-080 D1; the producer would answer `400 VALIDATION_ERROR`). No
+ * password field exists on an invitation; `.strict()` rejects one (and any
+ * other unknown key) rather than forwarding it.
+ */
+export const InviteBodySchema = z
+  .object({
+    email: z.string().trim().min(1).max(255),
+    displayName: z.string().trim().min(1).max(64),
+    roles: z.array(z.string()),
+    tenantId: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((t) => t !== '*', { message: 'platform scope is not invitable' }),
+    reason: z.string(),
+    idempotencyKey: z.string().min(1),
+  })
+  .strict();
+export type InviteBody = z.infer<typeof InviteBodySchema>;
+
+/**
+ * cancel / resend an invitation (TASK-MONO-772 S5 — § 2.4.3 rows 13–14): the
+ * body carries ONLY the audit `reason` (→ `X-Operator-Reason`). NO
+ * `Idempotency-Key` per the producer matrix. `.strict()` rejects unknown keys.
+ */
+export const InvitationReasonBodySchema = z
+  .object({ reason: z.string() })
+  .strict();
+export type InvitationReasonBody = z.infer<typeof InvitationReasonBodySchema>;
+
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {
     return NextResponse.json(

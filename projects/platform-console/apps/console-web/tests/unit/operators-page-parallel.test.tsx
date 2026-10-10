@@ -3,8 +3,9 @@ import { render } from '@testing-library/react';
 
 /**
  * TASK-PC-FE-118 — `/operators` parallelises the independent success-path
- * fetches that previously ran as a waterfall: the create-form tenant options
- * (`getCatalog`), the caller's own operatorId (`getSelfOperatorIdOrNull`), and
+ * fetches that previously ran as a waterfall: the platform-scope hint
+ * (`getCatalog` — TASK-MONO-772 S5: only `isPlatformOperator` is derived from it
+ * now; the tenant picker went with the non-`*` create), the caller's own operatorId (`getSelfOperatorIdOrNull`), and
  * (feat/iam-grantable-roles-filter) the caller's grantable role set
  * (`getGrantableRolesOrNull`). All three run only past the
  * noTenant/permissionError/degraded gates, so this is a pure post-gate
@@ -26,19 +27,16 @@ const selectableTenants = vi.fn();
 vi.mock('@/features/operators', () => ({
   getOperatorsListState: (a: unknown) => getOperatorsListState(a),
   OperatorsScreen: ({
-    tenantOptions,
     isPlatformOperator,
     selfOperatorId,
     grantableRoles,
   }: {
-    tenantOptions: string[];
     isPlatformOperator: boolean;
     selfOperatorId: string | null;
     grantableRoles: string[] | null;
   }) => (
     <div
       data-testid="operators-screen"
-      data-tenants={tenantOptions.join(',')}
       data-platform={String(isPlatformOperator)}
       data-self={selfOperatorId ?? ''}
       data-grantable-roles={(grantableRoles ?? []).join(',')}
@@ -112,7 +110,7 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
     expect(getGrantableRolesOrNull).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the screen with tenant options + self id + grantable roles on the success path', async () => {
+  it('renders the screen with the platform hint + self id + grantable roles on the success path', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockResolvedValue({ products: [] });
     getSelfOperatorIdOrNull.mockResolvedValue('op-self');
@@ -121,8 +119,7 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
     const ui = await OperatorsPage();
     const { getByTestId } = render(ui);
     const el = getByTestId('operators-screen');
-    expect(el).toHaveAttribute('data-tenants', 'wms'); // '*' filtered out
-    expect(el).toHaveAttribute('data-platform', 'true');
+    expect(el).toHaveAttribute('data-platform', 'true'); // '*' among the tenants
     expect(el).toHaveAttribute('data-self', 'op-self');
     expect(el).toHaveAttribute(
       'data-grantable-roles',
@@ -145,7 +142,7 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
     );
   });
 
-  it('keeps the independent self result when the catalog fetch rejects (registry down → empty options)', async () => {
+  it('keeps the independent self result when the catalog fetch rejects (registry down → no platform form)', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockRejectedValue(new Error('registry down'));
     getSelfOperatorIdOrNull.mockResolvedValue('op-self');
@@ -153,8 +150,7 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
     const ui = await OperatorsPage();
     const { getByTestId } = render(ui);
     const el = getByTestId('operators-screen');
-    expect(el).toHaveAttribute('data-tenants', ''); // empty options on failure
-    expect(el).toHaveAttribute('data-platform', 'false');
+    expect(el).toHaveAttribute('data-platform', 'false'); // fail-closed on failure
     // The self promise is independent — its result survives the catalog reject.
     expect(el).toHaveAttribute('data-self', 'op-self');
   });

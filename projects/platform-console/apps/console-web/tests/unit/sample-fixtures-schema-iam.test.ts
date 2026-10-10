@@ -23,6 +23,7 @@ import { messageForCode } from '@/shared/api/errors';
 import { AccountPageSchema } from '@/shared/api/iam-accounts-types';
 import { AuditPageSchema } from '@/shared/api/iam-audit-types';
 import { OperatorPageSchema } from '@/shared/api/iam-operators-types';
+import { OperatorInvitationPageSchema } from '@/features/operators/api/invitation-types';
 import { RolesResponseSchema, PermissionsResponseSchema } from '@/shared/api/rbac-catalog';
 import { TenantPageSchema, TenantSchema } from '@/features/tenants/api/types';
 import {
@@ -140,6 +141,29 @@ describe('operators (AC-1 / AC-4)', () => {
     expect(suspended.totalElements).toBeGreaterThan(0);
     expect(suspended.totalElements).toBeLessThan(all.totalElements);
     expect(suspended.content.every((o) => o.status === 'SUSPENDED')).toBe(true);
+  });
+
+  it('TASK-MONO-772 S5 — pending invitations parse with OperatorInvitationPageSchema; a FAILED delivery and an expired row are both shown; no token/link field', async () => {
+    const res = get(
+      'operators',
+      '/api/admin/operator-invitations?tenantId=sample&status=PENDING&page=0&size=20',
+    );
+    expect(res.status).toBe(200);
+    const raw = await res.json();
+    const parsed = OperatorInvitationPageSchema.parse(raw);
+    expect(parsed.totalElements).toBe(parsed.content.length);
+    expect(parsed.content.length).toBeGreaterThan(0);
+    expect(parsed.content.some((i) => i.delivery?.status === 'FAILED_TRANSIENT')).toBe(true);
+    expect(parsed.content.some((i) => i.expired)).toBe(true);
+    const text = JSON.stringify(raw);
+    expect(text).not.toMatch(/"token"|"link"|accept\?token/);
+    // A status the seed has no rows for answers an empty page, not a 503.
+    const cancelled = OperatorInvitationPageSchema.parse(
+      await (
+        await get('operators', '/api/admin/operator-invitations?status=CANCELLED&page=0&size=20')
+      ).json(),
+    );
+    expect(cancelled.totalElements).toBe(0);
   });
 
   it('grantable-roles and /me resolve (used by the operators page pre-filter + self-row gate)', async () => {

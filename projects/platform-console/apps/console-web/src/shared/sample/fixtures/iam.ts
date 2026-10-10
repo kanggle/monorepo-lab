@@ -319,8 +319,74 @@ const IAM_GRANTABLE_ROLES = [
   'SECURITY_ANALYST',
 ];
 
+/**
+ * TASK-MONO-772 S5 — pending operator invitations (`GET
+ * /api/admin/operator-invitations`, same `operators` gateway surface). One
+ * delivered, one whose mail FAILED (the warning + «다시 보내기» state a visitor
+ * should be able to see), one expired. 🔴 No token / link field — the real
+ * producer never returns one either.
+ */
+const INVITATIONS_PATH = '/api/admin/operator-invitations';
+
+export const IAM_OPERATOR_INVITATIONS = [
+  {
+    invitationId: 'inv-sample-0001',
+    tenantId: SAMPLE_TENANT_ID,
+    email: `seojun.han.sample@example.com${SUFFIX}`,
+    displayName: `한서준${SUFFIX}`,
+    roles: ['SUPPORT_READONLY'],
+    status: 'PENDING',
+    expired: false,
+    expiresAt: '2026-09-21T00:00:00Z',
+    createdAt: '2026-09-14T00:00:00Z',
+    invitedBy: 'op-sample-0002',
+    delivery: { status: 'SENT', attemptedAt: '2026-09-14T00:00:01Z' },
+    acceptedAt: null,
+    acceptedOperatorId: null,
+    cancelledAt: null,
+  },
+  {
+    invitationId: 'inv-sample-0002',
+    tenantId: SAMPLE_TENANT_ID,
+    email: `jiwoo.yoon.sample@example.com${SUFFIX}`,
+    displayName: `윤지우${SUFFIX}`,
+    roles: ['SUPPORT_LOCK'],
+    status: 'PENDING',
+    expired: false,
+    expiresAt: '2026-09-20T00:00:00Z',
+    createdAt: '2026-09-13T00:00:00Z',
+    invitedBy: 'op-sample-0002',
+    delivery: { status: 'FAILED_TRANSIENT', attemptedAt: '2026-09-13T00:00:01Z' },
+    acceptedAt: null,
+    acceptedOperatorId: null,
+    cancelledAt: null,
+  },
+  {
+    invitationId: 'inv-sample-0003',
+    tenantId: SAMPLE_TENANT_ID,
+    email: `doyun.kang.sample@example.com${SUFFIX}`,
+    displayName: `강도윤${SUFFIX}`,
+    roles: ['SECURITY_ANALYST'],
+    status: 'PENDING',
+    expired: true,
+    expiresAt: '2026-09-01T00:00:00Z',
+    createdAt: '2026-08-25T00:00:00Z',
+    invitedBy: 'op-sample-0001',
+    delivery: { status: 'SENT', attemptedAt: '2026-08-25T00:00:01Z' },
+    acceptedAt: null,
+    acceptedOperatorId: null,
+    cancelledAt: null,
+  },
+] as const;
+
 function operatorsFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
+
+  if (pathname === INVITATIONS_PATH) {
+    const status = query.get('status') ?? 'PENDING';
+    const rows = IAM_OPERATOR_INVITATIONS.filter((i) => i.status === status);
+    return paginateContent(rows, intParam(query, 'page', 0), intParam(query, 'size', 20));
+  }
 
   if (pathname === '/api/admin/me') {
     return IAM_OPERATORS[0];
@@ -743,6 +809,7 @@ export const IAM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'iam:operators': {
     content: IAM_OPERATORS,
     grantableRoles: IAM_GRANTABLE_ROLES,
+    invitations: IAM_OPERATOR_INVITATIONS,
   },
   'iam:rbac': { roles: IAM_ROLES, permissions: IAM_PERMISSIONS },
   'iam:subscriptions': {},

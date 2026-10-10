@@ -7,23 +7,12 @@ import { OperatorsScreen } from '@/features/operators';
 import type { OperatorPage } from '@/features/operators';
 import { runAxe } from '../a11y/axe-helper';
 
-// PC-FE-179 added a debounced account-existence pre-flight in CreateOperatorForm
-// (a GET /api/accounts lookup on email+tenant), which TASK-MONO-334 turned into a
-// submit GATE (create is enabled only when the email resolves to an existing tenant
-// account). That side-effecting fetch is out of scope for OperatorsScreen behaviour
-// tests and, when it races the create flow, lands as the first `fetch` call. Stub it
-// to a no-network **exists (true)** so the create-flow tests can reach the confirm
-// dialog; those tests `await` the OIDC-ok note before submitting. The gate's own
-// absent/unavailable behaviour is covered by CreateOperatorForm.test.
-//
-// A PLAIN function (not vi.fn) on purpose: the 400ms debounce timer can fire
-// after a test's teardown, and clearAllMocks/clearMocks would wipe a vi.fn's
-// mockResolvedValue → the late call returns undefined → `undefined.then(...)`
-// throws inside the timer callback = an unhandled error (vitest exits non-zero
-// even with all tests "passing"). A plain arrow is immune to mock resets.
-vi.mock('@/features/operators/api/account-existence', () => ({
-  checkAccountExistsForTenant: () => Promise.resolve(true),
-}));
+// TASK-MONO-772 S5 — the account-existence pre-gate (TASK-MONO-334) and its
+// debounced probe are RETIRED with the non-`*` create, so there is no probe to
+// stub here any more. The direct create form is platform-scope (`*`) only and
+// is mounted only for `isPlatformOperator`; the «초대» surface has its own
+// suite (`OperatorInvitations.test.tsx`). These tests pass no `activeTenant`,
+// so the invitations list (which needs one) never fires a fetch here.
 
 /**
  * `features/operators` component behaviour (TASK-PC-FE-004):
@@ -94,7 +83,7 @@ beforeEach(() => {
 describe('OperatorsScreen — list, role tolerance, pagination', () => {
   it('renders the server-provided page with a row per operator', () => {
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
     expect(screen.getByTestId('operators-table')).toBeInTheDocument();
@@ -119,7 +108,7 @@ describe('OperatorsScreen — list, role tolerance, pagination', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -143,7 +132,7 @@ describe('OperatorsScreen — list, role tolerance, pagination', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -158,32 +147,23 @@ describe('OperatorsScreen — list, role tolerance, pagination', () => {
 });
 
 describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () => {
-  it('does NOT offer the * platform tenant to a non-platform operator', () => {
+  it('TASK-MONO-772 — a non-platform operator gets NO direct create form (company operators are invited)', () => {
     render(
-      <OperatorsScreen
-        initial={PAGE}
-        tenantOptions={['wms', 'scm']}
-        isPlatformOperator={false}
-      />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator={false} />,
       { wrapper: wrapper() },
     );
     expect(
-      screen.queryByTestId('create-operator-tenant-platform'),
+      screen.queryByTestId('create-operator-form'),
     ).not.toBeInTheDocument();
   });
 
-  it('offers the * platform tenant ONLY for a platform-scope operator', () => {
+  it('a platform-scope operator gets the create form, fixed to the * tenant', () => {
     render(
-      <OperatorsScreen
-        initial={PAGE}
-        tenantOptions={['wms']}
-        isPlatformOperator
-      />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
       { wrapper: wrapper() },
     );
-    expect(
-      screen.getByTestId('create-operator-tenant-platform'),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('create-operator-form')).toBeInTheDocument();
+    expect(screen.getByTestId('create-operator-tenant')).toHaveTextContent('*');
   });
 
   it('blocks submit on a weak password (client policy mirror) — proxy NOT called', async () => {
@@ -191,7 +171,7 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
       { wrapper: wrapper() },
     );
 
@@ -206,10 +186,6 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
     await user.type(
       screen.getByTestId('create-operator-password'),
       'weak', // < 10 chars, no digit/special
-    );
-    await user.selectOptions(
-      screen.getByTestId('create-operator-tenant'),
-      'wms',
     );
     await user.click(screen.getByTestId('create-operator-submit'));
 
@@ -227,7 +203,7 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
       { wrapper: wrapper() },
     );
 
@@ -244,13 +220,6 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
       'Str0ng!pass1',
     );
     await user.click(screen.getByTestId('create-operator-role-SUPER_ADMIN'));
-    await user.selectOptions(
-      screen.getByTestId('create-operator-tenant'),
-      'wms',
-    );
-    // TASK-MONO-334: submit is account-gated — wait for the OIDC-ok state before
-    // clicking (the mocked probe resolves to exists).
-    await screen.findByTestId('create-operator-account-ok');
     await user.click(screen.getByTestId('create-operator-submit'));
 
     // The confirm dialog opens — the producer call has NOT fired yet.
@@ -269,7 +238,7 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
           roles: ['SUPER_ADMIN'],
           createdAt: 'x',
           auditId: 'a',
-          tenantId: 'wms',
+          tenantId: '*',
         },
         201,
       ),
@@ -293,6 +262,8 @@ describe('OperatorsScreen — create form (policy mirror, tenant *, gate)', () =
     expect(body.reason).toBe('onboarding a platform admin');
     expect(body.idempotencyKey).toBeTruthy();
     expect(body.password).toBe('Str0ng!pass1');
+    // TASK-MONO-772 — the direct create only ever targets the platform scope.
+    expect(body.tenantId).toBe('*');
   });
 });
 
@@ -302,7 +273,7 @@ describe('OperatorsScreen — edit-roles strong confirm (remove all)', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -348,7 +319,7 @@ describe('OperatorsScreen — change-status suspend (reason+confirm)', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -392,7 +363,7 @@ describe('OperatorsScreen — change-status suspend (reason+confirm)', () => {
 describe('OperatorsScreen — self-service forms moved to /account (TASK-PC-FE-045)', () => {
   it('no longer renders the self change-password or my-profile forms', () => {
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
       { wrapper: wrapper() },
     );
     expect(screen.queryByTestId('change-password-form')).not.toBeInTheDocument();
@@ -413,7 +384,7 @@ describe('OperatorsScreen — permission / degrade UX', () => {
     );
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -434,7 +405,7 @@ describe('OperatorsScreen — permission / degrade UX', () => {
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
       { wrapper: wrapper() },
     );
 
@@ -450,12 +421,6 @@ describe('OperatorsScreen — permission / degrade UX', () => {
       screen.getByTestId('create-operator-password'),
       'Str0ng!pass1',
     );
-    await user.selectOptions(
-      screen.getByTestId('create-operator-tenant'),
-      'wms',
-    );
-    // TASK-MONO-334: submit is account-gated — wait for the OIDC-ok state first.
-    await screen.findByTestId('create-operator-account-ok');
     await user.click(screen.getByTestId('create-operator-submit'));
     const dialog = screen.getByTestId('operator-confirm-dialog');
     fetchMock.mockResolvedValue(
@@ -486,7 +451,7 @@ describe('OperatorsScreen — permission / degrade UX', () => {
     );
     const user = userEvent.setup();
     render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
 
@@ -506,7 +471,7 @@ describe('OperatorsScreen — accessibility (WCAG AA)', () => {
   it('the confirm dialog is axe-clean and keyboard-dismissable', async () => {
     const user = userEvent.setup();
     const { container } = render(
-      <OperatorsScreen initial={PAGE} tenantOptions={['wms']} />,
+      <OperatorsScreen initial={PAGE} />,
       { wrapper: wrapper() },
     );
     await user.click(screen.getByTestId('action-status-op-1'));

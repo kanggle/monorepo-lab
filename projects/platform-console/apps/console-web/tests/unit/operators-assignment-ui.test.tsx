@@ -13,8 +13,13 @@ import { KNOWN_OPERATOR_ROLES } from '@/features/operators/api/types';
  *     free-text operatorId → reason+confirm dialog → POST to
  *     `/api/operators/{id}/assignments/{activeTenant}` with the reason.
  *   - the per-row 배정 해제 action → reason+confirm → DELETE the same path.
- *   - the create/edit-roles selectors offer TENANT_ADMIN (delegation
+ *   - the invite/edit-roles selectors offer TENANT_ADMIN (delegation
  *     appointment) — no one-click; still confirm-gated.
+ *
+ * TASK-MONO-772 S5 — with an active tenant the screen ALSO reads the pending
+ * invitations (`GET /api/operator-invitations`) on mount, so `fetch` is
+ * stubbed with a router that answers that read with an empty page and lets
+ * each test see only the calls it is about (`callsTo`).
  */
 
 function wrapper() {
@@ -46,8 +51,35 @@ const PAGE: OperatorPage = {
   totalPages: 1,
 };
 
+const EMPTY_INVITATIONS = {
+  content: [],
+  totalElements: 0,
+  page: 0,
+  size: 20,
+  totalPages: 0,
+};
+
+/** fetch stub: the invitations read answers an empty page; everything else
+ *  goes to `other` (default: 204). */
+function routedFetch(other?: (url: string, init?: RequestInit) => Response) {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/api/operator-invitations')) {
+      return new Response(JSON.stringify(EMPTY_INVITATIONS), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return other ? other(String(url), init) : new Response(null, { status: 204 });
+  });
+}
+
+function callsTo(fetchMock: ReturnType<typeof routedFetch>, prefix: string) {
+  return fetchMock.mock.calls.filter(([u]) => String(u).startsWith(prefix));
+}
+
 beforeEach(() => {
   vi.unstubAllGlobals();
+  vi.stubGlobal('fetch', routedFetch());
 });
 
 describe('selectable roles include the tenant-scoped delegation roles', () => {
@@ -56,24 +88,25 @@ describe('selectable roles include the tenant-scoped delegation roles', () => {
     expect(KNOWN_OPERATOR_ROLES).toContain('TENANT_BILLING_ADMIN');
   });
 
-  it('renders a TENANT_ADMIN checkbox in the create form', () => {
+  it('renders a TENANT_ADMIN checkbox in the invite form (TASK-MONO-772 — company operators are invited)', () => {
     render(
       <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
       { wrapper: wrapper() },
     );
     expect(
-      screen.getByTestId('create-operator-role-TENANT_ADMIN'),
+      screen.getByTestId('invite-operator-role-TENANT_ADMIN'),
     ).toBeInTheDocument();
   });
 });
 
 describe('assign form → confirm → POST', () => {
   it('POSTs the operatorId to the active-tenant assignment path with the reason', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ tenantId: 'acme-corp' }), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    const fetchMock = routedFetch(
+      () =>
+        new Response(JSON.stringify({ tenantId: 'acme-corp' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        }),
     );
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
@@ -91,8 +124,10 @@ describe('assign form → confirm → POST', () => {
     await user.type(reason, 'onboard partner');
     await user.click(screen.getByTestId('operator-confirm-submit'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(callsTo(fetchMock, '/api/operators/')).toHaveLength(1),
+    );
+    const [url, init] = callsTo(fetchMock, '/api/operators/')[0];
     expect(String(url)).toBe('/api/operators/op-9/assignments/acme-corp');
     expect((init as RequestInit).method).toBe('POST');
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
@@ -101,7 +136,7 @@ describe('assign form → confirm → POST', () => {
   });
 
   it('does NOT fire the assign without a reason (confirm gate)', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = routedFetch();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
@@ -113,15 +148,13 @@ describe('assign form → confirm → POST', () => {
     await user.click(screen.getByTestId('assign-operator-submit'));
     // confirm submit is disabled until a reason is entered → click is a no-op.
     await user.click(screen.getByTestId('operator-confirm-submit'));
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(callsTo(fetchMock, '/api/operators/')).toHaveLength(0);
   });
 });
 
 describe('per-row unassign → confirm → DELETE', () => {
   it('DELETEs the row operator from the active tenant with the reason', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchMock = routedFetch();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
 
@@ -135,8 +168,10 @@ describe('per-row unassign → confirm → DELETE', () => {
     await user.type(reason, 'left the team');
     await user.click(screen.getByTestId('operator-confirm-submit'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(callsTo(fetchMock, '/api/operators/')).toHaveLength(1),
+    );
+    const [url, init] = callsTo(fetchMock, '/api/operators/')[0];
     expect(String(url)).toBe('/api/operators/op-1/assignments/acme-corp');
     expect((init as RequestInit).method).toBe('DELETE');
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
