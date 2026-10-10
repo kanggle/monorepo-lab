@@ -20,9 +20,10 @@ public class AccountSearchQueryService {
     private final AccountQueryPort accountQueryPort;
     /**
      * TASK-BE-614 (multi-tenancy.md § 소비자 계정 풀 § 5): this is the search behind the console's
-     * customer-account operations AND admin-service {@code CreateOperatorUseCase}'s "a signed-up
-     * account exists in the target tenant" check. With the pool on, a site search includes that
-     * site's pool members. Flag off: the old tenant-only queries, unchanged.
+     * customer-account operations. With the pool on, a site search includes that site's pool members.
+     * Flag off: the old tenant-only queries, unchanged. (TASK-MONO-772 S7 retired the TASK-BE-615
+     * {@code excludePoolMembers} narrowing together with its only caller, admin-service's TASK-MONO-334
+     * operator-create account check.)
      */
     private final ConsumerAccountPool consumerAccountPool;
 
@@ -34,21 +35,6 @@ public class AccountSearchQueryService {
      */
     @Transactional(readOnly = true)
     public AccountSearchResult search(String tenantId, String email, String status, int page, int size) {
-        return search(tenantId, email, status, page, size, false);
-    }
-
-    /**
-     * TASK-BE-615 AC-8 (owner decision, 2026-10-01): {@code excludePoolMembers = true} answers with the
-     * site's OWN accounts only — the pre-pool query — even when the pool is on. admin-service
-     * {@code CreateOperatorUseCase}'s "a signed-up account exists in the target tenant" check asks
-     * this way: an operator's account rules change only with ADR-MONO-080 ({@code TASK-MONO-746}),
-     * and a pool member passing that check would get a NEW site-tenant identity
-     * ({@code resolveOrCreateIdentity}) beside its pool one. The console account-operations listing
-     * keeps {@code false} — § 5 says site lookups include that site's pool members.
-     */
-    @Transactional(readOnly = true)
-    public AccountSearchResult search(String tenantId, String email, String status, int page, int size,
-                                      boolean excludePoolMembers) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
@@ -56,7 +42,7 @@ public class AccountSearchQueryService {
             throw new IllegalArgumentException("size must be ≤ " + MAX_PAGE_SIZE);
         }
 
-        boolean includePoolMembers = !excludePoolMembers && consumerAccountPool.lookupsIncludePoolMembers();
+        boolean includePoolMembers = consumerAccountPool.lookupsIncludePoolMembers();
 
         if (email == null || email.isBlank()) {
             // TASK-BE-475: optional status filter (list branch only). Fail-closed parse —

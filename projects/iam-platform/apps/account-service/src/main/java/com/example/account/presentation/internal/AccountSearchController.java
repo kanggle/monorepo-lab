@@ -28,13 +28,11 @@ public class AccountSearchController {
             // fail-closed in the service; admin-service already validated the allow-set.
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            // TASK-BE-615 AC-8: true → the site's OWN accounts only, never its pool members, whatever
-            // iam.consumer-pool.enabled says. Sent by admin-service CreateOperatorUseCase (owner
-            // decision: operator creation keeps the pre-pool rule). Absent/false → unchanged.
-            @RequestParam(defaultValue = "false") boolean excludePoolMembers) {
+            // TASK-MONO-772 S7: the TASK-BE-615 `excludePoolMembers` flag is retired (its only caller, the
+            // TASK-MONO-334 operator-create check, is gone). A stale sender's flag is ignored.
+            @RequestParam(defaultValue = "20") int size) {
 
-        var result = accountSearchQueryService.search(tenantId, email, status, page, size, excludePoolMembers);
+        var result = accountSearchQueryService.search(tenantId, email, status, page, size);
         var items = result.content().stream()
                 .map(item -> new AccountSearchResponse.Item(
                         item.id(), item.email(), item.status(), item.createdAt()))

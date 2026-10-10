@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,7 +46,7 @@ class AccountSearchControllerSliceTest {
         var item = new AccountSearchResult.Item("acc-1", "a@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 1, 0, 20, 1);
-        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(0), eq(20), eq(false))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform"))
                 .andExpect(status().isOk())
@@ -63,7 +64,7 @@ class AccountSearchControllerSliceTest {
         var item = new AccountSearchResult.Item("acc-2", "b@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 6, 1, 5, 2);
-        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(1), eq(5), eq(false))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), isNull(), isNull(), eq(1), eq(5))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&page=1&size=5"))
                 .andExpect(status().isOk())
@@ -75,7 +76,7 @@ class AccountSearchControllerSliceTest {
     @Test
     @DisplayName("GET /internal/accounts?size=101 returns 400")
     void search_sizeOverMax_returns400() throws Exception {
-        given(accountSearchQueryService.search(any(), any(), any(), eq(0), eq(101), eq(false)))
+        given(accountSearchQueryService.search(any(), any(), any(), eq(0), eq(101)))
                 .willThrow(new IllegalArgumentException("size must be ≤ 100"));
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&size=101"))
@@ -86,7 +87,7 @@ class AccountSearchControllerSliceTest {
     @DisplayName("TASK-BE-475: GET /internal/accounts?status=LOCKED forwards the status to the service")
     void search_withStatus_forwardsStatus() throws Exception {
         var result = new AccountSearchResult(List.of(), 3, 0, 1, 3);
-        given(accountSearchQueryService.search(eq("ecommerce"), isNull(), eq("LOCKED"), eq(0), eq(1), eq(false)))
+        given(accountSearchQueryService.search(eq("ecommerce"), isNull(), eq("LOCKED"), eq(0), eq(1)))
                 .willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=ecommerce&status=LOCKED&page=0&size=1"))
@@ -100,7 +101,7 @@ class AccountSearchControllerSliceTest {
         var item = new AccountSearchResult.Item("acc-1", "a@example.com", "ACTIVE",
                 Instant.parse("2026-01-01T00:00:00Z"));
         var result = new AccountSearchResult(List.of(item), 1, 0, 20, 1);
-        given(accountSearchQueryService.search(eq("fan-platform"), eq("a@example.com"), isNull(), eq(0), eq(20), eq(false))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), eq("a@example.com"), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&email=a@example.com"))
                 .andExpect(status().isOk())
@@ -112,7 +113,7 @@ class AccountSearchControllerSliceTest {
     @DisplayName("GET /internal/accounts?email=unknown returns empty content")
     void search_withUnknownEmail_returnsEmpty() throws Exception {
         var result = new AccountSearchResult(List.of(), 0, 0, 20, 0);
-        given(accountSearchQueryService.search(eq("fan-platform"), eq("unknown@example.com"), isNull(), eq(0), eq(20), eq(false))).willReturn(result);
+        given(accountSearchQueryService.search(eq("fan-platform"), eq("unknown@example.com"), isNull(), eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=fan-platform&email=unknown@example.com"))
                 .andExpect(status().isOk())
@@ -121,15 +122,16 @@ class AccountSearchControllerSliceTest {
     }
 
     @Test
-    @DisplayName("TASK-BE-615 AC-8: excludePoolMembers=true 를 서비스에 그대로 넘긴다 (운영자 생성 확인의 옛 범위)")
-    void search_excludePoolMembers_forwarded() throws Exception {
+    @DisplayName("TASK-MONO-772 S7: 퇴역한 excludePoolMembers=true 를 보내도 무시 — 서비스는 5-인자 검색(풀 멤버 포함 규칙) 그대로")
+    void search_retiredExcludePoolMembers_ignored() throws Exception {
         var result = new AccountSearchResult(List.of(), 0, 0, 20, 0);
         given(accountSearchQueryService.search(eq("ecommerce"), eq("shopper@example.com"), isNull(),
-                eq(0), eq(20), eq(true))).willReturn(result);
+                eq(0), eq(20))).willReturn(result);
 
         mockMvc.perform(get("/internal/accounts?tenantId=ecommerce&email=shopper@example.com&excludePoolMembers=true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+        verify(accountSearchQueryService).search("ecommerce", "shopper@example.com", null, 0, 20);
     }
 
     @Test

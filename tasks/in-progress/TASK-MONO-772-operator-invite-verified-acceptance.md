@@ -63,7 +63,7 @@ monorepo
 - [x] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
 - [ ] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
 - [ ] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
-- [ ] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
+- [x] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
 - [x] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
 
 # Related Specs
@@ -734,3 +734,81 @@ monorepo
 
 - `account-maintenance-internal.md` · `error-handling.md`(`POOL_MOVE_OPERATOR_FACETED` 설명) 는 S1 이 이미 «S6 부터 신원 축만» 으로 적어 두어 고치지 않았다.
 - 로그: 새 로그 줄은 client id · 세션 테넌트 · (게이트 조회 실패 시) 예외만 — 이메일 · 토큰 · 해시 없음.
+
+- AC-5 ✅ (2026-10-10 UTC — 오케스트레이터): #4285 CI 에서 실제로 돈 시험 — iam A `OperatorAssignmentCheckIntegrationTest` «🔴 S6 (AC-5) 셀프 온보딩 운영자(oidc_subject 축)» · «S6 대조군(F11)», iam B auth `ConsumerPoolLegacyMoveIntegrationTest` «🔴 772 AC-5 — 이동 전 콘솔(사이트 principal) 세션 거절 → 재로그인 = 같은 sub», account «🔴 772 AC-5 — 같은 id 로 풀 이동 · 사이트 계정 거절 해제(F10)» 전부 PASSED.
+
+---
+
+# S7 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `feat/mono-772-s7-retire-334`(origin/main `09d8aaaed` + AC-5 판정 커밋 `db93bca7a`). 날짜는 `date -u +%F`.
+> 🔵 AC 체크박스는 건드리지 않았다 — AC-3 · AC-4 를 동사대로 단언하는 시험은 둘 다 Testcontainers IT 라 로컬 `:test` 레인에서 돌지 않는다(§ 3). CI `integrationTest` 초록을 본 뒤 오케스트레이터가 판정한다.
+
+## 1. 334 퇴역 — 쓴 것 · 지운 것
+
+| 서비스 | 무엇 | 파일 |
+|---|---|---|
+| admin | 🔴 `POST /api/admin/operators` 는 `'*'` 만 — 비-`'*'` 면 **첫 줄에서** `422 OPERATOR_INVITATION_REQUIRED`(운영자 조회 · 범위 검사 · 감사 · 하류 호출 0, actor 무관 — 계약 «판정 순서»). `'*'` 경로(BE-249 비-플랫폼 actor 403 + DENIED 감사 · D2 · D3 · 이메일 충돌 · 감사)는 그대로 | `application/CreateOperatorUseCase.java` |
+| admin | 새 예외 `OperatorInvitationRequiredException`(초대 예외 가족 — 핸들러 무변경, 레지스트리 가드가 `super("OPERATOR_INVITATION_REQUIRED", 422, …)` 를 본다) | `application/exception/OperatorInvitationRequiredException.java` (신규) |
+| admin | 죽은 코드 제거: 334 계정 확인 · 비-`'*'` 전용이던 BE-374 신원 resolve-or-link 블록(원래 `'*'` 는 건너뜀 → 이제 도달 불가) · `AccountServiceClient` 의존 · `@Deprecated` 오버로드 둘(`reuseExistingIdentity` 없는 7-인자는 이제 본 시그니처, `fan-platform` 기본값 6-인자는 늘 422 라 삭제) · `AccountServiceClient#searchSiteAccounts` + `excludePoolMembers` 갈래 · `OperatorAccountNotFoundException` + 핸들러 | `CreateOperatorUseCase.java` · `infrastructure/client/AccountServiceClient.java` · `presentation/advice/AdminExceptionHandler.java` · **삭제** `application/exception/OperatorAccountNotFoundException.java` |
+| admin | 컨트롤러는 `reuseExistingIdentity` 를 더 넘기지 않는다(DTO 필드는 본문 호환으로 남김) | `presentation/OperatorAdminController.java` |
+| account | `excludePoolMembers` 쿼리 파라미터 · 6-인자 `search` 제거 — 검색은 언제나 § 5(풀 켜짐 = 사이트 풀 멤버 포함). 낡은 호출자의 플래그는 Spring 이 버린다 | `application/service/AccountSearchQueryService.java` · `presentation/internal/AccountSearchController.java` |
+| 계약 | `admin-api.md` § POST /operators — «S7 머지 전까지» 표식을 «퇴역 (772 S7)» 으로 · `reuseExistingIdentity` 효과 없음 · 422 는 감사 행 없음 · 🔴 S1 문장 정정(§ 4 S7-2) / `admin-to-account.md` — `excludePoolMembers` 행을 «퇴역» 으로 | § 4 |
+
+- 콘솔: 무변경 — S5 가 비-`'*'` 생성 경로 · 334 사전 게이트를 이미 걷었다(BFF 는 `tenantId` 를 `'*'` 로 고정). 저장소 전체 grep: `POST /api/admin/operators` 를 부르는 e2e · 스크립트 · 다른 프로젝트 **0**(federation e2e 는 `…/operators/{id}/assignments` 만).
+
+## 2. 시드 (F16) — 실측 후 «남긴다»
+
+| 잰 것 | 결과 |
+|---|---|
+| `newhire@demo-corp.example` · `…00ad07` 의 소비자 (`.`, done 태스크 제외 전수 grep) | 짝 파일 auth `R__03_seed_demo_corp_new_hire_credential.sql` · 그 파일을 «다른 자격 시드» 목록에 넣는 `DemoCsOperatorSeedTest`(계정 id 유일성 대조용) · `tasks/INDEX.md` 완료 행 — **그 밖 0**: 콘솔 가이드 · 런처 문구 · `infra/demo` 검사(`verify-demo-wrapper.sh` 칸 포함) · 워크스루 원장 · e2e 픽스처 어디에도 없다 |
+| 지울 수 있나 | 🔴 **아니오 — 지우면 기존 볼륨이 기동하지 않는다.** 이 R__ 둘은 이미 데모 · 개발 볼륨에 «적용됨» 으로 기록돼 있고, 적용된 repeatable 을 지우면 Flyway validate 가 «applied migration not resolved locally» 로 막는다. iam 서비스 `application*.yml` 에 `ignore-migration-patterns` 설정 0(grep), 저장소에 `migration-dev`/`seed` 의 R__ 를 지운 선례 0(`git log --diff-filter=D`) |
+| 남겨도 되나 | ✅ 행은 무해 — `demo-corp` **사이트** 계정 1개(운영자 측면 없음). 초대 수락은 풀 계정만 받으므로(`verified-email:match` → 404 → `403 …ACCOUNT_NOT_ELIGIBLE`) 이 계정으로 운영자가 생길 길도 없다 |
+| 한 것 | 두 파일 머리에 «S7 — 시연하던 길은 사라졌다 · 왜 남기나» 블록만 덧붙였다(내용 바뀜 → repeatable 재적용, `INSERT IGNORE` 라 no-op). 행 · id · 해시 무변경 → `DemoCsOperatorSeedTest` 무영향 |
+| 남는 결정 | 파일 삭제 + 볼륨 정리 절차(또는 `*:missing` 무시 패턴 도입)는 별도 결정 — 772 범위 밖 |
+
+- «인증된 이메일의 풀 계정 시드로 바꿔 초대 → 수락을 시연» 안은 택하지 않았다: 같은 R__ 의 행을 바꾸면 옛 행은 `INSERT IGNORE` 라 그대로 남고 새 행이 하나 더 생긴다(같은 이메일 · 다른 테넌트 — 공존 금지 규칙과 부딪힐 수 있음). 시연용 풀 피초대자가 필요하면 새 R__ 로 따로 — 소유자 판단.
+- `check-dev-seed-migration-band.sh` rc=0(R__ 만 건드림 — 버전 시드 0).
+
+## 3. 시험 · 로컬 결과
+
+| 시험 | 무엇을 단언 | 로컬 |
+|---|---|---|
+| admin `CreateOperatorUseCaseTest` (재작성 14) | 🔴 비-`'*'` 4 테넌트(파라미터) → `OPERATOR_INVITATION_REQUIRED` · 422 · 메시지에 이메일/테넌트 없음 · **모든 협력자 상호작용 0**(운영자 포트 · 감사 · 해시 · 조회 · D2 · D3) / 회사 actor 의 자기 테넌트도 422(403 아님 · DENIED 감사 0) / `null` 테넌트 422 / 대조군: `'*'` 생성 성공 — 해시 · 역할 · D2 · D3 · 감사(`target_tenant='*'`) · 신원 링크 0 / BE-249 403 + DENIED 감사 / 이메일 충돌 / 모르는 역할 / 빈 역할 / BE-377 비밀번호 셋 | ✅ 14/14 |
+| admin `OperatorAdminControllerSliceTest` | 334 칸 → `422 OPERATOR_INVITATION_REQUIRED` 칸 · 201 칸은 `'*'` · 매처 7-인자 | ✅ 43/43 |
+| admin `AccountServiceClientUnitTest` | `searchSiteAccounts` 칸 → «어떤 검색에도 `excludePoolMembers` 없음» | ✅ 16/16 |
+| admin `OperatorAdminIntegrationTest` (IT) | 334 칸 → 🔴 SUPER_ADMIN 의 `fan-platform` 생성 422 · 행 0 · `OPERATOR_CREATE` 감사 수 불변 · account 클라이언트 상호작용 0 / 생성 · 목록 · 역할 교체 · 중복 409 는 `'*'` 로 / BE-289 «비-fan 운영자 역할 교체» 는 운영자 행을 SQL 로 심고 같은 단언 | ⚪ 로컬 미실행(IT 레인) |
+| admin `OperatorAdminScopeConfinementIntegrationTest` (IT) | create confinement: tenant-x 관리자 → tenant-y · tenant-x 둘 다 422 · `'*'` 는 403 · 행 0 | ⚪ 〃 |
+| admin `PartnershipCrossOrgLeakIntegrationTest` (IT, +2) | 🔴 **AC-4**: 협력사 직원 = 초대 수락이 쓰는 모양의 운영자 행(홈 globex · 비밀번호 NULL · `oidc_subject` = 풀 계정 id) + 참여자. 전제 — S4 콘솔 적격 `true` · `check(풀 계정, acme)` assigned + 위임 범위 → A 관리자 `:terminate` → **다음 `check`(auth 의 assume 게이트가 부르는 판정) assigned=false · 위임 범위 없음** → 대조군: 홈 globex 는 assigned · 콘솔 적격 그대로 · 운영자 행 ACTIVE / 둘째 칸: SUSPENDED → 거절 · 복구 → 통과 · 참여자 제외 → 거절 · 다른 참여자(B-op)는 그대로 | ⚪ 〃 |
+| account `AccountSearchPoolMembersTest` (← `AccountSearchExcludePoolMembersTest` 이름 변경) | 좁히기 칸 둘 삭제, 대조군 둘(풀 켜짐 → 풀 멤버 포함 / 풀 꺼짐 → 사이트만) 유지 | ✅ 2/2 |
+| account `AccountSearchControllerSliceTest` | `excludePoolMembers=true` 를 보내도 서비스는 5-인자 호출 | ✅ 9/9 |
+| account `ConsumerSiteMembershipLookupIntegrationTest` (IT) | AC-8 칸 → 퇴역 플래그를 보내도 풀 쇼핑객을 기본 검색과 똑같이 찾는다 | ⚪ 〃 |
+| auth `ConsumerPoolSsoIntegrationTest` (IT, 기존 AC-3 칸 확장) | 🔴 **AC-3 팬 칸**: 측면 있는 풀 운영자(팬 멤버십 ACTIVE 추가)가 같은 IdP 세션으로 팬 토큰도 받음 → 측면 회수 → 콘솔 refresh 400(BE-614 문구) · 스토어 refresh 200 · **팬 refresh 200(`fan-platform` · 같은 `sub`)** · **같은 브라우저의 팬 새 로그인 → 코드 → 토큰 200** · 같은 브라우저의 콘솔 새 authorize 는 여전히 토큰 400(거절은 client 단위) | ⚪ 〃 · 컴파일 ✅ |
+| 서비스 전체 `:test` | admin 1104(skip 58) · account 752(skip 47) · auth `compileTestJava` | ✅ 실패 0 (`rc=0`, 결과 XML 합산) |
+| auth `demoseed.*` (R__03 머리를 바꿨으므로) | `DemoCsOperatorSeedTest`(R__03 을 읽는다) 5 포함 6 클래스 32 | ✅ 실패 0 |
+
+- ⚪ IT 는 로컬에서 하나도 돌지 않았다 — `:test` 레인이 `integration` 을 제외한다. Docker 가용성은 이번엔 재지 못했다(§ 5 분류기 차단 뒤 `docker info` 도 막힘). S2–S6 와 같은 호스트다.
+- **bite**: 🔵 `CreateOperatorUseCase` 첫 줄 판정을 `false &&` 로 무력화해 422 칸만 빨개지는지 보려 했으나 **자동 모드 분류기가 그 편집을 막았다**(«Security Weaken»). 우회하지 않았다 — 파일에 표식 0 확인(Grep). 사람이 할 때: 그 `if` 를 `if (false && …)` 로 → `CreateOperatorUseCaseTest` 의 422 칸 셋(파라미터 4 · 회사 actor · null)이 빨개지고 `'*'` 칸은 초록이어야 한다.
+
+## 4. S1 계약과 다르게 · 계약이 정하지 않아 정한 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S7-1 | `reuseExistingIdentity` 를 본문에서 지우지 않고 «받되 효과 없음» 으로 계약에 적었다 | 본문 키를 지우면 낡은 호출자가 400 이 될 수 있다(엄격 역직렬화 여부와 무관하게 계약 변경). 효과는 원래 비-`'*'` 에만 있었다 |
+| S7-2 | 🔴 S1 문장 «`OPERATOR_ACCOUNT_NOT_FOUND` — 코드 자체는 `identity:link` 가 계속 쓴다» 정정 | 실측: admin `src/main` 에서 그 코드를 내는 곳은 334 확인 하나뿐(예외 · 핸들러 · 던지는 곳 셋 다 334). 그래서 예외 · 핸들러를 같이 지웠다. `platform/error-handling.md` · `rules/domains/saas.md` 의 행은 기록으로 남겼다(레지스트리 가드는 코드→문서 한 방향 — rc=0) |
+| S7-3 | 422 판정을 운영자 조회 **전**에 둠 | 계약 «비-`'*'` 이면 422(actor 와 무관)» — 두 갈래가 서로소라 관측 결과는 계약 순서와 같고, 하류 · DB 읽기 0 을 단언할 수 있다 |
+| S7-4 | `@Deprecated` 6-인자 오버로드(테넌트 기본 `fan-platform`) 삭제 | 호출자 0(grep), 남기면 늘 422 인 죽은 API |
+| S7-5 | AC-4 의 «풀 계정 직원» 을 **수락이 쓰는 행 모양으로 시드** — S3 수락 경로를 그 IT 에서 다시 태우지 않음 | 지시대로 새 하네스 없이 기존 IT 에 칸 추가. 수락 경로가 그 행을 쓴다는 것은 S3 IT(AC-1 · AC-6)가 이미 실 DB 로 단언한다. admin 은 계정 테넌트를 모른다 — admin 쪽에서 «풀 계정 운영자» 를 구별하는 술어는 S4 콘솔 적격뿐이라 그것을 전제로 단언했다 |
+| S7-6 | AC-4 의 «다음 요청» = 다음 `operator-assignments/check` | F13 그대로 — auth 의 assume-tenant 교환이 매번 이 판정을 부른다. 🔴 이미 발급된 assume 토큰은 TTL 까지 산다(잔여 창 — 기록, `multi-tenancy.md` § 8 «회수 장치» 와 같은 문장) |
+
+- HTTP 오류 코드 · Flyway · JWT 클레임 · 권한 키 **0**(`OPERATOR_INVITATION_REQUIRED` 는 S1 이 등록). `scripts/` 추가 · 삭제 없음.
+- 로그: 새 로그 줄 0. 422 메시지는 고정 문구(이메일 · 테넌트 값 없음 — 단위 시험이 단언).
+
+## 5. 가드 (스테이지 뒤)
+
+필수 셋(`check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift`) · `check-flyway-version-collision` · `check-flyway-unresolvable-placeholder` · `check-dev-seed-migration-band` · `check-error-code-registry` · `check-domain-error-code-registry` · `check-internal-caller-addresses` · `check-jwt-claims-registry` 전부 rc=0(이 기록을 쓰기 전 스테이지 기준). `infra/demo` 무변경 → `verify-demo-wrapper.sh` 대상 아님.
+
+## 6. AC 판정 (체크하지 않음 — 오케스트레이터 몫)
+
+- **AC-3** — 남았던 «팬 로그인» 칸을 채웠다: auth IT 한 시험 안에서 회수 뒤 팬 refresh 200 · 팬 새 로그인 200 · 콘솔 400. 스토어 · 콘솔 쪽은 #4281 CI 가 이미 단언. ⇒ 이 PR 의 CI iam B `ConsumerPoolSsoIntegrationTest` 초록 뒤 판정.
+- **AC-4** — admin IT 두 칸(해지 · SUSPENDED · 참여자 제외 → 다음 판정 거절, 대조군 홈 회사 · 콘솔 적격 유지). ⇒ CI iam A `PartnershipCrossOrgLeakIntegrationTest` 초록 뒤 판정. 라이브 ⚪.

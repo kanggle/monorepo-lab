@@ -58,6 +58,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       {@code partnership.terminated} outbox row.</li>
  *   <li><b>AC-6</b> net-zero: check(B-op, globex) [home] → assigned with NO
  *       delegatedScope block (normal-assignment shape byte-unchanged).</li>
+ *   <li><b>TASK-MONO-772 AC-4</b> the same cascade for a partner employee who is a <b>consumer-pool account
+ *       with an operator facet</b> — the row an accepted invitation writes (home = globex, no password,
+ *       {@code oidc_subject} = the pool account id; S4's console-eligibility answers {@code true} for it).
+ *       After :terminate the NEXT check (the assume-tenant gate auth-service calls) refuses company A,
+ *       while the same person's home company and console eligibility stay (control).</li>
  * </ul>
  */
 @SpringBootTest
@@ -85,6 +90,9 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
     static final String B_OP_SUBJECT = "00000000-0000-7000-8000-0000000004b2";
     static final String A_TARGET_UUID = "00000000-0000-7000-8000-0000000004a9";
     static final String PID = "00000000-0000-7000-8000-00000004pp01";
+    // TASK-MONO-772 AC-4: a partner employee on the consumer pool (accepted-invitation shape).
+    static final String POOL_OP_UUID = "00000000-0000-7000-8000-0000000004c1";
+    static final String POOL_ACCOUNT_ID = "00000000-0000-7000-8000-0000000004c2";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -146,6 +154,12 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
                 "{\"domains\":[\"wms\",\"scm\"],\"roles\":[\"WMS_OP\",\"SCM_PLANNER\"]}");
         // B-op is a participant narrowed to {wms}×{WMS_OP}.
         seedParticipant(PID, B_OP_UUID, "{\"domains\":[\"wms\"],\"roles\":[\"WMS_OP\"]}");
+        // TASK-MONO-772 AC-4: a pool-account partner employee — the row an accepted invitation writes
+        // (OperatorInvitationAcceptanceWriter: home = invitation tenant, password_hash NULL, ACTIVE,
+        // oidc_subject = the accepting pool account id) — also a participant narrowed to {wms}×{WMS_OP}.
+        seedPoolOperator(POOL_OP_UUID, POOL_ACCOUNT_ID, PARTNER, "pool-staff@example.com");
+        seedRole(POOL_OP_UUID, "SUPPORT_READONLY");
+        seedParticipant(PID, POOL_OP_UUID, "{\"domains\":[\"wms\"],\"roles\":[\"WMS_OP\"]}");
     }
 
     // ── AC-4a ────────────────────────────────────────────────────────────────
@@ -247,6 +261,67 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.delegatedScope").doesNotExist());
     }
 
+    // ── TASK-MONO-772 AC-4 ───────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("🔴 772 AC-4: 파트너십 해지 → 협력사 직원(운영자 측면 있는 풀 계정)의 회사 A 진입이 다음 요청(assume 판정)에서 거절 · 대조군: 홈 회사 · 콘솔 적격은 그대로")
+    void ac4_poolAccountPartnerEmployee_refusedAtNextRequest_afterTerminate() throws Exception {
+        // Precondition: this IS a pool operator in the 772 sense — S4's console eligibility (the predicate the
+        // console token issuer asks) says yes for the pool account id, and it reaches company A as a participant.
+        consoleEligibility(POOL_ACCOUNT_ID).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true));
+        check(POOL_ACCOUNT_ID, HOST).andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.delegatedScope.domains[0]").value("wms"))
+                .andExpect(jsonPath("$.delegatedScope.roles[0]").value("WMS_OP"));
+
+        mockMvc.perform(post("/api/admin/partnerships/" + PID + ":terminate")
+                        .header("Authorization", "Bearer " + jwt.operatorToken(A_ADMIN_UUID))
+                        .header("X-Tenant-Id", HOST)
+                        .header("X-Operator-Reason", "ending partnership")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("TERMINATED"));
+
+        // The very next request: company A is refused (no per-operator sweep, nothing written to the operator).
+        check(POOL_ACCOUNT_ID, HOST).andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(false))
+                .andExpect(jsonPath("$.delegatedScope").doesNotExist());
+
+        // Control: termination removes company A only — the person keeps the home company and the console door
+        // (ADR-MONO-080 D5: leaving a partnership is not leaving the employer).
+        check(POOL_ACCOUNT_ID, PARTNER).andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.delegatedScope").doesNotExist());
+        consoleEligibility(POOL_ACCOUNT_ID).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true));
+        String status = jdbcTemplate.queryForObject(
+                "SELECT status FROM admin_operators WHERE operator_id = ?", String.class, POOL_OP_UUID);
+        assertThat(status).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("772 AC-4: SUSPENDED · 참여자 제외도 같은 풀 계정 직원을 다음 요청에서 거절 (다른 참여자는 그대로)")
+    void ac4_poolAccountPartnerEmployee_refusedAfterSuspendAndParticipantRemoval() throws Exception {
+        check(POOL_ACCOUNT_ID, HOST).andExpect(jsonPath("$.assigned").value(true));
+
+        jdbcTemplate.update("UPDATE tenant_partnership SET status = 'SUSPENDED' WHERE partnership_id = ?", PID);
+        check(POOL_ACCOUNT_ID, HOST).andExpect(jsonPath("$.assigned").value(false));
+
+        jdbcTemplate.update("UPDATE tenant_partnership SET status = 'ACTIVE' WHERE partnership_id = ?", PID);
+        check(POOL_ACCOUNT_ID, HOST).andExpect(jsonPath("$.assigned").value(true));
+
+        jdbcTemplate.update("""
+                DELETE p FROM tenant_partnership_participant p
+                 JOIN tenant_partnership tp ON tp.id = p.partnership_id
+                 JOIN admin_operators o ON o.id = p.operator_id
+                WHERE tp.partnership_id = ? AND o.operator_id = ?
+                """, PID, POOL_OP_UUID);
+        check(POOL_ACCOUNT_ID, HOST).andExpect(jsonPath("$.assigned").value(false));
+        // The other participant (B-op) is untouched — the removal is per person.
+        check(B_OP_SUBJECT, HOST).andExpect(jsonPath("$.assigned").value(true));
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private ResultActions check(String subject, String tenantId) throws Exception {
@@ -265,6 +340,24 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
                        oidc_subject, created_at, updated_at, version)
                     VALUES (?, ?, ?, 'x', ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
                     """, uuid, tenantId, email, "Test Op", oidcSubject);
+        }
+    }
+
+    private ResultActions consoleEligibility(String accountId) throws Exception {
+        return mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", accountId));
+    }
+
+    /** TASK-MONO-772: the accepted-invitation row shape — no password, oidc_subject = the pool account id. */
+    private void seedPoolOperator(String uuid, String poolAccountId, String tenantId, String email) {
+        Integer existing = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM admin_operators WHERE operator_id = ?", Integer.class, uuid);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO admin_operators
+                      (operator_id, tenant_id, email, password_hash, display_name, status,
+                       oidc_subject, created_at, updated_at, version)
+                    VALUES (?, ?, ?, NULL, ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
+                    """, uuid, tenantId, email, "Pool Staff", poolAccountId);
         }
     }
 

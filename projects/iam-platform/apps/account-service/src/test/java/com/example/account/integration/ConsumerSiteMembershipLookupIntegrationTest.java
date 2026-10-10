@@ -21,12 +21,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>{@code GET /internal/tenants/{site}/consumer-members/{accountId}} — the read auth-service signs
  *       a pool principal into a site with: ACTIVE on the signup site, no membership elsewhere, and
  *       the site roles of THAT site only (no flattening across sites — contract § 4 role rule).</li>
- *   <li>AC-8 — {@code GET /internal/accounts?excludePoolMembers=true} (admin-service operator
- *       creation) does NOT find a pool shopper in {@code ecommerce}, while the default search (console
- *       account operations, § 5) still does.</li>
+ *   <li>AC-8 — retired by TASK-MONO-772 S7: {@code excludePoolMembers} had one caller (admin-service's
+ *       TASK-MONO-334 operator-create check), which is gone. A stale {@code excludePoolMembers=true} is now
+ *       ignored — the search answers by § 5 (pool members included) exactly like the default.</li>
  * </ul>
  */
-@DisplayName("TASK-BE-615 — 사이트 멤버십 조회 · 운영자 생성 확인의 옛 범위 (MySQL, 풀 켜짐)")
+@DisplayName("TASK-BE-615 — 사이트 멤버십 조회 · 퇴역한 운영자 생성 확인 범위 (MySQL, 풀 켜짐)")
 class ConsumerSiteMembershipLookupIntegrationTest extends AbstractConsumerPoolIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
@@ -91,15 +91,16 @@ class ConsumerSiteMembershipLookupIntegrationTest extends AbstractConsumerPoolIn
     }
 
     @Test
-    @DisplayName("AC-8: excludePoolMembers=true → 풀 가입 쇼핑객은 ecommerce 에 «없음»; 기본 검색(콘솔 계정 운영)은 여전히 찾는다 — 대조군")
-    void operatorCreationSearch_excludesPoolMembers_consoleSearchKeepsThem() throws Exception {
-        String email = uniqueEmail("615-ac8-shopper");
+    @DisplayName("772 S7: 퇴역한 excludePoolMembers=true 는 무시 — 풀 가입 쇼핑객을 기본 검색과 똑같이 찾는다")
+    void retiredExcludePoolMembersFlag_isIgnored() throws Exception {
+        String email = uniqueEmail("772-s7-shopper");
         String accountId = poolSignup("ecommerce", email);
 
         mockMvc.perform(get("/internal/accounts").param("tenantId", "ecommerce").param("email", email)
                         .param("excludePoolMembers", "true"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(accountId));
         mockMvc.perform(get("/internal/accounts").param("tenantId", "ecommerce").param("email", email))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
