@@ -220,6 +220,13 @@ public class RequiresPermissionAspect {
             // issuance and must not be gated by the RBAC aspect.
             + " && !within(com.example.admin.presentation.WellKnownController)"
             + " && !within(com.example.admin.presentation.AdminAuthController)"
+            // TASK-MONO-772 S3: service-to-service endpoints are not operator API. `/internal/**` is authenticated
+            // by its own @Order(0) chain (client_credentials JWT, `internal.invoke`) and carries no operator
+            // principal — so this operator-RBAC guardrail could only deny them, and its DENIED audit then fails
+            // (no operator row → AuditFailureException → 500). Measured on the S3 CI lane for
+            // POST /internal/operator-invitations/{preview,accept}; the older internal POST
+            // (`operator-oidc-subject-backfill`) sat behind the same latent 500.
+            + " && !within(com.example.admin.presentation.internal..*)"
             + " && ("
             + " @annotation(org.springframework.web.bind.annotation.PostMapping)"
             + " || @annotation(org.springframework.web.bind.annotation.PutMapping)"

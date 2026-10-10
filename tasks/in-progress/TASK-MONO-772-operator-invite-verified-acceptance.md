@@ -568,3 +568,9 @@ monorepo
 2. ⚪ 라이브 — 데모 Mailpit 의 초대 메일 링크 → `https://auth.hubwang.com/operator-invitations/accept?token=…` 가 200 인지(이 PR 이 라우터를 넓혔다) · «콘솔로 가기» 가 `https://console.hubwang.com` 인지.
 3. 🔵 수락 성공 뒤 같은 브라우저의 콘솔 로그인 — 세션 principal 이 풀 계정이고 이제 측면이 있으니 S4 발급자가 콘솔 토큰을 준다(S4 단위 · IT 가 그 갈래를 단언). 이 둘을 한 브라우저 흐름으로 잇는 시험은 없다(e2e 는 S5 몫).
 4. 🔵 S3-1(수락 로그인에 2단계 없음)은 D-3 의 결론과 같지만, 소유자가 «수락도 2단계» 를 원하면 폼 체인에 게이트가 하나 생긴다.
+
+### CI 1차 — 내부 POST 가 운영자 RBAC 가드레일에 걸렸다 (2026-10-10 UTC)
+
+- iam A `OperatorInvitationAcceptanceIntegrationTest` 5건 전부 500. 원인: `RequiresPermissionAspect.denyUnannotatedMutation` 이 `presentation..*` 의 **모든** POST 를 운영자 API 로 보고, `@RequiresPermission` 없는 내부 POST(`/internal/operator-invitations/{preview,accept}`)를 거절하려다 DENIED 감사에서 운영자 행을 못 찾아 `AuditFailureException` → 500. 슬라이스 시험은 애스펙트를 안 올려 못 봤다.
+- 조치(오케스트레이터): 가드레일 포인트컷에서 `presentation.internal..*` 제외 — `/internal/**` 은 자기 `@Order(0)` 체인(client_credentials · `internal.invoke`)이 인증하고 운영자 주체가 없다. 빌드 시점 가드(`AspectCoverageTest`)도 같은 패키지를 같은 이유로 건너뛴다. 🔵 기존 내부 POST `operator-oidc-subject-backfill` 도 같은 잠복 500 뒤에 있었다.
+- ⚪ 후속 의심(미측정): `AspectCoverageTest` 가 `classpath:`(별표 없음)로 스캔해 첫 classpath 루트만 볼 수 있다 — 그러면 main 클래스를 안 읽는 공허한 가드다. 내부 POST 컨트롤러가 있는데도 로컬에서 통과한 것이 그 신호.
