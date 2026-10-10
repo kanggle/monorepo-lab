@@ -2,6 +2,12 @@
 <configuration>
     <include resource="logback-observability-base.xml"/>
 
+    <!-- TASK-MONO-772 S2: Hibernate's flush-time «Listing entities:» dump prints every managed entity's full state
+         (operator emails, the invitation token_hash, …) at DEBUG. regulated R4 forbids a credential hash or an email in
+         a log line, and that must not depend on the root level — the `test` profile has no root here, so logback's
+         default DEBUG applied and the S2 CI integration lane captured the hash. Off in every profile. -->
+    <logger name="org.hibernate.internal.util.EntityPrinter" level="OFF"/>
+
     <springProfile name="default,local,dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>

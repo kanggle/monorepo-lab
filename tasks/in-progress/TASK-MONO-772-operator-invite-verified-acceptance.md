@@ -469,3 +469,8 @@ monorepo
 
 - iam A `OperatorInvitationIntegrationTest` 수명주기 1건 실패: 루트 로거 포획에 원문 토큰이 있었다. 출처 = Spring 메시지 컨버터의 DEBUG `Writing [{to=…, token=<원문>, …}]` — admin 의 `AccountServiceInvitationClient` 가 본문을 `Map` 으로 보내 `toString` 에 토큰 · 주소가 그대로 찍혔다. 운영 프로필은 root INFO 라 평소엔 안 찍히지만 **로그 레벨에 기대는 비밀 보호는 보호가 아니다**(시험이 바로 그것을 잡았다).
 - 조치(오케스트레이터): 두 본문을 `MailRequest` · `MatchRequest` 레코드로 — `toString` 이 토큰 `<redacted>` · 주소 `<masked>`. account 쪽 수신 레코드(`OperatorInvitationMailRequest`)가 이미 같은 방식이었다. `inviterDisplayName` 부재 시 생략은 `@JsonInclude(NON_NULL)` 로 유지. 단위 시험 2개 추가(toString 무노출 · 생략 모양), 7/7 통과.
+
+### CI 2차 — 토큰은 사라졌고 해시가 남았다 (2026-10-10 UTC)
+
+- 같은 시험이 이번엔 `token_hash` 를 잡았다. 출처 = Hibernate flush 의 DEBUG «Listing entities:» 덤프(`org.hibernate.internal.util.EntityPrinter`) — **모든 엔티티의 전 상태**(운영자 이메일 · 이 해시)를 찍는다. `test` 프로필은 `logback-spring.xml` 에 root 가 없어 logback 기본 DEBUG 가 적용됐다(다른 프로필은 전부 INFO).
+- 조치: admin `logback-spring.xml` 에 그 로거를 **모든 프로필에서 OFF** — regulated R4(자격 해시 · 이메일 로그 금지)를 로그 레벨에 기대지 않게. ⚪ 같은 덤프는 다른 서비스에도 있을 수 있다(이 PR 은 admin 만) — 후속 판단.
