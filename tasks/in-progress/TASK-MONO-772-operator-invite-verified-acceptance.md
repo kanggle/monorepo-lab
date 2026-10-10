@@ -59,12 +59,12 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정: 334 규칙 file:line · 615 D-5 거절 지점 · 온보딩 audience 요구 · 사이트 계정으로 남은 셀프 온보딩 운영자 수(정적 · 라이브 ⚪ 가능).
-- [ ] **AC-1** — 🔴 대조군: 인증 안 된 계정 · 다른 이메일 계정 · 만료/재사용 초대 → 수락 거절. 같은 시험에서 인증된 본인 수락만 성공.
-- [ ] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
+- [x] **AC-1** — 🔴 대조군: 인증 안 된 계정 · 다른 이메일 계정 · 만료/재사용 초대 → 수락 거절. 같은 시험에서 인증된 본인 수락만 성공.
+- [x] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
 - [ ] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
 - [ ] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
 - [ ] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
-- [ ] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
+- [x] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
 
 # Related Specs
 
@@ -574,3 +574,12 @@ monorepo
 - iam A `OperatorInvitationAcceptanceIntegrationTest` 5건 전부 500. 원인: `RequiresPermissionAspect.denyUnannotatedMutation` 이 `presentation..*` 의 **모든** POST 를 운영자 API 로 보고, `@RequiresPermission` 없는 내부 POST(`/internal/operator-invitations/{preview,accept}`)를 거절하려다 DENIED 감사에서 운영자 행을 못 찾아 `AuditFailureException` → 500. 슬라이스 시험은 애스펙트를 안 올려 못 봤다.
 - 조치(오케스트레이터): 가드레일 포인트컷에서 `presentation.internal..*` 제외 — `/internal/**` 은 자기 `@Order(0)` 체인(client_credentials · `internal.invoke`)이 인증하고 운영자 주체가 없다. 빌드 시점 가드(`AspectCoverageTest`)도 같은 패키지를 같은 이유로 건너뛴다. 🔵 기존 내부 POST `operator-oidc-subject-backfill` 도 같은 잠복 500 뒤에 있었다.
 - ⚪ 후속 의심(미측정): `AspectCoverageTest` 가 `classpath:`(별표 없음)로 스캔해 첫 classpath 루트만 볼 수 있다 — 그러면 main 클래스를 안 읽는 공허한 가드다. 내부 POST 컨트롤러가 있는데도 로컬에서 통과한 것이 그 신호.
+
+# AC 판정 기록 (2026-10-10 UTC — 오케스트레이터)
+
+| AC | 판정 | 근거(CI 에서 실제로 돈 시험) |
+|---|---|---|
+| AC-1 | ✅ | #4283 iam A `OperatorInvitationAcceptanceIntegrationTest` «🔴 AC-1 대조군» PASSED — 같은 초대로 미인증 · 다른 이메일 · 사이트 계정 · 만료 거절(아무것도 안 씀) → 인증된 본인만 성공(`oidc_subject`). 재사용은 «동시 수락 — 정확히 하나만 200 · 진 쪽 409 ALREADY_USED» 가 같은 런에서 덮는다 |
+| AC-2 | ✅ | 토큰: #4281 iam A `OperatorAssignmentCheckIntegrationTest` «🔴 S4 (AC-2) 운영자 행 없는 계정 → eligible=false» + iam B `ConsumerPoolSsoIntegrationTest` 토큰 엔드포인트 거절. 관리 API: 기존 `TokenExchangeIntegrationTest` «valid OIDC token but NO admin_operators mapping → 401 fail-closed» (매 런 PASSED) — 토큰 교환이 운영자 토큰을 안 준다 |
+| AC-3 | ⚪ 미닫힘 | 콘솔 쪽(측면 회수 → 다음 refresh 거절 · SUSPENDED → eligible=false)과 **스토어** refresh 200 은 #4281 CI 에서 단언됐다. 🔴 AC 문장의 **팬** 로그인은 따로 단언된 시험이 없다 — S7 에서 팬 칸을 더한다 |
+| AC-6 | ✅ | #4283 iam A «🔴 AC-6» PASSED — 셀프 온보딩 조직 관리자 초대 → 피초대자 수락 → 콘솔 적격 true · 토큰 교환 200 · 두 번째 회사 409 · 셀프 온보딩 409. 라이브 ⚪ |
