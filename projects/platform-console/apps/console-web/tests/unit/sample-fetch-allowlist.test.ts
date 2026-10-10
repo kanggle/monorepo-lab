@@ -96,11 +96,6 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
     category: 'same-origin',
     why: '/api/console/dashboards/domain-health',
   },
-  'features/operators/api/account-existence.ts': {
-    count: 1,
-    category: 'same-origin',
-    why: '/api/accounts (iam core, gated)',
-  },
   'shared/lib/logout.ts': { count: 1, category: 'same-origin', why: '/api/auth/logout' },
   'shared/observability/web-vitals.tsx': {
     count: 2,

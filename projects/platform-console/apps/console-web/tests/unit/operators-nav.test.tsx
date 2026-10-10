@@ -45,7 +45,7 @@ describe('operators nav — does not disturb the catalog iam.baseRoute (FE-002)'
   });
 
   it('the operators screen mounts as an in-console destination', () => {
-    render(<OperatorsScreen initial={PAGE} tenantOptions={['wms']} />, {
+    render(<OperatorsScreen initial={PAGE} />, {
       wrapper: wrapper(),
     });
     expect(

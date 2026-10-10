@@ -936,6 +936,10 @@ const MESSAGES: Record<string, string> = {
   ROLE_NOT_FOUND:
     '존재하지 않는 역할이 포함되어 있습니다. 역할 목록을 새로고침한 뒤 다시 시도하세요.',
   OPERATOR_NOT_FOUND: '대상 운영자를 찾을 수 없습니다.',
+  // TASK-MONO-772 — `POST /operators` is platform-scope (`*`) only; a company
+  // operator is invited instead (§ 2.4.3 row 2). Seeing this = a stale form.
+  OPERATOR_INVITATION_REQUIRED:
+    '회사 운영자는 «초대»로만 추가할 수 있습니다. 운영자 초대 양식을 사용하세요.',
   SELF_SUSPEND_FORBIDDEN: '본인 계정은 정지할 수 없습니다.',
   CURRENT_PASSWORD_MISMATCH: '현재 비밀번호가 일치하지 않습니다.',
   PASSWORD_POLICY_VIOLATION:

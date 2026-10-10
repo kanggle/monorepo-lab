@@ -28,11 +28,12 @@ export const dynamic = 'force-dynamic';
  *   - 503 / timeout → a degraded notice; the console shell stays intact
  *     (the `(console)` layout still renders around this).
  *
- * The create-form tenant options come from the operator's own (GAP-scoped)
- * registry response — IAM enforces the operator's tenant scope
- * producer-side; the `*` platform sentinel only appears when the operator
- * is platform-scope, so the UI never offers `*` to a non-platform operator
- * (task Edge Case; the producer is the final authority anyway).
+ * The operator's own (GAP-scoped) registry response tells whether the
+ * operator is platform-scope (`*` among its tenants). TASK-MONO-772 S5 — that
+ * flag is now the ONLY thing the catalog is read for: the direct create form
+ * is platform-scope (`*`) only, and a company operator is INVITED into the
+ * active tenant (no tenant picker any more). The producer is the final
+ * authority either way.
  */
 export default async function OperatorsPage() {
   const state = await getOperatorsListState({ page: 0, size: 20 });
@@ -102,10 +103,9 @@ export default async function OperatorsPage() {
     );
   }
 
-  // Create-form tenant options (operator-scoped, from the registry). The
-  // `*` platform sentinel only appears for a platform-scope operator; we
-  // pass it as the `isPlatformOperator` hint and keep it OUT of the normal
-  // tenant dropdown (the form re-adds `*` only when platform-scope).
+  // Platform-scope hint (operator-scoped, from the registry): `*` among the
+  // operator's tenants ⇒ the `*`-only «플랫폼 운영자 등록» form is offered
+  // (TASK-MONO-772 S5 — company operators are invited, not created).
   //
   // TASK-PC-FE-045: the SELF profile (`operatorContext.defaultAccountId`) +
   // password moved to 계정 설정(`/account`); this page is 남 관리 only.
@@ -127,18 +127,14 @@ export default async function OperatorsPage() {
   // resolves to `null`, and the screen falls back to the full role set.
   const grantableRolesPromise = getGrantableRolesOrNull();
 
-  let tenantOptions: string[] = [];
   let isPlatformOperator = false;
   try {
     const catalog = await catalogPromise;
-    const tenants = selectableTenants(catalog.products);
-    isPlatformOperator = tenants.includes('*');
-    tenantOptions = tenants.filter((t) => t !== '*');
+    isPlatformOperator = selectableTenants(catalog.products).includes('*');
   } catch {
     // Registry unavailable here does NOT block operators management — the
-    // create form simply has no preset tenant options (the operator can
-    // still manage existing operators; the producer is authoritative).
-    tenantOptions = [];
+    // platform create form simply stays hidden (fail-closed for the UI; the
+    // invite form + list do not depend on it; the producer is authoritative).
     isPlatformOperator = false;
   }
 
@@ -165,7 +161,6 @@ export default async function OperatorsPage() {
   return (
     <OperatorsScreen
       initial={state.page}
-      tenantOptions={tenantOptions}
       isPlatformOperator={isPlatformOperator}
       selfOperatorId={selfOperatorId}
       activeTenant={activeTenant}

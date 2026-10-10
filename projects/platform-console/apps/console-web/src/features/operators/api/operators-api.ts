@@ -20,6 +20,8 @@
  *   - operators-self-api.ts        — self-service `/me/*`: change own password /
  *                                     update own profile / self-id resolve.
  *   - operators-assignments-api.ts — org-scope: list-assignments / set-org-scope.
+ *   - operator-invitations-api.ts  — invite / list / cancel / resend
+ *                                     (TASK-MONO-772 S5 — § 2.4.3 rows 11–14).
  *
  * The privilege-sensitive create/role/status surface, the per-endpoint header
  * matrix, and the password/email/token redaction invariants are UNCHANGED —
@@ -30,3 +32,4 @@
 export * from './operators-crud-api';
 export * from './operators-self-api';
 export * from './operators-assignments-api';
+export * from './operator-invitations-api';

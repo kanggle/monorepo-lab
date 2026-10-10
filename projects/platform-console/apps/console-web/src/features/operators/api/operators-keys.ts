@@ -34,4 +34,38 @@ function assignmentsKey(operatorId: string) {
   return [OPERATORS_KEY, 'assignments', operatorId] as const;
 }
 
-export { OPERATORS_KEY, listKey, invalidateOperators, assignmentsKey };
+// --- operator invitations (TASK-MONO-772 S5) -------------------------------
+
+/**
+ * Invitations query key. 🔴 The TENANT is part of the key (TASK-MONO-780 /
+ * PC-FE-044 lesson): the list is tenant-scoped, so two tenants must never
+ * share a cache entry — a switch produces a NEW key (the page re-renders with
+ * the new `activeTenant`) and a fresh fetch, rather than the previous
+ * tenant's rows. It also sits under the `['operators']` root, which
+ * `useTenantSwitch` invalidates on every switch, so a mounted list refetches
+ * through the proxy with the new active-tenant cookie either way.
+ */
+const INVITATIONS_SEGMENT = 'invitations';
+
+function invitationsKey(
+  tenantId: string | null,
+  status: string,
+  page: number,
+  size: number,
+) {
+  return [OPERATORS_KEY, INVITATIONS_SEGMENT, tenantId, status, page, size] as const;
+}
+
+function invalidateInvitations(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: [OPERATORS_KEY, INVITATIONS_SEGMENT] });
+}
+
+export {
+  OPERATORS_KEY,
+  listKey,
+  invalidateOperators,
+  assignmentsKey,
+  INVITATIONS_SEGMENT,
+  invitationsKey,
+  invalidateInvitations,
+};

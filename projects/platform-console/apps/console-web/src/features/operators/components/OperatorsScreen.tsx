@@ -3,6 +3,24 @@
 import { useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import {
+  useOperatorInvitations,
+  useInviteOperator,
+  useCancelInvitation,
+  useResendInvitation,
+} from '../hooks/use-operator-invitations';
+import type {
+  InviteOperatorInput,
+  OperatorInvitation,
+} from '../api/invitation-types';
+import { InviteOperatorForm } from './InviteOperatorForm';
+import { OperatorInvitationsSection } from './OperatorInvitationsSection';
+import { InvitationDeliveryNotice } from './InvitationDeliveryNotice';
+import {
+  INVITATION_STALE_CODES,
+  errorCode,
+  invitationErrorMessage,
+} from './invitation-copy';
+import {
   useOperatorsList,
   useCreateOperator,
   useEditOperatorRoles,
@@ -55,6 +73,17 @@ import {
  * retried. edit-roles / change-status carry NO key (per the producer
  * header matrix — § 2.4.3).
  *
+ * ── «등록» → «초대» (TASK-MONO-772 S5 — § 2.4.3 rows 2, 11–14) ── a company
+ * (non-`*`) operator is no longer created here; it is INVITED into the ACTIVE
+ * tenant and becomes an operator only when the invitee accepts on the IdP
+ * with an account whose email they VERIFIED. The direct «등록» form stays
+ * ONLY for a platform-scope operator and ONLY for `tenantId='*'`. The
+ * pending-invitations list (cancel / resend) sits under the invite form; its
+ * query key carries the active tenant (TASK-MONO-780 lesson) and lives under
+ * the `['operators']` root the tenant switch invalidates. A FAILED_* mail
+ * delivery is a WARNING with «다시 보내기», never an error — the invitation
+ * exists. No token or link is ever rendered (the producer never sends one).
+ *
  * ── MODULE SPLIT (TASK-PC-FE-105) ── this container owns ALL state, the
  * mutations, and the gating; the list region (filter + table + pagination)
  * is the prop-driven `OperatorsTable` presentational child, and the
@@ -65,9 +94,8 @@ import {
 
 export interface OperatorsScreenProps {
   initial: OperatorPage;
-  /** Tenants the operator may assign on create (from the catalog/registry). */
-  tenantOptions?: string[];
-  /** True ⇒ this operator is platform-scope → may offer `*` on create. */
+  /** True ⇒ this operator is platform-scope → the `*`-only «플랫폼 운영자
+   *  등록» form is offered (TASK-MONO-772: the only direct create left). */
   isPlatformOperator?: boolean;
   /** TASK-PC-FE-017 — caller's own `operatorId` (when derivable). When set,
    *  the per-row "Profile 편집" button is disabled on the self row (UX gate;
@@ -91,7 +119,6 @@ export interface OperatorsScreenProps {
 
 export function OperatorsScreen({
   initial,
-  tenantOptions = [],
   isPlatformOperator = false,
   selfOperatorId = null,
   activeTenant = null,
@@ -115,6 +142,32 @@ export function OperatorsScreen({
   const setProfile = useSetOperatorProfile();
   const assign = useAssignOperator();
   const unassign = useUnassignOperator();
+
+  // --- TASK-MONO-772 S5 — invitations (active-tenant scoped) ---------------
+  // `*` is never an invitation target; the list still reads for `*` (the
+  // producer answers platform-scope operators with every tenant's rows).
+  const canInvite = activeTenant !== null && activeTenant !== '*';
+  const [invitationsPage, setInvitationsPage] = useState(0);
+  const invitations = useOperatorInvitations(activeTenant, {
+    status: 'PENDING',
+    page: invitationsPage,
+    size: 20,
+  });
+  const invite = useInviteOperator();
+  const cancelInvitation = useCancelInvitation();
+  const resendInvitation = useResendInvitation();
+  /** The last invite / resend response — drives the delivery notice. */
+  const [deliveryNotice, setDeliveryNotice] = useState<{
+    invitation: OperatorInvitation;
+    via: 'invite' | 'resend';
+  } | null>(null);
+  /** «The row moved under you» answer of a cancel / resend (list refreshed). */
+  const [invitationNotice, setInvitationNotice] = useState<string | null>(null);
+  const [inviteResetSignal, setInviteResetSignal] = useState(0);
+  const [lastInviteEmail, setLastInviteEmail] = useState<string | null>(null);
+  const [highlightInvitationId, setHighlightInvitationId] = useState<
+    string | null
+  >(null);
 
   const [pending, setPending] = useState<PendingAction | null>(null);
   /** TASK-PC-FE-017 — track which row's profile-edit dialog is open by
@@ -167,10 +220,31 @@ export function OperatorsScreen({
         return assign;
       case 'unassign':
         return unassign;
+      case 'invite':
+        return invite;
+      case 'cancel-invitation':
+        return cancelInvitation;
+      case 'resend-invitation':
+        return resendInvitation;
       default:
         return null;
     }
-  }, [pending?.kind, create, editRoles, changeStatus, assign, unassign]);
+  }, [
+    pending?.kind,
+    create,
+    editRoles,
+    changeStatus,
+    assign,
+    unassign,
+    invite,
+    cancelInvitation,
+    resendInvitation,
+  ]);
+
+  const isInvitationKind =
+    pending?.kind === 'invite' ||
+    pending?.kind === 'cancel-invitation' ||
+    pending?.kind === 'resend-invitation';
 
   // 403 (permission / tenant-scope) on the LIST read surfaces as ApiError
   // — render the whole section as inline "not permitted", never crash,
@@ -181,8 +255,9 @@ export function OperatorsScreen({
   const degraded =
     list.isError && (!listApiError || listApiError.status >= 500);
 
-  const dialogError =
-    activeMutation?.error instanceof ApiError
+  const dialogError = isInvitationKind
+    ? invitationErrorMessage(activeMutation?.error)
+    : activeMutation?.error instanceof ApiError
       ? messageForCode(
           (activeMutation.error as ApiError).code,
           activeMutation.error.message,
@@ -211,12 +286,71 @@ export function OperatorsScreen({
         ? '프로파일 저장에 실패했습니다.'
         : null;
 
+  // «already pending» → the contract asks for a jump to THAT row's resend.
+  // Resolved against the loaded page (best effort — on another page the
+  // message alone points at the list).
+  const inviteErrorCode = errorCode(invite.error);
+  const inviteError = invitationErrorMessage(invite.error);
+  const pendingTwin =
+    inviteErrorCode === 'OPERATOR_INVITATION_ALREADY_PENDING' && lastInviteEmail
+      ? (invitations.data?.content.find(
+          (i) => i.email.toLowerCase() === lastInviteEmail,
+        ) ?? null)
+      : null;
+
   function resetMutations() {
     create.reset();
     editRoles.reset();
     changeStatus.reset();
     assign.reset();
     unassign.reset();
+    invite.reset();
+    cancelInvitation.reset();
+    resendInvitation.reset();
+  }
+
+  /** Inviter column label — display name from the loaded operators page
+   *  (never the email: no second copy of an operator's address on screen). */
+  function operatorLabel(operatorId: string): string {
+    if (operatorId === selfOperatorId) return '나';
+    const op = page?.content.find((o) => o.operatorId === operatorId);
+    if (op) return op.displayName || op.operatorId;
+    return operatorId.length > 12 ? `${operatorId.slice(0, 8)}…` : operatorId;
+  }
+
+  function openInvite(draft: InviteOperatorInput) {
+    resetMutations();
+    setInvitationNotice(null);
+    setLastInviteEmail(draft.email.toLowerCase());
+    setPending({
+      kind: 'invite',
+      inviteDraft: draft,
+      idempotencyKey: newIdemKey(),
+      // Granting operator access is privilege-high — same posture as create.
+      elevated: true,
+    });
+  }
+
+  function openCancelInvitation(invitation: OperatorInvitation) {
+    resetMutations();
+    setInvitationNotice(null);
+    setPending({ kind: 'cancel-invitation', invitation, elevated: false });
+  }
+
+  function openResendInvitation(invitation: OperatorInvitation) {
+    resetMutations();
+    setInvitationNotice(null);
+    setPending({ kind: 'resend-invitation', invitation, elevated: false });
+  }
+
+  /** A cancel / resend answered «stale» → close the dialog, say so; the hook
+   *  already re-fetched the list (invalidate on settle). */
+  function onInvitationActionError(err: unknown) {
+    const code = errorCode(err);
+    if (code !== null && INVITATION_STALE_CODES.has(code)) {
+      setPending(null);
+      setInvitationNotice(invitationErrorMessage(err));
+    }
   }
 
   function openCreate(draft: CreateOperatorInput) {
@@ -296,6 +430,72 @@ export function OperatorsScreen({
 
   function onConfirm(reason: string, roles?: string[]) {
     if (!pending) return;
+    if (
+      pending.kind === 'invite' &&
+      pending.inviteDraft &&
+      pending.idempotencyKey
+    ) {
+      invite.mutate(
+        {
+          input: pending.inviteDraft,
+          reason,
+          // Reused verbatim if THIS confirmed invite is retried.
+          idempotencyKey: pending.idempotencyKey,
+        },
+        {
+          onSuccess: (invitation) => {
+            setPending(null);
+            // 201 — even a FAILED_* delivery is a success of the invitation.
+            setDeliveryNotice({ invitation, via: 'invite' });
+            setHighlightInvitationId(invitation.invitationId);
+            setInviteResetSignal((n) => n + 1);
+            setInvitationsPage(0);
+          },
+          onError: (err) => {
+            // The two «this email is already handled» answers belong next to
+            // the form (with the jump-to-resend), not inside the dialog.
+            const code = errorCode(err);
+            if (
+              code === 'OPERATOR_INVITATION_ALREADY_PENDING' ||
+              code === 'OPERATOR_EMAIL_CONFLICT'
+            ) {
+              setPending(null);
+            }
+          },
+        },
+      );
+      return;
+    }
+    if (pending.kind === 'cancel-invitation' && pending.invitation) {
+      const target = pending.invitation;
+      cancelInvitation.mutate(
+        { invitationId: target.invitationId, reason },
+        {
+          onSuccess: () => {
+            setPending(null);
+            setDeliveryNotice((n) =>
+              n?.invitation.invitationId === target.invitationId ? null : n,
+            );
+          },
+          onError: onInvitationActionError,
+        },
+      );
+      return;
+    }
+    if (pending.kind === 'resend-invitation' && pending.invitation) {
+      resendInvitation.mutate(
+        { invitationId: pending.invitation.invitationId, reason },
+        {
+          onSuccess: (invitation) => {
+            setPending(null);
+            setDeliveryNotice({ invitation, via: 'resend' });
+            setHighlightInvitationId(invitation.invitationId);
+          },
+          onError: onInvitationActionError,
+        },
+      );
+      return;
+    }
     if (pending.kind === 'create' && pending.draft && pending.idempotencyKey) {
       create.mutate(
         {
@@ -384,9 +584,10 @@ export function OperatorsScreen({
         운영자 관리
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        운영자 등록·역할 변경·상태 변경·내 비밀번호 변경. 모든 변경 작업은
-        사유와 확인이 필요하며 감사 기록에 남습니다. (SUPER_ADMIN /
-        operator.manage 권한 필요)
+        운영자 초대·역할 변경·상태 변경·테넌트 배정. 회사 운영자는 이메일로
+        초대하고, 받은 사람이 인증한 계정으로 수락해야 만들어집니다. 모든 변경
+        작업은 사유와 확인이 필요하며 감사 기록에 남습니다. (operator.manage
+        권한 필요)
       </p>
 
       {permissionDenied ? (
@@ -395,14 +596,73 @@ export function OperatorsScreen({
         <OperatorsDegradedNotice />
       ) : (
         <>
-          <CreateOperatorForm
-            tenantOptions={tenantOptions}
-            isPlatformOperator={isPlatformOperator}
-            onSubmitDraft={openCreate}
-            serverError={createError}
-            pending={create.isPending}
-            grantableRoles={grantableRoles}
-          />
+          {/* TASK-MONO-772 S5 — «초대» (company operators, active tenant). */}
+          {canInvite && activeTenant && (
+            <InviteOperatorForm
+              tenantId={activeTenant}
+              onSubmitDraft={openInvite}
+              serverError={pending?.kind === 'invite' ? null : inviteError}
+              onJumpToPending={
+                pendingTwin
+                  ? () => {
+                      setHighlightInvitationId(pendingTwin.invitationId);
+                      openResendInvitation(pendingTwin);
+                    }
+                  : null
+              }
+              pending={invite.isPending}
+              grantableRoles={grantableRoles}
+              resetSignal={inviteResetSignal}
+            />
+          )}
+
+          {deliveryNotice && (
+            <InvitationDeliveryNotice
+              invitation={deliveryNotice.invitation}
+              via={deliveryNotice.via}
+              onResend={() => openResendInvitation(deliveryNotice.invitation)}
+              onDismiss={() => setDeliveryNotice(null)}
+            />
+          )}
+
+          {activeTenant && (
+            <>
+              {invitationNotice && (
+                <p
+                  role="status"
+                  data-testid="operator-invitations-notice"
+                  className="mb-3 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground"
+                >
+                  {invitationNotice}
+                </p>
+              )}
+              <OperatorInvitationsSection
+                tenantId={activeTenant}
+                data={invitations.data}
+                isLoading={invitations.isLoading}
+                error={invitations.error}
+                page={invitationsPage}
+                onPrevPage={() => setInvitationsPage((p) => Math.max(0, p - 1))}
+                onNextPage={() => setInvitationsPage((p) => p + 1)}
+                onRetry={() => void invitations.refetch()}
+                onCancel={openCancelInvitation}
+                onResend={openResendInvitation}
+                operatorLabel={operatorLabel}
+                highlightInvitationId={highlightInvitationId}
+                busy={cancelInvitation.isPending || resendInvitation.isPending}
+              />
+            </>
+          )}
+
+          {/* Direct create — platform scope (`*`) ONLY (§ 2.4.3 row 2). */}
+          {isPlatformOperator && (
+            <CreateOperatorForm
+              onSubmitDraft={openCreate}
+              serverError={createError}
+              pending={create.isPending}
+              grantableRoles={grantableRoles}
+            />
+          )}
 
           {/* TASK-PC-FE-157 — assign an existing operator to the active
               tenant (delegation onboarding). Shown only when the active

@@ -59,12 +59,12 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정: 334 규칙 file:line · 615 D-5 거절 지점 · 온보딩 audience 요구 · 사이트 계정으로 남은 셀프 온보딩 운영자 수(정적 · 라이브 ⚪ 가능).
-- [ ] **AC-1** — 🔴 대조군: 인증 안 된 계정 · 다른 이메일 계정 · 만료/재사용 초대 → 수락 거절. 같은 시험에서 인증된 본인 수락만 성공.
-- [ ] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
+- [x] **AC-1** — 🔴 대조군: 인증 안 된 계정 · 다른 이메일 계정 · 만료/재사용 초대 → 수락 거절. 같은 시험에서 인증된 본인 수락만 성공.
+- [x] **AC-2** — 🔴 닫힌 경로(D9 = T1 반영): 운영자 측면 **없는** 풀 계정은 **운영자 토큰을 받지 못한다**(셸 진입 여부가 아니라 토큰 · 관리 API 로 단언).
 - [ ] **AC-3** — 퇴사(운영자 측면 회수) 뒤 그 풀 계정의 스토어 · 팬 로그인은 그대로이고 콘솔 운영자 토큰은 없다(ADR-080 D5).
 - [ ] **AC-4** — 파트너십 해지 → 협력사 직원(풀 계정)의 회사 A 진입이 다음 요청에서 거절.
 - [ ] **AC-5** — 셀프 온보딩 운영자 이동 뒤 같은 사람이 같은 `sub` 로 콘솔에 들어오고(또는 방침대로) · 그 이메일의 풀 가입 거절이 사라진다.
-- [ ] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
+- [x] **AC-6** — 셀프 온보딩으로 만든 새 조직의 관리자가 직원을 **초대 → 수락**으로 운영자로 만들 수 있다(이 대화가 찾은 빈틈의 종단 확인, 라이브 ⚪ 가능).
 
 # Related Specs
 
@@ -574,3 +574,89 @@ monorepo
 - iam A `OperatorInvitationAcceptanceIntegrationTest` 5건 전부 500. 원인: `RequiresPermissionAspect.denyUnannotatedMutation` 이 `presentation..*` 의 **모든** POST 를 운영자 API 로 보고, `@RequiresPermission` 없는 내부 POST(`/internal/operator-invitations/{preview,accept}`)를 거절하려다 DENIED 감사에서 운영자 행을 못 찾아 `AuditFailureException` → 500. 슬라이스 시험은 애스펙트를 안 올려 못 봤다.
 - 조치(오케스트레이터): 가드레일 포인트컷에서 `presentation.internal..*` 제외 — `/internal/**` 은 자기 `@Order(0)` 체인(client_credentials · `internal.invoke`)이 인증하고 운영자 주체가 없다. 빌드 시점 가드(`AspectCoverageTest`)도 같은 패키지를 같은 이유로 건너뛴다. 🔵 기존 내부 POST `operator-oidc-subject-backfill` 도 같은 잠복 500 뒤에 있었다.
 - ⚪ 후속 의심(미측정): `AspectCoverageTest` 가 `classpath:`(별표 없음)로 스캔해 첫 classpath 루트만 볼 수 있다 — 그러면 main 클래스를 안 읽는 공허한 가드다. 내부 POST 컨트롤러가 있는데도 로컬에서 통과한 것이 그 신호.
+
+# AC 판정 기록 (2026-10-10 UTC — 오케스트레이터)
+
+| AC | 판정 | 근거(CI 에서 실제로 돈 시험) |
+|---|---|---|
+| AC-1 | ✅ | #4283 iam A `OperatorInvitationAcceptanceIntegrationTest` «🔴 AC-1 대조군» PASSED — 같은 초대로 미인증 · 다른 이메일 · 사이트 계정 · 만료 거절(아무것도 안 씀) → 인증된 본인만 성공(`oidc_subject`). 재사용은 «동시 수락 — 정확히 하나만 200 · 진 쪽 409 ALREADY_USED» 가 같은 런에서 덮는다 |
+| AC-2 | ✅ | 토큰: #4281 iam A `OperatorAssignmentCheckIntegrationTest` «🔴 S4 (AC-2) 운영자 행 없는 계정 → eligible=false» + iam B `ConsumerPoolSsoIntegrationTest` 토큰 엔드포인트 거절. 관리 API: 기존 `TokenExchangeIntegrationTest` «valid OIDC token but NO admin_operators mapping → 401 fail-closed» (매 런 PASSED) — 토큰 교환이 운영자 토큰을 안 준다 |
+| AC-3 | ⚪ 미닫힘 | 콘솔 쪽(측면 회수 → 다음 refresh 거절 · SUSPENDED → eligible=false)과 **스토어** refresh 200 은 #4281 CI 에서 단언됐다. 🔴 AC 문장의 **팬** 로그인은 따로 단언된 시험이 없다 — S7 에서 팬 칸을 더한다 |
+| AC-6 | ✅ | #4283 iam A «🔴 AC-6» PASSED — 셀프 온보딩 조직 관리자 초대 → 피초대자 수락 → 콘솔 적격 true · 토큰 교환 200 · 두 번째 회사 409 · 셀프 온보딩 409. 라이브 ⚪ |
+
+---
+
+# S5 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (frontend-engineer) · worktree `feat/mono-772-s5-console-invite`(origin/main `14f2b2112` + AC 판정 커밋 `05cf82f06`). 콘솔(console-web)만 — 백엔드 · 계약 무변경. 날짜는 `date -u +%F`.
+> 🔵 AC 체크박스는 건드리지 않았다(이 슬라이스의 티켓 AC 는 «—»). 콜백의 «측면 조회 실패» 분기는 S4 가 이미 냈다(S4-3) — 이 슬라이스는 다시 건드리지 않았다.
+
+## 1. 화면 · 흐름
+
+| 무엇 | 동작 | 어디 (file:line) |
+|---|---|---|
+| «초대» 양식 (§ 2.4.3 행 11) | 활성 테넌트(≠ `*`)에만. 이메일 · 표시 이름(1–64) · 역할(부여 가능 목록 ∩ 알려진 역할, 1개 이상). 비밀번호 · 테넌트 선택 · 계정 사전확인 없음. 초안만 넘기고 사유+확인 대화상자가 호출을 막는다 | `components/InviteOperatorForm.tsx` · `hooks/use-invite-operator-form.ts` · 마운트 `OperatorsScreen.tsx:601` (`canInvite` `:149`) |
+| 초대 확인 문구 | 계약 문장 그대로(«초대 메일이 {email}로 갑니다. 그 주소를 **인증한** 개인(IAM) 계정으로 로그인해 수락하면 운영자가 됩니다(7일 안에).») + TENANT_ADMIN/TENANT_BILLING_ADMIN/SUPER_ADMIN 이면 그 역할을 따로 부른다 | `components/operators-confirm-copy.tsx:92-125` |
+| 초대 호출 | `POST /api/operator-invitations` → 프로듀서 `POST /api/admin/operator-invitations`, `X-Operator-Reason` + `Idempotency-Key`(확인 1회당 1개, 같은 확인의 재시도는 재사용) | `OperatorsScreen.tsx:434` · `api/operator-invitations-api.ts:49` · BFF `app/api/operator-invitations/route.ts` |
+| 발송 결과 알림 | 201/200 응답의 `delivery.status` — `SENT` → 보통 알림 · `FAILED_TRANSIENT`/`FAILED_PERMANENT` → **경고**(`role="status"`, 호박색) + «다시 보내기». 오류 상태 · `role="alert"` 아님 — 초대는 있다(OD-4) | `components/InvitationDeliveryNotice.tsx` · 마운트 `OperatorsScreen.tsx:620` · 문구 `components/invitation-copy.ts` `deliveryNoticeCopy` |
+| 대기 중인 초대 목록 (행 12) | 활성 테넌트 · `PENDING` 기본 · 이메일/표시 이름 · 역할 · 초대한 운영자(표시 이름 — 이메일 아님) · 만료(`expired=true` → «만료됨», 재발송/취소는 그대로 제공) · 발송 상태(보냄 / 보내지 못함 — 다시 보내기 / 이 주소로는 보낼 수 없음 / `delivery=null` → 발송 대기) · 페이지 | `components/OperatorInvitationsSection.tsx` · 마운트 `OperatorsScreen.tsx:639` |
+| 취소 · 재발송 (행 13–14) | 행마다, 사유+확인. 본문 `{reason}` 만 → `X-Operator-Reason` 만, **`Idempotency-Key` 없음**(BFF 본문 `.strict()` 가 키를 422 로 막는다). 재발송 확인 문구 «새 링크를 보냅니다 — 전에 보낸 링크는 더 이상 쓸 수 없습니다» | `OperatorsScreen.tsx:469, 485` · `api/operator-invitations-api.ts:98, 120`(`{id}:cancel` · `{id}:resend`) · BFF `app/api/operator-invitations/[invitationId]/{cancel,resend}/route.ts` |
+| 갱신 방식 | 낙관적 갱신 없음. 초대 성공 → 목록 무효화, 취소/재발송 → **settle(성공·실패 모두)** 에 무효화 — `NOT_PENDING`/`NOT_FOUND` 는 «다른 사람이 이미 움직였다» 이므로 다시 읽는다 | `hooks/use-operator-invitations.ts:98, 122, 139` |
+| 테넌트 범위 쿼리 키 | `['operators','invitations', tenantId, status, page, size]` — 🔴 테넌트가 키에 있다(TASK-MONO-780 교훈). `['operators']` 루트 아래라 `useTenantSwitch` 의 기존 무효화가 마운트된 목록도 다시 읽게 한다(`use-tenant-switch.ts` 무변경) | `api/operators-keys.ts:50, 59` |
+| «등록» = 플랫폼(`*`) 전용 (행 2) | `isPlatformOperator` 일 때만 마운트, 테넌트 고정 `*`(선택기 없음). 회사 운영자 생성 경로는 콘솔에서 사라졌다 | `OperatorsScreen.tsx:658` · `hooks/use-create-operator-form.ts:28, 97` · `components/CreateOperatorForm.tsx` |
+| 334 사전 게이트 퇴역 | `CreateOperatorAccountAdvisory.tsx` · `api/account-existence.ts` 삭제, 훅의 디바운스 계정 조회 제거, 페이지의 `tenantOptions` 제거(카탈로그는 이제 `isPlatformOperator` 판정에만 쓴다) | `app/(console)/operators/page.tsx:133` |
+| 토큰 · 링크 | 🔴 어디에도 없다. 스키마(`z.object`)가 모르는 키를 **벗겨낸다** — 프로듀서가 실수로 `token`/`link` 를 실어도 BFF 응답에도 화면에도 안 나간다. «링크 복사» 없음 | `api/invitation-types.ts` `OperatorInvitationSchema` |
+
+## 2. 오류 매핑 (계약 § 2.4.3 «Errors» 행)
+
+| 코드 | 화면 | 어디 |
+|---|---|---|
+| `409 OPERATOR_INVITATION_ALREADY_PENDING` | 대화상자를 닫고 양식 옆 «이미 대기 중인 초대가 있습니다…» + 불러온 목록에 같은 이메일 행이 있으면 «대기 중인 초대 다시 보내기» 버튼(그 행 강조 + 재발송 확인 열기) | `OperatorsScreen.tsx:294`(`pendingTwin`) · `InviteOperatorForm.tsx` `onJumpToPending` |
+| `409 OPERATOR_EMAIL_CONFLICT` | 대화상자를 닫고 «이미 이 테넌트의 운영자입니다» | `invitation-copy.ts` |
+| `409 OPERATOR_INVITATION_NOT_PENDING` · `404 OPERATOR_INVITATION_NOT_FOUND` | 대화상자를 닫고 목록 위 알림 + 목록 다시 읽음 | `OperatorsScreen.tsx:348` |
+| `403 ROLE_GRANT_FORBIDDEN` · `TENANT_SCOPE_DENIED` | 초대 전용 문구(공용 맵의 같은 코드 문구는 그룹/조회 화면용이라 덮어씀) — 대화상자 안 | `invitation-copy.ts` |
+| `404 TENANT_NOT_FOUND` · `400 ROLE_NOT_FOUND`/`VALIDATION_ERROR`/`REASON_REQUIRED` · `403 PERMISSION_DENIED` · `409 IDEMPOTENCY_KEY_CONFLICT` | 공용 `messageForCode` 그대로(«as today») | — |
+| 5xx / 시간 초과 | 그 동작만 실패(«초대 서비스가 일시적으로 응답하지 않습니다…»), 목록 읽기 실패는 **초대 구역만** 저하 — 운영자 표 · 초대 양식은 그대로 | `invitation-copy.ts` · `OperatorInvitationsSection.tsx` |
+| `422 OPERATOR_INVITATION_REQUIRED` (S7 이후, 낡은 양식) | 공용 맵에 추가 — «회사 운영자는 «초대»로만…» | `shared/api/errors.ts:941` |
+
+## 3. 원장 사본
+
+- **샘플 방문자**(ADR-MONO-074): `GET /api/admin/operator-invitations` 픽스처 3행(보냄 · 발송 실패 · 만료) — `operators` 표면 핸들러에 추가, 토큰/링크 필드 없음 · `invitedBy` 를 라벨 규칙의 기계 키로 분류 · 표면 문서에 `invitations` 추가. `shared/sample/fixtures/iam.ts:329, 385` · `shared/sample/label-rule.ts:113`.
+- **네트워크 호출 허용 목록**: `account-existence.ts` 삭제로 그 항목 제거(`tests/unit/sample-fetch-allowlist.test.ts` — 개수 양방향 단언이라 지우지 않으면 빨강).
+- **permission-map · iam-guide · domain-features**: rbac 무변경(초대 넷은 `operator.manage`) — 키 · 행렬은 손대지 않고 **문구만** «등록 → 초대» + 출처에 `OperatorInvitationController.java:46,61,76,86` 와 BFF 경로 추가.
+
+## 4. 시험 · 로컬 결과
+
+| 시험 | 무엇을 단언 | 로컬 |
+|---|---|---|
+| `tests/unit/features/operators/OperatorInvitations.test.tsx` (신규 22) | 비-플랫폼 → 초대 양식 · 등록 양식 없음 · 비밀번호/테넌트 선택 없음 / `*` 활성 → 초대 양식 없음 / 검증 실패 → 대화상자 · 호출 0 / SENT 흐름(확인 문구 · 사유 전 호출 0 · 본문 정확 일치 · 비밀번호 없음 · 목록 재조회 · 양식 비움) / FAILED_TRANSIENT → `role=status` 경고 · `alert` 0 · 행 표시 → 알림의 «다시 보내기» → 본문 `{reason}` 만 → SENT / 같은 확인 재시도 = 같은 멱등 키 / 목록 행 · 만료됨 · 발송 라벨 4종 · 초대자 이름 / 활성 테넌트 · PENDING 질의 / 목록 503 · 403 = 구역만 / 취소 사유 게이트 · 본문 · 재조회 / NOT_PENDING · NOT_FOUND → 대화상자 닫힘 · 알림 · 재조회 / ROLE_GRANT_FORBIDDEN · ALREADY_PENDING(+행으로 이동) · EMAIL_CONFLICT · TENANT_SCOPE_DENIED · ROLE_NOT_FOUND / 테넌트 전환(같은 관찰자, 새 테넌트의 목록만) · `['operators']` 무효화 → 재조회 / 🔴 프로듀서가 토큰·링크를 흘려도 DOM 에 없음 | ✅ 22/22 |
+| `tests/unit/operator-invitations-proxy.test.ts` (신규 16) | 초대 → 두 헤더 · 프로듀서 경로 · 본문(비밀번호 없음) / FAILED_TRANSIENT = 201 / `tenantId='*'` · 비밀번호 키 → 422, 호출 0 / 빈 사유 → 400 REASON_REQUIRED, 호출 0 / ALREADY_PENDING 통과 / 🔴 흘린 토큰·해시·링크가 BFF 응답에 없음 / 목록 기본 테넌트·PENDING · 변이 헤더 없음 · 명시 파라미터 · 503 · 401 / 취소·재발송 → `{id}:cancel`·`{id}:resend`, 사유 헤더만, 키 없음, 본문 없음 · id 인코딩(`:` 는 그대로) · 취소 본문의 키 → 422 · NOT_PENDING/NOT_FOUND 통과 | ✅ 16/16 |
+| 기존 고침 | `CreateOperatorForm.test.tsx`(334 게이트 칸 → 플랫폼 전용 칸) · `OperatorsScreen.test.tsx`(계정 조회 목 제거 · 등록 흐름은 `isPlatformOperator` · 본문 `tenantId='*'` 단언 추가) · `operators-assignment-ui.test.tsx`(초대 목록 GET 을 받는 라우팅 목 · TENANT_ADMIN 칸은 초대 양식) · `operators-page-parallel.test.tsx`(`data-tenants` 제거) · `operators-nav.test.tsx` · `sample-fixtures-schema-iam.test.ts`(+1 초대 픽스처 파싱) · `sample-fetch-allowlist.test.ts` | ✅ |
+| 관련 22 파일 | 위 + operators-proxy · parity-verification · features/operators 전체 | ✅ 302/302 |
+| 전체 console-web | `vitest run --maxWorkers=4 --minWorkers=1` | ✅ 368 파일 · 4175 시험 · rc=0 · unhandled `Errors` 0 |
+| `tsc --noEmit` | — | ✅ rc=0 |
+| `next lint`(건드린 src · 신규 시험) | src 지적 0. `tests/unit` 의 `react/display-name` 은 기존 `wrapper()` 모양(이 PR 이 만든 것 아님) | ✅ |
+
+**bite (둘 다 되돌린 뒤 diff 에 표식 0 확인)**:
+- 🔴 `invitationsKey` 에서 `tenantId` 를 뺌 → «테넌트 전환» 칸 빨강(1 failed) → 복원 → 22/22. 🔵 첫 시도는 **안 물었다** — 시험의 `rerender` 가 공급자를 한 겹 더 감싸 트리를 새로 마운트했고, 새 관찰자는 키와 상관없이 다시 읽는다. 같은 관찰자를 다시 그리도록 고친 뒤 물었다(시험 주석에 남김).
+- 🔴 `OperatorInvitationSchema` 에 `.passthrough()` → 프록시의 «흘린 토큰이 브라우저로 안 간다» 칸 빨강 → 복원.
+
+## 5. 계약과 다르게 · 계약이 정하지 않아 정한 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S5-1 | 초대 양식은 역할 **1개 이상**을 요구한다 | 계약은 `roles` 를 `POST /operators` 와 같은 검증이라고만 한다. 역할 없는 초대는 아무것도 못 하는 운영자를 만든다 — UI 검증일 뿐 프로듀서가 최종 |
+| S5-2 | 초대 확인은 **항상** «특권» 대화상자(등록과 같은 자세), 관리자급 역할(TENANT_ADMIN · TENANT_BILLING_ADMIN · SUPER_ADMIN)이면 그 이름을 문구에서 따로 부른다 | 계약 «elevated confirm copy when the roles include TENANT_ADMIN/SUPER_ADMIN-class roles is unchanged» 의 «unchanged» 는 등록 기준이고 등록은 항상 elevated 다 — 둘 다 만족하는 쪽 |
+| S5-3 | ALREADY_PENDING 의 «그 행 재발송으로 이동» 은 **불러온 페이지 안**에서만 — 다른 페이지면 문구만 | 목록 API 에 이메일 검색이 없다(계약 표면 밖 호출을 더하지 않음) |
+| S5-4 | BFF 가 `tenantId='*'` · 모르는 키(비밀번호 포함)를 **422** 로 막는다(프로듀서는 `'*'` 에 400) | 기존 operators BFF 의 형식 오류 = 422 관례. UI 는 `*` 를 보내지 않으므로 사용자에게 닿지 않는다 |
+| S5-5 | 활성 테넌트가 `*` 이면 초대 양식은 숨기고 목록은 `tenantId=*` 로 읽는다(플랫폼 운영자에게 전 테넌트 대기 초대) | 계약 «tenant = the active tenant (never `*`)» + 목록 행 12 의 `*` 규칙(플랫폼 범위 운영자 전용) |
+| S5-6 | «초대한 운영자» 칸 = 불러온 운영자 페이지의 **표시 이름**(본인은 «나», 못 찾으면 id 앞 8자) | 계약은 «invited by» 만. 이메일을 쓰면 같은 화면에 운영자 이메일이 두 번 나와 e2e `getByText(<email>)`(federation `iam-golden-path`)가 strict-mode 로 깨질 수 있다 |
+| S5-7 | 이메일을 클라이언트에서 trim · 소문자로 보낸다 | 프로듀서도 그렇게 저장한다 — 이동 버튼의 행 찾기가 같은 값으로 맞는다 |
+| S5-8 | 재발송 확인 문구에 «만료 기한도 새로 정해집니다» 를 덧붙였다(계약 문장은 그대로 포함) · 초대 확인의 «7일» 은 기본 TTL(`P7D`)이다 | TTL 은 설정값이라 재발송 쪽은 일수를 쓰지 않았다. 초대 쪽은 계약 문장을 바꾸지 않았다 |
+
+계약 본문(`console-integration-contract.md` · `admin-api.md`)은 고치지 않았다 — 위 여덟은 계약이 정하지 않은 빈칸이다.
+
+## 6. e2e
+
+- grep(`create-operator` · `운영자 등록` · `운영자 초대` · `operator-invit` · `/operators`, `*.spec.ts` 전부): console `tests/e2e/operators-admin-profile.spec.ts` · `operators-profile.spec.ts`(프로필 편집 testid — 무변경) · `e2e-smoke/console-guard.spec.ts`(샘플 배너) · federation `tests/federation-hardening-e2e/specs/iam-golden-path.spec.ts`(`getByText('e2e-super-admin@example.com')` — S5-6 이 이것과 겹치지 않게 했다). **옛 «등록» 양식을 겨누는 e2e 는 없다 — 고친 스펙 0.**
+- `.github/workflows` 에 이 화면 경로를 박은 것 없음. ⚪ 머지 뒤 다음 `nightly-e2e.yml` 의 console 스위트를 한 번 볼 것(CLAUDE.md «Post-merge nightly check»).
