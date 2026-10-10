@@ -221,6 +221,55 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.operatorFaceted").value(false));
     }
 
+    // ── TASK-MONO-772 S6 — `axes` on the real rows: the mover asks IDENTITY only ──────────────────────
+
+    @Test
+    @DisplayName("🔴 MONO-772 S6 (AC-5): 셀프 온보딩 운영자(oidc_subject 축) — axes=IDENTITY → false(옮겨진다) · 같은 행 axes 생략 → true · 콘솔 적격 true(같은 sub)")
+    void facet_axesIdentity_selfOnboardedOperatorIsMovable() throws Exception {
+        seedFacetOperators();
+        // FACET_SUBJECT's own identity link is FACET_IDENTITY; a self-onboarded operator's consumer account has a
+        // DIFFERENT identity (its consumer identity), so the mover asks with that — here: none matching.
+        facetAxes(FACET_SUBJECT, "00000000-0000-7000-8000-0000000006fe", "IDENTITY")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(false));
+        facetAxes(FACET_SUBJECT, null, "IDENTITY")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(false));
+        // Control: the same row, both axes (omitted) — the pre-772 answer, byte-unchanged.
+        facet(FACET_SUBJECT, null).andExpect(jsonPath("$.operatorFaceted").value(true));
+        facetAxes(FACET_SUBJECT, null, "OIDC_SUBJECT").andExpect(jsonPath("$.operatorFaceted").value(true));
+        // The move keeps the account id, so the operator row is untouched and the S4 eligibility (= the
+        // exchange's predicate) still answers for the same sub.
+        consoleEligibility(FACET_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-772 S6 대조군(F11): 신원 연결 운영자 — axes=IDENTITY 로도 true (계속 건너뛴다) · SUSPENDED 도 상태 무관")
+    void facet_axesIdentity_identityLinkedOperatorStillProtected() throws Exception {
+        seedFacetOperators();
+        facetAxes(UNKNOWN_SUBJECT, FACET_IDENTITY, "IDENTITY")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorFaceted").value(true));
+    }
+
+    @Test
+    @DisplayName("MONO-772 S6: axes 모르는 값 · 빈 값 → 400 VALIDATION_ERROR")
+    void facet_axesUnknown_400() throws Exception {
+        facetAxes(FACET_SUBJECT, null, "EMAIL").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        facetAxes(FACET_SUBJECT, null, "").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions facetAxes(String accountId, String identityId,
+                                                                        String axes) throws Exception {
+        var request = get("/internal/operators/facet").param("accountId", accountId).param("axes", axes);
+        if (identityId != null) {
+            request.param("identityId", identityId);
+        }
+        return mockMvc.perform(request);
+    }
+
     private void seedFacetOperators() {
         seedOperator(FACET_OP_UUID, FACET_SUBJECT, "acme-corp", "facet-op-618@example.com");
         jdbcTemplate.update("UPDATE admin_operators SET identity_id = ? WHERE operator_id = ?",

@@ -660,3 +660,77 @@ monorepo
 
 - grep(`create-operator` · `운영자 등록` · `운영자 초대` · `operator-invit` · `/operators`, `*.spec.ts` 전부): console `tests/e2e/operators-admin-profile.spec.ts` · `operators-profile.spec.ts`(프로필 편집 testid — 무변경) · `e2e-smoke/console-guard.spec.ts`(샘플 배너) · federation `tests/federation-hardening-e2e/specs/iam-golden-path.spec.ts`(`getByText('e2e-super-admin@example.com')` — S5-6 이 이것과 겹치지 않게 했다). **옛 «등록» 양식을 겨누는 e2e 는 없다 — 고친 스펙 0.**
 - `.github/workflows` 에 이 화면 경로를 박은 것 없음. ⚪ 머지 뒤 다음 `nightly-e2e.yml` 의 console 스위트를 한 번 볼 것(CLAUDE.md «Post-merge nightly check»).
+
+---
+
+# S6 기록 (2026-10-10 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `feat/mono-772-s6-pool-move`(origin/main `489ff0a76` — S1–S5 머지 뒤). 날짜는 `date -u +%F`.
+> 🔵 AC-5 체크박스는 건드리지 않았다 — AC-5 를 «AC 가 말한 동사대로» 단언하는 시험은 셋 다 Testcontainers IT 라 이 호스트에서 돌지 않았다(Docker 없음, § 4). CI `integrationTest` 초록을 본 뒤 오케스트레이터가 판정한다.
+
+## 0. 이 슬라이스의 AC-0 — 재고 측정 (코드 읽기)
+
+| # | 잰 것 | 결과 | 근거 (file:line — 편집 **전**) |
+|---|---|---|---|
+| 1 | 이동기 경로 | account `POST /internal/consumer-pool/legacy-moves`(`ConsumerPoolLegacyMoveUseCase`) → 계정마다 account_db 트랜잭션 → **마지막 단계** auth `POST /internal/auth/consumer-pool/moves`(`MoveCredentialToConsumerPoolUseCase`) → 판정 6 `AdminOperatorFacetClient` → admin `GET /internal/operators/facet` | `MoveCredentialToConsumerPoolUseCase.java:87-96` · `AdminOperatorFacetClient.java:93-101` |
+| 2 | 이동기가 지금 쓰는 facet 술어 | **두 축 OR · 상태 무관** — `oidc_subject = accountId` 이면 즉시 true, 아니면 `identity_id = identityId`. auth 는 `axes` 를 보내지 않았다 | `JpaAdminOperatorAdapter.java:133-141` · `OperatorFacetQueryUseCase.java:33-35` |
+| 3 | 옮긴 계정의 «같은 `sub`» | ✅ 성립 — 이동은 `credentials.tenant_id` 한 칸만 쓰고(`account_id` 불변), admin 은 쓰기 0. 교환(`TokenExchangeService` — `sub` 단독 조회)과 S4 콘솔 적격(같은 술어 `oidc_subject = 계정 id ∧ ACTIVE`)이 같은 운영자 행을 그대로 찾는다. 풀 principal 의 콘솔 토큰은 S4 갈래(`tenant_id=iam`) | `MoveCredentialToConsumerPoolUseCase.java:97-98` · `OperatorConsoleEligibilityQueryUseCase` · `TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole` |
+| 4 | F10 — 풀 가입 거절은 코드인가 | ✅ 데이터다 — `ConsumerAccountPool.refuseIfEmailHasSiteAccount` 는 «소비자 사이트에 그 이메일의 사이트 계정» 하나만 본다. 운영자 전용 조회 없음 ⇒ 코드 변경 0 | `ConsumerAccountPool.java:73-82` |
+| 5 | 소셜 연결 계정 | 판정 4(`SOCIAL_LINKED`)가 facet 질문 **전**에 걸러낸다 — 축을 바꿔도 그대로 남는다 | `MoveCredentialToConsumerPoolUseCase.java:80-82` |
+| 6 | 🔴 **열린 질문 3 — 이동 전 콘솔 세션** | **계속 동작했다 — 조용히, 옛 사이트 테넌트로.** ① SAS 세션은 열릴 때의 principal(`details.tenant_id` = 사이트)을 저장한다. ② refresh: 미러 행 테넌트(사이트) = `AuthorizationSessionTenant.of`(principal 테넌트 = 사이트) → 통과 → 발급자의 **비-풀 갈래** → `tenant_id` = 옛 사이트, 역할은 `listAccountRoles(사이트, id)` — S4 콘솔 적격을 **묻지 않는다**(S4 는 풀 principal 만 묻는다). ③ IdP 브라우저 세션: 게이트 콘솔 갈래가 사이트 principal 을 BE-610 규칙으로 통과 → 같은 낡은 principal 로 새 코드. ⇒ 세션이 끝날 때까지(refresh TTL · IdP 세션) **계정이 더는 살지 않는 사이트**를 `tenant_id` 로 싣는 콘솔 토큰이 나온다. 운영자 권한은 교환(`sub` · ACTIVE)이 정하므로 다른 사람의 권한이 되지는 않지만, 오케스트레이터 지시(«조용한 다른 테넌트 토큰보다 안전한 재로그인»)대로 **고쳤다**(§ 1) | `SasRefreshTokenAuthenticationProvider.java:223-283, 309-325` · `AuthorizationSessionTenant.java:70-93` · `TenantClaimTokenCustomizer.java:456-468` · `AuthorizeSessionTenantGate.java:211-218` |
+| 7 | 이동 전 소비자 사이트 세션(스토어 · 팬) | 손대지 않는다 — 그 토큰 테넌트(사이트)는 풀 principal 의 목표 모양이다(BE-618 정정 ①, auth IT `move_credentialOnly_preMoveRefreshWorks…` 가 이미 단언) | `auth-internal.md` § moves «옮기지 않는 것» |
+
+## 1. 쓴 것
+
+| 서비스 | 무엇 | 파일 |
+|---|---|---|
+| admin | `axes` 파라미터 — 생략 = 두 축(byte-불변) · 모르는 값 · 빈 값 · 빈 원소 → `400 VALIDATION_ERROR`(메시지에 입력값 없음) | `application/OperatorFacetAxis.java`(신규) · `presentation/internal/OperatorFacetController.java` |
+| admin | 유스케이스가 축을 받는다(2-인자 = 두 축) · 포트를 축마다 둘로(`existsOperatorBySubject` · `existsOperatorByIdentity`) — 술어는 그대로 | `application/OperatorFacetQueryUseCase.java` · `port/AdminOperatorPort.java` · `persistence/rbac/JpaAdminOperatorAdapter.java` |
+| auth | 이동기의 facet 질의에 **`axes=IDENTITY`** — 셀프 온보딩 운영자(`oidc_subject` 축)는 이제 옮긴다 · 신원 연결 운영자는 계속 `OPERATOR_FACETED` | `infrastructure/client/AdminOperatorFacetClient.java` · `application/port/OperatorFacetPort.java`(javadoc) · `application/MoveCredentialToConsumerPoolUseCase.java`(javadoc) |
+| auth | 🔴 열린 질문 3 — **발급자**: 풀 아님 · `iam` 아님 principal × 콘솔 client 이고 그 계정의 자격이 **지금 `consumer-pool`** 이면 `invalid_grant` + **`session_predates_pool_move`**(고정 상수, `'consumer-pool'` 미포함). access token 생성 단계라 refresh 토큰은 회전되지 않는다. 자격이 아직 사이트면 772 전 그대로 | `infrastructure/oauth2/TenantClaimTokenCustomizer.java`(`refuseConsoleSessionThatPredatesPoolMove` · 생성자 3-인자 `CredentialRepository`) |
+| auth | 🔴 같은 조건의 **authorize 게이트 재인증** — 재개된 로그인은 콘솔 폼 교차 조회가 풀 자격을 골라 풀 principal → S4 갈래. 조회 실패는 통과(BE-610 규칙 — 발급자가 여전히 거절) | `infrastructure/oauth2/AuthorizeSessionTenantGate.java`(`credentialMovedToPool`) |
+| 계약 | `auth-to-admin.md` § facet(빈 값 400 · 배포 순서) · `auth-api.md`(토큰 오류표 + § 풀 계정의 콘솔 토큰 «이동 전 콘솔 세션» 절) · `auth-internal.md` § moves «옮기지 않는 것» · `multi-tenancy.md` § 3 셀프 온보딩 행 | § 5 |
+| — | account-service 코드 변경 **0**(F10) · admin `data-model` · Flyway · 권한 키 · JWT 클레임 · HTTP 오류 코드 **0** | — |
+
+## 2. 시험
+
+| 시험 | 무엇을 단언 | 로컬 |
+|---|---|---|
+| admin `OperatorFacetQueryUseCaseTest` (신규 4) | 🔴 셀프 온보딩 운영자: 두 축 → true(772 전) · `IDENTITY` 만 → false · 주체 축 조회 안 함 / 🔴 대조군(F11): 신원 연결 운영자 → `IDENTITY` 만 물어도 true / `OIDC_SUBJECT` 만 → 신원 축 안 물음 / `parse` — null = 두 축 · 목록 · 빈 값 · 빈 원소 · 소문자 · 모르는 값 → 예외(고정 메시지) | ✅ 4/4 |
+| admin `OperatorFacetControllerSliceTest` (+3) | 생략 = 두 축 · `axes=IDENTITY` · `OIDC_SUBJECT, IDENTITY` · 🔴 `EMAIL` · `""` · `" "` · `IDENTITY,` · `identity` → 400 `VALIDATION_ERROR` + 유스케이스 상호작용 0 | ✅ 6/6 |
+| admin `OperatorAssignmentCheckIntegrationTest` (+3, 실제 `admin_operators`) | 🔴 AC-5: 셀프 온보딩 행 — `axes=IDENTITY` → false · 같은 행 생략/`OIDC_SUBJECT` → true · 콘솔 적격 true(같은 sub) / 대조군: 신원 연결 → `axes=IDENTITY` true / 모르는 값 · 빈 값 400 | ⚪ 로컬 미실행 — Docker 없음 |
+| auth `AdminOperatorFacetClientUnitTest` (신규 4, WireMock) | 🔴 질의에 `axes=IDENTITY` · `accountId` · `identityId` · Bearer / 신원 없음 → `identityId` 없음, `axes` 그대로 / true 통과 / admin 400 · 필드 없는 200 → 판정 불가(fail-closed) | ✅ 4/4 |
+| auth `TenantClaimPoolPrincipalTest` (+4) | 🔴 이동 전 콘솔 세션(팬 사이트 principal) · 자격 = 풀 → refresh `invalid_grant` `session_predates_pool_move`(`'consumer-pool'` 미포함 · 적격 상수 아님) · 사이트 역할 · 도메인 조회 0 · 적격 질의 0 / 같은 세션 authorization_code(id_token) 도 거절 / 🔴 대조군: 자격이 아직 사이트 → `tenant_id=fan-platform`(772 전 그대로) / 대조군: 팬 client 의 같은 세션은 자격을 읽지도 않는다 | ✅ 21/21 |
+| auth `AuthorizeSessionTenantGatePoolTest` (+4) | 🔴 콘솔 · 사이트 세션 · 자격 = 풀 → 재인증 / 대조군: 자격 = 사이트 → 통과 / 조회 실패 → 통과(고리 없음) / 팬 client 는 자격 조회 0 | ✅ 19/19 |
+| auth 나머지 customizer 시험 5개 | 생성자 3-인자 — `ConsoleEligibilityStubs.credentialsNotMoved()`(모든 조회 빈 값 = 이동 없음) | ✅ |
+| auth `ConsumerPoolLegacyMoveIntegrationTest` (+1, 기존 facet 스텁 전부 `axes=IDENTITY` 요구로) | 🔴 **AC-5 auth 절반**: 셀프 온보딩 운영자 콘솔 로그인(이동 전 — 사이트 principal, `tenant_id=fan-platform`) → refresh 200(대조군) → 이동(`axes=IDENTITY` 질의 확인 · 200 moved · 자격 행 하나) → 이동 전 콘솔 refresh `400 invalid_grant session_predates_pool_move` → 그 브라우저 세션 콘솔 authorize = `/login` → 그 브라우저에서 다시 로그인 → 저장된 콘솔 authorize 재개 → **같은 `sub` · `tenant_id=iam` · roles 없음** · admin 적격 질의 ≥1 → refresh 200(`iam`, 고리 없음). 기존 칸(운영자 facet true → 409 · admin 500 → 503)도 이제 `axes=IDENTITY` 없이는 스텁이 맞지 않아 빨개진다 | ⚪ 로컬 미실행 — Docker 없음 |
+| account `ConsumerPoolLegacyMoveIntegrationTest` (+2) | 🔴 **AC-5 account 절반 (F10)**: 셀프 온보딩 운영자 팬 사이트 계정 — 이동 전 스토어 가입 `409`(AC-6) · `refuseIfEmailHasSiteAccount` 예외 → 이동(같은 id) → 그 술어 통과 · 사이트 계정 0 · 스토어 멤버십 조회 = 소비자 사이트 · 멤버십 없음(= 첫 방문 동의 경로) · 같은 이메일 계정 1 / 🔴 대조군: 소셜 연결(auth `SOCIAL_LINKED`) → 사이트 그대로 · 거절 술어 그대로 | ⚪ 로컬 미실행 — Docker 없음 |
+| 서비스 전체 `:test` | admin 1112(S3 1105 + 7) · auth 1246(1234 + 12) · account 754 — skip = Docker IT | ✅ 실패 0 (`rc=0`, 결과 XML 합산) |
+
+**가드 (스테이지 뒤)**: 필수 셋(`check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift`) · `check-flyway-version-collision` · `check-flyway-unresolvable-placeholder` · `check-dev-seed-migration-band` · `check-error-code-registry` · `check-domain-error-code-registry` · `check-internal-caller-addresses` · `check-jwt-claims-registry` 전부 rc=0. `scripts/` 추가 · 삭제 없음.
+
+**bite (둘 다 되돌린 뒤 표식 0 확인)**:
+- admin — `OperatorFacetQueryUseCase` 의 주체 축 조건을 `true` 로(= 축 무시, 772 전 «두 축» 동작) → `OperatorFacetQueryUseCaseTest` 4 중 2 빨강: AC-5 칸 `Expecting value to be false but was true` · F11 대조군 `NeverWantedButInvoked existsOperatorBySubject`. 복원 → 4/4.
+- 🔴 auth — `refuseConsoleSessionThatPredatesPoolMove` 의 `if (movedToPool)` 를 `if (false && movedToPool)` 로(= 이동 전 콘솔 세션 계속 발급) → `TenantClaimPoolPrincipalTest` 21 중 **정확히 S6 거절 두 칸**만 빨강(`Expecting actual not to be null` — 예외 없음 = 토큰이 나왔다). 대조군 두 칸은 초록 유지. 복원 → 21/21. 🔵 이번에는 분류기가 막지 않았다.
+
+## 3. 열린 질문 3 — 답
+
+**이동 전 콘솔 세션은 이동 뒤 «안전하게 실패 → 재로그인» 한다**(S6 이 고친 결과). refresh 는 `400 invalid_grant` `session_predates_pool_move` — 콘솔 계약 § 2.6.3 의 «그 밖의 `invalid_grant`» 행 그대로 `session_expired`(다시 로그인, 콘솔 변경 0). 다시 로그인하는 authorize 는 게이트가 낡은 브라우저 세션을 재인증으로 돌려 **풀 principal** 이 되고, S4 발급자가 같은 `sub` 로 `tenant_id=iam` 콘솔 토큰을 낸다. 고리 없음(재개된 세션은 풀 principal 이라 이 판정에 다시 닿지 않는다). 고치기 전(§ 0-6)에는 조용히 옛 사이트 테넌트 토큰이 계속 나왔다.
+
+## 4. AC 판정
+
+- **AC-5 — 체크하지 않았다.** «같은 사람이 같은 `sub` 로 콘솔에 들어온다» 는 auth IT(브라우저 경로 — 이동 전 사이트 principal → 이동 → 재로그인 → `sub` · `iam`), «그 이메일의 풀 가입 거절이 사라진다» 는 account IT(F10 — 술어 · 동의 경로), «소셜 연결 운영자는 그대로» 는 account IT 대조군 + 기존 auth IT `socialLinked_409_nothingChanged`, admin 쪽 축 판정은 admin IT 가 단언한다 — 셋 다 Docker 가 필요해 로컬 ⚪. 한 JVM 에서 세 서비스를 태우는 종단은 없다(서비스 사이는 WireMock · 포트 mock). ⇒ CI `integrationTest` 초록 뒤 오케스트레이터 판정. 라이브 ⚪ — AC-0 측정 4 의 질의(`admin_operators.oidc_subject ∈ 소비자 사이트 계정 id`) 또는 이동기 응답의 `OPERATOR_FACETED` 수(이제 신원 축만 센다).
+- 🔵 AC-5 문장의 «풀 가입 거절이 사라진다» 는 이렇게 읽었다: 사라지는 것은 BE-614 AC-6 의 **«사이트 계정이 있는 이메일» 거절**이다. 이동 뒤 그 이메일로 다시 가입하면 여전히 `409` 인데, 이번엔 **그 사람 자신의 풀 계정**이 있어서다 — 그 사람은 가입하지 않고 로그인한다(스토어 첫 방문 = 동의 화면). account IT 가 두 사실을 같이 단언한다.
+
+## 5. S1 계약과 다르게 · 계약이 정하지 않아 정한 것
+
+| # | 무엇 | 왜 |
+|---|---|---|
+| S6-1 | `axes` 의 **빈 값 · 빈 원소(`IDENTITY,`)** 도 `400` (계약은 «모르는 값 → 400» 만) · 원소는 대문자 그대로 | «아무 축도 안 물음» 을 `false` 로 답하면 이동기가 운영자를 옮긴다 — 닫힌 쪽. `auth-to-admin.md` § facet 에 적었다 |
+| S6-2 | 🔴 **이동 전 콘솔 세션을 다시 쓰지 않는다** — 발급자 거절(새 고정 상수 `session_predates_pool_move`) + 게이트 재인증. `auth-internal.md` 의 «이동 전 세션의 principal 은 사이트 principal 로 남는다» 에 콘솔 client 예외를 덧붙였다 | 열린 질문 3 의 측정(§ 0-6) + 오케스트레이터 지시. 새 HTTP 오류 코드가 아니라 OAuth `error_description` 상수라 `error-handling.md` 는 건드리지 않았다(S1 의 `operator_eligibility_unavailable` 과 같은 자리 — `auth-api.md` 토큰 오류표) |
+| S6-3 | 그 판정은 **풀 아님 · `iam` 아님 principal × 콘솔 client** 에서만 auth_db 를 한 번 읽는다(계정 id 로 자격 테넌트) | 지금 그 모집단 = 셀프 온보딩 운영자의 콘솔 세션. `iam` principal · 풀 principal · 소비자 사이트 client 는 읽기 0 |
+| S6-4 | admin 포트 `existsOperatorFacet(accountId, identityId)` → 축마다 둘 | 축 선택을 응용 계층(유스케이스)에 두기 위해 — 어댑터의 술어는 글자 그대로 |
+| S6-5 | AC-5 «풀 가입 거절이 사라진다» 의 읽기(§ 4 🔵) | 이동 뒤에도 같은 이메일 가입은 `409`(풀 중복) — 계약 변경 없음, 해석만 기록 |
+
+- `account-maintenance-internal.md` · `error-handling.md`(`POOL_MOVE_OPERATOR_FACETED` 설명) 는 S1 이 이미 «S6 부터 신원 축만» 으로 적어 두어 고치지 않았다.
+- 로그: 새 로그 줄은 client id · 세션 테넌트 · (게이트 조회 실패 시) 예외만 — 이메일 · 토큰 · 해시 없음.

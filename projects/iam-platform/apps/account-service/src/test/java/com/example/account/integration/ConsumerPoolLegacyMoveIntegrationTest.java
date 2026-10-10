@@ -274,6 +274,79 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractConsumerPoolIntegrat
         assertStillSiteShaped(operator, SHOP);
     }
 
+    // ── TASK-MONO-772 S6 — AC-5 (account half): a self-onboarded operator moves; the AC-6 refusal is data ──
+
+    @Autowired private com.example.account.application.service.ConsumerAccountPool consumerAccountPool;
+
+    /**
+     * 772 AC-5 · AC-0 F10. A self-onboarded operator's site account (auth-service, the mock here, now answers «moved»
+     * for it — its operator facet is asked on the identity axis only, 772 S6). Before the move the TASK-BE-614 AC-6
+     * refusal holds: a pool signup with that email on another consumer site is {@code 409}. After the move — no code
+     * changed — the refusal's predicate («a site account with this email on a consumer site») no longer holds: the
+     * same account id now IS the email's pool account, and the store answers with the first-visit consent path (a
+     * consumer site with no membership yet), not a refusal. A pool signup for that email still answers {@code 409},
+     * but for the pool-duplicate reason: the person signs IN (one account), they do not sign up a second one.
+     */
+    @Test
+    @DisplayName("🔴 772 AC-5: 셀프 온보딩 운영자 팬 사이트 계정 — 이동 전 스토어 풀 가입 409(AC-6) → 이동(같은 id) → 사이트 계정 거절 술어가 사라짐 · 스토어는 동의 경로 · 같은 이메일 계정은 여전히 하나")
+    void selfOnboardedOperator_move_liftsSiteAccountRefusalAsData() throws Exception {
+        String email = email("772-self-onboarded");
+        Seeded operator = siteAccount(FAN, email, "ACTIVE", "FAN");
+
+        // Before: the BE-614 AC-6 refusal — a site account with this email exists on a consumer site.
+        mockMvc.perform(post("/api/accounts/signup")
+                        .header("X-Tenant-Id", SHOP)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"%s\", \"password\": \"Password1!\"}".formatted(email)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_ALREADY_EXISTS"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> consumerAccountPool.refuseIfEmailHasSiteAccount(email, email))
+                .as("the AC-6 predicate holds before the move")
+                .isInstanceOf(com.example.account.application.exception.AccountAlreadyExistsException.class);
+
+        Run run = runToEnd();
+
+        assertThat(run.moved()).contains(operator.accountId());
+        verify(authServicePort).moveCredentialToConsumerPool(operator.accountId(), FAN);
+        assertThat(one("SELECT tenant_id FROM accounts WHERE id = ?", operator.accountId()))
+                .as("same id — the operator's oidc_subject keeps pointing at it").isEqualTo("consumer-pool");
+
+        // After: the refusal's predicate is gone — no code changed (F10).
+        consumerAccountPool.refuseIfEmailHasSiteAccount(email, email);
+        assertThat(count("SELECT COUNT(*) FROM accounts WHERE email = ? AND tenant_id <> 'consumer-pool'", email))
+                .as("no site account with this email left anywhere").isZero();
+        // The store is reached by signing in: a consumer site without a membership yet = the first-visit consent.
+        mockMvc.perform(get("/internal/tenants/{t}/consumer-members/{a}", SHOP, operator.accountId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.consumerSite").value(true))
+                .andExpect(jsonPath("$.membershipStatus").doesNotExist());
+        // A second signup for the email is still a duplicate — of the person's own pool account, not of a site one.
+        mockMvc.perform(post("/api/accounts/signup")
+                        .header("X-Tenant-Id", SHOP)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"%s\", \"password\": \"Password1!\"}".formatted(email)))
+                .andExpect(status().isConflict());
+        assertThat(count("SELECT COUNT(*) FROM accounts WHERE email = ?", email)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("772 AC-5 대조군: 소셜 연결 셀프 온보딩 운영자 — auth 가 SOCIAL_LINKED 로 거절 → 사이트 계정 그대로 · AC-6 거절도 그대로 남는다")
+    void socialLinkedSelfOnboardedOperator_staysOnSite_refusalRemains() throws Exception {
+        String email = email("772-social-operator");
+        Seeded operator = siteAccount(FAN, email, "ACTIVE", "FAN");
+        doThrow(new AuthServicePort.CredentialPoolMoveRefused(operator.accountId(), "SOCIAL_LINKED"))
+                .when(authServicePort).moveCredentialToConsumerPool(operator.accountId(), FAN);
+
+        Run run = runToEnd();
+
+        assertThat(run.moved()).doesNotContain(operator.accountId());
+        assertStillSiteShaped(operator, FAN, "FAN");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> consumerAccountPool.refuseIfEmailHasSiteAccount(email, email))
+                .isInstanceOf(com.example.account.application.exception.AccountAlreadyExistsException.class);
+    }
+
     @Test
     @DisplayName("limit 범위 밖 → 400 VALIDATION_ERROR")
     void limitOutOfRange_400() throws Exception {

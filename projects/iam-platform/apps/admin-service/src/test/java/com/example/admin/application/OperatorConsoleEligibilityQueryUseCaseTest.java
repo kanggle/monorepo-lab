@@ -69,7 +69,8 @@ class OperatorConsoleEligibilityQueryUseCaseTest {
         given(adminOperatorPort.findByOidcSubject(ACCOUNT)).willReturn(Optional.empty());
 
         assertThat(useCase.isConsoleEligible(ACCOUNT)).isFalse();
-        verify(adminOperatorPort, never()).existsOperatorFacet(anyString(), anyString());
+        verify(adminOperatorPort, never()).existsOperatorBySubject(anyString());
+        verify(adminOperatorPort, never()).existsOperatorByIdentity(anyString());
     }
 
     @Test

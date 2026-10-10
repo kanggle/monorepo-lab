@@ -4,6 +4,7 @@ import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import com.example.auth.application.port.OperatorConsoleEligibilityPort;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
+import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.AuthenticationMethods;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.domain.tenant.TenantContext;
@@ -208,10 +209,28 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      */
     private final OperatorConsoleEligibilityPort consoleEligibilityPort;
 
+    /**
+     * TASK-MONO-772 S6 (auth-api.md § 풀 계정의 콘솔 토큰 · 토큰 오류표) — the fixed {@code error_description} of the
+     * refusal of a console token to a session that was opened BEFORE its account was moved into the consumer pool
+     * ({@link #refuseConsoleSessionThatPredatesPoolMove}). Never contains {@code 'consumer-pool'} (the console's
+     * «another account» discriminator) and is not {@link #OPERATOR_ELIGIBILITY_UNAVAILABLE}: the console reads it
+     * as «the session ended» and starts a fresh login, which the authorize gate turns into a pool login.
+     */
+    static final String SESSION_PREDATES_POOL_MOVE = "session_predates_pool_move";
+
+    /**
+     * TASK-MONO-772 S6 — the credential's CURRENT tenant, read only for a non-pool principal of another tenant on
+     * the console client (a self-onboarded operator's console session), to tell a session opened before the
+     * account moved into the pool.
+     */
+    private final CredentialRepository credentialRepository;
+
     public TenantClaimTokenCustomizer(AccountServicePort accountServicePort,
-                                      OperatorConsoleEligibilityPort consoleEligibilityPort) {
+                                      OperatorConsoleEligibilityPort consoleEligibilityPort,
+                                      CredentialRepository credentialRepository) {
         this.accountServicePort = accountServicePort;
         this.consoleEligibilityPort = consoleEligibilityPort;
+        this.credentialRepository = credentialRepository;
     }
 
     @Override
@@ -453,6 +472,15 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             }
         }
 
+        // TASK-MONO-772 S6 (open question 3) — a console session opened while the account was a site account,
+        // used after the account moved into the pool: no token, so the console logs in afresh (pool principal).
+        if (tenantId != null && tenantType != null && !TenantContext.isConsumerPool(tenantId)
+                && !TenantContext.CONSOLE_TENANT_ID.equals(tenantId)
+                && AuthorizationSessionTenant.mapsPoolPrincipalToConsole(
+                        clientTenantOf(context.getRegisteredClient()))) {
+            refuseConsoleSessionThatPredatesPoolMove(principal, tenantId, clientId);
+        }
+
         if (tenantId != null && tenantType != null) {
             context.getClaims()
                     .claim("tenant_id", tenantId)
@@ -613,6 +641,42 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 .claim("tenant_type", consoleClient.tenantType());
         log.debug("TenantClaimTokenCustomizer: pool principal with a live operator facet on console clientId={} "
                 + "— tenant_id=iam, no roles (TASK-MONO-772 S4)", clientId);
+    }
+
+    /**
+     * TASK-MONO-772 S6 (772 S1 open question 3; auth-internal.md § consumer-pool/moves «옮기지 않는 것») — a SAS
+     * session keeps the principal it was opened with. An ADR-MONO-044 D5 self-onboarded operator's console session
+     * opened while the account was a <b>site</b> account carries that site as its tenant; after the mover put the
+     * credential into the pool (same account id), that session would keep minting console tokens with
+     * {@code tenant_id} = the old site — a tenant the account no longer lives in, never asked for the operator
+     * facet (772 S4 asks only for pool principals). This refuses it instead: {@code invalid_grant} +
+     * {@link #SESSION_PREDATES_POOL_MOVE}, BEFORE the refresh token rotates (the access token is generated first).
+     * The console reads the refusal as an ended session and starts a fresh login; the authorize gate does the same
+     * check and re-authenticates the stale browser session ({@code AuthorizeSessionTenantGate}), so the new login
+     * is a pool principal and the 772 S4 path decides the console token. A fail-safe re-login, not a silent
+     * wrong-tenant token.
+     *
+     * <p>Reached only for a non-pool principal of a tenant other than {@code iam} on the console client — today
+     * the self-onboarded operators. One auth_db read by account id. A principal whose credential still lives in
+     * its own tenant (not moved) is byte-unchanged. No account id → nothing to compare, unchanged. A failed read
+     * propagates (no token — fail-closed).
+     */
+    private void refuseConsoleSessionThatPredatesPoolMove(Authentication principal, String sessionTenant,
+                                                          String clientId) {
+        String accountId = extractTenantAttribute(principal, PrincipalDetailKeys.ACCOUNT_ID);
+        if (accountId == null) {
+            return;
+        }
+        boolean movedToPool = credentialRepository.findByAccountId(accountId)
+                .map(credential -> TenantContext.isConsumerPool(credential.getTenantId()))
+                .orElse(false);
+        if (movedToPool) {
+            log.info("TenantClaimTokenCustomizer: console session of clientId={} was opened as a {} principal "
+                    + "before the account moved into the consumer pool — no token, fresh login (TASK-MONO-772 S6)",
+                    clientId, sessionTenant);
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_GRANT, SESSION_PREDATES_POOL_MOVE, null));
+        }
     }
 
     private static OAuth2AuthenticationException refusePoolPrincipal(String clientId, String site, String why) {

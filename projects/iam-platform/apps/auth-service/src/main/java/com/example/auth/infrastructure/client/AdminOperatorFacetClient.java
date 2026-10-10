@@ -25,10 +25,23 @@ import java.util.function.Supplier;
  *
  * <p><b>fail-CLOSED</b>: anything but a parseable {@code {"operatorFaceted": bool}} throws
  * {@link OperatorFacetUnavailableException}.
+ *
+ * <p><b>TASK-MONO-772 S6</b>: asks with {@code axes=IDENTITY} ({@link #AXES_ASKED}) — an admin that does not
+ * know the parameter would answer with both axes, i.e. the pre-772 «skip the self-onboarded operator», the
+ * conservative side.
  */
 @Slf4j
 @Component
 public class AdminOperatorFacetClient implements OperatorFacetPort {
+
+    static final String PATH = "/internal/operators/facet";
+
+    /**
+     * TASK-MONO-772 S6 — the axes the mover asks (auth-to-admin.md § facet {@code axes}). Not
+     * {@code OIDC_SUBJECT}: ADR-MONO-080 D6 fourth line moves self-onboarded operators into the pool under the
+     * same id (772 implementer decision D-6).
+     */
+    static final String AXES_ASKED = "IDENTITY";
 
     private final Environment environment;
     private final int connectTimeoutMs;
@@ -93,7 +106,12 @@ public class AdminOperatorFacetClient implements OperatorFacetPort {
     private Boolean doFacet(String accountId, String identityId) {
         Map<String, Object> body = restClient().get()
                 .uri(uriBuilder -> {
-                    uriBuilder.path("/internal/operators/facet").queryParam("accountId", accountId);
+                    uriBuilder.path(PATH)
+                            .queryParam("accountId", accountId)
+                            // TASK-MONO-772 S6 (auth-to-admin.md § facet · auth-internal.md 판정 6) — the
+                            // identity axis only: a self-onboarded operator (oidc_subject = this account) is
+                            // moved under the same id now, an identity-linked operator is still skipped.
+                            .queryParam("axes", AXES_ASKED);
                     if (identityId != null && !identityId.isBlank()) {
                         uriBuilder.queryParam("identityId", identityId);
                     }
