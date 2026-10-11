@@ -4,7 +4,7 @@ TASK-MONO-788
 
 # Status
 
-review — 구현 완료(2026-10-11 UTC). AC-1~5 ✅. ⏳ `done/` 전 남은 것 = **AC-6**(소유자 `terraform apply` 뒤 라이브 확인).
+done — 구현 완료(2026-10-11 UTC). AC-1~5 ✅. ⏳ `done/` 전 남은 것 = **AC-6**(소유자 `terraform apply` 뒤 라이브 확인).
 
 # Title
 
@@ -104,3 +104,18 @@ monorepo
 - 가드: `verify-demo-wrapper.sh` 정적 **PASS (rc=0)**. ⚪ (h) 이미지 실재 검증은 이 호스트에서 `docker manifest inspect` 가 매달려 **docker 심(shim)으로 manifest 만 즉시 실패**시켜 돌렸다 → **0/18 측정(skip 18)** — 이 변경과 무관한 축이고 CI 가 잰다.
 - 런처: 첫 브라우저 실측에서 클릭 직후 폴링(pending)이 응답 문구를 지웠다 — 무엇을 요청했는지가 그 줄에만 있으므로 pending·starting 에서는 남기게 고쳤다(재실측 `dmsg="mock: 기동 시작"`).
 - `infra/demo/aws/README.md` 의 `/status` 필드 목록에 `domain_cold_start` 한 줄.
+
+---
+
+## CORRECTION
+
+(2026-10-11 UTC, close chore) 위 Status 와 AC-6 의 «⏳ 소유자 `terraform apply` 뒤 라이브 확인» 은 **더 이상 남은 일이 아니다** — 아래가 지금의 사실이다. 위의 기록은 그대로 둔다.
+
+- **4차원 검증**: (a) #4302 `MERGED` · 머지 커밋 `5ad677ce8` (b) `origin/main` tip 일치 (c) 머지 시점 실패 check **0**(8 pass · 필수 4종 포함) (d) AC-1~5 는 review 시점에 닫혔고 AC-6 은 아래로 닫힘.
+- **AC-6 라이브 실측** — 소유자 `terraform apply`(`aws_lambda_function.control` in-place 1건, plan `0 add / 1 change / 0 destroy`, `source_code_hash` 만 변경) 뒤:
+  - `GET /status` → `"domain_cold_start": true`, `state: stopped`.
+  - 기준선: `GET /bundles` 의 `selection` = 지난 세션의 **5묶음** `console` · `console-scm` · `console-wms` · `store` · `store-fulfillment`.
+  - 꺼진 인스턴스에서 `POST /domain/start {"name":"finance"}` → **200** «기동 시작 - finance 웜업까지 약 4~10분». 3초 뒤 `selection` = **`["console-finance"]`** — 합집합이 아니라 **교체**(세션 경계 상속 확인).
+  - 약 2분 반 뒤 `console-finance` = `ready`. `/domains`: iam **up 16/16** · finance **up 7/7** · traefik 1/1 · wms · scm · erp · ecommerce · fan **down 0/0** ⇒ **24 컨테이너, 고른 도메인 + 로그인 의존만**.
+  - 확인 뒤 `POST /stop` → `stopping`, `used_minutes` 1258/1800.
+- ⚪ 안 잰 것: 런처 화면에서의 클릭(위 실측은 API 직접 호출). 화면 쪽은 AC-4 의 브라우저 실측(모의 API)이 덮고, 이번 라이브는 그 버튼이 부르는 같은 엔드포인트를 쟀다.

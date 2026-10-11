@@ -218,10 +218,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-788-domain-start-from-a-stopped-instance.md` — **꺼진 인스턴스에서도 론처 고급 영역의 도메인 「시작」 · 「▶ 전체 스택 시작」 → 「▶ 데모 서버 켜기」** (REVIEW, 2026-10-11 UTC). `TASK-MONO-787` 의 Scope Out(람다 409)을 닫는다: 꺼진 동안 `/domain/start <d>` 는 그 도메인을 «그 도메인만 푸는 묶음»(`BUNDLES`/`BUNDLE_ADDONS` 에서 **파생**)으로 바꿔 `bundle_start` 로 **위임** — 세대 거절 · 예산 · 세션 경계를 물려받는다(가드 (z40) + bite-4). `/status` 에 `domain_cold_start` — 론처는 참일 때만 버튼을 연다(apply 전 창 = 잠금). `start()` 는 «전체» 가 아니었다(부팅 = 저장된 선택, 없으면 `demo-core`) → 이름 · 문구를 동작에 맞춤(동작 무변경). 람다 시험 122 · bite 12칸 · 브라우저 4상태. ⏳ **AC-6 = 소유자 `terraform apply` 뒤 라이브**(재굽기 불필요). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
-
 
 ## done
+- ✅ `TASK-MONO-788-domain-start-from-a-stopped-instance.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4302**(`5ad677ce8`, 머지 시점 실패 0 · Demo wrapper smoke pass). 꺼진 인스턴스에서 도메인 「시작」 → 그 도메인만 푸는 묶음으로 `bundle_start` 위임 · `/status` `domain_cold_start` · 「▶ 전체 스택 시작」 → 「▶ 데모 서버 켜기」(동작 무변경). 소유자 `terraform apply`(Lambda in-place 1건) 뒤 라이브: `domain_cold_start:true` · 꺼진 상태 `finance` 시작 → 선택 5묶음 → `["console-finance"]` 교체 · iam 16/16 + finance 7/7 + traefik 만(24 컨테이너) · `/stop`.
 - ✅ `TASK-MONO-781-demo-cs-support-lock-operator.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4277**(`53e44f3e5`) · AC-4 기록 **#4279**(`b723b8810`) (머지 시점 실패 0, 둘 다). 데모 CS 2선 운영자 `cs@demo.com`(`SUPPORT_LOCK`@`ecommerce`). 26차 창 라이브: 스위처 `ecommerce` 하나 · 계정 운영 검색 · `demo@demo.com` 사이트 잠금/해제(account-service 로그) · 감사·보안 화면. 잠금 미표시는 `TASK-PC-FE-332`.
 - ✅ `TASK-MONO-772-operator-invite-verified-acceptance.md` — **DONE 2026-10-11 UTC (4-dim verified)** — 구현 PR **#4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286** · review 이동 **#4287**(`bfda6407a`) (머지 시점 실패 0, 전부). `ADR-MONO-080` 단계 3 — 운영자 초대 → 인증된 본인 수락 · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동. 26차 창 라이브: 사이트 계정 운영자 0 · 초대 메일 1통 · 초대 → 미인증 403 → 인증 → 수락 → 콘솔 토큰. 후속 `TASK-MONO-784` 착수 가능.
 - ✅ `TASK-MONO-787-launcher-advanced-domains-visible-when-off.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4298**(`d6caf88d6`, 머지 시점 실패 0 · Demo wrapper smoke pass · 로컬 `verify-demo-wrapper.sh` 정적 PASS). 론처 고급 영역 — 꺼진 인스턴스에서도 도메인 목록을 «⚪ 꺼짐» · 잠긴 버튼으로 표시(람다 409), 「인스턴스 전체」 · 「도메인별 제어」 두 구획 + 타일 그리드.
