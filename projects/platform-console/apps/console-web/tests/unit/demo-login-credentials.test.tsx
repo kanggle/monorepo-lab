@@ -25,6 +25,7 @@ import {
   DemoLoginCredentials,
   DEMO_LOGIN_EMAIL,
   DEMO_LOGIN_PASSWORD,
+  DEMO_CS_OPERATOR_EMAIL,
 } from '@/widgets/demo-credentials/DemoLoginCredentials';
 
 beforeEach(() => {
@@ -77,5 +78,14 @@ describe('DemoLoginCredentials', () => {
     // 계정만 알고 테넌트를 안 고르면 방문자는 빈 화면과 403 을 보고 "고장났다" 로 읽는다
     // — 운영자 권한은 계정이 아니라 **테넌트 assume** 에서 파생되기 때문이다.
     expect(text).toContain('demo-corp');
+  });
+
+  it('TASK-MONO-782 — names the CS 2nd-line operator and the ecommerce trade-off it discloses', async () => {
+    state.value = 'running';
+    await renderBlock();
+    const el = screen.getByTestId('demo-login-cs-operator');
+    expect(el).toHaveTextContent(DEMO_CS_OPERATOR_EMAIL);
+    expect(el).toHaveTextContent('ecommerce');
+    expect(el).toHaveTextContent('이커머스·WMS 운영 권한');
   });
 });
