@@ -95,7 +95,10 @@ class MasterRefSearchIntegrationTest extends AdminServiceIntegrationBase {
         UUID byCode = UUID.randomUUID();
         UUID byName = UUID.randomUUID();
         warehouseRepo.save(new WarehouseRefEntity(byCode, "WH-" + tok, "Busan", "Asia/Seoul", "ACTIVE", NOW));
-        warehouseRepo.save(new WarehouseRefEntity(byName, "WH-OTHER-" + UUID.randomUUID(),
+        // Code must NOT contain tok (so only the name can match) and must fit
+        // warehouse_code VARCHAR(40) — a full UUID suffix (45 chars) failed the insert on CI.
+        warehouseRepo.save(new WarehouseRefEntity(byName,
+                "WHN-" + UUID.randomUUID().toString().substring(0, 8),
                 "Incheon " + tok, "Asia/Seoul", "ACTIVE", NOW));
 
         var ids = warehouseRepo.search(like(tok.toLowerCase(Locale.ROOT)), null, PAGE)
