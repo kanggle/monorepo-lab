@@ -8,7 +8,7 @@ admin-service 기준정보 조회(`GET /dashboard/refs/{type}`)에 검색어 · 
 
 # Status
 
-in-progress — 구현 중(2026-10-12 UTC).
+review — 구현 완료(2026-10-12 UTC). AC-1~5 ✅ — 단 AC-2~4 의 실제 PostgreSQL 칸은 CI 통합 잡이 잰다(로컬 Docker 없음).
 
 # Owner
 
@@ -57,11 +57,11 @@ wms-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 계약 § 1.7 에 파라미터 표가 있고, 구현이 그 표대로 동작한다.
-- [ ] **AC-2** — `q` 는 코드와(이름이 있는 타입은) 이름에 대소문자 무시 부분 일치한다. `_` · `%` 는 문자 그대로 일치한다(실제 PostgreSQL).
-- [ ] **AC-3** — `warehouseId`(zones · locations) · `skuId`(lots) · `partnerType`(partners, 여럿 OR) · `status` 가 범위를 좁힌다. 해당 없는 파라미터는 무시된다.
-- [ ] **AC-4** — 모든 필터가 비어 있는 호출이 PostgreSQL 에서 실패하지 않는다(42P18 회귀 없음).
-- [ ] **AC-5** — 잘못된 UUID 는 `400 VALIDATION_ERROR` 이고 저장소를 부르지 않는다.
+- [x] **AC-1** — 계약 § 1.7 에 파라미터 표가 있고, 구현이 그 표대로 동작한다. 실측: 슬라이스 9/9(저장소가 받은 값 단언).
+- [x] **AC-2** — `q` 는 코드와(이름이 있는 타입은) 이름에 대소문자 무시 부분 일치한다. `_` · `%` 는 문자 그대로 일치한다. 실측: `RefSearchTest` 5/5(패턴) + `MasterRefSearchIntegrationTest`(`warehouse_q_…` · `underscore_isLiteral_…`). ⏳ 통합 시험은 **CI 가 잰다** — 이 호스트는 Docker 데몬이 꺼져 있다(`docker version` → npipe 없음). CI 의 wms 통합 잡이 `admin-service:integrationTest` 를 돈다(ci.yml, `needs.changes.outputs.wms`).
+- [x] **AC-3** — `warehouseId`(zones · locations) · `skuId`(lots) · `partnerType`(partners, 여럿 OR) · `status` 가 범위를 좁힌다. 해당 없는 파라미터는 무시된다. 실측: 슬라이스 4칸 + 통합 3칸(⏳ CI).
+- [x] **AC-4** — 모든 필터가 비어 있는 호출이 PostgreSQL 에서 실패하지 않는다. 실측: 통합 `everySearch_allNullFilters_…`(⏳ CI).
+- [x] **AC-5** — 잘못된 UUID 는 `400 VALIDATION_ERROR` 이고 저장소를 부르지 않는다. 실측: 슬라이스 `list_malformedUuid_returns400`.
 
 # Related Specs
 
@@ -90,4 +90,7 @@ wms-platform
 
 # Implementation Notes
 
-(구현 중 측정 · 정정은 여기에 적는다.)
+- `./gradlew :projects:wms-platform:apps:admin-service:test --tests MasterRefControllerSliceTest --tests RefSearchTest` → BUILD SUCCESSFUL, JUnit XML: 슬라이스 **9/9** · 단위 **5/5**. 통합 시험 클래스는 `compileTestJava` 로 컴파일만 확인.
+- **bite**: 체크포인트 커밋 뒤 컨트롤러에서 `q` 를 버리게(`like = null`, 수정 전 동작) 하자 슬라이스 **9 중 2 실패**(검색어를 보내는 두 칸) → `git checkout` 으로 복원, 트리 깨끗.
+- 계약의 «잘못된 UUID = 400 VALIDATION_ERROR» 는 `GlobalExceptionHandler` 의 `MethodArgumentTypeMismatchException` 처리를 읽고 적었다. 오류 봉투는 `{"error":{"code":…}}` 라 시험 경로는 `$.error.code`.
+- 저장소에 원래 있던 `findByWarehouseId` · `findBySkuId` 는 컨트롤러가 한 번도 안 불렀다(죽은 메서드) — 이 티켓 범위 밖이라 남겼다.
