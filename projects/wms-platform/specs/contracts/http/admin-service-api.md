@@ -457,8 +457,22 @@ partners) is shared reference data; not partitioned by tenant.
 
 Auth: `WMS_VIEWER` or higher.
 
-Query parameters vary by `{type}`. Pagination supported (default
-`lastEventAt,desc`).
+Query parameters (TASK-BE-630 — previously "vary by `{type}`" with none
+implemented, so a search box sent `q` and the producer silently ignored it):
+
+| Param | Applies to | Type | Description |
+|---|---|---|---|
+| `q` | all types | string | Case-insensitive **substring** match on `code`, and on `name` where the type has one (`warehouses`, `zones`, `skus`, `partners`). `locations` / `lots` match `code` only (`locationCode` / `lotNo`). `%` and `_` are matched literally. Blank or absent = no filter. |
+| `status` | all types | string | Exact match (`ACTIVE` / `INACTIVE`). |
+| `warehouseId` | `zones`, `locations` | UUID | Only refs in that warehouse. |
+| `skuId` | `lots` | UUID | Only lots of that SKU. |
+| `partnerType` | `partners` | string, repeatable | Exact match against any given value, e.g. `?partnerType=SUPPLIER&partnerType=BOTH` for a supplier picker. |
+
+A param that does not apply to the requested `{type}` is **ignored** (not
+rejected) — consistent with the other § 1 list endpoints. A malformed UUID in
+`warehouseId` / `skuId` is a `400 VALIDATION_ERROR`, as everywhere else.
+
+Pagination supported (default `lastEventAt,desc`).
 
 Response `200`: paginated list of the matching `*Ref` row shape from
 `domain-model.md § 5`.
