@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../model/auth-context';
 
@@ -107,11 +107,24 @@ export function LoginForm() {
     setIsSubmitting(true);
     try {
       await login(callbackUrl);
-    } finally {
-      // Note: signIn() typically redirects, so we won't actually reach here.
+    } catch {
+      // Re-arm only on failure. A successful signIn() resolves as soon as it has
+      // set window.location — before the browser leaves — so re-enabling here on
+      // success (as a `finally` did) reopened the button during the redirect, and
+      // a second press restarts the flow with fresh state/PKCE cookies that no
+      // longer match the authorize request IAM already holds (TASK-FE-108).
       setIsSubmitting(false);
     }
   }
+
+  // A page restored from the back/forward cache keeps «이동 중...»; re-arm it.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setIsSubmitting(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const disabled = isSubmitting || isLoading;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthCardLayout, useAuth } from '@/features/auth';
 
 /**
@@ -38,16 +38,53 @@ import { AuthCardLayout, useAuth } from '@/features/auth';
  * on the authorize request and IAM's entry point routes it to its signup form.
  * The authorize request itself is otherwise identical, which is what keeps the
  * new account in the `ecommerce` tenant.
+ *
+ * <h2>One flow per page, not one per press (TASK-FE-108)</h2>
+ *
+ * The button used to stay live while the automatic redirect was in flight
+ * (about a second). Pressing it started a **second** `signIn`: that call
+ * rewrote the store's `state` and PKCE cookies, but the browser was already on
+ * its way to IAM with the **first** authorize request, which is the one IAM
+ * saved and later resumed. The callback then carried the first `state` against
+ * a cookie holding the second, and Auth.js refused it — `CallbackRouteError` →
+ * `unexpected "state" response parameter value` — shown to the user as
+ * «인증 서버 설정에 문제가 있습니다» (measured live, 2026-10-11 UTC). A retry from
+ * `/login` worked because it was a single press. It is a race, so it fails only
+ * sometimes, which is why it looked like «the first login after signup».
+ *
+ * So the automatic start and the button share one guard, the button is
+ * disabled once the flow has started, and only a failed start re-arms it. A
+ * back-navigation that restores this page from the back/forward cache re-arms
+ * it too, or the button would stay «이동 중...» on a page that is not moving.
  */
 export default function SignupPage() {
   const { signup } = useAuth();
   const started = useRef(false);
+  const [starting, setStarting] = useState(false);
 
-  useEffect(() => {
+  const start = useCallback(() => {
     if (started.current) return;
     started.current = true;
-    void signup('/');
+    setStarting(true);
+    Promise.resolve(signup('/')).catch(() => {
+      started.current = false;
+      setStarting(false);
+    });
   }, [signup]);
+
+  useEffect(() => {
+    start();
+  }, [start]);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      started.current = false;
+      setStarting(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   // Shown while the redirect is in flight — and it is the whole page if JS never
   // runs, so the button is the fallback rather than decoration.
@@ -59,11 +96,12 @@ export default function SignupPage() {
       </p>
       <button
         type="button"
-        onClick={() => void signup('/')}
+        onClick={start}
         className="btn btn-primary btn-lg"
         style={{ width: '100%' }}
+        disabled={starting}
       >
-        IAM 으로 이동
+        {starting ? '이동 중...' : 'IAM 으로 이동'}
       </button>
     </AuthCardLayout>
   );
