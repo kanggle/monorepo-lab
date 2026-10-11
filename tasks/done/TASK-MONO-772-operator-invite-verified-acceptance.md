@@ -8,7 +8,7 @@ TASK-MONO-772
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -820,3 +820,22 @@ monorepo
 - 슬라이스 전부 머지: AC-0·S1 #4280 · S4 #4281 · S2 #4282 · S3 #4283 · S5 #4284 · S6 #4285 · S7 #4286. 각 PR 머지 시점 CI 실패 0.
 - AC-0~6 전부 ✅. ⚪ 라이브(AC 아님): AC-0 측정 4 질의(사이트 계정 셀프 온보딩 운영자 수) · 데모 Mailpit 초대 메일 1통 · 초대 → 수락 종단(AC-6 라이브).
 - 후속 판단(AC 아님): newhire R__ 시드 파일 삭제 + 볼륨 정리 · Hibernate EntityPrinter OFF 를 다른 서비스로 · `AspectCoverageTest` 공허 의심(`classpath:` 단일 루트) · S3-6~9 계약 메모(분류기 차단, 태스크 파일에만) · TASK-PC-FE-331 재평가(F7) · 🔴 OD-1 다회사 운영자 ADR = **773 착수 전**.
+
+---
+
+# 26차 데모 창 라이브 기록 · 완료 (2026-10-11 UTC, 4-dim verified)
+
+AMI `ami-00701c1fa528b5866`(REPO_COMMIT `69af06d0c`, 772 S1~S7 포함 — #4297). 소유자 브라우저 + 오케스트레이터 SSM 읽기 전용 질의.
+
+| 라이브 칸 | 결과 | 근거 |
+|---|---|---|
+| AC-0 측정 4 — 소비자 **사이트** 계정에 묶인 운영자 수 | ✅ **0** (운영자 8 · `oidc_subject` 있음 7) | `admin_operators ⋈ account_db.accounts ON id = oidc_subject WHERE tenant_id NOT IN ('consumer-pool','iam')` |
+| 초대 메일 1통 | ✅ admin `operator-invitation mail SENT (tenant=demo-corp)` 09:07:32Z · Mailpit 수신 · 수락 전 미리보기(마스킹 `h*****@` · «Demo Corporation» · `TENANT_BILLING_ADMIN`) | 🔵 링크 base 는 `iam.<domain>` 이 아니라 **`auth.hubwang.com`** — 데모의 고정 공개 인증 호스트(콘솔 로그인도 같은 홉). 기안의 «`iam.<domain>` 인지» 술어를 이것으로 정정 |
+| 초대 → 수락 종단 (AC-6 라이브) | ✅ 사이트 없는 풀 가입(«IAM 계정 만들기», 09:10:52Z) → 🔴 미인증 수락 **403 `EMAIL_NOT_VERIFIED`**(09:11:11Z, 쓰기 0) → 인증(09:12:35Z) → 🔴 수락 전 콘솔 **거절**(대조군, 09:21~09:27Z 5회 — 측면 없음) → 수락 **`ACCEPTED`**(09:43:34Z, `accepted_account_id` = 그 풀 계정) → 운영자 행 `demo-corp` · `ACTIVE` · `oidc_subject` = 계정 · 비밀번호 NULL · 역할 `TENANT_BILLING_ADMIN`@`demo-corp` → 콘솔 코드 09:43:45Z · **토큰 09:43:47Z** | admin_db · auth_db · admin/auth 로그 |
+
+창에서 덤으로 본 것(이 티켓 AC 아님 — 후속 티켓으로):
+- 수락 **전** 측면 없는 풀 계정의 콘솔 시도가 `sso_wrong_account` 문구(«다른 계정(스토어 소비자 계정)으로 로그인돼 있어…»)를 받는다 — 그 사람은 맞는 계정이고 수락만 남았다. 772 · 773 이후 이 화면에 오는 모집단이 바뀐 것(F7) → `TASK-MONO-773` AC-7 · `TASK-PC-FE-331` 재판정 몫.
+- 이메일 마스킹 길이가 화면마다 다르다(초대 `h*****@` · 인증 `h***@`).
+
+4-dim: (a) 구현 PR 8개 #4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286 · #4287 전부 `MERGED` (b) 스쿼시 전부 origin/main 조상 (c) 머지 시점 `statusCheckRollup` 실패 0 (각 66~67) (d) `# Acceptance Criteria` AC-0~6 본문 ✅ + 위 라이브 칸 셋 ✅.
+
