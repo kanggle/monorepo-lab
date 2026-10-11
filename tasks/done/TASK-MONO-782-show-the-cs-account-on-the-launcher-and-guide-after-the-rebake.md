@@ -4,7 +4,7 @@ TASK-MONO-782
 
 # Status
 
-in-progress (2026-10-11 UTC) — AC-0 참 · AC-1 창 CLOSED · AC-2~AC-4 구현 완료, 아래 § 구현 기록 참조.
+done
 
 # Title
 
@@ -127,3 +127,11 @@ Scope 가 "선택, 판단해서 기록"으로 남긴 항목. **추가하기로 �
 - `git add` 뒤(스테이지 먼저 — `check-*` 가드는 `git ls-files` 를 읽는다) `bash scripts/check-index-queue-drift.sh` → **rc=0**, `bash scripts/check-task-id-collision.sh` → **rc=0**, `bash scripts/check-walkthrough-ledger-drift.sh` → **rc=0**.
 - `pnpm-lock.yaml` 은 `pnpm install` 뒤 `git status` 에 modified 로 떴으나 `git diff` 가 **빈 diff**(줄바꿈 정규화 경고만) — 실제 내용 변경이 아니므로 커밋에서 **제외**.
 - 콘솔 e2e 스펙(`tests/e2e/*.spec.ts`) 을 grep — 이 가이드 카드·테스트 계정 텍스트를 핀하는 e2e 없음 ⇒ **nightly-e2e 영향 없음**(변경이 유닛 테스트로만 커버됨). `infra/demo/verify-demo-wrapper.sh` 변경은 `nightly-e2e.yml` 의 `--require-coverage` 호출과 `ci.yml` 의 `demo-wrapper-smoke`(경로 게이트, 이 PR 은 `infra/demo/` 를 건드리므로 **실행된다**) 양쪽에 걸린다 — 둘 다 이 PR 의 CI 에서 다시 확인됨.
+
+---
+
+# 완료 기록 (2026-10-11 UTC, 4-dim verified)
+
+- (a) impl PR **#4307** `MERGED` (b) 스쿼시 `c8488c209` = 그 시점 origin/main tip (c) 머지 시점 `statusCheckRollup` 실패 0/66 (d) `# Acceptance Criteria` AC-0~4 본문 ✅(AC-1 = 26차 창 라이브).
+- review 단계를 따로 두지 않았다 — 구현 PR 이 머지됐고 AC 가 전부 닫혀 review 에서 기다릴 것이 없다(라이브 AC 는 머지 전에 이미 닫혔다).
+- 🔵 남은 관찰: 론처가 방문자에게 «잠금 · 해제 버튼을 눌러 봅니다» 라고 안내하지만 목록 상태 칸은 사이트 잠금을 보여 주지 않는다 → `TASK-PC-FE-332`.

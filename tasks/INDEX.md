@@ -204,7 +204,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-782-show-the-cs-account-on-the-launcher-and-guide-after-the-rebake.md` — **CS 2선 데모 계정(`cs@demo.com`)을 론처 · 콘솔 가이드에 표시 + (z11) 대조 — 재굽기 뒤에만** (IN-PROGRESS, 2026-10-11 UTC · 🟢 AC-0 참 — 배포 AMI `REPO_COMMIT=69af06d0c`(26차)가 `TASK-MONO-781` 스쿼시 `53e44f3e5` 의 자손 · 🟢 AC-1 창 CLOSED(26차, SITE_MEMBERSHIP 스코프 잠금·해제 확인) — 남은 것은 AC-2~4 구현). `TASK-MONO-730` 과 같은 모양. 가이드 문구에 «ecommerce 를 고르면 이커머스·WMS 운영 권한도 함께 받는다» 공개(소유자 결정 A의 조건). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 - `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (IN-PROGRESS, 2026-10-11 UTC — AC-0 ✅: 772 `done/` · 측정 ①②③ 답 · ④ ⚪). 관리 평면 권한 평가 · 캐시 · 읽기 게이트를 행동 테넌트 축으로 · 역할 PK `(operator_id, role_id, tenant_id)` · «이 회사에서 내보내기» · 두 409(OD-1 · S1-11) → 소속 추가 · 라이더 R1~R4 기본값. 🔴 AC-0 이 찾은 것: 누수 자리 = 읽기 게이트 + 그 게이트를 쓰는 쓰기 5종 + 사본 4곳 · assume 실효 범위의 홈(R1 × D3 — 떠난 회사가 홈이면 AC-2 빨강 → 홈 제거 + 소속 백필) · 감사 `tenant_id` = 홈. 슬라이스 S1~S6(S6 = console-web). ⏳ **소유자 결정 OD-1(셀프 온보딩 상한) · OD-2(타사 운영자 배정) · OD-3(데모 `ecommerce` 역할) 대기** — S1 전에. 후속 773 AC-3. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
@@ -220,6 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## done
+- ✅ `TASK-MONO-782-show-the-cs-account-on-the-launcher-and-guide-after-the-rebake.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4307**(`c8488c209`) (머지 시점 실패 0/66). CS 2선 `cs@demo.com` 을 론처 · 콘솔 가이드 · `/login` 에 표시 + (z11) 시드 대조(bite rc=1→0). 26차 AMI 에 781 포함(AC-0) · 26차 창 라이브(AC-1).
 - ✅ `TASK-MONO-789-idle-stop-10-minutes-with-boot-grace.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4310**(`031c12d30`, 머지 시점 실패 0 · 14 pass). 데모 자동 종료(유휴) 20분 → 10분 + 켠 뒤 20분 부팅 보호(웜업 중 정지 = `TASK-MONO-389` 방지), 예산 · max-runtime 은 창과 무관. 소유자 `terraform apply`(Lambda in-place 1건) 뒤 재-plan «No changes» · 실물 env `IDLE_MINUTES=10` · `BOOT_GRACE_MINUTES=20`.
 - ✅ `TASK-MONO-788-domain-start-from-a-stopped-instance.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4302**(`5ad677ce8`, 머지 시점 실패 0 · Demo wrapper smoke pass). 꺼진 인스턴스에서 도메인 「시작」 → 그 도메인만 푸는 묶음으로 `bundle_start` 위임 · `/status` `domain_cold_start` · 「▶ 전체 스택 시작」 → 「▶ 데모 서버 켜기」(동작 무변경). 소유자 `terraform apply`(Lambda in-place 1건) 뒤 라이브: `domain_cold_start:true` · 꺼진 상태 `finance` 시작 → 선택 5묶음 → `["console-finance"]` 교체 · iam 16/16 + finance 7/7 + traefik 만(24 컨테이너) · `/stop`.
 - ✅ `TASK-MONO-781-demo-cs-support-lock-operator.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4277**(`53e44f3e5`) · AC-4 기록 **#4279**(`b723b8810`) (머지 시점 실패 0, 둘 다). 데모 CS 2선 운영자 `cs@demo.com`(`SUPPORT_LOCK`@`ecommerce`). 26차 창 라이브: 스위처 `ecommerce` 하나 · 계정 운영 검색 · `demo@demo.com` 사이트 잠금/해제(account-service 로그) · 감사·보안 화면. 잠금 미표시는 `TASK-PC-FE-332`.
