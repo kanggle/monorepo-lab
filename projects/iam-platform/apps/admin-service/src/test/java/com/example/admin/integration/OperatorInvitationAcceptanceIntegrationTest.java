@@ -458,7 +458,15 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
 
         // R4 — neither token nor hash in the log, and the capture is not empty (our refusal lines are in it).
         StringBuilder logged = new StringBuilder();
-        for (var event : logs.list) {
+        // Snapshot under the appender's own lock: the capture sits on the ROOT logger, so background
+        // threads (schedulers, pool housekeeping) keep appending while this reads — iterating `logs.list`
+        // directly threw ConcurrentModificationException in CI (#4312, iam A). AppenderBase.doAppend is
+        // synchronized on the appender, so holding that monitor while copying excludes every writer.
+        List<ch.qos.logback.classic.spi.ILoggingEvent> captured;
+        synchronized (logs) {
+            captured = new ArrayList<>(logs.list);
+        }
+        for (var event : captured) {
             logged.append(event.getFormattedMessage()).append('\n');
         }
         assertThat(logged.toString()).contains("operator-invitation accept refused")
