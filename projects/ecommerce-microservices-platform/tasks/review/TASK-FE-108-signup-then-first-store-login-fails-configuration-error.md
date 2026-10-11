@@ -4,7 +4,7 @@ TASK-FE-108
 
 # Status
 
-in-progress
+review
 
 # Title
 
@@ -66,8 +66,8 @@ ecommerce-microservices-platform
 # Acceptance Criteria
 
 - [x] **AC-0** — 착수 시 재측정: 로컬/e2e 로 "가입 → 즉시 첫 로그인" 을 재현하고 스토어 서버 로그의 실제 NextAuth 에러 타입을 읽는다. 가정하지 않고 file:line 으로 쿠키/리다이렉트 경로 표를 남긴다.
-- [ ] **AC-1** — 🔴 대조군: "가입 직후 첫 로그인"은 실패(현재) → 구현 뒤 성공. "이미 가입된 계정의 일반 로그인"(대조군)은 이전·이후 모두 변화 없이 성공.
-- [ ] **AC-2** — 재시도 경로(현재 성공) 가 구현 뒤에도 그대로 성공 — 회귀 없음.
+- [x] **AC-1** — 🔴 대조군: "가입 직후 첫 로그인"은 실패(현재) → 구현 뒤 성공. "이미 가입된 계정의 일반 로그인"(대조군)은 이전·이후 모두 변화 없이 성공.
+- [x] **AC-2** — 재시도 경로(현재 성공) 가 구현 뒤에도 그대로 성공 — 회귀 없음.
 - [ ] **AC-3** — 라이브 데모 창에서 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공. ⚪ 다음 데모 창.
 
 # Related Specs
@@ -152,3 +152,9 @@ AMI `ami-00701c1fa528b5866`. 위 «다음 데모 창 절차» 그대로 · 소�
 - `LoginForm`: `finally` → `catch` — 성공 경로에서 버튼을 다시 켜지 않는다 · bfcache 복원 때 재무장.
 - 시험: `signup-page.test.tsx` 3칸 · `login-form.test.tsx` 2칸(FE-108 표기). 로컬 vitest 는 Node 24 에서 기동 불가(`#module-evaluator`, 알려진 함정) ⇒ 🔴 **bite 는 CI 로**: 시험만 담은 커밋(수정 전 코드)을 먼저 푸시해 `Frontend unit tests` 가 FE-108 칸만 빨간지 보고, 그다음 수정 커밋.
 
+# 리뷰 이동 기록 (2026-10-11 UTC)
+
+- 구현 PR **#4301**(`69da5d1b5`) 머지 · 머지 시점 실패 0/68.
+- **AC-1 ✅** — 🔴 bite 는 CI 로(로컬 web-store vitest 는 Node 24 기동 불가): 첫 커밋(시험만 · 수정 전 코드)에서 `Frontend unit tests` 가 **FE-108 3칸만 빨강**(`/signup` 자동 시작 뒤 버튼 잠김 · bfcache 재무장 · `/login` 리다이렉트 중 잠김), 회귀 칸 2(실패 시 재무장 ×2) 초록, 다른 파일 132 초록 + 수정 전 `LoginForm` 의 미처리 rejection 1. 수정 커밋에서 `signup-page`(7) · `login-form`(9) 초록 · web-store 134 파일 초록 · 미처리 0. 로컬 `tsc --noEmit` · `next lint` rc=0.
+- **AC-2 ✅** — 재시도 경로(`/login` 단일 클릭)는 같은 `signIn` 이고 성공 경로에서 버튼만 잠긴 채 남는다 — 기존 `login-form` 칸(클릭 → `signIn('iam', {callbackUrl})` · `from` 전달 · 외부 URL 폴백) 전부 초록. e2e(`helpers/auth.ts` · `consent-decline` 등)는 새로 연 `/login` 에서 한 번 누르는 모양이라 영향 없음(grep).
+- **AC-3 ⚪** — 다음 데모 창: 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공 + `/signup` 에서 버튼을 눌러도(자동 이동 중) 실패하지 않음.

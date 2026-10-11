@@ -76,16 +76,18 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-FE-109-store-post-login-405-in-logs.md` — **스토어 Vercel 로그의 `POST /login 405` 반복 — 출처 밝히기** (READY, 2026-10-11 UTC). 26차 창 로그에 쌍으로 반복 · 화면 증상 없음. 가설: `/api/vitals` 307(메서드 보존)이 POST 를 `/login` 으로. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-- `TASK-FE-108-signup-then-first-store-login-fails-configuration-error.md` — **가입 직후 첫 스토어 로그인 `Configuration` 실패** (IN-PROGRESS, 2026-10-11 UTC). 🔴 AC-0 닫힘(26차 창 재현): `/signup` 자동 이동 중 «IAM 으로 이동» 버튼이 `signIn` 을 두 번 시작 → state 쿠키 덮어씀 → 콜백 `unexpected "state"`. 경합이라 간헐적. 수정 = 단일 시작(가드 공유 · 버튼 비활성 · 실패 · bfcache 때만 재무장) + `/login` 의 같은 틈. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 ## review
+
+- `TASK-FE-108-signup-then-first-store-login-fails-configuration-error.md` — **가입 직후 첫 스토어 로그인 `Configuration` 실패** (REVIEW, 2026-10-11 UTC). 원인(26차 창 재현): `/signup` 자동 이동 중 버튼이 `signIn` 을 두 번 시작 → state 덮어씀 → `unexpected "state"`. 수정 #4301(단일 시작 · `/login` 같은 틈). AC-0~2 ✅(CI bite 3칸) · ⏳ AC-3 라이브 다음 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **유휴 뒤 복귀 시 동시 요청이 refresh 토큰을 중복 전송 — 스토어 세션이 로그아웃된다** (REVIEW, 2026-10-06 UTC · impl PR **#4183** · 출처 `TASK-MONO-764` 23차 창 · n=1). 착수 조사: 미들웨어 `auth()` 가 refresh 를 하고 회전된 쿠키를 버려 왔다(단일 인스턴스에서도 성립). 수정 = 미들웨어 decode-only + `/api/auth/session` 경합 패자 307 재시도(console `TASK-PC-FE-300` 기전). bite = CI 런 37479099169 예상 4셀 빨강. ⚪ AC-0/2/3 라이브는 다음 창.
 - `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 원인은 세 후보(ⓐ배포 미반영·ⓑ클레임 없음·ⓒ소셜 가입)가 아니라 **ⓓ** — `TASK-BE-575` 의 pull-through 프로비저닝과 `TASK-MONO-511`(이후 완료)이 살린 `account.created` 이벤트 소비자가 서로 레이스하고, 이벤트 쪽이 거의 항상 먼저 도착해 `email=null` 로 행을 선점한다(`AccountCreatedHandler.java:28` 이 항상 `null` 전달, `UserProfileProvisioner` 의 기존 no-op 이 뒤따르는 pull-through 의 실 이메일을 버림). `UserProfile.assignEmail` + `UserProfileProvisioner.backfillEmailIfMissing` 로 1회 백필 추가, 단위 테스트 추가(`./gradlew :…:user-service:test` BUILD SUCCESSFUL). 라이브 재확인은 AMI 재굽기 이후(AC-4 ⚪ 미체크). impl PR **#4184**. 분석=Opus 5.5 / 구현 권장=Sonnet(실제: Opus 5.5 — 레이스 조건 진단은 복잡 도메인 작업).

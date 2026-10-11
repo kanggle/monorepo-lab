@@ -92,6 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-PC-FE-332-accounts-list-hides-site-membership-lock.md` — **«계정 운영» 목록이 풀 계정의 사이트 소속 잠금을 안 보여 준다** (READY, 2026-10-11 UTC · 26차 창). 잠금 · 해제는 실제로 됐는데(account-service `ACTIVE -> LOCKED`) 상태 칸은 계정 상태라 `ACTIVE` 그대로 → 운영자가 «안 됐다» 로 읽음. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-331-sso-wrong-account-logout-stuck-without-store-session.md` — **`sso_wrong_account` 안내의 탈출구가 «스토어 탭 로그아웃» 하나뿐 — 스토어 세션이 없으면 사용자가 갇힌다** (READY, 2026-10-09 UTC · 출처 25차 데모 창). 스토어 탭 없이(예: `TASK-FE-108` 로 스토어 로그인이 실패했거나 탭을 닫은 경우) IAM 세션만 있는 상태로 콘솔 재진입 → 같은 거절 반복(18:29:44·18:30:33·18:30:42Z). 원인은 `SsoWrongAccountLogout.tsx` 에 문서화됨(SAS 1.4.1 end_session 은 `id_token_hint` 필수, 콘솔엔 없음). AC-0 = 세 후보(IAM 폼 로그아웃 경로·`prompt=login` 강제·로컬 초기화만) 실측 비교, 결정 아님. 소유자 결정 가능성 높음. 분석=Opus 5.5 / 구현 권장=Opus. ⏳ **2026-10-10 UTC 소유자 결정: `TASK-MONO-773` 뒤로 미룸** — 773 이 측면 없는 풀 계정을 비운영자 셸로 들이면 이 실패 자체가 사라질 수 있다(772 F7). 773 AC-7 이 그것을 잰다.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
