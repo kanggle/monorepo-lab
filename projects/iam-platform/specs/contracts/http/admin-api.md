@@ -66,7 +66,7 @@ base path: `/api/admin`
 
 ## Authorization Model
 
-모든 mutation 및 read endpoint는 필요한 **permission key**를 선언한다 ([specs/services/admin-service/rbac.md](../../services/admin-service/rbac.md)). 운영자의 role 집합이 보유한 permission 합집합에 요청 endpoint의 permission이 포함되어야 통과한다. 누락 시 `403 PERMISSION_DENIED`.
+모든 mutation 및 read endpoint는 필요한 **permission key**를 선언한다 ([specs/services/admin-service/rbac.md](../../services/admin-service/rbac.md)). 운영자의 role 집합이 보유한 permission 합집합에 요청 endpoint의 permission이 포함되어야 통과한다. 누락 시 `403 PERMISSION_DENIED`. 🔴 **TASK-MONO-784** 부터 이 합집합 통과는 «어딘가에 이 권한이 있다» 일 뿐이고, **어느 회사에서** 통하는지는 아래 § 행동 테넌트 의 테넌트 게이트가 정한다(두 단 판정).
 
 - Permission key catalog: `account.read`, `account.lock`, `account.unlock`, `account.force_logout`, `audit.read`, `security.event.read`
 - Annotation이 선언되지 않은 endpoint는 **fail-closed로 deny**되며 `admin_actions`에 `outcome=DENIED, permission_used="<missing>"` 기록
@@ -81,6 +81,87 @@ base path: `/api/admin`
 - 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다. 대상 계정이 **다른 테넌트**면 tenant-scoped 조회가 → **`404 ACCOUNT_NOT_FOUND`** (enumeration-safe: 타 테넌트 존재를 확인해 주지 않는다).
 - **SUPER_ADMIN 플랫폼 스코프**: SUPER_ADMIN(`tenant_id='*'`) 이 활성 테넌트 없이(헤더 부재/`'*'`) 호출하면 admin-service 는 `'*'` 를 그대로 스탬프한다. account-service 는 **`lock` · `unlock` 에서 계정 행의 테넌트**로 대상을 찾는다(TASK-MONO-735 — 이전엔 `fan-platform` 기본값이라 `fan-platform` 밖 계정이 404 였다) · **`gdpr-delete` 도 같다(TASK-BE-619)** — 그리고 `gdpr-delete` 는 SUPER_ADMIN 이 활성 테넌트를 골라 둔 채 불러도 **항상** `'*'` 를 찍는다(아래 § gdpr-delete) · **`lock` · `unlock` · `bulk-lock` 도 이제 같다(TASK-BE-621)** — 플랫폼 스코프 운영자에게는 활성 테넌트와 무관하게 **항상** `'*'`(계정 전체 잠금은 플랫폼 관리자만, 아래 § lock) · `export` 는 여전히 `fan-platform` 기본값(BE-467 net-zero). 상세: [admin-to-account.md § Tenant Confinement](internal/admin-to-account.md#tenant-confinement--x-tenant-id-task-be-467).
 - **session-revoke** 는 admin-service 가 활성 테넌트를 동일하게 해소·스탬프하며(TASK-BE-467), auth-service 가 이를 **실제로 enforce** 한다(**TASK-BE-468**): 구체 테넌트가 계정을 소유하지 않으면 force-logout 은 **no-op**(`revokedTokenCount=0`, DB revoke·Redis 무효화 미수행 — enumeration-safe). 부재/`'*'` → net-zero. 상세: [admin-to-auth.md](internal/admin-to-auth.md#tenant-confinement--x-tenant-id-task-be-468).
+- 🔴 **`TASK-MONO-784` 부터 «effective scope(home ∪ 배정)» 는 이 절의 게이트가 아니다** — 아래 § 행동 테넌트 의 grant scope 판정으로 바뀐다(S3). 생략 시 «운영자 자신의 테넌트» 도 아래 생략 규칙으로 바뀐다.
+
+### 행동 테넌트 — 회사별 소속 · 역할 (TASK-MONO-784 · ADR-MONO-082 b)
+
+**ADR-MONO-082 ACCEPTED — b · 라이더 R1~R4 기본값 · 784 AC-0 기록(구현자 결정 D-1 ~ D-16) · 소유자 결정 OD-1 ~ OD-3 (2026-10-11 UTC).** 운영자 행 하나(계정 `sub` 하나)가 여러 회사의 운영자다. 이 절이 그 판정의 **정본**이고, 아래 각 엔드포인트 절의 «effective scope(home ∪ 배정)» · «생략 시 운영자 자신의(home) 테넌트» 문구는 표의 «784 슬라이스» 가 머지된 뒤부터 이 절로 읽는다(그 전까지는 각 절의 지금 동작).
+
+**용어**:
+
+| 용어 | 뜻 |
+|---|---|
+| **소속** (membership) | `operator_tenant_assignment` 행 하나 = 그 테넌트의 소속(ADR-082 갈래 비교 assume 행). `'*'` 운영자는 소속이 **0** 이다 — `'*'` 는 소속이 아니다(ADR-082 D2) |
+| **홈** (`admin_operators.tenant_id`) | 라이더 R1 — «처음 소속된 회사» 로 **남지만 판정에서 읽지 않는다**(표시 · 자기 흐름 감사 · DENIED 감사만). 그 회사를 떠나도 값은 그대로다. 784 S2 의 백필이 홈에 배정 행이 없는 기존 행에 그 행을 만들므로 단일 회사 운영자의 소속 = {홈} 이다 |
+| **회사별 역할** | `admin_operator_roles` 행의 `tenant_id` = **그 역할이 사는 회사**(WI-2 «역할 행 = 홈» 폐기 — [data-model.md](../../services/admin-service/data-model.md#admin_operator_roles)). 비-`'*'` 역할 행의 `tenant_id` 는 그 운영자의 소속 중 하나여야 한다 |
+| **grant scope** | `effectiveAdminScope(운영자, 권한)` — 그 권한을 주는 역할 행의 테넌트 집합(`'*'` → `{'*'}`, 노드 grant → subtree) — [rbac.md § Target-Tenant Scope Confinement](../../services/admin-service/rbac.md#target-tenant-scope-confinement-adr-mono-024-d2). 🔴 **배정만 있는 회사는 여기에 들어갈 수 없다**(라이더 R2 — 역할 행 없는 소속의 관리 권한 = 0). 홈도 읽지 않는다 |
+| **행동 테넌트** | 요청 하나가 «어느 회사로» 행동하는가. 운영자 토큰에는 테넌트가 없다(ADR-082 D1) — 행동 테넌트는 **요청마다 엔드포인트 입력에서만** 온다: 쿼리 `tenantId` · `X-Tenant-Id` · path `tenantId` · 대상 리소스의 테넌트 |
+
+**두 단 판정** (D-4):
+
+1. `@RequiresPermission` — 지금 그대로 «이 운영자가 **어딘가에** 이 권한을 가지나»(권한 합 · 캐시 키 = 운영자). 거친 거름이다 — 통과가 어느 회사에서의 허가도 아니다.
+2. 테넌트 게이트 — 행동 테넌트 T 가 그 권한의 grant scope 안인가(`'*'` ∈ scope 면 통과). 밖이면 `403 TENANT_SCOPE_DENIED` + best-effort DENIED 행(지금 모양). 읽기 · 쓰기 모두 이 한 술어 — 읽기 게이트(`QueryTenantScopeGate`)도 «배정 ∪ 홈» 이 아니라 이것이다(ADR-082 갈래 비교 RBAC 행 · AC-1).
+
+**행동 테넌트가 생략됐을 때** (D-4 — ADR-082 § 새로 생기는 위험 1: «홈» 기본값은 R1 과, «모든 소속의 합» 은 상속 누수와 모순이므로 둘 다 쓰지 않는다):
+
+| 그 권한의 grant scope | 해소 |
+|---|---|
+| 명시값이 있다(쿼리 `tenantId` > `X-Tenant-Id`) | **명시값이 이긴다** — 그 값으로 게이트 2 |
+| `{'*'}` | `'*'`(지금 홈 = `'*'` 와 같은 결과) |
+| 구체 테넌트 **정확히 하나** | 그 테넌트 |
+| **0** | `403 TENANT_SCOPE_DENIED` |
+| **둘 이상** | `400 VALIDATION_ERROR`(«`tenantId` 가 필요하다» — 새 코드 없음) |
+
+🔵 단일 회사 운영자는 grant scope = {그 회사} 이므로 지금 기본값(홈)과 **바이트 동일**하다 — 행동이 바뀌는 것은 다회사 운영자뿐이다. 콘솔은 활성 테넌트를 이미 늘 보낸다.
+**예외 둘** — 대상 운영자가 있는 쓰기는 행위자가 아니라 **대상**으로 해소한다: 역할 변경(§ PATCH …/roles — 대상이 `'*'` 면 `'*'`, 헤더 생략 시 대상의 단일 소속) · 행 전체 변경(아래 «행 전체 규칙»). path 에 테넌트가 있는 엔드포인트는 path 가 행동 테넌트다.
+
+**엔드포인트별 판정 (784 AC-0 ① 23행)** — 「784 슬라이스」 열이 그 동작을 구현하는 슬라이스다:
+
+| # | 엔드포인트 | 행동 테넌트 | 판정 (784 뒤) | 784 슬라이스 |
+|---|---|---|---|---|
+| 1 | `GET /me` | `X-Tenant-Id`(선택) | 판정 없음. `roles` = 그 테넌트의 역할 행 + `'*'` 행(헤더 없으면 지금처럼 전체) · 새 `memberships[]`(가산) — § GET /api/admin/me | S3 |
+| 2 | `PATCH /operators/me/password` · `/me/profile` | 없음 | 그대로 — 자기 행, 회사 판정 대상 아님 | — |
+| 3 | `GET /roles` · `/permissions` | 없음 | 그대로 — 카탈로그(테넌트 데이터 없음) | — |
+| 4 | `GET /console/registry` | 없음 | 운영자 범위 = **소속** ∩ 구독 ∩ ACTIVE · `'*'` 그대로 — [console-registry-api.md § Tenant selection rule](console-registry-api.md#tenant-selection-rule) | S2 |
+| 5 | `GET /operators/grantable-roles` | `X-Tenant-Id` · 생략 규칙(`operator.manage`) | ≤-own 을 **그 테넌트에서 보유한 권한**으로(D-6) | S3 |
+| 6 | `GET /operators` | `tenantId` · 생략 규칙 | grant scope(`operator.manage`) | S3 |
+| 7 | `GET /audit` | `tenantId` · 생략 규칙 | grant scope(`audit.read`) | S3 |
+| 8 | `GET /accounts`(목록) | `tenantId` · 생략 규칙 | grant scope(`account.read`) | S3 |
+| 8b | `GET /accounts?email=` | `tenantId` · 생략 규칙 | **«역할 행이 하나라도 있는 테넌트»**(역할 무관 — 권한 키 없는 읽기를 R2 에 맞춘다) | S3 |
+| 9 | `GET /operators/lookup` | `tenantId` · 생략 규칙 | 8b 와 같은 술어 · 범위 밖 = 빈 200 그대로 | S3 |
+| 10 | `POST /accounts/{id}/lock` · `unlock` · `bulk-lock` · `gdpr-delete` · `GET …/export` · `POST /sessions/{id}/revoke` | `X-Tenant-Id` · 생략 규칙 | 🔴 grant scope(각 엔드포인트의 권한) — 지금은 쓰기인데 읽기 게이트(배정 ∪ 홈)로 판정해 **배정만 있는 회사에서 잠금 쓰기가 통한다**(784 AC-0 F2) | S3 |
+| 11 | `GET /operator-invitations` | `tenantId` · 생략 규칙 | grant scope(`operator.manage`) | S3 |
+| 12 | `PATCH /operators/{id}/profile` | 대상 | **행 전체 규칙**(아래) | S4 |
+| 13 | `PATCH …/identity:link` · `:unlink` | 대상 | 행 전체 규칙 | S4 |
+| 14 | `PATCH /operators/{id}/status` | 대상 | 행 전체 규칙 | S4 |
+| 15 | `PATCH /operators/{id}/roles` | `X-Tenant-Id` = T | 회사 축 — § PATCH …/roles | S4 |
+| 16 | `GET /tenants` | 없음 | 그대로 — `'*'` 만 | — |
+| 17 | `GET /tenants/{tenantId}` | path | grant scope(`tenant.manage`) | S3 |
+| 18 | `GET /groups` | 생략 = grant scope 합 | 그대로(이미 이 규칙 — 안전한 합의 실례) | — |
+| 19 | `GET /partnerships` | `X-Tenant-Id` | 그대로(TASK-MONO-737 이 이미 이 축) | — |
+| 20 | `GET /operators/{id}/assignments` | `X-Tenant-Id` | 그대로 | — |
+| 21 | org-node 읽기 | path | 그대로 — 노드 스코프는 `org_node_id` 가 구동 | — |
+| 22 | entry-policy GET · placement preview | path | 그대로 | — |
+| 23 | `POST /onboarding/organizations` | 자기 흐름 | «두 409 → 소속 추가» — [onboarding-api.md](onboarding-api.md) | S5 |
+
+- 게이트를 다시 구현한 사본(운영자 목록 · 초대 목록 · 프로필 · 테넌트 상세)은 게이트 하나로 합친다(D-4) — 엔드포인트마다 술어를 다시 쓰지 않는다.
+- **행동 테넌트 = 감사 테넌트** (D-13 · S3): 테넌트로 판정된 비플랫폼 행위의 `admin_actions.tenant_id` = **행동 테넌트**(지금은 행위자 홈 — 784 AC-0 ②, 그래서 홈 A 인 사람이 B 에서 한 행위가 A 의 감사에 쌓이고 B 관리자가 못 봤다). `'*'` 행위자 = `'*'`(플랫폼 교차 조회 그대로). 자기 흐름(로그인 · 리프레시 · 자기 프로필 · 초대 수락) · DENIED 행 = 홈 그대로(R1 «감사 기본값» · DENIED «no leak»). 과거 행 백필 없음(감사 행 불변).
+
+**행 전체 규칙** (라이더 R3 · D-8 · S4) — 운영자 행 하나에 하나뿐인 속성(상태 · 프로필 `finance_default_account_id` · 신원 링크 `identity_id`)을 바꾸는 쓰기:
+
+| 대상의 소속 | 행위자에게 요구 | 아니면 |
+|---|---|---|
+| `'*'` 운영자(소속 0) | `'*'` grant scope(그 권한) | `403 TENANT_SCOPE_DENIED` |
+| 정확히 하나 {T} | T ∈ 그 권한의 grant scope(`'*'` 포함) — **지금 동작과 같다** | `403 TENANT_SCOPE_DENIED` |
+| 둘 이상 | **`'*'` grant scope 만** | 행위자가 대상의 회사 중 **하나라도** grant scope 에 가지면 `403 OPERATOR_HAS_OTHER_MEMBERSHIPS`(콘솔: «다른 회사에도 소속된 운영자입니다 — 이 회사에서 내보내기를 쓰세요»), 하나도 없으면 `403 TENANT_SCOPE_DENIED`(소속 수를 밖에 드러내지 않는다) |
+| 0 (비-`'*'` — 마지막 소속까지 내보내진 행) | `'*'` grant scope 만 | `403 TENANT_SCOPE_DENIED` |
+
+- 🔴 «`SUPER_ADMIN`» 은 역할 **이름**이 아니라 **`'*'` grant scope** 다(784 AC-0 F11 — 데모 운영자의 `SUPER_ADMIN` 은 `@demo-corp` 행이다. 이름으로 판정하면 회사 범위 `SUPER_ADMIN` 이 다회사 운영자를 정지한다).
+- 거절은 best-effort DENIED 행(지금 모양) · 아무것도 쓰지 않는다. `SELF_SUSPEND_FORBIDDEN` · `SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` 는 이 판정보다 먼저다(지금 순서).
+
+**`'*'` 와 회사 소속은 섞이지 않는다** (ADR-082 D2 · D-14 · S4): `'*'` 운영자에게 배정 생성 · 그룹 멤버 추가 · 비-`'*'` 역할 행 → 거절, 비-`'*'` 운영자에게 `'*'` 역할 행 → 거절. 코드 = **`400 VALIDATION_ERROR`**(772 D-2 의 `'*'` 초대 거절과 같은 코드). 초대 수락 · 셀프 온보딩의 `'*'` 행은 `409 OPERATOR_ALREADY_PROVISIONED`(§ Operator Invitation · onboarding-api).
+
+**권한 캐시** (D-5 · S3/S4): 합 캐시(`admin:operator:perm:{operator_id}`)는 운영자 키 그대로이고 **테넌트 질문에 답하지 않는다** — 테넌트 판정은 grant scope(DB)가 답한다. 무효화 지점에 **소속 추가 · 내보내기 · 상태 변경**(지금은 상태 변경이 무효화하지 않는다 — 784 AC-0 F7)을 더한다. 성능 때문에 테넌트 판정을 캐시하게 되면 키는 `admin:operator:perm:{operator_id}:{tenant_id}` 이고, 그 회사의 변경은 그 회사 키 + 합 키를, 행 전체 변경은 소속을 DB 에서 열거해 지운다(SCAN 금지) — [rbac.md § Caching & Invalidation](../../services/admin-service/rbac.md#caching--invalidation-구현-가이드).
 
 ---
 
@@ -97,7 +178,7 @@ base path: `/api/admin`
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `email` | string (optional) | 이메일로 단건 검색. 없으면 전체 목록 반환 |
-| `tenantId` | string (optional) | **TASK-BE-357** — 검색/목록 대상 테넌트. 생략 시 운영자의 활성/자기 테넌트. `*`는 SUPER_ADMIN 전용 (전 테넌트). 일반 운영자가 effective scope(home ∪ 배정, TASK-BE-326) 밖의 값을 지정하면 `403 TENANT_SCOPE_DENIED`. (`GET /api/admin/audit` 의 `tenantId` 와 동일 시맨틱.) |
+| `tenantId` | string (optional) | **TASK-BE-357** — 검색/목록 대상 테넌트. 생략 시 운영자의 활성/자기 테넌트. `*`는 SUPER_ADMIN 전용 (전 테넌트). 일반 운영자가 effective scope(home ∪ 배정, TASK-BE-326) 밖의 값을 지정하면 `403 TENANT_SCOPE_DENIED`. (`GET /api/admin/audit` 의 `tenantId` 와 동일 시맨틱.) **TASK-MONO-784 S3 부터**: § 행동 테넌트 — 목록 = grant scope(`account.read`), `email` 분기 = «역할 행이 하나라도 있는 테넌트» + 생략 규칙 |
 | `status` | enum (optional) | **TASK-BE-475** — 계정 상태 필터. `ACTIVE` \| `LOCKED` \| `DORMANT` \| `DELETED` (대소문자 무관). **전체 목록 분기에만 적용** (`email` 단건 검색 시 무시 — 단건은 상태로 필터하지 않는다). 미지정/공백 → 전체 상태 반환(back-compat). 허용 목록 외 값 → `400 VALIDATION_ERROR`. 소비 예: `?status=LOCKED&page=0&size=1` 의 `totalElements` 로 잠금 계정 수 집계(platform-console IAM 개요, TASK-PC-FE-181). |
 | `page` | int (default 0) | 전체 목록 조회 시 페이지 번호 |
 | `size` | int (default 20, max 100) | 전체 목록 조회 시 페이지 크기 |
@@ -388,7 +469,7 @@ base path: `/api/admin`
 | `from` | ISO 8601 datetime | 시작 시각 |
 | `to` | ISO 8601 datetime | 종료 시각 |
 | `source` | string (optional) | `admin` / `login_history` / `suspicious` |
-| `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. |
+| `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. **TASK-MONO-784 S3 부터**: § 행동 테넌트 — grant scope(`audit.read`) + 생략 규칙(생략 · 구체 테넌트 둘 이상 → `400 VALIDATION_ERROR`). 배정만 있는 회사의 감사는 `403`(AC-1). 결과는 `admin_actions.tenant_id` = 그 테넌트인 행 — 784 부터 그 칸은 행동 테넌트라(D-13) 홈이 다른 운영자가 이 테넌트에서 한 행위도 여기 보인다 |
 | `page` | int (default 0) | — |
 | `size` | int (default 20, max 100) | — |
 
@@ -567,7 +648,7 @@ platform-console 이 보유한 **IAM OIDC `platform-console-web` access token**
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | `subject_token` 누락 |
 | 400 | `BAD_REQUEST` | `grant_type` 또는 `subject_token_type` 가 RFC 8693 지정 값과 불일치 |
-| 401 | `TOKEN_INVALID` | subject token 서명/`iss`/`aud`/`exp`/`nbf` 검증 실패, `platform-console-web` 가 아닌 client 에 발급된 토큰, IAM OIDC access token 이 아님(예: operator/bootstrap 토큰 제시), auth-service JWKS 도달 불가, **또는** OIDC subject 에 매핑되는 활성 `admin_operators` row 부재(미매핑/비활성/잠금 — fail-closed, 토큰 미발급) |
+| 401 | `TOKEN_INVALID` | subject token 서명/`iss`/`aud`/`exp`/`nbf` 검증 실패, `platform-console-web` 가 아닌 client 에 발급된 토큰, IAM OIDC access token 이 아님(예: operator/bootstrap 토큰 제시), auth-service JWKS 도달 불가, **또는** OIDC subject 에 매핑되는 활성 `admin_operators` row 부재(미매핑/비활성/잠금 — fail-closed, 토큰 미발급). **TASK-MONO-784 S2 부터**: 행이 `ACTIVE` 여도 비-`'*'` 이고 **소속(`operator_tenant_assignment` 행) 0** 이면 같은 401 — 마지막 회사에서 내보내진 행(D-10). 콘솔 적격 술어와 한 자리([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)) |
 | 403 | `MFA_REQUIRED` | **TASK-MONO-771 (ADR-MONO-080 D4 · R2, 소유자 결정 OD-2 · OD-3)** — subject token 검증과 운영자 해석을 **모두 통과한 뒤**, 아래 «2단계 요구» 가 참이고 subject token 의 `amr` 에 `mfa` 가 없다(`amr` 부재 포함). operator token 미발급 |
 | 500 | `INTERNAL_ERROR` | **TASK-MONO-771** — 2단계 요구 여부를 계산하는 로컬 읽기 실패(아래). operator token 미발급 |
 
@@ -988,11 +1069,21 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
   "totpEnrolled": true,
   "lastLoginAt": "2026-04-24T10:00:00Z",
   "createdAt": "2026-01-01T00:00:00Z",
-  "homeTenantId": "*"
+  "homeTenantId": "*",
+  "memberships": []
 }
 ```
 
 > **TASK-BE-626**: `homeTenantId` 는 `GET /api/admin/operators` 항목과 **같은 응답 DTO** 를 공유해서 이 응답에도 실린다 — 의미는 아래 § GET /api/admin/operators 의 `homeTenantId` 행과 같다(로그인한 운영자 자신의 HOME 테넌트).
+
+> **TASK-MONO-784 (ADR-MONO-082 b · D-16 — 구현 S3)** — 판정은 여전히 없다(유효한 운영자 토큰만). 바뀌는 것은 응답 둘이다:
+>
+> | 필드 | 784 뒤 |
+> |---|---|
+> | `roles` | 요청에 `X-Tenant-Id` = T 가 있으면 **T 의 역할 행(`tenant_id = T` — 직접 · 그룹 · 노드 기록) + `'*'` 행**의 이름. 헤더가 없으면 지금처럼 모든 역할 행의 이름. 콘솔 nav 노출(`console-nav-exposure`)이 활성 회사의 역할을 따르게 하는 값이다 — A 의 `TENANT_ADMIN` 이 B 에서 운영자 메뉴를 열지 않게 |
+> | `memberships` | **새 필드(가산)** — `[{ "tenantId": "acme", "roles": ["TENANT_ADMIN"] }, …]`. 소속(`operator_tenant_assignment` 행)마다 한 항목, `roles` = 그 테넌트의 역할 행 이름(빈 배열 허용 — R2 «소속 · 역할 0»). `tenantId` 오름차순. `'*'` 운영자는 `[]`(`'*'` 는 소속이 아니다 — 그 역할은 헤더 없는 `roles` 에 있다). 이 응답 DTO 를 공유하는 `GET /api/admin/operators` 항목에는 **싣지 않는다**(다른 회사 소속을 그 회사 관리자에게 보이지 않게) |
+>
+> `homeTenantId` 는 그대로다 — 라이더 R1 «처음 소속된 회사», **소속이 아니다**(그 회사를 떠났어도 값이 남는다). 화면은 이것을 «소속» 처럼 보여 주지 않는다(784 Edge Case 1).
 
 **Errors**:
 
@@ -1005,6 +1096,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 ## GET /api/admin/operators
 
 운영자 목록 조회 (페이지네이션). **TASK-MONO-175 / ADR-MONO-020**: 결과는 `tenantId`(활성 테넌트)로 스코핑된다 — 해당 테넌트에 **속한** 운영자(HOME 테넌트 `admin_operators.tenant_id == tenantId` **또는** `operator_tenant_assignment` 에 `tenantId` 배정(D1 N:M, TASK-BE-326))만 반환.
+
+> **TASK-MONO-784 (ADR-MONO-082 b)** — ① «속한» = **소속(`operator_tenant_assignment` 행)** 이다(S2 — 홈은 판정에서 빠진다, R1. S2 의 백필이 홈 배정을 만들어 두므로 기존 목록은 그대로다). ② `tenantId` 판정 = § 행동 테넌트 의 grant scope(`operator.manage`) + 생략 규칙(S3) — 배정만 있는 회사의 운영자 목록은 `403`(AC-1). ③ 항목의 `roles` = **조회 테넌트의 역할 행 이름**(`tenant_id = tenantId` — 직접 · 그룹 · 노드 기록, S3). `tenantId='*'` 조회는 지금처럼 모든 역할 행. 다른 회사의 역할을 그 회사 밖 관리자에게 보이지 않는다.
 
 > **TASK-BE-338 (ADR-MONO-020 D3 amendment)**: `operator_tenant_assignment.org_scope`(per-assignment 데이터-스코프, 부서 subtree-root id 배열; `NULL ⟺ ["*"]` net-zero)는 이 list 응답(`/api/admin/operators`)에는 노출되지 않으며, internal assignment-check edge([internal/auth-to-admin.md](./internal/auth-to-admin.md) `GET /internal/operator-assignments/check` 의 `orgScope` 응답 필드)로 반환되어 assume-tenant 토큰 `org_scope` claim 으로 전파된다.
 >
@@ -1061,7 +1154,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | `totpEnrolled` | boolean | 항상 노출 |
 | `lastLoginAt` | string (ISO-8601) \| absent | 한 번도 로그인하지 않은 운영자는 키 자체 omit |
 | `createdAt` | string (ISO-8601) | 항상 노출 |
-| `homeTenantId` | string | 항상 노출. **TASK-BE-626** — 운영자의 HOME 테넌트(`admin_operators.tenant_id`), 플랫폼 운영자는 `*`. 이 목록은 HOME **또는** 배정(`operator_tenant_assignment`) 으로 그 테넌트에 속한 운영자를 함께 돌려주므로, 소비자가 둘을 가르려면 이 값을 `tenantId` 와 비교한다(`homeTenantId == tenantId` ⇒ HOME, 아니면 배정으로만 속함). 소비 예: 운영자 그룹 «멤버 추가» 선택기 — 그룹 멤버는 HOME 이 그룹 테넌트인 운영자만 받으므로(§ Operator Group Management · `422 GROUP_MEMBER_TENANT_MISMATCH`) 배정으로만 속한 운영자를 고르기 전에 막는다(platform-console TASK-PC-FE-319). 파트너십 참여자(ADR-MONO-045)는 이 목록에 나오지 않는다 — 배정 행이 아니라 별도 참여 테이블이다 |
+| `homeTenantId` | string | 항상 노출. **TASK-BE-626** — 운영자의 HOME 테넌트(`admin_operators.tenant_id`), 플랫폼 운영자는 `*`. 이 목록은 HOME **또는** 배정(`operator_tenant_assignment`) 으로 그 테넌트에 속한 운영자를 함께 돌려주므로, 소비자가 둘을 가르려면 이 값을 `tenantId` 와 비교한다(`homeTenantId == tenantId` ⇒ HOME, 아니면 배정으로만 속함). 소비 예: 운영자 그룹 «멤버 추가» 선택기 — 그룹 멤버는 HOME 이 그룹 테넌트인 운영자만 받으므로(§ Operator Group Management · `422 GROUP_MEMBER_TENANT_MISMATCH`) 배정으로만 속한 운영자를 고르기 전에 막는다(platform-console TASK-PC-FE-319). 파트너십 참여자(ADR-MONO-045)는 이 목록에 나오지 않는다 — 배정 행이 아니라 별도 참여 테이블이다. 🔴 **TASK-MONO-784 (S4 · S6)**: 그룹 멤버 술어가 «소속» 이 되므로(§ POST …/groups/{groupId}/members) 이 목록의 모든 운영자가 그룹 멤버 후보다 — 선택기는 `homeTenantId` 로 거르지 않는다. 값 자체는 R1 «처음 소속된 회사» 표시로 남는다 |
 | `operatorContext` | object \| **omit** | profile carrier (TASK-BE-308 신규). `admin_operators.finance_default_account_id` 가 NULL 이면 키 자체 omit (field-level `@JsonInclude(Include.NON_NULL)`); 값이 있으면 `{ "defaultAccountId": "<uuid>" }` 형태로 노출. v1 은 `defaultAccountId` 단일 키만 carrying — `me/profile` (TASK-BE-306) + `{operatorId}/profile` (TASK-BE-307) request body 의 carrier 와 동일 shape. console-web admin profile-edit dialog 가 dialog 초기값으로 사용 (TASK-PC-FE-018). v1 finance 단일 카드만 populating; 다른 carrier 키는 별 task 로 컬럼+노출 동시 확장 |
 
 > **carrier shape 대칭성 (TASK-BE-308)**: 본 list 응답의 item-level `operatorContext` 은 다음과 byte-identical 한 shape 를 사용한다:
@@ -1077,8 +1170,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
-| 403 | `TENANT_SCOPE_DENIED` | **TASK-MONO-175** — 일반(비-플랫폼) 운영자가 effective scope(home ∪ 배정) 밖의 `tenantId` 를 지정한 경우 |
-| 400 | `VALIDATION_ERROR` | size > 100 또는 status 값 오류 |
+| 403 | `TENANT_SCOPE_DENIED` | **TASK-MONO-175** — 일반(비-플랫폼) 운영자가 effective scope(home ∪ 배정) 밖의 `tenantId` 를 지정한 경우. **784 S3 부터**: `tenantId` ∉ grant scope(`operator.manage`) · 생략했는데 grant scope 가 비었다 |
+| 400 | `VALIDATION_ERROR` | size > 100 또는 status 값 오류. **784 S3 부터**: `tenantId` 를 생략했는데 grant scope(`operator.manage`)의 구체 테넌트가 둘 이상(§ 행동 테넌트 생략 규칙) |
 
 **Side Effects**: 없음 (read).
 
@@ -1105,6 +1198,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 **동작 규칙**:
 - 대상 = 해석된 테넌트에 **속한** 운영자(HOME `admin_operators.tenant_id == tenantId` **또는** `operator_tenant_assignment` 배정 — `GET /api/admin/operators` 와 같은 소속 술어) 중 `email` 이 일치하고, **`status = ACTIVE`** · **`oidc_subject` 있음**(콘솔 로그인이 이어진 운영자) · `confined_tenant_id` 가 없거나 그 테넌트(TASK-MONO-751 — 그 테넌트에 들어올 수 있는 사람)인 행. 이 셋이 아니면 그 테넌트에 콘솔로 들어와 연결을 **수락할 수 없는** 사람이므로 돌려주지 않는다.
 - 같은 이메일이 HOME 운영자와 다른 테넌트에서 배정된 운영자 둘로 걸릴 수 있다 → `content` 는 배열이고 항목마다 `tenantId`(그 운영자의 HOME 테넌트)를 싣는다. 정렬 = `tenantId` 오름차순(결정적).
+- **TASK-MONO-784 (ADR-MONO-082 b)**: «속한» = 소속(배정 행, S2). 테넌트 게이트 = **«호출자의 역할 행이 하나라도 있는 테넌트»**(역할 무관 — 권한 키 없는 읽기를 라이더 R2 에 맞춘다: 배정만 있는 회사 = 범위 밖 = 빈 200) + § 행동 테넌트 생략 규칙(S3). 항목의 `tenantId` 는 HOME 그대로다(R1 표시값 — 조회 테넌트 소속이라는 사실은 항목이 나온 것으로 이미 참이다).
 - 🔴 **«없음» 과 «범위 밖» 은 같은 응답이다** — 일치 0건, 그리고 일반 운영자가 effective scope 밖의 `tenantId` 를 지정한 경우 모두 **`200 {"content":[]}`**(바이트 동일). `GET /api/admin/accounts` 는 범위 밖을 `403 TENANT_SCOPE_DENIED` 로 답하지만, 이 조회는 소유자 결정으로 그 구별을 응답에서 지운다(존재 비노출 — 어떤 테넌트 이름이 범위 안인지도 응답으로 캐지 못한다).
 - 감사: 성공 read 는 감사 행 없음(BE-486 read-path 규약). 범위 밖은 응답은 빈 200 이지만 게이트가 기존대로 best-effort DENIED `admin_actions` 1행을 남긴다(`action_code=ACCOUNT_SEARCH` 재사용 — 같은 «이메일로 계정 id 찾기» 행위이고 새 action code 는 권한 레지스트리 매핑을 요구하므로 만들지 않는다 · `downstream_detail` 에 시도한 테넌트). probe 는 응답으로는 안 보이고 감사에는 남는다(rbac.md D3).
 
@@ -1153,6 +1247,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 **Headers**:
 - `Authorization: Bearer <operator-token>`
 
+> **TASK-MONO-784 (ADR-MONO-082 b · D-6 — 구현 S3)** — 부여 가능 여부는 **회사마다** 다르다. 행동 테넌트 T = `X-Tenant-Id`(생략 → § 행동 테넌트 생략 규칙, 권한 `operator.manage`). T ∉ grant scope(`operator.manage`) → `403 TENANT_SCOPE_DENIED`. 아래 «caller 자신의 permission 집합» 은 **T 에서 보유한 권한**(T 의 역할 행 + `'*'` 행 + T 를 덮는 노드 행이 주는 권한)이다 — 권한 합으로 두면 A 의 권한으로 B 에서 상향 부여 메뉴가 열린다(784 AC-0 F3). 쓰기 쪽 `requireGrantable` 도 같은 술어다(§ PATCH …/roles · § Operator Invitation). 생략 규칙이 둘 이상으로 갈리면 `400 VALIDATION_ERROR`.
+
 **부여 가능 판정 규칙** (RoleGrantGuard D3 와 byte-identical):
 
 - **플랫폼 스코프 caller** — effective admin-grant 스코프(`effectiveAdminScope(actor, operator.manage)`)에 `*` 포함(SUPER_ADMIN) → **전체 seed role** 반환(무제약, net-zero).
@@ -1178,6 +1274,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 (표준 `@RequiresPermission` 흐름) |
+| 403 | `TENANT_SCOPE_DENIED` | **784 S3 부터** — 행동 테넌트가 grant scope(`operator.manage`) 밖 · 생략했는데 grant scope 가 비었다 |
+| 400 | `VALIDATION_ERROR` | **784 S3 부터** — `X-Tenant-Id` 생략 + grant scope 의 구체 테넌트 둘 이상 |
 
 **Side Effects**: 없음 (read; 감사 미기록 — grant 강제 시에만 `RoleGrantGuard` 가 DENIED row 기록).
 
@@ -1410,6 +1508,12 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 **Response 201** (`GET .../assignments` element 와 동일 shape — `tenantId`, `orgScope`(omitted when null), `permissionSetId`(omitted when null)).
 
+> **TASK-MONO-784 (ADR-MONO-082 b)** — 배정 행 = **소속**이므로 이 엔드포인트는 «그 테넌트의 소속을 더한다» 가 된다.
+>
+> - **R2 — 소속 · 관리 권한 0 에서 시작**: 새 배정은 그 테넌트의 역할 행을 만들지 않는다. 대상은 T 를 assume 할 수 있지만(도메인 평면 — 구독 파생, ADR-082 D5) T 의 관리 API 는 역할 행이 생길 때까지 거절된다(§ 행동 테넌트). `permission_set_id` 는 쓰지 않는다(라이더 R4 — 응답의 `permissionSetId` 는 늘 생략).
+> - **`'*'` 대상 거절 (D2 · D-14 · S4)**: 대상이 `'*'` 운영자면 `400 VALIDATION_ERROR` — 플랫폼 관리자는 회사 소속을 받지 않는다(지금은 해소기가 무시해 무해했던 쓰기 — 784 AC-0 F13).
+> - 🔴 **알려진 위험 — 본인 동의 없는 소속 추가 (소유자 결정 OD-2, 2026-10-11 UTC: «지금대로 두고 기록»)**: T 의 관리자는 **어느 회사의 운영자든** T 에 배정할 수 있다(대상 제한 없음 — `operatorId` 를 알면). 784 전에는 이것이 «내 직원에게 내 테넌트 접근» 이었지만, 784 뒤에는 그 사람의 **소속 추가**이고 이어서 T 의 역할 부여(§ PATCH …/roles)가 가능해진다. 회사 소속의 입구를 «초대 → 인증된 본인 수락» 으로 정한 ADR-MONO-080 D6 과 어긋나는 두 번째 입구다. 그대로 두는 근거: ADR-MONO-020 D1(ACCEPTED)의 동작이고 · T 안에 갇히며(R2 로 관리 권한 0 에서 시작) · 그 사람의 다른 회사 행은 바이트 불변이고 · 같은 동의 문제가 도메인 평면 assume 에 이미 있다. 그룹 `TENANT_ASSIGNMENT` fan-out(§ Operator Group Management)도 같은 길이다. 닫으려면 후속 ADR(대안: 대상이 아직 T 소속이 아니면 `'*'` 만 배정 · 또는 배정에 본인 수락 단계).
+
 | Status | Code | 조건 |
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
@@ -1418,14 +1522,33 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
 | 409 | `ASSIGNMENT_ALREADY_EXISTS` | (operatorId, tenantId) assignment 행이 이미 존재 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
+| 400 | `VALIDATION_ERROR` | **784 S4 부터** — 대상이 `'*'` 운영자(ADR-082 D2) |
 
-**Side Effects**: 성공 시 `admin_actions` 에 `action_code=OPERATOR_ASSIGNMENT_CREATE, permission_used=operator.manage, target_id=operatorId, target_tenant_id=tenantId` 기록. `403 TENANT_SCOPE_DENIED` 시 best-effort DENIED row(`admin.audit.cross_tenant_deny_failure`).
+**Side Effects**: 성공 시 `admin_actions` 에 `action_code=OPERATOR_ASSIGNMENT_CREATE, permission_used=operator.manage, target_id=operatorId, target_tenant_id=tenantId` 기록. `403 TENANT_SCOPE_DENIED` 시 best-effort DENIED row(`admin.audit.cross_tenant_deny_failure`). **784 S4 부터** 대상의 권한 캐시 무효화(소속 추가).
 
 ---
 
 ## DELETE /api/admin/operators/{operatorId}/assignments/{tenantId}
 
 **TASK-BE-347 (ADR-MONO-024 D3-i)** — operator↔tenant assignment row 삭제.
+
+> 🔴 **TASK-MONO-784 (ADR-MONO-082 b · D3 · D-9 — 구현 S4): «이 회사에서 내보내기».** 배정 행 = 소속이므로 이 삭제는 **그 회사(path `tenantId` = T) 측면 전부**를 가져간다 — 역할 행만 남는 «소속 없는 역할» 상태를 만들지 않는다. 새 엔드포인트는 없다(의미를 넓힌다). 판정은 지금 그대로 T ∈ actor 의 grant scope(`operator.manage`).
+>
+> 한 트랜잭션에 지우는 것:
+>
+> | 무엇 | 범위 |
+> |---|---|
+> | 소속 | `operator_tenant_assignment (operatorId, T)` — `org_scope` 포함 |
+> | 그 회사의 역할 행 | `admin_operator_roles` 의 `tenant_id = T` 인 행 **전부** — 직접(`group_origin IS NULL`) · 그룹 fan-out · `T` 로 기록된 노드 grant(D-1). 다른 회사의 행은 **바이트 불변** |
+> | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹의 fan-out 행(`group_origin`) — 784 Edge Case 3 |
+> | 협력사 참여 | `partner_tenant_id = T` 인 파트너십의 `tenant_partnership_participant` 행 — 다시 소속돼도 옛 참여가 되살아나지 않게(784 AC-0 F18 · ADR-045 D6 관계 단위 회수와 같은 방향) |
+>
+> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(역할 행 · 그룹 멤버십 · 참여 행). 권한 캐시 무효화.
+> - **계정은 건드리지 않는다**(ADR-080 D5 · ADR-082 D3) — 스토어 · 팬 로그인 그대로. 다른 회사의 소속 · 역할 · 그룹 · 참여 그대로. 이미 발급된 T 의 assume 토큰은 TTL 까지 산다(다음 assume 부터 거절).
+> - **마지막 소속을 내보내도 운영자 행은 지우지 않는다**(D-10) — 행은 `ACTIVE` 로 남고 소속 0 이 된다. 콘솔 적격 · 토큰 교환이 `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` 로 문을 닫는다([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)). 재초대 · 재온보딩은 같은 행에 소속을 더한다(§ Operator Invitation). 감사 해소가 행을 요구한다.
+> - 홈 회사에서 내보내져도 `admin_operators.tenant_id`(홈)는 그대로다(R1) — 판정에서 읽지 않으므로 그 회사 권한은 없다.
+> - 대상이 `'*'` 운영자 · 소속이 없는 테넌트 → 지금처럼 `404 ASSIGNMENT_NOT_FOUND`(좁히는 방향이라 `'*'` 대상도 거절 코드를 따로 두지 않는다).
+> - 콘솔 문구: «배정 해제» → **«이 회사에서 내보내기»**(S6).
 
 **Auth required**: Yes · **Required permission**: `operator.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
 
@@ -1457,6 +1580,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 **Auth required**: Yes (operator token, `token_type=admin`)
 **Required permission**: `operator.manage` (관리 대상 운영자의 home tenant 스코프 — 다른 operator-management mutation 과 동일 게이트)
 **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
+
+> **TASK-MONO-784 (라이더 R3 · D-8 — 구현 S4)**: `identity_id` 는 운영자 **행에 하나**다 — 아래 2단계의 «home tenant 스코프» 는 § 행동 테넌트 의 **행 전체 규칙**으로 바뀐다(소속 하나 = 그 회사 관리자 · 둘 이상 = `'*'` 만 → `403 OPERATOR_HAS_OTHER_MEMBERSHIPS`). `identity:unlink` 도 같다. 감사 `target_tenant_id` 는 대상 홈 그대로(R1 «감사 기본값» — 행 전체 속성이라 회사 하나로 귀속되지 않는다).
 
 **Headers**:
 - `Authorization: Bearer <operator-token>`
@@ -1500,7 +1625,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
-| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 운영자 home tenant 에 대한 admin-grant 스코프 밖 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 운영자 home tenant 에 대한 admin-grant 스코프 밖 (**784 S4 부터** § 행동 테넌트 행 전체 규칙) |
+| 403 | `OPERATOR_HAS_OTHER_MEMBERSHIPS` | **784 S4 부터** — 대상이 회사 둘 이상의 소속이고 actor 가 `'*'` 가 아니다(그 회사 중 하나는 관리) |
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
 | 422 | `ACCOUNT_IDENTITY_UNRESOLVABLE` | account 가 중앙 identity 미보유(200 + null) — fail-closed |
 | 422 | `IDENTITY_LINK_EMAIL_MISMATCH` | operator email ≠ account email (necessary 조건 위반) |
@@ -1542,7 +1668,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
-| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 운영자 home tenant 에 대한 admin-grant 스코프 밖 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 운영자 home tenant 에 대한 admin-grant 스코프 밖 (**784 S4 부터** § 행동 테넌트 행 전체 규칙) |
+| 403 | `OPERATOR_HAS_OTHER_MEMBERSHIPS` | **784 S4 부터** — 대상이 회사 둘 이상의 소속이고 actor 가 `'*'` 가 아니다(그 회사 중 하나는 관리) |
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
 
@@ -1650,12 +1777,12 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|
 | 1회용 · 만료 · 원문 미저장 (R4) | 토큰 = `SecureRandom` 32바이트 → base64url. 서버는 **SHA-256 hex 만** 저장한다(셀러 구성원 초대와 같은 계산). 만료 `expires_at = 발급(또는 재발송) 시각 + admin.operator-invitation.ttl`(ISO-8601, 기본 `P7D`). **만료는 읽을 때 판정**한다 — `EXPIRED` 는 상태값이 아니고 정리 잡도 없다. 응답의 `expired` 는 읽은 시각의 판정이다 |
 | 상태 | `PENDING` → `ACCEPTED`(수락) · `PENDING` → `CANCELLED`(취소). 되돌림 없음. 수락은 조건부 갱신(`… WHERE id = ? AND status = 'PENDING'`)으로 **한 번만** 이긴다 |
-| 대기 하나 | `(tenant_id, email)` 에 `PENDING` 은 **최대 한 행**(만료된 `PENDING` 포함 — 다시 보내려면 재발송). 이미 그 테넌트의 운영자인 이메일은 초대하지 않는다 |
+| 대기 하나 | `(tenant_id, email)` 에 `PENDING` 은 **최대 한 행**(만료된 `PENDING` 포함 — 다시 보내려면 재발송). 이미 그 테넌트의 운영자인 이메일은 초대하지 않는다(784 S5 부터 «그 테넌트의 운영자» = 그 테넌트 **소속**인 운영자 행 — 홈이 아니다, 784 AC-0 F15) |
 | 전달 (OD-4) | **메일** — account-service 의 `TASK-MONO-770` 발송기를 내부 호출로 쓴다. 🔴 링크(토큰)는 초대자에게 **돌려주지 않는다** — 응답 · 목록 · 감사 · 로그 어디에도 없다. 발송이 실패해도 초대 행은 남고, 응답 · 목록의 `delivery` 가 그것을 보인다 → 재발송 |
 | 재발송 (OD-4) | **같은 행**에 새 토큰 · 새 만료. 옛 해시를 덮어쓰므로 **옛 링크는 죽는다**(수락 → `404`). 새 행 + 옛 행 취소는 하지 않는다(«대기 하나» 를 깨기 쉽다) |
 | 대상 테넌트 | `'*'` 거절(`400 VALIDATION_ERROR`) — 플랫폼 관리자는 초대로 생기지 않는다(ADR-080 D1). 등록된 테넌트여야 한다(발급 · 재발송 때 account-service 로 확인). **운영자가 0명인 테넌트도 받는다** — `SUPER_ADMIN` 이 새 테넌트의 첫 관리자를 초대하는 길(`TASK-MONO-773` 의 «관리자 대기» 가 이것을 쓴다) |
 | 권한 | **새 키 없음** — `operator.manage`([rbac.md](../../services/admin-service/rbac.md#permission-keys)). 범위(ADR-024 D2 `TenantScopeGuard`, 대상 = 초대 테넌트)와 역할 무상승(D3 `RoleGrantGuard`)은 `POST /api/admin/operators` 와 같은 규칙이고, **수락 때 한 번 더** 판정한다(7일 사이 초대자의 권한이 줄었을 수 있다) |
-| 🔴 한 사람 = 한 회사 (OD-1) | 772 에서 계정 하나는 운영자 행 **하나**까지다 — `admin_operators.oidc_subject` 가 플랫폼 전역 UNIQUE 이고 토큰 교환이 `sub` 로 한 행만 찾는다(772 AC-0 F2). 이미 운영자 측면이 있는 계정이 **두 번째 회사** 초대를 수락하면 `409 OPERATOR_ALREADY_PROVISIONED`(아무것도 쓰지 않는다 · 초대는 `PENDING` 그대로). 발급 단계에서는 막지 않는다 — 초대는 이메일에 가고, 누가(어느 계정이) 수락할지는 발급 때 모른다. 🔴 **다회사 운영자 모델은 `TASK-MONO-773` 착수 전 ADR 로 정한다**(ADR-080 개정 또는 새 ADR — 772 AC-0 OD-1 의 (b) 한 행 + 회사별 역할 · (c) 회사마다 행). 그 결정 전까지 772 Edge Case «같은 사람이 여러 회사에 초대» 는 **미충족 · 기록**이다 |
+| 🔴 한 사람 · 여러 회사 (ADR-MONO-082 = **b**, `TASK-MONO-784`) | 계정 하나는 여전히 운영자 행 **하나**다(`admin_operators.oidc_subject` 플랫폼 전역 UNIQUE 유지 · 토큰 교환이 `sub` 로 한 행 — ADR-082 갈래 비교 «토큰 교환 변화 0»). 그 행이 **회사마다 소속 · 역할**을 가진다(§ 행동 테넌트). 이미 운영자 측면이 있는 계정이 **두 번째 회사** 초대를 수락하면 → **같은 행에 소속 추가**(그 테넌트의 역할 행 + 배정 — 기존 회사의 행은 바이트 불변 · 홈 · `oidc_subject` · `email` · `display_name` 무변경 — 초대의 `displayName` 은 새 행을 만들 때만 쓴다). 그 측면이 **이미 그 테넌트 소속** · **`'*'` 측면**(ADR-082 D2) · **비-`ACTIVE`** 면 `409 OPERATOR_ALREADY_PROVISIONED`(아무것도 쓰지 않는다 · 초대는 `PENDING` 그대로) — 판정 정본: [auth-to-admin.md § accept](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) 6 · 7. 구현 = 784 S5. 발급 단계에서는 계정을 보지 않는다 — 초대는 이메일에 가고, 누가(어느 계정이) 수락할지는 발급 때 모른다. (772 시점 문장 — 소유자 결정 OD-1 «한 사람 = 한 회사 · 다회사 모델은 773 착수 전 ADR» — 은 ADR-082 ACCEPTED b(2026-10-10 UTC)로 닫혔다. 784 S5 머지 전까지 코드는 772 의 409 다) |
 
 **공통 응답 항목 (invitation item)** — 발급 · 목록 · 취소 · 재발송이 같은 모양을 쓴다:
 
@@ -1719,10 +1846,10 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 1. `operator.manage` — 없으면 `403 PERMISSION_DENIED`(DENIED 행, `RequiresPermissionAspect`).
 2. `X-Operator-Reason` → `400 REASON_REQUIRED` · `Idempotency-Key` 누락 → `400 VALIDATION_ERROR` · 본문 검증 → `400 VALIDATION_ERROR`.
 3. 범위(D2) — actor 의 admin-grant 범위가 `tenantId` 를 덮지 않으면 `403 TENANT_SCOPE_DENIED`(best-effort DENIED 행 — `POST /api/admin/operators` 의 BE-262 와 같다).
-4. 역할 — 없는 이름 `400 ROLE_NOT_FOUND` → 무상승(D3) `403 ROLE_GRANT_FORBIDDEN`(DENIED 행).
+4. 역할 — 없는 이름 `400 ROLE_NOT_FOUND` → 무상승(D3) `403 ROLE_GRANT_FORBIDDEN`(DENIED 행). **784 S3 부터** ≤-own 의 «actor 보유 권한» = 초대 테넌트에서 보유한 권한(§ GET …/grantable-roles · D-6). 수락 때의 재판정(D3)도 같다.
 5. `Idempotency-Key` 재사용 → `409 IDEMPOTENCY_KEY_CONFLICT`.
 6. 테넌트 존재 — account-service 로 확인(비 hot-path). 없으면 `404 TENANT_NOT_FOUND`, 확인 실패면 `503 DOWNSTREAM_ERROR` · `CIRCUIT_OPEN` — **쓰지 않는다**(fail-closed: 없는 테넌트로 가는 초대를 남기지 않는다). 상태(`ACTIVE` 여부)는 여기서 보지 않는다 — 수락 때 본다.
-7. 그 테넌트에 같은 이메일의 운영자 행이 이미 있다(`admin_operators (tenant_id, email)`) → `409 OPERATOR_EMAIL_CONFLICT`.
+7. 그 테넌트에 같은 이메일의 운영자 행이 이미 있다(`admin_operators (tenant_id, email)`) → `409 OPERATOR_EMAIL_CONFLICT`. **784 S5 부터** «그 테넌트에 있다» = 그 테넌트 **소속**(`operator_tenant_assignment`)인 운영자 행 중 `email` 이 같은 것 — 홈 기준이면 B 소속인 A-홈 사람이 발급을 통과했다가 수락에서 막힌다(784 AC-0 F15). 다른 회사에만 소속인 같은 이메일의 운영자는 막지 않는다(수락이 그 행에 소속을 더한다).
 8. 같은 `(tenant_id, email)` 의 `PENDING` 초대가 있다(만료 포함) → `409 OPERATOR_INVITATION_ALREADY_PENDING` — 콘솔은 그 행의 재발송을 권한다.
 9. 한 트랜잭션: 초대 행(`PENDING`, 해시 · 만료) + 감사 행 `OPERATOR_INVITATION_CREATE`(`SUCCESS`). 커밋.
 10. **커밋 뒤** 메일 발송(admin → account). 결과를 초대 행의 `delivery` 에 적는다(별도 짧은 트랜잭션). 🔴 발송 실패는 **오류 응답이 아니다** — `201` + `delivery.status = FAILED_*`. 커밋 전에 보내지 않는 이유: 롤백된 초대의 링크가 메일함에 남지 않게.
@@ -1756,7 +1883,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
-| `tenantId` | string (optional) | 조회할 테넌트. 생략 시 운영자 자신의 home 테넌트. `*` 는 플랫폼 범위 운영자 전용(전체 테넌트). 범위 규칙은 `GET /api/admin/operators` 의 `tenantId` 와 **같다**(effective scope 밖 → `403 TENANT_SCOPE_DENIED`). 콘솔은 활성 테넌트를 보낸다 |
+| `tenantId` | string (optional) | 조회할 테넌트. 생략 시 운영자 자신의 home 테넌트. `*` 는 플랫폼 범위 운영자 전용(전체 테넌트). 범위 규칙은 `GET /api/admin/operators` 의 `tenantId` 와 **같다**(effective scope 밖 → `403 TENANT_SCOPE_DENIED`; **784 S3 부터** § 행동 테넌트 grant scope(`operator.manage`) + 생략 규칙). 콘솔은 활성 테넌트를 보낸다 |
 | `status` | string (optional) | `PENDING`(기본) · `ACCEPTED` · `CANCELLED`. 만료된 `PENDING` 은 `PENDING` 에 `expired=true` 로 나온다 |
 | `page` · `size` | int | 기본 0 · 20, `size` ≤ 100 |
 
@@ -1780,7 +1907,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|
 | `PENDING`(만료 포함) | `CANCELLED` 로 조건부 갱신 → `200` + item. 그 사이 수락이 이겼으면 `409 OPERATOR_INVITATION_NOT_PENDING` |
 | `CANCELLED` | `200` + item — 멱등 no-op, 감사 행 없음 |
-| `ACCEPTED` | `409 OPERATOR_INVITATION_NOT_PENDING` — 수락된 초대는 취소하지 않는다. 그 사람을 빼려면 운영자 상태 변경(`PATCH …/{operatorId}/status`) · 역할 · 배정 회수다(ADR-080 D5 — 회수는 측면만) |
+| `ACCEPTED` | `409 OPERATOR_INVITATION_NOT_PENDING` — 수락된 초대는 취소하지 않는다. 그 사람을 빼려면 운영자 상태 변경(`PATCH …/{operatorId}/status`) · 역할 · 배정 회수다(ADR-080 D5 — 회수는 측면만). **784 S4 부터** 회사 관리자의 길은 **«이 회사에서 내보내기»**(`DELETE …/{operatorId}/assignments/{tenantId}`) — 다른 회사에도 소속된 사람의 행 전체 정지는 `'*'` 만(라이더 R3) |
 
 취소된 초대의 링크로 수락하면 `404`(없는 초대와 구별하지 않는다 — 아래 § 수락).
 
@@ -1829,7 +1956,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 - 호출자 = **IdP 세션의 풀 계정**(요청 본문은 계정을 말하지 않는다). 그 계정이 풀 계정이고 · 이메일이 초대 이메일과 같고 · 그 이메일이 **인증됐을 때만** 붙는다(판정은 account-service — `TASK-MONO-770` 의 공용 술어 `VerifiedEmailRequirement` 를 그 자리에서 부른다. 사본을 만들지 않는다).
 - 초대 테넌트 `ACTIVE` · 초대자(`invitedBy`) 아직 `ACTIVE` · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3) · 초대 테넌트가 **지금도** 초대자의 범위 안(D2).
-- 만들어지는 것: 운영자 행(홈 = 초대 테넌트 · `password_hash` NULL · **`oidc_subject` = 수락한 계정 id**) · 역할 grant(테넌트 = 초대 테넌트) · 초대 `ACCEPTED`. `oidc_subject` 를 쓰는 것이 «로그인 문» 이다 — 이 행이 있어야 토큰 교환이 그 계정을 운영자로 해석하고, IdP 가 그 풀 계정에 콘솔 토큰을 준다([auth-api.md § 풀 계정의 콘솔 토큰](auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).
+- 만들어지는 것: 운영자 행(홈 = 초대 테넌트 · `password_hash` NULL · **`oidc_subject` = 수락한 계정 id**) · 역할 grant(테넌트 = 초대 테넌트) · 초대 `ACCEPTED`. **784 S5 부터** 그 계정에 이미 `ACTIVE` 회사 측면이 있고 초대 테넌트가 아직 소속이 아니면 새 행 대신 **그 행에** 역할 grant(초대 테넌트) + 배정만 더한다(위 규칙 표 «한 사람 · 여러 회사»). `oidc_subject` 를 쓰는 것이 «로그인 문» 이다 — 이 행이 있어야 토큰 교환이 그 계정을 운영자로 해석하고, IdP 가 그 풀 계정에 콘솔 토큰을 준다([auth-api.md § 풀 계정의 콘솔 토큰](auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).
 - `amr ∋ mfa` 는 수락에서 요구하지 않는다 — 측면을 **만드는** 일이고, 2단계 진입 조건은 토큰 교환 · assume 이 문다(TASK-MONO-771).
 
 ---
@@ -1838,6 +1965,22 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 
 운영자의 역할 목록 전체 교체.
 
+> 🔴 **TASK-MONO-784 (ADR-MONO-082 b · D3 · D-7 — 구현 S4): 역할 변경은 회사 축이다 — «그 회사의 직접 역할 행» 만 교체한다.** 지금 구현은 대상의 역할 행을 **전부** 지우고 홈 테넌트로 다시 쓴다 — 그대로 두면 A 의 역할 변경이 B 의 역할 행을 지우고(784 Failure Scenario 3), 784 이전에도 그룹 fan-out 행 · 노드 grant 를 지워 직접 행으로 되쓴다(784 AC-0 F6). 784 뒤 규칙:
+>
+> | 단계 | 규칙 | 실패 |
+> |---|---|---|
+> | 행동 테넌트 T | 대상이 **`'*'` 운영자면 T = `'*'`**(헤더 무관 — `'*'` 운영자의 역할은 `'*'` 행뿐이다. 콘솔은 플랫폼 운영자끼리의 역할 편집에도 활성 회사를 헤더로 싣는다). 그 밖엔 `X-Tenant-Id`. **헤더 생략 시 대상 기준**: 소속이 정확히 하나면 그 테넌트 · 둘 이상이면 거절 · 0 이면 대상 없음 | 둘 이상 → `400 VALIDATION_ERROR` · 0 → `404 OPERATOR_NOT_FOUND` |
+> | 범위 (ADR-024 D2) | T ∈ actor 의 grant scope(`operator.manage`) — `'*'` 는 모든 T | `403 TENANT_SCOPE_DENIED`(DENIED 행) |
+> | 대상의 소속 | 비-`'*'` 대상: T 가 대상의 소속이어야 한다 | 아니면 `404 OPERATOR_NOT_FOUND`(열거 안전 — 새 코드 없음). 비-`'*'` 대상에 `X-Tenant-Id: *` → `400 VALIDATION_ERROR`(ADR-082 D2 — 풀 행은 `'*'` 를 받지 않는다) |
+> | 무상승 (ADR-024 D3) | ≤-own = actor 가 **T 에서** 보유한 권한(D-6) | `403 ROLE_GRANT_FORBIDDEN`(DENIED 행) |
+> | 교체 범위 | `admin_operator_roles` 중 `operator_id = 대상 ∧ tenant_id = T ∧ group_origin IS NULL ∧ org_node_id IS NULL` 만 지우고 요청의 `roles` 를 `tenant_id = T` 직접 행으로 쓴다 | — |
+>
+> - 다른 회사의 역할 행 · 그룹 fan-out 행 · 노드 grant 는 **바이트 불변**(784 AC-4 · F6 수선).
+> - `roles: []` = **T 의 직접 역할 전부 제거**다 — 소속은 남는다(R2 «소속 · 관리 권한 0»). 그 회사에서 사람을 빼는 것은 «이 회사에서 내보내기»(`DELETE …/assignments/{tenantId}`)다.
+> - 응답 `roles` = 교체 뒤 **T 의** 역할 행 이름(그룹 · 노드 행 포함). 다른 회사의 역할은 싣지 않는다.
+> - 감사 `OPERATOR_ROLE_CHANGE` 의 `target_tenant_id` = T. 권한 캐시 무효화(지금 그대로).
+> - 콘솔은 활성 테넌트를 `X-Tenant-Id` 로 이미 싣는다 — 헤더의 **의미**가 «그 회사의 역할만» 으로 바뀐다(S6 화면 문구).
+
 **Auth required**: Yes (operator token, `token_type=admin`)
 **Required permission**: `operator.manage`
 **Granted to roles**: `SUPER_ADMIN`
@@ -1845,6 +1988,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 **Headers**:
 - `Authorization: Bearer <operator-token>`
 - `X-Operator-Reason: string (required)`
+- `X-Tenant-Id: string (784 S4 부터 행동 테넌트 — 대상이 플랫폼 운영자면 무시 · 생략 시 위 표의 대상 기준 해소)`
 
 **Path Variable**: `operatorId` — 대상 운영자의 `admin_operators.operator_id` (UUID v7)
 
@@ -1855,7 +1999,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 }
 ```
 
-`roles` 빈 배열(`[]`) 허용 — 역할 전부 제거.
+`roles` 빈 배열(`[]`) 허용 — 역할 전부 제거(784 S4 부터: 행동 테넌트의 직접 역할 전부 제거).
 
 **Response 200**:
 ```json
@@ -1872,10 +2016,11 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
-| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 operator 의 home tenant 에 대한 admin-grant 스코프 밖 (ADR-024 D2, step-1) |
-| 403 | `ROLE_GRANT_FORBIDDEN` | **TASK-BE-347 (ADR-024 D3)** — 비-플랫폼 actor 가 `SUPER_ADMIN` 또는 보유하지 않은 권한을 가진 role 을 부여 시도 (≤-own grant-menu; `TENANT_ADMIN` 은 `tenant.admin.delegate` 보유 시, `TENANT_BILLING_ADMIN` 은 `subscription.manage` 보유 시에만 부여 가능) |
-| 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 operator 의 home tenant 에 대한 admin-grant 스코프 밖 (ADR-024 D2, step-1). **784 S4 부터**: 행동 테넌트 T 가 actor 의 grant scope 밖 |
+| 403 | `ROLE_GRANT_FORBIDDEN` | **TASK-BE-347 (ADR-024 D3)** — 비-플랫폼 actor 가 `SUPER_ADMIN` 또는 보유하지 않은 권한을 가진 role 을 부여 시도 (≤-own grant-menu; `TENANT_ADMIN` 은 `tenant.admin.delegate` 보유 시, `TENANT_BILLING_ADMIN` 은 `subscription.manage` 보유 시에만 부여 가능). **784 S4 부터** ≤-own 은 T 에서 보유한 권한 |
+| 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재. **784 S4 부터**: 대상이 T 소속이 아니다 · `X-Tenant-Id` 생략 + 대상 소속 0 |
 | 400 | `ROLE_NOT_FOUND` | roles 배열에 존재하지 않는 role 이름 포함 |
+| 400 | `VALIDATION_ERROR` | **784 S4 부터** — `X-Tenant-Id` 생략 + 대상 소속 둘 이상 · 비-`'*'` 대상에 `X-Tenant-Id: *`(ADR-082 D2) |
 
 **Side Effects**: `admin_actions`에 `action_code=OPERATOR_ROLE_CHANGE` 기록. Redis 권한 캐시 즉시 invalidate (`admin:operator:perm:{operatorId}`). `403 ROLE_GRANT_FORBIDDEN`/`TENANT_SCOPE_DENIED` 시 best-effort DENIED row.
 
@@ -1884,6 +2029,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 ## PATCH /api/admin/operators/{operatorId}/status
 
 운영자 계정 상태 변경.
+
+> 🔴 **TASK-MONO-784 (라이더 R3 · D-8 — 구현 S4)**: 상태는 운영자 **행 전체**다(`SUSPENDED` = 그 사람의 모든 회사에서 정지 · 리프레시 토큰 전부 회수). 판정은 § 행동 테넌트 의 **행 전체 규칙** — 대상 소속이 하나 {T} 면 T 의 관리자(지금과 같다), **둘 이상이면 `'*'` grant scope 만**. 회사 관리자에게는 `403 OPERATOR_HAS_OTHER_MEMBERSHIPS` — 그 사람을 자기 회사에서 빼는 길은 «이 회사에서 내보내기»(`DELETE …/assignments/{tenantId}`). 지금 구현(대상 **홈** 의 grant scope)은 홈 회사 관리자가 다른 회사의 일까지 멈추게 한다. 성공하면 대상의 **권한 캐시를 무효화**한다(지금은 하지 않아 정지된 운영자의 캐시 합이 TTL ≤10s 동안 산다 — 784 AC-0 F7).
 
 **Auth required**: Yes (operator token, `token_type=admin`)
 **Required permission**: `operator.manage`
@@ -1920,12 +2067,14 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상에 대한 admin-grant 스코프 밖(지금: 대상 홈 · **784 S4 부터** § 행동 테넌트 행 전체 규칙) |
+| 403 | `OPERATOR_HAS_OTHER_MEMBERSHIPS` | **784 S4 부터** — 대상이 회사 둘 이상의 소속이고 actor 가 `'*'` 가 아니다(그 회사 중 하나는 관리) |
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재 |
 | 400 | `SELF_SUSPEND_FORBIDDEN` | 본인 계정 SUSPENDED 시도 |
 | 400 | `STATE_TRANSITION_INVALID` | 현재 status와 요청 status가 동일 |
 | 400 | `VALIDATION_ERROR` | status 값이 허용 목록 외 |
 
-**Side Effects**: `SUSPENDED` 처리 시 해당 운영자의 모든 refresh token 즉시 무효화. `admin_actions`에 `action_code=OPERATOR_STATUS_CHANGE` 기록.
+**Side Effects**: `SUSPENDED` 처리 시 해당 운영자의 모든 refresh token 즉시 무효화. `admin_actions`에 `action_code=OPERATOR_STATUS_CHANGE` 기록. **784 S4 부터** 성공 시 권한 캐시 무효화(`admin:operator:perm:{operatorId}` — 테넌트 판정 캐시를 두면 그 운영자의 소속 키 전부).
 
 ---
 
@@ -1988,7 +2137,8 @@ Content-Type: application/json
 | 400 | `SELF_PROFILE_UPDATE_FORBIDDEN_VIA_ADMIN_PATH` | `{operatorId}` 가 caller 본인의 `operator_id` 와 일치. self-serve 는 반드시 `/me/profile` (BE-306) 사용 (audit reason 포맷이 다름: self-flow `<self_profile_update>` 상수 vs caller-typed reason) |
 | 401 | `TOKEN_INVALID` | operator JWT 없음 / 만료 / 변조 / soft-delete 됨 |
 | 403 | `PERMISSION_DENIED` | caller 가 `operator.manage` 권한 미보유 |
-| 403 | `TENANT_SCOPE_DENIED` | 대상 operator 의 tenant 가 caller 의 scope 외 (caller `tenant='*'` 아니면 cross-tenant 차단) |
+| 403 | `TENANT_SCOPE_DENIED` | 대상 operator 의 tenant 가 caller 의 scope 외 (caller `tenant='*'` 아니면 cross-tenant 차단). **784 S4 부터** § 행동 테넌트 행 전체 규칙 — 지금 구현은 대상 홈을 호출자의 **배정 ∪ 홈** 범위로 본다(게이트 사본 — 784 AC-0 F2) |
+| 403 | `OPERATOR_HAS_OTHER_MEMBERSHIPS` | **784 S4 부터** — `finance_default_account_id` 는 행 전체 속성이다(R3 · D-8). 대상이 회사 둘 이상의 소속이고 actor 가 `'*'` 가 아니다(그 회사 중 하나는 관리) |
 | 404 | `OPERATOR_NOT_FOUND` | `operatorId` 미존재 |
 | 409 | `OPTIMISTIC_LOCK_CONFLICT` | `admin_operators.version` race |
 
@@ -2559,6 +2709,8 @@ partner 테넌트 B 가 **자기 소유 operator** 를 파트너십 participant 
 
 **Tenant confinement (D2)**: `X-Tenant-Id` == `partner_tenant_id`. 추가로 대상 `operatorId` 의 home `tenant_id` == `partner_tenant_id`(B 는 자기 사람만) — 위반 → `422 PARTICIPANT_NOT_OWN_OPERATOR`.
 
+> **TASK-MONO-784 (ADR-MONO-082 b · D-11)**: «B 의 사람» = `partner_tenant_id` 가 대상의 **소속**이다 — 홈이 아니다(S4, 코드 그대로). 참여에서 파생되는 host 도달도 같은 술어다: assume 판정의 파트너십 조회는 `partner = 홈` 이 아니라 `partner ∈ 그 운영자의 소속` 인 ACTIVE 파트너십을 본다(S2 — [auth-to-admin.md § assignment check](internal/auth-to-admin.md#get-internaloperator-assignmentscheck)). B 에서 내보내진 사람의 참여 행은 내보내기가 함께 지운다(§ DELETE …/assignments/{tenantId}).
+
 **Request** (optional participant 좁힘):
 ```json
 { "participantScope": { "domains": ["wms"], "roles": ["WMS_OUTBOUND_OPERATOR"] } }
@@ -2590,7 +2742,7 @@ participant 해제(B 가 자기 직원 offboard 또는 참여 종료). partner �
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 헤더 누락 |
 | 400 | `VALIDATION_ERROR` | `partnerTenantId` 정규식/self/`'*'` 위반, `delegatedScope` 형식 오류 |
 | 422 | `PARTNERSHIP_SCOPE_INVALID` | (invite) `delegatedScope` 가 admin role 포함 또는 host 미보유(≤-own across org 위반) |
-| 422 | `PARTICIPANT_NOT_OWN_OPERATOR` | (participant add) 대상 operator 의 home tenant ≠ `partner_tenant_id` |
+| 422 | `PARTICIPANT_NOT_OWN_OPERATOR` | (participant add) 대상 operator 의 home tenant ≠ `partner_tenant_id` (**784 S4 부터**: `partner_tenant_id` ∉ 대상의 소속) |
 | 422 | `PARTICIPANT_SCOPE_EXCEEDS_DELEGATION` | (participant add) `participantScope ⊄ delegatedScope` |
 | 404 | `PARTNERSHIP_NOT_FOUND` | `partnershipId` 미존재 / actor 당사자 아님(enumeration-safe) |
 | 404 | `OPERATOR_NOT_FOUND` | (participant) `operatorId` 미존재 |
@@ -3282,6 +3434,8 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 
 **Tenant confinement (D3)**: 대상 `operatorId` 의 home `tenant_id` == 그룹 `tenant_id`(그룹은 자기 테넌트 사람만) — 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`.
 
+> **TASK-MONO-784 (ADR-MONO-082 b · D-11 — 구현 S4)**: «자기 테넌트 사람» = 그룹 `tenant_id` 가 대상의 **소속**(`operator_tenant_assignment`)이다 — 홈이 아니다(코드 · 위반 코드 그대로, 의미만 «소속»). `'*'` 대상 → `400 VALIDATION_ERROR`(ADR-082 D2 — 지금은 홈 `'*'` ≠ 그룹 테넌트라 422 였다). fan-out 이 만드는 역할 행의 `tenant_id` = **그룹 `tenant_id`**(지금은 멤버 홈), 이미 있으면 skip 하는 판정 = `(operator, role, 그룹 테넌트)` 3칸 PK. 그 회사에서 내보내진 멤버의 멤버십은 내보내기가 함께 지운다(§ DELETE …/assignments/{tenantId}). 🔵 그래서 «배정만 됨» 운영자(소속 · 역할 0)도 멤버가 될 수 있다 — 그룹이 그 사람에게 그 회사 역할을 주는 길이다(784 AC-0 F10).
+
 **No-escalation (D4, add-member 재검사)**: 그룹의 현행 grant 를 이 멤버로 fan-out 할 때 각 grant 가 actor 의 `effectiveAdminScope`/`RoleGrantGuard` 이내여야 한다 — 자기 미보유 role/tenant 를 새 멤버에게 우회 부여 불가. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`.
 
 **Request**:
@@ -3303,7 +3457,8 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 | 404 | `GROUP_NOT_FOUND` | 그룹 미존재/스코프 밖 |
 | 404 | `OPERATOR_NOT_FOUND` | `operatorId` 미존재 |
 | 409 | `GROUP_MEMBER_ALREADY_EXISTS` | (groupId, operatorId) 멤버십 이미 존재 |
-| 422 | `GROUP_MEMBER_TENANT_MISMATCH` | 대상 operator home tenant ≠ 그룹 tenant |
+| 422 | `GROUP_MEMBER_TENANT_MISMATCH` | 대상 operator home tenant ≠ 그룹 tenant (**784 S4 부터**: 그룹 tenant ∉ 대상의 소속) |
+| 400 | `VALIDATION_ERROR` | **784 S4 부터** — 대상이 `'*'` 운영자(ADR-082 D2) |
 | 422 | `GROUP_GRANT_NO_ESCALATION` | fan-out grant 가 tenant-scope no-escalation 위반 |
 
 **Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`(대상 operator 는 `detail`). fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — 멤버십 add 와 **단일 트랜잭션**(D5/D6). idempotent: 멤버가 이미 보유한 동등 직접 grant 는 중복 생성 안 함.

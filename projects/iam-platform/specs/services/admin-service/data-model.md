@@ -83,6 +83,9 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > 이다 — `POST /api/admin/operators`(334 경로)는 이 칸을 쓰지 않아 그렇게 만든 운영자는 OIDC 주 경로로 로그인할 수 없었다(772 AC-0 F1). 🔴 이 칸의 플랫폼 전역
 > UNIQUE 는 772 에서 그대로다 — 그래서 한 계정은 운영자 행 하나까지다(소유자 결정 OD-1, 두 번째 회사 수락 = `409 OPERATOR_ALREADY_PROVISIONED`). 다회사 모델은
 > `TASK-MONO-773` 착수 전 ADR 이 정한다(그 결정이 이 UNIQUE 를 바꿀 수 있다).
+> → **정해졌다: `ADR-MONO-082` = b (ACCEPTED 2026-10-10 UTC) · `TASK-MONO-784`.** 이 UNIQUE 는 **유지**된다 — 한 계정 = 운영자 행 하나이고, 그 행이 회사마다 소속(`operator_tenant_assignment`) · 역할(`admin_operator_roles.tenant_id`)을 가진다. 두 번째 회사 수락 · 셀프 온보딩은 같은 행에 소속을 더한다(784 S5 — 같은 테넌트 · `'*'` 행 · 비-`ACTIVE` 만 409).
+>
+> **홈 칸 `admin_operators.tenant_id` 의 의미 (TASK-MONO-784 · ADR-MONO-082 라이더 R1)**: «처음 소속된 회사» 로 **남지만 판정에서 읽지 않는다** — 관리 평면 권한 · assume 범위 · 콘솔 레지스트리 · 그룹 · 파트너십 술어는 소속 · 역할 행을 읽는다. 홈이 쓰이는 곳은 표시 · 자기 흐름(로그인 · 리프레시 · 자기 프로필 · 초대 수락)과 DENIED 감사 행의 `tenant_id` · `(tenant_id, email)` UNIQUE(새 행 생성에만 의미가 있다) · `'*'` sentinel(플랫폼 운영자)이다. 그 회사를 떠나도 값은 그대로다. 마지막 소속까지 내보내진 행도 지우지 않는다(`ACTIVE` · 소속 0 — 콘솔 적격 · 교환이 막는다, 784 D-10).
 >
 > **TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — account_id 단독으로 정착**: 위
 > 근거대로 `oidc_subject` 는 account_id UUID 이다. 과거 시드/프로비저닝은 운영자
@@ -135,15 +138,23 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `role_id` | BIGINT | NOT NULL, FK → `admin_roles.id` ON DELETE RESTRICT | internal | role 삭제는 해당 role의 운영자 바인딩이 모두 제거된 뒤에만 허용 |
 | `granted_at` | DATETIME(6) | NOT NULL | internal | 역할 부여 시각 |
 | `granted_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 부여자 operator. seed 투입 시 NULL |
-| `tenant_id` | VARCHAR(32) | NOT NULL | internal | **TASK-BE-249 (Flyway V0025)** — 역할 바인딩의 테넌트 스코프. **canonical 규칙: 바인딩된 operator(`operator_id` → `admin_operators.id`)의 `tenant_id` 값을 그대로 미러링한다.** SUPER_ADMIN(플랫폼 스코프) operator 의 바인딩은 sentinel `'*'`. 멀티테넌트 행 레벨 격리 + 감사 라우팅의 근거. 전체 테넌트 스코프 모델·sentinel·backfill 정책은 [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)가 canonical (`admin_operators.tenant_id` / `admin_actions.tenant_id`·`target_tenant_id` 포함) |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | **TASK-BE-249 (Flyway V0025)** — 역할 바인딩의 테넌트 스코프. **canonical 규칙: 바인딩된 operator(`operator_id` → `admin_operators.id`)의 `tenant_id` 값을 그대로 미러링한다.** 🔴 **TASK-MONO-784 (ADR-MONO-082 b) 부터 이 미러 규칙은 폐기 — 이 칸은 «그 역할이 사는 회사» 다**(아래 «회사별 역할 불변식»). SUPER_ADMIN(플랫폼 스코프) operator 의 바인딩은 sentinel `'*'`. 멀티테넌트 행 레벨 격리 + 감사 라우팅의 근거. 전체 테넌트 스코프 모델·sentinel·backfill 정책은 [docs/adr/ADR-002-admin-tenant-scope-sentinel.md](../../../docs/adr/ADR-002-admin-tenant-scope-sentinel.md)가 canonical (`admin_operators.tenant_id` / `admin_actions.tenant_id`·`target_tenant_id` 포함) |
 | `org_node_id` | VARCHAR(36) | NULL, `CHECK (org_node_id IS NULL OR tenant_id <> '*')` | internal | **신규 (TASK-BE-490 spec / TASK-BE-492 impl, Flyway V0042, ADR-MONO-047 § D5)** — org-node-scoped grant(`ORG_ADMIN`)의 **스코프 드라이버**. 비-NULL 이면 이 grant 의 effective admin-scope = 노드 subtree 의 tenant 집합(account-service `GET /internal/org-nodes/{id}/tenants` 로 해소; [rbac.md](./rbac.md) `effectiveAdminScope` 3-way 해소). `NULL` = 종전 tenant-scoped grant(byte-unchanged). **CHECK**: platform-scoped grant(`tenant_id='*'`)은 노드를 동시에 가질 수 없다 — 플랫폼은 이미 전체 도달이라 조합이 무의미하며 `'*'` short-circuit 이 subtree 를 무력화하므로 DB + 애플리케이션 양쪽에서 거부. **FK 부재** — account-service 소유 `org_node.id` 를 참조하는 **불투명 식별자**(cross-service decoupling; `admin_operators.oidc_subject`/`finance_default_account_id` 와 동형). `org_node` 트리·cycle/depth·ceiling 수학은 admin-service 가 저장하지 않는다(account-service = TASK-BE-491) |
 | `group_origin` | BIGINT | NULL, DEFAULT NULL, FK → `operator_group.id` ON DELETE CASCADE | internal | **신규 (TASK-BE-519 spec / TASK-BE-520 impl, Flyway V00NN, ADR-MONO-046 § D2-A/D5)** — fan-out 마커. `NULL`(기본) = **직접 grant**(운영자에게 직접 부여된 역할 바인딩, 종전 동작 byte-unchanged). 비-NULL = 이 역할 바인딩이 해당 `operator_group` 에 대한 group-grant 의 fan-out 으로 **materialise** 되었음을 기록(ADR-MONO-045 cascade trail 의 형제). **nullable + DEFAULT NULL 이라 기존 모든 직접 grant row 는 마이그레이션 후에도 byte-identical**(backward-compatible). cascade-revoke(remove-member/delete-group)는 `group_origin = <groupId>` 로 **엄격 필터**하여 직접 grant(`group_origin IS NULL`)를 절대 파괴하지 않는다(아래 `group_origin` 마커 절 idempotence 불변식). 평가는 이 컬럼을 **보지 않는다** — 마커는 lifecycle 부기 전용, `PermissionEvaluator`/perm-cache byte-unchanged([rbac.md](./rbac.md) Operator Group Fan-Out). 같은 서비스 소유 `operator_group.id` 참조라 `org_node_id`(cross-service 불투명 식별자)와 달리 **실제 FK**(ON DELETE CASCADE — delete-group 시 fan-out row 자동 제거, 단 감사·outbox 원자성을 위해 애플리케이션이 명시 revoke 도 수행) |
 
-> **Per-tenant 바인딩 불변식 (TASK-BE-289 WI-2)**: 모든 `admin_operator_roles` 행 생성 경로(`CreateOperatorUseCase`, `PatchOperatorRoleUseCase`)는 `tenant_id`를 대상 operator 의 `tenant_id`와 **반드시 일치**시켜야 한다. 하드코딩 기본값(`"fan-platform"`) 금지 — `PatchOperatorRoleUseCase`가 V0025 이전 레거시 4-arg 팩토리로 인해 이 불변식을 위반했던 회귀(TASK-BE-288 review Finding 1)가 V0026 backfill + 격리 회귀 테스트로 종결됨.
+> ~~**Per-tenant 바인딩 불변식 (TASK-BE-289 WI-2)**: 모든 `admin_operator_roles` 행 생성 경로(`CreateOperatorUseCase`, `PatchOperatorRoleUseCase`)는 `tenant_id`를 대상 operator 의 `tenant_id`와 **반드시 일치**시켜야 한다.~~ 하드코딩 기본값(`"fan-platform"`) 금지 — `PatchOperatorRoleUseCase`가 V0025 이전 레거시 4-arg 팩토리로 인해 이 불변식을 위반했던 회귀(TASK-BE-288 review Finding 1)가 V0026 backfill + 격리 회귀 테스트로 종결됨.
+> 🔴 **WI-2 폐기 — TASK-MONO-784 (ADR-MONO-082 ACCEPTED b, 갈래 비교 스키마 행 · 구현자 결정 D-1, 구현 S2 ~ S5)**. «역할 행 = 홈» 이 «B 의 `TENANT_ADMIN`» 행을 금지하던 넷째 벽이었다(ADR-082 Context ① 넷째 행). 하드코딩 기본값 금지는 그대로 남는다(값은 언제나 아래 규칙이 정한다).
 
-> **Org-node scope-driver 불변식 (TASK-BE-490 / ADR-MONO-047 D5)**: scope 해소 순서는 **(1) `tenant_id='*'` → PLATFORM**(전체 union 을 FIRST 로 단락, account-service round-trip 이전) → **(2) `org_node_id IS NOT NULL` → subtree tenant 집합** → **(3) else `{tenant_id}`**([rbac.md](./rbac.md) `effectiveAdminScope`). **`tenant_id` 는 재활용하지 않는다** — node-scoped grant 에서도 `tenant_id` 는 여전히 바인딩된 operator 자신의 `tenant_id` 를 미러링하는 **감사 라우팅/행-격리 컬럼**(위 WI-2 불변식)이며, `TENANT_ADMIN` 의 경우 스코프와 **우연히 일치**할 뿐이다. 스코프는 별개의 `org_node_id` 컬럼이 구동한다. subtree 해소 실패(account-service down/CB/timeout)는 **fail-closed**(해당 row 공집합 기여 — 절대 `'*'`/all). `org_node_id IS NOT NULL ∧ tenant_id='*'` 는 CHECK + 애플리케이션 양쪽에서 거부(hand-written seed/ops SQL 도 차단).
+> **회사별 역할 불변식 (TASK-MONO-784 · D-1 — WI-2 대체)**:
+> - **소속** = `operator_tenant_assignment` 행 하나. 비-`'*'` 역할 행의 `tenant_id` 는 **그 운영자의 소속 중 하나**여야 한다(역할 행만 남는 «소속 없는 역할» 금지 — 그래서 «이 회사에서 내보내기» 가 그 회사 역할 행을 함께 지운다).
+> - `'*'` 운영자(`admin_operators.tenant_id = '*'`)는 **`'*'` 역할 행만** 갖고 소속은 **0** 이다. 비-`'*'` 운영자는 `'*'` 역할 행을 갖지 않는다(ADR-082 D2 — 쓰기에서 거절, `400 VALIDATION_ERROR`).
+> - 쓰는 곳마다의 값: 초대 수락 = 초대 테넌트 · 셀프 온보딩 = 새 테넌트 · 역할 변경 = 행동 테넌트(`X-Tenant-Id`) · 그룹 fan-out = **그룹 `tenant_id`**(784 이전엔 멤버 홈) · `POST /api/admin/operators`(`'*'` 전용) = `'*'` · 노드 grant = 아래.
+> - 🔵 홈(`admin_operators.tenant_id`)은 라이더 R1 — «처음 소속된 회사» 로 남지만 판정에서 읽지 않는다. 역할 행의 `tenant_id` 가 홈과 같아야 할 이유가 더는 없다.
+> - 기존 데이터: 784 이전 모든 행이 `tenant_id = 홈`(V0026)이라 `(operator_id, role_id)` 유일 ⇒ `(operator_id, role_id, tenant_id)` 유일 — PK 넓히기는 **데이터 안전**(ADR-082 갈래 비교 «기존 데이터 이동» 행).
 
-**Primary Key**: (`operator_id`, `role_id`) 복합 PK
+> **Org-node scope-driver 불변식 (TASK-BE-490 / ADR-MONO-047 D5)**: scope 해소 순서는 **(1) `tenant_id='*'` → PLATFORM**(전체 union 을 FIRST 로 단락, account-service round-trip 이전) → **(2) `org_node_id IS NOT NULL` → subtree tenant 집합** → **(3) else `{tenant_id}`**([rbac.md](./rbac.md) `effectiveAdminScope`). **`tenant_id` 는 재활용하지 않는다** — node-scoped grant 에서도 `tenant_id` 는 여전히 바인딩된 operator 자신의 `tenant_id` 를 미러링하는 **감사 라우팅/행-격리 컬럼**(위 WI-2 불변식)이며, `TENANT_ADMIN` 의 경우 스코프와 **우연히 일치**할 뿐이다. (**TASK-MONO-784 — WI-2 폐기 뒤**: 노드 grant 행의 `tenant_id` = **부여 당시의 대상 소속 테넌트**(기록 · «이 회사에서 내보내기» 의 단위 — D-1). 스코프는 여전히 `org_node_id` 가 구동한다 — 이 문단의 «재활용하지 않는다» 는 그대로다.) 스코프는 별개의 `org_node_id` 컬럼이 구동한다. subtree 해소 실패(account-service down/CB/timeout)는 **fail-closed**(해당 row 공집합 기여 — 절대 `'*'`/all). `org_node_id IS NOT NULL ∧ tenant_id='*'` 는 CHECK + 애플리케이션 양쪽에서 거부(hand-written seed/ops SQL 도 차단).
+
+**Primary Key**: (`operator_id`, `role_id`) 복합 PK — 🔴 **TASK-MONO-784 S2 부터 (`operator_id`, `role_id`, `tenant_id`)** (ADR-082 갈래 비교 스키마 행 · D-3): 같은 역할을 두 회사에 줄 수 있다. 선행 칸 `operator_id` 가 남아 FK 인덱스 요건을 깨지 않는다. `org_node_id` · `group_origin` 은 PK 밖이다 — 같은 `(operator, role, tenant)` 의 직접 · 그룹 · 노드 grant 는 지금처럼 한 행(먼저 쓴 쪽이 소유 — 아래 `group_origin` 단일-소유 마커 규약).
 **인덱스**:
 - `idx_admin_operator_roles_role` (`role_id`) — 역할별 운영자 역검색
 
@@ -179,7 +190,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
 |---|---|---|---|---|
 | `group_id` | BIGINT | NOT NULL, FK → `operator_group.id` ON DELETE CASCADE | internal | **`operator_group.id` (BIGINT PK) 참조**. 외부 UUID `group_id` 컬럼이 아님. 그룹 삭제 시 멤버십 edge 는 DB CASCADE 로 제거되나, 그 멤버들의 fan-out `group_origin` row revoke 는 별도 애플리케이션 cascade(감사·outbox 원자성, D5) |
-| `operator_id` | BIGINT | NOT NULL, FK → `admin_operators.id` ON DELETE CASCADE | internal | 멤버 operator. **canonical 불변식(아래): 이 operator 의 home `tenant_id` 는 그룹의 `tenant_id` 와 반드시 일치**(`tenant_partnership_participant` 의 own-operator 불변식과 동형) — 그룹은 자기 테넌트 operator 만 담는다 |
+| `operator_id` | BIGINT | NOT NULL, FK → `admin_operators.id` ON DELETE CASCADE | internal | 멤버 operator. **canonical 불변식(아래): 이 operator 의 home `tenant_id` 는 그룹의 `tenant_id` 와 반드시 일치**(`tenant_partnership_participant` 의 own-operator 불변식과 동형) — 그룹은 자기 테넌트 operator 만 담는다. **TASK-MONO-784 (S4)**: «home 일치» → «그룹 `tenant_id` ∈ 이 operator 의 소속» |
 | `added_at` | DATETIME(6) | NOT NULL | internal | 멤버 추가 시각 |
 | `added_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | 멤버를 추가한 operator. seed/시스템 경로는 NULL |
 
@@ -189,6 +200,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 
 > **멤버 불변식 (TASK-BE-519 / ADR-MONO-046 D3/D5)**:
 > - 멤버 operator 의 `admin_operators.tenant_id` == 부모 그룹의 `tenant_id` — 그룹은 자기 테넌트 operator 만 담는다(cross-tenant 멤버는 fan-out 이 tenant confinement 을 넘게 만든다). 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`.
+>   **TASK-MONO-784 (ADR-MONO-082 b · D-11 — S4)**: «자기 테넌트 operator» = 부모 그룹의 `tenant_id` 가 멤버의 **소속**(`operator_tenant_assignment` 행)이다 — 홈이 아니다(코드 그대로). `'*'` 멤버 → `400 VALIDATION_ERROR`(D2). 멤버가 그 테넌트에서 «내보내지면» 멤버십 행과 그 그룹의 fan-out 행이 함께 지워진다(784 Edge Case 3). fan-out 역할 행의 `tenant_id` = 그룹 `tenant_id`.
 > - 멤버 추가는 그룹의 현행 grant 를 그 멤버로 fan-out 하며, 이때 no-escalation cap(D4)이 **재검사**된다(그룹 관리자가 자기 미보유 grant 를 새 멤버에게 우회 부여 불가). fan-out 은 멤버가 이미 보유한 동등 직접 grant 를 중복 생성하지 않는다(idempotence, 아래 `group_origin` 마커 절).
 
 ### `operator_group_grant`
@@ -226,7 +238,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 **backward-compatible**: `NULL` + `DEFAULT NULL` 이라 마이그레이션 후 기존 모든 직접 grant row 는 byte-identical 하게 `group_origin IS NULL`(= 직접 grant) 로 남는다. 마커가 nullable+defaulted 인 점이 곧 마이그레이션이 backward-compatible 인 이유다.
 
 > **Idempotence & cascade 불변식 (TASK-BE-519 / ADR-MONO-046 D5)**:
-> - **fan-out 은 동등 직접 grant 를 중복 생성하지 않는다** — 두 테이블 모두 grant 를 유일하게 식별하는 복합 PK(`operator_tenant_assignment` = `(operator_id, tenant_id)`, `admin_operator_roles` = `(operator_id, role_id)`)를 갖는다. 멤버가 이미 그 key 의 row 를 보유하면(직접이든 다른 그룹발이든) fan-out 은 **no-op skip**(PK 충돌 없음). 즉 grant 당 최대 1 row.
+> - **fan-out 은 동등 직접 grant 를 중복 생성하지 않는다** — 두 테이블 모두 grant 를 유일하게 식별하는 복합 PK(`operator_tenant_assignment` = `(operator_id, tenant_id)`, `admin_operator_roles` = `(operator_id, role_id)` — **TASK-MONO-784 S2 부터 `(operator_id, role_id, tenant_id)`**, skip 판정은 `(멤버, 역할, 그룹 tenant_id)`)를 갖는다. 멤버가 이미 그 key 의 row 를 보유하면(직접이든 다른 그룹발이든) fan-out 은 **no-op skip**(PK 충돌 없음). 즉 grant 당 최대 1 row.
 > - **cascade-revoke 는 `group_origin = <groupId>` 로 엄격 필터** — remove-member(그 멤버의 `group_origin=<groupId>` row) / delete-group(그 그룹의 모든 `group_origin=<groupId>` row)은 마커가 정확히 일치하는 row 만 삭제하고, **직접 grant(`group_origin IS NULL`)는 절대 파괴하지 않는다**. FK ON DELETE CASCADE 가 delete-group 시 DB 레벨 안전망을 제공하나, 감사(`admin_actions`)·outbox 원자성을 위해 애플리케이션이 명시 revoke 로 수행한다(D5/D6).
 > - **단일-소유 마커(v1 규약)** — `group_origin` 은 스칼라(하나의 그룹 id)이고 PK 상 grant 당 1 row 이므로, 두 그룹 G1·G2 가 같은 `(operator, grant)` 를 grant 하면 **먼저 materialise 한 그룹**이 마커를 소유하고 두 번째 fan-out 은 no-op skip 된다. 따라서 G1 삭제 시 G2 가 여전히 "의도"하더라도 그 row 는 revoke 된다(G2 가 다음 grant/멤버 재적용 시 재-materialise). 이는 fan-out(D2-A) 의 알려진 v1 특성이며, membership-을-평가-edge 로 승격하는 inheritance(D2-B, 후속 ADR)가 자연히 해소한다. **어느 경우에도 직접 grant 는 손상되지 않는다**(cascade 는 `group_origin IS NULL` 을 절대 건드리지 않음).
 
@@ -281,6 +293,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 
 > **참여자 불변식 (TASK-BE-476 / ADR-MONO-045 D4/D3)**:
 > - 참여 operator 의 `admin_operators.tenant_id` == 부모 파트너십의 `partner_tenant_id`(B). host(A) 는 개별 B-사람을 지명하지 않는다(D4-B 거부) — A 는 envelope(`delegated_scope`)만 authoring, B 가 자기 사람을 채운다. 위반 → `422 PARTICIPANT_NOT_OWN_OPERATOR`.
+>   **TASK-MONO-784 (ADR-MONO-082 b · D-11)**: «B 의 사람» = `partner_tenant_id` ∈ 참여 operator 의 **소속**(S4 — 참여 추가) · 파생 도달의 파트너십 조회도 `partner ∈ 소속`(S2). B 에서 내보내진 operator 의 참여 행은 내보내기가 함께 지운다 — 다시 소속돼도 되살아나지 않는다(784 AC-0 F18).
 > - `participant_scope ⊆ delegated_scope` — 참여자 좁힘은 host 위임을 넘을 수 없다. `delegated_scope` 밖 원소는 파생되지 않는다(초과분 무시, confinement 이 request-time 교집합으로 강제).
 > - **no transitive re-delegation** — participant 는 자신이 파생한 A-scope 를 다시 제3자에게 위임할 수 없다(confused-deputy default deny, [rbac.md](./rbac.md)). participant 는 B 소유 operator 로 한정되며 그 자체가 재-origination 지점이 될 수 없다.
 
@@ -515,6 +528,9 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
   - `V0047__create_tenant_entry_policy.sql`(S4) — `tenant_entry_policy` 신규, **빈 표**(행 없음 = 꺼짐 ⇒ net-zero). **forward-only**, `INFORMATION_SCHEMA` 존재 가드(V0027/V0029 패턴, `@var` 금지), `CHECK (tenant_id <> '*')`, `updated_by` FK → `admin_operators.id`.
   - ~~`V00NN__seed_tenant_security_and_2fa_reset_permissions.sql`(S5 · S6)~~ → **두 장으로 나눔(S5 구현)**: `V0048__seed_tenant_security_manage_permission.sql`(S5) — `tenant.security.manage`(`SUPER_ADMIN` · `TENANT_ADMIN`) · `account.2fa_reset`(`SUPER_ADMIN` · `SECURITY_ANALYST`) 은 그 엔드포인트 · 키 상수와 함께 S6 의 별도 한 장 `V0049__seed_account_2fa_reset_permission.sql`(S6). 둘 다 [rbac.md](./rbac.md) Seed Matrix 매핑 seed, `INSERT IGNORE` idempotent, **inert/net-zero** — 어떤 operator 에도 새로 배정하지 않는다. 나눈 이유: 엔드포인트 없는 키를 먼저 시드하면 `GET /api/admin/roles` 가 `GET /api/admin/permissions`(코드 카탈로그)에 없는 키를 보인다.
   - 🔵 데모 dev 시드(`db/migration-dev/R__seed_demo_operator.sql`)의 `SUPER_ADMIN` `require_2fa` 완화(소유자 결정 OD-5)는 스키마 변경이 아니라 시드 변경이고 S4 에서 한다.
+- **TASK-MONO-784 (ADR-MONO-082 b · 구현자 결정 D-2 · D-3)** — 한 마이그레이션(S1 은 specs-only; **작성 직전 다음 빈 버전 재확인** — S1 시점 마지막 = `V0050`):
+  - `V0051__admin_operator_roles_tenant_pk_and_membership_backfill.sql`(S2, 이름은 가칭) — ① `admin_operator_roles` `DROP PRIMARY KEY, ADD PRIMARY KEY (operator_id, role_id, tenant_id)` 한 문장(선행 칸 `operator_id` 유지 — FK 인덱스 요건 · 데이터 안전: 784 이전 모든 행이 `tenant_id = 홈`). ② **소속 백필(멱등)** — 비-`'*'` 운영자마다 (홈) · (그 운영자의 비-`'*'` 역할 행 `tenant_id` 들) 중 `operator_tenant_assignment` 행이 없는 것에 whole-tenant 행(`org_scope` · `permission_set_id` · `group_origin` NULL)을 만든다 — 홈을 판정에서 빼도(R1) 단일 회사 운영자의 assume · 콘솔 · 관리 판정이 바이트 불변이게. `'*'` 운영자에게는 만들지 않는다. **forward-only**, `INFORMATION_SCHEMA` 가드(V0027/V0029 패턴, `@var` 금지), 형태 시험은 V0042/V0044 선례.
+  - 🔴 `db/migration-dev` 의 `R__` 시드는 V 마이그레이션 **뒤에** 돌아 이 백필이 덮지 못한다 — 홈만으로 assume/콘솔에 닿던 데모 운영자(`demo-cs` · `demo-viewer`)의 배정 행은 시드에서 더한다(S2), `demo-operator` 의 `ecommerce` 역할 행(`SUPPORT_READONLY` + `SUPPORT_LOCK` — 소유자 결정 OD-3)은 S3 에서 시드한다.
 
 ---
 
@@ -533,6 +549,8 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > RBAC 테이블의 **행동 규칙**(권한 평가 알고리즘, seed 매트릭스, DENIED 기록 정책, JWT claim)은 본 문서가 아닌 [rbac.md](./rbac.md)에서 선언된다. 본 문서는 스키마와 분류만 다룬다.
 
 > **TASK-BE-327 (ADR-MONO-020 D2)**: `operator_tenant_assignment` (V0030) + `admin_operators.{oidc_subject, tenant_id}` 로 구성되는 D1 effective-scope 가 이제 auth-service 에 의해 `GET /internal/operator-assignments/check` 로 **cross-service read** 된다 (assume-tenant 발급 게이트). **스키마 변경 없음** — read-only 노출만 추가. 상세: [rbac.md](./rbac.md), [architecture.md](./architecture.md).
+
+> **TASK-MONO-784 (ADR-MONO-082 b) — `operator_tenant_assignment` = 소속**: 이 표의 행 하나가 «이 운영자는 이 회사의 운영자다» 의 **유일한** 저장소다(ADR-082 갈래 비교 assume 행 «소속 회사 = 배정 행»). ① D1 effective-scope 에서 `{admin_operators.tenant_id}`(홈)를 뺀다 — 비-`'*'` 운영자의 실효 범위 = 배정 행만(S2 · 라이더 R1 · rbac.md Assume-Tenant 절). ② 소속은 관리 권한을 주지 않는다 — 관리 권한은 같은 `tenant_id` 의 역할 행이 준다(라이더 R2 — 역할 행 없는 소속 = 관리 권한 0). ③ **`permission_set_id` 는 계속 쓰지 않는다**(라이더 R4 — 읽기 · 쓰기 0. 단일 FK 라 첫 관리자의 두 역할을 못 담는다 — 회사별 역할은 `admin_operator_roles.tenant_id` 축이 표현한다). 칸은 남고 값은 늘 NULL. ④ `'*'` 운영자는 이 표에 행을 갖지 않는다(ADR-082 D2 — 쓰기에서 거절). ⑤ 행 삭제 = «이 회사에서 내보내기» — 같은 `tenant_id` 의 역할 행 · 그 테넌트 그룹 멤버십과 fan-out · `partner_tenant_id` 가 그 테넌트인 참여 행을 한 트랜잭션에 함께 지운다(D-9).
 
 > **TASK-BE-338 (ADR-MONO-020 D3 amendment 2026-06-05)**: `operator_tenant_assignment` 에 **nullable `org_scope`** 컬럼 추가(V0031) — per-assignment **데이터-스코프**(운영자가 그 테넌트에서 act 가능한 부서 **subtree-root id** 들의 JSON 배열; `NULL ⟺ ["*"]` = 테넌트 전체 = **net-zero** 기본, 기존 모든 행 동작 불변). `permission_set_id`(D5, role-set 좁힘)의 data-scope 형제. `/internal/operator-assignments/check` 가 `org_scope` 를 함께 반환(현행 boolean gate 에 additive) → auth-service `TenantClaimTokenCustomizer.customizeForAssumeTenant` 가 하드코딩 `["*"]`(BE-337) 대신 실제 값 주입. 오직 erp 가 소비(subtree-root 를 자기 부서트리로 descendant 확장; TASK-ERP-BE-008). 행동 규칙(claim 형상/주입)은 [rbac.md](./rbac.md) + auth-service [architecture.md](../auth-service/architecture.md).
 
