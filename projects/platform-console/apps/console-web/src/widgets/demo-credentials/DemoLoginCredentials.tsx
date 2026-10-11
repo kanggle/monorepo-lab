@@ -30,6 +30,15 @@ export const DEMO_LOGIN_PASSWORD = 'Demo1234!';
 export const DEMO_PLATFORM_OPERATOR_EMAIL = 'platform@demo.com';
 
 /**
+ * TASK-MONO-782 — the CS 2nd-line demo operator (TASK-MONO-781 이 시딩, 소유자 결정 A ·
+ * 재굽기 뒤 공개). `demo@demo.com` 으로는 사이드바 «계정 운영» 화면을 search-only 로
+ * 재현할 수 없다(그 계정은 SUPER_ADMIN 이라 다른 경로가 열린다) — 이 계정으로만 이메일
+ * 검색 → 잠금 · 해제 흐름을 볼 수 있다. 플랫폼 운영자 줄과 같은 이유로 이름을
+ * `DEMO_LOGIN_*` 과 다르게 잡았다(z11 의 대입문 앵커가 걸리지 않게).
+ */
+export const DEMO_CS_OPERATOR_EMAIL = 'cs@demo.com';
+
+/**
  * 데모 배포의 `/login` 에서 **어느 계정으로 들어가는지 말한다** (`TASK-PC-FE-275`).
  *
  * -----------------------------------------------------------------------------
@@ -123,6 +132,12 @@ export async function DemoLoginCredentials() {
         으로 로그인해 테넌트를{' '}
         <strong className="font-medium text-foreground">fan-platform</strong> 으로 선택하면
         열립니다. 위 계정(고객사 운영자)에는 보이지 않습니다.
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground" data-testid="demo-login-cs-operator">
+        사이드바 «계정 운영»(이메일 검색 · 잠금 · 해제)은 <b>CS 2선</b> 계정{' '}
+        <code className="text-foreground">{DEMO_CS_OPERATOR_EMAIL}</code>(비밀번호 같음)
+        으로 로그인하면 열립니다. 테넌트 <strong className="font-medium text-foreground">ecommerce</strong> 가
+        자동 선택되고, 이커머스·WMS 운영 권한과 감사 · 보안 화면도 함께 열립니다.
       </p>
     </section>
   );

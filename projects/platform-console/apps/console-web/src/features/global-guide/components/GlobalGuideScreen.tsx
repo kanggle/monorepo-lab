@@ -121,6 +121,18 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
         </>
       ),
     },
+    {
+      key: 'cs',
+      email: 'cs@demo.com',
+      who: 'CS 2선(계정 잠금·해제)',
+      opens: (
+        <>
+          데모에서는 테넌트 <Mono>ecommerce</Mono> 를 고르면 이커머스·WMS 운영 권한도 함께 받습니다 —
+          테넌트를 고르면 그 테넌트가 구독한 도메인의 운영 권한이 따라오기 때문입니다. 감사 · 보안
+          화면도 열립니다.
+        </>
+      ),
+    },
   ];
 
   const content: Record<(typeof GLOBAL_GUIDE_TABS)[number]['id'], ReactNode> = {

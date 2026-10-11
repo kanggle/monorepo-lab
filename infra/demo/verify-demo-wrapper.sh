@@ -2398,6 +2398,40 @@ if [ -f "$z11_html" ] && [ -f "$z11_lib" ]; then
     fail "(z11) 플랫폼 운영자 자격증명 시드 파일이 없습니다: $z11_pcred"\
       $'\n'"→ TASK-MONO-751 이 만든 파일입니다. 옮겼다면 이 가드의 경로도 같은 PR 에서 옮기세요."
   fi
+
+  # -------------------------------------------------------------------------
+  # TASK-MONO-782 — CS 2선(`cs@demo.com`) 확장. 뷰어·플랫폼 운영자와 같은 모양·같은 이유:
+  # `seed/lib.sh` 가 쓰지 않으므로 권위는 auth-service 자격증명 시드의 이메일 **컬럼 값**이고,
+  # 앵커는 그 행의 account_id 리터럴(파일에 한 번만 — 아래에서 재확인)이다.
+  # -------------------------------------------------------------------------
+  z11_cscred="$ROOT/projects/iam-platform/apps/auth-service/src/main/resources/db/migration-dev/R__seed_demo_cs_operator_credential.sql"
+  if [ -f "$z11_cscred" ]; then
+    z11_cs_acct="0199de70-0000-7000-8000-00000000ad08"
+    z11_cs_n="$(grep -c "$z11_cs_acct" "$z11_cscred" || true)"
+    [ "$z11_cs_n" = "1" ] || fail "(z11) CS 시드의 account_id 앵커가 $z11_cs_n 번 나옵니다(1 이어야 합니다) — 추출이 불안정합니다: $z11_cscred"
+
+    z11_p_csemail="$(sed -n 's/.*id="c-cs-email"[^>]*>\([^<]*\)<.*/\1/p' "$z11_html" | head -1 | tr -d '\r')"
+    z11_s_csemail="$(sed -n "s/.*'$z11_cs_acct', '\([^']*\)'.*/\1/p" "$z11_cscred" | head -1 | tr -d '\r')"
+
+    for z11_pair in "론처 CS 이메일:$z11_p_csemail" "시드 CS 이메일:$z11_s_csemail"; do
+      z11_name="${z11_pair%%:*}"; z11_val="${z11_pair#*:}"
+      [ -n "$z11_val" ] || fail "(z11) $z11_name 을 뽑지 못했습니다 — 앵커가 갈라졌습니다."\
+        $'\n'"→ 론처는 id=\"c-cs-email\", 시드는 account_id \`$z11_cs_acct\` 옆의 email 컬럼을 앵커로 씁니다."
+    done
+
+    [ "$z11_p_csemail" = "$z11_s_csemail" ] \
+      || fail "(z11) 론처의 CS 이메일이 시드 자격증명 컬럼과 다릅니다: 페이지=\"$z11_p_csemail\" · 시드=\"$z11_s_csemail\""\
+        $'\n'"→ 방문자가 이 계정으로 로그인에 실패합니다. 권위는 $z11_cscred 의 email 컬럼입니다."
+
+    # 🔴 대조군 — 위 두 짝과 같은 이유.
+    [ "${z11_p_csemail}x" != "$z11_s_csemail" ] \
+      || fail "(z11) 대조군 실패(CS) — 일부러 다르게 만든 값이 같다고 판정됐습니다. 비교가 죽어 있습니다."
+
+    ok "론처 CS 계정 ↔ auth-service 자격증명 시드 일치 (email=$z11_s_csemail · account_id 앵커 유일 확인 · 대조군 통과)"
+  else
+    fail "(z11) CS 자격증명 시드 파일이 없습니다: $z11_cscred"\
+      $'\n'"→ TASK-MONO-781 이 만든 파일입니다. 옮겼다면 이 가드의 경로도 같은 PR 에서 옮기세요."
+  fi
 fi
 
 # ---------------------------------------------------------------------------

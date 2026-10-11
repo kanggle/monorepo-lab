@@ -473,6 +473,37 @@
         </ol>
         <p class="note"><code>/partnerships</code> 는 기본 계정도 설계상 403 이라 이 계정만의 특징은 아닙니다.</p>
       </section>
+
+      <!--
+        CS 2선 계정 (TASK-MONO-782, 재굽기 후 — TASK-MONO-781 이 시딩).
+
+        🔴 테넌트 스위처는 `ecommerce` 하나만 보이고 로그인 때 자동 선택됩니다 — 콘솔은 고른
+        테넌트를 항상 assume 하고, 역할은 RBAC 행이 아니라 그 테넌트의 **구독**에서 파생되기
+        때문입니다(`OperatorRoleDerivation.fromEntitledDomains`). `ecommerce` 는 이커머스 ·
+        WMS 를 구독하므로 이 계정은 이커머스·WMS 운영 권한도 함께 받습니다 — 소유자 결정 A
+        (TASK-MONO-781 AC-0, 공개하기로 함).
+        🔴 값을 손으로 고치지 마라. `verify-demo-wrapper.sh` (z11) 이 `id="c-cs-email"` 을
+        `R__seed_demo_cs_operator_credential.sql` 의 이메일 컬럼과 대조한다.
+      -->
+      <section class="acct">
+        <h3>CS 2선(계정 잠금·해제)</h3>
+        <p class="use">사이드바 «계정 운영» 에서 소비자 계정을 이메일로 검색해 잠그거나 해제할 때 씁니다.</p>
+        <dl style="margin:0">
+          <div class="crow">
+            <dt>이메일</dt>
+            <dd><code id="c-cs-email">cs@demo.com</code><button class="copy" data-copy="c-cs-email">복사</button></dd>
+          </div>
+          <div class="crow">
+            <dt>비밀번호</dt>
+            <dd><code id="c-cs-pass">Demo1234!</code><button class="copy" data-copy="c-cs-pass">복사</button></dd>
+          </div>
+        </dl>
+        <ol>
+          <li>콘솔에 로그인하면 테넌트 <code>ecommerce</code> 가 자동 선택됩니다 → 사이드바 «계정 운영» 을 엽니다.</li>
+          <li>검색창에 <code>demo@demo.com</code> 을 입력 → 1행이 나오면 잠금 · 해제 버튼을 눌러 봅니다.</li>
+        </ol>
+        <p class="note">데모에서는 테넌트 <code>ecommerce</code> 를 고르면 이커머스·WMS 운영 권한도 함께 받습니다 — 테넌트를 고르면 그 테넌트가 구독한 도메인의 운영 권한이 따라오기 때문입니다. 감사 · 보안 화면도 열립니다.</p>
+      </section>
     </div>
   </div>
 

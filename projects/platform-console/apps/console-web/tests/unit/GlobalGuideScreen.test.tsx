@@ -164,6 +164,18 @@ describe('GlobalGuideScreen', () => {
     expect(mismatches).toHaveTextContent('/permission-sets');
   });
 
+  it('pins the CS 2nd-line test account row — email, who, and the disclosed trade-off (TASK-MONO-782)', () => {
+    render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
+    const row = screen.getByTestId('global-guide-test-account-cs');
+    expect(row).toHaveTextContent('cs@demo.com');
+    expect(row).toHaveTextContent('CS 2선(계정 잠금·해제)');
+    expect(row).toHaveTextContent('ecommerce');
+    expect(row).toHaveTextContent('이커머스·WMS 운영 권한도 함께 받습니다');
+    expect(row).toHaveTextContent('감사 · 보안 화면도 열립니다');
+    // no role constant (e.g. SUPPORT_LOCK) leaks into this card — the guide names the role in plain words.
+    expect(row.textContent).not.toMatch(/SUPPORT_LOCK/);
+  });
+
   it('every role column header names the role AND what kind of person holds it (TASK-PC-FE-327)', () => {
     render(<GlobalGuideScreen demoLoginEmail={EMAIL} />);
     for (const r of RBAC_ROLES) {
