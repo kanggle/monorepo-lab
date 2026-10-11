@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSession, signIn } from 'next-auth/react';
 import SignupPage from '@/app/(auth)/signup/page';
@@ -81,13 +81,43 @@ describe('SignupPage (TASK-FE-097)', () => {
     expect(mockSignIn).toHaveBeenCalledTimes(1);
   });
 
-  it('JS 가 늦거나 막혀도 누를 수 있는 버튼이 남는다', async () => {
+  it('TASK-FE-108: 자동 시작 뒤에는 버튼이 잠겨 두 번째 signIn 을 부르지 않는다', async () => {
+    // 25·26차 데모 창 실측: 자동 이동 중 이 버튼을 누르면 두 번째 signIn 이 state/PKCE
+    // 쿠키를 덮어쓰고, IAM 은 첫 authorize 요청을 재개해 콜백이 `unexpected "state"` 로 죽었다.
     renderSignupPage();
-    const button = await screen.findByRole('button', { name: 'IAM 으로 이동' });
+    await waitFor(() => expect(mockSignIn).toHaveBeenCalledTimes(1));
 
+    const button = screen.getByRole('button', { name: '이동 중...' });
+    expect(button).toBeDisabled();
     await userEvent.click(button);
 
-    expect(mockSignIn).toHaveBeenCalledWith('iam', { callbackUrl: '/' }, { prompt: 'create' });
+    expect(mockSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('TASK-FE-108: 자동 시작이 실패하면 버튼이 다시 살아나 한 번 더 시작할 수 있다', async () => {
+    mockSignIn.mockRejectedValueOnce(new Error('network'));
+    renderSignupPage();
+
+    const button = await screen.findByRole('button', { name: 'IAM 으로 이동' });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+
+    await waitFor(() => expect(mockSignIn).toHaveBeenCalledTimes(2));
+    expect(mockSignIn).toHaveBeenLastCalledWith('iam', { callbackUrl: '/' }, { prompt: 'create' });
+  });
+
+  it('TASK-FE-108: 뒤로 가기로 bfcache 에서 복원되면 버튼이 다시 살아난다', async () => {
+    renderSignupPage();
+    await waitFor(() => expect(mockSignIn).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: '이동 중...' })).toBeDisabled();
+
+    const restored = new Event('pageshow') as PageTransitionEvent;
+    Object.defineProperty(restored, 'persisted', { value: true });
+    act(() => {
+      window.dispatchEvent(restored);
+    });
+
+    expect(await screen.findByRole('button', { name: 'IAM 으로 이동' })).toBeEnabled();
   });
 
   it('무엇을 하는 화면인지 알려 준다 (빈 화면으로 리다이렉트를 기다리지 않는다)', async () => {

@@ -56,6 +56,31 @@ describe('LoginForm (GAP)', () => {
     });
   });
 
+  it('TASK-FE-108: signIn 이 끝난 뒤(리다이렉트 중)에도 버튼이 잠겨 두 번째 클릭이 재시작하지 않는다', async () => {
+    // signIn() 은 window.location 을 세팅하자마자 resolve 한다 — 그때 버튼을 다시 켜면
+    // 이동 중 두 번째 클릭이 state/PKCE 쿠키를 덮어써 콜백이 `unexpected "state"` 로 죽는다.
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await user.click(screen.getByRole('button', { name: 'IAM 로그인' }));
+    await waitFor(() => expect(mockSignIn).toHaveBeenCalledTimes(1));
+    const button = screen.getByRole('button', { name: '이동 중...' });
+    expect(button).toBeDisabled();
+    await user.click(button);
+
+    expect(mockSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('TASK-FE-108: signIn 이 실패하면 버튼이 다시 살아난다', async () => {
+    mockSignIn.mockRejectedValueOnce(new Error('network'));
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await user.click(screen.getByRole('button', { name: 'IAM 로그인' }));
+
+    expect(await screen.findByRole('button', { name: 'IAM 로그인' })).toBeEnabled();
+  });
+
   it('?from=/products/p1 이 있으면 callbackUrl 로 전달한다', async () => {
     mockSearchParams.value = new URLSearchParams('from=%2Fproducts%2Fp1');
 
