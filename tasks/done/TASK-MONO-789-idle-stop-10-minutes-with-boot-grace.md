@@ -4,7 +4,7 @@ TASK-MONO-789
 
 # Status
 
-review — 구현 완료(2026-10-11 UTC). AC-1~4 ✅. ⏳ `done/` 전 남은 것 = **AC-5**(소유자 `terraform apply`).
+done — 구현 완료(2026-10-11 UTC). AC-1~4 ✅. ⏳ `done/` 전 남은 것 = **AC-5**(소유자 `terraform apply`).
 
 # Title
 
@@ -93,3 +93,17 @@ monorepo
 - `terraform fmt -check` (variables.tf · main.tf) rc=0.
 - `verify-demo-wrapper.sh` 정적 **PASS** (rc=0, FAIL 0). ⚪ (h) 이미지 실재 검증은 이 호스트에서 `docker manifest inspect` 가 매달려 docker 심으로 0/18(skip) — CI 가 잰다.
 - `terraform.tfvars`(gitignored, 로컬 운영값)는 `idle_minutes` 를 **주석으로만** 적고 있어 변수 기본값(10)이 그대로 쓰인다 — 손댈 필요 없음(확인함).
+
+---
+
+## CORRECTION
+
+(2026-10-11 UTC, close chore) 위 Status 와 AC-5 의 «⏳ 소유자 `terraform apply`» 는 **더 이상 남은 일이 아니다** — 아래가 지금의 사실이다. 위의 기록은 그대로 둔다.
+
+- **4차원 검증**: (a) #4310 `MERGED` · 머지 커밋 `031c12d30` (b) `origin/main` tip 일치 (c) 머지 시점 실패 check **0**(14 pass · 필수 4종 · Demo wrapper smoke · Frontend unit tests 포함 — 로컬 ⚪ 둘을 CI 가 쟀다) (d) AC-1~4 는 review 시점에 닫혔고 AC-5 는 아래로 닫힘.
+- **AC-5 실측**:
+  - apply 전 plan(읽기 전용): `aws_lambda_function.control` in-place 1건 — `source_code_hash` · env `+ BOOT_GRACE_MINUTES = "20"` · `IDLE_MINUTES "20" -> "10"`, `Plan: 0 to add, 1 to change, 0 to destroy`, 출력 `idle_stop_minutes 20 -> 10`.
+  - 소유자 apply: `Apply complete! Resources: 0 added, 1 changed, 0 destroyed.` · `idle_stop_minutes = 10`. 🔵 첫 시도는 PowerShell 5.1 이 `-out=mono-789.tfplan`(`-` 로 시작 + `.` 포함)을 두 인자로 쪼개 plan 이 실패했고 apply 도 파일이 없어 실패했다 — 아무것도 반영되지 않은 채였다. 인자를 따옴표로 감싸 재실행.
+  - apply 후 재-plan: `-detailed-exitcode` **0**, «No changes».
+  - 실물 람다 env(`aws lambda get-function-configuration`): `IDLE_MINUTES=10` · `BOOT_GRACE_MINUTES=20` · `MAX_RUNTIME_MINUTES=180`.
+- ⚪ 안 잰 것: 실제 유휴 정지 시각(10~15분)과 부팅 보호의 라이브 발화 — 인스턴스를 켜고 방치해야 재는 값이라 이 티켓만을 위해 예산을 쓰지 않았다. 판정 로직은 단위시험 4칸 + bite 가 덮는다.
