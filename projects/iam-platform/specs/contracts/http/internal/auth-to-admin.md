@@ -59,6 +59,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 1. **account_id 조회 (TASK-MONO-299)**: `oidcSubject`(account_id) 로 `admin_operators` row 조회 (`AdminOperatorPort.findByOidcSubject`). miss OR 비-`ACTIVE` → `assigned=false`, `orgScope=null` (fail-closed; 운영자 존재 여부를 boolean 너머로 노출하지 않는다).
 2. platform-scope 운영자 (`tenant_id == '*'`, `isPlatformScope()`) → 비어있지 않은 모든 `tenantId` 에 대해 `assigned=true` (sentinel 이 모든 tenant 를 부여; assumed 토큰은 여전히 선택된 구체 `tenant_id` 를 운반한다 — `'*'` 토큰은 절대 발급되지 않는다). 명시적 assignment row 가 없으므로 `orgScope=null` (→ `["*"]`).
 3. 그 외 → `assigned = TenantScopeResolver.resolveEffectiveTenantScope(internalId, homeTenant).contains(tenantId)` (D1 assignment rows ∪ {legacy home tenant} — BE-326 dual-read). `assigned=true` 시 `orgScope = operator_tenant_assignment.{(operatorInternalId, tenantId)}.org_scope` (해당 (운영자, 선택 테넌트) assignment row 의 `org_scope`; row 부재 또는 컬럼 NULL → `null`).
+   🔴 **TASK-MONO-784 (ADR-MONO-082 b · R1 · D3 · D-2 — 구현 S2)**: 실효 범위 = **배정 행(소속)만** — `{legacy home tenant}` 를 더하지 않는다. 홈은 «처음 소속된 회사» 로 남지만 판정에서 읽지 않는다(R1). 그래야 홈 회사에서 내보내진 사람의 그 회사 assume 이 거절된다(784 AC-2 · AC-0 F4 — ADR-082 갈래 비교 «assume 변화 0» 은 떠난 회사가 홈일 때 틀리다). 전제: S2 의 V0051 백필이 홈에 배정이 없는 기존 비-`'*'` 행에 홈 배정을 만든다(멱등) — 그래서 단일 회사 운영자의 판정은 **바이트 불변**이다. `'*'`(2번)은 그대로. 파트너십 host reach 의 파트너십 조회도 `partner = 홈` 이 아니라 **`partner ∈ 그 운영자의 소속`** 인 ACTIVE 파트너십이다(D-11). 2단계 요구(6번 · 토큰 교환)의 «정책 켜진 테넌트» 도 이 해소기를 따라 소속 기준이 된다(784 AC-0 F17).
 4. `tenantId` blank → `assigned=false`, `orgScope=null`.
 0. **`admin_operators.confined_tenant_id` — 한 테넌트로 묶인 운영자 (`TASK-MONO-751`, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로»).** 운영자 행을 찾고 ACTIVE 를 확인한 직후, **2번(platform-scope)보다 먼저**: 이 컬럼이 비-NULL 이고 `tenantId` 와 다르면 `assigned=false`. 같으면 나머지 규칙이 그대로 판정한다(좁히기만 — 열지 않는다). `NULL`(기존 모든 운영자)은 이 규칙에 걸리지 않는다. 쓰는 곳: 데모 플랫폼 운영자(`'*'`, `confined_tenant_id='fan-platform'`) — `fan-platform` 만 assume 가능.
 5. **`tenantId == fan-platform` — 플랫폼 운영자 전용 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3).** 2번(platform-scope)에 걸리지 않은 운영자 — 즉 **고객사 운영자** — 는 `fan-platform` 에 대해 **항상 `assigned=false`** 다. assignment row 가 있어도(이 surface 가 생기기 전에 만들어졌든 직접 SQL 이든), 파트너십-파생 host reach(3·`delegatedScope`) 가 있어도 같다 — 이 판정은 3번과 파트너십 분기 **앞에서** 내려진다. 이유: `fan-platform` 이 `fan` 도메인을 구독하므로 이 테넌트를 assume 한 토큰은 `FAN_OPERATOR` 를 파생받고, 그 역할로 열리는 길(artist-service 디렉터리 관리)은 플랫폼 운영자 몫으로만 열렸다. 플랫폼 운영자는 2번으로 지금처럼 `assigned=true`.
@@ -146,6 +147,8 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 
 **판정 (read-only)** — **토큰 교환과 같은 술어**(`TokenExchangeService` — `admin_operators.oidc_subject = accountId` ∧ `status = ACTIVE`). 그 행이 있으면 `true`, 없거나 비-`ACTIVE` 면 `false`.
 
+> 🔴 **TASK-MONO-784 (ADR-MONO-082 b · D3 · D-10 — 구현 S2)**: 술어 = `oidc_subject = accountId ∧ status = ACTIVE ∧ (tenant_id = '*' ∨ 소속(operator_tenant_assignment 행) ≥ 1)`. 마지막 소속까지 «이 회사에서 내보내기» 된 행은 `ACTIVE` 로 남지만(재초대 · 재온보딩이 같은 행에 소속을 더한다 · 감사가 행을 요구한다) 소속 0 이므로 `false` — 빈 콘솔에 들어오지 않는다(784 Edge Case 2 · AC-0 F16). **토큰 교환(`POST /api/admin/auth/token-exchange`)도 같은 술어로 바뀐다** — 한 자리(772 D-5 «교환과 같은 술어»): 소속 0 인 행의 교환 = `401 TOKEN_INVALID`(«운영자 아님» — 지금의 비-`ACTIVE` 와 같은 답).
+
 - 🔴 **`GET /internal/operators/facet` 를 재사용하지 않는다** — 그쪽은 «옮겨도 되나» 를 묻는 **상태 무관 · 두 축** 술어다. 그것으로 콘솔 토큰을 주면 퇴사(`SUSPENDED`) · 정지된 운영자가 콘솔 토큰을 받고, 그 다음 교환이 `401` → 콘솔 `/onboarding` 으로 간다(772 AC-3 위반). 질문이 다르면 술어도 다르다.
 - 신원 축(`identity_id`)은 묻지 않는다 — 교환이 `sub` 로만 해석하므로, 신원만 연결된 운영자에게 콘솔 토큰을 주어도 교환이 그 사람을 찾지 못한다.
 - `confined_tenant_id` · 진입 정책 · 2단계는 여기서 보지 않는다 — 그것들은 교환 · assume 이 문다(TASK-MONO-751 · 771). 이 읽기는 «콘솔 셸에 들어올 운영자인가» 하나다.
@@ -231,8 +234,8 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 | 3 | 만료(`expires_at ≤ 지금`) | `410 OPERATOR_INVITATION_EXPIRED` |
 | 4 | 🔴 **account-service 판정** — [`POST /internal/accounts/{accountId}/verified-email:match`](./admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772) (`expectedEmail` = 초대 이메일). 그 안의 순서: 풀 계정인가 → 이메일 = 초대 이메일 → 이메일 **인증됨**(`VerifiedEmailRequirement` — `TASK-MONO-770` 의 공용 술어를 그 자리에서 부른다) | 계정 없음 · 풀 계정 아님(사이트 계정 · `iam` 자격 계정) → `403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` · 이메일 불일치 → `403 OPERATOR_INVITATION_EMAIL_MISMATCH` · 미인증 → **`403 EMAIL_NOT_VERIFIED`**(770 의 공용 이름 그대로) · 판정 못 받음 → `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` (**fail-closed** — 모르고 붙이지 않는다) |
 | 5 | 근거가 아직 살아 있는가 — 초대 테넌트 `ACTIVE`(account-service 테넌트 읽기) · 초대자(`invited_by`) `ACTIVE` · 초대 테넌트가 **지금도** 초대자의 admin-grant 범위 안(D2) · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3 — 7일 사이 권한이 줄었을 수 있다) | 하나라도 아니면 `409 OPERATOR_INVITATION_INVALIDATED` · 테넌트 읽기 실패 → `503` |
-| 6 | 🔴 **OD-1 — 한 사람 = 한 회사**: `admin_operators.oidc_subject = accountId` 인 행이 **없다**(상태 무관 — 정지된 측면도 측면이다) | `409 OPERATOR_ALREADY_PROVISIONED` |
-| 7 | 그 테넌트에 같은 이메일의 운영자 행이 없다(`(tenant_id, email)` — 초대 발급 뒤 다른 길로 생겼을 수 있다) | `409 OPERATOR_EMAIL_CONFLICT` |
+| 6 | 🔴 ~~**OD-1 — 한 사람 = 한 회사**: `admin_operators.oidc_subject = accountId` 인 행이 **없다**(상태 무관 — 정지된 측면도 측면이다)~~ → **784 S5 부터 (ADR-MONO-082 b · D2 · D-12) — 기존 측면이 이 소속을 받을 수 있는가**: `oidc_subject = accountId` 인 행이 ① 없다 → 새 행(아래 «8 이 쓰는 것») ② 있고 `ACTIVE` ∧ 비-`'*'` ∧ 초대 테넌트가 **아직 소속이 아니다** → **그 행에 소속 추가**(아래 «소속 추가일 때») ③ 그 밖(이미 초대 테넌트 소속 · `'*'` 행 · 비-`ACTIVE`) → 거절 | ③ → `409 OPERATOR_ALREADY_PROVISIONED` (784 S5 머지 전: 행이 있으면 상태 무관 이 409) |
+| 7 | 그 테넌트에 같은 이메일의 운영자 행이 없다(`(tenant_id, email)` — 초대 발급 뒤 다른 길로 생겼을 수 있다). **784 S5 부터**: «그 테넌트에 있다» = 초대 테넌트 **소속**인 운영자 행 중 `email` 이 같은 것, **6 의 기존 행은 빼고**(784 AC-0 F15 — 홈 기준이 아니다) | `409 OPERATOR_EMAIL_CONFLICT` |
 | 8 | 한 admin 트랜잭션(아래) — 초대의 조건부 갱신 `PENDING → ACCEPTED`(`WHERE id = ? AND status = 'PENDING' AND token_hash = ?`) | 영향 행 0(동시 수락 · 취소 · 재발송이 먼저 이겼다) → 다시 읽어 2번 규칙으로 답한다(같은 계정 → `200`, 그 밖 → `409 OPERATOR_INVITATION_ALREADY_USED` · 취소 · 재발송이었으면 `404`). `oidc_subject` · `(tenant_id, email)` UNIQUE 위반(6 · 7 의 경합) → 각 `409` |
 
 - 4 의 순서(이메일 불일치가 미인증보다 먼저)는 `TASK-MONO-770` 이 셀러 구성원 수락에서 고른 순서와 같다 — 틀린 주소가 더 구체적인 답이다.
@@ -250,6 +253,19 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 | `admin_actions` | `action_code = OPERATOR_INVITATION_ACCEPT` · **`operator_id` = 새 운영자**(수락하는 사람은 그 전엔 운영자가 아니다 — 감사 주체 = 이제 생긴 그 운영자) · `permission_used = <self_invitation_accept>`(자기 흐름 상수 — `<self_enrollment>` 와 같은 부류, 권한 키 평가가 아니다) · `reason = <self_invitation_accept>` · `target_type = OPERATOR_INVITATION` · `target_id = <invitationId>` · `target_tenant_id = 초대 테넌트` · `downstream_detail = "accountId=<accountId>"`(772 AC-0 F19 — `TASK-MONO-774` 가 «초대 수락의 부산물» 로 직원 연결을 고를 때 읽을 `(accountId, tenantId, operatorId)` 가 이 한 행에 모인다) + outbox |
 
 - 중앙 신원 링크(ADR-MONO-034 U3)는 `FirstAdminProvisioner` 처럼 **fail-soft** 로 트랜잭션 밖에서 시도한다 — 실패해도 수락은 성공이고 운영자는 unlinked 로 남는다(나중에 `identity:link`).
+
+**소속 추가일 때 (6 ② — TASK-MONO-784 S5 · ADR-MONO-082 b · D-12)** — 8 의 트랜잭션이 쓰는 것:
+
+| 행 | 값 |
+|---|---|
+| `admin_operators` | 🔴 **쓰지 않는다** — 기존 행의 홈(`tenant_id`) · `oidc_subject` · `email` · `display_name` · `status` 그대로. 초대의 `displayName` 은 쓰이지 않는다 |
+| 역할 grant | 초대의 `roles` 각각, `tenant_id` = 초대 테넌트(직접 행 — `group_origin` · `org_node_id` NULL). 기존 회사의 역할 행은 **바이트 불변**(784 AC-3) |
+| 테넌트 배정 | 초대 테넌트 전체(`org_scope = NULL`) — 이것이 소속이다 |
+| `operator_invitation` | `status = ACCEPTED` · `accepted_at` · `accepted_account_id = accountId` · `accepted_operator_id` = **기존** 운영자 |
+| `admin_actions` | 새 행일 때와 같다 — `operator_id` = 기존 운영자 · `target_tenant_id` = 초대 테넌트 · `downstream_detail` 에 `membershipAdded=true` 를 덧붙인다 |
+
+- 응답 `operatorId` = 기존 운영자 id · `roles` = 초대 테넌트에서 받은 역할. 중앙 신원 링크는 시도하지 않는다(기존 행의 링크 그대로). 권한 캐시 무효화(D-5).
+- 경합: 같은 계정이 같은 테넌트 초대 둘을 동시에 수락하면 배정 PK `(operator_id, tenant_id)` 위반이 진 쪽을 `409 OPERATOR_ALREADY_PROVISIONED` 로 만든다(다시 읽어 6 ③).
 - 🔵 **거절은 감사 원장(`admin_actions`)에 남지 않는다** — 그 행은 운영자를 주체로 요구하는데(`operator_id NOT NULL`) 거절된 수락자에게는 운영자 행이 없다. 거절은 구조화 로그 한 줄(초대 id · 결과 코드 · 계정 id — 토큰 · 이메일 없음)이다.
 
 **Errors**:
@@ -264,7 +280,7 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 | 404 | `OPERATOR_INVITATION_NOT_FOUND` | 토큰에 맞는 초대 없음 · 취소됨 · 재발송으로 죽은 토큰 |
 | 409 | `OPERATOR_INVITATION_ALREADY_USED` | 다른 계정이 이미 수락했다 |
 | 409 | `OPERATOR_INVITATION_INVALIDATED` | 테넌트 비활성 · 초대자 비활성 · 초대자의 범위 · 부여 메뉴가 더는 이 초대를 덮지 않는다 — 초대한 쪽이 다시 보내야 한다 |
-| 409 | `OPERATOR_ALREADY_PROVISIONED` | 이 계정에 이미 운영자 측면이 있다(OD-1 — 772 는 한 사람 = 한 회사) |
+| 409 | `OPERATOR_ALREADY_PROVISIONED` | 이 계정의 운영자 측면이 이 소속을 받을 수 없다 — 이미 초대 테넌트 소속 · `'*'` 측면 · 비-`ACTIVE`(784 S5 · ADR-082 D2). 784 S5 머지 전: 측면이 있으면 전부(772 OD-1 한 사람 = 한 회사) |
 | 409 | `OPERATOR_EMAIL_CONFLICT` | 그 테넌트에 같은 이메일의 운영자가 이미 있다 |
 | 410 | `OPERATOR_INVITATION_EXPIRED` | 만료 — 초대한 쪽의 재발송이 새 링크를 보낸다 |
 | 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | account-service 판정 · 테넌트 읽기 실패 — 아무것도 쓰지 않음 |

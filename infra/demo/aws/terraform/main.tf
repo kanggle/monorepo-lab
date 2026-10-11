@@ -369,6 +369,7 @@ resource "aws_lambda_function" "control" {
       SELECTION_PARAM        = local.selection_param
       LOCK_PARAM             = local.lock_param
       IDLE_MINUTES           = tostring(var.idle_minutes)
+      BOOT_GRACE_MINUTES     = tostring(var.idle_boot_grace_minutes)
       MAX_RUNTIME_MINUTES    = tostring(var.max_runtime_minutes)
       MONTHLY_BUDGET_MINUTES = tostring(var.monthly_budget_minutes)
       # TASK-MONO-647 — 위 data.external 이 저장소에서 유도한 답. "yes" 만 통과이고
