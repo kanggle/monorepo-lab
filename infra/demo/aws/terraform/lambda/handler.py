@@ -61,7 +61,14 @@ HEALTH_STALE_AFTER_SECONDS = int(os.environ.get("HEALTH_STALE_AFTER_SECONDS", "9
 # **측정 분포가 아니라 표본 하나**다 — 상수로 승격하지 말라던 경고(§ 티켓 Failure 2)를
 # 지키기 위해, 300 은 그 표본의 약 4배 여유일 뿐 실측 분포가 아니라고 여기 적는다.
 FIRST_PUBLISH_GRACE_SECONDS = int(os.environ.get("FIRST_PUBLISH_GRACE_SECONDS", "300"))
-IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "20"))
+IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "10"))
+# 🔴 TASK-MONO-789 — 켠 뒤 이 시간(분) 안에는 **유휴만으로는** 끄지 않는다(부팅 보호).
+#    유휴 20분 시절엔 이 장치가 필요 없었다: 실측 전체 기동(약 10~13분)이 유휴 창보다 짧아서
+#    부팅은 언제나 먼저 끝났다. 유휴를 10분으로 줄이면(틱 5분 → 실제 정지 10~15분) 「모든 도메인
+#    시작」 직후 탭을 닫은 방문자의 부팅을 **웜업 한복판에서** 자를 수 있고, 그 모양이 바로
+#    kafka 로그 디렉터리를 반쯤 쓴 채로 남겨 이후 모든 부팅을 죽인 TASK-MONO-389 다.
+#    🔵 예산 · 최대 가동시간은 이 보호와 무관하게 언제나 문다 — 지출 상한은 부팅보다 우선이다.
+BOOT_GRACE_MINUTES = int(os.environ.get("BOOT_GRACE_MINUTES", "20"))
 MAX_MINUTES = int(os.environ.get("MAX_RUNTIME_MINUTES", "180"))
 BUDGET_MINUTES = int(os.environ.get("MONTHLY_BUDGET_MINUTES", "600"))
 
@@ -1092,7 +1099,9 @@ def idle_check():
         reason = f"monthly-budget {BUDGET_MINUTES}m 소진"
     elif run_sec > MAX_MINUTES * 60:
         reason = f"max-runtime {MAX_MINUTES}m 초과"
-    elif idle_sec > IDLE_MINUTES * 60:
+    elif idle_sec > IDLE_MINUTES * 60 and run_sec >= BOOT_GRACE_MINUTES * 60:
+        # 🔴 TASK-MONO-789 — run_sec 은 이 세션의 시작(기동 시각 하한)부터다. 부팅 보호 창 안이면
+        #    유휴여도 기다린다 — 창이 지나면 다음 틱에서 문다(유휴는 그동안 계속 쌓여 있다).
         reason = f"idle {IDLE_MINUTES}m 초과"
 
     if reason:
