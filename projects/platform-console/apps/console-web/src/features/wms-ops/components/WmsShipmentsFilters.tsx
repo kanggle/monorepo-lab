@@ -3,13 +3,16 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
 import type { ShipFilterState } from './wms-ops-helpers';
+import { WmsRefPicker } from './WmsRefPicker';
 
 /**
  * The 택배/출고 carrier/warehouse filter form for {@link WmsShipmentsTable}
  * (TASK-PC-FE-197 split) — includes the read-only intro copy above the form.
  * Controlled: the container owns the filter state + the submit that turns it
  * into the list query. Pure presentation — markup + testids preserved verbatim
- * (`wms-ship-filter-*`).
+ * (`wms-ship-filter-*`; the 창고 input is now `WmsRefPicker`, TASK-PC-FE-333 —
+ * 코드 · 이름으로 고르면 id 가 필터 상태에 들어간다, same base testid now
+ * suffixed `-input`).
  */
 export interface WmsShipmentsFiltersProps {
   shipWhFid: string;
@@ -39,21 +42,15 @@ export function WmsShipmentsFilters({
         aria-label="택배/출고 필터"
       >
         <div>
-          <label
-            htmlFor={shipWhFid}
-            className="block text-sm font-medium text-foreground"
-          >
-            창고 ID
-          </label>
-          <input
+          <WmsRefPicker
             id={shipWhFid}
-            type="text"
-            value={filters.warehouseId}
-            onChange={(e) =>
-              onFiltersChange((f) => ({ ...f, warehouseId: e.target.value }))
+            label="창고"
+            type="warehouses"
+            value={filters.warehouseId || undefined}
+            onChange={(id) =>
+              onFiltersChange((f) => ({ ...f, warehouseId: id ?? '' }))
             }
-            data-testid="wms-ship-filter-warehouse"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            testid="wms-ship-filter-warehouse"
           />
         </div>
         <div>
