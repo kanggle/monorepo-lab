@@ -89,7 +89,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-(empty)
+- `TASK-BE-630-master-ref-search-q-status-scope.md` — **admin-service 기준정보 조회 `GET /dashboard/refs/{type}` 에 검색어 · 상태 · 범위 필터 구현** (REVIEW, 2026-10-12 UTC · 소유자 요청). 지금은 `page`/`size`/`sort` 만 받고 `findAll` — 콘솔 `/wms/master` 가 보내던 `q`·`status` 가 조용히 버려졌다. 계약 § 1.7 파라미터 표(`q` 코드·이름 부분 일치 · `status` · `warehouseId` · `skuId` · `partnerType`) + 저장소 `search` 6개(LIKE 패턴은 Java 에서 — 42P18 회피 · `% _` 문자 그대로). 슬라이스 9 · 단위 5 · 통합 7(⏳ CI) · bite. 후속 `TASK-PC-FE-333`. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 
 ## done
 
