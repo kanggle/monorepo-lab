@@ -219,10 +219,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-781-demo-cs-support-lock-operator.md` — **데모 CS 2선 운영자 `cs@demo.com` — 홈 `ecommerce` · `SUPPORT_LOCK`@`ecommerce`(사이트 잠금)** (REVIEW, 2026-10-09 UTC · `TASK-PC-FE-326` 라이브 확인용). 🔴 AC-0: 콘솔은 고른 테넌트를 항상 assume 하고 토큰 역할은 그 테넌트 구독에서 파생 → 이 계정은 `ecommerce` 의 이커머스·WMS 운영 역할(쓰기 포함)도 받는다, 좁히는 장치 없음 → **소유자 결정 A = 시드 + 공개**(B=ADR-035 변경 · C=가짜 사이트 기각). 핀 = auth-service `DemoCsOperatorDerivedRolesTest`(account-service 전 마이그레이션에서 구독 재계산 → 운영 파생으로 역할 9개 정확 비교) · `DemoCsOperatorSeedTest` · admin IT 5칸. bite 2종. ⏳ **AC-4 = CI IT(Docker 없음) · AC-5 = 재굽기 뒤 라이브** — 공개(론처 · 가이드)는 `TASK-MONO-782`.
-- `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (REVIEW, 2026-10-10 UTC). 슬라이스 전부 머지(#4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286), AC-0~6 ✅(CI 통합 시험 근거). ⏳ `done/` 전 라이브 ⚪: 셀프 온보딩 운영자 수 질의 · 초대 메일 1통 · 초대 → 수락 종단. 🔴 후속 `TASK-MONO-773` 은 **착수 전 다회사 운영자 ADR**(OD-1). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done
+- ✅ `TASK-MONO-772-operator-invite-verified-acceptance.md` — **DONE 2026-10-11 UTC (4-dim verified)** — 구현 PR **#4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286** · review 이동 **#4287**(`bfda6407a`) (머지 시점 실패 0, 전부). `ADR-MONO-080` 단계 3 — 운영자 초대 → 인증된 본인 수락 · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동. 26차 창 라이브: 사이트 계정 운영자 0 · 초대 메일 1통 · 초대 → 미인증 403 → 인증 → 수락 → 콘솔 토큰. 후속 `TASK-MONO-784` 착수 가능.
 - ✅ `TASK-MONO-787-launcher-advanced-domains-visible-when-off.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4298**(`d6caf88d6`, 머지 시점 실패 0 · Demo wrapper smoke pass · 로컬 `verify-demo-wrapper.sh` 정적 PASS). 론처 고급 영역 — 꺼진 인스턴스에서도 도메인 목록을 «⚪ 꺼짐» · 잠긴 버튼으로 표시(람다 409), 「인스턴스 전체」 · 「도메인별 제어」 두 구획 + 타일 그리드.
 - ✅ `TASK-MONO-786-launcher-lede-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4295**(`69af06d0c`, 머지 시점 실패 0). 론처 상단 안내를 «둘러보기 → 로그인 후 기능 → 끄기» 세 줄(라벨 + 본문 + 보충)로. 사실 · 숫자 무변경.
 - ✅ `TASK-MONO-785-launcher-login-accounts-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4293**(`f499e7e43`, 머지 시점 실패 0 · Demo wrapper smoke pass). 론처 「로그인 계정」 을 계정별 카드 3장(기본 데모 · 플랫폼 운영자 · 권한 없음 시연)으로 정리 — 용도 · 자격 · 로그인 후 단계 · 보충. 계정 값 · (z11) 무변경. 후속 `TASK-MONO-782` 는 네 번째 카드로.
