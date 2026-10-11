@@ -18,14 +18,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * TASK-BE-326 / ADR-MONO-020 D6 step 1 — unit tests for {@link TenantScopeResolver}.
+ * {@link TenantScopeResolver} — effective scope = the operator's memberships.
  *
- * <p>AC-2: effective scope = assignment tenantIds ∪ {legacy tenantId};
- * {@code '*'} → {@code {"*"}}; no assignments → {legacy} (NET-ZERO).
+ * <p>TASK-BE-326 introduced it as the dual-read {@code assignments ∪ {home}}. TASK-MONO-784 S2
+ * (ADR-MONO-082 b · R1 · D3 · decision D-2) drops the home: a concrete home tenant is NOT in scope
+ * unless an assignment row names it. Each «home is gone» case carries its control in the same test
+ * (an assignment row is still in scope), so a resolver that returned nothing at all cannot pass.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@DisplayName("TenantScopeResolver 단위 테스트 (TASK-BE-326 dual-read)")
+@DisplayName("TenantScopeResolver 단위 테스트 (TASK-MONO-784 S2 — 소속 = 배정 행만)")
 class TenantScopeResolverTest {
 
     @Mock
@@ -35,33 +37,38 @@ class TenantScopeResolverTest {
     private TenantScopeResolver resolver;
 
     @Test
-    @DisplayName("NET-ZERO: 배정 0개 → {legacy home tenantId}")
-    void noAssignments_returnsLegacyOnly() {
+    @DisplayName("🔴 784 S2: 홈만 있고 배정 0 → 빈 집합 (홈은 판정에서 읽지 않는다 — R1)")
+    void homeOnly_noAssignment_isEmpty() {
         when(assignmentPort.findAssignedTenantIds(1L)).thenReturn(Set.of());
 
-        Set<String> result = resolver.resolveEffectiveTenantScope(1L, "fan-platform");
+        Set<String> result = resolver.resolveEffectiveTenantScope(1L, "acme");
 
-        assertThat(result).containsExactly("fan-platform");
+        assertThat(result).isEmpty();
     }
 
     @Test
-    @DisplayName("배정 2개 → union(legacy ∪ assigned)")
-    void twoAssignments_returnsUnion() {
+    @DisplayName("🔴 784 S2: 홈 ∉ 배정 → 홈은 빠지고 배정만 (대조군: 배정 테넌트는 그대로 범위 안)")
+    void homeNotAssigned_excluded_assignmentStillIn() {
         when(assignmentPort.findAssignedTenantIds(2L)).thenReturn(Set.of("wms", "scm"));
 
-        Set<String> result = resolver.resolveEffectiveTenantScope(2L, "fan-platform");
+        Set<String> result = resolver.resolveEffectiveTenantScope(2L, "acme");
 
-        assertThat(result).containsExactlyInAnyOrder("fan-platform", "wms", "scm");
+        assertThat(result)
+                .as("control — the assignment rows are the scope")
+                .containsExactlyInAnyOrder("wms", "scm");
+        assertThat(result)
+                .as("the home tenant without an assignment row is out of scope (784 AC-0 F4)")
+                .doesNotContain("acme");
     }
 
     @Test
-    @DisplayName("배정에 home tenant 가 중복 포함되어도 set 중복 제거")
-    void assignmentIncludesHome_deduplicated() {
-        when(assignmentPort.findAssignedTenantIds(3L)).thenReturn(Set.of("wms", "fan-platform"));
+    @DisplayName("V0051 백필 뒤 단일 회사 운영자: 홈 배정 행이 있으면 지금과 같은 {홈}")
+    void homeAssigned_singleCompany_unchanged() {
+        when(assignmentPort.findAssignedTenantIds(3L)).thenReturn(Set.of("acme"));
 
-        Set<String> result = resolver.resolveEffectiveTenantScope(3L, "fan-platform");
+        Set<String> result = resolver.resolveEffectiveTenantScope(3L, "acme");
 
-        assertThat(result).containsExactlyInAnyOrder("fan-platform", "wms");
+        assertThat(result).containsExactly("acme");
     }
 
     @Test

@@ -35,8 +35,11 @@ public class AdminOperatorRoleJpaEntity {
     @Column(name = "granted_by")
     private Long grantedBy;
 
-    // TASK-BE-249: tenant_id mirrors the operator's tenantId so role grants
-    // are scoped per tenant (spec §admin-service Isolation Strategy).
+    // TASK-BE-249: tenant_id scopes the role grant per tenant (spec §admin-service Isolation Strategy).
+    // TASK-MONO-784 S2 (ADR-MONO-082 b · D-3, Flyway V0051): part of the PRIMARY KEY — the same role may be
+    // held in two companies on one operator row. WI-2 («tenant_id = the operator's home») is retired
+    // (data-model.md § 회사별 역할 불변식); until S4/S5 every write path still stamps the home.
+    @Id
     @Column(name = "tenant_id", length = 32, nullable = false)
     private String tenantId;
 
@@ -145,20 +148,28 @@ public class AdminOperatorRoleJpaEntity {
         return e;
     }
 
+    /**
+     * Composite id {@code (operator_id, role_id, tenant_id)} — TASK-MONO-784 S2 (V0051). Before 784 it was
+     * {@code (operator_id, role_id)}; the 2-arg constructor is gone on purpose so no caller can build a key
+     * that silently ignores the company.
+     */
     public static class PK implements Serializable {
         private Long operatorId;
         private Long roleId;
+        private String tenantId;
         public PK() {}
-        public PK(Long operatorId, Long roleId) {
+        public PK(Long operatorId, Long roleId, String tenantId) {
             this.operatorId = operatorId;
             this.roleId = roleId;
+            this.tenantId = tenantId;
         }
         @Override public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof PK pk)) return false;
             return Objects.equals(operatorId, pk.operatorId)
-                    && Objects.equals(roleId, pk.roleId);
+                    && Objects.equals(roleId, pk.roleId)
+                    && Objects.equals(tenantId, pk.tenantId);
         }
-        @Override public int hashCode() { return Objects.hash(operatorId, roleId); }
+        @Override public int hashCode() { return Objects.hash(operatorId, roleId, tenantId); }
     }
 }

@@ -40,12 +40,17 @@
 --    second factor.
 --
 -- 3. confined_tenant_id = 'ecommerce' (Flyway V0046, the TASK-MONO-751 mechanism). The
---    effective scope is already {ecommerce} (home, no assignment row); the confinement keeps
---    it that way if a visitor adds an assignment through the public SUPER_ADMIN login — an
---    assignment to demo-corp would otherwise derive all five domain OPERATOR roles.
+--    effective scope is {ecommerce} (choice 4); the confinement keeps it that way if a
+--    visitor adds an assignment through the public SUPER_ADMIN login — an assignment to
+--    demo-corp would otherwise derive all five domain OPERATOR roles.
 --
--- 4. NO operator_tenant_assignment row — the home tenant is already in the effective
---    scope (TenantScopeResolver: assignment rows ∪ {home}).
+-- 4. ONE operator_tenant_assignment row: `ecommerce` (TASK-MONO-784 S2 — ADR-MONO-082 b ·
+--    rider R1 · decision D-2). An operator's tenant scope is its assignment rows ONLY; the
+--    home tenant is no longer added (before 784 the resolver read assignment rows ∪ {home},
+--    and this file deliberately had no row). Without this row the identity would lose the
+--    console (token exchange / console-eligibility = ACTIVE ∧ membership ≥ 1, D-10) and its
+--    ecommerce assume. V0051's backfill cannot supply it: R__ seeds run AFTER every V
+--    migration, so on a fresh volume this operator does not exist yet when V0051 runs.
 --
 -- 🔴 DISCLOSED TRADE-OFF (owner decision A, 2026-10-09 UTC — TASK-MONO-781 AC-0 #1)
 -- ---------------------------------------------------------------------------
@@ -99,5 +104,9 @@ SELECT o.id, r.id, 'ecommerce', NOW(6), NULL
   JOIN admin_roles r ON r.name = 'SUPPORT_LOCK'
  WHERE o.operator_id = 'demo-cs';
 
--- Intentionally NO operator_tenant_assignment row (choice 4 above).
--- DemoOperatorSeedIntegrationTest asserts the exact grant set and the empty assignment set.
+-- The one membership: `ecommerce` (choice 4 above — TASK-MONO-784 S2). Whole tenant
+-- (org_scope NULL), no permission set (rider R4), direct (group_origin NULL).
+-- DemoOperatorSeedIntegrationTest asserts the exact grant set and the exact assignment set.
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'ecommerce', NOW(6), NULL, NULL
+  FROM admin_operators o WHERE o.operator_id = 'demo-cs';

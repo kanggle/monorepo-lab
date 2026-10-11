@@ -195,28 +195,46 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                   FROM admin_operators WHERE operator_id = 'demo-viewer'
                 """, String.class);
 
-        // Home tenant must NOT be demo-corp: the home tenant is assumable
-        // (TenantScopeResolver home ∪ assignments), and demo-corp would derive all five
-        // domain OPERATOR roles — write access, the opposite of a restricted account.
+        // Home tenant must NOT be demo-corp: since TASK-MONO-784 S2 its one membership is this
+        // same unregistered slug (next test), and the membership is assumable — demo-corp would
+        // derive all five domain OPERATOR roles — write access, the opposite of a restricted account.
         assertThat(rows).containsExactly("demo-viewer|viewer@demo.com|ACTIVE|" + VIEWER_OIDC_SUBJECT);
     }
 
     @Test
-    @DisplayName("seed: demo-viewer holds NO role and NO tenant assignment — minimal by construction")
-    void viewerHasNoRoleAndNoAssignment() {
+    @DisplayName("seed: demo-viewer holds NO role and exactly ONE membership — its own unregistered slug (784 S2)")
+    void viewerHasNoRoleAndOnlyItsUnregisteredMembership() {
         Integer roles = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM admin_operator_roles g
                   JOIN admin_operators o ON o.id = g.operator_id
                  WHERE o.operator_id = 'demo-viewer'
                 """, Integer.class);
-        Integer assignments = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM operator_tenant_assignment a
+        List<String> memberships = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', a.tenant_id, a.org_scope IS NULL, a.permission_set_id IS NULL,
+                                 a.group_origin IS NULL)
+                  FROM operator_tenant_assignment a
                   JOIN admin_operators o ON o.id = a.operator_id
                  WHERE o.operator_id = 'demo-viewer'
-                """, Integer.class);
+                """, String.class);
 
         assertThat(roles).as("any role row widens the account that exists to show 403").isZero();
-        assertThat(assignments).as("any assignment makes a tenant assumable → domain roles").isZero();
+        // TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D-2 · D-10): the home is no longer a membership, so the
+        // row that used to be unnecessary now carries the login (exchange = ACTIVE ∧ membership ≥ 1). It
+        // names the UNREGISTERED slug and nothing else — a membership in a real tenant is assumable and
+        // derives that tenant's domain roles.
+        assertThat(memberships).containsExactly("demo-viewer|1|1|1");
+    }
+
+    @Autowired
+    com.example.admin.application.OperatorConsoleEligibilityQueryUseCase consoleEligibility;
+
+    @Test
+    @DisplayName("784 S2 (D-10): demo-viewer · demo-cs stay console-eligible through their seeded membership")
+    void viewerAndCsStayConsoleEligible() {
+        // The seeds are what keep these two logins alive now that the home is not a membership —
+        // without their assignment rows both would be refused here (and by the token exchange).
+        assertThat(consoleEligibility.isConsoleEligible(VIEWER_OIDC_SUBJECT)).isTrue();
+        assertThat(consoleEligibility.isConsoleEligible(CS_OIDC_SUBJECT)).isTrue();
     }
 
     @Test
@@ -326,7 +344,7 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("seed: demo-cs holds exactly SUPPORT_LOCK bound to ecommerce (a SITE grant, not '*') and no assignment row")
+    @DisplayName("seed: demo-cs holds exactly SUPPORT_LOCK bound to ecommerce (a SITE grant, not '*') and exactly the ecommerce membership")
     void csOperatorHoldsExactlySiteScopedSupportLock() {
         List<String> grants = jdbcTemplate.queryForList("""
                 SELECT CONCAT_WS('|', r.name, g.tenant_id)
@@ -336,16 +354,19 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                  WHERE o.operator_id = 'demo-cs'
                  ORDER BY r.name, g.tenant_id
                 """, String.class);
-        Integer assignments = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM operator_tenant_assignment a
+        List<String> memberships = jdbcTemplate.queryForList("""
+                SELECT a.tenant_id FROM operator_tenant_assignment a
                   JOIN admin_operators o ON o.id = a.operator_id
                  WHERE o.operator_id = 'demo-cs'
-                """, Integer.class);
+                 ORDER BY a.tenant_id
+                """, String.class);
 
         // '*' would make every lock a whole-account lock across sites (TASK-BE-621); any
         // other role widens CS 2nd-line past account control.
         assertThat(grants).containsExactly("SUPPORT_LOCK|ecommerce");
-        assertThat(assignments).as("the home tenant is already in scope; an assignment only widens it").isZero();
+        // TASK-MONO-784 S2: the home is no longer in scope, so the one membership is the seeded row —
+        // exactly ecommerce (a second one is a second assumable tenant whose derived roles nobody disclosed).
+        assertThat(memberships).containsExactly("ecommerce");
     }
 
     @Test
@@ -383,7 +404,7 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                 .as("SUPPORT_LOCK require_2fa=FALSE and no tenant_entry_policy row is seeded")
                 .isFalse();
         assertThat(ecommerce.delegatedScope())
-                .as("a normal (home) admission — no partnership cap narrows the derived roles")
+                .as("a normal (membership) admission — no partnership cap narrows the derived roles")
                 .isNull();
 
         assertThat(assignmentCheck.check(CS_OIDC_SUBJECT, "demo-corp").assigned()).isFalse();

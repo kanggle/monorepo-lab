@@ -4,7 +4,6 @@ import com.example.admin.application.exception.SecondFactorRequirementUnavailabl
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantEntryPolicyPort;
-import com.example.admin.domain.rbac.AdminOperator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,11 +19,12 @@ import java.util.Set;
  * <ul>
  *   <li><b>Operator token exchange</b> ({@link #requiredForTokenExchange}) — ① the operator holds a role
  *       with {@code require_2fa = TRUE} (OD-2: the flag the break-glass login always read is now read on
- *       the primary path too) <b>or</b> ② any tenant of the operator's <b>admin scope</b> — home
- *       {@code admin_operators.tenant_id} ∪ {@code operator_tenant_assignment} rows — has its entry policy
- *       on (OD-3). Partnerships are NOT part of the admin scope (ADR-MONO-045 — they never widen it), so
- *       they are not read here. A {@code '*'} home contributes nothing ({@code '*'} cannot hold a policy);
- *       for such an operator ② reads the assignment rows only.</li>
+ *       the primary path too) <b>or</b> ② any of the operator's <b>memberships</b>
+ *       ({@code operator_tenant_assignment} rows) has its entry policy on (OD-3). <b>TASK-MONO-784 S2
+ *       (ADR-MONO-082 b · R1 · AC-0 F17):</b> the home {@code admin_operators.tenant_id} is no longer added
+ *       — it is not a membership; V0051 backfilled a home assignment row for every pre-784 operator, so a
+ *       single-company operator's answer is unchanged. Partnerships are NOT memberships (ADR-MONO-045 —
+ *       they never widen the admin scope), so they are not read here.</li>
  *   <li><b>Assume-tenant</b> ({@link #requiredForAssume}) — the selected tenant's entry policy ∨ ①
  *       (auth-to-admin.md rule 6). Path-independent: the policy belongs to the tenant being entered.</li>
  * </ul>
@@ -43,19 +43,16 @@ public class OperatorSecondFactorRequirement {
     private final OperatorTenantAssignmentPort assignmentPort;
     private final TenantEntryPolicyPort entryPolicyPort;
 
-    /** Token exchange: role flag ∨ any policy-ON tenant in home ∪ assignment rows (partnerships excluded). */
+    /** Token exchange: role flag ∨ any policy-ON tenant among the memberships (partnerships excluded). */
     public boolean requiredForTokenExchange(AdminOperatorPort.OperatorView operator) {
         try {
             if (operatorPort.anyRoleRequires2fa(operator.internalId())) {
                 return true;
             }
-            Set<String> adminScope = new LinkedHashSet<>();
-            if (operator.tenantId() != null
-                    && !AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())) {
-                adminScope.add(operator.tenantId());
-            }
-            adminScope.addAll(assignmentPort.findAssignedTenantIds(operator.internalId()));
-            return !entryPolicyPort.findTenantsRequiringMfa(adminScope).isEmpty();
+            // TASK-MONO-784 S2: memberships only — the home is not added (R1, F17).
+            Set<String> memberships = new LinkedHashSet<>(
+                    assignmentPort.findAssignedTenantIds(operator.internalId()));
+            return !entryPolicyPort.findTenantsRequiringMfa(memberships).isEmpty();
         } catch (RuntimeException e) {
             throw new SecondFactorRequirementUnavailableException(e);
         }

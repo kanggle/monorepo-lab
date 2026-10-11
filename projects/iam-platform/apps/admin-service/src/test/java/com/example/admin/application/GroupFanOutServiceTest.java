@@ -56,9 +56,10 @@ class GroupFanOutServiceTest {
     @Test
     @DisplayName("grant-to-group ROLE: materialises a group_origin-tagged row for each member without one; skips existing")
     void fanOutRole_materialisesTaggedRows_idempotentSkip() {
-        // member 1 already holds (operator=1, role=7) → skip; member 2 does not → create.
-        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(1L, 7L))).thenReturn(true);
-        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(2L, 7L))).thenReturn(false);
+        // member 1 already holds (operator=1, role=7, tenant=acme) → skip; member 2 does not → create.
+        // TASK-MONO-784 S2: the key is 3 columns (V0051) and names the same tenant the row is written in.
+        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(1L, 7L, "acme"))).thenReturn(true);
+        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(2L, 7L, "acme"))).thenReturn(false);
 
         int created = service.fanOutGrantToMembers(
                 GROUP, roleGrant(7L), List.of(member(1L), member(2L)), 99L, now);

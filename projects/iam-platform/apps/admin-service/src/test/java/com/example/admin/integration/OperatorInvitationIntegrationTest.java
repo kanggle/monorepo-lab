@@ -196,6 +196,8 @@ class OperatorInvitationIntegrationTest extends AbstractIntegrationTest {
                   FROM admin_operators o JOIN admin_roles r ON r.name = 'TENANT_ADMIN'
                  WHERE o.operator_id = ?
                 """, tenantId, operatorId);
+        // TASK-MONO-784 S2: the home is no longer a membership — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     private static String bearer(String operatorId) {

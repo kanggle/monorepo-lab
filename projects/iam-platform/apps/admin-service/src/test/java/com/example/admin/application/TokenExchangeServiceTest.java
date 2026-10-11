@@ -66,7 +66,9 @@ class TokenExchangeServiceTest {
         OperatorOidcSubjectResolver resolver = new OperatorOidcSubjectResolver(operatorPort);
         service = new TokenExchangeService(
                 subjectTokenValidator, operatorPort, accessTokenIssuer, resolver,
-                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, entryPolicyPort));
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, entryPolicyPort),
+                // TASK-MONO-784 S2: the REAL shared admission predicate (console-eligibility uses the same).
+                new OperatorConsoleAdmission(assignmentPort));
     }
 
     /** A validated subject whose token carried {@code amr} = the given values. */
@@ -87,6 +89,8 @@ class TokenExchangeServiceTest {
         when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB));
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
+        // TASK-MONO-784 S2 (D-10): a non-'*' operator needs ≥ 1 membership (the V0051-backfilled home row).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("wms"));
         when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.operator.jwt");
         when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
 
@@ -178,6 +182,8 @@ class TokenExchangeServiceTest {
         when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB));
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
+        // TASK-MONO-784 S2 (D-10): a non-'*' operator needs ≥ 1 membership (the V0051-backfilled home row).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("wms"));
         when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.via.account.id");
         when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
 
@@ -256,6 +262,8 @@ class TokenExchangeServiceTest {
         when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd"));
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
+        // TASK-MONO-784 S2 (D-10): a non-'*' operator needs ≥ 1 membership (the V0051-backfilled home row).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("wms"));
         when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.no.requirement");
         when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
 
@@ -268,7 +276,8 @@ class TokenExchangeServiceTest {
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "acme-corp")));
         when(operatorPort.anyRoleRequires2fa(42L)).thenReturn(false);
-        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("globex"));
+        // TASK-MONO-784 S2: the home counts only through its (V0051-backfilled) assignment row.
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("acme-corp", "globex"));
         when(entryPolicyPort.findTenantsRequiringMfa(Set.of("acme-corp", "globex")))
                 .thenReturn(Set.of("globex"));
         when(subjectTokenValidator.validate(SUBJECT_TOKEN))
@@ -311,7 +320,8 @@ class TokenExchangeServiceTest {
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "partner-co")));
         when(operatorPort.anyRoleRequires2fa(42L)).thenReturn(false);
-        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of());
+        // TASK-MONO-784 S2: the operator's one membership is its own company (no partnership host in it).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("partner-co"));
         when(entryPolicyPort.findTenantsRequiringMfa(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenAnswer(inv -> {
                     java.util.Collection<String> ids = inv.getArgument(0);
@@ -329,6 +339,8 @@ class TokenExchangeServiceTest {
         when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd"));
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
+        // TASK-MONO-784 S2 (D-10): a non-'*' operator needs ≥ 1 membership (the V0051-backfilled home row).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("wms"));
         when(operatorPort.anyRoleRequires2fa(42L))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
 
@@ -343,8 +355,9 @@ class TokenExchangeServiceTest {
         when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd"));
         when(operatorPort.findByOidcSubject(OIDC_SUB))
                 .thenReturn(Optional.of(operatorView("ACTIVE", "wms")));
+        // TASK-MONO-784 S2 (D-10): a non-'*' operator needs ≥ 1 membership (the V0051-backfilled home row).
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("wms"));
         when(operatorPort.anyRoleRequires2fa(42L)).thenReturn(false);
-        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of());
         when(entryPolicyPort.findTenantsRequiringMfa(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"));
 
@@ -374,5 +387,65 @@ class TokenExchangeServiceTest {
         assertThatExceptionOfType(SubjectTokenInvalidException.class)
                 .isThrownBy(() -> service.exchange(SUBJECT_TOKEN));
         verify(operatorPort, never()).anyRoleRequires2fa(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    // ── TASK-MONO-784 S2 (ADR-MONO-082 b · D3 · D-10): membership ≥ 1 or '*' ────────────────────────
+
+    @Test
+    @DisplayName("🔴 784 S2: ACTIVE 비-'*' 운영자 · 소속 0 → 401 · 토큰 없음 · 2단계 요구 안 읽음 / 대조군: 소속 1 → 발급")
+    void noMembership_401_controlWithMembershipMinted() {
+        when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd"));
+        when(operatorPort.findByOidcSubject(OIDC_SUB))
+                .thenReturn(Optional.of(operatorView("ACTIVE", "acme-corp")));
+        // First exchange: the row's last membership is gone (home stays acme-corp — R1, not a membership).
+        // Second exchange (control, same row): one membership.
+        when(assignmentPort.findAssignedTenantIds(42L))
+                .thenReturn(Set.of())
+                .thenReturn(Set.of("acme-corp"));
+        when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.member");
+        when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
+
+        // Failing side first.
+        assertThatExceptionOfType(SubjectTokenInvalidException.class)
+                .isThrownBy(() -> service.exchange(SUBJECT_TOKEN))
+                .withMessage("Operator is not active"); // the same body as a non-ACTIVE row
+        verify(accessTokenIssuer, never()).mint(anyString());
+        verify(operatorPort, never()).anyRoleRequires2fa(org.mockito.ArgumentMatchers.anyLong());
+
+        // Control.
+        assertThat(service.exchange(SUBJECT_TOKEN).accessToken()).isEqualTo("minted.member");
+    }
+
+    @Test
+    @DisplayName("784 S2: '*' 운영자는 소속 0 이어도 발급 (D2 — '*' 는 소속이 아니다)")
+    void platformOperator_noMembership_minted() {
+        when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd", "otp", "mfa"));
+        when(operatorPort.findByOidcSubject(OIDC_SUB))
+                .thenReturn(Optional.of(operatorView("ACTIVE", "*")));
+        when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.platform.nomembership");
+        when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
+
+        assertThat(service.exchange(SUBJECT_TOKEN).accessToken()).isEqualTo("minted.platform.nomembership");
+        verify(assignmentPort, never()).findAssignedTenantIds(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName("🔴 784 S2 (F17): 2단계 요구 = 소속 기준 — 홈의 정책이 켜져 있어도 홈이 소속이 아니면 요구 없음")
+    void secondFactor_homeNotMember_policyNotRead() {
+        when(subjectTokenValidator.validate(SUBJECT_TOKEN)).thenReturn(subject(OIDC_SUB, "pwd"));
+        when(operatorPort.findByOidcSubject(OIDC_SUB))
+                .thenReturn(Optional.of(operatorView("ACTIVE", "acme-corp")));
+        when(operatorPort.anyRoleRequires2fa(42L)).thenReturn(false);
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(Set.of("globex"));
+        // The policy table has acme-corp (the home) ON; the operator is a member of globex only.
+        when(entryPolicyPort.findTenantsRequiringMfa(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenAnswer(inv -> {
+                    java.util.Collection<String> ids = inv.getArgument(0);
+                    return ids.contains("acme-corp") ? Set.of("acme-corp") : Set.of();
+                });
+        when(accessTokenIssuer.mint(OPERATOR_UUID)).thenReturn("minted.member.only");
+        when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(3600L);
+
+        assertThat(service.exchange(SUBJECT_TOKEN).accessToken()).isEqualTo("minted.member.only");
     }
 }

@@ -211,6 +211,9 @@ class TenantEntryPolicyIntegrationTest extends AbstractIntegrationTest {
                     VALUES (?, ?, ?, NULL, ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
                     """, operatorId, tenantId, operatorId + "@example.com", "S5 op", oidcSubject);
         }
+        // TASK-MONO-784 S2: the home is no longer a membership (roster · exchange · policy scope read the
+        // assignment rows only) — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     private String adminX() {
@@ -332,7 +335,7 @@ class TenantEntryPolicyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("enrolment-summary: real roster query (home ∪ assignment, ACTIVE) × auth-service answer → counts")
+    @DisplayName("enrolment-summary: real roster query (memberships, ACTIVE — 784 S2) × auth-service answer → counts")
     void enrolmentSummary_countsTheRoster() throws Exception {
         wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/auth/second-factor/enrolment-status"))
                 .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")

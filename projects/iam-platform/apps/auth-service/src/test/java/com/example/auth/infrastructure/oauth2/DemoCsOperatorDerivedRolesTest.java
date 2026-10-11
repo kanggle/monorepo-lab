@@ -35,7 +35,8 @@ import org.junit.jupiter.api.Test;
  * sources production uses, with nothing hard-coded on the input side:
  * <ol>
  *   <li>the CS operator's tenant — read out of admin-service's
- *       {@code R__seed_demo_cs_operator.sql} (home tenant and confinement);</li>
+ *       {@code R__seed_demo_cs_operator.sql} (home tenant, confinement and — since TASK-MONO-784 S2 —
+ *       the one membership row, which is what assume actually reads);</li>
  *   <li>that tenant's ACTIVE subscriptions — parsed out of EVERY account-service migration
  *       ({@code db/migration} and {@code db/migration-dev}) that writes
  *       {@code tenant_domain_subscription}. 🔴 A statement in a shape this parser does not
@@ -183,6 +184,21 @@ class DemoCsOperatorDerivedRolesTest {
                 .as("the confinement must equal the home tenant — otherwise the operator could assume a "
                         + "second tenant whose subscriptions are not the ones disclosed")
                 .isEqualTo(home.group(1));
+        // TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D-2): the assumable tenant is the operator's MEMBERSHIP
+        // (operator_tenant_assignment rows), no longer the home. So the disclosure is about the membership:
+        // it must be exactly the home/confined tenant — a second membership would be a second tenant whose
+        // subscriptions are not the ones disclosed, and none would lose the console (exchange 401).
+        Matcher assigned = Pattern.compile(
+                "INSERT\\s+IGNORE\\s+INTO\\s+operator_tenant_assignment[^;]*?SELECT\\s+o\\.id\\s*,\\s*'([a-z0-9-]+)'"
+                        + "[^;]*?o\\.operator_id\\s*=\\s*'demo-cs'",
+                Pattern.CASE_INSENSITIVE).matcher(seed);
+        List<String> memberships = new ArrayList<>();
+        while (assigned.find()) {
+            memberships.add(assigned.group(1));
+        }
+        assertThat(memberships)
+                .as("the CS operator's memberships must be exactly its home/confined tenant")
+                .containsExactly(home.group(1));
         return home.group(1);
     }
 

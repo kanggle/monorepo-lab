@@ -364,3 +364,67 @@ ADR-082 § Outstanding 그대로: `SELECT COUNT(DISTINCT operator_id) FROM opera
 ## 소유자 결정 추가 (2026-10-11 UTC) — 마지막 관리자
 
 S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 마지막 `TENANT_ADMIN` · 자기 자신을 내보내면 관리자 0 회사가 생긴다 — 784 전엔 불가능)에 소유자 선택창 응답 **«거절 (409)»**(추천과 같음 — 티켓 범위 결정). 계약: `admin-api.md` § «이 회사에서 내보내기» · § 역할 PATCH 에 `409 TENANT_LAST_ADMIN_REQUIRED`(새 코드, `platform/error-handling.md` · `rules/domains/saas.md` 등록). 🔴 오케스트레이터 판단으로 **같은 술어를 역할 교체 · 그룹 멤버 제거 · 그룹 역할 변경에도** 건다 — 내보내기만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회되어 결정이 공허해진다. 구현 = S4(AC-2 대조군에 «마지막 관리자 내보내기 → 409 · 쓰기 0» 칸 추가).
+
+---
+
+# S2 기록 (2026-10-11 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `wt-784` · 브랜치 `feat/mono-784-s2-membership-axis`(origin/main `519a609c7` = S1 #4308 위). 근거 = § AC-0 기록 D-2 · D-3 · D-10 · D-11 앞 절반 · S1 계약(`auth-to-admin.md` § check 판정 3 · § console-eligibility · `admin-api.md` § token-exchange 오류표 · § GET /api/admin/operators ① · `data-model.md` V0051 항목 · `console-registry-api.md` rule 2).
+> **AC 체크박스는 건드리지 않았다** — S2 는 티켓 AC 를 닫지 않는다(§ 7 표 S2 행: «— (AC-2 의 전제)»).
+
+## 1. 마이그레이션 `V0051__admin_operator_roles_tenant_pk_and_membership_backfill.sql`
+
+- 버전: 디렉터리 마지막 = `V0050` · 열린 PR(#4309 하나, tasks 만) · 원격 브랜치에 `V0051` 주장 없음 → `V0051`.
+- ① **PK 3칸**: `ALTER TABLE admin_operator_roles DROP PRIMARY KEY, ADD PRIMARY KEY (operator_id, role_id, tenant_id)` **한 문장**. FK 처리: `fk_admin_operator_roles_operator(operator_id)` 는 PK 의 선행 칸을 인덱스로 쓴다 — 따로 `DROP PRIMARY KEY` 하면 MySQL ER 1553, 한 ALTER 안에서 같은 선행 칸의 새 PK 로 바꾸면 인덱스 공백이 없다. `fk_..._role` 은 `idx_admin_operator_roles_role`, `group_origin` 은 V0044 인덱스 — 무관. `tenant_id` 는 V0025 부터 NOT NULL. 데이터 안전: 784 이전 모든 행 `tenant_id = 홈`(V0026) ⇒ 2칸 유일 ⇒ 3칸 유일. 멱등: `information_schema.key_column_usage` 에 PRIMARY 의 `tenant_id` 가 없을 때만(V0042/V0044 의 PREPARE/EXECUTE/DEALLOCATE 3종 · NULL-safe `COUNT(*) = 0`).
+- ② **소속 백필**: 비-`'*'` 운영자마다 (홈) ∪ (비-`'*'` 역할 행 `tenant_id`) 중 배정 행이 없는 것에 whole-tenant · direct · `permission_set_id` NULL 행을 INSERT. 멱등 = `NOT EXISTS (… FROM (SELECT operator_id, tenant_id FROM operator_tenant_assignment) a …)` (대상 표를 파생 표로 읽는 auth-service V0032 형태) — 두 번째 실행 0행. 기존 행(`org_scope` 포함)은 UPDATE/DELETE 0. `'*'` 운영자 · `'*'` 역할 행 제외(ADR-082 D2).
+- 🔵 홈이 `fan-platform`(V0025 의 레거시 기본값)인 비-`'*'` 운영자도 백필된다 — 바이트 불변 원칙(그 홈은 784 전에도 실효 범위였다). assume 은 여전히 2b(`fan-platform` = 플랫폼 운영자 전용)가 막는다.
+
+## 2. 행동 변경 (파일)
+
+| 무엇 | 파일 | 근거 |
+|---|---|---|
+| JPA PK 3칸(`@Id tenantId` · `PK(operatorId, roleId, tenantId)`, 2-arg 생성자 제거) | `infrastructure/persistence/rbac/AdminOperatorRoleJpaEntity.java` | D-3 |
+| 그룹 fan-out skip 키 = `(멤버, 역할, 멤버 홈)` — 멤버 불변식(홈 == 그룹 테넌트)으로 rbac.md 의 `(멤버, 역할, group.tenant_id)` 와 같다. S4 가 둘 다 그룹 테넌트로 | `application/GroupFanOutService.java` | rbac.md § Group Idempotence |
+| 실효 범위 = **배정 행만**(홈 제거, `'*'` 그대로) | `application/TenantScopeResolver.java` | D-2 · R1 · F4 |
+| assume: 3번 판정이 해소기 따라 소속 · 파트너십 도달 = `partner ∈ 소속`(정렬 순회, 첫 일치) | `application/OperatorAssignmentCheckUseCase.java` | D-11 앞 절반 |
+| 「살아 있는 운영자」 술어 한 자리 = `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` (신설) | `application/OperatorConsoleAdmission.java` | D-10 · F16 |
+| 콘솔 적격 = 위 술어 | `application/OperatorConsoleEligibilityQueryUseCase.java` | auth-to-admin § console-eligibility |
+| 토큰 교환: 비-ACTIVE 다음에 소속 0 → `401 TOKEN_INVALID`(본문 = 비-ACTIVE 와 같은 문구 «Operator is not active» — 계약 «같은 답»), 2단계 요구(403)보다 먼저 | `application/TokenExchangeService.java` | admin-api § token-exchange 오류표 · S1-4 |
+| 2단계 요구(교환)의 정책 테넌트 = 소속만(홈 제거) | `application/OperatorSecondFactorRequirement.java` | auth-to-admin 판정 3 «2단계 요구도 소속 기준» · F17 |
+| 운영자 목록 · 진입 정책 로스터 · 운영자 이메일 조회의 «속한» 술어 = 배정 행만(`o.tenantId = :tenantId OR` 삭제, 4 쿼리) | `infrastructure/persistence/rbac/AdminOperatorJpaRepository.java` | admin-api § GET /api/admin/operators ① «S2 — 홈은 판정에서 빠진다» (lookup · 로스터는 «같은 소속 술어» 문장으로 묶여 있다) |
+| 주석만(술어 설명 갱신) | `QueryTenantScopeGate` · `console/ConsoleRegistryUseCase` · `port/AdminOperatorPort` · `TenantEntryPolicyPrecheckUseCase` · `presentation/internal/OperatorAssignmentCheckController` | — |
+| 시드: `demo-cs` → `ecommerce` 배정 · `demo-viewer` → 미등록 `demo-viewer` 배정(헤더 «choice 4 / 3» 갱신) | `db/migration-dev/R__seed_demo_cs_operator.sql` · `R__seed_demo_viewer_operator.sql` | D-2 · D-10 |
+| e2e 픽스처: 로그인하는 비-`'*'` 운영자 3명(`acme-corp-operator` · `tenant-admin-umbrella` · `tenant-billing-admin-umbrella`)에 홈 배정. 대상 전용(`deleg-target-umbrella` · `ip-pilot-target` · `rt-*`)은 **안 넣음** — 스펙이 그 홈으로 배정 생성 201 을 기대한다 | `tests/federation-hardening-e2e/fixtures/seed.sql` | 시드가 Flyway 뒤에 돈다 — 백필이 못 본다 |
+
+🔵 그대로 둔 것: `QueryTenantScopeGate` 와 사본 4곳의 «생략 = 홈» 기본값 · grant scope 재조준(S3) · 콘솔 e2e `seed.sql`(로그인하는 운영자는 `'*'` 뿐) · `scripts/console-demo/seed/01-iam.sql`(`multi-operator` 는 이미 `acme-corp` 배정 보유).
+
+## 3. 시험 · 픽스처
+
+- **새 시험**: `V0051MigrationShapeTest`(6 — 한 ALTER PK 스왑 · 가드 · 사용자 변수 1개 · 백필 소스 홈 ∪ 역할 행 · `'*'` 제외 · NOT EXISTS 멱등 · 평이한 INSERT · 데이터 UPDATE/DELETE 0) · `integration/V0051MembershipBackfillIntegrationTest`(Testcontainers — 마이그레이션 파일의 **자기 문장**을 읽어 재실행: PK 칸 순서 · 가드 재실행 no-op · 홈만 있는 행 → 홈 + 역할 행 테넌트 소속 · `'*'` 0 · 기존 `org_scope` 행 불변 · **두 번째 실행 0행**; 데이터 절반은 롤백 트랜잭션 — 백필이 다른 클래스의 «홈만» 픽스처에 소속을 주지 않게) · `integration/MembershipFixture`(V0051 백필 행 하나를 픽스처 운영자에게).
+- **단위 대조군**(실패 쪽 먼저): `TenantScopeResolverTest`(홈만 → 빈 집합 / 홈 ∉ 배정 → 배정만 · 대조군 배정 그대로 / 백필 뒤 단일 회사 = {홈}) · `OperatorAssignmentCheckUseCaseTest` +4(진짜 해소기로 홈 assume 거절 · 대조군 배정 assigned / 백필 홈 assigned / 파트너십 비-홈 소속으로 도달 / 홈이 파트너여도 홈 비소속이면 도달 0 · 홈으로는 조회조차 안 함) · `OperatorConsoleEligibilityQueryUseCaseTest` +2(소속 0 → false · 같은 행 소속 1 → true / `'*'` → 소속 안 읽고 true) · `TokenExchangeServiceTest` +3(소속 0 → 401 · 발급 0 · 2단계 요구 안 읽음 / 같은 행 소속 1 → 발급 / `'*'` 소속 0 → 발급 / 홈 정책 ON · 홈 비소속 → 요구 없음).
+- **IT 대조군**(Docker 필요 — CI 판정): `ConsoleRegistryIntegrationTest`(홈만 → 스위처에 홈 없음 / 대조군 소속 → wms) · `OperatorAssignmentCheckIntegrationTest`(홈 배정 없음 → `assigned=false` / 대조군 globex · 백필 홈 → true; 소속 0 → `eligible=false` / 대조군 · `'*'` → true) · `TokenExchangeIntegrationTest`(소속 0 → 401 / 대조군 200) · `DemoOperatorSeedIntegrationTest`(`demo-viewer` 소속 = 정확히 `{demo-viewer}` · `demo-cs` 소속 = 정확히 `{ecommerce}` · 둘 다 콘솔 적격 true).
+- **홈만으로 assume/조회하던 IT 픽스처 수선**(`MembershipFixture.addHomeMembership` — «자기 회사의 평범한 운영자» 인 곳만): `AdminAuditTenantScopeIntegrationTest` · `ConsoleRegistryIntegrationTest` · `OperatorInvitationIntegrationTest` · `OperatorLookupIntegrationTest` · `OperatorProfileAdminIntegrationTest` · `PartnershipCrossOrgLeakIntegrationTest`(2 헬퍼) · `TenantEntryPolicyIntegrationTest` · `TokenExchangeIntegrationTest`(2 헬퍼) · `OperatorAssignmentCheckIntegrationTest`(facet 운영자). 셈법: 운영자 행을 손으로 넣는 IT 29파일 중 해소기 · 적격 · 교환 · 목록 술어를 타는 경로를 실제로 부르는 것만(나머지 — `'*'` 만 · 권한 aspect 에서 먼저 403 · grant scope 판정 · 플랫폼 전용 2FA reset — 는 무변경, 파일별로 확인).
+- **auth-service 핀**: `DemoCsOperatorSeedTest`(소속 = 정확히 `ecommerce → demo-cs` · 대조군 ROLE_GRANT 1) · `DemoViewerOperatorSeedTest`(역할 0 · 소속 = 정확히 `demo-viewer → demo-viewer`) · `DemoCsOperatorDerivedRolesTest`(공개 역할 파생의 테넌트 = 소속 = 홈 = 한정 테넌트).
+
+## 4. 실행 (rc 는 각자 따로 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `./gradlew :projects:iam-platform:apps:admin-service:compileTestJava :projects:iam-platform:apps:auth-service:compileTestJava` | **0** | IT 포함 컴파일(이 프로젝트의 `integrationTest` 는 별 소스셋이 아니라 `test` 소스셋의 `@Tag("integration")` — `compileIntegrationTestJava` 태스크는 없다) |
+| `./gradlew :projects:iam-platform:apps:admin-service:test` (최종) | **0** | 1119 tests · fail 0 · skip 58 (`V0051MigrationShapeTest` 6/6) |
+| `./gradlew :projects:iam-platform:apps:auth-service:test` | **0** | 1246 tests · fail 0 · skip 33 (세 시드 핀 5 · 4 · 3 모두 통과, 타임스탬프로 이번 실행 확인) |
+| 🔴 **bite**: `TenantScopeResolver` 에 홈을 되돌리고 + `OperatorConsoleAdmission` 의 소속 절을 `true` 로 → 네 클래스만 | **1** | 48 중 8 빨강 — 해소기 2 · assume 홈 거절 · 파트너십 홈 비소속 · 적격 소속 0 · 교환 소속 0 등(새 대조군이 문다). 원본 복원 후 같은 네 클래스 rc=**0** |
+| `integrationTest` | ⚪ | 이 호스트에 Docker 없음 — Testcontainers IT(위 § 3 IT 전부, 새 `V0051MembershipBackfillIntegrationTest` 포함)는 **CI 가 판정**한다 |
+
+## 5. 계약과 다르게 / 계약이 틀렸던 곳
+
+1. **AC-0 F17 «2단계 요구는 해소기를 따라 바뀐다 — 별도 수정 없음» 은 틀렸다**: `OperatorSecondFactorRequirement.requiredForTokenExchange` 는 해소기를 쓰지 않고 «홈 ∪ 배정» 을 **직접** 조립했다. 계약(auth-to-admin 판정 3 «2단계 요구도 소속 기준») 쪽을 따라 고쳤다.
+2. **S2 범위가 슬라이스 표보다 넓다**: `admin-api.md` § GET /api/admin/operators ① 이 «속한 = 소속» 을 **S2** 로 적었다(슬라이스 표에는 없다). 목록 쿼리를 바꾸면 «같은 소속 술어» 로 묶인 로스터(진입 정책 사전 점검) · 이메일 조회도 같이 바뀌어야 해서 4 쿼리를 함께 바꿨다. 백필 덕에 기존 목록은 그대로.
+3. 🔵 `admin-api.md` § GET /api/admin/operators 쿼리 파라미터 표의 `tenantId` 행(«effective scope(home ∪ 배정, BE-326 dual-read)») · § lookup(`:1199`) · 테넌트 개요 `operators` 행(`:2511`) 의 «HOME 또는 배정» 문장이 위 ① 과 어긋난 채 남아 있다 — S3 가 같은 절을 다시 쓸 때 정리한다(코드는 ① 을 따른다).
+4. 🔵 rbac.md § Group Idempotence 의 «784 S2 부터 skip = `(operator, role, group.tenant_id)`» — 코드는 멤버 홈을 쓴다. 멤버 불변식(홈 == 그룹 테넌트, S4 전까지 유효)으로 같은 값이라 행동 차이 0, S4 가 명시적으로 바꾼다.
+
+## 6. 남은 것
+
+- **CI**: admin-service `integrationTest`(위 IT 전부) · `federation-hardening-e2e`(시드 3행 추가 — 위임 스펙 · 스위처) — 이 PR 의 CI 결과로만 판정된다.
+- **S3+**: 읽기 게이트를 grant scope 로 · 사본 4곳 · 생략 규칙 · 권한 키 없는 읽기 · ≤-own 회사 안 · `/me` · 감사 `tenant_id` · 상태 변경 캐시 무효화 · OD-3 `demo-operator` `ecommerce` 역할 시드(S3) / 역할 PATCH 회사 축 · R3 · 내보내기 · 마지막 관리자 409 · 그룹 · 참여자 술어 · fan-out 그룹 테넌트 · D2 거절(S4) / 두 409 → 소속 추가(S5) / 콘솔(S6).
+- 라이브 ⚪: 데모 창에서 V0051 백필 수(§ AC-0 ④ 술어와 같은 창) — 배포 후 `operator_tenant_assignment` 가 «비-`'*'` 운영자 수 + (홈 밖 역할 행 테넌트 수)» 만큼 늘었는지.

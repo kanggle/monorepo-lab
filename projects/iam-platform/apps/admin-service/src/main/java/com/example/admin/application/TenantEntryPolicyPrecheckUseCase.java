@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
  * <p>Advisory and read-only: no audit row, no write, never on an entry path. Same gate and scope as the policy
  * read ({@code tenant.security.manage}, path tenant in the caller's admin scope — 403 without a DENIED row).
  *
- * <p>Population = the tenant's ACTIVE operators (home ∪ assignment rows — the operator-list membership).
+ * <p>Population = the tenant's ACTIVE operators (the operator-list membership — assignment rows only since
+ * TASK-MONO-784 S2; home ∪ assignment rows before).
  * Counted three ways: {@code enrolled} / {@code notEnrolled} (account-linked, confirmed second factor or not) /
  * {@code unlinked} (no IAM account link — the token exchange cannot resolve them at all, so the policy does not
  * change anything for them). Platform ({@code '*'}) operators and partnership participants are not members of the

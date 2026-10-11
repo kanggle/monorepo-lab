@@ -101,6 +101,9 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
     // no local break-glass password, authenticates purely via OIDC token-exchange.
     private static final String OIDC_ONLY_OP_UUID = "00000000-0000-7000-8000-0000000be377";
     private static final String OIDC_ONLY_OP_OIDC = "oidc-sub-oidc-only-0001";
+    // TASK-MONO-784 S2 (D-10): an ACTIVE wms-homed operator whose last membership is gone.
+    private static final String NO_MEMBERSHIP_OP_UUID = "00000000-0000-7000-8000-0000000be784";
+    private static final String NO_MEMBERSHIP_OP_OIDC = "oidc-sub-no-membership-0784";
 
     @BeforeAll
     static void setupShared() throws Exception {
@@ -207,6 +210,9 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
                             + "WHERE operator_id = ?",
                     status, oidcSubject, operatorId);
         }
+        // TASK-MONO-784 S2: the exchange requires ACTIVE ∧ ('*' ∨ membership ≥ 1) — add the row V0051 would
+        // have backfilled (no-op for '*').
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     private void seedOperator(String operatorId, String tenantId, String oidcSubject, String status) {
@@ -227,6 +233,9 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
                     "UPDATE admin_operators SET status = ?, oidc_subject = ? WHERE operator_id = ?",
                     status, oidcSubject, operatorId);
         }
+        // TASK-MONO-784 S2: the exchange requires ACTIVE ∧ ('*' ∨ membership ≥ 1) — add the row V0051 would
+        // have backfilled (no-op for '*').
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     // --- GAP OIDC subject-token minting helpers ---------------------------
@@ -390,6 +399,33 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("🔴 784 S2 (D-10 · F16): ACTIVE 비-'*' 운영자 · 소속 0 → 401 TOKEN_INVALID (토큰 없음) / 대조군: 소속 있는 같은 홈 운영자 → 200")
+    void noMembership_returns401_memberControl200() throws Exception {
+        // Inserted WITHOUT a membership row: home wms, ACTIVE, linked — the home is not a membership (R1).
+        jdbcTemplate.update("""
+                INSERT IGNORE INTO admin_operators
+                  (operator_id, tenant_id, email, password_hash, display_name,
+                   status, oidc_subject, created_at, updated_at, version)
+                VALUES (?, 'wms', ?, NULL, 'No Membership', 'ACTIVE', ?, NOW(6), NOW(6), 0)
+                """, NO_MEMBERSHIP_OP_UUID, NO_MEMBERSHIP_OP_UUID + "@example.com", NO_MEMBERSHIP_OP_OIDC);
+
+        // Failing side first.
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(sign(oidcToken(NO_MEMBERSHIP_OP_OIDC)))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist());
+
+        // Control, same test: the wms operator WITH its membership row exchanges.
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody(sign(oidcToken(MAPPED_OP_OIDC)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
     @DisplayName("mapped operator is DISABLED → 401 fail-closed")
     void deactivatedOperator_returns401() throws Exception {
         jdbcTemplate.update("UPDATE admin_operators SET status='DISABLED' WHERE operator_id=?",
@@ -539,7 +575,7 @@ class TokenExchangeIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("MONO-771 OD-3: operator's home tenant has its entry policy ON (V0047 row) → 403 MFA_REQUIRED without mfa")
+    @DisplayName("MONO-771 OD-3: operator's (home) membership has its entry policy ON (V0047 row) → 403 MFA_REQUIRED without mfa")
     void od3_homePolicyOn_403() throws Exception {
         jdbcTemplate.update("INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, updated_by, version)"
                 + " VALUES ('wms', TRUE, NOW(6), NULL, 0)");

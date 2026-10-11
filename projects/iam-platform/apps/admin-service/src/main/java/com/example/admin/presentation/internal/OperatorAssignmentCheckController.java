@@ -38,7 +38,8 @@ public class OperatorAssignmentCheckController {
      * GET /internal/operator-assignments/check?oidcSubject=&tenantId=
      *
      * <p>Returns {@code {assigned: true|false, orgScope: [...]|null}} per the
-     * operator's effective tenant scope (legacy home ∪ assignments; {@code '*'}
+     * operator's effective tenant scope (its memberships — assignment rows only since
+     * TASK-MONO-784 S2, the home is no longer added; {@code '*'}
      * platform → true). Never leaks operator existence vs unassigned beyond the
      * boolean: an unknown subject, a non-ACTIVE operator, and an unassigned tenant
      * all return {@code {assigned:false}} with HTTP 200.

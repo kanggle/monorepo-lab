@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * TASK-BE-327 / ADR-MONO-020 § 3.3 step 2 (D2) — resolves whether an operator
@@ -31,8 +32,12 @@ import java.util.Set;
  * {@code tenant_id} — never the {@code '*'} sentinel (that resolution happens in
  * auth-service).
  *
- * <p>Otherwise the decision is delegated to {@link TenantScopeResolver} (BE-326
- * dual-read: assignment rows ∪ {legacy home tenant}).
+ * <p>Otherwise the decision is delegated to {@link TenantScopeResolver}: the operator's memberships
+ * ({@code operator_tenant_assignment} rows). <b>TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D3 · D-2):</b>
+ * the home tenant is no longer added (it was the BE-326 dual-read {@code assignments ∪ {home}}) — an
+ * operator removed from the company that is their home must not assume into it (784 AC-0 F4). The
+ * partnership-derived host reach likewise reads the memberships ({@code partner ∈ memberships}, D-11),
+ * not {@code partner = home}.
  *
  * <p><b>TASK-MONO-299 (ADR-MONO-040 Phase 3 part B) — account_id-only operator
  * resolution.</b> The Phase-2 transitional DUAL-KEY (account_id first, legacy email
@@ -181,12 +186,14 @@ public class OperatorAssignmentCheckUseCase {
             return Resolution.denied();
         }
 
-        // 3. Dual-read effective scope: assignment rows ∪ {legacy home tenant}.
+        // 3. Effective scope = the operator's memberships (assignment rows only — TASK-MONO-784 S2, D-2:
+        //    the home tenant is no longer part of it; V0051 backfilled a home assignment for every
+        //    pre-784 operator, so single-company operators answer exactly as before).
         Set<String> effectiveScope = tenantScopeResolver.resolveEffectiveTenantScope(
                 operator.internalId(), operator.tenantId());
         if (effectiveScope.contains(tenantId)) {
             // 4. Resolve the selected assignment's org_scope data-scope. null ⟺ ["*"]
-            // (unset column OR legacy-home/platform with no explicit row). A normal
+            // (unset column; since 784 S2 an in-scope tenant always has an explicit row). A normal
             // assignment carries NO delegatedScope block (partnership-only, additive).
             List<String> orgScope = assignmentPort.findOrgScope(operator.internalId(), tenantId);
             return new Resolution(new Result(true, orgScope, null), operator);
@@ -198,7 +205,7 @@ public class OperatorAssignmentCheckUseCase {
         // The derived reach is capped to the triple-intersection and returned as the
         // additive `delegatedScope` block (auth-service step 2b consumes it to cap the
         // assume-tenant token's entitled domains/roles; admin scope is NEVER widened).
-        DelegatedScope delegated = resolveCrossOrgDelegatedScope(operator, tenantId);
+        DelegatedScope delegated = resolveCrossOrgDelegatedScope(operator, effectiveScope, tenantId);
         if (delegated != null) {
             return new Resolution(new Result(true, null, delegated), operator);
         }
@@ -219,9 +226,12 @@ public class OperatorAssignmentCheckUseCase {
      * (rbac.md "Cross-Org Partner Delegation Confinement"):
      *
      * <pre>
-     *   p = findActive(host = tenantId, partner = operator.tenantId)   // ACTIVE only
-     *   if p is null: return null                                       // no reach
-     *   part = participant(p, operator); if part is null: return null   // not a participant
+     *   for partner in sorted(memberships):                             // 784 S2 (D-11): partner ∈ memberships
+     *     p = findActive(host = tenantId, partner)                      // ACTIVE only
+     *     if p is null: continue                                        // no reach through this company
+     *     part = participant(p, operator); if part is null: continue    // not a participant
+     *     → derive from (p, part) below and stop
+     *   return null                                                     // no reach
      *   scope = p.delegated_scope
      *   if part.participant_scope != null: scope ∩= participant_scope
      *   scope ∩= hostEntitledScope(host)         // ≤-own; host-holds is UNBOUNDED here
@@ -236,23 +246,42 @@ public class OperatorAssignmentCheckUseCase {
      * term is retained so a future local host-holds mirror could bound this path without
      * changing the algorithm.
      *
+     * <p><b>TASK-MONO-784 S2 (ADR-MONO-082 b · D-11, first half):</b> the partner side is the operator's
+     * <b>memberships</b>, not its home ({@code partner = operator.tenantId} before 784). The home of an
+     * operator that left that company no longer opens a partner's host; a company the operator joined
+     * later does. Memberships are walked in sorted order so the answer is deterministic when the
+     * operator participates through two of its companies (the first match wins — participation is
+     * bound to the partnership row, and the reach is capped per partnership either way).
+     *
+     * @param memberships the operator's memberships (the resolver's scope — never {@code '*'} here:
+     *                    platform operators are admitted at step 2)
      * @return the derived {@code {domains, roles}}, or {@code null} when the operator
      *         has no partnership-derived reach to {@code hostTenant} (fail-closed).
      */
     private DelegatedScope resolveCrossOrgDelegatedScope(AdminOperatorPort.OperatorView operator,
+                                                         Set<String> memberships,
                                                          String hostTenant) {
-        TenantPartnershipPort.PartnershipView partnership = partnershipPort
-                .findActivePartnership(hostTenant, operator.tenantId())
-                .orElse(null);
-        if (partnership == null) {
-            return null; // no partnership / PENDING / SUSPENDED / TERMINATED → reach 0
+        for (String partner : new TreeSet<>(memberships)) {
+            TenantPartnershipPort.PartnershipView partnership = partnershipPort
+                    .findActivePartnership(hostTenant, partner)
+                    .orElse(null);
+            if (partnership == null) {
+                continue; // no partnership / PENDING / SUSPENDED / TERMINATED → no reach via this company
+            }
+            TenantPartnershipPort.ParticipantView participant = partnershipPort
+                    .findParticipant(partnership.internalId(), operator.internalId())
+                    .orElse(null);
+            if (participant == null) {
+                continue; // this operator is not a participant → no reach via this company
+            }
+            return derive(partnership, participant, hostTenant);
         }
-        TenantPartnershipPort.ParticipantView participant = partnershipPort
-                .findParticipant(partnership.internalId(), operator.internalId())
-                .orElse(null);
-        if (participant == null) {
-            return null; // this operator is not a participant → reach 0
-        }
+        return null;
+    }
+
+    private DelegatedScope derive(TenantPartnershipPort.PartnershipView partnership,
+                                  TenantPartnershipPort.ParticipantView participant,
+                                  String hostTenant) {
         ScopeSet scope = partnership.delegatedScope();
         if (participant.participantScope() != null) {
             scope = scope.intersect(participant.participantScope());

@@ -87,8 +87,12 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     /**
      * TASK-MONO-175 / ADR-MONO-020 — tenant-scoped operator listing for
      * {@code GET /api/admin/operators?tenantId=X}. Returns operators that belong
-     * to tenant {@code tenantId} = their HOME tenant ({@code admin_operators.tenant_id})
-     * OR an ASSIGNED tenant ({@code operator_tenant_assignment} — D1 N:M, BE-326).
+     * to tenant {@code tenantId} = a MEMBERSHIP ({@code operator_tenant_assignment} row).
+     * <b>TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D-2; admin-api.md § GET /api/admin/operators ①):</b>
+     * the HOME tenant ({@code admin_operators.tenant_id}) is no longer an alternative — before 784 the
+     * predicate was {@code home = X OR assignment = X} (BE-326). V0051 backfilled a home assignment for
+     * every pre-784 operator, so existing lists are unchanged; an operator removed from its home company
+     * leaves that company's list. The three sibling queries below share this one predicate.
      * {@code status} is an optional filter ({@code null} → no filter). Sort +
      * paging come from the {@link Pageable}. An explicit {@code countQuery} is
      * supplied so the EXISTS-subquery page count is derived correctly.
@@ -96,16 +100,14 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     @Query(value = """
             SELECT o FROM AdminOperatorJpaEntity o
             WHERE (:status IS NULL OR o.status = :status)
-              AND ( o.tenantId = :tenantId
-                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
-                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+              AND EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                          WHERE a.operatorId = o.id AND a.tenantId = :tenantId)
             """,
             countQuery = """
             SELECT COUNT(o) FROM AdminOperatorJpaEntity o
             WHERE (:status IS NULL OR o.status = :status)
-              AND ( o.tenantId = :tenantId
-                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
-                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+              AND EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                          WHERE a.operatorId = o.id AND a.tenantId = :tenantId)
             """)
     Page<AdminOperatorJpaEntity> findByTenantScope(@Param("tenantId") String tenantId,
                                                    @Param("status") String status,
@@ -113,22 +115,21 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
 
     /**
      * TASK-MONO-771 S5 — the entry-policy pre-check roster: the {@code oidc_subject} (IAM account id, possibly
-     * {@code null}) of every ACTIVE operator of {@code tenantId}, with the SAME home ∪ assignment membership
-     * predicate as {@link #findByTenantScope}. One element per operator.
+     * {@code null}) of every ACTIVE operator of {@code tenantId}, with the SAME membership predicate as
+     * {@link #findByTenantScope} (assignment rows only since TASK-MONO-784 S2). One element per operator.
      */
     @Query("""
             SELECT o.oidcSubject FROM AdminOperatorJpaEntity o
             WHERE o.status = 'ACTIVE'
-              AND ( o.tenantId = :tenantId
-                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
-                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+              AND EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                          WHERE a.operatorId = o.id AND a.tenantId = :tenantId)
             """)
     List<String> findActiveOidcSubjectsInTenantScope(@Param("tenantId") String tenantId);
 
     /**
      * TASK-MONO-777 — {@code GET /api/admin/operators/lookup}: the ACTIVE, console-linked
-     * ({@code oidc_subject} present) operators of tenant {@code tenantId} — same HOME ∪
-     * ASSIGNED membership predicate as {@link #findByTenantScope} — whose normalized email
+     * ({@code oidc_subject} present) operators of tenant {@code tenantId} — same membership
+     * predicate as {@link #findByTenantScope} (assignment rows only since TASK-MONO-784 S2) — whose normalized email
      * equals {@code email}. The {@code confined_tenant_id} filter (TASK-MONO-751) is applied
      * in the adapter so this query keeps the membership predicate byte-identical to the list.
      */
@@ -137,9 +138,8 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
             WHERE o.email = :email
               AND o.status = 'ACTIVE'
               AND o.oidcSubject IS NOT NULL
-              AND ( o.tenantId = :tenantId
-                 OR EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
-                            WHERE a.operatorId = o.id AND a.tenantId = :tenantId) )
+              AND EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                          WHERE a.operatorId = o.id AND a.tenantId = :tenantId)
             """)
     List<AdminOperatorJpaEntity> findLookupCandidatesInTenant(@Param("tenantId") String tenantId,
                                                               @Param("email") String email);

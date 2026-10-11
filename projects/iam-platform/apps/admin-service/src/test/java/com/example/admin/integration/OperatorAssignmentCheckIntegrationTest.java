@@ -27,9 +27,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * TASK-BE-327 (ADR-MONO-020 § 3.3 step 2, D2) — integration test proving the
  * {@code GET /internal/operator-assignments/check} endpoint resolves the real
- * {@code TenantScopeResolver} dual-read (BE-326) end-to-end:
+ * {@code TenantScopeResolver} end-to-end:
  * <ul>
- *   <li>legacy home tenant → assigned</li>
+ *   <li>home tenant WITHOUT an assignment row → NOT assigned (TASK-MONO-784 S2 — the home is not a
+ *       membership, R1 · D-2); the same home WITH its (V0051-style) assignment row → assigned</li>
  *   <li>seeded {@code operator_tenant_assignment} row → assigned</li>
  *   <li>unrelated tenant → not assigned</li>
  *   <li>{@code '*'} platform-scope operator → assigned to any tenant</li>
@@ -59,6 +60,12 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     static final String SUPER_UUID = "00000000-0000-7000-8000-0000000000c2";
     static final String SUPER_SUBJECT = "00000000-0000-7000-8000-0000000000d2";
     static final String UNKNOWN_SUBJECT = "00000000-0000-7000-8000-0000000000ff";
+    // TASK-MONO-784 S2: an acme-corp-homed operator WITH its home membership (what V0051 backfills).
+    static final String MEMBER_UUID = "00000000-0000-7000-8000-0000007840c3";
+    static final String MEMBER_SUBJECT = "00000000-0000-7000-8000-0000007840d3";
+    // TASK-MONO-784 S2: an ACTIVE acme-corp-homed operator with NO membership at all.
+    static final String NO_MEMBERSHIP_UUID = "00000000-0000-7000-8000-0000007840c4";
+    static final String NO_MEMBERSHIP_SUBJECT = "00000000-0000-7000-8000-0000007840d4";
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -82,17 +89,31 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     void seed() {
         // Home tenant = acme-corp; assignment row → globex with a populated
         // org_scope subtree (TASK-BE-338). The acme-corp home tenant itself has
-        // NO explicit assignment row → org_scope resolves to null (net-zero).
+        // NO assignment row — since TASK-MONO-784 S2 that means acme-corp is NOT in scope.
         seedOperator(OP_UUID, OP_SUBJECT, "acme-corp", "assign-op@example.com");
         seedAssignment(OP_UUID, "globex", "[\"dept-sales\"]");
+        // Same home, WITH the home membership row V0051 backfills (org_scope NULL).
+        seedOperator(MEMBER_UUID, MEMBER_SUBJECT, "acme-corp", "assign-member-784@example.com");
+        MembershipFixture.addHomeMembership(jdbcTemplate, MEMBER_UUID);
+        // ACTIVE, home acme-corp, no membership anywhere (the last one was removed).
+        seedOperator(NO_MEMBERSHIP_UUID, NO_MEMBERSHIP_SUBJECT, "acme-corp", "assign-nomember-784@example.com");
         // Platform-scope operator.
         seedOperator(SUPER_UUID, SUPER_SUBJECT, "*", "super-assign@example.com");
     }
 
     @Test
-    @DisplayName("legacy home tenant → assigned=true")
-    void homeTenant_assigned() throws Exception {
+    @DisplayName("🔴 784 S2 (R1 · D-2 · F4): 홈 테넌트에 배정 행 없음 → assigned=false / 대조군: 배정 행 globex → true · 홈 배정 행 있는 운영자 → true")
+    void homeTenantWithoutMembership_notAssigned_controls() throws Exception {
+        // Failing side first: the home alone no longer opens assume (before 784: true).
         check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(false))
+                .andExpect(jsonPath("$.mfaRequired").value(false));
+        // Control 1: the same operator's assignment row still admits.
+        check(OP_SUBJECT, "globex").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true));
+        // Control 2: the same home WITH its membership row (the V0051 backfill) admits — single-company
+        // operators are unchanged.
+        check(MEMBER_SUBJECT, "acme-corp").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true));
     }
 
@@ -112,15 +133,15 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("BE-338: legacy home tenant (no explicit row) → assigned=true + orgScope ABSENT (net-zero, ⟺ [\"*\"])")
-    void homeTenant_orgScopeNull() throws Exception {
+    @DisplayName("BE-338 · 784 S2: backfilled home membership (org_scope NULL) → assigned=true + orgScope ABSENT (net-zero, ⟺ [\"*\"])")
+    void homeMembership_orgScopeNull() throws Exception {
         // admin-service serializes with @JsonInclude(NON_NULL), so a null orgScope is
         // OMITTED from the JSON — NOT rendered as `"orgScope": null`. Absent ⟺ null ⟺
         // ["*"] (net-zero): the auth-service AdminAssignmentClient parses an absent/null
         // orgScope to null → TenantClaimTokenCustomizer injects ["*"]. doesNotExist() is
         // the correct net-zero assertion (the prior .value(nullValue()) required the path
         // to exist, which the NON_NULL omission breaks → PathNotFoundException).
-        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+        check(MEMBER_SUBJECT, "acme-corp").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.orgScope").doesNotExist());
     }
@@ -272,6 +293,8 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
 
     private void seedFacetOperators() {
         seedOperator(FACET_OP_UUID, FACET_SUBJECT, "acme-corp", "facet-op-618@example.com");
+        // TASK-MONO-784 S2: console eligibility needs a membership (D-10) — the V0051 home row.
+        MembershipFixture.addHomeMembership(jdbcTemplate, FACET_OP_UUID);
         jdbcTemplate.update("UPDATE admin_operators SET identity_id = ? WHERE operator_id = ?",
                 FACET_IDENTITY, FACET_OP_UUID);
         seedOperator(SUSPENDED_OP_UUID, SUSPENDED_SUBJECT, "acme-corp", "facet-suspended-618@example.com");
@@ -321,6 +344,21 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("🔴 784 S2 (D-10 · F16): ACTIVE 비-'*' · 소속 0 → eligible=false / 대조군: 같은 홈 · 소속 1 → true · '*' → true")
+    void consoleEligibility_noMembership_false_controls() throws Exception {
+        // Failing side first: ACTIVE, home acme-corp, zero memberships — not an operator for the console.
+        consoleEligibility(NO_MEMBERSHIP_SUBJECT).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false));
+        // Control: the same home with its membership row.
+        consoleEligibility(MEMBER_SUBJECT).andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true));
+        // A membership that is not the home also counts (OP has globex only).
+        consoleEligibility(OP_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
+        // '*' has no memberships by definition (ADR-082 D2) and stays eligible.
+        consoleEligibility(SUPER_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
+    }
+
+    @Test
     @DisplayName("MONO-772 S4: accountId 공백 → 400 VALIDATION_ERROR")
     void consoleEligibility_blank_400() throws Exception {
         consoleEligibility(" ").andExpect(status().isBadRequest())
@@ -346,20 +384,23 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("MONO-771: V0047 empty + no require_2fa role → mfaRequired=false, present (net-zero)")
     void mfaRequired_netZero() throws Exception {
-        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+        check(MEMBER_SUBJECT, "acme-corp").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.mfaRequired").value(false));
     }
 
     @Test
-    @DisplayName("MONO-771 AC-2: policy row ON for globex → mfaRequired=true there; acme-corp (no row) control → false")
+    @DisplayName("MONO-771 AC-2: policy row ON for globex → mfaRequired=true there; acme-corp member (no row) control → false")
     void mfaRequired_policyOnTenant_vsControl() throws Exception {
         jdbcTemplate.update("INSERT INTO tenant_entry_policy (tenant_id, require_mfa, updated_at, updated_by, version)"
                 + " VALUES ('globex', TRUE, NOW(6), NULL, 0)");
         check(OP_SUBJECT, "globex").andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.mfaRequired").value(true));
-        check(OP_SUBJECT, "acme-corp").andExpect(status().isOk())
+        // Control on an ASSIGNED tenant without a policy row (since 784 S2 OP's acme-corp home is not
+        // assigned at all, which would make «false» vacuous — use the member of acme-corp instead).
+        check(MEMBER_SUBJECT, "acme-corp").andExpect(status().isOk())
+                .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.mfaRequired").value(false));
     }
 

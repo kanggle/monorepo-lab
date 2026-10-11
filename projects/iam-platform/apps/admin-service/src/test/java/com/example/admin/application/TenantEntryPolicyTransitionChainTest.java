@@ -87,7 +87,8 @@ class TenantEntryPolicyTransitionChainTest {
     void wire() {
         requirement = new OperatorSecondFactorRequirement(operatorPort, assignmentPort, table);
         exchange = new TokenExchangeService(subjectTokenValidator, operatorPort, accessTokenIssuer,
-                new OperatorOidcSubjectResolver(operatorPort), requirement);
+                new OperatorOidcSubjectResolver(operatorPort), requirement,
+                new OperatorConsoleAdmission(assignmentPort));
         management = new TenantEntryPolicyUseCase(table, provisioningPort, operatorPort,
                 new TenantScopeGuard(grantScopeEvaluator, auditor), auditor);
 
@@ -99,10 +100,12 @@ class TenantEntryPolicyTransitionChainTest {
                 Instant.EPOCH, Instant.EPOCH));
         when(operatorPort.findByOperatorId(TENANT_ADMIN_UUID)).thenReturn(Optional.of(view(1L, TENANT_ADMIN_UUID)));
 
-        // A plain member operator of the tenant: home = acme, no require_2fa role, no assignment rows.
+        // A plain member operator of the tenant: home = acme, no require_2fa role, one membership = acme.
+        // TASK-MONO-784 S2: the membership is the assignment row (V0051 backfills it for a pre-784 home);
+        // the home alone is neither a membership (exchange 401) nor a policy input (R1 · F17).
         when(operatorPort.findByOidcSubject(MEMBER_SUB)).thenReturn(Optional.of(view(2L, MEMBER_UUID)));
         when(operatorPort.anyRoleRequires2fa(anyLong())).thenReturn(false);
-        when(assignmentPort.findAssignedTenantIds(anyLong())).thenReturn(Set.of());
+        when(assignmentPort.findAssignedTenantIds(anyLong())).thenReturn(Set.of(TENANT));
         when(accessTokenIssuer.mint(anyString())).thenReturn("operator.jwt");
         when(accessTokenIssuer.accessTokenTtlSeconds()).thenReturn(900L);
     }

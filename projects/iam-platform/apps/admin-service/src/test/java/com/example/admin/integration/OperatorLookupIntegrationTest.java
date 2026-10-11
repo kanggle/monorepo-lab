@@ -31,7 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * TASK-MONO-777 — {@code GET /api/admin/operators/lookup} against real MySQL (Flyway schema) and
  * the REAL {@code QueryTenantScopeGate} / {@code PermissionEvaluator}. What the slice test cannot
- * measure: the JPQL membership predicate (HOME ∪ ASSIGNED), the ACTIVE + {@code oidc_subject}
+ * measure: the JPQL membership predicate (assignment rows — HOME ∪ ASSIGNED before TASK-MONO-784 S2;
+ * every fixture operator carries its home membership row), the ACTIVE + {@code oidc_subject}
  * filters, and that an operator with NO role at all is served.
  */
 @SpringBootTest
@@ -158,6 +159,9 @@ class OperatorLookupIntegrationTest extends AbstractIntegrationTest {
                    oidc_subject, created_at, updated_at, version)
                 VALUES (?, ?, ?, NULL, ?, ?, ?, NOW(6), NOW(6), 0)
                 """, uuid, tenant, email, "M777 " + uuid.substring(uuid.length() - 2), status, oidcSubject);
+        // TASK-MONO-784 S2: membership = assignment rows only (the home is no longer an alternative in the
+        // lookup predicate or the gate) — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 
     private void assign(String uuid, String tenant) {

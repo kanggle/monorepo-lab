@@ -125,7 +125,13 @@ public class GroupFanOutService {
     private boolean materialise(Long groupInternalId, OperatorGroupGrantJpaEntity grant,
                                 Member member, Long grantedBy, Instant now) {
         if (grant.isRole()) {
-            var pk = new AdminOperatorRoleJpaEntity.PK(member.internalId(), grant.getRoleId());
+            // TASK-MONO-784 S2 (V0051): the key carries the row's tenant. The tenant written below is still
+            // the member's home — which the member invariant (home == group tenant, 422
+            // GROUP_MEMBER_TENANT_MISMATCH) makes equal to the group's tenant, i.e. the
+            // (member, role, group.tenant_id) skip key rbac.md names. S4 switches both to the group tenant
+            // explicitly (D-11); the key and the written row must always name the same tenant or the
+            // skip check would miss its own row.
+            var pk = new AdminOperatorRoleJpaEntity.PK(member.internalId(), grant.getRoleId(), member.tenantId());
             if (operatorRoles.existsById(pk)) {
                 return false;
             }
