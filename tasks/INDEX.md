@@ -217,6 +217,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-789-idle-stop-10-minutes-with-boot-grace.md` — **데모 자동 종료(유휴) 20분 → 10분 + 켠 뒤 20분 부팅 보호** (REVIEW, 2026-10-11 UTC · 소유자 요청). 그대로 10분이면 틱 5분 → 실제 10~15분 정지가 전체 기동(약 10~13분) 한복판을 자를 수 있어(웜업 중 정지 = `TASK-MONO-389` kafka 손상) 소유자가 «10분 + 부팅 보호» 선택. `idle_check` 유휴 갈래에 `run_sec >= BOOT_GRACE_MINUTES` — 예산 · max-runtime 은 창과 무관하게 문다. 람다 시험 126 · bite 1칸 · 런처 · 콘솔 가이드 · README 문구. ⏳ **AC-5 = 소유자 `terraform apply`**(재굽기 불필요). 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+
 
 ## done
 - ✅ `TASK-MONO-788-domain-start-from-a-stopped-instance.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4302**(`5ad677ce8`, 머지 시점 실패 0 · Demo wrapper smoke pass). 꺼진 인스턴스에서 도메인 「시작」 → 그 도메인만 푸는 묶음으로 `bundle_start` 위임 · `/status` `domain_cold_start` · 「▶ 전체 스택 시작」 → 「▶ 데모 서버 켜기」(동작 무변경). 소유자 `terraform apply`(Lambda in-place 1건) 뒤 라이브: `domain_cold_start:true` · 꺼진 상태 `finance` 시작 → 선택 5묶음 → `["console-finance"]` 교체 · iam 16/16 + finance 7/7 + traefik 만(24 컨테이너) · `/stop`.

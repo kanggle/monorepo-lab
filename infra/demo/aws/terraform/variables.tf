@@ -133,6 +133,17 @@ variable "allowed_origins" {
 variable "idle_minutes" {
   description = "heartbeat 이 이 시간(분) 이상 끊기면 자동 종료"
   type        = number
+  # TASK-MONO-789 (소유자 요청 2026-10-11) — 20 → 10. 판정 틱이 5분이라 실제 정지는 10~15분 뒤다.
+  default = 10
+}
+
+# TASK-MONO-789 — 켠 뒤 이 시간(분) 안에는 유휴만으로는 끄지 않는다(부팅 보호). 근거는 handler.py
+# 의 BOOT_GRACE_MINUTES 주석: 유휴 10분이면 전체 기동(실측 약 10~13분) 한복판을 자를 수 있고, 웜업
+# 중 정지가 kafka 로그를 망가뜨린 이력이 있다(TASK-MONO-389). 🔴 이 값은 전체 기동 시간보다 커야
+# 의미가 있다 — 줄이기 전에 기동 시간을 다시 재라. 예산 · max_runtime 은 이 창과 무관하게 문다.
+variable "idle_boot_grace_minutes" {
+  description = "기동 후 이 시간(분) 동안은 heartbeat 이 없어도 유휴 종료하지 않는다(부팅 보호)"
+  type        = number
   default     = 20
 }
 

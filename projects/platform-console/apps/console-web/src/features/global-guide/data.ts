@@ -365,10 +365,10 @@ export const STARTUP_STEPS: GuideFact[] = [
 
 export const SHUTDOWN_RULES: GuideFact[] = [
   {
-    title: '20분 동안 안 쓰면 꺼진다',
-    body: '로그인한 운영자가 콘솔을 쓰는 동안만 켜져 있습니다. 로그인하지 않은 방문자의 열린 탭은 서버를 붙잡아 두지 않습니다.',
+    title: '10분 동안 안 쓰면 꺼진다',
+    body: '로그인한 운영자가 콘솔을 쓰는 동안만 켜져 있습니다. 로그인하지 않은 방문자의 열린 탭은 서버를 붙잡아 두지 않습니다. 단, 켠 뒤 20분 동안은 켜는 중일 수 있어 아무도 안 써도 끄지 않습니다.',
     sources: [
-      'infra/demo/aws/terraform/variables.tf:133-136',
+      'infra/demo/aws/terraform/variables.tf:133-148',
       'projects/platform-console/apps/console-web/src/app/(console)/layout.tsx:225-230',
     ],
   },

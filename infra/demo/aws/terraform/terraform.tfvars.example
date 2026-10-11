@@ -83,10 +83,12 @@ allowed_origins = [
 # `/start` 는 **공개 엔드포인트**다. 가드 없이 두면 무제한 지출 버튼이 된다.
 # 세 겹으로 막는다:
 #   idle_minutes           — 마지막 하트비트 후 N 분 유휴면 정지
+#   idle_boot_grace_minutes— 켠 뒤 이 시간 안에는 유휴만으로 끄지 않는다(부팅 보호, TASK-MONO-789)
 #   max_runtime_minutes    — 한 세션의 절대 상한(하트비트가 계속 와도 정지)
 #   monthly_budget_minutes — **월 누적 가동 분**. 소진되면 `/start` 가 429 를 반환하고
 #                            인스턴스를 켜지 않는다. 앞의 둘만으로는 부족하다 —
 #                            누가 매일 세 시간씩 켜도 각 세션은 규칙을 지킨다.
-idle_minutes           = 20
-max_runtime_minutes    = 180
-monthly_budget_minutes = 600
+idle_minutes            = 10
+idle_boot_grace_minutes = 20
+max_runtime_minutes     = 180
+monthly_budget_minutes  = 600

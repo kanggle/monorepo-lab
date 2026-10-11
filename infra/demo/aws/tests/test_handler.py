@@ -86,7 +86,8 @@ os.environ.update({
     "STARTED_PARAM": "/t/started",
     "USAGE_PARAM": "/t/usage",
     "HEALTH_PARAM": "/t/health",
-    "IDLE_MINUTES": "20",
+    "IDLE_MINUTES": "10",          # TASK-MONO-789 — 운영 기본값과 같게
+    "BOOT_GRACE_MINUTES": "20",
     "MAX_RUNTIME_MINUTES": "180",
     "MONTHLY_BUDGET_MINUTES": "60",  # 테스트는 1시간 예산
     # 🔴 `ALLOWED_ORIGIN` 은 **일부러 남겨 심는다**(TASK-MONO-557). 핸들러가 이걸 다시
@@ -310,7 +311,7 @@ class FreshlyLaunchedInstanceTest(unittest.TestCase):
         self.assertEqual(FAKE_EC2.stop_calls, 0, "기동 시각이 옛 하트비트를 이겨야 한다")
 
     def test_idle_guard_still_bites_once_the_window_really_elapses(self):
-        """켜진 지 1시간, 하트비트 없음 → idle 20m 초과로 **정지해야 한다.**"""
+        """켜진 지 1시간, 하트비트 없음 → idle 초과로 **정지해야 한다.**"""
         FAKE_EC2.launch_time = launched(T0 - 3600)
         FAKE_SSM.store["/t/beat"] = "0"
         FAKE_SSM.store["/t/started"] = "0"
@@ -328,6 +329,58 @@ class FreshlyLaunchedInstanceTest(unittest.TestCase):
             r = handler.idle_check()
         self.assertEqual(FAKE_EC2.stop_calls, 1, "세션 상한은 하트비트로 우회될 수 없다")
         self.assertIn("max-runtime", r["reason"])
+
+
+class IdleBootGraceTest(unittest.TestCase):
+    """유휴 10분 + 부팅 보호 — TASK-MONO-789.
+
+    🔴 유휴를 20 → 10 으로 줄이면 전체 기동(실측 약 10~13분) 한복판에서 끌 수 있다. 웜업 중 정지는
+    kafka 로그를 망가뜨려 이후 모든 부팅을 죽인 이력이 있다(TASK-MONO-389). 그래서 켠 지
+    BOOT_GRACE_MINUTES 안에는 유휴만으로 끄지 않는다. 대칭으로 잰다: 보호 창 안에선 안 끄고(1),
+    창이 지나면 10분 유휴로 끄고(2), 예산은 창 안에서도 문다(3).
+    """
+
+    def setUp(self):
+        FAKE_SSM.store.clear()
+        FAKE_EC2.state = "running"
+        FAKE_EC2.stop_calls = 0
+
+    def _check(self, launched_ago, beat_ago):
+        FAKE_EC2.launch_time = launched(T0 - launched_ago)
+        FAKE_SSM.store["/t/beat"] = str(T0 - beat_ago)
+        FAKE_SSM.store["/t/started"] = str(T0 - launched_ago)
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return handler.idle_check()
+
+    def test_a_booting_instance_is_not_stopped_for_idle(self):
+        """켠 지 14분, 클릭 뒤 하트비트 0 (탭을 닫았다) → 유휴 14분이지만 부팅 보호로 **안 끈다**."""
+        r = self._check(launched_ago=14 * 60, beat_ago=14 * 60)
+        self.assertEqual(r["idle_sec"], 14 * 60)
+        self.assertEqual(FAKE_EC2.stop_calls, 0, "부팅 보호 창 안에서 유휴로 껐습니다 — 웜업을 자릅니다")
+        self.assertFalse(r["stopped"])
+
+    def test_after_the_grace_window_ten_idle_minutes_stop_it(self):
+        """켠 지 25분, 마지막 하트비트 11분 전 → **끈다** (20분 시절이면 안 껐을 자리)."""
+        r = self._check(launched_ago=25 * 60, beat_ago=11 * 60)
+        self.assertEqual(FAKE_EC2.stop_calls, 1, "보호 창이 지났는데 10분 유휴를 안 물었습니다")
+        self.assertIn("idle 10m", r["reason"])
+
+    def test_nine_idle_minutes_still_keep_it_running(self):
+        """경계 대조군 — 켠 지 1시간, 마지막 하트비트 9분 전 → 안 끈다."""
+        self._check(launched_ago=3600, beat_ago=9 * 60)
+        self.assertEqual(FAKE_EC2.stop_calls, 0)
+
+    def test_budget_still_stops_inside_the_grace_window(self):
+        """🔴 부팅 보호는 유휴에만 걸린다 — 지출 상한은 창 안에서도 문다."""
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": BUDGET_SEC, "tick": 0})
+        FAKE_EC2.launch_time = launched(T0 - 5 * 60)
+        FAKE_SSM.store["/t/beat"] = str(T0 - 5 * 60)
+        FAKE_SSM.store["/t/started"] = str(T0 - 5 * 60)
+        with mock.patch.object(handler, "_now", return_value=T0):
+            r = handler.idle_check()
+        self.assertEqual(FAKE_EC2.stop_calls, 1)
+        self.assertIn("monthly-budget", r["reason"])
 
 
 class DomainControlTest(unittest.TestCase):
