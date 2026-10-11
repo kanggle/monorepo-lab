@@ -369,11 +369,15 @@ class DomainControlTest(unittest.TestCase):
         self.assertEqual(resp["statusCode"], 400)
         self.assertEqual(len(FAKE_SSM.sent), 0, "검증 실패 시 명령을 보내면 안 된다(주입 방지)")
 
-    def test_domain_start_requires_running_vm(self):
-        FAKE_EC2.state = "stopped"
+    def test_domain_start_while_booting_is_refused(self):
+        """🔵 TASK-MONO-788 — 꺼진(stopped) 인스턴스는 이제 콜드 경로로 켠다(DomainColdStartTest).
+        켜지는 중(pending)은 여전히 거절이다: 부팅이 이미 선택을 읽었을 수 있고, SSM 은 아직
+        받을 대상이 없다."""
+        FAKE_EC2.state = "pending"
         resp = handler.domain_start(self._evt("fan"))
         self.assertEqual(resp["statusCode"], 409)
         self.assertEqual(len(FAKE_SSM.sent), 0)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
 
     def test_domain_start_refused_when_budget_exhausted(self):
         FAKE_SSM.store["/t/usage"] = json.dumps(
@@ -1634,6 +1638,124 @@ class BundleGenerationGateTest(unittest.TestCase):
         self.assertEqual(
             set(bad_body["bundles"]), set(handler.BUNDLE_NAMES),
             "거절 상태에서 묶음 목록이 비었습니다 — 론처는 이것을 «모양 불명» 으로 읽습니다.")
+
+
+class DomainColdStartTest(unittest.TestCase):
+    """꺼진 인스턴스에서 `/domain/start` — TASK-MONO-788.
+
+    🔴 판정은 «200 이 나왔나» 가 아니라 **무엇이 저장되고 무엇이 켜졌나**다(BundleSelectionTest 와
+    같은 규율). 이 경로의 결함은 «wms 를 눌렀더니 다른 것이 떴다» 이고 그것은 에러를 내지 않는다.
+    부팅은 저장된 묶음 이름을 `resolve_bundles` 로 풀므로, 저장된 묶음이 푸는 도메인 집합을 본다.
+    """
+
+    def setUp(self):
+        # 🔴 저장은 여기서 **한 번만**. 아래 칸들이 서브테스트마다 `_reset()` 을 부르는데, 그것이
+        #    저장까지 하면 직전 칸이 갈아 끼운 "no" 를 저장해 tearDown 이 그 값을 되살린다 —
+        #    그러면 뒤에 도는 다른 클래스의 묶음 테스트가 전부 409 로 떨어진다(실제로 그렇게 됐다).
+        self._saved = handler.BUNDLE_CAPABLE
+        self._reset()
+
+    def _reset(self):
+        FAKE_SSM.store.clear()
+        FAKE_SSM.sent.clear()
+        FAKE_EC2.state = "stopped"
+        FAKE_EC2.start_calls = 0
+        FAKE_EC2.stop_calls = 0
+        FAKE_EC2.launch_time = launched(0)
+        handler.BUNDLE_CAPABLE = "yes"
+
+    def tearDown(self):
+        handler.BUNDLE_CAPABLE = self._saved
+
+    def _start(self, name):
+        with mock.patch.object(handler, "_now", return_value=T0):
+            return handler.domain_start({"body": json.dumps({"name": name})})
+
+    def _selected_domains(self):
+        bundles = json.loads(FAKE_SSM.store[handler.SELECTION_PARAM])["bundles"]
+        return set().union(*(handler.BUNDLE_OWN_DOMAINS[b] for b in bundles))
+
+    def test_every_domain_has_a_cold_start_bundle(self):
+        """🔴 짝이 없는 도메인은 꺼진 동안 「시작」이 409 가 된다 — 전수로 잰다."""
+        self.assertEqual(set(handler.DOMAIN_BUNDLE), set(handler.DOMAINS))
+        for d, b in handler.DOMAIN_BUNDLE.items():
+            with self.subTest(domain=d):
+                self.assertEqual(handler.BUNDLE_OWN_DOMAINS[b], (d,),
+                                 f"{d} 의 짝 {b} 가 {d} 하나만 풀지 않습니다")
+
+    def test_each_domain_starts_the_instance_with_only_that_domain_selected(self):
+        for d in sorted(handler.DOMAINS):
+            with self.subTest(domain=d):
+                self._reset()
+                r = self._start(d)
+                body = json.loads(r["body"])
+                self.assertEqual(r["statusCode"], 200, body)
+                self.assertEqual(body["state"], "starting")
+                self.assertEqual(FAKE_EC2.start_calls, 1)
+                self.assertEqual(self._selected_domains(), {d})
+                # 🔴 콜드 경로는 SSM 명령을 보내지 않는다 — 받을 인스턴스가 아직 없다.
+                #    부팅 유닛이 저장된 선택을 읽는다(demo-boot.sh selection).
+                self.assertEqual(FAKE_SSM.sent, [])
+                # 메시지는 방문자가 누른 이름을 댄다(`console-wms` 가 아니라 `wms`).
+                self.assertIn(d, body["message"])
+
+    def test_full_selects_every_domain(self):
+        r = self._start("full")
+        self.assertEqual(r["statusCode"], 200, json.loads(r["body"]))
+        self.assertEqual(FAKE_EC2.start_calls, 1)
+        self.assertEqual(self._selected_domains(), set(handler.DOMAINS))
+
+    def test_a_previous_sessions_selection_is_dropped(self):
+        """세션 경계(TASK-MONO-685)를 물려받는가 — 꺼진 뒤 첫 요청은 지난 선택을 비운다."""
+        FAKE_SSM.store[handler.SELECTION_PARAM] = json.dumps({"bundles": ["store", "fan"]})
+        r = self._start("wms")
+        self.assertEqual(r["statusCode"], 200, json.loads(r["body"]))
+        self.assertEqual(self._selected_domains(), {"wms"})
+
+    def test_demo_core_is_refused_while_off(self):
+        r = self._start("demo-core")
+        self.assertEqual(r["statusCode"], 409)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
+        self.assertNotIn(handler.SELECTION_PARAM, FAKE_SSM.store)
+
+    def test_old_generation_ami_refuses_before_anything_costs_money(self):
+        """🔴 세대 거절(TASK-MONO-647)이 이 경로에도 걸리는가 — 우회하면 구세대 AMI 가
+        선택을 모른 채 `full` 로 뜬다(그 결함의 비용은 전체 스택 분량이다)."""
+        for cap in ("no", "unknown"):
+            with self.subTest(capability=cap):
+                self._reset()
+                handler.BUNDLE_CAPABLE = cap
+                r = self._start("fan")
+                self.assertEqual(r["statusCode"], 409)
+                self.assertEqual(json.loads(r["body"])["error"], "bundle-boot-not-deployed")
+                self.assertEqual(FAKE_EC2.start_calls, 0)
+                self.assertNotIn(handler.SELECTION_PARAM, FAKE_SSM.store)
+
+    def test_budget_exhausted_refuses(self):
+        FAKE_SSM.store["/t/usage"] = json.dumps(
+            {"month": handler._month(T0), "seconds": BUDGET_SEC, "tick": 0})
+        r = self._start("fan")
+        self.assertEqual(r["statusCode"], 429)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
+
+    def test_unknown_name_is_still_rejected_before_anything(self):
+        r = self._start("fan; rm -rf /")
+        self.assertEqual(r["statusCode"], 400)
+        self.assertEqual(FAKE_EC2.start_calls, 0)
+        self.assertNotIn(handler.SELECTION_PARAM, FAKE_SSM.store)
+
+    def test_status_says_whether_the_screen_may_open_the_buttons(self):
+        """론처는 `domain_cold_start` 가 참일 때만 꺼진 동안의 버튼을 연다."""
+        self.assertIs(json.loads(handler.status()["body"])["domain_cold_start"], True)
+        handler.BUNDLE_CAPABLE = "no"
+        self.assertIs(json.loads(handler.status()["body"])["domain_cold_start"], False)
+
+    def test_start_no_longer_claims_every_domain(self):
+        """🔴 `/start` 는 선택을 건드리지 않는다 — 부팅은 저장된 선택(없으면 demo-core)으로 뜬다.
+        「전체」라고 말하면 방문자는 100개가 뜰 줄 알고 기다린다."""
+        msg = json.loads(handler.start()["body"])["message"]
+        self.assertNotIn("전체", msg)
+        self.assertIn("핵심 3도메인", msg)
 
 
 if __name__ == "__main__":

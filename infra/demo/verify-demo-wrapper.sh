@@ -4316,6 +4316,18 @@ else:
                 problems.append(
                     "거절(%d행)이 %s(%d행)보다 뒤입니다 — %s에 거절합니다" % (cap, needle, ln, why))
 
+# TASK-MONO-788 — `/domain/start` 의 콜드 경로(꺼진 인스턴스)는 **bundle_start 를 거쳐야** 한다.
+# 🔴 직접 켜거나 선택을 직접 쓰면 위 거절을 건너뛴다 — 구세대 AMI 가 선택을 모른 채 full 로 뜬다.
+ds = fn("domain_start")
+if ds is None:
+    problems.append("domain_start 함수가 없습니다")
+else:
+    if calls(ds, "bundle_start") is None:
+        problems.append("domain_start 가 bundle_start 로 위임하지 않습니다 — 콜드 경로가 세대 거절을 안 지납니다")
+    for needle in ("start_instances", "_add_to_selection", "_reset_selection", "_write_selection"):
+        if calls(ds, needle) is not None:
+            problems.append("domain_start 가 %s 를 직접 부릅니다 — bundle_start 의 세대 거절을 우회합니다" % needle)
+
 # 대조군: /start(전체 스택)는 막지 않는다. 막으면 데모가 통째로 멈춘다.
 st = fn("start")
 if st is None:
@@ -4425,8 +4437,29 @@ grep -q '_bundle_capability()' "$z40_b3" \
   || z40_die "(z40) bite-3 — 거절을 선택 영속화 뒤로 옮겼는데 가드가 **안 물었습니다.**"\
     $'\n'"→ 호출이 있는지만 보고 있습니다. 거절이 뒤에 있으면 선택이 저장되고 돈이 나간 뒤에 거절합니다."
 
+# (bite-4) TASK-MONO-788 — domain_start 의 콜드 위임을 **직접 기동**으로 바꾼다. 세대 거절을 우회하는 모양.
+z40_b4="$z40_dir/handler-bite4.py"
+"$z40_py" - "$z40_handler" "$z40_b4" <<'Z40COLD'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+pat = re.compile(r"\n        return bundle_start\(None, names=list\(COLD_START_BUNDLES\[name\]\),\n[^\n]*\n")
+if not pat.search(src):
+    sys.exit("bite-4: 위임 줄을 못 찾았습니다")
+src2 = pat.sub("\n        ec2.start_instances(InstanceIds=[INSTANCE_ID])\n        return _resp({}, 200)\n", src, count=1)
+open(sys.argv[2], "w", encoding="utf-8").write(src2)
+Z40COLD
+[ -f "$z40_b4" ] || z40_die "(z40) bite-4 주입 실패 — 변형본이 안 만들어졌습니다."
+if cmp -s "$z40_handler" "$z40_b4"; then
+  z40_die "(z40) bite-4 주입 실패 — 파일이 안 바뀌었습니다."
+fi
+"$z40_py" -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$z40_b4" \
+  || z40_die "(z40) bite-4 실행 실패 — 변형이 문법을 깼습니다. 이 빨강은 가드가 문 것이 아닙니다."
+[ -n "$(z40_order "$z40_b4")" ] \
+  || z40_die "(z40) bite-4 — domain_start 가 꺼진 인스턴스를 직접 켜는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 콜드 경로가 세대 거절을 우회합니다. 구세대 AMI 에서 200 을 내고 고른 것과 다른 것이 뜹니다."
+
 rm -rf "$z40_dir"
-ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 3칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동) · 실제 핀 = $z40_real"
+ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + **domain_start 콜드 경로는 bundle_start 위임**(788) + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 4칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동 · 콜드 경로 직접 기동) · 실제 핀 = $z40_real"
 
 # =============================================================================
 # (z41) 전체 집계 배지·카드 의존성 고지가 **카드 상태에서 파생되는가** — TASK-MONO-729

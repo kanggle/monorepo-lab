@@ -171,6 +171,28 @@ BUNDLE_OWN_DOMAINS = {
 }
 
 
+# 🔴 TASK-MONO-788 — **꺼진 인스턴스에서** `/domain/start <이름>` 을 받았을 때 저장할 묶음.
+#    도메인 이름은 부팅 선택에 그대로 적을 수 없다 — 부팅은 **묶음 이름**만 읽는다
+#    (`demo-boot.sh selection` → `resolve_bundles`). 그래서 도메인 하나를 «그 도메인만 푸는 묶음»
+#    으로 바꾼다. 그 묶음은 이미 있다: 자기 도메인이 정확히 하나인 묶음(`fan`→fan,
+#    `store`→ecommerce, `console`→iam, `console-wms`→wms …).
+# 🔴 **표로 다시 적지 않고 위 두 표에서 파생한다.** 손으로 적은 세 번째 표는 묶음이 바뀌는 날
+#    혼자 낡는다 — 그리고 그 결함의 모양은 «시작을 눌렀더니 다른 것이 떴다» 라 로그에 안 남는다.
+#    한 도메인을 푸는 묶음이 둘이면(ecommerce: `store` · `console-ecommerce`) **BUNDLES 쪽**이
+#    이긴다(먼저 본다) — 화면 묶음이 애드온보다 기본이다. 어느 쪽이든 푸는 도메인은 같다.
+# 🔴 모든 도메인이 짝을 가져야 한다 — 짝이 없는 도메인은 꺼진 동안 「시작」이 400 이 된다.
+#    `test_every_domain_has_a_cold_start_bundle` 이 그 전수를 잰다.
+DOMAIN_BUNDLE = {}
+for _name, _doms in list(BUNDLES.items()) + list(BUNDLE_ADDONS.items()):
+    if len(set(_doms)) == 1 and _doms[0] not in DOMAIN_BUNDLE:
+        DOMAIN_BUNDLE[_doms[0]] = _name
+# `full` = 모든 도메인의 짝. 부팅 쪽 resolve_deps 가 FULL 순서로 다시 줄 세우므로 순서는 무관하다.
+# 🔵 `demo-core` 는 **넣지 않는다** — 그 구성원(iam·ecommerce·wms)의 정본은 projects.sh 의 CORE 이고
+#    여기 적으면 사본이 된다. 론처에 그 버튼도 없다. 꺼진 동안 오면 409 로 사유를 댄다.
+COLD_START_BUNDLES = {d: (b,) for d, b in DOMAIN_BUNDLE.items()}
+COLD_START_BUNDLES["full"] = tuple(sorted(set(DOMAIN_BUNDLE.values())))
+
+
 def _parse_names(event, key="bundles"):
     """요청 본문에서 묶음 이름 목록을 꺼낸다. 모르는 이름이 하나라도 있으면 (None, 그 이름들).
 
@@ -599,7 +621,7 @@ def bundles():
     })
 
 
-def bundle_start(event):
+def bundle_start(event, names=None, label=None):
     """POST /bundle/start {"bundles":["fan"]} - **최초 부팅부터** 그 묶음만 올린다.
 
     🔴🔴 이것이 이 티켓의 본체다. 기존 `/domain/start` 는 인스턴스가 running 이 아니면
@@ -609,12 +631,20 @@ def bundle_start(event):
        여기서는 순서를 뒤집는다: **선택을 먼저 영속화하고, 그 다음에 켠다.** 부팅은
        그 선택을 읽는다(`demo-boot.sh selection`). 그러면 stopped 상태에서도 "팬만" 이
        표현 가능하다.
+
+    🔵 TASK-MONO-788 — `names`/`label` 은 `domain_start()` 의 콜드 경로가 쓴다. 그 경로는 도메인
+       이름을 이미 화이트리스트로 검증하고 묶음 이름으로 바꿔서 여기로 들어온다 — 세대 거절 ·
+       예산 · 세션 경계 · 선택 영속화를 **이 함수 하나에서** 물려받기 위해서다. 같은 순서를
+       두 번째 함수에 다시 적으면 가드 (z40) 이 지키는 «거절이 돈보다 앞» 이 한쪽에서만 지켜진다.
+       `label` 은 메시지에 묶음 이름 대신 쓸 이름이다(방문자는 `console-wms` 가 아니라 `wms` 를 눌렀다).
     """
-    names, bad = _parse_names(event)
-    if bad:
-        return _resp({"error": "invalid-bundle", "invalid": bad, "valid": sorted(BUNDLE_NAMES)}, 400)
+    if names is None:
+        names, bad = _parse_names(event)
+        if bad:
+            return _resp({"error": "invalid-bundle", "invalid": bad, "valid": sorted(BUNDLE_NAMES)}, 400)
     if not names:
         return _resp({"error": "no-bundles", "valid": sorted(BUNDLE_NAMES)}, 400)
+    shown = label or ", ".join(sorted(names))
 
     # -- 0. 배포된 AMI 가 이 동작을 아는가 (TASK-MONO-647).
     #
@@ -674,7 +704,7 @@ def bundle_start(event):
         _put(STARTED_PARAM, _now())
         _put(BEAT_PARAM, _now())
         return _resp({"state": "starting", "selection": sorted(selection), "started": sorted(names),
-                      "message": "기동 시작 - %s 웜업까지 약 4~10분" % ", ".join(sorted(names))})
+                      "message": "기동 시작 - %s 웜업까지 약 4~10분" % shown})
 
     # -- 2. 이미 running - 부족한 묶음만 **추가**한다.
     _put(BEAT_PARAM, _now())
@@ -685,7 +715,7 @@ def bundle_start(event):
     cmd = _send(["bash %s/infra/demo/demo-boot.sh selection" % REPO])
     return _resp({"state": state, "selection": sorted(selection), "started": sorted(names),
                   "command_id": cmd,
-                  "message": "%s 추가 기동 요청됨 - 웜업까지 잠시 걸립니다" % ", ".join(sorted(names))})
+                  "message": "%s 추가 기동 요청됨 - 웜업까지 잠시 걸립니다" % shown})
 
 
 def bundle_stop(event):
@@ -781,7 +811,13 @@ def start():
     # 아직 시작도 안 했다. 방문자를 정확히 포기할 시점에 포기시키는 문구였다.
     # 🔵 TASK-MONO-757 — 프로젝트 수를 문구에서 뺐다(8 → 7 이 됐고, 숫자는 다음에 또 낡는다).
     #    "약 10분" 은 8개 시절 실측이라 7개에는 보수 쪽이다.
-    return _resp({"state": "starting", "message": "기동 시작 — 전체 데모 도메인 웜업까지 약 10분"})
+    # 🔴🔴 TASK-MONO-788 — 여기는 **「전체 데모 도메인」 이라고 말하고 있었는데 사실이 아니었다.**
+    #    이 함수는 인스턴스를 켜기만 하고 선택은 건드리지 않는다. 부팅 유닛은 `DEMO_PROFILE=selection`
+    #    으로 **저장된 선택**을 읽고, 비어 있으면 `demo-core`(iam·ecommerce·wms)로 떨어진다
+    #    (demo-stack.service · demo-selection.sh § 폴백 결정). 그래서 문구를 동작에 맞췄다.
+    #    전부 올리는 길은 `/domain/start full` 이고, 이 티켓부터 꺼진 상태에서도 된다.
+    return _resp({"state": "starting",
+                  "message": "기동 시작 — 고른 화면을 올립니다(고른 것이 없으면 핵심 3도메인 iam · ecommerce · wms). 웜업까지 약 4~10분"})
 
 
 def stop():
@@ -861,6 +897,11 @@ def status():
             # 🔴 TASK-MONO-668 — 인스턴스 running ≠ 선택한 화면이 대답한다. § _selection_ready.
             #    **추가 필드**다: 옛 해석기는 모르는 키를 무시하므로 배포 순서가 자유롭다.
             "selection_ready": _selection_ready(state),
+            # 🔴 TASK-MONO-788 — 꺼진 인스턴스에서 `/domain/start` 가 되는가. 론처는 이 값이 **참일
+            #    때만** 꺼진 동안의 도메인 버튼을 연다. 런처는 머지로 배포되고 이 람다는
+            #    `terraform apply` 로 배포되므로 둘 사이에 창이 있다 — 키가 없는(옛) 람다 앞에서 버튼을
+            #    열면 누른 방문자가 409 를 본다. 값은 콜드 경로가 실제로 지나는 세대 거절과 같은 판정이다.
+            "domain_cold_start": _bundle_capability()[0],
         }
     )
 
@@ -961,9 +1002,28 @@ def domain_start(event):
     if name not in START_NAMES:
         return _resp({"error": "invalid-domain", "name": name, "valid": sorted(START_NAMES)}, 400)
     state, _, _ = _state()
+    # 🔴🔴 TASK-MONO-788 — 꺼진 인스턴스에서도 된다. 예전에는 여기서 409 였다: 이 경로는 SSM
+    #    RunShellScript 로 명령을 보내므로 running 이 아니면 받을 대상이 없다. 그러나 «그 도메인만
+    #    올리며 켜기» 는 이미 `bundle_start` 가 하는 일이다 — 선택을 먼저 저장하고 켜면 부팅이 그
+    #    선택을 읽는다. 그래서 도메인을 그 짝 묶음으로 바꿔 **그대로 위임한다**(§ COLD_START_BUNDLES).
+    #    🔴 여기서 `start_instances` 를 직접 부르지 마라 — 세대 거절(z40)을 건너뛰고, 구세대 AMI 에서
+    #    200 을 낸 뒤 8도메인을 띄우는 TASK-MONO-647 의 결함이 이 경로로 돌아온다. 가드 (z40)이 문다.
+    # 🔵 `stopped` 만 위임한다. `pending`(켜지는 중)에 선택을 더하면 부팅이 이미 선택을 읽은
+    #    뒤일 수 있고, `stopping` 은 종료가 끝나야 켤 수 있다 — 둘 다 아래 409 가 사유를 댄다.
+    if state == "stopped" and name in COLD_START_BUNDLES:
+        return bundle_start(None, names=list(COLD_START_BUNDLES[name]),
+                            label="전체 도메인" if name == "full" else name)
     if state != "running":
-        return _resp({"state": state,
-                      "message": "먼저 데모를 시작하세요 (인스턴스가 켜져 있어야 도메인을 올릴 수 있습니다)"}, 409)
+        if state in ("pending", "starting"):
+            msg = "인스턴스가 켜지는 중입니다 — 켜진 뒤 다시 누르세요"
+        elif state in ("stopping", "shutting-down"):
+            msg = "이전 종료 진행 중 — 잠시 후 다시 시도하세요"
+        elif state == "stopped":
+            # 여기 오는 이름은 COLD_START_BUNDLES 밖이다(= demo-core).
+            msg = "'%s' 는 켜진 인스턴스에서만 올릴 수 있습니다 — 도메인을 하나씩 고르거나 「모든 도메인 시작」을 쓰세요" % name
+        else:
+            msg = "먼저 데모를 시작하세요 (인스턴스가 켜져 있어야 도메인을 올릴 수 있습니다)"
+        return _resp({"state": state, "message": msg}, 409)
     u = _usage()
     if _budget_exhausted(u):
         return _resp({"error": "monthly-budget-exhausted",

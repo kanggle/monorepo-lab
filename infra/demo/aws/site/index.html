@@ -495,23 +495,28 @@
     TASK-MONO-787 — 두 구획으로 나눴다: ① 인스턴스(EC2) 전체 ② 도메인별.
     🔴 도메인 목록은 **인스턴스가 꺼져 있어도 보인다.** 예전에는 running 이 아니면 목록을 통째로
        숨겨서, 어떤 도메인이 있고 무엇을 켤 수 있는지조차 보이지 않았다. 꺼진 동안은 각 타일을
-       «꺼짐» 으로 그리고 버튼을 **잠근다** — 람다의 `/domain/start`·`/domain/stop` 은 인스턴스가
-       running 이 아니면 409 를 낸다(handler.py domain_start / domain_stop). 열어 두면 방문자는
-       누를 수 있는 버튼이 실패하는 것을 본다.
+       «꺼짐» 으로 그린다.
+    🔵 TASK-MONO-788 — 꺼진(stopped) 동안의 「시작」 은 **람다가 `/status` 에 `domain_cold_start:true`
+       를 실을 때만** 열린다: 그 람다는 인스턴스를 켜고 그 도메인만(+ 로그인용 iam) 올린다. 키가 없는
+       옛 람다(terraform apply 전)는 여전히 409 를 내므로 그때는 787 처럼 잠근다. 「종료」 는 꺼진
+       동안 할 일이 없어 언제나 잠근다.
+    🔴 「▶ 데모 서버 켜기」(id=start) 는 예전 이름이 「▶ 전체 스택 시작」 이었지만 **전부를 올린 적이
+       없다** — 인스턴스만 켜고, 부팅은 저장된 선택(없으면 iam·ecommerce·wms)을 읽는다(788 이 이름을
+       동작에 맞췄다. 동작은 그대로다). 전부 올리는 길은 「모든 도메인 시작」 이다.
   -->
   <details class="adv">
-    <summary>고급 — 도메인 단위 제어 · 전체 스택 기동</summary>
+    <summary>고급 — 서버 켜고 끄기 · 도메인 단위 제어</summary>
     <div class="card">
       <section class="advsec">
         <h3>인스턴스 전체</h3>
         <div id="msg" class="amsg">상태 확인 중…</div>
         <div id="bar"><i></i></div>
         <div class="abtns">
-          <button id="start">▶ 전체 스택 시작</button>
+          <button id="start">▶ 데모 서버 켜기</button>
           <button id="stop" disabled>■ 데모 종료 (EC2 정지)</button>
         </div>
         <ul class="ahint">
-          <li><strong>전체 스택 시작</strong> — 데모 도메인을 전부 올립니다(약 10분). 평소에는 필요한 것만 올리는 카드의 「데모 서버 켜기」를 쓰세요.</li>
+          <li><strong>데모 서버 켜기</strong> — 서버를 켜고 위 카드에서 고른 화면을 올립니다. 고른 것이 없으면 핵심 세 도메인(iam · ecommerce · wms)만 올립니다(약 4~10분). <strong>전부</strong> 올리려면 아래 「모든 도메인 시작」을 쓰세요.</li>
           <li><strong>데모 종료</strong> — <strong>EC2 인스턴스 전체</strong>를 정지합니다. 묶음 하나만 내리는 것과 다릅니다.</li>
         </ul>
       </section>
@@ -1184,6 +1189,8 @@
         const usage = (body.budget_minutes != null)
           ? { used: body.used_minutes, budget: body.budget_minutes } : null;
         render(body.state, body.ip, usage);
+        // TASK-MONO-788 — 키가 없으면(옛 람다) false. «모르면 잠근다» 쪽이다.
+        domainColdStart = body.domain_cold_start === true;
         if (running(body.state)) { setDomainsLive(true); startHeartbeat(); pollDomains(); }
         else { stopHeartbeat(); renderDomainsOff(body.state); }
         pollBundles();
@@ -1241,8 +1248,12 @@
     //    버튼은 잠근다: 람다가 그 상태에서 `/domain/*` 에 409 를 내므로(handler.py), 열어 두면 누른
     //    방문자가 실패를 본다. 개수(0/0)는 붙이지 않는다 — 꺼진 인스턴스에서 잰 값이 아니다.
     //    `state === null` = 상태를 모른다(제어 API 없음) — 그래도 목록은 보이고 잠긴다.
+    // 🔵 TASK-MONO-788 — 람다가 콜드 기동을 말하면(`/status` 의 domain_cold_start) 꺼진 동안에도 「시작」을
+    //    연다: 누르면 인스턴스를 켜고 그 도메인만(+ 로그인용 iam) 올린다. 말하지 않으면 위 잠금 그대로다.
+    let domainColdStart = false;
+    const DOFF_NOTE_COLD = "인스턴스가 꺼져 있습니다. 도메인의 「시작」을 누르면 서버를 켜고 그 도메인만(로그인용 iam 포함) 올립니다 — 약 4~10분. 「모든 도메인 시작」은 전부 올립니다.";
     const DOFF_NOTE = {
-      stopped: "인스턴스가 꺼져 있습니다. 도메인별 시작 · 종료는 인스턴스가 켜진 뒤에 쓸 수 있습니다 — 위 「▶ 전체 스택 시작」 또는 카드의 「데모 서버 켜기」로 켜세요.",
+      stopped: "인스턴스가 꺼져 있습니다. 도메인별 시작 · 종료는 인스턴스가 켜진 뒤에 쓸 수 있습니다 — 위 「▶ 데모 서버 켜기」 또는 카드의 「데모 서버 켜기」로 켜세요.",
       pending: "인스턴스가 켜지는 중입니다. 켜지면 도메인별 상태가 여기에 표시됩니다.",
       starting: "인스턴스가 켜지는 중입니다. 켜지면 도메인별 상태가 여기에 표시됩니다.",
       stopping: "인스턴스가 종료 중입니다.",
@@ -1254,8 +1265,14 @@
     }
     function renderDomainsOff(state) {
       setDomainsLive(false);
-      $("doff").textContent = DOFF_NOTE[state] || "인스턴스 상태를 확인할 수 없어 도메인별 제어를 잠갔습니다.";
-      $("dmsg").textContent = "";
+      // 🔴 `stopped` 일 때만 연다. pending · stopping 은 람다가 여전히 409 를 낸다(handler.py domain_start).
+      const cold = state === "stopped" && domainColdStart;
+      $("doff").textContent = cold ? DOFF_NOTE_COLD
+        : (DOFF_NOTE[state] || "인스턴스 상태를 확인할 수 없어 도메인별 제어를 잠갔습니다.");
+      $("dall-start").disabled = !cold;
+      // 🔵 켜지는 중에는 응답 문구(«기동 시작 - wms …»)를 남긴다 — 무엇을 요청했는지가 그 줄에만 있다.
+      //    콜드 상태도 남긴다(클릭 직후 폴링이 stopped 를 한 번 더 볼 수 있다). 그 밖에는 지운다(787).
+      if (!cold && state !== "pending" && state !== "starting") $("dmsg").textContent = "";
       for (const row of document.querySelectorAll(".drow")) {
         const badge = row.querySelector("[data-badge]");
         badge.className = "badge b-down";
@@ -1264,7 +1281,7 @@
         btn.textContent = "시작";
         btn.className = "dbtn down";
         btn.dataset.mode = "start";
-        btn.disabled = true;
+        btn.disabled = !cold;
       }
     }
 
@@ -1313,10 +1330,19 @@
 
     async function domainAction(name, mode) {
       const path = (mode === "stop") ? "/domain/stop" : "/domain/start";
+      // TASK-MONO-788 — 꺼진 동안의 콜드 기동은 한 번이면 된다. 응답 전에 다른 행을 또 누르면 람다는
+      //    이미 켜지는 중이라 409 를 낸다 — 누를 수 있는 버튼이 실패하지 않게 바로 잠근다.
+      if (!$("doff").hidden) {
+        for (const b of document.querySelectorAll(".drow [data-act]")) b.disabled = true;
+        $("dall-start").disabled = true;
+      }
       $("dmsg").textContent = `${name} 요청 중…`;
       const { ok, status, body } = await api(path, "POST", { name });
       $("dmsg").textContent = body.message || (ok ? `${name} ${mode} 요청됨` : `실패 (${status})`);
-      setTimeout(pollDomains, 1500);   // 명령이 반영될 시간을 준 뒤 갱신
+      // 🔴 TASK-MONO-788 — pollDomains 가 아니라 poll 이다. 콜드 기동이면 인스턴스가 아직 running 이
+      //    아니고, 그때 `/domains` 의 빈 스냅샷으로 renderDomains 를 돌리면 꺼진 행의 버튼이 «확인 중» 으로
+      //    풀린다. poll 은 상태를 먼저 보고 running 일 때만 pollDomains 로 간다.
+      setTimeout(poll, 1500);   // 명령이 반영될 시간을 준 뒤 갱신
     }
 
     $("dlist").addEventListener("click", (e) => {
