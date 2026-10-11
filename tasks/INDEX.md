@@ -218,12 +218,12 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-787-launcher-advanced-domains-visible-when-off.md` — **론처 고급 영역 — 인스턴스가 꺼져 있어도 도메인 목록 표시(잠긴 채) + 두 구획 정리** (REVIEW, 2026-10-10 UTC · 소유자 요청). 원인 = `render()` 가 running 이 아니면 목록을 숨김. 꺼진 동안 «⚪ 꺼짐» · 버튼 잠금(람다가 409) · 상태별 안내. 「인스턴스 전체」 · 「도메인별 제어」 · 도메인 타일 그리드. 람다 · 가드 무변경, Z14 구간은 한 줄 제거뿐. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 - `TASK-MONO-781-demo-cs-support-lock-operator.md` — **데모 CS 2선 운영자 `cs@demo.com` — 홈 `ecommerce` · `SUPPORT_LOCK`@`ecommerce`(사이트 잠금)** (REVIEW, 2026-10-09 UTC · `TASK-PC-FE-326` 라이브 확인용). 🔴 AC-0: 콘솔은 고른 테넌트를 항상 assume 하고 토큰 역할은 그 테넌트 구독에서 파생 → 이 계정은 `ecommerce` 의 이커머스·WMS 운영 역할(쓰기 포함)도 받는다, 좁히는 장치 없음 → **소유자 결정 A = 시드 + 공개**(B=ADR-035 변경 · C=가짜 사이트 기각). 핀 = auth-service `DemoCsOperatorDerivedRolesTest`(account-service 전 마이그레이션에서 구독 재계산 → 운영 파생으로 역할 9개 정확 비교) · `DemoCsOperatorSeedTest` · admin IT 5칸. bite 2종. ⏳ **AC-4 = CI IT(Docker 없음) · AC-5 = 재굽기 뒤 라이브** — 공개(론처 · 가이드)는 `TASK-MONO-782`.
 - `TASK-MONO-772-operator-invite-verified-acceptance.md` — **`ADR-MONO-080` 단계 3 (D6 · R4) — 운영자 규칙 «초대 → 인증된 본인 수락» · 풀 계정 콘솔 진입 · 셀프 온보딩 운영자 풀 이동** (REVIEW, 2026-10-10 UTC). 슬라이스 전부 머지(#4280 · #4281 · #4282 · #4283 · #4284 · #4285 · #4286), AC-0~6 ✅(CI 통합 시험 근거). ⏳ `done/` 전 라이브 ⚪: 셀프 온보딩 운영자 수 질의 · 초대 메일 1통 · 초대 → 수락 종단. 🔴 후속 `TASK-MONO-773` 은 **착수 전 다회사 운영자 ADR**(OD-1). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done
+- ✅ `TASK-MONO-787-launcher-advanced-domains-visible-when-off.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4298**(`d6caf88d6`, 머지 시점 실패 0 · Demo wrapper smoke pass · 로컬 `verify-demo-wrapper.sh` 정적 PASS). 론처 고급 영역 — 꺼진 인스턴스에서도 도메인 목록을 «⚪ 꺼짐» · 잠긴 버튼으로 표시(람다 409), 「인스턴스 전체」 · 「도메인별 제어」 두 구획 + 타일 그리드.
 - ✅ `TASK-MONO-786-launcher-lede-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4295**(`69af06d0c`, 머지 시점 실패 0). 론처 상단 안내를 «둘러보기 → 로그인 후 기능 → 끄기» 세 줄(라벨 + 본문 + 보충)로. 사실 · 숫자 무변경.
 - ✅ `TASK-MONO-785-launcher-login-accounts-readable.md` — **DONE 2026-10-10 UTC (4-dim verified)** — impl PR **#4293**(`f499e7e43`, 머지 시점 실패 0 · Demo wrapper smoke pass). 론처 「로그인 계정」 을 계정별 카드 3장(기본 데모 · 플랫폼 운영자 · 권한 없음 시연)으로 정리 — 용도 · 자격 · 로그인 후 단계 · 보충. 계정 값 · (z11) 무변경. 후속 `TASK-MONO-782` 는 네 번째 카드로.
 - ✅ `TASK-MONO-783-draft-adr-082-multi-company-operator-model.md` — **DONE 2026-10-10 UTC (4-dim verified)** — PROPOSED **#4288**(`3e0fd511b`) · ACCEPT **#4289**(`e4bea92d2`) (머지 시점 실패 0, 둘 다). `ADR-MONO-082` ACCEPTED — **b**(운영자 행 하나 + 회사별 소속 · 역할, 라이더 R1~R4 기본값). 단계 티켓 `TASK-MONO-784` · `TASK-MONO-773` 선행에 784.

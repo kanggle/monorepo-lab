@@ -4,7 +4,7 @@ TASK-MONO-787
 
 # Status
 
-review — 구현 완료(2026-10-10 UTC). 론처 마크업 · CSS · 표시 전용 JS 만 바뀌고 람다 · 가드는 그대로다.
+done (2026-10-10 UTC — 4차원 검증: #4298 `d6caf88d6` MERGED · main tip 일치 · 머지 전 실패 0 · AC-1~5 닫힘) ‖ 직전: review — 구현 완료(2026-10-10 UTC). 론처 마크업 · CSS · 표시 전용 JS 만 바뀌고 람다 · 가드는 그대로다.
 
 # Title
 
