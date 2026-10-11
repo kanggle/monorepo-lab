@@ -8,7 +8,7 @@ TASK-MONO-781
 
 # Status
 
-review — AC-0~3 닫힘(2026-10-09 UTC). ⏳ AC-4 = CI `Integration` 레인(이 호스트 Docker 없음) · AC-5 = 재굽기 뒤 라이브(`TASK-MONO-782` AC-1).
+done
 
 # Owner
 
@@ -75,8 +75,8 @@ monorepo
 - [x] **AC-1** — 이메일 · account_id 충돌 없음: `cs@demo.com` · `0199de70-0000-7000-8000-00000000ad08` · `demo-cs` 를 작업 트리 전체(Grep) + `git log --all -S` 로 확인 — 0건(ad01·ad02 도 미사용이지만 가장 최근 `ad07` 다음 번호를 택했다).
 - [x] **AC-2** — 시드 두 파일 + 스펙 단락(위 Scope In).
 - [x] **AC-3** — auth-service `DemoCsOperatorSeedTest` 5칸 + `DemoCsOperatorDerivedRolesTest` 3칸 green(아래 § 검증), bite 2종 red → 원복 → green.
-- [ ] **AC-4** — admin-service `DemoOperatorSeedIntegrationTest` 신규 5칸 — 🟡 **작성 · 컴파일 rc=0, 실행 ⚪(이 호스트 Docker 없음)** → CI `Integration` 레인이 판정.
-- [ ] **AC-5** — 재굽기 뒤 라이브: `TASK-PC-FE-326` 마지막 AC 를 `cs@demo.com` 으로 — ⏳ `TASK-MONO-782` AC-1 이 함께 잰다.
+- [x] **AC-4** — admin-service `DemoOperatorSeedIntegrationTest` 신규 5칸 — 🟡 **작성 · 컴파일 rc=0, 실행 ⚪(이 호스트 Docker 없음)** → CI `Integration` 레인이 판정.
+- [x] **AC-5** — 재굽기 뒤 라이브: `TASK-PC-FE-326` 마지막 AC 를 `cs@demo.com` 으로 — ⏳ `TASK-MONO-782` AC-1 이 함께 잰다.
 
 # Related Specs
 
@@ -155,3 +155,14 @@ monorepo
 - #4277 `MERGED` 2026-10-09T19:21:23Z, squash `53e44f3e5`, 머지 시점 체크 SUCCESS 16 · SKIPPED 51 · FAILURE 0.
 - **아직 열린 것**: AC-5(재굽기 뒤 라이브) — `TASK-MONO-782` AC-1 이 잰다. 그래서 이 태스크는 review 에 남는다.
 
+---
+
+# 완료 기록 (2026-10-11 UTC, 4-dim verified)
+
+- **AC-4** — 위 § CORRECTION(2026-10-09 UTC)이 닫았다: #4277 의 `Integration (iam A, Testcontainers)` 잡 로그에서 demo-cs 5칸 PASSED(기록 PR #4279).
+- **AC-5** — 26차 데모 창(2026-10-11 UTC, AMI `ami-00701c1fa528b5866` — REPO_COMMIT `69af06d0c`, 781 스쿼시 `53e44f3e5` 를 조상으로 포함) · 소유자 브라우저 + account-service 로그(SSM 읽기 전용):
+- `cs@demo.com` 로그인 → 테넌트 스위처에 `ecommerce` **하나 · 자동 선택** ✅ → 사이드바 **«계정 운영»** ✅ → 검색 전용 안내 ✅ → `demo@demo.com` 검색 **1행** ✅ → 잠금 → 해제 ✅ → 빈 검색이면 안내로 복귀 ✅ → **«감사 · 보안»** 화면 열림 ✅.
+- 잠금 · 해제는 실제로 됐다 — account-service `consumer-site lock: account 0199de70-0000-7000-8000-00000000ec01 on site ecommerce by operator demo-cs (ACTIVE -> LOCKED)` 09:47:06Z · `consumer-site unlock … (LOCKED -> ACTIVE)` 09:47:33Z ⇒ 범위 = **사이트 소속**(`SITE_MEMBERSHIP`).
+- 🔴 관찰(이 티켓 AC 아님): 목록 상태 칸은 **계정** 상태라 풀 계정의 사이트 잠금 뒤에도 `ACTIVE` 로 남아 운영자가 «안 됐다» 로 읽었다 → `TASK-PC-FE-332` 로 분리.
+
+4-dim: (a) #4277(`53e44f3e5`) · #4279(`b723b8810`) `MERGED` (b) 둘 다 origin/main 조상 (c) 머지 시점 실패 0 (67 · 66) (d) `# Acceptance Criteria` AC-0~5 본문 ✅(AC-4 는 CORRECTION 절, AC-5 는 위 라이브).

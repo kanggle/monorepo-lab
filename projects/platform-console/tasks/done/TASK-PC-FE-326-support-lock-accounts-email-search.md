@@ -8,7 +8,7 @@ CS 2선(SUPPORT_LOCK)이 「계정 운영」(`/accounts`)을 전혀 쓸 수 없�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -89,7 +89,7 @@ platform-console
   - `AccountsScreen.test.tsx`: searchOnly 초기 렌더 = 안내 문구(fetch 0회) · 이메일 제출 → email 쿼리만 fetch + 결과 렌더 · 그 행에서 잠금 액션 동작 · 빈 검색 재제출 → 안내 문구 복귀(fetch 0회).
   - `IamGuideScreen.test.tsx`: `/accounts` × SUPPORT_LOCK 핀을 `none`→`partial`로 갱신.
 - [x] **AC-6** — bite: `accountsAccessTier()`의 검색-전용 분기(마지막 `return hasAnyPermission(...)`)를 임시로 `return 'none'`으로 바꾸고 타게팃 3개 파일 실행 → `accounts-access-tier.test.ts`의 정확히 3개 테스트만 빨강(SUPPORT_LOCK/SECURITY_ANALYST/OR 확인 테스트), `console-nav-exposure.test.ts`·`accounts-page.test.tsx`(둘 다 mock 기반이라 실제 함수를 안 거침)는 그대로 초록. 분기를 되돌리자 29/29 복귀.
-- [ ] **AC-7** — ⚪ 라이브 데모 확인(SUPPORT_LOCK 계정으로 로그인 → 사이드바 노출 → 이메일 검색 → 잠금 성공) — **측정 안 함**. 이 구현 세션은 실제 데모 환경(IAM+콘솔 기동)을 띄우지 않았다. 다음 데모 창에서 확인할 것 — 데모 시드가 `SUPPORT_LOCK` 전용 로그인 계정을 보유하는지부터 먼저 확인 필요(`infra/demo/seed/` 또는 `DEMO_TEST_ACCOUNT`는 `SUPER_ADMIN`만 — 이 티켓 범위 밖이면 수동 역할 부여로 확인).
+- [x] **AC-7** — ⚪ 라이브 데모 확인(SUPPORT_LOCK 계정으로 로그인 → 사이드바 노출 → 이메일 검색 → 잠금 성공) — **측정 안 함**. 이 구현 세션은 실제 데모 환경(IAM+콘솔 기동)을 띄우지 않았다. 다음 데모 창에서 확인할 것 — 데모 시드가 `SUPPORT_LOCK` 전용 로그인 계정을 보유하는지부터 먼저 확인 필요(`infra/demo/seed/` 또는 `DEMO_TEST_ACCOUNT`는 `SUPER_ADMIN`만 — 이 티켓 범위 밖이면 수동 역할 부여로 확인).
 
 # Related Specs
 
@@ -114,3 +114,15 @@ platform-console
 1. `/accounts` 게이트를 `admin-per-card`로 바꾸되 `accountsAccessTier()`가 별도의 하드코딩된 권한 배열을 쓰면, 둘이 갈라지는 순간(예: 다섯 번째 권한 키 추가) 사이드바는 보이는데 화면은 안 열리는 상태가 생긴다 — 이 티켓은 같은 배열을 공유해서 막는다.
 2. `page.tsx`가 `search-only`일 때도 여전히 `getAccountsListState`를 호출하면(순서를 안 바꾸거나 분기를 빠뜨리면) 403 감사 행이 매번 쌓이고 forbidden 안내가 또 보인다 — AC-3/AC-6 bite 가 이걸 지킨다.
 3. `useAccountsSearch`의 `enabled` 옵션 기본값을 잘못 두면(`false` 기본) 기존 전체 목록 화면(SUPER_ADMIN 등)이 깨진다 — 기본값을 `true`로 두고 전체 vitest 로 확인했다.
+
+---
+
+# 완료 기록 (2026-10-11 UTC, 4-dim verified)
+
+- **AC-7** — 26차 데모 창(2026-10-11 UTC, AMI `ami-00701c1fa528b5866` — REPO_COMMIT `69af06d0c`, 781 스쿼시 `53e44f3e5` 를 조상으로 포함) · 소유자 브라우저 + account-service 로그(SSM 읽기 전용):
+- `cs@demo.com` 로그인 → 테넌트 스위처에 `ecommerce` **하나 · 자동 선택** ✅ → 사이드바 **«계정 운영»** ✅ → 검색 전용 안내 ✅ → `demo@demo.com` 검색 **1행** ✅ → 잠금 → 해제 ✅ → 빈 검색이면 안내로 복귀 ✅ → **«감사 · 보안»** 화면 열림 ✅.
+- 잠금 · 해제는 실제로 됐다 — account-service `consumer-site lock: account 0199de70-0000-7000-8000-00000000ec01 on site ecommerce by operator demo-cs (ACTIVE -> LOCKED)` 09:47:06Z · `consumer-site unlock … (LOCKED -> ACTIVE)` 09:47:33Z ⇒ 범위 = **사이트 소속**(`SITE_MEMBERSHIP`).
+- 🔴 관찰(이 티켓 AC 아님): 목록 상태 칸은 **계정** 상태라 풀 계정의 사이트 잠금 뒤에도 `ACTIVE` 로 남아 운영자가 «안 됐다» 로 읽었다 → `TASK-PC-FE-332` 로 분리.
+- 위 AC-7 문안의 «SUPPORT_LOCK 전용 로그인 계정을 보유하는지부터» 는 `TASK-MONO-781` 이 `cs@demo.com` 시드로 답했다.
+
+4-dim: (a) #4265(`bd5353f54`) `MERGED` (b) origin/main 조상 (c) 머지 시점 실패 0/66 (d) `# Acceptance Criteria` AC-0~7 본문 ✅.
