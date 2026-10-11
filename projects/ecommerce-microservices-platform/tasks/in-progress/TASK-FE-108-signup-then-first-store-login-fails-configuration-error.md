@@ -4,7 +4,7 @@ TASK-FE-108
 
 # Status
 
-ready
+in-progress
 
 # Title
 
@@ -65,7 +65,7 @@ ecommerce-microservices-platform
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 재측정: 로컬/e2e 로 "가입 → 즉시 첫 로그인" 을 재현하고 스토어 서버 로그의 실제 NextAuth 에러 타입을 읽는다. 가정하지 않고 file:line 으로 쿠키/리다이렉트 경로 표를 남긴다.
+- [x] **AC-0** — 착수 시 재측정: 로컬/e2e 로 "가입 → 즉시 첫 로그인" 을 재현하고 스토어 서버 로그의 실제 NextAuth 에러 타입을 읽는다. 가정하지 않고 file:line 으로 쿠키/리다이렉트 경로 표를 남긴다.
 - [ ] **AC-1** — 🔴 대조군: "가입 직후 첫 로그인"은 실패(현재) → 구현 뒤 성공. "이미 가입된 계정의 일반 로그인"(대조군)은 이전·이후 모두 변화 없이 성공.
 - [ ] **AC-2** — 재시도 경로(현재 성공) 가 구현 뒤에도 그대로 성공 — 회귀 없음.
 - [ ] **AC-3** — 라이브 데모 창에서 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공. ⚪ 다음 데모 창.
@@ -125,4 +125,30 @@ ecommerce-microservices-platform
 3. 같은 조건에서 `/signup` 에서 **«IAM 으로 이동» 버튼을 바로 한 번 더** 누른다 → 가입 → 로그인. 성공/실패 기록(후보 1 판별).
 4. 25차 창 순서 재연: 시크릿 창에서 콘솔 로그인(콘솔 자격 계정) → 그 상태로 스토어 가입 → 로그인(후보 2 판별).
 5. 🔴 실패가 나면 **바로** Vercel 대시보드 → 스토어 프로젝트 → Runtime Logs 에서 그 시각의 `[auth][error]` 줄(오류 타입 + cause)을 복사한다. 보존 기간이 짧아 나중엔 없다. 동시에 auth-service 로그와 `oauth2_authorization`(client · 코드 발급 · `access_token_issued_at`) 행.
+
+---
+
+# AC-0 닫힘 — 26차 데모 창 재현 (2026-10-11 UTC)
+
+AMI `ami-00701c1fa528b5866`. 위 «다음 데모 창 절차» 그대로 · 소유자 브라우저 · Vercel Runtime Logs(소유자 복사) · auth_db/auth-service(SSM 읽기 전용).
+
+| 단계 | 결과 |
+|---|---|
+| A 대조군 — 깨끗한 시크릿 창 · `/signup` 자동 이동만 · `shopper2@demo.com` | ✅ 성공 — 코드 09:52:38Z · 토큰 09:52:39Z |
+| C — 시크릿 창에서 콘솔(`demo@`) 로그인 뒤 같은 창 `/signup` · `shopper4@demo.com` · 🔴 **소유자가 화면이 뜬 직후 «IAM 으로 이동» 을 누름** | 🔴 **재현** — 코드 09:57:49Z · 토큰 NULL · 스토어 `/login?error=Configuration` |
+| B — 깨끗한 창 · 버튼 바로 누름 · `shopper5@demo.com` | ✅ 성공 — 경합에서 이긴 경우(아래) |
+
+**원인 (Vercel 로그 원문, 09:57:49.180Z)**: `[auth][error] CallbackRouteError` · `[auth][cause]: unexpected "state" response parameter value` · `expected`(= 스토어 state 쿠키) `…r70ldHjHyplhTtP…` ≠ IAM 이 돌려준 state = auth_db 저장 authorize 요청의 state `…Ku0h4VSq6Rdh1jmz…` ⇒ **H-A(스토어 콜백에서 끊김, `InvalidCheck` 계열 state 검사)** 확정. 토큰 요청은 나가지 않았다(auth-service 로그 0 과 일치).
+
+**두 번째 state 의 출처 (Vercel 요청 로그)**: `GET /signup` 18:55:13.96 KST → `POST /api/auth/signin/iam` **15.08** → 다시 providers · csrf → `POST /api/auth/signin/iam` **15.81** → IAM authorize 도착은 **한 번**(재인증 로그 09:55:16Z). ⇒ `/signup` 의 자동 `signup()` 과 리다이렉트 중에도 살아 있는 «IAM 으로 이동» 버튼(`app/(auth)/signup/page.tsx:62` 당시)이 `signIn` 을 **두 번** 시작했다. 두 번째가 state/PKCE 쿠키를 덮어쓰고, 브라우저는 첫 번째 이동으로 IAM 에 가 있었으므로 IAM 은 첫 요청을 저장 · 재개했다. 🔵 **경합**이라 같은 동작이 B 처럼 성공하기도 한다 — 25차 «가입 직후 첫 로그인만 실패 · 재시도는 성공» 과 맞다(재시도는 `/login` 의 단일 클릭).
+
+- 기각: 15분 쿠키 만료 · 사이트 소속 거절 · 이메일 미인증(위 착수 시도 기록) · 콘솔 세션 자체(C 의 원인은 버튼이지 세션이 아니다 — 세션은 재인증 로그를 남겼을 뿐 같은 모양의 authorize 를 재개했다: `prompt=create` · `continue` · S256, A 와 동일).
+- 🔴 같은 틈이 `/login` 에도 있다 — `LoginForm.handleClick` 이 `finally` 로 버튼을 다시 켜는데 `signIn()` 은 `window.location` 을 세팅하자마자 resolve 하므로 리다이렉트 중 재클릭이 가능했다.
+- Failure Scenario 2(IAM 리다이렉트 모양) 아님 — 스토어 클라이언트 쪽 결함이라 크로스 프로젝트 분리 불필요.
+
+## 구현 (AC-1 · AC-2)
+
+- `/signup`: 자동 시작과 버튼이 **같은 가드**(`started` ref + `starting` 상태)를 쓴다 · 시작 뒤 버튼 비활성 «이동 중...» · 시작 **실패**(reject)일 때만 재무장 · bfcache 복원(`pageshow` `persisted`) 때 재무장.
+- `LoginForm`: `finally` → `catch` — 성공 경로에서 버튼을 다시 켜지 않는다 · bfcache 복원 때 재무장.
+- 시험: `signup-page.test.tsx` 3칸 · `login-form.test.tsx` 2칸(FE-108 표기). 로컬 vitest 는 Node 24 에서 기동 불가(`#module-evaluator`, 알려진 함정) ⇒ 🔴 **bite 는 CI 로**: 시험만 담은 커밋(수정 전 코드)을 먼저 푸시해 `Frontend unit tests` 가 FE-108 칸만 빨간지 보고, 그다음 수정 커밋.
 
