@@ -288,3 +288,79 @@ ADR-082 § Outstanding 그대로: `SELECT COUNT(DISTINCT operator_id) FROM opera
 | OD-2 | **지금대로 두고 기록** — 회사 관리자의 다른 회사 운영자 배정은 그대로(b 에서 동의 없는 소속 추가가 됨). 위험을 계약(`admin-api.md` § assignments)과 이 티켓에 명시 | S1(문구) |
 | OD-3 | **`demo-operator` 의 `ecommerce` = `SUPPORT_READONLY` + `SUPPORT_LOCK`** — 계정 · 감사 · 잠금 유지, ecommerce 운영자 목록은 403 | S3(시드) |
 
+---
+
+# S1 기록 (2026-10-11 UTC)
+
+> 분석=Opus 5.5 (api-designer) · **코드 0 · 계약/명세만** · worktree `feat/mono-784-s1-contracts`(origin/main 에서). 근거는 위 § AC-0 기록(F1~F18 · D-1~D-16) · § 소유자 결정 확정(OD-1~OD-3). 선례 = `TASK-MONO-772` § S1 기록.
+> **AC 체크박스는 건드리지 않았다** — S1 은 AC 를 닫지 않는다(§ 7 표 S1 행: «AC-0 결정 고정»). 이 슬라이스의 완료 조건 셋: ① 새 코드가 `platform/error-handling.md` 에 먼저 등록 ② rbac 새 권한 키 없음 · seed 행렬 무변경 ③ 계약이 D-1~D-16 · OD-1~OD-3 을 보인다 — 아래 § 1 · § 2 가 그 근거다.
+
+## 1. 쓴 것 (파일 · 절) — 어느 AC · 슬라이스를 위한 줄인가
+
+| 파일 | 절 | 무엇 | 결정 · AC · 구현 슬라이스 |
+|---|---|---|---|
+| `projects/iam-platform/specs/contracts/http/admin-api.md` | § Authorization Model · § Tenant Confinement · **§ 행동 테넌트 (신설)** | 두 단 판정 · 용어(소속 · 홈 R1 · 회사별 역할 · grant scope · 행동 테넌트) · **생략 규칙**(명시값 > `{'*'}`→`'*'` > 하나 → 그것 > 0 → 403 > 둘 이상 → `400 VALIDATION_ERROR`) · **엔드포인트별 23행 표**(AC-0 ①, 슬라이스 열) · 감사 `tenant_id` = 행동 테넌트(D-13) · **행 전체 규칙 표**(R3) · `'*'` 와 소속 비혼합(D-14) · 캐시(D-5) | D-4 · D-5 · D-8 · D-13 · D-14 · AC-1 · AC-4 · AC-5 / S3 · S4 |
+| 〃 | § GET /api/admin/me | `roles` = 행동 테넌트의 역할 · 새 `memberships[{tenantId, roles}]`(가산) · `homeTenantId` = «처음 소속된 회사» | D-16 · Edge 1 / S3 |
+| 〃 | § GET /api/admin/operators | 소속 술어 = 배정 · grant scope 게이트 · 항목 `roles` = 조회 테넌트의 역할(S1-3) · `homeTenantId` 행(그룹 선택기 회색 처리 걷힘) · 오류표 | AC-1 · F10 / S2 · S3 · S6 |
+| 〃 | § GET …/operators/lookup · § GET /api/admin/accounts · § GET /api/admin/audit · § GET /api/admin/operator-invitations | `tenantId` 판정을 § 행동 테넌트 로 · 권한 키 없는 읽기 = «역할 행 있는 테넌트» | AC-1 · F2 / S3 |
+| 〃 | § GET …/operators/grantable-roles | ≤-own 을 행동 테넌트 안에서(D-6) · 오류표 | D-6 · F3 / S3 |
+| 〃 | § POST /api/admin/auth/token-exchange 오류표 | 소속 0 인 비-`'*'` 행 = `401 TOKEN_INVALID`(콘솔 적격과 한 술어) | D-10 · F16 / S2 |
+| 〃 | § POST …/assignments/{tenantId} | 배정 = 소속 추가 · R2(관리 권한 0) · `'*'` 대상 `400` · 🔴 **OD-2 위험 문장**(본인 동의 없는 소속 추가 — 지금대로 두고 기록, 그룹 `TENANT_ASSIGNMENT` 도) · 캐시 무효화 | OD-2 · D-14 · F12 · F13 / S4 |
+| 〃 | § DELETE …/assignments/{tenantId} | **«이 회사에서 내보내기»** — 한 트랜잭션에 배정 + 그 회사 역할 행(직접 · 그룹 · 노드 기록) + 그 회사 그룹 멤버십 · fan-out + `partner = T` 참여 행 · 감사 detail · 캐시 · 마지막 소속이어도 행 유지(D-10) · 홈 R1 | D-9 · D-10 · AC-2 · Edge 2 · Edge 3 · F18 / S4 |
+| 〃 | § PATCH …/identity:link · :unlink | 행 전체 규칙 · `OPERATOR_HAS_OTHER_MEMBERSHIPS` | D-8 / S4 |
+| 〃 | § Operator Invitation 규칙 표 · 발급 4 · 7 · 취소 표 · «수락» 요약 | `:1658` «한 사람 = 한 회사 · 773 전 ADR» 행 → «ADR-082 = b · 소속 추가» · «대기 하나» · 발급 7 의 «이미 운영자» = 소속 기준(F15) · 발급 ≤-own 을 초대 테넌트 안에서 · 수락된 초대의 회수 길 = 내보내기 | D-12 · F15 · AC-3 / S3 · S5 |
+| 〃 | § PATCH …/roles | **회사 축** 표(행동 테넌트 · 범위 · 대상 소속 · ≤-own · 교체 범위 = T 의 **직접** 행만) · `[]` = T 의 직접 역할 제거(소속은 남음) · 오류표 | D-7 · F6 · AC-4 · Failure 3 / S4 |
+| 〃 | § PATCH …/status · § PATCH …/profile | 행 전체 규칙 · 새 403 · 정지 시 캐시 무효화 | R3 · D-8 · F7 · AC-4 / S4 |
+| 〃 | § POST …/groups/{groupId}/members · § Partnership participant 추가 | 멤버 · 참여 술어 = 소속 · fan-out 역할 행 `tenant_id` = 그룹 테넌트 · `'*'` 멤버 `400` · 파생 도달 `partner ∈ 소속` | D-11 · D-14 · F10 / S2 · S4 |
+| `projects/iam-platform/specs/contracts/http/internal/auth-to-admin.md` | § assignment check 판정 3 · § console-eligibility · § accept 판정 6 · 7 · **«소속 추가일 때» 신설** · 오류표 | assume 실효 범위 = 배정만(홈 제거 · 백필 전제) · 파트너십 도달 `partner ∈ 소속` · 2단계 요구 소속 기준 · 콘솔 적격 = `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` · 수락 6 = 새 행 / 소속 추가 / 409 셋 · 7 = 소속 기준(자기 행 제외) · 소속 추가 트랜잭션이 쓰는 것(운영자 행 쓰기 0) | D-2 · D-10 · D-11 · D-12 · F4 · F15 · F16 · F17 · AC-2 · AC-3 / S2 · S5 |
+| `projects/iam-platform/specs/contracts/http/onboarding-api.md` | 오류표 · Side Effects · `:93` 문장 · **«다회사 운영자와 온보딩» · «신원당 상한» 신설** | `:93` «773 착수 전 ADR» → «ADR-082 = b · 784» · 409 의미 좁힘(`'*'` · 비-`ACTIVE`) · 판정 표 5행(테넌트 생성 전) · 기존 행 바이트 불변 · **OD-1 상한**: 단위 = 그 행의 `TENANT_ADMIN` 역할 행의 서로 다른 테넌트 수, 설정 `admin.onboarding.max-owned-tenants-per-operator` 기본 2, 초과 `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` | OD-1 · D-12 · F14 · AC-3 / S5 |
+| `projects/iam-platform/specs/contracts/http/console-registry-api.md` | § Tenant selection rule 2 | `:282-283` «single tenant slug» 정정 → 소속(배정 행) · 784 이전 구현 = 배정 ∪ 홈 · S2 부터 배정만 | D-2 · F9 · ADR-082 § Outstanding / S2 |
+| `projects/iam-platform/specs/services/admin-service/rbac.md` | § 권한 키 없는 읽기 · **§ 두 단 판정 (신설)** · § Target-Tenant(머리 · 대상 해소) · § Account-Data Mutation · § Grant-Menu · § Assign/Unassign · § Cross-Org(의사코드 주석) · § Group(D3 · Idempotence) · § Caching · § Assume-Tenant Assignment Check | 두 단 판정 · 읽기 게이트 = grant scope · 대상 해소에서 홈 제거 · R3 · ≤-own 회사 안 · 배정 = 소속(R2 · R4 · OD-2) · 내보내기 · 파트너십 · 그룹 술어 · 3칸 PK skip · 캐시 무효화 지점 · assume 범위 홈 제거. **새 권한 키 0 · seed 행렬 무변경** | D-2 · D-4 ~ D-9 · D-11 / S2 ~ S4 |
+| `projects/iam-platform/specs/services/admin-service/data-model.md` | `admin_operators` 링크 키 노트 · `admin_operator_roles.tenant_id` · **WI-2 폐기 + «회사별 역할 불변식» 신설** · org-node 불변식 · PK · 그룹 멤버 · fan-out idempotence · 참여자 불변식 · `operator_tenant_assignment` = 소속 노트(R4 `permission_set_id` 미사용) · Migration Strategy `V0051` | D-1 · D-2 · D-3 · D-15 · R1 · R4 · OD-3 시드 위치 / S2 · S3 |
+| `projects/iam-platform/specs/features/multi-tenancy.md` | § 8 OD-1 블릿(`:635`) · 회수 장치 블릿 | «773 착수 전 ADR» → «ADR-082 = b · 784» 요약 · 회수 = 내보내기 | — |
+| `projects/platform-console/specs/contracts/console-integration-contract.md` | § 2.4.3 행 9 · **«한 사람 · 여러 회사» 블릿 신설** | 역할 편집 = 활성 회사 · 부여 메뉴 회사별 · «배정 해제» → «이 회사에서 내보내기»(확인 문구) · 행 전체 변경의 새 403 매핑 · `/me` nav · 그룹 선택기 회색 처리 걷힘 · § 3 패리티 행 무변경(16) | S6 · AC-6 |
+| `platform/error-handling.md` · `rules/domains/saas.md` | Admin 절 · Operator Group 절 | **새 코드 2** 등록 + `OPERATOR_ALREADY_PROVISIONED` 의미 좁힘 · `GROUP_MEMBER_TENANT_MISMATCH` 의미 «소속» (아래 § 2) | — |
+| `docs/adr/ADR-MONO-020-…md` · `ADR-MONO-024-…md` | D5 표 뒤 · D2 의 ADR-047 노트 뒤 | **Additive note** — «082 b 가 D5(배정마다 권한 세트 → 역할 행 테넌트 축 · R4) · D1 dual-read 홈 반쪽 · 역할 행 `tenant_id` 의미 · D2 대상 해소 · D3 ≤-own 을 바꾼다». 본문 · 상태 · History 바이트 그대로 | Scope 마지막 줄 |
+
+## 2. 새 코드 · 키
+
+**새 HTTP 오류 코드 (2 — admin)** — 둘 다 `platform/error-handling.md` § Admin 에 먼저, saas 도메인 코드라 `rules/domains/saas.md` § Admin Operations 에도. 공유 경로 문구는 프로젝트 비종속(서비스 이름 · 경로 없음 — 기존 행과 같은 모양: TASK/ADR id · 칸 이름만):
+- `OPERATOR_HAS_OTHER_MEMBERSHIPS` (403) — R3 · D-8. 행 전체 변경 · 회사 범위 행위자 · 대상 소속 ≥ 2.
+- `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` (422) — OD-1. 셀프 온보딩 · 테넌트 생성 전.
+
+**의미가 바뀌는 기존 코드 (코드 문자열 유지 — IdP · 콘솔 매핑 무변경)**: `OPERATOR_ALREADY_PROVISIONED`(«측면이 있으면» → «이 소속을 받을 수 없음»: 이미 소속 · `'*'` · 비-`ACTIVE`) · `GROUP_MEMBER_TENANT_MISMATCH`(홈 → 소속) · `PARTICIPANT_NOT_OWN_OPERATOR`(공유 문구 «호출 테넌트 소속 아님» 이 이미 맞아 무변경 — 계약에만 «784 S4 부터 소속») · `TENANT_SCOPE_DENIED` · `VALIDATION_ERROR`(새 조건 — 생략 규칙 · D2 거절).
+
+🔵 가드: `check-error-code-registry.sh` 는 코드→문서 한 방향이라 문서 먼저 넣어도 초록 · `check-domain-error-code-registry.sh` 는 saas.md 의 두 코드가 registry 에 있어야 한다 — 넣었다.
+
+**권한 키 0 · seed 행렬 무변경**(rbac § 두 단 판정 마지막 블릿). JWT 클레임 0(ADR-082 D1).
+
+**새 설정 키 (구현 몫 — S5)**: admin `admin.onboarding.max-owned-tenants-per-operator`(기본 `2`).
+
+**새 마이그레이션 (구현 몫 — S2)**: `V0051__…`(가칭 — 작성 직전 다음 빈 버전 재확인; S1 시점 마지막 = `V0050`).
+
+## 3. AC-0 계획이 정하지 않아 S1 이 정한 것 (🔴 = 소유자가 볼 만한 것)
+
+| # | 결정 | 왜 | 어디 |
+|---|---|---|---|
+| S1-1 🔴 | **역할 변경의 행동 테넌트는 생략 규칙이 아니라 «대상 기준»**: 대상이 `'*'` 운영자면 헤더와 무관하게 T = `'*'` · 헤더 생략 시 대상 소속이 하나면 그것 · 둘 이상 `400` · 0 `404` | AC-0 의 생략 규칙(행위자 grant scope 기준)을 그대로 쓰면 ① `'*'` 행위자의 헤더 없는 호출이 T = `'*'` 로 해소돼 회사 운영자의 역할 편집이 `400` 이 되고 ② 콘솔은 활성 회사를 늘 실으므로 플랫폼 운영자끼리의 역할 편집(T = 활성 회사, 대상 소속 0)이 `404` 가 된다. 대상 기준이면 단일 회사 대상은 지금과 바이트 동일 | admin-api § PATCH …/roles |
+| S1-2 | 행 전체 규칙의 거절 코드 분기: 대상 회사 중 **하나라도** 행위자 grant scope 안 → `OPERATOR_HAS_OTHER_MEMBERSHIPS` · 하나도 아님 → `TENANT_SCOPE_DENIED` · 비-`'*'` 소속 0 → `'*'` 만 | 새 403 이 «이 사람은 다른 회사에도 있다» 를 밖에 알려 주지 않게(열거 안전). 소속 0 은 D-8 의 «0 이면 `'*'` 만» 그대로 | admin-api § 행동 테넌트 «행 전체 규칙» |
+| S1-3 🔴 | **`GET /operators` 항목의 `roles` = 조회 테넌트의 역할만**(`'*'` 조회는 전체) | AC-0 ① 표는 게이트만 정했다. 그대로 두면 B 의 관리자가 B 목록에서 그 사람의 **A 역할**을 본다(회사 간 정보 노출). `/me` 의 `memberships` 도 같은 DTO 를 쓰는 목록에는 싣지 않는다 | admin-api § GET …/operators · § GET …/me |
+| S1-4 | 토큰 교환에도 «소속 ≥ 1» — 소속 0 인 비-`'*'` 행의 교환 = `401 TOKEN_INVALID` | D-10 이 «콘솔 적격 · 토큰 교환 술어 한 자리» 라 적었다. 이미 발급된 콘솔 토큰으로 교환을 시도하는 경로를 같이 닫는다 | admin-api § token-exchange 오류표 · auth-to-admin § console-eligibility |
+| S1-5 | 상한: 판정 = `count ≥ 상한` → 거절 · 출처 무관(직접 · 그룹 · 초대 수락) · **초대 수락은 상한을 보지 않는다** · 코드 `422`(형제 `*_LIMIT_EXCEEDED` 와 같은 상태) | OD-1 은 셀프 온보딩의 질문이었다. ADR-044 D4 의 상한은 «스스로 만드는» 남용 방지 | onboarding-api § 신원당 상한 |
+| S1-6 | D-14 거절 코드 = `400 VALIDATION_ERROR`(티켓 D-14 «772 D-2 와 같은 코드»). 그룹 멤버의 `'*'` 대상은 지금 `422 GROUP_MEMBER_TENANT_MISMATCH` 였는데 `400` 으로 바뀐다 | 티켓 문장을 따랐다. 의미상 `422` 가 더 맞을 수 있다(형식 오류가 아니라 대상 상태) — 아래 § 4-3 | admin-api § 행동 테넌트 · § assignments · § groups members |
+| S1-7 | 소속 추가 수락은 기존 행의 `display_name` · `email` 을 쓰지 않는다(초대의 `displayName` 은 새 행일 때만) · 중앙 신원 링크 시도 안 함 · 감사 `downstream_detail` 에 `membershipAdded=true` | D-12 «홈 · `oidc_subject` 쓰기 0» 의 연장 — 기존 회사에서 보이는 이름이 바뀌지 않게 | auth-to-admin § accept «소속 추가일 때» |
+| S1-8 | 행 전체 변경(신원 링크 · 프로필)의 감사 `target_tenant_id` = 대상 홈 그대로 | 행 전체 속성은 회사 하나로 귀속되지 않는다 — R1 «감사 기본값» | admin-api § identity:link |
+| S1-9 | `GET /operators/lookup` 응답 항목 `tenantId` = 홈 그대로 | R1 표시값. 조회 테넌트 소속은 항목이 나온 것으로 이미 참 | admin-api § lookup |
+| S1-10 | `'*'` 대상의 `DELETE …/assignments/{tenantId}` = 지금처럼 `404 ASSIGNMENT_NOT_FOUND`(별도 거절 없음) | 좁히는 방향 · F13 의 기존 행이 있으면 지워지는 것이 맞다 | admin-api § DELETE …/assignments |
+
+## 4. 열린 질문 (S1 이 답하지 않은 것 — 해당 슬라이스 착수 전에 본다)
+
+1. 🔴 **자기 자신 · 마지막 관리자의 «내보내기»** — 회사 관리자가 자기 자신을(또는 그 회사의 마지막 `TENANT_ADMIN` 을) 내보내면 그 회사는 관리자 0 이 된다(784 전에는 배정 삭제가 역할을 지우지 않아 이 일이 없었다). ADR-082 · 라이더 · AC-0 어디에도 없다. 후보: (a) 그대로(플랫폼이 복구) (b) 자기 자신 내보내기 = `400`(정지의 `SELF_SUSPEND_FORBIDDEN` 과 같은 모양) (c) 마지막 `TENANT_ADMIN` 보호 = `409`. **S4 착수 전 소유자 판단**(계약에 적지 않았다).
+2. **상한의 세는 집합** — ADR-044 D4 는 «ACTIVE tenants owned per identity», ADR-082 D4 는 «`TENANT_ADMIN` 역할 행이 가리키는 서로 다른 테넌트 수» 다. S1 은 ADR-082 D4 그대로(테넌트 상태 무관) 적었다. `SUSPENDED` 테넌트를 빼면 계정 하나가 «만들고 → 정지되고 → 또 만들기» 를 할 수 있고, 넣으면 정지된 회사가 자리를 차지한다. 값과 함께 773 AC-0 이 다시 볼 것.
+3. D-14 의 코드(`400 VALIDATION_ERROR`)가 `'*'` **대상**(요청 필드가 아니라 대상의 상태)에 맞는지 — 티켓대로 적었다. 새 코드를 원하면 S4 전에 바꾼다(registry 행 하나).
+4. `GET /api/admin/me` 의 `roles` 가 `X-Tenant-Id` 를 읽는데 콘솔이 `/me` 에 그 헤더를 싣는지 — S6 에서 확인(안 실으면 nav 가 합으로 남는다 — 판정은 producer 가 하므로 누수는 아니다).
+5. `multi-tenancy.md` § 7 시험 자리 표에 784 행(AC-1 · AC-2 · AC-3 · AC-4 · AC-5 의 시험 위치)을 더하는 것은 시험이 생기는 S3 ~ S5 몫으로 남겼다.
+
+## 소유자 결정 추가 (2026-10-11 UTC) — 마지막 관리자
+
+S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 마지막 `TENANT_ADMIN` · 자기 자신을 내보내면 관리자 0 회사가 생긴다 — 784 전엔 불가능)에 소유자 선택창 응답 **«거절 (409)»**(추천과 같음 — 티켓 범위 결정). 계약: `admin-api.md` § «이 회사에서 내보내기» · § 역할 PATCH 에 `409 TENANT_LAST_ADMIN_REQUIRED`(새 코드, `platform/error-handling.md` · `rules/domains/saas.md` 등록). 🔴 오케스트레이터 판단으로 **같은 술어를 역할 교체 · 그룹 멤버 제거 · 그룹 역할 변경에도** 건다 — 내보내기만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회되어 결정이 공허해진다. 구현 = S4(AC-2 대조군에 «마지막 관리자 내보내기 → 409 · 쓰기 0» 칸 추가).

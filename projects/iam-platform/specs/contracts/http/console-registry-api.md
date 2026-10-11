@@ -279,8 +279,21 @@ per § Tenant selection rule).
    (the platform itself federates them); each of `wms` / `scm` / `erp` /
    `finance` binds to the tenants that hold an **ACTIVE subscription** to its
    `domain_key` (TASK-BE-322 / ADR-MONO-019 D2/D4 — see below);
-2. the **operator's tenant scope** — `'*'` (platform) ⇒ all; a single
-   tenant slug ⇒ only that slug;
+2. the **operator's tenant scope** — `'*'` (platform) ⇒ all; otherwise the
+   operator's **memberships** = its `operator_tenant_assignment` rows.
+   *Correction (TASK-MONO-784, ADR-MONO-082 § Outstanding):* this item used to
+   read "a single tenant slug ⇒ only that slug", which was never the
+   implementation — the implemented scope is the effective scope
+   **assignments ∪ {home `admin_operators.tenant_id`}** (`ConsoleRegistryUseCase`,
+   measured in ADR-MONO-082 Context ③), so an assigned tenant already appears
+   in the switcher. From **784 S2** the home is dropped and the scope is the
+   assignment rows only (ADR-082 rider R1 — the home is not read for
+   decisions; D3 — a company the operator was removed from disappears from the
+   switcher). S2's V0051 backfills a home assignment for every non-`'*'`
+   operator that lacked one, so a single-company operator's `tenants` is
+   byte-unchanged. A membership grants no admin-plane rights by itself (rider
+   R2) — the console still shows the tenant, and the admin API decides per
+   request (`admin-api.md` § 행동 테넌트);
 3. the tenant being **registered + ACTIVE** in `tenants` (account-service
    owned; read via `ListTenantsUseCase`). A SUSPENDED or unregistered tenant
    is excluded.

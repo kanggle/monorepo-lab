@@ -85,6 +85,8 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 
 아래 읽기는 **권한 키를 요구하지 않는다** — 위 카탈로그 · Seed Roles 행렬 · `@RequiresPermission` 선언 어디에도 나오지 않는다(GET 은 deny-default 가드 대상이 아니다, `RequiresPermissionAspect`). 운영자 토큰 + `QueryTenantScopeGate`(home ∪ 배정)만 건다.
 
+> **TASK-MONO-784 (ADR-MONO-082 b · 라이더 R2 · D-4 — 구현 S3)**: 이 두 읽기의 테넌트 게이트 술어 = **«호출자의 역할 행이 하나라도 있는 테넌트»**(`admin_operator_roles.tenant_id` 집합 — 역할 무관, 노드 grant 는 subtree, `'*'` 행이면 전부). home ∪ 배정이 아니다 — 배정만 있는 회사(역할 행 0)는 범위 밖이다(R2: 관리 평면 권한 0). 생략 규칙은 [admin-api.md § 행동 테넌트](../../contracts/http/admin-api.md#행동-테넌트--회사별-소속--역할-task-mono-784--adr-mono-082-b) 와 같다(이 집합으로). 범위 밖 응답은 표 그대로(`403` · 빈 `200`). 권한 키를 새로 만들지 않는다.
+
 | endpoint | 권한 키 | 테넌트 게이트 | 범위 밖 응답 | 근거 |
 |---|---|---|---|---|
 | `GET /api/admin/accounts` (`email` 있음) | 없음 | `QueryTenantScopeGate` | `403 TENANT_SCOPE_DENIED` | 기존 동작 — SUPPORT_LOCK 이 잠글 계정을 찾는 길(TASK-BE-357) |
@@ -208,6 +210,19 @@ function evaluate(request, annotationPermission):
 
 DENIED row 기록과 403 응답은 **단일 트랜잭션**이어야 한다 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A10 fail-closed). 감사 기록 실패 시 응답도 실패(500)하여 로그 누락을 방지한다.
 
+### 두 단 판정 — 행동 테넌트 (TASK-MONO-784 · ADR-MONO-082 b · D-4)
+
+위 알고리즘(step 2 의 union)은 **테넌트를 보지 않는다** — 운영자 토큰에도 `OperatorContext` 에도 테넌트가 없기 때문이다(ADR-082 D1 · 784 AC-0 F1). 그래서 «권한 평가에 테넌트를 더한다» 는 이 자리에서 하지 않고 **두 단**으로 나눈다:
+
+1. **aspect (이 알고리즘, 변경 없음)** — «이 운영자가 **어딘가에** 이 권한을 가지나». 거친 거름이다. 캐시 키는 운영자 그대로(아래 Caching).
+2. **테넌트 게이트** — 요청의 **행동 테넌트** T(엔드포인트 입력: 쿼리 `tenantId` · `X-Tenant-Id` · path · 대상 리소스)가 `effectiveAdminScope(operator, permission)`(아래 Target-Tenant 절 — 그 권한을 주는 역할 행의 테넌트 집합) 안인가. 읽기 · 쓰기 같은 술어다. 밖이면 `403 TENANT_SCOPE_DENIED`.
+
+- **배정(소속)만 있는 테넌트는 grant scope 에 들어갈 수 없다** — 라이더 R2(역할 행 없는 소속의 관리 권한 = 0). 784 이전의 읽기 게이트(`QueryTenantScopeGate` = home ∪ 배정)가 홈의 역할을 배정 테넌트 읽기에 «상속» 시키던 누수(ADR-082 Context ③ «관리 평면 읽기»)를 이 술어가 닫는다. 홈은 읽지 않는다(R1).
+- **생략된 행동 테넌트**: 명시값 > grant scope `{'*'}` → `'*'` > 구체 테넌트 하나 → 그것 > 0 → `403 TENANT_SCOPE_DENIED` > 둘 이상 → `400 VALIDATION_ERROR`. 엔드포인트별 표 · 예외(역할 변경의 대상 기준 해소 · 행 전체 규칙)는 [admin-api.md § 행동 테넌트](../../contracts/http/admin-api.md#행동-테넌트--회사별-소속--역할-task-mono-784--adr-mono-082-b) 가 정본.
+- 게이트를 다시 구현한 사본(운영자 목록 · 초대 목록 · 프로필 · 테넌트 상세 — 784 AC-0 F2)은 이 게이트 하나로 합친다.
+- **새 권한 키 없음 · seed 행렬 무변경** — 바뀌는 것은 «어느 회사에서» 의 판정이지 권한 카탈로그가 아니다.
+- 구현 슬라이스: 784 S3(읽기 축 · 잠금 계열 쓰기) · S4(쓰기 축 · 행 전체 규칙).
+
 ### Source-IP Access Condition (ADR-MONO-026, axis ② 2단계)
 
 권한 union 통과(step 4) **이후**, **변이(mutation) 엔드포인트**(`@RequiresPermission` 가 붙은 POST/PUT/PATCH/DELETE)는 추가로 **SOURCE_IP access condition** 게이트를 거친다 ([ADR-MONO-026](../../../../../docs/adr/ADR-MONO-026-role-grant-access-conditions.md), [platform/access-conditions.md](../../../../../platform/access-conditions.md)). 이는 RBAC → tenant-scope → data-scope 다음의 **4번째 직교 게이트**로, 닫힌 조건 enum 중 `SOURCE_IP` 타입이다.
@@ -242,6 +257,8 @@ tenant/account 는 account-service 가 비즈니스 데이터를 소유하므로
 ### Target-Tenant Scope Confinement (ADR-MONO-024 D2)
 
 권한 union 통과(step 4) 이후, **administration 표면의 변이**(operator/assignment/subscription 관리)는 추가로 **대상 테넌트 confinement**를 거친다 ([ADR-MONO-024](../../../../../docs/adr/ADR-MONO-024-tenant-admin-delegation.md) D2). 한 operator 가 *어떤 테넌트를 관리(administer)* 할 수 있는지는 그 permission 을 부여하는 **role-grant 의 테넌트 스코프**로 결정된다 — assume-tenant 운영 스코프(`TenantScopeResolver` = home ∪ `operator_tenant_assignment`)와는 **별개의 축**이다.
+
+> **TASK-MONO-784 (ADR-MONO-082 b)**: ① 이 절의 `effectiveAdminScope` 는 **읽기에도** 쓰인다(위 «두 단 판정» — 784 이전엔 쓰기 전용이었다). 술어 자체는 그대로다 — 역할 행 PK 가 `(operator_id, role_id, tenant_id)` 로 넓어지는 것만 따라간다(ADR-082 갈래 비교 RBAC 행). ② 역할 행의 `tenant_id` 는 이제 «그 역할이 사는 회사» 다(WI-2 «= 홈» 폐기 — [data-model.md](./data-model.md#admin_operator_roles)). ③ assume 운영 스코프(`TenantScopeResolver`)는 784 S2 부터 **배정(소속)만** — 홈을 더하지 않는다(R1 · 아래 Assume-Tenant 절).
 
 **effective admin-grant scope** 정의:
 
@@ -288,6 +305,7 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 ```
 
 - **대상 테넌트 해소**는 엔드포인트별이다(생성/관리 대상 operator 의 home `tenant_id`, assignment 의 `tenant_id`, 또는 요청 path 의 `tenantId`). 각 변이 use-case 는 *대상 테넌트만* 해소하여 gate 를 호출하며, **규칙 자체를 재구현하지 않는다**(D2-A 중앙 규칙; per-endpoint 재구현 D2-B 는 거부됨).
+  🔴 **TASK-MONO-784 (ADR-MONO-082 b · R1 · R3 — 구현 S4)**: «관리 대상 operator 의 home `tenant_id`» 는 대상 해소에서 **빠진다**(R1 — 홈은 판정에서 읽지 않는다). 대신 ① 역할 변경 = 행동 테넌트 T(`X-Tenant-Id`, 대상의 소속이어야 함 — D-7) ② 행 전체 속성(상태 · 프로필 · 신원 링크) = **대상의 소속 집합**: 하나 {T} 면 T, 둘 이상 · 0 이면 `'*'` 만(R3 · D-8 — 회사 관리자에게 `403 OPERATOR_HAS_OTHER_MEMBERSHIPS`, 대상 회사를 하나도 관리하지 않으면 `TENANT_SCOPE_DENIED`). 🔴 «`SUPER_ADMIN` 만» 은 역할 이름이 아니라 **`'*'` ∈ grant scope** 다(784 AC-0 F11 — 회사 범위 `SUPER_ADMIN` 행이 있다). 정본 표: [admin-api.md § 행동 테넌트](../../contracts/http/admin-api.md#행동-테넌트--회사별-소속--역할-task-mono-784--adr-mono-082-b) «행 전체 규칙».
 - `null` 대상 → **거부**(fail-closed). 모든 gated 변이는 구체적 대상 테넌트를 갖는다.
 - **DENIED row 는 best-effort**(architecture.md A10 override, BE-249/262 cross-tenant deny 와 동일): 감사 실패는 `admin.audit.cross_tenant_deny_failure` 카운터만 증가시키고 403 은 항상 성립한다.
 - **NET-ZERO**: 현재 `operator.manage` / `subscription.manage` 보유 role 은 `SUPER_ADMIN`(grant row `tenant_id='*'`) 뿐이라 gate 는 아무도 거부하지 않는다 — confinement 은 ADR-MONO-024 step 2 가 비-플랫폼 admin role(`TENANT_ADMIN`/`TENANT_BILLING_ADMIN`)을 seed 한 이후에만 발효한다.
@@ -302,6 +320,7 @@ function requireTenantInScope(actor, permission, targetTenantId, actionCode):
 위 D2 `TenantScopeGuard` 가 **administration 표면**(operator/assignment/subscription 관리)을 confine 하는 것과 **별개의 축**으로, **account 데이터 표면의 변이**(`POST /api/admin/accounts/{id}/{lock\|unlock}`, `bulk-lock`, gdpr-delete, export)는 **읽기 경로와 동일한 게이트**로 confine 된다. 읽기(`GET /api/admin/accounts`)가 이미 `QueryTenantScopeGate`(TASK-BE-357)로 활성 테넌트에 confine 되므로, 변이도 같은 게이트로 parity 를 맞춘다(TASK-BE-467 — 이전에는 account-service 가 `TenantId.FAN_PLATFORM` 리터럴에 하드핀되어 비-FAN 계정은 목록엔 보이나 변이는 실패했다).
 
 - **게이트 = `QueryTenantScopeGate`** (D2 `TenantScopeGuard` 가 **아님**): 각 변이 컨트롤러가 `X-Tenant-Id`(활성 테넌트)를 읽어 `queryTenantScopeGate.resolve(op, header, <ActionCode>, <Permission>)` 로 해소·검증한다. 생략 → 운영자 자신의 테넌트. out-of-scope → **403 `TENANT_SCOPE_DENIED`** + best-effort DENIED row (목록 읽기와 동일).
+  🔴 **TASK-MONO-784 (구현 S3)**: 게이트의 술어가 home ∪ 배정 → **그 엔드포인트 권한의 grant scope**(위 «두 단 판정»)로 바뀐다 — 784 이전에는 배정만 있는 회사에서 이 **쓰기**(잠금 · 해제 · 일괄 잠금 · GDPR 삭제/내보내기 · 세션 종료)가 홈의 역할로 통했다(784 AC-0 F2). 생략 → «운영자 자신의 테넌트» 가 아니라 생략 규칙. 호출 모양(헤더 · 스탬프 · 404 enumeration-safe)은 그대로.
 - 해소된 테넌트는 `X-Tenant-Id` 로 account-service 에 스탬프된다(admin `AccountServiceClient` 의 mutation 호출이 `tenantId` 헤더 운반). account-service 의 admin-reachable 변이 use-case(`AccountStatusUseCase`/`GdprDeleteUseCase`/`DataExportUseCase`)는 `findById(TenantId.of(header), id)` 로 조회한다.
 - **cross-tenant 대상 → `404 ACCOUNT_NOT_FOUND`** (enumeration-safe): tenant-scoped `findById` 가 빈 결과 → 기존 not-found 경로. 타 테넌트 존재를 확인해 주는 403 이 아니다. 새 cross-tenant finder 를 추가하지 않는다(격리 우회 금지).
 - **NET-ZERO**: SUPER_ADMIN(`'*'`)/헤더 부재 → account-service 는 `fan-platform` 기본값 폴백 = BE-467 이전과 byte-identical. `X-Tenant-Id` 를 실제로 지정하는 현재 유일 경로는 assume-tenant 스위치뿐이라 기존 동작 무변.
@@ -330,10 +349,13 @@ function requireGrantable(actor, rolesToGrant, actionCode):
 - **빈 권한집합 role** 은 누구나 부여 가능(≤-own 자명).
 - **플랫폼 스코프(SUPER_ADMIN `'*'`) 는 unconstrained** — 모든 role 부여 가능(플랫폼 온보딩 불변, net-zero).
 - 위반 → 403 `ROLE_GRANT_FORBIDDEN` + best-effort DENIED row(`admin.audit.role_grant_forbidden_failure` 카운터). **테넌트 confinement(어느 테넌트)** 와 **grant-menu(어느 role)** 는 별개 — 전자는 step-1 `TenantScopeGuard`, 후자는 `RoleGrantGuard`.
+- 🔴 **TASK-MONO-784 (ADR-MONO-082 b · D-6 — 구현 S3)**: `actor.permissions` = **부여 대상 테넌트 T 에서 actor 가 보유한 권한** — T 의 역할 행(`tenant_id = T`) + `'*'` 행 + T 를 subtree 로 덮는 노드 행이 주는 권한의 합. 운영자 전체의 합이 아니다 — 그대로 두면 A 의 `TENANT_ADMIN` 이 가진 `tenant.admin.delegate` 로 B 에서 `TENANT_ADMIN` 을 부여한다(784 AC-0 F3). `'*'` short-circuit · `SUPER_ADMIN` 금지 · 빈 권한 role 규칙은 그대로. T = 역할 변경의 행동 테넌트 · 초대 테넌트 · 그룹 테넌트 · `grantable-roles` 의 행동 테넌트.
 
 ### Assign/Unassign Surface (ADR-MONO-024 D3-i, step 2b)
 
 `POST/DELETE /api/admin/operators/{operatorId}/assignments/{tenantId}` — operator↔tenant `operator_tenant_assignment` row 생성/삭제("내 직원에게 내 테넌트 접근 부여"). `operator.manage` + step-1 target-tenant confinement(target=path `tenantId`) + reason-gated + audited(`OPERATOR_ASSIGNMENT_CREATE`/`OPERATOR_ASSIGNMENT_DELETE`). 생성 시 whole-tenant(`org_scope=null` ⟺ `["*"]`, `permission_set_id=null` = operator-level role 상속); 중복 → 409 `ASSIGNMENT_ALREADY_EXISTS`; 삭제 시 미존재 → 404 `ASSIGNMENT_NOT_FOUND`. SUPER_ADMIN(`'*'`) net-zero.
+
+> **TASK-MONO-784 (ADR-MONO-082 b — 구현 S4)**: 배정 행 = **소속**. ① 생성 = 소속 추가 — `permission_set_id=null` 의 뜻이 «운영자 수준 역할 상속» 에서 **«이 소속의 관리 권한 0 — 역할 행이 생길 때까지»**(라이더 R2)로 바뀐다(`permission_set_id` 는 계속 미사용 — R4). `'*'` 대상 → `400 VALIDATION_ERROR`(D2). 🔴 **알려진 위험(소유자 결정 OD-2 «지금대로 두고 기록»)**: 대상 제한이 없어 T 의 관리자가 다른 회사의 운영자를 본인 동의 없이 T 에 소속시킬 수 있다 — [admin-api.md § POST …/assignments/{tenantId}](../../contracts/http/admin-api.md#post-apiadminoperatorsoperatoridassignmentstenantid). ② 삭제 = **«이 회사에서 내보내기»** — 그 테넌트의 역할 행(직접 · 그룹 · 노드 기록) · 그 테넌트 그룹의 멤버십과 fan-out · `partner = T` 파트너십 참여 행을 한 트랜잭션에 함께 지운다(D-9 — [admin-api.md § DELETE …/assignments/{tenantId}](../../contracts/http/admin-api.md#delete-apiadminoperatorsoperatoridassignmentstenantid)). 판정은 그대로 path `tenantId` ∈ grant scope.
 
 ### Cross-Org Partner Delegation Confinement (ADR-MONO-045 D3/D5)
 
@@ -349,6 +371,9 @@ function requireGrantable(actor, rolesToGrant, actionCode):
 ```
 function crossOrgPartnershipScope(operator, hostTenant):
     # operator(home = partner_tenant_id) 가 hostTenant 를 reach 할 수 있는지 + 그 범위
+    # TASK-MONO-784 (ADR-MONO-082 b · D-11 — S2): partner = operator.tenant_id(홈) 가 아니라
+    #   partner ∈ memberships(operator)(operator_tenant_assignment 의 tenant 집합) 인 ACTIVE 파트너십.
+    #   참여 행 불변식도 «참여 operator 의 소속 ∋ partner_tenant_id» 로(S4 — data-model 참여자 불변식).
     p = tenant_partnership.findActive(host=hostTenant, partner=operator.tenant_id)   # status=ACTIVE 만
     if p is null:
         return EMPTY                       # 파트너십 없음/PENDING/SUSPENDED/TERMINATED → reach 0
@@ -444,9 +469,9 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 **Confinement 재사용 (신규 규칙 없음)**:
 
 - **D4 no-escalation** — group 에 role/tenant-assignment 를 grant 하는 것은 기존 `RoleGrantGuard`(grant-menu ≤-own, ADR-MONO-024 D3) + `effectiveAdminScope`(대상 tenant confinement) 를 **그대로 재사용**한다. cap 은 **grant 시점**(granter 가 자기 보유 이내만 그룹에 grant) 과 **fan-out 을 유발하는 새 멤버 추가 시점**(D5) 양쪽에서 검사되어, 그룹을 우회로 삼아 자기 미보유 role/tenant 를 멤버에게 부여할 수 없다. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`([admin-api.md](../../contracts/http/admin-api.md)).
-- **D3 tenant-scope** — group 은 `operator_group.tenant_id`(단일 concrete tenant, `'*'` 아님)로 tenant-scoped 되며, 모든 group 변이(CRUD/member/grant)는 `TenantScopeGuard`(대상 = `group.tenant_id`)로 confine 된다 — `TENANT_ADMIN @ acme` 는 acme 그룹만, `SUPER_ADMIN`(`'*'`)은 net-zero. 멤버는 그 tenant 소속 operator 만(멤버 home `tenant_id` == `group.tenant_id`, 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`).
+- **D3 tenant-scope** — group 은 `operator_group.tenant_id`(단일 concrete tenant, `'*'` 아님)로 tenant-scoped 되며, 모든 group 변이(CRUD/member/grant)는 `TenantScopeGuard`(대상 = `group.tenant_id`)로 confine 된다 — `TENANT_ADMIN @ acme` 는 acme 그룹만, `SUPER_ADMIN`(`'*'`)은 net-zero. 멤버는 그 tenant 소속 operator 만(멤버 home `tenant_id` == `group.tenant_id`, 위반 → `422 GROUP_MEMBER_TENANT_MISMATCH`). **TASK-MONO-784 (D-11 — S4)**: «그 tenant 소속» = `group.tenant_id` ∈ 멤버의 **소속**(배정 행) — 홈이 아니다. `'*'` 멤버 → `400 VALIDATION_ERROR`(ADR-082 D2). fan-out 역할 행의 `tenant_id` = **`group.tenant_id`**(784 이전엔 멤버 홈 — 그래서 다회사 멤버의 fan-out 이 다른 회사 역할로 적혔을 것이다).
 
-**Idempotence & cascade (D5)** — fan-out 은 멤버가 이미 보유한 **동등한 직접 grant** 를 중복 생성하지 않으며(`(operator, tenant)`/`(operator, role)` PK 상 row 존재 시 no-op skip), cascade-revoke(remove-member / delete-group)는 `group_origin = <groupId>` 인 row **만** 삭제하여 직접 grant(=`group_origin IS NULL`)를 절대 파괴하지 않는다. 정확한 마커 스키마·PK 상호작용·다중 그룹 중첩 시 단일-소유 마커 규약은 [data-model.md](./data-model.md) `operator_group` / `group_origin` 절이 canonical.
+**Idempotence & cascade (D5)** — fan-out 은 멤버가 이미 보유한 **동등한 직접 grant** 를 중복 생성하지 않으며(`(operator, tenant)`/`(operator, role)` PK 상 row 존재 시 no-op skip — **784 S2 부터 역할 쪽은 `(operator, role, group.tenant_id)` 3칸 PK**: 다른 회사에 같은 역할이 있어도 이 회사 fan-out 은 skip 되지 않는다), cascade-revoke(remove-member / delete-group)는 `group_origin = <groupId>` 인 row **만** 삭제하여 직접 grant(=`group_origin IS NULL`)를 절대 파괴하지 않는다. 정확한 마커 스키마·PK 상호작용·다중 그룹 중첩 시 단일-소유 마커 규약은 [data-model.md](./data-model.md) `operator_group` / `group_origin` 절이 canonical.
 
 **감사**: 모든 group 변이는 `group.manage` 게이트 + `admin_actions` row(`GROUP_CREATE`/`GROUP_UPDATE`/`GROUP_DELETE`/`GROUP_MEMBER_ADD`/`GROUP_MEMBER_REMOVE`/`GROUP_GRANT_ADD`/`GROUP_GRANT_REVOKE`, deny-default·fail-closed, D6). GET read-path 는 성공 시 감사 row 미기록(`grantable-roles`/BE-486 규약), 403 은 best-effort DENIED row. 이벤트는 v1 audit-only(소비자 존재 시에만 `admin_outbox` v2 새 `topicFor` 로 발행 — D6).
 
@@ -505,6 +530,11 @@ function evaluateAuditRead(operator, permissionSet, request):
 - `admin_operator_roles` / `admin_role_permissions` 변경 API는 해당 key를 즉시 DELETE
 - 캐시 miss 시 DB fallback, 동시 다발 miss는 mutex 불필요 (TTL 10초로 thundering herd 무시 가능)
 
+> **TASK-MONO-784 (ADR-MONO-082 b · D-5 — 구현 S3 · S4)**:
+> - 이 캐시는 **합**(«어딘가에 이 권한이 있나» — 두 단 판정의 1단)만 담는다. 키는 운영자 그대로다. **테넌트 판정(2단)은 이 캐시를 읽지 않는다** — `effectiveAdminScope` 가 DB 에서 답한다(지금도 캐시 없음). 그래서 A 의 판정이 B 에서 재사용되는 일(784 Failure Scenario 1)은 구조적으로 없다.
+> - **무효화 지점 추가**: 소속 추가(배정 생성 · 초대 수락 · 셀프 온보딩의 소속 추가) · «이 회사에서 내보내기» · **상태 변경**(784 이전엔 무효화하지 않아 정지된 운영자의 합이 ≤10s 동안 살았다 — 784 AC-0 F7). 역할 변경 · 그룹 fan-out 은 지금 그대로.
+> - 성능 때문에 테넌트 판정을 캐시하게 되면 키 = `admin:operator:perm:{operator_id}:{tenant_id}`. 한 회사의 변경(역할 변경 · 내보내기 · 그 회사 그룹 fan-out)은 그 회사 키 + 합 키를, 행 전체 변경(상태)은 **소속을 DB 에서 열거해** 그 키들 + 합 키를 지운다(SCAN 금지). 784 AC-5 «캐시 키 = 운영자 × 테넌트» 는 이 경우를 말한다 — S4 시험은 판정 **값**(T 변경 뒤 T 판정이 다음 요청에서 바뀜 · U 판정 그대로)으로 단언한다.
+
 세부 구현은 TASK-BE-028에서 확정.
 
 ---
@@ -547,6 +577,7 @@ D1 dual-read: `operator_tenant_assignment` rows ∪ {legacy `admin_operators.ten
   IAM JWKS resource-server, account-service 미러링. 미인증 → 401 `UNAUTHORIZED`.
   기존 operator 체인(`@Order(2)`, `/api/admin/**`)은 byte-unchanged.
 - D1 effective-scope 가 이제 auth-service 에 cross-service 로 읽힌다. 스키마 변경 없음.
+- 🔴 **TASK-MONO-784 (ADR-MONO-082 b · R1 · D3 · D-2 — 구현 S2)**: effective tenant scope = **`operator_tenant_assignment` 행만**(`{legacy admin_operators.tenant_id}` 를 더하지 않는다 — ADR-MONO-020 § 3.3 item 4 의 «legacy read» 를 비-`'*'` 분기에서 걷는다. `'*'` 분기는 그대로). 전제: S2 의 V0051 이 홈 배정이 없는 기존 비-`'*'` 행에 홈 배정을 백필한다(멱등) — 단일 회사 운영자의 `assigned` 는 바이트 불변. 이유: 떠난 회사가 홈일 때 배정을 지워도 홈이 assume 을 열어 두면 ADR-082 D3 «A assume 거절» 이 깨진다(784 AC-0 F4). 상세: [auth-to-admin.md § check](../../contracts/http/internal/auth-to-admin.md#get-internaloperator-assignmentscheck).
 
 상세: [architecture.md](./architecture.md) "Assume-Tenant Assignment Check", [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md).
 
