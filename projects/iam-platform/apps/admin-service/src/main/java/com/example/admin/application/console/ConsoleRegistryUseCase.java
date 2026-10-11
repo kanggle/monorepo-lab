@@ -76,8 +76,10 @@ public class ConsoleRegistryUseCase {
                         "Operator not found: " + operator.operatorId()));
         AdminOperator adminOperator = toDomain(entity);
 
-        // Effective tenant scope: assignment rows ∪ {home tenant}. NET-ZERO with
-        // no assignments → {home tenant} → byte-identical legacy binding.
+        // Effective tenant scope = the operator's memberships (assignment rows only — TASK-MONO-784 S2,
+        // ADR-MONO-082 b · R1 · D-2; console-registry-api.md § Tenant selection rule 2). The home is no
+        // longer added: a company the operator was removed from leaves the switcher even if it is the
+        // home. V0051 backfilled a home assignment for every pre-784 operator.
         Set<String> effectiveTenants = tenantScopeResolver
                 .resolveEffectiveTenantScope(entity.getId(), entity.getTenantId());
 
@@ -185,10 +187,9 @@ public class ConsoleRegistryUseCase {
             return List.copyOf(bound);
         }
         // single-tenant operator: never expose a tenant outside the operator's
-        // effective scope. TASK-BE-326 dual-read: bound ∩ effectiveTenants
-        // (assignment rows ∪ home tenant), preserving bound ordering. NET-ZERO
-        // with no assignments → effectiveTenants == {home tenant} → reproduces
-        // the legacy `bound.contains(ownTenant) ? [ownTenant] : []` exactly.
+        // effective scope: bound ∩ effectiveTenants (the memberships — assignment rows
+        // only since TASK-MONO-784 S2; TASK-BE-326 added the home to the union, 784
+        // removed it, R1 · D-2), preserving bound ordering.
         //
         // TASK-MONO-751 (ADR-MONO-079 rider R3): a platform-operator-only tenant
         // (`fan-platform`) is NEVER listed for a non-platform operator — not even when

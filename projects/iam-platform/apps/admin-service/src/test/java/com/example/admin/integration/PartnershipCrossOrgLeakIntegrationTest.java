@@ -341,6 +341,9 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
                     VALUES (?, ?, ?, 'x', ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
                     """, uuid, tenantId, email, "Test Op", oidcSubject);
         }
+        // TASK-MONO-784 S2: the home is no longer a membership (and partnership reach is partner ∈
+        // memberships, D-11) — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 
     private ResultActions consoleEligibility(String accountId) throws Exception {
@@ -359,6 +362,8 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
                     VALUES (?, ?, ?, NULL, ?, 'ACTIVE', ?, NOW(6), NOW(6), 0)
                     """, uuid, tenantId, email, "Pool Staff", poolAccountId);
         }
+        // TASK-MONO-784 S2: an accepted invitation writes the membership row (OperatorInvitationAcceptanceWriter).
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 
     private void seedRole(String uuid, String roleName) {

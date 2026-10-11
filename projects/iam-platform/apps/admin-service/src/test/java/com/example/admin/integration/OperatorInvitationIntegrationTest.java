@@ -196,6 +196,8 @@ class OperatorInvitationIntegrationTest extends AbstractIntegrationTest {
                   FROM admin_operators o JOIN admin_roles r ON r.name = 'TENANT_ADMIN'
                  WHERE o.operator_id = ?
                 """, tenantId, operatorId);
+        // TASK-MONO-784 S2: the home is no longer a membership — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     private static String bearer(String operatorId) {
@@ -331,7 +333,14 @@ class OperatorInvitationIntegrationTest extends AbstractIntegrationTest {
         // R4: neither token (nor a hash) reached the application log — and the capture is not empty: the use case's
         // own INFO line about this invitation is in it.
         StringBuilder logged = new StringBuilder();
-        for (var event : logs.list) {
+        // Snapshot under the appender's lock — the ROOT capture keeps receiving background-thread events while this
+        // reads; iterating `logs.list` directly is the race that threw ConcurrentModificationException in the sibling
+        // OperatorInvitationAcceptanceIntegrationTest (#4312 CI). AppenderBase.doAppend is synchronized on the appender.
+        List<ch.qos.logback.classic.spi.ILoggingEvent> captured;
+        synchronized (logs) {
+            captured = new java.util.ArrayList<>(logs.list);
+        }
+        for (var event : captured) {
             logged.append(event.getFormattedMessage()).append('\n');
         }
         assertThat(logged.toString()).contains(invitationId)

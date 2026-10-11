@@ -240,6 +240,15 @@ SELECT o.id, r.id, o.tenant_id, NOW(6), NULL
   JOIN admin_roles r ON r.name = 'SUPER_ADMIN'
  WHERE o.operator_id = 'acme-corp-operator';
 
+-- 8b. TASK-MONO-784 S2 (ADR-MONO-082 b · rider R1 · D-2 · D-10): the acme-corp membership row. An
+--     operator's tenant scope (assume · console registry · token exchange) is its
+--     operator_tenant_assignment rows only — the home is no longer added. admin-service V0051
+--     backfills this row for pre-existing operators, but this seed runs after Flyway.
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'acme-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id = 'acme-corp-operator';
+
 -- ===========================================================================
 -- TASK-MONO-158 — ADR-MONO-020 § 3.3 step 3 (D4) active-tenant switcher →
 -- assume-tenant flow. Multi-assignment demo operator + 2nd customer tenant.
@@ -478,6 +487,17 @@ SELECT o.id, r.id, 'umbrella-corp', NOW(6), NULL
   FROM admin_operators o
   JOIN admin_roles r ON r.name = 'TENANT_BILLING_ADMIN'
  WHERE o.operator_id = 'tenant-billing-admin-umbrella';
+
+-- TASK-MONO-784 S2 (ADR-MONO-082 b · rider R1 · D-2 · D-10): an operator's tenant scope is its
+-- operator_tenant_assignment rows («memberships») only — the home tenant is no longer added, and the
+-- token exchange requires ACTIVE ∧ membership ≥ 1. admin-service V0051 backfills a home membership for
+-- every pre-existing operator, but THIS seed runs after Flyway, so the two operators that LOG IN carry
+-- their umbrella-corp membership here. The throwaway target (`deleg-target-umbrella`) deliberately gets
+-- none: the delegation spec assigns it INTO umbrella-corp and expects 201 (a row would make that 409).
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'umbrella-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id IN ('tenant-admin-umbrella', 'tenant-billing-admin-umbrella');
 
 -- SUPPORT_READONLY @ umbrella-corp for the throwaway target (benign baseline so
 -- the grant-menu ALLOW is a visible role *change*; SUPPORT_READONLY's read perms

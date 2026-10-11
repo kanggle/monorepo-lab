@@ -187,6 +187,8 @@ class OperatorProfileAdminIntegrationTest extends AbstractIntegrationTest {
                      WHERE operator_id = ?
                     """, tenantId, operatorUuid);
         }
+        // TASK-MONO-784 S2: the home is no longer a membership — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorUuid);
     }
 
     /** Bind SUPER_ADMIN role to the operator (idempotent). */

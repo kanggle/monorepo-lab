@@ -25,8 +25,9 @@
 -- ---------------------------------------------------------------------------
 -- 1. NO admin_operator_roles row. Logging in does not need one: the console reaches
 --    the operator plane through the OIDC token exchange, which checks only that an
---    admin_operators row matches the `sub` and is `status = 'ACTIVE'`
---    (TokenExchangeService). The console shell's own call
+--    admin_operators row matches the `sub`, is `status = 'ACTIVE'` and — since
+--    TASK-MONO-784 S2 — has at least one membership (choice 3) (TokenExchangeService ·
+--    OperatorConsoleAdmission). The console shell's own call
 --    (`GET /api/admin/console/registry`) carries no @RequiresPermission either.
 --    SUPPORT_READONLY was the alternative and was rejected: it would OPEN /accounts
 --    (account.read) and /audit (audit.read) — consumer account data and the audit
@@ -35,8 +36,8 @@
 --    union is empty — rbac.md § Permission Evaluation Algorithm step 4).
 --
 -- 2. Home tenant `demo-viewer`, which is deliberately NOT a registered tenant.
---    The home tenant is part of the operator's effective scope (TenantScopeResolver:
---    assignment rows ∪ {home}), and OperatorAssignmentCheckUseCase lets an operator
+--    The operator's effective scope is its membership (choice 3: the one assignment row
+--    to this same unregistered slug), and OperatorAssignmentCheckUseCase lets an operator
 --    ASSUME any tenant in that scope. With home = demo-corp this identity could assume
 --    demo-corp and receive ECOMMERCE/WMS/SCM/ERP/FINANCE_OPERATOR — write access to
 --    every domain — which is not "minimal". An unregistered slug is dropped by the
@@ -44,7 +45,14 @@
 --    lists zero tenants, the switcher does not render, and each domain section shows
 --    «테넌트를 먼저 선택하세요» (DomainTenantGate) instead of data.
 --
--- 3. NO operator_tenant_assignment row, for the same reason as 2.
+-- 3. ONE operator_tenant_assignment row — to the unregistered `demo-viewer` slug, NOT to
+--    any real tenant, for the same reason as 2. TASK-MONO-784 S2 (ADR-MONO-082 b · rider R1
+--    · decisions D-2 · D-10): the home tenant is no longer part of the scope, and the token
+--    exchange / console-eligibility now require ACTIVE ∧ membership ≥ 1. Before 784 this
+--    file had no row and the home alone carried both; now the row carries exactly what the
+--    home used to (the demo behaviour is unchanged — the registry still drops the
+--    unregistered slug, so every product lists zero tenants). V0051's backfill cannot supply
+--    it: R__ seeds run AFTER every V migration.
 --
 -- 🔴 KNOWN LIMIT — this identity's restriction is not tamper-proof on a public demo.
 --    `demo@demo.com` is SUPER_ADMIN with published credentials and can grant this
@@ -82,6 +90,10 @@ ON DUPLICATE KEY UPDATE
     status       = 'ACTIVE',
     updated_at   = NOW(6);
 
--- Intentionally NO admin_operator_roles and NO operator_tenant_assignment rows
--- (see "WHAT MINIMAL MEANS" above). DemoOperatorSeedIntegrationTest asserts both are
--- empty, so adding one argues with a red test rather than with this comment.
+-- Intentionally NO admin_operator_roles row (see "WHAT MINIMAL MEANS" above).
+-- The one membership — the unregistered `demo-viewer` slug (choice 3, TASK-MONO-784 S2).
+-- DemoOperatorSeedIntegrationTest asserts the role set is empty and the assignment set is
+-- exactly {demo-viewer}, so widening either argues with a red test rather than with this comment.
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'demo-viewer', NOW(6), NULL, NULL
+  FROM admin_operators o WHERE o.operator_id = 'demo-viewer';

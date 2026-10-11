@@ -79,6 +79,8 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
     // TASK-BE-305: single-tenant operators for finance + erp isolation regression guard.
     private static final String FINANCE_TENANT_OP_UUID = "00000000-0000-7000-8000-000000000013";
     private static final String ERP_TENANT_OP_UUID     = "00000000-0000-7000-8000-000000000014";
+    // TASK-MONO-784 S2: a wms-homed operator WITHOUT a membership row (the home alone).
+    private static final String HOME_ONLY_OP_UUID      = "00000000-0000-7000-8000-000000784021";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -236,6 +238,9 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                     """, operatorId, tenantId, operatorId + "@example.com",
                     "Op " + operatorId.substring(operatorId.length() - 2));
         }
+        // TASK-MONO-784 S2: the registry's tenant scope is the memberships only — add the home
+        // membership V0051 would have backfilled (no-op for '*').
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorId);
     }
 
     private String token(String operatorId) {
@@ -310,6 +315,33 @@ class ConsoleRegistryIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath(
                         "$.products[*].tenants[?(@ == 'fan-platform' || @ == 'scm' || @ == 'ecommerce')]")
                         .doesNotExist());
+    }
+
+    @Test
+    @DisplayName("🔴 784 S2 (R1 · D-2): 홈만 있고 소속 행 없는 운영자 → 스위처에 홈 테넌트 없음 / 대조군: 소속 행 있는 같은 홈 운영자 → wms")
+    void homeOnlyOperator_seesNoTenant_memberControlSeesHome() throws Exception {
+        // Inserted by hand WITHOUT MembershipFixture: the home tenant alone, as a row V0051 never saw.
+        jdbcTemplate.update("""
+                INSERT IGNORE INTO admin_operators
+                  (operator_id, tenant_id, email, password_hash, display_name, status,
+                   created_at, updated_at, version)
+                VALUES (?, 'wms', ?, 'x', 'Home-only Op', 'ACTIVE', NOW(6), NOW(6), 0)
+                """, HOME_ONLY_OP_UUID, HOME_ONLY_OP_UUID + "@example.com");
+
+        // Failing side first: the home is not a membership (console-registry-api.md § Tenant selection
+        // rule 2 — the switcher lists the memberships).
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(HOME_ONLY_OP_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].productKey").value("iam"))
+                .andExpect(jsonPath("$.products[0].tenants.length()").value(0))
+                .andExpect(jsonPath("$.products[*].tenants[?(@ == 'wms')]").doesNotExist());
+
+        // Control, same test: the wms operator WITH its membership row still sees wms.
+        mockMvc.perform(get("/api/admin/console/registry")
+                        .header("Authorization", token(WMS_OP_UUID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].tenants[0]").value("wms"));
     }
 
     @Test

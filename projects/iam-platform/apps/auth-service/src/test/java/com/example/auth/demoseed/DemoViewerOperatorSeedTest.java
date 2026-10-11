@@ -34,9 +34,11 @@ import org.junit.jupiter.api.Test;
  *       own hasher — a stale hash only shows up as a failed live login;</li>
  *   <li>the operator's {@code oidc_subject} equals that credential's account id —
  *       a mismatch fail-closes to a console 401 that reads like a load timeout;</li>
- *   <li>the operator seed grants NO role and NO tenant assignment, and its home tenant
- *       is not {@code demo-corp} — each of those would quietly turn the account that
- *       exists to show «권한 부족» into one that does not.</li>
+ *   <li>the operator seed grants NO role, its ONE tenant assignment is its own unregistered
+ *       home slug {@code demo-viewer}, and that home is not {@code demo-corp} — each of those
+ *       would quietly turn the account that exists to show «권한 부족» into one that does not.
+ *       (TASK-MONO-784 S2: the home alone is no longer a membership, so the row is what keeps
+ *       the login — exchange = ACTIVE ∧ membership ≥ 1.)</li>
  * </ul>
  *
  * <p>Every value is parsed out of the SQL; the admin-service file is a Gradle
@@ -159,23 +161,30 @@ class DemoViewerOperatorSeedTest {
     }
 
     @Test
-    @DisplayName("the viewer operator is minimal: no role, no assignment, home tenant not demo-corp")
+    @DisplayName("the viewer operator is minimal: no role, membership exactly its unregistered home, home not demo-corp")
     void viewerIsMinimal() throws IOException {
         String seed = operatorSeed();
         String statements = statementsOnly(seed);
 
-        // A role or an assignment is the only way this seed could widen the account.
+        // A role or a membership in a real tenant is the only way this seed could widen the account.
         assertThat(statements).doesNotContainIgnoringCase("admin_operator_roles");
-        assertThat(statements).doesNotContainIgnoringCase("operator_tenant_assignment");
-        // Control for statementsOnly(): the raw file DOES mention both tables (in the
-        // comment that explains their absence). If this fails, the comment stripping is
-        // no longer what makes the two checks above meaningful.
-        assertThat(seed).contains("admin_operator_roles").contains("operator_tenant_assignment");
+        // Control for statementsOnly(): the raw file DOES mention the table (in the
+        // comment that explains its absence). If this fails, the comment stripping is
+        // no longer what makes the check above meaningful.
+        assertThat(seed).contains("admin_operator_roles");
 
-        // The home tenant is assumable (home ∪ assignments). demo-corp would derive all
-        // five domain OPERATOR roles at assume time.
+        // TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D-2 · D-10): the assumable tenant is the membership
+        // (assignment rows only — the home is no longer added). Exactly one, and it is the operator's
+        // own unregistered home slug: the login survives (exchange needs ≥ 1) and nothing real opens.
         List<SeededOperator> operators = parseOperators(seed);
         assertThat(operators).hasSize(1);
-        assertThat(operators.get(0).tenantId()).isNotEqualTo("demo-corp");
+        Matcher membership = DemoCsOperatorSeedTest.MEMBERSHIP.matcher(statements);
+        List<String> memberships = new ArrayList<>();
+        while (membership.find()) {
+            memberships.add(membership.group(1) + " → " + membership.group(2));
+        }
+        assertThat(memberships).containsExactly(operators.get(0).tenantId() + " → demo-viewer");
+        // demo-corp would derive all five domain OPERATOR roles at assume time.
+        assertThat(operators.get(0).tenantId()).isEqualTo("demo-viewer").isNotEqualTo("demo-corp");
     }
 }

@@ -36,7 +36,9 @@ import org.junit.jupiter.api.Test;
  *       {@code ecommerce} — a {@code '*'} grant would make every lock a whole-account lock
  *       across sites (TASK-BE-621), and any other home tenant cannot find the demo consumer
  *       (it is a member of {@code ecommerce} and {@code fan-platform} only);</li>
- *   <li>the operator is confined to {@code ecommerce} and holds no assignment row.</li>
+ *   <li>the operator is confined to {@code ecommerce} and its ONE membership (assignment row) is
+ *       {@code ecommerce} — TASK-MONO-784 S2: the home is no longer a membership, so without that row
+ *       the identity loses the console (exchange 401) and its ecommerce assume.</li>
  * </ul>
  * The disclosed domain-role trade-off of that home tenant is pinned separately, where the
  * package-private derivation table is reachable:
@@ -77,6 +79,15 @@ class DemoCsOperatorSeedTest {
     private static final Pattern ROLE_GRANT = Pattern.compile(
             "INSERT\\s+IGNORE\\s+INTO\\s+admin_operator_roles[^;]*?SELECT\\s+o\\.id\\s*,\\s*r\\.id\\s*,\\s*"
                     + "'([a-z*-]+)'[^;]*?r\\.name\\s*=\\s*'([A-Z_]+)'[^;]*?o\\.operator_id\\s*=\\s*'([a-z-]+)'\\s*;",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * TASK-MONO-784 S2 — a membership: {@code INSERT IGNORE INTO operator_tenant_assignment ... SELECT o.id,
+     * '<tenant>', ... o.operator_id = '<operatorId>'}. {@code [^;]} keeps one match inside one statement.
+     */
+    static final Pattern MEMBERSHIP = Pattern.compile(
+            "INSERT\\s+IGNORE\\s+INTO\\s+operator_tenant_assignment[^;]*?SELECT\\s+o\\.id\\s*,\\s*'([a-z*-]+)'"
+                    + "[^;]*?o\\.operator_id\\s*=\\s*'([a-z-]+)'\\s*;",
             Pattern.CASE_INSENSITIVE);
 
     private final PasswordHasher hasher = new Argon2idPasswordHasher();
@@ -169,7 +180,7 @@ class DemoCsOperatorSeedTest {
     }
 
     @Test
-    @DisplayName("the CS operator is a SITE operator: home ecommerce, exactly SUPPORT_LOCK@ecommerce, no assignment")
+    @DisplayName("the CS operator is a SITE operator: home ecommerce, exactly SUPPORT_LOCK@ecommerce, membership exactly ecommerce")
     void csOperatorIsSiteScopedSupportLock() throws IOException {
         String seed = operatorSeed();
         String statements = statementsOnly(seed);
@@ -191,10 +202,18 @@ class DemoCsOperatorSeedTest {
                         + "any other role widens CS 2nd-line")
                 .containsExactly("SUPPORT_LOCK@ecommerce → demo-cs");
 
-        assertThat(statements).doesNotContainIgnoringCase("operator_tenant_assignment");
-        // Control for statementsOnly(): the raw file DOES mention the table (in the comment
-        // that explains its absence).
-        assertThat(seed).contains("operator_tenant_assignment");
+        // TASK-MONO-784 S2 (ADR-MONO-082 b · R1 · D-2 · D-10): the membership is the assignment row —
+        // exactly ecommerce. None → the console refuses this identity (exchange 401); a second one →
+        // a second assumable tenant whose derived roles nobody disclosed.
+        Matcher membership = MEMBERSHIP.matcher(statements);
+        List<String> memberships = new ArrayList<>();
+        while (membership.find()) {
+            memberships.add(membership.group(1) + " → " + membership.group(2));
+        }
+        assertThat(memberships).containsExactly("ecommerce → demo-cs");
+        // Control: the membership pattern is not the role-grant pattern — the grant statement above
+        // was matched by ROLE_GRANT and is NOT counted as a membership (and vice versa).
+        assertThat(ROLE_GRANT.matcher(statements).results().count()).isEqualTo(1);
     }
 
     @Test

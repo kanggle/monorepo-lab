@@ -60,9 +60,9 @@ public interface AdminOperatorPort {
 
     /**
      * TASK-MONO-175 / ADR-MONO-020 — tenant-scoped paginated listing: operators
-     * whose HOME tenant ({@code admin_operators.tenant_id}) equals {@code tenantId}
-     * OR who have an ASSIGNED tenant ({@code operator_tenant_assignment}) equal to
-     * {@code tenantId}. Sorted by {@code createdAt DESC}. Used by
+     * with a MEMBERSHIP ({@code operator_tenant_assignment} row) in {@code tenantId}.
+     * TASK-MONO-784 S2 removed the «OR HOME tenant equals {@code tenantId}» alternative
+     * (R1 · D-2 — the home is not a membership; V0051 backfilled home assignments). Sorted by {@code createdAt DESC}. Used by
      * {@code GET /api/admin/operators} when scoping to a specific (non-platform)
      * tenant; the unscoped {@link #findOperatorsPage} is used for the platform
      * ({@code '*'}) cross-tenant view.
@@ -73,7 +73,7 @@ public interface AdminOperatorPort {
 
     /**
      * TASK-MONO-777 — {@code GET /api/admin/operators/lookup}: operators of {@code tenantId}
-     * (HOME ∪ ASSIGNED; {@code '*'} = every tenant) with this normalized {@code email} who can
+     * (members — assignment rows only since TASK-MONO-784 S2; {@code '*'} = every tenant) with this normalized {@code email} who can
      * enter that tenant through the console: {@code status = ACTIVE}, {@code oidc_subject}
      * present, and {@code confined_tenant_id} null or {@code tenantId} (TASK-MONO-751; ignored
      * for {@code '*'}). Sorted by HOME tenant ascending.

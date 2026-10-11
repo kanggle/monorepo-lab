@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
  *       token minted;</li>
  *   <li>mapped operator not {@code ACTIVE} (DISABLED/LOCKED) → 401, no token
  *       minted;</li>
+ *   <li>TASK-MONO-784 S2 (ADR-MONO-082 b · D-10) — a non-{@code '*'} operator with <b>no membership</b>
+ *       ({@code operator_tenant_assignment} rows = 0) → 401, no token minted. The same
+ *       {@link OperatorConsoleAdmission} answers the console-eligibility read, so the two cannot drift;</li>
  *   <li>tenant scope is NEVER read from the OIDC token — it is resolved at
  *       request time from {@code admin_operators.tenant_id} (ADR-002 sentinel)
  *       by the existing RBAC/tenant evaluators; this service merely mints the
@@ -63,6 +66,8 @@ public class TokenExchangeService {
     private final OperatorOidcSubjectResolver operatorResolver;
     // TASK-MONO-771 S4: the shared requirement (the assume-tenant gate uses the SAME component).
     private final OperatorSecondFactorRequirement secondFactorRequirement;
+    // TASK-MONO-784 S2 (D-10): the shared «live operator» predicate (console-eligibility uses the SAME one).
+    private final OperatorConsoleAdmission admission;
 
     /**
      * Exchanges a validated GAP OIDC subject token for an operator access
@@ -103,9 +108,22 @@ public class TokenExchangeService {
                     "Operator is not active");
         }
 
+        // 2a. TASK-MONO-784 S2 (ADR-MONO-082 b · D3 · D-10; admin-api.md § token-exchange, auth-to-admin.md
+        //     § console-eligibility) — an ACTIVE row whose last membership was removed («export from this
+        //     company») is not an operator any more: 401, exactly like a non-ACTIVE row. '*' has no
+        //     memberships by definition and is admitted. Decided BEFORE 2b, so a 403 MFA_REQUIRED never
+        //     reveals a row that has no membership.
+        if (!admission.hasMembershipOrIsPlatform(operator)) {
+            log.debug("token-exchange fail-closed: operator has no membership");
+            // The same body as the non-ACTIVE refusal (contract: «the same answer») — the response does not
+            // tell a row-with-no-membership apart from a suspended one; only the debug log does.
+            throw new SubjectTokenInvalidException(
+                    "Operator is not active");
+        }
+
         // 2b. TASK-MONO-771 S4 (ADR-MONO-080 D4 · R2, OD-2 · OD-3) — second-factor requirement, decided
         //     only AFTER the operator resolved (so 403 never reveals an operator that 401 would hide).
-        //     Required (role flag ∨ any policy-ON tenant in home ∪ assignments) and "mfa" ∉ amr
+        //     Required (role flag ∨ any policy-ON tenant among the memberships — 784 S2) and "mfa" ∉ amr
         //     → 403 MFA_REQUIRED, NOT 401 (the console reads only 401 as «not an operator», AC-0 F1).
         //     A subject that already carries "mfa" needs no requirement read at all. A failed read
         //     → 500 (SecondFactorRequirementUnavailableException) — never «not required».

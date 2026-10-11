@@ -227,5 +227,7 @@ class AdminAuditTenantScopeIntegrationTest extends AbstractIntegrationTest {
                      WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
                     """, uuid);
         }
+        // TASK-MONO-784 S2: the home is no longer a membership — add the row V0051 would have backfilled.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 }

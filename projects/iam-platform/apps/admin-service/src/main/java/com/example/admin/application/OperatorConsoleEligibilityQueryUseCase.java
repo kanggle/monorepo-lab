@@ -10,9 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
  * facet.
  *
  * <p>The predicate is <b>the operator token exchange's</b> ({@link TokenExchangeService}): the operator resolved
- * by {@code oidc_subject = accountId} through the same shared {@link OperatorOidcSubjectResolver}, and
- * {@code status = ACTIVE}. Sharing the resolver means the issuer's answer and the exchange's answer cannot drift:
- * a console token is minted exactly for the subjects the exchange would then accept.
+ * by {@code oidc_subject = accountId} through the same shared {@link OperatorOidcSubjectResolver}, then the shared
+ * {@link OperatorConsoleAdmission} — {@code status = ACTIVE ∧ ('*' ∨ membership ≥ 1)}. The membership clause is
+ * TASK-MONO-784 S2 (ADR-MONO-082 b · D-10): a row whose last membership was removed stays {@code ACTIVE} but must
+ * not enter an empty console. Sharing the resolver and the admission means the issuer's answer and the
+ * exchange's answer cannot drift: a console token is minted exactly for the subjects the exchange would then
+ * accept.
  *
  * <p>Deliberately NOT {@link OperatorFacetQueryUseCase}: that read is status-blind and two-axis (it answers «may
  * this account be moved into the pool»). Using it here would hand a console token to a suspended operator, whose
@@ -25,15 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OperatorConsoleEligibilityQueryUseCase {
 
-    /** {@code admin_operators.status} the exchange admits — the literal {@link TokenExchangeService} compares. */
-    static final String ACTIVE = "ACTIVE";
-
     private final OperatorOidcSubjectResolver operatorResolver;
+    private final OperatorConsoleAdmission admission;
 
     @Transactional(readOnly = true)
     public boolean isConsoleEligible(String accountId) {
         return operatorResolver.resolve(accountId)
-                .map(operator -> ACTIVE.equals(operator.status()))
+                .map(admission::admits)
                 .orElse(false);
     }
 }

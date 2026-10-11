@@ -14,7 +14,8 @@ import java.util.Set;
  *
  * <p>Extracted verbatim from {@link AuditQueryUseCase} (TASK-BE-249/BE-326) so the
  * two read surfaces cannot drift: resolve the operator's effective tenant scope
- * (home ∪ assignments via {@link TenantScopeResolver}), default an omitted request
+ * (its memberships via {@link TenantScopeResolver} — home ∪ assignments before TASK-MONO-784 S2,
+ * assignments only since), default an omitted request
  * tenant to the operator's own, and enforce membership — a non-platform operator
  * requesting an out-of-scope tenant gets a best-effort DENIED {@code admin_actions}
  * row (TASK-BE-262) + {@code 403 TENANT_SCOPE_DENIED}.
@@ -63,8 +64,9 @@ public class QueryTenantScopeGate {
         String operatorTenantId = operatorRef.tenantId();
         boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
 
-        // TASK-BE-326 dual-read effective scope (assignments ∪ home). NET-ZERO with
-        // no assignments → {home tenant} → membership check == legacy equality.
+        // Effective scope = memberships (assignment rows only since TASK-MONO-784 S2 — the home is not
+        // added, R1 · D-2; V0051 backfilled a home assignment so a single-company operator is unchanged).
+        // S3 retargets this gate at the per-permission grant scope (D-4).
         Set<String> effectiveTenants = tenantScopeResolver
                 .resolveEffectiveTenantScope(operatorRef.internalId(), operatorTenantId);
 
