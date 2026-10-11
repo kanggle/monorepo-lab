@@ -1548,6 +1548,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > - **마지막 소속을 내보내도 운영자 행은 지우지 않는다**(D-10) — 행은 `ACTIVE` 로 남고 소속 0 이 된다. 콘솔 적격 · 토큰 교환이 `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` 로 문을 닫는다([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)). 재초대 · 재온보딩은 같은 행에 소속을 더한다(§ Operator Invitation). 감사 해소가 행을 요구한다.
 > - 홈 회사에서 내보내져도 `admin_operators.tenant_id`(홈)는 그대로다(R1) — 판정에서 읽지 않으므로 그 회사 권한은 없다.
 > - 대상이 `'*'` 운영자 · 소속이 없는 테넌트 → 지금처럼 `404 ASSIGNMENT_NOT_FOUND`(좁히는 방향이라 `'*'` 대상도 거절 코드를 따로 두지 않는다).
+> - 🔴 **마지막 관리자 보호 (소유자 결정 2026-10-11 UTC — «거절 (409)»)**: 이 쓰기 뒤 T 에 **`ACTIVE` 이면서 `TENANT_ADMIN`@T 를 가진(직접 · 그룹 · 노드 어느 출처든) 운영자가 0** 이 되면 `409 TENANT_LAST_ADMIN_REQUIRED`, 쓰기 없음 — 자기 자신을 내보내는 경우 포함. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리한다(ADR-MONO-044 D3 «관리자 없는 활성 테넌트 없음» 과 같은 방향). 🔴 같은 술어를 **역할 변경(`PATCH …/roles`) · 그룹 멤버 제거 · 그룹 역할 변경**에도 건다 — 하나만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회된다. T 가 `'*'` 이거나 대상이 T 의 관리자가 아니면 술어는 참이다(검사 없음).
 > - 콘솔 문구: «배정 해제» → **«이 회사에서 내보내기»**(S6).
 
 **Auth required**: Yes · **Required permission**: `operator.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
@@ -1976,6 +1977,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > | 교체 범위 | `admin_operator_roles` 중 `operator_id = 대상 ∧ tenant_id = T ∧ group_origin IS NULL ∧ org_node_id IS NULL` 만 지우고 요청의 `roles` 를 `tenant_id = T` 직접 행으로 쓴다 | — |
 >
 > - 다른 회사의 역할 행 · 그룹 fan-out 행 · 노드 grant 는 **바이트 불변**(784 AC-4 · F6 수선).
+> - 🔴 마지막 관리자 보호: 교체 뒤 T 에 `ACTIVE` · `TENANT_ADMIN`@T 보유자가 0 이면 `409 TENANT_LAST_ADMIN_REQUIRED`(§ «이 회사에서 내보내기» 의 같은 술어).
 > - `roles: []` = **T 의 직접 역할 전부 제거**다 — 소속은 남는다(R2 «소속 · 관리 권한 0»). 그 회사에서 사람을 빼는 것은 «이 회사에서 내보내기»(`DELETE …/assignments/{tenantId}`)다.
 > - 응답 `roles` = 교체 뒤 **T 의** 역할 행 이름(그룹 · 노드 행 포함). 다른 회사의 역할은 싣지 않는다.
 > - 감사 `OPERATOR_ROLE_CHANGE` 의 `target_tenant_id` = T. 권한 캐시 무효화(지금 그대로).

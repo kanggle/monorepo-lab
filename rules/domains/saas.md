@@ -94,6 +94,7 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` — 수락한 계정이 ACTIVE 풀(개인) 계정이 아님 (403)
 - `OPERATOR_INVITATION_INVALIDATED` — 수락 시 초대의 근거(테넌트 ACTIVE · 초대자 ACTIVE · 초대자의 범위 · 부여 메뉴)가 더는 성립하지 않음 (409)
 - `OPERATOR_ALREADY_PROVISIONED` — 초대 수락 · 셀프 온보딩(테넌트 생성 전 판정)에서 계정의 기존 운영자 측면이 **이 소속을 받을 수 없음** — 이미 그 테넌트 소속 · 플랫폼(`'*'`) 측면 · 비-`ACTIVE`. 784(ADR-MONO-082 b) 부터 아직 소속이 아닌 `ACTIVE` 회사 측면은 같은 행에 소속이 더해진다 — 784 전에는 «측면이 있으면 전부»(772 OD-1 한 사람 = 한 회사) (409)
+- `TENANT_LAST_ADMIN_REQUIRED` — 그 테넌트의 마지막 활성 테넌트 관리자를 없애는 쓰기(회사에서 내보내기 · 자기 자신 포함 · 역할 교체 · 그룹 멤버 제거) 거절 (409). 경로마다 같은 술어 — 하나로 다른 하나를 우회하지 못하게. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리
 - `OPERATOR_HAS_OTHER_MEMBERSHIPS` — 행 전체 변경(상태 · 프로필 · 신원 연결/해제)을 회사 범위 관리자가 시도했는데 대상이 회사 둘 이상의 소속 — 행 전체는 플랫폼(`'*'`)만, 회사 관리자는 «이 회사에서 내보내기» (403, ADR-MONO-082 라이더 R3). 대상의 회사를 하나도 관리하지 않는 행위자에겐 `TENANT_SCOPE_DENIED`(소속 수 비노출)
 - `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` — 셀프 온보딩: 호출자의 운영자 측면이 이미 신원당 상한만큼의 서로 다른 테넌트에서 테넌트 관리자 역할을 가짐 — 테넌트 생성 전 판정, 아무것도 쓰지 않는다 (422, ADR-MONO-044 D4 · ADR-MONO-082 D4 세는 단위)
 - `OPERATOR_ALREADY_LINKED` — 이미 account 신원에 연결된 운영자 (409)

@@ -361,3 +361,6 @@ ADR-082 § Outstanding 그대로: `SELECT COUNT(DISTINCT operator_id) FROM opera
 4. `GET /api/admin/me` 의 `roles` 가 `X-Tenant-Id` 를 읽는데 콘솔이 `/me` 에 그 헤더를 싣는지 — S6 에서 확인(안 실으면 nav 가 합으로 남는다 — 판정은 producer 가 하므로 누수는 아니다).
 5. `multi-tenancy.md` § 7 시험 자리 표에 784 행(AC-1 · AC-2 · AC-3 · AC-4 · AC-5 의 시험 위치)을 더하는 것은 시험이 생기는 S3 ~ S5 몫으로 남겼다.
 
+## 소유자 결정 추가 (2026-10-11 UTC) — 마지막 관리자
+
+S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 마지막 `TENANT_ADMIN` · 자기 자신을 내보내면 관리자 0 회사가 생긴다 — 784 전엔 불가능)에 소유자 선택창 응답 **«거절 (409)»**(추천과 같음 — 티켓 범위 결정). 계약: `admin-api.md` § «이 회사에서 내보내기» · § 역할 PATCH 에 `409 TENANT_LAST_ADMIN_REQUIRED`(새 코드, `platform/error-handling.md` · `rules/domains/saas.md` 등록). 🔴 오케스트레이터 판단으로 **같은 술어를 역할 교체 · 그룹 멤버 제거 · 그룹 역할 변경에도** 건다 — 내보내기만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회되어 결정이 공허해진다. 구현 = S4(AC-2 대조군에 «마지막 관리자 내보내기 → 409 · 쓰기 0» 칸 추가).
