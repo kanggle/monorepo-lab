@@ -87,4 +87,4 @@ platform-console
 - 재측정: 772 뒤 `sso_wrong_account` 에 닿는 모집단 = **운영자 측면이 없는 풀 계정**뿐이다 — 콘솔 교환에서 측면이 없으면 `tenant_id` 를 풀 값으로 남겨 `refuseConsumerPoolTenant` 가 `invalid_grant`(`'consumer-pool'` 문구)로 거절한다(`TenantClaimTokenCustomizer.java:628-636, 309-323`) → 콘솔이 그 문구로 `sso_wrong_account` 를 고른다(`console-web/src/app/api/auth/callback/route.ts:113-126`).
 - 773(ADR-080 D9 = T1)은 바로 그 모집단을 «비운영자 셸» 로 들인다(773 AC-1). 그러면 콘솔이 IdP 로그인 결과(그리고 `id_token`)를 받을 수 있어 RP 로그아웃이 다시 성립할 가능성이 크다 — 지금 IdP 로그아웃 표면을 새로 만들면 773 뒤 쓸모가 줄어든다(772 F7).
 - 소유자 결정: **773 뒤로 미룸**. 773 쪽에 «비운영자 셸의 콘솔 로그아웃이 IAM 세션까지 끝낸다 · `sso_wrong_account` 에 닿는 경로가 남는지 확인» AC 를 더했다.
-
+- 🔵 26차 창(2026-10-11 UTC) 관찰: 초대를 **아직 수락하지 않은** 풀 계정(`hire1@demo.com`, 맞는 계정 · 수락만 남음)도 이 안내 «다른 계정(스토어 소비자 계정)으로 로그인돼 있어…» 를 받았다(콘솔 거절 5회, 09:21~09:27Z) — 772 뒤 이 화면의 모집단이 «틀린 계정» 이 아니라 «측면 없는 풀 계정» 이라는 F7 의 실례. 재판정 때 문구도 함께 본다(773 AC-7).
