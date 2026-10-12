@@ -266,13 +266,13 @@ describe('IamGuideScreen', () => {
     expect(at('/partnerships').SUPER_ADMIN.level).toBe('none');
   });
 
-  it('keeps the global and IAM catalogs in platform-first display order', () => {
+  it('keeps the global and IAM catalogs in functional display order', () => {
     const expected = [
-      'tenant.manage', 'org.manage', 'operator.manage', 'group.manage',
-      'subscription.manage', 'tenant.security.manage', 'account.2fa_reset',
-      'account.lock', 'account.unlock', 'account.force_logout',
-      'account.read', 'audit.read', 'security.event.read',
-      'tenant.admin.delegate', 'partnership.manage',
+      'account.read', 'account.lock', 'account.unlock', 'account.force_logout',
+      'account.2fa_reset', 'audit.read', 'security.event.read',
+      'tenant.manage', 'subscription.manage', 'partnership.manage',
+      'tenant.admin.delegate', 'tenant.security.manage',
+      'org.manage', 'group.manage', 'operator.manage',
     ];
     render(<><GlobalGuideScreen demoLoginEmail="demo@demo.com" /><IamGuideScreen /></>);
     const globalRows = Array.from(screen.getByTestId('global-guide-rbac-matrix').querySelectorAll('tbody tr'));

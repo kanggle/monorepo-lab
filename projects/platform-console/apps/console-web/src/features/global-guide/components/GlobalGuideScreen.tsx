@@ -284,7 +284,7 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
 
         <h3 className="mb-2 text-lg font-medium">역할별 권한</h3>
         <p className="mb-3 max-w-3xl text-sm text-muted-foreground">
-          ● 는 그 역할이 가진 권한입니다. 플랫폼 관리 → 계정 제어 → 조회 → 고객사 위임 순으로
+          ● 는 그 역할이 가진 권한입니다. 계정 → 감사·보안 → 테넌트 → 조직·그룹·운영자 순으로
           정리했습니다. 표시 순서는 권한의 상속이나 자동 부여를 뜻하지 않습니다.
         </p>
         <div className="mb-8 overflow-x-auto">
