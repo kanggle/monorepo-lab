@@ -104,25 +104,25 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'account.2fa_reset':      row(1, 0, 0, 1, 0, 0, 0),
 };
 
-/** Display order only: platform administration, account control, reads, tenant delegation.
+/** Display order only: accounts, audit/security, tenants, organization/workforce.
  * Permissions remain independent keys; this order does not imply inheritance.
  */
 export const RBAC_PERMISSION_ORDER = [
-  'tenant.manage',
-  'org.manage',
-  'operator.manage',
-  'group.manage',
-  'subscription.manage',
-  'tenant.security.manage',
-  'account.2fa_reset',
+  'account.read',
   'account.lock',
   'account.unlock',
   'account.force_logout',
-  'account.read',
+  'account.2fa_reset',
   'audit.read',
   'security.event.read',
-  'tenant.admin.delegate',
+  'tenant.manage',
+  'subscription.manage',
   'partnership.manage',
+  'tenant.admin.delegate',
+  'tenant.security.manage',
+  'org.manage',
+  'group.manage',
+  'operator.manage',
 ] as const satisfies readonly (keyof typeof RBAC_SEED_MATRIX)[];
 
 /**
