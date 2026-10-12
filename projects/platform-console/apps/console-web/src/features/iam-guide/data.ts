@@ -3,10 +3,10 @@
  *
  * **SoT**: `projects/iam-platform/specs/services/admin-service/rbac.md`
  * (§ Permission Keys / § Seed Roles / § Seed Matrix). 이 파일은 그 스펙의
- * seed 매트릭스를 화면-표시용으로 옮긴 것이며, admin-service seed(Flyway
+ * 역할 설명과 키 설명을 화면-표시용으로 옮긴 것이며, admin-service seed(Flyway
  * `V0033__seed_tenant_admin_roles.sql` 외)가 canonical 이다. seed role/권한이
- * 바뀌면 이 파일도 동반 갱신해야 한다(테스트가 role×화면 매트릭스를 단언하여
- * 표면적 드리프트는 잡지만, 설명 텍스트는 사람이 맞춰야 함).
+ * 바뀌면 역할·설명도 동반 갱신해야 한다. 역할별 메뉴는 공통 permission-map 과
+ * 사이드바에서 파생하고, 권한 키 순서는 두 가이드가 공유한다.
  *
  * 화면은 세 부분으로 나뉜다(PC-FE-238):
  *   1. 개념     — `ACCOUNT_HATS` · `AUTH_PLANES`
@@ -27,6 +27,17 @@ import type {
   GlossaryEntry,
   GuideRecipeData,
 } from '@/shared/ui/guide-primitives';
+
+import {
+  RBAC_PERMISSION_ORDER,
+  RBAC_ROLES,
+  accountsAccessTier,
+  gateLabel,
+  hasPermission,
+  resolvePermissionMap,
+  type ResolvedRow,
+  type RbacRole,
+} from '@/shared/guide/permission-map';
 
 /* ─────────────────────────── 1. 개념 ─────────────────────────── */
 
@@ -392,7 +403,7 @@ export interface PermissionKey {
   desc: string;
 }
 
-export const PERMISSION_KEYS: PermissionKey[] = [
+const PERMISSION_KEY_CATALOG: PermissionKey[] = [
   { key: 'account.read', desc: '계정 목록을 조회합니다.' },
   { key: 'account.lock', desc: '계정을 잠급니다. GDPR 삭제도 이 키가 필요합니다.' },
   { key: 'account.unlock', desc: '계정 잠금을 풉니다.' },
@@ -447,6 +458,13 @@ export const PERMISSION_KEYS: PermissionKey[] = [
     desc: '인증 앱과 복구 코드를 모두 잃은 사람의 계정 2단계 인증을 지웁니다. 플랫폼 역할(SUPER_ADMIN · SECURITY_ANALYST)만 — 테넌트 관리자는 갖지 않습니다.',
   },
 ];
+
+/** Both guides use the same display order; a missing description is a build/test error. */
+export const PERMISSION_KEYS: PermissionKey[] = RBAC_PERMISSION_ORDER.map((key) => {
+  const entry = PERMISSION_KEY_CATALOG.find((p) => p.key === key);
+  if (!entry) throw new Error(`IAM guide: missing permission description for ${key}`);
+  return entry;
+});
 
 /** admin-console RBAC seed role (rbac.md § Seed Roles). */
 export interface SeedRole {
@@ -524,7 +542,7 @@ export const SEED_ROLES: SeedRole[] = [
     koName: '보안 분석가',
     scope: 'platform',
     intent:
-      '감사 · 보안 이벤트를 보고 의심 세션을 끊습니다. 계정 잠금은 CS 를 거칩니다.',
+      '감사 · 보안 이벤트를 보고 의심 세션을 끊으며, 계정 2단계 인증을 초기화합니다. 계정 잠금은 CS 를 거칩니다.',
     permissions: [
       'audit.read',
       'security.event.read',
@@ -572,170 +590,65 @@ export const SEED_ROLES: SeedRole[] = [
 /** 매트릭스 셀 상태. */
 export type AccessLevel = 'full' | 'partial' | 'none';
 
-/**
- * 메뉴 × role 접근 매트릭스 (rbac.md § Seed Matrix 파생).
- *
- * PC-FE-238 에서 3개 → 7개 라이브 표면으로 확장하고, 렌더를 **행=메뉴 / 열=역할**
- * 로 전치했다. PC-FE-239 가 `/org-hierarchy` 를 더해 8개 표면 × 7개 역할이 됐다.
- * `data-testid` 규약 `iam-guide-cell-{role}-{href}` 는 전치와 무관하게 유지된다.
- *
- * `/operator-groups`(스텁, 권한 축 없음) · `/iam`(카드별 부분 게이트) · `/iam/guide`
- * (누구나) 는 권한 축이 없어 매트릭스에서 제외 — 사용법 표에만 나온다.
- */
+/** Menu × role table derived from the sidebar and its shared permission gates. */
 export interface ScreenAccess {
-  /** 화면 라벨. */
   screen: string;
-  /** 라우트(참조용 + testid 키). */
   href: string;
-  /** 이 화면을 여는 데 필요한 권한 키. */
   gate: string;
-  /** role.name → 접근 수준 + 주석. */
   cells: Record<string, { level: AccessLevel; note?: string }>;
 }
 
-// 순서는 사이드바 nav(ConsoleSidebarNav.tsx)의 setup-first 순서를 따른다:
-// 운영자 관리 → 권한 세트/권한(TASK-PC-FE-315) → 감사·보안 → 계정 운영 → 조직 계층 → 테넌트 → 구독
-// → 파트너십 (TASK-PC-FE-313: 조직 계층 · 테넌트는 「조직 설정」 그룹으로 옮겨 갔다).
-export const SCREEN_ACCESS: ScreenAccess[] = [
-  {
-    screen: '운영자 관리',
-    href: '/operators',
-    gate: 'operator.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
-    },
-  },
-  {
-    screen: '권한 세트 · 권한',
-    href: '/permissions',
-    gate: 'operator.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'full' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      // operator.manage 로 열린다(조회 카탈로그).
-      ORG_ADMIN: { level: 'full' },
-    },
-  },
-  {
-    screen: '감사 · 보안',
-    href: '/audit',
-    gate: 'audit.read (+ security.event.read)',
-    cells: {
-      SUPER_ADMIN: { level: 'full', note: '보안 이벤트 포함' },
-      SUPPORT_READONLY: { level: 'full', note: '보안 이벤트 포함' },
-      SUPPORT_LOCK: { level: 'partial', note: '보안 이벤트 제외' },
-      SECURITY_ANALYST: { level: 'full', note: '보안 이벤트 포함' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    screen: '계정 운영',
-    href: '/accounts',
-    gate: 'account.read (또는 lock/unlock/force_logout = 이메일 검색만)',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'full', note: '조회만' },
-      // TASK-PC-FE-326 — account.read 는 없지만 lock/unlock/force_logout 이
-      // 있어 전체 목록 없이 이메일 검색으로 화면이 열린다(rbac.md:90,
-      // TASK-BE-357 — email 단건 조회는 권한 키가 필요 없다).
-      SUPPORT_LOCK: { level: 'partial', note: '이메일 검색만(목록 없음)' },
-      SECURITY_ANALYST: { level: 'partial', note: '이메일 검색만(세션 종료 전용)' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    screen: '조직 계층',
-    href: '/org-hierarchy',
-    gate: 'org.manage',
-    cells: {
-      // ROOT 노드 생성 유일 주체는 SUPER_ADMIN(rbac.md § Seed Matrix, ADR-047 D5).
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      ORG_ADMIN: { level: 'full', note: '자기 노드 subtree' },
-    },
-  },
-  {
-    screen: '테넌트',
-    href: '/tenants',
-    gate: 'tenant.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      // ORG_ADMIN 은 tenant.manage 가 없다 — 노드는 관리하되 테넌트 원장은 못 만진다.
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    screen: '도메인 구독',
-    href: '/subscriptions',
-    gate: 'subscription.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'none' },
-      TENANT_BILLING_ADMIN: { level: 'full', note: '자기 테넌트' },
-      // 의도적(ADR-047 v1 한계) — ORG_ADMIN 은 subscription.manage 가 없다. 이게 있어야
-      // TENANT_ADMIN 을 세울 수 있으므로, 없는 것이 no-escalation 을 지킨다.
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    screen: '파트너십',
-    href: '/partnerships',
-    gate: 'partnership.manage',
-    cells: {
-      // 의도적 — 파트너십은 두 고객 테넌트 사이 관계이고 플랫폼은 당사자가 아니다.
-      SUPER_ADMIN: { level: 'none' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      // 의도적(ADR-047 v1 한계) — ORG_ADMIN 은 partnership.manage 도 없다.
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-  {
-    // TASK-MONO-771 S5 (OD-1) — 테넌트 진입 정책. SUPER_ADMIN 은 테넌트 상세에서도 같은 토글.
-    screen: '보안 설정',
-    href: '/security-settings',
-    gate: 'tenant.security.manage',
-    cells: {
-      SUPER_ADMIN: { level: 'full', note: '모든 테넌트' },
-      SUPPORT_READONLY: { level: 'none' },
-      SUPPORT_LOCK: { level: 'none' },
-      SECURITY_ANALYST: { level: 'none' },
-      TENANT_ADMIN: { level: 'full', note: '자기 테넌트' },
-      TENANT_BILLING_ADMIN: { level: 'none' },
-      // 의도적(OD-1) — org-node subtree 단위 위임은 정하지 않았다(rbac.md:141).
-      ORG_ADMIN: { level: 'none' },
-    },
-  },
-];
+function screenAccessCell(
+  screen: ResolvedRow,
+  role: RbacRole,
+): { level: AccessLevel; note?: string } {
+  const has = (key: string) => hasPermission([role], key);
+  const scopeNote = SEED_ROLES.find((r) => r.name === role)?.scope;
+  const note = scopeNote === 'tenant' ? '자기 테넌트'
+    : scopeNote === 'org-node' ? '자기 노드 subtree' : undefined;
+
+  if (screen.href === '/accounts') {
+    const tier = accountsAccessTier([role]);
+    if (tier === 'none') return { level: 'none' };
+    if (tier === 'search-only') return { level: 'partial', note: '이메일 검색만(목록 없음)' };
+    return { level: 'full', note: role === 'SUPPORT_READONLY' ? '조회만' : undefined };
+  }
+  if (screen.href === '/audit') {
+    if (!has('audit.read')) return { level: 'none' };
+    return has('security.event.read')
+      ? { level: 'full', note: '보안 이벤트 포함' }
+      : { level: 'partial', note: '보안 이벤트 제외' };
+  }
+  const gate = screen.gate;
+  switch (gate.kind) {
+    case 'public':
+    case 'operator':
+      return { level: 'full' };
+    case 'admin':
+      return has(gate.permission) ? { level: 'full', note } : { level: 'none' };
+    case 'admin-per-card': {
+      const count = gate.permissions.filter(has).length;
+      if (count === 0) return { level: 'none' };
+      return count === gate.permissions.length
+        ? { level: 'full', note }
+        : { level: 'partial', note: '보유 권한에 해당하는 카드만' };
+    }
+    case 'domain':
+      return { level: 'none', note: '도메인 롤 별도 필요' };
+  }
+}
+
+// IAM drill, organization settings and customer identity in the current sidebar order.
+export const SCREEN_ACCESS: ScreenAccess[] = resolvePermissionMap()
+  .filter((s) => ['iam', 'org', 'customer-identity'].includes(s.area))
+  .map((s) => ({
+    screen: s.label,
+    href: s.href,
+    gate: s.href === '/accounts'
+      ? 'account.read (또는 lock/unlock/force_logout = 이메일 검색만)'
+      : s.href === '/audit' ? 'audit.read (+ security.event.read)' : gateLabel(s.gate),
+    cells: Object.fromEntries(RBAC_ROLES.map((role) => [role, screenAccessCell(s, role)])),
+  }));
 
 /**
  * 도메인 롤(별도 축) — 테넌트 직원/협력사가 실제로 받는 role.

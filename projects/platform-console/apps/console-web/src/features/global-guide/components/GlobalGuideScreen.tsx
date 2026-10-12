@@ -10,6 +10,7 @@ import {
 import {
   DEMO_TEST_ACCOUNT,
   RBAC_ROLES,
+  RBAC_PERMISSION_ORDER,
   RBAC_ROLE_NATURE,
   RBAC_SEED_MATRIX,
 } from '@/shared/guide/permission-map';
@@ -283,7 +284,8 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
 
         <h3 className="mb-2 text-lg font-medium">역할별 권한</h3>
         <p className="mb-3 max-w-3xl text-sm text-muted-foreground">
-          ● 는 그 역할이 가진 권한입니다.
+          ● 는 그 역할이 가진 권한입니다. 플랫폼 관리 → 계정 제어 → 조회 → 고객사 위임 순으로
+          정리했습니다. 표시 순서는 권한의 상속이나 자동 부여를 뜻하지 않습니다.
         </p>
         <div className="mb-8 overflow-x-auto">
           <table className="data-table" data-testid="global-guide-rbac-matrix">
@@ -302,14 +304,14 @@ export function GlobalGuideScreen({ demoLoginEmail }: { demoLoginEmail: string }
               </tr>
             </thead>
             <tbody>
-              {Object.entries(RBAC_SEED_MATRIX).map(([perm, cells]) => (
+              {RBAC_PERMISSION_ORDER.map((perm) => (
                 <tr key={perm} className="border-b border-border" data-testid={`global-guide-rbac-${perm}`}>
                   <th scope="row" className="p-2 text-left">
                     <Mono>{perm}</Mono>
                   </th>
                   {RBAC_ROLES.map((r) => (
                     <td key={r} className="p-2 text-center text-sm">
-                      {cells[r] ? (
+                      {RBAC_SEED_MATRIX[perm][r] ? (
                         <span aria-label="보유" className="text-foreground">●</span>
                       ) : (
                         <span aria-label="미보유" className="text-muted-foreground/60">—</span>
