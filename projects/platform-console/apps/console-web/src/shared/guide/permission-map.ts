@@ -104,6 +104,27 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'account.2fa_reset':      row(1, 0, 0, 1, 0, 0, 0),
 };
 
+/** Display order only: platform administration, account control, reads, tenant delegation.
+ * Permissions remain independent keys; this order does not imply inheritance.
+ */
+export const RBAC_PERMISSION_ORDER = [
+  'tenant.manage',
+  'org.manage',
+  'operator.manage',
+  'group.manage',
+  'subscription.manage',
+  'tenant.security.manage',
+  'account.2fa_reset',
+  'account.lock',
+  'account.unlock',
+  'account.force_logout',
+  'account.read',
+  'audit.read',
+  'security.event.read',
+  'tenant.admin.delegate',
+  'partnership.manage',
+] as const satisfies readonly (keyof typeof RBAC_SEED_MATRIX)[];
+
 /**
  * Does ANY of `myRoles` hold `permission` per the RBAC seed matrix above? An
  * unknown role (custom role / a seed-matrix addition this copy hasn't caught

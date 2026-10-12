@@ -427,7 +427,9 @@ export function IamGuideScreen() {
               <h3 className="mb-2 text-lg font-medium">역할별로 열리는 메뉴</h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 ✅ 가능 · △ 부분 · ✕ 불가. 권한은 보유한 역할들의 합집합으로 평가되고,
-                메뉴가 요구하는 키가 없으면 서버가 거부합니다.
+                메뉴가 요구하는 키가 없으면 서버가 거부합니다. 현재 사이드바 순서대로 IAM · 조직 설정 ·
+                고객 신원 메뉴를 표시합니다. 가이드는 누구나 볼 수 있고, 개요는 카드별 권한으로 열립니다.
+                ✅ 는 해당 메뉴 접근을 뜻하며, 변경 작업은 개별 권한과 테넌트·조직 범위로 제한됩니다.
               </p>
               <div className="mb-4 overflow-x-auto">
                 <table className="data-table" data-testid="iam-guide-access-matrix">

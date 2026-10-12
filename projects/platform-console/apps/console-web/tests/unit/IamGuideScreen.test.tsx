@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { GlobalGuideScreen } from '@/features/global-guide/components/GlobalGuideScreen';
 import { IamGuideScreen } from '@/features/iam-guide';
 import {
   SEED_ROLES,
@@ -263,6 +264,38 @@ describe('IamGuideScreen', () => {
     // 파트너십 = partnership.manage → TENANT_ADMIN only. SUPER_ADMIN is ❌ by design.
     expect(at('/partnerships').TENANT_ADMIN.level).toBe('full');
     expect(at('/partnerships').SUPER_ADMIN.level).toBe('none');
+  });
+
+  it('keeps the global and IAM catalogs in platform-first display order', () => {
+    const expected = [
+      'tenant.manage', 'org.manage', 'operator.manage', 'group.manage',
+      'subscription.manage', 'tenant.security.manage', 'account.2fa_reset',
+      'account.lock', 'account.unlock', 'account.force_logout',
+      'account.read', 'audit.read', 'security.event.read',
+      'tenant.admin.delegate', 'partnership.manage',
+    ];
+    render(<><GlobalGuideScreen demoLoginEmail="demo@demo.com" /><IamGuideScreen /></>);
+    const globalRows = Array.from(screen.getByTestId('global-guide-rbac-matrix').querySelectorAll('tbody tr'));
+    const iamRows = Array.from(screen.getByTestId('iam-guide-permission-keys').querySelectorAll('tbody tr'));
+    expect(globalRows.map((r) => r.querySelector('th')?.textContent)).toEqual(expected);
+    expect(iamRows.map((r) => r.querySelector('td')?.textContent)).toEqual(expected);
+  });
+
+  it('includes current IAM menus and distinguishes overview card access', () => {
+    expect(SCREEN_ACCESS.map((s) => s.href)).toEqual([
+      '/iam/guide', '/iam', '/operators', '/operator-groups', '/permission-sets',
+      '/permissions', '/audit', '/org-hierarchy', '/tenants', '/subscriptions',
+      '/partnerships', '/security-settings', '/accounts',
+    ]);
+    const cells = (href: string) => SCREEN_ACCESS.find((s) => s.href === href)!.cells;
+    expect(cells('/operator-groups').TENANT_ADMIN.level).toBe('full');
+    expect(cells('/operator-groups').ORG_ADMIN.level).toBe('full');
+    expect(cells('/operator-groups').SUPPORT_READONLY.level).toBe('none');
+    expect(cells('/permission-sets').SUPPORT_READONLY.level).toBe('none');
+    expect(cells('/iam').SUPER_ADMIN.level).toBe('full');
+    expect(cells('/iam').TENANT_ADMIN.level).toBe('partial');
+    expect(cells('/iam').TENANT_BILLING_ADMIN.level).toBe('none');
+    expect(cells('/iam/guide').TENANT_BILLING_ADMIN.level).toBe('full');
   });
 
   it('lists every permission key with its description', () => {
