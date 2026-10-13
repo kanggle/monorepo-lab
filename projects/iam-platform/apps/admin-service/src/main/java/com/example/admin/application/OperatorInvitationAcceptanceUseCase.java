@@ -20,6 +20,7 @@ import com.example.admin.application.port.TenantProvisioningPort;
 import com.example.admin.application.port.VerifiedEmailMatchPort;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.Permission;
+import com.example.security.pii.PiiMaskingUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -365,17 +366,18 @@ public class OperatorInvitationAcceptanceUseCase {
     }
 
     /**
-     * {@code p*****@example.com} (auth-to-admin.md § preview example): the first character, a fixed run of stars
-     * (the local part's length is not revealed), the domain.
+     * TASK-BE-629 — one rule for every IdP screen: the first character, a fixed run of three stars
+     * (the local part's length is not revealed), the domain — {@link PiiMaskingUtils#maskEmail(String)}.
+     * A value that is not an address ({@code @} missing or leading) is fully masked here: the shared
+     * function returns such input unchanged, and a mask must fail toward hiding more, not less.
      */
     static String maskEmail(String email) {
         if (email == null) {
             return null;
         }
-        int at = email.indexOf('@');
-        if (at <= 0) {
-            return "*****";
+        if (email.indexOf('@') <= 0) {
+            return "***";
         }
-        return email.charAt(0) + "*****" + email.substring(at);
+        return PiiMaskingUtils.maskEmail(email);
     }
 }

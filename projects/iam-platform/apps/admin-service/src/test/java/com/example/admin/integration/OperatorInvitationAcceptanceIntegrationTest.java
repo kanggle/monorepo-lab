@@ -507,7 +507,7 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
                 .andExpect(jsonPath("$.tenantId").value(newOrg))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.expired").value(false))
-                .andExpect(jsonPath("$.maskedEmail").value(inviteeEmail.charAt(0) + "*****@example.com"));
+                .andExpect(jsonPath("$.maskedEmail").value(inviteeEmail.charAt(0) + "***@example.com"));
 
         // Before accepting, the colleague's pool account has no console (S4's closed path, the control).
         assertThat(consoleEligible(invitee)).isFalse();

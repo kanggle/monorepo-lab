@@ -60,14 +60,14 @@ class OperatorInvitationAcceptanceControllerSliceTest {
     @DisplayName("preview 200 — 계약 모양, tenantDisplayName 이 null 이어도 키는 남는다")
     void preview_200() throws Exception {
         given(useCase.preview(TOKEN)).willReturn(new OperatorInvitationPreviewResult(
-                "acme-corp", null, "p*****@example.com", List.of("SUPPORT_LOCK"), "PENDING", false,
+                "acme-corp", null, "p***@example.com", List.of("SUPPORT_LOCK"), "PENDING", false,
                 Instant.parse("2026-10-17T10:00:00Z")));
 
         String json = mockMvc.perform(post("/internal/operator-invitations/preview")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"" + TOKEN + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tenantId").value("acme-corp"))
-                .andExpect(jsonPath("$.maskedEmail").value("p*****@example.com"))
+                .andExpect(jsonPath("$.maskedEmail").value("p***@example.com"))
                 .andExpect(jsonPath("$.roles[0]").value("SUPPORT_LOCK"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.expired").value(false))

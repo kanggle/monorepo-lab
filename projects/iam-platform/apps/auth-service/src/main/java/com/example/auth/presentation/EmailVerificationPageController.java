@@ -5,6 +5,7 @@ import com.example.auth.application.port.AccountServicePort.EmailVerificationCon
 import com.example.auth.application.port.AccountServicePort.EmailVerificationRequestOutcome;
 import com.example.auth.domain.session.PrincipalDetailKeys;
 import com.example.auth.infrastructure.security.LoginBranding;
+import com.example.security.pii.PiiMaskingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -131,16 +132,16 @@ public class EmailVerificationPageController {
         return new SessionAccount(accountId, tenantId, mask(email));
     }
 
-    /** Same format as the senders' log masking ({@code a***@example.com}); {@code null} when there is none. */
+    /**
+     * TASK-BE-629 — the same rule as the invitation preview ({@code a***@example.com}, admin-service
+     * {@code OperatorInvitationAcceptanceUseCase.maskEmail}): {@link PiiMaskingUtils#maskEmail(String)}.
+     * {@code null} when there is no address — the shared function would return such input unchanged.
+     */
     static String mask(String email) {
-        if (email == null) {
+        if (email == null || email.indexOf('@') <= 0) {
             return null;
         }
-        int at = email.indexOf('@');
-        if (at <= 0) {
-            return null;
-        }
-        return email.charAt(0) + "***" + email.substring(at);
+        return PiiMaskingUtils.maskEmail(email);
     }
 
     record SessionAccount(String accountId, String tenantId, String maskedEmail) {
