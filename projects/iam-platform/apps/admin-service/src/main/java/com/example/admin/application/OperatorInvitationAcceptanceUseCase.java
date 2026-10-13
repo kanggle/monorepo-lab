@@ -366,12 +366,18 @@ public class OperatorInvitationAcceptanceUseCase {
     }
 
     /**
-     * TASK-BE-629 S1 — standardized masking: the first character, a fixed run of three stars
-     * (the local part's length is not revealed), the domain. Delegates to the shared
-     * {@link PiiMaskingUtils#maskEmail(String)} to ensure consistency across all IdP screens
-     * and audit logs.
+     * TASK-BE-629 — one rule for every IdP screen: the first character, a fixed run of three stars
+     * (the local part's length is not revealed), the domain — {@link PiiMaskingUtils#maskEmail(String)}.
+     * A value that is not an address ({@code @} missing or leading) is fully masked here: the shared
+     * function returns such input unchanged, and a mask must fail toward hiding more, not less.
      */
     static String maskEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        if (email.indexOf('@') <= 0) {
+            return "***";
+        }
         return PiiMaskingUtils.maskEmail(email);
     }
 }

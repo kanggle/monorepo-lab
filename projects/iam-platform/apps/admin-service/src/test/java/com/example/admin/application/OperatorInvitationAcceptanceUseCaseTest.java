@@ -574,7 +574,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
         }
 
         @Test
-        @DisplayName("maskEmail — 1자 로컬 파트는 그 글자와 도메인만 유지(정보 비노출)")
+        @DisplayName("maskEmail — 1자 로컬 파트도 별 3개 — 로컬 파트가 1자라는 사실(길이)은 드러나지 않는다")
         void maskEmail_singleChar() {
             assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("a@example.com"))
                     .isEqualTo("a***@example.com");
@@ -588,17 +588,17 @@ class OperatorInvitationAcceptanceUseCaseTest {
         }
 
         @Test
-        @DisplayName("maskEmail — @ 기호가 없으면 그대로 반환한다")
+        @DisplayName("maskEmail — @ 기호가 없으면 전부 가린다(원문을 돌려주지 않는다)")
         void maskEmail_noAt() {
             assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("noemailaddress"))
-                    .isEqualTo("noemailaddress");
+                    .isEqualTo("***");
         }
 
         @Test
-        @DisplayName("maskEmail — @ 기호가 맨 앞이면 그대로 반환한다")
+        @DisplayName("maskEmail — @ 기호가 맨 앞이면 전부 가린다")
         void maskEmail_atStart() {
             assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("@example.com"))
-                    .isEqualTo("@example.com");
+                    .isEqualTo("***");
         }
 
         @Test

@@ -54,10 +54,15 @@ iam-platform
   - **감사 로그 (admin-service outbox)**: `admin-service/src/main/java/com/example/admin/infrastructure/outbox/OutboxAdminEventPublisher.java:97` — PiiMaskingUtils 사용 → 3개 고정별
   - **로그 마스킹 (auth-service)**: `auth-service/src/main/java/com/example/auth/infrastructure/email/LoggingEmailSender.java:101-119` — 3개 고정별 (dev stub)
   - **MFA 화면 (auth-service)**: `auth-service/src/main/java/com/example/auth/presentation/MfaPageController.java:314` — EmailVerificationPageController.mask 사용 → 3개 고정별
-  - **정본 선택**: 🔵 3개 고정별(`j***@example.com`). 근거: 기존 공유 라이브러리 `libs/java-security/src/main/java/com/example/security/pii/PiiMaskingUtils.java:35-40` 이미 3개를 정의했고, 감사·로그에서 3개를 쓰고 있다. 5개는 길이를 더 노출(최장 로컬 파트에서 별 개수로 문자 몇 개 남는지 추정 가능). 1자 로컬 파트(`a@x.com`) → `a***@x.com` (정보 비노출, 안전함). 2자 로컬 파트(`ab@x.com`) → `a***@x.com` (정보 비노출).
+  - **정본 선택**: 🔵 별 3개 고정(`j***@example.com`) = `libs/java-security/src/main/java/com/example/security/pii/PiiMaskingUtils.java:35-40`. 근거: 감사 로그 · 인증 화면 · MFA 화면이 이미 이 규칙이고 공용 함수가 있다. 별 5개도 고정 개수라 길이를 드러내지 않는다는 점은 같다 — 고른 이유는 «이미 다수 + 공용 함수», 노출량 차이가 아니다.
+  - **짧은 로컬 파트**: 1자 `a@x.com` → `a***@x.com` — 그 한 글자는 보이지만, 별이 고정이라 «로컬 파트가 그 한 글자뿐» 이라는 사실은 드러나지 않는다. 2자 `ab@x.com` → `a***@x.com`.
+  - 🔴 **공용 함수는 주소가 아닌 입력(`@` 없음 · 맨 앞)을 원문 그대로 돌려준다**(`PiiMaskingUtils.java:38`). 화면 쪽 두 함수는 그 경우를 공용 함수에 넘기지 않는다 — admin `***`(전엔 `*****`), auth `null`(전과 같음). 가림은 실패하면 더 가리는 쪽이어야 한다. 공용 함수 자체의 동작은 다른 호출처(감사 로그)가 있어 이 티켓에서 바꾸지 않았다.
 
 - ✅ **AC-1** — 초대 화면 · 인증 화면 · (있으면) 메일 본문이 같은 입력에 같은 가림을 낸다(단위 시험 — 짧은 로컬 파트 1~2자 포함).
-  - admin-service: `OperatorInvitationAcceptanceUseCaseTest.java:567-620` — `MaskEmailEdgeCases` 중첩 클래스에 6개 케이스 추가 (표준, 1자, 2자, @없음, @맨앞, null). 모든 화면이 동일한 PiiMaskingUtils.maskEmail 또는 그 구현을 사용하도록 통일함
+  - 두 화면 함수가 모두 `PiiMaskingUtils.maskEmail` 에 위임한다 — admin `OperatorInvitationAcceptanceUseCase.maskEmail` · auth `EmailVerificationPageController.mask`(MFA 화면도 이것을 쓴다).
+  - 서비스가 달라 호출 지점을 하나로 못 모으므로, **같은 입력 · 같은 기대값**을 양쪽에 고정했다: admin `OperatorInvitationAcceptanceUseCaseTest.MaskEmailEdgeCases`(표준 · 1자 · 2자 · `@` 없음 · `@` 맨 앞 · null) / auth `EmailVerificationMaskTest`(표준 · `hire1@demo.com`→`h***@demo.com` · 1자 · 2자 · 주소 아님).
+  - bite: `@` 없음 · 맨 앞 두 셀은 공용 함수에 그대로 위임하던 중간 판(`noemailaddress` → 원문)에서 빨강이다.
+  - 메일 본문: 초대 · 인증 메일 본문에는 가린 주소가 없다(받는 사람 본인에게 가므로) — 해당 없음.
 
 - ✅ **AC-2** — 772 의 마스킹 단언(`p*****@`)이 정본과 다르면 그 시험을 정본 기대값으로 고친다(걷지 않는다).
   - `OperatorInvitationAcceptanceUseCaseTest.java:523` — `p*****@example.com` → `p***@example.com` 로 업데이트 완료. 통합 테스트 · 컨트롤러 슬라이스 · auth-service 클라이언트 테스트도 함께 업데이트.
