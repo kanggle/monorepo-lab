@@ -176,12 +176,24 @@ public class ManageOperatorAssignmentUseCase {
                         operatorPublicId,
                         AuditReasons.normalize(reason),
                         null,
-                        "assignment:" + code.name() + ":" + operatorPublicId + ":" + tenantId + ":" + now.toEpochMilli(),
+                        auditIdempotencyKey(operatorPublicId, tenantId, now),
                         Outcome.SUCCESS,
                         detail,
                         now,
                         now,
                         tenantId),
                 Permission.OPERATOR_MANAGE);
+    }
+
+    /**
+     * TASK-BE-631: the audit row's {@code idempotency_key} ({@code admin_actions.idempotency_key VARCHAR(100)}).
+     * The old form {@code "assignment:" + actionCode + ":" + …} spent 38 characters on a prefix and an action name
+     * the row already carries in {@code action_code} (the unique index is {@code (actor_id, action_code, key)}), so
+     * with a 36-char operator UUID and a 13-digit timestamp it overflowed the column for any tenant id longer than
+     * 11 characters ({@code tenants.tenant_id} is {@code VARCHAR(32)}) — the fail-closed audit then aborted the whole
+     * command as {@code 500 AUDIT_FAILURE}. This form is at most 4 + 36 + 1 + 32 + 1 + 13 = 87 characters.
+     */
+    static String auditIdempotencyKey(String operatorPublicId, String tenantId, Instant at) {
+        return "asg:" + operatorPublicId + ":" + tenantId + ":" + at.toEpochMilli();
     }
 }

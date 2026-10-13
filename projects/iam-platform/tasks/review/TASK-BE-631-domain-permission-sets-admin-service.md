@@ -165,3 +165,12 @@ ADR-083 갈래 A 의 저장 모델과 관리 API 를 admin-service 에 만든다
 - **`mes` 소비자 = 0**(AC-0): `MES_OPERATOR` 는 IAM 자기 목록(카탈로그 · 위임 목록 · V0052 · auth 파생)과 콘솔 가이드 한 행에만 있고 `projects/*mes*` · 게이트웨이 · `ProductCatalog` 항목이 없다. **그대로 둔다** — 카탈로그 행과 `mes-full` 프리셋은 이미 `main` 의 V0052 에 있어 빼려면 데이터 마이그레이션이 따로 필요하고, 남겨도 발급 시 `∩ entitled` 로 걸러진다(구독하는 테넌트가 없다). MES 프로젝트가 생기면 그 단계에서 다시 본다.
 - 계약 보완: 세트 생성 · 그룹 세트 POST 오류표 — `Idempotency-Key` 누락/길이 초과 = `400 VALIDATION_ERROR` · 재사용 = `409`(저장 응답 재생 없음 — 초대 생성 규약). 직접 배정 POST 는 키를 쓰지 않는다(계약도 그렇다).
 - 그대로 둔 것: 멤버 추가 응답 `fannedOutGrants` · `GROUP_MEMBER_ADD` 감사 detail 은 역할 행만 센다(세트 행 미포함 — 계약이 정하지 않음) · 없는 세트의 그룹 회수 = `404 DOMAIN_PERMISSION_SET_NOT_FOUND`.
+
+## 5. 🔴 CI 1회차 실패 — 원인은 세트가 아니라 **784 때부터 있던 감사 키 넘침** (2026-10-14 UTC)
+
+- **증상**: #4343 `Integration (iam A)` — `GroupDomainPermissionSetIntegrationTest` AC-4 «이 회사에서 내보내기» 가 204 대신 **`500 AUDIT_FAILURE`**. 다른 4 IT 는 PASSED.
+- **진단 과정**: 감사는 내보내기와 **같은 트랜잭션**(`AdminActionAuditWriter.recordWithPermission` = `@Transactional` REQUIRED)에서 fail-closed 로 원인을 감싸고, IT 프로파일은 앱 로그가 꺼져 있어 레인 로그 · JUnit XML 아티팩트 어디에도 원인이 없었다. 외래키 · TEXT 길이 · 잠금 대기(0.1초 만의 실패)는 코드로 배제했지만 **확정은 못 해서 추측으로 고치지 않았다** — 실패한 요청의 원인 체인을 출력하는 진단 한 줄을 시험에 넣고(동작 무변경, 그대로 둔다) CI 를 한 번 더 돌렸다.
+- **원인**(CI 출력 그대로): `MysqlDataTruncation: Data too long for column 'idempotency_key'`. 키 = `"assignment:" + 동작이름 + ":" + 운영자 UUID + ":" + 테넌트 + ":" + millis` — 고정 부분만 **89자**, 칸은 `VARCHAR(100)`(`V0001:10`), 테넌트 id 는 최대 32자(`tenants.tenant_id`) ⇒ **테넌트 id 가 11자를 넘으면 배정 생성 · 삭제(내보내기)가 언제나 500**. 이 시험의 테넌트 `s631a-44r3ha`(12자)가 처음으로 그 경계를 넘었다 — 784 의 시험 테넌트는 짧았다. 🔴 세트 변경과 무관한 **기존 결함**이다.
+- **수선**: `ManageOperatorAssignmentUseCase.auditIdempotencyKey` = `"asg:" + 운영자 + ":" + 테넌트 + ":" + millis`(최대 87자). 동작 이름은 행의 `action_code` 칸과 유일 색인 `(actor_id, action_code, key)` 에 이미 있어 키에서 빼도 유일성이 같다. 옛 형식에 의존하는 곳 0(grep).
+- **시험**: `AssignmentAuditIdempotencyKeyTest` — 최장 입력(UUID 36 · 테넌트 32 · millis 13)이 100 이하 / 대조군 옛 형식은 같은 입력에서 넘침 / 키가 운영자 · 테넌트 · 시각을 가른다. `:admin-service:test` rc **0**.
+- **형제**: 같은 손조립 키가 7 곳 더 있다. 🔴 `ManagePartnershipParticipantUseCase.java:162` 는 **계산상 항상 넘친다**(UUID 둘 → 127/130자) — 그 API 를 부르는 IT 가 0 이라 지금까지 안 보였다. 증명 없이 고치지 않고 **`TASK-BE-634`** 로 넘겼다(AC-0 = 빨강 먼저).
