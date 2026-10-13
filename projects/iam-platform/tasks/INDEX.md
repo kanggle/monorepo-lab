@@ -122,9 +122,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- ⏳ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **IdP 이메일 가림 규칙 통일** (READY, 2026-10-11 UTC · 26차 창). 초대 화면 5별 ↔ 인증 화면 3별 불일치 해소 — 공유 라이브러리 `PiiMaskingUtils.maskEmail`(3별) 으로 정본 선택·통일. impl PR _(검토 대기)_. AC-0 전수 완료, AC-1~2 구현 완료 단위시험 6개, AC-2 기존 단언(772) 업데이트. 분석=Opus 5.5 / 구현=Haiku.
+_(없음)_
 
 ## done
+- ✅ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4329**, 스쿼시 **`7b115c60e`**. IdP 이메일 가림을 공용 `PiiMaskingUtils.maskEmail`(첫 글자 + 별 3개) 하나로 — 초대 미리보기 · 인증/MFA 화면이 같은 입력에 같은 값, 양 서비스에 같은 기대값 시험 고정 · 주소 아닌 입력은 화면 쪽에서 전부 가림. 후속(AC 아님): 공용 함수의 주소 아닌 입력 원문 반환.
 - ✅ `TASK-BE-628-demo-assigned-only-operator-seed.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4246**, 스쿼시 **`276f74d52`** (머지 시점 실패 0 · iam A/B 통합 레인 SUCCESS). 데모 시드에 로그인 불가·배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만) — 콘솔 그룹 «멤버 추가» 의 비활성 행을 데모에서 보기 위함. 25차 창 재굽기 뒤 라이브: 소유자가 demo-corp 그룹 «멤버 추가» 에서 `assigned-only@demo.com` 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인(AC-6).
 - ✅ `TASK-BE-627-password-reset-pages.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4232**, 스쿼시 **`7c513ae26`** (머지 시점 실패 0). IdP 비밀번호 재설정 화면 · 로그인 링크 · 데모 경로. CI `PasswordResetIntegrationTest` 초록 · 24차 창 메일→링크→재설정→로그인 라이브 통과.
 - ✅ `TASK-BE-625-tenant-org-node-placement-api.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4223**, 스쿼시 **`9880f9209`** (머지 시점 실패 0 · 통과 34). 테넌트를 org-node 에 두기 · 옮기기 · 빼기 `PUT /api/admin/tenants/{tenantId}/org-node` + 미리보기(잃는 도메인) · 양쪽 관리자 판정 · 범위 밖 404 · 조건부 쓰기 409 · 테넌트 생성의 선택 `orgNodeId`. IT 는 CI 가 닫음(admin 5 메서드 PASSED · account 134→136). 후속 `TASK-PC-FE-312`.
