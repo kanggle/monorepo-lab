@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { OperatorPicker } from '@/shared/ui/OperatorPicker';
+import type { OperatorSummary } from '@/shared/api/iam-operators-types';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { masterRefLabel } from '@/shared/lib/master-ref-label';
 import {
@@ -27,6 +29,14 @@ import { OrgReasonDialog } from './OrgReasonDialog';
  * pre-filter is UX only: the server stays the authority (403
  * `ROLE_GRANT_FORBIDDEN` / 422 `ORG_ADMIN_GRANT_OUT_OF_CEILING` are surfaced
  * verbatim via `grantError`).
+ *
+ * The 운영자 field is the shared `<OperatorPicker>` (TASK-PC-FE-334 — raw-UUID
+ * input → 이메일/이름 pick, mirror of `GroupMemberDialog`'s picker pattern).
+ * `onGrant` still receives the picked operator's `operatorId` unchanged; the
+ * picker ALSO exposes the full `OperatorSummary` when known, so the
+ * reason-confirm dialog shows a name/email label instead of a bare id
+ * (falls back to the id when the picker is in its UUID-escape / fetch-failed
+ * fallback mode, AC-2).
  */
 export interface OrgAdminPanelProps {
   node: OrgNode;
@@ -72,7 +82,10 @@ export function OrgAdminPanel({
     return base.filter((r) => r !== ELEVATED_ROLE_NEVER_GRANTABLE);
   }, [grantableRoles]);
 
-  const [operatorId, setOperatorId] = useState('');
+  const [operatorId, setOperatorId] = useState<string | undefined>(undefined);
+  const [operatorInfo, setOperatorInfo] = useState<OperatorSummary | undefined>(
+    undefined,
+  );
   const [role, setRole] = useState<string>(
     roleOptions.includes(ORG_ADMIN_ROLE) ? ORG_ADMIN_ROLE : roleOptions[0] ?? '',
   );
@@ -80,7 +93,10 @@ export function OrgAdminPanel({
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
 
   const effectiveRole = roleOptions.includes(role) ? role : roleOptions[0] ?? '';
-  const canGrant = operatorId.trim().length > 0 && effectiveRole !== '';
+  const canGrant = Boolean(operatorId) && effectiveRole !== '';
+  const operatorLabel = operatorInfo
+    ? `${operatorInfo.displayName} (${operatorInfo.email})`
+    : operatorId ?? '';
 
   return (
     <section aria-labelledby="org-admins-heading" className="space-y-3">
@@ -145,19 +161,17 @@ export function OrgAdminPanel({
           if (canGrant) setGranting(true);
         }}
       >
-        <div className="flex flex-col gap-1">
-          <label htmlFor="org-admin-operator" className="text-sm font-medium text-foreground">
-            운영자 ID
-          </label>
-          <input
-            id="org-admin-operator"
-            value={operatorId}
-            onChange={(e) => setOperatorId(e.target.value)}
-            data-testid="org-admin-operator-input"
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder="operator-uuid"
-          />
-        </div>
+        <OperatorPicker
+          id="org-admin-operator"
+          label="운영자"
+          value={operatorId}
+          onChange={(id, operator) => {
+            setOperatorId(id);
+            setOperatorInfo(operator);
+          }}
+          testid="org-admin-operator"
+          placeholder="operator-uuid"
+        />
         <div className="flex flex-col gap-1">
           <label htmlFor="org-admin-role" className="text-sm font-medium text-foreground">
             역할
@@ -191,12 +205,13 @@ export function OrgAdminPanel({
       {granting && (
         <OrgReasonDialog
           title="노드 관리자 배정"
-          description={`${node.name} 노드에 운영자(${operatorId.trim()})를 ${effectiveRole} 로 배정합니다.`}
+          description={`${node.name} 노드에 운영자(${operatorLabel})를 ${effectiveRole} 로 배정합니다.`}
           confirmLabel="배정"
           pending={grantPending}
           error={grantError}
           onConfirm={(reason) => {
-            onGrant(operatorId.trim(), effectiveRole, reason);
+            if (!operatorId) return;
+            onGrant(operatorId, effectiveRole, reason);
             setGranting(false);
           }}
           onCancel={() => setGranting(false)}

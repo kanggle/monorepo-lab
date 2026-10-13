@@ -132,14 +132,17 @@ export function actionMeta(a: PendingAction): ActionMeta {
       };
     case 'participant-add':
       return {
-        title: `참여자 배정 (${a.operatorId})`,
-        description: `운영자 ${a.operatorId} 를 이 파트너십의 참여자로 배정합니다. 범위를 지정하지 않으면 위임 범위 전체가 적용됩니다.`,
+        // TASK-PC-FE-334 — `label` is a name/email display string when the
+        // shared OperatorPicker resolved the operator, else the raw id
+        // (byte-identical to the pre-334 behaviour when unresolved).
+        title: `참여자 배정 (${a.label})`,
+        description: `운영자 ${a.label} 를 이 파트너십의 참여자로 배정합니다. 범위를 지정하지 않으면 위임 범위 전체가 적용됩니다.`,
         confirmLabel: '배정',
       };
     case 'participant-remove':
       return {
-        title: `참여자 해제 (${a.operatorId})`,
-        description: `운영자 ${a.operatorId} 의 참여자 배정을 해제합니다. 해당 운영자의 파생 접근이 즉시 소멸합니다.`,
+        title: `참여자 해제 (${a.label})`,
+        description: `운영자 ${a.label} 의 참여자 배정을 해제합니다. 해당 운영자의 파생 접근이 즉시 소멸합니다.`,
         confirmLabel: '해제',
       };
   }

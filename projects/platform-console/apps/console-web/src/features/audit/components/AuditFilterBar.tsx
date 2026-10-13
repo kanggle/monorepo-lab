@@ -2,6 +2,7 @@
 
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { AccountEmailLookup } from '@/shared/ui/AccountEmailLookup';
 import { showPickerOnClick } from '@/shared/lib/show-picker';
 import { messageForCode } from '@/shared/api/errors';
 import {
@@ -21,7 +22,10 @@ import type { FilterState } from '../hooks/use-audit-screen';
  * the security source options (`login_history` / `suspicious`) are PRE-DISABLED
  * with a " — 권한 없음" suffix + the `SECURITY_EVENT_READ_REQUIRED` hint; when
  * unknown they stay enabled (a server 403 is handled defensively upstream).
- * Every `data-testid` / aria / class / option order / copy is byte-identical.
+ * Every pre-existing `data-testid` / aria / class / option order / copy is
+ * byte-identical — TASK-PC-FE-334 adds ONE thing: a shared
+ * `<AccountEmailLookup>` ASSIST under the 계정 ID input (email → pick → fills
+ * the SAME `filters.accountId`; the raw-id input itself is untouched).
  */
 
 const SOURCE_LABEL: Record<AuditSource, string> = {
@@ -83,6 +87,15 @@ export function AuditFilterBar({
           data-testid="audit-filter-accountId"
           className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
+        <div className="mt-2">
+          <AccountEmailLookup
+            id={`${accountFid}-email-lookup`}
+            testid="audit-filter-account-lookup"
+            onPick={(accountId) =>
+              setFilters((f) => ({ ...f, accountId }))
+            }
+          />
+        </div>
       </div>
 
       <div>
