@@ -427,6 +427,14 @@ async function openCreateWithEmployees(user: ReturnType<typeof userEvent.setup>)
     expect(screen.getByTestId('approval-create-approver-0')).toBeEnabled(),
   );
   expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('SELECT');
+  // TASK-PC-FE-335 — 대상 ID (default subjectType DEPARTMENT) also fetches a
+  // list now; `createDialogFetch()` 404s every non-employees/non-POST GET, so
+  // the department route settles into its id-input fallback (same testid).
+  // Wait for that settle so the per-test `user.type(subjectId, …)` below
+  // always lands on the (by-then-stable) fallback input, never a mid-flight
+  // <select>.
+  await screen.findByTestId('approval-create-subjectId-dept-fallback');
+  expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
 }
 
 describe('ApprovalScreen — create dialog', () => {
@@ -548,6 +556,134 @@ describe('ApprovalScreen — create dialog', () => {
     await user.click(screen.getByTestId('approval-create'));
     await screen.findByTestId('approval-create-approvers-fallback');
     expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('INPUT');
+  });
+});
+
+// ===========================================================================
+// TASK-PC-FE-335 — 대상 ID selector (subjectType DEPARTMENT/EMPLOYEE).
+// ===========================================================================
+
+const DEPARTMENTS_PAGE = {
+  data: [
+    {
+      id: 'dept-1',
+      code: 'D1',
+      name: '총무부',
+      status: 'ACTIVE',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+    {
+      id: 'dept-2',
+      code: 'D2',
+      name: '재무부',
+      status: 'ACTIVE',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+  ],
+  meta: { page: 0, size: 100, totalElements: 2 },
+};
+
+/** Both the employees AND departments lists resolve (unlike
+ *  `createDialogFetch()`, which 404s departments). */
+function subjectIdDialogFetch() {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/api/erp/masterdata/employees?')) {
+      return Promise.resolve(jsonResponse(EMPLOYEES_PAGE));
+    }
+    if (String(url).startsWith('/api/erp/masterdata/departments?')) {
+      return Promise.resolve(jsonResponse(DEPARTMENTS_PAGE));
+    }
+    if (init?.method === 'POST') {
+      return Promise.resolve(jsonResponse({ data: DRAFT }, 201));
+    }
+    return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+  });
+}
+
+describe('ApprovalScreen — create dialog 대상 ID selector (TASK-PC-FE-335)', () => {
+  it('🔴 AC-1/AC-2 — DEPARTMENT shows a department selector; switching to EMPLOYEE clears subjectId + swaps the list; the CHOSEN id reaches the create body', async () => {
+    const fetchMock = subjectIdDialogFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-create-subjectId')).toBeEnabled(),
+    );
+    expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('SELECT');
+    await user.selectOptions(screen.getByTestId('approval-create-subjectId'), 'dept-1');
+    expect(
+      (screen.getByTestId('approval-create-subjectId') as HTMLSelectElement).value,
+    ).toBe('dept-1');
+
+    // AC-2 — switch subject type → EMPLOYEE: subjectId clears, list swaps.
+    await user.selectOptions(screen.getByTestId('approval-create-subjectType'), 'EMPLOYEE');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-create-subjectId')).toBeEnabled(),
+    );
+    const sel = screen.getByTestId('approval-create-subjectId') as HTMLSelectElement;
+    expect(sel.value).toBe('');
+    expect(Array.from(sel.options).some((o) => o.value === 'emp-a')).toBe(true);
+    expect(Array.from(sel.options).some((o) => o.value === 'dept-1')).toBe(false);
+
+    // AC-1 — the chosen id (not a raw id string) reaches the create body.
+    await user.selectOptions(sel, 'emp-a');
+    await user.type(screen.getByTestId('approval-create-title'), '제목');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-create-approver-0')).toBeEnabled(),
+    );
+    await user.selectOptions(screen.getByTestId('approval-create-approver-0'), 'emp-b');
+    await user.click(screen.getByTestId('approval-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]) === '/api/erp/approval/requests'),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]) === '/api/erp/approval/requests',
+    )!;
+    const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    expect(body.subjectType).toBe('EMPLOYEE');
+    expect(body.subjectId).toBe('emp-a');
+  });
+
+  it('AC-3 — department list unreadable → subjectId falls back to an id input (same testid) and the dialog still submits', async () => {
+    const fetchMock = createDialogFetch(); // employees ok; departments (and everything else) 404.
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user); // asserts the dept-fallback input settles.
+    expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
+    await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-manual');
+    await user.type(screen.getByTestId('approval-create-title'), '제목');
+    await user.selectOptions(screen.getByTestId('approval-create-approver-0'), 'emp-a');
+    await user.click(screen.getByTestId('approval-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]) === '/api/erp/approval/requests'),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]) === '/api/erp/approval/requests',
+    )!;
+    const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    expect(body.subjectId).toBe('dept-manual');
+  });
+
+  it('AC-3 — subjectType EMPLOYEE + employee list unreadable → subjectId ALSO falls back to an id input (same employeesQ as the approver route)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(errorResponse('DATA_SCOPE_FORBIDDEN', 403)),
+    );
+    const user = userEvent.setup();
+    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    await user.selectOptions(screen.getByTestId('approval-create-subjectType'), 'EMPLOYEE');
+    await screen.findByTestId('approval-create-subjectId-fallback');
+    expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
   });
 });
 

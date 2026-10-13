@@ -104,6 +104,28 @@ public interface OperatorTenantAssignmentPort {
     void deleteAssignment(Long operatorInternalId, String tenantId);
 
     /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-13 UTC) — delete the assignment rows one group fanned out to one
+     * operator ({@code group_origin = groupInternalId}), in every tenant. Direct assignments and other groups'
+     * rows are untouched.
+     *
+     * @return the number of rows deleted
+     */
+    int deleteGroupOriginAssignments(Long operatorInternalId, Long groupInternalId);
+
+    /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-13 UTC «U 소속을 직접 소속으로 남김») — the tenants of the assignment
+     * rows one group fanned out to one operator ({@code group_origin = groupInternalId}).
+     */
+    List<String> findGroupOriginAssignmentTenants(Long operatorInternalId, Long groupInternalId);
+
+    /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-13 UTC) — turn a group fan-out assignment into a DIRECT membership:
+     * {@code group_origin} → NULL only; {@code granted_at} · {@code granted_by} · {@code org_scope} ·
+     * {@code permission_set_id} kept as they are. No-op when the row is absent.
+     */
+    void convertToDirectAssignment(Long operatorInternalId, String tenantId);
+
+    /**
      * Immutable projection of an {@code operator_tenant_assignment} row for the
      * admin-facing management surface. {@code orgScope} is {@code null} when the
      * column is unset (⟺ {@code ["*"]} net-zero) and is rendered ABSENT in JSON

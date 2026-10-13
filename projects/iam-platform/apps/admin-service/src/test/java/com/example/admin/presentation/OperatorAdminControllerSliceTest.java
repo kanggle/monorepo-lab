@@ -513,7 +513,7 @@ class OperatorAdminControllerSliceTest {
 
     @Test
     void patch_roles_returns_200() throws Exception {
-        when(patchOperatorRoleUseCase.patchRoles(anyString(), any(), any(), anyString()))
+        when(patchOperatorRoleUseCase.patchRoles(anyString(), any(), any(), any(), anyString()))
                 .thenReturn(new PatchOperatorRoleUseCase.PatchRolesResult(
                         "op-target",
                         List.of("SUPPORT_READONLY"),
@@ -533,9 +533,62 @@ class OperatorAdminControllerSliceTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("784 S4 (D-7): X-Tenant-Id reaches the use case as the acting tenant")
+    void patch_roles_passes_acting_tenant_header() throws Exception {
+        when(patchOperatorRoleUseCase.patchRoles(eq("op-target"), any(), eq("acme"), any(), anyString()))
+                .thenReturn(new PatchOperatorRoleUseCase.PatchRolesResult(
+                        "op-target", List.of("SUPPORT_READONLY"), "audit-patch"));
+
+        mockMvc.perform(patch("/api/admin/operators/op-target/roles")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "rotation")
+                        .header("X-Tenant-Id", "acme")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles": ["SUPPORT_READONLY"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("SUPPORT_READONLY"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("784 S4: last administrator → 409 TENANT_LAST_ADMIN_REQUIRED")
+    void patch_roles_last_admin_returns_409() throws Exception {
+        doThrow(new com.example.admin.application.exception.TenantLastAdminRequiredException("last"))
+                .when(patchOperatorRoleUseCase).patchRoles(anyString(), any(), any(), any(), anyString());
+
+        mockMvc.perform(patch("/api/admin/operators/op-target/roles")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "rotation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles": []}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TENANT_LAST_ADMIN_REQUIRED"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("784 S4 (R3): a company admin suspending a two-company operator → 403 OPERATOR_HAS_OTHER_MEMBERSHIPS")
+    void patch_status_other_memberships_returns_403() throws Exception {
+        doThrow(new com.example.admin.application.exception.OperatorHasOtherMembershipsException("two"))
+                .when(patchOperatorStatusUseCase).patchStatus(anyString(), anyString(), any(), anyString());
+
+        mockMvc.perform(patch("/api/admin/operators/op-target/status")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "violation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "SUSPENDED"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("OPERATOR_HAS_OTHER_MEMBERSHIPS"));
+    }
+
+    @Test
     void patch_roles_missing_operator_returns_404() throws Exception {
         doThrow(new OperatorNotFoundException("missing"))
-                .when(patchOperatorRoleUseCase).patchRoles(anyString(), any(), any(), anyString());
+                .when(patchOperatorRoleUseCase).patchRoles(anyString(), any(), any(), any(), anyString());
 
         mockMvc.perform(patch("/api/admin/operators/ghost/roles")
                         .header("Authorization", bearer())

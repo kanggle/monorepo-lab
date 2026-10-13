@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -334,6 +335,42 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                 // control: the demo operator itself is HOME in demo-corp
                 .andExpect(jsonPath("$.content[?(@.operatorId == 'demo-operator')].homeTenantId")
                         .value("demo-corp"));
+    }
+
+    @Test
+    @DisplayName("784 S4 (D-11 · F10): demo-assigned-only is a demo-corp MEMBER (no role) — a demo-corp group accepts it; still no role row")
+    void assignedOnlyOperator_isAcceptedIntoADemoCorpGroup() throws Exception {
+        // Before 784 S4 this was 422 GROUP_MEMBER_TENANT_MISMATCH (home ecommerce ≠ demo-corp) — the reason the
+        // console greyed the row out. A group with no grant: adding the member fans out nothing.
+        String created = mockMvc.perform(post("/api/admin/groups")
+                        .header("Authorization", bearer("demo-operator"))
+                        .header("X-Operator-Reason", "784 s4 pin")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"demo-corp\",\"name\":\"784-s4-pin-" + System.nanoTime() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String groupId = created.replaceAll("(?s).*\"groupId\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+        try {
+            mockMvc.perform(post("/api/admin/groups/" + groupId + "/members")
+                            .header("Authorization", bearer("demo-operator"))
+                            .header("X-Operator-Reason", "784 s4 pin")
+                            .header("Idempotency-Key", "784-s4-pin-" + System.nanoTime())
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content("{\"operatorId\":\"demo-assigned-only\"}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.fannedOutGrants").value(0));
+        } finally {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .delete("/api/admin/groups/" + groupId)
+                    .header("Authorization", bearer("demo-operator"))
+                    .header("X-Operator-Reason", "784 s4 pin cleanup"));
+        }
+        Integer roles = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM admin_operator_roles g
+                  JOIN admin_operators o ON o.id = g.operator_id
+                 WHERE o.operator_id = 'demo-assigned-only'
+                """, Integer.class);
+        assertThat(roles).isZero();
     }
 
     // ---------------------------------------------------------------------------------

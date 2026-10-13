@@ -119,6 +119,15 @@ public class TenantPartnershipPortImpl implements TenantPartnershipPort {
                 .ifPresent(participantRepository::delete);
     }
 
+    @Override
+    @Transactional
+    public int removeParticipationsWithPartner(long operatorInternalId, String partnerTenantId) {
+        if (partnerTenantId == null || partnerTenantId.isBlank()) {
+            return 0;
+        }
+        return participantRepository.deleteByOperatorIdAndPartnerTenantId(operatorInternalId, partnerTenantId);
+    }
+
     // ── mappers ─────────────────────────────────────────────────────────────
 
     private static PartnershipView toView(TenantPartnershipJpaEntity e) {

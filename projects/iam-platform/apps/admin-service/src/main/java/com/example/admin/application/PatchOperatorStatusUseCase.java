@@ -26,7 +26,7 @@ public class PatchOperatorStatusUseCase {
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
     private final AdminRefreshTokenPort refreshTokenPort;
-    private final TenantScopeGuard tenantScopeGuard;
+    private final OperatorRowScopeGuard rowScopeGuard;
     private final CachingPermissionEvaluator cachingPermissionEvaluator;
 
     @Transactional
@@ -48,10 +48,12 @@ public class PatchOperatorStatusUseCase {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorUuid));
 
-        // ADR-MONO-024 D2 (TASK-BE-345): the actor must hold operator.manage scoped
-        // to the managed operator's home tenant. Net-zero for SUPER_ADMIN ('*').
-        tenantScopeGuard.requireTenantInScope(
-                actor, Permission.OPERATOR_MANAGE, operator.tenantId(), ActionCode.OPERATOR_STATUS_CHANGE);
+        // TASK-MONO-784 S4 (rider R3 · D-8): status is ROW-WIDE — SUSPENDED stops the person in every company.
+        // One membership {T} → T's administrator (what ADR-024 D2 «the target's home» was for a single-company
+        // operator); two or more → the '*' grant scope only (403 OPERATOR_HAS_OTHER_MEMBERSHIPS for a company
+        // admin, who removes the person from its own company instead). The home is no longer read (R1).
+        rowScopeGuard.requireRowAdministrable(
+                actor, Permission.OPERATOR_MANAGE, operator, ActionCode.OPERATOR_STATUS_CHANGE);
 
         String previousStatus = operator.status();
         if (Objects.equals(previousStatus, newStatus)) {

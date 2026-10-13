@@ -2,118 +2,246 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.RoleNotFoundException;
-import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.exception.TenantLastAdminRequiredException;
+import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 
 import static com.example.admin.application.OperatorUseCaseTestSupport.actor;
 import static com.example.admin.application.OperatorUseCaseTestSupport.operator;
-import static com.example.admin.application.OperatorUseCaseTestSupport.role;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link PatchOperatorRoleUseCase} — TASK-MONO-784 S4: a role edit is on the company axis (D-7).
+ *
+ * <p>Role rows live in {@link InMemoryRoleRowsPort} (a fake that really deletes), so «another company's rows are
+ * byte-unchanged» is asserted on data, not on which mock method was called: reverting the edit to «delete every
+ * row of the operator» turns the 🔴 cells red. The «last administrator» predicate is the REAL
+ * {@link TenantLastAdminGuard} over the same rows.
+ */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class PatchOperatorRoleUseCaseTest {
 
-    @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
     @Mock TenantScopeGuard tenantScopeGuard;
     @Mock RoleGrantGuard roleGrantGuard;
+    @Mock TenantScopeResolver tenantScopeResolver;
 
+    InMemoryRoleRowsPort port;
     PatchOperatorRoleUseCase useCase;
 
+    static final long TARGET = 77L;
+    static final long OTHER_ADMIN = 88L;
+
     @BeforeEach
-    void initUseCase() {
-        useCase = new PatchOperatorRoleUseCase(
-                operatorPort, auditor, cachingPermissionEvaluator, tenantScopeGuard, roleGrantGuard);
+    void init() {
+        port = new InMemoryRoleRowsPort()
+                .role(1L, "SUPER_ADMIN").role(2L, "SUPPORT_READONLY").role(3L, "SUPPORT_LOCK")
+                .role(4L, "SECURITY_ANALYST").role(5L, "TENANT_ADMIN").role(6L, "ORG_ADMIN")
+                .operator(operator(TARGET, "target-uuid", "t@ex.com", "ACTIVE", "alpha"))
+                .operator(operator(99L, "actor-uuid", "a@ex.com", "ACTIVE", "alpha"));
+        useCase = new PatchOperatorRoleUseCase(port, auditor, cachingPermissionEvaluator, tenantScopeGuard,
+                roleGrantGuard, tenantScopeResolver, new TenantLastAdminGuard(port));
+    }
+
+    private void memberships(String... tenants) {
+        when(tenantScopeResolver.resolveEffectiveTenantScope(TARGET, "alpha")).thenReturn(Set.of(tenants));
     }
 
     @Test
-    @DisplayName("role 패치 성공 시 기존 role 을 모두 교체하고 권한 캐시를 무효화한다")
-    void patchRoles_replaces_all_and_invalidates_cache() {
-        AdminOperatorPort.OperatorView target = operator(77L, "target-uuid", "t@ex.com", "ACTIVE");
-        when(operatorPort.findByOperatorId("target-uuid")).thenReturn(Optional.of(target));
-        Map<String, AdminOperatorPort.RoleView> resolved = new LinkedHashMap<>();
-        resolved.put("SUPPORT_READONLY", role(2L, "SUPPORT_READONLY"));
-        resolved.put("SECURITY_ANALYST", role(4L, "SECURITY_ANALYST"));
-        when(operatorPort.resolveRolesByName(List.of("SUPPORT_READONLY", "SECURITY_ANALYST")))
-                .thenReturn(resolved);
-        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(99L);
-        when(auditor.newAuditId()).thenReturn("audit-patch");
+    @DisplayName("🔴 AC-4 · F6 · Failure 3: edit in alpha replaces ONLY alpha's direct rows — beta row, alpha group row, alpha node row byte-unchanged")
+    void editInAlpha_leavesOtherCompanyAndNonDirectRowsByteUnchanged() {
+        memberships("alpha", "beta");
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null)          // replaced
+                .row(TARGET, "SUPPORT_READONLY", "beta", null, null)   // other company
+                .row(TARGET, "SECURITY_ANALYST", "alpha", 9L, null)    // group fan-out in alpha
+                .row(TARGET, "ORG_ADMIN", "alpha", null, "node-1");    // org-node grant recorded in alpha
+        List<InMemoryRoleRowsPort.Row> betaBefore = List.copyOf(port.rowsOutside(TARGET, "alpha"));
+        List<InMemoryRoleRowsPort.Row> alphaNonDirectBefore = port.rowsIn(TARGET, "alpha").stream()
+                .filter(r -> !r.isDirect()).toList();
 
-        PatchOperatorRoleUseCase.PatchRolesResult result = useCase.patchRoles(
-                "target-uuid",
-                List.of("SUPPORT_READONLY", "SECURITY_ANALYST"),
-                actor(),
-                "quarterly rotation");
+        PatchOperatorRoleUseCase.PatchRolesResult result =
+                useCase.patchRoles("target-uuid", List.of("SUPPORT_READONLY"), "alpha", actor(), "rotation");
+
+        assertThat(port.rowsOutside(TARGET, "alpha")).as("beta rows byte-unchanged").isEqualTo(betaBefore);
+        assertThat(port.rowsIn(TARGET, "alpha").stream().filter(r -> !r.isDirect()).toList())
+                .as("alpha's group / node rows byte-unchanged (F6)").isEqualTo(alphaNonDirectBefore);
+        assertThat(port.rowsIn(TARGET, "alpha").stream().filter(InMemoryRoleRowsPort.Row::isDirect)
+                .map(InMemoryRoleRowsPort.Row::roleName).toList())
+                .containsExactly("SUPPORT_READONLY");
+        // response = alpha's roles after the edit: requested first, then alpha's group / node roles; never beta's
+        assertThat(result.roles()).containsExactly("SUPPORT_READONLY", "ORG_ADMIN", "SECURITY_ANALYST");
+
+        verify(tenantScopeGuard).requireTenantInScope(any(), eq(Permission.OPERATOR_MANAGE), eq("alpha"),
+                eq(ActionCode.OPERATOR_ROLE_CHANGE));
+        verify(roleGrantGuard).requireGrantable(any(), any(), eq(ActionCode.OPERATOR_ROLE_CHANGE), eq("alpha"));
+        verify(cachingPermissionEvaluator).invalidate("target-uuid");
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> rec = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        verify(auditor).record(rec.capture());
+        assertThat(rec.getValue().targetTenantId()).as("audit target_tenant_id = T").isEqualTo("alpha");
+    }
+
+    @Test
+    @DisplayName("control: single-company target, no header → its one membership (same as the pre-784 «home» edit)")
+    void noHeader_singleMembership_isThatCompany() {
+        memberships("alpha");
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+        administers("alpha");
+
+        PatchOperatorRoleUseCase.PatchRolesResult result =
+                useCase.patchRoles("target-uuid", List.of("SUPPORT_READONLY", "SECURITY_ANALYST"), null, actor(), "r");
 
         assertThat(result.roles()).containsExactly("SUPPORT_READONLY", "SECURITY_ANALYST");
-        verify(operatorPort).deleteOperatorRoles(77L);
-        verify(operatorPort).saveOperatorRoles(anyList());
-        verify(cachingPermissionEvaluator).invalidate("target-uuid");
+        assertThat(port.rowsIn(TARGET, "alpha")).extracting(InMemoryRoleRowsPort.Row::roleName)
+                .containsExactlyInAnyOrder("SUPPORT_READONLY", "SECURITY_ANALYST");
     }
 
     @Test
-    @DisplayName("빈 role 배열도 허용되며 권한 캐시는 여전히 무효화된다")
-    void patchRoles_empty_array_allowed_still_invalidates_cache() {
-        AdminOperatorPort.OperatorView target = operator(77L, "target-uuid", "t@ex.com", "ACTIVE");
-        when(operatorPort.findByOperatorId("target-uuid")).thenReturn(Optional.of(target));
-        when(operatorPort.resolveRolesByName(List.of())).thenReturn(new LinkedHashMap<>());
-        when(operatorPort.resolveActorInternalId("actor-uuid")).thenReturn(null);
-        when(auditor.newAuditId()).thenReturn("audit-empty");
+    @DisplayName("no header, actor administers one of the target's companies: two memberships → 400 · '*' actor + none → 404; nothing written")
+    void noHeader_ambiguousOrNone_refusedBeforeAnyWrite() {
+        memberships("alpha", "beta");
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+        administers("alpha");
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(IllegalArgumentException.class);
 
-        PatchOperatorRoleUseCase.PatchRolesResult result = useCase.patchRoles(
-                "target-uuid", List.of(), actor(), "demotion");
+        memberships();
+        administers("*");
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(OperatorNotFoundException.class);
 
-        assertThat(result.roles()).isEmpty();
-        verify(operatorPort).deleteOperatorRoles(77L);
-        verify(operatorPort).saveOperatorRoles(anyList());
-        verify(cachingPermissionEvaluator).invalidate("target-uuid");
+        assertThat(port.rows).hasSize(1);
+        verify(tenantScopeGuard, never()).requireTenantInScope(any(), anyString(), anyString(), any());
+        verify(tenantScopeGuard, never()).recordTenantDenied(any(), anyString(), anyString(), any());
     }
 
     @Test
-    @DisplayName("알 수 없는 role 이 포함되면 예외를 던지고 기존 role 삭제 단계로 진행하지 않는다")
-    void patchRoles_unknown_role_throws_and_skips_delete() {
-        AdminOperatorPort.OperatorView target = operator(77L, "target-uuid", "t@ex.com", "ACTIVE");
-        when(operatorPort.findByOperatorId("target-uuid")).thenReturn(Optional.of(target));
-        when(operatorPort.resolveRolesByName(List.of("GHOST")))
-                .thenThrow(new RoleNotFoundException("Unknown role name: GHOST"));
+    @DisplayName("🔴 owner decision 2026-10-13 «범위 확인을 먼저»: no header, actor administers NONE of the target's companies → 403 before 400 / 404 (count not disclosed)")
+    void noHeader_strangerGets403BeforeCountRevealingCodes() {
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
 
-        assertThatThrownBy(() -> useCase.patchRoles(
-                "target-uuid", List.of("GHOST"), actor(), "reason"))
+        memberships("alpha", "beta"); // would be 400 for an administrator of alpha or beta
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantScopeDeniedException.class);
+
+        memberships();                // would be 404 for a '*' actor
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantScopeDeniedException.class);
+
+        // DENIED row against the target's HOME (R1 audit default — no company is named), twice
+        verify(tenantScopeGuard, org.mockito.Mockito.times(2)).recordTenantDenied(
+                any(), eq(Permission.OPERATOR_MANAGE), eq("alpha"), eq(ActionCode.OPERATOR_ROLE_CHANGE));
+        assertThat(port.rows).hasSize(1);
+    }
+
+    /** The actor's operator.manage grant scope as the mocked TenantScopeGuard answers it. */
+    private void administers(String tenant) {
+        // lenient: the use case also asks about other tenants ('*' first), which must answer the default false
+        org.mockito.Mockito.lenient()
+                .when(tenantScopeGuard.isTenantInScope(any(), eq(Permission.OPERATOR_MANAGE), eq(tenant)))
+                .thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("header names a company the target does not belong to → 404 (enumeration safe), nothing written")
+    void headerOutsideMemberships_notFound() {
+        memberships("alpha");
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of("SUPPORT_READONLY"), "gamma", actor(), "r"))
+                .isInstanceOf(OperatorNotFoundException.class);
+        assertThat(port.rows).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("D2 (D-14): a company operator never gets a '*' row (header '*') → 400; a '*' target ignores the header → T='*'")
+    void platformAxis() {
+        memberships("alpha");
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of("SUPPORT_READONLY"), "*", actor(), "r"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(port.rows).isEmpty();
+
+        port.operator(operator(55L, "platform-uuid", "p@ex.com", "ACTIVE", "*"));
+        port.row(55L, "SUPPORT_LOCK", "*", null, null);
+        useCase.patchRoles("platform-uuid", List.of("SUPPORT_READONLY"), "alpha", actor(), "r");
+        assertThat(port.rowsIn(55L, "*")).extracting(InMemoryRoleRowsPort.Row::roleName)
+                .containsExactly("SUPPORT_READONLY");
+        // twice with '*': the refused company-target call (the scope row runs before the D2 row — contract table
+        // order) and the platform target's edit
+        verify(tenantScopeGuard, org.mockito.Mockito.times(2))
+                .requireTenantInScope(any(), eq(Permission.OPERATOR_MANAGE), eq("*"), any());
+    }
+
+    @Test
+    @DisplayName("🔴 last admin: removing the sole ACTIVE TENANT_ADMIN@alpha → 409, nothing written / control: another admin → OK")
+    void lastAdmin_refused_thenAllowedWithAnotherAdmin() {
+        memberships("alpha");
+        port.row(TARGET, "TENANT_ADMIN", "alpha", null, null);
+
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), "alpha", actor(), "r"))
+                .isInstanceOf(TenantLastAdminRequiredException.class);
+        assertThat(port.rowsIn(TARGET, "alpha")).extracting(InMemoryRoleRowsPort.Row::roleName)
+                .containsExactly("TENANT_ADMIN");
+
+        // a SUSPENDED second admin does not count
+        port.operator(operator(OTHER_ADMIN, "other-uuid", "o@ex.com", "SUSPENDED", "alpha"));
+        port.row(OTHER_ADMIN, "TENANT_ADMIN", "alpha", null, null);
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), "alpha", actor(), "r"))
+                .isInstanceOf(TenantLastAdminRequiredException.class);
+
+        // control: the second admin is ACTIVE → the edit goes through
+        port.operator(operator(OTHER_ADMIN, "other-uuid", "o@ex.com", "ACTIVE", "alpha"));
+        useCase.patchRoles("target-uuid", List.of(), "alpha", actor(), "r");
+        assertThat(port.rowsIn(TARGET, "alpha")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("last admin keeps TENANT_ADMIN through a group row, or the edit re-grants it → no 409")
+    void lastAdmin_notTriggeredWhenAdminSurvives() {
+        memberships("alpha");
+        port.row(TARGET, "TENANT_ADMIN", "alpha", null, null);
+        useCase.patchRoles("target-uuid", List.of("TENANT_ADMIN", "SUPPORT_READONLY"), "alpha", actor(), "r");
+        assertThat(port.rowsIn(TARGET, "alpha")).extracting(InMemoryRoleRowsPort.Row::roleName)
+                .containsExactlyInAnyOrder("TENANT_ADMIN", "SUPPORT_READONLY");
+    }
+
+    @Test
+    @DisplayName("unknown role → RoleNotFoundException before any delete; cache untouched")
+    void unknownRole_throwsBeforeDelete() {
+        memberships("alpha");
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of("GHOST"), "alpha", actor(), "reason"))
                 .isInstanceOf(RoleNotFoundException.class);
 
-        verify(operatorPort, never()).deleteOperatorRoles(anyLong());
+        assertThat(port.rows).hasSize(1);
         verify(cachingPermissionEvaluator, never()).invalidate(anyString());
     }
 
     @Test
-    @DisplayName("대상 운영자가 존재하지 않으면 OperatorNotFoundException 을 던진다")
-    void patchRoles_missing_operator_throws_not_found() {
-        when(operatorPort.findByOperatorId("ghost")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> useCase.patchRoles(
-                "ghost", List.of(), actor(), "reason"))
+    @DisplayName("missing operator → OperatorNotFoundException")
+    void missingOperator_notFound() {
+        assertThatThrownBy(() -> useCase.patchRoles("ghost", List.of(), null, actor(), "reason"))
                 .isInstanceOf(OperatorNotFoundException.class);
     }
 }

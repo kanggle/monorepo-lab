@@ -48,7 +48,11 @@ public class GroupFanOutService {
     private final OperatorTenantAssignmentJpaRepository assignments;
     private final CachingPermissionEvaluator cachingPermissionEvaluator;
 
-    /** A fan-out target: the member's internal id, external UUID (cache key), and home tenant. */
+    /**
+     * A fan-out target: the member's internal id, external UUID (cache key), and the tenant its fan-out ROLE rows
+     * live in — the GROUP's tenant (TASK-MONO-784 S4 · D-11; before S4 the member's home, which the old member
+     * invariant «home == group tenant» made the same value).
+     */
     public record Member(long internalId, String externalId, String tenantId) {}
 
     /**
@@ -87,11 +91,17 @@ public class GroupFanOutService {
         return created;
     }
 
-    /** Remove-member: revoke ONLY this member's {@code group_origin=groupId} rows (direct grants untouched). */
-    public void revokeMemberFanOut(Long groupInternalId, Member member) {
-        operatorRoles.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
+    /**
+     * Remove-member: revoke ONLY this member's {@code group_origin=groupId} rows (direct grants untouched).
+     *
+     * @return the number of fan-out ROLE rows revoked (TASK-MONO-784 S4 — counted in the «이 회사에서 내보내기»
+     *         audit detail)
+     */
+    public int revokeMemberFanOut(Long groupInternalId, Member member) {
+        int roles = operatorRoles.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
         assignments.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
         invalidate(member.externalId());
+        return roles;
     }
 
     /** Delete-group: revoke ALL of the group's {@code group_origin=groupId} rows (direct grants untouched). */
@@ -125,12 +135,10 @@ public class GroupFanOutService {
     private boolean materialise(Long groupInternalId, OperatorGroupGrantJpaEntity grant,
                                 Member member, Long grantedBy, Instant now) {
         if (grant.isRole()) {
-            // TASK-MONO-784 S2 (V0051): the key carries the row's tenant. The tenant written below is still
-            // the member's home — which the member invariant (home == group tenant, 422
-            // GROUP_MEMBER_TENANT_MISMATCH) makes equal to the group's tenant, i.e. the
-            // (member, role, group.tenant_id) skip key rbac.md names. S4 switches both to the group tenant
-            // explicitly (D-11); the key and the written row must always name the same tenant or the
-            // skip check would miss its own row.
+            // TASK-MONO-784 S2 (V0051) · S4 (D-11): the key carries the row's tenant, and both the skip key and
+            // the written row use member.tenantId() = the GROUP's tenant — the (member, role, group.tenant_id)
+            // skip key rbac.md names. The key and the written row must always name the same tenant or the skip
+            // check would miss its own row (a duplicate-key INSERT instead of an idempotent skip).
             var pk = new AdminOperatorRoleJpaEntity.PK(member.internalId(), grant.getRoleId(), member.tenantId());
             if (operatorRoles.existsById(pk)) {
                 return false;

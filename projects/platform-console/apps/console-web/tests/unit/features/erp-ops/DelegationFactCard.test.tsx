@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -39,6 +40,57 @@ function wrapper() {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+function errorResponse(code: string, status: number) {
+  return new Response(JSON.stringify({ code, message: 'e' }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// TASK-PC-FE-335 — the delegatorId/delegateId filters are EMPLOYEE SELECTORS
+// now (were raw-id text inputs). One shared `GET /api/erp/masterdata/employees`
+// feeds both; a default success stub below means every PRE-EXISTING test in
+// this file (none of which mocked `fetch` before — they relied solely on the
+// `initial` prop seeding the delegation-facts query) keeps working unchanged.
+const FILTER_EMPLOYEES_PAGE = {
+  data: [
+    {
+      id: 'emp-001',
+      employeeNumber: 'E1',
+      name: '김위임',
+      status: 'ACTIVE',
+      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+    },
+    {
+      id: 'emp-002',
+      employeeNumber: 'E2',
+      name: '이대행',
+      status: 'RETIRED',
+      effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: '2024-01-01' },
+    },
+  ],
+  meta: { page: 0, size: 100, totalElements: 2 },
+};
+
+beforeEach(() => {
+  vi.unstubAllGlobals();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+        return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
+      }
+      return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+    }),
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -408,5 +460,120 @@ describe('<DelegationFactCard> — scope column (AC-1 PC-FE-056)', () => {
     expect(screen.getByTestId('delegation-fact-scope-0').textContent).toContain('특정 건');
     expect(screen.getByTestId('delegation-fact-scope-1').textContent).toContain('전체');
     expect(screen.getByTestId('delegation-fact-scope-2').textContent).toBe('—');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — delegatorId/delegateId filter selectors (TASK-PC-FE-335).
+// ---------------------------------------------------------------------------
+
+describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
+  it('AC-1 — the two filters render as employee selectors (blank = "전체 …")', async () => {
+    const initial = makeListResp([ACTIVE_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    const delegatorSel = screen.getByTestId(
+      'delegation-fact-filter-delegatorId',
+    ) as HTMLSelectElement;
+    const delegateSel = screen.getByTestId(
+      'delegation-fact-filter-delegateId',
+    ) as HTMLSelectElement;
+    expect(delegatorSel.tagName).toBe('SELECT');
+    expect(delegateSel.tagName).toBe('SELECT');
+    expect(delegatorSel.options[0].textContent).toBe('전체 위임자');
+    expect(delegateSel.options[0].textContent).toBe('전체 대행자');
+  });
+
+  it('AC-5 — no filter chosen (default) → the delegatorId/delegateId params are OMITTED from the fetched query', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+        return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
+      }
+      if (String(url).startsWith('/api/erp/read-model/delegations')) {
+        return Promise.resolve(
+          jsonResponse({ data: [], meta: { page: 0, size: 20, totalElements: 0 } }),
+        );
+      }
+      return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    // No `initial` — the facts query is never "seeded", so it always fetches
+    // on mount with the default (no-filter) query.
+    render(<DelegationFactCard />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]).startsWith('/api/erp/read-model/delegations'),
+        ),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find((c) =>
+      String(c[0]).startsWith('/api/erp/read-model/delegations'),
+    )!;
+    const url = String(call[0]);
+    expect(url).not.toContain('delegatorId=');
+    expect(url).not.toContain('delegateId=');
+  });
+
+  it('AC-1/AC-5 — picking a delegatorId option and applying sends that CHOSEN id as `delegatorId` on the query', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+        return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
+      }
+      if (String(url).startsWith('/api/erp/read-model/delegations')) {
+        return Promise.resolve(
+          jsonResponse({ data: [], meta: { page: 0, size: 20, totalElements: 0 } }),
+        );
+      }
+      return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<DelegationFactCard />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    await user.selectOptions(
+      screen.getByTestId('delegation-fact-filter-delegatorId'),
+      'emp-001',
+    );
+    await user.click(screen.getByTestId('delegation-fact-filter-apply'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          (c) =>
+            String(c[0]).startsWith('/api/erp/read-model/delegations') &&
+            String(c[0]).includes('delegatorId=emp-001'),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('AC-3 — employee list unreadable → both filters fall back to id inputs (same testids) and say so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(errorResponse('DATA_SCOPE_FORBIDDEN', 403)),
+    );
+    const initial = makeListResp([ACTIVE_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+    await screen.findByTestId('delegation-fact-filter-employees-fallback');
+    expect(screen.getByTestId('delegation-fact-filter-delegatorId').tagName).toBe('INPUT');
+    expect(screen.getByTestId('delegation-fact-filter-delegateId').tagName).toBe('INPUT');
+  });
+
+  it('retired employees stay selectable in the filters (historical filter, not a write)', async () => {
+    const initial = makeListResp([ACTIVE_FACT]);
+    render(<DelegationFactCard initial={initial} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    const sel = screen.getByTestId(
+      'delegation-fact-filter-delegatorId',
+    ) as HTMLSelectElement;
+    const retiredOpt = Array.from(sel.options).find((o) => o.value === 'emp-002')!;
+    expect(retiredOpt.textContent).toContain('폐기된 직원');
+    expect(retiredOpt.disabled).toBe(false);
   });
 });

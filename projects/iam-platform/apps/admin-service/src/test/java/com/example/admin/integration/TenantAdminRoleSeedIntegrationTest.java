@@ -198,5 +198,8 @@ class TenantAdminRoleSeedIntegrationTest extends AbstractIntegrationTest {
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = ?
                 """, uuid, roleName);
+        // TASK-MONO-784 S4 (D-7): role edits resolve against the target's memberships — the V0051 backfill row
+        // a hand-seeded operator never receives. No-op for '*'.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 }

@@ -4,7 +4,6 @@ import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.SelfProfileUpdateForbiddenException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
-import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,10 +21,11 @@ import java.util.UUID;
  *
  * <p>SUPER_ADMIN (or any operator with {@code operator.manage}) sets another
  * operator's {@code admin_operators.finance_default_account_id}. The caller's
- * tenant scope is enforced producer-side: caller's {@code tenant_id == '*'}
- * (platform-scope) may target any operator; otherwise caller and target
- * tenants must match. Cross-tenant attempts surface as
- * {@code 403 TENANT_SCOPE_DENIED} (ADR-002 + existing pattern).
+ * scope is enforced producer-side by the row-wide rule
+ * ({@link OperatorRowScopeGuard}, TASK-MONO-784 S4): a {@code '*'} grant scope may
+ * target any operator; otherwise the target must belong to exactly one company and
+ * the caller must hold {@code operator.manage} there. Refusals surface as
+ * {@code 403 TENANT_SCOPE_DENIED} or {@code 403 OPERATOR_HAS_OTHER_MEMBERSHIPS}.
  *
  * <p>Self via admin path is forbidden — calling
  * {@code PATCH /api/admin/operators/{caller.operator_id}/profile} throws
@@ -54,7 +54,7 @@ public class UpdateOperatorProfileUseCase {
 
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
-    private final TenantScopeResolver tenantScopeResolver;
+    private final OperatorRowScopeGuard rowScopeGuard;
 
     /**
      * Sets or clears another operator's {@code finance_default_account_id}
@@ -97,22 +97,14 @@ public class UpdateOperatorProfileUseCase {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + targetOperatorPublicId));
 
-        AdminOperatorPort.OperatorView callerView = operatorPort
-                .findByOperatorId(caller.operatorId())
-                .orElseThrow(() -> new OperatorNotFoundException(
-                        "Caller not found for operatorId=" + caller.operatorId()));
-
-        boolean callerIsPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(callerView.tenantId());
-        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
-        // tenant). NET-ZERO with no assignments → {home tenant} → the membership
-        // check reduces to the legacy `callerTenant.equals(targetTenant)`.
-        java.util.Set<String> effectiveTenants = tenantScopeResolver
-                .resolveEffectiveTenantScope(callerView.internalId(), callerView.tenantId());
-        if (!callerIsPlatformScope && !effectiveTenants.contains(target.tenantId())) {
-            throw new TenantScopeDeniedException(
-                    "Caller tenant '" + callerView.tenantId() + "' may not modify operator in tenant '"
-                            + target.tenantId() + "'");
-        }
+        // TASK-MONO-784 S4 (rider R3 · D-8 · admin-api.md § 행동 테넌트 #12): finance_default_account_id is
+        // ROW-WIDE — the shared row-wide rule replaces this use case's own copy of the read gate (784 AC-0 F2: the
+        // copy judged the target's HOME against the caller's «assignments ∪ home», so a mere assignment to the
+        // target's home company was enough). One membership {T} → T's operator.manage grant scope; two or more →
+        // '*' only (403 OPERATOR_HAS_OTHER_MEMBERSHIPS for a company admin). Platform = the '*' GRANT scope, not
+        // the caller's home '*'.
+        rowScopeGuard.requireRowAdministrable(
+                caller, Permission.OPERATOR_MANAGE, target, ActionCode.OPERATOR_PROFILE_UPDATE);
 
         Instant now = Instant.now();
         operatorPort.changeFinanceDefaultAccountId(target.internalId(), defaultAccountId, now);

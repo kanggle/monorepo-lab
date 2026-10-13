@@ -1,6 +1,8 @@
 package com.example.admin.infrastructure.persistence.rbac;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -16,4 +18,13 @@ public interface OperatorGroupMemberJpaRepository
 
     /** Membership count for the group wire shape ({@code memberCount}). */
     long countByGroupId(Long groupId);
+
+    /**
+     * TASK-MONO-784 S4 (D-9 «이 회사에서 내보내기» · 784 Edge Case 3) — one operator's memberships in the groups
+     * of one company ({@code operator_group.tenant_id = tenantId}). Groups of other companies are not returned.
+     */
+    @Query("SELECT m FROM OperatorGroupMemberJpaEntity m, OperatorGroupJpaEntity g "
+            + "WHERE m.groupId = g.id AND m.operatorId = :operatorId AND g.tenantId = :tenantId")
+    List<OperatorGroupMemberJpaEntity> findByOperatorIdAndGroupTenantId(@Param("operatorId") Long operatorId,
+                                                                        @Param("tenantId") String tenantId);
 }

@@ -189,6 +189,7 @@ class TenantAdminDelegationIntegrationTest extends AbstractIntegrationTest {
     void grantMenu_deniesEscalation() throws Exception {
         String target = uuid("14");
         seedOperator(target, "tenant-x", "grant-target-b4@example.com", "SUPPORT_READONLY");
+        MembershipFixture.addHomeMembership(jdbcTemplate, target); // 784 S4 (D-7): role edits need a membership
 
         for (String role : new String[]{"SUPER_ADMIN", "SUPPORT_LOCK", "TENANT_BILLING_ADMIN"}) {
             mockMvc.perform(patch(rolesPath(target))
@@ -206,6 +207,7 @@ class TenantAdminDelegationIntegrationTest extends AbstractIntegrationTest {
     void grantMenu_admitsInTenantSubDelegation() throws Exception {
         String target = uuid("15");
         seedOperator(target, "tenant-x", "grant-target-b5@example.com", "SUPPORT_READONLY");
+        MembershipFixture.addHomeMembership(jdbcTemplate, target); // 784 S4 (D-7): role edits need a membership
 
         mockMvc.perform(patch(rolesPath(target))
                         .header("Authorization", bearer(TENANT_X_ADMIN_UUID))
@@ -221,6 +223,7 @@ class TenantAdminDelegationIntegrationTest extends AbstractIntegrationTest {
     void superAdmin_grantMenuUnconstrained() throws Exception {
         String target = uuid("16");
         seedOperator(target, "tenant-x", "grant-target-b6@example.com", "SUPPORT_READONLY");
+        MembershipFixture.addHomeMembership(jdbcTemplate, target); // 784 S4 (D-7): role edits need a membership
 
         mockMvc.perform(patch(rolesPath(target))
                         .header("Authorization", bearer(SUPER_ADMIN_UUID))

@@ -80,6 +80,16 @@ public interface TenantPartnershipPort {
     /** Remove the participant binding. No-op when absent (caller's 404 gate is authoritative). */
     void removeParticipant(long partnershipInternalId, long operatorInternalId);
 
+    /**
+     * TASK-MONO-784 S4 (ADR-MONO-082 b · D-9 · 784 AC-0 F18) — remove every participant binding of one operator
+     * in partnerships whose {@code partner_tenant_id = partnerTenantId} (any partnership status). Part of «이
+     * 회사에서 내보내기»: a person removed from company B keeps no participation that would come back to life if
+     * they ever rejoined B. Bindings in partnerships where another company is the partner are untouched.
+     *
+     * @return the number of bindings removed
+     */
+    int removeParticipationsWithPartner(long operatorInternalId, String partnerTenantId);
+
     // ---------- Projections ----------
 
     /**

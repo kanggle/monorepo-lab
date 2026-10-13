@@ -8,7 +8,9 @@ import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.domain.rbac.Permission;
+import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +32,7 @@ import java.util.UUID;
  * inherits the operator-level role grants ({@code permission_set_id=null}); the
  * per-assignment {@code org_scope} is then refined via {@link ManageOperatorOrgScopeUseCase}.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ManageOperatorAssignmentUseCase {
@@ -38,6 +41,9 @@ public class ManageOperatorAssignmentUseCase {
     private final OperatorTenantAssignmentPort assignmentPort;
     private final TenantScopeGuard tenantScopeGuard;
     private final AdminActionAuditor auditor;
+    private final TenantLastAdminGuard lastAdminGuard;
+    private final OperatorCompanyExitCascade exitCascade;
+    private final CachingPermissionEvaluator cachingPermissionEvaluator;
 
     /**
      * Creates the (operator, tenant) assignment row.
@@ -79,6 +85,13 @@ public class ManageOperatorAssignmentUseCase {
         tenantScopeGuard.requireTenantInScope(
                 actor, Permission.OPERATOR_MANAGE, tenantId, ActionCode.OPERATOR_ASSIGNMENT_CREATE);
 
+        // TASK-MONO-784 S4 (ADR-MONO-082 D2 · D-14 · AC-0 F13): an assignment is a company MEMBERSHIP, and a
+        // platform ('*') operator takes none. Harmless before 784 (the resolver ignored such a row), refused now.
+        if (AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())) {
+            throw new IllegalArgumentException(
+                    "A platform ('*') operator cannot be assigned to a company");
+        }
+
         if (assignmentPort.assignmentExists(operator.internalId(), tenantId)) {
             throw new AssignmentAlreadyExistsException(
                     "Assignment already exists for operatorId=" + operatorPublicId + " tenantId=" + tenantId);
@@ -88,17 +101,26 @@ public class ManageOperatorAssignmentUseCase {
                 actor == null ? null : actor.operatorId());
         assignmentPort.createAssignment(operator.internalId(), tenantId, actorInternalId);
 
-        recordAudit(ActionCode.OPERATOR_ASSIGNMENT_CREATE, operator.operatorId(), tenantId, actor, reason);
+        recordAudit(ActionCode.OPERATOR_ASSIGNMENT_CREATE, operator.operatorId(), tenantId, actor, reason, null);
+        // 784 S4 (D-5): a membership was added.
+        safeInvalidatePermissionCache(operator.operatorId());
         return new OperatorTenantAssignmentPort.AssignmentView(tenantId, null, null);
     }
 
     /**
-     * Removes the (operator, tenant) assignment row.
+     * «이 회사에서 내보내기» (TASK-MONO-784 S4 · ADR-MONO-082 b · D3 · D-9): removes the (operator, tenant)
+     * membership AND every side of the person living in that company — its role rows of every origin, its
+     * memberships of that company's groups with their fan-out, and its participations in partnerships whose
+     * partner is that company ({@link OperatorCompanyExitCascade}). One transaction; the person's other
+     * companies, the operator row (stays {@code ACTIVE} even at zero memberships — D-10) and the person's account
+     * are untouched.
      *
-     * @throws OperatorNotFoundException   the operator does not exist
+     * @throws OperatorNotFoundException        the operator does not exist
      * @throws com.example.admin.application.exception.TenantScopeDeniedException
      *         the actor is not scoped to administer {@code tenantId}
-     * @throws AssignmentNotFoundException no row exists for (operator, tenant)
+     * @throws AssignmentNotFoundException      no row exists for (operator, tenant)
+     * @throws com.example.admin.application.exception.TenantLastAdminRequiredException
+     *         the company would be left without an active {@code TENANT_ADMIN} (incl. removing oneself)
      */
     @Transactional
     public void unassignOperator(String operatorPublicId,
@@ -115,8 +137,25 @@ public class ManageOperatorAssignmentUseCase {
                     "No assignment row for operatorId=" + operatorPublicId + " tenantId=" + tenantId);
         }
 
-        assignmentPort.deleteAssignment(operator.internalId(), tenantId);
-        recordAudit(ActionCode.OPERATOR_ASSIGNMENT_DELETE, operator.operatorId(), tenantId, actor, reason);
+        // Owner decision 2026-10-11 UTC: every TENANT_ADMIN@T row of the person goes with them.
+        long targetId = operator.internalId();
+        lastAdminGuard.requireAdminRemains(tenantId, row -> row.operatorInternalId() == targetId, null);
+
+        OperatorCompanyExitCascade.ExitCounts counts = exitCascade.exit(operator, tenantId);
+        assignmentPort.deleteAssignment(targetId, tenantId);
+        recordAudit(ActionCode.OPERATOR_ASSIGNMENT_DELETE, operator.operatorId(), tenantId, actor, reason,
+                counts.detail());
+        safeInvalidatePermissionCache(operator.operatorId());
+    }
+
+    private void safeInvalidatePermissionCache(String operatorUuid) {
+        if (cachingPermissionEvaluator == null) return;
+        try {
+            cachingPermissionEvaluator.invalidate(operatorUuid);
+        } catch (RuntimeException ex) {
+            log.warn("Permission cache invalidate failed for operatorId={} cause={}",
+                    operatorUuid, ex.getClass().getSimpleName());
+        }
     }
 
     private AdminOperatorPort.OperatorView resolveOperator(String operatorPublicId) {
@@ -126,7 +165,7 @@ public class ManageOperatorAssignmentUseCase {
     }
 
     private void recordAudit(ActionCode code, String operatorPublicId, String tenantId,
-                             OperatorContext actor, String reason) {
+                             OperatorContext actor, String reason, String detail) {
         Instant now = Instant.now();
         auditor.recordWithPermission(
                 new AdminActionAuditor.AuditRecord(
@@ -139,7 +178,7 @@ public class ManageOperatorAssignmentUseCase {
                         null,
                         "assignment:" + code.name() + ":" + operatorPublicId + ":" + tenantId + ":" + now.toEpochMilli(),
                         Outcome.SUCCESS,
-                        null,
+                        detail,
                         now,
                         now,
                         tenantId),

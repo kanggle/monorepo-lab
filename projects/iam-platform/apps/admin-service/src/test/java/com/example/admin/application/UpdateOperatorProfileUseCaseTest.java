@@ -1,14 +1,17 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.OperatorHasOtherMembershipsException;
 import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.SelfProfileUpdateForbiddenException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.domain.rbac.Permission;
+import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,39 +26,30 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * TASK-BE-307 — unit tests for the admin-on-behalf-of operator profile
- * mutation use case (the cross-operator counterpart of
+ * TASK-BE-307 — the admin-on-behalf-of operator profile mutation (the cross-operator counterpart of
  * {@link UpdateOwnOperatorProfileUseCase}).
  *
- * <p>Verifies the 5 canonical cases from the spec § Scope > Tests:
- * <ol>
- *   <li>cross-tenant target by platform-scope caller → save + audit (with
- *       {@code target_id != caller.operator_id},
- *       {@code permission_used=operator.manage}, caller-typed reason);</li>
- *   <li>same-tenant target by non-platform caller → save + audit;</li>
- *   <li>cross-tenant target by non-platform caller → {@code TenantScopeDeniedException},
- *       no save, no audit;</li>
- *   <li>target not found → {@code OperatorNotFoundException}, no save, no audit;</li>
- *   <li>self via admin path → {@code SelfProfileUpdateForbiddenException}, no
- *       target lookup, no save, no audit (cheapest check first).</li>
- * </ol>
+ * <p>TASK-MONO-784 S4 (rider R3 · D-8 · admin-api.md § 행동 테넌트 #12): the use case's own copy of the read
+ * gate («caller home '*' or target home ∈ caller's assignments ∪ home») is gone; the REAL
+ * {@link OperatorRowScopeGuard} decides here, over a mocked grant scope and membership resolver — so these cells
+ * pin the rule, not a mock's answer.
  */
 @ExtendWith(MockitoExtension.class)
-@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.STRICT_STUBS)
 class UpdateOperatorProfileUseCaseTest {
 
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
+    @Mock AdminGrantScopeEvaluator grantScopeEvaluator;
     @Mock TenantScopeResolver tenantScopeResolver;
 
-    @InjectMocks UpdateOperatorProfileUseCase useCase;
+    UpdateOperatorProfileUseCase useCase;
 
     private static final String CALLER_UUID  = "00000000-0000-7000-8000-0000000000aa";
     private static final String TARGET_UUID  = "00000000-0000-7000-8000-0000000000bb";
@@ -63,12 +57,17 @@ class UpdateOperatorProfileUseCaseTest {
             new OperatorContext(CALLER_UUID, "jti-test");
     private static final String REASON = "onboarding bulk-provision";
 
+    @BeforeEach
+    void init() {
+        useCase = new UpdateOperatorProfileUseCase(operatorPort, auditor,
+                new OperatorRowScopeGuard(grantScopeEvaluator, tenantScopeResolver, auditor));
+    }
+
     @Test
     void update_platform_scope_caller_cross_tenant_target_writes_column_and_audit_row() {
-        AdminOperatorPort.OperatorView caller = operator(10L, CALLER_UUID, "platform@example.com", "ACTIVE", "*");
         AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "u@example.com", "ACTIVE", "wms");
         when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
-        when(operatorPort.findByOperatorId(CALLER_UUID)).thenReturn(Optional.of(caller));
+        when(grantScopeEvaluator.effectiveAdminScope(CALLER_UUID, Permission.OPERATOR_MANAGE)).thenReturn(Set.of("*"));
 
         String newValue = "01928c4a-7e9f-7c00-9a40-d2b1f5e8a000";
         useCase.update(TARGET_UUID, newValue, CALLER, REASON);
@@ -90,7 +89,7 @@ class UpdateOperatorProfileUseCaseTest {
                 .isEqualTo(TARGET_UUID)
                 .isNotEqualTo(CALLER_UUID);
         assertThat(rec.targetTenantId())
-                .as("audit target_tenant_id is the TARGET operator's tenant, NOT the caller's '*'")
+                .as("audit target_tenant_id is the TARGET operator's home (S1-8 — a row-wide attribute)")
                 .isEqualTo("wms");
         assertThat(rec.reason())
                 .as("admin path uses caller-typed X-Operator-Reason, NOT the <self_profile_update> constant")
@@ -107,13 +106,12 @@ class UpdateOperatorProfileUseCaseTest {
     }
 
     @Test
+    @DisplayName("control (784 AC-4 «소속 하나 = 지금과 같다»): single-company target, caller administers that company → written")
     void update_same_tenant_caller_target_writes_column_and_audit_row() {
-        AdminOperatorPort.OperatorView caller = operator(10L, CALLER_UUID, "wms-admin@example.com", "ACTIVE", "wms");
         AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "u@example.com", "ACTIVE", "wms");
         when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
-        when(operatorPort.findByOperatorId(CALLER_UUID)).thenReturn(Optional.of(caller));
-        // NET-ZERO: no assignments → effective scope = {home tenant}.
-        when(tenantScopeResolver.resolveEffectiveTenantScope(10L, "wms")).thenReturn(Set.of("wms"));
+        when(grantScopeEvaluator.effectiveAdminScope(CALLER_UUID, Permission.OPERATOR_MANAGE)).thenReturn(Set.of("wms"));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(20L, "wms")).thenReturn(Set.of("wms"));
 
         useCase.update(TARGET_UUID, "any-uuid", CALLER, REASON);
 
@@ -124,12 +122,10 @@ class UpdateOperatorProfileUseCaseTest {
 
     @Test
     void update_cross_tenant_non_platform_caller_throws_tenant_scope_denied() {
-        AdminOperatorPort.OperatorView caller = operator(10L, CALLER_UUID, "wms-admin@example.com", "ACTIVE", "wms");
         AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "scm-user@example.com", "ACTIVE", "scm");
         when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
-        when(operatorPort.findByOperatorId(CALLER_UUID)).thenReturn(Optional.of(caller));
-        // NET-ZERO: no assignments → effective scope = {wms}; target scm not in it → denied.
-        when(tenantScopeResolver.resolveEffectiveTenantScope(10L, "wms")).thenReturn(Set.of("wms"));
+        when(grantScopeEvaluator.effectiveAdminScope(CALLER_UUID, Permission.OPERATOR_MANAGE)).thenReturn(Set.of("wms"));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(20L, "scm")).thenReturn(Set.of("scm"));
 
         assertThatThrownBy(() -> useCase.update(TARGET_UUID, "any-uuid", CALLER, REASON))
                 .isInstanceOf(TenantScopeDeniedException.class);
@@ -138,6 +134,36 @@ class UpdateOperatorProfileUseCaseTest {
                 .changeFinanceDefaultAccountId(anyLong(), anyString(), any(Instant.class));
         verify(auditor, never()).recordWithPermission(any(AdminActionAuditor.AuditRecord.class), anyString());
         verify(auditor, never()).record(any(AdminActionAuditor.AuditRecord.class));
+    }
+
+    @Test
+    @DisplayName("🔴 784 F2: caller merely ASSIGNED to the target's company (no operator.manage there) → refused (was: written)")
+    void update_assignedOnly_caller_isRefused() {
+        // Before S4 the copy of the read gate admitted this: caller home=wms with an assignment to scm → scm in its
+        // «assignments ∪ home» → may modify an scm operator without holding operator.manage in scm.
+        AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "scm-user@example.com", "ACTIVE", "scm");
+        when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
+        when(grantScopeEvaluator.effectiveAdminScope(CALLER_UUID, Permission.OPERATOR_MANAGE)).thenReturn(Set.of("wms"));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(20L, "scm")).thenReturn(Set.of("scm"));
+
+        assertThatThrownBy(() -> useCase.update(TARGET_UUID, "any-uuid", CALLER, REASON))
+                .isInstanceOf(TenantScopeDeniedException.class);
+        verify(operatorPort, never())
+                .changeFinanceDefaultAccountId(anyLong(), anyString(), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("🔴 784 AC-4 (R3): two-company target, company admin of one → 403 OPERATOR_HAS_OTHER_MEMBERSHIPS, nothing written")
+    void update_twoCompanyTarget_companyAdmin_refused() {
+        AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "two@example.com", "ACTIVE", "wms");
+        when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
+        when(grantScopeEvaluator.effectiveAdminScope(CALLER_UUID, Permission.OPERATOR_MANAGE)).thenReturn(Set.of("wms"));
+        when(tenantScopeResolver.resolveEffectiveTenantScope(20L, "wms")).thenReturn(Set.of("wms", "scm"));
+
+        assertThatThrownBy(() -> useCase.update(TARGET_UUID, "any-uuid", CALLER, REASON))
+                .isInstanceOf(OperatorHasOtherMembershipsException.class);
+        verify(operatorPort, never())
+                .changeFinanceDefaultAccountId(anyLong(), anyString(), any(Instant.class));
     }
 
     @Test
@@ -150,25 +176,6 @@ class UpdateOperatorProfileUseCaseTest {
         verify(operatorPort, never())
                 .changeFinanceDefaultAccountId(anyLong(), anyString(), any(Instant.class));
         verify(auditor, never()).recordWithPermission(any(AdminActionAuditor.AuditRecord.class), anyString());
-    }
-
-    @Test
-    void update_assigned_non_home_tenant_target_by_non_platform_caller_writes_column_and_audit() {
-        // TASK-BE-326 AC-5: caller home=wms but has an assignment to scm → its
-        // effective scope is {wms, scm} → it MAY modify an operator in scm even
-        // though scm is NOT its home tenant. (Legacy single-equality would deny.)
-        AdminOperatorPort.OperatorView caller = operator(10L, CALLER_UUID, "wms-admin@example.com", "ACTIVE", "wms");
-        AdminOperatorPort.OperatorView target = operator(20L, TARGET_UUID, "scm-user@example.com", "ACTIVE", "scm");
-        when(operatorPort.findByOperatorId(TARGET_UUID)).thenReturn(Optional.of(target));
-        when(operatorPort.findByOperatorId(CALLER_UUID)).thenReturn(Optional.of(caller));
-        when(tenantScopeResolver.resolveEffectiveTenantScope(10L, "wms"))
-                .thenReturn(Set.of("wms", "scm"));
-
-        useCase.update(TARGET_UUID, "any-uuid", CALLER, REASON);
-
-        verify(operatorPort, times(1))
-                .changeFinanceDefaultAccountId(eq(20L), anyString(), any(Instant.class));
-        verify(auditor, times(1)).recordWithPermission(any(AdminActionAuditor.AuditRecord.class), anyString());
     }
 
     @Test
