@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-PC-FE-338
+TASK-PC-FE-339
 
 # Title
 
@@ -8,7 +8,7 @@ TASK-PC-FE-338
 
 # Status
 
-review — 구현 완료(2026-10-13 UTC). AC-1~5 ✅. 라이브 확인은 AC 밖(데모 창).
+done — 구현 완료(2026-10-13 UTC). AC-1~5 ✅. 라이브 확인은 AC 밖(데모 창).
 
 # Owner
 
@@ -81,3 +81,8 @@ ID 입력 정리(묶음 ①~④)에서 남긴 두 칸은 «다른 회사의 사�
 | 실패 | 기대 |
 |---|---|
 | 배정 POST 실패 | 기존 확인 창 오류 그대로(변경 없음) |
+
+## CORRECTION
+
+- 2026-10-13 UTC — **번호 변경 338 → 339** (tasks/INDEX.md rule 4). 다른 세션의 `TASK-PC-FE-338-domain-permission-sets-console.md`(ADR-MONO-083 P4, #4337 `945db2169`)가 **먼저** main 에 들어갔고, 이 작업의 impl PR #4336 은 그 전에 CI 를 돌려 충돌을 못 본 채 뒤에 머지됐다 → main 의 필수 체크 `Task ID collision` 이 빨강(같은 ID 가 ready · review 둘 다에). 먼저 들어간 쪽이 번호를 갖는다 → 이 파일을 339 로 옮긴다. 🔴 impl 커밋 `8c95379ee` 의 제목 · PR #4336 제목은 «TASK-PC-FE-338» 로 남아 있다(이미 머지됨 — 고칠 수 없다). 그 «338» 은 이 작업(339)이다.
+- 2026-10-13 UTC close chore — 4-dim verified: (a) PR #4336 `MERGED` (b) squash `8c95379ee` 가 `origin/main` 조상 (c) 머지 시점 statusCheckRollup 실패 0 · 성공 12(콘솔 전체 vitest · Playwright 스모크 포함) — 🔴 단, 머지 **뒤** main 은 위 ID 충돌로 빨강이었고 이 정리가 그것을 푼다 (d) `# Acceptance Criteria` 5/5 `[x]`.
