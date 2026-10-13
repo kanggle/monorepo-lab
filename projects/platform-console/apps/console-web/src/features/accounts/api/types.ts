@@ -44,6 +44,25 @@ export type {
 
 // --- lock / unlock --------------------------------------------------------
 
+// TASK-BE-619 / TASK-PC-FE-332 — shared "whose scope did this mutation apply
+// to" enum. A SITE operator's lock/unlock/gdpr-delete of a consumer-POOL
+// member affects only that site's membership (`SITE_MEMBERSHIP`), never the
+// whole account (`ACCOUNT`). Declared once, before every result schema that
+// carries it (lock/unlock below, gdpr-delete further down), so none of them
+// forward-reference it.
+export const MutationScopeSchema = z.enum(['ACCOUNT', 'SITE_MEMBERSHIP']);
+export type MutationScope = z.infer<typeof MutationScopeSchema>;
+/** @deprecated alias kept for the gdpr-delete section's existing name/export. */
+export const GdprDeleteScopeSchema = MutationScopeSchema;
+export type GdprDeleteScope = MutationScope;
+
+// TASK-PC-FE-332 (admin-api.md § lock/unlock, TASK-BE-621): a SITE operator's
+// lock/unlock of a consumer-POOL member changes only that site's membership —
+// the account's own `status` (and this row's `AccountSummary.status`) is
+// untouched, so the response says so out loud via `scope`/`siteTenantId`
+// (same shape as GdprDeleteResultSchema's TASK-BE-619 fields below). `scope`
+// is optional so an older admin-service (no field) still parses — read as
+// `ACCOUNT` per the contract's documented fallback.
 export const LockResultSchema = z.object({
   accountId: z.string(),
   previousStatus: z.string(),
@@ -51,6 +70,8 @@ export const LockResultSchema = z.object({
   operatorId: z.string(),
   lockedAt: z.string(),
   auditId: z.string(),
+  scope: MutationScopeSchema.optional(),
+  siteTenantId: z.string().nullable().optional(),
 });
 export type LockResult = z.infer<typeof LockResultSchema>;
 
@@ -61,6 +82,8 @@ export const UnlockResultSchema = z.object({
   operatorId: z.string(),
   unlockedAt: z.string(),
   auditId: z.string(),
+  scope: MutationScopeSchema.optional(),
+  siteTenantId: z.string().nullable().optional(),
 });
 export type UnlockResult = z.infer<typeof UnlockResultSchema>;
 
@@ -107,8 +130,9 @@ export type RevokeSessionResult = z.infer<typeof RevokeSessionResultSchema>;
 // SITE_MEMBERSHIP`, `maskedAt = null`, `status` = the account's unchanged
 // status). Erasing the pool account itself is the person's or a platform
 // admin's. `scope` is optional so an older admin-service still parses.
-export const GdprDeleteScopeSchema = z.enum(['ACCOUNT', 'SITE_MEMBERSHIP']);
-export type GdprDeleteScope = z.infer<typeof GdprDeleteScopeSchema>;
+// (`GdprDeleteScopeSchema` is declared above, next to `MutationScopeSchema`,
+// so `LockResultSchema`/`UnlockResultSchema` can share it without a
+// forward-reference.)
 
 export const GdprDeleteResultSchema = z.object({
   accountId: z.string(),

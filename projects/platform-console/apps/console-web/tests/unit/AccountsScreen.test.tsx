@@ -214,6 +214,117 @@ describe('AccountsScreen — destructive ops are reason-gated', () => {
     expect(screen.queryByTestId('accounts-gdpr-site-scope')).not.toBeInTheDocument();
   });
 
+  it('TASK-PC-FE-332 AC-1: a SITE_MEMBERSHIP lock says so (row status badge is unaffected — AC-0 ①) and an unlock clears the notice', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        accountId: 'acc-1',
+        previousStatus: 'ACTIVE',
+        currentStatus: 'LOCKED',
+        operatorId: 'op',
+        lockedAt: 'x',
+        auditId: 'a',
+        scope: 'SITE_MEMBERSHIP',
+        siteTenantId: 'ecommerce',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('action-lock-acc-1'));
+    const dialog = screen.getByTestId('confirm-dialog');
+    await user.type(within(dialog).getByTestId('confirm-reason'), 'abuse report');
+    await user.click(within(dialog).getByTestId('confirm-submit'));
+
+    const notice = await screen.findByTestId('accounts-site-lock-notice');
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveTextContent('alice@x.com');
+    expect(notice).toHaveTextContent('ecommerce 사이트에서만 잠겼습니다');
+    // The row's own status badge (= AccountSummary.status from the search
+    // response, untouched by a site-scoped lock) is still whatever the list
+    // last said — never silently flipped to LOCKED by the lock response.
+    expect(
+      within(screen.getByTestId('account-row-acc-1')).getByTestId('account-status'),
+    ).toHaveTextContent('ACTIVE');
+
+    // Unlock the same row → the notice disappears (AC-1 "해제 → 사라진다").
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        accountId: 'acc-1',
+        previousStatus: 'LOCKED',
+        currentStatus: 'ACTIVE',
+        operatorId: 'op',
+        unlockedAt: 'x',
+        auditId: 'a',
+        scope: 'SITE_MEMBERSHIP',
+        siteTenantId: 'ecommerce',
+      }),
+    );
+    await user.click(screen.getByTestId('action-unlock-acc-1'));
+    const unlockDialog = screen.getByTestId('confirm-dialog');
+    await user.type(
+      within(unlockDialog).getByTestId('confirm-reason'),
+      'resolved',
+    );
+    await user.click(within(unlockDialog).getByTestId('confirm-submit'));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId('accounts-site-lock-notice'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('TASK-PC-FE-332 AC-2 control: a non-pool (site account) lock shows no site-lock notice — unchanged from before', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        accountId: 'acc-1',
+        previousStatus: 'ACTIVE',
+        currentStatus: 'LOCKED',
+        operatorId: 'op',
+        lockedAt: 'x',
+        auditId: 'a',
+        scope: 'ACCOUNT',
+        siteTenantId: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('action-lock-acc-1'));
+    const dialog = screen.getByTestId('confirm-dialog');
+    await user.type(within(dialog).getByTestId('confirm-reason'), 'abuse report');
+    await user.click(within(dialog).getByTestId('confirm-submit'));
+
+    await waitFor(() => expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('accounts-site-lock-notice')).not.toBeInTheDocument();
+  });
+
+  it('TASK-PC-FE-332 control: an old admin-service response with no `scope` field (back-compat) shows no site-lock notice', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        accountId: 'acc-1',
+        previousStatus: 'ACTIVE',
+        currentStatus: 'LOCKED',
+        operatorId: 'op',
+        lockedAt: 'x',
+        auditId: 'a',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<AccountsScreen initial={PAGE} />, { wrapper: wrapper() });
+
+    await user.click(screen.getByTestId('action-lock-acc-1'));
+    const dialog = screen.getByTestId('confirm-dialog');
+    await user.type(within(dialog).getByTestId('confirm-reason'), 'abuse report');
+    await user.click(within(dialog).getByTestId('confirm-submit'));
+
+    await waitFor(() => expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('accounts-site-lock-notice')).not.toBeInTheDocument();
+  });
+
   it('cancel closes the dialog without calling the proxy', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

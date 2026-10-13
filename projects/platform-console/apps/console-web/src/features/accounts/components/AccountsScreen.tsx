@@ -92,6 +92,19 @@ export function AccountsScreen({
     email: string;
     site: string;
   } | null>(null);
+  // TASK-PC-FE-332 — a lock/unlock of a consumer-pool account's SITE
+  // membership (scope SITE_MEMBERSHIP) never changes the account's own
+  // `status` (AC-0 ①: `GET /api/admin/accounts` has no per-site field), so the
+  // row's status badge stays unchanged by design. Said out loud instead, same
+  // shape as `siteScopeNotice` above — a lock sets it, an unlock (or any new
+  // pending action, via `openAction` below) clears it; it does not persist
+  // across a refresh and is not read by any other operator (Failure Scenario
+  // 2 — this is an announcement, not the only record of the lock: the
+  // membership row + admin_actions audit trail are that record).
+  const [siteLockNotice, setSiteLockNotice] = useState<{
+    email: string;
+    site: string;
+  } | null>(null);
 
   const lock = useLockAccount();
   const unlock = useUnlockAccount();
@@ -133,6 +146,7 @@ export function AccountsScreen({
   ) {
     setBulkResult(null);
     setSiteScopeNotice(null);
+    setSiteLockNotice(null);
     lock.reset();
     unlock.reset();
     revoke.reset();
@@ -165,9 +179,36 @@ export function AccountsScreen({
     if (!account) return;
     const onSuccess = () => setPending(null);
     if (kind === 'lock') {
-      lock.mutate({ accountId: account.id, ...common }, { onSuccess });
+      lock.mutate(
+        { accountId: account.id, ...common },
+        {
+          onSuccess: (r) => {
+            // AC-0 ②: scope/siteTenantId already ride the lock response
+            // (admin-api.md § lock) — a SITE_MEMBERSHIP lock leaves this row's
+            // status badge (the ACCOUNT status) unchanged by design, so say
+            // the site-scoped lock out loud instead of letting it read as a
+            // no-op (Goal — the 26차 창 operator read "잠금이 안 됐다").
+            setSiteLockNotice(
+              r.scope === 'SITE_MEMBERSHIP'
+                ? { email: account.email, site: r.siteTenantId ?? '' }
+                : null,
+            );
+            setPending(null);
+          },
+        },
+      );
     } else if (kind === 'unlock') {
-      unlock.mutate({ accountId: account.id, ...common }, { onSuccess });
+      unlock.mutate(
+        { accountId: account.id, ...common },
+        {
+          onSuccess: () => {
+            // AC-1: 해제 → 표시가 사라진다 — any unlock (site-scoped or
+            // account-wide) clears this row's lock notice.
+            setSiteLockNotice(null);
+            setPending(null);
+          },
+        },
+      );
     } else if (kind === 'revoke-session') {
       revoke.mutate({ accountId: account.id, ...common }, { onSuccess });
     } else if (kind === 'gdpr-delete') {
@@ -264,6 +305,20 @@ export function AccountsScreen({
           <strong>{siteScopeNotice.site}</strong> 사이트에서만 탈퇴 처리했습니다.
           다른 사이트의 이용과 계정 정보는 그대로입니다. 계정 전체 삭제는 본인
           또는 플랫폼 관리자만 할 수 있습니다.
+        </div>
+      )}
+
+      {siteLockNotice && (
+        <div
+          role="status"
+          data-testid="accounts-site-lock-notice"
+          className="mb-6 rounded-md border border-border bg-muted px-4 py-3 text-sm text-foreground"
+        >
+          <strong>{siteLockNotice.email}</strong> 은(는) 팬·스토어가 함께 쓰는
+          IAM 공용 계정이라 계정 전체가 아니라{' '}
+          <strong>{siteLockNotice.site}</strong> 사이트에서만 잠겼습니다. 위
+          상태 칸은 계정 자체의 상태라 바뀌지 않습니다 — 다른 사이트의 이용은
+          그대로입니다.
         </div>
       )}
 
