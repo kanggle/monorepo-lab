@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { useTenantSuggestions } from '../hooks/use-tenant-suggestions';
 import {
   ELEVATED_ROLE_NEVER_GRANTABLE,
   KNOWN_GROUP_ROLES,
@@ -59,6 +60,8 @@ export function GroupGrantDialog({
   const [role, setRole] = useState<string>('');
   const [tenantId, setTenantId] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const tenantDatalistId = useId();
+  const tenantSuggestions = useTenantSuggestions();
 
   const roleSelected = role !== '';
   const tenantSelected = tenantId.trim() !== '' && tenantId.trim() !== '*';
@@ -120,12 +123,19 @@ export function GroupGrantDialog({
           </label>
           <input
             id="group-grant-tenant"
+            list={tenantDatalistId}
             value={tenantId}
             onChange={(e) => setTenantId(e.target.value)}
+            onFocus={tenantSuggestions.load}
             data-testid="group-grant-tenant-input"
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="acme-corp"
           />
+          <datalist id={tenantDatalistId} data-testid="group-grant-tenant-datalist">
+            {tenantSuggestions.options.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
         </div>
 
         {error && (

@@ -155,15 +155,21 @@ describe('SettlementsScreen — seeded render + section presence', () => {
 
 describe('SettlementsScreen — seller balance lookup gates on submit', () => {
   it('fetches + renders a ₩-formatted balance after submitting a sellerId', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        sellerId: 'acme-corp',
-        accruedNetMinor: 90000,
-        platformCommissionMinor: 10000,
-        grossMinor: 100000,
-        accrualCount: 1,
-        asOf: '2026-06-14T00:00:00Z',
-      }),
+    // A fresh `Response` per call (not one shared static object) — the
+    // sellers-list GET fired by `<SellerSelect>` on mount and the balance GET
+    // fired on submit each read their OWN body; a shared `Response` would
+    // throw "body already used" on the second read (TASK-PC-FE-336).
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          sellerId: 'acme-corp',
+          accruedNetMinor: 90000,
+          platformCommissionMinor: 10000,
+          grossMinor: 100000,
+          accrualCount: 1,
+          asOf: '2026-06-14T00:00:00Z',
+        }),
+      ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -174,6 +180,11 @@ describe('SettlementsScreen — seller balance lookup gates on submit', () => {
     // no query until submit
     expect(screen.queryByTestId('settlements-balance-detail')).toBeNull();
 
+    // TASK-PC-FE-336 — the seller field is a `<SellerSelect>` now; the mocked
+    // `fetch` above answers EVERY call (incl. the sellers-list GET) with the
+    // balance shape, which fails `SellerListSchema` → the selector falls back
+    // to the old free-text id input (same testid, AC-3).
+    await screen.findByTestId('settlements-balance-seller-input-fallback');
     await userEvent.type(
       screen.getByTestId('settlements-balance-seller-input'),
       'acme-corp',
@@ -185,9 +196,141 @@ describe('SettlementsScreen — seller balance lookup gates on submit', () => {
     );
     const detail = screen.getByTestId('settlements-balance-detail');
     expect(detail).toHaveTextContent('₩90,000');
-    const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain(
-      '/api/ecommerce/settlements/sellers/acme-corp/balance',
+    const balanceCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/ecommerce/settlements/sellers/acme-corp/balance'),
     );
+    expect(balanceCall).toBeDefined();
+  });
+});
+
+// ===========================================================================
+// TASK-PC-FE-336 — `<SellerSelect>` (AC-1/AC-2/AC-3/AC-6 for the settlement
+// screens; the operator-groups datalist AC-4 is covered separately).
+// ===========================================================================
+
+function sellerListJson(overrides: Partial<{ totalElements: number }> = {}) {
+  return {
+    content: [
+      {
+        sellerId: 'acme-corp',
+        displayName: 'ACME Corp',
+        status: 'ACTIVE',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        sellerId: 'beta-co',
+        displayName: 'Beta Co',
+        status: 'SUSPENDED',
+        createdAt: '2026-01-02T00:00:00Z',
+      },
+    ],
+    page: 0,
+    size: 100,
+    totalElements: overrides.totalElements ?? 2,
+  };
+}
+
+describe('SellerSelect — real list render + chosen sellerId reaches the request (AC-1)', () => {
+  it('renders «표시명 · sellerId · 상태» options and the chosen sellerId reaches the balance request', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('/api/ecommerce/sellers?')) {
+        return Promise.resolve(jsonResponse(sellerListJson()));
+      }
+      if (u.includes('/balance')) {
+        return Promise.resolve(
+          jsonResponse({
+            sellerId: 'acme-corp',
+            accruedNetMinor: 90000,
+            platformCommissionMinor: 10000,
+            grossMinor: 100000,
+            accrualCount: 1,
+            asOf: '2026-06-14T00:00:00Z',
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ code: 'NOT_FOUND', message: 'nf' }, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
+      wrapper: wrapper(),
+    });
+
+    const select = (await screen.findByTestId(
+      'settlements-balance-seller-input',
+    )) as HTMLSelectElement;
+    expect(select.tagName).toBe('SELECT');
+    await waitFor(() => expect(select.options.length).toBe(3)); // blank + 2 sellers
+    expect(select.options[1].textContent).toBe('ACME Corp · acme-corp · ACTIVE');
+    expect(select.options[2].textContent).toBe('Beta Co · beta-co · SUSPENDED');
+
+    await userEvent.selectOptions(select, 'acme-corp');
+    await userEvent.click(screen.getByTestId('settlements-balance-submit'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('settlements-balance-detail')).toBeInTheDocument(),
+    );
+    const balanceCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/balance'),
+    )!;
+    expect(String(balanceCall[0])).toContain('/sellers/acme-corp/balance');
+  });
+
+  it('shows a «처음 N개만 표시» notice when totalElements exceeds the one loaded page', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(sellerListJson({ totalElements: 150 })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
+      wrapper: wrapper(),
+    });
+
+    await screen.findByTestId('settlements-balance-seller-input-truncated');
+    expect(
+      screen.getByTestId('settlements-balance-seller-input-truncated'),
+    ).toHaveTextContent('처음 2개만 표시합니다');
+  });
+});
+
+describe('AccrualsSection seller filter — blank selection omits sellerId (AC-2)', () => {
+  it('submits the accrual filter without `sellerId` when the seller select is left blank («전체 셀러»)', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('/api/ecommerce/sellers?')) {
+        return Promise.resolve(jsonResponse(sellerListJson()));
+      }
+      if (u.includes('/api/ecommerce/settlements/accruals')) {
+        return Promise.resolve(jsonResponse(EMPTY_ACCRUALS));
+      }
+      return Promise.resolve(jsonResponse({ code: 'NOT_FOUND', message: 'nf' }, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SettlementsScreen accruals={ACCRUALS} periods={EMPTY_PERIODS} />, {
+      wrapper: wrapper(),
+    });
+
+    await screen.findByTestId('settlements-accruals-seller-input');
+    // The seller select stays at its default blank («전체 셀러») option; typing
+    // an orderId forces a real re-fetch (a blank-seller resubmit alone would
+    // hit the already-seeded page-0 cache entry and fetch nothing — this
+    // isolates the "blank seller" half of the filter from that caching detail).
+    await userEvent.type(
+      screen.getByTestId('settlements-accruals-order-input'),
+      'ord-9',
+    );
+    await userEvent.click(screen.getByTestId('settlements-accruals-filter-submit'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]).includes('orderId=ord-9')),
+      ).toBe(true),
+    );
+    const accrualsCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('orderId=ord-9'),
+    )!;
+    expect(String(accrualsCall[0])).not.toContain('sellerId=');
   });
 });

@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
+import { useTenantSuggestions } from '../hooks/use-tenant-suggestions';
 import type {
   Group,
   CreateGroupInput,
@@ -40,8 +41,10 @@ export function GroupForm({
   pending = false,
 }: GroupFormProps) {
   const tenantIdFieldId = useId();
+  const tenantDatalistId = useId();
   const nameFieldId = useId();
   const descriptionFieldId = useId();
+  const tenantSuggestions = useTenantSuggestions();
 
   const [tenantId, setTenantId] = useState('');
   const [name, setName] = useState(group?.name ?? '');
@@ -106,8 +109,10 @@ export function GroupForm({
           <input
             id={tenantIdFieldId}
             type="text"
+            list={tenantDatalistId}
             value={tenantId}
             onChange={(e) => setTenantId(e.target.value)}
+            onFocus={tenantSuggestions.load}
             required
             aria-required="true"
             aria-invalid={touched && !tenantIdOk}
@@ -115,6 +120,11 @@ export function GroupForm({
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="acme-corp"
           />
+          <datalist id={tenantDatalistId} data-testid="group-form-tenant-id-datalist">
+            {tenantSuggestions.options.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
           <p className="mt-1 text-xs text-muted-foreground">
             그룹이 소속될 테넌트. 플랫폼 전역(`*`) 그룹은 만들 수 없으며 본인
             스코프 이내여야 합니다.

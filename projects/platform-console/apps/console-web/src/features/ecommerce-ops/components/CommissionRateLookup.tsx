@@ -9,6 +9,7 @@ import {
   commissionSourceLabel,
 } from '../api/settlement-types';
 import { CommissionRateForm } from './CommissionRateForm';
+import { SellerSelect } from './SellerSelect';
 
 /**
  * Commission-rate lookup + set (TASK-PC-FE-221). A `sellerId`-driven read of the
@@ -62,14 +63,11 @@ export function CommissionRateLookup() {
           >
             셀러 ID
           </label>
-          <input
+          <SellerSelect
             id={fieldId}
-            type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            data-testid="settlements-rate-seller-input"
-            autoComplete="off"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onChange={setDraft}
+            testid="settlements-rate-seller-input"
           />
         </div>
         <Button

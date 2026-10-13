@@ -151,6 +151,110 @@ describe('OperatorGroupsScreen — create', () => {
   });
 });
 
+describe('GroupForm — tenant datalist suggestions (TASK-PC-FE-336 AC-4)', () => {
+  it('suggests known tenants (excluding `*`) in the create-form tenant datalist on focus', async () => {
+    get.mockResolvedValue({
+      products: [
+        {
+          productKey: 'iam',
+          displayName: 'IAM',
+          available: true,
+          tenants: ['*', 'acme-corp'],
+          baseRoute: '/accounts',
+        },
+        {
+          productKey: 'wms',
+          displayName: 'WMS',
+          available: true,
+          tenants: ['beta-corp'],
+          baseRoute: '/wms',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderScreen();
+
+    // No fetch until the field is focused (TASK-PC-FE-336 — must not break the
+    // "renders the seeded list without an extra fetch" invariant above).
+    expect(get).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('group-form-tenant-id'));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/registry'));
+
+    const datalistId = screen
+      .getByTestId('group-form-tenant-id')
+      .getAttribute('list')!;
+    const datalist = document.getElementById(datalistId) as HTMLDataListElement;
+    await waitFor(() => {
+      const values = Array.from(datalist.options).map((o) => o.value);
+      expect(values).toEqual(['acme-corp', 'beta-corp']);
+    });
+
+    // Free text NOT in the suggestion list still submits (it's a suggestion,
+    // not a whitelist).
+    await user.type(screen.getByTestId('group-form-tenant-id'), 'freeform-corp');
+    await user.type(screen.getByTestId('group-form-name'), '자유입력 그룹');
+    expect(screen.getByTestId('group-create-submit')).toBeEnabled();
+  });
+
+  it('registry failure → no datalist options, the free-text field still works', async () => {
+    get.mockRejectedValue(new Error('registry down'));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByTestId('group-form-tenant-id'));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/registry'));
+
+    const datalistId = screen
+      .getByTestId('group-form-tenant-id')
+      .getAttribute('list')!;
+    const datalist = document.getElementById(datalistId) as HTMLDataListElement;
+    await waitFor(() => expect(datalist.options.length).toBe(0));
+
+    await user.type(screen.getByTestId('group-form-tenant-id'), 'acme-corp');
+    await user.type(screen.getByTestId('group-form-name'), '여전히 됨');
+    expect(screen.getByTestId('group-create-submit')).toBeEnabled();
+  });
+});
+
+describe('GroupGrantDialog — tenant datalist suggestions (TASK-PC-FE-336 AC-4)', () => {
+  it('suggests known tenants in the grant-dialog tenant datalist on focus', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/api/registry') {
+        return Promise.resolve({
+          products: [
+            {
+              productKey: 'iam',
+              displayName: 'IAM',
+              available: true,
+              tenants: ['*', 'acme-corp'],
+              baseRoute: '/accounts',
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ items: [] });
+    });
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByTestId('groups-row-select-g-1'));
+    await user.click(screen.getByTestId('group-grant-add'));
+    await user.click(screen.getByTestId('group-grant-tenant-input'));
+
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/registry'));
+    const datalistId = screen
+      .getByTestId('group-grant-tenant-input')
+      .getAttribute('list')!;
+    const datalist = document.getElementById(datalistId) as HTMLDataListElement;
+    await waitFor(() => {
+      expect(Array.from(datalist.options).map((o) => o.value)).toEqual([
+        'acme-corp',
+      ]);
+    });
+  });
+});
+
 describe('OperatorGroupsScreen — grant no-escalation pre-filter (AC-4)', () => {
   it('offers only grantable roles in the group-grant picker', async () => {
     get.mockResolvedValue({ items: [] });

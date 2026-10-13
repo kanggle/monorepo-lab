@@ -10,6 +10,7 @@ import {
   type AccrualsListParams,
 } from '../api/settlement-types';
 import { AccrualsTable } from './AccrualsTable';
+import { SellerSelect } from './SellerSelect';
 
 /**
  * Settlement accrual-lines section (TASK-PC-FE-221 Phase A). Owns the
@@ -93,14 +94,12 @@ export function AccrualsSection({ initialAccruals }: AccrualsSectionProps) {
           >
             셀러 ID
           </label>
-          <input
+          <SellerSelect
             id={sellerFieldId}
-            type="text"
             value={draftSellerId}
-            onChange={(e) => setDraftSellerId(e.target.value)}
-            data-testid="settlements-accruals-seller-input"
-            autoComplete="off"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onChange={setDraftSellerId}
+            testid="settlements-accruals-seller-input"
+            blankOptionLabel="전체 셀러"
           />
         </div>
         <div className="w-56">
