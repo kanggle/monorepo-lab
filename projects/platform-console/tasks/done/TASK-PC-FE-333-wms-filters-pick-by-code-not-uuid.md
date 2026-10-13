@@ -8,7 +8,7 @@ TASK-PC-FE-333
 
 # Status
 
-review — 구현 완료(2026-10-12 UTC). AC-1~7 ✅. 선행 `TASK-BE-630` 머지됨(#4313 `8338dda8a`) — 데모 백엔드 반영은 다음 AMI 재굽기, 그 전에도 AC-4 로 데모 규모에서 옳다.
+done — 구현 완료(2026-10-12 UTC). AC-1~7 ✅. 선행 `TASK-BE-630` 머지됨(#4313 `8338dda8a`) — 데모 백엔드 반영은 다음 AMI 재굽기, 그 전에도 AC-4 로 데모 규모에서 옳다.
 
 # Owner
 
@@ -101,3 +101,14 @@ platform-console
 - **bite**: 원본을 scratchpad 에 복사한 뒤 ② 를 끄면(`scoped = rows`) 부품 시험 16 중 **정확히 그 칸 1개**, ① 을 끄면(재설정 effect 조기 return) **그 칸 1개**가 빨강. 원본 복원 바이트 일치 확인.
 - 한계(문서화): 재굽기 전에는 서버가 준 **첫 페이지(20행, 최신순)** 안에서만 클라이언트가 거를 수 있다 — 데모 기준정보(창고 1 · 거래처 4 · SKU 3 · 위치 4)에는 충분하고, 서버가 거르기 시작하면 사라진다.
 - worktree 의 `node_modules` 는 `pnpm install --frozen-lockfile` 로 만든 **실제 디렉터리**(링크 아님, `LinkType` 빈 값 확인) — 정리 때 저장소 밖을 건드리지 않는다.
+
+---
+
+## CORRECTION
+
+(2026-10-13 UTC, close chore) 위 Status 는 `review` 였다 — 아래가 지금의 사실이다. 위의 기록은 그대로 둔다.
+
+- **4차원 검증**: (a) #4317 `MERGED` · 머지 커밋 `ea775d9dc` (b) `origin/main` 조상 (c) 머지 시점 실패 check **0**(13 pass — `Frontend unit tests (… console-web, vitest)` · `Frontend E2E smoke (… console-web, Playwright)` 포함) (d) AC-1~7 은 review 시점에 닫혔다(본문 확인).
+- **nightly 전용 e2e**: 바꾼 testid(`wms-inbound-filter-*` · `wms-inv-filter-*` · `wms-ship-filter-*`)와 «창고 ID» 류 라벨을 e2e 스펙 디렉터리 전체에서 grep → **0건** ⇒ nightly 가 이 변경으로 깨질 경로가 없다.
+- ⚪ 라이브(데모 화면) 확인 안 함 — AC 가 요구하지 않는다. 선행 `TASK-BE-630` 의 서버 검색은 **다음 AMI 재굽기** 뒤 데모에 닿고, 그 전에는 이 티켓의 클라이언트 필터(AC-4)가 데모 규모에서 결과를 맞춘다.
+- worktree 정리: `git worktree remove` 가 `node_modules` 때문에 «Directory not empty» 로 실패 → 안의 재분석 지점 **2212개** 의 대상이 **전부 그 폴더 안**(밖 0)인 것을 확인한 뒤 `rmdir /s /q`.
