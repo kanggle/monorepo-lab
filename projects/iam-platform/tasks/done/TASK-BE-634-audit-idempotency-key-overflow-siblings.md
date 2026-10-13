@@ -8,7 +8,7 @@ TASK-BE-634
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -49,10 +49,10 @@ admin-service 의 여러 유스케이스가 감사 행 `idempotency_key` 를 `"<
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 참여자 추가 IT 가 수선 전 500 `AUDIT_FAILURE`(실패 쪽 먼저) — 또는 계산 전제가 틀렸음을 실측으로.
-- [ ] **AC-1** — 형제 8 곳 최대 길이 표(입력 칸 길이 근거 포함).
-- [ ] **AC-2** — 넘치는 자리 수선 · 같은 IT 가 201/204.
-- [ ] **AC-3** — 모든 키 빌더 최대 길이 ≤ 100 단언 시험.
+- [x] **AC-0** — 참여자 추가 IT 가 수선 전 500 `AUDIT_FAILURE`(실패 쪽 먼저) — 또는 계산 전제가 틀렸음을 실측으로.
+- [x] **AC-1** — 형제 8 곳 최대 길이 표(입력 칸 길이 근거 포함).
+- [x] **AC-2** — 넘치는 자리 수선 · 같은 IT 가 201/204.
+- [x] **AC-3** — 모든 키 빌더 최대 길이 ≤ 100 단언 시험.
 
 # Related Specs
 
@@ -124,3 +124,8 @@ Only the participant key overflowed. The other 7 produce byte-identical output; 
   - (d) Scans `src/main/java` and **fails on any line outside the builder class that is both `":"`-joined and `toEpochMilli()`**.
 - Bite check for (d): applying the same predicate to the `origin/main` tree catches **all 8 old builders**.
 - `AssignmentAuditIdempotencyKeyTest` (BE-631) is folded into this test.
+
+## Close (2026-10-14 UTC)
+
+- #4345 → `d3a097f3f`. Failing checks at merge time: 0. Lane A: AC-0 IT red (500 `AUDIT_FAILURE`, 1/255) on the test-only commit → **PASSED** on the fix commit.
+- ⚪ Deployment: not applied to the demo/production admin-service (needs an AMI bake). Until then, adding or removing a participant in production returns 500 as before.

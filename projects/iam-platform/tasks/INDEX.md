@@ -117,7 +117,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-634-audit-idempotency-key-overflow-siblings.md` — **감사 `idempotency_key`(`VARCHAR(100)`) 넘침 형제 — 파트너십 참여자 키는 계산상 항상 130자 · 넘치면 fail-closed 감사가 명령 전체를 `500 AUDIT_FAILURE` 로** (IN-PROGRESS 2026-10-14 UTC, 출처 `TASK-BE-631` 슬라이스 b CI). 🔴 참여자 API 를 부르는 IT 0 — AC-0 = 빨강 먼저 증명. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
@@ -127,6 +127,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 _(없음)_
 
 ## done
+- ✅ `TASK-BE-634-audit-idempotency-key-overflow-siblings.md` — **DONE 2026-10-14 UTC (4-dim verified)** — **#4345**(`d3a097f3f`, 0 failures at merge). The participant add/remove audit key was 127/130 chars against a 100-char column, so the API **returned 500 on every call**. AC-0 IT failed (`AUDIT_FAILURE`) on the test-only commit and passed after the fix. All 8 server-built keys now go through `AuditIdempotencyKeys` (participant max 91; the other 7 byte-unchanged). `AuditIdempotencyKeysTest` holds the widest input plus a source scan for keys concatenated outside that class (bite: catches all 8 old builders). Client header keys moved to `TASK-BE-635`. ⚪ Production not yet updated (AMI).
 - ✅ `TASK-BE-631-domain-permission-sets-admin-service.md` — **DONE 2026-10-14 UTC (4-dim verified)** — 슬라이스 a **#4342**(`7d663829d`) · 슬라이스 b **#4343**(`871ab5dc9`) (머지 시점 실패 0, 둘 다 · 새 IT 는 레인 로그에서 PASSED 확인 — a 9 · b 5). `ADR-MONO-083` P2: 업무 세트 · 출처별 직접/그룹 배정 · `domainRoles` · `legacy-compat` 백필 · 세트 달린 그룹의 멤버 추가 게이트 · 내보내기 전 출처 삭제. 🔴 b 의 CI 가 **784 때부터의 감사 키 넘침**(테넌트 id 11자 초과 시 배정 생성 · 내보내기 500)을 드러내 고쳤다 — 형제 `TASK-BE-634`. ⚪ V0052 운영 미적용(AMI · 데모 창 없음) — 완료 판정 SQL 은 P3 배포 게이트. 토큰 무변경(P3 `TASK-BE-632`).
 - ✅ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4329**, 스쿼시 **`7b115c60e`**. IdP 이메일 가림을 공용 `PiiMaskingUtils.maskEmail`(첫 글자 + 별 3개) 하나로 — 초대 미리보기 · 인증/MFA 화면이 같은 입력에 같은 값, 양 서비스에 같은 기대값 시험 고정 · 주소 아닌 입력은 화면 쪽에서 전부 가림. 후속(AC 아님): 공용 함수의 주소 아닌 입력 원문 반환.
 - ✅ `TASK-BE-628-demo-assigned-only-operator-seed.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4246**, 스쿼시 **`276f74d52`** (머지 시점 실패 0 · iam A/B 통합 레인 SUCCESS). 데모 시드에 로그인 불가·배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만) — 콘솔 그룹 «멤버 추가» 의 비활성 행을 데모에서 보기 위함. 25차 창 재굽기 뒤 라이브: 소유자가 demo-corp 그룹 «멤버 추가» 에서 `assigned-only@demo.com` 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인(AC-6).
