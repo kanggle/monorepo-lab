@@ -8,7 +8,7 @@ IdP 화면마다 이메일 가림 규칙이 다르다 — 초대 수락 `h*****@
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -82,3 +82,13 @@ iam-platform
 # Failure Scenarios
 
 1. 한 화면만 고친다 — 다음에 세 번째 화면이 생기면 또 갈라진다(규칙 한 곳 + 시험 고정이 이 티켓의 요점).
+
+---
+
+# 완료 기록 (2026-10-13 UTC)
+
+- impl PR **#4329**, 스쿼시 **`7b115c60e`**(2026-10-13T15:08:22Z) — `origin/main` 에 있음 · 머지 시점 `statusCheckRollup` 실패 0 · 대기 0(`Build & Test` · `Integration (iam A/B)` · `E2E smoke (iam docker-compose)` 포함 초록).
+- AC 절을 열어 읽음: AC-0 · AC-1 · AC-2 모두 ✅, 라이브 ⚪ 없음(화면 가림은 단위 시험으로 판정되는 AC 들).
+- PR 안의 검토 수정(에이전트 초안 뒤): 주소 아닌 입력을 공용 함수에 넘기면 원문이 나오던 것 → 화면 쪽에서 막음 · auth 인증 화면을 공용 함수 위임 + 같은 기대값 시험(`EmailVerificationMaskTest`).
+- 후속(AC 아님): 공용 `PiiMaskingUtils.maskEmail` 자체는 주소 아닌 입력을 원문 그대로 돌려준다(`PiiMaskingUtils.java:38`) — 감사 로그 호출처가 있어 이 티켓에서 바꾸지 않았다.
+
