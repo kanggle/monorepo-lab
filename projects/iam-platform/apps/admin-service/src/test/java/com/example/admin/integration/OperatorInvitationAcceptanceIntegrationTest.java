@@ -76,8 +76,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       row, and to have left the invitation PENDING.</li>
  *   <li>🔴 <b>AC-6</b> ({@link #ac6_selfOnboardedOrgAdmin_invites_inviteeBecomesOperator}) — a self-onboarded
  *       organisation's admin invites, the invitee accepts, and the S4 console-eligibility read and the operator
- *       token exchange then answer «yes» for that account; then OD-1 (a second company → 409) and S1-11 (that
- *       account's self-onboarding → 409 before any tenant is created).</li>
+ *       token exchange then answer «yes» for that account. Steps 5–6 were 772's OD-1 «second company → 409» and
+ *       S1-11 «self-onboarding → 409»; 🔴 TASK-MONO-784 S5 (AC-3 · ADR-MONO-082 b) rewrote them to the new
+ *       expectations: a second company's acceptance adds a membership to the SAME row (the first company's rows
+ *       byte-unchanged), the same tenant again → 409, issuance keys on membership (F15), self-onboarding at the
+ *       OD-1 cap → 422 before any tenant is created, and the founder's second org → a membership on the
+ *       founder's row. {@link #platformAndSuspendedFacets_refusedBothPaths} keeps the two remaining 409s.</li>
  *   <li>D3 re-check, concurrent acceptance (exactly one operator), preview.</li>
  * </ul>
  *
@@ -477,7 +481,7 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
     // ── AC-6 ────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("🔴 AC-6: 셀프 온보딩한 새 조직의 관리자가 초대 → 피초대자(인증된 풀 계정) 수락 → 콘솔 적격 true · 토큰 교환 200 / 그 계정의 두 번째 회사 409 · 그 계정의 셀프 온보딩 409(테넌트 생성 전)")
+    @DisplayName("🔴 AC-6 (+ 784 S5 AC-3): 셀프 온보딩한 새 조직의 관리자가 초대 → 피초대자(인증된 풀 계정) 수락 → 콘솔 적격 true · 토큰 교환 200 / 그 계정의 두 번째 회사 → 같은 행에 소속 추가(기존 회사 바이트 불변) · 같은 테넌트 재수락 409 · 셀프 온보딩 상한 422(테넌트 생성 전) · 창업자의 두 번째 조직 = 같은 행에 소속 추가")
     void ac6_selfOnboardedOrgAdmin_invites_inviteeBecomesOperator() throws Exception {
         String founder = newAccountId();
         String founderEmail = uniqueEmail();
@@ -522,23 +526,199 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("admin"));
 
-        // 5. 🔴 OD-1 — a second company's invitation to the same person → 409, no second operator.
+        // 5. 🔴 TASK-MONO-784 S5 (AC-3 — was 772 OD-1 «second company → 409»): a second company's invitation to the
+        //    same person → 200 and a MEMBERSHIP on the SAME row. A second TENANT_X invitation to another address of
+        //    the same account is issued now, before the membership exists («대기 하나» is per (tenant, email)).
         String[] second = invite(ADMIN_X, TENANT_X, inviteeEmail, "TENANT_ADMIN");
-        accept(second[1], invitee).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("OPERATOR_ALREADY_PROVISIONED"));
-        assertThat(operatorsWithSubject(invitee)).isEqualTo(1);
-        assertThat(invitationStatus(second[0])).isEqualTo("PENDING");
+        String[] sameTenantAgain = invite(ADMIN_X, TENANT_X, uniqueEmail(), "TENANT_ADMIN");
+        long inviteeId = operatorInternalId(invitee);
+        Map<String, Object> rowBefore = operatorRow(inviteeId);
+        List<Map<String, Object>> rolesOutsideXBefore = roleRowsOutside(inviteeId, TENANT_X);
+        List<Map<String, Object>> assignmentsOutsideXBefore = assignmentRowsOutside(inviteeId, TENANT_X);
+        assertThat(rolesOutsideXBefore).as("the newOrg role row exists before").isNotEmpty();
+        String inviteeOperator = jdbcTemplate.queryForObject(
+                "SELECT operator_id FROM admin_operators WHERE id = ?", String.class, inviteeId);
 
-        // 6. 🔴 S1-11 — that account's self-onboarding → 409 BEFORE any tenant is created.
+        accept(second[1], invitee).andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatorId").value(inviteeOperator))
+                .andExpect(jsonPath("$.tenantId").value(TENANT_X))
+                .andExpect(jsonPath("$.roles[0]").value("TENANT_ADMIN"))
+                .andExpect(jsonPath("$.alreadyAccepted").value(false));
+        assertThat(operatorsWithSubject(invitee)).as("still ONE operator row").isEqualTo(1);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT r.name FROM admin_operator_roles x JOIN admin_roles r ON r.id = x.role_id"
+                        + " WHERE x.operator_id = ? AND x.tenant_id = ? AND x.group_origin IS NULL AND x.org_node_id IS NULL",
+                String.class, inviteeId, TENANT_X)).containsExactly("TENANT_ADMIN");
+        assertThat(count("SELECT COUNT(*) FROM operator_tenant_assignment WHERE operator_id = ? AND tenant_id = ?",
+                inviteeId, TENANT_X)).isEqualTo(1);
+        // 🔴 the existing company (newOrg) — role rows and assignment byte-unchanged; the operator row too (home ·
+        //    email · display name · status · oidc_subject · identity link · updated_at)
+        assertThat(roleRowsOutside(inviteeId, TENANT_X)).isEqualTo(rolesOutsideXBefore);
+        assertThat(assignmentRowsOutside(inviteeId, TENANT_X)).isEqualTo(assignmentsOutsideXBefore);
+        assertThat(operatorRow(inviteeId)).isEqualTo(rowBefore);
+        assertThat(invitationStatus(second[0])).isEqualTo("ACCEPTED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT accepted_operator_id FROM operator_invitation WHERE invitation_id = ?", Long.class, second[0]))
+                .isEqualTo(inviteeId);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT downstream_detail FROM admin_actions
+                 WHERE action_code = 'OPERATOR_INVITATION_ACCEPT' AND target_id = ?""", String.class, second[0]))
+                .isEqualTo("accountId=" + invitee + ",membershipAdded=true");
+
+        // 5b. 🔴 the same tenant again (the invitation issued before the membership) → 409 · nothing written
+        accept(sameTenantAgain[1], invitee).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OPERATOR_ALREADY_PROVISIONED"));
+        assertThat(invitationStatus(sameTenantAgain[0])).isEqualTo("PENDING");
+        assertThat(count("SELECT COUNT(*) FROM admin_operator_roles WHERE operator_id = ? AND tenant_id = ?",
+                inviteeId, TENANT_X)).isEqualTo(1);
+
+        // 5c. F15 — issuance's «already an operator of this tenant» is now the MEMBERSHIP (the invitee's home is
+        //     newOrg, so the home-keyed check would have issued this)
+        issue(ADMIN_X, TENANT_X, inviteeEmail, "TENANT_ADMIN").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OPERATOR_EMAIL_CONFLICT"));
+
+        // 6. 🔴 OD-1 (was 772 S1-11 «self-onboarding → 409»): the invitee now administers TWO tenants (newOrg ·
+        //    TENANT_X) = the default cap → 422 BEFORE any tenant is created.
         stubAccountDetail(invitee, inviteeEmail);
         int tenantCreatesBefore = wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants"))).size();
-        mockMvc.perform(post("/api/admin/onboarding/organizations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"subjectToken\":\"" + userOidcToken(invitee) + "\",\"tenantId\":\"s3-never-"
-                                + UUID.randomUUID().toString().substring(0, 6) + "\",\"organizationName\":\"Never\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("OPERATOR_ALREADY_PROVISIONED"));
+        onboard(invitee, "s5-never-" + UUID.randomUUID().toString().substring(0, 6))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED"));
         assertThat(wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants")))).hasSize(tenantCreatesBefore);
+
+        // 7. 🔴 AC-3 (self-onboarding half): the founder administers ONE tenant → a second org is created and added
+        //    to the founder's SAME row; the first org's rows byte-unchanged.
+        long founderId = operatorInternalId(founder);
+        Map<String, Object> founderRowBefore = operatorRow(founderId);
+        String org2 = "s5-org2-" + UUID.randomUUID().toString().substring(0, 8);
+        List<Map<String, Object>> founderRolesBefore = roleRowsOutside(founderId, org2);
+        List<Map<String, Object>> founderAssignmentsBefore = assignmentRowsOutside(founderId, org2);
+        stubTenantCreate(org2);
+        onboard(founder, org2).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenantId").value(org2))
+                .andExpect(jsonPath("$.operatorId").value(founderOperator));
+        assertThat(operatorsWithSubject(founder)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT r.name FROM admin_operator_roles x JOIN admin_roles r ON r.id = x.role_id"
+                        + " WHERE x.operator_id = ? AND x.tenant_id = ? ORDER BY r.name",
+                String.class, founderId, org2)).containsExactly("TENANT_ADMIN", "TENANT_BILLING_ADMIN");
+        assertThat(count("SELECT COUNT(*) FROM operator_tenant_assignment WHERE operator_id = ? AND tenant_id = ?",
+                founderId, org2)).isEqualTo(1);
+        assertThat(roleRowsOutside(founderId, org2)).isEqualTo(founderRolesBefore);
+        assertThat(assignmentRowsOutside(founderId, org2)).isEqualTo(founderAssignmentsBefore);
+        assertThat(operatorRow(founderId)).isEqualTo(founderRowBefore);
+        // … and the third → 422 before creation (newOrg · org2 = the cap)
+        int creates = wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants"))).size();
+        onboard(founder, "s5-org3-" + UUID.randomUUID().toString().substring(0, 6))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED"));
+        assertThat(wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants")))).hasSize(creates);
+    }
+
+    @Test
+    @DisplayName("🔴 784 S5 (D2 · 6 ③): '*' 측면 · 정지된 회사 측면 → 수락 409 · 셀프 온보딩 409(테넌트 생성 전) · 아무것도 안 씀")
+    void platformAndSuspendedFacets_refusedBothPaths() throws Exception {
+        String starAccount = newAccountId();
+        String starEmail = uniqueEmail();
+        long star = seedFacet(starAccount, starEmail, "*", "ACTIVE", "SUPER_ADMIN");
+        String suspendedAccount = newAccountId();
+        String suspendedEmail = uniqueEmail();
+        long suspended = seedFacet(suspendedAccount, suspendedEmail, "s5-home-co", "SUSPENDED", "TENANT_ADMIN");
+
+        for (Object[] c : new Object[][]{{starAccount, starEmail, star}, {suspendedAccount, suspendedEmail, suspended}}) {
+            String account = (String) c[0];
+            String email = (String) c[1];
+            long id = (Long) c[2];
+            int rolesBefore = count("SELECT COUNT(*) FROM admin_operator_roles WHERE operator_id = ?", id);
+            int assignmentsBefore = count("SELECT COUNT(*) FROM operator_tenant_assignment WHERE operator_id = ?", id);
+
+            String[] inv = invite(ADMIN_X, TENANT_X, email, "TENANT_ADMIN");
+            stubMatch(account, 200, null);
+            accept(inv[1], account).andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("OPERATOR_ALREADY_PROVISIONED"));
+            assertThat(invitationStatus(inv[0])).isEqualTo("PENDING");
+
+            stubAccountDetail(account, email);
+            int creates = wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants"))).size();
+            onboard(account, "s5-never-" + UUID.randomUUID().toString().substring(0, 6))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("OPERATOR_ALREADY_PROVISIONED"));
+            assertThat(wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants")))).hasSize(creates);
+
+            assertThat(count("SELECT COUNT(*) FROM admin_operator_roles WHERE operator_id = ?", id)).isEqualTo(rolesBefore);
+            assertThat(count("SELECT COUNT(*) FROM operator_tenant_assignment WHERE operator_id = ?", id))
+                    .isEqualTo(assignmentsBefore);
+            assertThat(operatorsWithSubject(account)).isEqualTo(1);
+        }
+    }
+
+    // ── 784 S5 helpers ──────────────────────────────────────────────────────
+
+    private ResultActions issue(String actor, String tenantId, String email, String role) throws Exception {
+        return mockMvc.perform(post("/api/admin/operator-invitations")
+                .header("Authorization", "Bearer " + jwt.operatorToken(actor))
+                .header("X-Operator-Reason", "s5-it")
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"email":"%s","displayName":"S5","roles":["%s"],"tenantId":"%s"}
+                        """.formatted(email, role, tenantId)));
+    }
+
+    private ResultActions onboard(String accountId, String tenantId) throws Exception {
+        return mockMvc.perform(post("/api/admin/onboarding/organizations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subjectToken\":\"" + userOidcToken(accountId) + "\",\"tenantId\":\"" + tenantId
+                        + "\",\"organizationName\":\"S5 Org\"}"));
+    }
+
+    private long operatorInternalId(String accountId) {
+        Long id = jdbcTemplate.queryForObject("SELECT id FROM admin_operators WHERE oidc_subject = ?", Long.class,
+                accountId);
+        return id == null ? -1L : id;
+    }
+
+    /** Every column a membership addition must not write (the home included). */
+    private Map<String, Object> operatorRow(long id) {
+        return jdbcTemplate.queryForMap("""
+                SELECT operator_id, tenant_id, email, display_name, status, oidc_subject, identity_id,
+                       password_hash, updated_at, version
+                  FROM admin_operators WHERE id = ?""", id);
+    }
+
+    private List<Map<String, Object>> roleRowsOutside(long id, String tenantId) {
+        return jdbcTemplate.queryForList("""
+                SELECT role_id, tenant_id, granted_at, granted_by, group_origin, org_node_id
+                  FROM admin_operator_roles WHERE operator_id = ? AND tenant_id <> ?
+                 ORDER BY tenant_id, role_id""", id, tenantId);
+    }
+
+    private List<Map<String, Object>> assignmentRowsOutside(long id, String tenantId) {
+        return jdbcTemplate.queryForList("""
+                SELECT * FROM operator_tenant_assignment WHERE operator_id = ? AND tenant_id <> ?
+                 ORDER BY tenant_id""", id, tenantId);
+    }
+
+    /** An operator row linked to {@code accountId} with one role row in its home and (non-'*') a membership. */
+    private long seedFacet(String accountId, String email, String home, String status, String role) {
+        String operatorId = UUID.randomUUID().toString();
+        jdbcTemplate.update("""
+                INSERT INTO admin_operators
+                  (operator_id, tenant_id, email, password_hash, display_name,
+                   status, oidc_subject, created_at, updated_at, version)
+                VALUES (?, ?, ?, NULL, 'S5 facet', ?, ?, NOW(6), NOW(6), 0)
+                """, operatorId, home, email, status, accountId);
+        long id = operatorInternalId(accountId);
+        jdbcTemplate.update("""
+                INSERT INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+                SELECT ?, r.id, ?, NOW(6), NULL FROM admin_roles r WHERE r.name = ?
+                """, id, home, role);
+        if (!"*".equals(home)) {
+            jdbcTemplate.update("""
+                    INSERT INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by)
+                    VALUES (?, ?, NOW(6), NULL)""", id, home);
+        }
+        return id;
     }
 
     private void stubAccountDetail(String accountId, String email) {

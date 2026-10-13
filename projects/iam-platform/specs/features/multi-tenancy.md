@@ -620,6 +620,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 한 회사만 떠난다 — 그 회사의 assume · 관리 API 거절, 다른 회사 그대로, 계정 무변경 · 마지막 관리자는 자기 자신도 못 내보낸다 (§ 8 회수 장치) | `TASK-MONO-784` S4 — 784 AC-2: admin-service `OperatorCompanyExitUseCaseTest` · `TenantLastAdminGuardTest` · `OperatorMembershipWriteAxisIntegrationTest#ac2_leaveOneCompany` |
 | 행 전체 속성(상태 · 프로필 · 신원 링크)은 소속 둘 이상이면 `'*'` 만 · 역할 변경은 그 회사의 직접 행만(다른 회사 행 바이트 불변) | `TASK-MONO-784` S4 — 784 AC-4: `OperatorRowScopeGuardTest` · `PatchOperatorRoleUseCaseTest` · `OperatorMembershipWriteAxisIntegrationTest#ac4_*` |
 | 한 회사의 변경은 그 회사 판정만 다음 요청에서 바꾼다 | `TASK-MONO-784` S4 — 784 AC-5: `OperatorMembershipWriteAxisIntegrationTest#ac5_perCompanyDecisionNextRequest` |
+| 이미 운영자인 사람의 두 번째 회사(초대 수락 · 셀프 온보딩) = 같은 행에 소속 추가(기존 회사 행 바이트 불변) · 같은 테넌트 · `'*'` · 비-`ACTIVE` 409 · 셀프 온보딩 신원당 상한 422 | `TASK-MONO-784` S5 — 784 AC-3: `OperatorMembershipAdditionTest` · `OperatorOwnedTenantLimitTest` · `SelfServiceOnboardingUseCaseTest$ExistingFacet` · `OperatorInvitationAcceptanceIntegrationTest#ac6_*` · `#platformAndSuspendedFacets_refusedBothPaths` |
 
 #### 8. 운영자 측면 — 초대 → 인증된 본인 수락 (ADR-MONO-080 D6, `TASK-MONO-772`)
 

@@ -149,6 +149,11 @@ admin:
   # resent (ISO-8601 duration). Expiry is judged at read time from operator_invitation.expires_at — no job.
   operator-invitation:
     ttl: ${ADMIN_OPERATOR_INVITATION_TTL:P7D}
+  # TASK-MONO-784 S5 (owner decision OD-1 · ADR-MONO-082 D4 · onboarding-api.md § 신원당 상한) — self-service
+  # onboarding refuses (422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED) a caller whose operator row already holds
+  # TENANT_ADMIN in this many distinct tenants. The VALUE is TASK-MONO-773 AC-0's to set; 784 ships the counter.
+  onboarding:
+    max-owned-tenants-per-operator: ${ADMIN_ONBOARDING_MAX_OWNED_TENANTS_PER_OPERATOR:2}
   downstream:
     connect-timeout-ms: ${DOWNSTREAM_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${DOWNSTREAM_READ_TIMEOUT:10000}

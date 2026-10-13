@@ -73,7 +73,7 @@ class OperatorInvitationWriterTest {
     @Test
     @DisplayName("🔴 R4: 행에는 SHA-256(token) 만 · 원문은 호출자에게만 · 만료 = 지금 + P7D · 감사 키 = 클라이언트 키")
     void createPending_storesHashOnly() {
-        given(operatorPort.existsByTenantIdAndEmail("acme-corp", "person@example.com")).willReturn(false);
+        given(operatorPort.existsMemberWithEmail("acme-corp", "person@example.com", null)).willReturn(false);
         given(invitationPort.existsPending("acme-corp", "person@example.com")).willReturn(false);
         given(operatorPort.findByOperatorId("op-admin-x")).willReturn(Optional.of(actorRow()));
         given(invitationPort.create(any())).willAnswer(inv -> {
@@ -112,15 +112,18 @@ class OperatorInvitationWriterTest {
     @Test
     @DisplayName("이미 그 테넌트의 운영자 → 409 OPERATOR_EMAIL_CONFLICT · 대기 초대 있음 → 409 ALREADY_PENDING (쓰기 없음)")
     void createPending_conflicts() {
-        given(operatorPort.existsByTenantIdAndEmail("acme-corp", "a@x.example")).willReturn(true);
+        given(operatorPort.existsMemberWithEmail("acme-corp", "a@x.example", null)).willReturn(true);
         assertThatThrownBy(() -> writer.createPending(ACTOR, "acme-corp", "a@x.example", "A", List.of(), "k", "r"))
                 .isInstanceOf(OperatorEmailConflictException.class);
 
-        given(operatorPort.existsByTenantIdAndEmail("acme-corp", "b@x.example")).willReturn(false);
+        given(operatorPort.existsMemberWithEmail("acme-corp", "b@x.example", null)).willReturn(false);
         given(invitationPort.existsPending("acme-corp", "b@x.example")).willReturn(true);
         assertThatThrownBy(() -> writer.createPending(ACTOR, "acme-corp", "b@x.example", "B", List.of(), "k", "r"))
                 .isInstanceOf(OperatorInvitationAlreadyPendingException.class);
         verify(invitationPort, never()).create(any());
+        // TASK-MONO-784 S5 (AC-0 F15): «already an operator of the tenant» = a MEMBER of it — the home-keyed
+        // (tenant_id, email) check is no longer what issuance asks.
+        verify(operatorPort, never()).existsByTenantIdAndEmail(any(), any());
     }
 
     @Test

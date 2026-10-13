@@ -1,12 +1,13 @@
 package com.example.admin.application;
 
-import com.example.admin.application.exception.OperatorAlreadyProvisionedException;
+import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.TenantProvisioningPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * TASK-BE-474 (ADR-MONO-044 D1/D3/D7) — orchestrates self-service B2B tenant
@@ -41,6 +42,10 @@ public class SelfServiceOnboardingUseCase {
     private final FirstAdminProvisioner firstAdminProvisioner;
     /** TASK-MONO-772 S3 (S1-11) — the same OIDC-subject → operator lookup the token exchange uses. */
     private final OperatorOidcSubjectResolver oidcSubjectResolver;
+    /** TASK-MONO-784 S5 (D-12) — «can this existing row take a new membership» + the cache eviction after it. */
+    private final OperatorMembershipAddition membershipAddition;
+    /** TASK-MONO-784 S5 (OD-1) — the per-identity cap on self-created tenants. */
+    private final OperatorOwnedTenantLimit ownedTenantLimit;
 
     /**
      * @param tenantId         the requested tenant slug (validated {@code ^[a-z][a-z0-9-]{1,31}$} at the DTO)
@@ -52,14 +57,23 @@ public class SelfServiceOnboardingUseCase {
      */
     public Result onboard(String tenantId, String organizationName, String callerAccountId,
                           String callerEmail, String callerDisplayName) {
-        // TASK-MONO-772 S3 (onboarding-api.md 409 · owner decision OD-1 · S1-11): a caller who already has an operator
-        // facet (oidc_subject = sub, ANY status) is refused BEFORE the tenant exists. Without this the tenant was
-        // created first and the provisioner's oidc_subject write then hit the platform-global UNIQUE (V0027), leaving
-        // a SUSPENDED empty tenant behind as «compensation». One person = one company in 772 — the same predicate and
-        // code as the invitation acceptance (step 6).
-        if (callerAccountId != null && !callerAccountId.isBlank()
-                && oidcSubjectResolver.resolve(callerAccountId).isPresent()) {
-            throw new OperatorAlreadyProvisionedException("This account already has an operator facet");
+        // TASK-MONO-784 S5 (onboarding-api.md § 다회사 운영자와 온보딩 — ADR-MONO-082 b · D-12 · OD-1), replacing
+        // 772 S3's «any facet → 409» (S1-11). EVERYTHING is decided BEFORE the tenant exists — a refusal leaves
+        // nothing to compensate (before 772 the tenant was created first and the oidc_subject UNIQUE then left a
+        // SUSPENDED empty tenant behind). First failure answers:
+        //   1 no facet                      → a new operator row (unchanged)
+        //   2 '*' facet                     → 409 OPERATOR_ALREADY_PROVISIONED (ADR-082 D2)
+        //   3 non-ACTIVE facet              → 409 OPERATOR_ALREADY_PROVISIONED
+        //   4 ACTIVE company facet at cap   → 422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED (OD-1)
+        //   5 ACTIVE company facet below it → the tenant, then a membership on THAT row
+        // (requireCanReceive also refuses «already a member of this slug» — a fresh slug cannot normally be, but an
+        // assignment to an unregistered tenant id can exist, e.g. a seeded one; refusing it is the fail-closed side.)
+        Optional<AdminOperatorPort.OperatorView> facet = (callerAccountId == null || callerAccountId.isBlank())
+                ? Optional.empty()
+                : oidcSubjectResolver.resolve(callerAccountId);
+        if (facet.isPresent()) {
+            membershipAddition.requireCanReceive(facet.get(), tenantId);
+            ownedTenantLimit.requireBelowLimit(facet.get().internalId());
         }
 
         // D1 step 1: create the tenant (cross-service). A duplicate slug surfaces as
@@ -67,16 +81,23 @@ public class SelfServiceOnboardingUseCase {
         // (nothing was created).
         tenantPort.create(tenantId, organizationName, TENANT_TYPE_B2B);
 
-        // D1 step 2: mint the first admin atomically. On ANY failure, compensate the
-        // orphan tenant (D3 fail-closed) and rethrow the original cause.
+        // D1 step 2: mint the first admin atomically — a new row, or the new tenant's membership on the existing
+        // row. On ANY failure, compensate the orphan tenant (D3 fail-closed) and rethrow the original cause; the
+        // admin-side writes rolled back in their own transaction, so the existing row keeps nothing.
+        FirstAdminProvisioner.Result minted;
         try {
-            FirstAdminProvisioner.Result minted =
-                    firstAdminProvisioner.provision(tenantId, callerAccountId, callerEmail, callerDisplayName);
-            return new Result(tenantId, minted.operatorId(), FirstAdminProvisioner.FIRST_ADMIN_ROLES);
+            minted = facet.isPresent()
+                    ? firstAdminProvisioner.addMembership(facet.get(), tenantId)
+                    : firstAdminProvisioner.provision(tenantId, callerAccountId, callerEmail, callerDisplayName);
         } catch (RuntimeException provisioningFailure) {
             compensateOrphanTenant(tenantId, provisioningFailure);
             throw provisioningFailure;
         }
+        if (facet.isPresent()) {
+            // D-5 — the existing row gained permissions; after commit.
+            membershipAddition.invalidatePermissionCache(minted.operatorId());
+        }
+        return new Result(tenantId, minted.operatorId(), FirstAdminProvisioner.FIRST_ADMIN_ROLES);
     }
 
     /**

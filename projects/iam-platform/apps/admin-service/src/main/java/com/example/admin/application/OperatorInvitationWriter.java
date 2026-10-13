@@ -70,7 +70,11 @@ public class OperatorInvitationWriter {
     @Transactional
     public Issued createPending(OperatorContext actor, String tenantId, String email, String displayName,
                                 List<String> roleNames, String idempotencyKey, String reason) {
-        if (operatorPort.existsByTenantIdAndEmail(tenantId, email)) {
+        // TASK-MONO-784 S5 (AC-0 F15 · admin-api.md issuance step 7): «already an operator of this tenant» = a
+        // MEMBER of it (assignment row), not a row whose home it is (R1). By home, a person whose home is A and who
+        // is already a member of B passed issuance in B (and only the acceptance refused it); a person whose home
+        // is B but who was exported from B was refused here although no longer in B.
+        if (operatorPort.existsMemberWithEmail(tenantId, email, null)) {
             throw new OperatorEmailConflictException("An operator with this email already exists in the tenant");
         }
         if (invitationPort.existsPending(tenantId, email)) {

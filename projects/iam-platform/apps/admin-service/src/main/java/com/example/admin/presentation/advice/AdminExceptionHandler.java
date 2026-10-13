@@ -583,6 +583,15 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("TENANT_LAST_ADMIN_REQUIRED", e.getMessage()));
     }
 
+    // TASK-MONO-784 S5 (owner decision OD-1) — self-service onboarding by an operator who already administers the
+    // per-identity cap's worth of tenants; refused before the tenant is created.
+    @ExceptionHandler(com.example.admin.application.exception.OperatorOwnedTenantLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleOperatorOwnedTenantLimitExceeded(
+            com.example.admin.application.exception.OperatorOwnedTenantLimitExceededException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

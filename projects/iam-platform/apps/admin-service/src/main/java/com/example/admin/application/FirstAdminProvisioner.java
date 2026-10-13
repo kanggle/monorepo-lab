@@ -54,6 +54,8 @@ public class FirstAdminProvisioner {
     private final AdminOperatorPort operatorPort;
     private final OperatorTenantAssignmentPort assignmentPort;
     private final AccountServiceClient accountServiceClient;
+    /** TASK-MONO-784 S5 — the shared «add a membership to an existing row» writes (D-12). */
+    private final OperatorMembershipAddition membershipAddition;
 
     /**
      * @param newTenantId     the just-created tenant — the SOLE tenant_id every write below targets (D2)
@@ -118,6 +120,28 @@ public class FirstAdminProvisioner {
         log.info("self-service onboarding: minted first admin operator={} tenant={} roles={}",
                 operatorUuid, newTenantId, FIRST_ADMIN_ROLES);
         return new Result(operatorUuid, created.internalId());
+    }
+
+    /**
+     * TASK-MONO-784 S5 (onboarding-api.md § 다회사 운영자와 온보딩 row 5 · ADR-MONO-082 b D4 · D-12) — the caller
+     * already has an ACTIVE company operator row (the orchestrator judged it — {@link
+     * OperatorMembershipAddition#requireCanReceive} and the OD-1 cap — BEFORE the tenant was created). That row
+     * becomes the new tenant's first admin: {@code TENANT_ADMIN} + {@code TENANT_BILLING_ADMIN} role rows with
+     * {@code tenant_id = newTenantId} and the whole-tenant assignment, in ONE transaction.
+     *
+     * <p>🔴 The same D2 confinement as {@link #provision}: every row written targets {@code newTenantId}. No new
+     * operator row, no {@code oidc_subject} / home / email / display-name write, no identity resolve (born-unified
+     * is for a NEW row; the existing row's link stays) — the rows of the operator's other companies are not read
+     * or touched (784 AC-3 · 773 AC-3 «기존 회사 바이트 불변»).
+     */
+    @Transactional
+    public Result addMembership(AdminOperatorPort.OperatorView existing, String newTenantId) {
+        Map<String, AdminOperatorPort.RoleView> roles = operatorPort.resolveRolesByName(FIRST_ADMIN_ROLES);
+        // granted_by = null (system origination — the same as a first-time onboarder's grants).
+        membershipAddition.write(existing.internalId(), newTenantId, roles.values(), null, Instant.now());
+        log.info("self-service onboarding: added membership operator={} tenant={} roles={}",
+                existing.operatorId(), newTenantId, FIRST_ADMIN_ROLES);
+        return new Result(existing.operatorId(), existing.internalId());
     }
 
     /** The minted operator's external UUID + internal BIGINT id. */

@@ -47,9 +47,14 @@ import java.util.Optional;
  *       downstream exception propagates (503) — never «attach without knowing»;</li>
  *   <li>the basis still holds — tenant ACTIVE, inviter ACTIVE, tenant still in the inviter's admin-grant scope (D2),
  *       every role still in the inviter's grant menu (D3) → otherwise 409 {@code INVALIDATED};</li>
- *   <li>OD-1 — no operator row has {@code oidc_subject = accountId} (any status) → otherwise 409;</li>
- *   <li>no operator with this email in the tenant → otherwise 409 {@code OPERATOR_EMAIL_CONFLICT};</li>
- *   <li>the transaction ({@link OperatorInvitationAcceptanceWriter}).</li>
+ *   <li>TASK-MONO-784 S5 (ADR-MONO-082 b · D-12; was 772 OD-1 «any facet → 409») — the account's operator row
+ *       ({@code oidc_subject = accountId}): none → a new row · ACTIVE, non-{@code '*'}, not yet a member of the
+ *       invitation's tenant → a membership on that row ({@link OperatorMembershipAddition}) · otherwise 409
+ *       {@code OPERATOR_ALREADY_PROVISIONED};</li>
+ *   <li>no MEMBER of the tenant with this email, the receiving facet excluded (784 AC-0 F15) → otherwise 409
+ *       {@code OPERATOR_EMAIL_CONFLICT};</li>
+ *   <li>the transaction ({@link OperatorInvitationAcceptanceWriter#accept} for a new row,
+ *       {@link OperatorInvitationAcceptanceWriter#acceptAsMembership} for a membership).</li>
  * </ol>
  *
  * <p>Refusals are not audited in {@code admin_actions} (its actor must be an operator, and a refused acceptor has
@@ -75,6 +80,8 @@ public class OperatorInvitationAcceptanceUseCase {
     private final TenantScopeGuard tenantScopeGuard;
     private final RoleGrantGuard roleGrantGuard;
     private final OperatorIdentityResolvePort identityResolvePort;
+    /** TASK-MONO-784 S5 (D-12) — «can this facet take this membership» + the cache eviction after it. */
+    private final OperatorMembershipAddition membershipAddition;
 
     // ── preview ─────────────────────────────────────────────────────────────
 
@@ -124,18 +131,22 @@ public class OperatorInvitationAcceptanceUseCase {
             // 5. the basis the invitation was issued on.
             Map<String, AdminOperatorPort.RoleView> roles = requireBasis(invitation);
 
-            // 6. OD-1 — one person, one company (any status: a suspended facet is still a facet).
-            if (oidcSubjectResolver.resolve(account).isPresent()) {
-                throw new OperatorAlreadyProvisionedException("This account already has an operator facet");
+            // 6. TASK-MONO-784 S5 (ADR-MONO-082 b · D2 · D-12, replacing 772 OD-1 «any facet → 409»): can this
+            //    account's facet take this membership? none → a new row · ACTIVE company row not yet a member →
+            //    a membership on that row · '*' / non-ACTIVE / already a member → 409 OPERATOR_ALREADY_PROVISIONED.
+            Optional<AdminOperatorPort.OperatorView> facet = oidcSubjectResolver.resolve(account);
+            if (facet.isPresent()) {
+                membershipAddition.requireCanReceive(facet.get(), invitation.tenantId());
             }
 
-            // 7. an operator of this tenant with this email appeared since the invitation was issued.
-            if (operatorPort.existsByTenantIdAndEmail(invitation.tenantId(), invitation.email())) {
-                throw new OperatorEmailConflictException("An operator with this email already exists in the tenant");
-            }
+            // 7. a MEMBER of this tenant with this email appeared since the invitation was issued (784 AC-0 F15 —
+            //    membership, not home), the facet that is about to receive the membership excluded.
+            requireNoMemberWithEmail(invitation, facet.map(AdminOperatorPort.OperatorView::internalId).orElse(null));
 
             // 8. the transaction (a lost race is answered by the rules above, see write()).
-            return write(invitation, account, roles);
+            return facet.isPresent()
+                    ? writeMembership(invitation, account, facet.get(), roles)
+                    : write(invitation, account, roles);
         } catch (OperatorInvitationException | OperatorEmailConflictException e) {
             String code = e instanceof OperatorInvitationException oie ? oie.getCode() : "OPERATOR_EMAIL_CONFLICT";
             log.info("operator-invitation accept refused (invitation={}, code={}, account={})",
@@ -248,28 +259,77 @@ public class OperatorInvitationAcceptanceUseCase {
         try {
             accepted = writer.accept(invitation, accountId, roles.values(), invitation.invitedByInternalId());
         } catch (OperatorInvitationAcceptanceWriter.ClaimLost lost) {
-            InvitationView now = invitationPort.findByInvitationId(invitation.invitationId()).orElse(null);
-            if (now == null || STATUS_CANCELLED.equals(now.status())
-                    || !invitation.tokenHash().equals(now.tokenHash())) {
-                throw new OperatorInvitationNotFoundException("Operator invitation not found");
-            }
-            if (STATUS_ACCEPTED.equals(now.status())) {
-                return alreadyAccepted(now, accountId);
-            }
-            throw new OperatorInvitationExpiredException("The operator invitation has expired");
+            return answerLostClaim(invitation, accountId);
         } catch (DataIntegrityViolationException e) {
+            // A facet appeared meanwhile (the oidc_subject UNIQUE — a concurrent acceptance of another invitation
+            // by this account, or its self-onboarding): 409, whatever that facet could otherwise take — this
+            // request was decided as «new row», and that decision is what lost.
             if (oidcSubjectResolver.resolve(accountId).isPresent()) {
                 throw new OperatorAlreadyProvisionedException("This account already has an operator facet");
             }
             if (operatorPort.existsByTenantIdAndEmail(invitation.tenantId(), invitation.email())) {
                 throw new OperatorEmailConflictException("An operator with this email already exists in the tenant");
             }
+            requireNoMemberWithEmail(invitation, null);
             throw e;
         }
         log.info("operator-invitation accepted (invitation={}, operator={}, tenant={}, account={})",
                 invitation.invitationId(), accepted.operatorId(), invitation.tenantId(), accountId);
         linkIdentityFailSoft(accepted.operatorInternalId(), invitation.tenantId(), invitation.email());
         return new OperatorInvitationAcceptResult(accepted.operatorId(), invitation.tenantId(), invitation.roles(), false);
+    }
+
+    /**
+     * TASK-MONO-784 S5 — step 8 when step 6 chose «a membership on the existing row» (auth-to-admin.md § accept
+     * «소속 추가일 때»). The response names the EXISTING operator and the roles received in the invitation's
+     * tenant; no identity link is attempted (the row keeps its own); the permission cache of that row is evicted
+     * after commit (D-5). A lost race: the claim → the same answers as {@link #write}; the assignment PK
+     * {@code (operator_id, tenant_id)} (the same account accepting two invitations of this tenant at once) →
+     * re-read and answered by step 6 (now «already a member» → 409).
+     */
+    private OperatorInvitationAcceptResult writeMembership(InvitationView invitation, String accountId,
+                                                           AdminOperatorPort.OperatorView existing,
+                                                           Map<String, AdminOperatorPort.RoleView> roles) {
+        OperatorInvitationAcceptanceWriter.Accepted accepted;
+        try {
+            accepted = writer.acceptAsMembership(invitation, accountId, existing, roles.values(),
+                    invitation.invitedByInternalId());
+        } catch (OperatorInvitationAcceptanceWriter.ClaimLost lost) {
+            return answerLostClaim(invitation, accountId);
+        } catch (DataIntegrityViolationException e) {
+            AdminOperatorPort.OperatorView now = oidcSubjectResolver.resolve(accountId).orElse(existing);
+            membershipAddition.requireCanReceive(now, invitation.tenantId());
+            requireNoMemberWithEmail(invitation, now.internalId());
+            throw e;
+        }
+        membershipAddition.invalidatePermissionCache(accepted.operatorId());
+        log.info("operator-invitation accepted as a membership (invitation={}, operator={}, tenant={}, account={})",
+                invitation.invitationId(), accepted.operatorId(), invitation.tenantId(), accountId);
+        return new OperatorInvitationAcceptResult(accepted.operatorId(), invitation.tenantId(), invitation.roles(), false);
+    }
+
+    /**
+     * Step 7 (TASK-MONO-784 S5 · AC-0 F15): «an operator of this tenant with this email» = a MEMBER of the tenant
+     * ({@code operator_tenant_assignment}), not a row whose home is the tenant — {@code excludeInternalId} is the
+     * facet receiving the membership (its own email never conflicts with itself).
+     */
+    private void requireNoMemberWithEmail(InvitationView invitation, Long excludeInternalId) {
+        if (operatorPort.existsMemberWithEmail(invitation.tenantId(), invitation.email(), excludeInternalId)) {
+            throw new OperatorEmailConflictException("An operator with this email already exists in the tenant");
+        }
+    }
+
+    /** A lost claim, re-read outside the rolled-back transaction (see {@link #write}). */
+    private OperatorInvitationAcceptResult answerLostClaim(InvitationView invitation, String accountId) {
+        InvitationView now = invitationPort.findByInvitationId(invitation.invitationId()).orElse(null);
+        if (now == null || STATUS_CANCELLED.equals(now.status())
+                || !invitation.tokenHash().equals(now.tokenHash())) {
+            throw new OperatorInvitationNotFoundException("Operator invitation not found");
+        }
+        if (STATUS_ACCEPTED.equals(now.status())) {
+            return alreadyAccepted(now, accountId);
+        }
+        throw new OperatorInvitationExpiredException("The operator invitation has expired");
     }
 
     private void linkIdentityFailSoft(long operatorInternalId, String tenantId, String email) {
