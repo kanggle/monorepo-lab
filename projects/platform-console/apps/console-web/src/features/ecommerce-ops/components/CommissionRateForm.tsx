@@ -10,6 +10,7 @@ import {
   rateBpsToPercent,
 } from '../api/settlement-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
+import { SellerSelect } from './SellerSelect';
 
 /**
  * Commission-rate SET form (TASK-PC-FE-221 Phase B). Confirm-gated PUT of a
@@ -92,14 +93,11 @@ export function CommissionRateForm({ onApplied }: CommissionRateFormProps) {
           <label htmlFor={sellerFieldId} className={labelCls}>
             셀러 ID <span className="text-destructive">*</span>
           </label>
-          <input
+          <SellerSelect
             id={sellerFieldId}
-            type="text"
             value={sellerId}
-            onChange={(e) => setSellerId(e.target.value)}
-            autoComplete="off"
-            className={inputCls}
-            data-testid="settlements-rate-set-seller-input"
+            onChange={setSellerId}
+            testid="settlements-rate-set-seller-input"
           />
         </div>
         <div className="w-40">

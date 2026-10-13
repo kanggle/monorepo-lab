@@ -6,6 +6,7 @@ import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { useSellerBalance } from '../hooks/use-ecommerce-settlements';
 import { minorToWon } from '../api/settlement-types';
+import { SellerSelect } from './SellerSelect';
 
 /**
  * Seller settlement balance lookup (TASK-PC-FE-221 Phase A). The balance is a
@@ -58,14 +59,11 @@ export function SellerBalanceLookup() {
           >
             셀러 ID
           </label>
-          <input
+          <SellerSelect
             id={fieldId}
-            type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            data-testid="settlements-balance-seller-input"
-            autoComplete="off"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            onChange={setDraft}
+            testid="settlements-balance-seller-input"
           />
         </div>
         <Button

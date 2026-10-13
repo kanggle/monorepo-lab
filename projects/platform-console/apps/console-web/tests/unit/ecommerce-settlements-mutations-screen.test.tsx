@@ -91,9 +91,14 @@ beforeEach(() => {
 
 describe('commission-rate SET form — validation + confirm gate', () => {
   it('rejects an out-of-range bps (submit disabled + range error)', async () => {
+    // TASK-PC-FE-336 — the seller field is a `<SellerSelect>` now; stub a
+    // rejecting `fetch` so the sellers-list GET fails deterministically and
+    // the selector falls back to the old free-text id input (same testid).
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
     render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
+    await screen.findByTestId('settlements-rate-set-seller-input-fallback');
     await userEvent.type(
       screen.getByTestId('settlements-rate-set-seller-input'),
       'acme-corp',
@@ -108,14 +113,23 @@ describe('commission-rate SET form — validation + confirm gate', () => {
   });
 
   it('does NOT PUT until the confirm is pressed, then PUTs to the right URL/body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ sellerId: 'acme-corp', rateBps: 1500, source: 'SELLER_OVERRIDE' }),
+    // Fresh `Response` per call (not one shared static object) — see the
+    // sibling test file's comment on the same TASK-PC-FE-336 "body already
+    // used" hazard once `<SellerSelect>` adds a competing sellers-list GET.
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({ sellerId: 'acme-corp', rateBps: 1500, source: 'SELLER_OVERRIDE' }),
+      ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
+    // TASK-PC-FE-336 — every fetch call (incl. the sellers-list GET fired by
+    // `<SellerSelect>` on mount) resolves with the commission-rate shape here,
+    // which fails `SellerListSchema` → fallback to the free-text id input.
+    await screen.findByTestId('settlements-rate-set-seller-input-fallback');
     await userEvent.type(
       screen.getByTestId('settlements-rate-set-seller-input'),
       'acme-corp',
@@ -125,13 +139,23 @@ describe('commission-rate SET form — validation + confirm gate', () => {
     });
     await userEvent.click(screen.getByTestId('settlements-rate-set-submit'));
 
-    // confirm dialog open, but NO request yet
+    // confirm dialog open, but NO PUT yet (the sellers-list GET above already
+    // ran once, so the assertion is "no PUT call", not "fetch never called").
     expect(screen.getByTestId('ecommerce-confirm-dialog')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'PUT'),
+    ).toBe(false);
 
     await userEvent.click(screen.getByTestId('ecommerce-confirm-confirm'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'PUT'),
+      ).toBe(true),
+    );
+    const putCall = fetchMock.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === 'PUT',
+    )!;
+    const [url, init] = putCall;
     expect(String(url)).toContain(
       '/api/ecommerce/settlements/commission-rates/acme-corp',
     );
@@ -179,11 +203,23 @@ describe('period OPEN form — ordering validation + confirm gate', () => {
       target: { value: '2026-08-01T00:00' },
     });
     await userEvent.click(screen.getByTestId('settlements-period-open-submit'));
-    expect(fetchMock).not.toHaveBeenCalled();
+    // TASK-PC-FE-336 — `<SellerSelect>` already fired its own GET on mount
+    // (dedup'd across the 3 seller fields); the gate under test is "no POST
+    // yet", not "fetch never called".
+    expect(
+      fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false);
 
     await userEvent.click(screen.getByTestId('ecommerce-confirm-confirm'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'POST'),
+      ).toBe(true),
+    );
+    const postCall = fetchMock.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === 'POST',
+    )!;
+    const [url, init] = postCall;
     expect(String(url)).toContain('/api/ecommerce/settlements/periods');
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
@@ -211,11 +247,22 @@ describe('period CLOSE — irreversible confirm gate', () => {
 
     const dialog = screen.getByTestId('ecommerce-confirm-dialog');
     expect(dialog).toHaveTextContent('되돌릴 수 없습니다');
-    expect(fetchMock).not.toHaveBeenCalled();
+    // TASK-PC-FE-336 — `<SellerSelect>` already fired its own GET on mount;
+    // the gate under test is "no close POST yet".
+    expect(
+      fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false);
 
     await userEvent.click(screen.getByTestId('ecommerce-confirm-confirm'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'POST'),
+      ).toBe(true),
+    );
+    const postCall = fetchMock.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === 'POST',
+    )!;
+    const [url, init] = postCall;
     expect(String(url)).toContain(
       '/api/ecommerce/settlements/periods/2026-07/close',
     );
