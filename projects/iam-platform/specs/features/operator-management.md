@@ -132,7 +132,7 @@ SUPER_ADMIN 역할을 보유한 운영자가 다른 운영자 계정을 생성�
 end-to-end 흐름 **그룹 생성 → 멤버 추가 → grant → fan-out**, 그리고 **멤버 제거 / 그룹 삭제 → cascade-revoke**:
 
 - **그룹에 role/assignment grant** → 모든 **현재 멤버**로 fan-out(각 멤버의 flat `operator_tenant_assignment`/`admin_operator_roles` row 를 `group_origin=<groupId>` 로 materialise). grant-time no-escalation(D4): granter 보유 이내만.
-- **멤버 추가** → 그룹의 **현행 grant** 를 새 멤버로 fan-out. add-member 시점에 no-escalation(D4) **재검사**. 멤버는 그룹 테넌트 소속 operator 만(home `tenant_id` == 그룹 `tenant_id`).
+- **멤버 추가** → 그룹의 **현행 grant** 를 새 멤버로 fan-out. add-member 시점에 no-escalation(D4) **재검사**. (ADR-MONO-083) 그룹에 업무 권한 세트가 올라가 있으면 actor 에게 `domain_access.manage` 도 요구한다. 멤버는 그룹 테넌트 소속 operator 만(home `tenant_id` == 그룹 `tenant_id`).
 - **멤버 제거** → 그 멤버의 `group_origin=<groupId>` 태그 grant **만** revoke. **직접 grant(`group_origin IS NULL`)는 불변**.
 - **그룹 삭제** → 모든 `group_origin=<groupId>` assignment cascade-revoke; 멤버는 독립 직접 grant 를 유지.
 - **멱등성(Idempotence)** — fan-out 은 이미 존재하는 **동등 직접 grant** 를 중복 생성하지 않으며(`(operator, tenant)`/`(operator, role)` PK 상 최대 1 row), removal 은 non-`group_origin` row 를 절대 건드리지 않는다.

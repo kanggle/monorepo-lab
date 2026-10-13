@@ -361,6 +361,83 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - 행을 지우지 않는다 — `ACCEPTED` · `CANCELLED` 는 기록으로 남는다(관리 목록의 상태 필터).
 > - 감사: 발급 · 취소 · 재발송 · 수락은 `admin_actions`(`target_type = OPERATOR_INVITATION`)에 남는다. 수락 행의 주체(`operator_id`)는 **수락으로 생긴 운영자**다 — 거절된 수락은 주체가 없어 `admin_actions` 에 남지 않는다(구조화 로그).
 
+### `domain_permission_set`
+
+**신규 (TASK-MONO-791 P1 계약 / TASK-BE-631 impl, Flyway `V0052` — 작성 직전 다음 빈 버전 재확인, ADR-MONO-083 갈래 A)** — **도메인 업무 권한 세트**: 업무 역할(카탈로그 항목)의 이름 붙은 묶음. 테넌트 세트(그 테넌트 관리자가 만든다)와 시스템 프리셋(시드 · 읽기 전용) 두 종류. 🔴 `admin_roles` 와 **다른 엔티티**다(ADR-035 O1-C · ADR-083 D1 — 관리 역할 표에 도메인 역할 행을 넣지 않는다). 관리 표면: [admin-api.md § 도메인 업무 권한 세트](../../contracts/http/admin-api.md#도메인-업무-권한-세트-adr-mono-083--task-mono-791-p1-계약--구현-p2-task-be-631) · 규칙: [rbac.md § 도메인 업무 권한 세트](./rbac.md#도메인-업무-권한-세트-adr-mono-083).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `id` | BIGINT | PK, AUTO_INCREMENT | internal | 내부 PK. 배정 표가 참조하는 값 |
+| `set_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7 — API 의 `setId`. 프리셋은 시드가 **고정값**으로 넣는다(환경마다 같은 값) |
+| `tenant_id` | VARCHAR(32) | NULL, `CHECK (tenant_id IS NULL OR tenant_id <> '*')` | internal | 테넌트 세트의 소유 테넌트(M1 격리 키). **`NULL` = 시스템 프리셋**. account-service `tenants` 의 불투명 참조 — FK 없음(`operator_group.tenant_id` 와 같은 형태). `'*'` 금지 — 플랫폼 공용 묶음은 프리셋이다 |
+| `system_key` | VARCHAR(40) | NULL, UNIQUE | internal | 프리셋 키(`wms-inventory-read` · … · `all-domains-full` · `legacy-compat` — admin-api 프리셋 표). `CHECK ((tenant_id IS NULL) = (system_key IS NOT NULL))` — 프리셋 ⟺ 테넌트 없음 |
+| `name` | VARCHAR(120) | NOT NULL | internal | 표시명. 테넌트 안에서 유일할 필요 없음(식별 = `set_id`) |
+| `description` | VARCHAR(255) | NULL | internal | 설명 |
+| `created_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | 만든 운영자. 프리셋(시드)은 NULL |
+| `created_at` / `updated_at` | DATETIME(6) | NOT NULL | internal | — |
+| `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 — 동시 수정 · 삭제 경합 |
+
+**인덱스**: `uk_domain_permission_set_set_id` · `uk_domain_permission_set_system_key` · `idx_domain_permission_set_tenant (tenant_id)`(테넌트 세트 목록).
+
+> **불변식**: 프리셋 행(`tenant_id IS NULL`)은 API 로 수정 · 삭제되지 않는다(`409 DOMAIN_PERMISSION_SET_READ_ONLY`) — 내용 변경은 마이그레이션만(카탈로그가 넓어질 때 `<domainKey>-full` · `all-domains-full` · `legacy-compat` 를 함께). 테넌트 세트의 역할 도메인 ⊆ 그 테넌트의 entitled domains — **생성 · 수정 시점**에 검사(애플리케이션 · account-service 조회, 실패 = 거절). 그 뒤 구독이 해지돼도 행은 남는다(토큰에서 걸러진다).
+
+### `domain_permission_set_role`
+
+**신규 (같은 마이그레이션)** — 세트 → 업무 역할.
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `set_id` | BIGINT | NOT NULL, FK → `domain_permission_set.id` ON DELETE CASCADE | internal | **`domain_permission_set.id` (BIGINT PK) 참조** — 외부 UUID `set_id` 컬럼이 아님 |
+| `domain_key` | VARCHAR(32) | NOT NULL | internal | 카탈로그 도메인 키(`wms` · `scm` · `erp` · `finance` · `ecommerce` · `fan` · `mes`) |
+| `role_name` | VARCHAR(40) | NOT NULL | internal | 카탈로그 역할(`INVENTORY_READ` · `SCM_OPERATOR` …). 값 검증은 애플리케이션의 카탈로그(코드 한 자리)와 대조 — DB 에 카탈로그 표를 두지 않는다 |
+
+**Primary Key**: (`set_id`, `domain_key`, `role_name`).
+
+> 🔴 관리 등급(`*_ADMIN`) · `MASTER_WRITE` · `INVENTORY_RESERVE` · `WMS_ADMIN` 은 카탈로그에 없으므로 이 표에 들어올 수 없다(`422 DOMAIN_ROLE_NOT_ASSIGNABLE`). 카탈로그가 줄어 남게 된 행은 토큰에서 걸러진다(auth 의 `∩ derive(entitled)`).
+
+### `operator_domain_set_grant`
+
+**신규 (같은 마이그레이션, ADR-083 D4 — 출처별 행)** — 운영자 × 테넌트 × 세트 × **출처** 한 행. 실효 업무 권한 = (운영자, T) 행 ∪ (`'*'` 운영자면 (운영자, `'*'`) 행)의 세트 역할 합. assume 판정 `GET /internal/operator-assignments/check` 의 `domainRoles` 가 이 표를 읽는다(같은 요청 안의 로컬 읽기).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `operator_id` | BIGINT | NOT NULL, FK → `admin_operators.id` ON DELETE CASCADE | internal | 대상 운영자 |
+| `tenant_id` | VARCHAR(32) | NOT NULL | internal | 그 배정이 적용되는 테넌트. 비-`'*'` 운영자 = 그 운영자의 **소속 테넌트 중 하나** · `'*'` 운영자 = 구체 테넌트 또는 **`'*'`(모든 테넌트)** (OD-3) |
+| `set_id` | BIGINT | NOT NULL, FK → `domain_permission_set.id` ON DELETE RESTRICT | internal | 배정한 세트. RESTRICT — 배정이 남은 세트는 지울 수 없다(애플리케이션이 먼저 `409 DOMAIN_PERMISSION_SET_IN_USE`) |
+| `source_key` | VARCHAR(48) | NOT NULL | internal | **출처 — NULL 없는 키**: `DIRECT` · `MIGRATION` · `GROUP:<operator_group.id>` |
+| `group_origin` | BIGINT | NULL, FK → `operator_group.id` ON DELETE CASCADE | internal | `source_key = GROUP:<id>` 일 때 그 그룹 id(같은 값) — 그룹 삭제의 DB 안전망 · 역검색용. 그 밖 NULL |
+| `granted_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | 배정한 운영자. `MIGRATION` 은 NULL |
+| `granted_at` | DATETIME(6) | NOT NULL | internal | 배정 시각 |
+
+**Primary Key**: (`operator_id`, `tenant_id`, `set_id`, `source_key`) — 🔴 **출처가 PK 안에 있다**. 같은 운영자 · 테넌트 · 세트를 직접 + G1 + G2 가 주면 행이 셋이다. 관리 역할의 `admin_operator_roles` 처럼 «출처는 PK 밖의 칸 하나(`group_origin`) · 먼저 쓴 쪽이 소유» 로 두지 않는다(그 모양은 G1 회수가 G2 분을 지운다 — ADR-083 Context ④).
+
+**제약**: `CHECK ((source_key IN ('DIRECT','MIGRATION') AND group_origin IS NULL) OR (group_origin IS NOT NULL AND source_key = CONCAT('GROUP:', group_origin) AND tenant_id <> '*'))` — 출처 키와 그룹 칸이 어긋나지 않게 · 그룹 행은 `'*'` 테넌트에 없다(그룹은 `'*'` 가 아니다). MySQL 이 이 식을 CHECK 로 받지 못하면 같은 불변식을 애플리케이션 + 비-Docker 형태 시험으로 고정한다.
+
+**인덱스**: PK(선행 `operator_id` — FK 인덱스 겸 판정 조회) · `idx_operator_domain_set_grant_tenant_set (tenant_id, set_id)`(세트 사용 수 · `IN_USE` · 내보내기) · `idx_operator_domain_set_grant_group (group_origin)`(그룹 회수 · 삭제).
+
+> **불변식 (애플리케이션 — 다른 표의 값에 걸려 CHECK 로 쓸 수 없다)**:
+> - 🔴 **`tenant_id = '*'` 행은 `'*'` 운영자(`admin_operators.tenant_id = '*'`)에게만** 있다(OD-3). 비-`'*'` 운영자의 행 `tenant_id` ∈ 그 운영자의 소속(`operator_tenant_assignment`) — «소속 없는 업무 권한» 금지. 쓰기 경로(직접 배정 · 그룹 fan-out · 백필)가 모두 이 술어를 지키고, «이 회사에서 내보내기» 가 그 회사 행(모든 출처)을 함께 지운다.
+> - `'*'` 운영자에게 세트를 배정해도 `operator_tenant_assignment` 행은 **만들지 않는다**(ADR-082 D2).
+> - 테넌트 세트를 가리키는 행의 `tenant_id` = 그 세트의 `tenant_id`(다른 회사의 세트를 걸지 않는다) · `'*'` 행은 프리셋만.
+> - `MIGRATION` 행 ⟺ 세트 = `legacy-compat`(백필 전용 — API 는 `legacy-compat` 를 배정하지 않고, `MIGRATION` 행을 만들지 않는다).
+> - `GROUP:<id>` 행의 `tenant_id` = 그 그룹의 `tenant_id`(그룹 세트는 그룹 테넌트에만, ADR-083 D4).
+> - 회수는 **자기 출처의 행만**: 개인 회수 = `DIRECT` + `MIGRATION` · 그룹 회수/탈퇴/삭제 = `GROUP:<그 그룹>` · 내보내기 = 그 테넌트의 전부.
+
+### `operator_group_domain_set_grant`
+
+**신규 (같은 마이그레이션)** — 그룹에 배정된 업무 권한 세트(**템플릿**). 멤버 추가 시 이 템플릿을 새 멤버로 fan-out 하고, 멤버 0 인 그룹의 배정을 보존한다(`operator_group_grant` 와 같은 이유로 별도 표).
+
+| 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
+|---|---|---|---|---|
+| `group_id` | BIGINT | NOT NULL, FK → `operator_group.id` ON DELETE CASCADE | internal | **`operator_group.id` (BIGINT PK) 참조** |
+| `set_id` | BIGINT | NOT NULL, FK → `domain_permission_set.id` ON DELETE RESTRICT | internal | 배정한 세트 — 프리셋 또는 그룹 테넌트의 세트 |
+| `granted_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | — |
+| `granted_at` | DATETIME(6) | NOT NULL | internal | — |
+
+**Primary Key**: (`group_id`, `set_id`) — 같은 세트 중복 배정 → `409 DOMAIN_PERMISSION_SET_ALREADY_GRANTED`. **인덱스**: `idx_operator_group_domain_set_grant_set (set_id)`(`IN_USE` · 그룹 수).
+
+> **fan-out (ADR-046 D2 유지 · ADR-083 D4)**: 템플릿 INSERT → 현재 멤버마다 `operator_domain_set_grant (멤버, 그룹 tenant_id, set, 'GROUP:<group.id>', group_origin = group.id)` — 멤버가 같은 세트를 다른 출처로 이미 가져도 **skip 하지 않는다**(출처별 행). 멤버 추가 = 그 그룹의 모든 템플릿을 새 멤버로 · 멤버 제거 · 템플릿 회수 · 그룹 삭제 = `source_key = 'GROUP:<group.id>'` 행만 삭제. 모두 그 쓰기와 **단일 트랜잭션**(감사 원자성 — FK CASCADE 는 안전망).
+
 ### `admin_actions`
 
 감사 원장. **append-only** ([architecture.md](./architecture.md) Forbidden Dependencies, [rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A3).
@@ -531,6 +608,35 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 - **TASK-MONO-784 (ADR-MONO-082 b · 구현자 결정 D-2 · D-3)** — 한 마이그레이션(S1 은 specs-only; **작성 직전 다음 빈 버전 재확인** — S1 시점 마지막 = `V0050`):
   - `V0051__admin_operator_roles_tenant_pk_and_membership_backfill.sql`(S2, 이름은 가칭) — ① `admin_operator_roles` `DROP PRIMARY KEY, ADD PRIMARY KEY (operator_id, role_id, tenant_id)` 한 문장(선행 칸 `operator_id` 유지 — FK 인덱스 요건 · 데이터 안전: 784 이전 모든 행이 `tenant_id = 홈`). ② **소속 백필(멱등)** — 비-`'*'` 운영자마다 (홈) · (그 운영자의 비-`'*'` 역할 행 `tenant_id` 들) 중 `operator_tenant_assignment` 행이 없는 것에 whole-tenant 행(`org_scope` · `permission_set_id` · `group_origin` NULL)을 만든다 — 홈을 판정에서 빼도(R1) 단일 회사 운영자의 assume · 콘솔 · 관리 판정이 바이트 불변이게. `'*'` 운영자에게는 만들지 않는다. **forward-only**, `INFORMATION_SCHEMA` 가드(V0027/V0029 패턴, `@var` 금지), 형태 시험은 V0042/V0044 선례.
   - 🔴 `db/migration-dev` 의 `R__` 시드는 V 마이그레이션 **뒤에** 돌아 이 백필이 덮지 못한다 — 홈만으로 assume/콘솔에 닿던 데모 운영자(`demo-cs` · `demo-viewer`)의 배정 행은 시드에서 더한다(S2), `demo-operator` 의 `ecommerce` 역할 행(`SUPPORT_READONLY` + `SUPPORT_LOCK` — 소유자 결정 OD-3)은 S3 에서 시드한다.
+- **TASK-MONO-791 P1 계약 / TASK-BE-631 (P2) — ADR-MONO-083 갈래 A · OD-1 기본값 · OD-3 소유자 결정** (계획 — P1 은 specs-only; **작성 직전 다음 빈 버전 재확인** — P1 시점 마지막 = `V0051`):
+  - `V0052__create_domain_permission_sets_and_backfill.sql`(P2, 이름은 가칭 — 나눠도 된다, 순서는 아래 그대로) —
+    ① 표 넷: `domain_permission_set` · `domain_permission_set_role` · `operator_domain_set_grant` · `operator_group_domain_set_grant`(위 절 그대로 — PK 에 `source_key`, CHECK 둘). **forward-only**, `INFORMATION_SCHEMA` 존재 가드(V0027/V0029 패턴, `@var` 금지).
+    ② **프리셋 시드**: admin-api § 시스템 프리셋 표의 행 전부(고정 `set_id` · `system_key` · 역할) — `INSERT IGNORE` 멱등.
+    ③ `domain_access.manage` 키 → `SUPER_ADMIN` · `TENANT_ADMIN` 매핑([rbac.md](./rbac.md) Seed Matrix) — inert/net-zero(키 상수 · 엔드포인트와 같은 PR).
+    ④ **이전 백필 (OD-1 · ADR-083 D8 — 멱등, 상태 무관)**: (a) 비-`'*'` 운영자의 **모든 소속**(`operator_tenant_assignment` 행) 마다 `(operator_id, tenant_id, legacy-compat, 'MIGRATION')` 한 행 · (b) `'*'` 운영자마다 `(operator_id, '*', legacy-compat, 'MIGRATION')` 한 행(OD-3). `INSERT … SELECT … WHERE NOT EXISTS`(또는 PK 충돌 무시) — 재실행 0행. `legacy-compat` = 카탈로그 전부이므로 발급 때 `∩ derive(entitled)` 를 거친 결과는 **지금의 구독 파생과 같은 역할 집합**이다(admin_db 마이그레이션은 account_db 의 구독을 읽지 못한다 — 그래서 «그 테넌트 구독 도메인의 세트» 대신 «전부 + 발급 교집합» 으로 같은 결과를 낸다. 해석 대조 = BE-631 AC-0). 이전 **뒤** 생긴 소속은 세트 0 에서 시작한다(코드 분기 없음 — 행이 없을 뿐).
+  - **완료 판정 (P3 `TASK-BE-632` 배포 게이트 — 라이브에서 0 이어야 한다)**: «이전 시점의 소속 중 세트 행이 하나도 없는 것» =
+
+    ```sql
+    -- :cutover = (SELECT installed_on FROM flyway_schema_history WHERE version = '52')
+    SELECT
+      (SELECT COUNT(*)
+         FROM operator_tenant_assignment a
+         JOIN admin_operators o ON o.id = a.operator_id
+        WHERE o.tenant_id <> '*'
+          AND a.granted_at <= :cutover
+          AND NOT EXISTS (SELECT 1 FROM operator_domain_set_grant g
+                           WHERE g.operator_id = a.operator_id AND g.tenant_id = a.tenant_id))
+    + (SELECT COUNT(*)
+         FROM admin_operators o
+        WHERE o.tenant_id = '*'
+          AND o.created_at <= :cutover
+          AND NOT EXISTS (SELECT 1 FROM operator_domain_set_grant g
+                           WHERE g.operator_id = o.id AND g.tenant_id = '*'))
+      AS missing_backfill;   -- = 0
+    ```
+
+    🔵 이 술어는 P3 배포 **직전**에 잰다 — P2 배포 뒤 관리자가 의도해 `legacy-compat` 를 회수하고 아무것도 주지 않은 소속도 세어지므로, 0 이 아니면 그 행이 «백필 누락» 인지 «의도된 회수» 인지 감사 행(`OPERATOR_DOMAIN_SET_REVOKE`)과 대조한다.
+  - 🔴 `db/migration-dev` 의 `R__` 시드는 V 마이그레이션 **뒤에** 돈다(784 D-2 교훈) — 시드가 새로 만드는 데모 운영자 · 소속에는 위 백필이 닿지 않으므로 시드가 그 운영자의 세트 행을 직접 넣는다(P2).
 
 ---
 
@@ -540,7 +646,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 |---|---|
 | **restricted** | `admin_operators.password_hash`, `admin_operators.totp_secret_encrypted` |
 | **confidential** | `admin_operators.email`, `admin_operators.display_name`, `admin_actions.reason` |
-| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼 (**`org_node_id`** 포함 — org-node scope-driver, account-service 소유 `org_node.id` 를 참조하는 불투명 식별자·비-PII·credential 아님, TASK-BE-490/ADR-MONO-047; **`group_origin`** 포함 — fan-out 마커, 같은 서비스 `operator_group.id` FK·비-PII·lifecycle 부기, TASK-BE-519/ADR-MONO-046), **`operator_group`의 모든 컬럼** (TASK-BE-519 — group_id·tenant_id·name·description·audit FK·시각. 비-PII 그룹 메타데이터), **`operator_group_member`의 모든 컬럼** (TASK-BE-519 — group/operator FK·배정 메타), **`operator_group_grant`의 모든 컬럼** (TASK-BE-519 — grant_id·group FK·grant_type·role/tenant 참조·audit 메타. 비-PII grant 템플릿), **`tenant_partnership`의 모든 컬럼** (TASK-BE-476 — host/partner tenant_id·status·`delegated_scope`(도메인/역할 키 집합, PII·credential 아님)·audit FK·시각. 비-PII 관계 메타데이터), **`tenant_partnership_participant`의 모든 컬럼** (TASK-BE-476 — operator FK·`participant_scope`·배정 메타), **`tenant_entry_policy`의 모든 컬럼** (TASK-MONO-771 — tenant_id·`require_mfa` 플래그·변경 메타. 비-PII 정책 메타데이터), `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
+| **internal** | 위에 명시되지 않은 모든 컬럼 — `admin_operators` 나머지 (id, operator_id, status, totp_enrolled_at, **oidc_subject** (불투명 OIDC `sub` UUID — 비-PII 링크 키, TASK-BE-298), **finance_default_account_id** (불투명 finance 계정 UUID — 비-PII 외부 식별자, TASK-BE-304), last_login_at, created_at, updated_at, version), `admin_roles`의 모든 컬럼, `admin_role_permissions`의 모든 컬럼, `admin_operator_roles`의 모든 컬럼 (**`org_node_id`** 포함 — org-node scope-driver, account-service 소유 `org_node.id` 를 참조하는 불투명 식별자·비-PII·credential 아님, TASK-BE-490/ADR-MONO-047; **`group_origin`** 포함 — fan-out 마커, 같은 서비스 `operator_group.id` FK·비-PII·lifecycle 부기, TASK-BE-519/ADR-MONO-046), **`operator_group`의 모든 컬럼** (TASK-BE-519 — group_id·tenant_id·name·description·audit FK·시각. 비-PII 그룹 메타데이터), **`operator_group_member`의 모든 컬럼** (TASK-BE-519 — group/operator FK·배정 메타), **`operator_group_grant`의 모든 컬럼** (TASK-BE-519 — grant_id·group FK·grant_type·role/tenant 참조·audit 메타. 비-PII grant 템플릿), **`tenant_partnership`의 모든 컬럼** (TASK-BE-476 — host/partner tenant_id·status·`delegated_scope`(도메인/역할 키 집합, PII·credential 아님)·audit FK·시각. 비-PII 관계 메타데이터), **`tenant_partnership_participant`의 모든 컬럼** (TASK-BE-476 — operator FK·`participant_scope`·배정 메타), **`tenant_entry_policy`의 모든 컬럼** (TASK-MONO-771 — tenant_id·`require_mfa` 플래그·변경 메타. 비-PII 정책 메타데이터), **`domain_permission_set` · `domain_permission_set_role` · `operator_domain_set_grant` · `operator_group_domain_set_grant`의 모든 컬럼** (TASK-MONO-791 / ADR-MONO-083 — 세트 메타 · 업무 역할 키 · 배정 출처 · FK · 시각. 비-PII), `admin_actions`의 나머지 (id, action_code, operator_id, permission_used, target_type, target_id, ticket_id, request_id, outcome, detail, started_at, completed_at), `outbox` 테이블의 나머지 컬럼 |
 | **internal (special)** | `outbox.payload` — `admin.action.performed` envelope을 직렬화하여 포함. `target.displayHint`처럼 **upstream에서 이미 마스킹된** confidential 원본의 파생값을 포함할 수 있다 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4 — 중앙 masking utility 경유 강제). 원문 PII는 포함되지 않음을 스펙 레벨에서 보장하므로 분류는 `internal`. 단, `reason` 필드(운영자 입력 원문) 전달 시 소비자 측에서 필요에 따라 추가 필터링을 고려한다. |
 | **public** | 없음 |
 
@@ -551,6 +657,8 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > **TASK-BE-327 (ADR-MONO-020 D2)**: `operator_tenant_assignment` (V0030) + `admin_operators.{oidc_subject, tenant_id}` 로 구성되는 D1 effective-scope 가 이제 auth-service 에 의해 `GET /internal/operator-assignments/check` 로 **cross-service read** 된다 (assume-tenant 발급 게이트). **스키마 변경 없음** — read-only 노출만 추가. 상세: [rbac.md](./rbac.md), [architecture.md](./architecture.md).
 
 > **TASK-MONO-784 (ADR-MONO-082 b) — `operator_tenant_assignment` = 소속**: 이 표의 행 하나가 «이 운영자는 이 회사의 운영자다» 의 **유일한** 저장소다(ADR-082 갈래 비교 assume 행 «소속 회사 = 배정 행»). ① D1 effective-scope 에서 `{admin_operators.tenant_id}`(홈)를 뺀다 — 비-`'*'` 운영자의 실효 범위 = 배정 행만(S2 · 라이더 R1 · rbac.md Assume-Tenant 절). ② 소속은 관리 권한을 주지 않는다 — 관리 권한은 같은 `tenant_id` 의 역할 행이 준다(라이더 R2 — 역할 행 없는 소속 = 관리 권한 0). ③ **`permission_set_id` 는 계속 쓰지 않는다**(라이더 R4 — 읽기 · 쓰기 0. 단일 FK 라 첫 관리자의 두 역할을 못 담는다 — 회사별 역할은 `admin_operator_roles.tenant_id` 축이 표현한다). 칸은 남고 값은 늘 NULL. ④ `'*'` 운영자는 이 표에 행을 갖지 않는다(ADR-082 D2 — 쓰기에서 거절). ⑤ 행 삭제 = «이 회사에서 내보내기» — 같은 `tenant_id` 의 역할 행 · 그 테넌트 그룹 멤버십과 fan-out · `partner_tenant_id` 가 그 테넌트인 참여 행을 한 트랜잭션에 함께 지운다(D-9).
+
+> **TASK-MONO-791 (ADR-MONO-083 갈래 A) — `permission_set_id` 는 여전히 쓰지 않는다**: 도메인 업무 권한 세트는 별도 표(`domain_permission_set` · `operator_domain_set_grant`)에 산다 — 배정 행 하나에 세트 하나인 이 칸으로는 «여러 세트 · 여러 출처» 를 담을 수 없다(ADR-083 갈래 C 기각 · ADR-082 R4 유지). 칸은 남고 값은 늘 NULL. ⑤ 의 내보내기는 P2 부터 그 테넌트의 `operator_domain_set_grant` 행(모든 출처)도 함께 지운다. `'*'` 운영자에게 세트를 배정해도 이 표에 행은 생기지 않는다(④ 그대로).
 
 > **TASK-BE-338 (ADR-MONO-020 D3 amendment 2026-06-05)**: `operator_tenant_assignment` 에 **nullable `org_scope`** 컬럼 추가(V0031) — per-assignment **데이터-스코프**(운영자가 그 테넌트에서 act 가능한 부서 **subtree-root id** 들의 JSON 배열; `NULL ⟺ ["*"]` = 테넌트 전체 = **net-zero** 기본, 기존 모든 행 동작 불변). `permission_set_id`(D5, role-set 좁힘)의 data-scope 형제. `/internal/operator-assignments/check` 가 `org_scope` 를 함께 반환(현행 boolean gate 에 additive) → auth-service `TenantClaimTokenCustomizer.customizeForAssumeTenant` 가 하드코딩 `["*"]`(BE-337) 대신 실제 값 주입. 오직 erp 가 소비(subtree-root 를 자기 부서트리로 descendant 확장; TASK-ERP-BE-008). 행동 규칙(claim 형상/주입)은 [rbac.md](./rbac.md) + auth-service [architecture.md](../auth-service/architecture.md).
 

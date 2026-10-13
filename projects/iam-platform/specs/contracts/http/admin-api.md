@@ -143,6 +143,13 @@ base path: `/api/admin`
 | 21 | org-node 읽기 | path | 그대로 — 노드 스코프는 `org_node_id` 가 구동 | — |
 | 22 | entry-policy GET · placement preview | path | 그대로 | — |
 | 23 | `POST /onboarding/organizations` | 자기 흐름 | «두 409 → 소속 추가» — [onboarding-api.md](onboarding-api.md) | S5 |
+| 24 | `GET /domain-roles` | 없음 | 판정 없음 — 카탈로그(테넌트 데이터 없음). 권한 키 `domain_access.manage` 만(1단) — § 도메인 업무 권한 세트 | 083 P2 |
+| 25 | `GET\|POST /domain-permission-sets` · `GET\|PATCH\|DELETE /domain-permission-sets/{setId}` | `X-Tenant-Id` · 생략 규칙(`domain_access.manage`) | grant scope(`domain_access.manage`). 테넌트 세트의 소유 테넌트 = 행동 테넌트 · 다른 테넌트 세트 = `404` | 083 P2 |
+| 26 | `GET /operators/{id}/domain-access` · `POST /operators/{id}/domain-permission-sets` · `DELETE …/domain-permission-sets/{setId}` | `X-Tenant-Id` · 생략 규칙(`domain_access.manage`) | grant scope(`domain_access.manage`) + 대상이 `'*'` 운영자면 **`'*'` grant scope 만**(행 전체 규칙의 `'*'` 행과 같은 술어 · OD-3) | 083 P2 |
+| 27 | `GET\|POST /groups/{groupId}/domain-permission-sets` · `DELETE …/{setId}` | 대상(그룹 `tenant_id`) | grant scope(`domain_access.manage`) | 083 P2 |
+| 28 | `GET /me/domain-access` | `X-Tenant-Id`(필수) | 판정 없음 — 자기 자신의 값만(권한 키 없음) | 083 P2 |
+
+🔵 24 ~ 28 행은 `TASK-MONO-791`(ADR-MONO-083 P1) 이 더했다 — «784 슬라이스» 열 대신 그 동작을 구현하는 단계(`083 P2` = `TASK-BE-631`)를 적는다. P2 머지 전 이 엔드포인트는 없다.
 
 - 게이트를 다시 구현한 사본(운영자 목록 · 초대 목록 · 프로필 · 테넌트 상세)은 게이트 하나로 합친다(D-4) — 엔드포인트마다 술어를 다시 쓰지 않는다.
 - **행동 테넌트 = 감사 테넌트** (D-13 · S3): 테넌트로 판정된 비플랫폼 행위의 `admin_actions.tenant_id` = **행동 테넌트**(지금은 행위자 홈 — 784 AC-0 ②, 그래서 홈 A 인 사람이 B 에서 한 행위가 A 의 감사에 쌓이고 B 관리자가 못 봤다). `'*'` 행위자 = `'*'`(플랫폼 교차 조회 그대로). 자기 흐름(로그인 · 리프레시 · 자기 프로필 · 초대 수락) · DENIED 행 = 홈 그대로(R1 «감사 기본값» · DENIED «no leak»). 과거 행 백필 없음(감사 행 불변).
@@ -1383,6 +1390,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 **Side Effects**: 없음 (read; 권한 거부 시에만 DENIED row).
 
 > **`GET /api/admin/permission-sets` 미구현 (의도적)**: 선택 엔드포인트였으나 생략한다 — `GET /api/admin/roles` 가 이미 각 role 을 permission 키 집합과 함께 반환하므로 「권한 세트」 화면(TASK-PC-FE-228)이 요구하는 permission-set 뷰를 완전히 커버한다. 같은 테이블에 대한 두 번째 프레이밍 엔드포인트는 중복이다.
+>
+> 🔴 **ADR-MONO-083 (TASK-MONO-791) — 이름을 나눈다**: 콘솔의 옛 `/permission-sets` 화면이 보여 주는 것은 **IAM 관리 역할**(`admin_roles` — 관리 평면 권한 키의 묶음)이고, 도메인 업무 권한이 **아니다**. 화면 이름은 «IAM 관리 역할» 로 바뀐다(P4). 운영자 · 그룹에게 테넌트별로 배정하는 **도메인 업무 권한의 묶음**은 별도 엔티티이고 별도 API 다 — 아래 § 도메인 업무 권한 세트(`/api/admin/domain-roles` · `/api/admin/domain-permission-sets` · …). 둘은 이름 공간이 다르다(ADR-MONO-035 O1-C · ADR-083 D1): 관리 역할이 업무 권한을 주지 않고, 업무 권한 세트가 관리 권한을 주지 않는다. `GET /api/admin/permission-sets` 는 여전히 없다.
 
 ---
 
@@ -1511,6 +1520,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > **TASK-MONO-784 (ADR-MONO-082 b)** — 배정 행 = **소속**이므로 이 엔드포인트는 «그 테넌트의 소속을 더한다» 가 된다.
 >
 > - **R2 — 소속 · 관리 권한 0 에서 시작**: 새 배정은 그 테넌트의 역할 행을 만들지 않는다. 대상은 T 를 assume 할 수 있지만(도메인 평면 — 구독 파생, ADR-082 D5) T 의 관리 API 는 역할 행이 생길 때까지 거절된다(§ 행동 테넌트). `permission_set_id` 는 쓰지 않는다(라이더 R4 — 응답의 `permissionSetId` 는 늘 생략).
+> - 🔵 **ADR-MONO-083 (P2 · P3 부터)**: 새 소속은 **업무 권한 세트 0** 에서도 시작한다 — 이 배정은 `operator_domain_set_grant` 행을 만들지 않는다(D8 «이전 뒤 생긴 소속은 0 에서»). P3 배포 뒤 그 사람의 T assume 토큰에는 도메인 역할이 없다 — 업무 권한은 § 도메인 업무 권한 세트로 따로 준다. (P3 전에는 위 «구독 파생» 이 그대로다.) 초대 수락 · 셀프 온보딩 · 그룹 `TENANT_ASSIGNMENT` fan-out 의 소속 추가도 같다(회사 생성자의 기본 세트는 OD-5 — P9 `TASK-MONO-773`).
 > - **`'*'` 대상 거절 (D2 · D-14 · S4)**: 대상이 `'*'` 운영자면 `400 VALIDATION_ERROR` — 플랫폼 관리자는 회사 소속을 받지 않는다(지금은 해소기가 무시해 무해했던 쓰기 — 784 AC-0 F13).
 > - 🔴 **알려진 위험 — 본인 동의 없는 소속 추가 (소유자 결정 OD-2, 2026-10-11 UTC: «지금대로 두고 기록»)**: T 의 관리자는 **어느 회사의 운영자든** T 에 배정할 수 있다(대상 제한 없음 — `operatorId` 를 알면). 784 전에는 이것이 «내 직원에게 내 테넌트 접근» 이었지만, 784 뒤에는 그 사람의 **소속 추가**이고 이어서 T 의 역할 부여(§ PATCH …/roles)가 가능해진다. 회사 소속의 입구를 «초대 → 인증된 본인 수락» 으로 정한 ADR-MONO-080 D6 과 어긋나는 두 번째 입구다. 그대로 두는 근거: ADR-MONO-020 D1(ACCEPTED)의 동작이고 · T 안에 갇히며(R2 로 관리 권한 0 에서 시작) · 그 사람의 다른 회사 행은 바이트 불변이고 · 같은 동의 문제가 도메인 평면 assume 에 이미 있다. 그룹 `TENANT_ASSIGNMENT` fan-out(§ Operator Group Management)도 같은 길이다. 닫으려면 후속 ADR(대안: 대상이 아직 T 소속이 아니면 `'*'` 만 배정 · 또는 배정에 본인 수락 단계).
 
@@ -1542,9 +1552,10 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > | 그 회사의 역할 행 | `admin_operator_roles` 의 `tenant_id = T` 인 행 **전부** — 직접(`group_origin IS NULL`) · 그룹 fan-out · `T` 로 기록된 노드 grant(D-1). 다른 회사의 행은 **바이트 불변** |
 > | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹이 이 사람에게 만든 fan-out 행(`group_origin` = 그 그룹) **전부 — 다른 회사 U 에 있는 것까지**: 그룹 `TENANT_ASSIGNMENT` 가 만든 U 배정 행 · 그 그룹의 U 역할 행(소유자 결정 2026-10-13 UTC «U 역할 행도 함께 지움» — «소속 없는 역할» 을 남기지 않는다, D-1). 그 사람이 U 에 **직접**(또는 U 그룹으로) 가진 행은 바이트 불변. 🔴 **U 배정 행의 예외 (소유자 결정 2026-10-13 UTC «U 소속을 직접 소속으로 남김»)**: 그 사람이 U 에 이 그룹이 만들지 않은 역할 행(직접 · 다른 그룹 · U 에 기록된 노드 grant)을 하나라도 가지면 U 배정 행은 지우지 않고 **직접 소속으로 바꾼다**(`group_origin` → NULL 만 — `granted_at` · `granted_by` · `org_scope` 그대로). 그런 행이 없으면 지운다. 결과: «소속 없는 역할» 도, 의도된 U 부여의 소실도 없다 — 784 Edge Case 3 |
 > | 협력사 참여 | `partner_tenant_id = T` 인 파트너십의 `tenant_partnership_participant` 행 — 다시 소속돼도 옛 참여가 되살아나지 않게(784 AC-0 F18 · ADR-045 D6 관계 단위 회수와 같은 방향) |
+> | 그 회사의 업무 권한 세트 배정 (**ADR-MONO-083 D4 · P2 부터**) | `operator_domain_set_grant` 의 `(operatorId, tenant_id = T)` 행 **전부 — 모든 출처**(`DIRECT` · `MIGRATION` · `GROUP:<id>`). 다른 회사의 세트 행은 바이트 불변. 그룹 출처 행은 위 그룹 멤버십 삭제와 같은 트랜잭션이다(그룹 세트는 그룹 테넌트에만 행을 만들므로 다른 회사 U 에 그 그룹 출처 행은 없다) |
 >
-> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(`roleRows` · `groupMemberships` · `participations` · `groupAssignments` = 그 그룹들이 만든 배정 행 중 지운 수 · `keptAsDirect` = 직접 소속으로 바꾼 수). 권한 캐시 무효화.
-> - **계정은 건드리지 않는다**(ADR-080 D5 · ADR-082 D3) — 스토어 · 팬 로그인 그대로. 다른 회사의 소속 · 역할 · 그룹 · 참여 그대로. 이미 발급된 T 의 assume 토큰은 TTL 까지 산다(다음 assume 부터 거절).
+> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(`roleRows` · `groupMemberships` · `participations` · `groupAssignments` = 그 그룹들이 만든 배정 행 중 지운 수 · `keptAsDirect` = 직접 소속으로 바꾼 수 · **ADR-083 P2 부터** `domainSetGrants` = 지운 업무 권한 세트 배정 행 수). 권한 캐시 무효화.
+> - **계정은 건드리지 않는다**(ADR-080 D5 · ADR-082 D3) — 스토어 · 팬 로그인 그대로. 다른 회사의 소속 · 역할 · 그룹 · 참여 그대로. ~~이미 발급된 T 의 assume 토큰은 TTL 까지 산다(다음 assume 부터 거절).~~ → **회수 지연 (ADR-MONO-083 D7)**: 이 내보내기(소속 · 업무 권한 세트 회수)는 **다음 assume 교환부터** 반영된다(다음 assume 은 거절). **이미 발급된 T 의 assume 토큰은 자기 `exp` 까지 그대로 쓰인다** — 그 토큰의 `exp` 는 발급 뒤 최대 300초(`TASK-BE-632` P3 부터 · 그 전에는 최대 1800초, [auth-api.md § Assume-Tenant Exchange](auth-api.md)). «즉시 회수» 가 아니다.
 > - **마지막 소속을 내보내도 운영자 행은 지우지 않는다**(D-10) — 행은 `ACTIVE` 로 남고 소속 0 이 된다. 콘솔 적격 · 토큰 교환이 `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` 로 문을 닫는다([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)). 재초대 · 재온보딩은 같은 행에 소속을 더한다(§ Operator Invitation). 감사 해소가 행을 요구한다.
 > - 홈 회사에서 내보내져도 `admin_operators.tenant_id`(홈)는 그대로다(R1) — 판정에서 읽지 않으므로 그 회사 권한은 없다.
 > - 대상이 `'*'` 운영자 · 소속이 없는 테넌트 → 지금처럼 `404 ASSIGNMENT_NOT_FOUND`(좁히는 방향이라 `'*'` 대상도 거절 코드를 따로 두지 않는다).
@@ -3441,6 +3452,8 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 
 **No-escalation (D4, add-member 재검사)**: 그룹의 현행 grant 를 이 멤버로 fan-out 할 때 각 grant 가 actor 의 `effectiveAdminScope`/`RoleGrantGuard` 이내여야 한다 — 자기 미보유 role/tenant 를 새 멤버에게 우회 부여 불가. 위반 → `403 ROLE_GRANT_FORBIDDEN` 또는 `422 GROUP_GRANT_NO_ESCALATION`.
 
+> **ADR-MONO-083 (TASK-MONO-791 P1 — 구현 P2 `TASK-BE-631`)**: 이 그룹에 **업무 세트가 하나 이상** 올라가 있으면 actor 는 그룹 테넌트의 grant scope 에 `domain_access.manage` 도 가져야 한다 — 없으면 `403 PERMISSION_DENIED`(DENIED 행 · 멤버 · 역할 · 세트 행 0). 멤버 추가는 새 사람에게 업무 권한을 주는 행위라 `group.manage` 만으로 통과시키면 D5(배정 = `domain_access.manage`)가 우회된다. 세트 없는 그룹은 지금 규칙 그대로. § 도메인 업무 권한 세트 › 그룹 노트.
+
 **Request**:
 ```json
 { "operatorId": "op-123" }
@@ -3454,7 +3467,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 |---|---|---|
 | 400 | `VALIDATION_ERROR` / `REASON_REQUIRED` | `operatorId` 누락 / reason 누락 |
 | 401 | `TOKEN_INVALID` | — |
-| 403 | `PERMISSION_DENIED` | `group.manage` 없음 |
+| 403 | `PERMISSION_DENIED` | `group.manage` 없음 · (ADR-083) 업무 세트가 올라간 그룹인데 `domain_access.manage` 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | 그룹 `tenant_id` 가 actor 스코프 밖 |
 | 403 | `ROLE_GRANT_FORBIDDEN` | fan-out grant 가 actor 보유 초과(no-escalation) |
 | 404 | `GROUP_NOT_FOUND` | 그룹 미존재/스코프 밖 |
@@ -3559,6 +3572,504 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 **Side Effects**: `admin_actions` `action_code=GROUP_GRANT_REVOKE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿 delete + 그 grant 의 fan-out row(`group_origin=<groupId>` + 해당 role/tenant 자연키) cascade-revoke + 멤버 perm-cache 무효화 — **단일 트랜잭션**. **직접 grant·타 grant 발 row 미변경**.
 
 > **Idempotence & 직접-grant 보존 (D5).** fan-out 은 멤버가 이미 보유한 동등 **직접** grant(`group_origin IS NULL`)를 절대 중복/덮어쓰기 하지 않으며(grant 당 최대 1 row — `(operator, tenant)`/`(operator, role)` PK), 모든 cascade-revoke 는 `group_origin = <groupId>` 로 엄격 필터하여 직접 grant 를 절대 파괴하지 않는다. 두 그룹이 같은 `(operator, grant)` 를 grant 하면 먼저 materialise 한 그룹이 마커를 소유하는 **단일-소유 v1 규약**이다([data-model.md](../../services/admin-service/data-model.md#group_origin-마커-fan-out-substrate)).
+
+> 🔴 **업무 권한 세트의 fan-out 은 이 규약을 따르지 않는다 (ADR-MONO-083 D4 · P2 부터)**: 그룹에 배정한 **도메인 업무 권한 세트**(아래 § 도메인 업무 권한 세트 — `…/groups/{groupId}/domain-permission-sets`)는 멤버마다 **출처별 행**(`operator_domain_set_grant`, PK 에 `source_key = GROUP:<id>` 포함)으로 materialise 된다. 직접 + G1 + G2 가 같은 세트를 주면 **행이 셋**이고, G1 탈퇴 · G1 세트 회수 · G1 삭제는 `GROUP:<G1>` 행만 지운다 — 위의 «먼저 materialise 한 그룹이 소유» 와 달리 다른 출처가 주려는 세트가 사라지지 않는다. 위 단일-소유 규약은 **관리 역할 · tenant-assignment fan-out 에만** 남는다(고치는 일은 `TASK-BE-633`). 멤버 추가(`POST …/members`) · 멤버 제거 · 그룹 삭제는 같은 트랜잭션에서 그 그룹의 세트 행도 만들고 · 지운다.
+
+---
+
+## 도메인 업무 권한 세트 (ADR-MONO-083 · TASK-MONO-791 P1 계약 — 구현 P2 `TASK-BE-631`)
+
+**ADR-MONO-083 ACCEPTED — A · OD 기본값(§ OD 대조) · OD-3 소유자 결정(2026-10-14 UTC — `TASK-MONO-791` § AC-0 기록 4).** 운영자가 테넌트를 assume 해 받는 도메인 토큰의 `roles` 를 «그 테넌트가 구독한 도메인 전체» 가 아니라 «그 테넌트에서 **그 운영자에게 배정된 업무 권한 세트**» 에서 만들기 위한 관리 표면이다. 🔴 **상태**: P2 머지 전 이 절의 엔드포인트는 없다. P2 가 배포돼도 **토큰은 바뀌지 않는다** — assume `roles` 가 세트를 따르는 것은 P3(`TASK-BE-632`) 배포부터다([auth-api.md § Assume-Tenant Exchange](auth-api.md) · [auth-to-admin.md § check](internal/auth-to-admin.md#get-internaloperator-assignmentscheck) `domainRoles`).
+
+**세 축 — 섞지 않는다** (ADR-083 D1):
+
+| 축 | 무엇이 정하나 | 이 절 |
+|---|---|---|
+| 도메인 접근(상한) | 테넌트의 entitled domains = 활성 구독 ∩ 조직 노드 상한(ADR-047) | 그대로 — 세트가 이 밖으로 넓히지 못한다 |
+| 업무 수행 권한 | **배정된 세트의 역할 합** | 이 절이 관리한다 |
+| 데이터 범위 | `org_scope`(배정 행) · 테넌트 격리 | 그대로 — 별도 적용 |
+
+- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 `tenant_id = T` 세트 행 ∪ O 가 `'*'` 운영자면 `tenant_id = '*'` 세트 행)이 가리키는 세트들의 역할 **합**. admin-service 는 이 합(**카탈로그 · 구독 교집합 전** 값)을 낸다. 토큰에 싣는 값은 auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 **다시 거른 것**이다(P3) — 구독하지 않은 도메인의 세트는 배정돼 있어도 토큰에 아무것도 싣지 않는다. 세분 역할이 들어온 도메인의 진입 역할 파생은 그 도메인 단계(P5 ~ P8)가 정의한다.
+- **관리 역할과 다른 이름 공간** (ADR-MONO-035 O1-C · ADR-083 D1): 이 절의 세트 · 역할은 `admin_roles` · `admin_operator_roles` · `/api/admin/roles` 와 **다른 엔티티**다. 관리 역할이 있다고 업무 권한이 생기지 않고, 업무 권한 세트가 관리 권한(`/api/admin/**`)을 주지 않는다. 세트 변경은 관리 권한 캐시(`admin:operator:perm:*`)를 건드리지 않는다.
+- **권한 키** `domain_access.manage`(`SUPER_ADMIN` · `TENANT_ADMIN` — [rbac.md § 도메인 업무 권한 세트](../../services/admin-service/rbac.md#도메인-업무-권한-세트-adr-mono-083)). 행동 테넌트는 § 행동 테넌트 표 24 ~ 28 행. 이 키는 **업무 권한을 주지 않는다** — 세트 배정은 관리 평면 행위다(D5). 배정자가 그 세트의 업무 역할을 스스로 갖고 있을 필요는 없다(관리 역할의 ≤-own `RoleGrantGuard` 는 여기 적용하지 않는다) — 상한은 **그 테넌트의 entitled domains** 와 카탈로그다.
+- **자기 배정 허용** (OD-4 기본값): 행위자 = 대상이어도 거절하지 않는다. 감사 행 `detail` 에 **`selfGrant=true`** 를 싣는다(그룹 세트 배정은 행위자가 그 그룹의 멤버일 때).
+- **`'*'` 운영자** (OD-3 소유자 결정): `'*'` 운영자에게도 세트를 배정할 수 있다 — 배정 행의 `tenant_id` = **구체 테넌트**(그 테넌트에서만) 또는 **`'*'`**(모든 테넌트에 적용). `'*'` 테넌트 행은 `'*'` 운영자에게만 · `'*'` 운영자 대상의 쓰기는 **`'*'` grant scope 의 `domain_access.manage`(= `SUPER_ADMIN`)만**. 이 배정은 **소속(`operator_tenant_assignment`) 행을 만들지 않는다**(ADR-082 D2 그대로 — `'*'` 는 회사 소속이 아니다).
+- **비-`'*'` 운영자**: 세트 배정 행은 그 운영자의 **소속 테넌트에만** 있을 수 있다(«소속 없는 업무 권한» 금지 — 내보내기가 그 회사 세트 행을 함께 지우는 근거). 소속 아닌 T 에 배정 → `404 OPERATOR_NOT_FOUND`(역할 변경 `PATCH …/roles` 와 같은 답 — 다른 회사 소속을 드러내지 않는다). `tenant_id = '*'` 행 → `400 VALIDATION_ERROR`(ADR-082 D2 와 같은 코드).
+- **배정 가능한 세트**: 구체 테넌트 T 행 = 시스템 프리셋 또는 **T 의** 테넌트 세트 · `'*'` 행 = 시스템 프리셋만(테넌트 세트를 모든 테넌트에 걸지 않는다). 세트의 도메인 ⊄ T 의 entitled domains → `422 DOMAIN_NOT_SUBSCRIBED`(`'*'` 행은 구독 판정이 없다 — auth 의 `∩ entitled` 가 테넌트마다 거른다). entitled 조회 실패 → `503`(아무것도 쓰지 않는다 — fail-closed). `legacy-compat` 프리셋은 API 로 배정할 수 없다(`MIGRATION` 출처 전용 → `400 VALIDATION_ERROR`).
+- 🔴 **회수 지연 (ADR-083 D7 — 이 문장을 그대로 쓴다)**: 세트 회수 · 그룹 탈퇴 · 운영자 정지 · 구독 해지 · 세트 구성 변경은 **다음 assume 교환부터** 반영되고, **이미 발급된 assume 토큰은 자기 `exp`(발급 뒤 최대 300초 — P3 부터, 그 전에는 최대 1800초)까지 그대로 쓰인다.** «즉시 회수» 가 아니다.
+
+### 출처 (`source_key`) 와 회수 규칙 (ADR-083 D4)
+
+배정 단위 = `(운영자, 테넌트, 세트, 출처)` 한 행([data-model.md § operator_domain_set_grant](../../services/admin-service/data-model.md#operator_domain_set_grant)). 같은 운영자 · 테넌트 · 세트를 여러 출처가 주면 **행이 출처 수만큼** 있고, 실효 권한은 그 합이다.
+
+| `source_key` | 만드는 것 | 지우는 것 — **자기 출처의 행만** |
+|---|---|---|
+| `DIRECT` | `POST /operators/{id}/domain-permission-sets` | 개인 회수 `DELETE /operators/{id}/domain-permission-sets/{setId}` · 내보내기 |
+| `MIGRATION` | 이전 백필(V0052 — `legacy-compat` 만, 한 번) | 개인 회수(같은 엔드포인트가 `DIRECT` 와 함께 지운다) · 내보내기 |
+| `GROUP:<id>` | 그룹 세트 배정 · 멤버 추가(fan-out — 그룹 테넌트에만) | 그 그룹의 세트 회수 · 멤버 제거 · 그룹 삭제 · 내보내기 |
+
+- 개인 회수는 `GROUP:*` 행을 지우지 않는다 — 그룹에서 받은 세트는 그 그룹에서 빼야 사라진다(응답 · 콘솔이 출처를 보여 주는 이유). 그룹 쪽 회수는 `DIRECT` · `MIGRATION` · 다른 그룹 행을 지우지 않는다.
+- «이 회사에서 내보내기»(§ DELETE …/assignments/{tenantId}) = 그 회사(T)의 행 **전부 — 모든 출처**.
+
+### 카탈로그 — 배정 가능한 업무 역할 (ADR-083 D2 · D3)
+
+카탈로그는 admin-service **한 자리**가 소유한다(지금 손으로 복제된 auth-service `OperatorRoleDerivation` 목록과 admin-service `DelegatableRoleCatalog` 를 P2 가 이것으로 합친다 — 파트너십 위임 허용 목록도 같은 출처). 들어가는 조건: **그 도메인의 서버가 실제로 검사하는 역할**. 관리(ADMIN) 등급 · `MASTER_WRITE` · `INVENTORY_RESERVE` · `WMS_ADMIN` 은 **없다**(넣으려면 별도 ADR).
+
+| `domainKey` | `role` | `access` | `fineGrained` | `label` |
+|---|---|---|---|---|
+| `wms` | `INVENTORY_READ` | `READ` | `true` | 재고 조회 |
+| `wms` | `INVENTORY_WRITE` | `WRITE` | `true` | 재고 변경(조정 · 이동) |
+| `wms` | `INBOUND_READ` | `READ` | `true` | 입고 조회 |
+| `wms` | `INBOUND_WRITE` | `WRITE` | `true` | 입고 변경 |
+| `wms` | `OUTBOUND_READ` | `READ` | `true` | 출고 조회 |
+| `wms` | `OUTBOUND_WRITE` | `WRITE` | `true` | 출고 변경 |
+| `wms` | `MASTER_READ` | `READ` | `true` | 기준정보 조회 |
+| `wms` | `WMS_OPERATOR` | `OPERATE` | `true` | WMS 운영 조치(알림 확인 · 운영 조치 — 업무 API 를 열지 않는다) |
+| `scm` | `SCM_OPERATOR` | `OPERATE` | `false` | SCM 전체 업무(세분 미지원) |
+| `erp` | `ERP_OPERATOR` | `OPERATE` | `false` | ERP 전체 업무(세분 미지원) |
+| `finance` | `FINANCE_OPERATOR` | `OPERATE` | `false` | Finance 전체 업무(세분 미지원) |
+| `ecommerce` | `ECOMMERCE_OPERATOR` | `OPERATE` | `false` | E-commerce 전체 업무(세분 미지원) |
+| `fan` | `FAN_OPERATOR` | `OPERATE` | `false` | fan 전체 업무(세분 미지원) |
+| `mes` | `MES_OPERATOR` | `OPERATE` | `false` | MES 전체 업무(세분 미지원) |
+
+- `fineGrained=false` = 그 도메인 서버가 아직 세분 역할을 검사하지 않는다 — 진입 역할 하나가 그 도메인의 **모든 업무 API** 를 연다. 화면은 이것을 «전체 업무(세분 미지원)» 로 보인다 — 세분된 척하지 않는다(D3). 세분 역할은 그 도메인 단계(P5 ~ P8)가 그 도메인의 계약을 먼저 고친 뒤 이 표에 더한다.
+- `fan` 은 구독 키 `fan` · `fan-platform` 둘 다에 해당한다(지금 파생과 같은 대응). `fan-platform` 은 플랫폼 운영자만 assume 하므로(auth-to-admin 판정 규칙 5) `fan` 세트는 사실상 `'*'` 운영자에게 배정한다.
+- `mes` 는 지금 파생 표에 있는 역할이다 — 소비자가 있는지는 P2 AC-0 이 재고, 없으면 P2 가 이 행을 계약 개정으로 뺀다.
+
+### 시스템 프리셋 (읽기 전용 — `tenantId` 없음)
+
+| `systemKey` | 역할 | 비고 |
+|---|---|---|
+| `wms-inventory-read` | `INVENTORY_READ` | |
+| `wms-inventory-operate` | `INVENTORY_READ` · `INVENTORY_WRITE` | |
+| `wms-inbound-operate` | `INBOUND_READ` · `INBOUND_WRITE` | |
+| `wms-outbound-operate` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | |
+| `wms-master-read` | `MASTER_READ` | |
+| `wms-ops-actions` | `WMS_OPERATOR` | |
+| `<domainKey>-full` | 그 도메인의 카탈로그 역할 전부 | 도메인마다 하나: `wms-full` · `scm-full` · `erp-full` · `finance-full` · `ecommerce-full` · `fan-full` · `mes-full` |
+| `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 |
+| `legacy-compat` | `all-domains-full` 과 같은 내용 | **`MIGRATION` 출처 전용**(API 배정 불가) — 이전 완료 판정에서 «백필이 준 것» 을 구분하는 표지 |
+
+- 프리셋은 수정 · 삭제할 수 없다(`409 DOMAIN_PERMISSION_SET_READ_ONLY`) — 바꾸려면 같은 역할로 **테넌트 세트를 만든다**(복제). 카탈로그가 넓어지면(P5 ~ P8) `<domainKey>-full` · `all-domains-full` · `legacy-compat` 의 내용이 그 단계의 마이그레이션으로 함께 넓어진다.
+- 프리셋의 `setId` 는 시드가 고정값으로 넣는다(환경마다 같은 값).
+
+### Domain role wire shape
+
+```json
+{ "domainKey": "wms", "role": "INVENTORY_READ", "access": "READ", "fineGrained": true, "label": "재고 조회" }
+```
+
+### Domain permission set wire shape
+
+```json
+{
+  "setId": "0192f3a0-0000-7000-8000-00000000d001",
+  "tenantId": "acme-corp",
+  "systemKey": null,
+  "readOnly": false,
+  "name": "재고팀",
+  "description": "재고 조회 · 변경",
+  "roles": [
+    { "domainKey": "wms", "role": "INVENTORY_READ" },
+    { "domainKey": "wms", "role": "INVENTORY_WRITE" }
+  ],
+  "domains": ["wms"],
+  "grantCount": 4,
+  "groupCount": 1,
+  "createdAt": "2026-10-14T09:00:00Z",
+  "updatedAt": "2026-10-14T09:00:00Z"
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `setId` | string (UUID v7) | 외부 식별자(`domain_permission_set.set_id`) |
+| `tenantId` | string \| null | 테넌트 세트의 소유 테넌트. 시스템 프리셋은 `null` |
+| `systemKey` | string \| null | 프리셋 키(위 표). 테넌트 세트는 `null` |
+| `readOnly` | boolean | 프리셋 = `true` · 테넌트 세트 = `false` |
+| `name` / `description` | string / string \| null | 표시명(1 ~ 120자 — 테넌트 안에서 유일할 필요 없음, 식별은 `setId`) / 설명(≤255자). 프리셋은 서버가 정한 값 |
+| `roles` | array\<{domainKey, role}\> | 세트의 업무 역할. 카탈로그 순서 · 중복 없음 · 1개 이상 |
+| `domains` | array\<string\> | `roles` 의 `domainKey` 집합(오름차순) — 구독 판정의 단위 |
+| `grantCount` | int | **행동 테넌트에서** 이 세트를 가리키는 운영자 배정 행 수(모든 출처) |
+| `groupCount` | int | 행동 테넌트에서 이 세트를 배정한 그룹 수 |
+| `createdAt` / `updatedAt` | string (ISO-8601) | — |
+
+### GET /api/admin/domain-roles
+
+배정 가능한 업무 역할 **카탈로그**(위 표). 테넌트 데이터 없음 — 구독과 무관하게 전부 낸다(구독 판정은 세트 생성 · 배정이 한다).
+
+**Auth required**: Yes (operator token, `token_type=admin`) · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`
+**행동 테넌트**: 없음(§ 행동 테넌트 24 행) — 2단 테넌트 게이트를 타지 않는다.
+
+**Response 200**: `{ "items": [ <domain role wire shape>, … ] }` — 위 카탈로그 표 순서.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | operator token 만료/변조/부재 |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 권한 없음 |
+
+**Side Effects**: 없음(read — 권한 거부 시에만 DENIED row).
+
+---
+
+### GET /api/admin/domain-permission-sets
+
+행동 테넌트 T 의 **테넌트 세트 + 시스템 프리셋** 목록. 프리셋이 먼저(위 표 순서), 이어 테넌트 세트(`createdAt` 오름차순).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`
+**Headers**: `Authorization: Bearer <operator-token>`, `X-Tenant-Id`(§ 행동 테넌트 생략 규칙 — `domain_access.manage`)
+
+T = `'*'`(플랫폼 스코프) → **프리셋만**(`'*'` 에는 테넌트 세트가 없다 — `grantCount` · `groupCount` 는 `'*'` 행 기준).
+
+**Response 200**: `{ "items": [ <domain permission set wire shape>, … ] }`
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope(`domain_access.manage`) 밖 · 생략했는데 grant scope 가 비었다 |
+| 400 | `VALIDATION_ERROR` | `X-Tenant-Id` 생략 + grant scope 의 구체 테넌트 둘 이상 |
+
+**Side Effects**: 없음(read).
+
+---
+
+### GET /api/admin/domain-permission-sets/{setId}
+
+단건. 프리셋 또는 **T 의** 테넌트 세트. 다른 테넌트의 세트 → `404`(존재 미누설).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Tenant-Id`(생략 규칙)
+
+**Response 200**: [domain permission set wire shape](#domain-permission-set-wire-shape).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 |
+| 400 | `VALIDATION_ERROR` | 생략 + 구체 테넌트 둘 이상 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | `setId` 미존재 · 다른 테넌트의 세트 |
+
+**Side Effects**: 없음(read).
+
+---
+
+### POST /api/admin/domain-permission-sets
+
+T 의 **테넌트 세트** 생성.
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트)
+**Headers**: `Authorization`, `X-Tenant-Id`(생략 규칙 — T), `X-Operator-Reason: <required>`, `Idempotency-Key: <required>`
+
+**Request**:
+```json
+{
+  "name": "재고팀",
+  "description": "재고 조회 · 변경",
+  "roles": [
+    { "domainKey": "wms", "role": "INVENTORY_READ" },
+    { "domainKey": "wms", "role": "INVENTORY_WRITE" }
+  ]
+}
+```
+
+| 필드 | 타입 | 필수 | 검증 |
+|---|---|---|---|
+| `name` | string | Y | trim 후 1 ~ 120자 |
+| `description` | string | N | ≤255자 |
+| `roles` | array\<{domainKey, role}\> | Y | 1개 이상 · 중복은 하나로 · 각 원소가 **카탈로그 항목**(아니면 `422 DOMAIN_ROLE_NOT_ASSIGNABLE`) · 각 `domainKey` ∈ T 의 entitled domains(아니면 `422 DOMAIN_NOT_SUBSCRIBED`) |
+
+- T = `'*'` → `400 VALIDATION_ERROR`(테넌트 세트는 한 실제 테넌트의 것 — 플랫폼 공용 묶음은 프리셋이다).
+- 구독 밖 도메인을 담은 세트는 **만들 수 없다**(task Edge Case 3 — 생성 · 수정 · 배정 세 자리 모두 같은 술어). 만든 뒤 구독이 해지되면 세트는 남고, 그 역할은 다음 교환부터 토큰에 실리지 않는다(auth 의 `∩ entitled`).
+
+**Response 201**: [domain permission set wire shape](#domain-permission-set-wire-shape)(`grantCount=0`, `groupCount=0`).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `name` · `roles` 형식 · 빈 `roles` · T = `'*'` · 생략 + 구체 테넌트 둘 이상 |
+| 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 (best-effort DENIED row) |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 `Idempotency-Key` 로 다른 요청 |
+| 422 | `DOMAIN_ROLE_NOT_ASSIGNABLE` | `roles` 에 카탈로그 밖 역할(관리 등급 · 지금 발급하지 않는 역할 포함) |
+| 422 | `DOMAIN_NOT_SUBSCRIBED` | `roles` 의 도메인이 T 의 entitled domains(구독 ∩ 조직 노드 상한) 밖 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패 — 아무것도 쓰지 않는다(fail-closed) |
+
+**Side Effects**: `admin_actions` `action_code=DOMAIN_PERMISSION_SET_CREATE`, `permission_used=domain_access.manage`, `target_type='DOMAIN_PERMISSION_SET'`, `target_id=<setId>`, `target_tenant_id=<T>`, `detail` = 역할 목록. 거절 = DENIED row(fail-closed — 감사 쓰기 실패 시 `500 AUDIT_FAILURE`, 아무것도 쓰지 않음).
+
+---
+
+### PATCH /api/admin/domain-permission-sets/{setId}
+
+T 의 테넌트 세트 수정. 필드는 모두 선택, 최소 하나. `roles` 를 보내면 **전체 교체**.
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Tenant-Id`(생략 규칙), `X-Operator-Reason: <required>`
+
+**Request**: `{ "name"?: string, "description"?: string, "roles"?: [{domainKey, role}] }` — 검증은 POST 와 같다.
+
+- 🔴 이미 이 세트를 배정받은 운영자(직접 · 그룹 · 이전 — 모든 출처)에게 미치는 시점 = **다음 assume 교환부터**. 발급된 토큰은 `exp` 까지 그대로다(D7 — § 위 «회수 지연»).
+
+**Response 200**: [domain permission set wire shape](#domain-permission-set-wire-shape)(변경 후).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | 필드 0개 · 형식 · 빈 `roles` · 생략 + 구체 테넌트 둘 이상 |
+| 400 | `REASON_REQUIRED` | reason 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | `setId` 미존재 · 다른 테넌트의 세트 |
+| 409 | `DOMAIN_PERMISSION_SET_READ_ONLY` | 시스템 프리셋 |
+| 422 | `DOMAIN_ROLE_NOT_ASSIGNABLE` | 카탈로그 밖 역할 |
+| 422 | `DOMAIN_NOT_SUBSCRIBED` | T 의 entitled domains 밖 도메인 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패(`roles` 를 보낸 경우) — 아무것도 쓰지 않는다 |
+
+**Side Effects**: `admin_actions` `action_code=DOMAIN_PERMISSION_SET_UPDATE`, `permission_used=domain_access.manage`, `target_type='DOMAIN_PERMISSION_SET'`, `target_id=<setId>`, `target_tenant_id=<T>`, `detail` = 바뀐 필드 · 이전/이후 역할. 거절 = DENIED row.
+
+---
+
+### DELETE /api/admin/domain-permission-sets/{setId}
+
+T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — 배정째 걷지 않는다(조용한 대량 회수를 막는다. 먼저 회수하라).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Tenant-Id`(생략 규칙), `X-Operator-Reason: <required>`
+
+**Response 204**.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `REASON_REQUIRED` / `VALIDATION_ERROR` | reason 누락 / 생략 + 구체 테넌트 둘 이상 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | `setId` 미존재 · 다른 테넌트의 세트 |
+| 409 | `DOMAIN_PERMISSION_SET_READ_ONLY` | 시스템 프리셋 |
+| 409 | `DOMAIN_PERMISSION_SET_IN_USE` | 이 세트를 가리키는 운영자 배정 행(어느 출처든) 또는 그룹 배정이 남아 있다 |
+
+**Side Effects**: `admin_actions` `action_code=DOMAIN_PERMISSION_SET_DELETE`, `permission_used=domain_access.manage`, `target_type='DOMAIN_PERMISSION_SET'`, `target_id=<setId>`, `target_tenant_id=<T>`. 거절 = DENIED row.
+
+---
+
+### GET /api/admin/operators/{operatorId}/domain-access
+
+대상 운영자의 T 에서의 **실효 업무 권한 + 세트별 출처**. 콘솔 운영자 화면이 «직접 배정 · 그룹에서 받은 세트 · 합산 실효 권한» 을 그리는 값이다(D9).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`
+**Headers**: `X-Tenant-Id`(생략 규칙 — T)
+
+- 대상이 비-`'*'` 운영자: T 가 그 운영자의 소속이어야 한다(아니면 `404 OPERATOR_NOT_FOUND`). T = `'*'` → 빈 결과(그런 행은 있을 수 없다).
+- 대상이 `'*'` 운영자: `'*'` grant scope 만(아니면 `403 TENANT_SCOPE_DENIED`). 결과 = T 행 + `'*'` 행(T = `'*'` 면 `'*'` 행만).
+
+**Response 200**:
+```json
+{
+  "operatorId": "0192…",
+  "tenantId": "acme-corp",
+  "roles": [
+    { "domainKey": "wms", "role": "INVENTORY_READ" },
+    { "domainKey": "wms", "role": "INVENTORY_WRITE" }
+  ],
+  "sets": [
+    {
+      "setId": "0192…d001",
+      "name": "재고팀",
+      "systemKey": null,
+      "sources": [
+        { "source": "DIRECT", "tenantId": "acme-corp", "grantedAt": "2026-10-14T09:00:00Z", "grantedBy": "0192…" },
+        { "source": "GROUP", "groupId": "0192…g1", "groupName": "재고팀", "tenantId": "acme-corp", "grantedAt": "2026-10-14T09:05:00Z", "grantedBy": "0192…" }
+      ]
+    }
+  ]
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `roles` | 실효 업무 역할 = `sets` 의 역할 합(카탈로그 순서) — 🔴 **구독 교집합 전**이다. 토큰에 실리는 값은 auth 가 `∩ entitled` 로 다시 거른 것(P3). 화면은 구독 없는 도메인의 역할을 «구독 없음» 으로 구분해 보인다 |
+| `sets[].sources[].source` | `DIRECT` · `MIGRATION` · `GROUP`(이때 `groupId` · `groupName`). 개인 회수 버튼은 `DIRECT` · `MIGRATION` 출처에만(그룹 출처는 그 그룹에서 뺀다) |
+| `sets[].sources[].tenantId` | 그 행의 테넌트 — T 또는 `'*'`(`'*'` 운영자의 «모든 테넌트» 행) |
+| `grantedBy` | 배정한 운영자의 `operatorId`. 시스템 경로(`MIGRATION`)는 `null` |
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 · 대상이 `'*'` 운영자인데 행위자에게 `'*'` grant scope 가 없다 |
+| 400 | `VALIDATION_ERROR` | 생략 + 구체 테넌트 둘 이상 |
+| 404 | `OPERATOR_NOT_FOUND` | `operatorId` 미존재 · 비-`'*'` 대상이 T 의 소속이 아니다 |
+
+**Side Effects**: 없음(read).
+
+---
+
+### POST /api/admin/operators/{operatorId}/domain-permission-sets
+
+대상 운영자에게 T 에서 세트 하나를 **직접(`DIRECT`)** 배정한다.
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 · 비-`'*'` 대상만)
+**Headers**: `X-Tenant-Id`(생략 규칙 — T; `'*'` grant scope 행위자가 `'*'` 를 보내거나 생략하면 T = `'*'`), `X-Operator-Reason: <required>`. `Idempotency-Key` 없음 — 같은 배정의 재요청은 `409` 다.
+
+**Request**: `{ "setId": "0192…d001" }`
+
+판정 순서(처음 실패한 것이 답한다 · 거절은 아무것도 쓰지 않는다):
+
+1. T ∈ grant scope(`domain_access.manage`) — 아니면 `403 TENANT_SCOPE_DENIED`.
+2. 대상 존재 — 아니면 `404 OPERATOR_NOT_FOUND`.
+3. 대상이 `'*'` 운영자 → 행위자에게 `'*'` grant scope 필요(아니면 `403 TENANT_SCOPE_DENIED`) · T 는 구체 테넌트 또는 `'*'`. 대상이 비-`'*'` → T = `'*'` 면 `400 VALIDATION_ERROR` · T ∉ 대상의 소속이면 `404 OPERATOR_NOT_FOUND`.
+4. 세트 — 미존재 · 다른 테넌트의 세트 · T = `'*'` 인데 테넌트 세트 → `404 DOMAIN_PERMISSION_SET_NOT_FOUND`. `legacy-compat` → `400 VALIDATION_ERROR`.
+5. T ≠ `'*'` 이면 세트의 `domains` ⊆ T 의 entitled domains — 아니면 `422 DOMAIN_NOT_SUBSCRIBED` · 조회 실패 `503`.
+6. 같은 `(대상, T, 세트, DIRECT)` 행이 이미 있다 → `409 DOMAIN_PERMISSION_SET_ALREADY_GRANTED`. 🔵 같은 세트의 `MIGRATION` · `GROUP:*` 행이 있어도 `DIRECT` 행은 따로 만든다(출처가 다르다 — 나중에 그룹에서 빠져도 직접 배정이 남는다).
+
+자기 자신(행위자 = 대상)도 허용(OD-4) — 감사 `selfGrant=true`.
+
+**Response 201**:
+```json
+{ "operatorId": "0192…", "tenantId": "acme-corp", "setId": "0192…d001", "source": "DIRECT", "grantedAt": "2026-10-14T09:00:00Z", "grantedBy": "0192…", "selfGrant": false }
+```
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `setId` 누락 · 비-`'*'` 대상에 T = `'*'` · `legacy-compat` · 생략 + 구체 테넌트 둘 이상 |
+| 400 | `REASON_REQUIRED` | reason 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 · `'*'` 대상에 `'*'` grant scope 없음 (best-effort DENIED row) |
+| 404 | `OPERATOR_NOT_FOUND` | 대상 미존재 · 비-`'*'` 대상이 T 의 소속이 아니다 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 다른 테넌트의 세트 · `'*'` 행에 테넌트 세트 |
+| 409 | `DOMAIN_PERMISSION_SET_ALREADY_GRANTED` | 같은 세트의 `DIRECT` 행이 T 에 이미 있다 |
+| 422 | `DOMAIN_NOT_SUBSCRIBED` | 세트의 도메인이 T 의 entitled domains 밖 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패 — 아무것도 쓰지 않는다 |
+
+**Side Effects**: `admin_actions` `action_code=OPERATOR_DOMAIN_SET_GRANT`, `permission_used=domain_access.manage`, `target_type='OPERATOR'`, `target_id=<operatorId>`, `target_tenant_id=<T 또는 '*'>`, `detail="setId=<setId> source=DIRECT selfGrant=<true|false>"`. 거절 = DENIED row(fail-closed). 관리 권한 캐시 무효화 없음. 토큰 반영 = 다음 assume 교환부터(P3 뒤).
+
+---
+
+### DELETE /api/admin/operators/{operatorId}/domain-permission-sets/{setId}
+
+**개인 회수** — 대상의 T 에서 그 세트의 **`DIRECT` · `MIGRATION` 행만** 지운다. `GROUP:*` 행은 남는다(그룹에서 받은 세트는 그 그룹에서 뺀다).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Tenant-Id`(생략 규칙 — T), `X-Operator-Reason: <required>`
+
+판정은 POST 의 1 ~ 3 과 같다(존재 검사 전에 범위 — cross-tenant 는 존재 누설 없이 403). 지울 `DIRECT` · `MIGRATION` 행이 하나도 없으면 `404 DOMAIN_PERMISSION_SET_NOT_FOUND`(그룹 출처 행만 있는 경우 포함 — 콘솔은 그때 «그룹에서 받은 세트» 를 안내한다).
+
+**Response 204**.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `REASON_REQUIRED` / `VALIDATION_ERROR` | reason 누락 / 생략 + 구체 테넌트 둘 이상 · 비-`'*'` 대상에 T = `'*'` |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 · `'*'` 대상에 `'*'` grant scope 없음 |
+| 404 | `OPERATOR_NOT_FOUND` | 대상 미존재 · 비-`'*'` 대상이 T 의 소속이 아니다 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 이 세트의 `DIRECT` · `MIGRATION` 행이 T 에 없다 |
+
+**Side Effects**: `admin_actions` `action_code=OPERATOR_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`, `target_type='OPERATOR'`, `target_id=<operatorId>`, `target_tenant_id=<T 또는 '*'>`, `detail="setId=<setId> removedSources=<DIRECT,MIGRATION 중 지운 것> keptGroupSources=<남은 그룹 출처 수>"`. 거절 = DENIED row. 🔴 회수 지연: 다음 assume 교환부터 · 발급된 토큰은 `exp` 까지(D7).
+
+---
+
+### GET /api/admin/groups/{groupId}/domain-permission-sets
+
+그룹에 배정된 업무 권한 세트(템플릿) 목록.
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **행동 테넌트**: 그룹 `tenant_id`(§ 행동 테넌트 27 행 — 읽기에서 grant scope 밖 → `404 GROUP_NOT_FOUND`, `GET /groups/{groupId}` 의 enumeration-safe 규약과 같다 · 아래 쓰기 둘은 `403 TENANT_SCOPE_DENIED`)
+
+**Response 200**:
+```json
+{ "items": [ { "setId": "0192…d001", "name": "재고팀", "systemKey": null, "grantedAt": "2026-10-14T09:00:00Z", "grantedBy": "0192…" } ] }
+```
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 404 `GROUP_NOT_FOUND`.
+
+**Side Effects**: 없음(read).
+
+---
+
+### POST /api/admin/groups/{groupId}/domain-permission-sets
+
+그룹에 세트를 배정 → **fan-out**: 현재 멤버마다 `(멤버, 그룹 tenant_id, 세트, GROUP:<id>)` 행. 이후 멤버 추가도 같은 행을 만든다. **그룹 테넌트에만** 행을 만든다(ADR-083 D4 — 다른 테넌트에 세트를 주는 그룹 기능은 없다).
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 그룹)
+**Headers**: `X-Operator-Reason: <required>`, `Idempotency-Key: <required>`(그룹 grant 표면과 같은 헤더 행렬)
+
+**Request**: `{ "setId": "0192…d001" }` — 세트 = 프리셋 또는 그룹 테넌트의 세트(다른 테넌트 세트 → `404`) · `legacy-compat` → `400 VALIDATION_ERROR` · 도메인 ⊆ 그룹 테넌트의 entitled domains(아니면 `422 DOMAIN_NOT_SUBSCRIBED`).
+
+**Response 201**: `{ "item": { "setId": "…", "name": "…", "systemKey": null, "grantedAt": "…", "grantedBy": "…" }, "fannedOutRows": 5 }` — `fannedOutRows` = 만든 멤버 행 수. 멤버가 같은 세트를 **다른 출처**(직접 · 다른 그룹)로 이미 가져도 이 그룹 출처 행은 따로 만든다(출처별 행 — skip 하지 않는다).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `setId` 누락 · `legacy-compat` |
+| 400 | `REASON_REQUIRED` | reason 누락 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
+| 403 | `TENANT_SCOPE_DENIED` | 그룹 테넌트가 grant scope(`domain_access.manage`) 밖 (best-effort DENIED row — 그룹 변이 표면과 같은 코드) |
+| 404 | `GROUP_NOT_FOUND` | 그룹 미존재 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 다른 테넌트의 세트 |
+| 409 | `DOMAIN_PERMISSION_SET_ALREADY_GRANTED` | 이 그룹에 같은 세트가 이미 배정돼 있다 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 `Idempotency-Key` 로 다른 요청 |
+| 422 | `DOMAIN_NOT_SUBSCRIBED` | 세트의 도메인이 그룹 테넌트의 entitled domains 밖 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패 — 아무것도 쓰지 않는다 |
+
+**Side Effects**: `admin_actions` `action_code=GROUP_DOMAIN_SET_GRANT`, `permission_used=domain_access.manage`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`, `detail="setId=<setId> fannedOutRows=<N> selfGrant=<행위자가 멤버면 true>"`. 템플릿 INSERT + 멤버 행 INSERT 는 **단일 트랜잭션**. 거절 = DENIED row.
+
+> 🔴 **멤버 추가 · 제거 · 그룹 삭제** (§ Operator Group Management — `group.manage` 엔드포인트)는 같은 트랜잭션에서 이 그룹의 세트 행을 만들고 지운다. **업무 세트가 하나 이상 올라간 그룹에 멤버를 추가하려면 행위자가 그 그룹 테넌트의 grant scope 에 `group.manage` 와 함께 `domain_access.manage` 도 가져야 한다** — 없으면 `403 PERMISSION_DENIED`(DENIED 행, 멤버 · 세트 행 0). 이유: 멤버 추가는 새 사람에게 업무 권한을 **주는** 행위다. `group.manage` 만으로 통과시키면 그 키를 가진 역할(예: 조직 관리자)이 `domain_access.manage` 없이 업무 권한을 간접 부여하게 된다(ADR-083 D5 우회 — 관리 역할 fan-out 의 add-member ≤-own 재검사와 같은 자리). 세트가 없는 그룹은 지금 규칙 그대로. 멤버 **제거** · 그룹 **삭제**는 권한을 줄이는 쪽이므로 `group.manage` 만으로 된다. 구독 밖 역할은 auth 가 거른다(세트 재검사는 멤버 추가 시점에 다시 하지 않는다).
+
+---
+
+### DELETE /api/admin/groups/{groupId}/domain-permission-sets/{setId}
+
+그룹의 세트 배정 회수 → 템플릿 + 전 멤버의 **`GROUP:<이 그룹>` 행만** 삭제. 같은 세트의 `DIRECT` · `MIGRATION` · 다른 그룹 행은 남는다.
+
+**Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Operator-Reason: <required>`
+
+**Response 204**.
+
+**Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`(그룹 테넌트가 grant scope 밖), 404 `GROUP_NOT_FOUND`, 404 `DOMAIN_PERMISSION_SET_NOT_FOUND`(이 그룹에 그 세트 배정 없음), 400 `REASON_REQUIRED`.
+
+**Side Effects**: `admin_actions` `action_code=GROUP_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`, `detail="setId=<setId> removedRows=<N>"`. 단일 트랜잭션. 거절 = DENIED row. 회수 지연: 다음 assume 교환부터 · 발급된 토큰은 `exp` 까지(D7).
+
+---
+
+### GET /api/admin/me/domain-access
+
+로그인한 운영자 **자신의** T 에서의 실효 업무 권한 + 출처. 콘솔 nav 의 «업무 권한 없음» 신호의 입력이다([console-integration-contract.md § 2.4.3.4](../../../../platform-console/specs/contracts/console-integration-contract.md)) — 토큰 디코드가 아니라 이 값(D9).
+
+**Auth required**: Yes · **Required permission**: 없음(자기 값 — `GET /me` 와 같은 부류) · **Headers**: `X-Tenant-Id: <required>`
+
+- T 가 자신의 소속이 아니면(비-`'*'`) `200` + 빈 `roles` · `sets`(자기 질문이라 존재 누설이 없다 — «여기서 업무 권한 없음» 이 정직한 답이다).
+- `'*'` 운영자: T 행 + `'*'` 행. 
+- `roles` 는 **구독 교집합 전**이다 — 화면은 활성 테넌트의 구독 도메인과 교집합해 «업무 권한 없음» 을 정한다.
+
+**Response 200**: § GET …/operators/{operatorId}/domain-access 와 같은 모양(`operatorId` = 자신).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 401 | `TOKEN_INVALID` | — |
+| 400 | `VALIDATION_ERROR` | `X-Tenant-Id` 누락 |
+
+**Side Effects**: 없음(read).
 
 ---
 

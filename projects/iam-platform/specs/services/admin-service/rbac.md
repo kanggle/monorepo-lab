@@ -74,6 +74,7 @@ JWT에 role/permission을 embed하면 role revoke 즉시성이 깨진다. 매 �
 | `group.manage` | 운영자 그룹 CRUD + 멤버십 관리 + 그룹-grant fan-out/cascade (ADR-MONO-046 § D6). 운영자 그룹(`operator_group`)은 admin-service 소유 **tenant-scoped aggregate**(D3)로, 역할/tenant-assignment 를 **여러 operator 에 한 번에** 부여하는 편의 프리미티브다 — **v1 은 fan-out**(D2-A): group grant 는 각 멤버의 flat `operator_tenant_assignment`/`admin_operator_roles` row 로 materialise 되고 group 자체는 평가 경로가 **아니다**(아래 Operator Group Fan-Out). read 도 동일 키로 일관 게이트(`tenant.manage`/`org.manage` read-gating 규약). `SUPER_ADMIN`·`TENANT_ADMIN`(자기 테넌트 그룹)·`ORG_ADMIN`(company-wide 운영자 관리자)만 보유 — `operator.manage` 도달을 미러(그룹은 이들이 **이미 관리하는** operator/assignment 위의 bulk-grant 편의). `V00NN__seed_group_manage_permission.sql` 가 seed(inert/net-zero — 매핑만, 어떤 operator 에도 미배정). 그룹 변이의 confinement 은 신규 축 없이 grant-time `RoleGrantGuard`(D4 no-escalation) + `TenantScopeGuard`(D3, 대상 = `operator_group.tenant_id`)를 재사용 | `POST\|GET /api/admin/groups`, `GET\|PATCH\|DELETE /api/admin/groups/{groupId}`, `GET\|POST /api/admin/groups/{groupId}/members`, `DELETE /api/admin/groups/{groupId}/members/{operatorId}`, `GET\|POST /api/admin/groups/{groupId}/grants`, `DELETE /api/admin/groups/{groupId}/grants/{grantId}` |
 | `tenant.security.manage` | **테넌트 진입 정책**(«이 테넌트에 운영자로 들어오려면 2단계 필수») 읽기 · 켜기 · 끄기 (TASK-MONO-771, ADR-MONO-080 D4 · R2, 소유자 결정 OD-1). `SUPER_ADMIN`(모든 테넌트)과 `TENANT_ADMIN`(**grant 의 테넌트만** — D2 `TenantScopeGuard`, 대상 = path `tenantId`)이 보유. `tenant.manage`(테넌트 생명주기 — 플랫폼 전용)와 **분리**한 이유: OD-1 이 «회사가 직접 자기 테넌트의 보안 정책을 건다» 를 골랐고, `tenant.manage` 를 `TENANT_ADMIN` 에 주면 생성 · 정지까지 열린다. 읽기도 같은 키(`tenant.manage` · `org.manage` 읽기 규약) | `GET /api/admin/tenants/{tenantId}/entry-policy`, `PUT /api/admin/tenants/{tenantId}/entry-policy`, `GET /api/admin/tenants/{tenantId}/entry-policy/enrolment-summary` (S5 사전 점검) |
 | `account.2fa_reset` | 계정 평면 2단계 인증(auth-service `account_totp`) 리셋 (TASK-MONO-771, 소유자 결정 OD-6). `SUPER_ADMIN` · `SECURITY_ANALYST` 만, 그리고 **플랫폼 범위 grant(`tenant_id='*'`)일 때만** 효력(엔드포인트의 inline 2차 검사 — 아니면 `403 TENANT_SCOPE_DENIED`). `TENANT_ADMIN` 미보유 — 계정은 개인 풀 계정이라 리셋이 그 사람의 쇼핑 · 팬 로그인 보안까지 바꾼다. 이름의 `2fa` 는 기존 `auth.2fa_enroll` · `auth.2fa_verify`(감사 `permission_used`)와 같은 어휘 | `POST /api/admin/accounts/{accountId}/2fa/reset` |
+| `domain_access.manage` | **도메인 업무 권한 세트 관리** (TASK-MONO-791 · ADR-MONO-083 D5 — 구현 P2 `TASK-BE-631`): 업무 역할 카탈로그 읽기 · 테넌트 세트 CRUD · 운영자 직접 배정/회수(테넌트별) · 그룹 세트 배정/회수 · 실효 업무 권한 조회. `SUPER_ADMIN`(모든 테넌트 · **`'*'` 운영자 대상은 이 키의 `'*'` grant scope 만** — OD-3) · `TENANT_ADMIN`(**grant 의 테넌트만** — § 행동 테넌트 grant scope). 🔴 **이 키는 도메인 업무 권한을 주지 않는다** — 세트 배정은 관리 평면 행위이고, 보유자 자신의 도메인 토큰 `roles` 는 자기에게 배정된 세트로만 정해진다(아래 § 도메인 업무 권한 세트). `operator.manage` 와 분리한 이유: 업무 권한 배정을 운영자 관리 전체와 따로 위임할 수 있게(`subscription.manage` 분리와 같은 결) · `ORG_ADMIN` · `SUPPORT_*` 가 운영자 관리 키를 가졌다는 이유로 업무 권한을 배정하지 않게 | `GET /api/admin/domain-roles`, `GET\|POST /api/admin/domain-permission-sets`, `GET\|PATCH\|DELETE /api/admin/domain-permission-sets/{setId}`, `GET /api/admin/operators/{operatorId}/domain-access`, `POST /api/admin/operators/{operatorId}/domain-permission-sets`, `DELETE /api/admin/operators/{operatorId}/domain-permission-sets/{setId}`, `GET\|POST /api/admin/groups/{groupId}/domain-permission-sets`, `DELETE /api/admin/groups/{groupId}/domain-permission-sets/{setId}` (`GET /api/admin/me/domain-access` 는 키 없음 — 자기 값) |
 
 **Annotation**: 각 endpoint에는 `@RequiresPermission("account.lock")` 형식으로 단일 키를 선언한다. 복수 키가 필요한 경우(예: `GET /api/admin/audit`가 source에 따라 `audit.read` 또는 `security.event.read`를 요구)는 컨트롤러 레벨에서 최소 공통 권한을 선언하고, 내부에서 파라미터별 추가 권한을 재검사한다 (TASK-BE-028 구현).
 
@@ -104,11 +105,11 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 
 | Role | 보유 권한 | 의도 |
 |---|---|---|
-| `SUPER_ADMIN` | `account.read`, `account.lock`, `account.unlock`, `account.force_logout`, `audit.read`, `security.event.read`, `operator.manage`, `tenant.manage`, `subscription.manage`, `org.manage`, `group.manage`, `tenant.security.manage`, `account.2fa_reset` | 전체 권한. `org.manage` 로 ROOT org-node 생성 유일 주체 (ADR-MONO-047 D5); `group.manage` 로 모든 테넌트의 운영자 그룹 관리 (ADR-MONO-046 D6) |
+| `SUPER_ADMIN` | `account.read`, `account.lock`, `account.unlock`, `account.force_logout`, `audit.read`, `security.event.read`, `operator.manage`, `tenant.manage`, `subscription.manage`, `org.manage`, `group.manage`, `tenant.security.manage`, `account.2fa_reset`, `domain_access.manage`(ADR-083 P2 부터) | 전체 권한. `org.manage` 로 ROOT org-node 생성 유일 주체 (ADR-MONO-047 D5); `group.manage` 로 모든 테넌트의 운영자 그룹 관리 (ADR-MONO-046 D6) |
 | `SUPPORT_READONLY` | `account.read`, `audit.read`, `security.event.read` | CS L1. 조회 전용 |
 | `SUPPORT_LOCK` | `account.lock`, `account.unlock`, `account.force_logout`, `audit.read` | CS L2. 계정 제어 + 감사 조회. security 이벤트는 열람 불가 |
 | `SECURITY_ANALYST` | `audit.read`, `security.event.read`, `account.force_logout`, `account.2fa_reset` | 보안팀. 의심 세션 긴급 종료 가능, 계정 lock/unlock은 CS 경유 |
-| `TENANT_ADMIN` | `operator.manage`, `tenant.admin.delegate`, `partnership.manage`, `group.manage`, `tenant.security.manage` | **테넌트-scoped 위임관리자** (ADR-MONO-024 D1/D4-B, ADR-MONO-045 D2/D4, ADR-MONO-046 D3/D6). grant row 의 `admin_operator_roles.tenant_id` 로 스코프 — 자기 테넌트의 운영자 관리 + 자기 테넌트 한정 sub-delegation + 자기 테넌트를 당사자로 하는 cross-org 파트너십 관리(invite/accept/participant) + 자기 테넌트의 운영자 그룹 관리(`group.manage`, `TenantScopeGuard` 대상 = `operator_group.tenant_id`). IAM 평면 전용 (`subscription.manage` 미포함). SUPER_ADMIN (`'*'`) 과 달리 D2 confinement 으로 자기 테넌트에 한정됨 (TASK-BE-345). `partnership.manage` 는 파트너십 **관리 표면**만 부여하며, 그로 인한 cross-org **파생** 권한은 `delegated_scope` cap 이 별도 강제(TASK-BE-476) |
+| `TENANT_ADMIN` | `operator.manage`, `tenant.admin.delegate`, `partnership.manage`, `group.manage`, `tenant.security.manage`, `domain_access.manage`(ADR-083 P2 부터) | **테넌트-scoped 위임관리자** (ADR-MONO-024 D1/D4-B, ADR-MONO-045 D2/D4, ADR-MONO-046 D3/D6). grant row 의 `admin_operator_roles.tenant_id` 로 스코프 — 자기 테넌트의 운영자 관리 + 자기 테넌트 한정 sub-delegation + 자기 테넌트를 당사자로 하는 cross-org 파트너십 관리(invite/accept/participant) + 자기 테넌트의 운영자 그룹 관리(`group.manage`, `TenantScopeGuard` 대상 = `operator_group.tenant_id`). IAM 평면 전용 (`subscription.manage` 미포함). SUPER_ADMIN (`'*'`) 과 달리 D2 confinement 으로 자기 테넌트에 한정됨 (TASK-BE-345). `partnership.manage` 는 파트너십 **관리 표면**만 부여하며, 그로 인한 cross-org **파생** 권한은 `delegated_scope` cap 이 별도 강제(TASK-BE-476) |
 | `TENANT_BILLING_ADMIN` | `subscription.manage` | **테넌트-scoped entitlement 관리자** (ADR-MONO-024 D5-C). grant row 의 `tenant_id` 로 스코프 — 자기 테넌트의 도메인 구독 관리. `TENANT_ADMIN` 과 **별도 role** (IAM↔entitlement 위임 평면 분리, ADR-MONO-023 separability 실현) |
 | `ORG_ADMIN` | `org.manage`, `operator.manage`, `tenant.admin.delegate`, `group.manage` | **org-node-scoped company-wide 위임관리자** (ADR-MONO-047 D5, ADR-MONO-046 D6) — flat `TENANT_ADMIN` 의 company-wide 아날로그, **노드에서 부여**된다. grant row 의 `admin_operator_roles.org_node_id` 로 스코프(≠ `tenant_id` — 아래 Org-Node Scope Confinement) → 노드 subtree 의 모든 서비스-tenant 에 대한 operator 관리 + subtree 한정 sub-delegation + org-node 트리/ceiling 관리 + 운영자 그룹 관리(`group.manage` — 이미 보유한 `operator.manage` 도달을 미러). `subscription.manage` **미포함** (v1 — entitlement 는 `TENANT_BILLING_ADMIN` 유지; additive follow-up 으로만 부여 가능, 본 태스크는 부여하지 않음). SUPER_ADMIN(`'*'`)과 달리 D5 org-node confinement 으로 자기 노드 subtree 에 한정 |
 
@@ -131,6 +132,7 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 | `group.manage` | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
 | `tenant.security.manage` | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | `account.2fa_reset` | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `domain_access.manage` | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 
 이 매트릭스가 `admin_role_permissions` seed 데이터의 canonical source이다. TASK-BE-028의 Flyway seed script는 본 표를 기계적으로 반영해야 한다.
 
@@ -143,6 +145,8 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 > **ADR-MONO-046 step 1→2 (TASK-BE-519 spec / TASK-BE-520 impl)**: `group.manage` 행은 `V00NN__seed_group_manage_permission.sql` 로 `SUPER_ADMIN`·`TENANT_ADMIN`·`ORG_ADMIN` 에 시드된다. **inert/net-zero** — role→permission 매핑만 추가하며 **어떤 operator 에도 새로 배정하지 않고**, 어떤 operator 의 assignment/role row 도 바꾸지 않는다(fan-out 은 그룹이 생성·grant 된 이후에만 발생하며, seed 는 그룹을 하나도 만들지 않는다). 보유자 집합이 `operator.manage`(`SUPER_ADMIN`/`TENANT_ADMIN`/`ORG_ADMIN`)를 정확히 미러하는 것은 의도적 — 운영자 그룹은 이 role 들이 **이미 관리하는** operator/assignment 위의 bulk-grant 편의이므로 보유자 집합도 동일하다. `SUPPORT_READONLY`/`SUPPORT_LOCK`/`SECURITY_ANALYST`(조회·지원 전용, operator 를 관리하지 않음) 및 `TENANT_BILLING_ADMIN`(entitlement 평면 전용 — IAM 운영자 관리 미보유, `operator.manage` ❌ 와 동형)에는 ❌ 다. **v1 은 fan-out(D2-A)**: 그룹 멤버십은 평가-시점 edge 가 **아니며**, `PermissionEvaluator`·perm-cache·모든 confinement 축(Target-Tenant D2·BE-467 account-data·ADR-MONO-045 cross-org·ADR-MONO-047 org-node)은 **byte-unchanged** 다(아래 Operator Group Fan-Out). inheritance 평가 경로(D2-B)는 후속 ADR 로 연기.
 
 > **TASK-MONO-771 (ADR-MONO-080 D4, 소유자 결정 OD-1 · OD-6)**: `tenant.security.manage` 행(`SUPER_ADMIN` · `TENANT_ADMIN`)과 `account.2fa_reset` 행(`SUPER_ADMIN` · `SECURITY_ANALYST`)은 seed 마이그레이션으로 매핑만 추가한다 — S5 가 `V0048__seed_tenant_security_manage_permission.sql`(`tenant.security.manage` 만), `account.2fa_reset` 은 그 엔드포인트와 함께 S6 의 별도 한 장 `V0049__seed_account_2fa_reset_permission.sql`(키 상수 `Permission.ACCOUNT_2FA_RESET` · 엔드포인트와 같은 PR — 키 상수 · 엔드포인트 없이 키만 시드하면 `GET /api/admin/roles` 가 `GET /api/admin/permissions` 에 없는 키를 보인다) — **inert/net-zero**: 어떤 operator 에도 새로 배정하지 않는다. `ORG_ADMIN` 에 `tenant.security.manage` 가 ❌ 인 것은 의도적이다 — OD-1 의 답은 «그 테넌트의 `TENANT_ADMIN` + `SUPER_ADMIN`» 이고 org-node subtree 단위 위임은 정하지 않았다(필요해지면 additive 로 연다). `account.2fa_reset` 은 키 보유만으로 충분하지 않다 — 엔드포인트가 grant 의 플랫폼 범위(`'*'`)를 inline 으로 다시 본다(`SECURITY_ANALYST` 가 테넌트 범위로 grant 된 경우를 막는다).
+
+> **TASK-MONO-791 (ADR-MONO-083 D5 · P1 계약 — 시드 P2 `TASK-BE-631`, `V0052` 안)**: `domain_access.manage` 행(`SUPER_ADMIN` · `TENANT_ADMIN`)은 매핑만 추가한다 — **inert/net-zero**: 어떤 operator 에도 새로 배정하지 않는다. 키 상수 · 엔드포인트와 **같은 PR** 에서 시드한다(V0049 의 교훈 — 엔드포인트 없는 키는 `GET /api/admin/roles` 가 `GET /api/admin/permissions` 에 없는 키를 보이게 한다). `ORG_ADMIN` 에 ❌ 인 것은 의도적이다 — ADR-083 D5 가 «`TENANT_ADMIN` · `SUPER_ADMIN`» 으로 정했고 org-node subtree 단위의 업무 권한 배정은 정하지 않았다(필요해지면 additive). Seed Roles 표의 `SUPER_ADMIN` · `TENANT_ADMIN` 보유 권한에 이 키가 더해진다.
 
 ### Seeding Strategy
 
@@ -479,6 +483,32 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 
 **NET-ZERO**: seed(`V00NN__seed_group_manage_permission.sql`)는 role→permission 매핑만 추가하고 그룹을 하나도 만들지 않으므로, 첫 그룹이 생성·grant 되기 전엔 어떤 assignment/role row 도 바뀌지 않는다 — 기존 평가/캐시/confinement 동작과 byte-identical.
 
+### 도메인 업무 권한 세트 (ADR-MONO-083)
+
+**TASK-MONO-791 P1 계약 — 구현 P2 `TASK-BE-631`(admin) · P3 `TASK-BE-632`(auth 발급).** API · 오류 · 감사 코드의 정본은 [admin-api.md § 도메인 업무 권한 세트](../../contracts/http/admin-api.md#도메인-업무-권한-세트-adr-mono-083--task-mono-791-p1-계약--구현-p2-task-be-631) · 스키마는 [data-model.md](./data-model.md) `domain_permission_set` ~ `operator_group_domain_set_grant`. 이 절은 **권한 모델의 규칙**만 적는다.
+
+- **관리 역할과 다른 이름 공간** (ADR-MONO-035 O1-C 그대로 · ADR-083 D1): 도메인 업무 역할(`INVENTORY_READ` · `SCM_OPERATOR` …)은 `admin_roles` · `admin_role_permissions` 에 **행이 없고** 생기지도 않는다. 이 문서의 permission key · `PermissionEvaluator` · 권한 캐시(`admin:operator:perm:*`)는 업무 세트를 **읽지 않는다**. 관리 역할이 업무 권한을 주지 않고(ADR-024 D6), 업무 세트가 관리 권한(`/api/admin/**`)을 주지 않는다 — 세트로 IAM 관리 권한에 오르는 길은 없다(카탈로그에 관리 등급이 없다 · 세트는 `effectiveAdminScope` 의 입력이 아니다).
+- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 T 세트 행 ∪ O 가 `'*'` 운영자면 `'*'` 세트 행)의 세트 역할 **합** — admin-service 의 값(`domainRoles`, 카탈로그 · 구독 교집합 전). 토큰에 실리는 값 = 그 합 **∩ derive(T 의 entitled domains = 구독 ∩ 조직 노드 상한)** — 교집합은 auth-service 가 발급 때 한다(P3). 세트는 상한을 넓히지 못한다.
+- **배정자** = `domain_access.manage` 의 grant scope 에 T 가 있는 운영자(§ 행동 테넌트 — A 의 관리자가 B 의 배정을 바꿀 수 없다). 🔴 ≤-own(`RoleGrantGuard`)은 **적용하지 않는다** — 배정자가 그 업무 역할을 스스로 가질 필요가 없다(관리자에게 업무 권한이 없는 것이 정상이다). 업무 세트 쪽의 상한은 **T 의 entitled domains**(구독 밖 도메인 세트의 생성 · 수정 · 배정 = `422 DOMAIN_NOT_SUBSCRIBED`, 조회 실패 = 거절)와 **카탈로그**(밖 = `422 DOMAIN_ROLE_NOT_ASSIGNABLE`)다.
+- **자기 배정 허용** (OD-4 기본값): 관리자 하나뿐인 회사가 막히지 않게. 감사 행 `detail` 에 `selfGrant=true` — 숨기지 않고 표시한다.
+- **`'*'` 운영자** (OD-3 소유자 결정 2026-10-14 UTC): 배정 행의 테넌트 = 구체 테넌트 또는 `'*'`(모든 테넌트에 적용). 쓰기는 `domain_access.manage` 의 **`'*'` grant scope 만**(테넌트 범위 `TENANT_ADMIN` 은 `'*'` 운영자에게 세트를 주거나 뺄 수 없다 — `403 TENANT_SCOPE_DENIED`, admin-api § 행동 테넌트 «행 전체 규칙» 의 `'*'` 행과 같은 술어). 🔴 이 배정은 **소속 행을 만들지 않는다**(ADR-082 D2 — `'*'` 는 회사 소속이 아니다). `'*'` 라는 이유로 업무 권한 «전체» 가 생기지 않는다 — 배정된 세트만(백필이 `legacy-compat` 를 `'*'` 행으로 한 번 준다).
+- **비-`'*'` 운영자**: 세트 행은 **소속 테넌트에만**(«소속 없는 업무 권한» 금지). `'*'` 행 금지.
+- **출처별 행 · 회수 규칙** (ADR-083 D4): 배정 단위 = `(운영자, 테넌트, 세트, source_key)`. 회수는 **자기 출처의 행만** 지운다.
+
+  | 회수 행위 | 지우는 행 | 남는 행 |
+  |---|---|---|
+  | 개인 회수(`DELETE …/operators/{id}/domain-permission-sets/{setId}`) | 그 세트의 `DIRECT` · `MIGRATION` | `GROUP:*` |
+  | 그룹 세트 회수 · 그 그룹에서 멤버 제거 · 그룹 삭제 | `GROUP:<그 그룹>` | `DIRECT` · `MIGRATION` · 다른 그룹 |
+  | «이 회사에서 내보내기»(T) | T 의 행 **전부(모든 출처)** | 다른 회사의 행 |
+
+  여러 출처 공존 — 같은 세트를 직접 + G1 + G2 가 주면 행 셋, G1 이 빠져도 G2 · 직접 분이 실효 권한을 지킨다. 관리 역할 fan-out 의 단일-소유 `group_origin` 규약(위 Operator Group Fan-Out)을 **따르지 않는다** — 그 결함의 수리는 `TASK-BE-633`.
+- **그룹** (ADR-046 D2 fan-out 유지): 그룹 세트는 **그룹 테넌트에만** 행을 만든다. 그룹 세트 배정 · 회수는 `domain_access.manage`, 멤버 추가 · 제거 · 그룹 삭제(`group.manage`)는 같은 트랜잭션에서 그 그룹 출처 행을 만들고 지운다(🔴 **업무 세트가 올라간 그룹의 멤버 추가는 `group.manage` + `domain_access.manage`** — 멤버 추가가 새 사람에게 업무 권한을 주므로, `group.manage` 만 가진 역할이 D5 를 우회하지 못하게 한다 · 멤버 제거 · 그룹 삭제는 `group.manage` 만 — admin-api § POST …/members).
+- **파트너십 경로**: 파트너 운영자의 호스트 테넌트 세트 행은 assume 판정이 **읽지 않는다**(위임 상한 `delegated ∩ participant ∩ host-holds` 를 넓히지 않는다 — 아래 Cross-Org 절 그대로).
+- **감사**: `DOMAIN_PERMISSION_SET_CREATE` · `DOMAIN_PERMISSION_SET_UPDATE` · `DOMAIN_PERMISSION_SET_DELETE` · `OPERATOR_DOMAIN_SET_GRANT` · `OPERATOR_DOMAIN_SET_REVOKE` · `GROUP_DOMAIN_SET_GRANT` · `GROUP_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`. 거절 = `AdminActionDenyWriter` DENIED row(fail-closed). GET 성공은 감사 행 없음.
+- **회수 지연** (ADR-083 D7): 모든 변경은 **다음 assume 교환부터** 토큰에 반영된다. 발급된 assume 토큰은 `exp`(P3 뒤 최대 300초)까지 그대로다 — «즉시 회수» 라고 쓰지 않는다.
+
+**NET-ZERO (P2 단독)**: P2 는 표 · API · 백필 · `domainRoles` 를 만들지만 auth-service 가 그 값을 읽지 않으므로(P3 전) 어떤 토큰도 바뀌지 않는다.
+
 ### Conditional Cross-Permission: `GET /api/admin/audit`
 
 이 엔드포인트는 `source` query parameter 값에 따라 요구 권한이 달라진다. 컨트롤러 annotation은 최소 공통 권한(`audit.read`)만 선언하고, 내부에서 아래 알고리즘으로 추가 권한을 재검사한다.
@@ -580,6 +610,7 @@ D1 dual-read: `operator_tenant_assignment` rows ∪ {legacy `admin_operators.ten
   기존 operator 체인(`@Order(2)`, `/api/admin/**`)은 byte-unchanged.
 - D1 effective-scope 가 이제 auth-service 에 cross-service 로 읽힌다. 스키마 변경 없음.
 - 🔴 **TASK-MONO-784 (ADR-MONO-082 b · R1 · D3 · D-2 — 구현 S2)**: effective tenant scope = **`operator_tenant_assignment` 행만**(`{legacy admin_operators.tenant_id}` 를 더하지 않는다 — ADR-MONO-020 § 3.3 item 4 의 «legacy read» 를 비-`'*'` 분기에서 걷는다. `'*'` 분기는 그대로). 전제: S2 의 V0051 이 홈 배정이 없는 기존 비-`'*'` 행에 홈 배정을 백필한다(멱등) — 단일 회사 운영자의 `assigned` 는 바이트 불변. 이유: 떠난 회사가 홈일 때 배정을 지워도 홈이 assume 을 열어 두면 ADR-082 D3 «A assume 거절» 이 깨진다(784 AC-0 F4). 상세: [auth-to-admin.md § check](../../contracts/http/internal/auth-to-admin.md#get-internaloperator-assignmentscheck).
+- 🔴 **TASK-MONO-791 (ADR-MONO-083 D6 · OD-3 — 구현 P2 `TASK-BE-631`)**: 응답에 **`domainRoles`** 를 더한다 — 그 테넌트의 업무 권한 세트 행(모든 출처) ∪ (`'*'` 운영자면 `'*'` 행)의 세트 역할 합(카탈로그 · 구독 교집합 전). 소속 경로 · `'*'` 경로의 `assigned=true` 에는 **항상**(없으면 `[]`), 파트너십 host reach 에는 **없다**(호스트 세트를 읽지 않는다). 세트 읽기 실패 = 이 엔드포인트의 5xx(→ auth fail-closed) — `[]` 로 메우지 않는다. 이 필드는 `assigned` 판정을 바꾸지 않는다(`'*'` 운영자의 세트 배정은 소속 행을 만들지 않으므로 규칙 2 그대로). 위 § 도메인 업무 권한 세트 · [auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) 판정 규칙 7.
 
 상세: [architecture.md](./architecture.md) "Assume-Tenant Assignment Check", [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md).
 

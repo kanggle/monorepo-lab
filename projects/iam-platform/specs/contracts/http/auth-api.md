@@ -172,10 +172,14 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
   "access_token": "string (JWT, short-lived)",
   "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
   "token_type": "Bearer",
-  "expires_in": 1800
+  "expires_in": 300
 }
 ```
 > **`refresh_token` 없음** — assumed 토큰은 단명이며 selection 마다 재발급된다 (ADR-020 § 3.1). 이 grant 는 refresh token 을 발급/저장하지 않는다.
+>
+> **TTL — 300초 (`TASK-MONO-791` · ADR-MONO-083 D7 · OD-2 기본값 «(나) assume 토큰만 짧게» — 구현 P3 `TASK-BE-632`)**: 운영자 assume 토큰의 `expires_in` = **300**. 🔴 **P3 배포 전(지금)에는 1800** 이다(콘솔 클라이언트의 access-token TTL 을 그대로 쓴다 — 위 예시의 `300` 은 P3 뒤의 값). 기본 IAM 토큰 · 리프레시 토큰의 TTL 은 바꾸지 않는다. 리프레시는 여전히 없다 — 만료 전에 **다시 교환**하는 것이 클라이언트의 몫이다(콘솔: [console-integration-contract.md § 2.7](../../../../platform-console/specs/contracts/console-integration-contract.md)).
+>
+> 🔴 **회수 지연 (ADR-MONO-083 D7 — 이 문장을 그대로 쓴다)**: 업무 권한 세트 회수 · 그룹 탈퇴 · 운영자 정지 · 구독 해지 · 세트 구성 변경 · «이 회사에서 내보내기» 는 **다음 assume 교환부터** 반영된다. **이미 발급된 assume 토큰은 자기 `exp` 까지 그대로 쓰인다** — 최대 300초(P3 뒤) · 최대 1800초(P3 전). assume 토큰은 저장하지 않으므로 `/oauth2/revoke` 대상이 아니고, 도메인 게이트웨이는 JWKS 로컬 검증만 한다. «즉시 회수» 가 아니다.
 
 **Assumed Token Claims**:
 
@@ -186,6 +190,8 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `tenant_id` | **선택된** customer tenant (`audience`) — `'*'` 이 아님 |
 | `tenant_type` | 선택된 customer tenant 의 type (`B2B_ENTERPRISE`) |
 | `entitled_domains` | 선택된 tenant 의 ACTIVE subscriptions **만** (fail-soft 시 생략) |
+| `roles` | **운영자 assume — `TASK-BE-632`(ADR-MONO-083 P3) 배포부터**: assignment check 응답의 `domainRoles`(그 운영자에게 그 테넌트에서 배정된 업무 권한 세트의 역할 합 — [auth-to-admin.md](./internal/auth-to-admin.md) 판정 규칙 7) **∩ derive(entitled domains — 구독 ∩ 조직 노드 상한)**. 그대로 싣지 않는다 — 구독 해지 · 상한 밖 도메인의 역할은 배정돼 있어도 빠진다. `domainRoles` 가 `[]` · 부재면 운영자 도메인 역할 0 · 판정 호출 실패면 토큰 미발급(fail-closed) — **어떤 경우도 «구독 전체» 가 아니다**. **파트너십(host reach) assume**: `delegatedScope.roles` 그대로(`delegated ∩ participant ∩ host-holds` — **변경 없음**, 호스트 테넌트 세트를 읽지 않는다). **workload assume**: 없음(변경 없음). 결과가 비면 **생략**(`[]` 로 내지 않는다 — [jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `roles` 행). 🔴 **P3 배포 전(지금)**: 운영자 assume 의 `roles` = 그 테넌트 entitled domains 에서 **파생**(`OperatorRoleDerivation`) — 운영자 · 배정 · 세트와 무관하게 같은 테넌트의 운영자는 모두 같은 역할을 받는다. P2(`TASK-BE-631`) 배포만으로는 바뀌지 않는다 |
+| `scope` | **운영자 assume — P3 부터**: 콘솔 클라이언트의 등록 범위에서 **도메인 쓰기 범위(`erp.write` 등)를 뺀 것** — 도메인 쓰기는 배정된 업무 역할로만 열린다(ADR-083 D3 «우회 경로 1번»). **workload assume** · 워크로드 클라이언트 자신의 `client_credentials` 토큰의 범위는 **변경 없음**. 🔴 **P3 배포 전(지금)**: 운영자 assume 의 `scope` = 콘솔 클라이언트 등록 범위 **전체**(`erp.write` 포함 — 그래서 ERP 를 구독한 테넌트로 assume 한 운영자는 역할과 무관하게 ERP 쓰기가 통한다) |
 | `email` | **없음.** 아래 § Scope ↔ Claim 참조 — 이 grant 는 `email` 을 싣지 않는다 |
 | `amr` | subject_token 의 `amr` 을 **그대로 복사**(TASK-MONO-771). subject 에 없으면 생략. 판정은 발급 **전에** 끝났다(위 2단계 게이트) — 이 복사는 하류 가시성용이다. **workload assume(`client_credentials` subject)에는 싣지 않는다** |
 
