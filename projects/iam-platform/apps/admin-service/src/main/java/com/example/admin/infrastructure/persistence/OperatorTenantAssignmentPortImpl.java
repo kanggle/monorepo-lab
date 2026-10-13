@@ -96,6 +96,15 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
 
     @Override
     @Transactional
+    public int deleteGroupOriginAssignments(Long operatorInternalId, Long groupInternalId) {
+        if (operatorInternalId == null || groupInternalId == null) {
+            return 0;
+        }
+        return repository.deleteByGroupOriginAndOperatorId(groupInternalId, operatorInternalId);
+    }
+
+    @Override
+    @Transactional
     public void deleteAssignment(Long operatorInternalId, String tenantId) {
         repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)
                 .ifPresent(repository::delete);

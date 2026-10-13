@@ -262,6 +262,16 @@ public interface AdminOperatorPort {
      */
     int deleteOperatorRolesInTenant(long operatorInternalId, String tenantId);
 
+    /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-13 UTC «U 역할 행도 함께 지움») — delete every role row of one
+     * operator that one group fanned out ({@code group_origin = groupInternalId}), in EVERY tenant. Used by «이
+     * 회사에서 내보내기» when the person leaves a group of the exited company: everything that group produced goes,
+     * including rows outside the exited company.
+     *
+     * @return the number of rows deleted
+     */
+    int deleteOperatorRolesByGroupOrigin(long operatorInternalId, long groupInternalId);
+
     /** Persist the given bindings in one batch. */
     void saveOperatorRoles(List<NewRoleBinding> bindings);
 

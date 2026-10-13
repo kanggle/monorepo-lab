@@ -1,6 +1,7 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorNotFoundException;
+import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
@@ -28,7 +29,8 @@ import java.util.TreeSet;
  *
  * <p>Acting tenant T (admin-api.md § PATCH …/roles, S1-1): a {@code '*'} target → T = {@code '*'} whatever the
  * header says (a platform operator's roles are {@code '*'} rows only); otherwise {@code X-Tenant-Id}; header
- * omitted → the target's single membership (two or more → 400, none → 404). Then, in order: T ∈ the actor's
+ * omitted → the target's single membership (two or more → 400, none → 404) — but an actor administering none of
+ * the target's companies gets 403 FIRST (owner decision 2026-10-13 UTC «범위 확인을 먼저»). Then, in order: T ∈ the actor's
  * {@code operator.manage} grant scope (403 + DENIED row) → a non-{@code '*'} target belongs to T (404 — enumeration
  * safe) and never gets a {@code '*'} row (400, ADR-082 D2) → ≤-own in T (D-6) → T keeps an administrator (409) →
  * replace.
@@ -59,6 +61,24 @@ public class PatchOperatorRoleUseCase {
         boolean targetIsPlatform = AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId());
         Set<String> memberships = targetIsPlatform ? Set.of()
                 : tenantScopeResolver.resolveEffectiveTenantScope(operator.internalId(), operator.tenantId());
+
+        // Owner decision 2026-10-13 UTC «범위 확인을 먼저»: with the header omitted, an actor that administers NONE of
+        // the target's companies gets 403 before any 400 / 404 — those two would tell it how many companies the
+        // target belongs to (the S1-2 principle of the row-wide rule). '*' actors and actors administering at least
+        // one of the target's companies keep the 400 / 404 of resolveActingTenant.
+        boolean headerOmitted = actingTenantHeader == null || actingTenantHeader.isBlank();
+        if (headerOmitted && !targetIsPlatform
+                && !tenantScopeGuard.isTenantInScope(actor, Permission.OPERATOR_MANAGE, AdminOperator.PLATFORM_TENANT_ID)
+                && memberships.stream().noneMatch(
+                        m -> tenantScopeGuard.isTenantInScope(actor, Permission.OPERATOR_MANAGE, m))) {
+            // R1 «감사 기본값»: no company is named — the DENIED row records the target's home.
+            tenantScopeGuard.recordTenantDenied(actor, Permission.OPERATOR_MANAGE, operator.tenantId(),
+                    ActionCode.OPERATOR_ROLE_CHANGE);
+            throw new TenantScopeDeniedException(
+                    "Operator is not scoped to administer this operator for permission '"
+                            + Permission.OPERATOR_MANAGE + "'");
+        }
+
         String tenant = resolveActingTenant(operator, targetIsPlatform, memberships, actingTenantHeader);
 
         // ADR-MONO-024 D2 — T ∈ the actor's operator.manage grant scope ('*' covers every T).

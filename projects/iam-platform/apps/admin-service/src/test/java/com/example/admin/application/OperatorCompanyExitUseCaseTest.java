@@ -50,7 +50,6 @@ class OperatorCompanyExitUseCaseTest {
     @Mock AdminActionAuditor auditor;
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
     @Mock OperatorGroupMemberJpaRepository groupMembers;
-    @Mock GroupFanOutService fanOut;
     @Mock TenantPartnershipPort partnershipPort;
 
     InMemoryRoleRowsPort port;
@@ -66,9 +65,11 @@ class OperatorCompanyExitUseCaseTest {
                 .role(6L, "ORG_ADMIN")
                 .operator(operator(PERSON, "person-uuid", "p@ex.com", "ACTIVE", "alpha"))
                 .operator(operator(ADMIN_A, "admin-a-uuid", "a@ex.com", "ACTIVE", "alpha"));
-        OperatorCompanyExitCascade cascade = new OperatorCompanyExitCascade(port, groupMembers, fanOut, partnershipPort);
+        TenantLastAdminGuard lastAdminGuard = new TenantLastAdminGuard(port);
+        OperatorCompanyExitCascade cascade = new OperatorCompanyExitCascade(
+                port, groupMembers, assignmentPort, partnershipPort, lastAdminGuard);
         useCase = new ManageOperatorAssignmentUseCase(port, assignmentPort, tenantScopeGuard, auditor,
-                new TenantLastAdminGuard(port), cascade, cachingPermissionEvaluator);
+                lastAdminGuard, cascade, cachingPermissionEvaluator);
     }
 
     @Test
@@ -84,7 +85,6 @@ class OperatorCompanyExitUseCaseTest {
         when(assignmentPort.assignmentExists(PERSON, "alpha")).thenReturn(true);
         OperatorGroupMemberJpaEntity membership = OperatorGroupMemberJpaEntity.create(9L, PERSON, Instant.EPOCH, null);
         when(groupMembers.findByOperatorIdAndGroupTenantId(PERSON, "alpha")).thenReturn(List.of(membership));
-        when(fanOut.revokeMemberFanOut(eq(9L), any())).thenReturn(1);
         when(partnershipPort.removeParticipationsWithPartner(PERSON, "alpha")).thenReturn(1);
 
         useCase.unassignOperator("person-uuid", "alpha", actor(), "left the company");
@@ -93,9 +93,7 @@ class OperatorCompanyExitUseCaseTest {
         assertThat(port.rowsOutside(PERSON, "alpha")).as("beta rows byte-unchanged").isEqualTo(betaBefore);
         assertThat(port.rowsIn(ADMIN_A, "alpha")).as("another person's rows untouched").hasSize(1);
 
-        ArgumentCaptor<GroupFanOutService.Member> member = ArgumentCaptor.forClass(GroupFanOutService.Member.class);
-        verify(fanOut).revokeMemberFanOut(eq(9L), member.capture());
-        assertThat(member.getValue().tenantId()).as("fan-out rows of an alpha group live in alpha").isEqualTo("alpha");
+        verify(assignmentPort).deleteGroupOriginAssignments(PERSON, 9L);
         verify(groupMembers).delete(membership);
         verify(partnershipPort).removeParticipationsWithPartner(PERSON, "alpha");
         verify(assignmentPort).deleteAssignment(PERSON, "alpha");
@@ -106,10 +104,60 @@ class OperatorCompanyExitUseCaseTest {
         verify(auditor).recordWithPermission(rec.capture(), anyString());
         assertThat(rec.getValue().actionCode()).isEqualTo(ActionCode.OPERATOR_ASSIGNMENT_DELETE);
         assertThat(rec.getValue().targetTenantId()).isEqualTo("alpha");
-        // 1 fan-out row through the group engine + the 3 alpha rows the fake deletes (it holds the group row too)
+        // 1 group-9 row (by origin) + the 2 remaining alpha rows (direct · node)
         assertThat(rec.getValue().downstreamDetail())
-                .isEqualTo("roleRows=4,groupMemberships=1,participations=1");
+                .isEqualTo("roleRows=3,groupMemberships=1,participations=1,groupAssignments=0");
         // the operator row is not written (status · home · identity — D-10, R1): the fake throws on any of them
+    }
+
+    @Test
+    @DisplayName("🔴 owner decision 2026-10-13 «U 역할 행도 함께 지움»: leaving alpha's group 9 removes what group 9 produced in uu too; the person's own uu / vv rows byte-unchanged")
+    void exitAlpha_removesTheGroupsFanOutInOtherCompanies() {
+        port.row(PERSON, "SUPPORT_READONLY", "alpha", null, null)
+                .row(PERSON, "SECURITY_ANALYST", "uu", 9L, null)     // group 9 (alpha) fanned out into uu
+                .row(PERSON, "SUPPORT_READONLY", "uu", null, null)   // the person's own uu role — stays
+                .row(PERSON, "SUPPORT_READONLY", "vv", null, null)   // another company, direct — stays
+                .row(PERSON, "SECURITY_ANALYST", "vv", 12L, null)    // a vv group's row — stays
+                .row(ADMIN_A, "TENANT_ADMIN", "alpha", null, null);
+        List<InMemoryRoleRowsPort.Row> ownUu = port.rowsIn(PERSON, "uu").stream()
+                .filter(r -> r.groupOrigin() == null).toList();
+        List<InMemoryRoleRowsPort.Row> vvBefore = List.copyOf(port.rowsIn(PERSON, "vv"));
+        when(assignmentPort.assignmentExists(PERSON, "alpha")).thenReturn(true);
+        OperatorGroupMemberJpaEntity membership = OperatorGroupMemberJpaEntity.create(9L, PERSON, Instant.EPOCH, null);
+        when(groupMembers.findByOperatorIdAndGroupTenantId(PERSON, "alpha")).thenReturn(List.of(membership));
+        when(assignmentPort.deleteGroupOriginAssignments(PERSON, 9L)).thenReturn(1); // its uu assignment
+
+        useCase.unassignOperator("person-uuid", "alpha", actor(), "left the company");
+
+        assertThat(port.rowsIn(PERSON, "uu")).as("group 9's uu row gone, the person's own uu row byte-unchanged")
+                .isEqualTo(ownUu);
+        assertThat(port.rowsIn(PERSON, "vv")).as("vv byte-unchanged (incl. a vv group's row)").isEqualTo(vvBefore);
+        verify(assignmentPort).deleteGroupOriginAssignments(PERSON, 9L);
+        verify(assignmentPort, never()).deleteAssignment(eq(PERSON), eq("uu"));
+        verify(assignmentPort, never()).deleteAssignment(eq(PERSON), eq("vv"));
+    }
+
+    @Test
+    @DisplayName("🔴 owner decision 2026-10-13: group 9's fan-out held the sole TENANT_ADMIN@uu → 409, nothing written / control: another uu admin → OK")
+    void exitAlpha_groupFanOutWasLastAdminOfUu_refused() {
+        port.row(PERSON, "SUPPORT_READONLY", "alpha", null, null)
+                .row(PERSON, "TENANT_ADMIN", "uu", 9L, null)
+                .row(ADMIN_A, "TENANT_ADMIN", "alpha", null, null);
+        when(assignmentPort.assignmentExists(PERSON, "alpha")).thenReturn(true);
+        OperatorGroupMemberJpaEntity membership = OperatorGroupMemberJpaEntity.create(9L, PERSON, Instant.EPOCH, null);
+        when(groupMembers.findByOperatorIdAndGroupTenantId(PERSON, "alpha")).thenReturn(List.of(membership));
+
+        assertThatThrownBy(() -> useCase.unassignOperator("person-uuid", "alpha", actor(), "r"))
+                .isInstanceOf(TenantLastAdminRequiredException.class);
+        assertThat(port.rows).hasSize(3);
+        verify(assignmentPort, never()).deleteGroupOriginAssignments(anyLong(), anyLong());
+        verify(groupMembers, never()).delete(any());
+        verify(assignmentPort, never()).deleteAssignment(anyLong(), anyString());
+
+        // control: uu has another ACTIVE administrator
+        port.row(ADMIN_A, "TENANT_ADMIN", "uu", null, null);
+        useCase.unassignOperator("person-uuid", "alpha", actor(), "r");
+        assertThat(port.rowsIn(PERSON, "uu")).isEmpty();
     }
 
     @Test
@@ -123,7 +171,7 @@ class OperatorCompanyExitUseCaseTest {
                 .isInstanceOf(TenantLastAdminRequiredException.class);
 
         assertThat(port.rowsIn(ADMIN_A, "alpha")).hasSize(1);
-        verifyNoInteractions(groupMembers, fanOut, partnershipPort, cachingPermissionEvaluator);
+        verifyNoInteractions(groupMembers, partnershipPort, cachingPermissionEvaluator);
         verify(assignmentPort, never()).deleteAssignment(anyLong(), anyString());
         verify(auditor, never()).recordWithPermission(any(), anyString());
     }
@@ -148,7 +196,7 @@ class OperatorCompanyExitUseCaseTest {
         when(assignmentPort.assignmentExists(PERSON, "alpha")).thenReturn(false);
         assertThatThrownBy(() -> useCase.unassignOperator("person-uuid", "alpha", actor(), "r"))
                 .isInstanceOf(AssignmentNotFoundException.class);
-        verifyNoInteractions(groupMembers, fanOut, partnershipPort);
+        verifyNoInteractions(groupMembers, partnershipPort);
     }
 
     @Test

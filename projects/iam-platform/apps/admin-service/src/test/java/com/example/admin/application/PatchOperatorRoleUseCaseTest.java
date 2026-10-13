@@ -106,6 +106,7 @@ class PatchOperatorRoleUseCaseTest {
     void noHeader_singleMembership_isThatCompany() {
         memberships("alpha");
         port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+        administers("alpha");
 
         PatchOperatorRoleUseCase.PatchRolesResult result =
                 useCase.patchRoles("target-uuid", List.of("SUPPORT_READONLY", "SECURITY_ANALYST"), null, actor(), "r");
@@ -116,19 +117,49 @@ class PatchOperatorRoleUseCaseTest {
     }
 
     @Test
-    @DisplayName("no header + two memberships → 400 (IllegalArgumentException) · no header + none → 404; nothing written")
+    @DisplayName("no header, actor administers one of the target's companies: two memberships → 400 · '*' actor + none → 404; nothing written")
     void noHeader_ambiguousOrNone_refusedBeforeAnyWrite() {
         memberships("alpha", "beta");
         port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+        administers("alpha");
         assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
                 .isInstanceOf(IllegalArgumentException.class);
 
         memberships();
+        administers("*");
         assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
                 .isInstanceOf(OperatorNotFoundException.class);
 
         assertThat(port.rows).hasSize(1);
         verify(tenantScopeGuard, never()).requireTenantInScope(any(), anyString(), anyString(), any());
+        verify(tenantScopeGuard, never()).recordTenantDenied(any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("🔴 owner decision 2026-10-13 «범위 확인을 먼저»: no header, actor administers NONE of the target's companies → 403 before 400 / 404 (count not disclosed)")
+    void noHeader_strangerGets403BeforeCountRevealingCodes() {
+        port.row(TARGET, "SUPPORT_LOCK", "alpha", null, null);
+
+        memberships("alpha", "beta"); // would be 400 for an administrator of alpha or beta
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantScopeDeniedException.class);
+
+        memberships();                // would be 404 for a '*' actor
+        assertThatThrownBy(() -> useCase.patchRoles("target-uuid", List.of(), null, actor(), "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantScopeDeniedException.class);
+
+        // DENIED row against the target's HOME (R1 audit default — no company is named), twice
+        verify(tenantScopeGuard, org.mockito.Mockito.times(2)).recordTenantDenied(
+                any(), eq(Permission.OPERATOR_MANAGE), eq("alpha"), eq(ActionCode.OPERATOR_ROLE_CHANGE));
+        assertThat(port.rows).hasSize(1);
+    }
+
+    /** The actor's operator.manage grant scope as the mocked TenantScopeGuard answers it. */
+    private void administers(String tenant) {
+        // lenient: the use case also asks about other tenants ('*' first), which must answer the default false
+        org.mockito.Mockito.lenient()
+                .when(tenantScopeGuard.isTenantInScope(any(), eq(Permission.OPERATOR_MANAGE), eq(tenant)))
+                .thenReturn(true);
     }
 
     @Test

@@ -345,6 +345,11 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
         return operatorRoleRepository.deleteByOperatorIdAndTenantId(operatorInternalId, tenantId);
     }
 
+    @Override
+    public int deleteOperatorRolesByGroupOrigin(long operatorInternalId, long groupInternalId) {
+        return operatorRoleRepository.deleteByGroupOriginAndOperatorId(groupInternalId, operatorInternalId);
+    }
+
     private List<RoleRowView> toRowViews(List<AdminOperatorRoleJpaEntity> rows) {
         if (rows.isEmpty()) return List.of();
         Map<Long, String> roleNameById = roleNamesById(rows);

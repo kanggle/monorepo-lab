@@ -1540,15 +1540,15 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > |---|---|
 > | 소속 | `operator_tenant_assignment (operatorId, T)` — `org_scope` 포함 |
 > | 그 회사의 역할 행 | `admin_operator_roles` 의 `tenant_id = T` 인 행 **전부** — 직접(`group_origin IS NULL`) · 그룹 fan-out · `T` 로 기록된 노드 grant(D-1). 다른 회사의 행은 **바이트 불변** |
-> | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹의 fan-out 행(`group_origin`) — 784 Edge Case 3 |
+> | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹이 이 사람에게 만든 fan-out 행(`group_origin` = 그 그룹) **전부 — 다른 회사 U 에 있는 것까지**: 그룹 `TENANT_ASSIGNMENT` 가 만든 U 배정 행 · 그 그룹의 U 역할 행(소유자 결정 2026-10-13 UTC «U 역할 행도 함께 지움» — «소속 없는 역할» 을 남기지 않는다, D-1). 그 사람이 U 에 **직접**(또는 U 그룹으로) 가진 행은 바이트 불변 — 784 Edge Case 3 |
 > | 협력사 참여 | `partner_tenant_id = T` 인 파트너십의 `tenant_partnership_participant` 행 — 다시 소속돼도 옛 참여가 되살아나지 않게(784 AC-0 F18 · ADR-045 D6 관계 단위 회수와 같은 방향) |
 >
-> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(역할 행 · 그룹 멤버십 · 참여 행). 권한 캐시 무효화.
+> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(`roleRows` · `groupMemberships` · `participations` · `groupAssignments` = 그 그룹들이 만든 배정 행). 권한 캐시 무효화.
 > - **계정은 건드리지 않는다**(ADR-080 D5 · ADR-082 D3) — 스토어 · 팬 로그인 그대로. 다른 회사의 소속 · 역할 · 그룹 · 참여 그대로. 이미 발급된 T 의 assume 토큰은 TTL 까지 산다(다음 assume 부터 거절).
 > - **마지막 소속을 내보내도 운영자 행은 지우지 않는다**(D-10) — 행은 `ACTIVE` 로 남고 소속 0 이 된다. 콘솔 적격 · 토큰 교환이 `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` 로 문을 닫는다([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)). 재초대 · 재온보딩은 같은 행에 소속을 더한다(§ Operator Invitation). 감사 해소가 행을 요구한다.
 > - 홈 회사에서 내보내져도 `admin_operators.tenant_id`(홈)는 그대로다(R1) — 판정에서 읽지 않으므로 그 회사 권한은 없다.
 > - 대상이 `'*'` 운영자 · 소속이 없는 테넌트 → 지금처럼 `404 ASSIGNMENT_NOT_FOUND`(좁히는 방향이라 `'*'` 대상도 거절 코드를 따로 두지 않는다).
-> - 🔴 **마지막 관리자 보호 (소유자 결정 2026-10-11 UTC — «거절 (409)»)**: 이 쓰기 뒤 T 에 **`ACTIVE` 이면서 `TENANT_ADMIN`@T 를 가진(직접 · 그룹 · 노드 어느 출처든) 운영자가 0** 이 되면 `409 TENANT_LAST_ADMIN_REQUIRED`, 쓰기 없음 — 자기 자신을 내보내는 경우 포함. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리한다(ADR-MONO-044 D3 «관리자 없는 활성 테넌트 없음» 과 같은 방향). 🔴 같은 술어를 **역할 변경(`PATCH …/roles`) · 그룹 멤버 제거 · 그룹 역할 변경**에도 건다 — 하나만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회된다. T 가 `'*'` 이거나 대상이 T 의 관리자가 아니면 술어는 참이다(검사 없음).
+> - 🔴 **마지막 관리자 보호 (소유자 결정 2026-10-11 UTC — «거절 (409)»)**: 이 쓰기 뒤 T 에 **`ACTIVE` 이면서 `TENANT_ADMIN`@T 를 가진(직접 · 그룹 · 노드 어느 출처든) 운영자가 0** 이 되면 `409 TENANT_LAST_ADMIN_REQUIRED`, 쓰기 없음 — 자기 자신을 내보내는 경우 포함. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리한다(ADR-MONO-044 D3 «관리자 없는 활성 테넌트 없음» 과 같은 방향). 🔴 같은 술어를 **역할 변경(`PATCH …/roles`) · 그룹 멤버 제거 · 그룹 역할 회수(`DELETE …/groups/{id}/grants/{grantId}`) · 그룹 삭제(`DELETE …/groups/{id}` — 그룹이 준 역할을 모두 회수하므로)**에도 건다 — 하나만 막으면 «역할을 먼저 떼고 내보낸다» 로 우회된다. T 가 `'*'` 이거나 대상이 T 의 관리자가 아니면 술어는 참이다(검사 없음). 내보내기가 위 표대로 다른 회사 U 의 그룹 fan-out 역할 행을 걷을 때, 그 행이 `TENANT_ADMIN`@U 였다면 **U 에도 같은 술어**를 쓰기 전에 건다(U 가 관리자 0 이 되면 같은 409, 아무것도 쓰지 않음).
 > - 콘솔 문구: «배정 해제» → **«이 회사에서 내보내기»**(S6).
 
 **Auth required**: Yes · **Required permission**: `operator.manage` · **Granted to roles**: `SUPER_ADMIN`, `TENANT_ADMIN`(자기 테넌트 한정)
@@ -1970,6 +1970,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 >
 > | 단계 | 규칙 | 실패 |
 > |---|---|---|
+> | 0. 범위 먼저 (헤더 생략 시) | 소유자 결정 2026-10-13 UTC «범위 확인을 먼저»: 헤더가 없고 actor 가 `'*'` 가 아니며 대상의 소속 중 **어느 것도** `operator.manage` grant scope 에 없으면, 아래 400 / 404 보다 **먼저** 거절 — 400 / 404 가 대상의 소속 수를 밖에 알려 주지 않게(행 전체 규칙 S1-2 와 같은 원칙). 소속 중 하나라도 관리하는 actor · `'*'` actor 만 아래 400 / 404 를 본다 | `403 TENANT_SCOPE_DENIED`(DENIED 행 — `attempted_tenant_id` = 대상 홈, R1 감사 기본값) |
 > | 행동 테넌트 T | 대상이 **`'*'` 운영자면 T = `'*'`**(헤더 무관 — `'*'` 운영자의 역할은 `'*'` 행뿐이다. 콘솔은 플랫폼 운영자끼리의 역할 편집에도 활성 회사를 헤더로 싣는다). 그 밖엔 `X-Tenant-Id`. **헤더 생략 시 대상 기준**: 소속이 정확히 하나면 그 테넌트 · 둘 이상이면 거절 · 0 이면 대상 없음 | 둘 이상 → `400 VALIDATION_ERROR` · 0 → `404 OPERATOR_NOT_FOUND` |
 > | 범위 (ADR-024 D2) | T ∈ actor 의 grant scope(`operator.manage`) — `'*'` 는 모든 T | `403 TENANT_SCOPE_DENIED`(DENIED 행) |
 > | 대상의 소속 | 비-`'*'` 대상: T 가 대상의 소속이어야 한다 | 아니면 `404 OPERATOR_NOT_FOUND`(열거 안전 — 새 코드 없음). 비-`'*'` 대상에 `X-Tenant-Id: *` → `400 VALIDATION_ERROR`(ADR-082 D2 — 풀 행은 `'*'` 를 받지 않는다) |
@@ -2018,7 +2019,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `operator.manage` 권한 없음 |
-| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 operator 의 home tenant 에 대한 admin-grant 스코프 밖 (ADR-024 D2, step-1). **784 S4 부터**: 행동 테넌트 T 가 actor 의 grant scope 밖 |
+| 403 | `TENANT_SCOPE_DENIED` | actor 가 대상 operator 의 home tenant 에 대한 admin-grant 스코프 밖 (ADR-024 D2, step-1). **784 S4 부터**: 행동 테넌트 T 가 actor 의 grant scope 밖 · 헤더 생략 + 대상의 소속 중 actor 가 관리하는 것이 없음(400 / 404 보다 먼저) |
 | 403 | `ROLE_GRANT_FORBIDDEN` | **TASK-BE-347 (ADR-024 D3)** — 비-플랫폼 actor 가 `SUPER_ADMIN` 또는 보유하지 않은 권한을 가진 role 을 부여 시도 (≤-own grant-menu; `TENANT_ADMIN` 은 `tenant.admin.delegate` 보유 시, `TENANT_BILLING_ADMIN` 은 `subscription.manage` 보유 시에만 부여 가능). **784 S4 부터** ≤-own 은 T 에서 보유한 권한 |
 | 404 | `OPERATOR_NOT_FOUND` | operatorId 미존재. **784 S4 부터**: 대상이 T 소속이 아니다 · `X-Tenant-Id` 생략 + 대상 소속 0 |
 | 400 | `ROLE_NOT_FOUND` | roles 배열에 존재하지 않는 role 이름 포함 |

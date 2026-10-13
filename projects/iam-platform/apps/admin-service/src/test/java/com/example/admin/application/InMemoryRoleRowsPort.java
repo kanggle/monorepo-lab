@@ -123,6 +123,14 @@ final class InMemoryRoleRowsPort implements AdminOperatorPort {
     }
 
     @Override
+    public int deleteOperatorRolesByGroupOrigin(long operatorInternalId, long groupInternalId) {
+        int before = rows.size();
+        rows.removeIf(r -> r.operatorId() == operatorInternalId && r.groupOrigin() != null
+                && r.groupOrigin() == groupInternalId);
+        return before - rows.size();
+    }
+
+    @Override
     public Map<String, List<String>> findRoleNamesByTenant(long operatorInternalId) {
         Map<String, List<String>> out = new TreeMap<>();
         for (Row r : rows) {

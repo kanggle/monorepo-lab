@@ -60,6 +60,9 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
     static final String A = "s4w-alpha";
     static final String B = "s4w-beta";
     static final String HOST_C = "s4w-gamma";
+    static final String U = "s4w-u";
+    static final String V = "s4w-v";
+    static final String FANNED = "00000000-0000-7000-8000-000000078417";
 
     static final String SUPER = "00000000-0000-7000-8000-000000078410";
     static final String ADMIN_A = "00000000-0000-7000-8000-000000078411";
@@ -171,7 +174,7 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                  WHERE actor_id = ? AND action_code = 'OPERATOR_ASSIGNMENT_DELETE' AND outcome = 'SUCCESS'
                    AND target_id = ?
                 """, String.class, ADMIN_A, PERSON);
-        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1");
+        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1,groupAssignments=0");
 
         // the person's account and operator row are untouched (ADR-080 D5 · ADR-082 D3 · D-10): no account call
         // was made (nothing listens on the account-service URL), no account action audited, the row is ACTIVE
@@ -180,6 +183,49 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                 + "WHERE operator_id = ?", String.class, PERSON)).isEqualTo("ACTIVE|" + PERSON_SUBJECT + "|" + A);
         assertThat(count("SELECT COUNT(*) FROM admin_actions WHERE actor_id = ? AND action_code LIKE 'ACCOUNT_%'",
                 ADMIN_A)).isZero();
+    }
+
+    /**
+     * 🔴 Owner decision 2026-10-13 UTC «U 역할 행도 함께 지움»: a group G of company A also fans out into other
+     * companies. Leaving A removes everything G produced for the person in EVERY company — its assignment to U and
+     * its role row in U — while the person's own rows stay byte-unchanged: the direct role in U, and company V whose
+     * membership the person held directly before G granted it (G's V fan-out was an idempotent skip).
+     */
+    @Test
+    @DisplayName("🔴 owner 2026-10-13: leave A → A-group G's assignment + role row in U gone; the person's direct U role and direct V membership untouched")
+    void ac2_groupFanOutIntoOtherCompanies_goesWithTheGroup() throws Exception {
+        seedOperator(SUPER, "*", "s4w-super@example.com", null);
+        grant(SUPER, "SUPER_ADMIN", "*");
+        seedOperator(ADMIN_A, A, "s4w-admin-a@example.com", null);
+        grant(ADMIN_A, "TENANT_ADMIN", A);
+        member(ADMIN_A, A);
+        seedOperator(FANNED, A, "s4w-fanned@example.com", null);
+        member(FANNED, A);
+        member(FANNED, V);                         // V: held directly, before the group
+        grant(FANNED, "SUPPORT_READONLY", V);
+        grant(FANNED, "SECURITY_ANALYST", U);      // the person's own (direct) U role
+        String groupId = createGroupWithTenantAssignments(A, "s4w 팀 U", U, V);
+        addGroupMember(groupId, FANNED);          // fans out U only (V already held → skip)
+        Long groupInternalId = jdbc.queryForObject(
+                "SELECT id FROM operator_group WHERE group_id = ?", Long.class, groupId);
+        // a role row G produced in U (the shape a pre-S4 fan-out left behind — post-S4 role fan-out lands in A)
+        jdbc.update("""
+                INSERT INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by, group_origin)
+                SELECT o.id, r.id, ?, NOW(6), NULL, ?
+                  FROM admin_operators o CROSS JOIN admin_roles r
+                 WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
+                """, U, groupInternalId, FANNED);
+        assertThat(groupAssignment(FANNED, U)).as("precondition: G's U membership").isEqualTo(String.valueOf(groupInternalId));
+        assertThat(groupAssignment(FANNED, V)).as("precondition: V held directly").isEqualTo("-");
+        List<String> vRolesBefore = roleRows(FANNED, V);
+
+        exit(ADMIN_A, FANNED, A).andExpect(status().isNoContent());
+
+        assertThat(groupAssignment(FANNED, U)).as("G's U assignment gone").isNull();
+        assertThat(roleRows(FANNED, U)).as("G's U role row gone, the direct U role stays")
+                .singleElement().asString().startsWith("SECURITY_ANALYST|" + U + "|").endsWith("|-|-|-");
+        assertThat(groupAssignment(FANNED, V)).as("direct V membership untouched").isEqualTo("-");
+        assertThat(roleRows(FANNED, V)).as("V byte-unchanged").isEqualTo(vRolesBefore);
     }
 
     // ── AC-4 ──────────────────────────────────────────────────────────────────
@@ -326,6 +372,40 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                         .content("{\"roles\":[\"" + role + "\"]}"))
                 .andExpect(status().isCreated());
         return groupId;
+    }
+
+    private String createGroupWithTenantAssignments(String tenant, String name, String... assignTo) throws Exception {
+        String body = mockMvc.perform(post("/api/admin/groups")
+                        .header("Authorization", bearer(SUPER))
+                        .header("X-Operator-Reason", "s4 group")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"" + tenant + "\",\"name\":\"" + name + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String groupId = body.replaceAll("(?s).*\"groupId\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+        StringBuilder grants = new StringBuilder();
+        for (String t : assignTo) {
+            if (grants.length() > 0) grants.append(',');
+            grants.append("{\"tenantId\":\"").append(t).append("\"}");
+        }
+        mockMvc.perform(post("/api/admin/groups/" + groupId + "/grants")
+                        .header("Authorization", bearer(SUPER))
+                        .header("X-Operator-Reason", "s4 grant")
+                        .header("Idempotency-Key", "s4w-grant-" + System.nanoTime())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantAssignments\":[" + grants + "]}"))
+                .andExpect(status().isCreated());
+        return groupId;
+    }
+
+    /** The assignment row's {@code group_origin} ({@code "-"} = direct), or {@code null} when there is no row. */
+    private String groupAssignment(String uuid, String tenant) {
+        List<String> rows = jdbc.queryForList("""
+                SELECT COALESCE(CAST(a.group_origin AS CHAR), '-') FROM operator_tenant_assignment a
+                  JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = ? AND a.tenant_id = ?
+                """, String.class, uuid, tenant);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     private void addGroupMember(String groupId, String operator) throws Exception {

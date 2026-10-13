@@ -562,4 +562,20 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - **CI**: admin-service `integrationTest`(신규 IT 1 · 수선 8 · 그룹 IT 3 클래스 공용 시드) · nightly `federation-hardening-e2e`(시드 2행 · 위임 스펙의 내보내기 의미 변화).
 - **S5**: 두 409 → 소속 추가(D-12) · 발급 «이미 운영자» 소속 기준(F15) · OD-1 상한 · 772 AC-6 IT 기대값 교체 · 소속 추가 시 캐시 무효화.
 - **S6**: 콘솔 — 역할 편집 활성 회사 · «이 회사에서 내보내기» 문구 · `OPERATOR_HAS_OTHER_MEMBERSHIPS` · `TENANT_LAST_ADMIN_REQUIRED` 매핑 · 그룹 선택기 회색 처리 → 소속 술어 · `homeTenantId` 표기.
-- 위 § 4-1 · 4-2 · 4-6 소유자/후속 판단.
+- ~~위 § 4-1 · 4-2 · 4-6 소유자/후속 판단.~~ → § 6 소유자 결정 반영.
+- **S5/S6 이후 (미배정 — 잃지 않게)**: 노드 grant(`OrgNodeAdminUseCase`)가 아직 `tenant_id` = 대상 **홈**을 쓴다(D-1 «부여 당시 소속» 위반 가능 — 홈 비소속 대상의 노드 행은 내보내기 단위 밖에 남는다). 슬라이스 S5 · S6 어디에도 없으므로 착수 시 어느 슬라이스(또는 후속 티켓)가 가져갈지 정한다. (§ 4-6 에서 옮김, 소유자 지시 2026-10-13 UTC)
+
+### 6. S4 소유자 결정 반영 (2026-10-13 UTC)
+
+> PR #4321 첫 CI 전부 초록(16 pass) 뒤 소유자 결정. 같은 브랜치에 추가 커밋.
+
+| § 4 항목 | 결정 | 반영 |
+|---|---|---|
+| 4-2 T 그룹 fan-out 이 U 소속을 걷는 경우 | **«U 역할 행도 함께 지움»** — 그 그룹이 이 사람에게 만든 것(`group_origin` = 그 그룹)은 **모든 테넌트에서** 걷는다: U 배정 행 · U 역할 행. 이 사람이 U 에 직접(또는 U 그룹으로) 가진 행은 바이트 불변. 그 그룹 fan-out 이 `TENANT_ADMIN`@U 였다면 U 에도 마지막 관리자 술어(쓰기 전, 같은 409) | `OperatorCompanyExitCascade` 재작성 — fan-out 엔진 대신 포트 `AdminOperatorPort.deleteOperatorRolesByGroupOrigin` · `OperatorTenantAssignmentPort.deleteGroupOriginAssignments`(모든 테넌트) + 떠나는 그룹들의 다른 테넌트 행에 대해 `TenantLastAdminGuard` 를 먼저. 감사 detail 에 `groupAssignments` 추가. 계약 `admin-api.md` § 내보내기 표 · 감사 · 마지막 관리자 블릿 |
+| 4-5 역할 변경이 400/404 로 소속 수를 드러냄 | **«범위 확인을 먼저»** — 헤더 생략 · 비-`'*'` actor 가 대상 소속 중 어느 것도 관리하지 않으면 400/404 보다 먼저 `403 TENANT_SCOPE_DENIED`(DENIED 행 = 대상 홈) | `PatchOperatorRoleUseCase` 사전 검사 · `TenantScopeGuard.recordTenantDenied`(신설). 계약 § PATCH …/roles 표에 «0. 범위 먼저» 행 · 오류표 |
+| 4-1 그룹 삭제의 마지막 관리자 | 구현 유지 · 계약 문구 갱신 | `admin-api.md` 마지막 관리자 블릿(그룹 역할 회수 · 그룹 삭제 명시) · `platform/error-handling.md` · `rules/domains/saas.md` 의 `TENANT_LAST_ADMIN_REQUIRED` 경로 나열 |
+| 4-3 · 4-4 · 4-6 | 지금 변경 없음(기록대로). 4-6 은 § 5 «S5/S6 이후» 로 옮김 | — |
+
+- 🔵 **남는 경우 하나(결정대로)**: 이 사람의 U 소속이 그 그룹 fan-out 배정뿐이고 U 에 **직접** 역할 행이 있으면, 내보내기 뒤 그 직접 행은 소속 없이 남는다(소유자 결정 «직접 행은 바이트 불변» 을 따른 결과 — D-1 상태). U assume 은 거절되고 U 관리 권한은 남는다. 필요하면 후속 결정.
+- **시험**: `OperatorCompanyExitUseCaseTest` +2 — 🔴 그룹 9(alpha)가 uu 에 만든 역할 행 제거 · 이 사람의 직접 uu 행 · vv 행(vv 그룹 행 포함) 바이트 불변 · `deleteGroupOriginAssignments(9)` · uu/vv 배정 직접 삭제 0 / 🔴 그룹 9 fan-out 이 uu 의 유일 `TENANT_ADMIN` → 409 · 쓰기 0 → 대조군 다른 uu 관리자 있으면 통과. 기존 칸 detail 기대값 갱신. `PatchOperatorRoleUseCaseTest` +1 — 🔴 헤더 없음 · 아무 소속도 관리 안 함 → 소속 둘 / 0 둘 다 403(400 · 404 아님) + DENIED 행 = 홈; 기존 400 · 404 칸은 «소속 하나를 관리하는 actor» · «`'*'` actor» 로 고정. IT `#ac2_groupFanOutIntoOtherCompanies_goesWithTheGroup` 신설(A 그룹 G 가 U · V 배정 부여 · V 는 직접 소속이라 skip · G 의 U 역할 행은 pre-S4 모양으로 jdbc 삽입 · 직접 U 역할 → 내보내기 뒤 G 의 U 배정 · U 역할 행 없음, 직접 U 역할 · 직접 V 소속 · V 역할 바이트 불변) · `#ac2` detail 기대값 갱신. U 마지막 관리자의 IT 칸은 만들지 않았다(post-S4 API 로는 그룹 역할 fan-out 이 그룹 테넌트에만 생겨 U 의 `TENANT_ADMIN` 그룹 행을 만들 수 없다 — 단위 칸이 판정).
+- **rc**: `:admin-service:test` **0**(1169 tests · fail 0 · skip 58). 🔴 **bite 3**: cascade 를 «그룹의 T 행만»(`deleteOperatorRolesByGroupOrigin` 호출 제거 — T 행은 테넌트 삭제가 걷으므로 T 만 남는다)으로 → `OperatorCompanyExitUseCaseTest` 7 중 **2 빨강**(새 uu 칸 · uu 마지막 관리자 칸의 대조군 절반), 나머지 5 초록 → 복원 후 rc **0**. 가드(`git add` 뒤): index-queue-drift · task-id-collision · walkthrough-ledger-drift · error-code-registry · domain-error-code-registry 모두 **0**. IT 는 ⚪ CI.
