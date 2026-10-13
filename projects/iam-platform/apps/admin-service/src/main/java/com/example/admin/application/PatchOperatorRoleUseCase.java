@@ -45,7 +45,10 @@ public class PatchOperatorRoleUseCase {
         // grant only roles whose permissions ⊆ its own (never SUPER_ADMIN).
         // Net-zero for SUPER_ADMIN ('*'). Admits TENANT_ADMIN/TENANT_BILLING_ADMIN
         // only behind the matching delegating permission (≤-own).
-        roleGrantGuard.requireGrantable(actor, resolvedRoles.values(), ActionCode.OPERATOR_ROLE_CHANGE);
+        // TASK-MONO-784 S3 (D-6): ≤-own in the tenant the rows are written to (the target's home until S4
+        // moves role edits onto the acting-tenant axis, D-7).
+        roleGrantGuard.requireGrantable(actor, resolvedRoles.values(), ActionCode.OPERATOR_ROLE_CHANGE,
+                operator.tenantId());
 
         Instant now = Instant.now();
         Long actorInternalId = operatorPort.resolveActorInternalId(

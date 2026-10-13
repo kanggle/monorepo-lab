@@ -75,11 +75,18 @@ public class OperatorAdminController {
     private final UnlinkOperatorIdentityUseCase unlinkOperatorIdentityUseCase;
     private final AdminOperatorPort adminOperatorPort;
     private final RoleGrantGuard roleGrantGuard;
+    private final com.example.admin.application.QueryTenantScopeGate queryTenantScopeGate;
 
+    /**
+     * TASK-MONO-784 S3 (admin-api.md § GET /api/admin/me): no authorization decision; an optional
+     * {@code X-Tenant-Id} narrows {@code roles} to the role rows living in that tenant (+ {@code '*'} rows),
+     * and the new {@code memberships[]} lists each membership with its roles.
+     */
     @GetMapping("/me")
-    public ResponseEntity<OperatorSummaryResponse> currentOperator() {
+    public ResponseEntity<OperatorSummaryResponse> currentOperator(
+            @RequestHeader(value = "X-Tenant-Id", required = false) String actingTenantId) {
         String operatorId = OperatorContextHolder.require().operatorId();
-        OperatorSummary summary = queryService.getCurrentOperator(operatorId);
+        OperatorSummary summary = queryService.getCurrentOperator(operatorId, actingTenantId);
         return ResponseEntity.ok(toResponse(summary));
     }
 
@@ -129,10 +136,16 @@ public class OperatorAdminController {
      */
     @GetMapping("/operators/grantable-roles")
     @RequiresPermission(Permission.OPERATOR_MANAGE)
-    public ResponseEntity<GrantableRolesResponse> grantableRoles() {
+    public ResponseEntity<GrantableRolesResponse> grantableRoles(
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
         OperatorContext actor = OperatorContextHolder.require();
+        // TASK-MONO-784 S3 (D-6 · § 행동 테넌트 #5): the grant menu is per company — the acting tenant is
+        // judged against the operator.manage grant scope (omitted-tenant rule; refusal writes no row, a
+        // read), and ≤-own is measured in what the caller holds THERE, not the union over its companies.
+        String actingTenant = queryTenantScopeGate
+                .resolveWithoutDenyRow(actor, tenantId, Permission.OPERATOR_MANAGE).tenantId();
         List<AdminOperatorPort.RoleView> allRoles = adminOperatorPort.findAllRoles();
-        List<String> grantable = roleGrantGuard.grantableRoleNames(actor, allRoles);
+        List<String> grantable = roleGrantGuard.grantableRoleNames(actor, allRoles, actingTenant);
         return ResponseEntity.ok(new GrantableRolesResponse(grantable));
     }
 
@@ -424,7 +437,10 @@ public class OperatorAdminController {
                 summary.lastLoginAt(),
                 summary.createdAt(),
                 summary.homeTenantId(),
-                toOperatorContext(summary.financeDefaultAccountId()));
+                toOperatorContext(summary.financeDefaultAccountId()),
+                summary.memberships() == null ? null : summary.memberships().stream()
+                        .map(m -> new OperatorSummaryResponse.MembershipResponse(m.tenantId(), m.roles()))
+                        .toList());
     }
 
     /**

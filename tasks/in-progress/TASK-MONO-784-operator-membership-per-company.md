@@ -57,7 +57,7 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0 (게이트)** — 772 가 `done/` 이다. 아니면 착수하지 않는다. 참이면 재측정: ① 테넌트를 받지 않는 관리 API(자기 정보 · 목록)의 전수와 각각의 판정 기준(ADR-082 § 새로 생기는 위험 1 — 기본값 «홈» 은 R1 과, «모든 소속의 합» 은 상속 누수와 모순이므로 API 마다 정해 적는다) ② 감사기가 지금 `admin_actions.tenant_id` 를 무엇으로 채우는지 ③ R2 로 관리 화면이 줄어드는 데모 시드 행 수(`demo-operator` 의 `ecommerce` 배정 등) ④ ADR-082 § Outstanding 의 라이브 술어(홈 밖 배정 수) — 창이 없으면 ⚪ 와 이유. — ✅ 2026-10-11 UTC: 게이트 참 · ①②③ 답 · ④ ⚪(창 없음). § AC-0 기록.
-- [ ] **AC-1** — 🔴 **대조군 — 권한 누수**: A 에서 `TENANT_ADMIN`, B 는 배정만(역할 없음) → B 의 운영자 목록 · 감사 조회가 **거절**되고, 같은 시험에서 A 의 같은 조회는 통한다. 실패 쪽을 먼저 단언한다(지금 코드에서 이 앞 절반은 빨갛다 — 그것이 «전» 상태).
+- [x] **AC-1** — 🔴 **대조군 — 권한 누수**: A 에서 `TENANT_ADMIN`, B 는 배정만(역할 없음) → B 의 운영자 목록 · 감사 조회가 **거절**되고, 같은 시험에서 A 의 같은 조회는 통한다. 실패 쪽을 먼저 단언한다(지금 코드에서 이 앞 절반은 빨갛다 — 그것이 «전» 상태). — ✅ 2026-10-13 UTC (S3): 단위 칸 통과 + bite 빨강 확인 · IT 칸 작성(`OperatorMembershipReadAxisIntegrationTest`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). § S3 기록.
 - [ ] **AC-2** — 🔴 **대조군 — 한 회사만 떠나기**(ADR-082 D3): 같은 사람이 A · B 운영자 → A 에서 내보내기 → 같은 시험에서 A assume · A 관리 API 거절 · B assume · B 관리 API 성공 · 같은 계정의 스토어 · 팬 토큰 그대로.
 - [ ] **AC-3** — 두 번째 회사 소속 추가(초대 수락 · 셀프 온보딩) → 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 같은 테넌트 재소속 409 · `'*'` 행에 회사 소속 쓰기 거절 · 풀 행에 `'*'` 거절(D2). 772 AC-6 IT 의 «두 번째 회사 409 · 셀프 온보딩 409» 칸은 **바뀐 기대값으로 고친다**(걷지 않는다).
 - [ ] **AC-4** — 정지(R3): 소속 둘 이상인 운영자의 행 정지는 회사 관리자에게 거절 · `SUPER_ADMIN` 은 성공 · 소속 하나면 지금과 같다. 역할 변경이 다른 회사의 역할 행을 바꾸지 않는다.
@@ -428,3 +428,73 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - **CI**: admin-service `integrationTest`(위 IT 전부) · `federation-hardening-e2e`(시드 3행 추가 — 위임 스펙 · 스위처) — 이 PR 의 CI 결과로만 판정된다.
 - **S3+**: 읽기 게이트를 grant scope 로 · 사본 4곳 · 생략 규칙 · 권한 키 없는 읽기 · ≤-own 회사 안 · `/me` · 감사 `tenant_id` · 상태 변경 캐시 무효화 · OD-3 `demo-operator` `ecommerce` 역할 시드(S3) / 역할 PATCH 회사 축 · R3 · 내보내기 · 마지막 관리자 409 · 그룹 · 참여자 술어 · fan-out 그룹 테넌트 · D2 거절(S4) / 두 409 → 소속 추가(S5) / 콘솔(S6).
 - 라이브 ⚪: 데모 창에서 V0051 백필 수(§ AC-0 ④ 술어와 같은 창) — 배포 후 `operator_tenant_assignment` 가 «비-`'*'` 운영자 수 + (홈 밖 역할 행 테넌트 수)» 만큼 늘었는지.
+
+---
+
+## S3 기록 (2026-10-13 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `wt-784` · 브랜치 `feat/mono-784-s3-read-axis`(origin/main `187fd8544` = S2 #4312 위). 근거 = § AC-0 D-4 · D-5 · D-6 · D-13 · D-16 · OD-3 · S1 계약 `admin-api.md` § 행동 테넌트(23행 표의 S3 행 #1 · #5 ~ #11 · #17) · § GET /me · § GET /operators ②③.
+> 경로는 따로 적지 않으면 `projects/iam-platform/apps/admin-service/src/main/java/com/example/admin/` 아래.
+
+### 1. 행동 변경
+
+| # | 무엇 | 파일 | 근거 · 23행 |
+|---|---|---|---|
+| 1 | **게이트 = grant scope** — `QueryTenantScopeGate` 가 소속(배정)·홈 대신 `AdminGrantScopeEvaluator.effectiveAdminScope(운영자, 권한)` 으로 판정. 생략 규칙: `{'*'}`→`'*'` · 하나 → 그것 · 0 → 403 · 둘 이상 → `IllegalArgumentException`(400 `VALIDATION_ERROR`). `isPlatformScope` = grant scope 에 `'*'`(홈 칸 아님). DENIED 행 유무를 고르는 `resolveWithoutDenyRow` · 권한 키 없는 읽기용 `resolveAnyRole` 신설 | `application/QueryTenantScopeGate.java` (전면 재작성 — `decide` :102-128) | D-4 · #6 ~ #11 |
+| 2 | 권한 키 없는 읽기 술어 = «역할 행이 하나라도 있는 테넌트»(`anyRoleScope`) · ≤-own 의 «보유» = 그 테넌트에서 보유(`permissionsHeldIn` — 그 테넌트 행 · `'*'` 행 · 그 테넌트를 덮는 노드 행) · `scopeOf` 로 공용화 | `infrastructure/persistence/rbac/AdminGrantScopeEvaluator.java` (`anyRoleScope` · `permissionsHeldIn` · `scopeOf` · `activeRoleRows`) | R2 · D-6 |
+| 3 | 계정 검색: e-mail 분기 → `resolveAnyRole` · 목록 분기 → **권한 검사 뒤** `resolve(account.read)` (권한 없는 운영자의 grant scope 는 비어 있어 게이트가 먼저면 `PERMISSION_DENIED` 가 `TENANT_SCOPE_DENIED` 로 바뀐다 — 순서를 바꿔 계약 코드 유지). 잠금·해제·일괄잠금·GDPR·내보내기·세션 종료는 호출 코드 무변경 — 게이트 의미가 바뀐 것만으로 grant scope(각 annotation 권한) 판정이 된다(F2) | `presentation/AccountAdminController.java` (search) · `AdminGdprController` · `SessionAdminController`(무변경) | #8 · #8b · #10 |
+| 4 | 운영자 이메일 조회 → `resolveAnyRole` | `application/OperatorEmailLookupUseCase.java` | #9 |
+| 5 | **사본 3곳 합침**: 운영자 목록(`OperatorQueryService` — 해소기 사본 삭제, `resolveWithoutDenyRow(operator.manage)`) · 초대 목록(`OperatorInvitationUseCase.list`, 같은 호출) · 테넌트 상세(`TenantAdminController.getTenant` — `TenantScopeGuard.requireTenantReadable(tenant.manage)`; `PermissionEvaluator.isTenantAllowed` · 해소기 의존 제거). 🔵 4번째 사본 `UpdateOperatorProfileUseCase` 는 계약 23행 #12 가 **S4(행 전체 규칙)** 로 적어 두어 손대지 않았다 | `application/OperatorQueryService.java` · `application/OperatorInvitationUseCase.java` · `presentation/tenant/TenantAdminController.java` | #6 · #11 · #17 |
+| 6 | 운영자 목록 항목 `roles` = **조회 테넌트의 역할 행만**(`'*'` 목록은 전체) — 포트 `bulkLoadRoleNamesByOperatorInTenant` 신설 | `OperatorQueryService.listOperators` · `port/AdminOperatorPort.java` · `persistence/rbac/JpaAdminOperatorAdapter.java` | § GET /operators ③ (S1-3) |
+| 7 | `/me`: `X-Tenant-Id` = T 면 `roles` = T 행 + `'*'` 행 · 헤더 없으면 전체(그대로) · 새 `memberships[{tenantId, roles}]`(소속 오름차순, `'*'` 운영자 `[]`, 목록 항목엔 null = 생략). 포트 `findRoleNamesByTenant` 신설 | `OperatorQueryService.getCurrentOperator(uuid, tenant)` · `presentation/OperatorAdminController.java` (`/me`) · `presentation/dto/OperatorSummaryResponse.java` (`memberships`, NON_NULL) | #1 · D-16 |
+| 8 | **≤-own 회사 안**: `RoleGrantGuard.requireGrantable` · `grantableRoleNames` 에 테넌트 인자(필수 — 합 기반 오버로드 삭제, 그래서 어느 호출자도 조용히 합을 쓰지 못한다). 테넌트 = **부여되는 행이 사는 곳**: 초대 생성 = 초대 테넌트 · 재발송 = 초대 테넌트 · 수락 재검사 = 초대 테넌트 · 그룹 역할 부여·멤버 추가 = 그룹 테넌트 · 역할 PATCH = 대상 홈(S4 가 행동 테넌트로) · 직접 생성 = `'*'` · 노드 grant = 대상 홈(행의 `tenant_id`). `PermissionEvaluator`(합) 의존 제거 | `application/RoleGrantGuard.java` · `CreateOperatorUseCase` · `OperatorInvitationUseCase` · `OperatorInvitationAcceptanceUseCase` · `GroupAdminUseCase` · `PatchOperatorRoleUseCase` · `OrgNodeAdminUseCase` | D-6 · F3 |
+| 9 | `grantable-roles`: `X-Tenant-Id` 를 `resolveWithoutDenyRow(operator.manage)` 로 해소(밖 → 403, 감사 행 없음) → 그 테넌트의 메뉴 | `OperatorAdminController.grantableRoles` | #5 |
+| 10 | **감사 `tenant_id` = 행동 테넌트**(D-13): `'*'` 행위자 → `'*'` · 자기 흐름(`<self_*>` · `auth.*` 권한) → 홈 · 대상 테넌트 없음/`'*'`/홈과 같음 → 홈(조회 0) · 대상 테넌트가 행위자의 **소속**이면 그 테넌트 · 그 밖(파트너 회사 등) → 홈. IN_PROGRESS · 단발 행 둘 다. DENIED 행(`AdminActionDenyWriter`)은 무변경(홈) | `application/AdminActionAuditWriter.java` (`actingTenantId`) | D-13 · F5 |
+| 11 | 상태 변경 성공 뒤 권한 캐시 무효화(역할 PATCH 와 같은 best-effort) | `application/PatchOperatorStatusUseCase.java` | D-5 · F7 |
+| 12 | **OD-3 시드**: `demo-operator` 에 `SUPPORT_READONLY` + `SUPPORT_LOCK` @ `ecommerce`(§ 4b) — `ecommerce` 의 계정 · 감사 · 잠금 유지, `ecommerce` 운영자 목록 403 | `src/main/resources/db/migration-dev/R__seed_demo_operator.sql` | OD-3 |
+| 13 | 계약 정리(S2 보고 3건 + 관련 1건): GET /operators `tenantId` 행 · lookup `tenantId` 행 · lookup «속한» 술어(:1199) · 테넌트 개요 `operators` 행(:2511) — «home 또는 배정» → 소속 / grant scope + 생략 규칙. § Tenant Confinement 의 784 블릿을 «S3 부터 · 플랫폼 = grant scope 의 `'*'`» 로. lookup 오류표에 생략 → 둘 이상 = 400 | `projects/iam-platform/specs/contracts/http/admin-api.md` | S2 § 5-3 |
+
+### 2. 시험 (실패 쪽 먼저)
+
+- **AC-1 단위 반쪽** — `QueryTenantScopeGateTest`(전면 재작성, **진짜 `AdminGrantScopeEvaluator`** + 목 저장소): 🔴 역할 행 @alpha 만 → beta 의 `operator.manage` · `audit.read` · `account.lock` **거절**(+ DENIED 행 2) → 같은 시험에서 alpha 통과 · 권한별 scope(SUPPORT_LOCK @beta → beta 잠금 O · beta 운영자 목록 X) · **대조군** 생략 + 단일 회사 → 그 테넌트(=예전 홈 기본값) · 생략 + 둘 → 400 · 생략 + 0 → 403 · `'*'` · 비-플랫폼의 `'*'` 요청 403 · 미지 운영자 · R2 any-role(beta 거절 · alpha 통과 · 생략 → alpha). 9칸.
+- **AC-1 IT 반쪽** — `integration/OperatorMembershipReadAxisIntegrationTest`(신규, Testcontainers · F8 픽스처: A 에 `TENANT_ADMIN` + `SUPPORT_READONLY` + `SUPPORT_LOCK`, 소속 A · B, B 역할 0): ① 🔴 B 운영자 목록 · B 감사 403 `TENANT_SCOPE_DENIED` → 같은 시험 A 둘 200 ② 🔴 잠금 쓰기 B → 403 · IN_PROGRESS 행 0 ③ 대조군 단일 회사 생략 → 200 · 메타 감사 행 `tenant|target` = `gamma|gamma`(바이트 동일) ④ D-13 B 의 행위 행이 B 관리자의 감사 조회에 `totalElements=1` · `operatorId` 일치.
+- D-6: `RoleGrantGuardTest`(재작성) 🔴 `TENANT_ADMIN @alpha` 가 beta 에서 `TENANT_ADMIN` 부여 거절 + 메뉴 빈 배열 → 같은 시험 alpha 통과 · 나머지 기존 칸을 테넌트 인자로.
+- D-13: `AdminActionAuditWriterTest` +5(🔴 소속 beta 행위 → `tenant_id=beta` / 대조군 단일 회사 → 홈 · 소속 조회 0 / 소속 밖 대상 → 홈 / `'*'` → `'*'` · 조회 0 / 자기 흐름 → 홈).
+- `/me` · 목록: `OperatorQueryServiceTest`(재작성 — beta 헤더 → `SUPPORT_READONLY` 만 · memberships 3(역할 0 소속 포함) · 헤더 없음 → 전체 / `'*'` → `[]` · 소속 미조회 / 목록 항목 memberships null · 회사 목록은 `…InTenant` 만) · `OperatorAdminControllerSliceTest`(+/me 헤더·memberships 직렬화 · grantable 403).
+- 계정: `AccountAdminControllerSliceTest` +2(e-mail 분기 역할 0 테넌트 403 · 검색 0 / 목록 `account.read` 없음 → `PERMISSION_DENIED` · 게이트 미호출). `TenantAdminControllerSliceTest` +1(테넌트 상세 grant scope 밖 403). `PatchOperatorStatusUseCaseTest` +1(성공 → 무효화 · 거절 → 무효화 0).
+- 시그니처 따라 고침(기대값 무변경): `CreateOperatorUseCaseTest` · `GroupAdminUseCaseTest` · `OperatorInvitationUseCaseTest`(목록 3칸 → 게이트 목) · `OperatorInvitationAcceptanceUseCaseTest` · `OrgNodeAdminUseCaseTest` · `OperatorLookupControllerSliceTest`(`resolveAnyRole`).
+- 시드 핀: `DemoOperatorSeedIntegrationTest` — `demo-operator` 역할 집합 정확히 `{SUPER_ADMIN|demo-corp, SUPPORT_LOCK|ecommerce, SUPPORT_READONLY|ecommerce}` + 🆕 ecommerce 감사 200 · ecommerce 운영자 목록 403 `TENANT_SCOPE_DENIED` · demo-corp 목록 200(대조군).
+
+### 3. 실행 (rc 는 각자 따로 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `./gradlew :projects:iam-platform:apps:admin-service:compileTestJava` | **0** | IT 포함 컴파일 |
+| `./gradlew :projects:iam-platform:apps:admin-service:test` (최종) | **0** | 178 suites · 1135 tests · fail 0 · error 0 · skip 58(Testcontainers IT — Docker 없음) |
+| 🔴 **bite**: `QueryTenantScopeGate.decide` 의 명시값 분기를 «요청 테넌트 무조건 통과»(= 픽스처의 B 가 소속이므로 784 전 «home ∪ 배정» 게이트와 같은 결과)로 바꾸고 `--tests QueryTenantScopeGateTest` | **1** | 9 중 **4 빨강** — AC-1 · 권한별 scope · R2 any-role · 비-플랫폼 `'*'`. 대조군(생략 단일 · 둘 → 400 · 0 → 403 · `'*'`) 5칸은 초록 그대로(물 것만 문다). 복원 후 같은 클래스 rc=**0** |
+| auth-service | — | 이번 슬라이스는 auth-service 를 건드리지 않아 돌리지 않았다 |
+| `integrationTest` | ⚪ | 이 호스트에 Docker 없음 — 위 IT(신규 `OperatorMembershipReadAxisIntegrationTest` · 갱신 `DemoOperatorSeedIntegrationTest`)는 **CI 가 판정** |
+
+### 4. CI 가 판정할 것 · 계약과 다르게 한 곳
+
+1. 🔴 **IT 전반의 파급**: 게이트가 grant scope 로 바뀌어 «역할 행 테넌트 ≠ 조회 테넌트» 인 IT 픽스처(역할을 홈에만 두고 배정 테넌트로 감사·계정·운영자 목록을 부르던 것)는 이제 403 이다. 정적으로 찾은 곳은 없지만 29개 수기 픽스처를 모두 열지는 않았다 — CI 빨강이면 픽스처가 R2 를 어긴 것이다(역할 행을 그 테넌트에 더한다).
+2. **생략 규칙의 새 400**: 역할 행이 두 테넌트 이상인 운영자가 `tenantId`/`X-Tenant-Id` 없이 부르면 400. 콘솔은 늘 활성 테넌트를 보내므로 무영향 예상(S1 계약 그대로).
+3. **D-13 의 판정 술어**: 계약은 «테넌트로 판정된 행위 = 행동 테넌트» 이고 구현은 «기록의 `target_tenant_id` 가 행위자의 소속이면 그것» 이다. 노드 grant(ORG_ADMIN) 로 subtree 테넌트에서 한 행위는 그 테넌트가 소속이 아니어서 **홈에 남는다**(784 이전과 같음) — S4 이후 필요하면 판정 지점에서 행동 테넌트를 명시 전달하도록 바꾼다.
+4. **lookup 생략 + 역할 테넌트 둘 이상** = 400(계약 일반 규칙을 따름) — lookup 오류표에 한 줄 더했다.
+5. `TenantAdminController.getTenant` 는 이제 DENIED 행을 쓰지 않는 `requireTenantReadable`(784 전 사본도 행을 쓰지 않았다 — 행동 동일).
+
+### 5. S4+ 에 넘기는 것
+
+- `UpdateOperatorProfileUseCase` 의 게이트 사본(행 전체 규칙 #12) · `PatchOperatorRoleUseCase` 의 ≤-own 테넌트(지금 대상 홈 → D-7 행동 테넌트) · 역할 PATCH · 내보내기 · 그룹/파트너 술어의 캐시 무효화 지점(S4) — 상태 변경 무효화는 S3 에서 끝.
+- `AdminGrantScopeEvaluator` 클래스 javadoc 의 «operational scope = home ∪ assignment» 문구(코드 무관, S2 이후 낡음).
+- `multi-tenancy.md` § 7 시험 자리 표의 784 행(AC-1 위치 = 위 § 2) — S1 § 4-5 가 시험 생기는 슬라이스 몫으로 남긴 것.
+- 라이브 ⚪: 데모 창에서 `demo-operator` 의 ecommerce 화면(계정 · 감사 · 잠금 200 · 운영자 403) 확인 — AC-6 과 같은 창.
+
+### 6. CI 1회차 · 소유자 결정 (2026-10-13 UTC)
+
+- **실패**: PR #4320 `Integration (iam A)` — `OperatorLookupIntegrationTest` «HOME ∪ ASSIGNED operators … (operator holding no role)» `$.content.length()` 기대 2 · 실제 0.
+- **원인**: § 1 #4 가 `GET /operators/lookup`(#9)을 #8b 와 같은 «역할 행이 하나라도 있는 테넌트» 로 묶었다. 그 칸의 호출자(erp HR)는 역할 행이 0 → 범위 밖 → 빈 200. TASK-MONO-777 이 이 조회를 권한 키 없이 연 이유가 바로 **관리 역할이 없는 HR** 이라, S3 가 그 기능을 조용히 깼다. 그 IT 칸은 의도된 것이므로 약하게 고치지 않았다.
+- **소유자 결정** (선택 «그 회사 소속이면 허용»): **#9 만** 게이트 = 호출자의 **소속**(배정 행 · `'*'` 호출자는 그대로 전 테넌트 · 홈 안 읽음) + 생략 규칙을 소속 집합 위에서. 범위 밖 = 빈 200 + best-effort DENIED 행 그대로. **#8b 는 «역할 행» 그대로.**
+- **수정**: `QueryTenantScopeGate.resolveMembership`(신설 — `OperatorLookupPort` + `TenantScopeResolver`, S2 의 배정만 해소기) · `OperatorEmailLookupUseCase` → `resolveMembership` · `OperatorLookupControllerSliceTest` 목 이름. 계약 `admin-api.md` #9 행 · § lookup 의 `tenantId` 행 · 784 규칙 블릿 · 오류표 문구(«소속») — #8b 문구 무변경. `rbac.md` § 권한 키 없는 읽기 — lookup 예외 블록 추가, 역할 술어 블록은 accounts e-mail 에만.
+- **시험**: `QueryTenantScopeGateTest` +3 — 🔴 소속 beta · 역할 0 → lookup beta 해소(생략 → beta) + 같은 호출자로 #8b(`resolveAnyRole`) beta 거절(두 키 없는 읽기를 한 시험에서 갈라 핀) / 대조군 비소속 gamma · 소속 아닌 홈 alpha 둘 다 거절 + DENIED 행 / `'*'` → `*` · 소속 미조회.
+- **rc**: `:admin-service:test` **0**(1138 tests · fail 0 · skip 58). bite — `resolveMembership` 을 `anyRoleScope` 로 되돌림 → `QueryTenantScopeGateTest` 12 중 **3 빨강**(새 #9 칸 셋) · 나머지 9 초록 → 복원 후 그 클래스 + `OperatorLookupControllerSliceTest` rc **0**. IT(`OperatorLookupIntegrationTest`) 는 다시 CI 판정.

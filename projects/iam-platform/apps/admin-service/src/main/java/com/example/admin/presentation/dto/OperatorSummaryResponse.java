@@ -41,8 +41,27 @@ public record OperatorSummaryResponse(
          */
         String homeTenantId,
         @JsonInclude(JsonInclude.Include.NON_NULL)
-        OperatorContextResponse operatorContext
+        OperatorContextResponse operatorContext,
+        /*
+         * TASK-MONO-784 S3 (admin-api.md § GET /api/admin/me · D-16) — one entry per membership with the
+         * roles that live there. Carried by /me only ([] for a '*' operator); null — so omitted — on the
+         * operators list items, which must not show one company's admin another company's memberships.
+         */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        List<MembershipResponse> memberships
 ) {
+
+    /** Pre-TASK-MONO-784 S3 shape — no {@code memberships} (omitted on the wire). */
+    public OperatorSummaryResponse(String operatorId, String email, String displayName, String status,
+                                   List<String> roles, boolean totpEnrolled, Instant lastLoginAt,
+                                   Instant createdAt, String homeTenantId,
+                                   OperatorContextResponse operatorContext) {
+        this(operatorId, email, displayName, status, roles, totpEnrolled, lastLoginAt, createdAt,
+                homeTenantId, operatorContext, null);
+    }
+
+    /** TASK-MONO-784 S3 — {@code { "tenantId": "acme", "roles": ["TENANT_ADMIN"] }}. */
+    public record MembershipResponse(String tenantId, List<String> roles) {}
 
     /**
      * TASK-BE-308: wire DTO for the operator's profile carrier on

@@ -168,7 +168,7 @@ class CreateOperatorUseCaseTest {
         verify(passwordHasher, times(1)).hash("StrongPass1!");
         verify(operatorPort, times(1)).saveOperatorRoles(anyList());
         verify(tenantScopeGuard).requireTenantInScope(any(), any(), eq(PLATFORM), eq(ActionCode.OPERATOR_CREATE));
-        verify(roleGrantGuard).requireGrantable(any(), any(), eq(ActionCode.OPERATOR_CREATE));
+        verify(roleGrantGuard).requireGrantable(any(), any(), eq(ActionCode.OPERATOR_CREATE), eq(PLATFORM));
         // ADR-034 U4 identity link was always skipped for '*' — and '*' is now the only create.
         verify(operatorPort, never()).linkIdentity(anyLong(), anyString(), any(Instant.class));
 

@@ -133,7 +133,7 @@ class GroupAdminUseCaseTest {
         when(role.getName()).thenReturn("SUPER_ADMIN");
         when(adminRoles.findByName("SUPER_ADMIN")).thenReturn(Optional.of(role));
         doThrow(new RoleGrantForbiddenException("no")).when(roleGrantGuard)
-                .requireGrantable(any(), any(), eq(ActionCode.GROUP_GRANT_ADD));
+                .requireGrantable(any(), any(), eq(ActionCode.GROUP_GRANT_ADD), eq("acme"));
 
         assertThatThrownBy(() -> useCase.addGrants(actor, "grp-1", List.of("SUPER_ADMIN"), List.of(), "r"))
                 .isInstanceOf(RoleGrantForbiddenException.class);
@@ -252,7 +252,7 @@ class GroupAdminUseCaseTest {
 
         assertThat(result.operatorId()).isEqualTo("op-9");
         verify(groupMembers).save(any());
-        verify(roleGrantGuard).requireGrantable(eq(actor), eq(List.of()), eq(ActionCode.GROUP_MEMBER_ADD));
+        verify(roleGrantGuard).requireGrantable(eq(actor), eq(List.of()), eq(ActionCode.GROUP_MEMBER_ADD), any());
         verify(auditor).record(any());
     }
 

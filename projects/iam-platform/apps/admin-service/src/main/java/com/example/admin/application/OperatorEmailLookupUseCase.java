@@ -44,7 +44,10 @@ public class OperatorEmailLookupUseCase {
         }
         String tenantId;
         try {
-            tenantId = queryTenantScopeGate.resolve(
+            // TASK-MONO-784 S3 (§ 행동 테넌트 #9) · owner decision 2026-10-13 UTC: the caller's MEMBERSHIPS
+            // (not «any role row» like the accounts e-mail branch #8b) — this lookup exists (TASK-MONO-777) for
+            // an erp HR operator who holds no admin role at all.
+            tenantId = queryTenantScopeGate.resolveMembership(
                     caller, requestedTenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ)
                     .tenantId();
         } catch (TenantScopeDeniedException outOfScope) {

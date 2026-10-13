@@ -78,19 +78,21 @@ public class AccountAdminController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             HttpServletRequest request) {
 
-        // TASK-BE-357: resolve + effective-scope-gate the query tenant for BOTH
-        // branches (shared read gate with GET /api/admin/audit). Omitted tenantId →
-        // operator's own tenant; out-of-scope → 403 TENANT_SCOPE_DENIED (best-effort
-        // DENIED admin_actions row). This closes the previous gaps: email search was
+        // TASK-BE-357: resolve + gate the query tenant for BOTH branches (shared gate
+        // with GET /api/admin/audit); out-of-scope → 403 TENANT_SCOPE_DENIED (best-effort
+        // DENIED admin_actions row). This closed the earlier gaps: email search was
         // hard-coded to fan-platform (ecommerce un-findable) and list was unscoped
-        // (cross-tenant leak).
+        // (cross-tenant leak). TASK-MONO-784 S3: the gate is the grant scope and an
+        // omitted tenantId follows § 행동 테넌트's omitted-tenant rule (not the home).
         OperatorContext op = OperatorContextHolder.require();
-        String resolvedTenant = queryTenantScopeGate.resolve(
-                op, tenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId();
 
         // Single-account lookup by email needs NO account.read (a SUPPORT_LOCK
         // operator may look one up to lock it — admin-api.md), but is still tenant-scoped.
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #8b): with no permission key the tenant gate is «a tenant where
+        // the operator holds any role row» (rider R2 — a membership with no role reaches nothing).
         if (email != null && !email.isBlank()) {
+            String resolvedTenant = queryTenantScopeGate.resolveAnyRole(
+                    op, tenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId();
             return ResponseEntity.ok(accountServiceClient.search(resolvedTenant, email));
         }
 
@@ -109,6 +111,12 @@ public class AccountAdminController {
             throw new PermissionDeniedException(
                     "Operator lacks required permission: " + Permission.ACCOUNT_READ);
         }
+
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #8): the list's tenant is judged against the account.read grant
+        // scope — AFTER the permission check above, so an operator without account.read anywhere still gets
+        // PERMISSION_DENIED (its grant scope is empty, which the gate would answer TENANT_SCOPE_DENIED).
+        String resolvedTenant = queryTenantScopeGate.resolve(
+                op, tenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId();
 
         // TASK-BE-475: optional status filter (list branch only). Normalize + validate
         // at this boundary → bad value is 400 VALIDATION_ERROR here (IllegalArgumentException
@@ -148,9 +156,11 @@ public class AccountAdminController {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
         String ticketId = body == null ? null : body.ticketId();
-        // TASK-BE-467: resolve + effective-scope-gate the actor's active tenant
-        // (shared read gate). Out-of-scope tenant → 403 TENANT_SCOPE_DENIED (best-effort
-        // DENIED row); omitted → operator's own tenant. Stamped downstream as X-Tenant-Id.
+        // TASK-BE-467: resolve + gate the actor's active tenant (shared gate). Out-of-scope
+        // tenant → 403 TENANT_SCOPE_DENIED (best-effort DENIED row). Stamped downstream as
+        // X-Tenant-Id. TASK-MONO-784 S3 (§ 행동 테넌트 #10, AC-0 F2): judged against the
+        // account.lock GRANT scope — before S3 this write used the read gate's home ∪
+        // assignments, so a company the operator was merely assigned to could be locked in.
         OperatorContext op = OperatorContextHolder.require();
         String downstreamTenant = downstreamTenant(queryTenantScopeGate.resolve(
                 op, tenantId, ActionCode.ACCOUNT_LOCK, Permission.ACCOUNT_LOCK));

@@ -181,7 +181,7 @@ public class GroupAdminUseCase {
         // D4 re-check: fanning the group's current grants onto the new member must not exceed
         // the actor's own holdings (no group-as-bypass).
         List<OperatorGroupGrantJpaEntity> currentGrants = groupGrants.findByGroupId(group.getId());
-        requireGrantsWithinActorHoldings(actor, currentGrants, ActionCode.GROUP_MEMBER_ADD);
+        requireGrantsWithinActorHoldings(actor, currentGrants, ActionCode.GROUP_MEMBER_ADD, group.getTenantId());
 
         Instant now = Instant.now();
         Long actorInternalId = actorInternalId(actor);
@@ -239,7 +239,7 @@ public class GroupAdminUseCase {
                         .orElseThrow(() -> new RoleNotFoundException("Role not found: " + roleName)));
             }
             roleGrantGuard.requireGrantable(actor, roleEntities.stream().map(this::roleView).toList(),
-                    ActionCode.GROUP_GRANT_ADD);
+                    ActionCode.GROUP_GRANT_ADD, group.getTenantId());
         }
         // D4 no-escalation for tenant assignments (target ∈ actor's operator.manage scope).
         if (hasTenants) {
@@ -339,7 +339,8 @@ public class GroupAdminUseCase {
 
     private void requireGrantsWithinActorHoldings(OperatorContext actor,
                                                   List<OperatorGroupGrantJpaEntity> grants,
-                                                  ActionCode actionCode) {
+                                                  ActionCode actionCode,
+                                                  String groupTenantId) {
         List<AdminOperatorPort.RoleView> roleViews = new ArrayList<>();
         for (OperatorGroupGrantJpaEntity grant : grants) {
             if (grant.isRole()) {
@@ -353,7 +354,8 @@ public class GroupAdminUseCase {
                                 + "' (outside its operator.manage scope)");
             }
         }
-        roleGrantGuard.requireGrantable(actor, roleViews, actionCode);
+        // 784 S3 (D-6): ≤-own in the group's tenant — where the fanned-out rows live.
+        roleGrantGuard.requireGrantable(actor, roleViews, actionCode, groupTenantId);
     }
 
     private List<GroupFanOutService.Member> resolveMembers(Long groupInternalId) {

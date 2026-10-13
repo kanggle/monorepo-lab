@@ -1,87 +1,168 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.TenantScopeDeniedException;
-import com.example.admin.application.port.OperatorLookupPort;
 import com.example.admin.domain.rbac.AdminOperator;
+import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
 /**
- * TASK-BE-357 — the single dual-read tenant-scope gate for operator <em>read</em>
- * surfaces ({@code GET /api/admin/audit}, {@code GET /api/admin/accounts}).
+ * The single tenant gate for the endpoints whose <em>acting tenant</em> («행동 테넌트») comes from the
+ * request ({@code tenantId} query / {@code X-Tenant-Id} header): the audit · accounts · operators ·
+ * operator-invitation reads, the operator e-mail lookup, the grant-menu read, and the account / session
+ * <em>writes</em> (lock · unlock · bulk-lock · GDPR delete · export · session revoke) that reuse it
+ * (TASK-BE-357 / BE-467 lineage).
  *
- * <p>Extracted verbatim from {@link AuditQueryUseCase} (TASK-BE-249/BE-326) so the
- * two read surfaces cannot drift: resolve the operator's effective tenant scope
- * (its memberships via {@link TenantScopeResolver} — home ∪ assignments before TASK-MONO-784 S2,
- * assignments only since), default an omitted request
- * tenant to the operator's own, and enforce membership — a non-platform operator
- * requesting an out-of-scope tenant gets a best-effort DENIED {@code admin_actions}
- * row (TASK-BE-262) + {@code 403 TENANT_SCOPE_DENIED}.
+ * <p><b>TASK-MONO-784 S3 (ADR-MONO-082 b · decision D-4 · admin-api.md § 행동 테넌트).</b> This is the second
+ * of the two stages: {@code @RequiresPermission} has already said «this operator holds the permission
+ * <em>somewhere</em>»; this gate says <em>where</em>. The tenant must be in the permission's
+ * <b>grant scope</b> — {@link AdminGrantScopeEvaluator#effectiveAdminScope}, the tenants of the role rows
+ * that confer that permission — never the memberships and never the home. Before S3 it was the effective
+ * (operational) scope, home ∪ assignments, which let a role held in company A answer a read — or a lock —
+ * in company B where the operator was merely assigned (784 AC-1 · AC-0 F2). A read with no permission key
+ * uses {@link AdminGrantScopeEvaluator#anyRoleScope} instead (rider R2: a membership with no role row
+ * reaches nothing).
  *
- * <p>This is the READ-surface gate (effective scope = home ∪ assignments). It is
- * distinct from {@link TenantScopeGuard}, which gates the <em>administration</em>
- * surface against the admin-<em>grant</em> scope (ADR-MONO-024). Do not conflate.
+ * <p><b>Omitted tenant</b> (neither «home» — R1 — nor «the union of memberships» — inheritance):
+ * <ul>
+ *   <li>grant scope contains {@code '*'} → {@code '*'} (what the platform home used to give);</li>
+ *   <li>exactly one concrete tenant → that tenant (byte-identical to the old home default for every
+ *       single-company operator, whose role rows live at the home — V0026);</li>
+ *   <li>none → {@code 403 TENANT_SCOPE_DENIED};</li>
+ *   <li>two or more → {@code 400 VALIDATION_ERROR} («tenantId is required»).</li>
+ * </ul>
  *
- * <p><b>NET-ZERO:</b> with no assignment rows, {@link #resolve} reduces to the
- * legacy {@code operatorTenantId.equals(requested)} single-tenant behavior.
+ * <p>{@code isPlatformScope} is now «the grant scope contains {@code '*'}» — the role, not the home
+ * column — so a consumer that stamps {@code '*'} downstream for a platform admin (lock · GDPR, TASK-BE-619 /
+ * BE-621) keys on the same {@code '*'} grant row it always had.
+ *
+ * <p>Distinct from {@link TenantScopeGuard}, whose target tenant is a resource's tenant (an invitation's,
+ * a group's, a managed operator's) rather than a caller-chosen one. Both read the same grant scope.
  */
 @Component
 @RequiredArgsConstructor
 public class QueryTenantScopeGate {
 
-    private final OperatorLookupPort operatorLookupPort;
-    private final TenantScopeResolver tenantScopeResolver;
+    private final AdminGrantScopeEvaluator grantScopeEvaluator;
     private final AdminActionAuditor auditor;
+    private final com.example.admin.application.port.OperatorLookupPort operatorLookupPort;
+    private final TenantScopeResolver tenantScopeResolver;
 
     /**
-     * The resolved query tenant plus whether the caller is platform-scope
-     * (SUPER_ADMIN). Consumers branch on {@code isPlatformScope} when a cross-tenant
-     * ({@code "*"}) finder differs from the single-tenant finder.
+     * The resolved acting tenant plus whether the caller's grant scope is platform-wide ({@code '*'}).
+     * Consumers branch on {@code isPlatformScope} when a cross-tenant ({@code "*"}) finder differs from the
+     * single-tenant finder.
      */
     public record Resolved(String tenantId, boolean isPlatformScope) {}
 
     /**
-     * Resolves + gates the query tenant.
+     * Resolves + gates the acting tenant against the grant scope of {@code permission}; an out-of-scope
+     * tenant writes a best-effort DENIED {@code admin_actions} row (TASK-BE-262) before the 403.
      *
      * @param operator          the authenticated operator
-     * @param requestedTenantId the requested tenant; {@code null}/blank → operator's own
+     * @param requestedTenantId the requested tenant; {@code null}/blank → the omitted-tenant rule
      * @param actionCode        the audit action code for a DENIED row
-     * @param permission        the permission cited on the DENIED row (informational)
-     * @return the resolved tenant ({@code "*"} stays {@code "*"} for platform scope) + scope flag
-     * @throws TenantScopeDeniedException operator not found, or requested tenant out of effective scope
+     * @param permission        the permission whose grant scope decides
+     * @throws TenantScopeDeniedException out of scope, or omitted with an empty scope
+     * @throws IllegalArgumentException   omitted while the scope names two or more tenants (400)
      */
     public Resolved resolve(OperatorContext operator,
                             String requestedTenantId,
                             ActionCode actionCode,
                             String permission) {
-        OperatorLookupPort.OperatorLookupRef operatorRef = operatorLookupPort
-                .findByOperatorId(operator.operatorId())
-                .orElseThrow(() -> new TenantScopeDeniedException(
-                        "Operator not found: " + operator.operatorId()));
+        return decide(operator, requestedTenantId, grantScope(operator, permission), actionCode, permission);
+    }
 
-        String operatorTenantId = operatorRef.tenantId();
-        boolean isPlatformScope = AdminOperator.PLATFORM_TENANT_ID.equals(operatorTenantId);
+    /**
+     * {@link #resolve} without the DENIED row — for a read whose contract writes no audit row on refusal
+     * ({@code GET /api/admin/operators}, {@code GET /api/admin/operator-invitations},
+     * {@code GET /api/admin/operators/grantable-roles}; BE-486 read-path convention).
+     */
+    public Resolved resolveWithoutDenyRow(OperatorContext operator, String requestedTenantId, String permission) {
+        return decide(operator, requestedTenantId, grantScope(operator, permission), null, permission);
+    }
 
-        // Effective scope = memberships (assignment rows only since TASK-MONO-784 S2 — the home is not
-        // added, R1 · D-2; V0051 backfilled a home assignment so a single-company operator is unchanged).
-        // S3 retargets this gate at the per-permission grant scope (D-4).
-        Set<String> effectiveTenants = tenantScopeResolver
-                .resolveEffectiveTenantScope(operatorRef.internalId(), operatorTenantId);
+    /**
+     * The gate for {@code GET /api/admin/accounts?email=} (a read with <b>no permission key</b>, § 행동 테넌트
+     * #8b): the scope is every tenant where the operator holds any role row (R2). Writes the DENIED row like
+     * {@link #resolve}; {@code citedPermission} is informational only.
+     */
+    public Resolved resolveAnyRole(OperatorContext operator,
+                                   String requestedTenantId,
+                                   ActionCode actionCode,
+                                   String citedPermission) {
+        Set<String> scope = grantScopeEvaluator.anyRoleScope(operatorId(operator));
+        return decide(operator, requestedTenantId, scope, actionCode, citedPermission);
+    }
 
-        String requested = (requestedTenantId == null || requestedTenantId.isBlank())
-                ? operatorTenantId
-                : requestedTenantId;
+    /**
+     * The gate for {@code GET /api/admin/operators/lookup} (§ 행동 테넌트 #9): the scope is the caller's
+     * <b>memberships</b> ({@code operator_tenant_assignment} rows via {@link TenantScopeResolver}; a
+     * {@code '*'} caller stays {@code {'*'}}) — never the home (R1). Owner decision 2026-10-13 UTC «그 회사
+     * 소속이면 허용»: TASK-MONO-777 made this lookup permission-keyless so an ERP HR operator holding NO admin
+     * role can propose an employee ↔ account link in its own company; the any-role predicate of #8b would
+     * refuse exactly that caller. The omitted-tenant rule applies over the memberships. Writes the DENIED row
+     * like {@link #resolve}.
+     */
+    public Resolved resolveMembership(OperatorContext operator,
+                                      String requestedTenantId,
+                                      ActionCode actionCode,
+                                      String citedPermission) {
+        Set<String> scope = operator == null ? Set.of() : operatorLookupPort.findByOperatorId(operator.operatorId())
+                .map(ref -> tenantScopeResolver.resolveEffectiveTenantScope(ref.internalId(), ref.tenantId()))
+                .orElse(Set.of());
+        return decide(operator, requestedTenantId, scope, actionCode, citedPermission);
+    }
 
-        if (!isPlatformScope && !effectiveTenants.contains(requested)) {
-            // TASK-BE-262: best-effort DENIED audit row before throwing.
-            auditor.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permission, requested);
-            throw new TenantScopeDeniedException(
-                    "Operator tenantId=" + operatorTenantId
-                            + " cannot query tenantId=" + requested);
+    private Set<String> grantScope(OperatorContext operator, String permission) {
+        return grantScopeEvaluator.effectiveAdminScope(operatorId(operator), permission);
+    }
+
+    private Resolved decide(OperatorContext operator,
+                            String requestedTenantId,
+                            Set<String> scope,
+                            ActionCode actionCodeOrNullForNoRow,
+                            String permission) {
+        boolean isPlatformScope = scope.contains(AdminOperator.PLATFORM_TENANT_ID);
+        boolean omitted = requestedTenantId == null || requestedTenantId.isBlank();
+
+        if (!omitted) {
+            if (isPlatformScope || scope.contains(requestedTenantId)) {
+                return new Resolved(requestedTenantId, isPlatformScope);
+            }
+            throw deny(operator, actionCodeOrNullForNoRow, permission, requestedTenantId);
         }
 
-        return new Resolved(requested, isPlatformScope);
+        if (isPlatformScope) {
+            return new Resolved(AdminOperator.PLATFORM_TENANT_ID, true);
+        }
+        if (scope.size() == 1) {
+            return new Resolved(scope.iterator().next(), false);
+        }
+        if (scope.isEmpty()) {
+            throw deny(operator, actionCodeOrNullForNoRow, permission, null);
+        }
+        throw new IllegalArgumentException(
+                "tenantId is required: permission '" + permission + "' is held in more than one tenant");
+    }
+
+    private TenantScopeDeniedException deny(OperatorContext operator,
+                                            ActionCode actionCode,
+                                            String permission,
+                                            String attemptedTenantId) {
+        if (actionCode != null && operator != null) {
+            // TASK-BE-262: best-effort DENIED audit row before throwing (home tenant — DENIED rows never
+            // name the attempted tenant as their own, 784 D-13).
+            auditor.recordCrossTenantDenied(operator, null, actionCode, permission, attemptedTenantId);
+        }
+        return new TenantScopeDeniedException(attemptedTenantId == null
+                ? "Operator holds '" + permission + "' in no tenant"
+                : "Operator is not scoped to tenant '" + attemptedTenantId + "' for permission '" + permission + "'");
+    }
+
+    private static String operatorId(OperatorContext operator) {
+        return operator == null ? null : operator.operatorId();
     }
 }

@@ -1,6 +1,6 @@
 package com.example.admin.presentation.tenant;
 
-import com.example.admin.application.TenantScopeResolver;
+import com.example.admin.application.TenantScopeGuard;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.tenant.CreateTenantUseCase;
 import com.example.admin.application.tenant.GetTenantUseCase;
@@ -9,7 +9,6 @@ import com.example.admin.application.tenant.TenantPageSummary;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.application.tenant.UpdateTenantUseCase;
 import com.example.admin.domain.rbac.Permission;
-import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.application.OperatorContext;
 import com.example.admin.domain.rbac.AdminOperator;
@@ -62,9 +61,8 @@ public class TenantAdminController {
     private final UpdateTenantUseCase updateTenantUseCase;
     private final GetTenantUseCase getTenantUseCase;
     private final ListTenantsUseCase listTenantsUseCase;
-    private final PermissionEvaluator permissionEvaluator;
     private final AdminOperatorJpaRepository operatorRepository;
-    private final TenantScopeResolver tenantScopeResolver;
+    private final TenantScopeGuard tenantScopeGuard;
     private final com.example.admin.application.TenantOrgNodePlacementUseCase placementUseCase;
 
     /**
@@ -152,27 +150,11 @@ public class TenantAdminController {
     @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> getTenant(@PathVariable String tenantId) {
         OperatorContext operator = OperatorContextHolder.require();
-        var entity = operatorRepository.findByOperatorId(operator.operatorId())
-                .orElseThrow(() -> new com.example.admin.application.exception.OperatorUnauthorizedException(
-                        "Operator not found: " + operator.operatorId()));
-        AdminOperator adminOperator = new AdminOperator(
-                entity.getOperatorId(),
-                entity.getEmail(),
-                entity.getDisplayName(),
-                AdminOperator.Status.valueOf(entity.getStatus()),
-                entity.getVersion(),
-                entity.getTenantId(),
-                entity.getFinanceDefaultAccountId());
 
-        // TASK-BE-326: dual-read effective tenant scope (assignment rows ∪ home
-        // tenant). NET-ZERO with no assignments → {home tenant} → legacy behavior.
-        java.util.Set<String> effectiveTenants = tenantScopeResolver
-                .resolveEffectiveTenantScope(entity.getId(), entity.getTenantId());
-
-        if (!permissionEvaluator.isTenantAllowed(adminOperator, tenantId, effectiveTenants)) {
-            throw new TenantScopeDeniedException(
-                    "Operator is not allowed to access tenant: " + tenantId);
-        }
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #17 · D-4): the path tenant must be in the tenant.manage GRANT scope
+        // — the shared decision site, no DENIED row (a read). This controller used to carry its own copy of
+        // the effective-scope rule (home ∪ assignments, TASK-BE-326).
+        tenantScopeGuard.requireTenantReadable(operator, Permission.TENANT_MANAGE, tenantId);
 
         TenantSummary result = getTenantUseCase.execute(tenantId);
         return ResponseEntity.ok(TenantResponse.from(result));

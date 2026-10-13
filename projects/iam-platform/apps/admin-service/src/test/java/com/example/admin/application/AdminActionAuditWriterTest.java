@@ -49,6 +49,9 @@ class AdminActionAuditWriterTest {
     @Spy
     AdminActionPermissionRegistry permissions = new AdminActionPermissionRegistry();
 
+    @Mock
+    com.example.admin.application.port.OperatorTenantAssignmentPort assignmentPort;
+
     @InjectMocks
     AdminActionAuditWriter writer;
 
@@ -132,6 +135,74 @@ class AdminActionAuditWriterTest {
         assertThat(entity.getCompletedAt()).isNotNull();
         verify(repo).save(entity);
         verify(publisher).publishAdminActionPerformed(any());
+    }
+
+    // ── TASK-MONO-784 S3 · D-13: admin_actions.tenant_id = the acting tenant ─────────────────────────
+
+    private void stubActor(String home) {
+        when(operatorLookupPort.findByOperatorId("op-1"))
+                .thenReturn(Optional.of(new OperatorLookupPort.OperatorLookupRef(42L, "op-1", home)));
+    }
+
+    private AdminActionJpaEntity recordQueryTargeting(String targetTenantId) {
+        writer.recordWithPermission(new AdminActionAuditor.AuditRecord(
+                "audit-q", ActionCode.AUDIT_QUERY, op(), "audit", "*", "r", null, "k",
+                Outcome.SUCCESS, null, Instant.now(), Instant.now(), targetTenantId), null);
+        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
+        verify(repo).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void d13_actionInAnotherMembership_isStampedWithThatTenant() {
+        // 🔴 failure side: before S3 this row was written with tenant_id = alpha (the home) — invisible to beta.
+        stubActor("alpha");
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(java.util.Set.of("alpha", "beta"));
+
+        AdminActionJpaEntity row = recordQueryTargeting("beta");
+
+        assertThat(row.getTenantId()).isEqualTo("beta");
+        assertThat(row.getTargetTenantId()).isEqualTo("beta");
+    }
+
+    @Test
+    void d13_control_singleCompanyActor_unchangedAndNoLookup() {
+        stubActor("alpha");
+
+        AdminActionJpaEntity row = recordQueryTargeting("alpha");
+
+        assertThat(row.getTenantId()).isEqualTo("alpha");
+        verify(assignmentPort, never()).findAssignedTenantIds(any());
+    }
+
+    @Test
+    void d13_targetOutsideTheActorsMemberships_staysOnHome() {
+        stubActor("alpha");
+        when(assignmentPort.findAssignedTenantIds(42L)).thenReturn(java.util.Set.of("alpha"));
+
+        assertThat(recordQueryTargeting("partner-co").getTenantId()).isEqualTo("alpha");
+    }
+
+    @Test
+    void d13_platformActor_staysStar() {
+        stubActor("*");
+
+        assertThat(recordQueryTargeting("beta").getTenantId()).isEqualTo("*");
+        verify(assignmentPort, never()).findAssignedTenantIds(any());
+    }
+
+    @Test
+    void d13_selfFlow_staysOnHome() {
+        stubActor("alpha");
+
+        writer.recordWithPermission(new AdminActionAuditor.AuditRecord(
+                "audit-s", ActionCode.OPERATOR_PROFILE_UPDATE, op(), "OPERATOR", "op-1", "r", null, "k",
+                Outcome.SUCCESS, null, Instant.now(), Instant.now(), "beta"),
+                AdminActionAuditor.PERMISSION_SELF_ACTION);
+        ArgumentCaptor<AdminActionJpaEntity> captor = ArgumentCaptor.forClass(AdminActionJpaEntity.class);
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getTenantId()).isEqualTo("alpha");
+        verify(assignmentPort, never()).findAssignedTenantIds(any());
     }
 
     @Test

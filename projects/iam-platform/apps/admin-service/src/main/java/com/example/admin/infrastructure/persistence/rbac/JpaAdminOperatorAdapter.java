@@ -275,6 +275,53 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
         return byOperator;
     }
 
+    @Override
+    public Map<Long, List<String>> bulkLoadRoleNamesByOperatorInTenant(Collection<Long> operatorInternalIds,
+                                                                      String tenantId) {
+        if (operatorInternalIds == null || operatorInternalIds.isEmpty() || tenantId == null) return Map.of();
+        List<AdminOperatorRoleJpaEntity> bindings = new ArrayList<>();
+        for (AdminOperatorRoleJpaEntity b : operatorRoleRepository.findByOperatorIdIn(operatorInternalIds)) {
+            if (tenantId.equals(b.getTenantId())) bindings.add(b);
+        }
+        if (bindings.isEmpty()) return Map.of();
+        Map<Long, String> roleNameById = roleNamesById(bindings);
+        Map<Long, List<String>> byOperator = new LinkedHashMap<>();
+        for (AdminOperatorRoleJpaEntity b : bindings) {
+            String roleName = roleNameById.get(b.getRoleId());
+            if (roleName == null) continue;
+            List<String> names = byOperator.computeIfAbsent(b.getOperatorId(), k -> new ArrayList<>());
+            if (!names.contains(roleName)) names.add(roleName);
+        }
+        for (List<String> names : byOperator.values()) Collections.sort(names);
+        return byOperator;
+    }
+
+    @Override
+    public Map<String, List<String>> findRoleNamesByTenant(long operatorInternalId) {
+        List<AdminOperatorRoleJpaEntity> bindings = operatorRoleRepository.findByOperatorId(operatorInternalId);
+        if (bindings.isEmpty()) return Map.of();
+        Map<Long, String> roleNameById = roleNamesById(bindings);
+        Map<String, List<String>> byTenant = new java.util.TreeMap<>();
+        for (AdminOperatorRoleJpaEntity b : bindings) {
+            String roleName = roleNameById.get(b.getRoleId());
+            if (roleName == null || b.getTenantId() == null) continue;
+            List<String> names = byTenant.computeIfAbsent(b.getTenantId(), k -> new ArrayList<>());
+            if (!names.contains(roleName)) names.add(roleName);
+        }
+        for (List<String> names : byTenant.values()) Collections.sort(names);
+        return byTenant;
+    }
+
+    private Map<Long, String> roleNamesById(List<AdminOperatorRoleJpaEntity> bindings) {
+        List<Long> roleIds = new ArrayList<>(bindings.size());
+        for (AdminOperatorRoleJpaEntity b : bindings) roleIds.add(b.getRoleId());
+        Map<Long, String> roleNameById = new LinkedHashMap<>();
+        for (AdminRoleJpaEntity r : roleRepository.findAllById(roleIds)) {
+            roleNameById.put(r.getId(), r.getName());
+        }
+        return roleNameById;
+    }
+
     // ---------- Operator-Role bindings ----------
 
     @Override

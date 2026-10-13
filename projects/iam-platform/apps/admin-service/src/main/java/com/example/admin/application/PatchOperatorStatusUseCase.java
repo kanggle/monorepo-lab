@@ -6,6 +6,7 @@ import com.example.admin.application.exception.StateTransitionInvalidException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.AdminRefreshTokenPort;
 import com.example.admin.domain.rbac.Permission;
+import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class PatchOperatorStatusUseCase {
     private final AdminActionAuditor auditor;
     private final AdminRefreshTokenPort refreshTokenPort;
     private final TenantScopeGuard tenantScopeGuard;
+    private final CachingPermissionEvaluator cachingPermissionEvaluator;
 
     @Transactional
     public PatchStatusResult patchStatus(String operatorUuid,
@@ -81,7 +83,22 @@ public class PatchOperatorStatusUseCase {
                 now,
                 Instant.now()));
 
+        // TASK-MONO-784 S3 (D-5 · AC-0 F7): a status change drops the permission-union cache — before S3 a
+        // suspended operator's cached permissions kept answering the aspect for up to the TTL (10s), because a
+        // cache hit never reaches the origin evaluator that checks the status.
+        safeInvalidatePermissionCache(operatorUuid);
+
         return new PatchStatusResult(operatorUuid, previousStatus, newStatus, auditId);
+    }
+
+    private void safeInvalidatePermissionCache(String operatorUuid) {
+        if (cachingPermissionEvaluator == null) return;
+        try {
+            cachingPermissionEvaluator.invalidate(operatorUuid);
+        } catch (RuntimeException ex) {
+            log.warn("Permission cache invalidate failed for operatorId={} cause={}",
+                    operatorUuid, ex.getClass().getSimpleName());
+        }
     }
 
     private static String normalizeReason(String reason) {
