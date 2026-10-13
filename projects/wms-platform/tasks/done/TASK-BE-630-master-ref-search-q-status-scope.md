@@ -8,7 +8,7 @@ admin-service 기준정보 조회(`GET /dashboard/refs/{type}`)에 검색어 · 
 
 # Status
 
-review — 구현 완료(2026-10-12 UTC). AC-1~5 ✅ — 단 AC-2~4 의 실제 PostgreSQL 칸은 CI 통합 잡이 잰다(로컬 Docker 없음).
+done — 구현 완료(2026-10-12 UTC). AC-1~5 ✅ — 단 AC-2~4 의 실제 PostgreSQL 칸은 CI 통합 잡이 잰다(로컬 Docker 없음).
 
 # Owner
 
@@ -94,3 +94,13 @@ wms-platform
 - **bite**: 체크포인트 커밋 뒤 컨트롤러에서 `q` 를 버리게(`like = null`, 수정 전 동작) 하자 슬라이스 **9 중 2 실패**(검색어를 보내는 두 칸) → `git checkout` 으로 복원, 트리 깨끗.
 - 계약의 «잘못된 UUID = 400 VALIDATION_ERROR» 는 `GlobalExceptionHandler` 의 `MethodArgumentTypeMismatchException` 처리를 읽고 적었다. 오류 봉투는 `{"error":{"code":…}}` 라 시험 경로는 `$.error.code`.
 - 저장소에 원래 있던 `findByWarehouseId` · `findBySkuId` 는 컨트롤러가 한 번도 안 불렀다(죽은 메서드) — 이 티켓 범위 밖이라 남겼다.
+
+---
+
+## CORRECTION
+
+(2026-10-13 UTC, close chore) 위 Status 의 «AC-2~4 의 실제 PostgreSQL 칸은 CI 통합 잡이 잰다» 는 **더 이상 남은 일이 아니다** — 아래가 지금의 사실이다. 위의 기록은 그대로 둔다.
+
+- **4차원 검증**: (a) #4313 `MERGED` · 머지 커밋 `8338dda8a` (b) `origin/main` 조상 (c) 머지 시점 실패 check **0**(16 pass — `Integration (master-service + notification-service + outbound-service, Testcontainers)` 포함) (d) AC-1~5 닫힘.
+- **AC-2~4 실측(CI)**: 첫 CI 런에서 통합 시험 7칸 중 `warehouse_q_matchesCodeOrNameCaseInsensitively` **1칸 실패** — 원인은 쿼리가 아니라 **시험 데이터**: `"WH-OTHER-" + UUID` 가 45자라 `warehouse_code VARCHAR(40)` 에 안 들어갔고, JPA 가 다음 쿼리(`search`) 직전에 flush 하면서 그 줄에서 `DataException`. 나머지 6칸(전 필터 null · `_` 문자 그대로 · status · 창고 범위 · SKU 범위 · 거래처 유형)은 그 런에서 이미 통과. 코드를 8자로 줄인 커밋 뒤 재런에서 통합 잡 **pass**(7/7).
+- ⚪ 데모 반영: wms admin-service 는 구운 AMI 에서 돈다 ⇒ 이 변경은 **다음 재굽기** 뒤에 데모에 닿는다. 그 전까지 콘솔은 `TASK-PC-FE-333` 의 클라이언트 필터로 데모 규모에서 옳다. 이 티켓의 AC 는 데모 반영을 요구하지 않는다.
