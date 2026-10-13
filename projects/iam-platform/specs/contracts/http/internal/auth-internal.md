@@ -35,6 +35,7 @@ TASK-BE-063 Option A. 신규 계정이 저장된 직후, account-service 가 aut
 > **TASK-BE-384 (ADR-MONO-036 born-unified provisioning)** — `identityId` 는 same-origin issuance 의 in-band 전파(P3-A)다. account-service 가 계정 생성 시 `(tenant, email)` 로 mint/reuse 한 중앙 identity 를 이 필드로 넘기고, auth-service 는 `credentials.identity_id` 에 `IS NULL` 가드로 기록한다(덮어쓰기 없음, ADR-MONO-034 § 1.3). email 자동 병합이 아니다.
 
 > **TASK-MONO-263 (ADR-MONO-035 4b-2b / ADR-032 D5 step 4)** — `accountType` 필드(ADR-MONO-021 D2 / TASK-BE-330)는 **제거**되었다. `account_type` JWT 클레임은 더 이상 발급되지 않고 `auth_db.credentials.account_type` 컬럼은 drop 되었다(V0025). 권한 부여는 `roles` 클레임 단일 축으로 수렴한다 — consumer 는 플랫폼별 seed 역할(`CUSTOMER`/`FAN`, RoleSeedPolicy), operator 는 assume-tenant 시점 도메인 역할(OperatorRoleDerivation, BE-376). body 에 `accountType` 이 남아 있어도 무시된다(unknown property).
+> 🔴 **ADR-MONO-083 P3(`TASK-BE-632`) 배포부터** operator 의 assume-tenant 도메인 역할은 구독 파생(OperatorRoleDerivation)이 아니라 **그 테넌트에서 배정된 업무 권한 세트의 역할(`domainRoles`, admin-service) ∩ derive(entitled domains)** 다 — 운영자 경로의 파생은 제거된다(P1 계약 `TASK-MONO-791`, 그 전까지는 위 파생이 운영 동작). 상세: [auth-api.md § Assume-Tenant Exchange](../auth-api.md) Assumed Token Claims `roles` 행.
 
 **Response 201 Created** — 신규 credential 행 삽입 성공:
 

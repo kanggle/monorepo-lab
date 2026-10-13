@@ -43,7 +43,7 @@ ADR-083 갈래 A 의 저장 모델과 관리 API 를 admin-service 에 만든다
 - API(P1 계약대로): 카탈로그 · 세트 CRUD · 직접 배정/회수 · 그룹 세트 배정/회수 · 실효 권한 + 출처 조회.
 - 그룹 fan-out(ADR-046 D2 유지): 세트 배정 · 멤버 가입 → 그룹 출처 행 생성(그룹 테넌트에만) · 회수 · 탈퇴 · 그룹 삭제 → **그 그룹 출처 행만** 삭제.
 - 784 «이 회사에서 내보내기»(`OperatorCompanyExitCascade`) — 그 회사의 세트 행(모든 출처) 삭제 추가.
-- 권한 키 `domain_access.manage` 시드(`TENANT_ADMIN` · `SUPER_ADMIN`) · 행동 테넌트 grant scope 판정 · 구독 밖 · 조직 상한 밖 세트 배정 거절 · OD-4 자기 배정 허용 + 감사 표시.
+- 권한 키 `domain_access.manage` 시드(`TENANT_ADMIN` · `SUPER_ADMIN`) · 행동 테넌트 grant scope 판정 · 구독 밖 · 조직 상한 밖 세트 배정 거절 · OD-4 자기 배정 허용 + 감사 표시. 🟢 **OD-3 소유자 결정(2026-10-14 UTC — ADR-083 § OD 소유자 결정)**: `'*'` 운영자 배정 행 = 구체 테넌트 또는 `'*'`(모든 테넌트) · 쓰기 = `'*'` grant scope 의 `domain_access.manage`(`SUPER_ADMIN`)만 · 소속 행 생성 0(082 D2) · 백필 `'*'` × `'*'` × `legacy-compat`. 상세 = `TASK-MONO-791` § 설계 4.
 - `/internal/operator-assignments/check` 응답 `domainRoles`(그 테넌트의 실효 업무 역할 — 카탈로그 교집합은 auth 가 한다).
 - 감사: 변경 = `AdminActionAuditWriter` · 거절 = `AdminActionDenyWriter`(fail-closed).
 - **백필(OD-1)**: 실행 시점에 소속(배정 행)이 있는 비-`'*'` 운영자 × 그 테넌트에 «이전 호환» 시스템 프리셋을 `MIGRATION` 출처로(멱등). 🔵 AC-0 판단 대상: admin_db 마이그레이션은 account_db 의 구독을 못 읽는다 — 발급 시 `∩ entitled` 를 하므로 «모든 도메인의 이전 호환 세트» 를 주면 지금 파생과 **바이트 동일**(이후 구독 추가에도 지금과 같은 동작). 이 해석이 ADR D8 «그 테넌트의 entitled domains 에 해당하는» 과 결과가 같은지 대조해 기록한다.

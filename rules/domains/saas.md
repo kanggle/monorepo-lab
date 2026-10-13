@@ -97,6 +97,12 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `TENANT_LAST_ADMIN_REQUIRED` — 그 테넌트의 마지막 활성 테넌트 관리자를 없애는 쓰기(회사에서 내보내기 · 자기 자신 포함 · 역할 교체 · 그룹 멤버 제거 · 그룹 역할 회수 · 그룹 삭제) 거절 (409). 경로마다 같은 술어 — 하나로 다른 하나를 우회하지 못하게. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리
 - `OPERATOR_HAS_OTHER_MEMBERSHIPS` — 행 전체 변경(상태 · 프로필 · 신원 연결/해제)을 회사 범위 관리자가 시도했는데 대상이 회사 둘 이상의 소속 — 행 전체는 플랫폼(`'*'`)만, 회사 관리자는 «이 회사에서 내보내기» (403, ADR-MONO-082 라이더 R3). 대상의 회사를 하나도 관리하지 않는 행위자에겐 `TENANT_SCOPE_DENIED`(소속 수 비노출)
 - `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` — 셀프 온보딩: 호출자의 운영자 측면이 이미 신원당 상한만큼의 서로 다른 테넌트에서 테넌트 관리자 역할을 가짐 — 테넌트 생성 전 판정, 아무것도 쓰지 않는다 (422, ADR-MONO-044 D4 · ADR-MONO-082 D4 세는 단위)
+- `DOMAIN_PERMISSION_SET_NOT_FOUND` — 도메인 업무 권한 세트 없음 · 다른 테넌트의 세트(비노출) · 그 범위에서 쓸 수 없는 세트 · 회수하려는 출처의 배정 없음 (404, ADR-MONO-083)
+- `DOMAIN_PERMISSION_SET_READ_ONLY` — 시스템 제공(프리셋) 세트의 수정 · 삭제 — 읽기 전용, 테넌트 세트로 복제해서 쓴다 (409)
+- `DOMAIN_PERMISSION_SET_IN_USE` — 아직 배정(어느 출처든 · 그룹 포함)이 남은 세트의 삭제 — 배정째 걷지 않는다, 먼저 회수 (409)
+- `DOMAIN_PERMISSION_SET_ALREADY_GRANTED` — 같은 대상에 같은 출처로 같은 세트가 이미 배정됨 — 다른 출처의 배정은 공존하므로 이 코드가 아니다 (409)
+- `DOMAIN_ROLE_NOT_ASSIGNABLE` — 세트에 배정 가능 업무 역할 카탈로그 밖의 역할(관리 등급 · 그 도메인이 실제로 검사하지 않는 역할 포함) — 세트는 관리 권한을 담을 수 없다 (422)
+- `DOMAIN_NOT_SUBSCRIBED` — 세트(생성 · 수정 · 배정)의 도메인이 그 테넌트의 entitled domains(활성 구독 ∩ 조직 상한) 밖 — 세트는 상한을 넓히지 못한다. 판정 불가 = 거절(허용으로 떨어지지 않음) (422)
 - `OPERATOR_ALREADY_LINKED` — 이미 account 신원에 연결된 운영자 (409)
 - `IDENTITY_LINK_EMAIL_MISMATCH` — 운영자 이메일과 연결 대상 신원의 이메일 불일치 (422)
 - `ACCOUNT_IDENTITY_UNRESOLVABLE` — 권위 서비스에서 운영자의 account 신원을 해석 실패 (422)

@@ -23,6 +23,8 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 
 > **TASK-MONO-771 (ADR-MONO-080 D4 · R2, 소유자 결정 OD-2 · OD-3)** — 응답에 `mfaRequired` 필드가 **additive** 로 추가된다(아래 표 · 판정 규칙 6). 기존 `assigned` · `orgScope` · `delegatedScope` 의 판정과 상태코드는 불변이다. 요구 여부만 admin-service 가 계산하고, subject `amr` 과의 비교는 auth-service 가 한다([auth-api.md § Assume-Tenant Exchange](../auth-api.md) 2단계 게이트). 같은 요청 안의 admin-service **로컬** 읽기(`tenant_entry_policy` · `admin_roles.require_2fa`)라 새 서비스 간 호출이 없다.
 
+> **TASK-MONO-791 (ADR-MONO-083 D6 · P1 계약 — admin 구현 P2 `TASK-BE-631`, auth 소비 P3 `TASK-BE-632`)** — 응답에 `domainRoles` 필드가 **additive** 로 추가된다(아래 표 · 판정 규칙 7). 기존 `assigned` · `orgScope` · `mfaRequired` · `delegatedScope` 의 판정과 상태코드는 불변이다. 🔴 P2 만 배포된 동안 auth-service 는 이 필드를 **읽지 않는다**(토큰 `roles` 는 지금처럼 구독 파생) — 읽기 시작은 P3 다.
+
 **Query Parameters**:
 
 | 파라미터 | 타입 | 필수 | 설명 |
@@ -35,7 +37,8 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 {
   "assigned": true,
   "orgScope": ["dept-sales"],
-  "mfaRequired": true
+  "mfaRequired": true,
+  "domainRoles": ["INVENTORY_READ", "INVENTORY_WRITE"]
 }
 ```
 
@@ -53,6 +56,7 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 | `orgScope` | array\<string\> \| null | **TASK-BE-338 (ADR-MONO-020 D3 amendment) — additive.** 선택된 assignment 의 per-assignment **데이터-스코프**(운영자가 그 테넌트에서 act 가능한 부서 **subtree-root id** 들). `null` ⟺ `["*"]` = 테넌트 전체(**net-zero** 기본) — `org_scope` 컬럼 미설정, 명시적 assignment row 부재(legacy home-tenant / platform-scope), 그리고 모든 `assigned=false` 케이스에서 `null`. 명시적 빈 배열 `[]` = zero-scope(NULL 과 구분, verbatim 반환). auth-service 가 `null`/empty/부재 → `["*"]` 로 기본 처리(graceful, 구버전 admin 호환). |
 | `mfaRequired` | boolean | **TASK-MONO-771 — additive, 200 응답에 항상 실린다**(`true`/`false`, 생략 없음). `assigned=true` 일 때 = **선택 테넌트의 진입 정책**(`tenant_entry_policy.require_mfa`, 행 없음 = `false`) **∨ 운영자가 `require_2fa=TRUE` 역할을 하나라도 보유**(`anyRoleRequires2fa` — OD-2: 역할 플래그는 assume 에서도 문다). `assigned=false` 면 `false`(판정할 것이 없다 — 어차피 거절). 🔴 **auth-service 는 이 필드의 부재를 `true` 로 읽는다**(fail-closed — 구버전 admin 과의 어긋남이 2단계 없는 발급으로 새지 않게. 2단계를 거친 subject 는 그래도 통과한다). 판정 규칙 6 |
 | `delegatedScope` | object `{domains:[], roles:[]}` \| absent | **TASK-BE-477 (ADR-MONO-045 D3/D5) — additive.** 오직 **파트너십-파생 host reach** 케이스에만 존재하는 cross-org confinement 블록: partner 테넌트 B 의 participant 인 운영자가 host 테넌트 A(=`tenantId`)를 assume 할 때 얻는 **capped** 도메인-운영 스코프 = `delegated_scope ∩ participant_scope ∩ host-holds`. **정상(비-파트너십) assignment 와 모든 `assigned=false` 케이스에는 이 필드가 부재**한다(`@JsonInclude(NON_NULL)` 로 omit — 기존 `{assigned, orgScope}` shape 은 byte-불변). auth-service(step 2b)가 이 값으로 assume-tenant 토큰의 `entitled_domains` 를 `domains` 와 교집합하고 role 을 `roles` 로 캡한다. **admin scope 는 절대 확장되지 않는다** — cross-org actor 는 host 에서 `effectiveAdminScope` 공집합(→ `/api/admin/**` 403). 이 필드가 실린다고 해서 운영자가 host 를 administer 할 수 있는 것은 아니다. |
+| `domainRoles` | array\<string\> \| absent | **TASK-MONO-791 (ADR-MONO-083 D6) — additive, P2 부터.** 그 운영자의 `tenantId` 에서의 **실효 업무 역할** = 그 테넌트의 업무 권한 세트 배정 행(모든 출처 — `DIRECT` · `MIGRATION` · `GROUP:<id>`) ∪ (`'*'` 운영자면 `tenant_id='*'` 행)이 가리키는 세트들의 역할 **합**(중복 없음 · 카탈로그 순서). 🔴 **카탈로그 · 구독 교집합 전** 값이다 — auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 다시 거른다(파트너십 `delegatedScope.roles` 와 달리 **그대로 싣지 않는다**). **소속 경로(판정 규칙 3)와 `'*'` 경로(규칙 2)의 `assigned=true` 응답에는 항상 있다** — 세트가 없으면 `[]`(생략하지 않는다). **파트너십-파생 host reach 응답에는 없다**(`delegatedScope` 가 그 경로의 유일한 역할 입력 — 파트너 운영자의 호스트 테넌트 세트 배정은 이 경로에서 **읽지 않는다**, 위임 상한을 넓히는 길을 만들지 않는다). `assigned=false` 응답에도 없다. 판정 규칙 7 |
 
 **판정 규칙** (server-side, admin-service):
 
@@ -64,6 +68,12 @@ auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운�
 0. **`admin_operators.confined_tenant_id` — 한 테넌트로 묶인 운영자 (`TASK-MONO-751`, 2026-10-03 소유자 결정 «데모 운영자는 팬 전용으로»).** 운영자 행을 찾고 ACTIVE 를 확인한 직후, **2번(platform-scope)보다 먼저**: 이 컬럼이 비-NULL 이고 `tenantId` 와 다르면 `assigned=false`. 같으면 나머지 규칙이 그대로 판정한다(좁히기만 — 열지 않는다). `NULL`(기존 모든 운영자)은 이 규칙에 걸리지 않는다. 쓰는 곳: 데모 플랫폼 운영자(`'*'`, `confined_tenant_id='fan-platform'`) — `fan-platform` 만 assume 가능.
 5. **`tenantId == fan-platform` — 플랫폼 운영자 전용 (`TASK-MONO-750`, `ADR-MONO-079` D4-A 라이더 R3).** 2번(platform-scope)에 걸리지 않은 운영자 — 즉 **고객사 운영자** — 는 `fan-platform` 에 대해 **항상 `assigned=false`** 다. assignment row 가 있어도(이 surface 가 생기기 전에 만들어졌든 직접 SQL 이든), 파트너십-파생 host reach(3·`delegatedScope`) 가 있어도 같다 — 이 판정은 3번과 파트너십 분기 **앞에서** 내려진다. 이유: `fan-platform` 이 `fan` 도메인을 구독하므로 이 테넌트를 assume 한 토큰은 `FAN_OPERATOR` 를 파생받고, 그 역할로 열리는 길(artist-service 디렉터리 관리)은 플랫폼 운영자 몫으로만 열렸다. 플랫폼 운영자는 2번으로 지금처럼 `assigned=true`.
 6. **`mfaRequired` — 2단계 요구 (`TASK-MONO-771`, `ADR-MONO-080` D4 · R2, 소유자 결정 OD-2).** 위 규칙들이 `assigned=true` 를 낸 **뒤에** 계산한다(`assigned` 판정을 바꾸지 않는다): `mfaRequired = tenant_entry_policy(tenantId).require_mfa ∨ anyRoleRequires2fa(운영자)`. 정책 행이 없으면 `false`(꺼짐). **경로 불문** — 2(플랫폼 `'*'`) · 3(assignment) · 파트너십 host reach 어느 길로 `assigned=true` 가 나와도 정책은 «들어가는 테넌트» 의 것이다. `assigned=false` 는 언제나 `mfaRequired=false`. 정책 · 역할 읽기 실패는 이 엔드포인트의 5xx 다(→ auth-service fail-closed, 아래 Caller Constraints) — `false` 로 메우지 않는다.
+7. **`domainRoles` — 실효 업무 역할 (`TASK-MONO-791` · `ADR-MONO-083` D6 · OD-3 소유자 결정 — 구현 P2 `TASK-BE-631`).** 위 규칙들이 `assigned=true` 를 낸 **뒤에** 계산한다(`assigned` 판정을 바꾸지 않는다). 경로마다:
+   - **소속 경로(규칙 3)**: `operator_domain_set_grant` 의 `(운영자, tenantId)` 행 전부(모든 출처)의 세트 역할 합. 행이 없으면 **`[]`**.
+   - **`'*'` 경로(규칙 2)**: `(운영자, tenantId)` 행 ∪ `(운영자, '*')` 행의 세트 역할 합(OD-3 — `SUPER_ADMIN` 이 배정한 테넌트별 / 모든 테넌트 세트). 행이 없으면 **`[]`** — 🔴 `'*'` 라는 이유로 «전체» 를 주지 않는다. 이 배정은 소속 행을 만들지 않았으므로 규칙 2 의 판정은 그대로다(ADR-082 D2).
+   - **파트너십-파생 host reach**: 필드 **생략**(`delegatedScope` 그대로) — 호스트 테넌트에 이 운영자의 세트 행이 있어도 읽지 않는다.
+   - 세트 행 · 세트 역할 읽기 실패는 이 엔드포인트의 **5xx** 다(→ auth-service fail-closed — assume 거절). `[]` 로 메우지 않는다 — «읽지 못함» 과 «세트 없음» 을 같은 값으로 내지 않는다.
+   - 카탈로그 · 구독 · 조직 노드 상한과의 교집합은 **하지 않는다**(auth-service 몫 — 상한은 발급 시점 entitled domains 가 정한다).
 
 **Side Effect**: 없음 (read-only — `admin_actions` row 미기록).
 
@@ -296,4 +306,15 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 - 재시도: 2회 (지수 백오프 + jitter). 4xx 는 재시도 금지
 - Circuit breaker: 실패율 50% / 10초 sliding window → open → half-open
 - **⚠️ fail-CLOSED**: admin-service 장애 시(`assigned=false` / 4xx / 5xx / circuit-open / timeout / IO 모두) **assume-tenant 발급 거부** (`AssumeTenantDeniedException` → RFC 8693 `invalid_grant` / 400, 토큰 미발급). **`assigned=true` 여도 `mfaRequired` 가 `true` 이거나 부재이고 subject `amr` 에 `mfa` 가 없으면 거부** — `invalid_grant` + `error_description=insufficient_user_authentication`(TASK-MONO-771; 장애 거부와 **다른** 고정 상수 — 장애를 «2단계 필요» 로 보이게 하지 않는다). 이 게이트는 **절대 fail-soft 하지 않는다** — account-service `entitled_domains` 도출(fail-soft)과 정반대 정책이다. 인가 게이트이므로 가용성에 의존해 토큰을 발급해서는 안 된다 (격리 위반 = isolation breach).
+- **`domainRoles` 의 실패 의미 (`TASK-MONO-791` · ADR-MONO-083 D6 — auth-service 가 이 필드를 읽기 시작하는 P3 `TASK-BE-632` 부터)**:
+
+  | 상황 | auth-service 의 처리 |
+  |---|---|
+  | 판정 호출 실패(4xx · 5xx · timeout · circuit-open · IO) — admin 의 세트 읽기 실패 포함 | **assume 거절**(`invalid_grant`, 토큰 미발급) — 위 fail-CLOSED 그대로 |
+  | `assigned=true` · `domainRoles = []` | 토큰 발급 · 운영자 도메인 역할 **0**(`roles` 생략 — 도메인 API 는 403) |
+  | `assigned=true` · `domainRoles` **필드 없음**(구버전 admin · 파트너십 경로 외) | **역할 0** 으로 읽는다(`[]` 와 같다) |
+  | 파트너십 경로(`delegatedScope` 있음) | `delegatedScope.roles` 그대로(지금 동작) — `domainRoles` 를 보지 않는다 |
+  | entitled domains 조회 실패(account-service — fail-soft) | `roles` 생략(지금 규칙) |
+
+  🔴 **어떤 경우에도 «구독 전체» 의 역할로 떨어지지 않는다** — P3 이 운영자 경로의 구독 파생(`OperatorRoleDerivation`)을 지우므로 떨어질 곳이 없다. 빈 값 · 부재를 «미지정 → 예전 파생» 으로 읽는 분기를 두지 않는다.
 - **감사 기록 없음**: read 이므로 "audit first" 가 적용되지 않는다 (admin-to-account 의 lock/unlock 명령과 다름).
