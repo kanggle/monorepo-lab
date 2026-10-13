@@ -114,6 +114,15 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.OPERATOR_INVITATION_RESEND, "OPERATOR_INVITATION");
         // TASK-MONO-772 S3 — the acceptance's subject is the invitation too (its target_id is the invitation id).
         map.put(ActionCode.OPERATOR_INVITATION_ACCEPT, "OPERATOR_INVITATION");
+        // TASK-BE-631 (ADR-MONO-083) — a set's lifecycle targets the SET; a grant/revoke targets the OPERATOR it
+        // changes (the set rides in `detail`); a group set grant/revoke targets the GROUP (admin-api.md Side Effects).
+        map.put(ActionCode.DOMAIN_PERMISSION_SET_CREATE, "DOMAIN_PERMISSION_SET");
+        map.put(ActionCode.DOMAIN_PERMISSION_SET_UPDATE, "DOMAIN_PERMISSION_SET");
+        map.put(ActionCode.DOMAIN_PERMISSION_SET_DELETE, "DOMAIN_PERMISSION_SET");
+        map.put(ActionCode.OPERATOR_DOMAIN_SET_GRANT, "OPERATOR");
+        map.put(ActionCode.OPERATOR_DOMAIN_SET_REVOKE, "OPERATOR");
+        map.put(ActionCode.GROUP_DOMAIN_SET_GRANT, "GROUP");
+        map.put(ActionCode.GROUP_DOMAIN_SET_REVOKE, "GROUP");
         ACTION_TARGET_TYPE = Map.copyOf(map);
     }
 
@@ -198,6 +207,11 @@ public class AdminActionPermissionRegistry {
             case TENANT_ENTRY_POLICY_SET -> Permission.TENANT_SECURITY_MANAGE;
             // TASK-MONO-771 S6 (OD-6) — the account second-factor reset has its own platform-only key.
             case ACCOUNT_2FA_RESET -> Permission.ACCOUNT_2FA_RESET;
+            // TASK-BE-631 (ADR-MONO-083 D5) — every domain permission set write gates on domain_access.manage
+            // (NOT operator.manage / group.manage — the work-authority grant is delegable on its own).
+            case DOMAIN_PERMISSION_SET_CREATE, DOMAIN_PERMISSION_SET_UPDATE, DOMAIN_PERMISSION_SET_DELETE,
+                 OPERATOR_DOMAIN_SET_GRANT, OPERATOR_DOMAIN_SET_REVOKE,
+                 GROUP_DOMAIN_SET_GRANT, GROUP_DOMAIN_SET_REVOKE -> Permission.DOMAIN_ACCESS_MANAGE;
             // TASK-BE-306 — self-serve operator profile mutation (no grantable permission;
             // synthetic <self_action> sentinel for symmetry with reason="<self_profile_update>").
             case OPERATOR_PROFILE_UPDATE -> AdminActionAuditor.PERMISSION_SELF_ACTION;

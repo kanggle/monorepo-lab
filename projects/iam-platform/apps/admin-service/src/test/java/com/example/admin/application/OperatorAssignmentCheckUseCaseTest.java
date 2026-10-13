@@ -67,7 +67,9 @@ class OperatorAssignmentCheckUseCaseTest {
         useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort, resolver,
                 partnershipPort, new UnboundedHostEntitledScopeResolver(),
                 // TASK-MONO-771 S4: no tenant has an entry policy in this suite (row absent = off).
-                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()));
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()),
+                // TASK-BE-631: no operator holds a domain permission set in this suite.
+                (operatorInternalId, tenantIds) -> java.util.List.of());
     }
 
     private AdminOperatorPort.OperatorView operator(String tenantId, String status, long internalId) {
@@ -232,7 +234,8 @@ class OperatorAssignmentCheckUseCaseTest {
         return new OperatorAssignmentCheckUseCase(new TenantScopeResolver(assignmentPort), assignmentPort,
                 new OperatorOidcSubjectResolver(operatorPort), partnershipPort,
                 new UnboundedHostEntitledScopeResolver(),
-                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> Set.of()));
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> Set.of()),
+                (operatorInternalId, tenantIds) -> java.util.List.of());
     }
 
     @Test

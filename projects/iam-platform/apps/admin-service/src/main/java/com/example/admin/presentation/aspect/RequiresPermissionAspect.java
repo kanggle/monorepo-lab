@@ -352,6 +352,19 @@ public class RequiresPermissionAspect {
             if ("revokeGrant".equals(name)) return ActionCode.GROUP_GRANT_REVOKE;
             // listGroups / getGroup / listMembers / listGrants are reads
         }
+        // TASK-BE-631 (ADR-MONO-083) — domain permission set writes; the DENIED row carries the contract's target
+        // type (DOMAIN_PERMISSION_SET for a set, OPERATOR for a grant / revoke).
+        if ("DomainPermissionSetController".equals(simple)) {
+            if ("createSet".equals(name)) return ActionCode.DOMAIN_PERMISSION_SET_CREATE;
+            if ("updateSet".equals(name)) return ActionCode.DOMAIN_PERMISSION_SET_UPDATE;
+            if ("deleteSet".equals(name)) return ActionCode.DOMAIN_PERMISSION_SET_DELETE;
+            // listDomainRoles / listSets / getSet are reads
+        }
+        if ("OperatorDomainAccessController".equals(simple)) {
+            if ("grantSet".equals(name)) return ActionCode.OPERATOR_DOMAIN_SET_GRANT;
+            if ("revokeSet".equals(name)) return ActionCode.OPERATOR_DOMAIN_SET_REVOKE;
+            // getDomainAccess / getMyDomainAccess are reads
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;

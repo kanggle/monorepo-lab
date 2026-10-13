@@ -439,6 +439,49 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
+    // ---------------------------------------------------------------------------------
+    // TASK-BE-631 (ADR-MONO-083 P2 · OD-1 · OD-3) — R__seed_zz_demo_domain_permission_sets.sql: every seeded
+    // membership holds exactly (tenant, legacy-compat, MIGRATION) — what V0052's backfill gives an operator that
+    // existed when it ran — and the '*' demo operator exactly ('*', legacy-compat, MIGRATION). Nothing more: a
+    // DIRECT or GROUP row here would widen a public demo credential the moment P3 reads these rows.
+    // ---------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("BE-631: each seeded membership holds exactly one legacy-compat MIGRATION row; demo-platform holds ('*')")
+    void seededOperatorsHoldExactlyTheLegacyCompatRows() {
+        java.util.Map<String, List<String>> expected = new java.util.LinkedHashMap<>();
+        expected.put("demo-operator", List.of("demo-corp|legacy-compat|MIGRATION", "ecommerce|legacy-compat|MIGRATION"));
+        expected.put("demo-requester", List.of("demo-corp|legacy-compat|MIGRATION"));
+        expected.put("demo-cs", List.of("ecommerce|legacy-compat|MIGRATION"));
+        expected.put("demo-viewer", List.of("demo-viewer|legacy-compat|MIGRATION"));
+        expected.put("demo-assigned-only", List.of("demo-corp|legacy-compat|MIGRATION"));
+        expected.put("demo-platform", List.of("*|legacy-compat|MIGRATION"));
+        for (var e : expected.entrySet()) {
+            List<String> rows = jdbcTemplate.queryForList("""
+                    SELECT CONCAT_WS('|', g.tenant_id, s.system_key, g.source_key)
+                      FROM operator_domain_set_grant g
+                      JOIN admin_operators o ON o.id = g.operator_id
+                      JOIN domain_permission_set s ON s.id = g.set_id
+                     WHERE o.operator_id = ?
+                     ORDER BY g.tenant_id
+                    """, String.class, e.getKey());
+            assertThat(rows).as("%s set rows", e.getKey()).containsExactlyElementsOf(e.getValue());
+        }
+        // the '*' row created no membership (ADR-082 D2)
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM operator_tenant_assignment a JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = 'demo-platform'
+                """, Integer.class)).isZero();
+    }
+
+    @Test
+    @DisplayName("BE-631 AC-6: demo-cs in ecommerce → domainRoles = the whole catalog (legacy-compat, before auth's ∩ entitled)")
+    void csOperatorDomainRolesAreLegacyCompat() {
+        var ecommerce = assignmentCheck.check(CS_OIDC_SUBJECT, "ecommerce");
+        assertThat(ecommerce.domainRoles())
+                .containsExactlyElementsOf(com.example.admin.domain.rbac.DomainRoleCatalog.roleNames());
+    }
+
     /**
      * 🔴 The DISCLOSED trade-off (owner decision A, 2026-10-09 UTC), admin side: the assume
      * gate admits demo-cs into `ecommerce` with NO second factor and no partnership cap. Once

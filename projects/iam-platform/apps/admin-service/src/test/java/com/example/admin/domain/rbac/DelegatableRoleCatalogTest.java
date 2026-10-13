@@ -34,6 +34,32 @@ class DelegatableRoleCatalogTest {
                         "MES_OPERATOR", "FAN_OPERATOR");
     }
 
+    /**
+     * TASK-BE-631 (ADR-MONO-083 D2) — the allow-list is now DERIVED from {@link DomainRoleCatalog}. Its content must
+     * be byte-identical to the hand-kept literal it replaced (copied verbatim below from the pre-BE-631 source), so
+     * the merge to one source changed no partnership's delegatable set: a catalog row added or removed later turns
+     * this red and has to be decided as a partnership change too.
+     */
+    @Test
+    @DisplayName("BE-631: the allow-list is derived from DomainRoleCatalog and equals the pre-BE-631 literal exactly")
+    void allowlist_derivedFromDomainRoleCatalog_byteIdenticalToTheReplacedLiteral() {
+        java.util.Set<String> preBe631Literal = java.util.Set.of(
+                "WMS_OPERATOR",
+                "OUTBOUND_READ", "OUTBOUND_WRITE",
+                "INBOUND_READ", "INBOUND_WRITE",
+                "INVENTORY_READ", "INVENTORY_WRITE",
+                "MASTER_READ",
+                "ECOMMERCE_OPERATOR",
+                "SCM_OPERATOR",
+                "ERP_OPERATOR",
+                "FINANCE_OPERATOR",
+                "MES_OPERATOR",
+                "FAN_OPERATOR");
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(preBe631Literal);
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(DomainRoleCatalog.roleNames());
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(14);
+    }
+
     @Test
     @DisplayName("operator-tier roles are delegatable")
     void operatorRoles_delegatable() {

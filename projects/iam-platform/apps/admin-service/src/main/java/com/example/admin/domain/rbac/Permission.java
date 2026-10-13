@@ -109,6 +109,15 @@ public final class Permission {
      */
     public static final String ACCOUNT_2FA_RESET = "account.2fa_reset";
 
+    /**
+     * TASK-BE-631 (ADR-MONO-083 D5 · rbac.md § 도메인 업무 권한 세트): manage DOMAIN permission sets — read the work
+     * role catalog, create / edit / delete a tenant's sets, grant / revoke a set to an operator per tenant, read an
+     * operator's effective work roles. Held by {@code SUPER_ADMIN} (every tenant; the only holder that may touch a
+     * {@code '*'} operator's sets — OD-3) and {@code TENANT_ADMIN} (its grant's tenant only — V0052). 🔴 This key
+     * gives NO domain work authority itself: granting a set is a management-plane act.
+     */
+    public static final String DOMAIN_ACCESS_MANAGE = "domain_access.manage";
+
     /** Sentinel recorded when a controller method is missing a permission declaration. */
     public static final String MISSING = "<missing>";
 
@@ -140,7 +149,8 @@ public final class Permission {
             ORG_MANAGE,
             GROUP_MANAGE,
             TENANT_SECURITY_MANAGE,
-            ACCOUNT_2FA_RESET);
+            ACCOUNT_2FA_RESET,
+            DOMAIN_ACCESS_MANAGE);
 
     /** @return the canonical permission-key catalog (immutable, rbac.md order). */
     public static List<String> catalog() {

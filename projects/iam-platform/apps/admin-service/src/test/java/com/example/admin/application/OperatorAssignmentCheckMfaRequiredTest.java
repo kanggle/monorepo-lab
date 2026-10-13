@@ -59,7 +59,9 @@ class OperatorAssignmentCheckMfaRequiredTest {
         useCase = new OperatorAssignmentCheckUseCase(tenantScopeResolver, assignmentPort,
                 new OperatorOidcSubjectResolver(operatorPort), partnershipPort,
                 new UnboundedHostEntitledScopeResolver(),
-                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, entryPolicyPort));
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, entryPolicyPort),
+                // TASK-BE-631: no domain permission set in this suite.
+                (operatorInternalId, tenantIds) -> List.of());
     }
 
     private AdminOperatorPort.OperatorView operator(String home, long id) {

@@ -1,0 +1,43 @@
+package com.example.admin.domain.rbac;
+
+import java.util.List;
+
+/**
+ * TASK-BE-631 (ADR-MONO-083) — the system preset keys of admin-api.md § 시스템 프리셋, in the table's order (the
+ * order {@code GET /api/admin/domain-permission-sets} lists them in). The rows themselves — fixed {@code setId}s and
+ * roles — are seeded by V0052; {@code V0052MigrationShapeTest} pins the migration to this list.
+ *
+ * <p>Framework-free.
+ */
+public final class DomainPermissionSetPresets {
+
+    /** The backfill-only preset (MIGRATION source exclusively — never grantable through the API). */
+    public static final String LEGACY_COMPAT = "legacy-compat";
+
+    /** Every preset key, in the contract's table order. */
+    public static final List<String> SYSTEM_KEYS = List.of(
+            "wms-inventory-read",
+            "wms-inventory-operate",
+            "wms-inbound-operate",
+            "wms-outbound-operate",
+            "wms-master-read",
+            "wms-ops-actions",
+            "wms-full",
+            "scm-full",
+            "erp-full",
+            "finance-full",
+            "ecommerce-full",
+            "fan-full",
+            "mes-full",
+            "all-domains-full",
+            LEGACY_COMPAT);
+
+    private DomainPermissionSetPresets() {
+    }
+
+    /** @return the list position of {@code systemKey}; unknown keys sort last. */
+    public static int orderOf(String systemKey) {
+        int i = SYSTEM_KEYS.indexOf(systemKey);
+        return i < 0 ? Integer.MAX_VALUE : i;
+    }
+}

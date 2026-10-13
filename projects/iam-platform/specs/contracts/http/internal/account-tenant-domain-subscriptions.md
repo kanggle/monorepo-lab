@@ -85,6 +85,8 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 
 > **Fail-soft 보존 (verbatim).** 이 호출의 어떤 실패(5xx/timeout/CB-open) 또는 **빈 결과** → auth-service 는 `entitled_domains` claim 을 **생략**한다(gateway 가 이후 403). **실패는 절대 reach 를 WIDEN 할 수 없다** — narrow-only.
 
+> **두 번째 호출자 — admin-service (TASK-BE-631 · ADR-MONO-083 D5).** 업무 권한 세트의 생성 · 수정 · 배정이 «세트 도메인 ⊆ 그 테넌트 entitled domains» 를 이 엔드포인트로 판정한다(`422 DOMAIN_NOT_SUBSCRIBED` — admin-api § 도메인 업무 권한 세트). 쓰기 게이트와 토큰이 **같은 상한**을 보게 하려고 raw 구독 목록이 아니라 이것을 쓴다. 실패 처리는 auth-service 와 **반대 방향으로 같은 원칙**이다: 404(모르는 테넌트) = 빈 집합 → 거절 · 그 밖의 4xx · 5xx · timeout · CB-open = `503`, 아무것도 쓰지 않는다(fail-closed). 어느 쪽도 실패가 권한을 넓히지 않는다.
+
 > **D7 net-zero.** `org_node_id = NULL` 인 테넌트는 `UNBOUNDED` effective ceiling 을 가지므로 `E ∩ UNBOUNDED = E`, 이 엔드포인트의 출력은 모든 pre-ADR-047 테넌트에 대해 구식 `?tenantId=` 출력과 **byte-identical** 하다.
 
 **Errors**:

@@ -241,6 +241,26 @@ class AdminActionPermissionRegistryTest {
     }
 
     @Test
+    void domain_permission_set_codes_target_the_contract_types_and_gate_on_domain_access_manage() {
+        // TASK-BE-631 (admin-api.md § 도메인 업무 권한 세트 Side Effects): a set's lifecycle targets the SET, a grant /
+        // revoke targets the OPERATOR, a group set grant / revoke the GROUP; all of them domain_access.manage.
+        for (ActionCode c : java.util.List.of(ActionCode.DOMAIN_PERMISSION_SET_CREATE,
+                ActionCode.DOMAIN_PERMISSION_SET_UPDATE, ActionCode.DOMAIN_PERMISSION_SET_DELETE)) {
+            assertThat(registry.targetTypeFor(c)).isEqualTo("DOMAIN_PERMISSION_SET");
+            assertThat(registry.permissionForActionCode(c)).isEqualTo(Permission.DOMAIN_ACCESS_MANAGE);
+        }
+        for (ActionCode c : java.util.List.of(ActionCode.OPERATOR_DOMAIN_SET_GRANT,
+                ActionCode.OPERATOR_DOMAIN_SET_REVOKE)) {
+            assertThat(registry.targetTypeFor(c)).isEqualTo("OPERATOR");
+            assertThat(registry.permissionForActionCode(c)).isEqualTo(Permission.DOMAIN_ACCESS_MANAGE);
+        }
+        for (ActionCode c : java.util.List.of(ActionCode.GROUP_DOMAIN_SET_GRANT, ActionCode.GROUP_DOMAIN_SET_REVOKE)) {
+            assertThat(registry.targetTypeFor(c)).isEqualTo("GROUP");
+            assertThat(registry.permissionForActionCode(c)).isEqualTo(Permission.DOMAIN_ACCESS_MANAGE);
+        }
+    }
+
+    @Test
     void permissionForActionCode_resolves_every_action_code_to_non_null() {
         for (ActionCode code : ActionCode.values()) {
             assertThat(registry.permissionForActionCode(code))

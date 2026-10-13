@@ -1,6 +1,8 @@
 package com.example.admin.application;
 
+import com.example.admin.application.exception.DomainAccessUnavailableException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.EffectiveDomainRolePort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.domain.rbac.AdminOperator;
@@ -68,6 +70,8 @@ public class OperatorAssignmentCheckUseCase {
     private final HostEntitledScopeResolver hostEntitledScopeResolver;
     // TASK-MONO-771 S4: the shared second-factor requirement (the token exchange uses the SAME one).
     private final OperatorSecondFactorRequirement secondFactorRequirement;
+    // TASK-BE-631 (auth-to-admin.md rule 7 · ADR-MONO-083 D6): the read behind `domainRoles`.
+    private final EffectiveDomainRolePort effectiveDomainRolePort;
 
     /**
      * Boolean convenience kept for callers that need only the assignment verdict.
@@ -115,7 +119,32 @@ public class OperatorAssignmentCheckUseCase {
         // independent: platform '*' (step 2 — this is what closes AC-0 F2), assignment (3) and partnership
         // host reach (5) all reach here. A read failure propagates (→ 5xx → auth-service denies).
         boolean mfaRequired = secondFactorRequirement.requiredForAssume(resolution.operator(), tenantId);
-        return resolution.result().withMfaRequired(mfaRequired);
+        Result result = resolution.result().withMfaRequired(mfaRequired);
+        // TASK-BE-631 (auth-to-admin.md rule 7): computed AFTER assigned=true, without changing it. The
+        // partnership host reach carries `delegatedScope` as its only role input and never reads the host's set
+        // rows (the delegation cap must not be widened) — the field is omitted there.
+        if (result.delegatedScope() != null) {
+            return result;
+        }
+        return result.withDomainRoles(domainRoles(resolution.operator(), tenantId));
+    }
+
+    /**
+     * Rule 7 — the effective work roles: membership path = the (operator, T) set rows of every source; {@code '*'}
+     * path = (operator, T) ∪ (operator, {@code '*'}) rows (OD-3). No row → {@code []} — a {@code '*'} operator gets no
+     * «everything» for being {@code '*'}. No catalog / subscription intersection here (auth-service's job). A read
+     * failure is a 5xx ({@link DomainAccessUnavailableException}) — never {@code []}: «could not read» and «no sets»
+     * must not be the same answer.
+     */
+    private List<String> domainRoles(AdminOperatorPort.OperatorView operator, String tenantId) {
+        List<String> rowTenants = AdminOperator.PLATFORM_TENANT_ID.equals(operator.tenantId())
+                ? List.of(tenantId, AdminOperator.PLATFORM_TENANT_ID)
+                : List.of(tenantId);
+        try {
+            return List.copyOf(effectiveDomainRolePort.effectiveRoleNames(operator.internalId(), rowTenants));
+        } catch (RuntimeException e) {
+            throw new DomainAccessUnavailableException(e);
+        }
     }
 
     /** The assignment verdict (rules 0-5) + the resolved operator row (null when not assigned). */
@@ -302,22 +331,36 @@ public class OperatorAssignmentCheckUseCase {
      *                 {@code null} when unset / not assigned (→ {@code ["*"]})
      */
     public record Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope,
-                         boolean mfaRequired) {
+                         boolean mfaRequired,
+                         /**
+                          * TASK-BE-631 (rule 7) — the effective work roles; {@code null} = the field is omitted
+                          * (every {@code assigned=false} answer and the partnership host reach), {@code []} = no set.
+                          */
+                         List<String> domainRoles) {
 
         /**
          * The assignment verdict before the TASK-MONO-771 requirement is attached ({@code mfaRequired=false}).
          * Production code attaches the computed value through {@link #withMfaRequired} in {@link #check}.
          */
         public Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope) {
-            this(assigned, orgScope, delegatedScope, false);
+            this(assigned, orgScope, delegatedScope, false, null);
+        }
+
+        /** Pre-TASK-BE-631 shape — no {@code domainRoles} (omitted). */
+        public Result(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope, boolean mfaRequired) {
+            this(assigned, orgScope, delegatedScope, mfaRequired, null);
         }
 
         static Result notAssigned() {
-            return new Result(false, null, null, false);
+            return new Result(false, null, null, false, null);
         }
 
         Result withMfaRequired(boolean required) {
-            return new Result(assigned, orgScope, delegatedScope, required);
+            return new Result(assigned, orgScope, delegatedScope, required, domainRoles);
+        }
+
+        Result withDomainRoles(List<String> roles) {
+            return new Result(assigned, orgScope, delegatedScope, mfaRequired, roles);
         }
     }
 

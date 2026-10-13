@@ -145,6 +145,68 @@ class OperatorAssignmentCheckControllerSliceTest {
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
     }
 
+    // ── TASK-BE-631 (auth-to-admin.md `domainRoles`, rule 7) ─────────────────────────────────────
+
+    @Test
+    @DisplayName("BE-631 AC-6: domainRoles = the effective roles, serialized in order")
+    void domainRoles_serialized() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null, null, false,
+                        java.util.List.of("INVENTORY_READ", "INVENTORY_WRITE")));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.domainRoles.length()").value(2))
+                .andExpect(jsonPath("$.domainRoles[0]").value("INVENTORY_READ"))
+                .andExpect(jsonPath("$.domainRoles[1]").value("INVENTORY_WRITE"));
+    }
+
+    @Test
+    @DisplayName("BE-631 AC-6: no set → domainRoles is PRESENT as [] (never omitted on the membership / '*' path)")
+    void domainRoles_emptyRenderedAsEmptyArray() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null, null, false, java.util.List.of()));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.domainRoles").isArray())
+                .andExpect(jsonPath("$.domainRoles").isEmpty());
+    }
+
+    @Test
+    @DisplayName("BE-631 AC-6: partnership host reach (domainRoles null) → field OMITTED, delegatedScope as before")
+    void domainRoles_omittedOnPartnershipPath() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("host-co")))
+                .willReturn(new OperatorAssignmentCheckUseCase.Result(true, null,
+                        new OperatorAssignmentCheckUseCase.DelegatedScope(java.util.List.of("wms"),
+                                java.util.List.of("OUTBOUND_READ")), false, null));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "host-co"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.delegatedScope.roles[0]").value("OUTBOUND_READ"))
+                .andExpect(jsonPath("$.domainRoles").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("BE-631 AC-6: the set read failed → 500 (auth-service denies), never a 200 with []")
+    void domainRolesReadFailure_returns500() throws Exception {
+        given(checkUseCase.check(eq(SUB), eq("acme-corp")))
+                .willThrow(new com.example.admin.application.exception.DomainAccessUnavailableException(
+                        new RuntimeException("db down")));
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", SUB)
+                        .param("tenantId", "acme-corp"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+    }
+
     @Test
     @DisplayName("tenantId 파라미터 누락 → 400")
     void missingTenantId_returns400() throws Exception {

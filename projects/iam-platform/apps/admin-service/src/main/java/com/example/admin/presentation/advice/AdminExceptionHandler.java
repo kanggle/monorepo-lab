@@ -381,6 +381,27 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of(e.getCode(), e.getMessage()));
     }
 
+    /**
+     * TASK-BE-631 (ADR-MONO-083) — the domain-permission-set family (admin-api.md § 도메인 업무 권한 세트). Each
+     * subclass fixes its own code and status (404 NOT_FOUND · 409 READ_ONLY / IN_USE / ALREADY_GRANTED · 422
+     * DOMAIN_ROLE_NOT_ASSIGNABLE / DOMAIN_NOT_SUBSCRIBED).
+     */
+    @ExceptionHandler(com.example.admin.application.exception.DomainPermissionSetException.class)
+    public ResponseEntity<ErrorResponse> handleDomainPermissionSet(
+            com.example.admin.application.exception.DomainPermissionSetException e) {
+        return ResponseEntity.status(e.getHttpStatus())
+                .body(ErrorResponse.of(e.getCode(), e.getMessage()));
+    }
+
+    // TASK-BE-631 (auth-to-admin.md rule 7) — the set read behind `domainRoles` failed: fail-closed 500, never `[]`.
+    @ExceptionHandler(com.example.admin.application.exception.DomainAccessUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleDomainAccessUnavailable(
+            com.example.admin.application.exception.DomainAccessUnavailableException e) {
+        log.error("fail-closed: effective domain roles could not be read, nothing answered", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
+    }
+
     // TASK-BE-343 (ADR-MONO-023 D3) — subscription management delegation errors
     // (account-service 404/409 surfaced unchanged to the operator).
     @ExceptionHandler(SubscriptionNotFoundException.class)

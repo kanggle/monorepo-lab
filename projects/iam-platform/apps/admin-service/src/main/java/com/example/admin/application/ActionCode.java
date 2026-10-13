@@ -131,5 +131,18 @@ public enum ActionCode {
     // has no operator to be the actor — S1-12, it is a structured log line). operator_id = the operator just created,
     // permission_used = reason = <self_invitation_accept>, target_type=OPERATOR_INVITATION, target_id=<invitationId>,
     // target_tenant_id=<invitation tenant>, detail = "accountId=<accountId>" (F19 — 774 reads (account, tenant, operator)).
-    OPERATOR_INVITATION_ACCEPT
+    OPERATOR_INVITATION_ACCEPT,
+    // TASK-BE-631 (ADR-MONO-083 · admin-api.md § 도메인 업무 권한 세트 Side Effects): domain permission sets.
+    // permission_used=domain_access.manage everywhere. A tenant set's create/edit/delete: target_type=
+    // DOMAIN_PERMISSION_SET, target_id=<setId>, target_tenant_id=<acting tenant>. A grant/revoke to an operator:
+    // target_type=OPERATOR, target_id=<operatorId>, target_tenant_id=<T or '*'>, detail carries setId / source /
+    // selfGrant (grant) or removedSources / keptGroupSources (revoke). Group set grant/revoke: target_type=GROUP,
+    // target_id=<groupId> (slice B writes those two). Reads write no row on success.
+    DOMAIN_PERMISSION_SET_CREATE,
+    DOMAIN_PERMISSION_SET_UPDATE,
+    DOMAIN_PERMISSION_SET_DELETE,
+    OPERATOR_DOMAIN_SET_GRANT,
+    OPERATOR_DOMAIN_SET_REVOKE,
+    GROUP_DOMAIN_SET_GRANT,
+    GROUP_DOMAIN_SET_REVOKE
 }
