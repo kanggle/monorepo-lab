@@ -314,6 +314,9 @@ class OperatorAdminIntegrationTest extends AbstractIntegrationTest {
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
                 """, operatorUuid);
+        // TASK-MONO-784 S4 (D-7): a role edit lands in a company the target belongs to — the V0051 backfill row
+        // a hand-seeded operator never receives (no header → the target's single membership = tenant-x).
+        MembershipFixture.addHomeMembership(jdbcTemplate, operatorUuid);
 
         String operatorTenant = jdbcTemplate.queryForObject(
                 "SELECT tenant_id FROM admin_operators WHERE operator_id = ?",

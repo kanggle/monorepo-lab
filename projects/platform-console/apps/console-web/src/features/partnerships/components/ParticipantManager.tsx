@@ -1,13 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { OperatorPicker } from '@/shared/ui/OperatorPicker';
+import type { OperatorSummary } from '@/shared/api/iam-operators-types';
 import { scopeOrNull, type PendingAction } from './partnerships-actions';
 
 // ---------------------------------------------------------------------------
 // Participant add/remove panel (ACTIVE partner-side rows only). The list gives
-// only participantCount (not the operator ids), so the operator id is a manual
-// input for both add and remove — the producer is authoritative on ownership
+// only participantCount (not the operator ids), so the operator is picked via
+// the shared `<OperatorPicker>` (TASK-PC-FE-334 — raw-UUID input → 이메일/이름
+// pick) for both add and remove — the producer is authoritative on ownership
 // (422 PARTICIPANT_NOT_OWN_OPERATOR) and existence (404 PARTICIPANT_NOT_FOUND).
+// `onOpen` still receives the picked operator's raw `operatorId`; `label`
+// carries a name/email display string when known (falls back to the id).
 // ---------------------------------------------------------------------------
 
 export function ParticipantManager({
@@ -17,23 +22,32 @@ export function ParticipantManager({
   partnershipId: string;
   onOpen: (a: PendingAction) => void;
 }) {
-  const [operatorId, setOperatorId] = useState('');
+  const [operatorId, setOperatorId] = useState<string | undefined>(undefined);
+  const [operatorInfo, setOperatorInfo] = useState<OperatorSummary | undefined>(
+    undefined,
+  );
   const [domains, setDomains] = useState('');
   const [roles, setRoles] = useState('');
 
-  const opTrimmed = operatorId.trim();
+  const opTrimmed = operatorId ?? '';
+  const operatorLabel = operatorInfo
+    ? `${operatorInfo.displayName} (${operatorInfo.email})`
+    : opTrimmed;
 
   return (
     <div className="rounded-md border border-dashed border-border bg-muted/30 p-3">
       <p className="mb-2 text-xs font-medium text-foreground">참여자 관리</p>
       <div className="grid gap-2 sm:grid-cols-3">
-        <input
-          type="text"
+        <OperatorPicker
+          id={`partnership-participant-operator-${partnershipId}`}
+          label="운영자"
           value={operatorId}
-          onChange={(e) => setOperatorId(e.target.value)}
-          data-testid={`partnership-participant-operator-${partnershipId}`}
+          onChange={(id, operator) => {
+            setOperatorId(id);
+            setOperatorInfo(operator);
+          }}
+          testid={`partnership-participant-operator-${partnershipId}`}
           placeholder="운영자 ID"
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <input
           type="text"
@@ -63,7 +77,7 @@ export function ParticipantManager({
               partnershipId,
               operatorId: opTrimmed,
               participantScope: scopeOrNull(domains, roles),
-              label: opTrimmed,
+              label: operatorLabel,
               destructive: false,
             })
           }
@@ -80,7 +94,7 @@ export function ParticipantManager({
               kind: 'participant-remove',
               partnershipId,
               operatorId: opTrimmed,
-              label: opTrimmed,
+              label: operatorLabel,
               destructive: true,
             })
           }

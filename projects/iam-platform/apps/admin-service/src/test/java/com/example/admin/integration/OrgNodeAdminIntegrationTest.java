@@ -468,5 +468,9 @@ class OrgNodeAdminIntegrationTest extends AbstractIntegrationTest {
                      WHERE o.operator_id = ? AND r.name = ?
                     """, uuid, roleName);
         }
+        // TASK-MONO-784 S4 (rider R3 · D-8): a status change is judged on the target's MEMBERSHIPS (one company →
+        // that company's admin). Every operator here is an ordinary operator of its own company, so it carries
+        // the V0051 backfill row a hand-seeded row never receives. No-op for '*'.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 }

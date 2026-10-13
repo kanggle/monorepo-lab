@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { AccountEmailLookup } from '@/shared/ui/AccountEmailLookup';
 import { useActiveAgencyOptions, useCreateArtist } from '../hooks/use-fan-directory';
 import { fanErrorMessage } from '../lib/fan-messages';
 import { ARTIST_TYPES } from '../api/fan-types';
@@ -73,6 +74,13 @@ export function ArtistCreateForm() {
         <p className="mt-1 text-xs text-muted-foreground">
           이 아티스트로 글을 쓰는 IAM 계정의 ID. 등록 뒤에는 바꿀 수 없습니다.
         </p>
+        <div className="mt-2">
+          <AccountEmailLookup
+            id={`${ids.account}-email-lookup`}
+            testid="fan-artist-create-account-lookup"
+            onPick={(pickedAccountId) => setAccountId(pickedAccountId)}
+          />
+        </div>
       </div>
       <div>
         <label htmlFor={ids.type} className={labelCls}>

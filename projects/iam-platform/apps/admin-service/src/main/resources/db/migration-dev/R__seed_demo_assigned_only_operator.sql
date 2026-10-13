@@ -18,6 +18,16 @@
 -- This row fills exactly that gap: HOME `ecommerce`, ASSIGNED to `demo-corp`. In a
 -- demo-corp group it renders «ecommerce 소속 · 배정만 됨», disabled.
 --
+-- 🔴 TASK-MONO-784 S4 (ADR-MONO-082 b · D-11 · 784 AC-0 F10) — WHAT THIS ROW MEANS NOW:
+-- an assignment row IS a company membership, and a group holds the operators whose
+-- MEMBERSHIPS include the group's tenant (no longer «home == group tenant»). So this
+-- operator is a «member of demo-corp with no role» (rider R2) and the group surface now
+-- ACCEPTS it into a demo-corp group — the group becomes the way it would get a demo-corp
+-- role. The HOME (`ecommerce`) is no membership at all: since 784 S2 the home is read by
+-- no decision (R1) and this row has no `ecommerce` assignment. The console picker's
+-- «배정만 됨» grey-out (PC-FE-319, keyed on homeTenantId) is therefore stale; S6 replaces
+-- it with the membership predicate. The row itself is unchanged — it still cannot log in.
+--
 -- WHY IT CANNOT BE USED TO LOG IN — each choice is load-bearing
 -- ---------------------------------------------------------------------------
 -- 1. password_hash NULL — AdminLoginService fail-closes the break-glass password login.

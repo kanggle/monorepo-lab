@@ -270,5 +270,8 @@ class OperatorAdminScopeConfinementIntegrationTest extends AbstractIntegrationTe
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = ?
                 """, uuid, roleName);
+        // TASK-MONO-784 S4 (D-7): a role edit is resolved against the target's memberships (no header → its
+        // single membership); a hand-seeded operator needs the V0051 backfill row. No-op for '*'.
+        MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 }

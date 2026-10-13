@@ -63,6 +63,15 @@ public class TenantScopeGuard {
     }
 
     /**
+     * TASK-MONO-784 S4 — the DENIED row of {@link #requireTenantInScope} on its own, for a caller that has already
+     * decided «out of scope» on a set of tenants (no single target to test) and throws the 403 itself. Best-effort.
+     */
+    public void recordTenantDenied(OperatorContext actor, String permission, String attemptedTenantId,
+                                   ActionCode actionCode) {
+        auditor.recordCrossTenantDenied(actor, null, actionCode, permission, attemptedTenantId);
+    }
+
+    /**
      * TASK-MONO-772 S2 — the same {@code target ∈ effectiveAdminScope} rule as a plain answer: no row, no throw.
      * For a surface whose contract answers «out of scope» with a 404 instead of a 403 (an operator invitation
      * outside the actor's scope is indistinguishable from a missing one — enumeration-safe), so the caller picks

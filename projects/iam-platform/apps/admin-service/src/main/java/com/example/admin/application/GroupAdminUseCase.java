@@ -12,6 +12,7 @@ import com.example.admin.application.exception.OperatorNotFoundException;
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
@@ -74,6 +75,8 @@ public class GroupAdminUseCase {
     private final AdminGrantScopeEvaluator grantScopeEvaluator;
     private final GroupFanOutService fanOut;
     private final AdminActionAuditor auditor;
+    private final OperatorTenantAssignmentPort assignmentPort;
+    private final TenantLastAdminGuard lastAdminGuard;
 
     // ==== Group CRUD ===========================================================
 
@@ -138,10 +141,15 @@ public class GroupAdminUseCase {
     @Transactional
     public void deleteGroup(OperatorContext actor, String groupId, String reason) {
         OperatorGroupJpaEntity group = requireGroupForMutation(actor, groupId, ActionCode.GROUP_DELETE);
+        // 784 S4 (owner decision 2026-10-11 UTC): disbanding the group revokes every role it fanned out — the same
+        // «last administrator» predicate, or deleting the group would route around the member / grant checks.
+        Long groupInternalId = group.getId();
+        lastAdminGuard.requireAdminRemains(group.getTenantId(),
+                row -> groupInternalId.equals(row.groupOrigin()), null);
         // Cascade-revoke every group_origin fan-out row (audit/outbox atomicity, D5/D6) BEFORE
         // deleting the group. Direct grants (group_origin IS NULL) are untouched. The FK
         // ON DELETE CASCADE is only the DB backstop; the application does it explicitly.
-        fanOut.revokeGroupFanOut(group.getId(), resolveMembers(group.getId()));
+        fanOut.revokeGroupFanOut(group.getId(), resolveMembers(group));
         operatorGroups.delete(group); // membership + grant templates cascade via FK
         audit(ActionCode.GROUP_DELETE, group.getGroupId(), group.getTenantId(), actor, reason, null);
     }
@@ -168,11 +176,18 @@ public class GroupAdminUseCase {
         AdminOperatorJpaEntity target = adminOperators.findByOperatorId(operatorPublicId)
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorPublicId));
-        // D3: a group holds only its own tenant's operators.
-        if (!group.getTenantId().equals(target.getTenantId())) {
+        // TASK-MONO-784 S4 (ADR-MONO-082 D2 · D-14): a platform operator takes no company membership.
+        if (AdminOperator.PLATFORM_TENANT_ID.equals(target.getTenantId())) {
+            throw new IllegalArgumentException(
+                    "A platform ('*') operator cannot be a member of a company group");
+        }
+        // D3 · 784 S4 (D-11): a group holds only its own tenant's operators — the group's tenant must be one of
+        // the target's MEMBERSHIPS (before S4: the target's home). A «member, no role» operator qualifies: the
+        // group is how that person gets a role in this company (784 AC-0 F10).
+        if (!assignmentPort.assignmentExists(target.getId(), group.getTenantId())) {
             throw new GroupMemberTenantMismatchException(
-                    "Operator '" + operatorPublicId + "' (tenant " + target.getTenantId()
-                            + ") does not belong to group tenant '" + group.getTenantId() + "'");
+                    "Operator '" + operatorPublicId + "' does not belong to group tenant '"
+                            + group.getTenantId() + "'");
         }
         if (groupMembers.existsById(new OperatorGroupMemberJpaEntity.PK(group.getId(), target.getId()))) {
             throw new GroupMemberAlreadyExistsException(
@@ -187,7 +202,7 @@ public class GroupAdminUseCase {
         Long actorInternalId = actorInternalId(actor);
         groupMembers.save(OperatorGroupMemberJpaEntity.create(group.getId(), target.getId(), now, actorInternalId));
         int fanned = fanOut.fanOutGrantsToMember(group.getId(), currentGrants,
-                new GroupFanOutService.Member(target.getId(), target.getOperatorId(), target.getTenantId()),
+                new GroupFanOutService.Member(target.getId(), target.getOperatorId(), group.getTenantId()),
                 actorInternalId, now);
         audit(ActionCode.GROUP_MEMBER_ADD, group.getGroupId(), group.getTenantId(), actor, reason,
                 "operator=" + operatorPublicId);
@@ -206,9 +221,17 @@ public class GroupAdminUseCase {
             throw new GroupMemberNotFoundException(
                     "Operator '" + operatorPublicId + "' is not a member of group '" + groupId + "'");
         }
+        // 784 S4 (owner decision 2026-10-11 UTC): the group's tenant keeps an administrator after this member's
+        // fan-out rows go.
+        Long groupInternalId = group.getId();
+        long memberInternalId = target.getId();
+        lastAdminGuard.requireAdminRemains(group.getTenantId(),
+                row -> row.operatorInternalId() == memberInternalId
+                        && groupInternalId.equals(row.groupOrigin()),
+                null);
         // Revoke ONLY this member's group_origin rows for this group; direct grants untouched.
         fanOut.revokeMemberFanOut(group.getId(),
-                new GroupFanOutService.Member(target.getId(), target.getOperatorId(), target.getTenantId()));
+                new GroupFanOutService.Member(target.getId(), target.getOperatorId(), group.getTenantId()));
         groupMembers.deleteById(pk);
         audit(ActionCode.GROUP_MEMBER_REMOVE, group.getGroupId(), group.getTenantId(), actor, reason,
                 "operator=" + operatorPublicId);
@@ -255,7 +278,7 @@ public class GroupAdminUseCase {
 
         Instant now = Instant.now();
         Long actorInternalId = actorInternalId(actor);
-        List<GroupFanOutService.Member> members = resolveMembers(group.getId());
+        List<GroupFanOutService.Member> members = resolveMembers(group);
         List<GrantView> created = new ArrayList<>();
         int fanned = 0;
 
@@ -297,7 +320,16 @@ public class GroupAdminUseCase {
                 .filter(g -> g.getGroupId().equals(group.getId()))
                 .orElseThrow(() -> new GroupGrantNotFoundException(
                         "Grant '" + grantId + "' not found in group '" + groupId + "'"));
-        fanOut.revokeGrantFanOut(group.getId(), grant, resolveMembers(group.getId()));
+        if (grant.isRole()) {
+            // 784 S4 (owner decision 2026-10-11 UTC): revoking the group's role (e.g. TENANT_ADMIN) must leave the
+            // group's tenant an administrator.
+            Long groupInternalId = group.getId();
+            Long roleId = grant.getRoleId();
+            lastAdminGuard.requireAdminRemains(group.getTenantId(),
+                    row -> groupInternalId.equals(row.groupOrigin()) && roleId != null && roleId == row.roleId(),
+                    null);
+        }
+        fanOut.revokeGrantFanOut(group.getId(), grant, resolveMembers(group));
         groupGrants.delete(grant);
         audit(ActionCode.GROUP_GRANT_REVOKE, group.getGroupId(), group.getTenantId(), actor, reason,
                 "grant=" + grantId);
@@ -358,11 +390,12 @@ public class GroupAdminUseCase {
         roleGrantGuard.requireGrantable(actor, roleViews, actionCode, groupTenantId);
     }
 
-    private List<GroupFanOutService.Member> resolveMembers(Long groupInternalId) {
+    /** 784 S4 (D-11): fan-out rows of a group live in the GROUP's tenant, whatever the member's home. */
+    private List<GroupFanOutService.Member> resolveMembers(OperatorGroupJpaEntity group) {
         List<GroupFanOutService.Member> out = new ArrayList<>();
-        for (OperatorGroupMemberJpaEntity m : groupMembers.findByGroupId(groupInternalId)) {
+        for (OperatorGroupMemberJpaEntity m : groupMembers.findByGroupId(group.getId())) {
             adminOperators.findById(m.getOperatorId()).ifPresent(op ->
-                    out.add(new GroupFanOutService.Member(op.getId(), op.getOperatorId(), op.getTenantId())));
+                    out.add(new GroupFanOutService.Member(op.getId(), op.getOperatorId(), group.getTenantId())));
         }
         return out;
     }

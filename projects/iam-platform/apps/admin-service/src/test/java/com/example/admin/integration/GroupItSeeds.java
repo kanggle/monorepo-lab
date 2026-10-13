@@ -41,5 +41,9 @@ final class GroupItSeeds {
                      WHERE o.operator_id = ? AND r.name = ?
                     """, uuid, roleName);
         }
+        // TASK-MONO-784 S4 (D-11): a group holds operators whose MEMBERSHIPS include the group's tenant (no longer
+        // «home == group tenant»). Every operator seeded here is an ordinary operator of its own company, so it
+        // carries the V0051 backfill row a hand-seeded row never receives. No-op for '*'.
+        MembershipFixture.addHomeMembership(jdbc, uuid);
     }
 }
