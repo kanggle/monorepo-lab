@@ -57,8 +57,13 @@ class QueryTenantScopeGateTest {
     @Mock AdminRolePermissionJpaRepository rolePermissions;
     @Mock OrgNodeSubtreeResolver subtreeResolver;
     @Mock AdminActionAuditor auditor;
+    @Mock com.example.admin.application.port.OperatorLookupPort operatorLookupPort;
+    @Mock com.example.admin.application.port.OperatorTenantAssignmentPort assignmentPort;
 
     private QueryTenantScopeGate gate;
+
+    /** The caller's memberships ({@code operator_tenant_assignment} rows) — read by the #9 gate only. */
+    private final java.util.Set<String> memberships = new java.util.HashSet<>();
 
     /** role id → the permissions it confers (the rbac.md seed matrix, the cells used here). */
     private static final Map<Long, List<String>> ROLE_PERMS = Map.of(
@@ -73,7 +78,12 @@ class QueryTenantScopeGateTest {
     void setUp() {
         AdminGrantScopeEvaluator evaluator =
                 new AdminGrantScopeEvaluator(operators, operatorRoles, rolePermissions, subtreeResolver);
-        gate = new QueryTenantScopeGate(evaluator, auditor);
+        gate = new QueryTenantScopeGate(evaluator, auditor, operatorLookupPort,
+                new TenantScopeResolver(assignmentPort));
+        when(operatorLookupPort.findByOperatorId("op-1"))
+                .thenReturn(Optional.of(new com.example.admin.application.port.OperatorLookupPort.OperatorLookupRef(
+                        7L, "op-1", "alpha")));
+        when(assignmentPort.findAssignedTenantIds(7L)).thenAnswer(inv -> java.util.Set.copyOf(memberships));
 
         AdminOperatorJpaEntity op = mock(AdminOperatorJpaEntity.class);
         when(op.getId()).thenReturn(7L);
@@ -218,5 +228,54 @@ class QueryTenantScopeGateTest {
                 .isEqualTo("alpha");
         assertThat(gate.resolveAnyRole(op(), null, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId())
                 .isEqualTo("alpha");
+    }
+
+    // ── #9 operator lookup: memberships (owner decision 2026-10-13 UTC «그 회사 소속이면 허용») ───────────
+
+    /**
+     * 🔴 The TASK-MONO-777 case: an erp HR operator is a member of beta and holds NO role row anywhere. The
+     * lookup (#9) admits beta; the accounts e-mail search (#8b) with the very same caller still refuses —
+     * the two keyless reads are pinned apart in one test.
+     */
+    @Test
+    @DisplayName("🔴 #9: member of beta with zero role rows → lookup resolves beta; #8b (any-role) still refuses the same caller")
+    void lookup_membership_noRole_admitted_butAccountsEmailRefused() {
+        memberships.add("beta");
+
+        assertThat(gate.resolveMembership(op(), "beta", ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId())
+                .isEqualTo("beta");
+        assertThat(gate.resolveMembership(op(), null, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ).tenantId())
+                .as("omission rule over the memberships — one → it").isEqualTo("beta");
+
+        assertThatThrownBy(() -> gate.resolveAnyRole(op(), "beta", ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ))
+                .as("#8b keeps «any role row»").isInstanceOf(TenantScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("#9 control: not a member of gamma (even holding a role at alpha, the home) → gamma out of scope + DENIED row; home is not read")
+    void lookup_nonMember_refused_homeNotRead() {
+        role(3L, "alpha");
+        memberships.add("beta");
+
+        assertThatThrownBy(() -> gate.resolveMembership(op(), "gamma", ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ))
+                .isInstanceOf(TenantScopeDeniedException.class);
+        assertThatThrownBy(() -> gate.resolveMembership(op(), "alpha", ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ))
+                .as("the home (alpha) without a membership row is not a membership — R1")
+                .isInstanceOf(TenantScopeDeniedException.class);
+        verify(auditor).recordCrossTenantDenied(any(), isNull(), eq(ActionCode.ACCOUNT_SEARCH), eq("account.read"), eq("gamma"));
+    }
+
+    @Test
+    @DisplayName("#9: '*' caller → {'*'} (memberships not read) · omitted → '*'")
+    void lookup_platform() {
+        when(operatorLookupPort.findByOperatorId("op-1"))
+                .thenReturn(Optional.of(new com.example.admin.application.port.OperatorLookupPort.OperatorLookupRef(
+                        7L, "op-1", "*")));
+
+        QueryTenantScopeGate.Resolved r =
+                gate.resolveMembership(op(), null, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ);
+        assertThat(r.tenantId()).isEqualTo("*");
+        assertThat(r.isPlatformScope()).isTrue();
+        verify(assignmentPort, never()).findAssignedTenantIds(any());
     }
 }

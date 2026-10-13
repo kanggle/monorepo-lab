@@ -128,7 +128,7 @@ base path: `/api/admin`
 | 7 | `GET /audit` | `tenantId` · 생략 규칙 | grant scope(`audit.read`) | S3 |
 | 8 | `GET /accounts`(목록) | `tenantId` · 생략 규칙 | grant scope(`account.read`) | S3 |
 | 8b | `GET /accounts?email=` | `tenantId` · 생략 규칙 | **«역할 행이 하나라도 있는 테넌트»**(역할 무관 — 권한 키 없는 읽기를 R2 에 맞춘다) | S3 |
-| 9 | `GET /operators/lookup` | `tenantId` · 생략 규칙 | 8b 와 같은 술어 · 범위 밖 = 빈 200 그대로 | S3 |
+| 9 | `GET /operators/lookup` | `tenantId` · 생략 규칙(소속 집합 위에서) | **«호출자의 소속(배정 행)»** — 8b 와 다르다: TASK-MONO-777 이 이 조회를 권한 키 없이 연 이유가 **관리 역할이 없는 erp 인사 담당자**이기 때문(소유자 결정 2026-10-13 UTC «그 회사 소속이면 허용»). `'*'` 호출자는 그대로 전 테넌트 · 홈은 읽지 않는다(R1) · 범위 밖 = 빈 200 그대로 | S3 |
 | 10 | `POST /accounts/{id}/lock` · `unlock` · `bulk-lock` · `gdpr-delete` · `GET …/export` · `POST /sessions/{id}/revoke` | `X-Tenant-Id` · 생략 규칙 | 🔴 grant scope(각 엔드포인트의 권한) — 지금은 쓰기인데 읽기 게이트(배정 ∪ 홈)로 판정해 **배정만 있는 회사에서 잠금 쓰기가 통한다**(784 AC-0 F2) | S3 |
 | 11 | `GET /operator-invitations` | `tenantId` · 생략 규칙 | grant scope(`operator.manage`) | S3 |
 | 12 | `PATCH /operators/{id}/profile` | 대상 | **행 전체 규칙**(아래) | S4 |
@@ -1193,12 +1193,12 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `email` | string (**required**) | 정확 일치(앞뒤 공백 제거 · 소문자화 후 비교 — `admin_operators.email` 은 정규화 저장). 비었거나 없으면 `400 VALIDATION_ERROR` |
-| `tenantId` | string (optional) | 찾을 테넌트(활성 테넌트). `QueryTenantScopeGate`(`GET /api/admin/accounts` · `GET /api/admin/audit` 와 같은 판정기)로 해석한다 — **TASK-MONO-784 S3 부터** 판정 = «호출자의 역할 행이 하나라도 있는 테넌트»(아래 동작 규칙), 생략 → § 행동 테넌트 생략 규칙(홈이 아니다). `*` 는 플랫폼 운영자 전용(전 테넌트) |
+| `tenantId` | string (optional) | 찾을 테넌트(활성 테넌트). `QueryTenantScopeGate`(`GET /api/admin/accounts` · `GET /api/admin/audit` 와 같은 판정기)로 해석한다 — **TASK-MONO-784 S3 부터** 판정 = «호출자의 소속(배정 행)»(아래 동작 규칙), 생략 → § 행동 테넌트 생략 규칙을 소속 집합 위에서(홈이 아니다). `*` 는 플랫폼 운영자 전용(전 테넌트) |
 
 **동작 규칙**:
 - 대상 = 해석된 테넌트에 **속한** 운영자(**소속** = `operator_tenant_assignment` 행 — `GET /api/admin/operators` 와 같은 소속 술어. TASK-MONO-784 S2 부터 홈은 술어에 들지 않는다) 중 `email` 이 일치하고, **`status = ACTIVE`** · **`oidc_subject` 있음**(콘솔 로그인이 이어진 운영자) · `confined_tenant_id` 가 없거나 그 테넌트(TASK-MONO-751 — 그 테넌트에 들어올 수 있는 사람)인 행. 이 셋이 아니면 그 테넌트에 콘솔로 들어와 연결을 **수락할 수 없는** 사람이므로 돌려주지 않는다.
 - 같은 이메일이 HOME 운영자와 다른 테넌트에서 배정된 운영자 둘로 걸릴 수 있다 → `content` 는 배열이고 항목마다 `tenantId`(그 운영자의 HOME 테넌트)를 싣는다. 정렬 = `tenantId` 오름차순(결정적).
-- **TASK-MONO-784 (ADR-MONO-082 b)**: «속한» = 소속(배정 행, S2). 테넌트 게이트 = **«호출자의 역할 행이 하나라도 있는 테넌트»**(역할 무관 — 권한 키 없는 읽기를 라이더 R2 에 맞춘다: 배정만 있는 회사 = 범위 밖 = 빈 200) + § 행동 테넌트 생략 규칙(S3). 항목의 `tenantId` 는 HOME 그대로다(R1 표시값 — 조회 테넌트 소속이라는 사실은 항목이 나온 것으로 이미 참이다).
+- **TASK-MONO-784 (ADR-MONO-082 b)**: «속한» = 소속(배정 행, S2). 테넌트 게이트 = **«호출자의 소속(배정 행)»**(`'*'` 호출자는 전 테넌트 · 홈은 읽지 않는다) + § 행동 테넌트 생략 규칙을 소속 집합 위에서(S3). `GET /api/admin/accounts?email=`(#8b)의 «역할 행이 하나라도 있는 테넌트» 를 쓰지 않는 이유: 이 조회는 TASK-MONO-777 이 **관리 역할이 없는 erp 인사 담당자**를 위해 권한 키 없이 연 것이라, 역할 술어는 바로 그 사람을 막는다(소유자 결정 2026-10-13 UTC «그 회사 소속이면 허용»). 항목의 `tenantId` 는 HOME 그대로다(R1 표시값 — 조회 테넌트 소속이라는 사실은 항목이 나온 것으로 이미 참이다).
 - 🔴 **«없음» 과 «범위 밖» 은 같은 응답이다** — 일치 0건, 그리고 일반 운영자가 effective scope 밖의 `tenantId` 를 지정한 경우 모두 **`200 {"content":[]}`**(바이트 동일). `GET /api/admin/accounts` 는 범위 밖을 `403 TENANT_SCOPE_DENIED` 로 답하지만, 이 조회는 소유자 결정으로 그 구별을 응답에서 지운다(존재 비노출 — 어떤 테넌트 이름이 범위 안인지도 응답으로 캐지 못한다).
 - 감사: 성공 read 는 감사 행 없음(BE-486 read-path 규약). 범위 밖은 응답은 빈 200 이지만 게이트가 기존대로 best-effort DENIED `admin_actions` 1행을 남긴다(`action_code=ACCOUNT_SEARCH` 재사용 — 같은 «이메일로 계정 id 찾기» 행위이고 새 action code 는 권한 레지스트리 매핑을 요구하므로 만들지 않는다 · `downstream_detail` 에 시도한 테넌트). probe 는 응답으로는 안 보이고 감사에는 남는다(rbac.md D3).
 
@@ -1228,9 +1228,9 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | Status | Code | 조건 |
 |---|---|---|
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
-| 400 | `VALIDATION_ERROR` | `email` 없음/공백. **784 S3 부터**: `tenantId` 를 생략했는데 호출자의 역할 행 테넌트가 둘 이상(§ 행동 테넌트 생략 규칙) |
+| 400 | `VALIDATION_ERROR` | `email` 없음/공백. **784 S3 부터**: `tenantId` 를 생략했는데 호출자의 소속이 둘 이상(§ 행동 테넌트 생략 규칙) |
 
-`403` 은 없다(권한 키 없음 · 범위 밖은 빈 200 — 생략했는데 역할 행이 하나도 없는 경우도 빈 200).
+`403` 은 없다(권한 키 없음 · 범위 밖은 빈 200 — 생략했는데 소속이 하나도 없는 경우도 빈 200).
 
 **Side Effects**: 없음 (read) — 범위 밖일 때의 best-effort DENIED 감사 1행 외.
 

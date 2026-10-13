@@ -85,7 +85,9 @@ Permission 키 오탈자 방지를 위해 문자열 상수 클래스를 TASK-BE-
 
 아래 읽기는 **권한 키를 요구하지 않는다** — 위 카탈로그 · Seed Roles 행렬 · `@RequiresPermission` 선언 어디에도 나오지 않는다(GET 은 deny-default 가드 대상이 아니다, `RequiresPermissionAspect`). 운영자 토큰 + `QueryTenantScopeGate`(home ∪ 배정)만 건다.
 
-> **TASK-MONO-784 (ADR-MONO-082 b · 라이더 R2 · D-4 — 구현 S3)**: 이 두 읽기의 테넌트 게이트 술어 = **«호출자의 역할 행이 하나라도 있는 테넌트»**(`admin_operator_roles.tenant_id` 집합 — 역할 무관, 노드 grant 는 subtree, `'*'` 행이면 전부). home ∪ 배정이 아니다 — 배정만 있는 회사(역할 행 0)는 범위 밖이다(R2: 관리 평면 권한 0). 생략 규칙은 [admin-api.md § 행동 테넌트](../../contracts/http/admin-api.md#행동-테넌트--회사별-소속--역할-task-mono-784--adr-mono-082-b) 와 같다(이 집합으로). 범위 밖 응답은 표 그대로(`403` · 빈 `200`). 권한 키를 새로 만들지 않는다.
+> 🔴 **예외 — `GET /api/admin/operators/lookup` (소유자 결정 2026-10-13 UTC «그 회사 소속이면 허용»)**: 이 조회의 게이트는 아래 역할 술어가 아니라 **«호출자의 소속(배정 행)»** 이다(`'*'` 호출자는 전 테넌트 · 홈은 읽지 않는다 · 생략 규칙은 소속 집합 위에서). TASK-MONO-777 이 이 조회를 권한 키 없이 연 이유가 관리 역할이 없는 erp 인사 담당자이므로, 역할 술어는 바로 그 사람을 막는다. 아래 블록은 `GET /api/admin/accounts?email=` 에만 적용된다.
+>
+> **TASK-MONO-784 (ADR-MONO-082 b · 라이더 R2 · D-4 — 구현 S3)**: `GET /api/admin/accounts?email=` 의 테넌트 게이트 술어 = **«호출자의 역할 행이 하나라도 있는 테넌트»**(`admin_operator_roles.tenant_id` 집합 — 역할 무관, 노드 grant 는 subtree, `'*'` 행이면 전부). home ∪ 배정이 아니다 — 배정만 있는 회사(역할 행 0)는 범위 밖이다(R2: 관리 평면 권한 0). 생략 규칙은 [admin-api.md § 행동 테넌트](../../contracts/http/admin-api.md#행동-테넌트--회사별-소속--역할-task-mono-784--adr-mono-082-b) 와 같다(이 집합으로). 범위 밖 응답은 표 그대로(`403` · 빈 `200`). 권한 키를 새로 만들지 않는다.
 
 | endpoint | 권한 키 | 테넌트 게이트 | 범위 밖 응답 | 근거 |
 |---|---|---|---|---|

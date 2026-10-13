@@ -96,7 +96,7 @@ class OperatorLookupControllerSliceTest {
         // the endpoint must not need one.
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
-        when(queryTenantScopeGate.resolveAnyRole(any(), eq("demo-corp"), any(), anyString()))
+        when(queryTenantScopeGate.resolveMembership(any(), eq("demo-corp"), any(), anyString()))
                 .thenReturn(new QueryTenantScopeGate.Resolved("demo-corp", false));
         when(operatorPort.findLookupCandidates(eq("demo-corp"), eq("demo@demo.com")))
                 .thenReturn(List.of(new AdminOperatorPort.OperatorLookupView(
@@ -142,7 +142,7 @@ class OperatorLookupControllerSliceTest {
      */
     @Test
     void out_of_scope_tenant_is_byte_identical_to_not_found() throws Exception {
-        when(queryTenantScopeGate.resolveAnyRole(any(), eq("other-corp"), any(), anyString()))
+        when(queryTenantScopeGate.resolveMembership(any(), eq("other-corp"), any(), anyString()))
                 .thenThrow(new TenantScopeDeniedException("out of scope"));
 
         var notFound = mockMvc.perform(get("/api/admin/operators/lookup")
@@ -160,7 +160,7 @@ class OperatorLookupControllerSliceTest {
         assertThat(outOfScope.getContentAsString()).isEqualTo(notFound.getContentAsString());
         assertThat(outOfScope.getContentType()).isEqualTo(notFound.getContentType());
         // the gate ran (and owns the best-effort DENIED row); no operator row was read
-        verify(queryTenantScopeGate).resolveAnyRole(any(), eq("other-corp"), eq(ActionCode.ACCOUNT_SEARCH), anyString());
+        verify(queryTenantScopeGate).resolveMembership(any(), eq("other-corp"), eq(ActionCode.ACCOUNT_SEARCH), anyString());
         verify(operatorPort, never()).findLookupCandidates(eq("other-corp"), anyString());
     }
 

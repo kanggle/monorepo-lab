@@ -489,3 +489,12 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - `AdminGrantScopeEvaluator` 클래스 javadoc 의 «operational scope = home ∪ assignment» 문구(코드 무관, S2 이후 낡음).
 - `multi-tenancy.md` § 7 시험 자리 표의 784 행(AC-1 위치 = 위 § 2) — S1 § 4-5 가 시험 생기는 슬라이스 몫으로 남긴 것.
 - 라이브 ⚪: 데모 창에서 `demo-operator` 의 ecommerce 화면(계정 · 감사 · 잠금 200 · 운영자 403) 확인 — AC-6 과 같은 창.
+
+### 6. CI 1회차 · 소유자 결정 (2026-10-13 UTC)
+
+- **실패**: PR #4320 `Integration (iam A)` — `OperatorLookupIntegrationTest` «HOME ∪ ASSIGNED operators … (operator holding no role)» `$.content.length()` 기대 2 · 실제 0.
+- **원인**: § 1 #4 가 `GET /operators/lookup`(#9)을 #8b 와 같은 «역할 행이 하나라도 있는 테넌트» 로 묶었다. 그 칸의 호출자(erp HR)는 역할 행이 0 → 범위 밖 → 빈 200. TASK-MONO-777 이 이 조회를 권한 키 없이 연 이유가 바로 **관리 역할이 없는 HR** 이라, S3 가 그 기능을 조용히 깼다. 그 IT 칸은 의도된 것이므로 약하게 고치지 않았다.
+- **소유자 결정** (선택 «그 회사 소속이면 허용»): **#9 만** 게이트 = 호출자의 **소속**(배정 행 · `'*'` 호출자는 그대로 전 테넌트 · 홈 안 읽음) + 생략 규칙을 소속 집합 위에서. 범위 밖 = 빈 200 + best-effort DENIED 행 그대로. **#8b 는 «역할 행» 그대로.**
+- **수정**: `QueryTenantScopeGate.resolveMembership`(신설 — `OperatorLookupPort` + `TenantScopeResolver`, S2 의 배정만 해소기) · `OperatorEmailLookupUseCase` → `resolveMembership` · `OperatorLookupControllerSliceTest` 목 이름. 계약 `admin-api.md` #9 행 · § lookup 의 `tenantId` 행 · 784 규칙 블릿 · 오류표 문구(«소속») — #8b 문구 무변경. `rbac.md` § 권한 키 없는 읽기 — lookup 예외 블록 추가, 역할 술어 블록은 accounts e-mail 에만.
+- **시험**: `QueryTenantScopeGateTest` +3 — 🔴 소속 beta · 역할 0 → lookup beta 해소(생략 → beta) + 같은 호출자로 #8b(`resolveAnyRole`) beta 거절(두 키 없는 읽기를 한 시험에서 갈라 핀) / 대조군 비소속 gamma · 소속 아닌 홈 alpha 둘 다 거절 + DENIED 행 / `'*'` → `*` · 소속 미조회.
+- **rc**: `:admin-service:test` **0**(1138 tests · fail 0 · skip 58). bite — `resolveMembership` 을 `anyRoleScope` 로 되돌림 → `QueryTenantScopeGateTest` 12 중 **3 빨강**(새 #9 칸 셋) · 나머지 9 초록 → 복원 후 그 클래스 + `OperatorLookupControllerSliceTest` rc **0**. IT(`OperatorLookupIntegrationTest`) 는 다시 CI 판정.

@@ -47,6 +47,8 @@ public class QueryTenantScopeGate {
 
     private final AdminGrantScopeEvaluator grantScopeEvaluator;
     private final AdminActionAuditor auditor;
+    private final com.example.admin.application.port.OperatorLookupPort operatorLookupPort;
+    private final TenantScopeResolver tenantScopeResolver;
 
     /**
      * The resolved acting tenant plus whether the caller's grant scope is platform-wide ({@code '*'}).
@@ -83,15 +85,34 @@ public class QueryTenantScopeGate {
     }
 
     /**
-     * The gate for a read with <b>no permission key</b> ({@code GET /api/admin/accounts?email=},
-     * {@code GET /api/admin/operators/lookup}): the scope is every tenant where the operator holds any role
-     * row (R2). Writes the DENIED row like {@link #resolve}; {@code citedPermission} is informational only.
+     * The gate for {@code GET /api/admin/accounts?email=} (a read with <b>no permission key</b>, § 행동 테넌트
+     * #8b): the scope is every tenant where the operator holds any role row (R2). Writes the DENIED row like
+     * {@link #resolve}; {@code citedPermission} is informational only.
      */
     public Resolved resolveAnyRole(OperatorContext operator,
                                    String requestedTenantId,
                                    ActionCode actionCode,
                                    String citedPermission) {
         Set<String> scope = grantScopeEvaluator.anyRoleScope(operatorId(operator));
+        return decide(operator, requestedTenantId, scope, actionCode, citedPermission);
+    }
+
+    /**
+     * The gate for {@code GET /api/admin/operators/lookup} (§ 행동 테넌트 #9): the scope is the caller's
+     * <b>memberships</b> ({@code operator_tenant_assignment} rows via {@link TenantScopeResolver}; a
+     * {@code '*'} caller stays {@code {'*'}}) — never the home (R1). Owner decision 2026-10-13 UTC «그 회사
+     * 소속이면 허용»: TASK-MONO-777 made this lookup permission-keyless so an ERP HR operator holding NO admin
+     * role can propose an employee ↔ account link in its own company; the any-role predicate of #8b would
+     * refuse exactly that caller. The omitted-tenant rule applies over the memberships. Writes the DENIED row
+     * like {@link #resolve}.
+     */
+    public Resolved resolveMembership(OperatorContext operator,
+                                      String requestedTenantId,
+                                      ActionCode actionCode,
+                                      String citedPermission) {
+        Set<String> scope = operator == null ? Set.of() : operatorLookupPort.findByOperatorId(operator.operatorId())
+                .map(ref -> tenantScopeResolver.resolveEffectiveTenantScope(ref.internalId(), ref.tenantId()))
+                .orElse(Set.of());
         return decide(operator, requestedTenantId, scope, actionCode, citedPermission);
     }
 
