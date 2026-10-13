@@ -77,7 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-632-assume-roles-from-assigned-sets.md` — **`ADR-MONO-083` P3 — auth-service: assume `roles` = 배정 세트 ∩ 구독 · 상한 · 구독 파생 제거 · 운영자 토큰 `erp.write` 제거 · assume TTL(OD-2) · 회수 지연 실측** (READY). 🔴 배포 게이트 = BE-631 배포 + 백필 완료 0 · AC-0 OD-3 재확인(플랫폼 운영자 도메인 역할 0 여부). 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-BE-634-audit-idempotency-key-overflow-siblings.md` — **감사 `idempotency_key`(`VARCHAR(100)`) 넘침 형제 — 파트너십 참여자 키는 계산상 항상 130자 · 넘치면 fail-closed 감사가 명령 전체를 `500 AUDIT_FAILURE` 로** (READY, 2026-10-14 UTC, 출처 `TASK-BE-631` 슬라이스 b CI). 🔴 참여자 API 를 부르는 IT 0 — AC-0 = 빨강 먼저 증명. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-BE-635-client-idempotency-key-length-to-audit-column.md` — **The client `Idempotency-Key` header reaches the audit column (100 characters) without a length check. 7 endpoints have no limit, and the bulk-lock per-row key is 101 characters at the boundary; client input becomes `500 AUDIT_FAILURE`** (READY, 2026-10-14 UTC, source: `TASK-BE-634` AC-1 count). 🔴 The bulk-lock per-row key is also the downstream retry key, so record its use before changing the shape. Analysis=Opus 5.5 / recommended implementation=Sonnet.
 - `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
@@ -117,7 +117,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-634-audit-idempotency-key-overflow-siblings.md` — **감사 `idempotency_key`(`VARCHAR(100)`) 넘침 형제 — 파트너십 참여자 키는 계산상 항상 130자 · 넘치면 fail-closed 감사가 명령 전체를 `500 AUDIT_FAILURE` 로** (IN-PROGRESS 2026-10-14 UTC, 출처 `TASK-BE-631` 슬라이스 b CI). 🔴 참여자 API 를 부르는 IT 0 — AC-0 = 빨강 먼저 증명. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).

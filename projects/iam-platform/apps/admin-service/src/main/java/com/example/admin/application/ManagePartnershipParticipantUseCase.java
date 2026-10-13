@@ -159,7 +159,7 @@ public class ManagePartnershipParticipantUseCase {
                         operatorId,
                         AuditReasons.normalize(reason),
                         null,
-                        "participant:" + code.name() + ":" + partnershipId + ":" + operatorId + ":" + now.toEpochMilli(),
+                        AuditIdempotencyKeys.participant(partnershipId, operatorId, now),
                         Outcome.SUCCESS,
                         null,
                         now,

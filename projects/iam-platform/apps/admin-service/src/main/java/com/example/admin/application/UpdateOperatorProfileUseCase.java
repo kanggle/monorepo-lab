@@ -124,7 +124,7 @@ public class UpdateOperatorProfileUseCase {
                         target.operatorId(),
                         reason,
                         null,
-                        "admin-profile-update:" + target.operatorId() + ":" + now.toEpochMilli(),
+                        AuditIdempotencyKeys.adminProfileUpdate(target.operatorId(), now),
                         Outcome.SUCCESS,
                         null,
                         now,

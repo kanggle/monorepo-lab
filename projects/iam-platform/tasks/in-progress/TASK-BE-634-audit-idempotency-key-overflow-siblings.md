@@ -8,7 +8,7 @@ TASK-BE-634
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -71,3 +71,56 @@ admin-service 의 여러 유스케이스가 감사 행 `idempotency_key` 를 `"<
 
 1. 단위 시험만 고친다 — 목 감사기는 칸 길이를 모른다(이 결함이 지금까지 숨은 이유).
 2. 키를 해시로 바꾸며 운영 중 같은 행위의 재시도 판정이 바뀐다 — 키는 이 행위들에서 재시도 판정에 쓰이지 않는지 먼저 확인.
+
+---
+
+# Implementation Record (2026-10-14 UTC)
+
+## AC-0: red first (measured)
+
+- I added `PartnershipCrossOrgLeakIntegrationTest#participantApi_addThenRemove_auditRowsLand` and pushed **the test alone, with no fix** to #4345 (commit `test(iam): TASK-BE-634 AC-0`).
+- CI `Integration (iam A, Testcontainers)` reported **255 tests completed, 1 failed**, and the single failure was this test:
+  `[add body: {"code":"AUDIT_FAILURE","message":"Audit write failed; command aborted",…}]` ⇒ **adding a participant returned 500 `AUDIT_FAILURE`**.
+- ⚪ This IT does not print the cause chain, so the log does not show `Data too long` itself. The cause is attributed by the counter-measurement below: the next commit changes only the key shape, and the same IT turns 201/204 (AC-2).
+
+## AC-1: maximum length of the 8 siblings (widest legal input)
+
+Input widths:
+- `admin_operators.operator_id`: `VARCHAR(36)` (`V0004:44`)
+- `tenant_partnership.partnership_id`: `VARCHAR(36)` (`V0039:22`)
+- assignment and org-scope `tenant_id`: `VARCHAR(32)` (`V0030:28`)
+- epoch millis: 13 digits (until 2286)
+- the longest `PARTNERSHIP_*` action name: `PARTNERSHIP_REACTIVATE`, 22 characters
+
+| Builder | Before | After | Maximum after |
+|---|---|---|---|
+| assignment | 87 (BE-631 fix) | unchanged | 87 |
+| org-scope | `org-scope:`+36+1+32+1+13 = **93** | byte-unchanged | 93 |
+| 🔴 participant | `participant:`+27/30+1+36+1+36+1+13 = **127 / 130** | `ptc:`+36+1+36+1+13 | **91** |
+| partnership | 12+22+1+36+1+13 = **85** | byte-unchanged | 85 |
+| identity-link | 14+36+1+13 = 64 | byte-unchanged | 64 |
+| identity-unlink | 16+36+1+13 = 66 | byte-unchanged | 66 |
+| admin-profile-update | 21+36+1+13 = 71 | byte-unchanged | 71 |
+| self-profile-update | 20+36+1+13 = 70 | byte-unchanged | 70 |
+
+Only the participant key overflowed. The other 7 produce byte-identical output; the code just moved into one class.
+
+🔵 **Another kind found outside this table, not fixed here, filed as `TASK-BE-635`:** keys the **client** sends.
+- 7 `Idempotency-Key` headers have no `@Size`.
+- Bulk lock: `header(≤64)+":"+accountId(36)` = 101 at the boundary. This key is also the downstream retry key, so its shape is not changed casually.
+
+## AC-2: fix
+
+- New `AuditIdempotencyKeys` (package-private). All 8 builders now go through this class.
+- The participant key drops the action name (`ptc:<partnershipId>:<operatorId>:<millis>`). The row already carries the action name in `action_code`, and the unique index is `(actor_id, action_code, idempotency_key)`.
+- No key is read back for a retry decision; every one ends in the instant.
+
+## AC-3: guard
+
+- `AuditIdempotencyKeysTest`:
+  - (a) Feeds every builder the widest input and asserts ≤ 100. The partnership key is checked for **every** `PARTNERSHIP_*` code.
+  - (b) A control: the old participant forms measure 127 and 130.
+  - (c) The keys still separate their subjects.
+  - (d) Scans `src/main/java` and **fails on any line outside the builder class that is both `":"`-joined and `toEpochMilli()`**.
+- Bite check for (d): applying the same predicate to the `origin/main` tree catches **all 8 old builders**.
+- `AssignmentAuditIdempotencyKeyTest` (BE-631) is folded into this test.

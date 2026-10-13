@@ -81,7 +81,7 @@ public class UpdateOwnOperatorProfileUseCase {
                 caller.operatorId(),
                 AdminActionAuditor.REASON_SELF_PROFILE_UPDATE,
                 null,
-                "self-profile-update:" + caller.operatorId() + ":" + now.toEpochMilli(),
+                AuditIdempotencyKeys.selfProfileUpdate(caller.operatorId(), now),
                 Outcome.SUCCESS,
                 null,
                 now,
