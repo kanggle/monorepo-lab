@@ -24,6 +24,12 @@ export function listRefs(
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
   if (params.status) qs.set('status', params.status);
+  // TASK-PC-FE-333 — zones/locations(warehouseId) + lots(skuId) scoping.
+  if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
+  if (params.skuId) qs.set('skuId', params.skuId);
+  // partnerType is REPEATED (never comma-joined) — matches the proxy's
+  // `searchParams.getAll('partnerType')` + the picker's own query build.
+  for (const pt of params.partnerType ?? []) qs.append('partnerType', pt);
   pageParams(qs, params.page, params.size);
   return callWmsAdmin(
     {

@@ -41,9 +41,17 @@ export async function GET(
   }
 
   const sp = new URL(req.url).searchParams;
+  const partnerType = sp.getAll('partnerType');
   const params_: RefQueryParams = {
     q: sp.get('q') ?? undefined,
     status: sp.get('status') ?? undefined,
+    // TASK-PC-FE-333 — WmsRefPicker scoping (zones/locations by warehouse,
+    // lots by SKU, partners by type). `getAll` (not `get`) for `partnerType`
+    // — it is REPEATABLE on the wire (`partnerType=SUPPLIER&partnerType=
+    // BOTH`), never comma-joined.
+    warehouseId: sp.get('warehouseId') ?? undefined,
+    skuId: sp.get('skuId') ?? undefined,
+    partnerType: partnerType.length > 0 ? partnerType : undefined,
     page: sp.has('page') ? Number(sp.get('page')) : undefined,
     size: sp.has('size') ? Number(sp.get('size')) : undefined,
   };

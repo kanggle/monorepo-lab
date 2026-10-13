@@ -369,6 +369,20 @@ export interface AsnQueryParams {
 export interface RefQueryParams {
   q?: string;
   status?: string;
+  /** TASK-PC-FE-333 — scopes `zones`/`locations` candidates to one
+   *  warehouse (§ 1.7, TASK-BE-630). Producer-side-only for those two
+   *  types; harmless (ignored) for the others, mirroring the existing
+   *  tolerant-forward convention this interface already documents. */
+  warehouseId?: string;
+  /** TASK-PC-FE-333 — scopes `lots` candidates to one SKU (TASK-BE-630). */
+  skuId?: string;
+  /** TASK-PC-FE-333 — scopes `partners` candidates by partner type
+   *  (repeatable — e.g. `SUPPLIER` + `BOTH` for an 입고 공급처 picker,
+   *  TASK-BE-630). Serialised as a REPEATED query param (`partnerType=
+   *  SUPPLIER&partnerType=BOTH`), never comma-joined — mirrors how every
+   *  other repeatable filter in this codebase (none yet in wms-ops; see
+   *  `listRefs`) is expected to travel on the wire. */
+  partnerType?: string[];
   page?: number;
   size?: number;
 }

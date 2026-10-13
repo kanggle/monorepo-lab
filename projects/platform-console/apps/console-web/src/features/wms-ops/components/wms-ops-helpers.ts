@@ -95,3 +95,11 @@ const ASN_STATUS_TONE: Record<string, StatusTone> = {
 export function asnStatusTone(status: string | undefined): StatusTone {
   return status ? (ASN_STATUS_TONE[status] ?? 'neutral') : 'neutral';
 }
+
+// --- ref picker scope (TASK-PC-FE-333) ------------------------------------
+
+/** 입고 공급처(`WmsInboundFilters`) `WmsRefPicker` scope — AC-2: candidates
+ *  are restricted to `SUPPLIER` + `BOTH` partner types (never `CUSTOMER`-
+ *  only partners). Module-level constant so the array identity is stable
+ *  across re-renders (the picker's effects key off it). */
+export const SUPPLIER_PARTNER_TYPES: string[] = ['SUPPLIER', 'BOTH'];

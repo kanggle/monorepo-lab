@@ -72,6 +72,17 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+/** `GET /dashboard/refs/{type}` page shape (TASK-PC-FE-333 `WmsRefPicker`). */
+function refsPage(
+  rows: { id: string; code: string; name?: string | null }[],
+) {
+  return {
+    content: rows,
+    page: { number: 0, size: 20, totalElements: rows.length, totalPages: 1 },
+  };
+}
+
+
 const BY_KEY_DETAIL = {
   locationId: 'loc-1',
   skuId: 'sku-1',
@@ -125,10 +136,15 @@ describe('WmsInventoryScreen — render + extended columns', () => {
     expect(row.getAllByText('—').length).toBeGreaterThan(0);
   });
 
-  it('shows the extended filter inputs (위치 ID / 로트 ID / 최소 보유)', () => {
+  it('shows the extended filter inputs (위치 / 로트 / 최소 보유)', () => {
     renderScreen();
-    expect(screen.getByTestId('wms-inv-filter-location')).toBeInTheDocument();
-    expect(screen.getByTestId('wms-inv-filter-lot')).toBeInTheDocument();
+    // TASK-PC-FE-333 — 위치/로트(+창고/SKU) are now `WmsRefPicker` combobox
+    // inputs (코드·이름으로 고르면 id 가 필터 상태에 들어간다), not raw UUID
+    // text inputs; same base testid, suffixed `-input`.
+    expect(
+      screen.getByTestId('wms-inv-filter-location-input'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('wms-inv-filter-lot-input')).toBeInTheDocument();
     expect(screen.getByTestId('wms-inv-filter-minonhand')).toBeInTheDocument();
   });
 
@@ -145,35 +161,174 @@ describe('WmsInventoryScreen — render + extended columns', () => {
 });
 
 describe('WmsInventoryScreen — extended filter submit & pagination', () => {
-  it('submits all filters (incl. location/lot/minOnHand) and re-queries with serialised params', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ ...INVENTORY, content: [] }));
+  it('submits all filters (incl. location/lot/minOnHand) and re-queries with serialised params — ids, not typed text (AC-1)', async () => {
+    // Four sequential debounced picker fetches — give this one more room
+    // than the vitest default (5000ms).
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/api/wms/master/refs/warehouses')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'wh-42-id', code: 'WH-42', name: '인천창고' }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/skus')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'sku-42-id', code: 'SKU-42', name: '테스트상품' }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/locations')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'loc-42-id', code: 'LOC-42', name: null }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/lots')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'lot-42-id', code: 'LOT-42', name: null }])),
+        );
+      }
+      return Promise.resolve(jsonResponse({ ...INVENTORY, content: [] }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     renderScreen();
 
-    await user.type(screen.getByTestId('wms-inv-filter-warehouse'), 'wh-42');
-    await user.type(screen.getByTestId('wms-inv-filter-sku'), 'sku-42');
-    await user.type(screen.getByTestId('wms-inv-filter-location'), 'loc-42');
-    await user.type(screen.getByTestId('wms-inv-filter-lot'), 'lot-42');
+    async function pick(baseTestid: string, typed: string, optionId: string) {
+      const input = screen.getByTestId(`${baseTestid}-input`);
+      await user.click(input);
+      await user.type(input, typed);
+      await user.click(
+        await screen.findByTestId(
+          `${baseTestid}-option-${optionId}`,
+          {},
+          { timeout: 2000 },
+        ),
+      );
+    }
+
+    await pick('wms-inv-filter-warehouse', 'WH-42', 'wh-42-id');
+    await pick('wms-inv-filter-sku', 'SKU-42', 'sku-42-id');
+    await pick('wms-inv-filter-location', 'LOC-42', 'loc-42-id');
+    await pick('wms-inv-filter-lot', 'LOT-42', 'lot-42-id');
     await user.type(screen.getByTestId('wms-inv-filter-minonhand'), '5');
     await user.click(screen.getByTestId('wms-inv-filter-lowstock'));
     await user.click(screen.getByTestId('wms-inv-filter-submit'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const url = new URL(
-      String(fetchMock.mock.calls[0][0]),
-      'http://console.local',
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]).includes('/api/wms/inventory?'),
+        ),
+      ).toBe(true),
     );
+    const invCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/inventory?'),
+    )!;
+    const url = new URL(String(invCall[0]), 'http://console.local');
     expect(url.pathname).toContain('/api/wms/inventory');
-    expect(url.searchParams.get('warehouseId')).toBe('wh-42');
-    expect(url.searchParams.get('skuId')).toBe('sku-42');
-    expect(url.searchParams.get('locationId')).toBe('loc-42');
-    expect(url.searchParams.get('lotId')).toBe('lot-42');
+    // The REQUEST carries the picked candidates' ids, never the typed text
+    // (Failure Scenario 2 — the producer only accepts ids, not codes).
+    expect(url.searchParams.get('warehouseId')).toBe('wh-42-id');
+    expect(url.searchParams.get('skuId')).toBe('sku-42-id');
+    expect(url.searchParams.get('locationId')).toBe('loc-42-id');
+    expect(url.searchParams.get('lotId')).toBe('lot-42-id');
     expect(url.searchParams.get('minOnHand')).toBe('5');
     expect(url.searchParams.get('lowStockOnly')).toBe('true');
-  });
+
+    // AC-2 — 위치 후보는 고른 창고로, 로트 후보는 고른 SKU 로 좁혀 요청했다.
+    const locRefsCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/master/refs/locations'),
+    )!;
+    expect(
+      new URL(String(locRefsCall[0]), 'http://console.local').searchParams.get(
+        'warehouseId',
+      ),
+    ).toBe('wh-42-id');
+    const lotRefsCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/master/refs/lots'),
+    )!;
+    expect(
+      new URL(String(lotRefsCall[0]), 'http://console.local').searchParams.get(
+        'skuId',
+      ),
+    ).toBe('sku-42-id');
+  }, 15000);
+
+  it('Edge Case — changing the warehouse clears the already-picked location', async () => {
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/api/wms/master/refs/warehouses')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'wh-1-id', code: 'WH-1', name: '서울창고' }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/locations')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'loc-1-id', code: 'A-01', name: null }])),
+        );
+      }
+      return Promise.resolve(jsonResponse({ ...INVENTORY, content: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    renderScreen();
+
+    const locInput = screen.getByTestId('wms-inv-filter-location-input');
+    await user.click(locInput);
+    await user.type(locInput, 'A-01');
+    await user.click(
+      await screen.findByTestId('wms-inv-filter-location-option-loc-1-id', {}, { timeout: 2000 }),
+    );
+    expect(locInput).toHaveValue('A-01');
+
+    const whInput = screen.getByTestId('wms-inv-filter-warehouse-input');
+    await user.click(whInput);
+    await user.type(whInput, 'WH-1');
+    await user.click(
+      await screen.findByTestId('wms-inv-filter-warehouse-option-wh-1-id', {}, { timeout: 2000 }),
+    );
+
+    // 창고를 (다시) 고르면 위치 선택은 해제된다 — 범위 밖 조합 방지.
+    expect(locInput).toHaveValue('');
+  }, 10000);
+
+  it('Edge Case — clearing/changing the SKU clears the already-picked lot', async () => {
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/api/wms/master/refs/skus')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'sku-1-id', code: 'SKU-1', name: '상품1' }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/lots')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'lot-1-id', code: 'LOT-1', name: null }])),
+        );
+      }
+      return Promise.resolve(jsonResponse({ ...INVENTORY, content: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    renderScreen();
+
+    const skuInput = screen.getByTestId('wms-inv-filter-sku-input');
+    await user.click(skuInput);
+    await user.type(skuInput, 'SKU-1');
+    await user.click(
+      await screen.findByTestId('wms-inv-filter-sku-option-sku-1-id', {}, { timeout: 2000 }),
+    );
+
+    const lotInput = screen.getByTestId('wms-inv-filter-lot-input');
+    await user.click(lotInput);
+    await user.type(lotInput, 'LOT-1');
+    await user.click(
+      await screen.findByTestId('wms-inv-filter-lot-option-lot-1-id', {}, { timeout: 2000 }),
+    );
+    expect(lotInput).toHaveValue('LOT-1');
+
+    // SKU 를 지우면 로트 선택도 같이 해제된다.
+    await user.click(screen.getByTestId('wms-inv-filter-sku-clear'));
+    expect(lotInput).toHaveValue('');
+  }, 10000);
 
   it('initialLowStockOnly seeds BOTH the checkbox and the query (the link actually filters)', async () => {
     // TASK-PC-FE-296 (owner decision ⓒ) — the operator-overview wms card
@@ -225,9 +380,15 @@ describe('WmsInventoryScreen — extended filter submit & pagination', () => {
   });
 
   it('an empty/non-numeric minOnHand → the param is NOT sent (undefined)', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ ...INVENTORY, content: [] }));
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/api/wms/master/refs/warehouses')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'wh-1-id', code: 'WH-1', name: '서울창고' }])),
+        );
+      }
+      return Promise.resolve(jsonResponse({ ...INVENTORY, content: [] }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     renderScreen();
@@ -236,16 +397,26 @@ describe('WmsInventoryScreen — extended filter submit & pagination', () => {
     // query key as the seeded initial page (no queryKey change ⇒ no
     // refetch, by design); pair it with a warehouse filter so a fetch is
     // actually triggered, and assert minOnHand is still omitted.
-    await user.type(screen.getByTestId('wms-inv-filter-warehouse'), 'wh-1');
+    const whInput = screen.getByTestId('wms-inv-filter-warehouse-input');
+    await user.click(whInput);
+    await user.type(whInput, 'WH-1');
+    await user.click(
+      await screen.findByTestId('wms-inv-filter-warehouse-option-wh-1-id', {}, { timeout: 2000 }),
+    );
     await user.click(screen.getByTestId('wms-inv-filter-submit'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const url = new URL(
-      String(fetchMock.mock.calls[0][0]),
-      'http://console.local',
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]).includes('/api/wms/inventory?')),
+      ).toBe(true),
     );
+    const invCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/inventory?'),
+    )!;
+    const url = new URL(String(invCall[0]), 'http://console.local');
+    expect(url.searchParams.get('warehouseId')).toBe('wh-1-id');
     expect(url.searchParams.has('minOnHand')).toBe(false);
-  });
+  }, 10000);
 
   it('a minOnHand of 0 is a valid value and IS sent', async () => {
     const fetchMock = vi

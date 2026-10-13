@@ -66,6 +66,16 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+/** `GET /dashboard/refs/{type}` page shape (TASK-PC-FE-333 `WmsRefPicker`). */
+function refsPage(
+  rows: { id: string; code: string; name?: string | null }[],
+) {
+  return {
+    content: rows,
+    page: { number: 0, size: 20, totalElements: rows.length, totalPages: 1 },
+  };
+}
+
 const INSPECTION = {
   asnId: 'asn-1',
   warehouseId: 'wh-1',
@@ -119,11 +129,14 @@ describe('WmsInboundScreen — render + columns', () => {
   it('shows the filter inputs (상태/창고/공급처/예정일 from·to)', () => {
     renderScreen();
     expect(screen.getByTestId('wms-inbound-filter-status')).toBeInTheDocument();
+    // TASK-PC-FE-333 — 창고/공급처 are now `WmsRefPicker` combobox inputs
+    // (코드·이름으로 고르면 id 가 필터 상태에 들어간다), not raw UUID text
+    // inputs; same base testid, suffixed `-input`.
     expect(
-      screen.getByTestId('wms-inbound-filter-warehouse'),
+      screen.getByTestId('wms-inbound-filter-warehouse-input'),
     ).toBeInTheDocument();
     expect(
-      screen.getByTestId('wms-inbound-filter-supplier'),
+      screen.getByTestId('wms-inbound-filter-supplier-input'),
     ).toBeInTheDocument();
     expect(
       screen.getByTestId('wms-inbound-filter-datefrom'),
@@ -144,10 +157,21 @@ describe('WmsInboundScreen — render + columns', () => {
 });
 
 describe('WmsInboundScreen — filter submit & pagination', () => {
-  it('submits all filters and re-queries with serialised params', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ ...ASNS, content: [] }));
+  it('submits all filters and re-queries with serialised params — 창고/공급처 는 고른 id 로 간다 (AC-1/AC-2)', async () => {
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/api/wms/master/refs/warehouses')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'wh-42-id', code: 'WH-42', name: '인천창고' }])),
+        );
+      }
+      if (url.includes('/api/wms/master/refs/partners')) {
+        return Promise.resolve(
+          jsonResponse(refsPage([{ id: 'sup-42-id', code: 'SUP-42', name: '공급사42' }])),
+        );
+      }
+      return Promise.resolve(jsonResponse({ ...ASNS, content: [] }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     renderScreen();
@@ -156,11 +180,29 @@ describe('WmsInboundScreen — filter submit & pagination', () => {
       screen.getByTestId('wms-inbound-filter-status'),
       'CREATED',
     );
-    await user.type(screen.getByTestId('wms-inbound-filter-warehouse'), 'wh-42');
-    await user.type(
-      screen.getByTestId('wms-inbound-filter-supplier'),
-      'sup-42',
+
+    const whInput = screen.getByTestId('wms-inbound-filter-warehouse-input');
+    await user.click(whInput);
+    await user.type(whInput, 'WH-42');
+    await user.click(
+      await screen.findByTestId(
+        'wms-inbound-filter-warehouse-option-wh-42-id',
+        {},
+        { timeout: 2000 },
+      ),
     );
+
+    const supplierInput = screen.getByTestId('wms-inbound-filter-supplier-input');
+    await user.click(supplierInput);
+    await user.type(supplierInput, 'SUP-42');
+    await user.click(
+      await screen.findByTestId(
+        'wms-inbound-filter-supplier-option-sup-42-id',
+        {},
+        { timeout: 2000 },
+      ),
+    );
+
     await user.type(
       screen.getByTestId('wms-inbound-filter-datefrom'),
       '2026-07-01',
@@ -171,18 +213,39 @@ describe('WmsInboundScreen — filter submit & pagination', () => {
     );
     await user.click(screen.getByTestId('wms-inbound-filter-submit'));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const url = new URL(
-      String(fetchMock.mock.calls[0][0]),
-      'http://console.local',
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) =>
+          String(c[0]).includes('/api/wms/inbound/asns'),
+        ),
+      ).toBe(true),
     );
+    const asnsCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/inbound/asns'),
+    )!;
+    const url = new URL(String(asnsCall[0]), 'http://console.local');
     expect(url.pathname).toContain('/api/wms/inbound/asns');
     expect(url.searchParams.get('status')).toBe('CREATED');
-    expect(url.searchParams.get('warehouseId')).toBe('wh-42');
-    expect(url.searchParams.get('supplierPartnerId')).toBe('sup-42');
+    // The REQUEST carries the picked candidate's id, never the typed text
+    // (Failure Scenario 2 — the producer only accepts ids, not codes).
+    expect(url.searchParams.get('warehouseId')).toBe('wh-42-id');
+    expect(url.searchParams.get('supplierPartnerId')).toBe('sup-42-id');
     expect(url.searchParams.get('expectedArriveDateFrom')).toBe('2026-07-01');
     expect(url.searchParams.get('expectedArriveDateTo')).toBe('2026-07-31');
-  });
+
+    // AC-2 — 공급처 후보는 SUPPLIER + BOTH 로만 요청했다.
+    const supplierRefsCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('/api/wms/master/refs/partners'),
+    )!;
+    const supplierRefsUrl = new URL(
+      String(supplierRefsCall[0]),
+      'http://console.local',
+    );
+    expect(supplierRefsUrl.searchParams.getAll('partnerType')).toEqual([
+      'SUPPLIER',
+      'BOTH',
+    ]);
+  }, 10000);
 
   it('a from-only date range is sent without the to bound (partial input allowed)', async () => {
     const fetchMock = vi
