@@ -73,7 +73,7 @@ public class UnlinkOperatorIdentityUseCase {
                         operator.operatorId(),
                         reason,
                         null,
-                        "identity-unlink:" + operator.operatorId() + ":" + now.toEpochMilli(),
+                        AuditIdempotencyKeys.identityUnlink(operator.operatorId(), now),
                         Outcome.SUCCESS,
                         detail,
                         now,

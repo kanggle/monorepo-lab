@@ -161,7 +161,7 @@ public class LinkOperatorIdentityUseCase {
                         operator.operatorId(),
                         reason,
                         null,
-                        "identity-link:" + operator.operatorId() + ":" + ts.toEpochMilli(),
+                        AuditIdempotencyKeys.identityLink(operator.operatorId(), ts),
                         Outcome.SUCCESS,
                         detail,
                         ts,

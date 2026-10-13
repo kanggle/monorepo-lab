@@ -77,6 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-632-assume-roles-from-assigned-sets.md` — **`ADR-MONO-083` P3 — auth-service: assume `roles` = 배정 세트 ∩ 구독 · 상한 · 구독 파생 제거 · 운영자 토큰 `erp.write` 제거 · assume TTL(OD-2) · 회수 지연 실측** (READY). 🔴 배포 게이트 = BE-631 배포 + 백필 완료 0 · AC-0 OD-3 재확인(플랫폼 운영자 도메인 역할 0 여부). 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-635-client-idempotency-key-length-to-audit-column.md` — **The client `Idempotency-Key` header reaches the audit column (100 characters) without a length check. 7 endpoints have no limit, and the bulk-lock per-row key is 101 characters at the boundary; client input becomes `500 AUDIT_FAILURE`** (READY, 2026-10-14 UTC, source: `TASK-BE-634` AC-1 count). 🔴 The bulk-lock per-row key is also the downstream retry key, so record its use before changing the shape. Analysis=Opus 5.5 / recommended implementation=Sonnet.
 - `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)

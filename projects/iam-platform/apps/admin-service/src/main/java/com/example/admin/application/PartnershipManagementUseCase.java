@@ -410,7 +410,7 @@ public class PartnershipManagementUseCase {
                         targetId,
                         AuditReasons.normalize(reason),
                         null,
-                        "partnership:" + code.name() + ":" + partnershipId + ":" + now.toEpochMilli(),
+                        AuditIdempotencyKeys.partnership(code, partnershipId, now),
                         Outcome.SUCCESS,
                         null,
                         now,

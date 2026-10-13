@@ -159,7 +159,7 @@ public class ManageOperatorOrgScopeUseCase {
                         operator.operatorId(),
                         reason,
                         null,
-                        "org-scope:" + operator.operatorId() + ":" + pathTenantId + ":" + now.toEpochMilli(),
+                        AuditIdempotencyKeys.orgScope(operator.operatorId(), pathTenantId, now),
                         Outcome.SUCCESS,
                         null,
                         now,
