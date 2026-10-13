@@ -64,6 +64,7 @@ import { GET as snapshotGET } from '@/app/api/scm/snapshot/route';
 import { GET as skuGET } from '@/app/api/scm/sku/[sku]/route';
 import { GET as stalenessGET } from '@/app/api/scm/staleness/route';
 import { GET as nodesGET } from '@/app/api/scm/nodes/route';
+import { GET as suppliersGET } from '@/app/api/scm/procurement/suppliers/route';
 import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
 
 function jsonResponse(
@@ -227,6 +228,106 @@ describe('GET /api/scm/sku/{sku} proxy — S5 + X-Cache surfaced', () => {
     expect(res.headers.get('X-Cache')).toBe('MISS');
     const body = await res.json();
     expect(body.meta.warning).toBe('Not for procurement decisions (S5)');
+  });
+});
+
+describe('GET /api/scm/procurement/suppliers proxy (TASK-PC-FE-337, read-only)', () => {
+  const SUPPLIERS_ENV = {
+    content: [
+      { id: 'sup-1', code: 'SUP-0001', name: 'Acme', status: 'ACTIVE' },
+    ],
+    page: 0,
+    size: 20,
+    totalElements: 1,
+    totalPages: 1,
+  };
+
+  it('attaches the IAM OIDC access token (NOT the operator token), forwards page/size/status', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ data: SUPPLIERS_ENV, meta: { timestamp: 'x' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await suppliersGET(
+      new Request(
+        'http://console.local/api/scm/procurement/suppliers?status=ACTIVE&size=999',
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.content[0].code).toBe('SUP-0001');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect(h['X-Tenant-Id']).toBeUndefined();
+    expect((init as RequestInit).method).toBe('GET');
+    const upstream = new URL(String(url));
+    expect(upstream.pathname).toBe('/api/v1/procurement/suppliers');
+    expect(upstream.searchParams.get('status')).toBe('ACTIVE');
+    expect(upstream.searchParams.get('size')).toBe('100'); // capped
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await suppliersGET(
+      new Request('http://console.local/api/scm/procurement/suppliers'),
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('403 TENANT_FORBIDDEN → 403 (inline not scoped)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(scmError('TENANT_FORBIDDEN', 403)),
+    );
+    const res = await suppliersGET(
+      new Request('http://console.local/api/scm/procurement/suppliers'),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('503 from scm → 503 (scm section degrades only)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(scmError('SERVICE_UNAVAILABLE', 503)),
+    );
+    const res = await suppliersGET(
+      new Request('http://console.local/api/scm/procurement/suppliers'),
+    );
+    expect(res.status).toBe(503);
+  });
+
+  it('429 → 429 + Retry-After (bounded; client must not re-storm)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ code: 'RATE_LIMIT_EXCEEDED', message: 'x' }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': '1',
+            },
+          },
+        ),
+      ),
+    );
+    const res = await suppliersGET(
+      new Request('http://console.local/api/scm/procurement/suppliers'),
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('1');
   });
 });
 

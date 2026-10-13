@@ -2,6 +2,7 @@
 
 import { Button } from '@/shared/ui/Button';
 import { useSupplierMapForm } from '../hooks/use-supplier-map-form';
+import { useSupplierSuggestions } from '../hooks/use-supplier-suggestions';
 import { COMMON_CURRENCIES } from '../api/types';
 import { ConfigConfirmDialog } from './ConfigConfirmDialog';
 import { SeedFormStates } from './SeedFormStates';
@@ -48,6 +49,7 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
   } = useSupplierMapForm(skuCode);
 
   const blocked = isLoading || forbidden || rateLimited || degraded;
+  const supplierSuggestions = useSupplierSuggestions();
 
   return (
     <section
@@ -88,11 +90,17 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
           <form onSubmit={openConfirm} className="mt-4 grid gap-4">
             <SeedTextField
               id={ids.supplierIdId}
-              label="공급사 ID (supplierId · free-text/uuid)"
+              label="공급사 ID (supplierId · 공급사 코드 — free-text)"
               testid="map-supplierId"
               value={fields.supplierId}
               error={fieldErrors.supplierId}
               onChange={(v) => setFields((f) => ({ ...f, supplierId: v }))}
+              options={
+                supplierSuggestions.options.length > 0
+                  ? supplierSuggestions.options
+                  : undefined
+              }
+              onFocus={supplierSuggestions.load}
             />
 
             <SeedNumberField
