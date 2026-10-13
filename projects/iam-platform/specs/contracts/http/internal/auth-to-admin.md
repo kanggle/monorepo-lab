@@ -180,7 +180,7 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 {
   "tenantId": "acme-corp",
   "tenantDisplayName": "Acme Corp",
-  "maskedEmail": "p*****@example.com",
+  "maskedEmail": "p***@example.com",
   "roles": ["SUPPORT_LOCK"],
   "status": "PENDING",
   "expired": false,

@@ -117,7 +117,7 @@ class OperatorInvitationPageSliceTest {
     }
 
     private static PreviewResult found(String status, boolean expired) {
-        return new PreviewResult(PreviewOutcome.FOUND, new Preview("acme-corp", "Acme Corp", "i*****@example.com",
+        return new PreviewResult(PreviewOutcome.FOUND, new Preview("acme-corp", "Acme Corp", "i***@example.com",
                 List.of("SUPPORT_LOCK"), status, expired, Instant.parse("2026-10-17T10:00:00Z")));
     }
 
@@ -155,7 +155,7 @@ class OperatorInvitationPageSliceTest {
 
             assertThat(result.getResponse().getStatus()).isEqualTo(200);
             String html = html(result);
-            assertThat(message(html)).contains("Acme Corp").contains("i*****@example.com").contains("개인(IAM) 계정");
+            assertThat(message(html)).contains("Acme Corp").contains("i***@example.com").contains("개인(IAM) 계정");
             assertThat(html).contains("id=\"invitation-login\"").contains("href=\"/login\"");
             assertThat(html).contains("id=\"invitation-signup\"")
                     .contains("/operator-invitations/signup?token=" + TOKEN);

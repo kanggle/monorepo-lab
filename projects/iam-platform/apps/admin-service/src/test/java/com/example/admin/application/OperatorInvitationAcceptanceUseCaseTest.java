@@ -520,7 +520,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
 
             assertThat(p.tenantId()).isEqualTo(TENANT);
             assertThat(p.tenantDisplayName()).isEqualTo("Acme Corp");
-            assertThat(p.maskedEmail()).isEqualTo("p*****@example.com").doesNotContain("person");
+            assertThat(p.maskedEmail()).isEqualTo("p***@example.com").doesNotContain("person");
             assertThat(p.roles()).containsExactly("SUPPORT_LOCK");
             assertThat(p.status()).isEqualTo("PENDING");
             assertThat(p.expired()).isFalse();
@@ -558,5 +558,53 @@ class OperatorInvitationAcceptanceUseCaseTest {
         assertThatThrownBy(() -> useCase.accept(TOKEN, null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> useCase.preview(null)).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(invitationPort);
+    }
+
+    @Nested
+    @DisplayName("maskEmail edge cases (TASK-BE-629 — 1~2자 로컬 파트)")
+    class MaskEmailEdgeCases {
+
+        @Test
+        @DisplayName("maskEmail — 표준 길이 로컬 파트는 첫 글자와 도메인을 유지하고 나머지를 ***로 대체한다")
+        void maskEmail_standard() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("person@example.com"))
+                    .isEqualTo("p***@example.com");
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("jane.doe@example.com"))
+                    .isEqualTo("j***@example.com");
+        }
+
+        @Test
+        @DisplayName("maskEmail — 1자 로컬 파트는 그 글자와 도메인만 유지(정보 비노출)")
+        void maskEmail_singleChar() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("a@example.com"))
+                    .isEqualTo("a***@example.com");
+        }
+
+        @Test
+        @DisplayName("maskEmail — 2자 로컬 파트도 첫 글자만 드러낸다")
+        void maskEmail_twoChars() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("ab@example.com"))
+                    .isEqualTo("a***@example.com");
+        }
+
+        @Test
+        @DisplayName("maskEmail — @ 기호가 없으면 그대로 반환한다")
+        void maskEmail_noAt() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("noemailaddress"))
+                    .isEqualTo("noemailaddress");
+        }
+
+        @Test
+        @DisplayName("maskEmail — @ 기호가 맨 앞이면 그대로 반환한다")
+        void maskEmail_atStart() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail("@example.com"))
+                    .isEqualTo("@example.com");
+        }
+
+        @Test
+        @DisplayName("maskEmail — null 입력은 null을 반환한다")
+        void maskEmail_null() {
+            assertThat(OperatorInvitationAcceptanceUseCase.maskEmail(null)).isNull();
+        }
     }
 }

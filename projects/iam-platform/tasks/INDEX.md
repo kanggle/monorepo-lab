@@ -76,8 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **IdP 화면마다 이메일 가림 규칙이 다르다**(초대 `h*****@` · 인증 `h***@`) (READY, 2026-10-11 UTC · 26차 창). 가림 규칙 한 곳 + 시험 고정. 분석=Opus 5.5 / 구현 권장=Haiku.
-
 (아래는 과거 로드맵/스윕의 완결 기록)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -121,6 +119,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- ⏳ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **IdP 이메일 가림 규칙 통일** (READY, 2026-10-11 UTC · 26차 창). 초대 화면 5별 ↔ 인증 화면 3별 불일치 해소 — 공유 라이브러리 `PiiMaskingUtils.maskEmail`(3별) 으로 정본 선택·통일. impl PR _(검토 대기)_. AC-0 전수 완료, AC-1~2 구현 완료 단위시험 6개, AC-2 기존 단언(772) 업데이트. 분석=Opus 5.5 / 구현=Haiku.
 
 ## done
 - ✅ `TASK-BE-628-demo-assigned-only-operator-seed.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4246**, 스쿼시 **`276f74d52`** (머지 시점 실패 0 · iam A/B 통합 레인 SUCCESS). 데모 시드에 로그인 불가·배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만) — 콘솔 그룹 «멤버 추가» 의 비활성 행을 데모에서 보기 위함. 25차 창 재굽기 뒤 라이브: 소유자가 demo-corp 그룹 «멤버 추가» 에서 `assigned-only@demo.com` 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인(AC-6).

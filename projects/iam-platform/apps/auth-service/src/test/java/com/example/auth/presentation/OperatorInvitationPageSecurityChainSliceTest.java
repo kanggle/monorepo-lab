@@ -48,7 +48,7 @@ class OperatorInvitationPageSecurityChainSliceTest {
     @DisplayName("비로그인 GET 수락 화면 · 가입 화면 → 200 (로그인으로 튕기지 않는다)")
     void anonymousGets_render() throws Exception {
         given(acceptancePort.preview("tok")).willReturn(new PreviewResult(PreviewOutcome.FOUND, new Preview(
-                "acme-corp", "Acme", "a*****@example.com", List.of("SUPPORT_LOCK"), "PENDING", false, Instant.now())));
+                "acme-corp", "Acme", "a***@example.com", List.of("SUPPORT_LOCK"), "PENDING", false, Instant.now())));
 
         mockMvc.perform(get("/operator-invitations/accept").param("token", "tok")).andExpect(status().isOk());
         mockMvc.perform(get("/operator-invitations/signup").param("token", "tok")).andExpect(status().isOk());

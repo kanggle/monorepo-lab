@@ -66,14 +66,14 @@ class AdminOperatorInvitationClientUnitTest {
     @DisplayName("preview 200 → FOUND(회사 · 마스킹 · 역할 · 만료) · 토큰은 본문 · Bearer")
     void preview_found() {
         stub(AdminOperatorInvitationClient.PREVIEW_PATH, 200, """
-                {"tenantId":"acme-corp","tenantDisplayName":null,"maskedEmail":"p*****@example.com",
+                {"tenantId":"acme-corp","tenantDisplayName":null,"maskedEmail":"p***@example.com",
                  "roles":["SUPPORT_LOCK"],"status":"PENDING","expired":false,"expiresAt":"2026-10-17T10:00:00Z"}""");
 
         PreviewResult result = client.preview(TOKEN);
 
         assertThat(result.outcome()).isEqualTo(PreviewOutcome.FOUND);
         assertThat(result.preview().companyName()).as("display name null → the tenant id").isEqualTo("acme-corp");
-        assertThat(result.preview().maskedEmail()).isEqualTo("p*****@example.com");
+        assertThat(result.preview().maskedEmail()).isEqualTo("p***@example.com");
         assertThat(result.preview().roles()).containsExactly("SUPPORT_LOCK");
         assertThat(result.preview().expiresAt()).isEqualTo(Instant.parse("2026-10-17T10:00:00Z"));
         wireMockServer.verify(postRequestedFor(urlPathEqualTo(AdminOperatorInvitationClient.PREVIEW_PATH))
