@@ -8,7 +8,7 @@ TASK-PC-FE-335
 
 # Status
 
-review — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창).
+done — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창).
 
 # Owner
 
@@ -95,3 +95,7 @@ platform-console
 
 - 공용 부품 `components/ErpEmployeeSelect.tsx`(선택기 + 목록 실패 시 같은 testid 의 ID 입력). 라벨 규칙 `employeeOptionLabel` 하나 — 기존 `approverOptionLabel` 은 그것을 부른다(두 곳에 같은 규칙을 두지 않는다). 결재선(결재자) 동작 · testid 는 그대로.
 - 부서 선택기는 호출처가 하나라 `ApprovalCreateDialog` 안에 둔다.
+
+## CORRECTION
+
+- 2026-10-13 UTC close chore — 4-dim verified: (a) PR #4322 `MERGED` (b) squash `54b9e7658` 가 `origin/main` 조상 (c) 머지 시점 statusCheckRollup 실패 0 · 성공 12 (d) `# Acceptance Criteria` 전부 `[x]`.

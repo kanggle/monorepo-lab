@@ -8,7 +8,7 @@ TASK-PC-FE-334
 
 # Status
 
-review — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창). 제외한 운영자 «테넌트 배정»은 소유자 결정 대기.
+done — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창). 제외한 운영자 «테넌트 배정»은 소유자 결정 대기.
 
 # Owner
 
@@ -105,3 +105,7 @@ platform-console
 - `shared/ui/AccountEmailLookup.tsx` — 응답 행 스키마를 그 파일 안에서 `tenantId?` 로 넓힌다(공용 스키마 파일은 안 건드림 — 다른 소비자 둘은 그 칸이 필요 없다).
 - `partnerships-actions.ts` 참여자 확인 문구가 `a.label`(이름 · 이메일, 모르면 id)을 쓴다 — 모를 때 출력은 이전과 같다.
 - 쿠폰 «이메일로 찾아 추가» 는 같은 feature 의 `user-types.ts` 스키마를 쓴다(다른 feature import 없음). 이메일이 null 인 사용자는 검색에 안 걸린다 — 목록 직접 입력이 남아 있다.
+
+## CORRECTION
+
+- 2026-10-13 UTC close chore — 4-dim verified: (a) PR #4323 `MERGED` (b) squash `c4bb62bd9` 가 `origin/main` 조상 (c) 머지 시점 statusCheckRollup 실패 0 · 성공 12 (d) `# Acceptance Criteria` 전부 `[x]`.

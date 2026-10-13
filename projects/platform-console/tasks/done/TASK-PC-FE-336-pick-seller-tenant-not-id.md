@@ -8,7 +8,7 @@ TASK-PC-FE-336
 
 # Status
 
-review — 구현 완료(2026-10-13 UTC). AC-1~6 ✅(AC-1 의 실측 범위는 아래 그대로). 라이브 확인은 AC 밖(데모 창).
+done — 구현 완료(2026-10-13 UTC). AC-1~6 ✅(AC-1 의 실측 범위는 아래 그대로). 라이브 확인은 AC 밖(데모 창).
 
 # Owner
 
@@ -100,3 +100,7 @@ platform-console
 - `features/ecommerce-ops/components/SellerSelect.tsx` — 기존 react-query 훅 `useSellers` 재사용(대상 화면 시험이 이미 `QueryClientProvider` 안).
 - 테넌트 제안: `shared/lib/registry-tenant-suggestions.ts`(순수 함수 — `features/tenant` 의 `selectableTenants` 와 같은 규칙 + `*` 제외; feature 간 import 금지라 복사) · `features/operator-groups/hooks/use-tenant-suggestions.ts`(유일한 소비 feature 안 — `architecture.md` 의 `shared/` 배치에 `hooks/` 가 없다 · **포커스 시** 한 번 가져옴 — 마운트 즉시 부르면 «시드 목록은 추가 fetch 없이» 기존 단언이 깨진다).
 - 기존 정산 시험의 잠복 결함 수리: `mockResolvedValue(jsonResponse(...))` 는 모든 fetch 에 **같은 Response** 를 돌려줘 두 번째 `.json()` 이 «body already used» 로 던진다 — 호출이 하나뿐일 땐 안 보였고 `SellerSelect` 가 두 번째 호출을 더하자 드러났다. 호출마다 새 Response(`mockImplementation`)로.
+
+## CORRECTION
+
+- 2026-10-13 UTC close chore — 4-dim verified: (a) PR #4325 `MERGED` (b) squash `c8c52d7f2` 가 `origin/main` 조상 (c) 머지 시점 statusCheckRollup 실패 0 · 성공 12 (d) `# Acceptance Criteria` 전부 `[x]`. AC-1 은 동사(«요청 URL · 본문을 단언») 기준으로 닫힘 — 네 화면 모두 요청 단언이 있고, «목록에서 고르는» 경로는 잔액 화면만 실측(나머지 셋은 같은 `SellerSelect` 의 대체 입력 경로) — 본문 🟡 그대로.

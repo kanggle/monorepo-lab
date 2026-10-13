@@ -8,7 +8,7 @@ TASK-PC-FE-337
 
 # Status
 
-review — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창). 제안 발주(코드 저장)를 공급사 선택으로 못 거르는 한계는 생산자 몫 — Out.
+done — 구현 완료(2026-10-13 UTC). AC-1~7 ✅. 라이브 확인은 AC 밖(데모 창). 제안 발주(코드 저장)를 공급사 선택으로 못 거르는 한계는 생산자 몫 — Out.
 
 # Owner
 
@@ -96,3 +96,7 @@ SCM 화면 두 곳이 공급사를 사람이 모르는 값으로 직접 치게 �
 - 페이지 상한 100 = 생산자 `PageQuery.MAX_SIZE`(`libs/java-common`), 기존 발주 목록 상한과 같다.
 - 발주 필터 `SupplierFilterField` — 선택(값=id) + «직접 입력» 전환(같은 testid 입력). 🔴 오케스트레이터 리뷰 수정: 전환 시 값을 비운다 — 직접 입력한 코드가 선택지에 없어 선택 상자는 «전체 공급사» 로 보이는데 필터는 남는 **보이지 않는 필터**가 됐다. 시험 «switching back … clears a typed code» 추가 · bite: 수정을 빼면 `supplierId` 가 요청에 남아 실패(rc=1), 넣으면 통과(rc=0).
 - 매핑 폼 — `SeedTextField.options` 를 `string | {value,label}` 로 넓혀 datalist 가 «code · 이름 · 상태» 를 보여 주되 **code 만** 넣는다(기존 통화 선택지는 바이트 동일). 제안은 포커스 시 한 번(`use-supplier-suggestions.ts`).
+
+## CORRECTION
+
+- 2026-10-13 UTC close chore — 4-dim verified: (a) PR #4331 `MERGED` (b) squash `d8a596b63` 가 `origin/main` 조상 (c) 머지 시점 statusCheckRollup 실패 0 · 성공 13 (d) `# Acceptance Criteria` 전부 `[x]`. 제안 발주(코드 저장)를 공급사 선택으로 못 거르는 한계는 Out(생산자 변경) — AC 아님.
