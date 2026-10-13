@@ -680,6 +680,7 @@ export function OperatorsScreen({
               activeTenant={activeTenant}
               onSubmitOperatorId={openAssign}
               pending={assign.isPending}
+              inviteAvailable={canInvite}
             />
           )}
 

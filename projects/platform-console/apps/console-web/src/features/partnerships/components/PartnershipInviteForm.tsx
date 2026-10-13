@@ -32,8 +32,20 @@ export function PartnershipInviteForm({
       data-testid="partnership-invite-form"
       className="mb-4 rounded-md border border-border bg-muted/40 p-4"
     >
-      <p className="mb-3 text-sm font-medium text-foreground">
+      <p className="mb-1 text-sm font-medium text-foreground">
         파트너 조직 초대
+      </p>
+      {/* TASK-PC-FE-338 (owner decision 2026-10-13 «ID 입력 유지 + 안내») — the
+          partner is another company, so the console does not list other
+          companies' tenants; the id is something the partner gives you, and the
+          partnership only takes effect once they accept (`:accept`, partner side). */}
+      <p
+        data-testid="partnership-invite-partner-hint"
+        className="mb-3 text-xs text-muted-foreground"
+      >
+        파트너 조직 ID 는 상대 회사에게 받아 입력하세요(예: <code>globex-corp</code>).
+        다른 회사 목록은 보여 주지 않습니다. 초대는 상대 회사가 수락해야 성립하고,
+        그 전까지는 대기 상태입니다.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">

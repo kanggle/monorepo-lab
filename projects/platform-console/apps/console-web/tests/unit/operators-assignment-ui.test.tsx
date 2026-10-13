@@ -321,6 +321,43 @@ describe('assign form → cross-org partnership disambiguation (PC-FE-195)', () 
     expect(guideLink).toHaveAttribute('href', '/iam/guide');
   });
 
+  // TASK-PC-FE-338 — owner decision «이메일 초대를 주 경로로».
+  it('leads with the email invitation and links to the invite form on the same screen', () => {
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+    const lead = screen.getByTestId('assign-operator-invite-first');
+    expect(lead).toHaveTextContent('운영자 초대');
+    expect(lead).toHaveTextContent('수락할 때 이 테넌트 소속이');
+    expect(screen.getByTestId('assign-operator-invite-link')).toHaveAttribute(
+      'href',
+      '#invite-operator-form',
+    );
+    // The link target exists on the same screen.
+    expect(screen.getByTestId('invite-operator-form')).toHaveAttribute(
+      'id',
+      'invite-operator-form',
+    );
+    // The raw-id path is still there, folded under «ID 를 아는 경우».
+    const byId = screen.getByTestId('assign-operator-by-id');
+    expect(byId.tagName).toBe('DETAILS');
+    expect(byId).not.toHaveAttribute('open');
+    expect(within(byId).getByTestId('assign-operator-id')).toBeInTheDocument();
+  });
+
+  it('platform scope (*) has no invite form, so the lead names it without a dead link', () => {
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="*" />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.queryByTestId('invite-operator-form')).toBeNull();
+    expect(screen.getByTestId('assign-operator-invite-first')).toHaveTextContent(
+      '운영자 초대',
+    );
+    expect(screen.queryByTestId('assign-operator-invite-link')).toBeNull();
+  });
+
   it('no partnership hint when the assign surface is hidden (no active tenant)', () => {
     render(<OperatorsScreen initial={PAGE} />, { wrapper: wrapper() });
     expect(

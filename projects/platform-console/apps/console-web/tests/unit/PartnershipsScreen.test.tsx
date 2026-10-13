@@ -65,6 +65,15 @@ describe('PartnershipsScreen — mount render', () => {
     expect(screen.getByTestId('partnership-row-ps-2')).toBeInTheDocument();
   });
 
+  // TASK-PC-FE-338 — owner decision «ID 입력 유지 + 안내».
+  it('the invite form keeps the partner-id input and explains where the id comes from', () => {
+    render(<PartnershipsScreen initial={LIST} activeTenant="acme" />);
+    expect(screen.getByTestId('partnership-invite-partner').tagName).toBe('INPUT');
+    const hint = screen.getByTestId('partnership-invite-partner-hint');
+    expect(hint).toHaveTextContent('상대 회사에게 받아 입력');
+    expect(hint).toHaveTextContent('상대 회사가 수락해야 성립');
+  });
+
   it('renders both empty-states when there are no partnerships', () => {
     const empty: PartnershipList = {
       items: [],
