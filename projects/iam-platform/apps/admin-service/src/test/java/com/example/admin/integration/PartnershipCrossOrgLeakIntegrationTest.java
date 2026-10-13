@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -93,6 +94,8 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
     // TASK-MONO-772 AC-4: a partner employee on the consumer pool (accepted-invitation shape).
     static final String POOL_OP_UUID = "00000000-0000-7000-8000-0000000004c1";
     static final String POOL_ACCOUNT_ID = "00000000-0000-7000-8000-0000000004c2";
+    // TASK-BE-634: a globex operator who is NOT yet a participant — the object of the participant API round trip.
+    static final String B_STAFF_UUID = "00000000-0000-7000-8000-0000000004d1";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -160,6 +163,9 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
         seedPoolOperator(POOL_OP_UUID, POOL_ACCOUNT_ID, PARTNER, "pool-staff@example.com");
         seedRole(POOL_OP_UUID, "SUPPORT_READONLY");
         seedParticipant(PID, POOL_OP_UUID, "{\"domains\":[\"wms\"],\"roles\":[\"WMS_OP\"]}");
+        // TASK-BE-634: a globex member with no participant binding yet.
+        seedOperator(B_STAFF_UUID, null, PARTNER, "b-staff@example.com");
+        seedRole(B_STAFF_UUID, "SUPPORT_READONLY");
     }
 
     // ── AC-4a ────────────────────────────────────────────────────────────────
@@ -320,6 +326,44 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
         check(POOL_ACCOUNT_ID, HOST).andExpect(jsonPath("$.assigned").value(false));
         // The other participant (B-op) is untouched — the removal is per person.
         check(B_OP_SUBJECT, HOST).andExpect(jsonPath("$.assigned").value(true));
+    }
+
+    // ── TASK-BE-634 ──────────────────────────────────────────────────────────
+
+    /**
+     * TASK-BE-634 AC-0 / AC-2 — the participant API itself, end to end against the real {@code admin_actions} table.
+     * Every other test here writes participant rows with jdbc, so nothing ever reached the audit row these two
+     * endpoints write; with a 36-char partnership id and a 36-char operator id the old key
+     * {@code "participant:" + actionCode + …} was 127 (add) / 130 (remove) characters against
+     * {@code idempotency_key VARCHAR(100)}, and the fail-closed audit aborted the command as {@code 500 AUDIT_FAILURE}.
+     * A mocked auditor (the unit tests) never sees the column width — only this test can.
+     */
+    @Test
+    @DisplayName("🔴 BE-634: partner admin adds then removes a participant through the API → 201 · 204, one SUCCESS audit row each")
+    void participantApi_addThenRemove_auditRowsLand() throws Exception {
+        var added = mockMvc.perform(post("/api/admin/partnerships/" + PID + "/participants/" + B_STAFF_UUID)
+                        .header("Authorization", "Bearer " + jwt.operatorToken(B_OP_UUID))
+                        .header("X-Tenant-Id", PARTNER)
+                        .header("X-Operator-Reason", "staffing the partnership")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"participantScope\":{\"domains\":[\"wms\"],\"roles\":[\"WMS_OP\"]}}"))
+                .andReturn().getResponse();
+        assertThat(added.getStatus()).as("add body: %s", added.getContentAsString()).isEqualTo(201);
+
+        var removed = mockMvc.perform(delete("/api/admin/partnerships/" + PID + "/participants/" + B_STAFF_UUID)
+                        .header("Authorization", "Bearer " + jwt.operatorToken(B_OP_UUID))
+                        .header("X-Tenant-Id", PARTNER)
+                        .header("X-Operator-Reason", "offboarding"))
+                .andReturn().getResponse();
+        assertThat(removed.getStatus()).as("remove body: %s", removed.getContentAsString()).isEqualTo(204);
+
+        for (String code : new String[] {"PARTNERSHIP_PARTICIPANT_ADD", "PARTNERSHIP_PARTICIPANT_REMOVE"}) {
+            Integer rows = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM admin_actions
+                     WHERE action_code = ? AND target_id = ? AND outcome = 'SUCCESS'
+                    """, Integer.class, code, B_STAFF_UUID);
+            assertThat(rows).as(code).isEqualTo(1);
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
