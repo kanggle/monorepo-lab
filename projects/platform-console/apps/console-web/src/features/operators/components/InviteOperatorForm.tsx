@@ -76,6 +76,7 @@ export function InviteOperatorForm({
       onSubmit={handleSubmit}
       className="mb-6 grid gap-4 rounded-md border border-border bg-background p-4 sm:grid-cols-2"
       aria-label="운영자 초대"
+      id="invite-operator-form"
       data-testid="invite-operator-form"
       noValidate
     >

@@ -27,12 +27,19 @@ export interface AssignOperatorFormProps {
   /** Hand the trimmed operatorId up; the parent confirms + fires the assign. */
   onSubmitOperatorId: (operatorId: string) => void;
   pending?: boolean;
+  /**
+   * TASK-PC-FE-338 — whether the «운영자 초대» form is rendered on this screen
+   * (`#invite-operator-form`). When true the lead note links to it; when false
+   * it only names it (the caller lacks the right to invite here).
+   */
+  inviteAvailable?: boolean;
 }
 
 export function AssignOperatorForm({
   activeTenant,
   onSubmitOperatorId,
   pending = false,
+  inviteAvailable = false,
 }: AssignOperatorFormProps) {
   const inputId = useId();
   const [operatorId, setOperatorId] = useState('');
@@ -56,7 +63,33 @@ export function AssignOperatorForm({
     >
       <div>
         <h2 className="text-lg font-semibold text-foreground">테넌트 배정</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        {/* TASK-PC-FE-338 (owner decision 2026-10-13 «이메일 초대를 주 경로로») —
+            the person being brought in is by definition outside this tenant, so
+            no list here can show them, and an email search across tenants would
+            reveal who works where. The invitation (email → the person accepts →
+            membership added, TASK-MONO-784 S5) needs neither, so it leads; the
+            raw-id assignment stays below for the operator who already has the id. */}
+        <p
+          data-testid="assign-operator-invite-first"
+          className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground"
+        >
+          다른 회사 사람이나 아직 이 테넌트에 없는 사람을 넣는 기본 방법은{' '}
+          {inviteAvailable ? (
+            <a
+              href="#invite-operator-form"
+              data-testid="assign-operator-invite-link"
+              className="font-medium text-primary underline underline-offset-2"
+            >
+              운영자 초대
+            </a>
+          ) : (
+            <strong>운영자 초대</strong>
+          )}
+          입니다. 이메일로 초대하면 그 사람이 수락할 때 이 테넌트 소속이
+          추가됩니다 — 운영자 ID 를 몰라도 됩니다.
+          {!inviteAvailable && ' (초대는 운영자 관리 권한이 있는 사람이 보냅니다.)'}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
           기존 운영자를 현재 테넌트{' '}
           <strong className="text-foreground">{activeTenant}</strong> 의{' '}
           <strong className="text-foreground">운영자로 편입</strong>합니다 (같은
@@ -94,7 +127,11 @@ export function AssignOperatorForm({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <details data-testid="assign-operator-by-id" className="rounded-md border border-border p-3">
+        <summary className="cursor-pointer text-sm font-medium text-foreground">
+          운영자 ID 를 아는 경우 — 수락 없이 바로 배정
+        </summary>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
         <div>
           <label
             htmlFor={inputId}
@@ -121,6 +158,7 @@ export function AssignOperatorForm({
           {pending ? '처리 중…' : '테넌트에 배정 (확인 필요)'}
         </Button>
       </div>
+      </details>
     </form>
   );
 }
