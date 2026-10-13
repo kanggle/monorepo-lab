@@ -204,7 +204,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (IN-PROGRESS, 2026-10-11 UTC — AC-0 ✅: 772 `done/` · 측정 ①②③ 답 · ④ ⚪). 관리 평면 권한 평가 · 캐시 · 읽기 게이트를 행동 테넌트 축으로 · 역할 PK `(operator_id, role_id, tenant_id)` · «이 회사에서 내보내기» · 두 409(OD-1 · S1-11) → 소속 추가 · 라이더 R1~R4 기본값. 🔴 AC-0 이 찾은 것: 누수 자리 = 읽기 게이트 + 그 게이트를 쓰는 쓰기 5종 + 사본 4곳 · assume 실효 범위의 홈(R1 × D3 — 떠난 회사가 홈이면 AC-2 빨강 → 홈 제거 + 소속 백필) · 감사 `tenant_id` = 홈. 슬라이스 S1~S6(S6 = console-web). ⏳ **소유자 결정 OD-1(셀프 온보딩 상한) · OD-2(타사 운영자 배정) · OD-3(데모 `ecommerce` 역할) 대기** — S1 전에. 후속 773 AC-3. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -216,6 +215,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (REVIEW, 2026-10-13 UTC). S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⏳ `done/` 전 ⚪: 첫 nightly 콘솔 잡 · 다음 데모 창 라이브(OD-3 화면 · R2 · 내보내기). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done

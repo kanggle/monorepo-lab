@@ -327,9 +327,9 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     href: '/operators',
     area: 'iam',
     gate: { kind: 'admin', permission: 'operator.manage' },
-    description: '운영자 목록 · 초대(대기 목록 · 취소 · 재발송) · 플랫폼(*) 운영자 등록 · 역할 변경 · 상태 변경 · 테넌트 배정/해제 · 조직 범위.',
+    description: '운영자 목록 · 초대(대기 목록 · 취소 · 재발송) · 플랫폼(*) 운영자 등록 · 회사별 역할 변경 · 상태 변경 · 테넌트 배정 · 이 회사에서 내보내기 · 조직 범위.',
     crud: crud('CRUD'),
-    crudNote: '삭제 = 테넌트 배정 해제(DELETE assignment). 운영자 자체는 삭제가 아니라 상태 변경(사용중지).',
+    crudNote: '삭제 = 이 회사에서 내보내기(DELETE assignment — 그 회사의 역할 · 그룹 · 협력사 참여도 함께 제거, 다른 회사 소속은 그대로). 운영자 자체는 삭제가 아니라 상태 변경(사용중지).',
     purpose: '운영자(워크포스 신원)를 만들고 권한·범위를 정한다.',
     services: ['iam admin-service'],
     sources: [

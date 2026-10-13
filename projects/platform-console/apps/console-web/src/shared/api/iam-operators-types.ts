@@ -47,6 +47,19 @@ export type OperatorStatus = (typeof OPERATOR_STATUSES)[number];
 export { OperatorContextSchema };
 export type { OperatorContext };
 
+// TASK-MONO-784 S6 — `GET /api/admin/me` § 행동 테넌트 "새 `memberships`" field:
+// one entry per company (`operator_tenant_assignment` row), `roles` = that
+// company's direct role-row names (R2 — may be `[]`). The producer does NOT
+// put this on `GET /api/admin/operators` list items (admin-api.md:1084 —
+// never leak another company's membership to that company's admin), so it is
+// optional here and simply absent on list rows. `'*'` operators carry `[]`
+// (their role lives in the headerless `roles` field instead).
+export const OperatorMembershipSchema = z.object({
+  tenantId: z.string(),
+  roles: z.array(z.string()),
+});
+export type OperatorMembership = z.infer<typeof OperatorMembershipSchema>;
+
 export const OperatorSummarySchema = z.object({
   operatorId: z.string(),
   email: z.string(),
@@ -55,6 +68,9 @@ export const OperatorSummarySchema = z.object({
   // future status never crashes the list render.
   status: z.string(),
   // Role members are strings (unknown/future role ⇒ generic chip, no crash).
+  // On `GET /api/admin/operators` this is the QUERIED tenant's roles; on
+  // `GET /api/admin/me` it is the `X-Tenant-Id` tenant's roles (TASK-MONO-784
+  // S3/S6 — header omitted ⇒ every role row, unchanged pre-784 shape).
   roles: z.array(z.string()),
   totpEnrolled: z.boolean().optional(),
   lastLoginAt: z.string().nullable().optional(),
@@ -63,8 +79,14 @@ export const OperatorSummarySchema = z.object({
   // The tenant-scoped list mixes HOME and ASSIGNED operators; comparing this to
   // the listed tenant tells them apart. Optional: an older producer (or a sample
   // fixture) without it parses unchanged, and consumers must treat absent as
-  // «unknown», never as «not home».
+  // «unknown», never as «not home». TASK-MONO-784 — R1: home is a display
+  // label only («처음 소속된 회사»), never read as «소속»; the group-member
+  // picker's home-vs-assignment greying this field used to drive was removed
+  // (S6 — the producer's membership predicate now matches the list predicate).
   homeTenantId: z.string().optional(),
+  // TASK-MONO-784 S6 — additive; see `OperatorMembershipSchema` above. Only
+  // `GET /api/admin/me` sets this; absent everywhere else.
+  memberships: z.array(OperatorMembershipSchema).optional(),
   // TASK-BE-308 — optional profile carrier; PC-FE-018 consumer reads
   // operatorContext?.defaultAccountId to pre-populate the admin
   // profile-edit dialog with the operator's current value.

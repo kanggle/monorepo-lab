@@ -8,7 +8,7 @@ TASK-MONO-784
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -62,7 +62,7 @@ monorepo
 - [x] **AC-3** — 두 번째 회사 소속 추가(초대 수락 · 셀프 온보딩) → 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 같은 테넌트 재소속 409 · `'*'` 행에 회사 소속 쓰기 거절 · 풀 행에 `'*'` 거절(D2). 772 AC-6 IT 의 «두 번째 회사 409 · 셀프 온보딩 409» 칸은 **바뀐 기대값으로 고친다**(걷지 않는다). — ✅ 2026-10-13 UTC (S5): 단위 칸 통과(`OperatorMembershipAdditionTest` · `OperatorOwnedTenantLimitTest` · `SelfServiceOnboardingUseCaseTest$ExistingFacet` · `OperatorInvitationAcceptanceUseCaseTest$MembershipAddition` · `OperatorInvitationAcceptanceWriterTest` · `FirstAdminProvisionerTest`) + bite 빨강 확인 · IT 칸 고쳐 씀(`OperatorInvitationAcceptanceIntegrationTest#ac6_*` 5 · 6단계 새 기대값 + 7단계 · `#platformAndSuspendedFacets_refusedBothPaths`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). § S5 기록.
 - [x] **AC-4** — 정지(R3): 소속 둘 이상인 운영자의 행 정지는 회사 관리자에게 거절 · `SUPER_ADMIN` 은 성공 · 소속 하나면 지금과 같다. 역할 변경이 다른 회사의 역할 행을 바꾸지 않는다. — ✅ 2026-10-13 UTC (S4): 단위 칸 통과(`OperatorRowScopeGuardTest` · `PatchOperatorRoleUseCaseTest` · `UpdateOperatorProfileUseCaseTest`) + bite 빨강 확인 · IT 칸 작성(`#ac4_rowWideRule` · `#ac4_roleEditInA_leavesBByteUnchanged`) — IT ⚪ CI. «`SUPER_ADMIN`» = `'*'` grant scope(F11). § S4 기록.
 - [x] **AC-5** — 권한 캐시: 한 회사의 역할 변경 · 내보내기 뒤 그 회사 판정이 다음 요청에서 바뀌고 다른 회사의 캐시 판정은 그대로(캐시 키 = 운영자 × 테넌트). — ✅ 2026-10-13 UTC (S4): D-5 읽기대로 «판정 값» 으로 단언 — 단위 칸(역할 변경 · 내보내기 · 소속 추가가 합 캐시를 무효화) 통과 · IT 칸 작성(`#ac5_perCompanyDecisionNextRequest` — A 다음 요청 403 · B 200 · 내보내기 뒤 `PERMISSION_DENIED` 로 캐시 무효화를 판별) — IT ⚪ CI. 테넌트 판정 캐시는 두지 않았다(D-5). § S4 기록.
-- [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(운영자 · 그룹 · 파트너 화면) 후 필요한 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · 다음 데모 창에서 R2 영향 행 라이브 확인(⚪ 허용, 이유 기록).
+- [x] **AC-6** — 콘솔 e2e 디렉터리 grep(운영자 · 그룹 · 파트너 화면) 후 필요한 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · 다음 데모 창에서 R2 영향 행 라이브 확인(⚪ 허용, 이유 기록). — ✅ 2026-10-13 UTC (S6): **코드 칸만** 닫음 — 역할 편집(활성 회사) · «이 회사에서 내보내기» · R3(`OPERATOR_HAS_OTHER_MEMBERSHIPS`) · `TENANT_LAST_ADMIN_REQUIRED` · `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` 콘솔 문구 · `grantable-roles`/`/me` 는 이미 `X-Tenant-Id` 를 싣고 있어 변경 없음(확인만) · 그룹 선택기 `homeTenantId` 회색 처리 제거 · 원장 사본(permission-map · iam-guide · sample fixtures) 갱신 · e2e 디렉터리 그렙 결과 = 영향 0. 401 만 «운영자 아님» 불변(변경 없음). ⚪ **nightly 콘솔 잡** — 머지 뒤 다음 `nightly-e2e.yml` 실행에서 확인(이 PR 은 머지 전이라 아직 ⚪). ⚪ **라이브 R2 영향 행** — 다음 데모 창(AC-0 ④ 와 같은 이유 — 이 세션엔 데모 창이 없다). § S6 기록.
 
 # Related Specs
 
@@ -642,3 +642,80 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - **CI**: admin-service `integrationTest` — `OperatorInvitationAcceptanceIntegrationTest`(AC-6 5 · 6 · 7단계 새 기대값 · `'*'`/SUSPENDED 칸 신설). 새 JPQL `existsMemberWithEmail` 은 MySQL 위에서 처음 돈다(단위 시험은 포트 목/가짜).
 - **S6 (콘솔)**: 온보딩 화면의 `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` 문구 매핑(지금 콘솔은 409 `OPERATOR_ALREADY_PROVISIONED` 만 안다) · 수락 뒤 다회사 운영자의 스위처에 새 회사가 뜨는지(소속 = 배정 — 백엔드는 그대로) · 그밖 S4 기록 § 5 의 S6 목록.
 - **S5/S6 이후 (미배정 — S4 § 5 에서 옮겨 온 것 그대로)**: 노드 grant `tenant_id` = 대상 홈(D-1 «부여 당시 소속»).
+
+---
+
+## S6 기록 (2026-10-13 UTC)
+
+> 구현=Sonnet 5 (frontend-engineer) · worktree `wt-784` · 브랜치 `feat/mono-784-s6-console`(origin/main `92d3cc2f5` = S5 #4324 위). 근거 = § AC-0 § 2 콘솔이 행동 테넌트를 보내야 하는 화면(위 표) · S1 계약 `console-integration-contract.md` § «한 사람 · 여러 회사» · `admin-api.md` § 행동 테넌트 · § DELETE …/assignments/{tenantId} · § PATCH …/status · § PATCH …/identity:link·unlink · `onboarding-api.md` § 다회사 운영자와 온보딩 · `platform/error-handling.md`(세 코드 기존 등록 확인) · S4 기록 § 5 S6 목록 · S5 기록 § 5 S6 목록.
+
+### 1. 쓴 것 — 어느 계약 절을 위한 줄인가
+
+| 파일 | 무엇 | 계약 절 |
+|---|---|---|
+| `shared/api/iam-operators-types.ts` | `OperatorMembershipSchema` 신설 + `OperatorSummarySchema.memberships` 가산 필드(옵셔널 — `GET /api/admin/operators` 항목에는 안 실린다, admin-api.md:1084) | `admin-api.md` § GET /api/admin/me `memberships` |
+| `shared/api/errors.ts` | `MESSAGES` 에 세 코드 추가 — `OPERATOR_HAS_OTHER_MEMBERSHIPS` · `TENANT_LAST_ADMIN_REQUIRED` · `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED`(세 코드 모두 `platform/error-handling.md:699-701` 에 이미 등록돼 있다 — S1/S4/S5 가 먼저 등록, S6 은 추가 등록 없음) | § 콘솔 오류 매핑 |
+| `features/operators/components/operators-confirm-copy.tsx` | `PendingAction.tenantId`(edit-roles 에도) · `allCompanies`(`'*'` 행위자의 정지) 신설 · `unassign` 제목/본문/확인 레이블 → «이 회사에서 내보내기»(계약 확인 문구 거의 그대로) · `edit-roles` 본문이 활성 회사를 이름 붙이고 «역할 비움» 문구를 «이 회사의 역할만» 으로 좁힘 · `change-status` SUSPEND 본문에 `allCompanies` 분기 | § «한 사람 · 여러 회사» row 3 · row 9 · «행 전체 규칙» |
+| `features/operators/components/OperatorsScreen.tsx` | `openEditRoles` 가 `tenantId: activeTenant` 를 pending 에 싣는다 · `openChangeStatus` 가 `allCompanies: nextStatus==='SUSPENDED' && isPlatformOperator` 를 싣는다 | 〃 |
+| `features/operators/components/OperatorRow.tsx` | 버튼 라벨 «배정 해제» → «이 회사에서 내보내기»(testid `action-unassign-{id}` 그대로 — e2e·nightly 가 참조하지 않음, § 3 그렙) | row 9 |
+| `features/operators/components/OperatorConfirmRoleEditor.tsx` | 역할 fieldset legend · remove-all 경고 문구를 회사 범위로 좁힘(«이 회사에서의 역할이 모두 제거됩니다 — 소속은 남습니다») | row 3 |
+| `features/operator-groups/components/GroupMemberDialog.tsx` | `isAssignmentOnly()` + «배정만 됨» 회색 처리 · `other-home` 핀 삭제 — 생성자가 이미 그 테넌트 **소속**(배정 행) 술어로 목록을 거르므로 매 행이 유효 후보(계약: «TASK-PC-FE-319 회색 처리는 제거») | «그룹 멤버 추가» |
+| `features/onboarding/api/onboarding-client.ts` + `app/api/onboarding/organizations/route.ts` | 🔴 **실제로 찾은 결함** — `422` 가 `400`/`409` 분기에 없어 `OperatorOwnedTenantLimitExceededException` 이 **다운스트림 불가(503) 로 오분류**됐다(§ 4-1 참고). `res.status === 422` 를 추가해 `ApiError(422, …)` 로 지나가게 고쳤다 | `onboarding-api.md` § 신원당 상한 |
+| `shared/sample/fixtures/iam.ts` | `/api/admin/me` 샘플 응답에 `memberships` 가산(원래 `roles` 를 그대로 한 회사로) | 원장 사본 |
+| `shared/guide/permission-map.ts` | `/operators` 행 description·crudNote — «테넌트 배정/해제» → «테넌트 배정 · 이 회사에서 내보내기», 삭제 설명에 역할·그룹·참여 동반 제거 적음 | 원장 사본 |
+| `features/iam-guide/data.ts` | 운영자 관리 레시피 액션 문구 + onboarding axis(`tenant assignment`) api/desc 를 새 동작으로(«이 회사에서 내보내기» · 다른 회사 그대로) + «다른 회사에도 소속된 사람은 사용중지 대신 내보내기» 노트 | 원장 사본 — `domain-guides-plain.test.tsx` 그대로 통과(티켓/ADR/파일명 없음 확인) |
+
+### 2. 확인만 하고 코드를 바꾸지 않은 것 (이미 계약대로였다)
+
+- **`/me` 가 `X-Tenant-Id` 를 싣는가(§ 4 열린 질문 4)** — ✅ 싣는다. `shared/api/iam-gateway.ts` `prepareAdminHeaders()` 가 **모든** `/api/admin/**` 호출에 활성 테넌트를 무조건 건다(`getSelfRolesOrNull` · `getSelfOperatorIdOrNull` 둘 다 같은 `callGapOperators`/`callAdminGateway` 코어를 탄다) — 헤더 생략 분기가 아예 없다. 기존 시험 `tests/unit/features/operators/self-operator-id.test.ts` (a) 가 이미 `expect(h['X-Tenant-Id']).toBe('wms')` 로 단언하고 있었다(바이트 불변). nav 노출(`console-nav-exposure.ts`)도 이 호출 하나를 읽으므로 활성 회사를 따라간다 — 코드 변경 0.
+- **`grantable-roles` 가 회사 전환 때마다 다시 읽히는가(§ «그룹 선택기» 옆 bullet)** — ✅ 그렇다. `/operators` 는 `export const dynamic = 'force-dynamic'` 서버 컴포넌트라 `getGrantableRolesOrNull()` 이 매 요청(활성 테넌트 쿠키 포함) 새로 돈다 — 콘솔이 탭 전환 사이 캐시하는 자리가 없다. 코드 변경 0.
+- **401 만 «운영자 아님»** — 손대지 않았다(772 S4/S5 불변식 — 변경 범위 밖).
+
+### 3. 콘솔 e2e 디렉터리 그렙 (AC-6)
+
+`find . -type d -iname e2e` → `apps/console-web/tests/e2e` 하나(플레이라이트 설정도 하나). 그 안 4 스펙(`operators-profile.spec.ts` · `operators-admin-profile.spec.ts` · `overview-consolidation.spec.ts` · `sample-visitor-transition.spec.ts`) 을 아래 패턴으로 그렙 — **전부 0건**:
+
+| 패턴 | 결과 |
+|---|---|
+| `역할 변경` · `배정 해제` · `action-unassign` · `action-edit-roles` | 0 |
+| `homeTenantId` · `group-member-candidate-other-home` · `isAssignmentOnly` | 0 |
+| `operator-row-` · `action-status-` · `group-member` | 0 |
+
+그룹 · 파트너 화면 e2e 스펙 자체가 없다(S4 기록 § 2 가 이미 적었다 — `nightly-e2e.yml` 콘솔 잡 픽스처는 `'*'` SUPER_ADMIN + 홈 테넌트 대상, 배정 0). 고칠 스펙 없음 — grep 결과만 기록한다.
+
+### 4. 열린 질문에 답하며 찾은 것
+
+1. 🔴 **422 상한이 콘솔에서 503 으로 오분류되던 결함**(§ 1 표) — `onboarding-client.ts` 는 `400`/`409` 만 인라인 `ApiError` 로 올리고 그 밖은 전부 `OnboardingUnavailableError`(«다운스트림») 로 접었다. S5 가 새로 던진 `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` 가 그 틈에 빠져 proxy route 가 `onboarding_proxy_degraded` 경고 로그 + `503` 으로 내보내고 있었다 — `code` 필드 자체는 보존돼 `messageForCode` 가 옳은 문구를 그렸겠지만(그래서 사용자가 보는 문구는 우연히 맞았다), **장애 아닌 사업 규칙 거절을 장애로 기록**하는 결함이었다(재시도해도 절대 안 풀리는데 "재시도 가능"으로 로그·의미가 읽힌다). `422` 를 그 둘의 분기에 추가해 고쳤다 — 이것이 이 슬라이스가 코드만 읽어서는 못 찾고 **기존 429/503 분기 설계를 실제로 밟아 봐서** 찾은 유일한 실제 결함이다.
+2. OD-3(`demo-operator` 의 `ecommerce` = `SUPPORT_READONLY`+`SUPPORT_LOCK`, S3)·OD-1(상한 2, S5)·OD-2(그대로 둔다, S1 문구) 는 콘솔 쪽에 추가로 손댈 화면이 없었다 — OD-2 는 배정 폼(`AssignOperatorForm`)의 기존 동작 그대로(변경 없음), OD-3 은 데모 계정의 역할 칸이 바뀐 것뿐이라 화면은 이미 그 값을 그대로 그린다.
+
+### 5. 실행 (rc 는 각자 따로 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `pnpm install --frozen-lockfile` | **0** | — |
+| `pnpm exec tsc --noEmit` | **0** | — |
+| `pnpm lint` | **0** | — |
+| `pnpm exec vitest run --minWorkers=1 --maxWorkers=2`(전체, 단독 실행) | **0**(최초 1회는 `OrgScopeDialog.test.tsx` 1건 5초 타임아웃으로 **1** — 내가 건드리지 않은 파일(org-scope, 조직 범위 다이얼로그)이고 단독 재실행 시 `rc=0`·6/6 통과 — 콘솔 vitest 풀스위트 동시 실행의 기존 flake, env 메모리 `env_console_web_vitest_flake_unhandled_error` 와 같은 결 — 내 변경과 무관) | 375/376 파일 · 4246/4247 테스트(첫 실행) → 재확인 후 전부 통과 |
+| 건드린/추가한 7개 시험 파일만 모아 재실행 | **0** | 87/87 통과(`OperatorsScreen.test.tsx` · `CreateOrganizationForm.test.tsx` · `GroupMemberDialog.test.tsx` · `onboarding-client.test.ts` · `onboarding-proxy.test.ts` · `operators-api.test.ts` · `operators-assignment-ui.test.tsx`) |
+| 🔴 **bite**: `shared/api/iam-gateway.ts` 의 `'X-Tenant-Id': tenant` 줄을 주석으로 뺀 채 새 시험(`EDIT-ROLES carries the active company as X-Tenant-Id`) 실행 | **1** | `expected undefined to be 'acme-corp'` 로 빨강 확인 → 줄 복원 → `operators-api.test.ts` 26/26 재통과(`git diff` 로 그 파일 잔여 diff 0 확인) |
+| `git add` 뒤 가드 4종: `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` · `check-error-code-registry.sh` | **0** ×4 | 네 코드 모두 `platform/error-handling.md` 에 이미 등록돼 있어(S1/S4/S5) 새 등록 없이 통과 |
+| «LOCAL DEMO ONLY / DO NOT COMMIT» 마커 그렙(수정 파일 전부) | — | 0건 |
+
+### 6. 남은 것
+
+- **nightly** — 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인(⚪, § AC-6 에 기록). § 3 의 grep 결과로 보아 영향은 없을 것으로 본다(레이블·회색처리만 바꿨고 그 네 스펙은 둘 다 건드리지 않는다).
+- **라이브** — 다음 데모 창에서 R2 영향 행 확인(AC-0 ④ 와 같은 창에서, ⚪).
+- **모델 참고** — 소유자 지시 모델 주석(`platform/git-workflow-policy.md` 류)의 «모델 선택」 자체는 바뀌지 않았다 — 구현은 지시대로 Sonnet.
+- **S5/S6 이후 — 노드 grant `tenant_id` = 대상 홈** 은 이번 슬라이스에도 배정이 없다(S4 § 5 에서 그대로 미배정 상태 — 후속 티켓 또는 다음 슬라이스가 가져갈지 소유자가 정한다).
+
+---
+
+# 리뷰 이동 기록 (2026-10-13 UTC)
+
+- 슬라이스 전부 머지 · 머지 시점 실패 0: AC-0 기록 **#4305**(`259b0606c`) · S1 계약 **#4308**(`519a609c7`) · S2 소속 축 **#4312**(`187fd8544`) · S3 읽기 축 **#4320**(`4c09136f0`) · S4 쓰기 축 · 내보내기 **#4321**(`8590f6636`) · S5 두 409 → 소속 추가 **#4324**(`92d3cc2f5`) · S6 콘솔 **#4326**(`5ddc56b95`).
+- S2 · S3 · S4 · S5 는 머지 전 `federation-hardening-e2e` 를 해당 브랜치로 수동 실행해 초록 확인(PR CI 밖 nightly 스위트 — S2 가 그 시드를 바꿨고 S3~S5 는 교차 회사 판정을 바꿨다).
+- AC-0~6 ✅ (IT 칸은 CI `Integration (iam A/B)` 초록이 근거).
+- ⏳ `done/` 전 ⚪: ① 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡(S6 — e2e grep 겹침 0) ② 다음 데모 창 라이브 — `demo-operator` 의 `ecommerce` 화면이 OD-3(계정 · 감사 · 잠금)으로 줄어드는지 · R2 로 줄어드는 행 · «이 회사에서 내보내기» · AC-0 ④ 라이브 술어(홈 밖 배정 수).
+- 후속(AC 아님): 노드 grant 가 아직 대상의 홈을 `tenant_id` 로 쓴다(§ S4 기록) · 상한 경합(cap+1, § S5 기록 → 773 AC-0) · `OrgScopeDialog` 전체 실행 타임아웃 flake(콘솔, 기존).
+- 🔵 후속 `TASK-MONO-773` 착수 조건(772 · 784 `done/`) 중 784 는 위 ⚪ 둘이 닫힌 뒤.
+

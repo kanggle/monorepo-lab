@@ -48,8 +48,14 @@ export interface PendingAction {
    *  be outside the active-tenant list scope, so it is not an OperatorSummary
    *  row). */
   assignOperatorId?: string;
-  /** assign / unassign — the target tenant (= the active tenant slug). */
+  /** assign / unassign / edit-roles — the target tenant (= the active tenant
+   *  slug). TASK-MONO-784 S6 — edit-roles is now per-company, so the confirm
+   *  copy names which company's roles are being replaced. */
   tenantId?: string;
+  /** TASK-MONO-784 S6 — change-status SUSPEND by a platform-scope (`'*'`)
+   *  actor: the confirm copy says the suspension reaches every company
+   *  (row-wide — R3), not just the active one. */
+  allCompanies?: boolean;
   /** Privilege-high → elevated confirm copy. */
   elevated: boolean;
 }
@@ -79,7 +85,9 @@ export function operatorConfirmTitle(pending: PendingAction): string {
     case 'assign':
       return '테넌트 배정 (특권 작업)';
     case 'unassign':
-      return '테넌트 배정 해제 (특권 작업)';
+      // TASK-MONO-784 S6 — «배정 해제» → «이 회사에서 내보내기» (the delete
+      // now takes that company's roles/groups/partnership participation too).
+      return '이 회사에서 내보내기 (특권 작업)';
     default:
       return pending.nextStatus === 'SUSPENDED'
         ? '운영자 정지 (특권 작업)'
@@ -149,9 +157,21 @@ export function operatorConfirmDescription(pending: PendingAction): ReactNode {
       이 작업은 운영자 권한 부여에 해당하므로 사유가 요구됩니다.
     </>
   ) : pending.kind === 'edit-roles' ? (
+    // TASK-MONO-784 S6 — edit-roles replaces only the ACTIVE company's direct
+    // roles (console-integration-contract § «한 사람 · 여러 회사» row 3); the
+    // operator's other companies are untouched. `pending.tenantId` is absent
+    // only in a test/caller that never resolved an active tenant.
     <>
-      <strong>{pending.operator?.email}</strong> 운영자의 역할을 전체
-      교체합니다. 역할을 모두 비우면 이 운영자는 어떤 운영 권한도 갖지 않으며,{' '}
+      <strong>{pending.operator?.email}</strong> 운영자의{' '}
+      {pending.tenantId ? (
+        <>
+          이 회사(<strong>{pending.tenantId}</strong>)에서의 역할
+        </>
+      ) : (
+        '역할'
+      )}
+      을 전체 교체합니다. 다른 회사에서의 역할은 그대로입니다. 역할을 모두
+      비우면 이 회사의 역할만 전부 제거되고 소속은 남으며,{' '}
       <strong>SUPER_ADMIN</strong> 부여는 특권 상승입니다. 사유가 요구됩니다.
     </>
   ) : pending.kind === 'assign' ? (
@@ -163,17 +183,26 @@ export function operatorConfirmDescription(pending: PendingAction): ReactNode {
       &ldquo;조직 스코프&rdquo;로 좁힐 수 있습니다). 사유가 요구됩니다.
     </>
   ) : pending.kind === 'unassign' ? (
+    // TASK-MONO-784 S6 (console-integration-contract § «한 사람 · 여러 회사»
+    // row 9 — elevated confirm copy, verbatim).
     <>
-      <strong>{pending.operator?.email}</strong> 운영자의{' '}
-      <strong>{pending.tenantId}</strong> 테넌트 배정을 해제합니다. 이후 이
-      운영자는 (홈 테넌트가 아니라면) 해당 테넌트에 접근할 수 없습니다. 사유가
-      요구됩니다.
+      <strong>{pending.operator?.displayName || pending.operator?.email}</strong>
+      님을 <strong>{pending.tenantId}</strong>에서 내보냅니다 — 이 회사의 역할 ·
+      그룹 · 협력사 참여가 함께 사라집니다. 다른 회사의 소속과 개인 계정(스토어
+      · 팬 로그인)은 그대로입니다. 사유가 요구됩니다.
     </>
   ) : pending.nextStatus === 'SUSPENDED' ? (
     <>
       <strong>{pending.operator?.email}</strong> 운영자를{' '}
       <strong>정지(SUSPENDED)</strong> 합니다. 정지 시 해당 운영자의 모든
-      세션이 즉시 종료됩니다. 사유가 요구됩니다.
+      세션이 즉시 종료됩니다.{' '}
+      {pending.allCompanies && (
+        <>
+          이 운영자는 여러 회사에 소속돼 있습니다 — 정지는{' '}
+          <strong>모든 회사</strong>에 적용됩니다.{' '}
+        </>
+      )}
+      사유가 요구됩니다.
     </>
   ) : (
     <>
@@ -198,7 +227,7 @@ export function operatorConfirmLabel(pending: PendingAction): string {
     case 'assign':
       return '배정';
     case 'unassign':
-      return '배정 해제';
+      return '내보내기';
     default:
       return pending.nextStatus === 'SUSPENDED' ? '정지' : '활성화';
   }

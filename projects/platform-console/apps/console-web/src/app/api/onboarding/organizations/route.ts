@@ -70,7 +70,9 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof ApiError) {
       // 401 (re-login) / 400 VALIDATION_ERROR / 409 TENANT_ALREADY_EXISTS |
-      // OPERATOR_EMAIL_CONFLICT → inline actionable passthrough.
+      // OPERATOR_EMAIL_CONFLICT | OPERATOR_ALREADY_PROVISIONED / 422
+      // OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED (TASK-MONO-784 S6) → inline
+      // actionable passthrough.
       return NextResponse.json(
         { code: err.code, message: err.message },
         { status: err.status },

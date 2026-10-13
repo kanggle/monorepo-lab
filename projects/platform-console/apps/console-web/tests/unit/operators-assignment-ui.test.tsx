@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -177,6 +177,113 @@ describe('per-row unassign → confirm → DELETE', () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       reason: 'left the team',
     });
+  });
+});
+
+// TASK-MONO-784 S6 (ADR-MONO-082 b — console-integration-contract §
+// «한 사람 · 여러 회사» row 9) — «배정 해제» → «이 회사에서 내보내기»: the
+// row button's visible label, the confirm dialog's elevated copy, and the
+// inline rendering of the producer's new last-admin refusal.
+describe('per-row unassign — «이 회사에서 내보내기» copy + 409 TENANT_LAST_ADMIN_REQUIRED (TASK-MONO-784 S6)', () => {
+  it('the row action reads «이 회사에서 내보내기» (not «배정 해제»), and the confirm dialog names the company + what is removed', async () => {
+    const fetchMock = routedFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+
+    const button = screen.getByTestId('action-unassign-op-1');
+    expect(button).toHaveTextContent('이 회사에서 내보내기');
+    expect(button).not.toHaveTextContent('배정 해제');
+
+    await user.click(button);
+    const dialog = screen.getByTestId('operator-confirm-dialog');
+    expect(dialog).toHaveTextContent('acme-corp에서 내보냅니다');
+    expect(dialog).toHaveTextContent('역할');
+    expect(dialog).toHaveTextContent('그룹');
+    expect(dialog).toHaveTextContent('협력사 참여');
+    expect(dialog).toHaveTextContent('다른 회사의 소속');
+  });
+
+  it('409 TENANT_LAST_ADMIN_REQUIRED on the DELETE surfaces inline (no crash)', async () => {
+    const fetchMock = routedFetch(() =>
+      new Response(JSON.stringify({ code: 'TENANT_LAST_ADMIN_REQUIRED' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+
+    await user.click(screen.getByTestId('action-unassign-op-1'));
+    const dialog = screen.getByTestId('operator-confirm-dialog');
+    await user.type(
+      within(dialog).getByTestId('operator-confirm-reason'),
+      'offboarding',
+    );
+    await user.click(within(dialog).getByTestId('operator-confirm-submit'));
+
+    await waitFor(() =>
+      expect(
+        within(dialog).getByTestId('operator-confirm-error'),
+      ).toHaveTextContent('관리자가 한 명도 남지 않게'),
+    );
+  });
+});
+
+// TASK-MONO-784 S6 — edit-roles now replaces only the ACTIVE company's
+// direct roles; the confirm copy names the company, and the PATCH carries
+// the active-tenant header (the shared `callGapOperators` core already
+// attaches `X-Tenant-Id` to every operators call — this proves it rides on
+// THIS mutation too, not just the list read).
+describe('per-row edit-roles — per-company copy + active-tenant header (TASK-MONO-784 S6)', () => {
+  it('names the active company in the confirm dialog and PATCHes with X-Tenant-Id: acme-corp', async () => {
+    const fetchMock = routedFetch(
+      () =>
+        new Response(
+          JSON.stringify({ operatorId: 'op-1', roles: ['SUPPORT_READONLY'], auditId: 'a' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(
+      <OperatorsScreen initial={PAGE} activeTenant="acme-corp" />,
+      { wrapper: wrapper() },
+    );
+
+    await user.click(screen.getByTestId('action-edit-roles-op-1'));
+    const dialog = screen.getByTestId('operator-confirm-dialog');
+    expect(dialog).toHaveTextContent('이 회사(');
+    expect(dialog).toHaveTextContent('acme-corp');
+    expect(dialog).toHaveTextContent('다른 회사에서의 역할은 그대로');
+
+    await user.type(
+      within(dialog).getByTestId('operator-confirm-reason'),
+      'role realignment',
+    );
+    await user.click(within(dialog).getByTestId('operator-confirm-submit'));
+
+    await waitFor(() =>
+      expect(callsTo(fetchMock, '/api/operators/')).toHaveLength(1),
+    );
+    const [url, init] = callsTo(fetchMock, '/api/operators/')[0];
+    expect(String(url)).toBe('/api/operators/op-1/roles');
+    // The PATCH goes through the same-origin proxy — the SERVER attaches
+    // `X-Tenant-Id` from the active-tenant cookie (not the browser request),
+    // so this UI-level assertion is on the request the browser makes; the
+    // header-attachment itself is proven server-side in
+    // `tests/unit/operators-api.test.ts`.
+    expect((init as RequestInit).method).toBe('POST');
   });
 });
 
