@@ -37,7 +37,7 @@ class UnlinkOperatorIdentityUseCaseTest {
 
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
-    @Mock TenantScopeGuard tenantScopeGuard;
+    @Mock OperatorRowScopeGuard rowScopeGuard;
 
     @InjectMocks UnlinkOperatorIdentityUseCase useCase;
 
@@ -59,8 +59,9 @@ class UnlinkOperatorIdentityUseCaseTest {
         assertThat(result.alreadyUnlinked()).isFalse();
         assertThat(result.previousIdentityId()).isEqualTo(IDENTITY_ID);
 
-        verify(tenantScopeGuard, times(1)).requireTenantInScope(
-                eq(ACTOR), eq(Permission.OPERATOR_MANAGE), eq(TENANT),
+        // 784 S4 (R3 · D-8): the row-wide rule decides, on the operator (not its home).
+        verify(rowScopeGuard, times(1)).requireRowAdministrable(
+                eq(ACTOR), eq(Permission.OPERATOR_MANAGE), eq(op),
                 eq(ActionCode.OPERATOR_IDENTITY_UNLINK));
         verify(operatorPort, times(1)).unlinkIdentity(eq(10L), any(Instant.class));
 

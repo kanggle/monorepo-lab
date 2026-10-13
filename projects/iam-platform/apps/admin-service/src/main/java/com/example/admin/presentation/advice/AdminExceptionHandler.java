@@ -565,6 +565,24 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("GROUP_GRANT_NO_ESCALATION", e.getMessage()));
     }
 
+    // TASK-MONO-784 S4 (rider R3 · D-8) — a row-wide change to an operator of several companies by a company
+    // administrator. The console maps it to «다른 회사에도 소속된 운영자입니다 — 이 회사에서 내보내기를 쓰세요».
+    @ExceptionHandler(com.example.admin.application.exception.OperatorHasOtherMembershipsException.class)
+    public ResponseEntity<ErrorResponse> handleOperatorHasOtherMemberships(
+            com.example.admin.application.exception.OperatorHasOtherMembershipsException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("OPERATOR_HAS_OTHER_MEMBERSHIPS", e.getMessage()));
+    }
+
+    // TASK-MONO-784 S4 (owner decision 2026-10-11 UTC) — the write would leave the company with no ACTIVE
+    // TENANT_ADMIN; nothing was written.
+    @ExceptionHandler(com.example.admin.application.exception.TenantLastAdminRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleTenantLastAdminRequired(
+            com.example.admin.application.exception.TenantLastAdminRequiredException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("TENANT_LAST_ADMIN_REQUIRED", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

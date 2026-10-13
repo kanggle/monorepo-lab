@@ -60,7 +60,8 @@ class ConsumerPoolTenantRefusalTest {
     @DisplayName("배정 생성: consumer-pool → 403 TENANT_SCOPE_DENIED 형태, 행·감사 없음 (SUPER_ADMIN 이라도)")
     void assignOperator_toPool_refused() {
         ManageOperatorAssignmentUseCase useCase =
-                new ManageOperatorAssignmentUseCase(operatorPort, assignmentPort, tenantScopeGuard, auditor);
+                new ManageOperatorAssignmentUseCase(operatorPort, assignmentPort, tenantScopeGuard, auditor,
+                        null, null, null); // 784 S4 deps — the create path reads none of them
 
         assertThatThrownBy(() -> useCase.assignOperator("op-1", POOL, actor(), "reason"))
                 .isInstanceOf(TenantScopeDeniedException.class)
@@ -74,7 +75,8 @@ class ConsumerPoolTenantRefusalTest {
     @DisplayName("대조군: 같은 경로로 일반 테넌트는 배정된다")
     void assignOperator_toOrdinaryTenant_created() {
         ManageOperatorAssignmentUseCase useCase =
-                new ManageOperatorAssignmentUseCase(operatorPort, assignmentPort, tenantScopeGuard, auditor);
+                new ManageOperatorAssignmentUseCase(operatorPort, assignmentPort, tenantScopeGuard, auditor,
+                        null, null, null); // 784 S4 deps — the create path reads none of them
         when(operatorPort.findByOperatorId("op-1")).thenReturn(Optional.of(operator("acme-corp")));
         when(assignmentPort.assignmentExists(7L, "globex")).thenReturn(false);
 

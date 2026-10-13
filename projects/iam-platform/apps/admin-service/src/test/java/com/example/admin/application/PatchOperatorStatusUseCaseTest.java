@@ -32,7 +32,7 @@ class PatchOperatorStatusUseCaseTest {
     @Mock AdminOperatorPort operatorPort;
     @Mock AdminActionAuditor auditor;
     @Mock AdminRefreshTokenPort refreshTokenPort;
-    @Mock TenantScopeGuard tenantScopeGuard;
+    @Mock OperatorRowScopeGuard rowScopeGuard;
     @Mock com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator cachingPermissionEvaluator;
 
     @InjectMocks PatchOperatorStatusUseCase useCase;

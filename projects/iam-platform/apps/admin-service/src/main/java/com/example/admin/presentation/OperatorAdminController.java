@@ -187,13 +187,17 @@ public class OperatorAdminController {
     public ResponseEntity<PatchOperatorRolesResponse> patchRoles(
             @PathVariable String operatorId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String actingTenantId,
             @Valid @RequestBody PatchOperatorRolesRequest body) {
 
         String reason = ControllerReasonSupport.requireReason(headerReason);
 
+        // TASK-MONO-784 S4 (D-7): X-Tenant-Id is the company whose roles this edit replaces (ignored for a
+        // platform target; omitted → the target's single membership).
         PatchRolesResult result = patchOperatorRoleUseCase.patchRoles(
                 operatorId,
                 body.roles(),
+                actingTenantId,
                 OperatorContextHolder.require(),
                 reason);
 

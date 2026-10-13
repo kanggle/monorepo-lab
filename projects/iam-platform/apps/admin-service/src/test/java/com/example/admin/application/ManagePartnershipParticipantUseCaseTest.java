@@ -53,10 +53,11 @@ class ManagePartnershipParticipantUseCaseTest {
     @Mock AdminActionAuditor auditor;
     @Mock PartnershipEventPublisher eventPublisher;
     @Mock AdminOperatorPort operatorPort;
+    @Mock com.example.admin.application.port.OperatorTenantAssignmentPort assignmentPort;
 
     private ManagePartnershipParticipantUseCase useCase() {
         return new ManagePartnershipParticipantUseCase(partnershipPort, tenantScopeGuard, auditor,
-                eventPublisher, operatorPort);
+                eventPublisher, operatorPort, assignmentPort);
     }
 
     private OperatorContext actor() {
@@ -82,6 +83,7 @@ class ManagePartnershipParticipantUseCaseTest {
     void add_happyPath() {
         when(partnershipPort.findByPartnershipId(PID)).thenReturn(Optional.of(partnership(PartnershipStatus.ACTIVE)));
         when(operatorPort.findByOperatorId(OP_UUID)).thenReturn(Optional.of(operator(PARTNER, 42L)));
+        when(assignmentPort.assignmentExists(42L, PARTNER)).thenReturn(true);
 
         useCase().addParticipant(PID, OP_UUID, PARTNER, List.of("wms"), List.of("WMS_OP"), actor(), "assign");
 
@@ -91,10 +93,11 @@ class ManagePartnershipParticipantUseCaseTest {
     }
 
     @Test
-    @DisplayName("add: operator home tenant != partner → 422 PARTICIPANT_NOT_OWN_OPERATOR")
+    @DisplayName("add: partner is not one of the operator's memberships → 422 PARTICIPANT_NOT_OWN_OPERATOR")
     void add_notOwnOperator() {
         when(partnershipPort.findByPartnershipId(PID)).thenReturn(Optional.of(partnership(PartnershipStatus.ACTIVE)));
         when(operatorPort.findByOperatorId(OP_UUID)).thenReturn(Optional.of(operator("initech", 42L)));
+        when(assignmentPort.assignmentExists(42L, PARTNER)).thenReturn(false);
 
         assertThatThrownBy(() -> useCase().addParticipant(PID, OP_UUID, PARTNER, null, null, actor(), "assign"))
                 .isInstanceOf(ParticipantNotOwnOperatorException.class);
@@ -102,10 +105,26 @@ class ManagePartnershipParticipantUseCaseTest {
     }
 
     @Test
+    @DisplayName("🔴 784 S4 (D-11 · R1): home = partner but NOT a member of it → 422 (was: added) / home elsewhere, member of partner → added")
+    void add_membershipNotHome() {
+        when(partnershipPort.findByPartnershipId(PID)).thenReturn(Optional.of(partnership(PartnershipStatus.ACTIVE)));
+        when(operatorPort.findByOperatorId(OP_UUID)).thenReturn(Optional.of(operator(PARTNER, 42L)));
+        when(assignmentPort.assignmentExists(42L, PARTNER)).thenReturn(false);
+        assertThatThrownBy(() -> useCase().addParticipant(PID, OP_UUID, PARTNER, null, null, actor(), "assign"))
+                .isInstanceOf(ParticipantNotOwnOperatorException.class);
+
+        when(operatorPort.findByOperatorId(OP_UUID)).thenReturn(Optional.of(operator("initech", 43L)));
+        when(assignmentPort.assignmentExists(43L, PARTNER)).thenReturn(true);
+        useCase().addParticipant(PID, OP_UUID, PARTNER, null, null, actor(), "assign");
+        verify(partnershipPort).addParticipant(eq(1L), eq(43L), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("add: participantScope not a subset of delegatedScope → 422 PARTICIPANT_SCOPE_EXCEEDS_DELEGATION")
     void add_scopeExceeds() {
         when(partnershipPort.findByPartnershipId(PID)).thenReturn(Optional.of(partnership(PartnershipStatus.ACTIVE)));
         when(operatorPort.findByOperatorId(OP_UUID)).thenReturn(Optional.of(operator(PARTNER, 42L)));
+        when(assignmentPort.assignmentExists(42L, PARTNER)).thenReturn(true);
 
         assertThatThrownBy(() -> useCase().addParticipant(
                 PID, OP_UUID, PARTNER, List.of("finance"), List.of("WMS_OP"), actor(), "assign"))

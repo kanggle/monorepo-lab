@@ -65,7 +65,7 @@ public class LinkOperatorIdentityUseCase {
     private final AdminOperatorPort operatorPort;
     private final AccountServiceClient accountServiceClient;
     private final AdminActionAuditor auditor;
-    private final TenantScopeGuard tenantScopeGuard;
+    private final OperatorRowScopeGuard rowScopeGuard;
 
     /**
      * @param operatorPublicId target operator's external UUID v7 (path variable)
@@ -92,11 +92,10 @@ public class LinkOperatorIdentityUseCase {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorPublicId));
 
-        // ADR-MONO-024 D2: actor must hold operator.manage scoped to the managed
-        // operator's home tenant. Net-zero for SUPER_ADMIN ('*').
-        tenantScopeGuard.requireTenantInScope(
-                actor, Permission.OPERATOR_MANAGE, operator.tenantId(),
-                ActionCode.OPERATOR_IDENTITY_LINK);
+        // TASK-MONO-784 S4 (rider R3 · D-8): identity_id is ROW-WIDE (one per operator row) — one membership {T}
+        // → T's administrator; two or more → the '*' grant scope only. The home is no longer read (R1).
+        rowScopeGuard.requireRowAdministrable(
+                actor, Permission.OPERATOR_MANAGE, operator, ActionCode.OPERATOR_IDENTITY_LINK);
 
         // FAIL-CLOSED downstream resolve. Any DownstreamFailureException /
         // NonRetryableDownstreamException from these calls propagates (→ 503/4xx) and

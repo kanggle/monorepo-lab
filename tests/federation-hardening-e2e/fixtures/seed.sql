@@ -607,6 +607,15 @@ SELECT o.id, r.id, 'ip-pilot-corp', NOW(6), NULL
   JOIN admin_roles r ON r.name = 'SUPPORT_READONLY'
  WHERE o.operator_id IN ('rt-protected-target', 'rt-untagged-target');
 
+-- TASK-MONO-784 S4 (ADR-MONO-082 b · D-7): a role edit lands in a company the target BELONGS to — with no
+-- X-Tenant-Id the target's single membership is the acting tenant, and a target with no membership is
+-- 404 OPERATOR_NOT_FOUND. These two targets are only ever re-roled (never assigned by a spec), so they carry
+-- the ip-pilot-corp membership V0051 would have backfilled (this seed runs after Flyway).
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'ip-pilot-corp', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id IN ('rt-protected-target', 'rt-untagged-target');
+
 -- ===========================================================================
 -- TASK-MONO-268 — ADR-MONO-036 § P4 (M3): born-unified demo seed rewrite.
 --

@@ -7,6 +7,7 @@ import com.example.admin.application.exception.GroupMemberNotFoundException;
 import com.example.admin.application.exception.GroupMemberTenantMismatchException;
 import com.example.admin.application.exception.GroupNameConflictException;
 import com.example.admin.application.exception.RoleGrantForbiddenException;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
@@ -64,6 +65,8 @@ class GroupAdminUseCaseTest {
     @Mock AdminGrantScopeEvaluator grantScopeEvaluator;
     @Mock GroupFanOutService fanOut;
     @Mock AdminActionAuditor auditor;
+    @Mock OperatorTenantAssignmentPort assignmentPort;
+    @Mock TenantLastAdminGuard lastAdminGuard;
 
     @InjectMocks GroupAdminUseCase useCase;
 
@@ -197,7 +200,7 @@ class GroupAdminUseCaseTest {
     // ── members: tenant match, dup, no-escalation re-check (D4, add-member) ─────
 
     @Test
-    @DisplayName("addMember: operator home tenant ≠ group tenant → 422 GROUP_MEMBER_TENANT_MISMATCH")
+    @DisplayName("addMember: group tenant is not one of the operator's memberships → 422 GROUP_MEMBER_TENANT_MISMATCH")
     void addMember_tenantMismatch() {
         when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
         AdminOperatorJpaEntity target = operator("op-9", "globex");
@@ -208,11 +211,55 @@ class GroupAdminUseCaseTest {
     }
 
     @Test
+    @DisplayName("🔴 784 S4 (D-11 · R1): home acme but NOT a member of acme → 422 (the home is not read)")
+    void addMember_homeWithoutMembership_mismatch() {
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
+        AdminOperatorJpaEntity target = operator("op-9", "acme");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.addMember(actor, "grp-1", "op-9", "r"))
+                .isInstanceOf(GroupMemberTenantMismatchException.class);
+        verify(groupMembers, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("🔴 784 S4 (D-11): home globex, member of acme → added; fan-out rows written in the GROUP's tenant (acme)")
+    void addMember_memberOfGroupTenant_fanOutInGroupTenant() {
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
+        AdminOperatorJpaEntity target = operator("op-9", "globex");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(true);
+        when(groupMembers.existsById(any())).thenReturn(false);
+        when(groupGrants.findByGroupId(any())).thenReturn(List.of());
+
+        useCase.addMember(actor, "grp-1", "op-9", "r");
+
+        org.mockito.ArgumentCaptor<GroupFanOutService.Member> member =
+                org.mockito.ArgumentCaptor.forClass(GroupFanOutService.Member.class);
+        verify(fanOut).fanOutGrantsToMember(any(), any(), member.capture(), any(), any());
+        assertThat(member.getValue().tenantId()).isEqualTo("acme");
+    }
+
+    @Test
+    @DisplayName("784 S4 (ADR-082 D2 · D-14): a '*' operator as group member → 400 (IllegalArgumentException)")
+    void addMember_platformOperator_refused() {
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
+        AdminOperatorJpaEntity target = operator("op-9", "*");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> useCase.addMember(actor, "grp-1", "op-9", "r"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(groupMembers, never()).save(any());
+    }
+
+    @Test
     @DisplayName("addMember: already a member → 409 GROUP_MEMBER_ALREADY_EXISTS")
     void addMember_alreadyExists() {
         when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
         AdminOperatorJpaEntity target = operator("op-9", "acme");
         when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(true);
         when(groupMembers.existsById(any())).thenReturn(true);
 
         assertThatThrownBy(() -> useCase.addMember(actor, "grp-1", "op-9", "r"))
@@ -225,6 +272,7 @@ class GroupAdminUseCaseTest {
         when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
         AdminOperatorJpaEntity target = operator("op-9", "acme");
         when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(true);
         when(groupMembers.existsById(any())).thenReturn(false);
         when(groupGrants.findByGroupId(any())).thenReturn(List.of(
                 OperatorGroupGrantJpaEntity.tenantAssignment("g-ta", 1L, "globex", null, Instant.EPOCH)));
@@ -244,6 +292,7 @@ class GroupAdminUseCaseTest {
         when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
         AdminOperatorJpaEntity target = operator("op-9", "acme");
         when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(true);
         when(groupMembers.existsById(any())).thenReturn(false);
         when(groupGrants.findByGroupId(any())).thenReturn(List.of());
         when(fanOut.fanOutGrantsToMember(any(), any(), any(), any(), any())).thenReturn(0);
@@ -280,9 +329,41 @@ class GroupAdminUseCaseTest {
 
         useCase.removeMember(actor, "grp-1", "op-9", "r");
 
+        verify(lastAdminGuard).requireAdminRemains(eq("acme"), any(), org.mockito.ArgumentMatchers.isNull());
         verify(fanOut).revokeMemberFanOut(any(), any());
         verify(groupMembers).deleteById(any());
         verify(auditor).record(any());
+    }
+
+    @Test
+    @DisplayName("🔴 784 S4 (last admin): removeMember / revokeGrant(ROLE) / deleteGroup refused by the guard → nothing revoked")
+    void lastAdminGuard_blocksGroupWrites() {
+        // a persisted-looking group (non-null surrogate id) so the grant's group match holds
+        OperatorGroupJpaEntity persisted = mock(OperatorGroupJpaEntity.class);
+        when(persisted.getId()).thenReturn(1L);
+        when(persisted.getTenantId()).thenReturn("acme");
+        when(persisted.getGroupId()).thenReturn("grp-1");
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(persisted));
+        AdminOperatorJpaEntity target = operator("op-9", "acme");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(groupMembers.existsById(any())).thenReturn(true);
+        OperatorGroupGrantJpaEntity roleGrant = OperatorGroupGrantJpaEntity.role("g-r", 1L, 5L, null, Instant.EPOCH);
+        when(groupGrants.findByGrantId("g-r")).thenReturn(Optional.of(roleGrant));
+        doThrow(new com.example.admin.application.exception.TenantLastAdminRequiredException("last"))
+                .when(lastAdminGuard).requireAdminRemains(eq("acme"), any(), any());
+
+        assertThatThrownBy(() -> useCase.removeMember(actor, "grp-1", "op-9", "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantLastAdminRequiredException.class);
+        assertThatThrownBy(() -> useCase.revokeGrant(actor, "grp-1", "g-r", "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantLastAdminRequiredException.class);
+        assertThatThrownBy(() -> useCase.deleteGroup(actor, "grp-1", "r"))
+                .isInstanceOf(com.example.admin.application.exception.TenantLastAdminRequiredException.class);
+
+        verify(fanOut, never()).revokeMemberFanOut(any(), any());
+        verify(fanOut, never()).revokeGrantFanOut(any(), any(), any());
+        verify(fanOut, never()).revokeGroupFanOut(any(), any());
+        verify(groupMembers, never()).deleteById(any());
+        verify(operatorGroups, never()).delete(any());
     }
 
     // ── delete: cascade-revoke all group_origin rows ───────────────────────────

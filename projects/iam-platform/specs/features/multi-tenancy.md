@@ -616,6 +616,10 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 운영자 측면은 초대 → **인증된 본인** 수락으로만 붙는다 — 미인증 · 다른 이메일 · 만료 · 재사용 수락은 거절, 같은 시험에서 인증된 본인만 성공 (§ 8) | `TASK-MONO-772` S3 — 772 AC-1 대조군(같은 초대, 실패 셋 먼저) · bite: 인증 술어 제거 → 미인증 칸만 빨강 |
 | 운영자 측면 **없는** 풀 계정은 콘솔 토큰을 받지 못한다 · 있는 풀 계정은 받는다 · 판정 실패 문구 ≠ `consumer-pool` 문구 · 콘솔 authorize 가 재인증 고리를 돌지 않는다 (§ 4 콘솔 행) | `TASK-MONO-772` S4 — 772 AC-2 · AC-3 |
 | 셀프 온보딩 운영자가 같은 `sub` 로 풀로 옮겨지고 콘솔에 들어온다 · 그 이메일의 풀 가입 거절이 사라진다 · 소셜 연결 운영자는 그대로 (§ 3 표) | `TASK-MONO-772` S6 — 772 AC-5 |
+| 한 회사의 역할이 다른 회사의 관리 권한으로 상속되지 않는다(ADR-082 b · R2) | `TASK-MONO-784` S3 — 784 AC-1: admin-service `QueryTenantScopeGateTest` · `OperatorMembershipReadAxisIntegrationTest` |
+| 한 회사만 떠난다 — 그 회사의 assume · 관리 API 거절, 다른 회사 그대로, 계정 무변경 · 마지막 관리자는 자기 자신도 못 내보낸다 (§ 8 회수 장치) | `TASK-MONO-784` S4 — 784 AC-2: admin-service `OperatorCompanyExitUseCaseTest` · `TenantLastAdminGuardTest` · `OperatorMembershipWriteAxisIntegrationTest#ac2_leaveOneCompany` |
+| 행 전체 속성(상태 · 프로필 · 신원 링크)은 소속 둘 이상이면 `'*'` 만 · 역할 변경은 그 회사의 직접 행만(다른 회사 행 바이트 불변) | `TASK-MONO-784` S4 — 784 AC-4: `OperatorRowScopeGuardTest` · `PatchOperatorRoleUseCaseTest` · `OperatorMembershipWriteAxisIntegrationTest#ac4_*` |
+| 한 회사의 변경은 그 회사 판정만 다음 요청에서 바꾼다 | `TASK-MONO-784` S4 — 784 AC-5: `OperatorMembershipWriteAxisIntegrationTest#ac5_perCompanyDecisionNextRequest` |
 
 #### 8. 운영자 측면 — 초대 → 인증된 본인 수락 (ADR-MONO-080 D6, `TASK-MONO-772`)
 
