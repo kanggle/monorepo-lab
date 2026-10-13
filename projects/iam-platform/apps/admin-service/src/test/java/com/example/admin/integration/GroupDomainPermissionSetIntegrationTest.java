@@ -324,6 +324,13 @@ class GroupDomainPermissionSetIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(delete("/api/admin/operators/" + w.worker() + "/assignments/" + w.tenantA())
                         .header("Authorization", bearer(w.adminA())).header("X-Operator-Reason", "ac4 exit"))
+                // A fail-closed audit wraps the real cause (AUDIT_FAILURE / 500) and the app logs are off in this
+                // profile — print the whole cause chain so a red run names its own cause in the report.
+                .andDo(r -> {
+                    for (Throwable t = r.getResolvedException(); t != null; t = t.getCause()) {
+                        System.out.println("CAUSE> " + t);
+                    }
+                })
                 .andExpect(status().isNoContent());
 
         assertThat(rowsIn(w.worker(), w.tenantA())).as("A rows of every source").isEmpty();
