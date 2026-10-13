@@ -45,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -97,6 +98,8 @@ class OperatorAdminControllerSliceTest {
     // wired into OperatorAdminController — mocked so the WebMvc slice context loads.
     @MockitoBean com.example.admin.application.port.AdminOperatorPort adminOperatorPort;
     @MockitoBean com.example.admin.application.RoleGrantGuard roleGrantGuard;
+    // TASK-MONO-784 S3: grantable-roles resolves its acting tenant through the shared gate.
+    @MockitoBean com.example.admin.application.QueryTenantScopeGate queryTenantScopeGate;
 
     @MockitoBean
     PermissionEvaluator permissionEvaluator;
@@ -118,13 +121,13 @@ class OperatorAdminControllerSliceTest {
 
     @Test
     void me_returns_current_operator_without_permission_annotation() throws Exception {
-        when(queryService.getCurrentOperator("op-actor")).thenReturn(
+        when(queryService.getCurrentOperator("op-actor", null)).thenReturn(
                 new OperatorQueryService.OperatorSummary(
                         "op-actor", "actor@example.com", "Actor",
                         "ACTIVE", List.of("SUPER_ADMIN"), true,
                         Instant.parse("2026-04-24T10:00:00Z"),
                         Instant.parse("2026-01-01T00:00:00Z"),
-                        null, "*"));
+                        null, "*", List.of()));
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()))
                 .andExpect(status().isOk())
@@ -133,7 +136,28 @@ class OperatorAdminControllerSliceTest {
                 .andExpect(jsonPath("$.roles[0]").value("SUPER_ADMIN"))
                 .andExpect(jsonPath("$.totpEnrolled").value(true))
                 // TASK-BE-626 — the shared DTO carries the HOME tenant on /me too.
-                .andExpect(jsonPath("$.homeTenantId").value("*"));
+                .andExpect(jsonPath("$.homeTenantId").value("*"))
+                // TASK-MONO-784 S3 — '*' operator: memberships present and empty.
+                .andExpect(jsonPath("$.memberships").isArray())
+                .andExpect(jsonPath("$.memberships").isEmpty());
+    }
+
+    @Test
+    void me_passes_x_tenant_id_and_serializes_memberships() throws Exception {
+        when(queryService.getCurrentOperator("op-actor", "beta")).thenReturn(
+                new OperatorQueryService.OperatorSummary(
+                        "op-actor", "actor@example.com", "Actor", "ACTIVE", List.of("SUPPORT_READONLY"), false,
+                        null, Instant.parse("2026-01-01T00:00:00Z"), null, "alpha",
+                        List.of(new OperatorQueryService.Membership("alpha", List.of("TENANT_ADMIN")),
+                                new OperatorQueryService.Membership("beta", List.of("SUPPORT_READONLY")))));
+
+        mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()).header("X-Tenant-Id", "beta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(1))
+                .andExpect(jsonPath("$.roles[0]").value("SUPPORT_READONLY"))
+                .andExpect(jsonPath("$.memberships[0].tenantId").value("alpha"))
+                .andExpect(jsonPath("$.memberships[0].roles[0]").value("TENANT_ADMIN"))
+                .andExpect(jsonPath("$.memberships[1].tenantId").value("beta"));
     }
 
     @Test
@@ -146,7 +170,7 @@ class OperatorAdminControllerSliceTest {
     @Test
     void me_missing_operator_row_returns_401_token_invalid() throws Exception {
         doThrow(new OperatorUnauthorizedException("operator not found"))
-                .when(queryService).getCurrentOperator("op-actor");
+                .when(queryService).getCurrentOperator("op-actor", null);
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", bearer()))
                 .andExpect(status().isUnauthorized())
@@ -160,12 +184,27 @@ class OperatorAdminControllerSliceTest {
         when(adminOperatorPort.findAllRoles()).thenReturn(List.of(
                 new com.example.admin.application.port.AdminOperatorPort.RoleView(1L, "SUPER_ADMIN", "", false),
                 new com.example.admin.application.port.AdminOperatorPort.RoleView(2L, "TENANT_ADMIN", "", false)));
-        when(roleGrantGuard.grantableRoleNames(any(), any())).thenReturn(List.of("TENANT_ADMIN"));
+        when(queryTenantScopeGate.resolveWithoutDenyRow(any(), eq("acme"), eq("operator.manage")))
+                .thenReturn(new com.example.admin.application.QueryTenantScopeGate.Resolved("acme", false));
+        when(roleGrantGuard.grantableRoleNames(any(), any(), eq("acme"))).thenReturn(List.of("TENANT_ADMIN"));
 
-        mockMvc.perform(get("/api/admin/operators/grantable-roles").header("Authorization", bearer()))
+        mockMvc.perform(get("/api/admin/operators/grantable-roles")
+                        .header("Authorization", bearer()).header("X-Tenant-Id", "acme"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[0]").value("TENANT_ADMIN"))
                 .andExpect(jsonPath("$.roles.length()").value(1));
+    }
+
+    @Test
+    void grantable_roles_out_of_scope_tenant_returns_403_tenant_scope_denied() throws Exception {
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #5): the acting tenant is judged before any menu is computed.
+        when(queryTenantScopeGate.resolveWithoutDenyRow(any(), eq("beta"), eq("operator.manage")))
+                .thenThrow(new com.example.admin.application.exception.TenantScopeDeniedException("no"));
+
+        mockMvc.perform(get("/api/admin/operators/grantable-roles")
+                        .header("Authorization", bearer()).header("X-Tenant-Id", "beta"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
     }
 
     @Test

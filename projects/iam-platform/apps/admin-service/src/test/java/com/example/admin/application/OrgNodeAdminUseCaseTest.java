@@ -150,7 +150,7 @@ class OrgNodeAdminUseCaseTest {
     void grant_noEscalation_delegatesToRoleGrantGuard() {
         when(subtreeResolver.effectiveCeilingFailClosed("biz")).thenReturn(CeilingView.unbounded());
         doThrow(new RoleGrantForbiddenException("may not grant SUPER_ADMIN"))
-                .when(roleGrantGuard).requireGrantable(any(), any(), any());
+                .when(roleGrantGuard).requireGrantable(any(), any(), any(), any());
 
         assertThatThrownBy(() -> useCase.grantNodeAdmin(ACTOR, "biz", TARGET_OP, "ORG_ADMIN", "why"))
                 .isInstanceOf(RoleGrantForbiddenException.class);
@@ -161,7 +161,7 @@ class OrgNodeAdminUseCaseTest {
     @DisplayName("cap 2 runs BEFORE cap 3 — a forbidden role never costs a ceiling round-trip")
     void grant_roleGuardPrecedesCeiling() {
         doThrow(new RoleGrantForbiddenException("nope"))
-                .when(roleGrantGuard).requireGrantable(any(), any(), any());
+                .when(roleGrantGuard).requireGrantable(any(), any(), any(), any());
 
         assertThatThrownBy(() -> useCase.grantNodeAdmin(ACTOR, "biz", TARGET_OP, "ORG_ADMIN", "why"))
                 .isInstanceOf(RoleGrantForbiddenException.class);

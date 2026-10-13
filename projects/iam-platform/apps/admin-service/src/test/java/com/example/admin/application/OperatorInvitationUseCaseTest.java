@@ -63,7 +63,7 @@ class OperatorInvitationUseCaseTest {
     @Mock AdminOperatorPort operatorPort;
     @Mock TenantProvisioningPort provisioningPort;
     @Mock TenantScopeGuard tenantScopeGuard;
-    @Mock TenantScopeResolver tenantScopeResolver;
+    @Mock QueryTenantScopeGate queryTenantScopeGate;
     @Mock RoleGrantGuard roleGrantGuard;
     @Mock AdminActionAuditor auditor;
     @InjectMocks OperatorInvitationUseCase useCase;
@@ -162,7 +162,7 @@ class OperatorInvitationUseCaseTest {
         void escalation() {
             given(operatorPort.resolveRolesByName(List.of("SUPPORT_LOCK"))).willReturn(supportLock());
             willThrow(new RoleGrantForbiddenException("no")).given(roleGrantGuard)
-                    .requireGrantable(eq(ACTOR), anyCollection(), eq(ActionCode.OPERATOR_INVITATION_CREATE));
+                    .requireGrantable(eq(ACTOR), anyCollection(), eq(ActionCode.OPERATOR_INVITATION_CREATE), eq(TENANT));
             assertThatThrownBy(() -> useCase.create(cmd(TENANT, "k-1")))
                     .isInstanceOf(RoleGrantForbiddenException.class);
             verifyNoInteractions(writer, mailPort, provisioningPort);
@@ -215,20 +215,20 @@ class OperatorInvitationUseCaseTest {
     class ListInvitations {
 
         @Test
-        @DisplayName("🔴 비-플랫폼 운영자가 effective scope 밖 tenantId → 403, 조회 없음")
+        @DisplayName("🔴 비-플랫폼 운영자가 grant scope(operator.manage) 밖 tenantId → 403, 조회 없음 (784 S3: 공용 게이트)")
         void nonPlatform_outOfScope() {
-            given(operatorPort.findByOperatorId("op-admin-x")).willReturn(Optional.of(operator(TENANT)));
-            given(tenantScopeResolver.resolveEffectiveTenantScope(11L, TENANT)).willReturn(Set.of(TENANT));
+            given(queryTenantScopeGate.resolveWithoutDenyRow(ACTOR, "other-corp", Permission.OPERATOR_MANAGE))
+                    .willThrow(new TenantScopeDeniedException("out"));
             assertThatThrownBy(() -> useCase.list(ACTOR, "other-corp", null, 0, 20))
                     .isInstanceOf(TenantScopeDeniedException.class);
             verify(invitationPort, never()).findPage(any(), anyString(), anyInt(), anyInt());
         }
 
         @Test
-        @DisplayName("생략 → 자기 home 테넌트 · 기본 status=PENDING · 만료된 PENDING 은 expired=true")
+        @DisplayName("생략 → 게이트가 해소한 테넌트 · 기본 status=PENDING · 만료된 PENDING 은 expired=true")
         void defaults_andExpiredFlag() {
-            given(operatorPort.findByOperatorId("op-admin-x")).willReturn(Optional.of(operator(TENANT)));
-            given(tenantScopeResolver.resolveEffectiveTenantScope(11L, TENANT)).willReturn(Set.of(TENANT));
+            given(queryTenantScopeGate.resolveWithoutDenyRow(ACTOR, null, Permission.OPERATOR_MANAGE))
+                    .willReturn(new QueryTenantScopeGate.Resolved(TENANT, false));
             given(invitationPort.findPage(TENANT, "PENDING", 0, 20)).willReturn(new OperatorInvitationPort.InvitationPage(
                     List.of(view("PENDING", Instant.now().minusSeconds(1), 0, "SENT")), 1, 0, 20, 1));
 
@@ -241,7 +241,8 @@ class OperatorInvitationUseCaseTest {
         @Test
         @DisplayName("플랫폼 운영자 + '*' → 전 테넌트 (findPage(null, …))")
         void platform_allTenants() {
-            given(operatorPort.findByOperatorId("op-admin-x")).willReturn(Optional.of(operator("*")));
+            given(queryTenantScopeGate.resolveWithoutDenyRow(ACTOR, "*", Permission.OPERATOR_MANAGE))
+                    .willReturn(new QueryTenantScopeGate.Resolved("*", true));
             given(invitationPort.findPage(null, "ACCEPTED", 1, 5))
                     .willReturn(new OperatorInvitationPort.InvitationPage(List.of(), 0, 1, 5, 0));
             assertThat(useCase.list(ACTOR, "*", "accepted", 1, 5).content()).isEmpty();
@@ -308,7 +309,7 @@ class OperatorInvitationUseCaseTest {
             given(invitationPort.findByInvitationId(INV)).willReturn(Optional.of(view("PENDING", Instant.MAX, 0, null)));
             given(operatorPort.resolveRolesByName(List.of("SUPPORT_LOCK"))).willReturn(supportLock());
             willThrow(new RoleGrantForbiddenException("no")).given(roleGrantGuard)
-                    .requireGrantable(eq(ACTOR), anyCollection(), eq(ActionCode.OPERATOR_INVITATION_RESEND));
+                    .requireGrantable(eq(ACTOR), anyCollection(), eq(ActionCode.OPERATOR_INVITATION_RESEND), eq(TENANT));
             assertThatThrownBy(() -> useCase.resend(ACTOR, INV, "r")).isInstanceOf(RoleGrantForbiddenException.class);
             verifyNoInteractions(writer, mailPort, provisioningPort);
         }

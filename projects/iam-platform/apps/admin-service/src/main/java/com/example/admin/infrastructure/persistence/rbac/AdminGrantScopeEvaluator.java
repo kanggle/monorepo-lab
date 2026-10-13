@@ -82,35 +82,103 @@ public class AdminGrantScopeEvaluator {
             return Set.of();
         }
         try {
-            List<AdminOperatorRoleJpaEntity> grantingRows = grantingRows(operatorId, permission);
-            if (grantingRows.isEmpty()) {
-                return Set.of();
-            }
-
-            // (1) Platform pre-scan — FIRST, before any subtree round-trip. Order-independent.
-            for (AdminOperatorRoleJpaEntity row : grantingRows) {
-                if (AdminOperator.PLATFORM_TENANT_ID.equals(row.getTenantId())) {
-                    return Set.of(AdminOperator.PLATFORM_TENANT_ID);
-                }
-            }
-
-            Set<String> scope = new LinkedHashSet<>();
-            for (AdminOperatorRoleJpaEntity row : grantingRows) {
-                if (row.getOrgNodeId() != null) {
-                    // (2) org-node-scoped grant (ORG_ADMIN) — subtree driver. Fail-closed:
-                    // an unresolvable subtree contributes nothing.
-                    scope.addAll(subtreeResolver.subtreeTenantIdsFailClosed(row.getOrgNodeId()));
-                } else if (row.getTenantId() != null) {
-                    // (3) tenant-scoped grant (TENANT_ADMIN) — byte-unchanged.
-                    scope.add(row.getTenantId());
-                }
-            }
-            return Set.copyOf(scope);
+            return scopeOf(grantingRows(operatorId, permission));
         } catch (RuntimeException ex) {
             log.error("Admin-grant scope resolution failed (fail-closed) operatorId={} permission={}",
                     operatorId, permission, ex);
             return Set.of();
         }
+    }
+
+    /**
+     * TASK-MONO-784 S3 (ADR-MONO-082 b · rider R2 · decision D-4) — the tenant set of a read that carries
+     * <b>no permission key</b> ({@code GET /api/admin/accounts?email=}, {@code GET /api/admin/operators/lookup}):
+     * every tenant where the operator holds <em>any</em> role row, resolved exactly like
+     * {@link #effectiveAdminScope} ({@code '*'} pre-scan → {@code {'*'}}, node row → its subtree, otherwise the
+     * row's {@code tenant_id}). A membership with no role row is NOT in it — R2 (a company you only belong to
+     * gives you no management reach), and the home is never read.
+     *
+     * @return empty when the operator is unknown, inactive or roleless (fail-closed on any error)
+     */
+    @Transactional(readOnly = true)
+    public Set<String> anyRoleScope(String operatorId) {
+        if (operatorId == null) {
+            return Set.of();
+        }
+        try {
+            return scopeOf(activeRoleRows(operatorId));
+        } catch (RuntimeException ex) {
+            log.error("Any-role scope resolution failed (fail-closed) operatorId={}", operatorId, ex);
+            return Set.of();
+        }
+    }
+
+    /**
+     * TASK-MONO-784 S3 (decision D-6) — the permission keys the operator holds <b>in</b> {@code tenantId}: the
+     * permissions of its role rows that live there — {@code tenant_id = '*'} rows, rows whose
+     * {@code tenant_id = tenantId} (direct · group fan-out), and node rows whose subtree contains
+     * {@code tenantId}. This is the «own» of the grant-menu ≤-own rule; the union over every company is NOT
+     * (784 AC-0 F3 — A's permissions would open an escalating grant menu in B).
+     *
+     * @return empty for an unknown / inactive / roleless operator or a {@code null} tenant (fail-closed)
+     */
+    @Transactional(readOnly = true)
+    public Set<String> permissionsHeldIn(String operatorId, String tenantId) {
+        if (operatorId == null || tenantId == null) {
+            return Set.of();
+        }
+        try {
+            List<Long> roleIds = new java.util.ArrayList<>();
+            for (AdminOperatorRoleJpaEntity row : activeRoleRows(operatorId)) {
+                boolean livesThere;
+                if (AdminOperator.PLATFORM_TENANT_ID.equals(row.getTenantId())) {
+                    livesThere = true;
+                } else if (row.getOrgNodeId() != null) {
+                    livesThere = subtreeResolver.subtreeTenantIdsFailClosed(row.getOrgNodeId()).contains(tenantId);
+                } else {
+                    livesThere = tenantId.equals(row.getTenantId());
+                }
+                if (livesThere) {
+                    roleIds.add(row.getRoleId());
+                }
+            }
+            if (roleIds.isEmpty()) {
+                return Set.of();
+            }
+            return Set.copyOf(rolePermissions.findPermissionKeysByRoleIds(roleIds));
+        } catch (RuntimeException ex) {
+            log.error("Held-permission resolution failed (fail-closed) operatorId={} tenantId={}",
+                    operatorId, tenantId, ex);
+            return Set.of();
+        }
+    }
+
+    /**
+     * The tenant set of a group of role rows: {@code '*'} pre-scan (order-independent, before any subtree
+     * round-trip) → {@code {'*'}}; node row → its subtree (fail-closed); otherwise the row's {@code tenant_id}.
+     */
+    private Set<String> scopeOf(List<AdminOperatorRoleJpaEntity> rows) {
+        if (rows.isEmpty()) {
+            return Set.of();
+        }
+        // (1) Platform pre-scan — FIRST, before any subtree round-trip. Order-independent.
+        for (AdminOperatorRoleJpaEntity row : rows) {
+            if (AdminOperator.PLATFORM_TENANT_ID.equals(row.getTenantId())) {
+                return Set.of(AdminOperator.PLATFORM_TENANT_ID);
+            }
+        }
+        Set<String> scope = new LinkedHashSet<>();
+        for (AdminOperatorRoleJpaEntity row : rows) {
+            if (row.getOrgNodeId() != null) {
+                // (2) org-node-scoped grant (ORG_ADMIN) — subtree driver. Fail-closed:
+                // an unresolvable subtree contributes nothing.
+                scope.addAll(subtreeResolver.subtreeTenantIdsFailClosed(row.getOrgNodeId()));
+            } else if (row.getTenantId() != null) {
+                // (3) tenant-scoped grant (TENANT_ADMIN) — byte-unchanged.
+                scope.add(row.getTenantId());
+            }
+        }
+        return Set.copyOf(scope);
     }
 
     /**
@@ -173,15 +241,7 @@ public class AdminGrantScopeEvaluator {
      * no granting role.
      */
     private List<AdminOperatorRoleJpaEntity> grantingRows(String operatorId, String permission) {
-        Optional<AdminOperatorJpaEntity> op = operators.findByOperatorId(operatorId);
-        if (op.isEmpty()) {
-            return List.of();
-        }
-        AdminOperatorJpaEntity operator = op.get();
-        if (!AdminOperator.Status.ACTIVE.name().equals(operator.getStatus())) {
-            return List.of();
-        }
-        List<AdminOperatorRoleJpaEntity> roleRows = operatorRoles.findByOperatorId(operator.getId());
+        List<AdminOperatorRoleJpaEntity> roleRows = activeRoleRows(operatorId);
         if (roleRows.isEmpty()) {
             return List.of();
         }
@@ -196,6 +256,19 @@ public class AdminGrantScopeEvaluator {
         return roleRows.stream()
                 .filter(row -> grantingRoleIds.contains(row.getRoleId()))
                 .toList();
+    }
+
+    /** Every {@code admin_operator_roles} row of an ACTIVE operator; empty when unknown, inactive or roleless. */
+    private List<AdminOperatorRoleJpaEntity> activeRoleRows(String operatorId) {
+        Optional<AdminOperatorJpaEntity> op = operators.findByOperatorId(operatorId);
+        if (op.isEmpty()) {
+            return List.of();
+        }
+        AdminOperatorJpaEntity operator = op.get();
+        if (!AdminOperator.Status.ACTIVE.name().equals(operator.getStatus())) {
+            return List.of();
+        }
+        return operatorRoles.findByOperatorId(operator.getId());
     }
 
     /**

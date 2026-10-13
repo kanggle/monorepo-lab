@@ -210,6 +210,22 @@ public interface AdminOperatorPort {
      */
     Map<Long, List<String>> bulkLoadRoleNamesByOperator(Collection<Long> operatorInternalIds);
 
+    /**
+     * TASK-MONO-784 S3 (admin-api.md § GET /api/admin/operators ③) — {@link #bulkLoadRoleNamesByOperator}
+     * restricted to the role rows that live in {@code tenantId} ({@code admin_operator_roles.tenant_id =
+     * tenantId} — direct, group fan-out and node rows recorded there). A company's operator list never shows
+     * the roles that person holds in another company. Names sorted, distinct per operator.
+     */
+    Map<Long, List<String>> bulkLoadRoleNamesByOperatorInTenant(Collection<Long> operatorInternalIds,
+                                                               String tenantId);
+
+    /**
+     * TASK-MONO-784 S3 (admin-api.md § GET /api/admin/me) — one operator's role names grouped by the role
+     * row's {@code tenant_id} (the company the role lives in; {@code '*'} for a platform row). Names sorted,
+     * distinct within a tenant. Empty map when the operator has no role row.
+     */
+    Map<String, List<String>> findRoleNamesByTenant(long operatorInternalId);
+
     // ---------- Operator-Role bindings ----------
 
     /** Delete every role binding for one operator (full-replacement pattern). */

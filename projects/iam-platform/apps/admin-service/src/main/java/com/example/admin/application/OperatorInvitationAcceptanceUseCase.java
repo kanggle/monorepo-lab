@@ -225,7 +225,7 @@ public class OperatorInvitationAcceptanceUseCase {
         if (roles.isEmpty()) {
             throw invalidated("the invitation carries no role");
         }
-        List<String> grantable = roleGrantGuard.grantableRoleNames(inviter, roles.values());
+        List<String> grantable = roleGrantGuard.grantableRoleNames(inviter, roles.values(), tenantId);
         if (!grantable.containsAll(roles.keySet())) {
             throw invalidated("an invited role left the inviter's grant menu");
         }

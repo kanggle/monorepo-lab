@@ -44,7 +44,9 @@ public class OperatorEmailLookupUseCase {
         }
         String tenantId;
         try {
-            tenantId = queryTenantScopeGate.resolve(
+            // TASK-MONO-784 S3 (§ 행동 테넌트 #9): no permission key → «a tenant where the caller holds any
+            // role row» (rider R2), the same predicate as the accounts e-mail branch.
+            tenantId = queryTenantScopeGate.resolveAnyRole(
                     caller, requestedTenantId, ActionCode.ACCOUNT_SEARCH, Permission.ACCOUNT_READ)
                     .tenantId();
         } catch (TenantScopeDeniedException outOfScope) {

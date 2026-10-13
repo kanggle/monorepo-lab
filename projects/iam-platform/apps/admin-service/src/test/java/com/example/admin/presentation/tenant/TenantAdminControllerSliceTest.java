@@ -82,7 +82,8 @@ class TenantAdminControllerSliceTest {
     @MockitoBean PermissionEvaluator permissionEvaluator;
     @MockitoBean AdminOperatorJpaRepository operatorRepository;
     @MockitoBean AdminActionAuditor adminActionAuditor; // required by RequiresPermissionAspect
-    @MockitoBean com.example.admin.application.TenantScopeResolver tenantScopeResolver; // TASK-BE-326
+    // TASK-MONO-784 S3: GET /tenants/{id} judges the path tenant through the shared grant-scope guard.
+    @MockitoBean com.example.admin.application.TenantScopeGuard tenantScopeGuard;
     @MockitoBean com.example.admin.application.TenantOrgNodePlacementUseCase placementUseCase; // TASK-BE-625
 
     // Pre-created mocks — stubs are set in @BeforeEach to avoid interleaving
@@ -120,27 +121,21 @@ class TenantAdminControllerSliceTest {
         lenient().when(permissionEvaluator.hasPermission(eq(REGULAR_OP_ID), anyString())).thenReturn(false);
         lenient().when(permissionEvaluator.hasAllPermissions(anyString(), any())).thenReturn(true);
 
-        // TASK-BE-326: the controller now calls the 3-arg dual-read overload
-        // isTenantAllowed(operator, target, effectiveTenants). The resolver
-        // returns the NET-ZERO effective scope = {home tenant}.
-        lenient().when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("*")))
-                .thenReturn(java.util.Set.of("*"));
-        lenient().when(tenantScopeResolver.resolveEffectiveTenantScope(any(), eq("tenant-a")))
-                .thenReturn(java.util.Set.of("tenant-a"));
+        // TASK-MONO-784 S3: the GET /tenants/{id} tenant check is TenantScopeGuard.requireTenantReadable
+        // (mocked: a no-op = in scope). The regular operator never reaches it — tenant.manage is denied first.
+    }
 
-        // isTenantAllowed (3-arg):
-        //   - SUPER_ADMIN (tenantId='*'): allowed everywhere
-        //   - Regular op (tenantId='tenant-a'): allowed only for own tenant, denied for others
-        // Use lenient() + argThat() so unused stubs do not cause failures.
-        lenient().when(permissionEvaluator.isTenantAllowed(
-                Mockito.argThat(op -> op != null && "*".equals(op.tenantId())),
-                anyString(), any())).thenReturn(true);
-        lenient().when(permissionEvaluator.isTenantAllowed(
-                Mockito.argThat(op -> op != null && "tenant-a".equals(op.tenantId())),
-                eq("tenant-a"), any())).thenReturn(true);
-        lenient().when(permissionEvaluator.isTenantAllowed(
-                Mockito.argThat(op -> op != null && "tenant-a".equals(op.tenantId())),
-                eq("tenant-b"), any())).thenReturn(false);
+    @Test
+    void get_tenant_out_of_grant_scope_returns_403_tenant_scope_denied() throws Exception {
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #17): the path tenant is judged against the tenant.manage grant scope.
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID)).thenReturn(java.util.Optional.of(superAdminMock));
+        Mockito.doThrow(new com.example.admin.application.exception.TenantScopeDeniedException("out"))
+                .when(tenantScopeGuard).requireTenantReadable(any(), eq("tenant.manage"), eq("tenant-z"));
+
+        mockMvc.perform(get("/api/admin/tenants/tenant-z").header("Authorization", superAdminToken()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+        Mockito.verifyNoInteractions(getTenantUseCase);
     }
 
     private String superAdminToken() {

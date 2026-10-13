@@ -25,7 +25,8 @@ import java.util.UUID;
  *
  * <p>TASK-BE-249/BE-326: tenant-scope enforcement.
  * <ul>
- *   <li>Normal operators: can only query a tenant in their effective scope (home ∪ assignments).</li>
+ *   <li>Normal operators: can only query a tenant in their {@code audit.read} grant scope
+ *       (TASK-MONO-784 S3 — before it, the effective scope home ∪ assignments).</li>
  *   <li>SUPER_ADMIN (tenantId='*'): may query any tenant via {@code tenantId=*}
  *       (returns cross-tenant rows) or a specific {@code tenantId}.</li>
  * </ul>
@@ -49,7 +50,9 @@ public class AuditQueryUseCase {
         // sources). This use-case is invoked only after grant.
 
         // TASK-BE-249/BE-326/BE-357: resolve the operator's query tenant and enforce
-        // the dual-read effective-scope gate (shared with GET /api/admin/accounts).
+        // the shared tenant gate (shared with GET /api/admin/accounts). TASK-MONO-784 S3:
+        // the gate is the audit.read GRANT scope — a company where the operator is only
+        // assigned (no role row there conferring audit.read) is refused (AC-1).
         QueryTenantScopeGate.Resolved scope = queryTenantScopeGate.resolve(
                 cmd.operator(), cmd.tenantId(), ActionCode.AUDIT_QUERY, "audit.read");
         String requestedTenantId = scope.tenantId();

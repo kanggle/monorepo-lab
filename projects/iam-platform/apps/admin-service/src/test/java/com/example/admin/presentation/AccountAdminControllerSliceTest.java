@@ -102,6 +102,9 @@ class AccountAdminControllerSliceTest {
         // TASK-BE-357: default — resolve to the operator's own non-platform tenant.
         when(queryTenantScopeGate.resolve(any(), any(), any(), anyString()))
                 .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", false));
+        // TASK-MONO-784 S3: the e-mail branch (no permission key) uses the any-role gate.
+        when(queryTenantScopeGate.resolveAnyRole(any(), any(), any(), anyString()))
+                .thenReturn(new QueryTenantScopeGate.Resolved("fan-platform", false));
     }
 
     private String bearer() {
@@ -383,7 +386,7 @@ class AccountAdminControllerSliceTest {
     void search_withEmail_operatorWithNoPermissions_returns_200_in_resolved_tenant() throws Exception {
         when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
         when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
-        when(queryTenantScopeGate.resolve(any(), eq("demo-corp"), any(), anyString()))
+        when(queryTenantScopeGate.resolveAnyRole(any(), eq("demo-corp"), any(), anyString()))
                 .thenReturn(new QueryTenantScopeGate.Resolved("demo-corp", false));
         var items = List.of(new AccountServiceClient.AccountSummaryItem(
                 "acc-dc", "hire@demo-corp.example", "ACTIVE", Instant.parse("2026-01-01T00:00:00Z")));
@@ -407,5 +410,32 @@ class AccountAdminControllerSliceTest {
                         .header("Authorization", bearer()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+    }
+
+    @Test
+    void search_withEmail_tenantWithNoRoleRow_returns_403_and_no_search() throws Exception {
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #8b · R2): the e-mail branch has no permission key; its gate is
+        // «a tenant where the caller holds any role row» — a membership with no role is refused.
+        when(queryTenantScopeGate.resolveAnyRole(any(), eq("beta"), any(), anyString()))
+                .thenThrow(new TenantScopeDeniedException("no role row in beta"));
+
+        mockMvc.perform(get("/api/admin/accounts?email=x@beta.example&tenantId=beta")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+        org.mockito.Mockito.verifyNoInteractions(accountServiceClient);
+    }
+
+    @Test
+    void search_list_withoutAccountRead_isPermissionDenied_beforeTheTenantGate() throws Exception {
+        // TASK-MONO-784 S3: the list's gate is the account.read grant scope — empty for an operator without
+        // account.read — so the permission check must run first to keep the contract's PERMISSION_DENIED.
+        when(permissionEvaluator.hasPermission(anyString(), anyString())).thenReturn(false);
+
+        mockMvc.perform(get("/api/admin/accounts").header("Authorization", bearer()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        org.mockito.Mockito.verify(queryTenantScopeGate, org.mockito.Mockito.never())
+                .resolve(any(), any(), any(), anyString());
     }
 }

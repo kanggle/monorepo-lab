@@ -33,8 +33,25 @@ class PatchOperatorStatusUseCaseTest {
     @Mock AdminActionAuditor auditor;
     @Mock AdminRefreshTokenPort refreshTokenPort;
     @Mock TenantScopeGuard tenantScopeGuard;
+    @Mock com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator cachingPermissionEvaluator;
 
     @InjectMocks PatchOperatorStatusUseCase useCase;
+
+    @Test
+    @DisplayName("784 S3 (D-5 · F7): 상태 변경 성공 → 권한 캐시 무효화 · 같은 상태(거절) → 무효화 없음")
+    void patchStatus_invalidatesPermissionCache_onSuccessOnly() {
+        AdminOperatorPort.OperatorView target = operator(77L, "target-uuid", "t@ex.com", "ACTIVE");
+        when(operatorPort.findByOperatorId("target-uuid")).thenReturn(Optional.of(target));
+        when(auditor.newAuditId()).thenReturn("audit-sus");
+
+        useCase.patchStatus("target-uuid", "SUSPENDED", actor(), "violation");
+        verify(cachingPermissionEvaluator).invalidate("target-uuid");
+
+        // control: a refused transition (same status) drops nothing
+        assertThatThrownBy(() -> useCase.patchStatus("target-uuid", "ACTIVE", actor(), "r"))
+                .isInstanceOf(StateTransitionInvalidException.class);
+        verify(cachingPermissionEvaluator, org.mockito.Mockito.times(1)).invalidate(anyString());
+    }
 
     private OperatorContext actor() {
         return new OperatorContext("actor-uuid", "jti-1");

@@ -153,7 +153,7 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("seed: the demo operator's SUPER_ADMIN grant is bound to its home tenant, not to the data tenant")
+    @DisplayName("seed: SUPER_ADMIN stays bound to demo-corp; ecommerce carries exactly SUPPORT_LOCK + SUPPORT_READONLY (784 OD-3)")
     void superAdminGrantStaysOnHomeTenant() {
         List<String> grants = jdbcTemplate.queryForList("""
                 SELECT CONCAT_WS('|', r.name, g.tenant_id)
@@ -164,12 +164,28 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
                  ORDER BY r.name, g.tenant_id
                 """, String.class);
 
-        // The second assignment (TASK-BE-576) deliberately grants NO extra role: assuming
-        // `ecommerce` derives ECOMMERCE_OPERATOR from that tenant's own subscriptions
-        // (ADR-MONO-035 — domain-ops pages are gated by entitlement, not by this RBAC row).
-        // If a future change starts minting per-tenant role grants here, this assertion is
-        // where that shows up rather than in a widened production surface.
-        assertThat(grants).containsExactly("SUPER_ADMIN|demo-corp");
+        // TASK-BE-576's `ecommerce` assignment granted no role (domain-ops pages are gated by
+        // entitlement, ADR-MONO-035). TASK-MONO-784 S3 made management screens judge the active
+        // tenant by the role rows living there (rider R2), so owner decision OD-3 seeds exactly
+        // SUPPORT_LOCK + SUPPORT_READONLY @ ecommerce — accounts · audit · lock stay usable, the
+        // ecommerce operator list does not. A third row here widens a public demo credential.
+        assertThat(grants).containsExactly(
+                "SUPER_ADMIN|demo-corp", "SUPPORT_LOCK|ecommerce", "SUPPORT_READONLY|ecommerce");
+    }
+
+    @Test
+    @DisplayName("784 S3 OD-3: demo-operator in ecommerce — audit 200, operator list 403 TENANT_SCOPE_DENIED; demo-corp list 200 (control)")
+    void demoOperatorEcommerceScreensFollowTheOd3Roles() throws Exception {
+        mockMvc.perform(get("/api/admin/audit?tenantId=ecommerce&source=admin")
+                        .header("Authorization", bearer("demo-operator")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/operators?tenantId=ecommerce")
+                        .header("Authorization", bearer("demo-operator")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_SCOPE_DENIED"));
+        mockMvc.perform(get("/api/admin/operators?tenantId=demo-corp")
+                        .header("Authorization", bearer("demo-operator")))
+                .andExpect(status().isOk());
     }
 
     // ---------------------------------------------------------------------------------

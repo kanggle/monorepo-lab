@@ -190,7 +190,9 @@ public class OrgNodeAdminUseCase {
                 actor,
                 List.of(new AdminOperatorPort.RoleView(
                         role.getId(), role.getName(), role.getDescription(), role.isRequire2fa())),
-                ActionCode.ORG_ADMIN_GRANT);
+                ActionCode.ORG_ADMIN_GRANT,
+                // 784 S3 (D-6): ≤-own measured in the tenant the new row is recorded under (the target's).
+                target.getTenantId());
 
         // (3) the node's ceiling caps the grant (fail-closed).
         requireGrantWithinCeiling(orgNodeId, roleName);

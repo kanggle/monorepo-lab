@@ -139,7 +139,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
         given(tenantScopeGuard.isTenantInScope(new OperatorContext(INVITER, null), Permission.OPERATOR_MANAGE, TENANT))
                 .willReturn(true);
         given(operatorPort.resolveRolesByName(List.of("SUPPORT_LOCK"))).willReturn(supportLock());
-        given(roleGrantGuard.grantableRoleNames(eq(new OperatorContext(INVITER, null)), anyCollection()))
+        given(roleGrantGuard.grantableRoleNames(eq(new OperatorContext(INVITER, null)), anyCollection(), any()))
                 .willReturn(List.of("SUPPORT_LOCK"));
     }
 
@@ -396,7 +396,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
             given(tenantScopeGuard.isTenantInScope(new OperatorContext(INVITER, null), Permission.OPERATOR_MANAGE, TENANT))
                     .willReturn(true);
             given(operatorPort.resolveRolesByName(List.of("SUPPORT_LOCK"))).willReturn(supportLock());
-            given(roleGrantGuard.grantableRoleNames(eq(new OperatorContext(INVITER, null)), anyCollection()))
+            given(roleGrantGuard.grantableRoleNames(eq(new OperatorContext(INVITER, null)), anyCollection(), any()))
                     .willReturn(List.of());
             assertInvalidated();
         }

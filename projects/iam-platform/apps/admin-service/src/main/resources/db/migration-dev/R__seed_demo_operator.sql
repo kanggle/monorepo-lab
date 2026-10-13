@@ -156,6 +156,29 @@ INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_a
 SELECT o.id, 'ecommerce', NOW(6), NULL, NULL
   FROM admin_operators o WHERE o.operator_id = 'demo-operator';
 
+-- ---------------------------------------------------------------------------
+-- 4b. Company roles AT `ecommerce` — SUPPORT_READONLY + SUPPORT_LOCK
+--     (TASK-MONO-784 S3 · ADR-MONO-082 b · owner decision OD-3, 2026-10-11 UTC).
+--
+-- Since 784 S3 the management screens judge the active tenant against the GRANT
+-- scope of the screen's permission — the tenants of the role rows that confer it —
+-- not against the assignments (rider R2: a membership with no role row gives no
+-- management reach). The SUPER_ADMIN row above lives at demo-corp, so without
+-- these two rows every management screen in `ecommerce` (accounts · audit ·
+-- lock/unlock · GDPR · session revoke) would answer 403.
+--
+-- Chosen pair (OD-3): accounts, audit and locking stay usable in `ecommerce`; the
+-- `ecommerce` OPERATOR list is now 403 (operator.manage lives only in TENANT_ADMIN,
+-- which would also open groups / partnerships / role edits to the public demo
+-- credential). This is the demo of «one person, a different role per company».
+-- Pinned by DemoOperatorSeedIntegrationTest.
+-- ---------------------------------------------------------------------------
+INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by)
+SELECT o.id, r.id, 'ecommerce', NOW(6), NULL
+  FROM admin_operators o
+  JOIN admin_roles r ON r.name IN ('SUPPORT_READONLY', 'SUPPORT_LOCK')
+ WHERE o.operator_id = 'demo-operator';
+
 -- ===========================================================================
 -- 5. THE SECOND OPERATOR (TASK-MONO-519) — `demo-requester`.
 --

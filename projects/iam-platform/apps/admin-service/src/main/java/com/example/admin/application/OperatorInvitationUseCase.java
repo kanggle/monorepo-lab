@@ -4,7 +4,6 @@ import com.example.admin.application.exception.IdempotencyKeyConflictException;
 import com.example.admin.application.exception.OperatorInvitationNotFoundException;
 import com.example.admin.application.exception.OperatorInvitationNotPendingException;
 import com.example.admin.application.exception.OperatorNotFoundException;
-import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorInvitationMailPort;
 import com.example.admin.application.port.OperatorInvitationMailPort.DeliveryStatus;
@@ -62,7 +61,7 @@ public class OperatorInvitationUseCase {
     private final AdminOperatorPort operatorPort;
     private final TenantProvisioningPort provisioningPort;
     private final TenantScopeGuard tenantScopeGuard;
-    private final TenantScopeResolver tenantScopeResolver;
+    private final QueryTenantScopeGate queryTenantScopeGate;
     private final RoleGrantGuard roleGrantGuard;
     private final AdminActionAuditor auditor;
 
@@ -91,7 +90,7 @@ public class OperatorInvitationUseCase {
 
         // 4. unknown role → 400 ROLE_NOT_FOUND, then D3 no-escalation → 403 ROLE_GRANT_FORBIDDEN (DENIED row).
         Map<String, AdminOperatorPort.RoleView> roles = operatorPort.resolveRolesByName(cmd.roles());
-        roleGrantGuard.requireGrantable(cmd.actor(), roles.values(), ActionCode.OPERATOR_INVITATION_CREATE);
+        roleGrantGuard.requireGrantable(cmd.actor(), roles.values(), ActionCode.OPERATOR_INVITATION_CREATE, tenantId);
 
         // 5. a re-sent key → 409, no row (its audit INSERT would otherwise die on idx_admin_actions_idemp → 500).
         if (auditor.isIdempotencyKeyUsed(cmd.actor().operatorId(), ActionCode.OPERATOR_INVITATION_CREATE, key)) {
@@ -114,9 +113,9 @@ public class OperatorInvitationUseCase {
     // ── list ────────────────────────────────────────────────────────────────
 
     /**
-     * Read — no audit row. The tenant rule is {@code GET /api/admin/operators}'s, verbatim: omitted → the
-     * caller's home tenant; within the caller's effective scope (home ∪ assignments) → that tenant; {@code '*'} →
-     * every tenant, platform-scope callers only; anything else → 403 {@code TENANT_SCOPE_DENIED}.
+     * Read — no audit row. The tenant rule is {@code GET /api/admin/operators}'s, verbatim (since 784 S3:
+     * {@link QueryTenantScopeGate} over the {@code operator.manage} grant scope, omitted-tenant rule);
+     * {@code '*'} → every tenant, platform-scope callers only; anything else → 403 {@code TENANT_SCOPE_DENIED}.
      */
     public OperatorInvitationPageResult list(OperatorContext actor, String requestedTenantId, String status,
                                              int page, int size) {
@@ -130,20 +129,12 @@ public class OperatorInvitationUseCase {
         if (size < 1 || size > 100) {
             throw new IllegalArgumentException("size must be between 1 and 100");
         }
-        AdminOperatorPort.OperatorView caller = operatorPort.findByOperatorId(actor.operatorId())
-                .orElseThrow(() -> new TenantScopeDeniedException("Operator not found: " + actor.operatorId()));
-        String callerTenantId = caller.tenantId();
-        boolean platform = AdminOperator.PLATFORM_TENANT_ID.equals(callerTenantId);
-        String tenantId = requestedTenantId == null || requestedTenantId.isBlank() ? callerTenantId : requestedTenantId;
-
-        if (!platform) {
-            Set<String> effective = tenantScopeResolver.resolveEffectiveTenantScope(caller.internalId(), callerTenantId);
-            if (!effective.contains(tenantId)) {
-                throw new TenantScopeDeniedException("Operator tenantId=" + callerTenantId
-                        + " cannot list operator invitations of tenantId=" + tenantId);
-            }
-        }
-        boolean allTenants = platform && AdminOperator.PLATFORM_TENANT_ID.equals(tenantId);
+        // TASK-MONO-784 S3 (§ 행동 테넌트 #11): the one gate — operator.manage GRANT scope + the omitted-tenant
+        // rule (this class used to carry its own copy of the home ∪ assignments rule). No DENIED row (a read).
+        QueryTenantScopeGate.Resolved resolved =
+                queryTenantScopeGate.resolveWithoutDenyRow(actor, requestedTenantId, Permission.OPERATOR_MANAGE);
+        String tenantId = resolved.tenantId();
+        boolean allTenants = resolved.isPlatformScope() && AdminOperator.PLATFORM_TENANT_ID.equals(tenantId);
         OperatorInvitationPort.InvitationPage rows =
                 invitationPort.findPage(allTenants ? null : tenantId, effectiveStatus, page, size);
         Instant now = Instant.now();
@@ -187,7 +178,8 @@ public class OperatorInvitationUseCase {
                     "Only a pending invitation can be resent (it is " + invitation.status() + ")");
         }
         Map<String, AdminOperatorPort.RoleView> roles = operatorPort.resolveRolesByName(invitation.roles());
-        roleGrantGuard.requireGrantable(actor, roles.values(), ActionCode.OPERATOR_INVITATION_RESEND);
+        roleGrantGuard.requireGrantable(actor, roles.values(), ActionCode.OPERATOR_INVITATION_RESEND,
+                invitation.tenantId());
         provisioningPort.get(invitation.tenantId());
 
         OperatorInvitationWriter.Issued issued = writer.rotate(actor, invitation, reason);
