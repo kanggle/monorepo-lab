@@ -13,6 +13,13 @@ import {
   SCM_DEFAULT_PAGE_SIZE,
   SCM_MAX_PAGE_SIZE,
 } from '../api/types';
+import {
+  SupplierPageSchema,
+  type SupplierPage,
+  type SupplierQueryParams,
+  SCM_SUPPLIER_DEFAULT_PAGE_SIZE,
+  SCM_SUPPLIER_MAX_PAGE_SIZE,
+} from '@/shared/api/scm-suppliers-types';
 
 /**
  * Client-side scm-ops hooks (architecture.md § Server vs Client
@@ -84,6 +91,57 @@ export function useScmPoList(params: PoQueryParams, initial?: PoPage) {
     // / client retry — the gateway is rate-limited (§ 2.4.6).
     staleTime: seeded ? 30_000 : 0,
     refetchOnMount: seeded ? false : true,
+    ...READ_QUERY_REFETCH,
+    retry: false,
+  });
+}
+
+// --- procurement supplier list read (TASK-PC-FE-337) ---------------------
+//     `shared/api/scm-suppliers-types.ts` — the PO filter's supplier
+//     <select> picks a supplier's **id**. Promoted to `shared/` because
+//     `features/scm-config` consumes the SAME list for its own purpose (the
+//     supplier's **code**) — architecture.md § Forbidden Dependencies.
+
+const clampSupplierSize = (size?: number): number =>
+  clampPageSize(size, SCM_SUPPLIER_DEFAULT_PAGE_SIZE, SCM_SUPPLIER_MAX_PAGE_SIZE);
+
+function suppliersKey(params: SupplierQueryParams) {
+  return [
+    SCM_KEY,
+    'suppliers',
+    params.status ?? null,
+    Math.max(0, params.page ?? 0),
+    clampSupplierSize(params.size),
+  ] as const;
+}
+
+function buildSuppliersQs(params: SupplierQueryParams): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set('status', params.status);
+  qs.set('page', String(Math.max(0, params.page ?? 0)));
+  qs.set('size', String(clampSupplierSize(params.size)));
+  return qs.toString();
+}
+
+async function fetchSuppliers(params: SupplierQueryParams): Promise<SupplierPage> {
+  const raw = await apiClient.get<unknown>(
+    `/api/scm/procurement/suppliers?${buildSuppliersQs(params)}`,
+  );
+  return SupplierPageSchema.parse(raw);
+}
+
+/**
+ * One page of suppliers for the PO filter `<select>` (TASK-PC-FE-337). A
+ * fetch/parse failure (`isError`) is the signal `ScmPoTable`'s supplier
+ * field falls back on — the SAME "list failed → plain text input" shape as
+ * `SellerSelect` (TASK-PC-FE-336). No refetch interval / focus refetch (the
+ * scm gateway is rate-limited — § 2.4.6, mirrors `useScmPoList`).
+ */
+export function useSuppliers(params: SupplierQueryParams = {}) {
+  return useQuery({
+    queryKey: suppliersKey(params),
+    queryFn: () => fetchSuppliers(params),
+    staleTime: 30_000,
     ...READ_QUERY_REFETCH,
     retry: false,
   });

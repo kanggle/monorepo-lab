@@ -76,8 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-FE-109-store-post-login-405-in-logs.md` — **스토어 Vercel 로그의 `POST /login 405` 반복 — 출처 밝히기** (READY, 2026-10-11 UTC). 26차 창 로그에 쌍으로 반복 · 화면 증상 없음. 가설: `/api/vitals` 307(메서드 보존)이 POST 를 `/login` 으로. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -86,6 +85,8 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 _(없음)_
 
 ## review
+
+- `TASK-FE-109-store-post-login-405-in-logs.md` — **스토어 Vercel 로그의 `POST /login 405` 반복 — 출처 밝히기** (REVIEW, 2026-10-13 UTC · impl PR **#4328**). AC-0 가설 확인: `/api/vitals` 비콘(`web-vitals.tsx:32-36`)이 `middleware.ts` 공개 경로 목록에 없어 307→`/login`(메서드 보존)→405. 수정: 두 공개 경로 표(`middleware.ts`·`auth.ts`)에 `/api/vitals` 추가. bite = CI run 38412464400(수정 전, 2 실패) → 38413114273(수정 후, 17/17 통과). AC-0~1 ✅ · ⚪ "다음 창 Vercel 로그 0줄"은 다음 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-FE-108-signup-then-first-store-login-fails-configuration-error.md` — **가입 직후 첫 스토어 로그인 `Configuration` 실패** (REVIEW, 2026-10-11 UTC). 원인(26차 창 재현): `/signup` 자동 이동 중 버튼이 `signIn` 을 두 번 시작 → state 덮어씀 → `unexpected "state"`. 수정 #4301(단일 시작 · `/login` 같은 틈). AC-0~2 ✅(CI bite 3칸) · ⏳ AC-3 라이브 다음 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 

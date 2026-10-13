@@ -84,16 +84,21 @@ function intParam(query: URLSearchParams, key: string, fallback: number): number
 }
 
 // ===========================================================================
-// supplier master (internal resolution table — NOT a console-consumed GET;
-// the console has no `GET /api/procurement/suppliers/**` call site at all,
-// only the PO responses that carry the RESOLVED code/name — see
-// `PurchaseOrderSchema` in `features/scm-ops/api/types.ts`)
+// supplier master — TASK-PC-FE-337 added the console's FIRST
+// `GET /api/procurement/suppliers` call site (`shared/api/scm-suppliers-
+// read.ts`, surface `scm` — the SupplierFilterField PO-filter `<select>` +
+// the SupplierMapForm supplier-code `<datalist>` suggestions). Before that
+// this table was internal-resolution-only (the PO responses' RESOLVED
+// `supplierCode`/`supplierName` — see `PurchaseOrderSchema` in
+// `features/scm-ops/api/types.ts`); it now ALSO answers that GET directly
+// (`suppliersFixture`, dispatched by `scmFixture` below).
 // ===========================================================================
 
 interface SupplierSeed {
   id: string;
   code: string;
   name: string;
+  status: string;
 }
 
 const SUPPLIERS: readonly SupplierSeed[] = [
@@ -101,11 +106,13 @@ const SUPPLIERS: readonly SupplierSeed[] = [
     id: '11111111-1111-4111-8111-111111111111',
     code: 'SUP-SAMPLE-01',
     name: `대한물산${SUFFIX}`,
+    status: 'ACTIVE',
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
     code: 'SUP-SAMPLE-02',
     name: `한빛무역${SUFFIX}`,
+    status: 'ACTIVE',
   },
 ];
 
@@ -552,13 +559,44 @@ function stalenessFixture(path: string): unknown {
 }
 
 // ===========================================================================
-// scm surface — dispatch (PO + inventory-visibility, ALL under the single
-// `flat:scm` fixture key — see `scm-client.ts`'s `logPrefix: 'scm'`)
+// procurement — supplier master list (surface `scm`) — TASK-PC-FE-337
+//   GET /api/v1/procurement/suppliers
+// ===========================================================================
+
+const SUPPLIERS_PATH = '/api/v1/procurement/suppliers';
+
+function suppliersFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  if (pathname !== SUPPLIERS_PATH) return undefined;
+  const status = query.get('status');
+  const page = intParam(query, 'page', 0);
+  const size = intParam(query, 'size', 20);
+  let rows = [...SUPPLIERS];
+  if (status) rows = rows.filter((s) => s.status === status);
+  const start = page * size;
+  return {
+    data: {
+      content: rows.slice(start, start + size),
+      page,
+      size,
+      totalElements: rows.length,
+      totalPages: Math.max(1, Math.ceil(rows.length / Math.max(1, size))),
+    },
+    meta: { timestamp: SAMPLE_AS_OF },
+  };
+}
+
+// ===========================================================================
+// scm surface — dispatch (PO + inventory-visibility + supplier master, ALL
+// under the single `flat:scm` fixture key — see `scm-client.ts`'s
+// `logPrefix: 'scm'`; `shared/api/scm-suppliers-read.ts` REUSES this same
+// logPrefix rather than minting a new surface — § TASK-PC-FE-337)
 // ===========================================================================
 
 function scmFixture(path: string): unknown {
   return (
     poFixture(path) ??
+    suppliersFixture(path) ??
     nodesFixture(path) ??
     snapshotFixture(path) ??
     skuFixture(path) ??
@@ -780,6 +818,7 @@ export const SCM_FIXTURE_HANDLERS: Readonly<Record<string, ScmFixtureHandler>> =
 export const SCM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'flat:scm': {
     purchaseOrders: SCM_POS.map(poView),
+    suppliers: SUPPLIERS,
     nodes: SCM_NODES,
     snapshot: SCM_SNAPSHOT_ROWS,
     warning: S5_WARNING,

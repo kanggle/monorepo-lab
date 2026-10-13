@@ -217,6 +217,17 @@ ON DUPLICATE KEY UPDATE
     status       = 'ACTIVE',
     updated_at   = NOW(6);
 
+-- 3b. TASK-MONO-784 (ADR-MONO-082 b · rider R1): the target's fan-platform membership row.
+--     Since S2 the operators list for a tenant is its operator_tenant_assignment rows — the
+--     home tenant_id above is kept but no longer read. admin-service V0051 backfills this row
+--     only for operators that exist when Flyway runs; this seed runs after Flyway, so without
+--     it `e2e-target-operator` is absent from /operators (nightly console e2e red since #4312).
+--     Same block as tests/federation-hardening-e2e/fixtures/seed.sql § 8b.
+INSERT IGNORE INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+SELECT o.id, 'fan-platform', NOW(6), NULL, NULL
+  FROM admin_operators o
+ WHERE o.operator_id = 'e2e-target-operator';
+
 -- ---------------------------------------------------------------------------
 -- (section 6 moved to seed-finance.sql by TASK-MONO-132)
 --

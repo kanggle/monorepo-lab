@@ -719,3 +719,11 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - 후속(AC 아님): 노드 grant 가 아직 대상의 홈을 `tenant_id` 로 쓴다(§ S4 기록) · 상한 경합(cap+1, § S5 기록 → 773 AC-0) · `OrgScopeDialog` 전체 실행 타임아웃 flake(콘솔, 기존).
 - 🔵 후속 `TASK-MONO-773` 착수 조건(772 · 784 `done/`) 중 784 는 위 ⚪ 둘이 닫힌 뒤.
 
+
+## CORRECTION (2026-10-13 UTC) — nightly 콘솔 e2e 가 S2 부터 빨강
+
+- 리뷰 이동 기록의 «⚪ ① 머지 뒤 첫 nightly 콘솔 잡» 을 재 보니 **S2(#4312, `187fd8544`) 이후 매번 실패**다. 직전 초록은 `031c12d30`(run 38148536665), 첫 빨강은 `187fd8544`(run 38154655865) — 그 사이 커밋은 S2 · 782 · 789 close chore 뿐. 실패 시험은 매번 같은 하나: `operators-admin-profile.spec.ts:46` — `action-edit-profile-e2e-target-operator` 를 못 찾음(행이 목록에 없음).
+- 원인: 콘솔 e2e 시드 `projects/platform-console/apps/console-web/tests/e2e/fixtures/seed.sql` 의 `e2e-target-operator`(홈 `fan-platform`)에 `operator_tenant_assignment` 행이 없다. S2 부터 운영자 목록 · 범위는 소속 행만 읽고(R1), V0051 백필은 Flyway 시점에 있던 운영자만 채운다 — 이 시드는 Flyway 뒤에 돈다. S2 는 같은 이유로 `tests/federation-hardening-e2e/fixtures/seed.sql` § 8b 에는 소속 행을 넣었지만 콘솔 시드는 빠뜨렸다(§ 리뷰 이동 기록 «S6 — e2e grep 겹침 0» 은 S6 의 스펙 겹침만 잰 것이고 S2 의 시드 겹침은 재지 않았다).
+- 시드 전수(마이그레이션 뒤에 도는 운영자 INSERT): `R__seed_demo_*` 다섯 개 중 소속 행이 없는 것은 `R__seed_demo_platform_operator.sql` 하나 — 홈 `'*'` 운영자라 의도된 부재(그 파일 § 3). `scripts/console-demo/seed/01-iam.sql` 은 소속 행 있음. 콘솔 e2e 시드의 `e2e-super-admin` 도 `'*'` 라 해당 없음. → 빠진 곳은 `e2e-target-operator` 한 행.
+- 수정: 그 시드에 § 3b 소속 행(`fan-platform`) 추가 — 이 정정과 같은 PR. 검증 = 그 브랜치로 `nightly-e2e.yml` 수동 실행의 콘솔 잡 초록(아래 PR 에 런 URL).
+- 그래서 784 는 아직 `done/` 이 아니다: ⚪ ① 은 이 수정 머지 뒤 main 의 nightly 콘솔 잡 초록으로 닫는다. ⚪ ② 라이브(27차 창)는 그대로.
