@@ -3,13 +3,16 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import {
+  ERP_MAX_PAGE_SIZE,
   type DelegationFactListResponse,
   type DelegationFactListQueryParams,
+  type Employee,
 } from '../api/types';
 import { delegationStatusTone } from '../api/delegation-types';
-import { useDelegationFacts } from '../hooks/use-erp-ops';
+import { useDelegationFacts, useEmployees } from '../hooks/use-erp-ops';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { statusToneClass } from '@/shared/ui/StatusBadge';
+import { ErpEmployeeSelect } from './ErpEmployeeSelect';
 
 /**
  * ERP "위임 현황" read-only card (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
@@ -51,6 +54,15 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
   const [filterActiveAt, setFilterActiveAt] = useState('');
 
   const q = useDelegationFacts(query, initial);
+
+  // TASK-PC-FE-335 AC-1/AC-5 — the two filters are EMPLOYEE SELECTORS now
+  // (were raw-id text inputs); one shared fetch feeds both (retired
+  // employees stay selectable — this is a historical filter, not a write).
+  // The first option is "전체 …" (value `''`) — unchanged '' ⇒ the param is
+  // simply omitted from the query (see `applyFilters` below).
+  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const employees: Employee[] = employeesQ.data?.data ?? [];
+  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
 
   const resp = q.data ?? initial ?? {
     data: [],
@@ -109,20 +121,28 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
         className="mb-3 flex flex-wrap gap-2 text-sm"
         data-testid="delegation-fact-filters"
       >
-        <input
-          type="text"
-          placeholder="위임자 ID (delegatorId)"
+        <ErpEmployeeSelect
+          employees={employees}
+          isError={employeesQ.isError}
+          isLoading={employeesQ.isLoading}
           value={filterDelegatorId}
-          onChange={(e) => setFilterDelegatorId(e.target.value)}
-          data-testid="delegation-fact-filter-delegatorId"
+          onChange={setFilterDelegatorId}
+          testId="delegation-fact-filter-delegatorId"
+          ariaLabel="위임자 (delegatorId)"
+          blankOptionLabel="전체 위임자"
+          inputPlaceholder="위임자 ID (delegatorId)"
           className="rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         />
-        <input
-          type="text"
-          placeholder="대행자 ID (delegateId)"
+        <ErpEmployeeSelect
+          employees={employees}
+          isError={employeesQ.isError}
+          isLoading={employeesQ.isLoading}
           value={filterDelegateId}
-          onChange={(e) => setFilterDelegateId(e.target.value)}
-          data-testid="delegation-fact-filter-delegateId"
+          onChange={setFilterDelegateId}
+          testId="delegation-fact-filter-delegateId"
+          ariaLabel="대행자 (delegateId)"
+          blankOptionLabel="전체 대행자"
+          inputPlaceholder="대행자 ID (delegateId)"
           className="rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <select
@@ -158,6 +178,23 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
           초기화
         </Button>
       </div>
+      {employeesQ.isError && (
+        <p
+          className="mb-3 text-xs text-muted-foreground"
+          role="status"
+          data-testid="delegation-fact-filter-employees-fallback"
+        >
+          직원 목록을 불러오지 못해 위임자/대행자 직원 ID 를 직접 입력합니다.
+        </p>
+      )}
+      {employeesQ.isSuccess && totalEmployees > employees.length && (
+        <p
+          className="mb-3 text-xs text-muted-foreground"
+          data-testid="delegation-fact-filter-employees-truncated"
+        >
+          직원이 많아 처음 {employees.length}명만 표시합니다.
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <p

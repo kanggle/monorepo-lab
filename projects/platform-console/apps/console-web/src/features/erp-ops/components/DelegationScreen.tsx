@@ -7,6 +7,7 @@ import { showPickerOnClick } from '@/shared/lib/show-picker';
 import type { DelegationGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
 import { DelegationGrantList } from './DelegationGrantList';
+import { ErpEmployeeSelect } from './ErpEmployeeSelect';
 import {
   useDelegationScreen,
   useDelegationCreate,
@@ -130,6 +131,9 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
     createM,
     canConfirm,
     onConfirm,
+    employeesQ,
+    employees,
+    totalEmployees,
   } = useDelegationCreate(onClose);
 
   return (
@@ -152,14 +156,35 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
           >
             대결자 ID <span aria-hidden="true">*</span>
           </label>
-          <input
-            id="delegation-create-delegateId"
-            data-testid="delegation-create-delegateId"
+          <ErpEmployeeSelect
+            employees={employees}
+            isError={employeesQ.isError}
+            isLoading={employeesQ.isLoading}
             value={delegateId}
-            onChange={(e) => setDelegateId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-            placeholder="emp-…"
+            onChange={setDelegateId}
+            testId="delegation-create-delegateId"
+            id="delegation-create-delegateId"
+            blankOptionLabel="— 대결자 선택 —"
+            inputPlaceholder="emp-…"
+            disableRetired
           />
+          {employeesQ.isError && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              role="status"
+              data-testid="delegation-create-delegateId-fallback"
+            >
+              직원 목록을 불러오지 못해 대결자 직원 ID 를 직접 입력합니다.
+            </p>
+          )}
+          {employeesQ.isSuccess && totalEmployees > employees.length && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="delegation-create-delegateId-truncated"
+            >
+              직원이 많아 처음 {employees.length}명만 표시합니다.
+            </p>
+          )}
         </div>
 
         <div className="mt-4">
