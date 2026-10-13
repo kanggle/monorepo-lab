@@ -104,6 +104,27 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<String> findGroupOriginAssignmentTenants(Long operatorInternalId, Long groupInternalId) {
+        if (operatorInternalId == null || groupInternalId == null) {
+            return List.of();
+        }
+        return repository.findByGroupOrigin(groupInternalId).stream()
+                .filter(e -> operatorInternalId.equals(e.getOperatorId()))
+                .map(OperatorTenantAssignmentJpaEntity::getTenantId)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void convertToDirectAssignment(Long operatorInternalId, String tenantId) {
+        repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId).ifPresent(entity -> {
+            entity.setGroupOrigin(null);
+            repository.saveAndFlush(entity); // BE-335: explicit flush
+        });
+    }
+
+    @Override
     @Transactional
     public void deleteAssignment(Long operatorInternalId, String tenantId) {
         repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId)

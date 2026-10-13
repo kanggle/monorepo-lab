@@ -106,7 +106,7 @@ class OperatorCompanyExitUseCaseTest {
         assertThat(rec.getValue().targetTenantId()).isEqualTo("alpha");
         // 1 group-9 row (by origin) + the 2 remaining alpha rows (direct · node)
         assertThat(rec.getValue().downstreamDetail())
-                .isEqualTo("roleRows=3,groupMemberships=1,participations=1,groupAssignments=0");
+                .isEqualTo("roleRows=3,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0");
         // the operator row is not written (status · home · identity — D-10, R1): the fake throws on any of them
     }
 

@@ -62,6 +62,7 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
     static final String HOST_C = "s4w-gamma";
     static final String U = "s4w-u";
     static final String V = "s4w-v";
+    static final String W = "s4w-w";
     static final String FANNED = "00000000-0000-7000-8000-000000078417";
 
     static final String SUPER = "00000000-0000-7000-8000-000000078410";
@@ -174,7 +175,7 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                  WHERE actor_id = ? AND action_code = 'OPERATOR_ASSIGNMENT_DELETE' AND outcome = 'SUCCESS'
                    AND target_id = ?
                 """, String.class, ADMIN_A, PERSON);
-        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1,groupAssignments=0");
+        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0");
 
         // the person's account and operator row are untouched (ADR-080 D5 · ADR-082 D3 · D-10): no account call
         // was made (nothing listens on the account-service URL), no account action audited, the row is ACTIVE
@@ -186,13 +187,14 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
     }
 
     /**
-     * 🔴 Owner decision 2026-10-13 UTC «U 역할 행도 함께 지움»: a group G of company A also fans out into other
-     * companies. Leaving A removes everything G produced for the person in EVERY company — its assignment to U and
-     * its role row in U — while the person's own rows stay byte-unchanged: the direct role in U, and company V whose
-     * membership the person held directly before G granted it (G's V fan-out was an idempotent skip).
+     * 🔴 Owner decisions 2026-10-13 UTC «U 역할 행도 함께 지움» + «U 소속을 직접 소속으로 남김»: a group G of company A
+     * also fans out into other companies. Leaving A removes every role row G produced for the person in EVERY company.
+     * G's assignment into a company is deleted (W) — unless the person still holds a role there G did not produce
+     * (U: a direct role), in which case it stays as a DIRECT membership (granted_at kept). Company V, held directly
+     * before G granted it (G's V fan-out was an idempotent skip), is untouched.
      */
     @Test
-    @DisplayName("🔴 owner 2026-10-13: leave A → A-group G's assignment + role row in U gone; the person's direct U role and direct V membership untouched")
+    @DisplayName("🔴 owner 2026-10-13: leave A → G's role rows gone everywhere; G's U membership kept as DIRECT (direct U role remains); G's W membership gone; V untouched")
     void ac2_groupFanOutIntoOtherCompanies_goesWithTheGroup() throws Exception {
         seedOperator(SUPER, "*", "s4w-super@example.com", null);
         grant(SUPER, "SUPER_ADMIN", "*");
@@ -204,8 +206,8 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
         member(FANNED, V);                         // V: held directly, before the group
         grant(FANNED, "SUPPORT_READONLY", V);
         grant(FANNED, "SECURITY_ANALYST", U);      // the person's own (direct) U role
-        String groupId = createGroupWithTenantAssignments(A, "s4w 팀 U", U, V);
-        addGroupMember(groupId, FANNED);          // fans out U only (V already held → skip)
+        String groupId = createGroupWithTenantAssignments(A, "s4w 팀 U", U, V, W);
+        addGroupMember(groupId, FANNED, 2);       // fans out U and W (V already held → skip)
         Long groupInternalId = jdbc.queryForObject(
                 "SELECT id FROM operator_group WHERE group_id = ?", Long.class, groupId);
         // a role row G produced in U (the shape a pre-S4 fan-out left behind — post-S4 role fan-out lands in A)
@@ -217,11 +219,16 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                 """, U, groupInternalId, FANNED);
         assertThat(groupAssignment(FANNED, U)).as("precondition: G's U membership").isEqualTo(String.valueOf(groupInternalId));
         assertThat(groupAssignment(FANNED, V)).as("precondition: V held directly").isEqualTo("-");
+        assertThat(groupAssignment(FANNED, W)).as("precondition: G's W membership").isEqualTo(String.valueOf(groupInternalId));
         List<String> vRolesBefore = roleRows(FANNED, V);
+        String uGrantedAtBefore = assignmentGrantedAt(FANNED, U);
 
         exit(ADMIN_A, FANNED, A).andExpect(status().isNoContent());
 
-        assertThat(groupAssignment(FANNED, U)).as("G's U assignment gone").isNull();
+        assertThat(groupAssignment(FANNED, U)).as("U membership kept, now DIRECT (a direct U role remains)")
+                .isEqualTo("-");
+        assertThat(assignmentGrantedAt(FANNED, U)).as("granted_at kept").isEqualTo(uGrantedAtBefore);
+        assertThat(groupAssignment(FANNED, W)).as("G's W membership gone (no other W role)").isNull();
         assertThat(roleRows(FANNED, U)).as("G's U role row gone, the direct U role stays")
                 .singleElement().asString().startsWith("SECURITY_ANALYST|" + U + "|").endsWith("|-|-|-");
         assertThat(groupAssignment(FANNED, V)).as("direct V membership untouched").isEqualTo("-");
@@ -408,7 +415,19 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    private String assignmentGrantedAt(String uuid, String tenant) {
+        return jdbc.queryForObject("""
+                SELECT DATE_FORMAT(a.granted_at, '%Y-%m-%d %H:%i:%s.%f') FROM operator_tenant_assignment a
+                  JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = ? AND a.tenant_id = ?
+                """, String.class, uuid, tenant);
+    }
+
     private void addGroupMember(String groupId, String operator) throws Exception {
+        addGroupMember(groupId, operator, 1);
+    }
+
+    private void addGroupMember(String groupId, String operator, int expectedFannedOut) throws Exception {
         mockMvc.perform(post("/api/admin/groups/" + groupId + "/members")
                         .header("Authorization", bearer(SUPER))
                         .header("X-Operator-Reason", "s4 member")
@@ -416,7 +435,7 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"operatorId\":\"" + operator + "\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.fannedOutGrants").value(1));
+                .andExpect(jsonPath("$.fannedOutGrants").value(expectedFannedOut));
     }
 
     private String bearer(String operatorUuid) {

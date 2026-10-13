@@ -46,10 +46,12 @@ public class OperatorCompanyExitCascade {
     private final TenantLastAdminGuard lastAdminGuard;
 
     /** How many rows of each kind left with the person (the audit {@code detail}). */
-    public record ExitCounts(int roleRows, int groupMemberships, int participations, int groupAssignments) {
+    public record ExitCounts(int roleRows, int groupMemberships, int participations, int groupAssignments,
+                             int keptAsDirect) {
         public String detail() {
             return "roleRows=" + roleRows + ",groupMemberships=" + groupMemberships
-                    + ",participations=" + participations + ",groupAssignments=" + groupAssignments;
+                    + ",participations=" + participations + ",groupAssignments=" + groupAssignments
+                    + ",keptAsDirect=" + keptAsDirect;
         }
     }
 
@@ -61,11 +63,25 @@ public class OperatorCompanyExitCascade {
             leavingGroups.add(m.getGroupId());
         }
 
+        // Owner decision 2026-10-13 UTC «U 소속을 직접 소속으로 남김»: the companies (other than T) where the person
+        // keeps a role row NOT produced by a leaving group — direct, another group's, or a node grant there. A
+        // leaving group's fan-out assignment into such a company becomes a direct membership instead of being
+        // deleted: no «role without membership» (D-1), and no deliberate grant there is lost.
+        List<AdminOperatorPort.RoleRowView> roleRowsBefore = leavingGroups.isEmpty()
+                ? List.of() : operatorPort.findRoleRowsOfOperator(operatorId);
+        Set<String> keepsRolesIn = new TreeSet<>();
+        for (AdminOperatorPort.RoleRowView row : roleRowsBefore) {
+            boolean fromLeavingGroup = row.groupOrigin() != null && leavingGroups.contains(row.groupOrigin());
+            if (!fromLeavingGroup && row.tenantId() != null && !tenantId.equals(row.tenantId())) {
+                keepsRolesIn.add(row.tenantId());
+            }
+        }
+
         // Guard first, write after: another company U whose TENANT_ADMIN came to this person through a leaving
         // group must keep an administrator.
         if (!leavingGroups.isEmpty()) {
             Set<String> otherTenants = new TreeSet<>();
-            for (AdminOperatorPort.RoleRowView row : operatorPort.findRoleRowsOfOperator(operatorId)) {
+            for (AdminOperatorPort.RoleRowView row : roleRowsBefore) {
                 if (row.groupOrigin() != null && leavingGroups.contains(row.groupOrigin())
                         && !tenantId.equals(row.tenantId())) {
                     otherTenants.add(row.tenantId());
@@ -81,13 +97,20 @@ public class OperatorCompanyExitCascade {
 
         int roleRows = 0;
         int groupAssignments = 0;
+        int keptAsDirect = 0;
         for (OperatorGroupMemberJpaEntity m : leaving) {
             roleRows += operatorPort.deleteOperatorRolesByGroupOrigin(operatorId, m.getGroupId());
+            for (String assigned : assignmentPort.findGroupOriginAssignmentTenants(operatorId, m.getGroupId())) {
+                if (!tenantId.equals(assigned) && keepsRolesIn.contains(assigned)) {
+                    assignmentPort.convertToDirectAssignment(operatorId, assigned);
+                    keptAsDirect++;
+                }
+            }
             groupAssignments += assignmentPort.deleteGroupOriginAssignments(operatorId, m.getGroupId());
             groupMembers.delete(m);
         }
         int participations = partnershipPort.removeParticipationsWithPartner(operatorId, tenantId);
         roleRows += operatorPort.deleteOperatorRolesInTenant(operatorId, tenantId);
-        return new ExitCounts(roleRows, leaving.size(), participations, groupAssignments);
+        return new ExitCounts(roleRows, leaving.size(), participations, groupAssignments, keptAsDirect);
     }
 }

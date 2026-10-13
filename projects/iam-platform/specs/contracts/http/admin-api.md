@@ -1540,10 +1540,10 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > |---|---|
 > | 소속 | `operator_tenant_assignment (operatorId, T)` — `org_scope` 포함 |
 > | 그 회사의 역할 행 | `admin_operator_roles` 의 `tenant_id = T` 인 행 **전부** — 직접(`group_origin IS NULL`) · 그룹 fan-out · `T` 로 기록된 노드 grant(D-1). 다른 회사의 행은 **바이트 불변** |
-> | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹이 이 사람에게 만든 fan-out 행(`group_origin` = 그 그룹) **전부 — 다른 회사 U 에 있는 것까지**: 그룹 `TENANT_ASSIGNMENT` 가 만든 U 배정 행 · 그 그룹의 U 역할 행(소유자 결정 2026-10-13 UTC «U 역할 행도 함께 지움» — «소속 없는 역할» 을 남기지 않는다, D-1). 그 사람이 U 에 **직접**(또는 U 그룹으로) 가진 행은 바이트 불변 — 784 Edge Case 3 |
+> | 그 회사의 그룹 멤버십 | `tenant_id = T` 인 그룹의 `operator_group_member` 행 + 그 그룹이 이 사람에게 만든 fan-out 행(`group_origin` = 그 그룹) **전부 — 다른 회사 U 에 있는 것까지**: 그룹 `TENANT_ASSIGNMENT` 가 만든 U 배정 행 · 그 그룹의 U 역할 행(소유자 결정 2026-10-13 UTC «U 역할 행도 함께 지움» — «소속 없는 역할» 을 남기지 않는다, D-1). 그 사람이 U 에 **직접**(또는 U 그룹으로) 가진 행은 바이트 불변. 🔴 **U 배정 행의 예외 (소유자 결정 2026-10-13 UTC «U 소속을 직접 소속으로 남김»)**: 그 사람이 U 에 이 그룹이 만들지 않은 역할 행(직접 · 다른 그룹 · U 에 기록된 노드 grant)을 하나라도 가지면 U 배정 행은 지우지 않고 **직접 소속으로 바꾼다**(`group_origin` → NULL 만 — `granted_at` · `granted_by` · `org_scope` 그대로). 그런 행이 없으면 지운다. 결과: «소속 없는 역할» 도, 의도된 U 부여의 소실도 없다 — 784 Edge Case 3 |
 > | 협력사 참여 | `partner_tenant_id = T` 인 파트너십의 `tenant_partnership_participant` 행 — 다시 소속돼도 옛 참여가 되살아나지 않게(784 AC-0 F18 · ADR-045 D6 관계 단위 회수와 같은 방향) |
 >
-> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(`roleRows` · `groupMemberships` · `participations` · `groupAssignments` = 그 그룹들이 만든 배정 행). 권한 캐시 무효화.
+> - 감사: `OPERATOR_ASSIGNMENT_DELETE` 한 행(`target_tenant_id = T`) — `detail` 에 지운 수(`roleRows` · `groupMemberships` · `participations` · `groupAssignments` = 그 그룹들이 만든 배정 행 중 지운 수 · `keptAsDirect` = 직접 소속으로 바꾼 수). 권한 캐시 무효화.
 > - **계정은 건드리지 않는다**(ADR-080 D5 · ADR-082 D3) — 스토어 · 팬 로그인 그대로. 다른 회사의 소속 · 역할 · 그룹 · 참여 그대로. 이미 발급된 T 의 assume 토큰은 TTL 까지 산다(다음 assume 부터 거절).
 > - **마지막 소속을 내보내도 운영자 행은 지우지 않는다**(D-10) — 행은 `ACTIVE` 로 남고 소속 0 이 된다. 콘솔 적격 · 토큰 교환이 `ACTIVE ∧ ('*' ∨ 소속 ≥ 1)` 로 문을 닫는다([auth-to-admin.md § console-eligibility](internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772)). 재초대 · 재온보딩은 같은 행에 소속을 더한다(§ Operator Invitation). 감사 해소가 행을 요구한다.
 > - 홈 회사에서 내보내져도 `admin_operators.tenant_id`(홈)는 그대로다(R1) — 판정에서 읽지 않으므로 그 회사 권한은 없다.
