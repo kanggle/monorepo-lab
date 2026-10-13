@@ -57,6 +57,10 @@ function routedFetch(
     map?: () => Response;
     policyPut?: () => Response;
     mapPut?: () => Response;
+    // TASK-PC-FE-337 — the supplier-CODE `<datalist>` suggestions read.
+    // Defaults to a small valid supplier page so focusing the field never
+    // crashes the suite; override to simulate a failed/empty registry.
+    suppliers?: () => Response;
   } = {},
 ) {
   const calls: { url: string; method: string; body?: string }[] = [];
@@ -97,6 +101,20 @@ function routedFetch(
       }
       return Promise.resolve(
         overrides.map ? overrides.map() : jsonResponse({ found: false }),
+      );
+    }
+    if (u.includes('/procurement/suppliers')) {
+      return Promise.resolve(
+        overrides.suppliers
+          ? overrides.suppliers()
+          : jsonResponse({
+              content: [
+                { id: 'sup-1', code: 'SUP-0001', name: 'Acme', status: 'ACTIVE' },
+              ],
+              page: 0,
+              size: 100,
+              totalElements: 1,
+            }),
       );
     }
     return Promise.resolve(jsonResponse({}));
@@ -320,11 +338,100 @@ describe('SeedConfigScreen — config invariant: only seed GET/PUT, no suggestio
       expect(calls.some((c) => c.method === 'PUT')).toBe(true),
     );
     for (const c of calls) {
-      expect(c.url).toMatch(/\/(policies|sku-supplier-map)\//);
+      // TASK-PC-FE-337 — typing into `map-supplierId` focuses it, which lazily
+      // loads the supplier-CODE `<datalist>` suggestions through the SAME
+      // `shared/api/scm-suppliers-read.ts` promotion `ScmPoTable` uses. That
+      // read is a convenience lookup over the procurement supplier MASTER —
+      // not a suggestion/PO/dispatch call in the demand-planning sense the
+      // invariant below still holds for (approve/dismiss/submit/confirm/
+      // cancel/dispatch never fire from this screen).
+      expect(c.url).toMatch(
+        /\/(policies|sku-supplier-map)\/|\/procurement\/suppliers(\?|$)/,
+      );
       expect(c.url).not.toMatch(
         /\/suggestions|\/approve|\/dismiss|\/submit|\/confirm|\/cancel|\/dispatch/,
       );
     }
+  });
+});
+
+describe('SupplierMapForm — supplier-CODE datalist suggestions (TASK-PC-FE-337)', () => {
+  it('AC-1 — the datalist suggests supplier CODE values (never the master row id)', async () => {
+    const { fn } = routedFetch();
+    vi.stubGlobal('fetch', fn);
+    render(<SeedConfigScreen />, { wrapper: wrapper() });
+    const user = await lookupSku();
+    await waitFor(() =>
+      expect(screen.getByTestId('map-not-configured')).toBeInTheDocument(),
+    );
+
+    const input = screen.getByTestId('map-supplierId') as HTMLInputElement;
+    // Focusing lazily loads the suggestions (mirrors `useTenantSuggestions`).
+    await user.click(input);
+    await waitFor(() => {
+      const list = document.getElementById(input.getAttribute('list')!);
+      expect(list?.querySelector('option')).toBeTruthy();
+    });
+    const list = document.getElementById(input.getAttribute('list')!)!;
+    const option = list.querySelector('option') as HTMLOptionElement;
+    // The inserted VALUE is the supplier CODE — the master row id ("sup-1")
+    // never appears as an option value.
+    expect(option.value).toBe('SUP-0001');
+    expect(option.textContent).toContain('SUP-0001');
+    expect(option.textContent).toContain('Acme');
+
+    // Picking it means the input ends up holding that CODE (jsdom cannot
+    // simulate a native <datalist> pick — typing the same value the pick
+    // would have inserted exercises the identical onChange path) — then the
+    // confirm-gated PUT body carries that CODE, never the id.
+    await user.type(input, option.value);
+    await user.type(screen.getByTestId('map-defaultOrderQty'), '100');
+    await user.type(screen.getByTestId('map-leadTimeDays'), '7');
+    await user.click(screen.getByTestId('map-save'));
+    await user.click(screen.getByTestId('config-confirm-submit'));
+
+    await waitFor(() => {
+      const put = fn.mock.calls.find(
+        ([u, init]) =>
+          String(u).includes('/sku-supplier-map/') &&
+          (init as RequestInit | undefined)?.method === 'PUT',
+      );
+      expect(put).toBeTruthy();
+      const body = JSON.parse((put![1] as RequestInit).body as string);
+      expect(body.supplierId).toBe('SUP-0001');
+    });
+  });
+
+  it('AC-3 — a supplier-list failure leaves the field free-text, unchanged, with no suggestions', async () => {
+    const { fn, calls } = routedFetch({
+      suppliers: () => errResponse('SERVICE_UNAVAILABLE', 503),
+    });
+    vi.stubGlobal('fetch', fn);
+    render(<SeedConfigScreen />, { wrapper: wrapper() });
+    const user = await lookupSku();
+    await waitFor(() =>
+      expect(screen.getByTestId('map-not-configured')).toBeInTheDocument(),
+    );
+
+    const input = screen.getByTestId('map-supplierId') as HTMLInputElement;
+    await user.click(input);
+    await user.type(input, 'SUP-0099');
+    expect(input).toHaveValue('SUP-0099');
+    // No `list` attribute is attached once there are no suggestions to show.
+    expect(input.getAttribute('list')).toBeNull();
+
+    await user.type(screen.getByTestId('map-defaultOrderQty'), '100');
+    await user.type(screen.getByTestId('map-leadTimeDays'), '7');
+    await user.click(screen.getByTestId('map-save'));
+    await user.click(screen.getByTestId('config-confirm-submit'));
+
+    await waitFor(() => {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.includes('/sku-supplier-map/'),
+      );
+      expect(put).toBeTruthy();
+      expect(JSON.parse(put!.body!).supplierId).toBe('SUP-0099');
+    });
   });
 });
 

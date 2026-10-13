@@ -11,6 +11,7 @@ import {
   poStatusTone,
   type PoFilterState,
 } from './scm-ops-helpers';
+import { SupplierFilterField } from './SupplierFilterField';
 
 /**
  * Procurement PO list region of the scm ops screen (TASK-PC-FE-144 split) —
@@ -95,17 +96,15 @@ export function ScmPoTable({
             htmlFor={supplierFid}
             className="block text-sm font-medium text-foreground"
           >
-            공급사 ID
+            공급사
           </label>
-          <input
+          <SupplierFilterField
             id={supplierFid}
-            type="text"
             value={filters.supplierId}
-            onChange={(e) =>
-              onFiltersChange((f) => ({ ...f, supplierId: e.target.value }))
+            onChange={(v) =>
+              onFiltersChange((f) => ({ ...f, supplierId: v }))
             }
-            data-testid="scm-po-filter-supplier"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            testid="scm-po-filter-supplier"
           />
         </div>
         <div className="flex items-end">
@@ -114,6 +113,20 @@ export function ScmPoTable({
           </Button>
         </div>
       </form>
+
+      {/* AC-4 — 보충 추천에서 만든 발주는 supplierId 가 공급사 코드로 저장돼 있어
+          (ADR-MONO-050 D9), 이 목록 필터가 코드가 아닌 id 로 거를 때는 그 발주가
+          걸리지 않는다. 생산자 쪽 필터는 저장값과의 정확 일치라 콘솔만으로는
+          고칠 수 없다 — 「직접 입력」으로 그 코드를 넣으면 찾을 수 있다는 것까지
+          안내한다. */}
+      <p
+        className="mb-4 text-xs text-muted-foreground"
+        data-testid="scm-po-filter-supplier-hint"
+      >
+        보충 제안에서 만든 발주는 공급사 코드로 저장돼 있어 공급사를 목록에서
+        골라도 그 발주는 걸리지 않습니다. 그런 발주는 공급사 필드의 「직접
+        입력」을 눌러 공급사 코드를 입력하면 찾을 수 있습니다.
+      </p>
 
       {forbidden ? (
         <div

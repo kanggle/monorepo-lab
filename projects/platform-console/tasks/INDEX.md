@@ -123,6 +123,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-337-scm-pick-supplier-not-id.md` — **SCM 공급사 ID 입력 2곳을 공급사 목록 선택으로** (REVIEW, 2026-10-13 UTC · 소유자 «확인» 전수 재검사로 새로 찾음 · 묶음 ④). 매핑 폼 = 공급사 code · 발주 필터 = 공급사 id(제안 발주는 code 저장이라 안 걸림 — 화면 안내). 백엔드 변경 없음. 분석=Opus 5.5 / 구현 권장=Sonnet. 공용 `shared/api/scm-suppliers-*` + 프록시 · vitest 377/4261 · tsc/lint/build rc=0 · 전환 시 값 비움(보이지 않는 필터 방지, bite 확인).
 - `TASK-PC-FE-336-pick-seller-tenant-not-id.md` — **셀러 · 테넌트 ID 입력 6곳: 셀러 선택기 · 테넌트 제안** (REVIEW, 2026-10-13 UTC · 소유자 «모든 도메인» 묶음 ③). 정산 잔액 · 수수료율 조회/설정 · 정산 라인 필터 · 그룹 생성/권한의 테넌트. 주문 ID · 소속사 셀러 · 파트너 초대 테넌트는 이유와 함께 제외. 분석=Opus 5.5 / 구현 권장=Sonnet. `SellerSelect` · 레지스트리 테넌트 `<datalist>` · vitest 370/4207 · tsc/lint/build rc=0 · e2e grep 0건.
 - `TASK-PC-FE-335-erp-pick-employee-not-id.md` — **ERP 직원 ID 입력 4곳을 사번 · 이름 선택기로** (REVIEW, 2026-10-13 UTC · 소유자 «모든 도메인» 묶음 ②). 결재 대상 · 위임 대결자 · 위임 사실 필터 ×2. 결재자 선택(PC-FE-318) 패턴 재사용, 백엔드 변경 없음. 분석=Opus 5.5 / 구현 권장=Sonnet. 공용 `ErpEmployeeSelect`(목록 실패 시 같은 testid 의 ID 입력) · erp-ops 시험 114/114 · tsc/lint/build rc=0 · e2e grep 0건.
 - `TASK-PC-FE-334-pick-operator-account-by-email-not-uuid.md` — **운영자 · 계정 · 사용자 ID 입력 5곳을 이메일 · 이름으로 찾아 고르기** (REVIEW, 2026-10-13 UTC · 소유자 «모든 도메인» 묶음 ①). 조직 노드 관리자 · 파트너십 참여자 · 감사 계정 필터 · 아티스트 계정 · 쿠폰 대상. 기존 읽기 재사용, 백엔드 변경 없음. 운영자 «테넌트 배정»은 소유자 결정 대기로 제외. 분석=Opus 5.5 / 구현 권장=Sonnet. 공용 `OperatorPicker` · `AccountEmailLookup` · vitest 375/4218 · tsc/lint/build rc=0 · e2e grep 0건.
