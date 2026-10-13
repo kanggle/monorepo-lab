@@ -89,9 +89,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-BE-630-master-ref-search-q-status-scope.md` — **admin-service 기준정보 조회 `GET /dashboard/refs/{type}` 에 검색어 · 상태 · 범위 필터 구현** (REVIEW, 2026-10-12 UTC · 소유자 요청). 지금은 `page`/`size`/`sort` 만 받고 `findAll` — 콘솔 `/wms/master` 가 보내던 `q`·`status` 가 조용히 버려졌다. 계약 § 1.7 파라미터 표(`q` 코드·이름 부분 일치 · `status` · `warehouseId` · `skuId` · `partnerType`) + 저장소 `search` 6개(LIKE 패턴은 Java 에서 — 42P18 회피 · `% _` 문자 그대로). 슬라이스 9 · 단위 5 · 통합 7(⏳ CI) · bite. 후속 `TASK-PC-FE-333`. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
+(empty)
 
 ## done
+
+- `TASK-BE-630-master-ref-search-q-status-scope.md` — **✅ DONE (2026-10-13 UTC, 4차원 검증 — impl PR [#4313](https://github.com/kanggle/monorepo-lab/pull/4313) squash `8338dda8a`; `state=MERGED` · main 조상 · 머지 시점 FAILURE 0 · AC 본문 열어 읽음)** — admin-service `GET /dashboard/refs/{type}` 에 `q`(코드·이름 부분 일치) · `status` · `warehouseId` · `skuId` · `partnerType` 구현 + 계약 § 1.7 표. 통합 7칸 CI pass(첫 런의 1칸 실패 = 시험 데이터 45자 > VARCHAR(40), 쿼리 무관). 데모 반영 = 다음 AMI 재굽기. 후속 `TASK-PC-FE-333`.
 
 - `TASK-BE-596-pick-and-pack-lines-accept-a-sku-the-order-line-never-had.md` — **✅ DONE (2026-09-24 UTC, 4차원 검증 — impl PR [#3987](https://github.com/kanggle/monorepo-lab/pull/3987) squash `a349f0acd`; CI 35/35 pass)** 피킹·패킹 라인이 주문 라인에 없는 SKU 를 받던 것을 막았다 — 새 422 `ORDER_LINE_MISMATCH` · 위치는 `WAREHOUSE_MISMATCH`/`LOCATION_INACTIVE`(스냅샷 있을 때만) · LOT 판정은 주문 라인 SKU · 패킹은 검증 뒤 `PICKED → PACKING`. 🔴 `check-error-code-registry.sh` 는 outbound `errorCode()` 모양을 못 본다(손 등록). 창 판정 없음 — 다음 신선 부팅의 wms 시드 `실패 0` 이 그 판정.
 
