@@ -34,8 +34,8 @@ class FirstAdminProvisionerTest {
     private final AdminOperatorPort operatorPort = mock(AdminOperatorPort.class);
     private final OperatorTenantAssignmentPort assignmentPort = mock(OperatorTenantAssignmentPort.class);
     private final AccountServiceClient accountServiceClient = mock(AccountServiceClient.class);
-    private final FirstAdminProvisioner provisioner =
-            new FirstAdminProvisioner(operatorPort, assignmentPort, accountServiceClient);
+    private final FirstAdminProvisioner provisioner = new FirstAdminProvisioner(operatorPort, assignmentPort,
+            accountServiceClient, new OperatorMembershipAddition(operatorPort, assignmentPort, null));
 
     private AdminOperatorPort.OperatorView stubCreatedOperator(long internalId) {
         return new AdminOperatorPort.OperatorView(
@@ -106,5 +106,35 @@ class FirstAdminProvisionerTest {
         // null identity → operator born unlinked (no linkIdentity), but assignment still created
         verify(operatorPort, never()).linkIdentity(anyLong(), any(), any());
         verify(assignmentPort).createAssignment(eq(7L), eq(NEW_TENANT), eq(null));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-784 S5 addMembership: 기존 행에 새 테넌트 역할 둘 + 배정 — 새 운영자 행 · oidc_subject · 신원 링크 쓰기 0 · 다른 회사 행 바이트 불변")
+    void addMembership_writesOnlyTheNewTenantRows() {
+        InMemoryRoleRowsPort operators = new InMemoryRoleRowsPort()
+                .role(1, "TENANT_ADMIN").role(2, "TENANT_BILLING_ADMIN").role(3, "SUPPORT_LOCK");
+        AdminOperatorPort.OperatorView existing = new AdminOperatorPort.OperatorView(
+                41L, "op-41", "home-co", "owner@acme.com", null, "Owner", "ACTIVE",
+                null, null, Instant.EPOCH, Instant.EPOCH, null, "identity-41");
+        operators.operator(existing)
+                .row(41L, "TENANT_ADMIN", "home-co", null, null)
+                .row(41L, "SUPPORT_LOCK", "other-co", null, null);
+        InMemoryAssignmentPort assignments = new InMemoryAssignmentPort().allowCreate()
+                .row(41L, "home-co", null, null);
+        List<InMemoryRoleRowsPort.Row> before = List.copyOf(operators.rows);
+        FirstAdminProvisioner real = new FirstAdminProvisioner(operators, assignments, accountServiceClient,
+                new OperatorMembershipAddition(operators, assignments, null));
+
+        FirstAdminProvisioner.Result result = real.addMembership(existing, NEW_TENANT);
+
+        assertThat(result.operatorId()).isEqualTo("op-41");
+        assertThat(result.operatorInternalId()).isEqualTo(41L);
+        assertThat(operators.rowsIn(41L, NEW_TENANT)).extracting(InMemoryRoleRowsPort.Row::roleName)
+                .containsExactlyInAnyOrder("TENANT_ADMIN", "TENANT_BILLING_ADMIN");
+        assertThat(operators.rowsOutside(41L, NEW_TENANT)).containsExactlyElementsOf(before);
+        assertThat(assignments.find(41L, NEW_TENANT)).hasValueSatisfying(r -> assertThat(r.grantedBy()).isNull());
+        assertThat(assignments.find(41L, "home-co")).isPresent();
+        // born-unified is for a NEW row only (the fake operator port would throw on create / oidc / link writes)
+        org.mockito.Mockito.verifyNoInteractions(accountServiceClient);
     }
 }

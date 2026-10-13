@@ -51,6 +51,16 @@ public interface AdminOperatorPort {
     boolean existsByTenantIdAndEmail(String tenantId, String email);
 
     /**
+     * TASK-MONO-784 S5 (784 AC-0 F15 · admin-api.md § Operator Invitation «대기 하나» · issuance step 7 ·
+     * auth-to-admin.md § accept step 7) — whether an operator row that is a MEMBER of {@code tenantId}
+     * ({@code operator_tenant_assignment} row — the home is not a membership, R1) has this normalized
+     * {@code email}, any status. {@code excludeOperatorInternalId} (nullable) leaves one row out — the acceptance's
+     * own facet, which is about to receive the membership. {@link #existsByTenantIdAndEmail} stays the
+     * {@code (tenant_id, email)} UNIQUE pre-check for creating a NEW row.
+     */
+    boolean existsMemberWithEmail(String tenantId, String email, Long excludeOperatorInternalId);
+
+    /**
      * Paginated listing with optional status filter — sorted by
      * {@code createdAt DESC} (admin-api pagination contract).
      *

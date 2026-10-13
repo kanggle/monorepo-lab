@@ -15,7 +15,9 @@ import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorIdentityResolvePort;
 import com.example.admin.application.port.OperatorInvitationPort;
 import com.example.admin.application.port.OperatorInvitationPort.InvitationView;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantProvisioningPort;
+import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
 import com.example.admin.application.port.VerifiedEmailMatchPort;
 import com.example.admin.application.port.VerifiedEmailMatchPort.MatchResult;
 import com.example.admin.application.port.VerifiedEmailMatchPort.Outcome;
@@ -89,6 +91,8 @@ class OperatorInvitationAcceptanceUseCaseTest {
     @Mock TenantScopeGuard tenantScopeGuard;
     @Mock RoleGrantGuard roleGrantGuard;
     @Mock OperatorIdentityResolvePort identityResolvePort;
+    @Mock OperatorTenantAssignmentPort assignmentPort;
+    @Mock CachingPermissionEvaluator permissionCache;
 
     private OperatorInvitationAcceptanceUseCase useCase;
 
@@ -96,7 +100,8 @@ class OperatorInvitationAcceptanceUseCaseTest {
     void setUp() {
         useCase = new OperatorInvitationAcceptanceUseCase(invitationPort, writer, verifiedEmailMatchPort,
                 provisioningPort, operatorPort, new OperatorOidcSubjectResolver(operatorPort), tenantScopeGuard,
-                roleGrantGuard, identityResolvePort);
+                roleGrantGuard, identityResolvePort,
+                new OperatorMembershipAddition(operatorPort, assignmentPort, permissionCache));
     }
 
     // ── fixtures ────────────────────────────────────────────────────────────
@@ -205,7 +210,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
             verdict(OWNER, Outcome.MATCHED);
             basisHolds();
             given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
-            given(operatorPort.existsByTenantIdAndEmail(TENANT, EMAIL)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
             given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
                     .willReturn(new OperatorInvitationAcceptanceWriter.Accepted("op-new", 99L, "audit-1"));
 
@@ -261,7 +266,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
         }
 
         @Test
-        @DisplayName("🔴 OD-1: 이미 운영자 측면(상태 무관 — SUSPENDED 도) → 409 OPERATOR_ALREADY_PROVISIONED · 쓰기 없음")
+        @DisplayName("🔴 784 S5 (6 ③): 비-ACTIVE 측면(SUSPENDED) → 409 OPERATOR_ALREADY_PROVISIONED · 쓰기 없음 (772 OD-1 «측면이면 409» 에서 좁혀진 것)")
         void alreadyProvisioned_409() {
             given(invitationPort.findByTokenHash(HASH)).willReturn(Optional.of(pending()));
             verdict(OWNER, Outcome.MATCHED);
@@ -281,7 +286,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
             verdict(OWNER, Outcome.MATCHED);
             basisHolds();
             given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
-            given(operatorPort.existsByTenantIdAndEmail(TENANT, EMAIL)).willReturn(true);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(true);
 
             assertThatThrownBy(() -> useCase.accept(TOKEN, OWNER)).isInstanceOf(OperatorEmailConflictException.class);
             verify(writer, never()).accept(any(), anyString(), anyCollection(), anyLong());
@@ -294,7 +299,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
             verdict(OWNER, Outcome.MATCHED);
             basisHolds();
             given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
-            given(operatorPort.existsByTenantIdAndEmail(TENANT, EMAIL)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
             given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
                     .willThrow(new OperatorInvitationAcceptanceWriter.ClaimLost());
             given(invitationPort.findByInvitationId(INV)).willReturn(Optional.of(
@@ -313,7 +318,7 @@ class OperatorInvitationAcceptanceUseCaseTest {
             verdict(OWNER, Outcome.MATCHED);
             basisHolds();
             given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
-            given(operatorPort.existsByTenantIdAndEmail(TENANT, EMAIL)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
             given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
                     .willThrow(new OperatorInvitationAcceptanceWriter.ClaimLost());
             given(invitationPort.findByInvitationId(INV)).willReturn(
@@ -336,12 +341,109 @@ class OperatorInvitationAcceptanceUseCaseTest {
             basisHolds();
             given(operatorPort.findByOidcSubject(OWNER)).willReturn(
                     Optional.empty(), Optional.of(operator("op-race", "other-corp", "ACTIVE")));
-            given(operatorPort.existsByTenantIdAndEmail(TENANT, EMAIL)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
             given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
                     .willThrow(new DataIntegrityViolationException("uk_admin_operators_oidc_subject"));
 
             assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
                     OperatorAlreadyProvisionedException.class, "OPERATOR_ALREADY_PROVISIONED", 409);
+        }
+    }
+
+    // ── TASK-MONO-784 S5 — step 6 ② «소속 추가» ───────────────────────────────
+
+    /**
+     * 🔴 TASK-MONO-784 S5 (auth-to-admin.md § accept step 6 · 7 · «소속 추가일 때» · ADR-MONO-082 b · D2 · D-12) —
+     * the account already has an operator row. The membership addition is the real class over mocked ports; the
+     * writer is mocked here (its byte-unchanged proof is {@code OperatorInvitationAcceptanceWriterTest}).
+     */
+    @Nested
+    @DisplayName("🔴 784 S5 — 측면 있는 계정의 수락: 소속 추가 · 409 셋")
+    class MembershipAddition {
+
+        private static final long FACET_ID = 41L;
+
+        private AdminOperatorPort.OperatorView facet(String home, String status) {
+            return new AdminOperatorPort.OperatorView(FACET_ID, "op-41", home, "old@example.com", null, "기존",
+                    status, null, null, Instant.EPOCH, Instant.EPOCH, null, "identity-41");
+        }
+
+        @BeforeEach
+        void verifiedOwnerAndBasis() {
+            given(invitationPort.findByTokenHash(HASH)).willReturn(Optional.of(pending()));
+            verdict(OWNER, Outcome.MATCHED);
+            basisHolds();
+        }
+
+        @Test
+        @DisplayName("🔴 AC-3: ACTIVE 회사 측면 · 초대 테넌트 비소속 → 소속 추가 writer · 응답 operatorId = 기존 행 · 새 행 writer 0 · 신원 링크 0 · 캐시 무효화 · 7단계는 자기 행을 뺀다")
+        void activeCompanyFacet_addsMembership() {
+            AdminOperatorPort.OperatorView existing = facet("home-co", "ACTIVE");
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.of(existing));
+            given(assignmentPort.assignmentExists(FACET_ID, TENANT)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, FACET_ID)).willReturn(false);
+            given(writer.acceptAsMembership(any(), eq(OWNER), eq(existing), anyCollection(), eq(INVITER_ID)))
+                    .willReturn(new OperatorInvitationAcceptanceWriter.Accepted("op-41", FACET_ID, "audit-9"));
+
+            OperatorInvitationAcceptResult result = useCase.accept(TOKEN, OWNER);
+
+            assertThat(result.operatorId()).isEqualTo("op-41");
+            assertThat(result.tenantId()).isEqualTo(TENANT);
+            assertThat(result.roles()).containsExactly("SUPPORT_LOCK");
+            assertThat(result.alreadyAccepted()).isFalse();
+            verify(writer, never()).accept(any(), anyString(), anyCollection(), anyLong());
+            verifyNoInteractions(identityResolvePort);
+            verify(permissionCache).invalidate("op-41");
+        }
+
+        @Test
+        @DisplayName("🔴 같은 테넌트 재소속(이미 초대 테넌트 소속) → 409 OPERATOR_ALREADY_PROVISIONED · 쓰기 0")
+        void alreadyMember_409() {
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.of(facet("home-co", "ACTIVE")));
+            given(assignmentPort.assignmentExists(FACET_ID, TENANT)).willReturn(true);
+
+            assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
+                    OperatorAlreadyProvisionedException.class, "OPERATOR_ALREADY_PROVISIONED", 409);
+            verify(writer, never()).acceptAsMembership(any(), anyString(), any(), anyCollection(), anyLong());
+            verify(writer, never()).accept(any(), anyString(), anyCollection(), anyLong());
+            verifyNoInteractions(permissionCache);
+        }
+
+        @Test
+        @DisplayName("🔴 D2: '*' 측면 → 409 · 쓰기 0 (플랫폼 관리자는 회사 소속을 받지 않는다)")
+        void platformFacet_409() {
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.of(facet("*", "ACTIVE")));
+
+            assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
+                    OperatorAlreadyProvisionedException.class, "OPERATOR_ALREADY_PROVISIONED", 409);
+            verify(writer, never()).acceptAsMembership(any(), anyString(), any(), anyCollection(), anyLong());
+            verifyNoInteractions(assignmentPort);
+        }
+
+        @Test
+        @DisplayName("F15: 초대 테넌트에 같은 이메일의 «다른» 소속 운영자가 있다 → 409 OPERATOR_EMAIL_CONFLICT · 쓰기 0")
+        void anotherMemberWithTheEmail_409() {
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.of(facet("home-co", "ACTIVE")));
+            given(assignmentPort.assignmentExists(FACET_ID, TENANT)).willReturn(false);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, FACET_ID)).willReturn(true);
+
+            assertThatThrownBy(() -> useCase.accept(TOKEN, OWNER)).isInstanceOf(OperatorEmailConflictException.class);
+            verify(writer, never()).acceptAsMembership(any(), anyString(), any(), anyCollection(), anyLong());
+        }
+
+        @Test
+        @DisplayName("경합: 같은 계정이 같은 테넌트 초대 둘을 동시에 → 배정 PK 위반 → 다시 읽어 6 ③ 409")
+        void assignmentPkRace_mapsToAlreadyProvisioned() {
+            AdminOperatorPort.OperatorView existing = facet("home-co", "ACTIVE");
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.of(existing));
+            given(assignmentPort.assignmentExists(FACET_ID, TENANT)).willReturn(false, true);
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, FACET_ID)).willReturn(false);
+            given(writer.acceptAsMembership(any(), eq(OWNER), eq(existing), anyCollection(), eq(INVITER_ID)))
+                    .willThrow(new DataIntegrityViolationException("PRIMARY operator_tenant_assignment"));
+
+            assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
+                    OperatorAlreadyProvisionedException.class, "OPERATOR_ALREADY_PROVISIONED", 409);
+            verifyNoInteractions(permissionCache);
         }
     }
 

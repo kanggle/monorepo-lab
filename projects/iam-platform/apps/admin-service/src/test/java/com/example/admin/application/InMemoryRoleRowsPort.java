@@ -161,6 +161,7 @@ final class InMemoryRoleRowsPort implements AdminOperatorPort {
 
     @Override public Optional<OperatorView> findByOidcSubject(String s) { throw unused(); }
     @Override public boolean existsByTenantIdAndEmail(String t, String e) { throw unused(); }
+    @Override public boolean existsMemberWithEmail(String t, String e, Long x) { throw unused(); }
     @Override public OperatorPage findOperatorsPage(String s, int p, int z) { throw unused(); }
     @Override public OperatorPage findOperatorsPageByTenant(String t, String s, int p, int z) { throw unused(); }
     @Override public List<OperatorLookupView> findLookupCandidates(String t, String e) { throw unused(); }

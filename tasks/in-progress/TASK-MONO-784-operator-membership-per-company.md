@@ -59,7 +59,7 @@ monorepo
 - [x] **AC-0 (게이트)** — 772 가 `done/` 이다. 아니면 착수하지 않는다. 참이면 재측정: ① 테넌트를 받지 않는 관리 API(자기 정보 · 목록)의 전수와 각각의 판정 기준(ADR-082 § 새로 생기는 위험 1 — 기본값 «홈» 은 R1 과, «모든 소속의 합» 은 상속 누수와 모순이므로 API 마다 정해 적는다) ② 감사기가 지금 `admin_actions.tenant_id` 를 무엇으로 채우는지 ③ R2 로 관리 화면이 줄어드는 데모 시드 행 수(`demo-operator` 의 `ecommerce` 배정 등) ④ ADR-082 § Outstanding 의 라이브 술어(홈 밖 배정 수) — 창이 없으면 ⚪ 와 이유. — ✅ 2026-10-11 UTC: 게이트 참 · ①②③ 답 · ④ ⚪(창 없음). § AC-0 기록.
 - [x] **AC-1** — 🔴 **대조군 — 권한 누수**: A 에서 `TENANT_ADMIN`, B 는 배정만(역할 없음) → B 의 운영자 목록 · 감사 조회가 **거절**되고, 같은 시험에서 A 의 같은 조회는 통한다. 실패 쪽을 먼저 단언한다(지금 코드에서 이 앞 절반은 빨갛다 — 그것이 «전» 상태). — ✅ 2026-10-13 UTC (S3): 단위 칸 통과 + bite 빨강 확인 · IT 칸 작성(`OperatorMembershipReadAxisIntegrationTest`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). § S3 기록.
 - [x] **AC-2** — 🔴 **대조군 — 한 회사만 떠나기**(ADR-082 D3): 같은 사람이 A · B 운영자 → A 에서 내보내기 → 같은 시험에서 A assume · A 관리 API 거절 · B assume · B 관리 API 성공 · 같은 계정의 스토어 · 팬 토큰 그대로. — ✅ 2026-10-13 UTC (S4): 단위 칸 통과(내보내기 범위 · B 바이트 불변 · 마지막 관리자 409) + bite 빨강 확인 · IT 칸 작성(`OperatorMembershipWriteAxisIntegrationTest#ac2_leaveOneCompany`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). «토큰 그대로» 는 admin 쪽 단언(계정 서비스 호출 0 · `ACCOUNT_*` 감사 0 · 운영자 행 ACTIVE · `oidc_subject` 그대로)이다 — auth 코드는 건드리지 않았다. § S4 기록.
-- [ ] **AC-3** — 두 번째 회사 소속 추가(초대 수락 · 셀프 온보딩) → 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 같은 테넌트 재소속 409 · `'*'` 행에 회사 소속 쓰기 거절 · 풀 행에 `'*'` 거절(D2). 772 AC-6 IT 의 «두 번째 회사 409 · 셀프 온보딩 409» 칸은 **바뀐 기대값으로 고친다**(걷지 않는다).
+- [x] **AC-3** — 두 번째 회사 소속 추가(초대 수락 · 셀프 온보딩) → 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 같은 테넌트 재소속 409 · `'*'` 행에 회사 소속 쓰기 거절 · 풀 행에 `'*'` 거절(D2). 772 AC-6 IT 의 «두 번째 회사 409 · 셀프 온보딩 409» 칸은 **바뀐 기대값으로 고친다**(걷지 않는다). — ✅ 2026-10-13 UTC (S5): 단위 칸 통과(`OperatorMembershipAdditionTest` · `OperatorOwnedTenantLimitTest` · `SelfServiceOnboardingUseCaseTest$ExistingFacet` · `OperatorInvitationAcceptanceUseCaseTest$MembershipAddition` · `OperatorInvitationAcceptanceWriterTest` · `FirstAdminProvisionerTest`) + bite 빨강 확인 · IT 칸 고쳐 씀(`OperatorInvitationAcceptanceIntegrationTest#ac6_*` 5 · 6단계 새 기대값 + 7단계 · `#platformAndSuspendedFacets_refusedBothPaths`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). § S5 기록.
 - [x] **AC-4** — 정지(R3): 소속 둘 이상인 운영자의 행 정지는 회사 관리자에게 거절 · `SUPER_ADMIN` 은 성공 · 소속 하나면 지금과 같다. 역할 변경이 다른 회사의 역할 행을 바꾸지 않는다. — ✅ 2026-10-13 UTC (S4): 단위 칸 통과(`OperatorRowScopeGuardTest` · `PatchOperatorRoleUseCaseTest` · `UpdateOperatorProfileUseCaseTest`) + bite 빨강 확인 · IT 칸 작성(`#ac4_rowWideRule` · `#ac4_roleEditInA_leavesBByteUnchanged`) — IT ⚪ CI. «`SUPER_ADMIN`» = `'*'` grant scope(F11). § S4 기록.
 - [x] **AC-5** — 권한 캐시: 한 회사의 역할 변경 · 내보내기 뒤 그 회사 판정이 다음 요청에서 바뀌고 다른 회사의 캐시 판정은 그대로(캐시 키 = 운영자 × 테넌트). — ✅ 2026-10-13 UTC (S4): D-5 읽기대로 «판정 값» 으로 단언 — 단위 칸(역할 변경 · 내보내기 · 소속 추가가 합 캐시를 무효화) 통과 · IT 칸 작성(`#ac5_perCompanyDecisionNextRequest` — A 다음 요청 403 · B 200 · 내보내기 뒤 `PERMISSION_DENIED` 로 캐시 무효화를 판별) — IT ⚪ CI. 테넌트 판정 캐시는 두지 않았다(D-5). § S4 기록.
 - [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(운영자 · 그룹 · 파트너 화면) 후 필요한 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · 다음 데모 창에서 R2 영향 행 라이브 확인(⚪ 허용, 이유 기록).
@@ -586,3 +586,59 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - **구현**: `OperatorCompanyExitCascade` — 쓰기 전 역할 행 스냅샷에서 «떠나는 그룹 출처가 아닌 역할 행이 있는 T 밖 테넌트» 집합을 만들고, 그룹마다 `findGroupOriginAssignmentTenants` 로 그 그룹의 배정 테넌트를 열거 → 그 집합에 있으면 `convertToDirectAssignment`(신설 — `group_origin` → NULL **만**), 그 뒤 `deleteGroupOriginAssignments` 가 나머지를 지운다. 🔵 `granted_by` 는 **바꾸지 않았다**(nullable 칼럼이라 요구되지 않음 — 원래 부여자 기록을 남긴다; 변환은 감사 detail `keptAsDirect` 와 `OPERATOR_ASSIGNMENT_DELETE` 행의 행위자로 추적된다). `granted_at` · `org_scope` · `permission_set_id` 그대로. 포트 `OperatorTenantAssignmentPort` +2. 계약 `admin-api.md` 내보내기 표(예외 문장) · 감사 detail(`keptAsDirect`).
 - **시험**: `InMemoryAssignmentPort`(신설 — 진짜 변환 · 삭제) · `OperatorCompanyExitKeepMembershipTest`(신설, 3): 🔴 (a) 직접 uu 역할 + uu 소속은 G 출처뿐 → 내보내기 뒤 uu 배정 존재 · `group_origin` NULL · `granted_at` · `granted_by` · `org_scope` 그대로 · 직접 uu 역할 바이트 불변 · G 의 uu 역할 없음 · alpha 소속 없음 / (b) 대조군 다른 uu 역할 없음 → uu 배정 삭제 / 떠나지 않는 다른 그룹의 uu 역할도 소속을 지킨다. 기존 detail 기대값에 `keptAsDirect=0`. IT `#ac2_groupFanOutIntoOtherCompanies_goesWithTheGroup` 확장: G 가 U · V · W 배정 부여(V skip) · 직접 U 역할 → U 배정 **직접으로 남음**(granted_at 동일) · W 배정 삭제 · G 의 U 역할 없음 · V 불변.
 - **rc**: `:admin-service:test` **0**(1172 tests · fail 0 · skip 58). 🔴 **bite 4**: 변환 분기 비활성(무조건 삭제) → `OperatorCompanyExitKeepMembershipTest` 3 중 **2 빨강**((a) · 다른 그룹 칸), 대조군 (b) 초록 → 복원 후 그 클래스 + `OperatorCompanyExitUseCaseTest` rc **0**. 가드(`git add` 뒤): index-queue-drift · task-id-collision · walkthrough-ledger-drift · error-code-registry 모두 **0**. IT ⚪ CI.
+
+---
+
+## S5 기록 (2026-10-13 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `wt-784` · 브랜치 `feat/mono-784-s5-add-membership`(origin/main `8590f6636` = S4 #4321 위). 근거 = § AC-0 D-5 · D-12 · D-14 · F14 · F15 · OD-1 · S1 계약 `onboarding-api.md` § 다회사 운영자와 온보딩(판정 표 5행) · § 신원당 상한 · `internal/auth-to-admin.md` § accept 6 · 7 · «소속 추가일 때» · `admin-api.md` § Operator Invitation 발급 7 · «대기 하나».
+> 경로는 따로 적지 않으면 `projects/iam-platform/apps/admin-service/src/main/java/com/example/admin/` 아래.
+
+### 1. 행동 변경
+
+| # | 무엇 | 파일 | 근거 |
+|---|---|---|---|
+| 1 | **소속 추가 한 자리** `OperatorMembershipAddition`(신설): `requireCanReceive` = 회사 테넌트인가(`'*'` → 400) → `'*'` 행(홈 `'*'` **또는** `'*'` 역할 행 — 엄격한 쪽) → 비-`ACTIVE` → 이미 그 테넌트 소속 — 셋 다 `409 OPERATOR_ALREADY_PROVISIONED`. `write` = 그 테넌트의 직접 역할 행 + 배정**만**(호출자 트랜잭션 안) · `invalidatePermissionCache`(커밋 뒤, best-effort). 773 «테넌트 생성» 이 부를 자리 | `application/OperatorMembershipAddition.java` | D-12 · D2 · D-14 · D-5 |
+| 2 | **OD-1 상한** `OperatorOwnedTenantLimit`(신설): 단위 = 그 행의 `TENANT_ADMIN` 역할 행의 서로 다른 비-`'*'` 테넌트 수(출처 무관 · 테넌트 상태 안 읽음) · `count ≥ 상한` → `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED`(새 예외 + 핸들러) · 설정 `admin.onboarding.max-owned-tenants-per-operator`(기본 2, `< 1` 기동 거절) | `application/OperatorOwnedTenantLimit.java` · `application/exception/OperatorOwnedTenantLimitExceededException.java` · `presentation/advice/AdminExceptionHandler.java` · `src/main/resources/application.yml` | OD-1 · S1-5 |
+| 3 | **셀프 온보딩** — 판정 표 1~5행을 **테넌트 생성 전에**: 측면 없음 → 새 행(그대로) · 측면 있음 → `requireCanReceive` → 상한 → 테넌트 생성 → `FirstAdminProvisioner.addMembership`(신설 — 그 행에 `TENANT_ADMIN` + `TENANT_BILLING_ADMIN`@새 테넌트 + 배정, 한 트랜잭션, 운영자 행 · `oidc_subject` · 신원 해소 쓰기 0) → 실패 시 SUSPEND 보상(그대로) → 캐시 무효화. 응답 `operatorId` = 기존 행 | `application/SelfServiceOnboardingUseCase.java` · `application/FirstAdminProvisioner.java` | D-12 · OD-1 · F14 |
+| 4 | **초대 수락** 6단계 = ① 측면 없음 → 새 행 ② `requireCanReceive` 통과 → `OperatorInvitationAcceptanceWriter.acceptAsMembership`(신설 — 선점 → 초대 역할 행(직접)@초대 테넌트 + 배정 → `accepted_operator_id` = 기존 행 → 감사 행위자 = 기존 운영자 · `downstream_detail` = `accountId=…,membershipAdded=true`) ③ 그 밖 409. 7단계 = 초대 테넌트 **소속** 중 같은 이메일(받는 행 제외 — `existsMemberWithEmail`). 경합: 소속 추가 중 배정 PK 위반 → 다시 읽어 6 ③ 409. 신원 링크 시도 0 · 커밋 뒤 캐시 무효화. 상한은 보지 않는다(S1-5) | `application/OperatorInvitationAcceptanceUseCase.java` · `application/OperatorInvitationAcceptanceWriter.java` | D-12 · F15 · auth-to-admin «소속 추가일 때» |
+| 5 | **발급 «이미 운영자»** = 초대 테넌트 **소속**(배정 행)인 같은 이메일 — 홈 기준 아님 | `application/OperatorInvitationWriter.java` · 포트 `AdminOperatorPort.existsMemberWithEmail` · `infrastructure/persistence/rbac/AdminOperatorJpaRepository.existsMemberWithEmail`(JPQL — 목록과 같은 소속 술어) · `JpaAdminOperatorAdapter` | F15 · admin-api 발급 7 |
+| 6 | `OperatorAlreadyProvisionedException` javadoc — 의미 좁힘 기록(코드 문자열 무변경) · 시험 자리 표 784 AC-3 행 | `application/exception/OperatorAlreadyProvisionedException.java` · `projects/iam-platform/specs/features/multi-tenancy.md` § 7 | — |
+
+### 2. 시험 (실패 쪽 먼저)
+
+- **진짜 쓰는 가짜 포트**: `InMemoryAssignmentPort` 에 `createAssignment` 를 붙였다 — 기본은 여전히 throw(S4 내보내기 시험의 «배정을 만들지 않는다» 를 지킨다), S5 시험만 `allowCreate()`. `InMemoryRoleRowsPort` 는 운영자 행 쓰기(생성 · `oidc_subject` · 신원 링크)에 throw 하므로 «운영자 행 쓰기 0» 이 구조로 단언된다.
+- 🔴 **AC-3 바이트 불변** — `OperatorMembershipAdditionTest`(6): 새 테넌트 역할 행 둘(직접) + 배정 하나 · 기존 alpha(직접 · 그룹 · 노드) · beta 역할 행과 배정(`org_scope` 포함) · 다른 사람 행 **바이트 불변**(`grantedAt` 포함) / 🔴 같은 테넌트 409 · 쓰기 0 / 🔴 `'*'`(홈 · 역할 행 둘 다) 409 → 대조군 회사 행 통과 / 비-ACTIVE 409 / `'*'` 테넌트 400 · 쓰기 0 / 캐시 무효화 best-effort.
+- `OperatorOwnedTenantLimitTest`(3): 🔴 세는 단위(직접 · 그룹 · 노드 출처 산입 · 같은 테넌트 두 역할 = 1 · 다른 역할 · `'*'` · 남의 행 제외) / 🔴 기본 2 — 하나 통과 · 둘 422 / 설정 3 → 통과 · 0 기동 거절.
+- `SelfServiceOnboardingUseCaseTest$ExistingFacet`(6, **진짜** 소속 추가 · 상한 · 프로비저너 + 가짜 포트): 🔴 5행 — 201 · `operatorId` = 기존 · 새 테넌트 두 역할 + 배정 · 기존 행 바이트 불변 · 캐시 무효화 / 🔴 4행 상한 422 · 테넌트 생성 0 · 쓰기 0 / 대조군 상한 3 통과 / 🔴 2행 `'*'` 409 · 생성 0 / 3행 SUSPENDED 409 / 생성 뒤 실패 → SUSPEND 보상 · 무효화 0. 기존 새 행 경로 4칸은 그대로(772 «측면이면 409» 칸은 이 표로 대체).
+- `OperatorInvitationAcceptanceUseCaseTest$MembershipAddition`(5): 🔴 소속 추가 writer · 응답 = 기존 행 · 새 행 writer 0 · 신원 링크 0 · 무효화 · 7단계 자기 행 제외 / 🔴 같은 테넌트 409 / 🔴 `'*'` 409 / F15 다른 소속 운영자 같은 이메일 409 / 배정 PK 경합 → 409. 기존 «SUSPENDED 측면 409» 칸은 6 ③ 으로 이름만 고침.
+- `OperatorInvitationAcceptanceWriterTest` +2(소속 추가 트랜잭션 — 가짜 포트로 초대 테넌트 행만 · 다른 회사 바이트 불변 · 표시 이름 · 홈 그대로 · 감사 / 선점 실패 → 쓰기 0) · `FirstAdminProvisionerTest` +1(`addMembership` 새 테넌트 행만 · 계정 서비스 호출 0) · `OperatorInvitationWriterTest`(발급 술어 = 소속, 홈 술어 호출 0).
+- **IT 기대값 교체**(`integration/OperatorInvitationAcceptanceIntegrationTest`, Testcontainers — CI 판정): `#ac6_*` 5단계 «두 번째 회사 409» → **200 · 같은 운영자 · `TENANT_X` 역할 행 + 배정 · newOrg 역할 행 · 배정 · 운영자 행(홈 · 이메일 · 표시 이름 · `oidc_subject` · `identity_id` · `updated_at` · `version`) 바이트 불변 · `downstream_detail` `membershipAdded=true`** / 5b 같은 테넌트의 (소속 전에 발급된) 두 번째 초대 → 409 · PENDING / 5c F15 발급 → 409 `OPERATOR_EMAIL_CONFLICT`(홈 기준이면 201 이었다) / 6단계 «셀프 온보딩 409» → **422 상한**(newOrg · `TENANT_X` 둘) · 테넌트 생성 호출 0 / 7단계(신설) 창업자 두 번째 조직 → 201 · 같은 행 · 새 조직 두 역할 + 배정 · 첫 조직 바이트 불변 → 세 번째 422. 신설 `#platformAndSuspendedFacets_refusedBothPaths`(`'*'` · SUSPENDED 측면 → 수락 409 · 온보딩 409 · 생성 0 · 쓰기 0).
+
+### 3. 실행 (rc 는 각자 따로 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `./gradlew :projects:iam-platform:apps:admin-service:compileJava` · `compileTestJava` | **0** · **0** | IT 포함 컴파일 |
+| `./gradlew :projects:iam-platform:apps:admin-service:test` (최종) | **0** | 186 suites · 1194 tests · fail 0 · error 0 · skip 58(Testcontainers IT — Docker 없음) |
+| 🔴 **bite 1a**: `OperatorMembershipAddition.write` 가 역할 행을 새 테넌트에 가두지 않고 그 행의 **모든 소속 테넌트**에 쓰게 → 4 클래스 | **1** | 19 중 **4 빨강** — 바이트 불변 칸만(`OperatorMembershipAdditionTest` AC-3 · `SelfServiceOnboardingUseCaseTest$ExistingFacet` 5행 · `OperatorInvitationAcceptanceWriterTest` 소속 추가 · `FirstAdminProvisionerTest` addMembership), 나머지 15 초록 → 복원 |
+| 🔴 **bite 1b**: 수락 · 온보딩을 «측면이면 409» 로 되돌림 → 두 클래스 | **1** | 32 중 **8 빨강** — 소속 추가 · 같은 테넌트 · F15 · 경합 · 5행 · 4행 상한 · 상한 3 · 보상 칸; `'*'` · SUSPENDED 409 칸과 새 행 경로는 초록(물 것만 문다) → 복원 |
+| 🔴 **bite 2**: 상한 비활성(`false &&`) → `OperatorOwnedTenantLimitTest` · `SelfServiceOnboardingUseCaseTest` | **1** | 13 중 **2 빨강** — 422 칸 둘(단위 · 4행) → 복원 후 전체 `test` rc **0**(위 최종) |
+| 가드 6종(`git add` 뒤): `check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift` · `check-error-code-registry` · `check-domain-error-code-registry` · `check-flyway-version-collision` | **0** ×6 | — |
+| auth-service · account-service | — | 건드리지 않아 돌리지 않았다(코드 문자열 `OPERATOR_ALREADY_PROVISIONED` 무변경 — auth `AdminOperatorInvitationClient` 매핑 그대로) |
+| `integrationTest` | ⚪ | Docker 없음 — `OperatorInvitationAcceptanceIntegrationTest` 는 CI 가 판정 |
+
+### 4. 계약과 다르게 / 계약이 정하지 않아 정한 곳 (🔴 = 소유자가 볼 만한 것)
+
+1. 🔴 **«이미 그 슬러그 소속» 을 온보딩도 테넌트 생성 전에 409 로 거른다.** 계약은 «새 슬러그라 생기지 않는다» 고 적었지만, 미등록 테넌트 id 로의 배정(D-2 시드 `demo-viewer` 같은)이 있으면 생긴다 — 그 경우 계약 표에 행이 없다. fail-closed 쪽(409 `OPERATOR_ALREADY_PROVISIONED`, 생성 0)을 골랐다.
+2. **`'*'` 행 판정 = 홈 `'*'` 또는 `'*'` 역할 행**(S4 `ManageOperatorAssignmentUseCase` 는 홈만 본다). D-1 불변식상 둘은 같은 집합이어야 하므로 엄격한 쪽 — 계약 «`'*'` 측면» 과 충돌하지 않는다.
+3. 🔴 **상한 경합**: 같은 계정의 동시 온보딩 둘은 둘 다 상한 미만을 읽고 둘 다 통과할 수 있다(상한 + 1). 잠금을 두지 않았다 — 773 AC-0 이 값과 함께 볼 것(행 잠금 또는 생성 뒤 재검사 + 보상).
+4. `'*'` 테넌트로의 소속 추가는 `400 VALIDATION_ERROR`(D-14 · S1-6) — `'*'` 초대는 발급에서 이미 막혀(772 D-2) 수락 경로로는 닿지 않는다. 계약의 수락 오류표에는 없는 행이다(도달 불가 방어).
+5. 수락의 새 행 경로 경합 처리(`DataIntegrityViolationException`)는 홈 기준 `(tenant_id, email)` UNIQUE 를 먼저 보고 그다음 소속 기준을 본다 — DB 제약이 홈 칸이라 새 행 생성은 여전히 홈 UNIQUE 에 걸릴 수 있다(«홈이 T 인데 T 에서 내보내진 같은 이메일의 다른 운영자» 가 있으면 새 행 수락이 409 `OPERATOR_EMAIL_CONFLICT`). 계약 «UNIQUE 위반 → 각 409» 그대로.
+6. 감사 `tenant_id`(D-13): 수락은 `<self_invitation_accept>` 자기 흐름이라 행위자 **홈** · `target_tenant_id` = 초대 테넌트 — S3 규칙 그대로(계약 «새 행일 때와 같다»).
+
+### 5. CI 가 판정할 것 · 남은 것
+
+- **CI**: admin-service `integrationTest` — `OperatorInvitationAcceptanceIntegrationTest`(AC-6 5 · 6 · 7단계 새 기대값 · `'*'`/SUSPENDED 칸 신설). 새 JPQL `existsMemberWithEmail` 은 MySQL 위에서 처음 돈다(단위 시험은 포트 목/가짜).
+- **S6 (콘솔)**: 온보딩 화면의 `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` 문구 매핑(지금 콘솔은 409 `OPERATOR_ALREADY_PROVISIONED` 만 안다) · 수락 뒤 다회사 운영자의 스위처에 새 회사가 뜨는지(소속 = 배정 — 백엔드는 그대로) · 그밖 S4 기록 § 5 의 S6 목록.
+- **S5/S6 이후 (미배정 — S4 § 5 에서 옮겨 온 것 그대로)**: 노드 grant `tenant_id` = 대상 홈(D-1 «부여 당시 소속»).

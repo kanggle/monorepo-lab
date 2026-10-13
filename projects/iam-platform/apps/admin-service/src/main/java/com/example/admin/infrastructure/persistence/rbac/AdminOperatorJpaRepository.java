@@ -81,6 +81,23 @@ public interface AdminOperatorJpaRepository extends JpaRepository<AdminOperatorJ
     @Deprecated
     boolean existsByEmail(String email);
 
+    /**
+     * TASK-MONO-784 S5 (AC-0 F15) — an operator row that is a MEMBER of {@code tenantId} (assignment row — same
+     * membership predicate as {@link #findByTenantScope}) with this normalized {@code email}, any status, other
+     * than {@code excludeId} (nullable = exclude nothing).
+     */
+    @Query("""
+            SELECT CASE WHEN COUNT(o) > 0 THEN true ELSE false END
+              FROM AdminOperatorJpaEntity o
+             WHERE o.email = :email
+               AND (:excludeId IS NULL OR o.id <> :excludeId)
+               AND EXISTS (SELECT 1 FROM OperatorTenantAssignmentJpaEntity a
+                           WHERE a.operatorId = o.id AND a.tenantId = :tenantId)
+            """)
+    boolean existsMemberWithEmail(@Param("tenantId") String tenantId,
+                                  @Param("email") String email,
+                                  @Param("excludeId") Long excludeId);
+
     /** Pagination for {@code GET /api/admin/operators} with optional status filter. */
     Page<AdminOperatorJpaEntity> findByStatus(String status, Pageable pageable);
 

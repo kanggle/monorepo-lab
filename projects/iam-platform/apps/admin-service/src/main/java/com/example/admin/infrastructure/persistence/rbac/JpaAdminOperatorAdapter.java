@@ -58,6 +58,14 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     }
 
     @Override
+    public boolean existsMemberWithEmail(String tenantId, String email, Long excludeOperatorInternalId) {
+        if (tenantId == null || tenantId.isBlank() || email == null || email.isBlank()) {
+            return false;
+        }
+        return operatorRepository.existsMemberWithEmail(tenantId, email, excludeOperatorInternalId);
+    }
+
+    @Override
     public OperatorPage findOperatorsPage(String statusFilter, int page, int size) {
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         PageRequest pageable = PageRequest.of(page, size, sort);

@@ -43,6 +43,8 @@ public class OperatorInvitationAcceptanceWriter {
     private final AdminOperatorPort operatorPort;
     private final OperatorTenantAssignmentPort assignmentPort;
     private final AdminActionAuditor auditor;
+    /** TASK-MONO-784 S5 — the shared «add a membership to an existing row» writes (D-12). */
+    private final OperatorMembershipAddition membershipAddition;
 
     /** The claim lost: a concurrent accept / cancel / resend won, or the invitation expired meanwhile. */
     public static final class ClaimLost extends RuntimeException {
@@ -104,5 +106,50 @@ public class OperatorInvitationAcceptanceWriter {
                 AdminActionAuditor.PERMISSION_SELF_INVITATION_ACCEPT);
 
         return new Accepted(operatorUuid, created.internalId(), auditId);
+    }
+
+    /**
+     * TASK-MONO-784 S5 (auth-to-admin.md § accept «소속 추가일 때» — step 6 ② · ADR-MONO-082 b · D-12) — the
+     * accepting account already has an ACTIVE company operator row that is not yet a member of the invitation's
+     * tenant (the use case judged it with {@link OperatorMembershipAddition#requireCanReceive}). ONE transaction:
+     *
+     * <ol>
+     *   <li>the same claim as {@link #accept} ({@link ClaimLost} on 0 rows);</li>
+     *   <li>🔴 NO operator-row write — home · {@code oidc_subject} · {@code email} · {@code display_name} ·
+     *       {@code status} stay; the invitation's {@code displayName} is not used (S1-7);</li>
+     *   <li>the membership — the invited roles as direct rows with {@code tenant_id} = the invitation's tenant +
+     *       the whole-tenant assignment ({@link OperatorMembershipAddition#write}); the rows of the operator's other
+     *       companies are not touched (784 AC-3 byte-unchanged);</li>
+     *   <li>{@code accepted_operator_id} = the EXISTING operator;</li>
+     *   <li>the audit row as for a new row — actor = the existing operator, {@code downstream_detail} carries
+     *       {@code membershipAdded=true} after {@code accountId=…}.</li>
+     * </ol>
+     */
+    @Transactional
+    public Accepted acceptAsMembership(InvitationView invitation, String accountId,
+                                       AdminOperatorPort.OperatorView existing,
+                                       Collection<AdminOperatorPort.RoleView> roles, long inviterInternalId) {
+        Instant now = Instant.now();
+        String tenantId = invitation.tenantId();
+
+        if (!invitationPort.acceptIfPending(invitation.internalId(), invitation.tokenHash(), accountId, now)) {
+            throw new ClaimLost();
+        }
+
+        membershipAddition.write(existing.internalId(), tenantId, roles, inviterInternalId, now);
+
+        invitationPort.recordAcceptedOperator(invitation.internalId(), existing.internalId(), now);
+
+        String auditId = auditor.newAuditId();
+        auditor.recordWithPermission(new AdminActionAuditor.AuditRecord(
+                auditId, ActionCode.OPERATOR_INVITATION_ACCEPT, new OperatorContext(existing.operatorId(), null),
+                OperatorInvitationWriter.TARGET_TYPE, invitation.invitationId(),
+                AdminActionAuditor.REASON_SELF_INVITATION_ACCEPT, null,
+                "invitation-accept:" + invitation.invitationId(),
+                Outcome.SUCCESS, "accountId=" + accountId + ",membershipAdded=true",
+                now, Instant.now(), tenantId),
+                AdminActionAuditor.PERMISSION_SELF_INVITATION_ACCEPT);
+
+        return new Accepted(existing.operatorId(), existing.internalId(), auditId);
     }
 }

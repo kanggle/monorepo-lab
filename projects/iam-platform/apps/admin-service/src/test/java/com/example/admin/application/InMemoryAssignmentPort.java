@@ -76,5 +76,22 @@ final class InMemoryAssignmentPort implements OperatorTenantAssignmentPort {
     @Override public List<String> findOrgScope(Long op, String t) { throw new UnsupportedOperationException(); }
     @Override public Optional<AssignmentView> findAssignment(Long op, String t) { throw new UnsupportedOperationException(); }
     @Override public void updateOrgScope(Long op, String t, List<String> s) { throw new UnsupportedOperationException(); }
-    @Override public void createAssignment(Long op, String t, Long by) { throw new UnsupportedOperationException(); }
+
+    /**
+     * TASK-MONO-784 S5 — the membership addition creates rows. Off by default so the S4 export tests keep
+     * «the export never creates an assignment» as a thrown failure; the S5 tests switch it on.
+     */
+    boolean createAllowed;
+
+    InMemoryAssignmentPort allowCreate() {
+        createAllowed = true;
+        return this;
+    }
+
+    @Override
+    public void createAssignment(Long op, String t, Long by) {
+        if (!createAllowed) throw new UnsupportedOperationException("createAssignment not part of this fake's use");
+        if (find(op, t).isPresent()) throw new IllegalStateException("duplicate PK (operator, tenant)");
+        rows.add(new Row(op, t, Instant.now(), by, null, null));
+    }
 }

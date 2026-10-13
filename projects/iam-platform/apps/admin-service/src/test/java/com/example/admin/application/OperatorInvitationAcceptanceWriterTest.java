@@ -4,12 +4,12 @@ import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.OperatorInvitationPort;
 import com.example.admin.application.port.OperatorInvitationPort.InvitationView;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -44,7 +44,13 @@ class OperatorInvitationAcceptanceWriterTest {
     @Mock AdminOperatorPort operatorPort;
     @Mock OperatorTenantAssignmentPort assignmentPort;
     @Mock AdminActionAuditor auditor;
-    @InjectMocks OperatorInvitationAcceptanceWriter writer;
+    OperatorInvitationAcceptanceWriter writer;
+
+    @BeforeEach
+    void setUp() {
+        writer = new OperatorInvitationAcceptanceWriter(invitationPort, operatorPort, assignmentPort, auditor,
+                new OperatorMembershipAddition(operatorPort, assignmentPort, null));
+    }
 
     private static InvitationView pending() {
         return new InvitationView(7L, "inv-1", TENANT, "person@example.com", "홍길동",
@@ -123,6 +129,72 @@ class OperatorInvitationAcceptanceWriterTest {
 
         verify(invitationPort).acceptIfPending(anyLong(), any(), any(), any());
         verifyNoMoreInteractions(invitationPort);
+        verifyNoInteractions(operatorPort, assignmentPort, auditor);
+    }
+
+    /**
+     * 🔴 TASK-MONO-784 S5 (auth-to-admin.md § accept «소속 추가일 때» · AC-3) — real-writing in-memory ports: the
+     * fake operator port throws on every operator-row write (create · oidc_subject · identity link), and the
+     * other companies' role rows are compared byte for byte.
+     */
+    @Test
+    @DisplayName("🔴 784 S5 소속 추가: 선점 → 기존 행에 초대 테넌트 역할 행(직접) + 배정 → accepted_operator_id = 기존 행 → 감사(행위자 = 기존 운영자 · membershipAdded=true) · 운영자 행 쓰기 0 · 다른 회사 행 바이트 불변")
+    void acceptAsMembership_writesOnlyTheInvitationTenant() {
+        InMemoryRoleRowsPort operators = new InMemoryRoleRowsPort()
+                .role(3, "SUPPORT_LOCK").role(4, "TENANT_ADMIN").role(5, "TENANT_BILLING_ADMIN");
+        AdminOperatorPort.OperatorView existing = new AdminOperatorPort.OperatorView(41L, "op-41", "home-co",
+                "person@example.com", null, "기존 이름", "ACTIVE", null, null, Instant.EPOCH, Instant.EPOCH, null,
+                "identity-41");
+        operators.operator(existing)
+                .row(41L, "TENANT_ADMIN", "home-co", null, null)
+                .row(41L, "TENANT_BILLING_ADMIN", "home-co", null, null)
+                .row(41L, "SUPPORT_LOCK", "other-co", 8L, null);
+        InMemoryAssignmentPort assignments = new InMemoryAssignmentPort().allowCreate()
+                .row(41L, "home-co", null, null).row(41L, "other-co", 8L, null);
+        List<InMemoryRoleRowsPort.Row> rolesBefore = List.copyOf(operators.rows);
+        List<InMemoryAssignmentPort.Row> assignmentsBefore = List.copyOf(assignments.rows);
+        OperatorInvitationAcceptanceWriter membershipWriter = new OperatorInvitationAcceptanceWriter(invitationPort,
+                operators, assignments, auditor, new OperatorMembershipAddition(operators, assignments, null));
+        given(invitationPort.acceptIfPending(eq(7L), eq("h".repeat(64)), eq(ACCOUNT), any())).willReturn(true);
+        given(auditor.newAuditId()).willReturn("audit-2");
+
+        OperatorInvitationAcceptanceWriter.Accepted accepted =
+                membershipWriter.acceptAsMembership(pending(), ACCOUNT, existing, roles(), 11L);
+
+        assertThat(accepted.operatorId()).isEqualTo("op-41");
+        assertThat(accepted.operatorInternalId()).isEqualTo(41L);
+        // the invitation's tenant: exactly the invited roles, direct
+        assertThat(operators.rowsIn(41L, TENANT))
+                .extracting(InMemoryRoleRowsPort.Row::roleName, InMemoryRoleRowsPort.Row::groupOrigin,
+                        InMemoryRoleRowsPort.Row::orgNodeId)
+                .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("SUPPORT_LOCK", null, null),
+                        org.assertj.core.groups.Tuple.tuple("TENANT_ADMIN", null, null));
+        // 🔴 home-co · other-co rows byte-unchanged
+        assertThat(operators.rowsOutside(41L, TENANT)).containsExactlyElementsOf(rolesBefore);
+        assertThat(assignments.rows).containsAll(assignmentsBefore).hasSize(assignmentsBefore.size() + 1);
+        assertThat(assignments.find(41L, TENANT)).hasValueSatisfying(r -> assertThat(r.grantedBy()).isEqualTo(11L));
+        // the operator row: home and display name as they were (the fake would have thrown on any write)
+        assertThat(operators.findByOperatorId("op-41").orElseThrow().tenantId()).isEqualTo("home-co");
+        assertThat(operators.findByOperatorId("op-41").orElseThrow().displayName()).isEqualTo("기존 이름");
+
+        verify(invitationPort).recordAcceptedOperator(eq(7L), eq(41L), any());
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> audit = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        verify(auditor).recordWithPermission(audit.capture(), eq("<self_invitation_accept>"));
+        assertThat(audit.getValue().operator().operatorId()).isEqualTo("op-41");
+        assertThat(audit.getValue().targetTenantId()).isEqualTo(TENANT);
+        assertThat(audit.getValue().downstreamDetail()).isEqualTo("accountId=" + ACCOUNT + ",membershipAdded=true");
+    }
+
+    @Test
+    @DisplayName("784 S5 소속 추가 · 선점 실패 → ClaimLost · 역할 · 배정 · 감사 0")
+    void acceptAsMembership_lostClaim_writesNothingElse() {
+        given(invitationPort.acceptIfPending(anyLong(), any(), any(), any())).willReturn(false);
+        AdminOperatorPort.OperatorView existing = new AdminOperatorPort.OperatorView(41L, "op-41", "home-co",
+                "person@example.com", null, "D", "ACTIVE", null, null, Instant.EPOCH, Instant.EPOCH, null, null);
+
+        assertThatThrownBy(() -> writer.acceptAsMembership(pending(), ACCOUNT, existing, roles(), 11L))
+                .isInstanceOf(OperatorInvitationAcceptanceWriter.ClaimLost.class);
+
         verifyNoInteractions(operatorPort, assignmentPort, auditor);
     }
 }
