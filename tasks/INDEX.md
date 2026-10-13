@@ -219,11 +219,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-791-adr-083-p1-contracts-domain-permission-sets.md` — **`ADR-MONO-083` P1 — 도메인 업무 권한 세트 계약 · 명세 먼저** (REVIEW, 2026-10-14 UTC). AC-0~4 ✅ — admin 세트 · 출처별 배정 · 12 엔드포인트 · assume 판정 `domainRoles`(실패 = 거절 · 빈 값 = 역할 0) · 토큰 `roles` · `scope` · 300초(P3 부터) · 콘솔 두 신호 · 공유 오류 코드 6. 🟢 OD-3 소유자 결정 = «세트 배정 허용»(`'*'` 운영자). 🔴 검토에서 권한 상승 경로 수선(세트 달린 그룹의 멤버 추가 = `domain_access.manage` 도). 코드 0. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (REVIEW, 2026-10-13 UTC). S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⏳ `done/` 전 ⚪: 첫 nightly 콘솔 잡 · 다음 데모 창 라이브(OD-3 화면 · R2 · 내보내기). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 ## done
+- ✅ `TASK-MONO-791-adr-083-p1-contracts-domain-permission-sets.md` — **DONE 2026-10-14 UTC (4-dim verified)** — impl PR **#4340**, 스쿼시 **`1059e9290`** (머지 시점 실패 0 · 14 pass). `ADR-MONO-083` P1 계약: admin 세트 · 출처별 배정 · 12 엔드포인트 · `domainRoles`(실패 = 거절 · 빈 값 = 역할 0) · 토큰 `roles` · `scope` · 300초(P3 부터) · 콘솔 두 신호 · 공유 오류 코드 6 · OD-3 소유자 결정(`'*'` 운영자 세트 배정) · 검토에서 그룹 멤버 추가 권한 상승 경로 수선. 코드 0 — 다음 P2 `TASK-BE-631`.
 - ✅ `TASK-MONO-790-domain-permission-sets-per-tenant.md` — **DONE 2026-10-14 UTC (4-dim verified)** — PROPOSED **#4335**(`2f0577f49`) · ACCEPT **#4337**(`945db2169`) (머지 시점 실패 0, 둘 다). `ADR-MONO-083` ACCEPTED — **A**(별도 모델 · OD-1~OD-6 기본값 = 구현자 선택). 결정 티켓 — 구현은 단계 티켓 `TASK-MONO-791` · `TASK-BE-631`~`633` · `TASK-PC-FE-338` · `TASK-MONO-792`~`795` · 773 개정.
 - ✅ `TASK-MONO-782-show-the-cs-account-on-the-launcher-and-guide-after-the-rebake.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4307**(`c8488c209`) (머지 시점 실패 0/66). CS 2선 `cs@demo.com` 을 론처 · 콘솔 가이드 · `/login` 에 표시 + (z11) 시드 대조(bite rc=1→0). 26차 AMI 에 781 포함(AC-0) · 26차 창 라이브(AC-1).
 - ✅ `TASK-MONO-789-idle-stop-10-minutes-with-boot-grace.md` — **DONE 2026-10-11 UTC (4-dim verified)** — impl PR **#4310**(`031c12d30`, 머지 시점 실패 0 · 14 pass). 데모 자동 종료(유휴) 20분 → 10분 + 켠 뒤 20분 부팅 보호(웜업 중 정지 = `TASK-MONO-389` 방지), 예산 · max-runtime 은 창과 무관. 소유자 `terraform apply`(Lambda in-place 1건) 뒤 재-plan «No changes» · 실물 env `IDLE_MINUTES=10` · `BOOT_GRACE_MINUTES=20`.
