@@ -38,6 +38,17 @@ export async function middleware(request: NextRequest) {
     // anonymous visitors, since the backend allows them. Mirrors the documented
     // intent of `authConfig.callbacks.authorized` in `shared/auth/auth.ts`.
     pathname.startsWith('/api/bff') ||
+    // 🔴🔴 TASK-FE-109 — `/api/vitals` is the Core Web Vitals beacon sink
+    // (`navigator.sendBeacon`/`fetch keepalive` POST from `web-vitals.tsx`,
+    // occasionally GET via the browser's beacon fallback). It was missing from
+    // this list, so an anonymous visitor's beacon fell through to the auth
+    // check below and got a 307 to `/login` — and a 307 preserves the method
+    // (RFC 7231 §6.4.7), so the POST landed on `/login`, which has no POST
+    // handler → 405. That is the paired `POST /login 405` lines in the Vercel
+    // log (one pair per page: LCP/CLS etc. each fire their own beacon close
+    // together). This route must stay public regardless of auth state — it is
+    // not "public to anonymous only", unlike the gated paths below.
+    pathname === '/api/vitals' ||
     // 🔴🔴 TASK-MONO-654 — 데모 백엔드 판정 탐침. **익명이 부를 수 있어야 한다.**
     // 이 배너의 청중이 정확히 «로그인하지 않은 방문자»(면접관)이므로, 여기 없으면
     // 그 방문자의 탐침이 `/login` 으로 307 되고 배너는 **영영 안 뜬다** — 그러면 이

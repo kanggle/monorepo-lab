@@ -129,6 +129,9 @@ export const authConfig: NextAuthConfig = {
         // token and returns 401 (→ client re-auth, F1) when absent; it must not
         // be middleware-bounced to /login (that would break XHR re-auth).
         pathname.startsWith('/api/bff') ||
+        // TASK-FE-109 — mirrors middleware.ts: the vitals beacon must never be
+        // bounced to /login (307 preserves POST → 405 on /login).
+        pathname === '/api/vitals' ||
         pathname.startsWith('/_next') ||
         pathname.startsWith('/favicon');
       if (isPublic) return true;
