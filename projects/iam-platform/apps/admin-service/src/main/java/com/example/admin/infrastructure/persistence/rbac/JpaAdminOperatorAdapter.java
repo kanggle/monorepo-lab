@@ -325,8 +325,35 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
     // ---------- Operator-Role bindings ----------
 
     @Override
-    public void deleteOperatorRoles(long operatorInternalId) {
-        operatorRoleRepository.deleteByOperatorId(operatorInternalId);
+    public List<RoleRowView> findRoleRowsOfOperator(long operatorInternalId) {
+        return toRowViews(operatorRoleRepository.findByOperatorId(operatorInternalId));
+    }
+
+    @Override
+    public List<RoleRowView> findActiveRoleRowsInTenant(String tenantId, String roleName) {
+        if (tenantId == null || roleName == null) return List.of();
+        return toRowViews(operatorRoleRepository.findActiveByTenantIdAndRoleName(tenantId, roleName));
+    }
+
+    @Override
+    public int deleteDirectOperatorRolesInTenant(long operatorInternalId, String tenantId) {
+        return operatorRoleRepository.deleteDirectByOperatorIdAndTenantId(operatorInternalId, tenantId);
+    }
+
+    @Override
+    public int deleteOperatorRolesInTenant(long operatorInternalId, String tenantId) {
+        return operatorRoleRepository.deleteByOperatorIdAndTenantId(operatorInternalId, tenantId);
+    }
+
+    private List<RoleRowView> toRowViews(List<AdminOperatorRoleJpaEntity> rows) {
+        if (rows.isEmpty()) return List.of();
+        Map<Long, String> roleNameById = roleNamesById(rows);
+        List<RoleRowView> out = new ArrayList<>(rows.size());
+        for (AdminOperatorRoleJpaEntity r : rows) {
+            out.add(new RoleRowView(r.getOperatorId(), r.getRoleId(), roleNameById.get(r.getRoleId()),
+                    r.getTenantId(), r.getGroupOrigin(), r.getOrgNodeId()));
+        }
+        return out;
     }
 
     @Override

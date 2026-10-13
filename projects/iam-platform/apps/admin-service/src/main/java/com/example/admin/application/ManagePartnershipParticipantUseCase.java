@@ -10,6 +10,7 @@ import com.example.admin.application.exception.PartnershipScopeDeniedException;
 import com.example.admin.application.exception.PartnershipTransitionInvalidException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.application.port.TenantPartnershipPort.PartnershipView;
 import com.example.admin.domain.rbac.PartnershipStatus;
@@ -43,6 +44,7 @@ public class ManagePartnershipParticipantUseCase {
     private final AdminActionAuditor auditor;
     private final PartnershipEventPublisher eventPublisher;
     private final AdminOperatorPort operatorPort;
+    private final OperatorTenantAssignmentPort assignmentPort;
 
     /**
      * Assign {@code operatorPublicId} (a partner-owned operator) as a participant.
@@ -68,10 +70,11 @@ public class ManagePartnershipParticipantUseCase {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found: " + operatorPublicId));
 
-        // D4: B may only assign its OWN operators — home tenant must equal partner.
-        if (!p.partnerTenantId().equals(operator.tenantId())) {
+        // D4 · TASK-MONO-784 S4 (ADR-MONO-082 b · D-11): B may only assign its OWN operators — the partner tenant
+        // must be one of the operator's MEMBERSHIPS (before S4: its home). A '*' operator has no membership.
+        if (!assignmentPort.assignmentExists(operator.internalId(), p.partnerTenantId())) {
             throw new ParticipantNotOwnOperatorException(
-                    "Operator home tenant does not match the partner tenant");
+                    "Operator is not a member of the partner tenant");
         }
 
         ScopeSet participantScope = scopeDomains == null && scopeRoles == null

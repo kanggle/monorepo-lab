@@ -58,10 +58,10 @@ monorepo
 
 - [x] **AC-0 (게이트)** — 772 가 `done/` 이다. 아니면 착수하지 않는다. 참이면 재측정: ① 테넌트를 받지 않는 관리 API(자기 정보 · 목록)의 전수와 각각의 판정 기준(ADR-082 § 새로 생기는 위험 1 — 기본값 «홈» 은 R1 과, «모든 소속의 합» 은 상속 누수와 모순이므로 API 마다 정해 적는다) ② 감사기가 지금 `admin_actions.tenant_id` 를 무엇으로 채우는지 ③ R2 로 관리 화면이 줄어드는 데모 시드 행 수(`demo-operator` 의 `ecommerce` 배정 등) ④ ADR-082 § Outstanding 의 라이브 술어(홈 밖 배정 수) — 창이 없으면 ⚪ 와 이유. — ✅ 2026-10-11 UTC: 게이트 참 · ①②③ 답 · ④ ⚪(창 없음). § AC-0 기록.
 - [x] **AC-1** — 🔴 **대조군 — 권한 누수**: A 에서 `TENANT_ADMIN`, B 는 배정만(역할 없음) → B 의 운영자 목록 · 감사 조회가 **거절**되고, 같은 시험에서 A 의 같은 조회는 통한다. 실패 쪽을 먼저 단언한다(지금 코드에서 이 앞 절반은 빨갛다 — 그것이 «전» 상태). — ✅ 2026-10-13 UTC (S3): 단위 칸 통과 + bite 빨강 확인 · IT 칸 작성(`OperatorMembershipReadAxisIntegrationTest`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). § S3 기록.
-- [ ] **AC-2** — 🔴 **대조군 — 한 회사만 떠나기**(ADR-082 D3): 같은 사람이 A · B 운영자 → A 에서 내보내기 → 같은 시험에서 A assume · A 관리 API 거절 · B assume · B 관리 API 성공 · 같은 계정의 스토어 · 팬 토큰 그대로.
+- [x] **AC-2** — 🔴 **대조군 — 한 회사만 떠나기**(ADR-082 D3): 같은 사람이 A · B 운영자 → A 에서 내보내기 → 같은 시험에서 A assume · A 관리 API 거절 · B assume · B 관리 API 성공 · 같은 계정의 스토어 · 팬 토큰 그대로. — ✅ 2026-10-13 UTC (S4): 단위 칸 통과(내보내기 범위 · B 바이트 불변 · 마지막 관리자 409) + bite 빨강 확인 · IT 칸 작성(`OperatorMembershipWriteAxisIntegrationTest#ac2_leaveOneCompany`) — IT 실행은 ⚪ CI(이 호스트 Docker 없음). «토큰 그대로» 는 admin 쪽 단언(계정 서비스 호출 0 · `ACCOUNT_*` 감사 0 · 운영자 행 ACTIVE · `oidc_subject` 그대로)이다 — auth 코드는 건드리지 않았다. § S4 기록.
 - [ ] **AC-3** — 두 번째 회사 소속 추가(초대 수락 · 셀프 온보딩) → 기존 행에 새 테넌트 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 같은 테넌트 재소속 409 · `'*'` 행에 회사 소속 쓰기 거절 · 풀 행에 `'*'` 거절(D2). 772 AC-6 IT 의 «두 번째 회사 409 · 셀프 온보딩 409» 칸은 **바뀐 기대값으로 고친다**(걷지 않는다).
-- [ ] **AC-4** — 정지(R3): 소속 둘 이상인 운영자의 행 정지는 회사 관리자에게 거절 · `SUPER_ADMIN` 은 성공 · 소속 하나면 지금과 같다. 역할 변경이 다른 회사의 역할 행을 바꾸지 않는다.
-- [ ] **AC-5** — 권한 캐시: 한 회사의 역할 변경 · 내보내기 뒤 그 회사 판정이 다음 요청에서 바뀌고 다른 회사의 캐시 판정은 그대로(캐시 키 = 운영자 × 테넌트).
+- [x] **AC-4** — 정지(R3): 소속 둘 이상인 운영자의 행 정지는 회사 관리자에게 거절 · `SUPER_ADMIN` 은 성공 · 소속 하나면 지금과 같다. 역할 변경이 다른 회사의 역할 행을 바꾸지 않는다. — ✅ 2026-10-13 UTC (S4): 단위 칸 통과(`OperatorRowScopeGuardTest` · `PatchOperatorRoleUseCaseTest` · `UpdateOperatorProfileUseCaseTest`) + bite 빨강 확인 · IT 칸 작성(`#ac4_rowWideRule` · `#ac4_roleEditInA_leavesBByteUnchanged`) — IT ⚪ CI. «`SUPER_ADMIN`» = `'*'` grant scope(F11). § S4 기록.
+- [x] **AC-5** — 권한 캐시: 한 회사의 역할 변경 · 내보내기 뒤 그 회사 판정이 다음 요청에서 바뀌고 다른 회사의 캐시 판정은 그대로(캐시 키 = 운영자 × 테넌트). — ✅ 2026-10-13 UTC (S4): D-5 읽기대로 «판정 값» 으로 단언 — 단위 칸(역할 변경 · 내보내기 · 소속 추가가 합 캐시를 무효화) 통과 · IT 칸 작성(`#ac5_perCompanyDecisionNextRequest` — A 다음 요청 403 · B 200 · 내보내기 뒤 `PERMISSION_DENIED` 로 캐시 무효화를 판별) — IT ⚪ CI. 테넌트 판정 캐시는 두지 않았다(D-5). § S4 기록.
 - [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(운영자 · 그룹 · 파트너 화면) 후 필요한 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · 다음 데모 창에서 R2 영향 행 라이브 확인(⚪ 허용, 이유 기록).
 
 # Related Specs
@@ -498,3 +498,68 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - **수정**: `QueryTenantScopeGate.resolveMembership`(신설 — `OperatorLookupPort` + `TenantScopeResolver`, S2 의 배정만 해소기) · `OperatorEmailLookupUseCase` → `resolveMembership` · `OperatorLookupControllerSliceTest` 목 이름. 계약 `admin-api.md` #9 행 · § lookup 의 `tenantId` 행 · 784 규칙 블릿 · 오류표 문구(«소속») — #8b 문구 무변경. `rbac.md` § 권한 키 없는 읽기 — lookup 예외 블록 추가, 역할 술어 블록은 accounts e-mail 에만.
 - **시험**: `QueryTenantScopeGateTest` +3 — 🔴 소속 beta · 역할 0 → lookup beta 해소(생략 → beta) + 같은 호출자로 #8b(`resolveAnyRole`) beta 거절(두 키 없는 읽기를 한 시험에서 갈라 핀) / 대조군 비소속 gamma · 소속 아닌 홈 alpha 둘 다 거절 + DENIED 행 / `'*'` → `*` · 소속 미조회.
 - **rc**: `:admin-service:test` **0**(1138 tests · fail 0 · skip 58). bite — `resolveMembership` 을 `anyRoleScope` 로 되돌림 → `QueryTenantScopeGateTest` 12 중 **3 빨강**(새 #9 칸 셋) · 나머지 9 초록 → 복원 후 그 클래스 + `OperatorLookupControllerSliceTest` rc **0**. IT(`OperatorLookupIntegrationTest`) 는 다시 CI 판정.
+
+---
+
+## S4 기록 (2026-10-13 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · worktree `wt-784` · 브랜치 `feat/mono-784-s4-membership-writes`(origin/main `4c09136f0` = S3 #4320 위). 근거 = § AC-0 D-5 · D-7 · D-8 · D-9 · D-10 · D-11 · D-14 · F6 · F10 · F11 · F13 · F18 · 소유자 결정(마지막 관리자 409) · S1 계약 `admin-api.md` § 행동 테넌트(23행 표 #12 ~ #15 · «행 전체 규칙» · «`'*'` 와 회사 소속») · § DELETE …/assignments/{tenantId} · § PATCH …/roles · § PATCH …/status · § groups members · § participant.
+> 경로는 따로 적지 않으면 `projects/iam-platform/apps/admin-service/src/main/java/com/example/admin/` 아래.
+
+### 1. 행동 변경
+
+| # | 무엇 | 파일 | 근거 |
+|---|---|---|---|
+| 1 | **역할 변경 = 회사 축**: T 해소(`'*'` 대상 → `'*'` · 헤더 · 생략 시 대상 소속 하나 / 둘 이상 400 / 0 404) → T ∈ grant scope(403 + DENIED) → 비-`'*'` 대상이 T 소속(아니면 404) · 헤더 `'*'` 400 → ≤-own **T 안에서**(S3 가 남긴 «대상 홈» 교체) → 마지막 관리자 → **T 의 직접 행만** 교체(`deleteDirectOperatorRolesInTenant`). 응답 `roles` = 요청 역할 + T 의 그룹 · 노드 역할 · 감사 `target_tenant_id` = T. 컨트롤러가 `X-Tenant-Id` 를 넘긴다 | `application/PatchOperatorRoleUseCase.java` · `presentation/OperatorAdminController.java` · 포트 `findRoleRowsOfOperator` · `deleteDirectOperatorRolesInTenant`(+ `deleteOperatorRoles` 삭제 — 포트에 «운영자 행 전부 삭제» 가 더는 없다) | D-7 · F6 · Failure 3 · S1-1 |
+| 2 | **행 전체 규칙 한 자리** `OperatorRowScopeGuard`: `'*'` grant scope → 통과 · 대상 소속 하나 {T} → T ∈ scope · 둘 이상 → 행위자가 그중 하나라도 관리하면 `403 OPERATOR_HAS_OTHER_MEMBERSHIPS`, 아니면 `TENANT_SCOPE_DENIED` · 0 / `'*'` 대상 → `'*'` 만. 역할 **이름** 무관(F11). 거절은 best-effort DENIED 행 | `application/OperatorRowScopeGuard.java`(신설) | R3 · D-8 · S1-2 |
+| 3 | 위 규칙을 상태 · 프로필(**네 번째 게이트 사본 제거** — 호출자 «배정 ∪ 홈» 으로 대상 홈을 보던 코드) · 신원 링크/해제에 | `PatchOperatorStatusUseCase` · `UpdateOperatorProfileUseCase` · `LinkOperatorIdentityUseCase` · `UnlinkOperatorIdentityUseCase` | #12 ~ #14 · F2 |
+| 4 | **«이 회사에서 내보내기»**: 범위(403) → 소속 존재(404) → 마지막 관리자(409) → `OperatorCompanyExitCascade`(T 그룹 멤버십 + 그 fan-out → `partner = T` 참여 행 → T 역할 행 **모든 출처**) → 배정 삭제 → 감사 `detail` = `roleRows=…,groupMemberships=…,participations=…` → 캐시 무효화. 운영자 행 · 계정 무접촉, 소속 0 이어도 행 ACTIVE | `ManageOperatorAssignmentUseCase.unassignOperator` · `application/OperatorCompanyExitCascade.java`(신설) · 포트 `deleteOperatorRolesInTenant` · `TenantPartnershipPort.removeParticipationsWithPartner` · repo 질의 3(`deleteByOperatorIdAndTenantId` · `deleteDirectByOperatorIdAndTenantId` — 둘 다 flush/clear · `OperatorGroupMemberJpaRepository.findByOperatorIdAndGroupTenantId` · 참여 삭제) | D-9 · D-10 · F18 · Edge 2 · 3 |
+| 5 | **마지막 관리자 보호** `TenantLastAdminGuard`: 쓰기 뒤 T 에 ACTIVE `TENANT_ADMIN`@T(직접 · 그룹 · 노드) 0 → `409 TENANT_LAST_ADMIN_REQUIRED`, 쓰기 전 판정. T = `'*'` · 대상이 T 관리자 아님 → 검사 없음. 호출처: 내보내기 · 역할 변경 · 그룹 멤버 제거 · 그룹 역할 회수 · **그룹 삭제**(아래 § 4-1) | `application/TenantLastAdminGuard.java`(신설) · 포트 `findActiveRoleRowsInTenant` | 소유자 결정 2026-10-11 |
+| 6 | 그룹 멤버 술어 = **소속**(그룹 테넌트의 배정 행) · `'*'` 대상 400 · fan-out 역할 행 `tenant_id` = **그룹 테넌트**(skip 키 같음) — `Member.tenantId` 의 의미를 «그룹 테넌트» 로 | `GroupAdminUseCase`(addMember · removeMember · resolveMembers) · `GroupFanOutService`(주석 · `revokeMemberFanOut` 이 지운 역할 행 수 반환) | D-11 · F10 |
+| 7 | 파트너십 참여자 술어 = `partner ∈ 대상 소속` | `ManagePartnershipParticipantUseCase` | D-11 |
+| 8 | 배정 생성: `'*'` 대상 400(D-14 · F13) · 성공 시 캐시 무효화(소속 추가) | `ManageOperatorAssignmentUseCase.assignOperator` | D-14 · D-5 |
+| 9 | 새 코드 2 매핑(`OPERATOR_HAS_OTHER_MEMBERSHIPS` 403 · `TENANT_LAST_ADMIN_REQUIRED` 409 — S1 에 등록 완료) | `presentation/advice/AdminExceptionHandler.java` · `application/exception/*` 2 | — |
+| 10 | 시드 주석: `demo-assigned-only` = 이제 «demo-corp 소속 · 역할 0» — 그룹이 받아들인다(콘솔 «배정만 됨» 회색 처리는 S6 이 소속 술어로) | `db/migration-dev/R__seed_demo_assigned_only_operator.sql`(데이터 무변경) | F10 |
+| 11 | 시험 자리 표 784 행 4줄(AC-1 · AC-2 · AC-4 · AC-5) | `projects/iam-platform/specs/features/multi-tenancy.md` § 7 | S1 § 4-5 |
+
+### 2. 시험 (실패 쪽 먼저)
+
+- **`InMemoryRoleRowsPort`**(신설, 시험 전용): 목은 «운영자 행 전부 삭제» 를 조용한 no-op 으로 삼켜 «B 행 바이트 불변» 을 증명하지 못한다 — 진짜로 지우는 가짜 포트(쓰기 축이 안 쓰는 메서드는 throw → 운영자 행 쓰기 0 도 덤으로 단언).
+- **AC-4 · F6** `PatchOperatorRoleUseCaseTest`(재작성, STRICT_STUBS): 🔴 alpha 편집 → beta 직접 행 · alpha 그룹 행 · alpha 노드 행 **바이트 불변**(`grantedAt` 포함) · alpha 직접 = 요청 · 응답 = 요청 + alpha 그룹/노드 역할 / 대조군 헤더 없음 + 소속 하나 / 헤더 없음 + 둘 → 400 · 0 → 404 · 범위 검사 전 / 비소속 헤더 404 / `'*'` 헤더 400 · `'*'` 대상 T=`'*'` / 🔴 마지막 관리자 409(SUSPENDED 관리자 불산입) → 대조군 ACTIVE 관리자 / 재부여 · 미지 역할 · 미지 운영자.
+- **R3** `OperatorRowScopeGuardTest`(신설, 6): 🔴 소속 둘 · 회사 관리자 → `OPERATOR_HAS_OTHER_MEMBERSHIPS` + DENIED 행 / `'*'` 통과 · 아무것도 관리 안 함 → `TENANT_SCOPE_DENIED` · 🔴 F11 회사 범위 SUPER_ADMIN ≠ 플랫폼 · 소속 하나 = 그 회사 관리자(홈 관리자 거절 — R1) · 소속 0 · `'*'` 대상.
+- `UpdateOperatorProfileUseCaseTest`(재작성 — **진짜** 가드 + 목 grant scope/해소기): 🔴 F2 «배정만 된» 호출자 거절(이전 시험은 이 누수를 핀하고 있었다) · 🔴 소속 둘 → 403 · 대조군 단일 회사.
+- **AC-2 단위** `OperatorCompanyExitUseCaseTest`(신설, 진짜 cascade + 가드 + 가짜 포트): 🔴 alpha 내보내기 → alpha 역할 행(직접 · 그룹 · 노드) 0 · beta 바이트 불변 · 다른 사람 행 무접촉 · 그룹 fan-out 이 alpha 로 · 멤버십 삭제 · 참여 삭제 · 배정 삭제(alpha 만) · 감사 detail · 캐시 / 🔴 유일 관리자 자기 내보내기 409 · 쓰기 0 · cascade 무호출 / 대조군 그룹 출처 관리자도 관리자 · 다른 ACTIVE 관리자(노드 출처) 있으면 허용 / 404 / `'*'` 배정 400 · 소속 추가 무효화.
+- `TenantLastAdminGuardTest`(신설, 3) · `GroupAdminUseCaseTest` +4(🔴 홈 = 그룹 테넌트지만 비소속 → 422 · 🔴 홈 globex · acme 소속 → 추가 + fan-out `tenantId`=acme · `'*'` 400 · 🔴 가드 거절 시 멤버 제거 / 역할 회수 / 그룹 삭제 쓰기 0) · `ManagePartnershipParticipantUseCaseTest` +1(🔴 홈 = 파트너지만 비소속 → 422 / 홈 밖 · 소속 → 추가) · `OperatorAdminControllerSliceTest` +3(헤더 전달 · 409 · 403 매핑).
+- 시그니처 따라 고침: `PatchOperatorStatusUseCaseTest` · `LinkOperatorIdentityUseCaseTest` · `UnlinkOperatorIdentityUseCaseTest`(가드 검증이 «대상 홈» 이 아니라 «대상 행») · `ConsumerPoolTenantRefusalTest` · `FanPlatformPlatformOperatorOnlyTest`.
+- **IT**(Testcontainers — CI 판정) `integration/OperatorMembershipWriteAxisIntegrationTest`(신설): `#ac2_leaveOneCompany`(🔴 유일 관리자 자기 내보내기 409 · 쓰기 0 → 내보내기 → A assume `assigned=false` · A 감사 403 / B assume true · B 감사 200 · A 역할 행 0 · B 바이트 불변(granted_at 까지) · A 그룹 멤버십 0 · 참여는 partner=B 만 · detail `roleRows=2,groupMemberships=1,participations=1` · 운영자 행 `ACTIVE|subject|홈` 그대로 · `ACCOUNT_*` 감사 0, 계정 서비스 URL 은 아무도 듣지 않는 포트) · `#ac4_rowWideRule`(🔴 회사 관리자 정지 403 `OPERATOR_HAS_OTHER_MEMBERSHIPS` · `'*'` 200 · 단일 회사 대조군 200) · `#ac4_roleEditInA_leavesBByteUnchanged`(`[]` → A 0 · B 바이트 불변 · 소속 유지) · `#ac5_perCompanyDecisionNextRequest`(A 역할 제거 → 다음 요청 A 403 `TENANT_SCOPE_DENIED` · B 200 / B 내보내기 → `PERMISSION_DENIED` = 합 캐시가 무효화됐다는 판별 — 낡은 캐시면 aspect 가 통과해 `TENANT_SCOPE_DENIED` 였다).
+- **IT 픽스처 수선**(R2 · D-7 · D-8 · D-11 로 빨개질 자리 — 손 시드 운영자에 V0051 소속 행): `GroupItSeeds`(그룹 IT 3 클래스) · `OrgNodeAdminIntegrationTest`(상태 = 행 전체 규칙) · `OperatorAdminIntegrationTest`(WI-2 칸) · `OperatorAdminScopeConfinementIntegrationTest` · `TenantAdminRoleSeedIntegrationTest` · `TenantAdminDelegationIntegrationTest`(역할 칸 셋만 — 배정 칸은 201 을 기대하므로 넣지 않음). `GroupAdminIntegrationTest#crossTenantMember` 기대값 교체: `'*'` 멤버 422 → **400**(S1-6 계약) + 다른 회사 운영자 422 칸 신설. `DemoOperatorSeedIntegrationTest` +1(`demo-assigned-only` 를 demo-corp 그룹이 받는다 · 역할 행 여전히 0).
+- **e2e 시드**: `tests/federation-hardening-e2e/fixtures/seed.sql` — `rt-protected-target` · `rt-untagged-target` 에 `ip-pilot-corp` 소속(그 스펙은 헤더 없이 역할만 바꾼다 → 소속 0 이면 404).
+
+### 3. 실행 (rc 는 각자 따로 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `./gradlew :projects:iam-platform:apps:admin-service:compileJava` · `compileTestJava` | **0** · **0** | IT 포함 컴파일 |
+| `./gradlew :projects:iam-platform:apps:admin-service:test` (최종) | **0** | 1166 tests · fail 0 · skip 58(Testcontainers IT — Docker 없음) |
+| 🔴 **bite 1**: 역할 교체를 «운영자 행 전부 삭제»(`findRoleNamesByTenant` 의 모든 테넌트에 `deleteOperatorRolesInTenant`)로 되돌림 → `--tests PatchOperatorRoleUseCaseTest` | **1** | 9 중 **1 빨강** — F6/«B 바이트 불변» 칸(:86, beta 행 단언)만. 복원 |
+| 🔴 **bite 2**: `TenantLastAdminGuard` 의 거절 분기 비활성 → `TenantLastAdminGuardTest` · `PatchOperatorRoleUseCaseTest` · `OperatorCompanyExitUseCaseTest` | **1** | 17 중 **5 빨강** — 409 칸 전부(가드 2 · 역할 1 · 내보내기 2), 나머지 12 초록. 복원 후 같은 세 클래스 rc **0** |
+| auth-service | — | 건드리지 않아 돌리지 않았다(AC-2 «계정 무변경» 은 admin 쪽 단언) |
+| 가드 6종(`git add` 뒤): `check-index-queue-drift` · `check-task-id-collision` · `check-walkthrough-ledger-drift` · `check-error-code-registry` · `check-flyway-version-collision` · `check-dev-seed-migration-band` | **0** ×6 | — |
+| `integrationTest` | ⚪ | Docker 없음 — 위 IT · 수선한 픽스처 8 클래스는 CI 가 판정 |
+
+### 4. 계약과 다르게 / 계약이 정하지 않아 정한 곳 (🔴 = 소유자가 볼 만한 것)
+
+1. 🔴 **그룹 삭제에도 마지막 관리자 술어**를 걸었다. 계약(§ DELETE …/assignments «같은 술어를 역할 변경 · 그룹 멤버 제거 · 그룹 역할 변경에도»)은 그룹 삭제를 적지 않았지만, 삭제는 그룹이 준 모든 역할을 회수하므로 빠지면 같은 우회가 된다. 계약 문장 갱신은 S6 전 문서 정리 몫.
+2. 🔴 **T 그룹의 `TENANT_ASSIGNMENT` fan-out**: 내보내기는 계약대로 T 그룹 멤버십의 fan-out 을 **전부** 걷는다 — 그 그룹이 다른 회사 U 로의 배정을 준 경우 U 의 **소속**(배정 행)도 사라지는데 U 의 역할 행은 남는다(D-1 «비-`'*'` 역할 행 테넌트 ∈ 소속» 위반 상태). 결과: U assume 은 거절되지만 grant scope 는 역할 행 기준이라 U 의 **관리 권한은 남는다**. 계약이 이 경우를 말하지 않는다 — 결정 필요(후보: fan-out 배정 행은 남긴다 / U 의 역할 행도 함께 걷는다).
+3. 내보내기의 참여 행 삭제는 `partnership.participant_removed` outbox 이벤트를 **내지 않는다**(감사 detail 의 수만). 계약 § 내보내기가 이벤트를 요구하지 않는다 — 소비자가 생기면 다시 본다.
+4. `OPERATOR_HAS_OTHER_MEMBERSHIPS` 의 DENIED 행 `attempted_tenant_id` = 대상 **홈**(R1 «감사 기본값» — 행 전체 거절은 회사 하나로 귀속되지 않는다). 소속 하나 거절은 그 회사.
+5. 역할 변경: 헤더 생략 + 소속 둘 이상 400 · 0 → 404 가 **범위 검사 전**이다(계약 표 순서 T → 범위). 범위 밖 행위자가 400/404 로 대상의 소속 수를 구분할 수 있다 — 계약 그대로 두었다.
+6. 노드 grant(`OrgNodeAdminUseCase`)는 아직 `tenant_id` = 대상 **홈**(D-1 «부여 당시 소속»). S4 슬라이스 행에 없어 손대지 않았다 — 홈 비소속 대상에게 노드 grant 를 주면 그 행은 내보내기 단위 밖에 남는다.
+7. 🔵 e2e `tenant-admin-delegation.spec.ts` 의 `finally` 복원(`patchRoles(TARGET, ['SUPPORT_READONLY'])`)은 이제 대상이 소속 0 이라 404 — `.catch` 로 삼켜져 결과는 같다(기준 역할이 사라질 뿐, 다음 실행은 배정 → 역할 부여로 다시 만든다). nightly 에서 확인.
+
+### 5. CI 가 판정할 것 · 남은 것
+
+- **CI**: admin-service `integrationTest`(신규 IT 1 · 수선 8 · 그룹 IT 3 클래스 공용 시드) · nightly `federation-hardening-e2e`(시드 2행 · 위임 스펙의 내보내기 의미 변화).
+- **S5**: 두 409 → 소속 추가(D-12) · 발급 «이미 운영자» 소속 기준(F15) · OD-1 상한 · 772 AC-6 IT 기대값 교체 · 소속 추가 시 캐시 무효화.
+- **S6**: 콘솔 — 역할 편집 활성 회사 · «이 회사에서 내보내기» 문구 · `OPERATOR_HAS_OTHER_MEMBERSHIPS` · `TENANT_LAST_ADMIN_REQUIRED` 매핑 · 그룹 선택기 회색 처리 → 소속 술어 · `homeTenantId` 표기.
+- 위 § 4-1 · 4-2 · 4-6 소유자/후속 판단.

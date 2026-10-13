@@ -17,7 +17,7 @@ import java.util.Optional;
  * projections.
  *
  * <p>Mutating methods are exposed as id-addressed operations
- * ({@code changeStatus} / {@code changePasswordHash} / {@code deleteOperatorRoles}
+ * ({@code changeStatus} / {@code changePasswordHash} / {@code deleteDirectOperatorRolesInTenant}
  * / {@code saveOperatorRoles}) so the application layer never holds a JPA
  * entity reference.
  *
@@ -228,8 +228,39 @@ public interface AdminOperatorPort {
 
     // ---------- Operator-Role bindings ----------
 
-    /** Delete every role binding for one operator (full-replacement pattern). */
-    void deleteOperatorRoles(long operatorInternalId);
+    /**
+     * TASK-MONO-784 S4 (ADR-MONO-082 b · decision D-7 · 784 AC-0 F6) — every role row of one operator, with the
+     * columns that say where it lives and where it came from. Read by the role PATCH to tell the rows it replaces
+     * (direct rows of the acting company) from the rows it must leave byte-unchanged (other companies · group
+     * fan-out · org-node grants).
+     */
+    List<RoleRowView> findRoleRowsOfOperator(long operatorInternalId);
+
+    /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-11 UTC — last administrator) — the rows of role {@code roleName}
+     * living in {@code tenantId} ({@code admin_operator_roles.tenant_id = tenantId}, any origin) whose operator
+     * is {@code ACTIVE}. The input of the «does this company keep an administrator» predicate.
+     */
+    List<RoleRowView> findActiveRoleRowsInTenant(String tenantId, String roleName);
+
+    /**
+     * TASK-MONO-784 S4 (decision D-7) — delete the DIRECT role rows ({@code group_origin IS NULL ∧ org_node_id IS
+     * NULL}) of one operator in one company. The role PATCH replaces exactly these; the operator's rows in other
+     * companies, its group fan-out rows and its org-node grants are untouched (before 784 the PATCH deleted every
+     * row of the operator — 784 Failure Scenario 3 · AC-0 F6).
+     *
+     * @return the number of rows deleted
+     */
+    int deleteDirectOperatorRolesInTenant(long operatorInternalId, String tenantId);
+
+    /**
+     * TASK-MONO-784 S4 (decision D-9 — «이 회사에서 내보내기») — delete EVERY role row of one operator that lives
+     * in {@code tenantId}, whatever its origin (direct · group fan-out · org-node row recorded there). Rows in
+     * other companies are untouched.
+     *
+     * @return the number of rows deleted
+     */
+    int deleteOperatorRolesInTenant(long operatorInternalId, String tenantId);
 
     /** Persist the given bindings in one batch. */
     void saveOperatorRoles(List<NewRoleBinding> bindings);
@@ -329,6 +360,25 @@ public interface AdminOperatorPort {
             String description,
             boolean require2fa
     ) {}
+
+    /**
+     * TASK-MONO-784 S4 — one {@code admin_operator_roles} row: the company it lives in ({@code tenantId};
+     * {@code '*'} for a platform row) and its origin ({@code groupOrigin} non-null = group fan-out,
+     * {@code orgNodeId} non-null = org-node grant, both null = direct).
+     */
+    record RoleRowView(
+            long operatorInternalId,
+            long roleId,
+            String roleName,
+            String tenantId,
+            Long groupOrigin,
+            String orgNodeId
+    ) {
+        /** A direct grant — neither a group fan-out nor an org-node row. */
+        public boolean isDirect() {
+            return groupOrigin == null && orgNodeId == null;
+        }
+    }
 
     /** Value used to INSERT an {@code admin_operator_roles} binding. */
     record NewRoleBinding(

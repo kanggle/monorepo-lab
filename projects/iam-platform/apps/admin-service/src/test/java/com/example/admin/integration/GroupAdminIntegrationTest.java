@@ -70,6 +70,8 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
     static final String PLAIN_UUID = "00000000-0000-7000-8000-00000be05203";
     static final String MEMBER1_UUID = "00000000-0000-7000-8000-00000be05204";
     static final String MEMBER2_UUID = "00000000-0000-7000-8000-00000be05205";
+    // TASK-MONO-784 S4 — an ordinary operator of ANOTHER company (globex), member of globex only.
+    static final String OTHER_CO_UUID = "00000000-0000-7000-8000-00000be05206";
 
     @BeforeAll
     static void setupShared() throws IOException {
@@ -261,17 +263,27 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("add member of a different tenant → 422 GROUP_MEMBER_TENANT_MISMATCH")
+    @DisplayName("784 S4 (D-11): add a member not belonging to the group's tenant → 422 GROUP_MEMBER_TENANT_MISMATCH; '*' member → 400 (D2)")
     void crossTenantMember_unprocessable() throws Exception {
         String groupId = createGroup(SUPER_UUID, "acme", "테넌트체크팀", null);
-        // SUPER_UUID is a platform operator (tenant '*'); its home tenant differs from 'acme'.
+        GroupItSeeds.seedOperator(jdbcTemplate, OTHER_CO_UUID, "globex", "grp-other-co@example.com", null);
+        // A globex operator (member of globex only) is not a member of acme.
+        mockMvc.perform(post("/api/admin/groups/" + groupId + "/members")
+                        .header("Authorization", bearer(SUPER_UUID))
+                        .header("X-Operator-Reason", "mismatch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operatorId\":\"" + OTHER_CO_UUID + "\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("GROUP_MEMBER_TENANT_MISMATCH"));
+        // SUPER_UUID is a platform operator ('*'): ADR-MONO-082 D2 — '*' takes no company membership (before
+        // 784 S4 this was the 422 above, because home '*' ≠ 'acme').
         mockMvc.perform(post("/api/admin/groups/" + groupId + "/members")
                         .header("Authorization", bearer(SUPER_UUID))
                         .header("X-Operator-Reason", "mismatch")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"operatorId\":\"" + SUPER_UUID + "\"}"))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("GROUP_MEMBER_TENANT_MISMATCH"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ public class UnlinkOperatorIdentityUseCase {
 
     private final AdminOperatorPort operatorPort;
     private final AdminActionAuditor auditor;
-    private final TenantScopeGuard tenantScopeGuard;
+    private final OperatorRowScopeGuard rowScopeGuard;
 
     /**
      * @param operatorPublicId target operator's external UUID v7 (path variable)
@@ -49,9 +49,9 @@ public class UnlinkOperatorIdentityUseCase {
                 .orElseThrow(() -> new OperatorNotFoundException(
                         "Operator not found for operatorId=" + operatorPublicId));
 
-        tenantScopeGuard.requireTenantInScope(
-                actor, Permission.OPERATOR_MANAGE, operator.tenantId(),
-                ActionCode.OPERATOR_IDENTITY_UNLINK);
+        // TASK-MONO-784 S4 (rider R3 · D-8): the same row-wide rule as identity:link.
+        rowScopeGuard.requireRowAdministrable(
+                actor, Permission.OPERATOR_MANAGE, operator, ActionCode.OPERATOR_IDENTITY_UNLINK);
 
         String previousIdentityId = operator.identityId();
         boolean alreadyUnlinked = (previousIdentityId == null || previousIdentityId.isBlank());

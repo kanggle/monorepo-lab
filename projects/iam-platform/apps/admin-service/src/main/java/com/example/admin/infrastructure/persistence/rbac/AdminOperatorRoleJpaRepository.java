@@ -20,10 +20,45 @@ public interface AdminOperatorRoleJpaRepository
      */
     List<AdminOperatorRoleJpaEntity> findByOperatorIdIn(Collection<Long> operatorIds);
 
-    /** Delete every role binding for one operator (used on full role replacement). */
+    /**
+     * Delete every role binding for one operator. 🔴 NOT the role-edit path any more (TASK-MONO-784 S4 · D-7):
+     * deleting every row of the operator wiped its other companies' roles, its group fan-out rows and its
+     * org-node grants (784 Failure Scenario 3 · AC-0 F6). Role edits use {@link #deleteDirectByOperatorIdAndTenantId}.
+     */
     @Modifying
     @Query("DELETE FROM AdminOperatorRoleJpaEntity e WHERE e.operatorId = :operatorId")
     int deleteByOperatorId(@Param("operatorId") Long operatorId);
+
+    /**
+     * TASK-MONO-784 S4 (D-7) — the rows a role PATCH replaces: one operator's DIRECT rows in one company
+     * ({@code group_origin IS NULL ∧ org_node_id IS NULL}). Flushes pending writes first and clears the
+     * persistence context after, so a role row loaded earlier in the request cannot shadow the re-insert that
+     * follows (a stale managed instance with the same 3-column key would turn the INSERT into a no-op merge).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM AdminOperatorRoleJpaEntity e WHERE e.operatorId = :operatorId AND e.tenantId = :tenantId "
+            + "AND e.groupOrigin IS NULL AND e.orgNodeId IS NULL")
+    int deleteDirectByOperatorIdAndTenantId(@Param("operatorId") Long operatorId,
+                                            @Param("tenantId") String tenantId);
+
+    /**
+     * TASK-MONO-784 S4 (D-9 «이 회사에서 내보내기») — every row of one operator living in one company, any
+     * origin (direct · group fan-out · org-node row recorded there). Other companies' rows are untouched.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM AdminOperatorRoleJpaEntity e WHERE e.operatorId = :operatorId AND e.tenantId = :tenantId")
+    int deleteByOperatorIdAndTenantId(@Param("operatorId") Long operatorId,
+                                      @Param("tenantId") String tenantId);
+
+    /**
+     * TASK-MONO-784 S4 (owner decision 2026-10-11 UTC — last administrator) — the rows of one role living in one
+     * company whose operator is ACTIVE, any origin.
+     */
+    @Query("SELECT e FROM AdminOperatorRoleJpaEntity e, AdminOperatorJpaEntity o, AdminRoleJpaEntity r "
+            + "WHERE e.operatorId = o.id AND e.roleId = r.id AND o.status = 'ACTIVE' "
+            + "AND e.tenantId = :tenantId AND r.name = :roleName")
+    List<AdminOperatorRoleJpaEntity> findActiveByTenantIdAndRoleName(@Param("tenantId") String tenantId,
+                                                                     @Param("roleName") String roleName);
 
     /**
      * TASK-BE-492 (ADR-MONO-047 D5) — the node-scoped grants attached to one org-node,
