@@ -286,6 +286,23 @@ describe('operators-api — PER-ENDPOINT HEADER MATRIX (the key correctness risk
     expect('Idempotency-Key' in h).toBe(false);
   });
 
+  // TASK-MONO-784 S6 (ADR-MONO-082 b § 행동 테넌트 — role edit is per
+  // company): the PATCH is judged by `X-Tenant-Id`, so a role edit MUST
+  // carry the active company, same as every other operators call.
+  it('EDIT-ROLES carries the active company as X-Tenant-Id (ADR-MONO-082 b per-company role edit)', async () => {
+    cookieJar.set(TENANT_COOKIE, 'acme-corp');
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ operatorId: 'op-1', roles: ['TENANT_ADMIN'], auditId: 'a' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await editOperatorRoles('op-1', ['TENANT_ADMIN'], 'company role realignment');
+
+    const [, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h['X-Tenant-Id']).toBe('acme-corp');
+  });
+
   it('EDIT-ROLES allows an empty [] (remove all roles) and still no key', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({ operatorId: 'op-1', roles: [], auditId: 'a' }),
@@ -438,6 +455,29 @@ describe('operators-api — §2.5 resilience error mapping', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(403);
     expect(err.code).toBe('TENANT_SCOPE_DENIED');
+  });
+
+  // TASK-MONO-784 S6 (라이더 R3 / D-8) — a change-status whose target is a
+  // member of more than one company is row-wide and refused to a mere
+  // company admin (only `'*'` may). The code is new; the client must
+  // surface it verbatim (not swallow it as a generic 403).
+  it('403 OPERATOR_HAS_OTHER_MEMBERSHIPS (R3 row-wide refusal) → ApiError(403) inline', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ code: 'OPERATOR_HAS_OTHER_MEMBERSHIPS' }, 403),
+        ),
+    );
+    const err = await changeOperatorStatus(
+      'op-1',
+      'SUSPENDED',
+      'security incident',
+    ).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('OPERATOR_HAS_OTHER_MEMBERSHIPS');
   });
 
   it('409 OPERATOR_EMAIL_CONFLICT → ApiError(409) inline', async () => {

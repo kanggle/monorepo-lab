@@ -371,6 +371,11 @@ export function OperatorsScreen({
     setPending({
       kind: 'edit-roles',
       operator,
+      // TASK-MONO-784 S6 — edit-roles replaces only the ACTIVE company's
+      // direct roles (the header the producer already reads); name it in
+      // the confirm copy so the operator isn't surprised other companies
+      // are untouched.
+      tenantId: activeTenant ?? undefined,
       // Elevated copy is computed from the FINAL selection at confirm time
       // (grant SUPER_ADMIN / remove-all) — start elevated so the wording
       // is strong by default for this escalation surface.
@@ -386,6 +391,9 @@ export function OperatorsScreen({
       kind: 'change-status',
       operator,
       nextStatus,
+      // TASK-MONO-784 S6 — a platform-scope ('*') actor's suspend reaches
+      // every one of the target's companies (row-wide — R3); say so.
+      allCompanies: nextStatus === 'SUSPENDED' && isPlatformOperator,
       // Suspending is privilege-high → elevated copy; re-activating is not.
       elevated: nextStatus === 'SUSPENDED',
     });

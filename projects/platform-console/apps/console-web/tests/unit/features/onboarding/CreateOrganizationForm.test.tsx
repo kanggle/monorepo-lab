@@ -117,6 +117,25 @@ describe('CreateOrganizationForm — submit outcomes', () => {
     expect(screen.getByTestId('onboarding-submit')).not.toBeDisabled();
   });
 
+  // TASK-MONO-784 S6 (ADR-MONO-082 b OD-1) — the owned-tenant limit.
+  it('422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED → inline actionable error, no navigation', async () => {
+    const submit = vi.fn().mockResolvedValue(
+      jsonResponse(422, { code: 'OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED' }),
+    );
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<CreateOrganizationForm submit={submit} navigate={navigate} />);
+
+    await user.type(screen.getByTestId('onboarding-tenant-id'), 'acme-corp');
+    await user.type(screen.getByTestId('onboarding-org-name'), 'Acme Corp');
+    await user.click(screen.getByTestId('onboarding-submit'));
+
+    const err = await screen.findByTestId('onboarding-error');
+    expect(err).toHaveTextContent('한 계정으로 만들 수 있는 회사 수를 초과했습니다');
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('onboarding-submit')).not.toBeDisabled();
+  });
+
   it('503 unavailable → inline retryable error, session preserved (no navigation)', async () => {
     const submit = vi.fn().mockResolvedValue(
       jsonResponse(503, { code: 'DOWNSTREAM_ERROR' }),

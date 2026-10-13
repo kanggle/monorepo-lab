@@ -355,6 +355,51 @@ describe('OperatorsScreen — change-status suspend (reason+confirm)', () => {
     expect(body.status).toBe('SUSPENDED');
     expect(body.idempotencyKey).toBeUndefined();
   });
+
+  // TASK-MONO-784 S6 (라이더 R3) — a company admin cannot row-wide-suspend a
+  // multi-company operator; the producer's new code must render inline with
+  // actionable copy pointing at «이 회사에서 내보내기» instead.
+  it('403 OPERATOR_HAS_OTHER_MEMBERSHIPS surfaces inline with the «내보내기» hint (no crash)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(
+      <OperatorsScreen initial={PAGE} />,
+      { wrapper: wrapper() },
+    );
+
+    await user.click(screen.getByTestId('action-status-op-1'));
+    const dialog = screen.getByTestId('operator-confirm-dialog');
+    fetchMock.mockResolvedValue(
+      jsonResponse({ code: 'OPERATOR_HAS_OTHER_MEMBERSHIPS' }, 403),
+    );
+    await user.type(
+      within(dialog).getByTestId('operator-confirm-reason'),
+      'security incident',
+    );
+    await user.click(within(dialog).getByTestId('operator-confirm-submit'));
+
+    await waitFor(() =>
+      expect(
+        within(dialog).getByTestId('operator-confirm-error'),
+      ).toHaveTextContent('이 회사에서 내보내기'),
+    );
+  });
+
+  // TASK-MONO-784 S6 — a platform-scope ('*') actor's suspend is row-wide
+  // (every company); the confirm copy says so up front.
+  it('a platform-scope actor sees "모든 회사" in the suspend confirm copy', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const user = userEvent.setup();
+    render(
+      <OperatorsScreen initial={PAGE} isPlatformOperator />,
+      { wrapper: wrapper() },
+    );
+
+    await user.click(screen.getByTestId('action-status-op-1'));
+    const dialog = screen.getByTestId('operator-confirm-dialog');
+    expect(dialog).toHaveTextContent('모든 회사');
+  });
 });
 
 // TASK-PC-FE-045: self change-password / my-profile moved to /account

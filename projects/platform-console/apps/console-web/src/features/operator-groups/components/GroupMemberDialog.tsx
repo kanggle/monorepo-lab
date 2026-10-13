@@ -16,15 +16,22 @@ import { GroupReasonDialog } from './GroupReasonDialog';
  * excludes/disables operators who are already members (AC-3), and shows the
  * chosen operator's name + email in the reason-confirm step.
  *
- * HOME vs ASSIGNED (TASK-PC-FE-317 AC-0 → closed by TASK-PC-FE-319 / TASK-BE-626):
- * the list API returns operators whose HOME **or** an ASSIGNMENT is the group's
- * tenant, but `GroupAdminUseCase.addMember` only accepts a member whose HOME
- * tenant equals the group's tenant (`422 GROUP_MEMBER_TENANT_MISMATCH`). Each
- * list item now carries `homeTenantId`, so an assignment-only candidate is
- * shown DISABLED with the reason instead of failing after the reason step.
- * An item WITHOUT `homeTenantId` (older producer / sample fixture) is treated
- * as «unknown» and stays selectable — the producer remains the authority, and
- * a 422 still surfaces verbatim via `error`.
+ * HOME vs ASSIGNED (TASK-PC-FE-317 AC-0 → closed by TASK-PC-FE-319 /
+ * TASK-BE-626 → REMOVED by TASK-MONO-784 S6): `GroupAdminUseCase.addMember`
+ * used to accept only a member whose HOME tenant equalled the group's
+ * tenant (`422 GROUP_MEMBER_TENANT_MISMATCH`), so an assignment-only
+ * candidate (home elsewhere) was shown disabled with a «배정만 됨» pill
+ * (`homeTenantId !== groupTenantId`). ADR-MONO-082 b (TASK-MONO-784) changed
+ * the producer's predicate to **membership** (a `operator_tenant_assignment`
+ * row for the group's tenant — exactly what this list already queries by),
+ * so every row the list returns is now already a valid candidate — the
+ * greying is gone (console-integration-contract § «한 사람 · 여러 회사»:
+ * "the TASK-PC-FE-319 «배정만 됨» greying by `homeTenantId` is removed").
+ * `homeTenantId` itself is left on the wire shape (optional, unused here) —
+ * it may still back a "처음 소속된 회사" display elsewhere; it is never read
+ * as "소속" again. A stale producer (pre-784) would still answer a true
+ * mismatch with `422 GROUP_MEMBER_TENANT_MISMATCH`, which still surfaces
+ * verbatim via `error` — this component only drops the PRE-EMPTIVE grey-out.
  *
  * SUSPENDED operators (AC-0(b): the producer's `addMember` has no status
  * check) are shown and ARE selectable — the picker does not invent a
@@ -44,15 +51,6 @@ export interface GroupMemberDialogProps {
   error: string | null;
   onConfirm: (operatorId: string, reason: string) => void;
   onCancel: () => void;
-}
-
-/**
- * TASK-PC-FE-319 — true only when the producer SAID the operator's home is a
- * different tenant. Absent `homeTenantId` ⇒ unknown ⇒ not blocked (never guess
- * «not home» from a missing field).
- */
-function isAssignmentOnly(op: OperatorSummary, groupTenantId: string): boolean {
-  return op.homeTenantId !== undefined && op.homeTenantId !== groupTenantId;
 }
 
 function matchesSearch(op: OperatorSummary, query: string): boolean {
@@ -188,14 +186,13 @@ export function GroupMemberDialog({
               >
                 {filtered.map((op) => {
                   const isMember = existingSet.has(op.operatorId);
-                  const otherHome = !isMember && isAssignmentOnly(op, groupTenantId);
                   const isSelected = selectedOperator?.operatorId === op.operatorId;
                   return (
                     <li key={op.operatorId}>
                       <button
                         type="button"
                         onClick={() => setSelectedOperator(op)}
-                        disabled={isMember || otherHome}
+                        disabled={isMember}
                         aria-pressed={isSelected}
                         data-testid={`group-member-candidate-${op.operatorId}`}
                         className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -213,15 +210,6 @@ export function GroupMemberDialog({
                         {isMember && (
                           <span className="text-xs text-muted-foreground">
                             이미 멤버
-                          </span>
-                        )}
-                        {otherHome && (
-                          <span
-                            data-testid={`group-member-candidate-other-home-${op.operatorId}`}
-                            className="shrink-0 text-xs text-muted-foreground"
-                            title="그룹에는 이 테넌트가 원래 소속(home)인 운영자만 들어갈 수 있습니다"
-                          >
-                            {op.homeTenantId} 소속 · 배정만 됨
                           </span>
                         )}
                       </button>

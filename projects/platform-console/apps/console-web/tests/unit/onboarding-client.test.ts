@@ -149,6 +149,31 @@ describe('createOrganization — inline-actionable producer errors', () => {
       code: 'TENANT_ALREADY_EXISTS',
     });
   });
+
+  // TASK-MONO-784 S6 (ADR-MONO-082 b OD-1) — the owned-tenant limit is a
+  // business-rule refusal, NOT a downstream outage: retrying never helps, so
+  // it MUST be an inline ApiError(422), never OnboardingUnavailableError
+  // (which the proxy route logs as a degrade incident and whose docstring
+  // frames as "retryable").
+  it('422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED → ApiError(422, passthrough) — NOT OnboardingUnavailableError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            code: 'OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED',
+            message: 'owned-tenant limit exceeded',
+          }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+    const err = await createOrganization(INPUT, SUBJECT).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(OnboardingUnavailableError);
+    expect(err.status).toBe(422);
+    expect(err.code).toBe('OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED');
+  });
 });
 
 describe('createOrganization — unavailable', () => {
