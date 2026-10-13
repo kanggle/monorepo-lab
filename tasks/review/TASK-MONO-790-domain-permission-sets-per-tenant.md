@@ -8,7 +8,7 @@ TASK-MONO-790
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,9 +57,9 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 실측: ① 운영자 도메인 역할의 발급 경로 전수와 각각의 입력 · 실패 처리 ② 도메인별(WMS · SCM · ERP · Finance · E-commerce) 실제 서버 인가와 세분 유무 ③ 관리 역할 · 그룹 fan-out · 출처 표시가 중복 부여를 안전하게 표현하는지 ④ 기존 토큰 회수 지연 ⑤ 콘솔 메뉴 · 화면 · 버튼 판정 입력과 배포 방식. — ✅ 2026-10-14 UTC: `ADR-MONO-083` § Context ①~⑤ (file:line 근거). ⚪ fan 도메인 인가 · 라이브 모집단은 열지 않음(ADR § Outstanding).
-- [ ] **AC-1** — `ADR-MONO-083` PROPOSED 를 `main` 에 머지(번호 확정 — ACCEPT 대기 중 번호가 넘어가지 않게).
-- [ ] **AC-2** — 소유자 정확형 `ADR-MONO-083 ACCEPTED — <A|B|C>` 수신 → Status 전환 · History · ACCEPT 게이트 기록 · OD 답(또는 기본값 = 구현자 선택) 대조. 결정 본문 바이트 불변.
-- [ ] **AC-3** — ACCEPT PR 안에서 단계 티켓 P1~P9 기안 · `TASK-MONO-773` 선행에 ADR-083(+P9) 추가 · ADR-035 · ADR-082 · ADR-020 덧붙임(본문 바이트 불변).
+- [x] **AC-1** — `ADR-MONO-083` PROPOSED 를 `main` 에 머지(번호 확정 — ACCEPT 대기 중 번호가 넘어가지 않게). — ✅ PR #4335 · 스쿼시 `2f0577f49`(머지 시점 실패 0 · 6 pass / 60 skip).
+- [x] **AC-2** — 소유자 정확형 `ADR-MONO-083 ACCEPTED — <A|B|C>` 수신 → Status 전환 · History · ACCEPT 게이트 기록 · OD 답(또는 기본값 = 구현자 선택) 대조. 결정 본문 바이트 불변. — ✅ 2026-10-14 UTC 소유자 정확형 *«ADR-MONO-083 ACCEPTED — A»* · OD 답 미공급 → OD-1~OD-6 기본값 = 구현자 선택(ADR § OD 대조). D1~D9 · 갈래 · OD 표 본문 무변경.
+- [x] **AC-3** — ACCEPT PR 안에서 단계 티켓 P1~P9 기안 · `TASK-MONO-773` 선행에 ADR-083(+P9) 추가 · ADR-035 · ADR-082 · ADR-020 덧붙임(본문 바이트 불변). — ✅ P1 `TASK-MONO-791` · P2 `TASK-BE-631` · P3 `TASK-BE-632` · P4 `TASK-PC-FE-338` · P5~P8 `TASK-MONO-792`~`795` · P9 = 773 선행 · AC-2 · AC-3 개정 · § Outstanding → `TASK-BE-633`. 덧붙임 셋(035 O1 뒤 · 020 D5 뒤 · 082 D5 뒤). 🔴 P3 AC-0 에 OD-3 재확인을 걸었다 — 기본값이면 플랫폼 운영자는 082 D2 로 세트를 가질 수 없어 도메인 역할 0.
 
 # Related Specs
 

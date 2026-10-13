@@ -76,7 +76,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-BE-631-domain-permission-sets-admin-service.md` — **`ADR-MONO-083` P2 — admin-service: 도메인 업무 권한 세트 · 테넌트별 직접/그룹 배정(출처별 행) · 실효 권한 · `domainRoles` · «이전 호환» 백필** (READY, 2026-10-14 UTC). 🔴 토큰은 안 바뀐다(P3 몫). 대조군 = 직접 + G1 + G2 중복 회수 · A/B 분리 · 권한 상승 거절 · 백필 완료 판정 SQL(P3 배포 게이트). 선행 `TASK-MONO-791` · 784 `done/`. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-632-assume-roles-from-assigned-sets.md` — **`ADR-MONO-083` P3 — auth-service: assume `roles` = 배정 세트 ∩ 구독 · 상한 · 구독 파생 제거 · 운영자 토큰 `erp.write` 제거 · assume TTL(OD-2) · 회수 지연 실측** (READY). 🔴 배포 게이트 = BE-631 배포 + 백필 완료 0 · AC-0 OD-3 재확인(플랫폼 운영자 도메인 역할 0 여부). 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
