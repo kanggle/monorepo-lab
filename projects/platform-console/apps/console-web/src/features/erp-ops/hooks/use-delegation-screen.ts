@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import type { DelegationGrant } from '../api/delegation-types';
+import { ERP_MAX_PAGE_SIZE, type Employee } from '../api/types';
 import {
   useDelegations,
   useCreateDelegation,
   useRevokeDelegation,
+  useEmployees,
 } from './use-erp-ops';
 
 /**
@@ -60,6 +62,15 @@ export function useDelegationCreate(onClose: () => void) {
   const [reason, setReason] = useState('');
   const createM = useCreateDelegation();
 
+  // TASK-PC-FE-335 AC-1/AC-4 — 대결자 is an EMPLOYEE SELECTOR now (was a raw-id
+  // text input); same shape as the approval approver route (one page of up to
+  // ERP_MAX_PAGE_SIZE, fallback to the id input on error, same testid). RETIRED
+  // employees stay listed but are NOT selectable here — `delegateId` must be an
+  // ACTIVE employee (the producer refuses otherwise with 422 `delegate_unresolved`).
+  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const employees: Employee[] = employeesQ.data?.data ?? [];
+  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
+
   const ok = delegateId.trim() !== '' && validFrom.trim() !== '';
   const canConfirm = ok && !createM.isPending;
 
@@ -91,6 +102,9 @@ export function useDelegationCreate(onClose: () => void) {
     createM,
     canConfirm,
     onConfirm,
+    employeesQ,
+    employees,
+    totalEmployees,
   };
 }
 

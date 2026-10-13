@@ -298,16 +298,83 @@ describe('DelegationScreen — absent validTo renders as "무기한"', () => {
 // Create dialog.
 // ===========================================================================
 
+// TASK-PC-FE-335 AC-1/AC-3/AC-4 — 대결자 is an EMPLOYEE SELECTOR now (it was a
+// raw-id text input). Same testid `delegation-create-delegateId`, but a
+// <select> fed by `GET /api/erp/masterdata/employees`; a RETIRED employee is
+// listed but its <option> is disabled (delegateId must be ACTIVE — 422
+// `delegate_unresolved`).
+const EMP_ACTIVE_DELEGATE = {
+  id: 'emp-delegate',
+  employeeNumber: 'E-D1',
+  name: '김대결',
+  status: 'ACTIVE',
+  effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+};
+const EMP_RETIRED_DELEGATE = {
+  id: 'emp-retired',
+  employeeNumber: 'E-D2',
+  name: '이퇴사',
+  status: 'RETIRED',
+  effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: '2024-01-01' },
+};
+const DELEGATE_EMPLOYEES_PAGE = {
+  data: [EMP_ACTIVE_DELEGATE, EMP_RETIRED_DELEGATE],
+  meta: { page: 0, size: 100, totalElements: 2 },
+};
+
+/** fetch mock: employee list for the delegate selector + the delegation
+ *  list/create endpoints — mirrors `ApprovalScreen.test.tsx`'s
+ *  `createDialogFetch()` shape. */
+function makeCreateDialogFetchMock({
+  delegatorList = DELEGATOR_LIST,
+  delegateList = DELEGATE_LIST,
+  employeesOk = true,
+  onPost,
+}: {
+  delegatorList?: typeof DELEGATOR_LIST;
+  delegateList?: typeof DELEGATE_LIST;
+  employeesOk?: boolean;
+  onPost?: () => Response;
+} = {}) {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (String(url).startsWith('/api/erp/masterdata/employees')) {
+      return Promise.resolve(
+        employeesOk
+          ? jsonResponse(DELEGATE_EMPLOYEES_PAGE)
+          : errorResponse('DATA_SCOPE_FORBIDDEN', 403),
+      );
+    }
+    if ((init as RequestInit)?.method === 'POST') {
+      return Promise.resolve(onPost ? onPost() : jsonResponse(ACTIVE_GRANT_DELEGATOR, 201));
+    }
+    if (String(url).includes('role=DELEGATE') && !String(url).includes('role=DELEGATOR')) {
+      return Promise.resolve(jsonResponse(delegateList));
+    }
+    return Promise.resolve(jsonResponse(delegatorList));
+  });
+}
+
+async function openCreateWithEmployees(user: ReturnType<typeof userEvent.setup>) {
+  render(<DelegationScreen />, { wrapper: wrapper() });
+  await user.click(screen.getByTestId('delegation-create'));
+  await waitFor(() =>
+    expect(screen.getByTestId('delegation-create-delegateId')).toBeEnabled(),
+  );
+  expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('SELECT');
+}
+
 describe('DelegationScreen — create dialog', () => {
   it('create button opens the dialog; submit is disabled until required fields filled', async () => {
-    vi.stubGlobal('fetch', makeFetchMock());
+    vi.stubGlobal('fetch', makeCreateDialogFetchMock());
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
-    await user.click(screen.getByTestId('delegation-create'));
+    await openCreateWithEmployees(user);
     expect(screen.getByTestId('delegation-create-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('delegation-create-submit')).toBeDisabled();
-    // Fill delegateId.
-    await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-delegate');
+    // Pick delegateId.
+    await user.selectOptions(
+      screen.getByTestId('delegation-create-delegateId'),
+      'emp-delegate',
+    );
     // Still disabled (no validFrom).
     expect(screen.getByTestId('delegation-create-submit')).toBeDisabled();
     // Fill validFrom.
@@ -315,26 +382,19 @@ describe('DelegationScreen — create dialog', () => {
     expect(screen.getByTestId('delegation-create-submit')).toBeEnabled();
   });
 
-  it('submit sends delegateId + validFrom + idempotencyKey to /api/erp/approval/delegations; closes on success', async () => {
+  it('AC-1 — submit sends the CHOSEN delegateId + validFrom + idempotencyKey to /api/erp/approval/delegations; closes on success', async () => {
     const delegatorList = {
       data: [ACTIVE_GRANT_DELEGATOR],
       meta: { page: 0, size: 20, totalElements: 1 },
     };
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if ((init as RequestInit)?.method === 'POST') {
-        // POST create → return the grant.
-        return Promise.resolve(jsonResponse(ACTIVE_GRANT_DELEGATOR, 201));
-      }
-      if (String(url).includes('role=DELEGATE') && !String(url).includes('role=DELEGATOR')) {
-        return Promise.resolve(jsonResponse(EMPTY_LIST));
-      }
-      return Promise.resolve(jsonResponse(delegatorList));
-    });
+    const fetchMock = makeCreateDialogFetchMock({ delegatorList, delegateList: EMPTY_LIST });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
-    await user.click(screen.getByTestId('delegation-create'));
-    await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-delegate');
+    await openCreateWithEmployees(user);
+    await user.selectOptions(
+      screen.getByTestId('delegation-create-delegateId'),
+      'emp-delegate',
+    );
     await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
     await user.click(screen.getByTestId('delegation-create-submit'));
     await waitFor(() =>
@@ -366,26 +426,65 @@ describe('DelegationScreen — create dialog', () => {
   });
 
   it('create error 422 DELEGATION_INVALID → inline error message (no crash)', async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      if ((init as RequestInit)?.method === 'POST') {
-        return Promise.resolve(errorResponse('DELEGATION_INVALID', 422));
-      }
-      if (String(url).includes('role=DELEGATE') && !String(url).includes('role=DELEGATOR')) {
-        return Promise.resolve(jsonResponse(EMPTY_LIST));
-      }
-      return Promise.resolve(jsonResponse(DELEGATOR_LIST));
+    const fetchMock = makeCreateDialogFetchMock({
+      onPost: () => errorResponse('DELEGATION_INVALID', 422),
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
-    await user.click(screen.getByTestId('delegation-create'));
-    await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-self');
+    await openCreateWithEmployees(user);
+    await user.selectOptions(
+      screen.getByTestId('delegation-create-delegateId'),
+      'emp-delegate',
+    );
     await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
     await user.click(screen.getByTestId('delegation-create-submit'));
     const errEl = await screen.findByTestId('delegation-error');
     expect(errEl.textContent).toContain('자기 위임');
     // Dialog still mounted (no crash).
     expect(screen.getByTestId('delegation-create-dialog')).toBeInTheDocument();
+  });
+
+  it('🔴 AC-4 — a RETIRED employee is listed in the delegate selector but its option is disabled', async () => {
+    vi.stubGlobal('fetch', makeCreateDialogFetchMock());
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    const select = screen.getByTestId(
+      'delegation-create-delegateId',
+    ) as HTMLSelectElement;
+    const opt = (v: string) =>
+      Array.from(select.options).find((o) => o.value === v)!;
+    expect(opt('emp-retired').textContent).toContain('폐기된 직원');
+    expect(opt('emp-retired').disabled).toBe(true);
+    expect(opt('emp-delegate').disabled).toBe(false);
+  });
+
+  it('AC-3 — employee list unreadable → the delegate row falls back to an id input (same testid) and the dialog still submits', async () => {
+    const fetchMock = makeCreateDialogFetchMock({ employeesOk: false });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<DelegationScreen />, { wrapper: wrapper() });
+    await user.click(screen.getByTestId('delegation-create'));
+    await screen.findByTestId('delegation-create-delegateId-fallback');
+    expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('INPUT');
+    await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-manual');
+    await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
+    await user.click(screen.getByTestId('delegation-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          (c) =>
+            String(c[0]).endsWith('/delegations') &&
+            (c[1] as RequestInit).method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) =>
+        String(c[0]).endsWith('/delegations') &&
+        (c[1] as RequestInit).method === 'POST',
+    )!;
+    const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    expect(body.delegateId).toBe('emp-manual');
   });
 });
 

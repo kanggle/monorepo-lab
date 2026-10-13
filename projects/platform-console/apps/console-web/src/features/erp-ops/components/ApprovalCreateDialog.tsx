@@ -3,11 +3,16 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { APPROVAL_SUBJECT_TYPES } from '../api/approval-types';
-import { ERP_MAX_PAGE_SIZE, type Employee } from '../api/types';
-import { useCreateApproval, useEmployees } from '../hooks/use-erp-ops';
+import { ERP_MAX_PAGE_SIZE, type Department, type Employee } from '../api/types';
+import {
+  useCreateApproval,
+  useDepartments,
+  useEmployees,
+} from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
 import { SUBJECT_LABEL } from './approval-common';
 import { ACCOUNT_UNLINKED_LABEL } from './AccountLinkBadge';
+import { ErpEmployeeSelect, employeeOptionLabel } from './ErpEmployeeSelect';
 
 // ===========================================================================
 // Create dialog — DRAFT request.
@@ -22,9 +27,19 @@ import { ACCOUNT_UNLINKED_LABEL } from './AccountLinkBadge';
  * and is marked; submit refuses it with `approver_unresolved`.
  */
 export function approverOptionLabel(e: Employee): string {
-  const parts = [`${e.employeeNumber} · ${e.name}`];
-  if (e.status === 'RETIRED') parts.push('폐기된 직원');
-  if (!e.accountId) parts.push(ACCOUNT_UNLINKED_LABEL);
+  // TASK-PC-FE-335 — one label rule for every employee picker in erp-ops.
+  return employeeOptionLabel(e);
+}
+
+/**
+ * One department option's label (TASK-PC-FE-335 AC-1 — 대상 ID DEPARTMENT
+ * route). Mirrors `approverOptionLabel`'s shape with the fields the
+ * `Department` type actually carries (`code` · `name`); a retired department
+ * stays listed (E2 — never hidden) and is marked, same convention.
+ */
+export function subjectDepartmentOptionLabel(d: Department): string {
+  const parts = [`${d.code} · ${d.name}`];
+  if (d.status === 'RETIRED') parts.push('폐기된 부서');
   return parts.join(' — ');
 }
 
@@ -39,10 +54,28 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
   const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
   const selectorMode = !employeesQ.isError;
   const employeesLoading = employeesQ.isLoading;
+
+  // TASK-PC-FE-335 AC-1/AC-2 — 대상 ID is a selector too now: EMPLOYEE reuses
+  // the SAME employee fetch above (one page, cached by React Query); DEPARTMENT
+  // reads its own list the same shape (one page of up to ERP_MAX_PAGE_SIZE,
+  // fallback to the raw-id input on error, truncated notice over the cap).
+  const departmentsQ = useDepartments({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const departments: Department[] = departmentsQ.data?.data ?? [];
+  const totalDepartments =
+    departmentsQ.data?.meta.totalElements ?? departments.length;
+  const departmentSelectorMode = !departmentsQ.isError;
+  const departmentsLoading = departmentsQ.isLoading;
+
   const [subjectType, setSubjectType] = useState<string>(
     APPROVAL_SUBJECT_TYPES[0],
   );
   const [subjectId, setSubjectId] = useState('');
+  // AC-2 — switching subjectType clears the previously-picked id AND swaps
+  // the list the selector draws from (no stale cross-type id survives).
+  function changeSubjectType(next: string) {
+    setSubjectType(next);
+    setSubjectId('');
+  }
   const [title, setTitle] = useState('');
   // Ordered approver route — each element is an approver id string.
   // Starts with a single blank row (legacy-compatible: 1 row → approverId).
@@ -137,7 +170,7 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
             id="approval-create-subjectType"
             data-testid="approval-create-subjectType"
             value={subjectType}
-            onChange={(e) => setSubjectType(e.target.value)}
+            onChange={(e) => changeSubjectType(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
           >
             {APPROVAL_SUBJECT_TYPES.map((t) => (
@@ -155,14 +188,96 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
           >
             대상 ID <span aria-hidden="true">*</span>
           </label>
-          <input
-            id="approval-create-subjectId"
-            data-testid="approval-create-subjectId"
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-            placeholder="dept-… / emp-…"
-          />
+          {subjectType === 'EMPLOYEE' ? (
+            <ErpEmployeeSelect
+              employees={employees}
+              isError={employeesQ.isError}
+              isLoading={employeesLoading}
+              value={subjectId}
+              onChange={setSubjectId}
+              testId="approval-create-subjectId"
+              id="approval-create-subjectId"
+              blankOptionLabel="— 대상 직원 선택 —"
+              inputPlaceholder="emp-…"
+            />
+          ) : departmentSelectorMode ? (
+            <select
+              id="approval-create-subjectId"
+              data-testid="approval-create-subjectId"
+              value={subjectId}
+              disabled={departmentsLoading}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+            >
+              <option value="">
+                {departmentsLoading
+                  ? '부서 목록 불러오는 중…'
+                  : '— 대상 부서 선택 —'}
+              </option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {subjectDepartmentOptionLabel(d)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="approval-create-subjectId"
+              data-testid="approval-create-subjectId"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+              placeholder="dept-…"
+            />
+          )}
+          {subjectType === 'EMPLOYEE' && employeesQ.isError && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              role="status"
+              data-testid="approval-create-subjectId-fallback"
+            >
+              직원 목록을 불러오지 못해 대상 직원 ID 를 직접 입력합니다.
+            </p>
+          )}
+          {subjectType === 'EMPLOYEE' &&
+            employeesQ.isSuccess &&
+            totalEmployees > employees.length && (
+              <p
+                className="mt-1 text-xs text-muted-foreground"
+                data-testid="approval-create-subjectId-truncated"
+              >
+                직원이 많아 처음 {employees.length}명만 표시합니다.
+              </p>
+            )}
+          {subjectType === 'DEPARTMENT' && departmentsQ.isError && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              role="status"
+              data-testid="approval-create-subjectId-dept-fallback"
+            >
+              부서 목록을 불러오지 못해 대상 부서 ID 를 직접 입력합니다.
+            </p>
+          )}
+          {subjectType === 'DEPARTMENT' &&
+            departmentsQ.isSuccess &&
+            totalDepartments > departments.length && (
+              <p
+                className="mt-1 text-xs text-muted-foreground"
+                data-testid="approval-create-subjectId-dept-truncated"
+              >
+                부서가 많아 처음 {departments.length}개만 표시합니다.
+              </p>
+            )}
+          {subjectType === 'DEPARTMENT' &&
+            departmentsQ.isSuccess &&
+            departments.length === 0 && (
+              <p
+                className="mt-1 text-xs text-muted-foreground"
+                data-testid="approval-create-subjectId-dept-empty"
+              >
+                등록된 부서가 없습니다.
+              </p>
+            )}
         </div>
 
         <div className="mt-4">
