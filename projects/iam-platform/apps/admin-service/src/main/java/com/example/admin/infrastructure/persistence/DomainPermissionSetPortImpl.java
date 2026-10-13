@@ -2,6 +2,7 @@ package com.example.admin.infrastructure.persistence;
 
 import com.example.admin.application.port.DomainPermissionSetPort;
 import com.example.admin.application.port.EffectiveDomainRolePort;
+import com.example.admin.domain.rbac.DomainGrantSource;
 import com.example.admin.domain.rbac.DomainRoleCatalog;
 import com.example.admin.domain.rbac.DomainRoleCatalog.RoleRef;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
@@ -12,6 +13,7 @@ import com.example.admin.infrastructure.persistence.rbac.DomainPermissionSetRole
 import com.example.admin.infrastructure.persistence.rbac.DomainPermissionSetRoleJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.OperatorDomainSetGrantJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.OperatorDomainSetGrantJpaRepository;
+import com.example.admin.infrastructure.persistence.rbac.OperatorGroupDomainSetGrantJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.OperatorGroupDomainSetGrantJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.OperatorGroupJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.OperatorGroupJpaRepository;
@@ -208,6 +210,100 @@ public class DomainPermissionSetPortImpl implements DomainPermissionSetPort, Eff
         grants.deleteSources(operatorInternalId, tenantId, setInternalId, present);
         present.sort(null);
         return List.copyOf(present);
+    }
+
+    @Override
+    @Transactional
+    public int deleteAllGrantsInTenant(long operatorInternalId, String tenantId) {
+        return grants.deleteAllOfOperatorInTenant(operatorInternalId, tenantId);
+    }
+
+    // ---------- Group grants (templates) — slice B ----------
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupSetGrantView> findGroupGrants(long groupInternalId) {
+        List<OperatorGroupDomainSetGrantJpaEntity> templates =
+                groupGrants.findByGroupIdOrderByGrantedAtAscSetIdAsc(groupInternalId);
+        if (templates.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> setIds = new LinkedHashSet<>();
+        Set<Long> granterIds = new HashSet<>();
+        for (OperatorGroupDomainSetGrantJpaEntity t : templates) {
+            setIds.add(t.getSetId());
+            if (t.getGrantedBy() != null) granterIds.add(t.getGrantedBy());
+        }
+        Map<Long, SetView> setViews = new HashMap<>();
+        for (SetView v : toViews(sets.findAllById(setIds))) {
+            setViews.put(v.internalId(), v);
+        }
+        Map<Long, String> granterById = new HashMap<>();
+        for (AdminOperatorJpaEntity o : operators.findAllById(granterIds)) {
+            granterById.put(o.getId(), o.getOperatorId());
+        }
+        List<GroupSetGrantView> out = new ArrayList<>(templates.size());
+        for (OperatorGroupDomainSetGrantJpaEntity t : templates) {
+            SetView set = setViews.get(t.getSetId());
+            if (set == null) {
+                // FK RESTRICT makes this unreachable; never invent a set.
+                throw new IllegalStateException("group template points at missing set " + t.getSetId());
+            }
+            out.add(new GroupSetGrantView(t.getGroupId(), set,
+                    t.getGrantedBy() == null ? null : granterById.get(t.getGrantedBy()), t.getGrantedAt()));
+        }
+        return out;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean groupHasGrants(long groupInternalId) {
+        return groupGrants.existsByGroupId(groupInternalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean groupGrantExists(long groupInternalId, long setInternalId) {
+        return groupGrants.existsById(new OperatorGroupDomainSetGrantJpaEntity.PK(groupInternalId, setInternalId));
+    }
+
+    @Override
+    @Transactional
+    public void insertGroupGrant(long groupInternalId, long setInternalId, Long grantedByInternalId,
+                                 Instant grantedAt) {
+        groupGrants.saveAndFlush(OperatorGroupDomainSetGrantJpaEntity.create(groupInternalId, setInternalId,
+                grantedByInternalId, grantedAt));
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteGroupGrant(long groupInternalId, long setInternalId) {
+        return groupGrants.deleteTemplate(groupInternalId, setInternalId) > 0;
+    }
+
+    @Override
+    @Transactional
+    public int deleteGroupGrants(long groupInternalId) {
+        return groupGrants.deleteTemplatesOfGroup(groupInternalId);
+    }
+
+    @Override
+    @Transactional
+    public int deleteGroupSourceRowsOfSet(long groupInternalId, long setInternalId) {
+        return grants.deleteGroupSourceOfSet(groupInternalId, DomainGrantSource.group(groupInternalId), setInternalId);
+    }
+
+    @Override
+    @Transactional
+    public int deleteGroupSourceRowsOfOperator(long groupInternalId, long operatorInternalId) {
+        return grants.deleteGroupSourceOfOperator(groupInternalId, DomainGrantSource.group(groupInternalId),
+                operatorInternalId);
+    }
+
+    @Override
+    @Transactional
+    public int deleteGroupSourceRows(long groupInternalId) {
+        return grants.deleteGroupSource(groupInternalId, DomainGrantSource.group(groupInternalId));
     }
 
     // ---------- Effective roles (auth-to-admin.md rule 7) ----------

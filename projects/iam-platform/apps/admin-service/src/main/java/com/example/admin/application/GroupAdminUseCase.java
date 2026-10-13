@@ -9,6 +9,7 @@ import com.example.admin.application.exception.GroupMemberTenantMismatchExceptio
 import com.example.admin.application.exception.GroupNameConflictException;
 import com.example.admin.application.exception.GroupNotFoundException;
 import com.example.admin.application.exception.OperatorNotFoundException;
+import com.example.admin.application.exception.PermissionDeniedException;
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.port.AdminOperatorPort;
@@ -77,6 +78,7 @@ public class GroupAdminUseCase {
     private final AdminActionAuditor auditor;
     private final OperatorTenantAssignmentPort assignmentPort;
     private final TenantLastAdminGuard lastAdminGuard;
+    private final GroupDomainSetFanOut domainSetFanOut;
 
     // ==== Group CRUD ===========================================================
 
@@ -150,6 +152,9 @@ public class GroupAdminUseCase {
         // deleting the group. Direct grants (group_origin IS NULL) are untouched. The FK
         // ON DELETE CASCADE is only the DB backstop; the application does it explicitly.
         fanOut.revokeGroupFanOut(group.getId(), resolveMembers(group));
+        // ADR-083 D4: every GROUP:<this group> set row and the group's set templates, in this transaction (the
+        // FK ON DELETE CASCADE on group_origin / group_id is only the safety net).
+        domainSetFanOut.revokeGroup(group.getId());
         operatorGroups.delete(group); // membership + grant templates cascade via FK
         audit(ActionCode.GROUP_DELETE, group.getGroupId(), group.getTenantId(), actor, reason, null);
     }
@@ -197,6 +202,18 @@ public class GroupAdminUseCase {
         // the actor's own holdings (no group-as-bypass).
         List<OperatorGroupGrantJpaEntity> currentGrants = groupGrants.findByGroupId(group.getId());
         requireGrantsWithinActorHoldings(actor, currentGrants, ActionCode.GROUP_MEMBER_ADD, group.getTenantId());
+        // TASK-BE-631 (ADR-MONO-083 D5 · admin-api.md POST …/members): adding a member to a group that carries
+        // domain permission sets GIVES that person work roles — so it also needs domain_access.manage in the group
+        // tenant's grant scope, or group.manage alone (e.g. ORG_ADMIN) would route around D5. Refused before any
+        // write: 403 PERMISSION_DENIED + DENIED row, no membership / role / set row. A group with no set: unchanged.
+        if (domainSetFanOut.groupHasSets(group.getId())
+                && !grantScopeEvaluator.isTenantInAdminScope(
+                        actorId(actor), Permission.DOMAIN_ACCESS_MANAGE, group.getTenantId())) {
+            auditor.recordDenied(ActionCode.GROUP_MEMBER_ADD, Permission.DOMAIN_ACCESS_MANAGE,
+                    "/api/admin/groups/" + groupId + "/members", "POST", group.getGroupId());
+            throw new PermissionDeniedException("Group '" + groupId + "' carries domain permission sets — adding a "
+                    + "member also requires domain_access.manage in tenant '" + group.getTenantId() + "'");
+        }
 
         Instant now = Instant.now();
         Long actorInternalId = actorInternalId(actor);
@@ -204,6 +221,8 @@ public class GroupAdminUseCase {
         int fanned = fanOut.fanOutGrantsToMember(group.getId(), currentGrants,
                 new GroupFanOutService.Member(target.getId(), target.getOperatorId(), group.getTenantId()),
                 actorInternalId, now);
+        // ADR-083 D4: every set of the group onto the new member, as this group's own rows (never skipped).
+        domainSetFanOut.fanOutSetsToMember(group.getId(), group.getTenantId(), target.getId(), actorInternalId, now);
         audit(ActionCode.GROUP_MEMBER_ADD, group.getGroupId(), group.getTenantId(), actor, reason,
                 "operator=" + operatorPublicId);
         return new MemberAddResult(target.getOperatorId(), target.getDisplayName(), now, fanned);
@@ -232,6 +251,8 @@ public class GroupAdminUseCase {
         // Revoke ONLY this member's group_origin rows for this group; direct grants untouched.
         fanOut.revokeMemberFanOut(group.getId(),
                 new GroupFanOutService.Member(target.getId(), target.getOperatorId(), group.getTenantId()));
+        // ADR-083 D4: this member's GROUP:<this group> set rows only — DIRECT / MIGRATION / other groups' stay.
+        domainSetFanOut.revokeMember(group.getId(), target.getId());
         groupMembers.deleteById(pk);
         audit(ActionCode.GROUP_MEMBER_REMOVE, group.getGroupId(), group.getTenantId(), actor, reason,
                 "operator=" + operatorPublicId);

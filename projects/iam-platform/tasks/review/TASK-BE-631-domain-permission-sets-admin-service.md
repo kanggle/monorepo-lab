@@ -8,7 +8,7 @@ TASK-BE-631
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -56,14 +56,14 @@ ADR-083 갈래 A 의 저장 모델과 관리 API 를 admin-service 에 만든다
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 재측정: 784 이후 `GroupFanOutService` · `GroupAdminUseCase` · `OperatorCompanyExitCascade` · 내부 check 응답 · Flyway 마지막 번호 · 시드 운영자 목록. 백필 해석(위 🔵) 결정 기록.
-- [ ] **AC-1** — 🔴 대조군(실패 쪽 먼저): 같은 운영자 · 테넌트 · 세트를 직접 + G1 + G2 가 줌 → G1 탈퇴 → 실효 권한에 그 세트 **유지**(G2 · 직접) → 직접 회수 → **유지**(G2) → G2 회수 → 사라짐. 같은 시험에서 단계마다 출처 목록을 단언.
-- [ ] **AC-2** — A · B 분리: 같은 운영자에게 A 재고 세트 · B 출고 세트 → A 변경이 B 실효 권한 · B `domainRoles` 를 바꾸지 않음.
-- [ ] **AC-3** — 권한 상승 · 범위: `domain_access.manage` 없는 운영자 배정 403(DENIED 행) · 다른 테넌트 배정 403 · 구독 안 한 도메인 세트 배정 거절 · 그룹 세트 배정이 그룹 테넌트 밖에 행을 만들지 않음 · 관리 역할만 있고 세트 없음 → `domainRoles` 빈 배열.
-- [ ] **AC-4** — 내보내기: A 에서 내보내기 → A 세트 행(모든 출처) 0 · B 세트 행 바이트 불변.
-- [ ] **AC-5** — 백필: 마이그레이션 문장 재실행 0행(멱등) · 기존 소속 운영자 전원 세트 ≥ 1 · `'*'` 0 · 이전 시점 뒤 새 소속은 0 에서 시작(대조군). 완료 판정 SQL(«이전 시점 소속 중 세트 행 0» = 0)을 티켓에 남긴다 — P3 배포 게이트.
-- [ ] **AC-6** — `domainRoles`: 판정 응답에 실효 역할 · 소속 없음/세트 없음 → 빈 배열 · 파트너십 경로 응답은 지금과 같음(호스트 세트를 읽지 않음).
-- [ ] **AC-7** — 배포 상태를 따로 적는다: `main` 머지 · AMI 재굽기 · 데모 창 라이브(백필 행 수 = 소속 수 · 완료 판정 0). 라이브가 없으면 ⚪ 와 이유.
+- [x] **AC-0** — 재측정: 784 이후 `GroupFanOutService` · `GroupAdminUseCase` · `OperatorCompanyExitCascade` · 내부 check 응답 · Flyway 마지막 번호 · 시드 운영자 목록. 백필 해석(위 🔵) 결정 기록. — ✅ Flyway 마지막 = V0051 → V0052 · 시드 운영자 6(+ `'*'`) · 백필 해석 = «소속마다 `legacy-compat`(전 카탈로그) 하나» — 발급 시 `∩ entitled` 가 테넌트마다 거르므로 지금 파생과 같은 결과(이전 뒤 구독 추가도 지금과 같은 동작). `mes` 소비자 = **0**(§ 슬라이스 b 기록 4).
+- [x] **AC-1** — 🔴 대조군(실패 쪽 먼저): 같은 운영자 · 테넌트 · 세트를 직접 + G1 + G2 가 줌 → G1 탈퇴 → 실효 권한에 그 세트 **유지**(G2 · 직접) → 직접 회수 → **유지**(G2) → G2 회수 → 사라짐. 같은 시험에서 단계마다 출처 목록을 단언. — ✅ 슬라이스 a: 개인 회수 절반(#4342 CI PASSED) · 슬라이스 b: 전체 단계 `GroupDomainPermissionSetIntegrationTest`(이 PR 의 CI 판정 — 닫기 전에 레인 로그 PASSED 확인).
+- [x] **AC-2** — A · B 분리: 같은 운영자에게 A 재고 세트 · B 출고 세트 → A 변경이 B 실효 권한 · B `domainRoles` 를 바꾸지 않음. — ✅ `DomainPermissionSetIntegrationTest` AC-2(#4342 CI PASSED).
+- [x] **AC-3** — 권한 상승 · 범위: `domain_access.manage` 없는 운영자 배정 403(DENIED 행) · 다른 테넌트 배정 403 · 구독 안 한 도메인 세트 배정 거절 · 그룹 세트 배정이 그룹 테넌트 밖에 행을 만들지 않음 · 관리 역할만 있고 세트 없음 → `domainRoles` 빈 배열. — ✅ 앞 셋 · 마지막 = #4342 CI PASSED · 그룹 테넌트 한정 + 🆕 세트 달린 그룹의 멤버 추가 게이트(`group.manage` 만 → 403 · 행 0 / 세트 없는 그룹 → 201 대조군) = 이 PR 의 IT.
+- [x] **AC-4** — 내보내기: A 에서 내보내기 → A 세트 행(모든 출처) 0 · B 세트 행 바이트 불변. — ✅ `GroupDomainPermissionSetIntegrationTest` AC-4(DIRECT · MIGRATION · GROUP 셋 다 삭제 · B 불변 · 감사 `domainSetGrants=3`) — 이 PR 의 CI 판정.
+- [x] **AC-5** — 백필: 마이그레이션 문장 재실행 0행(멱등) · 기존 소속 운영자 전원 세트 ≥ 1 · `'*'` 0 · 이전 시점 뒤 새 소속은 0 에서 시작(대조군). 완료 판정 SQL(«이전 시점 소속 중 세트 행 0» = 0)을 티켓에 남긴다 — P3 배포 게이트. — ✅ `V0052DomainSetBackfillIntegrationTest`(#4342 CI PASSED — 완료 판정 >0 → 0 · 재실행 0행 · 컷오버 뒤 소속 0). 🔴 «`'*'` 0» 은 **OD-3 소유자 결정(2026-10-14)으로 바뀌었다** — `'*'` 운영자는 `('*', legacy-compat)` 한 행을 받는다(그래야 P3 뒤에도 플랫폼 운영자 권한이 줄지 않는다). 완료 판정 SQL = `data-model.md` § Migration Strategy V0052 «완료 판정»(소속 쪽 + `'*'` 쪽 두 항의 합 = 0) — 🔴 **P3 직전에 라이브로 잰다**(관리자가 일부러 회수한 `legacy-compat` 도 세트 0 으로 센다).
+- [x] **AC-6** — `domainRoles`: 판정 응답에 실효 역할 · 소속 없음/세트 없음 → 빈 배열 · 파트너십 경로 응답은 지금과 같음(호스트 세트를 읽지 않음). — ✅ `DomainPermissionSetIntegrationTest` AC-6 · `OperatorAssignmentCheckDomainRolesTest` · 시드 시험(demo-cs → 전 카탈로그) — #4342 CI PASSED.
+- [x] **AC-7** — 배포 상태를 따로 적는다: `main` 머지 · AMI 재굽기 · 데모 창 라이브(백필 행 수 = 소속 수 · 완료 판정 0). 라이브가 없으면 ⚪ 와 이유. — ✅ 기록: `main` 머지 = 슬라이스 a #4342(`7d663829d`) · 슬라이스 b = 이 PR. ⚪ **AMI 재굽기 · 데모 창 라이브 = 아직 없음** — 이 세션에 데모 창이 없고, 백엔드 운영 반영은 `main` 머지가 아니라 AMI 굽기 · `terraform apply` 로만 일어난다. ⇒ 운영(데모) DB 에 V0052 는 **아직 적용되지 않았다**. 라이브 술어(백필 행 수 · 완료 판정 0)는 P3(`TASK-BE-632`) 배포 게이트로 넘긴다 — P3 은 그 값이 0 이 아니면 배포하지 않는다.
 
 # Related Specs
 
@@ -125,3 +125,43 @@ ADR-083 갈래 A 의 저장 모델과 관리 API 를 admin-service 에 만든다
 | `:admin-service:test` | **0** | 194 suites · 1270 tests · fail 0 · skip 58(Testcontainers — Docker 없음). 신규 · 수정 단위/슬라이스 10 클래스 통과(에이전트 보고) — 이 세션이 다시 돌려 rc 0 확인 |
 | `:auth-service:test` | **0** | 시드 파일을 읽는 auth 시험 무영향 확인 |
 | `integrationTest` | ⚪ CI | `DomainPermissionSetIntegrationTest`(AC-1 개인 회수 절반 · AC-2 · AC-3 · AC-6) · `V0052DomainSetBackfillIntegrationTest`(AC-5) · `DemoOperatorSeedIntegrationTest` · `TenantAdminRoleSeedIntegrationTest` 추가 단언 |
+
+## 5. CI 결과 — #4342 (2026-10-14 UTC)
+
+- 19 pass · 실패 0 · 스쿼시 `7d663829d`. 🔵 «레인 초록 = 새 IT 가 돌았다» 를 추론으로 두지 않고 `Integration (iam A)` 잡 로그를 열었다: `DomainPermissionSetIntegrationTest` 7 · `V0052DomainSetBackfillIntegrationTest` 2 · `TenantAdminRoleSeedIntegrationTest` · `DemoOperatorSeedIntegrationTest`(BE-631 단언 2 포함) — 전부 **PASSED**. (첫 grep 은 로그 형식과 안 맞아 «0» 을 냈다 — 판별자 탓이었다.)
+
+---
+
+# 슬라이스 b 기록 (2026-10-14 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · 검토 = 이 세션. 브랜치 `task/be-631-b-group-sets`(origin/main `7d663829d` = 슬라이스 a 위). DDL 없음(그룹 템플릿 표는 V0052).
+
+## 1. 무엇을
+
+| 규칙 | 자리 |
+|---|---|
+| 그룹 세트 GET/POST/DELETE — `domain_access.manage` @ 그룹 테넌트(쓰기 밖 = 403 + DENIED · 읽기 밖 = 404 `GROUP_NOT_FOUND`) | `GroupDomainPermissionSetController` · `GroupDomainPermissionSetUseCase.java:89, 132` |
+| 그룹이 가질 수 있는 세트 = 프리셋 · 그룹 테넌트 세트 · `legacy-compat` 400 · 구독 상한 · 중복 409 | `:96 · :106 · :107` |
+| fan-out 은 skip 하지 않는다 — 현재 멤버마다 `GROUP:<id>` 행(그룹 테넌트에만) · 회수 = 그 그룹 · 그 세트 행 + 템플릿만 | `GroupDomainSetFanOut` · `:141` |
+| 🔴 세트 달린 그룹의 멤버 추가 = `domain_access.manage` 도 — 없으면 DENIED 행(fail-closed) + 403, 쓰기 전 | `GroupAdminUseCase.java:209`(이후 fan-out `:225`) |
+| 멤버 제거 · 그룹 삭제 = `source_key = 'GROUP:<id>'` 행만 | `GroupAdminUseCase.java:255 · :157` |
+| 내보내기 = (운영자, 테넌트) 세트 행 **전 출처** · 감사 `domainSetGrants=<n>` | `OperatorCompanyExitCascade.java:120` |
+
+## 2. 시험
+
+- IT `GroupDomainPermissionSetIntegrationTest` 5: AC-1 전체(DIRECT + G1 + G2 → G1 탈퇴 → 개인 회수 → G2 세트 회수, 단계마다 출처 목록 · `domainRoles`) · 멤버 추가 게이트(`group.manage` 만 → 403 · DENIED · 행 0 / 세트 없는 그룹 → 201) · 그룹 테넌트 한정 · AC-4 내보내기 · 그룹 삭제.
+- 단위/슬라이스: `GroupDomainPermissionSetUseCaseTest` 7 · `GroupDomainSetFanOutTest` 4 · `GroupDomainPermissionSetControllerSliceTest` 5 · `GroupAdminUseCaseTest` +4. 기존 내보내기 시험 · `OperatorMembershipWriteAxisIntegrationTest` 는 감사 detail 의 `,domainSetGrants=N` 를 기대하도록(약화 없음 — «거절 시 아무것도 안 지움» 칸 추가).
+
+## 3. 실행 (rc 각자)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `:admin-service:compileTestJava` | **0** | 이 세션 재실행 |
+| `:admin-service:test` | **0** | 197 suites · 1290 tests · fail 0 · skip 58 — 이 세션 재실행 rc 0 |
+| `integrationTest` | ⚪ CI | 위 IT 5 — 이 PR 의 `Integration (iam A/B)` 로그에서 PASSED 를 확인한 뒤 닫는다 |
+
+## 4. 판단 · 계약 보완
+
+- **`mes` 소비자 = 0**(AC-0): `MES_OPERATOR` 는 IAM 자기 목록(카탈로그 · 위임 목록 · V0052 · auth 파생)과 콘솔 가이드 한 행에만 있고 `projects/*mes*` · 게이트웨이 · `ProductCatalog` 항목이 없다. **그대로 둔다** — 카탈로그 행과 `mes-full` 프리셋은 이미 `main` 의 V0052 에 있어 빼려면 데이터 마이그레이션이 따로 필요하고, 남겨도 발급 시 `∩ entitled` 로 걸러진다(구독하는 테넌트가 없다). MES 프로젝트가 생기면 그 단계에서 다시 본다.
+- 계약 보완: 세트 생성 · 그룹 세트 POST 오류표 — `Idempotency-Key` 누락/길이 초과 = `400 VALIDATION_ERROR` · 재사용 = `409`(저장 응답 재생 없음 — 초대 생성 규약). 직접 배정 POST 는 키를 쓰지 않는다(계약도 그렇다).
+- 그대로 둔 것: 멤버 추가 응답 `fannedOutGrants` · `GROUP_MEMBER_ADD` 감사 detail 은 역할 행만 센다(세트 행 미포함 — 계약이 정하지 않음) · 없는 세트의 그룹 회수 = `404 DOMAIN_PERMISSION_SET_NOT_FOUND`.

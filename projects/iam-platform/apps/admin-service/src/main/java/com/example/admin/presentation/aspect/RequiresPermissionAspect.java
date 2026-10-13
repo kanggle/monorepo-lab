@@ -365,6 +365,12 @@ public class RequiresPermissionAspect {
             if ("revokeSet".equals(name)) return ActionCode.OPERATOR_DOMAIN_SET_REVOKE;
             // getDomainAccess / getMyDomainAccess are reads
         }
+        // TASK-BE-631 slice B — a group's domain permission sets; the DENIED row carries target_type=GROUP.
+        if ("GroupDomainPermissionSetController".equals(simple)) {
+            if ("grantGroupSet".equals(name)) return ActionCode.GROUP_DOMAIN_SET_GRANT;
+            if ("revokeGroupSet".equals(name)) return ActionCode.GROUP_DOMAIN_SET_REVOKE;
+            // listGroupSets is a read
+        }
         // Fallback for deny-by-default on unknown mutation endpoints.
         if (isMutation(m)) return null;
         return null;

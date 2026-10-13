@@ -116,14 +116,14 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-631-domain-permission-sets-admin-service.md` — **`ADR-MONO-083` P2 — admin-service: 도메인 업무 권한 세트 · 테넌트별 직접/그룹 배정(출처별 행) · 실효 권한 · `domainRoles` · «이전 호환» 백필** (IN-PROGRESS, 2026-10-14 UTC — 슬라이스 a: 스키마 · 카탈로그 · 세트 · 직접 배정 · `domainRoles` · 백필 / b: 그룹 · 내보내기). 🔴 토큰은 안 바뀐다(P3 몫). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
 
-_(없음)_
+- `TASK-BE-631-domain-permission-sets-admin-service.md` — **`ADR-MONO-083` P2 — admin-service: 도메인 업무 권한 세트 · 출처별 직접/그룹 배정 · 실효 권한 · `domainRoles` · «이전 호환» 백필** (REVIEW, 2026-10-14 UTC). 슬라이스 a #4342(`7d663829d`, 새 IT 9 PASSED 로그 확인) · 슬라이스 b = 그룹 세트 · fan-out · 세트 달린 그룹의 멤버 추가 게이트 · 내보내기 전 출처 삭제. AC-0~7 ✅(AC-7 = ⚪ AMI · 데모 창 없음 — V0052 운영 미적용, 완료 판정은 P3 게이트). 🔴 토큰은 안 바뀐다(P3 몫). 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
 - ✅ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4329**, 스쿼시 **`7b115c60e`**. IdP 이메일 가림을 공용 `PiiMaskingUtils.maskEmail`(첫 글자 + 별 3개) 하나로 — 초대 미리보기 · 인증/MFA 화면이 같은 입력에 같은 값, 양 서비스에 같은 기대값 시험 고정 · 주소 아닌 입력은 화면 쪽에서 전부 가림. 후속(AC 아님): 공용 함수의 주소 아닌 입력 원문 반환.

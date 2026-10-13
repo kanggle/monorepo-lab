@@ -67,6 +67,7 @@ class GroupAdminUseCaseTest {
     @Mock AdminActionAuditor auditor;
     @Mock OperatorTenantAssignmentPort assignmentPort;
     @Mock TenantLastAdminGuard lastAdminGuard;
+    @Mock GroupDomainSetFanOut domainSetFanOut;
 
     @InjectMocks GroupAdminUseCase useCase;
 
@@ -305,6 +306,93 @@ class GroupAdminUseCaseTest {
         verify(auditor).record(any());
     }
 
+    // ── TASK-BE-631 slice B: domain permission sets on member add / remove / group delete ──
+
+    private OperatorGroupJpaEntity persistedGroup() {
+        OperatorGroupJpaEntity g = mock(OperatorGroupJpaEntity.class);
+        when(g.getId()).thenReturn(1L);
+        when(g.getTenantId()).thenReturn("acme");
+        when(g.getGroupId()).thenReturn("grp-1");
+        return g;
+    }
+
+    private void memberAddableTo(OperatorGroupJpaEntity g) {
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(g));
+        AdminOperatorJpaEntity target = operator("op-9", "acme");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(assignmentPort.assignmentExists(100L, "acme")).thenReturn(true);
+        when(groupMembers.existsById(any())).thenReturn(false);
+        when(groupGrants.findByGroupId(any())).thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("🔴 BE-631 (ADR-083 D5): group carries a set + actor lacks domain_access.manage in the group tenant → 403 PERMISSION_DENIED + DENIED row; no member / role / set row")
+    void addMember_groupWithSets_withoutDomainAccessManage_denied() {
+        OperatorGroupJpaEntity g = persistedGroup();
+        memberAddableTo(g);
+        when(domainSetFanOut.groupHasSets(1L)).thenReturn(true);
+        when(grantScopeEvaluator.isTenantInAdminScope("actor-uuid", Permission.DOMAIN_ACCESS_MANAGE, "acme"))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.addMember(actor, "grp-1", "op-9", "r"))
+                .isInstanceOf(com.example.admin.application.exception.PermissionDeniedException.class);
+
+        verify(auditor).recordDenied(eq(ActionCode.GROUP_MEMBER_ADD), eq(Permission.DOMAIN_ACCESS_MANAGE),
+                eq("/api/admin/groups/grp-1/members"), eq("POST"), eq("grp-1"));
+        verify(groupMembers, never()).save(any());
+        verify(fanOut, never()).fanOutGrantsToMember(any(), any(), any(), any(), any());
+        verify(domainSetFanOut, never()).fanOutSetsToMember(any(), any(), anyLong(), any(), any());
+        verify(auditor, never()).record(any());
+    }
+
+    @Test
+    @DisplayName("BE-631: group carries a set + actor holds domain_access.manage there → member added, the group's sets fanned onto the member in the group tenant")
+    void addMember_groupWithSets_withDomainAccessManage_fansOutSets() {
+        OperatorGroupJpaEntity g = persistedGroup();
+        memberAddableTo(g);
+        when(domainSetFanOut.groupHasSets(1L)).thenReturn(true);
+        when(grantScopeEvaluator.isTenantInAdminScope("actor-uuid", Permission.DOMAIN_ACCESS_MANAGE, "acme"))
+                .thenReturn(true);
+
+        useCase.addMember(actor, "grp-1", "op-9", "r");
+
+        verify(groupMembers).save(any());
+        verify(domainSetFanOut).fanOutSetsToMember(eq(1L), eq("acme"), eq(100L), any(), any());
+        verify(auditor, never()).recordDenied(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-631 control: a group with no set needs no domain_access.manage (not even asked) — the old rule")
+    void addMember_groupWithoutSets_noDomainKeyAsked() {
+        OperatorGroupJpaEntity g = persistedGroup();
+        memberAddableTo(g);
+        when(domainSetFanOut.groupHasSets(1L)).thenReturn(false);
+
+        useCase.addMember(actor, "grp-1", "op-9", "r");
+
+        verify(groupMembers).save(any());
+        verify(grantScopeEvaluator, never()).isTenantInAdminScope(any(), eq(Permission.DOMAIN_ACCESS_MANAGE), any());
+        verify(auditor, never()).recordDenied(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-631: remove member → that member's GROUP:<this group> set rows; delete group → every GROUP:<this group> row + templates")
+    void removeMemberAndDeleteGroup_revokeOwnGroupSetRows() {
+        OperatorGroupJpaEntity g = persistedGroup();
+        when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(g));
+        AdminOperatorJpaEntity target = operator("op-9", "acme");
+        when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
+        when(groupMembers.existsById(any())).thenReturn(true);
+        when(groupMembers.findByGroupId(any())).thenReturn(List.of());
+
+        useCase.removeMember(actor, "grp-1", "op-9", "r");
+        verify(domainSetFanOut).revokeMember(1L, 100L);
+
+        useCase.deleteGroup(actor, "grp-1", "r");
+        verify(domainSetFanOut).revokeGroup(1L);
+        verify(operatorGroups).delete(g);
+    }
+
     // ── members: remove revokes only group_origin rows (direct grants survive) ──
 
     @Test
@@ -362,6 +450,8 @@ class GroupAdminUseCaseTest {
         verify(fanOut, never()).revokeMemberFanOut(any(), any());
         verify(fanOut, never()).revokeGrantFanOut(any(), any(), any());
         verify(fanOut, never()).revokeGroupFanOut(any(), any());
+        verify(domainSetFanOut, never()).revokeMember(any(), anyLong());
+        verify(domainSetFanOut, never()).revokeGroup(any());
         verify(groupMembers, never()).deleteById(any());
         verify(operatorGroups, never()).delete(any());
     }

@@ -175,7 +175,9 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
                  WHERE actor_id = ? AND action_code = 'OPERATOR_ASSIGNMENT_DELETE' AND outcome = 'SUCCESS'
                    AND target_id = ?
                 """, String.class, ADMIN_A, PERSON);
-        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0");
+        // TASK-BE-631: + domainSetGrants (the memberships here are seeded after V0052, so no MIGRATION row exists)
+        assertThat(detail).isEqualTo("roleRows=2,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0"
+                + ",domainSetGrants=0");
 
         // the person's account and operator row are untouched (ADR-080 D5 · ADR-082 D3 · D-10): no account call
         // was made (nothing listens on the account-service URL), no account action audited, the row is ACTIVE

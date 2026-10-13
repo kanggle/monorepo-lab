@@ -78,6 +78,43 @@ public interface DomainPermissionSetPort {
     List<String> deleteGrants(long operatorInternalId, String tenantId, long setInternalId,
                               Collection<String> sourceKeys);
 
+    /**
+     * «이 회사에서 내보내기» (ADR-083 D4): deletes EVERY row of (operator, tenant) — DIRECT · MIGRATION · every
+     * {@code GROUP:<id>}. Rows of the operator's other tenants are untouched.
+     *
+     * @return the number of rows deleted
+     */
+    int deleteAllGrantsInTenant(long operatorInternalId, String tenantId);
+
+    // ---------- Group grants (templates) and their GROUP:<id> rows — slice B ----------
+
+    /** The sets granted to a group (its templates), oldest first, with the set and the granting operator. */
+    List<GroupSetGrantView> findGroupGrants(long groupInternalId);
+
+    /** Whether the group has at least one template. */
+    boolean groupHasGrants(long groupInternalId);
+
+    /** Whether the exact template (group, set) exists. */
+    boolean groupGrantExists(long groupInternalId, long setInternalId);
+
+    /** Inserts one template; flushes. */
+    void insertGroupGrant(long groupInternalId, long setInternalId, Long grantedByInternalId, Instant grantedAt);
+
+    /** Deletes one template. @return whether a template was deleted */
+    boolean deleteGroupGrant(long groupInternalId, long setInternalId);
+
+    /** Deletes every template of the group. @return the number deleted */
+    int deleteGroupGrants(long groupInternalId);
+
+    /** Deletes the group's ({@code source_key = GROUP:<id>}) rows of one set, every member. @return rows deleted */
+    int deleteGroupSourceRowsOfSet(long groupInternalId, long setInternalId);
+
+    /** Deletes the group's ({@code source_key = GROUP:<id>}) rows of one member, every set. @return rows deleted */
+    int deleteGroupSourceRowsOfOperator(long groupInternalId, long operatorInternalId);
+
+    /** Deletes every row the group produced ({@code source_key = GROUP:<id>}). @return rows deleted */
+    int deleteGroupSourceRows(long groupInternalId);
+
     // ---------- Projections ----------
 
     /**
@@ -98,4 +135,7 @@ public interface DomainPermissionSetPort {
     record GrantRowView(long operatorInternalId, String tenantId, SetView set, String sourceKey,
                         Long groupOrigin, String groupId, String groupName,
                         String grantedByOperatorId, Instant grantedAt) {}
+
+    /** One {@code operator_group_domain_set_grant} template with its set and the granting operator's external id. */
+    record GroupSetGrantView(long groupInternalId, SetView set, String grantedByOperatorId, Instant grantedAt) {}
 }

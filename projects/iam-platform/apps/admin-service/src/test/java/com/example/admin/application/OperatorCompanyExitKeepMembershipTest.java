@@ -36,6 +36,7 @@ class OperatorCompanyExitKeepMembershipTest {
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
     @Mock OperatorGroupMemberJpaRepository groupMembers;
     @Mock TenantPartnershipPort partnershipPort;
+    @Mock com.example.admin.application.port.DomainPermissionSetPort domainSetPort;
 
     InMemoryRoleRowsPort roles;
     InMemoryAssignmentPort assignments;
@@ -59,7 +60,7 @@ class OperatorCompanyExitKeepMembershipTest {
                 .row(PERSON, "uu", G, List.of("dept-ops"));       // the person's ONLY uu membership — from G
         TenantLastAdminGuard lastAdminGuard = new TenantLastAdminGuard(roles);
         OperatorCompanyExitCascade cascade = new OperatorCompanyExitCascade(
-                roles, groupMembers, assignments, partnershipPort, lastAdminGuard);
+                roles, groupMembers, assignments, partnershipPort, lastAdminGuard, domainSetPort);
         useCase = new ManageOperatorAssignmentUseCase(roles, assignments, tenantScopeGuard, auditor,
                 lastAdminGuard, cascade, cachingPermissionEvaluator);
         when(groupMembers.findByOperatorIdAndGroupTenantId(PERSON, "alpha"))
