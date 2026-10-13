@@ -149,6 +149,20 @@ describe('POST /api/onboarding/organizations — producer error passthrough', ()
     expect(exchangeForOperatorToken).not.toHaveBeenCalled();
   });
 
+  // TASK-MONO-784 S6 — the owned-tenant limit must pass through as its own
+  // 422, never folded into the 503 degrade branch below (it is a business
+  // refusal, not an outage — retrying never helps).
+  it('422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED passes through as 422 (no re-exchange)', async () => {
+    cookieJar.set(ACCESS_COOKIE, { value: 'iam.acc', opts: {} });
+    createOrganization.mockRejectedValue(
+      new ApiError(422, 'OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED', 'limit exceeded'),
+    );
+    const res = await POST(post(VALID));
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED');
+    expect(exchangeForOperatorToken).not.toHaveBeenCalled();
+  });
+
   it('401 subject token rejected → 401 (re-login)', async () => {
     cookieJar.set(ACCESS_COOKIE, { value: 'iam.acc', opts: {} });
     createOrganization.mockRejectedValue(

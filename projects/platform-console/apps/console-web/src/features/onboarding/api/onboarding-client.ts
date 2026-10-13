@@ -30,8 +30,16 @@ import {
  *   - `401` → ApiError(401, TOKEN_INVALID) — subject token invalid/expired or
  *     rejected (operator/bootstrap token, no `sub`) → the caller re-logins.
  *   - `400` VALIDATION_ERROR → ApiError(400, …) — inline actionable.
- *   - `409` TENANT_ALREADY_EXISTS / OPERATOR_EMAIL_CONFLICT → ApiError(409, …)
- *     — inline actionable (nothing was created on a slug clash — D3 note).
+ *   - `409` TENANT_ALREADY_EXISTS / OPERATOR_EMAIL_CONFLICT /
+ *     OPERATOR_ALREADY_PROVISIONED → ApiError(409, …) — inline actionable
+ *     (nothing was created on a slug clash — D3 note).
+ *   - `422` OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED (TASK-MONO-784 S5/S6 —
+ *     ADR-MONO-082 b OD-1, onboarding-api.md § 신원당 상한) → ApiError(422, …)
+ *     — inline actionable, NOT a degrade: the caller already owns the
+ *     configured max number of companies. Retrying never helps, so this must
+ *     never be folded into {@link OnboardingUnavailableError} (that class'
+ *     "retryable" framing — and its degrade-incident logging — would
+ *     misrepresent a business-rule refusal as a service outage).
  *   - `5xx` / timeout / network / unexpected shape → OnboardingUnavailableError
  *     — the onboarding form degrades to a retryable notice; the IAM login
  *     session is preserved (the visitor may retry).
@@ -85,7 +93,7 @@ export async function createOrganization(
       );
     }
 
-    if (res.status === 400 || res.status === 409) {
+    if (res.status === 400 || res.status === 409 || res.status === 422) {
       const body = (await res.json().catch(() => ({}))) as {
         code?: string;
         message?: string;

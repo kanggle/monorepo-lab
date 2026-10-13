@@ -389,7 +389,12 @@ function operatorsFixture(path: string): unknown {
   }
 
   if (pathname === '/api/admin/me') {
-    return IAM_OPERATORS[0];
+    // TASK-MONO-784 S6 — the additive `memberships[]` field (per-company
+    // roles). The sample operator's one company mirrors its `roles` so the
+    // shape matches a real single-company response (no second company
+    // invented — ADR-MONO-074 A4 "no extraction path" extends to not
+    // fabricating a scenario the real demo seed doesn't have either).
+    return { ...IAM_OPERATORS[0], memberships: [{ tenantId: SAMPLE_TENANT_ID, roles: IAM_OPERATORS[0].roles }] };
   }
   if (pathname === `${OPERATORS_PATH}/grantable-roles`) {
     return { roles: IAM_GRANTABLE_ROLES };

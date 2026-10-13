@@ -8,7 +8,8 @@ import { OperatorRoleChips, OperatorStatusBadge } from './OperatorBadges';
 /**
  * A single operators-table row (TASK-PC-FE-209 split of `OperatorsTable`) —
  * the identity cells + the per-row privilege-sensitive action buttons (역할
- * 변경 / 정지·활성화 / 프로파일 편집 / 조직 스코프 / 배정 해제). Pure
+ * 변경 / 정지·활성화 / 프로파일 편집 / 조직 스코프 / 이 회사에서 내보내기
+ * — TASK-MONO-784 S6 renamed the last one from «배정 해제»). Pure
  * presentation: all action handlers live in the `OperatorsScreen` container
  * and arrive via props.
  */
@@ -110,7 +111,10 @@ export function OperatorRow({
           </Button>
           {/* TASK-PC-FE-157 — remove this operator's assignment to
               the active tenant. A home-tenant-only operator has no
-              explicit assignment → producer 404 maps inline. */}
+              explicit assignment → producer 404 maps inline.
+              TASK-MONO-784 S6 — label «배정 해제» → «이 회사에서
+              내보내기» (the testid stays — no e2e/nav dependency on
+              the old label). */}
           {onUnassign && (
             <Button
               variant="secondary"
@@ -119,7 +123,7 @@ export function OperatorRow({
               onClick={() => onUnassign(op)}
               data-testid={`action-unassign-${op.operatorId}`}
             >
-              배정 해제
+              이 회사에서 내보내기
             </Button>
           )}
         </div>

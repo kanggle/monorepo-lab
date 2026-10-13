@@ -37,7 +37,10 @@ export function OperatorConfirmRoleEditor({
         className="text-sm font-medium text-foreground"
         id={rolesId}
       >
-        역할 (전체 교체 — 비우면 모든 역할 제거)
+        {/* TASK-MONO-784 S6 — role edit is now per-company; the legend says
+            so without needing the tenant id (the surrounding dialog
+            description already names it). */}
+        역할 (이 회사 — 전체 교체, 비우면 이 회사의 역할만 제거)
       </legend>
       <div
         className="mt-2 flex flex-wrap gap-3"
@@ -74,8 +77,8 @@ export function OperatorConfirmRoleEditor({
           data-testid="edit-roles-remove-all-warning"
           role="status"
         >
-          이 운영자의 모든 역할이 제거됩니다. 이후 어떤 운영 권한도
-          갖지 않습니다.
+          이 회사에서의 역할이 모두 제거됩니다 — 소속은 남습니다
+          (다른 회사의 역할은 그대로입니다).
         </p>
       )}
       {grantingElevated && (

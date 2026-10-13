@@ -940,6 +940,19 @@ const MESSAGES: Record<string, string> = {
   // operator is invited instead (§ 2.4.3 row 2). Seeing this = a stale form.
   OPERATOR_INVITATION_REQUIRED:
     '회사 운영자는 «초대»로만 추가할 수 있습니다. 운영자 초대 양식을 사용하세요.',
+  // --- operator membership per-company (TASK-MONO-784 S4/S5/S6) -----------
+  // 행 전체 변경(상태 변경 · 프로파일 · identity link) 거절 — 대상이 다른
+  // 회사에도 소속돼 있어 이 회사의 관리자만으로는 그 사람 전체를 멈출 수
+  // 없다. 올바른 조작은 «이 회사에서 내보내기»(그 회사 소속만 제거).
+  OPERATOR_HAS_OTHER_MEMBERSHIPS:
+    '다른 회사에도 소속된 운영자입니다 — 정지 대신 "이 회사에서 내보내기"를 쓰세요.',
+  // 역할 변경 · «이 회사에서 내보내기» · 그룹 멤버/역할 회수가 그 회사를
+  // 관리자 0 으로 만들 때 — 쓰기는 일어나지 않는다.
+  TENANT_LAST_ADMIN_REQUIRED:
+    '이 회사에 관리자가 한 명도 남지 않게 되어 실행할 수 없습니다. 다른 관리자를 먼저 지정한 뒤 다시 시도하세요.',
+  // 셀프 온보딩 — 한 계정으로 만들 수 있는 회사 수 상한 초과.
+  OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED:
+    '한 계정으로 만들 수 있는 회사 수를 초과했습니다.',
   SELF_SUSPEND_FORBIDDEN: '본인 계정은 정지할 수 없습니다.',
   CURRENT_PASSWORD_MISMATCH: '현재 비밀번호가 일치하지 않습니다.',
   PASSWORD_POLICY_VIOLATION:
