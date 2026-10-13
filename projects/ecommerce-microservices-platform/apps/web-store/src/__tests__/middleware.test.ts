@@ -73,6 +73,43 @@ describe('web-store route-guard middleware', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toContain('/login');
   });
+
+  // 🔴🔴 TASK-FE-109 — `/api/vitals` 는 `useReportWebVitals` 가 `sendBeacon`/`fetch`
+  // 로 쏘는 POST(가끔 GET, cf. 브라우저의 beacon 폴백) 를 받는 공개 엔드포인트다. 이
+  // 경로가 공개 목록에 없으면 비로그인 방문자의 vitals POST 가 여기서 `/login` 으로
+  // 307 되고(307 은 메서드를 보존 — RFC 7231 §6.4.7), `/login` 페이지는 POST 핸들러가
+  // 없어 405 를 낸다. Vercel 로그의 "POST /login 405" 가 이것이다 — AC-0.
+  it('🔴 /api/vitals 로 가는 POST 를 /login 으로 307 하지 않는다 (TASK-FE-109 AC-0/AC-1)', async () => {
+    const res = await middleware(
+      new NextRequest(new URL('http://localhost:3001/api/vitals'), {
+        method: 'POST',
+        body: JSON.stringify({ name: 'LCP', value: 2000, id: 'v1' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  // 🔵 대조군 — GET /api/vitals 도 같은 이유로 열려 있어야 한다(로그에 `GET /api/vitals
+  // 307` 도 함께 찍혔다 — sendBeacon 폴백/프리플라이트성 호출을 배제하지 않는다).
+  it('🔵 대조군 — GET /api/vitals 도 열려 있다', async () => {
+    const res = await middleware(request('/api/vitals'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  // 🔵 대조군 — 로그인한 방문자도 /api/vitals 에서 막히지 않는다(이 경로는 인증 여부와
+  // 무관하게 공개이지, "인증되면 통과" 로 바뀐 게 아니다).
+  it('🔵 대조군 — 로그인한 방문자도 /api/vitals 에서 막히지 않는다', async () => {
+    mockDecode.mockResolvedValue({
+      accountId: 'acc-1',
+      roles: ['CUSTOMER'],
+      expiresAt: Math.floor(Date.now() / 1000) + 1800,
+    });
+    const res = await middleware(request('/api/vitals'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
 });
 
 /**
