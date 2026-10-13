@@ -1,0 +1,78 @@
+# Task ID
+
+TASK-PC-FE-338
+
+# Title
+
+`ADR-MONO-083` P4 — 콘솔: «IAM 관리 역할» / «업무 권한 세트» 화면 분리 · 세트 · 운영자 · 그룹 배정 화면 · 메뉴 · 버튼의 두 신호(구독 없음 / 업무 권한 없음)
+
+# Status
+
+ready
+
+# Owner
+
+frontend
+
+# Task Tags
+
+- code
+- test
+
+---
+
+> **분석 모델:** Opus 5.5 / **구현 권장:** Sonnet(화면) — 오류 매핑 · 권한 신호 판정만 Opus 검토
+> 🔴 메뉴 숨김은 **편의**다. 이 단계의 시험은 «숨겼다» 가 아니라 «숨긴 것과 서버 403 이 일치한다» 를 본다. 샘플 화면만 보고 인가가 검증됐다고 보고하지 않는다.
+
+# Dependency Markers
+
+- **선행**: `TASK-MONO-791`(P1 계약) · `TASK-BE-631`(P2 API — `main` 에 있어야 화면이 붙는다). 업무 권한으로 메뉴를 좁히는 부분은 `TASK-BE-632`(P3) 배포 뒤에야 실제 권한과 일치한다 — P3 전에는 «업무 권한 없음» 신호가 서버 판정과 어긋나지 않게 P2 의 실효 권한 API 만 읽는다.
+
+# Goal
+
+관리자가 테넌트별로 운영자 · 그룹에 업무 권한 세트를 배정 · 회수하고 출처와 합산 결과를 보게 한다. 운영자에게는 구독 없음과 권한 없음을 구분해 보이고, 조회 전용이면 변경 버튼을 숨긴다(최종 판정은 서버).
+
+# Scope
+
+## In Scope
+
+- 지금 «권한 세트»(`/permission-sets` — 실은 `admin_roles`, `PermissionSetsScreen.tsx:1-20`) → «IAM 관리 역할» 로 이름 · 문구 변경(경로 유지 여부는 P1 계약 · e2e grep 결과로) · 새 «업무 권한 세트» 화면(서버 카탈로그에서 역할 선택 · 시스템 프리셋 읽기 전용 · 배정된 세트의 변경/삭제 규칙 표시 · 세분 미지원 도메인은 «전체 업무(세분 미지원)» 로만).
+- 운영자 화면: 테넌트별 직접 배정 · 그룹에서 받은 세트와 출처 · 합산 실효 업무 권한 · **직접 배정만 회수 버튼**.
+- 그룹 화면: 세트 여러 개 배정 · 회수 · 적용 대상(멤버)과 실제 부여 결과.
+- 메뉴 · 화면 · 버튼: `console-nav-exposure.ts` 에 «업무 권한 없음» 신호 추가(실효 권한 API — 토큰 디코드 아님) · 구독 배지와 구분 · 조회 전용이면 변경 버튼 숨김 · 직접 URL 진입은 지금처럼 서버 403 → 화면 안 «권한 없음».
+- 원장 사본 갱신: `permission-map.ts`(파생 줄 인용 `:24, 245` 제거) · `iam-guide/data.ts` · `shared/sample/fixtures/iam.ts`.
+- 운영자 초대 흐름: 초대 시 세트 지정이 P1 계약에 들어가면 연결(없으면 범위 밖으로 기록).
+- (OD-2) assume 토큰 TTL 단축 시 재교환 경로가 만료 전에 도는지 확인.
+
+## Out of Scope
+
+- 이번 변경과 무관한 레이아웃 · 문구 · 기능.
+- 도메인 화면 내부의 세분 버튼(도메인 세분 단계 P5~P8 이 카탈로그를 넓힌 뒤 각 화면).
+
+# Acceptance Criteria
+
+- [ ] **AC-0** — 재측정: 메뉴 판정 입력 · `/permission-sets` 를 가리키는 e2e · 단위 시험 · 가이드 사본 전수 grep(`tests/e2e` · `e2e-smoke` · `*-nav.test.tsx`).
+- [ ] **AC-1** — 재고 세트 운영자: WMS 재고 메뉴 열림 · 출고 메뉴 «권한 없음» · SCM 미구독 테넌트면 «구독 필요»(두 신호 구분) — 단위 시험 + 같은 조건의 서버 응답(403/200)과 대조한 기록.
+- [ ] **AC-2** — 조회 세트: 변경 버튼 숨김 · 같은 API 직접 호출은 서버 403(P3 배포 뒤 라이브, 그 전엔 ⚪ 이유).
+- [ ] **AC-3** — 운영자 화면: 그룹 출처 세트에는 회수 버튼 없음 · 직접 회수 뒤 그룹분 유지가 화면에 보임.
+- [ ] **AC-4** — 화면 이름 분리 · 기존 IAM 관리 역할 동작 불변(회귀 시험).
+- [ ] **AC-5** — 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · Vercel 배포 상태를 따로 적는다(`main` 직접 배포는 꺼져 있다 — `vercel.json`).
+
+# Related Specs
+
+- `docs/adr/ADR-MONO-083-domain-permission-sets-per-tenant.md` D9
+- `projects/platform-console/specs/services/console-web/architecture.md`
+
+# Related Contracts
+
+- `projects/platform-console/specs/contracts/console-integration-contract.md` (P1 갱신본) · `projects/iam-platform/specs/contracts/http/admin-api.md` (P1)
+
+# Edge Cases
+
+- 실효 권한 API 실패 — 메뉴를 **열어 두고**(편의 기능이므로 fail-open 표시) 서버가 판정한다. «권한 없음» 으로 잘못 닫지 않는다.
+- 같은 운영자가 테넌트 전환 — 메뉴 신호가 새 테넌트 기준으로 다시 계산.
+
+# Failure Scenarios
+
+1. 메뉴 숨김을 토큰 디코드로 판정 — 서버 판정과 어긋난다(`(console)/layout.tsx` 는 디코드를 표시용으로만 쓴다).
+2. «IAM 관리 역할» 과 «업무 권한 세트» 가 같은 화면 · 같은 이름으로 남는다 — 관리자가 관리 역할을 업무 권한으로 오해한다.

@@ -1,13 +1,15 @@
 # ADR-MONO-083 — 테넌트별 **도메인 업무 권한 세트**: 운영자 · 그룹에 배정한 세트만 assume 토큰에 싣는다 (ADR-035 O1-B 실행)
 
-**Status:** PROPOSED
-**Date:** 2026-10-14
+**Status:** ACCEPTED
+**Date:** 2026-10-14 (PROPOSED · 같은 날 ACCEPTED — 갈래 A)
 **주관 티켓:** `TASK-MONO-790`
 **Decision driver:** 소유자 요구(2026-10-13 대화) — «하나의 테넌트가 여러 도메인을 구독하더라도 운영자 · 그룹마다 담당 도메인과 세부 업무만 사용할 수 있게». 예: A 테넌트가 WMS · SCM 구독 → 재고팀은 WMS 재고만, 출고팀은 WMS 출고만, SCM팀은 SCM 만, 통합팀은 여러 세트, 같은 사람이 A 에선 재고 · B 에선 출고.
 **Supersedes:** 없음 — `ADR-MONO-035` O1 의 **미뤄 둔 B행**(«deferred refinement», `ADR-MONO-035…md:90`)을 실행한다. O1-A(구독 파생)는 이 ADR 이 ACCEPT 되면 **대체**된다(035 본문 바이트 불변, 덧붙임만).
 **Related:** [`ADR-MONO-035`](ADR-MONO-035-operator-auth-unification-model.md) (O1-A 구독 파생 · O1-B 미룸 · 🔴 O1-C «관리 역할 → 도메인 역할 매핑» 기각 = 이름 공간 분리) · [`ADR-MONO-082`](ADR-MONO-082-one-person-operator-in-many-companies.md) (D1 한 토큰 = 한 회사 · 🔴 D5 «도메인 평면 불변» · R4 `permission_set_id` 미사용) · [`ADR-MONO-020`](ADR-MONO-020-operator-multitenant-assignment.md) (D5 «배정마다 권한 세트» — ACCEPTED, 칸만 있음) · [`ADR-MONO-024`](ADR-MONO-024-tenant-admin-delegation.md) (D2 범위 = 행의 테넌트 · D6 관리자 ≠ 도메인 권한) · [`ADR-MONO-045`](ADR-MONO-045-cross-org-partner-delegation.md) (D3 위임 상한 · 관리 역할 위임 금지) · [`ADR-MONO-046`](ADR-MONO-046-operator-group-model.md) (D2 fan-out · 상속은 미룸) · [`ADR-MONO-047`](ADR-MONO-047-org-node-tenant-hierarchy.md) (D2 · D3 · D6 조직 노드 상한 = 도메인 단위 · 거부 전용) · [`ADR-MONO-080`](ADR-MONO-080-workforce-on-the-consumer-pool.md) (D5 퇴사 = 그 회사 측면만) · `TASK-MONO-773`(회사 생성자 · 두 번째 회사) · `TASK-MONO-784`(회사별 소속 · 역할 — review)
 
-> 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-083 ACCEPTED — <A|B|C>`** 로만 넘어간다(§ 수락 형식). «진행» · «좋아» · 갈래 letter 만 있는 문장 · 추천과 같은 선택창 응답은 수락이 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
+> 🟢 **ACCEPTED — 갈래 A** (2026-10-14 UTC, 소유자 정확형 `ADR-MONO-083 ACCEPTED — A`). 이름 · `ACCEPTED` · 갈래 letter 세 요건이 한 문장에 도착했다.
+> 🔴 **OD 답은 공급되지 않았다** — OD-1~OD-6 은 기본값이 **구현자 선택**으로 남는다(§ OD 대조). 단계 티켓은 이 ACCEPT PR 안에서 기안했다(§ ACCEPT 가 만든 새 의무). 아래 PROPOSED 시점 본문은 **바이트 그대로**.
+> (PROPOSED 시점 머리말) 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-083 ACCEPTED — <A|B|C>`** 로만 넘어간다(§ 수락 형식). «진행» · «좋아» · 갈래 letter 만 있는 문장 · 추천과 같은 선택창 응답은 수락이 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
 > 이 문서는 구현을 인가하지 않는다. 단계 티켓은 ACCEPT PR 안에서 기안한다(§ 단계).
 
 ---
@@ -249,4 +251,39 @@ ADR-MONO-083 ACCEPTED — <A|B|C>
 
 | 날짜 (UTC) | 상태 | 내용 | 근거 |
 |---|---|---|---|
-| 2026-10-14 | PROPOSED | 실측 ①~⑤(발급 경로 전수 · `scope` 우회 · 도메인별 서버 인가 · 그룹 단일 출처 · 콘솔 · 배포). D1~D9 · 갈래 A/B/C · 추천 A(구현자 선호) · OD-1~OD-6 · 단계 P1~P9 | `TASK-MONO-790` AC-0 |
+| 2026-10-14 | PROPOSED | 실측 ①~⑤(발급 경로 전수 · `scope` 우회 · 도메인별 서버 인가 · 그룹 단일 출처 · 콘솔 · 배포). D1~D9 · 갈래 A/B/C · 추천 A(구현자 선호) · OD-1~OD-6 · 단계 P1~P9 | `TASK-MONO-790` AC-0 · PR #4335 |
+| 2026-10-14 | PROPOSED → **ACCEPTED (A)** | 소유자 정확형 `ADR-MONO-083 ACCEPTED — A`. D1~D9 본문은 **바이트 그대로**. OD 답 미공급 → OD-1~OD-6 기본값(구현자 선택). 단계 티켓 P1~P8 + 후속 1건 기안 · P9 = `TASK-MONO-773` 개정 | 소유자(이 대화) · § ACCEPT 게이트 기록 |
+
+## ACCEPT 게이트 기록 (2026-10-14 UTC)
+
+- PROPOSED PR(#4335, `2f0577f49`) 머지 뒤 번호가 `main` 에서 확정된 상태에서, 다음 메시지로 *«ADR-MONO-083 ACCEPTED — A»* 가 도착했다. 선택창은 쓰지 않았다 — 소유자가 문장을 직접 보냈다. ACCEPT 는 그 메시지에 귀속된다.
+- 갈래 A 는 § 추천(구현자 선호)과 같다. 추천이 결정으로 바뀐 근거는 그 문장이지 추천이 아니다.
+- 같은 메시지에 OD 답은 없었다 — 아래 대조.
+
+## OD 대조 (ACCEPT 시점)
+
+| OD | 기록 | 걸리는 단계 |
+|---|---|---|
+| OD-1 기존 운영자 이전 | 기본값 = «이전 호환» 세트 백필(D8) — **구현자 선택** | P2 |
+| OD-2 회수 지연 | 기본값 = (나) assume 토큰만 5분 — **구현자 선택** | P3 |
+| OD-3 플랫폼 운영자 | 기본값 = 배정된 세트만 — **구현자 선택** | P2 · P3 |
+| OD-4 자기 배정 | 기본값 = 허용 · 감사 표시 — **구현자 선택** | P2 |
+| OD-5 회사 생성자 | 기본값 = 새 테넌트 «전체 업무» 세트 — **구현자 선택** | P9(773) |
+| OD-6 4도메인 업무 구분 | 기본값 = § 도메인 업무 구분 제안 — **구현자 선택** | P5~P8 |
+
+🔵 기본값은 «소유자가 고른 값» 이 아니다. 각 단계 티켓이 해당 OD 를 AC 로 싣고, 소유자는 그 단계 착수 전에 한 줄로 뒤집을 수 있다(예: `OD-2 가`).
+
+## ACCEPT 가 만든 새 의무 — 티켓으로 기안했다
+
+| 단계 | 티켓 | 큐 |
+|---|---|---|
+| P1 계약 · 명세 | `TASK-MONO-791` | 루트 `tasks/ready/` |
+| P2 admin — 세트 · 배정 · 백필 · `domainRoles` | `TASK-BE-631` | `projects/iam-platform/tasks/ready/` |
+| P3 auth — 발급 전환 · `erp.write` 제거 · TTL | `TASK-BE-632` | `projects/iam-platform/tasks/ready/` |
+| P4 콘솔 | `TASK-PC-FE-338` | `projects/platform-console/tasks/ready/` |
+| P5 SCM 세분 인가 | `TASK-MONO-792` | 루트 (scm + iam 카탈로그) |
+| P6 ERP 세분 인가 | `TASK-MONO-793` | 루트 (erp + iam 카탈로그) |
+| P7 Finance 세분 인가 | `TASK-MONO-794` | 루트 (finance + iam 카탈로그) |
+| P8 E-commerce 세분 인가 | `TASK-MONO-795` | 루트 (ecommerce + iam 카탈로그) |
+| P9 773 연동(OD-5) | `TASK-MONO-773` 개정(선행 · AC) | 루트 `tasks/ready/` |
+| § Outstanding — 관리 역할 그룹 fan-out 단일 출처 | `TASK-BE-633` | `projects/iam-platform/tasks/ready/` |
