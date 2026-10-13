@@ -2,6 +2,7 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.AssignmentNotFoundException;
 import com.example.admin.application.exception.TenantLastAdminRequiredException;
+import com.example.admin.application.port.DomainPermissionSetPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
@@ -51,6 +52,7 @@ class OperatorCompanyExitUseCaseTest {
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
     @Mock OperatorGroupMemberJpaRepository groupMembers;
     @Mock TenantPartnershipPort partnershipPort;
+    @Mock DomainPermissionSetPort domainSetPort;
 
     InMemoryRoleRowsPort port;
     ManageOperatorAssignmentUseCase useCase;
@@ -67,7 +69,7 @@ class OperatorCompanyExitUseCaseTest {
                 .operator(operator(ADMIN_A, "admin-a-uuid", "a@ex.com", "ACTIVE", "alpha"));
         TenantLastAdminGuard lastAdminGuard = new TenantLastAdminGuard(port);
         OperatorCompanyExitCascade cascade = new OperatorCompanyExitCascade(
-                port, groupMembers, assignmentPort, partnershipPort, lastAdminGuard);
+                port, groupMembers, assignmentPort, partnershipPort, lastAdminGuard, domainSetPort);
         useCase = new ManageOperatorAssignmentUseCase(port, assignmentPort, tenantScopeGuard, auditor,
                 lastAdminGuard, cascade, cachingPermissionEvaluator);
     }
@@ -86,6 +88,8 @@ class OperatorCompanyExitUseCaseTest {
         OperatorGroupMemberJpaEntity membership = OperatorGroupMemberJpaEntity.create(9L, PERSON, Instant.EPOCH, null);
         when(groupMembers.findByOperatorIdAndGroupTenantId(PERSON, "alpha")).thenReturn(List.of(membership));
         when(partnershipPort.removeParticipationsWithPartner(PERSON, "alpha")).thenReturn(1);
+        // TASK-BE-631 (ADR-083 D4): alpha's set rows of every source go (here: a MIGRATION and a GROUP:9 row)
+        when(domainSetPort.deleteAllGrantsInTenant(PERSON, "alpha")).thenReturn(2);
 
         useCase.unassignOperator("person-uuid", "alpha", actor(), "left the company");
 
@@ -98,6 +102,8 @@ class OperatorCompanyExitUseCaseTest {
         verify(partnershipPort).removeParticipationsWithPartner(PERSON, "alpha");
         verify(assignmentPort).deleteAssignment(PERSON, "alpha");
         verify(assignmentPort, never()).deleteAssignment(PERSON, "beta");
+        verify(domainSetPort).deleteAllGrantsInTenant(PERSON, "alpha");
+        verify(domainSetPort, never()).deleteAllGrantsInTenant(PERSON, "beta");
         verify(cachingPermissionEvaluator).invalidate("person-uuid");
 
         ArgumentCaptor<AdminActionAuditor.AuditRecord> rec = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
@@ -106,7 +112,8 @@ class OperatorCompanyExitUseCaseTest {
         assertThat(rec.getValue().targetTenantId()).isEqualTo("alpha");
         // 1 group-9 row (by origin) + the 2 remaining alpha rows (direct · node)
         assertThat(rec.getValue().downstreamDetail())
-                .isEqualTo("roleRows=3,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0");
+                .isEqualTo("roleRows=3,groupMemberships=1,participations=1,groupAssignments=0,keptAsDirect=0"
+                        + ",domainSetGrants=2");
         // the operator row is not written (status · home · identity — D-10, R1): the fake throws on any of them
     }
 
@@ -153,6 +160,7 @@ class OperatorCompanyExitUseCaseTest {
         verify(assignmentPort, never()).deleteGroupOriginAssignments(anyLong(), anyLong());
         verify(groupMembers, never()).delete(any());
         verify(assignmentPort, never()).deleteAssignment(anyLong(), anyString());
+        verify(domainSetPort, never()).deleteAllGrantsInTenant(anyLong(), anyString());
 
         // control: uu has another ACTIVE administrator
         port.row(ADMIN_A, "TENANT_ADMIN", "uu", null, null);
@@ -171,7 +179,7 @@ class OperatorCompanyExitUseCaseTest {
                 .isInstanceOf(TenantLastAdminRequiredException.class);
 
         assertThat(port.rowsIn(ADMIN_A, "alpha")).hasSize(1);
-        verifyNoInteractions(groupMembers, partnershipPort, cachingPermissionEvaluator);
+        verifyNoInteractions(groupMembers, partnershipPort, cachingPermissionEvaluator, domainSetPort);
         verify(assignmentPort, never()).deleteAssignment(anyLong(), anyString());
         verify(auditor, never()).recordWithPermission(any(), anyString());
     }

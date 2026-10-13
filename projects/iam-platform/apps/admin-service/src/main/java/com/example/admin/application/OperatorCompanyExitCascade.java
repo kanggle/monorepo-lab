@@ -1,6 +1,7 @@
 package com.example.admin.application;
 
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.DomainPermissionSetPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.TenantPartnershipPort;
 import com.example.admin.infrastructure.persistence.rbac.OperatorGroupMemberJpaEntity;
@@ -24,7 +25,8 @@ import java.util.TreeSet;
  *       2026-10-13 UTC «U 역할 행도 함께 지움»: no «role without membership» state, D-1). The person's own rows in U
  *       (direct, or from a U group) are untouched;</li>
  *   <li>participant bindings in partnerships whose partner is T (784 AC-0 F18);</li>
- *   <li>every role row living in T, whatever its origin (direct · group · org-node row recorded at T).</li>
+ *   <li>every role row living in T, whatever its origin (direct · group · org-node row recorded at T);</li>
+ *   <li>(TASK-BE-631 · ADR-MONO-083 D4) every domain permission set row of (person, T), every source.</li>
  * </ol>
  *
  * <p>Before anything is written, every OTHER company whose {@code TENANT_ADMIN} the leaving groups' fan-out held
@@ -44,14 +46,15 @@ public class OperatorCompanyExitCascade {
     private final OperatorTenantAssignmentPort assignmentPort;
     private final TenantPartnershipPort partnershipPort;
     private final TenantLastAdminGuard lastAdminGuard;
+    private final DomainPermissionSetPort domainSetPort;
 
     /** How many rows of each kind left with the person (the audit {@code detail}). */
     public record ExitCounts(int roleRows, int groupMemberships, int participations, int groupAssignments,
-                             int keptAsDirect) {
+                             int keptAsDirect, int domainSetGrants) {
         public String detail() {
             return "roleRows=" + roleRows + ",groupMemberships=" + groupMemberships
                     + ",participations=" + participations + ",groupAssignments=" + groupAssignments
-                    + ",keptAsDirect=" + keptAsDirect;
+                    + ",keptAsDirect=" + keptAsDirect + ",domainSetGrants=" + domainSetGrants;
         }
     }
 
@@ -111,6 +114,11 @@ public class OperatorCompanyExitCascade {
         }
         int participations = partnershipPort.removeParticipationsWithPartner(operatorId, tenantId);
         roleRows += operatorPort.deleteOperatorRolesInTenant(operatorId, tenantId);
-        return new ExitCounts(roleRows, leaving.size(), participations, groupAssignments, keptAsDirect);
+        // TASK-BE-631 (ADR-MONO-083 D4): the person's domain permission set rows in T, EVERY source (DIRECT ·
+        // MIGRATION · GROUP:<id> — a group gives sets in its own tenant only, so the leaving groups' rows are all
+        // here). Other companies' set rows are byte-unchanged; no «work role without membership» survives.
+        int domainSetGrants = domainSetPort.deleteAllGrantsInTenant(operatorId, tenantId);
+        return new ExitCounts(roleRows, leaving.size(), participations, groupAssignments, keptAsDirect,
+                domainSetGrants);
     }
 }

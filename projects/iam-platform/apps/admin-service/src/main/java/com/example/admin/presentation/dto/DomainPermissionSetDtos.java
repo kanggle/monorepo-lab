@@ -2,6 +2,7 @@ package com.example.admin.presentation.dto;
 
 import com.example.admin.application.DomainPermissionSetResult;
 import com.example.admin.application.GrantDomainPermissionSetResult;
+import com.example.admin.application.GroupDomainPermissionSetResult;
 import com.example.admin.application.OperatorDomainAccessResult;
 import com.example.admin.domain.rbac.DomainRoleCatalog;
 import com.example.admin.domain.rbac.DomainRoleCatalog.RoleRef;
@@ -107,6 +108,27 @@ public final class DomainPermissionSetDtos {
         static SourceResponse from(OperatorDomainAccessResult.Source s) {
             return new SourceResponse(s.source(), s.groupId(), s.groupName(), s.tenantId(), s.grantedAt(),
                     s.grantedBy());
+        }
+    }
+
+    /** {@code POST /api/admin/groups/{groupId}/domain-permission-sets} body. */
+    public record GrantGroupDomainPermissionSetRequest(String setId) {}
+
+    /** One set of a group: {@code {setId, name, systemKey, grantedAt, grantedBy}} ({@code systemKey} null for a tenant set). */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record GroupDomainPermissionSetResponse(String setId, String name, String systemKey, Instant grantedAt,
+                                                   String grantedBy) {
+        public static GroupDomainPermissionSetResponse from(GroupDomainPermissionSetResult r) {
+            return new GroupDomainPermissionSetResponse(r.setId(), r.name(), r.systemKey(), r.grantedAt(),
+                    r.grantedBy());
+        }
+    }
+
+    /** The 201 of a group set grant: {@code {item, fannedOutRows}}. */
+    public record GrantGroupDomainPermissionSetResponse(GroupDomainPermissionSetResponse item, int fannedOutRows) {
+        public static GrantGroupDomainPermissionSetResponse from(GroupDomainPermissionSetResult.Granted g) {
+            return new GrantGroupDomainPermissionSetResponse(GroupDomainPermissionSetResponse.from(g.item()),
+                    g.fannedOutRows());
         }
     }
 

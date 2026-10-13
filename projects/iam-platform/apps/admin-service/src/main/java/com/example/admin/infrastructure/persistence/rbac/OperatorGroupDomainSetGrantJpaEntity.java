@@ -15,8 +15,9 @@ import java.util.Objects;
 
 /**
  * TASK-BE-631 / ADR-MONO-083 D4 (Flyway V0052) — {@code operator_group_domain_set_grant}: a set granted to a group
- * (the template fanned out to members as {@code GROUP:<id>} rows). Slice A only READS it (a set's
- * {@code groupCount} and the {@code IN_USE} refusal); the group endpoints that write it are slice B.
+ * (the template fanned out to members as {@code GROUP:<id>} rows). Read by a set's {@code groupCount} and the
+ * {@code IN_USE} refusal; written by the group endpoints and the group delete (slice B —
+ * {@code GroupDomainPermissionSetUseCase} · {@code GroupDomainSetFanOut}).
  */
 @Entity
 @Table(name = "operator_group_domain_set_grant")

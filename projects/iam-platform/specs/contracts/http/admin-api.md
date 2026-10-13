@@ -3794,12 +3794,12 @@ T 의 **테넌트 세트** 생성.
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `name` · `roles` 형식 · 빈 `roles` · T = `'*'` · 생략 + 구체 테넌트 둘 이상 |
+| 400 | `VALIDATION_ERROR` | `name` · `roles` 형식 · 빈 `roles` · T = `'*'` · 생략 + 구체 테넌트 둘 이상 · `Idempotency-Key` 누락 · 길이 초과 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 (best-effort DENIED row) |
-| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 `Idempotency-Key` 로 다른 요청 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 행위자가 같은 동작에 같은 `Idempotency-Key` 를 다시 씀 — 저장 응답을 재생하지 않는다(초대 생성과 같은 규약, TASK-BE-631) · 새 키로 재시도 |
 | 422 | `DOMAIN_ROLE_NOT_ASSIGNABLE` | `roles` 에 카탈로그 밖 역할(관리 등급 · 지금 발급하지 않는 역할 포함) |
 | 422 | `DOMAIN_NOT_SUBSCRIBED` | `roles` 의 도메인이 T 의 entitled domains(구독 ∩ 조직 노드 상한) 밖 |
 | 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패 — 아무것도 쓰지 않는다(fail-closed) |
@@ -4018,7 +4018,7 @@ T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — �
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `setId` 누락 · `legacy-compat` |
+| 400 | `VALIDATION_ERROR` | `setId` 누락 · `legacy-compat` · `Idempotency-Key` 누락 · 길이 초과 |
 | 400 | `REASON_REQUIRED` | reason 누락 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
@@ -4026,7 +4026,7 @@ T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — �
 | 404 | `GROUP_NOT_FOUND` | 그룹 미존재 |
 | 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 다른 테넌트의 세트 |
 | 409 | `DOMAIN_PERMISSION_SET_ALREADY_GRANTED` | 이 그룹에 같은 세트가 이미 배정돼 있다 |
-| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 `Idempotency-Key` 로 다른 요청 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 행위자가 같은 동작에 같은 `Idempotency-Key` 를 다시 씀 — 저장 응답을 재생하지 않는다 · 새 키로 재시도 |
 | 422 | `DOMAIN_NOT_SUBSCRIBED` | 세트의 도메인이 그룹 테넌트의 entitled domains 밖 |
 | 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | entitled domains 조회 실패 — 아무것도 쓰지 않는다 |
 
