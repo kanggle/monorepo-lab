@@ -2,8 +2,11 @@
 
 import { useId, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { apiClient } from '@/shared/api/client';
 import { useIssueCoupons } from '../hooks/use-ecommerce-promotions';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
+import { Button } from '@/shared/ui/Button';
+import { UserListSchema, type UserSummary } from '../api/user-types';
 
 /**
  * Confirm-gated coupon-issue dialog (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -19,6 +22,14 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  *
  * NO `Idempotency-Key` (producer defines none — § 2.4.10); confirm-gate is
  * the sole double-submit guard.
+ *
+ * TASK-PC-FE-334 — «이메일로 찾아 추가»: a partial-email search against the
+ * SAME-origin `GET /api/ecommerce/users?email=&size=20` read proxy (the
+ * users list surface, § 2.4.10) appends a result row's `userId` to the
+ * existing textarea list (de-duped — appending an already-present id is a
+ * no-op and does NOT reset the held idempotency key, since the batch didn't
+ * actually change). The textarea stays the primary / bulk-paste path; this
+ * is strictly additive.
  */
 export interface CouponIssueDialogProps {
   open: boolean;
@@ -34,11 +45,18 @@ export function CouponIssueDialog({
   onIssued,
 }: CouponIssueDialogProps) {
   const textareaId = useId();
+  const emailSearchId = useId();
   const issue = useIssueCoupons();
 
   const [rawUserIds, setRawUserIds] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+
+  // TASK-PC-FE-334 — email search assist (see component doc).
+  const [emailQuery, setEmailQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserSummary[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   // Idempotency-Key for THIS issue intent (TASK-PC-FE-252). Minted lazily on
   // confirm and reused across a retry of the same batch (so a double-submit
   // dedupes). Editing the userId list, a successful issue, or cancel clears it —
@@ -62,6 +80,37 @@ export function CouponIssueDialog({
     setError(null);
     setSuccessCount(null);
     setIdempotencyKey(null);
+    setEmailQuery('');
+    setSearchResults(null);
+    setSearchError(null);
+  }
+
+  /** Appends a found user's id to the list (de-duped). A no-op add (the id
+   *  is already in the list) does NOT reset the idempotency key — the batch
+   *  didn't actually change. */
+  function addUserId(uid: string) {
+    if (userIds.includes(uid)) return;
+    setRawUserIds((prev) => (prev.trim() ? `${prev}\n${uid}` : uid));
+    setIdempotencyKey(null);
+  }
+
+  async function searchByEmail() {
+    const q = emailQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const raw = await apiClient.get<unknown>(
+        `/api/ecommerce/users?email=${encodeURIComponent(q)}&size=20`,
+      );
+      const list = UserListSchema.parse(raw);
+      setSearchResults(list.content);
+    } catch {
+      setSearchError('사용자를 검색하지 못했습니다.');
+      setSearchResults(null);
+    } finally {
+      setSearching(false);
+    }
   }
 
   function confirm() {
@@ -143,6 +192,76 @@ export function CouponIssueDialog({
               ? `${userIds.length}명이 입력되었습니다.`
               : '최소 1명의 사용자 ID를 입력하세요.'}
           </p>
+        </div>
+
+        <div className="space-y-2 rounded-md border border-dashed border-border p-3">
+          <label
+            htmlFor={emailSearchId}
+            className="block text-sm font-medium text-foreground"
+          >
+            이메일로 찾아 추가
+          </label>
+          <div className="flex gap-2">
+            <input
+              id={emailSearchId}
+              value={emailQuery}
+              onChange={(e) => setEmailQuery(e.target.value)}
+              placeholder="이메일 일부"
+              className={inputCls.replace('mt-1 ', '')}
+              data-testid="coupon-issue-email-search-input"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void searchByEmail()}
+              disabled={searching || emailQuery.trim() === ''}
+              data-testid="coupon-issue-email-search"
+            >
+              {searching ? '검색 중…' : '검색'}
+            </Button>
+          </div>
+          {searchError && (
+            <p
+              role="alert"
+              data-testid="coupon-issue-email-search-error"
+              className="text-sm text-destructive"
+            >
+              {searchError}
+            </p>
+          )}
+          {searchResults !== null && !searchError && (
+            searchResults.length === 0 ? (
+              <p
+                data-testid="coupon-issue-email-search-empty"
+                className="text-sm text-muted-foreground"
+              >
+                일치하는 사용자가 없습니다.
+              </p>
+            ) : (
+              <ul
+                data-testid="coupon-issue-email-search-results"
+                className="divide-y divide-border rounded-md border border-border"
+              >
+                {searchResults.map((u) => (
+                  <li
+                    key={u.userId}
+                    className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">{u.email ?? u.userId}</span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => addUserId(u.userId)}
+                      data-testid={`coupon-issue-email-search-add-${u.userId}`}
+                    >
+                      추가
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
         </div>
         {successCount !== null && (
           <p
