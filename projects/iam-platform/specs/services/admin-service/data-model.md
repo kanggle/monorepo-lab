@@ -368,7 +368,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | 컬럼 | 타입 | 제약 | 분류 등급 | 설명 |
 |---|---|---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | 내부 PK. 배정 표가 참조하는 값 |
-| `set_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7 — API 의 `setId`. 프리셋은 시드가 **고정값**으로 넣는다(환경마다 같은 값) |
+| `set_id` | VARCHAR(36) | UNIQUE, NOT NULL | internal | UUID v7 — API 의 `setId`. 프리셋은 시드가 **고정값**으로 넣는다(환경마다 같은 값) — `00000083-0000-7000-8000-0000000000NN`, NN = admin-api § 시스템 프리셋 표 순서 `01`(`wms-inventory-read`) ~ `07`(`wms-full`) · `08`~`13`(`scm`·`erp`·`finance`·`ecommerce`·`fan`·`mes` `-full`) · `14`(`all-domains-full`) · `15`(`legacy-compat`) (TASK-BE-631 V0052) |
 | `tenant_id` | VARCHAR(32) | NULL, `CHECK (tenant_id IS NULL OR tenant_id <> '*')` | internal | 테넌트 세트의 소유 테넌트(M1 격리 키). **`NULL` = 시스템 프리셋**. account-service `tenants` 의 불투명 참조 — FK 없음(`operator_group.tenant_id` 와 같은 형태). `'*'` 금지 — 플랫폼 공용 묶음은 프리셋이다 |
 | `system_key` | VARCHAR(40) | NULL, UNIQUE | internal | 프리셋 키(`wms-inventory-read` · … · `all-domains-full` · `legacy-compat` — admin-api 프리셋 표). `CHECK ((tenant_id IS NULL) = (system_key IS NOT NULL))` — 프리셋 ⟺ 테넌트 없음 |
 | `name` | VARCHAR(120) | NOT NULL | internal | 표시명. 테넌트 안에서 유일할 필요 없음(식별 = `set_id`) |

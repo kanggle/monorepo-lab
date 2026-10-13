@@ -21,20 +21,19 @@ import java.util.Set;
  *       entitlement — these are NOT delegatable across the org boundary.</li>
  * </ul>
  *
- * <p><b>Keep in sync</b> with {@code auth-service}
- * {@code com.example.auth.infrastructure.oauth2.OperatorRoleDerivation}: whenever a
- * new domain's operator roles are added there, add them here too. A drift is
- * <b>fail-CLOSED</b> (a legitimately-delegatable role missing here is rejected at
- * invite, never an over-grant). Extracting the table to a shared library is a
- * deferred follow-up; until then this mirror is the single admin-side source.
+ * <p><b>TASK-BE-631 (ADR-MONO-083 D2) — one source.</b> The allow-list is no longer a hand-kept mirror: it is
+ * the role-name set of {@link DomainRoleCatalog}, the single admin-side catalog of assignable domain work roles
+ * (whose content is the same flattened {@code OperatorRoleDerivation} value set this class used to copy).
+ * {@code DelegatableRoleCatalogTest} pins the derived set byte-identical to the list it replaced, so a catalog
+ * change that would silently widen or narrow what a partnership may delegate turns that test red first.
+ * A drift is still <b>fail-CLOSED</b> (a role missing from the catalog is rejected at invite, never an over-grant).
  *
  * <p>Framework-free (no Spring/JPA) — a pure domain policy, like {@link ScopeSet}.
  */
 public final class DelegatableRoleCatalog {
 
     /**
-     * The operator-tier domain roles delegatable across an org boundary — the
-     * flattened value set of auth-service {@code OperatorRoleDerivation}:
+     * The operator-tier domain roles delegatable across an org boundary — {@link DomainRoleCatalog#roleNames()}:
      * <ul>
      *   <li>{@code wms} → WMS_OPERATOR + granular OUTBOUND/INBOUND/INVENTORY
      *       {READ,WRITE} + MASTER_READ (TASK-BE-433; {@code WMS_ADMIN} excluded)</li>
@@ -44,21 +43,7 @@ public final class DelegatableRoleCatalog {
      *       {@code fan}/{@code fan-platform} → FAN_OPERATOR</li>
      * </ul>
      */
-    public static final Set<String> DELEGATABLE_OPERATOR_ROLES = Set.of(
-            // wms (TASK-BE-433 granular operator-tier set)
-            "WMS_OPERATOR",
-            "OUTBOUND_READ", "OUTBOUND_WRITE",
-            "INBOUND_READ", "INBOUND_WRITE",
-            "INVENTORY_READ", "INVENTORY_WRITE",
-            "MASTER_READ",
-            // ecommerce operator role
-            "ECOMMERCE_OPERATOR",
-            // single-role domains
-            "SCM_OPERATOR",
-            "ERP_OPERATOR",
-            "FINANCE_OPERATOR",
-            "MES_OPERATOR",
-            "FAN_OPERATOR");
+    public static final Set<String> DELEGATABLE_OPERATOR_ROLES = Set.copyOf(DomainRoleCatalog.roleNames());
 
     private DelegatableRoleCatalog() {
     }

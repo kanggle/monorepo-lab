@@ -8,7 +8,7 @@ TASK-BE-631
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -87,3 +87,41 @@ ADR-083 갈래 A 의 저장 모델과 관리 API 를 admin-service 에 만든다
 1. 출처를 PK 밖 칸 하나로 둔다(관리 역할의 `group_origin` 모양) — G1 회수가 G2 분을 지운다(ADR ④).
 2. 백필을 «구독 조회 실패 시 전체» 같은 코드 분기로 대신한다 — 영구 우회(D8).
 3. `domainRoles` 계산이 실패할 때 빈 값 대신 예외를 삼키고 «미지정» 을 반환 — auth 쪽이 과거 파생으로 떨어질 여지가 생긴다(P3 이 파생을 지우기 전 기간).
+
+---
+
+# 슬라이스 a 기록 (2026-10-14 UTC)
+
+> 구현=Opus 5.5 (backend-engineer) · 검토 = 이 세션(계약 대조 · 재실행). worktree `wt-631` · 브랜치 `task/be-631-domain-permission-sets`. 범위: 스키마 · 카탈로그 · 프리셋 · 세트 CRUD · 직접 배정/회수 · 실효 권한 · `/me/domain-access` · 내부 판정 `domainRoles` · 백필 · 데모 시드. 🔵 슬라이스 b(그룹 세트 · fan-out · 멤버 추가 게이트 · 내보내기 연동)는 다음 PR — **그 전까지 내보내기는 세트 행을 남긴다**(백엔드 운영 반영은 AMI 굽기 뒤라 b 머지 전에 운영으로 가지 않는다).
+
+## 1. 무엇을
+
+- `V0052__create_domain_permission_sets_and_backfill.sql` — 표 넷(그룹 템플릿 표 포함 — b 에 DDL 없음) · 프리셋 15(고정 id `00000083-0000-7000-8000-0000000000NN` — `data-model.md` 에 기록) · `domain_access.manage` 시드(`SUPER_ADMIN` · `TENANT_ADMIN`) · 백필 두 문장(비-`'*'` 소속마다 `legacy-compat` `MIGRATION` · `'*'` 운영자마다 `('*', legacy-compat)`), 재실행 0행.
+- 카탈로그 한 자리 `DomainRoleCatalog` · `DelegatableRoleCatalog` = 그 복사본(파트너십 허용 목록 바이트 동일 단언).
+- 유스케이스 `DomainPermissionSetUseCase` · `OperatorDomainAccessUseCase` · `DomainSetEntitlementGuard` · 포트 3 · JPA 4 · 컨트롤러 2 · 오류 6 + 판정 읽기 실패(5xx) · 감사 코드 7.
+- 내부 판정 `domainRoles`(소속 경로 · `'*'` 경로 합집합 · 파트너십 생략 · 읽기 실패 = 5xx, `[]` 아님).
+- 데모 시드 `R__seed_zz_demo_domain_permission_sets.sql`(시드 운영자 6 의 `legacy-compat` — R__ 가 V 뒤에 돌아 백필이 못 보므로).
+
+## 2. 계약 대조 (이 세션)
+
+- 엔드포인트 경로 8 · 내부 응답 필드명 `domainRoles` = 계약 글자 그대로(grep).
+- 구독 상한 판정 = account-service `GET /internal/tenants/{tenantId}/entitled-domains`(토큰과 같은 상한) · 404 = 빈 집합 → `422` · 그 밖 4xx · 5xx · CB-open → `DownstreamFailureException` → `503`(`AdminExceptionHandler.java:239-244`) — fail-closed 확인. account-service `/internal/**` = `internal.invoke` 범위만 요구(`SecurityConfig.java:128`) — admin 클라이언트가 이미 같은 경로군을 부른다 ⇒ 운영에서 막히지 않음.
+- 계약 보완 2: `account-tenant-domain-subscriptions.md` § entitled-domains 에 두 번째 호출자(admin) · 실패 방향 · `data-model.md` 프리셋 고정 id.
+
+## 3. 계약과 다르게 / 구현이 정한 것
+
+| # | 무엇 | 판단 |
+|---|---|---|
+| I-1 | MySQL 은 FK 동작이 걸린 칸에 CHECK 를 못 건다(ER 3823) — `group_origin` CHECK 일부를 앱 · 형태 시험이 잡는다 | data-model 이 허용한 대체 |
+| I-2 | 표 생성 가드 = `CREATE TABLE IF NOT EXISTS`(V0043/V0047 형태) | 멱등 동일 |
+| I-3 | `Idempotency-Key` 재사용 = `409`(초대 생성 패턴, 저장 응답 재생 없음) · 누락 = `400` | 기존 패턴 |
+| I-4 | `mes` 카탈로그 행 유지 — 소비자 유무(AC-0) 미측정 | 슬라이스 b AC-0 에서 |
+
+## 4. 실행 (rc 는 각자 — 파이프 없음)
+
+| 명령 | rc | 결과 |
+|---|---|---|
+| `:admin-service:compileTestJava` | **0** | IT 포함 컴파일 |
+| `:admin-service:test` | **0** | 194 suites · 1270 tests · fail 0 · skip 58(Testcontainers — Docker 없음). 신규 · 수정 단위/슬라이스 10 클래스 통과(에이전트 보고) — 이 세션이 다시 돌려 rc 0 확인 |
+| `:auth-service:test` | **0** | 시드 파일을 읽는 auth 시험 무영향 확인 |
+| `integrationTest` | ⚪ CI | `DomainPermissionSetIntegrationTest`(AC-1 개인 회수 절반 · AC-2 · AC-3 · AC-6) · `V0052DomainSetBackfillIntegrationTest`(AC-5) · `DemoOperatorSeedIntegrationTest` · `TenantAdminRoleSeedIntegrationTest` 추가 단언 |

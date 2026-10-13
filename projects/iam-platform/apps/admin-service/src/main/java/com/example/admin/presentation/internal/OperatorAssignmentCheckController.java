@@ -71,7 +71,7 @@ public class OperatorAssignmentCheckController {
                 checkUseCase.check(oidcSubject, tenantId);
         return ResponseEntity.ok(new AssignmentCheckResponse(
                 result.assigned(), result.orgScope(), DelegatedScopeDto.from(result.delegatedScope()),
-                result.mfaRequired()));
+                result.mfaRequired(), result.domainRoles()));
     }
 
     /**
@@ -96,7 +96,18 @@ public class OperatorAssignmentCheckController {
             // TASK-MONO-771 (auth-to-admin.md rule 6) — ALWAYS present (primitive, never omitted):
             // auth-service reads an ABSENT field as `true` (fail-closed), so omission would refuse
             // every subject without "mfa".
-            boolean mfaRequired) {}
+            boolean mfaRequired,
+            // TASK-BE-631 (auth-to-admin.md rule 7) — the effective work roles. Field-level NON_NULL: OMITTED on
+            // the partnership host reach and every assigned=false answer (null); an EMPTY list is still rendered
+            // as [] (NON_NULL keeps empty collections) — «no set» is `[]`, never an absent field.
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<String> domainRoles) {
+
+        /** Pre-TASK-BE-631 shape (no {@code domainRoles}). */
+        public AssignmentCheckResponse(boolean assigned, List<String> orgScope, DelegatedScopeDto delegatedScope,
+                                       boolean mfaRequired) {
+            this(assigned, orgScope, delegatedScope, mfaRequired, null);
+        }
+    }
 
     /** The additive cross-org {@code {domains, roles}} confinement block. */
     public record DelegatedScopeDto(List<String> domains, List<String> roles) {

@@ -44,7 +44,8 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-public class AccountServiceTenantClient implements TenantProvisioningPort, TenantDomainSubscriptionPort {
+public class AccountServiceTenantClient implements TenantProvisioningPort, TenantDomainSubscriptionPort,
+        com.example.admin.application.port.TenantEntitledDomainsPort {
 
     private static final String CB_NAME = "accountService";
 
@@ -237,6 +238,44 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
         }
     }
 
+    // TASK-BE-631 (ADR-MONO-083): a tenant's EFFECTIVE entitled domains (ACTIVE ∩ org-node ceiling) — the upper
+    // bound of every domain permission set create / edit / grant. Same endpoint auth-service reads at issuance
+    // (account-tenant-domain-subscriptions.md § GET /internal/tenants/{tenantId}/entitled-domains), so the write
+    // gate and the token agree on the bound. 404 (unknown tenant) → empty = nothing entitled (the caller refuses
+    // with 422); 5xx / timeout / CB-open → DownstreamFailureException (503, nothing written — fail-closed).
+    @Override
+    @Retry(name = CB_NAME)
+    @CircuitBreaker(name = CB_NAME)
+    public java.util.Set<String> entitledDomains(String tenantId) {
+        try {
+            EntitledDomainsResponse response = restClient.get()
+                    .uri("/internal/tenants/{tenantId}/entitled-domains", tenantId)
+                    .headers(h -> addInternalHeaders(h))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> {
+                        throw HttpClientErrorException.create(
+                                resp.getStatusCode(), resp.getStatusText(),
+                                resp.getHeaders(), resp.getBody().readAllBytes(), null);
+                    })
+                    .body(EntitledDomainsResponse.class);
+            if (response == null || response.domainKeys() == null) {
+                return java.util.Set.of();
+            }
+            return java.util.Set.copyOf(response.domainKeys());
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            log.warn("account-service returned {} on GET /internal/tenants/{}/entitled-domains: {}",
+                    status, tenantId, e.getMessage());
+            if (status == 404) {
+                return java.util.Set.of();
+            }
+            throw new DownstreamFailureException("account-service entitled-domains error " + status, e);
+        } catch (Exception e) {
+            log.error("account-service GET /internal/tenants/{}/entitled-domains failed", tenantId, e);
+            throw new DownstreamFailureException("account-service unavailable", e);
+        }
+    }
+
     // TASK-BE-343 (ADR-MONO-023 D3): subscribe (create) — delegate the entitlement
     // write to account-service. account-service 404 TENANT_NOT_FOUND → TenantNotFoundException,
     // 409 SUBSCRIPTION_ALREADY_EXISTS → SubscriptionAlreadyExistsException,
@@ -414,6 +453,9 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
             String tenantId,
             String domainKey
     ) {}
+
+    // TASK-BE-631: account GET /internal/tenants/{tenantId}/entitled-domains response shape.
+    private record EntitledDomainsResponse(String tenantId, List<String> domainKeys) {}
 
     // TASK-BE-343: account POST/PATCH /internal/tenant-domain-subscriptions response shape.
     private record SubscriptionMutationResponse(

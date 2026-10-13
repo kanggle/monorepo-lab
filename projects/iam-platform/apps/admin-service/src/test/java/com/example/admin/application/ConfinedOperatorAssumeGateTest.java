@@ -60,7 +60,9 @@ class ConfinedOperatorAssumeGateTest {
                 tenantScopeResolver, assignmentPort, new OperatorOidcSubjectResolver(operatorPort),
                 partnershipPort, new UnboundedHostEntitledScopeResolver(),
                 // TASK-MONO-771 S4: no tenant has an entry policy in this suite (row absent = off).
-                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()));
+                new OperatorSecondFactorRequirement(operatorPort, assignmentPort, ids -> java.util.Set.of()),
+                // TASK-BE-631: no domain permission set in this suite.
+                (operatorInternalId, tenantIds) -> java.util.List.of());
     }
 
     @Test
