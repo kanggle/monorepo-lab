@@ -124,9 +124,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-631-domain-permission-sets-admin-service.md` — **`ADR-MONO-083` P2 — admin-service: 도메인 업무 권한 세트 · 출처별 직접/그룹 배정 · 실효 권한 · `domainRoles` · «이전 호환» 백필** (REVIEW, 2026-10-14 UTC). 슬라이스 a #4342(`7d663829d`, 새 IT 9 PASSED 로그 확인) · 슬라이스 b = 그룹 세트 · fan-out · 세트 달린 그룹의 멤버 추가 게이트 · 내보내기 전 출처 삭제. AC-0~7 ✅(AC-7 = ⚪ AMI · 데모 창 없음 — V0052 운영 미적용, 완료 판정은 P3 게이트). 🔴 토큰은 안 바뀐다(P3 몫). 분석=Opus 5.5 / 구현 권장=Opus.
+_(없음)_
 
 ## done
+- ✅ `TASK-BE-631-domain-permission-sets-admin-service.md` — **DONE 2026-10-14 UTC (4-dim verified)** — 슬라이스 a **#4342**(`7d663829d`) · 슬라이스 b **#4343**(`871ab5dc9`) (머지 시점 실패 0, 둘 다 · 새 IT 는 레인 로그에서 PASSED 확인 — a 9 · b 5). `ADR-MONO-083` P2: 업무 세트 · 출처별 직접/그룹 배정 · `domainRoles` · `legacy-compat` 백필 · 세트 달린 그룹의 멤버 추가 게이트 · 내보내기 전 출처 삭제. 🔴 b 의 CI 가 **784 때부터의 감사 키 넘침**(테넌트 id 11자 초과 시 배정 생성 · 내보내기 500)을 드러내 고쳤다 — 형제 `TASK-BE-634`. ⚪ V0052 운영 미적용(AMI · 데모 창 없음) — 완료 판정 SQL 은 P3 배포 게이트. 토큰 무변경(P3 `TASK-BE-632`).
 - ✅ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4329**, 스쿼시 **`7b115c60e`**. IdP 이메일 가림을 공용 `PiiMaskingUtils.maskEmail`(첫 글자 + 별 3개) 하나로 — 초대 미리보기 · 인증/MFA 화면이 같은 입력에 같은 값, 양 서비스에 같은 기대값 시험 고정 · 주소 아닌 입력은 화면 쪽에서 전부 가림. 후속(AC 아님): 공용 함수의 주소 아닌 입력 원문 반환.
 - ✅ `TASK-BE-628-demo-assigned-only-operator-seed.md` — **DONE 2026-10-09 UTC (4-dim verified)** — impl PR **#4246**, 스쿼시 **`276f74d52`** (머지 시점 실패 0 · iam A/B 통합 레인 SUCCESS). 데모 시드에 로그인 불가·배정만 된 운영자 1명(HOME `ecommerce`, `demo-corp` 배정만) — 콘솔 그룹 «멤버 추가» 의 비활성 행을 데모에서 보기 위함. 25차 창 재굽기 뒤 라이브: 소유자가 demo-corp 그룹 «멤버 추가» 에서 `assigned-only@demo.com` 행이 «ecommerce 소속 · 배정만 됨» 으로 비활성 표시됨을 확인(AC-6).
 - ✅ `TASK-BE-627-password-reset-pages.md` — **DONE 2026-10-08 UTC (4-dim verified)** — impl PR **#4232**, 스쿼시 **`7c513ae26`** (머지 시점 실패 0). IdP 비밀번호 재설정 화면 · 로그인 링크 · 데모 경로. CI `PasswordResetIntegrationTest` 초록 · 24차 창 메일→링크→재설정→로그인 라이브 통과.
