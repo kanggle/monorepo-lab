@@ -146,3 +146,24 @@ backend
 - #4351 → `08f2da4a3`. Failing checks at merge: 0.
 - Integration lane B **PASSED**, confirmed in the log: `happy` (no `erp.write`, `expires_in` 300), BE-632 AC-1 (wire), BE-632 AC-3 (wire), STEP 5.
 - 🔴 **Merge ≠ deployment.** This stays in `review/` until the three deployment gates above are met, the AMI is baked, and AC-4 · AC-5 · AC-6 · AC-8 are measured in the demo window. If AC-4/5/6/8 still cannot be measured live, the reason is recorded as ⚪ and the ticket is not closed.
+
+## 27th demo window — live measurement (2026-10-14 UTC)
+
+AMI `ami-0775fa009a12a824d` baked at `73daae263` (`bake.sh --ref bake-73daae263`, provenance `ami-tag`). Instance `i-029065c2b2d7b8121` came up at 16:57Z: 89 containers · unhealthy 0 · seed failures 0. All measurements ran on the host through SSM; claims were decoded, tokens never printed.
+
+**Deployment gate 1 (backfill) — met.** Flyway `0050`–`0053` all succeeded. Re-measured after every seed had finished (17:09:30Z):
+- ① canonical predicate = **0**. The pre-cutover population is 0 memberships and 2 platform operators; both platform operators have `'*'` set rows.
+- ② window predicate = **0** over 6 memberships (9 set rows).
+- 🔴 The first attempt used `version = '52'` and gave a **vacuous 0**: Flyway stores `0052`, so the cutover was NULL. It was caught by printing the cutover and the population sizes.
+
+| AC | Result | Evidence |
+|---|---|---|
+| **AC-4** | ✅ | The demo operator assumes `demo-corp`. `roles` = `[ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR, WMS_OPERATOR, OUTBOUND_READ, OUTBOUND_WRITE, INBOUND_READ, INBOUND_WRITE, INVENTORY_READ, INVENTORY_WRITE, MASTER_READ]`, which is the `infra/demo/seed/README.md` list expanded, in order. `scope` has no `erp.write`. `exp − iat = 300`. |
+| **AC-1** (live) | ✅ | `requester@demo.com`, `wms-inventory-operate` only → `roles = [INVENTORY_READ, INVENTORY_WRITE]`. Inventory + outbound sets → `[OUTBOUND_*, INVENTORY_*]`, and in that state: outbound GET 200, **SCM supplier registration 403** `PERMISSION_DENIED` («OPERATOR actor required»), **ERP department create 403** («actor lacks required scope write»). Neither write created data. Control: with the full sets, outbound GET 200 → with the inventory set only, 403. 🔵 The SCM *PO list* GET is 200 by design (a non-operator reads as BUYER), so the run order's «SCM = 403» meant an operator-only SCM action. |
+| **AC-5** | 🟡 | 403 without an ERP set: ✅ (above). ERP write with an ERP set: covered by the same boot's seed, which created 22 ERP master rows with the demo operator token (`ERP_OPERATOR`) and 0 failures. ⚪ **Workload-client ERP write: not measured.** It needs that client's secret on the host; not attempted this window. |
+| **AC-6** (set revoke) | 🟡 | After revoking a set, re-exchanging gives a token without the role **immediately**, and that token gets 403. The **existing** token keeps working until `exp` and turns **401 at `exp + 62 s` and `exp + 63 s`** (two runs, 10 s and 5 s polling). ⇒ The real maximum is ≈ **360 s, not 300 s**. The resource servers seem to allow ~60 s of clock skew. 🔴 This contradicts the contract sentence «at most 300 s after revocation», so it needs a decision: change the sentence to `exp + skew`, or reduce the skew. ⚪ Group leave · operator suspend · subscription cancel · set edit were not measured (owner decision 2026-10-15: they touch the whole demo). |
+| **AC-8** | ✅ | Merge `08f2da4a3` (#4351, 2026-10-14) → AMI 27th `ami-0775fa009a12a824d` (`73daae263`, pin #4364) → live in the 27th window (2026-10-14 16:57Z–18:37Z), with the inventory/outbound narrowing above checked against the real domain APIs. |
+
+- **Demo data changed (owner decision 2026-10-15):** `requester@demo.com` in `demo-corp` no longer holds `legacy-compat`, which cannot be granted through the API. It holds the five subscribed `*-full` presets as `DIRECT` instead. Its assumed `roles` were re-checked **byte-identical** to before. `all-domains-full` was refused with 422 because it includes the unsubscribed `fan` and `mes`. The next re-bake (fresh volume) restores the seed.
+- Found on the way (not this ticket): WMS inventory list 500, a `ClassCastException` on `Instant` → `Timestamp` → `TASK-BE-637`.
+- **Still in `review/`.** AC-5 (workload client) and AC-6 (four revocation kinds, plus the skew finding) are open, and the rule above says the ticket is not closed with ⚪. Whether to close with these recorded ⚪ is an owner decision.

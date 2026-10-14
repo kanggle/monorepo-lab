@@ -219,10 +219,11 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (REVIEW, 2026-10-13 UTC). S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⏳ `done/` 전 ⚪: 첫 nightly 콘솔 잡 · 다음 데모 창 라이브(OD-3 화면 · R2 · 내보내기). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 
 ## done
+- ✅ `TASK-MONO-784-operator-membership-per-company.md` — **DONE 2026-10-14 UTC (4-dim verified)** — S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⚪ 둘 닫힘: ① main nightly 콘솔 잡 success(run 38419473597, `46bff4c36`) ② 27차 데모 창 라이브 — AC-0 ④ = 2(기대값) · OD-3 `ecommerce` 운영자 목록 403 / 계정 · 감사 200 · «이 회사에서 내보내기» 204 + 세트 행 동반 삭제 + 감사 `domainSetGrants=1` · 복구. 후속 `TASK-MONO-773` 착수 조건 중 784 충족(남은 것 = `TASK-BE-632` done).
 - ✅ `TASK-MONO-796-artist-goods-photos.md` — **DONE 2026-10-14 UTC (4-dim verified)** — impl PR **#4359**, 스쿼시 **`32e1e477f`** (머지 시점 실패 0 · 29 pass). 스토어 «아티스트 굿즈» 18개 이미지 `placehold.co` → 상품에 맞춘 무료 Unsplash 사진(`ADR-MONO-077` R2 소유자 뒤집기) · V23 + h2 V16 + 픽스처 + 번들 `store.json` + 팬 굿즈 카드 테스트. 🔴 데모 서버 DB 는 재굽기 전까지 옛 이미지.
 - ✅ `TASK-MONO-791-adr-083-p1-contracts-domain-permission-sets.md` — **DONE 2026-10-14 UTC (4-dim verified)** — impl PR **#4340**, 스쿼시 **`1059e9290`** (머지 시점 실패 0 · 14 pass). `ADR-MONO-083` P1 계약: admin 세트 · 출처별 배정 · 12 엔드포인트 · `domainRoles`(실패 = 거절 · 빈 값 = 역할 0) · 토큰 `roles` · `scope` · 300초(P3 부터) · 콘솔 두 신호 · 공유 오류 코드 6 · OD-3 소유자 결정(`'*'` 운영자 세트 배정) · 검토에서 그룹 멤버 추가 권한 상승 경로 수선. 코드 0 — 다음 P2 `TASK-BE-631`.
 - ✅ `TASK-MONO-790-domain-permission-sets-per-tenant.md` — **DONE 2026-10-14 UTC (4-dim verified)** — PROPOSED **#4335**(`2f0577f49`) · ACCEPT **#4337**(`945db2169`) (머지 시점 실패 0, 둘 다). `ADR-MONO-083` ACCEPTED — **A**(별도 모델 · OD-1~OD-6 기본값 = 구현자 선택). 결정 티켓 — 구현은 단계 티켓 `TASK-MONO-791` · `TASK-BE-631`~`633` · `TASK-PC-FE-338` · `TASK-MONO-792`~`795` · 773 개정.
