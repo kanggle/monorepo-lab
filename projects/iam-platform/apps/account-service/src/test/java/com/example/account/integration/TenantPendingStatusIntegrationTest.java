@@ -84,9 +84,18 @@ class TenantPendingStatusIntegrationTest extends AbstractIntegrationTest {
         List<String> ids = jdbc.queryForList(
                 "SELECT tenant_id FROM tenants WHERE tenant_id LIKE ?", String.class, PREFIX + "%");
         for (String id : ids) {
-            // The control path (activate → provision) creates one account; remove its rows first.
+            // account_status_history is append-only (DB triggers, V0004) and the FK from accounts
+            // cascades into it, so a tenant whose control path created an account (activate →
+            // provision) cannot be deleted — the same rule R__05 and the sibling ITs follow
+            // ("Deliberately NO DELETE"). Leave that tenant, but never as PENDING: the shared
+            // container would otherwise carry a non-ACTIVE row into other classes.
+            Integer history = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM account_status_history WHERE tenant_id = ?", Integer.class, id);
+            if (history != null && history > 0) {
+                jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE tenant_id = ?", id);
+                continue;
+            }
             jdbc.update("DELETE FROM account_roles WHERE tenant_id = ?", id);
-            jdbc.update("DELETE FROM account_status_history WHERE tenant_id = ?", id);
             jdbc.update("DELETE FROM profiles WHERE account_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
             jdbc.update("DELETE FROM account_outbox WHERE aggregate_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
             jdbc.update("DELETE FROM accounts WHERE tenant_id = ?", id);
