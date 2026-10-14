@@ -150,3 +150,15 @@ frontend
   - `assumed-token-lapse.test.ts` (new) and the OD-2 block in `domain-tenant-gate.test.tsx` (new).
   - **Five existing fixture files (notification-routes, dashboard-composition-routes, per-domain-credential, sample-mode-cores, sample-mode-proxies) modelled a «tenant cookie only, no assumed token» state that production never produces**: they relied on the fallback. They now carry the assumed token, and domain Bearer assertions expect the assumed token, which is what is actually sent.
   - In two more files (tenant-switch, active-tenant-default), the `maxAge` assertion changed from 1800 to 1740.
+
+## Merge record
+
+| Slice | PR | Merge commit | Failing checks at merge |
+|---|---|---|---|
+| a | #4347 | `56a15be8b` | 0 |
+| b | #4348 | `27cdcebd2` | 0 |
+| c-1 | #4349 | `808fa9e84` | 0 |
+
+- ⚪ None of this is on Vercel production yet (`main` auto-deploy is off).
+- c-1 has been recorded as a **deployment prerequisite** in `TASK-BE-632` (P3) Dependency Markers.
+- **Still open: c-2.** It covers AC-1, AC-2 and AC-5, and waits for P3 to deploy. This ticket stays in `in-progress`.

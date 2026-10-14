@@ -28,6 +28,10 @@ backend
 # Dependency Markers
 
 - **선행**: `TASK-BE-631` 머지 **및 배포**(AC-5 완료 판정 0) · `TASK-MONO-791`(P1 계약).
+- 🔴 **Deployment prerequisite (TTL 300 s) — added 2026-10-14 UTC**: `TASK-PC-FE-338` slice c-1 (#4349 `808fa9e84`) must be **live on the production console (Vercel)**.
+  - Without it, once the assume token drops to 300 s the console makes domain calls with the **base token of the login tenant** for 25 minutes out of every 30. The domain screens also fall to «테넌트를 먼저 선택하세요».
+  - A main merge is not a Vercel deployment: `vercel.json` turns off automatic deploys from main. Check the console's production deployment commit before shipping this ticket's TTL change.
+- **Follow-up (console)**: `TASK-PC-FE-338` slice c-2 (the «업무 권한 없음» nav signal and button hiding for read-only sets) can only be measured against the server after this ticket is deployed.
 - **후속**: `TASK-MONO-792`~`795`(도메인 세분 — 카탈로그가 넓어지면 이 경로가 그대로 싣는다).
 
 # Goal
