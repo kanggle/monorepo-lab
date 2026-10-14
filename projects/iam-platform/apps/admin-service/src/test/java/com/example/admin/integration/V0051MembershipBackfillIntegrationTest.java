@@ -110,15 +110,19 @@ class V0051MembershipBackfillIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("V0051 PK = (operator_id, role_id, tenant_id) · re-running the guarded swap is a no-op")
-    void primaryKeyIsThreeColumns_andGuardedSwapIsNoOpOnRerun() throws IOException {
+    @DisplayName("V0051's guarded PK swap is a no-op on the live schema — it never shrinks the V0053 PK (+source_key) back to three columns")
+    void guardedSwapIsNoOpOnRerun_andNeverUndoesV0053() throws IOException {
+        // TASK-BE-633: V0053 widened the PK to (operator_id, role_id, tenant_id, source_key). V0051 asserted
+        // its own three columns against the LIVE schema, which is no longer the live shape. What must
+        // still hold is the guard: re-running V0051's swap block must change nothing — in particular it
+        // must not drop source_key (that would collapse the per-source rows back into one).
         List<String> pkColumns = jdbcTemplate.queryForList("""
                 SELECT column_name FROM information_schema.key_column_usage
                  WHERE table_schema = DATABASE() AND table_name = 'admin_operator_roles'
                    AND constraint_name = 'PRIMARY'
                  ORDER BY ordinal_position
                 """, String.class);
-        assertThat(pkColumns).containsExactly("operator_id", "role_id", "tenant_id");
+        assertThat(pkColumns).containsExactly("operator_id", "role_id", "tenant_id", "source_key");
 
         // The PK block (SET / PREPARE / EXECUTE / DEALLOCATE) must run on ONE connection — the
         // prepared statement and the user variable are session state.
@@ -139,7 +143,7 @@ class V0051MembershipBackfillIntegrationTest extends AbstractIntegrationTest {
                  WHERE table_schema = DATABASE() AND table_name = 'admin_operator_roles'
                    AND constraint_name = 'PRIMARY'
                  ORDER BY ordinal_position
-                """, String.class)).containsExactly("operator_id", "role_id", "tenant_id");
+                """, String.class)).containsExactly("operator_id", "role_id", "tenant_id", "source_key");
     }
 
     @Test
