@@ -8,7 +8,7 @@ TASK-BE-632
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -167,3 +167,20 @@ AMI `ami-0775fa009a12a824d` baked at `73daae263` (`bake.sh --ref bake-73daae263`
 - **Demo data changed (owner decision 2026-10-15):** `requester@demo.com` in `demo-corp` no longer holds `legacy-compat`, which cannot be granted through the API. It holds the five subscribed `*-full` presets as `DIRECT` instead. Its assumed `roles` were re-checked **byte-identical** to before. `all-domains-full` was refused with 422 because it includes the unsubscribed `fan` and `mes`. The next re-bake (fresh volume) restores the seed.
 - Found on the way (not this ticket): WMS inventory list 500, a `ClassCastException` on `Instant` → `Timestamp` → `TASK-BE-637`.
 - **Still in `review/`.** AC-5 (workload client) and AC-6 (four revocation kinds, plus the skew finding) are open, and the rule above says the ticket is not closed with ⚪. Whether to close with these recorded ⚪ is an owner decision.
+
+# Close (2026-10-15 UTC) — owner decisions
+
+1. **Closed with the recorded ⚪** (owner decision 2026-10-15, choosing from options with a recommendation). This overrides, for this ticket only, the rule above that a ticket with ⚪ is not closed.
+   - P3's core is proven live: roles narrowed to the assigned sets, domain APIs 403, `erp.write` removed, TTL 300 s, immediate effect on re-exchange.
+   - The two ⚪ move to the `TASK-MONO-672` next-window list: AC-5 workload-client ERP write, and AC-6 group leave · suspend · subscription cancel · set edit.
+2. **AC-6 skew → the contract sentence is corrected, the skew is not reduced.**
+   - The source is the no-argument `JwtTimestampValidator` in `libs/java-security-servlet` `ResourceServerChainAssembler:252` and `libs/java-gateway` `GatewayJwtDecoders:89`. That is Spring's default 60 s clock skew, which matches the measured `exp + 62/63 s`.
+   - Corrected in the same PR: `auth-api.md` § 회수 지연 (the canonical sentence), `admin-api.md` § 회수 지연 and § «이 회사에서 내보내기», `rbac.md:513`. The new statement is «until `exp` + 60 s — at most about 360 s».
+   - ADR-083 D7 / OD-2 («5분») is left as is: it is ACCEPTED, and it names the token TTL, which is still 300 s.
+3. AMI prune 23rd · 24th · 25th — done (recorded in `deployed-ami.env`).
+
+Four dimensions:
+- (a)(b)(c) #4351 `08f2da4a3` merged with 0 failing checks (§ Merge record).
+- (d) AC-0 ~ AC-8 closed against their verbs. AC-5 / AC-6 are closed with the ⚪ above, by owner decision.
+
+→ `done/`. `TASK-MONO-773` start gate: 784 ✅ · BE-632 ✅ → **met**.

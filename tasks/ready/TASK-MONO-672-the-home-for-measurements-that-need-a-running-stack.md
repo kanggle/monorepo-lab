@@ -1953,7 +1953,11 @@ Bake `73daae263` → `ami-0775fa009a12a824d` (pin #4364) · apply by the agent p
 
 Demo data the window changed (restored by the next re-bake's fresh volume): `requester@demo.com` and `demo-assigned-only` in `demo-corp` now hold the five subscribed `*-full` presets, not `legacy-compat` (which the API cannot grant). Their roles are byte-identical.
 
-Owner decisions pending:
-1. Close BE-632 with the recorded ⚪ (AC-5 workload client · AC-6 four kinds)?
-2. AC-6 skew: change the contract sentence to `exp + skew`, or reduce the skew?
-3. AMI prune — five AMIs exist (23rd–27th). 26th `ami-00701c1fa528b5866` is the new rollback; 23rd · 24th · 25th are prune candidates.
+Owner decisions (2026-10-15 UTC — all three took the recommendation):
+1. **BE-632 closed with the recorded ⚪** → `done/`. Its two ⚪ are now next-window items **owned by this list**:
+   - ⚪ **AC-5 workload client**: an ERP masterdata write with the ERP workload client's client-credentials token must be 200. It needs that client's secret on the host. A probe with a valid body creates a row, so use a name like `BE632-PROBE`.
+   - ⚪ **AC-6 four kinds** (group leave · operator suspend · subscription cancel · set edit): for each, record when the existing token stops working (expected ≤ `exp` + 60 s) and check that re-exchange is immediate. Subscription cancel and suspend touch the whole demo, so use a throwaway tenant or operator, not `demo-corp` / `demo@demo.com`. These are permission writes, so prepare an owner-run wrapper (the classifier blocks them over SSM).
+2. **AC-6 skew → contract sentence corrected** (`auth-api.md` · `admin-api.md` · `rbac.md`: «`exp` + 60 s, at most about 360 s»). Not reduced. The source is Spring's default `JwtTimestampValidator` skew in `libs/java-security-servlet` and `libs/java-gateway`.
+3. **AMI prune done**: 23rd · 24th · 25th deregistered and their snapshots deleted. Remaining: 26th (rollback) · 27th (deployed).
+
+⇒ `TASK-MONO-773` start gate (784 · BE-632 `done/`) is **met**.
