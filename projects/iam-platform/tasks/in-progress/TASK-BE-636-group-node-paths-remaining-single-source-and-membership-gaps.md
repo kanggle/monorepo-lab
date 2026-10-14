@@ -56,10 +56,10 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: the red results of the three ITs (file:line), plus the design choice for each and why.
-- [ ] **AC-1**: G1 and G2 both give U → G1 revoked → U kept → G2 revoked → U removed (control group: a direct membership survives).
-- [ ] **AC-2**: when a person holding only domain set rows in U has their group TENANT_ASSIGNMENT revoked, no row is left without a membership (kept, or removed together — per the decision).
-- [ ] **AC-3**: after a node grant, D-1 holds: the row's tenant ∈ memberships.
+- [x] **AC-0**: the red results of the three ITs (file:line), plus the design choice for each and why.
+- [x] **AC-1**: G1 and G2 both give U → G1 revoked → U kept → G2 revoked → U removed (control group: a direct membership survives).
+- [x] **AC-2**: when a person holding only domain set rows in U has their group TENANT_ASSIGNMENT revoked, no row is left without a membership (kept, or removed together — per the decision).
+- [x] **AC-3**: after a node grant, D-1 holds: the row's tenant ∈ memberships.
 
 # Related Specs
 
@@ -97,7 +97,7 @@ backend
 
 ## AC-0 red measurement (CI, 2026-10-14 UTC — #4357 first commit = IT only + old code)
 
-Integration lane «iam A», run 38571399837 / job 115877338776, `GroupNodeMembershipSourceIntegrationTest`: **10 FAILED · 4 PASSED** — exactly as predicted from the code. **All 10 reds stopped at the defect assertion** (0 SQL errors, 0 fixture errors). The 4 PASSED are the controls.
+Integration lane «iam A», run 38571399837 / job 115877338776, `GroupNodeMembershipSourceIntegrationTest` (12 methods): **9 FAILED · 3 PASSED** — as predicted from the code. **All 9 reds stopped at the defect assertion** (0 SQL errors, 0 fixture errors). The 3 PASSED are the controls. (The implementing agent's report said «14 methods, 10 red, 4 controls»; the class has 12 `@Test` and the lane log lists 12 — counted from the log, not the report.)
 
 | # | Methods (red) | Assertion that failed | Old-code path |
 |---|---|---|---|
@@ -116,3 +116,18 @@ Found while writing the ITs (corrections to the ticket text):
 When a group source is revoked, the row is first handed to another group G′ of the member that still carries TENANT_ASSIGNMENT(U). Only if there is none does the ② rule apply (keep as direct if role **or** set rows remain), and only then is the row deleted.
 - Rejected: BE-633's source-in-PK shape. A membership row carries per-`(operator, tenant)` attributes (`org_scope`, `permission_set_id`) that the assume gate, `TenantScopeResolver`, `QueryTenantScopeGate`, the console registry and the org-scope PUT all read by that key. Rows per source would make every reader merge attributes and the PUT ambiguous. Role rows carry no such attributes, which is why the PK change was cheap there.
 - No migration: group sources are derivable exactly from templates × members, so re-ownership at revoke time also repairs existing v1 rows (Failure Scenario 1 does not apply).
+- A group TENANT_ASSIGNMENT template carries no membership attributes (`OperatorGroupGrantJpaEntity` = tenant · grantedBy · grantedAt; fan-out always writes `org_scope = NULL`, `permission_set_id = NULL`). So re-ownership changes `group_origin` only and **keeps** `org_scope` / `permission_set_id` — those can differ only when an admin set them on the membership later, and resetting them would silently widen scope.
+- G′ = the lowest group id. Audit `detail` gains `reownedToGroup=N` (and `keptAsDirect=N`), each only when > 0 — the usual detail string is byte-unchanged.
+
+## ② and ③ fixes
+
+- ② The keep-as-direct rule counts role rows **or** domain set rows, in `GroupFanOutService.settleGroupMemberships` and `OperatorCompanyExitCascade.keepsGrantsIn` (renamed from `keepsRolesIn`). On member removal and group deletion, that group's own `GROUP:<G>` set rows do not count (they are deleted right after); on a TENANT_ASSIGNMENT revoke they stay, so they count.
+- ③ `OrgNodeAdminUseCase.requireHomeIsMembership` after the ceiling check → 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`, nothing written, no success audit row. Order 404 → 403 ≤-own → 422 ceiling → 422 this. A `'*'` target is exempt from this check, but its node grant was already impossible before BE-636 (`ck_admin_operator_roles_node_not_platform`) — clause added to the contract.
+
+## AC-1 · AC-2 · AC-3 green (CI, 2026-10-14 UTC — #4357 fix commit `4f011b8f7`)
+
+Integration lane «iam A», run 38575551475 / job 115891686199, read from the job log (not the check badge):
+- `GroupNodeMembershipSourceIntegrationTest` **12 PASSED · 0 FAILED · 0 SKIPPED** (the 9 reds + 3 controls).
+- Neighbours unchanged: `AdminRoleSourceIntegrationTest` 10 · `OrgNodeAdminIntegrationTest` 15 · `OperatorMembershipWriteAxisIntegrationTest` 5 · `GroupAdminIntegrationTest` 5 PASSED. 0 FAILED anywhere in the lane · `BUILD SUCCESSFUL`.
+- Unit (local): `:admin-service:test` rc=0, 1330 tests, 0 failures. Guards (staged): the three required task guards · both error-code registries rc=0.
+- ⚪ Production: not yet applied — rides the next AMI bake (owner decision 1). No migration, so there is no pre-deploy query. Live check → `TASK-MONO-672` run order.
