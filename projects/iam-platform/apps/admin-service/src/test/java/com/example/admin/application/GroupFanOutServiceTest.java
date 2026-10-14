@@ -54,12 +54,14 @@ class GroupFanOutServiceTest {
     }
 
     @Test
-    @DisplayName("grant-to-group ROLE: materialises a group_origin-tagged row for each member without one; skips existing")
+    @DisplayName("grant-to-group ROLE: writes this group's own source row for each member without one; skips its own existing row")
     void fanOutRole_materialisesTaggedRows_idempotentSkip() {
-        // member 1 already holds (operator=1, role=7, tenant=acme) → skip; member 2 does not → create.
-        // TASK-MONO-784 S2: the key is 3 columns (V0051) and names the same tenant the row is written in.
-        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(1L, 7L, "acme"))).thenReturn(true);
-        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(2L, 7L, "acme"))).thenReturn(false);
+        // member 1 already holds THIS group's row (operator=1, role=7, tenant=acme, GROUP:42) → skip; member 2 does
+        // not → create. TASK-BE-633 (V0053): the key is 4 columns and names the same tenant AND source the row is
+        // written with.
+        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(1L, 7L, "acme", "GROUP:42"))).thenReturn(true);
+        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(2L, 7L, "acme", "GROUP:42"))).thenReturn(false);
+        when(operatorRoles.existsByOperatorIdAndRoleIdAndTenantId(2L, 7L, "acme")).thenReturn(false);
 
         int created = service.fanOutGrantToMembers(
                 GROUP, roleGrant(7L), List.of(member(1L), member(2L)), 99L, now);
@@ -70,7 +72,25 @@ class GroupFanOutServiceTest {
         assertThat(saved.getValue().getOperatorId()).isEqualTo(2L);
         assertThat(saved.getValue().getRoleId()).isEqualTo(7L);
         assertThat(saved.getValue().getGroupOrigin()).isEqualTo(GROUP);
-        assertThat(saved.getValue().getTenantId()).isEqualTo("acme"); // member's own tenant
+        assertThat(saved.getValue().getSourceKey()).isEqualTo("GROUP:42");
+        assertThat(saved.getValue().getTenantId()).isEqualTo("acme"); // the group's tenant
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-633: a member holding the role from ANOTHER source still gets this group's row — not counted as new")
+    void fanOutRole_otherSourceHeld_writesOwnRow_notCounted() {
+        // member 3 holds (3, 7, acme) directly or from another group: v1 skipped here and G's revoke later took the
+        // other source's role away. Now G's own row is written; the response count says «nothing new».
+        when(operatorRoles.existsById(new AdminOperatorRoleJpaEntity.PK(3L, 7L, "acme", "GROUP:42"))).thenReturn(false);
+        when(operatorRoles.existsByOperatorIdAndRoleIdAndTenantId(3L, 7L, "acme")).thenReturn(true);
+
+        int created = service.fanOutGrantToMembers(GROUP, roleGrant(7L), List.of(member(3L)), 99L, now);
+
+        assertThat(created).isZero();
+        ArgumentCaptor<AdminOperatorRoleJpaEntity> saved = ArgumentCaptor.forClass(AdminOperatorRoleJpaEntity.class);
+        verify(operatorRoles).save(saved.capture());
+        assertThat(saved.getValue().getSourceKey()).isEqualTo("GROUP:42");
+        assertThat(saved.getValue().getGroupOrigin()).isEqualTo(GROUP);
     }
 
     @Test
@@ -108,8 +128,11 @@ class GroupFanOutServiceTest {
     @Test
     @DisplayName("remove-member: revokes ONLY this member's group_origin rows (both substrates), spares direct grants")
     void revokeMemberFanOut_strictFilter() {
-        service.revokeMemberFanOut(GROUP, member(5L));
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of());
 
+        int kept = service.revokeMemberFanOut(GROUP, member(5L));
+
+        assertThat(kept).isZero();
         verify(operatorRoles).deleteByGroupOriginAndOperatorId(GROUP, 5L);
         verify(assignments).deleteByGroupOriginAndOperatorId(GROUP, 5L);
         // never a broad delete that could hit a direct grant.
@@ -120,6 +143,8 @@ class GroupFanOutServiceTest {
     @Test
     @DisplayName("delete-group: revokes ALL of the group's group_origin rows (both substrates)")
     void revokeGroupFanOut_deletesAllTagged() {
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of());
+
         service.revokeGroupFanOut(GROUP, List.of(member(1L), member(2L)));
 
         verify(operatorRoles).deleteByGroupOrigin(GROUP);
@@ -133,14 +158,62 @@ class GroupFanOutServiceTest {
 
         verify(operatorRoles).deleteByGroupOriginAndRoleId(GROUP, 7L);
         verify(assignments, never()).deleteByGroupOriginAndTenantId(any(), any());
+        verify(assignments, never()).findByGroupOrigin(any());
     }
 
     @Test
     @DisplayName("revoke TENANT_ASSIGNMENT grant: deletes only the assignment group_origin rows, not the role substrate")
     void revokeGrantFanOut_tenant() {
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of());
+
         service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L)));
 
         verify(assignments).deleteByGroupOriginAndTenantId(GROUP, "globex");
         verify(operatorRoles, never()).deleteByGroupOriginAndRoleId(any(), any());
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-633 AC-3 (784 D-1): a fan-out membership backing a role row is kept as DIRECT; one that backs none is deleted")
+    void revokeGrantFanOut_tenant_keepsMembershipBackingRoles() {
+        OperatorTenantAssignmentJpaEntity backsRole = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                1L, "globex", Instant.EPOCH, null, GROUP);
+        OperatorTenantAssignmentJpaEntity backsNothing = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                2L, "globex", Instant.EPOCH, null, GROUP);
+        OperatorTenantAssignmentJpaEntity otherTenant = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                1L, "initech", Instant.EPOCH, null, GROUP);
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(backsRole, backsNothing, otherTenant));
+        when(operatorRoles.existsByOperatorIdAndTenantId(1L, "globex")).thenReturn(true);
+        when(operatorRoles.existsByOperatorIdAndTenantId(2L, "globex")).thenReturn(false);
+
+        int kept = service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L), member(2L)));
+
+        assertThat(kept).isEqualTo(1);
+        assertThat(backsRole.getGroupOrigin()).as("kept, now a direct membership").isNull();
+        assertThat(backsNothing.getGroupOrigin()).as("left for the delete").isEqualTo(GROUP);
+        assertThat(otherTenant.getGroupOrigin()).as("not this grant's tenant — untouched").isEqualTo(GROUP);
+        verify(assignments).saveAndFlush(backsRole);
+        verify(assignments, never()).saveAndFlush(backsNothing);
+        verify(assignments).deleteByGroupOriginAndTenantId(GROUP, "globex");
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-633 AC-3: remove-member deletes the member's role rows of this group FIRST, then keeps only memberships still backing a role")
+    void revokeMemberFanOut_keepsMembershipBackingRoles_afterOwnRoleRowsGo() {
+        OperatorTenantAssignmentJpaEntity mine = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                5L, "globex", Instant.EPOCH, null, GROUP);
+        OperatorTenantAssignmentJpaEntity someoneElse = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                6L, "globex", Instant.EPOCH, null, GROUP);
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(mine, someoneElse));
+        when(operatorRoles.existsByOperatorIdAndTenantId(5L, "globex")).thenReturn(true);
+
+        int kept = service.revokeMemberFanOut(GROUP, member(5L));
+
+        assertThat(kept).isEqualTo(1);
+        assertThat(mine.getGroupOrigin()).isNull();
+        assertThat(someoneElse.getGroupOrigin()).as("another member's row is not this call's").isEqualTo(GROUP);
+        var order = org.mockito.Mockito.inOrder(operatorRoles, assignments);
+        order.verify(operatorRoles).deleteByGroupOriginAndOperatorId(GROUP, 5L);
+        order.verify(operatorRoles).existsByOperatorIdAndTenantId(5L, "globex");
+        order.verify(assignments).deleteByGroupOriginAndOperatorId(GROUP, 5L);
     }
 }

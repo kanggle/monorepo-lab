@@ -209,8 +209,13 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
         assertThat(audited).isPositive();
     }
 
+    /**
+     * TASK-BE-633 (V0053) rewrote this test's middle: before, the equal direct grant made the fan-out a no-op skip
+     * (one row, the direct one). Now the group writes its OWN source row next to it — two rows — and the response
+     * still counts 0 because the role is not new to the member. The direct grant still survives the group's deletion.
+     */
     @Test
-    @DisplayName("AC-3 idempotence: a member holding an equal DIRECT grant is skipped, and the direct grant survives removal")
+    @DisplayName("AC-3 + BE-633: a member holding an equal DIRECT grant gets the group's own row too (not counted new); the direct grant survives removal")
     void idempotentSkip_directGrantSurvives() throws Exception {
         // MEMBER2 already holds a DIRECT SUPPORT_LOCK grant (group_origin IS NULL).
         jdbcTemplate.update("""
@@ -228,7 +233,7 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"roles\":[\"SUPPORT_LOCK\"]}"))
                 .andExpect(status().isCreated());
 
-        // add MEMBER2 → the equal direct grant means the fan-out is a no-op skip.
+        // add MEMBER2 → the role is not NEW to the member (fannedOutGrants counts new grants only) …
         mockMvc.perform(post("/api/admin/groups/" + groupId + "/members")
                         .header("Authorization", bearer(SUPER_UUID))
                         .header("X-Operator-Reason", "onboard")
@@ -237,9 +242,9 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.fannedOutGrants").value(0));
 
-        // exactly one row, and it is the DIRECT grant (group_origin IS NULL) — not overwritten.
-        assertThat(totalRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isEqualTo(1);
-        assertThat(groupOriginRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isZero();
+        // … but the group's own source row is written next to the DIRECT one, which is not overwritten.
+        assertThat(totalRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isEqualTo(2);
+        assertThat(groupOriginRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isEqualTo(1);
 
         // deleting the group must NOT destroy the member's direct grant.
         mockMvc.perform(delete("/api/admin/groups/" + groupId)
@@ -247,6 +252,7 @@ class GroupAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Operator-Reason", "disband"))
                 .andExpect(status().isNoContent());
         assertThat(totalRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isEqualTo(1);
+        assertThat(groupOriginRoleRows(MEMBER2_UUID, "SUPPORT_LOCK")).isZero();
     }
 
     @Test

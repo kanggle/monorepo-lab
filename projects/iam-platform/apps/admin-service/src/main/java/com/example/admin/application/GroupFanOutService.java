@@ -25,13 +25,21 @@ import java.util.List;
  * writes and deletes flat rows (rbac.md § Operator Group Fan-Out). It touches NONE of the
  * evaluation, cache, or confinement logic (AC-6).
  *
- * <p>Two invariants are load-bearing (data-model.md § group_origin):
+ * <p>Three invariants are load-bearing (data-model.md § group_origin):
  * <ul>
- *   <li><b>Idempotent materialise</b> — a member who already holds the {@code (operator,role)}
- *       / {@code (operator,tenant)} PK row (whether a DIRECT grant or another group's fan-out)
- *       is a no-op SKIP; never a duplicate, never an overwrite. Grant ⇒ at most one row.</li>
+ *   <li><b>ROLE rows are per source</b> (TASK-BE-633 · V0053) — a ROLE fan-out writes this group's OWN row
+ *       {@code (member, role, group tenant, 'GROUP:<id>')} even when the member already holds the role directly,
+ *       from a node grant or from another group; only this group's own existing row is an idempotent skip. Before
+ *       V0053 the key had no source, the first writer owned the row, and G1's revoke took away the role G2 still
+ *       granted (data-model.md «단일-소유 마커(v1 규약)», now retired for roles).</li>
+ *   <li><b>TENANT_ASSIGNMENT rows stay single-owner</b> — a member who already holds the
+ *       {@code (operator, tenant)} membership (direct or another group's) is a no-op SKIP. (Per-source
+ *       memberships are not part of TASK-BE-633.)</li>
  *   <li><b>Strict cascade-revoke</b> — every revoke filters on {@code group_origin = groupId},
- *       so a direct grant ({@code group_origin IS NULL}) is <b>never</b> destroyed.</li>
+ *       so a direct grant ({@code group_origin IS NULL}) is <b>never</b> destroyed — and, since TASK-BE-633
+ *       (AC-3 · TASK-MONO-784 D-1), a fan-out membership is never deleted from under a role row the person still
+ *       holds in that tenant: it is kept as a DIRECT membership instead (the same rule «이 회사에서 내보내기» applies
+ *       to a leaving group's memberships — owner decision 2026-10-13 UTC «U 소속을 직접 소속으로 남김»).</li>
  * </ul>
  *
  * <p>Each method affects the fan-out member(s) and invalidates their perm-cache (best-effort,
@@ -58,7 +66,9 @@ public class GroupFanOutService {
     /**
      * Grant-to-group / grant-add: materialise one grant template across all current members.
      *
-     * @return the number of rows actually materialised (idempotent skips are not counted)
+     * @return the number of grants that are NEW to a member (admin-api.md {@code fannedOutRows}): a ROLE row
+     *         written for a member who already held that role from another source is not counted (its source row
+     *         is still written — TASK-BE-633), nor is an idempotent skip
      */
     public int fanOutGrantToMembers(Long groupInternalId, OperatorGroupGrantJpaEntity grant,
                                     List<Member> members, Long grantedBy, Instant now) {
@@ -75,7 +85,8 @@ public class GroupFanOutService {
     /**
      * Add-member: materialise the group's current grants onto the single new member.
      *
-     * @return the number of rows actually materialised (idempotent skips are not counted)
+     * @return the number of grants NEW to the member (admin-api.md {@code fannedOutGrants} — see
+     *         {@link #fanOutGrantToMembers})
      */
     public int fanOutGrantsToMember(Long groupInternalId, List<OperatorGroupGrantJpaEntity> grants,
                                     Member member, Long grantedBy, Instant now) {
@@ -92,60 +103,117 @@ public class GroupFanOutService {
     }
 
     /**
-     * Remove-member: revoke ONLY this member's {@code group_origin=groupId} rows (direct grants untouched).
+     * Remove-member: revoke ONLY this member's {@code group_origin=groupId} rows (direct grants and other groups'
+     * rows untouched — TASK-BE-633: they are separate rows now).
      *
-     * @return the number of fan-out ROLE rows revoked (TASK-MONO-784 S4 — counted in the «이 회사에서 내보내기»
-     *         audit detail)
+     * @return how many of this group's fan-out memberships were KEPT as direct memberships because the person
+     *         still holds a role row in that tenant (AC-3 · 784 D-1) — the caller records it in the audit detail
      */
     public int revokeMemberFanOut(Long groupInternalId, Member member) {
-        int roles = operatorRoles.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
+        operatorRoles.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
+        int keptAsDirect = keepAssignmentsStillBackingRoles(groupInternalId,
+                row -> member.internalId() == row.getOperatorId());
         assignments.deleteByGroupOriginAndOperatorId(groupInternalId, member.internalId());
         invalidate(member.externalId());
-        return roles;
+        return keptAsDirect;
     }
 
-    /** Delete-group: revoke ALL of the group's {@code group_origin=groupId} rows (direct grants untouched). */
-    public void revokeGroupFanOut(Long groupInternalId, List<Member> members) {
+    /**
+     * Delete-group: revoke ALL of the group's {@code group_origin=groupId} rows (direct grants untouched).
+     *
+     * @return memberships kept as direct (see {@link #revokeMemberFanOut})
+     */
+    public int revokeGroupFanOut(Long groupInternalId, List<Member> members) {
         operatorRoles.deleteByGroupOrigin(groupInternalId);
+        int keptAsDirect = keepAssignmentsStillBackingRoles(groupInternalId, row -> true);
         assignments.deleteByGroupOrigin(groupInternalId);
         for (Member m : members) {
             invalidate(m.externalId());
         }
+        return keptAsDirect;
     }
 
-    /** Revoke-grant: revoke the {@code group_origin=groupId} rows of ONE grant template only. */
-    public void revokeGrantFanOut(Long groupInternalId, OperatorGroupGrantJpaEntity grant, List<Member> members) {
+    /**
+     * Revoke-grant: revoke the {@code group_origin=groupId} rows of ONE grant template only.
+     *
+     * @return memberships kept as direct (see {@link #revokeMemberFanOut}); always 0 for a ROLE grant
+     */
+    public int revokeGrantFanOut(Long groupInternalId, OperatorGroupGrantJpaEntity grant, List<Member> members) {
+        int keptAsDirect = 0;
         if (grant.isRole()) {
             operatorRoles.deleteByGroupOriginAndRoleId(groupInternalId, grant.getRoleId());
         } else {
-            assignments.deleteByGroupOriginAndTenantId(groupInternalId, grant.getTenantId());
+            String tenantId = grant.getTenantId();
+            keptAsDirect = keepAssignmentsStillBackingRoles(groupInternalId,
+                    row -> tenantId != null && tenantId.equals(row.getTenantId()));
+            assignments.deleteByGroupOriginAndTenantId(groupInternalId, tenantId);
         }
         for (Member m : members) {
             invalidate(m.externalId());
         }
+        return keptAsDirect;
     }
 
     // ---- internals -------------------------------------------------------------
 
     /**
-     * Materialise one grant onto one member. Returns {@code false} (no-op skip) when the
-     * member already holds the equal PK row (direct OR another group's fan-out) — grant ⇒ at
-     * most one row; the first writer owns the {@code group_origin} marker (single-owner v1).
+     * TASK-BE-633 AC-3 (TASK-MONO-784 D-1 «a non-'*' role row's tenant is one of the person's memberships»). Before a
+     * group's fan-out memberships are deleted, each one whose person still holds a role row in that tenant — direct,
+     * a node grant, or another group's fan-out — is turned into a DIRECT membership ({@code group_origin} → NULL
+     * only; granted_at · granted_by · org_scope · permission_set_id kept) and so survives the delete that follows.
+     * Without it, revoking a group's TENANT_ASSIGNMENT (or the person leaving the group, or the group being deleted)
+     * left role rows in a company the person no longer belonged to. Same rule, same owner decision (2026-10-13 UTC
+     * «U 소속을 직접 소속으로 남김») as {@link OperatorCompanyExitCascade} applies to a leaving group's memberships.
+     *
+     * <p>Called AFTER this write's own role-row deletes, so the group's own fan-out role rows never keep its
+     * membership alive.
+     *
+     * @return the number of memberships kept as direct
+     */
+    private int keepAssignmentsStillBackingRoles(Long groupInternalId,
+                                                 java.util.function.Predicate<OperatorTenantAssignmentJpaEntity> rows) {
+        int kept = 0;
+        for (OperatorTenantAssignmentJpaEntity row : assignments.findByGroupOrigin(groupInternalId)) {
+            if (!rows.test(row)) {
+                continue;
+            }
+            if (operatorRoles.existsByOperatorIdAndTenantId(row.getOperatorId(), row.getTenantId())) {
+                row.setGroupOrigin(null);
+                assignments.saveAndFlush(row); // BE-335: explicit flush, before the bulk delete that follows
+                kept++;
+            }
+        }
+        return kept;
+    }
+
+    /**
+     * Materialise one grant onto one member. Returns {@code true} when the grant is NEW to the member.
+     *
+     * <p>ROLE (TASK-BE-633 · V0053): this group's own row {@code (member, role, group tenant, 'GROUP:<id>')} is
+     * written unless it already exists (re-add idempotence); it is written EVEN when the member holds the role from
+     * another source (direct · node · another group) — one row per source, so revoking one source never takes away
+     * the role another source still grants. Counted only when no source held the role before.
+     *
+     * <p>TENANT_ASSIGNMENT: unchanged single-owner skip on the {@code (operator, tenant)} key.
      */
     private boolean materialise(Long groupInternalId, OperatorGroupGrantJpaEntity grant,
                                 Member member, Long grantedBy, Instant now) {
         if (grant.isRole()) {
             // TASK-MONO-784 S2 (V0051) · S4 (D-11): the key carries the row's tenant, and both the skip key and
-            // the written row use member.tenantId() = the GROUP's tenant — the (member, role, group.tenant_id)
-            // skip key rbac.md names. The key and the written row must always name the same tenant or the skip
-            // check would miss its own row (a duplicate-key INSERT instead of an idempotent skip).
-            var pk = new AdminOperatorRoleJpaEntity.PK(member.internalId(), grant.getRoleId(), member.tenantId());
+            // the written row use member.tenantId() = the GROUP's tenant. TASK-BE-633 (V0053): and the group's own
+            // source — the key and the written row must name the same tenant AND source, or the skip check would
+            // miss its own row (a duplicate-key INSERT instead of an idempotent skip).
+            String source = AdminOperatorRoleJpaEntity.groupSource(groupInternalId);
+            var pk = new AdminOperatorRoleJpaEntity.PK(
+                    member.internalId(), grant.getRoleId(), member.tenantId(), source);
             if (operatorRoles.existsById(pk)) {
                 return false;
             }
+            boolean heldBefore = operatorRoles.existsByOperatorIdAndRoleIdAndTenantId(
+                    member.internalId(), grant.getRoleId(), member.tenantId());
             operatorRoles.save(AdminOperatorRoleJpaEntity.createGroupScoped(
                     member.internalId(), grant.getRoleId(), now, grantedBy, member.tenantId(), groupInternalId));
-            return true;
+            return !heldBefore;
         }
         var pk = new OperatorTenantAssignmentJpaEntity.PK(member.internalId(), grant.getTenantId());
         if (assignments.existsById(pk)) {

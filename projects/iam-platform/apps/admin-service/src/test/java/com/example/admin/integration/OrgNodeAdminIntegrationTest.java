@@ -150,10 +150,12 @@ class OrgNodeAdminIntegrationTest extends AbstractIntegrationTest {
         seedOperator(GRANT_TARGET_UUID, "acme-hq", "orgnode-target@example.com", null);
 
         // ORG_ADMIN @ biz. tenant_id mirrors the operator's OWN tenant (BE-289 WI-2);
-        // org_node_id is the scope driver.
+        // org_node_id is the scope driver. TASK-BE-633 (V0053): a node row's source is 'NODE' —
+        // ck_admin_operator_roles_node_source refuses it otherwise (and INSERT IGNORE would drop it silently).
         jdbcTemplate.update("""
-                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, org_node_id, granted_at, granted_by)
-                SELECT o.id, r.id, o.tenant_id, 'biz', NOW(6), NULL
+                INSERT IGNORE INTO admin_operator_roles
+                  (operator_id, role_id, tenant_id, org_node_id, granted_at, granted_by, source_key)
+                SELECT o.id, r.id, o.tenant_id, 'biz', NOW(6), NULL, 'NODE'
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'ORG_ADMIN'
                 """, ORG_ADMIN_UUID);
@@ -199,9 +201,10 @@ class OrgNodeAdminIntegrationTest extends AbstractIntegrationTest {
         // that the '*' pre-scan silently resolves to platform scope, node ignored.
         // MySQL raises errno 3819 (SQLSTATE HY000) for a CHECK violation, which Spring maps to
         // UncategorizedSQLException — NOT DataIntegrityViolationException (that is for FK/unique).
+        // source_key 'NODE' (TASK-BE-633 · V0053) so that ONLY the CHECK under test can refuse the row.
         assertThatThrownBy(() -> jdbcTemplate.update("""
-                INSERT INTO admin_operator_roles (operator_id, role_id, tenant_id, org_node_id, granted_at)
-                SELECT o.id, r.id, '*', 'biz', NOW(6)
+                INSERT INTO admin_operator_roles (operator_id, role_id, tenant_id, org_node_id, granted_at, source_key)
+                SELECT o.id, r.id, '*', 'biz', NOW(6), 'NODE'
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
                 """, GRANT_TARGET_UUID))

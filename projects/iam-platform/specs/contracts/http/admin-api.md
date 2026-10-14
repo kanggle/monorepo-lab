@@ -1994,9 +1994,9 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 > | 범위 (ADR-024 D2) | T ∈ actor 의 grant scope(`operator.manage`) — `'*'` 는 모든 T | `403 TENANT_SCOPE_DENIED`(DENIED 행) |
 > | 대상의 소속 | 비-`'*'` 대상: T 가 대상의 소속이어야 한다 | 아니면 `404 OPERATOR_NOT_FOUND`(열거 안전 — 새 코드 없음). 비-`'*'` 대상에 `X-Tenant-Id: *` → `400 VALIDATION_ERROR`(ADR-082 D2 — 풀 행은 `'*'` 를 받지 않는다) |
 > | 무상승 (ADR-024 D3) | ≤-own = actor 가 **T 에서** 보유한 권한(D-6) | `403 ROLE_GRANT_FORBIDDEN`(DENIED 행) |
-> | 교체 범위 | `admin_operator_roles` 중 `operator_id = 대상 ∧ tenant_id = T ∧ group_origin IS NULL ∧ org_node_id IS NULL` 만 지우고 요청의 `roles` 를 `tenant_id = T` 직접 행으로 쓴다 | — |
+> | 교체 범위 | `admin_operator_roles` 중 `operator_id = 대상 ∧ tenant_id = T ∧ group_origin IS NULL ∧ org_node_id IS NULL` 만 지우고 요청의 `roles` 를 `tenant_id = T` 직접 행으로 쓴다 — **TASK-BE-633 (V0053) 부터** 그 행은 `source_key = 'DIRECT'` 행이다 | — |
 >
-> - 다른 회사의 역할 행 · 그룹 fan-out 행 · 노드 grant 는 **바이트 불변**(784 AC-4 · F6 수선).
+> - 다른 회사의 역할 행 · 그룹 fan-out 행 · 노드 grant 는 **바이트 불변**(784 AC-4 · F6 수선). 🔴 **TASK-BE-633**: 784 의 수선은 «다른 역할» 에만 맞았다 — 요청 `roles` 에 T 의 그룹 · 노드 행과 **같은 역할**이 있으면 직접 행의 키가 그 행과 같아(PK 에 출처가 없었다) 저장이 JPA merge 가 되어 그룹 · 노드 행을 감사 없이 직접 행으로 바꾼다(AC-0 (b) — `SimpleJpaRepository.save` · 엔티티에 `Persistable` 없음에서 읽은 추론; V0053 이전 코드에서 빨강이도록 쓴 `AdminRoleSourceIntegrationTest` 가 CI 에서 판정한다). V0053 부터 출처가 PK 에 있어 **두 행이 공존**한다 — 직접 행을 다시 빼도 그룹 · 노드 분이 역할을 지킨다.
 > - 🔴 마지막 관리자 보호: 교체 뒤 T 에 `ACTIVE` · `TENANT_ADMIN`@T 보유자가 0 이면 `409 TENANT_LAST_ADMIN_REQUIRED`(§ «이 회사에서 내보내기» 의 같은 술어).
 > - `roles: []` = **T 의 직접 역할 전부 제거**다 — 소속은 남는다(R2 «소속 · 관리 권한 0»). 그 회사에서 사람을 빼는 것은 «이 회사에서 내보내기»(`DELETE …/assignments/{tenantId}`)다.
 > - 응답 `roles` = 교체 뒤 **T 의** 역할 행 이름(그룹 · 노드 행 포함). 다른 회사의 역할은 싣지 않는다.
@@ -3471,7 +3471,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 { "operatorId": "op-123" }
 ```
 
-**Response 201**: `{ "operatorId": "op-123", "displayName": "김운영", "addedAt": "2026-07-19T09:00:00Z", "fannedOutGrants": 3 }` (`fannedOutGrants` = 이 멤버에 새로 materialise 된 grant 수; 이미 보유한 동등 직접 grant 는 idempotent skip 되어 미포함).
+**Response 201**: `{ "operatorId": "op-123", "displayName": "김운영", "addedAt": "2026-07-19T09:00:00Z", "fannedOutGrants": 3 }` (`fannedOutGrants` = 이 멤버에게 **새로 생긴** grant 수; 이미 보유한 동등 grant 는 미포함. **TASK-BE-633** 부터 역할은 다른 출처(직접 · 노드 · 다른 그룹)로 이미 있어도 이 그룹 출처 행을 따로 만들지만 — 출처별 행 — 그 행은 «새 grant» 가 아니라 세지 않는다. 값의 의미는 그대로다).
 
 **Errors**:
 
@@ -3489,7 +3489,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 | 400 | `VALIDATION_ERROR` | **784 S4 부터** — 대상이 `'*'` 운영자(ADR-082 D2) |
 | 422 | `GROUP_GRANT_NO_ESCALATION` | fan-out grant 가 tenant-scope no-escalation 위반 |
 
-**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`(대상 operator 는 `detail`). fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — 멤버십 add 와 **단일 트랜잭션**(D5/D6). idempotent: 멤버가 이미 보유한 동등 직접 grant 는 중복 생성 안 함.
+**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`(대상 operator 는 `detail`). fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — 멤버십 add 와 **단일 트랜잭션**(D5/D6). idempotent: tenant-assignment 는 멤버가 이미 가진 소속을 중복 생성하지 않는다; 역할은 이 그룹 출처 행(`source_key = GROUP:<id>`)이 이미 있을 때만 skip(TASK-BE-633 — 다른 출처 행과 공존).
 
 ---
 
@@ -3505,7 +3505,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 
 **Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`, 404 `GROUP_MEMBER_NOT_FOUND`(멤버십 부재), 400 `REASON_REQUIRED`.
 
-**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_REMOVE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. cascade-revoke(`group_origin=<groupId>` row) + 멤버십 delete 단일 트랜잭션 + 멤버 perm-cache 무효화. **직접 grant·타 그룹발 row 미변경**.
+**Side Effects**: `admin_actions` `action_code=GROUP_MEMBER_REMOVE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. cascade-revoke(`group_origin=<groupId>` row) + 멤버십 delete 단일 트랜잭션 + 멤버 perm-cache 무효화. **직접 grant·타 그룹발 row 미변경**(TASK-BE-633: 같은 역할을 다른 출처가 주면 그 행이 남아 역할이 유지된다). 🔴 **TASK-BE-633 AC-3 (784 D-1)**: 이 그룹이 준 소속 중 그 사람이 그 테넌트에 역할 행을 여전히 가진 것은 지우지 않고 **직접 소속으로 남긴다** — `detail` 에 `keptAsDirect=<N>`(N>0 일 때만, `operator=<id>,keptAsDirect=<N>`).
 
 ---
 
@@ -3546,7 +3546,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 | `roles` | string[] | roles/tenantAssignments 중 최소 하나 | 존재하는 role; 비-`SUPER_ADMIN`; actor 보유 이내(≤-own) |
 | `tenantAssignments` | object[] | 〃 | 각 `tenantId` 는 tenantId 정규식 + actor `operator.manage` 스코프 이내 |
 
-**Response 201**: `{ "items": [ <group grant wire shape>, ... ], "fannedOutRows": 8 }` (생성된 grant 템플릿 + 전 멤버 fan-out 으로 materialise 된 row 수; 멤버별 동등 직접 grant 는 idempotent skip).
+**Response 201**: `{ "items": [ <group grant wire shape>, ... ], "fannedOutRows": 8 }` (생성된 grant 템플릿 + 전 멤버 fan-out 으로 멤버에게 **새로 생긴** grant 수; 멤버가 이미 가진 동등 grant 는 미포함 — TASK-BE-633 부터 역할은 그때도 이 그룹 출처 행을 만들지만 세지 않는다).
 
 **Errors**:
 
@@ -3563,7 +3563,7 @@ actor 스코프 내 그룹 **목록**(D3 read confine — 타 테넌트 그룹 �
 | 409 | `GROUP_GRANT_ALREADY_EXISTS` | 동일 (그룹, type, role/tenant) grant 템플릿 이미 존재 |
 | 422 | `GROUP_GRANT_NO_ESCALATION` | tenant-assignment grant 가 actor tenant-scope 초과 |
 
-**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿(`operator_group_grant`) INSERT + 전 멤버 fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — **단일 트랜잭션**(D5/D6). idempotent: 멤버가 이미 보유한 동등 직접 grant 는 skip.
+**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_ADD`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿(`operator_group_grant`) INSERT + 전 멤버 fan-out row(`group_origin=<group.id>`) INSERT + 멤버 perm-cache 무효화 — **단일 트랜잭션**(D5/D6). idempotent: tenant-assignment 는 이미 가진 소속을 skip; 역할은 출처별 행(TASK-BE-633 — 다른 출처로 이미 가진 멤버에게도 이 그룹 행을 만든다).
 
 ---
 
@@ -3581,11 +3581,11 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 
 **Errors**: 401 `TOKEN_INVALID`, 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 404 `GROUP_NOT_FOUND`, 404 `GROUP_GRANT_NOT_FOUND`(grant 템플릿 부재/타 그룹), 400 `REASON_REQUIRED`.
 
-**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_REVOKE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿 delete + 그 grant 의 fan-out row(`group_origin=<groupId>` + 해당 role/tenant 자연키) cascade-revoke + 멤버 perm-cache 무효화 — **단일 트랜잭션**. **직접 grant·타 grant 발 row 미변경**.
+**Side Effects**: `admin_actions` `action_code=GROUP_GRANT_REVOKE`, `target_type='GROUP'`, `target_id=<groupId>`, `target_tenant_id=<group tenant_id>`. grant 템플릿 delete + 그 grant 의 fan-out row(`group_origin=<groupId>` + 해당 role/tenant 자연키) cascade-revoke + 멤버 perm-cache 무효화 — **단일 트랜잭션**. **직접 grant·타 grant 발 row 미변경**. 🔴 **TASK-BE-633 AC-3**: tenant-assignment grant 회수 · 그룹 삭제(`DELETE /api/admin/groups/{groupId}`)도 그 그룹이 준 소속 중 역할 행이 남아 있는 것은 **직접 소속으로 남긴다** — `detail` 에 `keptAsDirect=<N>`(N>0 일 때만; 회수 = `grant=<id>,keptAsDirect=<N>`, 삭제 = `keptAsDirect=<N>`).
 
-> **Idempotence & 직접-grant 보존 (D5).** fan-out 은 멤버가 이미 보유한 동등 **직접** grant(`group_origin IS NULL`)를 절대 중복/덮어쓰기 하지 않으며(grant 당 최대 1 row — `(operator, tenant)`/`(operator, role)` PK), 모든 cascade-revoke 는 `group_origin = <groupId>` 로 엄격 필터하여 직접 grant 를 절대 파괴하지 않는다. 두 그룹이 같은 `(operator, grant)` 를 grant 하면 먼저 materialise 한 그룹이 마커를 소유하는 **단일-소유 v1 규약**이다([data-model.md](../../services/admin-service/data-model.md#group_origin-마커-fan-out-substrate)).
+> **Idempotence & 직접-grant 보존 (D5).** fan-out 은 멤버가 이미 보유한 동등 **직접** grant(`group_origin IS NULL`)를 절대 덮어쓰지 않으며, 모든 cascade-revoke 는 `group_origin = <groupId>` 로 엄격 필터하여 직접 grant 를 절대 파괴하지 않는다. **역할 (TASK-BE-633 · V0053)**: `admin_operator_roles` PK 에 `source_key`(`DIRECT` · `NODE` · `GROUP:<id>`)가 들어가 **출처별 행**이다 — 직접 + G1 + G2 가 같은 역할을 주면 행이 셋이고, G1 탈퇴 · G1 회수 · G1 삭제는 `GROUP:<G1>` 행만 지운다(G2 · 직접 분이 역할을 지킨다). 직접 역할 PATCH 도 `DIRECT` 행만 갈아 끼워 그룹 행과 공존한다. **tenant-assignment**: `(operator, tenant)` 한 행 — 두 그룹이 같은 소속을 주면 먼저 materialise 한 그룹이 마커를 소유하는 **단일-소유 v1 규약**이 남는다([data-model.md](../../services/admin-service/data-model.md#group_origin-마커-fan-out-substrate)).
 
-> 🔴 **업무 권한 세트의 fan-out 은 이 규약을 따르지 않는다 (ADR-MONO-083 D4 · P2 부터)**: 그룹에 배정한 **도메인 업무 권한 세트**(아래 § 도메인 업무 권한 세트 — `…/groups/{groupId}/domain-permission-sets`)는 멤버마다 **출처별 행**(`operator_domain_set_grant`, PK 에 `source_key = GROUP:<id>` 포함)으로 materialise 된다. 직접 + G1 + G2 가 같은 세트를 주면 **행이 셋**이고, G1 탈퇴 · G1 세트 회수 · G1 삭제는 `GROUP:<G1>` 행만 지운다 — 위의 «먼저 materialise 한 그룹이 소유» 와 달리 다른 출처가 주려는 세트가 사라지지 않는다. 위 단일-소유 규약은 **관리 역할 · tenant-assignment fan-out 에만** 남는다(고치는 일은 `TASK-BE-633`). 멤버 추가(`POST …/members`) · 멤버 제거 · 그룹 삭제는 같은 트랜잭션에서 그 그룹의 세트 행도 만들고 · 지운다.
+> 🔴 **업무 권한 세트의 fan-out 도 출처별 행이다 (ADR-MONO-083 D4 · P2 부터)**: 그룹에 배정한 **도메인 업무 권한 세트**(아래 § 도메인 업무 권한 세트 — `…/groups/{groupId}/domain-permission-sets`)는 멤버마다 **출처별 행**(`operator_domain_set_grant`, PK 에 `source_key = GROUP:<id>` 포함)으로 materialise 된다. 직접 + G1 + G2 가 같은 세트를 주면 **행이 셋**이고, G1 탈퇴 · G1 세트 회수 · G1 삭제는 `GROUP:<G1>` 행만 지운다 — 다른 출처가 주려는 세트가 사라지지 않는다. 위 단일-소유 규약은 **tenant-assignment fan-out 에만** 남는다(관리 역할은 `TASK-BE-633` · V0053 으로 출처별 행이 됐다). 멤버 추가(`POST …/members`) · 멤버 제거 · 그룹 삭제는 같은 트랜잭션에서 그 그룹의 세트 행도 만들고 · 지운다.
 
 ---
 

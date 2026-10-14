@@ -166,11 +166,14 @@ public class OrgNodeAdminUseCase {
      * <p>The grant row's {@code tenant_id} mirrors the <b>target operator's own tenant</b>
      * (BE-289 WI-2 — the audit-routing column), and its {@code org_node_id} drives the scope.
      *
-     * <p>{@code admin_operator_roles} is keyed by {@code (operator_id, role_id)}, so an
+     * <p>{@code admin_operator_roles} is keyed by {@code (operator_id, role_id, tenant_id, source_key)}
+     * (TASK-BE-633 · V0053) and every node row carries {@code source_key = 'NODE'}, so an
      * operator holds {@code ORG_ADMIN} at <b>at most one node</b>. Re-granting the same role
      * at a different node therefore <em>moves</em> the grant rather than adding a second one;
      * both are audited as {@code ORG_ADMIN_GRANT}. Widening this to multiple nodes would need
-     * a PK change and is out of scope.
+     * a source per node and is out of scope. 🔵 Since V0053 a node grant no longer lands on the
+     * operator's DIRECT or group row of the same role (before, the save merged into it and
+     * silently rewrote its origin): they coexist, and revoking the node grant leaves them.
      */
     public OrgAdminGrant grantNodeAdmin(OperatorContext actor, String orgNodeId,
                                         String targetOperatorId, String roleName, String reason) {

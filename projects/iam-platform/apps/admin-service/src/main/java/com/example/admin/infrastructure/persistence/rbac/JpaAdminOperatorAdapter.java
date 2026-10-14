@@ -277,7 +277,10 @@ public class JpaAdminOperatorAdapter implements AdminOperatorPort {
         for (AdminOperatorRoleJpaEntity b : bindings) {
             String roleName = roleNameById.get(b.getRoleId());
             if (roleName == null) continue;
-            byOperator.computeIfAbsent(b.getOperatorId(), k -> new ArrayList<>()).add(roleName);
+            // TASK-BE-633 (V0053): one row per SOURCE (and, since 784, per company) — the same role from direct +
+            // a group, or in two companies, is listed once.
+            List<String> names = byOperator.computeIfAbsent(b.getOperatorId(), k -> new ArrayList<>());
+            if (!names.contains(roleName)) names.add(roleName);
         }
         for (List<String> names : byOperator.values()) Collections.sort(names);
         return byOperator;

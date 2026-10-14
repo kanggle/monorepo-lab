@@ -254,10 +254,11 @@ public interface AdminOperatorPort {
     List<RoleRowView> findActiveRoleRowsInTenant(String tenantId, String roleName);
 
     /**
-     * TASK-MONO-784 S4 (decision D-7) — delete the DIRECT role rows ({@code group_origin IS NULL ∧ org_node_id IS
-     * NULL}) of one operator in one company. The role PATCH replaces exactly these; the operator's rows in other
+     * TASK-MONO-784 S4 (decision D-7) — delete the DIRECT role rows ({@code source_key = 'DIRECT'} — TASK-BE-633,
+     * V0053) of one operator in one company. The role PATCH replaces exactly these; the operator's rows in other
      * companies, its group fan-out rows and its org-node grants are untouched (before 784 the PATCH deleted every
-     * row of the operator — 784 Failure Scenario 3 · AC-0 F6).
+     * row of the operator — 784 Failure Scenario 3 · AC-0 F6). Since V0053 a group / node row of the same role is
+     * a separate row, so the PATCH's re-insert can no longer be merged into it (TASK-BE-633 AC-2).
      *
      * @return the number of rows deleted
      */
@@ -385,6 +386,11 @@ public interface AdminOperatorPort {
      * TASK-MONO-784 S4 — one {@code admin_operator_roles} row: the company it lives in ({@code tenantId};
      * {@code '*'} for a platform row) and its origin ({@code groupOrigin} non-null = group fan-out,
      * {@code orgNodeId} non-null = org-node grant, both null = direct).
+     *
+     * <p>TASK-BE-633 (V0053): one row per SOURCE — the same role of the same operator in the same company can come
+     * back as several views (direct · node · one per group). A caller that needs «does it hold the role» must
+     * de-duplicate; a caller that removes one source must match that source only (the last-admin guard counts a
+     * holder while ANY of its rows survives).
      */
     record RoleRowView(
             long operatorInternalId,

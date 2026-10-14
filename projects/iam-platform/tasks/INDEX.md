@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -116,6 +116,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## in-progress
 
 - `TASK-BE-635-client-idempotency-key-length-to-audit-column.md` — **The client `Idempotency-Key` header reaches the audit column (100 characters) without a length check. 7 endpoints have no limit, and the bulk-lock per-row key is 101 characters at the boundary; client input becomes `500 AUDIT_FAILURE`** (READY, 2026-10-14 UTC, source: `TASK-BE-634` AC-1 count). 🔴 The bulk-lock per-row key is also the downstream retry key, so record its use before changing the shape. Analysis=Opus 5.5 / recommended implementation=Sonnet.
+- `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
