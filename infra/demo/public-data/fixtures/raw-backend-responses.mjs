@@ -10,7 +10,7 @@
 //   상품 8행      ← `projects/ecommerce-microservices-platform/apps/product-service/
 //                     src/main/resources/db/migration/V8__seed_sample_data.sql`
 //   옵션 28행     ← 같은 파일 (재고 수량 포함)
-//   썸네일        ← 같은 디렉터리 `V9__add_product_thumbnail_url.sql` + `V11__…`
+//   썸네일        ← 같은 디렉터리 `V9__add_product_thumbnail_url.sql` + `V11__…` (굿즈는 `V23__artist_goods_photos.sql`)
 //   카테고리 7행  ← 같은 디렉터리 `V1`/`V8` (표시명 포함)
 //
 // 🔴🔴 **그리고 여기에는 공개되면 안 되는 필드가 일부러 들어 있다**:
@@ -509,8 +509,6 @@ const ARTIST_A003 = artistIdOf('세아');
 const ARTIST_A004 = artistIdOf('하린');
 const ARTIST_A005 = artistIdOf('리오');
 const ARTIST_A006 = artistIdOf('유노');
-/** R2 — `placehold.co` 자리표시(아티스트 색 + 영문 상품명). 스토어 `next.config.ts` 가 이미 허용한 호스트다. */
-const GOODS_IMG = (color, text) => `https://placehold.co/600x600/${color}?text=${text.replace(/ /g, '+')}&font=noto-sans`;
 
 /** 스토어 게이트웨이 `GET /api/products/{id}` 의 모양(`ProductDetail`). 재고 포함. */
 export const RAW_PRODUCTS = [
@@ -774,14 +772,14 @@ export const RAW_PRODUCTS = [
   // TASK-MONO-739 — 팬 아티스트 6명의 공식 굿즈 (ADR-MONO-077 갈래 D · ADR-MONO-079 D3)
   // ===========================================================================
   // 🔵 실제 시드는 postgres `V21__seed_artist_goods.sql` · h2 `V14__seed_artist_goods.sql` 이다 — 같은 행이다.
-  // 🔵 아티스트당 3개(R1) · 이미지 `placehold.co`(R2). 그룹 STELLAR 멤버(세아·리오)는 **개인** 굿즈만 둔다.
+  // 🔵 아티스트당 3개(R1) · 이미지는 상품에 맞춘 Unsplash 사진(`TASK-MONO-796` — R2 `placehold.co` 를 소유자가 뒤집음, V23/h2 V16). 그룹 STELLAR 멤버(세아·리오)는 **개인** 굿즈만 둔다.
   // 🔴 이름이 `<예명> ` 으로 시작하는 것은 팬의 «전체 보기» 링크(`categoryId=<굿즈>&q=<예명>`)가 스토어
   //    검색으로 그 아티스트 굿즈를 찾게 하는 규약이다. 카드 선택은 이름이 아니라 `collectionRef` 로 한다.
   // ── 루미 (a001) ──
   {
     id: `${P}25`, name: '루미 공식 응원봉', description: '루미의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-27T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Light Stick'), images: [],
+    thumbnailUrl: U('1763322564752-12ce8fae2bfe'), images: [],
     variants: [
       { id: `${C}66`, optionName: '기본', stock: 120, additionalPrice: 0 },
     ],
@@ -789,7 +787,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}26`, name: '루미 포토카드 세트', description: '앨범 콘셉트 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-28T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Photocard Set'), images: [],
+    thumbnailUrl: U('1736710744799-4ba71f73cf73'), images: [],
     variants: [
       { id: `${C}67`, optionName: '8매 세트', stock: 200, additionalPrice: 0 },
     ],
@@ -797,7 +795,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}27`, name: '루미 「밤의 끝」 후드티', description: '싱글 「밤의 끝」 아트워크를 자수로 넣은 오버핏 후드티입니다.',
     price: 69000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A001, createdAt: '2026-01-29T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('ede9fe/5b21b6', 'LUMI Hoodie'), images: [],
+    thumbnailUrl: U('1768264229225-5ea270d62f78'), images: [],
     variants: [
       { id: `${C}68`, optionName: 'M', stock: 40, additionalPrice: 0 },
       { id: `${C}69`, optionName: 'L', stock: 35, additionalPrice: 0 },
@@ -808,7 +806,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}28`, name: '노아 공식 응원봉', description: '노아의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-01-30T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Light Stick'), images: [],
+    thumbnailUrl: U('1741810977205-9fc28e5416da'), images: [],
     variants: [
       { id: `${C}70`, optionName: '기본', stock: 100, additionalPrice: 0 },
     ],
@@ -816,7 +814,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}29`, name: '노아 포토카드 세트', description: '작업실 비하인드 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-01-31T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Photocard Set'), images: [],
+    thumbnailUrl: U('1767474365536-ef81bfa24c8a'), images: [],
     variants: [
       { id: `${C}71`, optionName: '8매 세트', stock: 180, additionalPrice: 0 },
     ],
@@ -824,7 +822,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}30`, name: '노아 프로듀싱 노트 포스터', description: '자필 프로듀싱 노트를 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
     price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A002, createdAt: '2026-02-01T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dbeafe/1e40af', 'NOAH Poster'), images: [],
+    thumbnailUrl: U('1676883343810-e3e4b63d8ecd'), images: [],
     variants: [
       { id: `${C}72`, optionName: 'A2', stock: 90, additionalPrice: 0 },
     ],
@@ -834,7 +832,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}31`, name: '세아 공식 응원봉', description: '세아의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-02T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH Light Stick'), images: [],
+    thumbnailUrl: U('1520242739010-44e95bde329e'), images: [],
     variants: [
       { id: `${C}73`, optionName: '기본', stock: 110, additionalPrice: 0 },
     ],
@@ -842,7 +840,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}32`, name: '세아 포토카드 세트', description: '안무 연습실 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-03T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH Photocard Set'), images: [],
+    thumbnailUrl: U('1524594152303-9fd13543fe6e'), images: [],
     variants: [
       { id: `${C}74`, optionName: '8매 세트', stock: 190, additionalPrice: 0 },
     ],
@@ -850,7 +848,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}33`, name: '세아 시그니처 티셔츠', description: '세아의 손글씨 로고를 프린트한 코튼 반팔 티셔츠입니다.',
     price: 39000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A003, createdAt: '2026-02-04T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fce7f3/be185d', 'SEAH T-Shirt'), images: [],
+    thumbnailUrl: U('1620799139507-2a76f79a2f4d'), images: [],
     variants: [
       { id: `${C}75`, optionName: 'M', stock: 50, additionalPrice: 0 },
       { id: `${C}76`, optionName: 'L', stock: 45, additionalPrice: 0 },
@@ -861,7 +859,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}34`, name: '하린 공식 응원봉', description: '하린의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-05T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Light Stick'), images: [],
+    thumbnailUrl: U('1578874763335-4d21bab88a99'), images: [],
     variants: [
       { id: `${C}77`, optionName: '기본', stock: 90, additionalPrice: 0 },
     ],
@@ -869,7 +867,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}35`, name: '하린 포토카드 세트', description: '첫 단독 공연 리허설 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-06T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Photocard Set'), images: [],
+    thumbnailUrl: U('1780698370183-079584658a65'), images: [],
     variants: [
       { id: `${C}78`, optionName: '8매 세트', stock: 160, additionalPrice: 0 },
     ],
@@ -877,7 +875,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}36`, name: '하린 단독 공연 포스터', description: '첫 단독 공연 키 비주얼을 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
     price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A004, createdAt: '2026-02-07T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('fef3c7/92400e', 'HARIN Poster'), images: [],
+    thumbnailUrl: U('1780295725666-31c0d6d00f96'), images: [],
     variants: [
       { id: `${C}79`, optionName: 'A2', stock: 80, additionalPrice: 0 },
     ],
@@ -887,7 +885,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}37`, name: '리오 공식 응원봉', description: '리오의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-08T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO Light Stick'), images: [],
+    thumbnailUrl: U('1663026164508-b07adc48ca6c'), images: [],
     variants: [
       { id: `${C}80`, optionName: '기본', stock: 95, additionalPrice: 0 },
     ],
@@ -895,7 +893,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}38`, name: '리오 포토카드 세트', description: '커버 무대 현장 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-09T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO Photocard Set'), images: [],
+    thumbnailUrl: U('1758550445758-165aeab5b26e'), images: [],
     variants: [
       { id: `${C}81`, optionName: '8매 세트', stock: 170, additionalPrice: 0 },
     ],
@@ -903,7 +901,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}39`, name: '리오 시그니처 티셔츠', description: '리오의 손글씨 로고를 프린트한 코튼 반팔 티셔츠입니다.',
     price: 39000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A005, createdAt: '2026-02-10T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('dcfce7/166534', 'RIO T-Shirt'), images: [],
+    thumbnailUrl: U('1576871337622-98d48d1cf531'), images: [],
     variants: [
       { id: `${C}82`, optionName: 'M', stock: 45, additionalPrice: 0 },
       { id: `${C}83`, optionName: 'L', stock: 40, additionalPrice: 0 },
@@ -914,7 +912,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}40`, name: '유노 공식 응원봉', description: '유노의 시그니처 컬러로 빛나는 공식 응원봉입니다. AA 건전지 3개가 필요합니다.',
     price: 45000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-11T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Light Stick'), images: [],
+    thumbnailUrl: U('1491441555545-d6b8e24ffa33'), images: [],
     variants: [
       { id: `${C}84`, optionName: '기본', stock: 85, additionalPrice: 0 },
     ],
@@ -922,7 +920,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}41`, name: '유노 포토카드 세트', description: '재즈 세션 녹음 현장 사진 8장을 담은 포토카드 세트입니다.',
     price: 15000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-12T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Photocard Set'), images: [],
+    thumbnailUrl: U('1415201364774-f6f0bb35f28f'), images: [],
     variants: [
       { id: `${C}85`, optionName: '8매 세트', stock: 150, additionalPrice: 0 },
     ],
@@ -930,7 +928,7 @@ export const RAW_PRODUCTS = [
   {
     id: `${P}42`, name: '유노 재즈 세션 포스터', description: '재즈 세션 라이브 사진을 인쇄한 A2 포스터입니다. 지관통에 담아 배송합니다.',
     price: 18000, status: 'ON_SALE', categoryId: `${CAT}08`, collectionRef: ARTIST_A006, createdAt: '2026-02-13T00:00:00Z',
-    thumbnailUrl: GOODS_IMG('e2e8f0/475569', 'YUNO Poster'), images: [],
+    thumbnailUrl: U('1641185867887-e8a0c79214b9'), images: [],
     variants: [
       { id: `${C}86`, optionName: 'A2', stock: 75, additionalPrice: 0 },
     ],
