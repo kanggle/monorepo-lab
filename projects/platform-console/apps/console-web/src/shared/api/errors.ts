@@ -887,6 +887,41 @@ export class GroupsUnavailableError extends Error {
   }
 }
 
+/**
+ * ADR-MONO-083 domain business permission-set surface degrade signal
+ * (TASK-PC-FE-338 / admin-api.md § 도메인 업무 권한 세트). Sibling of
+ * {@link GroupsUnavailableError} — identical resilience posture for the
+ * `domain_access.manage`-gated catalog + tenant-set CRUD surface
+ * (`/api/admin/domain-roles`, `/api/admin/domain-permission-sets`, reads gated
+ * too): a `503 DOWNSTREAM_ERROR`/`503 CIRCUIT_OPEN`/timeout degrades ONLY the
+ * 업무 권한 세트 section (the console shell + every other IAM surface stay
+ * intact). Auth failures (401) are raised as {@link ApiError} so the caller
+ * forces a clean re-login (no partial authed state). Inline-recoverable
+ * producer errors (`403 PERMISSION_DENIED`/`TENANT_SCOPE_DENIED`,
+ * `404 DOMAIN_PERMISSION_SET_NOT_FOUND`,
+ * `409 DOMAIN_PERMISSION_SET_READ_ONLY`/`DOMAIN_PERMISSION_SET_IN_USE`,
+ * `422 DOMAIN_ROLE_NOT_ASSIGNABLE`/`DOMAIN_NOT_SUBSCRIBED`,
+ * `400 VALIDATION_ERROR`/`REASON_REQUIRED`) are raised as {@link ApiError} so
+ * the UI renders an inline actionable message without crashing. 🔴 P3 is not
+ * deployed — a set recorded here does not yet narrow any assume-tenant token
+ * (status honesty, ADR-083 D9); no error/message here may claim otherwise.
+ * No token / PII is ever placed in this error.
+ */
+export class DomainPermissionSetsUnavailableError extends Error {
+  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
+  readonly code: string;
+  constructor(
+    reason: DomainPermissionSetsUnavailableError['reason'],
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'DomainPermissionSetsUnavailableError';
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   // --- sample mode (ADR-MONO-074 R1ⓐ / A9 — TASK-PC-FE-282) -----------------
   // 🔴🔴 The ONE code → copy mapping for sample refusals. Never put this copy in
@@ -1183,6 +1218,22 @@ const MESSAGES: Record<string, string> = {
   // `VALIDATION_ERROR` / `TENANT_NOT_FOUND` are already mapped above.)
   OPTIMISTIC_LOCK_CONFLICT:
     '다른 운영자가 방금 같은 설정을 바꿨습니다. 화면을 새로고침한 뒤 다시 시도하세요.',
+  // --- domain business permission sets (TASK-PC-FE-338 / ADR-MONO-083) -----
+  // (`PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` / `REASON_REQUIRED` /
+  // `VALIDATION_ERROR` / `NO_ACTIVE_TENANT` are already mapped above and
+  // reused verbatim — the producer codes are identical.)
+  DOMAIN_PERMISSION_SET_NOT_FOUND:
+    '대상 업무 권한 세트를 찾을 수 없습니다. 목록을 새로고침하세요.',
+  DOMAIN_PERMISSION_SET_READ_ONLY:
+    '시스템 세트는 바꿀 수 없습니다 — 복제해서 새 세트를 만드세요.',
+  DOMAIN_PERMISSION_SET_IN_USE:
+    '아직 배정돼 있는 세트입니다 — 먼저 회수하세요.',
+  DOMAIN_PERMISSION_SET_ALREADY_GRANTED:
+    '이미 직접 배정돼 있습니다.',
+  DOMAIN_ROLE_NOT_ASSIGNABLE:
+    '카탈로그에 없는 업무 역할이 포함되어 있습니다. 역할 카탈로그를 새로고침한 뒤 다시 시도하세요.',
+  DOMAIN_NOT_SUBSCRIBED:
+    '이 테넌트가 구독하지 않은 도메인이 들어 있습니다.',
 };
 
 export function messageForCode(code: string, fallback?: string): string {

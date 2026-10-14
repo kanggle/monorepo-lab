@@ -73,6 +73,10 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   // sample fixture yet, so a sample visitor's call answers 503 SAMPLE_NOT_READY, which
   // the control maps to its own degraded note (the tenant detail page stays `ready`).
   { core: 'iam', surface: 'tenant_entry_policy', status: 'pending', owner: 'TASK-MONO-771' },
+  // TASK-PC-FE-338 (ADR-MONO-083 D9) — the new 업무 권한 세트 surface. 🔵 `pending` on
+  // purpose: no sample fixture yet (P2 producer just merged to `main`); a sample visitor's
+  // call answers 503 SAMPLE_NOT_READY, which the screen maps to its own degraded note.
+  { core: 'iam', surface: 'domain_permission_sets', status: 'pending', owner: 'TASK-PC-FE-338' },
 
   // ── ecommerce (`callEcommerceGateway`) — TASK-PC-FE-284 ────────────────────
   { core: 'ecommerce', surface: 'ecommerce', status: 'ready', owner: ECOMMERCE },
@@ -217,6 +221,8 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/org-hierarchy': 'ready',
   '/partnerships': 'ready',
   '/permission-sets': 'ready',
+  // TASK-PC-FE-338 — pending: no sample fixture yet for the new domain-permission-sets surface.
+  '/domain-permission-sets': 'pending',
   '/permissions': 'ready',
   '/subscriptions': 'ready',
   '/tenants': 'ready',

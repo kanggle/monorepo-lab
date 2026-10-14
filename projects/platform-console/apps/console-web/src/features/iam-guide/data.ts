@@ -211,15 +211,28 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     mutates: true,
     note: '그룹에 준 권한은 그 순간 멤버 각자에게도 똑같이 적용됩니다. 조회에도 group.manage 권한이 필요하고, 모든 변경에는 사유를 적어야 합니다. 자기가 가진 것보다 높은 역할이나 범위 밖 테넌트는 그룹에도 줄 수 없습니다.',
   },
-  // TASK-PC-FE-315 — 권한 세트 먼저(배정에 실제로 붙는 단위), 그 안의 키(권한)는 다음.
+  // TASK-PC-FE-315 — IAM 관리 역할 먼저(배정에 실제로 붙는 단위), 그 안의 키(권한)는 다음.
+  // TASK-PC-FE-338 (ADR-MONO-083 D9) — 이름이 「권한 세트」에서 바뀌었다. 이 화면이
+  // 보여주는 건 IAM 관리 평면의 역할(admin_roles)이고, 도메인 업무 권한이 아니다.
   {
-    label: '권한 세트',
+    label: 'IAM 관리 역할',
     href: '/permission-sets',
-    purpose: '테넌트 배정에 붙는 권한 묶음(= 역할)을 봅니다.',
-    actions: '조회 전용 — 세트를 펼치면 포함된 권한 키가 보입니다.',
+    purpose: '테넌트 배정에 붙는 관리 권한 묶음(= 역할)을 봅니다 — 도메인 업무 권한이 아닙니다.',
+    actions: '조회 전용 — 세트를 펼치면 포함된 관리 권한 키가 보입니다.',
     gate: 'operator.manage',
     mutates: false,
-    note: '「권한」 화면과 같은 내용을 배정 관점에서 다시 보여줍니다.',
+    note: '「권한」 화면과 같은 내용을 배정 관점에서 다시 보여줍니다. WMS·SCM 등 도메인 업무 권한은 「업무 권한 세트」가 별도로 관리합니다.',
+  },
+  // 업무 권한 세트 (TASK-PC-FE-338 / ADR-MONO-083 D9) — 위 IAM 관리 역할과 이름 공간이
+  // 다른, 테넌트별 도메인 업무 권한 묶음.
+  {
+    label: '업무 권한 세트',
+    href: '/domain-permission-sets',
+    purpose: '테넌트별로 운영자·그룹에게 줄 도메인 업무 역할(WMS·SCM 등)을 세트로 묶어 관리합니다.',
+    actions: '시스템 프리셋 조회(읽기 전용) · 테넌트 세트 등록/수정/삭제.',
+    gate: 'domain_access.manage',
+    mutates: true,
+    note: 'P3(토큰 발급 변경)가 배포되기 전까지는 세트를 배정해도 실제 assume 토큰의 업무 권한은 바뀌지 않습니다 — "적용 예정" 상태입니다. 모든 변경은 사유 입력이 필수입니다.',
   },
   {
     label: '권한',
@@ -457,6 +470,11 @@ const PERMISSION_KEY_CATALOG: PermissionKey[] = [
     key: 'account.2fa_reset',
     desc: '인증 앱과 복구 코드를 모두 잃은 사람의 계정 2단계 인증을 지웁니다. 플랫폼 역할(SUPER_ADMIN · SECURITY_ANALYST)만 — 테넌트 관리자는 갖지 않습니다.',
   },
+  {
+    // TASK-PC-FE-338 (rbac.md:135, ADR-MONO-083 P2)
+    key: 'domain_access.manage',
+    desc: '테넌트별로 운영자·그룹에게 도메인 업무 권한 세트를 배정·회수합니다. 이 키 자체는 업무 권한을 주지 않습니다 — 배정은 관리 평면 행위입니다(D5).',
+  },
 ];
 
 /** Both guides use the same display order; a missing description is a build/test error. */
@@ -513,6 +531,7 @@ export const SEED_ROLES: SeedRole[] = [
       'group.manage',
       'tenant.security.manage', // rbac.md:128 (TASK-MONO-771 S5, V0048)
       'account.2fa_reset', // rbac.md:129 (TASK-MONO-771 S6, V0049)
+      'domain_access.manage', // rbac.md:135 (TASK-PC-FE-338, ADR-MONO-083 P2)
     ],
     elevated: true,
   },
@@ -562,6 +581,7 @@ export const SEED_ROLES: SeedRole[] = [
       'partnership.manage',
       'group.manage', // rbac.md:94 (ADR-MONO-046 D6) — TASK-PC-FE-298
       'tenant.security.manage', // rbac.md:128 (TASK-MONO-771 S5, V0048) — 자기 테넌트의 진입 정책
+      'domain_access.manage', // rbac.md:135 (TASK-PC-FE-338, ADR-MONO-083 P2) — 자기 테넌트의 업무 권한 세트 배정
     ],
   },
   {

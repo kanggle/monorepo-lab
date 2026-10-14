@@ -417,12 +417,25 @@ export const GROUPS: NavGroup[] = [
             label: '운영자 그룹',
             testid: 'nav-iam-operator-groups', icon: 'users',
           },
-          // 권한 세트 (real feature = TASK-PC-FE-228) — IAM Policy/Role
-          // equivalent.
+          // IAM 관리 역할 (real feature = TASK-PC-FE-228) — IAM Policy/Role
+          // equivalent. TASK-PC-FE-338 (ADR-MONO-083 D9) renamed this from
+          // «권한 세트» — it shows `admin_roles` (관리 권한 묶음), never
+          // domain business permissions. The tenant-scoped domain business
+          // permission bundle is a SEPARATE entity/screen, immediately below
+          // — «업무 권한 세트» — and the two must never share a label
+          // (ADR-MONO-035 O1-C).
           {
             href: '/permission-sets',
-            label: '권한 세트',
+            label: 'IAM 관리 역할',
             testid: 'nav-iam-permission-sets', icon: 'lock',
+          },
+          // 업무 권한 세트 (TASK-PC-FE-338 / ADR-MONO-083 D9) — the tenant-scoped
+          // domain BUSINESS permission bundle operators/groups receive (a
+          // SEPARATE entity/producer from the admin role above).
+          {
+            href: '/domain-permission-sets',
+            label: '업무 권한 세트',
+            testid: 'nav-iam-domain-permission-sets', icon: 'clipboard',
           },
           // 권한 (real feature = TASK-PC-FE-227) — Action/Permission
           // equivalent.

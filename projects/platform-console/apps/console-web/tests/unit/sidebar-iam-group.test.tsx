@@ -27,7 +27,7 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     expect(screen.queryByTestId('nav-operators')).toBeNull();
   });
 
-  it('clicking IAM drills in: reveals the 7-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/권한 세트/권한/감사·보안) and pins IAM at the top (TASK-PC-FE-225 · TASK-PC-FE-313 · TASK-PC-FE-315)', () => {
+  it('clicking IAM drills in: reveals the 8-item workforce plane (가이드/개요/운영자 관리/운영자 그룹/IAM 관리 역할/업무 권한 세트/권한/감사·보안) and pins IAM at the top (TASK-PC-FE-225 · TASK-PC-FE-313 · TASK-PC-FE-315 · TASK-PC-FE-338)', () => {
     render(<ConsoleSidebarNav />);
     fireEvent.click(screen.getByTestId('nav-iam'));
 
@@ -60,6 +60,11 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       'href',
       '/permission-sets',
     );
+    // TASK-PC-FE-338 — new IAM nav item right after «IAM 관리 역할».
+    expect(screen.getByTestId('nav-iam-domain-permission-sets')).toHaveAttribute(
+      'href',
+      '/domain-permission-sets',
+    );
     expect(screen.getByTestId('nav-audit')).toHaveAttribute('href', '/audit');
     // 계정 운영 (customer-identity plane) is NO LONGER an IAM child
     // (TASK-PC-FE-225 — moved to its own 「고객 신원」 group).
@@ -81,6 +86,7 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       '/operators',
       '/operator-groups',
       '/permission-sets',
+      '/domain-permission-sets',
       '/permissions',
       '/audit',
     ]);
@@ -279,7 +285,7 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
     );
   });
 
-  it('a deep link to /permission-sets auto-opens the IAM drill with 권한 세트 active', () => {
+  it('a deep link to /permission-sets auto-opens the IAM drill with IAM 관리 역할 active', () => {
     mockPath = '/permission-sets';
     render(<ConsoleSidebarNav />);
     expect(screen.getByTestId('nav-iam-permission-sets')).toHaveAttribute(
@@ -287,6 +293,19 @@ describe('sidebar IAM parent group (TASK-PC-FE-060)', () => {
       'page',
     );
     expect(screen.getByTestId('nav-iam-operator-groups')).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  // TASK-PC-FE-338 — new 업무 권한 세트 nav item.
+  it('a deep link to /domain-permission-sets auto-opens the IAM drill with 업무 권한 세트 active', () => {
+    mockPath = '/domain-permission-sets';
+    render(<ConsoleSidebarNav />);
+    expect(screen.getByTestId('nav-iam-domain-permission-sets')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('nav-iam-permission-sets')).not.toHaveAttribute(
       'aria-current',
     );
   });
