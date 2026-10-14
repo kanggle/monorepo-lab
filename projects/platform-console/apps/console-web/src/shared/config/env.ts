@@ -162,6 +162,14 @@ const ServerEnvSchema = z.object({
    *  owned by IAM `admin-api.md` § Operator Group Management (authoritative,
    *  consumed only). */
   GROUPS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  /** Outbound timeout (ms) for the ADR-MONO-083 「업무 권한 세트」 calls
+   *  (TASK-PC-FE-338 / integration-heavy I1 — same convention as
+   *  GROUPS_TIMEOUT_MS). The catalog + tenant-set CRUD endpoints hang off
+   *  `${IAM_ADMIN_API_BASE}/api/admin/{domain-roles,domain-permission-sets}...`
+   *  (admin-service, gated `domain_access.manage` — reads too) —
+   *  request/response/error owned by IAM `admin-api.md` § 도메인 업무 권한 세트
+   *  (authoritative, consumed only). */
+  DOMAIN_PERMISSION_SETS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** wms `admin-service` base for the operations surface (TASK-PC-FE-007 /
    *  § 2.4.5). The dashboard read-model + alert-ack endpoints hang off
    *  `${WMS_ADMIN_BASE_URL}/dashboard/...` (+ `/operations/...`) —
@@ -374,6 +382,7 @@ export function getServerEnv(): ServerEnv {
     TENANTS_TIMEOUT_MS: process.env.TENANTS_TIMEOUT_MS,
     ORG_NODES_TIMEOUT_MS: process.env.ORG_NODES_TIMEOUT_MS,
     GROUPS_TIMEOUT_MS: process.env.GROUPS_TIMEOUT_MS,
+    DOMAIN_PERMISSION_SETS_TIMEOUT_MS: process.env.DOMAIN_PERMISSION_SETS_TIMEOUT_MS,
     WMS_ADMIN_BASE_URL: process.env.WMS_ADMIN_BASE_URL,
     WMS_TIMEOUT_MS: process.env.WMS_TIMEOUT_MS,
     WMS_OUTBOUND_BASE_URL: process.env.WMS_OUTBOUND_BASE_URL,

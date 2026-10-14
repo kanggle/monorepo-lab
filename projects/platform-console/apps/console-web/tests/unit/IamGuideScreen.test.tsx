@@ -272,7 +272,7 @@ describe('IamGuideScreen', () => {
       'account.2fa_reset', 'audit.read', 'security.event.read',
       'tenant.manage', 'subscription.manage', 'partnership.manage',
       'tenant.admin.delegate', 'tenant.security.manage',
-      'org.manage', 'group.manage', 'operator.manage',
+      'org.manage', 'group.manage', 'operator.manage', 'domain_access.manage',
     ];
     render(<><GlobalGuideScreen demoLoginEmail="demo@demo.com" /><IamGuideScreen /></>);
     const globalRows = Array.from(screen.getByTestId('global-guide-rbac-matrix').querySelectorAll('tbody tr'));
@@ -284,8 +284,8 @@ describe('IamGuideScreen', () => {
   it('includes current IAM menus and distinguishes overview card access', () => {
     expect(SCREEN_ACCESS.map((s) => s.href)).toEqual([
       '/iam/guide', '/iam', '/operators', '/operator-groups', '/permission-sets',
-      '/permissions', '/audit', '/org-hierarchy', '/tenants', '/subscriptions',
-      '/partnerships', '/security-settings', '/accounts',
+      '/domain-permission-sets', '/permissions', '/audit', '/org-hierarchy', '/tenants',
+      '/subscriptions', '/partnerships', '/security-settings', '/accounts',
     ]);
     const cells = (href: string) => SCREEN_ACCESS.find((s) => s.href === href)!.cells;
     expect(cells('/operator-groups').TENANT_ADMIN.level).toBe('full');

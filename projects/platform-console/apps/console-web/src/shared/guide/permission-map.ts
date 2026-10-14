@@ -102,6 +102,9 @@ export const RBAC_SEED_MATRIX: Readonly<Record<string, Record<RbacRole, boolean>
   'tenant.security.manage': row(1, 0, 0, 0, 1, 0, 0),
   // TASK-MONO-771 S6 (OD-6) — rbac.md § Seed Matrix `account.2fa_reset` (V0049). 플랫폼 역할만.
   'account.2fa_reset':      row(1, 0, 0, 1, 0, 0, 0),
+  // TASK-PC-FE-338 (ADR-MONO-083 P2) — rbac.md § Seed Matrix `domain_access.manage` (:135).
+  // 업무 권한 세트 배정 자체는 관리 평면 행위(D5) — 이 키가 업무 권한을 주지는 않는다.
+  'domain_access.manage':   row(1, 0, 0, 0, 1, 0, 0),
 };
 
 /** Display order only: accounts, audit/security, tenants, organization/workforce.
@@ -123,6 +126,7 @@ export const RBAC_PERMISSION_ORDER = [
   'org.manage',
   'group.manage',
   'operator.manage',
+  'domain_access.manage',
 ] as const satisfies readonly (keyof typeof RBAC_SEED_MATRIX)[];
 
 /**
@@ -366,13 +370,43 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     href: '/permission-sets',
     area: 'iam',
     gate: { kind: 'admin', permission: 'operator.manage' },
-    description: '권한 세트(= 역할) — 세트를 펼치면 포함된 권한 키.',
+    // TASK-PC-FE-338 (ADR-MONO-083 D9) — renamed to «IAM 관리 역할»: this view
+    // shows `admin_roles`(관리 평면 권한 키 묶음), never 도메인 업무 권한. The
+    // tenant-scoped 업무 권한 세트 is a SEPARATE screen/producer (`/domain-permission-sets`
+    // row below) — the two names must never collapse into one.
+    description: 'IAM 관리 역할(= admin_roles) — 역할을 펼치면 포함된 관리 권한 키.',
     crud: R,
-    purpose: '테넌트 배정에 붙일 수 있는 권한 묶음을 본다.',
+    purpose: '테넌트 배정에 붙일 수 있는 관리 권한 묶음을 본다(도메인 업무 권한이 아니다).',
     services: ['iam admin-service'],
     sources: [`${ADMIN_CTRL}/RoleAdminController.java:57`, `${RBAC}:80`],
     mismatch:
       '「권한」과 같다 — 보기만 하는 화면인데 운영자 관리 권한(`operator.manage`)이 있어야 열린다.',
+  },
+  {
+    // TASK-PC-FE-338 (ADR-MONO-083 D9 · TASK-MONO-791 P1 계약 · TASK-BE-631 P2) —
+    // tenant-scoped DOMAIN BUSINESS permission bundles operators/groups receive.
+    // A SEPARATE entity/producer from the admin-role view above — never the same
+    // label (ADR-MONO-035 O1-C).
+    href: '/domain-permission-sets',
+    area: 'iam',
+    gate: { kind: 'admin', permission: 'domain_access.manage' },
+    description:
+      '업무 권한 세트 — 시스템 프리셋(읽기 전용) + 테넌트 세트. 카탈로그 업무 역할(도메인별)을 묶어 운영자·그룹에 배정.',
+    crud: crud('CRUD'),
+    crudNote:
+      '삭제 = 배정이 하나도 없는 테넌트 세트만(배정 중이면 409). 시스템 프리셋은 읽기 전용(복제해서 새 세트).',
+    purpose:
+      '테넌트별로 운영자가 실제로 수행할 수 있는 업무(도메인 역할)를 세트로 묶어 배정·회수한다.',
+    services: ['iam admin-service'],
+    sources: [
+      `${ADMIN_CTRL}/DomainPermissionSetController.java`,
+      `${API}/domain-roles/route.ts (GET)`,
+      `${API}/domain-permission-sets/route.ts (GET,POST)`,
+      `${API}/domain-permission-sets/[setId]/route.ts (GET,PATCH,DELETE)`,
+      'projects/iam-platform/specs/contracts/http/admin-api.md § 도메인 업무 권한 세트',
+    ],
+    mismatch:
+      'P3(토큰 발급 변경) 배포 전에는 세트를 배정·회수해도 assume 토큰의 실제 업무 권한은 바뀌지 않는다(구독 도메인 전체가 여전히 그대로 적용) — 화면은 이를 "적용 예정"으로 명시한다.',
   },
   {
     href: '/audit',

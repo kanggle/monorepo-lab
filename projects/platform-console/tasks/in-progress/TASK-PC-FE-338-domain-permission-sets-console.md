@@ -8,7 +8,7 @@ TASK-PC-FE-338
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -76,3 +76,43 @@ frontend
 
 1. 메뉴 숨김을 토큰 디코드로 판정 — 서버 판정과 어긋난다(`(console)/layout.tsx` 는 디코드를 표시용으로만 쓴다).
 2. «IAM 관리 역할» 과 «업무 권한 세트» 가 같은 화면 · 같은 이름으로 남는다 — 관리자가 관리 역할을 업무 권한으로 오해한다.
+
+---
+
+# Implementation Record
+
+## Slice plan (2026-10-14 UTC)
+
+| Slice | Content | AC |
+|---|---|---|
+| **a** | Name split («IAM 관리 역할») · new «업무 권한 세트» screen (`/domain-permission-sets`, contract rows 1–5) · ledger copies | AC-0 · AC-4 (part) |
+| b | Operator detail «업무 권한» (rows 6–8) · group detail «업무 권한 세트» (rows 9–11) | AC-3 |
+| c | Nav «업무 권한 없음» signal (row 12) · read-only set hides buttons · OD-2 re-exchange · nightly / Vercel | AC-1 · AC-2 · AC-5 |
+
+## AC-0: re-measurement (2026-10-14 UTC)
+
+- References to `/permission-sets` or «권한 세트»:
+  - **e2e · smoke: 0** (searched `**/e2e/**`, `**/e2e-smoke/**`, `*.spec.ts`).
+  - Unit tests: `sidebar-iam-group`, `PermissionSetsScreen`, `IamGuideScreen`, `GlobalGuideScreen`, `permission-map-drift`, `sample-fixtures-schema-iam`, `rbac-catalog-api`, `sidebar-role-subscription`.
+  - Guide copies: `permission-map.ts`, `iam-guide/data.ts`, `domain-features.ts`, `sample/coverage.ts`.
+- ⇒ **The route stays at `/permission-sets`** (no e2e moves). Only the name changes. The testids are kept.
+
+## Slice a: what landed
+
+- **Rename.** Every visible name and line of copy for the `/permission-sets` view now reads «IAM 관리 역할». One line was added: "this is an IAM management permission bundle, not domain business permissions → «업무 권한 세트»".
+  - ⚪ Some comments still say «권한 세트». They describe the historical ticket name, TASK-PC-FE-228, not a visible label.
+- **New screen** `/domain-permission-sets`, in the nav right after «IAM 관리 역할».
+  - Presets carry the «시스템» badge, are read-only, and offer «복제해서 새 세트».
+  - Tenant sets show `grantCount` / `groupCount`.
+  - The role picker is grouped by domain. A `fineGrained=false` role shows its `label` verbatim.
+  - An unsubscribed domain is disabled with «구독 없음». When subscription data is unknown, nothing is disabled; the server's 422 is final.
+  - **Status honesty.** The screen always shows an «적용 예정» note. Edit and delete confirms carry the latency copy for before P3 (**at most 30 minutes**, never «즉시»).
+- **BFF.**
+  - `Idempotency-Key` is sent on create only.
+  - A PATCH or DELETE body that contains a key is refused with 422 (`.strict()`).
+  - 204 passes through as `NextResponse(null)`.
+- **Ledgers.**
+  - `permission-map` gets a new row, and `domain_access.manage` is added to the seed matrix (SUPER_ADMIN · TENANT_ADMIN, the same as V0052).
+  - `iam-guide` adds the menu, the role, and the key description.
+  - Sample coverage is `pending`: there is no fixture yet (the same precedent as `tenant_entry_policy`).
+- **Review corrections (main session).** The subagent added an error message for `DOMAIN_ACCESS_MANAGE_REQUIRED`. **No producer has that code** (the producer answers `403 PERMISSION_DENIED`), so I removed it.

@@ -69,7 +69,7 @@ export interface DomainFeatures {
 }
 
 /* ─────────────────────────── IAM ───────────────────────────
- * 사이드바: 관리 ▸ IAM(가이드·개요·운영자 관리·운영자 그룹·권한 세트·권한·감사·보안) +
+ * 사이드바: 관리 ▸ IAM(가이드·개요·운영자 관리·운영자 그룹·IAM 관리 역할·업무 권한 세트·권한·감사·보안) +
  * 고객 신원(계정 운영) + 조직 설정(조직 계층·테넌트·도메인 구독·파트너십).
  * (`console-nav-config.ts` GROUPS, `permission-map.ts` PERMISSION_MAP area 'iam'|
  * 'customer-identity'|'org'.)
@@ -123,7 +123,8 @@ const IAM: DomainFeatures = {
       items: [
         { text: '운영자 초대(대기 초대 취소·재발송), 테넌트 배정과 부서 단위 데이터 범위 설정', href: '/operators' },
         { text: '운영자 그룹으로 여러 사람에게 역할·테넌트 배정을 한 번에 부여', href: '/operator-groups' },
-        { text: '배정에 붙는 권한 묶음(권한 세트) 열람', href: '/permission-sets' },
+        { text: '배정에 붙는 관리 권한 묶음(IAM 관리 역할) 열람 — 도메인 업무 권한이 아님', href: '/permission-sets' },
+        { text: '테넌트별 도메인 업무 권한(WMS·SCM 등) 세트 관리 — 업무 권한 세트', href: '/domain-permission-sets' },
         { text: '권한 키 카탈로그 열람', href: '/permissions' },
       ],
     },
