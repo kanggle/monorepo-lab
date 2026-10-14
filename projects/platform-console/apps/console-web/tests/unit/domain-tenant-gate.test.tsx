@@ -339,13 +339,13 @@ describe('every domain section is behind the gate (Failure Scenario 3)', () => {
 describe('assumed token lapsed (OD-2)', () => {
   const child = <p data-testid="section-body">body</p>;
 
-  it('🔴 tenant selected, assumed cookie gone, refresh cookie present → refresh hop back to this page', async () => {
+  it('🔴 tenant selected, assumed cookie gone, base alive → the RE-ASSUME hop (not the refresh hop) back to this page', async () => {
     operatorSession();
     cookieJar.set(TENANT_COOKIE, 'demo-corp');
     expect(await assumedTokenLapsed()).toBe(true);
     const err = await DomainTenantGate({ section: 'WMS', children: child }).catch((e) => e);
     expect(err).toBeInstanceOf(RedirectSignal);
-    expect((err as RedirectSignal).to).toBe('/api/auth/refresh?redirect=%2Fwms%2Finventory');
+    expect((err as RedirectSignal).to).toBe('/api/tenant/reassume?redirect=%2Fwms%2Finventory');
   });
 
   it('control: assumed cookie present → no hop, the section renders', async () => {
@@ -362,9 +362,9 @@ describe('assumed token lapsed (OD-2)', () => {
     expect(await assumedTokenLapsed()).toBe(false);
   });
 
-  it('no refresh cookie → no hop (nothing to re-assume from; the notice stays)', async () => {
-    cookieJar.set(ACCESS_COOKIE, 'base.iam');
+  it('no base token → no re-assume hop here (the layout\'s idle-refresh hop owns that state)', async () => {
     cookieJar.set(OPERATOR_COOKIE, 'op');
+    cookieJar.set(REFRESH_COOKIE, 'ref');
     cookieJar.set(TENANT_COOKIE, 'demo-corp');
     expect(await assumedTokenLapsed()).toBe(false);
   });

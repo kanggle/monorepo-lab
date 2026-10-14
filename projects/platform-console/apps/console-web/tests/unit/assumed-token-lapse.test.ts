@@ -32,6 +32,7 @@ import {
   getDomainFacingToken,
 } from '@/shared/lib/session';
 import { hasCompleteSession } from '@/shared/lib/session-refresh';
+import { needsReassume } from '@/shared/lib/session';
 
 const jar = {
   get: (n: string) => (cookieJar.has(n) ? { value: cookieJar.get(n)! } : undefined),
@@ -60,10 +61,10 @@ describe('getDomainFacingToken — fail-closed for a selected tenant', () => {
   });
 });
 
-describe('hasCompleteSession — a selected tenant needs its assumed token', () => {
-  it('🔴 access + operator + tenant, no assumed → NOT complete (the refresh hop must refresh)', () => {
+describe('hasCompleteSession — access + operator only (restored by the c-1 fix)', () => {
+  it('🔴 access + operator + tenant, no assumed → still COMPLETE: the lapse is the re-assume hop\'s job, not a refresh (the first c-1 cut made the rotation-race retry end in session_expired)', () => {
     cookieJar.set(TENANT_COOKIE, 'demo-corp');
-    expect(hasCompleteSession(jar)).toBe(false);
+    expect(hasCompleteSession(jar)).toBe(true);
   });
 
   it('access + operator + tenant + assumed → complete', () => {
@@ -79,6 +80,23 @@ describe('hasCompleteSession — a selected tenant needs its assumed token', () 
   it('control: no operator cookie → not complete, exactly as before', () => {
     cookieJar.delete(OPERATOR_COOKIE);
     expect(hasCompleteSession(jar)).toBe(false);
+  });
+});
+
+describe('needsReassume — tenant selected, assumed lapsed, base alive', () => {
+  it('🔴 tenant + no assumed + base → true', async () => {
+    cookieJar.set(TENANT_COOKIE, 'demo-corp');
+    expect(await needsReassume()).toBe(true);
+  });
+
+  it('assumed present → false · no tenant → false · no base token → false (the refresh hop handles that)', async () => {
+    expect(await needsReassume()).toBe(false);
+    cookieJar.set(TENANT_COOKIE, 'demo-corp');
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, 'assumed.token');
+    expect(await needsReassume()).toBe(false);
+    cookieJar.delete(ASSUMED_TOKEN_COOKIE);
+    cookieJar.delete(ACCESS_COOKIE);
+    expect(await needsReassume()).toBe(false);
   });
 });
 

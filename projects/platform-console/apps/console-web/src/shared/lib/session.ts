@@ -258,6 +258,21 @@ export async function getAssumedToken(): Promise<string | null> {
  * {@link getOperatorToken}, § 2.6, unchanged). The GAP-domain clients
  * (accounts/audit/operators/dashboards) MUST NOT use this resolver.
  */
+/**
+ * TASK-PC-FE-338 slice c-1 fix (console contract § 2.7 «Assumed-token TTL becomes 300 s») — a tenant
+ * is selected, its assumed token has lapsed (the cookie expires {@link ASSUMED_TOKEN_EXPIRY_MARGIN_S}
+ * early on purpose), and the BASE IAM token is still alive. That is the state the contract tells the
+ * console to re-assume from — «from the current base token», not through a full IAM refresh. The
+ * `(console)` layout and the domain section gate send it through `GET /api/tenant/reassume`.
+ * No tenant / assumed present / no base token → false (the last one is the idle-refresh hop's job:
+ * the refresh re-assumes too). A sample visitor holds no cookies, so it is always false for them.
+ */
+export async function needsReassume(): Promise<boolean> {
+  if ((await getAssumedToken()) !== null) return false;
+  if ((await getActiveTenant()) === null) return false;
+  return (await getAccessToken()) !== null;
+}
+
 export async function getDomainFacingToken(): Promise<string | null> {
   const assumed = await getAssumedToken();
   if (assumed !== null) return assumed;

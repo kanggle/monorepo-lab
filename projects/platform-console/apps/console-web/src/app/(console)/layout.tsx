@@ -9,11 +9,13 @@ import {
   getActiveTenant,
   getIdToken,
   getAccessToken,
+  needsReassume,
 } from '@/shared/lib/session';
 import { decodeJwtPayload } from '@/shared/lib/jwt';
 import {
   buildLoginRedirectFor,
   buildSessionRefreshRedirectFor,
+  buildReassumeRedirectFor,
 } from '@/shared/lib/login-redirect';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import { liveSessionDemoStopRedirect } from '@/shared/lib/live-session-demo-stop';
@@ -170,6 +172,15 @@ export default async function ConsoleLayout({
   if (!sampleVisitor) {
     const demoStopHop = await liveSessionDemoStopRedirect((await headers()).get('x-pathname'));
     if (demoStopHop !== null) redirect(demoStopHop);
+  }
+
+  // TASK-PC-FE-338 slice c-1 fix (contract § 2.7 «Assumed-token TTL becomes 300 s») — a selected
+  // tenant whose assumed token lapsed is re-assumed from the base token BEFORE the page renders:
+  // the domain-facing resolver is fail-closed for that state (no base-token fallback), so a page
+  // with no section gate (overview, health) would otherwise answer 401 → «세션 만료». The section
+  // gate does the same for client-side navigation between sections, which this layout never sees.
+  if (!sampleVisitor && (await needsReassume())) {
+    redirect(buildReassumeRedirectFor((await headers()).get('x-pathname')));
   }
 
   const activeTenant = await getActiveTenant();
