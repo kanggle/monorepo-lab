@@ -349,6 +349,8 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `cancelled_at` | DATETIME(6) | NULL | internal | `CANCELLED` 일 때 |
 | `cancelled_by` | BIGINT | NULL, FK → `admin_operators.id` | internal | 취소한 운영자 |
 | `pending_key` | VARCHAR(300) | **생성 컬럼**, UNIQUE | internal | `CASE WHEN status = 'PENDING' THEN CONCAT(tenant_id, '|', email) END` — «`(tenant_id, email)` 에 `PENDING` 은 하나» 를 DB 가 지킨다(MySQL 은 부분 UNIQUE 가 없다 · 다중 NULL 허용). 애플리케이션 검사(`409 OPERATOR_INVITATION_ALREADY_PENDING`)가 먼저 답하고, 경합은 이 제약이 막는다. 구현이 다른 수단을 고르면 그 수단이 같은 불변식을 DB 에서 지켜야 한다 |
+| `first_admin` | BOOLEAN | NOT NULL, DEFAULT FALSE | internal | **신규 (TASK-MONO-773 OD-1 · OD-5 — 구현 S4, 새 마이그레이션)** — «첫 관리자 초대» 표지. `TRUE` 인 행은 `POST /api/admin/tenants` · `POST /api/admin/tenants/{tenantId}/first-admin-invitation` 만 만든다(일반 발급 API 는 늘 `FALSE`). 수락 판정이 이 칸으로 갈린다(테넌트 `PENDING` 만 · 수락 뒤 테넌트 활성화 · `ORIGIN` 세트 행). 역할은 늘 `TENANT_ADMIN,TENANT_BILLING_ADMIN` |
+| `first_admin_pending_key` | VARCHAR(32) | **생성 컬럼**, UNIQUE | internal | **신규 (773)** — `CASE WHEN status = 'PENDING' AND first_admin THEN tenant_id END` — «한 테넌트에 대기 중인 첫 관리자 초대는 하나(주소 무관)» 를 DB 가 지킨다(`pending_key` 와 같은 기법). 애플리케이션이 먼저 `409 OPERATOR_INVITATION_ALREADY_PENDING` 으로 답한다 |
 | `created_at` | DATETIME(6) | NOT NULL | internal | — |
 | `updated_at` | DATETIME(6) | NOT NULL | internal | — |
 | `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) — 재발송 · 취소 · 수락 경합 |
@@ -364,6 +366,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - 토큰 원문 · 해시는 응답 · 감사 · 로그 · 이벤트 어디에도 나오지 않는다.
 > - 행을 지우지 않는다 — `ACCEPTED` · `CANCELLED` 는 기록으로 남는다(관리 목록의 상태 필터).
 > - 감사: 발급 · 취소 · 재발송 · 수락은 `admin_actions`(`target_type = OPERATOR_INVITATION`)에 남는다. 수락 행의 주체(`operator_id`)는 **수락으로 생긴 운영자**다 — 거절된 수락은 주체가 없어 `admin_actions` 에 남지 않는다(구조화 로그).
+> - **TASK-MONO-773**: `first_admin = TRUE` 행이 테넌트의 «관리자 대기» 의 기록이다 — 테넌트 응답의 `firstAdmin` 요약(`INVITED` · `EXPIRED` · `NONE` · `ACCEPTED`)과 «정리로 정지된 테넌트의 재활성 금지» 판정이 이 행을 읽는다([admin-api.md § Tenant Lifecycle](../../contracts/http/admin-api.md#tenant-lifecycle-task-be-256)). 기존 행은 `FALSE` 로 채운다(백필 = 기본값 — 773 이전 초대는 모두 일반 초대다).
 
 ### `domain_permission_set`
 
@@ -408,14 +411,15 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 | `operator_id` | BIGINT | NOT NULL, FK → `admin_operators.id` ON DELETE CASCADE | internal | 대상 운영자 |
 | `tenant_id` | VARCHAR(32) | NOT NULL | internal | 그 배정이 적용되는 테넌트. 비-`'*'` 운영자 = 그 운영자의 **소속 테넌트 중 하나** · `'*'` 운영자 = 구체 테넌트 또는 **`'*'`(모든 테넌트)** (OD-3) |
 | `set_id` | BIGINT | NOT NULL, FK → `domain_permission_set.id` ON DELETE RESTRICT | internal | 배정한 세트. RESTRICT — 배정이 남은 세트는 지울 수 없다(애플리케이션이 먼저 `409 DOMAIN_PERMISSION_SET_IN_USE`) |
-| `source_key` | VARCHAR(48) | NOT NULL | internal | **출처 — NULL 없는 키**: `DIRECT` · `MIGRATION` · `GROUP:<operator_group.id>` |
+| `source_key` | VARCHAR(48) | NOT NULL | internal | **출처 — NULL 없는 키**: `DIRECT` · `MIGRATION` · **`ORIGIN`**(TASK-MONO-773 OD-4 — 회사 생성자 · 첫 관리자 기본 세트) · `GROUP:<operator_group.id>` |
 | `group_origin` | BIGINT | NULL, FK → `operator_group.id` ON DELETE CASCADE | internal | `source_key = GROUP:<id>` 일 때 그 그룹 id(같은 값) — 그룹 삭제의 DB 안전망 · 역검색용. 그 밖 NULL |
-| `granted_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | 배정한 운영자. `MIGRATION` 은 NULL |
+| `granted_by` | BIGINT | NULL, FK → `admin_operators.id` ON DELETE SET NULL | internal | 배정한 운영자. `MIGRATION` · `ORIGIN` 은 NULL(시스템 경로 — 관리 행위자가 없다) |
 | `granted_at` | DATETIME(6) | NOT NULL | internal | 배정 시각 |
 
 **Primary Key**: (`operator_id`, `tenant_id`, `set_id`, `source_key`) — 🔴 **출처가 PK 안에 있다**. 같은 운영자 · 테넌트 · 세트를 직접 + G1 + G2 가 주면 행이 셋이다. V0053 이전 `admin_operator_roles` 처럼 «출처는 PK 밖의 칸 하나(`group_origin`) · 먼저 쓴 쪽이 소유» 로 두지 않는다(그 모양은 G1 회수가 G2 분을 지운다 — ADR-083 Context ④; 관리 역할도 TASK-BE-633 · V0053 부터 이 모양으로 바뀌었다).
 
 **제약**: `CHECK ((source_key IN ('DIRECT','MIGRATION') AND group_origin IS NULL) OR (group_origin IS NOT NULL AND source_key = CONCAT('GROUP:', group_origin) AND tenant_id <> '*'))` — 출처 키와 그룹 칸이 어긋나지 않게 · 그룹 행은 `'*'` 테넌트에 없다(그룹은 `'*'` 가 아니다). MySQL 이 이 식을 CHECK 로 받지 못하면 같은 불변식을 애플리케이션 + 비-Docker 형태 시험으로 고정한다.
+🔴 **TASK-MONO-773 S3 — CHECK 개정 마이그레이션이 필요하다.** V0052 가 실제로 만든 CHECK 는 `source_key IN ('DIRECT', 'MIGRATION') OR (source_key LIKE 'GROUP:%' AND tenant_id <> '*')`(`V0052…sql:96-97`)라 `ORIGIN` 행 INSERT 는 CHECK 위반이다. S3 가 새 버전(작성 직전 다음 빈 번호 — S1 시점 마지막 = `V0053`)에서 그 CHECK 를 지우고 `source_key IN ('DIRECT', 'MIGRATION', 'ORIGIN') OR (source_key LIKE 'GROUP:%' AND tenant_id <> '*')` 와 `CHECK (source_key <> 'ORIGIN' OR tenant_id <> '*')`(`ORIGIN` 은 `'*'` 테넌트에 없다)로 다시 만든다. 멱등 가드는 V0052 와 같은 `INFORMATION_SCHEMA` 존재 검사 모양.
 
 **인덱스**: PK(선행 `operator_id` — FK 인덱스 겸 판정 조회) · `idx_operator_domain_set_grant_tenant_set (tenant_id, set_id)`(세트 사용 수 · `IN_USE` · 내보내기) · `idx_operator_domain_set_grant_group (group_origin)`(그룹 회수 · 삭제).
 
@@ -424,8 +428,11 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
 > - `'*'` 운영자에게 세트를 배정해도 `operator_tenant_assignment` 행은 **만들지 않는다**(ADR-082 D2).
 > - 테넌트 세트를 가리키는 행의 `tenant_id` = 그 세트의 `tenant_id`(다른 회사의 세트를 걸지 않는다) · `'*'` 행은 프리셋만.
 > - `MIGRATION` 행 ⟺ 세트 = `legacy-compat`(백필 전용 — API 는 `legacy-compat` 를 배정하지 않고, `MIGRATION` 행을 만들지 않는다).
+> - 🔴 **`ORIGIN` 행 (TASK-MONO-773 OD-4 · OD-5 — ADR-083 OD-5 P9)** ⟹ 세트 = 프리셋 `all-domains-full` ∧ `tenant_id ≠ '*'` ∧ `granted_by IS NULL`. **쓰는 자리는 둘뿐**이고 둘 다 «회사의 첫 관리자가 생기는» 원자 묶음이다: ① 셀프 온보딩 — 생성자 행 × 방금 만든 테넌트(새 운영자 행 · 기존 행에 소속 추가 두 갈래 모두, 역할 행 · 배정과 **같은 트랜잭션**) ② 첫 관리자 초대(`operator_invitation.first_admin = true`) 수락 — 수락자 행 × 초대 테넌트(같은 트랜잭션). API(직접 · 그룹 배정)는 `ORIGIN` 행을 만들지 않는다 · 백필도 만들지 않는다(773 이전 회사 생성자에게는 소급하지 않는다 — 그들은 V0052 `MIGRATION` 행이 있다).
+> - 🔴 **`ORIGIN` 은 구독 검사 없이 쓴다 — ADR-083 D5 의 한 자리 예외**(새 테넌트는 구독 0 · `all-domains-full` 은 `fan` 을 담는다). 상한은 auth 의 `∩ derive(entitled)`(P3). 그 밖의 쓰기 경로의 «세트 도메인 ⊆ entitled» 검사는 무변경. 정본: [admin-api.md § 출처와 회수 규칙](../../contracts/http/admin-api.md#출처-source_key-와-회수-규칙-adr-083-d4).
+> - `ORIGIN` 행도 «소속 없는 업무 권한 금지» 를 지킨다 — 같은 트랜잭션이 그 테넌트의 배정(소속) 행을 쓴다.
 > - `GROUP:<id>` 행의 `tenant_id` = 그 그룹의 `tenant_id`(그룹 세트는 그룹 테넌트에만, ADR-083 D4).
-> - 회수는 **자기 출처의 행만**: 개인 회수 = `DIRECT` + `MIGRATION` · 그룹 회수/탈퇴/삭제 = `GROUP:<그 그룹>` · 내보내기 = 그 테넌트의 전부.
+> - 회수는 **자기 출처의 행만**: 개인 회수 = `DIRECT` + `MIGRATION` + `ORIGIN`(773) · 그룹 회수/탈퇴/삭제 = `GROUP:<그 그룹>` · 내보내기 = 그 테넌트의 전부.
 
 ### `operator_group_domain_set_grant`
 

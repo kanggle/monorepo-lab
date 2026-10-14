@@ -45,12 +45,19 @@
 | `tenant_id` | 위 슬러그. PK |
 | `display_name` | UI 표시용. 예: "Fan Platform", "Warehouse Management System" |
 | `tenant_type` | enum: `B2C_CONSUMER`, `B2B_ENTERPRISE`. 격리 정책·기본 역할셋 결정 |
-| `status` | enum: `ACTIVE`, `SUSPENDED`. SUSPENDED 테넌트는 신규 로그인·가입 차단 |
+| `status` | enum: `ACTIVE`, `SUSPENDED`, **`PENDING`**(TASK-MONO-773 — 첫 관리자 대기: `SUPER_ADMIN` 이 만든 테넌트가 첫 관리자 초대 수락 전까지 갖는 상태). `ACTIVE` 가 아닌 테넌트(SUSPENDED · PENDING)는 신규 로그인·가입 차단 |
 | `created_at`, `updated_at` | 감사 |
 
 ### 테넌트 등록 방식
 
-테넌트는 **운영자(SUPER_ADMIN)에 의해서만 등록**된다. self-service 가입 없음.
+~~테넌트는 **운영자(SUPER_ADMIN)에 의해서만 등록**된다. self-service 가입 없음.~~ (ADR-MONO-044 이후 낡은 문장.) **TASK-MONO-773 부터 «테넌트 생성» 은 늘 첫 관리자와 한 묶음**이다 — 입구는 둘이고 결과의 모양은 같다:
+
+| 입구 | 누가 | 첫 관리자 | 생성 직후 |
+|---|---|---|---|
+| 셀프 온보딩 — [onboarding-api.md](../contracts/http/onboarding-api.md) | 인증된 이메일의 개인(풀) 계정 · 이미 회사 운영자인 사람(두 번째 회사) — `B2B_ENTERPRISE` 만 | 본인 | `ACTIVE` |
+| `POST /api/admin/tenants` — [admin-api.md § Tenant Lifecycle](../contracts/http/admin-api.md#tenant-lifecycle-task-be-256) | `SUPER_ADMIN` — B2B · B2C | 지정한 이메일에 첫 관리자 초대 | `PENDING` → 초대 수락 때 `ACTIVE` |
+
+어느 입구도 «관리자 없는 `ACTIVE` 테넌트» 를 만들지 않는다(ADR-MONO-044 D3 · 773 AC-4). 아래 블릿은 `SUPER_ADMIN` 입구의 관리 표면이다.
 
 > 신규 소비 도메인이 합류할 때의 단일 진입 가이드는 [consumer-integration-guide.md](consumer-integration-guide.md) 참조 — Phase 1 (테넌트 등록) ~ Phase 6 (운영 체크리스트) 단선화.
 
@@ -508,6 +515,8 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   `sso_wrong_account` 판별) · 판정 실패 → `operator_eligibility_unavailable` · refresh 마다 다시 묻는다(퇴사 → 다음 refresh 부터 콘솔 토큰 없음, 772 AC-3). authorize 게이트의 콘솔
   판정(BE-610 조건부 재인증 → 아니면 통과)은 그대로다. 🔴 **측면 없는 풀 계정에는 여전히 콘솔 토큰이 없다** — 그래서 셀프 온보딩(`/onboarding`, 인증 이메일 게이트 없음)도 계속
   닫혀 있다. 그 개방은 `TASK-MONO-773`(ADR-080 D9 = T1 · ADR-044 D4 트러스트 게이트) 몫이다. 정본: [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6).
+  → **`TASK-MONO-773` 이후 (S5 — OD-6)**: 풀 principal × 콘솔 client 는 **측면 상태와 무관하게** 콘솔 토큰(`id_token` 포함)을 받는다. 측면이 없거나 비-`ACTIVE` 면 운영자 교환이 `401` 이고
+  콘솔은 **비운영자 셸**(«가이드 · 테넌트 생성» 만, 운영자 토큰 없음)로 들어간다. 이 갈래의 `'consumer-pool'` 거절은 사라진다(콘솔 `sso_wrong_account` 모집단 0 — 773 AC-7). 🔴 순서: 인증 이메일 게이트(S3)가 먼저 머지된다.
 - **멤버십 없는 사이트 — `TASK-BE-616` 전까지의 결과 (`TASK-BE-615` 결정)**: authorize 는 재인증하지 않고 코드를 준다(재인증하면 그 client 의 폼이
   풀 자격을 먼저 골라 같은 세션 → 같은 게이트 → 무한 반복). **토큰 엔드포인트가 `invalid_grant` 로 거절**한다 — 토큰 없음 · 루프 없음. 616 의 동의 화면이 이 자리에 들어온다.
   멤버십 조회 실패도 토큰 없음(fail-closed). 갱신 때마다 다시 묻는다 — 멤버십이 `LEFT` 가 되면 다음 refresh 부터 토큰이 없다.
@@ -634,7 +643,7 @@ identity 해석(운영자 규칙 = `ADR-MONO-080` 후보).
 | 측면 생성 | `POST /api/admin/operators` — 대상 테넌트에 **가입 계정**이 있어야(`TASK-MONO-334`, 풀 멤버는 세지 않음). 만든 운영자는 `oidc_subject` 가 비어 OIDC 로 로그인할 수 없었다 | **초대 → 인증된 본인 수락**. 수락이 `oidc_subject` = 수락한 풀 계정 id 를 쓴다. `POST /api/admin/operators` 는 `'*'`(플랫폼 관리자) 생성만 |
 | 로그인 | 풀 세션 = 콘솔 토큰 없음(`TASK-BE-615` D-5) | 측면 있는 풀 계정만 콘솔 토큰(§ 4 콘솔 행) |
 | 셀프 온보딩 운영자 | 사이트 계정에 남음 · 그 이메일의 풀 가입 거절 | 같은 id 로 풀로 이동(§ 3 표) — 거절은 데이터로 사라진다 |
-| 셀프 온보딩 자체(풀 계정) | 콘솔 토큰이 없어 못 함 | **여전히 못 함** — 773 이 연다(인증 이메일 트러스트 게이트와 함께) |
+| 셀프 온보딩 자체(풀 계정) | 콘솔 토큰이 없어 못 함 | **여전히 못 함** — 773 이 연다(인증 이메일 트러스트 게이트와 함께) → **TASK-MONO-773**: 측면 없는 · 비-`ACTIVE` 측면의 풀 계정도 콘솔 **비운영자 셸** 토큰(운영자 토큰 없음)을 받고, 셸의 «테넌트 생성» 이 셀프 온보딩을 부른다 — 인증 이메일 · 게이트웨이 per-IP · 신원당 상한 3 이 먼저 문다(S3 가 S5 보다 먼저 머지) |
 
 - 🔴 **이메일 일치만으로는 붙지 않는다** — 수락은 IdP 에 로그인한 풀 계정이 하고, account-service 가 «그 계정의 이메일 = 초대 이메일 ∧ **인증됨**» 을 판정한다(`TASK-MONO-770` 의 공용 술어 — ADR-080 D3 · ADR-034 § 1.3). «인증» 은 **붙일 때의 증거**이지 유지 조건이 아니다(D5) — 퇴사는 측면 회수(운영자 상태 · 역할 · 배정)이고 계정 잠금이 아니다. 퇴사자의 스토어 · 팬 로그인은 그대로다.
 - 🔴 **한 사람 = 한 회사 (소유자 결정 OD-1, 2026-10-09 UTC)** — 772 의 저장 모양은 계정 하나에 운영자 행 하나다(`oidc_subject` 플랫폼 전역 UNIQUE · 교환이 `sub` 로 한 행 · 역할 grant PK `(operator_id, role_id)` — 772 AC-0 F2). 이미 측면이 있는 계정의 두 번째 회사 수락은 `409 OPERATOR_ALREADY_PROVISIONED`. ~~**다회사 운영자 모델은 `TASK-MONO-773` 착수 전 ADR 로 정한다** — 그 전까지 «같은 사람이 여러 회사에 초대» 는 미충족이다(773 AC-3 «두 번째 회사» 도 그 ADR 에 묶인다).~~ 파트너십(ADR-MONO-045)은 이 제약과 별개다 — 협력사 직원은 **자기 회사(B)의 운영자 행**으로 A 에 들어간다.
