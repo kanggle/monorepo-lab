@@ -597,6 +597,21 @@ class TenantClaimTokenCustomizerTest {
                 tenantId, tenantType, orgScope, null, ASSUME_ACCOUNT_ID);
     }
 
+    /** TASK-BE-632 — a normal assignment carrying admin-service {@code domainRoles} (null = field absent). */
+    private AssumeTenantAuthenticationToken assumeGrantWithDomainRoles(
+            String tenantId, List<String> orgScope, List<String> domainRoles) {
+        return new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                tenantId, "B2B_ENTERPRISE", orgScope, null, ASSUME_ACCOUNT_ID, null, domainRoles);
+    }
+
+    /** TASK-BE-632 — admin-service DomainRoleCatalog order; the legacy-compat preset holds all of it. */
+    private static final List<String> LEGACY_COMPAT_ROLES = List.of(
+            "INVENTORY_READ", "INVENTORY_WRITE", "INBOUND_READ", "INBOUND_WRITE",
+            "OUTBOUND_READ", "OUTBOUND_WRITE", "MASTER_READ", "WMS_OPERATOR",
+            "SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR",
+            "FAN_OPERATOR", "MES_OPERATOR");
+
     @Test
     @DisplayName("MONO-515 (ADR-060 A) assume-tenant: sub = the validated subject account UUID, not the acting client")
     void assumeTenant_subIsTheSubjectAccount() {
@@ -1033,15 +1048,15 @@ class TenantClaimTokenCustomizerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("BE-376/433 assume-tenant: entitled [finance, wms] → roles derived [FINANCE_OPERATOR + granular wms operator-tier set]")
-    void assumeTenant_rolesDerivedFromEntitledDomains() {
+    @DisplayName("🔴 BE-632 AC-4: legacy-compat holder, entitled [finance, wms] → the SAME bytes BE-376/433 derived (catalog ∩ ceiling, ceiling order)")
+    void assumeTenant_legacyCompatHolder_rolesByteIdenticalToTheOldDerivation() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        // A backfilled operator: admin answers the whole catalog (legacy-compat), in catalog order.
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE",
-                        List.of("dept-sales")));
+                .thenReturn(assumeGrantWithDomainRoles("acme-corp", List.of("dept-sales"), LEGACY_COMPAT_ROLES));
         // The selected tenant's ACTIVE entitled domains drive the operator roles.
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("finance", "wms"));
         when(context.getClaims()).thenReturn(claimsBuilder);
@@ -1068,14 +1083,14 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("BE-376 assume-tenant: entitled [ecommerce] → roles [ECOMMERCE_OPERATOR]")
-    void assumeTenant_ecommerceEntitled_derivesAdmin() {
+    @DisplayName("BE-632: ecommerce set assigned, entitled [ecommerce] → roles [ECOMMERCE_OPERATOR]")
+    void assumeTenant_ecommerceSet_ecommerceEntitled() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrant("acme-corp", "B2B_ENTERPRISE"));
+                .thenReturn(assumeGrantWithDomainRoles("acme-corp", null, List.of("ECOMMERCE_OPERATOR")));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("ecommerce"));
         when(context.getClaims()).thenReturn(claimsBuilder);
 
@@ -1083,6 +1098,99 @@ class TenantClaimTokenCustomizerTest {
 
         JwtClaimsSet built = claimsBuilder.build();
         assertThat(built.<List<String>>getClaim("roles")).containsExactly("ECOMMERCE_OPERATOR");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-632 (ADR-MONO-083 D3 · D6) — roles = assigned ∩ ceiling(entitled)
+    // -----------------------------------------------------------------------
+
+    private List<String> rolesFor(List<String> domainRoles, List<String> entitled) {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantWithDomainRoles("acme-corp", null, domainRoles));
+        when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(entitled);
+        when(context.getClaims()).thenReturn(claimsBuilder);
+        customizer.customize(context);
+        return claimsBuilder.build().getClaim("roles");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-1: inventory set, tenant on WMS+SCM → INVENTORY_* only — no OUTBOUND_*, no SCM_OPERATOR (before: the whole ceiling)")
+    void ac1_inventorySet_onlyInventoryRoles() {
+        assertThat(rolesFor(List.of("INVENTORY_READ", "INVENTORY_WRITE"), List.of("wms", "scm")))
+                .containsExactly("INVENTORY_READ", "INVENTORY_WRITE");
+    }
+
+    @Test
+    @DisplayName("BE-632 AC-1: outbound set → OUTBOUND_* only")
+    void ac1_outboundSet() {
+        assertThat(rolesFor(List.of("OUTBOUND_READ", "OUTBOUND_WRITE"), List.of("wms", "scm")))
+                .containsExactly("OUTBOUND_READ", "OUTBOUND_WRITE");
+    }
+
+    @Test
+    @DisplayName("BE-632 AC-1: SCM set on a WMS+SCM tenant → SCM_OPERATOR only")
+    void ac1_scmSet() {
+        assertThat(rolesFor(List.of("SCM_OPERATOR"), List.of("wms", "scm"))).containsExactly("SCM_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("BE-632 AC-1: WMS read set → *_READ only")
+    void ac1_readSet() {
+        assertThat(rolesFor(List.of("INVENTORY_READ", "INBOUND_READ", "OUTBOUND_READ", "MASTER_READ"),
+                List.of("wms")))
+                .containsExactly("OUTBOUND_READ", "INBOUND_READ", "INVENTORY_READ", "MASTER_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-2: a set whose domain is no longer subscribed → that role is dropped at the exchange (never carried verbatim)")
+    void ac2_unsubscribedDomain_roleDropped() {
+        assertThat(rolesFor(List.of("SCM_OPERATOR", "INVENTORY_READ"), List.of("wms")))
+                .containsExactly("INVENTORY_READ");
+    }
+
+    @Test
+    @DisplayName("BE-632 AC-2: only an unsubscribed domain's role → roles claim omitted")
+    void ac2_onlyUnsubscribed_noRoles() {
+        assertThat(rolesFor(List.of("SCM_OPERATOR"), List.of("wms"))).isNull();
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-3: domainRoles [] → roles omitted, even with every domain subscribed (never the whole ceiling)")
+    void ac3_emptyDomainRoles_noRoles() {
+        assertThat(rolesFor(List.of(), List.of("wms", "scm", "erp", "finance", "ecommerce"))).isNull();
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-3: domainRoles absent (older admin) → roles omitted, never «derive from the subscription»")
+    void ac3_absentDomainRoles_noRoles() {
+        assertThat(rolesFor(null, List.of("wms", "scm", "erp", "finance", "ecommerce"))).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-632 AC-3: entitled fetch empty (fail-soft) → roles omitted even with a full assignment")
+    void ac3_entitledEmpty_noRoles() {
+        assertThat(rolesFor(LEGACY_COMPAT_ROLES, List.of())).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-632 edge: a role outside the catalog (left in a set after the catalog shrank) never reaches the token")
+    void edge_unknownRole_dropped() {
+        assertThat(rolesFor(List.of("WMS_ADMIN", "MASTER_WRITE", "INVENTORY_READ"), List.of("wms")))
+                .containsExactly("INVENTORY_READ");
+    }
+
+    @Test
+    @DisplayName("BE-632 unit: assignedWithinCeiling keeps ceiling order, drops non-members, empty on null/empty input")
+    void assignedWithinCeiling_unit() {
+        List<String> ceiling = List.of("A", "B", "C");
+        assertThat(TenantClaimTokenCustomizer.assignedWithinCeiling(List.of("C", "A", "Z"), ceiling))
+                .containsExactly("A", "C");
+        assertThat(TenantClaimTokenCustomizer.assignedWithinCeiling(null, ceiling)).isEmpty();
+        assertThat(TenantClaimTokenCustomizer.assignedWithinCeiling(List.of(), ceiling)).isEmpty();
+        assertThat(TenantClaimTokenCustomizer.assignedWithinCeiling(List.of("A"), List.of())).isEmpty();
     }
 
     @Test
@@ -1206,6 +1314,29 @@ class TenantClaimTokenCustomizerTest {
         assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
         // partnership does not confine by department → org_scope net-zero [*].
         assertThat(built.<List<String>>getClaim("org_scope")).containsExactly("*");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-7: partner operator with host-tenant sets on the grant → roles stay delegated ∩ participant (host sets never widen the slice)")
+    void ac7_crossOrg_hostDomainRolesIgnored() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(List.of("wms"), List.of("OUTBOUND_READ"));
+        // Even if domainRoles reached the grant on a partnership path (admin does not send it there —
+        // auth-to-admin.md rule 7), the whole catalog must not leak onto the cross-org token.
+        AssumeTenantAuthenticationToken grant = new AssumeTenantAuthenticationToken(
+                null, "subject", "urn:ietf:params:oauth:token-type:access_token",
+                "host-corp", "B2B_ENTERPRISE", null, delegated, ASSUME_ACCOUNT_ID, null, LEGACY_COMPAT_ROLES);
+
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant()).thenReturn(grant);
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms", "scm"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles")).containsExactly("OUTBOUND_READ");
     }
 
     @Test

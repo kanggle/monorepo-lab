@@ -202,9 +202,10 @@ user_token() {
 #
 # 이것이 이 시드에서 가장 중요한 발견이다. 데모 계정은 각 도메인 테넌트에서
 # `CUSTOMER` 일 뿐이라 `/api/admin/**` 에 그대로 가면 **전부 403** 이다(실측 6/6).
-# 운영자 권한은 계정에 붙어 있지 않고 **`demo-corp` 를 assume 하는 순간 파생된다**
-# (`OperatorRoleDerivation.fromEntitledDomains` — TASK-BE-571 이 그 테넌트에 5개
-# 도메인 구독을 심었다). 즉:
+# 운영자 도메인 권한은 **`demo-corp` 를 assume 하는 순간 정해진다** — TASK-BE-632 부터
+# 그 테넌트에서 배정된 업무 권한 세트의 역할 ∩ 구독이 허락하는 역할
+# (`OperatorRoleDerivation.fromEntitledDomains` = 상한 — TASK-BE-571 이 5개 도메인 구독을 심었다).
+# 데모 운영자는 legacy-compat 세트(카탈로그 전부)를 가지므로 결과는 전과 같다. 즉:
 #
 #   콘솔 로그인(platform-console-web, 공개 클라이언트 · PKCE)
 #     → RFC 8693 token-exchange, audience=demo-corp

@@ -939,6 +939,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         DelegatedScope delegatedScope = null;
         String subjectAccountId = null;
         java.util.List<String> subjectAmr = null;
+        java.util.List<String> domainRoles = null;
         if (context.getAuthorizationGrant() instanceof AssumeTenantAuthenticationToken grant) {
             selectedTenantId = grant.getSelectedTenantId();
             selectedTenantType = grant.getSelectedTenantType();
@@ -946,6 +947,7 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             delegatedScope = grant.getDelegatedScope();
             subjectAccountId = grant.getSubjectAccountId();
             subjectAmr = grant.getSubjectAmr();
+            domainRoles = grant.getDomainRoles();
         }
 
         if (selectedTenantId == null || selectedTenantId.isBlank()
@@ -1007,37 +1009,60 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             return;
         }
 
-        // NORMAL operator path (BE-338/376) — byte-unchanged.
+        // NORMAL operator path (BE-338/376; roles changed by BE-632 below).
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
-        // The fetch ALSO drives the operator `roles` derivation below (one call:
-        // entitled_domains + roles ride the same account-service result).
+        // The fetch ALSO bounds the operator `roles` below (one call: entitled_domains
+        // + the role ceiling ride the same account-service result).
         java.util.List<String> entitled = populateEntitledDomains(context, selectedTenantId);
 
-        // TASK-BE-376 (ADR-MONO-035 O1 / step 4a): DERIVE the operator's domain roles
-        // from the SELECTED tenant's ACTIVE entitled domains (the operator-role mirror
-        // of RoleSeedPolicy). Replaces TASK-BE-370's preserve-from-base: the base
-        // operator token (aud=platform-console, tenant_id='gap') structurally has no
-        // domain-role set to preserve — domain roles are meaningful only per assumed
-        // tenant. The operator (already fail-closed-verified as assigned) gets the
-        // operator role(s) for everything the selected tenant is entitled to, so the
-        // domain gateway's `roles` leg admits them. Derives ONLY from entitled domains
-        // (never admin_operator_roles — ADR-033 S2 / ADR-034 U5 disjointness). NET-ZERO:
-        // empty/all-unknown/failed fetch → both entitled_domains AND roles omitted (the
-        // gateway then 403s — least-privilege; ADR-033 S5 fail-soft). Only ADD the roles
-        // claim; the tenant_id/tenant_type/org_scope injection above is untouched
-        // (BE-338).
-        java.util.List<String> derived = OperatorRoleDerivation.fromEntitledDomains(entitled);
-        if (!derived.isEmpty()) {
+        // TASK-BE-632 (ADR-MONO-083 D3 · D6 — auth-to-admin.md rule 7 · § failure semantics):
+        // roles = the operator's ASSIGNED business roles (admin-service `domainRoles`) ∩ the
+        // roles the selected tenant's ACTIVE entitled domains allow (OperatorRoleDerivation —
+        // now the CEILING, no longer the grant). Before this ticket (TASK-BE-376) every
+        // assigned operator received the whole ceiling: subscription = permission.
+        //  - `domainRoles` is NOT carried verbatim (unlike the partnership delegatedScope above):
+        //    a set whose domain lost its subscription, or a role outside the catalog, is dropped
+        //    here, at every exchange.
+        //  - null (field absent) and [] both mean roles 0 → the claim is omitted and the domain
+        //    gateway 403s. 🔴 There is no branch that reads «absent» as «derive from the
+        //    subscription» — a judgement outage is refused upstream (fail-closed provider), an
+        //    empty answer stays empty.
+        //  - Order = the ceiling's order (catalog order), so a backfilled operator holding the
+        //    legacy-compat set (= the whole catalog) gets the SAME bytes as before (AC-4).
+        //  - Failed / empty entitled fetch → ceiling [] → roles omitted (the existing rule).
+        java.util.List<String> roles = assignedWithinCeiling(
+                domainRoles, OperatorRoleDerivation.fromEntitledDomains(entitled));
+        if (!roles.isEmpty()) {
             // The claim value flows into the JdbcOAuth2AuthorizationService store,
             // which serializes via SecurityJackson2Modules' strict allowlist. An
             // ImmutableCollections list (List.of/List.copyOf) is NOT allowlisted and
             // breaks the authorization read-back (userinfo/refresh/revoke). Wrap in a
             // mutable ArrayList (allowlisted) — same reasoning as the HashMap details
             // map in CredentialAuthenticationProvider.
-            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(derived));
-            log.debug("TenantClaimTokenCustomizer: assume-tenant — derived operator roles={} "
-                    + "from the selected tenant's entitled_domains={}", derived, entitled);
+            context.getClaims().claim(CLAIM_ROLES, new java.util.ArrayList<>(roles));
         }
+        log.debug("TenantClaimTokenCustomizer: assume-tenant — roles={} (assigned={} ∩ ceiling of "
+                + "entitled_domains={})", roles, domainRoles, entitled);
+    }
+
+    /**
+     * TASK-BE-632 — the ceiling's roles that the operator was assigned, in ceiling order.
+     * {@code assigned} null or empty → {@code []} (roles 0). Never returns a role outside
+     * {@code ceiling}, never returns the whole ceiling for an empty assignment.
+     */
+    static java.util.List<String> assignedWithinCeiling(java.util.List<String> assigned,
+                                                        java.util.List<String> ceiling) {
+        if (assigned == null || assigned.isEmpty() || ceiling == null || ceiling.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.Set<String> wanted = new java.util.HashSet<>(assigned);
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String role : ceiling) {
+            if (wanted.contains(role)) {
+                out.add(role);
+            }
+        }
+        return java.util.List.copyOf(out);
     }
 
     /**

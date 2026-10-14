@@ -391,4 +391,89 @@ class AssumeTenantAuthenticationProviderTest {
         assertThat(provider.supports(AssumeTenantAuthenticationToken.class)).isTrue();
         assertThat(provider.supports(OAuth2ClientAuthenticationToken.class)).isFalse();
     }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-632 (ADR-MONO-083 D6 · D7 · OD-2)
+    // -----------------------------------------------------------------------
+
+    private org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext mintAndCapture(
+            OperatorAssignmentPort.AssignmentResult result) {
+        when(subjectTokenDecoder.decode(SUBJECT_TOKEN)).thenReturn(validSubjectJwt());
+        when(operatorAssignmentPort.resolveAssignment(OIDC_SUBJECT, SELECTED_TENANT)).thenReturn(result);
+        Jwt minted = Jwt.withTokenValue("assumed-token")
+                .header("alg", "RS256").subject(OIDC_SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build();
+        doReturn(minted).when(tokenGenerator).generate(any());
+        provider.authenticate(exchange());
+        org.mockito.ArgumentCaptor<org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext> captor =
+                org.mockito.ArgumentCaptor.forClass(
+                        org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext.class);
+        verify(tokenGenerator).generate(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    @DisplayName("BE-632: admin-service domainRoles ride onto the resolved grant (pre-intersection — the customizer filters)")
+    void carriesDomainRoles_onResolvedGrant() {
+        var ctx = mintAndCapture(new OperatorAssignmentPort.AssignmentResult(
+                true, null, null, false, java.util.List.of("INVENTORY_READ", "INVENTORY_WRITE")));
+        AssumeTenantAuthenticationToken grant = (AssumeTenantAuthenticationToken) ctx.getAuthorizationGrant();
+        assertThat(grant.getDomainRoles()).containsExactly("INVENTORY_READ", "INVENTORY_WRITE");
+    }
+
+    @Test
+    @DisplayName("BE-632: domainRoles absent → null on the grant (the customizer reads it as roles 0)")
+    void carriesAbsentDomainRoles_asNull() {
+        var ctx = mintAndCapture(new OperatorAssignmentPort.AssignmentResult(true, null, null, false));
+        assertThat(((AssumeTenantAuthenticationToken) ctx.getAuthorizationGrant()).getDomainRoles()).isNull();
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-5: the operator assumed token never carries erp.write; every other registered scope stays")
+    void operatorAssumedScopes_dropErpWrite() {
+        RegisteredClient client = RegisteredClient.withId("c1").clientId("platform-console-web")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("https://console.example/cb")
+                .scope("openid").scope("profile").scope("tenant.read").scope("erp.write")
+                .build();
+        assertThat(AssumeTenantAuthenticationProvider.operatorAssumedScopes(client))
+                .containsExactlyInAnyOrder("openid", "profile", "tenant.read")
+                .doesNotContain("erp.write");
+        // The registration itself is untouched (the base token path still reads it).
+        assertThat(client.getScopes()).contains("erp.write");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 OD-2: the operator assumed token lives min(client TTL, 300 s) — a 1800 s client is capped, a shorter one kept")
+    void withOperatorAssumedTtl_capsAt300() {
+        RegisteredClient longLived = RegisteredClient.withId("c2").clientId("platform-console-web")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("https://console.example/cb")
+                .tokenSettings(org.springframework.security.oauth2.server.authorization.settings.TokenSettings.builder()
+                        .accessTokenTimeToLive(java.time.Duration.ofSeconds(1800)).build())
+                .build();
+        assertThat(AssumeTenantAuthenticationProvider.withOperatorAssumedTtl(longLived)
+                .getTokenSettings().getAccessTokenTimeToLive()).isEqualTo(java.time.Duration.ofSeconds(300));
+        // the registration itself keeps 1800 s — base IAM token and refresh are unchanged
+        assertThat(longLived.getTokenSettings().getAccessTokenTimeToLive())
+                .isEqualTo(java.time.Duration.ofSeconds(1800));
+
+        RegisteredClient shortLived = RegisteredClient.from(longLived)
+                .tokenSettings(org.springframework.security.oauth2.server.authorization.settings.TokenSettings.builder()
+                        .accessTokenTimeToLive(java.time.Duration.ofSeconds(120)).build())
+                .build();
+        assertThat(AssumeTenantAuthenticationProvider.withOperatorAssumedTtl(shortLived)
+                .getTokenSettings().getAccessTokenTimeToLive()).isEqualTo(java.time.Duration.ofSeconds(120));
+    }
+
+    @Test
+    @DisplayName("BE-632: the mint context carries the capped TTL and no erp.write (what JwtGenerator actually reads)")
+    void mintContext_ttlCappedAndNoErpWrite() {
+        var ctx = mintAndCapture(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, java.util.List.of()));
+        assertThat(ctx.getRegisteredClient().getTokenSettings().getAccessTokenTimeToLive())
+                .isLessThanOrEqualTo(java.time.Duration.ofSeconds(300));
+        assertThat(ctx.getAuthorizedScopes()).doesNotContain("erp.write");
+    }
 }

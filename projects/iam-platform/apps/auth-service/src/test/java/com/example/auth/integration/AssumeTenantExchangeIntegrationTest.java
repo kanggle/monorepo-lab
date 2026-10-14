@@ -221,14 +221,18 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         assertThat(assumed.get("entitled_domains")).isNotNull();
         assertThat(assumed.get("entitled_domains").toString()).contains("finance").contains("wms");
 
-        // TASK-BE-336: the assumed (domain-facing) token carries the console
-        // client's REGISTERED scopes — including erp.write (V0023) — so erp
-        // masterdata-service can authorize a department WRITE (WRITE =
-        // erp.write ∨ operator-role; entitlement-trust widens READ only).
+        // TASK-BE-336 → TASK-BE-632 (ADR-MONO-083 D6 · AC-5): the assumed token still carries the
+        // console client's registered scopes, but NOT erp.write any more. «WRITE = erp.write ∨
+        // operator-role» made every console operator an ERP writer regardless of role; ERP write now
+        // rides on ERP_OPERATOR alone (a business permission set). Before BE-632 this asserted
+        // contains("erp.write") — the failing side of AC-5, flipped here.
         assertThat(assumed.get("scope")).as("assumed token must carry a scope claim").isNotNull();
         assertThat(assumed.get("scope").toString())
-                .as("assumed token scope must include the delegated erp.write")
-                .contains("erp.write");
+                .as("the operator assumed token must not carry erp.write (BE-632 AC-5)")
+                .doesNotContain("erp.write");
+        // TASK-BE-632 (OD-2): the assumed token lives 300 s on the wire.
+        assertThat(body.get("expires_in").asLong()).as("assumed expires_in (OD-2)").isBetween(299L, 300L);
+        assertThat(assumed.get("exp").asLong() - assumed.get("iat").asLong()).isEqualTo(300L);
 
         // TASK-BE-337 → TASK-BE-338 net-zero: this operator's resolveAssignment
         // returns a null org_scope (unset assignment), so the customizer injects
@@ -433,10 +437,11 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("STEP 5 (ADR-032 D5): one account → consumer login token + operator domain token in one session; roles-only, NO account_type on either")
     void step5_unifiedIdentity_oneAccount_consumerAndOperatorTokens_rolesOnly() throws Exception {
+        // TASK-BE-632: the operator holds sets giving WMS_OPERATOR + ECOMMERCE_OPERATOR, and the
+        // selected tenant is entitled to wms + ecommerce → both survive the ceiling.
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
-                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null));
-        // The selected tenant is entitled to wms + ecommerce → the operator's derived
-        // domain roles are WMS_OPERATOR + ECOMMERCE_OPERATOR (OperatorRoleDerivation, BE-376 / 4a).
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false,
+                        java.util.List.of("WMS_OPERATOR", "ECOMMERCE_OPERATOR")));
         stubEntitledDomains("wms", "ecommerce");
 
         String account = "unified-identity-step5-001";
@@ -462,10 +467,10 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
                 objectMapper.readTree(result.getResponse().getContentAsString())
                         .get("access_token").asText());
 
-        // 4a (BE-376): operator domain roles DERIVED from the selected tenant's entitled domains.
+        // 4a (BE-376 → BE-632): operator domain roles = assigned sets ∩ the entitled ceiling.
         assertThat(assumed.get("roles")).as("operator domain token must carry a roles claim").isNotNull();
         assertThat(assumed.get("roles").toString())
-                .as("operator capability: domain roles derived from entitled wms+ecommerce")
+                .as("operator capability: assigned roles within entitled wms+ecommerce")
                 .contains("WMS_OPERATOR").contains("ECOMMERCE_OPERATOR");
         // 4b: roles-only ADMISSION — the operator admits at the domain gateway via roles
         // ALONE; NO account_type leg remains on the operator token either.
@@ -518,6 +523,43 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
             }
         }
         return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-632 (ADR-MONO-083 D3 · D6) — on the wire, through the real customizer
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-1 (wire): inventory set on a WMS+SCM tenant → roles exactly INVENTORY_READ, INVENTORY_WRITE")
+    void be632_inventorySet_onlyInventoryRolesOnTheWire() throws Exception {
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false,
+                        java.util.List.of("INVENTORY_READ", "INVENTORY_WRITE")));
+        stubEntitledDomains("wms", "scm");
+
+        MvcResult result = assumeTenant(mintBaseToken("assume-op-632a"), SELECTED_TENANT);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("access_token").asText());
+
+        assertThat(assumed.get("roles").toString()).isEqualTo("[\"INVENTORY_READ\",\"INVENTORY_WRITE\"]");
+        // entitled_domains is unchanged by the set — it still lists the tenant's subscriptions.
+        assertThat(assumed.get("entitled_domains").toString()).contains("wms").contains("scm");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 AC-3 (wire): assigned, domainRoles [] on a fully subscribed tenant → token issued with NO roles claim")
+    void be632_noSets_noRolesClaimOnTheWire() throws Exception {
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, java.util.List.of()));
+        stubEntitledDomains("wms", "scm", "erp", "finance", "ecommerce");
+
+        MvcResult result = assumeTenant(mintBaseToken("assume-op-632b"), SELECTED_TENANT);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(assumed.has("roles")).as("no set ⇒ no domain role, never the subscription").isFalse();
+        assertThat(assumed.get("tenant_id").asText()).isEqualTo(SELECTED_TENANT);
     }
 
     private JsonNode decodeJwtPayload(String jwt) throws Exception {

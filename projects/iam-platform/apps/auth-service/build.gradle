@@ -159,6 +159,11 @@ tasks.named('test') {
     inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_cs_operator.sql'))
             .withPropertyName('demoCsOperatorSeed')
             .withPathSensitivity(PathSensitivity.RELATIVE)
+    // TASK-BE-632: DemoCsOperatorDerivedRolesTest#csHoldsLegacyCompat reads the domain-set demo seed —
+    // since P3 the CS operator's roles are its ASSIGNED sets ∩ the derivation, so the seed is an input.
+    inputs.file(rootProject.file('projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_zz_demo_domain_permission_sets.sql'))
+            .withPropertyName('demoDomainSetSeed')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(rootProject.file('projects/iam-platform/apps/account-service/src/main/resources/db/migration'))
             .withPropertyName('accountServiceProdMigrationsForDemoRoles')
             .withPathSensitivity(PathSensitivity.RELATIVE)

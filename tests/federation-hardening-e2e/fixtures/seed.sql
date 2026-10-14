@@ -707,3 +707,32 @@ UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d401'
  WHERE operator_id = 'tenant-admin-umbrella' AND identity_id IS NULL;
 UPDATE admin_operators SET identity_id = '01928c4a-7e9f-7c00-9a40-d2b1f5e8d402'
  WHERE operator_id = 'tenant-billing-admin-umbrella' AND identity_id IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- TASK-BE-632 (ADR-MONO-083 P3) — the «이전 호환» (legacy-compat) business permission set rows
+-- of the operators this file seeds.
+--
+-- From P3 an operator's assume-tenant `roles` = the business permission sets assigned to them in
+-- that tenant ∩ what the tenant's subscriptions allow — no longer «everything the tenant is
+-- subscribed to». admin-service V0052 backfills legacy-compat (= the whole catalog, so `roles`
+-- stay byte-identical) for every membership that exists WHEN V0052 RUNS. This file runs AFTER
+-- Flyway, so without this block every operator it seeds would assume with NO domain role and
+-- every domain call (wms INBOUND_READ, …) would 403. Same rows the backfill would have written —
+-- no more. Idempotent (the PK includes source_key; INSERT IGNORE).
+-- ---------------------------------------------------------------------------
+USE `admin_db`;
+
+INSERT IGNORE INTO operator_domain_set_grant
+    (operator_id, tenant_id, set_id, source_key, group_origin, granted_by, granted_at)
+SELECT a.operator_id, a.tenant_id, s.id, 'MIGRATION', NULL, NULL, NOW(6)
+  FROM operator_tenant_assignment a
+  JOIN domain_permission_set s ON s.system_key = 'legacy-compat'
+ WHERE a.tenant_id <> '*';
+
+-- A platform ('*') operator: one «all tenants» row (ADR-MONO-083 OD-3).
+INSERT IGNORE INTO operator_domain_set_grant
+    (operator_id, tenant_id, set_id, source_key, group_origin, granted_by, granted_at)
+SELECT o.id, '*', s.id, 'MIGRATION', NULL, NULL, NOW(6)
+  FROM admin_operators o
+  JOIN domain_permission_set s ON s.system_key = 'legacy-compat'
+ WHERE o.tenant_id = '*';

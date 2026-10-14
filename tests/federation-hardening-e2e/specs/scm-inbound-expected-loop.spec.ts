@@ -46,8 +46,10 @@ import { loginAsMultiOperator } from '../fixtures/login';
  *
  * The token wms ACCEPTS is an assume-tenant token for a wms-ENTITLED tenant: its
  * signed entitled_domains carries `wms` (TenantClaimValidator entitlement-trust dual-
- * accept), and OperatorRoleDerivation grants that same wms entitlement the
- * INBOUND_READ operator role. So this spec overrides the suite storageState, logs in
+ * accept), and the token's roles carry INBOUND_READ: since TASK-BE-632 (ADR-MONO-083 P3)
+ * roles = the operator's assigned business permission sets ∩ what the wms entitlement allows
+ * (OperatorRoleDerivation is the ceiling), and fixtures/seed.sql gives the seeded operators the
+ * legacy-compat set (= the whole catalog). So this spec overrides the suite storageState, logs in
  * fresh as the multi-assignment operator, and drives the real /api/tenant assume-tenant
  * exchange into `acme-corp` ([finance,wms]) — the production read path a real wms
  * operator uses. Mirrors subscription-plane-separation.spec.ts. The deterministic
@@ -71,7 +73,8 @@ test.describe('scm inbound-expected loop — federation live (ADR-MONO-050 leg 2
   const INBOUND_EXPECTED_TOPIC = 'scm.procurement.inbound-expected.v1';
 
   // The wms-ENTITLED tenant whose assume-tenant token carries INBOUND_READ
-  // (entitled_domains ∋ wms → OperatorRoleDerivation grants WMS_OPERATOR + INBOUND_*).
+  // (entitled_domains ∋ wms + the legacy-compat set from seed.sql → WMS_OPERATOR + INBOUND_*;
+  // TASK-BE-632: without a set the token carries no wms role and this read 403s).
   const WMS_ENTITLED_TENANT = 'acme-corp';
   const ASSUMED_COOKIE = 'console_assumed_token';
 

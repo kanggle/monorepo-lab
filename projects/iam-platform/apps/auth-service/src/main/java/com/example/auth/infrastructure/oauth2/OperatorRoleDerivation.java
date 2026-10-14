@@ -22,6 +22,14 @@ import java.util.Set;
  * keys are skipped; {@code gap} maps to no operator role (it is the IdP platform,
  * not a domain). An empty result means the {@code roles} claim is omitted, and the
  * gateway then 403s — the correct least-privilege behaviour.
+ *
+ * <p>🔴 <b>TASK-BE-632 (ADR-MONO-083 D3 · D6) — this table is now a CEILING, not a grant.</b> The
+ * assume-tenant customizer no longer gives an operator everything this returns; it intersects the
+ * operator's ASSIGNED business roles (admin-service {@code domainRoles}) with it. What this method
+ * still decides is which roles a subscription can make reachable at all. It mirrors admin-service
+ * {@code DomainRoleCatalog} (the producer of the roles an operator can be assigned) — a role the
+ * catalog offers but this table omits can never reach a token, and vice versa a role only here is
+ * never assignable. The two must move together (P5–P8 widen both).
  */
 final class OperatorRoleDerivation {
 
