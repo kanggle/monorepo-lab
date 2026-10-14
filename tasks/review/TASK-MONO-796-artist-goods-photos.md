@@ -100,3 +100,9 @@ monorepo
 - **AC-4** — `node --test tests/public-data.test.mjs` rc=0 · `CollectionRefMigrationTwinTest` 3/3 · `SellerMembersMigrationTwinTest` 1/1(h2 트리 끝까지 적용) — 결과 XML 로 실행 확인.
 - ⚪ postgres V23 은 로컬에서 안 돌렸다(Testcontainers) — CI 와 다음 재굽기가 잰다. `ArtistGoodsSeedOnExistingVolumeIntegrationTest` 는 `target=21` 이라 V23 과 무관.
 - 🔴 데모 서버 DB 는 재굽기(신선 볼륨) 전까지 옛 `placehold.co` 이미지다. 공개 열람(번들 저장본)은 머지 · Vercel 배포로 바뀐다.
+
+---
+
+## CORRECTION
+
+2026-10-14 UTC — 위 기록의 Scope 와 AC-4 는 **소비자 하나를 빠뜨렸다**. 팬 웹 아티스트 페이지의 굿즈 카드(`PublicArtistGoods`)도 번들 `store.json` 의 `thumbnailUrl` 을 `<img>` 로 렌더하고, 그 테스트 `public-pages.test.tsx:344` 가 `placehold.co` 를 고정하고 있었다 — PR CI 의 `Frontend unit tests` 가 잡았다(로컬 탐색이 글롭 실수로 그 디렉터리를 못 봤다). 같은 PR 에서 단언을 `images.unsplash.com/photo-` 로 고쳤다; 팬 웹은 `images.unoptimized` + `<img>` 라 호스트 허용 변경은 필요 없다. 로컬: `pnpm exec vitest run src/features/public-browse` **9 파일 · 108/108 통과**. 저장소 전체 재탐색 결과 남은 `placehold.co` 고정은 web-store 폴백 테스트 둘(썸네일 없는 상품 경로 — 무관)뿐이다.

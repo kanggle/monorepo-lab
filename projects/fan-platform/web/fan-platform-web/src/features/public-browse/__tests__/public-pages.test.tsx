@@ -341,7 +341,8 @@ describe('/artists/[id] (공개 프로필) — 세션 없이', () => {
       expect(card.tagName).toBe('A');
       expect(card).not.toHaveAttribute('target');
       expect(card.getAttribute('href')).toMatch(/^https:\/\/store\.hubwang\.com\/products\/b0000000-/);
-      expect(card.querySelector('img')?.getAttribute('src')).toMatch(/^https:\/\/placehold\.co\//);
+      // TASK-MONO-796 — 굿즈 이미지는 placehold.co 자리표시가 아니라 상품에 맞춘 Unsplash 사진이다.
+      expect(card.querySelector('img')?.getAttribute('src')).toMatch(/^https:\/\/images\.unsplash\.com\/photo-/);
     }
     const all = screen.getByTestId('artist-goods-all');
     expect(all).toHaveTextContent('↗');
