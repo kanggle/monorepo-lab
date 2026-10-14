@@ -8,7 +8,7 @@ TASK-MONO-784
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -727,3 +727,19 @@ S1 에이전트가 남긴 열린 질문(«이 회사에서 내보내기» 로 �
 - 시드 전수(마이그레이션 뒤에 도는 운영자 INSERT): `R__seed_demo_*` 다섯 개 중 소속 행이 없는 것은 `R__seed_demo_platform_operator.sql` 하나 — 홈 `'*'` 운영자라 의도된 부재(그 파일 § 3). `scripts/console-demo/seed/01-iam.sql` 은 소속 행 있음. 콘솔 e2e 시드의 `e2e-super-admin` 도 `'*'` 라 해당 없음. → 빠진 곳은 `e2e-target-operator` 한 행.
 - 수정: 그 시드에 § 3b 소속 행(`fan-platform`) 추가 — 이 정정과 같은 PR. 검증 = 그 브랜치로 `nightly-e2e.yml` 수동 실행의 콘솔 잡 초록(아래 PR 에 런 URL).
 - 그래서 784 는 아직 `done/` 이 아니다: ⚪ ① 은 이 수정 머지 뒤 main 의 nightly 콘솔 잡 초록으로 닫는다. ⚪ ② 라이브(27차 창)는 그대로.
+
+# Close — the two ⚪ (2026-10-14 UTC)
+
+**⚪ ① nightly console job — closed.** On `main` `46bff4c36` (the console e2e seed fix above), run 38419473597, the job «Platform Console E2E full-stack (Playwright + docker compose)» is **success**. It is the first green since S2 #4312. The run as a whole is `failure` only because of the unrelated `fan-platform live-trio` job (CI Gradle cache — auto issue #4314).
+
+**⚪ ② live — closed in the 27th demo window.** AMI `ami-0775fa009a12a824d` @ `73daae263`, instance `i-029065c2b2d7b8121`. Measured through SSM on the host; tokens were never printed.
+- **AC-0 ④ live predicate** (memberships outside the home) = **2**. That equals the static expectation, and the rows are exactly the expected two (`demo-assigned-only` → `demo-corp` · `demo-operator` → `ecommerce`), so visitors have created 0 rows.
+- **R2 rows:** `demo-operator` @ `ecommerce` = `SUPPORT_LOCK, SUPPORT_READONLY` (the OD-3 seed). `demo-assigned-only` @ `demo-corp` = no role rows. 🔵 Also seen: `demo-viewer` holds a membership in its own home `demo-viewer` with no role rows (a seed shape, not a visitor row).
+- **OD-3 screens** (demo operator, admin API, `tenantId=ecommerce`): accounts list 200 · email search 200 · audit 200 · **operators list 403 `TENANT_SCOPE_DENIED`**. Control `tenantId=demo-corp`: all 200. So the `ecommerce` surface shrank to accounts · audit · lock, as decided. 🔴 An earlier probe sent `X-Tenant-Id` without `tenantId` and saw operators 200. The list endpoints take the acting tenant from the `tenantId` **query** (§ 행동 테넌트 rows 6–8), so that probe measured nothing.
+- **«이 회사에서 내보내기»** on `demo-assigned-only` from `demo-corp` (its only membership; it cannot log in), run by the owner because the classifier blocks permission writes:
+  - `DELETE …/assignments/demo-corp` → **204**.
+  - Membership `demo-corp` → none. Set rows in `demo-corp`: 1 → **0** (no orphaned rows). Operator row kept.
+  - Audit: `OPERATOR_ASSIGNMENT_DELETE SUCCESS demo-corp` with detail `roleRows=0,groupMemberships=0,participations=0,groupAssignments=0,keptAsDirect=0,domainSetGrants=1`.
+  - Restored: assignment 201, and the five subscribed `*-full` presets 201. `legacy-compat` cannot be granted through the API; the next re-bake restores the seed. Window predicate ② stays 0.
+
+⇒ AC-0 ~ AC-6 are closed against their verbs, including AC-6's «R2 영향 행 라이브 확인». The PRs were merged with 0 failing checks (§ 리뷰 이동 기록). → `done/`.

@@ -1933,3 +1933,27 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
 ## When the window ends
 Move each ticket that closed from review → done (four dimensions), and clear the closed entries from the window memory (`project_demo_window_27_pending_checks`).
 🔵 Once `TASK-MONO-784` **and** `TASK-BE-632` are in `done/`, `TASK-MONO-773` may start (owner decision 2026-10-15 UTC — gate recorded in 773's Dependency Markers). Not before.
+
+## 27th window — harvest (2026-10-14 UTC, 16:57Z–18:37Z · budget 1258 → 1353 / 1800)
+
+Bake `73daae263` → `ami-0775fa009a12a824d` (pin #4364) · apply by the agent passed the classifier this time · instance `i-029065c2b2d7b8121`, stopped at 18:37Z on both sides (EC2 + `/status`). Results live in each owning ticket.
+
+| Step | Result | Where |
+|---|---|---|
+| 0 Boot | ✅ commit `73daae263` · 89 containers · unhealthy 0 · seed failures 0 | — |
+| 1 Backfill gate | ✅ ① 0 · ② 0, with non-empty populations. 🔴 First try was vacuous (`version='52'` vs stored `0052`) | `TASK-BE-632` § 27th window |
+| 2 BE-632 | AC-4 ✅ · AC-1 ✅ · AC-8 ✅ · AC-5 🟡 (workload client ⚪) · AC-6 🟡 — existing token lives to **`exp` + ~60 s** (≈ 360 s, contract says 300 s), other revocation kinds ⚪ (owner decision) | `TASK-BE-632` (stays in `review/`) |
+| 784 ⚪② | ✅ ④ = 2 · OD-3 · export → `done/` | `TASK-MONO-784` |
+| Found | WMS inventory list 500 (`Instant` → `Timestamp` cast, 4 sites) | new `TASK-BE-637` |
+
+**Not done in this window → next window** (owner decision 2026-10-15 — «784 내보내기까지만»):
+- step 3: PC-FE-338 c-2 precondition.
+- step 4: PC-FE-332 AC-3 · FE-109 AC-1 · FE-108 AC-3.
+- step 5: BE-634 · BE-635 · BE-633 ② · BE-636 ①②③. 🔵 `TASK-MONO-796` (artist goods photos) also rode this bake — see its screen in the next window.
+
+Demo data the window changed (restored by the next re-bake's fresh volume): `requester@demo.com` and `demo-assigned-only` in `demo-corp` now hold the five subscribed `*-full` presets, not `legacy-compat` (which the API cannot grant). Their roles are byte-identical.
+
+Owner decisions pending:
+1. Close BE-632 with the recorded ⚪ (AC-5 workload client · AC-6 four kinds)?
+2. AC-6 skew: change the contract sentence to `exp + skew`, or reduce the skew?
+3. AMI prune — five AMIs exist (23rd–27th). 26th `ami-00701c1fa528b5866` is the new rollback; 23rd · 24th · 25th are prune candidates.

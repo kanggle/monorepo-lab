@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-637-inventory-list-instant-timestamp-cast-500.md` — **inventory-service 목록 API 500 — 네이티브 쿼리 행을 `java.sql.Timestamp` 로 캐스팅하는데 드라이버는 `Instant` 를 준다(`ClassCastException`, 4곳)** (READY, 2026-10-14 UTC · 출처 27차 데모 창). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
