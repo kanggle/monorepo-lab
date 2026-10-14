@@ -186,7 +186,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-793-adr-083-p6-erp-fine-grained-authz.md` — **`ADR-MONO-083` P6 — ERP 세분 서버 인가** (READY). 기준정보 · 결재 조회/변경 · 직무 분리 가드 유지 · 🔴 구독 합성 READ 가 조회 세트를 무력화하는지 AC-0. 선행 BE-632(`erp.write` 제거). 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-794-adr-083-p7-finance-fine-grained-authz.md` — **`ADR-MONO-083` P7 — Finance 세분 서버 인가** (READY). 계좌 · 원장 조회/변경 · 🔴 원장 기간 마감 · 환율 덮어쓰기의 등급은 AC-0 측정 후 소유자 결정. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-795-adr-083-p8-ecommerce-fine-grained-authz.md` — **`ADR-MONO-083` P8 — E-commerce 세분 서버 인가** (READY). 관리 영역 8개 조회/변경 · 🔴 게이트웨이 단독 판정을 서비스 재검사까지 · 서비스 묶음별 슬라이스. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (READY, ⏳ AC-0 = 772 · 784 `done/` · 🆕 `ADR-MONO-083` P9 — 선행 BE-631 · OD-5 생성자 «전체 업무» 세트를 AC-2 · AC-3 에). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -208,6 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (IN-PROGRESS 2026-10-15 UTC — AC-0 기록 · 소유자 결정 OD-1~8 확정 · 슬라이스 S1 계약 → S2 account → S3 admin 셀프 → S4 admin `SUPER_ADMIN` → S5 auth → S6 console). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 

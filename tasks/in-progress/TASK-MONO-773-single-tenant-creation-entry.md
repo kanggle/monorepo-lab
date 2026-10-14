@@ -1,0 +1,297 @@
+# Task ID
+
+TASK-MONO-773
+
+# Title
+
+`ADR-MONO-080` D9 = **T1** — «조직 만들기»(`/onboarding`) · «테넌트 등록»(`/tenants`)을 **«테넌트 생성» 하나**로: 콘솔 셸 안 · 첫 관리자는 들어온 계정이 정한다 · 두 번째 회사
+
+# Status
+
+in-progress
+
+# Owner
+
+monorepo
+
+# Task Tags
+
+- iam
+- platform-console
+- security
+
+---
+
+> **분석 모델:** Opus 5.5 / **구현 권장:** Opus (권한 원점 · 셸 가드 상태 · 새 테넌트 상태)
+
+---
+
+# Dependency Markers
+
+- 🔴 **Owner decision (2026-10-15 UTC) — start date gate.** Start this ticket only after this sequence:
+  1. Re-bake window: backfill gate passes · `TASK-BE-632` AC-4~8 checked live · `TASK-MONO-784` ⚪② checked live.
+  2. `TASK-MONO-784` and `TASK-BE-632` move to `done/`.
+  3. Then start 773.
+
+  The earlier option — rewrite the 784 prerequisite as «S1~S6 merged + nightly green» and start at once — is **rejected**, for three reasons:
+  - AC-2 · AC-3 assert P3 behaviour (assume `roles` = sets), and P3 can still be rolled back at the backfill gate (revert of #4351).
+  - «Second company» *is* 784's mechanism, which is not yet checked live.
+  - Merging 773's backend before the bake would ride the same AMI and blur what the window measures.
+
+- **선행**: `TASK-MONO-772` `done/` — `SUPER_ADMIN` 이 남을 첫 관리자로 지정하는 길은 D6 초대가 있어야 하고, 운영자 아닌 풀 계정의 콘솔 세션도 772 의 토큰 경로 위에 선다.
+- **선행**: `ADR-MONO-083` ACCEPTED — A(2026-10-14 UTC) **P9** · `TASK-BE-631` 머지(세트 · 배정 모델 — 생성자 기본 세트를 쓸 자리) — 🔴 OD-5 기본값(구현자 선택): 회사 생성자에게 **새 테넌트의 entitled 도메인 «전체 업무» 세트**를 준다(ADR-044 D2 — 새 테넌트에만). 이것이 없으면 ADR-083 P3 뒤 생성자는 자기 회사에서 업무 권한 0 으로 시작한다. AC-2 · AC-3 이 그 단언을 싣는다.
+- **선행**: `TASK-MONO-784` `done/` — `ADR-MONO-082` ACCEPTED — **b**(2026-10-10 UTC). «두 번째 회사» 는 기존 운영자 행에 새 테넌트 소속(역할 행 + 배정)을 더하는 것이고, 그 기전(두 409 → 소속 추가 · 회사별 권한 평가)이 784 다.
+
+# Goal
+
+같은 행위(테넌트 생성)가 두 화면으로 갈라져 결과가 다르다 — 온보딩은 «테넌트 + 관리자», `/tenants` 는 «테넌트만»(`console-web/src/app/api/tenants/_proxy.ts:22-30`). `/tenants` 로 만든 B2B 테넌트에는 `SUPER_ADMIN` 도 운영자를 못 앉힌다(면제는 대상 `'*'` 만, `CreateOperatorUseCase.java:100-107`). 하나로 합친다:
+
+| 들어온 계정 | 셸 | 첫 관리자 |
+|---|---|---|
+| 운영자 아님 | 콘솔 셸 — 사이드바 «가이드 · 테넌트 생성» 만, 운영자 토큰 없음 | **본인** |
+| 이미 운영자(다른 회사) | 지금 셸 | **본인** — 두 번째 회사 |
+| `SUPER_ADMIN` | 지금 셸 | **지정한 이메일에 D6 초대** — 수락까지 테넌트 = «관리자 대기» |
+
+# Scope
+
+## In Scope
+
+- 계약 먼저: `onboarding-api.md` 와 `admin-api.md` § tenants 를 «테넌트 + 첫 관리자» 하나의 원자 묶음으로(입구 둘의 인증 방식 — 비운영자 OIDC 토큰 / 운영자 토큰) · «관리자 대기» 상태와 그 만료·재초대·정리
+- admin-service: 생성 원자 묶음 일반화(ADR-044 D1 · D2 — 셀프 경로의 권한은 **새 테넌트에만**) · `SUPER_ADMIN` 경로 = 테넌트 + 첫 관리자 초대(772 재사용) · 044 D4 트러스트 게이트(인증된 이메일 · 속도 제한 · 신원당 소유 상한)를 **모든 비-`SUPER_ADMIN` 경로**에
+- console-web: `(console)` 셸 가드에 «로그인 · 운영자 아님» 상태 — 그 상태에서 레지스트리 등 운영자 토큰 호출을 건너뛴다(401 재로그인 고리 방지; 샘플 방문자 분기 `(console)/layout.tsx:148-160` 이 선례) · «테넌트 생성» 화면 하나 · 사이드바 진입점 · 빈 상태 안내(«회사에 관리자가 있다면 초대를 요청하세요» 포함) · 생성 직후 운영자 토큰 재교환
+- `/onboarding` 은 새 화면으로 넘겨주는 주소로 남긴다(콜백 · 리프레시가 지금 그리로 보낸다 — `callback/route.ts:191` · `refresh/route.ts:205`)
+- B2C 테넌트 생성은 `SUPER_ADMIN` 전용 유지, 첫 관리자는 같은 초대 규칙
+
+## Out of Scope
+
+- 조직 계층 노드에 테넌트 넣기(`ADR-MONO-047` 개정 — 별도)
+- «한 신원 여러 조직» 의 조직 전환 화면 개선(지금 상단 스위처로 충분한지 AC-0 에서 확인만)
+
+# Acceptance Criteria
+
+- [ ] **AC-0** — 착수 시 재측정: 두 입구의 file:line · 온보딩 · `/tenants` 계약 · 셸 가드 · 콜백/리프레시의 `/onboarding` 보냄. «관리자 대기» 상태의 집(account-service `tenants.status` 확장 또는 별도 표)을 정하고 이유를 적는다.
+- [ ] **AC-1** — 운영자 아닌 계정: 셸이 열리고 사이드바는 «가이드 · 테넌트 생성» 뿐 · 🔴 **운영자 토큰 없음** · 관리 API 는 거절(대조군).
+- [ ] **AC-2** — 운영자 아닌 계정이 생성 → 테넌트 + 본인 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` + 배정 → 재교환 뒤 개요로. (ADR-083 P9 · OD-5) + 새 테넌트의 «전체 업무» 세트 배정(직접 출처) — 같은 시험에서 그 테넌트 assume `roles` = 그 테넌트 entitled 도메인의 카탈로그 전체 · 🔴 다른 테넌트 세트 행 0.
+- [ ] **AC-3** — 이미 운영자인 계정이 두 번째 회사를 생성 → 새 테넌트에만 관리자 · 🔴 기존 테넌트 권한 불변 · 신원당 상한을 넘으면 거절. (`ADR-MONO-082` D6 **b** 행: 기존 운영자 행에 새 테넌트의 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 새 회사에서 기존 회사 권한이 통하지 않음(대조군) · 상한 **값**은 AC-0 에서 정한다 — 세는 단위는 082 D4: 그 행의 `TENANT_ADMIN` 역할 행이 가리키는 서로 다른 테넌트 수) · (ADR-083 P9 · OD-5) 새 테넌트에만 «전체 업무» 세트 · 기존 회사의 세트 행 **바이트 불변**(대조군).
+- [ ] **AC-4** — `SUPER_ADMIN` 이 생성 + 첫 관리자 이메일 → 테넌트 «관리자 대기» + 초대 · 수락 뒤 활성 · 만료 시 정리 규칙대로. 🔴 관리자 없는 활성 테넌트가 생기지 않는다(ADR-044 D3).
+- [ ] **AC-5** — `/onboarding` 직접 접근 · 콜백의 «운영자 아님» 분기 → 새 화면으로.
+- [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(`/onboarding`, `onboarding-` testid) 후 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인.
+- [ ] **AC-7** — (`TASK-PC-FE-331` 미룸, 2026-10-10 UTC 소유자 결정) 운영자 측면 없는 풀 계정이 비운영자 셸에서 콘솔 로그아웃 → **IAM 세션까지 끝나** 다른 계정(운영자)으로 로그인할 수 있다(스토어 탭 없이). 그리고 773 뒤에도 콘솔 콜백의 `sso_wrong_account` 분기(`console-web/src/app/api/auth/callback/route.ts:113-126`)에 닿는 모집단이 남는지 적는다 — 0 이면 PC-FE-331 은 구현 없이 종결 근거.
+
+# Related Specs
+
+- `docs/adr/ADR-MONO-080-workforce-on-the-consumer-pool.md` D9 · D6 · § 새로 생기는 위험
+- `docs/adr/ADR-MONO-044-self-service-tenant-onboarding.md` D1~D4 · D7
+- `projects/platform-console/specs/services/console-web/architecture.md` (셸 · 인증 흐름)
+
+# Related Contracts
+
+- `projects/iam-platform/specs/contracts/http/onboarding-api.md` · `admin-api.md` § tenants · `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.6
+
+# Edge Cases
+
+- 초대받은 첫 관리자가 수락하지 않고 만료 — 테넌트를 정리할지 «관리자 대기» 로 둘지(AC-0 결정).
+- 운영자 아닌 계정이 직원으로 초대받은 상태(772) — 빈 상태 화면이 «받은 초대» 를 먼저 보여 준다.
+
+# Failure Scenarios
+
+1. 셸 가드에 상태를 더하고 레지스트리 호출을 안 건너뛴다 — 운영자 아닌 계정이 401 재로그인 고리에 빠진다.
+2. 셀프 경로의 권한 행이 기존 테넌트를 가리킬 수 있다 — ADR-044 D2 위반(권한 상승).
+
+---
+
+# AC-0 기록 (2026-10-15 UTC · 분석=Opus 5.5 — 코드 · 계약 재측정, 티켓 표를 복사하지 않고 다시 쟀다)
+
+> 규칙: 현재 코드가 문서를 이긴다. 문서가 낡은 곳은 «낡음» 으로 적는다. ⚪ = 이번에 재지 않은 것(이유 함께). 이 절은 **설계 제안**이고, «소유자 결정» 표의 항목은 소유자가 답할 때까지 정해지지 않는다.
+
+## 0. 착수 게이트 (Dependency Markers) — 이 트리에서 잰 것
+
+| 조건 | 결과 | 근거 |
+|---|---|---|
+| `TASK-MONO-772` `done/` | ✅ | `tasks/done/TASK-MONO-772-operator-invite-verified-acceptance.md` |
+| `TASK-MONO-784` `done/` | ✅ | `tasks/done/TASK-MONO-784-operator-membership-per-company.md` |
+| `TASK-BE-631` · `TASK-BE-632` `done/` | ✅ | `projects/iam-platform/tasks/done/TASK-BE-631-…md` · `…/TASK-BE-632-…md` (main `d819e3781` «BE-632 → done» #4366) |
+| 784 이 773 에 넘긴 미결 둘 | 열림 — 아래 OD-3 · § 6 R6 | `TASK-MONO-784…md:359`(상한이 `SUSPENDED` 테넌트를 세는가) · `:635`(상한 경합 cap+1) |
+
+## 1. 두 입구 — 지금 무엇을 만드나 (측정 1)
+
+| | `/onboarding` «조직 만들기» | `/tenants` «테넌트 등록» |
+|---|---|---|
+| 화면 가드 | `(onboarding)/layout.tsx:24-25` — 운영자 쿠키 있으면 `/`, IAM access 없으면 `/login?error=session_expired`. 셸 밖(사이드바 · 스위처 없음, `:16-17`) | `(console)` 셸 안 · 화면이 SUPER_ADMIN 전용 안내(`(console)/tenants/page.tsx:14,47,68`) |
+| BFF | `app/api/onboarding/organizations/route.ts:40-126` — 운영자 토큰 **아님**: IAM access 쿠키를 `subjectToken` 으로(`:43,68`) · 201 뒤 같은 access 로 운영자 토큰 **재교환** + `TENANT_COOKIE`=새 테넌트(`:103-116`) · 재교환 실패면 `{ready:false}`(`:117-125`) | `app/api/tenants/route.ts:58-82` → `createTenant` · 본문 `{tenantId, displayName, tenantType, reason, idempotencyKey?, orgNodeId?}`(`_proxy.ts:24-33`) — **첫 관리자 칸 없음** |
+| 백엔드 | `POST /api/admin/onboarding/organizations` — `OnboardingController.java:49-74`(`@SelfServiceEndpoint`, `subjectToken` 검증 `:57`, 이메일 · 이름은 권위 계정에서 `:61-66`) → `SelfServiceOnboardingUseCase.java:58-101` | `POST /api/admin/tenants` → `CreateTenantUseCase.java:56-125` |
+| 인증 | 콘솔 client(`platform-console-web`) OIDC access token, `token_type` 클레임 없는 것만(`onboarding-api.md:18-24`) | 운영자 JWT, `SUPER_ADMIN` 만(`admin-api.md:2274,2297,2339`) |
+| account-service `tenants` | 1행 `B2B_ENTERPRISE` 고정 · `ACTIVE`(`SelfServiceOnboardingUseCase.java:38,82` · `Tenant.java:98-108` «initial status always ACTIVE») | 1행 · `B2C_CONSUMER`/`B2B_ENTERPRISE` · `ACTIVE`(`CreateTenantUseCase.java:89`) |
+| 구독 | **0**(ADR-044 D6 · `onboarding-api.md:63-65`) | 0 |
+| `admin_operators` | 측면 없음 → 새 행(홈 = 새 테넌트, OIDC 전용, `oidc_subject`=`sub`)(`FirstAdminProvisioner.java:84-97`) · `ACTIVE` 회사 측면 → **만들지 않음**(784 S5, `:137-145`) | 0 |
+| 역할 행 | `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` @ 새 테넌트, `granted_by=NULL`(`FirstAdminProvisioner.java:52,99-107` / `OperatorMembershipAddition.java:84-93`) | 0 |
+| `operator_tenant_assignment` | 1행(`FirstAdminProvisioner.java:116-118` / `OperatorMembershipAddition.java:92`) | 0 |
+| 업무 세트 행(`operator_domain_set_grant`) | **0** — 두 메서드 어디에도 세트 쓰기가 없다(`FirstAdminProvisioner.java:69-145` 전체) | 0 |
+| 감사 · 이벤트 | 감사 행 없음(관리 행위자 없음) | `TENANT_CREATE` 감사 + outbox `tenant.created`(`CreateTenantUseCase.java:80-101`) |
+| 실패 보상 | 테넌트 생성 뒤 실패 → `SUSPENDED` 로 보상(`SelfServiceOnboardingUseCase.java:92-119`) | 없음(관리자 0 이 정상 결과) |
+| 판정 순서(생성 전) | 측면 없음 / `'*'`·비-`ACTIVE` → 409 / 상한 → 422 / 아니면 소속 추가(`:71-77` · `onboarding-api.md:100-108`) | 슬러그 · 예약어 · 이름 · 타입(`:60-74`) |
+
+## 2. `SUPER_ADMIN` 이 `/tenants` 테넌트에 운영자를 못 앉히는 이유 — 그리고 772 가 이미 푼 것 (측정 2)
+
+- 🔴 **티켓 Goal · ADR-080 D9 의 인용(`CreateOperatorUseCase.java:100-107` «면제는 대상 `'*'` 만») 은 낡았다.** 772 S7 이후 그 클래스는 비-`'*'` 생성을 **누가 하든** 첫 줄에서 `422 OPERATOR_INVITATION_REQUIRED` 로 거절한다(`CreateOperatorUseCase.java:36-46, 58-63`). 결론(«직접 생성으로는 못 앉힌다»)은 같지만 기전이 다르다. (ADR-080 본문은 바이트 고정이라 고치지 않는다.)
+- ✅ **772 초대가 이미 길을 열었다**: `SUPER_ADMIN`(`'*'`)은 «운영자가 하나도 없는 테넌트» 에도 초대한다 — 클래스 주석이 773 을 이름으로 부른다(`OperatorInvitationUseCase.java:33-36`). 발급은 테넌트 **존재**만 본다(`:101-102`), 상태는 안 본다.
+- 🔴 **남는 구멍 둘** (773 이 닫을 것):
+  1. 생성과 초대가 두 호출이라 그 사이 · 수락 전까지 **관리자 없는 `ACTIVE` 테넌트**가 있다(ADR-044 D3 위반 — AC-4 의 🔴).
+  2. 수락은 테넌트가 **`ACTIVE` 여야** 한다(`OperatorInvitationAcceptanceUseCase.java:207-217`). «관리자 대기» 를 비-`ACTIVE` 로 두면 첫 관리자가 수락하지 못한다 → 수락 경로에 «첫 관리자 초대 + 대기 테넌트» 갈래가 필요하다(§ 5).
+- 참고: 수락은 발급자가 여전히 `ACTIVE` · 범위 안이어야 한다(`:219-229`) — 발급한 `SUPER_ADMIN` 이 정지되면 첫 관리자 초대가 무효가 된다. 재발송은 재발송자를 `invitedBy` 로 바꾼다(`OperatorInvitationUseCase.java:168-187`) — 다른 `SUPER_ADMIN` 이 살릴 수 있다.
+
+## 3. 콘솔 셸 가드 · 콜백 · 리프레시 (측정 3)
+
+**지금의 셸 가드** (`(console)/layout.tsx`):
+
+| 상태 | 처리 | 근거 |
+|---|---|---|
+| 샘플 방문자(access · operator · refresh 쿠키 셋 다 없음) | 샘플 셸 | `:152-156` · `session.ts:345-351` (🔵 티켓의 `:148-160` → 지금 `:152-164`) |
+| 인증 안 됨 + refresh 있음 | `GET /api/auth/refresh` | `:156-163` |
+| 인증 안 됨 + refresh 없음 | `/login?redirect=` | `:159-163` |
+| 인증 = access **그리고** operator 쿠키 | 셸 | `session.ts:297-299` |
+| **«로그인 · 운영자 아님»(access 만)** | 셸에 못 들어온다 — 위 «인증 안 됨» 가지로 떨어져 refresh 로 간다 → 재교환 401 → `/onboarding` | `:156` · `refresh/route.ts:235-240` |
+
+**운영자 토큰이 필요한 셸 호출 (비운영자 상태에서 건너뛸 것)**: 레지스트리 `getCatalog()`(`:211-239` — 401 이면 `RE_LOGIN_PATH`, `:237`) · `getSelfRolesOrNull()`(`/api/admin/me`, `:199`) · `listOrgNodes()` · `getOrgNodeTenants()`(`:259-278`) · `NotificationBell`(브라우저 폴링, `apiClient` — `features/notifications/hooks/use-notifications.ts:4`; 401 → 브라우저 refresh → 재교환 401 → `/onboarding`, 이것이 Failure Scenario 1 의 고리) · `DemoHeartbeat`(`:303`, 라우트가 세션 재확인) · `needsReassume`(`:182` — 활성 테넌트 없으면 false, 무해). 그리고 **셸 안 각 페이지**의 직접 URL 접근(페이지마다 운영자 API → 401 → `/login?error=session_expired` → SSO 무음 로그인 → 다시 비운영자 셸): 무한은 아니지만 고리처럼 보인다 → 경로 허용 목록 리다이렉트가 필요하다(§ 7 S6).
+
+**콜백 · 리프레시가 `/onboarding` 으로 보내는 곳** (🔵 티켓 줄 번호 낡음):
+
+| 자리 | 지금 | 티켓 인용 |
+|---|---|---|
+| 콜백 — 교환 `401`(`fail_closed`)만 | `callback/route.ts:304-322` (`:319-321` 이 redirect) | `:191` (지금 `:190` 은 `redirect_uri` 줄) |
+| 리프레시 — `operator_not_provisioned` | `refresh/route.ts:235-240` | `:205` (지금 `:203-204` 는 `no_refresh_token`) |
+| `sso_wrong_account` | 판별 함수 `callback/route.ts:113-126` · 분기 `:232-235` | `:113-126` (함수 쪽만 맞다) |
+
+🔴🔴 **티켓 Scope 가 빠뜨린 서비스 — auth-service.** 지금 **측면 없는 풀 계정은 콘솔 토큰 자체를 못 받는다**(`auth-api.md:729-733` «측면 없음 → 거절 `invalid_grant` `'consumer-pool'`»). 그래서 그 사람은 콜백의 토큰 단계(`callback/route.ts:209-236`)에서 `sso_wrong_account` 로 떨어지고 **교환 401 → `/onboarding` 에 닿지 않는다**(`console-integration-contract.md:3825` 가 이를 명시). 계약이 773 의 변경 자리를 이미 지목한다: «773 이 넓힐 때 바꾸는 곳은 위 표의 «측면 없음» 행 한 곳 — 두 거절 상수는 그대로»(`auth-api.md:739`). 이것 없이는 AC-1 · AC-2 · AC-5 · AC-7 이 도달 불가다. ⇒ 슬라이스 S5(§ 7).
+
+**AC-7 (로그아웃)**: 콘솔 로그아웃은 revoke + 쿠키 삭제 + `id_token_hint` 가 있으면 IdP `end_session`(`logout/route.ts:35-92`) — `id_token` 이 없으면 로컬 로그아웃만(`:85-90`). 비운영자 셸 토큰도 지금 콘솔 토큰과 같은 규칙으로 `id_token` 을 받으면 IAM 세션까지 끝난다(`AccountMenu` 는 비샘플 셸에 이미 마운트, `layout.tsx:336-338`). **773 뒤 `sso_wrong_account` 모집단** = `auth-api.md:732` 의 «측면이 `ACTIVE` 아님(퇴사 · 정지)» 행이 남는지에 달렸다 → OD-6. ⚪ `'consumer-pool'` 거절의 **다른 발생원**(콘솔 client 외 경로)은 전수하지 않았다(`TenantClaimTokenCustomizer.refuseConsumerPoolTenant` 호출처 미열람).
+
+## 4. ADR-044 D4 트러스트 게이트 — 지금 어디에 있나 (측정 4)
+
+| 게이트 | 셀프 온보딩 지금 | 근거 |
+|---|---|---|
+| 인증된 이메일 | **없음** — 컨트롤러는 계정 상세만 읽고(`OnboardingController.java:61-66`), 그 응답에 인증 시각 칸이 없다(`AccountServiceClient.java:403-409`). 계약도 «이메일 인증 강제 = 범위 밖»(`onboarding-api.md:90`) | 재사용 후보: 772 수락의 `VerifiedEmailMatchPort`(`AccountServiceInvitationClient.java:96-114` — `MATCHED`+`emailVerifiedAt` / `EMAIL_NOT_VERIFIED` 403) · 단 그 판정은 «ACTIVE 풀 계정» 만 `MATCHED`(`OperatorInvitationAcceptanceUseCase.java:192-193`) — `iam` 자격 계정 호출자는 `NOT_ELIGIBLE` 이 된다(⚪ 그 모집단 크기 미측정; `'*'` 측면이면 어차피 409) |
+| 속도 제한 | 게이트웨이 **global(IP 당 100/1s)만** — 전용 스코프 없음(`RouteConfig.java:52-77` · `application.yml:116-129`). admin-service 쪽 카운터 없음 | signup 스코프(5/60s, `application.yml:121-123`)가 같은 모양의 선례 |
+| 신원당 소유 상한 | ✅ 784 S5 — `OperatorOwnedTenantLimit.java:59-67` · 값 `admin.onboarding.max-owned-tenants-per-operator` **기본 2**(`application.yml:155-156` · `OperatorOwnedTenantLimit.java:37`) · 단위 = 그 행의 `TENANT_ADMIN` 역할 행의 서로 다른 비-`'*'` 테넌트 수, **상태 무관 · 출처 무관**(`:17-21, 50-57`) · **측면 있는 호출자에게만** 묻는다(`SelfServiceOnboardingUseCase.java:74-77`; 측면 없음은 셀 것이 0 — `onboarding-api.md:119`) · 초대 수락은 안 묻는다(`:24-25`) | 경합: 잠금 없음 → 동시 두 요청이 cap+1(`TASK-MONO-784…md:635`) |
+
+⇒ «모든 비-`SUPER_ADMIN` 경로» = 이 엔드포인트 하나(측면 없음 · `ACTIVE` 회사 측면 두 갈래). 773 은 이메일 · 속도 둘을 **더하고** 상한은 **값만** 정한다.
+
+## 5. «관리자 대기» 의 집 (측정 5 — 추천, 결정은 OD-1 · OD-2)
+
+**테넌트 상태를 지금 읽는 곳**:
+
+| 읽는 곳 | 술어 | 대기 상태를 새 값으로 두면 | 근거 |
+|---|---|---|---|
+| account `ActiveTenantGuard` (가입 · 프로비저닝) | `!isActive()` → `TENANT_SUSPENDED` | 막힌다(옳다) — 오류 이름만 어색 | `ActiveTenantGuard.java:30-44` · `Tenant.java:73` |
+| account `ProvisionAccountUseCase` · `BulkProvisionAccountUseCase` | 정지면 거절 | 같다 | `:63` · `:92` |
+| auth `TenantSignupEligibilityResolver` | `"ACTIVE"` 문자열 | 막힌다 | `:51` |
+| admin 콘솔 레지스트리(스위처) | `ACTIVE` 목록만 | 안 보인다(옳다) | `ConsoleRegistryUseCase.java:62, 86-88, 251-262` |
+| admin 초대 **수락** | `ACTIVE` 아니면 `INVALIDATED` | 🔴 첫 관리자가 수락 못 함 — 갈래 필요 | `OperatorInvitationAcceptanceUseCase.java:207-217` |
+| admin 테넌트 목록 · PATCH | 상태 enum `ACTIVE`·`SUSPENDED`, 전이표 | 계약 · 전이표 개정 | `admin-api.md:2283-2291, 2361, 2419` · `Tenant.java:122-135` |
+| 콘솔 `/tenants` 목록 | `z.enum(TENANT_STATUSES)` | 🔴 새 값이 오면 파싱 실패 → 같은 PR 에서 넓혀야 | `_proxy.ts:5, 42` |
+| assume | 테넌트 상태를 읽지 않는다(배정 · 구독만) | ⚪ `'*'` 운영자가 대기 테넌트를 assume 할 수 있는지 미측정 | `OperatorAssignmentCheckUseCase.java:182` (운영자 상태만) |
+| 저장 칸 | `tenants.status VARCHAR(10)` | 🔴 `PENDING_ADMIN`(13자)은 안 들어간다 — 이름을 10자 이하로 하거나 마이그레이션으로 넓힌다 | `account-service …/V0009__create_tenants.sql:8` (이후 `ALTER TABLE tenants` 는 `V0027:52-54` 의 `org_node_id` 뿐) |
+
+**772 초대 만료가 이미 하는 것**: TTL `P7D`(`application.yml:148-151` · `OperatorInvitationWriter.java:44,89`) · 만료는 **읽을 때 판정, 잡(job) 없음**(같은 주석 · 수락 `:123-127`) · 만료된 대기 초대도 취소 · 재발송 가능(`OperatorInvitationUseCase.java:151-187`). 테넌트 하드 삭제 엔드포인트는 없다(`onboarding-api.md:67-70`).
+
+**선택지와 추천**:
+
+| 집 | 무엇 | 평가 |
+|---|---|---|
+| **(가) account-service `tenants.status` 에 새 값**(예: `PENDING` — 10자 이내) | 생성 시 대기 → 첫 관리자 수락이 `ACTIVE` 로 올린다 · PATCH 로는 대기→`ACTIVE` 불가(409) | **추천.** ADR-044 D3 을 글자 그대로 지킨다(관리자 없는 `ACTIVE` 테넌트 0) · 기존 «`ACTIVE` 만» 읽기가 전부 옳은 쪽으로 닫힌다(위 표) · `/tenants` 목록에 «관리자 대기» 가 보인다. 대가: enum · 전이표 · 이벤트 · 콘솔 enum · 수락 갈래 · (이름이 길면) 마이그레이션 |
+| (나) `SUSPENDED` 재사용 + admin-service 표식 표 | 계정 쪽 무변경 | 정지의 뜻을 겹쳐 쓴다 — `SUPER_ADMIN` 이 PATCH 로 재활성하면 관리자 없는 `ACTIVE` 가 생긴다(가드 추가 필요) · 목록에 «정지» 로 보인다 |
+| (다) admin 쪽 파생(테넌트는 `ACTIVE`, «첫 관리자 대기 초대가 있음» 으로 판정) | 스키마 최소 | **기각** — 관리자 없는 `ACTIVE` 테넌트를 정상 상태로 만든다(ADR-044 D3 · AC-4 🔴 위반) |
+
+## 6. ADR-082 두 번째 회사 — 재사용할 자리 (측정 6)
+
+- «소속 추가» 의 자리는 **하나**다: `OperatorMembershipAddition` — `requireCanReceive`(`'*'` · 비-`ACTIVE` · 이미 소속 → 409, `:61-75`) · `write`(대상 테넌트 역할 행 + 배정**만**, 호출자 트랜잭션 안, `:84-93`) · 캐시 무효화(`:96-104`). 클래스 주석이 773 을 이름으로 부른다(`:17-20`).
+- 셀프 온보딩은 이미 그것을 쓴다: `SelfServiceOnboardingUseCase.java:74-77, 89-99` → `FirstAdminProvisioner.addMembership` `:137-145`. 784 AC-0 의 «773 을 막지 않는 조건» ①~③(`TASK-MONO-784…md:274`).
+- ⇒ **773 은 두 번째 회사용 새 백엔드 경로를 만들지 않는다.** 콘솔 «테넌트 생성» 화면이 운영자(비-`SUPER_ADMIN`)일 때도 **같은 온보딩 엔드포인트**(OIDC `subjectToken`)를 부르면 표 5행이 탄다. 773 이 더하는 것은 (OD-5 세트 행 · 이메일 · 속도 게이트)뿐이고, 그 쓰기는 `provision` · `addMembership` **두 메서드 모두**의 같은 트랜잭션 안에 둔다.
+- Out of Scope 확인(스위처로 충분한가): ✅ 충분하다 — 스위처 = (`iam` 제품은 모든 테넌트에 묶임 `ConsoleRegistryUseCase.java:166-169`) ∩ 실효 범위(배정 ∪ 홈, `:83-84`) ∩ `ACTIVE`(`:86-88`) → 소속 추가된 새 회사는 재교환 뒤 스위처에 뜬다(`tenant-options.ts:13-20`). 대기 테넌트는 안 뜬다.
+
+## 7. 콘솔 e2e grep (측정 7 · AC-6)
+
+| 디렉터리 | `/onboarding` · `onboarding-` · `onboard`(대소문자 무시) · `조직 만들기` · `테넌트 등록` · `/tenants` |
+|---|---|
+| `projects/platform-console/apps/console-web/tests/e2e/` (4 spec) | **0** |
+| `projects/platform-console/apps/console-web/e2e-smoke/` (11 spec) | **0** |
+| `tests/federation-hardening-e2e/` (16 spec + fixtures — 티켓의 경로는 콘솔 아래가 아니라 **리포 루트**다) | **0** |
+| `projects/iam-platform/tests/` | **0** |
+| (참고) 단위 테스트 — 바뀔 곳 | `tests/unit/auth-routes.test.ts:411-448` · `auth-idle-refresh.test.ts:217-223, 321` · `mfa-step-up-routes.test.ts:226-238, 376-382` · `onboarding-proxy.test.ts` · `onboarding-client.test.ts` · `features/onboarding/CreateOrganizationForm.test.tsx` · `sample-fetch-allowlist.test.ts:131-136` · `session-end-demo-stopped.test.tsx:214-215`(샘플 모드가 `/onboarding` 을 `/` 로 바꾸는 목록 — 새 화면 경로도 넣어야 한다) |
+
+⇒ AC-6 의 «grep 후 수정» 은 **고칠 e2e 가 없다**(0). 대신 지금 `/onboarding` 은 e2e 커버리지 0 이다 — 773 은 새 spec 을 **추가**해야 AC-1 · AC-2 · AC-5 · AC-7 이 브라우저에서 재진다(S6).
+
+## 8. 티켓에서 틀린 것 · 낡은 것
+
+1. 🔴 **Scope 에 auth-service 가 없다** — 측면 없는 풀 계정의 콘솔 토큰 발급(`auth-api.md:731-732, 739`)을 바꾸지 않으면 비운영자 셸에 들어올 사람이 없다(§ 3).
+2. 🔴 **AC-2 «entitled 도메인의 카탈로그 전체» 는 생성 시점에 공집합이다** — 새 테넌트는 구독 0 으로 태어난다(ADR-044 D6 · `onboarding-api.md:63-65`). 그리고 `all-domains-full` 은 `fan` 을 포함하는데(`admin-api.md:3664-3665` · `V0052…sql:137, 174-177`) `fan` 은 `fan-platform` 만 구독할 수 있어(`admin-api.md:2586`) **어떤 고객 테넌트에도 배정 API 로는 영원히 못 준다**(`admin-api.md:3613` `422 DOMAIN_NOT_SUBSCRIBED` — 소유자 실측 2026-10-14 와 같다). 그대로 두면 AC-2 의 단언은 «∅ = ∅» 로 공허하게 초록이다 → OD-4.
+3. Goal 의 `CreateOperatorUseCase.java:100-107` 기전 인용 낡음(§ 2). 그리고 «`SUPER_ADMIN` 이 못 앉힌다» 의 해법(초대)은 772 가 이미 냈다 — 773 의 일은 **원자성(D3) · 대기 상태 · 수락 갈래**다.
+4. 줄 번호 낡음: `callback/route.ts:191` → `:319-321` · `refresh/route.ts:205` → `:235-240` · `(console)/layout.tsx:148-160` → `:152-164`(§ 3).
+5. AC-3 «신원당 상한을 넘으면 거절» 은 **이미 구현**(784 S5) — 773 은 값(+ `SUSPENDED` 셈 · 경합)만 정한다.
+6. AC-7 «0 이면 PC-FE-331 종결» — 773 뒤에도 «측면 비-`ACTIVE`» 거절 행을 남기면 모집단은 0 이 아니다(OD-6).
+7. Edge Case 2 «빈 상태 화면이 받은 초대를 먼저 보여 준다» — 운영자 토큰 없는 사람이 **자기 초대 목록**을 읽는 표면이 없다(초대 목록 `GET /api/admin/operator-invitations` 는 `operator.manage` 게이트, `OperatorInvitationUseCase.java:115-147`; iam specs 에 «받은 초대» 표면 grep 0) → 새 계약(OD-7).
+8. AC-6 의 `tests/federation-hardening-e2e` 는 리포 루트 경로다(§ 7).
+9. 문서 낡음(773 S1 에서 같이 고칠 것): `console-web/architecture.md:279`(교환 401 → «강제 재로그인 `not_provisioned`» — 코드는 `/onboarding`) · `admin-api.md:2564`(구독 POST «Granted to roles: SUPER_ADMIN» — `rbac.md:113` 은 `TENANT_BILLING_ADMIN` 에도 `subscription.manage`) · `onboarding-api.md:90`(이메일 인증 «범위 밖») · `onboarding-api.md:94` · `console-integration-contract.md:3820, 3825`(«773 이 연다» 문장들).
+
+## 9. 소유자 결정 — S1 전에 필요 (각 항목: 선택지 · 추천. 추천은 **구현자 선호**, 결정 아님)
+
+| OD | 질문 | 선택지 | 추천 · 이유 |
+|---|---|---|---|
+| **OD-1** | «관리자 대기» 의 집 | (가) account `tenants.status` 새 값 / (나) `SUSPENDED` + admin 표식 / (다) admin 파생(`ACTIVE` 유지) | **(가)**, 값 이름 10자 이내(예: `PENDING`) 또는 칸 확장 마이그레이션. D3 를 글자대로 지키고 기존 `ACTIVE` 술어가 전부 닫힌 쪽으로 동작한다(§ 5). (다)는 D3 위반 |
+| **OD-2** | 첫 관리자 초대가 **만료**되면 | (a) **대기로 둔다** — 잡 없음, `/tenants` 에 «관리자 대기 · 초대 만료» 표시, `SUPER_ADMIN` 이 재발송 또는 «정리»(= 초대 취소 + 테넌트 `SUSPENDED`) / (b) 만료 시 자동 정리(새 스케줄 잡 → `SUSPENDED`) / (c) 자동 삭제 | **(a)**. 772 의 «만료는 읽을 때, 잡 없음» 설계(`application.yml:148-149`)와 같은 모양이고, 대기 테넌트는 로그인 · 가입 · 스위처 모두 닫혀 있어(§ 5) 남아도 해가 없다. 하드 삭제는 없다(c 불가). 슬러그 점유만 대가 |
+| **OD-3** | 신원당 상한 **값** · `SUSPENDED` 테넌트를 세는가 | 값: 2(지금) / 3 / 더 크게. 셈: 상태 무관(지금) / `ACTIVE` 만 | **값 3 · 상태 무관 유지.** 단위가 출처 무관(초대받은 `TENANT_ADMIN` 소속도 센다, `OperatorOwnedTenantLimit.java:17-20`)이라 2 면 «초대받은 회사 1 + 내 회사 1» 인 사람이 자기 두 번째 회사를 못 만든다. `ACTIVE` 만 세면 «만들기 → 정지 → 또 만들기» 순환이 열린다(784 `:359`). 설정 키라 코드 변경 없이 올릴 수 있다 |
+| **OD-4** | AC-2 · AC-3 의 «전체 업무»(ADR-083 OD-5)를 무엇으로 | (A) **`all-domains-full` 한 행, 전용 출처**(예: `ORIGIN` — `legacy-compat`/`MIGRATION` 과 같은 «API 배정 불가 · 시스템만 쓰는» 모양), 쓰기 때 entitled 검사를 하지 않는다 · 토큰은 P3 의 `∩ entitled` 가 거른다 / (B) 생성 시점 «구독한 도메인의 `<d>-full`» = 태어날 때 ∅ + 이후 OD-4(자기 배정) 안내 / (C) 구독 활성 시점에 생성자에게 `<d>-full` 자동 배정(새 훅 + «생성자» 기억) | **(A).** 이유: ① 세트 행이 entitled 밖 도메인을 덮는 상태는 이미 **합법**이다(«구독이 해지돼도 행은 남는다 — 토큰에서 걸러진다», `data-model.md:386` · `admin-api.md:3607`) ② 토큰 상한은 쓰기 게이트가 아니라 auth 의 `∩ entitled` 다(ADR-083 D6) — 권한이 넓어지지 않는다 ③ 행 하나가 «구독을 켜는 순간 그 도메인 전체» 를 뜻해 OD-5 의 의도(«생성자가 업무 0 으로 시작하지 않는다»)를 실제로 이룬다 ④ P5~P8 카탈로그 확장이 그대로 따라온다(«전체» 의 뜻). 🔴 대가: ADR-083 D5 «구독 밖 도메인의 세트 배정은 서버가 거절» 의 **예외**를 계약 · ADR 덧붙임으로 적어야 한다(배정 API 가 아니라 생성 원자 묶음 한 자리만) · 개인 회수(`DELETE …/domain-permission-sets/{setId}`)가 이 출처도 지우게 한다(`MIGRATION` 과 같은 취급, `admin-api.md:3622-3623`). (B)는 OD-5 를 사실상 «0 에서 시작» 대안으로 바꾼다 — 고르면 ADR-083 OD-5 기록을 고쳐야 한다. **AC-2 단언(A 일 때)**: 같은 시험에서 구독 전 assume `roles`=[](대조군) → `wms` 구독 → assume `roles` = `wms` 카탈로그 8개 · 다른 테넌트 세트 행 0 · `fan` 역할 0 |
+| **OD-5** | `SUPER_ADMIN` 경로에서 초대로 들어온 **첫 관리자**도 OD-4 의 세트를 받는가 | 받는다(수락 때, 첫 관리자 초대일 때만) / 안 받는다(OD-5 는 «생성자» 만) | **받는다.** 그 사람이 그 테넌트의 사실상 창립 관리자다 — 안 주면 셀프 경로와 결과가 갈린다(이 티켓이 없애려는 «같은 행위 · 다른 결과»). 일반 초대 수락은 지금처럼 0(ADR-083 D8) |
+| **OD-6** | 측면이 **비-`ACTIVE`**(퇴사 · 정지)인 풀 계정의 콘솔 토큰 | (a) 비운영자 셸 토큰을 준다 — 운영자 토큰 없음, «테넌트 생성» 은 409(`onboarding-api.md:106`)로 설명 / (b) 지금처럼 거절(`'consumer-pool'`) | **(a).** 술어가 «풀 계정이면 셸» 하나로 줄고, 콘솔 client 의 `'consumer-pool'` 거절 모집단이 0 이 되어 `TASK-PC-FE-331` 을 구현 없이 닫을 근거가 생긴다(AC-7). 셸에는 운영자 토큰도 관리 API 도 없으니 넓어지는 권한 0. (b)면 PC-FE-331 모집단 ≠ 0 |
+| **OD-7** | 비운영자의 «받은 초대» 읽기(Edge Case 2) | (a) 새 읽기 — 온보딩 엔드포인트와 같은 `subjectToken` 인증, **그 계정의 인증된 이메일로 온** `PENDING` · 미만료 초대만 / (b) 표면 없이 «메일함을 확인하세요» 안내만 | **(a)**, 인증된 이메일일 때만(미인증이면 빈 목록 + 인증 안내). 남의 이메일 초대 열거가 생기지 않는다. (b)면 Edge Case 2 를 «안내 문구» 로 고쳐 닫는다 |
+| **OD-8** | 속도 제한 값 | per-IP: 게이트웨이 새 스코프 `onboarding`(signup 과 같은 5/60s) · per-identity: (i) 상한(OD-3)으로 갈음 / (ii) 별도 카운터 | **per-IP 5/60s + per-identity = 상한으로 갈음.** 신원당 총량은 상한이 이미 묶고, 새 계정 스팸은 «인증된 이메일» + per-IP 가 문다. ADR-044 D4 가 «per-identity + per-IP» 를 적었으므로 소유자 확인이 필요하다 |
+
+(구현자 결정 — 소유자 질문 아님: 상한 경합은 `addMembership` 트랜잭션 안에서 운영자 행 잠금 + 재계수로 닫는다 / 비운영자 상태는 «운영자 쿠키 없음» 추론이 아니라 **교환 `401` 에서만 세우는 명시 표식**으로 판정한다(§ 10 R2) / 새 화면 경로는 `/tenants/[tenantId]` 와 겹치지 않게 한다 — `/tenants/new` 를 쓰면 슬러그 `new` 를 예약어에 더한다.)
+
+## 10. 슬라이스 제안 (784 S1~S6 모양 — 계약 먼저)
+
+| 슬라이스 | 무엇 | 파일(주요) | 시험 |
+|---|---|---|---|
+| **S1 계약** | 위 OD 답을 계약으로. 온보딩: 이메일 게이트(`403 EMAIL_NOT_VERIFIED` — 770 공용 이름) · `429` · 상한 값 · OD-4 세트 행 · OD-7 읽기 · 판정 표에 게이트 자리. 테넌트: `POST /api/admin/tenants` 에 `firstAdmin{email, displayName}`(B2B · B2C 공통, `SUPER_ADMIN`) · 대기 상태 · 전이표(대기→`ACTIVE` 는 수락만) · OD-2 정리 행위. 초대: «첫 관리자 초대» 표지 · 대기 테넌트 수락 갈래 · 수락 = 활성화. 세트: OD-4 출처 · 회수 규칙. auth: `auth-api.md:729-739` 표 «측면 없음»(+OD-6) 행 → 발급. 콘솔: § 2.6 · 2.6.1 · 2.6.3 비운영자 상태 · `/onboarding` → 새 화면. 게이트웨이 스코프. § 8-9 낡은 문장 | `onboarding-api.md` · `admin-api.md`(§ Tenant Lifecycle · § Operator Invitation · § 도메인 업무 권한 세트) · `auth-api.md` · `internal/auth-to-admin.md` · `internal/account-*.md`(테넌트 상태) · `events/tenant-events.md` · `gateway-api.md` · `admin-service/data-model.md` · `rbac.md` · `features/multi-tenancy.md` · `console-integration-contract.md` · `console-web/architecture.md` · ADR-083 · ADR-044 덧붙임(본문 불변) | 문서 — 링크 · 앵커 가드 |
+| **S2 account-service** | 대기 상태 값 · 전이(생성 시 대기 허용, 대기→`ACTIVE`/`SUSPENDED`) · (필요 시) `status` 칸 확장 마이그레이션 · 내부 생성에 초기 상태 | `TenantStatus.java` · `Tenant.java:98-135` · `TenantProvisionUseCase.java` · 새 `V00xx` | 대기 테넌트 가입 거절 IT · 전이 단위 · 마이그레이션 IT |
+| **S3 admin 셀프 경로** | 이메일 게이트(`VerifiedEmailMatchPort` 재사용, 테넌트 생성 **전**) · 상한 값 · 경합 잠금 · OD-4 세트 행(`provision`·`addMembership` 같은 트랜잭션) · OD-7 읽기 · (OD-8) 게이트웨이 스코프 | `OnboardingController.java` · `SelfServiceOnboardingUseCase.java` · `FirstAdminProvisioner.java` · `OperatorOwnedTenantLimit.java` · `application.yml:156` · 세트 쓰기 포트 · `gateway …/RouteConfig.java:52` · `application.yml:116` | `SelfServiceOnboardingIntegrationTest` 확장: 🔴 미인증 이메일 → 403 · 테넌트 0(대조군: 인증 뒤 201) · AC-2 행 단언 · AC-3 기존 회사 역할 행 + 세트 행 **바이트 불변** · 새 회사에서 기존 권한 불통 · 상한 초과 422 · 동시 두 요청 = 하나만 |
+| **S4 admin `SUPER_ADMIN` 경로** | `POST /tenants` + `firstAdmin` → 대기 테넌트 + 첫 관리자 초대(772 `OperatorInvitationWriter` 재사용) · 초대 실패 보상 · 수락: 대기 테넌트 허용(첫 관리자 초대만) → 쓰기 → 활성화(+OD-5) · PATCH 대기→`ACTIVE` 거절 · OD-2 정리 | `CreateTenantUseCase.java` · `OperatorInvitationUseCase.java` · `OperatorInvitationAcceptanceUseCase.java:207-217` · `UpdateTenantUseCase.java` | AC-4 IT: 생성 직후 상태 = 대기 · 대기 테넌트 로그인/가입/스위처 0 · 수락 → `ACTIVE` + 역할 둘 · 🔴 어느 순간에도 «`ACTIVE` ∧ `TENANT_ADMIN` 0» 이 없음 · 만료 후 OD-2 규칙 · 일반 초대(비-첫관리자)는 대기 테넌트에서 여전히 거절(대조군) |
+| **S5 auth-service** | `auth-api.md:731-732` «측면 없음»(+OD-6) 행 → 콘솔 토큰 발급(`id_token` 포함 · `roles` 없음) · `operator_eligibility_unavailable` 행 그대로 | 콘솔 토큰 발급자(`TenantClaimTokenCustomizer` 주변 — S5 AC-0 이 정확한 자리를 잰다) | 발급 표 IT · 🔴 AC-1 대조군: 그 토큰을 `/api/admin/operators` 에 Bearer 로 → 401 · 교환 → 401 · 온보딩 엔드포인트만 통과 |
+| **S6 console-web** | 비운영자 표식(교환 `401` 에서만 — 콜백 `:304-322` · 리프레시 `:235-240`) · 셸 가드 갈래(레지스트리 · `/me` · org-nodes · 벨 · 하트비트 건너뜀) · 경로 허용 목록(가이드 · 테넌트 생성 · 받은 초대) 밖은 새 화면으로 · 사이드바 둘 · «테넌트 생성» 화면 하나(역할로 갈림: 비운영자/회사 운영자 → 온보딩 BFF, `SUPER_ADMIN` → `/api/tenants` + 첫 관리자) · 빈 상태(«받은 초대» · «관리자에게 초대를 요청하세요» · 이메일 미인증 안내) · 생성 뒤 재교환 + reassume · `/onboarding` → 리다이렉트 · `/tenants` 목록 대기 표시 · 샘플/데모 종료 목록에 새 경로 | `(console)/layout.tsx` · `api/auth/callback/route.ts` · `api/auth/refresh/route.ts` · `shared/lib/session.ts` · `ConsoleSidebarNav` · `(onboarding)/**` · `api/onboarding/**` · `features/onboarding/**` · `api/tenants/_proxy.ts` · `features/tenants` | 단위(§ 7 목록 갱신) + **새 e2e**(`tests/e2e/` 또는 `tests/federation-hardening-e2e/specs/`): AC-1(셸 · 사이드바 둘 · 관리 API 401 대조군) · AC-2(생성 → 개요) · AC-5(`/onboarding` 직접 → 새 화면) · AC-7(로그아웃 → IdP 세션 끝 → 다른 계정 로그인 폼). 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인(AC-6) |
+
+**순서**: S1 → S2 → S3 → S4 → S5 → S6. 🔴 **S5 는 S3(이메일 게이트) 보다 먼저 머지하지 않는다** — 772 가 측면 없는 풀 계정에 콘솔 토큰을 주지 않은 이유가 바로 «온보딩에 인증 이메일 게이트가 없다» 였다(`onboarding-api.md:94` · 772 AC-0 F9). 백엔드 S2~S5 는 한 AMI 에, S6 은 Vercel — S6 은 백엔드가 데모에 올라간 뒤.
+
+## 11. 위험
+
+- **R1 401 고리** — 벨 폴링 · 셸 안 페이지의 운영자 API 직접 호출. 대책: 셸 가드 갈래 + 경로 허용 목록 + 단위 테스트로 «비운영자 상태에서 운영자 토큰 호출 0» 을 단언(샘플 방문자의 fetch 허용 목록 가드 `sample-fetch-allowlist.test.ts` 와 같은 모양).
+- **R2 상태 술어의 표류** — «operator 쿠키 없음 = 비운영자» 로 추론하면 유휴 만료 · 교환 장애가 비운영자 셸로 잘못 떨어진다(지금 operator TTL 3600 > access 1800 이라 평소엔 안 생기지만, `admin-api.md:571` 설정 하나로 뒤집힌다). § 2.6 «`401` 만 운영자 아님» 그대로 명시 표식으로.
+- **R3 게이트 없는 개방** — S5 가 S3 보다 먼저 배포되면 미인증 계정이 무제한(측면 없음 = 상한 0 셈)으로 테넌트를 만든다.
+- **R4 서비스 간 활성화** — 수락(admin 트랜잭션) 뒤 활성화(account 호출)가 실패하면 «관리자 있는 대기 테넌트» 가 남는다 — 멱등 재시도(다음 수락 재요청 · 운영 재활성)로 닫는 쪽이 «관리자 없는 `ACTIVE`» 쪽보다 안전하다(D3 방향). S4 AC-0 이 순서를 정한다.
+- **R5 상태 enum 확장의 조용한 깨짐** — 콘솔 `z.enum`(`_proxy.ts:42`) · `VARCHAR(10)` · 이벤트 소비자 · 상태 필터. 같은 PR 묶음 안에서.
+- **R6 상한 경합** cap+1(784 `:635`) — 잠금 없으면 AC-3 «상한 초과 거절» 이 동시 요청에서 깨진다.
+- **R7 OD-4 (A) 행의 자동 확장** — 카탈로그가 넓어질 때 생성자의 실효 권한이 함께 넓어진다(«전체» 의 뜻이지만 감사에서 보이게 출처를 남긴다).
+- **R8 e2e 공백** — 지금 `/onboarding` e2e 0(§ 7). 콘솔 full-stack e2e 는 nightly 에서만 돈다(CLAUDE.md § Post-merge nightly check) — 머지 초록 ≠ 실행됨.
+- **R9 AC-7 의 전제** — 비운영자 셸 토큰에 `id_token` 이 없으면 로그아웃이 로컬로만 끝나(`logout/route.ts:85-90`) IAM 세션이 남는다. S5 계약에 `id_token` 발급을 명시.
+- ⚪ 재지 않은 것: `'*'` 운영자가 대기/정지 테넌트를 assume 할 수 있는가 · `'consumer-pool'` 거절의 콘솔 외 발생원 · `iam` 자격 계정 중 측면 없는 모집단 크기(이메일 게이트가 `NOT_ELIGIBLE` 로 막을 사람).
+
+## 12. 소유자 결정 확정 (2026-10-15 UTC — 선택창, 8건 전부 추천안)
+
+| OD | 결정 |
+|---|---|
+| OD-1 | «관리자 대기» = account-service `tenants.status` 의 새 값(≤10자, 예 `PENDING` — 이름 · 칸 폭은 S1 이 정한다). ADR-044 D3 «관리자 없는 활성 테넌트 0» 을 문자 그대로 지킨다 |
+| OD-2 | 첫 관리자 초대 만료 → 테넌트는 대기 유지 · 배치 없음(읽기 시점 판정, 772 와 같은 모양) · `/tenants` 에 «초대 만료» · `SUPER_ADMIN` 재초대 / 정리(초대 취소 + 테넌트 SUSPENDED) |
+| OD-3 | 신원당 소유 상한 = **3** · 테넌트 상태 무관 셈(784 의 미결 두 건 — SUSPENDED 포함 여부 · cap+1 경합 — 을 여기서 닫는다: 포함 · 운영자 행 잠금 + 트랜잭션 안 재셈) |
+| OD-4 | 회사 생성자의 «전체 업무» = `all-domains-full` 한 행을 **시스템 전용 출처**(예 `ORIGIN` — `MIGRATION` 과 같은 종류)로, 구독 검사 없이 쓴다. 상한은 P3 의 토큰 `∩ entitled`. ADR-083 D5 예외 한 줄 · 개인 회수가 이 출처도 지운다. AC-2 시험 = 구독 전 `roles` 없음(대조) → `wms` 구독 → wms 역할 전부 |
+| OD-5 | `SUPER_ADMIN` 이 초대한 **첫 관리자** 도 수락 시 같은 세트(같은 출처) — 첫 관리자 초대에만. 일반 직원 초대는 지금처럼 세트 없음 |
+| OD-6 | 운영자 측면이 없거나 **활성이 아닌** 계정에도 비운영자 셸 토큰(운영자 토큰 없음 → 권한 증가 없음) — `sso_wrong_account` 모집단 0 → `TASK-PC-FE-331` 구현 없이 종결 근거(AC-7) |
+| OD-7 | «받은 초대» = 새 읽기 API(로그인 subject token 인증 · 호출자의 **인증된 이메일** 로 온 초대만) |
+| OD-8 | 속도 제한 = 게이트웨이 `onboarding` 범위 IP 당 5회/60초 · 신원당은 소유 상한(OD-3)으로 충족(ADR-044 D4 «신원당» 의 충족 근거로 계약에 적는다) |
+
+## 13. AC-0 이 고친 티켓 범위 (§ 8 반영)
+
+- **Scope 에 auth-service 추가** — 운영자 측면 없는 풀 계정에 콘솔 셸 토큰(`id_token` 포함)을 발급하는 변경이 없으면 AC-1 · 2 · 5 · 7 에 도달하지 못한다(`auth-api.md:729-739`). 🔴 순서: 이메일 게이트(S3)가 셸 토큰(S5)보다 **먼저** 머지된다(772 F9 와 같은 이유).
+- **AC-2 정정** — «그 테넌트 assume `roles` = entitled 도메인의 카탈로그 전체» 는 생성 직후 구독 0 이라 공허하다. 대신: 생성 직후 assume `roles` 없음(대조) → 구독 하나 추가 → 그 도메인의 카탈로그 역할 전부 · 🔴 다른 테넌트 세트 행 0(그대로).
+- **AC-3** — 상한 거절은 784 에 이미 있다. 773 은 값(3)과 경합 수선만.
+- **Goal 의 `CreateOperatorUseCase.java:100-107` 인용은 낡았다** — 772 S7 뒤 비-`'*'` 생성은 `422 OPERATOR_INVITATION_REQUIRED`. 남은 결함은 «초대 수락까지 관리자 없는 ACTIVE 테넌트» 와 «수락은 ACTIVE 테넌트만» 이다(§ 2).
+- **Edge Case 2(«받은 초대»)** → OD-7 의 새 읽기 API 가 In Scope.
+- 슬라이스 = § 10(S1 계약 → S2 account → S3 admin 셀프 경로 → S4 admin `SUPER_ADMIN` 경로 → S5 auth → S6 console). S2~S5 는 한 AMI · S6 은 그 뒤 Vercel.
