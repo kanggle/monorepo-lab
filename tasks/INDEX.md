@@ -219,6 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-796-artist-goods-photos.md` — **스토어 «아티스트 굿즈» 18개 이미지를 어울리는 사진으로** (REVIEW, 2026-10-14 UTC). `ADR-MONO-077` R2(`placehold.co`) 소유자 뒤집기 → 상품 종류·설명에 맞춘 무료 Unsplash 사진 18장 · V23 + h2 V16 + 픽스처 + 번들 `store.json`. 🔴 데모 서버 DB 는 재굽기 전까지 옛 이미지. 분석=Opus 5.5 / 구현 권장=Sonnet 5.
 - `TASK-MONO-784-operator-membership-per-company.md` — **`ADR-MONO-082` 갈래 b — 운영자 행 하나에 회사별 소속 · 역할** (REVIEW, 2026-10-13 UTC). S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⏳ `done/` 전 ⚪: 첫 nightly 콘솔 잡 · 다음 데모 창 라이브(OD-3 화면 · R2 · 내보내기). 분석=Opus 5.5 / 구현 권장=Opus.
 
 

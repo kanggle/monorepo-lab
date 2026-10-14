@@ -196,7 +196,7 @@ test('번들 store.json: categories[].productCount 가 카테고리마다 실제
 });
 
 // TASK-MONO-739 — 굿즈 시드의 모양 (AC-9 R1·R2 · ADR-MONO-079 D3).
-test('번들 store.json: 아티스트 굿즈 — 팬 공개 아티스트마다 3개, collectionRef 는 팬 아티스트 id, 이미지는 placehold.co (TASK-MONO-739)', async () => {
+test('번들 store.json: 아티스트 굿즈 — 팬 공개 아티스트마다 3개, collectionRef 는 팬 아티스트 id, 이미지는 서로 다른 Unsplash 사진 (TASK-MONO-739 · 796)', async () => {
   const store = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'store.json'), 'utf8'));
   const fan = JSON.parse(await readFile(join(HERE, '..', 'snapshots', 'fan.json'), 'utf8'));
   const GOODS = 'a0000000-0000-0000-0000-000000000008';
@@ -210,8 +210,11 @@ test('번들 store.json: 아티스트 굿즈 — 팬 공개 아티스트마다 3
   }
   for (const p of goods) {
     assert.ok(artistIds.includes(p.collectionRef), `굿즈 '${p.name}' 의 collectionRef 가 팬 공개 아티스트가 아니다`);
-    assert.match(p.thumbnailUrl, /^https:\/\/placehold\.co\//, `R2 — 굿즈 '${p.name}' 의 이미지가 placehold.co 가 아니다`);
+    // TASK-MONO-796 — R2(`placehold.co` 자리표시)를 소유자가 뒤집었다: 다른 시드 상품과 같은 Unsplash CDN.
+    assert.match(p.thumbnailUrl, /^https:\/\/images\.unsplash\.com\/photo-/, `굿즈 '${p.name}' 의 이미지가 Unsplash 사진이 아니다`);
   }
+  // 18개가 같은 사진 한 장을 돌려 쓰면 «어울리는 이미지» 가 아니다 — 굿즈끼리는 전부 다른 사진이다.
+  assert.equal(new Set(goods.map((p) => p.thumbnailUrl)).size, goods.length, '굿즈 이미지가 서로 겹친다');
   // 🔴 굿즈 카테고리 밖의 상품은 어느 아티스트 컬렉션에도 속하지 않는다(기존 카탈로그는 백필하지 않았다).
   for (const p of store.data.products.filter((x) => x.categoryId !== GOODS)) {
     assert.equal(p.collectionRef, null, `굿즈가 아닌 상품 '${p.name}' 에 collectionRef 가 있다`);

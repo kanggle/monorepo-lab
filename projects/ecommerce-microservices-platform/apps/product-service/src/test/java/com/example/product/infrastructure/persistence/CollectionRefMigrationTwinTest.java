@@ -98,6 +98,15 @@ class CollectionRefMigrationTwinTest {
                 rs.next();
                 assertThat(rs.getLong(1)).isEqualTo(21L);
             }
+            // TASK-MONO-796 — V16 이 V14 의 placehold.co 자리표시를 굿즈마다 다른 Unsplash 사진으로 덮었다.
+            try (ResultSet rs = c.createStatement().executeQuery(
+                    "SELECT COUNT(*), COUNT(DISTINCT thumbnail_url), "
+                            + "SUM(CASE WHEN thumbnail_url LIKE 'https://images.unsplash.com/photo-%' THEN 1 ELSE 0 END) "
+                            + "FROM products WHERE category_id = '" + GOODS_CATEGORY + "'")) {
+                rs.next();
+                assertThat(rs.getLong(2)).as("굿즈 이미지가 서로 겹치지 않는다").isEqualTo(rs.getLong(1));
+                assertThat(rs.getLong(3)).as("굿즈 이미지가 전부 Unsplash 사진").isEqualTo(18L);
+            }
         }
     }
 
