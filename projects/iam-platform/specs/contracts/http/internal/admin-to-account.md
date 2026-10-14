@@ -409,6 +409,29 @@ admin-service 가 그대로 부를 수 없다. 771 은 auth-service 에서 같�
 
 ---
 
+## Tenant lifecycle (`/internal/tenants`) — 773 변경분 (TASK-MONO-773)
+
+**소유자 결정 OD-1 (2026-10-15 UTC) · 구현 S2 (account-service) · 호출자 S3 · S4 (admin-service).** account-service `TenantLifecycleController`(`POST /internal/tenants` · `PATCH /internal/tenants/{tenantId}` · `GET /internal/tenants` · `GET /internal/tenants/{tenantId}`)는 TASK-BE-250 부터 있었지만 이 파일에 절이 없었다 — 아래는 **773 이 바꾸는 것만** 적는다(그 밖의 모양은 코드 그대로: 본문 `{tenantId, displayName, tenantType}` · 응답 `{tenantId, displayName, tenantType, status, createdAt, updatedAt}` · 중복 `409 TENANT_ALREADY_EXISTS`). 관리 표면: [admin-api.md § Tenant Lifecycle](../admin-api.md#tenant-lifecycle-task-be-256).
+
+**상태 값 — `PENDING` 추가** (`tenants.status` · `TenantStatus`): `ACTIVE` · `SUSPENDED` · **`PENDING`**(첫 관리자 대기). 7자 — `VARCHAR(10)` 칸(V0009)에 들어가므로 **칸 확장 마이그레이션 없음**. 칸에 CHECK 가 없다(V0009) — 값 검증은 enum 이 한다. `Tenant.isActive()` 의 술어(`status == ACTIVE`)는 바꾸지 않는다 — `PENDING` 은 «활성 아님» 으로 읽혀 가입 · 프로비저닝 · 가입 적격이 지금 코드 그대로 닫힌다(`TENANT_SUSPENDED` 423 — 새 코드 없음).
+
+**`POST /internal/tenants`** — 본문에 선택 칸 **`initialStatus`**: `ACTIVE`(생략 시 기본 — 셀프 온보딩 경로 · 지금 동작 바이트 동일) \| `PENDING`(`SUPER_ADMIN` 경로). 그 밖의 값(`SUSPENDED` 포함) → `400 VALIDATION_ERROR`. 🔴 `Tenant.java` 의 «initial status always ACTIVE» 주석 · 팩토리가 이 칸을 받도록 바뀐다(773 AC-0 § 1).
+
+**`PATCH /internal/tenants/{tenantId}`** — `status` 전이표. 지금 `Tenant.updateStatus` 는 전이를 검사하지 않는다(같은 값 = no-op 만 — `Tenant.java:128-135`). 773 S2 가 더하는 거절은 하나다: **`status = PENDING` 은 요청 값이 될 수 없다 → `400 VALIDATION_ERROR`**(대기는 생성 때만 생긴다). 나머지 칸은 지금 그대로 허용이다:
+
+| 지금 | → `ACTIVE` | → `SUSPENDED` | → `PENDING` |
+|---|---|---|---|
+| `PENDING` | ✅ (admin-service 가 첫 관리자 수락 커밋 뒤에만 부른다 — «관리자가 있는가» 판정은 admin 의 몫, account 는 전이만 한다) | ✅ (정리 · 생성 보상) | `400`(요청 값 금지) |
+| `ACTIVE` | no-op | ✅ | `400` |
+| `SUSPENDED` | ✅ (재활성 — 지금 그대로; «정리로 정지된 테넌트의 재활성 금지» 는 admin-service 판정, admin-api § 전이 매트릭스) | no-op | `400` |
+
+- 🔵 account-service 가 «`PENDING → ACTIVE` 는 관리자가 있을 때만» 을 강제하지 않는 이유: 관리자(운영자 · 역할 행)는 admin-service DB 에 있다 — account 가 그것을 물으면 서비스 간 순환 의존이 생긴다. 이 내부 경로의 호출자는 admin-service 하나다(게이트웨이의 `/internal/tenants/{tenantId}/**` 라우트는 **경로 아래**(`/accounts` 등)를 테넌트 워크로드에 연다 — `PATCH /internal/tenants/{tenantId}` 자체가 그 라우트 패턴에 걸리는지는 ⚪ S2 AC-0 이 `RouteConfig` 로 확인한다; 걸린다면 테넌트 자신의 워크로드 토큰이 자기 `PENDING` 을 `ACTIVE` 로 올릴 수 있다 — 🔴 S2 의 막아야 할 구멍 후보. 같은 질문이 지금의 `SUSPENDED → ACTIVE` 에도 있다(773 이전부터 — admin-api § POST /api/admin/tenants 의 `orgNodeId` 노트가 `POST /internal/tenants` 에 대해 같은 노출을 적었다). 다만 `PENDING` 테넌트에는 아직 워크로드 클라이언트가 없다(그 테넌트의 클라이언트 등록은 운영자 몫이다)).
+- `GET /internal/tenants?status=PENDING` 필터를 받는다(목록 · 대기 테넌트 보기).
+- 이벤트: account-service 는 테넌트 상태 이벤트를 내지 않는다(지금 그대로 — `tenant.*` 는 admin-service outbox, [tenant-events.md](../../events/tenant-events.md)).
+- [auth-to-account.md § GET /internal/tenants/{tenantId}](./auth-to-account.md#get-internaltenantstenantid) 의 `status` 에 `PENDING` 이 올 수 있다 — auth-service 는 `tenantType` 만 읽으므로 영향 없음.
+
+---
+
 ## Org-Node command gateway (`/internal/org-nodes/*`) — TASK-BE-490 (ADR-MONO-047)
 
 > account-service 가 `tenants` 를 소유하므로 **`org_node` 트리도 소유**한다(ADR-MONO-047 § D6). admin-service 는 `org.manage` 게이트 + 운영자 감사만 담당하는 **thin command gateway** 이며 트리를 저장하지 않고 아래 엔드포인트로 위임한다. cycle/depth/subset(child ⊆ parent) 불변식은 **account-service 서버측에서 강제**되며 — admin-service 는 이를 중복 검사하지 않고 422 를 통과 매핑한다(ADR-MONO-047 § D2·D4). 이 서브트리는 파일 상단의 `/internal/**` 인증 게이트(IAM `client_credentials` Bearer JWT, JWKS+issuer 검증, fail-closed)를 그대로 적용받는다.

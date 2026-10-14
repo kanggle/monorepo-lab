@@ -159,6 +159,8 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 
 > 🔴 **TASK-MONO-784 (ADR-MONO-082 b · D3 · D-10 — 구현 S2)**: 술어 = `oidc_subject = accountId ∧ status = ACTIVE ∧ (tenant_id = '*' ∨ 소속(operator_tenant_assignment 행) ≥ 1)`. 마지막 소속까지 «이 회사에서 내보내기» 된 행은 `ACTIVE` 로 남지만(재초대 · 재온보딩이 같은 행에 소속을 더한다 · 감사가 행을 요구한다) 소속 0 이므로 `false` — 빈 콘솔에 들어오지 않는다(784 Edge Case 2 · AC-0 F16). **토큰 교환(`POST /api/admin/auth/token-exchange`)도 같은 술어로 바뀐다** — 한 자리(772 D-5 «교환과 같은 술어»): 소속 0 인 행의 교환 = `401 TOKEN_INVALID`(«운영자 아님» — 지금의 비-`ACTIVE` 와 같은 답).
 
+> 🔴 **TASK-MONO-773 (OD-6 · 구현 S5) — 이 답은 더는 콘솔 토큰 발급을 가르지 않는다.** 773 S5 부터 풀 principal × 콘솔 client 는 `eligible` 이 `true` 든 `false` 든 콘솔 토큰을 받는다(`false` = 콘솔 **비운영자 셸** 토큰 — [auth-api.md § 풀 계정의 콘솔 토큰](../auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)). 운영자인지는 지금처럼 **토큰 교환**(`POST /api/admin/auth/token-exchange`)이 매번 같은 술어로 답한다(`401` = 운영자 아님). 🔴 **소유자 결정 (2026-10-15 UTC — 773 S1 열린 질문 1): 발급자는 S5 에서 이 호출을 지운다** — 아래 «Caller — fail-CLOSED» 단락과 상수 `operator_eligibility_unavailable` 은 773 S5 머지와 함께 **폐기**된다. admin-service 장애가 콘솔 로그인을 막지 않는다. ⇒ S5 뒤 이 엔드포인트의 호출자는 **0** 이다 — S5 가 다른 호출처를 grep 해 0 이면 같은 PR 에서 엔드포인트도 지우고 이 절 머리에 «폐기 (773 S5)» 를 적는다(기본값 = 지운다).
+
 - 🔴 **`GET /internal/operators/facet` 를 재사용하지 않는다** — 그쪽은 «옮겨도 되나» 를 묻는 **상태 무관 · 두 축** 술어다. 그것으로 콘솔 토큰을 주면 퇴사(`SUSPENDED`) · 정지된 운영자가 콘솔 토큰을 받고, 그 다음 교환이 `401` → 콘솔 `/onboarding` 으로 간다(772 AC-3 위반). 질문이 다르면 술어도 다르다.
 - 신원 축(`identity_id`)은 묻지 않는다 — 교환이 `sub` 로만 해석하므로, 신원만 연결된 운영자에게 콘솔 토큰을 주어도 교환이 그 사람을 찾지 못한다.
 - `confined_tenant_id` · 진입 정책 · 2단계는 여기서 보지 않는다 — 그것들은 교환 · assume 이 문다(TASK-MONO-751 · 771). 이 읽기는 «콘솔 셸에 들어올 운영자인가» 하나다.
@@ -171,7 +173,7 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 | 401 `UNAUTHORIZED` | IAM client_credentials JWT 미제시/무효 (`/internal/**` 체인 fail-closed) |
 | 400 `VALIDATION_ERROR` | `accountId` 누락 · 공백 |
 
-**Caller (auth-service) — fail-CLOSED**: 아래 Caller Constraints 와 같은 타임아웃 · 재시도 · circuit breaker(**별도 breaker 이름** — 콘솔 로그인 장애가 assume-tenant 게이트 · 이동기 breaker 를 열지 않는다). 답을 못 받으면(4xx · 5xx · 타임아웃 · circuit-open · `eligible` 없는 200) **콘솔 토큰을 내지 않는다** — `invalid_grant` + 고정 상수 `error_description=operator_eligibility_unavailable`(«측면 없음» 의 거절과 **다른** 값 — 장애를 «다른 계정으로 로그인돼 있다» 로 보이게 하지 않는다, 772 AC-0 F5). 호출 시점: 풀 principal 의 콘솔 `authorization_code` · `refresh_token` 발급 **매번**(캐시 없음 — 멤버십 읽기와 같은 모양, 퇴사 · 정지가 다음 refresh 부터 걸린다).
+**Caller (auth-service) — fail-CLOSED** (772 — **773 S5 에서 폐기**, 위 소유자 결정. S5 머지 전까지의 동작): 아래 Caller Constraints 와 같은 타임아웃 · 재시도 · circuit breaker(**별도 breaker 이름** — 콘솔 로그인 장애가 assume-tenant 게이트 · 이동기 breaker 를 열지 않는다). 답을 못 받으면(4xx · 5xx · 타임아웃 · circuit-open · `eligible` 없는 200) **콘솔 토큰을 내지 않는다** — `invalid_grant` + 고정 상수 `error_description=operator_eligibility_unavailable`(«측면 없음» 의 거절과 **다른** 값 — 장애를 «다른 계정으로 로그인돼 있다» 로 보이게 하지 않는다, 772 AC-0 F5). 호출 시점: 풀 principal 의 콘솔 `authorization_code` · `refresh_token` 발급 **매번**(캐시 없음 — 멤버십 읽기와 같은 모양, 퇴사 · 정지가 다음 refresh 부터 걸린다).
 
 ---
 
@@ -192,12 +194,14 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
   "tenantDisplayName": "Acme Corp",
   "maskedEmail": "p***@example.com",
   "roles": ["SUPPORT_LOCK"],
+  "firstAdmin": false,
   "status": "PENDING",
   "expired": false,
   "expiresAt": "2026-10-17T10:00:00Z"
 }
 ```
 
+- `firstAdmin` (**TASK-MONO-773 — 가산**): 첫 관리자 초대면 `true` — 수락 화면이 «{회사}의 **첫 관리자**로 초대되었습니다 — 수락하면 회사가 활성화됩니다» 를 보인다([admin-api.md § Tenant Lifecycle](../admin-api.md#tenant-lifecycle-task-be-256)).
 - 토큰의 SHA-256 으로 찾는다. 없음 · `CANCELLED` → `404 OPERATOR_INVITATION_NOT_FOUND`(둘을 구별하지 않는다 — 열거 방지).
 - `maskedEmail` — 초대 주소를 마스킹한 것(R4). 수락 화면이 «이 주소를 인증한 계정으로 로그인하세요» 를 말하는 데 쓴다. 원문 주소는 싣지 않는다.
 - `tenantDisplayName` — account-service 테넌트 읽기에서. 실패하면 `null`(화면은 `tenantId` 를 쓴다) — 미리보기는 판정이 아니라 fail-soft 다.
@@ -243,7 +247,7 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 | 2 | 이미 `ACCEPTED` 인가 | 수락한 계정 = `accountId` → **`200` + 첫 결과**(`alreadyAccepted=true`, 아래 판정을 다시 하지 않는다) · 다른 계정 → `409 OPERATOR_INVITATION_ALREADY_USED` |
 | 3 | 만료(`expires_at ≤ 지금`) | `410 OPERATOR_INVITATION_EXPIRED` |
 | 4 | 🔴 **account-service 판정** — [`POST /internal/accounts/{accountId}/verified-email:match`](./admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772) (`expectedEmail` = 초대 이메일). 그 안의 순서: 풀 계정인가 → 이메일 = 초대 이메일 → 이메일 **인증됨**(`VerifiedEmailRequirement` — `TASK-MONO-770` 의 공용 술어를 그 자리에서 부른다) | 계정 없음 · 풀 계정 아님(사이트 계정 · `iam` 자격 계정) → `403 OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` · 이메일 불일치 → `403 OPERATOR_INVITATION_EMAIL_MISMATCH` · 미인증 → **`403 EMAIL_NOT_VERIFIED`**(770 의 공용 이름 그대로) · 판정 못 받음 → `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` (**fail-closed** — 모르고 붙이지 않는다) |
-| 5 | 근거가 아직 살아 있는가 — 초대 테넌트 `ACTIVE`(account-service 테넌트 읽기) · 초대자(`invited_by`) `ACTIVE` · 초대 테넌트가 **지금도** 초대자의 admin-grant 범위 안(D2) · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3 — 7일 사이 권한이 줄었을 수 있다) | 하나라도 아니면 `409 OPERATOR_INVITATION_INVALIDATED` · 테넌트 읽기 실패 → `503` |
+| 5 | 근거가 아직 살아 있는가 — 초대 테넌트 `ACTIVE`(account-service 테넌트 읽기) · 초대자(`invited_by`) `ACTIVE` · 초대 테넌트가 **지금도** 초대자의 admin-grant 범위 안(D2) · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3 — 7일 사이 권한이 줄었을 수 있다). 🔴 **773 (OD-5 · 구현 S4)** — 테넌트 상태 판정은 초대 종류로 갈린다: **일반 초대 = `ACTIVE` 만**(`PENDING` · `SUSPENDED` → 거절 — 대기 테넌트를 일반 초대로 열 수 없다, 773 AC-4 대조군) · **첫 관리자 초대(`first_admin = true`) = `PENDING` 만**(`ACTIVE` · `SUSPENDED` → 거절 — 정리된 테넌트의 남은 링크는 죽는다) | 하나라도 아니면 `409 OPERATOR_INVITATION_INVALIDATED` · 테넌트 읽기 실패 → `503` |
 | 6 | 🔴 ~~**OD-1 — 한 사람 = 한 회사**: `admin_operators.oidc_subject = accountId` 인 행이 **없다**(상태 무관 — 정지된 측면도 측면이다)~~ → **784 S5 부터 (ADR-MONO-082 b · D2 · D-12) — 기존 측면이 이 소속을 받을 수 있는가**: `oidc_subject = accountId` 인 행이 ① 없다 → 새 행(아래 «8 이 쓰는 것») ② 있고 `ACTIVE` ∧ 비-`'*'` ∧ 초대 테넌트가 **아직 소속이 아니다** → **그 행에 소속 추가**(아래 «소속 추가일 때») ③ 그 밖(이미 초대 테넌트 소속 · `'*'` 행 · 비-`ACTIVE`) → 거절 | ③ → `409 OPERATOR_ALREADY_PROVISIONED` (784 S5 머지 전: 행이 있으면 상태 무관 이 409) |
 | 7 | 그 테넌트에 같은 이메일의 운영자 행이 없다(`(tenant_id, email)` — 초대 발급 뒤 다른 길로 생겼을 수 있다). **784 S5 부터**: «그 테넌트에 있다» = 초대 테넌트 **소속**인 운영자 행 중 `email` 이 같은 것, **6 의 기존 행은 빼고**(784 AC-0 F15 — 홈 기준이 아니다) | `409 OPERATOR_EMAIL_CONFLICT` |
 | 8 | 한 admin 트랜잭션(아래) — 초대의 조건부 갱신 `PENDING → ACCEPTED`(`WHERE id = ? AND status = 'PENDING' AND token_hash = ?`) | 영향 행 0(동시 수락 · 취소 · 재발송이 먼저 이겼다) → 다시 읽어 2번 규칙으로 답한다(같은 계정 → `200`, 그 밖 → `409 OPERATOR_INVITATION_ALREADY_USED` · 취소 · 재발송이었으면 `404`). `oidc_subject` · `(tenant_id, email)` UNIQUE 위반(6 · 7 의 경합) → 각 `409` |
@@ -278,6 +282,18 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 - 경합: 같은 계정이 같은 테넌트 초대 둘을 동시에 수락하면 배정 PK `(operator_id, tenant_id)` 위반이 진 쪽을 `409 OPERATOR_ALREADY_PROVISIONED` 로 만든다(다시 읽어 6 ③).
 - 🔵 **거절은 감사 원장(`admin_actions`)에 남지 않는다** — 그 행은 운영자를 주체로 요구하는데(`operator_id NOT NULL`) 거절된 수락자에게는 운영자 행이 없다. 거절은 구조화 로그 한 줄(초대 id · 결과 코드 · 계정 id — 토큰 · 이메일 없음)이다.
 
+**첫 관리자 초대일 때 (`first_admin = true` — TASK-MONO-773 OD-1 · OD-5 · ADR-MONO-044 D3 · 구현 S4)** — 판정 1 ~ 7 은 위 그대로(5 는 «`PENDING` 만»). 6 의 세 갈래(새 행 · 소속 추가 · 409)도 그대로다 — 이미 다른 회사 운영자인 사람이 첫 관리자가 되면 «소속 추가» 다(ADR-082 D6 b). 🔵 신원당 소유 상한([onboarding-api.md](../onboarding-api.md) «신원당 상한»)은 보지 않는다 — 일반 수락과 같다(`SUPER_ADMIN` 이 고른 사람이다). 다른 점은 8 과 그 뒤다:
+
+| 순서 | 무엇 | 실패하면 |
+|---|---|---|
+| 8 | 위 «8 의 트랜잭션» 또는 «소속 추가일 때» 의 행 **+ `operator_domain_set_grant` 한 행** (그 운영자 행 × 초대 테넌트 × 프리셋 `all-domains-full` × 출처 **`ORIGIN`** × `granted_by = NULL`) — **같은 트랜잭션**. 구독 검사를 하지 않는다(ADR-083 D5 의 한 자리 예외 — [admin-api.md § 출처와 회수 규칙](../admin-api.md#출처-source_key-와-회수-규칙-adr-083-d4)) | 롤백 — 아무것도 안 남는다 · 초대 `PENDING` 그대로 |
+| 9 | **커밋 뒤** account-service 에 테넌트 전이 `PENDING → ACTIVE` 요청([admin-to-account.md § Tenant lifecycle](./admin-to-account.md#tenant-lifecycle-internaltenants--773-변경분-task-mono-773)) | 🔴 **`503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN`** — 그러나 8 은 이미 커밋됐다: 남는 상태는 «관리자 있는 `PENDING` 테넌트»(안전한 쪽 — ADR-044 D3 방향, 773 AC-0 R4). 같은 계정이 같은 링크로 다시 제출하면 2번 규칙(`ACCEPTED` · 같은 계정)이 **9 를 다시 시도**하고 `200` 을 돌려준다 · `SUPER_ADMIN` 은 `PATCH /api/admin/tenants/{tenantId}` `status=ACTIVE` 로 마칠 수 있다(초대가 `ACCEPTED` 일 때만 허용 — admin-api § Tenant Lifecycle) |
+| 10 | 9 가 성공하면 짧은 admin 트랜잭션: `admin_actions` `action_code = TENANT_ACTIVATE`(`operator_id` = 첫 관리자 · `permission_used = <self_invitation_accept>` · `target_type = TENANT` · `target_id` = `target_tenant_id` = 초대 테넌트) + outbox **`tenant.activated`**([tenant-events.md](../../events/tenant-events.md#tenantactivated)) | 9 는 이미 끝났다 — 이벤트 · 감사 한 행이 빠진다(구조화 로그 `tenant_activate_audit_failed`). 🔵 **받아들인 손실**(2026-10-15 UTC — 773 S1 열린 질문 5): 이 이벤트의 소비자는 SIEM · 관측성뿐이다(서비스 소비자 0) — 재시도 · 보상을 두지 않는다 |
+
+- 응답(`200`)은 위와 같은 모양이다 — `roles` = `["TENANT_ADMIN","TENANT_BILLING_ADMIN"]`. 수락 화면의 «콘솔로 가기» 뒤 콘솔은 새 회사를 스위처에서 본다(이제 `ACTIVE` · 소속 있음).
+- 🔴 **어느 순간에도 «`ACTIVE` ∧ 그 테넌트의 `TENANT_ADMIN` 0» 이 없다** — 9 는 8 의 커밋 뒤에만 일어난다(773 AC-4 의 🔴, S4 시험: 9 를 실패시켜 «관리자 있는 `PENDING`» 을 단언 · 재제출로 `ACTIVE` · 9 를 8 앞으로 옮기는 bite 는 그 단언을 빨갛게 한다).
+- 2번 규칙의 재시도: `ACCEPTED` 이고 같은 계정이고 첫 관리자 초대이고 테넌트가 아직 `PENDING` 이면 → 9 · 10 을 다시 한다(멱등 — 이미 `ACTIVE` 면 9 는 no-op 이고 10 은 하지 않는다). 그 밖의 2번 규칙은 지금 그대로.
+
 **Errors**:
 
 | Status | Code | 조건 |
@@ -289,11 +305,11 @@ IdP 수락 화면이 «무엇을 수락하는지» 를 그리기 위한 읽기([
 | 403 | `EMAIL_NOT_VERIFIED` | 이메일은 맞지만 인증되지 않았다 — 인증 뒤 같은 초대로 다시 된다 |
 | 404 | `OPERATOR_INVITATION_NOT_FOUND` | 토큰에 맞는 초대 없음 · 취소됨 · 재발송으로 죽은 토큰 |
 | 409 | `OPERATOR_INVITATION_ALREADY_USED` | 다른 계정이 이미 수락했다 |
-| 409 | `OPERATOR_INVITATION_INVALIDATED` | 테넌트 비활성 · 초대자 비활성 · 초대자의 범위 · 부여 메뉴가 더는 이 초대를 덮지 않는다 — 초대한 쪽이 다시 보내야 한다 |
+| 409 | `OPERATOR_INVITATION_INVALIDATED` | 테넌트 비활성(773: 일반 초대 = `ACTIVE` 아님 · 첫 관리자 초대 = `PENDING` 아님) · 초대자 비활성 · 초대자의 범위 · 부여 메뉴가 더는 이 초대를 덮지 않는다 — 초대한 쪽이 다시 보내야 한다 |
 | 409 | `OPERATOR_ALREADY_PROVISIONED` | 이 계정의 운영자 측면이 이 소속을 받을 수 없다 — 이미 초대 테넌트 소속 · `'*'` 측면 · 비-`ACTIVE`(784 S5 · ADR-082 D2). 784 S5 머지 전: 측면이 있으면 전부(772 OD-1 한 사람 = 한 회사) |
 | 409 | `OPERATOR_EMAIL_CONFLICT` | 그 테넌트에 같은 이메일의 운영자가 이미 있다 |
 | 410 | `OPERATOR_INVITATION_EXPIRED` | 만료 — 초대한 쪽의 재발송이 새 링크를 보낸다 |
-| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | account-service 판정 · 테넌트 읽기 실패 — 아무것도 쓰지 않음 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | account-service 판정 · 테넌트 읽기 실패 — 아무것도 쓰지 않음. **773 첫 관리자 초대의 9(활성화) 실패** — 8 은 커밋됐다, 같은 링크 재제출이 9 를 다시 한다(위 «첫 관리자 초대일 때») |
 
 **Caller (auth-service)**: 아래 Caller Constraints 의 타임아웃 · circuit breaker(별도 breaker 이름). 🔴 **재시도하지 않는다** — 쓰기다(4xx 는 원래 재시도 금지, 5xx · 타임아웃도 화면의 «다시 시도» 버튼에 맡긴다; 같은 계정의 재제출은 2번 규칙이 멱등으로 답한다).
 응답 코드 → 화면 문구 매핑은 [auth-api.md § IdP 브라우저 화면 — 운영자 초대 수락](../auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6) 이 정본이다.

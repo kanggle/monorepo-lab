@@ -276,7 +276,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 
 | Status | 에러 코드 | 조건 |
 |---|---|---|
-| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 / **2단계 필요(`error_description=insufficient_user_authentication`, TASK-MONO-771)** (위 Assume-Tenant Exchange 참조), **풀 principal 의 콘솔 토큰 거절(TASK-MONO-772)** — 운영자 측면 없음 = 기존 `consumer-pool` 문구 그대로 · 측면 판정 실패 = **`error_description=operator_eligibility_unavailable`**(고정 상수, 아래 § 풀 계정의 콘솔 토큰) · **풀 이동 전에 열린 콘솔 세션(772 S6) = `error_description=session_predates_pool_move`**(고정 상수, 같은 절) |
+| 400 | `invalid_grant` | code 만료/재사용, refresh token 재사용(reuse detection), **refresh token 의 `refresh_tokens` 미러 행이 폐기·만료됨**(비밀번호 재설정 · 재사용 탐지의 계정 전체 폐기 · 강제 로그아웃), **`TOKEN_TENANT_MISMATCH`**(`error_description` — 미러 행 테넌트 ≠ 세션의 로그인 시점 테넌트, 아래 주석), assume-tenant subject_token 무효 / assignment 미할당 / admin-service 장애 / **2단계 필요(`error_description=insufficient_user_authentication`, TASK-MONO-771)** (위 Assume-Tenant Exchange 참조), **풀 principal 의 콘솔 토큰 거절(TASK-MONO-772)** — 운영자 측면 없음 = 기존 `consumer-pool` 문구 그대로(**TASK-MONO-773 S5 부터 이 갈래는 거절이 아니라 비운영자 셸 토큰 발급** — 아래 § 풀 계정의 콘솔 토큰) · 측면 판정 실패(**773 S5 에서 판정 호출과 함께 폐기**) = **`error_description=operator_eligibility_unavailable`**(고정 상수, 아래 § 풀 계정의 콘솔 토큰) · **풀 이동 전에 열린 콘솔 세션(772 S6) = `error_description=session_predates_pool_move`**(고정 상수, 같은 절) |
 | 400 | `invalid_request` | PKCE 미포함, assume-tenant `audience` 누락/malformed |
 | 401 | `invalid_client` | client 인증 실패 |
 | 401 | `unauthorized_client` | 해당 grant_type 미허용 client |
@@ -653,6 +653,7 @@ RFC 9470 의 단계 상승 모양이다. 이 IdP 가 해석하는 `acr_values` �
 회사 운영자 초대([admin-api.md § Operator Invitation](./admin-api.md#operator-invitation-task-mono-772))의 메일 링크가 도착하는 곳. **수락은 IdP 에서 한다**(소유자 결정 OD-3 · 구현자 결정 D-4):
 «로그인한 상태로» 를 IdP 브라우저 세션 principal 로 안다(`/consent` · `/email-verification` · `/mfa/setup` 과 같은 자리). 콘솔에 두지 않는 이유 — 운영자 측면이 **없는** 풀 계정은 콘솔
 토큰을 받지 못한다(아래 § 풀 계정의 콘솔 토큰). 그걸 열면 셀프 온보딩(`/onboarding`, 인증 이메일 게이트 없음)까지 풀 계정 전부에 열린다 — 그것은 `TASK-MONO-773` 의 일이다(772 AC-0 F9).
+🔵 **773 이후에도 수락은 여기다** — 773 S5 가 측면 없는 풀 계정에 콘솔 **비운영자 셸** 토큰을 주고 콘솔이 «받은 초대» 를 보여 주지만([onboarding-api.md § received-invitations](./onboarding-api.md#post-apiadminonboardingreceived-invitations--받은-초대-task-mono-773-od-7--구현-s3)), 수락의 증거는 여전히 메일의 토큰이다(R4) — 콘솔은 링크를 갖지 않는다.
 
 화면은 `/login` · `/signup` · `/email-verification` · `/mfa/*` 와 같은 `@Order(0)` 폼 체인(같은 세션 · CSRF 켜짐 · permitAll — 판정은 컨트롤러가 한다)이고, admin-service ·
 account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-oidc` 라우터)는 `PathPrefix(\`/operator-invitations\`)` 하나로 덮는다(772 S3 — 화면의 «로그아웃»(`POST /logout`, 폼 체인)을 위해 `PathPrefix(\`/logout\`)` 도 더했다: 그 경로는 지금까지 어느 템플릿도 링크하지 않아 라우팅되지 않았다).
@@ -673,7 +674,7 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 | 미리보기 실패(5xx · 연결) | «지금은 초대를 확인할 수 없습니다 — 잠시 뒤 다시» |
 | IdP 세션 없음 | «{회사}의 운영자로 초대되었습니다 — {마스킹 주소}를 인증한 **개인(IAM) 계정**으로 로그인하세요» + **«로그인»**(→ `/login`, 이 화면이 저장된 요청이 되어 로그인 뒤 돌아온다) + **«IAM 계정 만들기»**(→ 아래 `/operator-invitations/signup`) |
 | 세션 principal 이 **풀 계정이 아니다**(사이트 계정 · `iam` 자격 · B2B 계정) | «이 초대는 개인(IAM) 계정으로만 수락할 수 있습니다 — 지금 로그인한 계정으로는 수락할 수 없습니다» + 로그아웃 안내. admin-service 를 부르지 않는다(최종 판정은 어차피 account-service 다 — 아래 `403 …ACCOUNT_NOT_ELIGIBLE`) |
-| 풀 principal | 회사 · 역할 · «{마스킹 주소}로 온 초대를 이 계정으로 수락합니다» + **«수락»**(POST) |
+| 풀 principal | 회사 · 역할 · «{마스킹 주소}로 온 초대를 이 계정으로 수락합니다» + **«수락»**(POST). **773** — 미리보기 `firstAdmin = true` 면 제목이 «{회사}의 **첫 관리자**로 초대되었습니다 — 수락하면 회사가 활성화됩니다» |
 
 **로그인 — 수락 화면에서 시작한 로그인은 풀 자격만 고른다**: 저장된 요청이 이 화면(`/operator-invitations/accept`)인 폼 로그인은 **`consumer-pool` 자격을 고른다** — 없으면 로그인 실패(오답 비밀번호와 같은 `/login?error`).
 [multi-tenancy.md § 로그인 가능한 계정과 client](../../features/multi-tenancy.md#로그인-가능한-계정과-client-task-be-604) 표의 «시작 client 없음 → 교차 테넌트 조회» 를 이 경로에서 쓰지 않는 이유:
@@ -697,7 +698,7 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 | `409 OPERATOR_EMAIL_CONFLICT` | «이 회사에 같은 주소의 운영자가 이미 있습니다 — 초대한 분께 문의하세요» | — |
 | `409 OPERATOR_INVITATION_INVALIDATED` | «이 초대는 더 이상 유효하지 않습니다 — 초대한 분께 다시 보내 달라고 하세요» | — |
 | `410 OPERATOR_INVITATION_EXPIRED` | GET 의 만료 화면과 같다 | — |
-| `503` · 그 밖 · 연결 실패 · 읽을 수 없는 본문 | «지금은 수락할 수 없습니다 — 잠시 뒤 다시» (아무것도 쓰이지 않았다 — 같은 링크로 다시 된다) | 있음 |
+| `503` · 그 밖 · 연결 실패 · 읽을 수 없는 본문 | «지금은 수락할 수 없습니다 — 잠시 뒤 다시» (아무것도 쓰이지 않았다 — 같은 링크로 다시 된다. 🔵 **773 첫 관리자 초대**의 활성화 실패 `503` 은 수락이 이미 기록된 뒤다 — 같은 링크 재제출이 활성화를 다시 하고 `200` 이 된다, [auth-to-admin.md § accept](./internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) «첫 관리자 초대일 때». 화면 문구는 같다) | 있음 |
 
 🔴 R4: 화면 · 로그 어디에도 토큰을 쓰지 않는다(폼의 hidden 필드만 예외 — 그 페이지의 주인에게 돌려주는 것). 주소는 마스킹한다.
 
@@ -726,17 +727,28 @@ account-service 를 **서버 측에서** 부른다. 데모 엣지(Traefik `iam-o
 **`TASK-BE-615` D-5 개정 · 구현자 결정 D-5(P1).** 지금까지 풀 principal 은 콘솔 client(`platform-console-web`)의 토큰을 받지 못했다 — 콘솔 세션 테넌트가 `consumer-pool` 로 남아
 발급자가 거절했다(`TASK-BE-614` 게이트, [multi-tenancy.md § 소비자 계정 풀 § 4](../../features/multi-tenancy.md#4-로그인--authorize--토큰)). 772 부터:
 
+> 🔴 **TASK-MONO-773 (S5) — 절 제목의 «측면이 있을 때만» 은 773 S5 머지까지의 상태다**(제목은 앵커라 그대로 둔다). 773 S5 부터 풀 principal × 콘솔 client 는 **측면 상태와 무관하게** 콘솔 토큰을 받는다 — 아래 표 둘째 행 · 그 아래 «773 이 이 표를 바꾸는 조건 · 순서».
+
 | 풀 principal | 콘솔 토큰 (`authorization_code` · `refresh_token`) |
 |---|---|
 | **살아 있는 운영자 측면 있음** — admin-service [`GET /internal/operators/console-eligibility`](./internal/auth-to-admin.md#get-internaloperatorsconsole-eligibility--풀-계정에-콘솔-토큰을-줄까-task-mono-772) `eligible=true`(= `admin_operators.oidc_subject = sub ∧ status = ACTIVE`, 토큰 교환과 같은 술어) | **발급** — `sub` = 풀 계정 id · `tenant_id = iam` · `tenant_type` = 콘솔 client 의 등록값(`oauth_clients.tenant_type`, 지금 `B2B_ENTERPRISE` — principal 테넌트가 없는 콘솔 토큰이 받는 값과 같은 출처. 772 S4 정밀화: 이 클레임을 읽는 소비자는 없다) · `email` · `amr` 은 다른 콘솔 토큰과 같은 규칙 · `roles` 없음(콘솔 client 는 역할을 주지 않는다 — 운영자 권한은 admin 토큰 교환에서 온다) · `entitled_domains` 없음 |
-| 측면 없음 · 측면이 `ACTIVE` 아님(퇴사 · 정지) | **거절** — `400 invalid_grant`, `error_description` = 지금 문구 **그대로**(`tenant_id 'consumer-pool' is a reserved storage value and is never issued` — 바이트 불변. 콘솔 `TASK-PC-FE-324` 의 `sso_wrong_account` 판별이 이 문구의 `'consumer-pool'` 에 걸려 있다) |
-| 판정을 못 받음(admin-service 4xx · 5xx · 타임아웃 · circuit-open · 본문 이상) | **거절(fail-closed)** — `400 invalid_grant`, **`error_description=operator_eligibility_unavailable`**(고정 상수 — 값 전체 일치로 가른다. `'consumer-pool'` 을 포함하지 않는다: 장애를 «다른 계정으로 로그인돼 있다» 로 보이게 하지 않는다, 772 AC-0 F5) |
+| 측면 없음 · 측면이 `ACTIVE` 아님(퇴사 · 정지) | ~~**거절** — `400 invalid_grant`, `error_description` = 지금 문구 그대로(`tenant_id 'consumer-pool' is a reserved storage value and is never issued`)~~ → 🔴 **773 S5 부터 발급 — 콘솔 «비운영자 셸» 토큰** (`TASK-MONO-773` OD-6 · ADR-MONO-080 D9 = T1). 클레임은 위 행과 **바이트 같은 규칙**이다: `sub` = 풀 계정 id · `tenant_id = iam` · `tenant_type` = 콘솔 client 등록값 · `email` · `amr` · **`id_token` 함께 발급**(콘솔 로그아웃이 `id_token_hint` 로 IdP 세션을 끝내는 전제 — 773 AC-7 · AC-0 R9) · `roles` 없음 · `entitled_domains` 없음. 위 행과 **구별하는 클레임을 두지 않는다** — 운영자인지는 토큰이 아니라 **토큰 교환**(`POST /api/admin/auth/token-exchange`)이 매번 답한다(`401` = 운영자 아님 → 콘솔 비운영자 셸, [console-integration-contract.md § 2.6.4](../../../../platform-console/specs/contracts/console-integration-contract.md)) |
+| 판정을 못 받음(admin-service 4xx · 5xx · 타임아웃 · circuit-open · 본문 이상) | ~~**거절(fail-closed)** — `400 invalid_grant`, **`error_description=operator_eligibility_unavailable`**(고정 상수 …, 772 AC-0 F5)~~ → 🔴 **773 S5 에서 이 행은 사라진다 (소유자 결정 2026-10-15 UTC — 773 S1 열린 질문 1)**: 발급자는 콘솔 토큰을 낼 때 admin-service `console-eligibility` 를 **더는 부르지 않는다** — 위 두 행이 모두 «발급» 이 되어 그 답이 발급을 가르지 않기 때문이다. 상수 `operator_eligibility_unavailable` 도 함께 지운다(어디서도 내지 않는다). ⇒ **admin-service 장애가 콘솔 로그인을 막지 않는다.** 운영자인지는 오직 admin 토큰 교환이 정한다(`401` → 콘솔 비운영자 표식) — 교환이 장애면 콘솔 § 2.6 의 «session-unavailable» 그대로(비운영자로 떨어지지 않는다) |
 
-- **매번 다시 묻는다** — 풀 principal 의 콘솔 `authorization_code` · `refresh_token` 발급마다(캐시 없음, 멤버십 읽기와 같은 모양). 퇴사(운영자 `SUSPENDED`) 뒤 **다음 refresh 부터** 콘솔 토큰이 없다(772 AC-3). 이미 발급된 콘솔 access token 은 만료까지 살지만, 운영자 토큰 교환은 그 즉시 `401` 이다(교환이 같은 술어를 매번 읽는다).
+🔴 **773 이 이 표를 바꾸는 조건 · 순서 (TASK-MONO-773 § 10 · AC-0 R3)**:
+
+- 🔴🔴 **머지 순서 — S5(이 표의 둘째 행 «발급») 는 S3(셀프 온보딩의 인증 이메일 게이트 · 상한 3 · 잠금 재셈 — [onboarding-api.md](./onboarding-api.md) «트러스트 게이트») 보다 먼저 `main` 에 들어가지 않는다.** S5 가 먼저 배포되면 측면 없는 풀 계정 전부가 인증 이메일도 상한도 없이 셀프 온보딩에 닿는다(측면 없음 = 상한 셈 0 — 772 가 이 행을 «거절» 로 둔 이유 그대로, 772 AC-0 F9). S5 PR 은 S3 의 머지 커밋을 본문에 적는다.
+- 🔴 **이 토큰은 운영자 토큰이 아니다 (773 AC-1 대조군 — S5 시험)**: 같은 토큰을 ① `Authorization: Bearer` 로 `GET /api/admin/operators` 에 → `401 TOKEN_INVALID`(`OperatorAuthenticationFilter` 는 `token_type=admin` · `iss=admin-service` 만 받는다) ② 토큰 교환에 subject 로 → `401 TOKEN_INVALID`(소속 있는 `ACTIVE` 운영자 행 없음) ③ `POST /api/admin/onboarding/organizations` · `…/received-invitations` 에 `subjectToken` 으로 → 통과(그 엔드포인트의 판정으로). 넓어지는 권한 = 0 — 콘솔 셸에 들어올 수 있게 될 뿐이다.
+- **`sso_wrong_account` 모집단 (773 AC-7 · OD-6)**: 773 S5 뒤 이 발급자는 풀 principal × 콘솔 client 에 `'consumer-pool'` 문구를 **내지 않는다**(측면 상태 무관 발급) — 콘솔 콜백의 `sso_wrong_account` 분기(`TASK-PC-FE-324`)에 이 경로로 닿는 모집단 = 0 → `TASK-PC-FE-331` 을 구현 없이 닫는 근거. ⚪ 그 문구의 **다른 발생원**(`TenantClaimTokenCustomizer.refuseConsumerPoolTenant` 의 다른 호출처 — 콘솔 client 외)은 773 AC-0 이 전수하지 않았다 — S5 가 호출처를 세고 콘솔 판별을 남길지(지금 계약: 남긴다) 적는다.
+- 퇴사 · 정지(측면 비-`ACTIVE`)인 사람도 비운영자 셸에 들어온다(OD-6) — 그 사람의 «테넌트 생성» 은 셀프 온보딩 판정 3행 `409 OPERATOR_ALREADY_PROVISIONED`(정지된 측면을 온보딩으로 되살리지 않는다)로 설명된다. 772 AC-3 «퇴사 → 다음 refresh 부터 콘솔 토큰 없음» 은 **773 에서 «다음 refresh 부터 운영자 토큰 없음 · 비운영자 셸»** 로 바뀐다(운영자 교환은 그 즉시 `401` — 그대로).
+
+- 🔴 **773 S5 부터 아래 «매번 다시 묻는다» 는 폐기된다** — 발급자가 측면을 묻지 않는다(위 표 셋째 행). 퇴사 · 정지의 효과는 다음 토큰 교환의 `401`(운영자 토큰 없음 · 비운영자 셸)로만 나타난다.
+- ~~**매번 다시 묻는다**~~ (772 — 773 S5 까지) — 풀 principal 의 콘솔 `authorization_code` · `refresh_token` 발급마다(캐시 없음, 멤버십 읽기와 같은 모양). 퇴사(운영자 `SUSPENDED`) 뒤 **다음 refresh 부터** 콘솔 토큰이 없다(772 AC-3). 이미 발급된 콘솔 access token 은 만료까지 살지만, 운영자 토큰 교환은 그 즉시 `401` 이다(교환이 같은 술어를 매번 읽는다).
 - **세션 테넌트 (772 AC-0 F4)** — 발급자 · authorize 게이트 · refresh 미러 행이 같은 함수(`AuthorizationSessionTenant`)로 세션 테넌트를 정한다. «풀 principal × 콘솔 client → `iam`» 갈래를 **풀-사이트 갈래와 따로** 둔다: 그 함수는 I/O 를 하지 않으므로 측면 판정은 발급자가 한다(위 표). refresh 미러 행의 테넌트는 `iam` 이다. `poolPrincipalMapsTo`(소비자 사이트 매핑)는 바꾸지 않는다 — 거기 `iam` 을 넣으면 게이트가 풀-사이트 분기로 가서 `iam` 의 소비자 사이트 멤버십을 묻고 «소비자 사이트 아님» → 재인증 무한 반복이 된다.
-- 🔴 **authorize 게이트는 콘솔 client 에 대해 지금 판정을 그대로 한다** — 풀 principal 이어도 `TASK-BE-610` 조건부 재인증(같은 이메일의 `iam` 자격이 있으면 재인증 → 콘솔 폼이 그 `iam` 자격을 고른다)을 먼저 하고, 아니면 통과한다. 세션 테넌트가 이제 `iam` 으로 계산된다고 해서 «세션 테넌트 = client 테넌트 → 통과» 로 단락시키지 않는다 — 그러면 `iam` 자격과 풀 계정을 함께 가진 사람(데모 `demo@demo.com`)이 재인증 없이 풀 principal 로 콘솔에 들어와 «측면 없음» 거절을 받는다(BE-610 회귀). 이 줄은 772 AC-0 F4 의 «게이트는 `PASS`» 를 S1 에서 정밀화한 것이다.
+- 🔴 **authorize 게이트는 콘솔 client 에 대해 지금 판정을 그대로 한다** — 풀 principal 이어도 `TASK-BE-610` 조건부 재인증(같은 이메일의 `iam` 자격이 있으면 재인증 → 콘솔 폼이 그 `iam` 자격을 고른다)을 먼저 하고, 아니면 통과한다. 세션 테넌트가 이제 `iam` 으로 계산된다고 해서 «세션 테넌트 = client 테넌트 → 통과» 로 단락시키지 않는다 — 그러면 `iam` 자격과 풀 계정을 함께 가진 사람(데모 `demo@demo.com`)이 재인증 없이 풀 principal 로 콘솔에 들어와 «측면 없음» 거절을 받는다(BE-610 회귀). 이 줄은 772 AC-0 F4 의 «게이트는 `PASS`» 를 S1 에서 정밀화한 것이다. 🔵 **773 S5 뒤에도 이 규칙은 그대로다** — 회귀의 모양만 «거절» 에서 «운영자인데 비운영자 셸로 떨어짐» 으로 바뀌므로 오히려 덜 눈에 띈다; BE-610 시험이 이 갈래를 계속 지킨다.
 - 2단계: 풀 운영자의 콘솔 로그인도 로그인 흐름의 2단계(§ IdP 브라우저 화면 — 2단계 인증)를 거친다. 교환 · assume 의 2단계 요구(TASK-MONO-771)는 그대로 문다 — TOTP 는 `account_id` 키라 풀 이동 뒤에도 산다.
-- **열지 않는 것**: 측면 **없는** 풀 계정의 콘솔 토큰 · 그래서 셀프 온보딩(`/onboarding` — 콘솔 토큰 필요)도 풀 계정에 계속 닫혀 있다. 그 개방(비운영자 셸 · ADR-MONO-044 D4 인증 이메일 트러스트 게이트)은 `TASK-MONO-773` 이 한다(ADR-080 D9 = T1). 773 이 넓힐 때 바꾸는 곳은 위 표의 «측면 없음» 행 한 곳이다 — 두 거절 상수는 그대로 둔다.
+- ~~**열지 않는 것**: 측면 **없는** 풀 계정의 콘솔 토큰 · 그래서 셀프 온보딩(`/onboarding` — 콘솔 토큰 필요)도 풀 계정에 계속 닫혀 있다. 그 개방(비운영자 셸 · ADR-MONO-044 D4 인증 이메일 트러스트 게이트)은 `TASK-MONO-773` 이 한다(ADR-080 D9 = T1). 773 이 넓힐 때 바꾸는 곳은 위 표의 «측면 없음» 행 한 곳이다 — 두 거절 상수는 그대로 둔다.~~ → **773 이 열었다**(위 표 둘째 · 셋째 행 · S5). `console-eligibility` 호출과 `operator_eligibility_unavailable` 상수는 **지운다**(소유자 결정 2026-10-15 UTC), `'consumer-pool'` 문구는 이 발급자의 이 갈래에서 더는 나오지 않는다(문구 자체 · 다른 갈래의 거절은 바이트 불변).
+- 🔵 **구현 메모 (773 S5)** — 아래 «구현 = 772 S4» 의 판정 지점(`TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole`)에서 admin-service 호출 · 별도 breaker · 거절 분기를 걷는다. `id_token` 발급 경로도 같은 자리를 지나므로 «한 번의 발급에서 두 번 묻는다» 도 함께 사라진다. S5 시험: admin-service 를 내린 상태에서 풀 계정 콘솔 로그인 → 토큰 발급(`200`) · 교환은 콘솔 § 2.6 «session-unavailable».
 - `consumer-pool` 은 여전히 어떤 토큰에도 나오지 않는다. 새 클레임 없음([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) 무변경).
 - 🔴 **풀 이동 전에 열린 콘솔 세션은 이동 뒤 다시 쓰지 않는다 (`TASK-MONO-772` S6 — S1 열린 질문 3).** 셀프 온보딩 운영자(ADR-MONO-044 D5)는 이동 전 콘솔에 **사이트 principal** 로 들어왔고(콘솔 폼의 교차 조회가 사이트 자격을 고른다), 그 세션의 콘솔 토큰은 `tenant_id` = 그 사이트였다. SAS 세션은 열릴 때의 principal 을 그대로 들고 있으므로, 이동기가 자격을 풀로 옮긴 뒤(같은 계정 id)에도 그 세션의 refresh · IdP 브라우저 세션 재사용은 **계정이 더는 살지 않는 사이트**를 `tenant_id` 로 싣는 콘솔 토큰을 계속 낸다 — 운영자 측면도 묻지 않은 채(위 표는 풀 principal 에만 묻는다). 그래서:
   - 발급자 — **풀이 아닌 · `iam` 이 아닌 principal × 콘솔 client** 이고 그 계정의 자격이 **지금 `consumer-pool` 에 있으면** 거절: `400 invalid_grant`, **`error_description=session_predates_pool_move`**(고정 상수 — `'consumer-pool'` 미포함 · `operator_eligibility_unavailable` 아님). access token 을 만드는 단계라 refresh 토큰은 회전되지 않는다. 자격이 아직 그 사이트에 있으면(이동 전) **772 전 그대로** 발급한다. 자격 조회 실패는 토큰 없음(fail-closed).

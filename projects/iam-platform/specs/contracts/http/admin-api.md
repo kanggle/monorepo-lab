@@ -30,6 +30,10 @@ base path: `/api/admin`
 | `POST` | `/api/admin/auth/2fa/verify` | **bootstrap token 필수** | 요구 없음 |
 | `POST` | `/api/admin/auth/refresh` | 없음 (refresh JWT body) | 요구 없음 |
 | `GET` | `/.well-known/admin/jwks.json` | 없음 (public key 노출) | 요구 없음 |
+| `POST` | `/api/admin/onboarding/organizations` | **IAM OIDC `platform-console-web` subject token 필수**(본문 `subjectToken` — ADR-MONO-044 셀프 온보딩). 🔵 TASK-BE-474 부터 있던 예외인데 이 표에 없었다 — 773 S1 이 적는다 | 요구 없음 |
+| `POST` | `/api/admin/onboarding/received-invitations` | 같은 subject token(본문) — **TASK-MONO-773 OD-7** 받은 초대 읽기 | 요구 없음 |
+
+> **`/api/admin/onboarding/**` (TASK-BE-474 · TASK-MONO-773)**: 운영자가 아닌 사람의 자기 흐름이다(셀프 테넌트 생성 · 자기에게 온 초대 보기). 정본은 [onboarding-api.md](onboarding-api.md). 🔴 이 두 경로가 받는 IAM 토큰은 **운영자 자격이 아니다** — 같은 토큰을 이 표의 다른 경로나 위 기본 규칙의 경로에 `Authorization: Bearer` 로 내밀면 `401 TOKEN_INVALID` 다(`OperatorAuthenticationFilter` 는 `token_type=admin` · `iss=admin-service` 만 받는다 — 773 AC-1 대조군).
 
 > **`/api/admin/auth/token-exchange` (TASK-BE-298 / ADR-MONO-014)**: 이 경로는
 > 정식 operator JWT 없이 호출 가능한 **추가 operator-token 발급 경로**다. 정식
@@ -142,7 +146,9 @@ base path: `/api/admin`
 | 20 | `GET /operators/{id}/assignments` | `X-Tenant-Id` | 그대로 | — |
 | 21 | org-node 읽기 | path | 그대로 — 노드 스코프는 `org_node_id` 가 구동 | — |
 | 22 | entry-policy GET · placement preview | path | 그대로 | — |
-| 23 | `POST /onboarding/organizations` | 자기 흐름 | «두 409 → 소속 추가» — [onboarding-api.md](onboarding-api.md) | S5 |
+| 23 | `POST /onboarding/organizations` | 자기 흐름 | «두 409 → 소속 추가» — [onboarding-api.md](onboarding-api.md). **773 S3** — 트러스트 게이트(인증 이메일 · 상한 3 · 잠금 재셈) · 생성자 `ORIGIN` 세트 행(새 테넌트에만) | S5 |
+| 23b | `POST /onboarding/received-invitations` | 자기 흐름(`sub` 의 인증된 이메일) | 판정 없음 — 자기 이메일로 온 대기 초대만(**773 OD-7**) | 773 S3 |
+| 23c | `POST /tenants` · `POST /tenants/{tenantId}/first-admin-invitation` · `PATCH /tenants/{tenantId}` | path · 본문 | 그대로 — `'*'` 만(`tenant.manage`). 첫 관리자 초대 · `PENDING` 상태 — § Tenant Lifecycle(**773**) | 773 S4 |
 | 24 | `GET /domain-roles` | 없음 | 판정 없음 — 카탈로그(테넌트 데이터 없음). 권한 키 `domain_access.manage` 만(1단) — § 도메인 업무 권한 세트 | 083 P2 |
 | 25 | `GET\|POST /domain-permission-sets` · `GET\|PATCH\|DELETE /domain-permission-sets/{setId}` | `X-Tenant-Id` · 생략 규칙(`domain_access.manage`) | grant scope(`domain_access.manage`). 테넌트 세트의 소유 테넌트 = 행동 테넌트 · 다른 테넌트 세트 = `404` | 083 P2 |
 | 26 | `GET /operators/{id}/domain-access` · `POST /operators/{id}/domain-permission-sets` · `DELETE …/domain-permission-sets/{setId}` | `X-Tenant-Id` · 생략 규칙(`domain_access.manage`) | grant scope(`domain_access.manage`) + 대상이 `'*'` 운영자면 **`'*'` grant scope 만**(행 전체 규칙의 `'*'` 행과 같은 술어 · OD-3) | 083 P2 |
@@ -1787,7 +1793,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|
 | 저장 | admin-service [`operator_invitation`](../../services/admin-service/data-model.md#operator_invitation) |
 | 관리(발급 · 목록 · 취소 · 재발송) | 이 절 — 운영자 토큰, `operator.manage` |
-| 수락 화면 | IdP — [auth-api.md § IdP 브라우저 화면 — 운영자 초대 수락](auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6) (OD-3: 콘솔이 아니다 — 측면 없는 풀 계정은 콘솔 토큰을 못 받는다) |
+| 수락 화면 | IdP — [auth-api.md § IdP 브라우저 화면 — 운영자 초대 수락](auth-api.md#idp-브라우저-화면--운영자-초대-수락-task-mono-772--adr-mono-080-d6) (OD-3: 콘솔이 아니다 — 측면 없는 풀 계정은 콘솔 토큰을 못 받는다. 🔵 773 S5 부터 그 사람도 콘솔 **비운영자 셸** 토큰은 받지만 수락은 여전히 IdP 다 — 수락의 증거는 메일의 토큰이다. 콘솔은 «받은 초대» 를 **보여 주기만** 한다: [onboarding-api.md § received-invitations](onboarding-api.md#post-apiadminonboardingreceived-invitations--받은-초대-task-mono-773-od-7--구현-s3)) |
 | 수락 판정 | auth → admin [`POST /internal/operator-invitations/accept`](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) — 계정 판정은 admin → account [`POST /internal/accounts/{accountId}/verified-email:match`](internal/admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772) |
 | 초대 메일 | admin → account [`POST /internal/notifications/operator-invitation`](internal/admin-to-account.md#post-internalnotificationsoperator-invitation--운영자-초대-메일-task-mono-772) (OD-4: `TASK-MONO-770` 발송기 재사용) |
 
@@ -1800,7 +1806,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 대기 하나 | `(tenant_id, email)` 에 `PENDING` 은 **최대 한 행**(만료된 `PENDING` 포함 — 다시 보내려면 재발송). 이미 그 테넌트의 운영자인 이메일은 초대하지 않는다(784 S5 부터 «그 테넌트의 운영자» = 그 테넌트 **소속**인 운영자 행 — 홈이 아니다, 784 AC-0 F15) |
 | 전달 (OD-4) | **메일** — account-service 의 `TASK-MONO-770` 발송기를 내부 호출로 쓴다. 🔴 링크(토큰)는 초대자에게 **돌려주지 않는다** — 응답 · 목록 · 감사 · 로그 어디에도 없다. 발송이 실패해도 초대 행은 남고, 응답 · 목록의 `delivery` 가 그것을 보인다 → 재발송 |
 | 재발송 (OD-4) | **같은 행**에 새 토큰 · 새 만료. 옛 해시를 덮어쓰므로 **옛 링크는 죽는다**(수락 → `404`). 새 행 + 옛 행 취소는 하지 않는다(«대기 하나» 를 깨기 쉽다) |
-| 대상 테넌트 | `'*'` 거절(`400 VALIDATION_ERROR`) — 플랫폼 관리자는 초대로 생기지 않는다(ADR-080 D1). 등록된 테넌트여야 한다(발급 · 재발송 때 account-service 로 확인). **운영자가 0명인 테넌트도 받는다** — `SUPER_ADMIN` 이 새 테넌트의 첫 관리자를 초대하는 길(`TASK-MONO-773` 의 «관리자 대기» 가 이것을 쓴다) |
+| 대상 테넌트 | `'*'` 거절(`400 VALIDATION_ERROR`) — 플랫폼 관리자는 초대로 생기지 않는다(ADR-080 D1). 등록된 테넌트여야 한다(발급 · 재발송 때 account-service 로 확인). **운영자가 0명인 테넌트도 받는다** — `SUPER_ADMIN` 이 새 테넌트의 첫 관리자를 초대하는 길(`TASK-MONO-773` 의 «관리자 대기» 가 이것을 쓴다 — 773 부터 그 길은 이 엔드포인트가 아니라 아래 «첫 관리자 초대» 행이다). 발급은 테넌트 **상태를 보지 않는다**(지금 그대로) — `PENDING` 테넌트로 가는 **일반** 초대는 발급되지만 수락에서 `409 OPERATOR_INVITATION_INVALIDATED` 다(773 AC-4 대조군 — 대기 테넌트를 여는 것은 첫 관리자 초대뿐) |
+| 🔴 첫 관리자 초대 (`TASK-MONO-773` OD-1 · OD-2 · OD-5 · 구현 S4) | `first_admin = true` 인 초대. **만드는 곳은 둘뿐**: [`POST /api/admin/tenants`](#post-apiadmintenants)(테넌트와 한 묶음) · [`POST /api/admin/tenants/{tenantId}/first-admin-invitation`](#post-apiadmintenantstenantidfirst-admin-invitation)(다시 초대). 이 엔드포인트(`POST /api/admin/operator-invitations`)로는 만들 수 없다(본문에 그 칸이 없다). 역할 = **`TENANT_ADMIN` · `TENANT_BILLING_ADMIN`** 고정(ADR-044 D6 — 셀프 경로와 같은 둘) · 테넌트 = `PENDING` 테넌트 · **테넌트마다 대기 하나**(`PENDING` 인 첫 관리자 초대는 그 테넌트에 최대 한 행 — 주소와 무관). 수락은 `PENDING` 테넌트에서만 이기고, 수락이 테넌트를 `ACTIVE` 로 올리며 첫 관리자에게 업무 세트(`all-domains-full` × `ORIGIN`)를 준다 — 정본 [auth-to-admin.md § accept](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) «첫 관리자 초대일 때». 만료 · 재발송 · 취소는 일반 초대와 같은 규칙(읽을 때 판정 · 같은 행 새 토큰 · `CANCELLED`) — 취소해도 테넌트는 `PENDING` 그대로다(정리는 § Tenant Lifecycle «정리») |
 | 권한 | **새 키 없음** — `operator.manage`([rbac.md](../../services/admin-service/rbac.md#permission-keys)). 범위(ADR-024 D2 `TenantScopeGuard`, 대상 = 초대 테넌트)와 역할 무상승(D3 `RoleGrantGuard`)은 `POST /api/admin/operators` 와 같은 규칙이고, **수락 때 한 번 더** 판정한다(7일 사이 초대자의 권한이 줄었을 수 있다) |
 | 🔴 한 사람 · 여러 회사 (ADR-MONO-082 = **b**, `TASK-MONO-784`) | 계정 하나는 여전히 운영자 행 **하나**다(`admin_operators.oidc_subject` 플랫폼 전역 UNIQUE 유지 · 토큰 교환이 `sub` 로 한 행 — ADR-082 갈래 비교 «토큰 교환 변화 0»). 그 행이 **회사마다 소속 · 역할**을 가진다(§ 행동 테넌트). 이미 운영자 측면이 있는 계정이 **두 번째 회사** 초대를 수락하면 → **같은 행에 소속 추가**(그 테넌트의 역할 행 + 배정 — 기존 회사의 행은 바이트 불변 · 홈 · `oidc_subject` · `email` · `display_name` 무변경 — 초대의 `displayName` 은 새 행을 만들 때만 쓴다). 그 측면이 **이미 그 테넌트 소속** · **`'*'` 측면**(ADR-082 D2) · **비-`ACTIVE`** 면 `409 OPERATOR_ALREADY_PROVISIONED`(아무것도 쓰지 않는다 · 초대는 `PENDING` 그대로) — 판정 정본: [auth-to-admin.md § accept](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) 6 · 7. 구현 = 784 S5. 발급 단계에서는 계정을 보지 않는다 — 초대는 이메일에 가고, 누가(어느 계정이) 수락할지는 발급 때 모른다. (772 시점 문장 — 소유자 결정 OD-1 «한 사람 = 한 회사 · 다회사 모델은 773 착수 전 ADR» — 은 ADR-082 ACCEPTED b(2026-10-10 UTC)로 닫혔다. 784 S5 머지 전까지 코드는 772 의 409 다) |
 
@@ -1813,6 +1820,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
   "email": "person@example.com",
   "displayName": "홍길동",
   "roles": ["SUPPORT_LOCK"],
+  "firstAdmin": false,
   "status": "PENDING",
   "expired": false,
   "expiresAt": "2026-10-17T10:00:00Z",
@@ -1830,6 +1838,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | `email` | 초대한 주소(앞뒤 공백 제거 · 소문자). 수락 판정의 «기대 이메일» |
 | `displayName` | 수락 때 만들어질 운영자 행의 `display_name`(1–64자, 초대자가 정한다) |
 | `roles` | 수락 때 부여될 역할(그 테넌트 범위 grant). 수락 때 초대자 기준으로 다시 판정한다 |
+| `firstAdmin` | **TASK-MONO-773 (가산)** — 첫 관리자 초대면 `true`(위 규칙 표). 콘솔 목록은 이 행을 «첫 관리자» 로 표시한다 |
 | `status` | `PENDING` · `ACCEPTED` · `CANCELLED` |
 | `expired` | `status = PENDING` 이고 `expiresAt ≤ 읽은 시각` 이면 `true`. 그 밖엔 `false`(`ACCEPTED`/`CANCELLED` 는 만료를 따지지 않는다) |
 | `invitedBy` | 지금 살아 있는 토큰을 낸 운영자(`admin_operators.operator_id`) — **재발송하면 재발송한 운영자로 바뀐다**(수락 때 그 사람 기준으로 재판정 — 아래 § 재발송) |
@@ -1927,6 +1936,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 |---|---|
 | `PENDING`(만료 포함) | `CANCELLED` 로 조건부 갱신 → `200` + item. 그 사이 수락이 이겼으면 `409 OPERATOR_INVITATION_NOT_PENDING` |
 | `CANCELLED` | `200` + item — 멱등 no-op, 감사 행 없음 |
+| `PENDING` 첫 관리자 초대 (773) | 위와 같다(`CANCELLED`). 🔴 테넌트는 **`PENDING` 그대로** — 취소는 테넌트를 정지하지 않는다. 같은 테넌트에 다른 주소로 다시 초대하려면 [`POST /api/admin/tenants/{tenantId}/first-admin-invitation`](#post-apiadmintenantstenantidfirst-admin-invitation), 테넌트를 접으려면 § Tenant Lifecycle «정리»(`PATCH status=SUSPENDED` — 남은 첫 관리자 초대를 함께 취소한다) |
 | `ACCEPTED` | `409 OPERATOR_INVITATION_NOT_PENDING` — 수락된 초대는 취소하지 않는다. 그 사람을 빼려면 운영자 상태 변경(`PATCH …/{operatorId}/status`) · 역할 · 배정 회수다(ADR-080 D5 — 회수는 측면만). **784 S4 부터** 회사 관리자의 길은 **«이 회사에서 내보내기»**(`DELETE …/{operatorId}/assignments/{tenantId}`) — 다른 회사에도 소속된 사람의 행 전체 정지는 `'*'` 만(라이더 R3) |
 
 취소된 초대의 링크로 수락하면 `404`(없는 초대와 구별하지 않는다 — 아래 § 수락).
@@ -1975,7 +1985,8 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 [`POST /internal/operator-invitations/accept`](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) 를 부른다. 판정 순서 · 거절 코드 · 수락이 만드는 행은 그 절이 정본이다. 요약:
 
 - 호출자 = **IdP 세션의 풀 계정**(요청 본문은 계정을 말하지 않는다). 그 계정이 풀 계정이고 · 이메일이 초대 이메일과 같고 · 그 이메일이 **인증됐을 때만** 붙는다(판정은 account-service — `TASK-MONO-770` 의 공용 술어 `VerifiedEmailRequirement` 를 그 자리에서 부른다. 사본을 만들지 않는다).
-- 초대 테넌트 `ACTIVE` · 초대자(`invitedBy`) 아직 `ACTIVE` · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3) · 초대 테넌트가 **지금도** 초대자의 범위 안(D2).
+- 초대 테넌트 `ACTIVE`(**첫 관리자 초대는 `PENDING`** — 773) · 초대자(`invitedBy`) 아직 `ACTIVE` · 초대 역할이 **지금도** 초대자의 부여 메뉴 안(D3) · 초대 테넌트가 **지금도** 초대자의 범위 안(D2).
+- **첫 관리자 초대 수락 (773 OD-5)** — 위와 같은 행 + 첫 관리자에게 `operator_domain_set_grant`(초대 테넌트 × `all-domains-full` × `ORIGIN`) 한 행(같은 트랜잭션) → 커밋 **뒤** 테넌트 `PENDING → ACTIVE`(account-service). 순서가 «관리자 먼저 · 활성화 나중» 인 이유: 활성화가 실패해도 남는 것은 «관리자 있는 대기 테넌트»(안전 — 재시도로 닫힌다)이고, 반대 순서는 «관리자 없는 `ACTIVE`»(ADR-044 D3 위반)다(773 AC-0 R4). 일반 초대 수락은 지금처럼 세트 0(ADR-083 D8).
 - 만들어지는 것: 운영자 행(홈 = 초대 테넌트 · `password_hash` NULL · **`oidc_subject` = 수락한 계정 id**) · 역할 grant(테넌트 = 초대 테넌트) · 초대 `ACCEPTED`. **784 S5 부터** 그 계정에 이미 `ACTIVE` 회사 측면이 있고 초대 테넌트가 아직 소속이 아니면 새 행 대신 **그 행에** 역할 grant(초대 테넌트) + 배정만 더한다(위 규칙 표 «한 사람 · 여러 회사»). `oidc_subject` 를 쓰는 것이 «로그인 문» 이다 — 이 행이 있어야 토큰 교환이 그 계정을 운영자로 해석하고, IdP 가 그 풀 계정에 콘솔 토큰을 준다([auth-api.md § 풀 계정의 콘솔 토큰](auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).
 - `amr ∋ mfa` 는 수락에서 요구하지 않는다 — 측면을 **만드는** 일이고, 2단계 진입 조건은 토큰 교환 · assume 이 문다(TASK-MONO-771).
 
@@ -2271,7 +2282,7 @@ Content-Type: application/json
 
 ## Tenant Lifecycle (TASK-BE-256)
 
-`POST /api/admin/tenants` 등 4개 엔드포인트는 SUPER_ADMIN(`tenant_id='*'`) 만 호출할 수 있다. 일반 운영자는 `403 TENANT_SCOPE_DENIED`. 모든 mutating 엔드포인트는 [admin-events.md](../events/admin-events.md) 의 `admin.action.performed` 이벤트와 함께 [tenant-events.md](../events/tenant-events.md) 의 lifecycle 이벤트를 outbox 패턴으로 발행한다.
+`POST /api/admin/tenants` 등 4개 엔드포인트(773 부터 `POST /api/admin/tenants/{tenantId}/first-admin-invitation` 을 더해 5개)는 SUPER_ADMIN(`tenant_id='*'`) 만 호출할 수 있다. 일반 운영자는 `403 TENANT_SCOPE_DENIED`. 모든 mutating 엔드포인트는 [admin-events.md](../events/admin-events.md) 의 `admin.action.performed` 이벤트와 함께 [tenant-events.md](../events/tenant-events.md) 의 lifecycle 이벤트를 outbox 패턴으로 발행한다.
 
 ### Tenant ID 규칙
 
@@ -2280,28 +2291,70 @@ Content-Type: application/json
   `admin`, `internal`, `system`, `null`, `default`, `public`, `gap`, `iam`, `auth`, `oauth`, `me`.
 - 한 번 발급된 `tenant_id` 는 변경·재할당 불가 (감사 트레일·외부 토큰 정합).
 
+### «테넌트 생성 = 테넌트 + 첫 관리자» — 한 묶음 (TASK-MONO-773 · ADR-MONO-080 D9 = T1 · ADR-MONO-044 D3)
+
+**소유자 결정 OD-1 · OD-2 · OD-5 (2026-10-15 UTC) · 구현 S2(account) · S4(admin).** 773 전에는 같은 «테넌트 생성» 이 두 결과였다 — 셀프 온보딩은 «테넌트 + 관리자», 이 절은 «테넌트만»(관리자 없는 `ACTIVE` 테넌트 — 그리고 772 S7 뒤 그 테넌트에 운영자를 앉히는 길은 초대뿐이었다). 773 부터 **모든 생성이 첫 관리자를 함께 정한다**:
+
+| 누가 만드나 | 어디로 | 첫 관리자 | 생성 직후 테넌트 |
+|---|---|---|---|
+| 운영자 아닌 개인 계정 · 이미 운영자(두 번째 회사) | [onboarding-api.md](onboarding-api.md) (자기 흐름) | **본인** — 같은 원자 묶음 | `ACTIVE` (실패 시 SUSPEND 보상 — 지금 그대로) |
+| `SUPER_ADMIN`(`'*'` grant scope 의 `tenant.manage`) | 이 절 `POST /api/admin/tenants` | **지정한 이메일**에 772 초대(첫 관리자 초대) | 🔴 **`PENDING`(«관리자 대기»)** — 첫 관리자 초대가 수락될 때 `ACTIVE` |
+
+🔴 **불변식 (ADR-044 D3 · 773 AC-4)**: `TENANT_ADMIN` 역할 행을 가진 `ACTIVE` 운영자가 0 인 `ACTIVE` 테넌트는 **이 절의 어떤 쓰기로도** 생기지 않는다 — `SUPER_ADMIN` 경로의 테넌트는 관리자가 생기기 전에는 `PENDING` 이고, `PENDING → ACTIVE` 를 하는 것은 첫 관리자 초대 수락(관리자 행 커밋 뒤)뿐이다. (784 의 `TENANT_LAST_ADMIN_REQUIRED` 가 그 뒤의 «마지막 관리자 제거» 를 막는다. 셀프 경로의 생성 → 관리자 쓰기 사이의 짧은 창 · 보상은 ADR-044 D3 가 고른 그대로다. 773 이전에 만들어진 관리자 없는 `ACTIVE` 테넌트는 이 절이 바꾸지 않는다 — 백필 없음.)
+
+**B2C 테넌트**: 지금처럼 `SUPER_ADMIN` 전용(셀프 경로는 `B2B_ENTERPRISE` 고정) — 첫 관리자도 **같은 초대 규칙**(`firstAdmin` 필수 · `PENDING` 으로 태어남).
+
 ### Status 전이 매트릭스
 
-| 현재 상태 | → ACTIVE (PATCH `status=ACTIVE`) | → SUSPENDED (PATCH `status=SUSPENDED`) |
+**773 이 `PENDING` 을 더한다** (account-service `tenants.status` 의 새 값 — OD-1. 이름 7자 — `VARCHAR(10)` 칸에 들어가므로 칸을 넓히지 않는다, 773 AC-0 § 5. 화면 표기 «관리자 대기»).
+
+| 현재 상태 | → ACTIVE | → SUSPENDED (PATCH `status=SUSPENDED`) |
 |---|---|---|
-| (none) | `POST` 로 생성 (status=ACTIVE 만 허용) | `POST` 로 직접 SUSPENDED 생성 불가 |
+| (none) | 셀프 경로(onboarding)만 `ACTIVE` 로 만든다 — 이 절의 `POST` 는 `ACTIVE` 를 만들지 **않는다**(773) | 직접 SUSPENDED 생성 불가 |
+| (none) → **PENDING** | `POST /api/admin/tenants`(773 — 항상 `PENDING` + 첫 관리자 초대) | — |
+| **PENDING** | 🔴 **첫 관리자 초대 수락만**(admin 이 관리자 행을 커밋한 뒤 account 에 전이를 요청) · `tenant.activated` 발행. PATCH `status=ACTIVE` → **`409 TENANT_FIRST_ADMIN_PENDING`** — 단 그 테넌트의 첫 관리자 초대가 이미 `ACCEPTED` 면(수락 뒤 활성화 호출만 실패한 경우, 773 AC-0 R4) PATCH 가 활성화를 **마친다**(같은 판정 · 같은 이벤트) | **정리**(OD-2) — 남은 `PENDING` 첫 관리자 초대를 `CANCELLED` 로 + 테넌트 `SUSPENDED` · `tenant.suspended`(`previousStatus=PENDING`) 발행. 아래 § PATCH «정리» |
 | ACTIVE | no-op (200, `tenant.updated` 미발행) | reactivate-able 전이; `tenant.suspended` 발행 |
-| SUSPENDED | reactivate; `tenant.reactivated` 발행 | no-op (200, 이벤트 미발행) |
+| SUSPENDED | reactivate; `tenant.reactivated` 발행. 🔴 **773**: 정리로 정지된 테넌트(첫 관리자가 생긴 적 없는 — `PENDING` 에서 온)는 PATCH 로 `ACTIVE` 가 되지 **않는다** → `409 TENANT_FIRST_ADMIN_PENDING`(관리자 없는 `ACTIVE` 를 만드는 길이 된다). 판정 = 그 테넌트에 첫 관리자 초대 행이 **있고**(= 773 `SUPER_ADMIN` 경로로 태어났다) 그중 `ACCEPTED` 가 **없다**. 🔵 첫 관리자 초대 행이 없는 테넌트(773 이전 테넌트 · 셀프 경로 테넌트 — 플랫폼 테넌트처럼 `TENANT_ADMIN` 이 원래 없는 것 포함)의 재활성은 지금 그대로다 | no-op (200, 이벤트 미발행) |
+| SUSPENDED → PENDING | **없다** — 정리된 테넌트를 다시 살리는 길은 773 이 만들지 않는다(슬러그는 점유된 채 남는다 — OD-2 의 대가) | — |
 
 SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다 (account-service consumer 가 `tenant.suspended` 이벤트 수신 시 차단 게이트 활성화 — TASK-BE-250 implementation 의 책임).
 
+🔴 **`PENDING` 을 누가 어떻게 읽나 (773 AC-0 § 5 — «`ACTIVE` 만» 술어는 전부 닫힌 쪽으로 동작한다, 고칠 것은 enum · 표시뿐)**:
+
+| 읽는 곳 | `PENDING` 일 때 |
+|---|---|
+| account 가입 · 프로비저닝(`ActiveTenantGuard` · 개별/일괄 프로비저닝) | 거절 — 코드는 지금의 `TENANT_SUSPENDED`(423) 그대로(새 코드 없음 · 술어 `!isActive()` 무변경) |
+| auth 가입 적격(`TenantSignupEligibilityResolver` — `"ACTIVE"` 문자열) | 거절(무변경) |
+| 콘솔 레지스트리 · 스위처(`ACTIVE` 목록만) | 안 보인다(무변경) |
+| 초대 수락 | 일반 초대 = 거절(`409 OPERATOR_INVITATION_INVALIDATED`) · 첫 관리자 초대 = 이 상태에서만 이긴다 |
+| 신원당 상한(onboarding) | 센다(상태 무관 — 773 OD-3) |
+| `GET /api/admin/tenants` · 콘솔 `/tenants` 목록 | 보인다 — `status=PENDING` + 아래 `firstAdmin` 요약(«관리자 대기 · 초대 만료» 등) · 콘솔 `z.enum` 을 같은 PR 묶음에서 넓힌다(773 AC-0 R5) |
+| assume(`'*'` 운영자가 `PENDING` 테넌트를 고를 수 있나) | ⚪ 773 AC-0 이 재지 않았다(운영자 상태만 본다 — `OperatorAssignmentCheckUseCase`). 콘솔 스위처에 안 뜨므로 UI 경로는 없다. S4 AC-0 이 잰다 |
+
+### 첫 관리자 초대의 만료 — 읽을 때 판정 · 배치 없음 (OD-2)
+
+- 첫 관리자 초대가 수락 없이 만료돼도 테넌트는 **`PENDING` 그대로**다. 만료를 처리하는 잡(job)은 없다 — 772 초대 만료와 같은 «읽을 때 판정» 이다(`admin.operator-invitation.ttl` 기본 `P7D`).
+- 목록 · 단건 응답의 `firstAdmin.state` 가 읽은 시각에 `EXPIRED` 를 보인다 — 콘솔 표기 «관리자 대기 · 초대 만료».
+- `SUPER_ADMIN` 의 다음 행동 둘: **재초대**(같은 주소 = 그 초대의 [`:resend`](#post-apiadminoperator-invitationsinvitationidresend) — 새 토큰 · 새 만료 · `invitedBy` = 재발송자 / 다른 주소 = 그 초대를 `:cancel` 한 뒤 [`POST /api/admin/tenants/{tenantId}/first-admin-invitation`](#post-apiadmintenantstenantidfirst-admin-invitation)) · **정리**(`PATCH status=SUSPENDED` — 초대 취소 + 테넌트 정지).
+- 🔵 대기 테넌트는 로그인 · 가입 · 스위처가 모두 닫혀 있어(위 표) 남아도 해가 없다. 대가는 슬러그 점유뿐이다(하드 삭제 없음).
+- 발급한 `SUPER_ADMIN` 이 정지되면 첫 관리자 초대의 수락은 `409 OPERATOR_INVITATION_INVALIDATED` 다(초대자 `ACTIVE` 판정 — 772 그대로). 다른 `SUPER_ADMIN` 의 `:resend` 가 `invitedBy` 를 바꿔 살린다.
+
 ### POST /api/admin/tenants
 
-신규 테넌트 등록.
+신규 테넌트 등록 — 🔴 **773 부터 «테넌트 + 첫 관리자 초대» 한 묶음**(위 § «테넌트 생성 = 테넌트 + 첫 관리자»). 테넌트는 **`PENDING`** 으로 태어나고, `firstAdmin.email` 로 772 운영자 초대(첫 관리자 초대)가 나간다. 그 초대가 수락돼야 `ACTIVE` 다.
 
 **Auth required**: 운영자 JWT, role = `SUPER_ADMIN`
 
 **Request**:
 ```json
 {
-  "tenantId": "wms",
-  "displayName": "Warehouse Management System",
-  "tenantType": "B2B_ENTERPRISE"
+  "tenantId": "acme-corp",
+  "displayName": "Acme Corp",
+  "tenantType": "B2B_ENTERPRISE",
+  "firstAdmin": {
+    "email": "owner@acme.example",
+    "displayName": "홍길동"
+  }
 }
 ```
 
@@ -2310,29 +2363,51 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | `tenantId` | string | Y | 정규식 + 예약어 미포함 |
 | `displayName` | string | Y | 1~100자, trim 후 검증 |
 | `tenantType` | enum | Y | `B2C_CONSUMER` \| `B2B_ENTERPRISE` |
+| `firstAdmin` | object | **Y (773 — 🔴 breaking: 없으면 `400 VALIDATION_ERROR`)** | 첫 관리자 초대의 대상. 두 타입 공통(B2C 포함) |
+| `firstAdmin.email` | string | Y | 이메일 형식, ≤ 255, 저장 전 trim · 소문자 — `POST /api/admin/operator-invitations` 의 `email` 과 같은 검증 |
+| `firstAdmin.displayName` | string | Y | 1–64자 — 같은 엔드포인트의 `displayName` 과 같은 검증(수락으로 **새** 운영자 행이 생길 때의 표시 이름. 이미 운영자인 사람이 수락하면 쓰이지 않는다 — 784 «소속 추가») |
+
+🔴 **breaking 의 범위 (773 S4 · S6 같은 묶음)**: `firstAdmin` 없는 호출자 = 콘솔 `/tenants` 등록 폼(`api/tenants/_proxy.ts` — 773 S6 이 «테넌트 생성» 화면으로 바꾼다) · admin-service 시험(`TenantAdminIntegrationTest` 등 — S4 가 고친다) · [consumer-integration-guide.md § Phase 1](../../features/consumer-integration-guide.md) 예시(S1 이 고쳤다). 🔴 **호환 (소유자 결정 2026-10-15 UTC — 773 S1 열린 질문 7)**: **S4 PR 이 콘솔 `/tenants` 등록 폼 + 프록시 본문(`firstAdmin.email` · `firstAdmin.displayName`) + `status` enum(`PENDING`)을 함께 넓힌다** — iam-platform · platform-console 한 원자 PR(CLAUDE.md § Cross-Project Changes). 그래서 «S4 와 S6 사이 콘솔 폼 `400`» 창은 없다. S6 은 그 폼을 `/new-tenant` 로 옮길 뿐이다. 🔵 배포 순서의 창은 **반대 방향**이다 — 콘솔(Vercel)은 머지 즉시 나가고 백엔드는 다음 재굽기(AMI)에 나간다. 그 사이 **새 콘솔 폼이 옛 백엔드**에 `firstAdmin` 을 보낸다. 옛 요청 DTO 가 모르는 칸을 무시하면 결과는 `400` 이 아니라 **오늘과 같은 «관리자 없는 ACTIVE 테넌트» + 초대 없음**이다(⚪ S4 가 옛 DTO 의 unknown-field 처리를 재서 적는다). 콘솔이 옛 응답(`status` 에 `PENDING` 없음 · `firstAdmin` 요약 없음)을 깨지지 않고 그리는지도 S4 가 시험한다. 그 창의 길이는 재굽기가 정하며, S4 PR 본문에 적는다.
 | `orgNodeId` | string \| null | N | (`TASK-BE-625`, `ADR-MONO-047` § 개정 2026-10-07) 새 테넌트를 둘 org-node. **생략 또는 `null` = 무소속(지금과 동일)**. 값이 있으면 [`PUT /api/admin/tenants/{tenantId}/org-node`](#put-apiadmintenantstenantidorg-node) 와 **같은 쓰기 규칙**으로 본다 — 출발 = 무소속(생성자는 이미 `SUPER_ADMIN` 이므로 출발 쪽 통과), 도착 = `administers(actor, orgNodeId)` |
 
-`Idempotency-Key` 헤더는 권장(optional, ≤100자 — **TASK-BE-635**, `CreateTenantUseCase` 가 그대로 `admin_actions.idempotency_key VARCHAR(100)` 에 저장한다. 생략 시 랜덤 UUID로 대체). 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지).
+`Idempotency-Key` 헤더는 권장(optional, ≤100자 — **TASK-BE-635**, `CreateTenantUseCase` 가 그대로 `admin_actions.idempotency_key VARCHAR(100)` 에 저장한다. 생략 시 랜덤 UUID로 대체). 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지). 🔵 773: 재생 응답에도 같은 `firstAdminInvitation` 이 실린다 — 초대를 다시 만들거나 메일을 다시 보내지 않는다.
+
+**처리 순서 (773 · 구현 S4)** — 처음 실패한 것이 답한다:
+
+1. 권한(`tenant.manage`) · `'*'` grant scope(아니면 `403 TENANT_SCOPE_DENIED`) · `X-Operator-Reason` · 본문 검증(`firstAdmin` 포함) · 예약어 — 아무것도 안 만든다.
+2. (`orgNodeId` 가 있으면) 도착 쪽 검사 — 아래 노트 그대로.
+3. account-service `POST /internal/tenants` **`initialStatus = PENDING`**([admin-to-account.md § Tenant lifecycle](internal/admin-to-account.md#tenant-lifecycle-internaltenants--773-변경분-task-mono-773)) — `409 TENANT_ALREADY_EXISTS` 면 아무것도 안 만든다.
+4. **한 admin 트랜잭션**: 첫 관리자 초대 행(`first_admin = true`, `PENDING`, 역할 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN`, 테넌트 = 새 테넌트, `invited_by` = actor, 해시 · 만료 — 772 `OperatorInvitationWriter` 재사용) + `TENANT_CREATE` 감사 행 + `OPERATOR_INVITATION_CREATE` 감사 행 + outbox `tenant.created`(`status = PENDING`). 커밋.
+5. **커밋 뒤** 초대 메일(772 와 같다 — 발송 실패는 오류 응답이 아니다: `201` + `firstAdminInvitation.delivery.status = FAILED_*` → 재발송).
+6. (`orgNodeId` 가 있으면) 소속 쓰기 — 아래 노트 그대로.
+
+- 🔴 **보상 (ADR-044 D3 방향)**: 4 가 실패하면(DB 오류 · 감사 실패) 3 에서 만든 테넌트를 account-service 로 **`PENDING → SUSPENDED`** 전이해 보상하고 오류를 그대로 답한다(`500 AUDIT_FAILURE` · `503`). 보상 호출까지 실패하면 테넌트는 **초대 없는 `PENDING`** 으로 남는다 — 어느 경우에도 `ACTIVE` 는 생기지 않는다. 그 테넌트는 목록에 `firstAdmin.state = NONE` 으로 보이고, `SUPER_ADMIN` 이 [`POST …/first-admin-invitation`](#post-apiadmintenantstenantidfirst-admin-invitation) 으로 이어 가거나 `PATCH status=SUSPENDED` 로 정리한다.
+- 테넌트 존재 확인(772 발급 6)은 3 이 방금 만들었으므로 다시 하지 않는다. «그 테넌트에 같은 이메일의 운영자» · «대기 초대 중복»(772 발급 7 · 8)은 새 테넌트라 생기지 않는다.
 
 > **`orgNodeId` 가 있을 때의 순서 (`TASK-BE-625`).** ① 도착 쪽 검사 `administers(actor, orgNodeId)` — 실패하면 **아무것도 만들지 않고** `404 ORG_NODE_NOT_FOUND` + best-effort DENIED 행. ② 테넌트 생성(아래 Side Effects 그대로). ③ 소속 쓰기 — `TENANT_ORG_NODE_ASSIGN` 감사 행(출발 `null` → 도착 `orgNodeId`). 🔴 ②와 ③ 은 account-service 의 서로 다른 두 내부 호출이라 한 트랜잭션이 아니다. ① 과 ③ 사이에 노드가 삭제되는 경합(또는 그 사이 account-service 장애)이면 테넌트는 **무소속으로 생성된 채** ③ 의 오류(`404 ORG_NODE_NOT_FOUND` / `503`)가 응답된다 — 재시도는 같은 POST 가 아니라(`409 TENANT_ALREADY_EXISTS`) `PUT /api/admin/tenants/{tenantId}/org-node` 로 한다. 생성 내부 호출(`POST /internal/tenants`)에 노드 칸을 싣지 않은 이유: 그 경로는 게이트웨이의 `/internal/tenants/**` 라우트로 테넌트 워크로드에도 열려 있다([gateway-api.md](gateway-api.md)) — 소속 쓰기를 거기에 얹으면 관리자 검사를 거치지 않는 소속 쓰기 길이 생긴다.
 
 **Response 201**:
 ```json
 {
-  "tenantId": "wms",
-  "displayName": "Warehouse Management System",
+  "tenantId": "acme-corp",
+  "displayName": "Acme Corp",
   "tenantType": "B2B_ENTERPRISE",
-  "status": "ACTIVE",
-  "createdAt": "2026-05-02T09:00:00Z",
-  "updatedAt": "2026-05-02T09:00:00Z"
+  "status": "PENDING",
+  "createdAt": "2026-10-15T09:00:00Z",
+  "updatedAt": "2026-10-15T09:00:00Z",
+  "firstAdmin": { "state": "INVITED", "email": "owner@acme.example", "invitationId": "0192…", "expiresAt": "2026-10-22T09:00:00Z" },
+  "firstAdminInvitation": { "…": "§ Operator Invitation 의 invitation item (firstAdmin=true) — 토큰 · 링크 없음" }
 }
 ```
+
+- `status` = 항상 `PENDING`(773). `firstAdmin` = 아래 «테넌트 응답의 `firstAdmin` 요약» · `firstAdminInvitation` = 방금 만든 초대의 invitation item(+ `delivery`). 🔴 응답 어디에도 초대 토큰 · 링크가 없다(772 R4).
 
 **Errors**:
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `tenantId` 정규식 위반, `displayName` 길이, `tenantType` enum 미일치, **TASK-BE-635**: `Idempotency-Key` 100자 초과 |
+| 400 | `VALIDATION_ERROR` | `tenantId` 정규식 위반, `displayName` 길이, `tenantType` enum 미일치, **TASK-BE-635**: `Idempotency-Key` 100자 초과 · **773**: `firstAdmin` 누락 · `firstAdmin.email` 형식 · `firstAdmin.displayName` 길이 |
+| 500 | `AUDIT_FAILURE` | (773) 4 의 감사 쓰기 실패 — 테넌트는 SUSPEND 로 보상(위 «보상») |
 | 400 | `TENANT_ID_RESERVED` | `tenantId` 가 예약어 목록에 포함 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
@@ -2343,8 +2418,51 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 **Side Effects**:
 - `admin_actions` 에 `action_code=TENANT_CREATE`, `tenant_id='*'` (actor), `target_tenant_id=<신규>`, `target_type='TENANT'`, `target_id=<신규 tenantId>`.
-- Outbox 이벤트 `tenant.created` 발행 ([tenant-events.md](../events/tenant-events.md)).
+- Outbox 이벤트 `tenant.created` 발행 ([tenant-events.md](../events/tenant-events.md)) — 773 부터 `status = "PENDING"`.
+- **773**: `operator_invitation` 한 행(`first_admin = true`) + `admin_actions` `action_code=OPERATOR_INVITATION_CREATE`(§ Operator Invitation 발급과 같은 모양 — `target_tenant_id=<신규>`) · 커밋 뒤 초대 메일 한 통.
 - (`orgNodeId` 가 있을 때만) 이어서 `admin_actions` `action_code=TENANT_ORG_NODE_ASSIGN` 한 행 — 모양은 [소속 쓰기의 Side Effects](#put-apiadmintenantstenantidorg-node) 와 같다(`from_org_node_id=null`). `orgNodeId` 가 없으면 이 행은 없다(회귀 — 지금과 동일).
+
+**테넌트 응답의 `firstAdmin` 요약 (773 — 가산, 이 절의 POST · GET 목록 · GET 단건 · PATCH 응답 공통)**:
+
+```json
+{ "state": "INVITED", "email": "owner@acme.example", "invitationId": "0192…", "expiresAt": "2026-10-22T09:00:00Z" }
+```
+
+| `state` | 뜻 (읽은 시각에 판정 — 잡 없음) | 콘솔 표기 |
+|---|---|---|
+| `INVITED` | `PENDING` 테넌트 · `PENDING` 첫 관리자 초대 · 미만료 | «관리자 대기» |
+| `EXPIRED` | `PENDING` 테넌트 · `PENDING` 첫 관리자 초대 · `expiresAt ≤ 읽은 시각` | «관리자 대기 · 초대 만료» |
+| `NONE` | `PENDING` 테넌트 · `PENDING` 첫 관리자 초대 없음(취소됨 · 보상 실패) | «관리자 대기 · 초대 없음» |
+| `ACCEPTED` | 첫 관리자 초대가 수락됐다(테넌트는 보통 `ACTIVE` — `PENDING` 이면 활성화만 남은 R4 상태) | (없음 — `PENDING` 이면 «활성화 재시도» 안내) |
+
+- `PENDING` 이 아니고 첫 관리자 초대 행도 없는 테넌트(773 이전 · 셀프 경로)는 **`firstAdmin = null`**. `email` · `invitationId` · `expiresAt` 은 그 초대 행의 값(`NONE` 이면 셋 다 `null`). 🔵 이메일은 `SUPER_ADMIN` 만 보는 표면이라 싣는다(초대 목록과 같은 등급).
+
+---
+
+### POST /api/admin/tenants/{tenantId}/first-admin-invitation
+
+**TASK-MONO-773 (OD-2 «재초대» — 다른 주소 · 초대가 없어진 대기 테넌트 · 구현 S4).** `PENDING` 테넌트에 첫 관리자 초대를 **새로** 낸다. 같은 주소로 다시 보내는 것은 이것이 아니라 그 초대의 `:resend` 다.
+
+**Auth required**: 운영자 JWT · `tenant.manage` · **`'*'` grant scope**(이 절의 다른 엔드포인트와 같다). **Headers**: `Authorization`, `X-Operator-Reason` (required), `Idempotency-Key` (required — 초대 발급과 같은 규칙).
+
+**Request**: `{ "email": "owner2@acme.example", "displayName": "김대표" }` — 검증은 `POST /api/admin/tenants` 의 `firstAdmin` 과 같다.
+
+**처리 순서**: 권한 · 범위 → 사유 · 본문 → 테넌트 읽기(account-service — 없으면 `404 TENANT_NOT_FOUND`, 실패면 `503` · 쓰지 않음) → 상태가 `PENDING` 아님 → **`409 TENANT_NOT_PENDING`** → 그 테넌트에 `PENDING` 첫 관리자 초대가 있다(주소 무관 · 만료 포함) → `409 OPERATOR_INVITATION_ALREADY_PENDING`(그 초대를 `:resend` 하거나 `:cancel` 한 뒤 다시) → 한 트랜잭션: 초대 행(`first_admin = true` — 위 POST 4 와 같은 값) + `OPERATOR_INVITATION_CREATE` 감사 행 → 커밋 뒤 메일.
+
+**Response 201**: invitation item(`firstAdmin = true`) + `"auditId"`.
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` / `REASON_REQUIRED` | 본문 · `Idempotency-Key` · 사유 |
+| 401 | `TOKEN_INVALID` | — |
+| 403 | `PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` | `tenant.manage` 없음 / `'*'` grant scope 아님 |
+| 404 | `TENANT_NOT_FOUND` | 테넌트 미등록 |
+| 409 | `TENANT_NOT_PENDING` | 테넌트가 `ACTIVE`(이미 관리자가 있다 — 일반 초대로) · `SUSPENDED` |
+| 409 | `OPERATOR_INVITATION_ALREADY_PENDING` | 그 테넌트에 대기 중인 첫 관리자 초대가 있다 |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자 · 같은 키 |
+| 503 | `DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` | 테넌트 읽기 실패 — 쓰지 않음 |
+
+**Side Effects**: `admin_actions` `action_code=OPERATOR_INVITATION_CREATE`, `permission_used=tenant.manage`, `target_type=OPERATOR_INVITATION`, `target_id=<invitationId>`, `target_tenant_id=<tenantId>` + outbox `admin.action.performed`. 테넌트 이벤트 없음(상태가 바뀌지 않는다).
 
 ---
 
@@ -2358,7 +2476,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 | 파라미터 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` 필터 |
+| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` \| **`PENDING`**(773) 필터 |
 | `tenantType` | enum (optional) | — | `B2C_CONSUMER` \| `B2B_ENTERPRISE` 필터 |
 | `page` | int | 0 | — |
 | `size` | int | 20 (max 100) | — |
@@ -2373,7 +2491,8 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
       "tenantType": "B2C_CONSUMER",
       "status": "ACTIVE",
       "createdAt": "2026-04-01T00:00:00Z",
-      "updatedAt": "2026-04-01T00:00:00Z"
+      "updatedAt": "2026-04-01T00:00:00Z",
+      "firstAdmin": null
     }
   ],
   "page": 0,
@@ -2382,6 +2501,8 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
   "totalPages": 1
 }
 ```
+
+- **773**: 각 항목에 `firstAdmin` 요약(위 «테넌트 응답의 `firstAdmin` 요약» — 첫 관리자 초대 행이 없는 테넌트는 `null`). admin-service 가 한 페이지의 테넌트 id 로 `operator_invitation`(`first_admin = true`)을 한 번에 읽어 붙인다(테넌트마다 호출 금지). `status` 값에 `PENDING` 이 온다 — 소비자(콘솔 `z.enum`)는 같은 PR 묶음에서 넓힌다(773 AC-0 R5).
 
 **Errors**: `401`, `403 PERMISSION_DENIED`, `403 TENANT_SCOPE_DENIED`, `422 VALIDATION_ERROR` (size > 100 등).
 
@@ -2393,7 +2514,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 **Auth required**: 운영자 JWT, role = `SUPER_ADMIN` 또는 `tenant.read` 권한 + `tenantId` == operator 의 `tenant_id` (자기 테넌트는 본인이 조회 가능).
 
-**Response 200**: POST 응답과 동일 schema.
+**Response 200**: POST 응답과 동일 schema(773: `firstAdmin` 요약 포함 · `firstAdminInvitation` 은 싣지 않는다 — 초대 단건은 § Operator Invitation 목록에서).
 
 **Errors**: `401`, `403 PERMISSION_DENIED`, `403 TENANT_SCOPE_DENIED`, `404 TENANT_NOT_FOUND`.
 
@@ -2416,7 +2537,13 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | 필드 | 타입 | 필수 | 검증 |
 |---|---|---|---|
 | `displayName` | string (optional) | — | 1~100자 |
-| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` (status 전이 매트릭스 참조) |
+| `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` (status 전이 매트릭스 참조). `PENDING` 은 요청 값이 될 수 없다(`400 VALIDATION_ERROR` — 대기는 `POST` 만 만든다) |
+
+**`PENDING` 테넌트에 대한 PATCH (773 · 구현 S4)**:
+
+- **`status=ACTIVE`** → `409 TENANT_FIRST_ADMIN_PENDING`, **단** 그 테넌트의 첫 관리자 초대가 `ACCEPTED` 면 활성화를 마친다(account `PENDING → ACTIVE` · `TENANT_ACTIVATE` 감사 · `tenant.activated`) — 수락 뒤 활성화 호출만 실패한 경우의 복구 길(773 AC-0 R4). 판정은 admin-service 가 자기 표(`operator_invitation`)로 한다.
+- **`status=SUSPENDED` = «정리» (OD-2)** — 순서: ① 한 admin 트랜잭션: 그 테넌트의 `PENDING` 첫 관리자 초대를 `CANCELLED`(있으면 — `cancelled_by` = actor) + `OPERATOR_INVITATION_CANCEL` 감사 행 ② account `PENDING → SUSPENDED` ③ `TENANT_SUSPEND` 감사 + outbox `tenant.suspended`(`previousStatus = PENDING`). ② 가 실패하면 `503` — 초대는 이미 취소됐고 테넌트는 `PENDING`(`firstAdmin.state = NONE`) — 같은 PATCH 를 다시 하면 ② 부터 이어진다(취소할 초대가 없으니 ① 은 no-op). 초대를 먼저 취소하는 이유: 반대 순서에서 ② 성공 뒤 ① 이 실패하면 «수락할 수 없는 대기 초대» 가 목록에 남아 사람을 헷갈리게 한다(어느 순서도 `ACTIVE` 를 만들지 않는다).
+- `displayName` 은 `PENDING` 에서도 바꿀 수 있다(지금 규칙 그대로 — `tenant.updated`).
 
 `Idempotency-Key` 헤더는 권장(optional, ≤93자 — **TASK-BE-635**. `UpdateTenantUseCase` 가 status 변경 감사 행에
 `:status`(7자)를 덧붙이므로 100 이 아니라 93: 93+7=100 이 `admin_actions.idempotency_key VARCHAR(100)`에 꼭
@@ -2428,17 +2555,20 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, displayName 길이 위반, status enum 미일치, **TASK-BE-635**: `Idempotency-Key` 93자 초과 |
+| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, displayName 길이 위반, status enum 미일치(`PENDING` 포함 — 773), **TASK-BE-635**: `Idempotency-Key` 93자 초과 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | 비-SUPER_ADMIN 호출 |
 | 404 | `TENANT_NOT_FOUND` | `tenantId` 미존재 |
+| 409 | `TENANT_FIRST_ADMIN_PENDING` | **773** — `PENDING` 테넌트에 `status=ACTIVE`(첫 관리자 초대 미수락) · 정리로 정지된(첫 관리자가 생긴 적 없는) 테넌트에 `status=ACTIVE` — 위 전이 매트릭스 |
 | 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
 
 **Side Effects** (변경 종류별):
 - `displayName` 변경 시 → `admin_actions: action_code=TENANT_UPDATE` + outbox `tenant.updated`.
 - `status: ACTIVE → SUSPENDED` → `admin_actions: action_code=TENANT_SUSPEND` + outbox `tenant.suspended`.
 - `status: SUSPENDED → ACTIVE` → `admin_actions: action_code=TENANT_REACTIVATE` + outbox `tenant.reactivated`.
+- **773** `status: PENDING → SUSPENDED`(정리) → `OPERATOR_INVITATION_CANCEL`(남은 첫 관리자 초대가 있을 때) + `TENANT_SUSPEND` + outbox `tenant.suspended`(`previousStatus=PENDING`).
+- **773** `status: PENDING → ACTIVE`(첫 관리자 초대가 `ACCEPTED` 일 때만 — 복구) → `admin_actions: action_code=TENANT_ACTIVATE` + outbox `tenant.activated`(새 이벤트 — [tenant-events.md](../events/tenant-events.md#tenantactivated)).
 - 동일 status 로의 PATCH 는 no-op (200 반환, audit/event 미발행).
 
 ---
@@ -2561,7 +2691,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 **Auth required**: Yes (operator token, `token_type=admin`)
 **Required permission**: `subscription.manage`
-**Granted to roles**: `SUPER_ADMIN`
+**Granted to roles**: `SUPER_ADMIN` · `TENANT_BILLING_ADMIN`(그 grant 의 테넌트만 — ADR-024 D5-C · D2, [rbac.md Seed Roles](../../services/admin-service/rbac.md#seed-roles)). 🔵 TASK-MONO-773 S1 정정 — 이 줄은 `SUPER_ADMIN` 만 적고 있었으나 셀프 온보딩 생성자(ADR-044 D6)와 773 의 첫 관리자가 이 키로 자기 회사 구독을 켠다(773 AC-2 의 «`wms` 구독» 단계가 이 엔드포인트다).
 
 **Headers**: `Authorization: Bearer <operator-token>`, `X-Operator-Reason: string (required)`
 
@@ -2569,6 +2699,8 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 ```json
 { "tenantId": "acme-corp", "domainKey": "scm" }
 ```
+
+- ⚪ `PENDING` 테넌트의 구독 생성은 막지 않는다(account-service 구독 쓰기가 테넌트 상태를 보는지 773 S1 은 재지 않았다). 첫 관리자가 생기기 전에는 그 테넌트의 `TENANT_BILLING_ADMIN` 이 없으므로 `SUPER_ADMIN` 만 할 수 있는 일이고, 대기 테넌트는 로그인 · assume UI 가 닫혀 있어 해가 없다.
 
 **Response 201**:
 ```json
@@ -3621,9 +3753,12 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 |---|---|---|
 | `DIRECT` | `POST /operators/{id}/domain-permission-sets` | 개인 회수 `DELETE /operators/{id}/domain-permission-sets/{setId}` · 내보내기 |
 | `MIGRATION` | 이전 백필(V0052 — `legacy-compat` 만, 한 번) | 개인 회수(같은 엔드포인트가 `DIRECT` 와 함께 지운다) · 내보내기 |
+| `ORIGIN` | **TASK-MONO-773 OD-4 · OD-5 (ADR-083 OD-5 — P9)** — 회사 생성 원자 묶음 두 자리만: 셀프 온보딩([onboarding-api.md](onboarding-api.md) «회사 생성자의 업무 권한 세트») · 첫 관리자 초대 수락([auth-to-admin.md § accept](internal/auth-to-admin.md#post-internaloperator-invitationsaccept--초대-수락-task-mono-772) «첫 관리자 초대일 때»). 세트 = **`all-domains-full` 만** · 테넌트 = 그 생성 · 수락의 테넌트 하나 · `granted_by = NULL`. 🔴 **API 로는 만들 수 없다**(이 절의 어떤 쓰기도 `ORIGIN` 행을 만들지 않는다 — `MIGRATION` 과 같은 «시스템 전용» 출처) | 개인 회수(`DIRECT` · `MIGRATION` 과 함께 — 같은 엔드포인트) · 내보내기 |
 | `GROUP:<id>` | 그룹 세트 배정 · 멤버 추가(fan-out — 그룹 테넌트에만) | 그 그룹의 세트 회수 · 멤버 제거 · 그룹 삭제 · 내보내기 |
 
-- 개인 회수는 `GROUP:*` 행을 지우지 않는다 — 그룹에서 받은 세트는 그 그룹에서 빼야 사라진다(응답 · 콘솔이 출처를 보여 주는 이유). 그룹 쪽 회수는 `DIRECT` · `MIGRATION` · 다른 그룹 행을 지우지 않는다.
+- 개인 회수는 `GROUP:*` 행을 지우지 않는다 — 그룹에서 받은 세트는 그 그룹에서 빼야 사라진다(응답 · 콘솔이 출처를 보여 주는 이유). 그룹 쪽 회수는 `DIRECT` · `MIGRATION` · `ORIGIN` · 다른 그룹 행을 지우지 않는다.
+- 🔴 **`ORIGIN` 은 ADR-083 D5 «구독 밖 도메인의 세트 배정은 서버가 거절» 의 예외 한 자리다 (TASK-MONO-773 OD-4, 2026-10-15 UTC — [ADR-083 § OD 소유자 결정](../../../../../docs/adr/ADR-MONO-083-domain-permission-sets-per-tenant.md) 덧붙임 행).** 이 행은 **구독 검사 없이** 쓴다 — 새 테넌트는 구독 0 으로 태어나고(ADR-044 D6), `all-domains-full` 은 고객 테넌트가 영원히 구독할 수 없는 `fan` 을 담는다(위 카탈로그 · `fan` 은 `fan-platform` 만 구독 — § Subscription Management). 그래서 이 행의 상한은 쓰기 게이트가 아니라 **auth 의 `∩ derive(entitled)`**(ADR-083 D6 · P3)다: 구독하지 않은 도메인은 토큰에 아무것도 싣지 않는다. 그 밖의 모든 배정(직접 · 그룹 · 세트 생성/수정)의 `422 DOMAIN_NOT_SUBSCRIBED` 규칙은 **바뀌지 않는다** — `all-domains-full` 을 `DIRECT` 로 주려는 배정은 지금처럼 구독 검사를 받는다. 이 예외로 권한이 entitled 밖으로 넓어지지 않는다(세트 행이 entitled 밖을 덮는 상태는 이미 합법이다 — 구독 해지 뒤 남은 행과 같다, 아래 POST 세트 노트).
+- 🔵 `ORIGIN` 행이 «전체» 를 뜻하므로 카탈로그가 넓어지면(P5 ~ P8 — `all-domains-full` 이 마이그레이션으로 함께 넓어진다) 생성자의 실효 권한도 함께 넓어진다(773 AC-0 R7). 출처가 행에 남으므로 감사 · 콘솔에서 보인다(아래 `sources[].source = ORIGIN`).
 - «이 회사에서 내보내기»(§ DELETE …/assignments/{tenantId}) = 그 회사(T)의 행 **전부 — 모든 출처**.
 
 ### 카탈로그 — 배정 가능한 업무 역할 (ADR-083 D2 · D3)
@@ -3662,7 +3797,7 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `wms-master-read` | `MASTER_READ` | |
 | `wms-ops-actions` | `WMS_OPERATOR` | |
 | `<domainKey>-full` | 그 도메인의 카탈로그 역할 전부 | 도메인마다 하나: `wms-full` · `scm-full` · `erp-full` · `finance-full` · `ecommerce-full` · `fan-full` · `mes-full` |
-| `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 |
+| `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 — 773 OD-4 가 출처 `ORIGIN` 으로 쓴다(위 «출처» 표). API 로 `DIRECT` 배정도 할 수 있지만 그때는 구독 검사를 받는다(`fan` 때문에 고객 테넌트에서는 사실상 `422`) |
 | `legacy-compat` | `all-domains-full` 과 같은 내용 | **`MIGRATION` 출처 전용**(API 배정 불가) — 이전 완료 판정에서 «백필이 준 것» 을 구분하는 표지 |
 
 - 프리셋은 수정 · 삭제할 수 없다(`409 DOMAIN_PERMISSION_SET_READ_ONLY`) — 바꾸려면 같은 역할로 **테넌트 세트를 만든다**(복제). 카탈로그가 넓어지면(P5 ~ P8) `<domainKey>-full` · `all-domains-full` · `legacy-compat` 의 내용이 그 단계의 마이그레이션으로 함께 넓어진다.
@@ -3914,9 +4049,9 @@ T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — �
 | 필드 | 설명 |
 |---|---|
 | `roles` | 실효 업무 역할 = `sets` 의 역할 합(카탈로그 순서) — 🔴 **구독 교집합 전**이다. 토큰에 실리는 값은 auth 가 `∩ entitled` 로 다시 거른 것(P3). 화면은 구독 없는 도메인의 역할을 «구독 없음» 으로 구분해 보인다 |
-| `sets[].sources[].source` | `DIRECT` · `MIGRATION` · `GROUP`(이때 `groupId` · `groupName`). 개인 회수 버튼은 `DIRECT` · `MIGRATION` 출처에만(그룹 출처는 그 그룹에서 뺀다) |
+| `sets[].sources[].source` | `DIRECT` · `MIGRATION` · **`ORIGIN`**(773 — 회사 생성자 · 첫 관리자 기본 세트) · `GROUP`(이때 `groupId` · `groupName`). 개인 회수 버튼은 `DIRECT` · `MIGRATION` · `ORIGIN` 출처에만(그룹 출처는 그 그룹에서 뺀다) |
 | `sets[].sources[].tenantId` | 그 행의 테넌트 — T 또는 `'*'`(`'*'` 운영자의 «모든 테넌트» 행) |
-| `grantedBy` | 배정한 운영자의 `operatorId`. 시스템 경로(`MIGRATION`)는 `null` |
+| `grantedBy` | 배정한 운영자의 `operatorId`. 시스템 경로(`MIGRATION` · `ORIGIN`)는 `null` |
 
 **Errors**:
 
@@ -3978,11 +4113,11 @@ T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — �
 
 ### DELETE /api/admin/operators/{operatorId}/domain-permission-sets/{setId}
 
-**개인 회수** — 대상의 T 에서 그 세트의 **`DIRECT` · `MIGRATION` 행만** 지운다. `GROUP:*` 행은 남는다(그룹에서 받은 세트는 그 그룹에서 뺀다).
+**개인 회수** — 대상의 T 에서 그 세트의 **`DIRECT` · `MIGRATION` · `ORIGIN` 행만** 지운다(`ORIGIN` 은 TASK-MONO-773 OD-4 — 생성자 기본 세트도 관리자가 회수할 수 있다, 자기 자신 포함). `GROUP:*` 행은 남는다(그룹에서 받은 세트는 그 그룹에서 뺀다).
 
 **Auth required**: Yes · **Required permission**: `domain_access.manage` · **Headers**: `X-Tenant-Id`(생략 규칙 — T), `X-Operator-Reason: <required>`
 
-판정은 POST 의 1 ~ 3 과 같다(존재 검사 전에 범위 — cross-tenant 는 존재 누설 없이 403). 지울 `DIRECT` · `MIGRATION` 행이 하나도 없으면 `404 DOMAIN_PERMISSION_SET_NOT_FOUND`(그룹 출처 행만 있는 경우 포함 — 콘솔은 그때 «그룹에서 받은 세트» 를 안내한다).
+판정은 POST 의 1 ~ 3 과 같다(존재 검사 전에 범위 — cross-tenant 는 존재 누설 없이 403). 지울 `DIRECT` · `MIGRATION` · `ORIGIN` 행이 하나도 없으면 `404 DOMAIN_PERMISSION_SET_NOT_FOUND`(그룹 출처 행만 있는 경우 포함 — 콘솔은 그때 «그룹에서 받은 세트» 를 안내한다).
 
 **Response 204**.
 
@@ -3995,9 +4130,9 @@ T 의 테넌트 세트 삭제. **배정이 남아 있으면 거절**한다 — �
 | 403 | `PERMISSION_DENIED` | `domain_access.manage` 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | T 가 grant scope 밖 · `'*'` 대상에 `'*'` grant scope 없음 |
 | 404 | `OPERATOR_NOT_FOUND` | 대상 미존재 · 비-`'*'` 대상이 T 의 소속이 아니다 |
-| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 이 세트의 `DIRECT` · `MIGRATION` 행이 T 에 없다 |
+| 404 | `DOMAIN_PERMISSION_SET_NOT_FOUND` | 세트 미존재 · 이 세트의 `DIRECT` · `MIGRATION` · `ORIGIN` 행이 T 에 없다 |
 
-**Side Effects**: `admin_actions` `action_code=OPERATOR_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`, `target_type='OPERATOR'`, `target_id=<operatorId>`, `target_tenant_id=<T 또는 '*'>`, `detail="setId=<setId> removedSources=<DIRECT,MIGRATION 중 지운 것> keptGroupSources=<남은 그룹 출처 수>"`. 거절 = DENIED row. 🔴 회수 지연: 다음 assume 교환부터 · 발급된 토큰은 `exp` 까지(D7).
+**Side Effects**: `admin_actions` `action_code=OPERATOR_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`, `target_type='OPERATOR'`, `target_id=<operatorId>`, `target_tenant_id=<T 또는 '*'>`, `detail="setId=<setId> removedSources=<DIRECT,MIGRATION,ORIGIN 중 지운 것> keptGroupSources=<남은 그룹 출처 수>"`. 거절 = DENIED row. 🔴 회수 지연: 다음 assume 교환부터 · 발급된 토큰은 `exp` 까지(D7).
 
 ---
 

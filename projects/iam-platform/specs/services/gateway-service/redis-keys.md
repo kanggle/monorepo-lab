@@ -35,6 +35,7 @@ gateway-service는 MySQL을 사용하지 않으며 Redis만 영속성 외 상태
 |---|---|---|---|---|
 | `login` | IP /24 서브넷 해시 | 60초 | 20회 | 로그인 시도 rate limit |
 | `signup` | IP | 60초 | 5회 | 가입 시도 rate limit |
+| `onboarding` | IP | 60초 | 5회 | 셀프 테넌트 생성(`POST /api/admin/onboarding/organizations` 한 경로) — **TASK-MONO-773 OD-8**. 신원당 제한은 admin-service 의 소유 상한이 맡는다 |
 | `refresh` | account_id | 60초 | 10회 | Token refresh rate limit |
 | `global` | IP | 1초 | 100회 | 전체 API 과부하 방지 |
 

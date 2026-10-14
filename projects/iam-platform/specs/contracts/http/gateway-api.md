@@ -36,6 +36,8 @@
 | `POST /api/admin/auth/2fa/verify` | admin-service | Bootstrap token (body) | admin-service 내부 검증 |
 | `POST /api/admin/auth/refresh` | admin-service | No (refresh JWT in body) | admin-service 내부 검증 |
 | `GET /.well-known/admin/jwks.json` | admin-service | No | public key 노출 |
+| `POST /api/admin/onboarding/organizations` | admin-service | No (gateway layer — subject token in body, admin-service 가 검증) | **rate-limit scope `onboarding`**(IP 당 5회/60초 — **TASK-MONO-773 OD-8**). 셀프 테넌트 생성 — [onboarding-api.md](onboarding-api.md) |
+| `POST /api/admin/onboarding/received-invitations` | admin-service | No (gateway layer — subject token in body) | `onboarding` scope **없음**(읽기 — global 만). TASK-MONO-773 OD-7 |
 | `POST /api/admin/accounts/{id}/lock` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `POST /api/admin/accounts/{id}/unlock` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `POST /api/admin/sessions/{id}/revoke` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
@@ -59,6 +61,12 @@ auth-service 내부의 SAS 필터 체인이 해당 엔드포인트별 인증을 
 - `id: auth-service-oidc` 라우트가 `/oauth2/**`, `/.well-known/openid-configuration`를 `AUTH_SERVICE_URL`로 forward
 - 기존 `id: auth-service` 라우트(`/api/auth/**`)와 분리 운영 — 상호 영향 없음
 - `POST /oauth2/token` 경로는 rate-limit scope `refresh`에 매핑 (brute-force 보호)
+
+### 셀프 테넌트 생성 rate limit (TASK-MONO-773 OD-8 · 구현 S3)
+
+- `POST /api/admin/onboarding/organizations` **한 경로**를 scope **`onboarding`** 에 매핑한다 — identifier = IP · 윈도우 60초 · 임계치 5(`signup` 과 같은 모양 — [redis-keys.md](../../services/gateway-service/redis-keys.md)). 초과 = 위 § 429 그대로(`RATE_LIMITED` + `Retry-After`), admin-service 에 닿지 않는다.
+- `/api/admin/**` 의 나머지(같은 `onboarding/` 아래의 `received-invitations` 읽기 포함)는 이 scope 를 타지 않는다 — `global` 만. 서브트리 와일드카드 public-paths 규칙(아래 § Admin Routes)은 바뀌지 않는다: rate-limit 매핑은 **경로 하나를 열거**하지만 그것은 인증 판정이 아니다(열거 금지 규칙은 JWT 검증 경로 열거에 관한 것이다).
+- 🔵 ADR-MONO-044 D4 «per-identity + per-IP» 중 per-identity 는 이 게이트웨이가 아니라 admin-service 의 신원당 소유 상한(3)이 맡는다(소유자 결정 OD-8 — [onboarding-api.md](onboarding-api.md) «신원당 상한»).
 
 ---
 

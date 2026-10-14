@@ -64,7 +64,9 @@ Phase 1을 시작하기 전에 다음 항목을 확정해 둔다:
 ### 흐름
 
 운영자(`SUPER_ADMIN`) 가 admin-service의 테넌트 lifecycle API로 신규 테넌트를 등록한다.
-self-service 등록 경로는 존재하지 않는다 ([multi-tenancy.md § Tenant Model](multi-tenancy.md#tenant-model)).
+~~self-service 등록 경로는 존재하지 않는다~~ — 고객 회사의 셀프 생성은 [onboarding-api.md](../contracts/http/onboarding-api.md)(ADR-MONO-044)이고, 이 가이드의 소비 도메인 테넌트는 아래 `SUPER_ADMIN` 경로다([multi-tenancy.md § Tenant Model](multi-tenancy.md#tenant-model)).
+
+🔴 **TASK-MONO-773 부터 `firstAdmin` 이 필수**다 — 생성은 «테넌트 + 첫 관리자 초대» 한 묶음이고 테넌트는 **`PENDING`** 으로 태어나, 그 이메일의 주인이 초대를 수락해야 `ACTIVE` 가 된다([admin-api.md § Tenant Lifecycle](../contracts/http/admin-api.md#tenant-lifecycle-task-be-256)). `PENDING` 동안은 그 테넌트로 로그인 · 가입 · 프로비저닝이 닫혀 있으므로 Phase 2 이후는 수락 뒤에 진행한다.
 
 ### 요청
 
@@ -78,7 +80,8 @@ Content-Type: application/json
 {
   "tenantId": "erp",
   "displayName": "Enterprise Resource Planning",
-  "tenantType": "B2B_ENTERPRISE"
+  "tenantType": "B2B_ENTERPRISE",
+  "firstAdmin": { "email": "erp-owner@example.com", "displayName": "ERP 관리자" }
 }
 ```
 
@@ -89,9 +92,11 @@ Content-Type: application/json
   "tenantId": "erp",
   "displayName": "Enterprise Resource Planning",
   "tenantType": "B2B_ENTERPRISE",
-  "status": "ACTIVE",
+  "status": "PENDING",
   "createdAt": "2026-05-02T09:00:00Z",
-  "updatedAt": "2026-05-02T09:00:00Z"
+  "updatedAt": "2026-05-02T09:00:00Z",
+  "firstAdmin": { "state": "INVITED", "email": "erp-owner@example.com", "invitationId": "…", "expiresAt": "2026-05-09T09:00:00Z" },
+  "firstAdminInvitation": { "…": "invitation item" }
 }
 ```
 

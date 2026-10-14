@@ -64,7 +64,7 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `SITE_ROLE_EMAIL_MISMATCH` — 내부 사이트 역할 쓰기에서 호출자가 기대한 이메일(초대 주소)이 그 계정의 이메일이 아님 (403)
 - `SITE_ROLE_REQUIRES_POOL_ACCOUNT` — 사이트 자체 계정(풀 밖)에 사이트 역할을 쓰려 함 (409)
 - `SITE_MEMBERSHIP_REQUIRED` — 그 사이트 ACTIVE 멤버십이 없는 풀 계정에 사이트 역할을 쓰려 함 — 쓰기는 멤버십을 만들지 않는다 (409)
-- `EMAIL_NOT_VERIFIED` — 회사 권한이 붙는 쓰기(사이트 역할 쓰기 · 운영자 초대 수락의 인증 이메일 판정)에 이메일 인증 안 된 풀 계정 — 로그인·소비자 이용에는 걸지 않는다 (403, ADR-MONO-080 D3)
+- `EMAIL_NOT_VERIFIED` — 회사 권한이 붙는 쓰기(사이트 역할 쓰기 · 운영자 초대 수락의 인증 이메일 판정 · 셀프 테넌트 생성의 트러스트 게이트 — ADR-MONO-044 D4)에 이메일 인증 안 된 풀 계정 — 로그인·소비자 이용에는 걸지 않는다 (403, ADR-MONO-080 D3)
 - `ACCOUNT_EMAIL_MISMATCH` — 내부 «인증된 이메일 일치» 판정에서 호출자가 기대한 이메일(초대 주소)이 그 풀 계정의 이메일이 아님 (403, ADR-MONO-080 D6)
 - `INVITATION_EMAIL_SEND_FAILED` — 운영자 초대 메일 일시 발송 실패 — 다시 보내면 될 수 있다 (503)
 - `INVITATION_EMAIL_UNDELIVERABLE` — 운영자 초대 메일 영구 발송 실패 — 메일 서버가 이 주소를 받지 않는다 (422)
@@ -92,11 +92,12 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 - `OPERATOR_INVITATION_NOT_PENDING` — 대기 상태가 아닌 초대의 취소 · 재발송 (409)
 - `OPERATOR_INVITATION_EMAIL_MISMATCH` — 수락한 풀 계정의 이메일 ≠ 초대 이메일 — 아무것도 쓰지 않는다 (403)
 - `OPERATOR_INVITATION_ACCOUNT_NOT_ELIGIBLE` — 수락한 계정이 ACTIVE 풀(개인) 계정이 아님 (403)
-- `OPERATOR_INVITATION_INVALIDATED` — 수락 시 초대의 근거(테넌트 ACTIVE · 초대자 ACTIVE · 초대자의 범위 · 부여 메뉴)가 더는 성립하지 않음 (409)
+- `OPERATOR_INVITATION_INVALIDATED` — 수락 시 초대의 근거(테넌트 ACTIVE — 첫 관리자 초대는 테넌트 `PENDING` · 초대자 ACTIVE · 초대자의 범위 · 부여 메뉴)가 더는 성립하지 않음 (409)
 - `OPERATOR_ALREADY_PROVISIONED` — 초대 수락 · 셀프 온보딩(테넌트 생성 전 판정)에서 계정의 기존 운영자 측면이 **이 소속을 받을 수 없음** — 이미 그 테넌트 소속 · 플랫폼(`'*'`) 측면 · 비-`ACTIVE`. 784(ADR-MONO-082 b) 부터 아직 소속이 아닌 `ACTIVE` 회사 측면은 같은 행에 소속이 더해진다 — 784 전에는 «측면이 있으면 전부»(772 OD-1 한 사람 = 한 회사) (409)
 - `TENANT_LAST_ADMIN_REQUIRED` — 그 테넌트의 마지막 활성 테넌트 관리자를 없애는 쓰기(회사에서 내보내기 · 자기 자신 포함 · 역할 교체 · 그룹 멤버 제거 · 그룹 역할 회수 · 그룹 삭제) 거절 (409). 경로마다 같은 술어 — 하나로 다른 하나를 우회하지 못하게. 다른 관리자를 먼저 앉히거나 플랫폼(`'*'`)이 처리
 - `OPERATOR_HAS_OTHER_MEMBERSHIPS` — 행 전체 변경(상태 · 프로필 · 신원 연결/해제)을 회사 범위 관리자가 시도했는데 대상이 회사 둘 이상의 소속 — 행 전체는 플랫폼(`'*'`)만, 회사 관리자는 «이 회사에서 내보내기» (403, ADR-MONO-082 라이더 R3). 대상의 회사를 하나도 관리하지 않는 행위자에겐 `TENANT_SCOPE_DENIED`(소속 수 비노출)
-- `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` — 셀프 온보딩: 호출자의 운영자 측면이 이미 신원당 상한만큼의 서로 다른 테넌트에서 테넌트 관리자 역할을 가짐 — 테넌트 생성 전 판정, 아무것도 쓰지 않는다 (422, ADR-MONO-044 D4 · ADR-MONO-082 D4 세는 단위)
+- `OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` — 셀프 온보딩: 호출자의 운영자 측면이 이미 신원당 상한만큼의 서로 다른 테넌트에서 테넌트 관리자 역할을 가짐 — 테넌트 생성 전 판정(아무것도 쓰지 않는다) + 소속 추가 트랜잭션 안에서 운영자 행 잠금 뒤 재판정(경합에 진 쪽은 테넌트 생성 뒤 이 코드 · 테넌트는 정지로 보상). 테넌트 상태 무관하게 센다 (422, ADR-MONO-044 D4 · ADR-MONO-082 D4 세는 단위)
+- `ONBOARDING_ACCOUNT_NOT_ELIGIBLE` — 셀프 테넌트 생성: 호출자가 이메일을 판정할 수 있는 ACTIVE 개인(풀) 계정이 아님 — 인증 이메일 트러스트 게이트(ADR-MONO-044 D4)를 답할 수 없다. 테넌트 생성 전 판정, 아무것도 쓰지 않는다 (403). 맞는 계정의 미인증 주소는 `EMAIL_NOT_VERIFIED`
 - `DOMAIN_PERMISSION_SET_NOT_FOUND` — 도메인 업무 권한 세트 없음 · 다른 테넌트의 세트(비노출) · 그 범위에서 쓸 수 없는 세트 · 회수하려는 출처의 배정 없음 (404, ADR-MONO-083)
 - `DOMAIN_PERMISSION_SET_READ_ONLY` — 시스템 제공(프리셋) 세트의 수정 · 삭제 — 읽기 전용, 테넌트 세트로 복제해서 쓴다 (409)
 - `DOMAIN_PERMISSION_SET_IN_USE` — 아직 배정(어느 출처든 · 그룹 포함)이 남은 세트의 삭제 — 배정째 걷지 않는다, 먼저 회수 (409)
@@ -143,6 +144,8 @@ SaaS 도메인에서 공통으로 발생하는 에러는 [../../platform/error-h
 **기타**
 
 - `TENANT_SCOPE_MISMATCH` — 요청 테넌트가 운영자가 현재 행위 중인 테넌트와 불일치 (403). 토큰 **스코프**에 관한 `TENANT_SCOPE_DENIED` 와 구분된다
+- `TENANT_FIRST_ADMIN_PENDING` — 첫 관리자를 기다리는 테넌트(`PENDING`)를 상태 변경으로 활성화하려 함 — 활성화는 첫 관리자 초대 수락만 한다(그 초대가 이미 수락됐으면 상태 변경이 활성화를 마친다). «관리자 없는 ACTIVE 테넌트 0» (ADR-MONO-044 D3) (409)
+- `TENANT_NOT_PENDING` — 첫 관리자 초대는 `PENDING` 테넌트에만 — 이미 ACTIVE(관리자 있음 — 일반 초대로) 또는 SUSPENDED (409)
 
 ### Email Verification (account-service 전용)
 

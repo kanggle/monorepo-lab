@@ -41,7 +41,8 @@ admin-service 가 발행하는 테넌트 lifecycle 이벤트. account-service �
 **필드 노트**:
 - `tenantId`: slug, 정규식 `^[a-z][a-z0-9-]{1,31}$`. 한 번 발급되면 변경 불가.
 - `tenantType`: `B2C_CONSUMER` | `B2B_ENTERPRISE`. 격리 정책·기본 역할셋 결정에 사용.
-- `actor.type` 은 항상 `operator` (테넌트는 self-service 등록 불가).
+- `status` (**TASK-MONO-773**): `POST /api/admin/tenants` 로 만든 테넌트는 **`PENDING`**(첫 관리자 대기 — `ACTIVE` 는 첫 관리자 초대 수락 때 아래 `tenant.activated`). 값이 하나 늘었을 뿐 칸은 그대로다 — `schemaVersion` 1 유지(아래 Consumer Rules «schema tolerance» · additive). 🔴 이 값을 `ACTIVE` 로 가정하는 소비자는 없다(서비스 소비자 0 — 아래 Consumers).
+- `actor.type` 은 항상 `operator`. 🔵 셀프 온보딩(ADR-MONO-044 · [onboarding-api.md](../http/onboarding-api.md))으로 만든 테넌트는 이 이벤트를 내지 않는다(관리 행위자 · 감사 행이 없는 경로 — 773 AC-0 § 1, 773 이 바꾸지 않는다). ~~테넌트는 self-service 등록 불가~~ — ADR-044 이후 낡은 문장.
 
 **Consumers**:
 - account-service: 내부 tenant 캐시 갱신 (선택 — account-service 가 source of truth 이므로 일반적으로 무시 가능)
@@ -52,7 +53,7 @@ admin-service 가 발행하는 테넌트 lifecycle 이벤트. account-service �
 
 ## tenant.suspended
 
-테넌트가 ACTIVE → SUSPENDED 로 전이될 때 발행. account-service 가 이 이벤트를 받아 해당 테넌트의 신규 로그인·가입을 차단한다.
+테넌트가 ACTIVE → SUSPENDED 로 전이될 때 발행. **TASK-MONO-773**: `PENDING → SUSPENDED`(첫 관리자 대기 테넌트의 «정리» — admin-api § PATCH)도 이 이벤트다 — `previousStatus = "PENDING"`, `reason` = 운영자 사유. 생성 보상(`POST /api/admin/tenants` 의 초대 쓰기 실패 → 정지)은 감사 트랜잭션이 롤백된 경로라 이 이벤트를 **내지 않는다**(outbox 는 감사 행과 같은 트랜잭션에서만 쓴다). account-service 가 이 이벤트를 받아 해당 테넌트의 신규 로그인·가입을 차단한다.
 
 **Topic**: `tenant.suspended`
 
@@ -110,6 +111,40 @@ admin-service 가 발행하는 테넌트 lifecycle 이벤트. account-service �
 **Consumers**:
 - account-service: 로그인 게이트 잠금 해제
 - 외부 SIEM: 운영 재개 알림
+
+---
+
+## tenant.activated
+
+**TASK-MONO-773 (OD-1 · OD-5 · 구현 S4) — 새 이벤트.** 첫 관리자 대기 테넌트가 `PENDING → ACTIVE` 로 전이될 때 발행 — 첫 관리자 초대 수락(관리자 행 커밋 → account-service 전이 → 이 이벤트) 또는 그 활성화만 실패했던 경우의 `SUPER_ADMIN` 복구 PATCH. `tenant.reactivated`(SUSPENDED → ACTIVE)를 재사용하지 않는 이유: «다시» 가 아니다 — 처음 열리는 것이고, SIEM 이 «정지됐던 회사의 재개» 와 «새 회사의 개시» 를 섞지 않게.
+
+**Topic**: `tenant.activated` — 🔴 토픽 생성 목록(`docker-compose.yml` · `docker-compose.e2e.yml` 의 topic init)과 admin-service `AdminOutboxPublisher.topicFor` 에 S4 가 함께 더한다(빠지면 outbox 릴레이가 이 행을 보낼 곳이 없다).
+
+**Schema version**: 1
+
+**Payload**:
+```json
+{
+  "tenantId": "acme-corp",
+  "previousStatus": "PENDING",
+  "currentStatus": "ACTIVE",
+  "trigger": "FIRST_ADMIN_ACCEPTED",
+  "actor": {
+    "type": "operator",
+    "id": "string (operator_id — 첫 관리자(수락) 또는 SUPER_ADMIN(복구 PATCH))"
+  },
+  "activatedAt": "2026-10-16T09:00:00Z"
+}
+```
+
+**필드 노트**:
+- `trigger`: `FIRST_ADMIN_ACCEPTED`(수락) | `OPERATOR_COMPLETED`(수락은 끝났고 활성화만 실패했던 것을 `SUPER_ADMIN` 이 PATCH 로 마침). `reason` 칸은 없다 — 수락은 운영자 사유가 없는 자기 흐름이다(복구 PATCH 의 사유는 감사 행에 있다).
+- 같은 테넌트에 한 번만 난다(`PENDING` 은 되돌아오지 않는다 — admin-api § 전이 매트릭스).
+
+**Consumers**:
+- 외부 SIEM: 새 회사 개시 알림
+- 관측성 시스템: `tenant.activated.count` · «생성 → 활성» 소요 시간
+- 서비스 소비자 없음(account-service 가 상태의 권위 — 이 이벤트를 소비해 게이트를 여닫지 않는다)
 
 ---
 

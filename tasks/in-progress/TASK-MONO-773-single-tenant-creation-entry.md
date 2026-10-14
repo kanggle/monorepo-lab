@@ -295,3 +295,64 @@ monorepo
 - **Goal 의 `CreateOperatorUseCase.java:100-107` 인용은 낡았다** — 772 S7 뒤 비-`'*'` 생성은 `422 OPERATOR_INVITATION_REQUIRED`. 남은 결함은 «초대 수락까지 관리자 없는 ACTIVE 테넌트» 와 «수락은 ACTIVE 테넌트만» 이다(§ 2).
 - **Edge Case 2(«받은 초대»)** → OD-7 의 새 읽기 API 가 In Scope.
 - 슬라이스 = § 10(S1 계약 → S2 account → S3 admin 셀프 경로 → S4 admin `SUPER_ADMIN` 경로 → S5 auth → S6 console). S2~S5 는 한 AMI · S6 은 그 뒤 Vercel.
+
+---
+
+# S1 기록 (2026-10-15 UTC)
+
+> 분석=Opus 5.5 (api-designer) · **코드 0 · 계약/명세만** · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-s1-contracts`(origin/main `a6e83afff`). 근거 = § AC-0 기록 1 ~ 11 · § 12 OD-1 ~ OD-8(최종 — 다시 열지 않았다) · § 13. 선례 = `TASK-MONO-784` § S1 기록.
+> **AC 체크박스는 건드리지 않았다** — S1 은 AC 를 닫지 않는다.
+
+## 1. 정한 이름
+
+| 무엇 | 이름 | 근거 |
+|---|---|---|
+| 테넌트 «관리자 대기» 상태 | **`PENDING`**(7자 — `VARCHAR(10)` 그대로, 칸 확장 없음) | OD-1 · AC-0 § 5 |
+| 첫 관리자 초대 표지 | `operator_invitation.first_admin` BOOLEAN + 생성 칸 `first_admin_pending_key`(테넌트당 대기 하나) · API `firstAdmin` | OD-5 |
+| 생성자 세트 출처 | **`ORIGIN`**(`all-domains-full` 만 · 시스템 전용 · 개인 회수 · 내보내기가 지운다) | OD-4 |
+| 새 이벤트 | **`tenant.activated`**(`PENDING → ACTIVE`, `trigger` = `FIRST_ADMIN_ACCEPTED` \| `OPERATOR_COMPLETED`) · `tenant.suspended` 에 `previousStatus=PENDING` | OD-1 |
+| 새 엔드포인트 | `POST /api/admin/onboarding/received-invitations`(OD-7 — 읽기, 본문 subject token) · `POST /api/admin/tenants/{tenantId}/first-admin-invitation`(OD-2 재초대 — 다른 주소 · 초대 없는 대기 테넌트) | OD-7 · OD-2 |
+| 새 오류 코드 | `ONBOARDING_ACCOUNT_NOT_ELIGIBLE`(403) · `TENANT_FIRST_ADMIN_PENDING`(409) · `TENANT_NOT_PENDING`(409) · 콘솔 `NOT_AN_OPERATOR`(403) — 앞 셋 `platform/error-handling.md` + `rules/domains/saas.md`, 넷째는 registry 의 Console Composition 절만 | — |
+| 게이트웨이 scope | `onboarding` IP 당 5/60s — `POST …/onboarding/organizations` 한 경로 | OD-8 |
+| 콘솔 | 표식 쿠키 `console_non_operator` · 화면 `/new-tenant`(예약어 추가 없음) · 허용 목록 `/new-tenant` · `/guide` | AC-0 § 9 구현자 결정 · R2 |
+
+## 2. 쓴 파일
+
+`onboarding-api.md`(773 머리말 · 트러스트 게이트 · 상한 3/상태 무관/잠금 재셈 · 생성자 세트 · received-invitations) · `admin-api.md`(Exceptions 표 · 행동 테넌트 23b/23c · 초대 규칙 «첫 관리자 초대» · item `firstAdmin` · Tenant Lifecycle 전면(한 묶음 · `PENDING` 전이표 · 만료 · POST `firstAdmin` · first-admin-invitation · PATCH 정리/복구) · 구독 POST «Granted to roles» 정정 · 세트 출처 `ORIGIN` + D5 예외) · `internal/auth-to-admin.md`(console-eligibility 773 노트 · preview `firstAdmin` · accept 5 갈래 · «첫 관리자 초대일 때» 8~10) · `internal/admin-to-account.md`(Tenant lifecycle 773 변경분 — `initialStatus` · 전이표) · `events/tenant-events.md` · `auth-api.md`(콘솔 토큰 표 · 순서 🔴 · AC-1 대조군 · `sso_wrong_account` 모집단) · `gateway-api.md` · `gateway-service/redis-keys.md` · `admin-service/data-model.md`(`ORIGIN` CHECK 개정 필요 · `first_admin`) · `admin-service/rbac.md` · `features/multi-tenancy.md` · `features/consumer-integration-guide.md` · `console-integration-contract.md`(§ 2.6 · 2.6.1 · 2.6.2 · 2.6.3 정정 + **§ 2.6.4 신설**) · `console-web/architecture.md`(:279 정정 · 4a · 6) · `platform/error-handling.md` · `rules/domains/saas.md` · ADR-083 OD 표 행 덧붙임 · ADR-044 Amendment note(본문 바이트 그대로).
+
+## 3. S1 이 정한 것 (OD 가 정하지 않은 설계 — 🔴 = 소유자가 볼 만한 것)
+
+| # | 결정 | 왜 |
+|---|---|---|
+| S1-1 🔴 | `POST /api/admin/tenants` 의 `firstAdmin` **필수**(breaking — 없으면 400) · B2C 포함 | «관리자 없는 ACTIVE 0» 과 «같은 행위 = 같은 결과» 를 문자 그대로. 콘솔 폼 · 시험 · 가이드가 같은 묶음에서 바뀐다(S4 · S6) |
+| S1-2 | 수락 = «관리자 행 커밋 → account 활성화 → `TENANT_ACTIVATE` 감사 + 이벤트». 활성화 실패 = `503`, 같은 링크 재제출이 재시도 · `SUPER_ADMIN` 은 초대가 `ACCEPTED` 일 때만 PATCH `ACTIVE` 로 마칠 수 있다 | R4 — 실패해도 «관리자 있는 대기» 쪽으로만 남게 |
+| S1-3 | 정리 = PATCH `SUSPENDED` 하나(초대 취소 먼저 → 테넌트 정지) · 정리된 테넌트(첫 관리자 초대 행 있음 ∧ `ACCEPTED` 없음)의 PATCH `ACTIVE` = `409 TENANT_FIRST_ADMIN_PENDING` · 773 이전 테넌트는 지금 그대로 | 정리 뒤 재활성이 관리자 없는 ACTIVE 를 만드는 길을 닫는다. 첫 관리자 초대 행이 없는 플랫폼 테넌트(`TENANT_ADMIN` 0 이 원래 정상)를 막지 않게 |
+| S1-4 | 일반 초대 발급은 테넌트 상태를 계속 안 본다 — `PENDING` 테넌트의 일반 초대는 **수락에서** `409 INVALIDATED` | 발급 규칙 무변경 · AC-4 대조군 |
+| S1-5 | 셀프 경로는 지금처럼 `ACTIVE` 로 만들고 실패 시 SUSPEND 보상(PENDING 을 거치지 않는다) | ADR-044 D3 가 고른 모양 · 재시도 없는 엔드포인트에 실패 모드를 더하지 않는다 |
+| S1-6 | 이메일 게이트 = 772 매치(풀 전용) 그대로 — 풀이 아닌 콘솔 토큰 보유자(`iam` 자격 등)는 `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` | 사본 금지(772). 대가는 § 4-2 |
+| S1-7 | 상한 경합 패자는 테넌트 생성 **뒤** `422` + SUSPEND 보상(잠금을 원격 호출 너머로 들지 않는다) | 잠금은 admin 트랜잭션 안에서만 |
+| S1-8 | received-invitations = `200` + `accountState`(`VERIFIED` · `EMAIL_NOT_VERIFIED` · `NOT_ELIGIBLE`) · 판정 실패만 `503` · 미만료 `PENDING` 만 · 50 상한 · 수락 링크 없음 · rate scope 없음 | «없음» 과 «모른다» 를 섞지 않는다 · R4 |
+| S1-9 | 콘솔 refresh POST 의 교환 `401` = `403 NOT_AN_OPERATOR`(IAM 쿠키 유지 · 표식) — 지금은 `401 TOKEN_INVALID` + 세션 전체 삭제 | 비운영자 셸 BFF 호출 중 액세스 만료가 로그아웃이 되지 않게 |
+| S1-10 | `tenant.activated` 새 토픽(`tenant.reactivated` 재사용 안 함) — S4 가 compose 토픽 목록 · `topicFor` 에 더한다 | 의미가 다르다(처음 개시 vs 재개) |
+
+## 4. 열린 질문 (S1 이 답하지 않았다 — 해당 슬라이스 착수 전에)
+
+1. 🔴 **콘솔 토큰 발급자의 `console-eligibility` 호출을 남기나 (S5)** — OD-6 뒤 그 답(`true`/`false`)은 발급을 가르지 않는다. 티켓 § 10 S5 문장대로 «`operator_eligibility_unavailable` 행 그대로» 적었지만, 그러면 쓰지 않는 답 때문에 admin-service 장애가 콘솔 로그인을 막는다(fail-closed 할 이유가 사라진 판정). 걷으면 그 거절 상수 · 콘솔 `operator_check_unavailable` 매핑이 도달 불가가 된다. 소유자 판단.
+2. 🔴 **`iam` 자격 계정 회사 운영자의 두 번째 회사** — 이메일 게이트가 풀 계정만 판정하므로, 772 이전 방식(`iam` 자격)의 `ACTIVE` 회사 운영자는 S3 뒤 셀프 경로로 두 번째 회사를 못 만든다(지금은 된다 — 784 S5). 모집단 ⚪(AC-0 § 4). 받아들이나, 아니면 772 매치를 `iam` 자격까지 넓히나(772 계약 변경).
+3. **게이트웨이 `/internal/tenants/{tenantId}/**` 가 `PATCH /internal/tenants/{tenantId}` 자체에 걸리는가** — 걸리면 테넌트 워크로드 토큰이 자기 상태를 바꾼다(`SUSPENDED → ACTIVE` 는 773 이전부터 같은 질문). S2 AC-0 이 `RouteConfig` 로 잰다(admin-to-account § Tenant lifecycle).
+4. `'*'` 운영자가 `PENDING` 테넌트를 assume 할 수 있는가(AC-0 ⚪) — S4 AC-0.
+5. 첫 관리자 수락의 `tenant.activated` 감사 + outbox 는 활성화 **뒤** 별도 트랜잭션이라 그 쓰기가 실패하면 이벤트 · 감사 한 행이 빠진다(서비스 소비자 0). 받아들이는지.
+6. received-invitations 에서 «링크 없이 수락» (subject token + 인증 이메일로 수락)을 열지 — OD-7 은 읽기만 정했다. 열면 772 R4(메일함 = 증거)의 해석이 바뀐다.
+7. S4 와 S6 사이 콘솔 `/tenants` 등록 폼이 `400` 을 받는 창(`firstAdmin` 필수) — S4 PR 이 콘솔 프록시 본문을 함께 넓힐지, 창을 받아들일지.
+
+## 소유자 결정 (2026-10-15 UTC) — § 4 열린 질문의 답 (선택창 — 매번 추천안)
+
+| Q | 결정 | 반영 자리 | 걸리는 슬라이스 |
+|---|---|---|---|
+| 1 | **걷는다** — auth 콘솔 토큰 발급자의 `console-eligibility` 호출과 상수 `operator_eligibility_unavailable` 을 S5 가 지운다. 운영자인지는 admin 토큰 교환(`401` → 비운영자 표식)만 정한다 → admin-service 장애가 콘솔 로그인을 막지 않는다. 호출자 0 이 되는 엔드포인트도 S5 가 grep 뒤 지운다(기본값) | `auth-api.md` § 풀 계정의 콘솔 토큰(표 셋째 행 · «매번 다시 묻는다» 폐기 · 구현 메모) · `auth-to-admin.md` § console-eligibility · 콘솔 § 2.6.3 · `error-handling.md` `OPERATOR_CHECK_UNAVAILABLE` 행 | S5 (콘솔 매핑 정리는 S6 선택) |
+| 2 | **받아들인다** — S3 뒤 `iam` 자격 회사 운영자는 셀프 두 번째 회사를 잃는다(`403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`). 거절에 안내 문구 «개인 계정으로 로그인해 만드세요» 필수. 🔴 **S3 의무**: AC-0 에서 «신원이 `iam` 자격인 `ACTIVE` 비-`'*'` 운영자 행 수» 를 라이브 · 시드 둘 다 세어 S3 기록에 적는다(술어 · 쿼리 · 시각) — **0 이 아니면 머지 전에 소유자에게 다시 묻는다** · 못 재면 그 사실도 질문으로 | `onboarding-api.md` «트러스트 게이트» · 콘솔 § 2.6.4 오류 표 | S3 · S6 |
+| 3 | (구현자 몫 — 기록만) 게이트웨이 `/internal/tenants/**` 가 `PATCH /internal/tenants/{tenantId}` 에 걸리는지 **S2 가 잰다** | `admin-to-account.md` § Tenant lifecycle | S2 |
+| 4 | (구현자 몫 — 기록만) `'*'` 운영자의 `PENDING` 테넌트 assume — **S4 가 잰다** | `admin-api.md` § 전이 매트릭스 읽는 곳 표 | S4 |
+| 5 | (구현자 몫 — 기록만) `tenant.activated` 감사 · 이벤트 한 행 손실 가능 — **받아들인다**(서비스 소비자 0) | `auth-to-admin.md` § accept «첫 관리자 초대일 때» 10 | S4 |
+| 6 | **읽기 전용** — «받은 초대» 는 빈 상태 화면에서 보여 주기만, 수락은 772 메일 링크 경로 그대로(링크 없는 수락 열지 않음) | `onboarding-api.md` § received-invitations · 콘솔 § 2.6.4 | S3 · S6 |
+| 7 | **S4 PR 이 콘솔 `/tenants` 등록 폼 + 프록시 본문(`firstAdmin`) + `PENDING` enum 을 함께 넓힌다**(교차 프로젝트 원자 PR) — 머지 사이 `400` 창 없음. 배포 순서 창(AMI 먼저 · Vercel 나중)은 남으므로 S4 PR 본문에 적는다 | `admin-api.md` § POST /api/admin/tenants «호환» · 콘솔 § 2.6.4 모드 표 | S4 |
