@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-636-group-node-paths-remaining-single-source-and-membership-gaps.md` — **Gaps BE-633 left: tenant-assignment fan-out still single-owner · group revoke leaves domain set rows without a membership · node grant home tenant (784 D-1)** (READY, 2026-10-14 UTC, source: `TASK-BE-633` report). Analysis=Opus 5.5 / recommended implementation=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,9 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-635-client-idempotency-key-length-to-audit-column.md` — **The client `Idempotency-Key` header reaches the audit column (100 characters) without a length check. 7 endpoints have no limit, and the bulk-lock per-row key is 101 characters at the boundary; client input becomes `500 AUDIT_FAILURE`** (READY, 2026-10-14 UTC, source: `TASK-BE-634` AC-1 count). 🔴 The bulk-lock per-row key is also the downstream retry key, so record its use before changing the shape. Analysis=Opus 5.5 / recommended implementation=Sonnet.
-- `TASK-BE-633-admin-role-group-fanout-per-source.md` — **관리 역할 그룹 fan-out 단일 출처 결함 — G1 회수가 G2 분을 지운다 · 그룹 행 위 직접 PATCH 의 조용한 출처 변환(추론) 확인** (READY, `ADR-MONO-083` § Outstanding). 분석=Opus 5.5 / 구현 권장=Opus.
-
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
@@ -126,6 +124,8 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 - 🔍 `TASK-BE-632-assume-roles-from-assigned-sets.md` — **`ADR-MONO-083` P3 — auth-service: assume `roles` = 배정 세트 ∩ 구독 · 상한 · 구독 파생 제거 · 운영자 토큰 `erp.write` 제거 · assume TTL(OD-2) · 회수 지연 실측** (READY). 🔴 배포 게이트 = BE-631 배포 + 백필 완료 0 · AC-0 OD-3 재확인(플랫폼 운영자 도메인 역할 0 여부). 분석=Opus 5.5 / 구현 권장=Opus. — **REVIEW 2026-10-14 UTC: #4351 `08f2da4a3` merged (0 failures, ITs PASSED). Awaiting deployment and live measurement (AC-4/5/6/8). Deployment gates: V0052 completeness SQL = 0 live · console c-1 Production success (met).**
 
 ## done
+- ✅ `TASK-BE-635-client-idempotency-key-length-to-audit-column.md` — **DONE 2026-10-14 UTC (4-dim verified)** — **#4355**(`3eb6cbebd`, 0 failing checks at merge). A client `Idempotency-Key` over 100 chars returns **400** instead of 500 (7 endpoints, tenant-update 93); bulk-lock header 64→63 and accountId ≤36 bring the row key to exactly 100 (account-service does not read that header). Source-scan guard in `ClientIdempotencyKeyTest`. ITs PASSED (5). ⚪ Production not applied (AMI).
+- ✅ `TASK-BE-633-admin-role-group-fanout-per-source.md` — **DONE 2026-10-14 UTC (4-dim verified)** — **#4353**(`ee7738b02`, 0 failing checks at merge). Admin roles are now one row per source (`source_key` PK, V0053 + re-fan-out). Revoking G1 no longer deletes G2's copy; a direct PATCH no longer silently converts a group/node row; a role row orphaned on a group path keeps its membership as direct (owner decisions 1–3). AC-0 red measured **10/10** (9 at the defect assertion), **14 PASSED** after the fix. Leftovers in `TASK-BE-636`. ⚪ Production not applied (AMI).
 - ✅ `TASK-BE-634-audit-idempotency-key-overflow-siblings.md` — **DONE 2026-10-14 UTC (4-dim verified)** — **#4345**(`d3a097f3f`, 0 failures at merge). The participant add/remove audit key was 127/130 chars against a 100-char column, so the API **returned 500 on every call**. AC-0 IT failed (`AUDIT_FAILURE`) on the test-only commit and passed after the fix. All 8 server-built keys now go through `AuditIdempotencyKeys` (participant max 91; the other 7 byte-unchanged). `AuditIdempotencyKeysTest` holds the widest input plus a source scan for keys concatenated outside that class (bite: catches all 8 old builders). Client header keys moved to `TASK-BE-635`. ⚪ Production not yet updated (AMI).
 - ✅ `TASK-BE-631-domain-permission-sets-admin-service.md` — **DONE 2026-10-14 UTC (4-dim verified)** — 슬라이스 a **#4342**(`7d663829d`) · 슬라이스 b **#4343**(`871ab5dc9`) (머지 시점 실패 0, 둘 다 · 새 IT 는 레인 로그에서 PASSED 확인 — a 9 · b 5). `ADR-MONO-083` P2: 업무 세트 · 출처별 직접/그룹 배정 · `domainRoles` · `legacy-compat` 백필 · 세트 달린 그룹의 멤버 추가 게이트 · 내보내기 전 출처 삭제. 🔴 b 의 CI 가 **784 때부터의 감사 키 넘침**(테넌트 id 11자 초과 시 배정 생성 · 내보내기 500)을 드러내 고쳤다 — 형제 `TASK-BE-634`. ⚪ V0052 운영 미적용(AMI · 데모 창 없음) — 완료 판정 SQL 은 P3 배포 게이트. 토큰 무변경(P3 `TASK-BE-632`).
 - ✅ `TASK-BE-629-idp-pages-mask-email-two-ways.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4329**, 스쿼시 **`7b115c60e`**. IdP 이메일 가림을 공용 `PiiMaskingUtils.maskEmail`(첫 글자 + 별 3개) 하나로 — 초대 미리보기 · 인증/MFA 화면이 같은 입력에 같은 값, 양 서비스에 같은 기대값 시험 고정 · 주소 아닌 입력은 화면 쪽에서 전부 가림. 후속(AC 아님): 공용 함수의 주소 아닌 입력 원문 반환.

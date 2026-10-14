@@ -8,7 +8,7 @@ TASK-BE-633
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -47,10 +47,10 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 측정 셋의 결과(빨강/초록 · file:line) · 수선 설계 선택과 이유.
-- [ ] **AC-1** — 🔴 대조군: G1 · G2 가 같은 역할 → G1 탈퇴 → 역할 유지 → G2 탈퇴 → 사라짐 · 직접 + 그룹 → 그룹 회수 뒤 직접 유지 · 직접 회수 뒤 그룹 유지.
-- [ ] **AC-2** — 직접 PATCH 와 그룹 행 공존 시 감사에 출처 변화가 남거나 두 출처가 공존한다(조용한 변환 0).
-- [ ] **AC-3** — 784 불변식: 비-`'*'` 역할 행의 테넌트 ∈ 소속 — 그룹 경로 회수 뒤에도 참.
+- [x] **AC-0** — 위 측정 셋의 결과(빨강/초록 · file:line) · 수선 설계 선택과 이유.
+- [x] **AC-1** — 🔴 대조군: G1 · G2 가 같은 역할 → G1 탈퇴 → 역할 유지 → G2 탈퇴 → 사라짐 · 직접 + 그룹 → 그룹 회수 뒤 직접 유지 · 직접 회수 뒤 그룹 유지.
+- [x] **AC-2** — 직접 PATCH 와 그룹 행 공존 시 감사에 출처 변화가 남거나 두 출처가 공존한다(조용한 변환 0).
+- [x] **AC-3** — 784 불변식: 비-`'*'` 역할 행의 테넌트 ∈ 소속 — 그룹 경로 회수 뒤에도 참.
 
 # Related Specs
 
@@ -141,3 +141,13 @@ Integration lane A, `AdminRoleSourceIntegrationTest`: **10 out of 10 FAILED**. W
   - Missing role (`$.roles[0]` absent).
   - Edge 1, the reading after a two-source survival.
 - **SQL error (not red) — 1**: the AC-2 sibling (direct PATCH over an org-node row). Its fixture inserts `source_key` directly, so it stops at `BadSqlGrammarException` on the old schema. This one is judged by the GREEN after the fix.
+
+## Close (2026-10-14 UTC)
+
+- #4353 → `ee7738b02`. 0 failing checks at merge.
+- Measurement order:
+  - The first commit (IT only + old code) ran **10/10 FAILED**: 9 at the defect assertion, 1 SQL-error sibling.
+  - The commit with the fix ran **14 PASSED** in lane A: AdminRoleSource 10 · V0053 backfill 2 · V0051, adjusted to the post-V0053 shape.
+- Lane A also failed once along the way: `V0051MembershipBackfillIntegrationTest` was pinning the **live** PK to V0051's three columns. I corrected it to «re-running V0051's guarded swap does not shrink the V0053 PK back» (V0051 guard = swap only while `tenant_id` is not in the PK).
+- Leftover paths with the same shape of problem → **`TASK-BE-636`**: tenant-assignment single owner · orphaned set rows · node grant home tenant.
+- ⚪ Production: not yet applied (needs an AMI bake). The demo uses a fresh volume, so the V0053 re-fan-out has 0 rows to restore by construction; for production the read-only query must run before deployment (`TASK-MONO-672` next-window run order).

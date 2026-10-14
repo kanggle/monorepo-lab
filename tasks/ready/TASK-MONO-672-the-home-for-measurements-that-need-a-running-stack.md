@@ -1861,3 +1861,68 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
 ## 🔵 소유자 결정 (2026-09-26 UTC) — 상설 유지
 
 오늘 항목 14 · 17 · 18 이 닫혀 새로 들어온 열린 항목이 없지만, 이 티켓은 **닫지 않고 상설로 둔다**(§ «할 일이 없다» 가 정상 상태다). 이유: 다음 창들(17차 이후)에서 닫히는 티켓이 넘길 측정이 또 생긴다 — 그때마다 집을 새로 만드는 것보다 이 집이 받는 편이 의무 유실이 적다.
+
+# ⏳ Next window (re-bake) — run order (written 2026-10-14 UTC · not an item, a pointer)
+
+> 🔴 **This section owns no obligation.** Each check stays an AC of the ticket named in its row, and its result is written to **that ticket**. This is only the order in which to open them inside one window. (Do not hold an obligation twice — this ticket's own rule.)
+> The re-bake runs only on the owner's command (~55 min, billed). Everything below assumes the AMI includes `main` ≥ the commits listed in § Bake contents.
+
+## Bake contents (backend — rides only in the AMI)
+
+| Ticket | Merge | What changes live |
+|---|---|---|
+| `TASK-BE-631` (ADR-083 P2) | `7d663829d` · `871ab5dc9` | Business permission sets · V0052 (tables, presets, legacy-compat backfill) |
+| `TASK-BE-634` | `d3a097f3f` | Adding/removing a partnership participant goes 500 → 201/204 |
+| `TASK-BE-632` (ADR-083 P3) | `08f2da4a3` | 🔴 **assume roles = assigned sets ∩ subscription** · operator token loses `erp.write` · assume TTL 300 s |
+| `TASK-BE-635` | `3eb6cbebd` | A client `Idempotency-Key` over 100 characters → 400 instead of 500. Bulk-lock header limit 63 (contract change) |
+| `TASK-BE-633` | `ee7738b02` | Admin-role group fan-out tracked per source (`source_key` PK) · V0053 re-fan-out · a role row orphaned on a group path keeps its membership as direct |
+
+The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` · b `27cdcebd2` · c-1 `808fa9e84` → c-1 fix `ca176d570` (re-assume from the base token — before merging it, a federation e2e run on the branch was green, run 38555155825). Check the Production deployment record of each commit before the window.
+
+## Order
+
+**0. Boot check** (every window): RepoCommit matches the commit baked · unhealthy 0 · seed failures 0.
+
+**1. 🔴 Backfill gate — before any other measurement** (`TASK-BE-632` deployment gate 1 · `TASK-BE-631` data-model.md § completeness).
+P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy P3» cannot be done in that order. Measure right after boot, before opening the demo to people.
+- ① The canonical predicate (memberships from before cutover with no set row): data-model.md § «완료 판정» SQL → **0**.
+- ② Window-only predicate (on a fresh volume the demo operators come from the `R__` seeds that run after cutover, so ① cannot see them):
+  ```sql
+  SELECT COUNT(*) FROM operator_tenant_assignment a
+   WHERE NOT EXISTS (SELECT 1 FROM operator_domain_set_grant g
+                      WHERE g.operator_id = a.operator_id AND g.tenant_id = a.tenant_id);   -- = 0
+  ```
+  If not 0: compare the rows against `R__seed_zz_demo_domain_permission_sets.sql`. A membership created on purpose after cutover would also be counted.
+- ③ Not 0 and it is a backfill gap → **stop the window**. Roll back by deploying a revert of #4351 (ADR-083 D8 — there is no switch flag).
+
+**2. `TASK-BE-632` AC-4 · AC-5 · AC-6 · AC-8** — the measurements that close this ticket.
+- AC-4: demo operator assumes `demo-corp`. `roles` must be byte-identical to the list in `infra/demo/seed/README.md` (demo operator = legacy-compat). Also check `scope` has no `erp.write` and `exp − iat = 300`.
+- AC-1 live (control first): in the console, give a new operator only the «재고» preset set → assume →
+  - wms `/inventory` GET = 200
+  - `/outbound` GET = 403
+  - SCM = 403
+- AC-5: an operator with no ERP set → an ERP masterdata write = **403**. Grant `erp-full` (or legacy-compat) → re-exchange → 200. The workload client's ERP write = 200.
+- AC-6: revoke the set and keep calling a domain API with the **existing** token. Record when it turns 403: it must be ≤ `exp`, at most 300 s. Then re-exchange → 403 immediately. Do the same for group leave, operator suspend, subscription cancel and set edit.
+- AC-8: in the ticket, record merge → AMI → live as three separate lines.
+
+**3. `TASK-PC-FE-338` c-2 preconditions** — only after AC-4 passes: in the console, check that the «업무 권한 세트» screen's «적용 예정» note is no longer true (P3 is live). Then c-2 starts in a separate ticket session (not in the window).
+
+**4. 27th-window carry-over** (each owning ticket):
+- `TASK-MONO-784` ⚪②: demo-operator's ecommerce screens (OD-3) · rows narrowed by R2 · «이 회사에서 내보내기» · AC-0 ④.
+  🔵 From P3, domain roles also follow sets, so measure 784's live checks **after** step 1.
+- `TASK-PC-FE-332` AC-3: `cs@demo.com` locks `demo@demo.com` → «이 사이트에서만 잠겼습니다» → **always unlock afterwards**.
+- `TASK-FE-109` AC-1: 0 lines of `POST /login 405` in the Vercel log, plus the vitals control.
+- `TASK-FE-108` AC-3 live.
+
+**5. Newly baked fixes** (each owning ticket):
+- `TASK-BE-634`: add and remove a partnership participant = 201/204 (both were 500).
+- `TASK-BE-635`: single-account lock with a 101-character `Idempotency-Key` → 400 `VALIDATION_ERROR`.
+- `TASK-BE-633`:
+  - ① **Roles restored without an audit row** (owner decision 2026-10-14: allowed as a repair).
+    - The data-model.md § V0053 query is meant to run **live, before deployment**.
+    - The demo boots on a **fresh volume**: V0053 runs before the `R__` seeds create the groups, so **by construction there are 0 rows to restore**. One line in the ticket is enough.
+    - 🔴 When this ships to a non-fresh volume (real operations), the query must run before deployment.
+  - ② Assign the same role to one member through two groups G1 · G2 → leave G1 → the role is still there.
+
+## When the window ends
+Move each ticket that closed from review → done (four dimensions), and clear the closed entries from the window memory (`project_demo_window_27_pending_checks`).
