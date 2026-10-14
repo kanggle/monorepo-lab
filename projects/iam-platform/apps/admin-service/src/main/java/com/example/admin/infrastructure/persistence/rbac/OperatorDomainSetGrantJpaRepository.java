@@ -20,6 +20,17 @@ public interface OperatorDomainSetGrantJpaRepository
     boolean existsByOperatorIdAndTenantIdAndSetIdAndSourceKey(Long operatorId, String tenantId, Long setId,
                                                               String sourceKey);
 
+    /**
+     * TASK-BE-636 ② — whether the operator holds any set row in the tenant whose source is NOT {@code sourceKey}
+     * (the «does a work grant still back this membership» check; the excluded source is the group being revoked,
+     * whose own rows are about to go). Pass a key no row carries to count every source.
+     */
+    boolean existsByOperatorIdAndTenantIdAndSourceKeyNot(Long operatorId, String tenantId, String sourceKey);
+
+    /** TASK-BE-636 ② — the tenants the operator holds at least one set row in (any source). */
+    @Query("SELECT DISTINCT e.tenantId FROM OperatorDomainSetGrantJpaEntity e WHERE e.operatorId = :operatorId")
+    List<String> findTenantIdsOfOperator(@Param("operatorId") Long operatorId);
+
     long countBySetIdAndTenantId(Long setId, String tenantId);
 
     long countBySetId(Long setId);

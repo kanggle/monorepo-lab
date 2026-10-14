@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -120,6 +121,25 @@ public class OperatorTenantAssignmentPortImpl implements OperatorTenantAssignmen
     public void convertToDirectAssignment(Long operatorInternalId, String tenantId) {
         repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId).ifPresent(entity -> {
             entity.setGroupOrigin(null);
+            repository.saveAndFlush(entity); // BE-335: explicit flush
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findReowningGroup(Long operatorInternalId, String tenantId,
+                                            Collection<Long> excludedGroups) {
+        if (operatorInternalId == null || tenantId == null || excludedGroups == null || excludedGroups.isEmpty()) {
+            return Optional.empty();
+        }
+        return repository.findLowestOtherGroupGivingTenant(operatorInternalId, tenantId, excludedGroups);
+    }
+
+    @Override
+    @Transactional
+    public void reassignGroupOrigin(Long operatorInternalId, String tenantId, Long groupInternalId) {
+        repository.findByOperatorIdAndTenantId(operatorInternalId, tenantId).ifPresent(entity -> {
+            entity.setGroupOrigin(groupInternalId);
             repository.saveAndFlush(entity); // BE-335: explicit flush
         });
     }

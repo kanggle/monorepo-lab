@@ -5,6 +5,8 @@ import com.example.admin.application.exception.OrgNodeNotFoundException;
 import com.example.admin.application.exception.RoleGrantForbiddenException;
 import com.example.admin.application.orgnode.CeilingView;
 import com.example.admin.application.orgnode.OrgNodeView;
+import com.example.admin.application.exception.OrgAdminGrantTargetNotMemberException;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.OrgNodePort;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.infrastructure.persistence.rbac.AdminGrantScopeEvaluator;
@@ -58,6 +60,7 @@ class OrgNodeAdminUseCaseTest {
     @Mock AdminRoleJpaRepository roles;
     @Mock AdminOperatorRoleJpaRepository operatorRoles;
     @Mock AdminGrantScopeEvaluator grantScopeEvaluator;
+    @Mock OperatorTenantAssignmentPort assignments;
 
     private OrgNodeAdminUseCase useCase;
 
@@ -68,7 +71,9 @@ class OrgNodeAdminUseCaseTest {
     void setUp() {
         OrgNodeScopeGuard scopeGuard = new OrgNodeScopeGuard(grantScopeEvaluator, auditor);
         useCase = new OrgNodeAdminUseCase(orgNodePort, scopeGuard, roleGrantGuard, subtreeResolver,
-                auditor, operators, roles, operatorRoles);
+                auditor, operators, roles, operatorRoles, assignments);
+        // TASK-BE-636 ③: the usual target — its home ("hq") is one of its memberships.
+        when(assignments.assignmentExists(2L, "hq")).thenReturn(true);
 
         when(orgNodePort.list()).thenReturn(List.of(
                 node("root", null), node("biz", "root")));
@@ -195,6 +200,47 @@ class OrgNodeAdminUseCaseTest {
         when(subtreeResolver.effectiveCeilingFailClosed("biz")).thenReturn(CeilingView.unbounded());
         useCase.grantNodeAdmin(ACTOR, "biz", TARGET_OP, "ORG_ADMIN", "why");
         verify(operatorRoles).save(any());
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-636 ③: the target's home is not one of its memberships → 422 TARGET_NOT_MEMBER, no row, no audit")
+    void grant_homeNotMembership_refused_nothingWritten() {
+        when(subtreeResolver.effectiveCeilingFailClosed("biz")).thenReturn(CeilingView.unbounded());
+        when(assignments.assignmentExists(2L, "hq")).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.grantNodeAdmin(ACTOR, "biz", TARGET_OP, "ORG_ADMIN", "why"))
+                .isInstanceOf(OrgAdminGrantTargetNotMemberException.class);
+        verify(operatorRoles, never()).save(any());
+        verify(subtreeResolver, never()).invalidateAll();
+        verify(auditor, never()).record(any());
+        verify(assignments, never()).createAssignment(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-636 ③ order: the ceiling (422 OUT_OF_CEILING) is judged before the membership check")
+    void grant_ceilingPrecedesMembershipCheck() {
+        when(subtreeResolver.effectiveCeilingFailClosed("biz")).thenReturn(CeilingView.bounded(List.of()));
+        when(assignments.assignmentExists(2L, "hq")).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.grantNodeAdmin(ACTOR, "biz", TARGET_OP, "ORG_ADMIN", "why"))
+                .isInstanceOf(OrgAdminGrantOutOfCeilingException.class);
+        verify(assignments, never()).assignmentExists(any(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-636 ③: a '*' target (no membership by design) is not judged by the membership check — its pre-existing refusal is unchanged")
+    void grant_platformTarget_notJudgedByMembership() {
+        AdminOperatorJpaEntity platformTarget = operator(3L, "platform-1", "*");
+        when(operators.findByOperatorId("platform-1")).thenReturn(Optional.of(platformTarget));
+        when(subtreeResolver.effectiveCeilingFailClosed("biz")).thenReturn(CeilingView.unbounded());
+
+        // Unchanged since V0042: a node row may not be recorded at '*' (AdminOperatorRoleJpaEntity.createNodeScoped ·
+        // ck_admin_operator_roles_node_not_platform) — so it is that refusal, not TARGET_NOT_MEMBER.
+        assertThatThrownBy(() -> useCase.grantNodeAdmin(ACTOR, "biz", "platform-1", "ORG_ADMIN", "why"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .isNotInstanceOf(OrgAdminGrantTargetNotMemberException.class);
+        verify(assignments, never()).assignmentExists(any(), any());
+        verify(operatorRoles, never()).save(any());
     }
 
     @Test

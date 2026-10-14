@@ -71,6 +71,40 @@ final class InMemoryAssignmentPort implements OperatorTenantAssignmentPort {
         }
     }
 
+    /**
+     * TASK-BE-636 ① — «operator X is a member of group G, and G's TENANT_ASSIGNMENT template gives tenant T»: the
+     * templates × members fact the real query joins over. Empty by default (no group takes a membership over).
+     */
+    record Giver(long operatorId, String tenantId, long groupId) {}
+
+    final List<Giver> givers = new ArrayList<>();
+
+    InMemoryAssignmentPort giver(long operatorId, String tenantId, long groupId) {
+        givers.add(new Giver(operatorId, tenantId, groupId));
+        return this;
+    }
+
+    @Override
+    public Optional<Long> findReowningGroup(Long operatorInternalId, String tenantId,
+                                            java.util.Collection<Long> excludedGroups) {
+        return givers.stream()
+                .filter(g -> g.operatorId() == operatorInternalId && g.tenantId().equals(tenantId))
+                .map(Giver::groupId)
+                .filter(id -> !excludedGroups.contains(id))
+                .min(Long::compare);
+    }
+
+    @Override
+    public void reassignGroupOrigin(Long operatorInternalId, String tenantId, Long groupInternalId) {
+        for (int i = 0; i < rows.size(); i++) {
+            Row r = rows.get(i);
+            if (r.operatorId() == operatorInternalId && r.tenantId().equals(tenantId)) {
+                rows.set(i, new Row(r.operatorId(), r.tenantId(), r.grantedAt(), r.grantedBy(), r.orgScope(),
+                        groupInternalId));
+            }
+        }
+    }
+
     // ---------- not used by the export ----------
 
     @Override public List<String> findOrgScope(Long op, String t) { throw new UnsupportedOperationException(); }

@@ -90,3 +90,29 @@ backend
    - The cost: such a person cannot become a node admin while their home tenant stays the same.
    - New error code → `admin-api.md` § POST …/org-nodes/{id}/admins is updated before the code.
 3. **②** follows the default in § Scope (BE-633 owner decision 2): keep the membership as a direct membership while domain set rows remain. No separate question was needed.
+
+---
+
+# Implementation Record
+
+## AC-0 red measurement (CI, 2026-10-14 UTC — #4357 first commit = IT only + old code)
+
+Integration lane «iam A», run 38571399837 / job 115877338776, `GroupNodeMembershipSourceIntegrationTest`: **10 FAILED · 4 PASSED** — exactly as predicted from the code. **All 10 reds stopped at the defect assertion** (0 SQL errors, 0 fixture errors). The 4 PASSED are the controls.
+
+| # | Methods (red) | Assertion that failed | Old-code path |
+|---|---|---|---|
+| ① | TENANT_ASSIGNMENT revoke · member leave · group deletion (×3) | «G2 still gives U — … must not take it»: actual 0 | `GroupFanOutService.java:218-221` (G2 fan-out `existsById` skip → G1 owns the only row) · then `:149` / `:114-116` / `:128-129` delete by `group_origin` |
+| ② | revoke · leave · group deletion · **company exit** (×4) | «no domain permission set row outside the person's memberships»: expected 0, was 1 | `GroupFanOutService.java:180` (keep rule counts role rows only) · `OperatorCompanyExitCascade.java:73-81` · `:106-112` |
+| ③ | decision-neutral invariant · refuse (×2) | «no non-'*' role row outside its memberships» / «no node row written»: expected 0, was 1 | `OrgNodeAdminUseCase.java:204-206` (row at `target.getTenantId()` = home) |
+
+Controls PASSED: ① direct + G1 · ① edge direct + G1 + G2 · ③ home is a membership → 201.
+
+Found while writing the ITs (corrections to the ticket text):
+- **② has a fourth path the ticket did not list**: «이 회사에서 내보내기». The exit cascade's keep rule also counts role rows only, so a person leaving company H loses the G-given membership in U while their set row in U stays. It is fixed with the other three.
+- **① is narrower than written.** «Direct + group» only arises when the direct membership came first (the group fan-out then skips and never owns it — survives today, the two controls). Group-first then direct is refused 409 `ASSIGNMENT_ALREADY_EXISTS` (`ManageOperatorAssignmentUseCase.java:95-97`). So the only real loss is group-vs-group.
+
+## Design choice for ① — re-ownership at revoke time, no schema change
+
+When a group source is revoked, the row is first handed to another group G′ of the member that still carries TENANT_ASSIGNMENT(U). Only if there is none does the ② rule apply (keep as direct if role **or** set rows remain), and only then is the row deleted.
+- Rejected: BE-633's source-in-PK shape. A membership row carries per-`(operator, tenant)` attributes (`org_scope`, `permission_set_id`) that the assume gate, `TenantScopeResolver`, `QueryTenantScopeGate`, the console registry and the org-scope PUT all read by that key. Rows per source would make every reader merge attributes and the PUT ambiguous. Role rows carry no such attributes, which is why the PK change was cheap there.
+- No migration: group sources are derivable exactly from templates × members, so re-ownership at revoke time also repairs existing v1 rows (Failure Scenario 1 does not apply).

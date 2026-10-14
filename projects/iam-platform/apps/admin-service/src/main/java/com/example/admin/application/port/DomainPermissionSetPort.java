@@ -86,6 +86,12 @@ public interface DomainPermissionSetPort {
      */
     int deleteAllGrantsInTenant(long operatorInternalId, String tenantId);
 
+    /**
+     * TASK-BE-636 ② — the tenants the operator holds at least one set row in, any source (the «이 회사에서 내보내기»
+     * keep-as-direct check: a set row backs a membership just as a role row does). Never {@code null}.
+     */
+    java.util.Set<String> findTenantsWithGrants(long operatorInternalId);
+
     // ---------- Group grants (templates) and their GROUP:<id> rows — slice B ----------
 
     /** The sets granted to a group (its templates), oldest first, with the set and the granting operator. */

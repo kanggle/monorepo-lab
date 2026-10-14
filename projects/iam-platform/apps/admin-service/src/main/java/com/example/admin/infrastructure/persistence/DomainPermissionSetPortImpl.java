@@ -218,6 +218,12 @@ public class DomainPermissionSetPortImpl implements DomainPermissionSetPort, Eff
         return grants.deleteAllOfOperatorInTenant(operatorInternalId, tenantId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Set<String> findTenantsWithGrants(long operatorInternalId) {
+        return new java.util.TreeSet<>(grants.findTenantIdsOfOperator(operatorInternalId));
+    }
+
     // ---------- Group grants (templates) — slice B ----------
 
     @Override
