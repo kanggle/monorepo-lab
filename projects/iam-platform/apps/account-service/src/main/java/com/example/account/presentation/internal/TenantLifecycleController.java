@@ -38,11 +38,13 @@ public class TenantLifecycleController {
     /**
      * POST /internal/tenants
      * Create a new tenant. tenantId must be unique; returns 409 TENANT_ALREADY_EXISTS if duplicate.
+     * TASK-MONO-773: optional {@code initialStatus} — ACTIVE (default) | PENDING; anything else 400.
      */
     @PostMapping
     public ResponseEntity<TenantResponse> createTenant(@Valid @RequestBody CreateTenantRequest request) {
         TenantResult result = tenantProvisionUseCase.create(
-                request.tenantId(), request.displayName(), request.tenantType());
+                request.tenantId(), request.displayName(), request.tenantType(),
+                request.initialStatus());
         return ResponseEntity.status(HttpStatus.CREATED).body(TenantResponse.from(result));
     }
 
@@ -88,7 +90,9 @@ public class TenantLifecycleController {
     public record CreateTenantRequest(
             @NotBlank String tenantId,
             @NotBlank @Size(min = 1, max = 100) String displayName,
-            @NotBlank String tenantType
+            @NotBlank String tenantType,
+            /** TASK-MONO-773 (OD-1): optional — null = ACTIVE. */
+            String initialStatus
     ) {}
 
     public record UpdateTenantRequest(

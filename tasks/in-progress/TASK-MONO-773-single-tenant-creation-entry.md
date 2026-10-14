@@ -356,3 +356,10 @@ monorepo
 | 5 | (구현자 몫 — 기록만) `tenant.activated` 감사 · 이벤트 한 행 손실 가능 — **받아들인다**(서비스 소비자 0) | `auth-to-admin.md` § accept «첫 관리자 초대일 때» 10 | S4 |
 | 6 | **읽기 전용** — «받은 초대» 는 빈 상태 화면에서 보여 주기만, 수락은 772 메일 링크 경로 그대로(링크 없는 수락 열지 않음) | `onboarding-api.md` § received-invitations · 콘솔 § 2.6.4 | S3 · S6 |
 | 7 | **S4 PR 이 콘솔 `/tenants` 등록 폼 + 프록시 본문(`firstAdmin`) + `PENDING` enum 을 함께 넓힌다**(교차 프로젝트 원자 PR) — 머지 사이 `400` 창 없음. 배포 순서 창(AMI 먼저 · Vercel 나중)은 남으므로 S4 PR 본문에 적는다 | `admin-api.md` § POST /api/admin/tenants «호환» · 콘솔 § 2.6.4 모드 표 | S4 |
+
+## S2 기록 (2026-10-15 UTC) — account-service `PENDING`
+
+- **변경**: `TenantStatus.PENDING` · `Tenant.create(…, initialStatus, now)`(ACTIVE · PENDING 만) · `updateStatus` 가 `PENDING` 을 요청값으로 거절(no-op 판정보다 먼저) · `CreateTenantRequest.initialStatus`(선택, 생략 = ACTIVE · 그 밖 400). 마이그레이션 없음(`tenants.status VARCHAR(10)` · CHECK 없음 — `V0009:8`). ACTIVE 만 받는 읽기(`ActiveTenantGuard` · 개별/일괄 프로비저닝)는 무변경 — `PENDING` 은 `!isActive()` 로 409 `TENANT_SUSPENDED`. 이벤트 없음(`tenant.*` 는 admin outbox — S4).
+- **빨강 측정**(#4369 첫 커밋 = 시험만, iam B 레인): `TenantPendingStatusIntegrationTest` **12 FAILED · 2 PASSED(대조군)** — 12 전부 `AssertionError`(500 × 8 = 옛 enum 이 `'PENDING'` 행을 못 읽음 · 201≠400 × 2 · `$.status` ACTIVE · 400≠200). 단위 `TenantPendingStatusTest` · `…UseCaseTest` 는 로컬 9 FAILED → 수선 뒤 10/10.
+- **정정**: S1 이 `TENANT_SUSPENDED` 를 423 으로 적었다 — 코드와 다른 계약 셋은 **409**. `admin-to-account.md` · `admin-api.md` 와 그 출처인 공유 레지스트리 `platform/error-handling.md:596` 을 함께 고쳤다(유일한 발신 = account-service 409 — `GlobalExceptionHandler:263-267`).
+- **S1 Q3 측정 → `TASK-BE-638` 기안(#4370)**: 게이트웨이 `/internal/tenants/**` 가 `PATCH /internal/tenants/{self}` 를 그 테넌트 자기 토큰으로 통과시키고, `POST`/`GET /internal/tenants` 는 테넌트 범위 검사가 없다(코드 읽기 — 라이브 미확인). 773 S2 의 `PENDING` 이 나가면 «관리자 대기» 를 건너뛸 수 있어 시급해진다 — 773 과 같은 굽기에 싣는 것을 권한다.

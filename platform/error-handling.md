@@ -593,7 +593,7 @@ Owned by `account-service` + `admin-service` (per multi-tenant trait M1).
 | TENANT_ALREADY_EXISTS | 409 | Tenant identifier already taken |
 | TENANT_FORBIDDEN | 403 | Cross-tenant write or invalid `tenant_id` claim (per `multi-tenant.md` M2/M3) |
 | TENANT_SCOPE_DENIED | 403 | Token scope does not include the requested tenant context |
-| TENANT_SUSPENDED | 423 | Tenant is suspended (administrative action) |
+| TENANT_SUSPENDED | 409 | Tenant is not `ACTIVE` — suspended (administrative action), or still waiting for its first administrator (`PENDING`, TASK-MONO-773). The only emitter answers 409; this row said 423 until 2026-10-15 and the contracts that copied it were corrected with it |
 | TENANT_ID_RESERVED | 400 | Tenant ID is reserved and cannot be used (admin-service `TenantIdReservedException`) |
 | TENANT_SCOPE_MISMATCH | 403 | The requested tenant does not match the tenant the operator is currently acting in (admin-service). Distinct from `TENANT_SCOPE_DENIED`, which is about the token's scope rather than the active context |
 | TENANT_FIRST_ADMIN_PENDING | 409 | A tenant still waiting for its first administrator (status `PENDING`) cannot be activated by a status update — it becomes `ACTIVE` only when its first-administrator invitation is accepted. The status update is refused unless that invitation is already accepted (then the update completes the activation). Keeps «no `ACTIVE` tenant without an administrator» (ADR-MONO-044 D3, TASK-MONO-773). Nothing is written |

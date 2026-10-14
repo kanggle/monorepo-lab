@@ -93,15 +93,33 @@ public class Tenant {
     // -----------------------------------------------------------------------
 
     /**
-     * Factory for creating a brand-new tenant (initial status always ACTIVE).
+     * Factory for creating a brand-new {@link TenantStatus#ACTIVE ACTIVE} tenant (the self-service
+     * onboarding path and every pre-773 caller).
      */
     public static Tenant create(TenantId tenantId, String displayName,
                                 TenantType tenantType, java.time.Instant now) {
+        return create(tenantId, displayName, tenantType, TenantStatus.ACTIVE, now);
+    }
+
+    /**
+     * TASK-MONO-773 (OD-1): factory with an explicit initial status. Only {@code ACTIVE} or
+     * {@code PENDING} (SUPER_ADMIN path — «관리자 대기») may be born; {@code SUSPENDED} or null is
+     * refused ({@code admin-to-account.md} § POST /internal/tenants {@code initialStatus}).
+     *
+     * @throws IllegalArgumentException if {@code initialStatus} is neither ACTIVE nor PENDING
+     */
+    public static Tenant create(TenantId tenantId, String displayName,
+                                TenantType tenantType, TenantStatus initialStatus,
+                                java.time.Instant now) {
+        if (initialStatus != TenantStatus.ACTIVE && initialStatus != TenantStatus.PENDING) {
+            throw new IllegalArgumentException(
+                    "initialStatus must be ACTIVE or PENDING, was: " + initialStatus);
+        }
         Tenant tenant = new Tenant();
         tenant.tenantId = tenantId;
         tenant.displayName = displayName;
         tenant.tenantType = tenantType;
-        tenant.status = TenantStatus.ACTIVE;
+        tenant.status = initialStatus;
         tenant.createdAt = now;
         tenant.updatedAt = now;
         return tenant;
@@ -120,12 +138,21 @@ public class Tenant {
     }
 
     /**
-     * Updates status. Validates the ACTIVE ↔ SUSPENDED transition matrix.
-     * Same-status update is a no-op (returns {@code false} to indicate no change).
+     * Updates status. Same-status update is a no-op (returns {@code false} to indicate no change).
+     *
+     * <p>TASK-MONO-773: {@code PENDING} can never be a requested target — it only arises at
+     * creation — so it is refused from every state, PENDING itself included (checked before the
+     * no-op rule). {@code PENDING → ACTIVE} and {@code PENDING → SUSPENDED} are allowed; whether
+     * the tenant has an admin is admin-service's judgement, not this aggregate's.
      *
      * @return {@code true} if the status actually changed, {@code false} if it was a no-op.
+     * @throws IllegalArgumentException if {@code newStatus} is PENDING
      */
     public boolean updateStatus(TenantStatus newStatus, java.time.Instant now) {
+        if (newStatus == TenantStatus.PENDING) {
+            throw new IllegalArgumentException(
+                    "status PENDING cannot be requested — it only arises at creation");
+        }
         if (this.status == newStatus) {
             return false; // no-op
         }
