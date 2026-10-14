@@ -297,6 +297,7 @@ base path: `/api/admin`
 | 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-467** — 일반 운영자가 effective scope 밖의 `X-Tenant-Id` 지정 |
 | 400 | `STATE_TRANSITION_INVALID` | 이미 LOCKED 또는 DELETED 상태 |
 | 400 | `REASON_REQUIRED` | X-Operator-Reason 또는 body reason 누락 |
+| 400 | `VALIDATION_ERROR` | **TASK-BE-635** — `Idempotency-Key` 100자 초과(`admin_actions.idempotency_key VARCHAR(100)`). 이전엔 500 `AUDIT_FAILURE`(감사 INSERT 넘침) — 클라이언트 입력 오류이므로 400 으로 바뀜 |
 | 404 | `ACCOUNT_NOT_FOUND` | 대상 계정 미존재 **또는 cross-tenant** (`X-Tenant-Id` ≠ 계정 테넌트, BE-467) |
 | 409 | `IDEMPOTENCY_KEY_CONFLICT` | **TASK-MONO-735** — 같은 운영자가 같은 `Idempotency-Key` 로 이 명령을 **이미 한 번 실행했다**(`admin_actions` 에 `(actor_id, action_code, idempotency_key)` 행이 있다). 두 번째 요청은 감사 행을 새로 쓰지 않고 account-service 를 부르지 않는다. 다시 시도하려면 새 키. 🔴 이전엔 두 번째 요청이 감사 INSERT 에서 유니크 키에 걸려 `500 AUDIT_FAILURE` 였다 |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 (5xx/timeout) |
@@ -319,7 +320,10 @@ base path: `/api/admin`
 **Headers**:
 - `Authorization: Bearer <operator-token>`
 - `X-Operator-Reason: string (required)` — 감사 헤더
-- `Idempotency-Key: string (required, ≤64자, UUID 권장)`
+- `Idempotency-Key: string (required, ≤63자 — TASK-BE-635, was ≤64. UUID 권장)` — 행마다 키는
+  `header + ":" + accountId`이고 `accountId` 는 ≤36자(아래 Constraints)이므로 63+1+36=100 이
+  `admin_actions.idempotency_key VARCHAR(100)`에 꼭 맞는다. account-service 는 이 헤더를 읽지 않으므로(내부
+  `/internal/accounts/{id}/lock` 는 멱등 판정에 쓰지 않는다) 경계를 낮춰도 하류 재시도 판정은 바뀌지 않는다.
 - `X-Tenant-Id: string (optional, 활성 테넌트, TASK-BE-467)` — 배치 전체에 1회 해소되어 모든 per-row lock 이 상속. out-of-scope 지정 → `403 TENANT_SCOPE_DENIED` (배치 진입 전). **cross-tenant accountId 는 해당 row 만** `outcome=NOT_FOUND` (`ACCOUNT_NOT_FOUND`) 로 처리되고 배치는 200 유지. [Tenant Confinement](#tenant-confinement--x-tenant-id-task-be-467) 참조.
 
 **Request**:
@@ -334,6 +338,8 @@ base path: `/api/admin`
 **Constraints**:
 - `accountIds.length` ≤ 100. 초과 시 `422 BATCH_SIZE_EXCEEDED`.
 - 중복 `accountId`는 서버에서 1회만 처리 (입력 순서 보존 dedup).
+- **TASK-BE-635** — `accountIds` 각 원소 ≤36자(`accounts.id VARCHAR(36)`). 초과 시 `400 VALIDATION_ERROR`
+  (위 `Idempotency-Key` ≤63자와 합쳐 행 키가 `admin_actions.idempotency_key VARCHAR(100)`를 넘지 않는다).
 - `reason`은 최소 8자.
 
 **Response 200**:
@@ -365,7 +371,7 @@ base path: `/api/admin`
 | 401 | `TOKEN_INVALID` | operator token 만료/변조 |
 | 403 | `PERMISSION_DENIED` | `account.lock` 미보유 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 누락 |
-| 400 | `VALIDATION_ERROR` | 필수 헤더/필드 누락, reason<8자, accountIds 비어있음 |
+| 400 | `VALIDATION_ERROR` | 필수 헤더/필드 누락, reason<8자, accountIds 비어있음, **TASK-BE-635**: `Idempotency-Key` 63자 초과 또는 `accountIds` 원소 36자 초과 |
 | 422 | `BATCH_SIZE_EXCEEDED` | accountIds>100 |
 | 409 | `IDEMPOTENCY_KEY_CONFLICT` | 동일 key 재사용·payload 불일치 |
 | 503 | `CIRCUIT_OPEN` | 전체 요청이 circuit open으로 소화되지 않은 드문 경우 (개별 row 레벨 CB OPEN은 outcome=FAILURE로 기록) |
@@ -447,6 +453,7 @@ base path: `/api/admin`
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | — |
 | 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-467** — 일반 운영자가 effective scope 밖의 `X-Tenant-Id` 지정 |
+| 400 | `VALIDATION_ERROR` | `Idempotency-Key` 누락 또는 **TASK-BE-635**: 100자 초과(이전엔 500 `AUDIT_FAILURE`) |
 | 404 | `ACCOUNT_NOT_FOUND` | — |
 | 503 | `DOWNSTREAM_ERROR` | auth-service 호출 실패 (5xx/timeout) |
 | 503 | `CIRCUIT_OPEN` | auth-service circuit breaker OPEN (호출 자체 거부) |
@@ -942,6 +949,7 @@ GDPR/PIPA 삭제권 이행. 계정 상태를 DELETED로 전이하고 PII를 즉�
 | 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-467** — 일반 운영자가 effective scope 밖의 `X-Tenant-Id` 지정 |
 | 400 | `STATE_TRANSITION_INVALID` | 이미 DELETED 상태 |
 | 400 | `REASON_REQUIRED` | X-Operator-Reason 또는 body reason 누락 |
+| 400 | `VALIDATION_ERROR` | **TASK-BE-635** — `Idempotency-Key` 100자 초과(이전엔 500 `AUDIT_FAILURE`) |
 | 404 | `ACCOUNT_NOT_FOUND` | 대상 계정 미존재 **또는 cross-tenant** (BE-467) |
 | 503 | `DOWNSTREAM_ERROR` | account-service 호출 실패 (5xx/timeout) |
 | 503 | `CIRCUIT_OPEN` | account-service circuit breaker OPEN |
@@ -1048,7 +1056,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 403 | `PERMISSION_DENIED` | `account.2fa_reset` 미보유 |
 | 403 | `TENANT_SCOPE_DENIED` | 키를 가졌으나 grant 가 플랫폼 범위(`'*'`)가 아님 |
 | 400 | `REASON_REQUIRED` | `X-Operator-Reason` 또는 body `reason` 누락 |
-| 400 | `VALIDATION_ERROR` | `Idempotency-Key` 누락 |
+| 400 | `VALIDATION_ERROR` | `Idempotency-Key` 누락 또는 **TASK-BE-635**: 100자 초과 |
 | 404 | `ACCOUNT_NOT_FOUND` | 계정 미존재 — 🔵 S6: 지울 행이 **없을 때만** 판정된다(auth-service 가 그때 account-service 에 묻는다). 행이 있으면 계정 존재와 무관하게 지운다(삭제된 계정에 남은 비밀도 지워지는 편이 옳다) |
 | 404 | `TOTP_NOT_ENROLLED` | 지울 등록이 없다(대기 행도 없음) — 리셋할 것이 없다는 사실을 운영자에게 보인다(플랫폼 전용 표면이라 열거 방어 대상 아님). 🔵 S6: 하류 재시도가 «이미 지운» 뒤에 닿은 경우도 이 코드다 — [admin-to-auth.md § 멱등](internal/admin-to-auth.md#post-internalauthaccountsaccountidsecond-factorreset) |
 | 409 | `IDEMPOTENCY_KEY_CONFLICT` | 같은 운영자 · 같은 키로 이미 실행 |
@@ -1763,7 +1771,7 @@ GDPR/PIPA 이식권 이행. 계정의 개인 데이터를 JSON으로 내보낸�
 | 422 | ~~`OPERATOR_ACCOUNT_NOT_FOUND`~~ | **퇴역 (772 S7).** TASK-MONO-334 의 «대상 테넌트에 가입 계정 없음». 이 엔드포인트는 더 내지 않는다. 🔴 정정: S1 이 적은 «코드 자체는 `identity:link` 가 계속 쓴다» 는 실측과 다르다 — 이 코드를 내는 곳은 334 확인 하나뿐이었다(admin `src/main` grep: 예외 클래스 · 핸들러 · 던지는 곳 모두 334). S7 이 예외 · 핸들러를 함께 지웠다. registry 행(`platform/error-handling.md`)은 기록으로 남는다 |
 | 503 | ~~`DOWNSTREAM_ERROR`~~ | **퇴역 (772 S7).** 334 확인의 account-service 불가용 거절. `'*'` 생성은 account-service 를 부르지 않는다(identity 링크는 `'*'` 에서 생략 — 아래 BE-374) |
 | 400 | `ROLE_NOT_FOUND` | `roles` 배열에 존재하지 않는 role 이름 포함 |
-| 400 | `VALIDATION_ERROR` | email 형식 오류 / password 정책 위반 / displayName 길이 초과 / tenantId 누락 또는 32자 초과 |
+| 400 | `VALIDATION_ERROR` | email 형식 오류 / password 정책 위반 / displayName 길이 초과 / tenantId 누락 또는 32자 초과 / **TASK-BE-635**: `Idempotency-Key` 100자 초과(이 값은 지금 어디에도 전달되지 않는다 — 경계 일관성을 위한 바운드) |
 
 **Side Effects**: 성공 시 `admin_actions`에 `action_code=OPERATOR_CREATE, tenant_id=actor.tenantId, target_tenant_id=body.tenantId` 기록. `422 OPERATOR_INVITATION_REQUIRED` 는 감사 행을 쓰지 않는다(772 S7 — 아무 테넌트에도 시도하지 않았다). **TASK-BE-374** (772 S7 부터 도달하지 않음 — 비-`*` 는 `422`): 비-`*` tenant 의 경우 identity resolve-or-create + `admin_operators.identity_id` 링크가 같은 트랜잭션에서 수행됨(fail-soft — identity 호출 실패 시 unlinked 로 생성, 별도 audit row 없음 — OPERATOR_CREATE 가 provisioning 행위를 이미 커버). `403 TENANT_SCOPE_DENIED` 시 `admin_actions`에 `outcome=DENIED, tenant_id=actor's, target_tenant_id=actor's, downstream_detail`에 시도한 `body.tenantId` 기록 — best-effort 쓰기 (TASK-BE-262). 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
 
@@ -2304,7 +2312,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | `tenantType` | enum | Y | `B2C_CONSUMER` \| `B2B_ENTERPRISE` |
 | `orgNodeId` | string \| null | N | (`TASK-BE-625`, `ADR-MONO-047` § 개정 2026-10-07) 새 테넌트를 둘 org-node. **생략 또는 `null` = 무소속(지금과 동일)**. 값이 있으면 [`PUT /api/admin/tenants/{tenantId}/org-node`](#put-apiadmintenantstenantidorg-node) 와 **같은 쓰기 규칙**으로 본다 — 출발 = 무소속(생성자는 이미 `SUPER_ADMIN` 이므로 출발 쪽 통과), 도착 = `administers(actor, orgNodeId)` |
 
-`Idempotency-Key` 헤더는 권장. 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지).
+`Idempotency-Key` 헤더는 권장(optional, ≤100자 — **TASK-BE-635**, `CreateTenantUseCase` 가 그대로 `admin_actions.idempotency_key VARCHAR(100)` 에 저장한다. 생략 시 랜덤 UUID로 대체). 동일 키로 재요청 시 첫 요청과 동일한 응답 반환 (이벤트 중복 발행 방지).
 
 > **`orgNodeId` 가 있을 때의 순서 (`TASK-BE-625`).** ① 도착 쪽 검사 `administers(actor, orgNodeId)` — 실패하면 **아무것도 만들지 않고** `404 ORG_NODE_NOT_FOUND` + best-effort DENIED 행. ② 테넌트 생성(아래 Side Effects 그대로). ③ 소속 쓰기 — `TENANT_ORG_NODE_ASSIGN` 감사 행(출발 `null` → 도착 `orgNodeId`). 🔴 ②와 ③ 은 account-service 의 서로 다른 두 내부 호출이라 한 트랜잭션이 아니다. ① 과 ③ 사이에 노드가 삭제되는 경합(또는 그 사이 account-service 장애)이면 테넌트는 **무소속으로 생성된 채** ③ 의 오류(`404 ORG_NODE_NOT_FOUND` / `503`)가 응답된다 — 재시도는 같은 POST 가 아니라(`409 TENANT_ALREADY_EXISTS`) `PUT /api/admin/tenants/{tenantId}/org-node` 로 한다. 생성 내부 호출(`POST /internal/tenants`)에 노드 칸을 싣지 않은 이유: 그 경로는 게이트웨이의 `/internal/tenants/**` 라우트로 테넌트 워크로드에도 열려 있다([gateway-api.md](gateway-api.md)) — 소속 쓰기를 거기에 얹으면 관리자 검사를 거치지 않는 소속 쓰기 길이 생긴다.
 
@@ -2324,7 +2332,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | `tenantId` 정규식 위반, `displayName` 길이, `tenantType` enum 미일치 |
+| 400 | `VALIDATION_ERROR` | `tenantId` 정규식 위반, `displayName` 길이, `tenantType` enum 미일치, **TASK-BE-635**: `Idempotency-Key` 100자 초과 |
 | 400 | `TENANT_ID_RESERVED` | `tenantId` 가 예약어 목록에 포함 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
@@ -2410,13 +2418,17 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 | `displayName` | string (optional) | — | 1~100자 |
 | `status` | enum (optional) | — | `ACTIVE` \| `SUSPENDED` (status 전이 매트릭스 참조) |
 
+`Idempotency-Key` 헤더는 권장(optional, ≤93자 — **TASK-BE-635**. `UpdateTenantUseCase` 가 status 변경 감사 행에
+`:status`(7자)를 덧붙이므로 100 이 아니라 93: 93+7=100 이 `admin_actions.idempotency_key VARCHAR(100)`에 꼭
+맞는다).
+
 **Response 200**: POST 응답과 동일 schema (변경 후 상태).
 
 **Errors**:
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, displayName 길이 위반, status enum 미일치 |
+| 400 | `VALIDATION_ERROR` | 두 필드 모두 누락, displayName 길이 위반, status enum 미일치, **TASK-BE-635**: `Idempotency-Key` 93자 초과 |
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `tenant.manage` 권한 없음 |
 | 403 | `TENANT_SCOPE_DENIED` | 비-SUPER_ADMIN 호출 |

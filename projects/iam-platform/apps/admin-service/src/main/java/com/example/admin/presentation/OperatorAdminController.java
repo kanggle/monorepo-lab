@@ -41,6 +41,7 @@ import com.example.admin.presentation.dto.PatchOperatorStatusResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -153,7 +154,12 @@ public class OperatorAdminController {
     @RequiresPermission(Permission.OPERATOR_MANAGE)
     public ResponseEntity<CreateOperatorResponse> createOperator(
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            // TASK-BE-635: bounded for guard consistency even though this value is never forwarded to
+            // CreateOperatorUseCase today (the audit row uses "create:" + auditId) — see
+            // ClientIdempotencyKeyTest for why every declaration site, used or not, carries the bound.
+            @RequestHeader("Idempotency-Key")
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @Valid @RequestBody CreateOperatorRequest body) {
 
         String reason = ControllerReasonSupport.requireReason(headerReason);

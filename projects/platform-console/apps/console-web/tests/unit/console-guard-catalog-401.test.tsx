@@ -36,6 +36,8 @@ vi.mock('@/shared/lib/session', async (importOriginal) => {
     getActiveTenant: async () => null,
     getIdToken: async () => null,
     getAccessToken: async () => 'live.access.token',
+    // TASK-PC-FE-338 c-1 fix: no tenant selected here, so no re-assume hop (the real one reads cookies()).
+    needsReassume: async () => false,
   };
 });
 

@@ -90,6 +90,17 @@ class AuditControllerSliceTest {
     }
 
     @Test
+    void audit_query_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: bounded for guard consistency — this header is read into QueryAuditCommand but
+        // never consulted by AuditQueryUseCase (a GET has no audit-row key to overflow).
+        mockMvc.perform(get("/api/admin/audit")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "k".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void audit_query_without_jwt_returns_401_token_invalid() throws Exception {
         mockMvc.perform(get("/api/admin/audit"))
                 .andExpect(status().isUnauthorized())

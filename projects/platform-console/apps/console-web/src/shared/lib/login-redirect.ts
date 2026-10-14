@@ -97,6 +97,18 @@ export function buildSessionRefreshRedirectFor(raw: string | null): string {
   return `${SESSION_REFRESH_PATH}?redirect=${encodeURIComponent(raw)}`;
 }
 
+/**
+ * TASK-PC-FE-338 slice c-1 fix — the re-assume hop (`GET /api/tenant/reassume`): re-mints the
+ * selected tenant's assumed token from the current base token (no IAM refresh), then returns to
+ * the page. Same return-path predicate as the refresh hop.
+ */
+export const REASSUME_PATH = '/api/tenant/reassume';
+
+export function buildReassumeRedirectFor(raw: string | null): string {
+  if (!isGuardReturnPath(raw)) return REASSUME_PATH;
+  return `${REASSUME_PATH}?redirect=${encodeURIComponent(raw)}`;
+}
+
 /** 2단계 단계 상승 라우트(`GET`) — `TASK-MONO-771`, 계약 § 2.6. */
 export const STEP_UP_PATH = '/api/auth/step-up';
 

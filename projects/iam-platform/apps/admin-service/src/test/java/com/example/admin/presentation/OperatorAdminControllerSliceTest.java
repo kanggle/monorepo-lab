@@ -426,6 +426,28 @@ class OperatorAdminControllerSliceTest {
     }
 
     @Test
+    void create_operator_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: bounded for guard consistency (the header is not forwarded downstream today,
+        // so this does not reproduce a 500 — see ClientIdempotencyKeyTest).
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "provisioning")
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "new@example.com",
+                                  "displayName": "New",
+                                  "password": "StrongPass1!",
+                                  "roles": ["SUPPORT_LOCK"],
+                                  "tenantId": "*"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void create_operator_weak_password_returns_400() throws Exception {
         mockMvc.perform(post("/api/admin/operators")
                         .header("Authorization", bearer())
