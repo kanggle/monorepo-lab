@@ -1876,6 +1876,7 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
 | `TASK-BE-632` (ADR-083 P3) | `08f2da4a3` | 🔴 **assume roles = assigned sets ∩ subscription** · operator token loses `erp.write` · assume TTL 300 s |
 | `TASK-BE-635` | `3eb6cbebd` | A client `Idempotency-Key` over 100 characters → 400 instead of 500. Bulk-lock header limit 63 (contract change) |
 | `TASK-BE-633` | `ee7738b02` | Admin-role group fan-out tracked per source (`source_key` PK) · V0053 re-fan-out · a role row orphaned on a group path keeps its membership as direct |
+| `TASK-BE-636` | `2d3a0661d` | A group-given membership is handed to another group that still gives the same company instead of being deleted · domain set rows also keep a membership as direct (group paths + company exit) · node grant to a target whose home company is not a membership → 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`. **No migration** (owner decision 2026-10-14: in this bake) |
 
 The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` · b `27cdcebd2` · c-1 `808fa9e84` → c-1 fix `ca176d570` (re-assume from the base token — before merging it, a federation e2e run on the branch was green, run 38555155825). Check the Production deployment record of each commit before the window.
 
@@ -1923,6 +1924,11 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
     - The demo boots on a **fresh volume**: V0053 runs before the `R__` seeds create the groups, so **by construction there are 0 rows to restore**. One line in the ticket is enough.
     - 🔴 When this ships to a non-fresh volume (real operations), the query must run before deployment.
   - ② Assign the same role to one member through two groups G1 · G2 → leave G1 → the role is still there.
+- `TASK-BE-636` — no migration, so nothing to run before or right after boot. Old single-owner rows are repaired the next time a revoke touches them, so there is **no boot-time count to measure**.
+  - ① Two groups G1 · G2 both give company U by «테넌트 배정» to one member → revoke G1's assignment → the member is **still** in U (console company switcher, and the operator's memberships). The audit row's `detail` has `reownedToGroup=1`. Then revoke G2's → U is gone. 🔵 Same setup as BE-633 ② — do both in one go.
+  - ② A member who holds only a business permission set in U (no admin role), with U coming from G's assignment → revoke G's assignment → the membership stays (`keptAsDirect=1`) and the set still shows under the operator's «업무 권한».
+  - ③ Optional — needs an operator exported from their home company but still in another: `POST /api/admin/org-nodes/{id}/admins` for them → **422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`**, and no node admin appears. Control: an ordinary operator → 201.
+  - `TASK-BE-636` is in `done/` (frozen), so record the result here under the window's harvest.
 
 ## When the window ends
 Move each ticket that closed from review → done (four dimensions), and clear the closed entries from the window memory (`project_demo_window_27_pending_checks`).
