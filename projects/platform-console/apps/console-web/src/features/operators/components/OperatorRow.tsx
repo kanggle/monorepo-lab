@@ -22,6 +22,10 @@ export interface OperatorRowProps {
   onChangeStatus: (op: OperatorSummary) => void;
   onEditProfile: (op: OperatorSummary) => void;
   onOrgScope: (op: OperatorSummary) => void;
+  /** TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」 (contract § 2.4.3.4
+   *  screen 2). Omitted (⇒ button hidden) when no active tenant is resolved
+   *  (mirrors `onUnassign` — the surface is tenant-scoped). */
+  onDomainAccess?: (op: OperatorSummary) => void;
   /** TASK-PC-FE-157 — remove this operator's assignment to the active tenant.
    *  Omitted (⇒ button hidden) when no active tenant is resolved. */
   onUnassign?: (op: OperatorSummary) => void;
@@ -34,6 +38,7 @@ export function OperatorRow({
   onChangeStatus,
   onEditProfile,
   onOrgScope,
+  onDomainAccess,
   onUnassign,
 }: OperatorRowProps) {
   return (
@@ -109,6 +114,19 @@ export function OperatorRow({
           >
             조직 스코프
           </Button>
+          {/* TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」: per-set
+              sources + the summed effective role, revoke (DIRECT/MIGRATION
+              only) + grant. Omitted (⇒ hidden) with no active tenant. */}
+          {onDomainAccess && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onDomainAccess(op)}
+              data-testid={`action-domain-access-${op.operatorId}`}
+            >
+              업무 권한
+            </Button>
+          )}
           {/* TASK-PC-FE-157 — remove this operator's assignment to
               the active tenant. A home-tenant-only operator has no
               explicit assignment → producer 404 maps inline.

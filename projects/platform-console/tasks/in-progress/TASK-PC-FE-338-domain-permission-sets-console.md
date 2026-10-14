@@ -116,3 +116,18 @@ frontend
   - `iam-guide` adds the menu, the role, and the key description.
   - Sample coverage is `pending`: there is no fixture yet (the same precedent as `tenant_entry_policy`).
 - **Review corrections (main session).** The subagent added an error message for `DOMAIN_ACCESS_MANAGE_REQUIRED`. **No producer has that code** (the producer answers `403 PERMISSION_DENIED`), so I removed it.
+
+## Slice b — what landed (#4347 follow-up)
+
+- **Operator «업무 권한»** — `/operators` has no detail page; it is a table with row action dialogs. Following the `OrgScopeDialog` precedent, a «업무 권한» button on each row opens `OperatorDomainAccessDialog`.
+  - Per set, its sources are shown as badges: «직접» · «이전 호환» · «그룹: {name}» · «모든 테넌트» (`sources[].tenantId='*'`).
+  - Effective roles are grouped by domain. Roles of a domain the tenant has not subscribed to are marked «구독 없음 — 토큰에 실리지 않음»; when subscription data is unknown, nothing is marked.
+  - **The revoke button appears only on a set with a `DIRECT`/`MIGRATION` source.** A set with only group sources shows a link to the group instead.
+  - The confirm copy says group copies stay, and gives the latency (at most 30 minutes).
+  - A grant sends no `Idempotency-Key`. Self-grant has its own confirm copy (OD-4).
+- **Group «업무 권한 세트»** — a third panel in `GroupDetail`.
+  - Add sends `Idempotency-Key` and a reason, then shows «멤버 N명에게 배정했습니다» from `fannedOutRows`. Remove sends no key.
+  - On a group that carries sets, both the panel and the member-add dialog show a `domain_access.manage` hint.
+- **Architecture boundary.** A cross-feature import is forbidden (`layer-dependency-rules.test.ts`), so each feature owns its own view model. The set picker calls the existing BFF `/api/domain-permission-sets` over HTTP. The latency copy is promoted to `shared/api/domain-permission-sets-copy.ts`; the original path keeps a re-export.
+- **Review correction (main session).** The group panel had no «적용 예정» note, so I added one along with a test.
+- ⚪ «그룹: {name}» links to `/operator-groups` itself. There is no deep link to one group, because the group selection is held in client state.

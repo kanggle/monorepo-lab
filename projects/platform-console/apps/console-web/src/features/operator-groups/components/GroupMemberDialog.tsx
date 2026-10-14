@@ -47,6 +47,12 @@ export interface GroupMemberDialogProps {
   groupTenantId: string;
   /** operatorIds already members of this group — excluded from selection (AC-3). */
   existingMemberIds: string[];
+  /** TASK-PC-FE-338 slice b (ADR-083) — true when this group carries ≥1
+   *  업무 권한 세트: adding a member then ALSO needs the actor's grant scope
+   *  to hold `domain_access.manage` (not just `group.manage`), or the
+   *  producer answers `403 PERMISSION_DENIED`. Shows a proactive hint; the
+   *  existing `error` prop already renders that 403 inline either way. */
+  hasDomainSets?: boolean;
   pending: boolean;
   error: string | null;
   onConfirm: (operatorId: string, reason: string) => void;
@@ -65,6 +71,7 @@ export function GroupMemberDialog({
   groupName,
   groupTenantId,
   existingMemberIds,
+  hasDomainSets = false,
   pending,
   error,
   onConfirm,
@@ -125,6 +132,16 @@ export function GroupMemberDialog({
           「{groupName}」 그룹에 운영자를 추가합니다. 그룹의 현행 grant 가 새
           멤버에게 fan-out 됩니다 (본인 스코프 밖 grant 는 서버가 거부).
         </p>
+
+        {hasDomainSets && (
+          <p
+            data-testid="group-member-domain-sets-dialog-hint"
+            className="text-xs text-muted-foreground"
+          >
+            이 그룹에는 업무 권한 세트가 배정돼 있습니다 — 멤버 추가에는
+            group.manage 외에 domain_access.manage 권한도 필요합니다.
+          </p>
+        )}
 
         {fallback ? (
           <>

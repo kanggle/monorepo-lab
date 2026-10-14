@@ -158,6 +158,27 @@ export default async function OperatorsPage() {
   // authoritative on scope anyway).
   const activeTenant = await getActiveTenant().catch(() => null);
 
+  // TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」 dialog's "구독 없음"
+  // marking source, resolved HERE (the `app/` layer) the SAME way
+  // `(console)/layout.tsx` resolves it for the sidebar badge and
+  // `(console)/domain-permission-sets/page.tsx` resolves it for the create
+  // form (`features/catalog` `getCatalog()` ∩ active tenant). A registry
+  // failure (or no active tenant) leaves it `null` — "don't know ⇒ don't
+  // mark"; the already-caught `catalogPromise` above is reused rather than
+  // fetching the catalog twice.
+  let subscribedDomains: string[] | null = null;
+  if (activeTenant) {
+    try {
+      const catalog = await catalogPromise;
+      subscribedDomains = catalog.products
+        .filter((p) => p.tenants.includes(activeTenant))
+        .map((p) => p.productKey)
+        .filter((k) => k !== 'iam');
+    } catch {
+      subscribedDomains = null;
+    }
+  }
+
   return (
     <OperatorsScreen
       initial={state.page}
@@ -165,6 +186,7 @@ export default async function OperatorsPage() {
       selfOperatorId={selfOperatorId}
       activeTenant={activeTenant}
       grantableRoles={grantableRoles}
+      subscribedDomains={subscribedDomains}
     />
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { DOMAIN_SET_LATENCY_COPY } from '@/shared/api/domain-permission-sets-copy';
 import { formatDateTime } from '@/shared/lib/datetime';
 import type { Group, UpdateGroupInput } from '../api/types';
 import {
@@ -15,10 +16,16 @@ import {
   useAddGrants,
   useRemoveGrant,
 } from '../hooks/use-operator-groups';
+import {
+  useGroupDomainSets,
+  useAddGroupDomainSet,
+  useRemoveGroupDomainSet,
+} from '../hooks/use-group-domain-sets';
 import { GroupForm } from './GroupForm';
 import { GroupReasonDialog } from './GroupReasonDialog';
 import { GroupMemberDialog } from './GroupMemberDialog';
 import { GroupGrantDialog } from './GroupGrantDialog';
+import { GroupDomainSetDialog } from './GroupDomainSetDialog';
 
 /**
  * Operator-group detail panel (TASK-PC-FE-250). A `<dl>` summary, an inline
@@ -46,21 +53,30 @@ function errText(err: unknown): string | null {
 export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailProps) {
   const members = useGroupMembers(group.groupId);
   const grants = useGroupGrants(group.groupId);
+  const domainSets = useGroupDomainSets(group.groupId);
   const update = useUpdateGroup();
   const remove = useDeleteGroup();
   const addMember = useAddMember();
   const removeMember = useRemoveMember();
   const addGrants = useAddGrants();
   const removeGrant = useRemoveGrant();
+  const addDomainSet = useAddGroupDomainSet();
+  const removeDomainSet = useRemoveGroupDomainSet();
 
   const [pendingEdit, setPendingEdit] = useState<UpdateGroupInput | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [addingGrant, setAddingGrant] = useState(false);
+  const [addingDomainSet, setAddingDomainSet] = useState(false);
   const [revokeMemberTarget, setRevokeMemberTarget] = useState<string | null>(null);
   const [revokeGrantTarget, setRevokeGrantTarget] = useState<string | null>(null);
+  const [revokeDomainSetTarget, setRevokeDomainSetTarget] = useState<string | null>(null);
+  /** TASK-PC-FE-338 slice b — the last successful add's fan-out count, shown
+   *  once as a dismissible notice (admin-api.md row 10 `fannedOutRows`). */
+  const [lastFanOutCount, setLastFanOutCount] = useState<number | null>(null);
 
   const updateError = update.isError ? errText(update.error) : null;
+  const hasDomainSets = (domainSets.data?.length ?? 0) > 0;
 
   return (
     <div className="space-y-6" data-testid="group-detail">
@@ -128,6 +144,23 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
           </Button>
         </div>
 
+        {/* TASK-PC-FE-338 slice b — ADR-083 「멤버 추가 · 업무 세트 그룹」
+            note: adding a member to a group carrying ≥1 업무 권한 세트 ALSO
+            needs the actor's grant scope to hold `domain_access.manage`
+            (not just `group.manage`) — the producer answers
+            `403 PERMISSION_DENIED` otherwise. The existing error path below
+            already renders that inline via `messageForCode`; this is a
+            proactive hint so the actor is not surprised by it. */}
+        {hasDomainSets && (
+          <p
+            data-testid="group-member-domain-sets-hint"
+            className="text-xs text-muted-foreground"
+          >
+            이 그룹에는 업무 권한 세트가 배정돼 있습니다 — 멤버 추가에는
+            group.manage 외에 domain_access.manage 권한도 필요합니다.
+          </p>
+        )}
+
         {members.isError ? (
           <p role="alert" data-testid="group-members-error" className="text-sm text-destructive">
             {errText(members.error)}
@@ -162,6 +195,105 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
                   data-testid={`group-member-remove-${m.operatorId}`}
                 >
                   제거
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* 업무 권한 세트 panel (TASK-PC-FE-338 slice b — ADR-083, contract
+          § 2.4.3.4 screen 3 / rows 9-11) */}
+      <section aria-labelledby="group-domain-sets-heading" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3
+            id="group-domain-sets-heading"
+            className="text-base font-semibold text-foreground"
+          >
+            업무 권한 세트
+          </h3>
+          <Button
+            onClick={() => setAddingDomainSet(true)}
+            data-testid="group-domain-set-add"
+          >
+            세트 추가
+          </Button>
+        </div>
+
+        {/* Status honesty (contract § 2.4.3.4): P3 is not deployed, so a group set
+            is recorded but does not yet narrow any member's token. */}
+        <p
+          role="note"
+          data-testid="group-domain-sets-applies-later-note"
+          className="text-xs text-muted-foreground"
+        >
+          멤버에게 배정은 기록되지만 아직 실제 업무 권한을 좁히지 않습니다 —{' '}
+          <strong className="text-foreground">적용 예정</strong>입니다 (토큰 발급 변경 배포 전).
+        </p>
+
+        {lastFanOutCount !== null && (
+          <p
+            role="status"
+            data-testid="group-domain-set-fanout-notice"
+            className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
+          >
+            멤버 {lastFanOutCount}명에게 배정했습니다.{' '}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => setLastFanOutCount(null)}
+            >
+              닫기
+            </button>
+          </p>
+        )}
+
+        {domainSets.isError ? (
+          <p
+            role="alert"
+            data-testid="group-domain-sets-error"
+            className="text-sm text-destructive"
+          >
+            {errText(domainSets.error)}
+          </p>
+        ) : domainSets.isLoading ? (
+          <p className="text-sm text-muted-foreground">불러오는 중…</p>
+        ) : (domainSets.data?.length ?? 0) === 0 ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="group-domain-sets-empty"
+          >
+            배정된 업무 권한 세트가 없습니다.
+          </p>
+        ) : (
+          <ul
+            data-testid="group-domain-sets-list"
+            className="divide-y divide-border rounded-md border border-border"
+          >
+            {domainSets.data?.map((s) => (
+              <li
+                key={s.setId}
+                data-testid={`group-domain-set-row-${s.setId}`}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="font-medium text-foreground">{s.name}</span>{' '}
+                  {s.systemKey && (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      시스템
+                    </span>
+                  )}{' '}
+                  <span className="text-muted-foreground">
+                    · {formatDateTime(s.grantedAt)}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() => setRevokeDomainSetTarget(s.setId)}
+                  disabled={removeDomainSet.isPending}
+                  data-testid={`group-domain-set-remove-${s.setId}`}
+                >
+                  회수
                 </Button>
               </li>
             ))}
@@ -278,6 +410,7 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
           groupName={group.name}
           groupTenantId={group.tenantId}
           existingMemberIds={members.data?.map((m) => m.operatorId) ?? []}
+          hasDomainSets={hasDomainSets}
           pending={addMember.isPending}
           error={addMember.isError ? errText(addMember.error) : null}
           onConfirm={(operatorId, reason) => {
@@ -347,6 +480,53 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
             );
           }}
           onCancel={() => setRevokeGrantTarget(null)}
+        />
+      )}
+
+      {/* 업무 권한 세트 add / remove (TASK-PC-FE-338 slice b) */}
+
+      {addingDomainSet && (
+        <GroupDomainSetDialog
+          groupName={group.name}
+          pending={addDomainSet.isPending}
+          error={addDomainSet.isError ? errText(addDomainSet.error) : null}
+          onConfirm={(setId, reason) => {
+            const idempotencyKey =
+              typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : `group-domain-set-${Date.now()}`;
+            addDomainSet.mutate(
+              { groupId: group.groupId, setId, reason, idempotencyKey },
+              {
+                onSuccess: (result) => {
+                  setAddingDomainSet(false);
+                  setLastFanOutCount(result.fannedOutRows);
+                },
+              },
+            );
+          }}
+          onCancel={() => setAddingDomainSet(false)}
+        />
+      )}
+
+      {revokeDomainSetTarget !== null && (
+        <GroupReasonDialog
+          title="업무 권한 세트 회수"
+          description={`"${
+            domainSets.data?.find((s) => s.setId === revokeDomainSetTarget)?.name ??
+            revokeDomainSetTarget
+          }" 세트의 그룹 배정을 회수합니다 — 이 그룹이 fan-out 한 전 멤버의 권한이 회수됩니다(멤버의 직접·다른 그룹 배정은 유지). ${DOMAIN_SET_LATENCY_COPY}`}
+          confirmLabel="회수"
+          tone="destructive"
+          pending={removeDomainSet.isPending}
+          error={removeDomainSet.isError ? errText(removeDomainSet.error) : null}
+          onConfirm={(reason) => {
+            removeDomainSet.mutate(
+              { groupId: group.groupId, setId: revokeDomainSetTarget, reason },
+              { onSuccess: () => setRevokeDomainSetTarget(null) },
+            );
+          }}
+          onCancel={() => setRevokeDomainSetTarget(null)}
         />
       )}
     </div>

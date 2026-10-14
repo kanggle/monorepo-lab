@@ -10,9 +10,13 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * expires. **Pre-P3 version** (P3, the token-issuance change, is not
  * deployed yet — TASK-BE-632): the bound is 30 minutes, not the post-P3
  * 5-minute figure the contract will carry once P3 ships.
+ *
+ * TASK-PC-FE-338 slice b — promoted to `shared/api/domain-permission-sets-copy.ts`
+ * (two more consumers: `features/operators` + `features/operator-groups`,
+ * architecture.md § Forbidden Dependencies remedy). Re-exported here so this
+ * module's existing import path is unchanged.
  */
-export const DOMAIN_SET_LATENCY_COPY =
-  '다음 테넌트 재교환부터 적용됩니다. 이미 발급된 도메인 토큰은 만료(최대 30분)까지 그대로 쓰입니다.';
+export { DOMAIN_SET_LATENCY_COPY } from '@/shared/api/domain-permission-sets-copy';
 
 /**
  * Reason-capture confirm dialog for a 업무 권한 세트 mutation (TASK-PC-FE-338).

@@ -171,6 +171,30 @@ export const AssignmentReasonBodySchema = z
 export type AssignmentReasonBody = z.infer<typeof AssignmentReasonBodySchema>;
 
 /**
+ * grant a domain permission set DIRECTLY to an operator (TASK-PC-FE-338
+ * slice b — admin-api.md § 도메인 업무 권한 세트 row 7). `setId` + the audit
+ * `reason` ONLY — NO `idempotencyKey` (a repeat grant is
+ * `409 DOMAIN_PERMISSION_SET_ALREADY_GRANTED`, never a double-submit retry
+ * key — the per-endpoint header matrix is non-uniform, same posture as
+ * `/roles` + `/status`). `.strict()` rejects unknown top-level keys.
+ */
+export const GrantDomainSetBodySchema = z
+  .object({ setId: z.string().min(1), reason: z.string() })
+  .strict();
+export type GrantDomainSetBody = z.infer<typeof GrantDomainSetBodySchema>;
+
+/**
+ * personal revoke of a domain permission set (TASK-PC-FE-338 slice b — row
+ * 8): the audit `reason` ONLY, in the request BODY (never the query string
+ * — the org-nodes/groups DELETE precedent). Shares the SAME shape as
+ * {@link AssignmentReasonBodySchema}; kept as its own named export so the
+ * route handler's intent reads clearly (reuse is a deliberate choice, not an
+ * accidental alias).
+ */
+export const DomainSetReasonBodySchema = AssignmentReasonBodySchema;
+export type DomainSetReasonBody = AssignmentReasonBody;
+
+/**
  * invite (TASK-MONO-772 S5 — § 2.4.3 row 11): the draft + reason +
  * idempotencyKey (BOTH headers, like create). `tenantId='*'` is refused here
  * (422, no producer call) — the platform scope is never an invitation target
