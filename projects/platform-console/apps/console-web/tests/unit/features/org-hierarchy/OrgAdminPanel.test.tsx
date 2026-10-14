@@ -91,6 +91,17 @@ describe('OrgAdminPanel', () => {
     );
   });
 
+  it('renders a server 422 ORG_ADMIN_GRANT_TARGET_NOT_MEMBER as Korean copy, not the raw server message (TASK-PC-FE-340)', () => {
+    const serverMessage =
+      "Org node grant target 'op-1' is not a member of its home tenant 't-1' — the grant row would sit outside its memberships";
+    renderPanel({
+      grantError: messageForCode('ORG_ADMIN_GRANT_TARGET_NOT_MEMBER', serverMessage),
+    });
+    const banner = screen.getByTestId('org-admin-grant-error');
+    expect(banner).toHaveTextContent('홈 회사의 소속이 아니어서');
+    expect(banner).not.toHaveTextContent('op-1');
+  });
+
   it('falls back to the FULL known set (never an empty select) when grantable-roles is null', () => {
     renderPanel({ grantableRoles: null });
     const select = screen.getByTestId('org-admin-role-select');

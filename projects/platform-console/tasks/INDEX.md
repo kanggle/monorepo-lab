@@ -118,6 +118,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
+- `TASK-PC-FE-340-org-admin-grant-target-not-member-message.md` — **노드 관리자 배정의 새 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`(iam `TASK-BE-636` ③) → 한국어 문구 · 서버 영어 메시지(원시 id) 노출 차단** (2026-10-14 UTC). 재굽기 창 전에 Vercel 운영 반영. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-338-domain-permission-sets-console.md` — **`ADR-MONO-083` P4 — 콘솔: «IAM 관리 역할» / «업무 권한 세트» 화면 분리 · 세트 · 운영자 · 그룹 배정 · 메뉴 · 버튼 두 신호(구독 없음 / 업무 권한 없음)** (READY, 2026-10-14 UTC). 🔴 메뉴 숨김은 편의 — 서버 403 과 일치를 단언. 선행 `TASK-MONO-791` · iam `TASK-BE-631`(실제 권한 일치는 `TASK-BE-632` 배포 뒤). 분석=Opus 5.5 / 구현 권장=Sonnet(화면) · Opus 검토(권한 신호).
 
 ## review
