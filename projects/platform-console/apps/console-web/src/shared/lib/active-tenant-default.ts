@@ -9,6 +9,7 @@ import {
   LAST_TENANT_COOKIE,
   TENANT_COOKIE,
   tokenCookieOpts,
+  assumedTokenCookieMaxAge,
 } from '@/shared/lib/session';
 
 /**
@@ -165,7 +166,7 @@ export async function establishDefaultTenant(
     jar.set(TENANT_COOKIE, tenant, tokenCookieOpts);
     jar.set(ASSUMED_TOKEN_COOKIE, assumed.accessToken, {
       ...tokenCookieOpts,
-      maxAge: assumed.expiresIn,
+      maxAge: assumedTokenCookieMaxAge(assumed.expiresIn),
     });
     logger.info('tenant_default_assumed', {
       requestId,

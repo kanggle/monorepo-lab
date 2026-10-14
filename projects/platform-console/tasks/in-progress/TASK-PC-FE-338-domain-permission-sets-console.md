@@ -131,3 +131,22 @@ frontend
 - **Architecture boundary.** A cross-feature import is forbidden (`layer-dependency-rules.test.ts`), so each feature owns its own view model. The set picker calls the existing BFF `/api/domain-permission-sets` over HTTP. The latency copy is promoted to `shared/api/domain-permission-sets-copy.ts`; the original path keeps a re-export.
 - **Review correction (main session).** The group panel had no «적용 예정» note, so I added one along with a test.
 - ⚪ «그룹: {name}» links to `/operator-groups` itself. There is no deep link to one group, because the group selection is held in client state.
+
+## Slice c re-split (2026-10-14 UTC, main session judgement)
+
+- **c-1 (now; must ship before P3 is deployed) — OD-2 assumed-token re-exchange.** I measured three defects:
+  1. **`getDomainFacingToken()` fell back to the base token when the assumed-token cookie was missing** (`session.ts`). With a tenant selected, the base token carries the login tenant (`iam`), not the selected one. Today the assumed and base tokens are both 1800 s, so the two cookies lapse almost together. From P3 the assumed token is 300 s, so **for 25 minutes of every 30 every domain call would go out with the wrong token**.
+  2. **The domain section gate (`DomainTenantGate`) showed «테넌트를 먼저 선택하세요» when the assumed token was missing.** The contract forbids this downgrade: that notice may appear only once the re-assume itself has been refused.
+  3. **`GET /api/auth/refresh` decided «complete session ⇒ return without refreshing» from access + operator alone (`hasCompleteSession`).** Had the gate sent the browser through that hop, it would **loop forever**.
+- **c-2 (after P3 is deployed) — the «업무 권한 없음» nav signal (AC-1) and hiding buttons for a read-only set (AC-2).** Before P3 the server still allows everything the subscription covers. Turning these on now would make the screen say "no permission" while the server answers 200, which breaks AC-1's "match the server's verdict". AC-5 (nightly / Vercel) is recorded at the end of c-2.
+
+## Slice c-1 — what landed
+
+- `getDomainFacingToken()`: **fail-closed**. With a tenant selected and no assumed token it returns `null`. Every caller already maps `null` to 401, and the browser client then does one refresh (which re-assumes) and a retry. With no tenant selected it uses the base token as before (net-zero).
+- The assumed-token cookie expires **60 s before the token** (`assumedTokenCookieMaxAge`: 300 → 240, 1800 → 1740). All three set sites use it: switch, refresh, and the default-tenant path. Its absence is the re-assume trigger, so the console re-assumes before a domain server could ever see an expired token.
+- `hasCompleteSession`: with a tenant selected, the session is complete only when the assumed token is present. If the re-assume is refused, the refresh drops the tenant, so the hop always converges.
+- `DomainTenantGate`: a selected tenant with no assumed token and a refresh cookie present goes through the refresh hop, back to the same page.
+- Tests:
+  - `assumed-token-lapse.test.ts` (new) and the OD-2 block in `domain-tenant-gate.test.tsx` (new).
+  - **Five existing fixture files (notification-routes, dashboard-composition-routes, per-domain-credential, sample-mode-cores, sample-mode-proxies) modelled a «tenant cookie only, no assumed token» state that production never produces**: they relied on the fallback. They now carry the assumed token, and domain Bearer assertions expect the assumed token, which is what is actually sent.
+  - In two more files (tenant-switch, active-tenant-default), the `maxAge` assertion changed from 1800 to 1740.

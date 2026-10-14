@@ -26,7 +26,12 @@ vi.mock('@/shared/config/demo-backend', () => ({
 import { NextRequest } from 'next/server';
 import { GET as inboxGET } from '@/app/api/console/notifications/inbox/route';
 import { POST as markReadPOST } from '@/app/api/console/notifications/[sourceDomain]/[id]/read/route';
-import { ACCESS_COOKIE, OPERATOR_COOKIE, TENANT_COOKIE } from '@/shared/lib/session';
+import {
+  ACCESS_COOKIE,
+  OPERATOR_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
+} from '@/shared/lib/session';
 import { NotificationInboxResponseSchema } from '@/features/notifications/api/notification-types';
 
 function json(body: unknown, status = 200): Response {
@@ -52,6 +57,9 @@ function session() {
   cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
   cookieJar.set(OPERATOR_COOKIE, 'OP-TOKEN');
   cookieJar.set(TENANT_COOKIE, 'acme');
+  // TASK-PC-FE-338 (OD-2): a selected tenant always carries its assumed token (the switch sets both);
+  // without it the domain-facing resolver is fail-closed (null → 401), no base-token fallback.
+  cookieJar.set(ASSUMED_TOKEN_COOKIE, 'GAP-ASSUMED');
 }
 
 function inbox(search = '') {
@@ -96,7 +104,7 @@ describe('inbox route', () => {
     await inbox();
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const headers = init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(headers.Authorization).toBe('Bearer GAP-ASSUMED');
     expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain('x-tenant-id');
     expect(Object.keys(headers).map((k) => k.toLowerCase())).not.toContain('x-operator-token');
   });
@@ -164,7 +172,7 @@ describe('mark-read route', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://erp.local/api/erp/notifications/n%201/read');
     expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer GAP-ACCESS');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer GAP-ASSUMED');
   });
 
   it.each([

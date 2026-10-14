@@ -14,6 +14,7 @@ import {
   LAST_TENANT_COOKIE,
   tokenCookieOpts,
   getAccessToken,
+  assumedTokenCookieMaxAge,
 } from '@/shared/lib/session';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
 import {
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
   jar.set(TENANT_COOKIE, tenant, tokenCookieOpts);
   jar.set(ASSUMED_TOKEN_COOKIE, assumed.accessToken, {
     ...tokenCookieOpts,
-    maxAge: assumed.expiresIn,
+    maxAge: assumedTokenCookieMaxAge(assumed.expiresIn),
   });
   // Remembered for the next login (TASK-PC-FE-292) — only after the assume
   // succeeded, so a refused tenant is never remembered.

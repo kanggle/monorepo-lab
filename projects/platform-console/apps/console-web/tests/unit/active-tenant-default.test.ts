@@ -191,7 +191,8 @@ describe('callback — the active tenant is not the token tenant_id (AC-2 / AC-3
     expect(assumeCalls(fn)).toEqual(['demo-corp']);
     expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('demo-corp');
     expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.value).toBe('ASSUMED-FOR-demo-corp');
-    expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.opts.maxAge).toBe(1800);
+    // TASK-PC-FE-338 OD-2 — the cookie lapses 60 s before the 1800 s token.
+    expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.opts.maxAge).toBe(1740);
   });
 
   it('the registry is asked with the operator token just minted (not a cookie read the request does not carry)', async () => {

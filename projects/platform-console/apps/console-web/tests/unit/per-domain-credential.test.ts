@@ -80,6 +80,7 @@ import {
   ACCESS_COOKIE,
   OPERATOR_COOKIE,
   TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
 } from '@/shared/lib/session';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -99,6 +100,9 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     cookieJar.set(ACCESS_COOKIE, 'GAP-OIDC-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'EXCHANGED-OPERATOR');
     cookieJar.set(TENANT_COOKIE, 'scm');
+    // TASK-PC-FE-338 (OD-2): a selected tenant always carries its assumed token (the switch sets both);
+    // without it the domain-facing resolver is fail-closed (null → 401), no base-token fallback.
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, 'GAP-OIDC-ASSUMED');
 
     // IAM accounts uses `AccountPageSchema`; wms uses its own page meta;
     // scm uses the procurement-PO envelope; finance uses its
@@ -173,7 +177,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     await listInventory({ page: 0, size: 20 });
     const wmsHeaders = (fetchMock.mock.calls[1][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(wmsHeaders.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(wmsHeaders.Authorization).toBe('Bearer GAP-OIDC-ASSUMED');
     expect(wmsHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(wmsHeaders['X-Tenant-Id']).toBeUndefined();
 
@@ -183,7 +187,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     await listPurchaseOrders({ page: 0, size: 20 });
     const scmHeaders = (fetchMock.mock.calls[2][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(scmHeaders.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(scmHeaders.Authorization).toBe('Bearer GAP-OIDC-ASSUMED');
     expect(scmHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(scmHeaders['X-Tenant-Id']).toBeUndefined();
 
@@ -194,7 +198,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     await getAccount('acct-1');
     const finHeaders = (fetchMock.mock.calls[3][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(finHeaders.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(finHeaders.Authorization).toBe('Bearer GAP-OIDC-ASSUMED');
     expect(finHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(finHeaders['X-Tenant-Id']).toBeUndefined();
 
@@ -206,7 +210,7 @@ describe('per-domain credential divergence (§ 2.4.5 / § 2.4.6 / § 2.4.7 / § 
     await listDepartments({});
     const erpHeaders = (fetchMock.mock.calls[4][1] as RequestInit)
       .headers as Record<string, string>;
-    expect(erpHeaders.Authorization).toBe('Bearer GAP-OIDC-ACCESS');
+    expect(erpHeaders.Authorization).toBe('Bearer GAP-OIDC-ASSUMED');
     expect(erpHeaders.Authorization).not.toContain('EXCHANGED-OPERATOR');
     expect(erpHeaders['X-Tenant-Id']).toBeUndefined();
 
