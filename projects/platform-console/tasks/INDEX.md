@@ -118,7 +118,6 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-340-org-admin-grant-target-not-member-message.md` — **노드 관리자 배정의 새 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`(iam `TASK-BE-636` ③) → 한국어 문구 · 서버 영어 메시지(원시 id) 노출 차단** (2026-10-14 UTC). 재굽기 창 전에 Vercel 운영 반영. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-338-domain-permission-sets-console.md` — **`ADR-MONO-083` P4 — 콘솔: «IAM 관리 역할» / «업무 권한 세트» 화면 분리 · 세트 · 운영자 · 그룹 배정 · 메뉴 · 버튼 두 신호(구독 없음 / 업무 권한 없음)** (READY, 2026-10-14 UTC). 🔴 메뉴 숨김은 편의 — 서버 403 과 일치를 단언. 선행 `TASK-MONO-791` · iam `TASK-BE-631`(실제 권한 일치는 `TASK-BE-632` 배포 뒤). 분석=Opus 5.5 / 구현 권장=Sonnet(화면) · Opus 검토(권한 신호).
 
 ## review
@@ -129,6 +128,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
+- ✅ `TASK-PC-FE-340-org-admin-grant-target-not-member-message.md` — **DONE 2026-10-14 UTC (4-dim verified)** — **#4360**(`14629a187`, 머지 시점 실패 0). 노드 관리자 배정의 새 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`(iam `TASK-BE-636` ③)를 한국어 문구로 — 매핑이 없으면 서버 영어 메시지(원시 운영자·테넌트 id)가 화면에 떴다. 시험 먼저 빨강(1 failed) → 매핑 뒤 초록. Vercel 운영 배포 success(재굽기 창 전 반영 완료).
 - ✅ `TASK-PC-FE-339-assign-via-invite-partner-id-hint.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4336**(`8c95379ee`, 머지 시점 실패 0/12 — 커밋 제목의 «338» 은 이 작업, 동시 세션과 번호가 겹쳐 339 로 변경). 운영자 «테넌트 배정»은 이메일 초대를 주 경로로 · 파트너 초대 ID 는 유지 + 안내. 소유자 선택창 결정 2건. 라이브 ⚪(AC 밖).
 - ✅ `TASK-PC-FE-337-scm-pick-supplier-not-id.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4331**(`d8a596b63`, 머지 시점 실패 0/13). SCM 공급사 ID 입력 2곳을 공급사 목록 선택으로. 소유자 «모든 도메인» ID 입력 정리 묶음. 라이브 ⚪(AC 밖).
 - ✅ `TASK-PC-FE-336-pick-seller-tenant-not-id.md` — **DONE 2026-10-13 UTC (4-dim verified)** — impl PR **#4325**(`c8c52d7f2`, 머지 시점 실패 0/12). 셀러 · 테넌트 ID 입력 6곳: 셀러 선택기 · 테넌트 제안. 소유자 «모든 도메인» ID 입력 정리 묶음. 라이브 ⚪(AC 밖).
