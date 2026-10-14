@@ -150,3 +150,19 @@ frontend
   - `assumed-token-lapse.test.ts` (new) and the OD-2 block in `domain-tenant-gate.test.tsx` (new).
   - **Five existing fixture files (notification-routes, dashboard-composition-routes, per-domain-credential, sample-mode-cores, sample-mode-proxies) modelled a «tenant cookie only, no assumed token» state that production never produces**: they relied on the fallback. They now carry the assumed token, and domain Bearer assertions expect the assumed token, which is what is actually sent.
   - In two more files (tenant-switch, active-tenant-default), the `maxAge` assertion changed from 1800 to 1740.
+
+## Merge record
+
+| Slice | PR | Merge commit | Failing checks at merge |
+|---|---|---|---|
+| a | #4347 | `56a15be8b` | 0 |
+| b | #4348 | `27cdcebd2` | 0 |
+| c-1 | #4349 | `808fa9e84` | 0 |
+
+- **Vercel production — measured, not assumed (GitHub Deployments, `Production – kanggle-console`, 2026-10-14 UTC):**
+  - a `56a15be8b` → `success` (00:21Z).
+  - b `27cdcebd2` → `success` (01:30Z).
+  - c-1 `808fa9e84` → the `Vercel deploy hooks` workflow is `success`, but **no deployment record existed at the time of writing**. Check the record again before deploying P3.
+  - 🔴 The ticket body (AC-5) says «`main` direct deploy is off (`vercel.json`)». In practice, **each console merge is reaching Production through the deploy-hook workflow**. Measure by the deployment record, not by that sentence.
+- c-1 has been recorded as a **deployment prerequisite** in `TASK-BE-632` (P3) Dependency Markers.
+- **Still open: c-2.** It covers AC-1, AC-2 and AC-5, and waits for P3 to deploy. This ticket stays in `in-progress`.
