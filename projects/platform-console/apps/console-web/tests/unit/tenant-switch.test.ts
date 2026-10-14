@@ -124,13 +124,14 @@ describe('POST /api/tenant — switch success (AC-1)', () => {
     expect(sent.get('subject_token')).toBe('BASE-GAP-TOKEN');
     expect(sent.get('audience')).toBe('acme-corp');
 
-    // Both cookies set atomically; assumed-token maxAge tracks expires_in.
+    // Both cookies set atomically; the assumed-token cookie lapses 60 s BEFORE the token
+    // (TASK-PC-FE-338 OD-2 — expires_in 1800 → maxAge 1740), so it is re-assumed in time.
     expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('acme-corp');
     expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.value).toBe('ASSUMED-FOR-ACME');
     expect(cookieJar.get(ASSUMED_TOKEN_COOKIE)?.opts).toMatchObject({
       httpOnly: true,
       secure: true,
-      maxAge: 1800,
+      maxAge: 1740,
     });
   });
 });

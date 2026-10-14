@@ -16,6 +16,19 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({
     get: (n: string) => (cookieJar.has(n) ? { value: cookieJar.get(n)! } : undefined),
   }),
+  headers: async () => new Map([['x-pathname', '/wms/inventory']]),
+}));
+
+/** TASK-PC-FE-338 (OD-2) — `redirect()` throws in Next; the mock records the target. */
+class RedirectSignal extends Error {
+  constructor(readonly to: string) {
+    super(`NEXT_REDIRECT ${to}`);
+  }
+}
+vi.mock('next/navigation', () => ({
+  redirect: (to: string) => {
+    throw new RedirectSignal(to);
+  },
 }));
 
 /**
@@ -50,7 +63,11 @@ vi.mock('@/shared/lib/active-tenant-default', () => ({
 }));
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DomainTenantGate, tenantSelectionRequired } from '@/widgets/domain-tenant-gate';
+import {
+  DomainTenantGate,
+  tenantSelectionRequired,
+  assumedTokenLapsed,
+} from '@/widgets/domain-tenant-gate';
 import {
   ACCESS_COOKIE,
   OPERATOR_COOKIE,
@@ -311,5 +328,48 @@ describe('every domain section is behind the gate (Failure Scenario 3)', () => {
       .filter((d) => files(path.join(CONSOLE, d)).some((f) => DOMAIN_FEATURE.test(readFileSync(f, 'utf8'))));
     expect(importing.length).toBeGreaterThan(0);
     expect(importing.filter((d) => !DOMAIN_SECTIONS.includes(d))).toEqual([]);
+  });
+});
+
+/**
+ * TASK-PC-FE-338 (ADR-MONO-083 D7 · OD-2) — from P3 the assumed token lives 300 s, the base
+ * token 1800 s: a selected tenant whose assumed cookie lapsed is the NORMAL state every five
+ * minutes. The gate must re-assume (refresh hop), not say «테넌트를 먼저 선택하세요».
+ */
+describe('assumed token lapsed (OD-2)', () => {
+  const child = <p data-testid="section-body">body</p>;
+
+  it('🔴 tenant selected, assumed cookie gone, refresh cookie present → refresh hop back to this page', async () => {
+    operatorSession();
+    cookieJar.set(TENANT_COOKIE, 'demo-corp');
+    expect(await assumedTokenLapsed()).toBe(true);
+    const err = await DomainTenantGate({ section: 'WMS', children: child }).catch((e) => e);
+    expect(err).toBeInstanceOf(RedirectSignal);
+    expect((err as RedirectSignal).to).toBe('/api/auth/refresh?redirect=%2Fwms%2Finventory');
+  });
+
+  it('control: assumed cookie present → no hop, the section renders', async () => {
+    operatorSession();
+    cookieJar.set(TENANT_COOKIE, 'demo-corp');
+    cookieJar.set(ASSUMED_TOKEN_COOKIE, 'assumed');
+    expect(await assumedTokenLapsed()).toBe(false);
+    const html = renderToStaticMarkup(await DomainTenantGate({ section: 'WMS', children: child }));
+    expect(html).toContain('section-body');
+  });
+
+  it('no tenant selected → no hop (that IS «select a tenant»)', async () => {
+    operatorSession();
+    expect(await assumedTokenLapsed()).toBe(false);
+  });
+
+  it('no refresh cookie → no hop (nothing to re-assume from; the notice stays)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'base.iam');
+    cookieJar.set(OPERATOR_COOKIE, 'op');
+    cookieJar.set(TENANT_COOKIE, 'demo-corp');
+    expect(await assumedTokenLapsed()).toBe(false);
+  });
+
+  it('sample visitor → no hop', async () => {
+    expect(await assumedTokenLapsed()).toBe(false);
   });
 });

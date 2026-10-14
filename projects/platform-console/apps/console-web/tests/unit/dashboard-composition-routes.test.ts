@@ -40,7 +40,12 @@ vi.mock('@/shared/lib/finance-default-account-id', () => ({
 
 import { GET as overviewGET } from '@/app/api/console/dashboards/operator-overview/route';
 import { GET as healthGET } from '@/app/api/console/dashboards/domain-health/route';
-import { ACCESS_COOKIE, OPERATOR_COOKIE, TENANT_COOKIE } from '@/shared/lib/session';
+import {
+  ACCESS_COOKIE,
+  OPERATOR_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
+} from '@/shared/lib/session';
 import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 import { OperatorOverviewSchema } from '@/features/operator-overview/api/operator-overview-types';
 import { DomainHealthSchema } from '@/features/domain-health/api/types';
@@ -76,6 +81,9 @@ function fullSession(tenant = 'acme') {
   cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
   cookieJar.set(OPERATOR_COOKIE, 'OP-TOKEN');
   cookieJar.set(TENANT_COOKIE, tenant);
+  // TASK-PC-FE-338 (OD-2): a selected tenant always carries its assumed token (the switch sets both);
+  // without it the domain-facing resolver is fail-closed (null → 401), no base-token fallback.
+  cookieJar.set(ASSUMED_TOKEN_COOKIE, 'GAP-ASSUMED');
 }
 
 beforeEach(() => {

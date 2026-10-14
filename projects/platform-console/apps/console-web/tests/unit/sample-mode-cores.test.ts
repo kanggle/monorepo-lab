@@ -57,7 +57,12 @@ import { callScmGateway, type ScmGatewayProfile } from '@/shared/api/scm-gateway
 import { ApiError } from '@/shared/api/errors';
 import { sampleResponse } from '@/shared/sample/router';
 import { SAMPLE_NOT_READY, SAMPLE_READ_ONLY } from '@/shared/sample/codes';
-import { ACCESS_COOKIE, OPERATOR_COOKIE, TENANT_COOKIE } from '@/shared/lib/session';
+import {
+  ACCESS_COOKIE,
+  OPERATOR_COOKIE,
+  TENANT_COOKIE,
+  ASSUMED_TOKEN_COOKIE,
+} from '@/shared/lib/session';
 
 class TestUnavailable extends Error {
   constructor(
@@ -138,6 +143,9 @@ function authenticate() {
   cookieJar.set(ACCESS_COOKIE, 'access');
   cookieJar.set(OPERATOR_COOKIE, 'operator');
   cookieJar.set(TENANT_COOKIE, 'acme');
+  // TASK-PC-FE-338 (OD-2): a selected tenant always carries its assumed token (the switch sets both);
+  // without it the domain-facing resolver is fail-closed (null → 401), no base-token fallback.
+  cookieJar.set(ASSUMED_TOKEN_COOKIE, 'assumed');
 }
 
 describe('callAdminGateway (iam)', () => {

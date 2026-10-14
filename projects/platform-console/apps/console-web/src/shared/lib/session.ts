@@ -36,6 +36,25 @@ export const TENANT_COOKIE = 'console_active_tenant';
  *  `/api/admin/**` credential (the IAM operator-token boundary § 2.6 is
  *  unchanged). */
 export const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
+
+/**
+ * TASK-PC-FE-338 (ADR-MONO-083 D7 · OD-2 — console contract § 2.7 «Assumed-token TTL
+ * becomes 300 s») — seconds the assumed-token COOKIE expires before the TOKEN does.
+ *
+ * From P3 the assumed token lives 300 s while the base IAM token lives 1800 s, so it
+ * lapses between IAM refreshes. Dropping the cookie a margin early turns «the cookie
+ * is gone» into the re-assume trigger ({@link hasCompleteSession} in
+ * `session-refresh.ts` and the domain section gate): the console re-assumes BEFORE a
+ * domain server could see an expired token, never after.
+ */
+export const ASSUMED_TOKEN_EXPIRY_MARGIN_S = 60;
+
+/** The assumed-token cookie `maxAge` for a token that lives `expiresIn` seconds. */
+export function assumedTokenCookieMaxAge(expiresIn: number): number {
+  if (expiresIn > 2 * ASSUMED_TOKEN_EXPIRY_MARGIN_S) return expiresIn - ASSUMED_TOKEN_EXPIRY_MARGIN_S;
+  // A token too short for the margin keeps half its life (never 0 — a 0 maxAge deletes).
+  return Math.max(1, Math.floor(expiresIn / 2));
+}
 /** The operator's last tenant selection (`<operator sub>|<tenant>`), kept across
  *  logins so the next login can re-assume it (TASK-PC-FE-292). NOT a credential
  *  and NOT the active tenant: only ever a candidate, re-validated against the
@@ -240,7 +259,16 @@ export async function getAssumedToken(): Promise<string | null> {
  * (accounts/audit/operators/dashboards) MUST NOT use this resolver.
  */
 export async function getDomainFacingToken(): Promise<string | null> {
-  return (await getAssumedToken()) ?? (await getAccessToken());
+  const assumed = await getAssumedToken();
+  if (assumed !== null) return assumed;
+  // TASK-PC-FE-338 (OD-2) — 🔴 fail-closed: a SELECTED tenant whose assumed token has
+  // lapsed must never fall back to the base token (that one carries the login
+  // tenant, not the selected one). `null` makes every caller answer `401`, which the
+  // browser client turns into one refresh (= re-assume) + retry, and the domain
+  // section gate turns into the refresh hop. Only a non-switched operator (no tenant
+  // cookie) keeps the base token — net-zero for them.
+  if ((await getActiveTenant()) !== null) return null;
+  return getAccessToken();
 }
 
 /**

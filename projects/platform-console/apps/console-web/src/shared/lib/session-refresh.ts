@@ -9,6 +9,7 @@ import {
   ASSUMED_TOKEN_COOKIE,
   ID_TOKEN_COOKIE,
   tokenCookieOpts,
+  assumedTokenCookieMaxAge,
   clearOperatorSession,
   clearTenantSelection,
 } from '@/shared/lib/session';
@@ -90,7 +91,15 @@ export const REFRESH_RACE_GRACE_MS = 2000;
  *     caller in `shared/api/client.ts` never sees the intermediate hop.
  */
 export function hasCompleteSession(jar: CookieStore): boolean {
-  return Boolean(jar.get(ACCESS_COOKIE)?.value) && Boolean(jar.get(OPERATOR_COOKIE)?.value);
+  if (!jar.get(ACCESS_COOKIE)?.value || !jar.get(OPERATOR_COOKIE)?.value) return false;
+  // TASK-PC-FE-338 (OD-2) — a SELECTED tenant is part of the session: without its
+  // assumed token the session is not complete. The assumed token (300 s from P3)
+  // lapses long before the base token (1800 s), and the `GET` hop returned «complete»
+  // on access + operator alone — so the domain section gate's re-assume hop would
+  // have bounced straight back, forever. Now the refresh runs and re-assumes (or, on
+  // a refused re-assume, drops the tenant), so the hop always converges.
+  if (jar.get(TENANT_COOKIE)?.value && !jar.get(ASSUMED_TOKEN_COOKIE)?.value) return false;
+  return true;
 }
 
 export type RefreshOutcome =
@@ -246,7 +255,7 @@ export async function refreshSessionCookies(
         const assumed = await assumePromise;
         jar.set(ASSUMED_TOKEN_COOKIE, assumed.accessToken, {
           ...tokenCookieOpts,
-          maxAge: assumed.expiresIn,
+          maxAge: assumedTokenCookieMaxAge(assumed.expiresIn),
         });
       } catch {
         clearTenantSelection(jar);

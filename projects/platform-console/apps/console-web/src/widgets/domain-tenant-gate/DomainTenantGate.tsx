@@ -1,11 +1,15 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { getCatalog } from '@/features/catalog';
 import {
   getActiveTenant,
   getAssumedToken,
+  hasRefreshToken,
   isSampleVisitor,
 } from '@/shared/lib/session';
+import { buildSessionRefreshRedirectFor } from '@/shared/lib/login-redirect';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 /**
@@ -93,6 +97,27 @@ async function tenantMismatch(
   }
 }
 
+/**
+ * TASK-PC-FE-338 (ADR-MONO-083 D7 · OD-2 — console contract § 2.7) — a tenant IS selected
+ * but its assumed token has lapsed (its cookie expires {@link ASSUMED_TOKEN_EXPIRY_MARGIN_S}
+ * early on purpose — `ASSUMED_TOKEN_EXPIRY_MARGIN_S` in `shared/lib/session.ts`), and a refresh is possible.
+ *
+ * 🔴 That is not «no tenant selected»: from P3 the assumed token lives 300 s against the
+ * base token's 1800 s, so this is the normal state every five minutes. Showing
+ * «테넌트를 먼저 선택하세요» here would be the downgrade the contract forbids («drop to
+ * that notice only if the re-assume itself is refused»). The gate sends the browser
+ * through the refresh hop instead, which re-assumes; a refused re-assume drops the
+ * tenant there, so the next render shows the notice — the hop cannot loop
+ * (`hasCompleteSession` counts a selected tenant without its assumed token as incomplete).
+ * Without a refresh cookie there is nothing to re-assume from — the notice stays.
+ */
+export async function assumedTokenLapsed(): Promise<boolean> {
+  if (await isSampleVisitor()) return false;
+  if ((await getAssumedToken()) !== null) return false;
+  if ((await getActiveTenant()) === null) return false;
+  return hasRefreshToken();
+}
+
 /** The domain-section layout gate — renders the section, or «테넌트를 선택하세요». */
 export async function DomainTenantGate({
   section,
@@ -114,6 +139,9 @@ export async function DomainTenantGate({
   productKey?: string;
   children: ReactNode;
 }) {
+  if (await assumedTokenLapsed()) {
+    redirect(buildSessionRefreshRedirectFor((await headers()).get('x-pathname')));
+  }
   if (!(await tenantSelectionRequired())) {
     const mismatch = productKey ? await tenantMismatch(productKey) : null;
     if (!mismatch) return <>{children}</>;
