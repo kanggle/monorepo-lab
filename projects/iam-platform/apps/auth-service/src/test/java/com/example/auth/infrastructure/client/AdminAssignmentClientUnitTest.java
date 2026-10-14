@@ -113,6 +113,29 @@ class AdminAssignmentClientUnitTest {
     }
 
     @Test
+    @DisplayName("BE-632: domainRoles array parsed in order")
+    void domainRoles_parsed() {
+        stubBody("{\"assigned\":true,\"mfaRequired\":false,\"domainRoles\":[\"INVENTORY_READ\",\"INVENTORY_WRITE\"]}");
+        assertThat(client.resolveAssignment(SUBJECT, TENANT).domainRoles())
+                .containsExactly("INVENTORY_READ", "INVENTORY_WRITE");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632: domainRoles absent → null · [] → [] — both read as roles 0 downstream, never as «derive»")
+    void domainRoles_absentAndEmpty() {
+        stubBody("{\"assigned\":true,\"mfaRequired\":false}");
+        assertThat(client.resolveAssignment(SUBJECT, TENANT).domainRoles()).isNull();
+        assertThat(AdminAssignmentClient.parseDomainRoles(java.util.List.of())).isEmpty();
+        assertThat(AdminAssignmentClient.parseDomainRoles("INVENTORY_READ")).isNull();
+        java.util.List<Object> mixed = new java.util.ArrayList<>();
+        mixed.add("SCM_OPERATOR");
+        mixed.add(null);
+        mixed.add(7);
+        mixed.add(" ");
+        assertThat(AdminAssignmentClient.parseDomainRoles(mixed)).containsExactly("SCM_OPERATOR");
+    }
+
+    @Test
     @DisplayName("MONO-771 fail-closed: mfaRequired null / non-boolean (\"false\" string) → read as true")
     void mfaRequired_nonBoolean_readAsTrue() {
         assertThat(AdminAssignmentClient.parseMfaRequired(null)).isTrue();

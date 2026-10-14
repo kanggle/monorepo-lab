@@ -21,12 +21,15 @@ import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AccessTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 
+import java.time.Duration;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,6 +82,27 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
 
     /** Customer tenants are enterprise tenants (multi-tenancy.md). */
     static final String CUSTOMER_TENANT_TYPE = "B2B_ENTERPRISE";
+
+    /**
+     * TASK-BE-632 (ADR-MONO-083 D7 · OD-2 default — auth-api.md § Assume-Tenant Exchange
+     * {@code expires_in} 300) — the lifetime of an OPERATOR assumed token. Revoking a business
+     * permission set reaches a live session at the next exchange, so this bounds how long an
+     * already-issued domain token keeps a revoked role. Applied as {@code min(client TTL, this)}
+     * on the operator branch only — the base IAM token, the refresh token and the workload branch
+     * keep their own TTLs. The console re-assumes before it lapses (PC-FE-338 slice c-1).
+     */
+    static final Duration OPERATOR_ASSUMED_TOKEN_TTL = Duration.ofSeconds(300);
+
+    /**
+     * TASK-BE-632 (ADR-MONO-083 D6 · Failure Scenario 3) — registered scopes the OPERATOR assumed
+     * token must not carry. {@code erp.write} (V0023) let any console operator write ERP master
+     * data regardless of role («WRITE = erp.write ∨ operator-role»); with it on the token a
+     * business permission set could not narrow ERP writes. ERP write now rides on the
+     * {@code ERP_OPERATOR} role alone, which the backfill (legacy-compat) gives every existing
+     * operator. The workload branch is untouched — {@code erp-platform-internal-services-client}
+     * keeps its scope.
+     */
+    static final Set<String> OPERATOR_EXCLUDED_SCOPES = Set.of("erp.write");
 
     /**
      * TASK-MONO-771 (auth-api.md § Assume-Tenant Errors, HS-C) — the FIXED {@code error_description} of the
@@ -171,6 +195,7 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         java.util.List<String> orgScope;
         OperatorAssignmentPort.DelegatedScope delegatedScope;
         boolean mfaRequired;
+        java.util.List<String> domainRoles;
         try {
             // TASK-MONO-299 (ADR-MONO-040 Phase 3 part B): account_id-only — the
             // validated `sub` IS the account UUID and admin_operators.oidc_subject is
@@ -185,6 +210,9 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
             // assignment → the BE-338/376 path stays byte-unchanged.
             delegatedScope = assignment.delegatedScope();
             mfaRequired = assignment.mfaRequired();
+            // TASK-BE-632 (ADR-MONO-083 D6): the operator's assigned business roles in this tenant,
+            // pre-intersection. The customizer filters derive(entitled) down to them; null = roles 0.
+            domainRoles = assignment.domainRoles();
         } catch (AssumeTenantDeniedException e) {
             log.debug("assume-tenant: assignment gate denied (fail-closed): {}", e.getMessage());
             throw invalidGrant("operator is not assigned to the selected tenant");
@@ -229,7 +257,8 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // X-User-Id <- sub).
         AssumeTenantAuthenticationToken resolvedGrant = new AssumeTenantAuthenticationToken(
                 clientPrincipal, exchange.getSubjectToken(), exchange.getSubjectTokenType(),
-                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope, oidcSubject, subjectAmr);
+                selectedTenantId, CUSTOMER_TENANT_TYPE, orgScope, delegatedScope, oidcSubject, subjectAmr,
+                domainRoles);
 
         // TASK-BE-336: propagate the client's REGISTERED scopes into the
         // domain-facing token's `scope` claim (was Set.of() — empty). This is
@@ -243,11 +272,15 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // authorization_code token is unchanged (the console requests only
         // openid/profile/email/tenant.read at authorize) — write capability
         // rides ONLY in the tenant-scoped assumed token (least-privilege).
+        // TASK-BE-632 (ADR-MONO-083 D6): ... EXCEPT the domain write scopes in
+        // OPERATOR_EXCLUDED_SCOPES. The paragraph above is history: «erp.write on the assumed token»
+        // was the role-independent ERP write path, which a business permission set cannot narrow.
+        // TASK-BE-632 (OD-2): the operator assumed token lives min(client TTL, 300 s).
         DefaultOAuth2TokenContext.Builder contextBuilder = DefaultOAuth2TokenContext.builder()
-                .registeredClient(registeredClient)
+                .registeredClient(withOperatorAssumedTtl(registeredClient))
                 .principal(clientPrincipal)
                 .authorizationServerContext(AuthorizationServerContextHolder.getContext())
-                .authorizedScopes(registeredClient.getScopes())
+                .authorizedScopes(operatorAssumedScopes(registeredClient))
                 .tokenType(OAuth2TokenType.ACCESS_TOKEN)
                 .authorizationGrantType(AuthorizationGrantType.TOKEN_EXCHANGE)
                 .authorizationGrant(resolvedGrant);
@@ -268,6 +301,31 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
         // No refresh token for the assumed token (short-lived, re-minted per selection).
         return new OAuth2AccessTokenAuthenticationToken(
                 registeredClient, clientPrincipal, accessToken, null, Map.of());
+    }
+
+    /** TASK-BE-632 — the client's registered scopes minus {@link #OPERATOR_EXCLUDED_SCOPES}. */
+    static Set<String> operatorAssumedScopes(RegisteredClient registeredClient) {
+        Set<String> scopes = new LinkedHashSet<>(registeredClient.getScopes());
+        scopes.removeAll(OPERATOR_EXCLUDED_SCOPES);
+        return scopes;
+    }
+
+    /**
+     * TASK-BE-632 (OD-2) — the same client with its access-token TTL capped at
+     * {@link #OPERATOR_ASSUMED_TOKEN_TTL}. A copy used only to mint this token: the registration
+     * itself (and so the base IAM token minted on the authorization_code path) is untouched.
+     */
+    static RegisteredClient withOperatorAssumedTtl(RegisteredClient registeredClient) {
+        TokenSettings settings = registeredClient.getTokenSettings();
+        Duration clientTtl = settings.getAccessTokenTimeToLive();
+        if (clientTtl != null && clientTtl.compareTo(OPERATOR_ASSUMED_TOKEN_TTL) <= 0) {
+            return registeredClient;
+        }
+        return RegisteredClient.from(registeredClient)
+                .tokenSettings(TokenSettings.withSettings(settings.getSettings())
+                        .accessTokenTimeToLive(OPERATOR_ASSUMED_TOKEN_TTL)
+                        .build())
+                .build();
     }
 
     /**

@@ -178,7 +178,26 @@ public class AdminAssignmentClient implements OperatorAssignmentPort {
                 isAssigned,
                 parseOrgScope(body.get("orgScope")),
                 parseDelegatedScope(body.get("delegatedScope")),
-                parseMfaRequired(body.get("mfaRequired")));
+                parseMfaRequired(body.get("mfaRequired")),
+                parseDomainRoles(body.get("domainRoles")));
+    }
+
+    /**
+     * TASK-BE-632 (auth-to-admin.md rule 7 · § failure semantics): {@code domainRoles}. Absent / null /
+     * non-list → {@code null}, which the customizer reads as roles 0 — exactly like {@code []}. Never
+     * a reason to fall back to the subscription. Non-string / null elements are skipped.
+     */
+    static List<String> parseDomainRoles(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        List<String> roles = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element instanceof String role && !role.isBlank()) {
+                roles.add(role);
+            }
+        }
+        return roles;
     }
 
     /** {@code mfaRequired}: only an explicit JSON {@code false} reads as «not required». */

@@ -51,6 +51,14 @@ import org.junit.jupiter.api.Test;
  * <p>Limit (recorded, not testable here): subscriptions can also change at RUNTIME through
  * the admin API on the public demo. This test pins the seeded state.
  *
+ * <p>🔴 <b>TASK-BE-632 (ADR-MONO-083 P3) changed what makes the disclosure true.</b> The assumed
+ * token's {@code roles} are now the operator's ASSIGNED business roles ∩ that derivation (a ceiling).
+ * cs@demo.com keeps exactly the disclosed set only because the demo seed gives it the
+ * {@code legacy-compat} set (= the whole catalog) in {@code ecommerce}
+ * ({@code R__seed_zz_demo_domain_permission_sets.sql}). {@link #csHoldsLegacyCompat()} pins that
+ * premise: drop the row and cs would carry NO domain role, and every sentence of the disclosure
+ * would turn false in silence — the same failure this test exists to stop.
+ *
  * <p>Lives in this package because {@link OperatorRoleDerivation} is package-private. The
  * files it reads are declared as Gradle {@code test} inputs in this module's build.gradle.
  */
@@ -59,6 +67,9 @@ class DemoCsOperatorDerivedRolesTest {
 
     private static final Path CS_OPERATOR_SEED = Path.of("..", "admin-service", "src", "main",
             "resources", "db", "migration-dev", "R__seed_demo_cs_operator.sql");
+    /** TASK-BE-632 — the demo seed that gives cs@demo.com its business permission set. */
+    private static final Path DOMAIN_SET_SEED = Path.of("..", "admin-service", "src", "main",
+            "resources", "db", "migration-dev", "R__seed_zz_demo_domain_permission_sets.sql");
     private static final List<Path> ACCOUNT_MIGRATION_DIRS = List.of(
             Path.of("..", "account-service", "src", "main", "resources", "db", "migration"),
             Path.of("..", "account-service", "src", "main", "resources", "db", "migration-dev"));
@@ -248,5 +259,19 @@ class DemoCsOperatorDerivedRolesTest {
                 .containsExactlyInAnyOrderElementsOf(DISCLOSED_ROLES);
         // The disclosure says «쓰기 포함» — keep that sentence honest in both directions.
         assertThat(derived).contains("OUTBOUND_WRITE", "INBOUND_WRITE", "INVENTORY_WRITE");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-632 premise: cs@demo.com holds the legacy-compat set in the demo seed — without it the derived set is only a ceiling and cs carries no domain role")
+    void csHoldsLegacyCompat() throws IOException {
+        assertThat(DOMAIN_SET_SEED).as("the admin-service domain-set demo seed must be resolvable").exists();
+        String seed = stripComments(Files.readString(DOMAIN_SET_SEED, StandardCharsets.UTF_8));
+        // The statement that inserts legacy-compat MIGRATION rows for the seeded customer operators.
+        Matcher stmt = Pattern.compile(
+                "INSERT INTO operator_domain_set_grant[^;]*?system_key\\s*=\\s*'legacy-compat'[^;]*?"
+                        + "operator_id\\s+IN\\s*\\(([^)]*)\\)[^;]*;",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(seed);
+        assertThat(stmt.find()).as("a legacy-compat INSERT with an operator_id IN (...) list (parser control)").isTrue();
+        assertThat(stmt.group(1)).as("demo-cs must be among the operators given legacy-compat").contains("'demo-cs'");
     }
 }

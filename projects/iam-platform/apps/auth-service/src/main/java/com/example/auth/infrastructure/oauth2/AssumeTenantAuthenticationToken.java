@@ -30,6 +30,7 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
     private final DelegatedScope delegatedScope;
     private final String subjectAccountId;
     private final List<String> subjectAmr;
+    private final List<String> domainRoles;
 
     /**
      * Converter-side constructor — the selected tenant_type is not yet known at
@@ -142,7 +143,28 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
                                            DelegatedScope delegatedScope,
                                            String subjectAccountId,
                                            List<String> subjectAmr) {
+        this(clientPrincipal, subjectToken, subjectTokenType, selectedTenantId, selectedTenantType,
+                orgScope, delegatedScope, subjectAccountId, subjectAmr, null);
+    }
+
+    /**
+     * Provider-side constructor (TASK-BE-632, ADR-MONO-083 D6) — additionally carries the
+     * admin-service {@code domainRoles} (the operator's assigned business roles in the selected
+     * tenant, before the catalog/subscription intersection). {@code null} = the field was absent,
+     * read as roles 0 by the customizer (never as «derive from the subscription»).
+     */
+    public AssumeTenantAuthenticationToken(Authentication clientPrincipal,
+                                           String subjectToken,
+                                           String subjectTokenType,
+                                           String selectedTenantId,
+                                           String selectedTenantType,
+                                           List<String> orgScope,
+                                           DelegatedScope delegatedScope,
+                                           String subjectAccountId,
+                                           List<String> subjectAmr,
+                                           List<String> domainRoles) {
         super(Collections.emptyList());
+        this.domainRoles = domainRoles;
         this.subjectAmr = subjectAmr;
         this.clientPrincipal = clientPrincipal;
         this.subjectToken = subjectToken;
@@ -227,5 +249,14 @@ public class AssumeTenantAuthenticationToken extends AbstractAuthenticationToken
      */
     public List<String> getSubjectAmr() {
         return subjectAmr;
+    }
+
+    /**
+     * TASK-BE-632 — the operator's assigned business roles in the selected tenant (admin-service
+     * {@code domainRoles}), or {@code null} when admin omitted the field. Pre-intersection: the
+     * customizer filters {@code derive(entitled)} down to these, it never carries them verbatim.
+     */
+    public List<String> getDomainRoles() {
+        return domainRoles;
     }
 }

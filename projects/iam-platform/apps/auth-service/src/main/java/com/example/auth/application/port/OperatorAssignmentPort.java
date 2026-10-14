@@ -74,9 +74,22 @@ public interface OperatorAssignmentPort {
      *                       {@code entitled_domains} to {@code host ∩ domains} and sets
      *                       {@code roles} to the delegated {@code roles} verbatim (never
      *                       re-deriving from the entitled domains).
+     * @param domainRoles    TASK-BE-632 (ADR-MONO-083 D6 · auth-to-admin.md rule 7) — the operator's
+     *                       effective business roles in the selected tenant (the union of the domain
+     *                       permission sets assigned to them there, every source), <b>before</b> the
+     *                       catalog/subscription intersection — the customizer intersects it with
+     *                       {@code derive(entitled)}, it never carries it verbatim. {@code null} = the
+     *                       field was absent; it reads exactly like {@code []} (roles 0). There is no
+     *                       branch that turns «absent» into «derive from the subscription».
      */
     record AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope,
-                            boolean mfaRequired) {
+                            boolean mfaRequired, List<String> domainRoles) {
+
+        /** A result without {@code domainRoles} (absent field — roles 0). */
+        public AssignmentResult(boolean assigned, List<String> orgScope, DelegatedScope delegatedScope,
+                                boolean mfaRequired) {
+            this(assigned, orgScope, delegatedScope, mfaRequired, null);
+        }
 
         /**
          * TASK-MONO-771 — a result admin-service answered with {@code mfaRequired=false}. Only for

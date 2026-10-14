@@ -46,8 +46,11 @@ SQL
 
 `operator_token` 이 이 시드의 핵심 발견이다. 데모 계정은 각 도메인 테넌트에서
 `CUSTOMER` 일 뿐이라 `/api/admin/**` 에 그대로 가면 **전부 403** 이다(실측 6/6).
-운영자 권한은 계정에 붙어 있지 않고 **`demo-corp` 를 assume 하는 순간 파생된다**
-(`OperatorRoleDerivation.fromEntitledDomains`). 한 번의 교환으로:
+운영자 도메인 권한은 **`demo-corp` 를 assume 하는 순간 정해진다**. TASK-BE-632(ADR-MONO-083 P3) 부터
+그 값은 **그 테넌트에서 배정된 업무 권한 세트의 역할 ∩ 구독이 허락하는 역할**
+(`OperatorRoleDerivation.fromEntitledDomains` 는 이제 상한)이다. 데모 운영자는 «이전 호환»(legacy-compat
+= 카탈로그 전부) 세트를 가지므로(admin `R__seed_zz_demo_domain_permission_sets.sql`) 결과는 전과 같다.
+세트를 회수하면 이 역할이 사라진다. 한 번의 교환으로:
 
 ```
 roles = [ECOMMERCE_OPERATOR, ERP_OPERATOR, FINANCE_OPERATOR, SCM_OPERATOR,

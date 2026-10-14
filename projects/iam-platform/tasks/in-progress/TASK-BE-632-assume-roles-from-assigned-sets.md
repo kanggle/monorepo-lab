@@ -8,7 +8,7 @@ TASK-BE-632
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -87,3 +87,56 @@ backend
 2. 파생 코드를 «폴백» 으로 남긴다 — 판정 장애가 업무 전체 권한이 된다.
 3. 역할만 바꾸고 `erp.write` 를 둔다 — ERP 쓰기가 세트와 무관하게 열린 채다.
 4. 백필 완료 판정 없이 배포 — 백필 빠진 운영자가 업무 0 이 된다.
+
+---
+
+# Implementation Record (2026-10-14 UTC)
+
+## AC-0: re-measurement
+
+- **Entry points for operator domain roles are still two**: the normal assume (`TenantClaimTokenCustomizer#customizeForAssumeTenant`, after `populateEntitledDomains`) and partnership (`delegatedScope != null` → `applyCrossOrgCap`, then return). The workload branch carries no derived roles (`customizeForWorkloadAssumeTenant`).
+- **`erp.write`**: registered on the console client in V0023. `AssumeTenantAuthenticationProvider` put every registered scope of the client onto the assumed token's `authorizedScopes`. ERP checks writes as `RoleScopeAuthorizationAdapter` WRITE = `erp.write ∨ isOperator()` (ERP_OPERATOR · ERP_ADMIN · SUPER_ADMIN). Removing `erp.write` therefore leaves ERP writes open only to holders of `ERP_OPERATOR`.
+- **Catalog equality**: admin `DomainRoleCatalog` (14 roles) = auth `OperatorRoleDerivation` (union over every domain) = 14 roles. ⇒ The legacy-compat holder's `roles` are **byte-identical** to before (derive order is kept).
+- 🔴 **Operators seeded after Flyway**: the V0052 backfill only sees operators that exist when it runs. Three runtime seeds load **after** admin Flyway:
+  - `tests/federation-hardening-e2e/fixtures/seed.sql` (nightly federation)
+  - `console-web/tests/e2e/fixtures/seed.sql` (nightly console)
+  - `scripts/console-demo/seed/01-iam.sql`
+
+  The operators they seed hold **no sets**. With P3 alone they would carry no domain role and their domain calls would 403 (e.g. `scm-inbound-expected-loop.spec.ts` INBOUND_READ). ⇒ I appended the same legacy-compat rows the backfill would have written to all three files. The demo `R__` seeds were already covered by BE-631 `R__seed_zz_demo_domain_permission_sets.sql`.
+- **OD-3 control**: a `'*'` operator has its `domainRoles` computed by admin from the `'*'` rows. The auth path is the same as for a normal operator (no extra code).
+- **External pins citing the derivation**: grepping finds 62 files. Classified:
+  - **(changed here)** auth unit tests, ITs and `DemoCsOperatorDerivedRolesTest`; the federation spec comments; the demo seed README and `lib.sh`; the three runtime seeds.
+  - **(contracts — no change needed)** P1 already split the wording into «from the P3 deploy» and «before deploy (now)».
+  - **(handed off)** `console-web permission-map.ts:24, 249 · 556 · 612 · 636 · 694`. The drift test only checks that the file exists. The guide wording (domain row = derived) is switched by `TASK-PC-FE-338` c-2 after P3 is deployed.
+  - **(left as is)** Explanations in other domains such as «operators hold SCM_OPERATOR» stay true for legacy-compat holders.
+
+## Changes
+
+- `OperatorAssignmentPort.AssignmentResult` gains `domainRoles` (null = absent = roles 0).
+- `AdminAssignmentClient.parseDomainRoles` and the `AssumeTenantAuthenticationToken` constructor/getter carry it through.
+- `TenantClaimTokenCustomizer`: on the normal path `roles = assignedWithinCeiling(domainRoles, OperatorRoleDerivation.fromEntitledDomains(entitled))`.
+  - The order is the ceiling's order.
+  - null, `[]`, an empty ceiling, or no overlap → the claim is omitted.
+  - **No branch falls back to the subscription.**
+- `OperatorRoleDerivation`: the javadoc now states it is a **ceiling** and must move together with admin `DomainRoleCatalog` (code unchanged).
+- `AssumeTenantAuthenticationProvider` (operator branch only):
+  - `authorizedScopes` = registered scopes − `{erp.write}`;
+  - access-token TTL = `min(client, 300 s)` via a copy of `RegisteredClient`, so the base token, refresh token and workload branch are unchanged.
+
+## AC status
+
+- [x] **AC-0** — above.
+- [x] **AC-1** — Customizer unit tests: inventory set on a WMS+SCM tenant → exactly `INVENTORY_READ`/`INVENTORY_WRITE`. Outbound set → `OUTBOUND_*`, SCM set → `SCM_OPERATOR`, read set → `*_READ`. IT on the wire: `roles` == `["INVENTORY_READ","INVENTORY_WRITE"]`.
+- [x] **AC-2** — Unit: a set whose domain is unsubscribed → that role is dropped; only unsubscribed roles → claim omitted. (The org-node ceiling is computed by account-service inside `entitled_domains`, so it is the same intersection.)
+- [x] **AC-3** — Unit: `[]`, absent and entitled-empty → claim omitted. IT: a fully subscribed tenant with `[]` → no `roles`. A failed judgement call → `invalid_grant` is the existing fail-closed path (no change, existing tests).
+- [ ] **AC-4** — Unit: a legacy-compat holder yields the same bytes as the old derivation. Rows for operators invited after the backfill are proven by BE-631 (0 rows). ⚪ **Live «byte-identical before and after the switch» is not measured** (needs deployment). Closed once the demo window is measured.
+- [ ] **AC-5** — Unit: the operator assumed scope has no `erp.write`, and the registration itself keeps it. IT: the assumed token's `scope` has no `erp.write` (the old `contains` assertion flipped). ⚪ **Live ERP writes not measured**: 403 without an ERP set, 200 with one, 200 for the workload client. Needs deployment.
+- [ ] **AC-6** — ⚪ Revocation-latency measurement is live-only (once the token TTL is 300 s, an existing token turns 403 at most 300 s after revocation). Not measured before deployment.
+- [x] **AC-7** — Unit: a partnership grant with the whole catalog in `domainRoles` → `roles` = `delegatedScope.roles` exactly. The partnership IT is unchanged.
+- [ ] **AC-8** — ⚪ Deployment status recorded separately (below).
+
+## Deployment gates (all must hold before deploy)
+
+1. `TASK-BE-631` V0052 is applied on demo/production, and the backfill completeness SQL (BE-631 data-model.md) measures **0 live**.
+2. The console `808fa9e84` (PC-FE-338 c-1) or later is a **Production deployment `success`** — **met** (2026-10-14 01:59Z, measured).
+3. This PR is merged, then the AMI is baked and the demo window opens. Rollback = a deploy that reverts this PR (ADR D8, no switch flag).
