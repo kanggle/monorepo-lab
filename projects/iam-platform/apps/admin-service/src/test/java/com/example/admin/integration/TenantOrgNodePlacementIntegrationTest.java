@@ -381,9 +381,11 @@ class TenantOrgNodePlacementIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void grantNodeRole(String uuid, String roleName, String orgNodeId) {
+        // TASK-BE-633 (V0053): a node row's source is 'NODE' (ck_admin_operator_roles_node_source).
         jdbcTemplate.update("""
-                INSERT IGNORE INTO admin_operator_roles (operator_id, role_id, tenant_id, org_node_id, granted_at, granted_by)
-                SELECT o.id, r.id, o.tenant_id, ?, NOW(6), NULL
+                INSERT IGNORE INTO admin_operator_roles
+                  (operator_id, role_id, tenant_id, org_node_id, granted_at, granted_by, source_key)
+                SELECT o.id, r.id, o.tenant_id, ?, NOW(6), NULL, 'NODE'
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = ?
                 """, orgNodeId, uuid, roleName);

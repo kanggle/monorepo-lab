@@ -212,13 +212,15 @@ class OperatorMembershipWriteAxisIntegrationTest extends AbstractIntegrationTest
         addGroupMember(groupId, FANNED, 2);       // fans out U and W (V already held → skip)
         Long groupInternalId = jdbc.queryForObject(
                 "SELECT id FROM operator_group WHERE group_id = ?", Long.class, groupId);
-        // a role row G produced in U (the shape a pre-S4 fan-out left behind — post-S4 role fan-out lands in A)
+        // a role row G produced in U (the shape a pre-S4 fan-out left behind — post-S4 role fan-out lands in A);
+        // TASK-BE-633 (V0053): with its source, as V0053 derived it for such a row
         jdbc.update("""
-                INSERT INTO admin_operator_roles (operator_id, role_id, tenant_id, granted_at, granted_by, group_origin)
-                SELECT o.id, r.id, ?, NOW(6), NULL, ?
+                INSERT INTO admin_operator_roles
+                  (operator_id, role_id, tenant_id, granted_at, granted_by, group_origin, source_key)
+                SELECT o.id, r.id, ?, NOW(6), NULL, ?, CONCAT('GROUP:', ?)
                   FROM admin_operators o CROSS JOIN admin_roles r
                  WHERE o.operator_id = ? AND r.name = 'SUPPORT_LOCK'
-                """, U, groupInternalId, FANNED);
+                """, U, groupInternalId, groupInternalId, FANNED);
         assertThat(groupAssignment(FANNED, U)).as("precondition: G's U membership").isEqualTo(String.valueOf(groupInternalId));
         assertThat(groupAssignment(FANNED, V)).as("precondition: V held directly").isEqualTo("-");
         assertThat(groupAssignment(FANNED, W)).as("precondition: G's W membership").isEqualTo(String.valueOf(groupInternalId));

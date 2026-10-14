@@ -79,15 +79,47 @@ public class AdminOperatorRoleJpaEntity {
     @Column(name = "group_origin")
     private Long groupOrigin;
 
+    /** {@link #sourceKey} of a direct grant (role PATCH · invitation · onboarding · operator creation · seeds). */
+    public static final String SOURCE_DIRECT = "DIRECT";
+
+    /** {@link #sourceKey} of an org-node grant ({@link #orgNodeId} set). */
+    public static final String SOURCE_NODE = "NODE";
+
+    private static final String SOURCE_GROUP_PREFIX = "GROUP:";
+
     /**
-     * Sole factory. {@code tenantId} MUST equal the bound operator's
-     * {@code admin_operators.tenant_id} (per-tenant binding invariant —
-     * data-model.md §admin_operator_roles; ADR-002).
+     * TASK-BE-633 (Flyway V0053) — WHERE THIS ROW CAME FROM, and part of the PRIMARY KEY:
+     * {@value #SOURCE_DIRECT} | {@value #SOURCE_NODE} | {@code GROUP:<operator_group.id>}.
+     *
+     * <p>Before V0053 the key was {@code (operator_id, role_id, tenant_id)} and the origin lived only in
+     * {@link #groupOrigin} / {@link #orgNodeId}: the first writer owned the row, so G1's revoke took away the role
+     * G2 still granted, and a direct / node save over a group row was a JPA merge that silently rewrote the row's
+     * origin. Now each source is its own row — the same role from direct + G1 + G2 is three rows, and revoking one
+     * source deletes that source's row only. Readers de-duplicate (evaluation unions the role ids).
+     *
+     * <p>Set only by the factories below, together with {@link #groupOrigin} / {@link #orgNodeId}, so the two can
+     * never disagree ({@code ck_admin_operator_roles_node_source} also pins NODE ⟺ {@code org_node_id}).
+     */
+    @Id
+    @Column(name = "source_key", length = 48, nullable = false)
+    private String sourceKey;
+
+    /** The {@link #sourceKey} of operator_group {@code groupInternalId}'s fan-out rows. */
+    public static String groupSource(Long groupInternalId) {
+        if (groupInternalId == null) {
+            throw new IllegalArgumentException("groupInternalId is required for a group source key");
+        }
+        return SOURCE_GROUP_PREFIX + groupInternalId;
+    }
+
+    /**
+     * Factory of a DIRECT grant ({@code source_key = 'DIRECT'}). {@code tenantId} is the company the role lives in
+     * (TASK-MONO-784 D-1 — no longer necessarily the operator's home).
      *
      * <p>TASK-BE-289 WI-2 removed the legacy 4-arg overload that silently
      * defaulted {@code tenant_id} to {@code "fan-platform"} — that hidden
      * default caused the TASK-BE-288 review Finding 1 regression. Callers must
-     * now pass the operator's tenant explicitly so the foot-gun cannot recur.
+     * now pass the tenant explicitly so the foot-gun cannot recur.
      */
     public static AdminOperatorRoleJpaEntity create(Long operatorId, Long roleId,
                                                     Instant grantedAt, Long grantedBy,
@@ -98,6 +130,7 @@ public class AdminOperatorRoleJpaEntity {
         e.grantedAt = grantedAt;
         e.grantedBy = grantedBy;
         e.tenantId = tenantId;
+        e.sourceKey = SOURCE_DIRECT;
         return e;
     }
 
@@ -126,6 +159,7 @@ public class AdminOperatorRoleJpaEntity {
         }
         AdminOperatorRoleJpaEntity e = create(operatorId, roleId, grantedAt, grantedBy, tenantId);
         e.orgNodeId = orgNodeId;
+        e.sourceKey = SOURCE_NODE;
         return e;
     }
 
@@ -145,31 +179,41 @@ public class AdminOperatorRoleJpaEntity {
         }
         AdminOperatorRoleJpaEntity e = create(operatorId, roleId, grantedAt, grantedBy, tenantId);
         e.groupOrigin = groupOrigin;
+        e.sourceKey = groupSource(groupOrigin);
         return e;
     }
 
+    /** {@code true} for a DIRECT grant row ({@code source_key = 'DIRECT'}). */
+    public boolean isDirect() {
+        return SOURCE_DIRECT.equals(sourceKey);
+    }
+
     /**
-     * Composite id {@code (operator_id, role_id, tenant_id)} — TASK-MONO-784 S2 (V0051). Before 784 it was
-     * {@code (operator_id, role_id)}; the 2-arg constructor is gone on purpose so no caller can build a key
-     * that silently ignores the company.
+     * Composite id {@code (operator_id, role_id, tenant_id, source_key)} — TASK-BE-633 (V0053). Before it was
+     * {@code (operator_id, role_id, tenant_id)} (TASK-MONO-784 S2 · V0051) and before that
+     * {@code (operator_id, role_id)}; each narrower constructor is gone on purpose so no caller can build a key that
+     * silently ignores the company or the source.
      */
     public static class PK implements Serializable {
         private Long operatorId;
         private Long roleId;
         private String tenantId;
+        private String sourceKey;
         public PK() {}
-        public PK(Long operatorId, Long roleId, String tenantId) {
+        public PK(Long operatorId, Long roleId, String tenantId, String sourceKey) {
             this.operatorId = operatorId;
             this.roleId = roleId;
             this.tenantId = tenantId;
+            this.sourceKey = sourceKey;
         }
         @Override public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof PK pk)) return false;
             return Objects.equals(operatorId, pk.operatorId)
                     && Objects.equals(roleId, pk.roleId)
-                    && Objects.equals(tenantId, pk.tenantId);
+                    && Objects.equals(tenantId, pk.tenantId)
+                    && Objects.equals(sourceKey, pk.sourceKey);
         }
-        @Override public int hashCode() { return Objects.hash(operatorId, roleId, tenantId); }
+        @Override public int hashCode() { return Objects.hash(operatorId, roleId, tenantId, sourceKey); }
     }
 }
