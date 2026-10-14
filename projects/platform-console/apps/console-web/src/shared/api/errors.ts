@@ -832,7 +832,7 @@ export class TenantsUnavailableError extends Error {
  * `403 ORG_NODE_SELF_CEILING_DENIED`, `404 ORG_NODE_NOT_FOUND` — also returned
  * for any node outside the actor's reach, existence never leaked,
  * `422 ORG_NODE_CYCLE`/`ORG_NODE_DEPTH_EXCEEDED`/`ORG_NODE_CEILING_NOT_SUBSET`/
- * `ORG_NODE_NOT_EMPTY`/`ORG_ADMIN_GRANT_OUT_OF_CEILING`,
+ * `ORG_NODE_NOT_EMPTY`/`ORG_ADMIN_GRANT_OUT_OF_CEILING`/`ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`,
  * `400 VALIDATION_ERROR`) are raised as {@link ApiError} so the UI renders an
  * inline actionable message without crashing. No token / org PII is ever
  * placed in this error.
@@ -1186,6 +1186,11 @@ const MESSAGES: Record<string, string> = {
     '자식 노드 또는 소속 테넌트가 있어 삭제할 수 없습니다. 먼저 비운 뒤 삭제하세요.',
   ORG_ADMIN_GRANT_OUT_OF_CEILING:
     '이 노드의 유효 상한이 비어 있어(어떤 도메인도 허용하지 않음) 관리자를 배정할 수 없습니다. 상위 노드의 상한을 확인하세요.',
+  // TASK-PC-FE-340 — iam TASK-BE-636 ③: the grant row is recorded under the target's
+  // home company, so a target exported from that company is refused (422). Without this
+  // entry the server's English message (raw operator / tenant ids) reached the screen.
+  ORG_ADMIN_GRANT_TARGET_NOT_MEMBER:
+    '이 운영자는 홈 회사의 소속이 아니어서(그 회사에서 내보내짐) 노드 관리자로 배정할 수 없습니다.',
   ORG_MANAGE_REQUIRED:
     '조직 계층 관리는 org.manage 권한이 필요합니다 (SUPER_ADMIN 또는 상위 노드의 ORG_ADMIN).',
   // --- operator groups (TASK-PC-FE-250 / ADR-MONO-046) ---------------------
