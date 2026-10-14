@@ -8,7 +8,7 @@ Gaps TASK-BE-633 left: **tenant-assignment fan-out still has a single owner** (r
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -131,3 +131,10 @@ Integration lane «iam A», run 38575551475 / job 115891686199, read from the jo
 - Neighbours unchanged: `AdminRoleSourceIntegrationTest` 10 · `OrgNodeAdminIntegrationTest` 15 · `OperatorMembershipWriteAxisIntegrationTest` 5 · `GroupAdminIntegrationTest` 5 PASSED. 0 FAILED anywhere in the lane · `BUILD SUCCESSFUL`.
 - Unit (local): `:admin-service:test` rc=0, 1330 tests, 0 failures. Guards (staged): the three required task guards · both error-code registries rc=0.
 - ⚪ Production: not yet applied — rides the next AMI bake (owner decision 1). No migration, so there is no pre-deploy query. Live check → `TASK-MONO-672` run order.
+
+## Close (2026-10-14 UTC)
+
+- #4357 → `2d3a0661d` (squash, merged 14:12:06Z). `origin/main` tip = that commit.
+- 0 failing checks at merge: 34 pass · 35 skipping. The four required checks passed (`changes` · INDEX queue drift · Task ID collision · Walkthrough ledger drift), as did «iam A» and «iam B».
+- Measurement order: first commit (IT only + old code) **9 FAILED at the defect assertion + 3 controls PASSED** → fix commit **12 PASSED** (lane log, job 115891686199).
+- Live check → `TASK-MONO-672` § Bake contents / Order step 5 (added in this close).
