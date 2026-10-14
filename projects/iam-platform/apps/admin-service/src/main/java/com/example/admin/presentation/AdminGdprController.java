@@ -14,6 +14,7 @@ import com.example.admin.presentation.aspect.RequiresPermission;
 import com.example.admin.presentation.dto.GdprDeleteRequest;
 import com.example.admin.presentation.dto.GdprDeleteResponse;
 import com.example.admin.presentation.dto.DataExportResponse;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -34,7 +35,9 @@ public class AdminGdprController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("Idempotency-Key")
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @RequestBody(required = false) GdprDeleteRequest body) {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());

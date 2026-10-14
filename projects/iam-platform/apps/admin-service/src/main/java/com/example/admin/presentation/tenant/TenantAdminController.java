@@ -1,5 +1,6 @@
 package com.example.admin.presentation.tenant;
 
+import com.example.admin.presentation.ClientIdempotencyKey;
 import com.example.admin.application.TenantScopeGuard;
 import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.application.tenant.CreateTenantUseCase;
@@ -75,7 +76,11 @@ public class TenantAdminController {
     @RequiresPermission(Permission.TENANT_MANAGE)
     public ResponseEntity<TenantResponse> createTenant(
             @RequestHeader("X-Operator-Reason") String reason,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            // TASK-BE-635: CreateTenantUseCase stores this verbatim in admin_actions.idempotency_key
+            // VARCHAR(100) (or a random UUID fallback when absent — always ≤100).
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @Valid @RequestBody CreateTenantRequest request) {
 
         OperatorContext operator = OperatorContextHolder.require();
@@ -104,7 +109,13 @@ public class TenantAdminController {
     public ResponseEntity<TenantResponse> updateTenant(
             @PathVariable String tenantId,
             @RequestHeader("X-Operator-Reason") String reason,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            // TASK-BE-635: UpdateTenantUseCase appends ":status" (7 chars) to this for the status-change audit
+            // row when both displayName and status change — bound to TENANT_UPDATE_HEADER_MAX (93), not the
+            // general 100, so the suffixed form still fits admin_actions.idempotency_key VARCHAR(100).
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            @Size(max = ClientIdempotencyKey.TENANT_UPDATE_HEADER_MAX,
+                    message = "Idempotency-Key must be ≤93 characters")
+            String idempotencyKey,
             @Valid @RequestBody UpdateTenantRequest request) {
 
         OperatorContext operator = OperatorContextHolder.require();

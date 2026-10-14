@@ -12,9 +12,11 @@ import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
 import com.example.admin.presentation.dto.AuditQueryResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +29,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/audit")
 @RequiredArgsConstructor
+@Validated
 public class AuditController {
 
     private static final String COMPOSITE_AUDIT_PERMISSION =
@@ -58,7 +61,12 @@ public class AuditController {
             @RequestParam(required = false) String tenantId,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            // TASK-BE-635: bounded for guard consistency. This parameter is read into QueryAuditCommand but
+            // never consulted by AuditQueryUseCase (a GET has no audit-row key to overflow) — kept so a future
+            // wiring of it doesn't silently inherit an unbounded value.
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @RequestHeader(value = "X-Operator-Reason", required = false) String reason,
             HttpServletRequest request) {
 

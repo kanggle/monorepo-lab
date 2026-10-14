@@ -287,6 +287,24 @@ class TenantAdminControllerSliceTest {
     }
 
     @Test
+    void create_tenant_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: CreateTenantUseCase stores this verbatim — was 500 AUDIT_FAILURE.
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+
+        mockMvc.perform(post("/api/admin/tenants")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "onboard wms tenant")
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void create_tenant_duplicate_returns_409_tenant_already_exists() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
@@ -324,6 +342,25 @@ class TenantAdminControllerSliceTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
+    }
+
+    @Test
+    void patch_tenant_idempotency_key_over_93_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: UpdateTenantUseCase appends ":status" (7 chars) to this header for the
+        // status-change audit row — bound is 93, not 100, so the suffixed form still fits the column.
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+
+        mockMvc.perform(patch("/api/admin/tenants/wms-test")
+                        .header("Authorization", superAdminToken())
+                        .header("X-Operator-Reason", "suspend wms tenant")
+                        .header("Idempotency-Key", "k".repeat(94))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"SUSPENDED"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test

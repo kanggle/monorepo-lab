@@ -12,8 +12,10 @@ import com.example.admin.infrastructure.security.OperatorContextHolder;
 import com.example.admin.presentation.aspect.RequiresPermission;
 import com.example.admin.presentation.dto.RevokeSessionRequest;
 import com.example.admin.presentation.dto.RevokeSessionResponse;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/sessions")
 @RequiredArgsConstructor
+@Validated
 public class SessionAdminController {
 
     private final SessionAdminUseCase useCase;
@@ -35,7 +38,9 @@ public class SessionAdminController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("Idempotency-Key")
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @RequestBody(required = false) RevokeSessionRequest body) {
 
         String reason = headerReason != null && !headerReason.isBlank()

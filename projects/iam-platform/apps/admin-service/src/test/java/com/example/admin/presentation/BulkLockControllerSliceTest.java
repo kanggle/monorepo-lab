@@ -160,14 +160,46 @@ class BulkLockControllerSliceTest {
     }
 
     @Test
-    void bulk_lock_idempotency_key_over_64_chars_returns_400_validation_error() throws Exception {
-        String longKey = "k".repeat(65);
+    void bulk_lock_idempotency_key_over_63_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: bound lowered 64 -> 63. 64 + ":" + a 36-char accountId = 101, 1 over
+        // admin_actions.idempotency_key VARCHAR(100); 63 + 1 + 36 = 100 fits exactly.
+        String longKey = "k".repeat(64);
         mockMvc.perform(post("/api/admin/accounts/bulk-lock")
                         .header("Authorization", bearer())
                         .header("Idempotency-Key", longKey)
                         .header("X-Operator-Reason", "incident-size")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"accountIds\":[\"a\"],\"reason\":\"fraud-wave\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void bulk_lock_idempotency_key_at_63_chars_is_accepted() throws Exception {
+        // Boundary control: 63 is still valid (reaches the use case).
+        when(bulkLockUseCase.execute(any())).thenReturn(new BulkLockAccountResult(List.of(
+                new BulkLockAccountResult.Item("a", "LOCKED", null, null)), false));
+        String key = "k".repeat(63);
+        mockMvc.perform(post("/api/admin/accounts/bulk-lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", key)
+                        .header("X-Operator-Reason", "incident-size-ok")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountIds\":[\"a\"],\"reason\":\"fraud-wave\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void bulk_lock_accountId_over_36_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635 AC-2: the per-row key is "header:" + accountId; an over-length accountId
+        // overflows the audit column regardless of the header's own length.
+        String longAccountId = "a".repeat(37);
+        mockMvc.perform(post("/api/admin/accounts/bulk-lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "idemp-long-acc")
+                        .header("X-Operator-Reason", "incident-acc")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountIds\":[\"" + longAccountId + "\"],\"reason\":\"fraud-wave\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
