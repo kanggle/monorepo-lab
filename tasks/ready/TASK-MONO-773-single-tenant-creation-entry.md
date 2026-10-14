@@ -28,6 +28,16 @@ monorepo
 
 # Dependency Markers
 
+- 🔴 **Owner decision (2026-10-15 UTC) — start date gate.** Start this ticket only after this sequence:
+  1. Re-bake window: backfill gate passes · `TASK-BE-632` AC-4~8 checked live · `TASK-MONO-784` ⚪② checked live.
+  2. `TASK-MONO-784` and `TASK-BE-632` move to `done/`.
+  3. Then start 773.
+
+  The earlier option — rewrite the 784 prerequisite as «S1~S6 merged + nightly green» and start at once — is **rejected**, for three reasons:
+  - AC-2 · AC-3 assert P3 behaviour (assume `roles` = sets), and P3 can still be rolled back at the backfill gate (revert of #4351).
+  - «Second company» *is* 784's mechanism, which is not yet checked live.
+  - Merging 773's backend before the bake would ride the same AMI and blur what the window measures.
+
 - **선행**: `TASK-MONO-772` `done/` — `SUPER_ADMIN` 이 남을 첫 관리자로 지정하는 길은 D6 초대가 있어야 하고, 운영자 아닌 풀 계정의 콘솔 세션도 772 의 토큰 경로 위에 선다.
 - **선행**: `ADR-MONO-083` ACCEPTED — A(2026-10-14 UTC) **P9** · `TASK-BE-631` 머지(세트 · 배정 모델 — 생성자 기본 세트를 쓸 자리) — 🔴 OD-5 기본값(구현자 선택): 회사 생성자에게 **새 테넌트의 entitled 도메인 «전체 업무» 세트**를 준다(ADR-044 D2 — 새 테넌트에만). 이것이 없으면 ADR-083 P3 뒤 생성자는 자기 회사에서 업무 권한 0 으로 시작한다. AC-2 · AC-3 이 그 단언을 싣는다.
 - **선행**: `TASK-MONO-784` `done/` — `ADR-MONO-082` ACCEPTED — **b**(2026-10-10 UTC). «두 번째 회사» 는 기존 운영자 행에 새 테넌트 소속(역할 행 + 배정)을 더하는 것이고, 그 기전(두 409 → 소속 추가 · 회사별 권한 평가)이 784 다.

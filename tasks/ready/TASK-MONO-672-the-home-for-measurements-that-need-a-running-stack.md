@@ -1932,3 +1932,4 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
 
 ## When the window ends
 Move each ticket that closed from review → done (four dimensions), and clear the closed entries from the window memory (`project_demo_window_27_pending_checks`).
+🔵 Once `TASK-MONO-784` **and** `TASK-BE-632` are in `done/`, `TASK-MONO-773` may start (owner decision 2026-10-15 UTC — gate recorded in 773's Dependency Markers). Not before.
