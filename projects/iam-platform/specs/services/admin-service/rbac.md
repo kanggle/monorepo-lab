@@ -510,7 +510,7 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 - **그룹** (ADR-046 D2 fan-out 유지): 그룹 세트는 **그룹 테넌트에만** 행을 만든다. 그룹 세트 배정 · 회수는 `domain_access.manage`, 멤버 추가 · 제거 · 그룹 삭제(`group.manage`)는 같은 트랜잭션에서 그 그룹 출처 행을 만들고 지운다(🔴 **업무 세트가 올라간 그룹의 멤버 추가는 `group.manage` + `domain_access.manage`** — 멤버 추가가 새 사람에게 업무 권한을 주므로, `group.manage` 만 가진 역할이 D5 를 우회하지 못하게 한다 · 멤버 제거 · 그룹 삭제는 `group.manage` 만 — admin-api § POST …/members).
 - **파트너십 경로**: 파트너 운영자의 호스트 테넌트 세트 행은 assume 판정이 **읽지 않는다**(위임 상한 `delegated ∩ participant ∩ host-holds` 를 넓히지 않는다 — 아래 Cross-Org 절 그대로).
 - **감사**: `DOMAIN_PERMISSION_SET_CREATE` · `DOMAIN_PERMISSION_SET_UPDATE` · `DOMAIN_PERMISSION_SET_DELETE` · `OPERATOR_DOMAIN_SET_GRANT` · `OPERATOR_DOMAIN_SET_REVOKE` · `GROUP_DOMAIN_SET_GRANT` · `GROUP_DOMAIN_SET_REVOKE`, `permission_used=domain_access.manage`. 거절 = `AdminActionDenyWriter` DENIED row(fail-closed). GET 성공은 감사 행 없음.
-- **회수 지연** (ADR-083 D7): 모든 변경은 **다음 assume 교환부터** 토큰에 반영된다. 발급된 assume 토큰은 `exp`(P3 뒤 최대 300초)까지 그대로다 — «즉시 회수» 라고 쓰지 않는다.
+- **회수 지연** (ADR-083 D7): 모든 변경은 **다음 assume 교환부터** 토큰에 반영된다. 발급된 assume 토큰은 `exp`(P3 뒤 최대 300초) + 리소스 서버의 만료 허용 오차 60초까지 그대로다(최대 약 360초 — `auth-api.md` § 회수 지연) — «즉시 회수» 라고 쓰지 않는다.
 
 **NET-ZERO (P2 단독)**: P2 는 표 · API · 백필 · `domainRoles` 를 만들지만 auth-service 가 그 값을 읽지 않으므로(P3 전) 어떤 토큰도 바뀌지 않는다.
 

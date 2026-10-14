@@ -179,7 +179,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 >
 > **TTL — 300초 (`TASK-MONO-791` · ADR-MONO-083 D7 · OD-2 기본값 «(나) assume 토큰만 짧게» — 구현 P3 `TASK-BE-632`)**: 운영자 assume 토큰의 `expires_in` = **300**. 🔴 **P3 배포 전(지금)에는 1800** 이다(콘솔 클라이언트의 access-token TTL 을 그대로 쓴다 — 위 예시의 `300` 은 P3 뒤의 값). 기본 IAM 토큰 · 리프레시 토큰의 TTL 은 바꾸지 않는다. 리프레시는 여전히 없다 — 만료 전에 **다시 교환**하는 것이 클라이언트의 몫이다(콘솔: [console-integration-contract.md § 2.7](../../../../platform-console/specs/contracts/console-integration-contract.md)).
 >
-> 🔴 **회수 지연 (ADR-MONO-083 D7 — 이 문장을 그대로 쓴다)**: 업무 권한 세트 회수 · 그룹 탈퇴 · 운영자 정지 · 구독 해지 · 세트 구성 변경 · «이 회사에서 내보내기» 는 **다음 assume 교환부터** 반영된다. **이미 발급된 assume 토큰은 자기 `exp` 까지 그대로 쓰인다** — 최대 300초(P3 뒤) · 최대 1800초(P3 전). assume 토큰은 저장하지 않으므로 `/oauth2/revoke` 대상이 아니고, 도메인 게이트웨이는 JWKS 로컬 검증만 한다. «즉시 회수» 가 아니다.
+> 🔴 **회수 지연 (ADR-MONO-083 D7 — 이 문장을 그대로 쓴다)**: 업무 권한 세트 회수 · 그룹 탈퇴 · 운영자 정지 · 구독 해지 · 세트 구성 변경 · «이 회사에서 내보내기» 는 **다음 assume 교환부터** 반영된다. **이미 발급된 assume 토큰은 자기 `exp` 에 리소스 서버의 만료 허용 오차(60초)를 더한 시각까지 그대로 쓰인다** — 최대 약 360초(P3 뒤, `exp` 300초 + 60초) · 최대 약 1860초(P3 전). 60초는 공유 라이브러리가 인자 없이 만드는 Spring `JwtTimestampValidator` 의 기본 clock skew 다(`libs/java-security-servlet` `ResourceServerChainAssembler` · `libs/java-gateway` `GatewayJwtDecoders`) — 27차 데모 창 실측 `exp` + 62 s · + 63 s(`TASK-BE-632` AC-6, 소유자 결정 2026-10-15: 오차를 줄이지 않고 문장을 고친다). assume 토큰은 저장하지 않으므로 `/oauth2/revoke` 대상이 아니고, 도메인 게이트웨이는 JWKS 로컬 검증만 한다. «즉시 회수» 가 아니다.
 
 **Assumed Token Claims**:
 
