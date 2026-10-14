@@ -151,13 +151,13 @@ public class GroupAdminUseCase {
         // Cascade-revoke every group_origin fan-out row (audit/outbox atomicity, D5/D6) BEFORE
         // deleting the group. Direct grants (group_origin IS NULL) are untouched. The FK
         // ON DELETE CASCADE is only the DB backstop; the application does it explicitly.
-        int keptAsDirect = fanOut.revokeGroupFanOut(group.getId(), resolveMembers(group));
+        GroupFanOutService.RevokeOutcome outcome = fanOut.revokeGroupFanOut(group.getId(), resolveMembers(group));
         // ADR-083 D4: every GROUP:<this group> set row and the group's set templates, in this transaction (the
         // FK ON DELETE CASCADE on group_origin / group_id is only the safety net).
         domainSetFanOut.revokeGroup(group.getId());
         operatorGroups.delete(group); // membership + grant templates cascade via FK
         audit(ActionCode.GROUP_DELETE, group.getGroupId(), group.getTenantId(), actor, reason,
-                keptAsDirect > 0 ? keptAsDirectDetail(keptAsDirect) : null);
+                outcome.auditDetail());
     }
 
     // ==== Members ==============================================================
@@ -250,13 +250,13 @@ public class GroupAdminUseCase {
                         && groupInternalId.equals(row.groupOrigin()),
                 null);
         // Revoke ONLY this member's group_origin rows for this group; direct grants untouched.
-        int keptAsDirect = fanOut.revokeMemberFanOut(group.getId(),
+        GroupFanOutService.RevokeOutcome outcome = fanOut.revokeMemberFanOut(group.getId(),
                 new GroupFanOutService.Member(target.getId(), target.getOperatorId(), group.getTenantId()));
         // ADR-083 D4: this member's GROUP:<this group> set rows only — DIRECT / MIGRATION / other groups' stay.
         domainSetFanOut.revokeMember(group.getId(), target.getId());
         groupMembers.deleteById(pk);
         audit(ActionCode.GROUP_MEMBER_REMOVE, group.getGroupId(), group.getTenantId(), actor, reason,
-                "operator=" + operatorPublicId + (keptAsDirect > 0 ? "," + keptAsDirectDetail(keptAsDirect) : ""));
+                withOutcome("operator=" + operatorPublicId, outcome));
     }
 
     // ==== Grants ===============================================================
@@ -351,19 +351,22 @@ public class GroupAdminUseCase {
                     row -> groupInternalId.equals(row.groupOrigin()) && roleId != null && roleId == row.roleId(),
                     null);
         }
-        int keptAsDirect = fanOut.revokeGrantFanOut(group.getId(), grant, resolveMembers(group));
+        GroupFanOutService.RevokeOutcome outcome =
+                fanOut.revokeGrantFanOut(group.getId(), grant, resolveMembers(group));
         groupGrants.delete(grant);
         audit(ActionCode.GROUP_GRANT_REVOKE, group.getGroupId(), group.getTenantId(), actor, reason,
-                "grant=" + grantId + (keptAsDirect > 0 ? "," + keptAsDirectDetail(keptAsDirect) : ""));
+                withOutcome("grant=" + grantId, outcome));
     }
 
     /**
-     * TASK-BE-633 AC-3 — the group's fan-out memberships that were kept as DIRECT memberships because the person
-     * still holds a role in that company (784 D-1). The source change is never silent: it is in the audit detail,
-     * same key as «이 회사에서 내보내기» ({@code keptAsDirect=}).
+     * TASK-BE-633 AC-3 · TASK-BE-636 — the group's fan-out memberships that were RE-OWNED by another group still
+     * giving the tenant ({@code reownedToGroup=}) or kept as DIRECT memberships because the person still holds a role
+     * or a domain permission set in that company ({@code keptAsDirect=}, the same key as «이 회사에서 내보내기»).
+     * The source change is never silent: it is in the audit detail. Nothing is appended when neither happened.
      */
-    private static String keptAsDirectDetail(int keptAsDirect) {
-        return "keptAsDirect=" + keptAsDirect;
+    private static String withOutcome(String detail, GroupFanOutService.RevokeOutcome outcome) {
+        String extra = outcome.auditDetail();
+        return extra == null ? detail : detail + "," + extra;
     }
 
     // ==== Guards / helpers =====================================================

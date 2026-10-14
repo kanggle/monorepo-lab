@@ -3,6 +3,7 @@ package com.example.admin.application;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.CachingPermissionEvaluator;
+import com.example.admin.infrastructure.persistence.rbac.OperatorDomainSetGrantJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.OperatorGroupGrantJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.OperatorTenantAssignmentJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.OperatorTenantAssignmentJpaRepository;
@@ -34,6 +35,7 @@ class GroupFanOutServiceTest {
 
     @Mock AdminOperatorRoleJpaRepository operatorRoles;
     @Mock OperatorTenantAssignmentJpaRepository assignments;
+    @Mock OperatorDomainSetGrantJpaRepository domainSetGrants;
     @Mock CachingPermissionEvaluator cachingPermissionEvaluator;
 
     @InjectMocks GroupFanOutService service;
@@ -130,9 +132,10 @@ class GroupFanOutServiceTest {
     void revokeMemberFanOut_strictFilter() {
         when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of());
 
-        int kept = service.revokeMemberFanOut(GROUP, member(5L));
+        GroupFanOutService.RevokeOutcome outcome = service.revokeMemberFanOut(GROUP, member(5L));
 
-        assertThat(kept).isZero();
+        assertThat(outcome).isEqualTo(GroupFanOutService.RevokeOutcome.NONE);
+        assertThat(outcome.auditDetail()).as("nothing appended to the usual audit detail").isNull();
         verify(operatorRoles).deleteByGroupOriginAndOperatorId(GROUP, 5L);
         verify(assignments).deleteByGroupOriginAndOperatorId(GROUP, 5L);
         // never a broad delete that could hit a direct grant.
@@ -185,7 +188,8 @@ class GroupFanOutServiceTest {
         when(operatorRoles.existsByOperatorIdAndTenantId(1L, "globex")).thenReturn(true);
         when(operatorRoles.existsByOperatorIdAndTenantId(2L, "globex")).thenReturn(false);
 
-        int kept = service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L), member(2L)));
+        int kept = service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L), member(2L)))
+                .keptAsDirect();
 
         assertThat(kept).isEqualTo(1);
         assertThat(backsRole.getGroupOrigin()).as("kept, now a direct membership").isNull();
@@ -206,7 +210,7 @@ class GroupFanOutServiceTest {
         when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(mine, someoneElse));
         when(operatorRoles.existsByOperatorIdAndTenantId(5L, "globex")).thenReturn(true);
 
-        int kept = service.revokeMemberFanOut(GROUP, member(5L));
+        int kept = service.revokeMemberFanOut(GROUP, member(5L)).keptAsDirect();
 
         assertThat(kept).isEqualTo(1);
         assertThat(mine.getGroupOrigin()).isNull();
@@ -215,5 +219,74 @@ class GroupFanOutServiceTest {
         order.verify(operatorRoles).deleteByGroupOriginAndOperatorId(GROUP, 5L);
         order.verify(operatorRoles).existsByOperatorIdAndTenantId(5L, "globex");
         order.verify(assignments).deleteByGroupOriginAndOperatorId(GROUP, 5L);
+    }
+
+    // ── TASK-BE-636 ① — re-ownership · ② — set rows back a membership ──────────
+
+    @Test
+    @DisplayName("🔴 BE-636 ①: another group the member stays in gives the tenant → the membership is RE-OWNED (only group_origin changes), not kept-as-direct, not deleted")
+    void revokeGrantFanOut_tenant_reownedToAnotherGroup() {
+        OperatorTenantAssignmentJpaEntity row = OperatorTenantAssignmentJpaEntity.create(
+                1L, "globex", Instant.EPOCH, 99L, null, List.of("dept-ops"));
+        row.setGroupOrigin(GROUP);
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(row));
+        when(assignments.findLowestOtherGroupGivingTenant(1L, "globex", List.of(GROUP)))
+                .thenReturn(java.util.Optional.of(7L));
+
+        GroupFanOutService.RevokeOutcome outcome =
+                service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L)));
+
+        assertThat(outcome).isEqualTo(new GroupFanOutService.RevokeOutcome(1, 0));
+        assertThat(outcome.auditDetail()).isEqualTo("reownedToGroup=1");
+        assertThat(row.getGroupOrigin()).as("handed to G'").isEqualTo(7L);
+        assertThat(row.getOrgScope()).as("the membership's own data scope is kept — never widened")
+                .containsExactly("dept-ops");
+        assertThat(row.getGrantedAt()).isEqualTo(Instant.EPOCH);
+        assertThat(row.getGrantedBy()).isEqualTo(99L);
+        // re-ownership comes first: the backing checks are not even asked
+        verify(operatorRoles, never()).existsByOperatorIdAndTenantId(any(), any());
+        verify(domainSetGrants, never()).existsByOperatorIdAndTenantIdAndSourceKeyNot(any(), any(), any());
+        var order = org.mockito.Mockito.inOrder(assignments);
+        order.verify(assignments).saveAndFlush(row);
+        order.verify(assignments).deleteByGroupOriginAndTenantId(GROUP, "globex");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-636 ②: no group takes over, no role row, but a domain set row in the tenant → kept as DIRECT")
+    void revokeGrantFanOut_tenant_setRowOnly_keptAsDirect() {
+        OperatorTenantAssignmentJpaEntity row = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                1L, "globex", Instant.EPOCH, null, GROUP);
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(row));
+        when(operatorRoles.existsByOperatorIdAndTenantId(1L, "globex")).thenReturn(false);
+        // TENANT_ASSIGNMENT revoke: the group's own set rows stay, so every source counts («-» excludes none)
+        when(domainSetGrants.existsByOperatorIdAndTenantIdAndSourceKeyNot(1L, "globex", "-")).thenReturn(true);
+
+        GroupFanOutService.RevokeOutcome outcome =
+                service.revokeGrantFanOut(GROUP, tenantGrant("globex"), List.of(member(1L)));
+
+        assertThat(outcome).isEqualTo(new GroupFanOutService.RevokeOutcome(0, 1));
+        assertThat(outcome.auditDetail()).isEqualTo("keptAsDirect=1");
+        assertThat(row.getGroupOrigin()).isNull();
+    }
+
+    @Test
+    @DisplayName("BE-636 ②: member removal / group deletion do not let the group's OWN GROUP:<id> set rows keep its membership")
+    void revokeMemberAndGroup_ownGroupSetRowsDoNotBack() {
+        OperatorTenantAssignmentJpaEntity row = OperatorTenantAssignmentJpaEntity.createGroupScoped(
+                5L, "globex", Instant.EPOCH, null, GROUP);
+        when(assignments.findByGroupOrigin(GROUP)).thenReturn(List.of(row));
+
+        service.revokeMemberFanOut(GROUP, member(5L));
+        service.revokeGroupFanOut(GROUP, List.of(member(5L)));
+
+        verify(domainSetGrants, times(2)).existsByOperatorIdAndTenantIdAndSourceKeyNot(5L, "globex", "GROUP:42");
+        assertThat(row.getGroupOrigin()).as("nothing backs it — left for the delete").isEqualTo(GROUP);
+    }
+
+    @Test
+    @DisplayName("BE-636 audit detail: both counts, re-owned first; null when neither")
+    void revokeOutcome_auditDetail() {
+        assertThat(new GroupFanOutService.RevokeOutcome(2, 1).auditDetail()).isEqualTo("reownedToGroup=2,keptAsDirect=1");
+        assertThat(GroupFanOutService.RevokeOutcome.NONE.auditDetail()).isNull();
     }
 }

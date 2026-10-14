@@ -48,6 +48,24 @@ public interface OperatorTenantAssignmentJpaRepository
     int deleteByGroupOriginAndOperatorId(@Param("groupOrigin") Long groupOrigin,
                                          @Param("operatorId") Long operatorId);
 
+    /**
+     * TASK-BE-636 ① — the group that takes over a fan-out membership when its owner group's source goes: the
+     * SMALLEST {@code operator_group.id}, outside {@code excludedGroups}, that the operator is still a member of AND
+     * whose TENANT_ASSIGNMENT template gives {@code tenantId}; empty when no such group exists ({@code MIN} over no
+     * row is NULL). Optional, not a nullable {@code Long}: a mock's default for {@code Long} is {@code 0L}, which
+     * would read as «re-own to group 0». The group sources of a membership are fully determined by templates ×
+     * members, so this needs no recorded provenance.
+     *
+     * @param excludedGroups non-empty — the group(s) whose source is being revoked
+     */
+    @Query("SELECT MIN(g.groupId) FROM OperatorGroupGrantJpaEntity g, OperatorGroupMemberJpaEntity m "
+            + "WHERE m.groupId = g.groupId AND m.operatorId = :operatorId "
+            + "AND g.grantType = '" + OperatorGroupGrantJpaEntity.TYPE_TENANT_ASSIGNMENT + "' "
+            + "AND g.tenantId = :tenantId AND g.groupId NOT IN :excludedGroups")
+    Optional<Long> findLowestOtherGroupGivingTenant(@Param("operatorId") Long operatorId,
+                                          @Param("tenantId") String tenantId,
+                                          @Param("excludedGroups") java.util.Collection<Long> excludedGroups);
+
     /** Revoke-grant cascade-revoke: the fan-out assignments of one group's TENANT_ASSIGNMENT grant. */
     @Modifying
     @Query("DELETE FROM OperatorTenantAssignmentJpaEntity e "

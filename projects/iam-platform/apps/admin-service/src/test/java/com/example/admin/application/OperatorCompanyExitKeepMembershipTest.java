@@ -97,6 +97,44 @@ class OperatorCompanyExitKeepMembershipTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-BE-636 ②: no uu role, but a domain permission set row in uu → G's uu assignment KEPT as direct")
+    void setRowOnlyInUu_keepsTheMembershipAsDirect() {
+        when(domainSetPort.findTenantsWithGrants(PERSON)).thenReturn(java.util.Set.of("alpha", "uu"));
+        InMemoryAssignmentPort.Row before = assignments.find(PERSON, "uu").orElseThrow();
+
+        useCase.unassignOperator("person-uuid", "alpha", actor(), "left alpha");
+
+        InMemoryAssignmentPort.Row after = assignments.find(PERSON, "uu").orElseThrow();
+        assertThat(after.groupOrigin()).as("now a direct membership").isNull();
+        assertThat(after.orgScope()).isEqualTo(before.orgScope());
+        assertThat(detail()).contains(",keptAsDirect=1,").doesNotContain("reownedToGroup");
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-636 ①: a group the person STAYS in (12, not alpha's) also gives uu → G's uu membership RE-OWNED by 12 (smallest id), org_scope kept")
+    void anotherGroupStillGivesUu_reownsTheMembership() {
+        assignments.giver(PERSON, "uu", 15L).giver(PERSON, "uu", 12L).giver(PERSON, "uu", G);
+        roles.row(PERSON, "SUPPORT_READONLY", "uu", null, null); // would keep it as direct — re-ownership wins
+        InMemoryAssignmentPort.Row before = assignments.find(PERSON, "uu").orElseThrow();
+
+        useCase.unassignOperator("person-uuid", "alpha", actor(), "left alpha");
+
+        InMemoryAssignmentPort.Row after = assignments.find(PERSON, "uu").orElseThrow();
+        assertThat(after.groupOrigin()).as("the leaving group is excluded; the smallest remaining giver").isEqualTo(12L);
+        assertThat(after.grantedAt()).isEqualTo(before.grantedAt());
+        assertThat(after.grantedBy()).isEqualTo(before.grantedBy());
+        assertThat(after.orgScope()).as("the membership's own data scope — never widened").isEqualTo(before.orgScope());
+        assertThat(detail()).endsWith(",keptAsDirect=0,domainSetGrants=0,reownedToGroup=1");
+    }
+
+    private String detail() {
+        org.mockito.ArgumentCaptor<AdminActionAuditor.AuditRecord> rec =
+                org.mockito.ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        org.mockito.Mockito.verify(auditor).recordWithPermission(rec.capture(), org.mockito.ArgumentMatchers.anyString());
+        return rec.getValue().downstreamDetail();
+    }
+
+    @Test
     @DisplayName("a uu role from ANOTHER group (not leaving) also keeps the membership")
     void otherGroupsUuRole_alsoKeeps() {
         roles.row(PERSON, "SUPPORT_READONLY", "uu", 12L, null);

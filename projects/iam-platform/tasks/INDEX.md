@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-636-group-node-paths-remaining-single-source-and-membership-gaps.md` — **Gaps BE-633 left: tenant-assignment fan-out still single-owner · group revoke leaves domain set rows without a membership · node grant home tenant (784 D-1)** (READY, 2026-10-14 UTC, source: `TASK-BE-633` report). Analysis=Opus 5.5 / recommended implementation=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-636-group-node-paths-remaining-single-source-and-membership-gaps.md` — **Gaps BE-633 left: tenant-assignment fan-out still single-owner · group revoke leaves domain set rows without a membership · node grant home tenant (784 D-1)** (source: `TASK-BE-633` report). Analysis=Opus 5.5 / recommended implementation=Opus. — **IN-PROGRESS 2026-10-14 UTC: owner decision — ships in the next re-bake · ③ = refuse 422.**
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

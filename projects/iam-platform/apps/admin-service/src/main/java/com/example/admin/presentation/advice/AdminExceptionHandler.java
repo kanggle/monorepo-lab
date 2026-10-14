@@ -516,6 +516,15 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("ORG_ADMIN_GRANT_OUT_OF_CEILING", e.getMessage()));
     }
 
+    // TASK-BE-636 ③ (admin-api.md § POST …/org-nodes/{id}/admins): the node grant's row would land in the target's
+    // home tenant, which is not one of its memberships (784 D-1). Nothing written.
+    @ExceptionHandler(com.example.admin.application.exception.OrgAdminGrantTargetNotMemberException.class)
+    public ResponseEntity<ErrorResponse> handleOrgAdminGrantTargetNotMember(
+            com.example.admin.application.exception.OrgAdminGrantTargetNotMemberException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("ORG_ADMIN_GRANT_TARGET_NOT_MEMBER", e.getMessage()));
+    }
+
     // The account-service org-node authority's 422, passed through with its own code
     // (ORG_NODE_CYCLE / ORG_NODE_DEPTH_EXCEEDED / ORG_NODE_CEILING_NOT_SUBSET /
     // ORG_NODE_NOT_EMPTY). admin-service does not re-implement those invariants.

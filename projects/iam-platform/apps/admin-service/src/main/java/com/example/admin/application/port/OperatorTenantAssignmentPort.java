@@ -1,5 +1,6 @@
 package com.example.admin.application.port;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -124,6 +125,22 @@ public interface OperatorTenantAssignmentPort {
      * {@code permission_set_id} kept as they are. No-op when the row is absent.
      */
     void convertToDirectAssignment(Long operatorInternalId, String tenantId);
+
+    /**
+     * TASK-BE-636 ① — the group that takes over a group fan-out membership when its owner's source goes: the
+     * SMALLEST group id outside {@code excludedGroups} that the operator is still a member of and whose
+     * TENANT_ASSIGNMENT template gives {@code tenantId}; empty when none.
+     *
+     * @param excludedGroups non-empty — the group(s) whose source is going
+     */
+    Optional<Long> findReowningGroup(Long operatorInternalId, String tenantId, Collection<Long> excludedGroups);
+
+    /**
+     * TASK-BE-636 ① — hand a group fan-out membership to another group: {@code group_origin} → {@code groupInternalId}
+     * only; {@code granted_at} · {@code granted_by} · {@code org_scope} · {@code permission_set_id} kept (a
+     * TENANT_ASSIGNMENT template carries none of them). No-op when the row is absent.
+     */
+    void reassignGroupOrigin(Long operatorInternalId, String tenantId, Long groupInternalId);
 
     /**
      * Immutable projection of an {@code operator_tenant_assignment} row for the

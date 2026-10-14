@@ -384,6 +384,8 @@ class GroupAdminUseCaseTest {
         when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
         when(groupMembers.existsById(any())).thenReturn(true);
         when(groupMembers.findByGroupId(any())).thenReturn(List.of());
+        when(fanOut.revokeMemberFanOut(any(), any())).thenReturn(GroupFanOutService.RevokeOutcome.NONE);
+        when(fanOut.revokeGroupFanOut(any(), any())).thenReturn(GroupFanOutService.RevokeOutcome.NONE);
 
         useCase.removeMember(actor, "grp-1", "op-9", "r");
         verify(domainSetFanOut).revokeMember(1L, 100L);
@@ -414,6 +416,7 @@ class GroupAdminUseCaseTest {
         AdminOperatorJpaEntity target = operator("op-9", "acme");
         when(adminOperators.findByOperatorId("op-9")).thenReturn(Optional.of(target));
         when(groupMembers.existsById(any())).thenReturn(true);
+        when(fanOut.revokeMemberFanOut(any(), any())).thenReturn(GroupFanOutService.RevokeOutcome.NONE);
 
         useCase.removeMember(actor, "grp-1", "op-9", "r");
 
@@ -463,6 +466,7 @@ class GroupAdminUseCaseTest {
     void deleteGroup_cascade() {
         when(operatorGroups.findByGroupId("grp-1")).thenReturn(Optional.of(group("acme")));
         when(groupMembers.findByGroupId(any())).thenReturn(List.of());
+        when(fanOut.revokeGroupFanOut(any(), any())).thenReturn(GroupFanOutService.RevokeOutcome.NONE);
 
         useCase.deleteGroup(actor, "grp-1", "r");
 

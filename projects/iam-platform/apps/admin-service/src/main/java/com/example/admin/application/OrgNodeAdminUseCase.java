@@ -1,12 +1,15 @@
 package com.example.admin.application;
 
 import com.example.admin.application.exception.OrgAdminGrantOutOfCeilingException;
+import com.example.admin.application.exception.OrgAdminGrantTargetNotMemberException;
 import com.example.admin.application.exception.OrgNodeNotFoundException;
 import com.example.admin.application.exception.RoleNotFoundException;
 import com.example.admin.application.orgnode.CeilingView;
 import com.example.admin.application.orgnode.OrgNodeView;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.OperatorTenantAssignmentPort;
 import com.example.admin.application.port.OrgNodePort;
+import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaEntity;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorJpaRepository;
 import com.example.admin.infrastructure.persistence.rbac.AdminOperatorRoleJpaEntity;
@@ -58,6 +61,7 @@ public class OrgNodeAdminUseCase {
     private final AdminOperatorJpaRepository operators;
     private final AdminRoleJpaRepository roles;
     private final AdminOperatorRoleJpaRepository operatorRoles;
+    private final OperatorTenantAssignmentPort assignments;
 
     // ---- Reads (no audit row — BE-486 read-path convention) --------------------
 
@@ -154,17 +158,20 @@ public class OrgNodeAdminUseCase {
     // ---- ORG_ADMIN grant / revoke (IAM plane — admin-service owns the row) ------
 
     /**
-     * Grants a node-scoped role. Three caps, composed:
+     * Grants a node-scoped role. Four checks, composed in this order:
      * <ol>
      *   <li>{@code administers(actor, N)} — else 404 (existence not leaked);</li>
      *   <li>{@link RoleGrantGuard} — the ADR-024 D3 ≤-own rule, reused unchanged:
      *       {@code SUPER_ADMIN} is never mintable, and the actor may not grant a role whose
      *       permissions it does not itself hold (403);</li>
-     *   <li>{@link #requireGrantWithinCeiling} — the node's effective ceiling (422).</li>
+     *   <li>{@link #requireGrantWithinCeiling} — the node's effective ceiling (422);</li>
+     *   <li>{@link #requireHomeIsMembership} — TASK-BE-636 ③: the target's home tenant is one of its memberships
+     *       (422 {@code ORG_ADMIN_GRANT_TARGET_NOT_MEMBER}; a {@code '*'} target is exempt).</li>
      * </ol>
      *
      * <p>The grant row's {@code tenant_id} mirrors the <b>target operator's own tenant</b>
-     * (BE-289 WI-2 — the audit-routing column), and its {@code org_node_id} drives the scope.
+     * (BE-289 WI-2 — the audit-routing column), and its {@code org_node_id} drives the scope. Since TASK-MONO-784
+     * that home is not automatically a membership; check 4 keeps the row inside the target's memberships (D-1).
      *
      * <p>{@code admin_operator_roles} is keyed by {@code (operator_id, role_id, tenant_id, source_key)}
      * (TASK-BE-633 · V0053) and every node row carries {@code source_key = 'NODE'}, so an
@@ -199,6 +206,9 @@ public class OrgNodeAdminUseCase {
 
         // (3) the node's ceiling caps the grant (fail-closed).
         requireGrantWithinCeiling(orgNodeId, roleName);
+
+        // (4) TASK-BE-636 ③ — the row is recorded under the target's home, which must be one of its memberships.
+        requireHomeIsMembership(target);
 
         Instant now = Instant.now();
         AdminOperatorRoleJpaEntity row = AdminOperatorRoleJpaEntity.createNodeScoped(
@@ -237,6 +247,27 @@ public class OrgNodeAdminUseCase {
     }
 
     // ---- Internals -------------------------------------------------------------
+
+    /**
+     * TASK-BE-636 ③ (owner decision 2026-10-14 UTC · admin-api.md § POST …/org-nodes/{id}/admins) — TASK-MONO-784 D-1
+     * «a non-'*' role row's tenant is one of the person's memberships». The node row's {@code tenant_id} is the
+     * target's home ({@code admin_operators.tenant_id}); since 784 the home need not be a membership (a person removed
+     * from the home company while a member elsewhere keeps the home — D-10). Then the grant is refused: 422
+     * {@code ORG_ADMIN_GRANT_TARGET_NOT_MEMBER}, nothing written, no success audit row. The row is not moved to another
+     * membership and no membership is re-created in the home (a silent re-joining). A {@code '*'} target has no
+     * membership by design (ADR-082 D2) and is exempt. The usual case (home ∈ memberships) is byte-unchanged.
+     */
+    private void requireHomeIsMembership(AdminOperatorJpaEntity target) {
+        String home = target.getTenantId();
+        if (AdminOperator.PLATFORM_TENANT_ID.equals(home)) {
+            return;
+        }
+        if (!assignments.assignmentExists(target.getId(), home)) {
+            throw new OrgAdminGrantTargetNotMemberException(
+                    "Org node grant target '" + target.getOperatorId() + "' is not a member of its home tenant '"
+                            + home + "' — the grant row would sit outside its memberships");
+        }
+    }
 
     /**
      * The entitlement-plane cap on a node-scoped grant (ADR-047 D5 / ADR-023).
