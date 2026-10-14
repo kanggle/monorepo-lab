@@ -79,12 +79,29 @@ export const AddGrantsBodySchema = z
 export type AddGrantsBody = z.infer<typeof AddGrantsBodySchema>;
 
 /**
- * reason-only body for the three DELETE surfaces (group delete, member remove,
- * grant revoke). The reason travels in the request BODY, never the query string
+ * reason-only body for the four DELETE surfaces (group delete, member remove,
+ * grant revoke, and — TASK-PC-FE-338 slice b — domain-permission-set
+ * revoke). The reason travels in the request BODY, never the query string
  * (see the file header). The 204 RESPONSE remains body-free.
  */
 export const GroupReasonBodySchema = z.object({ reason: z.string() }).strict();
 export type GroupReasonBody = z.infer<typeof GroupReasonBodySchema>;
+
+/**
+ * add a 업무 권한 세트 to a group (TASK-PC-FE-338 slice b — ADR-MONO-083,
+ * admin-api.md § 도메인 업무 권한 세트 row 10): `setId` + the audit `reason` +
+ * `idempotencyKey` — BOTH headers required (same matrix as add-member /
+ * add-grants, NOT the operator-personal-grant matrix which sends no key).
+ * `.strict()` rejects unknown top-level keys.
+ */
+export const AddGroupDomainSetBodySchema = z
+  .object({
+    setId: z.string().min(1),
+    reason: z.string(),
+    idempotencyKey: z.string().min(1),
+  })
+  .strict();
+export type AddGroupDomainSetBody = z.infer<typeof AddGroupDomainSetBodySchema>;
 
 export function mapError(err: unknown, requestId: string): NextResponse {
   if (err instanceof ApiError && err.status === 401) {

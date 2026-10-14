@@ -40,6 +40,7 @@ import { AssignOperatorForm } from './AssignOperatorForm';
 import { OperatorConfirmDialog } from './OperatorConfirmDialog';
 import { OperatorProfileEditDialog } from './OperatorProfileEditDialog';
 import { OrgScopeDialog } from './OrgScopeDialog';
+import { OperatorDomainAccessDialog } from './OperatorDomainAccessDialog';
 import { OperatorsTable } from './OperatorsTable';
 import {
   OperatorsPermissionDenied,
@@ -115,6 +116,11 @@ export interface OperatorsScreenProps {
    *  never an empty list; the producer `403 ROLE_GRANT_FORBIDDEN` remains
    *  the authoritative no-escalation gate either way. */
   grantableRoles?: string[] | null;
+  /** TASK-PC-FE-338 slice b — the active tenant's subscribed domains (`app/`
+   *  layer, same source as `(console)/layout.tsx`'s sidebar badge and the
+   *  `/domain-permission-sets` page). `null` ⇒ unknown — the 업무 권한
+   *  dialog never marks a role «구독 없음» in that case. */
+  subscribedDomains?: string[] | null;
 }
 
 export function OperatorsScreen({
@@ -123,6 +129,7 @@ export function OperatorsScreen({
   selfOperatorId = null,
   activeTenant = null,
   grantableRoles = null,
+  subscribedDomains = null,
 }: OperatorsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | OperatorStatus>('');
   const [query, setQuery] = useState<{
@@ -206,6 +213,22 @@ export function OperatorsScreen({
             (o: OperatorSummary) => o.operatorId === orgScopeOperatorId,
           ) ?? null),
     [page, orgScopeOperatorId],
+  );
+
+  // TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」 dialog target, tracked
+  // by operatorId (reactive against the live list query, same posture as the
+  // profile-edit / org-scope dialogs above).
+  const [domainAccessOperatorId, setDomainAccessOperatorId] = useState<
+    string | null
+  >(null);
+  const domainAccessFor = useMemo<OperatorSummary | null>(
+    () =>
+      domainAccessOperatorId === null
+        ? null
+        : (page?.content.find(
+            (o: OperatorSummary) => o.operatorId === domainAccessOperatorId,
+          ) ?? null),
+    [page, domainAccessOperatorId],
   );
 
   const activeMutation = useMemo(() => {
@@ -701,6 +724,11 @@ export function OperatorsScreen({
             onChangeStatus={openChangeStatus}
             onEditProfile={openProfileEdit}
             onOrgScope={(op) => setOrgScopeOperatorId(op.operatorId)}
+            onDomainAccess={
+              activeTenant
+                ? (op) => setDomainAccessOperatorId(op.operatorId)
+                : undefined
+            }
             onUnassign={activeTenant ? openUnassign : undefined}
           />
         </>
@@ -765,6 +793,23 @@ export function OperatorsScreen({
           operatorId={orgScopeFor.operatorId}
           operatorLabel={orgScopeFor.email || orgScopeFor.operatorId}
           onClose={() => setOrgScopeOperatorId(null)}
+        />
+      )}
+
+      {/* TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」 dialog (contract
+          § 2.4.3.4 screen 2). Per-set sources + revoke (DIRECT/MIGRATION
+          only) + grant; subscription marking on the effective roles. */}
+      {domainAccessFor && (
+        <OperatorDomainAccessDialog
+          open
+          operatorId={domainAccessFor.operatorId}
+          operatorLabel={domainAccessFor.email || domainAccessFor.operatorId}
+          isSelf={
+            selfOperatorId !== null &&
+            selfOperatorId === domainAccessFor.operatorId
+          }
+          subscribedDomains={subscribedDomains}
+          onClose={() => setDomainAccessOperatorId(null)}
         />
       )}
     </section>

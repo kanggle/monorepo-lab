@@ -39,6 +39,9 @@ export interface OperatorsTableProps {
   onChangeStatus: (op: OperatorSummary) => void;
   onEditProfile: (op: OperatorSummary) => void;
   onOrgScope: (op: OperatorSummary) => void;
+  /** TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」. Omitted (⇒ button
+   *  hidden) when no active tenant is resolved. */
+  onDomainAccess?: (op: OperatorSummary) => void;
   /** TASK-PC-FE-157 — remove this operator's assignment to the active tenant.
    *  Omitted (⇒ button hidden) when no active tenant is resolved. */
   onUnassign?: (op: OperatorSummary) => void;
@@ -59,6 +62,7 @@ export function OperatorsTable({
   onChangeStatus,
   onEditProfile,
   onOrgScope,
+  onDomainAccess,
   onUnassign,
 }: OperatorsTableProps) {
   return (
@@ -126,6 +130,7 @@ export function OperatorsTable({
                   onChangeStatus={onChangeStatus}
                   onEditProfile={onEditProfile}
                   onOrgScope={onOrgScope}
+                  onDomainAccess={onDomainAccess}
                   onUnassign={onUnassign}
                 />
               ))}
