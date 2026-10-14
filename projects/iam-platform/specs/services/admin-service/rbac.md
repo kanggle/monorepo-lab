@@ -457,7 +457,7 @@ strictlyAdministers(actor, N) = actor 가 SUPER_ADMIN, 또는 N 의 STRICT ances
 
 > **소속 변경은 관리 범위를 옮긴다 (`TASK-BE-625`).** T 를 S 에서 빼면 S 와 그 조상의 `ORG_ADMIN` 은 T 에 대한 `operator.manage` 등 subtree 도달을 **잃고**, D 에 넣으면 D 와 그 조상의 `ORG_ADMIN` 이 **얻는다**(위 `effectiveAdminScope` 의 subtree 분기 — 코드 변경 없음). 쓰기가 성공하면 admin-service 는 그 인스턴스의 subtree 캐시를 비운다. 다른 인스턴스는 `admin.org-node.subtree-cache-ttl-ms`(기본 5초) 안에 따라온다 — `ORG_ADMIN` grant 회수와 같은 창이다. 무소속 T 의 출발 쪽 판정(P1) 직전에도 이 인스턴스의 캐시를 비운다 — 방금 S 에서 빠진 T 가 낡은 subtree 캐시로 S 의 `ORG_ADMIN` 출발 쪽을 통과하지 않도록.
 
-**에러 코드**: 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 403 `ORG_NODE_SELF_CEILING_DENIED`, 404 `ORG_NODE_NOT_FOUND`(cross-scope 포함), 404 `TENANT_NOT_FOUND`(소속 변경의 출발 쪽 cross-scope 포함), 409 `TENANT_ORG_NODE_CONFLICT`(소속 변경 — 판정과 쓰기 사이에 소속이 바뀜), 422 `ORG_ADMIN_GRANT_OUT_OF_CEILING`, 503 `INTEGRATION_UNAVAILABLE`.
+**에러 코드**: 403 `PERMISSION_DENIED`, 403 `TENANT_SCOPE_DENIED`, 403 `ORG_NODE_SELF_CEILING_DENIED`, 404 `ORG_NODE_NOT_FOUND`(cross-scope 포함), 404 `TENANT_NOT_FOUND`(소속 변경의 출발 쪽 cross-scope 포함), 409 `TENANT_ORG_NODE_CONFLICT`(소속 변경 — 판정과 쓰기 사이에 소속이 바뀜), 422 `ORG_ADMIN_GRANT_OUT_OF_CEILING`, 422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`(노드 grant 대상의 홈 테넌트 ∉ 소속 — `TASK-BE-636` ③, `admin-api.md` § POST …/admins), 503 `INTEGRATION_UNAVAILABLE`.
 
 **NET-ZERO**: seed 는 `ORG_ADMIN` 을 **어떤 operator 에도** 배정하지 않으므로(V0041 inert — `V0033__seed_tenant_admin_roles.sql` 와 동일 규율) 이 축은 어떤 operator 가 `ORG_ADMIN @ node` 를 부여받기 전엔 발효하지 않는다 — `effectiveAdminScope` 의 subtree 분기도 그때까지 unreachable, 기존 동작과 byte-identical. ROOT 노드 생성 유일 주체는 `SUPER_ADMIN`(`org.manage` 추가 보유).
 

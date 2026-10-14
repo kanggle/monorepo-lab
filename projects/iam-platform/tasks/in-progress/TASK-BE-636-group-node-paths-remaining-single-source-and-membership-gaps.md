@@ -8,7 +8,7 @@ Gaps TASK-BE-633 left: **tenant-assignment fan-out still has a single owner** (r
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -79,3 +79,14 @@ backend
 
 1. Changing the PK alone without migrating existing data — rows that v1 skipped are never recorded (the same lesson as V0053).
 2. Fixing only ① and leaving ② — the membership survives but the orphaned set rows in other tenants remain.
+
+---
+
+# Owner decisions (2026-10-14 UTC)
+
+1. **BE-636 ships in the next re-bake.** It rides in the same AMI as BE-631 · 632 · 633 · 634 · 635. After merge, add it to the `TASK-MONO-672` run order (§ Bake contents) together with the checks for the window.
+2. **③ — refuse.** When the target operator's home tenant (`admin_operators.tenant_id`) is not one of their memberships, a node grant is refused with **422** and writes no row. The row is not moved to another membership, and no membership is added in the home tenant. Adding one would quietly re-admit the person to a company that removed them.
+   - The usual case, where the home tenant is a membership, stays byte-unchanged.
+   - The cost: such a person cannot become a node admin while their home tenant stays the same.
+   - New error code → `admin-api.md` § POST …/org-nodes/{id}/admins is updated before the code.
+3. **②** follows the default in § Scope (BE-633 owner decision 2): keep the membership as a direct membership while domain set rows remain. No separate question was needed.

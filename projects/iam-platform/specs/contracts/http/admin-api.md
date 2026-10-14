@@ -3112,7 +3112,10 @@ actor 의 reach 로 스코프된 노드 **flat array**. SUPER_ADMIN → 전체; 
 | 403 | `PERMISSION_DENIED` | `org.manage` 없음, 또는 부여 role ⊄ actor 보유(no-escalation) 또는 role = `SUPER_ADMIN` |
 | 404 | `ORG_NODE_NOT_FOUND` | 노드 또는 `operatorId` 미존재/reach 밖 |
 | 422 | `ORG_ADMIN_GRANT_OUT_OF_CEILING` | 부여 role 의 파생 도메인 ⊄ `effectiveCeiling(N)` |
+| 422 | `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER` | 대상 운영자의 홈 테넌트(`admin_operators.tenant_id`) ∉ 대상의 소속(`operator_tenant_assignment`). **`TASK-BE-636` ③ (소유자 결정 2026-10-14 UTC)** — 행을 쓰지 않는다 |
 | 503 | `INTEGRATION_UNAVAILABLE` | account-service CB open |
+
+> 🔴 **`TASK-BE-636` ③ — 노드 grant 행은 소속 안에만 쓴다(784 D-1).** grant 행의 `tenant_id` 는 대상의 홈 테넌트다(감사 라우팅 · ≤-own 측정 칸 — 스코프는 `org_node_id` 가 정한다). 784 이후 홈은 소속이 아닐 수 있다(예: 홈 회사에서 «이 회사에서 내보내기» 뒤 다른 회사 소속으로 남은 사람). 그때 grant 는 **422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`** 로 거절되고 행 · 감사 성공 행 모두 0. 다른 소속으로 행을 옮기지 않고, 홈에 소속을 다시 만들지도 않는다(내보낸 회사로의 조용한 재가입). 홈이 소속인 보통의 경우는 바이트 불변. 판정 순서: 404(노드 · 대상 reach) → 403(≤-own) → 422 ceiling → **422 이 검사**. `'*'` 운영자(소속 없음)는 이 검사 대상이 아니다.
 
 **Side Effects**: `admin_actions` `action_code=ORG_ADMIN_GRANT`, `target_type='ORG_NODE'`, `target_id=<orgNodeId>`(부여 대상 operator 는 `detail`). 이벤트 없음.
 
