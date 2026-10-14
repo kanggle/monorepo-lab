@@ -413,7 +413,7 @@ admin-service 가 그대로 부를 수 없다. 771 은 auth-service 에서 같�
 
 **소유자 결정 OD-1 (2026-10-15 UTC) · 구현 S2 (account-service) · 호출자 S3 · S4 (admin-service).** account-service `TenantLifecycleController`(`POST /internal/tenants` · `PATCH /internal/tenants/{tenantId}` · `GET /internal/tenants` · `GET /internal/tenants/{tenantId}`)는 TASK-BE-250 부터 있었지만 이 파일에 절이 없었다 — 아래는 **773 이 바꾸는 것만** 적는다(그 밖의 모양은 코드 그대로: 본문 `{tenantId, displayName, tenantType}` · 응답 `{tenantId, displayName, tenantType, status, createdAt, updatedAt}` · 중복 `409 TENANT_ALREADY_EXISTS`). 관리 표면: [admin-api.md § Tenant Lifecycle](../admin-api.md#tenant-lifecycle-task-be-256).
 
-**상태 값 — `PENDING` 추가** (`tenants.status` · `TenantStatus`): `ACTIVE` · `SUSPENDED` · **`PENDING`**(첫 관리자 대기). 7자 — `VARCHAR(10)` 칸(V0009)에 들어가므로 **칸 확장 마이그레이션 없음**. 칸에 CHECK 가 없다(V0009) — 값 검증은 enum 이 한다. `Tenant.isActive()` 의 술어(`status == ACTIVE`)는 바꾸지 않는다 — `PENDING` 은 «활성 아님» 으로 읽혀 가입 · 프로비저닝 · 가입 적격이 지금 코드 그대로 닫힌다(`TENANT_SUSPENDED` 423 — 새 코드 없음).
+**상태 값 — `PENDING` 추가** (`tenants.status` · `TenantStatus`): `ACTIVE` · `SUSPENDED` · **`PENDING`**(첫 관리자 대기). 7자 — `VARCHAR(10)` 칸(V0009)에 들어가므로 **칸 확장 마이그레이션 없음**. 칸에 CHECK 가 없다(V0009) — 값 검증은 enum 이 한다. `Tenant.isActive()` 의 술어(`status == ACTIVE`)는 바꾸지 않는다 — `PENDING` 은 «활성 아님» 으로 읽혀 가입 · 프로비저닝 · 가입 적격이 지금 코드 그대로 닫힌다(`409 TENANT_SUSPENDED` — 새 코드 없음; `account-internal-provisioning.md` · `account-api.md` 와 같은 409).
 
 **`POST /internal/tenants`** — 본문에 선택 칸 **`initialStatus`**: `ACTIVE`(생략 시 기본 — 셀프 온보딩 경로 · 지금 동작 바이트 동일) \| `PENDING`(`SUPER_ADMIN` 경로). 그 밖의 값(`SUSPENDED` 포함) → `400 VALIDATION_ERROR`. 🔴 `Tenant.java` 의 «initial status always ACTIVE» 주석 · 팩토리가 이 칸을 받도록 바뀐다(773 AC-0 § 1).
 

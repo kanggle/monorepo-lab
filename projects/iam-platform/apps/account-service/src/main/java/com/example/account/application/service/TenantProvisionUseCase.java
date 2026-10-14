@@ -30,20 +30,28 @@ public class TenantProvisionUseCase {
     private final TenantRepository tenantRepository;
 
     /**
-     * Creates a new tenant. Status is always ACTIVE at creation time.
+     * Creates a new tenant.
+     *
+     * <p>TASK-MONO-773 (OD-1): {@code initialStatus} null/blank → {@code ACTIVE} (the self-service
+     * path, unchanged); {@code PENDING} → «관리자 대기» (the SUPER_ADMIN path). Any other value,
+     * {@code SUSPENDED} included, is refused as a validation error ({@code admin-to-account.md}
+     * § POST /internal/tenants). It is validated before the existence check so a bad value never
+     * depends on whether the slug is taken.
      *
      * @throws TenantAlreadyExistsException if a tenant with this id already exists
-     * @throws IllegalArgumentException     if tenantId format is invalid
+     * @throws IllegalArgumentException     if tenantId format or initialStatus is invalid
      */
     @Transactional
-    public TenantResult create(String tenantId, String displayName, String tenantType) {
+    public TenantResult create(String tenantId, String displayName, String tenantType,
+                               String initialStatus) {
         TenantId id = new TenantId(tenantId); // validates format
+        TenantStatus status = parseInitialStatus(initialStatus);
         if (tenantRepository.existsById(id)) {
             throw new TenantAlreadyExistsException(tenantId);
         }
         TenantType type = TenantType.valueOf(tenantType);
         Instant now = Instant.now();
-        Tenant tenant = Tenant.create(id, displayName.trim(), type, now);
+        Tenant tenant = Tenant.create(id, displayName.trim(), type, status, now);
         Tenant saved = tenantRepository.save(tenant);
         return TenantResult.from(saved);
     }
@@ -52,6 +60,8 @@ public class TenantProvisionUseCase {
      * Updates an existing tenant's displayName and/or status.
      * At least one of the two parameters must be non-null.
      * Same-status update is a no-op for the status field.
+     * TASK-MONO-773: {@code status = PENDING} is refused from every state by
+     * {@link Tenant#updateStatus} ({@link IllegalArgumentException} → 400 VALIDATION_ERROR).
      *
      * @throws TenantNotFoundException if no tenant with this id exists
      */
@@ -96,5 +106,18 @@ public class TenantProvisionUseCase {
         TenantType tenantType = tenantTypeFilter != null ? TenantType.valueOf(tenantTypeFilter) : null;
         var tenantPage = tenantRepository.findAll(status, tenantType, page, size);
         return TenantPageResult.from(tenantPage);
+    }
+
+    /** TASK-MONO-773: null/blank → ACTIVE; ACTIVE | PENDING accepted; anything else → 400. */
+    private static TenantStatus parseInitialStatus(String initialStatus) {
+        if (initialStatus == null || initialStatus.isBlank()) {
+            return TenantStatus.ACTIVE;
+        }
+        TenantStatus status = TenantStatus.valueOf(initialStatus); // unknown name → IllegalArgumentException
+        if (status != TenantStatus.ACTIVE && status != TenantStatus.PENDING) {
+            throw new IllegalArgumentException(
+                    "initialStatus must be ACTIVE or PENDING, was: " + initialStatus);
+        }
+        return status;
     }
 }

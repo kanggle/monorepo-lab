@@ -2323,7 +2323,7 @@ SUSPENDED 테넌트는 신규 로그인·신규 사용자 등록이 차단된다
 
 | 읽는 곳 | `PENDING` 일 때 |
 |---|---|
-| account 가입 · 프로비저닝(`ActiveTenantGuard` · 개별/일괄 프로비저닝) | 거절 — 코드는 지금의 `TENANT_SUSPENDED`(423) 그대로(새 코드 없음 · 술어 `!isActive()` 무변경) |
+| account 가입 · 프로비저닝(`ActiveTenantGuard` · 개별/일괄 프로비저닝) | 거절 — 코드는 지금의 `409 TENANT_SUSPENDED` 그대로(새 코드 없음 · 술어 `!isActive()` 무변경) |
 | auth 가입 적격(`TenantSignupEligibilityResolver` — `"ACTIVE"` 문자열) | 거절(무변경) |
 | 콘솔 레지스트리 · 스위처(`ACTIVE` 목록만) | 안 보인다(무변경) |
 | 초대 수락 | 일반 초대 = 거절(`409 OPERATOR_INVITATION_INVALIDATED`) · 첫 관리자 초대 = 이 상태에서만 이긴다 |
