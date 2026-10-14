@@ -8,7 +8,7 @@ TASK-BE-632
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -140,3 +140,9 @@ backend
 1. `TASK-BE-631` V0052 is applied on demo/production, and the backfill completeness SQL (BE-631 data-model.md) measures **0 live**.
 2. The console `808fa9e84` (PC-FE-338 c-1) or later is a **Production deployment `success`** — **met** (2026-10-14 01:59Z, measured).
 3. This PR is merged, then the AMI is baked and the demo window opens. Rollback = a deploy that reverts this PR (ADR D8, no switch flag).
+
+## Merge record (2026-10-14 UTC)
+
+- #4351 → `08f2da4a3`. Failing checks at merge: 0.
+- Integration lane B **PASSED**, confirmed in the log: `happy` (no `erp.write`, `expires_in` 300), BE-632 AC-1 (wire), BE-632 AC-3 (wire), STEP 5.
+- 🔴 **Merge ≠ deployment.** This stays in `review/` until the three deployment gates above are met, the AMI is baked, and AC-4 · AC-5 · AC-6 · AC-8 are measured in the demo window. If AC-4/5/6/8 still cannot be measured live, the reason is recorded as ⚪ and the ticket is not closed.
