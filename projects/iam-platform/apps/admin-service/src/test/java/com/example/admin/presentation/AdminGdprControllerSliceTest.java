@@ -187,6 +187,19 @@ class AdminGdprControllerSliceTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-635: Idempotency-Key 101자 → 400 VALIDATION_ERROR (was 500 AUDIT_FAILURE)")
+    void gdpr_delete_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        mockMvc.perform(post("/api/admin/accounts/acc-1/gdpr-delete")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .header("X-Operator-Reason", "subject erasure request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     @DisplayName("POST gdpr-delete: 헤더와 body 모두 reason 이 없으면 400 REASON_REQUIRED 를 반환한다")
     void gdpr_delete_missing_reason_in_header_and_body_returns_400_reason_required() throws Exception {
         mockMvc.perform(post("/api/admin/accounts/acc-1/gdpr-delete")

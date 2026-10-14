@@ -265,6 +265,31 @@ class AccountAdminControllerSliceTest {
     }
 
     @Test
+    void lock_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: was 500 AUDIT_FAILURE (admin_actions.idempotency_key VARCHAR(100) overflow).
+        mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .header("X-Operator-Reason", "fraud")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void unlock_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        mockMvc.perform(post("/api/admin/accounts/acc-1/unlock")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .header("X-Operator-Reason", "resolved")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void lock_missing_operator_reason_returns_400_reason_required() throws Exception {
         mockMvc.perform(post("/api/admin/accounts/acc-1/lock")
                         .header("Authorization", bearer())

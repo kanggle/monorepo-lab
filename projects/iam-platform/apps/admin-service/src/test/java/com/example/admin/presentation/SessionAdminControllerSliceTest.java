@@ -112,6 +112,19 @@ class SessionAdminControllerSliceTest {
     }
 
     @Test
+    void revoke_idempotency_key_over_100_chars_returns_400_validation_error() throws Exception {
+        // TASK-BE-635: was 500 AUDIT_FAILURE (admin_actions.idempotency_key VARCHAR(100) overflow).
+        mockMvc.perform(post("/api/admin/sessions/acc-1/revoke")
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "k".repeat(101))
+                        .header("X-Operator-Reason", "security-incident")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void revoke_missing_reason_returns_400_reason_required() throws Exception {
         mockMvc.perform(post("/api/admin/sessions/acc-1/revoke")
                         .header("Authorization", bearer())

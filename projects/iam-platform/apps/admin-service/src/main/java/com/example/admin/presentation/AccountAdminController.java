@@ -151,7 +151,9 @@ public class AccountAdminController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("Idempotency-Key")
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @RequestBody(required = false) LockAccountRequest body) {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
@@ -191,7 +193,9 @@ public class AccountAdminController {
             @PathVariable String accountId,
             @RequestHeader(value = "X-Operator-Reason", required = false) String headerReason,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("Idempotency-Key")
+            @Size(max = ClientIdempotencyKey.MAX_LENGTH, message = "Idempotency-Key must be ≤100 characters")
+            String idempotencyKey,
             @RequestBody(required = false) UnlockAccountRequest body) {
 
         String reason = resolveReason(headerReason, body == null ? null : body.reason());
@@ -213,7 +217,12 @@ public class AccountAdminController {
             @RequestHeader("X-Operator-Reason") String headerReason,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestHeader("Idempotency-Key")
-            @Size(max = 64, message = "Idempotency-Key must be ≤64 characters") String idempotencyKey,
+            // TASK-BE-635: was ≤64 — the per-row key is "header:" + accountId (BulkLockAccountUseCase#processOne);
+            // accountId is now bounded to ClientIdempotencyKey.BULK_LOCK_ACCOUNT_ID_MAX (36), so 63 + 1 + 36 = 100
+            // fits admin_actions.idempotency_key exactly. account-service does not read this header (see
+            // ClientIdempotencyKey javadoc), so lowering it changes no downstream retry semantics.
+            @Size(max = ClientIdempotencyKey.BULK_LOCK_HEADER_MAX,
+                    message = "Idempotency-Key must be ≤63 characters") String idempotencyKey,
             @Valid @RequestBody BulkLockRequest body) {
 
         // Header reason is the audit trail; body.reason (≥8 chars) is the

@@ -161,6 +161,17 @@ class AccountSecondFactorAdminControllerSliceTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-635: Idempotency-Key 101자 → 400 VALIDATION_ERROR (was 500 AUDIT_FAILURE) · 리셋 미실행")
+    void idempotencyKeyOver100Chars_400() throws Exception {
+        granted(true);
+
+        call("lost-device", "k".repeat(101), BODY)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(useCase);
+    }
+
+    @Test
     @DisplayName("토큰 없음 → 401 TOKEN_INVALID")
     void noJwt_401() throws Exception {
         mockMvc.perform(post(PATH)
