@@ -1927,7 +1927,7 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
 - `TASK-BE-636` — no migration, so nothing to run before or right after boot. Old single-owner rows are repaired the next time a revoke touches them, so there is **no boot-time count to measure**.
   - ① Two groups G1 · G2 both give company U by «테넌트 배정» to one member → revoke G1's assignment → the member is **still** in U (console company switcher, and the operator's memberships). The audit row's `detail` has `reownedToGroup=1`. Then revoke G2's → U is gone. 🔵 Same setup as BE-633 ② — do both in one go.
   - ② A member who holds only a business permission set in U (no admin role), with U coming from G's assignment → revoke G's assignment → the membership stays (`keptAsDirect=1`) and the set still shows under the operator's «업무 권한».
-  - ③ Optional — needs an operator exported from their home company but still in another: `POST /api/admin/org-nodes/{id}/admins` for them → **422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`**, and no node admin appears. Control: an ordinary operator → 201.
+  - ③ Optional — needs an operator exported from their home company but still in another: `POST /api/admin/org-nodes/{id}/admins` for them → **422 `ORG_ADMIN_GRANT_TARGET_NOT_MEMBER`**, and no node admin appears. In the console the panel shows «이 운영자는 홈 회사의 소속이 아니어서 … 배정할 수 없습니다» (`TASK-PC-FE-340`, already live on Vercel), not an English message with raw ids. Control: an ordinary operator → 201.
   - `TASK-BE-636` is in `done/` (frozen), so record the result here under the window's harvest.
 
 ## When the window ends

@@ -8,7 +8,7 @@ Org-node admin grant: show Korean copy for the new 422 `ORG_ADMIN_GRANT_TARGET_N
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -45,8 +45,8 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-1**: with `grantError = messageForCode('ORG_ADMIN_GRANT_TARGET_NOT_MEMBER', <server message>)`, the panel shows the Korean copy and no raw operator id. The test fails without the map entry, which bites: the fallback shows the server message.
-- [ ] **AC-2**: console-web unit tests and lint/build green in CI.
+- [x] **AC-1**: with `grantError = messageForCode('ORG_ADMIN_GRANT_TARGET_NOT_MEMBER', <server message>)`, the panel shows the Korean copy and no raw operator id. The test fails without the map entry, which bites: the fallback shows the server message.
+- [x] **AC-2**: console-web unit tests and lint/build green in CI.
 
 # Related Specs
 
@@ -63,3 +63,11 @@ frontend
 # Failure Scenarios
 
 1. The entry is added under a misspelt key. The fallback silently keeps showing the English message, so the test asserts the absence of the raw id, not just the presence of some Korean text.
+
+---
+
+# Close (2026-10-14 UTC)
+
+- #4360 → `14629a187` (squash, merged 15:07:16Z). `origin/main` tip = that commit. 0 failing checks at merge (12 pass · 54 skipping; the four required checks passed).
+- Measurement order: first commit (test only, no map entry) → «Frontend unit tests» **1 failed / 384 passed** — only the new test, at `toHaveTextContent('홈 회사의 소속이 아니어서')` (the fallback showed the server's English message). The map-entry commit `7ea8db762` → `OrgAdminPanel.test.tsx` 5 ✓ · 385 files passed (job 115925223716, read from the log).
+- Vercel Production deployment of `14629a187`: **success** (deployment 7069203676), so it is live before the re-bake window. The server sends this code only after the bake (`TASK-MONO-672` Order step 5, BE-636 ③).
