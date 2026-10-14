@@ -8,7 +8,7 @@ The client `Idempotency-Key` header reaches the audit column `admin_actions.idem
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -53,10 +53,10 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: both of the two IT cases above fail before the fix. If either does not, record a measurement showing the premise was wrong.
-- [ ] **AC-1**: a table of the 7 unchecked headers and the bulk lock, with each one's maximum length and evidence for it.
-- [ ] **AC-2**: after the fix, the single-lock case returns 400 `VALIDATION_ERROR` and the bulk lock completes that row.
-- [ ] **AC-3**: the contract has the 400 rows, and a guard catches a new endpoint that takes a header key without a length check.
+- [x] **AC-0**: both of the two IT cases above fail before the fix. If either does not, record a measurement showing the premise was wrong.
+- [x] **AC-1**: a table of the 7 unchecked headers and the bulk lock, with each one's maximum length and evidence for it.
+- [x] **AC-2**: after the fix, the single-lock case returns 400 `VALIDATION_ERROR` and the bulk lock completes that row.
+- [x] **AC-3**: the contract has the 400 rows, and a guard catches a new endpoint that takes a header key without a length check.
 
 # Related Specs
 
@@ -189,3 +189,13 @@ bound, and the tenant-update 93 vs 100 split) but not materially the count.
   scans declaration sites, not data flow) and to future-proof a later wiring of either value.
 - No AMI/demo deployment — same caveat as TASK-BE-634's close record; this lands in the admin-service jar only
   once merged + deployed.
+
+## Close (2026-10-14 UTC)
+
+- #4355 → `3eb6cbebd`. 0 failing checks at merge. The 5 `ClientIdempotencyKeyOverflowIntegrationTest` cases were confirmed **PASSED** in the CI lane log.
+- **How AC-0 was closed**: there was no separate red-first CI push of the IT alone before the fix. Instead, AC-0a/b drive the use case directly, without the controller's new `@Size`, against real MySQL (Testcontainers):
+  - a 101-character key → `AuditFailureException`;
+  - the bulk-lock row key of 101 characters → that row is `AUDIT_FAILURE`.
+
+  They PASSED in CI, which **measures the mechanism behind the 500 on the real DB.** It is the measurement form of «show that the premise holds».
+- ⚪ Production: not yet applied (needs an AMI bake) — next-window run order in `TASK-MONO-672` § 5.

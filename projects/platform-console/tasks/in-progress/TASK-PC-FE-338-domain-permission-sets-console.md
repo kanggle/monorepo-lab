@@ -166,3 +166,16 @@ frontend
   - 🔴 The ticket body (AC-5) says «`main` direct deploy is off (`vercel.json`)». In practice, **each console merge is reaching Production through the deploy-hook workflow**. Measure by the deployment record, not by that sentence.
 - c-1 has been recorded as a **deployment prerequisite** in `TASK-BE-632` (P3) Dependency Markers.
 - **Still open: c-2.** It covers AC-1, AC-2 and AC-5, and waits for P3 to deploy. This ticket stays in `in-progress`.
+
+## CORRECTION — c-1 re-assumed through the wrong path (2026-10-14 UTC)
+
+- **What happened.** The federation e2e (run 38549120539, `d2d858cf7`) went red. Most specs landed on `/login?error=session_expired`. The cause was **c-1, not P3**. The harness put an active-tenant cookie on its own, without an assumed token. c-1 made that state fail-closed and then sent it through the **full IAM refresh hop**. Two things broke:
+  - Screens with no section gate (overview, domain health) went to 401 → «세션 만료».
+  - The rotation-race retry ended in `session_expired`, because my change to `hasCompleteSession` counted the state as incomplete.
+- **Production impact.** In production the switch path always sets the assumed token together with the tenant. The one path that sets only the tenant is right after onboarding. Its impact was limited: it re-assumed through the refresh hop. **But the wrong half was that it did not follow the contract wording** (§ 2.7: «re-assume from the current base token»).
+- **Fix #4354 → `ca176d570`.**
+  - Added `GET /api/tenant/reassume`: re-assumes from the base token. Success sets the assumed cookie; a refusal or outage clears the tenant (no loop); a missing base token goes to the refresh hop.
+  - The `(console)` layout and the domain section gate send that state through the re-assume hop.
+  - `hasCompleteSession` is restored (access + operator).
+- **Verification.** Before merging, I **ran the federation e2e on the branch itself** (run 38555155825) → **success**. Locally: tsc, lint, and the 63 tests in the affected suites.
+- Vercel Production: `3eb6cbebd` (later than and including `ca176d570`) has a deployment record (2026-10-14 11:31Z). Status `success` is to be rechecked before the window.
