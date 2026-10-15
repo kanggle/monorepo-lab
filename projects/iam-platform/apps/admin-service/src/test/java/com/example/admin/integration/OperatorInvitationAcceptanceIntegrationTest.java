@@ -487,6 +487,8 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
         String founderEmail = uniqueEmail();
         String newOrg = "s3-org-" + UUID.randomUUID().toString().substring(0, 8);
         stubAccountDetail(founder, founderEmail);
+        // TASK-MONO-773 S3 — the onboarding trust gate asks account-service whether the founder's email is verified.
+        stubMatch(founder, 200, null);
         stubTenantCreate(newOrg);
         stubTenant(newOrg, "ACTIVE");
 
@@ -578,8 +580,14 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
                 .andExpect(jsonPath("$.code").value("OPERATOR_EMAIL_CONFLICT"));
 
         // 6. 🔴 OD-1 (was 772 S1-11 «self-onboarding → 409»): the invitee now administers TWO tenants (newOrg ·
-        //    TENANT_X) = the default cap → 422 BEFORE any tenant is created.
+        //    TENANT_X). 🔴 TASK-MONO-773 OD-3 raised the default cap 2 → 3 (an invited company counts — at 2 this
+        //    person could not create their own company at all): the third is created, the fourth → 422 BEFORE any
+        //    tenant is created. (The invitee's email is verified — stubMatch in step 3 — so the 773 gate passes.)
         stubAccountDetail(invitee, inviteeEmail);
+        String inviteeOwn = "s5-own-" + UUID.randomUUID().toString().substring(0, 6);
+        stubTenantCreate(inviteeOwn);
+        onboard(invitee, inviteeOwn).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.operatorId").value(inviteeOperator));
         int tenantCreatesBefore = wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants"))).size();
         onboard(invitee, "s5-never-" + UUID.randomUUID().toString().substring(0, 6))
                 .andExpect(status().isUnprocessableEntity())
@@ -607,9 +615,14 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
         assertThat(roleRowsOutside(founderId, org2)).isEqualTo(founderRolesBefore);
         assertThat(assignmentRowsOutside(founderId, org2)).isEqualTo(founderAssignmentsBefore);
         assertThat(operatorRow(founderId)).isEqualTo(founderRowBefore);
-        // … and the third → 422 before creation (newOrg · org2 = the cap)
+        // … the third is created (773 OD-3 — cap 3), and the fourth → 422 before creation (newOrg · org2 · org3 =
+        //    the cap)
+        String org3 = "s5-org3-" + UUID.randomUUID().toString().substring(0, 6);
+        stubTenantCreate(org3);
+        onboard(founder, org3).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.operatorId").value(founderOperator));
         int creates = wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants"))).size();
-        onboard(founder, "s5-org3-" + UUID.randomUUID().toString().substring(0, 6))
+        onboard(founder, "s5-org4-" + UUID.randomUUID().toString().substring(0, 6))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED"));
         assertThat(wireMock.findAll(postRequestedFor(urlEqualTo("/internal/tenants")))).hasSize(creates);

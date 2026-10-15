@@ -125,6 +125,15 @@ class SelfServiceOnboardingIntegrationTest extends AbstractIntegrationTest {
                                 + "\",\"status\":\"ACTIVE\",\"createdAt\":\"2026-07-04T00:00:00Z\","
                                 + "\"profile\":{\"displayName\":\"NewCo Owner\",\"phoneMasked\":null}}")));
 
+        // TASK-MONO-773 S3 (onboarding-api.md «트러스트 게이트») — the owner's email is verified: account-service's
+        // verified-email:match answers 200 + emailVerifiedAt. Without it the gate refuses (an unmatched WireMock
+        // request is a 404 = NOT_ELIGIBLE) — the refusals themselves are SelfServiceOnboardingTrustGateIntegrationTest.
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/accounts/" + OWNER_ACCOUNT_ID + "/verified-email:match"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"" + OWNER_ACCOUNT_ID
+                                + "\",\"emailVerifiedAt\":\"2026-10-15T00:00:00Z\"}")));
+
         // account-service: tenant create → 201 (TenantResponse shape)
         wireMock.stubFor(WireMock.post(urlEqualTo("/internal/tenants"))
                 .willReturn(aResponse().withStatus(201)
