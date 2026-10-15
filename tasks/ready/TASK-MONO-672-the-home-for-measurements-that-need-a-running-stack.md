@@ -1907,7 +1907,19 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
 - AC-6: revoke the set and keep calling a domain API with the **existing** token. Record when it turns 403: it must be ≤ `exp`, at most 300 s. Then re-exchange → 403 immediately. Do the same for group leave, operator suspend, subscription cancel and set edit.
 - AC-8: in the ticket, record merge → AMI → live as three separate lines.
 
-**3. `TASK-PC-FE-338` c-2 preconditions** — only after AC-4 passes: in the console, check that the «업무 권한 세트» screen's «적용 예정» note is no longer true (P3 is live). Then c-2 starts in a separate ticket session (not in the window).
+**3. `TASK-PC-FE-338` c-2 live checks** (rewritten 2026-10-15 UTC — the precondition is moot). P3 was already live in the 27th window; c-2 PR 1 (#4378 `0091e1897`, «적용 예정» retired) and PR 2 (#4381, per-menu «업무 권한 없음» + read-set button hiding) were built without a window. Results go to `TASK-PC-FE-338` (AC-1 · AC-2 · AC-5).
+- **Before the window**:
+  - The Production deployment record (`Production – kanggle-console`) of `0091e1897` and of the PR 2 merge commit must be `success`. That is AC-5's Vercel line.
+  - Check the first `nightly-e2e.yml` console job on `main` after PR 2.
+- **AC-1** (only after step 1): an operator in a tenant subscribed to `wms` only, holding only the `wms-inventory-operate` preset → re-assume.
+  - In the console sidebar: WMS ▸ «출고» shows «업무 권한 없음», «재고» shows nothing, and SCM shows «구독 필요» only.
+  - Against the server, with the same token: wms `/dashboard/inventory` GET = **200**, outbound `/orders` GET = **403**.
+  - Then grant `wms-outbound-operate` → re-assume → the «출고» badge is gone and outbound GET = 200.
+- **AC-2:** a tenant set holding `OUTBOUND_READ` only.
+  - `/wms/outbound` opens (200); the order drill shows no pick / pack / ship / cancel, plus the «조회 전용» note.
+  - A direct outbound-service mutation with the same token (e.g. `POST /api/v1/outbound/orders/{id}:cancel`) = **403**. Use a throwaway order, or accept a 403 with no state change.
+  - Control: `wms-outbound-operate` → buttons back.
+- Use a throwaway operator, not `demo@demo.com`. Granting sets is a permission write: run it through the console UI as the owner, or prepare an owner-run wrapper (the classifier blocks permission writes over SSM).
 
 **4. 27th-window carry-over** (each owning ticket):
 - `TASK-MONO-784` ⚪②: demo-operator's ecommerce screens (OD-3) · rows narrowed by R2 · «이 회사에서 내보내기» · AC-0 ④.
@@ -1964,7 +1976,7 @@ Bake `73daae263` → `ami-0775fa009a12a824d` (pin #4364) · apply by the agent p
 | Found | WMS inventory list 500 (`Instant` → `Timestamp` cast, 4 sites) | new `TASK-BE-637` |
 
 **Not done in this window → next window** (owner decision 2026-10-15 — «784 내보내기까지만»):
-- step 3: PC-FE-338 c-2 precondition.
+- step 3: PC-FE-338 c-2 — now the AC-1 / AC-2 live checks (step 3 rewritten 2026-10-15 UTC).
 - step 4: PC-FE-332 AC-3 · FE-109 AC-1 · FE-108 AC-3.
 - step 5: BE-634 · BE-635 · BE-633 ② · BE-636 ①②③. 🔵 `TASK-MONO-796` (artist goods photos) also rode this bake — see its screen in the next window.
 

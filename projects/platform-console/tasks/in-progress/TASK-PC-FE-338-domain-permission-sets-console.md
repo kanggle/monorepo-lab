@@ -329,3 +329,33 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
   - Full `npx vitest run`: **398 files / 4543 tests passed**, rc=0.
   - `tsc --noEmit -p .`: rc=0.
   - `next lint`: rc=0. Its one pre-existing warning is in an untouched file.
+
+## Slice c-2 PR 2 — CI and branch e2e (2026-10-15 UTC)
+
+- **CI red.** `f84a71172`, run 38787846471, job 116604482015: **15 failed / 4528 passed (4543)**. The 5 new or extended files are the only failing ones (`Test Files 5 failed | 393 passed`).
+- **CI green.** `98d825e81`, run 38789329431:
+  - job 116609609615: **4543 passed (4543)**;
+  - console smoke job 116609609976: success.
+  - `gh pr checks 4381`: 13 pass / 53 skipping / 0 fail.
+- **Console nightly on the branch.** `gh workflow run nightly-e2e.yml --ref task/pc-fe-338-c2-pr2-nav-signal`:
+  - Run 38789366286 (`98d825e81`) **success**, all 15 jobs.
+  - Console job 116610381145: **12 passed**. That is all 5 specs in `tests/e2e` (12 `test(` calls), including `overview-consolidation.spec.ts` with the ERP pin.
+  - The «red nightly arrives» job is success, so no issue was opened.
+- **Federation e2e on the branch.** `gh workflow run federation-hardening-e2e.yml --ref …`:
+  - Run 38789372503 **success**. Job 116610291271: **20 passed · 1 flaky · 0 failed**.
+  - **The flaky spec:** `tenant-switch-rescope.spec.ts:110`. On the first attempt the globex `operator-overview-card-scm` was `degraded`, not `ok`; it passed on retry.
+  - **Why I don't think this PR caused it:**
+    - The assertion is on the overview composition's SCM leg (a domain-token read). It is not on a nav badge.
+    - The same spec has flaked before and passed on retry (`TASK-BE-516`: «`tenant-switch-rescope:106` = flake (retry-passed)»).
+    - 🔵 The layout's new row-12 call is an admin-service read with the operator token; it does not touch the domain token.
+
+  Recorded, not fixed.
+
+## AC status after PR 2 (2026-10-15 UTC)
+
+- [ ] **AC-1** — Unit-tested against the measured server table (inventory set → «출고» badged, inventory/inbound/master/overview not, SCM «구독 필요» only).
+  - The server side of the comparison is the 27th-window live result (BE-632 AC-1: inventory set → outbound GET 403) plus the code reading (dashboards synthesise `WMS_VIEWER` from subscription).
+  - ⚪ **A live comparison of the console badge against the server's 403/200 in the same session** needs a running stack with P3; no CI harness seeds sets per operator. → `TASK-MONO-672` § Next window step 3 (rewritten).
+- [ ] **AC-2** — Unit-tested: read set → outbound write buttons and «확인 처리» hidden; fail-open control.
+  - ⚪ **The direct mutation call → server 403** has the same reason and goes to the same place (MONO-672 step 3). The outbound-service side is already pinned by its own slice tests (`OUTBOUND_READ`-only caller → 403).
+- [ ] **AC-5** — The nightly console job on the branch is green (above). ⚪ «First nightly on `main` after merge» and the Vercel Production deployment record need the merge, so they are not measurable yet. MONO-672 step 3 lists them as checks to make before the window.
