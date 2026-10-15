@@ -206,7 +206,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## in-progress
 
 - `TASK-MONO-792-adr-083-p5-scm-fine-grained-authz.md` — **`ADR-MONO-083` P5 — SCM 세분 서버 인가** (IN-PROGRESS, 2026-10-15 UTC). 소유자 결정 Q1~Q5 (2026-10-15) 적용 · 구현 + 초록(run `38810407668`) · PR #4382 DRAFT. scm 4 서비스 역할 판정 · admin 카탈로그 SCM 8 역할 · **V0056**(세트 · 파트너십의 `SCM_OPERATOR` → 8 역할) · auth 진입 역할 파생(`ENTRY_ROLES` 데이터). 콘솔 신호 = `TASK-PC-FE-342`(굽기 라이브 뒤) · 라이브 = `TASK-MONO-672` 다음 창. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-793-adr-083-p6-erp-fine-grained-authz.md` — **`ADR-MONO-083` P6 — ERP 세분 서버 인가** (IN-PROGRESS, 2026-10-15 UTC). 🔴 **AC-0 STOP — 소유자 결정 Q1~Q6 대기**(구현 커밋 없음). 실측: 구독 합성 READ(`entitled_domains∋erp`)가 assume 토큰마다 실려 «조회 세트 없음 → 403» 을 **깬다** · JWT 경로 55(조회 26 · 변경 29) · 결재가 운영자 토큰으로 기준정보를 부른다 · 개인 엔드포인트 · IAM 부서 선택기 · 결재 전체 목록. 선행 BE-632 충족(`erp.write` 제외). Flyway 예정 `V0057`. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-793-adr-083-p6-erp-fine-grained-authz.md` — **`ADR-MONO-083` P6 — ERP 세분 서버 인가** (IN-PROGRESS, 2026-10-15 UTC). 소유자 결정 Q1~Q6 (2026-10-15) 적용 · 구현 + 초록(run `38824478499`) · PR #4384 DRAFT. erp 4 서비스 업무 역할 판정(구독 합성 READ · `isOperator()` 갈래 제거 · 개인 엔드포인트 · 결재 대상 GET) · admin 카탈로그 ERP 4 역할 · **V0057**(세트 · 파트너십의 `ERP_OPERATOR` → 4 역할) · auth `ENTRY_ROLES` ERP 행. 콘솔 신호 = `TASK-PC-FE-343`(굽기 라이브 뒤) · 라이브 = `TASK-MONO-672` 다음 창. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 

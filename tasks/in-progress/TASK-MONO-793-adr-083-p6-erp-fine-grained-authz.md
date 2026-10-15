@@ -50,10 +50,10 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 
 # Acceptance Criteria
 
-- [x] **AC-0** — 재측정: 쓰기 엔드포인트 전수 · 🔴 `entitled_domains∋erp` 가 역할 없이 READ 를 여는 규칙(`RoleScopeAuthorizationAdapter.java:80-96`)이 «조회 세트 없음 → 조회 403» 을 깨는지 · 업무 구분안 대조(OD-6). → § AC-0 기록(2026-10-15 UTC) — **깬다**(실측) · OD-6 을 글자 그대로 못 가는 점 여섯 → § 질문과 추천. 🔴 STOP — 소유자 결정 전 구현 커밋 없음.
-- [ ] **AC-1** — 🔴 대조군: 결재 세트만 → 기준정보 변경 403 · 결재 200 / 조회 세트 → 변경 403 / `ERP_OPERATOR` 만 → 업무 변경 403 / 결재 자격(직무 분리) 거절은 역할과 무관하게 유지.
-- [ ] **AC-2** — 이전 호환 대조군 · 부서 범위(`org_scope`) 판정 불변.
-- [ ] **AC-3** — 배포 상태를 따로 적는다.
+- [x] **AC-0** — 재측정: 쓰기 엔드포인트 전수 · 🔴 `entitled_domains∋erp` 가 역할 없이 READ 를 여는 규칙(`RoleScopeAuthorizationAdapter.java:80-96`)이 «조회 세트 없음 → 조회 403» 을 깨는지 · 업무 구분안 대조(OD-6). → § AC-0 기록(2026-10-15 UTC) — **깬다**(실측) · OD-6 을 글자 그대로 못 가는 점 여섯 → § 질문과 추천. STOP 뒤 소유자 결정(§ 소유자 결정, 2026-10-15 UTC) 수령.
+- [x] **AC-1** — 🔴 대조군: 결재 세트만 → 기준정보 변경 403 · 결재 200 / 조회 세트 → 변경 403 / `ERP_OPERATOR` 만 → 업무 변경 403 / 결재 자격(직무 분리) 거절은 역할과 무관하게 유지. → masterdata `MasterdataBusinessRoleAdapterTest` · `MasterdataPersonalAndSubjectGateTest`(실 어댑터) · approval `ApprovalBusinessRoleGateTest`(ActorContext + 포트) · read-model `ReadModelBusinessRoleGateSliceTest`(실서명 JWT · 실 체인) · notification `NotificationPersonalGateTest` · auth `erp793_*` · admin 위임 422. 직무 분리 = 집합체 가드, 역할을 읽지 않는다(기존 `ApprovalRouteTest` · `ApprovalApplicationServiceTest` 무변경 초록). § Red · § Green.
+- [x] **AC-2** — 이전 호환 대조군 · 부서 범위(`org_scope`) 판정 불변. → 세 고리: V0057 IT(legacy-compat = 카탈로그 = ERP 4 포함 · `ERP_OPERATOR` 세트 → 4 역할 · 파트너십 2 scope) · auth(`erp793_legacyCompat_fullErp` — legacy-compat → `ERP_OPERATOR` + 4) · 서비스(legacy 토큰이 모든 경로 통과 — 네 서비스 시험의 `legacy*` 대조군) · `org_scope`: `subject_orgScopeUnchanged`(결재 대상 GET 의 부서 범위 판정 그대로) · `readRoleTargetedReadStillScopeGated` · erp IT 144/0(부서 범위 IT 포함). ⚪ 라이브는 AC-3.
+- [ ] **AC-3** — 배포 상태를 따로 적는다. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪.
 
 # Related Specs
 
@@ -148,3 +148,42 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 | Q4 | 결재 테넌트 전체 목록 = `isOperator()` 무변경 |
 | Q5 | IAM `org_scope` 부서 선택기 저하(수동 id) 수용 · 알림 종이 역할 없는 사용자에게 ERP 갈래를 건너뛰는 것은 콘솔 후속 티켓(793 을 실은 굽기 라이브 확인 뒤) — ERP 내비 `serverRequires/writeRequires` · 계약 § 2.4.3.4 표와 함께 |
 | Q6 | read-model `employees*` = MD_READ ∨ MD_WRITE · `approvals*`/`delegations*` = AP_READ ∨ AP_WRITE · 알림 = Q2 |
+
+## 구현 노트 (결정의 적용 범위 — 판단을 적는다)
+
+- 🔵 **판정 위치**: 필터 체인(`authenticated()`)은 무변경 — ERP 는 앱 단 판정이므로 그 자리에서 세분했다. masterdata `RequiredScope` 에 `SUBJECT_READ` · `SELF` 두 값을 더하고 어댑터가 역할로 판정(`READ` · `WRITE` 는 의미만 바뀜). approval 은 `ActorContext.canReadErp/canWriteErp`(서비스 단락 + 포트가 같은 술어) · read-model 은 게이트를 `requireMasterdataRead` / `requireApprovalRead` 둘로 · notification 은 `requireRead` 를 개인 규칙으로.
+- 🔵 **`isOperator()` 의 업무 판정 갈래를 뺐다**(masterdata · approval · read-model · notification): `ERP_OPERATOR` 는 이제 결재 세트만 가진 운영자에게도 파생되므로 남기면 기준정보가 열린다. 함께 빠진 `ERP_ADMIN` · `SUPER_ADMIN` 은 발급처 0(ADR-033 S2 · ADR-083 D2). approval 의 `isOperator()` 자체(목록 범위, Q4)는 무변경 · masterdata `ActorContext.isOperator()` 는 남아 있으나 판정이 읽지 않는다.
+- 🔵 **`erp.approval.create` · `erp.approval.approve` 범위를 쓰기 판정에서 뺐다** — 발급처 0(AC-0 § 0). 남기면 «범위로 결재 쓰기» 라는 길이 계약에 없는 채로 남는다. 시험 하나(`ActorContextAuthPathSliceTest#scopeClaimIsAnErpRoleToken`)가 그 범위로 WRITE 를 단언했으므로 `erp.write` 를 더해 «클레임 들어올림» 만 재는 시험으로 고쳤다.
+- 🔵 **`SELF` 는 `'*'` 도 받는다** — 개인 엔드포인트는 이전에 READ(와일드카드 포함)였다 · 티켓 Edge Case «`'*'` GET 지금 규칙 유지». approval 조회는 이전에도 `'*'` 를 받지 않았다(무변경).
+- 🔵 **정당하게 바뀐 시험**(이 PR 의 판정이 바꾼 것만): 구독 합성 READ 를 단언하던 것(masterdata 어댑터 2 · approval 어댑터 1 · read-model 게이트 2 · notification 게이트 1 · read-model IT 1 → 역할을 실어 나누고 «역할 없음 → 403» 대조를 더함) · 개인 엔드포인트의 요구값(`EmployeeAccountLinkServiceTest` 4 곳 READ → SELF) · read-model 컨트롤러 슬라이스 3(게이트 메서드 이름) · admin 카탈로그 크기 21 → 24 · 프리셋 20 → 23(V0056 형태/IT) · V0052 형태 시험의 «V0052 시절 카탈로그»(RETIRED/ADDED 에 ERP).
+- ⚪ erp ITs(Testcontainers)는 모두 범위(`erp.read` · `erp.write`) 토큰을 쓴다 — 역할 판정 변경에 무영향(실측: CI erp IT 144/0).
+
+# Red — 2026-10-15 UTC (커밋 `d3a8e6c09` · 시험 · 계약만)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116722812445` | auth-service `:test` **1275 실행 · 8 실패**(`OperatorRoleDerivationTest` 1 · `TenantClaimTokenCustomizerTest` 7) · admin-service `:test` **1375 실행 · 15 실패**(`DomainRoleCatalogTest` 2 · `DelegatableRoleCatalogTest` 3 · `DomainPermissionSetUseCaseTest` 1 · `DomainPermissionSetControllerSliceTest` 1 · `PartnershipManagementUseCaseTest` 1 · `V0057MigrationShapeTest` 7) |
+| CI `Integration (iam A, Testcontainers)` | `116722814165` | admin `:integrationTest` **328 실행 · 2 실패**(`V0057ErpRoleMigrationIntegrationTest` 2) |
+| CI 합계 | — | **25 실패 — 전부 단언 실패**(빌드 레인 23 = `java.lang.AssertionError` 14 · `org.opentest4j.AssertionFailedError` 9, 로그 `FAILED` 다음 줄에서 셈 · IT 2). 컴파일 · 부팅 실패 0 |
+| ⚪ CI erp 단계 | `116722812445` | **실행 안 됨** — 같은 job 안에서 iam 단계가 먼저 실패해 erp `:test` 가 건너뛰어졌다(로그의 단계 목록에 erp 단계 없음). CI 로그로는 erp 빨강을 셀 수 없다 |
+| 로컬(같은 커밋, 이 worktree) | — | erp 게이트 시험 5 클래스 **39 실행 · 19 실패** — masterdata 18/8(어댑터 8/5 · 개인/대상 10/3) · approval 9/5 · read-model 6/4 · notification 6/2. 전부 `AssertionError` / `AssertionFailedError`(기대 403 실제 200 — 구독 합성 READ · `isOperator()` 갈래가 통과시켰다 / 기대 200 실제 403 — 업무 역할을 모른다). 통과 쪽 20 = 허용 대조군(legacy-compat · 범위 · `'*'` · 진입 역할의 개인 엔드포인트 — 양쪽 단계 모두 초록이어야 하는 쪽) |
+
+# Green — 2026-10-15 UTC (커밋 `78bdabf52` · run `38824478499`)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116728658360` | ✅ — iam auth/admin · erp 4 서비스의 `:test` 가 **실제로 실행**(캐시 아님 — 로그의 `Task …:test` 줄, erp gateway 만 FROM-CACHE)되고 BUILD SUCCESSFUL. 🔵 이 레인은 성공 시 시험별 줄을 찍지 않는다 — 클래스별 수는 아래 로컬 줄 |
+| CI `Integration (iam A, Testcontainers)` | `116728659269` | ✅ **352 PASSED · 0 FAILED**(로그에서 셈) — `V0057ErpRoleMigrationIntegrationTest` 2/2 · `V0056ScmRoleMigrationIntegrationTest` 2/2 PASSED |
+| CI `Integration (erp-platform, Testcontainers)` | `116728658786` | ✅ **144 PASSED · 0 FAILED** — `ReadModelSecurityIntegrationTest#entitledCrossTenantWithoutRoleIs403PermissionDenied` 포함 |
+| CI 그 밖 | run `38824478499` | 실행된 검사 22 전부 pass(필수 4 포함) · Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · JWT 클레임 레지스트리 pass |
+| 로컬(같은 코드) | — | erp 4 서비스 `:test` · iam auth/admin `:test` rc=0 · 게이트 시험 5 클래스 39/39 |
+
+# 배포 상태 (AC-3) — 2026-10-15 UTC
+
+| 층 | 상태 |
+|---|---|
+| `main` | ❌ 미머지 — PR #4384 DRAFT (머지 · ready 전환은 이 에이전트 범위 밖) |
+| AMI | ⚪ — 굽기는 소유자 명령. 이 PR 의 백엔드(erp 4 · admin V0057 · auth 파생)는 **한 굽기에 함께** 실려야 한다(갈라지면 기존 운영자가 그 사이 ERP 업무 0 이 되거나 세분이 무력화). 792 와 같은 굽기에 실려도 된다 |
+| 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-793» (V0057 행 수 앞/뒤 · AC-1/2 라이브 · IAM 부서 선택기 저하 기록) |
+| 콘솔 | 변경 없음(이 PR). ERP 신호 · 알림 종 갈래는 `TASK-PC-FE-343`(ready) — **굽기 라이브 확인 뒤에만 머지** |
+| 기계 클라이언트 | `erp-platform-internal-services-client`(범위만) — 범위 갈래 유지로 **계속 통한다**(SCM 과 다름 — 기록) |

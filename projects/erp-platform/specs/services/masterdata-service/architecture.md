@@ -455,6 +455,8 @@ E2 reproducibility AC.
 
 ## Authorization matrix + Data scope (E6)
 
+> 🔴 **TASK-MONO-793 (ADR-MONO-083 P6, 2026-10-15 UTC)** — the role half of this matrix is replaced by erp [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본): `RequiredScope` = `READ` (`ERP_MASTERDATA_READ ∨ _WRITE ∨ erp.read ∨ erp.write ∨ '*'`) · `WRITE` (`ERP_MASTERDATA_WRITE ∨ erp.write`) · `SUBJECT_READ` (`GET /departments/{id}` · `/employees/{id}` — READ `∨ ERP_APPROVAL_WRITE`) · `SELF` (personal endpoints — any ERP role or the derived `ERP_OPERATOR`, or a scope, or `'*'`). `isOperator()` and `entitled_domains ∋ erp` no longer open anything. The data-scope half below is unchanged.
+
 Single un-bypassable application path:
 
 1. Every use case method begins with `AuthorizationPort.evaluate(actor,
