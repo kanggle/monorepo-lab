@@ -206,7 +206,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-792-adr-083-p5-scm-fine-grained-authz.md` — **`ADR-MONO-083` P5 — SCM 세분 서버 인가** (IN-PROGRESS, 2026-10-15 UTC). 🔴 **AC-0 STOP — 소유자 결정 대기**: 엔드포인트 27(조회 14 · 변경 13) 전수 · OD-6 과 다른 점 다섯 — Q1 재고 가시성에 변경 2개(3PL) · Q2 수요계획 승인이 운영자 토큰으로 발주 초안 생성 · Q3 물류의 유일한 화면 소비자 = WMS 출고 «발송 재시도» · Q4 `SCM_OPERATOR` 진입 역할 파생은 선례 없음(auth 변경 여부) · Q5 `SCM_OPERATOR` 를 담은 테넌트 세트. 콘솔 데이터는 굽기 뒤 별도 PR 추천. 구현 커밋 0. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-792-adr-083-p5-scm-fine-grained-authz.md` — **`ADR-MONO-083` P5 — SCM 세분 서버 인가** (IN-PROGRESS, 2026-10-15 UTC). 소유자 결정 Q1~Q5 (2026-10-15) 적용 · 구현 + 초록(run `38810407668`) · PR #4382 DRAFT. scm 4 서비스 역할 판정 · admin 카탈로그 SCM 8 역할 · **V0056**(세트 · 파트너십의 `SCM_OPERATOR` → 8 역할) · auth 진입 역할 파생(`ENTRY_ROLES` 데이터). 콘솔 신호 = `TASK-PC-FE-342`(굽기 라이브 뒤) · 라이브 = `TASK-MONO-672` 다음 창. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
