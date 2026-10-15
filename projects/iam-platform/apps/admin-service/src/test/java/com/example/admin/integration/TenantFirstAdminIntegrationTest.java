@@ -207,7 +207,7 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
 
         // one first-admin invitation row, from the actor, the two fixed roles
         Map<String, Object> row = jdbc.queryForMap("""
-                SELECT i.first_admin, i.status, i.email, i.display_name, i.roles, o.operator_id AS inviter
+                SELECT CAST(i.first_admin AS UNSIGNED) AS first_admin, i.status, i.email, i.display_name, i.roles, o.operator_id AS inviter
                   FROM operator_invitation i JOIN admin_operators o ON o.id = i.invited_by
                  WHERE i.invitation_id = ?""", invitationId);
         assertThat(((Number) row.get("first_admin")).intValue()).isEqualTo(1);
@@ -1104,7 +1104,9 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
             LoggedRequest r = serveEvent.getRequest();
             String prefix = "/internal/tenants/";
             JdbcTemplate db = jdbc;
-            if (db != null && r.getMethod() == RequestMethod.PATCH && r.getUrl().startsWith(prefix)) {
+            // equals, not ==: WireMock's RequestMethod.fromString returns a NEW instance per request (3.9.1), so an
+            // identity check against the RequestMethod.PATCH constant never matched and the probe recorded nothing.
+            if (db != null && RequestMethod.PATCH.equals(r.getMethod()) && r.getUrl().startsWith(prefix)) {
                 try {
                     JsonNode body = JSON.readTree(r.getBodyAsString());
                     if (body != null && "ACTIVE".equals(body.path("status").asText())) {
