@@ -416,6 +416,11 @@ services:
       CONSOLE_REGISTRY_URL: http://admin-service:8085/api/admin/console/registry
       REGISTRY_TIMEOUT_MS: "5000"
       CONSOLE_TOKEN_EXCHANGE_URL: http://admin-service:8085/api/admin/auth/token-exchange
+      # TASK-MONO-773 S6 — the «테넌트 생성» screen's self mode + «받은 초대» read. Unset, `env.ts` defaults to
+      # `http://iam.local/…` (the dev Traefik path), which resolves nowhere here — onboarding had NO e2e
+      # coverage until `non-operator-tenant-creation.spec.ts`, so the gap never showed. The received-invitations
+      # URL is derived from this one (sibling path on the same host).
+      CONSOLE_ONBOARDING_URL: http://admin-service:8085/api/admin/onboarding/organizations
       TOKEN_EXCHANGE_TIMEOUT_MS: "5000"
       # TASK-PC-FE-029 iter 2 — GAP admin-service base for the 7 operator
       # endpoints (operators list/create/edit-roles/change-status/change-

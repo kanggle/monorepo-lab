@@ -213,6 +213,9 @@ describe('③ GET /api/auth/demo-ended — 신호를 다시 읽고, 꺼졌을 �
     ['/login?error=session_expired', '/'],
     ['/onboarding', '/'],
     ['/onboarding/create', '/'],
+    // TASK-MONO-773 S6 — the tenant-creation screen is not reachable in sample mode (§ 2.6.2 / § 2.6.4).
+    ['/new-tenant', '/'],
+    ['/new-tenant?step=1', '/'],
   ])('🔴 목적지 소독 — %s → %s (샘플로 닿지 않거나 사이트 밖)', async (raw, expected) => {
     demo.state = 'unavailable';
     const r = await callRoute(`?redirect=${encodeURIComponent(raw)}`);

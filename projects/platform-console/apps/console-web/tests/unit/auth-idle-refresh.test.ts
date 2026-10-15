@@ -214,13 +214,13 @@ describe('GET /api/auth/refresh — 유휴 만료 갱신 (TASK-MONO-674)', () =>
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
   });
 
-  it('operator 재교환이 fail-closed(401, 운영자 아님)면 콜백과 같게 `/onboarding` — IAM 쿠키는 남기고 operator 는 지운다', async () => {
+  it('operator 재교환이 fail-closed(401, 운영자 아님)면 콜백과 같게 비운영자 상태 → `/new-tenant`(TASK-MONO-773 — 옛 `/onboarding`) — IAM 쿠키는 남기고 operator 는 지운다', async () => {
     idleExpired();
     stubFetch(IAM_OK, () => json({ code: 'TOKEN_INVALID' }, 401));
 
     const res = await get('?redirect=%2Fecommerce');
 
-    expect(location(res)).toBe(`${ORIGIN}/onboarding`);
+    expect(location(res)).toBe(`${ORIGIN}/new-tenant`);
     expect(cookieJar.get(REFRESH_COOKIE)?.value).toBe('rotated.ref');
     expect(cookieJar.has(ACCESS_COOKIE)).toBe(true);
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
@@ -318,7 +318,9 @@ describe('🔴 루프 상한 — 갱신 왕복은 절대 순환하지 않는다'
     if (loc.pathname === SESSION_REFRESH_PATH) {
       expect(loc.searchParams.get('retry')).toBe('1');
     } else {
-      expect(['/ecommerce', '/login', '/onboarding']).toContain(loc.pathname);
+      // TASK-MONO-773 S6 — the non-operator landing `/new-tenant` is inside the guard but admitted
+      // there without a refresh hop (§ 2.6.4 «Loop bound»).
+      expect(['/ecommerce', '/login', '/new-tenant']).toContain(loc.pathname);
     }
   });
 

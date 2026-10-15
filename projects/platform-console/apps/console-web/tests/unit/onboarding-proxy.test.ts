@@ -48,6 +48,13 @@ vi.mock('@/shared/lib/operator-token-exchange', () => ({
     exchangeForOperatorToken(...args),
 }));
 
+// TASK-MONO-773 S6 (§ 2.6.4 «Self-mode success») — the new tenant is assumed through the SAME default-assume
+// function the callback / refresh use (it reads the registry + runs the assume exchange — mocked here).
+const establishDefaultTenant = vi.fn();
+vi.mock('@/shared/lib/active-tenant-default', () => ({
+  establishDefaultTenant: (...args: unknown[]) => establishDefaultTenant(...args),
+}));
+
 import { POST } from '@/app/api/onboarding/organizations/route';
 import {
   ACCESS_COOKIE,
@@ -71,6 +78,8 @@ beforeEach(() => {
   cookieDeletes.length = 0;
   createOrganization.mockReset();
   exchangeForOperatorToken.mockReset();
+  establishDefaultTenant.mockReset();
+  establishDefaultTenant.mockResolvedValue('acme-corp');
 });
 
 describe('POST /api/onboarding/organizations — guards', () => {
@@ -91,7 +100,7 @@ describe('POST /api/onboarding/organizations — guards', () => {
 });
 
 describe('POST /api/onboarding/organizations — success + console entry', () => {
-  it('201 ready:true — sets operator + active-tenant cookies from the re-exchange', async () => {
+  it('201 ready:true — sets the operator cookie, drops the non-operator marker, assumes the NEW tenant via the shared default-assume (TASK-MONO-773 S6)', async () => {
     cookieJar.set(ACCESS_COOKIE, { value: 'iam.acc', opts: {} });
     createOrganization.mockResolvedValue({
       tenantId: 'acme-corp',
@@ -111,10 +120,21 @@ describe('POST /api/onboarding/organizations — success + console entry', () =>
     // The onboarding client got the access token as the subjectToken.
     expect(createOrganization).toHaveBeenCalledWith(VALID, 'iam.acc');
     expect(exchangeForOperatorToken).toHaveBeenCalledWith('iam.acc');
-    // Operator + active-tenant cookies set → the owner enters the console.
+    // Operator cookie set → the owner enters the console.
     expect(cookieJar.get(OPERATOR_COOKIE)?.value).toBe('op.jwt');
     expect(cookieJar.get(OPERATOR_COOKIE)?.opts).toMatchObject({ maxAge: 900 });
-    expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('acme-corp');
+    // TASK-MONO-773 S6 — the session is no longer a non-operator one: the marker goes in the same response.
+    expect(cookieDeletes).toContain('console_non_operator');
+    // TASK-MONO-773 S6 — the new tenant is ASSUMED (tenant cookie + assumed token together, § 2.7) by the
+    // same function callback/refresh use, with the new tenant as the preferred choice — never a bare tenant
+    // cookie without its assumed token.
+    expect(establishDefaultTenant).toHaveBeenCalledTimes(1);
+    expect(establishDefaultTenant.mock.calls[0][1]).toMatchObject({
+      accessToken: 'iam.acc',
+      operatorToken: 'op.jwt',
+      preferredTenant: 'acme-corp',
+    });
+    expect(cookieJar.has(TENANT_COOKIE), 'no bare tenant cookie from the route itself').toBe(false);
   });
 
   it('201 ready:false — the org is created but the immediate re-exchange failed (no cookie, no rollback)', async () => {
@@ -134,6 +154,9 @@ describe('POST /api/onboarding/organizations — success + console entry', () =>
     expect(await res.json()).toEqual({ tenantId: 'acme-corp', ready: false });
     // No operator cookie minted; the durable org is NOT undone.
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
+    // TASK-MONO-773 S6 — the marker stays: the session is still a non-operator one until an exchange succeeds.
+    expect(cookieDeletes).not.toContain('console_non_operator');
+    expect(establishDefaultTenant).not.toHaveBeenCalled();
   });
 });
 

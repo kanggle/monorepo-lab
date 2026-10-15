@@ -118,16 +118,15 @@ describe('재로그인 루프 (TASK-PC-FE-278)', () => {
     );
   });
 
-  // TASK-MONO-772 S4 (§ 2.6.3) — the refresh path keeps EVERY cookie on
-  // `operator_check_unavailable` (IAM did not rotate), so the browser client can land
-  // here with a complete session. The reason must be shown, not swallowed.
-  it('🔴 772: `operator_check_unavailable` 은 쿠키가 남아 있어도 단락 회로를 타지 않고 사유를 보인다', async () => {
+  // TASK-MONO-773 S6 — `operator_check_unavailable` is retired (773 S5 removed its only IAM
+  // source; the console no longer emits it). It is an ordinary unknown reason again: with a
+  // complete session it takes the «already authenticated» short-circuit like any other.
+  it('🔴 773: 퇴역한 `operator_check_unavailable` 은 더는 단락 회로의 예외가 아니다', async () => {
     isAuthenticatedMock.mockResolvedValue(true);
 
-    await renderLogin({ error: 'operator_check_unavailable' });
-
-    expect(redirectMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId('host')).toHaveTextContent('운영자 권한을 확인하지 못했습니다');
+    await expect(renderLogin({ error: 'operator_check_unavailable' })).rejects.toThrow(
+      'REDIRECT:/dashboards/overview',
+    );
   });
 
   it('익명 방문자는 마커와 무관하게 로그인 화면을 본다', async () => {

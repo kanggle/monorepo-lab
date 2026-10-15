@@ -9,6 +9,8 @@
  */
 export { TenantsScreen } from './components/TenantsScreen';
 export type { TenantsScreenProps } from './components/TenantsScreen';
+export { TenantCreateScreen } from './components/TenantCreateScreen';
+export type { TenantCreateScreenProps } from './components/TenantCreateScreen';
 export { TenantDetail } from './components/TenantDetail';
 export type { TenantDetailProps } from './components/TenantDetail';
 

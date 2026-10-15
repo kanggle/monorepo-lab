@@ -112,8 +112,9 @@ const EXPECTED: Record<string, string> = {
     '다른 계정(스토어 소비자 계정)으로 로그인돼 있어 콘솔에 들어갈 수 없습니다. 아래에서 로그아웃한 뒤, 스토어(쇼핑몰) 탭에서도 로그아웃하고 운영자 계정으로 다시 로그인하세요.',
   // TASK-MONO-771 S3 — the § 2.6 loop bound + IAM «취소» on the second factor.
   mfa_required: '2단계 인증을 마쳐야 콘솔에 들어올 수 있습니다.',
-  // TASK-MONO-772 S4 — contract § 2.6.3 (IAM `operator_eligibility_unavailable`).
-  operator_check_unavailable: '운영자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.',
+  // TASK-MONO-773 S6 — `operator_check_unavailable` (TASK-MONO-772 S4) is retired: 773 S5 removed its
+  // only IAM source (`operator_eligibility_unavailable`), so the console no longer emits it and the
+  // page no longer carries a dedicated copy for it (see the «retired» cell below).
   [SESSION_EXPIRED]: '세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.',
 };
 
@@ -224,14 +225,11 @@ describe('/login — `sso_wrong_account` 전용 로그아웃 버튼 (TASK-PC-FE-
     expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
   });
 
-  // TASK-MONO-772 S4 (§ 2.6.3, AC-0 F5) — an admin-service outage is NOT «wrong account»:
-  // its own copy, and no logout affordance (the account may well be right).
-  it('🔴 772: `operator_check_unavailable` 은 로그아웃 버튼 없이 «운영자 권한 확인 실패» 를 말한다 — «다른 계정» 이 아니다', async () => {
+  // TASK-MONO-773 S6 — `operator_check_unavailable` is retired (no emitter after 773 S5). A stale
+  // bookmark still renders SOMETHING (the generic copy) and never the «wrong account» logout widget.
+  it('🔴 773: 퇴역한 `operator_check_unavailable` 은 일반 문구로 떨어진다 — 전용 문구 · 로그아웃 버튼 없음', async () => {
     await renderLogin({ error: 'operator_check_unavailable' });
-    const t = alertText()!;
-    expect(t).toContain('운영자 권한을 확인하지 못했습니다');
-    expect(t).not.toContain('다른 계정');
-    expect(t).not.toContain('로그아웃');
+    expect(alertText()).toBe(GENERIC);
     expect(screen.queryByTestId('sso-wrong-account-logout')).toBeNull();
   });
 

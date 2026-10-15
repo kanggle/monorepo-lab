@@ -408,7 +408,7 @@ describe('GET /api/auth/callback (token exchange)', () => {
     );
   });
 
-  it('exchange 401 (not_provisioned) → redirect to /onboarding, NO operator cookie, IAM access+refresh KEPT as the onboarding subject_token (TASK-PC-FE-182 / ADR-MONO-044)', async () => {
+  it('exchange 401 (not_provisioned) → redirect to /new-tenant (TASK-MONO-773 § 2.6.4 — was /onboarding), NO operator cookie, IAM access+refresh KEPT as the onboarding subject_token (TASK-PC-FE-182 / ADR-MONO-044)', async () => {
     cookieJar.set(PKCE_VERIFIER_COOKIE, { value: 'v', opts: {} });
     cookieJar.set(OAUTH_STATE_COOKIE, { value: 's|/console', opts: {} });
     // A stale tenant/assumed selection must be cleared even on this branch.
@@ -445,7 +445,9 @@ describe('GET /api/auth/callback (token exchange)', () => {
     expect(res.status).toBe(307);
     // A valid IAM login that is not yet an operator is routed to self-service
     // onboarding, NOT bounced to re-login.
-    expect(res.headers.get('location')).toBe('http://console.local/onboarding');
+    // TASK-MONO-773 S6 — the non-operator state: `/console` is not on the
+    // non-operator allow-list, so the landing is the tenant-creation screen.
+    expect(res.headers.get('location')).toBe('http://console.local/new-tenant');
     // No operator credential is minted (the pre-operator state).
     expect(cookieJar.has(OPERATOR_COOKIE)).toBe(false);
     // The IAM access+refresh cookies are KEPT — the onboarding endpoint's
