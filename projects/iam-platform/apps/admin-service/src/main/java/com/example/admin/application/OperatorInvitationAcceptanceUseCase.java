@@ -18,6 +18,7 @@ import com.example.admin.application.port.OperatorInvitationPort;
 import com.example.admin.application.port.OperatorInvitationPort.InvitationView;
 import com.example.admin.application.port.TenantProvisioningPort;
 import com.example.admin.application.port.VerifiedEmailMatchPort;
+import com.example.admin.application.tenant.TenantActivation;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.Permission;
 import com.example.security.pii.PiiMaskingUtils;
@@ -83,6 +84,11 @@ public class OperatorInvitationAcceptanceUseCase {
     private final OperatorIdentityResolvePort identityResolvePort;
     /** TASK-MONO-784 S5 (D-12) — «can this facet take this membership» + the cache eviction after it. */
     private final OperatorMembershipAddition membershipAddition;
+    /**
+     * TASK-MONO-773 S4 — a first-admin invitation's acceptance opens its {@code PENDING} tenant AFTER the writer's
+     * transaction committed (auth-to-admin.md § accept «첫 관리자 초대일 때» 9 · 10).
+     */
+    private final TenantActivation tenantActivation;
 
     // ── preview ─────────────────────────────────────────────────────────────
 
@@ -99,7 +105,8 @@ public class OperatorInvitationAcceptanceUseCase {
                 invitation.roles(),
                 invitation.status(),
                 OperatorInvitationResult.isExpired(invitation.status(), invitation.expiresAt(), now),
-                invitation.expiresAt());
+                invitation.expiresAt(),
+                invitation.firstAdmin());
     }
 
     // ── accept ──────────────────────────────────────────────────────────────
@@ -116,8 +123,14 @@ public class OperatorInvitationAcceptanceUseCase {
             invitationId = invitation.invitationId();
 
             // 2. already accepted — the same account gets its first result back; anyone else is refused.
+            //    TASK-MONO-773 S4: a first-admin invitation whose tenant is still PENDING (the activation failed last
+            //    time) retries the activation here (auth-to-admin.md «2번 규칙의 재시도»).
             if (STATUS_ACCEPTED.equals(invitation.status())) {
-                return alreadyAccepted(invitation, account);
+                OperatorInvitationAcceptResult first = alreadyAccepted(invitation, account);
+                if (invitation.firstAdmin()) {
+                    retryActivationIfStillPending(invitation.tenantId(), first.operatorId());
+                }
+                return first;
             }
 
             // 3. expired (judged on read — EXPIRED is not a stored value).
@@ -145,14 +158,45 @@ public class OperatorInvitationAcceptanceUseCase {
             requireNoMemberWithEmail(invitation, facet.map(AdminOperatorPort.OperatorView::internalId).orElse(null));
 
             // 8. the transaction (a lost race is answered by the rules above, see write()).
-            return facet.isPresent()
+            OperatorInvitationAcceptResult result = facet.isPresent()
                     ? writeMembership(invitation, account, facet.get(), roles)
                     : write(invitation, account, roles);
+
+            // 9 · 10. TASK-MONO-773 S4 — a first-admin invitation: the admin rows are COMMITTED (the writer's
+            //    transaction returned) → now, and only now, PENDING → ACTIVE (ADR-044 D3). A failure of 9 propagates
+            //    (503) and leaves «관리자 있는 대기» — the same link's resubmit retries (step 2). A lost race answered
+            //    «already accepted» leaves the activation to the winner.
+            if (invitation.firstAdmin() && !result.alreadyAccepted()) {
+                activateAsFirstAdmin(invitation.tenantId(), result.operatorId());
+            }
+            return result;
         } catch (OperatorInvitationException | OperatorEmailConflictException e) {
             String code = e instanceof OperatorInvitationException oie ? oie.getCode() : "OPERATOR_EMAIL_CONFLICT";
             log.info("operator-invitation accept refused (invitation={}, code={}, account={})",
                     invitationId == null ? "-" : invitationId, code, account);
             throw e;
+        }
+    }
+
+    // ── TASK-MONO-773 S4 — the first admin opens the tenant ──────────────────
+
+    /** 9 · 10 — actor = the first admin, a self flow (no permission key evaluated). */
+    private void activateAsFirstAdmin(String tenantId, String firstAdminOperatorId) {
+        tenantActivation.activate(tenantId, new OperatorContext(firstAdminOperatorId, null),
+                TenantActivation.TRIGGER_FIRST_ADMIN_ACCEPTED,
+                AdminActionAuditor.PERMISSION_SELF_INVITATION_ACCEPT,
+                AdminActionAuditor.REASON_SELF_INVITATION_ACCEPT,
+                "tenant-activate:" + tenantId);
+    }
+
+    /**
+     * The resubmit of an accepted first-admin link: if the tenant is still {@code PENDING}, 9 · 10 again (idempotent
+     * — an {@code ACTIVE} tenant is left alone and nothing is written). A tenant read failure propagates (503).
+     */
+    private void retryActivationIfStillPending(String tenantId, String firstAdminOperatorId) {
+        TenantSummary tenant = provisioningPort.get(tenantId);
+        if (tenant != null && STATUS_PENDING.equals(tenant.status())) {
+            activateAsFirstAdmin(tenantId, firstAdminOperatorId);
         }
     }
 
@@ -212,8 +256,11 @@ public class OperatorInvitationAcceptanceUseCase {
         } catch (TenantNotFoundException e) {
             throw invalidated("tenant no longer exists");
         }
-        if (tenant == null || !ACTIVE.equals(tenant.status())) {
-            throw invalidated("tenant is not ACTIVE");
+        // TASK-MONO-773 S4 (OD-5 · S1-4): an ordinary invitation needs an ACTIVE tenant; a first-admin invitation
+        // wins ONLY on a PENDING one (the cleaned-up — SUSPENDED — or already-opened tenant's leftover link is dead).
+        String required = invitation.firstAdmin() ? STATUS_PENDING : ACTIVE;
+        if (tenant == null || !required.equals(tenant.status())) {
+            throw invalidated("tenant is not " + required);
         }
 
         String inviterId = invitation.invitedByOperatorId();

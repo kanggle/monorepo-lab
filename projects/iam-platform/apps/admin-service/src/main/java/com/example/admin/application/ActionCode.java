@@ -51,6 +51,11 @@ public enum ActionCode {
     TENANT_SUSPEND,
     TENANT_REACTIVATE,
     TENANT_UPDATE,
+    // TASK-MONO-773 S4 (admin-api.md § Tenant Lifecycle · auth-to-admin.md § accept «첫 관리자 초대일 때» 10):
+    // PENDING → ACTIVE. Two writers: the first admin's acceptance (operator_id = the first admin, permission_used =
+    // reason = <self_invitation_accept>) and the SUPER_ADMIN recovery PATCH (permission_used = tenant.manage).
+    // target_type=TENANT, target_id = target_tenant_id = the tenant.
+    TENANT_ACTIVATE,
     // TASK-BE-343 (ADR-MONO-023 D3): tenant↔domain subscription lifecycle
     // (operator-facing surface delegating to account-service). target_type=SUBSCRIPTION,
     // target_id="<tenantId>:<domainKey>", permission_used=subscription.manage.

@@ -7,6 +7,8 @@ import com.example.admin.application.orgnode.OrgNodeView;
 import com.example.admin.application.orgnode.TenantPlacementView;
 import com.example.admin.application.port.OrgNodePort;
 import com.example.admin.application.port.TenantPlacementPort;
+import com.example.admin.application.tenant.CreateTenantCommand;
+import com.example.admin.application.tenant.CreateTenantResult;
 import com.example.admin.application.tenant.CreateTenantUseCase;
 import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.domain.rbac.Permission;
@@ -385,19 +387,19 @@ class TenantOrgNodePlacementUseCaseTest {
             platform(SUPER);
             when(grantScopeEvaluator.isTenantInAdminScope("op-super", Permission.OPERATOR_MANAGE, "brand-new"))
                     .thenReturn(true);
-            TenantSummary created = new TenantSummary("brand-new", "Brand New", "B2B_ENTERPRISE", "ACTIVE",
-                    Instant.EPOCH, Instant.EPOCH);
-            when(createTenantUseCase.execute("brand-new", "Brand New", "B2B_ENTERPRISE", SUPER, "new", "idem-1"))
-                    .thenReturn(created);
+            // TASK-MONO-773 S4 — the creation is the «tenant + first admin» command; the placement follows it.
+            CreateTenantResult created = new CreateTenantResult(new TenantSummary("brand-new", "Brand New",
+                    "B2B_ENTERPRISE", "PENDING", Instant.EPOCH, Instant.EPOCH), null);
+            CreateTenantCommand command = command("idem-1");
+            when(createTenantUseCase.execute(command)).thenReturn(created);
             when(placementPort.place("brand-new", D, null)).thenReturn(effect("brand-new", null, D, true));
             when(auditor.newAuditId()).thenReturn("audit-7");
 
-            TenantSummary result = useCase.createTenantUnder(SUPER, "brand-new", "Brand New", "B2B_ENTERPRISE",
-                    D, "new", "idem-1");
+            CreateTenantResult result = useCase.createTenantUnder(command, D);
 
             assertThat(result).isEqualTo(created);
             InOrder order = inOrder(createTenantUseCase, placementPort, auditor);
-            order.verify(createTenantUseCase).execute("brand-new", "Brand New", "B2B_ENTERPRISE", SUPER, "new", "idem-1");
+            order.verify(createTenantUseCase).execute(command);
             order.verify(placementPort).place("brand-new", D, null);
             order.verify(auditor).record(any());
         }
@@ -410,14 +412,18 @@ class TenantOrgNodePlacementUseCaseTest {
             when(grantScopeEvaluator.isTenantInAdminScope("op-super", Permission.OPERATOR_MANAGE, "brand-new"))
                     .thenReturn(true);
 
-            assertThatThrownBy(() -> useCase.createTenantUnder(SUPER, "brand-new", "Brand New", "B2B_ENTERPRISE",
-                    "ghost-node", "new", "idem-2"))
+            assertThatThrownBy(() -> useCase.createTenantUnder(command("idem-2"), "ghost-node"))
                     .isInstanceOf(OrgNodeNotFoundException.class);
 
-            verify(createTenantUseCase, never()).execute(anyString(), anyString(), anyString(), any(), any(), any());
+            verify(createTenantUseCase, never()).execute(any());
             verify(placementPort, never()).place(anyString(), any(), any());
             verify(auditor).recordTenantPlacementDenied(eq(SUPER), eq(ActionCode.TENANT_ORG_NODE_ASSIGN),
                     eq("brand-new"), eq(OrgNodeScopeGuard.SIDE_DESTINATION), eq(null), eq("ghost-node"));
+        }
+
+        private CreateTenantCommand command(String idempotencyKey) {
+            return new CreateTenantCommand("brand-new", "Brand New", "B2B_ENTERPRISE",
+                    "owner@brand-new.example", "Brand Owner", SUPER, "new", idempotencyKey);
         }
     }
 }

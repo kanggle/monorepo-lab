@@ -101,8 +101,11 @@ class OperatorInvitationAcceptanceUseCaseTest {
         useCase = new OperatorInvitationAcceptanceUseCase(invitationPort, writer, verifiedEmailMatchPort,
                 provisioningPort, operatorPort, new OperatorOidcSubjectResolver(operatorPort), tenantScopeGuard,
                 roleGrantGuard, identityResolvePort,
-                new OperatorMembershipAddition(operatorPort, assignmentPort, permissionCache));
+                new OperatorMembershipAddition(operatorPort, assignmentPort, permissionCache), tenantActivation);
     }
+
+    /** TASK-MONO-773 S4 — never reached by these ordinary invitations (first_admin = false). */
+    @Mock com.example.admin.application.tenant.TenantActivation tenantActivation;
 
     // ── fixtures ────────────────────────────────────────────────────────────
 
@@ -605,6 +608,118 @@ class OperatorInvitationAcceptanceUseCaseTest {
         @DisplayName("maskEmail — null 입력은 null을 반환한다")
         void maskEmail_null() {
             assertThat(OperatorInvitationAcceptanceUseCase.maskEmail(null)).isNull();
+        }
+    }
+
+    // ── TASK-MONO-773 S4 — the first-admin invitation ───────────────────────
+
+    @Nested
+    @DisplayName("🔴 773 S4 — 첫 관리자 초대: PENDING 테넌트에서만 · 관리자 커밋 뒤 활성화 · 재제출 재시도")
+    class FirstAdmin {
+
+        private final List<String> roles = List.of("TENANT_ADMIN", "TENANT_BILLING_ADMIN");
+
+        private InvitationView firstAdminInvitation(String status, String acceptedAccountId, String acceptedOperatorId) {
+            return new InvitationView(7L, INV, TENANT, EMAIL, "홍길동", roles, status,
+                    Instant.now().plus(Duration.ofDays(3)), INVITER_ID, INVITER, "SENT", Instant.EPOCH,
+                    acceptedAccountId == null ? null : Instant.EPOCH, acceptedOperatorId, null, Instant.EPOCH, 0,
+                    HASH, acceptedAccountId, true);
+        }
+
+        private void basisHoldsOn(String tenantStatus) {
+            given(provisioningPort.get(TENANT)).willReturn(tenant(tenantStatus));
+            given(operatorPort.findByOperatorId(INVITER)).willReturn(Optional.of(operator(INVITER, "*", "ACTIVE")));
+            given(tenantScopeGuard.isTenantInScope(new OperatorContext(INVITER, null), Permission.OPERATOR_MANAGE,
+                    TENANT)).willReturn(true);
+            Map<String, AdminOperatorPort.RoleView> m = new LinkedHashMap<>();
+            m.put("TENANT_ADMIN", new AdminOperatorPort.RoleView(5L, "TENANT_ADMIN", "", false));
+            m.put("TENANT_BILLING_ADMIN", new AdminOperatorPort.RoleView(6L, "TENANT_BILLING_ADMIN", "", false));
+            given(operatorPort.resolveRolesByName(roles)).willReturn(m);
+            given(roleGrantGuard.grantableRoleNames(eq(new OperatorContext(INVITER, null)), anyCollection(), any()))
+                    .willReturn(roles);
+        }
+
+        @Test
+        @DisplayName("PENDING 테넌트 · 새 계정 → writer(관리자 행) 먼저, 그 뒤 활성화(FIRST_ADMIN_ACCEPTED · <self_invitation_accept>)")
+        void acceptOnPending_writesThenActivates() {
+            given(invitationPort.findByTokenHash(HASH)).willReturn(Optional.of(firstAdminInvitation("PENDING", null, null)));
+            verdict(OWNER, Outcome.MATCHED);
+            basisHoldsOn("PENDING");
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
+            given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
+                    .willReturn(new OperatorInvitationAcceptanceWriter.Accepted("op-first", 99L, "audit-1"));
+
+            OperatorInvitationAcceptResult result = useCase.accept(TOKEN, OWNER);
+
+            assertThat(result.operatorId()).isEqualTo("op-first");
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(writer, tenantActivation);
+            order.verify(writer).accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID));
+            order.verify(tenantActivation).activate(TENANT, new OperatorContext("op-first", null),
+                    com.example.admin.application.tenant.TenantActivation.TRIGGER_FIRST_ADMIN_ACCEPTED,
+                    AdminActionAuditor.PERMISSION_SELF_INVITATION_ACCEPT,
+                    AdminActionAuditor.REASON_SELF_INVITATION_ACCEPT, "tenant-activate:" + TENANT);
+        }
+
+        @Test
+        @DisplayName("활성화 실패 → 예외가 그대로 나간다(503) — 관리자 행은 이미 커밋(writer 호출됨)")
+        void activationFailure_propagates_afterTheWrite() {
+            given(invitationPort.findByTokenHash(HASH)).willReturn(Optional.of(firstAdminInvitation("PENDING", null, null)));
+            verdict(OWNER, Outcome.MATCHED);
+            basisHoldsOn("PENDING");
+            given(operatorPort.findByOidcSubject(OWNER)).willReturn(Optional.empty());
+            given(operatorPort.existsMemberWithEmail(TENANT, EMAIL, null)).willReturn(false);
+            given(writer.accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID)))
+                    .willReturn(new OperatorInvitationAcceptanceWriter.Accepted("op-first", 99L, "audit-1"));
+            given(tenantActivation.activate(any(), any(), any(), any(), any(), any()))
+                    .willThrow(new DownstreamFailureException("account-service unavailable"));
+
+            assertThatThrownBy(() -> useCase.accept(TOKEN, OWNER)).isInstanceOf(DownstreamFailureException.class);
+            verify(writer).accept(any(), eq(OWNER), anyCollection(), eq(INVITER_ID));
+        }
+
+        @Test
+        @DisplayName("첫 관리자 초대가 ACTIVE · SUSPENDED 테넌트 → 409 INVALIDATED · writer · 활성화 0")
+        void notPending_invalidated() {
+            for (String status : List.of("ACTIVE", "SUSPENDED")) {
+                given(invitationPort.findByTokenHash(HASH))
+                        .willReturn(Optional.of(firstAdminInvitation("PENDING", null, null)));
+                verdict(OWNER, Outcome.MATCHED);
+                given(provisioningPort.get(TENANT)).willReturn(tenant(status));
+                assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
+                        OperatorInvitationInvalidatedException.class, "OPERATOR_INVITATION_INVALIDATED", 409);
+            }
+            verify(writer, never()).accept(any(), anyString(), anyCollection(), anyLong());
+            verifyNoInteractions(tenantActivation);
+        }
+
+        @Test
+        @DisplayName("대조군: 일반 초대는 PENDING 테넌트에서 409 INVALIDATED (대기 테넌트를 여는 것은 첫 관리자 초대뿐)")
+        void ordinaryInvitation_onPending_invalidated() {
+            given(invitationPort.findByTokenHash(HASH)).willReturn(Optional.of(pending()));
+            verdict(OWNER, Outcome.MATCHED);
+            given(provisioningPort.get(TENANT)).willReturn(tenant("PENDING"));
+            assertRefused(catchThrowable(() -> useCase.accept(TOKEN, OWNER)),
+                    OperatorInvitationInvalidatedException.class, "OPERATOR_INVITATION_INVALIDATED", 409);
+            verifyNoInteractions(tenantActivation);
+        }
+
+        @Test
+        @DisplayName("같은 계정의 재제출 · 테넌트가 아직 PENDING → 200 alreadyAccepted + 활성화 재시도 / 이미 ACTIVE → 활성화 0")
+        void resubmit_retriesOnlyWhilePending() {
+            given(invitationPort.findByTokenHash(HASH))
+                    .willReturn(Optional.of(firstAdminInvitation("ACCEPTED", OWNER, "op-first")));
+            given(provisioningPort.get(TENANT)).willReturn(tenant("PENDING"), tenant("ACTIVE"));
+
+            OperatorInvitationAcceptResult first = useCase.accept(TOKEN, OWNER);
+            assertThat(first.alreadyAccepted()).isTrue();
+            verify(tenantActivation).activate(eq(TENANT), eq(new OperatorContext("op-first", null)), any(), any(),
+                    any(), any());
+
+            OperatorInvitationAcceptResult second = useCase.accept(TOKEN, OWNER);
+            assertThat(second.alreadyAccepted()).isTrue();
+            verify(tenantActivation).activate(any(), any(), any(), any(), any(), any()); // still once
+            verify(writer, never()).accept(any(), anyString(), anyCollection(), anyLong());
         }
     }
 }

@@ -370,6 +370,14 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("TENANT_NOT_FOUND", e.getMessage()));
     }
 
+    /** TASK-MONO-773 S4 — {@code 409 TENANT_FIRST_ADMIN_PENDING} / {@code 409 TENANT_NOT_PENDING}. */
+    @ExceptionHandler(com.example.admin.application.exception.TenantStatusConflictException.class)
+    public ResponseEntity<ErrorResponse> handleTenantStatusConflict(
+            com.example.admin.application.exception.TenantStatusConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(e.getCode(), e.getMessage()));
+    }
+
     /**
      * TASK-MONO-772 — the operator-invitation family (admin-api.md § Operator Invitation). Each subclass fixes its
      * own code and status in its constructor, so this one handler serves S2's refusals and S3's.

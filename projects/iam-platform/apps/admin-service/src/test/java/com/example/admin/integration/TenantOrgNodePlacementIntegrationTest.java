@@ -299,7 +299,8 @@ class TenantOrgNodePlacementIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Operator-Reason", "onboard")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"brand-new","displayName":"Brand New","tenantType":"B2B_ENTERPRISE","orgNodeId":"erp-div"}
+                                {"tenantId":"brand-new","displayName":"Brand New","tenantType":"B2B_ENTERPRISE","orgNodeId":"erp-div",
+                                 "firstAdmin":{"email":"owner@brand-new.example","displayName":"Brand Owner"}}
                                 """))
                 .andExpect(status().isCreated());
         verify(placementPort).place("brand-new", "erp-div", null);
@@ -310,7 +311,8 @@ class TenantOrgNodePlacementIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Operator-Reason", "onboard")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"plain-new","displayName":"Plain New","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"plain-new","displayName":"Plain New","tenantType":"B2B_ENTERPRISE",
+                                 "firstAdmin":{"email":"owner@plain-new.example","displayName":"Plain Owner"}}
                                 """))
                 .andExpect(status().isCreated());
         verify(placementPort, never()).place(org.mockito.ArgumentMatchers.eq("plain-new"), any(), any());

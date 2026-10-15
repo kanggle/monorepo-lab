@@ -30,6 +30,13 @@ public interface OperatorInvitationJpaRepository extends JpaRepository<OperatorI
 
     Page<OperatorInvitationJpaEntity> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
 
+    /** TASK-MONO-773 S4 — «a PENDING first-admin invitation exists for this tenant» (expired included). */
+    boolean existsByTenantIdAndFirstAdminTrueAndStatus(String tenantId, String status);
+
+    /** TASK-MONO-773 S4 — every first-admin invitation of a page of tenants, in one query (the summary). */
+    java.util.List<OperatorInvitationJpaEntity> findByTenantIdInAndFirstAdminTrueOrderByCreatedAtDesc(
+            java.util.Collection<String> tenantIds);
+
     /**
      * TASK-MONO-773 OD-7 — «받은 초대»: the live PENDING invitations to one (normalised) address, newest first.
      * Expiry is judged here against {@code :now} (EXPIRED is not a stored value — 772).

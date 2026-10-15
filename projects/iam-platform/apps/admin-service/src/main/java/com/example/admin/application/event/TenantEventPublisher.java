@@ -22,13 +22,38 @@ import java.time.Instant;
  */
 public interface TenantEventPublisher {
 
-    /** Publishes {@code tenant.created} after a successful POST /api/admin/tenants. */
-    void publishTenantCreated(String tenantId, String displayName, String tenantType,
+    /** Publishes {@code tenant.created} with {@code status = ACTIVE} (the pre-773 shape). */
+    default void publishTenantCreated(String tenantId, String displayName, String tenantType,
+                                      String operatorId, Instant createdAt) {
+        publishTenantCreated(tenantId, displayName, tenantType, "ACTIVE", operatorId, createdAt);
+    }
+
+    /**
+     * Publishes {@code tenant.created} after a successful POST /api/admin/tenants — TASK-MONO-773 S4: {@code status}
+     * is the tenant's real birth status ({@code PENDING} on the {@code SUPER_ADMIN} path).
+     */
+    void publishTenantCreated(String tenantId, String displayName, String tenantType, String status,
                               String operatorId, Instant createdAt);
 
-    /** Publishes {@code tenant.suspended} when status transitions ACTIVE → SUSPENDED. */
-    void publishTenantSuspended(String tenantId, String operatorId,
+    /** Publishes {@code tenant.suspended} for an ACTIVE → SUSPENDED transition (the pre-773 shape). */
+    default void publishTenantSuspended(String tenantId, String operatorId,
+                                        String reason, Instant suspendedAt) {
+        publishTenantSuspended(tenantId, "ACTIVE", operatorId, reason, suspendedAt);
+    }
+
+    /**
+     * Publishes {@code tenant.suspended} — TASK-MONO-773 S4: {@code previousStatus} is the status the tenant really
+     * left ({@code ACTIVE}, or {@code PENDING} for the OD-2 «정리»).
+     */
+    void publishTenantSuspended(String tenantId, String previousStatus, String operatorId,
                                 String reason, Instant suspendedAt);
+
+    /**
+     * TASK-MONO-773 S4 — {@code tenant.activated} ({@code PENDING → ACTIVE}). {@code trigger} =
+     * {@code FIRST_ADMIN_ACCEPTED} (the first admin accepted) | {@code OPERATOR_COMPLETED} (the {@code SUPER_ADMIN}
+     * recovery PATCH). No {@code reason} field (tenant-events.md § tenant.activated).
+     */
+    void publishTenantActivated(String tenantId, String trigger, String operatorId, Instant activatedAt);
 
     /** Publishes {@code tenant.reactivated} when status transitions SUSPENDED → ACTIVE. */
     void publishTenantReactivated(String tenantId, String operatorId,

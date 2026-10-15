@@ -211,6 +211,7 @@ services:
           "tenant.suspended"
           "tenant.reactivated"
           "tenant.updated"
+          "tenant.activated"
           "partnership.invited"
           "partnership.accepted"
           "partnership.suspended"

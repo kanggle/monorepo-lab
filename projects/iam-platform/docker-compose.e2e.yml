@@ -161,7 +161,7 @@ services:
           "security.suspicious.detected" "security.auto.lock.triggered"
           "security.auto.lock.pending" "security.pii.masked"
           "admin.action.performed"
-          "tenant.created" "tenant.suspended" "tenant.reactivated" "tenant.updated"
+          "tenant.created" "tenant.suspended" "tenant.reactivated" "tenant.updated" "tenant.activated"
           "partnership.invited" "partnership.accepted" "partnership.suspended"
           "partnership.reactivated" "partnership.terminated"
           "partnership.participant_added" "partnership.participant_removed"

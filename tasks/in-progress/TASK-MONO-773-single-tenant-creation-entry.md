@@ -433,3 +433,64 @@ S1 Q2 의 전제(«지금은 된다 — 784 S5») 는 시드 기준으로 거짓
 - 시험: 위 빨강 표 갱신(`iam` 셋 · 사이트 계정 · received-invitations `iam` 호출자). 경쟁 · 상한(기본값) 시험은 인증된 개인(풀) 계정 호출자 그대로, `iam` 자격의 상한은 `iamCredentialOperator_stillBoundByTheCap` 가 맡는다. 로컬 `compileTestJava`(admin) rc=0 (재실행).
 - **S3 빨강 측정 (#4371 첫 커밋 = 시험 + 계약 정정, iam A 레인 job 116298303145)**: `SelfServiceOnboardingTrustGateIntegrationTest` **15 FAILED** · `SelfServiceOnboardingCapRaceIntegrationTest` **1 FAILED**(«exactly one wins the race») · `OperatorInvitationAcceptanceIntegrationTest` ac6 **1 FAILED**(201≠422, 옛 상한 2) — 17 전부 결함 단언(`AssertionError`: 503 × 3 = iam 운영자 계정 읽기 404 → 503 · 201≠403 × 2 · 401 × 2 = 엔드포인트 없음 · ORIGIN 행 0 · V0052 CHECK). SQL/컴파일 오류 0. 대조: `SelfServiceOnboardingIntegrationTest` 2 PASSED · 같은 클래스의 나머지 acceptance 5 PASSED. gateway 단위 2건은 로컬 실측 빨강.
 - **S3 초록 (#4371, job 116313854354)**: `SelfServiceOnboardingTrustGateIntegrationTest` **15 PASSED** · `SelfServiceOnboardingCapRaceIntegrationTest` **1 PASSED**(운영자 행 FOR UPDATE 를 첫 문장으로 → 둘 중 하나만 성공, CI 실측) · `OperatorInvitationAcceptanceIntegrationTest` 6 · `SelfServiceOnboardingIntegrationTest` 2 PASSED · 레인 FAILED 0. 🔴 중간 빨강 1건: V0054 CHECK 는 실제로 거절했는데(3819) 시험이 `DataIntegrityViolationException` 을 기대 — MySQL CHECK 위반은 Spring 이 `UncategorizedSQLException` 으로 분류한다(형제 `OrgNodeAdminIntegrationTest:202-211` 이 이미 적어 둔 함정, CLAUDE.md step 10). 제약 이름 단언으로 좁혔다(`f15e0009f`).
+
+## S4 기록 (2026-10-15T08:46Z UTC) — admin-service `SUPER_ADMIN` 경로 · 콘솔 `/tenants` 폼 (교차 프로젝트 원자 PR)
+
+> 분석=Opus 5.5 (backend-engineer) · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-s4-admin-superadmin`(origin/main `bf2d0236f` — S1 · S2 · S3 위). 방법 = S2 / S3 와 같다: **PHASE 1 = 시험만** 먼저 밀어 빨강을 재고, PHASE 2 에서 수선. 소유자 결정 S1 Q7 = 이 PR 이 콘솔 폼 · 프록시 · `PENDING` enum 을 함께 넓힌다.
+
+### PHASE 1 — 시험 (구현 0)
+
+| 파일 | 무엇 | 지금 코드에서의 빨강(예상 · 🔵 = 로컬 실측) |
+|---|---|---|
+| `admin-service …/integration/TenantFirstAdminIntegrationTest.java` (신규) | POST 한 묶음 · B2C · `firstAdmin` 필수/검증 · 보상(트리거로 초대 INSERT 거절 주입) · 마이그레이션(`first_admin` · `first_admin_pending_key`) · 첫 관리자 수락(새 계정 · 상한 3 인 기존 운영자 = 소속 추가) · 활성화 실패 → 재제출 재시도 · 복구 PATCH · 정리(순서 · 실패 재시도 · 재활성 409) · 요약 4 상태 + `null` · 재초대 엔드포인트 · Q4 측정 · 대조군 3 | 아래 표 |
+| `admin-service …/integration/TenantAdminIntegrationTest.java` | POST 본문에 `firstAdmin` · account 생성 스텁이 `initialStatus=PENDING` 일 때만 `PENDING` 을 답한다(S2 실제 동작) · 기대 `PENDING` | `superAdmin_post_creates_tenant_and_emits_outbox` `$.status` ACTIVE ≠ PENDING |
+| `admin-service …/integration/RbacTenantEndpointMatrixIntegrationTest.java` · `TenantOrgNodePlacementIntegrationTest.java` | POST 본문에 `firstAdmin` 만 더함(admin-api «breaking 의 범위» 의 호출자) | 초록 유지(옛 DTO 는 모르는 칸을 무시) |
+| `admin-service …/presentation/tenant/TenantAdminControllerSliceTest.java` | `firstAdmin` 없는 본문(B2B · B2C · `null` · `orgNodeId` 경로) → 400 · 유스케이스 0 / 다른 본문에 `firstAdmin` | 🔵 로컬 실측 `Status expected:<400> but was:<500>`(`:194` — 옛 컨트롤러가 유스케이스까지 감) |
+| `admin-service …/infrastructure/outbox/AdminOutboxPublisherTest.java` | `topicFor("tenant.activated")` | 🔵 로컬 실측 `AssertionError :94`(IAE «Unknown admin event type») |
+| `console-web tests/unit/tenants-proxy.test.ts` | POST 본문 `firstAdmin` 전달 · 없으면 422 · 형식 · `?status=PENDING` 전달 · 대조: PATCH `status=PENDING` 422 | 🔵 아래 콘솔 표 |
+| `console-web tests/unit/features/tenants/tenants-api-create-org-node.test.ts` | 생산자 본문 = 4 칸(`firstAdmin` 포함) | 🔵 |
+| `console-web tests/unit/features/tenants/tenants-first-admin.test.tsx` (신규) | 스키마가 `firstAdmin` 요약을 지킴 · 목록 «관리자 대기» + `· 초대 만료` / `· 초대 없음` / `· 활성화 재시도` · 필터 `PENDING` · 상세 상태 · `PENDING` 테넌트 이름 변경 PATCH 에 `status` 없음 · 🔵 옛 응답 파싱 · 렌더(대조) | 🔵 |
+| `console-web tests/unit/features/tenants/TenantsScreen.test.tsx` | 등록 폼 `tenant-form-first-admin-email` · `…-display-name` — 둘 다 유효해야 제출 · 본문 `firstAdmin`(trim) · `PENDING` 응답 수락 | 🔵 |
+
+`TenantFirstAdminIntegrationTest` 빨강 예상(Docker 없음 — CI 가 잰다):
+
+| 시험 | 빨강 자리 |
+|---|---|
+| `post_superAdmin_pendingTenantAndFirstAdminInvitation` | `status 201` 은 **통과**(= 아래 배포 순서 측정) → `$.status` ACTIVE ≠ PENDING |
+| `post_b2c_sameFirstAdminRule` | `$.status` ACTIVE |
+| `post_firstAdminRequiredAndValidated_400_nothingCreated` | 첫 `status 400` ← 201 |
+| `post_invitationWriteFails_compensatedBySuspend_neverActive` | `5xx` ← 201(초대를 쓰지 않으니 주입이 발화하지 않는다) |
+| `migration_firstAdminColumns_onePendingPerTenant` | `first_admin` 칸 존재 단언(information_schema) ← null |
+| `accept_*` 4 · `cleanup_cancelsInvitationThenSuspends_andRefusesReactivation` · `cleanup_accountFails_…` · `recovery_…` · `summary_states_onList` · `reinvite_flow` | 공통 도우미 `createPending` 의 `$.status` ACTIVE ≠ PENDING. 🔵 이 아홉은 지금 코드에서 «첫 관리자 초대 행» 을 만들 길이 없어(칸이 없다) 수락 · 정리 · 요약 자체의 결함으로 빨강을 낼 수 없다 — 수선 뒤 초록이 그 자리의 증거다(S3 의 `ORIGIN` 셋과 같은 사정) |
+| `ordinaryIssuance_cannotMintAFirstAdminInvitation` | `$.firstAdmin` 없음(item 가산 칸) |
+| `patch_pendingToActive_withoutAcceptedFirstAdmin_409` | `status 409` ← 200(지금은 `TENANT_REACTIVATE` 로 활성화한다 — 관리자 없는 ACTIVE 를 만드는 길) |
+| `cleanup_pendingWithoutInvitation_eventSaysPreviousPending` | outbox `previousStatus` ACTIVE(하드코딩, `OutboxTenantEventPublisher.java:80`) |
+| `summary_tenantWithoutFirstAdminRows_isNull` | `No value at JSON path "$.items[0].firstAdmin"` |
+| `reinvite_notPending_409` | `status 409` ← 엔드포인트 없음 |
+| 대조군 `control_ordinaryInvitationIntoPendingTenant_refusedAtAcceptance` · `control_patchToPending_400` · `control_pre773SuspendedTenant_reactivates` | 초록(지금 코드 그대로가 계약) |
+| 측정 `measure_starOperatorAssumesPendingTenant` | 초록(아래 Q4) |
+
+🔴 **불변식(ADR-044 D3) 측정 방법**: WireMock 변환기 `ActivationProbe` 가 account-service 에 `PATCH /internal/tenants/{id} status=ACTIVE` 가 들어오는 **그 순간** 별도 커넥션으로(커밋된 행만 보인다) 그 테넌트의 `ACTIVE` 운영자 중 `TENANT_ADMIN` 역할 행 보유자 수를 센다. `assertEveryActivationSawAnAdmin` = 모든 활성화 요청에서 ≥ 1. 활성화(auth-to-admin § accept 9)를 관리자 커밋(8) 앞으로 옮기는 bite 는 이 단언을 빨갛게 한다. 생성 쪽은 «account 에 `initialStatus=PENDING` 으로만 생성 요청» + «생성 · 정리 · 재초대 경로에서 활성화 요청 0» 으로 잰다.
+
+**콘솔 로컬 실측** (`npx vitest run tests/unit/tenants-proxy.test.ts tests/unit/features/tenants/` · rc=1): **31 FAILED · 26 PASSED** · 31 전부 `AssertionError`(422 ≠ 201 · 프록시가 `firstAdmin` 을 strict 로 거절 / 필드 없음 «expected null not to be null» / 상태 칸 `PENDING` 그대로 / PATCH 본문에 `status: 'PENDING'` / 필터에 `PENDING` 없음). `npx tsc --noEmit -p .` rc=0(시험 파일 포함 — 입력은 `Parameters<typeof createTenant>[0]` 캐스트로 두 단계 모두 컴파일). 🔵 `firstAdmin` 형식 422 다섯 케이스는 지금 **틀린 이유로 초록**이다(바깥 객체가 `.strict()` 라 `firstAdmin` 칸 자체가 거절) — 수선 뒤에도 초록이어야 하는 회귀 가드.
+
+admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSliceTest *AdminOutboxPublisherTest *TenantFirstAdminIntegrationTest` = 25 completed · 2 FAILED(위 둘 — IT 는 Docker 없음으로 건너뜀).
+
+### S1 측정 의무 둘
+
+- **Q4 — `'*'` 운영자가 `PENDING` 테넌트를 assume 할 수 있나 = 예(코드 읽기 · IT 는 admin 절반을 고정)**. admin `OperatorAssignmentCheckUseCase.java:199-203` — `'*'` 행은 테넌트를 읽지 않고 `assigned=true`(그 앞의 거절은 consumer-pool 테넌트 · 운영자 행 없음 · 운영자 비-`ACTIVE` · `confined_tenant_id` 밖 뿐 — `:162-197`). auth `AssumeTenantAuthenticationProvider` 와 `infrastructure/oauth2/**` 에 테넌트 상태 술어 0(grep `SUSPENDED` · `"ACTIVE".equals` — 토큰 · 리프레시의 `isActive()` 만). 그래서 `PENDING`(그리고 773 이전부터 `SUSPENDED`) 테넌트도 assume 된다 — 토큰의 `entitled_domains` 는 그 테넌트의 `ACTIVE` 구독(대기 테넌트는 보통 0). 콘솔 스위처엔 `ACTIVE` 만 뜨므로 UI 길은 없다. 데모의 `'*'` 운영자는 `fan-platform` 확정(TASK-MONO-751)이라 데모에선 닿지 않는다. 🔵 IT `measure_starOperatorAssumesPendingTenant` 는 «측정 핀» 이다(요구가 아니다) — 막기로 하면 같이 뒤집는다. **소유자 결정 필요 여부: 열린 질문으로 올린다**(막으려면 assignment-check 가 테넌트 상태를 읽어야 한다 — admin → account 호출이 assume 경로에 생긴다).
+- **배포 순서 창(admin-api § POST /tenants «호환»)**. ① 옛 요청 DTO: admin-service 에 Jackson `FAIL_ON_UNKNOWN_PROPERTIES` 재정의 · `ObjectMapper` 빈 · `Jackson2ObjectMapperBuilderCustomizer` 모두 0(grep — `new ObjectMapper()` 는 다운스트림 응답 파싱용 클라이언트 필드뿐) → Spring Boot 기본(모르는 칸 무시) → **새 콘솔 폼 + 옛 백엔드 = `201` · `ACTIVE` · 초대 없음**(400 아님). CI 빨강 런의 `post_superAdmin_…` 가 `status 201` 통과 뒤 `$.status` ACTIVE 로 떨어지는 줄이 그 실측이다. ② 콘솔이 옛 응답을 그리나: `TenantSchema` 는 non-strict `z.object` · `status: z.string()` — 옛 응답 파싱 OK · 옛 행 렌더 OK(🔵 로컬 실측 — `tenants-first-admin.test.tsx` 의 대조 둘이 지금 초록). PHASE 2 는 `firstAdmin` 을 **optional · nullable** 로 더해야 이 대조가 초록으로 남는다. 창의 길이 = Vercel 머지 → 다음 재굽기(AMI) — PR 본문에 적는다.
+
+### 콘솔 e2e grep (`/tenants` 생성 흐름)
+
+`projects/platform-console/apps/console-web/tests/e2e/` · `…/e2e-smoke/` · 리포 루트 `tests/federation-hardening-e2e/` 에서 `/tenants` · `tenant-create` · `tenant-form` · `테넌트 등록` · (루트 e2e) `api/admin/tenants` — **0 건**. 고칠 e2e 없음 · 지금 `/tenants` 생성 흐름의 e2e 커버리지도 0.
+
+### PHASE 2 — 수선 (2026-10-15T09:43Z UTC · 커밋 전 · PHASE 1 단언 무변경)
+
+- **admin-service**: `V0055__operator_invitation_first_admin.sql`(`first_admin` · 생성 칸 `first_admin_pending_key` · `uk_operator_invitation_first_admin_pending_key`) · `CreateTenantUseCase`(account `initialStatus=PENDING` → 한 트랜잭션 `Bundle` = 첫 관리자 초대 행 + 그 감사 + `tenant.created(PENDING)` → 실패 시 `PENDING→SUSPENDED` 보상 → 커밋 뒤 메일; 전체 `@Transactional` 제거) · `TenantActivation`(9 account `PATCH ACTIVE` → 10 `TENANT_ACTIVATE` 감사 + `tenant.activated`, 10 실패는 로그 — S1 Q5) · 수락: 첫 관리자 초대 = `PENDING` 테넌트만 · writer 트랜잭션에 `ORIGIN` 행(S3 경로를 `OriginSetWriter` 로 뽑아 공유) · 커밋 **뒤** 활성화 · 같은 계정 재제출이 `PENDING` 이면 재시도 · 상한 안 봄 · `UpdateTenantUseCase`(PENDING→ACTIVE 409 `TENANT_FIRST_ADMIN_PENDING` / `ACCEPTED` 면 복구 = `OPERATOR_COMPLETED` · 정리 = 초대 취소 커밋 → 정지 · `tenant.suspended(previousStatus=실제)` · 정리된 테넌트 재활성 409; 전체 `@Transactional` 제거 — 취소가 정지 실패에 롤백되지 않게) · `POST /api/admin/tenants/{id}/first-admin-invitation`(409 `TENANT_NOT_PENDING` · `OPERATOR_INVITATION_ALREADY_PENDING`) · `firstAdmin` 요약(`TenantFirstAdminSummaryQuery` — 페이지당 한 번 읽기; 응답은 `@JsonInclude(ALWAYS)` — test 프로필 `non_null` 이 `null` 키를 지우지 않게) · invitation item · preview 에 `firstAdmin` · `topicFor("tenant.activated")` + compose 두 파일 토픽 · `ActionCode.TENANT_ACTIVATE`.
+- **console-web**: 프록시 `firstAdmin` 필수(trim 뒤 IAM 규칙) · PATCH enum = `TENANT_PATCH_STATUSES`(PENDING 불가) · 목록 `?status=PENDING` · `TenantSchema.firstAdmin` optional+nullable(옛 응답 호환) · 등록 폼 첫 관리자 두 칸(둘 다 유효해야 제출) · 상태 «관리자 대기 · 초대 만료/초대 없음/활성화 재시도»(`tenants-row-status-{id}`) · 대기 테넌트 수정은 `status` 를 보내지 않음.
+- **Q4** — 측정 사실 그대로(막지 않음, 소유자에게 질문 중).
+- **로컬 검증**: admin `compileTestJava` rc=0 · `:admin-service:test` rc=0(ITs 는 Docker 없음 → CI) · console 해당 7 파일 77 PASSED · 전체 `npx vitest run` 386 파일 4392 PASSED · `tsc --noEmit` rc=0 · `next lint` rc=0 · 스테이지 뒤 `check-error-code-registry` · `check-flyway-version-collision`(320 / 27 디렉터리) · `check-flyway-unresolvable-placeholder`(400) · `check-dev-seed-migration-band` 모두 rc=0.
+- **S4 빨강 측정 (#4372 첫 커밋 = 시험만)**: iam A 레인(job 116334237061) — `TenantFirstAdminIntegrationTest` **19 FAILED · 4 PASSED**(대조군 3 + Q4 측정) · `TenantAdminIntegrationTest` 1 FAILED(PENDING 기대) · 20 전부 `AssertionError`(`$.status` ACTIVE≠PENDING × 12 · `$.firstAdmin` 없음 × 2 · 201≠400 · 201≠5xx · 200≠409 · 404≠409 · V0055 칸 없음 · 불변식 프로브). SQL/컴파일 오류 0. 콘솔 vitest(job 116334235424): 손댄 4파일에서만 **31 FAILED** · 나머지 4361 PASSED.
+- **S4 소유자 결정 (2026-10-15 UTC)** — Q4 `'*'` 운영자의 PENDING(·SUSPENDED) 테넌트 assume: 773 은 측정 사실로만 기록(S4 IT 가 `assigned=true` 를 측정으로 고정) · **`TASK-BE-639`** 로 따로 다룬다(같은 PR 에서 기안).
+- **S4 초록 (#4372, job 116390247407)**: `TenantFirstAdminIntegrationTest` **23 PASSED**(불변식 프로브 — 모든 활성화 요청 시점에 커밋된 ACTIVE TENANT_ADMIN ≥ 1) · `TenantAdminIntegrationTest` 13 · `RbacTenantEndpointMatrix` 7 · `TenantOrgNodePlacement` 5 · `OperatorInvitationAcceptance` 6 · `SelfServiceOnboarding*` 18 PASSED · 레인 FAILED 0 · 콘솔 vitest 386 파일 PASSED. 🔴 중간 빨강 5건은 둘 다 시험 결함: ① 프로브가 WireMock 3.9.1 `RequestMethod` 를 `==` 로 비교(요청마다 새 인스턴스 → 늘 거짓, 같은 시험의 «활성화 호출 1회» 는 통과) ② MySQL `BOOLEAN` 을 `Number` 로 캐스팅. 운영 코드 무변경(`787200555`).

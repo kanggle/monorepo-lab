@@ -45,6 +45,11 @@ public class OperatorInvitationAcceptanceWriter {
     private final AdminActionAuditor auditor;
     /** TASK-MONO-784 S5 — the shared «add a membership to an existing row» writes (D-12). */
     private final OperatorMembershipAddition membershipAddition;
+    /**
+     * TASK-MONO-773 S4 (OD-5) — a first-admin invitation's acceptance also writes the founding admin's ORIGIN set
+     * row, in the same transaction (auth-to-admin.md § accept «첫 관리자 초대일 때» 8). The S3 code path.
+     */
+    private final OriginSetWriter originSetWriter;
 
     /** The claim lost: a concurrent accept / cancel / resend won, or the invitation expired meanwhile. */
     public static final class ClaimLost extends RuntimeException {
@@ -94,6 +99,11 @@ public class OperatorInvitationAcceptanceWriter {
         // 5. which operator the invitation became.
         invitationPort.recordAcceptedOperator(invitation.internalId(), created.internalId(), now);
 
+        // 5b. TASK-MONO-773 OD-5 — the founding admin's ORIGIN set (first-admin invitations only).
+        if (invitation.firstAdmin()) {
+            originSetWriter.write(created.internalId(), tenantId, now);
+        }
+
         // 6. the audit row. Neither the token nor the email rides in it; accountId does (F19 — 774's link source).
         String auditId = auditor.newAuditId();
         auditor.recordWithPermission(new AdminActionAuditor.AuditRecord(
@@ -139,6 +149,12 @@ public class OperatorInvitationAcceptanceWriter {
         membershipAddition.write(existing.internalId(), tenantId, roles, inviterInternalId, now);
 
         invitationPort.recordAcceptedOperator(invitation.internalId(), existing.internalId(), now);
+
+        // TASK-MONO-773 OD-5 — a first-admin invitation: the ORIGIN set in THIS tenant only (the other companies'
+        // set rows are not read or written).
+        if (invitation.firstAdmin()) {
+            originSetWriter.write(existing.internalId(), tenantId, now);
+        }
 
         String auditId = auditor.newAuditId();
         auditor.recordWithPermission(new AdminActionAuditor.AuditRecord(

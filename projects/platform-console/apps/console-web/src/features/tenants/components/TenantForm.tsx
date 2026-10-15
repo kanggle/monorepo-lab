@@ -4,7 +4,9 @@ import { useId, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import {
   TENANT_TYPES,
-  TENANT_STATUSES,
+  TENANT_PATCH_STATUSES,
+  FIRST_ADMIN_DISPLAY_NAME_MAX,
+  firstAdminValidationError,
   tenantIdValidationError,
   type Tenant,
   type TenantType,
@@ -23,7 +25,9 @@ import {
  *
  * `mode='create'`: tenantId (immutable once set, contract § Tenant ID 규칙) +
  * displayName + tenantType + optional «소속 노드» (TASK-PC-FE-312 — left out
- * of the draft entirely when empty).
+ * of the draft entirely when empty) + 🔴 the required first admin (email +
+ * name — TASK-MONO-773 S4: IAM creates the tenant «관리자 대기» and invites that
+ * address; submit stays disabled until both are valid).
  * `mode='edit'`: displayName + status only — `tenantId`/`tenantType` are
  * read-only (the producer PATCH accepts neither field; a re-assigned
  * `tenant_id` would break the audit trail + external tokens per the
@@ -59,6 +63,8 @@ export function TenantForm({
   const tenantTypeFieldId = useId();
   const statusFieldId = useId();
   const orgNodeFieldId = useId();
+  const firstAdminEmailFieldId = useId();
+  const firstAdminNameFieldId = useId();
 
   const [tenantId, setTenantId] = useState('');
   const [displayName, setDisplayName] = useState(tenant?.displayName ?? '');
@@ -68,15 +74,22 @@ export function TenantForm({
   const [status, setStatus] = useState<TenantStatus>(
     (tenant?.status as TenantStatus) ?? 'ACTIVE',
   );
+  // TASK-MONO-773 S4 — the first admin (create only, required): IAM invites
+  // this address; the tenant stays «관리자 대기» until it is accepted.
+  const [firstAdminEmail, setFirstAdminEmail] = useState('');
+  const [firstAdminName, setFirstAdminName] = useState('');
   const [touched, setTouched] = useState(false);
 
   const tenantIdError = mode === 'create' ? tenantIdValidationError(tenantId) : null;
   const displayNameOk = displayName.trim().length > 0 && displayName.trim().length <= 100;
+  const firstAdminError =
+    mode === 'create' ? firstAdminValidationError(firstAdminEmail, firstAdminName) : null;
 
   const canSubmit =
     !pending &&
     displayNameOk &&
-    (mode === 'edit' || (tenantId.length > 0 && tenantIdError === null));
+    (mode === 'edit' ||
+      (tenantId.length > 0 && tenantIdError === null && firstAdminError === null));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,11 +101,17 @@ export function TenantForm({
         displayName: displayName.trim(),
         tenantType,
         ...(orgNodeId !== '' ? { orgNodeId } : {}),
+        firstAdmin: {
+          email: firstAdminEmail.trim(),
+          displayName: firstAdminName.trim(),
+        },
       });
     } else if (mode === 'edit' && onSubmitUpdateDraft) {
       onSubmitUpdateDraft({
         displayName: displayName.trim(),
-        status,
+        // TASK-MONO-773 S4 — `PENDING` is never a request value (IAM `400`): a
+        // «관리자 대기» tenant kept as is sends no `status` at all.
+        ...(status !== 'PENDING' ? { status } : {}),
       });
     }
   }
@@ -245,6 +264,73 @@ export function TenantForm({
         </div>
       )}
 
+      {mode === 'create' && (
+        <fieldset
+          className="sm:col-span-2 grid gap-4 sm:grid-cols-2"
+          data-testid="tenant-form-first-admin"
+        >
+          <legend className="text-sm font-medium text-foreground">
+            첫 관리자 <span aria-hidden="true">*</span>
+          </legend>
+          <div>
+            <label
+              htmlFor={firstAdminEmailFieldId}
+              className="block text-sm font-medium text-foreground"
+            >
+              이메일 <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id={firstAdminEmailFieldId}
+              // text + inputMode: the format is judged by firstAdminValidationError (IAM's
+              // rule, after trim), not by the browser's own email sanitisation.
+              type="text"
+              inputMode="email"
+              autoComplete="email"
+              value={firstAdminEmail}
+              onChange={(e) => setFirstAdminEmail(e.target.value)}
+              required
+              aria-required="true"
+              aria-invalid={touched && firstAdminError === 'FIRST_ADMIN_EMAIL_INVALID'}
+              data-testid="tenant-form-first-admin-email"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor={firstAdminNameFieldId}
+              className="block text-sm font-medium text-foreground"
+            >
+              이름 <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id={firstAdminNameFieldId}
+              type="text"
+              value={firstAdminName}
+              onChange={(e) => setFirstAdminName(e.target.value)}
+              required
+              aria-required="true"
+              maxLength={FIRST_ADMIN_DISPLAY_NAME_MAX}
+              data-testid="tenant-form-first-admin-display-name"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </div>
+          <p className="sm:col-span-2 text-xs text-muted-foreground">
+            이 주소로 첫 관리자 초대 메일이 갑니다. 초대가 수락될 때까지 테넌트는
+            «관리자 대기»이며 로그인·가입이 열리지 않습니다.
+          </p>
+          {touched && firstAdminError !== null && (
+            <p
+              className="sm:col-span-2 text-xs text-destructive"
+              data-testid="tenant-form-first-admin-error"
+            >
+              {firstAdminError === 'FIRST_ADMIN_EMAIL_INVALID'
+                ? '올바른 이메일 주소를 입력하세요.'
+                : '이름은 1~64자로 입력하세요.'}
+            </p>
+          )}
+        </fieldset>
+      )}
+
       {mode === 'edit' && (
         <div>
           <label
@@ -260,7 +346,12 @@ export function TenantForm({
             data-testid="tenant-form-status"
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            {TENANT_STATUSES.map((s) => (
+            {/* TASK-MONO-773 S4 — a «관리자 대기» tenant keeps that state unless
+                another is chosen (PENDING itself is never sent). */}
+            {tenant?.status === 'PENDING' && (
+              <option value="PENDING">관리자 대기 (유지)</option>
+            )}
+            {TENANT_PATCH_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s === 'ACTIVE' ? 'ACTIVE (활성)' : 'SUSPENDED (정지)'}
               </option>

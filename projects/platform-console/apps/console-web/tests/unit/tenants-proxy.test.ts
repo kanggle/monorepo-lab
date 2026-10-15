@@ -60,6 +60,9 @@ const TENANT = {
   updatedAt: '2026-07-08T00:00:00Z',
 };
 
+/** TASK-MONO-773 S4 — `firstAdmin` is required by IAM `POST /api/admin/tenants` (admin-api.md, breaking). */
+const FIRST_ADMIN = { email: 'owner@acme.example', displayName: '홍길동' };
+
 beforeEach(() => {
   listTenants.mockReset();
   getTenant.mockReset();
@@ -100,20 +103,26 @@ describe('GET /api/tenants (list)', () => {
 });
 
 describe('POST /api/tenants (create)', () => {
-  it('201 with the producer result on a valid body', async () => {
+  it('201 with the producer result on a valid body (TASK-MONO-773 S4 — firstAdmin rides to the api layer)', async () => {
     createTenant.mockResolvedValue(TENANT);
     const res = await createPOST(
       post({
         tenantId: 'acme-corp',
         displayName: 'ACME Corp',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         reason: '신규 온보딩',
       }),
     );
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual(TENANT);
     expect(createTenant).toHaveBeenCalledWith(
-      { tenantId: 'acme-corp', displayName: 'ACME Corp', tenantType: 'B2B_ENTERPRISE' },
+      {
+        tenantId: 'acme-corp',
+        displayName: 'ACME Corp',
+        tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
+      },
       '신규 온보딩',
       undefined,
     );
@@ -126,6 +135,7 @@ describe('POST /api/tenants (create)', () => {
         tenantId: 'acme-corp',
         displayName: 'ACME Corp',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         reason: 'r',
         idempotencyKey: 'idem-1',
       }),
@@ -144,6 +154,7 @@ describe('POST /api/tenants (create)', () => {
         tenantId: 'acme-corp',
         displayName: 'ACME Corp',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         reason: 'r',
         orgNodeId: 'node-1',
       }),
@@ -153,6 +164,7 @@ describe('POST /api/tenants (create)', () => {
         tenantId: 'acme-corp',
         displayName: 'ACME Corp',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         orgNodeId: 'node-1',
       },
       'r',
@@ -167,10 +179,12 @@ describe('POST /api/tenants (create)', () => {
         tenantId: 'acme-corp',
         displayName: 'ACME Corp',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         reason: 'r',
         orgNodeId: null,
       }),
     );
+    expect(createTenant).toHaveBeenCalledTimes(1);
     const input = createTenant.mock.calls[0][0] as Record<string, unknown>;
     expect(input).not.toHaveProperty('orgNodeId');
   });
@@ -182,6 +196,7 @@ describe('POST /api/tenants (create)', () => {
         tenantId: 'acme-corp',
         displayName: 'X',
         tenantType: 'B2C_CONSUMER',
+        firstAdmin: FIRST_ADMIN,
         reason: 'r',
         orgNodeId: 'node-x',
       }),
@@ -192,7 +207,13 @@ describe('POST /api/tenants (create)', () => {
 
   it('422 on an invalid tenantType', async () => {
     const res = await createPOST(
-      post({ tenantId: 'acme-corp', displayName: 'ACME', tenantType: 'BOGUS', reason: 'r' }),
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'ACME',
+        tenantType: 'BOGUS',
+        firstAdmin: FIRST_ADMIN,
+        reason: 'r',
+      }),
     );
     expect(res.status).toBe(422);
     expect(createTenant).not.toHaveBeenCalled();
@@ -203,7 +224,13 @@ describe('POST /api/tenants (create)', () => {
       new ApiError(400, 'TENANT_ID_RESERVED', 'reserved'),
     );
     const res = await createPOST(
-      post({ tenantId: 'admin', displayName: 'X', tenantType: 'B2C_CONSUMER', reason: 'r' }),
+      post({
+        tenantId: 'admin',
+        displayName: 'X',
+        tenantType: 'B2C_CONSUMER',
+        firstAdmin: FIRST_ADMIN,
+        reason: 'r',
+      }),
     );
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('TENANT_ID_RESERVED');
@@ -214,10 +241,83 @@ describe('POST /api/tenants (create)', () => {
       new ApiError(409, 'TENANT_ALREADY_EXISTS', 'exists'),
     );
     const res = await createPOST(
-      post({ tenantId: 'acme-corp', displayName: 'X', tenantType: 'B2C_CONSUMER', reason: 'r' }),
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'X',
+        tenantType: 'B2C_CONSUMER',
+        firstAdmin: FIRST_ADMIN,
+        reason: 'r',
+      }),
     );
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('TENANT_ALREADY_EXISTS');
+  });
+});
+
+describe('TASK-MONO-773 S4 — POST /api/tenants firstAdmin · PENDING', () => {
+  it('a body WITHOUT firstAdmin → 422 (IAM would 400 — the proxy fails fast) · nothing forwarded', async () => {
+    const res = await createPOST(
+      post({ tenantId: 'acme-corp', displayName: 'ACME', tenantType: 'B2B_ENTERPRISE', reason: 'r' }),
+    );
+    expect(res.status).toBe(422);
+    expect(createTenant).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['email missing', { displayName: '홍길동' }],
+    ['email not an address', { email: 'not-an-email', displayName: '홍길동' }],
+    ['displayName empty', { email: 'owner@acme.example', displayName: '' }],
+    ['displayName over 64', { email: 'owner@acme.example', displayName: '가'.repeat(65) }],
+    ['an unknown key', { email: 'owner@acme.example', displayName: '홍길동', roles: ['SUPER_ADMIN'] }],
+  ])('firstAdmin with %s → 422 · nothing forwarded', async (_label, firstAdmin) => {
+    const res = await createPOST(
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'ACME',
+        tenantType: 'B2B_ENTERPRISE',
+        firstAdmin,
+        reason: 'r',
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect(createTenant).not.toHaveBeenCalled();
+  });
+
+  it('the producer 201 (status PENDING + firstAdmin summary + firstAdminInvitation) passes through as-is', async () => {
+    const created = {
+      ...TENANT,
+      status: 'PENDING',
+      firstAdmin: {
+        state: 'INVITED',
+        email: 'owner@acme.example',
+        invitationId: 'inv-1',
+        expiresAt: '2026-10-22T09:00:00Z',
+      },
+    };
+    createTenant.mockResolvedValue(created);
+    const res = await createPOST(
+      post({
+        tenantId: 'acme-corp',
+        displayName: 'ACME Corp',
+        tenantType: 'B2C_CONSUMER',
+        firstAdmin: FIRST_ADMIN,
+        reason: 'r',
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual(created);
+  });
+
+  it('GET ?status=PENDING forwards the PENDING filter (admin-api § GET /api/admin/tenants)', async () => {
+    listTenants.mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+    await listGET(get('http://console.local/api/tenants?status=PENDING'));
+    expect(listTenants).toHaveBeenCalledWith(expect.objectContaining({ status: 'PENDING' }));
+  });
+
+  it('control — PATCH status=PENDING stays a 422 (PENDING is never a request value — only POST makes it)', async () => {
+    const res = await updatePATCH(patch({ status: 'PENDING', reason: 'r' }), params('acme-corp'));
+    expect(res.status).toBe(422);
+    expect(updateTenant).not.toHaveBeenCalled();
   });
 });
 

@@ -19,7 +19,16 @@ public interface TenantProvisioningPort {
      * @throws com.example.admin.application.exception.TenantAlreadyExistsException if duplicate
      * @throws com.example.admin.application.exception.DownstreamFailureException    on 5xx/CB open
      */
-    TenantSummary create(String tenantId, String displayName, String tenantType);
+    default TenantSummary create(String tenantId, String displayName, String tenantType) {
+        return create(tenantId, displayName, tenantType, null);
+    }
+
+    /**
+     * TASK-MONO-773 S4 (admin-to-account.md § Tenant lifecycle — 773 변경분) — {@code initialStatus}:
+     * {@code null} = omitted = account-service's default {@code ACTIVE} (the self-service path, byte-unchanged);
+     * {@code "PENDING"} = the {@code SUPER_ADMIN} path's «관리자 대기».
+     */
+    TenantSummary create(String tenantId, String displayName, String tenantType, String initialStatus);
 
     /**
      * Updates displayName and/or status of an existing tenant.

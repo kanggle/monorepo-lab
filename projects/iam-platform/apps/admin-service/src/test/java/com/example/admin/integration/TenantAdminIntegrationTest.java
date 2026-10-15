@@ -192,25 +192,42 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
 
     // ---- Tests -------------------------------------------------------------
 
+    /**
+     * TASK-MONO-773 S4 — every POST carries the now-required {@code firstAdmin} (admin-api.md § POST /api/admin/tenants
+     * «breaking 의 범위»: this class is one of the named callers S4 fixes).
+     */
+    private static String createBody(String tenantId, String displayName) {
+        return "{\"tenantId\":\"" + tenantId + "\",\"displayName\":\"" + displayName + "\","
+                + "\"tenantType\":\"B2B_ENTERPRISE\","
+                + "\"firstAdmin\":{\"email\":\"owner-" + tenantId + "@example.com\",\"displayName\":\"첫 관리자\"}}";
+    }
+
     @Test
-    @DisplayName("SUPER_ADMIN POST → 201 + admin_actions TENANT_CREATE + outbox tenant.created")
+    @DisplayName("SUPER_ADMIN POST(+firstAdmin) → 201 PENDING + admin_actions TENANT_CREATE + outbox tenant.created (TASK-MONO-773 S4)")
     void superAdmin_post_creates_tenant_and_emits_outbox() throws Exception {
-        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/tenants"))
+        // S2's real behaviour: account-service answers PENDING only when asked for it (initialStatus).
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/tenants")).atPriority(1)
+                .withRequestBody(WireMock.matchingJsonPath("$.initialStatus", WireMock.equalTo("PENDING")))
+                .willReturn(aResponse()
+                        .withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(WMS_TENANT_RESPONSE.replace("\"ACTIVE\"", "\"PENDING\""))));
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/tenants")).atPriority(2)
                 .willReturn(aResponse()
                         .withStatus(201)
                         .withHeader("Content-Type", "application/json")
                         .withBody(WMS_TENANT_RESPONSE)));
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/notifications/operator-invitation"))
+                .willReturn(aResponse().withStatus(204)));
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
-                                """))
+                        .content(createBody("wms-test", "WMS Test")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("wms-test"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("PENDING"));
 
         // Verify admin_actions row
         Integer count = jdbcTemplate.queryForObject(
@@ -233,9 +250,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", regularOpToken())
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
-                                """))
+                        .content(createBody("wms-test", "WMS Test")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
@@ -247,9 +262,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", superAdminToken())
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"WMS","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
-                                """))
+                        .content(createBody("WMS", "WMS")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -261,9 +274,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", superAdminToken())
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"admin","displayName":"Admin Tenant","tenantType":"B2B_ENTERPRISE"}
-                                """))
+                        .content(createBody("admin", "Admin Tenant")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("TENANT_ID_RESERVED"));
     }
@@ -281,9 +292,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", superAdminToken())
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"wms-test","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
-                                """))
+                        .content(createBody("wms-test", "WMS")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TENANT_ALREADY_EXISTS"));
     }
@@ -302,9 +311,7 @@ class TenantAdminIntegrationTest extends AbstractIntegrationTest {
                             .header("Authorization", superAdminToken())
                             .header("X-Operator-Reason", "cb regression test")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"tenantId\":\"cb-test-" + i + "\","
-                                    + "\"displayName\":\"CB Test\","
-                                    + "\"tenantType\":\"B2B_ENTERPRISE\"}"))
+                            .content(createBody("cb-test-" + i, "CB Test")))
                     .andExpect(status().isServiceUnavailable());
         }
     }

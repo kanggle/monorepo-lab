@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ApiError, TenantsUnavailableError } from '@/shared/api/errors';
 import { logger, newRequestId } from '@/shared/lib/logger';
-import { TENANT_TYPES, TENANT_STATUSES } from '@/features/tenants';
+import {
+  TENANT_TYPES,
+  TENANT_PATCH_STATUSES,
+  FIRST_ADMIN_EMAIL_REGEX,
+  FIRST_ADMIN_EMAIL_MAX,
+  FIRST_ADMIN_DISPLAY_NAME_MAX,
+} from '@/features/tenants';
 
 /**
  * Shared error → HTTP mapping + body schemas for the tenant-management proxy
@@ -20,12 +26,28 @@ import { TENANT_TYPES, TENANT_STATUSES } from '@/features/tenants';
 /** create: tenantId + displayName + tenantType + reason (+ optional
  *  idempotencyKey — producer-recommended, not required) (+ optional
  *  `orgNodeId` — TASK-PC-FE-312 / TASK-BE-625: the node to place the new
- *  tenant under; absent or `null` = 무소속, the pre-312 create). */
+ *  tenant under; absent or `null` = 무소속, the pre-312 create)
+ *  + 🔴 REQUIRED `firstAdmin{email, displayName}` (TASK-MONO-773 S4 — IAM
+ *  answers `400` without it; checked here after trim with IAM's own rules so a
+ *  bad draft fails fast as `422` and never reaches IAM). */
+export const FirstAdminBodySchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .min(1)
+      .max(FIRST_ADMIN_EMAIL_MAX)
+      .regex(FIRST_ADMIN_EMAIL_REGEX),
+    displayName: z.string().trim().min(1).max(FIRST_ADMIN_DISPLAY_NAME_MAX),
+  })
+  .strict();
+
 export const CreateTenantBodySchema = z
   .object({
     tenantId: z.string().min(1),
     displayName: z.string().min(1).max(100),
     tenantType: z.enum(TENANT_TYPES),
+    firstAdmin: FirstAdminBodySchema,
     reason: z.string(),
     idempotencyKey: z.string().min(1).optional(),
     orgNodeId: z.string().min(1).nullable().optional(),
@@ -34,11 +56,12 @@ export const CreateTenantBodySchema = z
 export type CreateTenantBody = z.infer<typeof CreateTenantBodySchema>;
 
 /** update: displayName and/or status (at least one) + reason. NO
- *  idempotencyKey (partial PATCH is naturally idempotent). */
+ *  idempotencyKey (partial PATCH is naturally idempotent). `status` is the
+ *  REQUEST enum — never `PENDING` (TASK-MONO-773: only the create makes it). */
 export const UpdateTenantBodySchema = z
   .object({
     displayName: z.string().min(1).max(100).optional(),
-    status: z.enum(TENANT_STATUSES).optional(),
+    status: z.enum(TENANT_PATCH_STATUSES).optional(),
     reason: z.string(),
   })
   .strict()

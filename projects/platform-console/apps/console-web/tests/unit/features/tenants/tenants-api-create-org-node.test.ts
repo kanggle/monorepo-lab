@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * TASK-PC-FE-312 AC-4 at the producer edge — `createTenant` builds the
  * `POST /api/admin/tenants` body. A chosen node adds `orgNodeId`; no node keeps
- * the pre-312 three-field body byte-for-byte (regression).
+ * the pre-312 body byte-for-byte (regression) — which, since TASK-MONO-773 S4,
+ * includes the required `firstAdmin`.
  */
 
 const callGapTenants = vi.fn();
@@ -13,6 +14,12 @@ vi.mock('@/features/tenants/api/tenants-client', () => ({
 }));
 
 import { createTenant } from '@/features/tenants/api/tenants-api';
+
+/** TASK-MONO-773 S4 — every create carries the required first admin. */
+const FIRST_ADMIN = { email: 'owner@acme.example', displayName: '홍길동' };
+
+/** Typed through `createTenant`'s own parameter, so this file compiles before and after S4 widens the input. */
+const input = (o: Record<string, unknown>) => o as unknown as Parameters<typeof createTenant>[0];
 
 const TENANT = {
   tenantId: 'acme',
@@ -31,7 +38,13 @@ beforeEach(() => {
 describe('createTenant — orgNodeId (TASK-PC-FE-312 / TASK-BE-625)', () => {
   it('a chosen node rides in the producer body', async () => {
     await createTenant(
-      { tenantId: 'acme', displayName: 'ACME', tenantType: 'B2B_ENTERPRISE', orgNodeId: 'n-1' },
+      input({
+        tenantId: 'acme',
+        displayName: 'ACME',
+        tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
+        orgNodeId: 'n-1',
+      }),
       '온보딩',
       'idem-1',
     );
@@ -44,23 +57,36 @@ describe('createTenant — orgNodeId (TASK-PC-FE-312 / TASK-BE-625)', () => {
         tenantId: 'acme',
         displayName: 'ACME',
         tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
         orgNodeId: 'n-1',
       },
     });
   });
 
-  it('regression — no node: the body is exactly the three pre-312 fields', async () => {
+  it('regression — no node: the body is exactly the pre-312 fields + TASK-MONO-773 S4 firstAdmin', async () => {
     await createTenant(
-      { tenantId: 'acme', displayName: 'ACME', tenantType: 'B2B_ENTERPRISE' },
+      input({
+        tenantId: 'acme',
+        displayName: 'ACME',
+        tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
+      }),
       '온보딩',
     );
     const body = callGapTenants.mock.calls[0][0].body as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(['displayName', 'tenantId', 'tenantType']);
+    expect(Object.keys(body).sort()).toEqual(['displayName', 'firstAdmin', 'tenantId', 'tenantType']);
+    expect(body.firstAdmin).toEqual(FIRST_ADMIN);
   });
 
   it('an empty-string node is treated as «none» (never sent as "")', async () => {
     await createTenant(
-      { tenantId: 'acme', displayName: 'ACME', tenantType: 'B2B_ENTERPRISE', orgNodeId: '' },
+      input({
+        tenantId: 'acme',
+        displayName: 'ACME',
+        tenantType: 'B2B_ENTERPRISE',
+        firstAdmin: FIRST_ADMIN,
+        orgNodeId: '',
+      }),
       '온보딩',
     );
     const body = callGapTenants.mock.calls[0][0].body as Record<string, unknown>;

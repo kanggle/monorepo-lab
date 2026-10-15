@@ -5,8 +5,6 @@ import com.example.admin.application.port.AdminOperatorPort;
 import com.example.admin.application.port.DomainPermissionSetPort;
 import com.example.admin.application.port.OperatorRowLockPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
-import com.example.admin.domain.rbac.DomainGrantSource;
-import com.example.admin.domain.rbac.DomainPermissionSetPresets;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
@@ -177,13 +175,8 @@ public class FirstAdminProvisioner {
      * just-created tenant — never {@code '*'} (V0054 CHECK), never another company.
      */
     private void writeOriginSet(long operatorInternalId, String newTenantId, Instant now) {
-        DomainPermissionSetPort.SetView preset = setPort.findPresets().stream()
-                .filter(s -> DomainPermissionSetPresets.ALL_DOMAINS_FULL.equals(s.systemKey()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "system preset '" + DomainPermissionSetPresets.ALL_DOMAINS_FULL + "' is missing (V0052)"));
-        setPort.insertGrant(operatorInternalId, newTenantId, preset.internalId(), DomainGrantSource.ORIGIN,
-                null, null, now);
+        // TASK-MONO-773 S4 — the one ORIGIN code path, shared with the first-admin invitation acceptance.
+        OriginSetWriter.write(setPort, operatorInternalId, newTenantId, now);
     }
 
     /** The minted operator's external UUID + internal BIGINT id. */

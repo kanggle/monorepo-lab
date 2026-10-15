@@ -53,7 +53,7 @@ public class OutboxTenantEventPublisher implements TenantEventPublisher {
 
     @Override
     @Transactional
-    public void publishTenantCreated(String tenantId, String displayName, String tenantType,
+    public void publishTenantCreated(String tenantId, String displayName, String tenantType, String status,
                                      String operatorId, Instant createdAt) {
         Map<String, Object> envelope = envelope("tenant.created", tenantId, createdAt);
 
@@ -61,7 +61,8 @@ public class OutboxTenantEventPublisher implements TenantEventPublisher {
         inner.put("tenantId", tenantId);
         inner.put("displayName", displayName);
         inner.put("tenantType", tenantType);
-        inner.put("status", "ACTIVE");
+        // TASK-MONO-773 S4 — the real birth status (PENDING on the SUPER_ADMIN path); was a hard-coded "ACTIVE".
+        inner.put("status", status == null ? "ACTIVE" : status);
         inner.put("actor", actorOf(operatorId));
         inner.put("createdAt", createdAt.toString());
         envelope.put("payload", inner);
@@ -71,13 +72,14 @@ public class OutboxTenantEventPublisher implements TenantEventPublisher {
 
     @Override
     @Transactional
-    public void publishTenantSuspended(String tenantId, String operatorId,
+    public void publishTenantSuspended(String tenantId, String previousStatus, String operatorId,
                                        String reason, Instant suspendedAt) {
         Map<String, Object> envelope = envelope("tenant.suspended", tenantId, suspendedAt);
 
         Map<String, Object> inner = new LinkedHashMap<>();
         inner.put("tenantId", tenantId);
-        inner.put("previousStatus", "ACTIVE");
+        // TASK-MONO-773 S4 — the status really left (PENDING for the OD-2 «정리»); was a hard-coded "ACTIVE".
+        inner.put("previousStatus", previousStatus == null ? "ACTIVE" : previousStatus);
         inner.put("currentStatus", "SUSPENDED");
         inner.put("reason", reason);
         inner.put("actor", actorOf(operatorId));
@@ -103,6 +105,23 @@ public class OutboxTenantEventPublisher implements TenantEventPublisher {
         envelope.put("payload", inner);
 
         save(envelope, tenantId, "tenant.reactivated");
+    }
+
+    @Override
+    @Transactional
+    public void publishTenantActivated(String tenantId, String trigger, String operatorId, Instant activatedAt) {
+        Map<String, Object> envelope = envelope("tenant.activated", tenantId, activatedAt);
+
+        Map<String, Object> inner = new LinkedHashMap<>();
+        inner.put("tenantId", tenantId);
+        inner.put("previousStatus", "PENDING");
+        inner.put("currentStatus", "ACTIVE");
+        inner.put("trigger", trigger);
+        inner.put("actor", actorOf(operatorId));
+        inner.put("activatedAt", activatedAt.toString());
+        envelope.put("payload", inner);
+
+        save(envelope, tenantId, "tenant.activated");
     }
 
     @Override

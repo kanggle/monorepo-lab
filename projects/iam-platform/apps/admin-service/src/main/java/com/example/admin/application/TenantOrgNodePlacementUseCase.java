@@ -3,8 +3,9 @@ package com.example.admin.application;
 import com.example.admin.application.orgnode.TenantPlacementView;
 import com.example.admin.application.port.OrgNodePort;
 import com.example.admin.application.port.TenantPlacementPort;
+import com.example.admin.application.tenant.CreateTenantCommand;
+import com.example.admin.application.tenant.CreateTenantResult;
 import com.example.admin.application.tenant.CreateTenantUseCase;
-import com.example.admin.application.tenant.TenantSummary;
 import com.example.admin.infrastructure.persistence.rbac.OrgNodeSubtreeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -81,22 +82,24 @@ public class TenantOrgNodePlacementUseCase {
      * <p>The DESTINATION is checked <b>before</b> anything is created — an out-of-reach node
      * leaves no tenant behind. Creation and placement are then two authority calls; see the
      * contract's ordering note for the one race between them.
+     *
+     * <p>TASK-MONO-773 S4 — the creation is the «tenant + first admin» bundle ({@link CreateTenantCommand}); the
+     * placement follows it (admin-api.md § POST /api/admin/tenants step 6).
      */
-    public TenantSummary createTenantUnder(OperatorContext actor, String tenantId, String displayName,
-                                           String tenantType, String orgNodeId,
-                                           String reason, String idempotencyKey) {
+    public CreateTenantResult createTenantUnder(CreateTenantCommand command, String orgNodeId) {
+        OperatorContext actor = command.operator();
+        String tenantId = command.tenantId();
         String target = blankToNull(orgNodeId);
         OrgNodeScopeGuard.Reach reach = orgNodeScopeGuard.resolveReach(actor, orgNodePort.list());
         orgNodeScopeGuard.requirePlacementAllowed(actor, reach, tenantId, null, target,
                 ActionCode.TENANT_ORG_NODE_ASSIGN);
 
-        TenantSummary created = createTenantUseCase.execute(
-                tenantId, displayName, tenantType, actor, reason, idempotencyKey);
+        CreateTenantResult created = createTenantUseCase.execute(command);
 
         if (target != null) {
             TenantPlacementView placed = placementPort.place(tenantId, target, null);
             subtreeResolver.invalidateAll();
-            audit(actor, tenantId, placed, reason);
+            audit(actor, tenantId, placed, command.reason());
         }
         return created;
     }

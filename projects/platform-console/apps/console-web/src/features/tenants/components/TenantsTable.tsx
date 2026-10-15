@@ -8,6 +8,8 @@ import {
   TENANT_STATUSES,
   TENANT_TYPES,
   tenantStatusTone,
+  tenantStatusLabel,
+  tenantStatusOptionLabel,
   type Tenant,
   type TenantPage,
   type TenantStatus,
@@ -73,7 +75,7 @@ export function TenantsTable({
             <option value="">전체</option>
             {TENANT_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {tenantStatusOptionLabel(s)}
               </option>
             ))}
           </select>
@@ -147,8 +149,9 @@ export function TenantsTable({
                 </td>
                 <td className="py-2 pr-4 font-mono text-xs">{t.tenantId}</td>
                 <td className="py-2 pr-4">{tenantTypeLabel(t.tenantType)}</td>
-                <td className="py-2 pr-4">
-                  <StatusBadge tone={tenantStatusTone(t.status)}>{t.status}</StatusBadge>
+                <td className="py-2 pr-4" data-testid={`tenants-row-status-${t.tenantId}`}>
+                  {/* TASK-MONO-773 S4 — PENDING reads «관리자 대기» + the firstAdmin.state suffix */}
+                  <StatusBadge tone={tenantStatusTone(t.status)}>{tenantStatusLabel(t)}</StatusBadge>
                 </td>
                 <td className="py-2 pr-4 text-xs text-muted-foreground">
                   {formatDateTime(t.createdAt)}

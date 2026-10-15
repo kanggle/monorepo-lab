@@ -48,8 +48,10 @@ class OperatorInvitationAcceptanceWriterTest {
 
     @BeforeEach
     void setUp() {
+        // originSetWriter = null: these invitations are ordinary (first_admin = false) — the ORIGIN write is never
+        // reached; TenantFirstAdminIntegrationTest covers the first-admin branch against real MySQL.
         writer = new OperatorInvitationAcceptanceWriter(invitationPort, operatorPort, assignmentPort, auditor,
-                new OperatorMembershipAddition(operatorPort, assignmentPort, null));
+                new OperatorMembershipAddition(operatorPort, assignmentPort, null), null);
     }
 
     private static InvitationView pending() {
@@ -154,7 +156,7 @@ class OperatorInvitationAcceptanceWriterTest {
         List<InMemoryRoleRowsPort.Row> rolesBefore = List.copyOf(operators.rows);
         List<InMemoryAssignmentPort.Row> assignmentsBefore = List.copyOf(assignments.rows);
         OperatorInvitationAcceptanceWriter membershipWriter = new OperatorInvitationAcceptanceWriter(invitationPort,
-                operators, assignments, auditor, new OperatorMembershipAddition(operators, assignments, null));
+                operators, assignments, auditor, new OperatorMembershipAddition(operators, assignments, null), null);
         given(invitationPort.acceptIfPending(eq(7L), eq("h".repeat(64)), eq(ACCOUNT), any())).willReturn(true);
         given(auditor.newAuditId()).willReturn("audit-2");
 

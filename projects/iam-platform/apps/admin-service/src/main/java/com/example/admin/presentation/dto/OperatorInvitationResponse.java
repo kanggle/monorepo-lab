@@ -24,6 +24,8 @@ public record OperatorInvitationResponse(
         String email,
         String displayName,
         List<String> roles,
+        /** TASK-MONO-773 S4 (가산) — a first-admin invitation (admin-api.md § Operator Invitation «첫 관리자 초대»). */
+        boolean firstAdmin,
         String status,
         boolean expired,
         Instant expiresAt,
@@ -43,7 +45,8 @@ public record OperatorInvitationResponse(
     public static OperatorInvitationResponse from(OperatorInvitationResult r) {
         Delivery delivery = r.deliveryStatus() == null ? null : new Delivery(r.deliveryStatus(), r.deliveryAttemptedAt());
         return new OperatorInvitationResponse(
-                r.invitationId(), r.tenantId(), r.email(), r.displayName(), r.roles(), r.status(), r.expired(),
+                r.invitationId(), r.tenantId(), r.email(), r.displayName(), r.roles(), r.firstAdmin(),
+                r.status(), r.expired(),
                 r.expiresAt(), r.createdAt(), r.invitedBy(), delivery,
                 r.acceptedAt(), r.acceptedOperatorId(), r.cancelledAt(), r.auditId());
     }
