@@ -137,11 +137,18 @@ export function ConsoleSidebarNav({
   availableProductKeys,
   myRoles,
   subscribedDomains,
+  myBusinessRoles,
   variant = 'operator',
 }: {
   availableProductKeys?: readonly string[];
   myRoles?: readonly string[] | null;
   subscribedDomains?: ReadonlySet<DomainKey>;
+  /**
+   * TASK-PC-FE-338 c-2 — the operator's business roles (row 12 `GET /api/admin/me/domain-access`
+   * ∩ the active tenant's subscribed domains — after P3 this equals the assumed token's `roles`,
+   * never a token decode). Drives the per-menu «업무 권한 없음» badge. Omitted = no badge.
+   */
+  myBusinessRoles?: ReadonlySet<string>;
   /**
    * TASK-MONO-773 S6 — `'non-operator'` renders the non-operator shell's two items only
    * ({@link NON_OPERATOR_NAV}, console-integration-contract § 2.6.4). Default `'operator'` = unchanged.
@@ -154,6 +161,7 @@ export function ConsoleSidebarNav({
       availableProductKeys={availableProductKeys}
       myRoles={myRoles}
       subscribedDomains={subscribedDomains}
+      myBusinessRoles={myBusinessRoles}
     />
   );
 }
@@ -190,6 +198,7 @@ function OperatorNav({
   availableProductKeys?: readonly string[];
   myRoles?: readonly string[] | null;
   subscribedDomains?: ReadonlySet<DomainKey>;
+  myBusinessRoles?: ReadonlySet<string>;
 }) {
   const groups = visibleGroups(GROUPS, availableProductKeys, (href) =>
     isHrefHiddenFor(href, myRoles),

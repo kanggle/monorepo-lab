@@ -200,6 +200,15 @@ export async function getSelfRolesOrNull(): Promise<string[] | null> {
 }
 
 /**
+ * TASK-PC-FE-338 c-2 — `GET /api/admin/me/domain-access` (contract § 2.4.3.4 row 12) roles. RED STUB.
+ */
+export async function getMyDomainRolesOrNull(): Promise<
+  { domainKey: string; role: string }[] | null
+> {
+  return null;
+}
+
+/**
  * TASK-MONO-773 S6 — the whole `GET /api/admin/me` summary (roles + `homeTenantId`), or `null` on ANY failure
  * (no operator session, no active tenant, 4xx, 5xx, timeout). The «테넌트 생성» screen reads it to pick its mode
  * (a `'*'` operator holding `tenant.manage` → the SUPER_ADMIN form); `null` means «don't know» and the screen

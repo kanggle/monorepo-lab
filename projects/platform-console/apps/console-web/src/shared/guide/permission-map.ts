@@ -197,7 +197,24 @@ export type PermissionGate =
   /** 카드마다(또는 동작마다) 다른 키로 부분 게이트되는 화면 — 키 중 하나라도 있으면 열린다. */
   | { kind: 'admin-per-card'; permissions: string[]; extra?: string }
   /** 도메인 롤 — assume-tenant 시 구독 도메인에서 파생. */
-  | { kind: 'domain'; domain: DomainKey; roles: string[]; extra?: string };
+  | {
+      kind: 'domain';
+      domain: DomainKey;
+      roles: string[];
+      extra?: string;
+      /**
+       * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Domain nav — two signals», per menu) — the roles
+       * of which the domain server needs AT LEAST ONE for this screen's PRIMARY READ. Absent =
+       * the server opens the screen on subscription alone → never «업무 권한 없음».
+       */
+      serverRequires?: readonly string[];
+      /**
+       * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — the roles
+       * of which the domain server needs AT LEAST ONE for this screen's MUTATION buttons.
+       * Absent = nothing on this screen is hidden.
+       */
+      writeRequires?: readonly string[];
+    };
 
 export interface Crud {
   read: boolean;

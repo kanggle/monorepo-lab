@@ -136,6 +136,44 @@ export function subscriptionBadgeKeys(
   return out;
 }
 
+/* TASK-PC-FE-338 c-2 — «업무 권한 없음» (per menu) + write-button gate. RED STUBS — implemented in
+ * the fix commit. */
+
+/** One row-12 role (`GET /api/admin/me/domain-access` `roles[]`). */
+export interface MyDomainRole {
+  domainKey: string;
+  role: string;
+}
+
+export function businessRolesWithin(
+  _rows: readonly MyDomainRole[] | null | undefined,
+  _subscribedDomains: ReadonlySet<DomainKey> | undefined,
+): ReadonlySet<string> | undefined {
+  return undefined;
+}
+
+export function businessPermissionBadgeKeys(
+  _groups: readonly NavGroup[],
+  _subscribedDomains: ReadonlySet<DomainKey> | undefined,
+  _myBusinessRoles: ReadonlySet<string> | undefined,
+): ReadonlySet<string> {
+  return new Set();
+}
+
+export function defaultBusinessPermissionBadgeKeys(
+  subscribedDomains: ReadonlySet<DomainKey> | undefined,
+  myBusinessRoles: ReadonlySet<string> | undefined,
+): ReadonlySet<string> {
+  return businessPermissionBadgeKeys(GROUPS, subscribedDomains, myBusinessRoles);
+}
+
+export function canWriteOn(
+  _href: string,
+  _myBusinessRoles: ReadonlySet<string> | undefined,
+): boolean {
+  return true;
+}
+
 /** Re-exported for callers (`ConsoleSidebarNav`, the `(console)` layout) that
  *  only need the type, not the rest of `permission-map.ts`'s surface. */
 export type { DomainKey };

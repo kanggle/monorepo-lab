@@ -266,3 +266,23 @@ describe('WmsOpsScreen — a11y', () => {
     );
   });
 });
+
+/**
+ * TASK-PC-FE-338 c-2 AC-2 — alert acknowledge needs WMS_OPERATOR on the server
+ * (`AlertDashboardController` `hasRole('WMS_OPERATOR')`). Without it the button hides; the
+ * alert rows (a subscription-only read) stay. Contract § 2.4.3.4.
+ */
+describe('WmsOpsScreen — AC-2 acknowledge hidden without WMS_OPERATOR', () => {
+  it('canAcknowledge=false → no «확인 처리» button, the row stays, a read-only note shows', () => {
+    renderScreen({ canAcknowledge: false });
+    expect(screen.getByTestId('wms-alert-row-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('wms-alert-ack-0')).toBeNull();
+    expect(screen.getByTestId('wms-alerts-read-only-note')).toHaveTextContent('조회 전용');
+  });
+
+  it('control: canAcknowledge omitted (fail-open) → the button is there, no note', () => {
+    renderScreen();
+    expect(screen.getByTestId('wms-alert-ack-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('wms-alerts-read-only-note')).toBeNull();
+  });
+});

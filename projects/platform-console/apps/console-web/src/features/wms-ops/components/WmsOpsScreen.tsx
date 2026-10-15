@@ -64,6 +64,12 @@ export interface WmsOpsScreenProps {
    *  distribution (in `overview`) sits directly above the alerts table, and
    *  this passive glance last. Absent ⇒ no recent-activity glance. */
   recentActivity?: React.ReactNode;
+  /**
+   * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when
+   * the operator's business roles hold none of `/wms`'s `writeRequires` (`WMS_OPERATOR`): the
+   * acknowledge buttons hide. Omitted / `true` = shown (fail-open). The server stays final.
+   */
+  canAcknowledge?: boolean;
 }
 
 export function WmsOpsScreen({

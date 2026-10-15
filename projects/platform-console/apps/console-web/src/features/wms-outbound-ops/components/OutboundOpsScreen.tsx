@@ -64,6 +64,13 @@ import { ACTION_COPY } from './outbound-ops-helpers';
 
 export interface OutboundOpsScreenProps {
   orders: OutboundOrderPage;
+  /**
+   * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when
+   * the operator's business roles hold none of `/wms/outbound`'s `writeRequires`
+   * (`OUTBOUND_WRITE`): pick / pack / ship / cancel hide. «발송 재시도» (logistics-service,
+   * `authenticated()` only) stays. Omitted / `true` = shown (fail-open). The server stays final.
+   */
+  canWrite?: boolean;
 }
 
 export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
