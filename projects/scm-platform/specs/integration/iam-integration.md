@@ -117,6 +117,42 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 v2 user-f
 > ([`procurement-api.md`](../contracts/http/procurement-api.md) § Actor model).
 > demand-planning operator 표면은 role split 없이 `tenant_id` + DRAFT-PO 불변식으로
 > 게이트된다 ([`gateway-public-routes.md`](../contracts/http/gateway-public-routes.md)).
+> 🔴 **TASK-MONO-792 부터 이 문단의 «role split 없이» 는 낡았다** — 아래 § 업무 역할이 정본이다.
+
+---
+
+## 업무 역할 (ADR-MONO-083 P5 · TASK-MONO-792) — 정본
+
+> 2026-10-15 UTC 소유자 결정(Q1~Q5). 이 절이 SCM 서버 인가의 **유일한 정본**이다 — 각 API 계약
+> (`procurement-api.md` · `demand-planning-api.md` · `inventory-visibility-api.md`)과 logistics
+> `architecture.md` 는 이 표를 가리킨다. iam 쪽 짝: `iam-platform … admin-api.md` § 카탈로그 (같은 역할 이름 ·
+> 같은 순서).
+
+판정은 **각 서비스의 필터 체인**(URL × HTTP 메서드)에서 한다 — 게이트웨이는 지금처럼 아무 역할이나 통과시킨다
+(`RoleAdmissions.roleOrScope`). 게이트웨이에만 넣으면 서비스 직접 호출이 우회한다(TASK-MONO-792 Failure 1).
+역할은 검증된 JWT `roles` claim → `ROLE_<name>` authority 로 읽는다. **범위(`scope`)는 업무 판정에 쓰지 않는다**.
+
+| 서비스 · 경로 | 조회 (`GET`) | 변경 (그 밖의 메서드) |
+|---|---|---|
+| procurement `/api/procurement/**` | `SCM_PROCUREMENT_READ` ∨ `SCM_PROCUREMENT_WRITE` | `SCM_PROCUREMENT_WRITE` |
+| procurement `POST /api/procurement/po/from-suggestion` | — | `SCM_PROCUREMENT_WRITE` ∨ **`SCM_DEMAND_PLANNING_WRITE`** (Q2 — 초안(DRAFT)만 만든다; 수요계획 승인이 운영자 토큰을 실어 부른다) |
+| demand-planning `/api/demand-planning/**` | `SCM_DEMAND_PLANNING_READ` ∨ `_WRITE` | `SCM_DEMAND_PLANNING_WRITE` |
+| logistics `/api/logistics/**` | `SCM_LOGISTICS_READ` ∨ `_WRITE` | `SCM_LOGISTICS_WRITE` (Q3 — 엄격: WMS 출고 화면의 «발송 재시도» 도 이 역할이 필요하다) |
+| inventory-visibility `/api/inventory-visibility/**` | `SCM_INVENTORY_VISIBILITY_READ` ∨ `_WRITE` | `SCM_INVENTORY_VISIBILITY_WRITE` (Q1 — `POST /nodes` · `POST /nodes/{nodeId}/observed-stock`, 3PL 온보딩) |
+| 무변경 | procurement `/api/procurement/webhooks/**`(HMAC, JWT 없음) · `/internal/inventory-visibility/**`(네트워크 신뢰) · actuator | |
+
+- **조회 역할은 변경을 열지 않는다. 변경 역할은 조회를 연다**(WMS outbound 와 같은 관용 — `GET = READ ∨ WRITE`).
+- **`SCM_OPERATOR` = 진입 역할**(Q4): 업무 API 를 **단독으로 열지 않는다**(위 표 어디에도 없다). 카탈로그에서 빠졌고
+  배정할 수 없다 — auth-service 가 assume 토큰에 SCM 업무 역할이 하나라도 실릴 때 **파생**한다(iam
+  `auth-service/architecture.md` § 진입 역할 파생). 쓰임: procurement `ActorContext.isOperator()` 의 운영자 행위자
+  판정(발주 확정 · 공급사 등록) — **무변경**이며 역할 판정과 겹쳐도 넓히지 않는다(확정 = `SCM_PROCUREMENT_WRITE`
+  **∧** OPERATOR 행위자).
+- 일반 역할 `OPERATOR` · `ADMIN` · `SUPER_ADMIN` 은 `isOperator()` 에만 남고 업무 API 를 열지 않는다(위 표에 없다).
+- 🔵 **기계 클라이언트 `scm-platform-internal-services-client`**(범위 `scm.read/scm.write`, 역할 없음 —
+  auth `WorkloadRoleCatalog`) 는 이 판정 아래에서 **업무 API 403** 이다. 소유자 수용(2026-10-15 UTC) — 사용처 0
+  (데모 · e2e · 스크립트). 필요해지면 그 클라이언트에 업무 역할을 주는 별도 티켓이다(범위 판정을 다시 열지 않는다).
+- 도메인 경계: WMS 역할만 가진 토큰은 SCM 업무 API 403, SCM 역할만 가진 토큰은 WMS 업무 API 403(각 서버의 판정 —
+  교차 수용 없음).
 
 ---
 
@@ -126,7 +162,7 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 v2 user-f
 |---|---|---|
 | Authorization 헤더 누락 / 만료 / 서명 불일치 | 401 | `UNAUTHORIZED` |
 | `tenant_id != scm` (cross-tenant, 그리고 `*` 가 아님) | 403 | `TENANT_FORBIDDEN` |
-| 유효 토큰이지만 scope/role 부족 | 403 | `FORBIDDEN` |
+| 유효 토큰이지만 업무 역할 부족(§ 업무 역할) | 403 | `PERMISSION_DENIED` |
 
 `platform/error-handling.md` 의 envelope 형식 (`{ "code", "message", "timestamp" }`) 을 따른다.
 

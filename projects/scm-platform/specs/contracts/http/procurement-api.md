@@ -25,11 +25,28 @@ token to an actor via `ActorContext.isOperator()`:
   is not a registered scope or account type).
 
 scm's only OAuth **scopes** remain `scm.read` / `scm.write` (see
-[`iam-integration.md`](../../integration/iam-integration.md) § Scopes); they
-gate read-vs-write, orthogonal to the BUYER/OPERATOR actor split. Tenant
+[`iam-integration.md`](../../integration/iam-integration.md) § Scopes); they are
+**not** checked by this service — read-vs-write is the business-role axis below (TASK-MONO-792). Tenant
 admission (`tenant_id ∈ {scm, *}` ∪ signed `entitled_domains ∋ scm`, ADR-MONO-019)
 is a third, separate axis. `SUPPLIER` / `SYSTEM` actors are not token-derived
 (webhook callers / internal transitions).
+
+### Business roles (ADR-MONO-083 P5 · TASK-MONO-792)
+
+A fourth axis, checked **first** by the service's filter chain (URL × method), before the actor model.
+Canonical table: [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본).
+For this service:
+
+| Request | Required (any of) |
+|---|---|
+| `GET /api/procurement/**` | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` |
+| `POST /api/procurement/po/from-suggestion` | `SCM_PROCUREMENT_WRITE` · `SCM_DEMAND_PLANNING_WRITE` (DRAFT only — owner decision Q2) |
+| every other `/api/procurement/**` mutation (`POST /po` · `submit` · `confirm` · `cancel` · `POST /suppliers`) | `SCM_PROCUREMENT_WRITE` |
+| `/api/procurement/webhooks/**` | none — HMAC (unchanged) |
+
+Missing → `403 PERMISSION_DENIED`. The actor model above still applies on top (confirm = OPERATOR actor; supplier
+registration = `requireOperator()`), so the role gate never widens what an actor may do. `scm.read` / `scm.write`
+scopes open nothing.
 
 Webhook endpoints (`/api/procurement/webhooks/**`):
 - Public (no JWT) — supplier callers have no IAM identity.
@@ -239,9 +256,9 @@ Edge Case #7 in architecture.md) — the PO stays `DRAFT` for retry.
 
 ## POST /api/procurement/po/{poId}/confirm
 
-Transition `ACKNOWLEDGED → CONFIRMED`. OPERATOR actor only (i.e. the token's
-`roles` claim must contain `OPERATOR`/`ADMIN`/`SUPER_ADMIN` — `ActorContext.isOperator()`;
-see § Actor model).
+Transition `ACKNOWLEDGED → CONFIRMED`. `SCM_PROCUREMENT_WRITE` (§ Business roles) **and** OPERATOR
+actor (i.e. the token's `roles` claim must contain `OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`SCM_OPERATOR` —
+`ActorContext.isOperator()`; see § Actor model). The role gate does not widen the state machine.
 
 **Headers:** same as submit.
 
@@ -406,8 +423,10 @@ credential — so **a supplier with no credentials is the normal v1 state**. Cre
 handling is deferred whole to the v2 `supplier-service` (ADR-SCM-001 ACCEPT rider).
 Do not add credential fields here; that decision belongs to v2.
 
-**Authorization:** OPERATOR actor — `roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN, SCM_OPERATOR}`
-(`ActorContext.isOperator()`). A BUYER-actor token → 403 `PERMISSION_DENIED`.
+**Authorization:** `SCM_PROCUREMENT_WRITE` (filter chain, § Business roles) **∧** OPERATOR actor —
+`roles ∋ {OPERATOR, ADMIN, SUPER_ADMIN, SCM_OPERATOR}` (`ActorContext.isOperator()`). A BUYER-actor token → 403
+`PERMISSION_DENIED`. (TASK-MONO-792: `SCM_OPERATOR` is now derived by auth-service whenever the token carries an
+SCM business role, so an assumed operator holding `SCM_PROCUREMENT_WRITE` is also an OPERATOR actor.)
 
 🔴 **Role only — `scm.write` is deliberately NOT required here, and that is a
 measurement, not a preference.** The assumed operator token carries the

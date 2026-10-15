@@ -29,8 +29,13 @@ class DelegatableRoleCatalogTest {
                         "MASTER_READ",
                         // ecommerce operator role
                         "ECOMMERCE_OPERATOR",
+                        // scm — fine-grained since TASK-MONO-792 (SCM_OPERATOR is derived, not delegatable)
+                        "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+                        "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+                        "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+                        "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE",
                         // single-role domains
-                        "SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR",
+                        "ERP_OPERATOR", "FINANCE_OPERATOR",
                         "MES_OPERATOR", "FAN_OPERATOR");
     }
 
@@ -41,7 +46,7 @@ class DelegatableRoleCatalogTest {
      * this red and has to be decided as a partnership change too.
      */
     @Test
-    @DisplayName("BE-631: the allow-list is derived from DomainRoleCatalog and equals the pre-BE-631 literal exactly")
+    @DisplayName("BE-631 + 792: the allow-list is derived from DomainRoleCatalog = the pre-BE-631 literal with SCM_OPERATOR swapped for the eight SCM roles")
     void allowlist_derivedFromDomainRoleCatalog_byteIdenticalToTheReplacedLiteral() {
         java.util.Set<String> preBe631Literal = java.util.Set.of(
                 "WMS_OPERATOR",
@@ -55,9 +60,16 @@ class DelegatableRoleCatalogTest {
                 "FINANCE_OPERATOR",
                 "MES_OPERATOR",
                 "FAN_OPERATOR");
-        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(preBe631Literal);
+        // TASK-MONO-792 — the ONE deliberate partnership change: a host may delegate SCM business roles
+        // (the delegate's SCM_OPERATOR is derived by auth); existing delegations were rewritten by V0056.
+        java.util.Set<String> expected = new java.util.HashSet<>(preBe631Literal);
+        expected.remove("SCM_OPERATOR");
+        expected.addAll(List.of("SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ",
+                "SCM_DEMAND_PLANNING_WRITE", "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+                "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE"));
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(expected);
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(DomainRoleCatalog.roleNames());
-        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(14);
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(21);
     }
 
     @Test
@@ -89,7 +101,10 @@ class DelegatableRoleCatalogTest {
     @DisplayName("firstNonDelegatable returns the offending role, or null when all delegatable")
     void firstNonDelegatable_reportsOffender() {
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
-                List.of("WMS_OPERATOR", "SCM_OPERATOR"))).isNull();
+                List.of("WMS_OPERATOR", "SCM_PROCUREMENT_READ"))).isNull();
+        // TASK-MONO-792: the SCM entry role is derived, never delegated
+        assertThat(DelegatableRoleCatalog.firstNonDelegatable(
+                List.of("WMS_OPERATOR", "SCM_OPERATOR"))).isEqualTo("SCM_OPERATOR");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("WMS_OPERATOR", "WMS_ADMIN"))).isEqualTo("WMS_ADMIN");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(List.of())).isNull();

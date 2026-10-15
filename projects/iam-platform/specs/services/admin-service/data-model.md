@@ -666,6 +666,19 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
        AND NOT EXISTS (SELECT 1 FROM admin_operator_roles x
                         WHERE x.operator_id = m.operator_id AND x.role_id = gg.role_id AND x.tenant_id = g.tenant_id);
     ```
+- **TASK-MONO-792 (ADR-MONO-083 P5 · 소유자 결정 Q5, 2026-10-15 UTC)** — SCM 세분 역할(작성 시점 마지막 = `V0055`):
+  - `V0056__scm_fine_grained_domain_roles.sql` — ① 새 프리셋 5개(`scm-read` · `scm-procurement-operate` · `scm-demand-planning-operate` · `scm-logistics-operate` · `scm-inventory-visibility-operate`, 고정 id `…000000000016` ~ `…020`, `INSERT IGNORE`) 와 그 역할 행. ② 🔴 **`SCM_OPERATOR` 를 담은 모든 세트**(프리셋 `scm-full` · `all-domains-full` · `legacy-compat` · **테넌트 세트 전부**)에 SCM 업무 역할 8개를 `INSERT IGNORE` 로 더한 **뒤** 그 세트의 `('scm','SCM_OPERATOR')` 행을 지운다 — 순서가 곧 안전성이다(더하기가 먼저라 중간 상태에서도 «SCM 0» 인 세트가 없다). ③ 파트너십 `tenant_partnership.delegated_scope` · `tenant_partnership_participant.participant_scope`(JSON `roles` 배열)의 `"SCM_OPERATOR"` 를 같은 8개로 바꾼다(`JSON_CONTAINS` 가드 — 없는 행은 0행). ④ `scm-full` 설명 갱신. 기존 운영자의 실효 범위는 같다: 그들의 세트가 «SCM 전체» 였으므로 «SCM 업무 역할 전부» 가 되고, 진입 역할은 auth 가 파생한다. forward-only · 재실행 0행. 형태 시험 `V0056MigrationShapeTest` · 행동 시험 `V0056ScmRoleMigrationIntegrationTest`.
+  - 완료 판정(배포 전 · 뒤 라이브에서 — 읽기 전용, `TASK-MONO-672` 다음 창 목록):
+
+    ```sql
+    SELECT
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'scm' AND role_name = 'SCM_OPERATOR')                         AS sets_with_scm_operator,   -- 뒤 = 0
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'scm' AND role_name = 'SCM_PROCUREMENT_WRITE')                AS sets_with_procurement_write, -- 뒤 = 앞의 sets_with_scm_operator + 2 (새 프리셋 둘)
+      (SELECT COUNT(*) FROM tenant_partnership
+        WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"SCM_OPERATOR"'))                AS partnerships_with_scm_operator; -- 뒤 = 0
+    ```
 
 ---
 

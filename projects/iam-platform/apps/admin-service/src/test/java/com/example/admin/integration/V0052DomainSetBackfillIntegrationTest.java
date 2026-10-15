@@ -123,7 +123,9 @@ class V0052DomainSetBackfillIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("presets: 15 rows; legacy-compat = all-domains-full = the whole catalog; wms-full = the 8 wms roles")
     void presetsMatchTheCatalog() {
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class)).isEqualTo(15);
+                "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class))
+                // V0052 seeds 15; later phases add more (TASK-MONO-792 V0056 +5) — the boot runs them all.
+                .isEqualTo(com.example.admin.domain.rbac.DomainPermissionSetPresets.SYSTEM_KEYS.size());
         for (String key : List.of("legacy-compat", "all-domains-full")) {
             List<String> roles = jdbcTemplate.queryForList("""
                     SELECT r.role_name FROM domain_permission_set_role r
@@ -183,9 +185,11 @@ class V0052DomainSetBackfillIntegrationTest extends AbstractIntegrationTest {
             for (String s : backfill) {
                 second += jdbcTemplate.update(s);
             }
-            for (String s : seeds) {
-                second += jdbcTemplate.update(s);
-            }
+            // TASK-MONO-792: the preset SEEDS are no longer re-run here — a later migration (V0056) deliberately
+            // removed ('scm','SCM_OPERATOR') from the presets, so re-running V0052's seeds on today's schema
+            // would re-add it (that is V0052 being older than V0056, not a lost idempotency). The seeds'
+            // own idempotency is INSERT IGNORE on a PK, pinned by V0052MigrationShapeTest.
+            assertThat(seeds).allMatch(s -> s.startsWith("INSERT IGNORE"));
             assertThat(second).as("second run inserts 0 rows").isZero();
             assertThat(grants(MEMBER)).hasSize(2);
 

@@ -15,6 +15,12 @@ All endpoints:
     genuinely needs structured context, `platform/error-handling.md § Error Response
     Format` permits extending the envelope — see `procurement-api.md`, whose
     `PO_STATUS_TRANSITION_INVALID` is scm's one live `details` emitter.
+- **Business roles (ADR-MONO-083 P5 · TASK-MONO-792)** — canonical table
+  [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본):
+  every `GET /api/inventory-visibility/**` = `SCM_INVENTORY_VISIBILITY_READ` ∨ `SCM_INVENTORY_VISIBILITY_WRITE`;
+  the two mutations `POST /nodes` · `POST /nodes/{nodeId}/observed-stock` = `SCM_INVENTORY_VISIBILITY_WRITE`
+  (owner decision Q1, 2026-10-15 UTC — this API is «read + 3PL onboarding», not read-only). Missing →
+  `403 PERMISSION_DENIED`. `/internal/**` is unchanged (network-trusted, no JWT).
 
 ---
 

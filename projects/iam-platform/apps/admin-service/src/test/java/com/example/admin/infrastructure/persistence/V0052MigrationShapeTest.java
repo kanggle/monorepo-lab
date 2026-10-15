@@ -44,6 +44,30 @@ class V0052MigrationShapeTest {
 
     static final String MIGRATION_RESOURCE = "/db/migration/V0052__create_domain_permission_sets_and_backfill.sql";
 
+    /**
+     * TASK-MONO-792 — V0052 is frozen (Flyway checksum), the catalog and the preset list are not: later migrations
+     * (V0056 = P5 SCM) add presets and retire / add catalog rows. So this test pins V0052 against the catalog AS IT WAS
+     * when V0052 shipped: the first 15 preset keys, and its role literals = today's catalog minus what was added
+     * later, plus what was retired later. Each later phase extends the two sets below and pins its own file
+     * (V0056MigrationShapeTest).
+     */
+    static final List<String> V0052_SYSTEM_KEYS = DomainPermissionSetPresets.SYSTEM_KEYS.stream()
+            .filter(k -> !k.startsWith("scm-") || k.equals("scm-full"))
+            .toList();
+    static final Set<String> RETIRED_AFTER_V0052 = Set.of("SCM_OPERATOR");
+    static final Set<String> ADDED_AFTER_V0052 = Set.of(
+            "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+            "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE", "SCM_INVENTORY_VISIBILITY_READ",
+            "SCM_INVENTORY_VISIBILITY_WRITE");
+
+    /** The catalog's role names as of V0052 (= today's, minus the later additions, plus the later retirements). */
+    static Set<String> catalogAtV0052() {
+        Set<String> out = new TreeSet<>(DomainRoleCatalog.roleNames());
+        out.removeAll(ADDED_AFTER_V0052);
+        out.addAll(RETIRED_AFTER_V0052);
+        return out;
+    }
+
     private static String sql;
 
     @BeforeAll
@@ -152,8 +176,9 @@ class V0052MigrationShapeTest {
             ids.add(m.group(1));
             keys.add(m.group(2).toLowerCase());
         }
-        assertThat(keys).containsExactlyElementsOf(DomainPermissionSetPresets.SYSTEM_KEYS);
-        assertThat(ids).as("one fixed, distinct id per preset").hasSize(DomainPermissionSetPresets.SYSTEM_KEYS.size());
+        assertThat(keys).containsExactlyElementsOf(V0052_SYSTEM_KEYS);
+        assertThat(keys).hasSize(15);
+        assertThat(ids).as("one fixed, distinct id per preset").hasSize(V0052_SYSTEM_KEYS.size());
     }
 
     @Test
@@ -167,14 +192,15 @@ class V0052MigrationShapeTest {
         while (m.find()) {
             String domain = m.group(2).toLowerCase();
             String role = m.group(3);
-            assertThat(DomainRoleCatalog.isAssignable(domain, role)).as("%s:%s is a catalog row", domain, role).isTrue();
+            assertThat(DomainRoleCatalog.isAssignable(domain, role) || RETIRED_AFTER_V0052.contains(role))
+                    .as("%s:%s is a catalog row (or one retired after V0052)", domain, role).isTrue();
             literalRoles.add(role);
             if (m.group(1).endsWith("-FULL")) {
                 fullDomains.add(domain);
             }
         }
         // every catalog role appears as a literal (wms through its single-purpose presets, others through <d>-full)
-        assertThat(literalRoles).containsExactlyInAnyOrderElementsOf(DomainRoleCatalog.roleNames());
+        assertThat(literalRoles).containsExactlyInAnyOrderElementsOf(catalogAtV0052());
         assertThat(fullDomains).containsExactlyInAnyOrder("scm", "erp", "finance", "ecommerce", "fan", "mes");
         String flat = flat();
         // wms-full = the union of the five wms single-purpose presets

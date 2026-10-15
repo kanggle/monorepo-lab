@@ -139,3 +139,23 @@ monorepo
 역할 이름(추천, 계약에서 확정): `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` · `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` · `SCM_LOGISTICS_READ` · `SCM_LOGISTICS_WRITE` · `SCM_INVENTORY_VISIBILITY_READ` (+ Q1 이면 `_WRITE`). 프리셋 추천: `scm-read`(조회 전부) · `scm-procurement-operate` · `scm-demand-planning-operate` · `scm-logistics-operate` · `scm-inventory-visibility-read` · `scm-full` 확장 · `all-domains-full` · `legacy-compat` 확장.
 
 Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-MONO-773` 이 같은 영역을 병행 중이면 충돌 가능 — 구현 착수 때 `scripts/check-flyway-version-collision.sh` 로 다시 본다.
+
+# 소유자 결정 — 2026-10-15 UTC (코디네이터 경유)
+
+| Q | 결정 |
+|---|---|
+| Q1 | `SCM_INVENTORY_VISIBILITY_WRITE` 신설 — `POST /nodes` · `POST /nodes/{id}/observed-stock` |
+| Q2 | `POST /api/procurement/po/from-suggestion` = `SCM_PROCUREMENT_WRITE ∨ SCM_DEMAND_PLANNING_WRITE`(초안만). 제출 · 확정 · 그 밖의 발주 변경은 발주 역할만 |
+| Q3 | 엄격 — 물류 = `SCM_LOGISTICS_READ/WRITE`. WMS 출고 운영자가 발송 재시도하려면 SCM 물류 세트가 필요하다. 콘솔 후속이 그 버튼을 역할로 숨긴다 |
+| Q4 | (a) — auth 가 SCM 업무 역할 ≥1 이면(assume 상한 안에서) `SCM_OPERATOR` 파생 · 카탈로그에서 제거 · `isOperator()` 무변경 · auth-service 가 이 PR 에 들어온다 · 793~795 가 재사용하도록 **도메인별 진입 역할 표(데이터)** 로 설계 · `admin-api.md:3739` 와 auth 계약 갱신 |
+| Q5 | 마이그레이션이 `SCM_OPERATOR` 를 담은 **모든 세트**(legacy-compat · 프리셋 포함)에 SCM 업무 역할 전부를 더하고 `SCM_OPERATOR` 행을 지운다 — 기존 운영자는 같은 범위. 라이브 행 수(앞 · 뒤) 확인을 `TASK-MONO-672` 다음 창 목록에 |
+| 순서 | 이 PR = 백엔드 + 계약(scm 서비스 · iam 카탈로그/마이그레이션 · auth 파생). 콘솔 SCM 내비 데이터(`permission-map.ts` · 계약 `console-integration-contract.md:281,304,307`)는 **별도 후속** — platform-console 다음 빈 PC-FE id 로 ready 티켓 기안(«792 를 실은 굽기가 라이브 확인된 뒤에만 머지»), 여기서 구현 안 함 |
+| 기타 | 정당하게 깨지는 시험은 고친다(`ClientCredentialsActorOverflowIntegrationTest` 토큰 역할 등). 기계 클라이언트 `scm-platform-internal-services-client` 의 업무 API 403 은 **수용**(사용처 0) — 기록 |
+| Flyway | 커밋 시점 origin/main 기준 다음 빈 번호 — 2026-10-15 20:38 UTC 재확인: `V0055` 가 마지막 → **`V0056`** |
+
+## 구현 노트 (결정의 적용 범위 — 판단을 적는다)
+
+- 🔵 **Q5 를 파트너십에도 적용했다.** `tenant_partnership.delegated_scope` · `tenant_partnership_participant.participant_scope` 의 `roles` 도 `SCM_OPERATOR`(= 카탈로그 시절 «SCM 전체») 를 담을 수 있고(위임 허용 목록 = 카탈로그), auth 파트너십 경로는 위임 역할을 **그대로** 싣는다. 바꾸지 않으면 파트너 운영자는 배포 순간 SCM 업무 0 이 된다 — Q5 의 근거(«기존 운영자는 같은 범위»)가 같은 모양으로 걸린다. 세트와 같은 규칙(8개 추가 · `SCM_OPERATOR` 제거, `JSON_CONTAINS` 가드)으로 V0056 이 바꾼다. 결정을 넘는 적용이면 되돌릴 수 있게 별도 문장 두 개로 두었다.
+- 🔵 **Q4 파생은 두 경로 모두.** 정상 assume(배정 ∩ 상한) 과 파트너십(위임 그대로) 둘 다 같은 함수 `withDerivedEntryRoles` 를 지난다 — 파트너십에서 빠지면 위임받은 발주 운영자가 `isOperator()=false`(BUYER) 로 떨어져 발주 확정이 안 된다.
+- 🔵 **배정 · 위임으로 들어온 진입 역할은 버린다** — 진입 역할은 파생으로만 생긴다(«SCM_OPERATOR 만 → 업무 API 403» 이 토큰 단계에서도 성립).
+- 🔵 **V0052 시험의 재범위.** V0052 는 동결(Flyway checksum)이고 카탈로그 · 프리셋 목록은 자란다 — `V0052MigrationShapeTest` 는 «V0052 시절의 카탈로그»(오늘 − 뒤에 더한 것 + 뒤에 뺀 것)와 대조하도록, `V0052DomainSetBackfillIntegrationTest` 는 프리셋 수를 `SYSTEM_KEYS.size()` 로 · 시드 재실행 0 행 단언을 뺐다(V0056 이 뺀 `SCM_OPERATOR` 를 V0052 시드가 다시 넣는 것은 «V0052 가 더 오래됐다» 는 뜻이지 멱등성 상실이 아니다).

@@ -128,6 +128,28 @@ class SecurityChainAssemblyParityTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
+    /**
+     * TASK-MONO-792 AC-3 (ADR-MONO-083) — the cross-domain control: an operator holding only the SCM
+     * business set (every SCM role + the derived {@code SCM_OPERATOR}) is refused by WMS outbound.
+     * The SCM side of the same pair is each scm service's {@code *BusinessRoleGateSliceTest}.
+     */
+    @Test
+    @DisplayName("AC-3 (792) SCM 세트만 가진 토큰 → WMS 출고 GET · POST 403 (도메인 경계)")
+    void scmSetOnly_isRefusedByWmsOutbound() throws Exception {
+        SimpleGrantedAuthority[] scm = java.util.stream.Stream.of(
+                        "SCM_OPERATOR", "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+                        "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+                        "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+                        "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE")
+                .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                .toArray(SimpleGrantedAuthority[]::new);
+        mockMvc.perform(get(ORDERS + "/any").with(jwt().authorities(scm)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(ORDERS).contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .with(jwt().authorities(scm)))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     @DisplayName("ERP webhook 은 role gate 보다 먼저 등록된 public path 다 — 토큰 없이도 401/403 이 아니다")
     void erpWebhook_isPublicDespiteTheRoleGates() throws Exception {

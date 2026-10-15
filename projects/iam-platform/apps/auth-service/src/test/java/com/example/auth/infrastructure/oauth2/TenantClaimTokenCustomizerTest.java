@@ -1193,6 +1193,87 @@ class TenantClaimTokenCustomizerTest {
         assertThat(TenantClaimTokenCustomizer.assignedWithinCeiling(List.of("A"), List.of())).isEmpty();
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-MONO-792 (ADR-MONO-083 P5 · owner decision Q4) — SCM business roles +
+    // the SCM_OPERATOR entry role, DERIVED here (never assigned)
+    // -----------------------------------------------------------------------
+
+    private static final List<String> SCM_BUSINESS_ROLES_792 = List.of(
+            "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+            "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+            "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+            "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE");
+
+    @Test
+    @DisplayName("🔴 792 AC-1: demand-planning set on WMS+SCM → SCM_OPERATOR (derived) + the two demand-planning roles")
+    void scm792_demandPlanningSet_entryDerived() {
+        assertThat(rolesFor(List.of("SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE"), List.of("wms", "scm")))
+                .containsExactly("SCM_OPERATOR", "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE");
+    }
+
+    @Test
+    @DisplayName("🔴 792 AC-1: SCM read set → SCM_OPERATOR + the four *_READ, no *_WRITE")
+    void scm792_readSet() {
+        assertThat(rolesFor(List.of("SCM_PROCUREMENT_READ", "SCM_DEMAND_PLANNING_READ",
+                        "SCM_LOGISTICS_READ", "SCM_INVENTORY_VISIBILITY_READ"), List.of("scm")))
+                .containsExactly("SCM_OPERATOR", "SCM_PROCUREMENT_READ", "SCM_DEMAND_PLANNING_READ",
+                        "SCM_LOGISTICS_READ", "SCM_INVENTORY_VISIBILITY_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 792 AC-1: an assigned SCM_OPERATOR alone (stale row) → no roles — the entry role is never carried from an assignment")
+    void scm792_assignedEntryRoleAlone_dropped() {
+        assertThat(rolesFor(List.of("SCM_OPERATOR"), List.of("wms", "scm"))).isNull();
+    }
+
+    @Test
+    @DisplayName("🔴 792 AC-2: legacy-compat (new catalog) on WMS+SCM → WMS roles + SCM_OPERATOR + all eight SCM roles (ceiling order)")
+    void scm792_legacyCompat_fullScm() {
+        List<String> legacy = new java.util.ArrayList<>(List.of(
+                "INVENTORY_READ", "INVENTORY_WRITE", "INBOUND_READ", "INBOUND_WRITE",
+                "OUTBOUND_READ", "OUTBOUND_WRITE", "MASTER_READ", "WMS_OPERATOR"));
+        legacy.addAll(SCM_BUSINESS_ROLES_792);
+        legacy.addAll(List.of("ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR", "FAN_OPERATOR", "MES_OPERATOR"));
+        List<String> expected = new java.util.ArrayList<>(List.of("WMS_OPERATOR", "OUTBOUND_READ", "OUTBOUND_WRITE",
+                "INBOUND_READ", "INBOUND_WRITE", "INVENTORY_READ", "INVENTORY_WRITE", "MASTER_READ", "SCM_OPERATOR"));
+        expected.addAll(SCM_BUSINESS_ROLES_792);
+        assertThat(rolesFor(legacy, List.of("wms", "scm"))).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    @DisplayName("792 control: SCM business roles on a tenant WITHOUT scm → nothing SCM, no SCM_OPERATOR")
+    void scm792_unsubscribed_noEntry() {
+        assertThat(rolesFor(List.of("SCM_PROCUREMENT_READ", "INVENTORY_READ"), List.of("wms")))
+                .containsExactly("INVENTORY_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 792 AC-3: WMS set only on WMS+SCM → no SCM_OPERATOR, no SCM role")
+    void scm792_wmsSetOnly_noScm() {
+        assertThat(rolesFor(List.of("OUTBOUND_READ", "OUTBOUND_WRITE"), List.of("wms", "scm")))
+                .containsExactly("OUTBOUND_READ", "OUTBOUND_WRITE")
+                .doesNotContain("SCM_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("🔴 792 partnership: delegated SCM business role → SCM_OPERATOR derived on the cross-org token too")
+    void scm792_crossOrg_entryDerived() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(List.of("scm"), List.of("SCM_PROCUREMENT_READ"));
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms", "scm"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles"))
+                .containsExactly("SCM_PROCUREMENT_READ", "SCM_OPERATOR");
+    }
+
     @Test
     @DisplayName("BE-376 assume-tenant: entitled empty → no roles claim AND no entitled_domains (net-zero)")
     void assumeTenant_emptyEntitled_omitsRoles() {

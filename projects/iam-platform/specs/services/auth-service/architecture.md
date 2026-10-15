@@ -280,6 +280,18 @@ apps/auth-service/src/main/java/com/example/auth/
 
 상세: [specs/contracts/http/auth-api.md](../../contracts/http/auth-api.md) § Assume-Tenant Exchange, [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) § delegatedScope.
 
+#### 진입 역할 파생 (ADR-MONO-083 P5 · TASK-MONO-792)
+
+세분 업무 역할이 들어온 도메인의 **진입 역할**(지금 `SCM_OPERATOR` 하나)은 카탈로그에 없고 배정할 수 없다 — auth-service 가 **토큰을 내는 순간 파생**한다(소유자 결정 Q4, 2026-10-15 UTC).
+
+- **표 하나 = 데이터** (`OperatorRoleDerivation.ENTRY_ROLES` — 진입 역할 → 그 도메인의 업무 역할 집합). 지금 행: `SCM_OPERATOR ← {SCM_PROCUREMENT_READ, SCM_PROCUREMENT_WRITE, SCM_DEMAND_PLANNING_READ, SCM_DEMAND_PLANNING_WRITE, SCM_LOGISTICS_READ, SCM_LOGISTICS_WRITE, SCM_INVENTORY_VISIBILITY_READ, SCM_INVENTORY_VISIBILITY_WRITE}`. P6 ~ P8(ERP · Finance · E-commerce)은 **행만 더한다**(코드 무변경).
+- **규칙** (step 3 정상 경로 · step 4 파트너십 경로 **둘 다** — 같은 함수 `withDerivedEntryRoles`):
+  1. 입력 역할 목록에서 진입 역할을 **먼저 뺀다** — 진입 역할은 배정 · 위임으로 들어오지 않는다(남은 옛 행이 있어도 단독으로 토큰에 실리지 않는다).
+  2. 남은 역할 중 그 진입 역할의 업무 역할이 **하나라도** 있고, 정상 경로에서는 그 진입 역할이 상한(`derive(entitled)`)에 있을 때 진입 역할을 더한다. 파트너십 경로의 상한은 이미 걸러진 `delegatedScope.roles` 자체다(업무 역할이 실렸으면 그 도메인은 위임 slice 안).
+  3. 순서 = 정상 경로는 상한 순서(`OperatorRoleDerivation` 표 순서 — 진입 역할이 그 도메인 맨 앞), 파트너십 경로는 위임 순서 뒤에 덧붙임.
+- **업무 역할 0 → 진입 역할 없음**(토큰에 그 도메인 역할 0 → 게이트웨이 · 서비스 403). 진입 역할은 그 자체로 업무 API 를 열지 않는다(scm `iam-integration.md` § 업무 역할) — 쓰임은 게이트웨이 통과 · 화면 진입 · procurement `isOperator()`.
+- `OperatorRoleDerivation` 의 `scm` 상한 = 진입 역할 + 업무 역할 8개(카탈로그와 같이 넓힌다 — 둘이 함께 움직인다는 BE-632 규칙 그대로).
+
 **revocation 동작 흐름 (Phase 2c)**:
 1. `POST /oauth2/revoke` → SAS `OAuth2TokenRevocationEndpointFilter` 수신
 2. SAS built-in `OAuth2TokenRevocationAuthenticationProvider` → `oAuth2AuthorizationService.remove(authorization)`
