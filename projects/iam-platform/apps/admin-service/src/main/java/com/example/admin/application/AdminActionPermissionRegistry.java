@@ -59,6 +59,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.TENANT_SUSPEND, "TENANT");
         map.put(ActionCode.TENANT_REACTIVATE, "TENANT");
         map.put(ActionCode.TENANT_UPDATE, "TENANT");
+        // TASK-MONO-773 S4 — PENDING → ACTIVE (first-admin acceptance · SUPER_ADMIN recovery PATCH)
+        map.put(ActionCode.TENANT_ACTIVATE, "TENANT");
         // TASK-BE-306 — self-serve operator profile mutation
         map.put(ActionCode.OPERATOR_PROFILE_UPDATE, "OPERATOR");
         // TASK-BE-339 — per-assignment org_scope set/clear
@@ -186,7 +188,10 @@ public class AdminActionPermissionRegistry {
                  OPERATOR_INVITATION_CREATE, OPERATOR_INVITATION_CANCEL, OPERATOR_INVITATION_RESEND
                     -> Permission.OPERATOR_MANAGE;
             // TASK-BE-250 — tenant lifecycle management
-            case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE -> Permission.TENANT_MANAGE;
+            // TASK-MONO-773 S4 — TENANT_ACTIVATE resolves to tenant.manage (the recovery PATCH); the acceptance's row
+            // overrides it with <self_invitation_accept> (recordWithPermission).
+            case TENANT_CREATE, TENANT_SUSPEND, TENANT_REACTIVATE, TENANT_UPDATE, TENANT_ACTIVATE
+                    -> Permission.TENANT_MANAGE;
             // TASK-BE-343 (ADR-MONO-023 D3) — subscription lifecycle management
             case SUBSCRIPTION_SUBSCRIBE, SUBSCRIPTION_CHANGE_STATUS -> Permission.SUBSCRIPTION_MANAGE;
             // TASK-BE-477 (ADR-MONO-045 D2/D4) — all cross-org partnership mutations

@@ -39,7 +39,8 @@ public class OperatorInvitationAcceptanceController {
     public ResponseEntity<PreviewResponse> preview(@RequestBody(required = false) PreviewRequest request) {
         OperatorInvitationPreviewResult result = acceptanceUseCase.preview(request == null ? null : request.token());
         return ResponseEntity.ok(new PreviewResponse(result.tenantId(), result.tenantDisplayName(),
-                result.maskedEmail(), result.roles(), result.status(), result.expired(), result.expiresAt()));
+                result.maskedEmail(), result.roles(), result.firstAdmin(), result.status(), result.expired(),
+                result.expiresAt()));
     }
 
     /** {@code 200} (incl. {@code alreadyAccepted}) or the refusal table of auth-to-admin.md § accept. */
@@ -70,8 +71,9 @@ public class OperatorInvitationAcceptanceController {
 
     /** {@code tenantDisplayName} stays present as {@code null} when the tenant read failed (contract shape). */
     @JsonInclude(JsonInclude.Include.ALWAYS)
+    /** {@code firstAdmin} — TASK-MONO-773 S4 (가산, auth-to-admin.md § preview). */
     public record PreviewResponse(String tenantId, String tenantDisplayName, String maskedEmail, List<String> roles,
-                                  String status, boolean expired, Instant expiresAt) {}
+                                  boolean firstAdmin, String status, boolean expired, Instant expiresAt) {}
 
     public record AcceptResponse(String operatorId, String tenantId, List<String> roles, boolean alreadyAccepted) {}
 }

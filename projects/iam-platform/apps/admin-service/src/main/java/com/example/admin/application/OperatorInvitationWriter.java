@@ -100,6 +100,50 @@ public class OperatorInvitationWriter {
     }
 
     /**
+     * TASK-MONO-773 S4 (admin-api.md § POST /api/admin/tenants step 4 · § POST …/first-admin-invitation) — a
+     * first-admin invitation ({@code first_admin = TRUE}, roles {@link #FIRST_ADMIN_ROLES}) + its
+     * {@code OPERATOR_INVITATION_CREATE} audit row ({@code permission_used = tenant.manage} — the surface that mints
+     * it is the tenant-lifecycle one). Joins the caller's transaction when there is one (the tenant-creation
+     * bundle), else is its own. «One pending first-admin invitation per tenant» → 409
+     * {@code OPERATOR_INVITATION_ALREADY_PENDING} (pre-check here, V0055's UNIQUE key behind it).
+     */
+    @Transactional
+    public Issued createFirstAdminPending(OperatorContext actor, String tenantId, String email, String displayName,
+                                          String idempotencyKey, String reason) {
+        if (invitationPort.existsPendingFirstAdmin(tenantId)) {
+            throw new OperatorInvitationAlreadyPendingException(
+                    "A pending first-admin invitation already exists for this tenant — resend or cancel it");
+        }
+        if (operatorPort.existsMemberWithEmail(tenantId, email, null)) {
+            throw new OperatorEmailConflictException("An operator with this email already exists in the tenant");
+        }
+        if (invitationPort.existsPending(tenantId, email)) {
+            throw new OperatorInvitationAlreadyPendingException(
+                    "A pending invitation for this email already exists in the tenant — resend it instead");
+        }
+        long actorInternalId = actorInternalId(actor);
+        Instant now = Instant.now();
+        String token = OperatorInvitationTokens.newToken();
+        InvitationView created = invitationPort.create(new OperatorInvitationPort.NewInvitation(
+                UuidV7.randomString(), tenantId, email, displayName, FIRST_ADMIN_ROLES,
+                OperatorInvitationTokens.sha256Hex(token), now.plus(ttl), actorInternalId, now, true));
+
+        String auditId = auditor.newAuditId();
+        auditor.recordWithPermission(new AdminActionAuditor.AuditRecord(
+                auditId, ActionCode.OPERATOR_INVITATION_CREATE, actor,
+                TARGET_TYPE, created.invitationId(),
+                AuditReasons.normalize(reason), null,
+                idempotencyKey,
+                Outcome.SUCCESS, "roles=" + String.join(",", created.roles()) + ",firstAdmin=true",
+                now, Instant.now(), tenantId),
+                com.example.admin.domain.rbac.Permission.TENANT_MANAGE);
+        return new Issued(created, token, auditId);
+    }
+
+    /** ADR-044 D6 — the first admin's two roles (the same two the self-service path grants). */
+    public static final List<String> FIRST_ADMIN_ROLES = List.of("TENANT_ADMIN", "TENANT_BILLING_ADMIN");
+
+    /**
      * {@code PENDING → CANCELLED} + audit. A lost race to a concurrent cancel is the idempotent no-op it would
      * have been anyway; a lost race to an accept is 409.
      *

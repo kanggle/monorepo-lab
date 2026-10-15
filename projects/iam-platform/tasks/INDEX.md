@@ -77,6 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-638-gateway-internal-tenants-lifecycle-exposure.md` — **🔴 보안 — iam 게이트웨이가 테넌트 라이프사이클 쓰기를 노출: 자기 토큰으로 `PATCH /internal/tenants/{self}` 통과 · `POST`/`GET /internal/tenants` 는 테넌트 범위 검사 0** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-773` S2 Q3, 코드 읽기 — 라이브 미확인). 773 S2 의 `PENDING` 이 나가면 자기 «관리자 대기» 를 건너뛸 수 있어 시급해진다. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자가 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`)를 assume 할 수 있다 — assume 경로가 테넌트 상태를 안 읽는다** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-773` S4 Q4 측정 · 소유자 결정 «773 은 기록만 · 별도 티켓»). 콘솔 스위처엔 경로 없음(ACTIVE 만 표시). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 

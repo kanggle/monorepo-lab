@@ -20,9 +20,18 @@ export type {
   TenantPage,
   TenantType,
   TenantStatus,
+  TenantPatchStatus,
   TenantListParams,
   CreateTenantInput,
   UpdateTenantInput,
   TenantOrgNodeOption,
+  FirstAdminSummary,
 } from './api/types';
-export { TENANT_TYPES, TENANT_STATUSES } from './api/types';
+export {
+  TENANT_TYPES,
+  TENANT_STATUSES,
+  TENANT_PATCH_STATUSES,
+  FIRST_ADMIN_EMAIL_REGEX,
+  FIRST_ADMIN_EMAIL_MAX,
+  FIRST_ADMIN_DISPLAY_NAME_MAX,
+} from './api/types';

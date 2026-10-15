@@ -72,9 +72,15 @@ export async function createTenant(
     tenantId: input.tenantId,
     displayName: input.displayName,
     tenantType: input.tenantType,
+    // TASK-MONO-773 S4 — required by IAM (`400` without it): the tenant is born
+    // `PENDING` and this address receives the first-admin invitation.
+    firstAdmin: {
+      email: input.firstAdmin.email,
+      displayName: input.firstAdmin.displayName,
+    },
   };
   // TASK-PC-FE-312 — `orgNodeId` rides ONLY when chosen; an unplaced create
-  // keeps the pre-312 three-field body (the producer reads absent = 무소속).
+  // keeps the pre-312 body (the producer reads absent = 무소속).
   if (input.orgNodeId !== undefined && input.orgNodeId !== '') {
     body.orgNodeId = input.orgNodeId;
   }

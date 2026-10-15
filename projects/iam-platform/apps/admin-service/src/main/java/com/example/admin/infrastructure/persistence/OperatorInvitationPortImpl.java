@@ -33,6 +33,8 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
 
     /** The UNIQUE key on the generated {@code pending_key} column (V0050). */
     static final String PENDING_KEY_CONSTRAINT = "uk_operator_invitation_pending_key";
+    /** TASK-MONO-773 S4 — the UNIQUE key on the generated {@code first_admin_pending_key} column (V0055). */
+    static final String FIRST_ADMIN_PENDING_KEY_CONSTRAINT = "uk_operator_invitation_first_admin_pending_key";
 
     private final OperatorInvitationJpaRepository repository;
     private final AdminOperatorJpaRepository operatorRepository;
@@ -44,15 +46,36 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean existsPendingFirstAdmin(String tenantId) {
+        return repository.existsByTenantIdAndFirstAdminTrueAndStatus(tenantId, "PENDING");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InvitationView> findFirstAdminInvitations(Collection<String> tenantIds) {
+        if (tenantIds == null || tenantIds.isEmpty()) {
+            return List.of();
+        }
+        return toViews(repository.findByTenantIdInAndFirstAdminTrueOrderByCreatedAtDesc(tenantIds));
+    }
+
+    @Override
     @Transactional
     public InvitationView create(NewInvitation row) {
         OperatorInvitationJpaEntity entity = OperatorInvitationJpaEntity.create(
                 row.invitationId(), row.tenantId(), row.email(), row.displayName(),
-                joinRoles(row.roles()), row.tokenHash(), row.expiresAt(), row.invitedByInternalId(), row.now());
+                joinRoles(row.roles()), row.tokenHash(), row.expiresAt(), row.invitedByInternalId(), row.now(),
+                row.firstAdmin());
         try {
             entity = repository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException e) {
-            if (mentionsPendingKey(e)) {
+            if (mentions(e, FIRST_ADMIN_PENDING_KEY_CONSTRAINT)) {
+                // TASK-MONO-773 S4 — two first-admin invitations for the same tenant raced; the DB kept one.
+                throw new OperatorInvitationAlreadyPendingException(
+                        "A pending first-admin invitation already exists for this tenant — resend or cancel it");
+            }
+            if (mentions(e, PENDING_KEY_CONSTRAINT)) {
                 // Two creates for the same (tenant, email) raced past the pre-check; the DB kept one.
                 throw new OperatorInvitationAlreadyPendingException(
                         "A pending invitation for this email already exists in the tenant — resend it instead");
@@ -156,10 +179,10 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
         return Arrays.stream(roles.split(",")).map(String::trim).filter(r -> !r.isEmpty()).toList();
     }
 
-    private static boolean mentionsPendingKey(Throwable e) {
+    private static boolean mentions(Throwable e, String constraint) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             String m = t.getMessage();
-            if (m != null && m.toLowerCase(Locale.ROOT).contains(PENDING_KEY_CONSTRAINT)) {
+            if (m != null && m.toLowerCase(Locale.ROOT).contains(constraint)) {
                 return true;
             }
             if (t.getCause() == t) {
@@ -193,7 +216,7 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
                     e.getAcceptedAt(),
                     e.getAcceptedOperatorId() == null ? null : uuidById.get(e.getAcceptedOperatorId()),
                     e.getCancelledAt(), e.getCreatedAt(), e.getVersion(), e.getTokenHash(),
-                    e.getAcceptedAccountId()));
+                    e.getAcceptedAccountId(), e.isFirstAdmin()));
         }
         return out;
     }

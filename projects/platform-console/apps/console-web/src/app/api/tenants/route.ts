@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { listTenants, createTenant } from '@/features/tenants/api/tenants-api';
+import { TENANT_STATUSES } from '@/features/tenants';
 import type { TenantStatus, TenantType } from '@/features/tenants';
 import {
   CreateTenantBodySchema,
@@ -31,10 +32,10 @@ export async function GET(req: Request) {
   const requestId = newRequestId();
   const url = new URL(req.url);
   const statusParam = url.searchParams.get('status');
-  const status =
-    statusParam === 'ACTIVE' || statusParam === 'SUSPENDED'
-      ? (statusParam as TenantStatus)
-      : undefined;
+  // TASK-MONO-773 S4 — `PENDING` («관리자 대기») is a list filter value too.
+  const status = (TENANT_STATUSES as readonly string[]).includes(statusParam ?? '')
+    ? (statusParam as TenantStatus)
+    : undefined;
   const tenantTypeParam = url.searchParams.get('tenantType');
   const tenantType =
     tenantTypeParam === 'B2C_CONSUMER' || tenantTypeParam === 'B2B_ENTERPRISE'
@@ -69,6 +70,8 @@ export async function POST(req: Request) {
         tenantId: body.tenantId,
         displayName: body.displayName,
         tenantType: body.tenantType,
+        // TASK-MONO-773 S4 — required by IAM; trimmed by the body schema.
+        firstAdmin: { email: body.firstAdmin.email, displayName: body.firstAdmin.displayName },
         // TASK-PC-FE-312 — only a chosen node travels; absent/null stays absent.
         ...(body.orgNodeId ? { orgNodeId: body.orgNodeId } : {}),
       },

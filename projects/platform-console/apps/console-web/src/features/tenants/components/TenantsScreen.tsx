@@ -153,7 +153,7 @@ export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenP
       {pendingDraft && (
         <TenantConfirmDialog
           title="테넌트를 등록할까요?"
-          description={`"${pendingDraft.displayName}" (${pendingDraft.tenantId}) 테넌트를 새로 등록합니다.`}
+          description={`"${pendingDraft.displayName}" (${pendingDraft.tenantId}) 테넌트를 새로 등록하고 ${pendingDraft.firstAdmin.email} 에게 첫 관리자 초대를 보냅니다. 초대가 수락될 때까지 «관리자 대기»입니다.`}
           confirmLabel="등록"
           pending={create.isPending}
           error={createError}

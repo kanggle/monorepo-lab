@@ -45,6 +45,8 @@ public class AdminOutboxPublisher extends AbstractOutboxPublisher<AdminOutboxJpa
     static final String TOPIC_TENANT_SUSPENDED = "tenant.suspended";
     static final String TOPIC_TENANT_REACTIVATED = "tenant.reactivated";
     static final String TOPIC_TENANT_UPDATED = "tenant.updated";
+    /** TASK-MONO-773 S4 (tenant-events.md § tenant.activated) — PENDING → ACTIVE. */
+    static final String TOPIC_TENANT_ACTIVATED = "tenant.activated";
     // TASK-BE-477 (ADR-MONO-045) — cross-org partnership lifecycle (bare iam topics).
     static final String TOPIC_PARTNERSHIP_INVITED = "partnership.invited";
     static final String TOPIC_PARTNERSHIP_ACCEPTED = "partnership.accepted";
@@ -106,6 +108,7 @@ public class AdminOutboxPublisher extends AbstractOutboxPublisher<AdminOutboxJpa
             case "tenant.suspended" -> TOPIC_TENANT_SUSPENDED;
             case "tenant.reactivated" -> TOPIC_TENANT_REACTIVATED;
             case "tenant.updated" -> TOPIC_TENANT_UPDATED;
+            case "tenant.activated" -> TOPIC_TENANT_ACTIVATED;
             // TASK-BE-477 (ADR-MONO-045) — the 7 partnership.* lifecycle types. An
             // unmapped type would throw at publish (invisible to Docker-free :check),
             // so all 7 MUST be present (caught by the cross-org-leak IT / relay test).

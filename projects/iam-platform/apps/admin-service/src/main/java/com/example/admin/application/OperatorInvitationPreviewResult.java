@@ -16,6 +16,13 @@ public record OperatorInvitationPreviewResult(
         List<String> roles,
         String status,
         boolean expired,
-        Instant expiresAt
+        Instant expiresAt,
+        /** TASK-MONO-773 S4 (가산) — a first-admin invitation (the page says «첫 관리자로 초대되었습니다»). */
+        boolean firstAdmin
 ) {
+    /** The 772 shape — an ordinary invitation. */
+    public OperatorInvitationPreviewResult(String tenantId, String tenantDisplayName, String maskedEmail,
+                                           List<String> roles, String status, boolean expired, Instant expiresAt) {
+        this(tenantId, tenantDisplayName, maskedEmail, roles, status, expired, expiresAt, false);
+    }
 }

@@ -16,7 +16,18 @@ public interface OperatorInvitationPort {
     /** A new {@code PENDING} row. */
     record NewInvitation(String invitationId, String tenantId, String email, String displayName,
                          List<String> roles, String tokenHash, Instant expiresAt, long invitedByInternalId,
-                         Instant now) {}
+                         Instant now,
+                         /** TASK-MONO-773 S4 — a first-admin invitation (only the tenant-creation surface sets it). */
+                         boolean firstAdmin) {
+
+        /** An ordinary invitation (the 772 shape). */
+        public NewInvitation(String invitationId, String tenantId, String email, String displayName,
+                             List<String> roles, String tokenHash, Instant expiresAt, long invitedByInternalId,
+                             Instant now) {
+            this(invitationId, tenantId, email, displayName, roles, tokenHash, expiresAt, invitedByInternalId,
+                    now, false);
+        }
+    }
 
     /**
      * One invitation as the use case sees it. {@code invitedByOperatorId} / {@code acceptedOperatorId} are the
@@ -34,7 +45,23 @@ public interface OperatorInvitationPort {
                            * {@code null} while not accepted. The acceptance's «same account resubmits → 200» rule
                            * compares against it.
                            */
-                          String acceptedAccountId) {
+                          String acceptedAccountId,
+                          /** TASK-MONO-773 S4 — {@code operator_invitation.first_admin}. */
+                          boolean firstAdmin) {
+
+        /** The S3 shape — an ordinary invitation. */
+        public InvitationView(long internalId, String invitationId, String tenantId, String email,
+                              String displayName, List<String> roles, String status, Instant expiresAt,
+                              long invitedByInternalId, String invitedByOperatorId,
+                              String lastDeliveryStatus, Instant lastDeliveryAt,
+                              Instant acceptedAt, String acceptedOperatorId,
+                              Instant cancelledAt, Instant createdAt, int version, String tokenHash,
+                              String acceptedAccountId) {
+            this(internalId, invitationId, tenantId, email, displayName, roles, status, expiresAt,
+                    invitedByInternalId, invitedByOperatorId, lastDeliveryStatus, lastDeliveryAt,
+                    acceptedAt, acceptedOperatorId, cancelledAt, createdAt, version, tokenHash, acceptedAccountId,
+                    false);
+        }
 
         /** The S2 shape — not accepted ({@code acceptedAccountId = null}). */
         public InvitationView(long internalId, String invitationId, String tenantId, String email,
@@ -53,6 +80,15 @@ public interface OperatorInvitationPort {
 
     /** Is there a {@code PENDING} row (expired included) for this tenant + normalised email? */
     boolean existsPending(String tenantId, String email);
+
+    /** TASK-MONO-773 S4 — is there a {@code PENDING} first-admin row (expired included) for this tenant? */
+    boolean existsPendingFirstAdmin(String tenantId);
+
+    /**
+     * TASK-MONO-773 S4 — every first-admin invitation of these tenants (any status), newest first, in ONE read
+     * (admin-api.md § GET /api/admin/tenants — «테넌트마다 호출 금지»).
+     */
+    List<InvitationView> findFirstAdminInvitations(java.util.Collection<String> tenantIds);
 
     /**
      * Inserts and flushes. A concurrent INSERT that already holds the {@code (tenant_id, email)} PENDING slot

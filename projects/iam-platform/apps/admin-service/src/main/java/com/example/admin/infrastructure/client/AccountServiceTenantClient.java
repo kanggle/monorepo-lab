@@ -66,10 +66,27 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
     @Retry(name = CB_NAME)
     @CircuitBreaker(name = CB_NAME)
     public TenantSummary create(String tenantId, String displayName, String tenantType) {
+        // Its own annotated entry point (not the port's default method): a default method would reach the 4-arg
+        // overload by self-invocation and bypass the retry / circuit-breaker proxy.
+        return doCreate(tenantId, displayName, tenantType, null);
+    }
+
+    @Override
+    @Retry(name = CB_NAME)
+    @CircuitBreaker(name = CB_NAME)
+    public TenantSummary create(String tenantId, String displayName, String tenantType, String initialStatus) {
+        return doCreate(tenantId, displayName, tenantType, initialStatus);
+    }
+
+    private TenantSummary doCreate(String tenantId, String displayName, String tenantType, String initialStatus) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("tenantId", tenantId);
         body.put("displayName", displayName);
         body.put("tenantType", tenantType);
+        // TASK-MONO-773 S4 — omitted unless asked for: the self-service create stays byte-identical (ACTIVE).
+        if (initialStatus != null) {
+            body.put("initialStatus", initialStatus);
+        }
 
         try {
             TenantResponse response = restClient.post()

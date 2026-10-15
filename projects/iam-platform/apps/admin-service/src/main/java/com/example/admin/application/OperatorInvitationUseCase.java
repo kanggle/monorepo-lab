@@ -186,6 +186,48 @@ public class OperatorInvitationUseCase {
         return toResult(deliver(issued, inviterName(actor)), Instant.now());
     }
 
+    // ── TASK-MONO-773 S4 — first-admin invitations ─────────────────────────
+
+    /**
+     * After the caller's transaction committed a first-admin invitation (the tenant-creation bundle): the mail,
+     * once, and the item as it now stands (+ the invitation's audit id). Never throws for a failed mail.
+     */
+    public OperatorInvitationResult deliverCommitted(OperatorInvitationWriter.Issued issued, OperatorContext actor) {
+        return toResult(deliver(issued, inviterName(actor)), Instant.now()).withAuditId(issued.auditId());
+    }
+
+    /**
+     * {@code POST /api/admin/tenants/{tenantId}/first-admin-invitation} (admin-api.md — OD-2 «재초대»). The caller
+     * (controller) has already required {@code tenant.manage} and the {@code '*'} grant scope. Order: reason · key ·
+     * body → the tenant (404 / 503, nothing written) → not PENDING → 409 {@code TENANT_NOT_PENDING} → a PENDING
+     * first-admin invitation exists → 409 {@code OPERATOR_INVITATION_ALREADY_PENDING} → one transaction (row + audit)
+     * → the mail after commit.
+     */
+    public OperatorInvitationResult reinviteFirstAdmin(OperatorContext actor, String tenantId, String email,
+                                                       String displayName, String idempotencyKey, String reason) {
+        AuditReasons.require(reason);
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new IllegalArgumentException("Idempotency-Key header is required");
+        }
+        if (idempotencyKey.length() > MAX_IDEMPOTENCY_KEY) {
+            throw new IllegalArgumentException("Idempotency-Key must be at most " + MAX_IDEMPOTENCY_KEY + " characters");
+        }
+        String normalizedEmail = normalizeEmail(email);
+        String name = requireDisplayName(displayName);
+        String tenant = requireInvitableTenant(tenantId);
+        if (auditor.isIdempotencyKeyUsed(actor.operatorId(), ActionCode.OPERATOR_INVITATION_CREATE, idempotencyKey)) {
+            throw new IdempotencyKeyConflictException(
+                    "Idempotency-Key already used for OPERATOR_INVITATION_CREATE by this operator; retry with a new key");
+        }
+        String status = provisioningPort.get(tenant).status();
+        if (!"PENDING".equals(status)) {
+            throw com.example.admin.application.exception.TenantStatusConflictException.notPending(tenant, status);
+        }
+        OperatorInvitationWriter.Issued issued =
+                writer.createFirstAdminPending(actor, tenant, normalizedEmail, name, idempotencyKey, reason);
+        return deliverCommitted(issued, actor);
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────
 
     /**
@@ -241,10 +283,11 @@ public class OperatorInvitationUseCase {
                 OperatorInvitationResult.isExpired(v.status(), v.expiresAt(), now),
                 v.expiresAt(), v.createdAt(), v.invitedByOperatorId(),
                 v.lastDeliveryStatus(), v.lastDeliveryAt(),
-                v.acceptedAt(), v.acceptedOperatorId(), v.cancelledAt(), null);
+                v.acceptedAt(), v.acceptedOperatorId(), v.cancelledAt(), null, v.firstAdmin());
     }
 
-    static String normalizeEmail(String raw) {
+    /** Also the first-admin email rule of {@code POST /api/admin/tenants} (TASK-MONO-773 S4 — «같은 검증»). */
+    public static String normalizeEmail(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException("email is required");
         }
@@ -255,7 +298,7 @@ public class OperatorInvitationUseCase {
         return email;
     }
 
-    static String requireDisplayName(String raw) {
+    public static String requireDisplayName(String raw) {
         if (raw == null || raw.isBlank() || raw.trim().length() > 64) {
             throw new IllegalArgumentException("displayName is required (1–64 characters)");
         }

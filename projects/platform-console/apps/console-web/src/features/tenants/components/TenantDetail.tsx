@@ -7,7 +7,12 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { useTenant, useUpdateTenant } from '../hooks/use-tenants';
-import { tenantStatusTone, type Tenant, type UpdateTenantInput } from '../api/types';
+import {
+  tenantStatusLabel,
+  tenantStatusTone,
+  type Tenant,
+  type UpdateTenantInput,
+} from '../api/types';
 import { TenantForm } from './TenantForm';
 import { TenantConfirmDialog } from './TenantConfirmDialog';
 
@@ -102,7 +107,7 @@ export function TenantDetail({ tenant }: TenantDetailProps) {
             <dt className="text-muted-foreground">상태</dt>
             <dd data-testid="tenant-detail-status">
               <StatusBadge tone={tenantStatusTone(data.status)}>
-                {data.status}
+                {tenantStatusLabel(data)}
               </StatusBadge>
             </dd>
           </div>

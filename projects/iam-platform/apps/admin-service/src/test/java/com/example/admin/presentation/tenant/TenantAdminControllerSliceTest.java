@@ -2,6 +2,7 @@ package com.example.admin.presentation.tenant;
 
 import com.example.admin.application.exception.TenantAlreadyExistsException;
 import com.example.admin.application.exception.TenantIdReservedException;
+import com.example.admin.application.tenant.CreateTenantResult;
 import com.example.admin.application.tenant.CreateTenantUseCase;
 import com.example.admin.application.tenant.GetTenantUseCase;
 import com.example.admin.application.tenant.ListTenantsUseCase;
@@ -85,6 +86,9 @@ class TenantAdminControllerSliceTest {
     // TASK-MONO-784 S3: GET /tenants/{id} judges the path tenant through the shared grant-scope guard.
     @MockitoBean com.example.admin.application.TenantScopeGuard tenantScopeGuard;
     @MockitoBean com.example.admin.application.TenantOrgNodePlacementUseCase placementUseCase; // TASK-BE-625
+    // TASK-MONO-773 S4 — the firstAdmin summary (mock → null = a tenant without first-admin rows) and the re-invite.
+    @MockitoBean com.example.admin.application.tenant.TenantFirstAdminSummaryQuery firstAdminSummaryQuery;
+    @MockitoBean com.example.admin.application.OperatorInvitationUseCase invitationUseCase;
 
     // Pre-created mocks — stubs are set in @BeforeEach to avoid interleaving
     // with when(...).thenReturn(Optional.of(helperMethod())) call chains.
@@ -94,6 +98,20 @@ class TenantAdminControllerSliceTest {
     private static TenantSummary stubTenant(String tenantId) {
         return new TenantSummary(tenantId, "Display " + tenantId,
                 "B2B_ENTERPRISE", "ACTIVE", Instant.now(), Instant.now());
+    }
+
+    /** TASK-MONO-773 S4 — the SUPER_ADMIN path's tenant is born PENDING. */
+    private static TenantSummary pendingTenant(String tenantId) {
+        return new TenantSummary(tenantId, "Display " + tenantId,
+                "B2B_ENTERPRISE", "PENDING", Instant.now(), Instant.now());
+    }
+
+    private static com.example.admin.application.OperatorInvitationResult firstAdminInvitation(String tenantId) {
+        return new com.example.admin.application.OperatorInvitationResult(
+                "inv-" + tenantId, tenantId, "owner@example.com", "Owner",
+                List.of("TENANT_ADMIN", "TENANT_BILLING_ADMIN"), "PENDING", false,
+                Instant.now().plusSeconds(3600), Instant.now(), SUPER_ADMIN_ID, "SENT", Instant.now(),
+                null, null, null, "audit-1", true);
     }
 
     @BeforeEach
@@ -152,8 +170,11 @@ class TenantAdminControllerSliceTest {
     void create_tenant_super_admin_returns_201() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(createTenantUseCase.execute(eq("wms-test"), anyString(), anyString(), any(), any(), any()))
-                .thenReturn(stubTenant("wms-test"));
+        when(createTenantUseCase.execute(org.mockito.ArgumentMatchers.argThat(c -> c != null
+                        && "wms-test".equals(c.tenantId())
+                        && "owner@example.com".equals(c.firstAdminEmail())
+                        && "Owner".equals(c.firstAdminDisplayName()))))
+                .thenReturn(new CreateTenantResult(pendingTenant("wms-test"), firstAdminInvitation("wms-test")));
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
@@ -164,7 +185,13 @@ class TenantAdminControllerSliceTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("wms-test"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                // TASK-MONO-773 S4 — PENDING + the first-admin summary + the invitation item (no token anywhere)
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.firstAdmin.state").value("INVITED"))
+                .andExpect(jsonPath("$.firstAdmin.email").value("owner@example.com"))
+                .andExpect(jsonPath("$.firstAdmin.invitationId").value("inv-wms-test"))
+                .andExpect(jsonPath("$.firstAdminInvitation.firstAdmin").value(true))
+                .andExpect(jsonPath("$.firstAdminInvitation.roles[0]").value("TENANT_ADMIN"));
 
         // TASK-BE-625 AC-5 regression: no orgNodeId → the pre-existing path, placement untouched.
         org.mockito.Mockito.verifyNoInteractions(placementUseCase);
@@ -203,9 +230,12 @@ class TenantAdminControllerSliceTest {
         // checks the destination BEFORE creating (unit-tested in TenantOrgNodePlacementUseCaseTest).
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(placementUseCase.createTenantUnder(any(), eq("acme-svc"), eq("Acme Svc"), eq("B2B_ENTERPRISE"),
-                eq("erp-div"), eq("onboard under erp"), anyString()))
-                .thenReturn(stubTenant("acme-svc"));
+        when(placementUseCase.createTenantUnder(org.mockito.ArgumentMatchers.argThat(c -> c != null
+                        && "acme-svc".equals(c.tenantId()) && "Acme Svc".equals(c.displayName())
+                        && "B2B_ENTERPRISE".equals(c.tenantType()) && "onboard under erp".equals(c.reason())
+                        && c.idempotencyKey() != null && "owner@example.com".equals(c.firstAdminEmail())),
+                eq("erp-div")))
+                .thenReturn(new CreateTenantResult(pendingTenant("acme-svc"), firstAdminInvitation("acme-svc")));
 
         mockMvc.perform(post("/api/admin/tenants")
                         .header("Authorization", superAdminToken())
@@ -217,16 +247,14 @@ class TenantAdminControllerSliceTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("acme-svc"));
 
-        org.mockito.Mockito.verify(createTenantUseCase, org.mockito.Mockito.never())
-                .execute(anyString(), anyString(), anyString(), any(), any(), any());
+        org.mockito.Mockito.verify(createTenantUseCase, org.mockito.Mockito.never()).execute(any());
     }
 
     @Test
     void create_tenant_with_out_of_reach_orgNodeId_returns_404_org_node_not_found() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(placementUseCase.createTenantUnder(any(), anyString(), anyString(), anyString(),
-                eq("ghost"), any(), any()))
+        when(placementUseCase.createTenantUnder(any(), eq("ghost")))
                 .thenThrow(new com.example.admin.application.exception.OrgNodeNotFoundException(
                         "Org node not found: ghost"));
 
@@ -281,7 +309,7 @@ class TenantAdminControllerSliceTest {
     void create_tenant_invalid_slug_returns_400_validation_error() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(createTenantUseCase.execute(eq("WMS"), anyString(), anyString(), any(), any(), any()))
+        when(createTenantUseCase.execute(org.mockito.ArgumentMatchers.argThat(c -> c != null && "WMS".equals(c.tenantId()))))
                 .thenThrow(new IllegalArgumentException("tenantId must match regex"));
 
         mockMvc.perform(post("/api/admin/tenants")
@@ -299,7 +327,7 @@ class TenantAdminControllerSliceTest {
     void create_tenant_reserved_returns_400_tenant_id_reserved() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(createTenantUseCase.execute(eq("admin"), anyString(), anyString(), any(), any(), any()))
+        when(createTenantUseCase.execute(org.mockito.ArgumentMatchers.argThat(c -> c != null && "admin".equals(c.tenantId()))))
                 .thenThrow(new TenantIdReservedException("admin"));
 
         mockMvc.perform(post("/api/admin/tenants")
@@ -335,7 +363,7 @@ class TenantAdminControllerSliceTest {
     void create_tenant_duplicate_returns_409_tenant_already_exists() throws Exception {
         when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
                 .thenReturn(Optional.of(superAdminMock));
-        when(createTenantUseCase.execute(anyString(), anyString(), anyString(), any(), any(), any()))
+        when(createTenantUseCase.execute(any()))
                 .thenThrow(new TenantAlreadyExistsException("wms-test"));
 
         mockMvc.perform(post("/api/admin/tenants")

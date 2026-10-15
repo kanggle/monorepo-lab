@@ -87,6 +87,13 @@ public class OperatorInvitationJpaEntity {
     @Column(name = "cancelled_by")
     private Long cancelledBy;
 
+    /**
+     * TASK-MONO-773 S4 (V0055) — the «first-admin invitation» mark. Written once at creation; the generated
+     * {@code first_admin_pending_key} (not mapped, like {@code pending_key}) keeps one PENDING such row per tenant.
+     */
+    @Column(name = "first_admin", nullable = false)
+    private boolean firstAdmin;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -106,7 +113,16 @@ public class OperatorInvitationJpaEntity {
     public static OperatorInvitationJpaEntity create(String invitationId, String tenantId, String email,
                                                      String displayName, String roles, String tokenHash,
                                                      Instant expiresAt, Long invitedBy, Instant now) {
+        return create(invitationId, tenantId, email, displayName, roles, tokenHash, expiresAt, invitedBy, now, false);
+    }
+
+    /** TASK-MONO-773 S4 — as above, with the first-admin mark. */
+    public static OperatorInvitationJpaEntity create(String invitationId, String tenantId, String email,
+                                                     String displayName, String roles, String tokenHash,
+                                                     Instant expiresAt, Long invitedBy, Instant now,
+                                                     boolean firstAdmin) {
         OperatorInvitationJpaEntity e = new OperatorInvitationJpaEntity();
+        e.firstAdmin = firstAdmin;
         e.invitationId = invitationId;
         e.tenantId = tenantId;
         e.email = email;
