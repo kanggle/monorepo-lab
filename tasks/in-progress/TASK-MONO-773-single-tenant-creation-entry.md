@@ -494,3 +494,46 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 - **S4 빨강 측정 (#4372 첫 커밋 = 시험만)**: iam A 레인(job 116334237061) — `TenantFirstAdminIntegrationTest` **19 FAILED · 4 PASSED**(대조군 3 + Q4 측정) · `TenantAdminIntegrationTest` 1 FAILED(PENDING 기대) · 20 전부 `AssertionError`(`$.status` ACTIVE≠PENDING × 12 · `$.firstAdmin` 없음 × 2 · 201≠400 · 201≠5xx · 200≠409 · 404≠409 · V0055 칸 없음 · 불변식 프로브). SQL/컴파일 오류 0. 콘솔 vitest(job 116334235424): 손댄 4파일에서만 **31 FAILED** · 나머지 4361 PASSED.
 - **S4 소유자 결정 (2026-10-15 UTC)** — Q4 `'*'` 운영자의 PENDING(·SUSPENDED) 테넌트 assume: 773 은 측정 사실로만 기록(S4 IT 가 `assigned=true` 를 측정으로 고정) · **`TASK-BE-639`** 로 따로 다룬다(같은 PR 에서 기안).
 - **S4 초록 (#4372, job 116390247407)**: `TenantFirstAdminIntegrationTest` **23 PASSED**(불변식 프로브 — 모든 활성화 요청 시점에 커밋된 ACTIVE TENANT_ADMIN ≥ 1) · `TenantAdminIntegrationTest` 13 · `RbacTenantEndpointMatrix` 7 · `TenantOrgNodePlacement` 5 · `OperatorInvitationAcceptance` 6 · `SelfServiceOnboarding*` 18 PASSED · 레인 FAILED 0 · 콘솔 vitest 386 파일 PASSED. 🔴 중간 빨강 5건은 둘 다 시험 결함: ① 프로브가 WireMock 3.9.1 `RequestMethod` 를 `==` 로 비교(요청마다 새 인스턴스 → 늘 거짓, 같은 시험의 «활성화 호출 1회» 는 통과) ② MySQL `BOOLEAN` 을 `Number` 로 캐스팅. 운영 코드 무변경(`787200555`).
+
+## S5 기록 (2026-10-15T11:53Z UTC) — auth-service 콘솔 «비운영자 셸» 토큰 · console-eligibility 폐기
+
+> 분석=Opus 5.5 (backend-engineer) · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-s5-auth-shell-token`(origin/main `c98e80ab5` — S1 ~ S4 위) · PR #4373(draft). 방법 = S2 ~ S4 와 같다: **PHASE 1 = 시험만** 먼저 밀어 빨강을 재고(`87e684c42`), PHASE 2 에서 수선. 🔴 머지 순서 조건(auth-api.md «S5 는 S3 보다 먼저 main 에 들어가지 않는다»): S3 머지 커밋 `bf2d0236f`(#4371)는 이미 main 에 있다.
+
+### S5 AC-0 — 정확한 자리 (코드 읽기)
+
+- 판정 지점은 **하나**: `TenantClaimTokenCustomizer.customizeForPoolPrincipalOnConsole` — `customizeForAuthorizationCode` 에서 «풀 principal ∧ client 테넌트 = `iam`» 일 때만 탄다. `authorization_code`(access · id 토큰 둘 다) · `refresh_token` 모두 이 메서드를 지난다(`customize` 가 refresh 를 `customizeForAuthorizationCode` 로 보낸다). 측면 없음 = 클레임을 `consumer-pool` 로 두어 `refuseConsumerPoolTenant` 가 BE-614 문구로 거절 · 판정 실패 = `operator_eligibility_unavailable`.
+- **refresh 미러 행** · **authorize 게이트**는 I/O 없는 `AuthorizationSessionTenant` 가 이미 «풀 principal × 콘솔 → `iam`» 을 답한다(772 S4) — 바꿀 것 없음. 측면 없는 풀 계정의 미러 행도 이제 `iam` 이다(IT 가 잰다).
+- `'consumer-pool'` 문구의 **다른 발생원**(AC-0 § 3 의 ⚪): `refuseConsumerPoolTenant` 호출처 = **1**(`customize` 끝 — 모든 grant 공통). S5 뒤 그 문구가 나가는 길은 클레임이 `consumer-pool` 로 남는 셋뿐 — ① 풀 principal × 테넌트 없는 / `consumer-pool` 자체인 client(또는 폴백 메타데이터가 풀) ② `client_credentials` client 테넌트 = 풀 ③ assume 선택 테넌트 = 풀(공급자가 먼저 거절). **콘솔 client 는 어느 것도 아니다** → 콘솔 경로 `sso_wrong_account` 모집단 = **0**(773 AC-7 · `TASK-PC-FE-331` 무구현 종결 근거). 대조 시험 `poolPrincipal_onTenantlessClient_stillRefusedWithPoolText`(새) · `TenantClaimConsumerPoolRefusalTest`(그대로). auth-api.md 해당 줄에 적었다.
+- **console-eligibility 호출자 grep**(`console-eligibility` · `ConsoleEligib` · `isConsoleEligible`, 리포 전체 `.java`/`.ts`/`.yml`): 운영 코드 호출자 = auth `AdminConsoleEligibilityClient` **하나**(gateway · console-web · 다른 서비스 0 — 콘솔은 그 IAM 상수의 **문구**만 매핑하고 엔드포인트를 부르지 않는다). ⇒ 소유자 기본값대로 admin 엔드포인트도 지웠다. resilience 설정(`adminConsoleEligibility`)은 yml 에 행이 없었다(코드 기본값) — 지울 설정 0.
+
+### PHASE 1 — 시험 (`87e684c42`, 운영 코드 0)
+
+| 파일 | 무엇 |
+|---|---|
+| auth `TenantClaimPoolPrincipalTest` | 콘솔 셀 넷을 새 표로: 측면 묻지 않고 셸 토큰(access) · id_token · refresh 2회 · 대조(스토어 토큰 그대로 / 테넌트 없는 client 는 BE-614 문구 그대로). 772 의 적격 true/false/판정 실패 셀(4)은 폐기 행이라 지웠다. 발급자에 **`NOT_ASKED` 포트**(물으면 `AssertionError` — `Error` 라 발급자의 `RuntimeException` catch 가 못 삼킨다)를 넣어 «묻지 않음» 을 단언으로 만들었다 |
+| auth `ConsumerPoolSsoIntegrationTest` | admin WireMock 이 **모든 계정에 503**(이 질문엔 누구에게도 답 못 함) · 측면 없는 풀 계정 → 콘솔 `200` · access + `id_token` 둘 다 `tenant_id=iam` · `sub`=풀 계정 · `roles`/`entitled_domains`/`token_type` 없음 · 미러 행 `iam` · refresh `200` · admin 호출 0 / 폼 로그인 교차 조회도 `200` / 측면 있는 운영자: 772 AC-3 «회수 뒤 refresh 400» → **200(셸)** · 스토어 · 팬 대조 그대로 / 772 F5 → `adminServiceDown_consoleLoginStillIssues`(본문에 `operator_eligibility_unavailable` 없음 · `200`) |
+| auth `ConsumerPoolLegacyMoveIntegrationTest` | 772 AC-5 끝: console-eligibility 스텁 제거 · `verify(≥1)` → `verify(0)` |
+| admin `OperatorAssignmentCheckIntegrationTest` | `GET /internal/operators/console-eligibility` → **404**(새) · 술어 셀 넷은 엔드포인트 대신 공용 빈 둘(`OperatorOidcSubjectResolver` + `OperatorConsoleAdmission` — 엔드포인트가 조합하던 그 둘, 교환이 계속 쓴다)을 직접 묻는다 · 공백 400 셀은 엔드포인트 동작이라 지웠다 |
+| admin `PartnershipCrossOrgLeak` · `OperatorInvitationAcceptance` · `DemoOperatorSeed` IT | 같은 치환(HTTP 탐침 → 공용 빈 둘). 단언 값 무변경 |
+| admin `SelfServiceOnboardingIntegrationTest` | 🔴 **AC-1 대조군** `ac1_consoleShellToken_isNotAnOperatorToken` — S5 셸 토큰과 **같은 클레임 집합**(IAM `iss` · 콘솔 `aud` · `sub`=풀 계정 · `tenant_id=iam` · `tenant_type` · `roles`/`token_type` 없음)으로 ① `GET /api/admin/operators` Bearer → `401 TOKEN_INVALID` ② 토큰 교환 → `401 TOKEN_INVALID`(운영자 행 없음) ③ `received-invitations` → `200 VERIFIED` · `organizations` → `201` ④ 대조: 생성 뒤 **같은 토큰** 교환 → `200`(②의 401 이 «나쁜 토큰» 이 아니라 «운영자 아님» 이었다는 증거) |
+
+**빨강 측정 (#4373 `87e684c42`, run 38729482533 · 레인 로그에서 셈)**:
+
+| 레인 (job) | 클래스 | FAILED | PASSED | 실패 형태 |
+|---|---|---|---|---|
+| Build & Test (116403525826) | `TenantClaimPoolPrincipalTest` | **3** | ⚪ 레인 로그가 PASSED 를 찍지 않는다 — 레인 합계 1267 completed · 3 failed(셋 다 이 클래스). 로컬 실측: 두 클래스 24 중 21 PASSED | `AssertionFailedError` ×3(`assertThat(t).isNull()` ← `NOT_ASKED` 의 AssertionError — 지금 코드가 admin 에 묻는다) |
+| iam B (116403527692) | `ConsumerPoolSsoIntegrationTest` | **4** | 8 | `AssertionFailedError` ×3 «token status — body: `operator_eligibility_unavailable` expected 200 but 400» · `AssertionError` ×1 «not to contain `operator_eligibility_unavailable`» |
+| iam B | `ConsumerPoolLegacyMoveIntegrationTest` | **1** | 5 | `AssertionFailedError` 200≠400(같은 본문) — 스텁을 뺀 admin 이 404 → 지금 코드가 거절 |
+| iam A (116403527840) | `OperatorAssignmentCheckIntegrationTest` | **1** | 25 | `AssertionError: Status expected:<404> but was:<200>` |
+| iam A | `SelfServiceOnboardingIntegrationTest` · `PartnershipCrossOrgLeak` · `OperatorInvitationAcceptance` · `DemoOperatorSeed` | 0 | 3 · 10 · 6 · 21 | — (AC-1 대조군과 치환 셀은 S5 전에도 참이어야 하는 것 — 초록이 맞다) |
+
+9 FAILED 전부 단언 실패 — 컴파일 · SQL · 컨텍스트 오류 0. 🔵 AC-1 대조군(admin 절반)은 PHASE 1 에서도 **초록**이다: admin-service 는 S5 에서 바뀌지 않으므로(그 토큰을 운영자 토큰으로 받지 않는 것은 772 이전부터의 성질) 빨강이 날 자리가 없다. 그 시험의 몫은 «S5 가 여는 토큰이 권한을 넓히지 않는다» 의 고정이다.
+
+### PHASE 2 — 수선 (PHASE 1 단언 무변경)
+
+- **auth-service**: `customizeForPoolPrincipalOnConsole` = 늘 셸 클레임(`tenant_id=iam` · 콘솔 client `tenant_type`) — admin 호출 · 두 거절 갈래 삭제. 생성자에서 포트 제거(`TenantClaimTokenCustomizer(AccountServicePort, CredentialRepository)`). 상수 `OPERATOR_ELIGIBILITY_UNAVAILABLE` 삭제(자리에 «다시 넣지 말 것» 주석). 삭제: `OperatorConsoleEligibilityPort` · `OperatorEligibilityUnavailableException` · `AdminConsoleEligibilityClient`(+ `AdminConsoleEligibilityClientUnitTest`). 주석 정정: `AuthorizationSessionTenant` 둘 · `AdminOperatorInvitationClient`.
+- **auth 시험(기계적)**: 생성자 호출 6곳에서 둘째 인자(`NOT_ASKED`) 제거 · `ConsoleEligibilityStubs` 에서 `NOT_ASKED` 제거(포트가 없으니 «묻지 않음» 은 구성으로 성립 — 단언이 아니라 타입이 지킨다). PHASE 1 단언 줄은 그대로.
+- **admin-service**: 삭제 `OperatorConsoleEligibilityController` · `OperatorConsoleEligibilityQueryUseCase`(+ slice · unit 시험). `OperatorConsoleAdmission` 은 **남긴다**(토큰 교환이 쓴다) — 주석만 정정(`OperatorConsoleAdmission` · `TokenExchangeService` · `OperatorInvitationAcceptanceController` · `TokenExchangeServiceTest`). dev 시드 `R__seed_demo_*_operator.sql` 의 «console-eligibility» 주석 두 줄은 **고치지 않았다** — 반복 마이그레이션 내용이 바뀌면 체크섬이 바뀌어 다음 기동에 다시 돈다(주석 때문에 시드를 재실행하지 않는다).
+- **계약 (S1 이 이미 «지운다» 로 적은 것을 구현 사실로)**: `auth-to-admin.md` § console-eligibility 머리에 **«폐기 (773 S5)»**(제목은 `admin-api.md` 가 거는 앵커라 그대로) · 노출 경로 줄 · 머리글 772 노트 / `auth-api.md` 구현 메모 «✅ 구현 = S5 (#4373)» · `'consumer-pool'` 다른 발생원 측정 결과 / `admin-api.md:671 · :1573`(교환이 운영자 판정의 유일한 자리) / `features/multi-tenancy.md`(콘솔 행 · § 4 끝 문단) / `platform/error-handling.md` `OAUTH_INVALID_GRANT` 행의 `operator_eligibility_unavailable` = «773 S5 에서 퇴역 — 재사용 금지 때문에 행에 남긴다». `OPERATOR_CHECK_UNAVAILABLE` 행은 **그대로** — 그 코드를 내는 것은 콘솔 BFF 이고(S6 몫), 행 자체가 «마지막 발신자와 함께 지운다» 고 적고 있다. 콘솔 계약 § 2.6.3 는 S1 이 이미 «S5 뒤 도달 불가 · S6 이 정리» 로 적어 두었다 — 무변경.
+- **계약 이탈 0** — S1 의 계약이 이미 «호출 · 상수 · 엔드포인트를 지운다» 로 쓰여 있어 결정을 다시 하지 않았다. 티켓 § 10 S5 행의 «`operator_eligibility_unavailable` 행 그대로» 는 S1 소유자 답 1 이 대체했다(그 행은 고치지 않는다 — AC-0 기록).
+- **로컬 검증**: `:auth-service:test` · `:admin-service:test` rc=0(ITs 는 Docker 없음 → CI).

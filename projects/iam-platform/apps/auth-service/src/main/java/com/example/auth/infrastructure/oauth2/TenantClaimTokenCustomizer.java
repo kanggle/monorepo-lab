@@ -2,7 +2,6 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
-import com.example.auth.application.port.OperatorConsoleEligibilityPort;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.AuthenticationMethods;
@@ -194,27 +193,20 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      */
     private final AccountServicePort accountServicePort;
 
-    /**
-     * TASK-MONO-772 S4 (auth-api.md § 풀 계정의 콘솔 토큰 · 토큰 오류표) — the fixed {@code error_description}
-     * of the refusal when admin-service cannot say whether a pool principal has a live operator facet.
-     * Matched by the console by <b>whole-value equality</b>; it must never contain {@code 'consumer-pool'}
-     * (that substring is the console's «signed in with another account» discriminator — 772 AC-0 F5).
+    /*
+     * TASK-MONO-773 S5 (S1 owner answer 1, 2026-10-15 UTC; auth-api.md § 풀 계정의 콘솔 토큰) removed the 772 S4
+     * console-eligibility port and its fixed refusal constant "operator_eligibility_unavailable": the issuer no
+     * longer asks admin-service whether a pool principal is an operator (every pool principal on the console gets
+     * the same shell token — OD-6), so an admin-service outage can no longer block a console login. Operator-ness
+     * is answered only by the admin token exchange. Do not reintroduce an admin-service call on this path.
      */
-    static final String OPERATOR_ELIGIBILITY_UNAVAILABLE = "operator_eligibility_unavailable";
-
-    /**
-     * TASK-MONO-772 S4 — admin-service's console-eligibility read, asked for every console
-     * {@code authorization_code} / {@code refresh_token} issuance to a consumer-pool principal (no cache).
-     * Fail-CLOSED ({@link #customizeForPoolPrincipalOnConsole}).
-     */
-    private final OperatorConsoleEligibilityPort consoleEligibilityPort;
 
     /**
      * TASK-MONO-772 S6 (auth-api.md § 풀 계정의 콘솔 토큰 · 토큰 오류표) — the fixed {@code error_description} of the
      * refusal of a console token to a session that was opened BEFORE its account was moved into the consumer pool
      * ({@link #refuseConsoleSessionThatPredatesPoolMove}). Never contains {@code 'consumer-pool'} (the console's
-     * «another account» discriminator) and is not {@link #OPERATOR_ELIGIBILITY_UNAVAILABLE}: the console reads it
-     * as «the session ended» and starts a fresh login, which the authorize gate turns into a pool login.
+     * «another account» discriminator): the console reads it as «the session ended» and starts a fresh login,
+     * which the authorize gate turns into a pool login.
      */
     static final String SESSION_PREDATES_POOL_MOVE = "session_predates_pool_move";
 
@@ -226,10 +218,8 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     private final CredentialRepository credentialRepository;
 
     public TenantClaimTokenCustomizer(AccountServicePort accountServicePort,
-                                      OperatorConsoleEligibilityPort consoleEligibilityPort,
                                       CredentialRepository credentialRepository) {
         this.accountServicePort = accountServicePort;
-        this.consoleEligibilityPort = consoleEligibilityPort;
         this.credentialRepository = credentialRepository;
     }
 
@@ -464,10 +454,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                 customizeForPoolPrincipal(context, principal, clientTenant.trim(), clientId);
                 return;
             }
-            // TASK-MONO-772 S4 — a pool principal on the console: a console token ONLY with a live
-            // operator facet (admin-service), else the BE-614 refusal below, byte-unchanged.
+            // TASK-MONO-772 S4 → TASK-MONO-773 S5 — a pool principal on the console: the console shell token,
+            // operator facet or not (OD-6). No admin-service question.
             if (AuthorizationSessionTenant.mapsPoolPrincipalToConsole(clientTenant)) {
-                customizeForPoolPrincipalOnConsole(context, principal, tenantType, clientId);
+                customizeForPoolPrincipalOnConsole(context, clientId);
                 return;
             }
         }
@@ -585,62 +575,31 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
     }
 
     /**
-     * TASK-MONO-772 S4 (ADR-MONO-080 D6; auth-api.md § 풀 계정의 콘솔 토큰 — 운영자 측면이 있을 때만; TASK-BE-615 D-5
-     * amended) — the {@code platform-console-web} token of a consumer-pool principal. Serves
-     * {@code authorization_code} AND {@code refresh_token} (both reach here through
-     * {@link #customizeForAuthorizationCode}), so the facet is asked on every issuance — an operator suspended
-     * or removed after login gets no console token from the next refresh on (772 AC-3). SAS's refresh provider
-     * generates the access token before it rotates anything, so a refusal here leaves the refresh token as it
-     * was (S1-13).
+     * TASK-MONO-772 S4 → TASK-MONO-773 S5 (ADR-MONO-080 D6 · D9 = T1; 773 OD-6 · S1 owner answer 1; auth-api.md
+     * § 풀 계정의 콘솔 토큰) — the {@code platform-console-web} token of a consumer-pool principal: the console
+     * «non-operator shell» token, for EVERY pool principal, with or without an operator facet. Serves
+     * {@code authorization_code} (access AND id token) and {@code refresh_token} — all reach here through
+     * {@link #customizeForAuthorizationCode}.
      *
-     * <ul>
-     *   <li>{@code eligible=true} → {@code tenant_id=iam} · {@code tenant_type} = the console client's (the
-     *       tenant metadata every console token without a principal tenant carries) · no {@code roles}
-     *       (operator authority comes from the admin token exchange) · no {@code entitled_domains}. {@code sub},
-     *       {@code email} and {@code amr} were already set by the caller, like every other console token.</li>
-     *   <li>{@code eligible=false} → the claim stays the pool value, so {@link #refuseConsumerPoolTenant}
-     *       refuses with its existing text — byte-unchanged (the console's {@code sso_wrong_account}
-     *       discriminator reads its {@code 'consumer-pool'}).</li>
-     *   <li>no answer → {@code invalid_grant} with {@link #OPERATOR_ELIGIBILITY_UNAVAILABLE} — fail-CLOSED, and
-     *       deliberately NOT the «no facet» text (772 AC-0 F5).</li>
-     * </ul>
+     * <p>Claims: {@code tenant_id=iam} · {@code tenant_type} = the console client's (the tenant metadata every
+     * console token without a principal tenant carries) · no {@code roles} (operator authority comes from the admin
+     * token exchange) · no {@code entitled_domains}. {@code sub}, {@code email} and {@code amr} were already set by
+     * the caller, like every other console token. No claim tells an operator from a non-operator — the admin token
+     * exchange answers that on every exchange ({@code 401} = not an operator → the console's non-operator shell),
+     * so this token widens no authority: it only lets the person into the console shell.
      *
-     * <p>🔴 This is the one decision point 773 widens («non-operator shell»): it changes the
-     * {@code eligible=false} row only; the two refusal texts stay.
+     * <p>🔴 Until 773 S5 this asked admin-service ({@code GET /internal/operators/console-eligibility}) on every
+     * issuance and refused without a live facet (the TASK-BE-614 {@code 'consumer-pool'} text) or without an
+     * answer ({@code operator_eligibility_unavailable}). Both refusals are gone here, and so is the call: the answer
+     * no longer decided anything, and asking it made an admin-service outage block console logins.
      */
-    private void customizeForPoolPrincipalOnConsole(JwtEncodingContext context, Authentication principal,
-                                                    String poolTenantType, String clientId) {
-        String accountId = extractTenantAttribute(principal, PrincipalDetailKeys.ACCOUNT_ID);
-        boolean eligible = false;
-        if (accountId != null) {
-            try {
-                eligible = consoleEligibilityPort.isConsoleEligible(accountId);
-            } catch (RuntimeException e) {
-                // OperatorEligibilityUnavailableException is the adapter's failure shape; any other
-                // runtime failure of the port is «no answer» too — never a console token, never the
-                // «no facet» text.
-                log.warn("TenantClaimTokenCustomizer: console-eligibility unavailable for a pool principal on "
-                        + "clientId={} — no console token (fail-closed): {}", clientId, e.toString());
-                throw new OAuth2AuthenticationException(new OAuth2Error(
-                        OAuth2ErrorCodes.INVALID_GRANT, OPERATOR_ELIGIBILITY_UNAVAILABLE, null));
-            }
-        }
-        if (!eligible) {
-            // No live operator facet (or no account id to ask about): leave the pool value on the claim —
-            // refuseConsumerPoolTenant (customize) refuses it with the TASK-BE-614 text, unchanged.
-            context.getClaims()
-                    .claim("tenant_id", TenantContext.CONSUMER_POOL_TENANT_ID)
-                    .claim("tenant_type", poolTenantType);
-            log.info("TenantClaimTokenCustomizer: pool principal on console clientId={} has no live operator "
-                    + "facet — refused by the consumer-pool issuer gate (TASK-BE-614 text)", clientId);
-            return;
-        }
+    private void customizeForPoolPrincipalOnConsole(JwtEncodingContext context, String clientId) {
         TenantInfo consoleClient = clientTenantInfo(context.getRegisteredClient());
         context.getClaims()
                 .claim("tenant_id", TenantContext.CONSOLE_TENANT_ID)
                 .claim("tenant_type", consoleClient.tenantType());
-        log.debug("TenantClaimTokenCustomizer: pool principal with a live operator facet on console clientId={} "
-                + "— tenant_id=iam, no roles (TASK-MONO-772 S4)", clientId);
+        log.debug("TenantClaimTokenCustomizer: pool principal on console clientId={} — shell token, tenant_id=iam, "
+                + "no roles (TASK-MONO-773 S5)", clientId);
     }
 
     /**

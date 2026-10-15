@@ -26,9 +26,10 @@ import java.util.function.Supplier;
  * admin-service's {@code POST /internal/operator-invitations/preview · /accept}.
  *
  * <p>Same base URL ({@code auth.admin-service.base-url}), timeouts and GAP {@code client_credentials} Bearer as
- * {@link AdminAssignmentClient} / {@link AdminConsoleEligibilityClient}, with its <b>own</b> circuit breaker
+ * {@link AdminAssignmentClient} / {@link AdminOperatorFacetClient}, with its <b>own</b> circuit breaker
  * ({@code adminOperatorInvitation}) — an invitation-page outage must not open the breakers that gate assume-tenant
- * or console issuance (contract «별도 breaker 이름»).
+ * or the pool move (contract «별도 breaker 이름»). (The console-eligibility client it was once listed beside was
+ * removed in TASK-MONO-773 S5.)
  *
  * <ul>
  *   <li>{@code preview} — a read: retried like the other reads. 404 is an answer ({@code NOT_FOUND}).</li>

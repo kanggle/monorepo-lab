@@ -3,12 +3,12 @@
 auth-service가 **assume-tenant** RFC 8693 token-exchange 발급 시점에 운영자의 D1 assignment 를 확인한다 (ADR-MONO-020 § 3.3 step 2, D2).
 
 **호출 방향**: auth-service (client) → admin-service (server)
-**노출 경로**: `/internal/operator-assignments/*` · `/internal/operators/facet`(TASK-BE-618) · `/internal/operators/console-eligibility` · `/internal/operator-invitations/*`(TASK-MONO-772) — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
+**노출 경로**: `/internal/operator-assignments/*` · `/internal/operators/facet`(TASK-BE-618) · ~~`/internal/operators/console-eligibility`~~(TASK-MONO-773 S5 에서 폐기 — 아래 절) · `/internal/operator-invitations/*`(TASK-MONO-772) — 게이트웨이 퍼블릭 라우트에 노출 금지 ([rules/domains/saas.md](../../../../../../rules/domains/saas.md) S2)
 **인증** (TASK-BE-327 호출측/수신측): `Authorization: Bearer <IAM client_credentials JWT>` — auth-service 가 `auth-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고 ([IamClientCredentialsTokenProvider] 재사용), admin-service 가 IAM JWKS 서명 + issuer 로 검증한다. 정적 토큰 경로 없음. JWT 미제시/무효 시 모든 `/internal/**` 요청은 401 `UNAUTHORIZED` 로 fail-closed (account-service 의 `/internal/**` 체인 미러링).
 
 > **TASK-BE-327 (ADR-MONO-020 D2)** — 이 edge 는 assume-tenant 발급 시점의 **1회성(one-shot) read** 이다. 도메인→IAM 의 per-request callback 이 **아니다** (ADR-020 § 3.1 은 후자만 금지한다; assignment store(D1)·assume-tenant 발급(D2)·entitled_domains 도출(D3) 은 모두 IAM 내부에 머무르므로 auth↔admin 조율은 IAM-internal). admin_actions row 를 쓰지 않는다 (read-only — ADR-014 token-exchange "not audited" 규칙과 동일).
 
-> **TASK-MONO-772 (ADR-MONO-080 D6)** — 이 edge 에 **쓰기 하나**가 생긴다: `POST /internal/operator-invitations/accept`(초대 수락 — 운영자 행을 만든다, 감사 행을 쓴다). 나머지 셋(`console-eligibility` · `operator-invitations/preview` · 기존 둘)은 읽기다.
+> **TASK-MONO-772 (ADR-MONO-080 D6)** — 이 edge 에 **쓰기 하나**가 생긴다: `POST /internal/operator-invitations/accept`(초대 수락 — 운영자 행을 만든다, 감사 행을 쓴다). 나머지 셋(`console-eligibility` · `operator-invitations/preview` · 기존 둘)은 읽기다. (`console-eligibility` 는 TASK-MONO-773 S5 에서 폐기 — 호출자 0.)
 > 이 edge 의 방향(auth → admin)은 그대로다 — account-service 는 admin-service 를 부르지 않는다(반대 방향 `admin → account` 가 이미 있어 순환). 수락이 계정 판정을 필요로 하면 admin-service 가 account-service 에 묻는다([admin-to-account.md](./admin-to-account.md)).
 
 ---
@@ -140,6 +140,8 @@ account-service 가 아니라 auth-service 가 묻는 이유: account-service �
 ---
 
 ## GET /internal/operators/console-eligibility — 풀 계정에 콘솔 토큰을 줄까 (TASK-MONO-772)
+
+> 🔴 **폐기 (773 S5 — `TASK-MONO-773` S5, 2026-10-15 UTC · 소유자 결정 773 S1 열린 질문 1).** auth-service 콘솔 토큰 발급자가 이 호출을 지웠고(풀 principal × 콘솔 client 는 측면과 무관하게 콘솔 «비운영자 셸» 토큰 — [auth-api.md § 풀 계정의 콘솔 토큰](../auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)), S5 가 다른 호출처를 grep 해 **0** 을 확인한 뒤 admin-service 엔드포인트(`OperatorConsoleEligibilityController` · `OperatorConsoleEligibilityQueryUseCase`)도 같은 PR 에서 지웠다 — 이제 이 경로는 `404 NOT_FOUND` 다(`OperatorAssignmentCheckIntegrationTest.consoleEligibility_endpointRemoved_404`). 아래 판정 술어(`ACTIVE ∧ ('*' ∨ 소속 ≥ 1)`)는 **토큰 교환**(`POST /api/admin/auth/token-exchange`, `OperatorConsoleAdmission`)에 그대로 남는다 — 운영자인지는 그 교환만 답한다(`401` = 운영자 아님). 이 절의 나머지는 772 · 784 기록으로 남긴다(제목은 다른 문서가 거는 앵커라 그대로 둔다).
 
 **ADR-MONO-080 D6 셋째 줄 · 구현자 결정 D-5 · `TASK-BE-615` D-5 개정.** 풀 principal 이 콘솔 client(`platform-console-web`)로 토큰을 받으려 할 때 auth-service 발급자가
 «이 계정에 **살아 있는** 운영자 측면이 있나» 를 묻는다. 있으면 콘솔 토큰을 내고, 없으면 지금처럼 거절한다([auth-api.md § 풀 계정의 콘솔 토큰](../auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6)).

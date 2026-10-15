@@ -63,10 +63,9 @@ class TenantClaimPoolPrincipalTest {
 
     @BeforeEach
     void setUp() {
-        // TASK-MONO-773 S5: no cell of this class may ask admin-service anything — NOT_ASKED throws an Error that
-        // the issuer's RuntimeException catch cannot swallow.
-        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED,
-                credentialRepository);
+        // TASK-MONO-773 S5: the customizer has no admin-service collaborator any more (PHASE 1 passed the
+        // throwing NOT_ASKED port here to measure that no cell asked; the port is gone with the call).
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, credentialRepository);
     }
 
     private static RegisteredClient client(String clientId, String tenant, String type) {
@@ -261,7 +260,7 @@ class TenantClaimPoolPrincipalTest {
     /**
      * TASK-MONO-773 S5 (OD-6 · S1 owner answer 1; auth-api.md § 풀 계정의 콘솔 토큰 — «측면 없음» row → 발급 · the
      * «판정을 못 받음» row is gone) — EVERY pool principal on the console client gets the console «non-operator
-     * shell» token, operator facet or not, and admin-service is not asked at all ({@code NOT_ASKED} throws). The
+     * shell» token, operator facet or not, and admin-service is not asked at all (by construction since S5). The
      * claims are byte-the-same rule as the faceted row: {@code tenant_id=iam} · the console client's
      * {@code tenant_type} · {@code sub} = the pool account · no {@code roles} · no {@code entitled_domains}. Whether
      * the person is an operator is answered by the admin token exchange only.
