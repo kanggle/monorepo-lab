@@ -136,8 +136,25 @@ export function subscriptionBadgeKeys(
   return out;
 }
 
-/* TASK-PC-FE-338 c-2 — «업무 권한 없음» (per menu) + write-button gate. RED STUBS — implemented in
- * the fix commit. */
+/* ───────────────────────────────────────────────────────────────────────────
+ * TASK-PC-FE-338 c-2 — the per-menu «업무 권한 없음» signal + the write-button gate
+ * (console-integration-contract § 2.4.3.4 «Domain nav — two signals» and «Read-only sets hide
+ * write buttons»; owner decision 2026-10-15: per menu).
+ *
+ * INPUT = row 12 (`GET /api/admin/me/domain-access`) ∩ the active tenant's subscribed domains
+ * ({@link businessRolesWithin}). After P3 (TASK-BE-632) that set EQUALS the assumed token's
+ * `roles` — so the signal predicts the domain server's verdict without ever decoding the token
+ * (contract Failure Scenario 1).
+ *
+ * DATA = `permission-map.ts` `domain` gates: `serverRequires` (primary read) / `writeRequires`
+ * (mutation buttons). A leaf the server opens on subscription alone declares nothing and is
+ * never signalled — measured per leaf in the ticket's c-2 AC-0 table. P5–P8 (TASK-MONO-792~795)
+ * add data, not rules.
+ *
+ * 🔴 Every «don't know» (row 12 failed, no active tenant, registry failed, sample visitor) is
+ *    `undefined` here and means NO badge, buttons SHOWN — an outage must never read as «no
+ *    permission»; the server stays the gate.
+ * ─────────────────────────────────────────────────────────────────────────── */
 
 /** One row-12 role (`GET /api/admin/me/domain-access` `roles[]`). */
 export interface MyDomainRole {
@@ -145,21 +162,81 @@ export interface MyDomainRole {
   role: string;
 }
 
+/**
+ * Row 12 ∩ subscribed domains. `undefined` = don't know (row 12 failed, or no subscription data);
+ * an EMPTY set = known to hold no business role on a subscribed domain.
+ */
 export function businessRolesWithin(
-  _rows: readonly MyDomainRole[] | null | undefined,
-  _subscribedDomains: ReadonlySet<DomainKey> | undefined,
+  rows: readonly MyDomainRole[] | null | undefined,
+  subscribedDomains: ReadonlySet<DomainKey> | undefined,
 ): ReadonlySet<string> | undefined {
-  return undefined;
+  if (!rows || subscribedDomains === undefined) return undefined;
+  const subscribed = subscribedDomains as ReadonlySet<string>;
+  return new Set(rows.filter((r) => subscribed.has(r.domainKey)).map((r) => r.role));
 }
 
+function domainGateOf(href: string) {
+  const gate = GATE_BY_HREF.get(href);
+  return gate?.kind === 'domain' ? gate : null;
+}
+
+/** Holds at least one of `required`? An absent/empty requirement is always satisfied. */
+function holdsAny(
+  myBusinessRoles: ReadonlySet<string>,
+  required: readonly string[] | undefined,
+): boolean {
+  if (!required || required.length === 0) return true;
+  return required.some((r) => myBusinessRoles.has(r));
+}
+
+/** Is this leaf refused by the server for lack of a business role? (subscribed domain only) */
+function leafLacksBusinessPermission(
+  href: string,
+  subscribedDomains: ReadonlySet<DomainKey>,
+  myBusinessRoles: ReadonlySet<string>,
+): boolean {
+  const gate = domainGateOf(href);
+  if (!gate || !gate.serverRequires || gate.serverRequires.length === 0) return false;
+  // «구독 필요» wins — an unsubscribed domain is never ALSO «업무 권한 없음».
+  if (!subscribedDomains.has(gate.domain)) return false;
+  return !holdsAny(myBusinessRoles, gate.serverRequires);
+}
+
+/**
+ * The nav identifiers carrying «업무 권한 없음»: leaf `href`s, plus a drill parent's `key` when
+ * EVERY `domain`-gated child of it is badged (one cause per item — a parent with an open child
+ * is not «no permission»).
+ */
 export function businessPermissionBadgeKeys(
-  _groups: readonly NavGroup[],
-  _subscribedDomains: ReadonlySet<DomainKey> | undefined,
-  _myBusinessRoles: ReadonlySet<string> | undefined,
+  groups: readonly NavGroup[],
+  subscribedDomains: ReadonlySet<DomainKey> | undefined,
+  myBusinessRoles: ReadonlySet<string> | undefined,
 ): ReadonlySet<string> {
-  return new Set();
+  const out = new Set<string>();
+  if (subscribedDomains === undefined || myBusinessRoles === undefined) return out;
+
+  for (const g of groups) {
+    for (const n of g.items) {
+      if (isParent(n)) {
+        const domainChildren = n.children.filter((c) => domainGateOf(c.href) !== null);
+        let all = domainChildren.length > 0;
+        for (const c of domainChildren) {
+          if (leafLacksBusinessPermission(c.href, subscribedDomains, myBusinessRoles)) {
+            out.add(c.href);
+          } else {
+            all = false;
+          }
+        }
+        if (all) out.add(n.key);
+      } else if (leafLacksBusinessPermission(n.href, subscribedDomains, myBusinessRoles)) {
+        out.add(n.href);
+      }
+    }
+  }
+  return out;
 }
 
+/** {@link businessPermissionBadgeKeys} over the full, unfiltered nav tree. */
 export function defaultBusinessPermissionBadgeKeys(
   subscribedDomains: ReadonlySet<DomainKey> | undefined,
   myBusinessRoles: ReadonlySet<string> | undefined,
@@ -167,11 +244,17 @@ export function defaultBusinessPermissionBadgeKeys(
   return businessPermissionBadgeKeys(GROUPS, subscribedDomains, myBusinessRoles);
 }
 
+/**
+ * AC-2 — may the screen at `href` show its mutation buttons? `false` only when the operator's
+ * business roles are KNOWN and hold none of the screen's `writeRequires`. Unknown roles, or a
+ * screen with no declaration → `true` (the server stays final).
+ */
 export function canWriteOn(
-  _href: string,
-  _myBusinessRoles: ReadonlySet<string> | undefined,
+  href: string,
+  myBusinessRoles: ReadonlySet<string> | undefined,
 ): boolean {
-  return true;
+  if (myBusinessRoles === undefined) return true;
+  return holdsAny(myBusinessRoles, domainGateOf(href)?.writeRequires);
 }
 
 /** Re-exported for callers (`ConsoleSidebarNav`, the `(console)` layout) that

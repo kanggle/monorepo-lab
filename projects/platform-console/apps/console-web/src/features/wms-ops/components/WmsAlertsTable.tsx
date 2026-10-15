@@ -13,13 +13,28 @@ import type { AlertRow } from '../api/types';
 export interface WmsAlertsTableProps {
   rows: AlertRow[];
   onAck: (alert: AlertRow) => void;
+  /**
+   * TASK-PC-FE-338 c-2 AC-2 — `false` hides «확인 처리» (the operator holds no `WMS_OPERATOR`,
+   * which the server's acknowledge requires). Default `true` (fail-open).
+   */
+  canAcknowledge?: boolean;
 }
 
-export function WmsAlertsTable({ rows, onAck }: WmsAlertsTableProps) {
+export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlertsTableProps) {
   return (
     <>
       {/* ── Alerts (confirm-gated acknowledge — the only mutation) ─────── */}
       <h2 className="mb-3 text-lg font-medium text-foreground">알림</h2>
+      {!canAcknowledge && (
+        <p
+          role="note"
+          data-testid="wms-alerts-read-only-note"
+          className="mb-2 text-xs text-muted-foreground"
+        >
+          조회 전용 — 알림 확인 처리에 필요한 업무 권한(WMS 운영 조치)이 이 테넌트에서 배정되지
+          않아 «확인 처리» 버튼을 숨겼습니다.
+        </p>
+      )}
       {rows.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
@@ -75,7 +90,7 @@ export function WmsAlertsTable({ rows, onAck }: WmsAlertsTableProps) {
                   )}
                 </td>
                 <td className="p-2">
-                  {a.acknowledged ? (
+                  {a.acknowledged || !canAcknowledge ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
                     <Button

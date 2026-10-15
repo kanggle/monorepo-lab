@@ -73,7 +73,7 @@ export interface OutboundOpsScreenProps {
   canWrite?: boolean;
 }
 
-export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
+export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreenProps) {
   const statusFid = useId();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -187,6 +187,7 @@ export function OutboundOpsScreen({ orders }: OutboundOpsScreenProps) {
           shipEnabled={shipEnabled}
           cancelVisible={cancelVisible}
           retryVisible={retryVisible}
+          canWrite={canWrite}
           cancelPending={cancelPending}
           actionPending={actionDialog.actionPending}
           cancelMutationPending={cancelDialog.cancelPending}

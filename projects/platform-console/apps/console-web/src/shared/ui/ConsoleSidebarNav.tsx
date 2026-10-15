@@ -15,6 +15,7 @@ import { NavIcon } from './console-nav-icons';
 import {
   isHrefHiddenFor,
   defaultSubscriptionBadgeKeys,
+  defaultBusinessPermissionBadgeKeys,
   type DomainKey,
 } from './console-nav-exposure';
 
@@ -96,6 +97,24 @@ function SubscriptionBadge({ testid }: { testid: string }) {
       className="shrink-0 rounded-sm bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-amber-700 dark:text-amber-400"
     >
       구독 필요
+    </span>
+  );
+}
+
+/**
+ * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Domain nav — two signals», per menu) — the
+ * «업무 권한 없음» indicator. Same form as {@link SubscriptionBadge} (a native `title`, never a
+ * link — it sits inside a `<button>` or `<a>`), a different tone and text so the two signals never
+ * read as one. The item stays a working link: hiding is a convenience, the server is the gate.
+ */
+function BusinessPermissionBadge({ testid }: { testid: string }) {
+  return (
+    <span
+      data-testid={testid}
+      title="이 테넌트에서 이 화면에 필요한 업무 권한 세트가 배정되지 않았습니다 — 관리자에게 «업무 권한 세트» 배정을 요청하세요."
+      className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium leading-none text-muted-foreground"
+    >
+      업무 권한 없음
     </span>
   );
 }
@@ -194,6 +213,7 @@ function OperatorNav({
   availableProductKeys,
   myRoles,
   subscribedDomains,
+  myBusinessRoles,
 }: {
   availableProductKeys?: readonly string[];
   myRoles?: readonly string[] | null;
@@ -204,6 +224,8 @@ function OperatorNav({
     isHrefHiddenFor(href, myRoles),
   );
   const badgeKeys = defaultSubscriptionBadgeKeys(subscribedDomains);
+  // TASK-PC-FE-338 c-2 — per-menu «업무 권한 없음» (leaf hrefs + fully-refused parent keys).
+  const businessBadgeKeys = defaultBusinessPermissionBadgeKeys(subscribedDomains, myBusinessRoles);
   const pathname = navPathFor(usePathname() ?? '');
   // Drill state. Initialised from the route so a deep-link into a child route
   // opens its parent; re-synced on every navigation to the current route's
@@ -264,6 +286,9 @@ function OperatorNav({
           {badgeKeys.has(openParent.key) && (
             <SubscriptionBadge testid={`${openParent.testid}-subscription-badge`} />
           )}
+          {businessBadgeKeys.has(openParent.key) && (
+            <BusinessPermissionBadge testid={`${openParent.testid}-business-permission-badge`} />
+          )}
         </button>
         <div className="ml-1 flex flex-col gap-0.5 border-l border-border pl-3">
           {openParent.children.map((child) => (
@@ -276,6 +301,9 @@ function OperatorNav({
             >
               <NavIcon name={child.icon} />
               <span className="min-w-0 truncate">{child.label}</span>
+              {businessBadgeKeys.has(child.href) && (
+                <BusinessPermissionBadge testid={`${child.testid}-business-permission-badge`} />
+              )}
             </Link>
           ))}
         </div>
@@ -328,6 +356,9 @@ function OperatorNav({
                   {badgeKeys.has(node.key) && (
                     <SubscriptionBadge testid={`${node.testid}-subscription-badge`} />
                   )}
+                  {businessBadgeKeys.has(node.key) && (
+                    <BusinessPermissionBadge testid={`${node.testid}-business-permission-badge`} />
+                  )}
                   <ChevronRight />
                 </button>
               );
@@ -345,6 +376,9 @@ function OperatorNav({
                 <span className="min-w-0 flex-1 truncate">{node.label}</span>
                 {badgeKeys.has(node.href) && (
                   <SubscriptionBadge testid={`${node.testid}-subscription-badge`} />
+                )}
+                {businessBadgeKeys.has(node.href) && (
+                  <BusinessPermissionBadge testid={`${node.testid}-business-permission-badge`} />
                 )}
               </Link>
             );

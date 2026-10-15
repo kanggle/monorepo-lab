@@ -295,3 +295,37 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
   - `my-domain-access-read.test.ts`
   - AC-2 blocks appended to `OutboundOpsScreen.test.tsx` and `WmsOpsScreen.test.tsx`
 - **Local run of the 5 files: 15 failed / 68 passed.** All 15 are `AssertionError` or `TestingLibraryElementError` (missing badge testid). `tsc --noEmit -p .` rc=0.
+
+## Slice c-2 PR 2 — what landed
+
+- **`shared/api/iam-operators-read.ts`** — new `getMyDomainRolesOrNull()`, the row 12 read.
+  - It uses the same hardened operators core: operator token and `X-Tenant-Id`.
+  - It parses only `roles[]`.
+  - Every failure returns `null`, which callers read as «don't know».
+- **`shared/ui/console-nav-exposure.ts`** — pure functions, no React and no `features/` import:
+  - `businessRolesWithin` computes row 12 ∩ subscribed domains. `undefined` = don't know; an empty set = known to hold nothing.
+  - `businessPermissionBadgeKeys` returns the badged leaves, plus a parent when all of its `domain` children are badged. «구독 필요» wins over it.
+  - `canWriteOn` gives the AC-2 answer.
+- **`permission-map.ts` declarations:**
+  - `/wms/outbound`: `serverRequires` `OUTBOUND_READ · OUTBOUND_WRITE`, `writeRequires` `OUTBOUND_WRITE`.
+  - `/wms`: `writeRequires` `WMS_OPERATOR`.
+  - All 9 ecommerce leaves: `serverRequires` `ECOMMERCE_GATEWAY_REQUIRES`.
+  - The header comment no longer says «domain row = derived»; this is the BE-632 hand-off of `:24`. It now says sets ∩ subscribed, with `OperatorRoleDerivation` as the ceiling only.
+- **Sidebar.** `BusinessPermissionBadge` («업무 권한 없음», a neutral tone that differs from the amber «구독 필요») renders on:
+  - drill children;
+  - the drill header;
+  - top-level parents;
+  - flat leaves.
+
+  The testid is `${testid}-business-permission-badge`. The item always stays a link.
+- **`(console)` layout.** Row 12 is fired alongside `/me`, and skipped for a sample visitor or when no tenant is selected. The layout passes `myBusinessRoles` to the sidebar.
+- **AC-2 screens.**
+  - `WmsOpsScreen` / `WmsAlertsTable` take `canAcknowledge`. When it is false, «확인 처리» hides and the note `wms-alerts-read-only-note` shows.
+  - `OutboundOpsScreen` → `OutboundOrderDrill` → `OutboundDrillActions` take `canWrite`. When it is false, pick · pack · ship · cancel and the pick-blocked hint hide, the note `outbound-read-only-note` shows, and «발송 재시도» stays.
+  - The two pages compute the flag through `app/(console)/wms/_lib/wms-business-roles.ts`: row 12 ∩ (active tenant ∈ the registry's `wms` tenants). The registry is already fetched; no second call.
+- **e2e pin.** `overview-consolidation.spec.ts:82-87`: the comment now says why the exact regex stays true. The regex is unchanged.
+  - I grepped `tests/e2e`, `e2e-smoke` and `tests/federation-hardening-e2e` for `wms-alert-ack`, `outbound-action`, `business-permission` and «업무 권한 없음»: **0 hits**.
+- **Green (local).**
+  - Full `npx vitest run`: **398 files / 4543 tests passed**, rc=0.
+  - `tsc --noEmit -p .`: rc=0.
+  - `next lint`: rc=0. Its one pre-existing warning is in an untouched file.

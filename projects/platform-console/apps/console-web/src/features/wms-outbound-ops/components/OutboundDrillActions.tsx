@@ -23,6 +23,13 @@ export interface OutboundDrillActionsProps {
   shipEnabled: boolean;
   cancelVisible: boolean;
   retryVisible: boolean;
+  /**
+   * TASK-PC-FE-338 c-2 AC-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false`
+   * when the operator holds no `OUTBOUND_WRITE`: pick / pack / ship / cancel hide (outbound-service
+   * would `403` them). «발송 재시도» (logistics-service, `authenticated()` only) is not gated by
+   * that role and stays. Default `true` (fail-open — the server stays final).
+   */
+  canWrite?: boolean;
   cancelPending: boolean;
   actionPending: boolean;
   cancelMutationPending: boolean;
@@ -45,6 +52,7 @@ export function OutboundDrillActions({
   shipEnabled,
   cancelVisible,
   retryVisible,
+  canWrite = true,
   cancelPending,
   actionPending,
   cancelMutationPending,
@@ -55,7 +63,18 @@ export function OutboundDrillActions({
 }: OutboundDrillActionsProps) {
   return (
     <>
+      {!canWrite && (
+        <p
+          role="note"
+          data-testid="outbound-read-only-note"
+          className="text-xs text-muted-foreground"
+        >
+          조회 전용 — 출고 변경(피킹 · 패킹 · 출고 확정 · 주문 취소)에 필요한 업무 권한이 이
+          테넌트에서 배정되지 않아 해당 버튼을 숨겼습니다.
+        </p>
+      )}
       {/* Confirm-gated + status/saga-gated lifecycle actions. */}
+      {canWrite && (
       <div className="flex flex-wrap gap-3">
         <Button
           onClick={() => onAction('pick', detail.orderId)}
@@ -79,10 +98,11 @@ export function OutboundDrillActions({
           출고 확정
         </Button>
       </div>
+      )}
 
       {/* Cancel — the one NON-forward action (reason-required,
           role-escalating). Visible for cancellable statuses only. */}
-      {cancelVisible && (
+      {cancelVisible && canWrite && (
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
           <Button
             variant="secondary"
@@ -138,7 +158,7 @@ export function OutboundDrillActions({
           </span>
         </div>
       )}
-      {!pickEnabled && status === 'PICKING' && (
+      {canWrite && !pickEnabled && status === 'PICKING' && (
         <p
           className="mt-2 text-xs text-muted-foreground"
           data-testid="outbound-pick-blocked-hint"

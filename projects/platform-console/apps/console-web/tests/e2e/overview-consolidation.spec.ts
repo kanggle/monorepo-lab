@@ -84,6 +84,9 @@ test.describe('@e2e overview consolidation (TASK-PC-FE-034)', () => {
     // this stack's tenant is entitled is fixture data, not what this test is about, so the
     // label is pinned exactly and the badge is allowed either way — never `toContainText`,
     // which would also pass a label that merely starts with something else.
+    // TASK-PC-FE-338 c-2: the second signal, «업무 권한 없음», can never appear here — ERP declares
+    // no `serverRequires` (its reads open on subscription alone, contract § 2.4.3.4), so this pin
+    // stays exact. Pinned in unit form by `sidebar-business-permission.test.tsx`.
     await expect(erp).toHaveText(/^ERP(구독 필요)?$/);
     await expect(erp).not.toHaveAttribute('href', '/erp');
     // Drill in → the 4 section children appear.

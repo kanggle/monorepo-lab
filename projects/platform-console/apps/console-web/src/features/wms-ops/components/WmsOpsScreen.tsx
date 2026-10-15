@@ -77,6 +77,7 @@ export function WmsOpsScreen({
   lagSeconds,
   overview,
   recentActivity,
+  canAcknowledge = true,
 }: WmsOpsScreenProps) {
   // The alerts list is not paginated in this slice's UI. It is seeded page-0;
   // the only re-fetch is the post-ack invalidation (the acknowledged row then
@@ -150,7 +151,11 @@ export function WmsOpsScreen({
 
       <WmsLagHint testid="wms-lag-hint" message={lagBanner} />
 
-      <WmsAlertsTable rows={alertsData.content} onAck={openAck} />
+      <WmsAlertsTable
+        rows={alertsData.content}
+        onAck={openAck}
+        canAcknowledge={canAcknowledge}
+      />
 
       {/* 활동(최근 출고) glance — LAST, after the attention (alert) content
           (TASK-PC-FE-177). */}

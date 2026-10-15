@@ -20,9 +20,12 @@
  *   - IAM 행의 권한 코드 = admin-service 컨트롤러의 `@RequiresPermission`
  *     (`projects/iam-platform/apps/admin-service/src/main/java/com/example/admin/presentation/*Controller.java`)
  *     와 `rbac.md` § Permission Keys(:60-74).
- *   - 도메인 행의 권한 = assume-tenant 때 파생되는 도메인 롤
- *     (`auth-service` `OperatorRoleDerivation.java:53-58,102-107`) — IAM RBAC 과 **다른 평면**이다
- *     (ADR-MONO-035, `iam-guide/data.ts` `AUTH_PLANES`).
+ *   - 도메인 행의 권한 = assume-tenant 토큰의 도메인 롤 — `TASK-BE-632`(ADR-MONO-083 P3) 부터
+ *     **배정된 업무 권한 세트 ∩ 구독 도메인**이다(`admin-api.md` § 도메인 업무 권한 세트 · 카탈로그).
+ *     `auth-service` `OperatorRoleDerivation` 은 이제 그 상한(구독 도메인의 역할 목록)일 뿐 운영자의
+ *     역할을 정하지 않는다. IAM RBAC 과 **다른 평면**이다(ADR-MONO-035, `iam-guide/data.ts` `AUTH_PLANES`).
+ *     `gate.roles` = 그 화면 도메인의 카탈로그 역할(상한), `serverRequires` / `writeRequires` = 서버가
+ *     실제로 요구하는 것(TASK-PC-FE-338 c-2 — 메뉴 단위 «업무 권한 없음» · 쓰기 버튼).
  *   - 조회/생성/수정/삭제 = 그 화면이 쓰는 콘솔 프록시 라우트가 export 하는 HTTP 메서드
  *     (`src/app/api/**\/route.ts`) + 그 화면 `page.tsx` 의 헤더 주석(READ-ONLY 선언 등).
  *
@@ -176,7 +179,10 @@ export const DEMO_TEST_ACCOUNT = {
   adminRoles: ['SUPER_ADMIN'] as RbacRole[],
   /** assume-tenant 가능한 테넌트(`operator_tenant_assignment`). */
   assumableTenants: ['demo-corp', 'ecommerce'],
-  /** demo-corp 의 ACTIVE 구독 → assume 시 파생되는 도메인. */
+  /**
+   * demo-corp 의 ACTIVE 구독 도메인. P3 부터 assume 토큰의 역할 = 배정 세트 ∩ 이 도메인 — 데모
+   * 운영자는 시드 세트(전체)를 받으므로 이 다섯 도메인의 카탈로그 역할 전부를 갖는다(BE-632 AC-4 라이브).
+   */
   entitledDomains: ['ecommerce', 'wms', 'scm', 'erp', 'finance'] as DomainKey[],
   sources: [
     'projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_operator.sql §1 operator · §2 SUPER_ADMIN 바인딩 · §3 demo-corp · §4 ecommerce 배정',
@@ -196,7 +202,7 @@ export type PermissionGate =
   | { kind: 'admin'; permission: string; extra?: string }
   /** 카드마다(또는 동작마다) 다른 키로 부분 게이트되는 화면 — 키 중 하나라도 있으면 열린다. */
   | { kind: 'admin-per-card'; permissions: string[]; extra?: string }
-  /** 도메인 롤 — assume-tenant 시 구독 도메인에서 파생. */
+  /** 도메인 롤 — assume-tenant 토큰 `roles` = 배정된 업무 권한 세트 ∩ 구독 도메인(P3 부터). */
   | {
       kind: 'domain';
       domain: DomainKey;
@@ -275,6 +281,12 @@ const WMS_ROLES = [
   'INVENTORY_WRITE',
   'MASTER_READ',
 ];
+/**
+ * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 per-menu signal) — the ecommerce gateway is the only
+ * gate for operators: `/api/admin/**` and the operator-on-public read trees admit an operator
+ * only with `ECOMMERCE_OPERATOR` (`ecommerce gateway-service AccountTypeEnforcementFilter.java:104-116`).
+ */
+const ECOMMERCE_GATEWAY_REQUIRES = ['ECOMMERCE_OPERATOR'] as const;
 const WMS_GW = 'wms gateway-service';
 const WMS_GW_ROUTES =
   'projects/wms-platform/apps/gateway-service/src/main/resources/application.yml:58-112 (master/inbound/inventory/outbound/admin 라우트)';
@@ -581,7 +593,10 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms',
     area: 'wms',
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
+    // TASK-PC-FE-338 c-2 — no `serverRequires`: wms admin-service dashboards synthesise
+    // `WMS_VIEWER` from `entitled_domains ∋ wms` (subscription alone). Alert acknowledge needs
+    // `WMS_OPERATOR` (`AlertDashboardController` `hasRole('WMS_OPERATOR')`).
+    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, writeRequires: ['WMS_OPERATOR'] },
     description: '재고·처리량·주문·알림 요약(읽기 모델 대시보드).',
     crud: crud('RU'),
     crudNote: '수정 = 운영 알림 확인(acknowledge).',
@@ -622,6 +637,11 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       domain: 'wms',
       roles: WMS_ROLES,
       extra: '주문 취소는 OUTBOUND_ADMIN 이 필요하다 — 테넌트를 골라 받는 역할에는 ADMIN 등급이 들어 있지 않다',
+      // TASK-PC-FE-338 c-2 — outbound-service `SecurityConfig.java:97`: GET = OUTBOUND_READ ∨
+      // WRITE ∨ ADMIN; mutations = OUTBOUND_WRITE ∨ ADMIN (ADMIN is not in the catalog). Live in
+      // the 27th window: an inventory-set operator's outbound GET → 403 (BE-632 AC-1).
+      serverRequires: ['OUTBOUND_READ', 'OUTBOUND_WRITE'],
+      writeRequires: ['OUTBOUND_WRITE'],
     },
     description: '출고 주문 · 피킹/패킹/출고 확정 · 택배(출고) · 운송사 통보 재시도.',
     crud: crud('RU'),
@@ -823,7 +843,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '이커머스 도메인 개요(섹션별 요약·상태).',
     crud: R,
     purpose: '스토어 운영 상태를 요약해 본다.',
@@ -833,7 +853,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/products',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '상품 목록 · 등록 · 수정 · 삭제 · 옵션(variant) · 재고 · 이미지.',
     crud: crud('CRUD'),
     purpose: '판매할 상품을 관리한다.',
@@ -843,7 +863,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/orders',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '주문 목록 · 상세 · 상태 변경.',
     crud: crud('RU'),
     purpose: '주문을 확인하고 상태를 진행시킨다.',
@@ -853,7 +873,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/shippings',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '배송 목록 · 상태 변경 · 추적 새로고침.',
     crud: crud('RU'),
     purpose: '배송을 발송·완료까지 진행시킨다.',
@@ -863,7 +883,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/promotions',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '프로모션 목록 · 등록 · 수정 · 삭제 · 쿠폰 발급.',
     crud: crud('CRUD'),
     purpose: '할인·쿠폰을 운영한다.',
@@ -873,7 +893,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/users',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '스토어 사용자 목록 · 상세 조회.',
     crud: R,
     purpose: '구매자 정보를 확인한다.',
@@ -883,7 +903,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/sellers',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '셀러 목록 · 등록 · 정지 · 폐점 · 프로비저닝.',
     crud: crud('RCU'),
     crudNote: '삭제 없음 — 폐점(close)은 상태 전이.',
@@ -894,7 +914,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/settlements',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '정산 기간 · 적립 · 수수료율 · 지급 실행 · 셀러 잔액.',
     crud: crud('RCU'),
     crudNote: '생성 = 정산 기간 생성 · 수정 = 기간 마감·지급 실행·수수료율 변경.',
@@ -909,7 +929,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/notifications/templates',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'ecommerce', roles: ['ECOMMERCE_OPERATOR'], serverRequires: ECOMMERCE_GATEWAY_REQUIRES },
     description: '알림 템플릿 목록 · 등록 · 수정.',
     crud: crud('RCU'),
     purpose: '고객에게 가는 알림 문구를 관리한다.',
