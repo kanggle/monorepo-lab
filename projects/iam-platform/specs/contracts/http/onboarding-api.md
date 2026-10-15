@@ -85,7 +85,7 @@ and the error is rethrown — no half-provisioned ACTIVE tenant lingers.
 | 400 | `VALIDATION_ERROR` | `tenantId` 슬러그 형식 불일치 / `organizationName` 누락·초과 |
 | 401 | `TOKEN_INVALID` (or `UNAUTHORIZED`) | `subjectToken` 서명/iss/aud/exp 실패, `token_type` 클레임 보유(operator/bootstrap 토큰), `sub` 부재, JWKS 도달 실패 (fail-closed) |
 | 403 | `EMAIL_NOT_VERIFIED` | **TASK-MONO-773 (ADR-044 D4 — 구현 S3)** — 호출자 계정의 이메일이 인증되지 않았다. **테넌트를 만들기 전에** 판정 — 아무것도 생성 안 됨. 아래 «트러스트 게이트» |
-| 403 | `ONBOARDING_ACCOUNT_NOT_ELIGIBLE` | **TASK-MONO-773 (구현 S3)** — 호출자 계정이 이메일을 판정할 수 있는 `ACTIVE` 개인(풀) 계정이 아니다(사이트 계정 · `iam` 자격 계정 · B2B 계정 · 비-`ACTIVE`). 테넌트를 만들기 전에 판정 — 아무것도 생성 안 됨 |
+| 403 | `ONBOARDING_ACCOUNT_NOT_ELIGIBLE` | **TASK-MONO-773 (구현 S3)** — 호출자가 아래 «트러스트 게이트» 의 두 자격 어디에도 들지 않는다: 이메일을 판정할 수 있는 `ACTIVE` 개인(풀) 계정이 아니고(사이트 계정 · B2B 계정 · 비-`ACTIVE` 풀 계정 — account-service 계정 행은 있다), `iam` 자격 운영자(계정 행 없음 ∧ 운영자 측면 있음)도 아니다(계정 행도 측면도 없다). 테넌트를 만들기 전에 판정 — 아무것도 생성 안 됨 |
 | 429 | `RATE_LIMITED` | **TASK-MONO-773 OD-8** — 게이트웨이 `onboarding` scope(IP 당 5회/60초) 소진. 게이트웨이가 답한다(admin-service 미도달) · `Retry-After` |
 | 409 | `TENANT_ALREADY_EXISTS` | `tenantId` 슬러그 중복 (보상 불필요 — 아무것도 생성 안 됨) |
 | 409 | `OPERATOR_EMAIL_CONFLICT` | (희귀) 새 테넌트에 동일 이메일 operator 존재 |
@@ -117,7 +117,7 @@ and the error is rethrown — no half-provisioned ACTIVE tenant lingers.
 | # | 판정 | 결과 |
 |---|---|---|
 | (게이트웨이) | `onboarding` scope IP 당 5회/60초 | `429 RATE_LIMITED`(admin-service 미도달) |
-| 0 | 🔴 **인증된 이메일 (773 · ADR-044 D4)** — 아래 «트러스트 게이트» | `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` · `403 EMAIL_NOT_VERIFIED` · `503`(판정 못 받음 — fail-closed) |
+| 0 | 🔴 **트러스트 게이트 (773 · ADR-044 D4)** — 개인(풀) 계정은 인증된 이메일 · `iam` 자격 운영자는 이메일 면제(상한 · rate limit 은 그대로) — 아래 «트러스트 게이트» | `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` · `403 EMAIL_NOT_VERIFIED` · `503`(판정 못 받음 — fail-closed) |
 | 0b | 슬러그 · 이름 형식(지금 그대로 — `400 VALIDATION_ERROR`) · 슬러그 중복은 account-service 생성이 답한다(`409 TENANT_ALREADY_EXISTS`) | — |
 
 | # | 호출자 계정의 운영자 측면(`oidc_subject = sub`) | 결과 |
@@ -145,9 +145,23 @@ and the error is rethrown — no half-provisioned ACTIVE tenant lingers.
 
 **트러스트 게이트 — 인증된 이메일 (TASK-MONO-773 · ADR-MONO-044 D4 · 구현 S3)**:
 
-- **자리**: 토큰 검증 뒤, 측면 판정 · 테넌트 생성 **전**(위 판정 표 0). 모든 갈래(측면 없음 · `ACTIVE` 회사 측면)에 건다 — `SUPER_ADMIN` 경로(admin-api § POST /api/admin/tenants)만 이 게이트 밖이다(그 경로의 «인증» 은 첫 관리자의 초대 수락이 한다).
-- **판정 = 772 의 것을 그대로 부른다** — admin → account [`POST /internal/accounts/{accountId}/verified-email:match`](internal/admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772)(admin-service `VerifiedEmailMatchPort` — 772 수락이 쓰는 그 포트). 입력: `accountId` = 토큰 `sub` · `expectedEmail` = 이 컨트롤러가 이미 권위 계정에서 읽은 이메일. 사본을 만들지 않는다(`VerifiedEmailRequirement` 는 account-service 한 자리).
-- **매핑**:
+- **자리**: 토큰 검증 뒤, 테넌트 생성 **전**(위 판정 표 0). `SUPER_ADMIN` 경로(admin-api § POST /api/admin/tenants)만 이 게이트 밖이다(그 경로의 «인증» 은 첫 관리자의 초대 수락이 한다).
+- 🔴 **두 자격 (소유자 결정 2026-10-15 UTC — 773 S3, option A · S1 열린 질문 2 의 «수용 + 안내» 를 대체)** — 먼저 호출자의 운영자 측면(`oidc_subject = sub`)과 권위 계정(account-service `GET /internal/accounts/{sub}`)을 읽는다. 🔴 **계정 읽기의 404 는 오류가 아니라 판정 입력이다** — 컨트롤러는 측면 조회 전에 계정 행을 요구하지 않는다(773 이전 코드는 이 404 를 `503` 으로 끝냈다 — 아래 «773 이전 동작»):
+
+  | 계정 읽기 | 운영자 측면 | 자격 | 이메일 판정 | 이어서 |
+  |---|---|---|---|---|
+  | `200`(계정 행 있음) | 무관 | **개인(풀) 계정 후보** | 772 매치(아래 매핑) — `MATCHED` 만 통과 | 측면 표 1 ~ 5행 |
+  | `404 ACCOUNT_NOT_FOUND` | 있다 | **`iam` 자격 운영자**(관리자가 만든 자격 — 셀프 가입이 아니다) | **면제** — 매치를 부르지 않는다 | 측면 표 **2 ~ 5행만**(`'*'` · 비-`ACTIVE` → `409` · 상한 → `422` · 상한 미만 → 소속 추가 + `ORIGIN` 행). 🔴 **상한 3 · 게이트웨이 rate limit 은 그대로 걸린다** |
+  | `404 ACCOUNT_NOT_FOUND` | 없다 | 없음 | — | `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`(fail-closed — 이 `sub` 를 보증하는 것이 아무것도 없다) |
+  | 그 밖의 4xx · 5xx · 타임아웃 · circuit-open | — | — | — | `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN`(fail-closed) |
+
+  - **왜 면제인가**: ADR-044 D4 의 인증 이메일 게이트는 **익명 셀프 가입**을 겨눈다. `iam` 자격은 관리자가 만든 자격이고 셀프 가입 경로가 없다. 그 사람이 회사를 만드는 길은 «이미 가진 운영자 행에 소속 추가» 하나이므로 이메일이 필요 없다(소속 추가는 이메일 · 이름을 읽지도 쓰지도 않는다 — 784 S5). 772 매치는 **넓히지 않는다**.
+  - 🔴 **판별자는 대리(proxy)다** — «계정 행 없음 ∧ 측면 있음» 은 «`iam` 자격» 의 정의가 아니라 그 관측이다(시드의 `iam` 자격 넷 모두 account-service 계정 행이 없다 — 773 S3 기록). 알려진 두 어긋남:
+    1. **넓은 쪽(위험)**: 계정 행이 지워졌는데 운영자 측면이 남은 개인 계정도 면제된다. 그래도 **상한 3 이 그 행을 묶는다**(새 측면을 만들 수 없다 — 측면 없는 404 는 거절) · rate limit 도 그대로.
+    2. **좁은 쪽(안전)**: account-service 계정 행이 **있는** `iam` 자격은 1행(개인 계정 후보)으로 가서 매치가 404 → `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`. 거절 쪽으로 틀린다.
+    판별을 정의로 바꾸려면(auth-service 의 자격 종류 신호 — 토큰 클레임 또는 내부 조회) 별도 결정이다.
+- **개인(풀) 계정의 판정 = 772 의 것을 그대로 부른다** — admin → account [`POST /internal/accounts/{accountId}/verified-email:match`](internal/admin-to-account.md#post-internalaccountsaccountidverified-emailmatch--인증된-이메일-일치-판정-task-mono-772)(admin-service `VerifiedEmailMatchPort` — 772 수락이 쓰는 그 포트). 입력: `accountId` = 토큰 `sub` · `expectedEmail` = 이 컨트롤러가 이미 권위 계정에서 읽은 이메일. 사본을 만들지 않는다(`VerifiedEmailRequirement` 는 account-service 한 자리).
+- **매핑** (계정 읽기 `200` 일 때):
 
   | account-service 답 | 이 엔드포인트 |
   |---|---|
@@ -157,11 +171,11 @@ and the error is rethrown — no half-provisioned ACTIVE tenant lingers.
   | `403 EMAIL_NOT_VERIFIED` | `403 EMAIL_NOT_VERIFIED`(770 공용 이름 그대로) |
   | 그 밖의 4xx · 5xx · 타임아웃 · circuit-open · `emailVerifiedAt` 없는 `200` | `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` — **fail-closed**, 아무것도 안 만든다 |
 
-- 🔴 **누가 막히나 (의도)**: 풀 계정이 아닌 콘솔 토큰 보유자 — `iam` 자격 계정(플랫폼 운영자 · 772 이전 방식의 회사 운영자) · 사이트 계정 · B2B 계정. `'*'` 측면은 어차피 2행에서 409 였다. ⚪ `iam` 자격 계정이면서 `ACTIVE` 회사 측면만 가진 사람(이 게이트 전에는 5행으로 두 번째 회사를 만들 수 있었다)의 수는 재지 않았다(773 AC-0 § 4 ⚪).
-- 🔴 **소유자 결정 (2026-10-15 UTC — 773 S1 열린 질문 2): 받아들인다.** S3 뒤 `iam` 자격 계정의 회사 운영자는 셀프 경로로 두 번째 회사를 만들지 못한다(`403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`). 772 매치를 `iam` 자격까지 넓히지 않는다. 그 거절은 **안내 문구를 싣는다** — 콘솔 «테넌트 생성» 화면 문구 «개인 계정으로 로그인해 만드세요»([console-integration-contract.md § 2.6.4](../../../../platform-console/specs/contracts/console-integration-contract.md) 오류 표). 응답 본문 `message` 도 같은 뜻의 문장으로 둔다(코드는 그대로 — 콘솔은 코드로 문구를 고른다).
-- 🔴 **S3 의무 — 영향 모집단을 재고 기록한다**: S3 착수 시(AC-0) «`oidc_subject` 가 **`iam` 자격** 계정을 가리키는 `ACTIVE` 비-`'*'` 운영자 행 수»(= 신원이 `iam` 자격인 회사 운영자 — 이 게이트로 셀프 두 번째 회사를 잃는 사람)를 라이브(데모) · 시드 둘 다 세어 773 티켓 S3 기록에 적는다(술어 · 쿼리 · 시각 함께). **0 이 아니면 S3 를 머지하기 전에 소유자에게 다시 묻는다**(결정은 «0 또는 소수» 전제 위에 있다). ⚪ 이 수를 잴 수 없으면(데모 창 없음) «못 쟀다 · 이유» 를 적고 그것도 소유자 질문으로 올린다.
+- 🔴 **누가 막히나 (의도)**: 계정 행이 있지만 `ACTIVE` 개인(풀) 계정이 아닌 호출자 — 사이트 계정 · B2B 계정 · 비-`ACTIVE` 풀 계정 · (위 «좁은 쪽») 계정 행이 있는 `iam` 자격 — 그리고 계정 행도 측면도 없는 `sub`. `'*'` 측면은 어차피 2행에서 409 다. 거절은 **안내 문구를 싣는다** — 콘솔 «테넌트 생성» 화면 문구([console-integration-contract.md § 2.6.4](../../../../platform-console/specs/contracts/console-integration-contract.md) 오류 표 — 남은 모집단의 중심인 사이트 · B2B 계정에 맞춰 «개인 계정으로 로그인해 만드세요» 를 유지한다). 응답 본문 `message` 도 같은 뜻의 문장으로 둔다(코드는 그대로 — 콘솔은 코드로 문구를 고른다).
+- ~~🔴 소유자 결정 (2026-10-15 UTC — 773 S1 열린 질문 2): 받아들인다 — `iam` 자격 회사 운영자는 S3 뒤 `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`~~ → **대체됨 (소유자 결정 2026-10-15 UTC, 773 S3)**: S3 의무로 잰 영향 모집단이 시드 **4**(`iam` 자격 `ACTIVE` 비-`'*'` 운영자 — demo@demo.com 포함)여서 다시 물었고, 답은 위 «두 자격» 의 면제다(option A).
+- 🔵 **773 이전 동작 (S3 측정 — 시드 기준, 라이브 ⚪)**: `iam` 자격 운영자는 773 이전에도 이 엔드포인트로 회사를 만들 수 **없었다** — 컨트롤러가 측면을 보기 전에 `GET /internal/accounts/{sub}` 를 부르고, `iam` 자격에는 account-service 계정 행이 없어 404 → `503 DOWNSTREAM_ERROR` 로 끝났다. 그래서 면제는 «지키는» 변경이 아니라 «여는» 변경이다.
 - 이 판정은 **붙일 때의 증거**다(ADR-080 D5) — 이미 만든 회사 · 측면을 이메일 상태로 회수하지 않는다.
-- S3 시험(대조군 — 실패 먼저): 미인증 풀 계정 → `403 EMAIL_NOT_VERIFIED` · 테넌트 행 0 · 운영자 행 0 · 세트 행 0 → 같은 계정 인증 뒤 같은 요청 → `201`. bite: 게이트를 빼면 첫 칸만 빨강.
+- S3 시험(대조군 — 실패 먼저): 미인증 풀 계정 → `403 EMAIL_NOT_VERIFIED` · 테넌트 행 0 · 운영자 행 0 · 세트 행 0 → 같은 계정 인증 뒤 같은 요청 → `201`. bite: 게이트를 빼면 첫 칸만 빨강. `iam` 자격 운영자(계정 404 ∧ `ACTIVE` 회사 측면) → `201` · 매치 호출 0 · 새 테넌트에만 행 + `ORIGIN` · 기존 회사 행 바이트 불변. 사이트 계정(계정 200 · 매치 404 · 측면 없음) → `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`. 계정 404 ∧ 측면 없음 → `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`.
 
 **회사 생성자의 업무 권한 세트 (TASK-MONO-773 OD-4 · ADR-MONO-083 OD-5 · ADR-MONO-044 D2 · 구현 S3)**:
 
@@ -205,7 +219,7 @@ and the error is rethrown — no half-provisioned ACTIVE tenant lingers.
 
 | 필드 | 뜻 |
 |---|---|
-| `accountState` | 인증 이메일 판정(위 «트러스트 게이트» 와 **같은 호출 · 같은 매핑**): `VERIFIED` · `EMAIL_NOT_VERIFIED`(→ `items` = `[]`, 화면은 이메일 인증 안내) · `NOT_ELIGIBLE`(풀 계정 아님 · 비-`ACTIVE` · 이메일 경합 → `items` = `[]`). 판정을 못 받으면 이 필드를 지어내지 않고 `503`(아래) |
+| `accountState` | 인증 이메일 판정(위 «트러스트 게이트» 와 **같은 호출 · 같은 매핑**): `VERIFIED` · `EMAIL_NOT_VERIFIED`(→ `items` = `[]`, 화면은 이메일 인증 안내) · `NOT_ELIGIBLE`(풀 계정 아님 · 비-`ACTIVE` · 이메일 경합 → `items` = `[]`; 🔵 계정 읽기가 404 인 호출자 — `iam` 자격 운영자 포함 — 도 `NOT_ELIGIBLE` + `[]`: 인증된 이메일이 없으니 열쇠가 없다. 온보딩의 이메일 면제는 이 읽기에 옮겨지지 않는다). 판정을 못 받으면 이 필드를 지어내지 않고 `503`(아래) |
 | `items` | `accountState = VERIFIED` 일 때만 채운다: `operator_invitation` 중 `email` = 그 계정의 인증된 이메일(trim · 소문자) ∧ `status = PENDING` ∧ `expires_at > 읽은 시각`. `createdAt` 내림차순 · 최대 50(그 이상은 자른다 — 한 주소로 대기 초대가 50을 넘는 경우는 정상이 아니다) |
 | `tenantDisplayName` | account-service 테넌트 읽기 — 실패하면 `null`(화면은 `tenantId`) · fail-soft(772 미리보기와 같은 규칙) |
 | `firstAdmin` | 그 초대가 «첫 관리자 초대» 인가(admin-api § Tenant Lifecycle) — 화면 문구가 «{회사}의 첫 관리자로 초대되었습니다» 로 바뀐다 |

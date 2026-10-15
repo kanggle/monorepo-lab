@@ -95,4 +95,19 @@ public interface OperatorInvitationPort {
 
     /** Writes {@code accepted_operator_id} on a row this transaction just accepted. */
     void recordAcceptedOperator(long internalId, long operatorInternalId, Instant at);
+
+    // ── TASK-MONO-773 OD-7 — «받은 초대» (onboarding-api.md § received-invitations) ──
+
+    /**
+     * What the recipient may see of one invitation — 🔴 no token, no hash, no inviter, no delivery state (R4).
+     * {@code invitedAt} = when the live token was issued ({@code updated_at}: creation, or the last resend).
+     */
+    record ReceivedInvitationView(String invitationId, String tenantId, List<String> roles, Instant expiresAt,
+                                  Instant invitedAt) {}
+
+    /**
+     * The {@code PENDING} invitations to {@code normalizedEmail} that are not expired at {@code now}, newest
+     * ({@code created_at}) first, at most {@code limit}.
+     */
+    List<ReceivedInvitationView> findLivePendingByEmail(String normalizedEmail, Instant now, int limit);
 }

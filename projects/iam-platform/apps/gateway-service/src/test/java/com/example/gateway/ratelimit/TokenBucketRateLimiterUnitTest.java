@@ -91,6 +91,28 @@ class TokenBucketRateLimiterUnitTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-773 OD-8: 'onboarding' scope 기본값 = 5회/60초 — 5번째 허용 · 6번째 거부(Retry-After 60) · 키 rate:onboarding:{ip}")
+    void onboardingScope_defaultFivePerSixtySeconds() {
+        // the DEFAULT limits (no override) — redis-keys.md § scope 종류: onboarding · IP · 60s · 5
+        TokenBucketRateLimiter defaults = new TokenBucketRateLimiter(redisTemplate, new EdgeGatewayProperties());
+        given(redisTemplate.execute(any(), anyList(), anyList()))
+                .willReturn(Flux.just(5L), Flux.just(6L));
+
+        StepVerifier.create(defaults.isAllowed("onboarding", "203.0.113.7"))
+                .assertNext(result -> assertThat(result.isAllowed()).isTrue())
+                .verifyComplete();
+        StepVerifier.create(defaults.isAllowed("onboarding", "203.0.113.7"))
+                .assertNext(result -> {
+                    assertThat(result.isAllowed()).as("the 6th request in the window").isFalse();
+                    assertThat(result.retryAfterSeconds()).isEqualTo(60);
+                })
+                .verifyComplete();
+        org.mockito.Mockito.verify(redisTemplate, org.mockito.Mockito.times(2))
+                .execute(any(), org.mockito.ArgumentMatchers.eq(List.of("rate:onboarding:203.0.113.7")),
+                        org.mockito.ArgumentMatchers.eq(List.of("70")));
+    }
+
+    @Test
     @DisplayName("알 수 없는 scope는 항상 허용")
     void isAllowed_unknownScope_returnsAllowed() {
         StepVerifier.create(rateLimiter.isAllowed("unknown", "10.0.0.1"))

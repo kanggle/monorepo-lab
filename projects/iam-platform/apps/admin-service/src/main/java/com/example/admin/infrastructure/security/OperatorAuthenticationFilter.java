@@ -82,7 +82,9 @@ public class OperatorAuthenticationFilter extends OncePerRequestFilter {
                         // WITHOUT an operator JWT — the caller is an ordinary IAM user; the
                         // OIDC subject token is in the body and validated by OnboardingController
                         // (IamOidcSubjectTokenValidator), exactly like /auth/token-exchange.
-                        || "/api/admin/onboarding/organizations".equals(path))) {
+                        || "/api/admin/onboarding/organizations".equals(path)
+                        // TASK-MONO-773 OD-7: «받은 초대» — the same self flow, read-only.
+                        || "/api/admin/onboarding/received-invitations".equals(path))) {
             return true;
         }
         if ("GET".equalsIgnoreCase(method) && "/.well-known/admin/jwks.json".equals(path)) {

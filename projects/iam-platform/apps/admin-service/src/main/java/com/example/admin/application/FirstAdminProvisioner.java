@@ -2,7 +2,11 @@ package com.example.admin.application;
 
 import com.example.admin.application.exception.OperatorEmailConflictException;
 import com.example.admin.application.port.AdminOperatorPort;
+import com.example.admin.application.port.DomainPermissionSetPort;
+import com.example.admin.application.port.OperatorRowLockPort;
 import com.example.admin.application.port.OperatorTenantAssignmentPort;
+import com.example.admin.domain.rbac.DomainGrantSource;
+import com.example.admin.domain.rbac.DomainPermissionSetPresets;
 import com.example.admin.infrastructure.client.AccountServiceClient;
 import com.example.common.id.UuidV7;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +60,12 @@ public class FirstAdminProvisioner {
     private final AccountServiceClient accountServiceClient;
     /** TASK-MONO-784 S5 — the shared «add a membership to an existing row» writes (D-12). */
     private final OperatorMembershipAddition membershipAddition;
+    /** TASK-MONO-773 S3 (OD-4) — the creator's ORIGIN set row. */
+    private final DomainPermissionSetPort setPort;
+    /** TASK-MONO-773 S3 (OD-3) — the cap, re-counted under the row lock inside {@link #addMembership}. */
+    private final OperatorOwnedTenantLimit ownedTenantLimit;
+    /** TASK-MONO-773 S3 (OD-3) — {@code SELECT … FOR UPDATE} on the receiving operator row. */
+    private final OperatorRowLockPort rowLockPort;
 
     /**
      * @param newTenantId     the just-created tenant — the SOLE tenant_id every write below targets (D2)
@@ -117,6 +127,9 @@ public class FirstAdminProvisioner {
         // granted_by = null (system origination).
         assignmentPort.createAssignment(created.internalId(), newTenantId, null);
 
+        // TASK-MONO-773 OD-4 — the creator's work-permission set, same transaction, new tenant only.
+        writeOriginSet(created.internalId(), newTenantId, now);
+
         log.info("self-service onboarding: minted first admin operator={} tenant={} roles={}",
                 operatorUuid, newTenantId, FIRST_ADMIN_ROLES);
         return new Result(operatorUuid, created.internalId());
@@ -136,12 +149,41 @@ public class FirstAdminProvisioner {
      */
     @Transactional
     public Result addMembership(AdminOperatorPort.OperatorView existing, String newTenantId) {
+        // 🔴 TASK-MONO-773 OD-3 (onboarding-api.md § 신원당 상한 «경합») — lock the receiving row FIRST (no read
+        // before it: the REPEATABLE READ snapshot is taken at the first plain read, so a read before the lock would
+        // hide a competing creation that committed while we waited), then re-count the cap. Two concurrent creations
+        // by the same row queue here; the one that would exceed the cap throws, this transaction rolls back and the
+        // orchestrator compensates its tenant by SUSPEND (ADR-044 D3).
+        rowLockPort.lockForUpdate(existing.internalId());
+        ownedTenantLimit.requireBelowLimit(existing.internalId());
+
+        Instant now = Instant.now();
         Map<String, AdminOperatorPort.RoleView> roles = operatorPort.resolveRolesByName(FIRST_ADMIN_ROLES);
         // granted_by = null (system origination — the same as a first-time onboarder's grants).
-        membershipAddition.write(existing.internalId(), newTenantId, roles.values(), null, Instant.now());
+        membershipAddition.write(existing.internalId(), newTenantId, roles.values(), null, now);
+        // TASK-MONO-773 OD-4 — the new company's ORIGIN set; the other companies' set rows are not read or written.
+        writeOriginSet(existing.internalId(), newTenantId, now);
         log.info("self-service onboarding: added membership operator={} tenant={} roles={}",
                 existing.operatorId(), newTenantId, FIRST_ADMIN_ROLES);
         return new Result(existing.operatorId(), existing.internalId());
+    }
+
+    /**
+     * TASK-MONO-773 OD-4 (ADR-MONO-083 OD-5 P9 · onboarding-api.md «회사 생성자의 업무 권한 세트») — one
+     * {@code operator_domain_set_grant} row: (creator, the new tenant, preset {@code all-domains-full},
+     * {@code ORIGIN}, {@code granted_by NULL}). 🔴 No entitlement check — ADR-083 D5's one exception: the tenant is
+     * born with zero subscriptions and the preset carries {@code fan}; the ceiling is auth-service's
+     * {@code ∩ entitled} at token time (P3). Called inside the provisioner's transaction only, with the
+     * just-created tenant — never {@code '*'} (V0054 CHECK), never another company.
+     */
+    private void writeOriginSet(long operatorInternalId, String newTenantId, Instant now) {
+        DomainPermissionSetPort.SetView preset = setPort.findPresets().stream()
+                .filter(s -> DomainPermissionSetPresets.ALL_DOMAINS_FULL.equals(s.systemKey()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "system preset '" + DomainPermissionSetPresets.ALL_DOMAINS_FULL + "' is missing (V0052)"));
+        setPort.insertGrant(operatorInternalId, newTenantId, preset.internalId(), DomainGrantSource.ORIGIN,
+                null, null, now);
     }
 
     /** The minted operator's external UUID + internal BIGINT id. */

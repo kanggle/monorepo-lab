@@ -30,6 +30,18 @@ public interface OperatorInvitationJpaRepository extends JpaRepository<OperatorI
 
     Page<OperatorInvitationJpaEntity> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
 
+    /**
+     * TASK-MONO-773 OD-7 — «받은 초대»: the live PENDING invitations to one (normalised) address, newest first.
+     * Expiry is judged here against {@code :now} (EXPIRED is not a stored value — 772).
+     */
+    @Query(value = "SELECT * FROM operator_invitation"
+            + " WHERE email = :email AND status = 'PENDING' AND expires_at > :now"
+            + " ORDER BY created_at DESC, id DESC LIMIT :limit",
+            nativeQuery = true)
+    java.util.List<OperatorInvitationJpaEntity> findLivePendingByEmail(@Param("email") String email,
+                                                                      @Param("now") Instant now,
+                                                                      @Param("limit") int limit);
+
     /** {@code PENDING → CANCELLED}. 0 rows ⇒ the invitation was no longer PENDING (accepted / cancelled meanwhile). */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = "UPDATE operator_invitation"

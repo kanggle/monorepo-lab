@@ -3883,7 +3883,7 @@ Owner decisions OD-6 · OD-7 (2026-10-15 UTC). Implementation slice **773 S6** (
   | IAM answer | Screen |
   |---|---|
   | `403 EMAIL_NOT_VERIFIED` | «회사를 만들려면 먼저 이메일을 인증해야 합니다» + link to the IAM email-verification page |
-  | `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` | «이 계정으로는 회사를 만들 수 없습니다 — **개인 계정으로 로그인해 만드세요**» + logout (owner decision 2026-10-15 UTC, 773 S1 open question 2: operators whose identity is an `iam` credential lose the self-service second-company path after IAM S3 — accepted; this guidance copy is mandatory, and IAM S3 measures and records the affected population, asking the owner again if it is non-zero) |
+  | `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` | «이 계정으로는 회사를 만들 수 없습니다. 사이트나 회사용 계정이라면 **개인 계정으로 로그인해 만드세요**» + logout. Who still gets this after IAM S3 (owner decision 2026-10-15 UTC, 773 S3 option A — supersedes the S1 open-question-2 «accepted + guidance» row): accounts that are not an `ACTIVE` personal account (site · B2B · non-`ACTIVE` personal accounts) and identities with neither an account record nor an operator facet. Operators signing in with an `iam` credential are **no longer** in this population — they are exempt from the email check (the cap and the rate limit still apply), so the copy no longer addresses them |
   | `409 OPERATOR_ALREADY_PROVISIONED` | «이 계정은 지금 회사를 새로 만들 수 없습니다 (플랫폼 관리자 또는 정지된 운영자)» |
   | `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` | «관리하는 회사 수가 한도에 도달했습니다» (TASK-MONO-784 S6 copy — unchanged) |
   | `409 TENANT_ALREADY_EXISTS` | slug-taken message on the `tenantId` field |

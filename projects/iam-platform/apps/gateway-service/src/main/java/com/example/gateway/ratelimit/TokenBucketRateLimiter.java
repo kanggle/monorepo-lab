@@ -83,6 +83,7 @@ public class TokenBucketRateLimiter {
         return switch (scope) {
             case "login" -> rl.getLogin();
             case "signup" -> rl.getSignup();
+            case "onboarding" -> rl.getOnboarding();
             case "refresh" -> rl.getRefresh();
             case "global" -> rl.getGlobal();
             default -> null;

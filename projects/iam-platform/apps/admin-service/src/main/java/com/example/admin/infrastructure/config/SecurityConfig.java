@@ -243,7 +243,10 @@ public class SecurityConfig {
                                 // by OnboardingController (IamOidcSubjectTokenValidator), exactly
                                 // like /auth/token-exchange. OperatorAuthenticationFilter skips it
                                 // and @SelfServiceEndpoint admits it past the deny-by-default guard.
-                                "/api/admin/onboarding/organizations").permitAll()
+                                "/api/admin/onboarding/organizations",
+                                // TASK-MONO-773 OD-7: «받은 초대» — the same self flow (subject token in the
+                                // body, validated by OnboardingController), read-only.
+                                "/api/admin/onboarding/received-invitations").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
                         .anyRequest().denyAll()
                 )

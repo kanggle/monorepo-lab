@@ -46,17 +46,20 @@ public class SelfServiceOnboardingUseCase {
     private final OperatorMembershipAddition membershipAddition;
     /** TASK-MONO-784 S5 (OD-1) — the per-identity cap on self-created tenants. */
     private final OperatorOwnedTenantLimit ownedTenantLimit;
+    /** TASK-MONO-773 S3 (ADR-044 D4 · option A) — the verified-email trust gate, before anything is created. */
+    private final OnboardingTrustGate trustGate;
 
     /**
      * @param tenantId         the requested tenant slug (validated {@code ^[a-z][a-z0-9-]{1,31}$} at the DTO)
      * @param organizationName the tenant display name
      * @param callerAccountId  the caller's OIDC subject (account_id) — set as the operator's
      *                         {@code oidc_subject} so they can token-exchange into the console (fix-001)
-     * @param callerEmail      the authenticated caller's email (from the authoritative account, not user input)
-     * @param callerDisplayName the operator display name (never blank — controller defaults to email)
+     * @param callerAccount    the caller's authoritative account record (email + display name — never user
+     *                         input), or empty when account-service has none (TASK-MONO-773 option A — the
+     *                         {@code iam}-credential operator; the trust gate decides what that means)
      */
     public Result onboard(String tenantId, String organizationName, String callerAccountId,
-                          String callerEmail, String callerDisplayName) {
+                          Optional<OnboardingCallerAccount> callerAccount) {
         // TASK-MONO-784 S5 (onboarding-api.md § 다회사 운영자와 온보딩 — ADR-MONO-082 b · D-12 · OD-1), replacing
         // 772 S3's «any facet → 409» (S1-11). EVERYTHING is decided BEFORE the tenant exists — a refusal leaves
         // nothing to compensate (before 772 the tenant was created first and the oidc_subject UNIQUE then left a
@@ -71,6 +74,13 @@ public class SelfServiceOnboardingUseCase {
         Optional<AdminOperatorPort.OperatorView> facet = (callerAccountId == null || callerAccountId.isBlank())
                 ? Optional.empty()
                 : oidcSubjectResolver.resolve(callerAccountId);
+
+        // 0. 🔴 TASK-MONO-773 S3 — the trust gate (onboarding-api.md «트러스트 게이트 — 두 자격»), before the facet
+        //    table and before the tenant: a personal account must have a verified email; a caller with no account
+        //    record but an operator facet (the iam-credential operator, option A) is exempt and continues on the
+        //    facet path below (cap included); no record and no facet → 403. Refusals create nothing.
+        trustGate.require(callerAccountId, callerAccount, facet);
+
         if (facet.isPresent()) {
             membershipAddition.requireCanReceive(facet.get(), tenantId);
             ownedTenantLimit.requireBelowLimit(facet.get().internalId());
@@ -86,9 +96,11 @@ public class SelfServiceOnboardingUseCase {
         // admin-side writes rolled back in their own transaction, so the existing row keeps nothing.
         FirstAdminProvisioner.Result minted;
         try {
+            // No facet ⇒ the gate saw an account record (no record and no facet was refused above).
             minted = facet.isPresent()
                     ? firstAdminProvisioner.addMembership(facet.get(), tenantId)
-                    : firstAdminProvisioner.provision(tenantId, callerAccountId, callerEmail, callerDisplayName);
+                    : firstAdminProvisioner.provision(tenantId, callerAccountId,
+                            callerAccount.orElseThrow().email(), callerAccount.orElseThrow().displayName());
         } catch (RuntimeException provisioningFailure) {
             compensateOrphanTenant(tenantId, provisioningFailure);
             throw provisioningFailure;

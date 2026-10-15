@@ -314,6 +314,22 @@ class RouteConfigTest {
     }
 
     @org.junit.jupiter.api.Test
+    @DisplayName("TASK-MONO-773 OD-8: POST /api/admin/onboarding/organizations 한 경로만 rate-limit 스코프 'onboarding' — 같은 서브트리의 received-invitations · 다른 admin 경로는 global")
+    void onboardingOrganizations_rateLimitScope_isOnboarding_only() {
+        RouteConfig config = new RouteConfig(new EdgeGatewayProperties());
+
+        assertThat(config.resolveRateLimitScope("/api/admin/onboarding/organizations"))
+                .as("self-service tenant creation — IP 5/60s (gateway-api.md · redis-keys.md)")
+                .isEqualTo("onboarding");
+        // the read in the same subtree is called on every screen entry — global only (onboarding-api.md)
+        assertThat(config.resolveRateLimitScope("/api/admin/onboarding/received-invitations")).isNull();
+        assertThat(config.resolveRateLimitScope("/api/admin/onboarding")).isNull();
+        assertThat(config.resolveRateLimitScope("/api/admin/onboarding/organizations-x")).isNull();
+        assertThat(config.resolveRateLimitScope("/api/admin/tenants")).isNull();
+        assertThat(config.resolveRateLimitScope("/api/admin/operators")).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
     @DisplayName("/oauth2/revoke 경로는 global rate-limit 스코프 (null 반환)")
     void oauth2RevokePath_rateLimitScope_isGlobal() {
         EdgeGatewayProperties props = new EdgeGatewayProperties();

@@ -363,3 +363,73 @@ monorepo
 - **빨강 측정**(#4369 첫 커밋 = 시험만, iam B 레인): `TenantPendingStatusIntegrationTest` **12 FAILED · 2 PASSED(대조군)** — 12 전부 `AssertionError`(500 × 8 = 옛 enum 이 `'PENDING'` 행을 못 읽음 · 201≠400 × 2 · `$.status` ACTIVE · 400≠200). 단위 `TenantPendingStatusTest` · `…UseCaseTest` 는 로컬 9 FAILED → 수선 뒤 10/10.
 - **정정**: S1 이 `TENANT_SUSPENDED` 를 423 으로 적었다 — 코드와 다른 계약 셋은 **409**. `admin-to-account.md` · `admin-api.md` 와 그 출처인 공유 레지스트리 `platform/error-handling.md:596` 을 함께 고쳤다(유일한 발신 = account-service 409 — `GlobalExceptionHandler:263-267`).
 - **S1 Q3 측정 → `TASK-BE-638` 기안(#4370)**: 게이트웨이 `/internal/tenants/**` 가 `PATCH /internal/tenants/{self}` 를 그 테넌트 자기 토큰으로 통과시키고, `POST`/`GET /internal/tenants` 는 테넌트 범위 검사가 없다(코드 읽기 — 라이브 미확인). 773 S2 의 `PENDING` 이 나가면 «관리자 대기» 를 건너뛸 수 있어 시급해진다 — 773 과 같은 굽기에 싣는 것을 권한다.
+- **S2 초록 (#4369 → `19d0a0a6b`, 2026-10-15 UTC)**: 수선 커밋 뒤 iam B 레인 로그에서 `TenantPendingStatusIntegrationTest` **14 PASSED · 0 FAILED** · 레인 FAILED 0 · 머지 시점 실패 체크 0. 🔴 중간에 한 번 더 빨강: 수선 뒤 대조군(활성화 → 프로비저닝)이 실제 계정을 만들자 IT 의 `@AfterEach` 가 append-only `account_status_history`(V0004 트리거)를 지우려다 45000 으로 막혀 13건이 **정리 단계**에서 실패했다(단언은 통과) — 형제 규칙(«Deliberately NO DELETE», R__05)대로 그 테넌트는 남기되 ACTIVE 로 두게 고쳤다(`ee91f08dd`).
+
+## S3 기록 (2026-10-14T22:30Z UTC) — admin-service 셀프 경로 · 게이트웨이 `onboarding` scope
+
+> 분석=Opus 5.5 (backend-engineer) · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-s3-admin-self`(origin/main `19d0a0a6b` — S1 계약 · S2 account `PENDING` 위). 방법 = BE-636 / S2 와 같다: **PHASE 1 = 시험만** 먼저 밀어 빨강을 재고, PHASE 2 에서 수선.
+
+### PHASE 1 — 시험 (구현 0)
+
+| 파일 | 무엇 | 지금 코드에서 빨강이 나는 자리(예상) |
+|---|---|---|
+| `admin-service …/integration/SelfServiceOnboardingTrustGateIntegrationTest.java` (신규) | 게이트 · AC-2 · AC-3 · 상한 3 · `ORIGIN` CHECK · API/회수/내보내기 · received-invitations | 아래 표 |
+| `admin-service …/integration/SelfServiceOnboardingCapRaceIntegrationTest.java` (신규 — 상한을 3 으로 고정한 별도 컨텍스트) | 상한 −1 인 행으로 동시 두 생성(테넌트 생성 1.5 s 지연으로 두 사전 판정이 겹치게) | `[201, 201]` ≠ `[201, 422]` — 784 S5 기록의 cap+1 그대로 |
+| `admin-service …/integration/SelfServiceOnboardingIntegrationTest.java` | 소유자 계정의 `verified-email:match` 200 스텁만 더함 | 초록 유지(게이트가 들어와도 초록이게 하는 준비) |
+| `admin-service …/integration/OperatorInvitationAcceptanceIntegrationTest.java` | ac6: 창업자 match 스텁 · 상한 2 → 3 기대(피초대자 세 번째 201 · 네 번째 422 / 창업자 org3 201 · org4 422) | 6단계 `onboard(invitee, own)` 기대 201 ← 지금 422(상한 2) |
+| `gateway-service …/route/RouteConfigTest.java` | `resolveRateLimitScope("/api/admin/onboarding/organizations") = "onboarding"` · received-invitations · 다른 admin 경로 = `null` | 로컬 실측 빨강 — `RouteConfigTest.java:323` `AssertionFailedError`(`null` ≠ `"onboarding"`) |
+| `gateway-service …/ratelimit/TokenBucketRateLimiterUnitTest.java` | 기본값 `onboarding` = 5/60s: 5번째 허용 · 6번째 거부(`Retry-After` 60) · 키 `rate:onboarding:{ip}` · TTL 70 | 로컬 실측 빨강 — `:106` `AssertionFailedError`(scope 미지 → 늘 허용) |
+
+`SelfServiceOnboardingTrustGateIntegrationTest` 의 빨강 예상(Docker 없음 — CI 가 잰다):
+
+| 시험 | 빨강 자리 |
+|---|---|
+| `unverifiedEmail_403_nothingCreated_thenVerified_201` | 첫 `status 403` ← 지금 201(게이트 없음) |
+| ~~`notAPoolAccount_403_notEligible_withCopy_rowsUnchanged`~~ | 아래 «소유자 결정 — option A» 로 넷으로 갈렸다 (그 시험의 `iam` 계정 detail 200 스텁은 불가능한 입력이었다 — `iam` 자격에는 account-service 계정 행이 없다) |
+| `iamCredentialOperator_exemptFromEmail_secondCompany_201` | `status 201` ← 지금 **503**(컨트롤러가 측면 전에 계정 읽기 → 404 → `NonRetryableDownstreamException` → 503) |
+| `iamCredentialOperator_stillBoundByTheCap` | `status 422` ← 지금 503(같은 이유) |
+| `noAccountRecordAndNoFacet_403_notEligible` | `status 403` ← 지금 503 |
+| `siteAccount_403_notEligible_withCopy` | `status 403` ← 지금 201(사이트 계정 · 측면 없음 → 1행 새 운영자) |
+| `noVerdict_503_nothingCreated` | `status 503` ← 지금 201 |
+| `ac2_newCreator_originRowInTheNewTenantOnly` | `originRows hasSize(1)` ← 0 |
+| `ac3_secondCompany_newTenantOnly_existingCompanyByteUnchanged` | 새 테넌트 세트 행 `containsExactly("ORIGIN/all-domains-full")` ← `[]` |
+| `cap3_countsSuspendedTenant_thirdOk_fourthRefused` | 세 번째 `status 201` ← 422(기본 상한 2) |
+| `check_admitsOriginOnACompanyTenant_refusesItOnStar` | `doesNotThrowAnyException` ← V0052 CHECK 위반(`DataIntegrityViolationException`) |
+| `origin_notGrantableThroughTheApi` · `personalRevoke_deletesOrigin` · `companyExit_deletesOrigin` | 전제 `originRows hasSize(1)` ← 0 (🔵 이 셋은 지금 `ORIGIN` 행을 만들 길이 없어 — 생성은 안 쓰고, JDBC 직접 INSERT 는 CHECK 가 막는다 — 회수 · 내보내기 자체의 결함으로 빨강을 낼 수 없다. 수선 뒤 초록이 그 자리의 증거다. `origin_notGrantable…` 의 본체는 지금 코드에서도 성립하는 대조군) |
+| `receivedInvitations_onlyLivePendingToTheVerifiedEmail` · `receivedInvitations_statesAndRefusals` | 첫 `status 200` ← 401(엔드포인트 없음 — `OperatorAuthenticationFilter` 가 운영자 토큰을 요구). 후자에 `iam` 자격 호출자(계정 404) → `NOT_ELIGIBLE` + `[]` · 매치 호출 0 도 실었다 |
+
+로컬 `compileTestJava`(admin · gateway) rc=0.
+
+### 소유자 의무 (S1 Q2) — «신원이 `iam` 자격인 `ACTIVE` 비-`'*'` 운영자 행 수»
+
+- **술어**: `admin_operators.status = 'ACTIVE'` ∧ `tenant_id <> '*'` ∧ `'*'` 역할 행 없음(= `OperatorMembershipAddition.isPlatformRow` 의 반대) ∧ `oidc_subject` = auth `credentials.account_id` 중 `tenant_id = 'iam'` 인 행.
+- **시드 (이 트리 · 2026-10-14T22:30Z 읽음)**: **4** — `demo-operator`(홈 `demo-corp`, `…ad03`, `R__seed_demo_operator.sql:61-76`) · `demo-requester`(`demo-corp`, `…ad04`, `:220-237`) · `demo-cs`(`ecommerce`, `…ad08`, `R__seed_demo_cs_operator.sql:82-98`) · `demo-viewer`(`demo-viewer`, `…ad05`, `R__seed_demo_viewer_operator.sql:78-91`). 각 `oidc_subject` 는 auth-service `migration-dev` 의 `'iam'` 자격 행과 같은 값(`R__01_seed_demo_single_identity_credentials.sql:112` · `R__seed_demo_second_operator_credential.sql:103` · `R__seed_demo_cs_operator_credential.sql:39` · `R__seed_demo_viewer_operator_credential.sql:38`). 제외: `demo-platform`(홈 `'*'`) · `demo-assigned-only`(`oidc_subject` NULL) · dev `V0014`/`V0023` 두 행(`SUPER_ADMIN` → V0025 가 `'*'`, `oidc_subject` 는 실재 자격과 안 맞는 자리표시자 — `V0028`). 🔵 `demo-operator` · `demo-requester` 는 `SUPER_ADMIN` 역할 행을 갖지만 그 행의 `tenant_id` 가 `demo-corp`(`'*'` 아님)라 술어상 회사 행이다.
+- **영향 (S1 결정 기준 — 아래 option A 로 대체됨)**: ~~S3 뒤 이 넷은 셀프 «테넌트 생성» 에서 `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`~~. 데모 화면 · e2e 가 이 넷으로 온보딩을 부르는 곳은 AC-0 § 7 grep 에서 0.
+- **라이브(데모) — ⚪ 못 쟀다**: 데모 창이 없고(로컬 Docker 없음) admin_db · auth_db 에 닿을 수 없다. 재는 쿼리(같은 MySQL 서버, 두 스키마 — 이름은 배포 설정을 확인):
+  ```sql
+  SELECT o.operator_id, o.tenant_id, o.oidc_subject
+    FROM admin_db.admin_operators o
+    JOIN auth_db.credentials c ON c.account_id = o.oidc_subject AND c.tenant_id = 'iam'
+   WHERE o.status = 'ACTIVE' AND o.tenant_id <> '*'
+     AND NOT EXISTS (SELECT 1 FROM admin_db.admin_operator_roles r WHERE r.operator_id = o.id AND r.tenant_id = '*');
+  ```
+  (스키마가 다른 서버면 admin 쪽 `oidc_subject` 목록을 뽑아 auth 쪽 `credentials` 에 `IN (…)` 으로 대조.)
+- 🔴 **결론 = 0 이 아니다(시드 4) · 라이브는 못 쟀다** → 소유자 결정 S1 Q2 의 조건대로 소유자에게 다시 물었다(아래 option A).
+
+### 🔴 S3 측정 — 773 이전에도 `iam` 자격 운영자는 셀프 생성이 **안 됐다** (503)
+
+S1 Q2 의 전제(«지금은 된다 — 784 S5») 는 시드 기준으로 거짓이다: `OnboardingController.java:61` 이 측면 판정 **전에** `AccountServiceClient.getDetail(sub)`(account-service `GET /internal/accounts/{id}` — `AccountSearchController.java:44-49`)를 부르고, `iam` 자격(ad03 · ad04 · ad05 · ad08)에는 account-service 계정 행이 없다(그 id 는 auth `credentials` · admin `admin_operators` 에만 있다 · account-service main 코드에 `iam` 테넌트 언급 0) → 404 → `AccountServiceClient.execute` 가 `NonRetryableDownstreamException`(`DownstreamFailureException` 하위) → `AdminExceptionHandler.handleDownstream:239` = **`503 DOWNSTREAM_ERROR`**. ⚪ 라이브 미측정. 그래서 아래 면제는 기능을 «지키는» 것이 아니라 «여는» 것이다. 콘솔 토큰 클레임으로는 두 종류를 못 가른다(풀 주체의 콘솔 토큰도 `tenant_id=iam` — `TenantClaimTokenCustomizer.java:638-641`).
+
+### 소유자 결정 (2026-10-15 UTC) — option A: `iam` 자격 운영자는 이메일 면제 (S1 Q2 «수용 + 안내» 와 그 사이의 «면제» 문구를 대체)
+
+- **계기**: 위 S1 Q2 의무 측정의 시드 **4**(demo@demo.com 포함).
+- **판별(대리)**: account-service 계정 읽기 `404` ∧ `oidc_subject = sub` 운영자 측면 있음 ⟹ `iam` 자격 운영자. 근거: `iam` 자격은 관리자가 만든 자격(셀프 가입 없음) — ADR-044 D4 의 이메일 게이트는 익명 셀프 가입을 겨눈다. 772 매치는 넓히지 않는다.
+- **그 호출자**: 이메일 판정 면제 · 측면 표 2~5행만(`'*'`/비-`ACTIVE` → 409 · 상한 → 422 · 상한 미만 → 소속 추가 + `ORIGIN`) · **상한 3 · 게이트웨이 rate limit 은 그대로**. 컨트롤러는 측면 조회 전에 계정 행을 요구하지 않는다(404 는 판정 입력).
+- **계정 404 ∧ 측면 없음** → `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE`(fail-closed).
+- **received-invitations**: 계정 404 호출자(`iam` 자격 포함) → `NOT_ELIGIBLE` + `[]`(인증된 이메일이 없다 — 면제는 옮겨지지 않는다).
+- 🔴 **알려진 위험(대리 판별)**: ① 넓은 쪽 — 계정 행이 지워졌는데 측면이 남은 개인 계정도 면제된다. 상한 3 이 그 행을 묶고(측면 없는 404 는 거절이라 새 행은 못 만든다) rate limit 도 그대로. ② 좁은 쪽 — account-service 계정 행이 **있는** `iam` 자격은 개인 계정 후보로 가서 매치 404 → `NOT_ELIGIBLE`(안전 쪽). 정의형 판별(auth 의 자격 종류 신호)은 별도 결정.
+- **남는 `NOT_ELIGIBLE` 모집단**: 계정 행이 있지만 `ACTIVE` 개인 계정이 아닌 호출자(사이트 · B2B · 비-`ACTIVE` 개인) + 계정 행도 측면도 없는 `sub`. 콘솔 문구는 중립 머리 + 사이트 · B2B 대상 «개인 계정으로 로그인해 만드세요» 유지.
+- **반영한 문서(Phase 1, 편집만)**: `onboarding-api.md`(Errors 표 · 판정 표 0행 · «트러스트 게이트» 의 «두 자격» 표 · 대리 위험 · «773 이전 동작» · received-invitations `accountState`) · `console-integration-contract.md` § 2.6.4 오류 표 · `platform/error-handling.md:705` · `rules/domains/saas.md:100`(프로젝트 무관 문구 — «consumer-pool» 제거).
+- 시험: 위 빨강 표 갱신(`iam` 셋 · 사이트 계정 · received-invitations `iam` 호출자). 경쟁 · 상한(기본값) 시험은 인증된 개인(풀) 계정 호출자 그대로, `iam` 자격의 상한은 `iamCredentialOperator_stillBoundByTheCap` 가 맡는다. 로컬 `compileTestJava`(admin) rc=0 (재실행).
+- **S3 빨강 측정 (#4371 첫 커밋 = 시험 + 계약 정정, iam A 레인 job 116298303145)**: `SelfServiceOnboardingTrustGateIntegrationTest` **15 FAILED** · `SelfServiceOnboardingCapRaceIntegrationTest` **1 FAILED**(«exactly one wins the race») · `OperatorInvitationAcceptanceIntegrationTest` ac6 **1 FAILED**(201≠422, 옛 상한 2) — 17 전부 결함 단언(`AssertionError`: 503 × 3 = iam 운영자 계정 읽기 404 → 503 · 201≠403 × 2 · 401 × 2 = 엔드포인트 없음 · ORIGIN 행 0 · V0052 CHECK). SQL/컴파일 오류 0. 대조: `SelfServiceOnboardingIntegrationTest` 2 PASSED · 같은 클래스의 나머지 acceptance 5 PASSED. gateway 단위 2건은 로컬 실측 빨강.
+- **S3 초록 (#4371, job 116313854354)**: `SelfServiceOnboardingTrustGateIntegrationTest` **15 PASSED** · `SelfServiceOnboardingCapRaceIntegrationTest` **1 PASSED**(운영자 행 FOR UPDATE 를 첫 문장으로 → 둘 중 하나만 성공, CI 실측) · `OperatorInvitationAcceptanceIntegrationTest` 6 · `SelfServiceOnboardingIntegrationTest` 2 PASSED · 레인 FAILED 0. 🔴 중간 빨강 1건: V0054 CHECK 는 실제로 거절했는데(3819) 시험이 `DataIntegrityViolationException` 을 기대 — MySQL CHECK 위반은 Spring 이 `UncategorizedSQLException` 으로 분류한다(형제 `OrgNodeAdminIntegrationTest:202-211` 이 이미 적어 둔 함정, CLAUDE.md step 10). 제약 이름 단언으로 좁혔다(`f15e0009f`).
