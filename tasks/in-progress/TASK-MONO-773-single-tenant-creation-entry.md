@@ -634,3 +634,61 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 - «테넌트 등록» 폼 → `/new-tenant` 링크(계약 § 2.6.4 끝 문장): S6 PHASE 2(`bf4ebc01e`)에서 이미 했다(`tenants-create-link`).
 - e2e / 스모크 grep(`tenants-row` · `tenant-confirm` · `테넌트 관리` · `/tenants`): `tests/e2e/` · `e2e-smoke/` · 리포 루트 `tests/federation-hardening-e2e/` **0** — 고칠 spec 없음. 행 동작의 브라우저 시험은 없다(⚪ — 대기 테넌트를 만드는 e2e 시드가 없다).
 - **로컬 검증**: 전체 `npx vitest run` **394 파일 / 4498 PASSED** · tsc rc=0 · `next lint` rc=0(경고 1 그대로).
+
+---
+
+# 닫기 (2026-10-15 UTC)
+
+> 분석=Opus 5.5 · worktree `monorepo-lab-773` · 브랜치 `chore/mono-773-close`(origin/main `712629cac`) · 측정 시각 2026-10-15T16:08Z. 규칙 = CLAUDE.md «Objective merge verification before any close chore»(네 차원). 🔴 **결론: (a)(b)(c) 통과 · (d) 실패 — AC-2 하나가 그 AC 의 동사대로 닫히지 않았다.** 그래서 `done/` 으로 옮기지 않고 `in-progress/` 에 둔다(남은 일 = 시험 한 칸 또는 소유자 판정 — 아래 § CORRECTION). AC 체크박스는 건드리지 않았다.
+
+## 1. 네 차원
+
+| 차원 | 결과 | 근거 |
+|---|---|---|
+| (a) PR `MERGED` | ✅ 6/6 | `gh pr view <n> --json state,mergeCommit,statusCheckRollup` — #4368 S1 `460fddbfb` · #4369 S2 `19d0a0a6b` · #4371 S3 `bf2d0236f` · #4372 S4 `c98e80ab5` · #4373 S5 `f6e850cb0` · #4374 S6 `712629cac` |
+| (b) `origin/main` 이 스쿼시 커밋을 담음 | ✅ | `git fetch` 뒤 `origin/main` 끝 = `712629cac`(S6), 그 아래 S5 · S4 · S3 · S2 · (#4370 BE-638 기안) · S1 순서 그대로 |
+| (c) 머지 시점 실패 체크 0 | ✅ 6/6 | `statusCheckRollup` 결론 집계 — S1 SUCCESS 12 · SKIPPED 54 / S2 33 · 36 / S3 37 · 32 / S4 31 · 36 / S5 34 · 35 / S6 38 · 31. **FAILURE 0 · 대기 0**(여섯 모두). 🔵 (c) 는 «필수 체크 실패 0» 이지 스위트 초록이 아니다 — 스위트 초록은 각 슬라이스 기록의 레인 로그 셈이 근거 |
+| (d) AC 를 열어 동사대로 | 🔴 **7/8** — AC-2 미닫힘 | 아래 § 2 |
+
+## 2. AC 별 판정 (동사 기준)
+
+| AC | 판정 | 닫는 근거(슬라이스 · 시험 · 잡) | 주의 |
+|---|---|---|---|
+| **AC-0** «재측정 · 집을 정하고 이유를 적는다» | ✅ | § AC-0 기록 1~11(두 입구 file:line · 계약 · 셸 가드 · 콜백/리프레시) · § 12 OD-1 = account `tenants.status` 새 값(이유: ADR-044 D3 글자대로 · 기존 `ACTIVE` 술어가 닫힌 쪽) · S1 이 이름 `PENDING`(7자, 칸 확장 없음) 확정 · AC-3 이 요구한 상한 **값** = OD-3 **3** | — |
+| **AC-1** 셸 · 사이드바 둘 · 🔴 운영자 토큰 없음 · 관리 API 거절(대조) | ✅ | nightly run **38763381565** 콘솔 잡 **116520791861** — `non-operator-tenant-creation.spec.ts` «AC-1 · AC-5» 첫 시도 통과: 사이드바 링크 정확히 2(`/guide` → `/new-tenant`) · 벨 0 · `console_operator_token` 없음 · 표식 `1` · 🔴 대조: 실제 IAM 이 발급한 콘솔 access 를 실제 admin-service `GET /api/admin/operators` 에 Bearer → **401**. 단위: S6 `console-shell-non-operator`(fetch 0 — R1) · `sidebar-non-operator`. IT: S5 `SelfServiceOnboardingIntegrationTest.ac1_consoleShellToken_isNotAnOperatorToken` | 🔵 S5 기록의 ⚪(«두 절반이 다른 IT — 실제 auth 토큰을 admin 에 내미는 교차 시험 없음»)를 이 e2e 가 **한 런에서** 닫았다(실제 auth 발급 → 실제 admin 거절) |
+| **AC-2** 생성 → 테넌트 + 본인 두 역할 + 배정 → 재교환 뒤 개요 · `ORIGIN` 세트 · 🔴 **같은 시험에서** assume `roles` = entitled 도메인 카탈로그 전체 · 다른 테넌트 세트 행 0 | 🔴 **미닫힘 (부분)** | 닫힌 부분: S3 IT `SelfServiceOnboardingTrustGateIntegrationTest.ac2_newCreator_originRowInTheNewTenantOnly`(job 116313854354 PASSED) — 새 테넌트 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` · 배정 1 · `ORIGIN` `all-domains-full` 정확히 1행(`granted_by` NULL) · **다른 테넌트 세트 행 0**. 브라우저: nightly «AC-2» 첫 시도 통과 — 생성 → `/dashboards` · 운영자 토큰 · 표식 없음 · `console_active_tenant` = 새 슬러그 · `console_assumed_token` 있음 | 🔴 **«assume `roles`» 는 같은 시험에서 재지 않았다.** 그 시험이 재는 것은 admin 의 assignment-check `domainRoles`(= `all-domains-full` 카탈로그 **전체**, `:399-400` 주석 «auth 의 ∩ entitled 가 좁힌다») — 토큰 `roles` 의 **admin 절반**이다. auth 절반(`∩ entitled`)은 BE-632 의 기전(`AssumeTenantExchangeIntegrationTest:533` · 27차 창 라이브 AC-4)으로 따로 서 있다. OD-4 가 정한 시험 모양(«구독 전 assume `roles` 없음(대조) → `wms` 구독 → `wms` 역할 전부», § 12 OD-4 · § 13)은 **어느 슬라이스에도 없다** — IT 의 entitled 스텁은 처음부터 `wms` 고정(`:194-197`)이라 «구독 전» 대조도 없다. e2e 는 assumed 토큰의 **존재**만 본다. ⇒ AC 가 «같은 시험에서» 를 명시했으므로 두 절반의 합성은 이 동사를 닫지 않는다 |
+| **AC-3** 두 번째 회사 → 새 테넌트에만 · 🔴 기존 권한 불변 · 상한 초과 거절 | ✅ | S3 IT `ac3_secondCompany_newTenantOnly_existingCompanyByteUnchanged` — 운영자 행 하나 유지 · 새 테넌트 역할 = 두 개뿐(`SUPPORT_LOCK` 안 옮겨감) · 새 테넌트 세트 = `ORIGIN/all-domains-full` 뿐(기존 회사 `DIRECT wms-inventory-read` 안 옮겨감 — 대조) · 🔴 기존 회사 **역할 행 · 배정 행 · 세트 행 · 운영자 행 · `domainRoles`** 전후 `isEqualTo`(바이트 불변). `cap3_countsSuspendedTenant_thirdOk_fourthRefused`(상한 **3** · `SUSPENDED` 셈 · 넷째 `422 OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED` · 생성 호출 0) · `SelfServiceOnboardingCapRaceIntegrationTest`(동시 둘 = 하나만, 784 의 cap+1 닫힘). 모두 job 116313854354 PASSED | «새 회사에서 기존 회사 권한이 통하지 않음(대조군)» 은 **행 수준**(옮겨지지 않음)으로 쟀다 — 회사별 평가 자체는 784 의 기전(done). AC 문장에 «같은 시험» 요구가 없어 이것으로 닫힌다고 판정 |
+| **AC-4** `SUPER_ADMIN` 생성 + 첫 관리자 → 대기 + 초대 · 수락 뒤 활성 · 만료 시 정리 규칙 · 🔴 관리자 없는 `ACTIVE` 0 | ✅ | S4 IT `TenantFirstAdminIntegrationTest` **23 PASSED**(job 116390247407) — 생성 직후 `PENDING` · 초대 실패 보상 = `SUSPENDED`(활성 안 됨) · 수락 → `ACTIVE` · 🔴 불변식 프로브 `ActivationProbe`: **모든** account 활성화 요청 시점에 커밋된 `ACTIVE` `TENANT_ADMIN` ≥ 1 · `patch_pendingToActive_withoutAcceptedFirstAdmin_409` · 만료 = OD-2(대기 유지 · 요약 «초대 만료» · 재초대 · 정리 = 취소 → 정지 · 정리 뒤 재활성 409) · 대조 3(일반 초대는 대기 테넌트 수락 거절 등). 콘솔 행 동작 셋: S6 owner decision 절 `tenants-pending-row-actions` 단위 | 라이브 ⚪ — AC 가 «라이브» 를 요구하지 않는다(재굽기 창 몫, `TASK-MONO-672`) |
+| **AC-5** `/onboarding` 직접 · 콜백 «운영자 아님» 분기 → 새 화면 | ✅ | nightly «AC-1 · AC-5» — `/onboarding` → `/new-tenant` · 로그인 자체가 콜백 교환 `401` → `/new-tenant` 에 착지(`loginAsPoolAccount` 기본 착지 술어 `/new-tenant`). 단위: S6 `onboarding-address-redirect`(307 · 쿼리 · 대조 `/onboardingx`) · `non-operator-auth-routes`(콜백 · GET/POST 갱신) | — |
+| **AC-6** e2e grep 후 수정 · 머지 뒤 첫 nightly 콘솔 잡 확인 | ✅ | grep: AC-0 § 7 · S4 · S6 기록 — 고칠 기존 spec **0**(새 spec 추가). 첫 nightly: § 3 | 🔵 flaky 1 은 773 의 새 spec 이 아니다 — § 4 |
+| **AC-7** 비운영자 셸 로그아웃 → IAM 세션까지 끝 → 다른 계정 로그인(스토어 탭 없이) · `sso_wrong_account` 모집단을 **적는다** | ✅ | 로그아웃: nightly «AC-7» 첫 시도 통과 — 계정 메뉴 로그아웃 → `/login` · 쿠키 없음 · 🔴 `/api/auth/login` 이 IdP 폼(`input[name=username]`)을 보임 = 무음 SSO 없음 → `SUPER_ADMIN` 로그인 → `/dashboards`. 모집단: S5 AC-0 기록 — `refuseConsumerPoolTenant` 호출처 1 · 그 문구가 나가는 세 길(테넌트 없는/풀 client · `client_credentials` 풀 · assume 풀) 중 **콘솔 client 는 없음** ⇒ **콘솔 경로 `sso_wrong_account` 모집단 = 0**(OD-6: 측면 없음 · 비-`ACTIVE` 측면 모두 셸 토큰 — `customizeForPoolPrincipalOnConsole` 이 측면을 묻지 않는다). 대조 시험 `poolPrincipal_onTenantlessClient_stillRefusedWithPoolText` | 모집단 0 은 **코드 읽기 + 단위 대조**의 결론이다(라이브 로그 셈 아님) — AC 의 동사가 «적는다» 라 닫힌다 |
+
+## 3. AC-6 — 머지 뒤 첫 nightly
+
+- run **38763381565** — `push` of `712629cac`(S6 머지 커밋), 생성 2026-10-15T15:47:11Z(머지 15:47:07Z 의 4 초 뒤 — 머지 뒤 **첫** 런), 결론 **success**. 잡 15 중 success 12 · skipped 3(AMI 세대 · 팬 표면 · 론처 — 각 조건부).
+- 콘솔 잡 **116520791861** «Platform Console E2E full-stack (Playwright + docker compose)»: `Running 11 tests` · `10 passed (59.1s)` · `1 flaky`.
+- main 의 spec 별 칸 수: operators-admin-profile 1 · operators-profile 1 · overview-consolidation 5 · sample-visitor-transition 1 · non-operator-tenant-creation 3 = **11** ⇒ 773 의 새 3 칸(AC-1·AC-5 / AC-2 / AC-7)이 돌았고 **첫 시도에 통과**했다(list 리포터는 실패만 찍는다 · 세 칸의 Playwright 보고 폴더에 `-retry1` 없음).
+
+## 4. 열린 관측 — `sample-visitor-transition.spec.ts:19` flaky (판정 아님)
+
+- 첫 시도: «anonymous sees samples…» 에서 `getByTestId('operator-overview-cards')` 를 5 s 안에 못 찾음 — 페이지 스냅샷 = «통합 개요를 일시적으로 불러올 수 없습니다»(개요 저하) · 문서 `/dashboards/overview` 응답 **10063 ms**. 재시도 통과.
+- 앞선 nightly 다섯(38745574967 · 38727544958 · 38704767456 · 38645649227 · 38642293093) 모두 `8 passed` · flaky 0 ⇒ **S6 과 함께 처음 나타났다**(칸 3 증가 · 워커 2).
+- 🔴 **원인 미확정.** 가설: SSR 개요 fetch 가 병렬로 도는 비운영자 흐름(새 spec — 로그인 · 테넌트 생성 · 재교환)과 경합. **재지 않았다.** «flake = 인프라» 로 읽지 않는다 — 새 후속 `TASK-PC-FE-341`(platform-console `ready/`) 의 AC-0 이 다음 nightly 들에서 재발 · 동시 실행 상관을 잰다. 773 의 AC 를 막지 않는다(실패한 칸은 773 의 칸이 아니고, 773 의 세 칸은 첫 시도 통과).
+
+## 5. AC-7 의 결과 — `TASK-PC-FE-331`
+
+- 근거는 섰다: 773 뒤 콘솔 경로에서 `sso_wrong_account` 에 닿는 모집단 = 0(§ 2 AC-7) ⇒ PC-FE-331 은 **구현 없이 종결** 가능(그 티켓 Dependency Markers 의 «0 이면 구현 없이 종결»).
+- 🔴 **지금 닫지 않는다** — PC-FE-331 의 착수 게이트가 «773 `done/`» 이고 773 은 아직 아니다(§ CORRECTION). 773 이 `done/` 으로 간 뒤 그 티켓에서: ① AC-0 = 이 절과 S5 AC-0 기록을 인용해 «모집단 0» 기록 ② 남은 코드 = 콘솔 콜백의 `sso_wrong_account` 판별 함수 · 분기(`callback/route.ts`, S6 이 바이트 그대로 둠)와 `widgets/sso-wrong-account-logout/` — 콘솔 경로에선 도달 불가가 됐지만 **지우는지 남기는지는 그 티켓의 결정**(다른 client 발생원 셋은 남는다) ③ AC-3 라이브(스토어 탭 없이 탈출)는 773 AC-7 e2e 가 같은 명제를 이미 쟀다 — 라이브로 다시 잴지도 그 티켓 몫.
+
+## 6. 다음 재굽기에 넘기는 라이브 확인
+
+AC 가 아니다(어느 AC 도 «라이브» 를 요구하지 않는다). `TASK-MONO-672` § Next window 에 773 행으로 적었다 — 그 표가 순서만 갖고, 결과는 이 티켓(또는 닫힌 뒤엔 672 의 수확 절)에 적는다.
+
+## CORRECTION (2026-10-15 UTC) — 닫기 보류: AC-2 의 «같은 시험에서 assume `roles`»
+
+- **무엇이 빠졌나**: AC-2 의 «같은 시험에서 그 테넌트 assume `roles` = 그 테넌트 entitled 도메인의 카탈로그 전체» — OD-4 결정(§ 12)이 그 시험의 모양을 «구독 전 `roles` 없음(대조) → `wms` 구독 → `wms` 역할 전부» 로 정했다. 실제로 잰 것은 admin 절반(`domainRoles` = `all-domains-full` 카탈로그 전체)뿐이다. 토큰의 `roles` 클레임을 그 새 테넌트에서 본 시험이 없다.
+- **왜 중요한가**: `ORIGIN` 행은 구독 검사 없이 쓰이고(OD-4 · ADR-083 D5 예외) 상한은 auth 의 `∩ entitled` 하나다. 그 두 기전이 **이 새 출처에서** 합성되는지는 각 절반의 초록으로는 보이지 않는다(«두 각각 옳은 것이 합쳐서 구멍»). AC-0 § 8-2 가 «∅ = ∅ 로 공허하게 초록» 을 경고한 바로 그 자리다.
+- **닫는 길 (둘 중 하나 — 소유자 선택)**:
+  1. **시험 한 칸** — 한 런에서 실제 auth 와 admin 을 함께 걷는 자리(콘솔 nightly `non-operator-tenant-creation.spec.ts` «AC-2» 끝에 이어 붙이거나, `E2E full (iam docker-compose)`): 생성 직후 assume 토큰의 `roles` 없음(대조) → `SUPER_ADMIN` 이 그 테넌트에 `wms` 구독 → 재교환 · re-assume → `roles` = `wms` 카탈로그 전부 · `fan` 역할 0 · 같은 런에서 다른 테넌트 세트 행 0. 머지 뒤 첫 nightly 로 닫는다(e2e 면 `ci.yml` 이 돌리지 않는다 — R8).
+  2. **소유자 판정** — admin 절반(S3 IT) + auth 절반(BE-632 `AssumeTenantExchangeIntegrationTest:533` · 27차 창 AC-4 라이브)의 합성을 AC-2 의 충족으로 받아들인다고 기록. 그러면 이 CORRECTION 아래에 결정을 적고 닫기를 다시 돈다.
+- **그때까지**: 이 파일은 `in-progress/` 에 둔다(남은 것이 시험 = 구현이라 `review/` 로 얼리지 않는다). `TASK-PC-FE-331` 의 게이트(773 `done/`)도 그때까지 닫히지 않는다.
