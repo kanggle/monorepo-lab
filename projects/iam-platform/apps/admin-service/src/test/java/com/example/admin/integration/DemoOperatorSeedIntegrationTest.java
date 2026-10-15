@@ -242,16 +242,21 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
         assertThat(memberships).containsExactly("demo-viewer|1|1|1");
     }
 
+    // TASK-MONO-773 S5 removed OperatorConsoleEligibilityQueryUseCase (its endpoint lost its only caller); the
+    // predicate it composed is the token exchange's, asked here through the same two shared beans.
     @Autowired
-    com.example.admin.application.OperatorConsoleEligibilityQueryUseCase consoleEligibility;
+    com.example.admin.application.OperatorOidcSubjectResolver operatorResolver;
+
+    @Autowired
+    com.example.admin.application.OperatorConsoleAdmission admission;
 
     @Test
-    @DisplayName("784 S2 (D-10): demo-viewer · demo-cs stay console-eligible through their seeded membership")
+    @DisplayName("784 S2 (D-10): demo-viewer · demo-cs stay live operators (the exchange's predicate) through their seeded membership")
     void viewerAndCsStayConsoleEligible() {
         // The seeds are what keep these two logins alive now that the home is not a membership —
         // without their assignment rows both would be refused here (and by the token exchange).
-        assertThat(consoleEligibility.isConsoleEligible(VIEWER_OIDC_SUBJECT)).isTrue();
-        assertThat(consoleEligibility.isConsoleEligible(CS_OIDC_SUBJECT)).isTrue();
+        assertThat(operatorResolver.resolve(VIEWER_OIDC_SUBJECT).map(admission::admits).orElse(false)).isTrue();
+        assertThat(operatorResolver.resolve(CS_OIDC_SUBJECT).map(admission::admits).orElse(false)).isTrue();
     }
 
     @Test

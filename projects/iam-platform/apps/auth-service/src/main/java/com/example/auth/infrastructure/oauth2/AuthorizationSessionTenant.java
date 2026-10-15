@@ -80,7 +80,7 @@ final class AuthorizationSessionTenant {
                 }
                 if (TenantContext.isConsumerPool(tenantId) && mapsPoolPrincipalToConsole(clientTenant)) {
                     // TASK-MONO-772 S4 — a pool principal on the console: the token the issuer mints for
-                    // it (only when admin-service says it has a live operator facet) carries `iam`, so
+                    // it (since TASK-MONO-773 S5 for every pool principal — the shell token) carries `iam`, so
                     // the mirror rows carry `iam` and a refresh must compare with `iam`. A SEPARATE
                     // branch from the site mapping above (772 AC-0 F4): putting `iam` into
                     // poolPrincipalMapsTo would send the authorize gate down the consumer-site branch.
@@ -122,10 +122,10 @@ final class AuthorizationSessionTenant {
      * console's tenant ({@link TenantContext#CONSOLE_TENANT_ID}), the one client a pool principal is mapped onto
      * as {@code iam} rather than as a consumer site.
      *
-     * <p>Mapping is not admission here either: the issuer mints the console token only when admin-service
-     * confirms a live operator facet ({@code TenantClaimTokenCustomizer}); without one the claim stays the pool
-     * value and the TASK-BE-614 refusal mints nothing. This rule is I/O-free on purpose — the three readers
-     * (claim, mirror row, gate) must agree on one value, and the facet answer is the issuer's alone.
+     * <p>TASK-MONO-773 S5: the issuer mints the console «non-operator shell» token for every pool principal here
+     * ({@code TenantClaimTokenCustomizer}) — until S5 only with a live operator facet confirmed by admin-service.
+     * Admission to operator authority is the admin token exchange's, not this mapping's. This rule is I/O-free on
+     * purpose — the three readers (claim, mirror row, gate) must agree on one value.
      */
     static boolean mapsPoolPrincipalToConsole(String clientTenant) {
         return clientTenant != null && TenantContext.CONSOLE_TENANT_ID.equals(clientTenant.trim());

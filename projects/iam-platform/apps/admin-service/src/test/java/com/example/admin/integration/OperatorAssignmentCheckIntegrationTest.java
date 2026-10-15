@@ -20,6 +20,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -259,9 +260,9 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
         // Control: the same row, both axes (omitted) — the pre-772 answer, byte-unchanged.
         facet(FACET_SUBJECT, null).andExpect(jsonPath("$.operatorFaceted").value(true));
         facetAxes(FACET_SUBJECT, null, "OIDC_SUBJECT").andExpect(jsonPath("$.operatorFaceted").value(true));
-        // The move keeps the account id, so the operator row is untouched and the S4 eligibility (= the
-        // exchange's predicate) still answers for the same sub.
-        consoleEligibility(FACET_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
+        // The move keeps the account id, so the operator row is untouched and the exchange's «live operator»
+        // predicate still answers for the same sub.
+        assertThat(liveOperator(FACET_SUBJECT)).isTrue();
     }
 
     @Test
@@ -311,62 +312,67 @@ class OperatorAssignmentCheckIntegrationTest extends AbstractIntegrationTest {
         return mockMvc.perform(request);
     }
 
-    // ── TASK-MONO-772 S4 — GET /internal/operators/console-eligibility on the real admin_operators rows ──
-    // Same context on purpose. The predicate is the token exchange's (oidc_subject = accountId ∧ ACTIVE) —
-    // the same SUSPENDED row the facet read above answers TRUE for answers FALSE here (the two questions differ).
+    // ── The «live operator» predicate (TASK-MONO-772 S4 · 784 S2) on the real admin_operators rows ──
+    // Same context on purpose. Until TASK-MONO-773 S5 these cells asked GET /internal/operators/console-eligibility;
+    // S5 removed that endpoint (its only caller, auth-service's console issuer, stopped asking — S1 owner answer 1).
+    // The predicate itself stays: the token exchange uses it (TokenExchangeService → OperatorConsoleAdmission), so
+    // the cells now ask the shared resolver + admission in-process — the same two beans the endpoint composed.
+    // The same SUSPENDED row the facet read above answers TRUE for answers FALSE here (the two questions differ).
 
-    @Test
-    @DisplayName("MONO-772 S4: ACTIVE 운영자의 oidc_subject → eligible=true")
-    void consoleEligibility_activeOperator() throws Exception {
-        seedFacetOperators();
-        consoleEligibility(FACET_SUBJECT).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(true));
+    @Autowired
+    com.example.admin.application.OperatorOidcSubjectResolver operatorResolver;
+
+    @Autowired
+    com.example.admin.application.OperatorConsoleAdmission admission;
+
+    /** {@code oidc_subject = accountId ∧ status = ACTIVE ∧ ('*' ∨ membership ≥ 1)} — the exchange's predicate. */
+    private boolean liveOperator(String accountId) {
+        return operatorResolver.resolve(accountId).map(admission::admits).orElse(false);
     }
 
     @Test
-    @DisplayName("🔴 MONO-772 S4 (AC-3): SUSPENDED 운영자 → eligible=false — 같은 행에 facet 은 true (질문이 다르면 술어도 다르다)")
-    void consoleEligibility_suspendedOperator_false_whileFacetTrue() throws Exception {
+    @DisplayName("MONO-772 S4: ACTIVE 운영자의 oidc_subject → 살아 있는 운영자")
+    void liveOperator_activeOperator() {
         seedFacetOperators();
-        consoleEligibility(SUSPENDED_SUBJECT).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(false));
+        assertThat(liveOperator(FACET_SUBJECT)).isTrue();
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-772 S4 (AC-3): SUSPENDED 운영자 → false — 같은 행에 facet 은 true (질문이 다르면 술어도 다르다)")
+    void liveOperator_suspendedOperator_false_whileFacetTrue() throws Exception {
+        seedFacetOperators();
+        assertThat(liveOperator(SUSPENDED_SUBJECT)).isFalse();
         facet(SUSPENDED_SUBJECT, null).andExpect(jsonPath("$.operatorFaceted").value(true));
     }
 
     @Test
-    @DisplayName("🔴 MONO-772 S4 (AC-2): 운영자 행 없는 계정 → eligible=false · 신원 축만 맞는 계정도 false")
-    void consoleEligibility_noOperator_false_identityAxisNotAsked() throws Exception {
+    @DisplayName("🔴 MONO-772 S4 (AC-2): 운영자 행 없는 계정 → false · 신원 축만 맞는 계정도 false")
+    void liveOperator_noOperator_false_identityAxisNotAsked() {
         seedFacetOperators();
-        consoleEligibility(UNKNOWN_SUBJECT).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(false));
+        assertThat(liveOperator(UNKNOWN_SUBJECT)).isFalse();
         // FACET_IDENTITY is the identity_id of an operator — passing it as an accountId matches nothing.
-        consoleEligibility(FACET_IDENTITY).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(false));
+        assertThat(liveOperator(FACET_IDENTITY)).isFalse();
+        assertThat(liveOperator(" ")).as("blank subject — nothing resolves").isFalse();
     }
 
     @Test
-    @DisplayName("🔴 784 S2 (D-10 · F16): ACTIVE 비-'*' · 소속 0 → eligible=false / 대조군: 같은 홈 · 소속 1 → true · '*' → true")
-    void consoleEligibility_noMembership_false_controls() throws Exception {
+    @DisplayName("🔴 784 S2 (D-10 · F16): ACTIVE 비-'*' · 소속 0 → false / 대조군: 같은 홈 · 소속 1 → true · '*' → true")
+    void liveOperator_noMembership_false_controls() {
         // Failing side first: ACTIVE, home acme-corp, zero memberships — not an operator for the console.
-        consoleEligibility(NO_MEMBERSHIP_SUBJECT).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(false));
+        assertThat(liveOperator(NO_MEMBERSHIP_SUBJECT)).isFalse();
         // Control: the same home with its membership row.
-        consoleEligibility(MEMBER_SUBJECT).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(true));
+        assertThat(liveOperator(MEMBER_SUBJECT)).isTrue();
         // A membership that is not the home also counts (OP has globex only).
-        consoleEligibility(OP_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
-        // '*' has no memberships by definition (ADR-082 D2) and stays eligible.
-        consoleEligibility(SUPER_SUBJECT).andExpect(jsonPath("$.eligible").value(true));
+        assertThat(liveOperator(OP_SUBJECT)).isTrue();
+        // '*' has no memberships by definition (ADR-082 D2) and stays live.
+        assertThat(liveOperator(SUPER_SUBJECT)).isTrue();
     }
 
     @Test
-    @DisplayName("MONO-772 S4: accountId 공백 → 400 VALIDATION_ERROR")
-    void consoleEligibility_blank_400() throws Exception {
-        consoleEligibility(" ").andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-    }
-
-    private org.springframework.test.web.servlet.ResultActions consoleEligibility(String accountId) throws Exception {
-        return mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", accountId));
+    @DisplayName("🔴 773 S5: GET /internal/operators/console-eligibility 는 없다 — 호출자 0 (auth 발급자가 묻지 않는다) → 404")
+    void consoleEligibility_endpointRemoved_404() throws Exception {
+        mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", FACET_SUBJECT))
+                .andExpect(status().isNotFound());
     }
 
     // ── TASK-MONO-771 S4 — mfaRequired on the real V0047 table + V0013 role flag ─────────────

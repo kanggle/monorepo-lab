@@ -60,7 +60,7 @@ class TenantClaimTokenCustomizerTest {
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED,
+        customizer = new TenantClaimTokenCustomizer(accountServicePort,
                 ConsoleEligibilityStubs.credentialsNotMoved());
     }
 

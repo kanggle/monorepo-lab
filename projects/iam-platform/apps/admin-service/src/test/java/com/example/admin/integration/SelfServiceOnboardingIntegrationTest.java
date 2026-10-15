@@ -84,6 +84,11 @@ class SelfServiceOnboardingIntegrationTest extends AbstractIntegrationTest {
     private static final String OWNER_EMAIL = "owner@newco.com";
     private static final String NEW_TENANT = "newco-inc";
 
+    /** TASK-MONO-773 S5 — a pool account with no operator row (the «측면 없음» row of auth-api.md's console table). */
+    private static final String SHELL_ACCOUNT_ID = "0199de70-0000-7000-8000-000000a10773";
+    private static final String SHELL_EMAIL = "shell-owner-773@example.com";
+    private static final String SHELL_TENANT = "shellco-773";
+
     static WireMockServer wireMock;
     static KeyPair authKeyPair;
     static OperatorJwtTestFixture jwt;
@@ -141,6 +146,27 @@ class SelfServiceOnboardingIntegrationTest extends AbstractIntegrationTest {
                         .withBody("{\"tenantId\":\"" + NEW_TENANT + "\",\"displayName\":\"NewCo Inc\","
                                 + "\"tenantType\":\"B2B_ENTERPRISE\",\"status\":\"ACTIVE\","
                                 + "\"createdAt\":\"2026-07-04T00:00:00Z\",\"updatedAt\":\"2026-07-04T00:00:00Z\"}")));
+
+        // ── TASK-MONO-773 S5 (AC-1 control) — a pool account with NO operator row, holding the console shell token ──
+        wireMock.stubFor(WireMock.get(urlPathEqualTo("/internal/accounts/" + SHELL_ACCOUNT_ID))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"id\":\"" + SHELL_ACCOUNT_ID + "\",\"email\":\"" + SHELL_EMAIL
+                                + "\",\"status\":\"ACTIVE\",\"createdAt\":\"2026-10-15T00:00:00Z\","
+                                + "\"profile\":{\"displayName\":\"Shell Owner\",\"phoneMasked\":null}}")));
+        wireMock.stubFor(WireMock.post(urlPathEqualTo("/internal/accounts/" + SHELL_ACCOUNT_ID + "/verified-email:match"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"" + SHELL_ACCOUNT_ID
+                                + "\",\"emailVerifiedAt\":\"2026-10-15T00:00:00Z\"}")));
+        wireMock.stubFor(WireMock.post(urlEqualTo("/internal/tenants"))
+                .atPriority(1)
+                .withRequestBody(WireMock.containing(SHELL_TENANT))
+                .willReturn(aResponse().withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"tenantId\":\"" + SHELL_TENANT + "\",\"displayName\":\"Shell Co\","
+                                + "\"tenantType\":\"B2B_ENTERPRISE\",\"status\":\"ACTIVE\","
+                                + "\"createdAt\":\"2026-10-15T00:00:00Z\",\"updatedAt\":\"2026-10-15T00:00:00Z\"}")));
 
         // account-service: born-unified identity resolve-or-create
         wireMock.stubFor(WireMock.post(urlPathMatching("/internal/tenants/[^/]+/identities:resolveOrCreate"))
@@ -292,5 +318,71 @@ class SelfServiceOnboardingIntegrationTest extends AbstractIntegrationTest {
                         .contentType("application/json")
                         .content(onboardBody(operatorToken, "other-tenant")))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * TASK-MONO-773 S5 — the console «non-operator shell» token, byte-for-byte the claim set auth-service now mints
+     * for a pool principal with no operator facet (auth-api.md § 풀 계정의 콘솔 토큰, «측면 없음» row; the auth half —
+     * that the real issuer mints exactly these claims — is auth-service's
+     * {@code ConsumerPoolSsoIntegrationTest#poolSession_onConsole_shellToken}): {@code iss} = IAM ·
+     * {@code aud} = the console client · {@code sub} = the pool account · {@code tenant_id=iam} ·
+     * {@code tenant_type=B2B_ENTERPRISE} · no {@code roles} · no {@code token_type}.
+     *
+     * <p>🔴 AC-1 control (auth-api.md «이 토큰은 운영자 토큰이 아니다»): ① as a Bearer on an admin API → 401
+     * TOKEN_INVALID ② as the token-exchange subject while no operator row exists → 401 TOKEN_INVALID ③ on the
+     * onboarding endpoints as {@code subjectToken} → admitted, the endpoint's own judgement decides
+     * (received-invitations 200 VERIFIED · organizations 201). ④ Control for ②: after ③ created the operator row, the
+     * SAME token exchanges (200) — so ②'s 401 was «not an operator», not «a bad token».
+     */
+    @Test
+    @DisplayName("🔴 773 S5 AC-1 대조군: 콘솔 셸 토큰 → 관리 API Bearer 401 · 토큰 교환 401 · 온보딩 두 엔드포인트는 통과(200 · 201) · 생성 뒤 같은 토큰 교환 200")
+    void ac1_consoleShellToken_isNotAnOperatorToken() throws Exception {
+        Instant now = Instant.now();
+        String shell = Jwts.builder()
+                .header().keyId(JWKS_KID).and()
+                .subject(SHELL_ACCOUNT_ID)
+                .issuer(OIDC_ISSUER)
+                .audience().add(CONSOLE_CLIENT).and()
+                .claim("tenant_id", "iam")
+                .claim("tenant_type", "B2B_ENTERPRISE")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(15, ChronoUnit.MINUTES)))
+                .signWith(authKeyPair.getPrivate(), Jwts.SIG.RS256).compact();
+
+        // ① an admin API with the shell token as Bearer.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/admin/operators")
+                        .header("Authorization", "Bearer " + shell))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+
+        // ② the operator token exchange — no operator row for this sub.
+        String exchangeBody = "{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\","
+                + "\"subject_token\":\"" + shell + "\","
+                + "\"subject_token_type\":\"urn:ietf:params:oauth:token-type:access_token\"}";
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+
+        // ③ the onboarding endpoints take it as subjectToken; their own judgement decides.
+        mockMvc.perform(post("/api/admin/onboarding/received-invitations")
+                        .contentType("application/json")
+                        .content("{\"subjectToken\":\"" + shell + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountState").value("VERIFIED"));
+        mockMvc.perform(post("/api/admin/onboarding/organizations")
+                        .contentType("application/json")
+                        .content("{\"subjectToken\":\"" + shell + "\",\"tenantId\":\"" + SHELL_TENANT
+                                + "\",\"organizationName\":\"Shell Co\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenantId").value(SHELL_TENANT));
+
+        // ④ control for ②: the same token now exchanges — the operator row exists.
+        mockMvc.perform(post("/api/admin/auth/token-exchange")
+                        .contentType("application/json")
+                        .content(exchangeBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("admin"));
     }
 }

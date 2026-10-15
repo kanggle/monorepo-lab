@@ -67,7 +67,7 @@ class TokenExchangeServiceTest {
         service = new TokenExchangeService(
                 subjectTokenValidator, operatorPort, accessTokenIssuer, resolver,
                 new OperatorSecondFactorRequirement(operatorPort, assignmentPort, entryPolicyPort),
-                // TASK-MONO-784 S2: the REAL shared admission predicate (console-eligibility uses the same).
+                // TASK-MONO-784 S2: the REAL shared admission predicate (console-eligibility shared it until TASK-MONO-773 S5).
                 new OperatorConsoleAdmission(assignmentPort));
     }
 

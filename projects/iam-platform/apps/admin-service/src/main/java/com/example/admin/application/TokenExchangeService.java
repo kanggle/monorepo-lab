@@ -28,7 +28,8 @@ import org.springframework.stereotype.Service;
  *       minted;</li>
  *   <li>TASK-MONO-784 S2 (ADR-MONO-082 b · D-10) — a non-{@code '*'} operator with <b>no membership</b>
  *       ({@code operator_tenant_assignment} rows = 0) → 401, no token minted. The same
- *       {@link OperatorConsoleAdmission} answers the console-eligibility read, so the two cannot drift;</li>
+ *       {@link OperatorConsoleAdmission} answered the console-eligibility read until TASK-MONO-773 S5 removed
+ *       it — this exchange is now the only place operator-ness is decided ({@code 401} = not an operator);</li>
  *   <li>tenant scope is NEVER read from the OIDC token — it is resolved at
  *       request time from {@code admin_operators.tenant_id} (ADR-002 sentinel)
  *       by the existing RBAC/tenant evaluators; this service merely mints the
@@ -66,7 +67,7 @@ public class TokenExchangeService {
     private final OperatorOidcSubjectResolver operatorResolver;
     // TASK-MONO-771 S4: the shared requirement (the assume-tenant gate uses the SAME component).
     private final OperatorSecondFactorRequirement secondFactorRequirement;
-    // TASK-MONO-784 S2 (D-10): the shared «live operator» predicate (console-eligibility uses the SAME one).
+    // TASK-MONO-784 S2 (D-10): the «live operator» predicate (console-eligibility shared it until 773 S5).
     private final OperatorConsoleAdmission admission;
 
     /**

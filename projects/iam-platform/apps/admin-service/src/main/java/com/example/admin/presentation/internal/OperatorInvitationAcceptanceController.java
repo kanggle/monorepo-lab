@@ -19,7 +19,7 @@ import java.util.List;
  * ({@code /operator-invitations/accept}, auth-service) makes, server-side, on behalf of the browser.
  *
  * <p>Under the {@code @Order(0)} {@code /internal/**} resource-server chain (IAM {@code client_credentials} JWT),
- * like {@link OperatorConsoleEligibilityController}. Not operator-gated: the caller is auth-service, and the
+ * like every {@code /internal/operators/*} read. Not operator-gated: the caller is auth-service, and the
  * «who» of an acceptance is the {@code accountId} auth-service took from its own browser session — the page never
  * reads it from a form (auth-api.md).
  *

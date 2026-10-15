@@ -135,8 +135,8 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
 
         // ── TASK-MONO-772 S6 — a self-onboarded operator (admin_operators.oidc_subject = SELF_ONBOARDED) ──
         // Asked with axes=IDENTITY, admin answers false (the subject axis is not asked) — the row the both-axes
-        // question would have answered true for. Console eligibility (the exchange's predicate) is true: the
-        // operator row is untouched by the move, the account id — its sub — unchanged.
+        // question would have answered true for. The operator row is untouched by the move, the account id — its
+        // sub — unchanged (773 S5: the console token no longer asks admin-service about it).
         facet(SELF_ONBOARDED, "false");
         downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/accounts/" + SELF_ONBOARDED + "/status"))
                 .willReturn(json("""
@@ -147,9 +147,8 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
                 .willReturn(json("""
                         { "accountId": "%s", "tenantId": "fan-platform", "roles": ["FAN"] }
                         """.formatted(SELF_ONBOARDED))));
-        downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
-                .withQueryParam("accountId", WireMock.equalTo(SELF_ONBOARDED))
-                .willReturn(json("{ \"eligible\": true }")));
+        // TASK-MONO-773 S5: no console-eligibility stub — the console issuer no longer asks (an ask would get
+        // WireMock's 404 and, before S5, no console token).
         downstream.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/operators/facet"))
                 .withQueryParam("accountId", WireMock.equalTo(ADMIN_DOWN))
                 .willReturn(WireMock.aResponse().withStatus(500)));
@@ -400,9 +399,9 @@ class ConsumerPoolLegacyMoveIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(SELF_ONBOARDED);
         assertThat(claim(newAccess, "tenant_id")).isEqualTo("iam").isNotEqualTo("consumer-pool");
         assertThat(roles(newAccess)).isEmpty();
-        downstream.verify(WireMock.moreThanOrExactly(1),
-                WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility"))
-                        .withQueryParam("accountId", WireMock.equalTo(SELF_ONBOARDED)));
+        // TASK-MONO-773 S5: the pool principal's console token is issued without asking admin-service.
+        downstream.verify(0,
+                WireMock.getRequestedFor(WireMock.urlPathEqualTo("/internal/operators/console-eligibility")));
         // And it refreshes (no loop, no stale-session refusal: the new session is a pool principal).
         JsonNode refreshed = refresh(newTokens.get("refresh_token").asText(), CONSOLE_CLIENT_ID, 200);
         assertThat(claim(refreshed.get("access_token").asText(), "tenant_id")).isEqualTo("iam");

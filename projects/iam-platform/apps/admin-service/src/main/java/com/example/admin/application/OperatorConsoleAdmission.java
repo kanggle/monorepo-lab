@@ -14,9 +14,11 @@ import org.springframework.stereotype.Component;
  *   status = ACTIVE  ∧  ( tenant_id = '*'  ∨  memberships (operator_tenant_assignment rows) ≥ 1 )
  * </pre>
  *
- * <p>Shared by the console-eligibility read ({@link OperatorConsoleEligibilityQueryUseCase}) and the operator
- * token exchange ({@link TokenExchangeService}) — 772 D-5 «the same predicate as the exchange», so the issuer
- * never mints a console token the exchange would then refuse, and vice versa.
+ * <p>Used by the operator token exchange ({@link TokenExchangeService}). Until TASK-MONO-773 S5 it was shared with
+ * the console-eligibility read ({@code GET /internal/operators/console-eligibility}, 772 D-5 «the same predicate
+ * as the exchange») that auth-service asked before minting a console token; S5 removed that read — auth-service
+ * now mints the console «non-operator shell» token for every pool account (773 OD-6) and the exchange alone
+ * decides operator-ness ({@code 401} = not an operator).
  *
  * <p>Why membership: «export from this company» (S4) may remove an operator's last membership while the row
  * stays {@code ACTIVE} (D-10 — re-invitation adds a membership to the same row; the auditor needs the row).

@@ -496,7 +496,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
 | 소비자 | 풀 계정, 그 사이트 멤버십 **있음** | 폼 없이 그 사이트 토큰 — `sub` = 풀 계정 id, `tenant_id` = 그 사이트, `roles` = 그 사이트 역할만 |
 | 소비자 | 풀 계정, 멤버십 **없음** | 그 사이트 **동의 화면 한 번**(`TASK-BE-616`) → 멤버십 생성 → 토큰 |
 | 소비자 | 사이트별 계정(묶이지 않음) | **지금 그대로** — 테넌트가 다르면 재인증(위 SSO 표) |
-| 콘솔 | 풀 계정 | 위 SSO 표의 콘솔 행 그대로(D1) — 같은 이메일의 `iam` 자격이 있으면 재인증(BE-610), 아니면 통과. 🔵 **발급은 `TASK-MONO-772` 부터 운영자 측면으로 갈린다**: **살아 있는 운영자 측면이 있는**(`admin_operators.oidc_subject = 계정 id ∧ ACTIVE`) 풀 계정만 콘솔 토큰(`tenant_id = iam`, 역할 없음)을 받고, 없으면 지금처럼 `invalid_grant`(문구 불변), 판정을 못 받으면 `invalid_grant` + `operator_eligibility_unavailable`(fail-closed) — [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6). 풀 계정 자체는 여전히 운영자 권한을 주지 않는다 — 권한은 운영자 측면(admin 토큰 교환)에서 온다 |
+| 콘솔 | 풀 계정 | 위 SSO 표의 콘솔 행 그대로(D1) — 같은 이메일의 `iam` 자격이 있으면 재인증(BE-610), 아니면 통과. 🔵 **발급은 `TASK-MONO-772` 부터 운영자 측면으로 갈린다**: **살아 있는 운영자 측면이 있는**(`admin_operators.oidc_subject = 계정 id ∧ ACTIVE`) 풀 계정만 콘솔 토큰(`tenant_id = iam`, 역할 없음)을 받고, 없으면 지금처럼 `invalid_grant`(문구 불변), 판정을 못 받으면 `invalid_grant` + `operator_eligibility_unavailable`(fail-closed). 🔴 **`TASK-MONO-773` S5 부터 측면과 무관하게 모든 풀 계정이 콘솔 «비운영자 셸» 토큰을 받고, 판정 호출 · 그 상수는 폐기됐다**(아래 «`TASK-MONO-773` 이후 (S5 — OD-6)» 문단) — [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6). 풀 계정 자체는 여전히 운영자 권한을 주지 않는다 — 권한은 운영자 측면(admin 토큰 교환)에서 온다 |
 
 - 폼 로그인의 자격 선택: 소비자 client 는 **풀 자격을 먼저**, 없으면 그 client 테넌트의 사이트별 자격을 찾는다. § 2 의 가입 거절과 § 3 의 이동이
   «같은 이메일에 풀 자격과 사이트별 자격이 공존» 을 막으므로 순서가 결과를 바꾸지 않는다 — 🔴 공존이 생기면 그것이 결함이다(`TASK-BE-615` 의 대조군).
@@ -517,6 +517,7 @@ authorize 시점에 따로 판정한다(`AuthorizeSessionTenantGate`, SAS `OAuth
   닫혀 있다. 그 개방은 `TASK-MONO-773`(ADR-080 D9 = T1 · ADR-044 D4 트러스트 게이트) 몫이다. 정본: [auth-api.md § 풀 계정의 콘솔 토큰](../contracts/http/auth-api.md#풀-계정의-콘솔-토큰--운영자-측면이-있을-때만-task-mono-772--adr-mono-080-d6).
   → **`TASK-MONO-773` 이후 (S5 — OD-6)**: 풀 principal × 콘솔 client 는 **측면 상태와 무관하게** 콘솔 토큰(`id_token` 포함)을 받는다. 측면이 없거나 비-`ACTIVE` 면 운영자 교환이 `401` 이고
   콘솔은 **비운영자 셸**(«가이드 · 테넌트 생성» 만, 운영자 토큰 없음)로 들어간다. 이 갈래의 `'consumer-pool'` 거절은 사라진다(콘솔 `sso_wrong_account` 모집단 0 — 773 AC-7). 🔴 순서: 인증 이메일 게이트(S3)가 먼저 머지된다.
+  발급자는 admin-service 에 **더는 묻지 않는다** — 위 772 문단의 `console-eligibility` 호출 · `operator_eligibility_unavailable` 거절 · «refresh 마다 다시 묻는다» 는 773 S5 에서 폐기됐고, 호출자 0 이 된 그 admin 엔드포인트도 지웠다(admin-service 장애가 콘솔 로그인을 막지 않는다).
 - **멤버십 없는 사이트 — `TASK-BE-616` 전까지의 결과 (`TASK-BE-615` 결정)**: authorize 는 재인증하지 않고 코드를 준다(재인증하면 그 client 의 폼이
   풀 자격을 먼저 골라 같은 세션 → 같은 게이트 → 무한 반복). **토큰 엔드포인트가 `invalid_grant` 로 거절**한다 — 토큰 없음 · 루프 없음. 616 의 동의 화면이 이 자리에 들어온다.
   멤버십 조회 실패도 토큰 없음(fail-closed). 갱신 때마다 다시 묻는다 — 멤버십이 `LEFT` 가 되면 다음 refresh 부터 토큰이 없다.

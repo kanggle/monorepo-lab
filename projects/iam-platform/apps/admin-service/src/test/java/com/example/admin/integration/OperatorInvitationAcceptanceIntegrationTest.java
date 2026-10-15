@@ -56,7 +56,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -75,8 +74,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       invitation. Every refusal is asserted to have written no operator row, no grant, no assignment, no audit
  *       row, and to have left the invitation PENDING.</li>
  *   <li>🔴 <b>AC-6</b> ({@link #ac6_selfOnboardedOrgAdmin_invites_inviteeBecomesOperator}) — a self-onboarded
- *       organisation's admin invites, the invitee accepts, and the S4 console-eligibility read and the operator
- *       token exchange then answer «yes» for that account. Steps 5–6 were 772's OD-1 «second company → 409» and
+ *       organisation's admin invites, the invitee accepts, and the live-operator predicate (the exchange's — 773 S5
+ *       removed the console-eligibility read that exposed it) and the operator token exchange then answer «yes» for
+ *       that account. Steps 5–6 were 772's OD-1 «second company → 409» and
  *       S1-11 «self-onboarding → 409»; 🔴 TASK-MONO-784 S5 (AC-3 · ADR-MONO-082 b) rewrote them to the new
  *       expectations: a second company's acceptance adds a membership to the SAME row (the first company's rows
  *       byte-unchanged), the same tenant again → 409, issuance keys on membership (F15), self-onboarding at the
@@ -287,10 +287,19 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
                 .contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"" + token + "\"}"));
     }
 
-    private boolean consoleEligible(String accountId) throws Exception {
-        String json = mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", accountId))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        return JSON.readTree(json).get("eligible").asBoolean();
+    @org.springframework.beans.factory.annotation.Autowired
+    com.example.admin.application.OperatorOidcSubjectResolver operatorResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.example.admin.application.OperatorConsoleAdmission admission;
+
+    /**
+     * The token exchange's «live operator» predicate ({@code ACTIVE ∧ ('*' ∨ membership ≥ 1)}). Until TASK-MONO-773
+     * S5 this read {@code GET /internal/operators/console-eligibility}; S5 removed that endpoint (no caller left) —
+     * the same two shared beans it composed answer in-process.
+     */
+    private boolean liveOperator(String accountId) {
+        return operatorResolver.resolve(accountId).map(admission::admits).orElse(false);
     }
 
     // ── what a refusal must not have written ────────────────────────────────
@@ -511,15 +520,16 @@ class OperatorInvitationAcceptanceIntegrationTest extends AbstractIntegrationTes
                 .andExpect(jsonPath("$.expired").value(false))
                 .andExpect(jsonPath("$.maskedEmail").value(inviteeEmail.charAt(0) + "***@example.com"));
 
-        // Before accepting, the colleague's pool account has no console (S4's closed path, the control).
-        assertThat(consoleEligible(invitee)).isFalse();
+        // Before accepting, the colleague's pool account is no operator (the control) — 773 S5: it still gets a
+        // console shell token from auth-service, but no operator token.
+        assertThat(liveOperator(invitee)).isFalse();
 
         // 3. the colleague (site-less pool signup → verified — account-service's half) accepts.
         stubMatch(invitee, 200, null);
         accept(inv[1], invitee).andExpect(status().isOk()).andExpect(jsonPath("$.tenantId").value(newOrg));
 
-        // 4. … and is now an operator the console admits: S4's eligibility read, and the operator token exchange.
-        assertThat(consoleEligible(invitee)).isTrue();
+        // 4. … and is now an operator the console admits: the live-operator predicate, and the operator token exchange.
+        assertThat(liveOperator(invitee)).isTrue();
         mockMvc.perform(post("/api/admin/auth/token-exchange")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"grant_type\":\"urn:ietf:params:oauth:grant-type:token-exchange\","
