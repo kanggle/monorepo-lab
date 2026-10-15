@@ -3804,12 +3804,12 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `wms-outbound-operate` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | |
 | `wms-master-read` | `MASTER_READ` | |
 | `wms-ops-actions` | `WMS_OPERATOR` | |
-| `scm-read` | `SCM_PROCUREMENT_READ` · `SCM_DEMAND_PLANNING_READ` · `SCM_LOGISTICS_READ` · `SCM_INVENTORY_VISIBILITY_READ` | «SCM 조회» — TASK-MONO-792 (V0056) |
+| `<domainKey>-full` | 그 도메인의 카탈로그 역할 전부 | 도메인마다 하나: `wms-full` · `scm-full` · `erp-full` · `finance-full` · `ecommerce-full` · `fan-full` · `mes-full` |
+| `scm-read` | `SCM_PROCUREMENT_READ` · `SCM_DEMAND_PLANNING_READ` · `SCM_LOGISTICS_READ` · `SCM_INVENTORY_VISIBILITY_READ` | «SCM 조회» — TASK-MONO-792 (V0056). 목록 순서: `scm-full` 바로 뒤 |
 | `scm-procurement-operate` | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` | V0056 |
 | `scm-demand-planning-operate` | `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` | V0056 |
 | `scm-logistics-operate` | `SCM_LOGISTICS_READ` · `SCM_LOGISTICS_WRITE` | V0056 |
 | `scm-inventory-visibility-operate` | `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | V0056 |
-| `<domainKey>-full` | 그 도메인의 카탈로그 역할 전부 | 도메인마다 하나: `wms-full` · `scm-full` · `erp-full` · `finance-full` · `ecommerce-full` · `fan-full` · `mes-full` |
 | `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 — 773 OD-4 가 출처 `ORIGIN` 으로 쓴다(위 «출처» 표). API 로 `DIRECT` 배정도 할 수 있지만 그때는 구독 검사를 받는다(`fan` 때문에 고객 테넌트에서는 사실상 `422`) |
 | `legacy-compat` | `all-domains-full` 과 같은 내용 | **`MIGRATION` 출처 전용**(API 배정 불가) — 이전 완료 판정에서 «백필이 준 것» 을 구분하는 표지 |
 

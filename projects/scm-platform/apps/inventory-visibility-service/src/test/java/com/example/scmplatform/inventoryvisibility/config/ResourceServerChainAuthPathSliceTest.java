@@ -195,7 +195,8 @@ class ResourceServerChainAuthPathSliceTest {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
                 .claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId)
-                .claim("roles", List.of("OPERATOR"))
+                // TASK-MONO-792: the business-role gate now needs a visibility role (OPERATOR alone → 403).
+                .claim("roles", List.of("SCM_INVENTORY_VISIBILITY_READ"))
                 .build();
         SignedJWT jwt = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.RS256).build(), claims);

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -19,7 +20,8 @@ import java.io.IOException;
 
 /**
  * logistics-service Spring Security configuration. OAuth2 Resource Server (RS256, IAM JWKS).
- * All {@code /api/logistics/**} endpoints require authentication; the tenant gate + entitlement
+ * All {@code /api/logistics/**} endpoints require authentication and a business role (TASK-MONO-792:
+ * {@code GET} = {@code SCM_LOGISTICS_READ ∨ _WRITE}, retry = {@code SCM_LOGISTICS_WRITE}); the tenant gate + entitlement
  * dual-accept live in {@link ServiceLevelOAuth2Config} (shared validators + servlet enforcer).
  *
  * <p>The generic tail — CSRF-disabled, {@code STATELESS}, the permit/authenticate/deny sequence
@@ -32,12 +34,24 @@ import java.io.IOException;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /** TASK-MONO-792 — scm iam-integration.md § 업무 역할 (= iam DomainRoleCatalog scm rows). */
+    static final String LOGISTICS_READ = "SCM_LOGISTICS_READ";
+    static final String LOGISTICS_WRITE = "SCM_LOGISTICS_WRITE";
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return ResourceServerChainAssembler.statelessJwtChain(http)
                 .publicPaths(PublicPaths.AS_SET)
-                .authenticated("/api/logistics/**")
+                // TASK-MONO-792 (ADR-MONO-083 P5 · owner decision Q3 — strict) — GET = read ∨ write, every
+                // other method (the dispatch retry) = write. WMS roles are not accepted across the domain
+                // boundary: the console's WMS outbound «발송 재시도» needs the SCM logistics set too.
+                .authorizeRules(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/logistics/**")
+                        .hasAnyRole(LOGISTICS_READ, LOGISTICS_WRITE)
+                        .requestMatchers("/api/logistics/**")
+                        .hasRole(LOGISTICS_WRITE))
                 .anyRequestDenied()
+                .jwtAuthenticationConverter(ScmRoleAuthorities.converter())
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();

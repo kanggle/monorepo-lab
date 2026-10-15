@@ -51,7 +51,7 @@ class SuggestionControllerSliceTest {
     static final String SUPPLIER_ID = "SUP-0043";
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void listSuggestions_returns200_withPageMeta() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
@@ -69,7 +69,7 @@ class SuggestionControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void getSuggestion_returns200() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
@@ -82,7 +82,7 @@ class SuggestionControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void getSuggestion_returns404_whenNotFound() throws Exception {
         UUID missing = UUID.randomUUID();
         when(suggestionQueryUseCase.getById(missing))
@@ -94,7 +94,7 @@ class SuggestionControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void dismissSuggestion_returns200() throws Exception {
         ReorderSuggestion dismissed = ReorderSuggestion.reconstitute(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID,
@@ -116,7 +116,7 @@ class SuggestionControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void approve_returns200_materialized() throws Exception {
         UUID poId = UUID.fromString("0192cccc-0000-0000-0000-0000000000aa");
         when(approveSuggestionUseCase.approve(eq(SUGGESTION_ID), any()))
@@ -134,7 +134,7 @@ class SuggestionControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void approve_returns422_whenSkuUnmapped() throws Exception {
         when(approveSuggestionUseCase.approve(eq(SUGGESTION_ID), any()))
                 .thenThrow(new SkuSupplierUnmappedException("SKU-APPLE-001"));

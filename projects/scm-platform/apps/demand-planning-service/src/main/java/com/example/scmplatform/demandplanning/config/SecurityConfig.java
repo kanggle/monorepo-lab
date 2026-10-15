@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -20,7 +21,8 @@ import java.io.IOException;
 /**
  * demand-planning-service Spring Security configuration.
  * OAuth2 Resource Server (RS256, IAM JWKS).
- * All /api/demand-planning/** endpoints require authentication.
+ * All /api/demand-planning/** endpoints require authentication AND a business role (TASK-MONO-792):
+ * {@code GET} = {@code SCM_DEMAND_PLANNING_READ ∨ _WRITE}, every other method = {@code SCM_DEMAND_PLANNING_WRITE}.
  *
  * <p>The generic tail — CSRF-disabled, {@code STATELESS}, the permit/authenticate/deny sequence
  * and the {@code oauth2ResourceServer} wiring — is assembled by
@@ -32,6 +34,10 @@ import java.io.IOException;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /** TASK-MONO-792 — scm iam-integration.md § 업무 역할 (= iam DomainRoleCatalog scm rows). */
+    static final String DEMAND_PLANNING_READ = "SCM_DEMAND_PLANNING_READ";
+    static final String DEMAND_PLANNING_WRITE = "SCM_DEMAND_PLANNING_WRITE";
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // The permit list and TenantClaimEnforcer's exemption come from the same object
@@ -42,8 +48,15 @@ public class SecurityConfig {
         // automatically — the whole point is that these two cannot be edited independently.
         return ResourceServerChainAssembler.statelessJwtChain(http)
                 .publicPaths(PublicPaths.AS_SET)
-                .authenticated("/api/demand-planning/**")
+                // TASK-MONO-792 (ADR-MONO-083 P5) — business roles: GET = read ∨ write, every other
+                // method = write. SCM_OPERATOR alone opens nothing (entry role, derived by iam auth).
+                .authorizeRules(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/demand-planning/**")
+                        .hasAnyRole(DEMAND_PLANNING_READ, DEMAND_PLANNING_WRITE)
+                        .requestMatchers("/api/demand-planning/**")
+                        .hasRole(DEMAND_PLANNING_WRITE))
                 .anyRequestDenied()
+                .jwtAuthenticationConverter(ScmRoleAuthorities.converter())
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();

@@ -127,7 +127,8 @@ class PartnershipManagementUseCaseTest {
 
         PartnershipView result = useCase().invite(HOST,
                 new InvitePartnershipCommand(PARTNER, List.of("wms", "scm"),
-                        List.of("WMS_OPERATOR", "SCM_OPERATOR")),
+                        // TASK-MONO-792: SCM is delegated by business role (SCM_OPERATOR is derived, not delegatable)
+                        List.of("WMS_OPERATOR", "SCM_PROCUREMENT_READ")),
                 actor(), "collab");
 
         assertThat(result.status()).isEqualTo(PartnershipStatus.PENDING);
@@ -135,6 +136,16 @@ class PartnershipManagementUseCaseTest {
                 any(), eq(Permission.PARTNERSHIP_MANAGE), eq(HOST), eq(ActionCode.PARTNERSHIP_INVITE));
         verify(eventPublisher).publishInvited(eq(PID), eq(HOST), eq(PARTNER), any(), any(), any());
         verify(auditor).recordWithPermission(any(), eq(Permission.PARTNERSHIP_MANAGE));
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-792: invite delegating the SCM entry role SCM_OPERATOR → 422 (derived by auth, never delegated)")
+    void invite_scmEntryRole_rejected() {
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("scm"), List.of("SCM_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(PartnershipScopeInvalidException.class);
+        verify(partnershipPort, never()).createPending(any());
     }
 
     @Test

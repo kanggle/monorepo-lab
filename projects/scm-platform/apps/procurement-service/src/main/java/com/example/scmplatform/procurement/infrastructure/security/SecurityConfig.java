@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,7 +31,10 @@ import java.time.Instant;
  * <ul>
  *   <li>{@code /actuator/health}, {@code /actuator/info}, {@code /actuator/prometheus} — public</li>
  *   <li>{@code /api/procurement/webhooks/**} — public (HMAC-SHA256 + timestamp + replay verified by {@link WebhookSignatureFilter})</li>
- *   <li>{@code /api/procurement/**} — bearer token required</li>
+ *   <li>{@code /api/procurement/**} — bearer token + business role (TASK-MONO-792): {@code GET} =
+ *       {@code SCM_PROCUREMENT_READ ∨ _WRITE}; {@code POST /po/from-suggestion} =
+ *       {@code SCM_PROCUREMENT_WRITE ∨ SCM_DEMAND_PLANNING_WRITE}; every other method =
+ *       {@code SCM_PROCUREMENT_WRITE}</li>
  *   <li>everything else — denied</li>
  * </ul>
  *
@@ -51,11 +55,28 @@ public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** TASK-MONO-792 — scm iam-integration.md § 업무 역할 (= iam DomainRoleCatalog scm rows). */
+    static final String PROCUREMENT_READ = "SCM_PROCUREMENT_READ";
+    static final String PROCUREMENT_WRITE = "SCM_PROCUREMENT_WRITE";
+    static final String DEMAND_PLANNING_WRITE = "SCM_DEMAND_PLANNING_WRITE";
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return ResourceServerChainAssembler.statelessJwtChain(http)
                 .publicPaths(PublicPaths.AS_SET)
-                .authenticated("/api/procurement/**")
+                // TASK-MONO-792 (ADR-MONO-083 P5) — business roles, URL × method (scm iam-integration.md
+                // § 업무 역할). Registered after the public webhook prefix (HMAC, unchanged) and before the
+                // closed tail; first match wins, so the narrow from-suggestion rule precedes the catch-all.
+                // The actor model (isOperator → PO confirm · supplier registration) still applies on top —
+                // this gate never widens it. SCM_OPERATOR / OPERATOR alone open nothing here.
+                .authorizeRules(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/procurement/**")
+                        .hasAnyRole(PROCUREMENT_READ, PROCUREMENT_WRITE)
+                        // owner decision Q2: demand-planning approval drafts a PO with the caller's token
+                        .requestMatchers(HttpMethod.POST, "/api/procurement/po/from-suggestion")
+                        .hasAnyRole(PROCUREMENT_WRITE, DEMAND_PLANNING_WRITE)
+                        .requestMatchers("/api/procurement/**")
+                        .hasRole(PROCUREMENT_WRITE))
                 .anyRequestDenied()
                 // ADR-MONO-058 § D1: the claim-lifting mechanism is the shared one; scm's own
                 // ActorContext record — isOperator(), actorType(), its role literals — stays here

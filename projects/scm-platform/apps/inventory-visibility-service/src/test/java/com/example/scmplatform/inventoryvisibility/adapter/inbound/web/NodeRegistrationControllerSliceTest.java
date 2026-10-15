@@ -278,6 +278,10 @@ class NodeRegistrationControllerSliceTest {
                 .jwt(jwt -> jwt
                         .subject("test-account-id")
                         .claim("tenant_id", "scm")
-                        .claim("roles", java.util.List.of("OPERATOR")));
+                        .claim("roles", java.util.List.of("SCM_INVENTORY_VISIBILITY_WRITE")))
+                // TASK-MONO-792 (owner decision Q1): the two 3PL mutations need the visibility WRITE role;
+                // the post-processor sets authorities directly (it bypasses the converter).
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                        "ROLE_SCM_INVENTORY_VISIBILITY_WRITE"));
     }
 }

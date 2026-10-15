@@ -162,13 +162,17 @@ class DomainPermissionSetControllerSliceTest {
         when(setUseCase.catalog()).thenReturn(DomainRoleCatalog.entries());
         mockMvc.perform(get("/api/admin/domain-roles").header("Authorization", bearer(HOLDER)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items.length()").value(14))
+                .andExpect(jsonPath("$.items.length()").value(21)) // TASK-MONO-792: + the eight SCM roles, − SCM_OPERATOR
                 .andExpect(jsonPath("$.items[0].domainKey").value("wms"))
                 .andExpect(jsonPath("$.items[0].role").value("INVENTORY_READ"))
                 .andExpect(jsonPath("$.items[0].access").value("READ"))
                 .andExpect(jsonPath("$.items[0].fineGrained").value(true))
                 .andExpect(jsonPath("$.items[0].label").value("재고 조회"))
-                .andExpect(jsonPath("$.items[8].fineGrained").value(false));
+                // items[8] = SCM_PROCUREMENT_READ (fine-grained since TASK-MONO-792); items[16] = ERP_OPERATOR (not yet)
+                .andExpect(jsonPath("$.items[8].role").value("SCM_PROCUREMENT_READ"))
+                .andExpect(jsonPath("$.items[8].fineGrained").value(true))
+                .andExpect(jsonPath("$.items[16].role").value("ERP_OPERATOR"))
+                .andExpect(jsonPath("$.items[16].fineGrained").value(false));
     }
 
     @Test

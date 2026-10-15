@@ -159,3 +159,15 @@ Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-M
 - 🔵 **Q4 파생은 두 경로 모두.** 정상 assume(배정 ∩ 상한) 과 파트너십(위임 그대로) 둘 다 같은 함수 `withDerivedEntryRoles` 를 지난다 — 파트너십에서 빠지면 위임받은 발주 운영자가 `isOperator()=false`(BUYER) 로 떨어져 발주 확정이 안 된다.
 - 🔵 **배정 · 위임으로 들어온 진입 역할은 버린다** — 진입 역할은 파생으로만 생긴다(«SCM_OPERATOR 만 → 업무 API 403» 이 토큰 단계에서도 성립).
 - 🔵 **V0052 시험의 재범위.** V0052 는 동결(Flyway checksum)이고 카탈로그 · 프리셋 목록은 자란다 — `V0052MigrationShapeTest` 는 «V0052 시절의 카탈로그»(오늘 − 뒤에 더한 것 + 뒤에 뺀 것)와 대조하도록, `V0052DomainSetBackfillIntegrationTest` 는 프리셋 수를 `SYSTEM_KEYS.size()` 로 · 시드 재실행 0 행 단언을 뺐다(V0056 이 뺀 `SCM_OPERATOR` 를 V0052 시드가 다시 넣는 것은 «V0052 가 더 오래됐다» 는 뜻이지 멱등성 상실이 아니다).
+- 🔵 **판정 모양**: 각 서비스 `SecurityConfig` 의 `authorizeRules` — `GET = READ ∨ WRITE` · 그 밖의 메서드 = `WRITE`(WMS outbound 관용). demand-planning · logistics · inventory-visibility 는 그동안 기본 변환기(`SCOPE_*` 만)를 썼으므로 `roles` → `ROLE_*` 변환기(`ScmRoleAuthorities` — 공유 `ActorClaims` 사용, 서비스마다 한 장)를 붙였다. procurement 는 이미 `ActorContextJwtAuthenticationConverter` 가 `ROLE_*` 를 낸다.
+- 🔵 **정당하게 바뀐 시험**(이 PR 의 판정이 바꾼 것만): scm 컨트롤러 슬라이스 · 인증 경로 시험의 토큰에 업무 역할을 더함 · procurement 인증 경로의 client-credentials 시험은 «역할 없음 → 403»(소유자 수용) 과 «37자 sub 보존»(역할 하나를 실어) 둘로 나눔 · scm 교차 서비스 e2e(`JwtTestHelper`) 의 BUYER/OPERATOR 토큰에 SCM 8 역할 · admin 카탈로그 크기 14 → 21 · 위임 시험의 `SCM_OPERATOR` → `SCM_PROCUREMENT_READ`(+ «`SCM_OPERATOR` 위임 → 422» 시험 추가). 🔵 `ClientCredentialsActorOverflowIntegrationTest` 는 **바꾸지 않았다** — 유스케이스를 직접 부르는 시험이라 필터 체인을 지나지 않는다(코디네이터가 예로 든 «깨질 시험» 은 실측상 깨지지 않는다).
+
+# Red — 2026-10-15 UTC (커밋 `4118c303f` · 시험 · 계약만)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116669276653` | auth-service `:test` **1267 실행 · 6 실패**(`OperatorRoleDerivationTest` 1 · `TenantClaimTokenCustomizerTest` 5) · admin-service `:test` **1365 실행 · 13 실패**(`DelegatableRoleCatalogTest` 3 · `DomainRoleCatalogTest` 3 · `V0056MigrationShapeTest` 7) |
+| CI `Integration (iam A, Testcontainers)` | `116669281205` | admin `:integrationTest` **326 실행 · 2 실패**(`V0056ScmRoleMigrationIntegrationTest` 2) |
+| CI 합계 | — | **21 실패 — 전부 단언 실패**(`java.lang.AssertionError` 11 · `org.opentest4j.AssertionFailedError` 10, 로그 `FAILED` 다음 줄에서 셈). 컴파일 · 부팅 실패 0 |
+| ⚪ CI scm · wms 단계 | `116669276653` | **실행 안 됨** — 같은 job 안에서 iam 단계(`gradle-iam`)가 먼저 실패해 뒤의 `gradle-scm` · wms 단계가 건너뛰어졌다. CI 로그로는 scm 빨강을 셀 수 없다 |
+| 로컬(같은 커밋 `4118c303f`, 별도 worktree) | — | scm 게이트 시험 4 클래스 **34 실행 · 20 실패**(procurement 12/8 · demand-planning 7/4 · logistics 7/4 · inventory-visibility 8/4) — 전부 `java.lang.AssertionError`(기대 403, 실제 404/405 — 게이트가 없어 통과). 통과 쪽 14 = 허용 대조군(양쪽 단계 모두 초록이어야 하는 쪽). wms `SecurityChainAssemblyParityTest` **12/12 통과**(AC-3 의 WMS 쪽 대조 — 이미 성립) |
