@@ -101,3 +101,10 @@ platform-console
   - AC-3 «라이브 데모 창: 스토어 탭 없이 콘솔 재진입 → 새 경로로 로그아웃 → 운영자 로그인 성공 (⚪ 다음 데모 창)» — 라이브는 **재지 않았다.** 773 AC-7 은 nightly e2e(compose)다. 게다가 배포된 AMI(27차 `73daae263`)는 773 S2~S5 가 없는 옛 auth 라 거기서는 `sso_wrong_account` 가 **여전히 난다**(`TASK-MONO-672` § Next window 6). 라이브 증거는 773 을 실은 재굽기 뒤에야 존재한다.
   - 코드 처분 — 콘솔 콜백의 `sso_wrong_account` 판별 함수 · 분기(`console-web/src/app/api/auth/callback/route.ts`, 773 S6 이 바이트 그대로 둠)와 `widgets/sso-wrong-account-logout/` 는 콘솔 경로에서 도달 불가가 됐으나 **다른 client 발생원 셋**이 남아 있어(773 S5 AC-0) 지울지 남길지는 결정이다.
 - **소유자 질문(이 셋이 답이 나면 닫을 수 있다)**: ① 773 AC-7 e2e(nightly) 를 AC-3 의 라이브 대체로 받아들이나, 아니면 재굽기 뒤 라이브 1회를 기다리나 ② AC-0 을 «모집단 0 ⇒ 비교 불필요» 로 갈음하나 ③ `sso_wrong_account` 분기 · 위젯을 지우나 남기나.
+
+## 소유자 결정 (2026-10-15 UTC)
+
+- ① **AC-3 — 라이브를 기다린다.** 773 AC-7 nightly e2e 는 대체로 받지 않는다(AC 의 동사가 «라이브 데모 창»). 773 을 실은 재굽기 창에서 `TASK-MONO-672` § Next window 6 의 «AC-7 live» 줄로 1회 확인 → 그 결과로 이 티켓을 닫는다. 그때까지 `ready/` 에 둔다(구현 없음).
+- ② **AC-0 — «모집단 0 ⇒ 비교 불필요» 로 갈음한다.** 후보 셋 비교가 필요했던 이유(측면 없는 풀 계정이 콘솔 콜백에서 `sso_wrong_account` 에 갇힘)가 773 S5 로 사라졌다. 근거는 위 «773 닫힘 뒤 재검토».
+- ③ **코드 처분 — 유지.** 콘솔 콜백의 `sso_wrong_account` 분기와 `widgets/sso-wrong-account-logout/` 는 남긴다(다른 client 발생원 셋이 남아 있는 한 방어 분기 · 비용 0 · 회귀 위험 0).
+- ⇒ 남은 것 = ① 의 라이브 1회뿐. 닫기 = 그 창의 결과 기록 + AC 체크 + `done/`.
