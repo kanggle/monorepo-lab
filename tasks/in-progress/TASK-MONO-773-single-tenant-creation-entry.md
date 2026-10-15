@@ -692,3 +692,15 @@ AC 가 아니다(어느 AC 도 «라이브» 를 요구하지 않는다). `TASK-
   1. **시험 한 칸** — 한 런에서 실제 auth 와 admin 을 함께 걷는 자리(콘솔 nightly `non-operator-tenant-creation.spec.ts` «AC-2» 끝에 이어 붙이거나, `E2E full (iam docker-compose)`): 생성 직후 assume 토큰의 `roles` 없음(대조) → `SUPER_ADMIN` 이 그 테넌트에 `wms` 구독 → 재교환 · re-assume → `roles` = `wms` 카탈로그 전부 · `fan` 역할 0 · 같은 런에서 다른 테넌트 세트 행 0. 머지 뒤 첫 nightly 로 닫는다(e2e 면 `ci.yml` 이 돌리지 않는다 — R8).
   2. **소유자 판정** — admin 절반(S3 IT) + auth 절반(BE-632 `AssumeTenantExchangeIntegrationTest:533` · 27차 창 AC-4 라이브)의 합성을 AC-2 의 충족으로 받아들인다고 기록. 그러면 이 CORRECTION 아래에 결정을 적고 닫기를 다시 돈다.
 - **그때까지**: 이 파일은 `in-progress/` 에 둔다(남은 것이 시험 = 구현이라 `review/` 로 얼리지 않는다). `TASK-PC-FE-331` 의 게이트(773 `done/`)도 그때까지 닫히지 않는다.
+
+### 소유자 결정 (2026-10-15 UTC, `date -u` 기준) — AC-2 = 위 길 1 «시험 하나 추가»
+
+- **고른 길 = 1.** 실제 auth 와 admin 이 **한 런에서 함께 도는** 시험 한 칸을 더한다. 하네스(콘솔 nightly `non-operator-tenant-creation.spec.ts` «AC-2» 또는 `E2E full (iam docker-compose)`)는 **구현자가** 그 단언을 할 수 있는 쪽으로 고른다. 단언: 생성 직후 assume `roles` **없음**(대조) → `SUPER_ADMIN` 이 그 테넌트에 `wms` 구독 → re-assume → `roles` = `wms` 카탈로그 **전부** · `fan`(그리고 구독하지 않은 다른 도메인) 역할 **0**.
+- **기각**: 길 2(두 절반의 합성을 소유자 판정으로 수용) · «라이브 창에서만 잰다»(`TASK-MONO-672` § Next window 6 의 AC-2 라이브 줄은 확인일 뿐 이 AC 를 닫는 근거가 아니다).
+- **순서**: 🔴 빨강 먼저(단언이 지금 코드에서 실패할 자리를 재거나 — 지금 코드가 이미 맞으면 bite 로 단언이 무는지 증명) → 머지 → 그 하네스의 **다음 nightly(또는 그 레인)에서 통과 측정** → 773 닫기를 다시 돌아 `done/`.
+- **그 측정 전까지 이 티켓은 `in-progress/` 에 남는다.**
+
+### 소유자 결정 (2026-10-15 UTC) — 배포 순서 = «재굽기 전엔 창을 열지 않는다»
+
+- S4 · S6 콘솔은 이미 Vercel 운영(배포 7091340401 · 7097384302 success)이고 배포된 AMI 는 27차(`73daae263`, S2~S5 없음)다. 옛 admin 은 `SUPER_ADMIN` 생성 양식의 `firstAdmin` 을 모르는 칸으로 **무시**한다(S4 § «배포 순서 창» 실측) → **`201` `ACTIVE` · 관리자 0 · 초대 0** — 773 이 닫는 ADR-044 D3 구멍이, 양식은 «첫 관리자를 받았다» 고 보이는 채로 열린다.
+- ⇒ **773 S2~S5 를 실은 굽기 전에는 27차 AMI 로 데모 창을 열지 않는다. 콘솔 롤백은 하지 않는다.** 상설 게이트로 `TASK-MONO-672` § Next window 6 에 적었다.
