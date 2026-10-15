@@ -8,7 +8,7 @@ TASK-MONO-773
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -69,14 +69,14 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 재측정: 두 입구의 file:line · 온보딩 · `/tenants` 계약 · 셸 가드 · 콜백/리프레시의 `/onboarding` 보냄. «관리자 대기» 상태의 집(account-service `tenants.status` 확장 또는 별도 표)을 정하고 이유를 적는다.
-- [ ] **AC-1** — 운영자 아닌 계정: 셸이 열리고 사이드바는 «가이드 · 테넌트 생성» 뿐 · 🔴 **운영자 토큰 없음** · 관리 API 는 거절(대조군).
-- [ ] **AC-2** — 운영자 아닌 계정이 생성 → 테넌트 + 본인 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` + 배정 → 재교환 뒤 개요로. (ADR-083 P9 · OD-5) + 새 테넌트의 «전체 업무» 세트 배정(직접 출처) — 같은 시험에서 그 테넌트 assume `roles` = 그 테넌트 entitled 도메인의 카탈로그 전체 · 🔴 다른 테넌트 세트 행 0.
-- [ ] **AC-3** — 이미 운영자인 계정이 두 번째 회사를 생성 → 새 테넌트에만 관리자 · 🔴 기존 테넌트 권한 불변 · 신원당 상한을 넘으면 거절. (`ADR-MONO-082` D6 **b** 행: 기존 운영자 행에 새 테넌트의 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 새 회사에서 기존 회사 권한이 통하지 않음(대조군) · 상한 **값**은 AC-0 에서 정한다 — 세는 단위는 082 D4: 그 행의 `TENANT_ADMIN` 역할 행이 가리키는 서로 다른 테넌트 수) · (ADR-083 P9 · OD-5) 새 테넌트에만 «전체 업무» 세트 · 기존 회사의 세트 행 **바이트 불변**(대조군).
-- [ ] **AC-4** — `SUPER_ADMIN` 이 생성 + 첫 관리자 이메일 → 테넌트 «관리자 대기» + 초대 · 수락 뒤 활성 · 만료 시 정리 규칙대로. 🔴 관리자 없는 활성 테넌트가 생기지 않는다(ADR-044 D3).
-- [ ] **AC-5** — `/onboarding` 직접 접근 · 콜백의 «운영자 아님» 분기 → 새 화면으로.
-- [ ] **AC-6** — 콘솔 e2e 디렉터리 grep(`/onboarding`, `onboarding-` testid) 후 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인.
-- [ ] **AC-7** — (`TASK-PC-FE-331` 미룸, 2026-10-10 UTC 소유자 결정) 운영자 측면 없는 풀 계정이 비운영자 셸에서 콘솔 로그아웃 → **IAM 세션까지 끝나** 다른 계정(운영자)으로 로그인할 수 있다(스토어 탭 없이). 그리고 773 뒤에도 콘솔 콜백의 `sso_wrong_account` 분기(`console-web/src/app/api/auth/callback/route.ts:113-126`)에 닿는 모집단이 남는지 적는다 — 0 이면 PC-FE-331 은 구현 없이 종결 근거.
+- [x] **AC-0** — 착수 시 재측정: 두 입구의 file:line · 온보딩 · `/tenants` 계약 · 셸 가드 · 콜백/리프레시의 `/onboarding` 보냄. «관리자 대기» 상태의 집(account-service `tenants.status` 확장 또는 별도 표)을 정하고 이유를 적는다.
+- [x] **AC-1** — 운영자 아닌 계정: 셸이 열리고 사이드바는 «가이드 · 테넌트 생성» 뿐 · 🔴 **운영자 토큰 없음** · 관리 API 는 거절(대조군).
+- [x] **AC-2** — 운영자 아닌 계정이 생성 → 테넌트 + 본인 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` + 배정 → 재교환 뒤 개요로. (ADR-083 P9 · OD-5) + 새 테넌트의 «전체 업무» 세트 배정(직접 출처) — 같은 시험에서 그 테넌트 assume `roles` = 그 테넌트 entitled 도메인의 카탈로그 전체 · 🔴 다른 테넌트 세트 행 0.
+- [x] **AC-3** — 이미 운영자인 계정이 두 번째 회사를 생성 → 새 테넌트에만 관리자 · 🔴 기존 테넌트 권한 불변 · 신원당 상한을 넘으면 거절. (`ADR-MONO-082` D6 **b** 행: 기존 운영자 행에 새 테넌트의 `TENANT_ADMIN` · `TENANT_BILLING_ADMIN` 역할 행 + 배정 · 기존 회사 역할 행 **바이트 불변** · 새 회사에서 기존 회사 권한이 통하지 않음(대조군) · 상한 **값**은 AC-0 에서 정한다 — 세는 단위는 082 D4: 그 행의 `TENANT_ADMIN` 역할 행이 가리키는 서로 다른 테넌트 수) · (ADR-083 P9 · OD-5) 새 테넌트에만 «전체 업무» 세트 · 기존 회사의 세트 행 **바이트 불변**(대조군).
+- [x] **AC-4** — `SUPER_ADMIN` 이 생성 + 첫 관리자 이메일 → 테넌트 «관리자 대기» + 초대 · 수락 뒤 활성 · 만료 시 정리 규칙대로. 🔴 관리자 없는 활성 테넌트가 생기지 않는다(ADR-044 D3).
+- [x] **AC-5** — `/onboarding` 직접 접근 · 콜백의 «운영자 아님» 분기 → 새 화면으로.
+- [x] **AC-6** — 콘솔 e2e 디렉터리 grep(`/onboarding`, `onboarding-` testid) 후 수정 · 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인.
+- [x] **AC-7** — (`TASK-PC-FE-331` 미룸, 2026-10-10 UTC 소유자 결정) 운영자 측면 없는 풀 계정이 비운영자 셸에서 콘솔 로그아웃 → **IAM 세션까지 끝나** 다른 계정(운영자)으로 로그인할 수 있다(스토어 탭 없이). 그리고 773 뒤에도 콘솔 콜백의 `sso_wrong_account` 분기(`console-web/src/app/api/auth/callback/route.ts:113-126`)에 닿는 모집단이 남는지 적는다 — 0 이면 PC-FE-331 은 구현 없이 종결 근거.
 
 # Related Specs
 
@@ -739,3 +739,43 @@ AC 가 아니다(어느 AC 도 «라이브» 를 요구하지 않는다). `TASK-
 - ⚪ **AC-2 를 닫는 측정은 아직 없다** — 이 칸은 `ci.yml` 이 돌리지 않는다. 머지 뒤 `main` 의 첫 nightly 콘솔 잡에서 «AC-2 roles» 통과(spec 별 칸 수로 12 중 이 칸이 돈 것 확인)를 잰 뒤 닫기를 다시 돈다.
 - ⚪ «다른 테넌트 세트 행 0» 은 이 시험에서 **소속 수준**(`fan-platform` domain-access `404`)으로만 본다 — 행 수준은 S3 IT `ac2_newCreator_originRowInTheNewTenantOnly` 몫 그대로.
 - ⚪ 대조의 «`roles` 없음» 은 «구독 0» 과 «entitled 조회 실패(fail-soft — 클레임 생략)» 를 토큰만으로는 가르지 못한다. 같은 런의 구독 뒤 `entitled=["wms"]` 가 조회 경로가 살아 있음을 보이고, admin 절반이 배정 = 카탈로그 전체임을 보이므로 «없음» 의 원인은 ∩ 다 — 다만 그 두 사실의 결합이지 한 술어는 아니다.
+
+---
+
+# 닫기 재개 (2026-10-15 UTC — AC-2 시험 머지 · 첫 nightly 통과 뒤)
+
+> 분석=Sonnet 5.5(닫기 chore) · worktree `monorepo-lab-773` · 브랜치 `chore/mono-773-done`(origin/main `5dd4aeb8e`) · 측정 시각 2026-10-15T18:21Z. 규칙 = CLAUDE.md «Objective merge verification before any close chore» 네 차원 — 위 § 닫기(2026-10-15)의 (a)(b)(c) 는 S1~S6 6 PR 몫이었고, 이 절은 그 뒤에 더해진 AC-2 시험 PR 한 개를 같은 네 차원으로 다시 잰다.
+
+## 1. 네 차원 — #4376
+
+| 차원 | 결과 | 근거 |
+|---|---|---|
+| (a) PR `MERGED` | ✅ | `gh pr view 4376 --json state,mergeCommit,statusCheckRollup` — `state=MERGED` · `mergedAt` 2026-10-15T18:03:39Z · 머지 커밋 `5dd4aeb8ece63588ecaafa0d4166468498fd23cc` |
+| (b) `origin/main` 이 스쿼시 커밋을 담음 | ✅ | `git fetch --prune` 뒤 `origin/main` 끝 = `5dd4aeb8e`(`git merge-base --is-ancestor 5dd4aeb8e origin/main` 참) |
+| (c) 머지 시점 실패 체크 0 | ✅ | `statusCheckRollup` 집계: SUCCESS 6 · SKIPPED 60 · **FAILURE 0**. 🔵 (c) 는 «필수 체크 실패 0» 이지 스위트 초록이 아니다 — 새 칸은 `ci.yml` 이 돌리지 않는 nightly 칸이라, 통과 증거는 아래 § 2 의 nightly 다. |
+| (d) AC 를 열어 동사대로 | ✅ **8/8** | § 2 · § 3 |
+
+## 2. AC-2 — 머지 뒤 첫 nightly (이 AC 가 요구한 «같은 시험에서 assume `roles`» 를 잰 측정)
+
+- run **38782478516** — `push` of `5dd4aeb8e`(#4376 머지 커밋), 결론 **success**.
+- 콘솔 잡 **116586647094**: `Running 12 tests using 2 workers` · **`12 passed (50.4s)`** · flaky **0**.
+- «[AC-2 roles]» 로그 줄이 **한 벌뿐** = 첫 시도에 통과(재시도 없음): 카탈로그 14 · wms 8 · 그 밖 6 · 생성 시점 `roles=null entitled=null` · 구독 전 `roles=null entitled=null` · wms 구독 뒤 `roles 8 [WMS_OPERATOR,OUTBOUND_READ,OUTBOUND_WRITE,INBOUND_READ,INBOUND_WRITE,INVENTORY_READ,INVENTORY_WRITE,MASTER_READ] entitled=["wms"]`.
+- 빨강 먼저(bite) 증거는 위 § AC-2 시험 § Bite 에 이미 기록됨(런 38777797324 · 잡 116570399831 — `∩ entitled` 를 뺀 임시 커밋에서 «AC-2 roles» 하나만 빨강, 이후 되돌림).
+- 그러므로 AC-2 의 동사(«같은 시험에서 그 테넌트 assume `roles` = 그 테넌트 entitled 도메인의 카탈로그 전체 · 다른 테넌트 세트 행 0») 중 **assume `roles`** 는 이제 실제 auth + admin 한 런에서 쟀고, **세트 행 0** 은 위 § 2 AC-2 표대로 S3 IT(행 수준) + 이 시험(소속 수준)이 맡는다 ⇒ **AC-2 ✅ 닫힘.**
+- ⚪ 한계(위 § 남은 것 · 한계 그대로): 대조의 «`roles` 없음» 은 «구독 0» 과 «entitled 조회 실패(fail-soft)» 를 토큰만으로 가르지 못한다 — 같은 런의 구독 뒤 `entitled=["wms"]` 가 조회 경로가 살아 있음을 보인다.
+
+## 3. CORRECTION 해소
+
+위 § CORRECTION(2026-10-15 UTC — AC-2 «같은 시험에서 assume `roles`») 은 **충족됐다**: 소유자가 고른 길 1(시험 한 칸)이 #4376 으로 머지됐고, 그 하네스의 다음 nightly(위 § 2)에서 통과를 쟀다. CORRECTION 본문은 삭제하지 않는다(그때의 판단 기록). 이 파일은 그래서 `done/` 으로 간다.
+
+## 4. 열린 관측 — `sample-visitor-transition.spec.ts:19` flaky
+
+위 § 4 의 flaky 1 은 이 런(38782478516)에서 **0** — 두 번째 데이터 점이다. 판정은 `TASK-PC-FE-341` 의 몫이며 773 AC 를 막지 않는다(거기에 같은 점을 적었다).
+
+## 5. `TASK-PC-FE-331`
+
+위 § 5 의 후속: 773 이 `done/` 이 되었으므로 그 티켓의 착수 게이트가 풀렸다. 처리 결과는 그 티켓에 적는다.
+
+## 6. 라이브 확인
+
+위 § 6 그대로 — `TASK-MONO-672` § Next window 6 이 다음 재굽기 창의 확인을 갖는다(AC 아님 · AC-2 라이브 줄은 확인일 뿐). 🔴 그 굽기 전 27차 AMI 로 창을 열지 않는다는 소유자 결정도 그대로.

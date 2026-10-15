@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (IN-PROGRESS 2026-10-15 UTC — AC-0 기록 · 소유자 결정 OD-1~8 확정 · 슬라이스 S1 계약 → S2 account → S3 admin 셀프 → S4 admin `SUPER_ADMIN` → S5 auth → S6 console). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus. 🟡 **닫기 보류 2026-10-15 UTC** — S1~S6 전부 머지(#4368 · #4369 · #4371 · #4372 · #4373 · #4374, 머지 시점 실패 0) · 첫 nightly 콘솔 잡 success(run 38763381565 — 새 3 칸 첫 시도 통과) · AC-0 · 1 · 3~7 ✅ · 🔴 **AC-2 미닫힘** — «같은 시험에서 assume `roles`» 를 admin 절반만 쟀다(§ CORRECTION — 소유자 결정 2026-10-15 UTC: 실제 auth + admin 시험 한 칸 추가 · 빨강 먼저 · 다음 nightly 측정 뒤 `done/`). flaky 1 → `TASK-PC-FE-341`. 라이브 = `TASK-MONO-672` 다음 재굽기 — 🔴 그 굽기 전엔 27차 AMI 로 창을 열지 않는다(소유자 결정).
 
 
 
@@ -223,6 +222,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## done
+- ✅ `TASK-MONO-773-single-tenant-creation-entry.md` — **DONE 2026-10-15 UTC (4-dim verified)** — `ADR-MONO-080` D9 = T1 «테넌트 생성» 하나(콘솔 셸 안). S1~S6 전부 머지(#4368 · #4369 · #4371 · #4372 · #4373 · #4374) + AC-2 시험 **#4376**(`5dd4aeb8e`) (머지 시점 실패 0, 전부) · AC-0~7 ✅. AC-2 = 실 auth + admin 한 런에서 assume `roles`(구독 전 없음 → `wms` 구독 뒤 카탈로그 8) 측정 — 머지 뒤 첫 nightly run 38782478516 콘솔 잡 `12 passed` · flaky 0. 라이브 = `TASK-MONO-672` 다음 재굽기(🔴 그 굽기 전엔 27차 AMI 로 창을 열지 않는다). 후속 `TASK-PC-FE-331` 게이트 해제(소유자 질문 3건) · `TASK-PC-FE-341` flaky 관찰 중.
 - ✅ `TASK-MONO-784-operator-membership-per-company.md` — **DONE 2026-10-14 UTC (4-dim verified)** — S1~S6 전부 머지(#4308 · #4312 · #4320 · #4321 · #4324 · #4326, 실패 0) · AC-0~6 ✅. ⚪ 둘 닫힘: ① main nightly 콘솔 잡 success(run 38419473597, `46bff4c36`) ② 27차 데모 창 라이브 — AC-0 ④ = 2(기대값) · OD-3 `ecommerce` 운영자 목록 403 / 계정 · 감사 200 · «이 회사에서 내보내기» 204 + 세트 행 동반 삭제 + 감사 `domainSetGrants=1` · 복구. 후속 `TASK-MONO-773` 착수 조건 중 784 충족(남은 것 = `TASK-BE-632` done).
 - ✅ `TASK-MONO-796-artist-goods-photos.md` — **DONE 2026-10-14 UTC (4-dim verified)** — impl PR **#4359**, 스쿼시 **`32e1e477f`** (머지 시점 실패 0 · 29 pass). 스토어 «아티스트 굿즈» 18개 이미지 `placehold.co` → 상품에 맞춘 무료 Unsplash 사진(`ADR-MONO-077` R2 소유자 뒤집기) · V23 + h2 V16 + 픽스처 + 번들 `store.json` + 팬 굿즈 카드 테스트. 🔴 데모 서버 DB 는 재굽기 전까지 옛 이미지.
 - ✅ `TASK-MONO-791-adr-083-p1-contracts-domain-permission-sets.md` — **DONE 2026-10-14 UTC (4-dim verified)** — impl PR **#4340**, 스쿼시 **`1059e9290`** (머지 시점 실패 0 · 14 pass). `ADR-MONO-083` P1 계약: admin 세트 · 출처별 배정 · 12 엔드포인트 · `domainRoles`(실패 = 거절 · 빈 값 = 역할 0) · 토큰 `roles` · `scope` · 300초(P3 부터) · 콘솔 두 신호 · 공유 오류 코드 6 · OD-3 소유자 결정(`'*'` 운영자 세트 배정) · 검토에서 그룹 멤버 추가 권한 상승 경로 수선. 코드 0 — 다음 P2 `TASK-BE-631`.
