@@ -149,7 +149,7 @@ class DelegationFactControllerSliceTest {
 
     @Test
     void readGateDenialReturns403PermissionDenied() throws Exception {
-        doThrow(new ReadAccessDeniedException("no read")).when(readGate).requireRead(any());
+        doThrow(new ReadAccessDeniedException("no read")).when(readGate).requireApprovalRead(any());
 
         mockMvc.perform(get("/api/erp/read-model/delegations/dgr-1"))
                 .andExpect(status().isForbidden())

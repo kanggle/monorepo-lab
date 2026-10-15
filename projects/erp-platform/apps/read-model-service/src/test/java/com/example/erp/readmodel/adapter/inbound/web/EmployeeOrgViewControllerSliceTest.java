@@ -128,7 +128,7 @@ class EmployeeOrgViewControllerSliceTest {
 
     @Test
     void readGateDenialReturns403PermissionDenied() throws Exception {
-        doThrow(new ReadAccessDeniedException("no read")).when(readGate).requireRead(any());
+        doThrow(new ReadAccessDeniedException("no read")).when(readGate).requireMasterdataRead(any());
 
         mockMvc.perform(get("/api/erp/read-model/employees/emp-1"))
                 .andExpect(status().isForbidden())

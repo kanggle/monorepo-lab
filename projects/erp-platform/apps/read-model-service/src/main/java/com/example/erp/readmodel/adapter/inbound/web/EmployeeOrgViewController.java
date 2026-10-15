@@ -55,7 +55,7 @@ public class EmployeeOrgViewController {
             @RequestParam(required = false, defaultValue = "ACTIVE") String status,
             @AuthenticationPrincipal Jwt jwt) {
 
-        readGate.requireRead(jwt);
+        readGate.requireMasterdataRead(jwt); // TASK-MONO-793 Q6
         ReadQueryWebSupport.validatePaging(page, size);
         parseAsOf(asOf); // validates format (point-in-time parity, E2)
         MasterStatus statusFilter = parseStatus(status);
@@ -80,7 +80,7 @@ public class EmployeeOrgViewController {
             @RequestParam(required = false) String asOf,
             @AuthenticationPrincipal Jwt jwt) {
 
-        readGate.requireRead(jwt);
+        readGate.requireMasterdataRead(jwt); // TASK-MONO-793 Q6
         parseAsOf(asOf);
 
         // org_scope read filter (TASK-ERP-BE-008): out-of-scope → 404 (no leak).

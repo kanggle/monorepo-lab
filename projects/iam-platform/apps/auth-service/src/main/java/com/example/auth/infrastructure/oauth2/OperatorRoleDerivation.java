@@ -83,6 +83,19 @@ final class OperatorRoleDerivation {
             .toList();
 
     /**
+     * TASK-MONO-793 (ADR-MONO-083 P6) — the erp business roles the four erp services check (erp
+     * {@code iam-integration.md} § 업무 역할). Mirrors the {@code erp} rows of admin-service
+     * {@code DomainRoleCatalog}, in the same order.
+     */
+    private static final List<String> ERP_BUSINESS_ROLES = List.of(
+            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
+
+    /** The {@code erp} arm of the ceiling: entry role first, then the business roles (catalog order). */
+    private static final List<String> ERP_CEILING = java.util.stream.Stream
+            .concat(java.util.stream.Stream.of("ERP_OPERATOR"), ERP_BUSINESS_ROLES.stream())
+            .toList();
+
+    /**
      * TASK-MONO-792 (ADR-MONO-083 D3 · P5 · owner decision Q4) — <b>entry role → the business roles that
      * derive it</b>, one row per fine-grained domain. The entry role (gateway passage · screen entry ·
      * procurement {@code isOperator()}) is NOT in admin-service's catalog and is never assigned: it rides
@@ -93,7 +106,9 @@ final class OperatorRoleDerivation {
      * does not change.
      */
     static final Map<String, Set<String>> ENTRY_ROLES = Map.of(
-            "SCM_OPERATOR", Set.copyOf(SCM_BUSINESS_ROLES));
+            "SCM_OPERATOR", Set.copyOf(SCM_BUSINESS_ROLES),
+            // TASK-MONO-793 (ADR-083 P6): the ERP row — erp iam-integration.md § 업무 역할.
+            "ERP_OPERATOR", Set.copyOf(ERP_BUSINESS_ROLES));
 
     private OperatorRoleDerivation() {
     }
@@ -191,7 +206,9 @@ final class OperatorRoleDerivation {
                 // TASK-MONO-792 (ADR-083 P5): the scm ceiling = the entry role (derived — see
                 // ENTRY_ROLES) + the eight business roles the scm services check.
                 case "scm" -> SCM_CEILING;
-                case "erp" -> List.of("ERP_OPERATOR");
+                // TASK-MONO-793 (ADR-083 P6): the erp ceiling = the entry role (derived) + the
+                // four business roles the erp services check.
+                case "erp" -> ERP_CEILING;
                 case "finance" -> List.of("FINANCE_OPERATOR");
                 case "mes" -> List.of("MES_OPERATOR");
                 // TASK-MONO-750 / ADR-MONO-079 ACCEPTED — A (D4-A), a partial amendment of

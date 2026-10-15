@@ -316,7 +316,8 @@ class EmployeeAccountLinkServiceTest {
 
             service.acceptAccountLink(new AcceptAccountLinkCommand(OWNER, "p-1"));
 
-            verify(authorizationPort).evaluate(OWNER, RequiredScope.READ, null);
+            // TASK-MONO-793 Q2: a personal endpoint (was READ — masterdata read is not required of the owner)
+            verify(authorizationPort).evaluate(OWNER, RequiredScope.SELF, null);
             verify(authorizationPort, never()).evaluate(any(), any(), eq("dept-1"));
         }
 
@@ -510,7 +511,7 @@ class EmployeeAccountLinkServiceTest {
             service.unlinkAccount(new UnlinkAccountCommand(OWNER, "emp-1", "not my record"));
 
             assertThat(e.getAccountId()).isNull();
-            verify(authorizationPort).evaluate(OWNER, RequiredScope.READ, null);
+            verify(authorizationPort).evaluate(OWNER, RequiredScope.SELF, null); // TASK-MONO-793 Q2
             verify(authorizationPort, never()).evaluate(OWNER, RequiredScope.WRITE, "dept-1");
         }
 
@@ -540,7 +541,7 @@ class EmployeeAccountLinkServiceTest {
 
             assertThat(v.id()).isEqualTo("emp-1");
             assertThat(v.accountId()).isEqualTo("acct-A");
-            verify(authorizationPort).evaluate(OWNER, RequiredScope.READ, null);
+            verify(authorizationPort).evaluate(OWNER, RequiredScope.SELF, null); // TASK-MONO-793 Q2
         }
 
         @Test
@@ -592,7 +593,7 @@ class EmployeeAccountLinkServiceTest {
                 assertThat(v.employeeNumber()).isEqualTo("E-1");
                 assertThat(v.status()).isEqualTo("PENDING");
             });
-            verify(authorizationPort).evaluate(OWNER, RequiredScope.READ, null);
+            verify(authorizationPort).evaluate(OWNER, RequiredScope.SELF, null); // TASK-MONO-793 Q2
         }
 
         @Test

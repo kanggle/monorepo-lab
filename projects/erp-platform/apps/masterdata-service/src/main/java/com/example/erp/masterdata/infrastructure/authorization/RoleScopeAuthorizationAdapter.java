@@ -50,8 +50,15 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
 
     private static final String SCOPE_READ = "erp.read";
     private static final String SCOPE_WRITE = "erp.write";
-    /** Domain key matched against the signed {@code entitled_domains} claim. */
-    private static final String DOMAIN_KEY = "erp";
+
+    /** TASK-MONO-793 — the ERP business roles (erp iam-integration.md § 업무 역할) and the derived entry role. */
+    static final String ROLE_MASTERDATA_READ = "ERP_MASTERDATA_READ";
+    static final String ROLE_MASTERDATA_WRITE = "ERP_MASTERDATA_WRITE";
+    static final String ROLE_APPROVAL_READ = "ERP_APPROVAL_READ";
+    static final String ROLE_APPROVAL_WRITE = "ERP_APPROVAL_WRITE";
+    static final String ROLE_ENTRY = "ERP_OPERATOR";
+    static final List<String> ERP_BUSINESS_ROLES = List.of(
+            ROLE_MASTERDATA_READ, ROLE_MASTERDATA_WRITE, ROLE_APPROVAL_READ, ROLE_APPROVAL_WRITE);
 
     /**
      * Department hierarchy port — resolves the target's ancestor chain for the
@@ -72,31 +79,35 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
         if (actor == null || actor.roles() == null) {
             return AuthorizationDecision.denyRole("no roles claim");
         }
-        // Role check. READ additionally honours ADR-MONO-019 § D5
-        // entitlement-trust: a signed entitled_domains ∋ "erp" claim grants
-        // READ visibility even without an erp.read/operator role, mirroring the
-        // tenant gate's TenantClaimValidator.isEntitled dual-accept. WRITE is
-        // NEVER widened by entitlement-trust (visibility, not mutation).
+        // Role check — TASK-MONO-793 (ADR-MONO-083 P6 · owner decisions Q1–Q3, 2026-10-15 UTC; erp
+        // iam-integration.md § 업무 역할). Business roles decide; the entry role ERP_OPERATOR (derived by
+        // auth-service for every ERP set holder) opens only SELF. Two clauses are GONE on purpose:
+        //  - entitled_domains ∋ erp ⇒ READ (ADR-MONO-019 § D5 authority-layer dual-accept): every assume token
+        //    carries the tenant's subscriptions, so it opened masterdata to operators holding no ERP set at all
+        //    (Q1). The TENANT gate's dual-accept (ServiceLevelOAuth2Config) is untouched — that one decides
+        //    which tenant a token may enter, not what it may do there.
+        //  - isOperator() (ERP_OPERATOR ∨ ERP_ADMIN ∨ SUPER_ADMIN) ⇒ READ/WRITE: ERP_OPERATOR is now carried by
+        //    the approval-only operator too, and the other two are issued nowhere (ADR-033 S2 · ADR-083 D2).
+        // The workload scopes erp.read / erp.write keep their arms (erp-platform-internal-services-client).
+        boolean wildcard = TenantClaimValidator.WILDCARD_TENANT.equals(actor.tenantId());
+        boolean masterdataRead = actor.hasRole(ROLE_MASTERDATA_READ) || actor.hasRole(ROLE_MASTERDATA_WRITE)
+                || actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
+                // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031, unchanged): the
+                // platform-console super-admin's base token — tenant_id='*', no erp scope, no domain roles.
+                // Widens READ only; the WRITE arm below is never widened.
+                || wildcard;
         boolean roleOk = switch (required) {
-            case READ -> actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
-                    || actor.isOperator() || actor.isEntitledTo(DOMAIN_KEY)
-                    // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031):
-                    // the erp authority-layer analogue of the tenant gate's
-                    // allowSuperAdminWildcard(), mirroring finance FIN-BE-049. A
-                    // platform-console super-admin forwards its base OIDC domain token —
-                    // tenant_id='*', NO erp scope, NO domain roles, entitled_domains=[] —
-                    // which passes layer-1 (ServiceLevelOAuth2Config.allowSuperAdminWildcard)
-                    // but matches none of the clauses above. Per ADR-033 S2 / ADR-034 U5
-                    // the admin-plane SUPER_ADMIN role is deliberately kept OFF the domain
-                    // token, so actor.isOperator()'s SUPER_ADMIN branch is dead for the real
-                    // super-admin persona — the wildcard tenant_id is the correct key.
-                    // Widens READ visibility only; the WRITE arm below is never widened.
-                    || TenantClaimValidator.WILDCARD_TENANT.equals(actor.tenantId());
-            case WRITE -> actor.hasScope(SCOPE_WRITE) || actor.isOperator();
+            case READ -> masterdataRead;
+            // Q3 — approval-service forwards the submitter's token to resolve the approval subject.
+            case SUBJECT_READ -> masterdataRead || actor.hasRole(ROLE_APPROVAL_WRITE);
+            // Q2 — «about me», not masterdata: any ERP business role, the entry role, an erp scope, or '*'.
+            case SELF -> wildcard || actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
+                    || actor.hasRole(ROLE_ENTRY) || ERP_BUSINESS_ROLES.stream().anyMatch(actor::hasRole);
+            case WRITE -> actor.hasRole(ROLE_MASTERDATA_WRITE) || actor.hasScope(SCOPE_WRITE);
         };
         if (!roleOk) {
             return AuthorizationDecision.denyRole(
-                    "actor lacks required scope " + required.name().toLowerCase());
+                    "actor lacks the erp role required for " + required.name().toLowerCase());
         }
         // Data-scope check (only if a target is supplied)
         if (targetDepartmentId == null) {

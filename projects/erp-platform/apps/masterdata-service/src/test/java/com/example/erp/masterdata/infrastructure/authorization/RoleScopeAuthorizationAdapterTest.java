@@ -202,12 +202,12 @@ class RoleScopeAuthorizationAdapterTest {
     // ── ADR-MONO-019 § D5 entitlement-trust authz-layer dual-accept (MONO-161) ──
 
     @Test
-    @DisplayName("entitlement-trust: entitled_domains ∋ 'erp' + NO role/scope + READ + null target → ALLOW")
-    void entitledReadOverviewAllow() {
+    @DisplayName("TASK-MONO-793 Q1: entitled_domains ∋ 'erp' + NO role/scope + READ → DENY_ROLE (was ALLOW — the subscription no longer reads)")
+    void entitledReadOverviewDenied() {
         ActorContext actor = new ActorContext("u", "globex-corp",
                 Collections.emptySet(), Collections.emptySet(), Set.of("erp"));
         AuthorizationDecision d = adapter().evaluate(actor, RequiredScope.READ, null);
-        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.ALLOW);
+        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_ROLE);
     }
 
     @Test
@@ -238,10 +238,12 @@ class RoleScopeAuthorizationAdapterTest {
     }
 
     @Test
-    @DisplayName("entitlement-trust READ does NOT loosen targeted data-scope: entitled + non-null target + no data-scope → DENY_SCOPE")
-    void entitledTargetedReadStillScopeGated() {
+    @DisplayName("masterdata read role does NOT loosen targeted data-scope: role + non-null target + no data-scope → DENY_SCOPE")
+    void readRoleTargetedReadStillScopeGated() {
+        // TASK-MONO-793: was the entitlement-trust variant; the subscription no longer reads, so the
+        // data-scope half of the same rule is pinned with the business role instead.
         ActorContext actor = new ActorContext("u", "globex-corp",
-                Collections.emptySet(), Collections.emptySet(), Set.of("erp"));
+                Set.of("ERP_MASTERDATA_READ"), Collections.emptySet(), Set.of("erp"));
         AuthorizationDecision d = adapter().evaluate(actor, RequiredScope.READ, "dept-x");
         assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_SCOPE);
     }

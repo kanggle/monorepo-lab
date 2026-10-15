@@ -36,9 +36,10 @@ class ReadAuthorizationGateTest {
     }
 
     @Test
-    void entitledAllowed() {
-        assertThatCode(() -> gate.requireRead(jwt(Map.of("entitled_domains", List.of("erp"), "sub", "u"))))
-                .doesNotThrowAnyException();
+    void entitledAloneDenied() {
+        // TASK-MONO-793 Q1: the subscription no longer opens the inbox (before: «entitledAllowed»).
+        assertThatThrownBy(() -> gate.requireRead(jwt(Map.of("entitled_domains", List.of("erp"), "sub", "u"))))
+                .isInstanceOf(ReadAccessDeniedException.class);
     }
 
     @Test
