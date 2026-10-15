@@ -704,3 +704,38 @@ AC 가 아니다(어느 AC 도 «라이브» 를 요구하지 않는다). `TASK-
 
 - S4 · S6 콘솔은 이미 Vercel 운영(배포 7091340401 · 7097384302 success)이고 배포된 AMI 는 27차(`73daae263`, S2~S5 없음)다. 옛 admin 은 `SUPER_ADMIN` 생성 양식의 `firstAdmin` 을 모르는 칸으로 **무시**한다(S4 § «배포 순서 창» 실측) → **`201` `ACTIVE` · 관리자 0 · 초대 0** — 773 이 닫는 ADR-044 D3 구멍이, 양식은 «첫 관리자를 받았다» 고 보이는 채로 열린다.
 - ⇒ **773 S2~S5 를 실은 굽기 전에는 27차 AMI 로 데모 창을 열지 않는다. 콘솔 롤백은 하지 않는다.** 상설 게이트로 `TASK-MONO-672` § Next window 6 에 적었다.
+
+## AC-2 시험 (2026-10-15 UTC — 위 소유자 결정 «길 1»)
+
+> 분석=Opus 5.5 · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-ac2-roles-e2e`(origin/main `a01005367`) · 드래프트 PR **#4376** · 측정 시각 2026-10-15T17:52Z. 🔴 **이 기록은 AC-2 를 아직 닫지 않는다** — 결정의 «순서» 대로 머지 뒤 `main` 의 nightly 콘솔 잡에서 이 칸이 통과한 것을 재고 닫기를 다시 돌아야 한다. 아래 초록은 **브랜치** dispatch 런이다.
+
+### 하네스 — 콘솔 nightly (`platform-console-e2e-fullstack`), `E2E full (iam docker-compose)` 아님
+
+- 고른 이유: 한 compose(`projects/platform-console/docker-compose.e2e.yml`)에 실제 auth · account · admin 이 함께 돌고, ① 시드된 `SUPER_ADMIN`(global-setup 이 OIDC PKCE 로 받은 운영자 토큰이 storageState 에 있다) ② 이메일 인증된 비운영자 풀 계정(S6 시드) ③ 온보딩 URL 배선(S6 이 넣은 `CONSOLE_ONBOARDING_URL`) ④ 콘솔의 실제 assume 경로(`POST /api/tenant` → auth token-exchange)가 **이미** 있다. iam compose 하네스에는 ②③ 이 없고 «생성 → 같은 브라우저 세션의 assume» 을 새로 지어야 한다.
+- 시험: `non-operator-tenant-creation.spec.ts` 의 새 칸 **«AC-2 roles»**. 시드에 세 번째 풀 계정 `e2e-pool-roles@example.com`(`…c775`) — `fullyParallel` 에서 기존 «AC-2» 칸과 생성자를 나누지 않게(상한 3 · 착지 술어 공유 방지).
+- 단계(한 시험 · 한 런):
+  0. 카탈로그 = `GET /api/admin/domain-roles`(단일 소유자 `DomainRoleCatalog` — 손으로 적지 않음). 비공허: wms 쪽 길이 > 0 · «그 밖» 쪽에 `FAN_OPERATOR` 포함.
+  1. 풀 계정 → 실제 온보딩 → `/dashboards` · `console_active_tenant` = 새 슬러그.
+  2. admin 절반(같은 런): 생성자 운영자 토큰 `sub` 로 `GET …/operators/{id}/domain-access`(`X-Tenant-Id` = 새 슬러그) → 세트 = 정확히 `all-domains-full:ORIGIN` · 역할 = **카탈로그 전체**(fan 포함 — ∩ 가 자를 것이 있다). 다른 테넌트(`fan-platform`) → `404`(소속 없음 ⇒ 세트 행 없을 자리 — 행 수준 «다른 테넌트 세트 행 0» 은 S3 IT 가 쟀다).
+  3. 대조: 생성 교환의 assume 토큰 · 구독 전 새 전환 교환(`POST /api/tenant`)의 토큰 둘 다 `roles` **없음**(`expect.soft` — 빨강이어도 뒤 단계가 보고되게).
+  4. `SUPER_ADMIN` → `POST /api/admin/subscriptions {tenantId: 새 슬러그, domainKey: wms}` = `201`.
+  5. `POST /api/tenant` 로 **새 교환**(TTL 300 s 를 기다리지 않음 · 토큰이 바뀐 것을 단언) → `entitled_domains = ["wms"]` · 정렬한 `roles` = wms 카탈로그 · 그 밖 도메인 역할 0 · `FAN_OPERATOR` 없음.
+
+### Bite (빨강 측정) — CI, 임시 커밋 + 되돌림
+
+- 로컬 Docker 없음 → 브랜치에 임시 커밋 `cda01f129`(auth `TenantClaimTokenCustomizer.assignedWithinCeiling` 이 `∩` 없이 `domainRoles` 를 그대로 반환) → `gh workflow run nightly-e2e.yml --ref task/mono-773-ac2-roles-e2e` → 되돌림 `0fb71293a`(그 파일 `main` 과 바이트 동일 — `git diff a01005367 --stat` 에 시험 · 시드 두 파일만).
+- 런 **38777797324** · 콘솔 잡 **116570399831** — conclusion `failure`: `Running 12 tests using 2 workers` → **`1 failed` · `11 passed (1.1m)`**. 실패 칸 = «AC-2 roles» 하나(첫 시도 + `-retry1` + `-retry2` 셋 다). 시도마다 같은 세 단언이 빨강: «right after creation … ⇒ no role»(`+ Received +16`) · «a fresh exchange before any subscription ⇒ still no role»(`+16`) · «roles = the whole wms catalog»(`+ Received +6` = 그 밖 도메인 역할 여섯). 로그 줄: 생성 시점 · 구독 전 `roles` = 카탈로그 14 개 전부(`FAN_OPERATOR` 포함, `entitled=null`) · 구독 뒤 14 개(`entitled=["wms"]`). ⇒ 단언이 ∩ 를 문다. 🔵 비-단언 단계(카탈로그 읽기 · admin 절반 · `404` · 구독 `201` · 재교환 `200`)는 bite 런에서도 모두 통과 — 빨강은 술어에서만 났다.
+- 🔵 부수 효과: 그 런의 빨강이 자동 감시 이슈 **#4377** 을 열었다(`nightly-red-arrives` — 브랜치 dispatch 도 연다). 의도한 bite 런이라고 코멘트만 달고 닫지 않았다 — 규칙대로 `main` 런에서 콘솔 잡이 실제로 돌아 success 일 때 닫힌다.
+
+### 초록 (되돌린 커밋 · 브랜치)
+
+- 런 **38779408841**(head `0fb71293a`) — conclusion `success` · 콘솔 잡 **116575829694** success: `Running 12 tests using 2 workers` · **`12 passed (59.5s)`** · flaky 0. «AC-2 roles» 로그 줄이 한 벌뿐 = 첫 시도 통과(재시도 없음).
+- spec 별 칸: operators-admin-profile 1 · operators-profile 1 · overview-consolidation 5 · sample-visitor-transition 1 · non-operator-tenant-creation **4**(3 → 4) = 12. 로컬 `npx playwright test --list` 도 `12 tests in 5 files`.
+- 측정 줄: 카탈로그 14 · wms 8 `[INBOUND_READ,INBOUND_WRITE,INVENTORY_READ,INVENTORY_WRITE,MASTER_READ,OUTBOUND_READ,OUTBOUND_WRITE,WMS_OPERATOR]` · 그 밖 6 `[ECOMMERCE_OPERATOR,ERP_OPERATOR,FAN_OPERATOR,FINANCE_OPERATOR,MES_OPERATOR,SCM_OPERATOR]` · 생성 시점 `roles=null entitled=null` · 구독 전 `roles=null entitled=null` · 구독 뒤 `roles 8 [WMS_OPERATOR,OUTBOUND_READ,OUTBOUND_WRITE,INBOUND_READ,INBOUND_WRITE,INVENTORY_READ,INVENTORY_WRITE,MASTER_READ] entitled=["wms"]`.
+- 로컬: `npx tsc --noEmit -p .` rc=0 · `./gradlew :…:auth-service:compileJava`(bite 커밋) rc=0.
+
+### ⚪ 남은 것 · 한계
+
+- ⚪ **AC-2 를 닫는 측정은 아직 없다** — 이 칸은 `ci.yml` 이 돌리지 않는다. 머지 뒤 `main` 의 첫 nightly 콘솔 잡에서 «AC-2 roles» 통과(spec 별 칸 수로 12 중 이 칸이 돈 것 확인)를 잰 뒤 닫기를 다시 돈다.
+- ⚪ «다른 테넌트 세트 행 0» 은 이 시험에서 **소속 수준**(`fan-platform` domain-access `404`)으로만 본다 — 행 수준은 S3 IT `ac2_newCreator_originRowInTheNewTenantOnly` 몫 그대로.
+- ⚪ 대조의 «`roles` 없음» 은 «구독 0» 과 «entitled 조회 실패(fail-soft — 클레임 생략)» 를 토큰만으로는 가르지 못한다. 같은 런의 구독 뒤 `entitled=["wms"]` 가 조회 경로가 살아 있음을 보이고, admin 절반이 배정 = 카탈로그 전체임을 보이므로 «없음» 의 원인은 ∩ 다 — 다만 그 두 사실의 결합이지 한 술어는 아니다.
