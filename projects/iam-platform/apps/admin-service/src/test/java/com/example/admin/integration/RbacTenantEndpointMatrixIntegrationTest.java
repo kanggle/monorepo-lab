@@ -221,7 +221,8 @@ class RbacTenantEndpointMatrixIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Operator-Reason", "matrix allow case")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"matrix-test","displayName":"Matrix Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"matrix-test","displayName":"Matrix Test","tenantType":"B2B_ENTERPRISE",
+                                 "firstAdmin":{"email":"owner@matrix-test.example","displayName":"Matrix Owner"}}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("matrix-test"));
@@ -265,7 +266,8 @@ class RbacTenantEndpointMatrixIntegrationTest extends AbstractIntegrationTest {
                         .header("X-Operator-Reason", "matrix deny case")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"matrix-test","displayName":"Matrix Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"matrix-test","displayName":"Matrix Test","tenantType":"B2B_ENTERPRISE",
+                                 "firstAdmin":{"email":"owner@matrix-test.example","displayName":"Matrix Owner"}}
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));

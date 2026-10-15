@@ -160,7 +160,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "onboard wms tenant")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("wms-test"))
@@ -168,6 +168,33 @@ class TenantAdminControllerSliceTest {
 
         // TASK-BE-625 AC-5 regression: no orgNodeId → the pre-existing path, placement untouched.
         org.mockito.Mockito.verifyNoInteractions(placementUseCase);
+    }
+
+    @Test
+    void create_tenant_without_firstAdmin_returns_400_and_creates_nothing() throws Exception {
+        // TASK-MONO-773 S4 (admin-api § POST /api/admin/tenants — firstAdmin required, breaking): a body without
+        // firstAdmin (B2B and B2C alike, with or without an orgNodeId) is refused before any use case runs.
+        // (The email / displayName FORMAT is judged after trim — like the 772 issuance — so it is the use case's,
+        // covered by TenantFirstAdminIntegrationTest, not this slice.)
+        when(operatorRepository.findByOperatorId(SUPER_ADMIN_ID))
+                .thenReturn(Optional.of(superAdminMock));
+
+        for (String body : List.of(
+                "{\"tenantId\":\"wms-test\",\"displayName\":\"WMS Test\",\"tenantType\":\"B2B_ENTERPRISE\"}",
+                "{\"tenantId\":\"fan-test\",\"displayName\":\"Fan Test\",\"tenantType\":\"B2C_CONSUMER\"}",
+                "{\"tenantId\":\"wms-test\",\"displayName\":\"WMS Test\",\"tenantType\":\"B2B_ENTERPRISE\","
+                        + "\"firstAdmin\":null}",
+                "{\"tenantId\":\"wms-test\",\"displayName\":\"WMS Test\",\"tenantType\":\"B2B_ENTERPRISE\","
+                        + "\"orgNodeId\":\"erp-div\"}")) {
+            mockMvc.perform(post("/api/admin/tenants")
+                            .header("Authorization", superAdminToken())
+                            .header("X-Operator-Reason", "onboard")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+        Mockito.verifyNoInteractions(createTenantUseCase, placementUseCase);
     }
 
     @Test
@@ -185,7 +212,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "onboard under erp")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"erp-div"}
+                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"erp-div","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tenantId").value("acme-svc"));
@@ -208,7 +235,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "onboard")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"ghost"}
+                                {"tenantId":"acme-svc","displayName":"Acme Svc","tenantType":"B2B_ENTERPRISE","orgNodeId":"ghost","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORG_NODE_NOT_FOUND"));
@@ -226,7 +253,7 @@ class TenantAdminControllerSliceTest {
                         .header("Authorization", superAdminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REASON_REQUIRED"));
@@ -244,7 +271,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
@@ -262,7 +289,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"WMS","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"WMS","displayName":"WMS","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -280,7 +307,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"admin","displayName":"Admin","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"admin","displayName":"Admin","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("TENANT_ID_RESERVED"));
@@ -298,7 +325,7 @@ class TenantAdminControllerSliceTest {
                         .header("Idempotency-Key", "k".repeat(101))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"wms-test","displayName":"WMS Test","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -316,7 +343,7 @@ class TenantAdminControllerSliceTest {
                         .header("X-Operator-Reason", "regression test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantId":"wms-test","displayName":"WMS","tenantType":"B2B_ENTERPRISE"}
+                                {"tenantId":"wms-test","displayName":"WMS","tenantType":"B2B_ENTERPRISE","firstAdmin":{"email":"owner@example.com","displayName":"Owner"}}
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TENANT_ALREADY_EXISTS"));

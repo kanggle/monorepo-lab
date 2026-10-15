@@ -87,6 +87,15 @@ class AdminOutboxPublisherTest {
     }
 
     @Test
+    @DisplayName("TASK-MONO-773 S4: topicFor maps the new tenant.activated (PENDING → ACTIVE) — an unmapped type would throw at publish")
+    void topicFor_tenantActivated() {
+        org.assertj.core.api.Assertions.assertThatCode(() -> AdminOutboxPublisher.topicFor("tenant.activated"))
+                .as("tenant-events.md § tenant.activated — S4 adds it to topicFor")
+                .doesNotThrowAnyException();
+        assertThat(AdminOutboxPublisher.topicFor("tenant.activated")).isEqualTo("tenant.activated");
+    }
+
+    @Test
     @DisplayName("topicFor ALSO covers the PartnershipEventPublisher event types (partnership.*)")
     void topicFor_partnershipEvents() {
         assertThat(AdminOutboxPublisher.topicFor("partnership.invited")).isEqualTo("partnership.invited");

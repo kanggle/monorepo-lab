@@ -61,6 +61,83 @@ beforeEach(() => {
   post.mockReset();
 });
 
+/**
+ * TASK-MONO-773 S4 — the create form asks for the first admin (IAM `POST /api/admin/tenants` requires
+ * `firstAdmin{email, displayName}`; console-integration-contract.md § 2.6.4 «`SUPER_ADMIN` mode»). Asserted as a
+ * presence check first so a form without the fields fails on an assertion, not on a query throw.
+ */
+async function fillFirstAdmin(
+  user: ReturnType<typeof userEvent.setup>,
+  email = 'owner@new-tenant.example',
+  name = '홍길동',
+) {
+  const emailInput = screen.queryByTestId('tenant-form-first-admin-email');
+  const nameInput = screen.queryByTestId('tenant-form-first-admin-display-name');
+  expect(emailInput, 'the create form has a first-admin email field').not.toBeNull();
+  expect(nameInput, 'the create form has a first-admin display-name field').not.toBeNull();
+  await user.type(emailInput as HTMLElement, email);
+  await user.type(nameInput as HTMLElement, name);
+}
+
+describe('TenantsScreen — create · first admin (TASK-MONO-773 S4)', () => {
+  it('keeps submit disabled until the first admin email and name are both valid', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
+    await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
+    expect(screen.getByTestId('tenant-create-submit'), 'no first admin yet').toBeDisabled();
+
+    const emailInput = screen.queryByTestId('tenant-form-first-admin-email');
+    expect(emailInput, 'the create form has a first-admin email field').not.toBeNull();
+    await user.type(emailInput as HTMLElement, 'not-an-email');
+    await user.type(
+      screen.getByTestId('tenant-form-first-admin-display-name'),
+      '홍길동',
+    );
+    expect(screen.getByTestId('tenant-create-submit'), 'malformed email').toBeDisabled();
+
+    await user.clear(screen.getByTestId('tenant-form-first-admin-email'));
+    await user.type(screen.getByTestId('tenant-form-first-admin-email'), 'owner@new-tenant.example');
+    expect(screen.getByTestId('tenant-create-submit')).not.toBeDisabled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('the confirmed create carries firstAdmin (trimmed) to /api/tenants, and a PENDING answer is accepted', async () => {
+    post.mockResolvedValue({
+      tenantId: 'new-tenant',
+      displayName: 'New Tenant',
+      tenantType: 'B2B_ENTERPRISE',
+      status: 'PENDING',
+      createdAt: '2026-10-15T00:00:00Z',
+      updatedAt: '2026-10-15T00:00:00Z',
+      firstAdmin: {
+        state: 'INVITED',
+        email: 'owner@new-tenant.example',
+        invitationId: 'inv-1',
+        expiresAt: '2026-10-22T00:00:00Z',
+      },
+      firstAdminInvitation: { invitationId: 'inv-1', firstAdmin: true },
+    });
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
+    await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
+    await fillFirstAdmin(user, '  owner@new-tenant.example ', ' 홍길동 ');
+    await user.click(screen.getByTestId('tenant-create-submit'));
+    await user.type(screen.getByTestId('tenant-confirm-reason'), '신규 고객사');
+    await user.click(screen.getByTestId('tenant-confirm-submit'));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const body = post.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.firstAdmin).toEqual({ email: 'owner@new-tenant.example', displayName: '홍길동' });
+    // success closes the dialog — no error surfaced for a PENDING answer
+    await waitFor(() => expect(screen.queryByTestId('tenant-confirm-submit')).toBeNull());
+    expect(screen.queryByTestId('tenant-confirm-error')).toBeNull();
+  });
+});
+
 describe('TenantsScreen — render (seeded)', () => {
   it('renders the seeded list without an extra fetch', () => {
     renderScreen();
@@ -103,6 +180,7 @@ describe('TenantsScreen — create', () => {
       screen.getByTestId('tenant-form-tenant-type'),
       'B2B_ENTERPRISE',
     );
+    await fillFirstAdmin(user);
     await user.click(screen.getByTestId('tenant-create-submit'));
 
     const submit = screen.getByTestId('tenant-confirm-submit');
@@ -119,6 +197,7 @@ describe('TenantsScreen — create', () => {
           tenantId: 'new-tenant',
           displayName: 'New Tenant',
           tenantType: 'B2B_ENTERPRISE',
+          firstAdmin: { email: 'owner@new-tenant.example', displayName: '홍길동' },
           reason: '신규 파트너 온보딩',
           idempotencyKey: expect.any(String),
         }),
@@ -137,6 +216,7 @@ describe('TenantsScreen — create', () => {
     if (pickNode !== null) {
       await user.selectOptions(screen.getByTestId('tenant-form-org-node'), pickNode);
     }
+    await fillFirstAdmin(user);
     await user.click(screen.getByTestId('tenant-create-submit'));
     await user.type(screen.getByTestId('tenant-confirm-reason'), '온보딩');
     await user.click(screen.getByTestId('tenant-confirm-submit'));
@@ -180,7 +260,7 @@ describe('TenantsScreen — create', () => {
     const body = await fillAndConfirm(user, null);
     expect(body).not.toHaveProperty('orgNodeId');
     expect(Object.keys(body).sort()).toEqual(
-      ['displayName', 'idempotencyKey', 'reason', 'tenantId', 'tenantType'],
+      ['displayName', 'firstAdmin', 'idempotencyKey', 'reason', 'tenantId', 'tenantType'],
     );
   });
 
@@ -231,6 +311,7 @@ describe('TenantsScreen — create', () => {
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'fan-platform');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'Fan Platform 2');
+    await fillFirstAdmin(user);
     await user.click(screen.getByTestId('tenant-create-submit'));
     await user.type(screen.getByTestId('tenant-confirm-reason'), '재등록 시도');
     await user.click(screen.getByTestId('tenant-confirm-submit'));
