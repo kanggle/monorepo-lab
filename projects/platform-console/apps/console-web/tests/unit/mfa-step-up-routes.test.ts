@@ -223,11 +223,11 @@ describe('GET /api/auth/callback — exchange 403 MFA_REQUIRED (§ 2.6)', () => 
     expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
   });
 
-  it('🔴🔴 «401 만 운영자 아님» — exchange 401 still goes to /onboarding (control on the neighbouring branch)', async () => {
+  it('🔴🔴 «401 만 운영자 아님» — exchange 401 still goes to the non-operator landing /new-tenant (TASK-MONO-773; control on the neighbouring branch)', async () => {
     seedCallback('s1');
     stubFetch({ exchange: NOT_OPERATOR_401 });
     const res = await callback('s1');
-    expect(res.headers.get('location')).toBe('http://console.local/onboarding');
+    expect(res.headers.get('location')).toBe('http://console.local/new-tenant');
   });
 
   it('🔵 control — a 401 for a STEPPED-UP request is still «not an operator» (the mark changes nothing there)', async () => {
@@ -235,7 +235,7 @@ describe('GET /api/auth/callback — exchange 403 MFA_REQUIRED (§ 2.6)', () => 
     cookieJar.set(STEP_UP_MARKER_COOKIE, { value: 's1', opts: {} });
     stubFetch({ exchange: NOT_OPERATOR_401 });
     const res = await callback('s1');
-    expect(res.headers.get('location')).toBe('http://console.local/onboarding');
+    expect(res.headers.get('location')).toBe('http://console.local/new-tenant');
   });
 
   it('🔵 control — a 403 with another code is not a step-up (session-unavailable, as before)', async () => {
@@ -373,13 +373,13 @@ describe('refresh re-exchange 403 MFA_REQUIRED (§ 2.6.1)', () => {
     expect(cookieDeletes).not.toContain(ACCESS_COOKIE);
   });
 
-  it('🔵 control — GET re-exchange 401 still goes to /onboarding', async () => {
+  it('🔵 control — GET re-exchange 401 still goes to the non-operator landing /new-tenant (TASK-MONO-773)', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
     stubFetch({ exchange: NOT_OPERATOR_401 });
     const res = await refreshGET(
       new Request('http://console.local/api/auth/refresh?redirect=/wms'),
     );
-    expect(res.headers.get('location')).toBe('http://console.local/onboarding');
+    expect(res.headers.get('location')).toBe('http://console.local/new-tenant');
   });
 
   it('🔴 POST → 403 { code: MFA_REQUIRED }; IAM cookies not cleared', async () => {
@@ -397,14 +397,17 @@ describe('refresh re-exchange 403 MFA_REQUIRED (§ 2.6.1)', () => {
     expect(cookieDeletes).not.toContain(REFRESH_COOKIE);
   });
 
-  it('🔵 control — POST re-exchange 401 keeps its 401 + whole-session clear', async () => {
+  // TASK-MONO-773 S6 (§ 2.6.1 / § 2.6.4, S1-9) — the neighbouring `401` is now `403 NOT_AN_OPERATOR` with the
+  // IAM cookies kept (was `401` + whole-session clear). Still a DIFFERENT code from MFA_REQUIRED — the control.
+  it('🔵 control — POST re-exchange 401 → 403 NOT_AN_OPERATOR (not MFA_REQUIRED), IAM cookies kept', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref', opts: {} });
     stubFetch({ exchange: NOT_OPERATOR_401 });
     const res = await refreshPOST(
       new Request('http://console.local/api/auth/refresh', { method: 'POST' }),
     );
-    expect(res.status).toBe(401);
-    expect(cookieDeletes).toContain(ACCESS_COOKIE);
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe('NOT_AN_OPERATOR');
+    expect(cookieDeletes).not.toContain(ACCESS_COOKIE);
   });
 
   it('🔵 control — a re-ASSUME refused with insufficient_user_authentication only drops the tenant pair (refresh still ok)', async () => {

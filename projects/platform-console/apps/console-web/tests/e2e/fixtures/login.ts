@@ -136,6 +136,10 @@ async function driveOidcPkceLogin(
   // `tests/e2e/README.md`); the branch is kept because it is the correct
   // behaviour for any spec that asserts the assume-tenant re-scope.
   activeTenant: string | null = DEFAULTS.defaultTenant,
+  // TASK-MONO-773 S6 — where the callback chain must settle. An operator lands under `/dashboards`
+  // (the default); a personal account with no operator facet lands on the non-operator shell's
+  // `/new-tenant` (console-integration-contract § 2.6.4).
+  landing: (url: URL) => boolean = (url) => url.pathname.startsWith('/dashboards'),
 ): Promise<void> {
   // TASK-PC-FE-027 — start tracing BEFORE bridgeAuthServiceHostname so the
   // `context.route` handler invocations are captured. CI-only to avoid dev
@@ -210,7 +214,7 @@ async function driveOidcPkceLogin(
     // any observable state); TASK-PC-FE-070 then made it prefix-tolerant
     // after the exact `/dashboards` string silently broke globalSetup.
     await Promise.all([
-      page.waitForURL((url) => url.pathname.startsWith('/dashboards'), {
+      page.waitForURL(landing, {
         timeout: 30_000,
       }),
       page.click('button[type="submit"]'),
@@ -281,6 +285,30 @@ export async function loginAsSuperAdmin(
     DEFAULTS.superAdminPassword,
   );
 }
+
+/**
+ * TASK-MONO-773 S6 — logs a context in as a seeded PERSONAL (consumer-pool) account that has no operator
+ * facet, through the same production OIDC + PKCE path. IAM issues the console shell token (773 S5), the
+ * operator exchange answers `401`, and the console lands on the non-operator shell's `/new-tenant`
+ * (console-integration-contract § 2.6.4). No tenant is selected — there is none to act in.
+ *
+ * `landing` defaults to `/new-tenant`; a spec whose account has since become an operator (e.g. a retry
+ * after it created a company) passes the operator landing instead.
+ */
+export async function loginAsPoolAccount(
+  context: BrowserContext,
+  email: string,
+  password: string = DEFAULTS.superAdminPassword,
+  landing: (url: URL) => boolean = (url) => url.pathname === '/new-tenant',
+): Promise<void> {
+  await driveOidcPkceLogin(context, email, password, null, landing);
+}
+
+/** The seeded SUPER_ADMIN credential (AC-7: «another account» logs in after the non-operator logout). */
+export const SUPER_ADMIN_CREDENTIAL = {
+  email: DEFAULTS.superAdminEmail,
+  password: DEFAULTS.superAdminPassword,
+} as const;
 
 /**
  * Convenience for specs that need a logged-in `page` (rather than the

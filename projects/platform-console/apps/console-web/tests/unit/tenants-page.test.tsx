@@ -140,29 +140,16 @@ describe('TenantsPage — SSR gating', () => {
     query: {},
   };
 
-  it('TASK-PC-FE-312 — hands the org-node list to the create form as «소속 노드» options', async () => {
+  // TASK-MONO-773 S6 — the create form (and with it the «소속 노드» options, TASK-PC-FE-312) moved to the one
+  // «테넌트 생성» screen `/new-tenant` (console-integration-contract § 2.6.4). The list page no longer reads the
+  // org-node list at all — that read now belongs to `/new-tenant` (`new-tenant-page.test.tsx`).
+  it('🔴 TASK-MONO-773 S6 — the list page no longer reads the org-node list (the create form moved to /new-tenant)', async () => {
     getTenantsListState.mockResolvedValue(HAPPY);
-    listOrgNodes.mockResolvedValue({
-      items: [
-        { orgNodeId: 'n-1', parentId: null, name: '본사', depth: 1 },
-        { orgNodeId: 'n-2', parentId: 'n-1', name: '물류', depth: 2 },
-      ],
-    });
-    const ui = await TenantsPage();
-    const { getByTestId } = render(ui);
-    expect(getByTestId('tenants-screen')).toHaveAttribute(
-      'data-org-node-options',
-      'n-1=본사,n-2=물류',
-    );
-  });
-
-  it('TASK-PC-FE-312 — an org-node read failure never blocks the tenants screen (options = null)', async () => {
-    getTenantsListState.mockResolvedValue(HAPPY);
-    listOrgNodes.mockRejectedValue(new Error('org-nodes down'));
     const ui = await TenantsPage();
     const { getByTestId } = render(ui);
     expect(getByTestId('tenants-screen')).toHaveAttribute('data-items', '1');
     expect(getByTestId('tenants-screen')).toHaveAttribute('data-org-node-options', 'null');
+    expect(listOrgNodes).not.toHaveBeenCalled();
   });
 
   it('TASK-PC-FE-312 — the gated states do not read the org-node list', async () => {

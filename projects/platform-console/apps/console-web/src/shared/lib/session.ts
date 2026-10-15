@@ -75,6 +75,22 @@ export const OAUTH_STATE_COOKIE = 'console_oauth_state';
  *  transient). The callback reads it once and deletes it: a callback whose
  *  `state` equals it and still gets `403 MFA_REQUIRED` does NOT step up again. */
 export const STEP_UP_MARKER_COOKIE = 'console_oauth_step_up';
+/**
+ * TASK-MONO-773 S6 — the explicit «logged in · not an operator» marker (console-integration-contract § 2.6.4).
+ *
+ * Set to `1` by exactly three places, and ONLY when the § 2.6 operator exchange answered `401`:
+ * `/api/auth/callback`, `GET /api/auth/refresh` and `POST /api/auth/refresh` ({@link setNonOperatorMarker}).
+ * Deleted whenever an exchange succeeds, by {@link clearFullSession} (logout · forced re-login · demo-ended)
+ * and by the tenant-creation success path. `maxAge` = the IAM access token's `expires_in`, so the marker and
+ * the access cookie expire together.
+ *
+ * 🔴 NOT a credential: it only selects which `(console)` shell renders ({@link isNonOperatorSession}). Every
+ *    server call in that shell still authenticates with the IAM access cookie, and the marker can never make
+ *    an operator call succeed (no operator cookie ⇒ every `/api/admin/**` proxy answers `401`).
+ * 🔴 «operator cookie absent» is NOT the predicate (773 AC-0 R2) — an idled-out or exchange-outage session has
+ *    no marker and takes the § 2.6.1 refresh hop exactly as before.
+ */
+export const NON_OPERATOR_COOKIE = 'console_non_operator';
 
 /**
  * Token / session cookies (access / refresh / operator-token / active-tenant).
@@ -156,8 +172,8 @@ export function clearTenantSelection(jar: CookieStore): void {
 /**
  * End the operator session: drop the operator token plus the tenant selection it
  * scopes ({@link clearTenantSelection}). The IAM OIDC cookies (access/refresh/id)
- * are KEPT — this is the pre-operator state the `(onboarding)` route group admits
- * (a valid IAM login that is not yet an operator of any tenant).
+ * are KEPT. Whether the session continues as a non-operator one is decided by the
+ * caller (only an exchange `401` sets {@link NON_OPERATOR_COOKIE} — TASK-MONO-773 S6).
  */
 export function clearOperatorSession(jar: CookieStore): void {
   jar.delete(OPERATOR_COOKIE);
@@ -165,14 +181,32 @@ export function clearOperatorSession(jar: CookieStore): void {
 }
 
 /**
+ * TASK-MONO-773 S6 — set the non-operator marker ({@link NON_OPERATOR_COOKIE}). Called ONLY on an operator
+ * exchange `401`, with the IAM access token's `expires_in` as the lifetime.
+ */
+export function setNonOperatorMarker(jar: CookieStore, accessTokenExpiresIn: number): void {
+  jar.set(NON_OPERATOR_COOKIE, '1', { ...tokenCookieOpts, maxAge: accessTokenExpiresIn });
+}
+
+/**
+ * TASK-MONO-773 S6 — drop the non-operator marker (an exchange succeeded / the session ends). Only when the
+ * browser sent one: an operator refresh must not grow a `Set-Cookie` for a cookie that was never there.
+ */
+export function clearNonOperatorMarker(jar: CookieStore): void {
+  if (jar.get(NON_OPERATOR_COOKIE) !== undefined) jar.delete(NON_OPERATOR_COOKIE);
+}
+
+/**
  * Drop the ENTIRE console session — the IAM OIDC cookies (access/refresh/id_token)
- * plus the operator session ({@link clearOperatorSession}). Leaves no partial
- * authed state; the API client falls back to a clean re-login.
+ * plus the operator session ({@link clearOperatorSession}) and, since TASK-MONO-773
+ * S6, the non-operator marker. Leaves no partial authed state; the API client falls
+ * back to a clean re-login.
  */
 export function clearFullSession(jar: CookieStore): void {
   jar.delete(ACCESS_COOKIE);
   jar.delete(REFRESH_COOKIE);
   jar.delete(ID_TOKEN_COOKIE);
+  clearNonOperatorMarker(jar);
   clearOperatorSession(jar);
 }
 
@@ -331,8 +365,8 @@ export async function hasRefreshToken(): Promise<boolean> {
  *
  * 🔴 NOT sample visitors, on purpose (ADR-MONO-074 A1: «반쪽 세션·죽은 쿠키는 지금
  *    경로 그대로»):
- *    - access cookie only (the pre-operator state, {@link hasPreOperatorSession})
- *      → onboarding / login exactly as before;
+ *    - access cookie only (with the marker: the non-operator shell, {@link isNonOperatorSession};
+ *      without it: refresh / login exactly as before);
  *    - operator cookie only → not authenticated → login exactly as before;
  *    - 🔴🔴 refresh cookie surviving without access/operator cookies = «logged in
  *      before, idled out» (TASK-MONO-674: the access and operator cookies expire
@@ -351,20 +385,23 @@ export async function isSampleVisitor(): Promise<boolean> {
 }
 
 /**
- * The **pre-operator** intermediate session: the caller has a valid IAM OIDC
- * login (access token present) but is NOT yet an operator of any tenant
- * (operator token absent — the RFC 8693 exchange returned `not_provisioned`).
+ * TASK-MONO-773 S6 — the **non-operator** session (console-integration-contract § 2.6.4, `(console)` guard
+ * row 3): the IAM access cookie AND the explicit {@link NON_OPERATOR_COOKIE} marker are present and the
+ * operator cookie is absent. A valid IAM login that the § 2.6 exchange answered `401` — not an operator of any
+ * tenant. It replaces TASK-PC-FE-182's «pre-operator» predicate (access present ∧ operator absent), which
+ * inferred the state from a MISSING cookie and therefore also caught idled-out and exchange-outage sessions
+ * (773 AC-0 R2).
  *
- * This is the ONLY state the self-service onboarding surface (`(onboarding)`
- * route group) admits (TASK-PC-FE-182 / ADR-MONO-044 §3.4): a logged-in
- * visitor who owns no workspace yet, on their way to creating one. It is
- * deliberately distinct from both {@link isAuthenticated} (operator — reaches
- * `(console)`) and anonymous (no access token — reaches `/login`).
- *
- * The access token remains ONLY the `subject_token` input (§ 2.1 invariant,
- * unchanged): it is the onboarding endpoint's `subjectToken` and, on success,
- * the operator-token re-exchange input — never an `/api/admin/**` credential.
+ * The access token remains ONLY the `subject_token` input (§ 2.1 invariant, unchanged): it is the onboarding
+ * endpoint's `subjectToken` and, on success, the operator-token re-exchange input — never an `/api/admin/**`
+ * credential. An operator cookie present means the operator shell, whatever the marker says (a stray marker is
+ * ignored and dropped by the next route handler).
  */
-export async function hasPreOperatorSession(): Promise<boolean> {
-  return (await getAccessToken()) !== null && (await getOperatorToken()) === null;
+export async function isNonOperatorSession(): Promise<boolean> {
+  const jar = await cookies();
+  return (
+    Boolean(jar.get(ACCESS_COOKIE)?.value) &&
+    jar.get(NON_OPERATOR_COOKIE)?.value === '1' &&
+    !jar.get(OPERATOR_COOKIE)?.value
+  );
 }

@@ -306,6 +306,27 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       `${API}/registry/route.ts (GET)`,
     ],
   },
+  {
+    // TASK-MONO-773 S6 — the one «테넌트 생성» screen (console-integration-contract § 2.6.4).
+    href: '/new-tenant',
+    area: 'platform',
+    gate: {
+      kind: 'operator',
+      note: '로그인만 하면 열린다 — 운영자가 아닌 개인 계정(비운영자 셸)도. 무엇을 만들 수 있는지는 IAM 이 정한다: 운영자 아님 · 회사 운영자 = 자기 회사(첫 · 두 번째), 플랫폼 SUPER_ADMIN = 테넌트 + 첫 관리자 초대.',
+    },
+    description:
+      '테넌트 생성 한 화면 — 비운영자는 받은 초대(읽기 전용) · «관리자에게 초대를 요청하세요» · 생성 양식, 회사 운영자는 두 번째 회사 양식, SUPER_ADMIN 은 테넌트 + 첫 관리자 양식.',
+    crud: crud('RC'),
+    crudNote: '받은 초대는 읽기만 — 수락은 초대 메일의 링크로만 한다.',
+    purpose: '새 회사(테넌트)를 만들고 그 첫 관리자를 정한다 — 들어온 계정이 본인이면 본인, SUPER_ADMIN 이면 초대한 이메일.',
+    services: ['iam admin-service (onboarding · tenants)', 'iam account-service (테넌트 · 인증 이메일)'],
+    sources: [
+      `${PAGES}/new-tenant/page.tsx`,
+      `${API}/onboarding/organizations/route.ts (POST)`,
+      `${API}/onboarding/received-invitations/route.ts (POST)`,
+      `${API}/tenants/route.ts (POST)`,
+    ],
+  },
   // 🔴 TASK-PC-FE-310 — the old `/console` row is GONE, not degraded-to-static:
   //    that route is now a bare `redirect('/dashboards/overview')`, no longer a
   //    sidebar leaf (`console-nav-config.ts`), so a row here would be an orphan

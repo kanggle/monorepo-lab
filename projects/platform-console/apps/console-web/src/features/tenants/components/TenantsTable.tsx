@@ -34,6 +34,61 @@ export interface TenantsTableProps {
   currentPage: number;
   onPrevPage: () => void;
   onNextPage: () => void;
+  /**
+   * TASK-MONO-773 S6 — the «관리자 대기» row actions (console-integration-contract § 2.6.4). A `PENDING` row
+   * offers «다시 초대» + «정리»; one whose `firstAdmin.state = ACCEPTED` offers «활성화 마치기» INSTEAD. Other
+   * rows offer nothing. Omitted (older callers / tests) = no action column.
+   */
+  onReinvite?: (tenant: Tenant) => void;
+  onCleanup?: (tenant: Tenant) => void;
+  onFinishActivation?: (tenant: Tenant) => void;
+}
+
+function PendingRowActions({
+  tenant,
+  onReinvite,
+  onCleanup,
+  onFinishActivation,
+}: {
+  tenant: Tenant;
+  onReinvite?: (tenant: Tenant) => void;
+  onCleanup?: (tenant: Tenant) => void;
+  onFinishActivation?: (tenant: Tenant) => void;
+}) {
+  if (tenant.status !== 'PENDING') return null;
+  if (tenant.firstAdmin?.state === 'ACCEPTED') {
+    return onFinishActivation ? (
+      <Button
+        variant="secondary"
+        onClick={() => onFinishActivation(tenant)}
+        data-testid={`tenants-row-finish-activation-${tenant.tenantId}`}
+      >
+        활성화 마치기
+      </Button>
+    ) : null;
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {onReinvite && (
+        <Button
+          variant="secondary"
+          onClick={() => onReinvite(tenant)}
+          data-testid={`tenants-row-reinvite-${tenant.tenantId}`}
+        >
+          다시 초대
+        </Button>
+      )}
+      {onCleanup && (
+        <Button
+          variant="secondary"
+          onClick={() => onCleanup(tenant)}
+          data-testid={`tenants-row-cleanup-${tenant.tenantId}`}
+        >
+          정리
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -53,7 +108,11 @@ export function TenantsTable({
   currentPage,
   onPrevPage,
   onNextPage,
+  onReinvite,
+  onCleanup,
+  onFinishActivation,
 }: TenantsTableProps) {
+  const withActions = Boolean(onReinvite || onCleanup || onFinishActivation);
   return (
     <div>
       <form
@@ -129,6 +188,7 @@ export function TenantsTable({
               <th className="py-2 pr-4">구분</th>
               <th className="py-2 pr-4">상태</th>
               <th className="py-2 pr-4">등록일</th>
+              {withActions && <th className="py-2 pr-4">동작</th>}
             </tr>
           </thead>
           <tbody>
@@ -156,6 +216,16 @@ export function TenantsTable({
                 <td className="py-2 pr-4 text-xs text-muted-foreground">
                   {formatDateTime(t.createdAt)}
                 </td>
+                {withActions && (
+                  <td className="py-2 pr-4">
+                    <PendingRowActions
+                      tenant={t}
+                      onReinvite={onReinvite}
+                      onCleanup={onCleanup}
+                      onFinishActivation={onFinishActivation}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

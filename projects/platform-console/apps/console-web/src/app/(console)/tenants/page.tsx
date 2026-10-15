@@ -1,9 +1,4 @@
-import {
-  getTenantsListState,
-  TenantsScreen,
-  type TenantOrgNodeOption,
-} from '@/features/tenants';
-import { listOrgNodes } from '@/features/org-hierarchy';
+import { getTenantsListState, TenantsScreen } from '@/features/tenants';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
 
 export const dynamic = 'force-dynamic';
@@ -90,25 +85,7 @@ export default async function TenantsPage() {
     );
   }
 
-  return (
-    <TenantsScreen
-      initial={state.page}
-      orgNodeOptions={await orgNodeOptionsOrNull()}
-    />
-  );
-}
-
-/**
- * «소속 노드 (선택)» choices for the create form (TASK-PC-FE-312). Read only on
- * the success path (the viewer is SUPER_ADMIN here, who reaches every node).
- * Fail-soft: any failure → `null` — the form still creates unplaced tenants,
- * exactly as before; the org-node list is never a precondition of a create.
- */
-async function orgNodeOptionsOrNull(): Promise<TenantOrgNodeOption[] | null> {
-  try {
-    const { items } = await listOrgNodes();
-    return items.map((n) => ({ orgNodeId: n.orgNodeId, name: n.name }));
-  } catch {
-    return null;
-  }
+  // TASK-MONO-773 S6 — the create form (and its «소속 노드» options, TASK-PC-FE-312) moved to the one
+  // «테넌트 생성» screen `/new-tenant`; this page no longer reads the org-node list.
+  return <TenantsScreen initial={state.page} />;
 }

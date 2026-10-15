@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
+import { ACCESS_COOKIE, OPERATOR_COOKIE, NON_OPERATOR_COOKIE } from '@/shared/lib/session';
+import { NON_OPERATOR_LANDING } from '@/shared/lib/non-operator';
+
+/**
+ * TASK-MONO-773 S6 (console-integration-contract § 2.6.4) — `/onboarding` stays as an ADDRESS only: the
+ * standalone `(onboarding)` page is gone and every visitor asking for it (or anything under it) gets
+ * `307 → /new-tenant`; the `(console)` guard then decides (sample → `/`, non-operator → the screen, operator →
+ * the screen in its operator mode). A redirect here — not a page — because there is no page left to render.
+ */
+function isOldOnboardingAddress(pathname: string): boolean {
+  return pathname === '/onboarding' || pathname.startsWith('/onboarding/');
+}
 
 /**
  * Injects the current request path (pathname + search) into the
@@ -32,6 +43,10 @@ import { ACCESS_COOKIE, OPERATOR_COOKIE } from '@/shared/lib/session';
  * relies on.
  */
 export function middleware(request: NextRequest) {
+  if (isOldOnboardingAddress(request.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL(NON_OPERATOR_LANDING, request.url), 307);
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(
     'x-pathname',
@@ -42,9 +57,14 @@ export function middleware(request: NextRequest) {
   // Mirrors `isAuthenticated()` in shared/lib/session.ts (access token cookie
   // AND operator token cookie) — the SAME predicate, read from the request
   // cookie jar instead of `next/headers` `cookies()` (not available here).
+  //
+  // TASK-MONO-773 S6 — the non-operator shell (access cookie + the explicit marker, § 2.6.4) is a private
+  // session view too: it renders the caller's received invitations. Same `no-store`.
+  const hasAccess = Boolean(request.cookies.get(ACCESS_COOKIE)?.value);
   const authenticated =
-    Boolean(request.cookies.get(ACCESS_COOKIE)?.value) &&
-    Boolean(request.cookies.get(OPERATOR_COOKIE)?.value);
+    hasAccess &&
+    (Boolean(request.cookies.get(OPERATOR_COOKIE)?.value) ||
+      request.cookies.get(NON_OPERATOR_COOKIE)?.value === '1');
   if (authenticated) {
     response.headers.set('Cache-Control', 'no-store, private');
   }

@@ -28,3 +28,30 @@ export const OnboardResponseSchema = z.object({
   status: z.string().min(1),
 });
 export type OnboardResponse = z.infer<typeof OnboardResponseSchema>;
+
+// --- received invitations (TASK-MONO-773 OD-7 — onboarding-api.md § received-invitations) ----------------
+
+/** One invitation addressed to the caller's verified email (read-only — never a token or a link). */
+export const ReceivedInvitationSchema = z.object({
+  invitationId: z.string().min(1),
+  tenantId: z.string().min(1),
+  tenantDisplayName: z.string().nullable(),
+  roles: z.array(z.string()),
+  firstAdmin: z.boolean(),
+  expiresAt: z.string(),
+  invitedAt: z.string(),
+});
+export type ReceivedInvitation = z.infer<typeof ReceivedInvitationSchema>;
+
+/** Producer 200 — `accountState` kept a string so a future value never crashes the screen. */
+export const ReceivedInvitationsResponseSchema = z.object({
+  accountState: z.string().min(1),
+  items: z.array(ReceivedInvitationSchema),
+});
+export type ReceivedInvitationsResponse = z.infer<typeof ReceivedInvitationsResponseSchema>;
+
+/** What the «테넌트 생성» screen knows about the caller's received invitations. */
+export type ReceivedInvitationsState =
+  | { kind: 'loaded'; accountState: string; items: ReceivedInvitation[] }
+  /** IAM could not judge (503 / timeout / bad shape) — never rendered as «no invitations». */
+  | { kind: 'unavailable' };

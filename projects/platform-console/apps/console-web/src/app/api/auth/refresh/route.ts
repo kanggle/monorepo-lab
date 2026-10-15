@@ -8,11 +8,8 @@ import {
   hasCompleteSession,
 } from '@/shared/lib/session-refresh';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
-import { MFA_REQUIRED_CODE } from '@/shared/api/errors';
-import {
-  OPERATOR_CHECK_UNAVAILABLE,
-  OPERATOR_CHECK_UNAVAILABLE_CODE,
-} from '@/shared/lib/iam-token-refusal';
+import { MFA_REQUIRED_CODE, NOT_AN_OPERATOR_CODE } from '@/shared/api/errors';
+import { nonOperatorLandingFor } from '@/shared/lib/non-operator';
 import {
   buildLoginRedirectFor,
   buildStepUpRedirectFor,
@@ -35,8 +32,11 @@ export const runtime = 'nodejs';
  * ---------------------------------------------------------------------------
  * POST — the browser API client after a `401` (`shared/api/client.ts`)
  * ---------------------------------------------------------------------------
- * JSON. Unchanged contract: any failure drops the whole session (IAM +
- * operator cookies) and answers `401`; an unexpected error answers `502`.
+ * JSON. Any failure drops the whole session (IAM + operator cookies) and
+ * answers `401`; an unexpected error answers `502`. Two exceptions keep the
+ * rotated IAM cookies: `403 MFA_REQUIRED` (TASK-MONO-771) and — TASK-MONO-773
+ * S6 — `403 NOT_AN_OPERATOR` (the exchange answered `401`: the session goes on
+ * as the non-operator shell, § 2.6.4).
  *
  * 🔴 TASK-PC-FE-300 — cookies are shared across browser tabs, and IAM
  * `TASK-BE-606` gives a same-token concurrent-refresh LOSER a bare `400
@@ -116,15 +116,6 @@ export async function POST(req: Request): Promise<NextResponse> {
         { code: 'TOKEN_INVALID', message: 'refresh failed' },
         { status: 401 },
       );
-    case 'operator_check_unavailable':
-      // TASK-MONO-772 S4 (§ 2.6.3) — transient: IAM could not ask whether this
-      // personal account is an operator, and did NOT rotate the refresh token.
-      // Every cookie is kept; not the rotation-race retry (that is for a plain
-      // `invalid_grant`). The browser client shows the reason on `/login`.
-      return NextResponse.json(
-        { code: OPERATOR_CHECK_UNAVAILABLE_CODE, message: 'operator check unavailable' },
-        { status: 503 },
-      );
     case 'operator_mfa_required':
       // TASK-MONO-771 (§ 2.6.1) — callback parity: the operator session was
       // dropped, the rotated IAM cookies stay; the browser client navigates
@@ -134,6 +125,14 @@ export async function POST(req: Request): Promise<NextResponse> {
         { status: 403 },
       );
     case 'operator_not_provisioned':
+      // TASK-MONO-773 S6 (§ 2.6.1 / § 2.6.4) — a valid identity session that is not an
+      // operator: the rotated IAM cookies STAY and the non-operator marker was set by
+      // `refreshSessionCookies` (was: `401` + the whole session cleared). The browser
+      // client navigates to the tenant-creation screen on this code (`shared/api/client.ts`).
+      return NextResponse.json(
+        { code: NOT_AN_OPERATOR_CODE, message: 'not an operator' },
+        { status: 403 },
+      );
     case 'operator_unavailable':
       // Whole session — no stale operator token, no GAP-token fallback.
       clearFullSession(jar);
@@ -220,29 +219,18 @@ export async function GET(req: Request): Promise<NextResponse> {
       if (outcome.status < 500) clearFullSession(jar);
       return sessionExpired();
 
-    case 'operator_check_unavailable': {
-      // TASK-MONO-772 S4 (§ 2.6.3) — transient: cookies KEPT (IAM did not rotate
-      // the refresh token), the reason is shown, the destination travels along.
-      // Outside the guard, so no loop; the next guard visit refreshes again.
-      const url = new URL('/login', origin);
-      url.searchParams.set('error', OPERATOR_CHECK_UNAVAILABLE);
-      if (target !== '/') url.searchParams.set('redirect', target);
-      const res = NextResponse.redirect(url.toString());
-      res.headers.set('Cache-Control', 'no-store');
-      return res;
-    }
-
     case 'operator_not_provisioned':
-      // Callback parity (§ 2.6 / ADR-MONO-044): a valid IAM login that is not
-      // an operator of any tenant goes to self-service onboarding. The operator
-      // session was dropped; the rotated IAM cookies stay (onboarding needs
-      // them as its subject_token).
-      return to('/onboarding');
+      // Callback parity (§ 2.6 / § 2.6.4 — TASK-MONO-773 S6): a valid IAM login
+      // that is not an operator of any tenant continues as the non-operator shell
+      // (marker set by `refreshSessionCookies`). The asked-for page if it is on the
+      // non-operator allow-list, otherwise the tenant-creation screen. The rotated
+      // IAM cookies stay (the onboarding subject_token + the logout hint).
+      return to(nonOperatorLandingFor(target));
 
     case 'operator_mfa_required':
       // TASK-MONO-771 (§ 2.6.1) — e.g. a tenant's entry policy was switched on
       // mid-session. Callback parity: operator session dropped, rotated IAM
-      // cookies kept → step-up. 🔴 Never `/onboarding` (that is the `401` above).
+      // cookies kept → step-up. 🔴 Never the non-operator state (that is the `401` above).
       return to(buildStepUpRedirectFor(target));
 
     case 'operator_unavailable':

@@ -152,3 +152,86 @@ describe('CreateOrganizationForm — submit outcomes', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * TASK-MONO-773 S6 — the self-mode form of the «테넌트 생성» screen (console-integration-contract § 2.6.4 error
+ * table). Codes are IAM's; the copy is the contract's. `logout` is injectable (defaults to the shared
+ * RP-initiated logout — the same one the account menu uses).
+ */
+describe('CreateOrganizationForm — 773 trust-gate answers (§ 2.6.4 error table)', () => {
+  async function submitWith(
+    status: number,
+    body: unknown,
+    extra: Record<string, unknown> = {},
+  ) {
+    const submit = vi.fn().mockResolvedValue(jsonResponse(status, body));
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    const Form = CreateOrganizationForm as unknown as React.ComponentType<Record<string, unknown>>;
+    render(
+      <Form
+        submit={submit}
+        navigate={navigate}
+        mode="first"
+        emailVerificationUrl="http://iam.local/email-verification"
+        {...extra}
+      />,
+    );
+    await user.type(screen.getByTestId('onboarding-tenant-id'), 'acme-corp');
+    await user.type(screen.getByTestId('onboarding-org-name'), 'Acme Corp');
+    await user.click(screen.getByTestId('onboarding-submit'));
+    const err = await screen.findByTestId('onboarding-error');
+    return { err, navigate, user };
+  }
+
+  it('🔴 403 EMAIL_NOT_VERIFIED → «회사를 만들려면 먼저 이메일을 인증해야 합니다» + link to the IAM verification page', async () => {
+    const { err, navigate } = await submitWith(403, { code: 'EMAIL_NOT_VERIFIED' });
+    expect(err).toHaveTextContent('회사를 만들려면 먼저 이메일을 인증해야 합니다');
+    expect(screen.getByTestId('onboarding-error-verify-link')).toHaveAttribute(
+      'href',
+      'http://iam.local/email-verification',
+    );
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('🔴 403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE → «개인 계정으로 로그인해 만드세요» + logout', async () => {
+    const logout = vi.fn();
+    const { err, user } = await submitWith(403, { code: 'ONBOARDING_ACCOUNT_NOT_ELIGIBLE' }, { logout });
+    expect(err).toHaveTextContent('이 계정으로는 회사를 만들 수 없습니다');
+    expect(err).toHaveTextContent('개인 계정으로 로그인해 만드세요');
+    await user.click(screen.getByTestId('onboarding-error-logout'));
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('🔴 409 OPERATOR_ALREADY_PROVISIONED → «이 계정은 지금 회사를 새로 만들 수 없습니다»', async () => {
+    const { err } = await submitWith(409, { code: 'OPERATOR_ALREADY_PROVISIONED' });
+    expect(err).toHaveTextContent('이 계정은 지금 회사를 새로 만들 수 없습니다');
+  });
+
+  it('🔴 429 RATE_LIMITED → «잠시 후 다시 시도하세요»', async () => {
+    const { err } = await submitWith(429, { code: 'RATE_LIMITED' });
+    expect(err).toHaveTextContent('잠시 후 다시 시도하세요');
+  });
+
+  it('🔵 control — 409 TENANT_ALREADY_EXISTS keeps its slug-taken copy and has no verify link / logout', async () => {
+    const { err } = await submitWith(409, { code: 'TENANT_ALREADY_EXISTS' });
+    expect(err).toHaveTextContent('이미 사용 중인');
+    expect(screen.queryByTestId('onboarding-error-verify-link')).toBeNull();
+    expect(screen.queryByTestId('onboarding-error-logout')).toBeNull();
+  });
+});
+
+describe('CreateOrganizationForm — 773 modes (first company vs second company)', () => {
+  const Form = CreateOrganizationForm as unknown as React.ComponentType<Record<string, unknown>>;
+
+  it('🔴 the button says «테넌트 만들기» (one name for the one act — 773 Goal)', () => {
+    render(<Form submit={vi.fn()} navigate={vi.fn()} mode="first" />);
+    expect(screen.getByTestId('onboarding-submit')).toHaveTextContent('테넌트 만들기');
+  });
+
+  it('🔴 second-company mode says the new tenant is ADDED and the existing companies are untouched', () => {
+    render(<Form submit={vi.fn()} navigate={vi.fn()} mode="additional" />);
+    const panel = screen.getByTestId('onboarding-what-happens');
+    expect(panel).toHaveTextContent('지금 소속된 회사의 권한은 그대로');
+  });
+});

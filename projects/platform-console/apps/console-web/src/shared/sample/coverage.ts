@@ -227,6 +227,9 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/subscriptions': 'ready',
   '/tenants': 'ready',
   '/tenants/[tenantId]': 'ready',
+  // TASK-MONO-773 S6 — pending, and deliberately so: a sample visitor never sees this screen — the page sends
+  // them to `/` (no tenant creation in the sample shell, console-integration-contract § 2.6.4 «Sample mode»).
+  '/new-tenant': 'pending',
   // TASK-MONO-771 S5 — pending: its only data is the `tenant_entry_policy` surface (no fixture).
   '/security-settings': 'pending',
 

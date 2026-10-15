@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import {
   isAuthenticated,
   isSampleVisitor,
+  isNonOperatorSession,
   hasRefreshToken,
   getActiveTenant,
   getIdToken,
@@ -18,6 +19,7 @@ import {
   buildReassumeRedirectFor,
 } from '@/shared/lib/login-redirect';
 import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
+import { isNonOperatorAllowedPath, NON_OPERATOR_LANDING } from '@/shared/lib/non-operator';
 import { liveSessionDemoStopRedirect } from '@/shared/lib/live-session-demo-stop';
 import { getCatalog } from '@/features/catalog';
 import { getSelfRolesOrNull } from '@/shared/api/iam-operators-read';
@@ -58,6 +60,47 @@ function accountDisplayLabel(idToken: string | null, accessToken: string | null)
 }
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * TASK-MONO-773 S6 — the «logged in · not an operator» shell (console-integration-contract § 2.6.4, guard
+ * row 3). A plain function returning JSX (not a component) so the guard's tests see exactly what it mounts.
+ *
+ * 🔴 What it NEVER calls (Failure Scenario 1 — the `401` re-login loop): the registry, `/api/admin/me`, the
+ *    org-node reads, the notification bell's polling, the demo heartbeat, the tenant switcher / re-assume and
+ *    the § 2.6.2 live demo-stop check. There is no operator token to call them with. What it mounts: the demo
+ *    notice (the shell still depends on the backend for its one read), the bfcache guard, the account menu
+ *    (logout — AC-7) and the two-item sidebar.
+ */
+function nonOperatorShell(children: ReactNode, accountLabel: string) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <DemoBackendNotice />
+      <BfcacheGuard />
+      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link
+            href={NON_OPERATOR_LANDING}
+            className="rounded-sm text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Platform Console
+          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <AccountMenu accountLabel={accountLabel} />
+          </div>
+        </div>
+      </header>
+      <div className="flex flex-1">
+        <aside className="hidden w-56 shrink-0 border-r border-border md:block">
+          <ConsoleSidebarNav variant="non-operator" />
+        </aside>
+        <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Builds the login redirect URL, preserving the intended destination via
@@ -154,6 +197,21 @@ export default async function ConsoleLayout({
   // unchanged.
   const sampleVisitor = await isSampleVisitor();
   if (!sampleVisitor && !(await isAuthenticated())) {
+    // TASK-MONO-773 S6 (contract § 2.6.4, guard row 3 — asked after row 2, the operator shell) — access
+    // cookie + the explicit non-operator marker, no operator cookie: the non-operator shell. Asked BEFORE the
+    // § 2.6.1 hop below, because this session is not «idled out» — the exchange answered `401`. 🔴 Only the
+    // two allow-listed pages render; every other path (including `/` and direct URLs to operator screens)
+    // answers `307 → /new-tenant`, so no operator page ever renders to call its operator API. No network call
+    // either way.
+    if (await isNonOperatorSession()) {
+      if (!isNonOperatorAllowedPath((await headers()).get('x-pathname'))) {
+        redirect(NON_OPERATOR_LANDING);
+      }
+      return nonOperatorShell(
+        children,
+        accountDisplayLabel(await getIdToken(), await getAccessToken()),
+      );
+    }
     // Refresh cookie present = logged in before, session idled out → refresh.
     // Absent = never logged in / logged out → login. No network call either way.
     redirect(

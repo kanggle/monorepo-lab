@@ -4,8 +4,12 @@
  * presentational split). Purely static — no props, no state, no interactivity.
  * Markup / testid (`onboarding-what-happens`) is byte-verbatim from the former
  * god-file.
+ *
+ * TASK-MONO-773 S6 — `mode="additional"` (a company operator's second company, ADR-MONO-082 D6 b) adds one
+ * line: the existing companies' permissions are untouched (ADR-044 D2 — the new rows point at the new tenant
+ * only). The default (`"first"`) renders byte-identically to before.
  */
-export function OnboardingWhatHappens() {
+export function OnboardingWhatHappens({ mode = 'first' }: { mode?: 'first' | 'additional' } = {}) {
   return (
     <section
       data-testid="onboarding-what-happens"
@@ -26,6 +30,12 @@ export function OnboardingWhatHappens() {
           <strong className="text-foreground">방금 만든 조직에만</strong>{' '}
           적용됩니다 — 다른 조직에는 접근할 수 없습니다.
         </li>
+        {mode === 'additional' && (
+          <li>
+            새 회사가 하나 <strong className="text-foreground">더해질 뿐</strong>, 지금 소속된 회사의
+            권한은 그대로입니다. 상단 스위처에서 회사를 오갈 수 있습니다.
+          </li>
+        )}
         <li>
           조직은{' '}
           <strong className="text-foreground">도메인 구독 0</strong>{' '}

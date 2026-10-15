@@ -270,3 +270,58 @@ SELECT o.id, '*', s.id, 'MIGRATION', NULL, NULL, NOW(6)
   FROM admin_operators o
   JOIN domain_permission_set s ON s.system_key = 'legacy-compat'
  WHERE o.tenant_id = '*';
+
+-- ---------------------------------------------------------------------------
+-- TASK-MONO-773 S6 — two PERSONAL (consumer-pool) accounts with NO operator facet, for
+-- `non-operator-tenant-creation.spec.ts` (AC-1 · AC-2 · AC-5 · AC-7).
+--
+-- Why these rows, and only these:
+--   • auth_db.credentials, tenant `consumer-pool` — the console client's form login falls back across
+--     tenants (console client only, TASK-BE-604) and finds exactly ONE row for these emails, so the
+--     principal is the pool account; IAM 773 S5 then issues the console SHELL token (no operator facet →
+--     still a token, `tenant_id=iam`, an `id_token` for the logout hint). No `iam` row for these emails —
+--     a second row would make the cross-tenant fallback ambiguous (fail-closed).
+--   • account_db identities + accounts in `consumer-pool`, `email_verified_at` SET — the onboarding trust
+--     gate (IAM 773 S3) reads the account (`GET /internal/accounts/{sub}`) and asks
+--     `verified-email:match`; an unverified email would answer `403 EMAIL_NOT_VERIFIED` and AC-2 could not
+--     create anything. The account id IS the credential's account_id (= the token `sub`).
+--   • NO admin_db row — that is the point: the operator exchange must answer `401`.
+-- Two accounts, not one: the specs run in parallel (`fullyParallel`), and the AC-2 account stops being a
+-- non-operator the moment it creates a tenant — the shell / logout specs need one that never does.
+-- Same Argon2id hash (`devpassword123!`) as every row above. Idempotent (INSERT IGNORE).
+-- ---------------------------------------------------------------------------
+USE `auth_db`;
+
+INSERT IGNORE INTO credentials (
+    tenant_id, account_id, email, credential_hash, hash_algorithm, created_at, updated_at, version
+) VALUES
+(
+    'consumer-pool',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c773',
+    'e2e-pool-shell@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id', NOW(6), NOW(6), 0
+),
+(
+    'consumer-pool',
+    '01928c4a-7e9f-7c00-9a40-d2b1f5e8c774',
+    'e2e-pool-creator@example.com',
+    '$argon2id$v=16$m=65536,t=3,p=1$7u/kw4KcLt7/i1nTEzEfsH7kRIraSsh1w9qOB7BhxUMTJdk3Oqp6zBklBlcMzJ4jS0PpgLYN+MW+1HlJF3m7ew$OJzCJkqvkul/EbS2FejjcDPx7Htj2HkAiCz74xcGBeY',
+    'argon2id', NOW(6), NOW(6), 0
+);
+
+USE `account_db`;
+
+-- The identity lives in the pool like its account (multi-tenancy.md § 소비자 계정 풀 § 3 — same shape as
+-- account-service migration-dev R__05). identity_id is its own UUID, not the account id.
+INSERT IGNORE INTO identities (identity_id, tenant_id, primary_email, status, created_at, updated_at, version)
+VALUES
+    ('01928c4b-7e9f-7c00-9a40-d2b1f5e8c773', 'consumer-pool', 'e2e-pool-shell@example.com', 'ACTIVE', NOW(6), NOW(6), 0),
+    ('01928c4b-7e9f-7c00-9a40-d2b1f5e8c774', 'consumer-pool', 'e2e-pool-creator@example.com', 'ACTIVE', NOW(6), NOW(6), 0);
+
+INSERT IGNORE INTO accounts (id, identity_id, tenant_id, email, status, email_verified_at, created_at, updated_at, version)
+VALUES
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8c773', '01928c4b-7e9f-7c00-9a40-d2b1f5e8c773',
+     'consumer-pool', 'e2e-pool-shell@example.com', 'ACTIVE', NOW(6), NOW(6), NOW(6), 0),
+    ('01928c4a-7e9f-7c00-9a40-d2b1f5e8c774', '01928c4b-7e9f-7c00-9a40-d2b1f5e8c774',
+     'consumer-pool', 'e2e-pool-creator@example.com', 'ACTIVE', NOW(6), NOW(6), NOW(6), 0);

@@ -138,7 +138,10 @@ describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (T
     expect(cookieJar.get(TENANT_COOKIE)?.value).toBe('acme-corp');
   });
 
-  it('operator re-exchange 401 with an active tenant: drops the whole session, the speculative assume is ignored (no unhandled rejection, no stale assumed token)', async () => {
+  // TASK-MONO-773 S6 — contract § 2.6.1 / § 2.6.4 (S1-9): the `401` is «not an operator» → `403 NOT_AN_OPERATOR`
+  // with the rotated IAM cookies KEPT (was `401` + whole session dropped). What this cell exists for is unchanged:
+  // the operator session and the tenant pair go, and the speculative assume never lands.
+  it('operator re-exchange 401 with an active tenant: 403 NOT_AN_OPERATOR, operator + tenant pair dropped, the speculative assume is ignored (no unhandled rejection, no stale assumed token)', async () => {
     cookieJar.set(REFRESH_COOKIE, { value: 'old.ref' });
     cookieJar.set(OPERATOR_COOKIE, { value: 'stale.op' });
     cookieJar.set(TENANT_COOKIE, { value: 'acme-corp' });
@@ -170,11 +173,11 @@ describe('POST /api/auth/refresh — concurrent operator + assume re-exchange (T
 
     const res = await postRefresh();
 
-    expect(res.status).toBe(401);
-    expect((await res.json()).code).toBe('TOKEN_INVALID');
-    // Whole session dropped — no stale operator/assumed token survives.
-    expect(cookieDeletes).toContain(ACCESS_COOKIE);
-    expect(cookieDeletes).toContain(REFRESH_COOKIE);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('NOT_AN_OPERATOR');
+    // Operator session dropped — no stale operator/assumed token survives; the identity session goes on.
+    expect(cookieDeletes).not.toContain(ACCESS_COOKIE);
+    expect(cookieDeletes).not.toContain(REFRESH_COOKIE);
     expect(cookieDeletes).toContain(OPERATOR_COOKIE);
     expect(cookieDeletes).toContain(ASSUMED_TOKEN_COOKIE);
     expect(cookieDeletes).toContain(TENANT_COOKIE);

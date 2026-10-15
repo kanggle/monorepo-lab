@@ -129,14 +129,14 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
 
   // ── unreachable for a sample visitor ───────────────────────────────────────
   'features/onboarding/api/onboarding-client.ts': {
-    count: 1,
+    count: 2,
     category: 'unreachable-for-sample',
-    why: 'pre-operator only: /api/onboarding requires the access cookie a sample visitor lacks',
+    why: 'create organization + received invitations (TASK-MONO-773 S6) — both need the IAM access cookie a sample visitor lacks (/api/onboarding/** answers 401 without it; /new-tenant sends a sample visitor to /)',
   },
   'features/onboarding/components/CreateOrganizationForm.tsx': {
     count: 1,
     category: 'unreachable-for-sample',
-    why: 'rendered only by the (onboarding) group, which admits pre-operator sessions only',
+    why: 'rendered only by /new-tenant (TASK-MONO-773 S6), which redirects a sample visitor to / before rendering',
   },
   'features/ecommerce-ops/hooks/use-ecommerce-images.ts': {
     count: 1,

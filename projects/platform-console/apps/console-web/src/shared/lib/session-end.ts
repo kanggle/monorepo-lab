@@ -65,14 +65,19 @@ export function sessionEndDestination(state: DemoBackendState): SessionEndDestin
  * 샘플 셸로 돌려보낼 경로 (CONSUME 측, 공격자 입력).
  *
  * 갱신 라우트와 **같은** 소독(`resolveRefreshReturnPath` — `//`·`/\`·절대 URL·`/login…`·
- * `/api/…` 거절)에 `/onboarding…` 거절을 하나 더 건다: 온보딩은 pre-operator 세션만
- * 들이므로 세션을 지운 방문자를 거기 보내면 다시 강제 재로그인으로 꺾인다.
+ * `/api/…` 거절)에 `/onboarding…` · `/new-tenant…` 거절을 더 건다: 테넌트 생성은 로그인한 세션만
+ * 쓰는 화면이라 세션을 지운 방문자에게는 닿지 않는다(샘플 셸에는 테넌트 생성이 없다 —
+ * `TASK-MONO-773` S6, 계약 § 2.6.2 · § 2.6.4). `/onboarding` 은 이제 `/new-tenant` 로 넘겨주는 주소다.
  */
+function isUnreachableInSample(path: string): boolean {
+  return ['/onboarding', '/new-tenant'].some(
+    (p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`),
+  );
+}
+
 export function sampleReturnPath(raw: string | null | undefined): string {
   const path = resolveRefreshReturnPath(raw);
-  return path === '/onboarding' || path.startsWith('/onboarding/') || path.startsWith('/onboarding?')
-    ? '/'
-    : path;
+  return isUnreachableInSample(path) ? '/' : path;
 }
 
 /** `/login` → 세션 종료 라우트. 목적지는 라우트가 다시 소독한다. */

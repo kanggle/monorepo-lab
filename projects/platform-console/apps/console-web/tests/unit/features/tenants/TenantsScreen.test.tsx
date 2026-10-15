@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TenantsScreen } from '@/features/tenants';
+import { TenantsScreen, TenantCreateScreen } from '@/features/tenants';
 
 /**
- * `TenantsScreen` — the tenant-management list + create surface
- * (TASK-PC-FE-226). `apiClient` is mocked so the create mutation is asserted
+ * `TenantsScreen` — the tenant-management list surface (TASK-PC-FE-226) — and, since TASK-MONO-773 S6,
+ * `TenantCreateScreen`: the SUPER_ADMIN create form moved off `/tenants` onto the one «테넌트 생성» screen
+ * `/new-tenant` (console-integration-contract § 2.6.4). The create cells below render that component; their
+ * assertions are unchanged from when the form lived on `TenantsScreen`. `apiClient` is mocked so the create mutation is asserted
  * without a real backend (mirrors `SubscriptionsScreen.test.tsx` /
  * `CreateOperatorForm.test.tsx` conventions: draft → reason+confirm dialog →
  * mutate).
@@ -22,9 +24,16 @@ vi.mock('@/shared/api/client', () => ({
   },
 }));
 
+// TASK-MONO-773 S6 — the mock forwards the remaining props (e.g. `data-testid`) like the real `Link` does.
 vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: { href: string; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -45,13 +54,25 @@ const INITIAL_PAGE = {
   totalPages: 1,
 };
 
-function renderScreen(
+// TASK-MONO-773 S6 — the list screen no longer takes org-node options (they went with the form).
+function renderScreen() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <TenantsScreen initial={INITIAL_PAGE} />
+    </QueryClientProvider>,
+  );
+}
+
+/** TASK-MONO-773 S6 — the create form on `/new-tenant` (navigation injected). */
+const navigateSpy = vi.fn();
+function renderCreate(
   orgNodeOptions?: { orgNodeId: string; name: string }[] | null,
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <TenantsScreen initial={INITIAL_PAGE} orgNodeOptions={orgNodeOptions} />
+      <TenantCreateScreen orgNodeOptions={orgNodeOptions} navigate={navigateSpy} />
     </QueryClientProvider>,
   );
 }
@@ -59,6 +80,7 @@ function renderScreen(
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  navigateSpy.mockReset();
 });
 
 /**
@@ -79,10 +101,10 @@ async function fillFirstAdmin(
   await user.type(nameInput as HTMLElement, name);
 }
 
-describe('TenantsScreen — create · first admin (TASK-MONO-773 S4)', () => {
+describe('TenantCreateScreen — create · first admin (TASK-MONO-773 S4)', () => {
   it('keeps submit disabled until the first admin email and name are both valid', async () => {
     const user = userEvent.setup();
-    renderScreen();
+    renderCreate();
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
@@ -120,7 +142,7 @@ describe('TenantsScreen — create · first admin (TASK-MONO-773 S4)', () => {
       firstAdminInvitation: { invitationId: 'inv-1', firstAdmin: true },
     });
     const user = userEvent.setup();
-    renderScreen();
+    renderCreate();
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
@@ -148,10 +170,10 @@ describe('TenantsScreen — render (seeded)', () => {
   });
 });
 
-describe('TenantsScreen — create', () => {
+describe('TenantCreateScreen — create', () => {
   it('keeps submit disabled for an invalid tenantId format (fail-closed pre-gate)', async () => {
     const user = userEvent.setup();
-    renderScreen();
+    renderCreate();
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'Bad_ID!');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
@@ -172,7 +194,7 @@ describe('TenantsScreen — create', () => {
       updatedAt: '2026-07-08T00:00:00Z',
     });
     const user = userEvent.setup();
-    renderScreen();
+    renderCreate();
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
@@ -240,7 +262,7 @@ describe('TenantsScreen — create', () => {
   it('AC-4 — a chosen node rides in the create body as orgNodeId', async () => {
     post.mockResolvedValue(CREATED);
     const user = userEvent.setup();
-    renderScreen(NODE_OPTIONS);
+    renderCreate(NODE_OPTIONS);
 
     const select = screen.getByTestId('tenant-form-org-node');
     expect(screen.getByLabelText('소속 노드 (선택)')).toBe(select);
@@ -255,7 +277,7 @@ describe('TenantsScreen — create', () => {
   it('AC-4 (regression) — left empty, the create body has NO orgNodeId key at all', async () => {
     post.mockResolvedValue(CREATED);
     const user = userEvent.setup();
-    renderScreen(NODE_OPTIONS);
+    renderCreate(NODE_OPTIONS);
 
     const body = await fillAndConfirm(user, null);
     expect(body).not.toHaveProperty('orgNodeId');
@@ -267,7 +289,7 @@ describe('TenantsScreen — create', () => {
   it('AC-4 — choosing a node then going back to «소속 없음» also leaves the key out', async () => {
     post.mockResolvedValue(CREATED);
     const user = userEvent.setup();
-    renderScreen(NODE_OPTIONS);
+    renderCreate(NODE_OPTIONS);
 
     await user.selectOptions(screen.getByTestId('tenant-form-org-node'), 'node-hq');
     const body = await fillAndConfirm(user, '');
@@ -277,7 +299,7 @@ describe('TenantsScreen — create', () => {
   it('the org-node list could not be read → the field still renders (소속 없음 only) and creates unplaced', async () => {
     post.mockResolvedValue(CREATED);
     const user = userEvent.setup();
-    renderScreen(null);
+    renderCreate(null);
 
     const select = screen.getByTestId('tenant-form-org-node') as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['']);
@@ -290,7 +312,7 @@ describe('TenantsScreen — create', () => {
     const { ApiError } = await import('@/shared/api/errors');
     post.mockRejectedValue(new ApiError(404, 'ORG_NODE_NOT_FOUND', 'no'));
     const user = userEvent.setup();
-    renderScreen(NODE_OPTIONS);
+    renderCreate(NODE_OPTIONS);
 
     await fillAndConfirm(user, 'node-hq');
     await waitFor(() =>
@@ -307,7 +329,7 @@ describe('TenantsScreen — create', () => {
     const { ApiError } = await import('@/shared/api/errors');
     post.mockRejectedValue(new ApiError(409, 'TENANT_ALREADY_EXISTS', 'exists'));
     const user = userEvent.setup();
-    renderScreen();
+    renderCreate();
 
     await user.type(screen.getByTestId('tenant-form-tenant-id'), 'fan-platform');
     await user.type(screen.getByTestId('tenant-form-display-name'), 'Fan Platform 2');
@@ -323,5 +345,53 @@ describe('TenantsScreen — create', () => {
     );
     // Dialog stays open on failure — no navigation / fake success.
     expect(screen.getByTestId('tenant-confirm-submit')).toBeInTheDocument();
+  });
+});
+
+describe('TASK-MONO-773 S6 — the create form moved to /new-tenant', () => {
+  it('🔴 /tenants no longer renders the create form — it links to /new-tenant instead', () => {
+    renderScreen();
+    expect(screen.queryByTestId('tenant-form-tenant-id')).toBeNull();
+    expect(screen.getByTestId('tenants-create-link')).toHaveAttribute('href', '/new-tenant');
+  });
+
+  it('🔴 a confirmed SUPER_ADMIN create on /new-tenant navigates to /tenants (the row reads «관리자 대기» there)', async () => {
+    post.mockResolvedValue({
+      tenantId: 'new-tenant',
+      displayName: 'New Tenant',
+      tenantType: 'B2B_ENTERPRISE',
+      status: 'PENDING',
+      createdAt: '2026-10-15T00:00:00Z',
+      updatedAt: '2026-10-15T00:00:00Z',
+      firstAdmin: { state: 'INVITED', email: 'owner@new-tenant.example', invitationId: 'inv-1', expiresAt: null },
+    });
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.type(screen.getByTestId('tenant-form-tenant-id'), 'new-tenant');
+    await user.type(screen.getByTestId('tenant-form-display-name'), 'New Tenant');
+    await fillFirstAdmin(user);
+    await user.click(screen.getByTestId('tenant-create-submit'));
+    await user.type(screen.getByTestId('tenant-confirm-reason'), '신규 고객사');
+    await user.click(screen.getByTestId('tenant-confirm-submit'));
+
+    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith('/tenants'));
+  });
+
+  it('🔵 control — a failed create does not navigate', async () => {
+    const { ApiError } = await import('@/shared/api/errors');
+    post.mockRejectedValue(new ApiError(409, 'TENANT_ALREADY_EXISTS', 'taken'));
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.type(screen.getByTestId('tenant-form-tenant-id'), 'fan-platform');
+    await user.type(screen.getByTestId('tenant-form-display-name'), 'Fan Platform 2');
+    await fillFirstAdmin(user);
+    await user.click(screen.getByTestId('tenant-create-submit'));
+    await user.type(screen.getByTestId('tenant-confirm-reason'), 'dup');
+    await user.click(screen.getByTestId('tenant-confirm-submit'));
+
+    await screen.findByTestId('tenant-confirm-error');
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

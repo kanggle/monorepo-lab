@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { clampPageSize } from '@/shared/lib/pagination';
 import {
   TenantSchema,
@@ -93,6 +94,31 @@ export async function createTenant(
       body,
     },
     (json) => TenantSchema.parse(json),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3b. first-admin re-invitation — POST /api/admin/tenants/{tenantId}/first-admin-invitation
+//     (TASK-MONO-773 S6 — a `PENDING` tenant, new address or no invitation left).
+//     HEADERS: X-Operator-Reason + Idempotency-Key (BOTH required by the producer).
+//     The answer is the invitation item (never a token or link) — passed through.
+// ---------------------------------------------------------------------------
+
+export async function inviteFirstAdmin(
+  tenantId: string,
+  firstAdmin: { email: string; displayName: string },
+  reason: string,
+  idempotencyKey: string,
+): Promise<Record<string, unknown>> {
+  return callGapTenants(
+    {
+      method: 'POST',
+      path: `${TENANTS_PREFIX}/${encodeURIComponent(tenantId)}/first-admin-invitation`,
+      reason,
+      idempotencyKey,
+      body: { email: firstAdmin.email, displayName: firstAdmin.displayName },
+    },
+    (json) => z.record(z.string(), z.unknown()).parse(json),
   );
 }
 
