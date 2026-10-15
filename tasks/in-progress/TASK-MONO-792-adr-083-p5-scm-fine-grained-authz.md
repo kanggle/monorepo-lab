@@ -190,7 +190,8 @@ Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-M
 - `federation-hardening-e2e` run `38813334285`, job `116692283695` — ❌ `specs/scm-replenishment-loop.spec.ts:62` `PUT sku-supplier-map -> 200` 이 **403 `PERMISSION_DENIED` ×3**(재시도 포함). 🔵 같은 런의 `tenant-switch-rescope.spec.ts:110` scm 카드 저하는 기지의 flake(`TASK-BE-516`) — 이 티켓과 무관, 쫓지 않음.
 - **원인(실측 · 스펙 읽기)**: 이 스펙은 assume 토큰이 아니라 suite SUPER_ADMIN storageState 의 **기본 로그인 토큰**(`console_access_token`, `tenant_id='*'`)으로 demand-planning · procurement 를 직접 불렀다. 기본 토큰은 설계상 도메인 역할이 **0** 이다(BE-632 이전에도) — 그동안 통한 것은 두 서비스가 `authenticated()` 만 봤기 때문이다. 스펙 머리 주석이 그 가정을 글로 적고 있었다(«demand-planning + procurement have no fine-grained role gate»). ⇒ 792 의 회귀가 아니라 **792 가 무너뜨린 전제에 기대던 시험**이다. 시드 문제 아님: post-Flyway 시드(federation `seed.sql` · 콘솔 e2e · 데모 `R__` · `infra/demo/seed`) 전수 grep — `domain_permission_set_role` 에 손으로 쓰는 시드 **0**, 세트는 전부 프리셋 키(`legacy-compat` · `*-full`)로 참조 ⇒ V0056 가 넓힌 내용을 그대로 받는다. `SCM_OPERATOR` 를 세트에 쓰는 시드 0.
 - **고침**: 스펙을 `scm-inbound-expected-loop.spec.ts` 와 같은 모양으로 — 새 컨텍스트에서 multi-operator 로그인 → `globex-corp`([scm, erp]) assume → 그 assume 토큰(legacy-compat ∩ scm 상한 = 파생 `SCM_OPERATOR` + SCM 8 역할)으로 같은 흐름. demand-planning 제안은 고정 `scm` 테넌트라 어느 토큰으로도 보이고, 초안 발주는 globex-corp 로 만들고 같은 토큰으로 읽는다. 머리 주석에 «Auth 문단은 대체됨» 을 적었다.
-- 재실행: § 아래 «federation 재실행».
+- **federation 재실행** — 커밋 `8997465be`, `gh workflow run federation-hardening-e2e.yml --ref task/mono-792-scm-authz` → run `38815768051`(conclusion **success**), 전체 스택 job `116700509940`: **20 passed · 1 flaky · 0 failed · skipped 0**(로그 요약 줄에서 셈). 실패 · flaky 목록에 `scm-replenishment-loop` 없음 ⇒ 통과(점 리포터라 통과 시험 이름은 찍히지 않는다 — 그 칸은 «실패 목록에 없다 + skipped 0» 으로 판정). flaky 1 = `tenant-switch-rescope.spec.ts:110` scm 카드 `degraded`(재시도 통과) — 기지의 `TASK-BE-516`, 쫓지 않음.
+- 콘솔 · 데모 시드는 바꾸지 않았으므로 `nightly-e2e` 재실행은 하지 않았다(코디네이터의 `38813328986` 초록이 그대로 유효 — 이번 커밋은 federation 스펙 1개와 티켓만 바꿨다).
 
 # 소유자 결정 (추가) — 2026-10-15 UTC
 
