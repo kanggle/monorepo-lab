@@ -364,3 +364,10 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
 
 - **AC-2 기준 이탈 인정**: 계약 `:270` «READ 역할만 → 숨김» 대신 화면별 `writeRequires`(출고 = `OUTBOUND_WRITE` · `/wms` 확인 처리 = `WMS_OPERATOR`). 이유: 행 12 응답에 `access` 칸이 없어 만들 수 없고, 만들더라도 `INVENTORY_WRITE` 보유자에게 출고 버튼을 보여 서버 403 과 어긋난다. 메뉴 단위 결정과 같은 원칙(서버 판정 일치). 조회 전용 세트는 여전히 모든 버튼이 숨는다.
 - **이커머스 배지 유지**: 9 화면 `serverRequires = ECOMMERCE_OPERATOR`(게이트웨이 규칙) — 서버가 거절하므로 «업무 권한 없음». **팬은 선언 없음** — 서버 검사를 잰 뒤(792~795 또는 별건) 데이터만 추가한다.
+
+## AC-5 기록 — c-2 머지 뒤 (2026-10-15 UTC)
+
+- **머지**: PR 1 #4378 `0091e1897` · PR 2 #4381 `091290a57` — 둘 다 머지 직전 실패 체크 0(12/54 · 13/53 pass/skipping).
+- **머지 뒤 첫 nightly(main)**: run 38796953966 (push `091290a57`) success · 콘솔 잡 116636289449 `Running 12 tests using 2 workers` · `12 passed (1.0m)` · flaky 0.
+- **Vercel Production(배포 기록으로 잼)**: `0091e1897` → deployment 7101097688 `success` (18:34:24Z) · `091290a57` → deployment 7102759725 `success` (19:50:41Z).
+- ⇒ AC-5 닫힘. 남은 것 = AC-1 · AC-2 의 서버 403/200 라이브 대조(`TASK-MONO-672` § Next window 3단계, 773 을 실은 재굽기 창). 티켓은 그때까지 `in-progress/`.
