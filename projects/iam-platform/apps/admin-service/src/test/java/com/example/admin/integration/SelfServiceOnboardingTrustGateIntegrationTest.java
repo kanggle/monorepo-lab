@@ -508,13 +508,19 @@ class SelfServiceOnboardingTrustGateIntegrationTest extends AbstractIntegrationT
                 INSERT INTO operator_domain_set_grant
                   (operator_id, tenant_id, set_id, source_key, group_origin, granted_by, granted_at)
                 VALUES (?, '*', ?, 'ORIGIN', NULL, NULL, NOW(6))""", id, allFull))
+                // MySQL raises errno 3819 (SQLSTATE HY000) for a CHECK violation, which Spring maps to
+                // UncategorizedSQLException — NOT DataIntegrityViolationException (that is for FK/unique);
+                // the sibling OrgNodeAdminIntegrationTest:202-211 records the same. So name the constraint.
                 .as("ORIGIN never targets '*'")
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_operator_domain_set_grant_origin_not_platform");
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO operator_domain_set_grant
                   (operator_id, tenant_id, set_id, source_key, group_origin, granted_by, granted_at)
                 VALUES (?, ?, ?, 'BOGUS', NULL, NULL, NOW(6))""", id, "s3-chk-" + sfx, allFull))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .as("an unknown source is still refused (control)")
+                .isInstanceOf(org.springframework.dao.DataAccessException.class)
+                .hasMessageContaining("ck_operator_domain_set_grant_source");
     }
 
     @Test
