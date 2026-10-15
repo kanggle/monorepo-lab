@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { Kafka } from 'kafkajs';
 
+import { switchTenant } from '../fixtures/console-helpers';
+import { loginAsMultiOperator } from '../fixtures/login';
+
 /**
  * TASK-SCM-INT-002 leg 2 — replenishment-loop federation live proof (ADR-MONO-027 §5).
  *
@@ -40,7 +43,21 @@ import { Kafka } from 'kafkajs';
  * base token carries tenant_id='*', accepted by all producers (login.ts). The
  * approve propagates that bearer to procurement (intra-scm trust, ADR-027 D5),
  * so the DRAFT PO is created under the same tenant the GET reads it under.
+ *
+ * 🔴 TASK-MONO-792 (ADR-MONO-083 P5) — the «Auth» paragraph above is SUPERSEDED. demand-planning and
+ * procurement now DO gate on SCM business roles (scm iam-integration.md § 업무 역할). The suite
+ * SUPER_ADMIN storageState holds only the BASE login token (tenant_id='*'), which by design carries
+ * no domain role — it reached these producers only because they checked `authenticated()`; after
+ * P5 it 403s (measured: federation run 38813334285, `PUT sku-supplier-map` 403 PERMISSION_DENIED ×3).
+ * So, exactly like scm-inbound-expected-loop.spec.ts, this spec logs in fresh as the
+ * multi-assignment operator and assumes `globex-corp` ([scm, erp]): its assume token carries the
+ * legacy-compat set (seed.sql § TASK-BE-632) ∩ the scm ceiling = SCM_OPERATOR (derived) + the
+ * eight SCM roles — the production read/write path a real SCM operator uses. demand-planning's
+ * suggestions live under its static `scm` tenant (any admitted token sees them); the DRAFT PO is
+ * created and read under globex-corp, the same token's tenant.
  */
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('scm replenishment loop — federation live (ADR-MONO-027 leg 2)', () => {
   // Nightly-only, not PR-gated; tolerate the documented federation flake classes
   // (Docker Hub image pull, consumer warm-up) with bounded retries.
@@ -57,17 +74,26 @@ test.describe('scm replenishment loop — federation live (ADR-MONO-027 leg 2)',
   // tenant is active, else the base access token (net-zero). NOT the operator
   // token — see the header note.
   const ASSUMED_TOKEN_COOKIE = 'console_assumed_token';
-  const ACCESS_COOKIE = 'console_access_token';
+
+  // TASK-MONO-792: the scm-entitled tenant whose assume token carries the SCM business roles.
+  const SCM_ENTITLED_TENANT = 'globex-corp';
 
   test('real broker wms alert -> demand-planning suggestion -> approve -> procurement DRAFT PO', async ({
-    page,
+    browser,
   }) => {
-    // ---- domain-facing IAM OIDC access token (SUPER_ADMIN base = tenant_id='*') ----
-    const cookies = await page.context().cookies();
-    const token =
-      cookies.find((c) => c.name === ASSUMED_TOKEN_COOKIE)?.value ??
-      cookies.find((c) => c.name === ACCESS_COOKIE)?.value;
-    expect(token, 'domain-facing IAM OIDC access token cookie present').toBeTruthy();
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    try {
+    // ---- domain-facing assume token for an scm-entitled tenant (TASK-MONO-792) ----
+    await loginAsMultiOperator(ctx);
+    await switchTenant(ctx, SCM_ENTITLED_TENANT);
+    const cookies = await ctx.cookies();
+    const token = cookies.find((c) => c.name === ASSUMED_TOKEN_COOKIE)?.value;
+    expect(
+      token,
+      `assume-tenant token for ${SCM_ENTITLED_TENANT} (entitled_domains ∋ scm → SCM business roles)`,
+    ).toBeTruthy();
+    // The rest of the body is unchanged — it only ever used `page.request`.
+    const page = { request: ctx.request };
     const authed = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -201,5 +227,8 @@ test.describe('scm replenishment loop — federation live (ADR-MONO-027 leg 2)',
     expect(po.status, 'PO is DRAFT only — never auto-SUBMITted').toBe('DRAFT');
     expect(po.origin).toBe('DEMAND_PLANNING');
     expect(po.sourceSuggestionId).toBe(suggestionId);
+    } finally {
+      await ctx.close();
+    }
   });
 });

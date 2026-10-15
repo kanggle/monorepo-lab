@@ -57,7 +57,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void getDispatch_returns200() throws Exception {
         when(persistencePort.findById(DISPATCH_ID)).thenReturn(Optional.of(pending()));
 
@@ -69,7 +69,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void getDispatch_unknownId_returns404() throws Exception {
         UUID missing = UUID.randomUUID();
         when(persistencePort.findById(missing)).thenReturn(Optional.empty());
@@ -80,7 +80,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void getDispatchByShipment_returns200_sameBodyAsById() throws Exception {
         when(persistencePort.findByShipmentId(SHIPMENT_ID)).thenReturn(Optional.of(dispatched()));
 
@@ -93,7 +93,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void getDispatchByShipment_noDispatch_returns404() throws Exception {
         UUID missingShipment = UUID.randomUUID();
         when(persistencePort.findByShipmentId(missingShipment)).thenReturn(Optional.empty());
@@ -104,7 +104,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void retry_failedDispatch_recoversToDispatched() throws Exception {
         when(retryDispatchUseCase.retry(eq(DISPATCH_ID))).thenReturn(dispatched());
 
@@ -117,7 +117,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void retry_alreadyDispatched_returnsCachedAck() throws Exception {
         // The use case short-circuits (no vendor call) and returns the cached DISPATCHED
         // aggregate; the controller surfaces it 200 with the original tracking number.
@@ -130,7 +130,7 @@ class DispatchControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_LOGISTICS_WRITE") // TASK-MONO-792 business-role gate
     void retry_unknownId_returns404() throws Exception {
         UUID missing = UUID.randomUUID();
         when(retryDispatchUseCase.retry(eq(missing)))

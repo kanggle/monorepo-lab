@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * TASK-BE-631 (ADR-MONO-083) — the system preset keys of admin-api.md § 시스템 프리셋, in the table's order (the
  * order {@code GET /api/admin/domain-permission-sets} lists them in). The rows themselves — fixed {@code setId}s and
- * roles — are seeded by V0052; {@code V0052MigrationShapeTest} pins the migration to this list.
+ * roles — are seeded by V0052 (15) and V0056 (the five SCM presets, TASK-MONO-792); {@code V0052MigrationShapeTest} /
+ * {@code V0056MigrationShapeTest} pin each migration to its part of this list.
  *
  * <p>Framework-free.
  */
@@ -27,6 +28,12 @@ public final class DomainPermissionSetPresets {
             "wms-ops-actions",
             "wms-full",
             "scm-full",
+            // TASK-MONO-792 (ADR-083 P5) — V0056: the SCM business presets, listed right after scm-full.
+            "scm-read",
+            "scm-procurement-operate",
+            "scm-demand-planning-operate",
+            "scm-logistics-operate",
+            "scm-inventory-visibility-operate",
             "erp-full",
             "finance-full",
             "ecommerce-full",

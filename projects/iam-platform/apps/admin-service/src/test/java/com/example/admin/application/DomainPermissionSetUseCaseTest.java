@@ -132,7 +132,7 @@ class DomainPermissionSetUseCaseTest {
         org.mockito.Mockito.doThrow(new DomainNotSubscribedException("scm"))
                 .when(entitlementGuard).requireEntitled("acme", List.of("scm"));
         assertThatThrownBy(() -> useCase.create(new CreateDomainPermissionSetCommand(ACTOR, "acme", "n", null,
-                List.of(new RoleRef("scm", "SCM_OPERATOR")), "r", "k")))
+                List.of(new RoleRef("scm", "SCM_PROCUREMENT_READ")), "r", "k"))) // TASK-MONO-792: a catalog scm row
                 .isInstanceOf(DomainNotSubscribedException.class);
         verify(setPort, never()).createTenantSet(any(), any(), any(), any(), any(), any(), any());
     }
@@ -294,7 +294,7 @@ class DomainPermissionSetUseCaseTest {
     @Test
     @DisplayName("catalog: the whole DomainRoleCatalog, no tenant gate")
     void catalog_noGate() {
-        assertThat(useCase.catalog()).hasSize(14);
+        assertThat(useCase.catalog()).hasSize(21); // TASK-MONO-792: SCM_OPERATOR → eight SCM roles
         verifyNoInteractions(tenantGate);
     }
 }

@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -65,7 +66,85 @@ final class OperatorRoleDerivation {
             "INVENTORY_READ", "INVENTORY_WRITE",
             "MASTER_READ");
 
+    /**
+     * TASK-MONO-792 (ADR-MONO-083 P5 · owner decision Q4) — the scm business roles the four scm services
+     * check (scm {@code iam-integration.md} § 업무 역할). Mirrors the {@code scm} rows of admin-service
+     * {@code DomainRoleCatalog}, in the same order.
+     */
+    private static final List<String> SCM_BUSINESS_ROLES = List.of(
+            "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+            "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+            "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+            "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE");
+
+    /** The {@code scm} arm of the ceiling: entry role first, then the business roles (catalog order). */
+    private static final List<String> SCM_CEILING = java.util.stream.Stream
+            .concat(java.util.stream.Stream.of("SCM_OPERATOR"), SCM_BUSINESS_ROLES.stream())
+            .toList();
+
+    /**
+     * TASK-MONO-792 (ADR-MONO-083 D3 · P5 · owner decision Q4) — <b>entry role → the business roles that
+     * derive it</b>, one row per fine-grained domain. The entry role (gateway passage · screen entry ·
+     * procurement {@code isOperator()}) is NOT in admin-service's catalog and is never assigned: it rides
+     * the token iff ≥1 of its business roles does (auth-service architecture.md § 진입 역할 파생).
+     *
+     * <p>This is data on purpose: ERP · Finance · E-commerce (P6–P8, TASK-MONO-793..795) add one row each
+     * here (and widen their ceiling arm in {@link #fromEntitledDomains}) — {@link #withDerivedEntryRoles}
+     * does not change.
+     */
+    static final Map<String, Set<String>> ENTRY_ROLES = Map.of(
+            "SCM_OPERATOR", Set.copyOf(SCM_BUSINESS_ROLES));
+
     private OperatorRoleDerivation() {
+    }
+
+    /**
+     * TASK-MONO-792 — applies {@link #ENTRY_ROLES} to an already-filtered role list.
+     * <ol>
+     *   <li>every entry role in {@code roles} is DROPPED first — an entry role never comes from an
+     *       assignment or a delegation (a stale {@code SCM_OPERATOR}-only set yields nothing);</li>
+     *   <li>an entry role is then added iff ≥1 of its business roles is in the list AND {@code ceiling}
+     *       (when non-null) contains the entry role;</li>
+     *   <li>order: with a {@code ceiling}, the ceiling's order (the entry role heads its domain's arm);
+     *       without one (the partnership path, whose ceiling is the delegated slice itself), the input
+     *       order followed by the derived entry roles in key order.</li>
+     * </ol>
+     *
+     * @param roles   the roles already decided for the token (assigned ∩ ceiling, or delegated verbatim)
+     * @param ceiling the subscription ceiling ({@link #fromEntitledDomains}) or {@code null} for «no
+     *                separate ceiling» (partnership)
+     * @return an immutable list, never null
+     */
+    static List<String> withDerivedEntryRoles(List<String> roles, List<String> ceiling) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        Set<String> kept = new LinkedHashSet<>();
+        for (String role : roles) {
+            if (role != null && !ENTRY_ROLES.containsKey(role)) {
+                kept.add(role);
+            }
+        }
+        Set<String> derived = new java.util.TreeSet<>();
+        for (Map.Entry<String, Set<String>> e : ENTRY_ROLES.entrySet()) {
+            boolean anyBusiness = kept.stream().anyMatch(e.getValue()::contains);
+            boolean allowed = ceiling == null || ceiling.contains(e.getKey());
+            if (anyBusiness && allowed) {
+                derived.add(e.getKey());
+            }
+        }
+        if (ceiling == null) {
+            List<String> out = new java.util.ArrayList<>(kept);
+            out.addAll(derived);
+            return List.copyOf(out);
+        }
+        List<String> out = new java.util.ArrayList<>();
+        for (String role : ceiling) {
+            if (kept.contains(role) || derived.contains(role)) {
+                out.add(role);
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -109,7 +188,9 @@ final class OperatorRoleDerivation {
                 // wms contract puts create/update at MASTER_WRITE). TASK-MONO-514.
                 case "wms" -> WMS_OPERATOR_ROLES;
                 case "ecommerce" -> List.of("ECOMMERCE_OPERATOR");
-                case "scm" -> List.of("SCM_OPERATOR");
+                // TASK-MONO-792 (ADR-083 P5): the scm ceiling = the entry role (derived — see
+                // ENTRY_ROLES) + the eight business roles the scm services check.
+                case "scm" -> SCM_CEILING;
                 case "erp" -> List.of("ERP_OPERATOR");
                 case "finance" -> List.of("FINANCE_OPERATOR");
                 case "mes" -> List.of("MES_OPERATOR");

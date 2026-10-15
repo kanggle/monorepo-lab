@@ -30,6 +30,20 @@ in [`gateway-public-routes.md`](./gateway-public-routes.md) § platform-console
 operator-action / config consumer. (Contrast: procurement `confirm` *does* require
 `roles ∋ OPERATOR` — see [`procurement-api.md`](./procurement-api.md) § Actor model.)
 
+> 🔴 **Superseded by TASK-MONO-792 (ADR-MONO-083 P5) — business roles.** The «no role split» paragraph above
+> describes the state before P5. From P5 the filter chain requires (canonical table:
+> [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본)):
+>
+> | Request | Required (any of) |
+> |---|---|
+> | `GET /api/demand-planning/**` | `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` |
+> | `POST …/approve` · `POST …/dismiss` · `PUT /policies/{skuCode}` · `PUT /sku-supplier-map/{skuCode}` | `SCM_DEMAND_PLANNING_WRITE` |
+>
+> Missing → `403 PERMISSION_DENIED`. `approve` forwards the caller's token to procurement
+> `POST /po/from-suggestion`, which accepts `SCM_DEMAND_PLANNING_WRITE` for that one route (DRAFT only — owner
+> decision Q2), so a demand-planning-only operator can approve. Reading procurement (e.g. the console's supplier
+> picker on `/scm/config`) still needs a procurement role.
+
 ## Route publicity
 
 | Route | Publicity |

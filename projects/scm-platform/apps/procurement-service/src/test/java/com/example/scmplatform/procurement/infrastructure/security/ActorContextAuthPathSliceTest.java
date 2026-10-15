@@ -148,16 +148,17 @@ class ActorContextAuthPathSliceTest {
     void arrayFormRolesLiftIntoActorAndAuthorities() throws Exception {
         stubCapturingGet();
 
+        // TASK-MONO-792: the GET needs a procurement business role; OPERATOR still decides the actor.
         mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
-                        "operator-001", "scm", Map.of("roles", List.of("OPERATOR"))))))
+                        "operator-001", "scm", Map.of("roles", List.of("OPERATOR", "SCM_PROCUREMENT_READ"))))))
                 .andExpect(status().isOk());
 
-        assertThat(authorities()).containsExactly("ROLE_OPERATOR");
+        assertThat(authorities()).containsExactlyInAnyOrder("ROLE_OPERATOR", "ROLE_SCM_PROCUREMENT_READ");
         assertThat(capturedAuthentication.getName()).isEqualTo("operator-001");
         assertThat(capturedActor).isInstanceOf(ActorContext.class);
         assertThat(capturedActor.accountId()).isEqualTo("operator-001");
         assertThat(capturedActor.tenantId()).isEqualTo("scm");
-        assertThat(capturedActor.roles()).containsExactly("OPERATOR");
+        assertThat(capturedActor.roles()).containsExactlyInAnyOrder("OPERATOR", "SCM_PROCUREMENT_READ");
         // scm's own policy, still local, still reading off the shared record's plain role set.
         assertThat(capturedActor.isOperator()).isTrue();
         assertThat(capturedActor.actorType()).isEqualTo(ActorType.OPERATOR);
@@ -169,11 +170,12 @@ class ActorContextAuthPathSliceTest {
         stubCapturingGet();
 
         mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
-                        "operator-002", "scm", Map.of("role", "OPERATOR BUYER")))))
+                        "operator-002", "scm", Map.of("role", "OPERATOR BUYER SCM_PROCUREMENT_READ")))))
                 .andExpect(status().isOk());
 
-        assertThat(authorities()).containsExactlyInAnyOrder("ROLE_OPERATOR", "ROLE_BUYER");
-        assertThat(capturedActor.roles()).containsExactlyInAnyOrder("OPERATOR", "BUYER");
+        assertThat(authorities()).containsExactlyInAnyOrder(
+                "ROLE_OPERATOR", "ROLE_BUYER", "ROLE_SCM_PROCUREMENT_READ");
+        assertThat(capturedActor.roles()).containsExactlyInAnyOrder("OPERATOR", "BUYER", "SCM_PROCUREMENT_READ");
         assertThat(capturedActor.actorType()).isEqualTo(ActorType.OPERATOR);
     }
 
@@ -183,41 +185,55 @@ class ActorContextAuthPathSliceTest {
         stubCapturingGet();
 
         mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
-                        "operator-003", "scm", Map.of("role", "BUYER,ADMIN")))))
+                        "operator-003", "scm", Map.of("role", "BUYER,ADMIN,SCM_PROCUREMENT_READ")))))
                 .andExpect(status().isOk());
 
-        assertThat(authorities()).containsExactlyInAnyOrder("ROLE_BUYER", "ROLE_ADMIN");
-        assertThat(capturedActor.roles()).containsExactlyInAnyOrder("BUYER", "ADMIN");
+        assertThat(authorities()).containsExactlyInAnyOrder("ROLE_BUYER", "ROLE_ADMIN", "ROLE_SCM_PROCUREMENT_READ");
+        assertThat(capturedActor.roles()).containsExactlyInAnyOrder("BUYER", "ADMIN", "SCM_PROCUREMENT_READ");
         assertThat(capturedActor.isOperator()).isTrue();
     }
 
     @Test
-    @DisplayName("assume-tenant SCM_OPERATOR survives the shared resolver (TASK-MONO-417)")
+    @DisplayName("assume-tenant SCM_OPERATOR (now auth-derived beside a business role) still maps to OPERATOR (TASK-MONO-417 · 792)")
     void assumeTenantOperatorRoleStillMapsToOperator() throws Exception {
         stubCapturingGet();
 
+        // TASK-MONO-792: what iam issues to a procurement-set operator — the business role + the derived entry role.
         mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
-                        "console-operator-001", "scm", Map.of("roles", List.of("SCM_OPERATOR"))))))
+                        "console-operator-001", "scm",
+                        Map.of("roles", List.of("SCM_OPERATOR", "SCM_PROCUREMENT_READ"))))))
                 .andExpect(status().isOk());
 
         assertThat(capturedActor.actorType()).isEqualTo(ActorType.OPERATOR);
     }
 
     @Test
-    @DisplayName("37-char client-credentials sub survives the shared resolver (TASK-SCM-BE-050)")
+    @DisplayName("37-char client-credentials sub survives the shared resolver (TASK-SCM-BE-050) — given a business role")
     void clientCredentialsSubSurvivesTheSharedResolver() throws Exception {
         stubCapturingGet();
 
-        // No roles/role claim at all — a client-credentials token, exactly as iam mints it.
+        // The resolver property (a 37-char `sub` is carried intact, roles-free actor = BUYER) is unchanged;
+        // since TASK-MONO-792 a token needs a business role to reach the controller at all, so the probe
+        // carries one. The role does not make it an OPERATOR actor.
         mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
-                        CLIENT_CREDENTIALS_SUB, "scm", Map.of()))))
+                        CLIENT_CREDENTIALS_SUB, "scm", Map.of("roles", List.of("SCM_PROCUREMENT_READ"))))))
                 .andExpect(status().isOk());
 
         assertThat(capturedActor.accountId()).isEqualTo(CLIENT_CREDENTIALS_SUB).hasSize(37);
-        assertThat(capturedActor.roles()).isEmpty();
+        assertThat(capturedActor.roles()).containsExactly("SCM_PROCUREMENT_READ");
         assertThat(capturedActor.actorType()).isEqualTo(ActorType.BUYER);
-        assertThat(authorities()).isEmpty();
         assertThat(capturedAuthentication.isAuthenticated()).isTrue();
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-792 (owner-accepted): the real client-credentials token — no roles claim — gets 403 on a business API")
+    void clientCredentialsTokenWithoutRoles_isRefusedByTheBusinessGate() throws Exception {
+        // scm-platform-internal-services-client: scopes scm.read/scm.write, no roles (WorkloadRoleCatalog).
+        // Scopes open no business API (scm iam-integration.md § 업무 역할); usage = 0 (demo · e2e · scripts).
+        mockMvc.perform(get(PO_PATH).header("Authorization", bearer(token(
+                        CLIENT_CREDENTIALS_SUB, "scm", Map.of("scope", "scm.read scm.write")))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     // =====================================================================================

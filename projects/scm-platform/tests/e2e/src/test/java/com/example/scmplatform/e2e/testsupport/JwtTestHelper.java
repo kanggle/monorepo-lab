@@ -108,16 +108,35 @@ public final class JwtTestHelper {
         return jwt.serialize();
     }
 
+    /**
+     * TASK-MONO-792 (ADR-MONO-083 P5) — every scm service now gates on business roles (scm
+     * {@code iam-integration.md} § 업무 역할); the actor (BUYER / OPERATOR) is still decided by the
+     * {@code BUYER} / {@code OPERATOR} role. These smoke tokens carry the full SCM business set so the
+     * scenarios keep exercising the same flows; the gate itself is pinned by each service's
+     * {@code *BusinessRoleGateSliceTest}.
+     */
+    private static final List<String> SCM_BUSINESS_ROLES = List.of(
+            "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+            "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+            "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+            "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE");
+
+    private static List<String> with(String actorRole) {
+        java.util.ArrayList<String> roles = new java.util.ArrayList<>(List.of(actorRole));
+        roles.addAll(SCM_BUSINESS_ROLES);
+        return List.copyOf(roles);
+    }
+
     /** Convenience: 10-minute valid scm BUYER token (drafts + submits + confirms POs). */
     public String signBuyerToken(String subject) {
         return signToken(subject, "BUYER", DEFAULT_TENANT_ID, DEFAULT_TTL_SECONDS,
-                Map.of("roles", List.of("BUYER"), "email", subject + "@test.local"));
+                Map.of("roles", with("BUYER"), "email", subject + "@test.local"));
     }
 
     /** Convenience: 10-minute valid scm OPERATOR token (PO confirm path). */
     public String signOperatorToken(String subject) {
         return signToken(subject, "OPERATOR", DEFAULT_TENANT_ID, DEFAULT_TTL_SECONDS,
-                Map.of("roles", List.of("OPERATOR")));
+                Map.of("roles", with("OPERATOR")));
     }
 
     /**

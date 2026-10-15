@@ -172,6 +172,10 @@ class InventoryVisibilityControllerSliceTest {
                 .jwt(jwt -> jwt
                         .subject("test-account-id")
                         .claim("tenant_id", "scm")
-                        .claim("roles", List.of("OPERATOR")));
+                        .claim("roles", List.of("SCM_INVENTORY_VISIBILITY_READ")))
+                // TASK-MONO-792: the post-processor sets authorities directly (it bypasses the converter) —
+                // the read role the GET gate requires.
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                        "ROLE_SCM_INVENTORY_VISIBILITY_READ"));
     }
 }

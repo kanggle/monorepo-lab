@@ -35,6 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
 
     private static final String SHIPMENTS = "/shipments";
+
+    /**
+     * TASK-MONO-792: the business-role gate needs a logistics role. The {@code jwt()} post-processor sets
+     * authorities directly (the converter is bypassed), so the role is given as its {@code ROLE_} authority.
+     */
+    private static final org.springframework.security.core.authority.SimpleGrantedAuthority LOGISTICS_WRITE =
+            new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SCM_LOGISTICS_WRITE");
     private static final String SUCCESS_BODY =
             "{\"id\":\"shp_1\",\"tracking_code\":\"TRACK-NEW\","
                     + "\"selected_rate\":{\"carrier\":\"USPS\"},\"status\":\"purchased\"}";
@@ -58,7 +65,7 @@ class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
         Dispatch failed = seedFailed(UUID.randomUUID(), "SHP-RETRY");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/logistics/dispatches/" + failed.getId() + ":retry")
-                        .with(jwt().jwt(j -> j.claim("tenant_id", TENANT_SCM))))
+                        .with(jwt().authorities(LOGISTICS_WRITE).jwt(j -> j.claim("tenant_id", TENANT_SCM))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISPATCHED"))
                 .andExpect(jsonPath("$.data.trackingNo").value("TRACK-NEW"));
@@ -71,7 +78,7 @@ class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
         Dispatch dispatched = seedDispatched(UUID.randomUUID(), "SHP-DONE");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/logistics/dispatches/" + dispatched.getId() + ":retry")
-                        .with(jwt().jwt(j -> j.claim("tenant_id", TENANT_SCM))))
+                        .with(jwt().authorities(LOGISTICS_WRITE).jwt(j -> j.claim("tenant_id", TENANT_SCM))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISPATCHED"))
                 .andExpect(jsonPath("$.data.trackingNo").value("TRACK-PRE"));
@@ -85,7 +92,7 @@ class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
         Dispatch failed = seedFailed(UUID.randomUUID(), "SHP-INSPECT");
 
         mockMvc.perform(get("/api/logistics/dispatches/" + failed.getId())
-                        .with(jwt().jwt(j -> j.claim("tenant_id", TENANT_SCM))))
+                        .with(jwt().authorities(LOGISTICS_WRITE).jwt(j -> j.claim("tenant_id", TENANT_SCM))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISPATCH_FAILED"));
     }
@@ -95,7 +102,7 @@ class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
         Dispatch failed = seedFailed(UUID.randomUUID(), "SHP-WMS");
 
         mockMvc.perform(get("/api/logistics/dispatches/" + failed.getId())
-                        .with(jwt().jwt(j -> j.claim("tenant_id", "wms"))))
+                        .with(jwt().authorities(LOGISTICS_WRITE).jwt(j -> j.claim("tenant_id", "wms"))))
                 .andExpect(status().isForbidden());
     }
 
@@ -104,7 +111,7 @@ class DispatchRetryIntegrationTest extends AbstractLogisticsIntegrationTest {
         Dispatch failed = seedFailed(UUID.randomUUID(), "SHP-ENT");
 
         mockMvc.perform(get("/api/logistics/dispatches/" + failed.getId())
-                        .with(jwt().jwt(j -> j.claim("tenant_id", "acme")
+                        .with(jwt().authorities(LOGISTICS_WRITE).jwt(j -> j.claim("tenant_id", "acme")
                                 .claim("entitled_domains", List.of("scm")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISPATCH_FAILED"));

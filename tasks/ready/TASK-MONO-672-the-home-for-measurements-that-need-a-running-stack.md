@@ -1990,3 +1990,10 @@ Owner decisions (2026-10-15 UTC — all three took the recommendation):
 3. **AMI prune done**: 23rd · 24th · 25th deregistered and their snapshots deleted. Remaining: 26th (rollback) · 27th (deployed).
 
 ⇒ `TASK-MONO-773` start gate (784 · BE-632 `done/`) is **met**.
+
+## Next window — `TASK-MONO-792` (ADR-083 P5 · SCM fine-grained authz) — added 2026-10-15 UTC (owner instruction)
+
+🔵 Added while 792 is still open (owner instruction Q5 «라이브 행 수 확인을 672 다음 창 목록에»), not as an inherited ⚪. Only meaningful in a window whose bake **contains the 792 merge commit** — check the clone commit first.
+- **V0056 row counts, before / after** (read-only, admin_db — the predicate is `data-model.md` § Migration Strategy TASK-MONO-792): `sets_with_scm_operator` → **0** after · `sets_with_procurement_write` = before's `sets_with_scm_operator` + 2 · `partnerships_with_scm_operator` → **0** after. «Before» must be read on the PREVIOUS bake (or estimated from it) — a fresh volume has already run V0056.
+- **Live AC-2 / AC-1** (792): the demo operator (legacy-compat) — assume `demo-corp` → token `roles` ∋ `SCM_OPERATOR` + the eight SCM roles; `/scm/procurement` · `/scm/replenishment` approve still 200. A throwaway operator with only `scm-read` → SCM GETs 200 · approve / policy PUT 403 `PERMISSION_DENIED`. WMS-outbound-only operator → WMS outbound «발송 재시도» 403 (Q3 — expected; `TASK-PC-FE-342` hides the button after this check).
+- 🔴 Then — and only then — `TASK-PC-FE-342` (console SCM nav data) may merge.

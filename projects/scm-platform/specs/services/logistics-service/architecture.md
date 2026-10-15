@@ -55,6 +55,22 @@ Fact event in (`shipping.confirmed`) → carrier selected → vendor dispatched 
 dispatch record `DISPATCHED` (or `DISPATCH_FAILED` + operator retry). That is the
 whole Phase-1 loop.
 
+## HTTP authorization (ADR-MONO-083 P5 · TASK-MONO-792)
+
+This service has no separate API contract file; its HTTP surface and roles are recorded here. Canonical role
+table: [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본).
+
+| Request | Required (any of) |
+|---|---|
+| `GET /api/logistics/dispatches/{id}` · `GET /api/logistics/dispatches/by-shipment/{shipmentId}` | `SCM_LOGISTICS_READ` · `SCM_LOGISTICS_WRITE` |
+| `POST /api/logistics/dispatches/{id}:retry` | `SCM_LOGISTICS_WRITE` |
+
+Missing → `403 PERMISSION_DENIED`. 🔴 Owner decision Q3 (2026-10-15 UTC) — **strict**: the only screen that calls
+this service is the platform-console **WMS outbound** screen («발송 재시도» · dispatch lookup), and a WMS-outbound-only
+operator gets 403 here; to retry a dispatch the operator also needs the SCM logistics set. WMS roles are not accepted
+across the domain boundary. The console hides that button by role in a separate follow-up (platform-console ticket
+drafted by TASK-MONO-792, merged only after the bake carrying 792 is live).
+
 ## Architecture Style Rationale
 
 Hexagonal chosen because:

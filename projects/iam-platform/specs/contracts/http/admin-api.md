@@ -3736,7 +3736,7 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | 업무 수행 권한 | **배정된 세트의 역할 합** | 이 절이 관리한다 |
 | 데이터 범위 | `org_scope`(배정 행) · 테넌트 격리 | 그대로 — 별도 적용 |
 
-- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 `tenant_id = T` 세트 행 ∪ O 가 `'*'` 운영자면 `tenant_id = '*'` 세트 행)이 가리키는 세트들의 역할 **합**. admin-service 는 이 합(**카탈로그 · 구독 교집합 전** 값)을 낸다. 토큰에 싣는 값은 auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 **다시 거른 것**이다(P3) — 구독하지 않은 도메인의 세트는 배정돼 있어도 토큰에 아무것도 싣지 않는다. 세분 역할이 들어온 도메인의 진입 역할 파생은 그 도메인 단계(P5 ~ P8)가 정의한다.
+- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 `tenant_id = T` 세트 행 ∪ O 가 `'*'` 운영자면 `tenant_id = '*'` 세트 행)이 가리키는 세트들의 역할 **합**. admin-service 는 이 합(**카탈로그 · 구독 교집합 전** 값)을 낸다. 토큰에 싣는 값은 auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 **다시 거른 것**이다(P3) — 구독하지 않은 도메인의 세트는 배정돼 있어도 토큰에 아무것도 싣지 않는다. 세분 역할이 들어온 도메인의 **진입 역할**은 카탈로그에 없고 배정할 수 없다 — auth-service 가 그 도메인의 업무 역할이 토큰에 하나라도 실릴 때 **파생**한다(TASK-MONO-792 · 소유자 결정 Q4 2026-10-15 UTC — [auth-service architecture § 진입 역할 파생](../../services/auth-service/architecture.md#진입-역할-파생-adr-mono-083-p5--task-mono-792)). 지금 진입 역할을 가진 도메인 = `scm`(`SCM_OPERATOR`); ERP · Finance · E-commerce 는 P6 ~ P8 이 같은 표에 한 행씩 더한다. 그래서 admin-service 가 내는 실효 역할(`domainRoles` · `GET /me/domain-access` 의 `roles`)에는 진입 역할이 **없다**.
 - **관리 역할과 다른 이름 공간** (ADR-MONO-035 O1-C · ADR-083 D1): 이 절의 세트 · 역할은 `admin_roles` · `admin_operator_roles` · `/api/admin/roles` 와 **다른 엔티티**다. 관리 역할이 있다고 업무 권한이 생기지 않고, 업무 권한 세트가 관리 권한(`/api/admin/**`)을 주지 않는다. 세트 변경은 관리 권한 캐시(`admin:operator:perm:*`)를 건드리지 않는다.
 - **권한 키** `domain_access.manage`(`SUPER_ADMIN` · `TENANT_ADMIN` — [rbac.md § 도메인 업무 권한 세트](../../services/admin-service/rbac.md#도메인-업무-권한-세트-adr-mono-083)). 행동 테넌트는 § 행동 테넌트 표 24 ~ 28 행. 이 키는 **업무 권한을 주지 않는다** — 세트 배정은 관리 평면 행위다(D5). 배정자가 그 세트의 업무 역할을 스스로 갖고 있을 필요는 없다(관리 역할의 ≤-own `RoleGrantGuard` 는 여기 적용하지 않는다) — 상한은 **그 테넌트의 entitled domains** 와 카탈로그다.
 - **자기 배정 허용** (OD-4 기본값): 행위자 = 대상이어도 거절하지 않는다. 감사 행 `detail` 에 **`selfGrant=true`** 를 싣는다(그룹 세트 배정은 행위자가 그 그룹의 멤버일 때).
@@ -3775,7 +3775,14 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `wms` | `OUTBOUND_WRITE` | `WRITE` | `true` | 출고 변경 |
 | `wms` | `MASTER_READ` | `READ` | `true` | 기준정보 조회 |
 | `wms` | `WMS_OPERATOR` | `OPERATE` | `true` | WMS 운영 조치(알림 확인 · 운영 조치 — 업무 API 를 열지 않는다) |
-| `scm` | `SCM_OPERATOR` | `OPERATE` | `false` | SCM 전체 업무(세분 미지원) |
+| `scm` | `SCM_PROCUREMENT_READ` | `READ` | `true` | 발주 조회 |
+| `scm` | `SCM_PROCUREMENT_WRITE` | `WRITE` | `true` | 발주 변경(생성 · 제출 · 확정 · 취소 · 공급사 등록) |
+| `scm` | `SCM_DEMAND_PLANNING_READ` | `READ` | `true` | 수요계획 조회 |
+| `scm` | `SCM_DEMAND_PLANNING_WRITE` | `WRITE` | `true` | 수요계획 변경(승인 · 기각 · 정책 · 매핑) |
+| `scm` | `SCM_LOGISTICS_READ` | `READ` | `true` | 물류(배차) 조회 |
+| `scm` | `SCM_LOGISTICS_WRITE` | `WRITE` | `true` | 물류 변경(발송 재시도) |
+| `scm` | `SCM_INVENTORY_VISIBILITY_READ` | `READ` | `true` | 재고 가시성 조회 |
+| `scm` | `SCM_INVENTORY_VISIBILITY_WRITE` | `WRITE` | `true` | 재고 가시성 변경(3PL 노드 등록 · 관측 재고) |
 | `erp` | `ERP_OPERATOR` | `OPERATE` | `false` | ERP 전체 업무(세분 미지원) |
 | `finance` | `FINANCE_OPERATOR` | `OPERATE` | `false` | Finance 전체 업무(세분 미지원) |
 | `ecommerce` | `ECOMMERCE_OPERATOR` | `OPERATE` | `false` | E-commerce 전체 업무(세분 미지원) |
@@ -3783,6 +3790,7 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `mes` | `MES_OPERATOR` | `OPERATE` | `false` | MES 전체 업무(세분 미지원) |
 
 - `fineGrained=false` = 그 도메인 서버가 아직 세분 역할을 검사하지 않는다 — 진입 역할 하나가 그 도메인의 **모든 업무 API** 를 연다. 화면은 이것을 «전체 업무(세분 미지원)» 로 보인다 — 세분된 척하지 않는다(D3). 세분 역할은 그 도메인 단계(P5 ~ P8)가 그 도메인의 계약을 먼저 고친 뒤 이 표에 더한다.
+- 🔵 **SCM 은 TASK-MONO-792(P5)부터 세분됐다** — 판정 정본은 scm [`iam-integration.md` § 업무 역할](../../../../scm-platform/specs/integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본). `SCM_OPERATOR` 는 이 표에서 **빠졌다**(진입 역할 — 업무 API 를 열지 않고 auth 가 파생한다, 위 «실효 업무 권한» 노트). 같은 단계의 V0056 이 `SCM_OPERATOR` 를 담은 **모든 세트**(프리셋 · `legacy-compat` · `all-domains-full` · 테넌트 세트)와 파트너십 `delegated_scope` · `participant_scope` 의 역할을 SCM 업무 역할 8개로 바꿨다(소유자 결정 Q5 — 기존 운영자는 같은 업무 범위).
 - `fan` 은 구독 키 `fan` · `fan-platform` 둘 다에 해당한다(지금 파생과 같은 대응). `fan-platform` 은 플랫폼 운영자만 assume 하므로(auth-to-admin 판정 규칙 5) `fan` 세트는 사실상 `'*'` 운영자에게 배정한다.
 - `mes` 는 지금 파생 표에 있는 역할이다 — 소비자가 있는지는 P2 AC-0 이 재고, 없으면 P2 가 이 행을 계약 개정으로 뺀다.
 
@@ -3797,6 +3805,11 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `wms-master-read` | `MASTER_READ` | |
 | `wms-ops-actions` | `WMS_OPERATOR` | |
 | `<domainKey>-full` | 그 도메인의 카탈로그 역할 전부 | 도메인마다 하나: `wms-full` · `scm-full` · `erp-full` · `finance-full` · `ecommerce-full` · `fan-full` · `mes-full` |
+| `scm-read` | `SCM_PROCUREMENT_READ` · `SCM_DEMAND_PLANNING_READ` · `SCM_LOGISTICS_READ` · `SCM_INVENTORY_VISIBILITY_READ` | «SCM 조회» — TASK-MONO-792 (V0056). 목록 순서: `scm-full` 바로 뒤 |
+| `scm-procurement-operate` | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` | V0056 |
+| `scm-demand-planning-operate` | `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` | V0056 |
+| `scm-logistics-operate` | `SCM_LOGISTICS_READ` · `SCM_LOGISTICS_WRITE` | V0056 |
+| `scm-inventory-visibility-operate` | `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | V0056 |
 | `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 — 773 OD-4 가 출처 `ORIGIN` 으로 쓴다(위 «출처» 표). API 로 `DIRECT` 배정도 할 수 있지만 그때는 구독 검사를 받는다(`fan` 때문에 고객 테넌트에서는 사실상 `422`) |
 | `legacy-compat` | `all-domains-full` 과 같은 내용 | **`MIGRATION` 출처 전용**(API 배정 불가) — 이전 완료 판정에서 «백필이 준 것» 을 구분하는 표지 |
 

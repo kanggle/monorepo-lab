@@ -989,8 +989,12 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         //  - Order = the ceiling's order (catalog order), so a backfilled operator holding the
         //    legacy-compat set (= the whole catalog) gets the SAME bytes as before (AC-4).
         //  - Failed / empty entitled fetch → ceiling [] → roles omitted (the existing rule).
-        java.util.List<String> roles = assignedWithinCeiling(
-                domainRoles, OperatorRoleDerivation.fromEntitledDomains(entitled));
+        //  - TASK-MONO-792 (ADR-083 P5 · Q4): then the fine-grained domains' ENTRY roles are derived
+        //    (SCM_OPERATOR iff ≥1 SCM business role survived the ceiling) and any assigned entry role
+        //    is dropped — OperatorRoleDerivation.withDerivedEntryRoles.
+        java.util.List<String> ceiling = OperatorRoleDerivation.fromEntitledDomains(entitled);
+        java.util.List<String> roles = OperatorRoleDerivation.withDerivedEntryRoles(
+                assignedWithinCeiling(domainRoles, ceiling), ceiling);
         if (!roles.isEmpty()) {
             // The claim value flows into the JdbcOAuth2AuthorizationService store,
             // which serializes via SecurityJackson2Modules' strict allowlist. An
@@ -1108,8 +1112,13 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, cappedDomains);
         }
 
-        java.util.List<String> cappedRoles = delegatedScope.roles();
-        if (cappedRoles != null && !cappedRoles.isEmpty()) {
+        // TASK-MONO-792 (ADR-083 P5 · Q4): the delegated slice is still carried as-is, except that
+        // entry roles are never delegated — they are derived from the business roles in the slice
+        // (OperatorRoleDerivation.withDerivedEntryRoles, ceiling = the slice itself). Without this a
+        // partner holding SCM_PROCUREMENT_WRITE would be a BUYER actor in procurement.
+        java.util.List<String> cappedRoles =
+                OperatorRoleDerivation.withDerivedEntryRoles(delegatedScope.roles(), null);
+        if (!cappedRoles.isEmpty()) {
             // SecurityJackson2Modules allowlist (BE-376): wrap in a mutable ArrayList —
             // an ImmutableCollections list breaks the JdbcOAuth2AuthorizationService
             // read-back (userinfo/refresh/revoke).

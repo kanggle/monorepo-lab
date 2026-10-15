@@ -45,7 +45,18 @@ public final class DomainRoleCatalog {
             new Entry("wms", "MASTER_READ", "READ", true, "기준정보 조회"),
             new Entry("wms", "WMS_OPERATOR", "OPERATE", true,
                     "WMS 운영 조치(알림 확인 · 운영 조치 — 업무 API 를 열지 않는다)"),
-            new Entry("scm", "SCM_OPERATOR", "OPERATE", false, "SCM 전체 업무(세분 미지원)"),
+            // TASK-MONO-792 (ADR-083 P5 · owner decisions Q1–Q4) — SCM is fine-grained: the scm services check these
+            // eight roles (scm iam-integration.md § 업무 역할). SCM_OPERATOR LEFT the catalog: it is the entry role,
+            // derived by auth-service when ≥1 of these rides the token, never assigned (V0056 rewrote every set and
+            // partnership scope that held it).
+            new Entry("scm", "SCM_PROCUREMENT_READ", "READ", true, "발주 조회"),
+            new Entry("scm", "SCM_PROCUREMENT_WRITE", "WRITE", true, "발주 변경(생성 · 제출 · 확정 · 취소 · 공급사 등록)"),
+            new Entry("scm", "SCM_DEMAND_PLANNING_READ", "READ", true, "수요계획 조회"),
+            new Entry("scm", "SCM_DEMAND_PLANNING_WRITE", "WRITE", true, "수요계획 변경(승인 · 기각 · 정책 · 매핑)"),
+            new Entry("scm", "SCM_LOGISTICS_READ", "READ", true, "물류(배차) 조회"),
+            new Entry("scm", "SCM_LOGISTICS_WRITE", "WRITE", true, "물류 변경(발송 재시도)"),
+            new Entry("scm", "SCM_INVENTORY_VISIBILITY_READ", "READ", true, "재고 가시성 조회"),
+            new Entry("scm", "SCM_INVENTORY_VISIBILITY_WRITE", "WRITE", true, "재고 가시성 변경(3PL 노드 등록 · 관측 재고)"),
             new Entry("erp", "ERP_OPERATOR", "OPERATE", false, "ERP 전체 업무(세분 미지원)"),
             new Entry("finance", "FINANCE_OPERATOR", "OPERATE", false, "Finance 전체 업무(세분 미지원)"),
             new Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false, "E-commerce 전체 업무(세분 미지원)"),

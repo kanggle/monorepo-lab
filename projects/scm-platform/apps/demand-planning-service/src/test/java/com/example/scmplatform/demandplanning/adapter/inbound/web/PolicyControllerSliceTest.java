@@ -40,7 +40,7 @@ class PolicyControllerSliceTest {
     static final String SUPPLIER_ID = "SUP-0043";
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void getPolicy_returns200() throws Exception {
         when(policyManagementUseCase.getPolicy("SKU-001"))
                 .thenReturn(new ReorderPolicy("SKU-001", 10, 5, 100, "scm", 0, Instant.now()));
@@ -53,7 +53,7 @@ class PolicyControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void getPolicy_returns404_whenNotFound() throws Exception {
         when(policyManagementUseCase.getPolicy("MISSING"))
                 .thenThrow(new PolicyNotFoundException("MISSING"));
@@ -64,7 +64,7 @@ class PolicyControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void upsertPolicy_returns200() throws Exception {
         when(policyManagementUseCase.upsertPolicy(eq("SKU-001"), anyInt(), anyInt(), anyInt()))
                 .thenReturn(new ReorderPolicy("SKU-001", 10, 5, 100, "scm", 0, Instant.now()));
@@ -77,7 +77,7 @@ class PolicyControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void upsertPolicy_returns422_whenInvalidInput() throws Exception {
         mockMvc.perform(put("/api/demand-planning/policies/SKU-001")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -87,7 +87,7 @@ class PolicyControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void getMapping_returns200() throws Exception {
         when(policyManagementUseCase.getMapping("SKU-001"))
                 .thenReturn(new SkuSupplierMapping("SKU-001", SUPPLIER_ID, 200, 7, "KRW", "scm"));
@@ -99,7 +99,7 @@ class PolicyControllerSliceTest {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE") // TASK-MONO-792 business-role gate
     void upsertMapping_returns200() throws Exception {
         when(policyManagementUseCase.upsertMapping(eq("SKU-001"), any(), anyInt(), anyInt(), any()))
                 .thenReturn(new SkuSupplierMapping("SKU-001", SUPPLIER_ID, 200, 7, "KRW", "scm"));

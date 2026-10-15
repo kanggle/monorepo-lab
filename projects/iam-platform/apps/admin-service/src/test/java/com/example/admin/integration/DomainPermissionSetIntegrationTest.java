@@ -227,7 +227,8 @@ class DomainPermissionSetIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", bearer(w.adminA())).header("X-Tenant-Id", w.tenantA())
                         .header("X-Operator-Reason", "ac3").header("Idempotency-Key", "ac3-" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"scm\",\"roles\":[{\"domainKey\":\"scm\",\"role\":\"SCM_OPERATOR\"}]}"))
+                        // TASK-MONO-792: SCM_OPERATOR left the catalog — a real scm catalog row keeps this about subscription
+                        .content("{\"name\":\"scm\",\"roles\":[{\"domainKey\":\"scm\",\"role\":\"SCM_PROCUREMENT_READ\"}]}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("DOMAIN_NOT_SUBSCRIBED"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id = ?",

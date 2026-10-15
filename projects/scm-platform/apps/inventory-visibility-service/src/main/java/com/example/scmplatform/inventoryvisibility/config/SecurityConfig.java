@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,7 +24,9 @@ import java.time.Instant;
 
 /**
  * inventory-visibility-service Spring Security configuration.
- * Read-only API — all GET /api/inventory-visibility/** require bearer token.
+ * Read API + two 3PL onboarding mutations — every /api/inventory-visibility/** call requires a bearer token
+ * and a business role (TASK-MONO-792): GET = {@code SCM_INVENTORY_VISIBILITY_READ ∨ _WRITE}, the mutations =
+ * {@code SCM_INVENTORY_VISIBILITY_WRITE}.
  *
  * <p>The generic tail — CSRF-disabled, {@code STATELESS}, the permit/authenticate/deny sequence
  * and the {@code oauth2ResourceServer} wiring — is assembled by
@@ -40,6 +43,10 @@ import java.time.Instant;
 public class SecurityConfig {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** TASK-MONO-792 — scm iam-integration.md § 업무 역할 (= iam DomainRoleCatalog scm rows). */
+    static final String VISIBILITY_READ = "SCM_INVENTORY_VISIBILITY_READ";
+    static final String VISIBILITY_WRITE = "SCM_INVENTORY_VISIBILITY_WRITE";
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -60,9 +67,16 @@ public class SecurityConfig {
                         // exemption list, and this path needs no exemption. It carries no JWT, and
                         // TenantClaimEnforcer passes non-JwtAuthenticationToken requests straight
                         // through — so the filter never gates it either way (ADR-MONO-049 § 1.8 C).
-                        auth.requestMatchers("/internal/inventory-visibility/**").permitAll())
-                .authenticated("/api/inventory-visibility/**")
+                        auth.requestMatchers("/internal/inventory-visibility/**").permitAll()
+                                // TASK-MONO-792 (ADR-MONO-083 P5 · owner decision Q1) — business roles:
+                                // GET = read ∨ write; the two 3PL mutations (POST /nodes ·
+                                // POST /nodes/{nodeId}/observed-stock) and any other method = write.
+                                .requestMatchers(HttpMethod.GET, "/api/inventory-visibility/**")
+                                .hasAnyRole(VISIBILITY_READ, VISIBILITY_WRITE)
+                                .requestMatchers("/api/inventory-visibility/**")
+                                .hasRole(VISIBILITY_WRITE))
                 .anyRequestDenied()
+                .jwtAuthenticationConverter(ScmRoleAuthorities.converter())
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();

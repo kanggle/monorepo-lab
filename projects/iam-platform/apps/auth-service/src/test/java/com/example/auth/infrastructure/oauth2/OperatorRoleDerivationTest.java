@@ -51,8 +51,14 @@ class OperatorRoleDerivationTest {
                 .containsExactlyElementsOf(WMS);
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("ecommerce")))
                 .containsExactly("ECOMMERCE_OPERATOR");
+        // TASK-MONO-792 (ADR-083 P5): the scm ceiling = the entry role + the eight business roles,
+        // the same rows admin-service DomainRoleCatalog offers (the entry role is derived, not assigned).
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("scm")))
-                .containsExactly("SCM_OPERATOR");
+                .containsExactly("SCM_OPERATOR",
+                        "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
+                        "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
+                        "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+                        "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("erp")))
                 .containsExactly("ERP_OPERATOR");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("finance")))

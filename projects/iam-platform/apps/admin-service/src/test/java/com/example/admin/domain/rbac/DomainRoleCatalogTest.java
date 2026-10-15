@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DomainRoleCatalogTest {
 
     @Test
-    @DisplayName("the catalog equals the contract table exactly (14 rows, order, access, fineGrained, label)")
+    @DisplayName("the catalog equals the contract table exactly (21 rows, order, access, fineGrained, label)")
     void catalog_equalsContractTable() {
         assertThat(DomainRoleCatalog.entries()).containsExactly(
                 new DomainRoleCatalog.Entry("wms", "INVENTORY_READ", "READ", true, "재고 조회"),
@@ -28,7 +28,19 @@ class DomainRoleCatalogTest {
                 new DomainRoleCatalog.Entry("wms", "MASTER_READ", "READ", true, "기준정보 조회"),
                 new DomainRoleCatalog.Entry("wms", "WMS_OPERATOR", "OPERATE", true,
                         "WMS 운영 조치(알림 확인 · 운영 조치 — 업무 API 를 열지 않는다)"),
-                new DomainRoleCatalog.Entry("scm", "SCM_OPERATOR", "OPERATE", false, "SCM 전체 업무(세분 미지원)"),
+                // TASK-MONO-792 (ADR-083 P5): SCM is fine-grained; SCM_OPERATOR left the catalog (entry role —
+                // derived by auth-service, never assigned).
+                new DomainRoleCatalog.Entry("scm", "SCM_PROCUREMENT_READ", "READ", true, "발주 조회"),
+                new DomainRoleCatalog.Entry("scm", "SCM_PROCUREMENT_WRITE", "WRITE", true,
+                        "발주 변경(생성 · 제출 · 확정 · 취소 · 공급사 등록)"),
+                new DomainRoleCatalog.Entry("scm", "SCM_DEMAND_PLANNING_READ", "READ", true, "수요계획 조회"),
+                new DomainRoleCatalog.Entry("scm", "SCM_DEMAND_PLANNING_WRITE", "WRITE", true,
+                        "수요계획 변경(승인 · 기각 · 정책 · 매핑)"),
+                new DomainRoleCatalog.Entry("scm", "SCM_LOGISTICS_READ", "READ", true, "물류(배차) 조회"),
+                new DomainRoleCatalog.Entry("scm", "SCM_LOGISTICS_WRITE", "WRITE", true, "물류 변경(발송 재시도)"),
+                new DomainRoleCatalog.Entry("scm", "SCM_INVENTORY_VISIBILITY_READ", "READ", true, "재고 가시성 조회"),
+                new DomainRoleCatalog.Entry("scm", "SCM_INVENTORY_VISIBILITY_WRITE", "WRITE", true,
+                        "재고 가시성 변경(3PL 노드 등록 · 관측 재고)"),
                 new DomainRoleCatalog.Entry("erp", "ERP_OPERATOR", "OPERATE", false, "ERP 전체 업무(세분 미지원)"),
                 new DomainRoleCatalog.Entry("finance", "FINANCE_OPERATOR", "OPERATE", false,
                         "Finance 전체 업무(세분 미지원)"),
@@ -52,6 +64,17 @@ class DomainRoleCatalogTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-792 Q4: SCM_OPERATOR is NOT assignable (entry role, derived by auth); the eight SCM roles are")
+    void scmEntryRole_notAssignable_businessRolesAre() {
+        assertThat(DomainRoleCatalog.isAssignable("scm", "SCM_OPERATOR")).isFalse();
+        for (String role : List.of("SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ",
+                "SCM_DEMAND_PLANNING_WRITE", "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
+                "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE")) {
+            assertThat(DomainRoleCatalog.isAssignable("scm", role)).as(role).isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("entitlement: identity per domain; catalog 'fan' is entitled by subscription 'fan' or 'fan-platform'")
     void isEntitled_fanMapsToBothSubscriptionKeys() {
         assertThat(DomainRoleCatalog.isEntitled("wms", Set.of("wms"))).isTrue();
@@ -66,7 +89,7 @@ class DomainRoleCatalogTest {
     @DisplayName("sortAndDistinct: catalog order, duplicates collapse, an unknown pair sorts last (never dropped)")
     void sortAndDistinct_catalogOrder() {
         List<RoleRef> sorted = DomainRoleCatalog.sortAndDistinct(List.of(
-                new RoleRef("scm", "SCM_OPERATOR"),
+                new RoleRef("scm", "SCM_PROCUREMENT_READ"),
                 new RoleRef("legacy", "GONE_ROLE"),
                 new RoleRef("wms", "INVENTORY_WRITE"),
                 new RoleRef("wms", "INVENTORY_READ"),
@@ -74,7 +97,7 @@ class DomainRoleCatalogTest {
         assertThat(sorted).containsExactly(
                 new RoleRef("wms", "INVENTORY_READ"),
                 new RoleRef("wms", "INVENTORY_WRITE"),
-                new RoleRef("scm", "SCM_OPERATOR"),
+                new RoleRef("scm", "SCM_PROCUREMENT_READ"),
                 new RoleRef("legacy", "GONE_ROLE"));
         assertThat(DomainRoleCatalog.domainsOf(sorted)).containsExactly("legacy", "scm", "wms");
     }
