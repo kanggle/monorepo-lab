@@ -820,3 +820,71 @@ describe('OutboundOpsScreen — dispatch retry action (TASK-PC-FE-258)', () => {
     );
   });
 });
+
+/**
+ * TASK-PC-FE-338 c-2 AC-2 — a read set (OUTBOUND_READ without OUTBOUND_WRITE) can open 출고
+ * (the list is 200) but every outbound-service mutation would be 403: the screen hides those
+ * buttons. «발송 재시도» goes to logistics-service (`authenticated()` only) and stays. Contract
+ * § 2.4.3.4 «Read-only sets hide write buttons» — the server stays final.
+ */
+describe('OutboundOpsScreen — AC-2 read set hides the outbound write buttons', () => {
+  async function drillReadOnly(
+    user: ReturnType<typeof userEvent.setup>,
+    seedStatus: string,
+    canWrite: boolean | undefined,
+  ) {
+    render(
+      <OutboundOpsScreen
+        orders={{ ...ORDERS, content: [order({ status: seedStatus })] }}
+        canWrite={canWrite}
+      />,
+      { wrapper: wrapper() },
+    );
+    await user.click(screen.getByTestId('outbound-drill-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-drill')).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-drill-status')).toBeInTheDocument(),
+    );
+  }
+
+  it('canWrite=false → no pick / pack / ship / cancel, and a read-only note', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('PICKING', 'RESERVED'))),
+    );
+    const user = userEvent.setup();
+    await drillReadOnly(user, 'PICKING', false);
+    for (const id of [
+      'outbound-action-pick',
+      'outbound-action-pack',
+      'outbound-action-ship',
+      'outbound-action-cancel-order',
+    ]) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+    expect(screen.getByTestId('outbound-read-only-note')).toHaveTextContent('조회 전용');
+  });
+
+  it('canWrite=false keeps «발송 재시도» (logistics-service is not gated by OUTBOUND_WRITE)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED'))),
+    );
+    const user = userEvent.setup();
+    await drillReadOnly(user, 'SHIPPED', false);
+    expect(screen.getByTestId('outbound-action-retry-dispatch')).toBeInTheDocument();
+  });
+
+  it('control: canWrite omitted (fail-open) → the buttons are there, no note', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('PICKING', 'RESERVED'))),
+    );
+    const user = userEvent.setup();
+    await drillReadOnly(user, 'PICKING', undefined);
+    expect(screen.getByTestId('outbound-action-pick')).toBeInTheDocument();
+    expect(screen.queryByTestId('outbound-read-only-note')).toBeNull();
+  });
+});

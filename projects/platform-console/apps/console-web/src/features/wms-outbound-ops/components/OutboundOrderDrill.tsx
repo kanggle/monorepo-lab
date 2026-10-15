@@ -34,6 +34,8 @@ export interface OutboundOrderDrillProps {
   shipEnabled: boolean;
   cancelVisible: boolean;
   retryVisible: boolean;
+  /** TASK-PC-FE-338 c-2 AC-2 — `false` hides the outbound-service write buttons. Default `true`. */
+  canWrite?: boolean;
   cancelPending: boolean;
   actionPending: boolean;
   cancelMutationPending: boolean;
@@ -60,6 +62,7 @@ export function OutboundOrderDrill({
   shipEnabled,
   cancelVisible,
   retryVisible,
+  canWrite = true,
   cancelPending,
   actionPending,
   cancelMutationPending,
@@ -124,6 +127,7 @@ export function OutboundOrderDrill({
             shipEnabled={shipEnabled}
             cancelVisible={cancelVisible}
             retryVisible={retryVisible}
+            canWrite={canWrite}
             cancelPending={cancelPending}
             actionPending={actionPending}
             cancelMutationPending={cancelMutationPending}

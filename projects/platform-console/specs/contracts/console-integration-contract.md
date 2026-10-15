@@ -267,7 +267,21 @@ TASK-PC-FE-225's orthodox IAM-taxonomy nav split introduced two workforce-plane 
   - Platform-scope (`'*'`) target operators appear only to a platform-scope actor; with the active tenant `*` the operator screen grants/revokes the «모든 테넌트» row.
   - **Self-grant** (actor = target, OD-4) is allowed; the confirm copy says «자기 자신에게 업무 권한을 줍니다 — 감사 기록에 자기 배정으로 남습니다.»
 - 🔴 **Revocation-latency copy (ADR-083 D7 — verbatim meaning, never «즉시»)**: every revoke / group-remove / set-edit / set-delete confirm says the change applies **from the next tenant exchange** and that an already-issued domain token keeps working until it expires — «다음 테넌트 재교환부터 적용됩니다. 이미 발급된 도메인 토큰은 만료(최대 약 6분)까지 그대로 쓰입니다.» (before P3: «최대 30분»). «약 6분» = the assume token's TTL of 300 s plus the resource servers' 60 s expiry skew. This is the canonical IAM statement, «`exp` + 60 s — 최대 약 360초» ([`auth-api.md` § 회수 지연](../../../iam-platform/specs/contracts/http/auth-api.md) · `admin-api.md` § 회수 지연, measured by `TASK-BE-632` AC-6, owner decision 2026-10-15). The earlier wording «최대 5분» named the TTL alone and is superseded.
-- **Read-only sets hide write buttons — the server is final**: on a `fineGrained` domain screen, when the operator's business roles for that domain (row 12, intersected with the subscribed domains) contain only `access=READ` entries, the screen hides its mutation buttons. A direct URL or API call is still refused by the domain server with `403` — the console keeps the existing inline «권한 없음» mapping for that `403`. 🔵 This **supersedes**, from P4, the «does NOT pre-gate on role» statements of the domain sections (§ 2.4.5 et al.) for **button visibility only**; the attempt-and-map-403 handling stays, because hiding is a convenience and the producer is the gate.
+- **Read-only sets hide write buttons — the server is final**: ~~on a `fineGrained` domain screen, when the operator's business roles for that domain (row 12, intersected with the subscribed domains) contain only `access=READ` entries, the screen hides its mutation buttons.~~ → **per screen (`TASK-PC-FE-338` c-2, 2026-10-15 — follows the per-menu owner decision below):**
+  - A screen's mutation buttons hide when the operator's business roles (row 12 ∩ subscribed domains — the same input as the nav signal below) hold **none** of the roles the server requires for **those mutations**. The required roles are declared per screen as `writeRequires`.
+  - The struck rule could not be built from row 12, which carries `{domainKey, role}` and no `access`. It is also coarser than the server: an `INVENTORY_WRITE` holder is not «READ-only», yet `/wms/outbound`'s writes need `OUTBOUND_WRITE`.
+  - A READ-only set never holds a write role, so it still hides every declared button (AC-2 unchanged).
+  - Declared today:
+
+    | Screen | Buttons | `writeRequires` | Server source |
+    |---|---|---|---|
+    | `/wms` | alert «확인 처리» | `WMS_OPERATOR` | wms admin-service `AlertDashboardController` `hasRole('WMS_OPERATOR')` |
+    | `/wms/outbound` | 피킹 확정 · 패킹 진행 · 출고 확정 · 주문 취소 | `OUTBOUND_WRITE` | outbound-service `SecurityConfig` mutations = `OUTBOUND_WRITE ∨ OUTBOUND_ADMIN` (`OUTBOUND_ADMIN` is not in the catalog) |
+
+  - «발송 재시도» goes to scm logistics-service, which is `authenticated()` only. It carries no requirement and stays visible.
+  - A screen with no declaration hides nothing.
+  - Row 12 failure, no active tenant, or a sample visitor → **buttons visible** (fail-open, as for the nav signal).
+  - A direct URL or API call is still refused by the domain server with `403` — the console keeps the existing inline «권한 없음» mapping for that `403`. 🔵 This **supersedes**, from P4, the «does NOT pre-gate on role» statements of the domain sections (§ 2.4.5 et al.) for **button visibility only**; the attempt-and-map-403 handling stays, because hiding is a convenience and the producer is the gate.
 - **Errors (inline, no crash)**: `404 DOMAIN_PERMISSION_SET_NOT_FOUND` → refresh the list · `409 DOMAIN_PERMISSION_SET_READ_ONLY` → «시스템 세트는 바꿀 수 없습니다 — 복제해서 새 세트를 만드세요» · `409 DOMAIN_PERMISSION_SET_IN_USE` → «아직 배정돼 있는 세트입니다 — 먼저 회수하세요» · `409 DOMAIN_PERMISSION_SET_ALREADY_GRANTED` → «이미 직접 배정돼 있습니다» · `422 DOMAIN_ROLE_NOT_ASSIGNABLE` → refresh the catalog · `422 DOMAIN_NOT_SUBSCRIBED` → «이 테넌트가 구독하지 않은 도메인이 들어 있습니다» · `404 OPERATOR_NOT_FOUND` (not a member of the active tenant) → refresh the operator list · `403 PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` → inline «권한 없음» · `400 REASON_REQUIRED` / `VALIDATION_ERROR` as elsewhere · `503 DOWNSTREAM_ERROR` / `CIRCUIT_OPEN` / timeout → only this section degrades · `401` → forced re-login.
 
 ##### Domain nav — two signals, kept apart (ADR-083 D9)
@@ -277,7 +291,21 @@ Domain menus are never hidden by either signal; each shows its own badge. Hiding
 | Signal | Source | Rule | On failure / unknown |
 |---|---|---|---|
 | **«구독 필요»** (subscription missing) — *documented here for the first time; the behaviour exists since TASK-PC-FE-314* | the registry catalog the `(console)` layout already fetches (§ 2.2) → the **active tenant's subscribed domains** | a nav node whose children all gate on the **same** domain (`permission-map` `domain` gate) gets the badge when the active tenant has not subscribed to that domain. A node with mixed child domains is not badged. `admin`-gated items are hidden by role (§ 2.4.3 «Nav exposure»); `domain`-gated items are **never hidden** by this signal | no active tenant, or registry failure → **no badge** («don't know ⇒ don't badge») |
-| **«업무 권한 없음»** (no business permission) — new, P4 | `GET /api/admin/me/domain-access` (row 12) with `X-Tenant-Id` = active tenant — 🔴 **never a decode of the domain token** | for a domain the active tenant **has** subscribed to: no role of that `domainKey` in the response → badge «업무 권한 없음». A domain without a subscription shows **only** «구독 필요» (the first signal wins — one cause per item) | API failure / timeout / `401`-after-refresh / no active tenant → **no badge, menu open** (an outage must never read as «no permission») |
+| **«업무 권한 없음»** (no business permission) — new, P4; **per menu** (owner decision 2026-10-15, `TASK-PC-FE-338` c-2) | `GET /api/admin/me/domain-access` (row 12) with `X-Tenant-Id` = active tenant, **∩ the active tenant's subscribed domains** — 🔴 **never a decode of the domain token**. After P3 (`TASK-BE-632`) the assumed token's `roles` = assigned sets ∩ subscribed domains, so this input **equals the token's `roles`** without reading the token, and the signal predicts what the domain server decides | **per nav leaf**: each `domain`-gated leaf declares `serverRequires`, the roles of which the domain server needs **at least one** for that screen's **primary read**. The leaf gets the badge when the active tenant has subscribed to the leaf's domain and the input holds none of them. **A leaf the server opens on subscription alone declares nothing and is never badged.** A drill parent gets the badge only when **every** `domain`-gated child is badged (one cause per item). A domain without a subscription shows **only** «구독 필요» (the first signal wins) | API failure / timeout / `401`-after-refresh / no active tenant → **no badge, menu open** (an outage must never read as «no permission») |
+
+- **What is declared (measured 2026-10-15, `TASK-PC-FE-338` c-2 AC-0 · ADR-083 ③ · BE-632 AC-1 live):**
+
+  | Leaf | `serverRequires` | Why |
+  |---|---|---|
+  | `/wms/outbound` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | outbound-service `GET /api/**` = `OUTBOUND_READ ∨ WRITE ∨ ADMIN` (live: inventory set → 403) |
+  | every `ecommerce` leaf | `ECOMMERCE_OPERATOR` | the ecommerce gateway admits operators on `/api/admin/**` and the operator-on-public trees only with `ECOMMERCE_OPERATOR` |
+  | `/wms` · `/wms/inventory` · `/wms/inbound` · `/wms/master` | — | wms admin-service dashboards: `WMS_VIEWER` is synthesised from `entitled_domains ∋ wms` (subscription alone) |
+  | `/wms/operations` | — | `WMS_ADMIN` for every operator — no catalog role can satisfy it, so it is not a set question |
+  | SCM · ERP · Finance leaves | — | SCM services are `authenticated()` only; ERP reads are open to `entitled_domains ∋ erp`; Finance synthesises `FINANCE_VIEWER` |
+  | fan leaves | — | not measured (ADR-083 ③ ⚪) — no declaration until measured |
+
+- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule.
+- **Badge.** The text is «업무 권한 없음», and the leaf keeps its link (never hidden). The `(console)` layout reads row 12 once per render, together with the registry.
 
 #### 2.4.4 IAM operator overview (composed) — TASK-PC-FE-005 — cross-reference, **no new producer**
 

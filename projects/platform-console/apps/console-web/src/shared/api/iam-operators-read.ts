@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { getActiveTenant } from '@/shared/lib/session';
 import { clampPageSize } from '@/shared/lib/pagination';
 import { OperatorsUnavailableError } from './errors';
@@ -197,6 +198,35 @@ export async function listOperators(
 
 export async function getSelfRolesOrNull(): Promise<string[] | null> {
   return (await getSelfOrNull())?.roles ?? null;
+}
+
+/**
+ * TASK-PC-FE-338 c-2 — `GET /api/admin/me/domain-access` (contract § 2.4.3.4 row 12): the caller's
+ * own business roles in the active tenant, PRE-subscription (the caller intersects with the
+ * subscribed domains — `console-nav-exposure.ts` `businessRolesWithin`). No permission key (self).
+ *
+ * Same hardened core as every operators call (operator token, `X-Tenant-Id` = active tenant; no
+ * active tenant ⇒ blocked before any fetch). EVERY failure → `null` = «don't know» ⇒ no
+ * «업무 권한 없음» badge, write buttons shown (fail-open; the domain server is the gate).
+ * Only `roles[]` is parsed — `sets[]` (sources) is not needed here, so a change there cannot
+ * break the nav.
+ */
+const MyDomainAccessRolesSchema = z.object({
+  roles: z.array(z.object({ domainKey: z.string(), role: z.string() })),
+});
+
+export async function getMyDomainRolesOrNull(): Promise<
+  { domainKey: string; role: string }[] | null
+> {
+  try {
+    const body = await callGapOperators(
+      { method: 'GET', path: '/api/admin/me/domain-access' },
+      (json) => MyDomainAccessRolesSchema.parse(json),
+    );
+    return body.roles.map((r) => ({ domainKey: r.domainKey, role: r.role }));
+  } catch {
+    return null;
+  }
 }
 
 /**

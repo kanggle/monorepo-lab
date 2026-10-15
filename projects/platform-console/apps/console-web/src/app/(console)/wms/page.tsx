@@ -10,6 +10,8 @@ import {
   WmsRecentShipments,
   WmsRecentAdjustments,
 } from '@/features/wms-ops';
+import { canWriteOn } from '@/shared/ui/console-nav-exposure';
+import { getWmsBusinessRoles } from './_lib/wms-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,10 +54,14 @@ export default async function WmsPage() {
   // from a failed registry — never block on an unproven negative).
   let eligible = false;
   let registryDegraded = false;
+  // TASK-PC-FE-338 c-2 AC-2 — the registry's wms tenants (for the write-button gate); `null` =
+  // unknown ⇒ buttons shown.
+  let wmsTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const wms = catalog.products.find((p) => p.productKey === 'wms');
     eligible = Boolean(wms && wms.available && wms.tenants.length > 0);
+    wmsTenants = wms ? wms.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -87,9 +93,10 @@ export default async function WmsPage() {
   // read leg, NOT a cross-domain composition leg); both perform a whole-session
   // `redirect('/login')` internally on a 401 (no partial authed state). The
   // overview does per-cell degrade; the section-state gates the tables.
-  const [overviewState, state] = await Promise.all([
+  const [overviewState, state, businessRoles] = await Promise.all([
     getWmsOverviewState(eligible),
     getWmsSectionState(eligible),
+    getWmsBusinessRoles(wmsTenants),
   ]);
 
   if (state.notEligible) {
@@ -161,6 +168,7 @@ export default async function WmsPage() {
     <WmsOpsScreen
       alerts={state.alerts}
       lagSeconds={state.lagSeconds}
+      canAcknowledge={canWriteOn('/wms', businessRoles)}
       overview={<WmsOverview state={overviewState} />}
       recentActivity={
         <>

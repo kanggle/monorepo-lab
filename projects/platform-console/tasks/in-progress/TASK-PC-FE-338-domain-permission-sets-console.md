@@ -257,3 +257,110 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
   - Full `npx vitest run`: **395 files / 4502 tests passed**, rc=0.
   - `tsc --noEmit -p .`: rc=0.
   - `next lint`: rc=0. Its one warning is pre-existing in an untouched file (`api/onboarding/received-invitations/route.ts:26`).
+- **Merge.** #4378 → `0091e1897` (merged by the main session).
+
+## Slice c-2 PR 2 — design (2026-10-15 UTC)
+
+- **Input = row 12 ∩ subscribed domains.** Main-session confirmation 2026-10-15: the input is `GET /api/admin/me/domain-access` intersected with the active tenant's subscribed domains.
+  - After P3 this set **equals the assumed token's `roles`**, so the signal predicts the server without decoding the token. The contract forbids a token decode (Failure Scenario 1).
+  - The `(console)` layout reads row 12 once per render, alongside the registry. The two WMS pages read it for their own buttons.
+- **Contract amended first** (§ 2.4.3.4 «Domain nav — two signals»): the «업무 권한 없음» row is now **per menu**.
+  - Each `domain`-gated leaf declares `serverRequires`: the roles of which the server needs at least one for the screen's **primary read**.
+  - A leaf the server opens on subscription alone declares nothing and is never badged.
+  - A drill parent is badged only when **every** `domain`-gated child is badged.
+  - «구독 필요» wins: one cause per item.
+  - A measured table records what is declared, and why. P5–P8 (`TASK-MONO-792`~`795`) add data only.
+- **Declared today.**
+  - `/wms/outbound` → `OUTBOUND_READ · OUTBOUND_WRITE`.
+  - Every ecommerce leaf → `ECOMMERCE_OPERATOR`. That is the ecommerce gateway's `/api/admin/**` and operator-on-public rule (`AccountTypeEnforcementFilter.java:104-116`).
+  - Everything else declares nothing, per the c-2 AC-0 table.
+  - The fan leaves are not measured (ADR-083 ③ ⚪), so they declare nothing.
+- **AC-2: the contract's READ-only rule is replaced by a per-screen `writeRequires`.**
+  - **Why:** the contract rule (`:270`, «only `access=READ` entries → hide») **cannot be built from row 12**, which returns `{domainKey, role}` with no `access` field. It is also coarser than the server: an `INVENTORY_WRITE` holder is not «READ-only», but `/wms/outbound`'s writes need `OUTBOUND_WRITE`.
+  - **What replaces it:** a screen's mutation buttons hide when the operator's business roles hold none of that screen's `writeRequires`. A READ-only set never holds a write role, so AC-2's case is unchanged.
+  - **Declared:**
+    - `/wms` alert «확인 처리» → `WMS_OPERATOR`.
+    - `/wms/outbound` pick · pack · ship · cancel → `OUTBOUND_WRITE`.
+    - «발송 재시도» (logistics-service, `authenticated()` only) carries nothing and stays.
+  - 🔵 **This is my reading of decision 1 applied to buttons.** The main session asked for «the `:270` rule»; the struck text stays in the contract with the reason. Reported for confirmation.
+- **The e2e pin** `overview-consolidation.spec.ts:82-87` (`/^ERP(구독 필요)?$/`) stays true: ERP declares nothing, so it can never carry «업무 권한 없음». A unit test now asserts the same regex on ERP with no business roles.
+- **AC-1 wording.** AC-1's «권한 없음» is rendered as the badge text **«업무 권한 없음»** (contract wording).
+
+## Slice c-2 PR 2 — red (2026-10-15 UTC)
+
+- **Stubs:** so that `tsc` compiles with the tests, the red commit carries the type fields (`serverRequires` / `writeRequires`), the new props and the function signatures as **stubs**. They return «no badge / can write / null», so every red is an assertion.
+- **New tests:**
+  - `console-nav-business-permission.test.ts`
+  - `sidebar-business-permission.test.tsx`
+  - `my-domain-access-read.test.ts`
+  - AC-2 blocks appended to `OutboundOpsScreen.test.tsx` and `WmsOpsScreen.test.tsx`
+- **Local run of the 5 files: 15 failed / 68 passed.** All 15 are `AssertionError` or `TestingLibraryElementError` (missing badge testid). `tsc --noEmit -p .` rc=0.
+
+## Slice c-2 PR 2 — what landed
+
+- **`shared/api/iam-operators-read.ts`** — new `getMyDomainRolesOrNull()`, the row 12 read.
+  - It uses the same hardened operators core: operator token and `X-Tenant-Id`.
+  - It parses only `roles[]`.
+  - Every failure returns `null`, which callers read as «don't know».
+- **`shared/ui/console-nav-exposure.ts`** — pure functions, no React and no `features/` import:
+  - `businessRolesWithin` computes row 12 ∩ subscribed domains. `undefined` = don't know; an empty set = known to hold nothing.
+  - `businessPermissionBadgeKeys` returns the badged leaves, plus a parent when all of its `domain` children are badged. «구독 필요» wins over it.
+  - `canWriteOn` gives the AC-2 answer.
+- **`permission-map.ts` declarations:**
+  - `/wms/outbound`: `serverRequires` `OUTBOUND_READ · OUTBOUND_WRITE`, `writeRequires` `OUTBOUND_WRITE`.
+  - `/wms`: `writeRequires` `WMS_OPERATOR`.
+  - All 9 ecommerce leaves: `serverRequires` `ECOMMERCE_GATEWAY_REQUIRES`.
+  - The header comment no longer says «domain row = derived»; this is the BE-632 hand-off of `:24`. It now says sets ∩ subscribed, with `OperatorRoleDerivation` as the ceiling only.
+- **Sidebar.** `BusinessPermissionBadge` («업무 권한 없음», a neutral tone that differs from the amber «구독 필요») renders on:
+  - drill children;
+  - the drill header;
+  - top-level parents;
+  - flat leaves.
+
+  The testid is `${testid}-business-permission-badge`. The item always stays a link.
+- **`(console)` layout.** Row 12 is fired alongside `/me`, and skipped for a sample visitor or when no tenant is selected. The layout passes `myBusinessRoles` to the sidebar.
+- **AC-2 screens.**
+  - `WmsOpsScreen` / `WmsAlertsTable` take `canAcknowledge`. When it is false, «확인 처리» hides and the note `wms-alerts-read-only-note` shows.
+  - `OutboundOpsScreen` → `OutboundOrderDrill` → `OutboundDrillActions` take `canWrite`. When it is false, pick · pack · ship · cancel and the pick-blocked hint hide, the note `outbound-read-only-note` shows, and «발송 재시도» stays.
+  - The two pages compute the flag through `app/(console)/wms/_lib/wms-business-roles.ts`: row 12 ∩ (active tenant ∈ the registry's `wms` tenants). The registry is already fetched; no second call.
+- **e2e pin.** `overview-consolidation.spec.ts:82-87`: the comment now says why the exact regex stays true. The regex is unchanged.
+  - I grepped `tests/e2e`, `e2e-smoke` and `tests/federation-hardening-e2e` for `wms-alert-ack`, `outbound-action`, `business-permission` and «업무 권한 없음»: **0 hits**.
+- **Green (local).**
+  - Full `npx vitest run`: **398 files / 4543 tests passed**, rc=0.
+  - `tsc --noEmit -p .`: rc=0.
+  - `next lint`: rc=0. Its one pre-existing warning is in an untouched file.
+
+## Slice c-2 PR 2 — CI and branch e2e (2026-10-15 UTC)
+
+- **CI red.** `f84a71172`, run 38787846471, job 116604482015: **15 failed / 4528 passed (4543)**. The 5 new or extended files are the only failing ones (`Test Files 5 failed | 393 passed`).
+- **CI green.** `98d825e81`, run 38789329431:
+  - job 116609609615: **4543 passed (4543)**;
+  - console smoke job 116609609976: success.
+  - `gh pr checks 4381`: 13 pass / 53 skipping / 0 fail.
+- **Console nightly on the branch.** `gh workflow run nightly-e2e.yml --ref task/pc-fe-338-c2-pr2-nav-signal`:
+  - Run 38789366286 (`98d825e81`) **success**, all 15 jobs.
+  - Console job 116610381145: **12 passed**. That is all 5 specs in `tests/e2e` (12 `test(` calls), including `overview-consolidation.spec.ts` with the ERP pin.
+  - The «red nightly arrives» job is success, so no issue was opened.
+- **Federation e2e on the branch.** `gh workflow run federation-hardening-e2e.yml --ref …`:
+  - Run 38789372503 **success**. Job 116610291271: **20 passed · 1 flaky · 0 failed**.
+  - **The flaky spec:** `tenant-switch-rescope.spec.ts:110`. On the first attempt the globex `operator-overview-card-scm` was `degraded`, not `ok`; it passed on retry.
+  - **Why I don't think this PR caused it:**
+    - The assertion is on the overview composition's SCM leg (a domain-token read). It is not on a nav badge.
+    - The same spec has flaked before and passed on retry (`TASK-BE-516`: «`tenant-switch-rescope:106` = flake (retry-passed)»).
+    - 🔵 The layout's new row-12 call is an admin-service read with the operator token; it does not touch the domain token.
+
+  Recorded, not fixed.
+
+## AC status after PR 2 (2026-10-15 UTC)
+
+- [ ] **AC-1** — Unit-tested against the measured server table (inventory set → «출고» badged, inventory/inbound/master/overview not, SCM «구독 필요» only).
+  - The server side of the comparison is the 27th-window live result (BE-632 AC-1: inventory set → outbound GET 403) plus the code reading (dashboards synthesise `WMS_VIEWER` from subscription).
+  - ⚪ **A live comparison of the console badge against the server's 403/200 in the same session** needs a running stack with P3; no CI harness seeds sets per operator. → `TASK-MONO-672` § Next window step 3 (rewritten).
+- [ ] **AC-2** — Unit-tested: read set → outbound write buttons and «확인 처리» hidden; fail-open control.
+  - ⚪ **The direct mutation call → server 403** has the same reason and goes to the same place (MONO-672 step 3). The outbound-service side is already pinned by its own slice tests (`OUTBOUND_READ`-only caller → 403).
+- [ ] **AC-5** — The nightly console job on the branch is green (above). ⚪ «First nightly on `main` after merge» and the Vercel Production deployment record need the merge, so they are not measurable yet. MONO-672 step 3 lists them as checks to make before the window.
+
+## 소유자 결정 — c-2 PR 2 (2026-10-15 UTC)
+
+- **AC-2 기준 이탈 인정**: 계약 `:270` «READ 역할만 → 숨김» 대신 화면별 `writeRequires`(출고 = `OUTBOUND_WRITE` · `/wms` 확인 처리 = `WMS_OPERATOR`). 이유: 행 12 응답에 `access` 칸이 없어 만들 수 없고, 만들더라도 `INVENTORY_WRITE` 보유자에게 출고 버튼을 보여 서버 403 과 어긋난다. 메뉴 단위 결정과 같은 원칙(서버 판정 일치). 조회 전용 세트는 여전히 모든 버튼이 숨는다.
+- **이커머스 배지 유지**: 9 화면 `serverRequires = ECOMMERCE_OPERATOR`(게이트웨이 규칙) — 서버가 거절하므로 «업무 권한 없음». **팬은 선언 없음** — 서버 검사를 잰 뒤(792~795 또는 별건) 데이터만 추가한다.

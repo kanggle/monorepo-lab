@@ -11,6 +11,8 @@ import {
   WmsShipmentsScreen,
 } from '@/features/wms-ops';
 import type { WmsShipmentsSectionState } from '@/features/wms-ops';
+import { canWriteOn } from '@/shared/ui/console-nav-exposure';
+import { getWmsBusinessRoles } from '../_lib/wms-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +45,14 @@ export const dynamic = 'force-dynamic';
 export default async function WmsOutboundPage() {
   let eligible = false;
   let registryDegraded = false;
+  // TASK-PC-FE-338 c-2 AC-2 — the registry's wms tenants (for the write-button gate); `null` =
+  // unknown ⇒ buttons shown.
+  let wmsTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const wms = catalog.products.find((p) => p.productKey === 'wms');
     eligible = Boolean(wms && wms.available && wms.tenants.length > 0);
+    wmsTenants = wms ? wms.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -80,9 +86,10 @@ export default async function WmsOutboundPage() {
   // resilience). Both share wms eligibility + the domain-facing IAM OIDC
   // token; each performs a whole-session `redirect('/login')` internally on a
   // 401 (no partial authed state).
-  const [state, shipmentsState] = await Promise.all([
+  const [state, shipmentsState, businessRoles] = await Promise.all([
     getOutboundSectionState(eligible),
     getWmsShipmentsState(eligible),
+    getWmsBusinessRoles(wmsTenants),
   ]);
 
   if (state.notEligible) {
@@ -160,7 +167,10 @@ export default async function WmsOutboundPage() {
 
   return (
     <>
-      <OutboundOpsScreen orders={state.orders} />
+      <OutboundOpsScreen
+        orders={state.orders}
+        canWrite={canWriteOn('/wms/outbound', businessRoles)}
+      />
       <WmsShipmentsSection state={shipmentsState} />
     </>
   );

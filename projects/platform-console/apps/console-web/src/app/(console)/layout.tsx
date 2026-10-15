@@ -22,7 +22,8 @@ import { RE_LOGIN_PATH } from '@/shared/lib/re-login';
 import { isNonOperatorAllowedPath, NON_OPERATOR_LANDING } from '@/shared/lib/non-operator';
 import { liveSessionDemoStopRedirect } from '@/shared/lib/live-session-demo-stop';
 import { getCatalog } from '@/features/catalog';
-import { getSelfRolesOrNull } from '@/shared/api/iam-operators-read';
+import { getSelfRolesOrNull, getMyDomainRolesOrNull } from '@/shared/api/iam-operators-read';
+import { businessRolesWithin } from '@/shared/ui/console-nav-exposure';
 import type { DomainKey } from '@/shared/guide/permission-map';
 import {
   selectableTenants,
@@ -255,6 +256,11 @@ export default async function ConsoleLayout({
   // entirely (task Out of Scope: the sample shell shows everything regardless
   // of what this would answer).
   const myRolesPromise = sampleVisitor ? null : getSelfRolesOrNull();
+  // TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Domain nav — two signals», per menu) — row 12
+  // `GET /api/admin/me/domain-access`, fired concurrently. Skipped for a sample visitor and when no
+  // tenant is selected (row 12 requires `X-Tenant-Id`). `null` ⇒ no «업무 권한 없음» anywhere.
+  const myDomainRolesPromise =
+    sampleVisitor || !activeTenant ? null : getMyDomainRolesOrNull();
 
   let tenants: string[] = [];
   // TASK-MONO-751 — products the registry lists with a selectable tenant; gates the
@@ -300,6 +306,12 @@ export default async function ConsoleLayout({
   // skipped for a sample visitor) ⇒ the sidebar shows everything, unchanged
   // from before this task.
   const myRoles = myRolesPromise ? await myRolesPromise : null;
+  // TASK-PC-FE-338 c-2 — row 12 ∩ subscribed domains = (after P3) the assumed token's `roles`,
+  // never a decode of it. `undefined` = don't know ⇒ no «업무 권한 없음» badge.
+  const myBusinessRoles = businessRolesWithin(
+    myDomainRolesPromise ? await myDomainRolesPromise : null,
+    subscribedDomains,
+  );
 
   // Org-node (company) grouping for the tenant switcher (TASK-PC-FE-237 /
   // ADR-047). This CANNOT break the shell: any failure (403 for a
@@ -403,6 +415,7 @@ export default async function ConsoleLayout({
             availableProductKeys={availableProductKeys}
             myRoles={myRoles}
             subscribedDomains={subscribedDomains}
+            myBusinessRoles={myBusinessRoles}
           />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
