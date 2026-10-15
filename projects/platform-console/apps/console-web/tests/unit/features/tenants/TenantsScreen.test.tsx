@@ -24,9 +24,16 @@ vi.mock('@/shared/api/client', () => ({
   },
 }));
 
+// TASK-MONO-773 S6 — the mock forwards the remaining props (e.g. `data-testid`) like the real `Link` does.
 vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: { href: string; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -47,13 +54,12 @@ const INITIAL_PAGE = {
   totalPages: 1,
 };
 
-function renderScreen(
-  orgNodeOptions?: { orgNodeId: string; name: string }[] | null,
-) {
+// TASK-MONO-773 S6 — the list screen no longer takes org-node options (they went with the form).
+function renderScreen() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <TenantsScreen initial={INITIAL_PAGE} orgNodeOptions={orgNodeOptions} />
+      <TenantsScreen initial={INITIAL_PAGE} />
     </QueryClientProvider>,
   );
 }

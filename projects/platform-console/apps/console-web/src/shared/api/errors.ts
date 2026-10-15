@@ -61,6 +61,15 @@ export function errorDetail(
 export const MFA_REQUIRED_CODE = 'MFA_REQUIRED';
 
 /**
+ * TASK-MONO-773 S6 — the console session route's `403` code (`POST /api/auth/refresh`) when the identity
+ * session is valid and was rotated but the operator exchange answered «not an operator» (`401`). The session
+ * goes on as the non-operator shell (console-integration-contract § 2.6.4 — identity cookies kept, marker set);
+ * the browser client navigates to the tenant-creation screen. Registry: `platform/error-handling.md`
+ * § Console Composition.
+ */
+export const NOT_AN_OPERATOR_CODE = 'NOT_AN_OPERATOR';
+
+/**
  * The fixed `error_description` the IAM assume-tenant exchange carries on its
  * second-factor refusal (`400 invalid_grant`, auth-api.md § Assume-Tenant
  * Exchange — RFC 9470 vocabulary). 🔴 Compared by **whole-value equality**

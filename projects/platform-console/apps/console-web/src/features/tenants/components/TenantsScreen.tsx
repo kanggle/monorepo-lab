@@ -1,17 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ApiError, messageForCode } from '@/shared/api/errors';
-import { useTenantsList, useCreateTenant } from '../hooks/use-tenants';
-import type {
-  TenantPage,
-  TenantStatus,
-  TenantType,
-  CreateTenantInput,
-  TenantOrgNodeOption,
-} from '../api/types';
-import { TenantForm } from './TenantForm';
-import { TenantConfirmDialog } from './TenantConfirmDialog';
+import Link from 'next/link';
+import { ApiError } from '@/shared/api/errors';
+import { useTenantsList } from '../hooks/use-tenants';
+import type { TenantPage, TenantStatus, TenantType } from '../api/types';
 import { TenantsTable } from './TenantsTable';
 
 /**
@@ -20,10 +13,9 @@ import { TenantsTable } from './TenantsTable';
  * client re-query handles the status/tenantType filter + pagination + post-
  * mutation invalidation (mirrors `OperatorsScreen`).
  *
- * The create mutation is reason + confirm-gated via {@link
- * TenantConfirmDialog} — no one-click mutate. `idempotencyKey` is generated
- * ONCE per confirmed create (`crypto.randomUUID()`), reused only if that
- * exact confirmed create is retried.
+ * TASK-MONO-773 S6 — the create form is no longer here: «조직 만들기» (`/onboarding`) and «테넌트 등록»
+ * (this screen's form) became ONE «테넌트 생성» screen `/new-tenant` (console-integration-contract § 2.6.4;
+ * the SUPER_ADMIN form lives in `TenantCreateScreen`). This screen keeps the list and links there.
  *
  * This screen is functionally UNRELATED to `features/tenant`
  * (`TenantSwitcher` — the operator's own active-tenant session switcher);
@@ -31,19 +23,9 @@ import { TenantsTable } from './TenantsTable';
  */
 export interface TenantsScreenProps {
   initial: TenantPage;
-  /** «소속 노드 (선택)» choices, read server-side by the page
-   *  (TASK-PC-FE-312). `null`/absent = could not be read. */
-  orgNodeOptions?: TenantOrgNodeOption[] | null;
 }
 
-/** 404 `ORG_NODE_NOT_FOUND` on a create with a node (TASK-BE-625): normally
- *  nothing was created, but in the documented race the tenant exists UNPLACED
- *  — the screen cannot tell which, so it says both (admin-api.md § POST
- *  /api/admin/tenants 순서 노트). */
-const CREATE_ORG_NODE_NOT_FOUND_COPY =
-  '선택한 소속 노드에 둘 수 없습니다 (삭제되었거나 관리 범위 밖). 테넌트가 무소속으로 이미 만들어졌을 수 있으니 목록을 확인하고, 있으면 조직 계층 화면에서 노드에 두세요.';
-
-export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenProps) {
+export function TenantsScreen({ initial }: TenantsScreenProps) {
   const [statusFilter, setStatusFilter] = useState<'' | TenantStatus>('');
   const [tenantTypeFilter, setTenantTypeFilter] = useState<'' | TenantType>('');
   const [query, setQuery] = useState<{
@@ -60,45 +42,8 @@ export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenP
   const list = useTenantsList(query, seeded ? initial : undefined);
   const page = list.data;
 
-  const create = useCreateTenant();
-  const [pendingDraft, setPendingDraft] = useState<CreateTenantInput | null>(
-    null,
-  );
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
-
   const listApiError = list.error instanceof ApiError ? (list.error as ApiError) : null;
   const isListError = list.isError;
-
-  const createError =
-    create.error instanceof ApiError
-      ? (create.error as ApiError).code === 'ORG_NODE_NOT_FOUND'
-        ? CREATE_ORG_NODE_NOT_FOUND_COPY
-        : messageForCode((create.error as ApiError).code, create.error.message)
-      : create.error
-        ? '테넌트 등록에 실패했습니다.'
-        : null;
-
-  function openCreate(draft: CreateTenantInput) {
-    create.reset();
-    setIdempotencyKey(
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `tenant-create-${Date.now()}`,
-    );
-    setPendingDraft(draft);
-  }
-
-  function closeDialog() {
-    setPendingDraft(null);
-  }
-
-  function confirmCreate(reason: string) {
-    if (!pendingDraft || !idempotencyKey) return;
-    create.mutate(
-      { input: pendingDraft, reason, idempotencyKey },
-      { onSuccess: () => setPendingDraft(null) },
-    );
-  }
 
   function submitFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -118,18 +63,22 @@ export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenP
         테넌트 관리
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        테넌트(격리 경계) 등록·조회·수정. 세션의 활성 테넌트를 전환하는 화면이
+        테넌트(격리 경계) 조회·수정. 세션의 활성 테넌트를 전환하는 화면이
         아닙니다 — 상단의 테넌트 스위처와는 별개입니다. 모든 변경 작업은
         사유를 요구하며 감사 기록에 남습니다. (SUPER_ADMIN 전용)
       </p>
 
-      <TenantForm
-        mode="create"
-        onSubmitCreateDraft={openCreate}
-        serverError={createError}
-        pending={create.isPending}
-        orgNodeOptions={orgNodeOptions}
-      />
+      <p className="mb-6 text-sm">
+        새 테넌트는{' '}
+        <Link
+          href="/new-tenant"
+          data-testid="tenants-create-link"
+          className="font-medium text-foreground underline underline-offset-2"
+        >
+          테넌트 생성
+        </Link>{' '}
+        화면에서 첫 관리자와 함께 만듭니다.
+      </p>
 
       <TenantsTable
         statusFilter={statusFilter}
@@ -148,18 +97,6 @@ export function TenantsScreen({ initial, orgNodeOptions = null }: TenantsScreenP
         <p className="sr-only" data-testid="tenants-list-error-code">
           {listApiError.code}
         </p>
-      )}
-
-      {pendingDraft && (
-        <TenantConfirmDialog
-          title="테넌트를 등록할까요?"
-          description={`"${pendingDraft.displayName}" (${pendingDraft.tenantId}) 테넌트를 새로 등록하고 ${pendingDraft.firstAdmin.email} 에게 첫 관리자 초대를 보냅니다. 초대가 수락될 때까지 «관리자 대기»입니다.`}
-          confirmLabel="등록"
-          pending={create.isPending}
-          error={createError}
-          onConfirm={confirmCreate}
-          onCancel={closeDialog}
-        />
       )}
     </section>
   );

@@ -12,12 +12,14 @@ import {
   STEP_UP_MARKER_COOKIE,
   tokenCookieOpts,
   clearOperatorSession,
+  setNonOperatorMarker,
+  clearNonOperatorMarker,
 } from '@/shared/lib/session';
+import { nonOperatorLandingFor } from '@/shared/lib/non-operator';
 import { buildStepUpRedirectFor } from '@/shared/lib/login-redirect';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
-import { isOperatorEligibilityUnavailable } from '@/shared/lib/iam-token-refusal';
 import { logger, newRequestId } from '@/shared/lib/logger';
 
 export const runtime = 'nodejs';
@@ -47,7 +49,8 @@ export const runtime = 'nodejs';
  *      TASK-MONO-771: exchange `403 MFA_REQUIRED` → `/api/auth/step-up`
  *      (IAM cookies kept), or — when this callback answers the step-up's own
  *      request — `/login?error=mfa_required` (the loop bound). Only the `401`
- *      goes to `/onboarding`.
+ *      means «not an operator»: TASK-MONO-773 S6 — the non-operator marker is
+ *      set and the browser lands on the tenant-creation screen (§ 2.6.4).
  *   5. Clears the transient PKCE/state cookies and 302s to the post-login
  *      path carried by the state cookie.
  */
@@ -213,16 +216,10 @@ export async function GET(req: Request) {
         status: upstream.status,
         error: (body as { error?: string }).error,
       });
-      // TASK-MONO-772 S4 (§ 2.6.3) — IAM could not ask admin-service whether
-      // this personal account is an operator (fail-closed). Checked BEFORE the
-      // `'consumer-pool'` row: it is not «wrong account», and the account may
-      // well be right — no logout affordance, its own message.
-      if (isOperatorEligibilityUnavailable(body)) {
-        logger.warn('oidc_token_exchange_operator_check_unavailable', { requestId });
-        // Literal reason (= OPERATOR_CHECK_UNAVAILABLE): the login-page suite's
-        // «every loginRedirect reason has its own copy» gate reads literals.
-        return loginRedirect(publicOrigin(env), 'operator_check_unavailable');
-      }
+      // 🔵 TASK-MONO-773 S6 — the TASK-MONO-772 S4 `operator_eligibility_unavailable` →
+      // `operator_check_unavailable` row is gone: 773 S5 removed that IAM constant and the
+      // issuer's operator lookup (owner decision, § 2.6.3), so the body can no longer arrive.
+      // Do not reintroduce it — operator-ness is decided only by the § 2.6 exchange below.
       // TASK-PC-FE-324 — distinguish "logged in as the WRONG (consumer-pool)
       // account" from every other token-exchange failure (expired/reused
       // code, network/5xx, …). See `isConsumerPoolSsoRefusal` above for the
@@ -269,6 +266,8 @@ export async function GET(req: Request) {
         maxAge: op.expiresIn,
       });
       operatorToken = op.accessToken;
+      // TASK-MONO-773 S6 (§ 2.6.4) — an operator session: no non-operator marker survives it.
+      clearNonOperatorMarker(jar);
     } catch (err) {
       const notProvisioned =
         err instanceof OperatorExchangeError && err.reason === 'fail_closed';
@@ -305,19 +304,20 @@ export async function GET(req: Request) {
       // TASK-MONO-771) — the predicate below must stay on that reason alone.
       if (notProvisioned) {
         // fail_closed (exchange 401) = a VALID IAM login that is simply not
-        // an operator of any tenant yet. Instead of bouncing to re-login, send
-        // them to self-service onboarding (ADR-MONO-044 §3.4 — AWS "create
-        // account → root" / GCP "create project → owner" parity). The IAM
-        // access + refresh cookies are KEPT — not as an admin credential (they
-        // never are, § 2.1), but as the onboarding endpoint's `subjectToken`
-        // input + the operator-token re-exchange input once a tenant is
-        // created. The pre-operator state (access present, operator absent) is
-        // the only state the `(onboarding)` route group admits.
-        logger.info('operator_exchange_not_provisioned_to_onboarding', {
+        // an operator of any tenant. TASK-MONO-773 S6 (§ 2.6.4): the session
+        // continues INSIDE the console shell as a non-operator one — the explicit
+        // marker is set (never inferred from the missing operator cookie, R2) and
+        // the browser lands on the tenant-creation screen (or on the allow-listed
+        // page it asked for, e.g. `/guide`). The IAM access + refresh + id_token
+        // cookies are KEPT — not as an admin credential (they never are, § 2.1),
+        // but as the onboarding `subjectToken`, the re-exchange input once a
+        // tenant is created, and the logout `id_token_hint` (AC-7).
+        setNonOperatorMarker(jar, data.expires_in);
+        logger.info('operator_exchange_not_provisioned_to_non_operator_shell', {
           requestId,
         });
         return NextResponse.redirect(
-          new URL('/onboarding', publicOrigin(env)).toString(),
+          new URL(nonOperatorLandingFor(postLoginPath), publicOrigin(env)).toString(),
         );
       }
 

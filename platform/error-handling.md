@@ -757,12 +757,12 @@ downstream domain reads; most failure surfaces are degraded-card `reason` values
 `200 OK` envelope (governed by `console-integration-contract.md`, a distinct namespace
 from this HTTP-error-code registry — e.g. `TIMEOUT`, `DOWNSTREAM_ERROR`, `MISSING_PREREQUISITE`).
 The HTTP-level error surface reuses Platform-Common auth codes (`TOKEN_INVALID` 401,
-`TOKEN_REVOKED` 401); the net-new console-specific HTTP codes are below (`NO_ACTIVE_TENANT` from the composition routes; `OPERATOR_CHECK_UNAVAILABLE` from the console's own session route, TASK-MONO-772; `NOT_AN_OPERATOR` from the same route, TASK-MONO-773).
+`TOKEN_REVOKED` 401); the net-new console-specific HTTP codes are below (`NO_ACTIVE_TENANT` from the composition routes; `NOT_AN_OPERATOR` from the console's own session route, TASK-MONO-773; `OPERATOR_CHECK_UNAVAILABLE` from the same route is **retired** — TASK-MONO-772 → TASK-MONO-773 S6).
 
 | Code | HTTP | Description |
 |---|---|---|
 | NO_ACTIVE_TENANT | 400 | No active tenant selected in the console session on a tenant-scoped composition request; the route fails closed before any downstream call. Frontend message-mapped (TASK-MONO-249) |
-| OPERATOR_CHECK_UNAVAILABLE | 503 | `console-web` session route (`POST /api/auth/refresh`): IAM refused the console token with the fixed `error_description=operator_eligibility_unavailable` — it could not ask whether the personal account is an operator. Transient; the session cookies are kept. Distinct from the «wrong (consumer) account» refusal (`console-integration-contract.md` § 2.6.3, TASK-MONO-772). Becomes unreachable once the identity provider stops asking the operator question at console-token issue (TASK-MONO-773 S5, owner decision 2026-10-15 UTC); remove this row together with the last emitter |
+| ~~OPERATOR_CHECK_UNAVAILABLE~~ | 503 | **RETIRED (TASK-MONO-773 S6) — no service emits it.** Was: `console-web` session route (`POST /api/auth/refresh`) when IAM refused the console token with the fixed `error_description=operator_eligibility_unavailable` (TASK-MONO-772). The identity provider stopped asking the operator question at console-token issue (TASK-MONO-773 S5, owner decision 2026-10-15 UTC) and the console removed the mapping with it (S6, `console-integration-contract.md` § 2.6.3). Kept, struck, so no other code reuses the name — the same treatment as the retired `operator_eligibility_unavailable` constant in the `OAUTH_INVALID_GRANT` row |
 | NOT_AN_OPERATOR | 403 | Console session refresh: the identity session is valid and was rotated, but the operator-token exchange answered «not an operator» — the session continues in the console's non-operator state (identity cookies kept, operator credential absent, explicit non-operator marker set). The client navigates to the tenant-creation screen; it must not treat this as «session expired» and must not retry operator calls (TASK-MONO-773 / ADR-MONO-080 D9) |
 
 ## Community  `[domain: fan-platform]`

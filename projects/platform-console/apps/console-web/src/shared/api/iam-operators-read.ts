@@ -7,6 +7,7 @@ import {
   OperatorSummarySchema,
   type OperatorPage,
   type OperatorListParams,
+  type OperatorSummary,
 } from './iam-operators-types';
 
 /**
@@ -195,12 +196,21 @@ export async function listOperators(
 // ---------------------------------------------------------------------------
 
 export async function getSelfRolesOrNull(): Promise<string[] | null> {
+  return (await getSelfOrNull())?.roles ?? null;
+}
+
+/**
+ * TASK-MONO-773 S6 — the whole `GET /api/admin/me` summary (roles + `homeTenantId`), or `null` on ANY failure
+ * (no operator session, no active tenant, 4xx, 5xx, timeout). The «테넌트 생성» screen reads it to pick its mode
+ * (a `'*'` operator holding `tenant.manage` → the SUPER_ADMIN form); `null` means «don't know» and the screen
+ * falls toward the self form — the producer stays the authority (a `'*'` caller there gets `409`).
+ */
+export async function getSelfOrNull(): Promise<OperatorSummary | null> {
   try {
-    const me = await callGapOperators(
+    return await callGapOperators(
       { method: 'GET', path: '/api/admin/me' },
       (json) => OperatorSummarySchema.parse(json),
     );
-    return me.roles;
   } catch {
     return null;
   }

@@ -555,3 +555,66 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 - AC-1 의 두 절반은 **다른 IT 에서** 잰다 — auth IT 가 «실제 발급자가 그 클레임 집합을 낸다» 를, admin IT 가 «그 클레임 집합의 토큰은 운영자 토큰이 아니다» 를. 한 런에서 실제 auth 토큰을 admin 에 내미는 교차 서비스 시험은 없다(두 서비스를 함께 띄워 이 경로를 걷는 시험을 찾지 못했다 — `E2E smoke (iam docker-compose)` 가 풀 계정 콘솔 로그인을 걷는지는 열어 보지 않았다). 다리는 «클레임 집합이 같다» 는 두 시험의 단언뿐이고, 서명 키 · `iss` 값의 일치는 시험 설정이 맞춘 것이다.
 - 콘솔이 셸 토큰을 받은 뒤의 화면(교환 `401` → 비운영자 표식 · 셸)은 S6 몫 — 여기서 재지 않았다. 그래서 S5 머지 ~ S6 배포 사이에는 측면 없는 풀 계정이 콘솔 콜백에서 교환 `401` → 지금의 `/onboarding` 으로 간다(AC-0 § 3 의 코드 읽기 `callback/route.ts:304-322` 기준 — S6 전 동작, 이번에 다시 재지 않았다). `sso_wrong_account` 에는 더 닿지 않는다.
 - 라이브(데모) 미측정 — 데모 창 없음.
+
+## S6 기록 (2026-10-15T14:43Z UTC) — console-web 비운영자 셸 · «테넌트 생성» 한 화면 · `/onboarding` 307
+
+> 분석=Opus 5.5 (frontend-engineer) · worktree `monorepo-lab-773` · 브랜치 `task/mono-773-s6-console-shell`(origin/main `f6e850cb0` — S1 ~ S5 위) · PR #4374(draft). 방법 = S2 ~ S5 와 같다: **PHASE 1 = 시험만** 먼저 밀어 빨강을 재고(`ecd578fd4`), PHASE 2 에서 수선. 계약은 S1 이 쓴 § 2.6 – 2.6.4 그대로 구현했다(다시 정하지 않았다 — 아래 «계약 손댄 곳» 둘만).
+
+### PHASE 1 — 시험 (`ecd578fd4`)
+
+🔵 **새 모듈 넷은 tsc 용 빈 껍데기(stub)로 함께 들어갔다** — TS 시험은 없는 모듈을 import 하면 컴파일되지 않는다. 껍데기는 S6 이전 동작을 그대로 낸다: `/new-tenant` 페이지 = `redirect('/onboarding')`(옛 주소) · `POST /api/onboarding/received-invitations` = `404`(Next 의 «라우트 없음») · `ReceivedInvitations` · `TenantCreateScreen` = `null`. 그래서 그 넷을 겨눈 칸의 빨강 일부는 단언(`AssertionError`)이 아니라 **요소 없음**(`TestingLibraryElementError` — 껍데기가 아무것도 안 그린다)이다(아래).
+
+| 파일 | 무엇 |
+|---|---|
+| `tests/unit/non-operator-auth-routes.test.ts` (신규) | 표식 생애: 콜백 · GET · POST 갱신의 교환 `401` 만 세움(HttpOnly · `maxAge`=access `expires_in`) · 허용 목록 목적지 · `POST` = `403 NOT_AN_OPERATOR` + IAM 쿠키 유지 · 성공 · 로그아웃이 지움(+ `id_token_hint`) · 대조군 `403 MFA_REQUIRED` · `503` 은 표식 없음 · 퇴역 상수 본문 = 보통 `invalid_grant` |
+| `tests/unit/non-operator-client.test.ts` (신규) | 브라우저 클라이언트: 갱신 `403 NOT_AN_OPERATOR` → `/new-tenant` · 원 호출 재시도 0 · 대조 MFA · 퇴역 `503 OPERATOR_CHECK_UNAVAILABLE` = 보통 실패 |
+| `tests/unit/console-shell-non-operator.test.tsx` (신규) | 가드 3행 — 리다이렉트 없음 · **fetch 0**(레지스트리 · `/me` · org-nodes 가 전부 fetch 를 지난다 — R1 단언) · 벨 · 하트비트 · 스위처 미마운트 · 계정 메뉴 · 데모 알림 마운트 · 사이드바 `variant="non-operator"` · 허용 목록(경로 같음 · 쿼리 허용) 밖 7경로 → `/new-tenant` · 대조군 3(표식 없는 access = 갱신 홉 · 표식은 자격 아님 · 운영자 셸의 남은 표식 무시) |
+| `tests/unit/sidebar-non-operator.test.tsx` (신규) | 비운영자 사이드바 = 정확히 «가이드 → 테넌트 생성» · 운영자 사이드바에 «테넌트 생성»(역할 무관) · 대조 `/tenants` 유지 |
+| `tests/unit/onboarding-address-redirect.test.ts` (신규) | `/onboarding` → 307 `/new-tenant`(세 상태) · 쿼리 · 대조 `/new-tenant` · `/onboardingx` · 비운영자 셸 `no-store` |
+| `tests/unit/new-tenant-onboarding-bff.test.ts` (신규) | `createOrganization` 이 `403 EMAIL_NOT_VERIFIED` · `403 ONBOARDING_ACCOUNT_NOT_ELIGIBLE` · `409 OPERATOR_ALREADY_PROVISIONED` · `429 RATE_LIMITED` 를 ApiError 로(«unavailable» 아님) · received-invitations BFF(형제 경로 · `subjectToken` = access 쿠키 · `Authorization` 없음 · `503` 은 `503` · 쿠키 없음 `401` 호출 0) |
+| `tests/unit/new-tenant-page.test.tsx` (신규) | 세 모드 — 샘플 → `/` · 비운영자 = 받은 초대 → «관리자에게 초대를 요청하세요» → 첫 회사 양식(순서 단언) · 유일한 네트워크 = IAM received-invitations(운영자 토큰 없음) · `503` → `unavailable` · `'*'` SUPER_ADMIN → `TenantCreateScreen` · 회사 운영자 → 두 번째 회사 양식 · 대조: 회사 범위 `SUPER_ADMIN` 역할 행 = 회사 운영자 · `/me` 실패 → 셀프 양식 |
+| `tests/unit/features/onboarding/ReceivedInvitations.test.tsx` (신규) | 행(회사 · 역할 · 만료 · «첫 관리자») · 🔴 읽기 전용(링크 · 버튼 0) · 없음 · 미인증 안내 + 링크 · `NOT_ELIGIBLE` · `unavailable` ≠ «없음» |
+| `CreateOrganizationForm.test.tsx` · `TenantsScreen.test.tsx` · `tenants-page.test.tsx` · `onboarding-proxy.test.ts` | 트러스트 게이트 문구 넷 + 인증 링크 · 로그아웃 / «테넌트 만들기» · 두 번째 회사 설명 / 등록 폼 시험 11칸의 대상을 `TenantCreateScreen` 으로 옮김(단언 무변경) + `/tenants` 는 폼 대신 `/new-tenant` 링크 · 생성 성공 → `/tenants` / 목록 화면은 org-nodes 를 읽지 않음 / 생성 성공 = 표식 삭제 + 같은 기본 assume 함수(`preferredTenant` = 새 테넌트) · 테넌트 쿠키 단독 설정 없음 |
+| `auth-routes` · `auth-idle-refresh` · `mfa-step-up-routes` · `session-end-demo-stopped` · `sample-fetch-allowlist` · `login-error-messages` · `relogin-loop` | `/onboarding` 단언 → `/new-tenant` · 데모 종료 목적지에 `/new-tenant…` · onboarding-client fetch 수 2 · 퇴역 `operator_check_unavailable` 문구 · 단락 회로 예외 제거 단언 |
+| `operator-check-unavailable.test.ts` · `…-client.test.ts` | **삭제** — 지우는 동작(772 S4 매핑)을 재던 시험. 그 반대 명제는 위 신규 두 파일이 잰다 |
+| 새 e2e `tests/e2e/non-operator-tenant-creation.spec.ts` + `fixtures/seed.sql` · `fixtures/login.ts` · `docker-compose.e2e.yml` | 아래 «e2e» |
+
+**빨강 측정 (#4374 `ecd578fd4`, run 38749979885, job 116473657469 «Frontend unit tests» — 레인 로그에서 셈)**: console-web `Test Files 20 failed | 372 passed (392)` · `Tests **99 failed** | 4370 passed (4469)`. 로컬 같은 커밋도 똑같이 99 / 4370. 실패 모양: `AssertionError`(+ jest-dom `toHaveTextContent` / `toHaveAttribute` 단언 `Error`) 과 `TestingLibraryElementError` 22(위 껍데기 — 요소 없음). **컴파일 · 모듈 해석 오류 0** — 로컬 `npx tsc --noEmit -p .` rc=0(시험 포함). 파일별: console-shell-non-operator 16 · non-operator-auth-routes 13 · TenantsScreen 13 · new-tenant-page 9 · ReceivedInvitations 7 · new-tenant-onboarding-bff 7 · CreateOrganizationForm 6 · sidebar-non-operator 5 · onboarding-address-redirect 5 · mfa-step-up 3 · login-error-messages 3 · auth-idle-refresh 2 · non-operator-client 2 · session-end-demo-stopped 2 · auth-routes · onboarding-proxy · relogin-loop · sample-fetch-allowlist · sample-coverage-ledger(껍데기 페이지에 원장 행 없음) · tenants-page 각 1. 같은 레인의 ecommerce · fan 스위트 초록.
+
+### PHASE 2 — 수선
+
+- **표식** `console_non_operator`(`shared/lib/session.ts`): `setNonOperatorMarker` · `clearNonOperatorMarker`(보낸 브라우저에만 — 운영자 갱신에 빈 `Set-Cookie` 를 키우지 않는다) · `clearFullSession` 이 지운다 · `isNonOperatorSession` = access ∧ 표식 ∧ 운영자 없음. 옛 `hasPreOperatorSession`(«운영자 쿠키 없음» 추론 — R2 가 금한 술어)은 유일 호출자 `(onboarding)` 과 함께 지웠다.
+- **세우는 곳 셋**: 콜백(`nonOperatorLandingFor(postLoginPath)`) · `refreshSessionCookies` 의 `fail_closed` 한 자리(GET · POST 가 공유). 교환 성공 두 곳이 지운다. `POST` 갱신 = `403 NOT_AN_OPERATOR`(`errors.ts` `NOT_AN_OPERATOR_CODE`) · GET = 허용 목록 목적지 또는 `/new-tenant`. 브라우저 클라이언트 → `/new-tenant`.
+- **허용 목록** `shared/lib/non-operator.ts` 한 곳(가드 · 콜백 · 갱신 · 클라이언트가 같은 목록).
+- **가드**(`(console)/layout.tsx`): 2행(운영자) 뒤 · § 2.6.1 홉 앞에 3행 — 허용 목록 밖은 `redirect('/new-tenant')`, 안은 `nonOperatorShell()`(레지스트리 · `/me` · org-nodes · 데모 정지 확인 · re-assume 호출 없음 · 벨 · 하트비트 · 스위처 없음 · 데모 알림 · bfcache 가드 · 계정 메뉴 · 사이드바 두 항목). 🔵 처음엔 3행을 1행 바로 뒤에 두었다가 `console-guard-catalog-401.test.tsx`(세션 모듈을 모의하고 `isAuthenticated` 만 true 로 둔다)가 빨개져 계약 순서(2행 먼저)로 옮겼다 — 계약이 맞았다.
+- **사이드바**: `ConsoleSidebarNav variant` · `NON_OPERATOR_NAV`(`GROUPS` 에서 href 로 파생 — 라벨 출처 하나) · 운영자 사이드바 맨 위 그룹에 «테넌트 생성»(`nav-new-tenant`) · `permission-map.ts` 행(`operator` 게이트 — 역할로 숨기지 않는다).
+- **`/new-tenant`**: 세 모드 · `'*'` SUPER_ADMIN 술어 = `/me` 의 `homeTenantId === '*'` ∧ 역할이 `tenant.manage` 를 가짐(`/me` 의 `roles` 는 활성 테넌트와 무관하게 `'*'` 행을 싣는다 — admin-api § 행동 테넌트). `/me` 를 못 읽으면(활성 테넌트 없음 등) 셀프 양식 + «플랫폼 관리자라면 테넌트를 고른 뒤 다시» 안내 — 더 넓은 양식을 짐작으로 내지 않는다. 이메일 인증 링크 = `${OIDC_ISSUER_URL}/email-verification`(auth-api § `/email-verification`).
+- **받은 초대**: `listReceivedInvitations`(onboarding URL 의 형제 경로 — env 하나) · `getReceivedInvitationsState`(실패 = `unavailable`, 양식은 막지 않음) · BFF `POST /api/onboarding/received-invitations` · `ReceivedInvitations`(초대에 링크 · 버튼 0).
+- **생성 성공**: 프록시가 표식 삭제 + `establishDefaultTenant(…, preferredTenant: 새 테넌트)`(콜백 · 갱신과 같은 함수 — 테넌트 쿠키 + assumed 토큰 함께). 옛 «테넌트 쿠키만» 설정을 지웠다. `ready:false` 는 표식 유지.
+- **`createOrganization`**: `403` · `429` 를 ApiError 로(옛: `403` 이 «unavailable» `503` 으로 접혔다 — 미인증 계정에게 «잠시 후 다시» 를 말했을 것).
+- **SUPER_ADMIN 폼 이동**: `TenantCreateScreen`(S4 폼 · 대화상자 · 변이 그대로 — 성공 → `/tenants`) · `TenantsScreen` 은 폼 대신 `/new-tenant` 링크 · `/tenants` 페이지는 org-nodes 를 안 읽는다.
+- **`/onboarding`**: 미들웨어 `307 → /new-tenant`(`/onboarding/**` 포함) · `(onboarding)` 그룹 삭제 · 비운영자 셸도 `no-store` · 데모 종료 목적지 거절에 `/new-tenant…` · 샘플 화면 원장 `/new-tenant: pending`(샘플 방문자는 `/` 로 간다).
+- **퇴역 매핑 제거**(계약 § 2.6.3 가 «S6 이 지울 수 있다» 로 열어 둔 것): 콜백 분기 · 갱신 결과 · 두 갱신 답 · 클라이언트 분기 · `/login` 문구와 단락 회로 예외 · `shared/lib/iam-token-refusal.ts` 삭제.
+- 🔴 **PHASE 2 에서 고친 시험 (PHASE 1 이 놓친 것 — 단언을 계약 쪽으로 정정)**: ① `auth-routes.test.ts` «re-exchange 401s → 세션 전체 삭제» ② `mfa-step-up-routes.test.ts` «POST re-exchange 401 keeps its 401» ③ `auth-refresh-parallel.test.ts` «operator re-exchange 401 with an active tenant» — 셋 다 S1-9 가 바꾼 `POST 401 → 403 NOT_AN_OPERATOR · IAM 쿠키 유지` 의 옛 단언이다(PHASE 1 에서 `/onboarding` 만 grep 해서 못 찾았다 — 같은 동작을 `401` 로 적은 칸이었다). ④ `console-shell-non-operator` «표식만 · access 없음» 칸은 **내 시험의 결함**이었다: refresh 쿠키도 없으면 ADR-074 술어상 샘플 방문자다 — refresh 쿠키를 더해 «갱신 홉» 을 단언하게 고쳤다. ⑤ `onboarding-proxy` 두 칸에 표식 쿠키를 먼저 심었다(조건부 삭제로 바꾼 뒤 — 지울 대상이 있어야 «지웠다» 가 성립). ⑥ `TenantsScreen.test` 의 `next/link` 모의가 `data-testid` 를 버려 나머지 props 를 넘기게 넓혔고, 목록 렌더 도우미에서 `orgNodeOptions` 를 뺐다(단언 무변경).
+- **로컬 검증**: 전체 `npx vitest run` **392 파일 / 4469 PASSED** · `npx tsc --noEmit -p .` rc=0 · `npx next lint` rc=0(경고 1 — 시험이 넘기는 `_req` 미사용). 🔵 병렬 부하에서 `CreateOrganizationForm` 두 칸이 한 번 5 s 타임아웃 · 단독 재실행 14/14(메모리 «프런트 스위트 동시 실행 = 5 s 타임아웃» 과 같은 모양 — 코드 결함 아님).
+
+### 계약 손댄 곳
+
+- `console-integration-contract.md` § 2.6.3 — «S6 이 매핑을 지울 수 있다» → **지웠다**(무엇을 · 옛 북마크는 일반 문구 · 레지스트리 행은 퇴역 표시) · 브라우저 클라이언트 줄을 취소선 + 지금 동작(`403 NOT_AN_OPERATOR` → `/new-tenant`).
+- `platform/error-handling.md` — `OPERATOR_CHECK_UNAVAILABLE` 행을 **삭제하지 않고 RETIRED + 취소선**(행 자신은 «마지막 발신자와 함께 지워라» 였지만, S5 가 같은 이유로 퇴역한 `operator_eligibility_unavailable` 상수를 «재사용 금지» 로 남긴 선례를 따랐다 — 이름 재사용을 막는 쪽). 머리 문장도 정정.
+- 그 밖(§ 2.6.4 · `console-web/architecture.md` 4a · 6)은 S1 이 이미 S6 동작대로 적어 두어 무변경.
+
+### e2e — 🔴 nightly 에서만 돈다 · 머지 뒤 첫 nightly 전까지 미측정
+
+- 새 spec `projects/platform-console/apps/console-web/tests/e2e/non-operator-tenant-creation.spec.ts` — `nightly-e2e.yml` 잡 `platform-console-e2e-fullstack` 만 실행한다(`ci.yml` 은 안 돈다). 셋: **AC-1 · AC-5**(셸 · 사이드바 링크 정확히 2 · 벨 없음 · `console_operator_token` 없음 · 표식 `1` · 🔴 대조군: 콘솔 access 토큰을 admin-service `GET /api/admin/operators` 에 Bearer 로 → `401` · 받은 초대 · ask-admin · 양식 보임 · `/operators` 직접 → `/new-tenant` · `/onboarding` → `/new-tenant`) · **AC-2**(생성 → `/dashboards` · 운영자 토큰 · 표식 없음 · `console_active_tenant` = 새 슬러그 · `console_assumed_token` 있음 — CI 재시도 때 이미 운영자가 된 계정도 같은 양식을 쓰게 착지 술어를 둘로) · **AC-7**(계정 메뉴 로그아웃 → `/login` · 쿠키 없음 → 🔴 `/api/auth/login` 이 IdP 폼(`input[name=username]`)을 보인다 = IdP 세션 끝 → SUPER_ADMIN 으로 로그인 → `/dashboards`).
+- 신원: `fixtures/seed.sql` 에 개인(풀) 계정 둘 — `auth_db.credentials`(`consumer-pool`) + `account_db` identities · accounts(`email_verified_at` 설정 — S3 트러스트 게이트) · admin 행 **없음**. 둘인 이유: `fullyParallel` 이고 AC-2 계정은 생성하는 순간 운영자가 된다.
+- 🔴 `docker-compose.e2e.yml` 의 console-web 에 `CONSOLE_ONBOARDING_URL` 이 **없었다** — `env.ts` 기본값 `http://iam.local/…` 로 가 e2e 에서 온보딩은 늘 실패했을 것이다(지금까지 온보딩 e2e 0 이라 드러나지 않았다). `http://admin-service:8085/api/admin/onboarding/organizations` 를 넣었다.
+- 로컬: `npx playwright test --list` rc=0 — 새 spec 3 칸이 목록에 뜬다(11 tests / 5 files). **실행은 못 했다** — 로컬 Docker 없음(S3 · S4 와 같은 사정). ⚪ AC-6 «머지 뒤 첫 nightly 콘솔 잡 확인» 은 머지 뒤 몫. 🔵 워크플로 스텝 이름 «Run Playwright e2e (2 specs)» 는 이미 낡아 있다(지금 5 spec) — 리포 루트 공유 파일이라 이 PR 에서 손대지 않았다.
+- e2e grep(AC-6): `tests/e2e/` · `e2e-smoke/` · 리포 루트 `tests/federation-hardening-e2e/` 에서 `onboard` · `tenant-form` · `nav-` · `조직 만들기` · `테넌트 등록` · `new-tenant` — 고칠 기존 spec **0**.
+
+### ⚪ 재지 못한 것 · 🔴 열린 것
+
+- 🔴 **`/tenants` 의 «관리자 대기» 행 동작 셋(계약 § 2.6.4 — 다시 초대 · 정리 · 활성화 마치기)은 이 PR 에 없다.** S4 가 표시(«관리자 대기 · 초대 만료/초대 없음/활성화 재시도»)는 넣었고, S6 슬라이스 행(§ 10)도 «`/tenants` 목록 대기 표시» 만 적었다. 그런데 S4 의 상세 화면은 `PENDING` 테넌트 수정에서 `status` 를 보내지 않으므로 **지금 콘솔 UI 로는 대기 테넌트를 정리 · 재초대 · 활성화할 길이 없다**(IAM API 로는 된다 — `PATCH status` · `POST …/first-admin-invitation` · 초대 `:resend`). 계약은 그 셋을 normative 로 적었다 → 후속 티켓으로 떼는지 · 이 PR 에 더하는지 **소유자 결정**.
+- ⚪ e2e 세 칸 미실행(위) · 라이브(데모) 미측정 — S6 은 Vercel 배포이고 S2 ~ S5 백엔드가 AMI 에 올라간 뒤여야 한다(§ 10 순서).
+- ⚪ 비운영자 셸에서의 § 2.6.2 «라이브 세션» 데모 정지 확인은 계약이 받아들인 공백대로 돌리지 않는다(다음 IAM 갱신 실패가 샘플 착지로 간다).
+- 🔵 AC-7 의 `sso_wrong_account` 모집단: S5 기록 그대로(콘솔 client 경로 = 0) — S6 은 그 판별자를 바꾸지 않았다(바이트 그대로).

@@ -6,3 +6,4 @@ export type {
   ReceivedInvitation,
   ReceivedInvitationsState,
 } from './api/types';
+export { getReceivedInvitationsState } from './api/received-invitations-state';

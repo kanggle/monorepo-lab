@@ -12,13 +12,14 @@ import {
   assumedTokenCookieMaxAge,
   clearOperatorSession,
   clearTenantSelection,
+  setNonOperatorMarker,
+  clearNonOperatorMarker,
 } from '@/shared/lib/session';
 import { exchangeForOperatorToken } from '@/shared/lib/operator-token-exchange';
 import { exchangeForAssumedToken } from '@/shared/lib/assume-tenant-exchange';
 import { establishDefaultTenant } from '@/shared/lib/active-tenant-default';
 import { OperatorExchangeError } from '@/shared/api/errors';
 import { logger } from '@/shared/lib/logger';
-import { isOperatorEligibilityUnavailable } from '@/shared/lib/iam-token-refusal';
 
 /**
  * The single IAM refresh + re-exchange sequence, shared by BOTH refresh entry
@@ -36,15 +37,17 @@ import { isOperatorEligibilityUnavailable } from '@/shared/lib/iam-token-refusal
  * two copies of it is how one side silently keeps a stale operator token.
  *
  * Cookie effects by outcome (callers own everything else):
- *   - `ok`                       → access/refresh/id_token + operator (+ assumed / home tenant) set.
+ *   - `ok`                       → access/refresh/id_token + operator (+ assumed / home tenant) set;
+ *                                  the non-operator marker dropped (TASK-MONO-773 S6).
  *   - `no_refresh_token`         → nothing touched.
  *   - `grant_rejected`           → nothing touched (the caller decides whether to clear —
  *                                  a rotation-race loser must NOT delete the winner's cookies).
- *   - `operator_check_unavailable` → nothing touched (TASK-MONO-772 S4 — IAM did not rotate;
- *                                  the caller keeps every cookie, § 2.6.3).
  *   - `operator_not_provisioned` / `operator_mfa_required` / `operator_unavailable`
  *                                → rotated IAM cookies set, operator session (+ tenant pair)
  *                                  dropped. The caller decides whether to drop IAM too.
+ *                                  `operator_not_provisioned` (exchange `401`) ALSO sets the
+ *                                  non-operator marker (TASK-MONO-773 S6, § 2.6.4) — the only
+ *                                  outcome that does.
  *   - `error`                    → nothing touched (thrown before any cookie was set).
  *
  * Public-client refresh_token grant against `${OIDC_ISSUER_URL}/oauth2/token`
@@ -108,11 +111,6 @@ export type RefreshOutcome =
       /** IAM `400 invalid_grant` — the token may have been rotated by a concurrent refresh. */
       rotationSuspect: boolean;
     }
-  /**
-   * TASK-MONO-772 S4 — IAM `400 invalid_grant` with `error_description` exactly
-   * `operator_eligibility_unavailable` (§ 2.6.3): nothing touched, cookies kept.
-   */
-  | { kind: 'operator_check_unavailable' }
   | { kind: 'operator_not_provisioned' }
   /** TASK-MONO-771 — re-exchange `403 MFA_REQUIRED` (a resolved operator lacking `amr ∋ mfa`). */
   | { kind: 'operator_mfa_required' }
@@ -161,15 +159,8 @@ export async function refreshSessionCookies(
 
     if (!upstream.ok) {
       const body = (await upstream.json().catch(() => ({}))) as { error?: unknown };
-      // TASK-MONO-772 S4 (§ 2.6.3) — IAM could not ask admin-service whether this
-      // personal account is an operator. Transient and NOT a rotation race: IAM
-      // refused before issuing anything, so the refresh token was not rotated —
-      // nothing is touched and the caller keeps the cookies. Checked before the
-      // generic `invalid_grant` → `rotationSuspect` classification below.
-      if (upstream.status === 400 && isOperatorEligibilityUnavailable(body)) {
-        logger.warn('refresh_operator_check_unavailable', { requestId, via });
-        return { kind: 'operator_check_unavailable' };
-      }
+      // 🔵 TASK-MONO-773 S6 — no `operator_eligibility_unavailable` special case any more: 773 S5
+      // removed that IAM constant (§ 2.6.3), so every `invalid_grant` is classified below.
       const oauthError = typeof body.error === 'string' ? body.error : undefined;
       const rotationSuspect = upstream.status === 400 && oauthError === 'invalid_grant';
       logger.warn('refresh_failed', {
@@ -228,6 +219,8 @@ export async function refreshSessionCookies(
         maxAge: op.expiresIn,
       });
       operatorToken = op.accessToken;
+      // TASK-MONO-773 S6 (§ 2.6.4) — an operator session again: the marker goes.
+      clearNonOperatorMarker(jar);
     } catch (err) {
       clearOperatorSession(jar);
       const reason =
@@ -235,11 +228,15 @@ export async function refreshSessionCookies(
       logger.warn('refresh_reexchange_failed', { requestId, via, reason });
       // TASK-MONO-771 (§ 2.6.1) — `403 MFA_REQUIRED` is its own outcome: the
       // caller steps up. 🔴 It is NEVER folded into `operator_not_provisioned`
-      // (that one sends the browser to `/onboarding`).
+      // (that one sets the non-operator marker — TASK-MONO-773 S6).
       if (reason === 'mfa_required') return { kind: 'operator_mfa_required' };
-      return {
-        kind: reason === 'fail_closed' ? 'operator_not_provisioned' : 'operator_unavailable',
-      };
+      if (reason === 'fail_closed') {
+        // TASK-MONO-773 S6 (§ 2.6.4) — 🔴 only a `401` means «not an operator»: the ONE place
+        // in the refresh sequence that sets the non-operator marker (GET and POST share it).
+        setNonOperatorMarker(jar, data.expires_in);
+        return { kind: 'operator_not_provisioned' };
+      }
+      return { kind: 'operator_unavailable' };
     }
 
     // --- Re-assume the active tenant (ADR-MONO-020 D4 / § 2.7) ------------

@@ -102,6 +102,8 @@ describe('POST /api/onboarding/organizations — guards', () => {
 describe('POST /api/onboarding/organizations — success + console entry', () => {
   it('201 ready:true — sets the operator cookie, drops the non-operator marker, assumes the NEW tenant via the shared default-assume (TASK-MONO-773 S6)', async () => {
     cookieJar.set(ACCESS_COOKIE, { value: 'iam.acc', opts: {} });
+    // the non-operator state this route runs in (§ 2.6.4)
+    cookieJar.set('console_non_operator', { value: '1', opts: {} });
     createOrganization.mockResolvedValue({
       tenantId: 'acme-corp',
       operatorId: 'op-1',
@@ -139,6 +141,7 @@ describe('POST /api/onboarding/organizations — success + console entry', () =>
 
   it('201 ready:false — the org is created but the immediate re-exchange failed (no cookie, no rollback)', async () => {
     cookieJar.set(ACCESS_COOKIE, { value: 'iam.acc', opts: {} });
+    cookieJar.set('console_non_operator', { value: '1', opts: {} });
     createOrganization.mockResolvedValue({
       tenantId: 'acme-corp',
       operatorId: 'op-1',

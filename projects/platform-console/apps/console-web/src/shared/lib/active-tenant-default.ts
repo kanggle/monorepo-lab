@@ -38,6 +38,9 @@ import {
  *
  * Callers: `/api/auth/callback` and `refreshSessionCookies` — one function, two
  * call sites, so login and the 30-minute idle refresh cannot drift apart.
+ * TASK-MONO-773 S6 adds a third: the tenant-creation success path
+ * (`/api/onboarding/organizations`), which passes the NEW tenant as
+ * `preferredTenant` — tried first, under the same «is it selectable?» check.
  */
 
 /** Tenants the operator may select = the distinct tenants of AVAILABLE
@@ -132,9 +135,16 @@ export function rememberTenant(jar: CookieStore, accessToken: string, tenant: st
  */
 export async function establishDefaultTenant(
   jar: CookieStore,
-  ctx: { accessToken: string; operatorToken: string; requestId: string; via: string },
+  ctx: {
+    accessToken: string;
+    operatorToken: string;
+    requestId: string;
+    via: string;
+    /** TASK-MONO-773 S6 — a tenant to prefer over the remembered one (the tenant just created). */
+    preferredTenant?: string;
+  },
 ): Promise<string | null> {
-  const { accessToken, operatorToken, requestId, via } = ctx;
+  const { accessToken, operatorToken, requestId, via, preferredTenant } = ctx;
 
   let selectable: string[];
   try {
@@ -152,7 +162,10 @@ export async function establishDefaultTenant(
     jar.get(LAST_TENANT_COOKIE)?.value,
     operatorSubject(accessToken),
   );
-  const tenant = chooseDefaultTenant(selectable, remembered);
+  const tenant =
+    preferredTenant && selectable.includes(preferredTenant)
+      ? preferredTenant
+      : chooseDefaultTenant(selectable, remembered);
   if (!tenant) {
     logger.info('tenant_default_none', { requestId, via, selectableCount: selectable.length });
     return null;
@@ -172,7 +185,8 @@ export async function establishDefaultTenant(
       requestId,
       via,
       tenant,
-      source: tenant === remembered ? 'remembered' : 'single',
+      source:
+        tenant === preferredTenant ? 'preferred' : tenant === remembered ? 'remembered' : 'single',
     });
     return tenant;
   } catch (err) {

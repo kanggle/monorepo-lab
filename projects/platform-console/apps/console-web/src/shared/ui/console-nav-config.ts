@@ -138,6 +138,13 @@ export const GROUPS: NavGroup[] = [
       // "전체 보기 →" link (PC-FE-061), and that page carries a back link to the
       // overview. Keeps the top group to the single 1-click home.
       { href: '/dashboards/overview', label: '개요', testid: 'nav-dashboards', icon: 'dashboard' },
+      // TASK-MONO-773 S6 (console-integration-contract § 2.6.4) — the ONE «테넌트 생성» screen
+      // (`/onboarding` «조직 만들기» and the `/tenants` «테넌트 등록» form became this). For EVERY operator:
+      // a company operator's second company, a SUPER_ADMIN's tenant + first-admin invitation — the screen
+      // picks its mode. Ungated (permission-map `operator` row): the producer decides who may create what.
+      // `/tenants` keeps its list entry under 조직 설정. The non-operator shell shows this item too
+      // ({@link NON_OPERATOR_NAV}).
+      { href: '/new-tenant', label: '테넌트 생성', testid: 'nav-new-tenant', icon: 'building' },
     ],
   },
   {
@@ -496,3 +503,17 @@ export const GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * TASK-MONO-773 S6 — the non-operator shell's sidebar (console-integration-contract § 2.6.4): EXACTLY these
+ * two items, in this order — «가이드» · «테넌트 생성». No group labels, no domain menus, no switcher. Derived
+ * from {@link GROUPS} by href so a label / testid / icon has one source; the two hrefs are the non-operator
+ * allow-list (`shared/lib/non-operator.ts`).
+ */
+export const NON_OPERATOR_NAV: readonly NavLeaf[] = ['/guide', '/new-tenant'].map((href) => {
+  const leaf = GROUPS.flatMap((g) => g.items).find(
+    (n): n is NavLeaf => !isParent(n) && n.href === href,
+  );
+  if (!leaf) throw new Error(`console-nav-config: no nav leaf for ${href}`);
+  return leaf;
+});

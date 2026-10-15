@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/shared/lib/cn';
-import { GROUPS, isParent, visibleGroups } from './console-nav-config';
+import { GROUPS, NON_OPERATOR_NAV, isParent, visibleGroups } from './console-nav-config';
 import {
   matchesRoute,
   activeHref,
@@ -137,11 +137,60 @@ export function ConsoleSidebarNav({
   availableProductKeys,
   myRoles,
   subscribedDomains,
+  variant = 'operator',
 }: {
   availableProductKeys?: readonly string[];
   myRoles?: readonly string[] | null;
   subscribedDomains?: ReadonlySet<DomainKey>;
+  /**
+   * TASK-MONO-773 S6 — `'non-operator'` renders the non-operator shell's two items only
+   * ({@link NON_OPERATOR_NAV}, console-integration-contract § 2.6.4). Default `'operator'` = unchanged.
+   */
+  variant?: 'operator' | 'non-operator';
 } = {}) {
+  if (variant === 'non-operator') return <NonOperatorNav />;
+  return (
+    <OperatorNav
+      availableProductKeys={availableProductKeys}
+      myRoles={myRoles}
+      subscribedDomains={subscribedDomains}
+    />
+  );
+}
+
+/** TASK-MONO-773 S6 — the two-item list (no drill, no groups, no badges). */
+function NonOperatorNav() {
+  const pathname = navPathFor(usePathname() ?? '');
+  return (
+    <nav aria-label="콘솔 내비게이션" className="sticky top-14 flex flex-col gap-0.5 p-4">
+      {NON_OPERATOR_NAV.map((leaf) => {
+        const active = matchesRoute(pathname, leaf.href);
+        return (
+          <Link
+            key={leaf.href}
+            href={leaf.href}
+            data-testid={leaf.testid}
+            aria-current={active ? 'page' : undefined}
+            className={leafClass(active)}
+          >
+            <NavIcon name={leaf.icon} />
+            <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function OperatorNav({
+  availableProductKeys,
+  myRoles,
+  subscribedDomains,
+}: {
+  availableProductKeys?: readonly string[];
+  myRoles?: readonly string[] | null;
+  subscribedDomains?: ReadonlySet<DomainKey>;
+}) {
   const groups = visibleGroups(GROUPS, availableProductKeys, (href) =>
     isHrefHiddenFor(href, myRoles),
   );

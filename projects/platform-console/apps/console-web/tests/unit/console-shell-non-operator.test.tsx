@@ -160,11 +160,14 @@ describe('5 — 🔵 대조군: 표식이 술어다', () => {
     });
   });
 
-  it('표식만 있고 access 가 없으면(표식은 자격이 아니다) → 지금 그대로 /login', async () => {
+  // (A marker with NO access AND no refresh cookie is a sample visitor by ADR-MONO-074's unchanged predicate —
+  // the marker is not a session cookie. With the refresh cookie it is an idled-out session: the § 2.6.1 hop.)
+  it('표식만 있고 access 가 없으면(표식은 자격이 아니다) → 지금 그대로 갱신 홉', async () => {
     req.path = '/new-tenant';
     cookieJar.set(MARKER, '1');
+    cookieJar.set(REFRESH_COOKIE, 'iam.ref');
     await expect(ConsoleLayout({ children: null })).rejects.toMatchObject({
-      to: `/login?redirect=${encodeURIComponent('/new-tenant')}`,
+      to: `/api/auth/refresh?redirect=${encodeURIComponent('/new-tenant')}`,
     });
   });
 
