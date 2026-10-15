@@ -61,9 +61,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       delegatedScope block (normal-assignment shape byte-unchanged).</li>
  *   <li><b>TASK-MONO-772 AC-4</b> the same cascade for a partner employee who is a <b>consumer-pool account
  *       with an operator facet</b> — the row an accepted invitation writes (home = globex, no password,
- *       {@code oidc_subject} = the pool account id; S4's console-eligibility answers {@code true} for it).
- *       After :terminate the NEXT check (the assume-tenant gate auth-service calls) refuses company A,
- *       while the same person's home company and console eligibility stay (control).</li>
+ *       {@code oidc_subject} = the pool account id; the exchange's «live operator» predicate answers
+ *       {@code true} for it). After :terminate the NEXT check (the assume-tenant gate auth-service calls) refuses
+ *       company A, while the same person's home company and live-operator status stay (control).</li>
  * </ul>
  */
 @SpringBootTest
@@ -272,10 +272,9 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("🔴 772 AC-4: 파트너십 해지 → 협력사 직원(운영자 측면 있는 풀 계정)의 회사 A 진입이 다음 요청(assume 판정)에서 거절 · 대조군: 홈 회사 · 콘솔 적격은 그대로")
     void ac4_poolAccountPartnerEmployee_refusedAtNextRequest_afterTerminate() throws Exception {
-        // Precondition: this IS a pool operator in the 772 sense — S4's console eligibility (the predicate the
-        // console token issuer asks) says yes for the pool account id, and it reaches company A as a participant.
-        consoleEligibility(POOL_ACCOUNT_ID).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(true));
+        // Precondition: this IS a pool operator in the 772 sense — the exchange's «live operator» predicate says
+        // yes for the pool account id, and it reaches company A as a participant.
+        assertThat(liveOperator(POOL_ACCOUNT_ID)).isTrue();
         check(POOL_ACCOUNT_ID, HOST).andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.delegatedScope.domains[0]").value("wms"))
@@ -299,8 +298,7 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
         check(POOL_ACCOUNT_ID, PARTNER).andExpect(status().isOk())
                 .andExpect(jsonPath("$.assigned").value(true))
                 .andExpect(jsonPath("$.delegatedScope").doesNotExist());
-        consoleEligibility(POOL_ACCOUNT_ID).andExpect(status().isOk())
-                .andExpect(jsonPath("$.eligible").value(true));
+        assertThat(liveOperator(POOL_ACCOUNT_ID)).isTrue();
         String status = jdbcTemplate.queryForObject(
                 "SELECT status FROM admin_operators WHERE operator_id = ?", String.class, POOL_OP_UUID);
         assertThat(status).isEqualTo("ACTIVE");
@@ -390,8 +388,19 @@ class PartnershipCrossOrgLeakIntegrationTest extends AbstractIntegrationTest {
         MembershipFixture.addHomeMembership(jdbcTemplate, uuid);
     }
 
-    private ResultActions consoleEligibility(String accountId) throws Exception {
-        return mockMvc.perform(get("/internal/operators/console-eligibility").param("accountId", accountId));
+    @org.springframework.beans.factory.annotation.Autowired
+    com.example.admin.application.OperatorOidcSubjectResolver operatorResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.example.admin.application.OperatorConsoleAdmission admission;
+
+    /**
+     * The token exchange's «live operator» predicate ({@code ACTIVE ∧ ('*' ∨ membership ≥ 1)}). Until TASK-MONO-773
+     * S5 this read {@code GET /internal/operators/console-eligibility}; S5 removed that endpoint (no caller left) —
+     * the same two shared beans it composed answer in-process.
+     */
+    private boolean liveOperator(String accountId) {
+        return operatorResolver.resolve(accountId).map(admission::admits).orElse(false);
     }
 
     /** TASK-MONO-772: the accepted-invitation row shape — no password, oidc_subject = the pool account id. */

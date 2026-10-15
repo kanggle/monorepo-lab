@@ -1,9 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.exception.AccountServiceUnavailableException;
-import com.example.auth.application.exception.OperatorEligibilityUnavailableException;
 import com.example.auth.application.port.AccountServicePort;
-import com.example.auth.application.port.OperatorConsoleEligibilityPort;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.credentials.CredentialHash;
@@ -59,14 +57,16 @@ class TenantClaimPoolPrincipalTest {
     @Mock private JwtEncodingContext context;
     @Mock private Authentication principal;
     @Mock private AccountServicePort accountServicePort;
-    @Mock private OperatorConsoleEligibilityPort consoleEligibilityPort;
     @Mock private CredentialRepository credentialRepository;
 
     private TenantClaimTokenCustomizer customizer;
 
     @BeforeEach
     void setUp() {
-        customizer = new TenantClaimTokenCustomizer(accountServicePort, consoleEligibilityPort, credentialRepository);
+        // TASK-MONO-773 S5: no cell of this class may ask admin-service anything — NOT_ASKED throws an Error that
+        // the issuer's RuntimeException catch cannot swallow.
+        customizer = new TenantClaimTokenCustomizer(accountServicePort, ConsoleEligibilityStubs.NOT_ASKED,
+                credentialRepository);
     }
 
     private static RegisteredClient client(String clientId, String tenant, String type) {
@@ -244,9 +244,9 @@ class TenantClaimPoolPrincipalTest {
         assertInvalidGrant(catchThrowable(() -> customizer.customize(context)));
     }
 
-    // ── console — TASK-MONO-772 S4 (ADR-MONO-080 D6): a console token ONLY with a live operator facet ─────
+    // ── console — TASK-MONO-772 S4 → TASK-MONO-773 S5: every pool principal gets the console shell token ─────
 
-    /** The TASK-BE-614 refusal text — byte-for-byte; the console's sso_wrong_account reads its 'consumer-pool'. */
+    /** The TASK-BE-614 refusal text — byte-for-byte (still the text of every other pool-value refusal). */
     private static final String NO_FACET_TEXT =
             "tenant_id 'consumer-pool' is a reserved storage value and is never issued";
 
@@ -258,70 +258,66 @@ class TenantClaimPoolPrincipalTest {
         return ((OAuth2AuthenticationException) t).getError().getDescription();
     }
 
+    /**
+     * TASK-MONO-773 S5 (OD-6 · S1 owner answer 1; auth-api.md § 풀 계정의 콘솔 토큰 — «측면 없음» row → 발급 · the
+     * «판정을 못 받음» row is gone) — EVERY pool principal on the console client gets the console «non-operator
+     * shell» token, operator facet or not, and admin-service is not asked at all ({@code NOT_ASKED} throws). The
+     * claims are byte-the-same rule as the faceted row: {@code tenant_id=iam} · the console client's
+     * {@code tenant_type} · {@code sub} = the pool account · no {@code roles} · no {@code entitled_domains}. Whether
+     * the person is an operator is answered by the admin token exchange only.
+     */
     @Test
-    @DisplayName("🔴 AC-2: 운영자 측면 없는 풀 계정 → 콘솔 토큰 없음 · invalid_grant · 문구는 BE-614 그대로(바이트 불변) · 사이트 멤버십·역할 조회 없음")
-    void console_noFacet_noToken_byteUnchangedRefusal() {
-        poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(false);
+    @DisplayName("🔴 773 S5 (OD-6): 운영자 측면을 묻지 않고 풀 계정 → 콘솔 셸 토큰 · tenant_id=iam · tenant_type=콘솔 client · sub=풀 계정 · roles·entitled_domains 없음 · 사이트 조회 없음")
+    void console_poolPrincipal_shellToken_facetNotAsked() {
+        JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE,
+                OAuth2TokenType.ACCESS_TOKEN);
 
         Throwable t = catchThrowable(() -> customizer.customize(context));
 
-        assertInvalidGrant(t);
-        assertThat(description(t)).isEqualTo(NO_FACET_TEXT);
-        verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
-        verify(accountServicePort, never()).listAccountRoles(anyString(), anyString());
-        verify(accountServicePort, never()).listEntitledDomains(any());
-    }
-
-    @Test
-    @DisplayName("대조군: 살아 있는 운영자 측면 있는 풀 계정 → 콘솔 토큰 · tenant_id=iam · sub=풀 계정 · roles·entitled_domains 없음")
-    void console_liveFacet_mintsConsoleToken() {
-        JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE,
-                OAuth2TokenType.ACCESS_TOKEN);
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true);
-
-        customizer.customize(context);
-
+        assertThat(t).as("a console token — no refusal, no admin-service question").isNull();
         JwtClaimsSet built = claims.build();
         assertThat((String) built.getClaim("tenant_id")).isEqualTo("iam").isNotEqualTo("consumer-pool");
         assertThat((String) built.getClaim("tenant_type")).isEqualTo("B2B_ENTERPRISE");
         assertThat(built.getSubject()).isEqualTo(POOL_ACCOUNT);
         assertThat(built.getClaims()).doesNotContainKeys("roles", "entitled_domains");
         verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
+        verify(accountServicePort, never()).listAccountRoles(anyString(), anyString());
+        verify(accountServicePort, never()).listEntitledDomains(any());
     }
 
     @Test
-    @DisplayName("id_token 도 같다 — 측면 있으면 tenant_id=iam")
-    void console_liveFacet_idToken() {
+    @DisplayName("🔴 773 S5 (R9 · AC-7): id_token 도 같은 셸 클레임 — tenant_id=iam · sub=풀 계정 (콘솔 로그아웃의 id_token_hint 전제)")
+    void console_poolPrincipal_shellIdToken() {
         JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE,
                 new OAuth2TokenType("id_token"));
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true);
 
-        customizer.customize(context);
+        Throwable t = catchThrowable(() -> customizer.customize(context));
 
-        assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("iam");
+        assertThat(t).as("an id_token — no refusal").isNull();
+        JwtClaimsSet built = claims.build();
+        assertThat((String) built.getClaim("tenant_id")).isEqualTo("iam");
+        assertThat(built.getSubject()).isEqualTo(POOL_ACCOUNT);
+        assertThat(built.getClaims()).doesNotContainKeys("roles", "entitled_domains");
     }
 
     @Test
-    @DisplayName("AC-3: refresh 마다 다시 묻는다 — 측면 있으면 iam, 회수(비-ACTIVE·삭제) 뒤 같은 principal 의 refresh 는 거절(BE-614 문구)")
-    void console_refresh_reasksEveryTime_revokedFacetRefused() {
+    @DisplayName("🔴 773 S5: refresh 도 매번 셸 토큰 — 측면 회수 · admin 장애와 무관 (772 의 «refresh 마다 다시 묻는다» 폐기)")
+    void console_refresh_shellTokenEveryTime_noQuestion() {
         JwtClaimsSet.Builder claims = poolSessionOn(console(), AuthorizationGrantType.REFRESH_TOKEN,
                 OAuth2TokenType.ACCESS_TOKEN);
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenReturn(true, false);
 
-        customizer.customize(context);
+        Throwable first = catchThrowable(() -> customizer.customize(context));
+        assertThat(first).isNull();
         assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("iam");
 
-        // The operator row was suspended / removed between the two refreshes.
-        Throwable t = catchThrowable(() -> customizer.customize(context));
-        assertInvalidGrant(t);
-        assertThat(description(t)).isEqualTo(NO_FACET_TEXT);
-        verify(consoleEligibilityPort, org.mockito.Mockito.times(2)).isConsoleEligible(POOL_ACCOUNT);
+        Throwable second = catchThrowable(() -> customizer.customize(context));
+        assertThat(second).as("the second refresh is the same shell token").isNull();
+        assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("iam");
     }
 
     @Test
-    @DisplayName("AC-3 대조군: 같은 풀 계정의 스토어 토큰은 측면과 무관 — 콘솔 적격을 묻지도 않는다")
-    void storeToken_unaffectedByFacet() {
+    @DisplayName("대조군: 같은 풀 계정의 스토어 토큰은 그대로 — 스토어 테넌트 · 콘솔 질문 없음")
+    void storeToken_unaffected() {
         JwtClaimsSet.Builder claims = poolSessionOn(store(), AuthorizationGrantType.REFRESH_TOKEN,
                 OAuth2TokenType.ACCESS_TOKEN);
         when(accountServicePort.getConsumerSiteMembership("ecommerce", POOL_ACCOUNT)).thenReturn(member("ecommerce"));
@@ -330,32 +326,24 @@ class TenantClaimPoolPrincipalTest {
         customizer.customize(context);
 
         assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("ecommerce");
-        verify(consoleEligibilityPort, never()).isConsoleEligible(anyString());
     }
 
     @Test
-    @DisplayName("판정 실패 → invalid_grant · error_description=operator_eligibility_unavailable(값 전체) · 'consumer-pool' 미포함 (fail-closed, F5)")
-    void console_lookupFailure_distinctRefusal() {
-        poolSessionOn(console(), AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT))
-                .thenThrow(new OperatorEligibilityUnavailableException("down", null));
+    @DisplayName("대조군(BE-614 바이트 불변): 풀 principal × 사이트도 콘솔도 아닌 client(테넌트 메타데이터 없음 → 풀 값) → invalid_grant · 'consumer-pool' 문구 그대로")
+    void poolPrincipal_onTenantlessClient_stillRefusedWithPoolText() {
+        RegisteredClient tenantless = RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("tenantless-client")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("http://localhost:3000/callback")
+                .build();
+        poolSessionOn(tenantless, AuthorizationGrantType.AUTHORIZATION_CODE, OAuth2TokenType.ACCESS_TOKEN);
+        lenient().when(accountServicePort.listEntitledDomains(any())).thenReturn(List.of());
+        lenient().when(accountServicePort.listAccountRoles(anyString(), anyString())).thenReturn(List.of());
 
         Throwable t = catchThrowable(() -> customizer.customize(context));
 
         assertInvalidGrant(t);
-        assertThat(description(t)).isEqualTo("operator_eligibility_unavailable").doesNotContain("consumer-pool");
-    }
-
-    @Test
-    @DisplayName("refresh 중 판정 실패도 같은 별도 거절 (토큰 회전 전에 실패 — S1-13)")
-    void console_refreshLookupFailure_distinctRefusal() {
-        poolSessionOn(console(), AuthorizationGrantType.REFRESH_TOKEN, OAuth2TokenType.ACCESS_TOKEN);
-        when(consoleEligibilityPort.isConsoleEligible(POOL_ACCOUNT)).thenThrow(new IllegalStateException("odd"));
-
-        Throwable t = catchThrowable(() -> customizer.customize(context));
-
-        assertInvalidGrant(t);
-        assertThat(description(t)).isEqualTo("operator_eligibility_unavailable");
+        assertThat(description(t)).isEqualTo(NO_FACET_TEXT);
     }
 
     // ── console — TASK-MONO-772 S6 (open question 3): a console session opened BEFORE the pool move ──────────
@@ -401,11 +389,10 @@ class TenantClaimPoolPrincipalTest {
         assertInvalidGrant(t);
         assertThat(description(t)).isEqualTo(TenantClaimTokenCustomizer.SESSION_PREDATES_POOL_MOVE)
                 .doesNotContain("consumer-pool")
-                .isNotEqualTo(TenantClaimTokenCustomizer.OPERATOR_ELIGIBILITY_UNAVAILABLE);
+                .isNotEqualTo("operator_eligibility_unavailable");
         // Refused before any site lookup — nothing of the old site reaches a claim.
         verify(accountServicePort, never()).listAccountRoles(anyString(), anyString());
         verify(accountServicePort, never()).listEntitledDomains(any());
-        verify(consoleEligibilityPort, never()).isConsoleEligible(anyString());
     }
 
     @Test
@@ -434,7 +421,6 @@ class TenantClaimPoolPrincipalTest {
         customizer.customize(context);
 
         assertThat((String) claims.build().getClaim("tenant_id")).isEqualTo("fan-platform");
-        verify(consoleEligibilityPort, never()).isConsoleEligible(anyString());
     }
 
     @Test
