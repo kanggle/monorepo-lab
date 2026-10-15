@@ -179,3 +179,42 @@ frontend
   - `hasCompleteSession` is restored (access + operator).
 - **Verification.** Before merging, I **ran the federation e2e on the branch itself** (run 38555155825) → **success**. Locally: tsc, lint, and the 63 tests in the affected suites.
 - Vercel Production: `3eb6cbebd` (later than and including `ca176d570`) has a deployment record (2026-10-14 11:31Z). Status `success` is to be rechecked before the window.
+
+## Slice c-2 — AC-0 re-measurement (2026-10-15 UTC, base `5dd4aeb8e`) — 🔴 STOPPED before implementation (HARDSTOP-06)
+
+P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-measured the inputs before writing any test. The nav signal rule cannot be implemented as written, because it disagrees with this ticket's AC-1.
+
+**What the server actually decides, per console menu (WMS-subscribed tenant, after P3):**
+
+| Menu | Call the screen makes | Server gate | Operator with no WMS set | Operator with `wms-inventory-operate` only |
+|---|---|---|---|---|
+| `/wms` · `/wms/inventory` · `/wms/inbound` · `/wms/master` | wms admin-service `/dashboard/*` (`wms-ops/api/*`) | `WMS_VIEWER`, **synthesised from `entitled_domains ∋ wms`** (`wms admin-service SecurityConfig.java:110-141`; ADR-083 ③ records it) | **200** | **200** |
+| `/wms/outbound` | outbound-service `GET /orders` (`outbound-order-api.ts:32-44`) | `OUTBOUND_READ ∨ WRITE ∨ ADMIN` (`outbound-service SecurityConfig.java:97`) | 403 | **403** (measured live in the 27th window, BE-632 AC-1) |
+| `/wms/operations` | admin-service `/operations/*` · `/settings` | `WMS_ADMIN` (not in the catalog) | 403 | 403 (same for every operator — not a set question) |
+| SCM read screens | scm services | `authenticated()` only (ADR-083 ③); PO list GET 200 as BUYER (BE-632 AC-1 note) | **200** | (not subscribed in AC-1's case) |
+| ERP / Finance read screens | erp · finance | read = `entitled_domains ∋ erp` / `FINANCE_VIEWER` synthesised (ADR-083 ③) | **200** | — |
+| E-commerce | gateway `roles ∋ ECOMMERCE_OPERATOR` | the gateway is the only gate | 403 | — |
+
+**The two specs that disagree:**
+
+1. Contract § 2.4.3.4 «Domain nav — two signals» (`console-integration-contract.md:280`) keys the badge on the **domain**: «no role of that `domainKey` in the response → «업무 권한 없음»».
+   - Inventory-set operator: it has a `wms` role, so **no WMS menu gets the badge**. The server answers `/wms/outbound` with 403.
+   - Operator with no WMS set: the whole WMS node gets the badge, but `/wms/inventory` · `/wms/inbound` · `/wms/master` answer **200**. The same holds for SCM · ERP · Finance read screens.
+2. AC-1 (and the header line «숨긴 것과 서버 403 이 일치한다») asks for **per-menu** signals: inventory menu open, outbound menu «권한 없음», matched against the server's 403/200.
+
+⇒ The contract rule fails AC-1 in **both** directions: it hides nothing that the server refuses (outbound), and it badges screens the server serves (read dashboards). Neither layer can be chosen mechanically. Contract (layer 6) beats task (layer 10), but implementing the contract knowingly ships a signal that contradicts the server, which is the exact Failure Scenario this ticket exists to prevent.
+
+**Second, smaller conflict — latency copy.**
+- Contract § 2.4.3.4 (`:269`) still says «만료(최대 5분)».
+- The canonical IAM sentence was corrected on 2026-10-15 by owner decision (BE-632 Close 2) to «`exp` + 60 s — 최대 약 360초» (`admin-api.md:3746` · `auth-api.md` § 회수 지연 · `rbac.md:516`).
+- The console copy today is still the pre-P3 «최대 30분» (`shared/api/domain-permission-sets-copy.ts:22`).
+- ⇒ The console contract has to be aligned first; the wording on screen is a copy choice.
+
+**Other AC-0 inputs (measured):**
+- Nav decision inputs: `console-nav-exposure.ts` (`isHrefHiddenFor` = admin roles · `subscriptionBadgeKeys` = registry), fed by `(console)/layout.tsx:257-302`. No consumer of `GET /api/admin/me/domain-access` exists in console-web yet (0 hits in `src/`).
+- `permission-map.ts` WMS rows all carry the same `roles: WMS_ROLES`. There is no per-menu required-role data today.
+- e2e: `tests/e2e/overview-consolidation.spec.ts:82-87` asserts the ERP drill text `/^ERP(구독 필요)?$/`. A second badge text inside that toggle would break it. `e2e-smoke/sample-visitor-wms.spec.ts` visits WMS routes (sample shell — no operator session, so no signal). `tests/federation-hardening-e2e/`: 0 hits for the badge texts.
+- «적용 예정» copies to retire now that P3 is live: `DomainPermissionSetsScreen.tsx:154` · `OperatorDomainAccessDialog.tsx:176` · `GroupDetail.tsx:231` · `iam-guide/data.ts:235` · `permission-map.ts:440`. «최대 30분»: `domain-permission-sets-copy.ts:22`. Pinned by `DomainPermissionSetsScreen.test.tsx:92-95, 246, 284` and `GroupDetail-domain-sets.test.tsx:237-240`.
+- Read-only button hiding (AC-2): the WMS screens with mutation buttons are `/wms` (alert acknowledge — `WMS_OPERATOR`) and `/wms/outbound` (pick · pack · ship · cancel · retry — `OUTBOUND_WRITE`). The contract rule (`:270`, «only `access=READ` entries for that domain → hide») is implementable as written. It is not the blocked part, but it needs the same row-12 read that the nav signal needs.
+
+**Decision needed (owner) before c-2 continues:** see the report of this session. No code changed in this slice.
