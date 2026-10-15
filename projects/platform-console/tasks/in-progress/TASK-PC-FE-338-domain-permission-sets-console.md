@@ -359,3 +359,8 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
 - [ ] **AC-2** — Unit-tested: read set → outbound write buttons and «확인 처리» hidden; fail-open control.
   - ⚪ **The direct mutation call → server 403** has the same reason and goes to the same place (MONO-672 step 3). The outbound-service side is already pinned by its own slice tests (`OUTBOUND_READ`-only caller → 403).
 - [ ] **AC-5** — The nightly console job on the branch is green (above). ⚪ «First nightly on `main` after merge» and the Vercel Production deployment record need the merge, so they are not measurable yet. MONO-672 step 3 lists them as checks to make before the window.
+
+## 소유자 결정 — c-2 PR 2 (2026-10-15 UTC)
+
+- **AC-2 기준 이탈 인정**: 계약 `:270` «READ 역할만 → 숨김» 대신 화면별 `writeRequires`(출고 = `OUTBOUND_WRITE` · `/wms` 확인 처리 = `WMS_OPERATOR`). 이유: 행 12 응답에 `access` 칸이 없어 만들 수 없고, 만들더라도 `INVENTORY_WRITE` 보유자에게 출고 버튼을 보여 서버 403 과 어긋난다. 메뉴 단위 결정과 같은 원칙(서버 판정 일치). 조회 전용 세트는 여전히 모든 버튼이 숨는다.
+- **이커머스 배지 유지**: 9 화면 `serverRequires = ECOMMERCE_OPERATOR`(게이트웨이 규칙) — 서버가 거절하므로 «업무 권한 없음». **팬은 선언 없음** — 서버 검사를 잰 뒤(792~795 또는 별건) 데이터만 추가한다.
