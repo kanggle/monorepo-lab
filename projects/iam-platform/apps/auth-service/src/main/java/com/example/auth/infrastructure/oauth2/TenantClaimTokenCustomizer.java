@@ -1011,6 +1011,10 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      */
     static java.util.List<String> assignedWithinCeiling(java.util.List<String> assigned,
                                                         java.util.List<String> ceiling) {
+        // BITE (TASK-MONO-773 AC-2, TEMPORARY — reverted in the next commit): skip the ∩ entitled.
+        if (true) {
+            return assigned == null ? java.util.List.of() : java.util.List.copyOf(assigned);
+        }
         if (assigned == null || assigned.isEmpty() || ceiling == null || ceiling.isEmpty()) {
             return java.util.List.of();
         }
