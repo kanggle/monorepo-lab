@@ -223,13 +223,24 @@ describe('OperatorDomainAccessDialog — sources + revoke visibility', () => {
     ).toHaveTextContent('모든 테넌트');
   });
 
-  it('latency copy says 30분, never «즉시»', async () => {
+  // TASK-PC-FE-338 c-2 PR 1 — post-P3 latency (TTL 300 s + 60 s resource-server skew, BE-632 AC-6).
+  it('latency copy says «최대 약 6분» (not 30분), never «즉시»', async () => {
     const user = userEvent.setup();
     await openDialog(user);
     await user.click(screen.getByTestId('operator-domain-access-set-s1-revoke'));
     const dialog = await screen.findByTestId('operator-domain-access-reason-dialog');
-    expect(dialog).toHaveTextContent('30분');
+    expect(dialog).toHaveTextContent('최대 약 6분');
+    expect(dialog).not.toHaveTextContent('30분');
     expect(dialog).not.toHaveTextContent('즉시');
+  });
+
+  it('carries the post-P3 effect note, no «적용 예정»', async () => {
+    const user = userEvent.setup();
+    await openDialog(user);
+    const note = screen.getByTestId('operator-domain-access-effect-note');
+    expect(note).toHaveTextContent('구독한 도메인');
+    expect(screen.queryByTestId('operator-domain-access-applies-later-note')).toBeNull();
+    expect(screen.getByTestId('operator-domain-access-dialog')).not.toHaveTextContent('적용 예정');
   });
 });
 

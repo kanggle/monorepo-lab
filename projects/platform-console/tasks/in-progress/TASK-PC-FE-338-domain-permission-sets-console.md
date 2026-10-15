@@ -218,3 +218,24 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
 - Read-only button hiding (AC-2): the WMS screens with mutation buttons are `/wms` (alert acknowledge — `WMS_OPERATOR`) and `/wms/outbound` (pick · pack · ship · cancel · retry — `OUTBOUND_WRITE`). The contract rule (`:270`, «only `access=READ` entries for that domain → hide») is implementable as written. It is not the blocked part, but it needs the same row-12 read that the nav signal needs.
 
 **Decision needed (owner) before c-2 continues:** see the report of this session. No code changed in this slice.
+
+## Slice c-2 — owner decisions (2026-10-15 UTC)
+
+1. **The nav signal is per menu.** Each nav leaf declares the role(s) the server requires for that screen's primary read. The signal shows when the assumed token's `roles` lack them.
+   - A leaf the server opens on subscription alone carries no requirement and therefore no signal. As measured above, that covers WMS inventory · inbound · master and the SCM · ERP · Finance reads.
+   - «구독 필요» stays a separate signal.
+   - The data must scale to `TASK-MONO-792`~`795`: when those add fine-grained roles to another domain, that is just more per-leaf data.
+   - Contract § 2.4.3.4 (`console-integration-contract.md:280`) is amended first, then AC-1's wording if needed. Watch the e2e pin `overview-consolidation.spec.ts:82-87`.
+2. **Latency copy = «최대 약 6분».** Align contract `:269` and `shared/api/domain-permission-sets-copy.ts:22`. The bound is TTL 300 s plus the resource servers' 60 s skew (BE-632 AC-6 · `auth-api.md` § 회수 지연).
+3. **Split into two PRs.**
+   - **PR 1 (first):** retire «적용 예정» at all its sites (three screens, the guide, `permission-map`, their tests) and change the latency copy and the contract.
+   - **PR 2 (after PR 1 merges, fresh branch from `origin/main`):** the per-menu nav signal and AC-2 button hiding. They share one input. Which input (`/me/domain-access` or the token's `roles`) is decided by the contract that PR 2 amends.
+
+## Slice c-2 PR 1 — red (2026-10-15 UTC)
+
+- Tests only, written before the fix:
+  - `DomainPermissionSetsScreen.test.tsx`: effect note, edit/delete confirms «최대 약 6분».
+  - `GroupDetail-domain-sets.test.tsx`: effect note.
+  - `OperatorsScreen-domain-access.test.tsx`: latency copy and effect note.
+  - `domain-permission-sets-post-p3-copy.test.ts` (new): the shared copy, the IAM guide menu and the permission-map row.
+- Local run of those four files: **9 failed / 22 passed**. Every failure is an assertion: `AssertionError`, or `TestingLibraryElementError` for the new testids that do not exist yet. `tsc --noEmit -p .` rc=0.

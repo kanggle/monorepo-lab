@@ -89,11 +89,15 @@ describe('DomainPermissionSetsScreen — render (seeded)', () => {
     expect(get).not.toHaveBeenCalled();
   });
 
-  it('carries the «적용 예정» status-honesty note, never «즉시» anywhere on screen', () => {
+  // TASK-PC-FE-338 c-2 PR 1 — P3 is live (TASK-BE-632 done, 27th window): the «적용 예정» note is
+  // retired. The note now states what a set DOES (sets ∩ subscribed domains), never «즉시».
+  it('carries the post-P3 effect note (sets ∩ subscribed domains), no «적용 예정», never «즉시»', () => {
     const { container } = renderScreen();
-    const note = screen.getByTestId('domain-set-applies-later-note');
-    expect(note).toHaveTextContent('적용 예정');
-    expect(note).toHaveTextContent('아직 실제 업무 권한을 좁히지 않습니다');
+    const note = screen.getByTestId('domain-set-effect-note');
+    expect(note).toHaveTextContent('구독한 도메인');
+    expect(note).toHaveTextContent('최대 약 6분');
+    expect(screen.queryByTestId('domain-set-applies-later-note')).toBeNull();
+    expect(container.textContent).not.toMatch(/적용 예정/);
     expect(container.textContent).not.toMatch(/즉시/);
   });
 });
@@ -233,7 +237,7 @@ describe('DomainPermissionSetsScreen — create (Idempotency-Key required)', () 
 });
 
 describe('DomainPermissionSetsScreen — edit (NO Idempotency-Key, latency copy)', () => {
-  it('PATCHes WITHOUT an idempotencyKey field, and the confirm carries the 30분 latency copy (never 즉시)', async () => {
+  it('PATCHes WITHOUT an idempotencyKey field, and the confirm carries the post-P3 latency copy «최대 약 6분» (never 즉시)', async () => {
     patch.mockResolvedValue({ ...TENANT_SET, name: '재고팀 (개편)' });
     const user = userEvent.setup();
     renderScreen();
@@ -243,7 +247,8 @@ describe('DomainPermissionSetsScreen — edit (NO Idempotency-Key, latency copy)
     await user.click(screen.getByTestId('domain-set-form-submit'));
 
     const dialog = screen.getByTestId('domain-set-reason-dialog');
-    expect(dialog).toHaveTextContent('최대 30분');
+    expect(dialog).toHaveTextContent('최대 약 6분');
+    expect(dialog.textContent).not.toMatch(/30분/);
     expect(dialog.textContent).not.toMatch(/즉시/);
 
     await user.type(screen.getByTestId('domain-set-reason-input'), '역할 조정');
@@ -281,7 +286,8 @@ describe('DomainPermissionSetsScreen — delete (NO Idempotency-Key, latency cop
 
     await user.click(screen.getByTestId('domain-set-tenant-set-1-delete'));
     const dialog = screen.getByTestId('domain-set-reason-dialog');
-    expect(dialog).toHaveTextContent('최대 30분');
+    expect(dialog).toHaveTextContent('최대 약 6분');
+    expect(dialog.textContent).not.toMatch(/30분/);
     expect(dialog.textContent).not.toMatch(/즉시/);
 
     await user.type(screen.getByTestId('domain-set-reason-input'), '폐지');
