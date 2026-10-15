@@ -3,7 +3,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-import { DOMAIN_SET_LATENCY_COPY } from '@/shared/api/domain-permission-sets-copy';
+import {
+  DOMAIN_SET_EFFECT_COPY,
+  DOMAIN_SET_LATENCY_COPY,
+} from '@/shared/api/domain-permission-sets-copy';
 import {
   useOperatorDomainAccess,
   useGrantableDomainSets,
@@ -28,7 +31,8 @@ import { OperatorDomainSetReasonDialog } from './OperatorDomainSetReasonDialog';
  *   - grant (pick a set → reason; NO Idempotency-Key — a repeat is `409
  *     DOMAIN_PERMISSION_SET_ALREADY_GRANTED`), including the self-grant
  *     confirm copy (OD-4) when the target IS the caller;
- *   - the persistent «적용 예정» note (P3 not deployed — ADR-083 D9).
+ *   - the persistent effect note (P3 live — sets ∩ subscribed domains; the
+ *     pre-P3 «적용 예정» note was retired in TASK-PC-FE-338 c-2 PR 1).
  *
  * 🔴 Fail-open (task Edge Case): a `DomainAccessUnavailableError`-class 503/
  * timeout degrades ONLY this dialog's body — it never claims "no permission".
@@ -170,11 +174,10 @@ export function OperatorDomainAccessDialog({
 
         <div
           role="note"
-          data-testid="operator-domain-access-applies-later-note"
+          data-testid="operator-domain-access-effect-note"
           className="mt-4 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
         >
-          🔴 아직 실제 업무 권한을 좁히지 않습니다 — <strong className="text-foreground">적용 예정</strong>
-          입니다 (토큰 발급 변경 배포 전).
+          {DOMAIN_SET_EFFECT_COPY}
         </div>
 
         {accessError && (

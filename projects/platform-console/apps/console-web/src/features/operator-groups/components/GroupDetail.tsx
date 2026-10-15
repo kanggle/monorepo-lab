@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
-import { DOMAIN_SET_LATENCY_COPY } from '@/shared/api/domain-permission-sets-copy';
+import {
+  DOMAIN_SET_EFFECT_COPY,
+  DOMAIN_SET_LATENCY_COPY,
+} from '@/shared/api/domain-permission-sets-copy';
 import { formatDateTime } from '@/shared/lib/datetime';
 import type { Group, UpdateGroupInput } from '../api/types';
 import {
@@ -220,15 +223,15 @@ export function GroupDetail({ group, grantableRoles, onDeleted }: GroupDetailPro
           </Button>
         </div>
 
-        {/* Status honesty (contract § 2.4.3.4): P3 is not deployed, so a group set
-            is recorded but does not yet narrow any member's token. */}
+        {/* Status honesty (contract § 2.4.3.4): P3 is live (TASK-BE-632), so a group set
+            narrows each member's token to its roles ∩ the subscribed domains. The pre-P3
+            «적용 예정» note was retired in TASK-PC-FE-338 c-2 PR 1. */}
         <p
           role="note"
-          data-testid="group-domain-sets-applies-later-note"
+          data-testid="group-domain-sets-effect-note"
           className="text-xs text-muted-foreground"
         >
-          멤버에게 배정은 기록되지만 아직 실제 업무 권한을 좁히지 않습니다 —{' '}
-          <strong className="text-foreground">적용 예정</strong>입니다 (토큰 발급 변경 배포 전).
+          그룹의 세트는 모든 멤버에게 배정됩니다. {DOMAIN_SET_EFFECT_COPY}
         </p>
 
         {lastFanOutCount !== null && (

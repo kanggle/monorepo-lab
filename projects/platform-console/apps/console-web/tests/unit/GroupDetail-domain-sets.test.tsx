@@ -234,9 +234,13 @@ describe('group member-add hint when the group carries domain sets', () => {
     expect(screen.queryByTestId('group-member-domain-sets-hint')).toBeNull();
   });
 
-  it('carries the «적용 예정» status-honesty note (P3 not deployed)', async () => {
+  // TASK-PC-FE-338 c-2 PR 1 — P3 is live: the «적용 예정» note is retired for the effect note.
+  it('carries the post-P3 effect note, no «적용 예정»', async () => {
     const fetchMock = routedFetch([]);
     await openDetail(fetchMock);
-    expect(screen.getByTestId('group-domain-sets-applies-later-note')).toHaveTextContent('적용 예정');
+    const note = screen.getByTestId('group-domain-sets-effect-note');
+    expect(note).toHaveTextContent('구독한 도메인');
+    expect(screen.queryByTestId('group-domain-sets-applies-later-note')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/적용 예정/);
   });
 });

@@ -21,10 +21,11 @@ import { z } from 'zod';
  *   domain permission set never grants an admin (`/api/admin/**`) permission.
  *
  * 🔴 STATUS HONESTY (ADR-083 D9): P3 (`TASK-BE-632`, the token-issuance
- *   change) is not deployed. A set recorded here does not yet narrow any
- *   assume-tenant token — every operator of the tenant still gets the full
- *   subscription-derived role set. Screens consuming these types must say
- *   "적용 예정", never that a set currently limits access.
+ *   change) is live — the assume-tenant token's `roles` = the operator's
+ *   assigned sets ∩ the tenant's subscribed domains. A change applies from the
+ *   next tenant exchange; an issued token keeps working up to about 6 minutes
+ *   (TTL 300 s + 60 s skew). Never «즉시». (Pre-P3 screens said «적용 예정» —
+ *   retired in TASK-PC-FE-338 c-2 PR 1.)
  */
 
 // --- domain role catalog (row 1) --------------------------------------------

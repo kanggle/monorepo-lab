@@ -179,3 +179,81 @@ frontend
   - `hasCompleteSession` is restored (access + operator).
 - **Verification.** Before merging, I **ran the federation e2e on the branch itself** (run 38555155825) → **success**. Locally: tsc, lint, and the 63 tests in the affected suites.
 - Vercel Production: `3eb6cbebd` (later than and including `ca176d570`) has a deployment record (2026-10-14 11:31Z). Status `success` is to be rechecked before the window.
+
+## Slice c-2 — AC-0 re-measurement (2026-10-15 UTC, base `5dd4aeb8e`) — 🔴 STOPPED before implementation (HARDSTOP-06)
+
+P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-measured the inputs before writing any test. The nav signal rule cannot be implemented as written, because it disagrees with this ticket's AC-1.
+
+**What the server actually decides, per console menu (WMS-subscribed tenant, after P3):**
+
+| Menu | Call the screen makes | Server gate | Operator with no WMS set | Operator with `wms-inventory-operate` only |
+|---|---|---|---|---|
+| `/wms` · `/wms/inventory` · `/wms/inbound` · `/wms/master` | wms admin-service `/dashboard/*` (`wms-ops/api/*`) | `WMS_VIEWER`, **synthesised from `entitled_domains ∋ wms`** (`wms admin-service SecurityConfig.java:110-141`; ADR-083 ③ records it) | **200** | **200** |
+| `/wms/outbound` | outbound-service `GET /orders` (`outbound-order-api.ts:32-44`) | `OUTBOUND_READ ∨ WRITE ∨ ADMIN` (`outbound-service SecurityConfig.java:97`) | 403 | **403** (measured live in the 27th window, BE-632 AC-1) |
+| `/wms/operations` | admin-service `/operations/*` · `/settings` | `WMS_ADMIN` (not in the catalog) | 403 | 403 (same for every operator — not a set question) |
+| SCM read screens | scm services | `authenticated()` only (ADR-083 ③); PO list GET 200 as BUYER (BE-632 AC-1 note) | **200** | (not subscribed in AC-1's case) |
+| ERP / Finance read screens | erp · finance | read = `entitled_domains ∋ erp` / `FINANCE_VIEWER` synthesised (ADR-083 ③) | **200** | — |
+| E-commerce | gateway `roles ∋ ECOMMERCE_OPERATOR` | the gateway is the only gate | 403 | — |
+
+**The two specs that disagree:**
+
+1. Contract § 2.4.3.4 «Domain nav — two signals» (`console-integration-contract.md:280`) keys the badge on the **domain**: «no role of that `domainKey` in the response → «업무 권한 없음»».
+   - Inventory-set operator: it has a `wms` role, so **no WMS menu gets the badge**. The server answers `/wms/outbound` with 403.
+   - Operator with no WMS set: the whole WMS node gets the badge, but `/wms/inventory` · `/wms/inbound` · `/wms/master` answer **200**. The same holds for SCM · ERP · Finance read screens.
+2. AC-1 (and the header line «숨긴 것과 서버 403 이 일치한다») asks for **per-menu** signals: inventory menu open, outbound menu «권한 없음», matched against the server's 403/200.
+
+⇒ The contract rule fails AC-1 in **both** directions: it hides nothing that the server refuses (outbound), and it badges screens the server serves (read dashboards). Neither layer can be chosen mechanically. Contract (layer 6) beats task (layer 10), but implementing the contract knowingly ships a signal that contradicts the server, which is the exact Failure Scenario this ticket exists to prevent.
+
+**Second, smaller conflict — latency copy.**
+- Contract § 2.4.3.4 (`:269`) still says «만료(최대 5분)».
+- The canonical IAM sentence was corrected on 2026-10-15 by owner decision (BE-632 Close 2) to «`exp` + 60 s — 최대 약 360초» (`admin-api.md:3746` · `auth-api.md` § 회수 지연 · `rbac.md:516`).
+- The console copy today is still the pre-P3 «최대 30분» (`shared/api/domain-permission-sets-copy.ts:22`).
+- ⇒ The console contract has to be aligned first; the wording on screen is a copy choice.
+
+**Other AC-0 inputs (measured):**
+- Nav decision inputs: `console-nav-exposure.ts` (`isHrefHiddenFor` = admin roles · `subscriptionBadgeKeys` = registry), fed by `(console)/layout.tsx:257-302`. No consumer of `GET /api/admin/me/domain-access` exists in console-web yet (0 hits in `src/`).
+- `permission-map.ts` WMS rows all carry the same `roles: WMS_ROLES`. There is no per-menu required-role data today.
+- e2e: `tests/e2e/overview-consolidation.spec.ts:82-87` asserts the ERP drill text `/^ERP(구독 필요)?$/`. A second badge text inside that toggle would break it. `e2e-smoke/sample-visitor-wms.spec.ts` visits WMS routes (sample shell — no operator session, so no signal). `tests/federation-hardening-e2e/`: 0 hits for the badge texts.
+- «적용 예정» copies to retire now that P3 is live: `DomainPermissionSetsScreen.tsx:154` · `OperatorDomainAccessDialog.tsx:176` · `GroupDetail.tsx:231` · `iam-guide/data.ts:235` · `permission-map.ts:440`. «최대 30분»: `domain-permission-sets-copy.ts:22`. Pinned by `DomainPermissionSetsScreen.test.tsx:92-95, 246, 284` and `GroupDetail-domain-sets.test.tsx:237-240`.
+- Read-only button hiding (AC-2): the WMS screens with mutation buttons are `/wms` (alert acknowledge — `WMS_OPERATOR`) and `/wms/outbound` (pick · pack · ship · cancel · retry — `OUTBOUND_WRITE`). The contract rule (`:270`, «only `access=READ` entries for that domain → hide») is implementable as written. It is not the blocked part, but it needs the same row-12 read that the nav signal needs.
+
+**Decision needed (owner) before c-2 continues:** see the report of this session. No code changed in this slice.
+
+## Slice c-2 — owner decisions (2026-10-15 UTC)
+
+1. **The nav signal is per menu.** Each nav leaf declares the role(s) the server requires for that screen's primary read. The signal shows when the assumed token's `roles` lack them.
+   - A leaf the server opens on subscription alone carries no requirement and therefore no signal. As measured above, that covers WMS inventory · inbound · master and the SCM · ERP · Finance reads.
+   - «구독 필요» stays a separate signal.
+   - The data must scale to `TASK-MONO-792`~`795`: when those add fine-grained roles to another domain, that is just more per-leaf data.
+   - Contract § 2.4.3.4 (`console-integration-contract.md:280`) is amended first, then AC-1's wording if needed. Watch the e2e pin `overview-consolidation.spec.ts:82-87`.
+2. **Latency copy = «최대 약 6분».** Align contract `:269` and `shared/api/domain-permission-sets-copy.ts:22`. The bound is TTL 300 s plus the resource servers' 60 s skew (BE-632 AC-6 · `auth-api.md` § 회수 지연).
+3. **Split into two PRs.**
+   - **PR 1 (first):** retire «적용 예정» at all its sites (three screens, the guide, `permission-map`, their tests) and change the latency copy and the contract.
+   - **PR 2 (after PR 1 merges, fresh branch from `origin/main`):** the per-menu nav signal and AC-2 button hiding. They share one input. Which input (`/me/domain-access` or the token's `roles`) is decided by the contract that PR 2 amends.
+
+## Slice c-2 PR 1 — red (2026-10-15 UTC)
+
+- Tests only, written before the fix:
+  - `DomainPermissionSetsScreen.test.tsx`: effect note, edit/delete confirms «최대 약 6분».
+  - `GroupDetail-domain-sets.test.tsx`: effect note.
+  - `OperatorsScreen-domain-access.test.tsx`: latency copy and effect note.
+  - `domain-permission-sets-post-p3-copy.test.ts` (new): the shared copy, the IAM guide menu and the permission-map row.
+- Local run of those four files: **9 failed / 22 passed**. Every failure is an assertion: `AssertionError`, or `TestingLibraryElementError` for the new testids that do not exist yet. `tsc --noEmit -p .` rc=0.
+
+## Slice c-2 PR 1 — what landed
+
+- **Contract first** (`console-integration-contract.md` § 2.4.3.4):
+  - «Status honesty» now records that P3 is deployed, that the «적용 예정» note is retired, and the wording of the effect note that replaces it.
+  - «Revocation-latency copy» now says «만료(최대 약 6분)», defined as TTL 300 s + 60 s skew, with a link to the canonical IAM sentence. The earlier «최대 5분» is marked superseded.
+- **Copy** (`shared/api/domain-permission-sets-copy.ts`):
+  - `DOMAIN_SET_LATENCY_COPY` now says «최대 약 6분».
+  - New `DOMAIN_SET_EFFECT_COPY`: «운영자가 테넌트를 고르면, 배정된 세트의 역할 중 그 테넌트가 구독한 도메인의 역할만 도메인 토큰에 실립니다.»
+- **Three surfaces.** The «적용 예정» note is replaced by the effect note. Testids are renamed `*-applies-later-note` → `*-effect-note`; e2e · smoke · federation have 0 references to either.
+  - Set screen: effect + latency.
+  - Operator dialog: effect.
+  - Group panel: «그룹의 세트는 모든 멤버에게 배정됩니다.» + effect.
+- **Guide copies.** The `iam-guide/data.ts` «업무 권한 세트» note and the `permission-map.ts` `/domain-permission-sets` `mismatch` now state the post-P3 behaviour (sets ∩ subscribed domains, next re-exchange, at most about 6 minutes).
+- **Green (local).**
+  - Full `npx vitest run`: **395 files / 4502 tests passed**, rc=0.
+  - `tsc --noEmit -p .`: rc=0.
+  - `next lint`: rc=0. Its one warning is pre-existing in an untouched file (`api/onboarding/received-invitations/route.ts:26`).
