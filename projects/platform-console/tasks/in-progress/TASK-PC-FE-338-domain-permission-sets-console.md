@@ -239,3 +239,21 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
   - `OperatorsScreen-domain-access.test.tsx`: latency copy and effect note.
   - `domain-permission-sets-post-p3-copy.test.ts` (new): the shared copy, the IAM guide menu and the permission-map row.
 - Local run of those four files: **9 failed / 22 passed**. Every failure is an assertion: `AssertionError`, or `TestingLibraryElementError` for the new testids that do not exist yet. `tsc --noEmit -p .` rc=0.
+
+## Slice c-2 PR 1 — what landed
+
+- **Contract first** (`console-integration-contract.md` § 2.4.3.4):
+  - «Status honesty» now records that P3 is deployed, that the «적용 예정» note is retired, and the wording of the effect note that replaces it.
+  - «Revocation-latency copy» now says «만료(최대 약 6분)», defined as TTL 300 s + 60 s skew, with a link to the canonical IAM sentence. The earlier «최대 5분» is marked superseded.
+- **Copy** (`shared/api/domain-permission-sets-copy.ts`):
+  - `DOMAIN_SET_LATENCY_COPY` now says «최대 약 6분».
+  - New `DOMAIN_SET_EFFECT_COPY`: «운영자가 테넌트를 고르면, 배정된 세트의 역할 중 그 테넌트가 구독한 도메인의 역할만 도메인 토큰에 실립니다.»
+- **Three surfaces.** The «적용 예정» note is replaced by the effect note. Testids are renamed `*-applies-later-note` → `*-effect-note`; e2e · smoke · federation have 0 references to either.
+  - Set screen: effect + latency.
+  - Operator dialog: effect.
+  - Group panel: «그룹의 세트는 모든 멤버에게 배정됩니다.» + effect.
+- **Guide copies.** The `iam-guide/data.ts` «업무 권한 세트» note and the `permission-map.ts` `/domain-permission-sets` `mismatch` now state the post-P3 behaviour (sets ∩ subscribed domains, next re-exchange, at most about 6 minutes).
+- **Green (local).**
+  - Full `npx vitest run`: **395 files / 4502 tests passed**, rc=0.
+  - `tsc --noEmit -p .`: rc=0.
+  - `next lint`: rc=0. Its one warning is pre-existing in an untouched file (`api/onboarding/received-invitations/route.ts:26`).

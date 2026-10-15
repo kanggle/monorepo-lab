@@ -437,7 +437,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       'projects/iam-platform/specs/contracts/http/admin-api.md § 도메인 업무 권한 세트',
     ],
     mismatch:
-      'P3(토큰 발급 변경) 배포 전에는 세트를 배정·회수해도 assume 토큰의 실제 업무 권한은 바뀌지 않는다(구독 도메인 전체가 여전히 그대로 적용) — 화면은 이를 "적용 예정"으로 명시한다.',
+      '세트 배정·회수·변경은 다음 테넌트 재교환부터 assume 토큰에 반영된다(토큰 roles = 세트의 역할 ∩ 구독 도메인). 이미 발급된 토큰은 만료 + 허용 오차까지(최대 약 6분) 그대로 쓰인다 — «즉시» 회수가 아니다.',
   },
   {
     href: '/audit',

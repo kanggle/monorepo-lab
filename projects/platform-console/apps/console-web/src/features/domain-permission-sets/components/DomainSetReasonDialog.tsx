@@ -7,9 +7,9 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * 🔴 Revocation-latency copy (ADR-083 D7 — verbatim meaning, never «즉시»).
  * Every edit / delete confirm says the change applies from the next tenant
  * exchange and that an already-issued assume token keeps working until it
- * expires. **Pre-P3 version** (P3, the token-issuance change, is not
- * deployed yet — TASK-BE-632): the bound is 30 minutes, not the post-P3
- * 5-minute figure the contract will carry once P3 ships.
+ * expires. **Post-P3 version** (TASK-BE-632 live — TASK-PC-FE-338 c-2 PR 1):
+ * «최대 약 6분» = TTL 300 s + the resource servers' 60 s clock skew (the
+ * pre-P3 copy said 30 minutes).
  *
  * TASK-PC-FE-338 slice b — promoted to `shared/api/domain-permission-sets-copy.ts`
  * (two more consumers: `features/operators` + `features/operator-groups`,

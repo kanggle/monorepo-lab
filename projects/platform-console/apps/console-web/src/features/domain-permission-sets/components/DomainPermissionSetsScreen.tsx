@@ -17,6 +17,7 @@ import type {
 } from '../api/types';
 import { DomainPermissionSetForm } from './DomainPermissionSetForm';
 import { DomainSetReasonDialog, DOMAIN_SET_LATENCY_COPY } from './DomainSetReasonDialog';
+import { DOMAIN_SET_EFFECT_COPY } from '@/shared/api/domain-permission-sets-copy';
 
 /**
  * 「업무 권한 세트」 management screen (TASK-PC-FE-338 / ADR-MONO-083 D9,
@@ -24,10 +25,10 @@ import { DomainSetReasonDialog, DOMAIN_SET_LATENCY_COPY } from './DomainSetReaso
  * then the active tenant's sets with `grantCount`/`groupCount`. Mirrors
  * `OperatorGroupsScreen` (seeded list + reason+confirm create/edit/delete).
  *
- * 🔴 Status honesty (ADR-083 D9): P3 (the token-issuance change) is not
- * deployed — a set recorded here does not yet narrow any assume-tenant
- * token. The screen carries a persistent «적용 예정» note; it never claims a
- * set currently limits access.
+ * 🔴 Status honesty (ADR-083 D9): P3 (TASK-BE-632) is live — a set narrows the
+ * assume-tenant token to its roles ∩ the tenant's subscribed domains. The
+ * persistent effect note says exactly that plus the revocation latency (the
+ * pre-P3 «적용 예정» note was retired in TASK-PC-FE-338 c-2 PR 1); never «즉시».
  */
 export interface DomainPermissionSetsScreenProps {
   roles: DomainRole[];
@@ -146,15 +147,10 @@ export function DomainPermissionSetsScreen({
 
       <div
         role="note"
-        data-testid="domain-set-applies-later-note"
+        data-testid="domain-set-effect-note"
         className="rounded-md border border-border bg-muted px-4 py-3 text-sm text-muted-foreground"
       >
-        🔴 지금 배정한 세트는 기록만 되고{' '}
-        <strong className="text-foreground">아직 실제 업무 권한을 좁히지 않습니다</strong> —{' '}
-        <strong className="text-foreground">적용 예정</strong>입니다. 토큰 발급
-        변경이 배포되면, 운영자가 테넌트를 다시 선택할 때부터 이 세트의
-        역할만 토큰에 실립니다. 그 전까지는 테넌트의 구독 도메인 전체가
-        그대로 적용됩니다.
+        {DOMAIN_SET_EFFECT_COPY} 세트를 바꾸면 {DOMAIN_SET_LATENCY_COPY}
       </div>
 
       {listError && (
