@@ -185,6 +185,17 @@ Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-M
 
 ⚪ nightly 전용 스위트(federation-hardening e2e · 콘솔 full-stack)는 이 PR 에서 돌지 않는다 — federation 시드(`tests/federation-hardening-e2e/fixtures/seed.sql:712-737`)는 운영자에게 `legacy-compat` 를 주므로 V0056 뒤 SCM 8 역할 + 파생 `SCM_OPERATOR` 를 받는다(코드 추론). 머지 뒤 첫 nightly 를 한 번 본다.
 
+🔴 **정정 — 위 문단의 추론은 반만 맞았다.** 코디네이터가 브랜치(`fda43d066`)에서 nightly 두 개를 직접 돌렸다:
+- `nightly-e2e` run `38813328986` — ✅ 전부 초록(콘솔 12 passed · iam docker-compose · scm cross-service).
+- `federation-hardening-e2e` run `38813334285`, job `116692283695` — ❌ `specs/scm-replenishment-loop.spec.ts:62` `PUT sku-supplier-map -> 200` 이 **403 `PERMISSION_DENIED` ×3**(재시도 포함). 🔵 같은 런의 `tenant-switch-rescope.spec.ts:110` scm 카드 저하는 기지의 flake(`TASK-BE-516`) — 이 티켓과 무관, 쫓지 않음.
+- **원인(실측 · 스펙 읽기)**: 이 스펙은 assume 토큰이 아니라 suite SUPER_ADMIN storageState 의 **기본 로그인 토큰**(`console_access_token`, `tenant_id='*'`)으로 demand-planning · procurement 를 직접 불렀다. 기본 토큰은 설계상 도메인 역할이 **0** 이다(BE-632 이전에도) — 그동안 통한 것은 두 서비스가 `authenticated()` 만 봤기 때문이다. 스펙 머리 주석이 그 가정을 글로 적고 있었다(«demand-planning + procurement have no fine-grained role gate»). ⇒ 792 의 회귀가 아니라 **792 가 무너뜨린 전제에 기대던 시험**이다. 시드 문제 아님: post-Flyway 시드(federation `seed.sql` · 콘솔 e2e · 데모 `R__` · `infra/demo/seed`) 전수 grep — `domain_permission_set_role` 에 손으로 쓰는 시드 **0**, 세트는 전부 프리셋 키(`legacy-compat` · `*-full`)로 참조 ⇒ V0056 가 넓힌 내용을 그대로 받는다. `SCM_OPERATOR` 를 세트에 쓰는 시드 0.
+- **고침**: 스펙을 `scm-inbound-expected-loop.spec.ts` 와 같은 모양으로 — 새 컨텍스트에서 multi-operator 로그인 → `globex-corp`([scm, erp]) assume → 그 assume 토큰(legacy-compat ∩ scm 상한 = 파생 `SCM_OPERATOR` + SCM 8 역할)으로 같은 흐름. demand-planning 제안은 고정 `scm` 테넌트라 어느 토큰으로도 보이고, 초안 발주는 globex-corp 로 만들고 같은 토큰으로 읽는다. 머리 주석에 «Auth 문단은 대체됨» 을 적었다.
+- 재실행: § 아래 «federation 재실행».
+
+# 소유자 결정 (추가) — 2026-10-15 UTC
+
+- **Q5 의 파트너십 확장 승인** — V0056 의 `tenant_partnership.delegated_scope` · `tenant_partnership_participant.participant_scope` 재작성 + 초대에서 `SCM_OPERATOR` 위임 → 422(`PARTNERSHIP_SCOPE_INVALID`). (구현 노트의 «결정을 넘는 적용» 표시는 이 승인으로 닫힌다.)
+
 # 배포 상태 (AC-4) — 2026-10-15 UTC
 
 | 층 | 상태 |
