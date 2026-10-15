@@ -13,6 +13,12 @@ public final class DomainGrantSource {
     public static final String DIRECT = "DIRECT";
     /** The V0052 backfill ({@code legacy-compat} only). Removed by the personal revoke and by the company exit. */
     public static final String MIGRATION = "MIGRATION";
+    /**
+     * TASK-MONO-773 OD-4 (ADR-MONO-083 OD-5 · P9) — a company's first administrator's {@code all-domains-full} row,
+     * written only by the company-creation atomic bundle (self-service onboarding; the first-admin invitation
+     * acceptance from S4). Never written by the set API. Removed by the personal revoke and by the company exit.
+     */
+    public static final String ORIGIN = "ORIGIN";
     /** Prefix of a group fan-out row: {@code GROUP:<operator_group.id>}. Removed only through that group. */
     public static final String GROUP_PREFIX = "GROUP:";
 

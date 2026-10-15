@@ -622,6 +622,21 @@ public class AdminExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("OPERATOR_OWNED_TENANT_LIMIT_EXCEEDED", e.getMessage()));
     }
 
+    // TASK-MONO-773 S3 (ADR-MONO-044 D4) — the self-service trust gate; both refusals precede tenant creation.
+    @ExceptionHandler(com.example.admin.application.exception.OnboardingEmailNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleOnboardingEmailNotVerified(
+            com.example.admin.application.exception.OnboardingEmailNotVerifiedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("EMAIL_NOT_VERIFIED", e.getMessage()));
+    }
+
+    @ExceptionHandler(com.example.admin.application.exception.OnboardingAccountNotEligibleException.class)
+    public ResponseEntity<ErrorResponse> handleOnboardingAccountNotEligible(
+            com.example.admin.application.exception.OnboardingAccountNotEligibleException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ONBOARDING_ACCOUNT_NOT_ELIGIBLE", e.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

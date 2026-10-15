@@ -57,14 +57,16 @@ import java.util.Set;
  * management-plane permission cache. Every change reaches tokens from the NEXT assume exchange only (D7 — and only
  * once P3 reads it).
  *
- * <p><b>Personal revoke</b> deletes the (target, T, set) rows of source DIRECT and MIGRATION only; GROUP rows stay
- * (a set received from a group is removed through that group). Nothing of those two sources → 404.
+ * <p><b>Personal revoke</b> deletes the (target, T, set) rows of source DIRECT, MIGRATION and (TASK-MONO-773 OD-4)
+ * ORIGIN only; GROUP rows stay (a set received from a group is removed through that group). Nothing of those
+ * sources → 404. The grant above never writes ORIGIN (or MIGRATION): those are system-only sources.
  */
 @Service
 @RequiredArgsConstructor
 public class OperatorDomainAccessUseCase {
 
-    private static final List<String> PERSONAL_SOURCES = List.of(DomainGrantSource.DIRECT, DomainGrantSource.MIGRATION);
+    private static final List<String> PERSONAL_SOURCES =
+            List.of(DomainGrantSource.DIRECT, DomainGrantSource.MIGRATION, DomainGrantSource.ORIGIN);
 
     private final DomainPermissionSetPort setPort;
     private final AdminOperatorPort operatorPort;
@@ -173,7 +175,7 @@ public class OperatorDomainAccessUseCase {
         List<String> removed = setPort.deleteGrants(target.internalId(), tenantId, set.internalId(), PERSONAL_SOURCES);
         if (removed.isEmpty()) {
             throw new DomainPermissionSetNotFoundException("Set '" + set.setId()
-                    + "' has no DIRECT / MIGRATION grant for this operator in '" + tenantId
+                    + "' has no DIRECT / MIGRATION / ORIGIN grant for this operator in '" + tenantId
                     + "' — a set received from a group is removed through that group");
         }
         long keptGroupSources = setPort.findGrantRows(target.internalId(), List.of(tenantId)).stream()

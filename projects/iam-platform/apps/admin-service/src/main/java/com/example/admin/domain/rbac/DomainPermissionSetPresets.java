@@ -14,6 +14,9 @@ public final class DomainPermissionSetPresets {
     /** The backfill-only preset (MIGRATION source exclusively — never grantable through the API). */
     public static final String LEGACY_COMPAT = "legacy-compat";
 
+    /** TASK-MONO-773 OD-4 — the company creator's set (source {@code ORIGIN}). */
+    public static final String ALL_DOMAINS_FULL = "all-domains-full";
+
     /** Every preset key, in the contract's table order. */
     public static final List<String> SYSTEM_KEYS = List.of(
             "wms-inventory-read",
@@ -29,7 +32,7 @@ public final class DomainPermissionSetPresets {
             "ecommerce-full",
             "fan-full",
             "mes-full",
-            "all-domains-full",
+            ALL_DOMAINS_FULL,
             LEGACY_COMPAT);
 
     private DomainPermissionSetPresets() {

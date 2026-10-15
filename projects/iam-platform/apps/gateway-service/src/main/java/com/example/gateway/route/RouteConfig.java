@@ -15,6 +15,7 @@ import java.util.Set;
 public class RouteConfig {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    static final String ONBOARDING_ORGANIZATIONS_PATH = "/api/admin/onboarding/organizations";
 
     private final Set<String> publicRoutes;
 
@@ -61,6 +62,11 @@ public class RouteConfig {
         }
         if (path.startsWith("/api/accounts/signup")) {
             return "signup";
+        }
+        // TASK-MONO-773 OD-8 (gateway-api.md · redis-keys.md) — self-service tenant creation, IP 5/60s. EXACT path:
+        // the read in the same subtree (`…/onboarding/received-invitations`, every screen entry) stays global-only.
+        if (ONBOARDING_ORGANIZATIONS_PATH.equals(path)) {
+            return "onboarding";
         }
         if (path.startsWith("/api/auth/refresh")) {
             return "refresh";

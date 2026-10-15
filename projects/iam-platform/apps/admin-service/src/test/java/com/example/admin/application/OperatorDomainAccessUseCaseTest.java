@@ -254,13 +254,14 @@ class OperatorDomainAccessUseCaseTest {
     // ── revoke ──────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("AC-1 (slice A): personal revoke deletes DIRECT + MIGRATION only; the GROUP row stays and is counted in the audit")
+    @DisplayName("AC-1 (slice A): personal revoke deletes DIRECT + MIGRATION + ORIGIN (773) only; the GROUP row stays and is counted in the audit")
     void revoke_keepsGroupRows() {
         gate(ActionCode.OPERATOR_DOMAIN_SET_REVOKE, "acme", "acme", false);
         member(op(7L, "op-target", "acme"), "acme");
         SetView set = tenantSet(11L, "s1", "acme", new RoleRef("wms", "INVENTORY_READ"));
         when(setPort.findBySetId("s1")).thenReturn(Optional.of(set));
-        when(setPort.deleteGrants(7L, "acme", 11L, List.of("DIRECT", "MIGRATION"))).thenReturn(List.of("DIRECT"));
+        when(setPort.deleteGrants(7L, "acme", 11L, List.of("DIRECT", "MIGRATION", "ORIGIN")))
+                .thenReturn(List.of("DIRECT"));
         when(setPort.findGrantRows(7L, List.of("acme"))).thenReturn(List.of(
                 new GrantRowView(7L, "acme", set, "GROUP:44", 44L, "g-44", "재고팀", "op-x", Instant.EPOCH)));
         when(auditor.newAuditId()).thenReturn("a");
@@ -274,13 +275,33 @@ class OperatorDomainAccessUseCaseTest {
     }
 
     @Test
-    @DisplayName("revoke with only a GROUP row (nothing DIRECT / MIGRATION) → 404, no audit row")
+    @DisplayName("🔴 TASK-MONO-773 OD-4: the creator's ORIGIN row is removed by the personal revoke (self included) — audit removedSources=ORIGIN")
+    void revoke_removesOrigin() {
+        gate(ActionCode.OPERATOR_DOMAIN_SET_REVOKE, "acme", "acme", false);
+        member(op(7L, "op-target", "acme"), "acme");
+        SetView set = preset(14L, "all-domains-full", new RoleRef("wms", "INVENTORY_READ"));
+        when(setPort.findBySetId(set.setId())).thenReturn(Optional.of(set));
+        when(setPort.deleteGrants(7L, "acme", 14L, List.of("DIRECT", "MIGRATION", "ORIGIN")))
+                .thenReturn(List.of("ORIGIN"));
+        when(setPort.findGrantRows(7L, List.of("acme"))).thenReturn(List.of());
+        when(auditor.newAuditId()).thenReturn("a");
+
+        useCase.revoke(new RevokeDomainPermissionSetCommand(ADMIN, "acme", "op-target", set.setId(), "r"));
+
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> rec = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        verify(auditor).recordWithPermission(rec.capture(), eq(Permission.DOMAIN_ACCESS_MANAGE));
+        assertThat(rec.getValue().downstreamDetail())
+                .isEqualTo("setId=" + set.setId() + " removedSources=ORIGIN keptGroupSources=0");
+    }
+
+    @Test
+    @DisplayName("revoke with only a GROUP row (nothing DIRECT / MIGRATION / ORIGIN) → 404, no audit row")
     void revoke_onlyGroupRow_404() {
         gate(ActionCode.OPERATOR_DOMAIN_SET_REVOKE, "acme", "acme", false);
         member(op(7L, "op-target", "acme"), "acme");
         when(setPort.findBySetId("s1")).thenReturn(Optional.of(tenantSet(11L, "s1", "acme",
                 new RoleRef("wms", "INVENTORY_READ"))));
-        when(setPort.deleteGrants(7L, "acme", 11L, List.of("DIRECT", "MIGRATION"))).thenReturn(List.of());
+        when(setPort.deleteGrants(7L, "acme", 11L, List.of("DIRECT", "MIGRATION", "ORIGIN"))).thenReturn(List.of());
 
         assertThatThrownBy(() -> useCase.revoke(new RevokeDomainPermissionSetCommand(ADMIN, "acme", "op-target",
                 "s1", "r"))).isInstanceOf(DomainPermissionSetNotFoundException.class);

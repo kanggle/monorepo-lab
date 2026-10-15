@@ -16,11 +16,15 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li><b>Unit</b> (ADR-082 D4): the number of DISTINCT tenants of this operator row's {@code TENANT_ADMIN} role
  *       rows, {@code tenant_id <> '*'}, whatever their origin (self-service onboarding · invitation acceptance ·
- *       role PATCH · group fan-out · org-node row recorded there). Tenant status is not read (784 S1 § 4-2 left
- *       «count SUSPENDED tenants?» to 773 AC-0).</li>
+ *       role PATCH · group fan-out · org-node row recorded there). Tenant status is not read — 🔴 TASK-MONO-773
+ *       OD-3: ACTIVE · SUSPENDED · PENDING all count (counting only ACTIVE opens «create → get suspended →
+ *       create again»).</li>
  *   <li><b>Verdict</b>: {@code count ≥ cap} → refused — one more tenant would exceed the cap.</li>
- *   <li><b>Value</b>: {@code admin.onboarding.max-owned-tenants-per-operator}, default {@code 2} (exactly the
- *       «second company» 784 AC-3 needs).</li>
+ *   <li><b>Value</b>: {@code admin.onboarding.max-owned-tenants-per-operator}, default {@code 3} (TASK-MONO-773
+ *       OD-3 — at 2, «one invited company + my own» already filled it).</li>
+ *   <li><b>Asked twice</b> (773 OD-3): before the tenant is created (the fast refusal) and again inside the
+ *       membership transaction under the operator-row lock ({@code FirstAdminProvisioner#addMembership}) — two
+ *       concurrent creations can no longer both pass.</li>
  *   <li>Only self-service onboarding asks (S1-5): the invitation acceptance does not — the cap guards tenants a
  *       person creates for themselves (ADR-044 D4), and an invitation is another company's decision.</li>
  * </ul>
@@ -34,7 +38,7 @@ public class OperatorOwnedTenantLimit {
     private final int maxOwnedTenants;
 
     public OperatorOwnedTenantLimit(AdminOperatorPort operatorPort,
-                                    @Value("${admin.onboarding.max-owned-tenants-per-operator:2}") int maxOwnedTenants) {
+                                    @Value("${admin.onboarding.max-owned-tenants-per-operator:3}") int maxOwnedTenants) {
         if (maxOwnedTenants < 1) {
             throw new IllegalStateException(
                     "admin.onboarding.max-owned-tenants-per-operator must be at least 1: " + maxOwnedTenants);

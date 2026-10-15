@@ -121,6 +121,10 @@ gateway:
     signup:
       max-requests: 5
       window-seconds: 60
+    # TASK-MONO-773 OD-8 — POST /api/admin/onboarding/organizations only (RouteConfig), per IP.
+    onboarding:
+      max-requests: 5
+      window-seconds: 60
     refresh:
       max-requests: 10
       window-seconds: 60

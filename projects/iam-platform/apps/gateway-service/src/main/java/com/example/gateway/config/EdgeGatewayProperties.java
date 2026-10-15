@@ -33,6 +33,8 @@ public class EdgeGatewayProperties {
         private boolean failOpen = true;
         private ScopeLimit login = new ScopeLimit(20, 60);
         private ScopeLimit signup = new ScopeLimit(5, 60);
+        /** TASK-MONO-773 OD-8 — self-service tenant creation, per IP (redis-keys.md § scope 종류). */
+        private ScopeLimit onboarding = new ScopeLimit(5, 60);
         private ScopeLimit refresh = new ScopeLimit(10, 60);
         private ScopeLimit global = new ScopeLimit(100, 1);
     }

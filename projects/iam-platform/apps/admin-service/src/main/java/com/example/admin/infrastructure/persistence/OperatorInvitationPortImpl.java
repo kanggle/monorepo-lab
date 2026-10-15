@@ -126,6 +126,20 @@ public class OperatorInvitationPortImpl implements OperatorInvitationPort {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReceivedInvitationView> findLivePendingByEmail(String normalizedEmail, Instant now, int limit) {
+        if (normalizedEmail == null || normalizedEmail.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        List<ReceivedInvitationView> out = new ArrayList<>();
+        for (OperatorInvitationJpaEntity e : repository.findLivePendingByEmail(normalizedEmail, now, limit)) {
+            out.add(new ReceivedInvitationView(e.getInvitationId(), e.getTenantId(), splitRoles(e.getRoles()),
+                    e.getExpiresAt(), e.getUpdatedAt()));
+        }
+        return out;
+    }
+
     // ── mapping ──────────────────────────────────────────────────────────────
 
     static String joinRoles(List<String> roles) {
