@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (IN-PROGRESS 2026-10-15 UTC — AC-0 기록 · 소유자 결정 OD-1~8 확정 · 슬라이스 S1 계약 → S2 account → S3 admin 셀프 → S4 admin `SUPER_ADMIN` → S5 auth → S6 console). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-773-single-tenant-creation-entry.md` — **`ADR-MONO-080` D9 = T1 — «조직 만들기» · «테넌트 등록» → «테넌트 생성» 하나(콘솔 셸 안)** (IN-PROGRESS 2026-10-15 UTC — AC-0 기록 · 소유자 결정 OD-1~8 확정 · 슬라이스 S1 계약 → S2 account → S3 admin 셀프 → S4 admin `SUPER_ADMIN` → S5 auth → S6 console). 첫 관리자 = 본인 / `SUPER_ADMIN` 은 초대 · «관리자 대기» 상태 · 두 번째 회사. 분석=Opus 5.5 / 구현 권장=Opus. 🟡 **닫기 보류 2026-10-15 UTC** — S1~S6 전부 머지(#4368 · #4369 · #4371 · #4372 · #4373 · #4374, 머지 시점 실패 0) · 첫 nightly 콘솔 잡 success(run 38763381565 — 새 3 칸 첫 시도 통과) · AC-0 · 1 · 3~7 ✅ · 🔴 **AC-2 미닫힘** — «같은 시험에서 assume `roles`» 를 admin 절반만 쟀다(§ CORRECTION — 소유자 결정 2026-10-15 UTC: 실제 auth + admin 시험 한 칸 추가 · 빨강 먼저 · 다음 nightly 측정 뒤 `done/`). flaky 1 → `TASK-PC-FE-341`. 라이브 = `TASK-MONO-672` 다음 재굽기 — 🔴 그 굽기 전엔 27차 AMI 로 창을 열지 않는다(소유자 결정).
 
 
 
