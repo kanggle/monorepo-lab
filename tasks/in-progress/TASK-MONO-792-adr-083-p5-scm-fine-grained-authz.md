@@ -52,11 +52,11 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 재측정: SCM 4 서비스의 판정 · 컨트롤러 전수(엔드포인트 × 조회/변경) · procurement 상태 기계 · `ActorContext.isOperator()` 의 역할 집합 · 업무 구분안을 소유자 OD-6 기본값과 대조(바꿀 점이 있으면 착수 전 소유자에게).
-- [ ] **AC-1** — 🔴 대조군(실패 쪽 먼저): 수요계획 세트만 → 발주 변경 API 403 · 수요계획 200 / 조회 세트 → GET 200 · 변경 403 / `SCM_OPERATOR` 만(업무 역할 0) → 업무 API 403.
-- [ ] **AC-2** — 이전 호환: 백필된 기존 운영자가 이 PR 전후로 같은 API 집합에 200(대조군).
-- [ ] **AC-3** — WMS 세트만 가진 운영자의 SCM 직접 API 403 · SCM 세트만 가진 운영자의 WMS 직접 API 403.
-- [ ] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다 · 라이브 없으면 ⚪ 와 이유.
+- [x] **AC-0** — 재측정: SCM 4 서비스의 판정 · 컨트롤러 전수(엔드포인트 × 조회/변경) · procurement 상태 기계 · `ActorContext.isOperator()` 의 역할 집합 · 업무 구분안을 소유자 OD-6 기본값과 대조(바꿀 점이 있으면 착수 전 소유자에게). → § AC-0 기록 · 다섯 차이 → § 소유자 결정(2026-10-15 UTC).
+- [x] **AC-1** — 🔴 대조군(실패 쪽 먼저): 수요계획 세트만 → 발주 변경 API 403 · 수요계획 200 / 조회 세트 → GET 200 · 변경 403 / `SCM_OPERATOR` 만(업무 역할 0) → 업무 API 403. → 서비스 4 `*BusinessRoleGateSliceTest`(실서명 JWT · 실 체인) + auth `scm792_*`. § Red · § Green.
+- [x] **AC-2** — 이전 호환: 백필된 기존 운영자가 이 PR 전후로 같은 API 집합에 200(대조군). → 세 고리: V0056 IT(legacy-compat = 카탈로그 = SCM 8 포함 · `SCM_OPERATOR` 세트 → 8 역할) · auth(legacy-compat → `SCM_OPERATOR` + 8) · 서비스(그 토큰이 모든 SCM 경로 게이트 통과) + scm e2e 4 시나리오(승인 → 초안 발주 포함) 초록. ⚪ 라이브는 AC-4.
+- [x] **AC-3** — WMS 세트만 가진 운영자의 SCM 직접 API 403 · SCM 세트만 가진 운영자의 WMS 직접 API 403. → scm 게이트 시험 4 클래스의 WMS 역할 토큰 403 · wms outbound `SecurityChainAssemblyParityTest#scmSetOnly_isRefusedByWmsOutbound` 403(양쪽 단계 초록 — WMS 쪽은 이미 성립하던 대조) · auth `scm792_wmsSetOnly_noScm`.
+- [ ] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다 · 라이브 없으면 ⚪ 와 이유. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪(소유자 명령 굽기 필요).
 
 # Related Specs
 
@@ -171,3 +171,25 @@ Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-M
 | CI 합계 | — | **21 실패 — 전부 단언 실패**(`java.lang.AssertionError` 11 · `org.opentest4j.AssertionFailedError` 10, 로그 `FAILED` 다음 줄에서 셈). 컴파일 · 부팅 실패 0 |
 | ⚪ CI scm · wms 단계 | `116669276653` | **실행 안 됨** — 같은 job 안에서 iam 단계(`gradle-iam`)가 먼저 실패해 뒤의 `gradle-scm` · wms 단계가 건너뛰어졌다. CI 로그로는 scm 빨강을 셀 수 없다 |
 | 로컬(같은 커밋 `4118c303f`, 별도 worktree) | — | scm 게이트 시험 4 클래스 **34 실행 · 20 실패**(procurement 12/8 · demand-planning 7/4 · logistics 7/4 · inventory-visibility 8/4) — 전부 `java.lang.AssertionError`(기대 403, 실제 404/405 — 게이트가 없어 통과). 통과 쪽 14 = 허용 대조군(양쪽 단계 모두 초록이어야 하는 쪽). wms `SecurityChainAssemblyParityTest` **12/12 통과**(AC-3 의 WMS 쪽 대조 — 이미 성립) |
+
+# Green — 2026-10-15 UTC (커밋 `a3250bdf1` · run `38810407668`)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116682005952` | ✅ — iam · scm 4 서비스 · wms outbound 의 `:test` 가 **실제로 실행**(캐시 아님 — 로그의 `Task …:test` 줄 · `GRADLE_TASKS_SCM` 단계 실행)되고 BUILD SUCCESSFUL. 🔵 이 레인은 성공 시 시험별 줄을 찍지 않는다 — 클래스별 수는 아래 로컬 줄 |
+| CI `Integration (iam A, Testcontainers)` | `116682009607` | ✅ **350 PASSED · 0 FAILED**(로그에서 셈) — `V0056ScmRoleMigrationIntegrationTest` 2/2 PASSED |
+| CI `Integration (scm-platform, Testcontainers)` | `116682007562` | ✅ **115 PASSED · 0 FAILED** (`DispatchRetryIntegrationTest` 의 토큰에 `SCM_LOGISTICS_WRITE`) |
+| CI `E2E (scm-platform v1 cross-service smoke)` | `116682476247` | ✅ **4 PASSED** — `ReplenishmentLoopE2ETest`(승인 → from-suggestion 초안 발주, Q2 경로) · `ProcurementHappyPathE2ETest` · `InboundExpectedLoopE2ETest` · `CrossTenantIsolationE2ETest` |
+| CI 그 밖 | run `38810407668` | 실행된 검사 28 전부 pass(필수 4 포함) · Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · JWT 클레임 레지스트리 pass |
+| 로컬(같은 코드, 시험 결과 XML) | — | 게이트 시험 procurement **12/12** · demand-planning **7/7** · logistics **7/7** · inventory-visibility **8/8** · auth `TenantClaimTokenCustomizerTest` **82/82** · `OperatorRoleDerivationTest` **9/9** · admin `DomainRoleCatalogTest` 5/5 · `DelegatableRoleCatalogTest` 5/5 · `V0056MigrationShapeTest` 7/7 · `V0052MigrationShapeTest` 10/10 |
+
+⚪ nightly 전용 스위트(federation-hardening e2e · 콘솔 full-stack)는 이 PR 에서 돌지 않는다 — federation 시드(`tests/federation-hardening-e2e/fixtures/seed.sql:712-737`)는 운영자에게 `legacy-compat` 를 주므로 V0056 뒤 SCM 8 역할 + 파생 `SCM_OPERATOR` 를 받는다(코드 추론). 머지 뒤 첫 nightly 를 한 번 본다.
+
+# 배포 상태 (AC-4) — 2026-10-15 UTC
+
+| 층 | 상태 |
+|---|---|
+| `main` | ❌ 미머지 — PR #4382 DRAFT (머지 · ready 전환은 이 에이전트 범위 밖) |
+| AMI | ⚪ — 굽기는 소유자 명령. 이 PR 의 백엔드(scm 4 · admin V0056 · auth 파생)는 **한 굽기에 함께** 실려야 한다(갈라지면 Failure 3) |
+| 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-792» (V0056 행 수 앞/뒤 · AC-1/2 라이브) |
+| 콘솔 | 변경 없음(이 PR). SCM 신호는 `TASK-PC-FE-342`(ready) — **굽기 라이브 확인 뒤에만 머지** |
