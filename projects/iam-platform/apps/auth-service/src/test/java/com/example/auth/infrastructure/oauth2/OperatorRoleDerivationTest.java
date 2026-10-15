@@ -59,8 +59,10 @@ class OperatorRoleDerivationTest {
                         "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
                         "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
                         "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE");
+        // TASK-MONO-793 (ADR-083 P6): the erp ceiling = the entry role + the four business roles.
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("erp")))
-                .containsExactly("ERP_OPERATOR");
+                .containsExactly("ERP_OPERATOR", "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE",
+                        "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("finance")))
                 .containsExactly("FINANCE_OPERATOR");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("mes")))

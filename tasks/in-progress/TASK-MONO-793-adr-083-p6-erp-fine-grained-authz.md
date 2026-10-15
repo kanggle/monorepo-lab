@@ -136,3 +136,15 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 | Q5 | IAM 화면의 부서 선택기 · 콘솔 집계 | **엄격**(792 Q3 과 같은 방향) — 기준정보 조회 역할 없는 관리자는 수동 id 입력으로 저하. 알림 종은 Q2 규칙으로 ERP 역할 보유자에게만 열리고, 없는 사람은 `degradedDomains∋erp` — 콘솔 후속이 «ERP 업무 권한 없음» 이면 그 갈래를 부르지 않게 |
 | Q6 | read-model · 알림 귀속 | read-model `employees*` = MD_READ ∨ MD_WRITE · `approvals*` · `delegations*` = AP_READ ∨ AP_WRITE · 알림 = Q2 |
 | 순서 | 콘솔 데이터 | **별도 콘솔 PR, 굽기 라이브 뒤**(792 와 같음 — `permission-map.ts` ERP `serverRequires/writeRequires` · 계약 § 2.4.3.4) |
+
+# 소유자 결정 — 2026-10-15 UTC (코디네이터 경유 · § 5 추천 그대로)
+
+| Q | 결정 |
+|---|---|
+| 역할 | `ERP_MASTERDATA_READ/_WRITE` · `ERP_APPROVAL_READ/_WRITE`. `ERP_OPERATOR` = auth 파생 진입 역할(`ENTRY_ROLES` 한 행) · 카탈로그에서 제거 · 진입 역할 위임 → 422. V0057 이 `ERP_OPERATOR` 를 담은 모든 세트 · 파트너십 scope 를 옮긴다(넓힌 뒤 지운다) |
+| Q1 | 구독 합성 READ(`entitled_domains ∋ erp` ⇒ READ)를 **4 서비스 모두에서 걷는다** · `'*'` 와일드카드 GET 유지 · 기계 클라이언트 범위는 계속 통한다 |
+| Q2 | 개인 엔드포인트(`/employees/me` · 연결 제안 mine/accept/decline · 본인 unlink · 알림 3) = ERP 업무 역할 하나라도(파생 `ERP_OPERATOR`) ∨ 범위 |
+| Q3 | 결재 → 기준정보: `approver-ref` = Q2 규칙 · 대상 GET `/departments/{id}` · `/employees/{id}` = MD_READ ∨ MD_WRITE ∨ AP_WRITE |
+| Q4 | 결재 테넌트 전체 목록 = `isOperator()` 무변경 |
+| Q5 | IAM `org_scope` 부서 선택기 저하(수동 id) 수용 · 알림 종이 역할 없는 사용자에게 ERP 갈래를 건너뛰는 것은 콘솔 후속 티켓(793 을 실은 굽기 라이브 확인 뒤) — ERP 내비 `serverRequires/writeRequires` · 계약 § 2.4.3.4 표와 함께 |
+| Q6 | read-model `employees*` = MD_READ ∨ MD_WRITE · `approvals*`/`delegations*` = AP_READ ∨ AP_WRITE · 알림 = Q2 |

@@ -98,6 +98,44 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 6. **internal-only 경계** — 외부(비-내부망·비-SSO) 트래픽은 게이트웨이/네트워크 정책에서 거부 (도메인 룰 E7).
 
 > **운영자 도메인 role 의 출처 (roles-only 모델)**: ADR-MONO-032 (통합 identity — `roles` 가 유일한 인가 축) + ADR-MONO-035 (operator 인증 통합) 로 `account_type` claim/column/gateway-leg 는 전부 제거되었다 (ADR-032 D5 step 4 + step 5, COMPLETE 2026-06-15). 운영자의 erp 도메인 인가는 JWT `roles` claim 을 타며, 운영자의 도메인 role 은 **assume-tenant 교환 시 IAM 이 선택 tenant 의 entitled domains 에서 파생**한다 (`erp → ERP_OPERATOR`, `OperatorRoleDerivation`; ADR-MONO-035 O1 / step 4a) — 운영자의 assignment 를 fail-closed 로 검증한 뒤 가산된다. erp 서비스의 `isOperator()` 는 이 `roles ∋ ERP_OPERATOR`/`ERP_ADMIN`/`SUPER_ADMIN` 를 읽는다. (erp 코드는 이미 roles 기반 — `account_type` 참조 0; 본 모델은 IAM 발행 측이 권위, erp 는 소비만 한다.)
+>
+> 🔴 **대체됨 (TASK-MONO-793 · ADR-MONO-083 P6)**: 위 «entitled domains 에서 파생» 은 BE-632(P3) 에서 «배정된 업무 권한 세트 ∩ 구독 상한» 으로 바뀌었고, P6 부터 `ERP_OPERATOR` 는 **진입 역할**이다 — 아래 § 업무 역할이 판정의 정본이다.
+
+---
+
+## 업무 역할 (ADR-MONO-083 P6 · TASK-MONO-793 — 정본)
+
+소유자 결정 Q1 ~ Q6 (2026-10-15 UTC). 이 절이 erp 4 서비스의 **업무 인가** 정본이다 — 각 HTTP 계약 · 서비스 명세의 옛 문장(`erp.read ∨ isOperator() ∨ entitled_domains∋erp`, `erp.write ∨ isOperator()`)은 이 절로 **대체**된다.
+
+| 역할 | 무엇을 연다 |
+|---|---|
+| `ERP_MASTERDATA_READ` | 기준정보 조회 — masterdata 의 조회 엔드포인트 · read-model `employees*` |
+| `ERP_MASTERDATA_WRITE` | 기준정보 변경 — masterdata 의 생성 · 수정 · 퇴역 · 부서 이동 · 계정 연결 제안/철회/HR 해제 (+ 조회) |
+| `ERP_APPROVAL_READ` | 결재 조회 — approval 의 요청 목록/상세 · 결재함 · 위임 목록 · read-model `approvals*` · `delegations*` |
+| `ERP_APPROVAL_WRITE` | 결재 변경 — 상신(생성 · 제출) · 승인 · 반려 · 회수 · 위임 생성/철회 (+ 조회) |
+| `ERP_OPERATOR` | **진입 역할** — 카탈로그에 없고 배정 · 위임할 수 없다. 위 넷 중 하나라도 토큰에 실리면 auth-service 가 **파생**한다(iam auth-service architecture § 진입 역할 파생). 그 자체로는 업무 API 를 열지 않는다 — 아래 «개인 엔드포인트» 의 입력과 결재 «테넌트 전체 목록» 판정(`isOperator()`)에만 쓰인다 |
+
+판정 (범위 갈래 `erp.read` · `erp.write` 는 워크로드 클라이언트 `erp-platform-internal-services-client` 용으로 **그대로**, 운영자 토큰은 BE-632 부터 `erp.write` 를 싣지 않는다):
+
+| 대상 | 판정 | 결정 |
+|---|---|---|
+| masterdata 조회(목록 · 상세 · 연결 제안 이력) | `MD_READ ∨ MD_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q1 |
+| masterdata `GET /departments/{id}` · `GET /employees/{id}` (결재 대상 확인 — approval 이 운영자 토큰으로 부른다) | 위 ∨ **`ERP_APPROVAL_WRITE`** | Q3 |
+| masterdata 변경 | `MD_WRITE ∨ erp.write` | — |
+| 🔵 **개인 엔드포인트** — masterdata `GET /employees/me` · `GET /employees/{id}/approver-ref` · `GET /account-link-proposals/mine` · `POST …/{id}/accept` · `POST …/{id}/decline` · `POST /employees/{id}/account-link/unlink`(본인 계정일 때 — 아니면 `MD_WRITE` + 부서 범위) · notification 3 엔드포인트 | **ERP 업무 역할 하나라도**(= 파생 `ERP_OPERATOR` ∨ 네 역할 중 하나) `∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q2 · Q3(approver-ref) · Q6(알림) |
+| approval 조회(요청 목록/상세 · 결재함 · 위임 목록) | `AP_READ ∨ AP_WRITE ∨ erp.read ∨ erp.write` | — |
+| approval 변경(상신 · 제출 · 승인 · 반려 · 회수 · 위임 생성/철회) | `AP_WRITE ∨ erp.write` | — |
+| approval 목록 범위 | `isOperator()`(= `ERP_OPERATOR` · 파생) → 테넌트 전체, 아니면 내가 참여한 것 — **무변경** | Q4 |
+| read-model `employees*` | `MD_READ ∨ MD_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q6 |
+| read-model `approvals*` · `delegations*` | `AP_READ ∨ AP_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q6 |
+
+- 🔴 **구독 합성 READ 는 없다** (Q1): `entitled_domains ∋ erp` 는 더 이상 어떤 판정도 열지 않는다(게이트웨이 · 서비스의 **테넌트 게이트** dual-accept 는 그대로 — 그것은 «어느 테넌트로 들어오는가» 이고 «무엇을 할 수 있는가» 가 아니다). 결과: 테넌트를 고르지 않은 운영자의 기본 로그인 토큰(역할 0)은 ERP 업무 API 403 — SCM(P5)과 같다.
+- `tenant_id='*'`(플랫폼 SUPER_ADMIN 기본 토큰) 의 조회 허용은 **그대로**(TASK-ERP-BE-031). 쓰기는 열지 않는다.
+- 결재 자격(직무 분리 · 단계 승인자 · 대결)은 집합체 가드 — 역할과 **별개로 유지**. 역할이 있어도 자격이 없으면 거절된다.
+- 부서 범위(`org_scope`): masterdata 쓰기 = 서브트리 판정 fail-closed · read-model 읽기 = «없음 = 좁히지 않음» — **무변경**.
+- `ERP_ADMIN` · `SUPER_ADMIN` 역할은 업무 판정에 **쓰이지 않는다**(발급처 0 — ADR-033 S2 · ADR-083 D2). `erp.approval.create` · `erp.approval.approve` 범위도 발급처 0 이라 판정에서 뺐다.
+- 기계 클라이언트 `erp-platform-internal-services-client`(`erp.read/erp.write`, 역할 없음)는 범위 갈래로 **계속 통한다**.
+- 콘솔 소비자: IAM 운영자 화면의 `org_scope` 부서 선택기(`GET /departments`)는 기준정보 조회 역할 없는 관리자에게 403 → 설계된 저하(수동 id 입력) — 수용(Q5). 콘솔 신호 데이터(메뉴 `serverRequires` · `writeRequires` · 알림 종의 ERP 갈래)는 굽기 라이브 뒤 별도 콘솔 티켓.
 
 ---
 

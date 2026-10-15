@@ -1,5 +1,7 @@
 # API Contract — read-model-service
 
+> 🔴 **업무 인가 — TASK-MONO-793 (ADR-MONO-083 P6, 2026-10-15 UTC)부터**: 아래 «READ authorization gate» 문장(`erp.read ∨ isOperator() ∨ entitled`)은 **대체됐다**. `employees*` = `ERP_MASTERDATA_READ ∨ ERP_MASTERDATA_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` · `approvals*` · `delegations*` = `ERP_APPROVAL_READ ∨ ERP_APPROVAL_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` · `entitled_domains ∋ erp` 는 아무것도 열지 않는다(테넌트 게이트 dual-accept 는 그대로) · `org_scope` 읽기 좁힘 무변경. 정본: [iam-integration.md § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본).
+
 Base path: `/api/erp/read-model` (rewritten by the gateway from
 `/api/v1/erp/read-model` once `gateway-service` is introduced; v1 = direct
 JWT to the service).

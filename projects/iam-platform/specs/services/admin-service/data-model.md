@@ -679,6 +679,21 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
       (SELECT COUNT(*) FROM tenant_partnership
         WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"SCM_OPERATOR"'))                AS partnerships_with_scm_operator; -- 뒤 = 0
     ```
+- **TASK-MONO-793 (ADR-MONO-083 P6 · 소유자 결정 2026-10-15 UTC)** — ERP 세분 역할(작성 시점 마지막 = `V0056`):
+  - `V0057__erp_fine_grained_domain_roles.sql` — V0056 과 같은 모양. ① 새 프리셋 3개(`erp-read` · `erp-masterdata-operate` · `erp-approval-operate`, 고정 id `…000000000021` ~ `…023`, `INSERT IGNORE`) 와 그 역할 행. ② 🔴 **`ERP_OPERATOR` 를 담은 모든 세트**(프리셋 `erp-full` · `all-domains-full` · `legacy-compat` · **테넌트 세트 전부**)에 ERP 업무 역할 4개(`ERP_MASTERDATA_READ` · `ERP_MASTERDATA_WRITE` · `ERP_APPROVAL_READ` · `ERP_APPROVAL_WRITE`)를 `INSERT IGNORE` 로 더한 **뒤** `('erp','ERP_OPERATOR')` 행을 지운다(넓힌 뒤 지운다 — 중간 상태에서도 «ERP 0» 인 세트가 없다). ③ 파트너십 `delegated_scope` · `participant_scope` 의 `"ERP_OPERATOR"` 를 같은 4개로(`JSON_CONTAINS` 가드). ④ `erp-full` 설명 갱신. forward-only · 재실행 0행. 형태 시험 `V0057MigrationShapeTest` · 행동 시험 `V0057ErpRoleMigrationIntegrationTest`.
+  - 완료 판정(배포 전 · 뒤 라이브 — 읽기 전용, `TASK-MONO-672` § Next window — TASK-MONO-793):
+
+    ```sql
+    SELECT
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'erp' AND role_name = 'ERP_OPERATOR')                         AS sets_with_erp_operator,      -- 뒤 = 0
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'erp' AND role_name = 'ERP_APPROVAL_WRITE')                   AS sets_with_approval_write,    -- 뒤 = 앞의 sets_with_erp_operator + 1 (erp-approval-operate)
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'erp' AND role_name = 'ERP_MASTERDATA_WRITE')                 AS sets_with_masterdata_write,  -- 뒤 = 앞의 sets_with_erp_operator + 1 (erp-masterdata-operate)
+      (SELECT COUNT(*) FROM tenant_partnership
+        WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"ERP_OPERATOR"'))                AS partnerships_with_erp_operator; -- 뒤 = 0
+    ```
 
 ---
 

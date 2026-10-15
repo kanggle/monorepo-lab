@@ -149,6 +149,23 @@ class PartnershipManagementUseCaseTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-793: invite delegating the ERP entry role ERP_OPERATOR → 422 (derived by auth, never delegated)")
+    void invite_erpEntryRole_rejected() {
+        // Everything else about this invite is valid (lenient — the refusal must come from the role, so these
+        // are reached only while ERP_OPERATOR is still delegatable): the host subscribes to erp, no pair exists.
+        org.mockito.Mockito.lenient().when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(false);
+        org.mockito.Mockito.lenient().when(partnershipPort.createPending(any()))
+                .thenReturn(view(PartnershipStatus.PENDING));
+        org.mockito.Mockito.lenient().when(subscriptionPort.listActiveSubscriptions())
+                .thenReturn(List.of(new TenantDomainSubscriptionSummary(HOST, "erp")));
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("erp"), List.of("ERP_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(PartnershipScopeInvalidException.class);
+        verify(partnershipPort, never()).createPending(any());
+    }
+
+    @Test
     @DisplayName("invite: delegatedScope carrying an admin role → 422 PARTNERSHIP_SCOPE_INVALID")
     void invite_adminRole_rejected() {
         assertThatThrownBy(() -> useCase().invite(HOST,

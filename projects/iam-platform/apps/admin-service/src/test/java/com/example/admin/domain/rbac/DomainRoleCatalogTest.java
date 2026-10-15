@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DomainRoleCatalogTest {
 
     @Test
-    @DisplayName("the catalog equals the contract table exactly (21 rows, order, access, fineGrained, label)")
+    @DisplayName("the catalog equals the contract table exactly (24 rows, order, access, fineGrained, label)")
     void catalog_equalsContractTable() {
         assertThat(DomainRoleCatalog.entries()).containsExactly(
                 new DomainRoleCatalog.Entry("wms", "INVENTORY_READ", "READ", true, "재고 조회"),
@@ -41,7 +41,13 @@ class DomainRoleCatalogTest {
                 new DomainRoleCatalog.Entry("scm", "SCM_INVENTORY_VISIBILITY_READ", "READ", true, "재고 가시성 조회"),
                 new DomainRoleCatalog.Entry("scm", "SCM_INVENTORY_VISIBILITY_WRITE", "WRITE", true,
                         "재고 가시성 변경(3PL 노드 등록 · 관측 재고)"),
-                new DomainRoleCatalog.Entry("erp", "ERP_OPERATOR", "OPERATE", false, "ERP 전체 업무(세분 미지원)"),
+                // TASK-MONO-793 (ADR-083 P6): ERP is fine-grained; ERP_OPERATOR left the catalog (entry role).
+                new DomainRoleCatalog.Entry("erp", "ERP_MASTERDATA_READ", "READ", true, "기준정보 조회"),
+                new DomainRoleCatalog.Entry("erp", "ERP_MASTERDATA_WRITE", "WRITE", true,
+                        "기준정보 변경(생성 · 수정 · 퇴역 · 부서 이동 · 계정 연결 제안/철회)"),
+                new DomainRoleCatalog.Entry("erp", "ERP_APPROVAL_READ", "READ", true, "결재 조회"),
+                new DomainRoleCatalog.Entry("erp", "ERP_APPROVAL_WRITE", "WRITE", true,
+                        "결재 변경(상신 · 승인 · 반려 · 회수 · 위임)"),
                 new DomainRoleCatalog.Entry("finance", "FINANCE_OPERATOR", "OPERATE", false,
                         "Finance 전체 업무(세분 미지원)"),
                 new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false,
@@ -71,6 +77,16 @@ class DomainRoleCatalogTest {
                 "SCM_DEMAND_PLANNING_WRITE", "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
                 "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE")) {
             assertThat(DomainRoleCatalog.isAssignable("scm", role)).as(role).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-793: ERP_OPERATOR is NOT assignable (entry role, derived by auth); the four ERP roles are")
+    void erpEntryRole_notAssignable_businessRolesAre() {
+        assertThat(DomainRoleCatalog.isAssignable("erp", "ERP_OPERATOR")).isFalse();
+        for (String role : List.of("ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE",
+                "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE")) {
+            assertThat(DomainRoleCatalog.isAssignable("erp", role)).as(role).isTrue();
         }
     }
 
