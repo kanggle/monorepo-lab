@@ -618,3 +618,19 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 - ⚪ e2e 세 칸 미실행(위) · 라이브(데모) 미측정 — S6 은 Vercel 배포이고 S2 ~ S5 백엔드가 AMI 에 올라간 뒤여야 한다(§ 10 순서).
 - ⚪ 비운영자 셸에서의 § 2.6.2 «라이브 세션» 데모 정지 확인은 계약이 받아들인 공백대로 돌리지 않는다(다음 IAM 갱신 실패가 샘플 착지로 간다).
 - 🔵 AC-7 의 `sso_wrong_account` 모집단: S5 기록 그대로(콘솔 client 경로 = 0) — S6 은 그 판별자를 바꾸지 않았다(바이트 그대로).
+
+### S6 초록 (#4374 `bf4ebc01e`, run 38754577106)
+
+- job 116489600931 «Frontend unit tests» — console-web `Test Files 392 passed (392)` · `Tests 4469 passed (4469)` · 같은 잡의 `npx tsc --noEmit` · `next lint` 스텝 통과. 그 런의 체크 전부 pass(실패 · 대기 0).
+
+### 소유자 결정 (2026-10-16 UTC) — `/tenants` «관리자 대기» 행 동작 셋을 이 PR 에
+
+> 위 «🔴 열린 것» 첫 줄의 답: 계약 § 2.6.4 그대로 **같은 PR #4374 에** 넣는다 — «다시 초대»(`INVITED`/`EXPIRED` 같은 주소 → 그 초대의 `:resend` · 새 주소 또는 `NONE` → `POST /api/admin/tenants/{tenantId}/first-admin-invitation`) · «정리»(`PATCH status=SUSPENDED` · 계약 문구의 화면 안 확인 대화상자 — `window.confirm` 금지) · `firstAdmin.state = ACCEPTED` 면 대신 «활성화 마치기»(`PATCH status=ACTIVE`). 오류 코드 셋(`TENANT_NOT_PENDING` · `TENANT_FIRST_ADMIN_PENDING` · `OPERATOR_INVITATION_ALREADY_PENDING`)에 한국어 문구.
+
+- **PHASE 1 (`db3ffb759`)** — 시험만 + tsc 용 껍데기 하나(`POST /api/tenants/[tenantId]/first-admin-invitation` = 지금처럼 `404`). `tests/unit/features/tenants/tenants-pending-row-actions.test.tsx`(행마다 어떤 동작 · 같은 주소 = `:resend`(사유만) · 새 주소 / `NONE` = first-admin-invitation(이메일 · 이름 · 사유 · 멱등 키) · 정리 = 계약 문구 대화상자 → `PATCH SUSPENDED` · `window.confirm` 호출 0 · 활성화 마치기 = `PATCH ACTIVE` · 세 오류 코드 문구) · `tests/unit/tenants-first-admin-invitation-proxy.test.ts`(BFF 전달 · trim · 422 넷 · 409/404 통과 · 대조: PATCH 가 `SUSPENDED` · `ACTIVE` 를 이미 통과시킨다 — 3칸은 지금도 초록).
+- **빨강 측정 (run 38760377728, job 116509906552 — 레인 로그)**: console-web `Test Files 2 failed | 392 passed (394)` · `Tests **24 failed** | 4474 passed (4498)`(행 동작 16 · BFF 8). 로컬 같은 커밋 24 / 4474. 전부 `AssertionError`(«control … is rendered: expected null not to be null» · `404≠201/409/422` · 일반 문구 = 미매핑) — 컴파일 · 모듈 오류 0 · 로컬 tsc rc=0.
+- **PHASE 2**: `tenants-api.ts` `inviteFirstAdmin`(`X-Operator-Reason` + `Idempotency-Key`) · BFF `app/api/tenants/[tenantId]/first-admin-invitation/route.ts`(`FirstAdminInvitationBodySchema` — 생성의 `firstAdmin` 규칙 재사용 · 키 필수) · `useReinviteFirstAdmin`(같은 주소 = 대소문자 · 공백 무시 비교 → 기존 `/api/operator-invitations/{id}/resend` BFF, 아니면 새 BFF) · `TenantReinviteDialog`(주소를 바꾸면 이름 칸이 열린다) · `TenantsTable` 동작 열(`PENDING` 행만) · `TenantsScreen` 이 대화상자 셋(공유 `ConfirmDialog` 위 — 정리 문구 = 계약 문장) · `errors.ts` 세 코드. PATCH 프록시는 이미 `TENANT_PATCH_STATUSES`(`ACTIVE` · `SUSPENDED`)라 바꾸지 않았다. PHASE 1 단언 무변경.
+- 🔵 계약 그대로 둔 것: 새 주소인데 그 테넌트에 아직 대기 초대가 있으면(`INVITED` · `EXPIRED`) IAM 이 `409 OPERATOR_INVITATION_ALREADY_PENDING` 을 답한다(admin-api — 다른 주소는 «먼저 `:cancel`»). 콘솔은 § 2.6.4 글자대로 새 초대를 부르고 그 409 를 «같은 주소로 다시 보내거나, 그 초대를 취소한 뒤 새 주소로» 로 보인다 — 취소를 대신 해 주지 않는다(계약에 없는 자동 동작).
+- «테넌트 등록» 폼 → `/new-tenant` 링크(계약 § 2.6.4 끝 문장): S6 PHASE 2(`bf4ebc01e`)에서 이미 했다(`tenants-create-link`).
+- e2e / 스모크 grep(`tenants-row` · `tenant-confirm` · `테넌트 관리` · `/tenants`): `tests/e2e/` · `e2e-smoke/` · 리포 루트 `tests/federation-hardening-e2e/` **0** — 고칠 spec 없음. 행 동작의 브라우저 시험은 없다(⚪ — 대기 테넌트를 만드는 e2e 시드가 없다).
+- **로컬 검증**: 전체 `npx vitest run` **394 파일 / 4498 PASSED** · tsc rc=0 · `next lint` rc=0(경고 1 그대로).

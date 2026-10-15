@@ -966,6 +966,13 @@ const MESSAGES: Record<string, string> = {
     '현재 구독 상태에서는 이 전이를 수행할 수 없습니다. 목록을 새로고침한 뒤 확인하세요.',
   SUBSCRIPTION_NOT_FOUND: '대상 구독을 찾을 수 없습니다. 목록을 새로고침하세요.',
   TENANT_NOT_FOUND: '대상 테넌트를 찾을 수 없습니다.',
+  // --- «관리자 대기» 테넌트 행 동작 (TASK-MONO-773 S6 — admin-api.md § Tenant Lifecycle) -------
+  TENANT_NOT_PENDING:
+    '이 테넌트는 더 이상 «관리자 대기»가 아닙니다. 목록을 새로고침한 뒤 확인하세요.',
+  TENANT_FIRST_ADMIN_PENDING:
+    '첫 관리자가 아직 초대를 수락하지 않아 활성화할 수 없습니다. 다시 초대하거나 정리하세요.',
+  OPERATOR_INVITATION_ALREADY_PENDING:
+    '대기 중인 초대가 이미 있습니다. 같은 주소로 다시 보내거나, 그 초대를 취소한 뒤 새 주소로 초대하세요.',
   TENANT_SCOPE_DENIED: '해당 테넌트에 대한 조회 권한이 없습니다.',
   AUDIT_RANGE_INVALID: '시작 시각이 종료 시각보다 늦을 수 없습니다.',
   SECURITY_EVENT_READ_REQUIRED:

@@ -55,6 +55,18 @@ export const CreateTenantBodySchema = z
   .strict();
 export type CreateTenantBody = z.infer<typeof CreateTenantBodySchema>;
 
+/** TASK-MONO-773 S6 — re-invite a `PENDING` tenant's first admin at a new address (or when none is left):
+ *  `{email, displayName}` with the create's `firstAdmin` rules + reason + REQUIRED idempotencyKey
+ *  (admin-api.md § POST /api/admin/tenants/{tenantId}/first-admin-invitation). */
+export const FirstAdminInvitationBodySchema = z
+  .object({
+    email: FirstAdminBodySchema.shape.email,
+    displayName: FirstAdminBodySchema.shape.displayName,
+    reason: z.string(),
+    idempotencyKey: z.string().min(1),
+  })
+  .strict();
+
 /** update: displayName and/or status (at least one) + reason. NO
  *  idempotencyKey (partial PATCH is naturally idempotent). `status` is the
  *  REQUEST enum — never `PENDING` (TASK-MONO-773: only the create makes it). */

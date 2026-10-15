@@ -153,3 +153,52 @@ export function useUpdateTenant() {
     },
   });
 }
+
+// --- mutation: «다시 초대» a PENDING tenant's first admin (TASK-MONO-773 S6) -----
+
+export interface ReinviteFirstAdminArgs {
+  tenantId: string;
+  /** The row's live invitation (`INVITED` / `EXPIRED`), if any. */
+  invitationId: string | null;
+  /** The address that invitation went to, if any. */
+  currentEmail: string | null;
+  email: string;
+  displayName: string;
+  reason: string;
+  /** Generated once per confirmed re-invite (the new-invitation path requires one). */
+  idempotencyKey: string;
+}
+
+/**
+ * console-integration-contract § 2.6.4 «다시 초대»: the SAME address with a live invitation → that invitation's
+ * `:resend` (`/api/operator-invitations/{id}/resend` — reason only, a new token on the same row); a NEW address,
+ * or no invitation left (`NONE`) → `POST /api/tenants/{tenantId}/first-admin-invitation` (email · display name ·
+ * reason · idempotency key). Address comparison is trim + case-insensitive (IAM stores addresses lower-cased).
+ */
+export function useReinviteFirstAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: ReinviteFirstAdminArgs) => {
+      const sameAddress =
+        args.invitationId !== null &&
+        args.currentEmail !== null &&
+        args.currentEmail.trim().toLowerCase() === args.email.trim().toLowerCase();
+      if (sameAddress) {
+        return apiClient.post<unknown>(
+          `/api/operator-invitations/${encodeURIComponent(args.invitationId as string)}/resend`,
+          { reason: args.reason },
+        );
+      }
+      return apiClient.post<unknown>(
+        `/api/tenants/${encodeURIComponent(args.tenantId)}/first-admin-invitation`,
+        {
+          email: args.email.trim(),
+          displayName: args.displayName.trim(),
+          reason: args.reason,
+          idempotencyKey: args.idempotencyKey,
+        },
+      );
+    },
+    onSuccess: () => invalidateTenants(qc),
+  });
+}
