@@ -521,7 +521,7 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 
 | 레인 (job) | 클래스 | FAILED | PASSED | 실패 형태 |
 |---|---|---|---|---|
-| Build & Test (116403525826) | `TenantClaimPoolPrincipalTest` | **3** | ⚪ 레인 로그가 PASSED 를 찍지 않는다 — 레인 합계 1267 completed · 3 failed(셋 다 이 클래스). 로컬 실측: 두 클래스 24 중 21 PASSED | `AssertionFailedError` ×3(`assertThat(t).isNull()` ← `NOT_ASKED` 의 AssertionError — 지금 코드가 admin 에 묻는다) |
+| Build & Test (116403525826) | `TenantClaimPoolPrincipalTest` | **3** | ⚪ 레인 로그가 PASSED 를 찍지 않는다 — 레인 합계 1267 completed · 3 failed(셋 다 이 클래스). 로컬 실측(같은 커밋): 이 클래스 19 중 **16 PASSED · 3 FAILED** · `TenantClaimConsumerPoolRefusalTest` 5 PASSED | `AssertionFailedError` ×3(`assertThat(t).isNull()` ← `NOT_ASKED` 의 AssertionError — 지금 코드가 admin 에 묻는다) |
 | iam B (116403527692) | `ConsumerPoolSsoIntegrationTest` | **4** | 8 | `AssertionFailedError` ×3 «token status — body: `operator_eligibility_unavailable` expected 200 but 400» · `AssertionError` ×1 «not to contain `operator_eligibility_unavailable`» |
 | iam B | `ConsumerPoolLegacyMoveIntegrationTest` | **1** | 5 | `AssertionFailedError` 200≠400(같은 본문) — 스텁을 뺀 admin 이 404 → 지금 코드가 거절 |
 | iam A (116403527840) | `OperatorAssignmentCheckIntegrationTest` | **1** | 25 | `AssertionError: Status expected:<404> but was:<200>` |
@@ -536,4 +536,22 @@ admin `compileTestJava` rc=0 · 로컬 `test --tests *TenantAdminControllerSlice
 - **admin-service**: 삭제 `OperatorConsoleEligibilityController` · `OperatorConsoleEligibilityQueryUseCase`(+ slice · unit 시험). `OperatorConsoleAdmission` 은 **남긴다**(토큰 교환이 쓴다) — 주석만 정정(`OperatorConsoleAdmission` · `TokenExchangeService` · `OperatorInvitationAcceptanceController` · `TokenExchangeServiceTest`). dev 시드 `R__seed_demo_*_operator.sql` 의 «console-eligibility» 주석 두 줄은 **고치지 않았다** — 반복 마이그레이션 내용이 바뀌면 체크섬이 바뀌어 다음 기동에 다시 돈다(주석 때문에 시드를 재실행하지 않는다).
 - **계약 (S1 이 이미 «지운다» 로 적은 것을 구현 사실로)**: `auth-to-admin.md` § console-eligibility 머리에 **«폐기 (773 S5)»**(제목은 `admin-api.md` 가 거는 앵커라 그대로) · 노출 경로 줄 · 머리글 772 노트 / `auth-api.md` 구현 메모 «✅ 구현 = S5 (#4373)» · `'consumer-pool'` 다른 발생원 측정 결과 / `admin-api.md:671 · :1573`(교환이 운영자 판정의 유일한 자리) / `features/multi-tenancy.md`(콘솔 행 · § 4 끝 문단) / `platform/error-handling.md` `OAUTH_INVALID_GRANT` 행의 `operator_eligibility_unavailable` = «773 S5 에서 퇴역 — 재사용 금지 때문에 행에 남긴다». `OPERATOR_CHECK_UNAVAILABLE` 행은 **그대로** — 그 코드를 내는 것은 콘솔 BFF 이고(S6 몫), 행 자체가 «마지막 발신자와 함께 지운다» 고 적고 있다. 콘솔 계약 § 2.6.3 는 S1 이 이미 «S5 뒤 도달 불가 · S6 이 정리» 로 적어 두었다 — 무변경.
 - **계약 이탈 0** — S1 의 계약이 이미 «호출 · 상수 · 엔드포인트를 지운다» 로 쓰여 있어 결정을 다시 하지 않았다. 티켓 § 10 S5 행의 «`operator_eligibility_unavailable` 행 그대로» 는 S1 소유자 답 1 이 대체했다(그 행은 고치지 않는다 — AC-0 기록).
-- **로컬 검증**: `:auth-service:test` · `:admin-service:test` rc=0(ITs 는 Docker 없음 → CI).
+- **로컬 검증**: `:auth-service:test` · `:admin-service:test` rc=0(ITs 는 Docker 없음 → CI) — `TenantClaimPoolPrincipalTest` 19/19(테스트 결과 XML). 스테이지 뒤 `check-error-code-registry` · `check-domain-error-code-registry` · `check-jwt-claims-registry` rc=0. `scripts/` 추가 · 삭제 0.
+
+**S5 초록 (#4373 `9cbecf2a4`, run 38730783016 · 레인 로그에서 셈)**:
+
+| 레인 (job) | 클래스 | PASSED | FAILED |
+|---|---|---|---|
+| iam B (116407817355) | `ConsumerPoolSsoIntegrationTest` | **12** | 0 |
+| iam B | `ConsumerPoolLegacyMoveIntegrationTest` | **6** | 0 |
+| iam A (116407817719) | `OperatorAssignmentCheckIntegrationTest` | **26**(404 셀 포함) | 0 |
+| iam A | `SelfServiceOnboardingIntegrationTest` | **3**(AC-1 대조군 포함) | 0 |
+| iam A | `PartnershipCrossOrgLeakIntegrationTest` · `OperatorInvitationAcceptanceIntegrationTest` · `DemoOperatorSeedIntegrationTest` · `TokenExchangeIntegrationTest` | 10 · 6 · 21 · 19 | 0 |
+| Build & Test (116407815777) | auth · admin 단위(`TenantClaimPoolPrincipalTest` 외) | ⚪ 이 레인은 성공 시 클래스별 PASSED 를 찍지 않는다 — `BUILD SUCCESSFUL` · 로그의 ` FAILED` 줄 **0**. 클래스별 수는 위 로컬 XML(19/19) | 0 |
+
+세 레인 FAILED 0 · `E2E smoke (iam docker-compose)` pass · 그 밖 실행된 체크 전부 pass(실패 0). 이 기록 커밋(티켓만)은 iam 레인을 다시 돌리지 않는다(경로 필터) — 초록의 근거는 `9cbecf2a4` 의 위 런이다.
+
+**⚪ 재지 못한 것**:
+- AC-1 의 두 절반은 **다른 IT 에서** 잰다 — auth IT 가 «실제 발급자가 그 클레임 집합을 낸다» 를, admin IT 가 «그 클레임 집합의 토큰은 운영자 토큰이 아니다» 를. 한 런에서 실제 auth 토큰을 admin 에 내미는 교차 서비스 시험은 없다(두 서비스를 함께 띄워 이 경로를 걷는 시험을 찾지 못했다 — `E2E smoke (iam docker-compose)` 가 풀 계정 콘솔 로그인을 걷는지는 열어 보지 않았다). 다리는 «클레임 집합이 같다» 는 두 시험의 단언뿐이고, 서명 키 · `iss` 값의 일치는 시험 설정이 맞춘 것이다.
+- 콘솔이 셸 토큰을 받은 뒤의 화면(교환 `401` → 비운영자 표식 · 셸)은 S6 몫 — 여기서 재지 않았다. 그래서 S5 머지 ~ S6 배포 사이에는 측면 없는 풀 계정이 콘솔 콜백에서 교환 `401` → 지금의 `/onboarding` 으로 간다(AC-0 § 3 의 코드 읽기 `callback/route.ts:304-322` 기준 — S6 전 동작, 이번에 다시 재지 않았다). `sso_wrong_account` 에는 더 닿지 않는다.
+- 라이브(데모) 미측정 — 데모 창 없음.
