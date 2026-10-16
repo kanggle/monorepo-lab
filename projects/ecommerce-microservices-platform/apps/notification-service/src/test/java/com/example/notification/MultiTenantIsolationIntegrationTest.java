@@ -73,7 +73,7 @@ class MultiTenantIsolationIntegrationTest {
 
     private static final String TENANT_HEADER = "X-Tenant-Id";
     private static final String ROLE_HEADER = "X-User-Role";
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
+    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR,ECOMMERCE_NOTIFICATION_READ,ECOMMERCE_NOTIFICATION_WRITE";
     private static final String TENANT_A = "tenant-a";
     private static final String TENANT_B = "tenant-b";
 

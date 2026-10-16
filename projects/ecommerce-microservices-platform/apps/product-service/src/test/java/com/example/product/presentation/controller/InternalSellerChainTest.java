@@ -276,13 +276,13 @@ class InternalSellerChainTest {
     // ------------------------------------------------------------------ header trust unchanged
 
     @Test
-    @DisplayName("🔵 the header-trust surface is unchanged — an operator header still works with NO token")
+    @DisplayName("🔵 the header-trust surface is unchanged — an operator header (TASK-MONO-795: a product business role) still works with NO token")
     void headerTrustPathUnchanged() throws Exception {
         given(sellerQueryService.getSeller("s-1")).willReturn(seller("s-1", SellerStatus.ACTIVE));
 
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .get("/api/admin/sellers/s-1")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sellerId").value("s-1"));
     }

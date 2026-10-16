@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Operator-plane settlement read + commission-rate admin (settlement-api.md). All
- * endpoints require an operator (gateway-trusted {@code X-User-Role = ECOMMERCE_OPERATOR}). There
+ * endpoints require the settlement business role ({@link OperatorRoleGuard} — TASK-MONO-795: reads = {@code ECOMMERCE_SETTLEMENT_READ ∨ _WRITE}, the rate PUT = {@code ECOMMERCE_SETTLEMENT_WRITE}). There
  * is <b>no accrual write path</b> — commission is booked only from the event streams.
  * Tenant + seller scope are applied below the controller (filters → context → repo
  * chokepoint).
@@ -45,7 +45,7 @@ public class SettlementController {
             @RequestParam(required = false) String orderId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         PageQuery pageQuery = PageQuery.of(page, size, "occurredAt", "DESC");
         PageResult<CommissionAccrual> result = queryService.listAccruals(sellerId, orderId, pageQuery);
         return ResponseEntity.ok(AccrualListResponse.from(result));
@@ -55,7 +55,7 @@ public class SettlementController {
     public ResponseEntity<SellerBalanceResponse> sellerBalance(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         SellerBalance balance = queryService.sellerBalance(sellerId);
         return ResponseEntity.ok(SellerBalanceResponse.from(balance));
     }
@@ -64,7 +64,7 @@ public class SettlementController {
     public ResponseEntity<CommissionRateResponse> getRate(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         CommissionRate rate = rateAdminService.getEffectiveRate(sellerId);
         return ResponseEntity.ok(CommissionRateResponse.from(sellerId, rate));
     }
@@ -74,7 +74,7 @@ public class SettlementController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId,
             @Valid @RequestBody SetCommissionRateRequest request) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         CommissionRate rate = rateAdminService.setRate(sellerId, request.rateBps());
         return ResponseEntity.ok(CommissionRateResponse.from(sellerId, rate));
     }

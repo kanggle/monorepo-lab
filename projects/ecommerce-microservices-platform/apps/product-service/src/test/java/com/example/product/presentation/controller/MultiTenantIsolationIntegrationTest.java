@@ -95,11 +95,11 @@ class MultiTenantIsolationIntegrationTest {
     }
 
     private String registerProduct(String tenantId, String name) throws Exception {
-        var request = post("/api/admin/products")
+        var request = post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                 // TASK-BE-536: POST /api/admin/products now requires an Idempotency-Key.
                 // A fresh key per call — each helper invocation is a distinct product.
                 .header("Idempotency-Key", UUID.randomUUID().toString())
-                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
+                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(productBody(name));
         // tenantId == null models the standalone/pre-multi-tenant path: no header
@@ -158,7 +158,7 @@ class MultiTenantIsolationIntegrationTest {
         String idA = registerProduct(TENANT_A, "운영자평면 격리 A");
 
         // tenant B context — the new read must NOT count / surface tenant A's product.
-        MvcResult bView = mockMvc.perform(get("/api/admin/products")
+        MvcResult bView = mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header(TENANT_HEADER, TENANT_B)
                         .param("page", "0")
                         .param("size", "1"))
@@ -171,7 +171,7 @@ class MultiTenantIsolationIntegrationTest {
         assertThat(bView.getResponse().getContentAsString()).doesNotContain(idA);
 
         // tenant A context sees its own product in the count (≥ 1).
-        MvcResult aView = mockMvc.perform(get("/api/admin/products")
+        MvcResult aView = mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header(TENANT_HEADER, TENANT_A)
                         .param("page", "0")
                         .param("size", "1"))
@@ -189,12 +189,12 @@ class MultiTenantIsolationIntegrationTest {
         String idA = registerProduct(TENANT_A, "운영자평면 상세 격리 A");
 
         // tenant B cannot see tenant A's product on the operator plane either — 404, not 403 (M3).
-        mockMvc.perform(get("/api/admin/products/{id}", idA).header(TENANT_HEADER, TENANT_B))
+        mockMvc.perform(get("/api/admin/products/{id}", idA).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE").header(TENANT_HEADER, TENANT_B))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
 
         // tenant A sees its own product, with the public detail's shape.
-        mockMvc.perform(get("/api/admin/products/{id}", idA).header(TENANT_HEADER, TENANT_A))
+        mockMvc.perform(get("/api/admin/products/{id}", idA).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE").header(TENANT_HEADER, TENANT_A))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(idA))
                 .andExpect(jsonPath("$.variants[0].optionName").value("기본"))
@@ -208,7 +208,7 @@ class MultiTenantIsolationIntegrationTest {
 
         // tenant B's update targets an id it cannot see → 404 (row unreachable).
         mockMvc.perform(patch("/api/admin/products/{id}", idA)
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header(TENANT_HEADER, TENANT_B)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"탈취 시도\"}"))

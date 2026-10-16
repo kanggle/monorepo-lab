@@ -66,7 +66,7 @@ class AdminProductSummaryControllerSliceTest {
         given(queryProductService.getPeriodSummary())
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
-        mockMvc.perform(get("/api/admin/products/summary"))
+        mockMvc.perform(get("/api/admin/products/summary").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(0))
                 .andExpect(jsonPath("$.week").value(0))
@@ -80,7 +80,7 @@ class AdminProductSummaryControllerSliceTest {
         given(queryProductService.getPeriodSummary())
                 .willReturn(new PeriodSummary(1L, 1L, 1L, 5L));
 
-        mockMvc.perform(get("/api/admin/products/summary"))
+        mockMvc.perform(get("/api/admin/products/summary").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(1))
                 .andExpect(jsonPath("$.week").value(1))
@@ -89,13 +89,13 @@ class AdminProductSummaryControllerSliceTest {
     }
 
     @Test
-    @DisplayName("GET /api/admin/products/summary - 역할 헤더 없이도 200 (auth는 게이트웨이 위임)")
-    void summary_noRoleHeader_returns200() throws Exception {
+    @DisplayName("GET /api/admin/products/summary - 업무 역할 헤더로 200 (auth는 게이트웨이 위임)")
+    void summary_businessRoleHeader_returns200() throws Exception {
         given(queryProductService.getPeriodSummary())
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
-        // No X-User-Role header — AdminProductController does not locally validate role
-        mockMvc.perform(get("/api/admin/products/summary"))
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — AdminProductController does not locally validate role
+        mockMvc.perform(get("/api/admin/products/summary").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk());
     }
 }

@@ -6,9 +6,9 @@ import java.util.List;
  * TASK-BE-631 (ADR-MONO-083) — the system preset keys of admin-api.md § 시스템 프리셋, in the table's order (the
  * order {@code GET /api/admin/domain-permission-sets} lists them in). The rows themselves — fixed {@code setId}s and
  * roles — are seeded by V0052 (15), V0056 (the five SCM presets, TASK-MONO-792), V0057 (the three ERP presets,
- * TASK-MONO-793) and V0058 (the three Finance presets, TASK-MONO-794); {@code V0052MigrationShapeTest} /
- * {@code V0056MigrationShapeTest} / {@code V0057MigrationShapeTest} / {@code V0058MigrationShapeTest} pin each
- * migration to its part of this list.
+ * TASK-MONO-793), V0058 (the three Finance presets, TASK-MONO-794) and V0059 (the seven E-commerce presets,
+ * TASK-MONO-795); {@code V0052MigrationShapeTest} / {@code V0056MigrationShapeTest} / {@code V0057MigrationShapeTest} /
+ * {@code V0058MigrationShapeTest} / {@code V0059MigrationShapeTest} pin each migration to its part of this list.
  *
  * <p>Framework-free.
  */
@@ -48,6 +48,15 @@ public final class DomainPermissionSetPresets {
             "finance-account-operate",
             "finance-ledger-operate",
             "ecommerce-full",
+            // TASK-MONO-795 (ADR-083 P8) — V0059: the E-commerce business presets, listed right after ecommerce-full.
+            // No member-operate preset: the member area is read-only (owner decision Q1).
+            "ecommerce-read",
+            "ecommerce-order-operate",
+            "ecommerce-product-operate",
+            "ecommerce-settlement-operate",
+            "ecommerce-promotion-operate",
+            "ecommerce-shipping-operate",
+            "ecommerce-notification-operate",
             "fan-full",
             "mes-full",
             ALL_DOMAINS_FULL,

@@ -62,7 +62,7 @@ class SellerMemberControllerSliceTest {
                 List.of(SellerMember.reconstitute("s-1", PERSON, SellerMemberRole.MEMBER, SellerMemberStatus.ACTIVE, T0)),
                 List.of(invitation), T0.plusSeconds(120)));
 
-        mockMvc.perform(get("/api/admin/sellers/s-1/members").header("X-User-Role", "ECOMMERCE_OPERATOR"))
+        mockMvc.perform(get("/api/admin/sellers/s-1/members").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.members[0].accountId").value(PERSON))
                 .andExpect(jsonPath("$.members[0].role").value("MEMBER"))
@@ -92,7 +92,7 @@ class SellerMemberControllerSliceTest {
                 .willReturn(new SellerMemberService.IssuedInvitation(invitation, "raw-token"));
 
         mockMvc.perform(post("/api/admin/sellers/s-1/invitations")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR").header("X-User-Id", "op-1")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE").header("X-User-Id", "op-1")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"Member@Example.com\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.invitationId").value("inv-1"))
@@ -103,13 +103,13 @@ class SellerMemberControllerSliceTest {
     @Test
     @DisplayName("POST invitations — 이메일 형식 오류 → 400 · 셀러 비활성 → 409 SELLER_NOT_ACTIVE")
     void invite_validationAndInactive() throws Exception {
-        mockMvc.perform(post("/api/admin/sellers/s-1/invitations").header("X-User-Role", "ECOMMERCE_OPERATOR")
+        mockMvc.perform(post("/api/admin/sellers/s-1/invitations").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"not-an-email\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         given(sellerMemberService.invite("s-1", "a@b.co", null)).willThrow(new SellerNotActiveException());
-        mockMvc.perform(post("/api/admin/sellers/s-1/invitations").header("X-User-Role", "ECOMMERCE_OPERATOR")
+        mockMvc.perform(post("/api/admin/sellers/s-1/invitations").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"a@b.co\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SELLER_NOT_ACTIVE"));

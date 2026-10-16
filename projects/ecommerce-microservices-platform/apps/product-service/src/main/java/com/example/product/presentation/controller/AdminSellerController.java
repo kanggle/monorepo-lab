@@ -9,7 +9,6 @@ import com.example.product.presentation.dto.RegisterSellerRequest;
 import com.example.product.presentation.dto.RegisterSellerResponse;
 import com.example.product.presentation.dto.SellerListResponse;
 import com.example.product.presentation.dto.SellerResponse;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,15 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
  * marketplace axis nested under {@code tenant_id}; settlement/commission remain Step 4.
  *
  * <p>Authorization is promotions-exact: every endpoint calls
- * {@link #validateAdminRole(String)} ({@code X-User-Role == ECOMMERCE_OPERATOR}); the routes sit
+ * {@link ProductOperatorAccess} (TASK-MONO-795: reads = {@code ECOMMERCE_PRODUCT_READ ∨ _WRITE} · writes = {@code ECOMMERCE_PRODUCT_WRITE}); the routes sit
  * behind the gateway {@code /api/admin/**} OPERATOR branch.
  */
 @RestController
 @RequestMapping("/api/admin/sellers")
 @RequiredArgsConstructor
 public class AdminSellerController {
-
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     /** Page-size cap mirrored from the product operator list. */
     private static final int MAX_PAGE_SIZE = 100;
@@ -51,13 +48,13 @@ public class AdminSellerController {
     /**
      * Tenant-scoped KST calendar-period-to-date seller counts for the Operator
      * Overview composition leg (TASK-BE-468, TASK-MONO-322). Authorization mirrors
-     * {@link #list}: {@code X-User-Role} must contain {@code ECOMMERCE_OPERATOR}; tenant
+     * {@link #list}: {@code ECOMMERCE_PRODUCT_READ ∨ _WRITE} (TASK-MONO-795); tenant
      * isolation is the repository {@code WHERE tenant_id} chokepoint (M6).
      */
     @GetMapping("/summary")
     public ResponseEntity<PeriodSummary> summary(
             @RequestHeader(value = "X-User-Role", required = false) String userRole) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireRead(userRole);
         return ResponseEntity.ok(sellerQueryService.getPeriodSummary());
     }
 
@@ -71,7 +68,7 @@ public class AdminSellerController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireRead(userRole);
         int cappedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         PageResult<SellerSummary> result = sellerQueryService.listSellers(Math.max(page, 0), cappedSize);
         return ResponseEntity.ok(SellerListResponse.from(result));
@@ -86,7 +83,7 @@ public class AdminSellerController {
     public ResponseEntity<SellerResponse> detail(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireRead(userRole);
         SellerSummary seller = sellerQueryService.getSeller(sellerId);
         return ResponseEntity.ok(SellerResponse.from(seller));
     }
@@ -95,7 +92,7 @@ public class AdminSellerController {
     public ResponseEntity<RegisterSellerResponse> register(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody RegisterSellerRequest request) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireWrite(userRole);
         String sellerId = registerSellerService.register(request.toCommand());
         return ResponseEntity.status(HttpStatus.CREATED).body(RegisterSellerResponse.from(sellerId));
     }
@@ -109,7 +106,7 @@ public class AdminSellerController {
     public ResponseEntity<Void> provision(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireWrite(userRole);
         registerSellerService.provisionPending(sellerId);
         return ResponseEntity.noContent().build();
     }
@@ -122,7 +119,7 @@ public class AdminSellerController {
     public ResponseEntity<Void> suspend(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireWrite(userRole);
         registerSellerService.suspend(sellerId);
         return ResponseEntity.noContent().build();
     }
@@ -135,26 +132,8 @@ public class AdminSellerController {
     public ResponseEntity<Void> close(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireWrite(userRole);
         registerSellerService.close(sellerId);
         return ResponseEntity.noContent().build();
-    }
-
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
-            throw new AccessDeniedException();
-        }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

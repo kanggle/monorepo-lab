@@ -104,7 +104,7 @@ class CouponConcurrencyIntegrationTest {
                     latch.await();
                     couponCommandService.issueCoupons(
                             new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId),
-                                    "ECOMMERCE_OPERATOR", idempotencyKey)
+                                    "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", idempotencyKey)
                     );
                     successCount.incrementAndGet();
                 } catch (Exception e) {
@@ -147,7 +147,7 @@ class CouponConcurrencyIntegrationTest {
         // Issue one coupon
         couponCommandService.issueCoupons(
                 new IssueCouponsCommand(promotion.getPromotionId(), List.of(userId),
-                        "ECOMMERCE_OPERATOR", "apply-test-key")
+                        "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "apply-test-key")
         );
 
         // Find the coupon

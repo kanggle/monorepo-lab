@@ -76,7 +76,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         UpdateShippingStatusResult result = shippingCommandService.updateStatus(command);
 
@@ -94,7 +94,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.findByIdForTenant("nonexistent")).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", false, "ECOMMERCE_OPERATOR")))
+                new UpdateShippingStatusCommand("nonexistent", ShippingStatus.SHIPPED, "TRK", "CJ", false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE")))
                 .isInstanceOf(ShippingNotFoundException.class);
     }
 
@@ -105,7 +105,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
 
         assertThatThrownBy(() -> shippingCommandService.updateStatus(
-                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, false, "ECOMMERCE_OPERATOR")))
+                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.DELIVERED, null, null, false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE")))
                 .isInstanceOf(InvalidStatusTransitionException.class);
     }
 
@@ -170,7 +170,7 @@ class ShippingCommandServiceTest {
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
                 shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운",
-                false, "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR");
+                false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE,ERP_OPERATOR,SCM_OPERATOR");
 
         assertThatCode(() -> shippingCommandService.updateStatus(command))
                 .doesNotThrowAnyException();
@@ -184,7 +184,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", false, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         assertThatCode(() -> shippingCommandService.updateStatus(command))
                 .doesNotThrowAnyException();
@@ -231,7 +231,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         shippingCommandService.updateStatus(command);
 
@@ -247,7 +247,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         shippingCommandService.updateStatus(command);
 
@@ -263,7 +263,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", true, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         shippingCommandService.updateStatus(command);
 
@@ -279,7 +279,7 @@ class ShippingCommandServiceTest {
         given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
 
         UpdateShippingStatusCommand command = new UpdateShippingStatusCommand(
-                shipping.getShippingId(), ShippingStatus.IN_TRANSIT, null, null, true, "ECOMMERCE_OPERATOR");
+                shipping.getShippingId(), ShippingStatus.IN_TRANSIT, null, null, true, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE");
 
         shippingCommandService.updateStatus(command);
 

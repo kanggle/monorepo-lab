@@ -98,9 +98,9 @@ class CouponIssueIdempotencyIntegrationTest {
         String userId = "user-" + System.nanoTime();
 
         couponCommandService.issueCoupons(
-                new IssueCouponsCommand(promotionId, java.util.List.of(userId), "ECOMMERCE_OPERATOR", "key-A"));
+                new IssueCouponsCommand(promotionId, java.util.List.of(userId), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A"));
         IssueCouponsResult replay = couponCommandService.issueCoupons(
-                new IssueCouponsCommand(promotionId, java.util.List.of(userId), "ECOMMERCE_OPERATOR", "key-A"));
+                new IssueCouponsCommand(promotionId, java.util.List.of(userId), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A"));
 
         assertThat(replay.issuedCount()).isEqualTo(1);
         assertThat(issuedCouponCountFor(promotionId)).isEqualTo(1);
@@ -113,9 +113,9 @@ class CouponIssueIdempotencyIntegrationTest {
         String promotionId = activePromotionId(100);
 
         couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "key-A"));
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A"));
         couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-b"), "ECOMMERCE_OPERATOR", "key-B"));
+                promotionId, java.util.List.of("user-b"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-B"));
 
         assertThat(issuedCouponCountFor(promotionId)).isEqualTo(2);
     }
@@ -126,10 +126,10 @@ class CouponIssueIdempotencyIntegrationTest {
     void sameKeyDifferentUserBatch_isRejected() {
         String promotionId = activePromotionId(100);
         couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "key-A"));
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A"));
 
         assertThatThrownBy(() -> couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-c", "user-d"), "ECOMMERCE_OPERATOR", "key-A")))
+                promotionId, java.util.List.of("user-c", "user-d"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A")))
                 .isInstanceOf(IdempotencyKeyConflictException.class);
 
         assertThat(issuedCouponCountFor(promotionId)).isEqualTo(1);
@@ -143,9 +143,9 @@ class CouponIssueIdempotencyIntegrationTest {
         String second = activePromotionId(100);
 
         couponCommandService.issueCoupons(new IssueCouponsCommand(
-                first, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "shared-key"));
+                first, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "shared-key"));
         assertThatCode(() -> couponCommandService.issueCoupons(new IssueCouponsCommand(
-                second, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "shared-key")))
+                second, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "shared-key")))
                 .doesNotThrowAnyException();
 
         assertThat(issuedCouponCountFor(first)).isEqualTo(1);
@@ -159,7 +159,7 @@ class CouponIssueIdempotencyIntegrationTest {
         String promotionId = activePromotionId(100);
 
         assertThatThrownBy(() -> couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", null)))
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", null)))
                 .isInstanceOf(IdempotencyKeyRequiredException.class);
 
         assertThat(issuedCouponCountFor(promotionId)).isZero();
@@ -174,11 +174,11 @@ class CouponIssueIdempotencyIntegrationTest {
     void replayAfterCapExhausted_composesWithCap_issuesNothing() {
         String promotionId = activePromotionId(1);
         IssueCouponsResult first = couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "key-cap"));
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-cap"));
         assertThat(first.issuedCount()).isEqualTo(1);
 
         IssueCouponsResult replay = couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "key-cap"));
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-cap"));
 
         assertThat(replay.issuedCount()).isEqualTo(1);
         assertThat(issuedCouponCountFor(promotionId)).isEqualTo(1);
@@ -193,7 +193,7 @@ class CouponIssueIdempotencyIntegrationTest {
     void uniqueConstraintExistsInSchema() {
         String promotionId = activePromotionId(100);
         couponCommandService.issueCoupons(new IssueCouponsCommand(
-                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR", "key-A"));
+                promotionId, java.util.List.of("user-a"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "key-A"));
 
         assertThatThrownBy(() -> jdbc.update(
                 "INSERT INTO coupon_issue_request (promotion_id, idempotency_key, user_ids_digest, issued_count) "

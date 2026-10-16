@@ -49,7 +49,7 @@ class PromotionCrudIntegrationTest {
     void promotionCrud_fullCycle_works() throws Exception {
         // Create
         MvcResult createResult = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -71,14 +71,14 @@ class PromotionCrudIntegrationTest {
 
         // Get detail
         mockMvc.perform(get("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("통합테스트 프로모션"))
                 .andExpect(jsonPath("$.discountValue").value(3000));
 
         // Update
         mockMvc.perform(put("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -97,25 +97,25 @@ class PromotionCrudIntegrationTest {
 
         // Verify updated
         mockMvc.perform(get("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("수정된 프로모션"))
                 .andExpect(jsonPath("$.discountType").value("PERCENTAGE"));
 
         // List
         mockMvc.perform(get("/api/promotions")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").isNumber());
 
         // Delete
         mockMvc.perform(delete("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isNoContent());
 
         // Verify deleted
         mockMvc.perform(get("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isNotFound());
     }
 

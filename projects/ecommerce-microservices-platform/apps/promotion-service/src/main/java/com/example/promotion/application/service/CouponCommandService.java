@@ -70,7 +70,7 @@ public class CouponCommandService {
      */
     @Transactional
     public IssueCouponsResult issueCoupons(IssueCouponsCommand command) {
-        OperatorRoleGuard.requireOperator(command.userRole());
+        OperatorRoleGuard.requireWrite(command.userRole());
         if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()) {
             throw new IdempotencyKeyRequiredException(
                     "Idempotency-Key 헤더는 쿠폰 발급 요청에 필수입니다");

@@ -100,7 +100,7 @@ import static org.assertj.core.api.Assertions.fail;
 @DisplayName("동시 상태 전이 (TASK-BE-537 특성화 → TASK-BE-547 회귀 가드) — PUT /shippings/{id}/status")
 class ConcurrentStatusTransitionIntegrationTest {
 
-    private static final String ROLE_OPERATOR = "ECOMMERCE_OPERATOR";
+    private static final String ROLE_OPERATOR = "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE";
     private static final long LATCH_TIMEOUT_SECONDS = 20;
 
     /**

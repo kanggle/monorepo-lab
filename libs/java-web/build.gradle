@@ -9,6 +9,8 @@ plugins {
 // reactive (WebFlux / Spring Cloud Gateway) classpaths. Currently:
 //   - com.example.web.dto.ErrorResponse        (POJO + Jackson)
 //   - com.example.web.exception.AccessDeniedException (POJO RuntimeException)
+//   - com.example.web.security.RoleListHeader      (pure JDK — the one comparison rule for a
+//                                                   comma-joined role header an edge forwards)
 //
 // MUST NOT introduce dependencies on spring-web / spring-webmvc /
 // spring-orm / jakarta.servlet-api here. Servlet-specific helpers belong

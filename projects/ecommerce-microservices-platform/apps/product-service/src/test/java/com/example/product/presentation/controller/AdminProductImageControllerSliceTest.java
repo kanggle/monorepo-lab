@@ -62,13 +62,13 @@ class AdminProductImageControllerSliceTest {
     // ─── GET / (listImages) ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET / - X-User-Role 헤더 없이 200 (operator-plane, 게이트 위임)")
-    void listImages_noRoleHeader_returns200() throws Exception {
+    @DisplayName("GET / - 업무 역할 헤더로 200 (operator-plane, TASK-MONO-795 서비스 재검사)")
+    void listImages_businessRoleHeader_returns200() throws Exception {
         given(productImageService.getImages(productId)).willReturn(java.util.List.of());
 
-        // No X-User-Role header — operator-plane: authz is the gateway's
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane: authz is the gateway's
         // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
-        mockMvc.perform(get("/api/admin/products/{productId}/images", productId))
+        mockMvc.perform(get("/api/admin/products/{productId}/images", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.images").isArray());
     }
@@ -83,7 +83,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.generateUploadUrl(eq(productId), eq("image/jpeg"), eq(1024L)))
                 .willReturn(new PresignedUploadResult("https://s3.example.com/presigned", objectKey, expiresAt));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "image/jpeg", "contentLength": 1024 }
@@ -100,7 +100,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.generateUploadUrl(eq(productId), eq("application/pdf"), anyLong()))
                 .willThrow(new MediaValidationException("Unsupported content type"));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "application/pdf", "contentLength": 1024 }
@@ -115,7 +115,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.generateUploadUrl(eq(productId), anyString(), anyLong()))
                 .willThrow(new StorageUnavailableException("S3 down", new RuntimeException()));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images/upload-url", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "contentType": "image/jpeg", "contentLength": 1024 }
@@ -135,7 +135,7 @@ class AdminProductImageControllerSliceTest {
                 .willReturn(image);
         given(mediaUrlResolver.resolve(objectKey)).willReturn("http://cdn/img.jpg");
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": true }
@@ -153,7 +153,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.registerImage(eq(productId), eq(objectKey), anyInt(), anyBoolean()))
                 .willThrow(new MediaNotFoundException(objectKey));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }
@@ -169,7 +169,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.registerImage(eq(productId), eq(objectKey), anyInt(), anyBoolean()))
                 .willThrow(new ImageLimitExceededException(productId));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }
@@ -190,7 +190,7 @@ class AdminProductImageControllerSliceTest {
                 .willReturn(image);
         given(mediaUrlResolver.resolve(objectKey)).willReturn("http://cdn/img.jpg");
 
-        mockMvc.perform(patch("/api/admin/products/{productId}/images/{imageId}", productId, imageId)
+        mockMvc.perform(patch("/api/admin/products/{productId}/images/{imageId}", productId, imageId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "sortOrder": 5, "isPrimary": true }
@@ -207,7 +207,7 @@ class AdminProductImageControllerSliceTest {
         UUID imageId = UUID.randomUUID();
         willDoNothing().given(productImageService).deleteImage(productId, imageId);
 
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId))
+        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
     }
 
@@ -218,7 +218,7 @@ class AdminProductImageControllerSliceTest {
         willThrow(new ImageNotFoundException(imageId))
                 .given(productImageService).deleteImage(productId, imageId);
 
-        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId))
+        mockMvc.perform(delete("/api/admin/products/{productId}/images/{imageId}", productId, imageId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("IMAGE_NOT_FOUND"));
     }
@@ -230,7 +230,7 @@ class AdminProductImageControllerSliceTest {
         given(productImageService.registerImage(eq(productId), eq(objectKey), anyInt(), anyBoolean()))
                 .willThrow(new ProductNotFoundException(productId));
 
-        mockMvc.perform(post("/api/admin/products/{productId}/images", productId)
+        mockMvc.perform(post("/api/admin/products/{productId}/images", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "objectKey": "%s", "sortOrder": 0, "isPrimary": false }

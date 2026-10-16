@@ -1,35 +1,38 @@
 package com.example.shipping.application.service;
 
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.security.RoleListHeader;
 
 /**
- * Operator-role guard for the shipping admin-plane services. Verifies the gateway-trusted
- * {@code X-User-Role} carries {@code ECOMMERCE_OPERATOR} (comma-separated, case-insensitive) —
- * otherwise {@link AccessDeniedException}. Single home for the check the command/query/refresh
- * services previously copy-pasted.
+ * TASK-MONO-795 (ADR-MONO-083 P8) — the shipping area's business-role decision for the operator plane. Canonical
+ * table: ecommerce {@code iam-integration.md} § 업무 역할.
+ *
+ * <ul>
+ *   <li>read = {@code ECOMMERCE_SHIPPING_READ ∨ ECOMMERCE_SHIPPING_WRITE};</li>
+ *   <li>write = {@code ECOMMERCE_SHIPPING_WRITE}.</li>
+ * </ul>
+ * The entry role {@code ECOMMERCE_OPERATOR} opens nothing here — it only gets a token through the gateway. The
+ * platform wildcard ({@code '*'}, no roles) is not admitted — as before this ticket. Reads: the operator list · summary; writes: status change · tracking refresh. The buyer's own shipping read and the carrier webhook are not operator paths and never reach this guard. The header comparison
+ * rule (comma-joined, trimmed, case-insensitive, whole-element) is {@link RoleListHeader}'s — never a local split
+ * ({@code RoleHeaderCopyGuardTest}).
  */
 final class OperatorRoleGuard {
 
-    private static final String OPERATOR_ROLE = "ECOMMERCE_OPERATOR";
+    static final String SHIPPING_READ = "ECOMMERCE_SHIPPING_READ";
+    static final String SHIPPING_WRITE = "ECOMMERCE_SHIPPING_WRITE";
 
     private OperatorRoleGuard() {
     }
 
-    static void requireOperator(String userRole) {
-        if (!hasOperatorRole(userRole)) {
+    static void requireRead(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, SHIPPING_READ, SHIPPING_WRITE)) {
             throw new AccessDeniedException("Admin role required");
         }
     }
 
-    private static boolean hasOperatorRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
+    static void requireWrite(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, SHIPPING_WRITE)) {
+            throw new AccessDeniedException("Admin role required");
         }
-        for (String role : userRole.split(",")) {
-            if (OPERATOR_ROLE.equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

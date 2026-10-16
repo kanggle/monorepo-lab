@@ -1,5 +1,6 @@
 package com.example.notification.adapter.in.rest;
 
+import com.example.web.security.RoleListHeader;
 import com.example.notification.adapter.in.rest.dto.request.CreateTemplateRequest;
 import com.example.notification.adapter.in.rest.dto.request.UpdateTemplateRequest;
 import com.example.notification.adapter.in.rest.dto.response.TemplateDetailResponse;
@@ -27,7 +28,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/notifications/templates")
 public class TemplateController {
 
-    private static final String ADMIN_ROLE = "ECOMMERCE_OPERATOR";
+    /**
+     * TASK-MONO-795 (ADR-MONO-083 P8): the notification area's business roles — reads = READ ∨ WRITE, create /
+     * update = WRITE (ecommerce iam-integration.md § 업무 역할). The old local check here compared the entry role
+     * case-SENSITIVELY while its seven siblings ignored case; the comparison rule now lives once in
+     * {@link RoleListHeader}.
+     */
+    static final String NOTIFICATION_READ = "ECOMMERCE_NOTIFICATION_READ";
+    static final String NOTIFICATION_WRITE = "ECOMMERCE_NOTIFICATION_WRITE";
 
     private final ManageTemplateUseCase templateService;
 
@@ -35,7 +43,7 @@ public class TemplateController {
     public ResponseEntity<PeriodSummary> getTemplateSummary(
             @RequestHeader(value = "X-User-Role", required = false) String userRole
     ) {
-        validateAdminRole(userRole);
+        requireRead(userRole);
         return ResponseEntity.ok(templateService.getPeriodSummary());
     }
 
@@ -45,7 +53,7 @@ public class TemplateController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        validateAdminRole(userRole);
+        requireRead(userRole);
         PageResult<NotificationTemplate> templates = templateService.getTemplates(new PageQuery(Math.max(page, 0), size < 1 ? 20 : Math.min(size, PageQuery.MAX_SIZE), null, null));
         return ResponseEntity.ok(TemplateListResponse.from(templates));
     }
@@ -55,7 +63,7 @@ public class TemplateController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String templateId
     ) {
-        validateAdminRole(userRole);
+        requireRead(userRole);
         NotificationTemplate template = templateService.getTemplate(templateId);
         return ResponseEntity.ok(TemplateDetailResponse.from(template));
     }
@@ -65,7 +73,7 @@ public class TemplateController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody CreateTemplateRequest request
     ) {
-        validateAdminRole(userRole);
+        requireWrite(userRole);
         CreateTemplateCommand command = new CreateTemplateCommand(
                 TemplateType.valueOf(request.type()),
                 NotificationChannel.valueOf(request.channel()),
@@ -82,35 +90,22 @@ public class TemplateController {
             @PathVariable String templateId,
             @Valid @RequestBody UpdateTemplateRequest request
     ) {
-        validateAdminRole(userRole);
+        requireWrite(userRole);
         UpdateTemplateCommand command = new UpdateTemplateCommand(
                 templateId, request.subject(), request.body());
         TemplateResult result = templateService.updateTemplate(command);
         return ResponseEntity.ok(TemplateIdResponse.from(result));
     }
 
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
+    private static void requireRead(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, NOTIFICATION_READ, NOTIFICATION_WRITE)) {
             throw new AdminAccessDeniedException("Not an admin user");
         }
     }
 
-    /**
-     * The API gateway ({@code JwtHeaderEnrichmentFilter}, ADR-MONO-035 4b-2a)
-     * injects {@code X-User-Role} as the COMMA-JOINED {@code roles} claim — e.g.
-     * {@code "ECOMMERCE_OPERATOR,WMS_OPERATOR"} for a multi-domain operator. Admit when ECOMMERCE_OPERATOR
-     * is one of the joined roles; an exact-equals check wrongly 403s any operator
-     * who holds more than one role.
-     */
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
+    private static void requireWrite(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, NOTIFICATION_WRITE)) {
+            throw new AdminAccessDeniedException("Not an admin user");
         }
-        for (String role : userRole.split(",")) {
-            if (ADMIN_ROLE.equals(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

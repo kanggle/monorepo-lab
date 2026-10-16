@@ -64,7 +64,7 @@ class AdminSellerControllerSliceTest {
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("page", "0")
                         .param("size", "20"))
                 .andExpect(status().isOk())
@@ -85,7 +85,7 @@ class AdminSellerControllerSliceTest {
         given(sellerQueryService.listSellers(eq(0), eq(100))).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("page", "0")
                         .param("size", "9999"))
                 .andExpect(status().isOk())
@@ -117,7 +117,7 @@ class AdminSellerControllerSliceTest {
         given(sellerQueryService.getSeller("seller-a1")).willReturn(summary("seller-a1", "셀러 A1"));
 
         mockMvc.perform(get("/api/admin/sellers/{id}", "seller-a1")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sellerId").value("seller-a1"))
                 .andExpect(jsonPath("$.displayName").value("셀러 A1"))
@@ -131,7 +131,7 @@ class AdminSellerControllerSliceTest {
                 .willThrow(new SellerNotFoundException("ghost"));
 
         mockMvc.perform(get("/api/admin/sellers/{id}", "ghost")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"));
     }
@@ -154,7 +154,7 @@ class AdminSellerControllerSliceTest {
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE,ERP_OPERATOR,SCM_OPERATOR"))
                 .andExpect(status().isOk());
     }
 
@@ -165,7 +165,7 @@ class AdminSellerControllerSliceTest {
         given(sellerQueryService.listSellers(anyInt(), anyInt())).willReturn(result);
 
         mockMvc.perform(get("/api/admin/sellers")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk());
     }
 
@@ -202,7 +202,7 @@ class AdminSellerControllerSliceTest {
     @DisplayName("POST /api/admin/sellers/{id}/provision - ECOMMERCE_OPERATOR → 204 + provisionPending 위임")
     void provision_admin_returns204() throws Exception {
         mockMvc.perform(post("/api/admin/sellers/{id}/provision", "seller-a1")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
         verify(registerSellerService).provisionPending("seller-a1");
     }
@@ -211,7 +211,7 @@ class AdminSellerControllerSliceTest {
     @DisplayName("POST /api/admin/sellers/{id}/suspend - ECOMMERCE_OPERATOR → 204 + suspend 위임")
     void suspend_admin_returns204() throws Exception {
         mockMvc.perform(post("/api/admin/sellers/{id}/suspend", "seller-a1")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
         verify(registerSellerService).suspend("seller-a1");
     }
@@ -220,7 +220,7 @@ class AdminSellerControllerSliceTest {
     @DisplayName("POST /api/admin/sellers/{id}/close - ECOMMERCE_OPERATOR → 204 + close 위임")
     void close_admin_returns204() throws Exception {
         mockMvc.perform(post("/api/admin/sellers/{id}/close", "seller-a1")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
         verify(registerSellerService).close("seller-a1");
     }
@@ -241,7 +241,7 @@ class AdminSellerControllerSliceTest {
                 .given(registerSellerService).provisionPending("ghost");
 
         mockMvc.perform(post("/api/admin/sellers/{id}/provision", "ghost")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"));
     }

@@ -88,7 +88,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR", "idem-key-1"
+                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-key-1"
         );
 
         IssueCouponsResult result = service.issueCoupons(command);
@@ -176,7 +176,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.findByIdForUpdate("non-existent")).willReturn(Optional.empty());
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                "non-existent", List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-key-2");
+                "non-existent", List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-key-2");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(PromotionNotFoundException.class);
@@ -246,7 +246,7 @@ class CouponCommandServiceTest {
 
         IssueCouponsCommand command = new IssueCouponsCommand(
                 promotion.getPromotionId(), List.of("user-1"),
-                "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR", "idem-key-3"
+                "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE,ERP_OPERATOR,SCM_OPERATOR", "idem-key-3"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -270,7 +270,7 @@ class CouponCommandServiceTest {
         given(promotionRepository.save(any(Promotion.class))).willAnswer(inv -> inv.getArgument(0));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-key-4"
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-key-4"
         );
 
         assertThatCode(() -> service.issueCoupons(command))
@@ -324,7 +324,7 @@ class CouponCommandServiceTest {
         CouponCommandService service = createService();
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR", null);
+                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", null);
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyRequiredException.class);
@@ -339,7 +339,7 @@ class CouponCommandServiceTest {
         CouponCommandService service = createService();
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR", "   ");
+                "promo-1", List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "   ");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyRequiredException.class);
@@ -361,7 +361,7 @@ class CouponCommandServiceTest {
                         promotion.getPromotionId(), "idem-A", List.of("user-1", "user-2"), 2, Instant.now())));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR", "idem-A");
+                promotion.getPromotionId(), List.of("user-1", "user-2"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-A");
 
         IssueCouponsResult result = service.issueCoupons(command);
 
@@ -387,7 +387,7 @@ class CouponCommandServiceTest {
                         promotion.getPromotionId(), "idem-A", List.of("user-1"), 1, Instant.now())));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-2"), "ECOMMERCE_OPERATOR", "idem-A");
+                promotion.getPromotionId(), List.of("user-2"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-A");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyConflictException.class);
@@ -410,7 +410,7 @@ class CouponCommandServiceTest {
                 .willThrow(new DataIntegrityViolationException("uq_coupon_issue_request_key"));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-B");
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-B");
 
         assertThatThrownBy(() -> service.issueCoupons(command))
                 .isInstanceOf(com.example.promotion.application.exception.IdempotencyKeyConflictException.class);
@@ -437,7 +437,7 @@ class CouponCommandServiceTest {
                         promotion.getPromotionId(), "idem-cap", List.of("user-1"), 1, Instant.now())));
 
         IssueCouponsCommand command = new IssueCouponsCommand(
-                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR", "idem-cap");
+                promotion.getPromotionId(), List.of("user-1"), "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE", "idem-cap");
 
         // The replay must succeed (no re-validation against the now-exhausted cap)
         // and must not mint a second coupon.

@@ -95,11 +95,11 @@ class SellerScopeIsolationIntegrationTest {
     }
 
     private String registerProduct(String tenantId, String sellerId, String name) throws Exception {
-        var request = post("/api/admin/products")
+        var request = post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                 // TASK-BE-536: POST /api/admin/products now requires an Idempotency-Key.
                 // A fresh key per call — each helper invocation is a distinct product.
                 .header("Idempotency-Key", UUID.randomUUID().toString())
-                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR")
+                .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                 .header(TENANT_HEADER, tenantId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(productBody(name, sellerId));

@@ -2,6 +2,7 @@ package com.example.search.adapter.inbound.web;
 
 import com.example.search.application.port.in.ReindexAllUseCase;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.security.RoleListHeader;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,10 @@ import java.util.Map;
  * 이 엔드포인트는 개발/운영자 수동 트리거를 전제로 하며, 외부 네트워크에
  * 직접 노출해서는 안 된다(Gateway에서 차단 필요). 현재는 gateway를 통한
  * 포워딩 없이 서비스 내부 포트(8085)로만 접근한다.
+ *
+ * <p>TASK-MONO-795 (ADR-MONO-083 P8 · 소유자 결정 Q1): 재색인 = {@code ECOMMERCE_PRODUCT_WRITE} — 색인은 상품
+ * 카탈로그의 파생물이고 검색 전용 역할은 없다. 진입 역할 {@code ECOMMERCE_OPERATOR} 단독은 403. 비교 규칙은
+ * {@link RoleListHeader}.
  */
 @RestController
 @RequiredArgsConstructor
@@ -45,21 +50,12 @@ public class SearchAdminController {
         return ResponseEntity.ok(Map.of("indexed", indexed, "batchSize", batchSize));
     }
 
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
+    /** The product area's write role — the same name product-service checks (owner decision Q1). */
+    static final String PRODUCT_WRITE = "ECOMMERCE_PRODUCT_WRITE";
+
+    private static void validateAdminRole(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, PRODUCT_WRITE)) {
             throw new AccessDeniedException();
         }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if ("ECOMMERCE_OPERATOR".equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

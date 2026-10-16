@@ -181,7 +181,7 @@ class UserApiContractTest {
                     .willReturn(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
 
             MvcResult result = mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk())
                     .andReturn();
 
@@ -200,7 +200,7 @@ class UserApiContractTest {
             given(userProfileService.getProfile(any())).willReturn(profileResult());
 
             MvcResult result = mockMvc.perform(get("/api/admin/users/" + USER_ID)
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk())
                     .andReturn();
 
