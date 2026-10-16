@@ -295,6 +295,37 @@ const WMS_ROLES = [
  * only with `ECOMMERCE_OPERATOR` (`ecommerce gateway-service AccountTypeEnforcementFilter.java:104-116`).
  */
 const ECOMMERCE_GATEWAY_REQUIRES = ['ECOMMERCE_OPERATOR'] as const;
+
+/**
+ * TASK-PC-FE-342 (ADR-MONO-083 P5 · server = TASK-MONO-792, live 28th window) — the SCM catalog
+ * (`DomainRoleCatalog.java` scm entries). `SCM_OPERATOR` is NOT here: since 792 Q4 it is an entry
+ * role auth derives when the token carries ≥1 of these, it is not in the catalog and never
+ * appears in row 12 — declaring it would badge every SCM operator.
+ */
+const SCM_ROLES = [
+  'SCM_PROCUREMENT_READ',
+  'SCM_PROCUREMENT_WRITE',
+  'SCM_DEMAND_PLANNING_READ',
+  'SCM_DEMAND_PLANNING_WRITE',
+  'SCM_LOGISTICS_READ',
+  'SCM_LOGISTICS_WRITE',
+  'SCM_INVENTORY_VISIBILITY_READ',
+  'SCM_INVENTORY_VISIBILITY_WRITE',
+];
+/** Each SCM service's `SecurityConfig`: `GET` = READ ∨ WRITE, every other method = WRITE. */
+const SCM_PROCUREMENT_GET = ['SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE'] as const;
+const SCM_INVENTORY_VISIBILITY_GET = [
+  'SCM_INVENTORY_VISIBILITY_READ',
+  'SCM_INVENTORY_VISIBILITY_WRITE',
+] as const;
+const SCM_DEMAND_PLANNING_GET = ['SCM_DEMAND_PLANNING_READ', 'SCM_DEMAND_PLANNING_WRITE'] as const;
+const SCM_SVC = 'projects/scm-platform/apps';
+const SCM_SECURITY = {
+  procurement: `${SCM_SVC}/procurement-service/src/main/java/com/example/scmplatform/procurement/infrastructure/security/SecurityConfig.java:35-37,59-61`,
+  demandPlanning: `${SCM_SVC}/demand-planning-service/src/main/java/com/example/scmplatform/demandplanning/config/SecurityConfig.java:25,38-39`,
+  logistics: `${SCM_SVC}/logistics-service/src/main/java/com/example/scmplatform/logistics/config/SecurityConfig.java:24,38-39`,
+  inventoryVisibility: `${SCM_SVC}/inventory-visibility-service/src/main/java/com/example/scmplatform/inventoryvisibility/config/SecurityConfig.java:28-29,48-49`,
+};
 const WMS_GW = 'wms gateway-service';
 const WMS_GW_ROUTES =
   'projects/wms-platform/apps/gateway-service/src/main/resources/application.yml:58-112 (master/inbound/inventory/outbound/admin 라우트)';
@@ -650,6 +681,10 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       // the 27th window: an inventory-set operator's outbound GET → 403 (BE-632 AC-1).
       serverRequires: ['OUTBOUND_READ', 'OUTBOUND_WRITE'],
       writeRequires: ['OUTBOUND_WRITE'],
+      // TASK-PC-FE-342 — «발송 재시도» goes to scm logistics-service, whose `:retry` needs
+      // SCM_LOGISTICS_WRITE since TASK-MONO-792 (Q3 strict; live 28th window: outbound set only →
+      // 403). OUTBOUND_WRITE neither opens nor closes it.
+      buttonWriteRequires: { 'retry-dispatch': ['SCM_LOGISTICS_WRITE'] },
     },
     description: '출고 주문 · 피킹/패킹/출고 확정 · 택배(출고) · 운송사 통보 재시도.',
     crud: crud('RU'),
@@ -664,6 +699,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       'projects/platform-console/apps/console-web/src/features/wms-outbound-ops/api/outbound-logistics-api.ts:88,116',
       `${API}/wms/outbound/[orderId]/{pick,pack,ship,cancel,retry-dispatch}/route.ts (POST)`,
       'projects/platform-console/apps/console-web/src/features/wms-guide/data.ts:299-335 (WMS_ROLES)',
+      `${SCM_SECURITY.logistics} (발송 재시도)`,
     ],
   },
   {
@@ -694,48 +730,93 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/scm',
     area: 'scm',
-    gate: { kind: 'domain', domain: 'scm', roles: ['SCM_OPERATOR'] },
+    gate: {
+      kind: 'domain',
+      domain: 'scm',
+      roles: SCM_ROLES,
+      extra: '두 카드가 서로 다른 서비스 — 발주 역할이 없으면 발주 카드만, 재고 가시성 역할이 없으면 재고 카드만 «권한 없음»',
+      // TASK-PC-FE-342 — the two cards read procurement `GET /po` and inventory-visibility
+      // `GET /snapshot`; either family opens the screen (per-card degrade is the existing rule).
+      serverRequires: [...SCM_PROCUREMENT_GET, ...SCM_INVENTORY_VISIBILITY_GET],
+    },
     description: '조달·재고 가시성 요약 밴드.',
     crud: R,
     purpose: '공급망 상태를 요약해 본다.',
     services: ['scm gateway-service → procurement-service · inventory-visibility-service'],
-    sources: [`${ROLE_DERIVATION}:104`, 'projects/platform-console/apps/console-web/src/features/scm-guide/data.ts:60-90'],
+    sources: [
+      'projects/platform-console/apps/console-web/src/features/scm-guide/data.ts:60-90',
+      SCM_SECURITY.procurement,
+      SCM_SECURITY.inventoryVisibility,
+    ],
   },
   {
     href: '/scm/procurement',
     area: 'scm',
-    gate: { kind: 'domain', domain: 'scm', roles: ['SCM_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'scm', roles: SCM_ROLES, serverRequires: SCM_PROCUREMENT_GET },
     description: '발주(PO) 목록 · 상세 조회.',
     crud: R,
     purpose: '발주가 어느 상태인지 확인한다.',
     services: ['scm gateway-service → procurement-service (/api/v1/procurement)'],
-    sources: [`${PAGES}/scm/procurement/page.tsx (READ-ONLY)`, `${API}/scm/po/route.ts (GET)`],
+    sources: [
+      `${PAGES}/scm/procurement/page.tsx (READ-ONLY)`,
+      `${API}/scm/po/route.ts (GET)`,
+      SCM_SECURITY.procurement,
+    ],
   },
   {
     href: '/scm/inventory',
     area: 'scm',
-    gate: { kind: 'domain', domain: 'scm', roles: ['SCM_OPERATOR'] },
+    gate: {
+      kind: 'domain',
+      domain: 'scm',
+      roles: SCM_ROLES,
+      serverRequires: SCM_INVENTORY_VISIBILITY_GET,
+    },
     description: '재고 가시성 스냅샷 · SKU · 노드 · 신선도 조회.',
     crud: R,
     purpose: '여러 노드의 재고를 한곳에서 본다.',
     services: ['scm gateway-service → inventory-visibility-service (/api/v1/inventory-visibility)'],
-    sources: [`${PAGES}/scm/inventory/page.tsx (READ-ONLY)`, `${API}/scm/snapshot/route.ts (GET)`],
+    sources: [
+      `${PAGES}/scm/inventory/page.tsx (READ-ONLY)`,
+      `${API}/scm/snapshot/route.ts (GET)`,
+      SCM_SECURITY.inventoryVisibility,
+    ],
   },
   {
     href: '/scm/replenishment',
     area: 'scm',
-    gate: { kind: 'domain', domain: 'scm', roles: ['SCM_OPERATOR'] },
+    gate: {
+      kind: 'domain',
+      domain: 'scm',
+      roles: SCM_ROLES,
+      serverRequires: SCM_DEMAND_PLANNING_GET,
+      // Approve also creates the draft PO via `POST /po/from-suggestion`, which procurement
+      // accepts with SCM_PROCUREMENT_WRITE ∨ SCM_DEMAND_PLANNING_WRITE (TASK-MONO-792 Q2) — the
+      // demand-planning role alone completes an approve.
+      writeRequires: ['SCM_DEMAND_PLANNING_WRITE'],
+    },
     description: '보충 추천 목록 · 승인 · 기각.',
     crud: crud('RU'),
     crudNote: '수정 = 추천 승인/기각(승인 시 DRAFT 발주가 생긴다).',
     purpose: '재주문 추천을 검토해 발주로 이어 준다.',
     services: ['scm gateway-service → demand-planning-service (/api/v1/demand-planning)'],
-    sources: [`${API}/scm/demand-planning/suggestions/[id]/{approve,dismiss}/route.ts (POST)`],
+    sources: [
+      `${API}/scm/demand-planning/suggestions/[id]/{approve,dismiss}/route.ts (POST)`,
+      SCM_SECURITY.demandPlanning,
+      `${SCM_SECURITY.procurement} (from-suggestion)`,
+    ],
   },
   {
     href: '/scm/config',
     area: 'scm',
-    gate: { kind: 'domain', domain: 'scm', roles: ['SCM_OPERATOR'] },
+    gate: {
+      kind: 'domain',
+      domain: 'scm',
+      roles: SCM_ROLES,
+      extra: '공급사 선택 목록은 발주 조회 — 수요계획 역할만 있으면 그 목록만 비어 있다',
+      serverRequires: SCM_DEMAND_PLANNING_GET,
+      writeRequires: ['SCM_DEMAND_PLANNING_WRITE'],
+    },
     description: 'SKU별 재주문 정책 · SKU→공급사 매핑 조회/업서트.',
     crud: crud('RCU'),
     crudNote: '생성/수정 = PUT 업서트(같은 호출).',
@@ -744,6 +825,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
     sources: [
       `${API}/scm/demand-planning/policies/[skuCode]/route.ts (GET,PUT)`,
       `${API}/scm/demand-planning/sku-supplier-map/[skuCode]/route.ts (GET,PUT)`,
+      SCM_SECURITY.demandPlanning,
     ],
   },
 

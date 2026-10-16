@@ -81,7 +81,11 @@ export interface OutboundOpsScreenProps {
   canRetry?: boolean;
 }
 
-export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreenProps) {
+export function OutboundOpsScreen({
+  orders,
+  canWrite = true,
+  canRetry = true,
+}: OutboundOpsScreenProps) {
   const statusFid = useId();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -145,9 +149,10 @@ export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreen
   // Dispatch retry: surfaced for a SHIPPED order (a carrier dispatch exists only
   // after shipping). The "does a retry apply?" signal is the logistics dispatch
   // status, resolved server-side at action time — NOT the wms saga state.
+  // TASK-PC-FE-342: and only when the operator may retry at all (SCM_LOGISTICS_WRITE — `canRetry`).
   const retryVisible = useMemo(
-    () => canRetryDispatch(drillStatus),
-    [drillStatus],
+    () => canRetry && canRetryDispatch(drillStatus),
+    [canRetry, drillStatus],
   );
   // Async-cancel hint: order CANCELLED but the saga still releasing inventory.
   const cancelPending = useMemo(

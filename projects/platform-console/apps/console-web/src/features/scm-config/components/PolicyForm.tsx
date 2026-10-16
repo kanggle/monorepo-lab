@@ -20,9 +20,11 @@ import { SeedNumberField } from './SeedNumberField';
 
 export interface PolicyFormProps {
   skuCode: string;
+  /** TASK-PC-FE-342 — `false` hides the save button (no `SCM_DEMAND_PLANNING_WRITE`). */
+  canWrite?: boolean;
 }
 
-export function PolicyForm({ skuCode }: PolicyFormProps) {
+export function PolicyForm({ skuCode, canWrite = true }: PolicyFormProps) {
   const {
     ids,
     fields,
@@ -78,7 +80,10 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
             </p>
           )}
 
-          <form onSubmit={openConfirm} className="mt-4 grid gap-4">
+          <form
+            onSubmit={canWrite ? openConfirm : (e) => e.preventDefault()}
+            className="mt-4 grid gap-4"
+          >
             <SeedNumberField
               id={ids.reorderPointId}
               label="재주문점 (reorderPoint)"
@@ -116,11 +121,13 @@ export function PolicyForm({ skuCode }: PolicyFormProps) {
               </p>
             )}
 
-            <div>
-              <Button type="submit" data-testid="policy-save">
-                {notConfigured ? '정책 생성' : '정책 저장'}
-              </Button>
-            </div>
+            {canWrite && (
+              <div>
+                <Button type="submit" data-testid="policy-save">
+                  {notConfigured ? '정책 생성' : '정책 저장'}
+                </Button>
+              </div>
+            )}
           </form>
         </>
       )}

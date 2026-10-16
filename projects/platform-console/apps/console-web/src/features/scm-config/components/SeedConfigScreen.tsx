@@ -37,8 +37,7 @@ export interface SeedConfigScreenProps {
   canWrite?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- TASK-PC-FE-342 red skeleton
-export function SeedConfigScreen(_props: SeedConfigScreenProps = {}) {
+export function SeedConfigScreen({ canWrite = true }: SeedConfigScreenProps = {}) {
   const lookupId = useId();
   const [draft, setDraft] = useState('');
   // The "active" SKU drives the two forms' read queries; it only changes on an
@@ -76,6 +75,16 @@ export function SeedConfigScreen(_props: SeedConfigScreenProps = {}) {
         여기서 변경한 설정은 <strong>이후(미래) 보충 추천 평가에만</strong>{' '}
         반영됩니다. 기존 추천·발주(PO)를 변경하거나 발주를 발행하지 않습니다.
       </p>
+      {!canWrite && (
+        <p
+          role="note"
+          data-testid="cfg-read-only-note"
+          className="mb-6 text-xs text-muted-foreground"
+        >
+          조회 전용 — 정책 · 매핑 저장에 필요한 업무 권한(수요계획 변경)이 이 테넌트에서
+          배정되지 않아 저장 버튼을 숨겼습니다. SKU 를 조회해 현재 값은 볼 수 있습니다.
+        </p>
+      )}
 
       {/* ── SKU-code lookup ─────────────────────────────────────────────── */}
       <form
@@ -112,8 +121,8 @@ export function SeedConfigScreen(_props: SeedConfigScreenProps = {}) {
 
       {activeSku ? (
         <div className="grid gap-6 lg:grid-cols-2">
-          <PolicyForm key={`policy-${activeSku}`} skuCode={activeSku} />
-          <SupplierMapForm key={`map-${activeSku}`} skuCode={activeSku} />
+          <PolicyForm key={`policy-${activeSku}`} skuCode={activeSku} canWrite={canWrite} />
+          <SupplierMapForm key={`map-${activeSku}`} skuCode={activeSku} canWrite={canWrite} />
         </div>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="cfg-no-sku">

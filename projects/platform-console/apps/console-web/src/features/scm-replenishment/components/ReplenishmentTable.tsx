@@ -50,6 +50,7 @@ export function ReplenishmentTable({
   onNext,
   onAction,
   actionPending,
+  canWrite = true,
 }: {
   rows: Suggestion[];
   queryPage: number;
@@ -60,6 +61,11 @@ export function ReplenishmentTable({
   onNext: () => void;
   onAction: (kind: ActionKind, suggestion: Suggestion) => void;
   actionPending: boolean;
+  /**
+   * TASK-PC-FE-342 — `false` drops the 작업 column (승인 · 기각) entirely: the operator holds no
+   * `SCM_DEMAND_PLANNING_WRITE`, so demand-planning-service would `403` both.
+   */
+  canWrite?: boolean;
 }) {
   return (
     <>
@@ -88,9 +94,11 @@ export function ReplenishmentTable({
             <th scope="col" className="p-2">
               PO
             </th>
-            <th scope="col" className="p-2">
-              작업
-            </th>
+            {canWrite && (
+              <th scope="col" className="p-2">
+                작업
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -135,6 +143,7 @@ export function ReplenishmentTable({
                   </StatusBadge>
                 </td>
                 <td className="p-2">{s.materializedPoId ?? '—'}</td>
+                {canWrite && (
                 <td className="p-2">
                   <div className="flex gap-2">
                     <Button
@@ -156,6 +165,7 @@ export function ReplenishmentTable({
                     </Button>
                   </div>
                 </td>
+                )}
               </tr>
             );
           })}

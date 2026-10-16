@@ -64,7 +64,10 @@ interface FilterState {
 
 const EMPTY_FILTERS: FilterState = { status: '', skuCode: '' };
 
-export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
+export function ReplenishmentScreen({
+  suggestions,
+  canWrite = true,
+}: ReplenishmentScreenProps) {
   // ── suggestion list (filters + pagination) ──────────────────────────
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [query, setQuery] = useState<SuggestionQueryParams>({
@@ -126,6 +129,17 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
         만들어지며, 제출(SUBMIT)은 조달(Procurement)에서 별도로 진행합니다.
       </p>
 
+      {!canWrite && (
+        <p
+          role="note"
+          data-testid="repl-read-only-note"
+          className="mb-4 text-xs text-muted-foreground"
+        >
+          조회 전용 — 추천 승인 · 기각에 필요한 업무 권한(수요계획 변경)이 이 테넌트에서
+          배정되지 않아 해당 버튼을 숨겼습니다.
+        </p>
+      )}
+
       {/* ── filters ────────────────────────────────────────────────────── */}
       <ReplenishmentFilters
         filters={filters}
@@ -150,6 +164,7 @@ export function ReplenishmentScreen({ suggestions }: ReplenishmentScreenProps) {
           onNext={() => setQuery((q) => ({ ...q, page: (q.page ?? 0) + 1 }))}
           onAction={openAction}
           actionPending={actionPending}
+          canWrite={canWrite}
         />
       ) : (
         <ReplenishmentListStates
