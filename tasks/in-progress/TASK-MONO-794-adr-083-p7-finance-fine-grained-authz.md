@@ -150,3 +150,26 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 
 - 🔵 **`FINANCE_LEDGER_CONTROL` 의 카탈로그 `access` = `WRITE`**: 콘솔이 카탈로그 행을 `z.enum(['READ','WRITE','OPERATE'])` 로 파싱한다(`console-web …/domain-permission-sets/api/types.ts:36`). 새 값(`CONTROL`)을 내면 그 화면의 카탈로그 응답 전체가 파싱 실패한다 ⇒ 와이어 값은 `WRITE`, 구분은 역할 이름과 라벨이 진다.
 - 🔵 **원장 조회 = LG_READ ∨ LG_WRITE ∨ LG_CONTROL**(Q2 추천 문구 그대로 — 통제 역할 보유자는 자기가 바꾸는 설정 · 기간을 읽을 수 있어야 한다). 통제 역할은 업무 쓰기 6 을 열지 않는다.
+- 🔵 **판정 위치**: Finance 는 필터 체인 판정이므로 그 자리(`SecurityConfig` 두 개)에서 세분했다. ledger 의 통제 쓰기 7 은 경로 × 메서드 매처로 **일반 쓰기 매처보다 먼저** 선언 — 앞으로 생길 쓰기는 기본이 `FINANCE_LEDGER_WRITE`(통제로 새로 넣으려면 매처를 더한다). account 앱 단 검사는 `ActorContext.canOperateAccounts()`(= `FINANCE_ACCOUNT_WRITE` 보유) · `isOperator()` 는 감사 행위자 종류만 정한다(진입 역할 ∨ Finance 업무 역할 — 일반 3 문자열은 더 세지 않는다).
+- 🔵 **gateway 무변경**: finance gateway 는 `RoleAdmissions.roleOrScope()`(역할 · 범위의 **존재**만)라 이름 변경의 영향이 없다 — gateway 시험 무변경 초록.
+- 🔵 **정당하게 바뀐 시험**(이 PR 의 판정이 바꾼 것만): 일반 `OPERATOR` 로 읽기 · 운영자 판정을 단언하던 것(`ActorContextTest` 1 · account/ledger HTTP IT 2 → 업무 역할로 나누고 «일반 문자열 → 403» 대조를 더함) · 구독 합성 READ 를 단언하던 것(변환기 시험 2 클래스 · HTTP IT 2) · `OPERATOR` 행위자 상수(`AccountApplicationServiceTest` · `AbstractAccountIntegrationTest` → `FINANCE_OPERATOR + FINANCE_ACCOUNT_WRITE`) · finance 상한(`OperatorRoleDerivationTest` 4 곳 · `TenantClaimTokenCustomizerTest` legacy-compat 2 곳) · admin 카탈로그 24 → 28 · 프리셋 23 → 26(V0056/V0057 형태 · V0057 IT) · V0052 형태 시험의 «V0052 시절 카탈로그» · `PartnershipManagementUseCaseTest#invite_unheldDomain_rejected` 의 역할(`FINANCE_OPERATOR` → `FINANCE_LEDGER_READ` — 진입 역할은 이제 위임 불가라 «구독 안 한 도메인» 단언에 닿기 전에 거절된다).
+
+# Red — 2026-10-16 UTC (커밋 `7dd6c87ec` · 시험 · 계약만)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116824652071` | auth-service `:test` **1282 실행 · 11 실패** · admin-service `:test` **1384 실행 · 19 실패** — 30 실패 전부 단언(`java.lang.AssertionError` 18 · `org.opentest4j.AssertionFailedError` 12 — 로그 `FAILED` 다음 줄에서 셈) |
+| CI `Integration (iam A, Testcontainers)` | `116824652652` | admin `:integrationTest` **330 실행 · 3 실패**(`V0058FinanceRoleMigrationIntegrationTest` 2 · `V0057ErpRoleMigrationIntegrationTest#presetsAfterBoot` 1 — 프리셋 26) |
+| CI `Integration (finance-platform, Testcontainers)` | `116824652408` | account `:integrationTest` **32 · 2 실패** · ledger **48 · 2 실패**(구독만 → 403 · 일반 `OPERATOR` → 403) — 4 전부 `AssertionError` |
+| ⚪ CI finance 단위 단계 | `116824652071` | **실행 안 됨** — 같은 job 의 iam 단계가 먼저 실패해 건너뛰어졌다(793 과 같은 모양) ⇒ 아래 로컬 줄 |
+| 로컬(같은 커밋) | — | account `:test` **184 · 12 실패** · ledger `:test` **451 · 9 실패** — 전부 단언(게이트 슬라이스 · 변환기 · `ActorContextTest` · KYC/충전). 통과 쪽 = 허용 대조군(legacy-compat · 범위 · `'*'` — 양쪽 단계 모두 초록이어야 하는 쪽) |
+
+# Green — 2026-10-16 UTC (커밋 `81628c63d` · run `38856007513`)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116827559131` | ✅ — iam auth/admin · finance account/ledger 의 `:test` 가 **실제로 실행**(로그의 `Task …:test` 줄 — 캐시 아님, finance gateway 만 FROM-CACHE)되고 BUILD SUCCESSFUL. 🔵 이 레인은 성공 시 시험별 줄을 찍지 않는다 — 클래스별 수는 아래 로컬 줄 |
+| CI `Integration (iam A, Testcontainers)` | `116827559813` | ✅ **354 PASSED · 0 FAILED**(로그에서 셈) — `V0058FinanceRoleMigrationIntegrationTest` 2/2 · `V0057ErpRoleMigrationIntegrationTest` 2/2 PASSED |
+| CI `Integration (finance-platform, Testcontainers)` | `116827559592` | ✅ **92 PASSED · 0 FAILED** — account · ledger HTTP 범위 IT(구독만 → 403 · 일반 `OPERATOR` → 403 · 업무 역할 → 통과) 포함 |
+| CI 그 밖 | run `38856007513` | 실행된 검사 22 전부 pass(필수 4 포함) · 45 skipping(경로 필터) |
+| 로컬(같은 코드) | — | finance account/ledger/gateway · iam auth/admin `:test` rc=0 · 스테이지 뒤 가드 6(Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · INDEX · 티켓 ID · walkthrough) rc=0 |
