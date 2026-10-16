@@ -8,7 +8,7 @@ WMS inventory-service list endpoints return **500** — native-query rows are ca
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -83,3 +83,10 @@ Only the inventory list is measured as 500. The other three lists share the cast
 
 1. Fixing only the inventory list. The three sibling lists keep failing, because the cast is copied, not shared.
 2. Proving the fix with a mocked `Object[]` row. That is the same shape of test that let the defect through.
+
+# Implementation Notes (2026-10-16 UTC)
+
+- **AC-0 (red, measured)**: `NativeListQueryTimestampIntegrationTest` (Testcontainers PostgreSQL 16, through the four repository ports) on the unfixed code: 4 of 4 methods red with `java.lang.ClassCastException` at the repository call (inventory · transfer · adjustment · movement) — CI job `Integration (inventory + inbound + gateway-service, Testcontainers) / integration`, run 38890745632, job 116939445990, head `b166f110c`; the Gradle task reported `30 tests completed, 4 failed` (the other 26 inventory ITs green). The CI log prints no exception message, so the `Instant`→`Timestamp` wording comes from the live log in the Goal, not from this run.
+- **Why no existing test caught it**: no test called any of the four list queries against a real database. The only coverage of the list paths is `@WebMvcTest` slice tests (`InventoryQueryControllerSliceTest`, `MovementQueryControllerSliceTest`, `TransferControllerSliceTest`, `AdjustmentControllerSliceTest`) that mock the use case, so the repository `mapRow` never ran; the existing ITs (`AdjustmentTransferIntegrationTest`, …) drive the mutation use cases and read via JDBC, not the native list queries.
+- **Fix**: one helper `adapter/out/persistence/NativeRowValues.instant(Object, String column)` (Instant · Timestamp · OffsetDateTime · LocalDateTime as UTC · null kept · unknown type -> `IllegalStateException` naming the column and class), used at all four sites. Pinned by `NativeRowValuesTest`.
+- **Sibling grep** (`java.sql.Timestamp` in `projects/*/**/src/main` + `libs/`): the 4 sites above only. iam `JdbcEventDedupeAdapter` / `SasAuthorizationRevocationAdapter` use `Timestamp.from(...)` as a bound parameter and `ConsumerPoolLegacyMoveRepositoryImpl` uses `rs.getTimestamp(...)` (JDBC API, type-safe) — not the defect. Other wms `createNativeQuery` users (masterref repositories, `AsnRepositoryImpl`) are DML / `Number` reads, no timestamp column read.

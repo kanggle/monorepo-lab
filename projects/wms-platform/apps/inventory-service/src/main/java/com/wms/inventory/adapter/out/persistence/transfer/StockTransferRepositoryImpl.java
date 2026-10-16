@@ -1,6 +1,7 @@
 package com.wms.inventory.adapter.out.persistence.transfer;
 
 import com.example.common.page.PageResult;
+import com.wms.inventory.adapter.out.persistence.NativeRowValues;
 import com.wms.inventory.application.port.out.StockTransferRepository;
 import com.wms.inventory.application.query.TransferListCriteria;
 import com.wms.inventory.application.result.TransferView;
@@ -112,7 +113,7 @@ public class StockTransferRepositoryImpl implements StockTransferRepository {
                 TransferReasonCode.valueOf((String) row[7]),
                 (String) row[8],
                 (String) row[9],
-                ((java.sql.Timestamp) row[10]).toInstant())).toList();
+                NativeRowValues.instant(row[10], "created_at"))).toList();
         return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
     }
 
