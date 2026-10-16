@@ -115,12 +115,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자 · 회사 운영자가 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`)를 assume 할 수 있다 — assume 경로가 테넌트 상태를 안 읽는다** (IN-PROGRESS, 2026-10-16 UTC · AC-0 측정 기록 · **소유자 결정 대기**: 상태를 어디서 읽나 · account-service 장애 시 · `'*'` 포함 여부 · 워크로드 assume 포함 여부). 다음 데모 AMI 굽기에 실린다(소유자 결정 2026-10-16). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
 
+- `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자 · 회사 운영자의 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`) assume 을 거절 — `400 invalid_grant` `tenant_not_active`** (REVIEW, 2026-10-16 UTC · **#4392**). 소유자 결정 B: account `entitled-domains` 가 `tenantStatus` 를 싣고 비-ACTIVE 면 `domainKeys: []` · auth 는 그 읽기(새 호출 없음)가 확실히 비-ACTIVE 일 때만 거절, 장애면 fail-soft. 워크로드 assume 제외(Q4). red auth 4 + account 3 → green 0 failed. 다음 데모 AMI 굽기 동승(소유자 결정 2026-10-16). 분석=Opus 5.5 / 구현=Opus 5.5.
 - `TASK-BE-638-gateway-internal-tenants-lifecycle-exposure.md` — **🔴 보안 — iam 게이트웨이가 테넌트 라이프사이클 API 를 실어 나르던 것을 닫음** (REVIEW, 2026-10-16 UTC · **#4390**). IT 실측: 자기 워크로드 토큰으로 `PATCH`/`GET /internal/tenants/{self}` 200 · `POST`/`GET /internal/tenants` 200/201(`'*'` 포함)이 그대로 account-service 에 닿았다. 라우트 `Path=/internal/tenants/*/*/**` + 필터 403 `TENANT_SCOPE_DENIED` 두 겹. red 16+5 → green 0 failed. 서브리소스(셀러 프로비저닝) 그대로. 다음 데모 AMI 굽기에 실린다(소유자 결정 2026-10-16) — 라이브 확인은 그 창. ⚪ `traefik-net` 직접 우회(account-service 측 client-id 허용 목록)는 소유자 질문. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done

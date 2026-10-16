@@ -8,7 +8,7 @@ A platform (`'*'`) operator can assume a tenant that is not `ACTIVE` (`PENDING` 
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -57,9 +57,9 @@ Decide whether assuming into a non-`ACTIVE` tenant should be refused, and for wh
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: the measured matrix (identity × tenant status → assume result → what the token can call), and the chosen design with why.
-- [ ] **AC-1**: each refused row is refused, and nothing is issued.
-- [ ] **AC-2**: control — `ACTIVE` tenant assume byte-unchanged; the 773 S4 IT's Q4 pin is updated to the decision.
+- [x] **AC-0**: the measured matrix (identity × tenant status → assume result → what the token can call), and the chosen design with why. — § AC-0 + § Owner decisions (B).
+- [x] **AC-1**: each refused row is refused, and nothing is issued. — `'*'`×PENDING · `'*'`×SUSPENDED · company×SUSPENDED · partnership host×SUSPENDED → 400 `invalid_grant` `tenant_not_active`, no `access_token` (IT, red 4 → green).
+- [x] **AC-2**: control — `ACTIVE` tenant assume byte-unchanged; the 773 S4 IT's Q4 pin is updated to the decision. — ACTIVE control green on red and fix; the Q4 pin renamed (`gate_starOperatorPendingTenant_assigned_statusJudgedByAuth`, gate unchanged under B); outage + no-`tenantStatus` controls green.
 
 # Related Specs
 
@@ -165,3 +165,54 @@ Consequences recorded with the decision (contract `account-tenant-domain-subscri
 - **Deploy order.** account first, then auth; both ride the same bake.
   - Old account image + new auth: unchanged behaviour (no `tenantStatus` → not refused).
   - New account image + old auth: issued, but with no reach.
+
+---
+
+# Implementation (2026-10-16 UTC, PR #4392)
+
+- **account-service.**
+  - `TenantEntitledDomainsQueryUseCase.entitlement(tenantId)` returns `{domainKeys, tenantStatus}`. A non-ACTIVE tenant answers `[]` before any subscription or ceiling read.
+  - `TenantEntitledDomainsController` adds `tenantStatus` to the response.
+  - `effectiveEntitledDomains` delegates to it, so it is consistent for every in-process caller.
+- **auth-service.**
+  - `AccountServiceClient.listEntitledDomains` parses `tenantStatus`. It throws the new `TenantNotActiveException` **after** the resilient call, so the answer is not a circuit-breaker failure, is not retried, and is not re-wrapped as "unavailable". A missing field counts as not-a-no.
+  - `TenantClaimTokenCustomizer`: the operator assume branch makes **one** read (`fetchEntitledDomainsForOperatorAssume`) for both the membership/`'*'` path and the partnership host-reach path.
+    - On `TenantNotActiveException` it throws `invalid_grant` + `tenant_not_active` before the JWT is encoded, so nothing is issued and no authorization is saved.
+    - On any other failure it stays fail-soft.
+  - The other callers of the read (`authorization_code` / `refresh_token` / pool principal) catch it as "no entitled domains".
+  - The workload branch is untouched (Q4).
+- **admin-service.** No production change; the two gate pins are renamed (Q5).
+- **Contracts.**
+  - `account-tenant-domain-subscriptions.md` § entitled-domains: `tenantStatus`, the `[]` rule, the old-auth-image note, and the consequences for other callers.
+  - `auth-api.md` § Assume-Tenant Exchange: the tenant status gate and the Errors row `tenant_not_active`.
+  - `platform/error-handling.md` `OAUTH_INVALID_GRANT`: the constant is registered.
+
+## Red → green (counted from CI lane logs)
+
+| commit | lane / job | result |
+|---|---|---|
+| `756b0393a` (tests only) | iam B `116987571776` | `auth-service:integrationTest` 165 run, **4 failed**, all `AssertionFailedError expected: 400 but was: 200` — `'*'`×PENDING, `'*'`×SUSPENDED, company×SUSPENDED, partnership host×SUSPENDED (a token was issued). The 3 controls passed. account-service did not run (Gradle stops at the first failing module) |
+| `756b0393a` | iam A `116987572283` | the 2 renamed admin gate pins passed (admin gate unchanged) |
+| `01ac282b0` (auth fix only — pushed alone so the lane reaches account) | iam B `116992202662` | auth 165 / 0 failed. `account-service:integrationTest` 160 run, **3 failed**, all assertion failures: `Expected an empty value at JSON path "$.domainKeys" but found: ["wms"]` ×2 (PENDING, SUSPENDED) and `No value at JSON path "$.tenantStatus"` ×1 (the ACTIVE control's additive field) |
+| `a3731ad5e` (account fix) | iam B `116995775518` | auth 165 · account 160 · gateway 43, **0 failed** (10 × BE-639 `PASSED`) |
+| `a3731ad5e` | iam A `116995775591` | admin 333 · security 24, 0 failed |
+| `a3731ad5e` | Build & Test `116995770826` | 0 failed (iam auth/account/admin unit tests executed) |
+
+All 35 checks on `a3731ad5e` that were not skipped passed.
+
+## Branch e2e (assume path changed)
+
+- **federation-hardening-e2e**, run `38907749786`, job `116996176977`: **20 passed, 1 flaky**. The flaky one is `tenant-switch-rescope.spec.ts:110` — the known TASK-BE-516 flake. Its first-try error was `scm leg must be HEALTHY (ok) on globex…`, and `tenant_not_active` appears 0 times in the log.
+- **nightly-e2e**, run `38907755999`: all jobs success.
+  - Platform Console full-stack (`116995904604`): 12 passed.
+  - web-store full-stack (`116996183879`): 14 passed.
+  - iam full (`116995551612`): 3/3.
+  - scm (`116995551800`): 11/11.
+  - fan (`116995551750`): 4/4.
+  - ecommerce×wms (`116995551832`): 2/2.
+  - wms gateway-master (`116995551572`): 2/2.
+
+## ⚪ Open
+
+- **Partnership host reach — old auth with new account.** The delegated slice's roles are carried verbatim even when `entitled_domains` is empty, so "old auth image + new account image" does **not** zero a partnership token's roles for a SUSPENDED host. The new auth refuses it. This is the same as today's outage behaviour for that path. Both images ride the same bake, so the window does not exist on the demo host.
+- **Not live.** Live verification → next demo window (bake row in the report).
