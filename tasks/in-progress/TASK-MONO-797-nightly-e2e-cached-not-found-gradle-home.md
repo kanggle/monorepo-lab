@@ -159,8 +159,14 @@ liveness, packaging, AMI generation, launcher freshness, deployed fan surface, r
 issue) succeeded.
 
 After this run, only the wording of the "recovered" warning and the script header
-changed (they now say that saving a clean entry is not guaranteed; see ⚪ below). The
-re-dispatch on that commit is recorded below.
+changed (they now say that saving a clean entry is not guaranteed; see ⚪ below).
+Re-dispatch on that commit (`30a15aef7`) → run **`38892589550`**: **15/15 success**,
+and it took the new path again. scm (`116945402533`) and fan (`116945402501`) restored
+main's newer poisoned entry (`…-f17216b1d…`, so main's nightly kept re-saving the record
+in the meantime), failed the first attempt from the cached record, and recovered on
+refresh. scm ran 11 tests and fan ran 4, 0 failures. PR #4391's ci.yml checks: 35 pass /
+34 skipping / 0 fail, including the two smoke `e2e` lanes, which now also run through
+the wrapper (download mode).
 
 ⚪ **Not provable on a branch: that main saves a clean gradle-home.** On a non-default
 branch setup-gradle is `cache-read-only: true` (job log line `cache-read-only: true`), so
