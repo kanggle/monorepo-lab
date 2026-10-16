@@ -4,7 +4,7 @@ TASK-FE-108
 
 # Status
 
-review
+done
 
 # Title
 
@@ -68,7 +68,7 @@ ecommerce-microservices-platform
 - [x] **AC-0** — 착수 시 재측정: 로컬/e2e 로 "가입 → 즉시 첫 로그인" 을 재현하고 스토어 서버 로그의 실제 NextAuth 에러 타입을 읽는다. 가정하지 않고 file:line 으로 쿠키/리다이렉트 경로 표를 남긴다.
 - [x] **AC-1** — 🔴 대조군: "가입 직후 첫 로그인"은 실패(현재) → 구현 뒤 성공. "이미 가입된 계정의 일반 로그인"(대조군)은 이전·이후 모두 변화 없이 성공.
 - [x] **AC-2** — 재시도 경로(현재 성공) 가 구현 뒤에도 그대로 성공 — 회귀 없음.
-- [ ] **AC-3** — 라이브 데모 창에서 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공. ⚪ 다음 데모 창.
+- [x] **AC-3** — 라이브 데모 창에서 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공. ⚪ 다음 데모 창. → ✅ 28차 창(2026-10-16 UTC), § 28차 창 라이브.
 
 # Related Specs
 
@@ -158,3 +158,15 @@ AMI `ami-00701c1fa528b5866`. 위 «다음 데모 창 절차» 그대로 · 소�
 - **AC-1 ✅** — 🔴 bite 는 CI 로(로컬 web-store vitest 는 Node 24 기동 불가): 첫 커밋(시험만 · 수정 전 코드)에서 `Frontend unit tests` 가 **FE-108 3칸만 빨강**(`/signup` 자동 시작 뒤 버튼 잠김 · bfcache 재무장 · `/login` 리다이렉트 중 잠김), 회귀 칸 2(실패 시 재무장 ×2) 초록, 다른 파일 132 초록 + 수정 전 `LoginForm` 의 미처리 rejection 1. 수정 커밋에서 `signup-page`(7) · `login-form`(9) 초록 · web-store 134 파일 초록 · 미처리 0. 로컬 `tsc --noEmit` · `next lint` rc=0.
 - **AC-2 ✅** — 재시도 경로(`/login` 단일 클릭)는 같은 `signIn` 이고 성공 경로에서 버튼만 잠긴 채 남는다 — 기존 `login-form` 칸(클릭 → `signIn('iam', {callbackUrl})` · `from` 전달 · 외부 URL 폴백) 전부 초록. e2e(`helpers/auth.ts` · `consent-decline` 등)는 새로 연 `/login` 에서 한 번 누르는 모양이라 영향 없음(grep).
 - **AC-3 ⚪** — 다음 데모 창: 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공 + `/signup` 에서 버튼을 눌러도(자동 이동 중) 실패하지 않음.
+
+# 28차 창 라이브 (2026-10-16 UTC) — AC-3
+
+- 스토어 = Vercel Production(#4301 `69da5d1b5` 이후) · 백엔드 = AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`.
+- 소유자 브라우저: 스토어 신규 가입 → 첫 로그인이 **재시도 없이 성공** ✅.
+- 위 리뷰 이동 기록의 «+ `/signup` 에서 버튼을 눌러도 실패하지 않음» 은 AC-3 문장에 없는 부가 칸이다 — 이번 창 결과에 따로 적히지 않았다(⚪, 단위 시험 `signup-page.test.tsx` 가 맡는다).
+- 기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — review → done
+
+- (a) `gh pr view 4301`: `state=MERGED` · `mergedAt` 2026-10-11T10:49:36Z · `mergeCommit` `69da5d1b5`. (b) `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0 (19 pass / 49 skipped).
+- (d) AC 절을 열어 동사별로: AC-0 재현 · file:line ✅ · AC-1 대조군(실패 → 성공 · 일반 로그인 불변) ✅ · AC-2 재시도 경로 회귀 없음 ✅ · AC-3 «라이브: 신규 가입 → 즉시 첫 로그인이 재시도 없이 성공» = 위 ✅. 전부 닫힘.

@@ -8,7 +8,7 @@ A platform (`'*'`) operator can assume a tenant that is not `ACTIVE` (`PENDING` 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -215,4 +215,20 @@ All 35 checks on `a3731ad5e` that were not skipped passed.
 ## ⚪ Open
 
 - **Partnership host reach — old auth with new account.** The delegated slice's roles are carried verbatim even when `entitled_domains` is empty, so "old auth image + new account image" does **not** zero a partnership token's roles for a SUSPENDED host. The new auth refuses it. This is the same as today's outage behaviour for that path. Both images ride the same bake, so the window does not exist on the demo host.
-- **Not live.** Live verification → next demo window (bake row in the report).
+- **Not live.** Live verification → next demo window (bake row in the report). → done in the 28th window, below.
+
+## 28th window live (2026-10-16 UTC)
+
+- AMI `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`; `0f544dd64` is an ancestor) — `iam-auth-service` and `iam-account-service` from the same bake (no split).
+- **Company operator × `SUSPENDED`** ✅ → `400 invalid_grant`, `error_description` `tenant_not_active`, no token; the membership / grant snapshot is unchanged. Two samples: `w28-pending`'s first admin and `w28-shellco`'s creator (both throwaway tenants, suspended in the window — never `demo-corp`).
+- **Reactivate** ✅ → the next exchange is `200`, roles byte-identical, nothing re-granted.
+- **account-service direct** ✅ `GET /internal/tenants/<suspended>/entitled-domains` → `{"domainKeys":[],"tenantStatus":"SUSPENDED"}`; `demo-corp` `ACTIVE` with its keys. The gateway response carries `tenantStatus` too.
+- **Controls** ✅ the workload `product-service-client` assumed into `ecommerce` is unchanged (`entitled-domains` 200 with `tenantStatus":"ACTIVE"`, `TASK-BE-638` live); `demo@demo.com` assumes `ACTIVE` `demo-corp` with all its roles (`TASK-MONO-792`~`795` AC-2 live).
+- ⚪ **`'*'` × `PENDING` / `SUSPENDED` (plan check 1)** — the demo has no unconfined `'*'` operator with an IdP login. `admin` / `dev1` are `'*'` with a placeholder `oidc_subject` and no credential; `platform@demo.com` is confined to `fan-platform` and is refused at the assignment gate **before** the status read, so its refusal is the confinement, not `tenant_not_active`. These rows stay covered by the auth IT (AC-1); the live check is carried by `TASK-MONO-672` § Order «Still open» 1.
+- ⚪ Optional failure mode (account-service stopped) — not run.
+- Recorded also in `TASK-MONO-672` § 28th window — harvest.
+
+## Close (2026-10-16 UTC) — review → done
+
+- (a) `gh pr view 4392`: `state=MERGED`, `mergedAt` 2026-10-16T13:54:00Z, merge commit `0f544dd64`. (b) An ancestor of `origin/main` (`1c8ee22cb`). (c) 0 failing checks at merge (35 pass / 34 skipped).
+- (d) AC section read against each verb: AC-0 «measured matrix + chosen design» ✅ · AC-1 «each refused row is refused, nothing issued» — IT for all four rows (red 4 → green), and live for company × `SUSPENDED` ✅ · AC-2 «control — `ACTIVE` byte-unchanged; Q4 pin updated» — IT, plus live reactivation byte-identical ✅. None of the ACs asks for the live `'*'` row, so its ⚪ does not hold the ticket open.

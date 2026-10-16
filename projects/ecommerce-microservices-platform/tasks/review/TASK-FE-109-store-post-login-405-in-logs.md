@@ -75,3 +75,10 @@ ecommerce-microservices-platform
 # Failure Scenarios
 
 1. 405 를 막으려고 `/login` 에 POST 핸들러를 추가한다 — 증상만 지우고 vitals 는 계속 버려진다.
+
+---
+
+# 28차 창 메모 (2026-10-16 UTC) — 닫지 않음
+
+- AC-1 의 라이브 칸(«다음 창 Vercel 로그에서 `POST /login 405` 0줄» + vitals 대조군)은 이번 창에서 **재지 않았다** ⚪ — 스토어 Vercel 요청 로그를 읽지 않았다. 이 칸에는 AMI 가 아니라 Vercel 로그가 필요하다.
+- 그래서 `review/` 에 그대로 둔다. 다음 창의 할 일 목록: `TASK-MONO-672` § Order «Still open» 8.

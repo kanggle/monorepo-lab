@@ -8,7 +8,7 @@ The iam gateway exposes account-service tenant lifecycle writes: `PATCH /interna
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -159,3 +159,18 @@ Searched `projects/*/apps/gateway-service` for an `/internal` route predicate, f
 ## Verification plan for the next demo window (rides the next AMI bake, owner decision 2026-10-16)
 
 Live check against `iam.local` with a `product-service-client` token assumed into `ecommerce`: `PATCH /internal/tenants/ecommerce` → 404 or 403, never 200, and the tenant stays `ACTIVE`. `POST /internal/tenants` → 404 or 403. `GET /internal/tenants` → 404 or 403. Control: seller provisioning (`POST /internal/tenants/ecommerce/accounts`) still 201, and console tenant create/suspend through admin-service still works.
+
+## 28th window live (2026-10-16 UTC)
+
+- AMI `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`; `a3eef4249` is an ancestor) — `iam-gateway-service` from this commit.
+- A `product-service-client` workload token (client credentials, tenant `global-account-platform`), and the same token assumed into `ecommerce`, against `iam.local`:
+  - `PATCH /internal/tenants/ecommerce {"status":"ACTIVE"}` → **404** · `GET /internal/tenants/ecommerce` → **404** · `GET /internal/tenants` → **404** · `POST /internal/tenants` → **404** · dot-segment `/internal/tenants/ecommerce/../x` → **404**. Never 200. `ecommerce` is still `ACTIVE` afterwards.
+  - Control: `GET /internal/tenants/ecommerce/entitled-domains` (assumed) → **200** `{"tenantId":"ecommerce","domainKeys":["ecommerce","wms"],"tenantStatus":"ACTIVE"}`.
+  - Control: the admin-service tenant create / suspend path still works — the 28th created and suspended three throwaway tenants through it (`TASK-MONO-672` § 28th window — harvest, 773 AC-4 row).
+  - ⚪ The seller-provisioning control (`POST /internal/tenants/ecommerce/accounts` 201) was not exercised separately; `seed-ecommerce` ran green on the fresh volume. This was a verification-plan line, not an AC — AC-3's control is admin-service, measured above.
+- Recorded also in `TASK-MONO-672` § 28th window — harvest.
+
+## Close (2026-10-16 UTC) — review → done
+
+- (a) `gh pr view 4390`: `state=MERGED`, `mergedAt` 2026-10-16T11:50:01Z, merge commit `a3eef4249`. (b) An ancestor of `origin/main` (`1c8ee22cb`). (c) 0 failing checks at merge (18 pass / 49 skipped).
+- (d) AC section read against each verb: AC-0 «measured answers + chosen fix + why» ✅ · AC-1 «own workload token PATCH refused, status unchanged» — IT 403 and live 404, `ACTIVE` unchanged ✅ · AC-2 «POST / GET with a non-admin workload token refused» — IT 403 and live 404 ✅ · AC-3 (control) «admin-service create / status change unchanged» — no admin-service / account-service code touched, admin ITs green, and live tenant create / suspend worked ✅.

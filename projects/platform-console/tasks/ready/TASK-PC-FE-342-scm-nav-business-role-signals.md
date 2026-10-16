@@ -91,3 +91,7 @@ frontend
 1. 굽기 전에 머지 — 위 머지 게이트의 거짓 배지 · 버튼 숨김.
 2. `SCM_OPERATOR` 를 `serverRequires` 에 넣는다 — 진입 역할은 업무 API 를 열지 않으므로 신호가 서버보다 넓어진다.
 3. 발송 재시도 버튼을 WMS 역할로 판정 — 서버(물류)는 SCM 역할만 본다(Q3).
+
+# Merge gate — 28th window
+
+- 2026-10-16 UTC — gate met: the bake carrying 792/793/794/795 was live-verified in the 28th window (2026-10-16) — may now be implemented/merged. (AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`; this ticket's source `TASK-MONO-792` → `done/`; results in `TASK-MONO-672` § 28th window — harvest.)

@@ -8,7 +8,7 @@ TASK-MONO-793
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -53,7 +53,7 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 - [x] **AC-0** — 재측정: 쓰기 엔드포인트 전수 · 🔴 `entitled_domains∋erp` 가 역할 없이 READ 를 여는 규칙(`RoleScopeAuthorizationAdapter.java:80-96`)이 «조회 세트 없음 → 조회 403» 을 깨는지 · 업무 구분안 대조(OD-6). → § AC-0 기록(2026-10-15 UTC) — **깬다**(실측) · OD-6 을 글자 그대로 못 가는 점 여섯 → § 질문과 추천. STOP 뒤 소유자 결정(§ 소유자 결정, 2026-10-15 UTC) 수령.
 - [x] **AC-1** — 🔴 대조군: 결재 세트만 → 기준정보 변경 403 · 결재 200 / 조회 세트 → 변경 403 / `ERP_OPERATOR` 만 → 업무 변경 403 / 결재 자격(직무 분리) 거절은 역할과 무관하게 유지. → masterdata `MasterdataBusinessRoleAdapterTest` · `MasterdataPersonalAndSubjectGateTest`(실 어댑터) · approval `ApprovalBusinessRoleGateTest`(ActorContext + 포트) · read-model `ReadModelBusinessRoleGateSliceTest`(실서명 JWT · 실 체인) · notification `NotificationPersonalGateTest` · auth `erp793_*` · admin 위임 422. 직무 분리 = 집합체 가드, 역할을 읽지 않는다(기존 `ApprovalRouteTest` · `ApprovalApplicationServiceTest` 무변경 초록). § Red · § Green.
 - [x] **AC-2** — 이전 호환 대조군 · 부서 범위(`org_scope`) 판정 불변. → 세 고리: V0057 IT(legacy-compat = 카탈로그 = ERP 4 포함 · `ERP_OPERATOR` 세트 → 4 역할 · 파트너십 2 scope) · auth(`erp793_legacyCompat_fullErp` — legacy-compat → `ERP_OPERATOR` + 4) · 서비스(legacy 토큰이 모든 경로 통과 — 네 서비스 시험의 `legacy*` 대조군) · `org_scope`: `subject_orgScopeUnchanged`(결재 대상 GET 의 부서 범위 판정 그대로) · `readRoleTargetedReadStillScopeGated` · erp IT 144/0(부서 범위 IT 포함). ⚪ 라이브는 AC-3.
-- [ ] **AC-3** — 배포 상태를 따로 적는다. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪.
+- [x] **AC-3** — 배포 상태를 따로 적는다. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪. → **갱신 § 배포 상태 — 28차 창 (2026-10-16 UTC)**: `main` #4384 `baff0fd45` · AMI `ami-00ef8cc1057cca59b` @ `8905d2c29` · 라이브 ✅.
 
 # Related Specs
 
@@ -194,3 +194,32 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 | 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-793» (V0057 행 수 앞/뒤 · AC-1/2 라이브 · IAM 부서 선택기 저하 기록) |
 | 콘솔 | 변경 없음(이 PR). ERP 신호 · 알림 종 갈래는 `TASK-PC-FE-343`(ready) — **굽기 라이브 확인 뒤에만 머지** |
 | 기계 클라이언트 | `erp-platform-internal-services-client`(범위만) — 범위 갈래 유지로 **계속 통한다**(SCM 과 다름 — 기록) |
+
+# 배포 상태 — 28차 창 (2026-10-16 UTC) — AC-3 닫힘
+
+| 층 | 상태 |
+|---|---|
+| `main` | ✅ PR #4384 → `baff0fd45` (2026-10-16T00:09:19Z) · 머지 시점 `statusCheckRollup` 실패 0 (22 pass / 45 skipped) |
+| AMI | ✅ `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`, `baff0fd45` 가 조상) · 792 · 794 · 795 와 같은 굽기 · Flyway admin V0052..V0059 전부 success |
+| 데모 창 라이브 | ✅ 아래 |
+| 콘솔 | `TASK-PC-FE-343` 머지 게이트 충족(그 티켓에 한 줄 적음) |
+| 기계 클라이언트 | ✅ 라이브로 «계속 통한다» 확인: `erp-platform-internal-services-client` client-credentials 토큰(scope `erp.read erp.write`, 테넌트 `erp`)으로 `erp-platform-masterdata:8080` 직접 GET 200 · 부서 `BE632-PROBE` 생성 **201** (`TASK-BE-632` AC-5 ⚪ 를 닫은 측정과 같은 호출). 첫 시도의 403 `AUDIENCE_FORBIDDEN` 은 ERP 엣지 게이트웨이(설계상 `platform-console-web` 청중만 — MONO-696/697)를 거친 측정 경로 탓 |
+
+**V0057 행 수(읽기 전용).** 신선 볼륨이라 «앞» = `ERP_OPERATOR` 를 가진 프리셋 3개(`erp-full` · `all-domains-full` · `legacy-compat`)로 셈한다. 뒤: `sets_with_erp_operator` **0** · `sets_with_approval_write` **4** (= 3 + 1) · `sets_with_masterdata_write` **4** (= 3 + 1) · `partnerships_with_erp_operator` **0** — 완료 판정 주석과 일치.
+
+**AC-2 라이브(이전 호환)** ✅ `demo@demo.com`(legacy-compat) assume `demo-corp` → `roles` ∋ `ERP_OPERATOR`(파생) + ERP 4 역할 · `scope` 에 `erp.write` 없음 · TTL 300 · erp departments GET 200.
+
+**AC-1 라이브 대조군** ✅ `requester@demo.com`(`demo-corp`), 프리셋 하나씩 → 바이트 동일 복원:
+- `erp-approval-operate` 만 → departments **403** · `employees/me` 200(개인, Q2) · 결재 목록 200 · 부서를 대상으로 한 결재 상신 → 422 `approver_unresolved`(**`subject_unresolved` 아님** — 대상 GET 이 `ERP_APPROVAL_WRITE` 로 통과, Q3).
+- `erp-read` 만 → GET 200 · 부서 생성 **403** · 결재 생성 **403**.
+- ERP 세트 없음(`wms-inventory-operate` 만) → departments **403**(Q1 — 793 전에는 구독만으로 200).
+- 남은 표본: 결재 초안 `MONO793-PROBE`(DRAFT) — 다음 굽기의 신선 볼륨이 지운다.
+- ⚪ 미측정(AC 아님 — 672 런북의 부가 칸): legacy-compat 의 부서 생성 · 상신 → 승인 · 알림 종 `degradedDomains ∋ erp` · IAM `org_scope` 부서 선택기 폴백(Q5) · 직무 분리(자기 승인).
+
+기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — in-progress → done
+
+- (a) `gh pr view 4384`: `state=MERGED` · `mergedAt` 2026-10-16T00:09:19Z · `mergeCommit` `baff0fd45`. (b) `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0.
+- (d) AC 절을 열어 동사별로: AC-0 재측정 + 소유자 결정 ✅ · AC-1 대조군 ✅ · AC-2 이전 호환 · `org_scope` 불변 ✅ · AC-3 «배포 상태를 따로 적는다» = 위 표 ✅. 전부 닫힘.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, 마지막 AC 는 배포 상태 기록뿐이었다.

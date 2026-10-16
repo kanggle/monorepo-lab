@@ -8,7 +8,7 @@ WMS inventory-service list endpoints return **500** — native-query rows are ca
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -62,10 +62,10 @@ Only the inventory list is measured as 500. The other three lists share the cast
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: each of the four endpoints is measured red, with the reason recorded. The ticket also records why no existing test caught it.
-- [ ] **AC-1**: all four list endpoints return 200 with rows, in an IT on the same driver and dialect the service runs with.
-- [ ] **AC-2**: a test pins the helper against each accepted input type, and fails on an unknown type with a message naming the column.
-- [ ] **AC-3**: live, after the next re-bake. Use `GET /api/v1/inventory?size=1` with the demo operator token, and check the console «WMS 재고» screen. Without a bake, record ⚪ and the reason.
+- [x] **AC-0**: each of the four endpoints is measured red, with the reason recorded. The ticket also records why no existing test caught it. → § Implementation Notes (red 4 of 4, run 38890745632).
+- [x] **AC-1**: all four list endpoints return 200 with rows, in an IT on the same driver and dialect the service runs with. → `NativeListQueryTimestampIntegrationTest` (Testcontainers PostgreSQL 16) green at merge — § Close.
+- [x] **AC-2**: a test pins the helper against each accepted input type, and fails on an unknown type with a message naming the column. → `NativeRowValuesTest` — § Implementation Notes · § Close.
+- [x] **AC-3**: live, after the next re-bake. Use `GET /api/v1/inventory?size=1` with the demo operator token, and check the console «WMS 재고» screen. Without a bake, record ⚪ and the reason. → § 28th window live (2026-10-16 UTC).
 
 # Related Specs
 
@@ -89,4 +89,18 @@ Only the inventory list is measured as 500. The other three lists share the cast
 - **AC-0 (red, measured)**: `NativeListQueryTimestampIntegrationTest` (Testcontainers PostgreSQL 16, through the four repository ports) on the unfixed code: 4 of 4 methods red with `java.lang.ClassCastException` at the repository call (inventory · transfer · adjustment · movement) — CI job `Integration (inventory + inbound + gateway-service, Testcontainers) / integration`, run 38890745632, job 116939445990, head `b166f110c`; the Gradle task reported `30 tests completed, 4 failed` (the other 26 inventory ITs green). The CI log prints no exception message, so the `Instant`→`Timestamp` wording comes from the live log in the Goal, not from this run.
 - **Why no existing test caught it**: no test called any of the four list queries against a real database. The only coverage of the list paths is `@WebMvcTest` slice tests (`InventoryQueryControllerSliceTest`, `MovementQueryControllerSliceTest`, `TransferControllerSliceTest`, `AdjustmentControllerSliceTest`) that mock the use case, so the repository `mapRow` never ran; the existing ITs (`AdjustmentTransferIntegrationTest`, …) drive the mutation use cases and read via JDBC, not the native list queries.
 - **Fix**: one helper `adapter/out/persistence/NativeRowValues.instant(Object, String column)` (Instant · Timestamp · OffsetDateTime · LocalDateTime as UTC · null kept · unknown type -> `IllegalStateException` naming the column and class), used at all four sites. Pinned by `NativeRowValuesTest`.
-- **Sibling grep** (`java.sql.Timestamp` in `projects/*/**/src/main` + `libs/`): the 4 sites above only. iam `JdbcEventDedupeAdapter` / `SasAuthorizationRevocationAdapter` use `Timestamp.from(...)` as a bound parameter and `ConsumerPoolLegacyMoveRepositoryImpl` uses `rs.getTimestamp(...)` (JDBC API, type-safe) — not the defect. Other wms `createNativeQuery` users (masterref repositories, `AsnRepositoryImpl`) are DML / `Number` reads, no timestamp column read.
+- **Sibling grep** (`java.sql.Timestamp` in `projects/*/**/src/main` + `libs/`): the 4 sites above only.
+
+# 28th window live (2026-10-16 UTC) — AC-3
+
+- AMI `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`; `f17216b1d` is an ancestor).
+- The demo operator's token: `GET /api/v1/inventory?size=1` → **200**, with non-null `lastMovementAt` · `createdAt` · `updatedAt` (27th window: `500`). Transfers list → 200.
+- The console «WMS 재고» screen renders rows (owner browser, during the `TASK-PC-FE-338` check).
+- Not measured live: the adjustment and movement lists (optional in AC-3; covered by the IT).
+- Recorded also in `TASK-MONO-672` § 28th window — harvest.
+
+# Close (2026-10-16 UTC) — in-progress → done
+
+- (a) `gh pr view 4389`: `state=MERGED`, `mergedAt` 2026-10-16T11:10:47Z, merge commit `f17216b1d`. (b) An ancestor of `origin/main` (`1c8ee22cb`). (c) 0 failing checks at merge (14 pass / 52 skipped); among the passes, `Integration (inventory + inbound + gateway-service, Testcontainers) / integration` (run 38891374650, job 116941497354 — the lane that runs `NativeListQueryTimestampIntegrationTest`, red 4 of 4 on `b166f110c`) and `Build & Test (JDK 21, Linux)` (job 116941498051 — unit tests incl. `NativeRowValuesTest`).
+- (d) AC section read against each verb: AC-0 «measured red + reason + why not caught» — Implementation Notes ✅ · AC-1 «200 with rows in an IT on the same driver» — the IT lane green at merge ✅ · AC-2 «a test pins the helper … fails on unknown type naming the column» — `NativeRowValuesTest` ✅ · AC-3 «live after the re-bake» — above ✅.
+- Moved straight to `done/` without a `review/` stop: the implementation PR was reviewed at merge, and the last AC was a live measurement only. iam `JdbcEventDedupeAdapter` / `SasAuthorizationRevocationAdapter` use `Timestamp.from(...)` as a bound parameter and `ConsumerPoolLegacyMoveRepositoryImpl` uses `rs.getTimestamp(...)` (JDBC API, type-safe) — not the defect. Other wms `createNativeQuery` users (masterref repositories, `AsnRepositoryImpl`) are DML / `Number` reads, no timestamp column read.
