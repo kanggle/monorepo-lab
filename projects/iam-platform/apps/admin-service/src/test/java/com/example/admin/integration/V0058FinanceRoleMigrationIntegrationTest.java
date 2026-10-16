@@ -117,7 +117,7 @@ class V0058FinanceRoleMigrationIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class))
                 .isEqualTo(DomainPermissionSetPresets.SYSTEM_KEYS.size())
-                .isEqualTo(26);
+                .isEqualTo(33); // + TASK-MONO-795 V0059 (7 E-commerce presets)
     }
 
     @Test

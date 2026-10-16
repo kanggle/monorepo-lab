@@ -316,6 +316,56 @@ class AccountTypeEnforcementFilterTest {
     }
 
     // -----------------------------------------------------------------------
+    // TASK-MONO-795 (ADR-MONO-083 P8) — the gateway stays the coarse door. ECOMMERCE_OPERATOR is now the
+    // ENTRY role auth-service derives whenever >= 1 E-commerce business role rides the token, so a token
+    // with ONE business role (+ the derived entry role) still passes here; the per-area split is decided
+    // by each service (ecommerce iam-integration.md § 업무 역할), never by a second copy of that table here.
+    // -----------------------------------------------------------------------
+
+    @Test
+    void ecom795_oneBusinessRolePlusDerivedEntryRole_passesAdminAndOperatorPublicTrees() {
+        for (String path : new String[] {
+                "/api/admin/orders", "/api/admin/products/42", "/api/admin/users", "/api/admin/settlements/accruals",
+                "/api/promotions", "/api/shippings", "/api/notifications/templates"}) {
+            for (HttpMethod method : new HttpMethod[] {HttpMethod.GET, HttpMethod.POST}) {
+                MockServerWebExchange exchange = exchangeFor(method, path);
+                CapturingChain chain = new CapturingChain();
+                // a member-read-only operator — the narrowest set there is; the gateway still lets it through,
+                // and the service then answers 403 on everything outside its area
+                run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR", "ECOMMERCE_MEMBER_READ"));
+
+                assertThat(chain.called).as("%s %s", method, path).isTrue();
+                assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+            }
+        }
+    }
+
+    @Test
+    void ecom795_businessRoleWithoutEntryRole_returns403() {
+        // Not a token auth-service mints (the entry role is derived from the business role), but it pins
+        // the gateway's dependency on that derivation: the gateway judges the entry role, nothing else.
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/admin/orders");
+        CapturingChain chain = new CapturingChain();
+        run(exchange, chain, jwtWithRoles("ECOMMERCE_ORDER_READ"));
+
+        assertThat(chain.called).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void ecom795_businessRoleDoesNotOpenConsumerTrees() {
+        // A business role is an OPERATOR role: the consumer-only trees stay CUSTOMER-only (web-store untouched).
+        for (String path : new String[] {"/api/orders/1", "/api/products/1", "/api/users/me", "/api/coupons/me"}) {
+            MockServerWebExchange exchange = exchangeFor(path);
+            CapturingChain chain = new CapturingChain();
+            run(exchange, chain, jwtWithRoles("ECOMMERCE_OPERATOR", "ECOMMERCE_ORDER_WRITE"));
+
+            assertThat(chain.called).as(path).isFalse();
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Public routes (no security context)
     // -----------------------------------------------------------------------
 

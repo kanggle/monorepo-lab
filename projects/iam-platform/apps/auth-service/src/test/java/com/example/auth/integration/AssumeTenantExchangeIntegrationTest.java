@@ -437,11 +437,12 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("STEP 5 (ADR-032 D5): one account → consumer login token + operator domain token in one session; roles-only, NO account_type on either")
     void step5_unifiedIdentity_oneAccount_consumerAndOperatorTokens_rolesOnly() throws Exception {
-        // TASK-BE-632: the operator holds sets giving WMS_OPERATOR + ECOMMERCE_OPERATOR, and the
-        // selected tenant is entitled to wms + ecommerce → both survive the ceiling.
+        // TASK-BE-632: the operator holds sets giving WMS_OPERATOR + an E-commerce business role, and the
+        // selected tenant is entitled to wms + ecommerce → both survive the ceiling (TASK-MONO-795: the
+        // ECOMMERCE_OPERATOR entry role is DERIVED from the business role, never assigned).
         when(operatorAssignmentPort.resolveAssignment(anyString(), eq(SELECTED_TENANT)))
                 .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false,
-                        java.util.List.of("WMS_OPERATOR", "ECOMMERCE_OPERATOR")));
+                        java.util.List.of("WMS_OPERATOR", "ECOMMERCE_ORDER_READ")));
         stubEntitledDomains("wms", "ecommerce");
 
         String account = "unified-identity-step5-001";

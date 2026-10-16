@@ -98,7 +98,8 @@ class V0057MigrationShapeTest {
         assertThat(DomainPermissionSetPresets.SYSTEM_KEYS.subList(erpFull + 1, erpFull + 4))
                 .containsExactlyElementsOf(V0057_PRESETS);
         // 23 after V0057; TASK-MONO-794's V0058 adds the three Finance presets.
-        assertThat(DomainPermissionSetPresets.SYSTEM_KEYS).hasSize(26);
+        // TASK-MONO-795's V0059 adds the seven E-commerce presets (V0059MigrationShapeTest pins those).
+        assertThat(DomainPermissionSetPresets.SYSTEM_KEYS).hasSize(33);
     }
 
     @Test
