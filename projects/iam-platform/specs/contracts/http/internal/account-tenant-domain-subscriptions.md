@@ -73,13 +73,20 @@ ACTIVE 상태인 tenant↔domain 구독 전체를 조회한다. 선택적으로 
 
 **Response 200 OK**:
 ```json
-{ "tenantId": "acme-corp", "domainKeys": ["wms"] }
+{ "tenantId": "acme-corp", "domainKeys": ["wms"], "tenantStatus": "ACTIVE" }
 ```
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `tenantId` | string | 요청 테넌트 id (echo). |
-| `domainKeys` | string[] | `ACTIVE subscriptions ∩ effectiveCeiling(tenant)`. **ACTIVE 목록의 순서 보존.** 빈 배열은 **합법**이며 caller 가 fail-closed 해야 함을 뜻한다. |
+| `domainKeys` | string[] | `ACTIVE subscriptions ∩ effectiveCeiling(tenant)`. **ACTIVE 목록의 순서 보존.** 빈 배열은 **합법**이며 caller 가 fail-closed 해야 함을 뜻한다. 🔴 **테넌트가 `ACTIVE` 가 아니면(`PENDING` · `SUSPENDED`) 구독과 무관하게 `[]`** (TASK-BE-639, 소유자 결정 2026-10-16 UTC). |
+| `tenantStatus` | string | **TASK-BE-639 — 추가 필드(additive).** 테넌트 자신의 상태 `ACTIVE` \| `PENDING` \| `SUSPENDED`(`tenants.status`). 이 필드를 모르는 호출자는 무시해도 된다 — 위 `[]` 규칙이 그 호출자에게도 같은 결론(도메인 0)을 준다. |
+
+> **TASK-BE-639 — 비-ACTIVE 테넌트 (소유자 결정 2026-10-16 UTC, Q1 = B).** 이 엔드포인트는 assume 경로가 이미 매번 부르는 **유일한 account-service 읽기**다. 그래서 테넌트 상태를 여기에 싣는다 — 새 호출을 만들지 않는다. 두 가지가 같이 바뀐다:
+> - `tenantStatus` 를 싣는다. auth-service 는 운영자 assume 에서 이 값이 **확실히** `ACTIVE` 가 아니면 발급을 거절한다([auth-api.md § Assume-Tenant Exchange](../auth-api.md) — `error_description=tenant_not_active`).
+> - `domainKeys` 를 `[]` 로 낸다. 🔵 **옛 auth 이미지 안전장치**: `tenantStatus` 를 읽지 않는 auth-service 이미지(배포 순서상 account 가 먼저 나간 창)도 비-ACTIVE 테넌트로 assume 한 토큰에 `entitled_domains` 와 역할을 싣지 못한다 — 도메인 API 는 403 이다. 거절은 아니지만 도달 범위는 0 이다.
+> - **다른 호출자에게 생기는 일**: auth-service 의 `authorization_code` · `refresh_token` 발급(그 테넌트 사용자의 토큰)도 비-ACTIVE 테넌트면 `entitled_domains` 가 빠진다. admin-service 의 업무 권한 세트 쓰기 게이트(아래 «두 번째 호출자»)는 비-ACTIVE 테넌트에 세트 생성 · 수정 · 배정을 `422 DOMAIN_NOT_SUBSCRIBED` 로 거절한다 — 재활성 뒤 다시 할 수 있다.
+> - 404(미등록 테넌트)는 그대로다.
 
 > **derive 합성 (ADR-MONO-035 × ADR-MONO-047 § D6).** ADR-035 파생은 domain-keyed/per-domain 이므로 `derive(E ∩ C) = derive(E) ∩ derive(C)` — 즉 여기서 좁힌 `E ∩ C` 를 auth-service 가 그대로 파생해도 D6 이 요구하는 `derive(E) ∩ ceiling` 과 정확히 일치한다. 강제를 이 한 곳으로 모으면 "이 테넌트가 도메인 X 에 도달 불가함"이 one-query 속성이 된다.
 

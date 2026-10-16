@@ -156,6 +156,12 @@ signIn('iam', { callbackUrl: '/' }, { prompt: 'create' });
 - **assignment 게이트 (fail-CLOSED)**: admin-service `GET /internal/operator-assignments/check?oidcSubject=<sub>&tenantId=<audience>` 가 `assigned=true` 를 반환할 때만 발급한다. 미할당 / 알 수 없는 subject / 비-ACTIVE 운영자 / **admin-service 장애·circuit-open·timeout** 모두 → **토큰 미발급**, `invalid_grant`. ([auth-to-admin.md](./internal/auth-to-admin.md) — fail-closed)
 - **2단계 게이트 (fail-CLOSED, TASK-MONO-771 · ADR-MONO-080 D4)**: 같은 응답의 `mfaRequired` 가 `true`(또는 **필드 부재** — `true` 로 읽는다)이고 subject_token 의 `amr` 에 `mfa` 가 없으면(`amr` 부재 포함) **토큰 미발급** — `400 invalid_grant` + **`error_description=insufficient_user_authentication`**(고정 상수, 아래 Errors). 판정 술어는 `"mfa" ∈ amr` 하나다([jwt-standard-claims.md](../../../../../platform/contracts/jwt-standard-claims.md) `amr` 행). 요구 여부(`mfaRequired`)는 admin-service 가 계산하고, 비교는 발급자인 auth-service 가 한다 — 정책은 «들어가는 테넌트» 의 것이라 assignment · 플랫폼 `'*'` · 파트너십 host reach 어느 길이든 같다.
 - **`entitled_domains` (fail-SOFT, least-privilege)**: 선택된 tenant 의 ACTIVE subscriptions **만** (다른 assignment 와의 union 없음 — D3). account-service 장애 시 claim 을 **생략**하고 토큰은 발급한다 (fail-soft; 도메인은 `tenant_id` 게이트로 fallback). keystone `populateEntitledDomains` 재사용.
+- **테넌트 상태 게이트 (TASK-BE-639 · 소유자 결정 2026-10-16 UTC)**: 위 `entitled_domains` 읽기의 응답 `tenantStatus`([account-tenant-domain-subscriptions.md § GET /internal/tenants/{tenantId}/entitled-domains](./internal/account-tenant-domain-subscriptions.md#get-internaltenantstenantidentitled-domains))가 **확실히 `ACTIVE` 가 아니면**(`PENDING` · `SUSPENDED`) **토큰 미발급** — `400 invalid_grant` + **`error_description=tenant_not_active`**(고정 상수, 아래 Errors). 새 호출이 아니다 — 이미 하던 그 읽기 하나다.
+  - **누구에게나**: 플랫폼 `'*'` 운영자 · 소속(assignment) 운영자 · 파트너십 host reach 모두(Q2 · Q3). 소속 행은 지우지 않는다 — 테넌트가 재활성되면 다음 교환부터 다시 들어간다.
+  - **account-service 장애(5xx · timeout · circuit-open · 그 밖의 실패) · 응답에 `tenantStatus` 가 없음(옛 account 이미지)** → **지금 그대로 fail-soft**: 토큰은 발급되고 `entitled_domains` · `roles` 는 생략된다(도메인 API 403). 상태를 **모르면** 거절하지 않는다 — 콘솔의 테넌트 전환이 account-service 가용성에 묶이지 않게 하는 것이 이 결정의 조건이다(Q1). 옛 account 이미지의 경우 이 창에서는 지금처럼 구독대로 실린다(배포 순서: account 먼저 · auth 뒤 — 둘이 같은 굽기에 실리므로 창은 굽기 안에서 닫힌다).
+  - **판정 순서**: assignment 게이트 · 2단계 게이트 **뒤**다. 그래서 `tenant_not_active` 는 그 테넌트에 이미 «할당됨» 판정을 받은 subject_token 주인에게만 돌아간다 — 미할당 운영자에게 테넌트 상태를 드러내지 않는다.
+  - **workload assume 은 대상 아님**(Q4): 그 토큰은 `entitled_domains` · `roles` 가 없고(아래 표), 비-ACTIVE 테넌트로의 쓰기는 account-service `ActiveTenantGuard` 가 이미 `409 TENANT_SUSPENDED` 로 막는다. 워크로드 assume 은 이 읽기를 하지 않으므로 이 게이트를 지나지 않는다.
+  - 이미 발급된 토큰은 아래 «회수 지연» 문장 그대로다(정지 직후에도 `exp` + 60초까지).
 
 **Request 예** (form-urlencoded):
 ```
@@ -201,6 +207,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 |---|---|---|---|
 | 400 | `invalid_grant` | (자유 문구) | subject_token 무효/만료, **assignment 미할당**, **admin-service 장애/circuit-open/timeout** |
 | 400 | `invalid_grant` | **`insufficient_user_authentication`** (고정 상수) | **2단계 필요** — 위 2단계 게이트: `mfaRequired` 이고 subject `amr` 에 `mfa` 없음 (TASK-MONO-771) |
+| 400 | `invalid_grant` | **`tenant_not_active`** (고정 상수) | **선택된 테넌트가 `ACTIVE` 아님** — 위 테넌트 상태 게이트: account-service 가 `tenantStatus` ∈ {`PENDING`, `SUSPENDED`} 를 답함 (TASK-BE-639). 상태를 못 읽으면 이 거절이 아니라 fail-soft 발급 |
 | 400 | `invalid_request` | (자유 문구) | `audience` 누락/malformed, `subject_token`/`subject_token_type` 누락 |
 
 🔴 **판별자는 `error_description` 의 값 전체 일치다**(TASK-MONO-771 HS-C). RFC 6749 § 5.2 가 토큰 엔드포인트의 `error` 를 닫힌 목록으로 두므로 `error` 는 `invalid_grant` 그대로 두고, «2단계 필요» 는 고정 상수 `insufficient_user_authentication`(RFC 9470 의 어휘)으로 가른다 — 기존 `TOKEN_TENANT_MISMATCH` 와 같은 방식. **다른 어떤 `invalid_grant` 도 이 값을 `error_description` 으로 쓰지 않는다**(쓰면 콘솔이 미할당을 단계 상승으로 오독한다). 부분 일치 · 대소문자 무시 매칭 금지. 이 상수를 받은 클라이언트는 미할당이 아니라 **할당은 됐고 2단계가 모자란** 것으로 읽는다 — 운영자는 이미 «할당됨» 판정을 통과했으므로 이 구분이 운영자 존재를 새로 드러내지 않는다(subject_token 의 주인에게만 돌아간다).

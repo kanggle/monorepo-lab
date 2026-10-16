@@ -34,9 +34,11 @@ public class TenantEntitledDomainsController {
 
     @GetMapping("/{tenantId}/entitled-domains")
     public ResponseEntity<EntitledDomainsResponse> entitledDomains(@PathVariable String tenantId) {
+        TenantEntitledDomainsQueryUseCase.Entitlement entitlement = queryUseCase.entitlement(tenantId);
         return ResponseEntity.ok(new EntitledDomainsResponse(
-                tenantId, queryUseCase.effectiveEntitledDomains(tenantId)));
+                tenantId, entitlement.domainKeys(), entitlement.tenantStatus()));
     }
 
-    public record EntitledDomainsResponse(String tenantId, List<String> domainKeys) {}
+    /** TASK-BE-639: {@code tenantStatus} is additive; {@code domainKeys} is {@code []} for a non-ACTIVE tenant. */
+    public record EntitledDomainsResponse(String tenantId, List<String> domainKeys, String tenantStatus) {}
 }

@@ -563,6 +563,140 @@ class AssumeTenantExchangeIntegrationTest extends AbstractIntegrationTest {
         assertThat(assumed.get("tenant_id").asText()).isEqualTo(SELECTED_TENANT);
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-BE-639 (owner decisions 2026-10-16 UTC, Q1 = B · Q2 · Q3) — the selected tenant's
+    // status rides on the entitled-domains read the assume path already makes; a POSITIVE
+    // non-ACTIVE answer refuses the exchange (invalid_grant + tenant_not_active, nothing issued).
+    // The admin gate is unchanged (it says assigned=true for these rows — admin pins), so the
+    // identity is expressed here by the gate's answer shape: '*' (no org_scope) · company
+    // (membership) · partnership host reach (delegatedScope).
+    // -----------------------------------------------------------------------
+
+    private static final java.util.List<String> SETS = java.util.List.of("INVENTORY_READ", "INVENTORY_WRITE");
+
+    /** Exact-path stub at top priority, so a pattern stub another test left on the shared server cannot win. */
+    private void stubEntitledDomainsWithStatus(String tenantId, String status, String... domainKeys) {
+        StringBuilder keys = new StringBuilder();
+        for (int i = 0; i < domainKeys.length; i++) {
+            if (i > 0) keys.append(",");
+            keys.append("\"").append(domainKeys[i]).append("\"");
+        }
+        String statusField = status == null ? "" : ",\"tenantStatus\":\"" + status + "\"";
+        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenants/" + tenantId + "/entitled-domains"))
+                .atPriority(1)
+                .willReturn(WireMock.aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"tenantId\":\"" + tenantId + "\",\"domainKeys\":[" + keys + "]"
+                                + statusField + "}")));
+    }
+
+    private void assertRefusedTenantNotActive(MvcResult result) throws Exception {
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("error").asText()).isEqualTo("invalid_grant");
+        assertThat(body.get("error_description").asText()).isEqualTo("tenant_not_active");
+        assertThat(body.has("access_token")).as("nothing is issued").isFalse();
+    }
+
+    @Test
+    @DisplayName("🔴 BE-639 Q2: '*' 운영자 × PENDING 테넌트 → 400 invalid_grant + tenant_not_active, 토큰 없음")
+    void be639_starOperator_pendingTenant_refused() throws Exception {
+        String tenant = "be639-pending";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, SETS));
+        stubEntitledDomainsWithStatus(tenant, "PENDING");
+
+        assertRefusedTenantNotActive(assumeTenant(mintBaseToken("assume-op-639a"), tenant));
+    }
+
+    @Test
+    @DisplayName("🔴 BE-639 Q2: '*' 운영자 × SUSPENDED 테넌트 → 400 invalid_grant + tenant_not_active, 토큰 없음")
+    void be639_starOperator_suspendedTenant_refused() throws Exception {
+        String tenant = "be639-suspended-a";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, SETS));
+        stubEntitledDomainsWithStatus(tenant, "SUSPENDED");
+
+        assertRefusedTenantNotActive(assumeTenant(mintBaseToken("assume-op-639b"), tenant));
+    }
+
+    @Test
+    @DisplayName("🔴 BE-639 Q3: 회사 운영자(소속 행 유지) × SUSPENDED 테넌트 → 400 invalid_grant + tenant_not_active, 토큰 없음")
+    void be639_companyOperator_suspendedTenant_refused() throws Exception {
+        String tenant = "be639-suspended-b";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(
+                        true, java.util.List.of("dept-1"), null, false, SETS));
+        stubEntitledDomainsWithStatus(tenant, "SUSPENDED");
+
+        assertRefusedTenantNotActive(assumeTenant(mintBaseToken("assume-op-639c"), tenant));
+    }
+
+    @Test
+    @DisplayName("🔴 BE-639: 파트너십 host reach × SUSPENDED host → 400 invalid_grant + tenant_not_active (교차 조직 경로도 같은 게이트)")
+    void be639_partnershipHostReach_suspendedHost_refused() throws Exception {
+        String tenant = "be639-suspended-c";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null,
+                        new OperatorAssignmentPort.DelegatedScope(java.util.List.of("wms"),
+                                java.util.List.of("OUTBOUND_READ"))));
+        stubEntitledDomainsWithStatus(tenant, "SUSPENDED");
+
+        assertRefusedTenantNotActive(assumeTenant(mintBaseToken("assume-op-639d"), tenant));
+    }
+
+    @Test
+    @DisplayName("BE-639 대조군: ACTIVE 테넌트 (tenantStatus=ACTIVE) → 200, entitled_domains · roles 그대로")
+    void be639_control_activeTenant_unchanged() throws Exception {
+        String tenant = "be639-active";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, SETS));
+        stubEntitledDomainsWithStatus(tenant, "ACTIVE", "wms");
+
+        MvcResult result = assumeTenant(mintBaseToken("assume-op-639e"), tenant);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(assumed.get("tenant_id").asText()).isEqualTo(tenant);
+        assertThat(assumed.get("entitled_domains").toString()).contains("wms");
+        assertThat(assumed.get("roles").toString()).contains("INVENTORY_READ").contains("INVENTORY_WRITE");
+    }
+
+    @Test
+    @DisplayName("BE-639 대조군 (Q1 fail-soft): account-service 장애 → 거절 아님 — 토큰 발급, entitled_domains · roles 없음")
+    void be639_control_accountUnavailable_issuedWithoutRoles() throws Exception {
+        String tenant = "be639-outage";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, SETS));
+        wireMock.stubFor(WireMock.get(WireMock.urlPathEqualTo("/internal/tenants/" + tenant + "/entitled-domains"))
+                .atPriority(1)
+                .willReturn(WireMock.aResponse().withStatus(503)));
+
+        MvcResult result = assumeTenant(mintBaseToken("assume-op-639f"), tenant);
+        assertThat(result.getResponse().getStatus()).as("status unknown ⇒ not refused").isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(assumed.get("tenant_id").asText()).isEqualTo(tenant);
+        assertThat(assumed.has("entitled_domains")).isFalse();
+        assertThat(assumed.has("roles")).as("no entitlement read ⇒ no role, the reach is 0").isFalse();
+    }
+
+    @Test
+    @DisplayName("BE-639 대조군 (배포 순서): tenantStatus 없는 응답(옛 account 이미지) → 거절 아님, 지금 그대로")
+    void be639_control_responseWithoutTenantStatus_unchanged() throws Exception {
+        String tenant = "be639-old-account";
+        when(operatorAssignmentPort.resolveAssignment(anyString(), eq(tenant)))
+                .thenReturn(new OperatorAssignmentPort.AssignmentResult(true, null, null, false, SETS));
+        stubEntitledDomainsWithStatus(tenant, null, "wms");
+
+        MvcResult result = assumeTenant(mintBaseToken("assume-op-639g"), tenant);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode assumed = decodeJwtPayload(objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("access_token").asText());
+        assertThat(assumed.get("roles").toString()).contains("INVENTORY_READ");
+    }
+
     private JsonNode decodeJwtPayload(String jwt) throws Exception {
         String[] parts = jwt.split("\\.");
         assertThat(parts).hasSize(3);

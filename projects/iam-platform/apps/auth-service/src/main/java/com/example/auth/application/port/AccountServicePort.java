@@ -251,6 +251,9 @@ public interface AccountServicePort {
      * @param tenantId the tenant whose effective entitled domains to resolve
      * @return the effective entitled domainKeys (possibly empty)
      * @throws com.example.auth.application.exception.AccountServiceUnavailableException if account-service is down
+     * @throws com.example.auth.application.exception.TenantNotActiveException TASK-BE-639 — account-service
+     *         answered with a {@code tenantStatus} that is positively not {@code ACTIVE} (an answer, not a failure:
+     *         the operator assume refuses on it, every other caller reads it as «no entitled domains»)
      */
     List<String> listEntitledDomains(String tenantId);
 

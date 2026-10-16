@@ -95,6 +95,8 @@ class TenantPendingStatusIntegrationTest extends AbstractIntegrationTest {
                 jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE tenant_id = ?", id);
                 continue;
             }
+            // TASK-BE-639 measurement seeds a subscription (FK → tenants)
+            jdbc.update("DELETE FROM tenant_domain_subscription WHERE tenant_id = ?", id);
             jdbc.update("DELETE FROM account_roles WHERE tenant_id = ?", id);
             jdbc.update("DELETE FROM profiles WHERE account_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
             jdbc.update("DELETE FROM account_outbox WHERE aggregate_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
@@ -386,5 +388,47 @@ class TenantPendingStatusIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("TENANT_SUSPENDED"));
 
         assertThat(accountRepository.findByEmail(new TenantId(id), email)).isEmpty();
+    }
+
+    // ── TASK-BE-639 (owner decision 2026-10-16 UTC, Q1 = B) — entitled-domains carries the tenant status ─────
+
+    /**
+     * auth-service fills an operator assumed token's {@code entitled_domains} (and through it the role ceiling) from
+     * this endpoint, and since BE-639 refuses the exchange when {@code tenantStatus} is positively not ACTIVE. For a
+     * non-ACTIVE tenant the keys are {@code []} whatever the subscriptions say — so an auth image that does not read
+     * {@code tenantStatus} still mints no domain reach (the old-image safety half). AC-0 measured {@code [wms]} here
+     * for PENDING and SUSPENDED (the pin this replaces).
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "tenant status {0} → domainKeys [] · tenantStatus {0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"PENDING", "SUSPENDED"})
+    @DisplayName("🔴 BE-639: 비-ACTIVE 테넌트의 entitled-domains → domainKeys [] · tenantStatus 실림 (구독이 있어도)")
+    void entitledDomains_nonActiveTenant_emptyAndCarriesStatus(String tenantStatus) throws Exception {
+        String id = newTenantId();
+        seedTenant(id, tenantStatus);
+        jdbc.update("""
+                INSERT INTO tenant_domain_subscription (tenant_id, domain_key, status, created_at, updated_at)
+                VALUES (?, 'wms', 'ACTIVE', NOW(6), NOW(6))""", id);
+
+        mockMvc.perform(get("/internal/tenants/{id}/entitled-domains", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value(id))
+                .andExpect(jsonPath("$.domainKeys").isEmpty())
+                .andExpect(jsonPath("$.tenantStatus").value(tenantStatus));
+    }
+
+    @Test
+    @DisplayName("BE-639 대조군: ACTIVE 테넌트의 entitled-domains → domainKeys [wms] 그대로 · tenantStatus ACTIVE")
+    void entitledDomains_activeTenant_unchanged() throws Exception {
+        String id = newTenantId();
+        seedTenant(id, "ACTIVE");
+        jdbc.update("""
+                INSERT INTO tenant_domain_subscription (tenant_id, domain_key, status, created_at, updated_at)
+                VALUES (?, 'wms', 'ACTIVE', NOW(6), NOW(6))""", id);
+
+        mockMvc.perform(get("/internal/tenants/{id}/entitled-domains", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.domainKeys.length()").value(1))
+                .andExpect(jsonPath("$.domainKeys[0]").value("wms"))
+                .andExpect(jsonPath("$.tenantStatus").value("ACTIVE"));
     }
 }
