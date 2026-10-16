@@ -1882,6 +1882,9 @@ SCM 보충 운영 (재고보충 추천)   08:14 UTC · 테넌트 demo-corp 적�
 | `TASK-MONO-793` (ADR-083 P6, added 2026-10-16 UTC) | `baff0fd45` | ERP 4 services: subscription-only read removed · 4 `ERP_*_READ/WRITE` · auth derives `ERP_OPERATOR` · V0057. Live checks: § Next window — `TASK-MONO-793` |
 | `TASK-MONO-794` (ADR-083 P7, added 2026-10-16 UTC) | `cf36d1609` | Finance account/ledger: `FINANCE_VIEWER` removed · 5 roles incl. `FINANCE_LEDGER_CONTROL` · auth derives `FINANCE_OPERATOR` · V0058. Live checks: § Next window — `TASK-MONO-794` |
 | `TASK-MONO-795` (ADR-083 P8, added 2026-10-16 UTC) | `2eef1d91f` | 9 E-commerce services gate per area (13 roles) — order/product admin had no service check before · role-header check single-sourced (`libs/java-web` `RoleListHeader`) · auth derives `ECOMMERCE_OPERATOR` · V0059. Live checks: § Next window — `TASK-MONO-795` |
+| `TASK-BE-637` (wms, added 2026-10-16 UTC) | `f17216b1d` (#4389) | inventory-service list queries (inventory · transfer · adjustment · movement) read native-query timestamps through `NativeRowValues` — the inventory list `500` (27th window) becomes `200`. Live checks: step 7 |
+| `TASK-BE-638` (iam gateway, added 2026-10-16 UTC) | `a3eef4249` (#4390) | iam gateway no longer routes `POST`/`GET /internal/tenants` or `GET`/`PATCH /internal/tenants/{id}` (route `Path=/internal/tenants/*/*/**` + filter 403 `TENANT_SCOPE_DENIED`, `'*'` included). Image: `iam-gateway-service`. Live checks: step 7 |
+| `TASK-BE-639` (iam auth + account, added 2026-10-16 UTC) | `0f544dd64` (#4392) | operator assume into a `PENDING`/`SUSPENDED` tenant → `400 invalid_grant` `error_description=tenant_not_active`, nothing issued (`'*'`, company and partnership host reach; workload unchanged) · account `entitled-domains` carries `tenantStatus` and `domainKeys: []` for non-`ACTIVE` (so a set write into a non-`ACTIVE` tenant answers 422 `DOMAIN_NOT_SUBSCRIBED` until reactivation; the 773 `ORIGIN` write is unaffected — no entitlement check). Images `iam-auth-service` + `iam-account-service` in the same bake (if ever split: account first). Live checks: step 7 |
 
 🔴 **792–795 are one unit**: the domain services, admin (V0056–V0059) and auth must go out in the **same** bake — a split leaves the catalog advertising a split nothing enforces, or old tokens 403 on every screen. The console follow-ups `TASK-PC-FE-342` (SCM) · `343` (ERP) · `344` (Finance) · `345` (E-commerce) merge **only after** this bake's live checks pass. Owner decision 2026-10-16 UTC: `TASK-BE-637` · `TASK-BE-638` · `TASK-BE-639` also ride this bake (rows added when they merge).
 
@@ -1963,7 +1966,21 @@ P2 and P3 boot in the **same AMI**, so «measure V0052 completeness, then deploy
 - AC-3 live: `demo@demo.com` (an `iam`-credential operator — email-exempt per S3 option A) creates a second company → `201` · its `demo-corp` role and set rows byte-unchanged (compare a `SELECT` before/after).
 - AC-4 live: `SUPER_ADMIN` creates a tenant with a first-admin email → `/tenants` shows «관리자 대기» · no login/sign-up into it · accept the invitation → `ACTIVE`. Then the row actions (re-invite · 정리 · 활성화 마치기) on a second throwaway tenant.
 - AC-7 live: logout from the non-operator shell → the next login shows the IdP form (no silent SSO) → an operator logs in. This is also `TASK-PC-FE-331` AC-3 — owner decision 2026-10-15 UTC: 331 closes on this live result (e2e not accepted as a substitute; AC-0 waived by population 0; the `sso_wrong_account` branch and widget are kept).
-- `TASK-BE-638` (gateway `/internal/tenants/**` exposure — `ready/`, not baked unless merged first): S2 noted that `PENDING` makes it more urgent — **owner decision 2026-10-16 UTC: it rides this bake** (with `TASK-BE-637` and `TASK-BE-639`); its live check is added to the bake-contents table when it merges.
+- `TASK-BE-638` (gateway `/internal/tenants/**` exposure — `ready/`, not baked unless merged first): S2 noted that `PENDING` makes it more urgent — **owner decision 2026-10-16 UTC: it rides this bake** (with `TASK-BE-637` and `TASK-BE-639`); its live check is added to the bake-contents table when it merges. → Merged `a3eef4249`; checks in step 7.
+
+**7. `TASK-BE-637` · `TASK-BE-638` · `TASK-BE-639` live checks (added 2026-10-16 UTC).** Results go to each ticket (637 `in-progress/` · 638 and 639 `review/`).
+- `TASK-BE-637` AC-3: `GET /api/v1/inventory?size=1` with the demo operator's token → `200`, ≥ 1 row, non-null `lastMovementAt` · `createdAt` · `updatedAt` (not `500 INTERNAL_ERROR`) · the console «WMS 재고» screen renders rows · optional: transfer / adjustment / movement lists (movement needs `inventoryId` or `occurredAfter`) → `200`.
+- `TASK-BE-638`, against `iam.local` with a `product-service-client` token assumed into `ecommerce`:
+  1. `PATCH /internal/tenants/ecommerce {"status":"SUSPENDED"}` → `404` or `403`, never `200`; the tenant is still `ACTIVE` afterwards.
+  2. `POST /internal/tenants` and `GET /internal/tenants` → `404` or `403`.
+  3. Controls: seller provisioning `POST /internal/tenants/ecommerce/accounts` still `201` · console tenant create/suspend (through admin-service) still works · `GET /internal/tenants/ecommerce/entitled-domains` through the gateway still `200`.
+- `TASK-BE-639`:
+  1. A `SUSPENDED` and a `PENDING` tenant (the latter from the 773 AC-4 line above): token exchange with a `'*'` operator's base token and `audience` = each → `400 invalid_grant`, `error_description` exactly `tenant_not_active`, no `access_token`.
+  2. A company operator whose tenant is suspended in the console (membership kept) → `tenant_not_active`; reactivate → the next exchange `200` with roles back, nothing re-granted.
+  3. Directly on account-service: `GET /internal/tenants/<suspended>/entitled-domains` → `{"domainKeys":[],"tenantStatus":"SUSPENDED"}`.
+  4. Controls: switching into an `ACTIVE` tenant in the console unchanged (domain cards entitled) · workload `product-service-client` assuming `ecommerce` unchanged.
+  5. Optional failure mode: account-service stopped → a console tenant switch still succeeds, domain sections `403` (no roles). Restart it afterwards.
+- 🔴 Order inside the window: run the 773 AC-4 line (which makes the `PENDING` tenant) before 639 check 1, and do 639 check 2's suspension on a **throwaway** company — never `demo-corp`.
 
 ## When the window ends
 Move each ticket that closed from review → done (four dimensions), and clear the closed entries from the window memory (`project_demo_window_27_pending_checks`).
