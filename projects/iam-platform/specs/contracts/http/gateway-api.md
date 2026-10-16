@@ -44,7 +44,7 @@
 | `GET /api/admin/audit` | admin-service | Yes (operator token, downstream) | 아래 §Admin Routes 참조 |
 | `GET /api/admin/console/registry` | admin-service | Yes (operator token, downstream) | platform-console product/tenant registry (TASK-BE-296). 아래 §Admin Routes 참조. contract: [console-registry-api.md](console-registry-api.md) |
 | `GET /actuator/health` | gateway 자체 | No | 헬스체크 |
-| `/internal/tenants/{tenantId}/**` | account-service | Yes (JWT) | path `{tenantId}` ↔ JWT `tenant_id` 검사. 불일치 시 403 `TENANT_SCOPE_DENIED`. 외부 노출 금지 |
+| `/internal/tenants/{tenantId}/{sub-resource}/**` | account-service | Yes (JWT) | path `{tenantId}` ↔ JWT `tenant_id` 검사. 불일치 시 403 `TENANT_SCOPE_DENIED`. 외부 노출 금지. **`{tenantId}` 뒤에 서브리소스가 반드시 있어야 한다** — 맨 `/internal/tenants` · `/internal/tenants/{tenantId}` 는 라우트되지 않는다(TASK-BE-638, 아래 § Internal Provisioning Routes) |
 
 ### 세션 라우팅 순서 정책 (TASK-BE-508)
 
@@ -160,6 +160,7 @@ operator JWT 를 검증하는 상태" 가 ADR 없이 사실상 성립해 있었�
 
 발생 조건:
 - `/internal/tenants/{tenantId}/...` 경로의 `{tenantId}` ↔ JWT `tenant_id` claim 불일치
+- (TASK-BE-638) 테넌트 범위 서브리소스가 아닌 `/internal/**` 경로 — 맨 `/internal/tenants` · `/internal/tenants/{tenantId}` · 그 끝 `/` 변형, 그리고 점 세그먼트(`/.` · `/..`) · 인코딩된 `.`/`/`/`\`(`%2e` · `%2f` · `%5c`) · `;` 가 든 경로. **토큰과 무관하게** 거절한다(`tenant_id='*'` 포함). 이때 message 는 `"Tenant scope denied: this internal path is not tenant-scoped"`. 라우트가 이 경로들을 이미 싣지 않으므로(§ Internal Provisioning Routes) 정상 배포에서 이 응답은 라우트가 다시 넓어졌을 때의 두 번째 방어선이다 — 라우트에 걸리지 않는 경로는 게이트웨이 기본 404 다
 
 ### 429 Too Many Requests — Rate Limit 초과
 
@@ -217,9 +218,13 @@ admin-service 는 이 헤더를 **신뢰하지 않고 판정한다.**
 
 | Path Pattern | 인증 | 검증 |
 |---|---|---|
-| `/internal/tenants/{tenantId}/**` | JWT 필수 | path `{tenantId}` ↔ JWT `tenant_id` 일치 확인. 불일치 시 403 `TENANT_SCOPE_DENIED` |
+| `/internal/tenants/{tenantId}/{sub-resource}/**` (route predicate `Path=/internal/tenants/*/*/**`) | JWT 필수 | path `{tenantId}` ↔ JWT `tenant_id` 일치 확인. 불일치 시 403 `TENANT_SCOPE_DENIED` |
 
 이 라우트는 외부 인터넷에 노출되지 않는다 (internal network only).
+
+**호출자는 테넌트 워크로드다**(예: ecommerce product-service 가 `iam.local` 로 셀러 계정을 프로비저닝 — `accounts` · `accounts:bulk` · `accounts/{id}/status` · `accounts/{id}/roles:add|remove` · `accounts/{id}/site-roles:grant|revoke` · `identities:resolveOrCreate` · `entitled-domains` · `consumer-members/{id}`).
+
+**🔴 테넌트 라이프사이클 API 는 이 라우트에 없다 (TASK-BE-638).** `POST /internal/tenants`(생성) · `GET /internal/tenants`(전 테넌트 목록) · `GET /internal/tenants/{tenantId}` · `PATCH /internal/tenants/{tenantId}`(표시명 · **상태**)는 테넌트 범위가 아니라 플랫폼 범위다. 그 **유일한 호출자는 admin-service** 이고 account-service 를 직접 부른다([admin-to-account.md § Tenant lifecycle](internal/admin-to-account.md)) — 게이트웨이를 지나지 않는다(auth-service 의 `GET /internal/tenants/{tenantId}` 도 직접 호출). 예전 predicate `Path=/internal/tenants/**` 와 선택적 꼬리 정규식 `^/internal/tenants/([^/]+)(/.*)?$` 은 이 경로들을 실어 날랐다: 테넌트 자신의 워크로드 토큰이 `PATCH /internal/tenants/{자기}` 로 자기 상태를 바꿀 수 있었고(`SUSPENDED → ACTIVE` · 773 이후 `PENDING → ACTIVE`), `POST`/`GET /internal/tenants` 는 경로에 테넌트가 없어 범위 검사가 아예 돌지 않았다. 지금은 두 겹으로 막는다: ① predicate `/*/*/**` 가 `{tenantId}` 뒤 세그먼트를 요구 → 라우트 없음(404) ② `JwtAuthenticationFilter` 가 서브리소스 모양이 아닌 `/internal/**` 를 토큰과 무관하게 403 `TENANT_SCOPE_DENIED`.
 
 ---
 

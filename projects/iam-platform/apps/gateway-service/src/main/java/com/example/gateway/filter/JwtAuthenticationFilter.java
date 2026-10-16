@@ -45,8 +45,23 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final String DEVICE_ID_HEADER = "X-Device-Id";
     private static final String TENANT_ID_HEADER = "X-Tenant-Id";
     private static final String ACCESS_INVALIDATE_KEY_PREFIX = "access:invalidate-before:";
+    /**
+     * TASK-BE-638 — a tenant-scoped SUB-resource: {@code /internal/tenants/{tenantId}/<something>}.
+     * The sub-path is required. It used to be optional ({@code (/.*)?}), which made the bare
+     * lifecycle row {@code /internal/tenants/{tenantId}} "tenant-scoped" too — so a tenant's own
+     * workload token could {@code PATCH} its own status ({@code PENDING → ACTIVE},
+     * {@code SUSPENDED → ACTIVE}).
+     */
     private static final Pattern INTERNAL_TENANT_PATH_PATTERN =
-            Pattern.compile("^/internal/tenants/([^/]+)(/.*)?$");
+            Pattern.compile("^/internal/tenants/([^/]+)/[^/].*$");
+    private static final String INTERNAL_PREFIX = "/internal/";
+    /**
+     * TASK-BE-638 — shapes that let a path look like a sub-resource here and resolve to something
+     * else downstream: a dot segment ({@code /wms/..} normalises to the lifecycle row), an encoded
+     * dot / slash / backslash, or a matrix parameter. The raw (still-encoded) path is tested.
+     */
+    private static final Pattern INTERNAL_PATH_DISGUISE_PATTERN =
+            Pattern.compile("(?i)(/\\.{1,2}(/|$)|%2e|%2f|%5c|;|\\\\)");
     private static final String FALLBACK_METRIC_NAME = "gateway_tenant_fallback_total";
     /** TASK-MONO-737 — the subtree whose caller-chosen {@code X-Tenant-Id} is passed through. */
     private static final String ADMIN_SUBTREE_PREFIX = "/api/admin/";
@@ -160,6 +175,20 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                         "Access token is missing, expired, or has an invalid signature")
                         .then(Mono.empty());
             }
+        }
+
+        // TASK-BE-638: an /internal/** path that is not a tenant-scoped sub-resource has no
+        // tenant this token could be scoped to — the tenant lifecycle API (POST/GET
+        // /internal/tenants, GET/PATCH /internal/tenants/{id}) is platform-scope and its only
+        // caller, admin-service, never comes through this edge. Refused for EVERY token,
+        // tenant_id '*' included. The route (application.yml) already does not carry these
+        // paths; this is the second, independent refusal if that route is ever widened.
+        if (isInternalPathOutsideTenantScope(path)) {
+            log.warn("SECURITY: internal path outside tenant scope refused at the edge: path={}, jwtTenantId={}, accountId={}",
+                    path, tenantId, accountId);
+            return writeForbidden(exchange,
+                    "Tenant scope denied: this internal path is not tenant-scoped")
+                    .then(Mono.empty());
         }
 
         // Check internal provisioning route tenant scope
@@ -279,6 +308,21 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private String extractDeviceId(Map<String, Object> claims) {
         Object deviceId = claims.get("device_id");
         return deviceId != null ? deviceId.toString() : null;
+    }
+
+    /**
+     * TASK-BE-638 — {@code true} for any {@code /internal/**} path that is not a well-formed
+     * tenant-scoped sub-resource: the bare lifecycle paths, a trailing-slash variant of them,
+     * and the disguise shapes in {@link #INTERNAL_PATH_DISGUISE_PATTERN}.
+     */
+    static boolean isInternalPathOutsideTenantScope(String path) {
+        if (path == null || !(path.equals("/internal") || path.startsWith(INTERNAL_PREFIX))) {
+            return false;
+        }
+        if (INTERNAL_PATH_DISGUISE_PATTERN.matcher(path).find()) {
+            return true;
+        }
+        return !INTERNAL_TENANT_PATH_PATTERN.matcher(path).matches();
     }
 
     /**
