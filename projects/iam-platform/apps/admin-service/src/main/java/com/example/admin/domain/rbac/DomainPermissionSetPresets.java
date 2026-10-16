@@ -5,9 +5,10 @@ import java.util.List;
 /**
  * TASK-BE-631 (ADR-MONO-083) — the system preset keys of admin-api.md § 시스템 프리셋, in the table's order (the
  * order {@code GET /api/admin/domain-permission-sets} lists them in). The rows themselves — fixed {@code setId}s and
- * roles — are seeded by V0052 (15), V0056 (the five SCM presets, TASK-MONO-792) and V0057 (the three ERP presets,
- * TASK-MONO-793); {@code V0052MigrationShapeTest} / {@code V0056MigrationShapeTest} / {@code V0057MigrationShapeTest}
- * pin each migration to its part of this list.
+ * roles — are seeded by V0052 (15), V0056 (the five SCM presets, TASK-MONO-792), V0057 (the three ERP presets,
+ * TASK-MONO-793) and V0058 (the three Finance presets, TASK-MONO-794); {@code V0052MigrationShapeTest} /
+ * {@code V0056MigrationShapeTest} / {@code V0057MigrationShapeTest} / {@code V0058MigrationShapeTest} pin each
+ * migration to its part of this list.
  *
  * <p>Framework-free.
  */
@@ -41,6 +42,11 @@ public final class DomainPermissionSetPresets {
             "erp-masterdata-operate",
             "erp-approval-operate",
             "finance-full",
+            // TASK-MONO-794 (ADR-083 P7) — V0058: the Finance business presets, listed right after finance-full.
+            // finance-ledger-operate carries NO FINANCE_LEDGER_CONTROL (owner decision Q1).
+            "finance-read",
+            "finance-account-operate",
+            "finance-ledger-operate",
             "ecommerce-full",
             "fan-full",
             "mes-full",

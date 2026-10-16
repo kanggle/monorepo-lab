@@ -11,63 +11,46 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.util.stream.Stream;
-
 /**
  * ledger-service Spring Security configuration.
  *
  * <ul>
  *   <li>{@code /actuator/{health,info,prometheus}} — public</li>
- *   <li>{@code /api/finance/**} writes (POST/PUT/PATCH/DELETE) — require {@code finance.write}
- *       scope (or an operator role, for gateway parity)</li>
- *   <li>{@code /api/finance/**} reads (GET/HEAD) — require {@code finance.read} or
- *       {@code finance.write} scope, or an operator role, or the entitlement-trust
- *       {@code ROLE_FINANCE_VIEWER} (so the platform-console operator read consumer keeps working,
- *       ADR-MONO-013, including the entitled-but-scopeless operator)</li>
+ *   <li>the 7 ledger <strong>control</strong> writes — require {@code FINANCE_LEDGER_CONTROL} or the workload scope
+ *       {@code finance.write}</li>
+ *   <li>every other {@code /api/finance/**} write (POST/PUT/PATCH/DELETE) — require {@code FINANCE_LEDGER_WRITE} or
+ *       {@code finance.write}</li>
+ *   <li>{@code /api/finance/**} reads (GET/HEAD) — require any ledger role, a finance scope, or the platform
+ *       wildcard READ role</li>
  *   <li>everything else — denied</li>
  * </ul>
  *
- * <p>Scope is enforced by value here (TASK-FIN-BE-047): {@code iam-integration.md § Token 검증
- * 규칙 #5} declares every downstream finance service enforces {@code finance.read}/{@code finance.write},
- * but this ledger chain previously required only {@code .authenticated()} — a {@code finance.read}-only
- * token could drive every ledger mutation (post journal entries, override FX rates, close accounting
- * periods, resolve reconciliation discrepancies). This is the ledger sibling of the account-service
- * fix (FIN-BE-046); the fix had not propagated here (the stale "read-only API" javadoc predated the
- * ~12 mutating endpoints this service since grew). The {@code SCOPE_*} authorities come from
- * {@link ActorContextJwtAuthenticationConverter}. Insufficient scope for an authenticated caller →
- * 403 {@code PERMISSION_DENIED} via {@link SecurityErrorHandler#onAccessDenied}; no token → 401.
+ * <p><strong>TASK-MONO-794 (ADR-MONO-083 P7 · owner decisions Q1–Q2, 2026-10-16 UTC) — business roles.</strong> The
+ * canonical table is finance {@code iam-integration.md} § 업무 역할. Before it, journal posting, FX override, period
+ * close and discrepancy resolve were ONE write authority ({@code finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/
+ * FINANCE_OPERATOR}). Now:
+ * <ul>
+ *   <li><b>control writes (7)</b> — period open / close, FX rate override, reconciliation FX tolerance, the cost-flow
+ *       default and per-account config (PUT · DELETE): {@code FINANCE_LEDGER_CONTROL} (Q1 — these change the outcome
+ *       of every other write, so they are separable from day-to-day posting);</li>
+ *   <li><b>business writes</b> — manual journal, settlement, revaluation, statement ingest, discrepancy resolve, FX
+ *       refresh, and any write added later: {@code FINANCE_LEDGER_WRITE}. CONTROL does not open these and WRITE does
+ *       not open the control writes (independent — Q2);</li>
+ *   <li>the generic {@code OPERATOR/ADMIN/SUPER_ADMIN} strings (issued by nobody — Failure 1), {@code FINANCE_OPERATOR}
+ *       (now the auth-derived entry role) and the entitlement-trust {@code ROLE_FINANCE_VIEWER} admit NOTHING.</li>
+ * </ul>
+ * ledger has no application-layer gate, so this chain is the sole authorization surface for its mutations. The control
+ * matchers are declared first so a more specific path is decided before the generic write matcher.
  *
- * <p>Read-OR-scope, not scope-only: a caller admitted by an operator role (no finance scope) is
- * still allowed, mirroring the gateway's {@code roleOrScope} admission and account-service, so the
- * two layers do not disagree about validity. ledger has no application-layer operator gate, so this
- * chain is the sole authorization surface for the mutating endpoints.
+ * <p>Scope is enforced by value here (TASK-FIN-BE-047). The {@code SCOPE_*} authorities come from
+ * {@link ActorContextJwtAuthenticationConverter}; the scope leg is what the workload client
+ * {@code finance-platform-internal-services-client} rides (unchanged — {@code finance.write} opens every write).
+ * Insufficient authority → 403 {@code PERMISSION_DENIED} via {@link SecurityErrorHandler#onAccessDenied}; no token →
+ * 401.
  *
- * <p><strong>Entitlement-trust READ authority (TASK-FIN-BE-048, ADR-MONO-019 § D5 / ADR-MONO-020
- * D4 — the finance analogue of the WMS {@code ROLE_WMS_VIEWER} synthesis, TASK-MONO-162):</strong>
- * a finance-entitled token ({@code entitled_domains ∋ "finance"}) that carries no finance scope and
- * no operator role — the base OIDC domain-facing token the platform console federates for an
- * entitled customer operator — is granted {@link ActorContextJwtAuthenticationConverter#VIEWER_ROLE}
- * by the converter, so its READS pass this gate. This is <em>read-visibility only</em>:
- * {@code VIEWER_ROLE} is in {@code readAuthorities} but NOT {@code writeAuthorities}, so such a token
- * still 403s on every ledger mutation. Mirrors the account-service fix — finance had applied
- * entitlement-trust at the tenant layer only (TASK-FIN-BE-006 pilot); when the read-scope hardening
- * landed (FIN-BE-047) the entitled operator became a straggler at this authorization layer despite
- * passing layer-1. This closes it.
- *
- * <p><strong>Platform super-admin wildcard READ authority (TASK-FIN-BE-049, ADR-MONO-019 § D5 —
- * the authority-layer analogue of the tenant gate's {@code allowSuperAdminWildcard()}):</strong>
- * a platform super-admin's base OIDC domain-facing token carries {@code tenant_id="*"} but no
- * finance scope and no domain role — per ADR-033 S2 / ADR-034 U5 the admin plane's
- * {@code SUPER_ADMIN} is deliberately kept OFF the domain-facing token, so the wildcard cannot be
- * minted into a {@code ROLE_SUPER_ADMIN} at auth-service without breaching that plane disjointness.
- * The converter grants {@link ActorContextJwtAuthenticationConverter#SUPERADMIN_READ_ROLE} keyed
- * strictly on {@code tenant_id="*"}, so its READS pass this gate. This is <em>read-visibility
- * only</em>: {@code SUPERADMIN_READ_ROLE} is in {@code readAuthorities} but NOT
- * {@code writeAuthorities}, so a wildcard token still 403s on every ledger mutation. Mirrors the
- * account-service fix — the tenant gate opened the wildcard, but when the read-scope hardening
- * landed (FIN-BE-047) the wildcard super-admin became the read straggler one axis over from the
- * entitlement straggler FIN-BE-048 closed (nightly-e2e run 29635409302, console super-admin
- * persona: finance overview card forbidden, reason PERMISSION_DENIED). This closes it.
+ * <p><strong>Platform super-admin wildcard READ authority (TASK-FIN-BE-049) — unchanged.</strong> The converter grants
+ * {@link ActorContextJwtAuthenticationConverter#SUPERADMIN_READ_ROLE} keyed strictly on {@code tenant_id="*"}; it is in
+ * {@code readAuthorities} only, so a wildcard token still 403s on every ledger mutation.
  *
  * Error handling (401/403 responses) is delegated to {@link SecurityErrorHandler}.
  */
@@ -79,19 +62,12 @@ public class SecurityConfig {
     private static final String SCOPE_READ = "SCOPE_finance.read";
     private static final String SCOPE_WRITE = "SCOPE_finance.write";
 
-    /**
-     * Roles that admit a caller regardless of scope — the operator/admin identities recognised
-     * across the finance platform. Kept in sync with account-service's {@code OPERATOR_AUTHORITIES}
-     * so a role-bearing operator token admitted at the gateway is never blocked here.
-     */
-    private static final String[] OPERATOR_AUTHORITIES = {
-            "ROLE_OPERATOR", "ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_FINANCE_OPERATOR"
-    };
+    /** TASK-MONO-794 — the ledger business roles (finance {@code iam-integration.md} § 업무 역할). */
+    static final String ROLE_LEDGER_READ = "ROLE_FINANCE_LEDGER_READ";
+    static final String ROLE_LEDGER_WRITE = "ROLE_FINANCE_LEDGER_WRITE";
+    static final String ROLE_LEDGER_CONTROL = "ROLE_FINANCE_LEDGER_CONTROL";
 
-    private static String[] withOperators(String... scopes) {
-        return Stream.concat(Stream.of(scopes), Stream.of(OPERATOR_AUTHORITIES))
-                .toArray(String[]::new);
-    }
+    private static final String LEDGER = "/api/finance/ledger";
 
     private final SecurityErrorHandler securityErrorHandler;
 
@@ -101,23 +77,35 @@ public class SecurityConfig {
         String[] prefixed = PublicPaths.PREFIXES.stream()
                 .map(p -> p + "**")
                 .toArray(String[]::new);
-        // Writes: scope finance.write or an operator role ONLY — the entitlement-trust
-        // ROLE_FINANCE_VIEWER and the platform-wildcard ROLE_FINANCE_SUPERADMIN_READ are deliberately
-        // absent, so neither an entitled-but-scopeless token nor a bare super-admin wildcard token can
-        // ever drive a ledger mutation (TASK-FIN-BE-048/049 invariant: both widen READ only).
-        String[] writeAuthorities = withOperators(SCOPE_WRITE);
-        // Reads: scope finance.read|write, an operator role, the entitlement-trust VIEWER role, or the
-        // platform super-admin wildcard READ role (TASK-FIN-BE-049).
-        String[] readAuthorities = withOperators(
-                SCOPE_READ, SCOPE_WRITE,
-                ActorContextJwtAuthenticationConverter.VIEWER_ROLE,
-                ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE);
+        // Control writes (owner decision Q1): the control role, or the workload scope.
+        String[] controlAuthorities = {ROLE_LEDGER_CONTROL, SCOPE_WRITE};
+        // Every other write: the ledger write role, or the workload scope. The platform-wildcard
+        // ROLE_FINANCE_SUPERADMIN_READ is deliberately absent (TASK-FIN-BE-049 invariant: READ only).
+        String[] writeAuthorities = {ROLE_LEDGER_WRITE, SCOPE_WRITE};
+        // Reads: any ledger role (a control holder reads the settings and periods it changes — Q2), a finance scope,
+        // or the platform super-admin wildcard READ role.
+        String[] readAuthorities = {ROLE_LEDGER_READ, ROLE_LEDGER_WRITE, ROLE_LEDGER_CONTROL, SCOPE_READ, SCOPE_WRITE,
+                ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE};
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(exact).permitAll()
                         .requestMatchers(prefixed).permitAll()
+                        // ── the 7 control writes (Q1) — before the generic write matchers ──
+                        .requestMatchers(HttpMethod.POST, LEDGER + "/periods").hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.POST, LEDGER + "/periods/*/close").hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.PUT, LEDGER + "/settlements/fx-rate-override/*")
+                                .hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.PUT, LEDGER + "/reconciliation/fx-tolerance")
+                                .hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.PUT, LEDGER + "/settlements/cost-flow-config")
+                                .hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.PUT, LEDGER + "/settlements/cost-flow-config/accounts/*")
+                                .hasAnyAuthority(controlAuthorities)
+                        .requestMatchers(HttpMethod.DELETE, LEDGER + "/settlements/cost-flow-config/accounts/*")
+                                .hasAnyAuthority(controlAuthorities)
+                        // ── every other write ──
                         .requestMatchers(HttpMethod.POST, "/api/finance/**").hasAnyAuthority(writeAuthorities)
                         .requestMatchers(HttpMethod.PUT, "/api/finance/**").hasAnyAuthority(writeAuthorities)
                         .requestMatchers(HttpMethod.PATCH, "/api/finance/**").hasAnyAuthority(writeAuthorities)

@@ -137,7 +137,8 @@ public class AccountApplicationService {
     @Transactional
     public AccountView upgradeKyc(UpgradeKycCommand cmd) {
         ActorContext actor = cmd.actor();
-        if (!actor.isOperator()) {
+        // TASK-MONO-794 (owner decision Q3): operator-only = holds the account write role.
+        if (!actor.canOperateAccounts()) {
             throw new PermissionDeniedException("KYC upgrade is operator-only");
         }
         Instant now = clock.now();
@@ -352,7 +353,8 @@ public class AccountApplicationService {
     @Transactional
     public TransactionView topUp(TopUpCommand cmd) {
         ActorContext actor = cmd.actor();
-        if (!actor.isOperator()) {
+        // TASK-MONO-794 (owner decision Q3): operator-only = holds the account write role.
+        if (!actor.canOperateAccounts()) {
             throw new PermissionDeniedException(
                     "Top-up is operator-only — v1 funding is an internal operator "
                             + "credit, not a holder-initiated deposit");

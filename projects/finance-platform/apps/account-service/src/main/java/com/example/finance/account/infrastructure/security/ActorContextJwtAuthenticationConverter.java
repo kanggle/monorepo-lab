@@ -36,7 +36,7 @@ import java.util.Set;
  * <ul>
  *   <li>{@code SCOPE_*} authorities lifted from the OAuth2 {@code scope}/{@code scp} claim
  *       (TASK-FIN-BE-046);</li>
- *   <li>the entitlement-trust {@link #VIEWER_ROLE} (TASK-FIN-BE-048);</li>
+ *   <li><s>the entitlement-trust {@code ROLE_FINANCE_VIEWER} (TASK-FIN-BE-048)</s> — removed by TASK-MONO-794;</li>
  *   <li>the platform super-admin wildcard {@link #SUPERADMIN_READ_ROLE} (TASK-FIN-BE-049).</li>
  * </ul>
  *
@@ -50,21 +50,16 @@ import java.util.Set;
 public class ActorContextJwtAuthenticationConverter
         implements Converter<Jwt, AbstractAuthenticationToken> {
 
-    /**
-     * Domain key for the entitlement-trust READ-visibility synthesis. A token whose signed
-     * {@code entitled_domains} claim contains {@code finance} is granted {@link #VIEWER_ROLE}
-     * (READ only) even when it carries no finance scope and no finance role.
+    /*
+     * TASK-MONO-794 (ADR-MONO-083 P7): the entitlement-trust READ role ROLE_FINANCE_VIEWER (TASK-FIN-BE-048 —
+     * granted when entitled_domains ∋ finance) is GONE, with its ENTITLEMENT_DOMAIN key. A subscription alone opens
+     * nothing any more: the read gate is the Finance business roles (finance iam-integration.md § 업무 역할). Do not
+     * reintroduce it — with it a read-only business set could never be told apart from «no set» (the 793 Q1 finding).
      */
-    public static final String ENTITLEMENT_DOMAIN = "finance";
-
-    /** The single READ-visibility role synthesised from entitlement-trust. */
-    public static final String VIEWER_ROLE = "ROLE_FINANCE_VIEWER";
 
     /**
      * The READ-visibility role synthesised for a platform super-admin wildcard token
-     * ({@code tenant_id="*"}). Distinct from {@link #VIEWER_ROLE} so the two admission axes —
-     * customer entitlement vs. platform wildcard — stay separable in authority logs (audit clarity).
-     * READ only, exactly like {@link #VIEWER_ROLE}: never added to {@code writeAuthorities}.
+     * ({@code tenant_id="*"}). READ only: never added to {@code writeAuthorities}.
      */
     public static final String SUPERADMIN_READ_ROLE = "ROLE_FINANCE_SUPERADMIN_READ";
 
@@ -90,21 +85,6 @@ public class ActorContextJwtAuthenticationConverter
         // application-layer operator gate (/kyc/upgrade) keeps deriving from roles independently.
         for (String scope : extractScopes(jwt)) {
             authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope));
-        }
-        // Entitlement-trust dual-accept (ADR-MONO-019 § D5, ADR-MONO-020 D4 — the finance
-        // analogue of TASK-MONO-162, closing the FIN-BE-046/047 read straggler): a
-        // finance-entitled token (entitled_domains ∋ "finance") is granted ROLE_FINANCE_VIEWER
-        // so the /api/finance/** READ gate passes even when the token carries no finance scope
-        // and no finance role — the entitled-but-scopeless operator the platform console federates
-        // (tenant_id=acme, entitled_domains=[finance], no roles, scope=[openid,...]). This
-        // synthesises ONLY the VIEWER role — the WRITE gate (SCOPE_finance.write or an operator
-        // role) is unaffected, so entitlement-trust widens READ visibility only, never mutation
-        // authority. entitled_domains is read only from the RS256/JWKS-verified token, so it is
-        // unforgeable; a claim-shape anomaly degrades to "not entitled" (TenantClaimValidator
-        // fail-closed). Layer-1 (the tenant gate) already admitted this token via
-        // trustEntitledDomains(); this closes the matching AUTHORITY-layer gap.
-        if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {
-            authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));
         }
         // Platform super-admin wildcard READ authority (TASK-FIN-BE-049, ADR-MONO-019 § D5 — the
         // authority-layer analogue of the tenant gate's allowSuperAdminWildcard()): a platform

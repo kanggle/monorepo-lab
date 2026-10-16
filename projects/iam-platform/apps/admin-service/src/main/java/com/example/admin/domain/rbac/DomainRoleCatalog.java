@@ -65,7 +65,17 @@ public final class DomainRoleCatalog {
                     "기준정보 변경(생성 · 수정 · 퇴역 · 부서 이동 · 계정 연결 제안/철회)"),
             new Entry("erp", "ERP_APPROVAL_READ", "READ", true, "결재 조회"),
             new Entry("erp", "ERP_APPROVAL_WRITE", "WRITE", true, "결재 변경(상신 · 승인 · 반려 · 회수 · 위임)"),
-            new Entry("finance", "FINANCE_OPERATOR", "OPERATE", false, "Finance 전체 업무(세분 미지원)"),
+            // TASK-MONO-794 (ADR-083 P7 · owner decisions Q1–Q2) — Finance is fine-grained (finance iam-integration.md
+            // § 업무 역할). FINANCE_OPERATOR LEFT the catalog: the entry role, derived by auth-service when ≥1 of these
+            // rides the token (V0058 rewrote every set and partnership scope that held it). CONTROL's wire access is
+            // WRITE — the wire knows READ · WRITE · OPERATE only (the console parses exactly those three).
+            new Entry("finance", "FINANCE_ACCOUNT_READ", "READ", true, "계좌 조회"),
+            new Entry("finance", "FINANCE_ACCOUNT_WRITE", "WRITE", true, "계좌 변경(개설 · KYC 승급 · 충전 · 홀드 · 이체)"),
+            new Entry("finance", "FINANCE_LEDGER_READ", "READ", true, "원장 조회"),
+            new Entry("finance", "FINANCE_LEDGER_WRITE", "WRITE", true,
+                    "원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신)"),
+            new Entry("finance", "FINANCE_LEDGER_CONTROL", "WRITE", true,
+                    "원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정)"),
             new Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false, "E-commerce 전체 업무(세분 미지원)"),
             new Entry("fan", "FAN_OPERATOR", "OPERATE", false, "fan 전체 업무(세분 미지원)"),
             new Entry("mes", "MES_OPERATOR", "OPERATE", false, "MES 전체 업무(세분 미지원)"));

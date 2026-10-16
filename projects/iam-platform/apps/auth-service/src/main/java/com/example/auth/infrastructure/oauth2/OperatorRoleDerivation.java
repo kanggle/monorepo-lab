@@ -96,6 +96,20 @@ final class OperatorRoleDerivation {
             .toList();
 
     /**
+     * TASK-MONO-794 (ADR-MONO-083 P7 · owner decisions Q1–Q2) — the finance business roles the two finance services
+     * check (finance {@code iam-integration.md} § 업무 역할). Mirrors the {@code finance} rows of admin-service
+     * {@code DomainRoleCatalog}, in the same order. {@code FINANCE_LEDGER_CONTROL} = the seven ledger control writes.
+     */
+    private static final List<String> FINANCE_BUSINESS_ROLES = List.of(
+            "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
+            "FINANCE_LEDGER_CONTROL");
+
+    /** The {@code finance} arm of the ceiling: entry role first, then the business roles (catalog order). */
+    private static final List<String> FINANCE_CEILING = java.util.stream.Stream
+            .concat(java.util.stream.Stream.of("FINANCE_OPERATOR"), FINANCE_BUSINESS_ROLES.stream())
+            .toList();
+
+    /**
      * TASK-MONO-792 (ADR-MONO-083 D3 · P5 · owner decision Q4) — <b>entry role → the business roles that
      * derive it</b>, one row per fine-grained domain. The entry role (gateway passage · screen entry ·
      * procurement {@code isOperator()}) is NOT in admin-service's catalog and is never assigned: it rides
@@ -108,7 +122,9 @@ final class OperatorRoleDerivation {
     static final Map<String, Set<String>> ENTRY_ROLES = Map.of(
             "SCM_OPERATOR", Set.copyOf(SCM_BUSINESS_ROLES),
             // TASK-MONO-793 (ADR-083 P6): the ERP row — erp iam-integration.md § 업무 역할.
-            "ERP_OPERATOR", Set.copyOf(ERP_BUSINESS_ROLES));
+            "ERP_OPERATOR", Set.copyOf(ERP_BUSINESS_ROLES),
+            // TASK-MONO-794 (ADR-083 P7): the Finance row — finance iam-integration.md § 업무 역할.
+            "FINANCE_OPERATOR", Set.copyOf(FINANCE_BUSINESS_ROLES));
 
     private OperatorRoleDerivation() {
     }
@@ -209,7 +225,9 @@ final class OperatorRoleDerivation {
                 // TASK-MONO-793 (ADR-083 P6): the erp ceiling = the entry role (derived) + the
                 // four business roles the erp services check.
                 case "erp" -> ERP_CEILING;
-                case "finance" -> List.of("FINANCE_OPERATOR");
+                // TASK-MONO-794 (ADR-083 P7): the finance ceiling = the entry role (derived) + the
+                // five business roles the finance services check.
+                case "finance" -> FINANCE_CEILING;
                 case "mes" -> List.of("MES_OPERATOR");
                 // TASK-MONO-750 / ADR-MONO-079 ACCEPTED — A (D4-A), a partial amendment of
                 // ADR-MONO-059: this arm is now REACHABLE, on exactly one path. account-service
