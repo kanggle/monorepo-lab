@@ -163,20 +163,26 @@ class DomainPermissionSetControllerSliceTest {
         mockMvc.perform(get("/api/admin/domain-roles").header("Authorization", bearer(HOLDER)))
                 .andExpect(status().isOk())
                 // TASK-MONO-792: + the eight SCM roles, − SCM_OPERATOR · TASK-MONO-793: + the four ERP roles, − ERP_OPERATOR
-                .andExpect(jsonPath("$.items.length()").value(24))
+                // TASK-MONO-794: + the five Finance roles, − FINANCE_OPERATOR
+                .andExpect(jsonPath("$.items.length()").value(28))
                 .andExpect(jsonPath("$.items[0].domainKey").value("wms"))
                 .andExpect(jsonPath("$.items[0].role").value("INVENTORY_READ"))
                 .andExpect(jsonPath("$.items[0].access").value("READ"))
                 .andExpect(jsonPath("$.items[0].fineGrained").value(true))
                 .andExpect(jsonPath("$.items[0].label").value("재고 조회"))
                 // items[8] = SCM_PROCUREMENT_READ (fine-grained since 792); items[16] = ERP_MASTERDATA_READ (since 793);
-                // items[20] = FINANCE_OPERATOR (not yet)
+                // items[20] = FINANCE_ACCOUNT_READ (since 794); items[24] = FINANCE_LEDGER_CONTROL (access WRITE);
+                // items[25] = ECOMMERCE_OPERATOR (not yet)
                 .andExpect(jsonPath("$.items[8].role").value("SCM_PROCUREMENT_READ"))
                 .andExpect(jsonPath("$.items[8].fineGrained").value(true))
                 .andExpect(jsonPath("$.items[16].role").value("ERP_MASTERDATA_READ"))
                 .andExpect(jsonPath("$.items[16].fineGrained").value(true))
-                .andExpect(jsonPath("$.items[20].role").value("FINANCE_OPERATOR"))
-                .andExpect(jsonPath("$.items[20].fineGrained").value(false));
+                .andExpect(jsonPath("$.items[20].role").value("FINANCE_ACCOUNT_READ"))
+                .andExpect(jsonPath("$.items[20].fineGrained").value(true))
+                .andExpect(jsonPath("$.items[24].role").value("FINANCE_LEDGER_CONTROL"))
+                .andExpect(jsonPath("$.items[24].access").value("WRITE"))
+                .andExpect(jsonPath("$.items[25].role").value("ECOMMERCE_OPERATOR"))
+                .andExpect(jsonPath("$.items[25].fineGrained").value(false));
     }
 
     @Test

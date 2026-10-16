@@ -166,6 +166,21 @@ class PartnershipManagementUseCaseTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-794: invite delegating the Finance entry role FINANCE_OPERATOR → 422 (derived by auth, never delegated)")
+    void invite_financeEntryRole_rejected() {
+        org.mockito.Mockito.lenient().when(partnershipPort.pairExists(HOST, PARTNER)).thenReturn(false);
+        org.mockito.Mockito.lenient().when(partnershipPort.createPending(any()))
+                .thenReturn(view(PartnershipStatus.PENDING));
+        org.mockito.Mockito.lenient().when(subscriptionPort.listActiveSubscriptions())
+                .thenReturn(List.of(new TenantDomainSubscriptionSummary(HOST, "finance")));
+        assertThatThrownBy(() -> useCase().invite(HOST,
+                new InvitePartnershipCommand(PARTNER, List.of("finance"), List.of("FINANCE_OPERATOR")),
+                actor(), "collab"))
+                .isInstanceOf(PartnershipScopeInvalidException.class);
+        verify(partnershipPort, never()).createPending(any());
+    }
+
+    @Test
     @DisplayName("invite: delegatedScope carrying an admin role → 422 PARTNERSHIP_SCOPE_INVALID")
     void invite_adminRole_rejected() {
         assertThatThrownBy(() -> useCase().invite(HOST,
@@ -231,7 +246,8 @@ class PartnershipManagementUseCaseTest {
         stubHostSubscribes("wms"); // host holds wms, NOT finance
         assertThatThrownBy(() -> useCase().invite(HOST,
                 new InvitePartnershipCommand(PARTNER, List.of("wms", "finance"),
-                        List.of("WMS_OPERATOR", "FINANCE_OPERATOR")),
+                        // TASK-MONO-794: a Finance business role (FINANCE_OPERATOR is no longer delegatable)
+                        List.of("WMS_OPERATOR", "FINANCE_LEDGER_READ")),
                 actor(), "collab"))
                 .isInstanceOf(PartnershipScopeInvalidException.class)
                 .hasMessageContaining("finance");

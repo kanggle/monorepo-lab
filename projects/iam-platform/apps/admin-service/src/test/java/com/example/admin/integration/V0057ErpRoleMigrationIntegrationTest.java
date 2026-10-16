@@ -114,7 +114,8 @@ class V0057ErpRoleMigrationIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class))
                 .isEqualTo(DomainPermissionSetPresets.SYSTEM_KEYS.size())
-                .isEqualTo(23);
+                // 23 after V0057; the boot also runs later phases (TASK-MONO-794 V0058 +3).
+                .isEqualTo(26);
     }
 
     @Test

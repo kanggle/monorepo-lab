@@ -39,8 +39,9 @@ public final class DelegatableRoleCatalog {
      *       {READ,WRITE} + MASTER_READ (TASK-BE-433; {@code WMS_ADMIN} excluded)</li>
      *   <li>{@code ecommerce} → ECOMMERCE_OPERATOR (the ecommerce operator role)</li>
      *   <li>{@code scm} → the eight SCM business roles (TASK-MONO-792) · {@code erp} → the four ERP business
-     *       roles (TASK-MONO-793) — their entry roles SCM_OPERATOR / ERP_OPERATOR are derived by auth, never
-     *       delegated · {@code finance} → FINANCE_OPERATOR · {@code mes} → MES_OPERATOR ·
+     *       roles (TASK-MONO-793) · {@code finance} → the five Finance business roles (TASK-MONO-794) — their entry
+     *       roles SCM_OPERATOR / ERP_OPERATOR / FINANCE_OPERATOR are derived by auth, never delegated ·
+     *       {@code mes} → MES_OPERATOR ·
      *       {@code fan}/{@code fan-platform} → FAN_OPERATOR</li>
      * </ul>
      */

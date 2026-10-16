@@ -101,8 +101,13 @@ public class AssumeTenantAuthenticationProvider implements AuthenticationProvide
      * {@code ERP_OPERATOR} role alone, which the backfill (legacy-compat) gives every existing
      * operator. The workload branch is untouched — {@code erp-platform-internal-services-client}
      * keeps its scope.
+     *
+     * <p>TASK-MONO-794 (ADR-083 P7) — {@code finance.write} likewise. It is NOT registered on the console client today
+     * (effect 0), but finance's chain admits it as a write authority («WRITE = finance.write ∨ business role»), so a
+     * future registration would recreate «bypass 1» for Finance; excluding it here closes that before it can open.
+     * {@code finance-platform-internal-services-client} keeps its scope (workload branch untouched).
      */
-    static final Set<String> OPERATOR_EXCLUDED_SCOPES = Set.of("erp.write");
+    static final Set<String> OPERATOR_EXCLUDED_SCOPES = Set.of("erp.write", "finance.write");
 
     /**
      * TASK-MONO-771 (auth-api.md § Assume-Tenant Errors, HS-C) — the FIXED {@code error_description} of the

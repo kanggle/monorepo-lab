@@ -103,3 +103,8 @@ platform-console
 | 비교 | 최초 관측 run 38763381565 는 `11 tests · 10 passed · 1 flaky`(flaky = `sample-visitor-transition.spec.ts:19`). 이 런은 칸이 12 개(773 spec 4 칸)로 늘었는데도 flaky 0 |
 
 🔵 한 점일 뿐이다 — AC-0 의 «연속 최소 5 런» 표에 넣을 두 번째 데이터이며, 재발 없음의 근거로 승격하지 않는다. 이 티켓은 닫지 않는다.
+
+## 증거 추가 (2026-10-16 UTC) — 같은 종류로 보이는 세 번째 사례
+
+- `nightly-e2e` 브랜치 실행 run 38856950242 attempt 1(TASK-MONO-794 브랜치) · 콘솔 job 116830663748: `operators-profile.spec.ts:44` Finance 카드 `degraded`(기대 `ok`). 같은 순간 콘솔 로그 `console_composition_leg` 가 `operator-overview` finance `degraded reason=TIMEOUT latencyMs=4002` · `domain-health` finance `degraded TIMEOUT 4000` — 인가 거절(`forbidden PERMISSION_DENIED`)이 아니라 **4 s 조합 시간 초과**. attempt 2(job 116835225745) 12 passed.
+- 🔵 run 38763381565 의 sample-visitor 사례(문서 응답 10 s · 개요 «일시적으로 불러올 수 없습니다»)와 같은 «개요 조합 다리 시간 초과» 가설 — 다른 spec · 다른 도메인에서 같은 증상. 원인 확정 아님(AC-0 이 잰다). 794 가 원인이 아니라는 것도 확정 아님 — 다음 main nightly 들에서 Finance `TIMEOUT` 이 반복되는지 함께 본다.

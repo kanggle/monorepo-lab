@@ -694,6 +694,21 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
       (SELECT COUNT(*) FROM tenant_partnership
         WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"ERP_OPERATOR"'))                AS partnerships_with_erp_operator; -- 뒤 = 0
     ```
+- **TASK-MONO-794 (ADR-MONO-083 P7 · 소유자 결정 2026-10-16 UTC)** — Finance 세분 역할(작성 시점 마지막 = `V0057`):
+  - `V0058__finance_fine_grained_domain_roles.sql` — V0057 과 같은 모양. ① 새 프리셋 3개(`finance-read` · `finance-account-operate` · `finance-ledger-operate`, 고정 id `…000000000024` ~ `…026`, `INSERT IGNORE`) 와 그 역할 행 — 🔴 `finance-ledger-operate` 에 `FINANCE_LEDGER_CONTROL` 은 **없다**(Q1). ② 🔴 **`FINANCE_OPERATOR` 를 담은 모든 세트**(프리셋 `finance-full` · `all-domains-full` · `legacy-compat` · **테넌트 세트 전부**)에 Finance 업무 역할 5개(`FINANCE_ACCOUNT_READ` · `FINANCE_ACCOUNT_WRITE` · `FINANCE_LEDGER_READ` · `FINANCE_LEDGER_WRITE` · `FINANCE_LEDGER_CONTROL`)를 `INSERT IGNORE` 로 더한 **뒤** `('finance','FINANCE_OPERATOR')` 행을 지운다(넓힌 뒤 지운다). ③ 파트너십 `delegated_scope` · `participant_scope` 의 `"FINANCE_OPERATOR"` 를 같은 5개로(`JSON_CONTAINS` 가드). ④ `finance-full` 설명 갱신. forward-only · 재실행 0행. 형태 시험 `V0058MigrationShapeTest` · 행동 시험 `V0058FinanceRoleMigrationIntegrationTest`.
+  - 완료 판정(배포 전 · 뒤 라이브 — 읽기 전용, `TASK-MONO-672` § Next window — TASK-MONO-794):
+
+    ```sql
+    SELECT
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'finance' AND role_name = 'FINANCE_OPERATOR')                 AS sets_with_finance_operator,  -- 뒤 = 0
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'finance' AND role_name = 'FINANCE_LEDGER_CONTROL')           AS sets_with_ledger_control,    -- 뒤 = 앞의 sets_with_finance_operator (새 프리셋은 통제를 담지 않는다)
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'finance' AND role_name = 'FINANCE_LEDGER_WRITE')             AS sets_with_ledger_write,      -- 뒤 = 앞의 sets_with_finance_operator + 1 (finance-ledger-operate)
+      (SELECT COUNT(*) FROM tenant_partnership
+        WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"FINANCE_OPERATOR"'))            AS partnerships_with_finance_operator; -- 뒤 = 0
+    ```
 
 ---
 

@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static com.example.finance.account.infrastructure.security.ActorContextJwtAuthenticationConverter.SUPERADMIN_READ_ROLE;
-import static com.example.finance.account.infrastructure.security.ActorContextJwtAuthenticationConverter.VIEWER_ROLE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -23,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   <li>scope-lifting (TASK-FIN-BE-046): the OAuth2 {@code scope} claim becomes {@code SCOPE_*}
  *       authorities so {@link SecurityConfig} can require {@code finance.write} per endpoint;</li>
  *   <li>entitlement-trust READ authority (TASK-FIN-BE-048): a finance-entitled token
- *       ({@code entitled_domains ∋ "finance"}) is granted {@link ActorContextJwtAuthenticationConverter#VIEWER_ROLE}
+ *       ({@code entitled_domains ∋ "finance"}) used to be granted {@code ROLE_FINANCE_VIEWER} — 🔴 removed by TASK-MONO-794 (ADR-083 P7)
  *       — READ visibility only — mirroring the WMS {@code ROLE_WMS_VIEWER} synthesis (TASK-MONO-162);</li>
  *   <li>platform super-admin wildcard READ authority (TASK-FIN-BE-049): a {@code tenant_id="*"} token
  *       is granted {@link ActorContextJwtAuthenticationConverter#SUPERADMIN_READ_ROLE} — READ only;</li>
@@ -100,37 +99,32 @@ class ActorContextJwtAuthenticationConverterTest {
     }
 
     @Nested
-    @DisplayName("entitlement-trust READ authority (TASK-FIN-BE-048)")
-    class EntitlementTrust {
+    @DisplayName("TASK-MONO-794 — no subscription-synthesised READ authority (ROLE_FINANCE_VIEWER removed)")
+    class NoEntitlementSynthesis {
+
+        /** The role TASK-FIN-BE-048 used to synthesise — a literal, because the constant is gone. */
+        private static final String FORMER_VIEWER_ROLE = "ROLE_FINANCE_VIEWER";
 
         @Test
-        @DisplayName("entitled_domains ∋ finance → ROLE_FINANCE_VIEWER 가 합성된다 (scope·role 없어도)")
-        void financeEntitledGrantsViewerRole() {
+        @DisplayName("🔴 entitled_domains ∋ finance (no scope, no role) → NO ROLE_FINANCE_VIEWER — a subscription alone opens nothing")
+        void financeEntitledGetsNoViewerRole() {
             List<String> auths = authorities(jwt(b -> b.claim("entitled_domains", List.of("finance", "wms"))));
-            assertThat(auths).contains(VIEWER_ROLE);
-            // read-visibility only — no scope authority is synthesised, so writes stay gated
-            assertThat(auths).noneMatch(a -> a.startsWith("SCOPE_"));
+            assertThat(auths).doesNotContain(FORMER_VIEWER_ROLE);
         }
 
         @Test
-        @DisplayName("entitled_domains 클레임이 없으면 VIEWER 권한도 없다")
-        void notEntitledGetsNoViewer() {
-            List<String> auths = authorities(jwt(b -> b.claim("scope", List.of("finance.read"))));
-            assertThat(auths).doesNotContain(VIEWER_ROLE);
-        }
-
-        @Test
-        @DisplayName("다른 도메인에만 entitled(=[wms]) 이면 finance VIEWER 권한 없다")
-        void entitledElsewhereGetsNoFinanceViewer() {
-            List<String> auths = authorities(jwt(b -> b.claim("entitled_domains", List.of("wms"))));
-            assertThat(auths).doesNotContain(VIEWER_ROLE);
-        }
-
-        @Test
-        @DisplayName("entitled(=[finance]) 토큰은 VIEWER 만 갖고 WRITE-계열 권한(SCOPE_/OPERATOR)은 없다")
-        void financeEntitledNoScopeNoRoleGetsOnlyViewer() {
+        @DisplayName("🔴 entitled(=[finance]) token with no scope and no role carries no authority at all")
+        void financeEntitledNoScopeNoRoleGetsNothing() {
             List<String> auths = authorities(jwt(b -> b.claim("entitled_domains", List.of("finance"))));
-            assertThat(auths).containsExactly(VIEWER_ROLE);
+            assertThat(auths).isEmpty();
+        }
+
+        @Test
+        @DisplayName("roles are lifted as-is: a Finance business role becomes ROLE_<name> (the chain matches on that)")
+        void businessRoleLifted() {
+            List<String> auths = authorities(jwt(b -> b.claim("roles", List.of("FINANCE_OPERATOR", "FINANCE_LEDGER_CONTROL"))));
+            assertThat(auths).contains("ROLE_FINANCE_OPERATOR", "ROLE_FINANCE_LEDGER_CONTROL")
+                    .doesNotContain(FORMER_VIEWER_ROLE);
         }
     }
 
@@ -142,7 +136,7 @@ class ActorContextJwtAuthenticationConverterTest {
         @DisplayName("tenant_id='*' (super-admin wildcard, no scope/role/entitlement) → ROLE_FINANCE_SUPERADMIN_READ 만 합성")
         void wildcardTenantGrantsSuperadminReadRole() {
             List<String> auths = authorities(jwt(b -> b.claim("tenant_id", "*")));
-            // read-visibility only — exactly the wildcard-read role, no SCOPE_* / VIEWER / operator role
+            // read-visibility only — exactly the wildcard-read role, no SCOPE_* / operator role
             assertThat(auths).containsExactly(SUPERADMIN_READ_ROLE);
             assertThat(auths).noneMatch(a -> a.startsWith("SCOPE_"));
         }

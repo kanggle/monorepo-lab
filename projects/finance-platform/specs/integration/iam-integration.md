@@ -95,6 +95,41 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 3. **Issuer 검증** — SAS issuer + legacy `iam-platform` 양쪽 허용 (D2-b deprecate 호환).
 4. **Tenant 검증** — `tenant_id` claim 이 `finance` 또는 `*` (SUPER_ADMIN platform-scope) 인 경우만 통과. 그 외 (`wms`, `ecommerce`, `fan-platform`, `scm`, 향후 `erp`) → `tenant_mismatch` → 403 `TENANT_FORBIDDEN`.
 5. **Scope 검증** — 다운스트림 service 의 `SecurityConfig` 가 JWT 의 `scope` claim 을 **값**으로 enforce (TASK-FIN-BE-046). account-service 기준: **쓰기**(`POST`/`PUT`/`PATCH`/`DELETE` `/api/finance/**`) 는 `finance.write` scope 를 요구하고, **읽기**(`GET`) 는 `finance.read` 또는 `finance.write` scope 를 요구한다. 두 경우 모두 operator/admin **role** (`OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`FINANCE_OPERATOR`) 을 가진 토큰은 scope 없이도 통과한다 — 게이트웨이의 `roleOrScope` admission 과 같은 role-OR-scope 정책이며, operator-only 경로(`/kyc/upgrade`)의 애플리케이션단 게이트를 여기서 가리지 않기 위함이고, platform-console operator read consumer(ADR-MONO-013, role 기반 read)를 보존한다. 인증된 토큰의 scope/role 이 부족하면 → 403 `PERMISSION_DENIED` (account-service `SecurityConfig`). `scope` 는 GAP 가 JSON 배열로 발급하며(`["finance.read"]`) 공백구분 문자열·`scp` alias 도 수용한다. (게이트웨이단 `RoleAdmissionFilter` 는 role/scope 의 **존재**만 보는 presence-admission → 둘 다 없으면 403 `FORBIDDEN`; 값 enforce 는 service 층 책임이다.)
+   > 🔴 **대체됨 (TASK-MONO-794 · ADR-MONO-083 P7)**: 위 «operator/admin role(`OPERATOR`/`ADMIN`/`SUPER_ADMIN`/`FINANCE_OPERATOR`) 을 가진 토큰은 scope 없이도 통과» 와 `ROLE_FINANCE_VIEWER`(구독 합성 READ)는 **없어졌다** — 아래 § 업무 역할이 판정의 정본이다. 범위 갈래(`finance.read` · `finance.write`)는 워크로드 클라이언트용으로 그대로다.
+
+---
+
+## 업무 역할 (ADR-MONO-083 P7 · TASK-MONO-794 — 정본)
+
+소유자 결정 Q1 ~ Q3 (2026-10-16 UTC). 이 절이 account · ledger 두 서비스의 **업무 인가** 정본이다 — 각 HTTP 계약 · 서비스 명세의 옛 문장(`finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OPERATOR`, `ROLE_FINANCE_VIEWER`)은 이 절로 **대체**된다. 판정 자리 = 각 서비스의 필터 체인(`SecurityConfig` — 경로 × 메서드) + account 의 앱 단 검사 둘.
+
+| 역할 | 무엇을 연다 |
+|---|---|
+| `FINANCE_ACCOUNT_READ` | 계좌 조회 — `GET /api/finance/accounts/{id}` · `/{id}/balances` · `/{id}/transactions` |
+| `FINANCE_ACCOUNT_WRITE` | 계좌 변경 — 개설 · **KYC 승급** · **충전** · 홀드 · 홀드 확정 · 홀드 해제 · 이체 (+ 조회) |
+| `FINANCE_LEDGER_READ` | 원장 조회 — ledger 의 `GET` 16 경로 전부 |
+| `FINANCE_LEDGER_WRITE` | 원장 **업무 쓰기 6** — 수동 분개 `POST /entries` · 정산 `POST /settlements` · 재평가 `POST /revaluations` · 명세 수입 `POST /reconciliation/statements` · 대사 해소 `POST /reconciliation/discrepancies/{id}/resolve` · 환율 갱신 `POST /fx-rates/refresh` (+ 조회) |
+| `FINANCE_LEDGER_CONTROL` | 원장 **통제 쓰기 7** — 기간 개시 `POST /periods` · 기간 마감 `POST /periods/{id}/close` · 환율 덮어쓰기 `PUT /settlements/fx-rate-override/{ccy}` · 대사 환차 허용오차 `PUT /reconciliation/fx-tolerance` · 원가흐름 기본값 `PUT /settlements/cost-flow-config` · 계정별 원가흐름 `PUT` · `DELETE /settlements/cost-flow-config/accounts/{code}` (+ 조회). 🔴 업무 쓰기 6 은 **열지 않는다**(독립 — Q2) |
+| `FINANCE_OPERATOR` | **진입 역할** — 카탈로그에 없고 배정 · 위임할 수 없다. 위 다섯 중 하나라도 토큰에 실리면 auth-service 가 **파생**한다(iam auth-service architecture § 진입 역할 파생). 그 자체로는 업무 API 를 열지 않는다 — 감사 행의 행위자 종류(`OPERATOR` / `HOLDER`)만 정한다 |
+
+경로는 ledger = `/api/finance/ledger` 아래 · account = `/api/finance/accounts` 아래. 판정:
+
+| 대상 | 판정 | 결정 |
+|---|---|---|
+| account `GET` | `AC_READ ∨ AC_WRITE ∨ finance.read ∨ finance.write ∨ tenant_id='*'` | — |
+| account 변경(`POST/PUT/PATCH/DELETE`) | `AC_WRITE ∨ finance.write` | — |
+| account KYC 승급 · 충전 (앱 단 — `AccountApplicationService`) | 위 필터 **그리고** **`FINANCE_ACCOUNT_WRITE` 역할 보유**(범위만 가진 워크로드 토큰은 `403 PERMISSION_DENIED` — 그대로) | Q3 |
+| ledger `GET` | `LG_READ ∨ LG_WRITE ∨ LG_CONTROL ∨ finance.read ∨ finance.write ∨ tenant_id='*'` | Q2 |
+| ledger 통제 쓰기 7 | `LG_CONTROL ∨ finance.write` | Q1 |
+| ledger 그 밖의 변경(업무 쓰기 6 · 앞으로 생길 쓰기) | `LG_WRITE ∨ finance.write` | — |
+
+- 🔴 **구독 합성 READ 는 없다**: `ROLE_FINANCE_VIEWER`(`entitled_domains ∋ finance` 면 합성)를 **걷었다** — 구독만으로는 어떤 판정도 열리지 않는다(테넌트 게이트의 entitled dual-accept 는 그대로 — 그것은 «어느 테넌트로 들어오는가» 다). 결과: 테넌트를 고르지 않은 운영자의 기본 로그인 토큰(역할 0)은 Finance 업무 API 403 — SCM(P5) · ERP(P6) 와 같다.
+- `tenant_id='*'`(플랫폼 SUPER_ADMIN 기본 토큰)의 조회 허용 `ROLE_FINANCE_SUPERADMIN_READ` 는 **그대로**(TASK-FIN-BE-049). 쓰기는 열지 않는다.
+- 🔴 **일반 `OPERATOR` · `ADMIN` · `SUPER_ADMIN` 역할은 어떤 판정도 열지 않는다**(발급처 0 — auth-service 에서 그 문자열은 워크로드 금지 목록에만 있다). 남겨 두면 다른 경로로 그 문자열을 받은 토큰이 Finance 전부를 연다(TASK-MONO-794 Failure 1).
+- 기계 클라이언트 `finance-platform-internal-services-client`(`finance.read/finance.write`, 역할 없음)는 범위 갈래로 **계속 통한다** — 단 KYC 승급 · 충전은 지금처럼 403(역할 필요).
+- 🔵 **`finance.write` 범위 가드**: 이 범위는 콘솔 클라이언트(`platform-console-web`)에 **등록돼 있지 않다**. 등록이 바뀌면 «범위로 Finance 쓰기» 가 운영자 토큰에 생기므로, auth-service 는 운영자 assume 토큰에서 `finance.write` 를 미리 뺀다(`OPERATOR_EXCLUDED_SCOPES` — `erp.write` 와 같은 자리).
+- 도메인 안 운영자 토큰 호출 · 교차 도메인 서버 호출자 · 개인 엔드포인트는 **없다**(TASK-MONO-794 AC-0) — account → ledger 는 Kafka 뿐.
+- 콘솔 신호 데이터(메뉴 `serverRequires` · `writeRequires` · 계약 § 2.4.3.4 표)는 굽기 라이브 뒤 별도 콘솔 티켓.
 
 ---
 

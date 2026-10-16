@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DomainRoleCatalogTest {
 
     @Test
-    @DisplayName("the catalog equals the contract table exactly (24 rows, order, access, fineGrained, label)")
+    @DisplayName("the catalog equals the contract table exactly (28 rows, order, access, fineGrained, label)")
     void catalog_equalsContractTable() {
         assertThat(DomainRoleCatalog.entries()).containsExactly(
                 new DomainRoleCatalog.Entry("wms", "INVENTORY_READ", "READ", true, "재고 조회"),
@@ -48,8 +48,16 @@ class DomainRoleCatalogTest {
                 new DomainRoleCatalog.Entry("erp", "ERP_APPROVAL_READ", "READ", true, "결재 조회"),
                 new DomainRoleCatalog.Entry("erp", "ERP_APPROVAL_WRITE", "WRITE", true,
                         "결재 변경(상신 · 승인 · 반려 · 회수 · 위임)"),
-                new DomainRoleCatalog.Entry("finance", "FINANCE_OPERATOR", "OPERATE", false,
-                        "Finance 전체 업무(세분 미지원)"),
+                // TASK-MONO-794 (ADR-083 P7 · owner decisions Q1–Q2): Finance is fine-grained; FINANCE_OPERATOR
+                // left the catalog (entry role). CONTROL's wire access is WRITE (the console parses READ|WRITE|OPERATE).
+                new DomainRoleCatalog.Entry("finance", "FINANCE_ACCOUNT_READ", "READ", true, "계좌 조회"),
+                new DomainRoleCatalog.Entry("finance", "FINANCE_ACCOUNT_WRITE", "WRITE", true,
+                        "계좌 변경(개설 · KYC 승급 · 충전 · 홀드 · 이체)"),
+                new DomainRoleCatalog.Entry("finance", "FINANCE_LEDGER_READ", "READ", true, "원장 조회"),
+                new DomainRoleCatalog.Entry("finance", "FINANCE_LEDGER_WRITE", "WRITE", true,
+                        "원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신)"),
+                new DomainRoleCatalog.Entry("finance", "FINANCE_LEDGER_CONTROL", "WRITE", true,
+                        "원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정)"),
                 new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false,
                         "E-commerce 전체 업무(세분 미지원)"),
                 new DomainRoleCatalog.Entry("fan", "FAN_OPERATOR", "OPERATE", false, "fan 전체 업무(세분 미지원)"),
@@ -88,6 +96,19 @@ class DomainRoleCatalogTest {
                 "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE")) {
             assertThat(DomainRoleCatalog.isAssignable("erp", role)).as(role).isTrue();
         }
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-794: FINANCE_OPERATOR is NOT assignable (entry role, derived by auth); the five Finance roles are")
+    void financeEntryRole_notAssignable_businessRolesAre() {
+        assertThat(DomainRoleCatalog.isAssignable("finance", "FINANCE_OPERATOR")).isFalse();
+        for (String role : List.of("FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ",
+                "FINANCE_LEDGER_WRITE", "FINANCE_LEDGER_CONTROL")) {
+            assertThat(DomainRoleCatalog.isAssignable("finance", role)).as(role).isTrue();
+        }
+        // the wire access stays within the three values the console parses (no new «CONTROL» value)
+        assertThat(DomainRoleCatalog.entries()).extracting(DomainRoleCatalog.Entry::access)
+                .allMatch(a -> Set.of("READ", "WRITE", "OPERATE").contains(a));
     }
 
     @Test

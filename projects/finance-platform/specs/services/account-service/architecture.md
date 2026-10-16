@@ -235,7 +235,8 @@ com.example.finance.account/
   the actor cluster `ActorClaims` + `ActorContextFactory` + `ActorAuthenticationToken` +
   `ActorContextResolver`, which replaced this service's hand-rolled claim-lifting
   mechanism. The `ActorContext` record and every authority the converter synthesises on
-  top — `SCOPE_*`, `ROLE_FINANCE_VIEWER`, `ROLE_FINANCE_SUPERADMIN_READ` — stay
+  top — `SCOPE_*`, `ROLE_FINANCE_SUPERADMIN_READ` (`ROLE_FINANCE_VIEWER` was removed by
+  TASK-MONO-794 — business-role authorization, `iam-integration.md` § 업무 역할) — stay
   in-service per `shared-library-policy.md § Ownership Rule`), `libs:java-web-servlet`
   (TASK-FIN-BE-063 — `BodyHashUtil` canonical idempotency body hash;
   TASK-FIN-BE-066 / ADR-MONO-058 § D2 — `CommonGlobalExceptionHandler`, the base

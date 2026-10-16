@@ -45,6 +45,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -69,8 +70,12 @@ class AccountApplicationServiceTest {
     private static final String TENANT = "finance";
     private static final ActorContext HOLDER =
             new ActorContext("user-1", TENANT, Set.of());
+    /**
+     * TASK-MONO-794 (ADR-083 P7 · Q3): an operator who may move funds = the account write role (+ the derived entry
+     * role). The never-issued generic {@code OPERATOR} string no longer opens anything.
+     */
     private static final ActorContext OPERATOR =
-            new ActorContext("op-1", TENANT, Set.of("OPERATOR"));
+            new ActorContext("op-1", TENANT, Set.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_WRITE"));
     private static final Instant NOW = Instant.parse("2026-05-18T00:00:00Z");
 
     @Mock ObjectMapper objectMapper;
@@ -325,6 +330,35 @@ class AccountApplicationServiceTest {
                         .UpgradeKycCommand(HOLDER, "acc-1", "BASIC", "x")))
                 .isInstanceOf(com.example.finance.account.domain.error
                         .DomainErrors.PermissionDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("🔴 794 Q3: KYC upgrade without FINANCE_ACCOUNT_WRITE (entry role + account read · ledger control · generic OPERATOR) → PERMISSION_DENIED")
+    void kycUpgrade_withoutAccountWrite_denied() {
+        for (ActorContext actor : List.of(
+                new ActorContext("op-2", TENANT, Set.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ")),
+                new ActorContext("op-3", TENANT, Set.of("FINANCE_OPERATOR", "FINANCE_LEDGER_CONTROL")),
+                new ActorContext("op-4", TENANT, Set.of("OPERATOR", "ADMIN", "SUPER_ADMIN")))) {
+            assertThatThrownBy(() -> service.upgradeKyc(new com.example.finance.account.application.command
+                    .UpgradeKycCommand(actor, "acc-1", "BASIC", "x")))
+                    .as("roles %s", actor.roles())
+                    .isInstanceOf(PermissionDeniedException.class);
+        }
+        verify(accountRepository, never()).findById(any(), any());
+    }
+
+    @Test
+    @DisplayName("🔴 794 Q3: top-up without FINANCE_ACCOUNT_WRITE (entry role + account read · generic OPERATOR) → PERMISSION_DENIED")
+    void topUp_withoutAccountWrite_denied() {
+        for (ActorContext actor : List.of(
+                new ActorContext("op-2", TENANT, Set.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ")),
+                new ActorContext("op-4", TENANT, Set.of("OPERATOR")))) {
+            assertThatThrownBy(() -> service.topUp(new TopUpCommand(
+                    actor, "acc-1", "150000", "KRW", "x")))
+                    .as("roles %s", actor.roles())
+                    .isInstanceOf(PermissionDeniedException.class);
+        }
+        verify(accountRepository, never()).findById(any(), any());
     }
 
     // ---------------- top-up: the v1 funding entry point ----------------

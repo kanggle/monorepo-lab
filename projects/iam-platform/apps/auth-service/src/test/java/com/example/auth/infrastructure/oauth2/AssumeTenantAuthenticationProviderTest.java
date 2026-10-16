@@ -445,6 +445,24 @@ class AssumeTenantAuthenticationProviderTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-794: finance.write is excluded from the operator assumed token too (guard — not registered on the console client today)")
+    void operatorAssumedScopes_dropFinanceWrite() {
+        assertThat(AssumeTenantAuthenticationProvider.OPERATOR_EXCLUDED_SCOPES)
+                .containsExactlyInAnyOrder("erp.write", "finance.write");
+        // a hypothetical registration that carried finance.write (and finance.read) — the write scope is dropped,
+        // the read scope rides on (reading is what the business READ roles already allow; the hole is writes)
+        RegisteredClient client = RegisteredClient.withId("c3").clientId("platform-console-web")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("https://console.example/cb")
+                .scope("openid").scope("tenant.read").scope("finance.read").scope("finance.write")
+                .build();
+        assertThat(AssumeTenantAuthenticationProvider.operatorAssumedScopes(client))
+                .containsExactlyInAnyOrder("openid", "tenant.read", "finance.read")
+                .doesNotContain("finance.write");
+    }
+
+    @Test
     @DisplayName("🔴 BE-632 OD-2: the operator assumed token lives min(client TTL, 300 s) — a 1800 s client is capped, a shorter one kept")
     void withOperatorAssumedTtl_capsAt300() {
         RegisteredClient longLived = RegisteredClient.withId("c2").clientId("platform-console-web")

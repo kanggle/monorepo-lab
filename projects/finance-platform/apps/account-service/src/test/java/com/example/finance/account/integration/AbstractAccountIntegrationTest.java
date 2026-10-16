@@ -64,9 +64,12 @@ public abstract class AbstractAccountIntegrationTest {
     /** Standard fund-holder actor (no operator role) used across the ITs. */
     protected static final ActorContext HOLDER =
             new ActorContext("user-1", TENANT_FINANCE, Set.of());
-    /** Operator actor (OPERATOR role) — e.g. KYC upgrades. */
+    /**
+     * Operator actor — e.g. KYC upgrades, top-ups. TASK-MONO-794 (ADR-083 P7 · Q3): the account write role (+ the
+     * auth-derived entry role); the generic {@code OPERATOR} string is issued by nobody and no longer counts.
+     */
     protected static final ActorContext OPERATOR =
-            new ActorContext("op-1", TENANT_FINANCE, Set.of("OPERATOR"));
+            new ActorContext("op-1", TENANT_FINANCE, Set.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_WRITE"));
 
     @SuppressWarnings("resource")
     protected static final MySQLContainer<?> MYSQL =
