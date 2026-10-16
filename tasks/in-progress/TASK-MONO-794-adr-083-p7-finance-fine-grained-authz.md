@@ -51,9 +51,9 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 재측정: finance 명세 · 코드 판정 대조 · 원장 고위험 쓰기 목록 · 업무 구분안(OD-6) · 원장 고위험 쓰기 처리 소유자 결정. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · 🔴 **소유자 결정 대기**(Q1 원장 고위험 쓰기 = 이 티켓이 요구한 결정 · Q2 역할 이름 · 프리셋 · Q3 계좌 KYC · 충전) → § 질문과 추천.
-- [ ] **AC-1** — 🔴 대조군: 계좌 세트만 → 원장 변경 403 · 계좌 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403.
-- [ ] **AC-2** — 이전 호환 대조군(기존 운영자 같은 API 집합 200).
+- [x] **AC-0** — 재측정: finance 명세 · 코드 판정 대조 · 원장 고위험 쓰기 목록 · 업무 구분안(OD-6) · 원장 고위험 쓰기 처리 소유자 결정. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · STOP 뒤 § 소유자 결정(2026-10-16 UTC) 수령 — Q1 원장 통제 쓰기 7 = `FINANCE_LEDGER_CONTROL` · Q2 역할 5 · 프리셋 · Q3 KYC/충전 = `FINANCE_ACCOUNT_WRITE`.
+- [x] **AC-1** — 🔴 대조군: 계좌 세트만 → 원장 변경 403 · 계좌 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403. → account `AccountBusinessRoleGateSliceTest` · ledger `LedgerBusinessRoleGateSliceTest`(실 체인 · 실서명 JWT · 경로 39 전수 — 계좌 세트만 → 원장 전 경로 403 · 원장 세트만 → 계좌 전 경로 403 · 조회 세트 → 쓰기 403 · `FINANCE_OPERATOR` 만 → 403 · 일반 `OPERATOR/ADMIN/SUPER_ADMIN` → 403 · 구독만 → 403 · 🔴 Q1 `finance-ledger-operate` → 통제 쓰기 7 403 · Q2 통제만 → 업무 쓰기 6 403) · KYC/충전 `AccountApplicationServiceTest`(쓰기 역할 없음 → `PERMISSION_DENIED`) · auth `fin794_*` · admin 위임 422. § Red · § Green.
+- [x] **AC-2** — 이전 호환 대조군(기존 운영자 같은 API 집합 200). → 세 고리: V0058 IT(legacy-compat = 카탈로그 = Finance 5 포함 · `FINANCE_OPERATOR` 세트 → 5 역할(**CONTROL 포함**) · 파트너십 2 scope) · auth(`assumeTenant_legacyCompatHolder_*` — legacy-compat → `FINANCE_OPERATOR` + 5) · 서비스(두 게이트 시험의 `legacyOperator_allowed` — 29 + 10 경로 전부 통과) · 브랜치 e2e(federation `tenant-switch-rescope` 의 acme Finance 카드 · 콘솔 `operators-profile` Finance 카드 `ok`). ⚪ 라이브는 AC-3.
 - [ ] **AC-3** — 배포 상태를 따로 적는다.
 
 # Related Specs
@@ -173,3 +173,23 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 | CI `Integration (finance-platform, Testcontainers)` | `116827559592` | ✅ **92 PASSED · 0 FAILED** — account · ledger HTTP 범위 IT(구독만 → 403 · 일반 `OPERATOR` → 403 · 업무 역할 → 통과) 포함 |
 | CI 그 밖 | run `38856007513` | 실행된 검사 22 전부 pass(필수 4 포함) · 45 skipping(경로 필터) |
 | 로컬(같은 코드) | — | finance account/ledger/gateway · iam auth/admin `:test` rc=0 · 스테이지 뒤 가드 6(Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · INDEX · 티켓 ID · walkthrough) rc=0 |
+
+## 브랜치 nightly 전용 스위트 — 2026-10-16 UTC (커밋 `11fb0ac1a`, 792 의 federation 교훈대로 머지 전에 돌렸다)
+
+| 워크플로 | run | 결과 (job 로그 요약 줄에서 셈) |
+|---|---|---|
+| `federation-hardening-e2e` | `38856946169` (success) · 전체 스택 job `116830900316` | **20 passed · 1 flaky · 0 failed**. flaky 1 = `tenant-switch-rescope.spec.ts:110` scm 카드 `degraded`(148행, 재시도 통과) — 기지의 `TASK-BE-516`, 이 티켓과 무관. 🔵 그 실패 시도는 148행(scm)에서 멈췄다 = 앞의 acme-corp **Finance 카드 NOT forbidden 단언(125행)은 통과**한 뒤 — assume 토큰 + legacy-compat 경로가 V0058 뒤에도 Finance 를 연다. 🔵 `finance-golden-path.spec.ts` · `entitlement-trust-crossdomain.spec.ts` = **통과**(실패 · flaky 목록에 없음 — 점 리포터라 통과 시험 이름은 찍히지 않는다, 792/793 과 같은 판정법). AC-0 의 ⚪(«entitlement-trust 가 `FINANCE_VIEWER` 에 기대는가») → **기대지 않았다**(선택 테넌트 쿠키 → 재-assume 경로) |
+| `nightly-e2e` 1차 | `38856950242` attempt 1 (failure) | 잡 16 중 콘솔 full-stack job `116830663748` 만 실패 — **11 passed · 1 failed**: `operators-profile.spec.ts:44` Finance 카드 `degraded`(기대 `ok`). 🔵 원인 = **시간 초과**(인가 아님): 콘솔 로그 `console_composition_leg` 가 같은 순간 `operator-overview` finance `degraded reason=TIMEOUT latencyMs=4002` 와 `domain-health` finance `degraded TIMEOUT 4000` 을 함께 찍었다 — 인가 거절이면 `forbidden PERMISSION_DENIED` 로 찍힌다. 재시도는 30 s 시험 시간 초과(저장 버튼 클릭) |
+| `nightly-e2e` 재실행 | `38856950242` attempt 2 (success) | 콘솔 full-stack job `116835225745` **12 passed · 0 failed**(`operators-profile` Finance 카드 `ok` 포함) · 나머지 15 잡은 1차에 이미 초록(iam docker-compose · scm cross-service · wms · ecommerce · fan · web-store) |
+
+- 🔴 **부수 효과(기록)**: 1차 빨강이 자동 감시 잡(`A red nightly arrives`)으로 **이슈 #4386** 을 열었다(«nightly 가 다시 초록이면 자동으로 닫힌다 — 손으로 닫지 마라»). 재실행 초록 뒤에도 열려 있다(2026-10-16 확인) ⇒ 다음 `main` nightly 초록에서 닫히는지 ⚪.
+
+# 배포 상태 (AC-3) — 2026-10-16 UTC
+
+| 층 | 상태 |
+|---|---|
+| `main` | ❌ 미머지 — PR #4385 DRAFT (머지 · ready 전환은 이 에이전트 범위 밖) |
+| AMI | ⚪ — 굽기는 소유자 명령. 이 PR 의 백엔드(finance account · ledger · admin V0058 · auth 파생 · `finance.write` 제외)는 **한 굽기에 함께** 실려야 한다(갈라지면: auth 만 먼저 → 토큰에 `FINANCE_OPERATOR` 만(옛 세트) 또는 5 역할(새 세트)인데 서비스가 모르는 이름 · 서비스만 먼저 → 옛 토큰의 `FINANCE_OPERATOR` 로는 Finance 전 화면 403). 792 · 793 과 같은 굽기에 실려도 된다 |
+| 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-794» (V0058 행 수 앞/뒤 · AC-1/2 라이브 · 데모 시드 · 통제 쓰기 대조) |
+| 콘솔 | 변경 없음(이 PR). Finance 신호는 `TASK-PC-FE-344`(ready) — **굽기 라이브 확인 뒤에만 머지** |
+| 기계 클라이언트 | `finance-platform-internal-services-client`(범위만) — 범위 갈래 유지로 **계속 통한다**(KYC/충전은 지금처럼 역할 필요 — 403) |
