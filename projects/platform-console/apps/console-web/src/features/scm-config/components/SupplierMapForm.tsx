@@ -27,9 +27,11 @@ import { SeedTextField } from './SeedTextField';
 
 export interface SupplierMapFormProps {
   skuCode: string;
+  /** TASK-PC-FE-342 — `false` hides the save button (no `SCM_DEMAND_PLANNING_WRITE`). */
+  canWrite?: boolean;
 }
 
-export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
+export function SupplierMapForm({ skuCode, canWrite = true }: SupplierMapFormProps) {
   const {
     ids,
     fields,
@@ -87,7 +89,10 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
             </p>
           )}
 
-          <form onSubmit={openConfirm} className="mt-4 grid gap-4">
+          <form
+            onSubmit={canWrite ? openConfirm : (e) => e.preventDefault()}
+            className="mt-4 grid gap-4"
+          >
             <SeedTextField
               id={ids.supplierIdId}
               label="공급사 ID (supplierId · 공급사 코드 — free-text)"
@@ -144,11 +149,13 @@ export function SupplierMapForm({ skuCode }: SupplierMapFormProps) {
               </p>
             )}
 
-            <div>
-              <Button type="submit" data-testid="map-save">
-                {notConfigured ? '매핑 생성' : '매핑 저장'}
-              </Button>
-            </div>
+            {canWrite && (
+              <div>
+                <Button type="submit" data-testid="map-save">
+                  {notConfigured ? '매핑 생성' : '매핑 저장'}
+                </Button>
+              </div>
+            )}
           </form>
         </>
       )}

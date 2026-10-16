@@ -394,3 +394,35 @@ describe('ReplenishmentScreen — invalidation + degrade + a11y', () => {
     );
   });
 });
+
+/**
+ * TASK-PC-FE-342 AC-2 — demand-planning-service mutations need `SCM_DEMAND_PLANNING_WRITE`
+ * (TASK-MONO-792; live 28th window: `scm-read` → GET 200 · mutations 403). The page passes
+ * `canWrite = canWriteOn('/scm/replenishment', roles)`.
+ */
+describe('ReplenishmentScreen — TASK-PC-FE-342 read set hides 승인 · 기각', () => {
+  it('canWrite=false → the list stays, 승인 · 기각 are gone, a read-only note says why', () => {
+    render(<ReplenishmentScreen suggestions={PAGE} canWrite={false} />, { wrapper: wrapper() });
+    expect(screen.getByTestId('repl-table')).toBeInTheDocument();
+    expect(screen.getByTestId('repl-row-status-0')).toHaveTextContent('SUGGESTED');
+    expect(screen.queryByTestId('repl-approve-0')).toBeNull();
+    expect(screen.queryByTestId('repl-dismiss-0')).toBeNull();
+    expect(screen.getByTestId('repl-read-only-note')).toHaveTextContent('조회 전용');
+  });
+
+  it('canWrite=false is axe-clean (no empty action column left behind)', async () => {
+    const { container } = render(
+      <ReplenishmentScreen suggestions={PAGE} canWrite={false} />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.queryByRole('columnheader', { name: '작업' })).toBeNull();
+    expect(await runAxe(container)).toEqual([]);
+  });
+
+  it('control: canWrite omitted (fail-open) → 승인 · 기각 shown, no note', () => {
+    render(<ReplenishmentScreen suggestions={PAGE} />, { wrapper: wrapper() });
+    expect(screen.getByTestId('repl-approve-0')).toBeInTheDocument();
+    expect(screen.getByTestId('repl-dismiss-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('repl-read-only-note')).toBeNull();
+  });
+});

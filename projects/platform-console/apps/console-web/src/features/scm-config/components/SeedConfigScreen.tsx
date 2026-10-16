@@ -27,7 +27,17 @@ import { SupplierMapForm } from './SupplierMapForm';
  * → only the affected sub-section degrades (the console shell + the 운영 + 보충
  * sections stay intact).
  */
-export function SeedConfigScreen() {
+export interface SeedConfigScreenProps {
+  /**
+   * TASK-PC-FE-342 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when the
+   * operator's business roles hold none of `/scm/config`'s `writeRequires`
+   * (`SCM_DEMAND_PLANNING_WRITE`): both forms' save buttons hide and a read-only note shows (the
+   * SKU lookup and the current values stay). Omitted / `true` = shown (fail-open).
+   */
+  canWrite?: boolean;
+}
+
+export function SeedConfigScreen({ canWrite = true }: SeedConfigScreenProps = {}) {
   const lookupId = useId();
   const [draft, setDraft] = useState('');
   // The "active" SKU drives the two forms' read queries; it only changes on an
@@ -65,6 +75,16 @@ export function SeedConfigScreen() {
         여기서 변경한 설정은 <strong>이후(미래) 보충 추천 평가에만</strong>{' '}
         반영됩니다. 기존 추천·발주(PO)를 변경하거나 발주를 발행하지 않습니다.
       </p>
+      {!canWrite && (
+        <p
+          role="note"
+          data-testid="cfg-read-only-note"
+          className="mb-6 text-xs text-muted-foreground"
+        >
+          조회 전용 — 정책 · 매핑 저장에 필요한 업무 권한(수요계획 변경)이 이 테넌트에서
+          배정되지 않아 저장 버튼을 숨겼습니다. SKU 를 조회해 현재 값은 볼 수 있습니다.
+        </p>
+      )}
 
       {/* ── SKU-code lookup ─────────────────────────────────────────────── */}
       <form
@@ -101,8 +121,8 @@ export function SeedConfigScreen() {
 
       {activeSku ? (
         <div className="grid gap-6 lg:grid-cols-2">
-          <PolicyForm key={`policy-${activeSku}`} skuCode={activeSku} />
-          <SupplierMapForm key={`map-${activeSku}`} skuCode={activeSku} />
+          <PolicyForm key={`policy-${activeSku}`} skuCode={activeSku} canWrite={canWrite} />
+          <SupplierMapForm key={`map-${activeSku}`} skuCode={activeSku} canWrite={canWrite} />
         </div>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="cfg-no-sku">

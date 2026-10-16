@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { SeedConfigScreen } from '@/features/scm-config';
+import { canWriteOn } from '@/shared/ui/console-nav-exposure';
+import { getDomainBusinessRoles } from '../../_lib/domain-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,10 +32,14 @@ export const dynamic = 'force-dynamic';
 export default async function ScmConfigPage() {
   let eligible = false;
   let registryDegraded = false;
+  // TASK-PC-FE-342 — the registry's scm tenants for the save-button gate; `null` = unknown ⇒
+  // buttons shown.
+  let scmTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const scm = catalog.products.find((p) => p.productKey === 'scm');
     eligible = Boolean(scm && scm.available && scm.tenants.length > 0);
+    scmTenants = scm ? scm.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -88,5 +94,6 @@ export default async function ScmConfigPage() {
     );
   }
 
-  return <SeedConfigScreen />;
+  const businessRoles = await getDomainBusinessRoles({ scm: scmTenants });
+  return <SeedConfigScreen canWrite={canWriteOn('/scm/config', businessRoles)} />;
 }

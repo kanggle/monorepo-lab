@@ -67,13 +67,25 @@ export interface OutboundOpsScreenProps {
   /**
    * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when
    * the operator's business roles hold none of `/wms/outbound`'s `writeRequires`
-   * (`OUTBOUND_WRITE`): pick / pack / ship / cancel hide. «발송 재시도» (logistics-service,
-   * `authenticated()` only) stays. Omitted / `true` = shown (fail-open). The server stays final.
+   * (`OUTBOUND_WRITE`): pick / pack / ship / cancel hide. «발송 재시도» is NOT governed by this
+   * flag (its server is scm logistics-service — see `canRetry`). Omitted / `true` = shown
+   * (fail-open). The server stays final.
    */
   canWrite?: boolean;
+  /**
+   * TASK-PC-FE-342 (contract § 2.4.3.4 button-level row) — `false` when the operator's business
+   * roles (row 12 ∩ the tenant's wms + scm subscriptions) hold no `SCM_LOGISTICS_WRITE`: the
+   * «발송 재시도» button hides (logistics-service would `403` it — `TASK-MONO-792` Q3).
+   * Omitted / `true` = shown (fail-open).
+   */
+  canRetry?: boolean;
 }
 
-export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreenProps) {
+export function OutboundOpsScreen({
+  orders,
+  canWrite = true,
+  canRetry = true,
+}: OutboundOpsScreenProps) {
   const statusFid = useId();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -137,9 +149,10 @@ export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreen
   // Dispatch retry: surfaced for a SHIPPED order (a carrier dispatch exists only
   // after shipping). The "does a retry apply?" signal is the logistics dispatch
   // status, resolved server-side at action time — NOT the wms saga state.
+  // TASK-PC-FE-342: and only when the operator may retry at all (SCM_LOGISTICS_WRITE — `canRetry`).
   const retryVisible = useMemo(
-    () => canRetryDispatch(drillStatus),
-    [drillStatus],
+    () => canRetry && canRetryDispatch(drillStatus),
+    [canRetry, drillStatus],
   );
   // Async-cancel hint: order CANCELLED but the saga still releasing inventory.
   const cancelPending = useMemo(

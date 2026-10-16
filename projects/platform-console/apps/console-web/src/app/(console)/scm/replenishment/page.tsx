@@ -6,6 +6,8 @@ import {
   getReplenishmentSectionState,
   ReplenishmentScreen,
 } from '@/features/scm-replenishment';
+import { canWriteOn } from '@/shared/ui/console-nav-exposure';
+import { getDomainBusinessRoles } from '../../_lib/domain-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,10 +37,14 @@ export const dynamic = 'force-dynamic';
 export default async function ReplenishmentPage() {
   let eligible = false;
   let registryDegraded = false;
+  // TASK-PC-FE-342 — the registry's scm tenants for the write-button gate; `null` = unknown ⇒
+  // buttons shown.
+  let scmTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const scm = catalog.products.find((p) => p.productKey === 'scm');
     eligible = Boolean(scm && scm.available && scm.tenants.length > 0);
+    scmTenants = scm ? scm.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -64,7 +70,10 @@ export default async function ReplenishmentPage() {
     );
   }
 
-  const state = await getReplenishmentSectionState(eligible);
+  const [state, businessRoles] = await Promise.all([
+    getReplenishmentSectionState(eligible),
+    getDomainBusinessRoles({ scm: scmTenants }),
+  ]);
 
   if (state.notEligible) {
     return (
@@ -149,5 +158,10 @@ export default async function ReplenishmentPage() {
     );
   }
 
-  return <ReplenishmentScreen suggestions={state.suggestions} />;
+  return (
+    <ReplenishmentScreen
+      suggestions={state.suggestions}
+      canWrite={canWriteOn('/scm/replenishment', businessRoles)}
+    />
+  );
 }

@@ -12,7 +12,7 @@ import {
 } from '@/features/wms-ops';
 import type { WmsShipmentsSectionState } from '@/features/wms-ops';
 import { canWriteOn } from '@/shared/ui/console-nav-exposure';
-import { getWmsBusinessRoles } from '../_lib/wms-business-roles';
+import { getDomainBusinessRoles } from '../../_lib/domain-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +48,16 @@ export default async function WmsOutboundPage() {
   // TASK-PC-FE-338 c-2 AC-2 — the registry's wms tenants (for the write-button gate); `null` =
   // unknown ⇒ buttons shown.
   let wmsTenants: readonly string[] | null = null;
+  // TASK-PC-FE-342 — «발송 재시도» is served by scm logistics-service, so its gate needs the
+  // tenant's scm subscription too (an scm role is dropped from the input without it).
+  let scmTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const wms = catalog.products.find((p) => p.productKey === 'wms');
     eligible = Boolean(wms && wms.available && wms.tenants.length > 0);
     wmsTenants = wms ? wms.tenants : [];
+    const scm = catalog.products.find((p) => p.productKey === 'scm');
+    scmTenants = scm ? scm.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -89,7 +94,7 @@ export default async function WmsOutboundPage() {
   const [state, shipmentsState, businessRoles] = await Promise.all([
     getOutboundSectionState(eligible),
     getWmsShipmentsState(eligible),
-    getWmsBusinessRoles(wmsTenants),
+    getDomainBusinessRoles({ wms: wmsTenants, scm: scmTenants }),
   ]);
 
   if (state.notEligible) {
@@ -170,6 +175,7 @@ export default async function WmsOutboundPage() {
       <OutboundOpsScreen
         orders={state.orders}
         canWrite={canWriteOn('/wms/outbound', businessRoles)}
+        canRetry={canWriteOn('/wms/outbound', businessRoles, 'retry-dispatch')}
       />
       <WmsShipmentsSection state={shipmentsState} />
     </>

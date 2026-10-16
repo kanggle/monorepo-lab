@@ -26,8 +26,9 @@ export interface OutboundDrillActionsProps {
   /**
    * TASK-PC-FE-338 c-2 AC-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false`
    * when the operator holds no `OUTBOUND_WRITE`: pick / pack / ship / cancel hide (outbound-service
-   * would `403` them). «발송 재시도» (logistics-service, `authenticated()` only) is not gated by
-   * that role and stays. Default `true` (fail-open — the server stays final).
+   * would `403` them). «발송 재시도» (scm logistics-service) is not gated by that role — its own
+   * gate (`SCM_LOGISTICS_WRITE`, TASK-PC-FE-342) is folded into `retryVisible` by the container.
+   * Default `true` (fail-open — the server stays final).
    */
   canWrite?: boolean;
   cancelPending: boolean;
