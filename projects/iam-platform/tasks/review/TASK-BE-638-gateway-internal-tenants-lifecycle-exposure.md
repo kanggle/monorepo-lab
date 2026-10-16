@@ -8,7 +8,7 @@ The iam gateway exposes account-service tenant lifecycle writes: `PATCH /interna
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -62,10 +62,10 @@ What the code says (to be confirmed live in AC-0):
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: the live or IT-measured answers to the In Scope questions (file:line), the chosen fix, and why.
-- [ ] **AC-1**: with a tenant's own workload token, `PATCH /internal/tenants/{self}` → refused, and the status is unchanged.
-- [ ] **AC-2**: `POST /internal/tenants` and `GET /internal/tenants` with a non-admin workload token → refused.
-- [ ] **AC-3** (control): admin-service's tenant create / status change → unchanged.
+- [x] **AC-0**: the live or IT-measured answers to the In Scope questions (file:line), the chosen fix, and why. — IT-measured, § AC-0 below (live → next demo window).
+- [x] **AC-1**: with a tenant's own workload token, `PATCH /internal/tenants/{self}` → refused, and the status is unchanged. — 403, 0 requests reach account-service (IT).
+- [x] **AC-2**: `POST /internal/tenants` and `GET /internal/tenants` with a non-admin workload token → refused. — 403 for every token incl. `'*'` (IT + unit), and no route (route test).
+- [x] **AC-3** (control): admin-service's tenant create / status change → unchanged. — no admin-service or account-service code touched; it never crosses the gateway; admin-service ITs 332/0 failed.
 
 # Related Specs
 
@@ -127,6 +127,34 @@ No new error code: the existing `TENANT_SCOPE_DENIED` (gateway-api.md § 403) wi
 Not chosen:
 - **A client-id allow-list on `TenantLifecycleController`.** It would also close direct calls that bypass the gateway, but it changes account-service, needs admin-service's client id as config (a wrong value in the demo env would break tenant create/suspend there), and must not catch auth-service's `GET /{id}`. ⚪ **Owner question:** in the demo account-service is also on `traefik-net` (`infra/demo/iam-traefik.override.yml:327-331`, alias `iam-account-service`). Any container on that network holding an `internal.invoke` token can call the lifecycle API directly. By reading the overrides, the non-IAM containers on `traefik-net` are ecommerce notification-service and the erp/finance/scm/wms/fan backends that join for JWKS. None of them holds an `internal.invoke` client as far as the seeds show. `product-service-client` and the ecommerce internal client run on `ecommerce-net` only (measured live in `TASK-MONO-717`/`721`). So the bypass is open today but has no holder. Closing it is a separate ticket if wanted.
 - **Explicit deny with route unchanged.** It was layered in as (2) rather than being the only layer.
+
+## Red → green (PR #4390, counted from CI job logs)
+
+| lane | red (`ecef8f91e`, tests only) | green (`3c807a9a9`, fix) |
+|---|---|---|
+| `Build & Test` — iam `gateway-service:test` | job `116941091652`: 158 run, **16 failed**, all `AssertionFailedError` (13 `JwtAuthenticationFilterUnitTest` status assertions · 3 `GatewayRouteResolutionTest` "no route") | job `116945363225`: 158 run, 0 failed (task executed, not FROM-CACHE) |
+| `Integration (iam B)` — `GatewayIntegrationTest` | job `116941092655`: 43 run, **5 failed**, all `Status expected:<403> but was:<200 OK>` (×3) / `<201 CREATED>` (×2) — the exposure itself | job `116945365039`: 43 run, 0 failed (5 × BE-638 `PASSED`); same lane auth 158 / account 157, 0 failed |
+| `Integration (iam A)` (AC-3 control — admin-service ITs incl. tenant create/suspend) | job `116941092590`: green | job `116945365058`: admin 332 / security 24, 0 failed |
+
+Expected-green-on-red (the current behaviour was already right, kept as guards): `PATCH /internal/tenants/wms` with `tenant_id='*'`, and the matrix-parameter shape `wms;x=1`. Both were already 403 via the path ≠ claim check. The 8 sub-resource controls in each of the unit and route tests passed on both commits.
+
+AC-1 "status unchanged" is measured as `accountServiceMock.verify(0, patchRequestedFor(/internal/tenants/wms))`: the request never reaches account-service.
+
+**Branch e2e (gateway path changed):**
+- `federation-hardening-e2e.yml` run `38892564503`, job `116945887037`: **21 passed**, 0 flaky.
+- `nightly-e2e.yml` run `38892569380`:
+  - iam docker-compose full (job `116945342031`): 3/3.
+  - Platform Console full-stack (job `116946011408`): 11 passed, **1 flaky**. The flaky one is `overview-consolidation.spec.ts:131`: the IAM overview card was not rendered within 5 s on the first try and passed on retry. That is the overview-leg family of `TASK-PC-FE-341`, but ⚪ the `degraded reason=TIMEOUT` text is not in the job log, so the cause is not verified. No console path calls `/internal/tenants` (grep of `*.ts`: 0).
+  - web-store full-stack, ecommerce×wms, wms gateway-master, web-store GAP logout: all success.
+  - scm (job `116945341991`) and fan (job `116945342012`): failed at `compileJava` with `Could not find resilience4j-annotations-2.2.0.jar` (2 hits each, `tests=0`). That is the known main-side CI cause, not this change.
+
+## Sibling gateways (CLAUDE.md step 10, grep by symptom)
+
+Searched `projects/*/apps/gateway-service` for an `/internal` route predicate, for a tenant/path scope regex with an optional tail, and for `/**` routes that also cover a bare collection or row on an internal API:
+- erp, finance, scm, wms, fan: no `/internal` route at all, and no path-scope regex (`Pattern.compile` appears only in iam).
+- ecommerce: `Path=/internal/sellers/**` (application.yml:78). Not the same exposure: `AccountTypeEnforcementFilter` admits GET/HEAD + scope `store.seller.read` + `tenant_id=ecommerce` only, and product-service maps a single `GET /internal/sellers/{id}` (`ProductSecurityConfig.java:127` `GET /internal/sellers/*`). There is no write or list behind it.
+- The ecommerce `/api/internal/**` endpoints (order, promotion, auth) sit under no ecommerce gateway route prefix.
+- ⇒ No sibling carries this pattern. Nothing filed.
 
 ## Verification plan for the next demo window (rides the next AMI bake, owner decision 2026-10-16)
 
