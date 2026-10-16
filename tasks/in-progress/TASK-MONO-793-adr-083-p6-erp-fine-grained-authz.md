@@ -178,6 +178,13 @@ ERP 쓰기 판정은 `erp.write` 범위 ∨ 운영자 역할 하나다(`masterda
 | CI 그 밖 | run `38824478499` | 실행된 검사 22 전부 pass(필수 4 포함) · Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · JWT 클레임 레지스트리 pass |
 | 로컬(같은 코드) | — | erp 4 서비스 `:test` · iam auth/admin `:test` rc=0 · 게이트 시험 5 클래스 39/39 |
 
+## 브랜치 nightly 전용 스위트 — 2026-10-16 UTC (커밋 `38bd611fb`, 792 의 federation 교훈대로 머지 전에 돌렸다)
+
+| 워크플로 | run | 결과 (job 로그 요약 줄에서 셈) |
+|---|---|---|
+| `federation-hardening-e2e` | `38825676862` (success) · 전체 스택 job `116732932716` | **20 passed · 1 flaky · 0 failed · skipped 0**. flaky 1 = `tenant-switch-rescope.spec.ts:110` scm 카드 `degraded`(재시도 통과) — 기지의 `TASK-BE-516`, 이 티켓과 무관. 🔵 `erp-golden-path.spec.ts` = **통과** — 실패 · flaky 목록에 없고 skipped 0(점 리포터라 통과 시험 이름은 찍히지 않는다 — 792 와 같은 판정법). SUPER_ADMIN `'*'` 토큰의 `/erp` 화면 = 와일드카드 READ 유지(티켓 Edge Case) |
+| `nightly-e2e` | `38825683316` (success) | 잡 16 전부 success — 콘솔 full-stack job `116732820334` **12 passed** · iam docker-compose · scm cross-service · wms · ecommerce · fan · web-store 전부 초록 |
+
 # 배포 상태 (AC-3) — 2026-10-15 UTC
 
 | 층 | 상태 |
