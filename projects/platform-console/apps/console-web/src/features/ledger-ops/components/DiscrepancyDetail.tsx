@@ -36,6 +36,11 @@ import { labelForUnknown } from '@/shared/lib/tolerant-label';
  */
 export interface DiscrepancyDetailProps {
   discrepancyId: string;
+  /**
+   * TASK-PC-FE-344 — `false` hides the «해소» action (no `FINANCE_LEDGER_WRITE`; ledger-service would
+   * `403` it). Default `true` (fail-open).
+   */
+  canWrite?: boolean;
 }
 
 export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {

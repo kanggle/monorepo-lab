@@ -44,6 +44,11 @@ export interface FxRatesTableProps {
    * feed-only behaviour; a test pins the no-regression).
    */
   onSelectPair?: (foreignCurrency: string) => void;
+  /**
+   * TASK-PC-FE-344 — `false` hides the «새로고침» button: it is `POST /fx-rates/refresh`, a ledger
+   * business write (`FINANCE_LEDGER_WRITE`; CONTROL does not open it). Default `true` (fail-open).
+   */
+  canWrite?: boolean;
 }
 
 

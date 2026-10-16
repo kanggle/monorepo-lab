@@ -14,6 +14,8 @@ import { PeriodDetail } from '@/features/ledger-ops/components/PeriodDetail';
 import { JournalEntryDetail } from '@/features/ledger-ops/components/JournalEntryDetail';
 import { DiscrepancyQueue } from '@/features/ledger-ops/components/DiscrepancyQueue';
 import { DiscrepancyDetail } from '@/features/ledger-ops/components/DiscrepancyDetail';
+import { FxRatesPanel } from '@/features/ledger-ops/components/FxRatesPanel';
+import { ReconciliationPanel } from '@/features/ledger-ops/components/ReconciliationPanel';
 import { AccountDetail } from '@/features/ledger-ops/components/AccountDetail';
 import type {
   TrialBalance,
@@ -1245,5 +1247,113 @@ describe('LedgerOpsScreen — lazy panel code split (TASK-PC-FE-134)', () => {
     // available synchronously (no second await).
     const inputAgain = screen.getByTestId('ledger-entry-input') as HTMLInputElement;
     expect(inputAgain.value).toBe('je-typed-123');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-344 — /ledger write buttons follow FINANCE_LEDGER_WRITE (contract § 2.4.3.4). The page
+// passes `canWrite = canWriteOn('/ledger', roles)`; CONTROL alone yields `false`.
+// ---------------------------------------------------------------------------
+
+describe('DiscrepancyDetail — TASK-PC-FE-344 canWrite hides «해소»', () => {
+  it('canWrite=false on an OPEN discrepancy → no resolve action, a read-only note says why', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY)));
+    render(<DiscrepancyDetail discrepancyId="d-1" canWrite={false} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-detail-type')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('ledger-recon-resolve-open')).toBeNull();
+    expect(screen.queryByTestId('ledger-recon-read-only-note')).not.toBeNull();
+    expect(screen.getByTestId('ledger-recon-read-only-note')).toHaveTextContent('조회 전용');
+  });
+
+  it('control: canWrite omitted → the resolve action is offered, no note', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY)));
+    render(<DiscrepancyDetail discrepancyId="d-1" />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolve-open')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('ledger-recon-read-only-note')).toBeNull();
+  });
+});
+
+/**
+ * Threading pins — the two panels are where `LedgerOpsScreen`'s `canWrite` must arrive (their prop is
+ * REQUIRED, so tsc fails if the screen stops passing it). Rendered directly: the panels are pure
+ * views over the parent hook's state.
+ */
+describe('FxRatesPanel / ReconciliationPanel — TASK-PC-FE-344 canWrite reaches the buttons', () => {
+  const FX = {
+    feedEnabled: true,
+    rates: [
+      {
+        baseCurrency: 'KRW',
+        foreignCurrency: 'USD',
+        rate: '1300.5',
+        asOf: '2026-06-15T00:00:00Z',
+        source: 'ECB',
+        fetchedAt: '2026-06-15T00:01:00Z',
+        ageSeconds: 60,
+        stale: false,
+      },
+    ],
+  };
+  type FxProps = Parameters<typeof FxRatesPanel>[0];
+  const fxProps = (canWrite: boolean) =>
+    ({
+      fxRatesForbidden: false,
+      fxRatesApiErr: null,
+      fxRatesRefreshError: null,
+      fxRatesQ: { data: FX },
+      refreshFxRatesMutation: { mutate: vi.fn() },
+      fxRatesRefreshing: false,
+      setFxHistoryForeign: vi.fn(),
+      fxHistoryForeign: null,
+      fxHistoryForbidden: false,
+      fxHistoryApiErr: null,
+      fxHistoryQ: { data: undefined },
+      canWrite,
+    }) as unknown as FxProps;
+
+  it('FxRatesPanel canWrite=false → no FX «새로고침» (POST refresh)', () => {
+    render(<FxRatesPanel {...fxProps(false)} />, { wrapper: wrapper() });
+    expect(screen.getByTestId('ledger-fx-rates-feed-badge')).toBeInTheDocument();
+    expect(screen.queryByTestId('ledger-fx-rates-refresh')).toBeNull();
+  });
+
+  it('control: FxRatesPanel canWrite=true → the button is there', () => {
+    render(<FxRatesPanel {...fxProps(true)} />, { wrapper: wrapper() });
+    expect(screen.getByTestId('ledger-fx-rates-refresh')).toBeInTheDocument();
+  });
+
+  type ReconProps = Parameters<typeof ReconciliationPanel>[0];
+  const reconProps = (canWrite: boolean) =>
+    ({
+      discrepancies: DISCREPANCIES,
+      selectedStatementId: null,
+      setSelectedStatementId: vi.fn(),
+      statement: null,
+      statementNotFound: false,
+      selectedDiscrepancyId: 'd-1',
+      setSelectedDiscrepancyId: vi.fn(),
+      handleSelectEntry: vi.fn(),
+      canWrite,
+    }) as unknown as ReconProps;
+
+  it('ReconciliationPanel canWrite=false → the selected OPEN discrepancy offers no «해소»', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY)));
+    render(<ReconciliationPanel {...reconProps(false)} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-detail-type')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('ledger-recon-resolve-open')).toBeNull();
+  });
+
+  it('control: ReconciliationPanel canWrite=true → «해소» offered', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes(OPEN_DISCREPANCY)));
+    render(<ReconciliationPanel {...reconProps(true)} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('ledger-recon-resolve-open')).toBeInTheDocument(),
+    );
   });
 });

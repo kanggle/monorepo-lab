@@ -16,7 +16,9 @@
  *   - ERP (TASK-PC-FE-343, server = TASK-MONO-793, live 28th window): no subscription-synthesised
  *     read any more; masterdata reads + read-model `employees*` = MD_READ ∨ MD_WRITE, approval reads
  *     = AP_READ ∨ AP_WRITE; `ERP_OPERATOR` is an auth-derived entry role, absent from row 12;
- *   - Finance reads → open on subscription alone (until TASK-PC-FE-344);
+ *   - Finance (TASK-PC-FE-344, server = TASK-MONO-794, live 28th window): `FINANCE_VIEWER` gone;
+ *     account GET = AC_READ ∨ AC_WRITE; ledger GET = LG_READ ∨ LG_WRITE ∨ LG_CONTROL; ledger
+ *     business writes (resolve · fx refresh) = LG_WRITE only — CONTROL is independent (Q2);
  *   - SCM (TASK-PC-FE-342, server = TASK-MONO-792, live 28th window): each SCM service's GET =
  *     its READ ∨ WRITE role, mutations = WRITE; `SCM_OPERATOR` is an auth-derived entry role
  *     that opens no business API and never appears in row 12; WMS 출고 «발송 재시도» goes to
@@ -47,11 +49,16 @@ const ECOMMERCE_LEAVES = PERMISSION_MAP.filter(
  * The admin-service catalog (admin-api.md § 카탈로그 · `DomainRoleCatalog.java`). The SCM part is
  * the TASK-MONO-792 catalog (8 business roles; `SCM_OPERATOR` removed — auth derives it); the
  * E-commerce part is the TASK-MONO-795 catalog (13 business roles; `ECOMMERCE_OPERATOR` removed);
- * the ERP part is the TASK-MONO-793 catalog (4 business roles; `ERP_OPERATOR` removed). The
- * Finance entry is still the pre-P7 one; TASK-PC-FE-344 replaces it.
+ * the ERP part is the TASK-MONO-793 catalog (4 business roles; `ERP_OPERATOR` removed); the
+ * Finance part is the TASK-MONO-794 catalog (5 business roles; `FINANCE_OPERATOR` removed). With
+ * P5–P8 in, no entry role remains in this set (pinned below).
  */
 const ERP_CATALOG = [
   'ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE', 'ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE',
+];
+const FINANCE_CATALOG = [
+  'FINANCE_ACCOUNT_READ', 'FINANCE_ACCOUNT_WRITE', 'FINANCE_LEDGER_READ', 'FINANCE_LEDGER_WRITE',
+  'FINANCE_LEDGER_CONTROL',
 ];
 const SCM_CATALOG = [
   'SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE', 'SCM_DEMAND_PLANNING_READ',
@@ -68,7 +75,7 @@ const ECOMMERCE_CATALOG = [
 const CATALOG_ROLES = new Set([
   'INVENTORY_READ', 'INVENTORY_WRITE', 'INBOUND_READ', 'INBOUND_WRITE', 'OUTBOUND_READ',
   'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', ...SCM_CATALOG, ...ERP_CATALOG,
-  'FINANCE_OPERATOR', ...ECOMMERCE_CATALOG, 'FAN_OPERATOR', 'MES_OPERATOR',
+  ...FINANCE_CATALOG, ...ECOMMERCE_CATALOG, 'FAN_OPERATOR', 'MES_OPERATOR',
 ]);
 
 /**
@@ -209,10 +216,71 @@ describe('TASK-PC-FE-345 — E-commerce menus follow the area roles', () => {
   });
 });
 
-describe('subscription-only domains never get the signal (Finance)', () => {
-  it('no role at all on a finance-subscribed tenant → no badge', () => {
+const FINANCE_LEAVES = ['/finance', '/finance/accounts', '/ledger'];
+/** System presets (V0058). */
+const FINANCE_READ_SET = ['FINANCE_ACCOUNT_READ', 'FINANCE_LEDGER_READ'];
+const FINANCE_ACCOUNT_SET = ['FINANCE_ACCOUNT_READ', 'FINANCE_ACCOUNT_WRITE'];
+const FINANCE_LEDGER_SET = ['FINANCE_LEDGER_READ', 'FINANCE_LEDGER_WRITE'];
+
+/**
+ * TASK-PC-FE-344 — Finance per area (server: TASK-MONO-794 — account / ledger `SecurityConfig`;
+ * «구독 합성 READ 는 없다»; CONTROL independent of the business writes).
+ */
+describe('TASK-PC-FE-344 — Finance menus and /ledger buttons follow the Finance roles', () => {
+  it('legacy-compat row 12 (the 5 roles, no entry role) → nothing badged · buttons shown', () => {
+    const r = roles(...FINANCE_CATALOG);
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), r);
+    for (const href of FINANCE_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(canWriteOn('/ledger', r)).toBe(true);
+  });
+
+  it('Finance set 0 on a finance-subscribed tenant → every Finance leaf badged', () => {
     const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), roles());
-    expect(badges.size).toBe(0);
+    for (const href of FINANCE_LEAVES) expect(badges.has(href), href).toBe(true);
+  });
+
+  it('`FINANCE_OPERATOR` alone (derived entry role) → still badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), roles('FINANCE_OPERATOR'));
+    for (const href of FINANCE_LEAVES) expect(badges.has(href), href).toBe(true);
+  });
+
+  it('read set (`finance-read`) → no badge · /ledger buttons hidden', () => {
+    const r = roles(...FINANCE_READ_SET);
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), r);
+    for (const href of FINANCE_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(canWriteOn('/ledger', r)).toBe(false);
+  });
+
+  it('account set only → /ledger and 개요 badged (the overview always reads the ledger)', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), roles(...FINANCE_ACCOUNT_SET));
+    expect(badges.has('/ledger')).toBe(true);
+    expect(badges.has('/finance')).toBe(true);
+    expect(badges.has('/finance/accounts')).toBe(false);
+  });
+
+  it('ledger operate set → /finance/accounts badged; /ledger open and its buttons shown', () => {
+    const r = roles(...FINANCE_LEDGER_SET);
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), r);
+    expect(badges.has('/finance/accounts')).toBe(true);
+    expect(badges.has('/ledger')).toBe(false);
+    expect(canWriteOn('/ledger', r)).toBe(true);
+  });
+
+  it('🔴 ledger CONTROL only → /ledger NOT badged (trial balance readable) and its buttons HIDDEN', () => {
+    const r = roles('FINANCE_LEDGER_CONTROL');
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), r);
+    expect(badges.has('/ledger')).toBe(false);
+    expect(canWriteOn('/ledger', r)).toBe(false);
+  });
+
+  it('finance not subscribed → no «업무 권한 없음»', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('wms'), roles());
+    for (const href of FINANCE_LEAVES) expect(badges.has(href)).toBe(false);
+  });
+
+  it('fail-open: row 12 unknown → no badge · /ledger buttons shown', () => {
+    expect(businessPermissionBadgeKeys(GROUPS, subs('finance'), undefined).size).toBe(0);
+    expect(canWriteOn('/ledger', undefined)).toBe(true);
   });
 });
 
@@ -541,6 +609,34 @@ describe('ledger — the declarations match the measurement', () => {
         expect(declared.includes(entry), `${row.href}: ${entry}`).toBe(false);
       }
     }
+  });
+
+  it('TASK-PC-FE-344 — Finance rows declare exactly what account / ledger enforce', () => {
+    const AC = ['FINANCE_ACCOUNT_READ', 'FINANCE_ACCOUNT_WRITE'];
+    const LG = ['FINANCE_LEDGER_READ', 'FINANCE_LEDGER_WRITE', 'FINANCE_LEDGER_CONTROL'];
+    const expected: Record<string, { server: string[]; write?: string[] }> = {
+      '/finance': { server: LG },
+      '/finance/accounts': { server: AC },
+      '/ledger': { server: LG, write: ['FINANCE_LEDGER_WRITE'] },
+    };
+    for (const [href, want] of Object.entries(expected)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.serverRequires ?? [])].sort(), href).toEqual([...want.server].sort());
+      expect([...g.roles].sort(), href).toEqual([...FINANCE_CATALOG].sort());
+      if (want.write) expect([...(g.writeRequires ?? [])], href).toEqual(want.write);
+      else expect(g.writeRequires, href).toBeUndefined();
+    }
+  });
+
+  it('TASK-PC-FE-344 — 🔴 /ledger writeRequires never names FINANCE_LEDGER_CONTROL (independent, Q2)', () => {
+    const g = gateOf('/ledger');
+    if (g?.kind !== 'domain') throw new Error('not a domain gate');
+    expect(g.writeRequires ?? []).not.toContain('FINANCE_LEDGER_CONTROL');
+  });
+
+  it('TASK-PC-FE-344 — the catalog copy in this file holds no entry role (P5–P8 complete)', () => {
+    for (const entry of ENTRY_ROLES) expect(CATALOG_ROLES.has(entry), entry).toBe(false);
   });
 
   it('TASK-PC-FE-343 — ERP rows declare exactly what the ERP services enforce (no buttons yet → 347)', () => {

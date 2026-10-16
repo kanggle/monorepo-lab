@@ -8,7 +8,7 @@ TASK-PC-FE-344
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -92,3 +92,22 @@ frontend
 # Merge gate — 28th window
 
 - 2026-10-16 UTC — gate met: the bake carrying 792/793/794/795 was live-verified in the 28th window (2026-10-16) — may now be implemented/merged. (AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`; this ticket's source `TASK-MONO-794` → `done/`; results in `TASK-MONO-672` § 28th window — harvest.)
+
+# 구현 기록 — 2026-10-16 UTC (branch `task/pc-fe-344-finance-nav`, base `82d857680`)
+
+## AC-0 — 오늘 거짓 배지 · 숨김이 있는가 (코디네이터 질문) · 서버 대조
+
+**판정: 없다 — 343(ERP) 과 같은 «덜 알림» 쪽뿐.** c-2 의 Finance 3 행은 `roles: ['FINANCE_OPERATOR']` 만 있고 `serverRequires` · `writeRequires` 가 없다 → 배지 · 숨김이 생길 수 없다. row 12 는 V0058 뒤 `FINANCE_OPERATOR` 를 내지 않는다(V0059 · V0057 과 같은 «넓힌 뒤 지움»). 남은 것: 794 가 `ROLE_FINANCE_VIEWER`(구독 합성)를 걷어 Finance 역할 없는 운영자는 Finance 화면 전부 서버 `403` 인데 메뉴에 배지가 없고, 조회 세트 운영자에게 `/ledger` 쓰기 버튼이 보인다(누르면 `403`).
+
+서버 대조(base `82d857680`, finance `iam-integration.md:102-132` 정본): account `SecurityConfig:19-22,62-63`(GET = AC_READ ∨ AC_WRITE ∨ `finance.*` ∨ `'*'`) · ledger `SecurityConfig:19-37,66-68`(GET = LG_READ ∨ LG_WRITE ∨ LG_CONTROL · 통제 쓰기 7 = CONTROL · 그 밖의 쓰기(대사 해소 · 환율 갱신 포함) = LG_WRITE — CONTROL 은 열지 않는다). ⇒ 티켓 대조표 그대로 + 두 칸 확정:
+- **`/finance` 개요**(티켓의 «데이터 없이 렌더» 는 **틀렸다**): `features/finance-overview/api/overview-state.ts:156-235` 가 원장 4 조회(시산표 · 기간 · 대사 OPEN · 환율)를 **매번**, 기본 계좌가 설정돼 있으면 계좌 2 조회를 한다. `:280-286` — 어느 한 갈래라도 `403` 이면 **화면 전체** `forbidden`. ⇒ `serverRequires` = 원장 3 역할(항상 부르는 갈래). 🔵 원장만 가진 운영자 + 기본 계좌 설정 → 배지 없음 · 화면 `forbidden`(덜 알림 — 안전 쪽). 갈래별 저하로 바꾸는 것은 화면 행동 변경이라 이 티켓 밖 — ⚪ 기록.
+- **운영 개요(`/dashboards/overview`) Finance 카드**(티켓의 «원장 조회 역할이 없는 운영자에게 forbidden» 은 **틀렸다**): `shared/composition/console-composition.ts:341-348` 는 기본 계좌의 `GET /accounts/{id}/balances` 하나를 부른다 → 필요한 것은 **계좌** 역할(`AC_READ ∨ AC_WRITE`). 기본 계좌가 없으면 카드는 호출 없이 `forbidden · MISSING_PREREQUISITE`. 콘솔 메뉴 신호의 대상이 아니므로 데이터 변경 없음 — ⚪ 라이브(다음 창: 계좌 세트 없는 운영자의 카드 = `forbidden`).
+
+## 범위 — 버튼은 이 PR 에서 배선 (분리 안 함)
+
+`/ledger` 의 쓰기 버튼은 둘뿐이다: 대사 해소(`DiscrepancyDetail` «해소») · FX «새로고침»(`FxRatesTable` — `POST /fx-rates/refresh`, 이름은 새로고침이지만 쓰기). 두 패널(`ReconciliationPanel` · `FxRatesPanel`)을 지나는 배선 하나라 345 · 343 처럼 나눌 크기가 아니다. 🔴 판정은 역할 **이름**(`FINANCE_LEDGER_WRITE`) — 카탈로그 `access`(CONTROL 도 `WRITE`)로 추론하지 않는다(Edge Case 2).
+
+## 함께 적는 것
+
+- 가이드 문안 후속 `TASK-PC-FE-348`(ready) 을 이 PR 에서 기안 — 코디네이터 지시(SCM · E-commerce · IAM · WMS 가이드의 «`*_OPERATOR` 하나 · 자동 부여» 문장).
+- `TASK-PC-FE-341` 에 `overview-consolidation.spec.ts:133` 첫 시도 flaky 증거 한 줄 추가(343 브랜치 nightly run 38965748396 / job 117192025297 — 원인 가설은 미확정).
