@@ -13,7 +13,10 @@
  *     `ECOMMERCE_OPERATOR` is an auth-derived entry role, deleted from every set by V0059, so row 12
  *     NEVER carries it — c-2's `serverRequires = ECOMMERCE_OPERATOR` badged every E-commerce menu
  *     for every operator (live regression from the 795 bake, 2026-10-16);
- *   - ERP · Finance reads → open on subscription alone;
+ *   - ERP (TASK-PC-FE-343, server = TASK-MONO-793, live 28th window): no subscription-synthesised
+ *     read any more; masterdata reads + read-model `employees*` = MD_READ ∨ MD_WRITE, approval reads
+ *     = AP_READ ∨ AP_WRITE; `ERP_OPERATOR` is an auth-derived entry role, absent from row 12;
+ *   - Finance reads → open on subscription alone (until TASK-PC-FE-344);
  *   - SCM (TASK-PC-FE-342, server = TASK-MONO-792, live 28th window): each SCM service's GET =
  *     its READ ∨ WRITE role, mutations = WRITE; `SCM_OPERATOR` is an auth-derived entry role
  *     that opens no business API and never appears in row 12; WMS 출고 «발송 재시도» goes to
@@ -43,10 +46,13 @@ const ECOMMERCE_LEAVES = PERMISSION_MAP.filter(
 /**
  * The admin-service catalog (admin-api.md § 카탈로그 · `DomainRoleCatalog.java`). The SCM part is
  * the TASK-MONO-792 catalog (8 business roles; `SCM_OPERATOR` removed — auth derives it); the
- * E-commerce part is the TASK-MONO-795 catalog (13 business roles; `ECOMMERCE_OPERATOR` removed).
- * The ERP · Finance entries are still the pre-P6/P7 ones; their console follow-ups
- * (TASK-PC-FE-343 · 344) replace them.
+ * E-commerce part is the TASK-MONO-795 catalog (13 business roles; `ECOMMERCE_OPERATOR` removed);
+ * the ERP part is the TASK-MONO-793 catalog (4 business roles; `ERP_OPERATOR` removed). The
+ * Finance entry is still the pre-P7 one; TASK-PC-FE-344 replaces it.
  */
+const ERP_CATALOG = [
+  'ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE', 'ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE',
+];
 const SCM_CATALOG = [
   'SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE', 'SCM_DEMAND_PLANNING_READ',
   'SCM_DEMAND_PLANNING_WRITE', 'SCM_LOGISTICS_READ', 'SCM_LOGISTICS_WRITE',
@@ -61,7 +67,7 @@ const ECOMMERCE_CATALOG = [
 ];
 const CATALOG_ROLES = new Set([
   'INVENTORY_READ', 'INVENTORY_WRITE', 'INBOUND_READ', 'INBOUND_WRITE', 'OUTBOUND_READ',
-  'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', ...SCM_CATALOG, 'ERP_OPERATOR',
+  'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', ...SCM_CATALOG, ...ERP_CATALOG,
   'FINANCE_OPERATOR', ...ECOMMERCE_CATALOG, 'FAN_OPERATOR', 'MES_OPERATOR',
 ]);
 
@@ -203,10 +209,74 @@ describe('TASK-PC-FE-345 — E-commerce menus follow the area roles', () => {
   });
 });
 
-describe('subscription-only domains never get the signal (ERP · Finance)', () => {
-  it('no role at all on a tenant subscribed to both → no badge in those domains', () => {
-    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp', 'finance'), roles());
+describe('subscription-only domains never get the signal (Finance)', () => {
+  it('no role at all on a finance-subscribed tenant → no badge', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('finance'), roles());
     expect(badges.size).toBe(0);
+  });
+});
+
+const ERP_LEAVES = ['/erp', '/erp/masters', '/erp/orgview', '/erp/approval', '/erp/delegation'];
+/** System presets (V0057). */
+const ERP_READ_SET = ['ERP_MASTERDATA_READ', 'ERP_APPROVAL_READ'];
+const ERP_MASTERDATA_SET = ['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE'];
+const ERP_APPROVAL_SET = ['ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'];
+
+/**
+ * TASK-PC-FE-343 — ERP per area (server: TASK-MONO-793 — masterdata `RoleScopeAuthorizationAdapter`,
+ * approval `ActorContext`, read-model `ReadAuthorizationGate`; «구독 합성 READ 는 없다»).
+ */
+describe('TASK-PC-FE-343 — ERP menus follow the ERP business roles', () => {
+  it('legacy-compat row 12 (the 4 roles, no entry role) → nothing badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles(...ERP_CATALOG));
+    for (const href of ERP_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(badges.has('erp')).toBe(false);
+  });
+
+  it('ERP set 0 on an erp-subscribed tenant → every ERP leaf AND the ERP parent badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles());
+    for (const href of ERP_LEAVES) expect(badges.has(href), href).toBe(true);
+    expect(badges.has('erp')).toBe(true);
+    expect(badges.has('/erp/guide')).toBe(false);
+  });
+
+  it('`ERP_OPERATOR` alone (derived entry role) opens no business API → still badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles('ERP_OPERATOR'));
+    for (const href of ERP_LEAVES) expect(badges.has(href), href).toBe(true);
+  });
+
+  it('read set (`erp-read`) → no badge', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles(...ERP_READ_SET));
+    for (const href of ERP_LEAVES) expect(badges.has(href), href).toBe(false);
+  });
+
+  it('approval set only → 기준정보 · 조직 조회 badged; 결재 · 위임 · 개요 open; parent not badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles(...ERP_APPROVAL_SET));
+    expect(badges.has('/erp/masters')).toBe(true);
+    expect(badges.has('/erp/orgview')).toBe(true);
+    expect(badges.has('/erp/approval')).toBe(false);
+    expect(badges.has('/erp/delegation')).toBe(false);
+    expect(badges.has('/erp')).toBe(false);
+    expect(badges.has('erp')).toBe(false);
+  });
+
+  it('masterdata set only → 결재 · 위임 badged; 기준정보 · 조직 조회 · 개요 open', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp'), roles(...ERP_MASTERDATA_SET));
+    expect(badges.has('/erp/approval')).toBe(true);
+    expect(badges.has('/erp/delegation')).toBe(true);
+    expect(badges.has('/erp/masters')).toBe(false);
+    expect(badges.has('/erp/orgview')).toBe(false);
+    expect(badges.has('/erp')).toBe(false);
+  });
+
+  it('erp not subscribed → «구독 필요» only, never «업무 권한 없음»', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('wms'), roles());
+    for (const href of ERP_LEAVES) expect(badges.has(href)).toBe(false);
+    expect(badges.has('erp')).toBe(false);
+  });
+
+  it('fail-open: row 12 unknown → no ERP badge', () => {
+    expect(businessPermissionBadgeKeys(GROUPS, subs('erp'), undefined).size).toBe(0);
   });
 });
 
@@ -470,6 +540,25 @@ describe('ledger — the declarations match the measurement', () => {
       for (const entry of ENTRY_ROLES) {
         expect(declared.includes(entry), `${row.href}: ${entry}`).toBe(false);
       }
+    }
+  });
+
+  it('TASK-PC-FE-343 — ERP rows declare exactly what the ERP services enforce (no buttons yet → 347)', () => {
+    const MD = ['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE'];
+    const AP = ['ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'];
+    const expected: Record<string, string[]> = {
+      '/erp': [...MD, ...AP],
+      '/erp/masters': MD,
+      '/erp/orgview': MD,
+      '/erp/approval': AP,
+      '/erp/delegation': AP,
+    };
+    for (const [href, want] of Object.entries(expected)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.serverRequires ?? [])].sort(), href).toEqual([...want].sort());
+      expect([...g.roles].sort(), href).toEqual([...ERP_CATALOG].sort());
+      expect(g.writeRequires, href).toBeUndefined();
     }
   });
 

@@ -316,11 +316,15 @@ Domain menus are never hidden by either signal; each shows its own badge. Hiding
   | `/scm/procurement` | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` | procurement-service `GET /api/procurement/**` = READ ∨ WRITE |
   | `/scm/inventory` | `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | inventory-visibility-service `GET` = READ ∨ WRITE |
   | `/scm/replenishment` · `/scm/config` | `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` | demand-planning-service `GET` = READ ∨ WRITE. 🔵 `/scm/config`'s supplier picker reads procurement (`GET /procurement/suppliers`) — a demand-planning-only operator keeps the screen and loses only that picker's suggestions |
-  | ERP · Finance leaves | — | ERP reads are open to `entitled_domains ∋ erp`; Finance synthesises `FINANCE_VIEWER` |
+  | `/erp` (개요) | `ERP_MASTERDATA_READ` · `ERP_MASTERDATA_WRITE` · `ERP_APPROVAL_READ` · `ERP_APPROVAL_WRITE` | its tiles read masterdata (5 counts) and approval (결재 대기 · 활성 위임); either family opens the screen, a missing one degrades only its own tiles (existing per-tile rule) |
+  | `/erp/masters` · `/erp/orgview` | `ERP_MASTERDATA_READ` · `ERP_MASTERDATA_WRITE` | masterdata reads and read-model `employees*` = `MD_READ ∨ MD_WRITE` (erp `iam-integration.md` § 업무 역할, `TASK-MONO-793` Q1 · Q6). 🔵 `/erp/orgview`'s delegation-facts card reads approval (`AP_READ ∨ AP_WRITE`) — a masterdata-only operator keeps the screen and loses only that card |
+  | `/erp/approval` · `/erp/delegation` | `ERP_APPROVAL_READ` · `ERP_APPROVAL_WRITE` | approval reads (요청 목록/상세 · 결재함 · 위임 목록) = `AP_READ ∨ AP_WRITE` |
+  | Finance leaves | — | Finance synthesises `FINANCE_VIEWER` (until `TASK-PC-FE-344`) |
+  | ~~ERP leaves~~ | ~~—~~ | ~~ERP reads are open to `entitled_domains ∋ erp`~~ — not true since `TASK-MONO-793` (live from the 28th window, 2026-10-16: «구독 합성 READ 는 없다»). The empty declaration never produced a false badge (it under-signalled: an operator without ERP roles saw no badge on menus the server refused). Replaced by the ERP rows above (`TASK-PC-FE-343`) |
   | fan leaves | — | not measured (ADR-083 ③ ⚪) — no declaration until measured |
 
   🔴 **An entry role is never declared** (`serverRequires` · `writeRequires` · `buttonWriteRequires`): `SCM_OPERATOR` (`TASK-MONO-792` Q4), `ERP_OPERATOR` (793), `FINANCE_OPERATOR` (794) and `ECOMMERCE_OPERATOR` (795) are **derived by auth** when the token carries ≥1 business role of that domain — they are not in the catalog and never appear in row 12, so declaring one badges (or hides buttons from) every operator of that domain. `console-nav-business-permission.test.ts` fails on any declared entry role.
-- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule. **P5 (SCM) — done, `TASK-PC-FE-342`** (the SCM rows above + the `/wms/outbound` «발송 재시도» button-level row). **P8 (E-commerce) — menus done, `TASK-PC-FE-345`** (the E-commerce `serverRequires` rows above); its write buttons are **not declared yet** and stay visible (server `403` → inline «권한 없음») — `TASK-PC-FE-346`. P6 (ERP) · P7 (Finance) follow in `TASK-PC-FE-343` · `344`.
+- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule. **P5 (SCM) — done, `TASK-PC-FE-342`** (the SCM rows above + the `/wms/outbound` «발송 재시도» button-level row). **P8 (E-commerce) — menus done, `TASK-PC-FE-345`** (the E-commerce `serverRequires` rows above); its write buttons are **not declared yet** and stay visible (server `403` → inline «권한 없음») — `TASK-PC-FE-346`. **P6 (ERP) — menus + bell done, `TASK-PC-FE-343`** (the ERP rows above + § 2.4.8 «ERP leg skipped»); its write buttons (masters · approval · delegation) are **not declared yet** and stay visible — `TASK-PC-FE-347`. P7 (Finance) follows in `TASK-PC-FE-344`.
 - **Badge.** The text is «업무 권한 없음», and the leaf keeps its link (never hidden). The `(console)` layout reads row 12 once per render, together with the registry.
 
 #### 2.4.4 IAM operator overview (composed) — TASK-PC-FE-005 — cross-reference, **no new producer**
@@ -2085,6 +2089,16 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
     operator uses the console normally with an empty bell). No
     `refetchInterval` polling (the same no-tight-loop rule as the erp-ops
     read hooks); the inbox refetches on bell-open + after a mark-read.
+  - **ERP leg skipped for an operator known to hold no ERP role (`TASK-PC-FE-343` · `TASK-MONO-793`
+    Q2/Q6)**: since 793 the notification endpoints are personal endpoints that need **any ERP
+    business role** (or `erp.read` · `tenant_id='*'`) — an operator with none gets `403`, which the
+    aggregator records as `degradedDomains ∋ erp`. So, before calling a domain's inbox, the console
+    asks row 12 of § 2.4.3.4 (`GET /api/admin/me/domain-access`) and **does not call** that domain when
+    **all** of these hold: an active tenant is selected, it is not `'*'` (the `'*'` token opens the
+    endpoint without a role), row 12 answered, and it carries **no** role of that domain. The domain
+    is then neither in `items` nor in `degradedDomains` (nothing was asked; nothing failed).
+    Row 12 failure / timeout, no active tenant, or `'*'` → the domain is called as before
+    (fail-open — an outage must never hide an operator's notifications).
   - **Routing**: in v1 (gateway-service deferred) `erp.local` routes
     `/api/erp/notifications/**` to notification-service via a path-prefix
     Traefik router (alongside the read-model `/api/erp/read-model/**` and

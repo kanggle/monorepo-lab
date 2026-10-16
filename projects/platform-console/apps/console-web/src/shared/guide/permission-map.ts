@@ -290,6 +290,24 @@ const WMS_ROLES = [
   'MASTER_READ',
 ];
 /**
+ * TASK-PC-FE-343 (ADR-MONO-083 P6 · server = TASK-MONO-793, live 28th window) — the ERP catalog
+ * (`DomainRoleCatalog.java` erp entries). `ERP_OPERATOR` is NOT here: an entry role auth derives,
+ * deleted from every set by V0057, never in row 12. 793 also removed the subscription-synthesised
+ * read («구독 합성 READ 는 없다»), so ERP menus now carry `serverRequires` (erp `iam-integration.md`
+ * § 업무 역할). Write buttons are not declared yet — TASK-PC-FE-347.
+ */
+const ERP_ROLES = [
+  'ERP_MASTERDATA_READ',
+  'ERP_MASTERDATA_WRITE',
+  'ERP_APPROVAL_READ',
+  'ERP_APPROVAL_WRITE',
+];
+/** masterdata reads + read-model `employees*` / approval reads + read-model `approvals*` · `delegations*`. */
+const ERP_GET = {
+  masterdata: ['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE'],
+  approval: ['ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'],
+} as const;
+/**
  * TASK-PC-FE-345 (ADR-MONO-083 P8 · server = TASK-MONO-795, live 28th window) — the E-commerce
  * catalog (`DomainRoleCatalog.java` ecommerce entries). 🔴 `ECOMMERCE_OPERATOR` is NOT here: since
  * 795 it is an entry role auth derives, V0059 deleted it from every set, so row 12 never carries it.
@@ -900,17 +918,20 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ['ERP_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: [...ERP_GET.masterdata, ...ERP_GET.approval] },
     description: '마스터 5종 카운트 + 결재 대기 + 활성 위임 타일.',
     crud: R,
     purpose: 'ERP 상태를 요약해 본다.',
     services: ['erp gateway-service → masterdata-service · approval-service'],
-    sources: ['projects/platform-console/apps/console-web/src/features/erp-guide/data.ts:65-95', `${ROLE_DERIVATION}:105`],
+    sources: [
+      'projects/platform-console/apps/console-web/src/features/erp-guide/data.ts:65-95',
+      'projects/erp-platform/specs/integration/iam-integration.md:106-138 (§ 업무 역할)',
+    ],
   },
   {
     href: '/erp/masters',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ['ERP_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.masterdata },
     description: '부서·직원·직급·비용센터·거래처 마스터 조회 · 등록 · 수정 · 폐기.',
     crud: crud('CRUD'),
     crudNote: '삭제 = 폐기(retire, 유효기간 종료 — 물리 삭제 아님).',
@@ -921,7 +942,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/orgview',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ['ERP_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.masterdata },
     description: '직원·위임 통합 조회(읽기 모델).',
     crud: R,
     purpose: '여러 마스터를 가로질러 조직을 한 번에 본다.',
@@ -931,7 +952,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/approval',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ['ERP_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.approval },
     description: '결재 요청 상신 · 결재함 · 승인/반려 등 상태 전이.',
     crud: crud('CRU'),
     crudNote: '수정 = 결재 상태 전이(transition).',
@@ -945,7 +966,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/delegation',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ['ERP_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.approval },
     description: '결재 위임 목록 · 등록 · 회수.',
     crud: crud('CRD'),
     crudNote: '삭제 = 위임 회수(revoke).',

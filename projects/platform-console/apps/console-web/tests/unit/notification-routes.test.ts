@@ -23,6 +23,19 @@ vi.mock('@/shared/config/demo-backend', () => ({
   resolveBackendUrl: async (u: string) => u,
 }));
 
+// TASK-PC-FE-343 — row 12 (`/me/domain-access`). Default `null` = «don't know» → the ERP leg is
+// called exactly as before, so every older test here keeps its meaning.
+const myDomainRoles = vi.hoisted(() => ({
+  value: null as { domainKey: string; role: string }[] | null,
+  calls: 0,
+}));
+vi.mock('@/shared/api/iam-operators-read', () => ({
+  getMyDomainRolesOrNull: async () => {
+    myDomainRoles.calls += 1;
+    return myDomainRoles.value;
+  },
+}));
+
 import { NextRequest } from 'next/server';
 import { GET as inboxGET } from '@/app/api/console/notifications/inbox/route';
 import { POST as markReadPOST } from '@/app/api/console/notifications/[sourceDomain]/[id]/read/route';
@@ -74,6 +87,8 @@ function markRead(sourceDomain: string, id = 'n1') {
 
 beforeEach(() => {
   cookieJar.clear();
+  myDomainRoles.value = null;
+  myDomainRoles.calls = 0;
   fetchMock = vi.fn(async () => json({ data: [erpItem], meta: { totalElements: 1 } }));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -193,5 +208,62 @@ describe('mark-read route', () => {
     const res = await markRead('erp');
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * TASK-PC-FE-343 (contract § 2.4.8 «ERP leg skipped», server = TASK-MONO-793 Q2/Q6): the erp
+ * notification endpoints need ANY ERP business role (or `erp.read` / `tenant_id='*'`). An
+ * operator row 12 KNOWS holds none would get 403 → `degradedDomains ∋ erp`; the console does not
+ * ask. Every «don't know» still asks (fail-open).
+ */
+describe('inbox route — TASK-PC-FE-343 ERP leg follows the ERP business roles', () => {
+  it('active tenant + row 12 with no ERP role → ERP is NOT called, and erp is not «degraded»', async () => {
+    session();
+    myDomainRoles.value = [{ domainKey: 'wms', role: 'INVENTORY_READ' }];
+    const res = await inbox();
+    expect(res.status).toBe(200);
+    const body = NotificationInboxResponseSchema.parse(await res.json());
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toEqual([]);
+    expect(body.degradedDomains).toEqual([]);
+    expect(body.items).toEqual([]);
+  });
+
+  it('row 12 empty (no business role at all) → ERP is NOT called', async () => {
+    session();
+    myDomainRoles.value = [];
+    await inbox();
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toEqual([]);
+  });
+
+  it('control: row 12 with one ERP role → ERP is called (personal endpoint opens on any ERP role)', async () => {
+    session();
+    myDomainRoles.value = [{ domainKey: 'erp', role: 'ERP_APPROVAL_READ' }];
+    const res = await inbox();
+    const body = NotificationInboxResponseSchema.parse(await res.json());
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toHaveLength(1);
+    expect(body.items.map((i) => i.id)).toEqual(['n1']);
+  });
+
+  it('fail-open: row 12 failed (null) → ERP is called', async () => {
+    session();
+    myDomainRoles.value = null;
+    await inbox();
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toHaveLength(1);
+  });
+
+  it('fail-open: no active tenant → ERP is called (row 12 needs a tenant)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    myDomainRoles.value = [];
+    await inbox();
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toHaveLength(1);
+  });
+
+  it("the '*' tenant → ERP is called even with no ERP role (the '*' token opens the endpoint)", async () => {
+    session();
+    cookieJar.set(TENANT_COOKIE, '*');
+    myDomainRoles.value = [];
+    await inbox();
+    expect(calledUrls().filter((u) => u.startsWith('http://erp.local'))).toHaveLength(1);
   });
 });

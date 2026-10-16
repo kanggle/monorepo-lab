@@ -90,9 +90,25 @@ describe('two signals kept apart', () => {
     expect(screen.queryByTestId('nav-ecommerce-subscription-badge')).toBeNull();
   });
 
-  it('ERP never gets «업무 권한 없음» — the e2e pin /^ERP(구독 필요)?$/ stays true', () => {
+  // TASK-PC-FE-343 — ERP now declares serverRequires, so the ERP toggle CAN carry «업무 권한 없음».
+  // The e2e pin (`overview-consolidation.spec.ts`) was widened to /^ERP(구독 필요|업무 권한 없음)?$/
+  // — still exact on the label, one cause at most. These two pin both directions in unit form.
+  it('TASK-PC-FE-343 — erp subscribed, no ERP role → the ERP toggle reads exactly «ERP업무 권한 없음»', () => {
     render(<ConsoleSidebarNav subscribedDomains={new Set(['erp'])} myBusinessRoles={new Set()} />);
-    expect(screen.getByTestId('nav-erp')).toHaveTextContent(/^ERP(구독 필요)?$/);
+    expect(screen.getByTestId('nav-erp')).toHaveTextContent(/^ERP업무 권한 없음$/);
+    expect(screen.getByTestId('nav-erp')).toHaveTextContent(/^ERP(구독 필요|업무 권한 없음)?$/);
+  });
+
+  it('TASK-PC-FE-343 — erp subscribed with the ERP roles → the ERP toggle reads exactly «ERP»', () => {
+    render(
+      <ConsoleSidebarNav
+        subscribedDomains={new Set(['erp'])}
+        myBusinessRoles={
+          new Set(['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE', 'ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'])
+        }
+      />,
+    );
+    expect(screen.getByTestId('nav-erp')).toHaveTextContent(/^ERP$/);
   });
 });
 
