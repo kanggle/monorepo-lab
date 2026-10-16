@@ -50,9 +50,9 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 재측정: 관리 컨트롤러 전수 · 게이트웨이 경로 판정 · 서비스별 재검사 유무 · 업무 구분안(OD-6) · 슬라이스 분할 계획. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · 🔴 **STOP**: 소유자 결정 Q1~Q4 대기(OD-6 이 글자 그대로 안 맞는 곳 2 · 정산 지급 등급 · 술어의 집 · 슬라이스).
-- [ ] **AC-1** — 🔴 대조군: 주문 세트만 → 상품 변경 403 · 주문 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403 / 🔴 게이트웨이를 거치지 않은 서비스 직접 호출도 같은 판정.
-- [ ] **AC-2** — 이전 호환 대조군 · 소비자 경로 무변경 대조군.
+- [x] **AC-0** — 재측정: 관리 컨트롤러 전수 · 게이트웨이 경로 판정 · 서비스별 재검사 유무 · 업무 구분안(OD-6) · 슬라이스 분할 계획. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · STOP 뒤 § 소유자 결정(2026-10-16 UTC) 수령 — Q1 역할 13 · Q2 정산 통제 역할 없음 · Q3 `libs/java-web` 기전 하나 · Q4 원자 PR(슬라이스 분할 = **하지 않는다**).
+- [x] **AC-1** — 🔴 대조군: 주문 세트만 → 상품 변경 403 · 주문 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403 / 🔴 게이트웨이를 거치지 않은 서비스 직접 호출도 같은 판정. → 서비스 게이트 시험 9(order 5 · product 24 · user 3 · settlement 9 · notification 5 · search 1 — 슬라이스 · promotion 7 · shipping 4 — 응용 서비스, **헤더만 넣는 직접 호출** = 게이트웨이 없는 판정): 다른 영역 세트 → 전 경로 403 · 영역 조회 세트 → 쓰기 403 · `ECOMMERCE_OPERATOR` 단독 → 403 · `CUSTOMER` · 빈/없는 헤더 → 403 · 대소문자 무시 · 부분 문자열 불인정. auth `ecom795_*`(주문 세트 → 진입 역할 + 주문 역할만 · 배정된 진입 역할 단독 → 0 · 파트너십 파생) · admin 진입 역할 위임 422. § Red · § Green.
+- [x] **AC-2** — 이전 호환 대조군 · 소비자 경로 무변경 대조군. → 이전 호환 세 고리: V0059 IT(legacy-compat = 카탈로그 · `ECOMMERCE_OPERATOR` 세트 → 13 역할 · 파트너십 2 scope) · auth(`ecom795_legacyCompat_fullEcommerce` — legacy-compat → 진입 역할 + 13) · 서비스(게이트 시험의 legacy-compat 행 — 58 경로 전부 통과). 소비자: 게이트웨이 시험(업무 역할은 소비자 트리를 열지 않는다) · 브랜치 nightly web-store full-stack 14 passed(`account-type-guard` 2 포함) · ecommerce×wms 주문처리 고리 2/0. ⚪ 라이브는 AC-3.
 - [ ] **AC-3** — 배포 상태를 따로 적는다.
 
 # Related Specs
@@ -219,3 +219,22 @@ auth(파생 · ceiling) · admin(카탈로그 · V0059) · ecommerce 서비스 9
 | CI `Integration (ecommerce A/B/C, Testcontainers)` | `116896564135` · `116896564019` · `116896564126` | ✅ **125 · 70 · 223 PASSED · 0 FAILED** — 업무 역할 헤더로 바꾼 IT(프로모션 CRUD · 쿠폰 발급 · 배송 · 알림 · 회원 · 다중 테넌트 · 셀러 스코프) 포함 |
 | CI 그 밖 | run `38877656055` | 실행된 잡 **38 전부 success**(필수 4 포함 · Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · 공유 라이브러리 위생 · 컨트롤러 슬라이스 이름) · 31 skipped(경로 필터) |
 | 로컬(같은 코드) | — | java-web · ecommerce 11 · iam admin/auth `:test` rc=0 · java-web 의존 39 모듈 `compileTestJava` rc=0 · 스테이지 뒤 가드 8(Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 2 · libs CI 커버리지 · INDEX · 티켓 ID · walkthrough) rc=0 |
+
+## 브랜치 nightly 전용 스위트 — 2026-10-16 UTC (커밋 `992ac70c6`)
+
+| 워크플로 | run | 결과 (job 로그 요약 줄에서 셈) |
+|---|---|---|
+| `federation-hardening-e2e` | `38879384218` (success) · 전체 스택 job `116902881046` | **20 passed · 1 flaky · 0 failed**. flaky 1 = `tenant-switch-rescope.spec.ts:110` — 기지의 `TASK-BE-516`, 이 티켓과 무관(federation 스택에 ecommerce 도메인 호출 0 — AC-0 § 3) |
+| `nightly-e2e` 1차 | `38879390811` attempt 1 (failure) | ecommerce · 콘솔 · web-store 잡 전부 초록. 실패 2 = `E2E full (fan-platform v1 live-trio)` `116902164084` · `E2E full (scm-platform v1 cross-service)` `116902163990` — 원인 = **의존성 해석**(`Could not find resilience4j-annotations-2.2.0.jar` — `libs:payment-core` · scm procurement 의 `compileJava`), 시험 단언 아님 |
+| `nightly-e2e` 재실행 | `38879390811` attempt 2 (failure) | 같은 두 잡이 같은 원인으로 다시 실패(`116908323426` · `116908323581`). 🔴 **이 PR 이전부터의 것**: 기준 브랜치의 nightly `38863691082`(`cf36d1609` = 794 머지, 이 브랜치의 base)도 `E2E full (fan-platform v1 live-trio)` 가 **같은 jar 해석 실패**로 빨갛다 ⇒ 795 의 코드가 아니라 러너의 의존성 캐시/저장소 쪽 ⚪(로컬 `curl` 로 그 jar 는 200). 이 티켓에서 고치지 않는다 — 이슈 **#4386**(794 창에서 자동 개설, 열림)이 같은 빨강을 들고 있다 |
+| ↳ ecommerce 관련 잡(재실행) | 위 run | web-store full-stack `116908325894` **14 passed · 0 failed**(필수 6 스펙 실행 · `account-type-guard` 2 — CUSTOMER 없는 ecommerce 계정 거부 포함) · 콘솔 full-stack `116908326105` **12 passed · 0 failed** · ecommerce×wms 주문처리 고리 `116908325182` **tests=2 failures=0** · iam docker-compose `116908384194` **tests=3 failures=0** · wms gateway-master 초록 |
+
+# 배포 상태 (AC-3) — 2026-10-16 UTC
+
+| 층 | 상태 |
+|---|---|
+| 기준 브랜치 | ❌ 미머지 — PR #4387 DRAFT (머지 · ready 전환은 이 에이전트 범위 밖) |
+| AMI | ⚪ — 굽기는 소유자 명령. 이 PR 의 백엔드(ecommerce 9 서비스 · admin V0059 · auth 파생)는 **한 굽기에 함께** 실려야 한다(§ 7 — 갈라지면: iam 만 먼저 → 세분 없이 전부 열림(카탈로그가 거짓) · ecommerce 만 먼저 → 옛 토큰(`ECOMMERCE_OPERATOR` 만)으로 E-commerce 운영 전 화면 403 + 데모 시드 백오피스 단계 실패). 792 · 793 · 794 와 같은 굽기에 실려도 된다 |
+| 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-795» (V0059 행 수 앞/뒤 · AC-1/2 라이브 · 직접 호출 대조 · 와일드카드 · 소비자 비회귀) |
+| 콘솔 | 변경 없음(이 PR). E-commerce 신호는 `TASK-PC-FE-345`(ready) — **굽기 라이브 확인 뒤에만 머지** |
+| web-store | 변경 없음 — 소비자 토큰은 `CUSTOMER` 만, 업무 역할은 assume · 파트너십 경로에만 실린다 |
