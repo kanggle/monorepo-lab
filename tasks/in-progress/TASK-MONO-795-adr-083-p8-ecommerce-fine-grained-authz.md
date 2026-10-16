@@ -187,3 +187,35 @@ auth(파생 · ceiling) · admin(카탈로그 · V0059) · ecommerce 서비스 9
 | Q3 | 저장소 루트 `libs/java-web` 에 **프로젝트 무관 기전 하나**(역할 이름 · 프로젝트 문구 없음 — HARDSTOP-03 · `platform/shared-library-policy.md`). 각 서비스는 자기 영역 상수만. 사본 8 삭제 — 비교 규칙(대소문자 무시 · trim · 콤마)을 **한 곳에서 정의하고 시험**. 새 사본이 생기면 실패하는 시험/가드. 공유 경로이므로 `:libs:java-web` 에 의존하는 CI 대상 모듈 전부를 쓸어 검사 |
 | Q4 | 원자 PR 하나 |
 | 그 밖 | `'*'` 와일드카드 GET = 지금 그대로(order 조회 4 · 상품/이미지 조회 4) · 넓히지 않음. 게이트웨이 무변경 + 새 시험(업무 역할 + 파생 진입 역할 → 통과). web-store · 소비자 경로 무변경 |
+
+## 구현 노트 (결정의 적용 범위 — 판단을 적는다)
+
+- 🔵 **판정 위치 = 지금 검사가 있던 자리 그대로**(controller 또는 응용 서비스). order · 상품 · 이미지 20 경로는 검사가 **없던** 자리라 controller 메서드 첫 줄에 넣었다(`OrderOperatorAccess` · `ProductOperatorAccess`). promotion · shipping 은 응용 서비스의 `OperatorRoleGuard`(같은 클래스 이름 · `requireRead/requireWrite` 로 갈라짐) — 판정 위치를 옮기지 않았다(구조 변경 0).
+- 🔵 **«한 술어» (Q3)** = `libs/java-web` `com.example.web.security.RoleListHeader` — 비교 규칙(콤마 · trim · `Locale.ROOT` 대소문자 무시 · 원소 동치 · 빈 헤더 = 역할 없음)만 갖고 **역할 이름은 없다**(HARDSTOP-03 무관, `shared-library-policy.md` «shared security helpers» — 기존 라이브러리에 클래스 하나, 새 라이브러리 아님 · 순수 JDK 라 reactive 게이트웨이 클래스패스에도 안전). 영역 상수는 서비스마다 자기 것만(주문 역할은 order 만 안다). 사본 8 삭제 — notification 의 대소문자 구분 분기는 **구성으로** 사라졌다(같은 메서드를 부른다). 재발 가드 = gateway-service `RoleHeaderCopyGuardTest`(술어 `\w*[Rr]ole\w*.split(` · bite 양방향 · 모집단 하한 > 100 파일) — 스크립트 가드가 아니라 시험으로 둔 이유: `scripts/` 에 파일을 더하면 가드 수 계수(`check-ls-files-guard-count.sh`)와 ci.yml 배선이 함께 움직이고, 이 규칙의 모집단은 ecommerce `src/main` 하나라 그 프로젝트의 빌드 레인이 가장 가까운 집이다.
+- 🔵 **`:libs:java-web` 의존 모듈 쓸기**: `settings.gradle` 에 포함된 의존 모듈 **39** 개 `compileTestJava` 초록(로컬) · java-web `:test` 초록. 의존을 선언했으나 빌드에 포함되지 않은 6 개(ecommerce `auth-service` 등 은퇴 모듈)는 대상 아님. 추가만 한 클래스라 기존 소비자의 시험 결과는 바뀌지 않는다(추론) — CI Build 레인이 libs 변경으로 전 프로젝트를 돌린다.
+- 🔵 **와일드카드 `'*'`**: 서비스 판정의 «`X-Tenant-Id = '*'`» 갈래 = 주문 조회 4 · 상품 조회 3 · 이미지 목록 1 **뿐**(지금 닿는 곳 그대로). `X-Tenant-Id` 는 게이트웨이가 클라이언트 값을 벗기고 토큰에서 다시 넣는다(`IdentityHeaderStripFilter.BASELINE_HEADERS`).
+- 🔵 **게이트웨이 무변경** + 시험 3(업무 역할 하나 + 파생 진입 역할 → `/api/admin/**` · 운영자-공개 트리 통과 / 진입 역할 없는 업무 역할 → 403(파생에 기대는 것을 고정) / 업무 역할은 소비자 트리를 열지 않는다).
+- 🔵 **검색 재색인**: 서비스 판정 = `ECOMMERCE_PRODUCT_WRITE`. 게이트웨이는 `/api/search/**` 에 `CUSTOMER` 를 요구하므로 운영자 토큰은 여전히 게이트웨이에서 403 — 계약(«내부 포트 전용») 그대로, 이 PR 은 그 경로를 열지 않는다.
+- 🔵 **정당하게 바뀐 시험**(이 PR 의 판정이 바꾼 것만): ecommerce 기존 시험 43 파일의 운영자 헤더 `ECOMMERCE_OPERATOR` → `ECOMMERCE_OPERATOR,<영역>_READ,<영역>_WRITE`(회원 = `MEMBER_READ`) · order/상품/이미지 시험의 «헤더 없이 200(게이트 위임)» → 업무 역할 헤더(이름도 고침) · `InternalSellerChainTest` 헤더 신뢰 경로 · admin 카탈로그 28 → 40 · 프리셋 26 → 33(V0056/57/58 형태 · V0057/58 IT) · V0052 형태 시험의 «V0052 시절 카탈로그» · auth `OperatorRoleDerivationTest` ecommerce 상한 · `TenantClaimTokenCustomizerTest` legacy-compat 목록 · BE-632 ecommerce 세트 시험 · `DemoCsOperatorDerivedRolesTest` 공개 역할 집합(ECOMMERCE_OPERATOR + 13 + WMS) · `AssumeTenantExchangeIntegrationTest` STEP 5 배정 역할(`ECOMMERCE_OPERATOR` → `ECOMMERCE_ORDER_READ` — 진입 역할은 이제 배정에서 버려진다).
+- ⚪ `R__seed_demo_cs_operator.sql` 머리 주석의 «holds ECOMMERCE_OPERATOR» 문장은 고치지 않았다 — R__ 체크섬이 바뀌어 반복 이전이 다시 돈다. 문장은 여전히 참(파생 진입 역할)이고 역할 집합은 `DemoCsOperatorDerivedRolesTest` 가 고정한다.
+
+# Red — 2026-10-16 UTC (커밋 `9b923356b` · 시험만 · run `38873993204`)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116884609850` | 실패 **21** — gateway 1(`RoleHeaderCopyGuardTest` — 사본 8 발견) · notification 4 · order 9 · product 7. 전부 단언(`java.lang.AssertionError` 20 · `AssertionFailedError` 1 — 로그 `FAILED` 다음 줄에서 셈). 🔵 이 단계는 실패 4 태스크에서 멈춰 user · settlement · search · promotion · shipping · iam 단위 시험은 **실행되지 않았다** ⇒ 아래 로컬 줄 |
+| CI `Integration (iam A, Testcontainers)` | `116884611247` | admin `:integrationTest` **332 · 4 실패**(V0059 IT 2 — 파일 없음 단언 · V0057/V0058 IT `presetsAfterBoot` 2 — 프리셋 33) — 전부 단언 |
+| CI `Integration (iam B, Testcontainers)` | `116884611297` | auth `:integrationTest` **158 · 1 실패**(`AssumeTenantExchangeIntegrationTest` STEP 5 — 배정된 업무 역할에서 진입 역할 파생 없음) — 단언 |
+| CI `Integration (ecommerce A/B/C)` | `116884611176` · `116884611285` · `116884611204` | 초록 — red 커밋은 IT 를 바꾸지 않았다(통제) |
+| 로컬(같은 커밋) | — | 새 게이트 시험 **39 실패**(order 9 · product 7 · user 3 · settlement 4 · promotion 4 · shipping 4 · notification 4 · search 3 · gateway 1 — 전부 단언, 결과 XML 의 `type` 에서 셈) · admin `:test` **1393 · 18** · auth `:test` **1288 · 9** — 전부 단언. 통과 쪽 = 허용 대조군(operate 세트 · legacy-compat · 게이트웨이 시험 3) |
+
+# Green — 2026-10-16 UTC (커밋 `992ac70c6` · run `38877656055`)
+
+| 레인 | job id | 결과 |
+|---|---|---|
+| CI `Build & Test (JDK 21, Linux)` | `116896562725` | ✅ — `libs:java-web` · ecommerce 11 서비스(gateway · order · product · user · settlement · promotion · shipping · notification · search · payment · review) · iam 5 서비스의 `:test` 가 **실제로 실행**(로그의 `Task …:test` 줄 — FROM-CACHE 아님, batch-worker · iam e2e 만 캐시)되고 BUILD SUCCESSFUL. 🔵 libs 변경이라 전 프로젝트가 이 레인에 들어온다(wms · scm · erp · finance · fan 은 캐시 적중 — 입력 불변) |
+| CI `Integration (iam A, Testcontainers)` | `116896563933` | ✅ **356 PASSED · 0 FAILED**(로그에서 셈) — `V0059EcommerceRoleMigrationIntegrationTest` 2/2 · V0057/V0058 `presetsAfterBoot` PASSED |
+| CI `Integration (iam B, Testcontainers)` | `116896564153` | ✅ **353 PASSED · 0 FAILED** — `AssumeTenantExchangeIntegrationTest` STEP 5 PASSED |
+| CI `Integration (ecommerce A/B/C, Testcontainers)` | `116896564135` · `116896564019` · `116896564126` | ✅ **125 · 70 · 223 PASSED · 0 FAILED** — 업무 역할 헤더로 바꾼 IT(프로모션 CRUD · 쿠폰 발급 · 배송 · 알림 · 회원 · 다중 테넌트 · 셀러 스코프) 포함 |
+| CI 그 밖 | run `38877656055` | 실행된 잡 **38 전부 success**(필수 4 포함 · Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 · 공유 라이브러리 위생 · 컨트롤러 슬라이스 이름) · 31 skipped(경로 필터) |
+| 로컬(같은 코드) | — | java-web · ecommerce 11 · iam admin/auth `:test` rc=0 · java-web 의존 39 모듈 `compileTestJava` rc=0 · 스테이지 뒤 가드 8(Flyway 버전 충돌 · 자리표시자 · 오류 코드 레지스트리 2 · libs CI 커버리지 · INDEX · 티켓 ID · walkthrough) rc=0 |
