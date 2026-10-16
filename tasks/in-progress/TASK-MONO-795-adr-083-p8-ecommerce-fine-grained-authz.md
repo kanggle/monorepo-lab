@@ -177,3 +177,13 @@ monorepo
 ## 7. 배포 순서 (구현 뒤 — 미리 적는다)
 
 auth(파생 · ceiling) · admin(카탈로그 · V0059) · ecommerce 서비스 9(product · order · user · settlement · promotion · shipping · notification · search + 게이트웨이 시험만)는 **한 굽기**에 함께. 갈라지면: auth/admin 만 먼저 → 토큰에 업무 역할 + 파생 `ECOMMERCE_OPERATOR`, 옛 서비스는 진입 역할만 보므로 **세분 없이 전부 열림**(퇴행은 아니나 카탈로그가 거짓) · 서비스만 먼저 → 옛 토큰(`ECOMMERCE_OPERATOR` 만)으로는 E-commerce 운영 전 화면 403(데모 시드 백오피스 단계 실패).
+
+# 소유자 결정 — 2026-10-16 UTC (코디네이터 경유 · § 6 추천 그대로)
+
+| Q | 결정 |
+|---|---|
+| Q1 | **역할 13** — `ECOMMERCE_ORDER_READ/WRITE` · `ECOMMERCE_PRODUCT_READ/WRITE`(상품 · 이미지 · 판매자 · 판매자 구성원 · **검색 재색인**) · `ECOMMERCE_MEMBER_READ` **만** · `ECOMMERCE_SETTLEMENT_READ/WRITE` · `ECOMMERCE_PROMOTION_READ/WRITE` · `ECOMMERCE_SHIPPING_READ/WRITE` · `ECOMMERCE_NOTIFICATION_READ/WRITE`. 프리셋 `ecommerce-read` · `ecommerce-<area>-operate` ×6 · `ecommerce-full` + `all-domains-full` · `legacy-compat` 확장 |
+| Q2 | 정산 지급 실행 · 기간 마감 = `ECOMMERCE_SETTLEMENT_WRITE`(통제 역할 없음) |
+| Q3 | 저장소 루트 `libs/java-web` 에 **프로젝트 무관 기전 하나**(역할 이름 · 프로젝트 문구 없음 — HARDSTOP-03 · `platform/shared-library-policy.md`). 각 서비스는 자기 영역 상수만. 사본 8 삭제 — 비교 규칙(대소문자 무시 · trim · 콤마)을 **한 곳에서 정의하고 시험**. 새 사본이 생기면 실패하는 시험/가드. 공유 경로이므로 `:libs:java-web` 에 의존하는 CI 대상 모듈 전부를 쓸어 검사 |
+| Q4 | 원자 PR 하나 |
+| 그 밖 | `'*'` 와일드카드 GET = 지금 그대로(order 조회 4 · 상품/이미지 조회 4) · 넓히지 않음. 게이트웨이 무변경 + 새 시험(업무 역할 + 파생 진입 역할 → 통과). web-store · 소비자 경로 무변경 |
