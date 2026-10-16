@@ -5,6 +5,7 @@ import com.example.auth.application.exception.SignupEmailConflictException;
 import com.example.auth.application.exception.SignupInvalidException;
 import com.example.auth.application.exception.SignupNotPossibleException;
 import com.example.auth.application.exception.SocialSignupEmailRegisteredException;
+import com.example.auth.application.exception.TenantNotActiveException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationConfirmOutcome;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationRequestOutcome;
@@ -751,8 +752,9 @@ public class AccountServiceClient implements AccountServicePort {
         if ("*".equals(tenantId)) {
             return List.of();
         }
+        EntitledDomainsBody body;
         try {
-            return callResilient(() -> doListEntitledDomains(tenantId));
+            body = callResilient(() -> doListEntitledDomains(tenantId));
         } catch (HttpClientErrorException e) {
             // TASK-BE-324: any 4xx (incl. unstubbed-WireMock 404) is treated as an
             // account-service failure here; the caller (TenantClaimTokenCustomizer)
@@ -769,7 +771,17 @@ public class AccountServiceClient implements AccountServicePort {
                     e.getCause() == null ? "null" : e.getCause().getClass().getName(), e);
             throw new AccountServiceUnavailableException("Account service is unavailable", e);
         }
+        // TASK-BE-639 (Q1 = B): judged AFTER the resilient call, outside its try — a positive «not ACTIVE» is an
+        // answer, so it must neither count as a circuit-breaker failure nor be retried nor be re-wrapped as
+        // «unavailable». A response without the field (an account image before BE-639) is not a «no».
+        if (body.tenantStatus() != null && !"ACTIVE".equals(body.tenantStatus())) {
+            throw new TenantNotActiveException(tenantId, body.tenantStatus());
+        }
+        return body.domainKeys();
     }
+
+    /** TASK-BE-639 — the parsed entitled-domains response: keys + the additive {@code tenantStatus} (null if absent). */
+    private record EntitledDomainsBody(List<String> domainKeys, String tenantStatus) {}
 
     /**
      * TASK-BE-491 (ADR-MONO-047 § D6): repointed from
@@ -794,9 +806,10 @@ public class AccountServiceClient implements AccountServicePort {
      * the domain gateway 403s. A failure can never <i>widen</i> reach.
      */
     @SuppressWarnings("unchecked")
-    private List<String> doListEntitledDomains(String tenantId) {
+    private EntitledDomainsBody doListEntitledDomains(String tenantId) {
         try {
-            // account-service returns { "tenantId": "...", "domainKeys": [ "wms", ... ] }
+            // account-service returns { "tenantId": "...", "domainKeys": [ "wms", ... ], "tenantStatus": "ACTIVE" }
+            // (tenantStatus since TASK-BE-639 — absent from an older account image)
             Map<String, Object> body = restClient().get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/internal/tenants/{tenantId}/entitled-domains")
@@ -814,7 +827,9 @@ public class AccountServiceClient implements AccountServicePort {
                     }
                 }
             }
-            return domainKeys;
+            String tenantStatus = body != null && body.get("tenantStatus") instanceof String st && !st.isBlank()
+                    ? st : null;
+            return new EntitledDomainsBody(domainKeys, tenantStatus);
         } catch (HttpClientErrorException e) {
             throw e;
         } catch (RuntimeException e) {

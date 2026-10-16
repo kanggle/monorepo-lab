@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.oauth2;
 
+import com.example.auth.application.exception.TenantNotActiveException;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.OperatorAssignmentPort.DelegatedScope;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
@@ -209,6 +210,14 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
      * which the authorize gate turns into a pool login.
      */
     static final String SESSION_PREDATES_POOL_MOVE = "session_predates_pool_move";
+
+    /**
+     * TASK-BE-639 (auth-api.md § Assume-Tenant Exchange — Errors): the fixed {@code error_description} of an operator
+     * assume exchange refused because account-service positively answered that the selected tenant is not
+     * {@code ACTIVE}. Whole-value equality; no other {@code invalid_grant} uses it. An unreadable status never
+     * produces it (fail-soft — the token is issued with no entitlement).
+     */
+    static final String TENANT_NOT_ACTIVE = "tenant_not_active";
 
     /**
      * TASK-MONO-772 S6 — the credential's CURRENT tenant, read only for a non-pool principal of another tenant on
@@ -963,8 +972,15 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // the cross-org actor holds no admin_operator_roles in the host (→ empty
         // effectiveAdminScope → /api/admin/** 403), and delegatedScope.roles is
         // admin-role-free by the invite-time cap (ScopeSet.containsAdminRole → 422).
+        // TASK-BE-639 (owner decision 2026-10-16 UTC, Q1 = B · Q2 · Q3): ONE entitled-domains read for both operator
+        // paths below. It also carries the selected tenant's status: a POSITIVE non-ACTIVE answer refuses the
+        // exchange here (invalid_grant + tenant_not_active — nothing is issued: the token is not yet encoded and the
+        // authorization is never saved), for every operator path ('*', membership, partnership host reach). An
+        // unreadable status stays fail-soft (empty → no entitled_domains, no roles).
+        java.util.List<String> entitled = fetchEntitledDomainsForOperatorAssume(selectedTenantId);
+
         if (delegatedScope != null) {
-            applyCrossOrgCap(context, fetchEntitledDomains(selectedTenantId), delegatedScope);
+            applyCrossOrgCap(context, entitled, delegatedScope);
             return;
         }
 
@@ -972,7 +988,11 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
         // D3: SELECTED tenant's ACTIVE subscriptions ONLY (no union). Reused verbatim.
         // The fetch ALSO bounds the operator `roles` below (one call: entitled_domains
         // + the role ceiling ride the same account-service result).
-        java.util.List<String> entitled = populateEntitledDomains(context, selectedTenantId);
+        if (!entitled.isEmpty()) {
+            context.getClaims().claim(CLAIM_ENTITLED_DOMAINS, entitled);
+            log.debug("TenantClaimTokenCustomizer: injected entitled_domains={} for tenant_id={}",
+                    entitled, selectedTenantId);
+        }
 
         // TASK-BE-632 (ADR-MONO-083 D3 · D6 — auth-to-admin.md rule 7 · § failure semantics):
         // roles = the operator's ASSIGNED business roles (admin-service `domainRoles`) ∩ the
@@ -1069,6 +1089,11 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
             if (entitled != null && !entitled.isEmpty()) {
                 return entitled;
             }
+        } catch (TenantNotActiveException e) {
+            // TASK-BE-639: an answer, not a failure — a non-ACTIVE tenant is entitled to nothing (the response's
+            // domainKeys is [] too). Outside the operator assume this path does not refuse; it omits the claim.
+            log.debug("TenantClaimTokenCustomizer: tenant_id={} is not ACTIVE (status={}), no entitled_domains",
+                    tenantId, e.getTenantStatus());
         } catch (RuntimeException e) {
             // fail-soft (ADR-MONO-019 keystone): token issuance must not depend on
             // account-service availability. Omit entitled_domains → legacy tenant_id
@@ -1078,6 +1103,31 @@ public class TenantClaimTokenCustomizer implements OAuth2TokenCustomizer<JwtEnco
                     tenantId, e.toString());
         }
         return java.util.List.of();
+    }
+
+    /**
+     * TASK-BE-639 (owner decision 2026-10-16 UTC, Q1 = B) — the operator assume-tenant variant of
+     * {@link #fetchEntitledDomains}: the same single read, the same fail-soft for «could not ask», but a positive
+     * «the selected tenant is not ACTIVE» refuses the exchange with {@code invalid_grant} +
+     * {@link #TENANT_NOT_ACTIVE}. Called only on the operator branch (never the workload assume — Q4).
+     */
+    private java.util.List<String> fetchEntitledDomainsForOperatorAssume(String tenantId) {
+        try {
+            java.util.List<String> entitled = accountServicePort.listEntitledDomains(tenantId);
+            return entitled == null ? java.util.List.of() : entitled;
+        } catch (TenantNotActiveException e) {
+            log.info("TenantClaimTokenCustomizer: assume-tenant refused — tenant_id={} is not ACTIVE (status={})",
+                    tenantId, e.getTenantStatus());
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_GRANT, TENANT_NOT_ACTIVE, null));
+        } catch (RuntimeException e) {
+            // fail-soft (ADR-MONO-019 keystone, kept by BE-639 Q1): the status is unknown, so nothing is refused —
+            // the token is issued with no entitled_domains and therefore no roles.
+            log.warn("TenantClaimTokenCustomizer: entitled_domains lookup failed for tenant_id={}, "
+                            + "omitting claim (fail-soft): {}",
+                    tenantId, e.toString());
+            return java.util.List.of();
+        }
     }
 
     /**
