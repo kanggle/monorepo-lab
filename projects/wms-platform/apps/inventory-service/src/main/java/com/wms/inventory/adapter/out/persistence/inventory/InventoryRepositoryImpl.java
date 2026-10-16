@@ -1,6 +1,7 @@
 package com.wms.inventory.adapter.out.persistence.inventory;
 
 import com.example.common.page.PageResult;
+import com.wms.inventory.adapter.out.persistence.NativeRowValues;
 import com.wms.inventory.application.port.out.InventoryRepository;
 import com.wms.inventory.application.query.InventoryListCriteria;
 import com.wms.inventory.application.result.InventoryView;
@@ -242,10 +243,10 @@ public class InventoryRepositoryImpl implements InventoryRepository {
         int available = ((Number) row[8]).intValue();
         int reserved = ((Number) row[9]).intValue();
         int damaged = ((Number) row[10]).intValue();
-        Instant lastMovement = ((java.sql.Timestamp) row[11]).toInstant();
+        Instant lastMovement = NativeRowValues.instant(row[11], "last_movement_at");
         long version = ((Number) row[12]).longValue();
-        Instant createdAt = ((java.sql.Timestamp) row[13]).toInstant();
-        Instant updatedAt = ((java.sql.Timestamp) row[14]).toInstant();
+        Instant createdAt = NativeRowValues.instant(row[13], "created_at");
+        Instant updatedAt = NativeRowValues.instant(row[14], "updated_at");
         return new InventoryView(
                 id, warehouseId, locationId, locationCode,
                 skuId, skuCode, lotId, lotNo,

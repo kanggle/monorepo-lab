@@ -1,6 +1,7 @@
 package com.wms.inventory.adapter.out.persistence.adjustment;
 
 import com.example.common.page.PageResult;
+import com.wms.inventory.adapter.out.persistence.NativeRowValues;
 import com.wms.inventory.application.port.out.StockAdjustmentRepository;
 import com.wms.inventory.application.query.AdjustmentListCriteria;
 import com.wms.inventory.application.result.AdjustmentView;
@@ -94,7 +95,7 @@ public class StockAdjustmentRepositoryImpl implements StockAdjustmentRepository 
                 ReasonCode.valueOf((String) row[4]),
                 (String) row[5],
                 (String) row[6],
-                ((java.sql.Timestamp) row[7]).toInstant())).toList();
+                NativeRowValues.instant(row[7], "created_at"))).toList();
         return new PageResult<>(views, c.page(), c.size(), total, totalPages(total, c.size()));
     }
 

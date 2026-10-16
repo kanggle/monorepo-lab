@@ -1,6 +1,7 @@
 package com.wms.inventory.adapter.out.persistence.movement;
 
 import com.example.common.page.PageResult;
+import com.wms.inventory.adapter.out.persistence.NativeRowValues;
 import com.wms.inventory.application.port.out.InventoryMovementRepository;
 import com.wms.inventory.application.query.MovementListCriteria;
 import com.wms.inventory.application.result.MovementView;
@@ -155,7 +156,7 @@ public class InventoryMovementRepositoryImpl implements InventoryMovementReposit
                 (UUID) row[11],
                 (UUID) row[12],
                 (String) row[13],
-                ((java.sql.Timestamp) row[14]).toInstant());
+                NativeRowValues.instant(row[14], "occurred_at"));
     }
 
 }
