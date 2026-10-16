@@ -114,6 +114,43 @@ class GatewayRouteResolutionTest {
                 .isEqualTo("account-service");
     }
 
+    /**
+     * TASK-BE-638 — the edge carries only the tenant-scoped SUB-resources of
+     * {@code /internal/tenants/{tenantId}}. The bare collection and the bare tenant row are the
+     * lifecycle API (create / list / read / status change) whose only caller is admin-service,
+     * which calls account-service directly. {@code Path=/internal/tenants/**} matched both, so a
+     * tenant workload token reached them through this edge.
+     */
+    @ParameterizedTest(name = "{0} → no route")
+    @CsvSource({
+            "/internal/tenants",
+            "/internal/tenants/",
+            "/internal/tenants/wms",
+    })
+    @DisplayName("TASK-BE-638: 테넌트 라이프사이클 경로는 게이트웨이 라우트에 없다")
+    void tenantLifecyclePaths_haveNoRoute(String path) {
+        assertThat(resolve(path))
+                .as("%s is the tenant lifecycle API (admin-service → account-service only); "
+                        + "the edge must not route it", path)
+                .isNull();
+    }
+
+    @ParameterizedTest(name = "{0} → account-service-internal")
+    @CsvSource({
+            "/internal/tenants/wms/accounts",
+            "/internal/tenants/wms/accounts:bulk",
+            "/internal/tenants/wms/accounts/acc-1/status",
+            "/internal/tenants/wms/accounts/acc-1/roles:add",
+            "/internal/tenants/wms/accounts/acc-1/site-roles:grant",
+            "/internal/tenants/wms/identities:resolveOrCreate",
+            "/internal/tenants/wms/entitled-domains",
+            "/internal/tenants/wms/consumer-members/acc-1",
+    })
+    @DisplayName("TASK-BE-638 대조군: 테넌트 범위 서브리소스는 여전히 account-service-internal")
+    void tenantScopedSubResources_stillRouted(String path) {
+        assertThat(resolve(path)).isEqualTo("account-service-internal");
+    }
+
     @Test
     @DisplayName("auth-service-sessions 라우트는 account-service 라우트보다 먼저 선언됨 (순서 함정 방지)")
     void sessionRoute_declaredBeforeAccountRoute() {

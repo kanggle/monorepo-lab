@@ -55,10 +55,20 @@ spring:
           filters:
             - StripPrefix=0
 
+        # TASK-BE-638: ONLY the tenant-scoped sub-resources of /internal/tenants/{tenantId}
+        # (accounts, identities:resolveOrCreate, entitled-domains, consumer-members, ...) -
+        # the caller is a tenant workload (ecommerce product-service via iam.local) and the
+        # JWT filter pins path {tenantId} == token tenant_id. The bare /internal/tenants and
+        # /internal/tenants/{tenantId} are the tenant LIFECYCLE API (create, list, read,
+        # status change); its only caller is admin-service, which calls account-service
+        # directly. `/internal/tenants/**` matched those too, so a tenant's own workload token
+        # could PATCH its own status. `/*/*/**` needs at least one segment after {tenantId}.
+        # GatewayRouteResolutionTest pins both directions; JwtAuthenticationFilter refuses the
+        # bare paths independently of this predicate.
         - id: account-service-internal
           uri: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
           predicates:
-            - Path=/internal/tenants/**
+            - Path=/internal/tenants/*/*/**
           filters:
             - StripPrefix=0
 

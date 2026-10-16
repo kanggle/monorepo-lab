@@ -76,7 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-638-gateway-internal-tenants-lifecycle-exposure.md` — **🔴 보안 — iam 게이트웨이가 테넌트 라이프사이클 쓰기를 노출: 자기 토큰으로 `PATCH /internal/tenants/{self}` 통과 · `POST`/`GET /internal/tenants` 는 테넌트 범위 검사 0** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-773` S2 Q3, 코드 읽기 — 라이브 미확인). 773 S2 의 `PENDING` 이 나가면 자기 «관리자 대기» 를 건너뛸 수 있어 시급해진다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자가 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`)를 assume 할 수 있다 — assume 경로가 테넌트 상태를 안 읽는다** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-773` S4 Q4 측정 · 소유자 결정 «773 은 기록만 · 별도 티켓»). 콘솔 스위처엔 경로 없음(ACTIVE 만 표시). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
@@ -122,7 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-638-gateway-internal-tenants-lifecycle-exposure.md` — **🔴 보안 — iam 게이트웨이가 테넌트 라이프사이클 API 를 실어 나르던 것을 닫음** (REVIEW, 2026-10-16 UTC · **#4390**). IT 실측: 자기 워크로드 토큰으로 `PATCH`/`GET /internal/tenants/{self}` 200 · `POST`/`GET /internal/tenants` 200/201(`'*'` 포함)이 그대로 account-service 에 닿았다. 라우트 `Path=/internal/tenants/*/*/**` + 필터 403 `TENANT_SCOPE_DENIED` 두 겹. red 16+5 → green 0 failed. 서브리소스(셀러 프로비저닝) 그대로. 다음 데모 AMI 굽기에 실린다(소유자 결정 2026-10-16) — 라이브 확인은 그 창. ⚪ `traefik-net` 직접 우회(account-service 측 client-id 허용 목록)는 소유자 질문. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 - ✅ `TASK-BE-632-assume-roles-from-assigned-sets.md` — **DONE 2026-10-15 UTC (4-dim verified · ⚪ 둘은 소유자 결정으로 닫음)** — **#4351**(`08f2da4a3`, 0 failing checks). ADR-083 P3 라이브(27차 창): 백필 게이트 0 · AC-4 roles 바이트 동일 · `erp.write` 없음 · TTL 300 · AC-1 세트대로 좁아짐(출고 · SCM 공급사 · ERP 쓰기 403). AC-6 실측 = 기존 토큰 `exp` + 60 s(Spring `JwtTimestampValidator` 기본 skew) → 계약 문장을 «최대 약 360초» 로 정정(소유자 결정). ⚪ 워크로드 클라이언트 ERP 쓰기 · AC-6 네 종류 → MONO-672 다음 창.
