@@ -119,6 +119,10 @@ frontend
 - `permission-map.ts`: `FINANCE_ROLES`(5) · `FINANCE_GET` · `FINANCE_LEDGER_BUSINESS_WRITE` · 3 행 `roles` = 5 · `serverRequires`(개요 · 원장 = 원장 3 · 계좌 = 계좌 2) · `/ledger` `writeRequires` = `FINANCE_LEDGER_WRITE`.
 - 배선: `ledger/page.tsx` → `canWriteOn('/ledger', getDomainBusinessRoles({ finance }))` → `LedgerOpsScreen.canWrite` → `ReconciliationPanel.canWrite`(필수) → `DiscrepancyDetail`(«해소» 숨김 + «조회 전용» 문구) · `FxRatesPanel.canWrite`(필수) → `FxRatesTable`(«새로고침» 숨김).
 - 로컬: `npx vitest run` **399 files / 4622 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`). e2e · smoke · federation 의 `ledger-fx-rates-refresh` · `ledger-recon-resolve` · `nav-finance` 사용처 0(grep).
+- CI 커밋 `cf56865bd` run `38974262414`: `Frontend unit tests (… console-web, vitest)` job **`117219861462`** — **399 files / 4622 passed**(로그에서 셈) · 실행된 검사 14 전부 pass · 52 skipped.
+- nightly(브랜치 dispatch) run **`38974258717`** = success(15 job) · 콘솔 job **`117220069959`**: **12 passed · 0 flaky · 0 failed**.
+- ⚪ AC-4: `main` 미머지(DRAFT) · Vercel 미배포 · 라이브 화면 미확인. 백엔드 변경 없음 — 다음 창: `finance-read` 운영자의 `/ledger` 에 «해소» · «새로고침» 없음 · 원장 통제만 준 운영자는 `/ledger` 배지 없음 + 버튼 없음 · 운영 개요 Finance 카드(계좌 역할 없는 운영자 = `forbidden`).
+- ⚪ 따로 남는 것: `/finance` 개요의 «한 갈래 403 = 화면 전체 forbidden»(`overview-state.ts:280-286`) — 794 뒤 원장만 가진 운영자가 기본 계좌 때문에 원장 타일까지 잃는다. 화면 행동 변경이라 이 티켓 밖 — 필요하면 후속 티켓.
 
 ## 함께 적는 것
 
