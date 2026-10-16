@@ -219,6 +219,14 @@ public class AccountServiceTenantClient implements TenantProvisioningPort, Tenan
             return toPageSummary(response);
         } catch (RestClientResponseException e) {
             log.warn("account-service returned {} on GET /internal/tenants: {}", e.getStatusCode(), e.getMessage());
+            // TASK-BE-640: a 4xx (e.g. 403 FORBIDDEN from a mis-set caller allow-list) is a definitive answer,
+            // not a fault — same mapping as create/update/get, so it is neither retried nor counted against the
+            // shared accountService breaker. The admin API answer is unchanged (subclass → 503 DOWNSTREAM_ERROR).
+            if (e.getStatusCode().is4xxClientError()) {
+                int status = e.getStatusCode().value();
+                throw new NonRetryableDownstreamException("account-service list error " + status, e, status,
+                        extractErrorCode(e.getResponseBodyAsByteArray()));
+            }
             throw new DownstreamFailureException("account-service list error", e);
         } catch (Exception e) {
             log.error("account-service GET /internal/tenants failed", e);

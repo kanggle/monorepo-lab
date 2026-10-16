@@ -6,8 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -59,18 +61,52 @@ public class SecurityConfig {
     @Value("${internal.api.jwt.required-scope:internal.invoke}")
     private String requiredScope;
 
+    /**
+     * TASK-BE-640: client ids ({@code sub}) allowed on the tenant lifecycle WRITES and LIST
+     * ({@code POST}/{@code GET /internal/tenants}, {@code PATCH /internal/tenants/{tenantId}}).
+     * Comma-separated. No code default on purpose: absent or blank → empty → every JWT caller is refused
+     * (fail-closed). {@code application.yml} supplies the value admin-service sends.
+     */
+    @Value("${internal.api.tenant-lifecycle.write-callers:}")
+    private String tenantLifecycleWriteCallers;
+
+    /**
+     * TASK-BE-640: client ids ({@code sub}) allowed on the single-tenant READ
+     * ({@code GET}/{@code HEAD /internal/tenants/{tenantId}}). Same fail-closed rule as above;
+     * {@code application.yml} supplies admin-service's and auth-service's values.
+     */
+    @Value("${internal.api.tenant-lifecycle.read-callers:}")
+    private String tenantLifecycleReadCallers;
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SecurityConfig.class);
+
     private final Environment environment;
 
     public SecurityConfig(Environment environment) {
         this.environment = environment;
     }
 
-    @Bean
-    public InternalApiFilter internalApiFilter() {
+    /** The dev/test bypass: the explicit property, or a {@code test}/{@code standalone} profile. */
+    boolean bypassActive() {
         java.util.List<String> profiles = Arrays.asList(environment.getActiveProfiles());
         boolean bypassProfileActive = profiles.contains("test") || profiles.contains("standalone");
-        boolean bypass = bypassProperty || bypassProfileActive;
-        return new InternalApiFilter(bypass);
+        return bypassProperty || bypassProfileActive;
+    }
+
+    @Bean
+    public InternalApiFilter internalApiFilter() {
+        return new InternalApiFilter(bypassActive());
+    }
+
+    private TenantLifecycleCallerPolicy tenantLifecyclePolicy(String key, String csv) {
+        TenantLifecycleCallerPolicy policy = TenantLifecycleCallerPolicy.fromCsv(csv, bypassActive());
+        if (policy.allowedClientIds().isEmpty()) {
+            log.error("internal.api.tenant-lifecycle.{} is empty — every JWT caller of that part of the tenant "
+                    + "lifecycle API will be refused with 403 (fail-closed, TASK-BE-640)", key);
+        } else {
+            log.info("Tenant lifecycle {} allowed for client ids {} (TASK-BE-640)", key, policy.allowedClientIds());
+        }
+        return policy;
     }
 
     /**
@@ -109,6 +145,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            InternalApiFilter internalApiFilter,
                                            JwtDecoder internalJwtDecoder) throws Exception {
+        TenantLifecycleCallerPolicy lifecycleWriters =
+                tenantLifecyclePolicy("write-callers", tenantLifecycleWriteCallers);
+        TenantLifecycleCallerPolicy lifecycleReaders =
+                tenantLifecyclePolicy("read-callers", tenantLifecycleReadCallers);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -120,6 +160,15 @@ public class SecurityConfig {
                         // TASK-BE-114: token in body is the auth — no JWT required.
                         .requestMatchers("/api/accounts/signup/verify-email").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        // TASK-BE-640: the tenant LIFECYCLE API admits only its named callers (token sub).
+                        // Exactly one segment after /internal/tenants — the tenant-scoped sub-resources
+                        // (/internal/tenants/{id}/accounts …) are not matched and keep the rule below.
+                        // Read first (GET/HEAD of one row: admin + auth), then every other method on the
+                        // two lifecycle paths (writes + list: admin only). Not authenticated → the
+                        // entry point's 401; authenticated but not named → 403 FORBIDDEN.
+                        .requestMatchers(HttpMethod.GET, "/internal/tenants/*").access(lifecycleReaders)
+                        .requestMatchers(HttpMethod.HEAD, "/internal/tenants/*").access(lifecycleReaders)
+                        .requestMatchers("/internal/tenants", "/internal/tenants/*").access(lifecycleWriters)
                         // TASK-BE-319b: JWT-only — satisfied solely by a valid GAP client_credentials
                         // JWT (oauth2ResourceServer below); the static X-Internal-Token path was removed.
                         // TASK-BE-514: the decoder additionally requires the internal.invoke scope, so
@@ -129,12 +178,30 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").permitAll()
                         .anyRequest().denyAll()
                 )
+                .exceptionHandling(ex -> ex.accessDeniedHandler(SecurityConfig::onAccessDenied))
                 .oauth2ResourceServer(rs -> rs
                         .jwt(jwt -> jwt.decoder(internalJwtDecoder))
                         .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
+                        .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 );
 
         return http.build();
+    }
+
+    /**
+     * TASK-BE-640: an authenticated caller the chain refuses (today: a workload not named on the tenant
+     * lifecycle allow-list) → {@code 403 FORBIDDEN} in the platform error envelope
+     * ({@code platform/error-handling.md}: «Authenticated caller lacks the required role/permission»).
+     * Replaces the resource server's default (an empty 403 with a {@code WWW-Authenticate} header) so the
+     * caller can read the code.
+     */
+    static void onAccessDenied(HttpServletRequest request,
+                               HttpServletResponse response,
+                               AccessDeniedException e) throws IOException {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write(
+                "{\"code\":\"FORBIDDEN\",\"message\":\"The caller is not allowed on this internal resource\"}");
     }
 
     /**
