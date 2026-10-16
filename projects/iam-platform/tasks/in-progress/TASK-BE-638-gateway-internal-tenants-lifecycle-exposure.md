@@ -8,7 +8,7 @@ The iam gateway exposes account-service tenant lifecycle writes: `PATCH /interna
 
 # Status
 
-ready
+in-progress
 
 # Owner
 

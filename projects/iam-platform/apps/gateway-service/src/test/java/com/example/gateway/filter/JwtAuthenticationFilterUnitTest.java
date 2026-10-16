@@ -10,6 +10,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +27,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.net.URI;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -426,6 +430,11 @@ class JwtAuthenticationFilterUnitTest {
         given(tokenValidator.validate("valid-token"))
                 .willReturn(Mono.just(Map.of("sub", "account-123", "tenant_id", "fan-platform")));
 
+        // Lenient: a correct filter never calls the chain. Stubbed anyway so that a forwarding
+        // (defective) filter completes normally and the red is the status assertion below,
+        // not a NullPointerException from an unstubbed chain.
+        lenient().when(chain.filter(any())).thenReturn(Mono.empty());
+
         StepVerifier.create(filter.filter(exchange, chain))
                 .verifyComplete();
 
@@ -457,5 +466,119 @@ class JwtAuthenticationFilterUnitTest {
                 .verifyComplete();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-638: the tenant LIFECYCLE paths are not tenant-scoped, so no tenant token
+    // may reach them through this edge. Before the fix the scope regex
+    // `^/internal/tenants/([^/]+)(/.*)?$` made the trailing segment optional, so
+    // `PATCH /internal/tenants/{self}` only needed tenant_id == {self} (a tenant could
+    // change its own status), and `POST` / `GET /internal/tenants` had no path tenant
+    // at all, so no check ran. The only caller of these is admin-service, which calls
+    // account-service directly (admin-to-account.md), never through this gateway.
+    // -----------------------------------------------------------------------
+
+    @ParameterizedTest(name = "{0} {1} (tenant_id={2}) → 403, not forwarded")
+    @CsvSource({
+            // AC-1 — the tenant's own token on its own lifecycle row
+            "PATCH, /internal/tenants/wms, wms",
+            "GET,   /internal/tenants/wms, wms",
+            // AC-2 — create / list carry no path tenant
+            "POST,  /internal/tenants, wms",
+            "GET,   /internal/tenants, wms",
+            // Edge case — the platform wildcard is refused too, not waved through
+            "POST,  /internal/tenants, *",
+            "PATCH, /internal/tenants/wms, *",
+            // trailing slash must not reopen the bare path
+            "GET,   /internal/tenants/, wms",
+            "PATCH, /internal/tenants/wms/, wms",
+    })
+    @DisplayName("TASK-BE-638: 테넌트 라이프사이클 경로(서브리소스 없음)는 어떤 테넌트 토큰으로도 403")
+    void filter_tenantLifecyclePath_isRefusedForAnyTenantToken(String method, String path, String tenantId) {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.valueOf(method), path);
+
+        given(routeConfig.isPublicRoute(any(), anyString())).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "product-service-client", "tenant_id", tenantId)));
+
+        // Lenient: a correct filter never calls the chain. Stubbed anyway so that a forwarding
+        // (defective) filter completes normally and the red is the status assertion below,
+        // not a NullPointerException from an unstubbed chain.
+        lenient().when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange.getResponse().getBodyAsString().block()).contains("TENANT_SCOPE_DENIED");
+        verify(chain, never()).filter(any());
+    }
+
+    @ParameterizedTest(name = "{0} {1} → 403, not forwarded")
+    @CsvSource({
+            "PATCH, /internal/tenants/wms/..",
+            "PATCH, /internal/tenants/wms/.",
+            "PATCH, /internal/tenants/wms/%2e%2e",
+            "PATCH, /internal/tenants/wms/%2E%2E",
+            "PATCH, /internal/tenants/wms/accounts%2F..",
+            "PATCH, /internal/tenants/wms;x=1/accounts",
+            "PATCH, /internal/tenants/wms/accounts%5C..",
+    })
+    @DisplayName("TASK-BE-638: 내부 경로의 점 세그먼트·인코딩된 구분자·matrix 는 서브리소스로 위장할 수 없다")
+    void filter_internalPathTraversalShapes_areRefused(String method, String rawPath) {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.valueOf(method), rawPath);
+
+        given(routeConfig.isPublicRoute(any(), anyString())).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "product-service-client", "tenant_id", "wms")));
+
+        // Lenient: a correct filter never calls the chain. Stubbed anyway so that a forwarding
+        // (defective) filter completes normally and the red is the status assertion below,
+        // not a NullPointerException from an unstubbed chain.
+        lenient().when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verify(chain, never()).filter(any());
+    }
+
+    @ParameterizedTest(name = "control: {0} {1} (tenant_id=wms) → forwarded")
+    @CsvSource({
+            "POST,  /internal/tenants/wms/accounts",
+            "POST,  /internal/tenants/wms/accounts:bulk",
+            "POST,  /internal/tenants/wms/identities:resolveOrCreate",
+            "PATCH, /internal/tenants/wms/accounts/acc-1/status",
+            "PATCH, /internal/tenants/wms/accounts/acc-1/roles:add",
+            "PATCH, /internal/tenants/wms/accounts/acc-1/site-roles:grant",
+            "GET,   /internal/tenants/wms/entitled-domains",
+            "PUT,   /internal/tenants/wms/consumer-members/acc-1",
+    })
+    @DisplayName("TASK-BE-638 대조군: 테넌트 범위 서브리소스는 자기 토큰으로 그대로 통과")
+    void filter_tenantScopedSubResource_stillForwarded(String method, String path) {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.valueOf(method), path);
+
+        given(routeConfig.isPublicRoute(any(), anyString())).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "product-service-client", "tenant_id", "wms")));
+        given(chain.filter(any())).willReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        ArgumentCaptor<ServerWebExchange> exchangeCaptor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain).filter(exchangeCaptor.capture());
+        assertThat(exchangeCaptor.getValue().getRequest().getHeaders().getFirst("X-Tenant-Id"))
+                .isEqualTo("wms");
+    }
+
+    /** Raw URI on purpose — the String overloads would re-encode {@code %2e} into {@code %252e}. */
+    private static MockServerWebExchange exchangeFor(HttpMethod method, String rawPath) {
+        MockServerHttpRequest request = MockServerHttpRequest
+                .method(method, URI.create("http://gateway" + rawPath))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .build();
+        return MockServerWebExchange.from(request);
     }
 }

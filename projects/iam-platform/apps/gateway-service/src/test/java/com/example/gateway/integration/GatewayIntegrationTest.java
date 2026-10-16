@@ -142,6 +142,27 @@ class GatewayIntegrationTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"new-wms-account\"}")));
 
+        // TASK-BE-638 — the tenant LIFECYCLE endpoints answer success here, the way the real
+        // account-service would for any internal.invoke token. If the edge forwards, the test
+        // sees 2xx — that is the exposure, measured, not a 404 from an unstubbed path.
+        accountServiceMock.stubFor(com.github.tomakehurst.wiremock.client.WireMock
+                .patch(urlEqualTo("/internal/tenants/wms"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"tenantId\":\"wms\",\"status\":\"ACTIVE\"}")));
+        accountServiceMock.stubFor(get(urlEqualTo("/internal/tenants/wms"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"tenantId\":\"wms\",\"status\":\"ACTIVE\"}")));
+        accountServiceMock.stubFor(post(urlEqualTo("/internal/tenants"))
+                .willReturn(aResponse().withStatus(201)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"tenantId\":\"rogue\",\"status\":\"ACTIVE\"}")));
+        accountServiceMock.stubFor(get(urlPathEqualTo("/internal/tenants"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"items\":[],\"page\":0,\"size\":20,\"totalElements\":0,\"totalPages\":0}")));
+
         // admin-service downstream — gateway must reach these without
         // performing its own JWT verification (operator tokens have a
         // separate JWKS owned by admin-service).
@@ -187,6 +208,10 @@ class GatewayIntegrationTest {
                 () -> "Path=/api/admin/**,/.well-known/admin/**");
         registry.add("spring.cloud.gateway.routes[3].uri", accountServiceMock::baseUrl);
         registry.add("spring.cloud.gateway.routes[3].id", () -> "account-service-internal");
+        // TASK-BE-638: deliberately the WIDE pattern, not application.yml's narrowed one. The
+        // narrowed route is pinned by GatewayRouteResolutionTest; here the route admits the
+        // lifecycle paths so the JwtAuthenticationFilter layer is measured on its own — a
+        // second, independent refusal that must hold even if the route is widened again.
         registry.add("spring.cloud.gateway.routes[3].predicates[0]", () -> "Path=/internal/tenants/**");
         // Fallback disabled by default
         registry.add("gateway.tenant.legacy-fallback.enabled", () -> "false");
@@ -541,6 +566,85 @@ class GatewayIntegrationTest {
                 .expectStatus().isForbidden()
                 .expectBody()
                 .jsonPath("$.code").isEqualTo("TENANT_SCOPE_DENIED");
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-638 — tenant lifecycle paths through the edge
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TASK-BE-638 AC-1: 자기 워크로드 토큰으로 PATCH /internal/tenants/{self} → 403, account-service 미도달")
+    void lifecyclePatch_ownTenantToken_refusedAndNotForwarded() {
+        String token = createValidToken("product-service-client", "wms");
+
+        webTestClient.patch().uri("/internal/tenants/wms")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"status\":\"ACTIVE\"}")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TENANT_SCOPE_DENIED");
+
+        accountServiceMock.verify(0, patchRequestedFor(urlEqualTo("/internal/tenants/wms")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-638: 자기 워크로드 토큰으로 GET /internal/tenants/{self} → 403, 미도달")
+    void lifecycleGetOne_ownTenantToken_refusedAndNotForwarded() {
+        String token = createValidToken("product-service-client", "wms");
+
+        webTestClient.get().uri("/internal/tenants/wms")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        accountServiceMock.verify(0, getRequestedFor(urlEqualTo("/internal/tenants/wms")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-638 AC-2: POST /internal/tenants (테넌트 생성) → 403, 미도달")
+    void lifecycleCreate_tenantToken_refusedAndNotForwarded() {
+        String token = createValidToken("product-service-client", "wms");
+
+        webTestClient.post().uri("/internal/tenants")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"tenantId\":\"rogue\",\"displayName\":\"Rogue\",\"tenantType\":\"B2B_ENTERPRISE\"}")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("TENANT_SCOPE_DENIED");
+
+        accountServiceMock.verify(0, postRequestedFor(urlEqualTo("/internal/tenants")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-638 AC-2: GET /internal/tenants (전 테넌트 목록) → 403, 미도달")
+    void lifecycleList_tenantToken_refusedAndNotForwarded() {
+        String token = createValidToken("product-service-client", "wms");
+
+        webTestClient.get().uri("/internal/tenants?status=PENDING")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        accountServiceMock.verify(0, getRequestedFor(urlPathEqualTo("/internal/tenants")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-638 edge: tenant_id='*' 토큰도 POST /internal/tenants 403 (와일드카드는 통과 사유가 아니다)")
+    void lifecycleCreate_wildcardTenantToken_refused() {
+        String token = createValidToken("some-client", "*");
+
+        webTestClient.post().uri("/internal/tenants")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"tenantId\":\"rogue\",\"displayName\":\"Rogue\",\"tenantType\":\"B2B_ENTERPRISE\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        accountServiceMock.verify(0, postRequestedFor(urlEqualTo("/internal/tenants")));
     }
 
     // TASK-BE-398: the legacy custom-JWT issuer `iam` was retired with POST /api/auth/login
