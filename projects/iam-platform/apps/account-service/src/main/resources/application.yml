@@ -119,6 +119,17 @@ internal:
     jwt:
       jwk-set-uri: ${OIDC_JWK_SET_URI:${OIDC_ISSUER_URL:http://localhost:8081}/oauth2/jwks}
       issuer: ${OIDC_ISSUER_URL:http://localhost:8081}
+    # TASK-BE-640: who may call the tenant LIFECYCLE API, by token `sub` (= client_credentials client id).
+    # Contract: admin-to-account.md § Tenant lifecycle «호출자 규칙». Comma-separated.
+    #   write-callers — POST/GET /internal/tenants, PATCH /internal/tenants/{id}: admin-service only.
+    #   read-callers  — GET/HEAD /internal/tenants/{id}: admin-service + auth-service (login/signup tenant read).
+    # The defaults are the literals the callers send (admin ADMIN_SERVICE_CLIENT_ID / auth
+    # AUTH_SERVICE_CLIENT_ID defaults — set in no environment of this repository). If you change a
+    # caller's client id, change it here too. 🔴 The code has NO default: a blank value refuses every
+    # JWT caller (403) — fail-closed, it never reopens the API.
+    tenant-lifecycle:
+      write-callers: ${INTERNAL_TENANT_LIFECYCLE_WRITE_CALLERS:admin-service-client}
+      read-callers: ${INTERNAL_TENANT_LIFECYCLE_READ_CALLERS:admin-service-client,auth-service-client}
 
 # TASK-BE-487 (ADR-005 단계 4): outbound /internal/auth/** calls (credential create / identity
 # backfill → auth-service) authenticate with a GAP client_credentials Bearer JWT (was unauthenticated).

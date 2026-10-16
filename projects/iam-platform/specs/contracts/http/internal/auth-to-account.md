@@ -75,6 +75,8 @@ auth-service가 로그인/refresh 플로우에서 계정의 현재 상태를 조
 - 404 → `Optional.empty()`.
 - 5xx / 네트워크 장애 / circuit-open → `AccountServiceUnavailableException` (다른 internal 호출과 동일).
 
+**호출자 허용 목록 (TASK-BE-640).** 이 경로는 account-service 가 토큰 `sub` 로 호출자를 판정하는 테넌트 라이프사이클 경로다 — `GET` 은 `admin-service-client` 와 `auth-service-client` 만 통과한다(`internal.api.tenant-lifecycle.read-callers`, 규칙 전문은 [admin-to-account.md § Tenant lifecycle «호출자 규칙»](./admin-to-account.md)). 목록에 없는 `internal.invoke` 토큰은 `403 FORBIDDEN`. auth-service 는 `404` 가 아닌 4xx 를 장애로 읽으므로(`AccountServiceClient.tenantLookup`), 목록에서 `auth-service-client` 가 빠지면 로그인 · 가입의 테넌트 조회가 **닫히는 쪽으로** 실패한다(TASK-BE-407 / TASK-BE-581 의 fail-closed). `AUTH_SERVICE_CLIENT_ID` 를 바꾸면 이 목록도 같이 바꾼다.
+
 ---
 
 ## GET /internal/accounts/{accountId}/status
