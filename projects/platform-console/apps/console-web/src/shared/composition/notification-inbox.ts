@@ -97,6 +97,25 @@ export function configuredInboxDomains(): InboxDomain[] {
   return out;
 }
 
+/**
+ * TASK-PC-FE-343 (console contract § 2.4.8 «ERP leg skipped» · TASK-MONO-793 Q2/Q6) — the domains
+ * worth asking. A domain's inbox is a personal endpoint that needs ANY business role of that
+ * domain (or the `'*'` token); asking an operator known to hold none only produces a `403` →
+ * `degradedDomains`. A domain is dropped ONLY when every condition says «known to hold none»:
+ *   - an active tenant is selected (row 12 is per tenant) and it is not `'*'`;
+ *   - row 12 answered (`myDomainRoles !== null` — a failure is «don't know»);
+ *   - row 12 carries no role whose `domainKey` is that domain.
+ * Anything else keeps the domain (fail-open — an outage must never hide notifications).
+ */
+export function inboxDomainsWorthAsking(
+  domains: readonly InboxDomain[],
+  activeTenant: string | null,
+  myDomainRoles: readonly { domainKey: string; role: string }[] | null,
+): InboxDomain[] {
+  if (!activeTenant || activeTenant === '*' || myDomainRoles === null) return [...domains];
+  return domains.filter((d) => myDomainRoles.some((r) => r.domainKey === d.name));
+}
+
 /** Per-domain credential — the domain-facing IAM OIDC token, no `X-Tenant-Id`. */
 export function domainInboxHeaders(
   domainFacingToken: string,

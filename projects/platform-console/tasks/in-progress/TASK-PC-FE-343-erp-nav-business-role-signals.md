@@ -65,9 +65,9 @@ frontend
 # Acceptance Criteria
 
 - [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-793` 을 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ERP_MASTERDATA_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 ERP 4 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(masterdata `RoleScopeAuthorizationAdapter` · approval `ActorContext` · read-model / notification `ReadAuthorizationGate`)와 다시 대조.
-- [ ] **AC-1** — 계약 § 2.4.3.4 · § 2.4.8 개정이 코드보다 먼저.
-- [ ] **AC-2** — 🔴 대조군: 조회 세트(`erp-read`) → ERP 메뉴 배지 없음 · 쓰기 버튼 없음 / 결재 세트만 → `/erp/masters` · `/erp/orgview` 배지, `/erp/approval` 버튼 보임 / 기준정보 세트만 → `/erp/approval` · `/erp/delegation` 배지 / ERP 세트 0 → ERP 메뉴 전부 배지 · 알림 종이 ERP 갈래를 부르지 않음(`degradedDomains` 에 erp 없음).
-- [ ] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임 · 알림 종은 ERP 갈래를 부른다(지금 규칙 그대로).
+- [x] **AC-1** — 계약 § 2.4.3.4 · § 2.4.8 개정이 코드보다 먼저. → red 커밋 `88d89e571`.
+- [ ] **AC-2** — 🔴 대조군: 조회 세트(`erp-read`) → ERP 메뉴 배지 없음 · 쓰기 버튼 없음 / 결재 세트만 → `/erp/masters` · `/erp/orgview` 배지, `/erp/approval` 버튼 보임 / 기준정보 세트만 → `/erp/approval` · `/erp/delegation` 배지 / ERP 세트 0 → ERP 메뉴 전부 배지 · 알림 종이 ERP 갈래를 부르지 않음(`degradedDomains` 에 erp 없음). → **메뉴 · 알림 종 몫 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-343 · `sidebar-business-permission.test.tsx` · `notification-routes.test.ts` § TASK-PC-FE-343). **버튼 몫(«쓰기 버튼 없음» · «`/erp/approval` 버튼 보임») 은 `TASK-PC-FE-347` 로** — § 범위 결정.
+- [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임 · 알림 종은 ERP 갈래를 부른다(지금 규칙 그대로). → row 12 `null`(실패 · 시간 초과 — `getMyDomainRolesOrNull` 이 모든 실패를 `null` 로) → 배지 없음 · 갈래 호출, 테넌트 없음 · `'*'` 도 호출.
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
 
 # Related Specs
@@ -117,6 +117,19 @@ frontend
 
 이 PR 뒤 ERP 상위 토글은 «업무 권한 없음» 을 달 수 있다(ERP 역할 0 · ERP 구독 테넌트). `tests/e2e/overview-consolidation.spec.ts` 의 `/^ERP(구독 필요)?$/` → **`/^ERP(구독 필요|업무 권한 없음)?$/`** — 라벨은 그대로 정확히, 배지는 많아야 하나(두 신호는 겹치지 않는다 — «구독 필요» 가 이긴다). 단위 시험(`sidebar-business-permission.test.tsx`)이 두 방향을 고정한다(역할 0 → `ERP업무 권한 없음` · 4 역할 → `ERP`). e2e · smoke · federation 의 다른 `nav-erp` 텍스트 핀 0(grep — 나머지는 `href` 속성 핀).
 
+## Red — 커밋 `88d89e571` (계약 · 시험 · e2e 핀 · 티켓만, 제품 코드 0)
+
+- 로컬 전체: **8 failed | 4595 passed (4603)** — `console-nav-business-permission.test.ts` 5 · `notification-routes.test.ts` 2 · `sidebar-business-permission.test.tsx` 1. 7 = `AssertionError`, 1 = jest-dom 매처 단언(`expect(element).toHaveTextContent()` — 기대 `ERP업무 권한 없음`, 실제 `ERP`). `tsc` rc=0.
+- CI run `38964505930`, `Frontend unit tests (… console-web, vitest)` job **`117187593284`**: console-web **8 failed | 4595 passed (4603)**, 실패 파일 3 — 같은 8 건 · 같은 종류(로그에서 셈).
+- 🔵 red 에서 이미 통과하는 대조군(설계상): legacy-compat 4 역할 → 배지 없음 · `erp-read` → 배지 없음 · 알림 갈래의 fail-open 4 건(row 12 실패 · 테넌트 없음 · `'*'` · ERP 역할 보유 → 부른다) — 지금 행동이 이미 그것이라 green 이 그것을 깨지 않는지를 잰다.
+
+## Green
+
+- `permission-map.ts`: `ERP_ROLES`(4) · `ERP_GET` · 5 행 `roles` = 4 · `serverRequires` = 대조표(개요 = MD ∪ AP).
+- `shared/composition/notification-inbox.ts` `inboxDomainsWorthAsking(domains, activeTenant, myDomainRoles)` + 알림 route 가 활성 테넌트(≠`'*'`)일 때만 row 12 를 묻고 그 결과로 갈래를 고른다.
+- 로컬: `npx vitest run` **399 files / 4603 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`).
+
 ## 함께 적는 것
 
 - 🔵 가이드 문안이 지금 틀림(범위 밖 — 코디네이터가 끝에 후속 기안): `features/scm-guide/data.ts:363-369` · `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `ERP_OPERATOR` 등 진입 역할).
+- 🔵 알림 종 비용: 활성 테넌트가 있는 종 열기마다 row 12 호출 1 회가 늘었다(사이드바도 같은 호출을 레이아웃에서 한다 — 캐시 공유 없음). ERP 역할 0 운영자에게는 ERP 호출 1 회가 줄었다.

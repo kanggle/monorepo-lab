@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDomainFacingToken } from '@/shared/lib/session';
+import { getActiveTenant, getDomainFacingToken } from '@/shared/lib/session';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
+import { getMyDomainRolesOrNull } from '@/shared/api/iam-operators-read';
 import {
   aggregateInbox,
   configuredInboxDomains,
   domainInboxHeaders,
+  inboxDomainsWorthAsking,
   type InboxQuery,
 } from '@/shared/composition/notification-inbox';
 import { resolveBackendUrl } from '@/shared/config/demo-backend';
@@ -66,7 +68,15 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const result = await aggregateInbox(configuredInboxDomains(), {
+  // TASK-PC-FE-343 (contract § 2.4.8 «ERP leg skipped») — do not ask a domain row 12 KNOWS this
+  // operator holds no role of (it would only answer 403 → «degraded»). Row 12 is asked only when a
+  // concrete tenant is active; every «don't know» keeps the domain.
+  const activeTenant = await getActiveTenant();
+  const myDomainRoles =
+    activeTenant && activeTenant !== '*' ? await getMyDomainRolesOrNull() : null;
+  const domains = inboxDomainsWorthAsking(configuredInboxDomains(), activeTenant, myDomainRoles);
+
+  const result = await aggregateInbox(domains, {
     query,
     headers: domainInboxHeaders(domainFacingToken, requestId),
     requestId,
