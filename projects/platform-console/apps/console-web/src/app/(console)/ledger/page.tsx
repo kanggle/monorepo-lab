@@ -6,6 +6,8 @@ import {
   LedgerOpsScreen,
   getLedgerSectionState,
 } from '@/features/ledger-ops';
+import { canWriteOn } from '@/shared/ui/console-nav-exposure';
+import { getDomainBusinessRoles } from '../_lib/domain-business-roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,10 +55,14 @@ export default async function LedgerPage({
   // a failed registry — never block on an unproven negative).
   let eligible = false;
   let registryDegraded = false;
+  // TASK-PC-FE-344 — the registry's finance tenants for the write-button gate; `null` = unknown ⇒
+  // buttons shown.
+  let financeTenants: readonly string[] | null = null;
   try {
     const catalog = await getCatalog();
     const fin = catalog.products.find((p) => p.productKey === 'finance');
     eligible = Boolean(fin && fin.available && fin.tenants.length > 0);
+    financeTenants = fin ? fin.tenants : [];
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
@@ -87,7 +93,10 @@ export default async function LedgerPage({
   const accountCode = sp.accountCode?.trim() || null;
   const statementId = sp.statementId?.trim() || null;
 
-  const state = await getLedgerSectionState(eligible, entryId, accountCode, statementId);
+  const [state, businessRoles] = await Promise.all([
+    getLedgerSectionState(eligible, entryId, accountCode, statementId),
+    getDomainBusinessRoles({ finance: financeTenants }),
+  ]);
 
   if (state.notEligible) {
     return (
@@ -173,6 +182,7 @@ export default async function LedgerPage({
       initialStatementId={statementId}
       initialStatement={state.statement}
       initialStatementNotFound={state.statementNotFound}
+      canWrite={canWriteOn('/ledger', businessRoles)}
     />
   );
 }

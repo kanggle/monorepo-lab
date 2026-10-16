@@ -290,6 +290,30 @@ const WMS_ROLES = [
   'MASTER_READ',
 ];
 /**
+ * TASK-PC-FE-344 (ADR-MONO-083 P7 · server = TASK-MONO-794, live 28th window) — the Finance catalog
+ * (`DomainRoleCatalog.java` finance entries). `FINANCE_OPERATOR` is NOT here: an entry role auth
+ * derives, deleted from every set by V0058, never in row 12. 794 also removed `ROLE_FINANCE_VIEWER`
+ * (the subscription-synthesised read) — finance `iam-integration.md` § 업무 역할.
+ */
+const FINANCE_ROLES = [
+  'FINANCE_ACCOUNT_READ',
+  'FINANCE_ACCOUNT_WRITE',
+  'FINANCE_LEDGER_READ',
+  'FINANCE_LEDGER_WRITE',
+  'FINANCE_LEDGER_CONTROL',
+];
+/** account `GET` = AC_READ ∨ AC_WRITE · ledger `GET` (16 paths, trial balance included) = any ledger role. */
+const FINANCE_GET = {
+  account: ['FINANCE_ACCOUNT_READ', 'FINANCE_ACCOUNT_WRITE'],
+  ledger: ['FINANCE_LEDGER_READ', 'FINANCE_LEDGER_WRITE', 'FINANCE_LEDGER_CONTROL'],
+} as const;
+/**
+ * The ledger's 6 business writes — the console calls two of them (대사 해소 · FX 환율 갱신).
+ * 🔴 `FINANCE_LEDGER_CONTROL` does NOT open them (independent — 794 Q2); it opens only the 7
+ * control writes, which the console never calls. Decided by role NAME, not catalog `access`.
+ */
+const FINANCE_LEDGER_BUSINESS_WRITE = ['FINANCE_LEDGER_WRITE'] as const;
+/**
  * TASK-PC-FE-343 (ADR-MONO-083 P6 · server = TASK-MONO-793, live 28th window) — the ERP catalog
  * (`DomainRoleCatalog.java` erp entries). `ERP_OPERATOR` is NOT here: an entry role auth derives,
  * deleted from every set by V0057, never in row 12. 793 also removed the subscription-synthesised
@@ -881,17 +905,21 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/finance',
     area: 'finance',
-    gate: { kind: 'domain', domain: 'finance', roles: ['FINANCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'finance', roles: FINANCE_ROLES, serverRequires: FINANCE_GET.ledger },
     description: '원장 집계 타일 + 운영자 본인 기본 계좌 단건 스냅샷.',
     crud: R,
     purpose: '재무 상태를 요약해 본다(계좌 목록 집계는 하지 않는다).',
     services: ['finance account-service · ledger-service'],
-    sources: ['projects/platform-console/apps/console-web/src/features/finance-guide/data.ts:58-120', `${ROLE_DERIVATION}:106`],
+    sources: [
+      'projects/platform-console/apps/console-web/src/features/finance-guide/data.ts:58-120',
+      'projects/platform-console/apps/console-web/src/features/finance-overview/api/overview-state.ts:156-235 (원장 4 조회 · 기본 계좌)',
+      'projects/finance-platform/specs/integration/iam-integration.md:102-132 (§ 업무 역할)',
+    ],
   },
   {
     href: '/finance/accounts',
     area: 'finance',
-    gate: { kind: 'domain', domain: 'finance', roles: ['FINANCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'finance', roles: FINANCE_ROLES, serverRequires: FINANCE_GET.account },
     description: 'accountId 로 계좌 상세 · 통화별 잔액 · 거래 이력 조회.',
     crud: R,
     purpose: '특정 계좌의 상태와 거래를 확인한다.',
@@ -901,7 +929,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ledger',
     area: 'finance',
-    gate: { kind: 'domain', domain: 'finance', roles: ['FINANCE_OPERATOR'] },
+    gate: { kind: 'domain', domain: 'finance', roles: FINANCE_ROLES, serverRequires: FINANCE_GET.ledger, writeRequires: FINANCE_LEDGER_BUSINESS_WRITE },
     description: '시산표 · 회계 기간 · 분개 · 계정 드릴 · 대사 큐 · FX 환율.',
     crud: crud('RU'),
     crudNote: '수정 = 대사 차이 해소(resolve) · FX 환율 새로고침.',

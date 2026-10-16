@@ -108,3 +108,10 @@ platform-console
 
 - `nightly-e2e` 브랜치 실행 run 38856950242 attempt 1(TASK-MONO-794 브랜치) · 콘솔 job 116830663748: `operators-profile.spec.ts:44` Finance 카드 `degraded`(기대 `ok`). 같은 순간 콘솔 로그 `console_composition_leg` 가 `operator-overview` finance `degraded reason=TIMEOUT latencyMs=4002` · `domain-health` finance `degraded TIMEOUT 4000` — 인가 거절(`forbidden PERMISSION_DENIED`)이 아니라 **4 s 조합 시간 초과**. attempt 2(job 116835225745) 12 passed.
 - 🔵 run 38763381565 의 sample-visitor 사례(문서 응답 10 s · 개요 «일시적으로 불러올 수 없습니다»)와 같은 «개요 조합 다리 시간 초과» 가설 — 다른 spec · 다른 도메인에서 같은 증상. 원인 확정 아님(AC-0 이 잰다). 794 가 원인이 아니라는 것도 확정 아님 — 다음 main nightly 들에서 Finance `TIMEOUT` 이 반복되는지 함께 본다.
+
+## 증거 추가 (2026-10-16 UTC) — 네 번째 사례: `overview-consolidation.spec.ts:133` 첫 시도 실패
+
+- `nightly-e2e` 브랜치 실행 run **38965748396**(`TASK-PC-FE-343` 브랜치, 커밋 `a21b54c03`) · 콘솔 job **117192025297**: `11 passed · 1 flaky`. flaky = `overview-consolidation.spec.ts:133` «IAM card on the home overview drills down to the IAM detail» — 첫 시도 `getByTestId('operator-overview-card-iam')` **element(s) not found**(`toHaveAttribute('data-status','ok')`, 5 s) → 재시도 통과.
+- 같은 커밋의 두 번째 run **38967164204** · job **117196733812**: `12 passed · 0 flaky`. 342 · 345 브랜치 nightly(각 12/0)에서는 첫 시도 통과.
+- 🔵 사유 문구가 앞 사례와 **다르다** — 문서 10 s TIMEOUT 이 아니라 개요 IAM 카드 미렌더(5 s). 같은 «개요 첫 렌더 지연» 계열로 보이나 확정 아님.
+- 🔴 가설(미확정): `TASK-PC-FE-343` 이 알림 종 route 에 row 12(`/me/domain-access`) 호출 1 회를 더했다 — 개요 SSR 과 겹칠 수 있다. 표본 3 개로는 확인도 배제도 못 했다. AC-0 의 연속 런 표에 `:133` 칸을 함께 둔다.

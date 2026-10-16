@@ -44,10 +44,21 @@ export interface FxRatesTableProps {
    * feed-only behaviour; a test pins the no-regression).
    */
   onSelectPair?: (foreignCurrency: string) => void;
+  /**
+   * TASK-PC-FE-344 — `false` hides the «새로고침» button: it is `POST /fx-rates/refresh`, a ledger
+   * business write (`FINANCE_LEDGER_WRITE`; CONTROL does not open it). Default `true` (fail-open).
+   */
+  canWrite?: boolean;
 }
 
 
-export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair }: FxRatesTableProps) {
+export function FxRatesTable({
+  data,
+  onRefresh,
+  refreshing = false,
+  onSelectPair,
+  canWrite = true,
+}: FxRatesTableProps) {
   if (!data) {
     return null;
   }
@@ -87,16 +98,18 @@ export function FxRatesTable({ data, onRefresh, refreshing = false, onSelectPair
           </span>
         )}
 
-        <button
-          type="button"
-          data-testid="ledger-fx-rates-refresh"
-          onClick={onRefresh}
-          disabled={refreshing}
-          aria-busy={refreshing}
-          className="rounded-md border border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {refreshing ? '새로고침 중…' : '새로고침'}
-        </button>
+        {canWrite && (
+          <button
+            type="button"
+            data-testid="ledger-fx-rates-refresh"
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-busy={refreshing}
+            className="rounded-md border border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {refreshing ? '새로고침 중…' : '새로고침'}
+          </button>
+        )}
       </div>
 
       {/* Empty state */}

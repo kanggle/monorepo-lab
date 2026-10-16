@@ -36,6 +36,13 @@ import type { TabKey } from '../components/LedgerOpsTabs';
  */
 
 export interface LedgerOpsScreenProps {
+  /**
+   * TASK-PC-FE-344 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when the
+   * operator's business roles hold no `FINANCE_LEDGER_WRITE`: 대사 해소 and the FX «새로고침»
+   * (`POST /fx-rates/refresh`) hide. 🔴 `FINANCE_LEDGER_CONTROL` does not open them. Omitted /
+   * `true` = shown (fail-open). The server stays final.
+   */
+  canWrite?: boolean;
   initialEntryId: string | null;
   trialBalance: TrialBalance | null;
   periods: PeriodsResponse | null;

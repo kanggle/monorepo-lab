@@ -24,8 +24,11 @@ export function ReconciliationPanel({
   selectedDiscrepancyId,
   setSelectedDiscrepancyId,
   handleSelectEntry,
+  canWrite,
 }: {
   discrepancies: DiscrepanciesResponse | null;
+  /** TASK-PC-FE-344 — REQUIRED so the screen cannot forget to pass it (`FINANCE_LEDGER_WRITE`). */
+  canWrite: boolean;
 } & Pick<
   S,
   | 'selectedStatementId'
@@ -70,7 +73,7 @@ export function ReconciliationPanel({
             onSelect={setSelectedDiscrepancyId}
           />
           {selectedDiscrepancyId ? (
-            <DiscrepancyDetail discrepancyId={selectedDiscrepancyId} />
+            <DiscrepancyDetail discrepancyId={selectedDiscrepancyId} canWrite={canWrite} />
           ) : (
             <p
               className="text-sm text-muted-foreground"

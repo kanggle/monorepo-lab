@@ -267,3 +267,24 @@ describe('FxRatesTable — refreshing prop (TASK-MONO-300 in-flight guard)', () 
     expect(btn.textContent).toContain('새로고침 중…');
   });
 });
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-344 — the «새로고침» button is `POST /fx-rates/refresh`, a ledger business write
+// (FINANCE_LEDGER_WRITE — TASK-MONO-794; CONTROL does not open it).
+// ---------------------------------------------------------------------------
+
+describe('FxRatesTable — TASK-PC-FE-344 canWrite gates the refresh write', () => {
+  it('canWrite=false → no «새로고침» button; the feed badge and rates still render', () => {
+    render(<FxRatesTable data={FX_RATES_ENABLED} onRefresh={vi.fn()} canWrite={false} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.queryByTestId('ledger-fx-rates-refresh')).toBeNull();
+    expect(screen.getByTestId('ledger-fx-rates-feed-badge')).toBeInTheDocument();
+    expect(screen.getByText('1300.12345678')).toBeInTheDocument();
+  });
+
+  it('control: canWrite omitted (fail-open) → the button is there', () => {
+    render(<FxRatesTable data={FX_RATES_ENABLED} onRefresh={vi.fn()} />, { wrapper: wrapper() });
+    expect(screen.getByTestId('ledger-fx-rates-refresh')).toBeInTheDocument();
+  });
+});
