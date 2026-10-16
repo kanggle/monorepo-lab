@@ -8,7 +8,11 @@
  *     (live, 27th window: inventory set → 403);
  *   - `/wms`, `/wms/inventory`, `/wms/inbound`, `/wms/master` → wms admin-service dashboards open on
  *     subscription alone (`WMS_VIEWER` synthesised from `entitled_domains`) → 200 for any set;
- *   - every ecommerce leaf → the ecommerce gateway needs ECOMMERCE_OPERATOR;
+ *   - E-commerce (TASK-PC-FE-345, server = TASK-MONO-795, live 28th window): each area's service
+ *     re-checks GET = <AREA>_READ ∨ _WRITE (members: MEMBER_READ only; sellers = product area);
+ *     `ECOMMERCE_OPERATOR` is an auth-derived entry role, deleted from every set by V0059, so row 12
+ *     NEVER carries it — c-2's `serverRequires = ECOMMERCE_OPERATOR` badged every E-commerce menu
+ *     for every operator (live regression from the 795 bake, 2026-10-16);
  *   - ERP · Finance reads → open on subscription alone;
  *   - SCM (TASK-PC-FE-342, server = TASK-MONO-792, live 28th window): each SCM service's GET =
  *     its READ ∨ WRITE role, mutations = WRITE; `SCM_OPERATOR` is an auth-derived entry role
@@ -38,20 +42,41 @@ const ECOMMERCE_LEAVES = PERMISSION_MAP.filter(
 
 /**
  * The admin-service catalog (admin-api.md § 카탈로그 · `DomainRoleCatalog.java`). The SCM part is
- * the TASK-MONO-792 catalog (8 business roles; `SCM_OPERATOR` removed — auth derives it). The
- * ERP · Finance · E-commerce entries are still the pre-P6..P8 ones this file's declarations use;
- * their console follow-ups (TASK-PC-FE-343..345) replace them.
+ * the TASK-MONO-792 catalog (8 business roles; `SCM_OPERATOR` removed — auth derives it); the
+ * E-commerce part is the TASK-MONO-795 catalog (13 business roles; `ECOMMERCE_OPERATOR` removed).
+ * The ERP · Finance entries are still the pre-P6/P7 ones; their console follow-ups
+ * (TASK-PC-FE-343 · 344) replace them.
  */
 const SCM_CATALOG = [
   'SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE', 'SCM_DEMAND_PLANNING_READ',
   'SCM_DEMAND_PLANNING_WRITE', 'SCM_LOGISTICS_READ', 'SCM_LOGISTICS_WRITE',
   'SCM_INVENTORY_VISIBILITY_READ', 'SCM_INVENTORY_VISIBILITY_WRITE',
 ];
+const ECOMMERCE_CATALOG = [
+  'ECOMMERCE_ORDER_READ', 'ECOMMERCE_ORDER_WRITE', 'ECOMMERCE_PRODUCT_READ',
+  'ECOMMERCE_PRODUCT_WRITE', 'ECOMMERCE_MEMBER_READ', 'ECOMMERCE_SETTLEMENT_READ',
+  'ECOMMERCE_SETTLEMENT_WRITE', 'ECOMMERCE_PROMOTION_READ', 'ECOMMERCE_PROMOTION_WRITE',
+  'ECOMMERCE_SHIPPING_READ', 'ECOMMERCE_SHIPPING_WRITE', 'ECOMMERCE_NOTIFICATION_READ',
+  'ECOMMERCE_NOTIFICATION_WRITE',
+];
 const CATALOG_ROLES = new Set([
   'INVENTORY_READ', 'INVENTORY_WRITE', 'INBOUND_READ', 'INBOUND_WRITE', 'OUTBOUND_READ',
   'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', ...SCM_CATALOG, 'ERP_OPERATOR',
-  'FINANCE_OPERATOR', 'ECOMMERCE_OPERATOR', 'FAN_OPERATOR', 'MES_OPERATOR',
+  'FINANCE_OPERATOR', ...ECOMMERCE_CATALOG, 'FAN_OPERATOR', 'MES_OPERATOR',
 ]);
+
+/**
+ * Entry roles auth DERIVES (TASK-MONO-792..795) — never in the catalog, never in row 12. A
+ * declaration naming one badges / hides buttons for every operator of that domain.
+ */
+const ENTRY_ROLES = ['SCM_OPERATOR', 'ERP_OPERATOR', 'FINANCE_OPERATOR', 'ECOMMERCE_OPERATOR'];
+
+/** Row 12 of a legacy-compat / `ecommerce-full` operator after V0059: the 13 roles, no entry role. */
+const ECOMMERCE_FULL_ROW12 = ECOMMERCE_CATALOG;
+/** System preset `ecommerce-read` (V0059). */
+const ECOMMERCE_READ_SET = ECOMMERCE_CATALOG.filter((r) => r.endsWith('_READ'));
+/** System preset `ecommerce-order-operate` (V0059). */
+const ECOMMERCE_ORDER_SET = ['ECOMMERCE_ORDER_READ', 'ECOMMERCE_ORDER_WRITE'];
 
 const SCM_LEAVES = ['/scm', '/scm/procurement', '/scm/inventory', '/scm/replenishment', '/scm/config'];
 /** System preset `scm-read` (TASK-MONO-792) — every SCM READ role. */
@@ -97,23 +122,84 @@ describe('AC-1 — control: the outbound set', () => {
   });
 });
 
-describe('ecommerce — the gateway is the only gate (ECOMMERCE_OPERATOR)', () => {
+/**
+ * TASK-PC-FE-345 — E-commerce per area (server: TASK-MONO-795, each service re-checks; live 28th
+ * window: `X-User-Role: ECOMMERCE_OPERATOR` alone → order/product 403, with ORDER_READ /
+ * PRODUCT_READ → 200; V0059 left 0 sets holding ECOMMERCE_OPERATOR).
+ */
+describe('TASK-PC-FE-345 — E-commerce menus follow the area roles', () => {
+  it('🔴 live regression pin: a legacy-compat operator\'s row 12 (13 roles, no entry role) → nothing badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles(...ECOMMERCE_FULL_ROW12));
+    for (const href of ECOMMERCE_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(badges.has('ecommerce')).toBe(false);
+  });
+
   it('no ecommerce role on a subscribed tenant → every ecommerce leaf AND the parent are badged', () => {
-    expect(ECOMMERCE_LEAVES.length).toBeGreaterThan(0);
+    expect(ECOMMERCE_LEAVES.length).toBe(9);
     const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles());
-    for (const href of ECOMMERCE_LEAVES) expect(badges.has(href)).toBe(true);
+    for (const href of ECOMMERCE_LEAVES) expect(badges.has(href), href).toBe(true);
     expect(badges.has('ecommerce')).toBe(true);
   });
 
-  it('with ECOMMERCE_OPERATOR → nothing badged', () => {
+  it('`ECOMMERCE_OPERATOR` alone (the derived entry role) opens no business API → still badged', () => {
     const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles('ECOMMERCE_OPERATOR'));
-    expect(badges.size).toBe(0);
+    for (const href of ECOMMERCE_LEAVES) expect(badges.has(href), href).toBe(true);
+  });
+
+  it('read set (`ecommerce-read`) → no badge', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles(...ECOMMERCE_READ_SET));
+    for (const href of ECOMMERCE_LEAVES) expect(badges.has(href), href).toBe(false);
+  });
+
+  it('order set only → 개요 · 주문 open; the other 7 badged; parent not badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles(...ECOMMERCE_ORDER_SET));
+    expect(badges.has('/ecommerce')).toBe(false);
+    expect(badges.has('/ecommerce/orders')).toBe(false);
+    for (const href of [
+      '/ecommerce/products', '/ecommerce/shippings', '/ecommerce/promotions', '/ecommerce/users',
+      '/ecommerce/sellers', '/ecommerce/settlements', '/ecommerce/notifications/templates',
+    ]) {
+      expect(badges.has(href), href).toBe(true);
+    }
+    expect(badges.has('ecommerce')).toBe(false);
+  });
+
+  it('product set → 상품 and 판매자 open (sellers are the product area, Q1)', () => {
+    const badges = businessPermissionBadgeKeys(
+      GROUPS,
+      subs('ecommerce'),
+      roles('ECOMMERCE_PRODUCT_READ', 'ECOMMERCE_PRODUCT_WRITE'),
+    );
+    expect(badges.has('/ecommerce/products')).toBe(false);
+    expect(badges.has('/ecommerce/sellers')).toBe(false);
+    expect(badges.has('/ecommerce/users')).toBe(true);
+  });
+
+  it('a set without MEMBER_READ → 회원 badged (members are read-only — no WRITE role opens them)', () => {
+    const allButMember = ECOMMERCE_CATALOG.filter((r) => r !== 'ECOMMERCE_MEMBER_READ');
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), roles(...allButMember));
+    expect(badges.has('/ecommerce/users')).toBe(true);
+    expect(badges.has('/ecommerce/orders')).toBe(false);
+  });
+
+  it('settlement set only → 정산 open; 개요 badged (the overview reads no settlement)', () => {
+    const badges = businessPermissionBadgeKeys(
+      GROUPS,
+      subs('ecommerce'),
+      roles('ECOMMERCE_SETTLEMENT_READ', 'ECOMMERCE_SETTLEMENT_WRITE'),
+    );
+    expect(badges.has('/ecommerce/settlements')).toBe(false);
+    expect(badges.has('/ecommerce')).toBe(true);
   });
 
   it('not subscribed → no «업무 권한 없음» (the subscription signal wins)', () => {
     const badges = businessPermissionBadgeKeys(GROUPS, subs('wms'), roles());
     for (const href of ECOMMERCE_LEAVES) expect(badges.has(href)).toBe(false);
     expect(badges.has('ecommerce')).toBe(false);
+  });
+
+  it('fail-open: row 12 unknown → no ecommerce badge', () => {
+    expect(businessPermissionBadgeKeys(GROUPS, subs('ecommerce'), undefined).size).toBe(0);
   });
 });
 
@@ -370,6 +456,45 @@ describe('ledger — the declarations match the measurement', () => {
         ...Object.values(row.gate.buttonWriteRequires ?? {}).flat(),
       ];
       expect(declared.includes('SCM_OPERATOR'), row.href).toBe(false);
+    }
+  });
+
+  it('TASK-PC-FE-345 — no declaration names an entry role (SCM · ERP · Finance · E-commerce _OPERATOR)', () => {
+    for (const row of PERMISSION_MAP) {
+      if (row.gate.kind !== 'domain') continue;
+      const declared = [
+        ...(row.gate.serverRequires ?? []),
+        ...(row.gate.writeRequires ?? []),
+        ...Object.values(row.gate.buttonWriteRequires ?? {}).flat(),
+      ];
+      for (const entry of ENTRY_ROLES) {
+        expect(declared.includes(entry), `${row.href}: ${entry}`).toBe(false);
+      }
+    }
+  });
+
+  it('TASK-PC-FE-345 — E-commerce rows declare exactly what the area services enforce', () => {
+    const rw = (area: string) => [`ECOMMERCE_${area}_READ`, `ECOMMERCE_${area}_WRITE`];
+    const expected: Record<string, string[]> = {
+      '/ecommerce': [
+        ...rw('ORDER'), ...rw('PRODUCT'), 'ECOMMERCE_MEMBER_READ', ...rw('PROMOTION'),
+        ...rw('SHIPPING'), ...rw('NOTIFICATION'),
+      ],
+      '/ecommerce/products': rw('PRODUCT'),
+      '/ecommerce/sellers': rw('PRODUCT'),
+      '/ecommerce/orders': rw('ORDER'),
+      '/ecommerce/shippings': rw('SHIPPING'),
+      '/ecommerce/promotions': rw('PROMOTION'),
+      '/ecommerce/users': ['ECOMMERCE_MEMBER_READ'],
+      '/ecommerce/settlements': rw('SETTLEMENT'),
+      '/ecommerce/notifications/templates': rw('NOTIFICATION'),
+    };
+    expect(Object.keys(expected).sort()).toEqual([...ECOMMERCE_LEAVES].sort());
+    for (const [href, want] of Object.entries(expected)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.serverRequires ?? [])].sort(), href).toEqual([...want].sort());
+      expect([...g.roles].sort(), href).toEqual([...ECOMMERCE_CATALOG].sort());
     }
   });
 

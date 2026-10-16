@@ -301,7 +301,15 @@ Domain menus are never hidden by either signal; each shows its own badge. Hiding
   | Leaf | `serverRequires` | Why |
   |---|---|---|
   | `/wms/outbound` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | outbound-service `GET /api/**` = `OUTBOUND_READ ∨ WRITE ∨ ADMIN` (live: inventory set → 403) |
-  | every `ecommerce` leaf | `ECOMMERCE_OPERATOR` | the ecommerce gateway admits operators on `/api/admin/**` and the operator-on-public trees only with `ECOMMERCE_OPERATOR` |
+  | `/ecommerce` (개요) | the READ · WRITE roles of order · product · member · promotion · shipping · notification | its cards read those six areas' summaries (sellers = product area); each card degrades to `forbidden` on its own `403` (existing per-cell rule), so any one area opens the screen. Settlement is not read here |
+  | `/ecommerce/products` · `/ecommerce/sellers` | `ECOMMERCE_PRODUCT_READ` · `ECOMMERCE_PRODUCT_WRITE` | product-service `ProductOperatorAccess` (sellers are the product area — `TASK-MONO-795` Q1) |
+  | `/ecommerce/orders` | `ECOMMERCE_ORDER_READ` · `ECOMMERCE_ORDER_WRITE` | order-service `OrderOperatorAccess` |
+  | `/ecommerce/shippings` | `ECOMMERCE_SHIPPING_READ` · `ECOMMERCE_SHIPPING_WRITE` | shipping-service `OperatorRoleGuard` |
+  | `/ecommerce/promotions` | `ECOMMERCE_PROMOTION_READ` · `ECOMMERCE_PROMOTION_WRITE` | promotion-service `OperatorRoleGuard` |
+  | `/ecommerce/users` | `ECOMMERCE_MEMBER_READ` | user-service `AdminUserController` (member area is read-only — no WRITE role exists) |
+  | `/ecommerce/settlements` | `ECOMMERCE_SETTLEMENT_READ` · `ECOMMERCE_SETTLEMENT_WRITE` | settlement-service `OperatorRoleGuard` |
+  | `/ecommerce/notifications/templates` | `ECOMMERCE_NOTIFICATION_READ` · `ECOMMERCE_NOTIFICATION_WRITE` | notification-service `TemplateController` |
+  | ~~every `ecommerce` leaf~~ | ~~`ECOMMERCE_OPERATOR`~~ | ~~the ecommerce gateway admits operators … only with `ECOMMERCE_OPERATOR`~~ — 🔴 **wrong since `TASK-MONO-795` (live from the 28th window, 2026-10-16)**: `ECOMMERCE_OPERATOR` became an auth-derived entry role and V0059 deleted it from every set, so row 12 never carries it and this row badged **every** E-commerce menu for every operator of an ecommerce-subscribed tenant. Replaced by the rows above (`TASK-PC-FE-345`). The gateway is a coarse door; the per-area service check decides, so it is what the signal predicts |
   | `/wms` · `/wms/inventory` · `/wms/inbound` · `/wms/master` | — | wms admin-service dashboards: `WMS_VIEWER` is synthesised from `entitled_domains ∋ wms` (subscription alone) |
   | `/wms/operations` | — | `WMS_ADMIN` for every operator — no catalog role can satisfy it, so it is not a set question |
   | `/scm` (개요) | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` · `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | its two cards read procurement `GET /po` and inventory-visibility `GET /snapshot` (each service: `GET` = READ ∨ WRITE, `TASK-MONO-792`); either role family opens the screen, and a missing one degrades only its own card (existing per-card rule) |
@@ -311,8 +319,8 @@ Domain menus are never hidden by either signal; each shows its own badge. Hiding
   | ERP · Finance leaves | — | ERP reads are open to `entitled_domains ∋ erp`; Finance synthesises `FINANCE_VIEWER` |
   | fan leaves | — | not measured (ADR-083 ③ ⚪) — no declaration until measured |
 
-  🔴 `SCM_OPERATOR` is never declared: since `TASK-MONO-792` (Q4) it is an **entry role auth derives** when the token carries ≥1 SCM business role — it is not in the catalog and never appears in row 12, so declaring it would badge every SCM operator.
-- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule. **P5 (SCM) — done, `TASK-PC-FE-342`** (the SCM rows above + the `/wms/outbound` «발송 재시도» button-level row). P6 (ERP) · P7 (Finance) · P8 (E-commerce) follow in `TASK-PC-FE-343` · `344` · `345`.
+  🔴 **An entry role is never declared** (`serverRequires` · `writeRequires` · `buttonWriteRequires`): `SCM_OPERATOR` (`TASK-MONO-792` Q4), `ERP_OPERATOR` (793), `FINANCE_OPERATOR` (794) and `ECOMMERCE_OPERATOR` (795) are **derived by auth** when the token carries ≥1 business role of that domain — they are not in the catalog and never appear in row 12, so declaring one badges (or hides buttons from) every operator of that domain. `console-nav-business-permission.test.ts` fails on any declared entry role.
+- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule. **P5 (SCM) — done, `TASK-PC-FE-342`** (the SCM rows above + the `/wms/outbound` «발송 재시도» button-level row). **P8 (E-commerce) — menus done, `TASK-PC-FE-345`** (the E-commerce `serverRequires` rows above); its write buttons are **not declared yet** and stay visible (server `403` → inline «권한 없음») — `TASK-PC-FE-346`. P6 (ERP) · P7 (Finance) follow in `TASK-PC-FE-343` · `344`.
 - **Badge.** The text is «업무 권한 없음», and the leaf keeps its link (never hidden). The `(console)` layout reads row 12 once per render, together with the registry.
 
 #### 2.4.4 IAM operator overview (composed) — TASK-PC-FE-005 — cross-reference, **no new producer**
