@@ -55,13 +55,17 @@ class V0052MigrationShapeTest {
             .filter(k -> !k.startsWith("scm-") || k.equals("scm-full"))
             // TASK-MONO-793 (V0057 = P6 ERP)
             .filter(k -> !k.startsWith("erp-") || k.equals("erp-full"))
+            // TASK-MONO-794 (V0058 = P7 Finance)
+            .filter(k -> !k.startsWith("finance-") || k.equals("finance-full"))
             .toList();
-    static final Set<String> RETIRED_AFTER_V0052 = Set.of("SCM_OPERATOR", "ERP_OPERATOR");
+    static final Set<String> RETIRED_AFTER_V0052 = Set.of("SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR");
     static final Set<String> ADDED_AFTER_V0052 = Set.of(
             "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
             "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE", "SCM_INVENTORY_VISIBILITY_READ",
             "SCM_INVENTORY_VISIBILITY_WRITE",
-            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
+            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE",
+            "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
+            "FINANCE_LEDGER_CONTROL");
 
     /** The catalog's role names as of V0052 (= today's, minus the later additions, plus the later retirements). */
     static Set<String> catalogAtV0052() {

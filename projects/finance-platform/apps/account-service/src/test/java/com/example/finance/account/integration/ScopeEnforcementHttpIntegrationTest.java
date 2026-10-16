@@ -134,16 +134,30 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
         }
     }
 
+    /**
+     * TASK-MONO-794 (ADR-083 P7): the console read consumer is admitted by a Finance BUSINESS role now — the generic
+     * {@code OPERATOR} string (issued by nobody) no longer admits anything (Failure 1).
+     */
     @Nested
-    @DisplayName("allow: operator role admits without any finance scope (console read consumer)")
+    @DisplayName("allow: a Finance business role admits without any finance scope (console read consumer)")
     class OperatorRoleReadsWithoutScope {
 
         @Test
-        @DisplayName("operator role, NO finance scope → GET → 404 (role-OR-scope; console read consumer preserved)")
-        void operatorRoleCanReadWithoutScope() throws Exception {
+        @DisplayName("FINANCE_ACCOUNT_READ, NO finance scope → GET → 404 (role-OR-scope; console read consumer preserved)")
+        void accountReadRoleCanReadWithoutScope() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer "
+                                    + token(null, List.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ"))))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("🔴 794 Failure 1: generic OPERATOR role, NO finance scope → GET → 403 PERMISSION_DENIED")
+        void genericOperatorRoleDenied() throws Exception {
             mockMvc.perform(get("/api/finance/accounts/does-not-exist")
                             .header("Authorization", "Bearer " + token(null, List.of("OPERATOR"))))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
         }
     }
 
@@ -161,11 +175,22 @@ class ScopeEnforcementHttpIntegrationTest extends AbstractAccountIntegrationTest
     class EntitlementTrustReadAuthority {
 
         @Test
-        @DisplayName("entitled operator (tenant=acme, entitled_domains=[finance], no scope/role) → GET → 404 (read gate open)")
-        void entitledNoScopeNoRoleCanRead() throws Exception {
+        @DisplayName("🔴 794: entitled operator (tenant=acme, entitled_domains=[finance], no scope/role) → GET → 403 (subscription alone opens nothing — ROLE_FINANCE_VIEWER removed)")
+        void entitledNoScopeNoRoleCannotRead() throws Exception {
             mockMvc.perform(get("/api/finance/accounts/does-not-exist")
                             .header("Authorization", "Bearer "
                                     + token("acme", null, null, List.of("finance", "wms"))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        }
+
+        @Test
+        @DisplayName("794: entitled operator WITH the account read role (tenant=acme) → GET → 404 (the role is what admits)")
+        void entitledWithAccountReadRoleCanRead() throws Exception {
+            mockMvc.perform(get("/api/finance/accounts/does-not-exist")
+                            .header("Authorization", "Bearer "
+                                    + token("acme", null, List.of("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ"),
+                                            List.of("finance", "wms"))))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
         }

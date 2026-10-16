@@ -9,6 +9,13 @@ Domain rules: [`rules/domains/fintech.md`](../../../../../rules/domains/fintech.
 All endpoints:
 - Require `Authorization: Bearer <token>` with `tenant_id ∈ {finance, *}`
   (RS256, IAM JWKS). Cross-tenant → 403 `TENANT_FORBIDDEN`.
+- **Business-role authorization (TASK-MONO-794 · ADR-MONO-083 P7 — canonical:
+  [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p7--task-mono-794--정본))**:
+  `GET` = `FINANCE_ACCOUNT_READ ∨ FINANCE_ACCOUNT_WRITE ∨ finance.read ∨ finance.write ∨ tenant_id='*'`;
+  every mutation = `FINANCE_ACCOUNT_WRITE ∨ finance.write`; KYC upgrade and top-up additionally
+  require the **`FINANCE_ACCOUNT_WRITE` role** (a scope-only workload token → 403). The generic
+  `OPERATOR`/`ADMIN`/`SUPER_ADMIN` roles, `FINANCE_OPERATOR` (now the derived entry role) and the
+  subscription-synthesised `ROLE_FINANCE_VIEWER` open nothing. Insufficient → 403 `PERMISSION_DENIED`.
 - **Mutating** endpoints require `Idempotency-Key: <client-generated>`
   (fintech F1, transactional T1). Missing → 400 `IDEMPOTENCY_KEY_REQUIRED`.
   Same key + identical payload → first stored response replayed (no fund

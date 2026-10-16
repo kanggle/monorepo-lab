@@ -135,3 +135,18 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 | **Q2** | 역할 이름 · 프리셋 | 역할 `FINANCE_ACCOUNT_READ` · `FINANCE_ACCOUNT_WRITE` · `FINANCE_LEDGER_READ` · `FINANCE_LEDGER_WRITE` (+ Q1 (나)면 `FINANCE_LEDGER_CONTROL` = 5). 판정: account READ = AC_READ ∨ AC_WRITE · WRITE = AC_WRITE · ledger READ = LG_READ ∨ LG_WRITE ∨ LG_CONTROL · 업무 쓰기 6 = LG_WRITE · 통제 쓰기 7 = LG_CONTROL(쓰기와 **독립** — CONTROL 이 LG_WRITE 를 함의하지 않는다). 프리셋: `finance-read`(조회 둘) · `finance-account-operate` · `finance-ledger-operate` · `finance-full`(전부) · `all-domains-full` · `legacy-compat` 확장 | CONTROL 이 LG_WRITE 를 함의(CONTROL 단독으로 업무 쓰기도 연다) |
 | **Q3** | 계좌 **KYC 승급 · 충전**(운영자 전용 앱 단 검사)의 등급 | **`FINANCE_ACCOUNT_WRITE` 그대로** — 앱 단 검사는 `isOperator()`(4 문자열) → «`FINANCE_ACCOUNT_WRITE` 역할 보유» 로(범위만 가진 워크로드는 지금처럼 403). 데모 시드의 KYC · 충전 경로가 그대로 산다. 감사 `ActorType` = 파생 `FINANCE_OPERATOR` 보유 여부(지금과 같은 뜻) | 충전(돈의 유입) · KYC 를 Q1 처럼 통제 역할(`FINANCE_ACCOUNT_CONTROL`)로 분리 |
 | 순서 | 콘솔 데이터 | 별도 콘솔 PR, 굽기 라이브 뒤(792 · 793 과 같음) | — |
+
+# 소유자 결정 — 2026-10-16 UTC (코디네이터 경유 · § 5 추천 그대로)
+
+| Q | 결정 |
+|---|---|
+| Q1 | 원장 통제 쓰기 7(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정 3) = **별도 업무 역할 `FINANCE_LEDGER_CONTROL`**. V0058 이 `FINANCE_OPERATOR` 를 담은 **모든** 세트 · 파트너십 scope 에 이 역할도 넣는다(기존 운영자 같은 API 집합). 프리셋 `finance-full` · `all-domains-full` · `legacy-compat` 에는 있고 `finance-ledger-operate` 에는 **없다** |
+| Q2 | 추천 그대로 — `FINANCE_ACCOUNT_READ/WRITE` · `FINANCE_LEDGER_READ/WRITE` · `FINANCE_LEDGER_CONTROL`(독립 — 원장 업무 쓰기를 함의하지 않는다). 프리셋 `finance-read` · `finance-account-operate` · `finance-ledger-operate` · `finance-full` + `all-domains-full` · `legacy-compat` 확장 |
+| Q3 | KYC 승급 · 충전 = `FINANCE_ACCOUNT_WRITE` 그대로 · 앱 단 검사 = «`FINANCE_ACCOUNT_WRITE` 보유» · 범위만 가진 워크로드는 403 유지 |
+| § 4 유추 | 전부 수용 — `FINANCE_VIEWER` 제거(`'*'` GET 유지) · 진입 역할 `ENTRY_ROLES` 파생 · 카탈로그 제거 · 위임 422 · 넓힌 뒤 지움 · 워크로드 범위 유지 · 미선택 테넌트 403 · 콘솔은 새 게이트 티켓. auth `OPERATOR_EXCLUDED_SCOPES` 에 `finance.write` + 시험 + 명세 문장 |
+| Failure 1 | 발급처 0 인 일반 `OPERATOR/ADMIN/SUPER_ADMIN` 을 finance 필터 체인에서 뺀다 — 시험으로 확인 |
+
+## 구현 노트 (결정의 적용 범위 — 판단을 적는다)
+
+- 🔵 **`FINANCE_LEDGER_CONTROL` 의 카탈로그 `access` = `WRITE`**: 콘솔이 카탈로그 행을 `z.enum(['READ','WRITE','OPERATE'])` 로 파싱한다(`console-web …/domain-permission-sets/api/types.ts:36`). 새 값(`CONTROL`)을 내면 그 화면의 카탈로그 응답 전체가 파싱 실패한다 ⇒ 와이어 값은 `WRITE`, 구분은 역할 이름과 라벨이 진다.
+- 🔵 **원장 조회 = LG_READ ∨ LG_WRITE ∨ LG_CONTROL**(Q2 추천 문구 그대로 — 통제 역할 보유자는 자기가 바꾸는 설정 · 기간을 읽을 수 있어야 한다). 통제 역할은 업무 쓰기 6 을 열지 않는다.

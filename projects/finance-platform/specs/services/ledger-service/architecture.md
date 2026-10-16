@@ -726,8 +726,10 @@ and, since TASK-FIN-BE-065 (ADR-MONO-058 § D1), the actor cluster — `ActorCla
 `ActorContextFactory` + `ActorAuthenticationToken` + `ActorContextResolver` — which replaced this
 service's hand-rolled claim-lifting mechanism. Only the **mechanism** moved: the `ActorContext`
 record (`subject`/`tenantId`/`roles`, `hasRole`, `identity()`) and every authority the converter
-synthesises on top (`SCOPE_*`, `ROLE_FINANCE_VIEWER`, `ROLE_FINANCE_SUPERADMIN_READ`) stay
-in-service per `shared-library-policy.md § Ownership Rule`.
+synthesises on top (`SCOPE_*`, `ROLE_FINANCE_SUPERADMIN_READ`) stay
+in-service per `shared-library-policy.md § Ownership Rule`. (`ROLE_FINANCE_VIEWER` was removed by
+TASK-MONO-794 — the business-role gate is `SecurityConfig`, canonical table in
+[`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p7--task-mono-794--정본).)
 
 `libs:java-web-servlet` was added by TASK-FIN-BE-066 (ADR-MONO-058 § D2) for
 `CommonGlobalExceptionHandler` — the base class `presentation/advice/GlobalExceptionHandler`

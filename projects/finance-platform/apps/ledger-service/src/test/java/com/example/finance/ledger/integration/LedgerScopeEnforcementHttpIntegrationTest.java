@@ -110,14 +110,24 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     // ---- allow: operator role admits without any finance scope (console read consumer) -----------
 
     @Test
-    @DisplayName("operator role, NO finance scope → GET → not 403 (role-OR-scope; console read consumer preserved)")
-    void operatorRoleCanReadWithoutScope() throws Exception {
+    @DisplayName("794: FINANCE_LEDGER_READ, NO finance scope → GET → not 403 (role-OR-scope; console read consumer preserved)")
+    void ledgerReadRoleCanReadWithoutScope() throws Exception {
         MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
-                        .header("Authorization", "Bearer " + financeToken(c -> c.claim("roles", List.of("OPERATOR")))))
+                        .header("Authorization", "Bearer " + financeToken(c -> c.claim("roles",
+                                List.of("FINANCE_OPERATOR", "FINANCE_LEDGER_READ")))))
                 .andReturn();
         assertThat(r.getResponse().getStatus())
-                .as("operator role admits reads without a finance scope")
+                .as("the ledger read role admits reads without a finance scope")
                 .isNotEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("🔴 794 Failure 1: generic OPERATOR role, NO finance scope → GET → 403 PERMISSION_DENIED")
+    void genericOperatorRoleDenied() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
+                        .header("Authorization", "Bearer " + financeToken(c -> c.claim("roles", List.of("OPERATOR")))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     // ---- entitlement-trust READ authority (TASK-FIN-BE-048) --------------------------------------
@@ -134,14 +144,12 @@ class LedgerScopeEnforcementHttpIntegrationTest extends AbstractLedgerIntegratio
     }
 
     @Test
-    @DisplayName("entitled operator (entitled_domains=[finance], no scope/role) → GET periods → not 403 (read gate open)")
-    void entitledNoScopeNoRoleCanRead() throws Exception {
-        MvcResult r = mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
+    @DisplayName("🔴 794: entitled operator (entitled_domains=[finance], no scope/role) → GET periods → 403 (ROLE_FINANCE_VIEWER removed)")
+    void entitledNoScopeNoRoleCannotRead() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get(READ_PATH)
                         .header("Authorization", "Bearer " + entitledOperatorToken()))
-                .andReturn();
-        assertThat(r.getResponse().getStatus())
-                .as("entitlement-trust VIEWER admits reads for a scopeless/roleless entitled operator")
-                .isNotEqualTo(403);
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
     }
 
     @Test

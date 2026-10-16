@@ -295,7 +295,8 @@ class DomainPermissionSetUseCaseTest {
     @DisplayName("catalog: the whole DomainRoleCatalog, no tenant gate")
     void catalog_noGate() {
         // TASK-MONO-792: SCM_OPERATOR → eight SCM roles · TASK-MONO-793: ERP_OPERATOR → four ERP roles
-        assertThat(useCase.catalog()).hasSize(24);
+        // TASK-MONO-794: FINANCE_OPERATOR → five Finance roles
+        assertThat(useCase.catalog()).hasSize(28);
         verifyNoInteractions(tenantGate);
     }
 }

@@ -36,8 +36,10 @@ class DelegatableRoleCatalogTest {
                         "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE",
                         // erp — fine-grained since TASK-MONO-793 (ERP_OPERATOR is derived, not delegatable)
                         "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE",
+                        // finance — fine-grained since TASK-MONO-794 (FINANCE_OPERATOR is derived, not delegatable)
+                        "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ",
+                        "FINANCE_LEDGER_WRITE", "FINANCE_LEDGER_CONTROL",
                         // single-role domains
-                        "FINANCE_OPERATOR",
                         "MES_OPERATOR", "FAN_OPERATOR");
     }
 
@@ -73,9 +75,13 @@ class DelegatableRoleCatalogTest {
         expected.remove("ERP_OPERATOR");
         expected.addAll(List.of("ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE",
                 "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE"));
+        // TASK-MONO-794 — and for Finance: FINANCE_OPERATOR → the five Finance business roles (V0058).
+        expected.remove("FINANCE_OPERATOR");
+        expected.addAll(List.of("FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ",
+                "FINANCE_LEDGER_WRITE", "FINANCE_LEDGER_CONTROL"));
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(expected);
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(DomainRoleCatalog.roleNames());
-        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(24);
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(28);
     }
 
     @Test
@@ -83,7 +89,7 @@ class DelegatableRoleCatalogTest {
     void operatorRoles_delegatable() {
         assertThat(DelegatableRoleCatalog.isDelegatable("WMS_OPERATOR")).isTrue();
         assertThat(DelegatableRoleCatalog.isDelegatable("OUTBOUND_WRITE")).isTrue();
-        assertThat(DelegatableRoleCatalog.isDelegatable("FINANCE_OPERATOR")).isTrue();
+        assertThat(DelegatableRoleCatalog.isDelegatable("FINANCE_LEDGER_CONTROL")).isTrue();
     }
 
     @Test
@@ -114,6 +120,9 @@ class DelegatableRoleCatalogTest {
         // TASK-MONO-793: the ERP entry role likewise
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("ERP_APPROVAL_READ", "ERP_OPERATOR"))).isEqualTo("ERP_OPERATOR");
+        // TASK-MONO-794: the Finance entry role likewise
+        assertThat(DelegatableRoleCatalog.firstNonDelegatable(
+                List.of("FINANCE_LEDGER_READ", "FINANCE_OPERATOR"))).isEqualTo("FINANCE_OPERATOR");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("WMS_OPERATOR", "WMS_ADMIN"))).isEqualTo("WMS_ADMIN");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(List.of())).isNull();

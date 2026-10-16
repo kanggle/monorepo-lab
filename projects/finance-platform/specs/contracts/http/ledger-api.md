@@ -17,6 +17,19 @@ All paths under `/api/finance/ledger/**`. All require a valid IAM RS256 JWT with
 `tenant_id` accepted by the dual-accept gate (`finance` / `*` / `entitled_domains ∋
 finance`); `finance.read` scope. Responses are tenant-scoped.
 
+**Business-role authorization (TASK-MONO-794 · ADR-MONO-083 P7 — canonical:
+[`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p7--task-mono-794--정본))** —
+supersedes every «operator role» / «`finance.write` or operator» sentence below:
+- `GET` (all 16) = `FINANCE_LEDGER_READ ∨ FINANCE_LEDGER_WRITE ∨ FINANCE_LEDGER_CONTROL ∨ finance.read ∨ finance.write ∨ tenant_id='*'`.
+- **Control writes (7)** = `FINANCE_LEDGER_CONTROL ∨ finance.write`: `POST /periods` · `POST /periods/{id}/close` ·
+  `PUT /settlements/fx-rate-override/{ccy}` · `PUT /reconciliation/fx-tolerance` · `PUT /settlements/cost-flow-config` ·
+  `PUT` / `DELETE /settlements/cost-flow-config/accounts/{code}` (owner decision Q1, 2026-10-16 UTC).
+- **Every other mutation** (`POST /entries` · `/settlements` · `/revaluations` · `/reconciliation/statements` ·
+  `/reconciliation/discrepancies/{id}/resolve` · `/fx-rates/refresh`) = `FINANCE_LEDGER_WRITE ∨ finance.write`.
+  `FINANCE_LEDGER_CONTROL` does not open these (independent roles).
+- The generic `OPERATOR`/`ADMIN`/`SUPER_ADMIN` roles, `FINANCE_OPERATOR` (the derived entry role) and the
+  subscription-synthesised `ROLE_FINANCE_VIEWER` open nothing. Insufficient → 403 `PERMISSION_DENIED`.
+
 ## Common shapes
 
 **Money** is always `{ "amount": "<minor-units-integer-string>", "currency": "<ISO-4217>" }`

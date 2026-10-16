@@ -31,6 +31,11 @@ class OperatorRoleDerivationTest {
             "MASTER_READ");
 
     /** wms roles followed by {@code extra} (input domain order: wms first). */
+    /** TASK-MONO-794 (ADR-083 P7): the finance ceiling = the entry role + the five business roles (catalog order). */
+    private static final String[] FINANCE_CEILING = {"FINANCE_OPERATOR",
+            "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
+            "FINANCE_LEDGER_CONTROL"};
+
     private static List<String> wmsThen(String... extra) {
         List<String> out = new ArrayList<>(WMS);
         out.addAll(Arrays.asList(extra));
@@ -63,8 +68,9 @@ class OperatorRoleDerivationTest {
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("erp")))
                 .containsExactly("ERP_OPERATOR", "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE",
                         "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
+        // TASK-MONO-794 (ADR-083 P7): the finance ceiling = the entry role + the five business roles.
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("finance")))
-                .containsExactly("FINANCE_OPERATOR");
+                .containsExactly(FINANCE_CEILING);
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("mes")))
                 .containsExactly("MES_OPERATOR");
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("fan")))
@@ -112,10 +118,10 @@ class OperatorRoleDerivationTest {
     @DisplayName("multiple domains → union of operator roles, stable input order")
     void multipleDomains_unionStableOrder() {
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("finance", "wms")))
-                .containsExactlyElementsOf(thenWms("FINANCE_OPERATOR"));
+                .containsExactlyElementsOf(thenWms(FINANCE_CEILING));
         // order follows the input order, not the table order.
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("wms", "finance")))
-                .containsExactlyElementsOf(wmsThen("FINANCE_OPERATOR"));
+                .containsExactlyElementsOf(wmsThen(FINANCE_CEILING));
     }
 
     @Test
@@ -151,7 +157,7 @@ class OperatorRoleDerivationTest {
     void nullAndBlankKeys_skippedTrimmed() {
         // Arrays.asList tolerates a null element (List.of does not).
         assertThat(OperatorRoleDerivation.fromEntitledDomains(Arrays.asList("wms", null, "  ", "finance")))
-                .containsExactlyElementsOf(wmsThen("FINANCE_OPERATOR"));
+                .containsExactlyElementsOf(wmsThen(FINANCE_CEILING));
         // surrounding whitespace is trimmed before the lookup.
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("  wms  ")))
                 .containsExactlyElementsOf(WMS);
