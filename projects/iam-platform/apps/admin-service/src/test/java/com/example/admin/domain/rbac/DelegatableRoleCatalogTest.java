@@ -27,8 +27,11 @@ class DelegatableRoleCatalogTest {
                         "INBOUND_READ", "INBOUND_WRITE",
                         "INVENTORY_READ", "INVENTORY_WRITE",
                         "MASTER_READ",
-                        // ecommerce operator role
-                        "ECOMMERCE_OPERATOR",
+                        // ecommerce — fine-grained since TASK-MONO-795 (ECOMMERCE_OPERATOR is derived, not delegatable)
+                        "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+                        "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+                        "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+                        "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE",
                         // scm — fine-grained since TASK-MONO-792 (SCM_OPERATOR is derived, not delegatable)
                         "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE",
                         "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
@@ -79,9 +82,15 @@ class DelegatableRoleCatalogTest {
         expected.remove("FINANCE_OPERATOR");
         expected.addAll(List.of("FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ",
                 "FINANCE_LEDGER_WRITE", "FINANCE_LEDGER_CONTROL"));
+        // TASK-MONO-795 — and for E-commerce: ECOMMERCE_OPERATOR → the thirteen E-commerce business roles (V0059).
+        expected.remove("ECOMMERCE_OPERATOR");
+        expected.addAll(List.of("ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+                "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+                "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+                "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE"));
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(expected);
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(DomainRoleCatalog.roleNames());
-        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(28);
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(40);
     }
 
     @Test
@@ -123,6 +132,9 @@ class DelegatableRoleCatalogTest {
         // TASK-MONO-794: the Finance entry role likewise
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("FINANCE_LEDGER_READ", "FINANCE_OPERATOR"))).isEqualTo("FINANCE_OPERATOR");
+        // TASK-MONO-795: the E-commerce entry role likewise
+        assertThat(DelegatableRoleCatalog.firstNonDelegatable(
+                List.of("ECOMMERCE_ORDER_READ", "ECOMMERCE_OPERATOR"))).isEqualTo("ECOMMERCE_OPERATOR");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("WMS_OPERATOR", "WMS_ADMIN"))).isEqualTo("WMS_ADMIN");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(List.of())).isNull();

@@ -74,7 +74,12 @@ public class AdminProductController {
      * is {@code ON_SALE|SOLD_OUT|HIDDEN}, with no boolean "active", so a status
      * count would be ambiguous during catalog setup).
      *
-     * <p><b>Authorization — enforced at the ecommerce gateway; the service applies
+     * <p>🔴 <b>TASK-MONO-795 (ADR-MONO-083 P8)</b>: every endpoint of this controller now re-checks the
+     * business role — {@link ProductOperatorAccess} (reads = {@code ECOMMERCE_PRODUCT_READ ∨ _WRITE} or the
+     * platform wildcard read · writes = {@code ECOMMERCE_PRODUCT_WRITE}). The «no additional RBAC» wording in
+     * this class's javadoc is pre-795 history; the gateway admits the derived entry role only.
+     *
+     * <p><b>(history) Authorization — enforced at the ecommerce gateway; the service applies
      * no additional ecommerce-local RBAC.</b> Rationale (consistent with the
      * erp/finance Operator Overview legs, which are gated by federation
      * entitlement-trust + the derived domain operator role):
@@ -101,11 +106,14 @@ public class AdminProductController {
      */
     @GetMapping
     public ProductListResponse list(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        ProductOperatorAccess.requireReadOrWildcard(userRole, tenantId);
         int cappedSize = Math.min(size, MAX_PAGE_SIZE);
         ProductListResult result = queryProductService.findAll(categoryId, status, name, page, cappedSize);
         return ProductListResponse.from(result);
@@ -119,7 +127,10 @@ public class AdminProductController {
      * {@code TenantContext} / repository {@code WHERE tenant_id} chokepoint.
      */
     @GetMapping("/summary")
-    public ResponseEntity<PeriodSummary> summary() {
+    public ResponseEntity<PeriodSummary> summary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
+        ProductOperatorAccess.requireReadOrWildcard(userRole, tenantId);
         return ResponseEntity.ok(queryProductService.getPeriodSummary());
     }
 
@@ -145,7 +156,11 @@ public class AdminProductController {
      * the literal pattern above the template, and {@code "summary"} is not a UUID.
      */
     @GetMapping("/{productId}")
-    public ProductDetailResponse detail(@PathVariable UUID productId) {
+    public ProductDetailResponse detail(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
+            @PathVariable UUID productId) {
+        ProductOperatorAccess.requireReadOrWildcard(userRole, tenantId);
         ProductDetail detail = queryProductService.findById(productId);
         List<ImageResponse> images = productImageService.getImages(productId).stream()
                 .map(img -> ImageResponse.from(img, mediaUrlResolver.resolve(img.getObjectKey())))
@@ -175,8 +190,10 @@ public class AdminProductController {
      */
     @PostMapping
     public ResponseEntity<RegisterProductResponse> register(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody RegisterProductRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         UUID id = registerProductService.register(request.toCommand(idempotencyKey));
         return ResponseEntity.status(HttpStatus.CREATED).body(RegisterProductResponse.from(id));
     }
@@ -188,8 +205,10 @@ public class AdminProductController {
      */
     @PatchMapping("/{productId}")
     public ResponseEntity<RegisterProductResponse> update(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody UpdateProductRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         UUID id = updateProductService.update(request.toCommand(productId));
         return ResponseEntity.ok(RegisterProductResponse.from(id));
     }
@@ -201,7 +220,9 @@ public class AdminProductController {
      */
     @DeleteMapping("/{productId}")
     public ResponseEntity<Void> delete(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId) {
+        ProductOperatorAccess.requireWrite(userRole);
         deleteProductService.delete(productId);
         return ResponseEntity.noContent().build();
     }
@@ -213,8 +234,10 @@ public class AdminProductController {
      */
     @PostMapping("/{productId}/variants")
     public ResponseEntity<VariantDetail> addVariant(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody AddVariantRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         VariantDetail variant = variantManagementService.addVariant(
                 productId, request.optionName(), request.stock(), request.additionalPrice());
         return ResponseEntity.status(HttpStatus.CREATED).body(variant);
@@ -227,9 +250,11 @@ public class AdminProductController {
      */
     @PatchMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<VariantDetail> updateVariant(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID variantId,
             @Valid @RequestBody UpdateVariantRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         VariantDetail variant = variantManagementService.updateVariant(
                 productId, variantId, request.optionName(), request.additionalPrice());
         return ResponseEntity.ok(variant);
@@ -242,8 +267,10 @@ public class AdminProductController {
      */
     @DeleteMapping("/{productId}/variants/{variantId}")
     public ResponseEntity<Void> deleteVariant(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID variantId) {
+        ProductOperatorAccess.requireWrite(userRole);
         variantManagementService.removeVariant(productId, variantId);
         return ResponseEntity.noContent().build();
     }
@@ -261,9 +288,11 @@ public class AdminProductController {
      */
     @PatchMapping("/{productId}/stock")
     public ResponseEntity<AdjustStockResponse> adjustStock(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID productId,
             @Valid @RequestBody AdjustStockRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         AdjustStockResult result = adjustStockService.adjust(request.toCommand(productId, idempotencyKey));
         return ResponseEntity.ok(AdjustStockResponse.from(result));
     }

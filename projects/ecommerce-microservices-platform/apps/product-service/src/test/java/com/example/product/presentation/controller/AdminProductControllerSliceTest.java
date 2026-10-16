@@ -89,17 +89,17 @@ class AdminProductControllerSliceTest {
     // ─── GET /api/admin/products (operator-plane read — TASK-MONO-243) ──
 
     @Test
-    @DisplayName("GET /api/admin/products - ECOMMERCE_OPERATOR-role 헤더 없이 200 + paged 요약 반환 (게이트 entitlement-trust, controller 미검사)")
-    void list_noRoleHeader_returns200WithPagedSummary() throws Exception {
+    @DisplayName("GET /api/admin/products - 업무 역할(PRODUCT) 헤더로 200 + paged 요약 반환 (게이트 entitlement-trust, controller 미검사)")
+    void list_businessRoleHeader_returns200WithPagedSummary() throws Exception {
         UUID id = UUID.randomUUID();
         ProductSummary summary = new ProductSummary(id, "상품", ProductStatus.ON_SALE, 10000L, null, null, "seller-a1");
         ProductListResult result = new ProductListResult(new PageResult<>(List.of(summary), 0, 1, 42L, 42));
         given(queryProductService.findAll(any(), any(), any(), anyInt(), anyInt())).willReturn(result);
 
-        // No X-User-Role header at all — the read MUST NOT require ECOMMERCE_OPERATOR (the
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) at all — the read MUST NOT require ECOMMERCE_OPERATOR (the
         // operator-overview leg presents an IAM OIDC token with no ecommerce
         // ECOMMERCE_OPERATOR role claim; authz is the gateway's OPERATOR + entitlement-trust).
-        mockMvc.perform(get("/api/admin/products")
+        mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("page", "0")
                         .param("size", "1"))
                 .andExpect(status().isOk())
@@ -119,7 +119,7 @@ class AdminProductControllerSliceTest {
         ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 1, 7L, 7));
         given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(1))).willReturn(result);
 
-        mockMvc.perform(get("/api/admin/products")
+        mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("page", "0")
                         .param("size", "1"))
                 .andExpect(status().isOk())
@@ -132,7 +132,7 @@ class AdminProductControllerSliceTest {
         ProductListResult result = new ProductListResult(new PageResult<>(List.of(), 0, 100, 0L, 0));
         given(queryProductService.findAll(isNull(), isNull(), isNull(), eq(0), eq(100))).willReturn(result);
 
-        mockMvc.perform(get("/api/admin/products")
+        mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("page", "0")
                         .param("size", "9999"))
                 .andExpect(status().isOk())
@@ -146,7 +146,7 @@ class AdminProductControllerSliceTest {
         org.mockito.ArgumentCaptor<String> nameCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
         given(queryProductService.findAll(any(), any(), nameCaptor.capture(), anyInt(), anyInt())).willReturn(result);
 
-        mockMvc.perform(get("/api/admin/products").param("name", "셔츠"))
+        mockMvc.perform(get("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE").param("name", "셔츠"))
                 .andExpect(status().isOk());
 
         org.assertj.core.api.Assertions.assertThat(nameCaptor.getValue()).isEqualTo("셔츠");
@@ -155,8 +155,8 @@ class AdminProductControllerSliceTest {
     // ─── GET /api/admin/products/{id} (operator-plane detail — TASK-MONO-703) ──
 
     @Test
-    @DisplayName("GET /api/admin/products/{id} - X-User-Role 헤더 없이 200 + 상품·변형·이미지 반환 (게이트 위임, 공개 상세와 같은 모양)")
-    void detail_noRoleHeader_returns200WithVariantsAndImages() throws Exception {
+    @DisplayName("GET /api/admin/products/{id} - 업무 역할 헤더로 200 + 상품·변형·이미지 반환 (TASK-MONO-795 서비스 재검사, 공개 상세와 같은 모양)")
+    void detail_businessRoleHeader_returns200WithVariantsAndImages() throws Exception {
         UUID id = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
         UUID imageId = UUID.randomUUID();
@@ -168,9 +168,9 @@ class AdminProductControllerSliceTest {
         given(productImageService.getImages(id)).willReturn(List.of(image));
         given(mediaUrlResolver.resolve("products/a.jpg")).willReturn("https://cdn.example/products/a.jpg");
 
-        // No X-User-Role header — operator-plane read: authz is the gateway's
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane read: authz is the gateway's
         // roles ∋ ECOMMERCE_OPERATOR + tenant_id + WHERE tenant_id, not this controller.
-        mockMvc.perform(get("/api/admin/products/{id}", id))
+        mockMvc.perform(get("/api/admin/products/{id}", id).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.sellerId").value("seller-a1"))
@@ -184,7 +184,7 @@ class AdminProductControllerSliceTest {
         UUID id = UUID.randomUUID();
         given(queryProductService.findById(id)).willThrow(new ProductNotFoundException(id));
 
-        mockMvc.perform(get("/api/admin/products/{id}", id))
+        mockMvc.perform(get("/api/admin/products/{id}", id).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
@@ -195,7 +195,7 @@ class AdminProductControllerSliceTest {
         given(queryProductService.getPeriodSummary())
                 .willReturn(new com.example.common.summary.PeriodSummary(1L, 2L, 3L, 4L));
 
-        mockMvc.perform(get("/api/admin/products/summary"))
+        mockMvc.perform(get("/api/admin/products/summary").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(4));
         org.mockito.Mockito.verify(queryProductService, org.mockito.Mockito.never()).findById(any());
@@ -204,13 +204,13 @@ class AdminProductControllerSliceTest {
     // ─── POST /api/admin/products (operator-plane write — TASK-BE-366) ──
 
     @Test
-    @DisplayName("POST /api/admin/products - X-User-Role 헤더 없이 201 (게이트 위임, controller 미검사)")
-    void register_noRoleHeader_returns201() throws Exception {
+    @DisplayName("POST /api/admin/products - 업무 역할 헤더로 201 (TASK-MONO-795 서비스 재검사, controller 미검사)")
+    void register_businessRoleHeader_returns201() throws Exception {
         given(registerProductService.register(any())).willReturn(UUID.randomUUID());
 
-        // No X-User-Role header — operator-plane: authz is the gateway's
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane: authz is the gateway's
         // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
-        mockMvc.perform(post("/api/admin/products")
+        mockMvc.perform(post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
@@ -228,7 +228,7 @@ class AdminProductControllerSliceTest {
                 org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.RegisterProductCommand.class);
         given(registerProductService.register(captor.capture())).willReturn(UUID.randomUUID());
 
-        mockMvc.perform(post("/api/admin/products")
+        mockMvc.perform(post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header("Idempotency-Key", "idem-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -245,7 +245,7 @@ class AdminProductControllerSliceTest {
         given(registerProductService.register(any()))
                 .willThrow(new IdempotencyKeyRequiredException("required"));
 
-        mockMvc.perform(post("/api/admin/products")
+        mockMvc.perform(post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "테스트 상품", "price": 10000, "variants": [{ "optionName": "기본", "stock": 10, "additionalPrice": 0 }] }
@@ -260,7 +260,7 @@ class AdminProductControllerSliceTest {
         given(registerProductService.register(any()))
                 .willThrow(new IdempotencyKeyConflictException("conflict"));
 
-        mockMvc.perform(post("/api/admin/products")
+        mockMvc.perform(post("/api/admin/products").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header("Idempotency-Key", "idem-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -273,13 +273,13 @@ class AdminProductControllerSliceTest {
     // ─── POST /api/admin/products/{id}/variants ────────────────────────
 
     @Test
-    @DisplayName("POST /api/admin/products/{id}/variants - X-User-Role 헤더 없이 201 (게이트 위임)")
-    void addVariant_noRoleHeader_returns201() throws Exception {
+    @DisplayName("POST /api/admin/products/{id}/variants - 업무 역할 헤더로 201 (TASK-MONO-795 서비스 재검사)")
+    void addVariant_businessRoleHeader_returns201() throws Exception {
         UUID productId = UUID.randomUUID();
         given(variantManagementService.addVariant(any(), any(), anyInt(), anyLong()))
                 .willReturn(new VariantDetail(UUID.randomUUID(), "옵션A", 10, 0L));
 
-        mockMvc.perform(post("/api/admin/products/{id}/variants", productId)
+        mockMvc.perform(post("/api/admin/products/{id}/variants", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
@@ -294,7 +294,7 @@ class AdminProductControllerSliceTest {
         given(variantManagementService.addVariant(any(), any(), anyInt(), anyLong()))
                 .willThrow(new DuplicateVariantOptionException(productId, "옵션A", null));
 
-        mockMvc.perform(post("/api/admin/products/{id}/variants", productId)
+        mockMvc.perform(post("/api/admin/products/{id}/variants", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "optionName": "옵션A", "stock": 10, "additionalPrice": 0 }
@@ -306,12 +306,12 @@ class AdminProductControllerSliceTest {
     // ─── PATCH /api/admin/products/{id}/variants/{variantId} ───────────
 
     @Test
-    @DisplayName("PATCH /api/admin/products/{id}/variants/{variantId} - X-User-Role 헤더 없이 200 (게이트 위임)")
-    void updateVariant_noRoleHeader_returns200() throws Exception {
+    @DisplayName("PATCH /api/admin/products/{id}/variants/{variantId} - 업무 역할 헤더로 200 (TASK-MONO-795 서비스 재검사)")
+    void updateVariant_businessRoleHeader_returns200() throws Exception {
         given(variantManagementService.updateVariant(any(), any(), any(), anyLong()))
                 .willReturn(new VariantDetail(UUID.randomUUID(), "옵션A", 10, 0L));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID())
+        mockMvc.perform(patch("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID()).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "optionName": "옵션A", "additionalPrice": 0 }
@@ -322,21 +322,21 @@ class AdminProductControllerSliceTest {
     // ─── DELETE /api/admin/products/{id}/variants/{variantId} ──────────
 
     @Test
-    @DisplayName("DELETE /api/admin/products/{id}/variants/{variantId} - X-User-Role 헤더 없이 204 (게이트 위임)")
-    void deleteVariant_noRoleHeader_returns204() throws Exception {
-        mockMvc.perform(delete("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID()))
+    @DisplayName("DELETE /api/admin/products/{id}/variants/{variantId} - 업무 역할 헤더로 204 (TASK-MONO-795 서비스 재검사)")
+    void deleteVariant_businessRoleHeader_returns204() throws Exception {
+        mockMvc.perform(delete("/api/admin/products/{id}/variants/{variantId}", UUID.randomUUID(), UUID.randomUUID()).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
     }
 
     // ─── PATCH /api/admin/products/{id} ────────────────────────────────
 
     @Test
-    @DisplayName("PATCH /api/admin/products/{id} - X-User-Role 헤더 없이 수정 성공 시 200과 id 반환 (게이트 위임)")
+    @DisplayName("PATCH /api/admin/products/{id} - 업무 역할 헤더로 수정 성공 시 200과 id 반환 (TASK-MONO-795 서비스 재검사)")
     void update_success_returns200() throws Exception {
         UUID productId = UUID.randomUUID();
         given(updateProductService.update(any())).willReturn(productId);
 
-        mockMvc.perform(patch("/api/admin/products/{id}", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "수정된 상품명", "price": 20000 }
@@ -348,7 +348,7 @@ class AdminProductControllerSliceTest {
     @Test
     @DisplayName("PATCH /api/admin/products/{id} - 깨진 JSON 본문 시 400 / VALIDATION_ERROR")
     void update_malformedBody_returns400() throws Exception {
-        mockMvc.perform(patch("/api/admin/products/{id}", UUID.randomUUID())
+        mockMvc.perform(patch("/api/admin/products/{id}", UUID.randomUUID()).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":"))
                 .andExpect(status().isBadRequest())
@@ -362,7 +362,7 @@ class AdminProductControllerSliceTest {
         UUID productId = UUID.randomUUID();
         given(updateProductService.update(any())).willReturn(productId);
 
-        mockMvc.perform(patch("/api/admin/products/{id}", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -375,7 +375,7 @@ class AdminProductControllerSliceTest {
         UUID productId = UUID.randomUUID();
         given(updateProductService.update(any())).willThrow(new ProductNotFoundException(productId));
 
-        mockMvc.perform(patch("/api/admin/products/{id}", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "이름" }
@@ -392,7 +392,7 @@ class AdminProductControllerSliceTest {
         UUID productId = UUID.randomUUID();
         willDoNothing().given(deleteProductService).delete(productId);
 
-        mockMvc.perform(delete("/api/admin/products/{id}", productId))
+        mockMvc.perform(delete("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNoContent());
     }
 
@@ -402,7 +402,7 @@ class AdminProductControllerSliceTest {
         UUID productId = UUID.randomUUID();
         willThrow(new ProductNotFoundException(productId)).given(deleteProductService).delete(productId);
 
-        mockMvc.perform(delete("/api/admin/products/{id}", productId))
+        mockMvc.perform(delete("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
     }
@@ -412,7 +412,7 @@ class AdminProductControllerSliceTest {
     void update_negativePrice_returns400() throws Exception {
         UUID productId = UUID.randomUUID();
 
-        mockMvc.perform(patch("/api/admin/products/{id}", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "상품명", "price": -1000 }
@@ -430,7 +430,7 @@ class AdminProductControllerSliceTest {
         UUID variantId = UUID.randomUUID();
         given(adjustStockService.adjust(any())).willReturn(new AdjustStockResult(variantId, 150));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header("Idempotency-Key", "adj-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -452,7 +452,7 @@ class AdminProductControllerSliceTest {
                 org.mockito.ArgumentCaptor.forClass(com.example.product.application.command.AdjustStockCommand.class);
         given(adjustStockService.adjust(captor.capture())).willReturn(new AdjustStockResult(variantId, 150));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header("Idempotency-Key", "adj-key-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -471,7 +471,7 @@ class AdminProductControllerSliceTest {
         given(adjustStockService.adjust(any()))
                 .willThrow(new IdempotencyKeyRequiredException("required"));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -488,7 +488,7 @@ class AdminProductControllerSliceTest {
         given(adjustStockService.adjust(any()))
                 .willThrow(new IdempotencyKeyConflictException("conflict"));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .header("Idempotency-Key", "adj-key-3")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -503,7 +503,7 @@ class AdminProductControllerSliceTest {
     void adjustStock_missingVariantId_returns400() throws Exception {
         UUID productId = UUID.randomUUID();
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "quantity": 50, "reason": "RESTOCK" }
@@ -519,7 +519,7 @@ class AdminProductControllerSliceTest {
         UUID variantId = UUID.randomUUID();
         given(adjustStockService.adjust(any())).willThrow(new VariantNotFoundException(variantId));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -535,7 +535,7 @@ class AdminProductControllerSliceTest {
         UUID variantId = UUID.randomUUID();
         given(adjustStockService.adjust(any())).willThrow(new ProductNotFoundException(productId));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }
@@ -552,7 +552,7 @@ class AdminProductControllerSliceTest {
         given(adjustStockService.adjust(any()))
                 .willThrow(new OptimisticLockingFailureException("Version conflict"));
 
-        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId)
+        mockMvc.perform(patch("/api/admin/products/{id}/stock", productId).header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "variantId": "%s", "quantity": 50, "reason": "RESTOCK" }

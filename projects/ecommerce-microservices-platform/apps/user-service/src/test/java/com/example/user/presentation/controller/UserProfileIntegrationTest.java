@@ -171,7 +171,7 @@ class UserProfileIntegrationTest {
             createAndSaveProfile(userId, "integ-list-" + userId + "@example.com", "목록테스트");
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("page", "0")
                             .param("size", "20"))
                     .andExpect(status().isOk())
@@ -194,7 +194,7 @@ class UserProfileIntegrationTest {
         @DisplayName("status 필터로 사용자 목록을 조회한다")
         void listUsers_statusFilter_returns200() throws Exception {
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("status", "ACTIVE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -207,7 +207,7 @@ class UserProfileIntegrationTest {
             createAndSaveProfile(userId, "integ-email-search@example.com", "이메일검색");
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("email", "integ-email-search"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -225,7 +225,7 @@ class UserProfileIntegrationTest {
             createAndSaveProfile(userId, "integ-admin-get@example.com", "관리자조회");
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(userId.toString()))
                     .andExpect(jsonPath("$.email").value("integ-admin-get@example.com"));
@@ -247,7 +247,7 @@ class UserProfileIntegrationTest {
             UUID userId = UUID.randomUUID();
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
         }

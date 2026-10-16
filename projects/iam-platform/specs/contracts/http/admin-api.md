@@ -3736,7 +3736,7 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | 업무 수행 권한 | **배정된 세트의 역할 합** | 이 절이 관리한다 |
 | 데이터 범위 | `org_scope`(배정 행) · 테넌트 격리 | 그대로 — 별도 적용 |
 
-- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 `tenant_id = T` 세트 행 ∪ O 가 `'*'` 운영자면 `tenant_id = '*'` 세트 행)이 가리키는 세트들의 역할 **합**. admin-service 는 이 합(**카탈로그 · 구독 교집합 전** 값)을 낸다. 토큰에 싣는 값은 auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 **다시 거른 것**이다(P3) — 구독하지 않은 도메인의 세트는 배정돼 있어도 토큰에 아무것도 싣지 않는다. 세분 역할이 들어온 도메인의 **진입 역할**은 카탈로그에 없고 배정할 수 없다 — auth-service 가 그 도메인의 업무 역할이 토큰에 하나라도 실릴 때 **파생**한다(TASK-MONO-792 · 소유자 결정 Q4 2026-10-15 UTC — [auth-service architecture § 진입 역할 파생](../../services/auth-service/architecture.md#진입-역할-파생-adr-mono-083-p5--task-mono-792)). 지금 진입 역할을 가진 도메인 = `scm`(`SCM_OPERATOR`) · `erp`(`ERP_OPERATOR`, TASK-MONO-793 · P6) · `finance`(`FINANCE_OPERATOR`, TASK-MONO-794 · P7); E-commerce 는 P8 이 같은 표에 한 행을 더한다. 그래서 admin-service 가 내는 실효 역할(`domainRoles` · `GET /me/domain-access` 의 `roles`)에는 진입 역할이 **없다**.
+- **실효 업무 권한** (운영자 O × 테넌트 T) = (O 의 `tenant_id = T` 세트 행 ∪ O 가 `'*'` 운영자면 `tenant_id = '*'` 세트 행)이 가리키는 세트들의 역할 **합**. admin-service 는 이 합(**카탈로그 · 구독 교집합 전** 값)을 낸다. 토큰에 싣는 값은 auth-service 가 `∩ derive(entitled ∩ 상한)` 으로 **다시 거른 것**이다(P3) — 구독하지 않은 도메인의 세트는 배정돼 있어도 토큰에 아무것도 싣지 않는다. 세분 역할이 들어온 도메인의 **진입 역할**은 카탈로그에 없고 배정할 수 없다 — auth-service 가 그 도메인의 업무 역할이 토큰에 하나라도 실릴 때 **파생**한다(TASK-MONO-792 · 소유자 결정 Q4 2026-10-15 UTC — [auth-service architecture § 진입 역할 파생](../../services/auth-service/architecture.md#진입-역할-파생-adr-mono-083-p5--task-mono-792)). 지금 진입 역할을 가진 도메인 = `scm`(`SCM_OPERATOR`) · `erp`(`ERP_OPERATOR`, TASK-MONO-793 · P6) · `finance`(`FINANCE_OPERATOR`, TASK-MONO-794 · P7) · `ecommerce`(`ECOMMERCE_OPERATOR`, TASK-MONO-795 · P8). 그래서 admin-service 가 내는 실효 역할(`domainRoles` · `GET /me/domain-access` 의 `roles`)에는 진입 역할이 **없다**.
 - **관리 역할과 다른 이름 공간** (ADR-MONO-035 O1-C · ADR-083 D1): 이 절의 세트 · 역할은 `admin_roles` · `admin_operator_roles` · `/api/admin/roles` 와 **다른 엔티티**다. 관리 역할이 있다고 업무 권한이 생기지 않고, 업무 권한 세트가 관리 권한(`/api/admin/**`)을 주지 않는다. 세트 변경은 관리 권한 캐시(`admin:operator:perm:*`)를 건드리지 않는다.
 - **권한 키** `domain_access.manage`(`SUPER_ADMIN` · `TENANT_ADMIN` — [rbac.md § 도메인 업무 권한 세트](../../services/admin-service/rbac.md#도메인-업무-권한-세트-adr-mono-083)). 행동 테넌트는 § 행동 테넌트 표 24 ~ 28 행. 이 키는 **업무 권한을 주지 않는다** — 세트 배정은 관리 평면 행위다(D5). 배정자가 그 세트의 업무 역할을 스스로 갖고 있을 필요는 없다(관리 역할의 ≤-own `RoleGrantGuard` 는 여기 적용하지 않는다) — 상한은 **그 테넌트의 entitled domains** 와 카탈로그다.
 - **자기 배정 허용** (OD-4 기본값): 행위자 = 대상이어도 거절하지 않는다. 감사 행 `detail` 에 **`selfGrant=true`** 를 싣는다(그룹 세트 배정은 행위자가 그 그룹의 멤버일 때).
@@ -3792,7 +3792,19 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `finance` | `FINANCE_LEDGER_READ` | `READ` | `true` | 원장 조회 |
 | `finance` | `FINANCE_LEDGER_WRITE` | `WRITE` | `true` | 원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신) |
 | `finance` | `FINANCE_LEDGER_CONTROL` | `WRITE` | `true` | 원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정) |
-| `ecommerce` | `ECOMMERCE_OPERATOR` | `OPERATE` | `false` | E-commerce 전체 업무(세분 미지원) |
+| `ecommerce` | `ECOMMERCE_ORDER_READ` | `READ` | `true` | 주문 조회 |
+| `ecommerce` | `ECOMMERCE_ORDER_WRITE` | `WRITE` | `true` | 주문 변경(상태 전이) |
+| `ecommerce` | `ECOMMERCE_PRODUCT_READ` | `READ` | `true` | 상품 · 판매자 조회 |
+| `ecommerce` | `ECOMMERCE_PRODUCT_WRITE` | `WRITE` | `true` | 상품 · 판매자 변경(상품 · 옵션 · 재고 · 이미지 · 판매자 · 구성원 초대 · 검색 재색인) |
+| `ecommerce` | `ECOMMERCE_MEMBER_READ` | `READ` | `true` | 회원 조회 |
+| `ecommerce` | `ECOMMERCE_SETTLEMENT_READ` | `READ` | `true` | 정산 조회 |
+| `ecommerce` | `ECOMMERCE_SETTLEMENT_WRITE` | `WRITE` | `true` | 정산 변경(수수료율 · 기간 개시 · 마감 · 지급 실행) |
+| `ecommerce` | `ECOMMERCE_PROMOTION_READ` | `READ` | `true` | 프로모션 조회 |
+| `ecommerce` | `ECOMMERCE_PROMOTION_WRITE` | `WRITE` | `true` | 프로모션 변경(등록 · 수정 · 삭제 · 쿠폰 발급) |
+| `ecommerce` | `ECOMMERCE_SHIPPING_READ` | `READ` | `true` | 배송 조회 |
+| `ecommerce` | `ECOMMERCE_SHIPPING_WRITE` | `WRITE` | `true` | 배송 변경(상태 · 추적 갱신) |
+| `ecommerce` | `ECOMMERCE_NOTIFICATION_READ` | `READ` | `true` | 알림 템플릿 조회 |
+| `ecommerce` | `ECOMMERCE_NOTIFICATION_WRITE` | `WRITE` | `true` | 알림 템플릿 변경(등록 · 수정) |
 | `fan` | `FAN_OPERATOR` | `OPERATE` | `false` | fan 전체 업무(세분 미지원) |
 | `mes` | `MES_OPERATOR` | `OPERATE` | `false` | MES 전체 업무(세분 미지원) |
 
@@ -3800,6 +3812,7 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 - 🔵 **SCM 은 TASK-MONO-792(P5)부터 세분됐다** — 판정 정본은 scm [`iam-integration.md` § 업무 역할](../../../../scm-platform/specs/integration/iam-integration.md#업무-역할-adr-mono-083-p5--task-mono-792--정본). `SCM_OPERATOR` 는 이 표에서 **빠졌다**(진입 역할 — 업무 API 를 열지 않고 auth 가 파생한다, 위 «실효 업무 권한» 노트). 같은 단계의 V0056 이 `SCM_OPERATOR` 를 담은 **모든 세트**(프리셋 · `legacy-compat` · `all-domains-full` · 테넌트 세트)와 파트너십 `delegated_scope` · `participant_scope` 의 역할을 SCM 업무 역할 8개로 바꿨다(소유자 결정 Q5 — 기존 운영자는 같은 업무 범위).
 - 🔵 **ERP 는 TASK-MONO-793(P6)부터 세분됐다** — 판정 정본은 erp [`iam-integration.md` § 업무 역할](../../../../erp-platform/specs/integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본). `ERP_OPERATOR` 는 이 표에서 **빠졌다**(진입 역할 — auth 가 파생, 위 «실효 업무 권한» 노트) · 위임하면 `422 PARTNERSHIP_SCOPE_INVALID`. V0057 이 `ERP_OPERATOR` 를 담은 **모든 세트**와 파트너십 `delegated_scope` · `participant_scope` 의 역할을 ERP 업무 역할 4개로 바꿨다(넓힌 뒤 지운다 — 기존 운영자는 같은 업무 범위).
 - 🔵 **Finance 는 TASK-MONO-794(P7)부터 세분됐다** — 판정 정본은 finance [`iam-integration.md` § 업무 역할](../../../../finance-platform/specs/integration/iam-integration.md#업무-역할-adr-mono-083-p7--task-mono-794--정본). `FINANCE_OPERATOR` 는 이 표에서 **빠졌다**(진입 역할 — auth 가 파생) · 위임하면 `422 PARTNERSHIP_SCOPE_INVALID`. V0058 이 `FINANCE_OPERATOR` 를 담은 **모든 세트**와 파트너십 `delegated_scope` · `participant_scope` 의 역할을 Finance 업무 역할 5개로 바꿨다(넓힌 뒤 지운다 — 기존 운영자는 같은 업무 범위). `FINANCE_LEDGER_CONTROL`(원장 통제 쓰기 7 — 소유자 결정 Q1, 2026-10-16 UTC)은 «관리 등급» 이 아니라 지금 `FINANCE_OPERATOR` 로 발급 · 행사되던 권한의 이름 분리다. 🔵 `access` 는 `WRITE` 다 — 와이어 값은 `READ` · `WRITE` · `OPERATE` 셋뿐이고(콘솔이 그 셋으로 파싱한다) 통제의 구분은 역할 이름 · 라벨이 진다. 통제 역할은 원장 업무 쓰기를 **함의하지 않는다**.
+- 🔵 **E-commerce 는 TASK-MONO-795(P8)부터 세분됐다** — 판정 정본은 ecommerce [`iam-integration.md` § 업무 역할](../../../../ecommerce-microservices-platform/specs/integration/iam-integration.md#업무-역할-adr-mono-083-p8--task-mono-795--정본). `ECOMMERCE_OPERATOR` 는 이 표에서 **빠졌다**(진입 역할 — auth 가 파생, 게이트웨이 통과에만 쓰인다) · 위임하면 `422 PARTNERSHIP_SCOPE_INVALID`. V0059 가 `ECOMMERCE_OPERATOR` 를 담은 **모든 세트**와 파트너십 `delegated_scope` · `participant_scope` 의 역할을 E-commerce 업무 역할 13개로 바꿨다(넓힌 뒤 지운다 — 기존 운영자는 같은 업무 범위). 회원은 변경 경로가 없어 `ECOMMERCE_MEMBER_READ` 만 있고, 검색 재색인은 `ECOMMERCE_PRODUCT_WRITE` 가 연다(소유자 결정 Q1, 2026-10-16 UTC). 정산 지급 실행 · 기간 마감은 `ECOMMERCE_SETTLEMENT_WRITE` 다(Q2 — 통제 역할 없음).
 - `fan` 은 구독 키 `fan` · `fan-platform` 둘 다에 해당한다(지금 파생과 같은 대응). `fan-platform` 은 플랫폼 운영자만 assume 하므로(auth-to-admin 판정 규칙 5) `fan` 세트는 사실상 `'*'` 운영자에게 배정한다.
 - `mes` 는 지금 파생 표에 있는 역할이다 — 소비자가 있는지는 P2 AC-0 이 재고, 없으면 P2 가 이 행을 계약 개정으로 뺀다.
 
@@ -3825,6 +3838,13 @@ grant 회수 → **cascade-revoke**(D5): 이 grant 로 materialise 된 전 멤�
 | `finance-read` | `FINANCE_ACCOUNT_READ` · `FINANCE_LEDGER_READ` | «Finance 조회» — TASK-MONO-794 (V0058). 목록 순서: `finance-full` 바로 뒤 |
 | `finance-account-operate` | `FINANCE_ACCOUNT_READ` · `FINANCE_ACCOUNT_WRITE` | V0058 |
 | `finance-ledger-operate` | `FINANCE_LEDGER_READ` · `FINANCE_LEDGER_WRITE` | V0058 — 🔴 `FINANCE_LEDGER_CONTROL` 은 **없다**(소유자 결정 Q1 — 통제는 `finance-full` · `all-domains-full` · `legacy-compat` · 테넌트 세트로만) |
+| `ecommerce-read` | `ECOMMERCE_ORDER_READ` · `ECOMMERCE_PRODUCT_READ` · `ECOMMERCE_MEMBER_READ` · `ECOMMERCE_SETTLEMENT_READ` · `ECOMMERCE_PROMOTION_READ` · `ECOMMERCE_SHIPPING_READ` · `ECOMMERCE_NOTIFICATION_READ` | «E-commerce 조회» — TASK-MONO-795 (V0059). 목록 순서: `ecommerce-full` 바로 뒤 |
+| `ecommerce-order-operate` | `ECOMMERCE_ORDER_READ` · `ECOMMERCE_ORDER_WRITE` | V0059 |
+| `ecommerce-product-operate` | `ECOMMERCE_PRODUCT_READ` · `ECOMMERCE_PRODUCT_WRITE` | V0059 |
+| `ecommerce-settlement-operate` | `ECOMMERCE_SETTLEMENT_READ` · `ECOMMERCE_SETTLEMENT_WRITE` | V0059 |
+| `ecommerce-promotion-operate` | `ECOMMERCE_PROMOTION_READ` · `ECOMMERCE_PROMOTION_WRITE` | V0059 |
+| `ecommerce-shipping-operate` | `ECOMMERCE_SHIPPING_READ` · `ECOMMERCE_SHIPPING_WRITE` | V0059 |
+| `ecommerce-notification-operate` | `ECOMMERCE_NOTIFICATION_READ` · `ECOMMERCE_NOTIFICATION_WRITE` | V0059 — 회원은 조회만이라 `-operate` 프리셋이 없다(`ecommerce-read` · `ecommerce-full`) |
 | `all-domains-full` | 카탈로그 전부 | OD-5(회사 생성자 기본 세트 — P9 `TASK-MONO-773`)용 — 773 OD-4 가 출처 `ORIGIN` 으로 쓴다(위 «출처» 표). API 로 `DIRECT` 배정도 할 수 있지만 그때는 구독 검사를 받는다(`fan` 때문에 고객 테넌트에서는 사실상 `422`) |
 | `legacy-compat` | `all-domains-full` 과 같은 내용 | **`MIGRATION` 출처 전용**(API 배정 불가) — 이전 완료 판정에서 «백필이 준 것» 을 구분하는 표지 |
 

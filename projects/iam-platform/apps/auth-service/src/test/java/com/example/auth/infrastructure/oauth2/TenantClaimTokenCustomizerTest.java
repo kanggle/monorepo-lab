@@ -610,6 +610,7 @@ class TenantClaimTokenCustomizerTest {
      * TASK-MONO-792: SCM_OPERATOR left the catalog for the eight SCM business roles (V0056 rewrote legacy-compat).
      * TASK-MONO-793: ERP_OPERATOR likewise, for the four ERP business roles (V0057).
      * TASK-MONO-794: FINANCE_OPERATOR likewise, for the five Finance business roles (V0058).
+     * TASK-MONO-795: ECOMMERCE_OPERATOR likewise, for the thirteen E-commerce business roles (V0059).
      */
     private static final List<String> LEGACY_COMPAT_ROLES = List.of(
             "INVENTORY_READ", "INVENTORY_WRITE", "INBOUND_READ", "INBOUND_WRITE",
@@ -620,7 +621,10 @@ class TenantClaimTokenCustomizerTest {
             "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE",
             "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
             "FINANCE_LEDGER_CONTROL",
-            "ECOMMERCE_OPERATOR",
+            "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+            "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+            "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+            "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE",
             "FAN_OPERATOR", "MES_OPERATOR");
 
     @Test
@@ -1098,21 +1102,23 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("BE-632: ecommerce set assigned, entitled [ecommerce] → roles [ECOMMERCE_OPERATOR]")
+    @DisplayName("BE-632 + 795: ecommerce order set assigned, entitled [ecommerce] → roles [ECOMMERCE_OPERATOR (derived), the two order roles]")
     void assumeTenant_ecommerceSet_ecommerceEntitled() {
         JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
 
         when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
         when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
         when(context.getAuthorizationGrant())
-                .thenReturn(assumeGrantWithDomainRoles("acme-corp", null, List.of("ECOMMERCE_OPERATOR")));
+                .thenReturn(assumeGrantWithDomainRoles("acme-corp", null,
+                        List.of("ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE")));
         when(accountServicePort.listEntitledDomains("acme-corp")).thenReturn(List.of("ecommerce"));
         when(context.getClaims()).thenReturn(claimsBuilder);
 
         customizer.customize(context);
 
         JwtClaimsSet built = claimsBuilder.build();
-        assertThat(built.<List<String>>getClaim("roles")).containsExactly("ECOMMERCE_OPERATOR");
+        assertThat(built.<List<String>>getClaim("roles"))
+                .containsExactly("ECOMMERCE_OPERATOR", "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE");
     }
 
     // -----------------------------------------------------------------------
@@ -1249,7 +1255,7 @@ class TenantClaimTokenCustomizerTest {
                 "INVENTORY_READ", "INVENTORY_WRITE", "INBOUND_READ", "INBOUND_WRITE",
                 "OUTBOUND_READ", "OUTBOUND_WRITE", "MASTER_READ", "WMS_OPERATOR"));
         legacy.addAll(SCM_BUSINESS_ROLES_792);
-        legacy.addAll(List.of("ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR", "FAN_OPERATOR", "MES_OPERATOR"));
+        legacy.addAll(List.of("ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_ORDER_READ", "FAN_OPERATOR", "MES_OPERATOR"));
         List<String> expected = new java.util.ArrayList<>(List.of("WMS_OPERATOR", "OUTBOUND_READ", "OUTBOUND_WRITE",
                 "INBOUND_READ", "INBOUND_WRITE", "INVENTORY_READ", "INVENTORY_WRITE", "MASTER_READ", "SCM_OPERATOR"));
         expected.addAll(SCM_BUSINESS_ROLES_792);
@@ -1293,7 +1299,8 @@ class TenantClaimTokenCustomizerTest {
     @Test
     @DisplayName("792 + 793 unit: ENTRY_ROLES is data (SCM_OPERATOR ← eight SCM roles · ERP_OPERATOR ← four ERP roles); withDerivedEntryRoles drops assigned entry roles and derives within the ceiling")
     void scm792_entryDerivation_unit() {
-        assertThat(OperatorRoleDerivation.ENTRY_ROLES).containsOnlyKeys("SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR");
+        assertThat(OperatorRoleDerivation.ENTRY_ROLES)
+                .containsOnlyKeys("SCM_OPERATOR", "ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR");
         assertThat(OperatorRoleDerivation.ENTRY_ROLES.get("SCM_OPERATOR"))
                 .containsExactlyInAnyOrderElementsOf(SCM_BUSINESS_ROLES_792);
         List<String> scmCeiling = OperatorRoleDerivation.fromEntitledDomains(List.of("scm"));
@@ -1451,6 +1458,76 @@ class TenantClaimTokenCustomizerTest {
         assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("FINANCE_LEDGER_CONTROL"), financeCeiling))
                 .containsExactly("FINANCE_OPERATOR", "FINANCE_LEDGER_CONTROL");
         assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("FINANCE_OPERATOR"), financeCeiling)).isEmpty();
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-MONO-795 (ADR-MONO-083 P8) — E-commerce business roles + the ECOMMERCE_OPERATOR
+    // entry role, DERIVED here (never assigned) — the last row of the same table
+    // -----------------------------------------------------------------------
+
+    private static final List<String> ECOMMERCE_BUSINESS_ROLES_795 = List.of(
+            "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+            "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+            "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+            "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE");
+
+    @Test
+    @DisplayName("🔴 795 AC-1: order set on WMS+E-commerce → ECOMMERCE_OPERATOR (derived) + the two order roles — no product role")
+    void ecom795_orderSet_entryDerived() {
+        assertThat(rolesFor(List.of("ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE"), List.of("wms", "ecommerce")))
+                .containsExactly("ECOMMERCE_OPERATOR", "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE")
+                .doesNotContain("ECOMMERCE_PRODUCT_WRITE");
+    }
+
+    @Test
+    @DisplayName("🔴 795 AC-1: an assigned ECOMMERCE_OPERATOR alone (stale row) → no roles — the entry role is never carried from an assignment")
+    void ecom795_assignedEntryRoleAlone_dropped() {
+        assertThat(rolesFor(List.of("ECOMMERCE_OPERATOR"), List.of("wms", "ecommerce"))).isNull();
+    }
+
+    @Test
+    @DisplayName("795 control: E-commerce business roles on a tenant WITHOUT ecommerce → nothing E-commerce, no ECOMMERCE_OPERATOR")
+    void ecom795_unsubscribed_noEntry() {
+        assertThat(rolesFor(List.of("ECOMMERCE_PRODUCT_WRITE", "INVENTORY_READ"), List.of("wms")))
+                .containsExactly("INVENTORY_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 795 AC-2: legacy-compat (new catalog) on E-commerce → ECOMMERCE_OPERATOR + all thirteen roles (ceiling order)")
+    void ecom795_legacyCompat_fullEcommerce() {
+        List<String> expected = new java.util.ArrayList<>(List.of("ECOMMERCE_OPERATOR"));
+        expected.addAll(ECOMMERCE_BUSINESS_ROLES_795);
+        assertThat(rolesFor(LEGACY_COMPAT_ROLES, List.of("ecommerce"))).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    @DisplayName("🔴 795 partnership: delegated E-commerce business role → ECOMMERCE_OPERATOR derived on the cross-org token too")
+    void ecom795_crossOrg_entryDerived() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(List.of("ecommerce"), List.of("ECOMMERCE_SHIPPING_READ"));
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms", "ecommerce"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles"))
+                .containsExactly("ECOMMERCE_SHIPPING_READ", "ECOMMERCE_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("795 unit: ECOMMERCE_OPERATOR ← the thirteen E-commerce roles; the ecommerce ceiling = entry role + the thirteen (catalog order)")
+    void ecom795_entryRow_unit() {
+        assertThat(OperatorRoleDerivation.ENTRY_ROLES.get("ECOMMERCE_OPERATOR"))
+                .containsExactlyInAnyOrderElementsOf(ECOMMERCE_BUSINESS_ROLES_795);
+        List<String> ceiling = OperatorRoleDerivation.fromEntitledDomains(List.of("ecommerce"));
+        assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("ECOMMERCE_MEMBER_READ"), ceiling))
+                .containsExactly("ECOMMERCE_OPERATOR", "ECOMMERCE_MEMBER_READ");
+        assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("ECOMMERCE_OPERATOR"), ceiling)).isEmpty();
     }
 
     @Test

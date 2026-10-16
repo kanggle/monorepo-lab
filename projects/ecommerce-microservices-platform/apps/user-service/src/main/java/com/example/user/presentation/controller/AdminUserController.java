@@ -3,6 +3,7 @@ package com.example.user.presentation.controller;
 import com.example.common.summary.PeriodSummary;
 import com.example.user.application.service.UserProfileService;
 import com.example.web.exception.AccessDeniedException;
+import com.example.web.security.RoleListHeader;
 import com.example.user.domain.model.ProfileStatus;
 import com.example.user.presentation.dto.response.AdminUserListResponse;
 import com.example.user.presentation.dto.response.UserProfileResponse;
@@ -12,12 +13,18 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+/**
+ * Operator-plane member (회원) reads. TASK-MONO-795 (ADR-MONO-083 P8 · owner decision Q1): every endpoint requires
+ * {@code ECOMMERCE_MEMBER_READ} — the member area is read-only (no write path, so no MEMBER_WRITE role). The entry
+ * role {@code ECOMMERCE_OPERATOR} alone and the platform wildcard ({@code '*'}, no roles) are refused, as the wildcard
+ * was before. Canonical table: ecommerce {@code iam-integration.md} § 업무 역할; comparison rule: {@link RoleListHeader}.
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/users")
 public class AdminUserController {
 
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
+    static final String MEMBER_READ = "ECOMMERCE_MEMBER_READ";
 
     private final UserProfileService userProfileService;
 
@@ -50,21 +57,9 @@ public class AdminUserController {
         return ResponseEntity.ok(UserProfileResponse.from(result));
     }
 
-    private void validateAdminRole(String userRole) {
-        if (!hasAdminRole(userRole)) {
+    private static void validateAdminRole(String userRole) {
+        if (!RoleListHeader.holdsAny(userRole, MEMBER_READ)) {
             throw new AccessDeniedException();
         }
-    }
-
-    private static boolean hasAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            return false;
-        }
-        for (String role : userRole.split(",")) {
-            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

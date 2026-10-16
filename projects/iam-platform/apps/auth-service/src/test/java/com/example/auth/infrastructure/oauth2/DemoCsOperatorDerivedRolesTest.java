@@ -74,9 +74,16 @@ class DemoCsOperatorDerivedRolesTest {
             Path.of("..", "account-service", "src", "main", "resources", "db", "migration"),
             Path.of("..", "account-service", "src", "main", "resources", "db", "migration-dev"));
 
-    /** What the disclosure says: ECOMMERCE_OPERATOR + the WMS operator tier (writes included). */
+    /**
+     * What the disclosure says: the E-commerce ceiling + the WMS operator tier (writes included). TASK-MONO-795: the
+     * E-commerce arm is ECOMMERCE_OPERATOR (derived entry role) + the thirteen E-commerce business roles.
+     */
     private static final List<String> DISCLOSED_ROLES = List.of(
             "ECOMMERCE_OPERATOR",
+            "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+            "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+            "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+            "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE",
             "WMS_OPERATOR",
             "OUTBOUND_READ", "OUTBOUND_WRITE",
             "INBOUND_READ", "INBOUND_WRITE",

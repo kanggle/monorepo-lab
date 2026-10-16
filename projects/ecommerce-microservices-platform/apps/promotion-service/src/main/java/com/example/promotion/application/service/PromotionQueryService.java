@@ -24,14 +24,14 @@ public class PromotionQueryService {
     private final Clock clock;
 
     public PromotionDetail getPromotion(String promotionId, String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         Promotion promotion = promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new PromotionNotFoundException(promotionId));
         return PromotionDetail.from(promotion, clock);
     }
 
     public PageResult<PromotionSummary> getPromotions(int page, int size, PromotionStatus status, String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         PageResult<Promotion> result;
         if (status != null) {
             result = promotionRepository.findAllByStatus(status, page, size, clock);
@@ -51,7 +51,7 @@ public class PromotionQueryService {
     }
 
     public PeriodSummary getPeriodSummary(String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
 
         KstPeriodBounds b = KstPeriodBounds.from(clock);
 

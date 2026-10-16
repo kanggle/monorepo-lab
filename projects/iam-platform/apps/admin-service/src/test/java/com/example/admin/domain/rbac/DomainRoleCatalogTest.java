@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DomainRoleCatalogTest {
 
     @Test
-    @DisplayName("the catalog equals the contract table exactly (28 rows, order, access, fineGrained, label)")
+    @DisplayName("the catalog equals the contract table exactly (40 rows, order, access, fineGrained, label)")
     void catalog_equalsContractTable() {
         assertThat(DomainRoleCatalog.entries()).containsExactly(
                 new DomainRoleCatalog.Entry("wms", "INVENTORY_READ", "READ", true, "재고 조회"),
@@ -58,8 +58,26 @@ class DomainRoleCatalogTest {
                         "원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신)"),
                 new DomainRoleCatalog.Entry("finance", "FINANCE_LEDGER_CONTROL", "WRITE", true,
                         "원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정)"),
-                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false,
-                        "E-commerce 전체 업무(세분 미지원)"),
+                // TASK-MONO-795 (ADR-083 P8 · owner decisions Q1–Q2): E-commerce is fine-grained; ECOMMERCE_OPERATOR
+                // left the catalog (entry role). Member = read only; search reindex rides PRODUCT_WRITE.
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_ORDER_READ", "READ", true, "주문 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_ORDER_WRITE", "WRITE", true, "주문 변경(상태 전이)"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_PRODUCT_READ", "READ", true, "상품 · 판매자 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_PRODUCT_WRITE", "WRITE", true,
+                        "상품 · 판매자 변경(상품 · 옵션 · 재고 · 이미지 · 판매자 · 구성원 초대 · 검색 재색인)"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_MEMBER_READ", "READ", true, "회원 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_SETTLEMENT_READ", "READ", true, "정산 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_SETTLEMENT_WRITE", "WRITE", true,
+                        "정산 변경(수수료율 · 기간 개시 · 마감 · 지급 실행)"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_PROMOTION_READ", "READ", true, "프로모션 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_PROMOTION_WRITE", "WRITE", true,
+                        "프로모션 변경(등록 · 수정 · 삭제 · 쿠폰 발급)"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_SHIPPING_READ", "READ", true, "배송 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_SHIPPING_WRITE", "WRITE", true,
+                        "배송 변경(상태 · 추적 갱신)"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_NOTIFICATION_READ", "READ", true, "알림 템플릿 조회"),
+                new DomainRoleCatalog.Entry("ecommerce", "ECOMMERCE_NOTIFICATION_WRITE", "WRITE", true,
+                        "알림 템플릿 변경(등록 · 수정)"),
                 new DomainRoleCatalog.Entry("fan", "FAN_OPERATOR", "OPERATE", false, "fan 전체 업무(세분 미지원)"),
                 new DomainRoleCatalog.Entry("mes", "MES_OPERATOR", "OPERATE", false, "MES 전체 업무(세분 미지원)"));
     }
@@ -109,6 +127,20 @@ class DomainRoleCatalogTest {
         // the wire access stays within the three values the console parses (no new «CONTROL» value)
         assertThat(DomainRoleCatalog.entries()).extracting(DomainRoleCatalog.Entry::access)
                 .allMatch(a -> Set.of("READ", "WRITE", "OPERATE").contains(a));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-MONO-795: ECOMMERCE_OPERATOR is NOT assignable (entry role, derived by auth); the thirteen E-commerce roles are; no MEMBER_WRITE / SEARCH role")
+    void ecommerceEntryRole_notAssignable_businessRolesAre() {
+        assertThat(DomainRoleCatalog.isAssignable("ecommerce", "ECOMMERCE_OPERATOR")).isFalse();
+        for (String role : List.of("ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+                "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+                "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+                "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE")) {
+            assertThat(DomainRoleCatalog.isAssignable("ecommerce", role)).as(role).isTrue();
+        }
+        assertThat(DomainRoleCatalog.isAssignable("ecommerce", "ECOMMERCE_MEMBER_WRITE")).isFalse();
+        assertThat(DomainRoleCatalog.roleNames()).noneMatch(r -> r.startsWith("ECOMMERCE_SEARCH"));
     }
 
     @Test

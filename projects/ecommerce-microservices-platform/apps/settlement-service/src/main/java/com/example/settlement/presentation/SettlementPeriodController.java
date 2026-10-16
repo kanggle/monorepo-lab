@@ -30,7 +30,7 @@ import java.util.List;
  * Operator-plane settlement-period endpoints (settlement-api.md § Period close).
  * Open a period, close it (folding in-window accruals into PENDING {@code seller_payout}
  * rows + emitting {@code settlement.period.closed.v1}), list periods, and execute /
- * read payout rows (TASK-BE-416). All require an operator ({@code X-User-Role ∋ ECOMMERCE_OPERATOR})
+ * read payout rows (TASK-BE-416). Reads require {@code ECOMMERCE_SETTLEMENT_READ ∨ _WRITE}, open / close / payout execution {@code ECOMMERCE_SETTLEMENT_WRITE} ({@link OperatorRoleGuard} — TASK-MONO-795)
  * and are tenant-scoped (gateway {@code X-Tenant-Id} via {@link TenantContext}). The
  * use cases own the transaction boundary — the controller never touches JPA directly
  * (architecture.md § boundary).
@@ -49,7 +49,7 @@ public class SettlementPeriodController {
     public ResponseEntity<PeriodResponse> open(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody OpenPeriodRequest request) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         PeriodView view = openPeriod.open(TenantContext.currentTenant(), request.from(), request.to());
         return ResponseEntity.status(HttpStatus.CREATED).body(PeriodResponse.summary(view));
     }
@@ -59,7 +59,7 @@ public class SettlementPeriodController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @PathVariable String periodId) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         String closedBy = (userId == null || userId.isBlank())
                 ? TenantContext.currentTenant() : userId;
         PeriodView view = closePeriod.close(periodId, TenantContext.currentTenant(), closedBy);
@@ -71,7 +71,7 @@ public class SettlementPeriodController {
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         return ResponseEntity.ok(PeriodListResponse.of(
                 queryPeriod.listPeriods(TenantContext.currentTenant()), page, size));
     }
@@ -88,7 +88,7 @@ public class SettlementPeriodController {
             @PathVariable String periodId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         List<PayoutView> views = executePayouts.list(periodId, TenantContext.currentTenant());
         return ResponseEntity.ok(PayoutListResponse.of(views, page, size));
     }
@@ -106,7 +106,7 @@ public class SettlementPeriodController {
             @PathVariable String periodId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         List<PayoutView> views = executePayouts.execute(periodId, TenantContext.currentTenant());
         return ResponseEntity.ok(PayoutListResponse.of(views, page, size));
     }

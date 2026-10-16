@@ -106,7 +106,8 @@ class V0056MigrationShapeTest {
         assertThat(DomainPermissionSetPresets.SYSTEM_KEYS).containsAll(V0056_PRESETS);
         // 20 after V0056; TASK-MONO-793's V0057 adds the three ERP presets (V0057MigrationShapeTest pins those).
         // TASK-MONO-794's V0058 adds the three Finance presets (V0058MigrationShapeTest pins those).
-        assertThat(DomainPermissionSetPresets.SYSTEM_KEYS).hasSize(26);
+        // TASK-MONO-795's V0059 adds the seven E-commerce presets (V0059MigrationShapeTest pins those).
+        assertThat(DomainPermissionSetPresets.SYSTEM_KEYS).hasSize(33);
     }
 
     @Test

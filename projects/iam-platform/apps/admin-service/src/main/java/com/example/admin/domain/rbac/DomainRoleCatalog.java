@@ -76,7 +76,25 @@ public final class DomainRoleCatalog {
                     "원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신)"),
             new Entry("finance", "FINANCE_LEDGER_CONTROL", "WRITE", true,
                     "원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정)"),
-            new Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false, "E-commerce 전체 업무(세분 미지원)"),
+            // TASK-MONO-795 (ADR-083 P8 · owner decisions Q1–Q2) — E-commerce is fine-grained (ecommerce
+            // iam-integration.md § 업무 역할). ECOMMERCE_OPERATOR LEFT the catalog: the entry role, derived by
+            // auth-service when ≥1 of these rides the token (V0059 rewrote every set and partnership scope that held
+            // it). Member is read-only (no write path); search reindex rides PRODUCT_WRITE (no search role).
+            new Entry("ecommerce", "ECOMMERCE_ORDER_READ", "READ", true, "주문 조회"),
+            new Entry("ecommerce", "ECOMMERCE_ORDER_WRITE", "WRITE", true, "주문 변경(상태 전이)"),
+            new Entry("ecommerce", "ECOMMERCE_PRODUCT_READ", "READ", true, "상품 · 판매자 조회"),
+            new Entry("ecommerce", "ECOMMERCE_PRODUCT_WRITE", "WRITE", true,
+                    "상품 · 판매자 변경(상품 · 옵션 · 재고 · 이미지 · 판매자 · 구성원 초대 · 검색 재색인)"),
+            new Entry("ecommerce", "ECOMMERCE_MEMBER_READ", "READ", true, "회원 조회"),
+            new Entry("ecommerce", "ECOMMERCE_SETTLEMENT_READ", "READ", true, "정산 조회"),
+            new Entry("ecommerce", "ECOMMERCE_SETTLEMENT_WRITE", "WRITE", true,
+                    "정산 변경(수수료율 · 기간 개시 · 마감 · 지급 실행)"),
+            new Entry("ecommerce", "ECOMMERCE_PROMOTION_READ", "READ", true, "프로모션 조회"),
+            new Entry("ecommerce", "ECOMMERCE_PROMOTION_WRITE", "WRITE", true, "프로모션 변경(등록 · 수정 · 삭제 · 쿠폰 발급)"),
+            new Entry("ecommerce", "ECOMMERCE_SHIPPING_READ", "READ", true, "배송 조회"),
+            new Entry("ecommerce", "ECOMMERCE_SHIPPING_WRITE", "WRITE", true, "배송 변경(상태 · 추적 갱신)"),
+            new Entry("ecommerce", "ECOMMERCE_NOTIFICATION_READ", "READ", true, "알림 템플릿 조회"),
+            new Entry("ecommerce", "ECOMMERCE_NOTIFICATION_WRITE", "WRITE", true, "알림 템플릿 변경(등록 · 수정)"),
             new Entry("fan", "FAN_OPERATOR", "OPERATE", false, "fan 전체 업무(세분 미지원)"),
             new Entry("mes", "MES_OPERATOR", "OPERATE", false, "MES 전체 업무(세분 미지원)"));
 

@@ -1,5 +1,7 @@
 # HTTP Contract: order-service
 
+> 🔴 **업무 인가 — TASK-MONO-795 (ADR-MONO-083 P8 · 2026-10-16 UTC)**: 이 계약의 **운영자** 엔드포인트는 서비스가 영역 업무 역할로 다시 판정한다 — `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE`. 조회(`GET`) = READ ∨ WRITE · 변경 = WRITE. `ECOMMERCE_OPERATOR`(진입 역할) 단독 · `CUSTOMER` · 빈 `X-User-Role` → `403`. `'*'` 와일드카드 조회(`X-Tenant-Id = '*'`)는 주문 조회 4 경로에서 **그대로** 열린다(TASK-BE-506). 아래 본문의 «`X-User-Role` ∋ `ECOMMERCE_OPERATOR`» · «gateway `roles ∋ ECOMMERCE_OPERATOR` … Service applies no additional ecommerce-local RBAC» 문장은 운영자 엔드포인트에 한해 이 노트로 **대체**된다(게이트웨이 판정 자체는 그대로). 정본: [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p8--task-mono-795--정본). 소비자 · 공개 · 워크로드 엔드포인트는 무변경.
+
 ## Overview
 Published HTTP API for order-service.
 All endpoints are accessible through gateway-service only.

@@ -44,7 +44,7 @@ class AdminSellerSummaryControllerSliceTest {
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(0))
                 .andExpect(jsonPath("$.week").value(0))
@@ -59,7 +59,7 @@ class AdminSellerSummaryControllerSliceTest {
                 .willReturn(new PeriodSummary(1L, 1L, 1L, 3L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.today").value(1))
                 .andExpect(jsonPath("$.week").value(1))
@@ -91,7 +91,7 @@ class AdminSellerSummaryControllerSliceTest {
                 .willReturn(new PeriodSummary(0L, 0L, 0L, 0L));
 
         mockMvc.perform(get("/api/admin/sellers/summary")
-                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ERP_OPERATOR"))
+                        .header(ROLE_HEADER, "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE,ERP_OPERATOR"))
                 .andExpect(status().isOk());
     }
 }

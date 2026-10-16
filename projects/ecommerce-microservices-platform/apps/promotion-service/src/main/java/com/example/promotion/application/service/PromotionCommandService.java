@@ -28,7 +28,7 @@ public class PromotionCommandService {
 
     @Transactional
     public CreatePromotionResult createPromotion(CreatePromotionCommand command) {
-        OperatorRoleGuard.requireOperator(command.userRole());
+        OperatorRoleGuard.requireWrite(command.userRole());
         DiscountType discountType = DiscountType.valueOf(command.discountType());
 
         Promotion promotion = Promotion.create(
@@ -45,7 +45,7 @@ public class PromotionCommandService {
 
     @Transactional
     public UpdatePromotionResult updatePromotion(UpdatePromotionCommand command) {
-        OperatorRoleGuard.requireOperator(command.userRole());
+        OperatorRoleGuard.requireWrite(command.userRole());
         Promotion promotion = promotionRepository.findById(command.promotionId())
                 .orElseThrow(() -> new PromotionNotFoundException(command.promotionId()));
 
@@ -65,7 +65,7 @@ public class PromotionCommandService {
 
     @Transactional
     public void deletePromotion(String promotionId, String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         Promotion promotion = promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new PromotionNotFoundException(promotionId));
 

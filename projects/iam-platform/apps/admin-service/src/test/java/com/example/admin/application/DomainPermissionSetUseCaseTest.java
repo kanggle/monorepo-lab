@@ -296,7 +296,8 @@ class DomainPermissionSetUseCaseTest {
     void catalog_noGate() {
         // TASK-MONO-792: SCM_OPERATOR → eight SCM roles · TASK-MONO-793: ERP_OPERATOR → four ERP roles
         // TASK-MONO-794: FINANCE_OPERATOR → five Finance roles
-        assertThat(useCase.catalog()).hasSize(28);
+        // TASK-MONO-795: ECOMMERCE_OPERATOR → thirteen E-commerce roles
+        assertThat(useCase.catalog()).hasSize(40);
         verifyNoInteractions(tenantGate);
     }
 }

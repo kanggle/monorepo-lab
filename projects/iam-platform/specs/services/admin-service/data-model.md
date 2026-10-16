@@ -709,6 +709,21 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
       (SELECT COUNT(*) FROM tenant_partnership
         WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"FINANCE_OPERATOR"'))            AS partnerships_with_finance_operator; -- 뒤 = 0
     ```
+- **TASK-MONO-795 (ADR-MONO-083 P8 · 소유자 결정 2026-10-16 UTC)** — E-commerce 세분 역할(작성 시점 마지막 = `V0058`):
+  - `V0059__ecommerce_fine_grained_domain_roles.sql` — V0058 과 같은 모양. ① 새 프리셋 7개(`ecommerce-read` · `ecommerce-order-operate` · `ecommerce-product-operate` · `ecommerce-settlement-operate` · `ecommerce-promotion-operate` · `ecommerce-shipping-operate` · `ecommerce-notification-operate`, 고정 id `…000000000027` ~ `…033`, `INSERT IGNORE`) 와 그 역할 행. ② 🔴 **`ECOMMERCE_OPERATOR` 를 담은 모든 세트**(프리셋 `ecommerce-full` · `all-domains-full` · `legacy-compat` · **테넌트 세트 전부**)에 E-commerce 업무 역할 13개를 `INSERT IGNORE` 로 더한 **뒤** `('ecommerce','ECOMMERCE_OPERATOR')` 행을 지운다(넓힌 뒤 지운다). ③ 파트너십 `delegated_scope` · `participant_scope` 의 `"ECOMMERCE_OPERATOR"` 를 같은 13개로(`JSON_CONTAINS` 가드). ④ `ecommerce-full` 설명 갱신. forward-only · 재실행 0행. 형태 시험 `V0059MigrationShapeTest` · 행동 시험 `V0059EcommerceRoleMigrationIntegrationTest`.
+  - 완료 판정(배포 전 · 뒤 라이브 — 읽기 전용, `TASK-MONO-672` § Next window — TASK-MONO-795):
+
+    ```sql
+    SELECT
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'ecommerce' AND role_name = 'ECOMMERCE_OPERATOR')             AS sets_with_ecommerce_operator, -- 뒤 = 0
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'ecommerce' AND role_name = 'ECOMMERCE_SETTLEMENT_WRITE')     AS sets_with_settlement_write,   -- 뒤 = 앞의 sets_with_ecommerce_operator + 1 (ecommerce-settlement-operate)
+      (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
+        WHERE domain_key = 'ecommerce' AND role_name = 'ECOMMERCE_MEMBER_READ')          AS sets_with_member_read,        -- 뒤 = 앞의 sets_with_ecommerce_operator + 1 (ecommerce-read)
+      (SELECT COUNT(*) FROM tenant_partnership
+        WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"ECOMMERCE_OPERATOR"'))          AS partnerships_with_ecommerce_operator; -- 뒤 = 0
+    ```
 
 ---
 

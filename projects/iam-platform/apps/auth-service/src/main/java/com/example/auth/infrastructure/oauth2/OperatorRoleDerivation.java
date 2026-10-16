@@ -110,6 +110,22 @@ final class OperatorRoleDerivation {
             .toList();
 
     /**
+     * TASK-MONO-795 (ADR-MONO-083 P8 · owner decisions Q1–Q2) — the ecommerce business roles the ecommerce services
+     * check (ecommerce {@code iam-integration.md} § 업무 역할). Mirrors the {@code ecommerce} rows of admin-service
+     * {@code DomainRoleCatalog}, in the same order. Member is read-only; search reindex rides PRODUCT_WRITE.
+     */
+    private static final List<String> ECOMMERCE_BUSINESS_ROLES = List.of(
+            "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+            "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+            "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+            "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE");
+
+    /** The {@code ecommerce} arm of the ceiling: entry role first, then the business roles (catalog order). */
+    private static final List<String> ECOMMERCE_CEILING = java.util.stream.Stream
+            .concat(java.util.stream.Stream.of("ECOMMERCE_OPERATOR"), ECOMMERCE_BUSINESS_ROLES.stream())
+            .toList();
+
+    /**
      * TASK-MONO-792 (ADR-MONO-083 D3 · P5 · owner decision Q4) — <b>entry role → the business roles that
      * derive it</b>, one row per fine-grained domain. The entry role (gateway passage · screen entry ·
      * procurement {@code isOperator()}) is NOT in admin-service's catalog and is never assigned: it rides
@@ -124,7 +140,10 @@ final class OperatorRoleDerivation {
             // TASK-MONO-793 (ADR-083 P6): the ERP row — erp iam-integration.md § 업무 역할.
             "ERP_OPERATOR", Set.copyOf(ERP_BUSINESS_ROLES),
             // TASK-MONO-794 (ADR-083 P7): the Finance row — finance iam-integration.md § 업무 역할.
-            "FINANCE_OPERATOR", Set.copyOf(FINANCE_BUSINESS_ROLES));
+            "FINANCE_OPERATOR", Set.copyOf(FINANCE_BUSINESS_ROLES),
+            // TASK-MONO-795 (ADR-083 P8): the E-commerce row — ecommerce iam-integration.md § 업무 역할. The entry
+            // role is what the ecommerce GATEWAY admits on; each ecommerce service then decides the area itself.
+            "ECOMMERCE_OPERATOR", Set.copyOf(ECOMMERCE_BUSINESS_ROLES));
 
     private OperatorRoleDerivation() {
     }
@@ -218,7 +237,9 @@ final class OperatorRoleDerivation {
                 // master-data writes are an ADMIN-tier role (they are not; the
                 // wms contract puts create/update at MASTER_WRITE). TASK-MONO-514.
                 case "wms" -> WMS_OPERATOR_ROLES;
-                case "ecommerce" -> List.of("ECOMMERCE_OPERATOR");
+                // TASK-MONO-795 (ADR-083 P8): the ecommerce ceiling = the entry role (derived) + the
+                // thirteen business roles the ecommerce services check.
+                case "ecommerce" -> ECOMMERCE_CEILING;
                 // TASK-MONO-792 (ADR-083 P5): the scm ceiling = the entry role (derived — see
                 // ENTRY_ROLES) + the eight business roles the scm services check.
                 case "scm" -> SCM_CEILING;

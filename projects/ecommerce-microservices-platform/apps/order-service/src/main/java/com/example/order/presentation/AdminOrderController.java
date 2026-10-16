@@ -21,7 +21,13 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Operator-plane order administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
  *
- * <p><b>Authorization is enforced at the ecommerce gateway, not in this
+ * <p>🔴 <b>TASK-MONO-795 (ADR-MONO-083 P8) — this controller now re-checks the business role</b>
+ * ({@link OrderOperatorAccess}: reads = {@code ECOMMERCE_ORDER_READ ∨ ECOMMERCE_ORDER_WRITE} or the
+ * platform wildcard read · status change = {@code ECOMMERCE_ORDER_WRITE}). The paragraph below is the
+ * pre-795 history: the gateway is no longer the single admission point — it admits the derived entry role
+ * {@code ECOMMERCE_OPERATOR} (any E-commerce business role), and the per-area split is decided here.
+ *
+ * <p><b>(history) Authorization is enforced at the ecommerce gateway, not in this
  * controller</b> (extension of the read-leg pattern established in
  * TASK-MONO-243 for {@code AdminProductController.list}, applied here to both
  * read and write endpoints):
@@ -46,21 +52,30 @@ public class AdminOrderController {
     private final AdminOrderStatusService adminOrderStatusService;
 
     @GetMapping("/summary")
-    public ResponseEntity<PeriodSummary> getOrderSummary() {
+    public ResponseEntity<PeriodSummary> getOrderSummary(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
+        OrderOperatorAccess.requireRead(userRole, tenantId);
         return ResponseEntity.ok(orderQueryService.getPeriodSummary());
     }
 
     @GetMapping("/insights")
-    public ResponseEntity<OrderInsights> getInsights() {
+    public ResponseEntity<OrderInsights> getInsights(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
+        OrderOperatorAccess.requireRead(userRole, tenantId);
         return ResponseEntity.ok(orderQueryService.getInsights());
     }
 
     @GetMapping
     public ResponseEntity<AdminOrderListResponse> getOrders(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String status
     ) {
+        OrderOperatorAccess.requireRead(userRole, tenantId);
         PageQuery pageQuery = OrderControllerUtils.buildPageQuery(page, size, status);
         PageResult<AdminOrderSummary> result = orderQueryService.getAllOrders(OrderControllerUtils.parseStatus(status), pageQuery);
         return ResponseEntity.ok(AdminOrderListResponse.from(result));
@@ -68,17 +83,22 @@ public class AdminOrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<AdminOrderDetailResponse> getOrder(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @PathVariable String orderId
     ) {
+        OrderOperatorAccess.requireRead(userRole, tenantId);
         AdminOrderDetail detail = orderQueryService.getOrderForAdmin(orderId);
         return ResponseEntity.ok(AdminOrderDetailResponse.from(detail));
     }
 
     @PostMapping("/{orderId}/status")
     public ResponseEntity<AdminOrderStatusChangeResponse> changeStatus(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String orderId,
             @Valid @RequestBody AdminOrderStatusChangeRequest request
     ) {
+        OrderOperatorAccess.requireWrite(userRole);
         AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, request.status());
         return ResponseEntity.ok(new AdminOrderStatusChangeResponse(result.orderId(), result.status()));
     }

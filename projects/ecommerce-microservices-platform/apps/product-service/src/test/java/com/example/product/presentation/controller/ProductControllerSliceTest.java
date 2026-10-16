@@ -113,7 +113,7 @@ class ProductControllerSliceTest {
         given(registerProductService.register(captor.capture())).willReturn(UUID.randomUUID());
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "응원봉", "price": 10000, "collectionRef": "artist-a",
@@ -123,7 +123,7 @@ class ProductControllerSliceTest {
         org.assertj.core.api.Assertions.assertThat(captor.getValue().collectionRef()).isEqualTo("artist-a");
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 { "name": "티셔츠", "price": 10000,
@@ -142,13 +142,13 @@ class ProductControllerSliceTest {
         given(updateProductService.update(captor.capture())).willReturn(id);
 
         mockMvc.perform(patch("/api/admin/products/{id}", id)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"collectionRef\": \"" + "a".repeat(65) + "\"}"))
                 .andExpect(status().isBadRequest());
 
         mockMvc.perform(patch("/api/admin/products/{id}", id)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"collectionRef\": \"\"}"))
                 .andExpect(status().isOk());
@@ -289,7 +289,7 @@ class ProductControllerSliceTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated());
@@ -318,7 +318,7 @@ class ProductControllerSliceTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -337,7 +337,7 @@ class ProductControllerSliceTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -362,7 +362,7 @@ class ProductControllerSliceTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
@@ -383,7 +383,7 @@ class ProductControllerSliceTest {
                 """;
 
         mockMvc.perform(post("/api/admin/products")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())

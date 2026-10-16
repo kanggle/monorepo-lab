@@ -41,7 +41,7 @@ public class RefreshTrackingService {
 
     @Transactional
     public UpdateShippingStatusResult refreshFromCarrier(String shippingId, String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireWrite(userRole);
         // Tenant-scoped lookup (admin mutation): a cross-tenant shippingId → 404 (M3).
         Shipping shipping = shippingRepository.findByIdForTenant(shippingId)
                 .orElseThrow(() -> new ShippingNotFoundException(shippingId));

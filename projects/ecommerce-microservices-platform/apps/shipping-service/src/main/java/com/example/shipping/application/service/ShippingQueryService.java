@@ -34,7 +34,7 @@ public class ShippingQueryService {
     }
 
     public PageResult<ShippingSummary> listShippings(String userRole, ShippingStatus status, PageQuery pageQuery) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
         PageResult<Shipping> pageResult;
         if (status != null) {
             pageResult = shippingRepository.findByStatus(status, pageQuery);
@@ -52,7 +52,7 @@ public class ShippingQueryService {
     }
 
     public PeriodSummary getPeriodSummary(String userRole) {
-        OperatorRoleGuard.requireOperator(userRole);
+        OperatorRoleGuard.requireRead(userRole);
 
         KstPeriodBounds b = KstPeriodBounds.now();
 

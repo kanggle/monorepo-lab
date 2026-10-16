@@ -34,7 +34,7 @@ class SearchAdminControllerSliceTest {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(42);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.indexed").value(42));
     }
@@ -60,7 +60,7 @@ class SearchAdminControllerSliceTest {
     @DisplayName("reindex - batchSize 0 이하 시 400 반환")
     void reindex_invalidBatchSize_returns400() throws Exception {
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE")
                         .param("batchSize", "0"))
                 .andExpect(status().isBadRequest());
     }
@@ -73,7 +73,7 @@ class SearchAdminControllerSliceTest {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(10);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE,ERP_OPERATOR,SCM_OPERATOR"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.indexed").value(10));
     }
@@ -84,7 +84,7 @@ class SearchAdminControllerSliceTest {
         given(reindexAllUseCase.reindexAll(anyInt())).willReturn(5);
 
         mockMvc.perform(post("/api/search/admin/reindex")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PRODUCT_READ,ECOMMERCE_PRODUCT_WRITE"))
                 .andExpect(status().isOk());
     }
 

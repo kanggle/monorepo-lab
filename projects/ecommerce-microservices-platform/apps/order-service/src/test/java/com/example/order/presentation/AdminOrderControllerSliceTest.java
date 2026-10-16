@@ -49,8 +49,8 @@ class AdminOrderControllerSliceTest {
     // ─── GET /api/admin/orders ───────────────────────────────────────────
 
     @Test
-    @DisplayName("X-User-Role 헤더 없이 주문 목록 조회 시 200과 주문 목록 반환 (operator-plane, 게이트 위임)")
-    void getOrders_noRoleHeader_returns200WithOrderList() throws Exception {
+    @DisplayName("업무 역할 헤더로 주문 목록 조회 시 200과 주문 목록 반환 (operator-plane, TASK-MONO-795 서비스 재검사)")
+    void getOrders_businessRoleHeader_returns200WithOrderList() throws Exception {
         AdminOrderSummary summary = new AdminOrderSummary(
                 "order-1", "user-1", OrderStatus.PENDING.name(),
                 50000L, 2, "노트북", Instant.now()
@@ -58,9 +58,9 @@ class AdminOrderControllerSliceTest {
         given(orderQueryService.getAllOrders(any(), any()))
                 .willReturn(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
 
-        // No X-User-Role header — operator-plane: authz is the gateway's
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane: authz is the gateway's
         // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
-        mockMvc.perform(get("/api/admin/orders"))
+        mockMvc.perform(get("/api/admin/orders").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content[0].orderId").value("order-1"))
@@ -79,7 +79,7 @@ class AdminOrderControllerSliceTest {
         given(orderQueryService.getAllOrders(eq(OrderStatus.PENDING), any()))
                 .willReturn(new PageResult<>(List.of(summary), 0, 20, 1L, 1));
 
-        mockMvc.perform(get("/api/admin/orders")
+        mockMvc.perform(get("/api/admin/orders").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .param("status", "PENDING"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].status").value("PENDING"))
@@ -100,7 +100,7 @@ class AdminOrderControllerSliceTest {
         );
         given(orderQueryService.getOrderForAdmin(eq("order-1"))).willReturn(detail);
 
-        mockMvc.perform(get("/api/admin/orders/order-1"))
+        mockMvc.perform(get("/api/admin/orders/order-1").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value("order-1"))
                 .andExpect(jsonPath("$.userId").value("user-1"))
@@ -113,7 +113,7 @@ class AdminOrderControllerSliceTest {
         given(orderQueryService.getOrderForAdmin(any()))
                 .willThrow(new OrderNotFoundException("order-x"));
 
-        mockMvc.perform(get("/api/admin/orders/order-x"))
+        mockMvc.perform(get("/api/admin/orders/order-x").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
     }
@@ -121,14 +121,14 @@ class AdminOrderControllerSliceTest {
     // ─── POST /api/admin/orders/{orderId}/status ─────────────────────────
 
     @Test
-    @DisplayName("유효한 상태 CONFIRMED로 변경 시 200과 변경된 상태 반환 (operator-plane, 게이트 위임)")
+    @DisplayName("유효한 상태 CONFIRMED로 변경 시 200과 변경된 상태 반환 (operator-plane, TASK-MONO-795 서비스 재검사)")
     void changeStatus_validStatus_returns200WithUpdatedStatus() throws Exception {
         given(adminOrderStatusService.changeStatus(eq("order-1"), eq("CONFIRMED")))
                 .willReturn(new AdminOrderStatusChangeResult("order-1", "CONFIRMED"));
 
-        // No X-User-Role header — operator-plane write: authz is the gateway's
+        // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane write: authz is the gateway's
         // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
-        mockMvc.perform(post("/api/admin/orders/order-1/status")
+        mockMvc.perform(post("/api/admin/orders/order-1/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "CONFIRMED"}
@@ -144,7 +144,7 @@ class AdminOrderControllerSliceTest {
         given(adminOrderStatusService.changeStatus(any(), eq("INVALID")))
                 .willThrow(new com.example.order.application.exception.InvalidOrderStatusException("INVALID"));
 
-        mockMvc.perform(post("/api/admin/orders/order-1/status")
+        mockMvc.perform(post("/api/admin/orders/order-1/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "INVALID"}
@@ -156,7 +156,7 @@ class AdminOrderControllerSliceTest {
     @Test
     @DisplayName("status 필드가 빈 문자열인 요청 시 400 유효성 검사 오류 반환")
     void changeStatus_blankStatus_returns400ValidationError() throws Exception {
-        mockMvc.perform(post("/api/admin/orders/order-1/status")
+        mockMvc.perform(post("/api/admin/orders/order-1/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": ""}
@@ -171,7 +171,7 @@ class AdminOrderControllerSliceTest {
         given(adminOrderStatusService.changeStatus(any(), any()))
                 .willThrow(new OrderNotFoundException("order-x"));
 
-        mockMvc.perform(post("/api/admin/orders/order-x/status")
+        mockMvc.perform(post("/api/admin/orders/order-x/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "CONFIRMED"}

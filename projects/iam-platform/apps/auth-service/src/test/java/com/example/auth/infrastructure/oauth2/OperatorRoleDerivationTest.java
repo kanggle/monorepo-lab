@@ -32,6 +32,13 @@ class OperatorRoleDerivationTest {
 
     /** wms roles followed by {@code extra} (input domain order: wms first). */
     /** TASK-MONO-794 (ADR-083 P7): the finance ceiling = the entry role + the five business roles (catalog order). */
+    /** TASK-MONO-795 (ADR-083 P8): the ecommerce ceiling = the entry role + the thirteen business roles (catalog order). */
+    private static final String[] ECOMMERCE_CEILING = {"ECOMMERCE_OPERATOR",
+            "ECOMMERCE_ORDER_READ", "ECOMMERCE_ORDER_WRITE", "ECOMMERCE_PRODUCT_READ", "ECOMMERCE_PRODUCT_WRITE",
+            "ECOMMERCE_MEMBER_READ", "ECOMMERCE_SETTLEMENT_READ", "ECOMMERCE_SETTLEMENT_WRITE",
+            "ECOMMERCE_PROMOTION_READ", "ECOMMERCE_PROMOTION_WRITE", "ECOMMERCE_SHIPPING_READ",
+            "ECOMMERCE_SHIPPING_WRITE", "ECOMMERCE_NOTIFICATION_READ", "ECOMMERCE_NOTIFICATION_WRITE"};
+
     private static final String[] FINANCE_CEILING = {"FINANCE_OPERATOR",
             "FINANCE_ACCOUNT_READ", "FINANCE_ACCOUNT_WRITE", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
             "FINANCE_LEDGER_CONTROL"};
@@ -54,8 +61,9 @@ class OperatorRoleDerivationTest {
     void knownDomains_mapToOperatorRole() {
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("wms")))
                 .containsExactlyElementsOf(WMS);
+        // TASK-MONO-795 (ADR-083 P8): the ecommerce ceiling = the entry role + the thirteen business roles.
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("ecommerce")))
-                .containsExactly("ECOMMERCE_OPERATOR");
+                .containsExactly(ECOMMERCE_CEILING);
         // TASK-MONO-792 (ADR-083 P5): the scm ceiling = the entry role + the eight business roles,
         // the same rows admin-service DomainRoleCatalog offers (the entry role is derived, not assigned).
         assertThat(OperatorRoleDerivation.fromEntitledDomains(List.of("scm")))

@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,7 +31,11 @@ import java.util.UUID;
 /**
  * Operator-plane product-image administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
  *
- * <p><b>Authorization is enforced at the ecommerce gateway, not in this
+ * <p>🔴 <b>TASK-MONO-795 (ADR-MONO-083 P8)</b>: this controller now re-checks the business role —
+ * {@link ProductOperatorAccess} (list = {@code ECOMMERCE_PRODUCT_READ ∨ _WRITE} or the platform wildcard read ·
+ * the four writes = {@code ECOMMERCE_PRODUCT_WRITE}). The paragraph below is pre-795 history.
+ *
+ * <p><b>(history) Authorization is enforced at the ecommerce gateway, not in this
  * controller</b> (extension of the read-leg pattern established in
  * TASK-MONO-243 for {@code AdminProductController.list}):
  * {@code AccountTypeEnforcementFilter} requires {@code roles ∋ ECOMMERCE_OPERATOR}
@@ -53,7 +58,10 @@ public class AdminProductImageController {
 
     @GetMapping
     public ResponseEntity<ImageListResponse> listImages(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @PathVariable UUID productId) {
+        ProductOperatorAccess.requireReadOrWildcard(userRole, tenantId);
         List<ProductImage> images = productImageService.getImages(productId);
         List<ImageResponse> responses = images.stream()
                 .map(img -> ImageResponse.from(img, mediaUrlResolver.resolve(img.getObjectKey())))
@@ -63,8 +71,10 @@ public class AdminProductImageController {
 
     @PostMapping("/upload-url")
     public ResponseEntity<PresignedUrlResponse> generateUploadUrl(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody PresignedUrlRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         PresignedUploadResult result = productImageService.generateUploadUrl(
                 productId, request.contentType(), request.contentLength());
         return ResponseEntity.ok(PresignedUrlResponse.from(result));
@@ -72,8 +82,10 @@ public class AdminProductImageController {
 
     @PostMapping
     public ResponseEntity<RegisterImageResponse> registerImage(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @Valid @RequestBody RegisterImageRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         ProductImage image = productImageService.registerImage(
                 productId, request.objectKey(), request.sortOrder(), request.isPrimary());
         String resolvedUrl = mediaUrlResolver.resolve(image.getObjectKey());
@@ -83,9 +95,11 @@ public class AdminProductImageController {
 
     @PatchMapping("/{imageId}")
     public ResponseEntity<ImageResponse> updateImage(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID imageId,
             @Valid @RequestBody UpdateImageRequest request) {
+        ProductOperatorAccess.requireWrite(userRole);
         ProductImage image = productImageService.updateImage(
                 productId, imageId, request.sortOrder(), request.isPrimary());
         String resolvedUrl = mediaUrlResolver.resolve(image.getObjectKey());
@@ -94,8 +108,10 @@ public class AdminProductImageController {
 
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable UUID productId,
             @PathVariable UUID imageId) {
+        ProductOperatorAccess.requireWrite(userRole);
         productImageService.deleteImage(productId, imageId);
         return ResponseEntity.noContent().build();
     }

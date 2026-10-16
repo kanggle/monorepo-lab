@@ -52,7 +52,7 @@ class AdminUserControllerSliceTest {
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray())
                     .andExpect(jsonPath("$.content[0].email").value("test@example.com"))
@@ -87,7 +87,7 @@ class AdminUserControllerSliceTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("status", "ACTIVE"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -101,7 +101,7 @@ class AdminUserControllerSliceTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("email", "test"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray());
@@ -115,7 +115,7 @@ class AdminUserControllerSliceTest {
                     .willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                             .param("page", "2")
                             .param("size", "10"))
                     .andExpect(status().isOk());
@@ -139,7 +139,7 @@ class AdminUserControllerSliceTest {
             given(userProfileService.getProfile(userId)).willReturn(result);
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(userId.toString()))
                     .andExpect(jsonPath("$.email").value("test@example.com"));
@@ -163,7 +163,7 @@ class AdminUserControllerSliceTest {
                     .willThrow(new UserProfileNotFoundException(userId));
 
             mockMvc.perform(get("/api/admin/users/{userId}", userId)
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("USER_PROFILE_NOT_FOUND"));
         }
@@ -182,7 +182,7 @@ class AdminUserControllerSliceTest {
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ,ERP_OPERATOR,SCM_OPERATOR"))
                     .andExpect(status().isOk());
         }
 
@@ -193,7 +193,7 @@ class AdminUserControllerSliceTest {
             given(userProfileService.listUsers(isNull(), isNull(), eq(0), eq(20))).willReturn(page);
 
             mockMvc.perform(get("/api/admin/users")
-                            .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                            .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ"))
                     .andExpect(status().isOk());
         }
 

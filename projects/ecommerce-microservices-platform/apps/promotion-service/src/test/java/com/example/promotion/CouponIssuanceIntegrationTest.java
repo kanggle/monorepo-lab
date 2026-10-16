@@ -51,7 +51,7 @@ class CouponIssuanceIntegrationTest {
 
         // Create promotion
         MvcResult createResult = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -72,7 +72,7 @@ class CouponIssuanceIntegrationTest {
 
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .header("Idempotency-Key", "issue-key-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"" + userId + "\"]}"))
@@ -129,7 +129,7 @@ class CouponIssuanceIntegrationTest {
     void deletePromotion_withIssuedCoupons_returns422() throws Exception {
         // Create promotion
         MvcResult createResult = mockMvc.perform(post("/api/promotions")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -149,7 +149,7 @@ class CouponIssuanceIntegrationTest {
 
         // Issue coupons
         mockMvc.perform(post("/api/promotions/" + promotionId + "/coupons/issue")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE")
                         .header("Idempotency-Key", "issue-key-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userIds\": [\"user-del-test\"]}"))
@@ -157,7 +157,7 @@ class CouponIssuanceIntegrationTest {
 
         // Try to delete
         mockMvc.perform(delete("/api/promotions/" + promotionId)
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_PROMOTION_READ,ECOMMERCE_PROMOTION_WRITE"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PROMOTION_HAS_ISSUED_COUPONS"));
     }

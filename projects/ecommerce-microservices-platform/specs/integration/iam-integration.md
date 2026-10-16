@@ -92,11 +92,47 @@ ecommerce 도메인의 세분화된 resource scope (`ecommerce.product.read`, `e
 3. **Issuer 검증** — `AllowedIssuersValidator` 로 SAS issuer 만 허용 (TASK-MONO-367: legacy `iam` issuer 는 2026-08-01 일몰로 제거됨, TASK-BE-398 이 발행 측을 먼저 끊었다).
 4. **Audience 검증 (TASK-MONO-696 → TASK-MONO-697, 2단계 거절)** — 공유 `GatewayJwtDecoders.validatorChain` 의 `AllowedAudiencesValidator` 가 `aud`(발급 client id, 문자열/배열) ∩ `ecommerce.oauth2.allowed-audiences`(`platform-console-web`, `ecommerce-web-store-client` — AC-1 실측 도달 client; `artist-service-client` — TASK-MONO-759 가 이 엣지로 라우트하는 워크로드, 같은 변경에서 추가(`jwt-standard-claims.md` 규칙 5)) ≠ ∅ 를 본다. 나머지 사슬(1–3, 5)을 통과한 토큰에만 평가한다. allowlist 빈/부재 = **기동 실패**. `audience-mode=ENFORCE`(출하값, TASK-MONO-697 — 실측 불일치 0 이후 6 게이트웨이 동시 전환): 불일치 → 403 `AUDIENCE_FORBIDDEN` + 메트릭 `gateway.jwt.audience{gateway,outcome="mismatch_rejected"}`. `SHADOW`(1단계): 거절하지 않고 WARN 로그(`gateway`·`jti`·`aud`) + 메트릭 — 이제는 되돌리기 수단이다(compose 가 `OIDC_AUDIENCE_MODE` 를 기본값 ENFORCE 로 전달하므로 env 한 줄 + 재생성). 같은 검증기가 토큰이 들어오는 동안 최대 1분에 한 번 누적 요약 INFO 한 줄(`JWT audience summary: gateway=… mode=… match=… mismatch=…`)을 낸다(TASK-MONO-736).
 5. **Tenant 검증** — `TenantClaimValidator` (entitlement-trust, ADR-MONO-030 §2.4) 로 **임의 well-formed `tenant_id`** 를 수용; **blank/missing 만** `tenant_mismatch` → 403 `TENANT_FORBIDDEN`. (레거시 고정슬러그 `ecommerce` = dual-accept 윈도우의 default-tenant. 도메인간 격리는 다운스트림 row 필터로 집행 — 게이트가 아님.)
-6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제.
+6. **Role 강제** — `AccountTypeEnforcementFilter` (TASK-BE-131; ADR-MONO-035 4b-2a 로 roles-only 전환 — `account_type` OR-branch 제거) 가 `/api/admin/**` 경로에 `roles ∋ ECOMMERCE_OPERATOR` 강제, 그 외 인증 필요 경로에 `roles ∋ CUSTOMER` 강제. 🔴 **TASK-MONO-795 (ADR-MONO-083 P8)**: `ECOMMERCE_OPERATOR` 는 이제 auth 가 파생하는 **진입 역할**이고, 운영자 엔드포인트의 서비스단 판정은 «`ECOMMERCE_OPERATOR` 보유» 가 아니라 **영역 업무 역할**이다 — 아래 § 업무 역할(정본)이 이 항목의 서비스단 문장(아래 두 하위 항목의 `X-User-Role == ECOMMERCE_OPERATOR` 포함)을 대체한다.
    - **operator-on-public 예외 (TASK-BE-380)** — promotion-api.md / shipping-api.md / notification-api.md 는 *운영자(Admin)* 엔드포인트를 **public 경로 트리**(`/api/promotions`, `/api/shippings`, `/api/notifications`)에 두고 서비스단에서 `X-User-Role == ECOMMERCE_OPERATOR` 으로 게이팅한다(`/api/admin/**` 아님). 따라서 게이트웨이는 이 세 read 트리에 한해 `CUSTOMER` 와 `ECOMMERCE_OPERATOR` 을 **둘 다** 수용한다(엔드포인트별 operator/consumer 구분은 서비스가 집행). prefix-only `non-/api/admin → CONSUMER` 규칙이면 운영자가 서비스 도달 전에 403 되는 라이브 갭(platform-console PC-FE-086/088/089 흡수)을 해소. 그 외 public 트리(`/api/products`, `/api/orders`, `/api/search`, `/api/users` 등)는 종전대로 `CUSTOMER` 전용.
    - **워크로드 내부 경로 예외 (TASK-MONO-759, 소유자 결정 R1 2026-10-03)** — `/internal/sellers/**` 는 역할이 아니라 **범위·테넌트**로 거른다: 메서드 `GET`/`HEAD` **이고** `scope ∋ store.seller.read` **이고** `tenant_id == ecommerce` 인 토큰만 통과, 그 밖의 토큰(**`CUSTOMER` 토큰 포함**)은 403 `FORBIDDEN`. 이 예외는 그 접두사 하나뿐이고 다른 모든 경로의 `CUSTOMER`/`ECOMMERCE_OPERATOR` 규칙은 그대로다. iam 게이트웨이가 `/internal/tenants/**` 를 실어 나르는 모양과 같다. 계약: [`product-api.md` § Internal seller read](../contracts/http/product-api.md).
-   - **`X-User-Role` 다중값 계약 (TASK-BE-393)** — `JwtHeaderEnrichmentFilter` 는 `roles` 클레임 배열을 **콤마 결합** 문자열로 `X-User-Role` 헤더에 주입한다 (예: `ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR`). 다중 도메인에 등록된 운영자는 여러 롤을 갖는다. **서비스단 operator 게이팅은 반드시 토큰-멤버십 검사**(`X-User-Role` 를 `,` 로 분리·trim 후 `ECOMMERCE_OPERATOR` 과 `equalsIgnoreCase` 비교)를 사용해야 한다 — 단순 문자열 동등 비교(`"ECOMMERCE_OPERATOR".equalsIgnoreCase(header)`)는 다중 도메인 운영자를 모두 403 으로 잠그는 버그다. `contains("ECOMMERCE_OPERATOR")` 형태의 서브스트링 검사도 금지 (`SUPERADMIN` 등 미래 롤의 오수용 위험). 구현 참조: 각 서비스의 `private static boolean hasAdminRole(String userRole)` 헬퍼.
+   - **`X-User-Role` 다중값 계약 (TASK-BE-393)** — `JwtHeaderEnrichmentFilter` 는 `roles` 클레임 배열을 **콤마 결합** 문자열로 `X-User-Role` 헤더에 주입한다 (예: `ECOMMERCE_OPERATOR,ERP_OPERATOR,SCM_OPERATOR`). 다중 도메인에 등록된 운영자는 여러 롤을 갖는다. **서비스단 operator 게이팅은 반드시 토큰-멤버십 검사**(`X-User-Role` 를 `,` 로 분리·trim 후 `ECOMMERCE_OPERATOR` 과 `equalsIgnoreCase` 비교)를 사용해야 한다 — 단순 문자열 동등 비교(`"ECOMMERCE_OPERATOR".equalsIgnoreCase(header)`)는 다중 도메인 운영자를 모두 403 으로 잠그는 버그다. `contains("ECOMMERCE_OPERATOR")` 형태의 서브스트링 검사도 금지 (`SUPERADMIN` 등 미래 롤의 오수용 위험). 구현 참조: ~~각 서비스의 `private static boolean hasAdminRole(String userRole)` 헬퍼~~ → TASK-MONO-795 부터 공유 기전 `libs/java-web` `com.example.web.security.RoleListHeader` 하나(사본 금지 — § 업무 역할).
 7. **Header Enrichment** — `JwtHeaderEnrichmentFilter` (TASK-BE-131) 가 downstream 으로 `X-User-Id`, `X-User-Email`, `X-User-Role` (`roles` 배열 comma-join), `X-Tenant-Id` (멀티테넌트 컨텍스트 전파, ADR-MONO-030 §2.2 M2 layer 2) 헤더 주입. (`X-Account-Type` 은 ADR-MONO-035 4b 로 주입 중단 — 다운스트림 리더 없음; `IdentityHeaderStripFilter` strip 엔트리는 inert defense-in-depth 로 잔존.) 클라이언트가 위조한 동일 헤더는 `IdentityHeaderStripFilter` 가 먼저 제거.
+
+---
+
+## 업무 역할 (ADR-MONO-083 P8 · TASK-MONO-795 — 정본)
+
+소유자 결정 Q1 ~ Q4 (2026-10-16 UTC). 이 절이 E-commerce 운영자 경로 **58**(조회 28 · 변경 30)의 **업무 인가** 정본이다 — 각 HTTP 계약 · 위 § Token 검증 규칙 6 의 옛 문장(«서비스단 `X-User-Role ∋ ECOMMERCE_OPERATOR`»)은 운영자 엔드포인트에 한해 이 절로 **대체**된다.
+
+| 역할 | 무엇을 연다 |
+|---|---|
+| `ECOMMERCE_ORDER_READ` | 주문 조회 — `GET /api/admin/orders` · `/summary` · `/insights` · `/{id}` |
+| `ECOMMERCE_ORDER_WRITE` | 주문 상태 전이 `POST /api/admin/orders/{id}/status` (+ 조회) |
+| `ECOMMERCE_PRODUCT_READ` | 상품 · 판매자 조회 — `GET /api/admin/products` · `/summary` · `/{id}` · `/{id}/images` · `GET /api/admin/sellers` · `/summary` · `/{id}` · `/{id}/members` |
+| `ECOMMERCE_PRODUCT_WRITE` | 상품 · 옵션 · 재고 변경(7) · 이미지 변경(4) · 판매자 등록 · 활성화 · 정지 · 종료 · 구성원 초대(5) · **검색 재색인** `POST /api/search/admin/reindex` (+ 조회) |
+| `ECOMMERCE_MEMBER_READ` | 회원 조회 — `GET /api/admin/users` · `/summary` · `/{id}`. 회원 **변경 경로는 없다** — 그래서 `ECOMMERCE_MEMBER_WRITE` 역할도 없다(Q1) |
+| `ECOMMERCE_SETTLEMENT_READ` | 정산 조회 — `GET /api/admin/settlements/accruals` · `/sellers/{id}/balance` · `/commission-rates/{id}` · `/periods` · `/periods/{id}/payouts` |
+| `ECOMMERCE_SETTLEMENT_WRITE` | 수수료율 `PUT` · 기간 개시 · 기간 마감 · **지급 실행**(+ 조회). 통제 역할을 따로 두지 않는다(Q2) |
+| `ECOMMERCE_PROMOTION_READ` | 프로모션 조회 — `GET /api/promotions` · `/summary` · `/{id}` |
+| `ECOMMERCE_PROMOTION_WRITE` | 프로모션 등록 · 수정 · 삭제 · 쿠폰 발급 `POST /api/promotions/{id}/coupons/issue` (+ 조회) |
+| `ECOMMERCE_SHIPPING_READ` | 배송 조회(운영자) — `GET /api/shippings` · `/summary` |
+| `ECOMMERCE_SHIPPING_WRITE` | 배송 상태 `PUT /api/shippings/{id}/status` · 추적 갱신 `POST /api/shippings/{id}/refresh-tracking` (+ 조회) |
+| `ECOMMERCE_NOTIFICATION_READ` | 알림 템플릿 조회 — `GET /api/notifications/templates` · `/summary` · `/{id}` |
+| `ECOMMERCE_NOTIFICATION_WRITE` | 알림 템플릿 등록 · 수정 (+ 조회) |
+| `ECOMMERCE_OPERATOR` | **진입 역할** — 카탈로그에 없고 배정 · 위임할 수 없다. 위 13 중 하나라도 토큰에 실리면 auth-service 가 **파생**한다(iam auth-service architecture § 진입 역할 파생). 게이트웨이 통과(`/api/admin/**` · 운영자-공개 트리)에만 쓰이고, **서비스에서는 어떤 업무 API 도 열지 않는다** |
+
+판정 — 영역마다 같은 모양: **조회(`GET`) = `<AREA>_READ ∨ <AREA>_WRITE`**, **변경(그 밖의 메서드) = `<AREA>_WRITE`**(회원 = 조회만).
+
+| 자리 | 판정 |
+|---|---|
+| 게이트웨이 `AccountTypeEnforcementFilter` | **무변경** — `/api/admin/**` = `roles ∋ ECOMMERCE_OPERATOR` ∨ (`GET/HEAD` ∧ `tenant_id='*'`) · 운영자-공개 트리 = `CUSTOMER ∨ ECOMMERCE_OPERATOR`. 진입 역할은 «E-commerce 업무 역할 ≥ 1» 과 같은 뜻이므로 게이트웨이는 거친 문으로 남는다 — 경로 × 업무 역할 표를 게이트웨이에 두 번째로 두지 않는다 |
+| 각 서비스(경로 58 전부) | 위 영역 판정을 게이트웨이가 주입한 `X-User-Role`(콤마 결합 · 대소문자 무시 · trim — 공유 기전 `libs/java-web` `com.example.web.security.RoleListHeader`)에 대해 **다시** 한다. 게이트웨이를 거치지 않은 직접 호출도 같은 판정을 받는다. 진입 역할 단독 · `CUSTOMER` · 빈 헤더 → `403` |
+| `'*'` 와일드카드(플랫폼 SUPER_ADMIN 기본 토큰 — 역할 없음) | 서비스 판정에서 «`X-Tenant-Id = '*'`» 갈래로 **조회만**, 그리고 **지금 열리는 8 경로에만**: 주문 조회 4 · 상품 조회 3 · 이미지 목록 1(TASK-BE-506 — 운영 개요 ecommerce 카드). 판매자 · 회원 · 정산 · 프로모션 · 배송 · 알림 조회는 와일드카드에 **열지 않는다**(지금과 같음 — 회원 = PII) |
+
+- 🔵 **소비자 경로는 무변경**: `CUSTOMER` 토큰(스토어프런트 · 저장 역할 경로)에는 업무 역할이 실리지 않는다 — 파생 · 상한은 assume · 파트너십 경로에만 있다. 운영자-공개 트리의 소비자 엔드포인트(`/api/shippings/orders/{orderId}` · `/api/notifications/me/**` · `/api/shippings/carrier-webhook`)와 그 밖의 공개 · 소비자 · 워크로드 경로(`/api/coupons/**` · `/internal/sellers/**` · `/api/internal/**`)는 이 절의 판정을 받지 않는다.
+- 🔴 **헤더 역할 검사는 공유 기전 하나로만 한다** — 서비스에 `X-User-Role` 을 직접 `split(",")` 하는 사본을 두지 않는다(옛 사본 8 개 중 하나가 대소문자를 구분하고 있었다 — TASK-MONO-795 Failure 2). gateway-service 의 `RoleHeaderCopyGuardTest` 가 ecommerce `src/main` 에 새 사본이 생기면 실패한다.
+- 도메인 안 운영자 토큰 호출 · 교차 도메인 HTTP 호출자 · 운영자 개인 엔드포인트 · 구독 합성 판정은 **없다**(TASK-MONO-795 AC-0 — WMS × ecommerce 주문처리 고리는 Kafka 뿐).
+- 콘솔 신호 데이터(9 화면 `serverRequires` · `writeRequires` · 계약 § 2.4.3.4 표)는 굽기 라이브 뒤 별도 콘솔 티켓.
 
 ---
 

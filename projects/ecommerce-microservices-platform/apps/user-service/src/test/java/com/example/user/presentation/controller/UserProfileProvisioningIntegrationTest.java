@@ -192,7 +192,7 @@ class UserProfileProvisioningIntegrationTest {
 
         mockMvc.perform(get("/api/admin/users/summary")
                 .header("X-User-Id", operatorId.toString())
-                .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_MEMBER_READ")
                 .header("X-Tenant-Id", "ecommerce"));
 
         assertThat(userProfileRepository.existsByUserId(operatorId))

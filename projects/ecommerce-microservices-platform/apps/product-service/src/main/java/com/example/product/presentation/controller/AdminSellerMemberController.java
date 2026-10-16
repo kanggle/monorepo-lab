@@ -4,7 +4,6 @@ import com.example.product.application.service.SellerMemberService;
 import com.example.product.presentation.dto.SellerMemberDtos.InviteRequest;
 import com.example.product.presentation.dto.SellerMemberDtos.InviteResponse;
 import com.example.product.presentation.dto.SellerMemberDtos.MembersResponse;
-import com.example.web.exception.AccessDeniedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,15 +19,13 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * OPERATOR-plane seller-member surface (ADR-MONO-079 D5, TASK-MONO-752; product-api.md § Seller members):
  * the console seller screen's member list and invite. Same plane and authorization as
- * {@link AdminSellerController} (gateway {@code /api/admin/**} OPERATOR branch + {@code X-User-Role} ∋
- * {@code ECOMMERCE_OPERATOR}); a separate controller so the seller lifecycle surface keeps its own collaborators.
+ * {@link AdminSellerController} (gateway {@code /api/admin/**} OPERATOR branch + {@link ProductOperatorAccess} — TASK-MONO-795: members =
+ * {@code ECOMMERCE_PRODUCT_READ ∨ _WRITE} · invite = {@code ECOMMERCE_PRODUCT_WRITE}); a separate controller so the seller lifecycle surface keeps its own collaborators.
  */
 @RestController
 @RequestMapping("/api/admin/sellers/{sellerId}")
 @RequiredArgsConstructor
 public class AdminSellerMemberController {
-
-    private static final String ROLE_ADMIN = "ECOMMERCE_OPERATOR";
 
     private final SellerMemberService sellerMemberService;
 
@@ -36,7 +33,7 @@ public class AdminSellerMemberController {
     public ResponseEntity<MembersResponse> members(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @PathVariable String sellerId) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireRead(userRole);
         return ResponseEntity.ok(MembersResponse.from(sellerMemberService.list(sellerId)));
     }
 
@@ -50,20 +47,8 @@ public class AdminSellerMemberController {
             @RequestHeader(value = "X-User-Id", required = false) String operatorId,
             @PathVariable String sellerId,
             @Valid @RequestBody InviteRequest request) {
-        validateAdminRole(userRole);
+        ProductOperatorAccess.requireWrite(userRole);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(InviteResponse.from(sellerMemberService.invite(sellerId, request.email(), operatorId)));
-    }
-
-    private static void validateAdminRole(String userRole) {
-        if (userRole == null || userRole.isBlank()) {
-            throw new AccessDeniedException();
-        }
-        for (String role : userRole.split(",")) {
-            if (ROLE_ADMIN.equalsIgnoreCase(role.trim())) {
-                return;
-            }
-        }
-        throw new AccessDeniedException();
     }
 }

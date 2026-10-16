@@ -66,7 +66,7 @@ class SettlementPeriodControllerSliceTest {
                 new PeriodView("p-1", FROM, TO, "OPEN", null, null, List.of()));
 
         mockMvc.perform(post("/api/admin/settlements/periods")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content(OPEN_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.periodId").value("p-1"))
@@ -82,7 +82,7 @@ class SettlementPeriodControllerSliceTest {
                         "an OPEN settlement period already covers this window", null));
 
         mockMvc.perform(post("/api/admin/settlements/periods")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content(OPEN_BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PERIOD_ALREADY_OPEN"));
@@ -94,7 +94,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodWindowInvalidException("from >= to"));
 
         mockMvc.perform(post("/api/admin/settlements/periods")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content(OPEN_BODY))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("PERIOD_WINDOW_INVALID"));
@@ -111,7 +111,7 @@ class SettlementPeriodControllerSliceTest {
     @Test
     void open_missingBody_returns400() throws Exception {
         mockMvc.perform(post("/api/admin/settlements/periods")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE")
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -128,7 +128,7 @@ class SettlementPeriodControllerSliceTest {
                         Instant.parse("2026-07-01T09:00:00Z"), 1, List.of(payout)));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-1/close")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"))
                 .andExpect(jsonPath("$.sellerCount").value(1))
@@ -145,7 +145,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodAlreadyClosedException("already closed"));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-1/close")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PERIOD_ALREADY_CLOSED"));
     }
@@ -156,7 +156,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodNotFoundException("not found"));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-x/close")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_FOUND"));
     }
@@ -176,7 +176,7 @@ class SettlementPeriodControllerSliceTest {
                 new PeriodView("p-1", FROM, TO, "CLOSED",
                         Instant.parse("2026-07-01T09:00:00Z"), 1, List.of())));
 
-        mockMvc.perform(get("/api/admin/settlements/periods").header("X-User-Role", "ECOMMERCE_OPERATOR"))
+        mockMvc.perform(get("/api/admin/settlements/periods").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].periodId").value("p-1"))
                 .andExpect(jsonPath("$.items[0].status").value("CLOSED"))
@@ -202,7 +202,7 @@ class SettlementPeriodControllerSliceTest {
                 .willReturn(List.of(paid, pending));
 
         mockMvc.perform(get("/api/admin/settlements/periods/p-1/payouts")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.items[0].payoutId").value("po-1"))
@@ -227,7 +227,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodNotFoundException("not found"));
 
         mockMvc.perform(get("/api/admin/settlements/periods/p-x/payouts")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_FOUND"));
     }
@@ -242,7 +242,7 @@ class SettlementPeriodControllerSliceTest {
                 .willReturn(List.of(paid));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-1/payouts/execute")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("PAID"))
                 .andExpect(jsonPath("$.items[0].payoutReference").value("SIM-p-1-seller-1-uuid1"))
@@ -255,7 +255,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodNotClosedException("period is not CLOSED: p-open"));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-open/payouts/execute")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PERIOD_NOT_CLOSED"));
     }
@@ -266,7 +266,7 @@ class SettlementPeriodControllerSliceTest {
                 .willThrow(new PeriodNotFoundException("not found"));
 
         mockMvc.perform(post("/api/admin/settlements/periods/p-x/payouts/execute")
-                        .header("X-User-Role", "ECOMMERCE_OPERATOR"))
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_SETTLEMENT_READ,ECOMMERCE_SETTLEMENT_WRITE"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SETTLEMENT_NOT_FOUND"));
     }
