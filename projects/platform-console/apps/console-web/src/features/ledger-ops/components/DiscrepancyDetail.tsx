@@ -43,7 +43,7 @@ export interface DiscrepancyDetailProps {
   canWrite?: boolean;
 }
 
-export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
+export function DiscrepancyDetail({ discrepancyId, canWrite = true }: DiscrepancyDetailProps) {
   const q = useDiscrepancy(discrepancyId);
   const d: Discrepancy | null = q.data ?? null;
   const resolveM = useResolveDiscrepancy();
@@ -102,7 +102,17 @@ export function DiscrepancyDetail({ discrepancyId }: DiscrepancyDetailProps) {
         >
           대사 차이 상세 — {d.discrepancyId}
         </h3>
-        {isOpen && (
+        {isOpen && !canWrite && (
+          <p
+            role="note"
+            data-testid="ledger-recon-read-only-note"
+            className="text-xs text-muted-foreground"
+          >
+            조회 전용 — 대사 차이 해소에 필요한 업무 권한(원장 변경)이 이 테넌트에서 배정되지 않아
+            «해소» 를 숨겼습니다.
+          </p>
+        )}
+        {isOpen && canWrite && (
           <Button
             variant="primary"
             onClick={() => setResolveOpen(true)}

@@ -95,7 +95,7 @@ const FxRatesPanel = dynamic(
 );
 
 export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
-  const { trialBalance, periods, discrepancies } = props;
+  const { trialBalance, periods, discrepancies, canWrite = true } = props;
   const state = useLedgerOpsState(props);
   const { active, setActive, visited } = state;
 
@@ -191,6 +191,7 @@ export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
             selectedDiscrepancyId={state.selectedDiscrepancyId}
             setSelectedDiscrepancyId={state.setSelectedDiscrepancyId}
             handleSelectEntry={state.handleSelectEntry}
+            canWrite={canWrite}
           />
         ) : null}
       </div>
@@ -258,6 +259,7 @@ export function LedgerOpsScreen(props: LedgerOpsScreenProps) {
             fxHistoryForbidden={state.fxHistoryForbidden}
             fxHistoryApiErr={state.fxHistoryApiErr}
             fxHistoryQ={state.fxHistoryQ}
+            canWrite={canWrite}
           />
         ) : null}
       </div>

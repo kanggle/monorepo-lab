@@ -62,9 +62,9 @@ frontend
 # Acceptance Criteria
 
 - [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-794` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `FINANCE_ACCOUNT_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 Finance 5 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(account · ledger `SecurityConfig`)와 다시 대조.
-- [ ] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저.
-- [ ] **AC-2** — 🔴 대조군: 조회 세트(`finance-read`) → Finance 메뉴 배지 없음 · 쓰기 버튼 없음 / 계좌 세트만(`finance-account-operate`) → `/ledger` 배지 / 원장 운영 세트(`finance-ledger-operate`) → `/finance/accounts` 배지, `/ledger` 버튼 보임 / 원장 통제만 → `/ledger` 배지 없음 · 버튼 없음 / Finance 세트 0 → Finance 메뉴 전부 배지.
-- [ ] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로).
+- [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `ee65d15b2`.
+- [x] **AC-2** — 🔴 대조군: 조회 세트(`finance-read`) → Finance 메뉴 배지 없음 · 쓰기 버튼 없음 / 계좌 세트만(`finance-account-operate`) → `/ledger` 배지 / 원장 운영 세트(`finance-ledger-operate`) → `/finance/accounts` 배지, `/ledger` 버튼 보임 / 원장 통제만 → `/ledger` 배지 없음 · 버튼 없음 / Finance 세트 0 → Finance 메뉴 전부 배지. → `console-nav-business-permission.test.ts` § TASK-PC-FE-344(+ 진입 역할 0 가드 · 통제 역할 미선언 가드) · `LedgerOpsScreen.test.tsx`(`DiscrepancyDetail` · 두 패널) · `LedgerFxRates.test.tsx`.
+- [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → row 12 `undefined` → 배지 없음 · `canWriteOn` true · `canWrite` 생략 = 보임(대조군 시험).
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
 
 # Related Specs
@@ -106,6 +106,19 @@ frontend
 ## 범위 — 버튼은 이 PR 에서 배선 (분리 안 함)
 
 `/ledger` 의 쓰기 버튼은 둘뿐이다: 대사 해소(`DiscrepancyDetail` «해소») · FX «새로고침»(`FxRatesTable` — `POST /fx-rates/refresh`, 이름은 새로고침이지만 쓰기). 두 패널(`ReconciliationPanel` · `FxRatesPanel`)을 지나는 배선 하나라 345 · 343 처럼 나눌 크기가 아니다. 🔴 판정은 역할 **이름**(`FINANCE_LEDGER_WRITE`) — 카탈로그 `access`(CONTROL 도 `WRITE`)로 추론하지 않는다(Edge Case 2).
+
+## Red — 커밋 `ee65d15b2` (계약 · 시험 · 타입 전용 선택 props · 티켓만)
+
+- 🔵 «시험만» 의 예외: tsc 를 통과시키려고 `canWrite?` 를 `DiscrepancyDetail` · `FxRatesTable` · `LedgerOpsScreenProps` 에 **선언만** 했다(읽지 않음 — 행동 불변).
+- 로컬 전체: **11 failed | 4611 passed (4622)** — 전부 `AssertionError`(`console-nav-business-permission` 7 · `LedgerOpsScreen` 3 · `LedgerFxRates` 1). `tsc` rc=0.
+- CI run `38973227139`, `Frontend unit tests (… console-web, vitest)` job **`117216438725`**: console-web **11 failed | 4611 passed (4622)** · 같은 3 파일 · 11 건 전부 `AssertionError`(로그에서 셈).
+- 🔵 버린 시험 하나: `LedgerOpsScreen` 을 그려 FX 탭으로 가는 화면 단위 시험 — jsdom 에서 FX 질의는 `success` 인데 `FxRatesTable` 이 그려지지 않아(이 변경 전 코드에서도 같음, 원인은 쫓지 않음) **대조군까지 빨갛다** → 화면 단위 대신 두 패널을 직접 그리는 시험 + 패널의 `canWrite` 를 **필수 prop** 으로 만들어 화면이 빠뜨리면 tsc 가 빨개지게 했다.
+
+## Green
+
+- `permission-map.ts`: `FINANCE_ROLES`(5) · `FINANCE_GET` · `FINANCE_LEDGER_BUSINESS_WRITE` · 3 행 `roles` = 5 · `serverRequires`(개요 · 원장 = 원장 3 · 계좌 = 계좌 2) · `/ledger` `writeRequires` = `FINANCE_LEDGER_WRITE`.
+- 배선: `ledger/page.tsx` → `canWriteOn('/ledger', getDomainBusinessRoles({ finance }))` → `LedgerOpsScreen.canWrite` → `ReconciliationPanel.canWrite`(필수) → `DiscrepancyDetail`(«해소» 숨김 + «조회 전용» 문구) · `FxRatesPanel.canWrite`(필수) → `FxRatesTable`(«새로고침» 숨김).
+- 로컬: `npx vitest run` **399 files / 4622 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`). e2e · smoke · federation 의 `ledger-fx-rates-refresh` · `ledger-recon-resolve` · `nav-finance` 사용처 0(grep).
 
 ## 함께 적는 것
 

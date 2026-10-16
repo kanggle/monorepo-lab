@@ -28,6 +28,7 @@ export function FxRatesPanel({
   fxHistoryForbidden,
   fxHistoryApiErr,
   fxHistoryQ,
+  canWrite,
 }: Pick<
   S,
   | 'fxRatesForbidden'
@@ -41,7 +42,10 @@ export function FxRatesPanel({
   | 'fxHistoryForbidden'
   | 'fxHistoryApiErr'
   | 'fxHistoryQ'
->) {
+> & {
+  /** TASK-PC-FE-344 — REQUIRED so the screen cannot forget to pass it (`FINANCE_LEDGER_WRITE`). */
+  canWrite: boolean;
+}) {
   return (
     <>
       {fxRatesForbidden ? (
@@ -76,6 +80,7 @@ export function FxRatesPanel({
             onRefresh={() => void refreshFxRatesMutation.mutate()}
             refreshing={fxRatesRefreshing}
             onSelectPair={setFxHistoryForeign}
+            canWrite={canWrite}
           />
         </>
       )}
