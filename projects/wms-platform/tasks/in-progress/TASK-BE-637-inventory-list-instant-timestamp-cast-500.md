@@ -8,7 +8,7 @@ WMS inventory-service list endpoints return **500** — native-query rows are ca
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
