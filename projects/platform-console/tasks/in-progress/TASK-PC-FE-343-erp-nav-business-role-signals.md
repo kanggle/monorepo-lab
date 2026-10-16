@@ -128,6 +128,10 @@ frontend
 - `permission-map.ts`: `ERP_ROLES`(4) · `ERP_GET` · 5 행 `roles` = 4 · `serverRequires` = 대조표(개요 = MD ∪ AP).
 - `shared/composition/notification-inbox.ts` `inboxDomainsWorthAsking(domains, activeTenant, myDomainRoles)` + 알림 route 가 활성 테넌트(≠`'*'`)일 때만 row 12 를 묻고 그 결과로 갈래를 고른다.
 - 로컬: `npx vitest run` **399 files / 4603 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`).
+- CI 커밋 `a21b54c03` run `38965751601`: `Frontend unit tests (… console-web, vitest)` job **`117191759384`** — **399 files / 4603 passed**(로그에서 셈) · `Backend fetch resolution` pass(알림 route 의 새 row 12 호출) · 실행된 검사 14 전부 pass · 52 skipped.
+- nightly(브랜치 dispatch) run **`38965748396`** = success(15 job) · 콘솔 job **`117192025297`**: **11 passed · 1 flaky · 0 failed**. flaky = `overview-consolidation.spec.ts:133` «IAM card on the home overview …» 첫 시도 `getByTestId('operator-overview-card-iam')` **element(s) not found**(5 s) → 재시도 통과. ERP 핀 시험(`:75`)은 첫 시도 통과. 🔵 이 변경이 닿지 않는 카드(IAM 개요 카드)이고 개요 SSR 지연 계열(`TASK-PC-FE-341` 은 같은 개요의 문서 10 s TIMEOUT)로 보이나, 사유 문구가 341 과 **같지 않다**(TIMEOUT 아님 — 카드 미렌더). 알림 종이 row 12 를 한 번 더 부르는 것이 개요 첫 렌더와 겹칠 수 있어 **원인 배제는 못 했다** — 표본을 늘려 재실행:
+- 두 번째 nightly run **`38967164204`**(같은 커밋 `a21b54c03`) = success(15 job) · 콘솔 job **`117196733812`**: **12 passed · 0 flaky · 0 failed**. ⇒ 같은 코드 2 런 중 1 런 flaky 1. 342 · 345 브랜치 nightly 는 각 12/0. 표본 3 개로는 «이 변경이 개요 첫 렌더를 늦춘다» 를 확인도 배제도 못 한다 — ⚪, 머지 뒤 정기 nightly 에서 `:133` 첫 시도 실패율을 본다(341 의 관찰 칸과 같은 자리).
+- ⚪ AC-4: `main` 미머지(DRAFT) · Vercel 미배포 · 라이브 화면 미확인. 백엔드 변경 없음(굽기 불필요) — 다음 창: ERP 역할 0 운영자의 ERP 메뉴 배지 · 종의 `degradedDomains` 에 erp 없음 · 데모 운영자는 배지 없음.
 
 ## 함께 적는 것
 
