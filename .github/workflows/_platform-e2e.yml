@@ -125,10 +125,19 @@ jobs:
           name: ${{ inputs.extra-boot-jars-artifact }}
           path: ${{ inputs.extra-download-path }}
 
+      # TASK-MONO-797 — both Gradle calls in this lane go through the not-found retry
+      # wrapper. Every caller of this workflow shares one gradle-home cache key prefix
+      # (the job is always `e2e`), and setup-gradle saves that home even from a failed
+      # build, so one transient "not found" from the repository used to be restored and
+      # replayed by every lane that needs the artifact, on every later run (3 red main
+      # nightlies, 2026-10-16). The wrapper retries ONLY on Gradle's not-found exceptions,
+      # with --refresh-dependencies, and annotates the run either way. Header of the
+      # script carries the measured mechanism.
       - name: Build boot jars in-job
         if: inputs.boot-jars-mode == 'build'
+        shell: bash
         run: >-
-          ./gradlew
+          bash .github/actions/setup-java-gradle/gradlew-retry-not-found.sh
           ${{ inputs.bootjar-tasks }}
           --no-daemon --stacktrace
 
@@ -188,7 +197,11 @@ jobs:
             DARGS="$DARGS -D${prop}=${image}"
           done < <(jq -c '.[]' <<<"$SERVICES")
           echo "[e2e] gradle: $GRADLE_TARGET$XARGS $DARGS"
-          ./gradlew "$GRADLE_TARGET" $XARGS $DARGS --no-daemon --stacktrace
+          # TASK-MONO-797 — same not-found retry as the boot-jar step (download mode has
+          # no boot-jar step, so this is its only Gradle call). Test failures are not
+          # retried: the wrapper's predicate is Gradle's not-found exception class only.
+          bash .github/actions/setup-java-gradle/gradlew-retry-not-found.sh \
+            "$GRADLE_TARGET" $XARGS $DARGS --no-daemon --stacktrace
 
       # TASK-MONO-545. Six caller jobs share this lane (wms / fan / scm × smoke+full),
       # and every one of them used to end a green run with no record of what it ran —
