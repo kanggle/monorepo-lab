@@ -4,6 +4,7 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.domain.orgnode.EntitlementCeiling;
 import com.example.account.domain.repository.TenantDomainSubscriptionRepository;
 import com.example.account.domain.repository.TenantRepository;
+import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantDomainSubscription;
 import com.example.account.domain.tenant.TenantId;
 import lombok.RequiredArgsConstructor;
@@ -53,21 +54,44 @@ public class TenantEntitledDomainsQueryUseCase {
     private final OrgNodeQueryUseCase orgNodeQueryUseCase;
 
     /**
+     * The effective entitled domain keys only — {@link #entitlement(String)}{@code .domainKeys()}.
+     *
      * @throws TenantNotFoundException the tenant is not registered (404)
      */
     @Transactional(readOnly = true)
     public List<String> effectiveEntitledDomains(String tenantId) {
-        if (!tenantRepository.existsById(new TenantId(tenantId))) {
-            throw new TenantNotFoundException(tenantId);
+        return entitlement(tenantId).domainKeys();
+    }
+
+    /**
+     * TASK-BE-639 (owner decision 2026-10-16 UTC, Q1 = B) — the effective entitled domains AND the tenant's own
+     * status, from the one read the assume path already makes. A tenant that is not {@code ACTIVE}
+     * ({@code PENDING} · {@code SUSPENDED}) is entitled to nothing, whatever its subscription rows say: the keys are
+     * {@code []}. auth-service refuses the operator assume exchange on the status; the empty keys are the
+     * old-auth-image safety (a caller that ignores {@code tenantStatus} still gets no domain reach).
+     *
+     * @throws TenantNotFoundException the tenant is not registered (404)
+     */
+    @Transactional(readOnly = true)
+    public Entitlement entitlement(String tenantId) {
+        Tenant tenant = tenantRepository.findById(new TenantId(tenantId))
+                .orElseThrow(() -> new TenantNotFoundException(tenantId));
+        String status = tenant.getStatus().name();
+        if (!tenant.isActive()) {
+            return new Entitlement(List.of(), status);
         }
         // An ungrouped tenant (org_node_id = NULL) resolves to UNBOUNDED — the intersection
         // identity — so the filter below is a no-op and the output is byte-identical to the
         // pre-ADR-047 behaviour (D7 net-zero).
         EntitlementCeiling ceiling = orgNodeQueryUseCase.effectiveCeilingForTenant(tenantId);
 
-        return subscriptionRepository.findActiveByTenantId(tenantId).stream()
+        List<String> keys = subscriptionRepository.findActiveByTenantId(tenantId).stream()
                 .map(TenantDomainSubscription::getDomainKey)
                 .filter(ceiling::permits)
                 .toList();
+        return new Entitlement(keys, status);
     }
+
+    /** TASK-BE-639 — the effective keys + the tenant's status ({@code ACTIVE} | {@code PENDING} | {@code SUSPENDED}). */
+    public record Entitlement(List<String> domainKeys, String tenantStatus) {}
 }
