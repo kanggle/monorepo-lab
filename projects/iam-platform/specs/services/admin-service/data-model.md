@@ -675,7 +675,7 @@ RBAC의 의사결정(권한 평가 알고리즘, seed role 매트릭스, missing
       (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
         WHERE domain_key = 'scm' AND role_name = 'SCM_OPERATOR')                         AS sets_with_scm_operator,   -- 뒤 = 0
       (SELECT COUNT(DISTINCT set_id) FROM domain_permission_set_role
-        WHERE domain_key = 'scm' AND role_name = 'SCM_PROCUREMENT_WRITE')                AS sets_with_procurement_write, -- 뒤 = 앞의 sets_with_scm_operator + 2 (새 프리셋 둘)
+        WHERE domain_key = 'scm' AND role_name = 'SCM_PROCUREMENT_WRITE')                AS sets_with_procurement_write, -- 뒤 = 앞의 sets_with_scm_operator + 1 (scm-procurement-operate — 새 프리셋 다섯 중 PROCUREMENT_WRITE 를 가진 것은 이 하나. «+2» 는 오기였다, 28차 창 2026-10-16 UTC 실측 3 → 4)
       (SELECT COUNT(*) FROM tenant_partnership
         WHERE JSON_CONTAINS(delegated_scope->'$.roles', '"SCM_OPERATOR"'))                AS partnerships_with_scm_operator; -- 뒤 = 0
     ```

@@ -8,7 +8,7 @@ TASK-PC-FE-338
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -51,12 +51,12 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 재측정: 메뉴 판정 입력 · `/permission-sets` 를 가리키는 e2e · 단위 시험 · 가이드 사본 전수 grep(`tests/e2e` · `e2e-smoke` · `*-nav.test.tsx`).
-- [ ] **AC-1** — 재고 세트 운영자: WMS 재고 메뉴 열림 · 출고 메뉴 «권한 없음» · SCM 미구독 테넌트면 «구독 필요»(두 신호 구분) — 단위 시험 + 같은 조건의 서버 응답(403/200)과 대조한 기록.
-- [ ] **AC-2** — 조회 세트: 변경 버튼 숨김 · 같은 API 직접 호출은 서버 403(P3 배포 뒤 라이브, 그 전엔 ⚪ 이유).
-- [ ] **AC-3** — 운영자 화면: 그룹 출처 세트에는 회수 버튼 없음 · 직접 회수 뒤 그룹분 유지가 화면에 보임.
-- [ ] **AC-4** — 화면 이름 분리 · 기존 IAM 관리 역할 동작 불변(회귀 시험).
-- [ ] **AC-5** — 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · Vercel 배포 상태를 따로 적는다(`main` 직접 배포는 꺼져 있다 — `vercel.json`).
+- [x] **AC-0** — 재측정: 메뉴 판정 입력 · `/permission-sets` 를 가리키는 e2e · 단위 시험 · 가이드 사본 전수 grep(`tests/e2e` · `e2e-smoke` · `*-nav.test.tsx`). → § AC-0: re-measurement (2026-10-14) + § Slice c-2 — AC-0 re-measurement (2026-10-15).
+- [x] **AC-1** — 재고 세트 운영자: WMS 재고 메뉴 열림 · 출고 메뉴 «권한 없음» · SCM 미구독 테넌트면 «구독 필요»(두 신호 구분) — 단위 시험 + 같은 조건의 서버 응답(403/200)과 대조한 기록. → 단위 시험 § Slice c-2 PR 2 · 라이브 대조 § 28차 창 라이브(2026-10-16 UTC).
+- [x] **AC-2** — 조회 세트: 변경 버튼 숨김 · 같은 API 직접 호출은 서버 403(P3 배포 뒤 라이브, 그 전엔 ⚪ 이유). → 단위 시험 § Slice c-2 PR 2 · 라이브 § 28차 창 라이브.
+- [x] **AC-3** — 운영자 화면: 그룹 출처 세트에는 회수 버튼 없음 · 직접 회수 뒤 그룹분 유지가 화면에 보임. → § Slice b · `OperatorsScreen-domain-access.test.tsx` («GROUP-only set has NO revoke button» · «DIRECT+GROUP set shows the revoke button, and its confirm says the group copy stays»).
+- [x] **AC-4** — 화면 이름 분리 · 기존 IAM 관리 역할 동작 불변(회귀 시험). → § Slice a · `PermissionSetsScreen.test.tsx`(기존 동작 칸 무변경 초록).
+- [x] **AC-5** — 머지 뒤 첫 `nightly-e2e.yml` 콘솔 잡 확인 · Vercel 배포 상태를 따로 적는다(`main` 직접 배포는 꺼져 있다 — `vercel.json`). → § AC-5 기록 (2026-10-15 UTC).
 
 # Related Specs
 
@@ -371,3 +371,25 @@ P3 is live (`TASK-BE-632` done, 27th window). c-2's precondition is met. I re-me
 - **머지 뒤 첫 nightly(main)**: run 38796953966 (push `091290a57`) success · 콘솔 잡 116636289449 `Running 12 tests using 2 workers` · `12 passed (1.0m)` · flaky 0.
 - **Vercel Production(배포 기록으로 잼)**: `0091e1897` → deployment 7101097688 `success` (18:34:24Z) · `091290a57` → deployment 7102759725 `success` (19:50:41Z).
 - ⇒ AC-5 닫힘. 남은 것 = AC-1 · AC-2 의 서버 403/200 라이브 대조(`TASK-MONO-672` § Next window 3단계, 773 을 실은 재굽기 창). 티켓은 그때까지 `in-progress/`.
+
+## 28차 창 라이브 (2026-10-16 UTC) — AC-1 · AC-2
+
+- 창: AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`(P3 포함) · 콘솔 = Vercel Production(`091290a57` 이후). 소유자 브라우저, `requester@demo.com` 를 `demo-corp` 에서 `run-338.sh` inv / out / ro / restore 로 세트만 바꿔 가며. 서버 쪽은 같은 세트 · 같은 세션의 assume 토큰으로 직접 호출.
+- **AC-1 ✅** — `wms-inventory-operate` 만:
+  - 화면: 사이드바 WMS ▸ «출고» 에 «업무 권한 없음», 열면 «이 화면을 조회할 권한이 없습니다»(서버 403). «재고» 는 배지 없음 · 열림.
+  - 서버: roles = `[INVENTORY_READ, INVENTORY_WRITE]` · inventory GET 200 · `/admin/dashboard/inventory` 200 · outbound orders **403**.
+  - 대조: `wms-outbound-operate` 추가 → 재로그인 → 배지 사라짐 · 출고 열림(서버 outbound GET 200 · 없는 id `:cancel` → 400 = 게이트 통과).
+  - «SCM 미구독 테넌트면 «구독 필요»» 칸은 `demo-corp` 가 SCM 구독 테넌트라 이 창에서 조건이 성립하지 않는다 — 단위 시험(§ Slice c-2 PR 2, `sidebar-business-permission.test.tsx`)이 맡는다. AC 의 «단위 시험 + 서버 대조 기록» 중 서버 대조가 필요한 칸(출고 403 ↔ 배지, 재고 200 ↔ 배지 없음)은 위에서 같은 세션으로 닫혔다.
+- **AC-2 ✅** — `wms-inventory-operate` + 테넌트 세트 {`OUTBOUND_READ`}:
+  - 화면: 출고 목록 열림 · 주문 상세에 피킹 · 패킹 · 출고 확정 · 취소 버튼 없음 + «조회 전용 — 출고 변경(피킹 · 패킹 · 출고 확정 · 주문 취소)에 필요한 업무 권한이 이 테넌트에서 배정되지 않아 해당 버튼을 숨겼습니다.»
+  - 서버: outbound GET 200 · 같은 토큰으로 `:cancel` **403**.
+- 관측(결함 아님): «발송 재시도»(SCM logistics)는 그대로 보인다 — 서버는 792 Q3 이후 403. 숨기는 것은 `TASK-PC-FE-342` 범위(그때까지 예상된 상태).
+- 관측: 콘솔은 assume 토큰을 최대 ~4분 들고 있어(쿠키 240 s — § Slice c-1) 세트 변경은 재로그인 / 재assume 뒤에 화면에 반영된다.
+- 복원: 세트 행 = `legacy-compat` `MIGRATION` 1행(`granted_at` 16:17:27.189715) · roles 전부 — 바이트 동일.
+- 기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+## 닫기 (2026-10-16 UTC) — in-progress → done
+
+- **(a)(b)(c) — 구현 PR 6개 전부 `gh pr view` 로 확인**: #4347 `56a15be8b` · #4348 `27cdcebd2` · #4349 `808fa9e84` · #4354 `ca176d570` · #4378 `0091e1897` · #4381 `091290a57` — 모두 `state=MERGED` · `origin/main` 조상 · `statusCheckRollup` 실패 0 (각 9~13 pass / 나머지 skipped).
+- **(d) — AC 절을 열어 동사별로 읽음**: AC-0 재측정 기록 있음 · AC-1 «단위 시험 + 서버 대조 기록» = 둘 다 · AC-2 «숨김 · 서버 403(라이브)» = 둘 다 · AC-3 «회수 버튼 없음 · 그룹분 유지가 보임» = 단위 시험 · AC-4 «이름 분리 · 회귀 시험» · AC-5 «nightly 확인 · Vercel 따로 적기» = § AC-5 기록. 전부 닫힘.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 각각 머지 시점에 검토됐고, 마지막 남은 두 AC 는 라이브 측정뿐이었다(코드 변경 없음).

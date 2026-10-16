@@ -85,13 +85,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-637-inventory-list-instant-timestamp-cast-500.md` — **inventory-service 목록 API 500 — 네이티브 쿼리 행을 `java.sql.Timestamp` 로 캐스팅하는데 드라이버는 `Instant` 를 준다(`ClassCastException`, 4곳)** (IN-PROGRESS, 2026-10-16 UTC · 출처 27차 데모 창). 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 ## review
 
 (empty)
 
 ## done
+
+- `TASK-BE-637-inventory-list-instant-timestamp-cast-500.md` — **✅ DONE (2026-10-16 UTC, 4차원 검증 — impl PR [#4389](https://github.com/kanggle/monorepo-lab/pull/4389) squash `f17216b1d`; `state=MERGED` · main 조상 · 머지 시점 FAILURE 0 · AC 본문 열어 읽음)** — inventory-service 목록 4종(재고 · 이동 · 조정 · 이력)의 `Instant`→`Timestamp` 캐스트 500 → `NativeRowValues` 하나로. 실 DB IT red 4/4 → green · `NativeRowValuesTest`. 28차 창 라이브(AC-3): `GET /api/v1/inventory?size=1` 200(27차 500) · 타임스탬프 3칸 non-null · 콘솔 «WMS 재고» 행 렌더.
 
 - `TASK-BE-630-master-ref-search-q-status-scope.md` — **✅ DONE (2026-10-13 UTC, 4차원 검증 — impl PR [#4313](https://github.com/kanggle/monorepo-lab/pull/4313) squash `8338dda8a`; `state=MERGED` · main 조상 · 머지 시점 FAILURE 0 · AC 본문 열어 읽음)** — admin-service `GET /dashboard/refs/{type}` 에 `q`(코드·이름 부분 일치) · `status` · `warehouseId` · `skuId` · `partnerType` 구현 + 계약 § 1.7 표. 통합 7칸 CI pass(첫 런의 1칸 실패 = 시험 데이터 45자 > VARCHAR(40), 쿼리 무관). 데모 반영 = 다음 AMI 재굽기. 후속 `TASK-PC-FE-333`.
 

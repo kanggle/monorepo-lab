@@ -8,7 +8,7 @@ TASK-PC-FE-332
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -74,7 +74,7 @@ platform-console
 - [x] **AC-2** — 대조군: 사이트 계정(비풀)의 계정 잠금 표시는 지금과 같다.
   - 단위 시험: 동 파일 `TASK-PC-FE-332 AC-2 control: a non-pool (site account) lock shows no site-lock notice — unchanged from before`(`scope=ACCOUNT` 응답 → 안내 미노출) 및 `TASK-PC-FE-332 control: an old admin-service response with no \`scope\` field (back-compat) shows no site-lock notice`(옛 admin-service 응답 — `scope` 필드 자체가 없음 — 도 안내 미노출, 계약의 "scope 없는 응답은 ACCOUNT 로 읽는다" 그대로).
 
-- [ ] **AC-3** — 라이브: 다음 데모 창에서 `cs@demo.com` 으로 잠금 → 표시 확인 → 해제. ⚪ 다음 창(27차, 날짜 미정) — 콘솔 코드·단위 시험은 이번 PR 에 있으나 실제 데모 환경에서의 눈으로 보는 확인은 그 창에서만 가능.
+- [x] **AC-3** — 라이브: 다음 데모 창에서 `cs@demo.com` 으로 잠금 → 표시 확인 → 해제. → ✅ 28차 창(2026-10-16 UTC), § 28차 창 라이브. ⚪ 다음 창(27차, 날짜 미정) — 콘솔 코드·단위 시험은 이번 PR 에 있으나 실제 데모 환경에서의 눈으로 보는 확인은 그 창에서만 가능.
 
 # Related Specs
 
@@ -94,3 +94,17 @@ platform-console
 
 1. 상태 칸을 «소속 상태» 로 갈아 끼운다 — 사이트 계정(비풀)의 계정 잠금 표시가 사라진다(대조군 AC-2).
 2. 클라이언트에서 «방금 잠갔다» 를 기억해 표시만 바꾼다 — 새로고침하면 사라지고 다른 운영자는 못 본다.
+
+---
+
+# 28차 창 라이브 (2026-10-16 UTC) — AC-3
+
+- 콘솔 = Vercel Production(#4330 `2b4b9faca` 이후) · 백엔드 = AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`.
+- 소유자 브라우저: `cs@demo.com` 이 `demo@demo.com`(풀 계정)을 잠금 → 안내 «demo@demo.com 은(는) 팬·스토어가 함께 쓰는 IAM 공용 계정이라 계정 전체가 아니라 ecommerce 사이트에서만 잠겼습니다. 위 상태 칸은 계정 자체의 상태라 바뀌지 않습니다 — 다른 사이트의 이용은 그대로입니다.» ✅ → 해제.
+- account-service 로그: 잠금 18:09:20Z `ACTIVE->LOCKED` · 해제 18:10:00Z `LOCKED->ACTIVE` — 공유 데모 계정은 원상태.
+- 기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — review → done
+
+- (a) `gh pr view 4330`: `state=MERGED` · `mergedAt` 2026-10-13T15:28:03Z · `mergeCommit` `2b4b9faca`. (b) `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0 (12 pass / 54 skipped).
+- (d) AC 절을 열어 동사별로: AC-0 «file:line + 방향» ✅ · AC-1 «알 수 있다 · 해제 → 사라진다(단위 시험)» ✅ · AC-2 대조군 ✅ · AC-3 «라이브: 잠금 → 표시 확인 → 해제» = 위 ✅. 전부 닫힘.

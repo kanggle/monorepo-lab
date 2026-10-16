@@ -8,7 +8,7 @@ TASK-MONO-795
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -53,7 +53,7 @@ monorepo
 - [x] **AC-0** — 재측정: 관리 컨트롤러 전수 · 게이트웨이 경로 판정 · 서비스별 재검사 유무 · 업무 구분안(OD-6) · 슬라이스 분할 계획. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · STOP 뒤 § 소유자 결정(2026-10-16 UTC) 수령 — Q1 역할 13 · Q2 정산 통제 역할 없음 · Q3 `libs/java-web` 기전 하나 · Q4 원자 PR(슬라이스 분할 = **하지 않는다**).
 - [x] **AC-1** — 🔴 대조군: 주문 세트만 → 상품 변경 403 · 주문 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403 / 🔴 게이트웨이를 거치지 않은 서비스 직접 호출도 같은 판정. → 서비스 게이트 시험 9(order 5 · product 24 · user 3 · settlement 9 · notification 5 · search 1 — 슬라이스 · promotion 7 · shipping 4 — 응용 서비스, **헤더만 넣는 직접 호출** = 게이트웨이 없는 판정): 다른 영역 세트 → 전 경로 403 · 영역 조회 세트 → 쓰기 403 · `ECOMMERCE_OPERATOR` 단독 → 403 · `CUSTOMER` · 빈/없는 헤더 → 403 · 대소문자 무시 · 부분 문자열 불인정. auth `ecom795_*`(주문 세트 → 진입 역할 + 주문 역할만 · 배정된 진입 역할 단독 → 0 · 파트너십 파생) · admin 진입 역할 위임 422. § Red · § Green.
 - [x] **AC-2** — 이전 호환 대조군 · 소비자 경로 무변경 대조군. → 이전 호환 세 고리: V0059 IT(legacy-compat = 카탈로그 · `ECOMMERCE_OPERATOR` 세트 → 13 역할 · 파트너십 2 scope) · auth(`ecom795_legacyCompat_fullEcommerce` — legacy-compat → 진입 역할 + 13) · 서비스(게이트 시험의 legacy-compat 행 — 58 경로 전부 통과). 소비자: 게이트웨이 시험(업무 역할은 소비자 트리를 열지 않는다) · 브랜치 nightly web-store full-stack 14 passed(`account-type-guard` 2 포함) · ecommerce×wms 주문처리 고리 2/0. ⚪ 라이브는 AC-3.
-- [ ] **AC-3** — 배포 상태를 따로 적는다.
+- [x] **AC-3** — 배포 상태를 따로 적는다. → § 배포 상태 (2026-10-16 · 머지 전) · **§ 배포 상태 — 28차 창 (2026-10-16 UTC)**: `main` #4387 `2eef1d91f` · AMI `ami-00ef8cc1057cca59b` @ `8905d2c29` · 라이브 ✅.
 
 # Related Specs
 
@@ -238,3 +238,32 @@ auth(파생 · ceiling) · admin(카탈로그 · V0059) · ecommerce 서비스 9
 | 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-795» (V0059 행 수 앞/뒤 · AC-1/2 라이브 · 직접 호출 대조 · 와일드카드 · 소비자 비회귀) |
 | 콘솔 | 변경 없음(이 PR). E-commerce 신호는 `TASK-PC-FE-345`(ready) — **굽기 라이브 확인 뒤에만 머지** |
 | web-store | 변경 없음 — 소비자 토큰은 `CUSTOMER` 만, 업무 역할은 assume · 파트너십 경로에만 실린다 |
+
+# 배포 상태 — 28차 창 (2026-10-16 UTC) — AC-3 닫힘
+
+| 층 | 상태 |
+|---|---|
+| `main` | ✅ PR #4387 → `2eef1d91f` (2026-10-16T09:55:41Z) · 머지 시점 `statusCheckRollup` 실패 0 (38 pass / 31 skipped) |
+| AMI | ✅ `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`, `2eef1d91f` 가 조상) — ecommerce 9 서비스 · admin V0059 · auth 파생이 **한 굽기**(§ 7 의 갈라짐 없음) · 792 · 793 · 794 와 같은 굽기 · Flyway admin V0052..V0059 전부 success · `seed-ecommerce` 상품 42(`ecommerce`) |
+| 데모 창 라이브 | ✅ 아래 |
+| 콘솔 | `TASK-PC-FE-345` 머지 게이트 충족(그 티켓에 한 줄 적음) |
+
+**V0059 행 수(읽기 전용).** 신선 볼륨이라 «앞» = `ECOMMERCE_OPERATOR` 를 가진 프리셋 3개(`ecommerce-full` · `all-domains-full` · `legacy-compat`)로 셈한다. 뒤: `sets_with_ecommerce_operator` **0** · `sets_with_settlement_write` **4** (= 3 + 1) · `sets_with_member_read` **4** (= 3 + 1) · `partnerships_with_ecommerce_operator` **0** — 완료 판정 주석과 일치.
+
+**AC-2 라이브(이전 호환)** ✅ `demo@demo.com`(legacy-compat) → `roles` ∋ `ECOMMERCE_OPERATOR`(파생) + E-commerce 13 역할 · assume `ecommerce` → `/api/admin/orders` · `products` · `users` · `sellers` 200.
+
+**AC-1 라이브 대조군 — 게이트웨이와 서비스 직접 둘 다** ✅ `requester@demo.com`(`demo-corp`), 프리셋 하나씩 → 바이트 동일 복원:
+- `ecommerce-order-operate` 만 → orders 200 · products POST **403** · users **403** · 주문 상태 변경(없는 주문) 404(게이트 통과).
+- `ecommerce-read` 만 → orders · products · users · sellers 200 · 쓰기 **403**.
+- E-commerce 세트 없음(`wms-inventory-operate` 만) → 게이트웨이 경유 orders **403**.
+- 🔴 **직접 호출(우회) 대조**: 호스트 안에서 `X-User-Role: ECOMMERCE_OPERATOR` 만 → order-service **403** · product-service **403**; `ORDER_READ` / `PRODUCT_READ` 를 실으면 200. 795 전에는 이 둘이 200(게이트웨이가 유일한 판정)이었다. 16:27Z 에 따로 한 번 더 재서 같음.
+- ⚪ **와일드카드 비회귀** — 데모에 IdP 로그인이 되는 무제한 `'*'` `SUPER_ADMIN` 이 없다(`platform@demo.com` 은 `fan-platform` 한정 · `admin`/`dev1` 은 자격 없음). `demo@demo.com`(`demo-corp`) 의 개요 ecommerce 카드는 렌더 · «상품 수 0» — `demo-corp` 상품 `totalElements` 0(http 200), `ecommerce` 는 42 ⇒ 0 은 맞는 데이터이지 거절이 아니다(이 칸을 대신하지 않는다). 이 ⚪ 는 AC 가 아니고 `TASK-MONO-672` § Order «Still open» 3 이 들고 간다.
+- ⚪ 미측정(AC 아님 — 672 런북의 부가 칸): `demo-cs` assume 의 E-commerce 역할 · 콘솔 E-commerce 9 화면 · 소비자 비회귀(web-store 로그인 + 주문 + 결제 + 배송 + 알림). 같은 창에서 스토어 신규 가입 → 첫 로그인은 성공했다(`TASK-FE-108` AC-3) — 주문 · 결제 경로는 아니다.
+
+기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — in-progress → done
+
+- (a) `gh pr view 4387`: `state=MERGED` · `mergedAt` 2026-10-16T09:55:41Z · `mergeCommit` `2eef1d91f`. (b) `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0.
+- (d) AC 절을 열어 동사별로: AC-0 재측정 + 소유자 결정 ✅ · AC-1 대조군(서비스 직접 + 게이트웨이) ✅ · AC-2 이전 호환 · 소비자 무변경 대조군 ✅(시험 · 브랜치 nightly) · AC-3 «배포 상태를 따로 적는다» = 위 표 ✅. 전부 닫힘.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, 마지막 AC 는 배포 상태 기록뿐이었다.

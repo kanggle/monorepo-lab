@@ -8,7 +8,7 @@ TASK-MONO-794
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -54,7 +54,7 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 - [x] **AC-0** — 재측정: finance 명세 · 코드 판정 대조 · 원장 고위험 쓰기 목록 · 업무 구분안(OD-6) · 원장 고위험 쓰기 처리 소유자 결정. → § AC-0 기록(2026-10-16 UTC) — 측정 완료 · STOP 뒤 § 소유자 결정(2026-10-16 UTC) 수령 — Q1 원장 통제 쓰기 7 = `FINANCE_LEDGER_CONTROL` · Q2 역할 5 · 프리셋 · Q3 KYC/충전 = `FINANCE_ACCOUNT_WRITE`.
 - [x] **AC-1** — 🔴 대조군: 계좌 세트만 → 원장 변경 403 · 계좌 200 / 조회 세트 → 변경 403 / 진입 역할만 → 업무 변경 403. → account `AccountBusinessRoleGateSliceTest` · ledger `LedgerBusinessRoleGateSliceTest`(실 체인 · 실서명 JWT · 경로 39 전수 — 계좌 세트만 → 원장 전 경로 403 · 원장 세트만 → 계좌 전 경로 403 · 조회 세트 → 쓰기 403 · `FINANCE_OPERATOR` 만 → 403 · 일반 `OPERATOR/ADMIN/SUPER_ADMIN` → 403 · 구독만 → 403 · 🔴 Q1 `finance-ledger-operate` → 통제 쓰기 7 403 · Q2 통제만 → 업무 쓰기 6 403) · KYC/충전 `AccountApplicationServiceTest`(쓰기 역할 없음 → `PERMISSION_DENIED`) · auth `fin794_*` · admin 위임 422. § Red · § Green.
 - [x] **AC-2** — 이전 호환 대조군(기존 운영자 같은 API 집합 200). → 세 고리: V0058 IT(legacy-compat = 카탈로그 = Finance 5 포함 · `FINANCE_OPERATOR` 세트 → 5 역할(**CONTROL 포함**) · 파트너십 2 scope) · auth(`assumeTenant_legacyCompatHolder_*` — legacy-compat → `FINANCE_OPERATOR` + 5) · 서비스(두 게이트 시험의 `legacyOperator_allowed` — 29 + 10 경로 전부 통과) · 브랜치 e2e(federation `tenant-switch-rescope` 의 acme Finance 카드 · 콘솔 `operators-profile` Finance 카드 `ok`). ⚪ 라이브는 AC-3.
-- [ ] **AC-3** — 배포 상태를 따로 적는다.
+- [x] **AC-3** — 배포 상태를 따로 적는다. → § 배포 상태 (2026-10-16 · 머지 전) · **§ 배포 상태 — 28차 창 (2026-10-16 UTC)**: `main` #4385 `cf36d1609` · AMI `ami-00ef8cc1057cca59b` @ `8905d2c29` · 라이브 ✅.
 
 # Related Specs
 
@@ -193,3 +193,33 @@ Finance 쓰기는 `SCOPE_finance.write ∨ OPERATOR/ADMIN/SUPER_ADMIN/FINANCE_OP
 | 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-794» (V0058 행 수 앞/뒤 · AC-1/2 라이브 · 데모 시드 · 통제 쓰기 대조) |
 | 콘솔 | 변경 없음(이 PR). Finance 신호는 `TASK-PC-FE-344`(ready) — **굽기 라이브 확인 뒤에만 머지** |
 | 기계 클라이언트 | `finance-platform-internal-services-client`(범위만) — 범위 갈래 유지로 **계속 통한다**(KYC/충전은 지금처럼 역할 필요 — 403) |
+
+# 배포 상태 — 28차 창 (2026-10-16 UTC) — AC-3 닫힘
+
+| 층 | 상태 |
+|---|---|
+| `main` | ✅ PR #4385 → `cf36d1609` (2026-10-16T06:52:24Z) · 머지 시점 `statusCheckRollup` 실패 0 (22 pass / 45 skipped) |
+| AMI | ✅ `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`, `cf36d1609` 가 조상) · 792 · 793 · 795 와 같은 굽기 · Flyway admin V0052..V0059 전부 success · finance 시드 데이터 있음 |
+| 데모 창 라이브 | ✅ 아래 |
+| 콘솔 | `TASK-PC-FE-344` 머지 게이트 충족(그 티켓에 한 줄 적음) |
+
+**V0058 행 수(읽기 전용).** 신선 볼륨이라 «앞» = `FINANCE_OPERATOR` 를 가진 프리셋 3개(`finance-full` · `all-domains-full` · `legacy-compat`)로 셈한다. 뒤: `sets_with_finance_operator` **0** · `sets_with_ledger_control` **3** (= 3 — 새 프리셋은 CONTROL 없음, Q1) · `sets_with_ledger_write` **4** (= 3 + 1, `finance-ledger-operate`) · `partnerships_with_finance_operator` **0** — 완료 판정 주석과 일치.
+
+**AC-2 라이브(이전 호환)** ✅ `demo@demo.com`(legacy-compat) assume `demo-corp` → `roles` ∋ `FINANCE_OPERATOR`(파생) + Finance 5 역할 · trial balance GET 200. **범위 가드** ✅ assume 토큰 `scope` = `[openid, profile, tenant.read, email]` — `finance.write` 없음.
+
+**AC-1 라이브 대조군** ✅ `requester@demo.com`(`demo-corp`), 프리셋 하나씩 → 바이트 동일 복원:
+- `finance-account-operate` 만 → 계좌 GET 404(게이트 통과) · trial balance **403**.
+- `finance-read` 만 → trial balance · periods 200 · transfer / journal **403**.
+- `finance-ledger-operate` 만 → 수기 분개 422(게이트 통과) · 기간 마감 **403** · FX override **403**(Q1).
+- 테넌트 세트 {`FINANCE_LEDGER_CONTROL`} 만 → 기간 마감 404(게이트 통과) · 분개 **403** · trial balance 200(Q2 — 독립).
+- Finance 세트 없음(`wms-inventory-operate` 만) → trial balance **403**(794 전에는 `FINANCE_VIEWER` 합성으로 200).
+- ⚪ 미측정(AC 아님 — 672 런북의 부가 칸): legacy-compat 의 대사 해소 · FX 갱신 · 기간 마감 200 · Finance 세트 없는 운영자의 개요 Finance 카드 `forbidden`.
+
+기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — in-progress → done
+
+- (a) `gh pr view 4385`: `state=MERGED` · `mergedAt` 2026-10-16T06:52:24Z · `mergeCommit` `cf36d1609`. (b) `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0.
+- (d) AC 절을 열어 동사별로: AC-0 재측정 + 소유자 결정 ✅ · AC-1 대조군 ✅ · AC-2 이전 호환 ✅ · AC-3 «배포 상태를 따로 적는다» = 위 표 ✅. 전부 닫힘.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, 마지막 AC 는 배포 상태 기록뿐이었다.
+- 🔵 § 브랜치 nightly 의 ⚪(이슈 #4386 이 다음 `main` nightly 초록에서 자동으로 닫히는가)는 AC 가 아니다 — 그 nightly 빨강은 `TASK-MONO-797` 이 맡는다.

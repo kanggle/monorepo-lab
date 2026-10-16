@@ -94,3 +94,7 @@ frontend
 1. 굽기 전에 머지 — 위 머지 게이트의 거짓 배지 · 버튼 숨김.
 2. `ECOMMERCE_OPERATOR` 를 `serverRequires` 에 남긴다 — 진입 역할은 서비스에서 업무 API 를 열지 않으므로 신호가 서버보다 넓어진다(조회 403 화면에 배지가 안 뜬다).
 3. 판매자 화면을 별도 역할로 만든다 — 서버에 없는 역할이라 신호가 영원히 «권한 없음».
+
+# Merge gate — 28th window
+
+- 2026-10-16 UTC — gate met: the bake carrying 792/793/794/795 was live-verified in the 28th window (2026-10-16) — may now be implemented/merged. (AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`; this ticket's source `TASK-MONO-795` → `done/`; results in `TASK-MONO-672` § 28th window — harvest.)

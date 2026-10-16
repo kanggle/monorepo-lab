@@ -8,7 +8,7 @@ TASK-MONO-792
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -56,7 +56,7 @@ monorepo
 - [x] **AC-1** — 🔴 대조군(실패 쪽 먼저): 수요계획 세트만 → 발주 변경 API 403 · 수요계획 200 / 조회 세트 → GET 200 · 변경 403 / `SCM_OPERATOR` 만(업무 역할 0) → 업무 API 403. → 서비스 4 `*BusinessRoleGateSliceTest`(실서명 JWT · 실 체인) + auth `scm792_*`. § Red · § Green.
 - [x] **AC-2** — 이전 호환: 백필된 기존 운영자가 이 PR 전후로 같은 API 집합에 200(대조군). → 세 고리: V0056 IT(legacy-compat = 카탈로그 = SCM 8 포함 · `SCM_OPERATOR` 세트 → 8 역할) · auth(legacy-compat → `SCM_OPERATOR` + 8) · 서비스(그 토큰이 모든 SCM 경로 게이트 통과) + scm e2e 4 시나리오(승인 → 초안 발주 포함) 초록. ⚪ 라이브는 AC-4.
 - [x] **AC-3** — WMS 세트만 가진 운영자의 SCM 직접 API 403 · SCM 세트만 가진 운영자의 WMS 직접 API 403. → scm 게이트 시험 4 클래스의 WMS 역할 토큰 403 · wms outbound `SecurityChainAssemblyParityTest#scmSetOnly_isRefusedByWmsOutbound` 403(양쪽 단계 초록 — WMS 쪽은 이미 성립하던 대조) · auth `scm792_wmsSetOnly_noScm`.
-- [ ] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다 · 라이브 없으면 ⚪ 와 이유. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪(소유자 명령 굽기 필요).
+- [x] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다 · 라이브 없으면 ⚪ 와 이유. → § 배포 상태 — `main` 미머지 · AMI ⚪ · 라이브 ⚪(소유자 명령 굽기 필요). → **갱신 § 배포 상태 — 28차 창 (2026-10-16 UTC)**: `main` #4382 `81d00faf5` · AMI `ami-00ef8cc1057cca59b` @ `8905d2c29` · 라이브 ✅.
 
 # Related Specs
 
@@ -205,3 +205,33 @@ Flyway: admin-service 다음 빈 번호 = **`V0056`**(base 기준). 🔴 `TASK-M
 | AMI | ⚪ — 굽기는 소유자 명령. 이 PR 의 백엔드(scm 4 · admin V0056 · auth 파생)는 **한 굽기에 함께** 실려야 한다(갈라지면 Failure 3) |
 | 데모 창 라이브 | ⚪ — 위 둘이 없다. 측정 항목은 `TASK-MONO-672` § «Next window — TASK-MONO-792» (V0056 행 수 앞/뒤 · AC-1/2 라이브) |
 | 콘솔 | 변경 없음(이 PR). SCM 신호는 `TASK-PC-FE-342`(ready) — **굽기 라이브 확인 뒤에만 머지** |
+
+# 배포 상태 — 28차 창 (2026-10-16 UTC) — AC-4 닫힘
+
+| 층 | 상태 |
+|---|---|
+| `main` | ✅ PR #4382 → `81d00faf5` (2026-10-15T22:37:53Z) · 머지 시점 `statusCheckRollup` 실패 0 (28 pass / 39 skipped) |
+| AMI | ✅ `ami-00ef8cc1057cca59b` (`RepoCommit` `8905d2c29`, `81d00faf5` 가 조상 — `git merge-base --is-ancestor`) · 793 · 794 · 795 와 **같은 굽기**(갈라짐 없음) · Flyway admin V0052..V0059 전부 success |
+| 데모 창 라이브 | ✅ 아래 |
+| 콘솔 | `TASK-PC-FE-342` 머지 게이트 충족(그 티켓에 한 줄 적음) |
+
+**V0056 행 수(읽기 전용, admin_db).** 신선 볼륨이라 «앞» = 부팅 시점 `SCM_OPERATOR` 를 가진 프리셋 3개(`scm-full` · `all-domains-full` · `legacy-compat`) — 신선 볼륨에서는 V0056 이 이미 돌았으므로 앞 값은 실측이 아니라 이 셈이다.
+- `sets_with_scm_operator` = **0** · `partnerships_with_scm_operator` = **0** · 어떤 세트도 옛 진입 역할을 갖지 않음(질의 결과 NULL).
+- `sets_with_procurement_write` = **4** (`all-domains-full` · `legacy-compat` · `scm-full` · `scm-procurement-operate`) = 앞 3 **+ 1**.
+- 🔴 **완료 판정 주석이 틀렸었다**: `data-model.md` § V0056 은 «앞 + 2 (새 프리셋 둘)» 이라 적었으나 새 프리셋 다섯 중 `SCM_PROCUREMENT_WRITE` 를 가진 것은 `scm-procurement-operate` 하나다 — 코드(V0056)는 맞고 문서만 틀렸다. 이 기록과 같은 PR 에서 주석을 «+ 1 (scm-procurement-operate)» 로 고쳤다.
+
+**AC-2 라이브(이전 호환 — 같은 200)** ✅ `demo@demo.com`(legacy-compat) assume `demo-corp` → `roles` ∋ `SCM_OPERATOR`(파생) + SCM 8 역할 · `scope` = `[openid, profile, tenant.read, email]` · TTL 300 · scm PO 목록 + 보충 제안 GET 200.
+
+**AC-1 · AC-3 라이브 대조군** ✅ `requester@demo.com`(`demo-corp`), `legacy-compat` 회수 → 프리셋 하나씩 → 바이트 동일 복원:
+- `scm-read` 만 → PO · 제안 · iv-nodes GET 200 · dispatch-by-id 404(게이트 통과) · PO 생성 `{}` **403** · 정책 PUT `{}` **403**.
+- `wms-inventory-operate` 만(WMS 세트만) → scm PO **403**(AC-3).
+- 출고 세트만(`wms-outbound-operate`) → scm dispatch `:retry` **403**(Q3 — 예상대로; 콘솔 버튼은 `TASK-PC-FE-342` 가 숨긴다) · inventory 403.
+- ⚪ 미측정(AC 아님 — 672 런북의 부가 칸): legacy-compat 의 `/scm/replenishment` 승인 200.
+
+기록 위치: `TASK-MONO-672` § 28th window — harvest.
+
+# 닫기 (2026-10-16 UTC) — in-progress → done
+
+- (a) `gh pr view 4382`: `state=MERGED` · `mergedAt` 2026-10-15T22:37:53Z · `mergeCommit` `81d00faf5`. (b) `81d00faf5` 는 `origin/main`(`1c8ee22cb`)의 조상. (c) 머지 시점 실패 체크 0.
+- (d) AC 절을 열어 동사별로: AC-0 재측정 · 소유자 결정 수령 ✅ · AC-1 대조군 시험 ✅ · AC-2 이전 호환 세 고리 ✅(라이브도 위) · AC-3 교차 403 ✅ · AC-4 «배포 상태를 따로 적는다» = 위 표(세 층) ✅. 전부 닫힘.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, 마지막 AC 는 배포 상태 기록뿐이었다.
