@@ -5,8 +5,9 @@ import java.util.List;
 /**
  * TASK-BE-631 (ADR-MONO-083) — the system preset keys of admin-api.md § 시스템 프리셋, in the table's order (the
  * order {@code GET /api/admin/domain-permission-sets} lists them in). The rows themselves — fixed {@code setId}s and
- * roles — are seeded by V0052 (15) and V0056 (the five SCM presets, TASK-MONO-792); {@code V0052MigrationShapeTest} /
- * {@code V0056MigrationShapeTest} pin each migration to its part of this list.
+ * roles — are seeded by V0052 (15), V0056 (the five SCM presets, TASK-MONO-792) and V0057 (the three ERP presets,
+ * TASK-MONO-793); {@code V0052MigrationShapeTest} / {@code V0056MigrationShapeTest} / {@code V0057MigrationShapeTest}
+ * pin each migration to its part of this list.
  *
  * <p>Framework-free.
  */
@@ -35,6 +36,10 @@ public final class DomainPermissionSetPresets {
             "scm-logistics-operate",
             "scm-inventory-visibility-operate",
             "erp-full",
+            // TASK-MONO-793 (ADR-083 P6) — V0057: the ERP business presets, listed right after erp-full.
+            "erp-read",
+            "erp-masterdata-operate",
+            "erp-approval-operate",
             "finance-full",
             "ecommerce-full",
             "fan-full",

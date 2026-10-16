@@ -11,10 +11,14 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * READ authorization gate (E6, fail-closed) — the read-model equivalent of
- * masterdata-service's {@code RoleScopeAuthorizationAdapter} READ verdict:
- * READ = {@code erp.read} scope ∨ {@code isOperator()} ∨ entitled
- * ({@code entitled_domains ∋ erp}).
+ * READ authorization gate (E6, fail-closed) for the read model. Since TASK-MONO-793 (ADR-MONO-083 P6 · owner
+ * decision Q6; erp iam-integration.md § 업무 역할) it has two verdicts, one per projection family:
+ * <ul>
+ *   <li>{@link #requireMasterdataRead(Jwt)} — {@code employees*}: {@code ERP_MASTERDATA_READ ∨ ERP_MASTERDATA_WRITE};</li>
+ *   <li>{@link #requireApprovalRead(Jwt)} — {@code approvals*} · {@code delegations*}:
+ *       {@code ERP_APPROVAL_READ ∨ ERP_APPROVAL_WRITE};</li>
+ * </ul>
+ * each {@code ∨ erp.read ∨ erp.write} (workload scopes) {@code ∨ tenant_id='*'} (TASK-ERP-BE-031).
  *
  * <p><b>Symmetric data-scope read filter (TASK-ERP-BE-008 / ADR-MONO-020 D3
  * amendment, 2026-06-05).</b> The gate also extracts the operator's
@@ -30,9 +34,6 @@ import java.util.Set;
  * {@code null}), so every BE-007 caller is unaffected. An explicit empty
  * {@code org_scope=[]} (zero-scope) narrows to nothing (fail-closed: empty
  * result / 404 on detail).
- *
- * <p>The platform-console operator token that already reads masterdata-service
- * satisfies this gate (same READ semantics; TASK-ERP-BE-004).
  */
 @Component
 public class ReadAuthorizationGate {
@@ -41,6 +42,15 @@ public class ReadAuthorizationGate {
     private static final String SCOPE_WRITE = "erp.write";
     private static final String DOMAIN_KEY = "erp";
 
+    static final String ROLE_MASTERDATA_READ = "ERP_MASTERDATA_READ";
+    static final String ROLE_MASTERDATA_WRITE = "ERP_MASTERDATA_WRITE";
+    static final String ROLE_APPROVAL_READ = "ERP_APPROVAL_READ";
+    static final String ROLE_APPROVAL_WRITE = "ERP_APPROVAL_WRITE";
+
+    /**
+     * The erp domain key. Before TASK-MONO-793 it keyed the {@code entitled_domains} READ clause; no verdict
+     * reads it now — kept so the constructor (and the property it binds) does not change.
+     */
     private final String domainKey;
 
     public ReadAuthorizationGate(
@@ -49,34 +59,50 @@ public class ReadAuthorizationGate {
                 ? DOMAIN_KEY : requiredTenantId;
     }
 
+    /** @return the configured erp domain key (diagnostics only since TASK-MONO-793). */
+    String domainKey() {
+        return domainKey;
+    }
+
     /**
-     * Enforces the READ gate; throws {@link ReadAccessDeniedException} (→ 403
-     * {@code PERMISSION_DENIED}) when the caller is neither scoped, an operator,
-     * nor entitled. A {@code null} JWT is denied (defense-in-depth; the security
-     * chain should already have rejected an unauthenticated request).
+     * TASK-MONO-793 Q6 — the {@code employees*} reads (the integrated org view is masterdata).
+     * Throws {@link ReadAccessDeniedException} (→ 403 {@code PERMISSION_DENIED}).
      */
-    public void requireRead(Jwt jwt) {
+    public void requireMasterdataRead(Jwt jwt) {
+        require(jwt, ROLE_MASTERDATA_READ, ROLE_MASTERDATA_WRITE);
+    }
+
+    /**
+     * TASK-MONO-793 Q6 — the {@code approvals*} · {@code delegations*} reads.
+     * Throws {@link ReadAccessDeniedException} (→ 403 {@code PERMISSION_DENIED}).
+     */
+    public void requireApprovalRead(Jwt jwt) {
+        require(jwt, ROLE_APPROVAL_READ, ROLE_APPROVAL_WRITE);
+    }
+
+    /**
+     * The shared verdict (fail-closed; a {@code null} JWT is denied — defense-in-depth). TASK-MONO-793
+     * (owner decision Q1) removed two clauses: {@code entitled_domains ∋ erp} — every assume token carries
+     * the tenant's subscriptions, so it opened the read model to operators holding no ERP set — and the
+     * operator roles ({@code ERP_OPERATOR} is the derived entry role now; {@code ERP_ADMIN} ·
+     * {@code SUPER_ADMIN} are issued nowhere). The tenant gate's dual-accept is untouched: it decides which
+     * tenant a token may enter, not what it may read there.
+     */
+    private void require(Jwt jwt, String readRole, String writeRole) {
         if (jwt == null) {
             throw new ReadAccessDeniedException("no authenticated token");
         }
-        Set<String> scopes = extractScopesAndRoles(jwt);
-        boolean scoped = scopes.contains(SCOPE_READ) || scopes.contains(SCOPE_WRITE);
-        boolean operator = isOperator(scopes);
-        boolean entitled = TenantClaimValidator.isEntitled(jwt, domainKey);
-        // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031): the erp
-        // authority-layer analogue of the tenant gate's allowSuperAdminWildcard(),
-        // mirroring finance FIN-BE-049. A platform-console super-admin forwards its base
-        // OIDC domain token — tenant_id='*', NO erp scope, NO domain roles,
-        // entitled_domains=[] — which passes layer-1 but matches none of the clauses
-        // above. Per ADR-033 S2 / ADR-034 U5 the admin-plane SUPER_ADMIN role is kept OFF
-        // the domain token, so isOperator()'s SUPER_ADMIN branch is dead for the real
-        // super-admin persona — the wildcard tenant_id is the correct key. This gate is
-        // READ-only (E5: no mutating endpoints), so this never widens a write.
+        Set<String> tokens = extractScopesAndRoles(jwt);
+        boolean scoped = tokens.contains(SCOPE_READ) || tokens.contains(SCOPE_WRITE);
+        boolean role = tokens.contains(readRole) || tokens.contains(writeRole);
+        // READ-only platform-super-admin wildcard admission (TASK-ERP-BE-031, unchanged): the
+        // platform-console super-admin's base OIDC domain token — tenant_id='*', NO erp scope, NO
+        // domain roles. This gate is READ-only (E5: no mutating endpoints), so it never widens a write.
         boolean superAdminWildcard = TenantClaimValidator.WILDCARD_TENANT
                 .equals(jwt.getClaimAsString(TenantClaimValidator.CLAIM_TENANT_ID));
-        if (!scoped && !operator && !entitled && !superAdminWildcard) {
+        if (!scoped && !role && !superAdminWildcard) {
             throw new ReadAccessDeniedException(
-                    "actor lacks erp.read scope, operator role, or erp entitlement");
+                    "actor lacks " + readRole + " (or " + writeRole + ", or an erp scope)");
         }
     }
 
@@ -125,11 +151,6 @@ public class ReadAuthorizationGate {
             return claimPresent ? OrgScope.of(Set.of()) : OrgScope.platform();
         }
         return OrgScope.of(scope.tokens());
-    }
-
-    private static boolean isOperator(Set<String> roles) {
-        return roles.contains("ERP_OPERATOR") || roles.contains("ERP_ADMIN")
-                || roles.contains("SUPER_ADMIN");
     }
 
     /**

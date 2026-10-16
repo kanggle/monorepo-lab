@@ -1,5 +1,7 @@
 # API Contract — notification-service (in-app inbox)
 
+> 🔴 **업무 인가 — TASK-MONO-793 (ADR-MONO-083 P6 · 소유자 결정 Q6, 2026-10-15 UTC)부터**: 세 엔드포인트는 **개인 엔드포인트**다 — ERP 업무 역할이 하나라도 있으면(파생 `ERP_OPERATOR` ∨ `ERP_MASTERDATA_*` ∨ `ERP_APPROVAL_*`) `∨ erp.read ∨ erp.write ∨ tenant_id='*'`. `entitled_domains ∋ erp` 만으로는 열리지 않는다(아래 «READ gate» 문장 대체) · 받는 사람 범위(`sub`)는 무변경. 정본: [iam-integration.md § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본).
+
 Base path: `/api/erp/notifications` (rewritten by the gateway from
 `/api/v1/erp/notifications` once `gateway-service` is introduced; v1 = direct
 JWT to the service).

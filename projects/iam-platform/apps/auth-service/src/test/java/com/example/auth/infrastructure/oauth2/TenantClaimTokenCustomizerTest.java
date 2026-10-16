@@ -608,6 +608,7 @@ class TenantClaimTokenCustomizerTest {
     /**
      * TASK-BE-632 — admin-service DomainRoleCatalog order; the legacy-compat preset holds all of it.
      * TASK-MONO-792: SCM_OPERATOR left the catalog for the eight SCM business roles (V0056 rewrote legacy-compat).
+     * TASK-MONO-793: ERP_OPERATOR likewise, for the four ERP business roles (V0057).
      */
     private static final List<String> LEGACY_COMPAT_ROLES = List.of(
             "INVENTORY_READ", "INVENTORY_WRITE", "INBOUND_READ", "INBOUND_WRITE",
@@ -615,7 +616,8 @@ class TenantClaimTokenCustomizerTest {
             "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
             "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE", "SCM_INVENTORY_VISIBILITY_READ",
             "SCM_INVENTORY_VISIBILITY_WRITE",
-            "ERP_OPERATOR", "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR",
+            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE",
+            "FINANCE_OPERATOR", "ECOMMERCE_OPERATOR",
             "FAN_OPERATOR", "MES_OPERATOR");
 
     @Test
@@ -1282,9 +1284,9 @@ class TenantClaimTokenCustomizerTest {
     }
 
     @Test
-    @DisplayName("792 unit: ENTRY_ROLES is data (SCM_OPERATOR ← the eight SCM roles); withDerivedEntryRoles drops assigned entry roles and derives within the ceiling")
+    @DisplayName("792 + 793 unit: ENTRY_ROLES is data (SCM_OPERATOR ← eight SCM roles · ERP_OPERATOR ← four ERP roles); withDerivedEntryRoles drops assigned entry roles and derives within the ceiling")
     void scm792_entryDerivation_unit() {
-        assertThat(OperatorRoleDerivation.ENTRY_ROLES).containsOnlyKeys("SCM_OPERATOR");
+        assertThat(OperatorRoleDerivation.ENTRY_ROLES).containsOnlyKeys("SCM_OPERATOR", "ERP_OPERATOR");
         assertThat(OperatorRoleDerivation.ENTRY_ROLES.get("SCM_OPERATOR"))
                 .containsExactlyInAnyOrderElementsOf(SCM_BUSINESS_ROLES_792);
         List<String> scmCeiling = OperatorRoleDerivation.fromEntitledDomains(List.of("scm"));
@@ -1300,6 +1302,81 @@ class TenantClaimTokenCustomizerTest {
         assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("OUTBOUND_READ"), null))
                 .containsExactly("OUTBOUND_READ");
         assertThat(OperatorRoleDerivation.withDerivedEntryRoles(null, null)).isEmpty();
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-MONO-793 (ADR-MONO-083 P6) — ERP business roles + the ERP_OPERATOR
+    // entry role, DERIVED here (never assigned) — the same table, one more row
+    // -----------------------------------------------------------------------
+
+    private static final List<String> ERP_BUSINESS_ROLES_793 = List.of(
+            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
+
+    @Test
+    @DisplayName("🔴 793 AC-1: approval set on WMS+ERP → ERP_OPERATOR (derived) + the two approval roles — no WMS role")
+    void erp793_approvalSet_entryDerived() {
+        assertThat(rolesFor(List.of("ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE"), List.of("wms", "erp")))
+                .containsExactly("ERP_OPERATOR", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
+    }
+
+    @Test
+    @DisplayName("🔴 793 AC-1: masterdata read set → ERP_OPERATOR + ERP_MASTERDATA_READ only")
+    void erp793_masterdataReadSet() {
+        assertThat(rolesFor(List.of("ERP_MASTERDATA_READ"), List.of("erp")))
+                .containsExactly("ERP_OPERATOR", "ERP_MASTERDATA_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 793 AC-1: an assigned ERP_OPERATOR alone (stale row) → no roles — the entry role is never carried from an assignment")
+    void erp793_assignedEntryRoleAlone_dropped() {
+        assertThat(rolesFor(List.of("ERP_OPERATOR"), List.of("wms", "erp"))).isNull();
+    }
+
+    @Test
+    @DisplayName("🔴 793 AC-2: legacy-compat (new catalog) on SCM+ERP → SCM_OPERATOR + 8 SCM roles + ERP_OPERATOR + 4 ERP roles (ceiling order)")
+    void erp793_legacyCompat_fullErp() {
+        List<String> expected = new java.util.ArrayList<>(List.of("SCM_OPERATOR"));
+        expected.addAll(SCM_BUSINESS_ROLES_792);
+        expected.add("ERP_OPERATOR");
+        expected.addAll(ERP_BUSINESS_ROLES_793);
+        assertThat(rolesFor(LEGACY_COMPAT_ROLES, List.of("scm", "erp"))).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    @DisplayName("793 control: ERP business roles on a tenant WITHOUT erp → nothing ERP, no ERP_OPERATOR")
+    void erp793_unsubscribed_noEntry() {
+        assertThat(rolesFor(List.of("ERP_APPROVAL_WRITE", "INVENTORY_READ"), List.of("wms")))
+                .containsExactly("INVENTORY_READ");
+    }
+
+    @Test
+    @DisplayName("🔴 793 partnership: delegated ERP business role → ERP_OPERATOR derived on the cross-org token too")
+    void erp793_crossOrg_entryDerived() {
+        JwtClaimsSet.Builder claimsBuilder = baseClaimsBuilder();
+        OperatorAssignmentPort.DelegatedScope delegated =
+                new OperatorAssignmentPort.DelegatedScope(List.of("erp"), List.of("ERP_APPROVAL_READ"));
+        when(context.getTokenType()).thenReturn(OAuth2TokenType.ACCESS_TOKEN);
+        when(context.getAuthorizationGrantType()).thenReturn(AuthorizationGrantType.TOKEN_EXCHANGE);
+        when(context.getAuthorizationGrant())
+                .thenReturn(assumeGrantCrossOrg("host-corp", "B2B_ENTERPRISE", null, delegated));
+        when(accountServicePort.listEntitledDomains("host-corp")).thenReturn(List.of("wms", "erp"));
+        when(context.getClaims()).thenReturn(claimsBuilder);
+
+        customizer.customize(context);
+
+        assertThat(claimsBuilder.build().<List<String>>getClaim("roles"))
+                .containsExactly("ERP_APPROVAL_READ", "ERP_OPERATOR");
+    }
+
+    @Test
+    @DisplayName("793 unit: ERP_OPERATOR ← the four ERP roles; the erp ceiling = entry role + the four (catalog order)")
+    void erp793_entryRow_unit() {
+        assertThat(OperatorRoleDerivation.ENTRY_ROLES.get("ERP_OPERATOR"))
+                .containsExactlyInAnyOrderElementsOf(ERP_BUSINESS_ROLES_793);
+        List<String> erpCeiling = OperatorRoleDerivation.fromEntitledDomains(List.of("erp"));
+        assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("ERP_MASTERDATA_WRITE"), erpCeiling))
+                .containsExactly("ERP_OPERATOR", "ERP_MASTERDATA_WRITE");
+        assertThat(OperatorRoleDerivation.withDerivedEntryRoles(List.of("ERP_OPERATOR"), erpCeiling)).isEmpty();
     }
 
     @Test

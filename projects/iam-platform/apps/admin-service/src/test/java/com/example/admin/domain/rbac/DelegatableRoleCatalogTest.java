@@ -34,8 +34,10 @@ class DelegatableRoleCatalogTest {
                         "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
                         "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
                         "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE",
+                        // erp — fine-grained since TASK-MONO-793 (ERP_OPERATOR is derived, not delegatable)
+                        "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE",
                         // single-role domains
-                        "ERP_OPERATOR", "FINANCE_OPERATOR",
+                        "FINANCE_OPERATOR",
                         "MES_OPERATOR", "FAN_OPERATOR");
     }
 
@@ -67,9 +69,13 @@ class DelegatableRoleCatalogTest {
         expected.addAll(List.of("SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ",
                 "SCM_DEMAND_PLANNING_WRITE", "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE",
                 "SCM_INVENTORY_VISIBILITY_READ", "SCM_INVENTORY_VISIBILITY_WRITE"));
+        // TASK-MONO-793 — the same change for ERP: ERP_OPERATOR → the four ERP business roles (V0057).
+        expected.remove("ERP_OPERATOR");
+        expected.addAll(List.of("ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE",
+                "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE"));
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(expected);
         assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).isEqualTo(DomainRoleCatalog.roleNames());
-        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(21);
+        assertThat(DelegatableRoleCatalog.DELEGATABLE_OPERATOR_ROLES).hasSize(24);
     }
 
     @Test
@@ -105,6 +111,9 @@ class DelegatableRoleCatalogTest {
         // TASK-MONO-792: the SCM entry role is derived, never delegated
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("WMS_OPERATOR", "SCM_OPERATOR"))).isEqualTo("SCM_OPERATOR");
+        // TASK-MONO-793: the ERP entry role likewise
+        assertThat(DelegatableRoleCatalog.firstNonDelegatable(
+                List.of("ERP_APPROVAL_READ", "ERP_OPERATOR"))).isEqualTo("ERP_OPERATOR");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(
                 List.of("WMS_OPERATOR", "WMS_ADMIN"))).isEqualTo("WMS_ADMIN");
         assertThat(DelegatableRoleCatalog.firstNonDelegatable(List.of())).isNull();

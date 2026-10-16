@@ -35,11 +35,11 @@ class JwtBackedAuthorizationAdapterTest {
     }
 
     @Test
-    @DisplayName("READ: entitlement-trust grants READ even without erp.read")
-    void readByEntitlement() {
+    @DisplayName("TASK-MONO-793 Q1: READ by entitlement alone → DENY_ROLE (was ALLOW — the subscription no longer reads)")
+    void readByEntitlementDenied() {
         var d = adapter.evaluate(actor(Set.of(), Set.of(), Set.of("erp")),
                 RequiredScope.READ, null);
-        assertThat(d.allowed()).isTrue();
+        assertThat(d.outcome()).isEqualTo(AuthorizationDecision.Outcome.DENY_ROLE);
     }
 
     @Test

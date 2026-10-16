@@ -197,18 +197,20 @@ class ActorContextAuthPathSliceTest {
     void scopeClaimIsAnErpRoleToken() throws Exception {
         // erp's alias set is WIDER than the fleet mechanism's roles-or-role normalisation. This
         // service authorises off canReadErp()/canWriteErp(), whose scope-tuples (erp.read,
-        // erp.write, erp.approval.*) arrive on the OAuth2 `scope` claim, never on `roles`.
+        // erp.write) arrive on the OAuth2 `scope` claim, never on `roles`.
         // Adopting the shared ActorClaims.from(...) normalisation verbatim would empty the set.
+        // TASK-MONO-793: erp.approval.* is issued nowhere and no longer opens WRITE — the claim still
+        // LIFTS into the set (that is what this test is about), it just authorises nothing.
         mockMvc.perform(get(INBOX)
-                        .header("Authorization", bearer(Map.of("scope", "erp.read erp.approval.approve"))))
+                        .header("Authorization", bearer(Map.of("scope", "erp.read erp.write erp.approval.approve"))))
                 .andExpect(status().isOk());
 
         assertThat(boundActor.get().roles())
-                .containsExactlyInAnyOrder("erp.read", "erp.approval.approve");
+                .containsExactlyInAnyOrder("erp.read", "erp.write", "erp.approval.approve");
         assertThat(boundActor.get().canReadErp()).isTrue();
         assertThat(boundActor.get().canWriteErp()).isTrue();
         assertThat(capturedAuthorities())
-                .containsExactlyInAnyOrder("ROLE_erp.read", "ROLE_erp.approval.approve");
+                .containsExactlyInAnyOrder("ROLE_erp.read", "ROLE_erp.write", "ROLE_erp.approval.approve");
     }
 
     @Test

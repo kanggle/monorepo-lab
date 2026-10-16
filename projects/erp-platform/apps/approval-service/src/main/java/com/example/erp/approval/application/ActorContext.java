@@ -15,8 +15,8 @@ import java.util.Set;
  * converter. {@code "*"} in {@code dataScopeDepartmentIds} = platform-wide scope.
  *
  * <p>{@code entitledDomains} carries the signed {@code entitled_domains} claim
- * (ADR-MONO-019 § D5). It grants READ visibility to an entitled domain even
- * without an {@code erp.read}/operator role — it NEVER widens a WRITE/transition.
+ * (ADR-MONO-019 § D5). Since TASK-MONO-793 it no longer grants anything here — business roles decide
+ * ({@link #canReadErp()} / {@link #canWriteErp()}); the tenant gate still reads the claim.
  */
 public record ActorContext(String actorId, String tenantId, Set<String> roles,
                            Set<String> dataScopeDepartmentIds,
@@ -48,29 +48,26 @@ public record ActorContext(String actorId, String tenantId, Set<String> roles,
         return domain != null && entitledDomains != null && entitledDomains.contains(domain);
     }
 
-    /** The erp domain the entitlement-trust READ grant applies to (ADR-MONO-019 § D5). */
-    private static final String ENTITLED_DOMAIN = "erp";
-
     /**
-     * The erp WRITE/transition scope-tuple (extracted dedup — net-zero). WRITE is
-     * operator OR one of the write/approval scopes. Entitlement-trust NEVER widens
-     * a WRITE (architecture.md § Approver authorization).
+     * Approval WRITE/transition — TASK-MONO-793 (ADR-MONO-083 P6; erp iam-integration.md § 업무 역할):
+     * {@code ERP_APPROVAL_WRITE ∨ erp.write}. Before P6 this was «{@link #isOperator()} ∨ erp.write ∨
+     * erp.approval.*»: the entry role {@code ERP_OPERATOR} is now derived for every ERP set holder (so it would
+     * open approval to a masterdata-only operator) and the {@code erp.approval.*} scopes are issued nowhere.
+     * Approver eligibility (separation of duties) stays the aggregate's guard, independent of this.
      */
     public boolean canWriteErp() {
-        return isOperator()
-                || hasScope("erp.write")
-                || hasScope("erp.approval.create")
-                || hasScope("erp.approval.approve");
+        return hasScope("ERP_APPROVAL_WRITE") || hasScope("erp.write");
     }
 
     /**
-     * The erp READ scope-tuple (extracted dedup — net-zero). READ is the WRITE-set
-     * OR {@code erp.read} OR entitlement-trust to the erp domain (ADR-MONO-019 —
-     * entitlement grants READ only).
+     * Approval READ — TASK-MONO-793: {@code ERP_APPROVAL_READ ∨} the WRITE set {@code ∨ erp.read}. The
+     * subscription ({@code entitled_domains ∋ erp}, ADR-MONO-019 entitlement-trust) no longer opens it — every
+     * assume token carries the tenant's subscriptions, so it opened approval to operators holding no ERP set
+     * (owner decision Q1). {@link #isEntitledTo(String)} stays for the record; no verdict reads it.
      */
     public boolean canReadErp() {
-        return canWriteErp()
-                || hasScope("erp.read")
-                || isEntitledTo(ENTITLED_DOMAIN);
+        return hasScope("ERP_APPROVAL_READ")
+                || canWriteErp()
+                || hasScope("erp.read");
     }
 }

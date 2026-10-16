@@ -115,7 +115,9 @@ class V0056ScmRoleMigrationIntegrationTest extends AbstractIntegrationTest {
                 "SELECT COUNT(*) FROM domain_permission_set_role WHERE role_name = 'SCM_OPERATOR'", Integer.class))
                 .isZero();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class)).isEqualTo(20);
+                "SELECT COUNT(*) FROM domain_permission_set WHERE tenant_id IS NULL", Integer.class))
+                // 20 after V0056; the boot also runs later phases (TASK-MONO-793 V0057 +3).
+                .isEqualTo(com.example.admin.domain.rbac.DomainPermissionSetPresets.SYSTEM_KEYS.size());
     }
 
     @Test

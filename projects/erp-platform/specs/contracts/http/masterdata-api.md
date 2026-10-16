@@ -1,5 +1,7 @@
 # API Contract — masterdata-service
 
+> 🔴 **업무 인가 — TASK-MONO-793 (ADR-MONO-083 P6, 2026-10-15 UTC)부터**: 조회 = `ERP_MASTERDATA_READ ∨ ERP_MASTERDATA_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` · `GET /departments/{id}` · `GET /employees/{id}` 는 여기에 `∨ ERP_APPROVAL_WRITE`(결재 대상 확인, Q3) · 변경 = `ERP_MASTERDATA_WRITE ∨ erp.write`(부서 범위 판정 무변경) · **개인 엔드포인트**(`GET /employees/me` · `GET /employees/{id}/approver-ref` · `GET /account-link-proposals/mine` · `accept` · `decline` · 본인 `unlink`) = ERP 업무 역할 하나라도(파생 `ERP_OPERATOR` 포함) `∨ erp.read ∨ erp.write ∨ tenant_id='*'`(Q2). `ERP_OPERATOR` 단독은 기준정보 조회 · 변경을 열지 않고, `entitled_domains ∋ erp` 는 아무것도 열지 않는다(Q1). 이 문서의 «`erp.write`(+ 부서 범위)» · «erp.read» 표기는 위 판정으로 읽는다. 정본: [iam-integration.md § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본).
+
 Base path: `/api/erp/masterdata` (rewritten by the gateway from
 `/api/v1/erp/masterdata` once `gateway-service` is introduced; v1 = direct
 JWT to the service).

@@ -244,7 +244,8 @@ public class MasterdataApplicationService {
     @Transactional(readOnly = true)
     public DepartmentView getDepartment(String id, ActorContext actor, LocalDate asOf) {
         Department d = loadOrThrow(departmentRepository::findById, id, actor.tenantId(), "Department");
-        authorize(actor, RequiredScope.READ, d.getParentId());
+        // TASK-MONO-793 Q3: also approval's subject check (approval-service forwards the submitter's token).
+        authorize(actor, RequiredScope.SUBJECT_READ, d.getParentId());
         ensureEffectiveAt(d.period(), asOf, "Department", id);
         return DepartmentView.from(d);
     }
@@ -340,7 +341,8 @@ public class MasterdataApplicationService {
     @Transactional(readOnly = true)
     public EmployeeView getEmployee(String id, ActorContext actor, LocalDate asOf) {
         Employee e = loadOrThrow(employeeRepository::findById, id, actor.tenantId(), "Employee");
-        authorize(actor, RequiredScope.READ, e.getDepartmentId());
+        // TASK-MONO-793 Q3: also approval's subject check (approval-service forwards the submitter's token).
+        authorize(actor, RequiredScope.SUBJECT_READ, e.getDepartmentId());
         ensureEffectiveAt(e.period(), asOf, "Employee", id);
         return EmployeeView.from(e);
     }
@@ -371,7 +373,7 @@ public class MasterdataApplicationService {
     /** {@code GET /employees/me} — the employee linked to the caller's {@code sub}; no data scope. */
     @Transactional(readOnly = true)
     public EmployeeView getMyEmployee(ActorContext actor) {
-        authorize(actor, RequiredScope.READ, null);
+        authorize(actor, RequiredScope.SELF, null); // TASK-MONO-793 Q2 — personal
         return employeeRepository.findByAccountId(actor.actorId(), actor.tenantId())
                 .map(EmployeeView::from)
                 .orElseThrow(() -> new MasterdataNotFoundException(
@@ -381,7 +383,7 @@ public class MasterdataApplicationService {
     /** {@code GET /employees/{id}/approver-ref} — {@code {id,status,accountId?}}; no data scope. */
     @Transactional(readOnly = true)
     public EmployeeApproverRefView getApproverRef(String employeeId, ActorContext actor) {
-        authorize(actor, RequiredScope.READ, null);
+        authorize(actor, RequiredScope.SELF, null); // TASK-MONO-793 Q3 — approval's stage-approver lookup
         Employee e = loadOrThrow(employeeRepository::findById, employeeId, actor.tenantId(), "Employee");
         return EmployeeApproverRefView.from(e);
     }
@@ -438,7 +440,7 @@ public class MasterdataApplicationService {
     @Transactional(readOnly = true)
     public PageResult<EmployeeAccountLinkProposalView> listMyPendingLinkProposals(ActorContext actor,
                                                                                   int page, int size) {
-        authorize(actor, RequiredScope.READ, null);
+        authorize(actor, RequiredScope.SELF, null); // TASK-MONO-793 Q2 — proposals addressed to me
         return linkProposalRepository.findPendingByAccountId(actor.actorId(), actor.tenantId(), page, size)
                 .map(p -> EmployeeAccountLinkProposalView.withEmployee(p,
                         employeeRepository.findById(p.getEmployeeId(), actor.tenantId()).orElse(null)));
@@ -465,7 +467,7 @@ public class MasterdataApplicationService {
     @Transactional
     public EmployeeView acceptAccountLink(AcceptAccountLinkCommand cmd) {
         ActorContext actor = cmd.actor();
-        authorize(actor, RequiredScope.READ, null);
+        authorize(actor, RequiredScope.SELF, null); // TASK-MONO-793 Q2 — the account owner, not HR
         EmployeeAccountLinkProposal proposal = loadProposalOrThrow(cmd.proposalId(), actor.tenantId());
         proposal.ensureAcceptableBy(actor.actorId());
 
@@ -507,7 +509,7 @@ public class MasterdataApplicationService {
     @Transactional
     public EmployeeAccountLinkProposalView declineAccountLink(DeclineAccountLinkCommand cmd) {
         ActorContext actor = cmd.actor();
-        authorize(actor, RequiredScope.READ, null);
+        authorize(actor, RequiredScope.SELF, null); // TASK-MONO-793 Q2 — the account owner
         EmployeeAccountLinkProposal proposal = loadProposalOrThrow(cmd.proposalId(), actor.tenantId());
         Instant now = clock.now();
 
@@ -547,7 +549,8 @@ public class MasterdataApplicationService {
     @Transactional
     public EmployeeView unlinkAccount(UnlinkAccountCommand cmd) {
         ActorContext actor = cmd.actor();
-        authorize(actor, RequiredScope.READ, null);
+        // TASK-MONO-793 Q2 — the owner's self-unlink is personal; anyone else needs WRITE + scope below.
+        authorize(actor, RequiredScope.SELF, null);
         Employee employee = loadOrThrow(employeeRepository::findById, cmd.employeeId(), actor.tenantId(), "Employee");
         boolean isAccountOwner = employee.isLinked() && employee.getAccountId().equals(actor.actorId());
         if (!isAccountOwner) {

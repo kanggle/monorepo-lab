@@ -57,7 +57,14 @@ public final class DomainRoleCatalog {
             new Entry("scm", "SCM_LOGISTICS_WRITE", "WRITE", true, "물류 변경(발송 재시도)"),
             new Entry("scm", "SCM_INVENTORY_VISIBILITY_READ", "READ", true, "재고 가시성 조회"),
             new Entry("scm", "SCM_INVENTORY_VISIBILITY_WRITE", "WRITE", true, "재고 가시성 변경(3PL 노드 등록 · 관측 재고)"),
-            new Entry("erp", "ERP_OPERATOR", "OPERATE", false, "ERP 전체 업무(세분 미지원)"),
+            // TASK-MONO-793 (ADR-083 P6) — ERP is fine-grained (erp iam-integration.md § 업무 역할). ERP_OPERATOR LEFT
+            // the catalog: the entry role, derived by auth-service when ≥1 of these rides the token (V0057 rewrote
+            // every set and partnership scope that held it).
+            new Entry("erp", "ERP_MASTERDATA_READ", "READ", true, "기준정보 조회"),
+            new Entry("erp", "ERP_MASTERDATA_WRITE", "WRITE", true,
+                    "기준정보 변경(생성 · 수정 · 퇴역 · 부서 이동 · 계정 연결 제안/철회)"),
+            new Entry("erp", "ERP_APPROVAL_READ", "READ", true, "결재 조회"),
+            new Entry("erp", "ERP_APPROVAL_WRITE", "WRITE", true, "결재 변경(상신 · 승인 · 반려 · 회수 · 위임)"),
             new Entry("finance", "FINANCE_OPERATOR", "OPERATE", false, "Finance 전체 업무(세분 미지원)"),
             new Entry("ecommerce", "ECOMMERCE_OPERATOR", "OPERATE", false, "E-commerce 전체 업무(세분 미지원)"),
             new Entry("fan", "FAN_OPERATOR", "OPERATE", false, "fan 전체 업무(세분 미지원)"),

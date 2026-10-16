@@ -26,33 +26,54 @@ class ReadAuthorizationGateTest {
 
     @Test
     void erpReadScopeAllowed() {
-        assertThatCode(() -> gate.requireRead(jwt(Map.of("scope", "erp.read", "sub", "u"))))
+        assertThatCode(() -> gate.requireMasterdataRead(jwt(Map.of("scope", "erp.read", "sub", "u"))))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> gate.requireApprovalRead(jwt(Map.of("scope", "erp.read", "sub", "u"))))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    void operatorRoleAllowed() {
-        assertThatCode(() -> gate.requireRead(
+    void businessRolesAllowedPerFamily() {
+        // TASK-MONO-793 Q6 — each family opens on its own read/write role only.
+        assertThatCode(() -> gate.requireMasterdataRead(
+                jwt(Map.of("roles", List.of("ERP_MASTERDATA_READ"), "sub", "u"))))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> gate.requireApprovalRead(
+                jwt(Map.of("roles", List.of("ERP_APPROVAL_WRITE"), "sub", "u"))))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> gate.requireApprovalRead(
+                jwt(Map.of("roles", List.of("ERP_MASTERDATA_READ"), "sub", "u"))))
+                .isInstanceOf(ReadAccessDeniedException.class);
+    }
+
+    @Test
+    void entryRoleAloneDenied() {
+        // TASK-MONO-793: ERP_OPERATOR is the derived entry role — it no longer opens a read on its own
+        // (before: «operatorRoleAllowed»).
+        assertThatThrownBy(() -> gate.requireMasterdataRead(
                 jwt(Map.of("roles", List.of("ERP_OPERATOR"), "sub", "u"))))
-                .doesNotThrowAnyException();
+                .isInstanceOf(ReadAccessDeniedException.class);
     }
 
     @Test
-    void entitledAllowed() {
-        assertThatCode(() -> gate.requireRead(
+    void entitledAloneDenied() {
+        // TASK-MONO-793 Q1: the subscription no longer reads (before: «entitledAllowed»).
+        assertThatThrownBy(() -> gate.requireMasterdataRead(
                 jwt(Map.of("entitled_domains", List.of("erp"), "sub", "u"))))
-                .doesNotThrowAnyException();
+                .isInstanceOf(ReadAccessDeniedException.class);
     }
 
     @Test
     void noScopeRoleOrEntitlementDenied() {
-        assertThatThrownBy(() -> gate.requireRead(jwt(Map.of("sub", "u"))))
+        assertThatThrownBy(() -> gate.requireMasterdataRead(jwt(Map.of("sub", "u"))))
                 .isInstanceOf(ReadAccessDeniedException.class);
     }
 
     @Test
     void nullJwtDenied() {
-        assertThatThrownBy(() -> gate.requireRead(null))
+        assertThatThrownBy(() -> gate.requireMasterdataRead(null))
+                .isInstanceOf(ReadAccessDeniedException.class);
+        assertThatThrownBy(() -> gate.requireApprovalRead(null))
                 .isInstanceOf(ReadAccessDeniedException.class);
     }
 
@@ -64,7 +85,9 @@ class ReadAuthorizationGateTest {
         // tenant_id='*', no erp scope, no domain roles, no entitled_domains. Admitted
         // for READ (this gate guards read-model, which has no mutating endpoint — the
         // read-only invariant is structural).
-        assertThatCode(() -> gate.requireRead(jwt(Map.of("tenant_id", "*", "sub", "u"))))
+        assertThatCode(() -> gate.requireMasterdataRead(jwt(Map.of("tenant_id", "*", "sub", "u"))))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> gate.requireApprovalRead(jwt(Map.of("tenant_id", "*", "sub", "u"))))
                 .doesNotThrowAnyException();
     }
 
@@ -72,7 +95,7 @@ class ReadAuthorizationGateTest {
     void nonWildcardTenantWithoutScopeStillDenied() {
         // Strict keying: admission is on the '*' literal, not on "authenticated" — a
         // concrete non-wildcard tenant with no scope/role/entitlement still 403s.
-        assertThatThrownBy(() -> gate.requireRead(jwt(Map.of("tenant_id", "erp", "sub", "u"))))
+        assertThatThrownBy(() -> gate.requireMasterdataRead(jwt(Map.of("tenant_id", "erp", "sub", "u"))))
                 .isInstanceOf(ReadAccessDeniedException.class);
     }
 

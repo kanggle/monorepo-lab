@@ -648,6 +648,8 @@ Errors:
 
 ## Approver authorization + Data scope (E6 / I3)
 
+> 🔴 **TASK-MONO-793 (ADR-MONO-083 P6, 2026-10-15 UTC)** — role verdicts: READ = `ERP_APPROVAL_READ ∨ ERP_APPROVAL_WRITE ∨ erp.read ∨ erp.write`, WRITE/transition = `ERP_APPROVAL_WRITE ∨ erp.write` (`ActorContext.canReadErp` / `canWriteErp`; `isOperator()` · `erp.approval.*` · `entitled_domains ∋ erp` no longer open anything). `isOperator()` still decides the tenant-wide list (Q4). Approver eligibility (SoD) below is unchanged and role-independent. Canonical: erp [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본).
+
 Single un-bypassable application path (mirrors masterdata-service's `AuthorizationPort`
 discipline):
 

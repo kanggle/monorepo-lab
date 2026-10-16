@@ -1,5 +1,7 @@
 # API Contract — approval-service
 
+> 🔴 **업무 인가 — TASK-MONO-793 (ADR-MONO-083 P6, 2026-10-15 UTC)부터**: 조회(요청 목록/상세 · 결재함 · 위임 목록) = `ERP_APPROVAL_READ ∨ ERP_APPROVAL_WRITE ∨ erp.read ∨ erp.write` · 변경(상신 · 제출 · 승인 · 반려 · 회수 · 위임 생성/철회) = `ERP_APPROVAL_WRITE ∨ erp.write`. `ERP_OPERATOR`(진입 역할 — auth 파생) 단독 · `entitled_domains ∋ erp` 는 아무것도 열지 않는다. 목록의 «테넌트 전체 vs 참여한 것» 은 `isOperator()` 그대로(Q4). 결재 자격(직무 분리 · 단계 승인자 · 대결)은 역할과 별개로 유지. 결재가 운영자 토큰으로 부르는 masterdata `GET /departments/{id}` · `GET /employees/{id}` 는 `ERP_APPROVAL_WRITE` 도 받는다 · `/employees/me` · `approver-ref` 는 개인 엔드포인트(Q3). 정본: [iam-integration.md § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p6--task-mono-793--정본) — 아래 § Auth 의 옛 술어는 대체됐다.
+
 Base path: `/api/erp/approval` (rewritten by the gateway from
 `/api/v1/erp/approval` once `gateway-service` is introduced; v1 = direct
 JWT to the service).

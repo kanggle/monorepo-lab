@@ -57,7 +57,7 @@ public class DelegationFactController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal Jwt jwt) {
 
-        readGate.requireRead(jwt);
+        readGate.requireApprovalRead(jwt); // TASK-MONO-793 Q6
         ReadQueryWebSupport.validatePaging(page, size);
         DelegationFactStatus statusFilter = parseStatus(status);
         Instant activeAtFilter = parseInstant(activeAt);
@@ -81,7 +81,7 @@ public class DelegationFactController {
             @PathVariable String grantId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        readGate.requireRead(jwt);
+        readGate.requireApprovalRead(jwt); // TASK-MONO-793 Q6
 
         // org_scope read filter: out-of-scope → 404 (no existence leak).
         List<String> orgScopeRootIds = ReadQueryWebSupport.orgScopeRootIds(readGate, jwt);

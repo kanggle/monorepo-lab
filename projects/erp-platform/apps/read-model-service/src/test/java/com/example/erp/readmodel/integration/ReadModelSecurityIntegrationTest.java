@@ -51,12 +51,25 @@ class ReadModelSecurityIntegrationTest extends AbstractReadModelIntegrationTest 
 
     @Test
     void entitledCrossTenantIs200() throws Exception {
-        // tenant_id=acme but entitled_domains ∋ erp → dual-accept passes; the
-        // entitlement also satisfies the READ gate.
+        // tenant_id=acme but entitled_domains ∋ erp → the TENANT gate's dual-accept passes.
+        // TASK-MONO-793 (Q1): the entitlement no longer satisfies the READ gate — the business
+        // role does (an assumed operator token carries both).
+        String token = token(c -> c.claim("tenant_id", "acme")
+                .claim("entitled_domains", List.of("erp"))
+                .claim("roles", List.of("ERP_OPERATOR", "ERP_MASTERDATA_READ")));
+        HttpResponse<String> resp = getEmployees("Bearer " + token);
+        assertThat(resp.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void entitledCrossTenantWithoutRoleIs403PermissionDenied() throws Exception {
+        // TASK-MONO-793 Q1 — the same token without an ERP role: the tenant gate admits it,
+        // the READ gate refuses it (before P6 this was 200 — the subscription read).
         String token = token(c -> c.claim("tenant_id", "acme")
                 .claim("entitled_domains", List.of("erp")));
         HttpResponse<String> resp = getEmployees("Bearer " + token);
-        assertThat(resp.statusCode()).isEqualTo(200);
+        assertThat(resp.statusCode()).isEqualTo(403);
+        assertThat(codeOf(resp)).isEqualTo("PERMISSION_DENIED");
     }
 
     @Test

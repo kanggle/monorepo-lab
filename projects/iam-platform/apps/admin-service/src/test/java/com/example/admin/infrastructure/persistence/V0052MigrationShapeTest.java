@@ -53,12 +53,15 @@ class V0052MigrationShapeTest {
      */
     static final List<String> V0052_SYSTEM_KEYS = DomainPermissionSetPresets.SYSTEM_KEYS.stream()
             .filter(k -> !k.startsWith("scm-") || k.equals("scm-full"))
+            // TASK-MONO-793 (V0057 = P6 ERP)
+            .filter(k -> !k.startsWith("erp-") || k.equals("erp-full"))
             .toList();
-    static final Set<String> RETIRED_AFTER_V0052 = Set.of("SCM_OPERATOR");
+    static final Set<String> RETIRED_AFTER_V0052 = Set.of("SCM_OPERATOR", "ERP_OPERATOR");
     static final Set<String> ADDED_AFTER_V0052 = Set.of(
             "SCM_PROCUREMENT_READ", "SCM_PROCUREMENT_WRITE", "SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE",
             "SCM_LOGISTICS_READ", "SCM_LOGISTICS_WRITE", "SCM_INVENTORY_VISIBILITY_READ",
-            "SCM_INVENTORY_VISIBILITY_WRITE");
+            "SCM_INVENTORY_VISIBILITY_WRITE",
+            "ERP_MASTERDATA_READ", "ERP_MASTERDATA_WRITE", "ERP_APPROVAL_READ", "ERP_APPROVAL_WRITE");
 
     /** The catalog's role names as of V0052 (= today's, minus the later additions, plus the later retirements). */
     static Set<String> catalogAtV0052() {

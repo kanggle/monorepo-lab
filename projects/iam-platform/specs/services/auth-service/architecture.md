@@ -284,7 +284,7 @@ apps/auth-service/src/main/java/com/example/auth/
 
 세분 업무 역할이 들어온 도메인의 **진입 역할**(지금 `SCM_OPERATOR` 하나)은 카탈로그에 없고 배정할 수 없다 — auth-service 가 **토큰을 내는 순간 파생**한다(소유자 결정 Q4, 2026-10-15 UTC).
 
-- **표 하나 = 데이터** (`OperatorRoleDerivation.ENTRY_ROLES` — 진입 역할 → 그 도메인의 업무 역할 집합). 지금 행: `SCM_OPERATOR ← {SCM_PROCUREMENT_READ, SCM_PROCUREMENT_WRITE, SCM_DEMAND_PLANNING_READ, SCM_DEMAND_PLANNING_WRITE, SCM_LOGISTICS_READ, SCM_LOGISTICS_WRITE, SCM_INVENTORY_VISIBILITY_READ, SCM_INVENTORY_VISIBILITY_WRITE}`. P6 ~ P8(ERP · Finance · E-commerce)은 **행만 더한다**(코드 무변경).
+- **표 하나 = 데이터** (`OperatorRoleDerivation.ENTRY_ROLES` — 진입 역할 → 그 도메인의 업무 역할 집합). 지금 행: `SCM_OPERATOR ← {SCM_PROCUREMENT_READ, SCM_PROCUREMENT_WRITE, SCM_DEMAND_PLANNING_READ, SCM_DEMAND_PLANNING_WRITE, SCM_LOGISTICS_READ, SCM_LOGISTICS_WRITE, SCM_INVENTORY_VISIBILITY_READ, SCM_INVENTORY_VISIBILITY_WRITE}` · `ERP_OPERATOR ← {ERP_MASTERDATA_READ, ERP_MASTERDATA_WRITE, ERP_APPROVAL_READ, ERP_APPROVAL_WRITE}`(TASK-MONO-793 · P6 — erp `iam-integration.md` § 업무 역할). P7 ~ P8(Finance · E-commerce)은 **행만 더한다**(코드 무변경). `erp` 상한 = `ERP_OPERATOR` + 업무 역할 4개(카탈로그와 같이 넓힌다). ERP 의 진입 역할은 «개인 엔드포인트»(내 직원 기록 · 연결 제안 · 알림)와 결재 «테넌트 전체 목록» 판정의 입력이다.
 - **규칙** (step 3 정상 경로 · step 4 파트너십 경로 **둘 다** — 같은 함수 `withDerivedEntryRoles`):
   1. 입력 역할 목록에서 진입 역할을 **먼저 뺀다** — 진입 역할은 배정 · 위임으로 들어오지 않는다(남은 옛 행이 있어도 단독으로 토큰에 실리지 않는다).
   2. 남은 역할 중 그 진입 역할의 업무 역할이 **하나라도** 있고, 정상 경로에서는 그 진입 역할이 상한(`derive(entitled)`)에 있을 때 진입 역할을 더한다. 파트너십 경로의 상한은 이미 걸러진 `delegatedScope.roles` 자체다(업무 역할이 실렸으면 그 도메인은 위임 slice 안).
