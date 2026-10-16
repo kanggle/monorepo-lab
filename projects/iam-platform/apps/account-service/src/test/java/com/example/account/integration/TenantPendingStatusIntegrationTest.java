@@ -95,6 +95,8 @@ class TenantPendingStatusIntegrationTest extends AbstractIntegrationTest {
                 jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE tenant_id = ?", id);
                 continue;
             }
+            // TASK-BE-639 measurement seeds a subscription (FK → tenants)
+            jdbc.update("DELETE FROM tenant_domain_subscription WHERE tenant_id = ?", id);
             jdbc.update("DELETE FROM account_roles WHERE tenant_id = ?", id);
             jdbc.update("DELETE FROM profiles WHERE account_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
             jdbc.update("DELETE FROM account_outbox WHERE aggregate_id IN (SELECT id FROM accounts WHERE tenant_id = ?)", id);
@@ -386,5 +388,28 @@ class TenantPendingStatusIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("TENANT_SUSPENDED"));
 
         assertThat(accountRepository.findByEmail(new TenantId(id), email)).isEmpty();
+    }
+
+    // ── TASK-BE-639 AC-0 measurement — what an assumed token's entitlement reads ─────
+
+    /**
+     * 🔵 A MEASUREMENT pin (TASK-BE-639 AC-0), not a requirement. auth-service fills an operator assumed token's
+     * {@code entitled_domains} (and through it the role ceiling) from this endpoint. It reads the tenant's ACTIVE
+     * subscriptions and never the tenant's own status, so a non-ACTIVE tenant with a subscription still yields a
+     * non-empty entitlement. Flips with the owner's BE-639 decision if that decision closes it here.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "tenant status {0} → entitled-domains still [wms]")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"PENDING", "SUSPENDED", "ACTIVE"})
+    @DisplayName("🔵 측정(TASK-BE-639 AC-0): entitled-domains 는 테넌트 상태를 안 읽는다 — PENDING · SUSPENDED 도 구독 그대로")
+    void measure_entitledDomains_ignoresTenantStatus(String tenantStatus) throws Exception {
+        String id = newTenantId();
+        seedTenant(id, tenantStatus);
+        jdbc.update("""
+                INSERT INTO tenant_domain_subscription (tenant_id, domain_key, status, created_at, updated_at)
+                VALUES (?, 'wms', 'ACTIVE', NOW(6), NOW(6))""", id);
+
+        mockMvc.perform(get("/internal/tenants/{id}/entitled-domains", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.domainKeys[0]").value("wms"));
     }
 }

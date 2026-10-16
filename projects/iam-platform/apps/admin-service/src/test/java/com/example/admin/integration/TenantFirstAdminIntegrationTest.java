@@ -803,6 +803,34 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
                 .as("the assume gate never reads the tenant's status").isEmpty();
     }
 
+    @Test
+    @DisplayName("🔵 측정(TASK-BE-639 AC-0): 회사 운영자 · 소속 테넌트가 SUSPENDED 인데 소속 행은 남음 — assignment-check → assigned=true, 테넌트 상태 읽기 0")
+    void measure_companyOperatorAssumesSuspendedTenant_membershipKept() throws Exception {
+        String slug = slug();
+        stubTenantGet(slug, "SUSPENDED");
+        String account = UUID.randomUUID().toString();
+        String operatorId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO admin_operators
+                  (operator_id, tenant_id, email, password_hash, display_name, status, oidc_subject,
+                   created_at, updated_at, version)
+                VALUES (?, ?, ?, NULL, 'BE-639 company', 'ACTIVE', ?, NOW(6), NOW(6), 0)""",
+                operatorId, slug, operatorId + "@example.com", account);
+        // UpdateTenantUseCase (SUSPENDED) does not touch operator_tenant_assignment — the row stays.
+        jdbc.update("""
+                INSERT INTO operator_tenant_assignment (operator_id, tenant_id, granted_at, granted_by, permission_set_id)
+                SELECT o.id, ?, NOW(6), NULL, NULL FROM admin_operators o WHERE o.operator_id = ?""",
+                slug, operatorId);
+
+        mockMvc.perform(get("/internal/operator-assignments/check")
+                        .param("oidcSubject", account).param("tenantId", slug))
+                .andExpect(status().isOk())
+                // 🔵 a MEASUREMENT pin (TASK-BE-639 AC-0), not a requirement: flips with the owner's decision.
+                .andExpect(jsonPath("$.assigned").value(true));
+        assertThat(wireMock.findAll(WireMock.getRequestedFor(urlPathEqualTo("/internal/tenants/" + slug))))
+                .as("the assume gate never reads the tenant's status").isEmpty();
+    }
+
     // ═══ helpers ════════════════════════════════════════════════════════════════
 
     record Created(String slug, String invitationId, String token) {}

@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자가 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`)를 assume 할 수 있다 — assume 경로가 테넌트 상태를 안 읽는다** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-773` S4 Q4 측정 · 소유자 결정 «773 은 기록만 · 별도 티켓»). 콘솔 스위처엔 경로 없음(ACTIVE 만 표시). 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **🔴 보안 — 게이트웨이를 우회하는 직접 경로: 데모의 account-service 는 `traefik-net` 에도 붙어 있어, 그 망에서 `internal.invoke` 토큰을 가진 컨테이너는 테넌트 라이프사이클 API(`POST`/`GET /internal/tenants` · `PATCH /internal/tenants/{id}`)를 직접 부를 수 있다** (READY, 2026-10-16 UTC · 출처 `TASK-BE-638` AC-0 ⚪). 지금 그 자격을 가진 비-IAM 컨테이너는 파일 기준 0 — 열려 있지만 쥔 자 없음. 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-639-assume-into-non-active-tenant.md` — **`'*'` 운영자 · 회사 운영자가 ACTIVE 아닌 테넌트(`PENDING` · `SUSPENDED`)를 assume 할 수 있다 — assume 경로가 테넌트 상태를 안 읽는다** (IN-PROGRESS, 2026-10-16 UTC · AC-0 측정 기록 · **소유자 결정 대기**: 상태를 어디서 읽나 · account-service 장애 시 · `'*'` 포함 여부 · 워크로드 assume 포함 여부). 다음 데모 AMI 굽기에 실린다(소유자 결정 2026-10-16). 분석=Opus 5.5 / 구현 권장=Opus.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
