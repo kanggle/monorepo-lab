@@ -20,7 +20,11 @@
 #      "same commit, ci.yml green, jar returns 200" all held at once.
 #
 # `--refresh-dependencies` makes Gradle re-ask the repository instead of trusting the
-# record, and a success overwrites it, so the next saved gradle-home is clean.
+# record, and a success overwrites it in THIS job's Gradle home. It does not guarantee the
+# next run restores a clean entry: the lanes share one key and the first to save wins, so
+# a sibling that never resolves the artifact (wms) can save the record again. That case
+# costs one refresh per affected lane and a visible ::warning:: per run, not a red lane.
+# (On non-default branches setup-gradle is cache-read-only and saves nothing.)
 #
 # What this deliberately does NOT do:
 #   - retry any other failure. Compile errors and test failures exit with their own code
@@ -72,7 +76,7 @@ fi
 ./gradlew "$@" --refresh-dependencies
 rc2=$?
 if [ "$rc2" -eq 0 ]; then
-  echo "::warning title=Gradle not-found retry recovered::the refreshed resolution succeeded; the cached not-found record is overwritten and the gradle-home saved by this job is clean."
+  echo "::warning title=Gradle not-found retry recovered::the refreshed resolution succeeded and this job's Gradle home no longer carries the not-found record. Whether the NEXT run restores a clean entry depends on which lane saves the shared gradle-home key first (a sibling lane that never needed the artifact still carries the record) — a repeat of this warning on the next run means exactly that, not a new outage."
   [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "- retry: **recovered** (rc=0)" >> "$GITHUB_STEP_SUMMARY"
 else
   echo "::error title=Gradle dependency still not found after --refresh-dependencies::${what:-<unparsed>} — the repository says so now too: a wrong coordinate or a repository outage, not a stale cache record."
