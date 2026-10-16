@@ -8,7 +8,7 @@ TASK-PC-FE-343
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -95,3 +95,28 @@ frontend
 # Merge gate — 28th window
 
 - 2026-10-16 UTC — gate met: the bake carrying 792/793/794/795 was live-verified in the 28th window (2026-10-16) — may now be implemented/merged. (AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`; this ticket's source `TASK-MONO-793` → `done/`; results in `TASK-MONO-672` § 28th window — harvest.)
+
+# 구현 기록 — 2026-10-16 UTC (branch `task/pc-fe-343-erp-nav`, base `d64a6b8a7`)
+
+## AC-0 — 오늘 거짓 배지 · 숨김이 있는가 (코디네이터 질문) · 서버 대조
+
+**판정: 거짓 «업무 권한 없음» · 거짓 버튼 숨김은 없다 — 반대 방향(덜 알림)만 있다.**
+- c-2 는 ERP 5 잎에 `serverRequires` · `writeRequires` 를 **선언하지 않았다** → `leafLacksBusinessPermission` 은 선언 없음에서 `false`, `canWriteOn` 은 선언 없음에서 `true`. row 12 가 무엇을 내든(V0057 뒤: `ERP_OPERATOR` 삭제 · 4 역할 — `V0057:45-58` 이 V0059 와 같은 «넓힌 뒤 지움») ERP 에는 배지도 숨김도 생기지 않는다.
+- 남는 것(안전 쪽): 793 뒤 «구독 합성 READ 는 없다» 라 ERP 역할 없는 운영자는 ERP 화면 전부 서버 `403` 인데 메뉴에 배지가 없다(화면 안 «권한 없음» 으로만 안다). 알림 종은 그 운영자에게 ERP 갈래를 부르고 `403` → `degradedDomains ∋ erp`.
+- ⇒ 345 같은 라이브 퇴행은 아니다. 이 PR 은 «덜 알림» 을 서버와 같게 맞춘다.
+
+서버 대조(base `d64a6b8a7`, erp `iam-integration.md` § 업무 역할 `:106-138` 정본): masterdata `RoleScopeAuthorizationAdapter:55-58` · approval `ActorContext:59,69` · read-model `ReadAuthorizationGate:45-48` · notification `ReadAuthorizationGate:57-80`(ERP 4 역할 ∨ 파생 `ERP_OPERATOR` ∨ `erp.read/write` ∨ `tenant_id='*'`). ⇒ 티켓 대조표 그대로:
+- `/erp` 개요 = MD ∪ AP 의 READ/WRITE(타일별 저하) · `/erp/masters` · `/erp/orgview` = MD_READ/WRITE · `/erp/approval` · `/erp/delegation` = AP_READ/WRITE.
+- 알림 종: 개인 엔드포인트 = ERP 업무 역할 하나라도 ∨ `tenant_id='*'`. 콘솔의 도메인 대면 토큰 = 활성 테넌트가 있으면 그 테넌트의 assume 토큰(`session.ts` `getDomainFacingToken`) — 그 `roles` = row 12 ∩ 구독(P3). ⇒ row 12 에 ERP 역할이 0 이면 그 토큰은 `403` 을 받는다 — 부르지 않아도 잃는 것이 없다. `'*'` 테넌트는 역할 없이 열리므로 예외.
+
+## 범위 결정 — 쓰기 버튼은 분리 (`TASK-PC-FE-347`)
+
+`writeRequires`(기준정보 MD_WRITE · 결재/위임 AP_WRITE)는 **선언하지 않았다** — `TASK-PC-FE-345` → `346` 과 같은 이유. 버튼은 `features/erp-ops/components` 의 17 컴포넌트(기준정보 5 목록 + 쓰기 대화상자 3 · 결재 화면/상신/상세 · 위임 화면/목록)에 흩어져 있고 어느 것도 `canWrite` 를 받지 않는다. 배선 없는 선언은 계약이 «숨는다» 고 거짓말하게 한다. 이 PR = 메뉴 신호 + 알림 종(티켓의 다른 두 몫), 버튼 = `TASK-PC-FE-347`(ready, 이 PR 에서 기안). 그 사이 조회 세트 운영자는 쓰기 버튼을 보고 누르면 서버 `403` → inline «권한 없음»(안전 쪽, 지금과 같음). ⇒ AC-2 의 «쓰기 버튼 없음» · «`/erp/approval` 버튼 보임» 은 347 로.
+
+## e2e 핀 조정 (코디네이터 지시)
+
+이 PR 뒤 ERP 상위 토글은 «업무 권한 없음» 을 달 수 있다(ERP 역할 0 · ERP 구독 테넌트). `tests/e2e/overview-consolidation.spec.ts` 의 `/^ERP(구독 필요)?$/` → **`/^ERP(구독 필요|업무 권한 없음)?$/`** — 라벨은 그대로 정확히, 배지는 많아야 하나(두 신호는 겹치지 않는다 — «구독 필요» 가 이긴다). 단위 시험(`sidebar-business-permission.test.tsx`)이 두 방향을 고정한다(역할 0 → `ERP업무 권한 없음` · 4 역할 → `ERP`). e2e · smoke · federation 의 다른 `nav-erp` 텍스트 핀 0(grep — 나머지는 `href` 속성 핀).
+
+## 함께 적는 것
+
+- 🔵 가이드 문안이 지금 틀림(범위 밖 — 코디네이터가 끝에 후속 기안): `features/scm-guide/data.ts:363-369` · `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `ERP_OPERATOR` 등 진입 역할).
