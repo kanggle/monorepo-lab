@@ -137,6 +137,9 @@ c-2 시험이 이것을 못 잡은 이유: `console-nav-business-permission.test
 
 - `permission-map.ts`: `ECOMMERCE_GATEWAY_REQUIRES` 삭제 · `ECOMMERCE_ROLES`(13) · `ECOMMERCE_GET`(영역별 GET 판정) · 9 행 `roles` = 13 · `serverRequires` = 위 대조표(개요 = 6 영역 합집합).
 - 로컬: `npx vitest run` **399 files / 4587 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`).
+- CI 커밋 `2f60a6051` run `38960061078`: `Frontend unit tests (… console-web, vitest)` job **`117172644972`** — **399 files / 4587 passed**(로그에서 셈) · 같은 job 의 tsc · lint 단계 실행 · 실행된 검사 13 전부 pass · 53 skipped.
+- nightly `nightly-e2e.yml`(브랜치 dispatch) run **`38960050012`** = success(15 job 전부) · 콘솔 job `Platform Console E2E full-stack` **`117172886508`**: **12 passed · 0 flaky · 0 failed**(개요 TIMEOUT flake 없음).
+- ⚪ AC-4: `main` 미머지(DRAFT) · Vercel 미배포 · 라이브 화면 미확인 — 머지 후 Vercel 배포만으로 라이브 배지가 사라져야 한다(백엔드 변경 없음, 굽기 불필요). 다음 창: 데모 운영자로 E-commerce 메뉴에 배지 없음 · `ecommerce-order-operate` 만 준 운영자는 주문 외 7 메뉴 배지.
 
 ## 함께 적는 것
 
