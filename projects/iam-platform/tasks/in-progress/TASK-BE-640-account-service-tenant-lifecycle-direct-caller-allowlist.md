@@ -58,10 +58,10 @@ What the files say (to be confirmed live in AC-0):
 
 # Acceptance Criteria
 
-- [ ] **AC-0**: the measured `traefik-net` membership × `internal.invoke` holders, the direct callers of each lifecycle endpoint (file:line), the chosen fix, and why.
-- [ ] **AC-1**: a non-allowed `internal.invoke` token on `POST /internal/tenants`, `GET /internal/tenants` and `PATCH /internal/tenants/{id}` → refused; the tenant row is unchanged.
-- [ ] **AC-2** (control): admin-service tenant create / suspend / reactivate / first-admin activation → unchanged; auth-service `GET /internal/tenants/{id}` → unchanged.
-- [ ] **AC-3**: the allowed client ids are configuration with a fail-closed default, and the demo env supplies them (a missing value must not reopen the API nor break admin-service — say which).
+- [x] **AC-0**: the measured `traefik-net` membership × `internal.invoke` holders, the direct callers of each lifecycle endpoint (file:line), the chosen fix, and why. — § AC-0 below. Callers and holders measured from the files; ⚪ `docker network inspect` on a live host → next demo window.
+- [x] **AC-1**: a non-allowed `internal.invoke` token on `POST /internal/tenants`, `GET /internal/tenants` and `PATCH /internal/tenants/{id}` → refused; the tenant row is unchanged. — IT: `product-service-client` → 403 on all four (incl. `GET /{id}`). `SUSPENDED → ACTIVE` and `PENDING → ACTIVE` rows unchanged, no row created. Same for a UUID-`sub` token and for `auth-service-client` writes. Red 7 → green 0.
+- [x] **AC-2** (control): admin-service tenant create / suspend / reactivate / first-admin activation → unchanged; auth-service `GET /internal/tenants/{id}` → unchanged. — IT: `admin-service-client` create(PENDING) → activate → suspend → reactivate → get → list all pass. `auth-service-client` `GET /{id}` → 200. Both passed on red and green. admin-service ITs (lane iam A) green. ⚪ No e2e spec drives console tenant create / suspend (grep of `*.spec.ts` for `tenants`: 0) — the live control is the next demo window.
+- [x] **AC-3**: the allowed client ids are configuration with a fail-closed default, and the demo env supplies them (a missing value must not reopen the API nor break admin-service — say which). — `internal.api.tenant-lifecycle.{write,read}-callers`. **Missing env var** → the `application.yml` default (`admin-service-client` / `+ auth-service-client`) → admin-service and auth-service keep working. That default is what the demo runs on: the demo sets neither caller's client id, so it sends the same literal. **Missing or blank property** → empty list → **every JWT caller refused (403)**, admin-service included. It fails closed and never reopens, and an ERROR line is logged at startup. Tests: blank-property slice (2) + `fromCsv(null / "" / " , ,")` unit test. ⚪ No explicit line was added to `infra/demo` — the demo gets the value through the yml default.
 
 # Related Specs
 
@@ -145,3 +145,20 @@ On the demo host, after an AMI that contains this change:
 1. `docker network inspect traefik-net` → list the members. For each non-IAM member, check its environment for an `internal.invoke` client (confirms or corrects Q2).
 2. From a container on `traefik-net`, send a `product-service-client` token (client credentials, scope `internal.invoke`) **directly** to `http://iam-account-service:8082`: `PATCH /internal/tenants/ecommerce {"status":"ACTIVE"}` → **403**, `POST /internal/tenants` → **403**, `GET /internal/tenants` → **403**, `GET /internal/tenants/ecommerce` → **403**. `ecommerce` stays `ACTIVE`.
 3. Control: from the same container, an `admin-service-client` token gets 200 on `GET /internal/tenants/ecommerce` and on `GET /internal/tenants/ecommerce/entitled-domains`. Console tenant create / suspend / reactivate through admin-service still works. An IdP login, which reads `GET /internal/tenants/{id}` through auth-service, still works.
+
+---
+
+# Red → green (PR #4397, counted from CI job logs)
+
+| lane | red (`162484ac4`, tests + contracts only) | green (`8ac8302d9`, fix) |
+|---|---|---|
+| `Build & Test` — iam `account-service:test` | job `117146199077`: 770 run, **5 failed**, all `AssertionError` (3 `TenantLifecycleCallerAllowListSliceTest` · 2 `…FailClosedSliceTest`) | job `117150019688`: task executed (not FROM-CACHE), 0 failed. Gradle prints counts only on failure; locally the 3 new classes ran 13/13 |
+| `Build & Test` — iam `admin-service:test` | same job: 1395 run, **1 failed**, `AssertionError` (`AccountServiceTenantClientCallerRefusalTest` `list()`) | same job: executed, 0 failed |
+| `Integration (iam B)` — account-service `integrationTest` | job `117146203007`: 171 run, **7 failed**, all `Status expected:<403> but was:<200>` (×5) / `<201>` (×2) — the exposure itself | job `117150020173`: 171 PASSED, 0 failed (all 11 BE-640 cases `PASSED`); whole lane 379 PASSED, 0 failed |
+| `Integration (iam A)` (admin-service ITs) | job `117146203188`: green | job `117150020208`: 357 PASSED, 0 failed |
+
+Passed on both commits (controls): admin full lifecycle · auth `GET /{id}` · sub-resource `entitled-domains` for `product-service-client` · test-profile bypass without a token (IT); admin all-paths · auth `GET /{id}` · no token → 401 (slice); `create`/`update`/`get` 403 mapping (admin unit).
+
+**Branch e2e (internal auth surface used by seeds and e2e):**
+- `federation-hardening-e2e.yml` run `38953380249`, job `117150753714`: **20 passed, 1 flaky** — `tenant-switch-rescope.spec.ts:110` (known, `TASK-BE-516`; this time the «scm leg must be HEALTHY on globex» assertion, passed on retry). The IdP logins in this suite go through auth-service's `GET /internal/tenants/{id}` on the branch build.
+- `nightly-e2e.yml` run `38953389471`: conclusion success. Platform Console full-stack (job `117150433477`) **12 passed, 0 flaky** · web-store full-stack (job `117150546261`) **14 passed** · wms gateway-master, fan live-trio, scm cross-service, ecommerce×wms, web-store GAP logout: success. ⚪ `E2E full (iam docker-compose)` (job `117150114203`) shows `:projects:iam-platform:tests:e2e:e2eFullTest FROM-CACHE` — it did **not** execute against this change.
