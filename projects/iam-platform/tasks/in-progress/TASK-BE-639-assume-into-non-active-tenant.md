@@ -146,3 +146,22 @@ An account-service outage never blocks a console tenant switch. The gate does no
    - → If you choose B, the admin gate is untouched, so the two admin pins stay `assigned=true` as gate facts. Their names and comments become "the gate does not judge status — auth-service does (BE-639)", and the refusal is pinned in an auth-service IT instead.
    - If you choose A, both admin pins flip to `false` (and the "0 account-service reads" assertion inverts).
    - The account-service 🆕 pin flips under B (`domainKeys: []` for non-ACTIVE).
+
+---
+
+# Owner decisions (2026-10-16 UTC)
+
+| Q | Decision | Why (as recorded) |
+|---|---|---|
+| Q1 | **B.** account-service `GET /internal/tenants/{id}/entitled-domains` gains an additive `tenantStatus` field and returns `domainKeys: []` when the tenant is not `ACTIVE`. auth-service refuses the operator assume exchange (`400 invalid_grant`, `error_description=tenant_not_active`, nothing issued) **only** when that read positively says not `ACTIVE`. On account-service outage it stays fail-soft (token issued, no `entitled_domains`, no `roles`). No new call. | Closes both refused rows without tying the console tenant switch to account-service availability (Failure Scenario 1). The `[]` half is the old-auth-image safety: an auth image that ignores `tenantStatus` still mints zero domain reach for a non-ACTIVE tenant. |
+| Q2 | `'*'` operators are refused too, for both `PENDING` and `SUSPENDED`. | A PENDING tenant is set up through admin APIs with the operator token (773). No flow needs an assumed domain token there. |
+| Q3 | The company operator of a `SUSPENDED` tenant is refused. Membership rows are kept. | Reactivation restores access without re-granting. |
+| Q4 | Workload client assume stays **out** of 639. | The workload token carries no `entitled_domains` or `roles`, and writes into a non-ACTIVE tenant are already refused by account-service `ActiveTenantGuard` (409 `TENANT_SUSPENDED`). The workload branch does not make the entitled-domains read, so the new gate does not apply to it. Re-open only if the workload reads (`entitled-domains`, `consumer-members`) must be refused too. |
+| Q5 | Tests "under B": the two admin pins are renamed to say auth-service judges status (the admin gate is unchanged). The account-service pin flips to `domainKeys: []` for non-ACTIVE (ACTIVE control unchanged). A new auth-service IT pins the refusal for `'*'`×PENDING, `'*'`×SUSPENDED, company×SUSPENDED (+ partnership host reach×SUSPENDED), plus the controls: ACTIVE unchanged, account-service unavailable → issued with no roles, response without `tenantStatus` → unchanged. | — |
+
+Consequences recorded with the decision (contract `account-tenant-domain-subscriptions.md`):
+- **User tokens.** `authorization_code` / `refresh_token` tokens of a non-ACTIVE tenant's users also lose `entitled_domains`. That path reads the same endpoint, and it does not refuse.
+- **admin-service writes.** admin-service's work-permission-set write gate (`DomainSetEntitlementGuard`) answers `422 DOMAIN_NOT_SUBSCRIBED` for set create, edit or grant into a non-ACTIVE tenant until it is reactivated.
+- **Deploy order.** account first, then auth; both ride the same bake.
+  - Old account image + new auth: unchanged behaviour (no `tenantStatus` → not refused).
+  - New account image + old auth: issued, but with no reach.

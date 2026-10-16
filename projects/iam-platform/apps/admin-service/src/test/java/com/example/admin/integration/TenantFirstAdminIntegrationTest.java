@@ -76,7 +76,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * that tenant. Moving the activation call before the admin commit (auth-to-admin.md § accept 9 before 8) turns
  * {@link #assertEveryActivationSawAnAdmin} red.
  *
- * <p>Two measurement obligations of S1 live here: (Q4) {@link #measure_starOperatorAssumesPendingTenant} and the
+ * <p>Two measurement obligations of S1 live here: (Q4) {@link #gate_starOperatorPendingTenant_assigned_statusJudgedByAuth} and the
  * deploy-order window (admin-api § POST /tenants «호환») — {@link #post_superAdmin_pendingTenantAndFirstAdminInvitation}
  * asserts {@code 201} BEFORE {@code status = PENDING}, so on the pre-S4 code its red line is the measurement «the old
  * request DTO ignores {@code firstAdmin}: 201 · {@code ACTIVE} · no invitation».
@@ -773,11 +773,11 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.firstAdmin.invitationId").value(newId));
     }
 
-    // ═══ S1 Q4 measurement — '*' operator · PENDING tenant ═══════════════════════════
+    // ═══ S1 Q4 — '*' operator · PENDING tenant (TASK-BE-639: the gate does not judge status — auth-service does) ═══
 
     @Test
-    @DisplayName("🔵 측정(S1 Q4): '*' 운영자의 PENDING 테넌트 assume — admin assignment-check 는 테넌트 상태를 읽지 않는다 → assigned=true (콘솔 스위처엔 안 뜬다 · 결정은 소유자)")
-    void measure_starOperatorAssumesPendingTenant() throws Exception {
+    @DisplayName("S1 Q4 · BE-639: '*' 운영자 × PENDING 테넌트 — admin 게이트는 상태를 판정하지 않는다(assigned=true · 상태 읽기 0) — 거절은 auth-service 의 테넌트 상태 게이트(tenant_not_active)")
+    void gate_starOperatorPendingTenant_assigned_statusJudgedByAuth() throws Exception {
         String slug = slug();
         stubTenantGet(slug, "PENDING");
         String account = UUID.randomUUID().toString();
@@ -796,16 +796,18 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", account).param("tenantId", slug))
                 .andExpect(status().isOk())
-                // 🔵 a MEASUREMENT pin, not a requirement (admin-api § 전이 매트릭스 «읽는 곳» 표 ⚪ row): if the owner
-                //    decides a PENDING tenant must not be assumable, this flips to false together with that change.
+                // TASK-BE-639 (owner decision 2026-10-16 UTC, Q1 = B): this gate is deliberately unchanged — the
+                //    status is judged by auth-service on the entitled-domains read it already makes, so the
+                //    exchange is refused there (AssumeTenantExchangeIntegrationTest#be639_*). An account-service
+                //    outage must not block the gate (Failure Scenario 1).
                 .andExpect(jsonPath("$.assigned").value(true));
         assertThat(wireMock.findAll(WireMock.getRequestedFor(urlPathEqualTo("/internal/tenants/" + slug))))
                 .as("the assume gate never reads the tenant's status").isEmpty();
     }
 
     @Test
-    @DisplayName("🔵 측정(TASK-BE-639 AC-0): 회사 운영자 · 소속 테넌트가 SUSPENDED 인데 소속 행은 남음 — assignment-check → assigned=true, 테넌트 상태 읽기 0")
-    void measure_companyOperatorAssumesSuspendedTenant_membershipKept() throws Exception {
+    @DisplayName("BE-639 Q3: 회사 운영자 × SUSPENDED 테넌트(소속 행 유지) — admin 게이트는 상태를 판정하지 않는다(assigned=true · 상태 읽기 0) — 거절은 auth-service")
+    void gate_companyOperatorSuspendedTenant_membershipKept_statusJudgedByAuth() throws Exception {
         String slug = slug();
         stubTenantGet(slug, "SUSPENDED");
         String account = UUID.randomUUID().toString();
@@ -825,7 +827,7 @@ class TenantFirstAdminIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/internal/operator-assignments/check")
                         .param("oidcSubject", account).param("tenantId", slug))
                 .andExpect(status().isOk())
-                // 🔵 a MEASUREMENT pin (TASK-BE-639 AC-0), not a requirement: flips with the owner's decision.
+                // TASK-BE-639: the row stays (reactivation restores access, Q3); the refusal is auth-service's.
                 .andExpect(jsonPath("$.assigned").value(true));
         assertThat(wireMock.findAll(WireMock.getRequestedFor(urlPathEqualTo("/internal/tenants/" + slug))))
                 .as("the assume gate never reads the tenant's status").isEmpty();
