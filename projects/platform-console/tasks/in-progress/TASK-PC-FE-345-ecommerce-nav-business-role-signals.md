@@ -68,9 +68,9 @@ frontend
 # Acceptance Criteria
 
 - [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-795` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ECOMMERCE_ORDER_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 E-commerce 13 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(`OrderOperatorAccess` · `ProductOperatorAccess` · 각 서비스 `OperatorRoleGuard` · `AdminUserController` · `TemplateController`)와 다시 대조.
-- [ ] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저.
-- [ ] **AC-2** — 🔴 대조군: 조회 세트(`ecommerce-read`) → E-commerce 메뉴 배지 없음 · 쓰기 버튼 없음 / 주문 운영 세트만(`ecommerce-order-operate`) → `/orders` 배지 없음 · 버튼 보임, 나머지 7 화면 배지 / 회원 조회 없는 세트 → `/users` 배지 / E-commerce 세트 0 → E-commerce 메뉴 전부 배지.
-- [ ] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로).
+- [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `96489e285`(계약 · 시험만).
+- [ ] **AC-2** — 🔴 대조군: 조회 세트(`ecommerce-read`) → E-commerce 메뉴 배지 없음 · 쓰기 버튼 없음 / 주문 운영 세트만(`ecommerce-order-operate`) → `/orders` 배지 없음 · 버튼 보임, 나머지 7 화면 배지 / 회원 조회 없는 세트 → `/users` 배지 / E-commerce 세트 0 → E-commerce 메뉴 전부 배지. → **메뉴 절반 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-345 · `sidebar-business-permission.test.tsx`). **버튼 절반(«쓰기 버튼 없음» · «버튼 보임») 은 `TASK-PC-FE-346` 으로 이관** — § 범위 결정.
+- [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(row 12 `undefined`) · 버튼은 이 PR 에서 선언 없음 = 늘 보임.
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
 
 # Related Specs
@@ -126,6 +126,17 @@ c-2 시험이 이것을 못 잡은 이유: `console-nav-business-permission.test
 ## 범위 결정 — 쓰기 버튼은 분리 (`TASK-PC-FE-346`)
 
 대조표의 `writeRequires`(상품 · 주문 · 배송 · 프로모션 · 판매자 · 정산 · 알림 템플릿)는 **선언하지 않았다**. 선언하면 계약 «Declared today» 가 «그 버튼은 숨는다» 고 말하게 되는데, 그 버튼들은 7 화면 · 약 20 라우트(목록 · 상세 · new · edit)에 흩어져 있고 지금 어느 것도 `canWrite` 를 받지 않는다 — 배선 없는 선언은 «아무도 그리지 않는 데이터» 다. 라이브 퇴행(배지)을 빨리 내보내는 것이 먼저라 이 PR 은 메뉴 신호만 고치고, 버튼 배선은 `TASK-PC-FE-346`(ready, 이 PR 에서 기안)으로 나눴다. 그 사이 조회 세트 운영자는 쓰기 버튼을 보고 누르면 서버 `403` → 화면 안 «권한 없음»(안전 쪽 실패, 795 전과 같은 체감). ⇒ AC-2 의 «쓰기 버튼 없음» · «버튼 보임» 절반은 346 으로 넘어간다.
+
+## Red — 커밋 `96489e285` (계약 · 시험 · 티켓만, 제품 코드 0)
+
+- 로컬 전체: **11 failed | 4576 passed (4587)** — `console-nav-business-permission.test.ts` 10 · `sidebar-business-permission.test.tsx` 1, 전부 `AssertionError`. `tsc` rc=0.
+- CI run `38958876577`, `Frontend unit tests (… console-web, vitest)` job **`117168660021`**: console-web **11 failed | 4576 passed (4587)**, 실패 파일 2 · 실패 11 건 전부 `AssertionError`(로그에서 셈).
+- 🔴 퇴행 고정 시험(`🔴 live regression pin`): legacy-compat row 12(13 역할) 입력에 `/ecommerce` 배지 = **true** — 지금 라이브와 같은 판정이 시험에서 재현됨.
+
+## Green — 데이터만
+
+- `permission-map.ts`: `ECOMMERCE_GATEWAY_REQUIRES` 삭제 · `ECOMMERCE_ROLES`(13) · `ECOMMERCE_GET`(영역별 GET 판정) · 9 행 `roles` = 13 · `serverRequires` = 위 대조표(개요 = 6 영역 합집합).
+- 로컬: `npx vitest run` **399 files / 4587 passed** · `tsc` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26`).
 
 ## 함께 적는 것
 
