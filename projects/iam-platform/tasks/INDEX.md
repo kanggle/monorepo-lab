@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **🔴 보안 — 게이트웨이를 우회하는 직접 경로: 데모의 account-service 는 `traefik-net` 에도 붙어 있어, 그 망에서 `internal.invoke` 토큰을 가진 컨테이너는 테넌트 라이프사이클 API(`POST`/`GET /internal/tenants` · `PATCH /internal/tenants/{id}`)를 직접 부를 수 있다** (READY, 2026-10-16 UTC · 출처 `TASK-BE-638` AC-0 ⚪). 지금 그 자격을 가진 비-IAM 컨테이너는 파일 기준 0 — 열려 있지만 쥔 자 없음. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **🔴 보안 — 게이트웨이를 우회하는 직접 경로: 데모의 account-service 는 `traefik-net` 에도 붙어 있어, 그 망에서 `internal.invoke` 토큰을 가진 컨테이너는 테넌트 라이프사이클 API(`POST`/`GET /internal/tenants` · `PATCH /internal/tenants/{id}`)를 직접 부를 수 있다** (IN-PROGRESS 2026-10-17 UTC · 출처 `TASK-BE-638` AC-0 ⚪). 고침 = account-service 보안 체인의 호출자(`sub`) 허용 목록 — 쓰기 · 목록은 admin-service, 단건 읽기는 admin-service + auth-service. 분석=Opus 5.5 / 구현=Opus.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
