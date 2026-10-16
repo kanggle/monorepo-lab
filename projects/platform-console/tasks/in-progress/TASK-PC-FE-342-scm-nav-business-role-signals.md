@@ -120,6 +120,8 @@ frontend
 - `permission-map.ts`: SCM 5행 `roles` = SCM 8(카탈로그) · `serverRequires`(대조표) · `/scm/replenishment` · `/scm/config` `writeRequires` = `SCM_DEMAND_PLANNING_WRITE` · `/wms/outbound` `buttonWriteRequires['retry-dispatch']` = `SCM_LOGISTICS_WRITE` · 출처 = SecurityConfig 4개 줄.
 - 화면: 보충 계획 — `canWrite=false` 면 «작업» 열(승인 · 기각) 통째로 빠지고 «조회 전용» 문구 · 설정 — 두 폼의 저장 버튼 숨김 · «조회 전용» 문구(SKU 조회와 현재 값은 남는다) · 출고 — `canRetry=false` 면 «발송 재시도» 와 그 안내 숨김. 페이지 셋이 `canWriteOn(…)` 으로 계산해 넘긴다.
 - 로컬: `npx vitest run` **399 files / 4577 passed, 0 failed** · `npx tsc --noEmit -p .` rc=0 · `next lint` rc=0(경고 1 = 기존 `received-invitations/route.ts:26` `_req`, 이 변경 밖).
+- CI 커밋 `18c73c77f` run `38953944252`: `Frontend unit tests (… console-web, vitest)` job **`117152057908`** — console-web **399 files / 4577 passed**(로그에서 셈) · 같은 job 의 `npx tsc --noEmit` · `next lint` 단계 실행 · job pass. 실행된 검사 14 전부 pass(필수 4 포함) · 52 skipped.
+- nightly `nightly-e2e.yml` (브랜치 dispatch) run **`38953962267`** = success · 콘솔 job `Platform Console E2E full-stack` **`117152378521`**: **12 passed · 0 flaky · 0 failed**(로그 요약 줄) — 알려진 개요 TIMEOUT flake(`TASK-PC-FE-341`) 이번 런엔 없음. 다른 14 job 전부 success.
 
 ## ⚪ 남은 것
 
