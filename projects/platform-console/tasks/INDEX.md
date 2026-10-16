@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-341-nightly-sample-visitor-overview-flaky.md` — **nightly 콘솔 e2e `sample-visitor-transition.spec.ts:19` 가 `TASK-MONO-773` S6 머지와 함께 처음 flaky — 개요 저하(문서 10 s)** (READY, 2026-10-15 UTC · 출처 773 § 닫기 § 4). run 38763381565 / job 116520791861 `10 passed · 1 flaky` · 앞선 nightly 다섯 `8 passed · 0 flaky`. 원인 미확정(가설: SSR 개요 fetch × 병렬 비운영자 흐름 경합 — 미측정). AC-0 = 다음 nightly 최소 5 런의 재발 · 실패 단계(익명 `:26` / 로그인 뒤 `:35`) · 동시 실행 상관. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-PC-FE-342-scm-nav-business-role-signals.md` — **`ADR-MONO-083` P5 콘솔 후속 — SCM 메뉴 «업무 권한 없음» · 쓰기 버튼을 SCM 세분 역할로 · WMS 출고 «발송 재시도» = `SCM_LOGISTICS_WRITE`** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-792` 소유자 결정 «순서»). ⏳ **머지 게이트: 792 를 실은 AMI 굽기가 라이브 확인된 뒤에만** — 먼저 나가면(Vercel 즉시) 전 운영자에게 거짓 배지 + 버튼 숨김. 데이터만(`permission-map.ts` `serverRequires` · `writeRequires` · 계약 § 2.4.3.4 `:281,304,307`). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **게이트 충족 2026-10-16 UTC** — 28차 창이 792~795 를 실은 굽기를 라이브 확인(`TASK-MONO-672` § 28th window — harvest) ⇒ 이제 구현 · 머지 가능.
 - `TASK-PC-FE-343-erp-nav-business-role-signals.md` — **`ADR-MONO-083` P6 콘솔 후속 — ERP 메뉴 «업무 권한 없음» · 쓰기 버튼을 ERP 세분 역할로 · 알림 종이 ERP 역할 없는 사용자에게 ERP 갈래를 부르지 않기** (READY, 2026-10-15 UTC · 출처 `TASK-MONO-793` 소유자 결정 Q5 · 순서). ⏳ **머지 게이트: 793 을 실은 AMI 굽기가 라이브 확인된 뒤에만** — 먼저 나가면(Vercel 즉시) 전 운영자에게 거짓 배지 + 버튼 숨김 + 알림 ERP 갈래 소실. 데이터(`permission-map.ts` ERP 5행 · 계약 § 2.4.3.4 · § 2.4.8) + 알림 갈래 선택 하나. 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **게이트 충족 2026-10-16 UTC** — 28차 창이 792~795 를 실은 굽기를 라이브 확인(`TASK-MONO-672` § 28th window — harvest) ⇒ 이제 구현 · 머지 가능.
 - `TASK-PC-FE-344-finance-nav-business-role-signals.md` — **`ADR-MONO-083` P7 콘솔 후속 — Finance 메뉴 «업무 권한 없음» · 쓰기 버튼을 Finance 세분 역할로 · 운영 개요 Finance 카드** (READY, 2026-10-16 UTC · 출처 `TASK-MONO-794` 소유자 결정 · 순서). ⏳ **머지 게이트: 794 를 실은 AMI 굽기가 라이브 확인된 뒤에만** — 먼저 나가면(Vercel 즉시) 전 운영자에게 거짓 배지 + 대사 해소 · 환율 갱신 버튼 숨김. 데이터(`permission-map.ts` Finance 3행 · 계약 § 2.4.3.4) — 🔴 `/ledger` 버튼은 `FINANCE_LEDGER_WRITE` 만(통제 역할은 열지 않는다). 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **게이트 충족 2026-10-16 UTC** — 28차 창이 792~795 를 실은 굽기를 라이브 확인(`TASK-MONO-672` § 28th window — harvest) ⇒ 이제 구현 · 머지 가능.
 - `TASK-PC-FE-345-ecommerce-nav-business-role-signals.md` — **`ADR-MONO-083` P8 콘솔 후속 — E-commerce 9 화면 «업무 권한 없음» · 쓰기 버튼을 E-commerce 세분 역할로 · 운영 개요 ecommerce 카드** (READY, 2026-10-16 UTC · 출처 `TASK-MONO-795` 소유자 결정 · 순서). ⏳ **머지 게이트 — `TASK-MONO-795` 를 실은 굽기 라이브 확인 뒤에만 머지**(굽기 전 머지 = 모든 운영자에게 거짓 «업무 권한 없음» · 버튼 숨김). `ECOMMERCE_GATEWAY_REQUIRES`(진입 역할) 를 서비스 판정 대조표의 영역 역할로 교체 · 데이터만. 분석=Opus 5.5 / 구현 권장=Sonnet. 🟢 **게이트 충족 2026-10-16 UTC** — 28차 창이 792~795 를 실은 굽기를 라이브 확인(`TASK-MONO-672` § 28th window — harvest) ⇒ 이제 구현 · 머지 가능.
@@ -122,7 +121,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-(empty)
+- `TASK-PC-FE-342-scm-nav-business-role-signals.md` — **`ADR-MONO-083` P5 콘솔 후속 — SCM 메뉴 «업무 권한 없음» · 쓰기 버튼을 SCM 세분 역할로 · WMS 출고 «발송 재시도» = `SCM_LOGISTICS_WRITE`** (IN-PROGRESS, 2026-10-16 UTC · 출처 `TASK-MONO-792` 소유자 결정 «순서»). 🟢 머지 게이트 충족(28차 창 라이브 2026-10-16). 데이터(`permission-map.ts` SCM 5행 `serverRequires` · `writeRequires` + 출고 «발송 재시도» 버튼 단위 요구) · 계약 § 2.4.3.4. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## review
 

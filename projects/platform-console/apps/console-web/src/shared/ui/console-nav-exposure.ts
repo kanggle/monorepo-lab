@@ -248,13 +248,20 @@ export function defaultBusinessPermissionBadgeKeys(
  * AC-2 — may the screen at `href` show its mutation buttons? `false` only when the operator's
  * business roles are KNOWN and hold none of the screen's `writeRequires`. Unknown roles, or a
  * screen with no declaration → `true` (the server stays final).
+ *
+ * `button` (TASK-PC-FE-342) names one button whose server differs from the rest of the screen's
+ * mutations: when the screen declares `buttonWriteRequires[button]`, that list replaces the
+ * screen's `writeRequires` for this button only. An undeclared button falls back to the screen.
  */
 export function canWriteOn(
   href: string,
   myBusinessRoles: ReadonlySet<string> | undefined,
+  button?: string,
 ): boolean {
   if (myBusinessRoles === undefined) return true;
-  return holdsAny(myBusinessRoles, domainGateOf(href)?.writeRequires);
+  const gate = domainGateOf(href);
+  const perButton = button === undefined ? undefined : gate?.buttonWriteRequires?.[button];
+  return holdsAny(myBusinessRoles, perButton ?? gate?.writeRequires);
 }
 
 /** Re-exported for callers (`ConsoleSidebarNav`, the `(console)` layout) that

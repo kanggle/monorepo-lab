@@ -867,7 +867,7 @@ describe('OutboundOpsScreen — AC-2 read set hides the outbound write buttons',
     expect(screen.getByTestId('outbound-read-only-note')).toHaveTextContent('조회 전용');
   });
 
-  it('canWrite=false keeps «발송 재시도» (logistics-service is not gated by OUTBOUND_WRITE)', async () => {
+  it('canWrite=false keeps «발송 재시도» (logistics-service is not gated by OUTBOUND_WRITE — its own flag is canRetry)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED'))),
@@ -886,5 +886,52 @@ describe('OutboundOpsScreen — AC-2 read set hides the outbound write buttons',
     await drillReadOnly(user, 'PICKING', undefined);
     expect(screen.getByTestId('outbound-action-pick')).toBeInTheDocument();
     expect(screen.queryByTestId('outbound-read-only-note')).toBeNull();
+  });
+});
+
+/**
+ * TASK-PC-FE-342 AC-2 — «발송 재시도» goes to scm logistics-service, whose retry needs
+ * `SCM_LOGISTICS_WRITE` since TASK-MONO-792 (Q3 strict; live 28th window: outbound set only →
+ * 403). The page passes `canRetry = canWriteOn('/wms/outbound', roles, 'retry-dispatch')`.
+ */
+describe('OutboundOpsScreen — TASK-PC-FE-342 «발송 재시도» follows SCM_LOGISTICS_WRITE', () => {
+  async function drillShipped(
+    user: ReturnType<typeof userEvent.setup>,
+    props: { canWrite?: boolean; canRetry?: boolean },
+  ) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(drillEnvelope('SHIPPED', 'SHIPPED_NOT_NOTIFIED'))),
+    );
+    render(
+      <OutboundOpsScreen
+        orders={{ ...ORDERS, content: [order({ status: 'SHIPPED' })] }}
+        {...props}
+      />,
+      { wrapper: wrapper() },
+    );
+    await user.click(screen.getByTestId('outbound-drill-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('outbound-drill-status')).toBeInTheDocument(),
+    );
+  }
+
+  it('canRetry=false (WMS outbound set only) → no «발송 재시도» and no retry note', async () => {
+    const user = userEvent.setup();
+    await drillShipped(user, { canWrite: true, canRetry: false });
+    expect(screen.queryByTestId('outbound-action-retry-dispatch')).toBeNull();
+    expect(screen.queryByTestId('outbound-retry-dispatch-note')).toBeNull();
+  });
+
+  it('canRetry=true with canWrite=false (logistics write, outbound read) → «발송 재시도» shown', async () => {
+    const user = userEvent.setup();
+    await drillShipped(user, { canWrite: false, canRetry: true });
+    expect(screen.getByTestId('outbound-action-retry-dispatch')).toBeInTheDocument();
+  });
+
+  it('control: canRetry omitted (fail-open) → «발송 재시도» shown', async () => {
+    const user = userEvent.setup();
+    await drillShipped(user, {});
+    expect(screen.getByTestId('outbound-action-retry-dispatch')).toBeInTheDocument();
   });
 });

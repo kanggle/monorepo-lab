@@ -67,10 +67,18 @@ export interface OutboundOpsScreenProps {
   /**
    * TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when
    * the operator's business roles hold none of `/wms/outbound`'s `writeRequires`
-   * (`OUTBOUND_WRITE`): pick / pack / ship / cancel hide. «발송 재시도» (logistics-service,
-   * `authenticated()` only) stays. Omitted / `true` = shown (fail-open). The server stays final.
+   * (`OUTBOUND_WRITE`): pick / pack / ship / cancel hide. «발송 재시도» is NOT governed by this
+   * flag (its server is scm logistics-service — see `canRetry`). Omitted / `true` = shown
+   * (fail-open). The server stays final.
    */
   canWrite?: boolean;
+  /**
+   * TASK-PC-FE-342 (contract § 2.4.3.4 button-level row) — `false` when the operator's business
+   * roles (row 12 ∩ the tenant's wms + scm subscriptions) hold no `SCM_LOGISTICS_WRITE`: the
+   * «발송 재시도» button hides (logistics-service would `403` it — `TASK-MONO-792` Q3).
+   * Omitted / `true` = shown (fail-open).
+   */
+  canRetry?: boolean;
 }
 
 export function OutboundOpsScreen({ orders, canWrite = true }: OutboundOpsScreenProps) {

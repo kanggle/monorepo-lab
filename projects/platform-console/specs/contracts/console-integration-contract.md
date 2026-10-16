@@ -277,8 +277,11 @@ TASK-PC-FE-225's orthodox IAM-taxonomy nav split introduced two workforce-plane 
     |---|---|---|---|
     | `/wms` | alert «확인 처리» | `WMS_OPERATOR` | wms admin-service `AlertDashboardController` `hasRole('WMS_OPERATOR')` |
     | `/wms/outbound` | 피킹 확정 · 패킹 진행 · 출고 확정 · 주문 취소 | `OUTBOUND_WRITE` | outbound-service `SecurityConfig` mutations = `OUTBOUND_WRITE ∨ OUTBOUND_ADMIN` (`OUTBOUND_ADMIN` is not in the catalog) |
+    | `/wms/outbound` (button-level) | 발송 재시도 | `SCM_LOGISTICS_WRITE` | scm logistics-service `SecurityConfig` `POST /dispatches/{id}:retry` = `SCM_LOGISTICS_WRITE` (`TASK-MONO-792` Q3 «strict»; 28th window live: outbound set only → `403`) |
+    | `/scm/replenishment` | 승인 · 기각 | `SCM_DEMAND_PLANNING_WRITE` | demand-planning-service `SecurityConfig` non-GET = `SCM_DEMAND_PLANNING_WRITE`; the approve's draft PO (`POST /api/procurement/po/from-suggestion`) = `SCM_PROCUREMENT_WRITE ∨ SCM_DEMAND_PLANNING_WRITE` (`TASK-MONO-792` Q2), so the demand-planning role alone completes an approve |
+    | `/scm/config` | 정책 저장 · 매핑 저장 | `SCM_DEMAND_PLANNING_WRITE` | demand-planning-service `PUT /policies/{sku}` · `PUT /sku-supplier-map/{sku}` = `SCM_DEMAND_PLANNING_WRITE` |
 
-  - «발송 재시도» goes to scm logistics-service, which is `authenticated()` only. It carries no requirement and stays visible.
+  - **A button whose server differs from the rest of the screen's mutations** declares its own requirement (`buttonWriteRequires`, keyed by button); it replaces the screen's `writeRequires` for that button only. Today the one case is «발송 재시도» (`TASK-PC-FE-342`): it goes to scm logistics-service, not outbound-service, so `OUTBOUND_WRITE` neither opens nor closes it. A WMS outbound operator needs the SCM logistics set to retry. Its roles input is row 12 ∩ the active tenant's subscriptions to **wms and scm** (the button's server is scm — a tenant without scm cannot retry, as the server's token roles carry no scm role). ~~«발송 재시도» goes to scm logistics-service, which is `authenticated()` only. It carries no requirement and stays visible.~~ (true until `TASK-MONO-792`.)
   - A screen with no declaration hides nothing.
   - Row 12 failure, no active tenant, or a sample visitor → **buttons visible** (fail-open, as for the nav signal).
   - A direct URL or API call is still refused by the domain server with `403` — the console keeps the existing inline «권한 없음» mapping for that `403`. 🔵 This **supersedes**, from P4, the «does NOT pre-gate on role» statements of the domain sections (§ 2.4.5 et al.) for **button visibility only**; the attempt-and-map-403 handling stays, because hiding is a convenience and the producer is the gate.
@@ -301,10 +304,15 @@ Domain menus are never hidden by either signal; each shows its own badge. Hiding
   | every `ecommerce` leaf | `ECOMMERCE_OPERATOR` | the ecommerce gateway admits operators on `/api/admin/**` and the operator-on-public trees only with `ECOMMERCE_OPERATOR` |
   | `/wms` · `/wms/inventory` · `/wms/inbound` · `/wms/master` | — | wms admin-service dashboards: `WMS_VIEWER` is synthesised from `entitled_domains ∋ wms` (subscription alone) |
   | `/wms/operations` | — | `WMS_ADMIN` for every operator — no catalog role can satisfy it, so it is not a set question |
-  | SCM · ERP · Finance leaves | — | SCM services are `authenticated()` only; ERP reads are open to `entitled_domains ∋ erp`; Finance synthesises `FINANCE_VIEWER` |
+  | `/scm` (개요) | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` · `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | its two cards read procurement `GET /po` and inventory-visibility `GET /snapshot` (each service: `GET` = READ ∨ WRITE, `TASK-MONO-792`); either role family opens the screen, and a missing one degrades only its own card (existing per-card rule) |
+  | `/scm/procurement` | `SCM_PROCUREMENT_READ` · `SCM_PROCUREMENT_WRITE` | procurement-service `GET /api/procurement/**` = READ ∨ WRITE |
+  | `/scm/inventory` | `SCM_INVENTORY_VISIBILITY_READ` · `SCM_INVENTORY_VISIBILITY_WRITE` | inventory-visibility-service `GET` = READ ∨ WRITE |
+  | `/scm/replenishment` · `/scm/config` | `SCM_DEMAND_PLANNING_READ` · `SCM_DEMAND_PLANNING_WRITE` | demand-planning-service `GET` = READ ∨ WRITE. 🔵 `/scm/config`'s supplier picker reads procurement (`GET /procurement/suppliers`) — a demand-planning-only operator keeps the screen and loses only that picker's suggestions |
+  | ERP · Finance leaves | — | ERP reads are open to `entitled_domains ∋ erp`; Finance synthesises `FINANCE_VIEWER` |
   | fan leaves | — | not measured (ADR-083 ③ ⚪) — no declaration until measured |
 
-- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule.
+  🔴 `SCM_OPERATOR` is never declared: since `TASK-MONO-792` (Q4) it is an **entry role auth derives** when the token carries ≥1 SCM business role — it is not in the catalog and never appears in row 12, so declaring it would badge every SCM operator.
+- **Scales with P5–P8 (`TASK-MONO-792`~`795`).** When a domain gains fine-grained server checks, that phase adds `serverRequires` (and `writeRequires`) to that domain's leaves — data only, no new rule. **P5 (SCM) — done, `TASK-PC-FE-342`** (the SCM rows above + the `/wms/outbound` «발송 재시도» button-level row). P6 (ERP) · P7 (Finance) · P8 (E-commerce) follow in `TASK-PC-FE-343` · `344` · `345`.
 - **Badge.** The text is «업무 권한 없음», and the leaf keeps its link (never hidden). The `(console)` layout reads row 12 once per render, together with the registry.
 
 #### 2.4.4 IAM operator overview (composed) — TASK-PC-FE-005 — cross-reference, **no new producer**

@@ -220,6 +220,14 @@ export type PermissionGate =
        * Absent = nothing on this screen is hidden.
        */
       writeRequires?: readonly string[];
+      /**
+       * TASK-PC-FE-342 (contract § 2.4.3.4 «a button whose server differs») — per-button
+       * override of {@link writeRequires}, keyed by a button id the screen passes to
+       * `canWriteOn(href, roles, button)`. Used when one button goes to a different domain
+       * server than the rest of the screen's mutations (`/wms/outbound` «발송 재시도» → scm
+       * logistics-service).
+       */
+      buttonWriteRequires?: Readonly<Record<string, readonly string[]>>;
     };
 
 export interface Crud {

@@ -48,6 +48,13 @@ import { ReplenishmentTable } from './ReplenishmentTable';
 
 export interface ReplenishmentScreenProps {
   suggestions: SuggestionPage;
+  /**
+   * TASK-PC-FE-342 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when the
+   * operator's business roles hold none of `/scm/replenishment`'s `writeRequires`
+   * (`SCM_DEMAND_PLANNING_WRITE`): 승인 · 기각 hide and a read-only note shows. Omitted / `true`
+   * = shown (fail-open). The server stays final.
+   */
+  canWrite?: boolean;
 }
 
 interface FilterState {

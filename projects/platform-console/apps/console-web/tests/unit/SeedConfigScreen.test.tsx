@@ -495,3 +495,43 @@ describe('SeedConfigScreen — a11y', () => {
     );
   });
 });
+
+/**
+ * TASK-PC-FE-342 AC-2 — `PUT /policies/{sku}` · `PUT /sku-supplier-map/{sku}` need
+ * `SCM_DEMAND_PLANNING_WRITE` (TASK-MONO-792; live 28th window: `scm-read` → policy PUT 403).
+ * The page passes `canWrite = canWriteOn('/scm/config', roles)`. The lookup and the current
+ * values stay — a read set may still inspect.
+ */
+describe('SeedConfigScreen — TASK-PC-FE-342 read set hides the save buttons', () => {
+  it('canWrite=false → read-only note; lookup still reads both rows; no 저장 / 생성 buttons', async () => {
+    const { fn, calls } = routedFetch({
+      policy: () =>
+        jsonResponse({
+          found: true,
+          value: { reorderPoint: 10, safetyStock: 5, reorderQty: 100 },
+        }),
+    });
+    vi.stubGlobal('fetch', fn);
+    render(<SeedConfigScreen canWrite={false} />, { wrapper: wrapper() });
+    expect(screen.queryByTestId('cfg-read-only-note')).not.toBeNull();
+    expect(screen.getByTestId('cfg-read-only-note')).toHaveTextContent('조회 전용');
+    await lookupSku();
+    await waitFor(() =>
+      expect(screen.getByTestId('map-not-configured')).toBeInTheDocument(),
+    );
+    expect(calls.some((c) => c.url.includes('/policies/') && c.method === 'GET')).toBe(true);
+    expect(calls.some((c) => c.url.includes('/sku-supplier-map/') && c.method === 'GET')).toBe(true);
+    expect(screen.queryByTestId('policy-save')).toBeNull();
+    expect(screen.queryByTestId('map-save')).toBeNull();
+  });
+
+  it('control: canWrite omitted (fail-open) → both save buttons, no note', async () => {
+    const { fn } = routedFetch();
+    vi.stubGlobal('fetch', fn);
+    render(<SeedConfigScreen />, { wrapper: wrapper() });
+    expect(screen.queryByTestId('cfg-read-only-note')).toBeNull();
+    await lookupSku();
+    await waitFor(() => expect(screen.getByTestId('policy-save')).toBeInTheDocument());
+    expect(screen.getByTestId('map-save')).toBeInTheDocument();
+  });
+});

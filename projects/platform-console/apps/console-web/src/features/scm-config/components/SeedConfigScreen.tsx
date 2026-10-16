@@ -27,7 +27,18 @@ import { SupplierMapForm } from './SupplierMapForm';
  * → only the affected sub-section degrades (the console shell + the 운영 + 보충
  * sections stay intact).
  */
-export function SeedConfigScreen() {
+export interface SeedConfigScreenProps {
+  /**
+   * TASK-PC-FE-342 (contract § 2.4.3.4 «Read-only sets hide write buttons») — `false` when the
+   * operator's business roles hold none of `/scm/config`'s `writeRequires`
+   * (`SCM_DEMAND_PLANNING_WRITE`): both forms' save buttons hide and a read-only note shows (the
+   * SKU lookup and the current values stay). Omitted / `true` = shown (fail-open).
+   */
+  canWrite?: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- TASK-PC-FE-342 red skeleton
+export function SeedConfigScreen(_props: SeedConfigScreenProps = {}) {
   const lookupId = useId();
   const [draft, setDraft] = useState('');
   // The "active" SKU drives the two forms' read queries; it only changes on an

@@ -9,7 +9,11 @@
  *   - `/wms`, `/wms/inventory`, `/wms/inbound`, `/wms/master` → wms admin-service dashboards open on
  *     subscription alone (`WMS_VIEWER` synthesised from `entitled_domains`) → 200 for any set;
  *   - every ecommerce leaf → the ecommerce gateway needs ECOMMERCE_OPERATOR;
- *   - SCM · ERP · Finance reads → open on subscription alone.
+ *   - ERP · Finance reads → open on subscription alone;
+ *   - SCM (TASK-PC-FE-342, server = TASK-MONO-792, live 28th window): each SCM service's GET =
+ *     its READ ∨ WRITE role, mutations = WRITE; `SCM_OPERATOR` is an auth-derived entry role
+ *     that opens no business API and never appears in row 12; WMS 출고 «발송 재시도» goes to
+ *     logistics-service = SCM_LOGISTICS_WRITE (Q3 strict — live: outbound set only → 403).
  * A badge on a leaf the server serves (or no badge on a leaf it refuses) is the failure this
  * pins.
  */
@@ -32,12 +36,33 @@ const ECOMMERCE_LEAVES = PERMISSION_MAP.filter(
   (r) => r.gate.kind === 'domain' && r.gate.domain === 'ecommerce',
 ).map((r) => r.href);
 
-/** The admin-service catalog (admin-api.md § 카탈로그 — 14 roles). */
+/**
+ * The admin-service catalog (admin-api.md § 카탈로그 · `DomainRoleCatalog.java`). The SCM part is
+ * the TASK-MONO-792 catalog (8 business roles; `SCM_OPERATOR` removed — auth derives it). The
+ * ERP · Finance · E-commerce entries are still the pre-P6..P8 ones this file's declarations use;
+ * their console follow-ups (TASK-PC-FE-343..345) replace them.
+ */
+const SCM_CATALOG = [
+  'SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE', 'SCM_DEMAND_PLANNING_READ',
+  'SCM_DEMAND_PLANNING_WRITE', 'SCM_LOGISTICS_READ', 'SCM_LOGISTICS_WRITE',
+  'SCM_INVENTORY_VISIBILITY_READ', 'SCM_INVENTORY_VISIBILITY_WRITE',
+];
 const CATALOG_ROLES = new Set([
   'INVENTORY_READ', 'INVENTORY_WRITE', 'INBOUND_READ', 'INBOUND_WRITE', 'OUTBOUND_READ',
-  'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', 'SCM_OPERATOR', 'ERP_OPERATOR',
+  'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR', ...SCM_CATALOG, 'ERP_OPERATOR',
   'FINANCE_OPERATOR', 'ECOMMERCE_OPERATOR', 'FAN_OPERATOR', 'MES_OPERATOR',
 ]);
+
+const SCM_LEAVES = ['/scm', '/scm/procurement', '/scm/inventory', '/scm/replenishment', '/scm/config'];
+/** System preset `scm-read` (TASK-MONO-792) — every SCM READ role. */
+const SCM_READ_SET = [
+  'SCM_PROCUREMENT_READ', 'SCM_DEMAND_PLANNING_READ', 'SCM_LOGISTICS_READ',
+  'SCM_INVENTORY_VISIBILITY_READ',
+];
+/** System preset `scm-demand-planning-operate`. */
+const SCM_DEMAND_PLANNING_SET = ['SCM_DEMAND_PLANNING_READ', 'SCM_DEMAND_PLANNING_WRITE'];
+/** System preset `wms-outbound-operate` (no SCM role). */
+const WMS_OUTBOUND_SET = ['OUTBOUND_READ', 'OUTBOUND_WRITE'];
 
 describe('AC-1 — inventory-set operator on a WMS-only tenant', () => {
   const badges = businessPermissionBadgeKeys(
@@ -92,10 +117,114 @@ describe('ecommerce — the gateway is the only gate (ECOMMERCE_OPERATOR)', () =
   });
 });
 
-describe('subscription-only domains never get the signal (SCM · ERP · Finance)', () => {
-  it('no role at all on a tenant subscribed to all three → no badge in those domains', () => {
-    const badges = businessPermissionBadgeKeys(GROUPS, subs('scm', 'erp', 'finance'), roles());
+describe('subscription-only domains never get the signal (ERP · Finance)', () => {
+  it('no role at all on a tenant subscribed to both → no badge in those domains', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('erp', 'finance'), roles());
     expect(badges.size).toBe(0);
+  });
+});
+
+/**
+ * TASK-PC-FE-342 AC-2 — SCM per menu (server: TASK-MONO-792 `SecurityConfig` × 4, live 28th
+ * window: `scm-read` → GETs 200 · PO create / policy PUT 403; WMS set only → scm PO 403).
+ */
+describe('TASK-PC-FE-342 — SCM menus follow the SCM business roles', () => {
+  it('SCM set 0 on an scm-subscribed tenant → every SCM leaf AND the SCM parent are badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('scm'), roles());
+    for (const href of SCM_LEAVES) expect(badges.has(href), href).toBe(true);
+    expect(badges.has('scm')).toBe(true);
+  });
+
+  it('the guide is never badged (static — no server read)', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('scm'), roles());
+    expect(badges.has('/scm/guide')).toBe(false);
+  });
+
+  it('`SCM_OPERATOR` alone (the derived entry role) opens no business API → still badged', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('scm'), roles('SCM_OPERATOR'));
+    for (const href of SCM_LEAVES) expect(badges.has(href), href).toBe(true);
+  });
+
+  it('read set (`scm-read`) → no SCM badge', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('scm'), roles(...SCM_READ_SET));
+    for (const href of SCM_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(badges.has('scm')).toBe(false);
+  });
+
+  it('read set → 승인 · 기각 (보충 계획) and 정책 · 매핑 저장 (설정) hidden', () => {
+    const r = roles(...SCM_READ_SET);
+    expect(canWriteOn('/scm/replenishment', r)).toBe(false);
+    expect(canWriteOn('/scm/config', r)).toBe(false);
+  });
+
+  it('demand-planning set only → 조달 · 재고 · 개요 badged; 보충 계획 · 설정 open; parent not badged', () => {
+    const badges = businessPermissionBadgeKeys(
+      GROUPS,
+      subs('scm'),
+      roles(...SCM_DEMAND_PLANNING_SET),
+    );
+    expect(badges.has('/scm/procurement')).toBe(true);
+    expect(badges.has('/scm/inventory')).toBe(true);
+    expect(badges.has('/scm')).toBe(true);
+    expect(badges.has('/scm/replenishment')).toBe(false);
+    expect(badges.has('/scm/config')).toBe(false);
+    expect(badges.has('scm')).toBe(false);
+  });
+
+  it('demand-planning set only → 승인 · 기각 and 저장 shown (approve\'s draft PO accepts DP_WRITE, Q2)', () => {
+    const r = roles(...SCM_DEMAND_PLANNING_SET);
+    expect(canWriteOn('/scm/replenishment', r)).toBe(true);
+    expect(canWriteOn('/scm/config', r)).toBe(true);
+  });
+
+  it('개요 opens on either card\'s family — inventory-visibility READ alone → no badge', () => {
+    const badges = businessPermissionBadgeKeys(
+      GROUPS,
+      subs('scm'),
+      roles('SCM_INVENTORY_VISIBILITY_READ'),
+    );
+    expect(badges.has('/scm')).toBe(false);
+    expect(badges.has('/scm/inventory')).toBe(false);
+    expect(badges.has('/scm/procurement')).toBe(true);
+  });
+
+  it('scm not subscribed → no «업무 권한 없음» on SCM (the subscription signal wins)', () => {
+    const badges = businessPermissionBadgeKeys(GROUPS, subs('wms'), roles());
+    for (const href of SCM_LEAVES) expect(badges.has(href), href).toBe(false);
+    expect(badges.has('scm')).toBe(false);
+  });
+
+  it('fail-open: row 12 unknown → no SCM badge, SCM buttons shown', () => {
+    expect(businessPermissionBadgeKeys(GROUPS, subs('scm'), undefined).size).toBe(0);
+    expect(canWriteOn('/scm/replenishment', undefined)).toBe(true);
+    expect(canWriteOn('/scm/config', undefined)).toBe(true);
+  });
+});
+
+describe('TASK-PC-FE-342 — WMS 출고 «발송 재시도» = SCM_LOGISTICS_WRITE (button-level, Q3 strict)', () => {
+  it('WMS outbound set only → 발송 재시도 hidden, the outbound buttons still shown', () => {
+    const r = roles(...WMS_OUTBOUND_SET);
+    expect(canWriteOn('/wms/outbound', r, 'retry-dispatch')).toBe(false);
+    expect(canWriteOn('/wms/outbound', r)).toBe(true);
+  });
+
+  it('SCM_LOGISTICS_READ alone (dispatch lookup only) → hidden', () => {
+    expect(canWriteOn('/wms/outbound', roles('OUTBOUND_READ', 'SCM_LOGISTICS_READ'), 'retry-dispatch')).toBe(false);
+  });
+
+  it('SCM_LOGISTICS_WRITE → shown even with only an outbound read set (the two servers are separate)', () => {
+    const r = roles('OUTBOUND_READ', 'SCM_LOGISTICS_WRITE');
+    expect(canWriteOn('/wms/outbound', r, 'retry-dispatch')).toBe(true);
+    expect(canWriteOn('/wms/outbound', r)).toBe(false);
+  });
+
+  it('fail-open: row 12 unknown → 발송 재시도 shown', () => {
+    expect(canWriteOn('/wms/outbound', undefined, 'retry-dispatch')).toBe(true);
+  });
+
+  it('an undeclared button falls back to the screen\'s writeRequires', () => {
+    expect(canWriteOn('/wms/outbound', roles('OUTBOUND_WRITE'), 'no-such-button')).toBe(true);
+    expect(canWriteOn('/wms/outbound', roles('SCM_LOGISTICS_WRITE'), 'no-such-button')).toBe(false);
   });
 });
 
@@ -186,9 +315,69 @@ describe('ledger — the declarations match the measurement', () => {
   it('every declared role is a catalog role (a typo would badge forever)', () => {
     for (const row of PERMISSION_MAP) {
       if (row.gate.kind !== 'domain') continue;
-      for (const r of [...(row.gate.serverRequires ?? []), ...(row.gate.writeRequires ?? [])]) {
+      const buttonRoles = Object.values(row.gate.buttonWriteRequires ?? {}).flat();
+      for (const r of [
+        ...(row.gate.serverRequires ?? []),
+        ...(row.gate.writeRequires ?? []),
+        ...buttonRoles,
+      ]) {
         expect(CATALOG_ROLES.has(r), `${row.href}: ${r}`).toBe(true);
       }
     }
+  });
+
+  it('TASK-PC-FE-342 — SCM rows declare exactly what the four SecurityConfigs enforce', () => {
+    const expected: Record<string, { server: string[]; write?: string[] }> = {
+      '/scm': {
+        server: [
+          'SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE',
+          'SCM_INVENTORY_VISIBILITY_READ', 'SCM_INVENTORY_VISIBILITY_WRITE',
+        ],
+      },
+      '/scm/procurement': { server: ['SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE'] },
+      '/scm/inventory': {
+        server: ['SCM_INVENTORY_VISIBILITY_READ', 'SCM_INVENTORY_VISIBILITY_WRITE'],
+      },
+      '/scm/replenishment': {
+        server: ['SCM_DEMAND_PLANNING_READ', 'SCM_DEMAND_PLANNING_WRITE'],
+        write: ['SCM_DEMAND_PLANNING_WRITE'],
+      },
+      '/scm/config': {
+        server: ['SCM_DEMAND_PLANNING_READ', 'SCM_DEMAND_PLANNING_WRITE'],
+        write: ['SCM_DEMAND_PLANNING_WRITE'],
+      },
+    };
+    for (const [href, want] of Object.entries(expected)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.serverRequires ?? [])], href).toEqual(want.server);
+      if (want.write) expect([...(g.writeRequires ?? [])], href).toEqual(want.write);
+      else expect(g.writeRequires, href).toBeUndefined();
+    }
+  });
+
+  it('TASK-PC-FE-342 — SCM gate.roles = the 8 SCM catalog roles; `SCM_OPERATOR` declared nowhere', () => {
+    for (const href of SCM_LEAVES) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...g.roles].sort(), href).toEqual([...SCM_CATALOG].sort());
+    }
+    for (const row of PERMISSION_MAP) {
+      if (row.gate.kind !== 'domain') continue;
+      const declared = [
+        ...(row.gate.serverRequires ?? []),
+        ...(row.gate.writeRequires ?? []),
+        ...Object.values(row.gate.buttonWriteRequires ?? {}).flat(),
+      ];
+      expect(declared.includes('SCM_OPERATOR'), row.href).toBe(false);
+    }
+  });
+
+  it('TASK-PC-FE-342 — /wms/outbound declares «발송 재시도» = SCM_LOGISTICS_WRITE at button level', () => {
+    const g = gateOf('/wms/outbound');
+    if (g?.kind !== 'domain') throw new Error('not a domain gate');
+    expect(g.buttonWriteRequires?.['retry-dispatch']).toEqual(['SCM_LOGISTICS_WRITE']);
+    // the screen-level read/write rows are unchanged
+    expect([...(g.writeRequires ?? [])]).toEqual(['OUTBOUND_WRITE']);
   });
 });
