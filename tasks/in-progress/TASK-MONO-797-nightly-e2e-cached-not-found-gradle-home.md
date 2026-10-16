@@ -1,6 +1,6 @@
 # TASK-MONO-797 — nightly e2e lanes stay red on a Gradle «not found» record carried in the shared gradle-home cache
 
-- **Status**: ready
+- **Status**: in-progress
 - **Type**: fix (CI)
 - **Created**: 2026-10-16 UTC
 - **Scope class**: monorepo-level (`.github/workflows/`)
