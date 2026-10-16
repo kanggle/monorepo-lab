@@ -8,7 +8,7 @@ TASK-PC-FE-345
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -98,3 +98,35 @@ frontend
 # Merge gate — 28th window
 
 - 2026-10-16 UTC — gate met: the bake carrying 792/793/794/795 was live-verified in the 28th window (2026-10-16) — may now be implemented/merged. (AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`; this ticket's source `TASK-MONO-795` → `done/`; results in `TASK-MONO-672` § 28th window — harvest.)
+
+# 구현 기록 — 2026-10-16 UTC (branch `task/pc-fe-345-ecommerce-nav`, base `af989d90d`)
+
+> 순서 변경(코디네이터, 2026-10-16): 342 다음에 343 이 아니라 **345 를 먼저** — 아래 AC-0 의 라이브 퇴행 때문.
+
+## AC-0 — 🔴 라이브 퇴행 확인 (코드로 증명) · 서버 대조
+
+**판정: 확인됨 — `TASK-MONO-795` 굽기(28차 창, 2026-10-16 UTC 라이브)가 들여온 라이브 퇴행.** ecommerce 를 구독한 활성 테넌트의 **모든** 운영자에게 E-commerce 9 메뉴 + 상위 «E-Commerce» 에 거짓 «업무 권한 없음» 배지가 붙는다(서버는 열어 준다). 버튼은 숨지 않는다(E-commerce 는 `writeRequires` 선언이 없었다).
+
+증명 사슬(코드 · 이미 기록된 라이브 수치):
+1. row 12 의 `roles` = 그 운영자에게 걸린 세트들의 `domain_permission_set_role` 합집합(`OperatorDomainAccessUseCase.myDomainAccess` → `assemble` `:242-267` — 세트 역할을 그대로 모은다, 파생 없음). 진입 역할을 덧붙이는 곳은 auth 토큰 발급(`withDerivedEntryRoles`)뿐이고 row 12 는 그 경로를 지나지 않는다.
+2. V0059 `:68-88` — `ECOMMERCE_OPERATOR` 를 가진 **모든** 세트에 13 역할을 넣은 뒤 `DELETE … role_name = 'ECOMMERCE_OPERATOR'`. 반복 시드(`migration-dev` `R__*`)에 `domain_permission_set_role` 를 쓰는 것 0(grep). 라이브: `TASK-MONO-795` § 28차 창 V0059 행 수 `sets_with_ecommerce_operator` **0**.
+3. ⇒ legacy-compat 운영자(`demo@demo.com` 포함)의 row 12 = E-commerce 13 역할, `ECOMMERCE_OPERATOR` 없음.
+4. 콘솔 c-2: E-commerce 9 행 `serverRequires = ['ECOMMERCE_OPERATOR']`(`permission-map.ts` `ECOMMERCE_GATEWAY_REQUIRES`). `leafLacksBusinessPermission` = 구독 ∧ `!holdsAny(row12 ∩ 구독, ['ECOMMERCE_OPERATOR'])` = **참** → 9 잎 전부 배지 → `businessPermissionBadgeKeys` 가 상위 `ecommerce` 키에도 배지(모든 자식 배지).
+5. 시험 고정: red 에서 `🔴 live regression pin` 이 정확히 이 입력(13 역할)으로 `/ecommerce` 배지 = true 를 낸다.
+
+⚪ 라이브 화면으로는 보지 않았다(데모 창 밖). 위 4 단계는 각각 코드 줄 · 기록된 라이브 수치로 닫힌다 — 화면 관찰은 다음 창 AC-4.
+
+c-2 시험이 이것을 못 잡은 이유: `console-nav-business-permission.test.ts` 의 «with ECOMMERCE_OPERATOR → nothing badged» 가 row 12 에 **실제로는 오지 않는** 역할을 입력으로 썼다(대조군 입력이 현실 밖 — 795 가 그 전제를 무너뜨렸다). 이번 PR 은 그 시험을 «진입 역할만 → 배지» 로 뒤집고, 진입 역할 4 개가 어떤 선언에도 들어가지 못하게 가드를 더했다.
+
+서버 대조(base `af989d90d`, ecommerce `iam-integration.md` § 업무 역할 정본 `:103-130`): order `OrderOperatorAccess:21-22` · product `ProductOperatorAccess:23-48`(판매자 · 판매자 구성원도 이 판정 — `AdminSellerController:34,51` · `AdminSellerMemberController:22-50`) · settlement / promotion / shipping `OperatorRoleGuard:21-22` · notification `TemplateController:37-38` · user `AdminUserController:27`(`MEMBER_READ` 만). GET = READ ∨ WRITE · 그 밖 = WRITE. ⇒ 티켓 대조표 그대로.
+- `/ecommerce` 개요(티켓의 «AC-0 (요약 카드별)» 칸): `features/ecommerce-ops/api/overview-state.ts:131-137` 카드 7 = 상품 · 주문 · 배송 · 프로모션 · 사용자 · 셀러 · 알림 템플릿(+ 주문 목록/인사이트 · 셀러 목록) — 셀마다 `403` → `forbidden`(`:149-160`). 정산은 안 읽는다. ⇒ `serverRequires` = 주문 · 상품 · 회원 · 프로모션 · 배송 · 알림의 READ/WRITE(하나라도 있으면 화면이 열리고 나머지 카드만 «권한 없음»).
+- 운영 개요(`/dashboards/overview`) ecommerce 카드: ⚪ 이번에 재지 않았다(BFF 합성 — 상품 조회 없는 운영자의 `forbidden` 표시는 다음 창 라이브 칸).
+- `'*'` 플랫폼 운영자 비대칭(Edge Case 3): 신호는 활성 테넌트가 있을 때만 계산되고(없으면 fail-open), `'*'` 기본 토큰 경로(상품 · 주문 조회 와일드카드)는 row 12 와 무관 — 이번 PR 은 그 갈래를 바꾸지 않는다. ⚪ 라이브 미측정.
+
+## 범위 결정 — 쓰기 버튼은 분리 (`TASK-PC-FE-346`)
+
+대조표의 `writeRequires`(상품 · 주문 · 배송 · 프로모션 · 판매자 · 정산 · 알림 템플릿)는 **선언하지 않았다**. 선언하면 계약 «Declared today» 가 «그 버튼은 숨는다» 고 말하게 되는데, 그 버튼들은 7 화면 · 약 20 라우트(목록 · 상세 · new · edit)에 흩어져 있고 지금 어느 것도 `canWrite` 를 받지 않는다 — 배선 없는 선언은 «아무도 그리지 않는 데이터» 다. 라이브 퇴행(배지)을 빨리 내보내는 것이 먼저라 이 PR 은 메뉴 신호만 고치고, 버튼 배선은 `TASK-PC-FE-346`(ready, 이 PR 에서 기안)으로 나눴다. 그 사이 조회 세트 운영자는 쓰기 버튼을 보고 누르면 서버 `403` → 화면 안 «권한 없음»(안전 쪽 실패, 795 전과 같은 체감). ⇒ AC-2 의 «쓰기 버튼 없음» · «버튼 보임» 절반은 346 으로 넘어간다.
+
+## 함께 적는 것
+
+- 🔵 가이드 문안이 지금 틀림(이 티켓 범위 밖, 코디네이터가 끝에 후속 기안): `features/scm-guide/data.ts:363-369`(«SCM_OPERATOR 하나뿐») · `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `*_OPERATOR`) — 795 뒤로는 `ECOMMERCE_OPERATOR` 도 같은 처지.

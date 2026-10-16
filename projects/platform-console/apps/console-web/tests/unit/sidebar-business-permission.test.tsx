@@ -59,7 +59,28 @@ describe('two signals kept apart', () => {
     expect(screen.queryByTestId('nav-scm-business-permission-badge')).toBeNull();
   });
 
-  it('ecommerce subscribed without ECOMMERCE_OPERATOR → the parent shows «업무 권한 없음», not «구독 필요»', () => {
+  it('TASK-PC-FE-345 — ecommerce subscribed, legacy-compat row 12 (13 area roles, no entry role) → no «업무 권한 없음»', () => {
+    render(
+      <ConsoleSidebarNav
+        subscribedDomains={new Set(['ecommerce'])}
+        myBusinessRoles={
+          new Set([
+            'ECOMMERCE_ORDER_READ', 'ECOMMERCE_ORDER_WRITE', 'ECOMMERCE_PRODUCT_READ',
+            'ECOMMERCE_PRODUCT_WRITE', 'ECOMMERCE_MEMBER_READ', 'ECOMMERCE_SETTLEMENT_READ',
+            'ECOMMERCE_SETTLEMENT_WRITE', 'ECOMMERCE_PROMOTION_READ', 'ECOMMERCE_PROMOTION_WRITE',
+            'ECOMMERCE_SHIPPING_READ', 'ECOMMERCE_SHIPPING_WRITE', 'ECOMMERCE_NOTIFICATION_READ',
+            'ECOMMERCE_NOTIFICATION_WRITE',
+          ])
+        }
+      />,
+    );
+    expect(screen.queryByTestId('nav-ecommerce-business-permission-badge')).toBeNull();
+    fireEvent.click(screen.getByTestId('nav-ecommerce'));
+    expect(screen.queryByTestId('nav-ecommerce-orders-business-permission-badge')).toBeNull();
+    expect(screen.queryByTestId('nav-ecommerce-users-business-permission-badge')).toBeNull();
+  });
+
+  it('ecommerce subscribed with no ecommerce role → the parent shows «업무 권한 없음», not «구독 필요»', () => {
     render(
       <ConsoleSidebarNav subscribedDomains={new Set(['ecommerce'])} myBusinessRoles={new Set()} />,
     );
