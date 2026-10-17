@@ -221,6 +221,9 @@ jobs:
       # TASK-MONO-584: raw filter, NOT AND-combined with `code-changed`. The arrival
       # path for a domain drift is a doc/terraform edit that carries no code at all.
       public-domains: ${{ steps.filter.outputs.public-domains }}
+      # TASK-MONO-798: raw filter, NOT AND-combined with `code-changed`. The arrival path
+      # for «the owner-only operator got listed in a guide» is a markdown / html edit.
+      owner-operator-undisclosed: ${{ steps.filter.outputs.owner-operator-undisclosed }}
       # TASK-MONO-570: raw filter, NOT AND-combined with `code-changed`. The arrival
       # path is a spec edit — a service's `architecture.md` Service Type row, or the
       # catalog it is validated against. Those diffs carry no code, so AND-combining
@@ -628,6 +631,14 @@ jobs:
               - 'README.md'
               - 'infra/demo/aws/terraform/**'
               - 'scripts/check-public-domains.sh'
+            # TASK-MONO-798: owner decision 2026-10-17 — the owner-only '*' operator is in no
+            # public doc. Docs arrive as .md / .html edits anywhere; the guard and the seed that
+            # carries the identity are watched too (renaming the identity must re-run the guard).
+            owner-operator-undisclosed:
+              - '**/*.md'
+              - '**/*.html'
+              - 'infra/demo/owner-operator.sh'
+              - 'projects/iam-platform/apps/admin-service/src/main/resources/db/migration-dev/R__seed_demo_star_owner_operator.sql'
             service-type-notation:
               - 'projects/*/specs/services/*/architecture.md'
               - 'platform/service-types/INDEX.md'
@@ -1438,6 +1449,29 @@ jobs:
 
       - name: Guard — every public hostname in the tree is declared in TEMPLATE.md
         run: bash scripts/check-public-domains.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-798. Owner decision 2026-10-17 UTC, point 1: the owner-only, unconfined
+  # '*' SUPER_ADMIN demo operator is NOT listed in README / demo guides / public seed
+  # docs. The guard searches every tracked file for its email · operator id · account
+  # id, outside a short allowlist (tasks/, its seeds, its tests, the wrapper itself) —
+  # so a new guide or launcher page is covered without being named. The identity lives
+  # in infra/demo/owner-operator.sh, so the guard does too (no project string in scripts/).
+  # ---------------------------------------------------------------------------
+  owner-operator-undisclosed:
+    name: Owner-only demo operator is in no public doc
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      (needs.changes.outputs.owner-operator-undisclosed == 'true' ||
+       needs.changes.outputs.workflows == 'true')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — no tracked file outside the allowlist names the owner-only operator
+        run: bash infra/demo/owner-operator.sh --check-undisclosed
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-767. `next/font`'s `google` loader fetches Google Fonts CSS at
@@ -2754,6 +2788,15 @@ jobs:
       # either pin someone else's image or silently skip a rescue.
       - name: Bake wrapper self-test (rescue verdict — no AWS)
         run: bash infra/demo/aws/packer/bake.sh --self-test
+
+      # TASK-MONO-798 — the owner-only '*' operator's boot provisioning + window wrapper has
+      # no runner other than a billed demo window, so its self-test runs here: docker / aws /
+      # java / unzip stubbed on PATH. Cells: seed ↔ script identity · SUSPENDED · no fixed
+      # password · SSM-before-credential (a refused put writes no credential) · once per boot ·
+      # the password in no output / argv / SQL · activate / deactivate / status · the
+      # undisclosed guard bites a synthetic README.
+      - name: Owner-only operator wrapper self-test (stubs — no Docker, no AWS)
+        run: bash infra/demo/owner-operator.sh --self-test
 
       # TASK-MONO-520 AC-2 — shellcheck is deliberately NOT enabled here, and the
       # decision was measured rather than assumed. A one-shot non-gating step ran

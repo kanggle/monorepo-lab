@@ -203,6 +203,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-798-owner-only-star-super-admin-demo-operator.md` — **소유자 전용 · 무제한 `'*'` SUPER_ADMIN 데모 운영자를 시드한다** (IN-PROGRESS, 2026-10-17 UTC — 소유자 결정 원문은 티켓). IdP 로그인 · 공개 문서 미기재(가드 `owner-operator.sh --check-undisclosed`) · 저장소에 고정 비밀번호 없음(부팅 시 생성 → SSM SecureString, 그 뒤에만 자격 해시) · 기본 SUSPENDED, 소유자 래퍼 `infra/demo/owner-operator.sh activate|deactivate|status`. `TASK-MONO-672` «Still open» 1–4 를 잴 수 있게 한다. 🔴 다음 굽기 + `terraform apply`(PutParameter 한 ARN) 뒤에야 산다. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-797-nightly-e2e-cached-not-found-gradle-home.md` — **nightly e2e 두 레인(scm · fan full)이 공유 gradle-home 캐시에 실린 Gradle «not found» 기록으로 계속 빨갛다** (IN-PROGRESS, 2026-10-16 UTC). runs `38863691082`(`cf36d1609`) · `38883805350`(`2eef1d91f`) · `38890453134`(`08e10cc37`) · #4386. AC-0 = 원인 실측 먼저. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 

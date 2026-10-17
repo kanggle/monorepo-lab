@@ -17,6 +17,7 @@
 --   demo-viewer        → demo-viewer (its unregistered slug — the row is as inert as the membership)
 --   demo-assigned-only → demo-corp
 --   demo-platform      → '*' (a '*' operator: one «all tenants» row, OD-3)
+--   demo-star-owner    → '*' (TASK-MONO-798 — the owner-only '*' SUPER_ADMIN; same shape as demo-platform)
 -- On a long-lived dev DB where those operators already existed when V0052 ran, every statement below inserts 0
 -- rows (the NOT EXISTS guard). Until P3 (TASK-BE-632) nothing reads these rows for a token.
 --
@@ -56,7 +57,7 @@ INSERT INTO operator_domain_set_grant
 SELECT o.id, '*', s.id, 'MIGRATION', NULL, NULL, NOW(6)
   FROM admin_operators o
   JOIN domain_permission_set s ON s.system_key = 'legacy-compat'
- WHERE o.operator_id = 'demo-platform'
+ WHERE o.operator_id IN ('demo-platform', 'demo-star-owner')
    AND o.tenant_id = '*'
    AND NOT EXISTS (
         SELECT 1

@@ -168,6 +168,23 @@ resource "aws_iam_role_policy" "ec2_health" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter"]
         Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/mailpit/*"
+      },
+      # -----------------------------------------------------------------------
+      # TASK-MONO-798 — 소유자 전용 '*' 운영자의 비밀번호를 **쓴다**(쓰기만). `infra/demo/owner-operator.sh
+      # provision` 이 부팅마다(boot_id 당 1회) 인스턴스 안에서 비밀번호를 만들어 이 파라미터 하나에
+      # SecureString 으로 `--overwrite` 한 뒤에만 auth_db 자격 해시를 쓴다. 소유자는 자기 자격으로 읽는다.
+      # 🔴 **PutParameter 만, 이 ARN 하나만** 연다 — 인스턴스는 이 값을 다시 읽을 필요가 없다(GetParameter 없음).
+      #    와일드카드를 쓰지 않는 이유: 쓰기 권한은 «어느 파라미터든 덮을 수 있다» 로 넓어지면 안 된다.
+      # 🔴 terraform 이 값을 만들지 않는다(aws_ssm_parameter 리소스 없음) — 값이 state 에 남지 않는다.
+      #    첫 put 이 파라미터를 만든다(PutParameter 는 생성과 덮어쓰기 둘 다다).
+      # 🔵 KMS — `alias/aws/ssm`(AWS 관리형 키). 위 oauth 의 SecureString 읽기가 kms 권한 없이 라이브에서
+      #    동작한 것과 같은 키 정책 경로라 여기서도 kms 를 추가하지 않는다. 막히면 provision 의 경고가
+      #    `AccessDenied` 를 말하고 자격은 **바뀌지 않는다**(fail-closed) — 그때 실측으로 추가한다.
+      # 🔴 apply 전에는 put 이 AccessDenied → 운영자는 SUSPENDED 인 채 자격 없음(측정 창만 못 연다).
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/owner-operator/password"
     }]
   })
 }
