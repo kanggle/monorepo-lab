@@ -409,8 +409,14 @@ fi
 post_up_started_at="$(date +%s)"
 
 domain_seed_rc=0
+owner_operator_rc=0
 if [[ " ${SET[*]} " == *" iam "* ]]; then
   post_up_call "OIDC 리다이렉트 URI 등록" bash "$HERE/seed-demo-domain.sh" || domain_seed_rc=$?
+  # TASK-MONO-798 — 소유자 전용 '*' 운영자: 부팅마다(boot_id 당 1회) SUSPENDED 로 되돌리고 새 비밀번호를
+  # 만들어 SSM(SecureString)에 넣은 뒤에만 자격 해시를 쓴다. 값은 어디에도 찍지 않는다(owner-operator.sh 머리말).
+  # 🔵 실패해도 final_rc 에 넣지 않는다 — 방문자 데모와 무관한 소유자 도구가 유닛을 failed 로 만들 이유가 없다.
+  #    대신 아래 요약에 한 줄로 말한다(조용히 넘기지 않는다).
+  post_up_call "소유자 '*' 운영자 준비" bash "$HERE/owner-operator.sh" provision || owner_operator_rc=$?
 fi
 
 # 도메인 데이터 시드 (TASK-MONO-506). 계정과 배선이 갖춰져도 화면이 비어 있으면
@@ -443,6 +449,7 @@ post_up_call "억제 런타임 판정" bash "$HERE/check-suppressed-containers.s
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"
 [ "$domain_seed_rc" -eq 0 ] || echo "[demo] ⚠ OIDC 리다이렉트 URI 등록이 실패했습니다(위 [seed] 로그 참조) — 로그인이 데모 도메인에서 되돌아오지 못할 수 있습니다"
+[ "$owner_operator_rc" -eq 0 ] || echo "[demo] ⚠ 소유자 '*' 운영자 준비가 실패했습니다(위 [owner-operator] 로그 참조) — 방문자 데모에는 영향 없음, 소유자 측정 창만 못 엽니다"
 # 🔴 web.ecommerce 는 더 이상 이 목록에 없다 — 스토어는 Vercel 로 옮겨갔고 데모는
 # 그 사본을 띄우지 않는다(TASK-MONO-604). 여기에 남겨 두면 방문자에게 **없는 주소**를
 # 안내하게 되고, 그 404 는 "스택이 안 떴다" 와 구별되지 않는다.
