@@ -1,6 +1,6 @@
 # TASK-MONO-798 — seed one owner-only, unconfined `'*'` SUPER_ADMIN demo operator (IdP login, SUSPENDED by default)
 
-- **Status**: ready
+- **Status**: in-progress
 - **Type**: feat (demo infra + iam dev seed)
 - **Created**: 2026-10-17 UTC
 - **Scope class**: monorepo-level (`infra/demo/**`, `.github/workflows/ci.yml`) + `projects/iam-platform/` dev seeds and tests (one atomic PR)
