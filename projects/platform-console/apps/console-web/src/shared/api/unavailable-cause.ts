@@ -24,8 +24,12 @@ import { ApiError } from './errors';
 export type UnavailableCause =
   /** 응답은 왔는데 상태코드가 나쁘다 (`status` · `code` 를 함께 싣는다). */
   | { kind: 'status'; status: number; code: string }
-  /** 요청이 응답에 닿지 못했다 — DNS·연결거부·TLS·CORS 등 `fetch` 자체가 던진 경우. */
-  | { kind: 'transport'; name: string }
+  /**
+   * 요청이 응답에 닿지 못했다 — DNS·연결거부·TLS·CORS 등 `fetch` 자체가 던진 경우.
+   * `code` = undici 가 `err.cause.code` 에 싣는 사유(`UND_ERR_CONNECT_TIMEOUT` · `ECONNRESET` ·
+   * `UND_ERR_SOCKET` …). 오류 코드 모양일 때만 싣는다(TASK-PC-FE-341).
+   */
+  | { kind: 'transport'; name: string; code?: string }
   /** 중단됐다 — `AbortError` / `TimeoutError`. */
   | { kind: 'timeout'; name: string }
   /** 위 어느 것으로도 못 가른 것. 🔵 «모른다» 를 «없다» 로 적지 않기 위해 남긴다. */
@@ -50,7 +54,16 @@ export function classifyUnavailable(err: unknown): UnavailableCause {
   if (name === 'AbortError' || name === 'TimeoutError') return { kind: 'timeout', name };
   // 🔴 `fetch` 가 네트워크 층에서 실패하면 `TypeError` 를 던진다(undici/브라우저 공통).
   //    이것이 «상대에 닿지도 못했다» 이다.
-  if (err instanceof TypeError) return { kind: 'transport', name };
+  if (err instanceof TypeError) {
+    // TASK-PC-FE-341 — `TypeError` 하나로는 «연결 시간 초과» 와 «연결이 끊겼다» 가 같은 값이다.
+    // 계측된 nightly 두 런이 각각 «~10 s 뒤 transport:TypeError, 합성 다리 0» 을 한 번씩 남겼고,
+    // 그 둘을 가르는 것이 undici 의 `cause.code` 다. 🔴 코드 **모양**(`[A-Z0-9_]`, 40자 이내)만
+    // 싣는다 — 메시지 · 주소 · 값은 싣지 않는다.
+    const code = (err as { cause?: { code?: unknown } }).cause?.code;
+    return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,39}$/.test(code)
+      ? { kind: 'transport', name, code }
+      : { kind: 'transport', name };
+  }
   return { kind: 'unknown', name };
 }
 
@@ -60,6 +73,7 @@ export function formatUnavailableCause(c: UnavailableCause): string {
     case 'status':
       return `status:${c.status}/${c.code}`;
     case 'transport':
+      return c.code ? `transport:${c.name}/${c.code}` : `transport:${c.name}`;
     case 'timeout':
     case 'unknown':
       return `${c.kind}:${c.name}`;
