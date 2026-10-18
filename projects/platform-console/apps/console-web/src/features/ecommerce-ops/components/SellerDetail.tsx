@@ -34,6 +34,8 @@ import { SellerMembers } from './SellerMembers';
  */
 
 export interface SellerDetailProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   seller: SellerDetailType;
 }
 

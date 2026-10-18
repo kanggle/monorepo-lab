@@ -305,3 +305,6 @@ export {
   IMAGE_MAX_PER_PRODUCT,
   isAllowedImageContentType,
 } from './api/image-types';
+
+// TASK-PC-FE-346 — «조회 전용» note + the new/edit route notice (contract § 2.4.3.4).
+export { ReadOnlyNote, ReadOnlyRouteNotice } from './components/ReadOnlyNotice';

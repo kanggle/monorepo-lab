@@ -27,6 +27,8 @@ import { NotificationsTable } from './NotificationsTable';
  */
 
 export interface NotificationsScreenProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   templates: NotificationTemplateList;
 }
 

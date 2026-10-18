@@ -24,6 +24,8 @@ import { formatDateTime } from '@/shared/lib/datetime';
  * 400/422/409/404 are surfaced inline by the dialog without crashing.
  */
 export interface OrderDetailProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   order: OrderDetailType;
 }
 

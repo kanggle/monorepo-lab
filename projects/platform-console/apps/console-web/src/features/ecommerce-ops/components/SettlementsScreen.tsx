@@ -28,6 +28,8 @@ import type {
  * intentionally absent (event-stream only).
  */
 export interface SettlementsScreenProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   accruals: AccrualsResponse;
   periods: PeriodsResponse;
 }

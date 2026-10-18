@@ -25,6 +25,8 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * the confirm dialog (never a fake 500/degrade).
  */
 export interface SettlementPeriodsSectionProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   initialPeriods: PeriodsResponse;
 }
 

@@ -28,6 +28,8 @@ import {
  */
 
 export interface SellerMembersProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   sellerId: string;
   /** The seller's status — the invite form is offered only when ACTIVE. */
   sellerStatus: string;

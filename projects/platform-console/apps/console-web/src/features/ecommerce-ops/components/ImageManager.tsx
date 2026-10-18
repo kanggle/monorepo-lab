@@ -26,6 +26,8 @@ import { ImageUploadField } from './ImageUploadField';
  * intact.
  */
 export interface ImageManagerProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   productId: string;
 }
 

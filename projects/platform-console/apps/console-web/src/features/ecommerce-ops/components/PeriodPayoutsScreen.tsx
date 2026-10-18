@@ -31,6 +31,8 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * Resilience (§ 2.5): 403 → inline forbidden; 503/timeout → degraded.
  */
 export interface PeriodPayoutsScreenProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   periodId: string;
   initialPayouts: PayoutsResponse;
 }

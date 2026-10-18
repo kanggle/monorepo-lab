@@ -28,6 +28,8 @@ import { PromotionDetailFields } from './PromotionDetailFields';
  * query, delete confirm-gate, and coupon-issue orchestration.
  */
 export interface PromotionDetailProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   promotion: PromotionDetailType;
 }
 

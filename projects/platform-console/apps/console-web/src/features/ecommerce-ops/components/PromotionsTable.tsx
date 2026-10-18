@@ -7,6 +7,8 @@ import { formatPromotionDay } from './promotion-format';
 import { promotionStatusTone, type PromotionList } from '../api/promotion-types';
 
 interface PromotionsTableProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   rows: PromotionList['content'];
   onDelete: (promotion: { id: string; name: string }) => void;
   pagination: {

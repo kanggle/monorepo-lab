@@ -691,3 +691,84 @@ describe('ledger — the declarations match the measurement', () => {
     expect([...(g.writeRequires ?? [])]).toEqual(['OUTBOUND_WRITE']);
   });
 });
+
+/**
+ * TASK-PC-FE-346 — E-commerce write buttons per screen (server: TASK-MONO-795 — product-service
+ * `ProductOperatorAccess`, order-service `OrderOperatorAccess`, shipping / promotion / settlement
+ * `OperatorRoleGuard`, notification-service `TemplateController`). Sellers are served by product-service
+ * and use the PRODUCT role; settlement payout has no control role. The page-level wiring is pinned in
+ * `ecommerce-write-buttons-pages.test.tsx`, the screens in `ecommerce-write-buttons.test.tsx`.
+ */
+describe('TASK-PC-FE-346 — E-commerce write rows (permission-map)', () => {
+  const gateOf = (href: string) => PERMISSION_MAP.find((r) => r.href === href)?.gate;
+  const WRITE: Record<string, string> = {
+    '/ecommerce/products': 'ECOMMERCE_PRODUCT_WRITE',
+    '/ecommerce/sellers': 'ECOMMERCE_PRODUCT_WRITE',
+    '/ecommerce/orders': 'ECOMMERCE_ORDER_WRITE',
+    '/ecommerce/shippings': 'ECOMMERCE_SHIPPING_WRITE',
+    '/ecommerce/promotions': 'ECOMMERCE_PROMOTION_WRITE',
+    '/ecommerce/settlements': 'ECOMMERCE_SETTLEMENT_WRITE',
+    '/ecommerce/notifications/templates': 'ECOMMERCE_NOTIFICATION_WRITE',
+  };
+
+  it('the 7 screens declare exactly their area `*_WRITE`; overview and members declare none', () => {
+    for (const [href, want] of Object.entries(WRITE)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.writeRequires ?? [])], href).toEqual([want]);
+      expect(g.buttonWriteRequires, href).toBeUndefined();
+    }
+    for (const href of ['/ecommerce', '/ecommerce/users']) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect(g.writeRequires, href).toBeUndefined();
+    }
+  });
+
+  it('every declared write role is in the catalog and is a *_WRITE (never READ, never an entry role)', () => {
+    for (const [href, want] of Object.entries(WRITE)) {
+      expect(ECOMMERCE_CATALOG.includes(want), href).toBe(true);
+      expect(want.endsWith('_WRITE'), href).toBe(true);
+      expect(ENTRY_ROLES.includes(want), href).toBe(false);
+    }
+  });
+
+  it('AC-2 control group: ecommerce-read → no E-commerce write button anywhere', () => {
+    const r = roles(...ECOMMERCE_READ_SET);
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, r), href).toBe(false);
+  });
+
+  it('AC-2 control group: order-operate set → only /ecommerce/orders', () => {
+    const r = roles(...ECOMMERCE_ORDER_SET);
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, r), href).toBe(href === '/ecommerce/orders');
+    }
+  });
+
+  it('AC-2 control group: product-operate set → products AND sellers (sellers = the product role)', () => {
+    const r = roles('ECOMMERCE_PRODUCT_READ', 'ECOMMERCE_PRODUCT_WRITE');
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, r), href).toBe(href === '/ecommerce/products' || href === '/ecommerce/sellers');
+    }
+  });
+
+  it('settlement payout has no control role — SETTLEMENT_WRITE alone opens /ecommerce/settlements', () => {
+    expect(canWriteOn('/ecommerce/settlements', roles('ECOMMERCE_SETTLEMENT_WRITE'))).toBe(true);
+    expect(canWriteOn('/ecommerce/settlements', roles('ECOMMERCE_SETTLEMENT_READ'))).toBe(false);
+  });
+
+  it('demo operator (legacy-compat, all 13 roles) → every button shown', () => {
+    const r = roles(...ECOMMERCE_FULL_ROW12);
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, r), href).toBe(true);
+  });
+
+  it('🔴 the entry role alone opens no button', () => {
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, roles('ECOMMERCE_OPERATOR')), href).toBe(false);
+    }
+  });
+
+  it('fail-open (AC-3): unknown roles → every button shown', () => {
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, undefined), href).toBe(true);
+  });
+});

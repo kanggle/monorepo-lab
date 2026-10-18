@@ -20,6 +20,8 @@ import { useVariantEditor } from '../hooks/use-variant-editor';
  * This container wires them + the delete ConfirmDialog (behavior-preserving split).
  */
 export interface VariantEditorProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   productId: string;
   variants: Variant[];
 }

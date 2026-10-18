@@ -18,6 +18,8 @@ interface VariantEditSlice {
 }
 
 interface VariantTableProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   variants: Variant[];
   edit: VariantEditSlice;
   openDelete: (v: Variant) => void;

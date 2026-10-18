@@ -32,6 +32,8 @@ import { Button } from '@/shared/ui/Button';
  * NO `Idempotency-Key` is sent (the producer defines none — § 2.4.10).
  */
 export interface OrderStatusDialogProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   orderId: string;
   currentStatus: string;
   onSuccess?: () => void;

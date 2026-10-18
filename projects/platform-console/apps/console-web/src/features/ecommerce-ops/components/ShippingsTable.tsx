@@ -11,6 +11,8 @@ import { statusLabel, nextStatusLabel } from './shipping-labels';
 import { formatDateTime } from '@/shared/lib/datetime';
 
 interface ShippingsTableProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   rows: ShippingList['content'];
   isAnyPending: boolean;
   openTransition: (id: string, nextStatus: string, wmsRouted: boolean) => void;

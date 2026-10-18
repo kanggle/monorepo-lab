@@ -6,6 +6,8 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { productStatusTone, type ProductList } from '../api/product-types';
 
 interface ProductsTableProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   rows: ProductList['content'];
   onDelete: (product: { id: string; name: string }) => void;
   pagination: {

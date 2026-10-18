@@ -33,6 +33,8 @@ import { useShippingsScreen } from '../hooks/use-shippings-screen';
  */
 
 export interface ShippingsScreenProps {
+  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
+  canWrite?: boolean;
   shippings: ShippingList;
 }
 
