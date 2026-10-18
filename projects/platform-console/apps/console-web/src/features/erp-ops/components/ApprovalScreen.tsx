@@ -62,6 +62,8 @@ export interface ApprovalScreenProps {
    * a crash.
    */
   initialSelectedId?: string | null;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+  canWrite?: boolean;
 }
 
 /** Inbox empty because the caller's account is linked to NO employee

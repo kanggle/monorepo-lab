@@ -50,7 +50,12 @@ import {
 // DelegationScreen.
 // ---------------------------------------------------------------------------
 
-export function DelegationScreen() {
+/** TASK-PC-FE-347 — `canWrite`: the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+export interface DelegationScreenProps {
+  canWrite?: boolean;
+}
+
+export function DelegationScreen(_props: DelegationScreenProps = {}) {
   const {
     createOpen,
     openCreate,

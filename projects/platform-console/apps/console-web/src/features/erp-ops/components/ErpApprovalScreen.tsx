@@ -15,6 +15,8 @@ export interface ErpApprovalScreenProps {
   /** Deep-link target from `/erp/approval?request=<id>` (notification bell
    *  approval fallback, PC-FE-230) — the request to open on mount. */
   initialSelectedId?: string | null;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+  canWrite?: boolean;
   // TASK-PC-FE-318 — the TASK-PC-FE-311 `mySub` prop is gone: «(나)» now
   // comes from the inbox's `meta.actorEmployeeId` (an employee id, the same
   // id space as every approval person field — approval v2.4).

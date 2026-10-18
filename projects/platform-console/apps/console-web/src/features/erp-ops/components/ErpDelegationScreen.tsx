@@ -12,6 +12,8 @@ import { DelegationFactCard } from './DelegationFactCard';
  */
 export interface ErpDelegationScreenProps {
   initialDelegationFacts?: DelegationFactListResponse | null;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+  canWrite?: boolean;
 }
 
 export function ErpDelegationScreen({

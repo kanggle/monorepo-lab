@@ -35,6 +35,8 @@ export function ApprovalDetail({
    *  TASK-PC-FE-318, replacing the TASK-PC-FE-311 `mySub` correction) —
    *  threaded into every `ApprovalEmployeeRef` below to mark «(나)». */
   myEmployeeId?: string | null;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+  canWrite?: boolean;
 }) {
   const {
     q,

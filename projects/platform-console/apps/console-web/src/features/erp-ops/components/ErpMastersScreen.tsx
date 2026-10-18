@@ -38,6 +38,8 @@ export interface ErpMastersScreenProps {
   initialBusinessPartners: BusinessPartnerListResponse | null;
   /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
   mastersWritable?: boolean;
+  /** TASK-PC-FE-347 — the operator holds `ERP_MASTERDATA_WRITE` (declared, unwired). */
+  canWrite?: boolean;
 }
 
 /** Maps a list response's rows to `{ id, code, name }` parent/FK options. */
