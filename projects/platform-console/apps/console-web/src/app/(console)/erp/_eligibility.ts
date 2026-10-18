@@ -42,6 +42,11 @@ export interface ErpEligibility {
   /** True ⇒ the registry itself was unreachable (render the degraded
    *  notice; do NOT attempt the erp call). */
   registryDegraded: boolean;
+  /**
+   * TASK-PC-FE-347 — the registry's erp tenants, for the write-button gate (`./_write-access.ts`).
+   * `null` = unknown (registry degraded / failed) => buttons shown.
+   */
+  tenants: readonly string[] | null;
 }
 
 export async function resolveErpEligibility(): Promise<ErpEligibility> {
@@ -49,6 +54,7 @@ export async function resolveErpEligibility(): Promise<ErpEligibility> {
     const catalog = await getCatalog();
     const erp = catalog.products.find((p) => p.productKey === 'erp');
     return {
+      tenants: catalog.degraded ? null : (erp ? erp.tenants : []),
       eligible: Boolean(erp && erp.available && erp.tenants.length > 0),
       registryDegraded: false,
     };
@@ -56,6 +62,6 @@ export async function resolveErpEligibility(): Promise<ErpEligibility> {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
     }
-    return { eligible: false, registryDegraded: true };
+    return { eligible: false, registryDegraded: true, tenants: null };
   }
 }

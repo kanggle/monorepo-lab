@@ -4,6 +4,7 @@ import {
   getErpDelegationState,
 } from '@/features/erp-ops';
 import { resolveErpEligibility } from '../_eligibility';
+import { resolveErpCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,8 @@ const HEADING = 'ERP 위임';
  * + notice (PC-FE-076).
  */
 export default async function ErpDelegationPage() {
-  const { eligible, registryDegraded } = await resolveErpEligibility();
+  const eligibility = await resolveErpEligibility();
+  const { eligible, registryDegraded } = eligibility;
   if (registryDegraded) {
     return <ErpSectionNotice kind="registryDegraded" heading={HEADING} />;
   }
@@ -36,5 +38,12 @@ export default async function ErpDelegationPage() {
     return <ErpSectionNotice kind="degraded" heading={HEADING} />;
   }
 
-  return <ErpDelegationScreen initialDelegationFacts={state.delegationFacts} />;
+  // TASK-PC-FE-347 — 위임 생성 · 회수 follow ERP_APPROVAL_WRITE (contract § 2.4.3.4).
+  const canWrite = await resolveErpCanWrite('/erp/delegation', eligibility);
+  return (
+    <ErpDelegationScreen
+      initialDelegationFacts={state.delegationFacts}
+      canWrite={canWrite}
+    />
+  );
 }

@@ -639,7 +639,7 @@ describe('ledger — the declarations match the measurement', () => {
     for (const entry of ENTRY_ROLES) expect(CATALOG_ROLES.has(entry), entry).toBe(false);
   });
 
-  it('TASK-PC-FE-343 — ERP rows declare exactly what the ERP services enforce (no buttons yet → 347)', () => {
+  it('TASK-PC-FE-343 — ERP rows declare exactly what the ERP services enforce (buttons: TASK-PC-FE-347 block below)', () => {
     const MD = ['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE'];
     const AP = ['ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'];
     const expected: Record<string, string[]> = {
@@ -654,7 +654,6 @@ describe('ledger — the declarations match the measurement', () => {
       if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
       expect([...(g.serverRequires ?? [])].sort(), href).toEqual([...want].sort());
       expect([...g.roles].sort(), href).toEqual([...ERP_CATALOG].sort());
-      expect(g.writeRequires, href).toBeUndefined();
     }
   });
 
@@ -769,6 +768,78 @@ describe('TASK-PC-FE-346 — E-commerce write rows (permission-map)', () => {
   });
 
   it('fail-open (AC-3): unknown roles → every button shown', () => {
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, undefined), href).toBe(true);
+  });
+});
+
+/**
+ * TASK-PC-FE-347 — ERP write buttons per screen (server: TASK-MONO-793 — masterdata
+ * `RoleScopeAuthorizationAdapter` `RequiredScope.WRITE` = ERP_MASTERDATA_WRITE ∨ erp.write; approval
+ * `ActorContext.canWriteErp()` = ERP_APPROVAL_WRITE ∨ erp.write for approval AND delegation mutations).
+ * The page-level wiring is pinned in `erp-write-buttons-pages.test.tsx`, the screens in
+ * `erp-write-buttons.test.tsx`.
+ */
+describe('TASK-PC-FE-347 — ERP write rows (permission-map)', () => {
+  const gateOf = (href: string) => PERMISSION_MAP.find((r) => r.href === href)?.gate;
+  const WRITE: Record<string, string> = {
+    '/erp/masters': 'ERP_MASTERDATA_WRITE',
+    '/erp/approval': 'ERP_APPROVAL_WRITE',
+    '/erp/delegation': 'ERP_APPROVAL_WRITE',
+  };
+
+  it('the 3 screens declare exactly their area *_WRITE; overview and orgview declare none', () => {
+    for (const [href, want] of Object.entries(WRITE)) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
+      expect([...(g.writeRequires ?? [])], href).toEqual([want]);
+      expect(g.buttonWriteRequires, href).toBeUndefined();
+    }
+    for (const href of ['/erp', '/erp/orgview', '/erp/guide']) {
+      const g = gateOf(href);
+      if (g?.kind !== 'domain') continue; // the guide row is not a domain gate
+      expect(g.writeRequires, href).toBeUndefined();
+    }
+  });
+
+  it('every declared write role is in the catalog and is a *_WRITE (never READ, never an entry role)', () => {
+    for (const [href, want] of Object.entries(WRITE)) {
+      expect(ERP_CATALOG.includes(want), href).toBe(true);
+      expect(want.endsWith('_WRITE'), href).toBe(true);
+      expect(ENTRY_ROLES.includes(want), href).toBe(false);
+    }
+  });
+
+  it('AC-2 control group: erp-read -> no ERP write button anywhere', () => {
+    const r = roles(...ERP_READ_SET);
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, r), href).toBe(false);
+  });
+
+  it('AC-2 control group: approval set only -> approval AND delegation, not masters', () => {
+    const r = roles(...ERP_APPROVAL_SET);
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, r), href).toBe(href !== '/erp/masters');
+    }
+  });
+
+  it('AC-2 control group: masterdata set only -> masters, not approval / delegation', () => {
+    const r = roles(...ERP_MASTERDATA_SET);
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, r), href).toBe(href === '/erp/masters');
+    }
+  });
+
+  it('demo operator (legacy-compat, all 4 roles) -> every button shown', () => {
+    const r = roles(...ERP_CATALOG);
+    for (const href of Object.keys(WRITE)) expect(canWriteOn(href, r), href).toBe(true);
+  });
+
+  it('the entry role alone opens no button', () => {
+    for (const href of Object.keys(WRITE)) {
+      expect(canWriteOn(href, roles('ERP_OPERATOR')), href).toBe(false);
+    }
+  });
+
+  it('fail-open (AC-3): unknown roles -> every button shown', () => {
     for (const href of Object.keys(WRITE)) expect(canWriteOn(href, undefined), href).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import { JobGradeList } from './JobGradeList';
 import { CostCenterList } from './CostCenterList';
 import { BusinessPartnerList } from './BusinessPartnerList';
 import type { MasterOption } from './MasterWriteDialog';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * erp **마스터** route screen (`/erp/masters` — TASK-PC-FE-076 drill-in
@@ -36,8 +37,12 @@ export interface ErpMastersScreenProps {
   initialJobGrades: JobGradeListResponse | null;
   initialCostCenters: CostCenterListResponse | null;
   initialBusinessPartners: BusinessPartnerListResponse | null;
-  /** TASK-PC-FE-046/048: enable the write affordances across all 5 masters. */
-  mastersWritable?: boolean;
+  /**
+   * TASK-PC-FE-046/048 + TASK-PC-FE-347: the write affordances across all 5 masters. REQUIRED —
+   * the page computes it from the operator's `ERP_MASTERDATA_WRITE` (contract § 2.4.3.4); `true` also
+   * when the role set is unknown (fail-open), the producer's E6 authz stays the authority.
+   */
+  canWrite: boolean;
 }
 
 /** Maps a list response's rows to `{ id, code, name }` parent/FK options. */
@@ -61,7 +66,7 @@ export function ErpMastersScreen({
   initialJobGrades,
   initialCostCenters,
   initialBusinessPartners,
-  mastersWritable = false,
+  canWrite,
 }: ErpMastersScreenProps) {
   const departments = toOptions(initialDepartments);
   const jobGrades = toOptions(initialJobGrades);
@@ -73,35 +78,43 @@ export function ErpMastersScreen({
         ERP 마스터
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        {mastersWritable
+        {canWrite
           ? '부서·직원·직급·비용센터·거래처 마스터를 조회하고 등록/수정/폐기할 수 있습니다 (TASK-PC-FE-048). 권한이 없는 작업은 실행 시 안내됩니다.'
           : '부서·직원·직급·비용센터·거래처 마스터 조회 (읽기 전용).'}
       </p>
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="masters-read-only-note"
+          action="마스터 등록 · 수정 · 폐기 · 부서 이동 · 계정 연결"
+          roleLabel="기준정보 변경"
+        />
+      )}
 
       <AsOfPicker />
 
       <DepartmentList
         initial={initialDepartments ?? undefined}
-        writable={mastersWritable}
+        writable={canWrite}
         parentOptions={departments}
       />
       <EmployeeList
         initial={initialEmployees ?? undefined}
-        writable={mastersWritable}
+        writable={canWrite}
         optionSources={{ departments, jobGrades, costCenters }}
       />
       <JobGradeList
         initial={initialJobGrades ?? undefined}
-        writable={mastersWritable}
+        writable={canWrite}
       />
       <CostCenterList
         initial={initialCostCenters ?? undefined}
-        writable={mastersWritable}
+        writable={canWrite}
         optionSources={{ departments }}
       />
       <BusinessPartnerList
         initial={initialBusinessPartners ?? undefined}
-        writable={mastersWritable}
+        writable={canWrite}
       />
     </section>
   );

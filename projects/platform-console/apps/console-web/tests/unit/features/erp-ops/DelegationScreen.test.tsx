@@ -127,7 +127,7 @@ beforeEach(() => {
 describe('DelegationScreen — renders both lists', () => {
   it('renders delegation-screen + both list sections', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     expect(screen.getByTestId('delegation-screen')).toBeInTheDocument();
     expect(screen.getByTestId('delegation-list-delegator')).toBeInTheDocument();
     expect(screen.getByTestId('delegation-list-delegate')).toBeInTheDocument();
@@ -135,7 +135,7 @@ describe('DelegationScreen — renders both lists', () => {
 
   it('delegator list shows active grant row + revoke button', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     // Wait for data.
     await waitFor(() =>
       expect(
@@ -154,7 +154,7 @@ describe('DelegationScreen — renders both lists', () => {
 
   it('REVOKED grant in delegator list has no revoke button', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${REVOKED_GRANT_DELEGATOR.id}`),
@@ -167,7 +167,7 @@ describe('DelegationScreen — renders both lists', () => {
 
   it('delegate list shows grants with delegatorId + no revoke button', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATE.id}`),
@@ -184,7 +184,7 @@ describe('DelegationScreen — renders both lists', () => {
 
   it('empty delegator list shows empty notice (no crash)', async () => {
     vi.stubGlobal('fetch', makeFetchMock(EMPTY_LIST, EMPTY_LIST));
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() => {
       const delegatorSection = screen.getByTestId('delegation-list-delegator');
       expect(delegatorSection.textContent).toContain('없습니다');
@@ -199,7 +199,7 @@ describe('DelegationScreen — renders both lists', () => {
 describe('DelegationScreen — status badges', () => {
   it('ACTIVE grant → "활성" badge', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`),
@@ -217,7 +217,7 @@ describe('DelegationScreen — status badges', () => {
 
   it('REVOKED grant → "회수됨" badge', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${REVOKED_GRANT_DELEGATOR.id}`),
@@ -254,7 +254,7 @@ describe('DelegationScreen — status badges', () => {
         EMPTY_LIST,
       ),
     );
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${expiredGrant.id}`),
@@ -281,7 +281,7 @@ describe('DelegationScreen — status badges', () => {
 describe('DelegationScreen — absent validTo renders as "무기한"', () => {
   it('row with absent validTo shows "무기한" in the period text', async () => {
     vi.stubGlobal('fetch', makeFetchMock());
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`),
@@ -355,7 +355,7 @@ function makeCreateDialogFetchMock({
 }
 
 async function openCreateWithEmployees(user: ReturnType<typeof userEvent.setup>) {
-  render(<DelegationScreen />, { wrapper: wrapper() });
+  render(<DelegationScreen canWrite />, { wrapper: wrapper() });
   await user.click(screen.getByTestId('delegation-create'));
   await waitFor(() =>
     expect(screen.getByTestId('delegation-create-delegateId')).toBeEnabled(),
@@ -462,7 +462,7 @@ describe('DelegationScreen — create dialog', () => {
     const fetchMock = makeCreateDialogFetchMock({ employeesOk: false });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await user.click(screen.getByTestId('delegation-create'));
     await screen.findByTestId('delegation-create-delegateId-fallback');
     expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('INPUT');
@@ -508,7 +508,7 @@ describe('DelegationScreen — revoke dialog', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     // Wait for the revoke button to appear.
     await waitFor(() =>
       expect(
@@ -560,7 +560,7 @@ describe('DelegationScreen — revoke dialog', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<DelegationScreen />, { wrapper: wrapper() });
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(
         screen.getByTestId(`delegation-revoke-${ACTIVE_GRANT_DELEGATOR.id}`),

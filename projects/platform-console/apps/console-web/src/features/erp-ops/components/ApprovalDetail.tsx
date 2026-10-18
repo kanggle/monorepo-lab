@@ -15,6 +15,7 @@ import { formatDateTime } from '@/shared/lib/datetime';
 import { statusLabel, StatusBadge } from './approval-common';
 import { ApprovalSubjectRef, ApprovalEmployeeRef } from './approval-refs';
 import { useApprovalDetail } from '../hooks/use-approval-detail';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 // ===========================================================================
 // Detail view — status badge + history timeline + state-gated actions.
@@ -28,6 +29,7 @@ export function ApprovalDetail({
   id,
   onClose,
   myEmployeeId,
+  canWrite,
 }: {
   id: string;
   onClose: () => void;
@@ -35,6 +37,9 @@ export function ApprovalDetail({
    *  TASK-PC-FE-318, replacing the TASK-PC-FE-311 `mySub` correction) —
    *  threaded into every `ApprovalEmployeeRef` below to mark «(나)». */
   myEmployeeId?: string | null;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (REQUIRED). false hides every
+   *  transition button; the detail itself (and the target/person lookups) stay. */
+  canWrite: boolean;
 }) {
   const {
     q,
@@ -42,12 +47,16 @@ export function ApprovalDetail({
     pending,
     actionError,
     actionErrorTransition,
-    actions,
+    actions: legalActions,
     reasonFor,
     clearReasonFor,
     onAction,
     runTransition,
   } = useApprovalDetail(id);
+  // TASK-PC-FE-347 — without ERP_APPROVAL_WRITE no transition is offered (the server would 403 all of
+  // them). Role hiding is separate from step-approver eligibility, which stays the server's verdict
+  // with the inline error mapping.
+  const actions: typeof legalActions = canWrite ? legalActions : [];
 
   return (
     <div
@@ -277,9 +286,17 @@ export function ApprovalDetail({
               </p>
             ) : null}
 
+            {!canWrite && (
+              <ReadOnlyNote
+                testId="approval-detail-read-only-note"
+                action="상신 · 승인 · 반려 · 회수"
+                roleLabel="결재 처리"
+              />
+            )}
+
             {/* state-gated transition actions */}
             <div className="flex flex-wrap justify-end gap-2">
-              {actions.length === 0 && (
+              {canWrite && actions.length === 0 && (
                 <span
                   className="mr-auto text-xs text-muted-foreground"
                   data-testid="approval-no-actions"

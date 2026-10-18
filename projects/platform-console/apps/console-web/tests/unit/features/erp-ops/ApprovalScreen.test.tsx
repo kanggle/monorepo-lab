@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { MASTER_REF_UNRESOLVED } from '@/shared/lib/master-ref-label';
 
 /**
- * TASK-PC-FE-051 — `<ApprovalScreen>` / `<ApprovalDetail>` / the reason +
+ * TASK-PC-FE-051 — `<ApprovalScreen canWrite>` / `<ApprovalDetail canWrite>` / the reason +
  * create dialogs. Asserts:
  *   - list (status filter) + inbox render; row → detail;
  *   - state-gated action visibility (DRAFT → submit/withdraw; SUBMITTED →
@@ -164,7 +164,7 @@ beforeEach(() => {
 
 describe('ApprovalScreen — list + inbox', () => {
   it('renders the requests list + inbox from the seed', () => {
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     expect(screen.getByTestId('approval-list-table')).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('ApprovalScreen — list + inbox', () => {
 
   it('empty inbox (linked caller) renders the empty notice (no crash)', () => {
     render(
-      <ApprovalScreen
+      <ApprovalScreen canWrite
         initialRequests={LIST}
         initialInbox={{
           data: [],
@@ -191,7 +191,7 @@ describe('ApprovalScreen — list + inbox', () => {
   // read DIFFERENTLY (Failure Scenario 3: «not linked» folded into «nothing to do»).
   it('AC-3 — actorEmployeeId ABSENT → «연결되지 않아 비어 있습니다», not the plain empty notice', () => {
     render(
-      <ApprovalScreen
+      <ApprovalScreen canWrite
         initialRequests={LIST}
         initialInbox={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } }}
       />,
@@ -205,7 +205,7 @@ describe('ApprovalScreen — list + inbox', () => {
 
   it('AC-3 — actorEmployeeId present + 0 rows → «처리할 결재가 없습니다» (a different sentence)', () => {
     render(
-      <ApprovalScreen
+      <ApprovalScreen canWrite
         initialRequests={LIST}
         initialInbox={{
           data: [],
@@ -222,7 +222,7 @@ describe('ApprovalScreen — list + inbox', () => {
   });
 
   it('the status filter is present with all 6 statuses (incl. IN_REVIEW)', () => {
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     const sel = screen.getByTestId('approval-status-filter');
@@ -240,7 +240,7 @@ describe('ApprovalScreen — list + inbox', () => {
 describe('ApprovalDetail — state-gated actions', () => {
   it('DRAFT → submit + withdraw actions only (no approve/reject)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT })));
-    render(<ApprovalDetail id="appr-draft" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-draft" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await screen.findByTestId('approval-detail');
@@ -254,7 +254,7 @@ describe('ApprovalDetail — state-gated actions', () => {
 
   it('SUBMITTED → approve + reject + withdraw (no submit)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: SUBMITTED })));
-    render(<ApprovalDetail id="appr-sub" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-sub" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -267,7 +267,7 @@ describe('ApprovalDetail — state-gated actions', () => {
 
   it('terminal (APPROVED) → NO transition actions; "완료" notice; history + reason render', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: APPROVED })));
-    render(<ApprovalDetail id="appr-app" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-app" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -282,7 +282,7 @@ describe('ApprovalDetail — state-gated actions', () => {
 
   it('DRAFT absent submittedAt / finalizedAt render as "—" (NON_NULL)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: DRAFT })));
-    render(<ApprovalDetail id="appr-draft" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-draft" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -308,7 +308,7 @@ describe('ApprovalDetail — reason-gated reject', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalDetail id="appr-sub" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-sub" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -352,7 +352,7 @@ describe('ApprovalDetail — inline error mapping (graceful, no crash)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalDetail id="appr-sub" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-sub" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -370,7 +370,7 @@ describe('ApprovalDetail — inline error mapping (graceful, no crash)', () => {
       'fetch',
       vi.fn().mockResolvedValue(errorResponse('APPROVAL_REQUEST_NOT_FOUND', 404)),
     );
-    render(<ApprovalDetail id="nope" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="nope" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     const err = await screen.findByTestId('approval-detail-error');
@@ -418,7 +418,7 @@ function createDialogFetch() {
 }
 
 async function openCreateWithEmployees(user: ReturnType<typeof userEvent.setup>) {
-  render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+  render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
     wrapper: wrapper(),
   });
   await user.click(screen.getByTestId('approval-create'));
@@ -508,7 +508,7 @@ describe('ApprovalScreen — create dialog', () => {
 
   it('remove-stage button disabled when only 1 row; enabled with 2 rows', async () => {
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     await user.click(screen.getByTestId('approval-create'));
@@ -550,7 +550,7 @@ describe('ApprovalScreen — create dialog', () => {
       vi.fn().mockResolvedValue(errorResponse('DATA_SCOPE_FORBIDDEN', 403)),
     );
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     await user.click(screen.getByTestId('approval-create'));
@@ -605,7 +605,7 @@ describe('ApprovalScreen — create dialog 대상 ID selector (TASK-PC-FE-335)',
     const fetchMock = subjectIdDialogFetch();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     await user.click(screen.getByTestId('approval-create'));
@@ -677,7 +677,7 @@ describe('ApprovalScreen — create dialog 대상 ID selector (TASK-PC-FE-335)',
       vi.fn().mockResolvedValue(errorResponse('DATA_SCOPE_FORBIDDEN', 403)),
     );
     const user = userEvent.setup();
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     await user.click(screen.getByTestId('approval-create'));
@@ -713,7 +713,7 @@ describe('approval v2.4 refusals (TASK-PC-FE-318)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ApprovalDetail id="appr-draft" onClose={() => {}} />, { wrapper: wrapper() });
+    render(<ApprovalDetail canWrite id="appr-draft" onClose={() => {}} />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(screen.getByTestId('approval-action-submit')).toBeInTheDocument(),
     );
@@ -765,7 +765,7 @@ describe('ApprovalScreen — IN_REVIEW status badge', () => {
       ],
       meta: { page: 0, size: 20, totalElements: 1 },
     };
-    render(<ApprovalScreen initialRequests={IN_REVIEW_LIST} initialInbox={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } }} />, {
+    render(<ApprovalScreen canWrite initialRequests={IN_REVIEW_LIST} initialInbox={{ data: [], meta: { page: 0, size: 20, totalElements: 0 } }} />, {
       wrapper: wrapper(),
     });
     const badge = screen.getByTestId('approval-status-badge');
@@ -774,7 +774,7 @@ describe('ApprovalScreen — IN_REVIEW status badge', () => {
   });
 
   it('IN_REVIEW status filter option is present', () => {
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     expect(screen.getByRole('option', { name: '검토중' })).toBeInTheDocument();
@@ -821,7 +821,7 @@ const MULTI_STAGE: ApprovalRequest = {
 describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () => {
   it('renders IN_REVIEW badge on detail', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
-    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-multi" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -836,7 +836,7 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
 
   it('renders the stage-progress timeline with currentStage highlighted', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
-    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-multi" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -852,7 +852,7 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
 
   it('shows "k/N 단계" summary in the heading', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
-    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-multi" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -864,7 +864,7 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
 
   it('history shows stage annotation + delegation marker', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: MULTI_STAGE })));
-    render(<ApprovalDetail id="appr-multi" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-multi" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -885,7 +885,7 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
   it('detail WITHOUT stages falls back to approverId (no crash — degrade)', async () => {
     // A legacy/single-stage response with NO stages field.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: SUBMITTED })));
-    render(<ApprovalDetail id="appr-sub" onClose={() => {}} />, {
+    render(<ApprovalDetail canWrite id="appr-sub" onClose={() => {}} />, {
       wrapper: wrapper(),
     });
     await waitFor(() =>
@@ -914,7 +914,7 @@ describe('ApprovalDetail — multi-stage timeline + IN_REVIEW + delegation', () 
 
 describe('ApprovalScreen — deep-link preselect (initialSelectedId)', () => {
   it('no initialSelectedId → list only, detail dialog closed', () => {
-    render(<ApprovalScreen initialRequests={LIST} initialInbox={INBOX} />, {
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
       wrapper: wrapper(),
     });
     expect(screen.getByTestId('approval-list-table')).toBeInTheDocument();
@@ -930,7 +930,7 @@ describe('ApprovalScreen — deep-link preselect (initialSelectedId)', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(
-      <ApprovalScreen
+      <ApprovalScreen canWrite
         initialRequests={LIST}
         initialInbox={INBOX}
         initialSelectedId="appr-1"
@@ -960,7 +960,7 @@ describe('ApprovalScreen — deep-link preselect (initialSelectedId)', () => {
       ),
     );
     render(
-      <ApprovalScreen
+      <ApprovalScreen canWrite
         initialRequests={LIST}
         initialInbox={INBOX}
         initialSelectedId="ghost"
