@@ -8,7 +8,7 @@ TASK-PC-FE-348
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -83,7 +83,8 @@ P5~P8 뒤 SCM · ERP · Finance · E-commerce 의 운영 권한은 «테넌트�
 - [x] **AC-2** — 가이드 시험 갱신 + 옛 문장이 돌아오면 빨개지는 단언 1 개 이상(예: SCM 가이드 본문에 «하나뿐» 없음). — 증거: `tests/unit/domain-guides-entry-role-copy.test.tsx`(신규 35 케이스) — 옛 문안에서 25 개가 **단언 실패**(red 커밋 `dfcb3fcd2`), 새 문안에서 통과. 전체 vitest 404 파일 · 4858 테스트 통과, `tsc --noEmit` rc=0, `next lint` rc=0(기존 경고 1 건만).
 - [x] **AC-3** — 소유자 문안 검토(사용자에게 보이는 문장) — PR 본문에 바뀐 문장 전후를 표로.
   - ✅ 2026-10-18 UTC 소유자 승인(«두 곳 다듬고 머지»): ① SCM «발주 확정은 … 운영자 행위자 확인도 거칩니다» → «발주 확정은 발주 변경 역할(SCM_PROCUREMENT_WRITE)이 있어도 운영자 계정으로만 할 수 있습니다» (내부 용어 `isOperator` 제거) ② E-Commerce «화면에는 "접근 권한이 없습니다" 라는 안내가 나오며» 삭제(화면마다 문구가 달라 글자 그대로는 거짓). 나머지는 검토 표 그대로.
-- [ ] **AC-4** — 배포 상태(Vercel)를 따로 적는다.
+- [x] **AC-4** — 배포 상태(Vercel)를 따로 적는다.
+  - ✅ 2026-10-18 UTC — Vercel `Production – kanggle-console` 배포 7154659816(`920d7975f`) state=success. 운영 `https://console.hubwang.com` 을 비로그인으로 열어 4 가이드 HTML 에서 확인했다. 새 문장: SCM «운영자 계정으로만 할 수 있습니다» · «배정하는 역할이 아니라 진입 역할입니다» / E-Commerce «화면마다 다른 업무 역할» · «업무 역할은 모두 13개입니다» / WMS «WMS를 구독한 회사(테넌트)를 선택하면 붙습니다» / IAM «업무 권한 세트를 배정합니다» · `FINANCE_LEDGER_CONTROL` — 각 2 건(HTML 본문 + RSC 페이로드). 옛 문장: «이 권한 하나뿐입니다» · «운영자 행위자 확인» · «하나로만 열립니다» · «라는 안내가 나오며» · «자동으로 주어집니다» · «구독 도메인에서 자동으로 생깁니다» — 각 0 건. «0 건» 은 같은 파일에서 새 문장이 잡혔으므로 빈 페이지에서 나온 0 이 아니다.
 
 # Related Specs
 
@@ -103,3 +104,11 @@ P5~P8 뒤 SCM · ERP · Finance · E-commerce 의 운영 권한은 «테넌트�
 
 1. 문안을 위임받은 쪽이 역할 이름 · 항목 수를 바꾼다(«쉽게 다시 쓰기» 가 사실을 흘린다) — AC-1 대조.
 2. 한 가이드만 고치고 IAM 가이드의 도메인 역할 표는 그대로 — 두 곳이 서로 다른 말을 한다.
+
+# 닫기 (2026-10-18 UTC) — in-progress → done
+
+- (a) `gh pr view 4409`: `state=MERGED`, `mergeCommit` `920d7975f`.
+- (b) `920d7975f` 는 `origin/main`(`b74e05ab7`)의 조상이다.
+- (c) 머지 직전 `gh pr checks 4409`: pass 13 · fail 0 · pending 0. console-web 전체 vitest 레인은 pass 였다.
+- (d) AC-0~AC-4 를 열어 확인했다. 전부 ✅ — AC-3 = 소유자 승인(두 곳 다듬음), AC-4 = 위 운영 화면 실측.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐다(문안은 소유자가 검토). 마지막 AC 는 배포 상태 기록뿐이었다.

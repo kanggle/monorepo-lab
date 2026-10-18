@@ -66,6 +66,7 @@ frontend
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`finance-read`) → Finance 메뉴 배지 없음 · 쓰기 버튼 없음 / 계좌 세트만(`finance-account-operate`) → `/ledger` 배지 / 원장 운영 세트(`finance-ledger-operate`) → `/finance/accounts` 배지, `/ledger` 버튼 보임 / 원장 통제만 → `/ledger` 배지 없음 · 버튼 없음 / Finance 세트 0 → Finance 메뉴 전부 배지. → `console-nav-business-permission.test.ts` § TASK-PC-FE-344(+ 진입 역할 0 가드 · 통제 역할 미선언 가드) · `LedgerOpsScreen.test.tsx`(`DiscrepancyDetail` · 두 패널) · `LedgerFxRates.test.tsx`.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → row 12 `undefined` → 배지 없음 · `canWriteOn` true · `canWrite` 생략 = 보임(대조군 시험).
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+  - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `465b39a94` → `Production – kanggle-console` 배포 7130932170 state=success (2026-10-16T22:34:17Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
 

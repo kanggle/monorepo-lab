@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-349-delegation-picker-approval-only-operator.md` — **결재 세트만 가진 운영자의 «위임 생성» 대결자 칸이 «직원 목록을 불러오지 못해» 로 떨어진다 — 권한 거절을 장애로 말한다** (READY, 2026-10-18 UTC 기안 · `TASK-PC-FE-347` 열린 의문 1 을 코드로 확인 · 라이브 미확인). 다이얼로그는 masterdata `listEmployees`(`RequiredScope.READ` = 기준정보 조회만)를 부르고 `ERP_APPROVAL_WRITE` 는 단건(`SUBJECT_READ`)만 연다. AC-0 = 라이브/BFF 확인 + 소유자 결정 (가) 콘솔 문구만 · (나) 서버 인가 확장(별도 티켓) · (다) 둔다. 사용자 노출 문구 → 소유자 확인 후 머지. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -118,7 +118,6 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-348-guide-copy-entry-roles-after-p5-p8.md` — **가이드 문안이 `ADR-MONO-083` P5~P8 뒤 틀렸다 — «도메인 = `*_OPERATOR` 하나» · 진입 역할을 배정 역할처럼 적은 문장을 세분 역할로** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-342` ~ `345` 에서 모은 후속). 정적 가이드 문안만 — 신호 · 서버 무변경. AC-3(소유자 문안 검토) ✅ 2026-10-18 UTC 승인(두 곳 다듬음) — AC-4(Vercel) 대기. 분석=Opus 5.5 / 구현 권장=Sonnet(문안 — 소유자 검토).
 - `TASK-PC-FE-341-nightly-sample-visitor-overview-flaky.md` — **nightly 콘솔 e2e 개요 첫 렌더 지연 flaky — sample-visitor:19 · IAM 카드 칸 3× · Finance TIMEOUT** (IN-PROGRESS, 2026-10-18 UTC · 출처 773 § 닫기 § 4). AC-0 측정 완료(56 런-시도) → AC-1 **미확정**, 소유자 결정 «계측 먼저»(2026-10-18 UTC): 수선 없이 계측만 — SSR 단계별 `console_ssr_phase` 로그 · Playwright json 리포터 · nightly compose 로그 상시 업로드(`TASK-MONO-799`). AC-2 열림 — 계측이 쌓인 nightly 5+ 런 재측정 뒤 판정. 티켓은 닫지 않는다. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-346-ecommerce-write-buttons-area-roles.md` — **`ADR-MONO-083` P8 콘솔 후속 (2) — E-commerce 7 화면의 쓰기 버튼을 영역 `*_WRITE` 로 숨김** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-345` 에서 분리). 서버 라이브(795) — 머지 게이트 없음. `writeRequires` 7 행 + 7 화면 · 하위 라우트 배선(`canWrite` 필수 prop · «조회 전용» · `new`/`edit` 는 폼 대신 안내) — 342 의 SCM 화면 · 344 의 `/ledger` 와 같은 모양. 분석=Opus 5.5 / 구현=Sonnet.
 - `TASK-PC-FE-347-erp-write-buttons-area-roles.md` — **`ADR-MONO-083` P6 콘솔 후속 (2) — ERP 3 화면(기준정보 · 결재 · 위임)의 쓰기 버튼을 `ERP_MASTERDATA_WRITE` / `ERP_APPROVAL_WRITE` 로 숨김** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-343` 에서 분리 — 343 은 메뉴 신호 · 알림 종만). 343 머지됨. 서버 라이브(793) — 머지 게이트 없음. 기준정보 5 목록 · 결재 상세/상신 · 위임 목록의 버튼 배선(`canWrite` · «조회 전용»). 분석=Opus 5.5 / 구현 권장=Sonnet.
@@ -134,6 +133,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 - `TASK-PC-FE-308-reason-header-byte-string-encode.md` — erp 결재 반려/회수 한글 사유가 `X-Operator-Reason` 헤더를 유효한 HTTP ByteString 이 아니게 만들어 `fetch()` 가 던지고(콘솔은 "erp unavailable" 503 으로 오보), `flat-envelope-gateway.ts` 에 `encodeURIComponent` 가 없어 생긴 결함(형제 `iam-gateway.ts` TASK-MONO-176 패턴 복사로 고정). AC-0~AC-2 닫힘(단위 시험 + bite), **AC-3 = 라이브 ⚪, 다음 데모 창에서 닫는다**. 🟡 23차 창(2026-10-06 UTC): impl #4173 `552d3182b` 머지 · 한글 사유 withdraw 503→**200 WITHDRAWN** · ⏳ AC-3 의 reject 는 미측정(결재자 미결 건 없음).
 
 ## done
+- ✅ `TASK-PC-FE-348-guide-copy-entry-roles-after-p5-p8.md` — **DONE 2026-10-18 UTC (4-dim verified)** — **#4409**(`920d7975f`, 머지 시점 실패 0). SCM · E-Commerce · IAM · WMS 가이드의 «`*_OPERATOR` 하나 · 테넌트를 고르면 자동 부여» 문장을 세분 업무 역할 · 진입 역할 파생으로. 소유자 문안 승인(두 곳 다듬음 — «운영자 행위자 확인» → «운영자 계정으로만» · E-Commerce «접근 권한이 없습니다» 안내 삭제). AC-4: Vercel 7154659816 success + 운영 `console.hubwang.com` 4 가이드에서 새 문장 2/2 · 옛 문장 0. ERP · Finance 가이드는 문안 변경 0(옛 모델 문장 없음).
 - ✅ `TASK-PC-FE-338-domain-permission-sets-console.md` — **DONE 2026-10-16 UTC (4-dim verified)** — **#4347**(`56a15be8b`) · **#4348**(`27cdcebd2`) · **#4349**(`808fa9e84`) · **#4354**(`ca176d570`) · **#4378**(`0091e1897`) · **#4381**(`091290a57`) (머지 시점 실패 0, 전부). `ADR-MONO-083` P4 콘솔: «IAM 관리 역할» / «업무 권한 세트» 분리 · 운영자 · 그룹 세트 배정 · 메뉴별 «업무 권한 없음» · 조회 세트 버튼 숨김. 28차 창 라이브(AC-1 · AC-2): 재고 세트 → «출고» 배지 + 서버 403 · «재고» 배지 없음 + 200 · {`OUTBOUND_READ`} → 버튼 숨김 + 조회 전용 문구 + `:cancel` 403. «발송 재시도» 숨김은 `TASK-PC-FE-342`.
 - ✅ `TASK-PC-FE-332-accounts-list-hides-site-membership-lock.md` — **DONE 2026-10-16 UTC (4-dim verified)** — **#4330**(`2b4b9faca`, 머지 시점 실패 0). 풀 계정 사이트 잠금을 행 안내로. 28차 창 라이브(AC-3): `cs@demo.com` 이 `demo@demo.com` 잠금 → «… ecommerce 사이트에서만 잠겼습니다 …» → 해제(18:09:20Z / 18:10:00Z).
 - ✅ `TASK-PC-FE-331-sso-wrong-account-logout-stuck-without-store-session.md` — **DONE 2026-10-16 UTC (구현 없이 종결 · ready → done)** — 구현 PR 없음(소유자 결정 2026-10-15: AC-0 = 모집단 0 으로 갈음 · 분기 · 위젯 유지 · 라이브 1회로 닫는다). 28차 창 라이브 = `TASK-MONO-773` AC-7: 로그아웃 → IdP 폼(무음 SSO 없음) → 운영자 로그인 성공.

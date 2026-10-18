@@ -1,6 +1,6 @@
 # TASK-MONO-799 — the nightly console e2e job keeps the compose server logs on every run, not only when it fails
 
-- **Status**: in-progress
+- **Status**: done
 - **Type**: ci (evidence)
 - **Created**: 2026-10-18 UTC
 - **Scope class**: monorepo-level (`.github/workflows/nightly-e2e.yml`)
@@ -80,3 +80,11 @@ None (CI only).
 - The log is large enough to slow the upload or hit the quota — measured in AC-3 before relying on it.
 - The step is placed after «Stop docker compose stack» — `logs` then returns nothing; the order
   is part of AC-2.
+
+# 닫기 (2026-10-18 UTC) — in-progress → done
+
+- (a) `gh pr view 4410`: `state=MERGED`, `mergedAt` 2026-10-18T13:11:28Z, `mergeCommit` `b74e05ab7`.
+- (b) `b74e05ab7` 는 `origin/main` 의 tip 이다(닫기 시점).
+- (c) 머지 직전 `gh pr checks 4410`: pass 42 · skipping 28 · fail 0 · pending 0. `statusCheckRollup` 도 SUCCESS 42 · SKIPPED 28 이다.
+- (d) AC-1~AC-4 를 열어 확인했다. 전부 ✅ 이고, 증거는 위 각 AC 줄에 있다(브랜치 nightly 39128709878 · 812,430 B · 다른 잡 무변경).
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, AC 는 머지 전에 모두 닫혔다.
