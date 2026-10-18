@@ -60,6 +60,7 @@ frontend
 - [x] **AC-2** — 🔴 대조군: `erp-read` → 3 화면 쓰기 버튼 없음 + «조회 전용» / 결재 세트만 → `/erp/approval` 버튼 보임 · `/erp/masters` 버튼 없음 / 기준정보 세트만 → `/erp/masters` 버튼 보임. ✅ `erp-write-buttons.test.tsx`(화면: masters 17 컨트롤 · 결재 작성 + 상세 4 전이 · 위임 생성/회수) · `erp-write-buttons-pages.test.tsx`(실제 `resolveErpCanWrite → getDomainBusinessRoles → canWriteOn` 사슬: erp-read / 결재 세트 / 기준정보 세트 / 데모 운영자 / 진입 역할 단독 / 타 도메인 역할) · `console-nav-business-permission.test.ts`(행). red 46 실패 → green 0.
 - [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. ✅ 3 화면 × (row 12 실패 · 테넌트 없음 · 샘플 방문자 · 레지스트리 tenants 미상) 12 케이스 + `canWriteOn(href, undefined)`.
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. ⏳ 배포 상태 — 머지 후 기록.
+  - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `8a12cf6b8` → `Production – kanggle-console` 배포 7153567913 state=success (2026-10-18T10:58:45Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
 

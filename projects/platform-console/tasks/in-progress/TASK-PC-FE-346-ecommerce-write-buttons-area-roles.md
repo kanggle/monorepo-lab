@@ -64,6 +64,7 @@ frontend
 - [x] **AC-2** — 🔴 대조군: `ecommerce-read` → 7 화면 쓰기 버튼 없음 + «조회 전용» / `ecommerce-order-operate` 만 → 주문 상태 전이 버튼 보임, 다른 화면 버튼 없음 / 상품 운영 세트 → 상품 · 판매자 버튼 보임. → `ecommerce-write-buttons.test.tsx`(화면 11종 × canWrite false/true + ImageManager) · `ecommerce-write-buttons-pages.test.tsx`(실제 `resolveEcommerceCanWrite` → `getDomainBusinessRoles` → `canWriteOn` 체인: 읽기 세트 · 주문 운영 세트 · 상품 운영 세트 · 데모 운영자 13 역할 · 진입 역할 단독 · 다른 영역 역할) · `console-nav-business-permission.test.ts` § TASK-PC-FE-346(행 선언 + 같은 대조군 3종). `new`/`edit` 7 라우트는 폼 대신 «조회 전용» 안내.
 - [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. → 페이지 11종 × (row 12 실패 · 활성 테넌트 없음 · 샘플 방문자 · 레지스트리 테넌트 미상) 모두 `canWrite=true`, `new`/`edit` 7종은 row 12 실패 시 폼 — `ecommerce-write-buttons-pages.test.tsx`. (`getDomainBusinessRoles` 가 `undefined` 를 돌려주고 `canWriteOn(…, undefined)` 가 `true` — 새 규칙 없음.)
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → 배포 상태 — 머지 후 기록.
+  - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `23b0cc1bd` → `Production – kanggle-console` 배포 7153236004 state=success (2026-10-18T10:27:10Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
 

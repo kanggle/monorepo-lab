@@ -70,6 +70,7 @@ frontend
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`scm-read`) → SCM 메뉴 배지 없음 · 승인/기각/저장 버튼 없음 / 수요계획 세트만 → `/scm/procurement` · `/scm/inventory` 배지, `/scm/replenishment` 버튼 보임 / SCM 세트 0 → SCM 메뉴 전부 배지 / WMS 출고 세트만 → 출고 화면의 «발송 재시도» 없음. → `console-nav-business-permission.test.ts` · `sidebar-business-permission.test.tsx` · `ReplenishmentScreen` · `SeedConfigScreen` · `OutboundOpsScreen` · `domain-business-roles.test.ts` (§ 구현 기록).
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(행 12 `undefined` · 레지스트리 `null` · 샘플 방문자 · 테넌트 없음).
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면) 를 따로 적는다.
+  - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `ce1277dfa` → `Production – kanggle-console` 배포 7128043458 state=success (2026-10-16T19:46:46Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
 

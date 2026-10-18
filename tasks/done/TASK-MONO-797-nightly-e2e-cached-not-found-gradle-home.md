@@ -1,6 +1,6 @@
 # TASK-MONO-797 — nightly e2e lanes stay red on a Gradle «not found» record carried in the shared gradle-home cache
 
-- **Status**: in-progress
+- **Status**: done
 - **Type**: fix (CI)
 - **Created**: 2026-10-16 UTC
 - **Scope class**: monorepo-level (`.github/workflows/`)
@@ -184,3 +184,22 @@ On the staged tree: `check-required-check-names.sh`, `check-index-queue-drift.sh
 `check-libs-ci-coverage.sh`, `check-artifact-retention.sh`,
 `check-claude-reference-integrity.sh` — all rc=0. No job renamed; nothing added or deleted
 under `scripts/` (the wrapper sits under `.github/actions/setup-java-gradle/`).
+
+# 닫기 (2026-10-18 UTC) — in-progress → done
+
+- (a) `gh pr view 4391`: `state=MERGED`, `mergedAt` 2026-10-16T11:34:36Z, `mergeCommit` `dfb232a24`.
+- (b) `dfb232a24` 는 `origin/main`(`b74e05ab7`)의 조상이다.
+- (c) 머지된 PR 의 `statusCheckRollup` 은 SUCCESS 35 · SKIPPED 34 · 실패 0 이다. 🔴 다만 머지 명령은 pending 22 가 남은 채 실행됐다. 절차 위반이고, 사후에 모두 pass 로 끝난 것은 결과일 뿐이다(ADR-083 인계 메모 «이 세션의 교훈»).
+- (d) AC 절을 열어 동사별로 확인했다.
+  - AC-0 «원인을 먼저 잰다» ✅ § AC-0.
+  - AC-1 «잰 원인에서 고친다 · 자가 회복 또는 감지» ✅ — 감지 + 경고 + `--refresh-dependencies` 1회 재시도.
+  - AC-2 «브랜치에서 증명 · 새 경로를 실제로 탔는가» ✅ — 38891217884 · 38892589550, 둘 다 새 경로를 탔다.
+  - AC-3 «가드» ✅.
+- **§ AC-2 의 ⚪ «main 이 깨끗한 gradle-home 을 저장하는가»는 이제 쟀다.**
+  - 술어는 래퍼가 로그에 실제로 남기는 본문 문구 `not-found record restored`(첫 시도) · `refreshed resolution succeeded`(회복)다.
+  - 🔴 첫 술어 `::warning` / `retrying once` 는 대조군(브랜치 런 38891217884 의 scm 잡 116940919243 — 경고가 났던 잡)에서도 0 이었다. GitHub 로그는 `::warning title=…::` 을 `##[warning]<본문>` 으로 바꿔 찍기 때문이다. 그래서 그 술어로 얻은 0 은 판정이 아니었다. 본문 문구는 대조군에서 1/1 이다.
+  - 머지 직후 첫 main nightly 38894690325(`dfb232a24`): scm 116952237342 · fan 116952237472 둘 다 not-found 1 · 회복 1. 오염 기록을 복원했고, 재시도로 초록이 됐다.
+  - 최신 main nightly 39130456238(`b74e05ab7`): scm 117684375812 · fan 117684375882 둘 다 0 / 0. 오염 기록이 더는 복원되지 않는다. 어느 런에서 깨끗한 엔트리로 바뀌었는지는 세지 않았다(사이 런 미측정).
+  - 머지 뒤 main nightly 19 런의 결과는 success 17 · failure 1 · 진행 중 1 이었다. failure 1 은 38965272467 로, 콘솔 잡 `operators-profile:44` Finance TIMEOUT 이다(`TASK-PC-FE-341` 측정분). 이 티켓의 두 레인과는 무관하다.
+- #4386 은 2026-10-16T11:34:37Z, 즉 PR 머지 1초 뒤에 `kanggle` 이 닫았다(PR 연결). § AC-2 가 기대한 «다음 nightly 가 자동으로 닫음» 경로는 아니다. 열린 채로 남은 이슈는 없다.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, 남은 것은 머지 뒤 측정뿐이었다.
