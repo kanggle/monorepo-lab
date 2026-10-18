@@ -34,16 +34,24 @@ nightlies can be read after the fact.
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — On a green run the artifact `platform-console-playwright-report-nightly`
+- [x] **AC-1** — On a green run the artifact `platform-console-playwright-report-nightly`
   contains `test-results/compose-logs.txt` with the whole run's compose output (no `--tail`),
   timestamped.
-- [ ] **AC-2** — The step is `if: always()`, sits before «Stop docker compose stack», and cannot
-  turn a green job red (`continue-on-error: true`).
-- [ ] **AC-3** — The file's size on a real run is recorded here (reasonable for a ~1 minute test
+  - ✅ 2026-10-18 UTC — branch nightly run 39128709878 (console job green, 12 expected · 0 flaky):
+    the downloaded artifact holds `test-results/compose-logs.txt`, every line prefixed with a
+    docker timestamp; it carries 151 `console_ssr_phase` lines (TASK-PC-FE-341).
+- [x] **AC-2** — The step is `if: always()`, sits before «Stop docker compose stack», and cannot
+  turn a green job red (`continue-on-error: true`). — ✅ diff of `nightly-e2e.yml`: one new step
+  «Save docker compose logs (every run)» directly before «Stop docker compose stack».
+- [x] **AC-3** — The file's size on a real run is recorded here (reasonable for a ~1 minute test
   phase plus stack boot; if it is large enough to threaten the artifact quota, narrow it by
-  service instead of dropping it).
-- [ ] **AC-4** — No other job changes; no job or step that is a required-check context is
-  renamed; the root guards (`scripts/check-*.sh`) pass on the staged tree.
+  service instead of dropping it). — ✅ run 39128709878: **812,430 bytes** (~0.8 MB, retention 7
+  days) — no narrowing needed.
+- [x] **AC-4** — No other job changes; no job or step that is a required-check context is
+  renamed; the root guards (`scripts/check-*.sh`) pass on the staged tree. — ✅ the workflow diff
+  touches only `platform-console-e2e-fullstack`; 36/38 guards rc=0 (2 need Docker /
+  `DEMO_API_BASE`, untouched by this change); after the rebase the required 3 +
+  `check-ls-files-guard-count` + `check-required-check-names` rc=0. PR #4410 checks 42 pass · 0 fail.
 
 # Related Specs
 

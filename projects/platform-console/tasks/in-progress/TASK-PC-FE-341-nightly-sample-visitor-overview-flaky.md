@@ -167,3 +167,13 @@ platform-console
 # AC-2 (열림)
 
 계측이 쌓인 뒤 재측정 → 판정 → 판정에 맞는 수선 + 대조군. 지금은 시작하지 않는다.
+
+## 계측 실동작 확인 (2026-10-18 UTC)
+
+브랜치 nightly run **39128709878**(PR #4410) 콘솔 잡 초록(12 expected · 0 flaky). 아티팩트 `platform-console-playwright-report-nightly` 에서 확인한 것:
+
+- `test-results/e2e-results.json`: 28 KB. 시도마다 `workerIndex` · `retry` · `startTime` · `duration` 이 남는다(② 동시 실행을 이 파일로 판정한다).
+- `test-results/compose-logs.txt`: 812 KB. 매 줄에 docker 타임스탬프가 붙는다(④).
+- `console_ssr_phase` 151 줄이 찍혔다. route 는 `(console)/layout` · `/dashboards/overview` 둘이다.
+
+재측정은 이 PR 머지 뒤 nightly 부터 센다. 이 런은 계측 동작 확인용이고, 표본으로는 세지 않는다.
