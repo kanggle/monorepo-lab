@@ -412,11 +412,6 @@ domain_seed_rc=0
 owner_operator_rc=0
 if [[ " ${SET[*]} " == *" iam "* ]]; then
   post_up_call "OIDC 리다이렉트 URI 등록" bash "$HERE/seed-demo-domain.sh" || domain_seed_rc=$?
-  # TASK-MONO-798 — 소유자 전용 '*' 운영자: 부팅마다(boot_id 당 1회) SUSPENDED 로 되돌리고 새 비밀번호를
-  # 만들어 SSM(SecureString)에 넣은 뒤에만 자격 해시를 쓴다. 값은 어디에도 찍지 않는다(owner-operator.sh 머리말).
-  # 🔵 실패해도 final_rc 에 넣지 않는다 — 방문자 데모와 무관한 소유자 도구가 유닛을 failed 로 만들 이유가 없다.
-  #    대신 아래 요약에 한 줄로 말한다(조용히 넘기지 않는다).
-  post_up_call "소유자 '*' 운영자 준비" bash "$HERE/owner-operator.sh" provision || owner_operator_rc=$?
 fi
 
 # 도메인 데이터 시드 (TASK-MONO-506). 계정과 배선이 갖춰져도 화면이 비어 있으면
@@ -445,6 +440,28 @@ post_up_call "라벨 드리프트 판정" bash "$HERE/check-label-drift.sh" "${S
 # 🔴 드리프트와 같이 종료코드를 보존한다: 이미 뜬 스택을 내리지 않되 조용히 넘기지도 않는다.
 suppressed_rc=0
 post_up_call "억제 런타임 판정" bash "$HERE/check-suppressed-containers.sh" "${SET[@]}" || suppressed_rc=$?
+
+# TASK-MONO-798 — 소유자 전용 '*' 운영자: 부팅마다(boot_id 당 1회) SUSPENDED 로 되돌리고 새 비밀번호를
+# 만들어 SSM(SecureString)에 넣은 뒤에만 자격 해시를 쓴다. 값은 어디에도 찍지 않는다(owner-operator.sh 머리말).
+# 🔴🔴 자리와 호출 방식이 load-bearing 이다 (verify-demo-wrapper (z15) 가 첫 판에서 잡았다):
+#    · post_up 단계 **맨 뒤**다 — 방문자 화면을 채우는 시드·판정보다 먼저 두면, 이 단계의 대기가 공용 예산을
+#      먹어 시드가 «시도 못 함» 이 되고 멀쩡한 부팅이 빨개진다(첫 판의 실측 그대로).
+#    · post_up_call 을 **쓰지 않는다** — 그것은 끊김을 post_up_cut 에 넣어 유닛을 failed 로 만든다. 소유자 도구가
+#      방문자 데모의 판정을 바꿀 이유가 없다. 대신 **남은 post-up 예산만** 쓰고(새 시간을 만들지 않는다 —
+#      systemd TimeoutStartSec 산술은 그대로), 결과는 아래 요약에 한 줄로 말한다(조용히 넘기지 않는다).
+owner_operator_rc=0
+if [[ " ${SET[*]} " == *" iam "* ]]; then
+  oo_left="$(post_up_remaining)"
+  [ "$oo_left" -gt 180 ] && oo_left=180
+  if [ "$oo_left" -le 0 ]; then
+    owner_operator_rc=1
+    echo "[demo] ⏱ 소유자 '*' 운영자 준비 — 시드 단계 예산이 남지 않아 건너뜁니다(방문자 데모와 무관)" >&2
+  elif [ "$HAVE_TIMEOUT" = 1 ]; then
+    timeout --foreground -k 15 "$oo_left" bash "$HERE/owner-operator.sh" provision || owner_operator_rc=$?
+  else
+    bash "$HERE/owner-operator.sh" provision || owner_operator_rc=$?
+  fi
+fi
 
 echo "[demo] up complete — profile=$PROFILE"
 [ "$seed_rc" -eq 0 ] || echo "[demo] ⚠ 도메인 데이터 시드가 일부 실패했습니다(위 [seed] 로그 참조) — 해당 화면은 빌 수 있습니다"

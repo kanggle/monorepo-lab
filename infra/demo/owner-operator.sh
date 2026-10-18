@@ -67,7 +67,7 @@ ADMIN_DB="${ADMIN_DB_NAME:-admin_db}"
 AUTH_BOOT_JAR_DIR="${OWNER_OPERATOR_AUTH_JAR_DIR:-$ROOT/projects/iam-platform/apps/auth-service/build/libs}"
 MARKER="${OWNER_OPERATOR_MARKER:-/run/demo-owner-operator.boot-id}"
 BOOT_ID_SRC="${DEMO_BOOT_ID_SRC:-/proc/sys/kernel/random/boot_id}"
-WAIT_SECS="${OWNER_OPERATOR_WAIT_SECS:-300}"
+WAIT_SECS="${OWNER_OPERATOR_WAIT_SECS:-120}"
 WAIT_STEP="${OWNER_OPERATOR_WAIT_STEP:-5}"
 ADMIN_ACCESS_TTL_NOTE="${ADMIN_JWT_ACCESS_TTL:-3600}"
 
@@ -130,6 +130,13 @@ _wait_ready() {
     n_cred="$(_q "$AUTH_DB" wait-credentials "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$AUTH_DB' AND table_name = 'credentials';" 2>/dev/null || echo 0)"
     n_op="$(_q "$ADMIN_DB" wait-operator "SELECT COUNT(*) FROM admin_operators WHERE operator_id = '$OWNER_OPERATOR_ID';" 2>/dev/null || echo 0)"
     [ "${n_cred:-0}" = "1" ] && [ "${n_op:-0}" = "1" ] && return 0
+    # 🔴 A query that SUCCEEDS but returns no number is not «not yet» — nothing real answered
+    #    (a docker shim, a container that is not MySQL). Bail at once rather than burn demo-up.sh's
+    #    shared post-up budget: verify-demo-wrapper (z15) measured exactly that — a 240 s wait here
+    #    starved the domain seeds and turned a healthy boot red. A FAILED query (table not created
+    #    yet → `|| echo 0`) still waits, bounded by WAIT_SECS.
+    case "$n_cred" in ''|*[!0-9]*) warn "MySQL gave no answer — not provisioning"; return 1 ;; esac
+    case "$n_op"   in ''|*[!0-9]*) warn "MySQL gave no answer — not provisioning"; return 1 ;; esac
     if [ "$waited" -ge "$WAIT_SECS" ]; then
       warn "credentials table=${n_cred:-0} · operator row=${n_op:-0} after ${WAIT_SECS}s — not provisioning"
       return 1
@@ -309,8 +316,8 @@ self_test() {
 printf '%s\n' "$*" >> "$STUB_LOG/argv"
 sql="$(cat)"; printf '%s\n' "$sql" >> "$STUB_LOG/sql"
 case "$sql" in
-  *owner-operator:wait-credentials*) echo "${STUB_TABLES:-1}" ;;
-  *owner-operator:wait-operator*)    echo "${STUB_OPERATOR:-1}" ;;
+  *owner-operator:wait-credentials*) echo "${STUB_TABLES-1}" ;;
+  *owner-operator:wait-operator*)    echo "${STUB_OPERATOR-1}" ;;
   *owner-operator:status*)           cat "$STUB_LOG/state" 2>/dev/null || echo SUSPENDED ;;
   *owner-operator:set-ACTIVE*)       echo ACTIVE > "$STUB_LOG/state" ;;
   *owner-operator:set-SUSPENDED*)    echo SUSPENDED > "$STUB_LOG/state" ;;
@@ -388,6 +395,13 @@ STUB
   rc=0; _run p4 provision STUB_OPERATOR=0 || rc=$?
   [ "$rc" -ne 0 ] && ! grep -qE 'owner-operator:(set-|upsert)' "$t/log/sql" && [ ! -e "$t/log/ssm-value" ] \
     && ok "(5) rc=$rc, no write, no SSM" || bad "(5) wrote something without the row (rc=$rc)"
+
+  # ---- (5b) MySQL that answers nothing → bail at once, not after WAIT_SECS (the z15 lesson) -------
+  echo "[self-test] (5b) a query that returns no number → no wait"
+  local t0 t1
+  t0="$(date +%s)"; rc=0; _run p5 provision STUB_TABLES= STUB_OPERATOR= OWNER_OPERATOR_WAIT_SECS=30 || rc=$?; t1="$(date +%s)"
+  [ "$rc" -ne 0 ] && [ $(( t1 - t0 )) -lt 10 ] && ! grep -qE 'owner-operator:(set-|upsert)' "$t/log/sql" \
+    && ok "(5b) rc=$rc in $(( t1 - t0 ))s, nothing written" || bad "(5b) waited $(( t1 - t0 ))s / rc=$rc on a non-answer"
 
   # ---- (6) activate / deactivate / status --------------------------------------------------------
   echo "[self-test] (6) activate → ACTIVE · deactivate → SUSPENDED + refresh revoke · status read-only"
