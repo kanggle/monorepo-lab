@@ -4,6 +4,7 @@ import {
   getErpApprovalState,
 } from '@/features/erp-ops';
 import { resolveErpEligibility } from '../_eligibility';
+import { resolveErpCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,8 @@ export default async function ErpApprovalPage({
 }: {
   searchParams?: Promise<{ request?: string }>;
 }) {
-  const { eligible, registryDegraded } = await resolveErpEligibility();
+  const eligibility = await resolveErpEligibility();
+  const { eligible, registryDegraded } = eligibility;
   if (registryDegraded) {
     return <ErpSectionNotice kind="registryDegraded" heading={HEADING} />;
   }
@@ -46,12 +48,15 @@ export default async function ErpApprovalPage({
 
   const sp = (await searchParams) ?? {};
   const requestId = sp.request?.trim() || null;
+  // TASK-PC-FE-347 — 상신 · 승인 · 반려 · 회수 follow ERP_APPROVAL_WRITE (contract § 2.4.3.4).
+  const canWrite = await resolveErpCanWrite('/erp/approval', eligibility);
 
   return (
     <ErpApprovalScreen
       initialApprovalRequests={state.approvalRequests}
       initialApprovalInbox={state.approvalInbox}
       initialSelectedId={requestId}
+      canWrite={canWrite}
     />
   );
 }

@@ -12,12 +12,13 @@ import { DelegationFactCard } from './DelegationFactCard';
  */
 export interface ErpDelegationScreenProps {
   initialDelegationFacts?: DelegationFactListResponse | null;
-  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
-  canWrite?: boolean;
+  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (required; fail-open upstream). */
+  canWrite: boolean;
 }
 
 export function ErpDelegationScreen({
   initialDelegationFacts,
+  canWrite,
 }: ErpDelegationScreenProps) {
   return (
     <section aria-labelledby="erp-heading">
@@ -30,7 +31,7 @@ export function ErpDelegationScreen({
       </p>
 
       {/* 위임(관리) — write surface (client-driven). */}
-      <DelegationScreen />
+      <DelegationScreen canWrite={canWrite} />
 
       {/* 위임 현황 — read-model delegation facts (read-only). */}
       <DelegationFactCard initial={initialDelegationFacts ?? undefined} />

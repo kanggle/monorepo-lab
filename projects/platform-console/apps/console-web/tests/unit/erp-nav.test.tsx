@@ -115,6 +115,7 @@ describe('erp nav — additive, does not disturb catalog routing (FE-001/002/007
   it('the erp masters section mounts as an in-console destination (read-only, list-driven)', () => {
     render(
       <ErpMastersScreen
+        canWrite={false}
         initialDepartments={{
           data: [],
           meta: { page: 0, size: 20, totalElements: 0, timestamp: 'x' },

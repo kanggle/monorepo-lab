@@ -948,7 +948,7 @@ const APPROVAL_EMP_LOOKUP: Record<
 
 function renderApprovalList() {
   return render(
-    <ApprovalScreen
+    <ApprovalScreen canWrite
       initialRequests={{
         data: [
           {
@@ -1033,7 +1033,7 @@ function renderApprovalDetail(
     ),
   );
   return render(
-    <ApprovalDetail id="appr-1" onClose={vi.fn()} myEmployeeId={myEmployeeId} />,
+    <ApprovalDetail canWrite id="appr-1" onClose={vi.fn()} myEmployeeId={myEmployeeId} />,
     { wrapper: wrapper() },
   );
 }

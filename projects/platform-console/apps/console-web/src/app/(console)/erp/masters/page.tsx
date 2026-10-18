@@ -4,6 +4,7 @@ import {
   getErpMastersState,
 } from '@/features/erp-ops';
 import { resolveErpEligibility } from '../_eligibility';
+import { resolveErpCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,8 @@ export default async function ErpMastersPage({
 }: {
   searchParams?: Promise<{ asOf?: string }>;
 }) {
-  const { eligible, registryDegraded } = await resolveErpEligibility();
+  const eligibility = await resolveErpEligibility();
+  const { eligible, registryDegraded } = eligibility;
   if (registryDegraded) {
     return <ErpSectionNotice kind="registryDegraded" heading={HEADING} />;
   }
@@ -60,6 +62,11 @@ export default async function ErpMastersPage({
     return <ErpSectionNotice kind="degraded" heading={HEADING} />;
   }
 
+  // TASK-PC-FE-347 — the write affordances follow ERP_MASTERDATA_WRITE (contract § 2.4.3.4); an
+  // unknown role set keeps them (the producer's E6 fail-CLOSED authz is the authority, a 403 is
+  // surfaced inline). § 2.4.8 *Masterdata write*.
+  const canWrite = await resolveErpCanWrite('/erp/masters', eligibility);
+
   return (
     <ErpMastersScreen
       initialDepartments={state.departments}
@@ -67,11 +74,7 @@ export default async function ErpMastersPage({
       initialJobGrades={state.jobGrades}
       initialCostCenters={state.costCenters}
       initialBusinessPartners={state.businessPartners}
-      // TASK-PC-FE-046/048 — erp masterdata write across all 5 masters.
-      // Eligible operators see the write affordances; the producer's E6
-      // fail-CLOSED authz is the authority (a 403 is surfaced inline — the
-      // console never pre-judges write authority). § 2.4.8 *Masterdata write*.
-      mastersWritable
+      canWrite={canWrite}
     />
   );
 }

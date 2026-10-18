@@ -975,7 +975,14 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/masters',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.masterdata },
+    gate: {
+      kind: 'domain',
+      domain: 'erp',
+      roles: ERP_ROLES,
+      serverRequires: ERP_GET.masterdata,
+      // TASK-PC-FE-347 — masterdata `RequiredScope.WRITE` = ERP_MASTERDATA_WRITE ∨ erp.write.
+      writeRequires: ['ERP_MASTERDATA_WRITE'],
+    },
     description: '부서·직원·직급·비용센터·거래처 마스터 조회 · 등록 · 수정 · 폐기.',
     crud: crud('CRUD'),
     crudNote: '삭제 = 폐기(retire, 유효기간 종료 — 물리 삭제 아님).',
@@ -996,7 +1003,14 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/approval',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.approval },
+    gate: {
+      kind: 'domain',
+      domain: 'erp',
+      roles: ERP_ROLES,
+      serverRequires: ERP_GET.approval,
+      // TASK-PC-FE-347 — approval `ActorContext.canWriteErp()` = ERP_APPROVAL_WRITE ∨ erp.write.
+      writeRequires: ['ERP_APPROVAL_WRITE'],
+    },
     description: '결재 요청 상신 · 결재함 · 승인/반려 등 상태 전이.',
     crud: crud('CRU'),
     crudNote: '수정 = 결재 상태 전이(transition).',
@@ -1010,7 +1024,14 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/erp/delegation',
     area: 'erp',
-    gate: { kind: 'domain', domain: 'erp', roles: ERP_ROLES, serverRequires: ERP_GET.approval },
+    gate: {
+      kind: 'domain',
+      domain: 'erp',
+      roles: ERP_ROLES,
+      serverRequires: ERP_GET.approval,
+      // TASK-PC-FE-347 — delegation mutations go through the same approval `canWriteErp()`.
+      writeRequires: ['ERP_APPROVAL_WRITE'],
+    },
     description: '결재 위임 목록 · 등록 · 회수.',
     crud: crud('CRD'),
     crudNote: '삭제 = 위임 회수(revoke).',

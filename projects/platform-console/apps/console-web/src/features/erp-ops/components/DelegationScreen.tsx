@@ -7,6 +7,7 @@ import { showPickerOnClick } from '@/shared/lib/show-picker';
 import type { DelegationGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
 import { DelegationGrantList } from './DelegationGrantList';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 import { ErpEmployeeSelect } from './ErpEmployeeSelect';
 import {
   useDelegationScreen,
@@ -50,12 +51,16 @@ import {
 // DelegationScreen.
 // ---------------------------------------------------------------------------
 
-/** TASK-PC-FE-347 — `canWrite`: the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
+/**
+ * TASK-PC-FE-347 — `canWrite`: the operator holds `ERP_APPROVAL_WRITE` (REQUIRED; unknown roles =>
+ * true, the server stays the gate). false hides 「위임 생성」 and the per-row 「회수」 and says «조회 전용»;
+ * the grant lists and their status badges stay.
+ */
 export interface DelegationScreenProps {
-  canWrite?: boolean;
+  canWrite: boolean;
 }
 
-export function DelegationScreen(_props: DelegationScreenProps = {}) {
+export function DelegationScreen({ canWrite }: DelegationScreenProps) {
   const {
     createOpen,
     openCreate,
@@ -81,14 +86,24 @@ export function DelegationScreen(_props: DelegationScreenProps = {}) {
         >
           위임(대결) 관리
         </h2>
-        <Button
-          variant="primary"
-          onClick={openCreate}
-          data-testid="delegation-create"
-        >
-          위임 생성
-        </Button>
+        {canWrite && (
+          <Button
+            variant="primary"
+            onClick={openCreate}
+            data-testid="delegation-create"
+          >
+            위임 생성
+          </Button>
+        )}
       </div>
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="delegation-read-only-note"
+          action="위임 생성 · 회수"
+          roleLabel="결재 처리"
+        />
+      )}
 
       {/* DELEGATOR — grants I issued */}
       <DelegationGrantList
@@ -98,7 +113,7 @@ export function DelegationScreen(_props: DelegationScreenProps = {}) {
         grants={delegatorGrants}
         emptyText="위임한 grant 가 없습니다."
         idField="delegateId"
-        onRevoke={openRevoke}
+        onRevoke={canWrite ? openRevoke : undefined}
       />
 
       {/* DELEGATE — grants delegated to me */}
@@ -111,8 +126,8 @@ export function DelegationScreen(_props: DelegationScreenProps = {}) {
         idField="delegatorId"
       />
 
-      {createOpen && <DelegationCreateDialog onClose={closeCreate} />}
-      {revokeTarget && (
+      {canWrite && createOpen && <DelegationCreateDialog onClose={closeCreate} />}
+      {canWrite && revokeTarget && (
         <DelegationRevokeDialog grant={revokeTarget} onClose={closeRevoke} />
       )}
     </section>

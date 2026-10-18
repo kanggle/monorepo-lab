@@ -16,6 +16,7 @@ import { statusLabel, StatusBadge } from './approval-common';
 import { ApprovalSubjectRef } from './approval-refs';
 import { ApprovalDetail } from './ApprovalDetail';
 import { ApprovalCreateDialog } from './ApprovalCreateDialog';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ERP "결재함" screen (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice).
@@ -62,8 +63,13 @@ export interface ApprovalScreenProps {
    * a crash.
    */
   initialSelectedId?: string | null;
-  /** TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (declared, unwired). */
-  canWrite?: boolean;
+  /**
+   * TASK-PC-FE-347 — the operator holds `ERP_APPROVAL_WRITE` (REQUIRED; unknown roles => true, the
+   * server stays the gate). false hides 「결재 요청 작성」 and the detail's 상신/승인/반려/회수 and says
+   * «조회 전용». Approver ELIGIBILITY (step approver / separation of duties) is a separate server
+   * guard and keeps its inline error mapping.
+   */
+  canWrite: boolean;
 }
 
 /** Inbox empty because the caller's account is linked to NO employee
@@ -78,6 +84,7 @@ export function ApprovalScreen({
   initialRequests,
   initialInbox,
   initialSelectedId,
+  canWrite,
 }: ApprovalScreenProps) {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -115,14 +122,24 @@ export function ApprovalScreen({
         >
           결재함 (approval)
         </h2>
-        <Button
-          variant="primary"
-          onClick={() => setCreateOpen(true)}
-          data-testid="approval-create"
-        >
-          결재 요청 작성
-        </Button>
+        {canWrite && (
+          <Button
+            variant="primary"
+            onClick={() => setCreateOpen(true)}
+            data-testid="approval-create"
+          >
+            결재 요청 작성
+          </Button>
+        )}
       </div>
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="approval-read-only-note"
+          action="결재 요청 작성 · 상신 · 승인 · 반려 · 회수"
+          roleLabel="결재 처리"
+        />
+      )}
 
       {/* section-level degrade / error notice (AC-4) */}
       {listQ.isError && (
@@ -257,7 +274,7 @@ export function ApprovalScreen({
         </table>
       )}
 
-      {createOpen && (
+      {canWrite && createOpen && (
         <ApprovalCreateDialog onClose={() => setCreateOpen(false)} />
       )}
       {selectedId && (
@@ -265,6 +282,7 @@ export function ApprovalScreen({
           id={selectedId}
           onClose={() => setSelectedId(null)}
           myEmployeeId={myEmployeeId}
+          canWrite={canWrite}
         />
       )}
     </section>

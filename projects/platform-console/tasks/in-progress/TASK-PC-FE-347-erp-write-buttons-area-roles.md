@@ -55,11 +55,11 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 3 화면의 쓰기 버튼 전수(컴포넌트 · testid)와 위 표를 서버(masterdata `RoleScopeAuthorizationAdapter` · approval `ActorContext`)와 대조. e2e · smoke · federation 의 해당 testid 사용처 grep.
-- [ ] **AC-1** — 계약 개정이 코드보다 먼저.
-- [ ] **AC-2** — 🔴 대조군: `erp-read` → 3 화면 쓰기 버튼 없음 + «조회 전용» / 결재 세트만 → `/erp/approval` 버튼 보임 · `/erp/masters` 버튼 없음 / 기준정보 세트만 → `/erp/masters` 버튼 보임.
-- [ ] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임.
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+- [x] **AC-0** — 3 화면의 쓰기 버튼 전수(컴포넌트 · testid)와 위 표를 서버(masterdata `RoleScopeAuthorizationAdapter` · approval `ActorContext`)와 대조. e2e · smoke · federation 의 해당 testid 사용처 grep. ✅ 2026-10-18 UTC — 아래 «AC-0 record»: 표와 서버가 모든 컨트롤에서 일치, e2e · smoke · federation · nightly 사용처 0건.
+- [x] **AC-1** — 계약 개정이 코드보다 먼저. ✅ § 2.4.3.4 «Declared today» ERP 3 행 + «Scales with P5–P8» P6 문장 «done» — red 커밋 `27c7fa4f7` 이 계약을 포함하고 `permission-map.ts` 데이터는 그 뒤 green 커밋.
+- [x] **AC-2** — 🔴 대조군: `erp-read` → 3 화면 쓰기 버튼 없음 + «조회 전용» / 결재 세트만 → `/erp/approval` 버튼 보임 · `/erp/masters` 버튼 없음 / 기준정보 세트만 → `/erp/masters` 버튼 보임. ✅ `erp-write-buttons.test.tsx`(화면: masters 17 컨트롤 · 결재 작성 + 상세 4 전이 · 위임 생성/회수) · `erp-write-buttons-pages.test.tsx`(실제 `resolveErpCanWrite → getDomainBusinessRoles → canWriteOn` 사슬: erp-read / 결재 세트 / 기준정보 세트 / 데모 운영자 / 진입 역할 단독 / 타 도메인 역할) · `console-nav-business-permission.test.ts`(행). red 46 실패 → green 0.
+- [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. ✅ 3 화면 × (row 12 실패 · 테넌트 없음 · 샘플 방문자 · 레지스트리 tenants 미상) 12 케이스 + `canWriteOn(href, undefined)`.
+- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. ⏳ 배포 상태 — 머지 후 기록.
 
 # Related Specs
 
@@ -109,3 +109,11 @@ Server evidence: masterdata `RoleScopeAuthorizationAdapter.java:75-101` (`case W
 ## e2e / smoke / federation / nightly usages of these testids
 
 Searched repo-wide (`tests/e2e`, `e2e-smoke`, federation, `.github`, `scripts`, `infra`, `**/*.spec.ts`) for every testid above and the `/erp/{masters,approval,delegation}` routes: **no e2e / smoke / federation / nightly spec references any ERP write testid.** The console e2e (`overview-consolidation.spec.ts`, `operators-admin-profile.spec.ts`) never touches these screens' buttons. Other hits: `infra/demo/seed/seed-erp.sh` and `infra/demo/aws/site/capture-shots.mjs` call the ERP **APIs / take screenshots** only, `scripts/check-capture-route-staleness.mjs` pins route existence only. All testid usages are unit tests under `tests/unit/features/erp-ops/` and `tests/unit/erp-master-ref-names.test.tsx` that render the components directly.
+
+# Implementation record (2026-10-18 UTC)
+
+- `permission-map.ts`: `/erp/masters` `writeRequires: [ERP_MASTERDATA_WRITE]`, `/erp/approval` and `/erp/delegation` `[ERP_APPROVAL_WRITE]`. `/erp`, `/erp/orgview` and the guide declare none. No entry role.
+- Pages compute `canWrite` via `app/(console)/erp/_write-access.ts` `resolveErpCanWrite` (`ErpEligibility.tenants`; `null` on a degraded/failed registry => fail-open). `canWrite` is a REQUIRED prop on `ErpMastersScreen` (replaces the hard-coded `mastersWritable`), `ErpApprovalScreen`, `ErpDelegationScreen`, `ApprovalScreen`, `ApprovalDetail`, `DelegationScreen`. Notes (`role="note"`): `masters-read-only-note` · `approval-read-only-note` · `approval-detail-read-only-note` · `delegation-read-only-note`. With `canWrite=false` the approval detail shows neither the buttons nor «완료된 결재입니다» (that sentence is for terminal states only).
+- Own `ReadOnlyNote` in `features/erp-ops` (features may not import each other, so 346's is not shared).
+- Open doubt (not changed): the 「위임 생성」 dialog picks the delegate from the masterdata employee list (`GET /employees` = masterdata READ), which an approval-only operator (`ERP_APPROVAL_WRITE` without a masterdata role) does not hold — the dialog appears to fall back to its manual-id input (delegateId-fallback testid; not verified live). Out of scope here; a follow-up may decide whether to expose a SELF-class lookup.
+- Gates: vitest 403 files / 4823 tests rc=0 · tsc --noEmit rc=0 · next lint rc=0.
