@@ -442,6 +442,15 @@ services:
       WMS_ADMIN_BASE_URL: http://127.0.0.1:9/api/v1/admin
       SCM_GATEWAY_BASE_URL: http://127.0.0.1:9
       ERP_BASE_URL: http://127.0.0.1:9
+      # TASK-PC-FE-341 — ecommerce was the one domain missing from the list above, so it ran on
+      # its code default `http://ecommerce.local/...` (unresolvable in this stack): every
+      # ecommerce leg waited out the 4 s leg timeout, and once per run an overview render's
+      # in-process self-fetch died at ~10 s with `UND_ERR_CONNECT_TIMEOUT` — the nightly
+      # «개요 첫 렌더 지연» flakes. Measured by manipulation (3 runs before / 3 after): events
+      # 1·1·1 → 0·0·0, overview page_total max 10.1–10.3 s → 0.4–0.6 s. 🔴 A new domain base
+      # added to console-web MUST be listed here too, or it silently brings this back.
+      ECOMMERCE_ADMIN_BASE_URL: http://127.0.0.1:9/api/admin
+      ECOMMERCE_PUBLIC_BASE_URL: http://127.0.0.1:9/api
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     depends_on:
