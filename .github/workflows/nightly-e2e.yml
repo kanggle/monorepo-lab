@@ -1399,6 +1399,21 @@ jobs:
         working-directory: projects/platform-console
         run: docker compose -f docker-compose.e2e.yml logs --tail=500
 
+      # TASK-MONO-799 / TASK-PC-FE-341 — the dump above runs ONLY when the job fails, so a flaky-but-
+      # green run (a retry covered it) left no server log at all, and the cause of the 10 s overview
+      # documents could not be read afterwards. Keep the WHOLE run's compose log (no --tail; the
+      # tests take ~1 min) on EVERY run, before the stack is torn down, inside the artifact below.
+      # `continue-on-error`: this is evidence, never a new way for a green job to turn red.
+      - name: Save docker compose logs (every run)
+        if: always()
+        continue-on-error: true
+        working-directory: projects/platform-console
+        run: |
+          mkdir -p apps/console-web/test-results
+          docker compose -f docker-compose.e2e.yml logs --timestamps --no-color \
+            > apps/console-web/test-results/compose-logs.txt
+          ls -l apps/console-web/test-results/compose-logs.txt
+
       - name: Stop docker compose stack
         if: always()
         working-directory: projects/platform-console

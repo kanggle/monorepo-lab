@@ -12,6 +12,10 @@ import { getCatalog, ServiceCatalog } from '@/features/catalog';
 import type { ProductKey } from '@/shared/api/registry-types';
 import { ApiError } from '@/shared/api/errors';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
+import { timedPhase } from '@/shared/lib/ssr-phase';
+
+// TASK-PC-FE-341 — fixed route label for `console_ssr_phase` (see shared/lib/ssr-phase.ts).
+const SSR_ROUTE = '/dashboards/overview';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +73,11 @@ export const dynamic = 'force-dynamic';
  * of the overview is untouched (Failure Scenario 4).
  */
 export default async function OperatorOverviewPage() {
+  // TASK-PC-FE-341 — timing only: `page_total` is this function, from entry to the returned JSX.
+  return timedPhase(SSR_ROUTE, 'page_total', renderOperatorOverviewPage);
+}
+
+async function renderOperatorOverviewPage() {
   // Speculatively fire the domain-health fan-out concurrently with the
   // operator-overview fetch (TASK-PC-FE-117). The two are independent BFF
   // round-trips, so starting them together turns the success-path latency
@@ -79,12 +88,18 @@ export default async function OperatorOverviewPage() {
   // embedded catalog grid needs its health notice); only the `unauthorized`
   // redirect leaves it un-awaited, and `getDomainHealthState()` never throws,
   // so that raises no unhandled rejection.
-  const healthPromise = getDomainHealthState();
+  const healthPromise = timedPhase(SSR_ROUTE, 'domain_health', () => getDomainHealthState());
   // TASK-PC-FE-310 — the catalog leg joins the same up-front fan-out; every
   // branch below needs the grid (directly, in the closed section, or in the
   // open section), so there is no branch where starting it late would help.
-  const catalogPromise = getCatalog();
-  const state = await getOperatorOverviewState();
+  const catalogPromise = timedPhase(SSR_ROUTE, 'registry', () => getCatalog());
+  // TASK-PC-FE-341 — the timing wrapper returns a NEW promise; on the `unauthorized` redirect path neither
+  // this nor `healthPromise` is ever awaited, so a rejection would surface as an unhandled rejection that the
+  // bare call did not (overview-page-parallel.test.tsx). A no-op handler restores that; awaiting later still
+  // rejects exactly as before.
+  healthPromise.catch(() => undefined);
+  catalogPromise.catch(() => undefined);
+  const state = await timedPhase(SSR_ROUTE, 'overview_state', () => getOperatorOverviewState());
 
   if (state.unauthorized) {
     redirect('/login?error=session_expired');

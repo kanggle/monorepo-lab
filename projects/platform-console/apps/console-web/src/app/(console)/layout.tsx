@@ -44,6 +44,10 @@ import { BfcacheGuard } from '@/widgets/bfcache-guard/BfcacheGuard';
 import { SampleVisitorBanner } from '@/widgets/sample-visitor/SampleVisitorBanner';
 import { SampleScreenNotice } from '@/widgets/sample-visitor/SampleScreenNotice';
 import { DemoSignedOutNotice } from '@/widgets/sample-visitor/DemoSignedOutNotice';
+import { timedPhase } from '@/shared/lib/ssr-phase';
+
+// TASK-PC-FE-341 — fixed route label for `console_ssr_phase` (never the request path: paths carry ids).
+const SSR_ROUTE = '(console)/layout';
 
 /**
  * The signed-in operator's display identity for the account menu. Read
@@ -193,6 +197,11 @@ export default async function ConsoleLayout({
 }: {
   children: ReactNode;
 }) {
+  // TASK-PC-FE-341 — timing only: `layout_total` is the layout function itself (not the children's render).
+  return timedPhase(SSR_ROUTE, 'layout_total', () => renderConsoleLayout(children));
+}
+
+async function renderConsoleLayout(children: ReactNode) {
   // ADR-MONO-074 A1 — a sample visitor (no access, operator OR refresh cookie)
   // enters the sample shell. Everyone else meets the TASK-MONO-674 guard below,
   // unchanged.
@@ -229,7 +238,9 @@ export default async function ConsoleLayout({
   // The session ends only after two consecutive, distinct `unavailable` readings;
   // the route counts them (a layout cannot write the marker cookie).
   if (!sampleVisitor) {
-    const demoStopHop = await liveSessionDemoStopRedirect((await headers()).get('x-pathname'));
+    const demoStopHop = await timedPhase(SSR_ROUTE, 'demo_stop_check', async () =>
+      liveSessionDemoStopRedirect((await headers()).get('x-pathname')),
+    );
     if (demoStopHop !== null) redirect(demoStopHop);
   }
 
@@ -255,12 +266,16 @@ export default async function ConsoleLayout({
   // visitor (ADR-MONO-074) has no operator session to ask — skip the call
   // entirely (task Out of Scope: the sample shell shows everything regardless
   // of what this would answer).
-  const myRolesPromise = sampleVisitor ? null : getSelfRolesOrNull();
+  const myRolesPromise = sampleVisitor
+    ? null
+    : timedPhase(SSR_ROUTE, 'me_roles', () => getSelfRolesOrNull());
   // TASK-PC-FE-338 c-2 (contract § 2.4.3.4 «Domain nav — two signals», per menu) — row 12
   // `GET /api/admin/me/domain-access`, fired concurrently. Skipped for a sample visitor and when no
   // tenant is selected (row 12 requires `X-Tenant-Id`). `null` ⇒ no «업무 권한 없음» anywhere.
   const myDomainRolesPromise =
-    sampleVisitor || !activeTenant ? null : getMyDomainRolesOrNull();
+    sampleVisitor || !activeTenant
+      ? null
+      : timedPhase(SSR_ROUTE, 'me_domain_access', () => getMyDomainRolesOrNull());
 
   let tenants: string[] = [];
   // TASK-MONO-751 — products the registry lists with a selectable tenant; gates the
@@ -273,7 +288,7 @@ export default async function ConsoleLayout({
   // don't-know-don't-badge posture `console-nav-exposure.ts` documents).
   let subscribedDomains: Set<DomainKey> | undefined;
   try {
-    const catalog = await getCatalog();
+    const catalog = await timedPhase(SSR_ROUTE, 'registry', () => getCatalog());
     tenants = selectableTenants(catalog.products);
     availableProductKeys = catalog.products
       .filter((p) => p.available && p.tenants.length > 0)
@@ -325,27 +340,34 @@ export default async function ConsoleLayout({
   // org nodes there are no roots, so the per-company fan-out is zero (the
   // net-zero property — the world as it is today). A per-root failure drops
   // just that company and keeps going.
-  let companies: CompanyGroup[] = [];
-  try {
-    const list = await listOrgNodes();
-    const roots = list.items.filter((n) => n.parentId === null);
-    const groups: CompanyGroupInput[] = [];
-    for (const root of roots) {
+  // TASK-PC-FE-341 — the whole discovery + per-root fan-out is one timed phase (`org_nodes`); the
+  // body is unchanged, only wrapped (each failure is still swallowed inside).
+  const companies: CompanyGroup[] = await timedPhase(
+    SSR_ROUTE,
+    'org_nodes',
+    async (): Promise<CompanyGroup[]> => {
       try {
-        const subtree = await getOrgNodeTenants(root.orgNodeId);
-        groups.push({
-          orgNodeId: root.orgNodeId,
-          name: root.name,
-          tenantIds: subtree.tenantIds,
-        });
+        const list = await listOrgNodes();
+        const roots = list.items.filter((n) => n.parentId === null);
+        const groups: CompanyGroupInput[] = [];
+        for (const root of roots) {
+          try {
+            const subtree = await getOrgNodeTenants(root.orgNodeId);
+            groups.push({
+              orgNodeId: root.orgNodeId,
+              name: root.name,
+              tenantIds: subtree.tenantIds,
+            });
+          } catch {
+            // drop just this company — keep the rest of the switcher intact
+          }
+        }
+        return groupTenantsByCompany(tenants, groups).companies;
       } catch {
-        // drop just this company — keep the rest of the switcher intact
+        return []; // flat switcher — unchanged behaviour
       }
-    }
-    companies = groupTenantsByCompany(tenants, groups).companies;
-  } catch {
-    companies = []; // flat switcher — unchanged behaviour
-  }
+    },
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
