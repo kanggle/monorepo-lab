@@ -134,9 +134,10 @@ export const AUTH_PLANES: AuthPlane[] = [
     koName: '도메인 운영 권한',
     token: '테넌트를 고를 때 붙음',
     purpose: '도메인 화면(WMS · 이커머스 · SCM …)을 엽니다.',
-    storage: '아무도 부여하지 않습니다 — 그 테넌트의 구독 도메인에서 자동으로 생깁니다.',
+    storage:
+      '운영자(또는 그룹)에 배정한 업무 권한 세트에서 오고, 테넌트를 고를 때 그 테넌트가 구독 중인 도메인의 역할만 붙습니다.',
     roles:
-      'WMS_OPERATOR · ECOMMERCE_OPERATOR · SCM_OPERATOR · ERP_OPERATOR · FINANCE_OPERATOR · MES_OPERATOR · FAN_OPERATOR',
+      'WMS_OPERATOR · MES_OPERATOR · FAN_OPERATOR / SCM · ERP · Finance · E-Commerce: 영역별 조회 · 변경 업무 역할(예: SCM_PROCUREMENT_READ · ERP_APPROVAL_WRITE · FINANCE_LEDGER_READ · ECOMMERCE_ORDER_WRITE)',
   },
 ];
 
@@ -290,7 +291,7 @@ export const CONSOLE_MENUS: ConsoleMenu[] = [
     actions: '구독 · 일시중지 · 재개 · 해지',
     gate: 'subscription.manage',
     mutates: true,
-    note: '새 테넌트는 구독 0건에서 시작합니다. 여기서 켠 도메인이 곧 직원들의 도메인 운영 권한이 됩니다.',
+    note: '새 테넌트는 구독 0건에서 시작합니다. 여기서 켠 도메인이 직원들의 도메인 운영 권한의 상한이 됩니다 — 실제 권한은 배정한 업무 권한 세트 가운데 구독 중인 도메인의 것만 붙습니다.',
   },
   {
     label: '파트너십',
@@ -342,7 +343,7 @@ export const DELEGATION_CHAIN: DelegationStep[] = [
   {
     actor: 'a회사 직원 · 협력사',
     action:
-      '로그인한 뒤 테넌트를 고르면, 그 테넌트가 구독 중인 도메인의 운영 권한이 자동으로 붙어 WMS · 이커머스 화면에 들어갑니다.',
+      '로그인한 뒤 테넌트를 고르면, 배정받은 업무 권한 세트 가운데 그 테넌트가 구독 중인 도메인의 역할이 붙어 WMS · 이커머스 화면에 들어갑니다.',
   },
 ];
 
@@ -672,17 +673,37 @@ export const SCREEN_ACCESS: ScreenAccess[] = resolvePermissionMap()
 
 /**
  * 도메인 롤(별도 축) — 테넌트 직원/협력사가 실제로 받는 role.
- * SoT: auth-service `OperatorRoleDerivation.java`(assume-tenant 파생표).
+ * SoT: SCM · ERP · Finance · E-commerce = 각 도메인 `specs/integration/iam-integration.md`
+ * § 업무 역할 (TASK-PC-FE-348 — 진입 역할 `*_OPERATOR` 는 배정 불가 · 업무 역할이 하나라도 있으면
+ * auth 가 파생 → 이 표에 적지 않는다). WMS · MES · fan = 종전 카탈로그 그대로.
+ * 이름 · 개수는 `shared/guide/permission-map.ts` 의 도메인 카탈로그와 같아야 한다
+ * (`tests/unit/domain-guides-entry-role-copy.test.tsx` 가 대조).
  */
 export const DOMAIN_ROLE_MAP: { domain: string; roles: string }[] = [
   {
     domain: 'wms',
     roles: 'WMS_OPERATOR + 세분(출고 · 입고 · 재고의 읽기/쓰기, 마스터 읽기)',
   },
-  { domain: 'ecommerce', roles: 'ECOMMERCE_OPERATOR' },
-  { domain: 'scm', roles: 'SCM_OPERATOR' },
-  { domain: 'erp', roles: 'ERP_OPERATOR' },
-  { domain: 'finance', roles: 'FINANCE_OPERATOR' },
+  {
+    domain: 'ecommerce',
+    roles:
+      'ECOMMERCE_ORDER_READ · ECOMMERCE_ORDER_WRITE · ECOMMERCE_PRODUCT_READ · ECOMMERCE_PRODUCT_WRITE · ECOMMERCE_MEMBER_READ · ECOMMERCE_SETTLEMENT_READ · ECOMMERCE_SETTLEMENT_WRITE · ECOMMERCE_PROMOTION_READ · ECOMMERCE_PROMOTION_WRITE · ECOMMERCE_SHIPPING_READ · ECOMMERCE_SHIPPING_WRITE · ECOMMERCE_NOTIFICATION_READ · ECOMMERCE_NOTIFICATION_WRITE (13개 — 주문 · 상품(셀러 포함) · 회원(조회만) · 정산 · 프로모션 · 배송 · 알림)',
+  },
+  {
+    domain: 'scm',
+    roles:
+      'SCM_PROCUREMENT_READ · SCM_PROCUREMENT_WRITE · SCM_DEMAND_PLANNING_READ · SCM_DEMAND_PLANNING_WRITE · SCM_LOGISTICS_READ · SCM_LOGISTICS_WRITE · SCM_INVENTORY_VISIBILITY_READ · SCM_INVENTORY_VISIBILITY_WRITE (8개 — 발주 · 수요계획 · 물류 · 재고 가시성 × 조회/변경)',
+  },
+  {
+    domain: 'erp',
+    roles:
+      'ERP_MASTERDATA_READ · ERP_MASTERDATA_WRITE · ERP_APPROVAL_READ · ERP_APPROVAL_WRITE (4개 — 기준정보 · 결재 × 조회/변경)',
+  },
+  {
+    domain: 'finance',
+    roles:
+      'FINANCE_ACCOUNT_READ · FINANCE_ACCOUNT_WRITE · FINANCE_LEDGER_READ · FINANCE_LEDGER_WRITE · FINANCE_LEDGER_CONTROL (5개 — 계좌 조회/변경 · 원장 조회/변경 · 원장 통제. 원장 통제 역할은 원장 변경 역할이 여는 업무 쓰기를 열지 않습니다)',
+  },
   { domain: 'mes', roles: 'MES_OPERATOR' },
   { domain: 'fan / fan-platform', roles: 'FAN_OPERATOR' },
   {
@@ -701,11 +722,12 @@ export const IAM_RECIPES: GuideRecipeData[] = [
   {
     title: '새 직원에게 도메인 화면 권한 주기',
     intro:
-      '관리 권한이 아니라 도메인 운영 권한을 주는 흐름입니다 — 권한은 구독 도메인에서 자동으로 생깁니다.',
+      '관리 권한이 아니라 도메인 운영 권한을 주는 흐름입니다 — 업무 권한 세트를 배정하며, 그중 구독 중인 도메인의 역할만 붙습니다.',
     steps: [
       '「운영자 관리」에서 직원을 운영자로 등록합니다(모든 변경은 사유 입력이 필수).',
       '그 운영자를 일할 회사 테넌트에 배정합니다(테넌트 배정). 원 소속이 아닌 회사에서 일하게 하는 유일한 방법입니다.',
-      '「도메인 구독」에서 그 테넌트가 쓸 도메인(WMS·이커머스 등)이 켜져 있는지 확인합니다 — 구독 도메인이 곧 직원의 도메인 운영 권한이 됩니다.',
+      '「운영자 관리」에서 그 운영자에게 업무 권한 세트를 배정합니다(「운영자 그룹」에 배정해 여러 명에게 줄 수도 있습니다).',
+      '「도메인 구독」에서 그 테넌트가 쓸 도메인(WMS·이커머스 등)이 켜져 있는지 확인합니다 — 구독 중인 도메인의 역할만 직원에게 붙습니다.',
       '직원이 로그인한 뒤 그 테넌트를 고르면 해당 도메인 운영 화면이 열립니다.',
     ],
   },

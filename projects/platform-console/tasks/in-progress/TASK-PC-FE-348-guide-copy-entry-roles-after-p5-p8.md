@@ -47,6 +47,28 @@ P5~P8 뒤 SCM · ERP · Finance · E-commerce 의 운영 권한은 «테넌트�
 | (코드 주석 — 사용자에게 안 보임, 같은 PR 에서 정정 권장) | `ecommerce-ops/api/products-api.ts:150` · `ecommerce-ops/api/settlement-types.ts:12` | «role `ECOMMERCE_OPERATOR`» | 게이트웨이는 진입 역할, 서비스는 영역 역할 |
 
 - ERP · Finance 가이드(`erp-guide` · `finance-guide`)는 역할 문장이 없다(grep 0) — AC-0 에서 «권한» 절이 필요한지만 판단(만들지 않으면 그 이유를 적는다).
+
+### AC-0 재측정 결과 (2026-10-18 UTC, `features/**` + `src/**` 전수)
+
+패턴: `(SCM|ERP|FINANCE|ECOMMERCE)_OPERATOR` · `자동으로\s*(부여|주어|붙|생)`(🔴 JSX 줄바꿈을 넘도록 multiline) · `하나뿐` · `테넌트만 맞으면` · `도메인 롤|구독 도메인` 문맥. 위 표(2026-10-16)보다 **넓다** — 티켓 패턴 `자동으로 (부여|주어)` 는 줄바꿈 · «자동으로 생깁니다» 를 놓쳤다.
+
+| 파일 : 줄 (착수 시점) | 지금 말하던 것 | 처리 |
+|---|---|---|
+| `scm-guide/data.ts:26-27 · 363-369` | 단일 SCM_OPERATOR · 자동 · 하나뿐 · 보충/설정 테넌트만 | 고침 (주석 2 + `SCM_ROLE_NOTE`) |
+| `ecommerce-guide/data.ts:26 · 551-558 · 632` | ECOMMERCE_OPERATOR 하나 · 자동 부여 · 7 화면 똑같이 | 고침 (주석 2 + `ECOMMERCE_ROLE_NOTE` + 용어집 `assume-tenant`) |
+| `iam-guide/data.ts:137 · 139` | 「아무도 부여하지 않습니다 — 구독 도메인에서 자동으로 생깁니다」 · `*_OPERATOR` 7 개 | 고침 (`AUTH_PLANES[1]`) |
+| `iam-guide/data.ts:677-687` | 도메인별 `roles: '<X>_OPERATOR'` | 고침 (`DOMAIN_ROLE_MAP` 4 행 = 업무 역할 전부 · WMS/MES/fan 행은 그대로) |
+| `iam-guide/data.ts:293 · 345 · 704 · 708` | 「구독 도메인이 곧 직원의 도메인 운영 권한」 · 「자동으로 붙어」 · 「자동으로 생깁니다」 — **티켓 표에 없던 자리** | 고침 (같은 모양 — 두 곳이 서로 다른 말을 하는 Failure 2 방지). 온보딩 레시피에 «업무 권한 세트 배정» 단계 1 개 추가 |
+| `iam-guide/components/IamGuideScreen.tsx:386 · 528-535 · 538 · 545` | 「구독 도메인에서 생기는 도메인 롤」 · 「아래처럼 자동으로 생깁니다」 — **표에 없던 자리** | 고침 (제목 · 설명 · 캡션 · 열 머리) |
+| `wms-guide/data.ts:396` | 「WMS 재고·출고 권한이 자동으로 주어집니다」 | 고침 (용어집) |
+| `wms-guide/components/WmsGuideScreen.tsx:207-208` | 「…선택하면 자동으로 주어집니다」 — **표에 없던 자리**(JSX 줄바꿈이라 grep 이 놓침) | 고침 |
+| `ecommerce-ops/api/products-api.ts:150 · settlement-types.ts:12` (코드 주석) | role `ECOMMERCE_OPERATOR` | 고침 (게이트웨이 문 vs 서비스 영역 역할) |
+| `app/api/ecommerce/products/[id]/route.ts:22` (코드 주석) | 「closed to `ECOMMERCE_OPERATOR` at the ecommerce gateway」 | **그대로** — 게이트웨이 문 얘기라 지금도 맞다 |
+| `scm-guide/data.ts:174` | 「확정(확정에는 운영자 권한 필요)」 | **그대로** — 발주 확정의 운영자 행위자 판정은 792 도 무변경(scm § 업무 역할). 모호하면 소유자가 검토 |
+| `shared/guide/permission-map.ts:294 · 318 · 336 · 388` | 진입 역할은 카탈로그에 없다는 영문 주석 | 이미 맞음 |
+| `ecommerce-guide/data.ts:266` · 그 밖의 `하나뿐` 4 곳 | 배송 상태머신 · 데모 resolver 등 — 권한 문장 아님 | 해당 없음 |
+
+**ERP · Finance 가이드의 «권한 안내» 절 — 만들지 않는다.** 이유: (1) 두 가이드의 «권한 안내» 탭은 `permissions: null` 이고 공용 `DomainGuideTabs` 가 «메뉴별 권한» 표와 «알아 둘 예외» 를 `permission-map.ts` 에서 **파생**해 그린다(`serverRequires` / `writeRequires` 가 이미 ERP · Finance 행에 있다 — 342~347). 산문 절을 손으로 더 쓰면 같은 사실이 두 사본이 된다. (2) 두 가이드에는 옛 모델을 말하는 문장이 0 이라 «틀린 문장» 이 없다 — 이 티켓의 범위는 틀린 문장을 고치는 것이다. (3) ERP · Finance 의 업무 역할은 IAM 가이드 «구독 도메인별 도메인 롤» 표에 이제 전부 적혀 있고, 거기서 진입 역할 설명도 한다. 산문 절이 필요하면(소유자 판단) 별도 티켓.
 - 가이드 시험(`*GuideScreen.test.tsx`)의 해당 단언 갱신 · 문안이 `permission-map.ts` 데이터와 어긋나지 않는지 대조.
 
 ## Out of Scope
@@ -56,9 +78,9 @@ P5~P8 뒤 SCM · ERP · Finance · E-commerce 의 운영 권한은 «테넌트�
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — `features/**` 의 `(SCM|ERP|FINANCE|ECOMMERCE)_OPERATOR` · «자동으로 (부여|주어)» · «하나뿐» · «테넌트만 맞으면» 전수 grep(🔴 한글 패턴은 그룹으로 감싼다) · 위 표 갱신.
-- [ ] **AC-1** — 바뀐 문장은 각 도메인 `iam-integration.md` § 업무 역할의 말과 같다(역할 이름 · 무엇을 여는지). 진입 역할을 «배정하는 권한» 으로 적은 문장 0.
-- [ ] **AC-2** — 가이드 시험 갱신 + 옛 문장이 돌아오면 빨개지는 단언 1 개 이상(예: SCM 가이드 본문에 «하나뿐» 없음).
+- [x] **AC-0** — `features/**` 의 `(SCM|ERP|FINANCE|ECOMMERCE)_OPERATOR` · «자동으로 (부여|주어)» · «하나뿐» · «테넌트만 맞으면» 전수 grep(🔴 한글 패턴은 그룹으로 감싼다) · 위 표 갱신. — 증거: 위 «AC-0 재측정 결과». 티켓 표 4 곳 → 실제 고칠 자리 9 곳(IAM 가이드 5 곳 · WMS 화면 1 곳 추가 — multiline grep 으로 발견).
+- [x] **AC-1** — 바뀐 문장은 각 도메인 `iam-integration.md` § 업무 역할의 말과 같다(역할 이름 · 무엇을 여는지). 진입 역할을 «배정하는 권한» 으로 적은 문장 0. — 증거: 문장별 전후 + 근거(`iam-integration.md` 줄)는 PR 본문의 검토 표(소유자 검토용). 역할 이름 · 개수(SCM 8 · ERP 4 · Finance 5 · E-commerce 13)는 시험이 `permission-map.ts` 카탈로그와 대조하고, 진입 역할 이름은 «진입 역할» 곁에서만 나오도록 시험이 강제한다.
+- [x] **AC-2** — 가이드 시험 갱신 + 옛 문장이 돌아오면 빨개지는 단언 1 개 이상(예: SCM 가이드 본문에 «하나뿐» 없음). — 증거: `tests/unit/domain-guides-entry-role-copy.test.tsx`(신규 35 케이스) — 옛 문안에서 25 개가 **단언 실패**(red 커밋 `dfcb3fcd2`), 새 문안에서 통과. 전체 vitest 404 파일 · 4858 테스트 통과, `tsc --noEmit` rc=0, `next lint` rc=0(기존 경고 1 건만).
 - [ ] **AC-3** — 소유자 문안 검토(사용자에게 보이는 문장) — PR 본문에 바뀐 문장 전후를 표로.
 - [ ] **AC-4** — 배포 상태(Vercel)를 따로 적는다.
 

@@ -383,7 +383,7 @@ export function IamGuideScreen() {
               </PartHeading>
               <p className="mb-8 max-w-3xl text-sm text-muted-foreground">
                 찾아보는 표입니다 — 역할의 종류, 역할별로 열리는 메뉴, 권한 키의 뜻, 그리고
-                구독 도메인에서 파생되는 도메인 롤.
+                구독 도메인별 도메인 롤.
               </p>
 
               <h3 className="mb-4 text-lg font-medium">역할 7종 (IAM 메뉴를 여는 권한)</h3>
@@ -525,24 +525,29 @@ export function IamGuideScreen() {
               </div>
 
               <h3 className="mb-2 text-lg font-medium">
-                구독 도메인에서 생기는 도메인 롤
+                구독 도메인별 도메인 롤
               </h3>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-                위 7개 역할과는 <strong>다른 축</strong>입니다. 직원 · 협력사는 이 역할을
-                따로 받지 않습니다 — 로그인 후 테넌트를 고르면, 그 테넌트가 구독 중인
-                도메인에서 아래처럼 자동으로 생깁니다. 협력사는 같은 롤을 받되 배정된 부서
-                범위만큼만 데이터를 봅니다.
+                위 7개 역할과는 <strong>다른 축</strong>입니다. 도메인 롤은 운영자(또는
+                그룹)에 배정한 업무 권한 세트에 담겨 있고, 로그인 후 테넌트를 고르면 그
+                테넌트가 구독 중인 도메인의 롤만 아래처럼 붙습니다. SCM · ERP · Finance ·
+                E-Commerce 는 영역별 조회 · 변경 업무 역할이고, 진입 역할(SCM_OPERATOR ·
+                ERP_OPERATOR · FINANCE_OPERATOR · ECOMMERCE_OPERATOR)은 배정하는 역할이
+                아닙니다 — 그 도메인의 업무 역할이 하나라도 있으면 인증 서버가 덧붙이며, 이
+                역할만으로는 업무 API 가 열리지 않습니다. 협력사는 같은 롤을 받되 배정된
+                부서 범위만큼만 데이터를 봅니다. 데모 계정에는 이 역할이 모두 배정되어 있어
+                데모에서는 모두 열려 있습니다.
               </p>
               <div className="overflow-x-auto">
                 <table className="data-table" data-testid="iam-guide-domain-role-map">
-                  <caption className="sr-only">테넌트 구독 도메인별 파생 도메인 롤</caption>
+                  <caption className="sr-only">테넌트 구독 도메인별 도메인 롤</caption>
                   <thead>
                     <tr className="text-left">
                       <th scope="col" className="p-2">
                         구독 도메인
                       </th>
                       <th scope="col" className="p-2">
-                        생기는 도메인 롤
+                        도메인 롤
                       </th>
                     </tr>
                   </thead>

@@ -141,7 +141,7 @@ describe('ScmGuideScreen', () => {
     ]);
   });
 
-  it('renders the scm domain-role note (single SCM_OPERATOR + single-tenant axis)', () => {
+  it('renders the scm domain-role note (8 business roles + derived entry role — wording pinned in domain-guides-entry-role-copy.test.tsx)', () => {
     render(<ScmGuideScreen />);
     expect(screen.getByTestId('scm-guide-roles')).toBeInTheDocument();
   });

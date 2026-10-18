@@ -393,6 +393,6 @@ export const WMS_GLOSSARY: GlossaryEntry[] = [
     key: 'assume-tenant',
     term: '테넌트 선택 (assume-tenant)',
     meaning:
-      '운영자가 특정 회사(테넌트)를 선택해 그 회사에서 쓸 권한을 받는 동작입니다. 이때 WMS 재고·출고 권한이 자동으로 주어집니다.',
+      '운영자가 특정 회사(테넌트)를 선택해 그 회사에서 쓸 권한을 받는 동작입니다. 이때 배정된 업무 권한 세트 가운데 그 회사가 구독 중인 WMS 재고·출고 권한이 붙습니다.',
   },
 ];

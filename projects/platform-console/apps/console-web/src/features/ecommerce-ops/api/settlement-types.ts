@@ -9,7 +9,9 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
  *
  * Authoritative producer contract (do NOT redefine — consume read-only):
  *   ecommerce `settlement-service` operator REST, gateway-routed at
- *   `Path=/api/admin/settlements/**` (role `ECOMMERCE_OPERATOR`):
+ *   `Path=/api/admin/settlements/**` (gateway door = entry role `ECOMMERCE_OPERATOR`;
+ *   the service itself needs `ECOMMERCE_SETTLEMENT_READ` ∨ `_WRITE` —
+ *   TASK-PC-FE-348, ecommerce `iam-integration.md` § 업무 역할):
  *     GET /settlements/accruals?sellerId=&orderId=&page=&size=
  *     GET /settlements/sellers/{sellerId}/balance
  *     GET /settlements/commission-rates/{sellerId}

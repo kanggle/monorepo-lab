@@ -255,7 +255,7 @@ describe('EcommerceGuideScreen', () => {
     }
   });
 
-  it('renders the ecommerce domain-role note (single ECOMMERCE_OPERATOR axis)', () => {
+  it('renders the ecommerce domain-role note (13 business roles + derived entry role — wording pinned in domain-guides-entry-role-copy.test.tsx)', () => {
     render(<EcommerceGuideScreen />);
     expect(screen.getByTestId('ecommerce-guide-roles')).toBeInTheDocument();
   });
