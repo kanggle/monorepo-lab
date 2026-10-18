@@ -225,3 +225,19 @@ platform-console
   - (가′) back-link 칸의 탐색 취소 · 재요청이 그 막힘을 유발한다.
   - 둘 다 아니다.
 - 🔴 원인이 확정되기 전에는 대기 시간 · 재시도 · 바닥(E-Commerce 4 s)을 바꾸지 않는다(Failure Scenario 1).
+
+## 추가 (2026-10-18 UTC) — 새 칸의 첫 표본: `UND_ERR_CONNECT_TIMEOUT`
+
+이 PR 의 브랜치 nightly **39134957346**(12 expected · 0 flaky)에서 사건 1 건이 나왔다.
+
+- 로그: `operator_overview_bff_unavailable cause=transport:TypeError/**UND_ERR_CONNECT_TIMEOUT**` (14:19:50.587).
+- 그 렌더: `overview_state` = `page_total` = **10316 ms**(14:19:40.271 시작). 이 런의 `page_total` 14 개 중 최댓값이고, 그다음은 7671 ms 다.
+- 그때 돌던 칸: w0 `overview-consolidation.spec.ts:55` back-link(14:19:31.8, 18.9 s) · w1 `:133`(39.5, 4.5 s) → `sample-visitor:19`(44.1, 5.3 s).
+- 렌더 구간에 시작한 `operator-overview` 다리 묶음은 1 개(`c725b48f`)다. 이 렌더의 것인지는 requestId 로 대조하지 않았다.
+
+이 사실이 좁히는 것과 아직 모르는 것:
+
+- ✅ 좁혀진 것: 이 한 건은 «응답이 늦다» 가 아니라 **TCP 연결을 맺지 못했다** 다. 개요 페이지 → `http://localhost:3000`(자기 자신)으로 가는 connect 가 undici 기본 10 s 를 다 썼다.
+- ⚪ 모르는 것 (1): 앞 두 런(39130456238 · 39128709878)의 사건도 같은 코드였는지. 그 런들은 이 칸이 생기기 전이다.
+- ⚪ 모르는 것 (2): **왜 자기 자신에게 연결이 안 되는가.** `localhost` 이름 해석(::1 / 127.0.0.1 — 콘솔은 `HOSTNAME=0.0.0.0` 으로 IPv4 에만 바인드된다), listen 백로그, 이벤트 루프 정체 등 후보만 있고 하나도 재지 않았다. 🔴 검증 가능한 기전이 원인은 아니다 — 다음 런들이 같은 코드를 내는지부터 센다.
+- 사건 수: 계측 런 **3/3** 에서 런당 1 건이고, 3 건 모두 w0 의 `:55` 와 겹친다. 🔴 표본 3 은 성질이 아니다(Failure Scenario 3).
