@@ -3,8 +3,10 @@ import {
   DetailHeader,
   getPromotionDetailSectionState,
   PromotionForm,
+  ReadOnlyRouteNotice,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +21,8 @@ export default async function PromotionEditPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">프로모션 수정</h1>
@@ -75,6 +78,21 @@ export default async function PromotionEditPage({
     return note(
       'promotion-degraded',
       'ecommerce 프로모션 정보를 일시적으로 불러올 수 없습니다. 잠시 후 다시 시도하세요.',
+    );
+  }
+
+  // TASK-PC-FE-346 — a non-writer gets the notice INSTEAD of the form (contract § 2.4.3.4); the
+  // server would only answer the submit with a 403.
+  if (!(await resolveEcommerceCanWrite('/ecommerce/promotions', eligibility))) {
+    return (
+      <ReadOnlyRouteNotice
+        heading="프로모션 수정"
+        testId="promotion-form-read-only"
+        action="프로모션 수정"
+        roleLabel="프로모션 변경"
+        backHref={`/ecommerce/promotions/${id}`}
+        backLabel="상세로"
+      />
     );
   }
 

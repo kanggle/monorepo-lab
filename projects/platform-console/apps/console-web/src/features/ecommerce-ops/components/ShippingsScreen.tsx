@@ -6,6 +6,7 @@ import { type ShippingList } from '../api/shipping-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ShipFormDialog } from './ShipFormDialog';
 import { ShippingsTable } from './ShippingsTable';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 import { STATUS_FILTER_OPTIONS, statusLabel } from './shipping-labels';
 import { useShippingsScreen } from '../hooks/use-shippings-screen';
 
@@ -33,12 +34,12 @@ import { useShippingsScreen } from '../hooks/use-shippings-screen';
  */
 
 export interface ShippingsScreenProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   shippings: ShippingList;
 }
 
-export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
+export function ShippingsScreen({ shippings, canWrite }: ShippingsScreenProps) {
   const {
     statusFid,
     statusFilter,
@@ -78,6 +79,13 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
       <p className="mb-6 text-sm text-muted-foreground">
         배송 목록 · 상태 전이(PREPARING→SHIPPED→IN_TRANSIT→DELIVERED) · 운송장 추적 동기화.
       </p>
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="shipping-read-only-note"
+          action="배송 상태 전이 · 출고 · 추적 동기화"
+          roleLabel="배송 변경"
+        />
+      )}
 
       <form
         onSubmit={submitFilter}
@@ -146,6 +154,7 @@ export function ShippingsScreen({ shippings }: ShippingsScreenProps) {
         <ShippingsTable
           rows={rows}
           isAnyPending={isAnyPending}
+          canWrite={canWrite}
           openTransition={openTransition}
           triggerRefresh={triggerRefresh}
           pagination={pagination}

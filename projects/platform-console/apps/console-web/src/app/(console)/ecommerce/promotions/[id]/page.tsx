@@ -4,6 +4,7 @@ import {
   PromotionDetail,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,8 @@ export default async function PromotionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">프로모션 상세</h1>
@@ -78,5 +80,7 @@ export default async function PromotionDetailPage({
     );
   }
 
-  return <PromotionDetail promotion={state.detail} />;
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/promotions', eligibility);
+  return <PromotionDetail promotion={state.detail} canWrite={canWrite} />;
 }

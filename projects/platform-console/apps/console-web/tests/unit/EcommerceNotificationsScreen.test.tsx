@@ -62,7 +62,7 @@ beforeEach(() => {
 
 describe('NotificationsScreen — mount render', () => {
   it('renders the heading + register link + template table with the seeded row', async () => {
-    render(<NotificationsScreen templates={LIST} />, { wrapper: wrapper() });
+    render(<NotificationsScreen canWrite templates={LIST} />, { wrapper: wrapper() });
 
     expect(
       screen.getByRole('heading', {
@@ -87,7 +87,7 @@ describe('NotificationsScreen — mount render', () => {
       totalElements: 0,
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(empty)));
-    render(<NotificationsScreen templates={empty} />, { wrapper: wrapper() });
+    render(<NotificationsScreen canWrite templates={empty} />, { wrapper: wrapper() });
 
     expect(await screen.findByTestId('notification-empty')).toBeInTheDocument();
   });

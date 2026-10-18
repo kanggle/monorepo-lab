@@ -25,13 +25,14 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * the confirm dialog (never a fake 500/degrade).
  */
 export interface SettlementPeriodsSectionProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   initialPeriods: PeriodsResponse;
 }
 
 export function SettlementPeriodsSection({
   initialPeriods,
+  canWrite,
 }: SettlementPeriodsSectionProps) {
   const [query, setQuery] = useState<PeriodsListParams>({
     page: 0,
@@ -85,7 +86,7 @@ export function SettlementPeriodsSection({
         수 있습니다.
       </p>
 
-      <PeriodOpenForm />
+      {canWrite && <PeriodOpenForm />}
 
       {forbidden ? (
         <div
@@ -121,10 +122,14 @@ export function SettlementPeriodsSection({
       ) : (
         <SettlementPeriodsTable
           rows={rows}
-          onClose={(id) => {
-            setCloseError(null);
-            setClosingPeriodId(id);
-          }}
+          onClose={
+            canWrite
+              ? (id) => {
+                  setCloseError(null);
+                  setClosingPeriodId(id);
+                }
+              : undefined
+          }
           pagination={{
             prevDisabled: (query.page ?? 0) <= 0,
             nextDisabled: (data?.page ?? 0) + 1 >= totalPages,

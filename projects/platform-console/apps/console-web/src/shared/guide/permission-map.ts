@@ -364,6 +364,22 @@ const ECOMMERCE_GET = {
   shipping: ['ECOMMERCE_SHIPPING_READ', 'ECOMMERCE_SHIPPING_WRITE'],
   notification: ['ECOMMERCE_NOTIFICATION_READ', 'ECOMMERCE_NOTIFICATION_WRITE'],
 } as const;
+/**
+ * TASK-PC-FE-346 — each area's mutation buttons (contract § 2.4.3.4 «Declared today»). One role per
+ * area: the services' `requireWrite` is `*_WRITE` alone (product-service `ProductOperatorAccess`,
+ * order-service `OrderOperatorAccess`, shipping / promotion / settlement `OperatorRoleGuard`,
+ * notification-service `TemplateController`; TASK-MONO-795). 🔵 Sellers are served by product-service
+ * ⇒ the PRODUCT role (795 Q1). 🔵 Settlement payout execution has no separate control role (795 Q2).
+ * Members have no write role.
+ */
+const ECOMMERCE_WRITE = {
+  product: ['ECOMMERCE_PRODUCT_WRITE'],
+  order: ['ECOMMERCE_ORDER_WRITE'],
+  settlement: ['ECOMMERCE_SETTLEMENT_WRITE'],
+  promotion: ['ECOMMERCE_PROMOTION_WRITE'],
+  shipping: ['ECOMMERCE_SHIPPING_WRITE'],
+  notification: ['ECOMMERCE_NOTIFICATION_WRITE'],
+} as const;
 const ECOMMERCE_ROLE_SPEC =
   'projects/ecommerce-microservices-platform/specs/integration/iam-integration.md:103-130 (§ 업무 역할)';
 
@@ -1040,7 +1056,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/products',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.product },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.product,
+      writeRequires: ECOMMERCE_WRITE.product,
+    },
     description: '상품 목록 · 등록 · 수정 · 삭제 · 옵션(variant) · 재고 · 이미지.',
     crud: crud('CRUD'),
     purpose: '판매할 상품을 관리한다.',
@@ -1050,7 +1072,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/orders',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.order },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.order,
+      writeRequires: ECOMMERCE_WRITE.order,
+    },
     description: '주문 목록 · 상세 · 상태 변경.',
     crud: crud('RU'),
     purpose: '주문을 확인하고 상태를 진행시킨다.',
@@ -1060,7 +1088,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/shippings',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.shipping },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.shipping,
+      writeRequires: ECOMMERCE_WRITE.shipping,
+    },
     description: '배송 목록 · 상태 변경 · 추적 새로고침.',
     crud: crud('RU'),
     purpose: '배송을 발송·완료까지 진행시킨다.',
@@ -1070,7 +1104,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/promotions',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.promotion },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.promotion,
+      writeRequires: ECOMMERCE_WRITE.promotion,
+    },
     description: '프로모션 목록 · 등록 · 수정 · 삭제 · 쿠폰 발급.',
     crud: crud('CRUD'),
     purpose: '할인·쿠폰을 운영한다.',
@@ -1090,7 +1130,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/sellers',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.product },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.product,
+      writeRequires: ECOMMERCE_WRITE.product,
+    },
     description: '셀러 목록 · 등록 · 정지 · 폐점 · 프로비저닝.',
     crud: crud('RCU'),
     crudNote: '삭제 없음 — 폐점(close)은 상태 전이.',
@@ -1101,7 +1147,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/settlements',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.settlement },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.settlement,
+      writeRequires: ECOMMERCE_WRITE.settlement,
+    },
     description: '정산 기간 · 적립 · 수수료율 · 지급 실행 · 셀러 잔액.',
     crud: crud('RCU'),
     crudNote: '생성 = 정산 기간 생성 · 수정 = 기간 마감·지급 실행·수수료율 변경.',
@@ -1116,7 +1168,13 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/ecommerce/notifications/templates',
     area: 'ecommerce',
-    gate: { kind: 'domain', domain: 'ecommerce', roles: ECOMMERCE_ROLES, serverRequires: ECOMMERCE_GET.notification },
+    gate: {
+      kind: 'domain',
+      domain: 'ecommerce',
+      roles: ECOMMERCE_ROLES,
+      serverRequires: ECOMMERCE_GET.notification,
+      writeRequires: ECOMMERCE_WRITE.notification,
+    },
     description: '알림 템플릿 목록 · 등록 · 수정.',
     crud: crud('RCU'),
     purpose: '고객에게 가는 알림 문구를 관리한다.',

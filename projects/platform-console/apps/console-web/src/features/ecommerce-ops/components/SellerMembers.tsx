@@ -28,8 +28,8 @@ import {
  */
 
 export interface SellerMembersProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   sellerId: string;
   /** The seller's status — the invite form is offered only when ACTIVE. */
   sellerStatus: string;
@@ -40,7 +40,7 @@ const MEMBER_STATUS_LABEL: Record<string, string> = {
   REVOKED: '회수됨',
 };
 
-export function SellerMembers({ sellerId, sellerStatus }: SellerMembersProps) {
+export function SellerMembers({ sellerId, sellerStatus, canWrite }: SellerMembersProps) {
   const emailFid = useId();
   const membersQ = useSellerMembers(sellerId);
   const invite = useInviteSellerMember(sellerId);
@@ -155,7 +155,7 @@ export function SellerMembers({ sellerId, sellerStatus }: SellerMembersProps) {
         </>
       )}
 
-      {canInvite ? (
+      {!canWrite ? null : canInvite ? (
         <form
           onSubmit={onSubmit}
           className="mt-4 flex max-w-xl flex-wrap items-end gap-3"

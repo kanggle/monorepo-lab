@@ -1,6 +1,11 @@
 import Link from 'next/link';
-import { DetailHeader, SellerRegisterForm } from '@/features/ecommerce-ops';
+import {
+  DetailHeader,
+  SellerRegisterForm,
+  ReadOnlyRouteNotice,
+} from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * the form. Mirrors the promotions new/page.tsx degrade/not-eligible branches.
  */
 export default async function NewSellerPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">셀러 등록</h1>
@@ -53,6 +59,21 @@ export default async function NewSellerPage() {
           </Link>
         </div>
       </section>
+    );
+  }
+
+  // TASK-PC-FE-346 — a non-writer gets the notice INSTEAD of the form (contract § 2.4.3.4); the
+  // server would only answer the submit with a 403.
+  if (!(await resolveEcommerceCanWrite('/ecommerce/sellers', eligibility))) {
+    return (
+      <ReadOnlyRouteNotice
+        heading="셀러 등록"
+        testId="seller-form-read-only"
+        action="셀러 등록"
+        roleLabel="상품 변경 — 셀러는 상품 영역 권한을 따릅니다"
+        backHref={'/ecommerce/sellers'}
+        backLabel="목록으로"
+      />
     );
   }
 

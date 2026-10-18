@@ -7,8 +7,8 @@ import { formatPromotionDay } from './promotion-format';
 import { promotionStatusTone, type PromotionList } from '../api/promotion-types';
 
 interface PromotionsTableProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   rows: PromotionList['content'];
   onDelete: (promotion: { id: string; name: string }) => void;
   pagination: {
@@ -35,6 +35,7 @@ function formatDiscount(type: string, value: number): string {
  */
 export function PromotionsTable({
   rows,
+  canWrite,
   onDelete,
   pagination,
 }: PromotionsTableProps) {
@@ -111,16 +112,18 @@ export function PromotionsTable({
                       상세
                     </Button>
                   </Link>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      onDelete({ id: p.promotionId, name: p.name })
-                    }
-                    data-testid={`promotion-delete-${i}`}
-                  >
-                    삭제
-                  </Button>
+                  {canWrite && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        onDelete({ id: p.promotionId, name: p.name })
+                      }
+                      data-testid={`promotion-delete-${i}`}
+                    >
+                      삭제
+                    </Button>
+                  )}
                 </div>
               </td>
             </tr>

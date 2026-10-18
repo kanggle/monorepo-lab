@@ -5,6 +5,7 @@ import {
   SellerDetail,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,8 @@ export default async function SellerDetailPage({
 }) {
   const { id: rawId } = await params;
   const id = decodeSellerId(rawId);
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">셀러 상세</h1>
@@ -98,5 +100,7 @@ export default async function SellerDetailPage({
     );
   }
 
-  return <SellerDetail seller={state.detail} />;
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/sellers', eligibility);
+  return <SellerDetail seller={state.detail} canWrite={canWrite} />;
 }

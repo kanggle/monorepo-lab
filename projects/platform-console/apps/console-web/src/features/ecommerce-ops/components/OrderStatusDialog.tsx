@@ -9,6 +9,7 @@ import {
 } from '../api/order-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { Button } from '@/shared/ui/Button';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * Confirm-gated order status change dialog for the ecommerce order detail
@@ -32,8 +33,8 @@ import { Button } from '@/shared/ui/Button';
  * NO `Idempotency-Key` is sent (the producer defines none — § 2.4.10).
  */
 export interface OrderStatusDialogProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   orderId: string;
   currentStatus: string;
   onSuccess?: () => void;
@@ -80,6 +81,7 @@ export function OrderStatusDialog({
   orderId,
   currentStatus,
   onSuccess,
+  canWrite,
 }: OrderStatusDialogProps) {
   const targets = allowedTransitions(currentStatus) as OrderStatus[];
   const change = useChangeOrderStatus();
@@ -90,6 +92,19 @@ export function OrderStatusDialog({
 
   if (targets.length === 0) {
     return null;
+  }
+
+  // TASK-PC-FE-346 — no ECOMMERCE_ORDER_WRITE: the transitions are hidden (the server would 403).
+  if (!canWrite) {
+    return (
+      <div className="mt-6" data-testid="order-status-actions-read-only">
+        <ReadOnlyNote
+          testId="order-read-only-note"
+          action="주문 상태 전이"
+          roleLabel="주문 변경"
+        />
+      </div>
+    );
   }
 
   function openDialog(target: OrderStatus) {

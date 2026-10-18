@@ -17,6 +17,7 @@ import {
 } from '../api/promotion-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { PromotionsTable } from './PromotionsTable';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce promotion operations list section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -34,14 +35,14 @@ import { PromotionsTable } from './PromotionsTable';
  */
 
 export interface PromotionsScreenProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   promotions: PromotionList;
 }
 
 const STATUS_FILTER_OPTIONS = ['', ...PROMOTION_STATUS_VALUES] as const;
 
-export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
+export function PromotionsScreen({ promotions, canWrite }: PromotionsScreenProps) {
   const router = useRouter();
   const statusFid = useId();
 
@@ -112,16 +113,25 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
         >
           E-Commerce 프로모션
         </h1>
-        <Link
-          href="/ecommerce/promotions/new"
-          data-testid="promotion-new-link"
-        >
-          <Button>새 프로모션</Button>
-        </Link>
+        {canWrite && (
+          <Link
+            href="/ecommerce/promotions/new"
+            data-testid="promotion-new-link"
+          >
+            <Button>새 프로모션</Button>
+          </Link>
+        )}
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         프로모션 목록 · 상세 · 생성 / 수정 / 삭제 + 쿠폰 발급.
       </p>
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="promotion-read-only-note"
+          action="프로모션 등록 · 수정 · 삭제 · 쿠폰 발급"
+          roleLabel="프로모션 변경"
+        />
+      )}
 
       <form
         onSubmit={submitFilter}
@@ -189,6 +199,7 @@ export function PromotionsScreen({ promotions }: PromotionsScreenProps) {
       ) : (
         <PromotionsTable
           rows={rows}
+          canWrite={canWrite}
           onDelete={(promotion) => {
             setDelError(null);
             setToDelete(promotion);

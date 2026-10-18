@@ -20,6 +20,7 @@ import {
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { SellerMembers } from './SellerMembers';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce seller detail section (TASK-PC-FE-090 read + TASK-PC-FE-154
@@ -34,8 +35,8 @@ import { SellerMembers } from './SellerMembers';
  */
 
 export interface SellerDetailProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   seller: SellerDetailType;
 }
 
@@ -77,7 +78,7 @@ const ACTION_META: Record<SellerLifecycleAction, ActionMeta> = {
   },
 };
 
-export function SellerDetail({ seller }: SellerDetailProps) {
+export function SellerDetail({ seller, canWrite }: SellerDetailProps) {
   const detailQ = useSeller(seller.sellerId, seller);
   const data = detailQ.data ?? seller;
 
@@ -91,7 +92,7 @@ export function SellerDetail({ seller }: SellerDetailProps) {
     useState<SellerLifecycleAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const actions = sellerActionsFor(data.status);
+  const actions = canWrite ? sellerActionsFor(data.status) : [];
   const activeMeta = pendingAction ? ACTION_META[pendingAction] : null;
   const activeM = pendingAction ? mutationFor(pendingAction) : null;
 
@@ -134,6 +135,14 @@ export function SellerDetail({ seller }: SellerDetailProps) {
         ))}
       />
 
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="seller-detail-read-only-note"
+          action="프로비저닝 · 정지 · 폐점 · 구성원 초대"
+          roleLabel="상품 변경 — 셀러는 상품 영역 권한을 따릅니다"
+        />
+      )}
+
       <dl className="mb-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div>
           <dt className="text-muted-foreground">셀러 이름</dt>
@@ -170,7 +179,7 @@ export function SellerDetail({ seller }: SellerDetailProps) {
       </dl>
 
       {/* TASK-MONO-752 — the people linked to this seller (ADR-MONO-079 D5). */}
-      <SellerMembers sellerId={data.sellerId} sellerStatus={data.status} />
+      <SellerMembers sellerId={data.sellerId} sellerStatus={data.status} canWrite={canWrite} />
 
       <ConfirmDialog
         open={pendingAction !== null}

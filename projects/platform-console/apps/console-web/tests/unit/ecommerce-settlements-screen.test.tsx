@@ -109,7 +109,7 @@ beforeEach(() => {
 
 describe('SettlementsScreen — seeded render + section presence', () => {
   it('renders the 4 sections + seeded accrual & period rows', () => {
-    render(<SettlementsScreen accruals={ACCRUALS} periods={PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={ACCRUALS} periods={PERIODS} />, {
       wrapper: wrapper(),
     });
     expect(
@@ -133,7 +133,7 @@ describe('SettlementsScreen — seeded render + section presence', () => {
   });
 
   it('renders REVERSAL money as a negative ₩ amount (sign-preserving)', () => {
-    render(<SettlementsScreen accruals={ACCRUALS} periods={PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={ACCRUALS} periods={PERIODS} />, {
       wrapper: wrapper(),
     });
     const reversalRow = screen.getByTestId('accrual-row-1');
@@ -145,7 +145,7 @@ describe('SettlementsScreen — seeded render + section presence', () => {
 
   it('renders the empty-state when both seeds are empty (no crash)', () => {
     render(
-      <SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />,
+      <SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />,
       { wrapper: wrapper() },
     );
     expect(screen.getByTestId('settlements-accruals-empty')).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe('SettlementsScreen — seller balance lookup gates on submit', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
       wrapper: wrapper(),
     });
 
@@ -253,7 +253,7 @@ describe('SellerSelect — real list render + chosen sellerId reaches the reques
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
       wrapper: wrapper(),
     });
 
@@ -283,7 +283,7 @@ describe('SellerSelect — real list render + chosen sellerId reaches the reques
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={EMPTY_PERIODS} />, {
       wrapper: wrapper(),
     });
 
@@ -308,7 +308,7 @@ describe('AccrualsSection seller filter — blank selection omits sellerId (AC-2
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={ACCRUALS} periods={EMPTY_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={ACCRUALS} periods={EMPTY_PERIODS} />, {
       wrapper: wrapper(),
     });
 

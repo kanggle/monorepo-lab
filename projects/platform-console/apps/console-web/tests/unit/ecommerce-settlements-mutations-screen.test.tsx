@@ -95,7 +95,7 @@ describe('commission-rate SET form — validation + confirm gate', () => {
     // rejecting `fetch` so the sellers-list GET fails deterministically and
     // the selector falls back to the old free-text id input (same testid).
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
     await screen.findByTestId('settlements-rate-set-seller-input-fallback');
@@ -123,7 +123,7 @@ describe('commission-rate SET form — validation + confirm gate', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
     // TASK-PC-FE-336 — every fetch call (incl. the sellers-list GET fired by
@@ -168,7 +168,7 @@ describe('commission-rate SET form — validation + confirm gate', () => {
 
 describe('period OPEN form — ordering validation + confirm gate', () => {
   it('shows an ordering error when from >= to (submit disabled)', async () => {
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
     fireEvent.change(screen.getByTestId('settlements-period-open-from'), {
@@ -193,7 +193,7 @@ describe('period OPEN form — ordering validation + confirm gate', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
     fireEvent.change(screen.getByTestId('settlements-period-open-from'), {
@@ -240,7 +240,7 @@ describe('period CLOSE — irreversible confirm gate', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<SettlementsScreen accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
+    render(<SettlementsScreen canWrite accruals={EMPTY_ACCRUALS} periods={OPEN_PERIODS} />, {
       wrapper: wrapper(),
     });
     await userEvent.click(screen.getByTestId('period-close-0'));
@@ -276,7 +276,7 @@ describe('payout EXECUTE — simulation confirm gate + 409 inline', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(
-      <PeriodPayoutsScreen periodId="2026-07" initialPayouts={PENDING_PAYOUTS} />,
+      <PeriodPayoutsScreen canWrite periodId="2026-07" initialPayouts={PENDING_PAYOUTS} />,
       { wrapper: wrapper() },
     );
     await userEvent.click(screen.getByTestId('settlements-payouts-execute'));

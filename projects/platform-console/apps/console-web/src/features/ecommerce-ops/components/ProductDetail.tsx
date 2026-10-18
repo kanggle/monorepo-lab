@@ -17,6 +17,7 @@ import { VariantEditor } from './VariantEditor';
 import { StockAdjustDialog } from './StockAdjustDialog';
 import { ImageManager } from './ImageManager';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce product detail section (TASK-PC-FE-081 — § 2.4.10 #2). The console
@@ -28,12 +29,12 @@ import { DetailHeader } from '@/shared/ui/DetailHeader';
  * variant/stock mutation invalidation.
  */
 export interface ProductDetailProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   product: ProductDetailType;
 }
 
-export function ProductDetail({ product }: ProductDetailProps) {
+export function ProductDetail({ product, canWrite }: ProductDetailProps) {
   const router = useRouter();
   const detailQ = useProduct(product.id, product);
   const data = detailQ.data ?? product;
@@ -67,25 +68,35 @@ export function ProductDetail({ product }: ProductDetailProps) {
         backHref="/ecommerce/products"
         backTestId="product-detail-back"
         actions={
-          <>
-            <Link href={`/ecommerce/products/${data.id}/edit`}>
-              <Button variant="secondary" data-testid="product-detail-edit">
-                수정
+          canWrite ? (
+            <>
+              <Link href={`/ecommerce/products/${data.id}/edit`}>
+                <Button variant="secondary" data-testid="product-detail-edit">
+                  수정
+                </Button>
+              </Link>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setDelError(null);
+                  setConfirmDelete(true);
+                }}
+                data-testid="product-detail-delete"
+              >
+                삭제
               </Button>
-            </Link>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setDelError(null);
-                setConfirmDelete(true);
-              }}
-              data-testid="product-detail-delete"
-            >
-              삭제
-            </Button>
-          </>
+            </>
+          ) : undefined
         }
       />
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="product-detail-read-only-note"
+          action="상품 수정 · 삭제 · 옵션 · 재고 · 이미지 변경"
+          roleLabel="상품 변경"
+        />
+      )}
 
       <dl className="mb-8 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <div className="col-span-2 sm:col-span-4">
@@ -124,14 +135,15 @@ export function ProductDetail({ product }: ProductDetailProps) {
 
       {/* Inline variant CRUD (#6/#7/#8). */}
       <div className="mb-8">
-        <VariantEditor productId={data.id} variants={data.variants} />
+        <VariantEditor productId={data.id} variants={data.variants} canWrite={canWrite} />
       </div>
 
       {/* Image management (#10-14, TASK-PC-FE-082) — presigned upload + list +
           set-primary + delete. Degrades only this section on failure. */}
-      <ImageManager productId={data.id} />
+      <ImageManager productId={data.id} canWrite={canWrite} />
 
-      {/* Per-variant stock adjust (#9). */}
+      {/* Per-variant stock adjust (#9) — a write surface, so absent without PRODUCT_WRITE. */}
+      {canWrite && (
       <div className="mb-8" data-testid="stock-adjust-section">
         <h3 className="mb-2 text-base font-medium text-foreground">재고 조정</h3>
         {data.variants.length === 0 ? (
@@ -153,6 +165,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
           </ul>
         )}
       </div>
+      )}
 
       <StockAdjustDialog
         open={stockVariant !== null}

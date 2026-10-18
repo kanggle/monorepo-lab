@@ -11,6 +11,7 @@ import {
   type NotificationTemplateListParams,
 } from '../api/notification-types';
 import { NotificationsTable } from './NotificationsTable';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce notification template operations list section (TASK-PC-FE-089 — ADR-031 Phase 5b).
@@ -27,12 +28,12 @@ import { NotificationsTable } from './NotificationsTable';
  */
 
 export interface NotificationsScreenProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   templates: NotificationTemplateList;
 }
 
-export function NotificationsScreen({ templates }: NotificationsScreenProps) {
+export function NotificationsScreen({ templates, canWrite }: NotificationsScreenProps) {
   const [query, setQuery] = useState<NotificationTemplateListParams>({
     page: 0,
     size: templates.size || NOTIFICATION_DEFAULT_PAGE_SIZE,
@@ -67,16 +68,25 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
         >
           E-Commerce 알림 템플릿
         </h1>
-        <Link
-          href="/ecommerce/notifications/templates/new"
-          data-testid="notification-new-link"
-        >
-          <Button>템플릿 등록</Button>
-        </Link>
+        {canWrite && (
+          <Link
+            href="/ecommerce/notifications/templates/new"
+            data-testid="notification-new-link"
+          >
+            <Button>템플릿 등록</Button>
+          </Link>
+        )}
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         알림 템플릿 목록 · 생성 / 수정. 타입·채널은 생성 후 변경 불가.
       </p>
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="notification-read-only-note"
+          action="알림 템플릿 등록 · 수정"
+          roleLabel="알림 변경"
+        />
+      )}
 
       {forbidden ? (
         <div
@@ -112,6 +122,7 @@ export function NotificationsScreen({ templates }: NotificationsScreenProps) {
       ) : (
         <NotificationsTable
           rows={rows}
+          canWrite={canWrite}
           pagination={{
             prevDisabled: (query.page ?? 0) <= 0,
             nextDisabled: (data?.page ?? 0) + 1 >= totalPages,

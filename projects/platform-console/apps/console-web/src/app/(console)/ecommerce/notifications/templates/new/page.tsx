@@ -1,6 +1,11 @@
 import Link from 'next/link';
-import { DetailHeader, TemplateForm } from '@/features/ecommerce-ops';
+import {
+  DetailHeader,
+  TemplateForm,
+  ReadOnlyRouteNotice,
+} from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * the form. Mirrors the promotions new/page.tsx degrade/not-eligible branches.
  */
 export default async function NewTemplatePage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">알림 템플릿 등록</h1>
@@ -53,6 +59,21 @@ export default async function NewTemplatePage() {
           </Link>
         </div>
       </section>
+    );
+  }
+
+  // TASK-PC-FE-346 — a non-writer gets the notice INSTEAD of the form (contract § 2.4.3.4); the
+  // server would only answer the submit with a 403.
+  if (!(await resolveEcommerceCanWrite('/ecommerce/notifications/templates', eligibility))) {
+    return (
+      <ReadOnlyRouteNotice
+        heading="알림 템플릿 등록"
+        testId="notification-form-read-only"
+        action="알림 템플릿 등록"
+        roleLabel="알림 변경"
+        backHref={'/ecommerce/notifications/templates'}
+        backLabel="목록으로"
+      />
     );
   }
 

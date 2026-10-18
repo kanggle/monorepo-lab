@@ -60,10 +60,10 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 7 화면의 쓰기 버튼 · 링크 · 라우트 전수(컴포넌트 · testid)와 위 표를 서버(`OrderOperatorAccess` · `ProductOperatorAccess` · 각 `OperatorRoleGuard` · `TemplateController`)와 대조. e2e · smoke · federation 의 해당 testid 사용처 grep. → 아래 § AC-0 실측.
-- [x] **AC-1** — 계약 개정이 코드보다 먼저. → red 커밋(계약 § 2.4.3.4 `Declared today` E-commerce 7행 + `Scales with P5–P8` P8 «done»).
-- [ ] **AC-2** — 🔴 대조군: `ecommerce-read` → 7 화면 쓰기 버튼 없음 + «조회 전용» / `ecommerce-order-operate` 만 → 주문 상태 전이 버튼 보임, 다른 화면 버튼 없음 / 상품 운영 세트 → 상품 · 판매자 버튼 보임.
-- [ ] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임.
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+- [x] **AC-1** — 계약 개정이 코드보다 먼저. → red 커밋 `ac348f63b`(계약 § 2.4.3.4 `Declared today` E-commerce 7행 + `Scales with P5–P8` P8 «done»).
+- [x] **AC-2** — 🔴 대조군: `ecommerce-read` → 7 화면 쓰기 버튼 없음 + «조회 전용» / `ecommerce-order-operate` 만 → 주문 상태 전이 버튼 보임, 다른 화면 버튼 없음 / 상품 운영 세트 → 상품 · 판매자 버튼 보임. → `ecommerce-write-buttons.test.tsx`(화면 11종 × canWrite false/true + ImageManager) · `ecommerce-write-buttons-pages.test.tsx`(실제 `resolveEcommerceCanWrite` → `getDomainBusinessRoles` → `canWriteOn` 체인: 읽기 세트 · 주문 운영 세트 · 상품 운영 세트 · 데모 운영자 13 역할 · 진입 역할 단독 · 다른 영역 역할) · `console-nav-business-permission.test.ts` § TASK-PC-FE-346(행 선언 + 같은 대조군 3종). `new`/`edit` 7 라우트는 폼 대신 «조회 전용» 안내.
+- [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. → 페이지 11종 × (row 12 실패 · 활성 테넌트 없음 · 샘플 방문자 · 레지스트리 테넌트 미상) 모두 `canWrite=true`, `new`/`edit` 7종은 row 12 실패 시 폼 — `ecommerce-write-buttons-pages.test.tsx`. (`getDomainBusinessRoles` 가 `undefined` 를 돌려주고 `canWriteOn(…, undefined)` 가 `true` — 새 규칙 없음.)
+- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → 배포 상태 — 머지 후 기록.
 
 # Related Specs
 
@@ -121,4 +121,11 @@ frontend
 
 **e2e · smoke · federation 의 해당 testid 사용처 grep (repo 전체 `*.spec.ts` · `e2e*/` · `tests/e2e/` · 스크립트 · 워크플로):** 위 쓰기 testid 를 쓰는 spec 은 **0건**. E-commerce 경로를 거는 spec 은 `e2e-smoke/legacy-demo-redirects.spec.ts:17-19`(`/demo/ecommerce → /ecommerce/orders` 리다이렉트만) · `e2e-smoke/sample-visitor-ecommerce.spec.ts:13-25`(`/ecommerce/orders` 목록의 배너 + 표 — 샘플 방문자, 쓰기 컨트롤 없음) 둘뿐이고 둘 다 영향 없다. 쓰기 testid 의 사용처는 `tests/unit/` 의 단위 시험뿐(이 티켓이 `canWrite` 를 넘기도록 고친다).
 
-**구현 메모.** 레지스트리 테넌트는 `resolveEcommerceEligibility()` 가 이미 읽는 카탈로그에서 얻는다(`tenants` 추가 — 두 번째 호출 없음). `app/(console)/ecommerce/_write-access.ts` 의 `resolveEcommerceCanWrite(href, eligibility)` 가 `canWriteOn(href, getDomainBusinessRoles({ ecommerce: tenants }))` 를 한 곳에서 한다 — 페이지 16곳이 같은 줄을 부른다. 화면 컴포넌트의 `canWrite` 는 **필수** prop.
+**구현 메모.** 레지스트리 테넌트는 `resolveEcommerceEligibility()` 가 이미 읽는 카탈로그에서 얻는다(`tenants` 추가 — 두 번째 호출 없음). `app/(console)/ecommerce/_write-access.ts` 의 `resolveEcommerceCanWrite(href, eligibility)` 가 `canWriteOn(href, getDomainBusinessRoles({ ecommerce: tenants }))` 를 한 곳에서 한다 — 페이지 18곳(화면 11 + 폼 7)이 같은 줄을 부른다. 화면 컴포넌트의 `canWrite` 는 **필수** prop.
+
+# 구현 기록 (2026-10-18 UTC)
+
+- red `ac348f63b` — 계약 + 시험 + 동작 무변경 배관. 3개 시험 파일 217건 중 **117건 단언 실패**(AssertionError 110 · TestingLibrary 요소 없음 7), `tsc` rc=0.
+- green — `permission-map.ts` 7행 `writeRequires`(`ECOMMERCE_WRITE` 상수 + 서버 근거 주석) · 화면 컴포넌트 22개의 `canWrite`(**필수** prop) · 페이지 18곳 배선(`resolveEcommerceCanWrite`) · 기존 시험의 렌더 호출 25곳에 `canWrite` 추가(필수 prop 이라 `tsc` 가 잡았다) · `ecommerce-seller-detail-page.test.tsx` 의 `_eligibility` / `_write-access` 목 보강.
+- 게이트: vitest **401 파일 · 4769 시험 통과** rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0 (경고 1건은 기존 `received-invitations/route.ts` 의 `_req` — 이 변경 밖).
+- 🔵 가드가 없는 곳(남김): 페이지 배선은 `ecommerce-write-buttons-pages.test.tsx` 가 **열거**(`SCREEN_PAGES` 11 + `FORM_PAGES` 7)로만 보장한다 — 새 E-commerce 라우트를 더하면 이 목록에도 더해야 한다(자동 발견 아님). 필수 prop 은 화면 컴포넌트까지만 강제하고, 페이지가 `resolveEcommerceCanWrite` 를 부르는지는 이 열거 시험만 본다.

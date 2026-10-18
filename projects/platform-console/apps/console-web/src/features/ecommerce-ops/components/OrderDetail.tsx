@@ -24,12 +24,12 @@ import { formatDateTime } from '@/shared/lib/datetime';
  * 400/422/409/404 are surfaced inline by the dialog without crashing.
  */
 export interface OrderDetailProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   order: OrderDetailType;
 }
 
-export function OrderDetail({ order }: OrderDetailProps) {
+export function OrderDetail({ order, canWrite }: OrderDetailProps) {
   const router = useRouter();
   const detailQ = useOrder(order.orderId, order);
   const data = detailQ.data ?? order;
@@ -182,6 +182,7 @@ export function OrderDetail({ order }: OrderDetailProps) {
         orderId={data.orderId}
         currentStatus={data.status}
         onSuccess={handleStatusSuccess}
+        canWrite={canWrite}
       />
     </section>
   );

@@ -52,7 +52,7 @@ function renderDetail(detail: SellerDetailType) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
-  return render(<SellerDetail seller={detail} />, { wrapper });
+  return render(<SellerDetail canWrite seller={detail} />, { wrapper });
 }
 
 beforeEach(() => vi.unstubAllGlobals());

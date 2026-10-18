@@ -2,6 +2,7 @@ import { AccrualsSection } from './AccrualsSection';
 import { SellerBalanceLookup } from './SellerBalanceLookup';
 import { CommissionRateLookup } from './CommissionRateLookup';
 import { SettlementPeriodsSection } from './SettlementPeriodsSection';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 import type {
   AccrualsResponse,
   PeriodsResponse,
@@ -28,13 +29,13 @@ import type {
  * intentionally absent (event-stream only).
  */
 export interface SettlementsScreenProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   accruals: AccrualsResponse;
   periods: PeriodsResponse;
 }
 
-export function SettlementsScreen({ accruals, periods }: SettlementsScreenProps) {
+export function SettlementsScreen({ accruals, periods, canWrite }: SettlementsScreenProps) {
   return (
     <section aria-labelledby="ecommerce-settlements-heading">
       <h1
@@ -50,10 +51,18 @@ export function SettlementsScreen({ accruals, periods }: SettlementsScreenProps)
         모든 변경 작업은 확인(confirm) 게이트를 거칩니다.
       </p>
 
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="settlements-read-only-note"
+          action="수수료율 설정 · 정산 기간 개시 · 마감"
+          roleLabel="정산 변경"
+        />
+      )}
+
       <AccrualsSection initialAccruals={accruals} />
       <SellerBalanceLookup />
-      <CommissionRateLookup />
-      <SettlementPeriodsSection initialPeriods={periods} />
+      <CommissionRateLookup canWrite={canWrite} />
+      <SettlementPeriodsSection initialPeriods={periods} canWrite={canWrite} />
     </section>
   );
 }

@@ -11,6 +11,7 @@ import {
   type SellerListParams,
 } from '../api/seller-types';
 import { SellersTable } from './SellersTable';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce seller operations list section (TASK-PC-FE-090 — ADR-MONO-031
@@ -29,12 +30,12 @@ import { SellersTable } from './SellersTable';
  */
 
 export interface SellersScreenProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   sellers: SellerList;
 }
 
-export function SellersScreen({ sellers }: SellersScreenProps) {
+export function SellersScreen({ sellers, canWrite }: SellersScreenProps) {
   const [query, setQuery] = useState<SellerListParams>({
     page: 0,
     size: sellers.size || SELLER_DEFAULT_PAGE_SIZE,
@@ -69,17 +70,26 @@ export function SellersScreen({ sellers }: SellersScreenProps) {
         >
           E-Commerce 셀러
         </h1>
-        <Link
-          href="/ecommerce/sellers/new"
-          data-testid="seller-new-link"
-        >
-          <Button>셀러 등록</Button>
-        </Link>
+        {canWrite && (
+          <Link
+            href="/ecommerce/sellers/new"
+            data-testid="seller-new-link"
+          >
+            <Button>셀러 등록</Button>
+          </Link>
+        )}
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         셀러 목록 · 상세 · 등록. 라이프사이클 관리(프로비저닝 · 정지 · 폐점)는 상세
         화면에서. (수정/삭제 대신 상태 전이 — ADR-042)
       </p>
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="seller-read-only-note"
+          action="셀러 등록"
+          roleLabel="상품 변경 — 셀러는 상품 영역 권한을 따릅니다"
+        />
+      )}
 
       {forbidden ? (
         <div

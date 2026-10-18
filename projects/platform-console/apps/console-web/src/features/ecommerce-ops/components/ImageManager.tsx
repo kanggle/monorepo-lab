@@ -26,12 +26,12 @@ import { ImageUploadField } from './ImageUploadField';
  * intact.
  */
 export interface ImageManagerProps {
-  /** TASK-PC-FE-346 — `false` hides the mutation buttons (no area `*_WRITE` role). Optional only in the red commit. */
-  canWrite?: boolean;
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   productId: string;
 }
 
-export function ImageManager({ productId }: ImageManagerProps) {
+export function ImageManager({ productId, canWrite }: ImageManagerProps) {
   const imagesQ = useImages(productId);
   const update = useUpdateImage();
   const del = useDeleteImage();
@@ -125,30 +125,34 @@ export function ImageManager({ productId }: ImageManagerProps) {
                     대표
                   </span>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setPrimary(img)}
-                    disabled={update.isPending}
-                    data-testid={`image-set-primary-${i}`}
-                  >
-                    대표로
-                  </Button>
+                  canWrite && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPrimary(img)}
+                      disabled={update.isPending}
+                      data-testid={`image-set-primary-${i}`}
+                    >
+                      대표로
+                    </Button>
+                  )
                 )}
               </div>
-              <div className="mt-1 flex justify-end">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setDelError(null);
-                    setToDelete(img);
-                  }}
-                  data-testid={`image-delete-${i}`}
-                >
-                  삭제
-                </Button>
-              </div>
+              {canWrite && (
+                <div className="mt-1 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setDelError(null);
+                      setToDelete(img);
+                    }}
+                    data-testid={`image-delete-${i}`}
+                  >
+                    삭제
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -164,7 +168,7 @@ export function ImageManager({ productId }: ImageManagerProps) {
         </p>
       )}
 
-      {!imagesQ.isError && (
+      {canWrite && !imagesQ.isError && (
         <ImageUploadField
           productId={productId}
           nextSortOrder={images.length}
