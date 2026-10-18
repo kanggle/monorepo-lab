@@ -177,3 +177,67 @@ platform-console
 - `console_ssr_phase` 151 줄이 찍혔다. route 는 `(console)/layout` · `/dashboards/overview` 둘이다.
 
 재측정은 이 PR 머지 뒤 nightly 부터 센다. 이 런은 계측 동작 확인용이고, 표본으로는 세지 않는다.
+
+# 재측정 — 중간 기록 (2026-10-18 UTC, 판정 아님)
+
+🔴 **표본이 모자란다.** 계측 머지(`b74e05ab7`) 뒤 끝난 main nightly 는 **1 런**(39130456238)이다. AC-2 기준은 5 런이므로, 아래는 판정이 아니라 다음 측정이 무엇을 잴지 정하는 기록이다. 브랜치 런 39128709878 은 계측 동작 확인용이라 표본에서 뺐지만, 같은 사건이 나왔으므로 «사건 목록» 에는 함께 적는다. 분석은 아티팩트 `platform-console-playwright-report-nightly` 의 `test-results/e2e-results.json` + `compose-logs.txt` 두 파일로 했다. 스크립트는 세션 scratchpad 에만 있다(임시 — 사라질 수 있다). 재현: console-web JSON 줄을 `msg` 로 고르고, `console_ssr_phase` 는 `startedAt` 으로, `console_composition_leg` 는 `requestId` 로 묶는다.
+
+## 기준선 (main 39130456238 — 12 expected · **0 flaky**)
+
+| 단계 | n | p50 | p90 | max |
+|---|---|---|---|---|
+| `/dashboards/overview` `page_total` | 14 | 4063 | 7423 | **10099** |
+| `overview_state` | 14 | 4063 | 7422 | 10099 |
+| `domain_health` | 14 | 4014 | 4025 | 7370 |
+| `(console)/layout` `layout_total` | 26 | 37 | 487 | 705 |
+| layout `me_roles` · `me_domain_access` · `registry` · `org_nodes` | — | 28 · 35 · 54 · 244 | — | 207 · 112 · 130 · 642 |
+
+- 레이아웃은 1 s 미만이다. 개요 지연은 전부 `overview_state` · `domain_health` 쪽에 있다.
+- 조합 다리: E-Commerce 는 `domain-health` 11/11 · `operator-overview` 9/9 가 `TIMEOUT` 이고 p50 4000 ms 다. WMS · SCM · ERP 는 즉시 `DOWNSTREAM_ERROR`(≤8 ms)다. ⇒ 인증 개요의 바닥 4 s 를 다시 확인했다.
+- 🔴 **flaky 0 인 초록 런에서도 개요 렌더가 7.4 s · 10.1 s 까지 간다.** 10 s 렌더는 flaky 런에만 있는 사건이 아니다. 시험이 그 렌더를 기다렸느냐에 따라 flaky 가 될 뿐이다.
+
+## 사건: «~10 s 뒤 내부 fetch 가 `transport:TypeError`, 합성 다리 0»
+
+| 런 | 렌더 | `overview_state` | 끝난 로그 | 그 렌더의 `operator-overview` 다리 | 그때 돌던 칸 |
+|---|---|---|---|---|---|
+| 39130456238 (main) | 13:19:40.108 → 50.207 | **10099** | `operator_overview_bff_unavailable cause=transport:TypeError` (50.207) | **0** — 그 구간에 시작한 묶음은 `ed74f7f3` 하나이고, 45.392 에 시작한 다른 렌더의 것이다(requestId 대조) | w0 `overview-consolidation.spec.ts:55` back-link(FE-068, 13:19:27.7–46.4, 이 런에서 가장 긴 18.7 s) · w1 `:133` 끝(→40.3) 다음 `sample-visitor-transition.spec.ts:19`(40.3–45.7) |
+| 39128709878 (브랜치, 계측 확인용) | → 12:56:38.610 | **10329** | 같음 | (같은 방법으로 미대조) | w0 `:55`(12:56:14.4–38.7, 24.3 s) · w1 `sample-visitor:19`(24.9–31.6) → `:133` 등 |
+| 38777797324 (AC-0, 잡 실패 덤프) | — | — | `operator_overview_bff_unavailable` + `domain_health_bff_unavailable` 둘 다 `transport:TypeError` (17:38:51.42) | — | — |
+
+- 이 개요 내부 fetch(`getOperatorOverviewState` → `selfOrigin()` = e2e 에서 `http://localhost:3000`, 자기 자신)에는 **타임아웃이 없다.** 그런데도 ~10 s 에 `TypeError` 로 끝났다. undici 의 기본 connect timeout 이 10 s 라 숫자가 맞는다. 🔴 이것은 **가설이다** — `TypeError` 만으로는 connect timeout 인지 reset 인지 가를 수 없다.
+- 원래 사례(run 38763381565: 문서 10063 ms + «통합 개요를 일시적으로 불러올 수 없습니다»)와 **숫자 · 문구 모양이 같다.** `bffUnavailable` 이면 개요가 그 문구로 저하된다.
+- AC-0 의 IAM 카드 flaky 3 건은 첫 시도가 모두 back-link(`:55`)와 겹쳤다. 그때는 «단독 재시도도 10~14 s» 라서 (가)를 기각했다. 오늘 두 런은 같은 칸 근처에서 10 s 사건을 보인다. 🔴 그런데 두 런 모두 **다른 워커에서 sample-visitor:19 도 함께 돌고 있었다** — 사건을 한 칸에 귀속시킬 근거는 아직 없다. 겹침이 **필요조건**인지, 어느 칸이 **유발**하는지는 모른다(표본 2).
+- (다)(익명 단계) 재검토: 두 런에서 익명 렌더(`overview_state` 11~50 ms)는 모두 빨랐다. 10 s 사건은 인증된 렌더였다.
+
+## 이 기록과 함께 넣은 계측 1 개
+
+`shared/api/unavailable-cause.ts` 의 `transport` 분류가 undici `err.cause.code` 를 싣는다(오류 코드 모양만 — `[A-Z][A-Z0-9_]{1,39}`, 메시지 · 주소는 싣지 않는다). 로그 형식은 `cause=transport:TypeError/UND_ERR_CONNECT_TIMEOUT` 이다. 다음 런부터 connect timeout · reset · socket 을 가를 수 있다. 시험 `tests/unit/shared/unavailable-cause.test.ts`(빨강 2 → 초록, 대조군 3).
+
+## 다음 측정
+
+- main nightly 를 5 런까지 모으고, 런마다 다음을 센다.
+  - `*_bff_unavailable` 사건 수 · 그 `cause` 코드(새로 생긴 칸)
+  - 사건 시각에 돌던 칸(`e2e-results.json`)
+  - 사건 렌더의 `operator-overview` 다리 수(0 인가)
+  - flaky 칸과 사건이 같은 렌더인가
+- 판정 후보는 셋이다.
+  - (나′) 자기 자신으로 가는 내부 fetch 의 연결이 간헐적으로 10 s 막힌다(제품 결함 후보).
+  - (가′) back-link 칸의 탐색 취소 · 재요청이 그 막힘을 유발한다.
+  - 둘 다 아니다.
+- 🔴 원인이 확정되기 전에는 대기 시간 · 재시도 · 바닥(E-Commerce 4 s)을 바꾸지 않는다(Failure Scenario 1).
+
+## 추가 (2026-10-18 UTC) — 새 칸의 첫 표본: `UND_ERR_CONNECT_TIMEOUT`
+
+이 PR 의 브랜치 nightly **39134957346**(12 expected · 0 flaky)에서 사건 1 건이 나왔다.
+
+- 로그: `operator_overview_bff_unavailable cause=transport:TypeError/**UND_ERR_CONNECT_TIMEOUT**` (14:19:50.587).
+- 그 렌더: `overview_state` = `page_total` = **10316 ms**(14:19:40.271 시작). 이 런의 `page_total` 14 개 중 최댓값이고, 그다음은 7671 ms 다.
+- 그때 돌던 칸: w0 `overview-consolidation.spec.ts:55` back-link(14:19:31.8, 18.9 s) · w1 `:133`(39.5, 4.5 s) → `sample-visitor:19`(44.1, 5.3 s).
+- 렌더 구간에 시작한 `operator-overview` 다리 묶음은 1 개(`c725b48f`)다. 이 렌더의 것인지는 requestId 로 대조하지 않았다.
+
+이 사실이 좁히는 것과 아직 모르는 것:
+
+- ✅ 좁혀진 것: 이 한 건은 «응답이 늦다» 가 아니라 **TCP 연결을 맺지 못했다** 다. 개요 페이지 → `http://localhost:3000`(자기 자신)으로 가는 connect 가 undici 기본 10 s 를 다 썼다.
+- ⚪ 모르는 것 (1): 앞 두 런(39130456238 · 39128709878)의 사건도 같은 코드였는지. 그 런들은 이 칸이 생기기 전이다.
+- ⚪ 모르는 것 (2): **왜 자기 자신에게 연결이 안 되는가.** `localhost` 이름 해석(::1 / 127.0.0.1 — 콘솔은 `HOSTNAME=0.0.0.0` 으로 IPv4 에만 바인드된다), listen 백로그, 이벤트 루프 정체 등 후보만 있고 하나도 재지 않았다. 🔴 검증 가능한 기전이 원인은 아니다 — 다음 런들이 같은 코드를 내는지부터 센다.
+- 사건 수: 계측 런 **3/3** 에서 런당 1 건이고, 3 건 모두 w0 의 `:55` 와 겹친다. 🔴 표본 3 은 성질이 아니다(Failure Scenario 3).
