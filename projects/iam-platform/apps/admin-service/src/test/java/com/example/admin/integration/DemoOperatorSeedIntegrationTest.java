@@ -461,6 +461,7 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
         expected.put("demo-viewer", List.of("demo-viewer|legacy-compat|MIGRATION"));
         expected.put("demo-assigned-only", List.of("demo-corp|legacy-compat|MIGRATION"));
         expected.put("demo-platform", List.of("*|legacy-compat|MIGRATION"));
+        expected.put("demo-star-owner", List.of("*|legacy-compat|MIGRATION"));
         for (var e : expected.entrySet()) {
             List<String> rows = jdbcTemplate.queryForList("""
                     SELECT CONCAT_WS('|', g.tenant_id, s.system_key, g.source_key)
@@ -510,5 +511,80 @@ class DemoOperatorSeedIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(assignmentCheck.check(CS_OIDC_SUBJECT, "demo-corp").assigned()).isFalse();
         assertThat(assignmentCheck.check(CS_OIDC_SUBJECT, "fan-platform").assigned()).isFalse();
+    }
+
+    // ---------------------------------------------------------------------------------
+    // TASK-MONO-798 — the owner-only, unconfined '*' SUPER_ADMIN (R__seed_demo_star_owner_operator.sql).
+    // Owner decision 2026-10-17 UTC: '*' unconfined · IdP login · no fixed password in the repo ·
+    // SUSPENDED by default, made ACTIVE only for a measurement window by an owner-run wrapper.
+    // ---------------------------------------------------------------------------------
+
+    /** == OWNER_ACCOUNT_ID in infra/demo/owner-operator.sh (the credential is written at boot, not seeded). */
+    private static final String STAR_OWNER_OIDC_SUBJECT = "0199de70-0000-7000-8000-00000000ad09";
+
+    @Test
+    @DisplayName("798: demo-star-owner exists SUSPENDED, home '*', unconfined, NULL password_hash, with its boot-written login's oidc_subject")
+    void starOwnerSeededSuspendedUnconfinedWithoutFixedPassword() {
+        List<String> rows = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', tenant_id, email, status, oidc_subject,
+                                 confined_tenant_id IS NULL, password_hash IS NULL)
+                  FROM admin_operators WHERE operator_id = 'demo-star-owner'
+                """, String.class);
+
+        // SUSPENDED: the default state — ACTIVE only inside an owner-run window. A seeded ACTIVE row
+        // would be a '*' SUPER_ADMIN open on every boot. NULL password_hash: no break-glass login path.
+        // NULL confinement: the reason it exists (platform@demo.com is confined to fan-platform).
+        assertThat(rows).containsExactly(
+                "*|star-owner@demo.com|SUSPENDED|" + STAR_OWNER_OIDC_SUBJECT + "|1|1");
+    }
+
+    @Test
+    @DisplayName("798: demo-star-owner holds exactly SUPER_ADMIN at '*' and no membership")
+    void starOwnerHoldsExactlySuperAdminAtStarAndNoMembership() {
+        List<String> grants = jdbcTemplate.queryForList("""
+                SELECT CONCAT_WS('|', r.name, g.tenant_id)
+                  FROM admin_operator_roles g
+                  JOIN admin_operators o ON o.id = g.operator_id
+                  JOIN admin_roles r ON r.id = g.role_id
+                 WHERE o.operator_id = 'demo-star-owner'
+                 ORDER BY r.name, g.tenant_id
+                """, String.class);
+        Integer memberships = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM operator_tenant_assignment a JOIN admin_operators o ON o.id = a.operator_id
+                 WHERE o.operator_id = 'demo-star-owner'
+                """, Integer.class);
+
+        assertThat(grants).containsExactly("SUPER_ADMIN|*");
+        assertThat(memberships).as("'*' covers every tenant (ADR-082 D2) — a membership row is not needed").isZero();
+    }
+
+    @Test
+    @DisplayName("798: SUSPENDED by default → the token exchange's admission and the assume gate both refuse it")
+    void starOwnerIsRefusedWhileSuspended() {
+        var operator = operatorResolver.resolve(STAR_OWNER_OIDC_SUBJECT);
+        assertThat(operator).as("the row resolves by its oidc_subject").isPresent();
+        assertThat(admission.admits(operator.get()))
+                .as("status = ACTIVE is the admission's first term — a SUSPENDED '*' row must not enter the console")
+                .isFalse();
+        assertThat(assignmentCheck.check(STAR_OWNER_OIDC_SUBJECT, "ecommerce").assigned()).isFalse();
+        assertThat(assignmentCheck.check(STAR_OWNER_OIDC_SUBJECT, "demo-corp").assigned()).isFalse();
+    }
+
+    @Test
+    @DisplayName("798: made ACTIVE (what owner-operator.sh activate does) → admitted, and may assume any registered tenant; SUSPENDED again → refused")
+    void starOwnerWhenActivatedIsUnconfinedAndReturnsToRefusedWhenSuspended() {
+        try {
+            jdbcTemplate.update("UPDATE admin_operators SET status = 'ACTIVE' WHERE operator_id = 'demo-star-owner'");
+            var operator = operatorResolver.resolve(STAR_OWNER_OIDC_SUBJECT);
+            assertThat(operator).isPresent();
+            assertThat(admission.admits(operator.get())).isTrue();
+            // Unconfined: the tenants platform@demo.com is refused (it is confined to fan-platform).
+            assertThat(assignmentCheck.check(STAR_OWNER_OIDC_SUBJECT, "ecommerce").assigned()).isTrue();
+            assertThat(assignmentCheck.check(STAR_OWNER_OIDC_SUBJECT, "demo-corp").assigned()).isTrue();
+            assertThat(assignmentCheck.check(STAR_OWNER_OIDC_SUBJECT, "fan-platform").assigned()).isTrue();
+        } finally {
+            jdbcTemplate.update("UPDATE admin_operators SET status = 'SUSPENDED' WHERE operator_id = 'demo-star-owner'");
+        }
+        assertThat(admission.admits(operatorResolver.resolve(STAR_OWNER_OIDC_SUBJECT).orElseThrow())).isFalse();
     }
 }
