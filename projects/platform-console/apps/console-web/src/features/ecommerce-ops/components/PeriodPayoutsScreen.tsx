@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { ApiError, messageForCode } from '@/shared/api/errors';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 import {
   usePeriodPayouts,
   useExecutePayouts,
@@ -31,6 +32,8 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
  * Resilience (§ 2.5): 403 → inline forbidden; 503/timeout → degraded.
  */
 export interface PeriodPayoutsScreenProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   periodId: string;
   initialPayouts: PayoutsResponse;
 }
@@ -38,6 +41,7 @@ export interface PeriodPayoutsScreenProps {
 export function PeriodPayoutsScreen({
   periodId,
   initialPayouts,
+  canWrite,
 }: PeriodPayoutsScreenProps) {
   const [query, setQuery] = useState<PayoutsListParams>({
     page: 0,
@@ -87,19 +91,29 @@ export function PeriodPayoutsScreen({
         backHref="/ecommerce/settlements"
         backTestId="settlements-period-back"
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setExecError(null);
-              setConfirmOpen(true);
-            }}
-            data-testid="settlements-payouts-execute"
-          >
-            지급 실행 (시뮬레이션)
-          </Button>
+          canWrite ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setExecError(null);
+                setConfirmOpen(true);
+              }}
+              data-testid="settlements-payouts-execute"
+            >
+              지급 실행 (시뮬레이션)
+            </Button>
+          ) : undefined
         }
       />
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="settlements-payouts-read-only-note"
+          action="지급 실행"
+          roleLabel="정산 변경"
+        />
+      )}
 
       {forbidden ? (
         <div

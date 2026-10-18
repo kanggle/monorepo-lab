@@ -6,6 +6,8 @@ import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { productStatusTone, type ProductList } from '../api/product-types';
 
 interface ProductsTableProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   rows: ProductList['content'];
   onDelete: (product: { id: string; name: string }) => void;
   pagination: {
@@ -24,7 +26,7 @@ interface ProductsTableProps {
  * Query/filter/delete state stays owned by `ProductsScreen`; all `data-testid`s
  * are unchanged.
  */
-export function ProductsTable({ rows, onDelete, pagination }: ProductsTableProps) {
+export function ProductsTable({ rows, canWrite, onDelete, pagination }: ProductsTableProps) {
   return (
     <>
       <table className="mb-3 data-table" data-testid="product-table">
@@ -54,19 +56,23 @@ export function ProductsTable({ rows, onDelete, pagination }: ProductsTableProps
                       상세
                     </Button>
                   </Link>
-                  <Link href={`/ecommerce/products/${p.id}/edit`}>
-                    <Button variant="secondary" size="sm" data-testid={`product-edit-${i}`}>
-                      수정
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onDelete({ id: p.id, name: p.name })}
-                    data-testid={`product-delete-${i}`}
-                  >
-                    삭제
-                  </Button>
+                  {canWrite && (
+                    <>
+                      <Link href={`/ecommerce/products/${p.id}/edit`}>
+                        <Button variant="secondary" size="sm" data-testid={`product-edit-${i}`}>
+                          수정
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onDelete({ id: p.id, name: p.name })}
+                        data-testid={`product-delete-${i}`}
+                      >
+                        삭제
+                      </Button>
+                    </>
+                  )}
                 </div>
               </td>
             </tr>

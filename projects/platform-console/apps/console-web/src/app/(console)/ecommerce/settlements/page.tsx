@@ -4,6 +4,7 @@ import {
   SettlementsScreen,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,8 @@ export const dynamic = 'force-dynamic';
  * needs BOTH the accruals + periods seed (rendered by SettlementsScreen).
  */
 export default async function EcommerceSettlementsPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1
@@ -104,7 +106,7 @@ export default async function EcommerceSettlementsPage() {
     );
   }
 
-  return (
-    <SettlementsScreen accruals={state.accruals} periods={state.periods} />
-  );
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/settlements', eligibility);
+  return <SettlementsScreen accruals={state.accruals} periods={state.periods} canWrite={canWrite} />;
 }

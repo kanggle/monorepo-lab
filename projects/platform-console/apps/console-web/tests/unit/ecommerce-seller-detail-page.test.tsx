@@ -38,6 +38,11 @@ const { resolveEligibilityMock } = vi.hoisted(() => ({
 vi.mock('@/app/(console)/ecommerce/products/_eligibility', () => ({
   resolveEcommerceEligibility: resolveEligibilityMock,
 }));
+// TASK-PC-FE-346 — the page now asks the write gate; its wiring is pinned in
+// ecommerce-write-buttons-pages.test.tsx, this file is only about the id decode.
+vi.mock('@/app/(console)/ecommerce/_write-access', () => ({
+  resolveEcommerceCanWrite: async () => true,
+}));
 
 const { getSellerDetailSectionStateMock } = vi.hoisted(() => ({
   getSellerDetailSectionStateMock: vi.fn(),
@@ -66,6 +71,7 @@ beforeEach(() => {
   resolveEligibilityMock.mockResolvedValue({
     eligible: true,
     registryDegraded: false,
+    tenants: ['demo-corp'],
   });
 });
 

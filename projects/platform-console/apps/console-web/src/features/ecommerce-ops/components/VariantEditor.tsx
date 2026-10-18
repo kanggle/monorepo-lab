@@ -20,6 +20,8 @@ import { useVariantEditor } from '../hooks/use-variant-editor';
  * This container wires them + the delete ConfirmDialog (behavior-preserving split).
  */
 export interface VariantEditorProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   productId: string;
   variants: Variant[];
 }
@@ -27,7 +29,7 @@ export interface VariantEditorProps {
 const inputCls =
   'w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
-export function VariantEditor({ productId, variants }: VariantEditorProps) {
+export function VariantEditor({ productId, variants, canWrite }: VariantEditorProps) {
   const { edit, openDelete, add, del } = useVariantEditor(productId);
 
   return (
@@ -39,9 +41,10 @@ export function VariantEditor({ productId, variants }: VariantEditorProps) {
         edit={edit}
         openDelete={openDelete}
         inputCls={inputCls}
+        canWrite={canWrite}
       />
 
-      <VariantAddRow add={add} inputCls={inputCls} />
+      {canWrite && <VariantAddRow add={add} inputCls={inputCls} />}
 
       <ConfirmDialog
         open={del.toDelete !== null}

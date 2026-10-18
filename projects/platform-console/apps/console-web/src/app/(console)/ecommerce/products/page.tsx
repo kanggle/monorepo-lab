@@ -4,6 +4,7 @@ import {
   ProductsScreen,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from './_eligibility';
+import { resolveEcommerceCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,8 @@ export const dynamic = 'force-dynamic';
  * registryDegraded → notEligible → forbidden → degraded → happy.
  */
 export default async function EcommerceProductsPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 id="ecommerce-products-heading" className="mb-6 text-2xl font-semibold">
@@ -109,5 +111,7 @@ export default async function EcommerceProductsPage() {
     );
   }
 
-  return <ProductsScreen products={state.products} />;
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/products', eligibility);
+  return <ProductsScreen products={state.products} canWrite={canWrite} />;
 }

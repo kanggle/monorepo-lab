@@ -21,7 +21,12 @@ import { SellerSelect } from './SellerSelect';
  * Resilience: 404 SETTLEMENT_NOT_FOUND → inline not-found; 403 → forbidden;
  * 503/timeout → inline degraded (never a crash).
  */
-export function CommissionRateLookup() {
+export interface CommissionRateLookupProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the set form (no `ECOMMERCE_SETTLEMENT_WRITE`). */
+  canWrite: boolean;
+}
+
+export function CommissionRateLookup({ canWrite }: CommissionRateLookupProps) {
   const fieldId = useId();
   const [draft, setDraft] = useState('');
   const [sellerId, setSellerId] = useState<string | null>(null);
@@ -133,7 +138,7 @@ export function CommissionRateLookup() {
         </dl>
       ) : null}
 
-      <CommissionRateForm onApplied={(sid) => setSellerId(sid)} />
+      {canWrite && <CommissionRateForm onApplied={(sid) => setSellerId(sid)} />}
     </section>
   );
 }

@@ -74,7 +74,7 @@ beforeEach(() => {
 
 describe('ProductsScreen — table + filter + delete confirm-gate', () => {
   it('renders the seeded products + register link', () => {
-    render(<ProductsScreen products={LIST} />, { wrapper: wrapper() });
+    render(<ProductsScreen canWrite products={LIST} />, { wrapper: wrapper() });
     expect(
       screen.getByRole('heading', { name: 'E-Commerce 상품' }),
     ).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ProductsScreen products={LIST} />, { wrapper: wrapper() });
+    render(<ProductsScreen canWrite products={LIST} />, { wrapper: wrapper() });
 
     await user.click(screen.getByTestId('product-delete-0'));
     // Dialog open, no upstream call yet (confirm-gate).
@@ -118,7 +118,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ProductsScreen products={LIST} />, { wrapper: wrapper() });
+    render(<ProductsScreen canWrite products={LIST} />, { wrapper: wrapper() });
 
     await user.click(screen.getByTestId('product-delete-0'));
     expect(screen.getByTestId('ecommerce-confirm-dialog')).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
   it('a 503 on a re-query degrades the section only', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ code: 'X' }, 503)));
     const user = userEvent.setup();
-    render(<ProductsScreen products={LIST} />, { wrapper: wrapper() });
+    render(<ProductsScreen canWrite products={LIST} />, { wrapper: wrapper() });
     // Filter submit → a non-seeded re-query that 503s.
     await user.selectOptions(screen.getByTestId('product-status-filter'), 'HIDDEN');
     await user.click(screen.getByTestId('product-filter-submit'));
@@ -142,7 +142,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
   });
 
   it('is axe-clean (WCAG AA)', async () => {
-    const { container } = render(<ProductsScreen products={LIST} />, {
+    const { container } = render(<ProductsScreen canWrite products={LIST} />, {
       wrapper: wrapper(),
     });
     const violations = await runAxe(container);
@@ -152,7 +152,7 @@ describe('ProductsScreen — table + filter + delete confirm-gate', () => {
 
 describe('ProductDetail — variant inline CRUD + stock adjust', () => {
   it('renders variants + opens the add row + stock-adjust buttons', () => {
-    render(<ProductDetail product={DETAIL} />, { wrapper: wrapper() });
+    render(<ProductDetail canWrite product={DETAIL} />, { wrapper: wrapper() });
     expect(screen.getByTestId('variant-table')).toBeInTheDocument();
     expect(screen.getByTestId('variant-stock-0')).toHaveTextContent('10');
     expect(screen.getByTestId('variant-add-row')).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe('ProductDetail — variant inline CRUD + stock adjust', () => {
       .mockResolvedValue(jsonResponse({ id: 'v-2', optionName: 'L', stock: 3, additionalPrice: 0 }, 201));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ProductDetail product={DETAIL} />, { wrapper: wrapper() });
+    render(<ProductDetail canWrite product={DETAIL} />, { wrapper: wrapper() });
 
     await user.type(screen.getByTestId('variant-add-name'), 'L');
     await user.clear(screen.getByTestId('variant-add-stock'));
@@ -193,7 +193,7 @@ describe('ProductDetail — variant inline CRUD + stock adjust', () => {
       .mockResolvedValue(jsonResponse({ variantId: 'v-1', currentStock: 7 }));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<ProductDetail product={DETAIL} />, { wrapper: wrapper() });
+    render(<ProductDetail canWrite product={DETAIL} />, { wrapper: wrapper() });
 
     await user.click(screen.getByTestId('stock-adjust-open-v-1'));
     const dialog = screen.getByTestId('ecommerce-confirm-dialog');

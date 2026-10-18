@@ -4,8 +4,10 @@ import {
   DetailHeader,
   getNotificationDetailSectionState,
   TemplateForm,
+  ReadOnlyRouteNotice,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +25,8 @@ export default async function TemplateEditPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">알림 템플릿 수정</h1>
@@ -76,6 +79,21 @@ export default async function TemplateEditPage({
     return note(
       'notification-degraded',
       'ecommerce 알림 템플릿 정보를 일시적으로 불러올 수 없습니다. 잠시 후 다시 시도하세요.',
+    );
+  }
+
+  // TASK-PC-FE-346 — a non-writer gets the notice INSTEAD of the form (contract § 2.4.3.4); the
+  // server would only answer the submit with a 403.
+  if (!(await resolveEcommerceCanWrite('/ecommerce/notifications/templates', eligibility))) {
+    return (
+      <ReadOnlyRouteNotice
+        heading="알림 템플릿 수정"
+        testId="notification-form-read-only"
+        action="알림 템플릿 수정"
+        roleLabel="알림 변경"
+        backHref={'/ecommerce/notifications/templates'}
+        backLabel="목록으로"
+      />
     );
   }
 

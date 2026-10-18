@@ -11,6 +11,8 @@ import { statusLabel, nextStatusLabel } from './shipping-labels';
 import { formatDateTime } from '@/shared/lib/datetime';
 
 interface ShippingsTableProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   rows: ShippingList['content'];
   isAnyPending: boolean;
   openTransition: (id: string, nextStatus: string, wmsRouted: boolean) => void;
@@ -32,6 +34,7 @@ interface ShippingsTableProps {
  */
 export function ShippingsTable({
   rows,
+  canWrite,
   isAnyPending,
   openTransition,
   triggerRefresh,
@@ -61,9 +64,11 @@ export function ShippingsTable({
             <th scope="col" className="p-2">
               생성일
             </th>
-            <th scope="col" className="p-2">
-              작업
-            </th>
+            {canWrite && (
+              <th scope="col" className="p-2">
+                작업
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -94,6 +99,7 @@ export function ShippingsTable({
                 <td className="p-2 text-sm text-muted-foreground">
                   {formatDateTime(s.createdAt)}
                 </td>
+                {canWrite && (
                 <td className="p-2">
                   <div className="flex gap-2">
                     {next !== null && (
@@ -126,6 +132,7 @@ export function ShippingsTable({
                     )}
                   </div>
                 </td>
+                )}
               </tr>
             );
           })}

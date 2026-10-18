@@ -10,6 +10,8 @@ import {
 } from '../api/notification-types';
 
 interface NotificationsTableProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   rows: NotificationTemplateList['content'];
   pagination: {
     prevDisabled: boolean;
@@ -32,6 +34,7 @@ function formatType(type: string): string {
  */
 export function NotificationsTable({
   rows,
+  canWrite,
   pagination,
 }: NotificationsTableProps) {
   return (
@@ -58,9 +61,11 @@ export function NotificationsTable({
             <th scope="col" className="p-2">
               수정일
             </th>
-            <th scope="col" className="p-2">
-              작업
-            </th>
+            {canWrite && (
+              <th scope="col" className="p-2">
+                작업
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -75,19 +80,21 @@ export function NotificationsTable({
               <td className="p-2">{t.subject}</td>
               <td className="p-2">{formatDateTime(t.createdAt)}</td>
               <td className="p-2">{formatDateTime(t.updatedAt)}</td>
-              <td className="p-2">
-                <Link
-                  href={`/ecommerce/notifications/templates/${t.templateId}/edit`}
-                >
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    data-testid={`notification-edit-${i}`}
+              {canWrite && (
+                <td className="p-2">
+                  <Link
+                    href={`/ecommerce/notifications/templates/${t.templateId}/edit`}
                   >
-                    수정
-                  </Button>
-                </Link>
-              </td>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      data-testid={`notification-edit-${i}`}
+                    >
+                      수정
+                    </Button>
+                  </Link>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

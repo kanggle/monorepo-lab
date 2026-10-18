@@ -4,6 +4,7 @@ import {
   NotificationsScreen,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,8 @@ export const dynamic = 'force-dynamic';
  * Reuses the products eligibility resolver (same ecommerce productKey gate).
  */
 export default async function EcommerceNotificationsPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1
@@ -104,5 +106,7 @@ export default async function EcommerceNotificationsPage() {
     );
   }
 
-  return <NotificationsScreen templates={state.templates} />;
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/notifications/templates', eligibility);
+  return <NotificationsScreen templates={state.templates} canWrite={canWrite} />;
 }

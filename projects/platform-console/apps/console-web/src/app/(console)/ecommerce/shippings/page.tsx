@@ -4,6 +4,7 @@ import {
   ShippingsScreen,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,8 @@ export const dynamic = 'force-dynamic';
  * Base URL: ECOMMERCE_PUBLIC_BASE_URL + /shippings (non-admin path).
  */
 export default async function EcommerceShippingsPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1
@@ -105,5 +107,7 @@ export default async function EcommerceShippingsPage() {
     );
   }
 
-  return <ShippingsScreen shippings={state.shippings} />;
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/shippings', eligibility);
+  return <ShippingsScreen shippings={state.shippings} canWrite={canWrite} />;
 }

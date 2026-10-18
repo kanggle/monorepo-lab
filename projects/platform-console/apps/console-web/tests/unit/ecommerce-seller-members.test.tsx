@@ -83,7 +83,7 @@ function renderMembers(status = 'ACTIVE') {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
-  return render(<SellerMembers sellerId="acme-corp" sellerStatus={status} />, {
+  return render(<SellerMembers canWrite sellerId="acme-corp" sellerStatus={status} />, {
     wrapper,
   });
 }

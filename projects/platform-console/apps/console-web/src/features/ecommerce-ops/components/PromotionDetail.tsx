@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { CouponIssueDialog } from './CouponIssueDialog';
 import { DetailHeader } from '@/shared/ui/DetailHeader';
 import { PromotionDetailFields } from './PromotionDetailFields';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce promotion detail section (TASK-PC-FE-086 — ADR-031 Phase 3b).
@@ -28,10 +29,12 @@ import { PromotionDetailFields } from './PromotionDetailFields';
  * query, delete confirm-gate, and coupon-issue orchestration.
  */
 export interface PromotionDetailProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   promotion: PromotionDetailType;
 }
 
-export function PromotionDetail({ promotion }: PromotionDetailProps) {
+export function PromotionDetail({ promotion, canWrite }: PromotionDetailProps) {
   const router = useRouter();
   const detailQ = usePromotion(promotion.promotionId, promotion);
   const data = detailQ.data ?? promotion;
@@ -70,6 +73,7 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
         backHref="/ecommerce/promotions"
         backTestId="promotion-detail-back"
         actions={
+          canWrite ? (
           <>
             {canEdit && (
               <Link href={`/ecommerce/promotions/${data.promotionId}/edit`}>
@@ -100,8 +104,17 @@ export function PromotionDetail({ promotion }: PromotionDetailProps) {
               </Button>
             )}
           </>
+          ) : undefined
         }
       />
+
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="promotion-detail-read-only-note"
+          action="프로모션 수정 · 삭제 · 쿠폰 발급"
+          roleLabel="프로모션 변경"
+        />
+      )}
 
       <PromotionDetailFields data={data} />
 

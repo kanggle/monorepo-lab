@@ -17,13 +17,18 @@ import { ApiError } from '@/shared/api/errors';
 export interface EcommerceEligibility {
   eligible: boolean;
   registryDegraded: boolean;
+  /**
+   * TASK-PC-FE-346 — the registry's ecommerce tenants, for the write-button gate
+   * (`../_write-access.ts`). `null` = unknown (registry degraded / failed) ⇒ buttons shown.
+   */
+  tenants: readonly string[] | null;
 }
 
 export async function resolveEcommerceEligibility(): Promise<EcommerceEligibility> {
   try {
     const catalog = await getCatalog();
     if (catalog.degraded) {
-      return { eligible: false, registryDegraded: true };
+      return { eligible: false, registryDegraded: true, tenants: null };
     }
     const ecommerce = catalog.products.find(
       (p) => p.productKey === 'ecommerce',
@@ -33,11 +38,12 @@ export async function resolveEcommerceEligibility(): Promise<EcommerceEligibilit
         ecommerce && ecommerce.available && ecommerce.tenants.length > 0,
       ),
       registryDegraded: false,
+      tenants: ecommerce ? ecommerce.tenants : [],
     };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login?error=session_expired');
     }
-    return { eligible: false, registryDegraded: true };
+    return { eligible: false, registryDegraded: true, tenants: null };
   }
 }

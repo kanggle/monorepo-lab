@@ -18,6 +18,8 @@ interface VariantEditSlice {
 }
 
 interface VariantTableProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   variants: Variant[];
   edit: VariantEditSlice;
   openDelete: (v: Variant) => void;
@@ -30,7 +32,7 @@ interface VariantTableProps {
  * Edit/add/delete state stays owned by `useVariantEditor`; all `data-testid`s
  * are unchanged.
  */
-export function VariantTable({ variants, edit, openDelete, inputCls }: VariantTableProps) {
+export function VariantTable({ variants, edit, openDelete, inputCls, canWrite }: VariantTableProps) {
   return (
     <table className="mb-3 data-table" data-testid="variant-table">
       <caption className="sr-only">상품 옵션 목록</caption>
@@ -39,7 +41,7 @@ export function VariantTable({ variants, edit, openDelete, inputCls }: VariantTa
           <th scope="col" className="p-2">옵션명</th>
           <th scope="col" className="p-2">재고</th>
           <th scope="col" className="p-2">추가 가격</th>
-          <th scope="col" className="p-2">작업</th>
+          {canWrite && <th scope="col" className="p-2">작업</th>}
         </tr>
       </thead>
       <tbody>
@@ -75,6 +77,7 @@ export function VariantTable({ variants, edit, openDelete, inputCls }: VariantTa
                   v.additionalPrice.toLocaleString('ko-KR')
                 )}
               </td>
+              {canWrite && (
               <td className="p-2">
                 <div className="flex flex-wrap gap-2">
                   {editing ? (
@@ -125,6 +128,7 @@ export function VariantTable({ variants, edit, openDelete, inputCls }: VariantTa
                   </p>
                 )}
               </td>
+              )}
             </tr>
           );
         })}

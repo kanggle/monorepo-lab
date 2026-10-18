@@ -17,6 +17,7 @@ import {
 } from '../api/product-types';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { ProductsTable } from './ProductsTable';
+import { ReadOnlyNote } from './ReadOnlyNotice';
 
 /**
  * ecommerce product operations list section (TASK-PC-FE-081 — § 2.4.10 #1).
@@ -32,12 +33,14 @@ import { ProductsTable } from './ProductsTable';
  */
 
 export interface ProductsScreenProps {
+  /** TASK-PC-FE-346 — REQUIRED: `false` hides the mutation controls (no area `*_WRITE` role). Pages pass `resolveEcommerceCanWrite(...)`. */
+  canWrite: boolean;
   products: ProductList;
 }
 
 const STATUS_FILTER_OPTIONS = ['', ...PRODUCT_STATUS_VALUES] as const;
 
-export function ProductsScreen({ products }: ProductsScreenProps) {
+export function ProductsScreen({ products, canWrite }: ProductsScreenProps) {
   const router = useRouter();
   const statusFid = useId();
 
@@ -103,13 +106,22 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
         <h1 id="ecommerce-products-heading" className="text-2xl font-semibold">
           E-Commerce 상품
         </h1>
-        <Link href="/ecommerce/products/new" data-testid="product-new-link">
-          <Button>상품 등록</Button>
-        </Link>
+        {canWrite && (
+          <Link href="/ecommerce/products/new" data-testid="product-new-link">
+            <Button>상품 등록</Button>
+          </Link>
+        )}
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         상품 목록 · 상세(옵션 + 재고) · 등록 / 수정 / 삭제.
       </p>
+      {!canWrite && (
+        <ReadOnlyNote
+          testId="product-read-only-note"
+          action="상품 등록 · 수정 · 삭제"
+          roleLabel="상품 변경"
+        />
+      )}
 
       <form
         onSubmit={submitFilter}
@@ -168,6 +180,7 @@ export function ProductsScreen({ products }: ProductsScreenProps) {
       ) : (
         <ProductsTable
           rows={rows}
+          canWrite={canWrite}
           onDelete={(product) => {
             setDelError(null);
             setToDelete(product);

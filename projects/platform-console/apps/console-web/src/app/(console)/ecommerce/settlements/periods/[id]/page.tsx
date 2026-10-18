@@ -4,6 +4,7 @@ import {
   PeriodPayoutsScreen,
 } from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,8 @@ export default async function EcommerceSettlementPeriodPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 id="settlements-period-heading" className="mb-6 text-2xl font-semibold">
@@ -123,7 +125,7 @@ export default async function EcommerceSettlementPeriodPage({
     );
   }
 
-  return (
-    <PeriodPayoutsScreen periodId={id} initialPayouts={state.payouts} />
-  );
+  // TASK-PC-FE-346 — mutation controls follow the area `*_WRITE` role (contract § 2.4.3.4).
+  const canWrite = await resolveEcommerceCanWrite('/ecommerce/settlements', eligibility);
+  return <PeriodPayoutsScreen periodId={id} initialPayouts={state.payouts} canWrite={canWrite} />;
 }

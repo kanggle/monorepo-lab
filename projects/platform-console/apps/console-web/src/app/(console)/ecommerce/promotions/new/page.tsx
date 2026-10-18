@@ -1,6 +1,11 @@
 import Link from 'next/link';
-import { DetailHeader, PromotionForm } from '@/features/ecommerce-ops';
+import {
+  DetailHeader,
+  PromotionForm,
+  ReadOnlyRouteNotice,
+} from '@/features/ecommerce-ops';
 import { resolveEcommerceEligibility } from '../../products/_eligibility';
+import { resolveEcommerceCanWrite } from '../../_write-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * the form. Mirrors the products new/page.tsx degrade/not-eligible branches.
  */
 export default async function NewPromotionPage() {
-  const { eligible, registryDegraded } = await resolveEcommerceEligibility();
+  const eligibility = await resolveEcommerceEligibility();
+  const { eligible, registryDegraded } = eligibility;
 
   const heading = (
     <h1 className="mb-6 text-2xl font-semibold">프로모션 등록</h1>
@@ -53,6 +59,21 @@ export default async function NewPromotionPage() {
           </Link>
         </div>
       </section>
+    );
+  }
+
+  // TASK-PC-FE-346 — a non-writer gets the notice INSTEAD of the form (contract § 2.4.3.4); the
+  // server would only answer the submit with a 403.
+  if (!(await resolveEcommerceCanWrite('/ecommerce/promotions', eligibility))) {
+    return (
+      <ReadOnlyRouteNotice
+        heading="프로모션 등록"
+        testId="promotion-form-read-only"
+        action="프로모션 등록"
+        roleLabel="프로모션 변경"
+        backHref={'/ecommerce/promotions'}
+        backLabel="목록으로"
+      />
     );
   }
 
