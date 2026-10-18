@@ -26,7 +26,16 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  // TASK-PC-FE-341 — CI keeps the annotations AND writes a machine-readable report: the `json`
+  // reporter carries every attempt's `startTime` / `duration` / `workerIndex` / `retry`, which the
+  // `github` (dot) reporter's job log does not — that is how a later reader reconstructs which spec
+  // ran on the other worker while a flaky one failed. Path: the nightly uploads `test-results/`
+  // (artifact `platform-console-playwright-report-nightly`).
+  // 🔴 `test-results/` is also Playwright's `outputDir` (cleaned at run START, not after), so a
+  // report file written at run END survives.
+  reporter: process.env.CI
+    ? [['github'], ['json', { outputFile: 'test-results/e2e-results.json' }]]
+    : 'list',
   // Run global-setup before any spec; mint tokens once + persist cookies.
   globalSetup: require.resolve('./tests/e2e/fixtures/global-setup.ts'),
   use: {
