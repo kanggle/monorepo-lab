@@ -204,8 +204,8 @@ export function WmsGuideScreen() {
               </h2>
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 재고·출고 화면을 보거나 쓰려면 <strong>WMS 권한(롤)</strong>이 있어야
-                합니다. 이 권한은 운영자가 WMS를 쓰는 회사(테넌트)를 선택하면 자동으로
-                주어집니다. IAM 관리 화면의 권한과는 다른 종류입니다 — 자세한 내용은{' '}
+                합니다. 이 권한은 운영자에게 배정한 업무 권한 세트에 담겨 있고, WMS를
+                구독한 회사(테넌트)를 선택하면 붙습니다. IAM 관리 화면의 권한과는 다른 종류입니다 — 자세한 내용은{' '}
                 <Link
                   href="/iam/guide"
                   data-testid="wms-guide-xlink-iam"

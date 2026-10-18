@@ -23,8 +23,9 @@
  *     (PO status/staleness) · `features/scm-replenishment/api/types.ts`
  *     (suggestion status/source) · `features/scm-config/api/types.ts`
  *     (policy/supplier-map 필드).
- *   - 도메인 롤: auth-service `OperatorRoleDerivation`(assume-tenant 파생 — scm
- *     → 단일 SCM_OPERATOR).
+ *   - 도메인 롤: scm-platform `specs/integration/iam-integration.md` § 업무 역할
+ *     (8 업무 역할 = 배정된 업무 권한 세트 ∩ 구독 · `SCM_OPERATOR` = 파생 진입 역할 —
+ *     TASK-PC-FE-348).
  *
  * 테스트(ScmGuideScreen.test.tsx)는 섹션/행 존재 등 **구조만** 단언하며, 설명
  * 텍스트 자체는 사람이 스펙과 맞춘다(iam-guide/wms-guide/ecommerce-guide data.ts
@@ -360,13 +361,14 @@ export const CONFIG_NOTE = {
 // ───────────────────────── 도메인 롤 · 단일테넌트 ─────────────────────────
 
 /**
- * SCM 도메인 롤(단일 SCM_OPERATOR) + 단일테넌트 안내. 운영자가 scm 구독 테넌트로
- * assume-tenant 할 때 auth-service `OperatorRoleDerivation` 이 파생한다. WMS(세분
- * 롤 다수)와 달리 단일 coarse 롤 하나뿐 — E-Commerce 의 단일 ADMIN 과 유사.
+ * SCM 도메인 롤 안내 (TASK-PC-FE-348, ADR-MONO-083 P5 · TASK-MONO-792). SCM 업무 역할 8 개
+ * (발주 · 수요계획 · 물류 · 재고 가시성 × 조회/변경)는 운영자에게 배정한 업무 권한 세트로
+ * 받는다. `SCM_OPERATOR` 는 그중 하나라도 있으면 auth 가 덧붙이는 진입 역할(배정 불가 ·
+ * 단독으로 업무 API 를 열지 않음). 정본 = scm `iam-integration.md` § 업무 역할.
  */
 export const SCM_ROLE_NOTE = {
   title: 'SCM 권한 안내',
-  body: '콘솔에서 SCM 을 구독한 테넌트(예: 데모의 demo-corp)를 고르면 SCM 화면이 열리고, SCM 운영자(SCM_OPERATOR) 권한이 자동으로 주어집니다. WMS 처럼 화면별로 권한이 나뉘어 있지 않고 이 권한 하나뿐입니다. 보충 · 설정 화면은 테넌트만 맞으면 열리고, 조달 화면의 발주 확정만 운영자 역할을 따로 확인합니다.',
+  body: 'SCM 은 화면마다 필요한 권한이 다릅니다. 콘솔에서 SCM 을 구독한 테넌트(예: 데모의 demo-corp)를 고르면, 운영자에게 배정한 업무 권한 세트 가운데 SCM 업무 역할이 붙습니다. SCM 업무 역할은 발주(SCM_PROCUREMENT) · 수요계획(SCM_DEMAND_PLANNING) · 물류(SCM_LOGISTICS) · 재고 가시성(SCM_INVENTORY_VISIBILITY) 네 영역마다 조회(_READ)와 변경(_WRITE)이 있어 모두 8개입니다. 조회 역할은 변경을 열지 않고, 변경 역할은 조회도 엽니다. 조달은 발주, 재고는 재고 가시성, 보충 · 설정은 수요계획 영역의 조회 또는 변경 역할이 있어야 열립니다. 보충 추천의 승인 · 기각과 설정 저장은 수요계획 변경 역할(SCM_DEMAND_PLANNING_WRITE)이 있어야 하고, 승인으로 만들어지는 발주 초안도 그 역할만으로 만들어집니다. 발주 확정은 발주 변경 역할(SCM_PROCUREMENT_WRITE)이 있어도 운영자 계정으로만 할 수 있습니다. WMS 출고 화면의 「발송 재시도」는 물류 변경 역할(SCM_LOGISTICS_WRITE)이 필요합니다. SCM 운영자(SCM_OPERATOR)는 배정하는 역할이 아니라 진입 역할입니다 — SCM 업무 역할이 하나라도 있으면 인증 서버가 덧붙이며, 이 역할만으로는 어떤 업무 API 도 열리지 않습니다. 그 화면의 조회 · 변경 역할이 하나도 없으면 사이드바 메뉴에 「업무 권한 없음」이 붙고, 변경 역할만 없으면 쓰기 버튼이 숨고 「조회 전용」 안내가 보입니다. 데모 계정에는 이 역할이 모두 배정되어 있어 데모에서는 모두 열려 있습니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────

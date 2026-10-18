@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-341-nightly-sample-visitor-overview-flaky.md` — **nightly 콘솔 e2e `sample-visitor-transition.spec.ts:19` 가 `TASK-MONO-773` S6 머지와 함께 처음 flaky — 개요 저하(문서 10 s)** (READY, 2026-10-15 UTC · 출처 773 § 닫기 § 4). run 38763381565 / job 116520791861 `10 passed · 1 flaky` · 앞선 nightly 다섯 `8 passed · 0 flaky`. 원인 미확정(가설: SSR 개요 fetch × 병렬 비운영자 흐름 경합 — 미측정). AC-0 = 다음 nightly 최소 5 런의 재발 · 실패 단계(익명 `:26` / 로그인 뒤 `:35`) · 동시 실행 상관. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-PC-FE-348-guide-copy-entry-roles-after-p5-p8.md` — **가이드 문안이 `ADR-MONO-083` P5~P8 뒤 틀렸다 — «도메인 = `*_OPERATOR` 하나» · 진입 역할을 배정 역할처럼 적은 문장을 세분 역할로** (READY, 2026-10-16 UTC · `TASK-PC-FE-342` ~ `345` 에서 모은 후속, `TASK-PC-FE-344` PR 에서 기안). 정적 가이드 문안만 — 신호 · 서버 무변경. 분석=Opus 5.5 / 구현 권장=Sonnet(문안 — 소유자 검토).
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -119,6 +118,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
+- `TASK-PC-FE-348-guide-copy-entry-roles-after-p5-p8.md` — **가이드 문안이 `ADR-MONO-083` P5~P8 뒤 틀렸다 — «도메인 = `*_OPERATOR` 하나» · 진입 역할을 배정 역할처럼 적은 문장을 세분 역할로** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-342` ~ `345` 에서 모은 후속). 정적 가이드 문안만 — 신호 · 서버 무변경. AC-3(소유자 문안 검토) ✅ 2026-10-18 UTC 승인(두 곳 다듬음) — AC-4(Vercel) 대기. 분석=Opus 5.5 / 구현 권장=Sonnet(문안 — 소유자 검토).
 - `TASK-PC-FE-346-ecommerce-write-buttons-area-roles.md` — **`ADR-MONO-083` P8 콘솔 후속 (2) — E-commerce 7 화면의 쓰기 버튼을 영역 `*_WRITE` 로 숨김** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-345` 에서 분리). 서버 라이브(795) — 머지 게이트 없음. `writeRequires` 7 행 + 7 화면 · 하위 라우트 배선(`canWrite` 필수 prop · «조회 전용» · `new`/`edit` 는 폼 대신 안내) — 342 의 SCM 화면 · 344 의 `/ledger` 와 같은 모양. 분석=Opus 5.5 / 구현=Sonnet.
 - `TASK-PC-FE-347-erp-write-buttons-area-roles.md` — **`ADR-MONO-083` P6 콘솔 후속 (2) — ERP 3 화면(기준정보 · 결재 · 위임)의 쓰기 버튼을 `ERP_MASTERDATA_WRITE` / `ERP_APPROVAL_WRITE` 로 숨김** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-343` 에서 분리 — 343 은 메뉴 신호 · 알림 종만). 343 머지됨. 서버 라이브(793) — 머지 게이트 없음. 기준정보 5 목록 · 결재 상세/상신 · 위임 목록의 버튼 배선(`canWrite` · «조회 전용»). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-344-finance-nav-business-role-signals.md` — **`ADR-MONO-083` P7 콘솔 후속 — Finance 메뉴 «업무 권한 없음» · `/ledger` 쓰기 버튼(대사 해소 · 환율 갱신)을 Finance 세분 역할로** (IN-PROGRESS, 2026-10-16 UTC · 출처 `TASK-MONO-794`). 🔴 `/ledger` 버튼 = `FINANCE_LEDGER_WRITE` 만(통제 역할은 열지 않는다). 시리즈 마지막 — `CATALOG_ROLES` 에 진입 역할 0. 가이드 문안 후속 `TASK-PC-FE-348` 기안. 분석=Opus 5.5 / 구현=Opus 5.5.

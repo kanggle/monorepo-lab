@@ -149,7 +149,10 @@ export function getProductsSummary(): Promise<ProductAreaSummary> {
  *  🔴 NOT the public `/products/{id}`: the ecommerce gateway admits
  *  `ECOMMERCE_OPERATOR` on `/api/admin/**` only (the public product tree is
  *  CUSTOMER-only), so the operator got the list and a 403 on its detail
- *  (TASK-MONO-703). A test pins the ADMIN base. */
+ *  (TASK-MONO-703). A test pins the ADMIN base.
+ *  (TASK-PC-FE-348 — `ECOMMERCE_OPERATOR` is the entry role auth derives; it is
+ *  the GATEWAY's coarse door only. The product service itself needs
+ *  `ECOMMERCE_PRODUCT_READ` ∨ `_WRITE`, ecommerce `iam-integration.md` § 업무 역할.) */
 export function getProduct(id: string): Promise<ProductDetail> {
   const env = getServerEnv();
   return callEcommerce(

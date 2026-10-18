@@ -23,7 +23,9 @@
  *   - 콘솔 소비 타입(producer enum verbatim 반영 — 2차 SoT):
  *     `features/ecommerce-ops/api/{types,order-types,shipping-types,seller-types,
  *     user-types,notification-types}.ts`.
- *   - 도메인 롤: auth-service `OperatorRoleDerivation`(assume-tenant 파생 — ecommerce ECOMMERCE_OPERATOR).
+ *   - 도메인 롤: ecommerce-microservices-platform `specs/integration/iam-integration.md` § 업무 역할
+ *     (13 업무 역할 = 배정된 업무 권한 세트 ∩ 구독 · `ECOMMERCE_OPERATOR` = 파생 진입 역할 —
+ *     TASK-PC-FE-348).
  *
  * 테스트(EcommerceGuideScreen.test.tsx)는 섹션/행 존재 등 **구조만** 단언하며,
  * 설명 텍스트 자체는 사람이 스펙과 맞춘다(iam-guide/wms-guide data.ts 동일 정책).
@@ -548,14 +550,14 @@ export const NOTIFICATION_NOTE = {
 // ───────────────────────── 도메인 롤 ─────────────────────────
 
 /**
- * E-Commerce 도메인 롤. 운영자가 ecommerce 구독 테넌트로 assume-tenant 할 때
- * auth-service `OperatorRoleDerivation` 이 파생한다. WMS(세분 롤 다수)와 달리
- * **단일 coarse `ECOMMERCE_OPERATOR`** 하나뿐 — 7개 화면이 모두 동일하게 게이트된다. IAM
- * 가이드의 admin-console 역할과는 다른 축(도메인 롤).
+ * E-Commerce 도메인 롤 (TASK-PC-FE-348, ADR-MONO-083 P8 · TASK-MONO-795). 영역별 업무 역할 13 개는
+ * 운영자에게 배정한 업무 권한 세트로 받는다. `ECOMMERCE_OPERATOR` 는 그중 하나라도 있으면 auth 가
+ * 덧붙이는 진입 역할(배정 불가 · 게이트웨이 문에만 쓰임 · 서비스에서는 업무 API 를 열지 않음). 정본 =
+ * ecommerce `iam-integration.md` § 업무 역할. IAM 가이드의 admin-console 역할과는 다른 축(도메인 롤).
  */
 export const ECOMMERCE_ROLE_NOTE = {
-  title: 'E-Commerce 권한 (ECOMMERCE_OPERATOR 하나)',
-  body: 'E-Commerce 화면은 ECOMMERCE_OPERATOR 라는 권한 하나로만 열립니다. 회사(테넌트)를 선택하면 이 권한이 자동으로 부여되고, 상품·주문·배송·프로모션·사용자·셀러·알림 7개 화면이 모두 똑같이 이 권한으로 열립니다. WMS 처럼 화면마다 권한이 따로 나뉘어 있지 않습니다. 이 권한이 없으면 "접근 권한이 없습니다" 라는 안내가 나옵니다.',
+  title: 'E-Commerce 권한 (화면마다 다른 업무 역할)',
+  body: 'E-Commerce 는 화면마다 필요한 권한이 다릅니다. 회사(테넌트)를 고르면, 운영자에게 배정한 업무 권한 세트 가운데 E-Commerce 업무 역할이 붙습니다. 업무 역할은 모두 13개입니다. 주문(ECOMMERCE_ORDER) · 상품(ECOMMERCE_PRODUCT, 셀러 포함) · 정산(ECOMMERCE_SETTLEMENT) · 프로모션(ECOMMERCE_PROMOTION) · 배송(ECOMMERCE_SHIPPING) · 알림(ECOMMERCE_NOTIFICATION)은 영역마다 조회(_READ)와 변경(_WRITE) 두 개씩이고, 회원(ECOMMERCE_MEMBER_READ)은 회원을 바꾸는 기능이 없어 조회 역할만 있습니다. 조회 역할은 변경을 열지 않고, 변경 역할은 그 영역의 조회도 엽니다. 상품 · 주문 · 배송 · 프로모션 · 셀러 · 정산 · 알림 화면은 자기 영역(셀러는 상품 영역)의 조회 또는 변경 역할로, 사용자 화면은 회원 조회 역할로 열립니다. E-Commerce 운영자(ECOMMERCE_OPERATOR)는 배정하는 역할이 아니라 진입 역할입니다 — 위 13개 중 하나라도 있으면 인증 서버가 덧붙이며, 게이트웨이를 통과하는 데만 쓰일 뿐 이 역할만으로는 어떤 업무 API 도 열리지 않습니다. 그 화면의 조회 · 변경 역할이 하나도 없으면 사이드바 메뉴에 「업무 권한 없음」이 붙고, 변경 역할만 없으면 쓰기 버튼이 숨고 「조회 전용」 안내가 보입니다. 데모 계정에는 이 역할이 모두 배정되어 있어 데모에서는 모두 열려 있습니다.',
 } as const;
 
 // ───────────────────────── 작업 레시피 (TASK-PC-FE-256) ─────────────────────────
@@ -629,6 +631,6 @@ export const ECOMMERCE_GLOSSARY: GlossaryEntry[] = [
     key: 'assume-tenant',
     term: '테넌트 선택 (assume-tenant)',
     meaning:
-      '운영자가 회사(테넌트)를 고르면 ECOMMERCE_OPERATOR 권한이 자동으로 부여되는 것을 말합니다. 7개 운영 화면이 모두 이 권한으로 열립니다.',
+      '운영자가 회사(테넌트)를 고르는 동작입니다. 이때 그 회사에서 쓰도록 배정된 E-Commerce 업무 역할이 붙고, 화면마다 필요한 역할이 다릅니다.',
   },
 ];
