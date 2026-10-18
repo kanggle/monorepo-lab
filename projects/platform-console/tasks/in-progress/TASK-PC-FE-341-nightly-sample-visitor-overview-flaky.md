@@ -8,7 +8,7 @@ nightly 콘솔 e2e `sample-visitor-transition.spec.ts:19` 가 `TASK-MONO-773` S6
 
 # Status
 
-ready
+in-progress (2026-10-18 UTC — AC-0 측정 완료 · AC-1 «미확정» · 소유자 결정 «계측 먼저» · AC-2 열림)
 
 # Owner
 
@@ -65,8 +65,8 @@ platform-console
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시 재측정(결정 아님): 이 티켓 기안 뒤 **연속 nightly 최소 5 런**(또는 착수 시점까지 쌓인 전부)에서 콘솔 잡의 `N passed` · `flaky` 수와 flaky 칸 이름을 표로 적는다. 각 flaky 에 대해 ① 실패 단계(`:26` 익명 / `:35` 로그인 뒤) ② 같은 시각에 다른 워커가 돌던 spec(Playwright 보고서의 시작 · 종료 시각) ③ 문서 응답 시간 ④ console-web 서버 로그의 개요 저하 사유(어느 다리). 0 런 재발이면 그 사실과 런 목록을 적고 «재발 없음 — 관찰 종료» 를 소유자에게 제안한다.
-- [ ] **AC-1** — AC-0 의 표로 원인을 하나로 좁힌다: (가) 동시 실행 상관(이 spec 실패가 773 spec 과 겹친 런에만) / (나) 겹침과 무관한 개요 SSR 지연 / (다) 익명 단계 저하(샘플 경로가 BFF 를 부름). 근거 없이 고르지 않는다 — 좁혀지지 않으면 «미확정» 으로 적고 추가 계측(개요 다리별 시간 로그)을 제안한다.
+- [x] **AC-0** (2026-10-18 UTC — 아래 § AC-0 측정) — 착수 시 재측정(결정 아님): 이 티켓 기안 뒤 **연속 nightly 최소 5 런**(또는 착수 시점까지 쌓인 전부)에서 콘솔 잡의 `N passed` · `flaky` 수와 flaky 칸 이름을 표로 적는다. 각 flaky 에 대해 ① 실패 단계(`:26` 익명 / `:35` 로그인 뒤) ② 같은 시각에 다른 워커가 돌던 spec(Playwright 보고서의 시작 · 종료 시각) ③ 문서 응답 시간 ④ console-web 서버 로그의 개요 저하 사유(어느 다리). 0 런 재발이면 그 사실과 런 목록을 적고 «재발 없음 — 관찰 종료» 를 소유자에게 제안한다.
+- [~] **AC-1** (2026-10-18 UTC — **«미확정»**, 근거 행 · 소유자 결정은 아래 § AC-1 판정) — AC-0 의 표로 원인을 하나로 좁힌다: (가) 동시 실행 상관(이 spec 실패가 773 spec 과 겹친 런에만) / (나) 겹침과 무관한 개요 SSR 지연 / (다) 익명 단계 저하(샘플 경로가 BFF 를 부름). 근거 없이 고르지 않는다 — 좁혀지지 않으면 «미확정» 으로 적고 추가 계측(개요 다리별 시간 로그)을 제안한다.
 - [ ] **AC-2** — 판정에 맞는 수선 + 대조군: 수선 뒤 연속 nightly 5 런 flaky 0, 그리고 773 spec 3 칸 · 이 spec 이 모두 첫 시도 통과. (다)면 단위 시험으로 «익명 샘플 렌더의 BFF fetch 0» 을 먼저 빨갛게 재현한다.
 
 # Related Specs
@@ -115,3 +115,55 @@ platform-console
 - 같은 커밋의 두 번째 run **38967164204** · job **117196733812**: `12 passed · 0 flaky`. 342 · 345 브랜치 nightly(각 12/0)에서는 첫 시도 통과.
 - 🔵 사유 문구가 앞 사례와 **다르다** — 문서 10 s TIMEOUT 이 아니라 개요 IAM 카드 미렌더(5 s). 같은 «개요 첫 렌더 지연» 계열로 보이나 확정 아님.
 - 🔴 가설(미확정): `TASK-PC-FE-343` 이 알림 종 route 에 row 12(`/me/domain-access`) 호출 1 회를 더했다 — 개요 SSR 과 겹칠 수 있다. 표본 3 개로는 확인도 배제도 못 했다. AC-0 의 연속 런 표에 `:133` 칸을 함께 둔다.
+
+---
+
+# AC-0 측정 (2026-10-18 UTC)
+
+읽기 전용. 범위: `nightly-e2e.yml` 전 런 · 2026-10-15T00:00Z ~ 2026-10-18T10:22Z, `gh run list --limit 100` 로 모은 **56 런-시도**(구간 최초 런 38704767456) × 콘솔 잡 «Platform Console E2E full-stack (Playwright + docker compose)» 1 개씩. 로그 56/56 확보. **56 행 전체 표는 PR 설명에 있다**(여기엔 flaky · failed 행과 집계만).
+
+도구 한계 둘: (a) CI 리포터가 `dot` 형식이라 잡 로그에 테스트별 시작/종료 줄이 없다 → ② 는 업로드된 trace.zip 의 시계로 복원(flaky 4 런만; 값은 «컨텍스트 열림~마지막 이벤트» 라 실제보다 약간 넓다). (b) `console_composition_leg` 는 **잡이 실패했을 때만** 덤프된다 → 초록(flaky 로 덮인) 잡엔 ④ 자료가 없다.
+
+## flaky · failed 칸 (① 실패 단계 · ② 동시 워커 · ③ 문서 응답 · ④ 서버 로그)
+
+| 런 | 칸 | ① | ② | ③ | ④ |
+|---|---|---|---|---|---|
+| **38763381565** main push `712629cac` (773 S6) · job 116520791861 | `sample-visitor-transition.spec.ts:19` | **`:26` 익명 단계**. `operator-overview-cards` 5 s 안에 못 찾음; 스냅샷 = 샘플 카드 5 장 **과 함께** «통합 개요를 일시적으로 불러올 수 없습니다» | `back-link` 와 첫 3.9 s 만 겹침, 이후 ~11 s 는 trace 상 다른 spec 없음 | 첫 시도 익명 `GET /dashboards/overview` **10063 ms**; 재시도 익명 76 ms · 로그인 뒤 63 ms | ⚪ 판정 불가(초록 잡, 덤프 없음) |
+| **38776096504** main push `a01005367` · job 116564931532 | `overview-consolidation.spec.ts:128` IAM 카드 | `operator-overview-card-iam` `data-status="ok"` 5 s 실패(로그인 뒤) | 첫 시도만 `back-link`/`sample-visitor` 와 겹침; 재시도 단독 | 첫 시도 10172 ms · 재시도(단독) 13957 ms | ⚪ |
+| **38892569380** 브랜치 be-638 `3c807a9a9` · job 116946011408 | `overview-consolidation.spec.ts:131` IAM 카드 | 동일; **재시도 1 도 실패, 2 에서 통과** | 첫 시도만 겹침; 재시도 1·2 단독 | 10165 · 10513(단독, 실패) · 4113(단독, 통과) ms | ⚪ |
+| **38965748396** 브랜치 pc-fe-343 `a21b54c03` · job 117192025297 | `overview-consolidation.spec.ts:133` IAM 카드 | 동일, 재시도 1 통과 | 첫 시도만 겹침; 재시도 단독 | 10285 · 13202(단독) ms | ⚪ |
+| **38965272467** main schedule `d64a6b8a7` · job 117190548510 (**잡 failure**) | `operators-profile.spec.ts:44` (:75 Finance 카드 `degraded`) | 3 시도 모두 실패 | ⚪ 미복원 | ⚪ 미측정 | **있음**: Finance `TIMEOUT latencyMs 4000/4002` 1 쌍(런 전체 Finance TIMEOUT 은 이것뿐) |
+| **38856950242** 브랜치 mono-794 attempt 1 · job 116830663748 (**잡 failure**, attempt 2 = 12 passed) | 동일 | 동일 | ⚪ | ⚪ | **있음**: 같은 모양 Finance `TIMEOUT 4000/4002` 1 쌍 |
+| 38777797324 브랜치 mono-773-ac2 `cda01f129` · job 116570399831 (**잡 failure**) | `non-operator-tenant-creation.spec.ts:137` | AC-2 roles 단언 — 개요와 무관한 결정적 실패(개발 중), 이 티켓 범위 밖 | — | — | — |
+
+## 집계
+
+- main 연속 런(push + schedule) **34 런**, 2026-10-15T08:18Z(`bf2d0236f`) → 2026-10-18T08:32Z(`4d96f4457`): 773 S6 전 3 런 flaky 0 · S6 첫 런 38763381565 flaky 1 (sample-visitor) · S6 이후 30 런 flaky 1 (38776096504, IAM 칸) + 잡 실패 1 (38965272467). main 합계 **flaky 런 2 · 잡 실패 런 1**.
+- 브랜치 런(workflow_dispatch) 22 런-시도: flaky 2 (38892569380 · 38965748396, 둘 다 IAM 칸) · 잡 실패 2 런-시도 (38777797324 = 773 개발 중 결정적 실패, 38856950242 attempt 1 = Finance TIMEOUT). 나머지 18 은 12/0. 이 구간 칸 수: 8 → 11 (S6) → 12.
+- `sample-visitor-transition.spec.ts:19` flaky: main **1 회**(34 런 중), 그 뒤 main 30 런 · 브랜치 22 런 **재발 0**(= 52 런-시도). IAM 카드 칸(`overview-consolidation` «IAM card … drills down») flaky: main 1 + 브랜치 2 = **3 회**.
+- 연속 최소 5 런 요건 충족. 단 sample-visitor 사건 자체는 **1 건**.
+- 구조(실패 3 잡의 compose 로그 집계): e2e 스택에서 E-Commerce 다리는 늘 `degraded TIMEOUT ≈4000 ms`, WMS · SCM · ERP 는 즉시 `DOWNSTREAM_ERROR` ⇒ 인증된 개요 문서는 구조적으로 ≥ 4.0 s (5 s 대기와 여유 < 1 s). 익명 개요 문서는 정상일 때 45~76 ms (8/8). 10 s 대 문서(IAM 3 건 + sample-visitor 1 건)에서 4 s 바닥 위의 ~6 s 가 무엇인지는 다리별 시간 로그가 없어 **판정 불가**.
+
+# AC-1 판정 (2026-10-18 UTC)
+
+**«미확정»** — 하나로 좁혀지지 않았다.
+
+| 가설 | 판정 | 근거 행 |
+|---|---|---|
+| (가) 동시 실행 상관 | IAM 칸: **기각** · sample-visitor: 결정 불가 | IAM 3 건 모두 **재시도를 단독으로 돌려도** 10.5 · 13.2 · 14.0 s (38892569380 · 38965748396 · 38776096504). sample-visitor 는 10 s 중 겹침 3.9 s, 나머지 ~6 s 는 다른 spec 없음; 표본 1 |
+| (나) 겹침과 무관한 개요 SSR 지연 | 부분 지지, **원인 다리 미확정** | 위 IAM 3 건 + Finance `TIMEOUT 4000` 이 `operators-profile:44` 시점에 1 쌍 (38965272467 · 38856950242). 6 s 이상 추가분의 출처는 로그에 없음 |
+| (다) 익명 단계 저하 | 지지(**단일 사례, 성질 승격 불가**) | 38763381565 `:26`, 샘플 카드 + 저하 문구, 익명 문서 10063 ms (통과 시도는 45~76 ms). 재발 0 |
+
+**소유자 결정 (2026-10-18 UTC): «계측 먼저».** 수선 없이 계측만 추가하고, 이 티켓은 연다. 계측이 쌓인 nightly **5 런 이상**으로 재측정한 뒤 AC-1 을 다시 판정한다. 계측 3 건 (같은 PR):
+
+1. `console-web` 서버: `console_ssr_phase` 로그 — `/dashboards/overview` 렌더의 단계별 시간 (layout: registry · me_roles · me_domain_access · org_nodes · demo_stop_check · layout_total; page: overview_state · registry · domain_health · page_total). 필드 `route · phase · status · latencyMs · startedAt` (+ 오류 시 `httpStatus · errorName`), 토큰 · 계정 id · 본문 없음.
+2. Playwright CI 리포터에 `json` 추가 → 아티팩트 `test-results/e2e-results.json` 에 시도별 `startTime · duration · workerIndex · retry` (② 를 로그가 아니라 파일에서).
+3. `TASK-MONO-799` — nightly 콘솔 잡이 compose 로그를 **매 런** `test-results/compose-logs.txt` 로 업로드 (④ 를 초록 잡에서도).
+
+# 소유자 제안 (AC-0 규정)
+
+`sample-visitor-transition.spec.ts:19` 자체는 main 30 런 · 브랜치 22 런(52 런-시도)에서 **재발 0** — 이 칸에 한해서는 «재발 없음 — 관찰 종료» 를 제안할 근거가 있다. 그러나 같은 «개요 첫 렌더 지연» 계열이 IAM 카드 칸(3×)과 Finance 카드로 계속 나타나며 **지금의 주 재발은 IAM 카드 칸**이므로, 이 티켓 전체를 닫는 근거는 아니다. **티켓은 닫지 않는다.**
+
+# AC-2 (열림)
+
+계측이 쌓인 뒤 재측정 → 판정 → 판정에 맞는 수선 + 대조군. 지금은 시작하지 않는다.
