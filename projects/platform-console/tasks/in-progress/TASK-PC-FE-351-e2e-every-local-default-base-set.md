@@ -47,8 +47,8 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — 빨강 먼저: 새 칸이 main 에서 정확히 그 3 개 키를 짚어 실패한다. 비공허 단언은 통과한다.
-- [ ] **AC-2** — 초록: 3 줄 추가 뒤 가드 통과 · 전체 vitest · tsc · lint rc=0.
+- [x] **AC-1** — 빨강 먼저: 새 칸이 main 에서 정확히 그 3 개 키를 짚어 실패한다. 비공허 단언은 통과한다. — ✅ 2026-10-19 UTC: `FAN_GATEWAY_BASE_URL` · `LEDGER_BASE_URL` · `WMS_OUTBOUND_BASE_URL` 3 개만 짚어 1 failed / 4 passed. 🔴 첫 시도는 «no tests» 였다(삽입 스크립트의 이스케이프가 시험 파일에 실제 CR · 백스페이스 문자로 들어가 변환 실패) — 그것은 판정이 아니었고, 제어 문자를 지운 뒤 다시 쟀다.
+- [x] **AC-2** — 초록: 3 줄 추가 뒤 가드 통과 · 전체 vitest · tsc · lint rc=0. — ✅ vitest 409 files / 4898 · tsc rc=0 · next lint rc=0.
 - [ ] **AC-3** — 브랜치 nightly 콘솔 잡 초록(설정 변경이므로).
 
 # Related Specs
