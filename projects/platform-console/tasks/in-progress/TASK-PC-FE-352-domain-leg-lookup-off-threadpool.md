@@ -57,7 +57,7 @@ threadpool 을 쓰지 않는 조회로 바꾸면 이 공유 정체가 없어지�
 # Acceptance Criteria
 
 - [x] **AC-0** (2026-10-20 UTC — § AC-0: ① 쟀다 · ② Docker 꺼짐 · ③ 배포 필요 + 운영 노출 경로 = 소유자 확인 ④) — ①②③ 을 «쟀다 / 못 쟀다(이유)» 로 적는다. 대조군은 lookup 교체 없음 · `127.0.0.1` 리터럴 · pool 크기 상향.
-- [ ] **AC-1** — 소유자 결정(선택지 · 추천).
+- [x] **AC-1** — 소유자 결정(선택지 · 추천). → **(가) Vercel 확인 ④ 를 보고 정한다** (소유자, 2026-10-20 UTC — 선택창, 추천안). 갈래: ④ 가 `TIMEOUT` ~4000 ms(느린 실패) → 혼성 전역 dispatcher(hosts 표 → `localhost` → c-ares, `src/instrumentation.ts` · `undici` 의존 추가) 구현 — 그 전에 ② alpine 측정(Docker); ④ 가 `DOWNSTREAM_ERROR`(빠른 실패) → 운영 노출 없음으로 적고 닫는다. 그 사이 티켓은 in-progress. 버린 선택지: (나) 지금 구현 착수 · (다) 하지 않음.
 - [ ] **AC-2** — 결정한 수선 + 빨강 먼저 시험(threadpool 을 채운 상태에서 다리 하나가 다른 다리를 막지 않는다) + 대조군.
 - [ ] **AC-3** — 배포 상태.
 
