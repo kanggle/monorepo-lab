@@ -561,6 +561,10 @@ describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
     await screen.findByTestId('delegation-fact-filter-employees-fallback');
     expect(screen.getByTestId('delegation-fact-filter-delegatorId').tagName).toBe('INPUT');
     expect(screen.getByTestId('delegation-fact-filter-delegateId').tagName).toBe('INPUT');
+    // TASK-PC-FE-349 — 403 wording.
+    expect(screen.getByTestId('delegation-fact-filter-employees-fallback')).toHaveTextContent(
+      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 위임자/대행자 직원 ID 를 직접 입력하세요.',
+    );
   });
 
   it('retired employees stay selectable in the filters (historical filter, not a write)', async () => {

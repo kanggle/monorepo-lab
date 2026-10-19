@@ -14,6 +14,7 @@ import {
   useDelegationCreate,
   useDelegationRevoke,
 } from '../hooks/use-delegation-screen';
+import { employeeListFallbackText } from './employee-list-fallback';
 
 /**
  * ERP "위임(대결) 관리" screen (TASK-PC-FE-054 — PC-FE-053 follow-up;
@@ -194,7 +195,7 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
               role="status"
               data-testid="delegation-create-delegateId-fallback"
             >
-              직원 목록을 불러오지 못해 대결자 직원 ID 를 직접 입력합니다.
+              {employeeListFallbackText(employeesQ.error, '대결자')}
             </p>
           )}
           {employeesQ.isSuccess && totalEmployees > employees.length && (

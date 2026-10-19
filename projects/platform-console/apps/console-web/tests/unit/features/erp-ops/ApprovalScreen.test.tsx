@@ -556,6 +556,10 @@ describe('ApprovalScreen — create dialog', () => {
     await user.click(screen.getByTestId('approval-create'));
     await screen.findByTestId('approval-create-approvers-fallback');
     expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('INPUT');
+    // TASK-PC-FE-349 — a 403 is a permission answer, not an outage.
+    expect(screen.getByTestId('approval-create-approvers-fallback')).toHaveTextContent(
+      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 결재자 직원 ID 를 직접 입력하세요.',
+    );
   });
 });
 
@@ -684,6 +688,10 @@ describe('ApprovalScreen — create dialog 대상 ID selector (TASK-PC-FE-335)',
     await user.selectOptions(screen.getByTestId('approval-create-subjectType'), 'EMPLOYEE');
     await screen.findByTestId('approval-create-subjectId-fallback');
     expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
+    // TASK-PC-FE-349 — 403 wording.
+    expect(screen.getByTestId('approval-create-subjectId-fallback')).toHaveTextContent(
+      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 대상 직원 ID 를 직접 입력하세요.',
+    );
   });
 });
 

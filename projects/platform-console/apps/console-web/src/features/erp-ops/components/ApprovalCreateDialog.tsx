@@ -13,6 +13,7 @@ import { approvalErrorMessage } from './approval-error';
 import { SUBJECT_LABEL } from './approval-common';
 import { ACCOUNT_UNLINKED_LABEL } from './AccountLinkBadge';
 import { ErpEmployeeSelect, employeeOptionLabel } from './ErpEmployeeSelect';
+import { employeeListFallbackText } from './employee-list-fallback';
 
 // ===========================================================================
 // Create dialog — DRAFT request.
@@ -236,7 +237,7 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
               role="status"
               data-testid="approval-create-subjectId-fallback"
             >
-              직원 목록을 불러오지 못해 대상 직원 ID 를 직접 입력합니다.
+              {employeeListFallbackText(employeesQ.error, '대상')}
             </p>
           )}
           {subjectType === 'EMPLOYEE' &&
@@ -311,7 +312,7 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
               role="status"
               data-testid="approval-create-approvers-fallback"
             >
-              직원 목록을 불러오지 못해 결재자 직원 ID 를 직접 입력합니다.
+              {employeeListFallbackText(employeesQ.error, '결재자')}
             </p>
           )}
           {employeesQ.isSuccess && totalEmployees > employees.length && (
