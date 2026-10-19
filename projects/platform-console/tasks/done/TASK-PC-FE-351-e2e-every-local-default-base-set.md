@@ -8,7 +8,7 @@ e2e 스택이 `*.local` 기본값을 가진 콘솔 서버 주소를 **전부** �
 
 # Status
 
-in-progress (2026-10-19 UTC 기안 · 착수)
+done
 
 # Owner
 
@@ -49,7 +49,7 @@ frontend
 
 - [x] **AC-1** — 빨강 먼저: 새 칸이 main 에서 정확히 그 3 개 키를 짚어 실패한다. 비공허 단언은 통과한다. — ✅ 2026-10-19 UTC: `FAN_GATEWAY_BASE_URL` · `LEDGER_BASE_URL` · `WMS_OUTBOUND_BASE_URL` 3 개만 짚어 1 failed / 4 passed. 🔴 첫 시도는 «no tests» 였다(삽입 스크립트의 이스케이프가 시험 파일에 실제 CR · 백스페이스 문자로 들어가 변환 실패) — 그것은 판정이 아니었고, 제어 문자를 지운 뒤 다시 쟀다.
 - [x] **AC-2** — 초록: 3 줄 추가 뒤 가드 통과 · 전체 vitest · tsc · lint rc=0. — ✅ vitest 409 files / 4898 · tsc rc=0 · next lint rc=0.
-- [ ] **AC-3** — 브랜치 nightly 콘솔 잡 초록(설정 변경이므로).
+- [x] **AC-3** — 브랜치 nightly 콘솔 잡 초록(설정 변경이므로). — ✅ run 39271934392 콘솔 잡: 12 expected · flaky 0 · unexpected 0 · `*_bff_unavailable` 0. 런의 빨간 잡은 «AMI generation»(재굽기 대기) 하나.
 
 # Related Specs
 
@@ -68,3 +68,11 @@ frontend
 
 1. 가드가 평면 정규식으로 키와 기본값을 잘못 짝짓는다 — 실제로 350 AC-0 첫 시도에서 일어났다. 블록 단위 파싱 + 짝 고정 단언으로 막는다.
 2. 막아 둔 주소 때문에 어떤 e2e 가 «정상 데이터» 를 기대하다 깨진다 — 지금 그 화면을 여는 e2e 는 없다(grep 확인).
+
+# 닫기 (2026-10-20 UTC) — in-progress → done
+
+- (a) `gh pr view 4419`: `state=MERGED`, `mergeCommit` `a1d0fdfde`.
+- (b) `a1d0fdfde` = `origin/main` tip(닫기 시점).
+- (c) 머지 직전 `gh pr checks 4419`: pass 10 · fail 0 · pending 0. `statusCheckRollup`(브랜치 nightly 제외) 실패 0.
+- (d) AC-1 «빨강 먼저 · 정확히 3 개 키» ✅ · AC-2 «초록 · 게이트 rc=0» ✅ · AC-3 «브랜치 nightly 콘솔 초록» ✅.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 은 머지 시점에 검토됐고, AC 는 머지 전에 모두 닫혔다.
