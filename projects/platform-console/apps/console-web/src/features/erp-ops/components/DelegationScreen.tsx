@@ -14,7 +14,10 @@ import {
   useDelegationCreate,
   useDelegationRevoke,
 } from '../hooks/use-delegation-screen';
-import { employeeListFallbackText } from './employee-list-fallback';
+import {
+  EMPLOYEE_PICKER_SCOPED_NOTICE,
+  employeeListFallbackText,
+} from './employee-list-fallback';
 
 /**
  * ERP "위임(대결) 관리" screen (TASK-PC-FE-054 — PC-FE-053 follow-up;
@@ -154,7 +157,7 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
     onConfirm,
     employeesQ,
     employees,
-    totalEmployees,
+    picker,
   } = useDelegationCreate(onClose);
 
   return (
@@ -188,6 +191,7 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
             blankOptionLabel="— 대결자 선택 —"
             inputPlaceholder="emp-…"
             disableRetired
+            offerManual={picker.offerManual}
           />
           {employeesQ.isError && (
             <p
@@ -198,7 +202,15 @@ function DelegationCreateDialog({ onClose }: { onClose: () => void }) {
               {employeeListFallbackText(employeesQ.error, '대결자')}
             </p>
           )}
-          {employeesQ.isSuccess && totalEmployees > employees.length && (
+          {picker.scoped && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="delegation-create-delegateId-scoped"
+            >
+              {EMPLOYEE_PICKER_SCOPED_NOTICE}
+            </p>
+          )}
+          {picker.truncated && (
             <p
               className="mt-1 text-xs text-muted-foreground"
               data-testid="delegation-create-delegateId-truncated"

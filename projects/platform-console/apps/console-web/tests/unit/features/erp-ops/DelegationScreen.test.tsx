@@ -300,26 +300,43 @@ describe('DelegationScreen — absent validTo renders as "무기한"', () => {
 
 // TASK-PC-FE-335 AC-1/AC-3/AC-4 — 대결자 is an EMPLOYEE SELECTOR now (it was a
 // raw-id text input). Same testid `delegation-create-delegateId`, but a
-// <select> fed by `GET /api/erp/masterdata/employees`; a RETIRED employee is
-// listed but its <option> is disabled (delegateId must be ACTIVE — 422
-// `delegate_unresolved`).
+// <select>; a RETIRED employee is listed but its <option> is disabled
+// (delegateId must be ACTIVE — 422 `delegate_unresolved`).
+// TASK-ERP-BE-045 — fed by the «선택용» picker list `GET /api/erp/masterdata/employees/picker`
+// (elements carry `accountLinked`; `meta.scope` says whether the list was narrowed).
+const PICKER_PATH = '/api/erp/masterdata/employees/picker?';
 const EMP_ACTIVE_DELEGATE = {
   id: 'emp-delegate',
   employeeNumber: 'E-D1',
   name: '김대결',
+  departmentId: 'dept-1',
+  departmentName: '총무부',
   status: 'ACTIVE',
-  effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+  accountLinked: true,
 };
 const EMP_RETIRED_DELEGATE = {
   id: 'emp-retired',
   employeeNumber: 'E-D2',
   name: '이퇴사',
+  departmentId: 'dept-1',
   status: 'RETIRED',
-  effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: '2024-01-01' },
+  accountLinked: true,
+};
+const EMP_UNLINKED_DELEGATE = {
+  id: 'emp-unlinked',
+  employeeNumber: 'E-D3',
+  name: '박미연결',
+  departmentId: 'dept-1',
+  status: 'ACTIVE',
+  accountLinked: false,
 };
 const DELEGATE_EMPLOYEES_PAGE = {
-  data: [EMP_ACTIVE_DELEGATE, EMP_RETIRED_DELEGATE],
-  meta: { page: 0, size: 100, totalElements: 2 },
+  data: [EMP_ACTIVE_DELEGATE, EMP_RETIRED_DELEGATE, EMP_UNLINKED_DELEGATE],
+  meta: { page: 0, size: 100, totalElements: 3, scope: 'TENANT' },
+};
+const DELEGATE_EMPLOYEES_PAGE_SUBTREE = {
+  ...DELEGATE_EMPLOYEES_PAGE,
+  meta: { ...DELEGATE_EMPLOYEES_PAGE.meta, scope: 'SUBTREE' },
 };
 
 /** fetch mock: employee list for the delegate selector + the delegation
@@ -329,20 +346,27 @@ function makeCreateDialogFetchMock({
   delegatorList = DELEGATOR_LIST,
   delegateList = DELEGATE_LIST,
   employeesOk = true,
+  employeesPage = DELEGATE_EMPLOYEES_PAGE,
   onPost,
 }: {
   delegatorList?: typeof DELEGATOR_LIST;
   delegateList?: typeof DELEGATE_LIST;
   employeesOk?: boolean;
+  employeesPage?: unknown;
   onPost?: () => Response;
 } = {}) {
   return vi.fn((url: string, init?: RequestInit) => {
-    if (String(url).startsWith('/api/erp/masterdata/employees')) {
+    if (String(url).startsWith(PICKER_PATH)) {
       return Promise.resolve(
         employeesOk
-          ? jsonResponse(DELEGATE_EMPLOYEES_PAGE)
-          : errorResponse('DATA_SCOPE_FORBIDDEN', 403),
+          ? jsonResponse(employeesPage)
+          : errorResponse('PERMISSION_DENIED', 403),
       );
+    }
+    // the master LIST is NOT what the delegate picker reads — answer it like an
+    // approval-only operator would get it (403), so a regression lands on the fallback.
+    if (String(url).startsWith('/api/erp/masterdata/employees')) {
+      return Promise.resolve(errorResponse('PERMISSION_DENIED', 403));
     }
     if ((init as RequestInit)?.method === 'POST') {
       return Promise.resolve(onPost ? onPost() : jsonResponse(ACTIVE_GRANT_DELEGATOR, 201));
@@ -466,10 +490,12 @@ describe('DelegationScreen — create dialog', () => {
     await user.click(screen.getByTestId('delegation-create'));
     await screen.findByTestId('delegation-create-delegateId-fallback');
     expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('INPUT');
-    // TASK-PC-FE-349 — the mock answers 403 (approval-only operator): permission wording.
+    // TASK-PC-FE-349 — the mock answers 403: permission wording (TASK-ERP-BE-045 — names both
+    // 기준정보 조회 and 결재 변경, the picker's two openers).
     expect(screen.getByTestId('delegation-create-delegateId-fallback')).toHaveTextContent(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 대결자 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 대결자 직원 ID 를 직접 입력하세요.',
     );
+    expect(screen.queryByTestId('delegation-create-delegateId-manual-toggle')).toBeNull();
     await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-manual');
     await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
     await user.click(screen.getByTestId('delegation-create-submit'));
@@ -489,6 +515,97 @@ describe('DelegationScreen — create dialog', () => {
     )!;
     const body = JSON.parse((createCall[1] as RequestInit).body as string);
     expect(body.delegateId).toBe('emp-manual');
+  });
+});
+
+// ===========================================================================
+// TASK-ERP-BE-045 — the delegate picker reads `/employees/picker`; a delegate normally sits
+// outside the operator's subtree, so a scoped list offers «ID 직접 입력».
+// ===========================================================================
+
+describe('DelegationScreen — delegate picker reads the picker list (TASK-ERP-BE-045)', () => {
+  it('🔴 the delegate selector is fed by `/employees/picker` (the master `/employees` list is never asked)', async () => {
+    const fetchMock = makeCreateDialogFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith(PICKER_PATH))).toBe(true);
+    expect(urls.some((u) => u.startsWith('/api/erp/masterdata/employees?'))).toBe(false);
+    const select = screen.getByTestId('delegation-create-delegateId') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      '',
+      'emp-delegate',
+      'emp-retired',
+      'emp-unlinked',
+    ]);
+  });
+
+  it('`accountLinked:false` → the option is marked «연결된 계정 없음» (still selectable); a linked one is not', async () => {
+    vi.stubGlobal('fetch', makeCreateDialogFetchMock());
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    const select = screen.getByTestId('delegation-create-delegateId') as HTMLSelectElement;
+    const opt = (v: string) => Array.from(select.options).find((o) => o.value === v)!;
+    expect(opt('emp-unlinked').textContent).toContain('연결된 계정 없음');
+    expect(opt('emp-unlinked').disabled).toBe(false);
+    expect(opt('emp-delegate').textContent).toBe('E-D1 · 김대결');
+  });
+
+  it('TENANT scope + not truncated → no scoped notice and no toggle', async () => {
+    vi.stubGlobal('fetch', makeCreateDialogFetchMock());
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    expect(screen.queryByTestId('delegation-create-delegateId-scoped')).toBeNull();
+    expect(screen.queryByTestId('delegation-create-delegateId-manual-toggle')).toBeNull();
+  });
+
+  it('🔴 SUBTREE scope → scoped notice + toggle; the toggle swaps to an id input (same testid) and a typed out-of-subtree delegate is submitted', async () => {
+    const fetchMock = makeCreateDialogFetchMock({ employeesPage: DELEGATE_EMPLOYEES_PAGE_SUBTREE });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    expect(screen.getByTestId('delegation-create-delegateId-scoped')).toHaveTextContent(
+      '내 부서 범위의 직원만 표시합니다. 목록에 없는 직원은 «ID 직접 입력» 을 누르세요.',
+    );
+    const toggle = screen.getByTestId('delegation-create-delegateId-manual-toggle');
+    expect(toggle).toHaveTextContent('ID 직접 입력');
+    await user.click(toggle);
+    expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('INPUT');
+    expect(screen.getByTestId('delegation-create-delegateId-manual-toggle')).toHaveTextContent(
+      '목록에서 고르기',
+    );
+    await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-outside');
+    await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
+    await user.click(screen.getByTestId('delegation-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          (c) => String(c[0]).endsWith('/delegations') && (c[1] as RequestInit).method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]).endsWith('/delegations') && (c[1] as RequestInit).method === 'POST',
+    )!;
+    expect(JSON.parse((createCall[1] as RequestInit).body as string).delegateId).toBe(
+      'emp-outside',
+    );
+  });
+
+  it('the toggle swaps back to the select; RETIRED stays disabled there (rule unchanged)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      makeCreateDialogFetchMock({ employeesPage: DELEGATE_EMPLOYEES_PAGE_SUBTREE }),
+    );
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    await user.click(screen.getByTestId('delegation-create-delegateId-manual-toggle'));
+    await user.click(screen.getByTestId('delegation-create-delegateId-manual-toggle'));
+    const select = screen.getByTestId('delegation-create-delegateId') as HTMLSelectElement;
+    expect(select.tagName).toBe('SELECT');
+    const retired = Array.from(select.options).find((o) => o.value === 'emp-retired')!;
+    expect(retired.disabled).toBe(true);
   });
 });
 

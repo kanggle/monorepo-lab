@@ -3,17 +3,28 @@
 import { useState } from 'react';
 import { Button } from '@/shared/ui/Button';
 import { APPROVAL_SUBJECT_TYPES } from '../api/approval-types';
-import { ERP_MAX_PAGE_SIZE, type Department, type Employee } from '../api/types';
+import {
+  ERP_MAX_PAGE_SIZE,
+  type Department,
+  type EmployeePickerEntry,
+} from '../api/types';
 import {
   useCreateApproval,
   useDepartments,
-  useEmployees,
+  useEmployeePicker,
 } from '../hooks/use-erp-ops';
 import { approvalErrorMessage } from './approval-error';
 import { SUBJECT_LABEL } from './approval-common';
 import { ACCOUNT_UNLINKED_LABEL } from './AccountLinkBadge';
-import { ErpEmployeeSelect, employeeOptionLabel } from './ErpEmployeeSelect';
-import { employeeListFallbackText } from './employee-list-fallback';
+import {
+  ErpEmployeeSelect,
+  employeeOptionLabel,
+  employeePickerView,
+} from './ErpEmployeeSelect';
+import {
+  EMPLOYEE_PICKER_SCOPED_NOTICE,
+  employeeListFallbackText,
+} from './employee-list-fallback';
 
 // ===========================================================================
 // Create dialog — DRAFT request.
@@ -27,7 +38,7 @@ import { employeeListFallbackText } from './employee-list-fallback';
  * A retired employee stays listed (existing FK-selector rule — nothing hidden)
  * and is marked; submit refuses it with `approver_unresolved`.
  */
-export function approverOptionLabel(e: Employee): string {
+export function approverOptionLabel(e: EmployeePickerEntry): string {
   // TASK-PC-FE-335 — one label rule for every employee picker in erp-ops.
   return employeeOptionLabel(e);
 }
@@ -49,11 +60,13 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
   // text input). One page of up to ERP_MAX_PAGE_SIZE employees; if the list
   // cannot be read, the row falls back to the old id input (same testid) so
   // the dialog still works — the producer is the authority either way.
-  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
-  const employees: Employee[] = employeesQ.data?.data ?? [];
+  // TASK-ERP-BE-045 — the list is the «선택용» picker (`GET /employees/picker`), open
+  // to the 결재 변경 role too; it may be narrowed to the operator's subtree, so every
+  // employee picker here offers «ID 직접 입력» when scoped or truncated.
+  const employeesQ = useEmployeePicker({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const picker = employeePickerView(employeesQ.data, employeesQ.isSuccess);
+  const employees: EmployeePickerEntry[] = picker.employees;
   const employeeById = new Map(employees.map((e) => [e.id, e]));
-  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
-  const selectorMode = !employeesQ.isError;
   const employeesLoading = employeesQ.isLoading;
 
   // TASK-PC-FE-335 AC-1/AC-2 — 대상 ID is a selector too now: EMPLOYEE reuses
@@ -81,6 +94,9 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
   // Ordered approver route — each element is an approver id string.
   // Starts with a single blank row (legacy-compatible: 1 row → approverId).
   const [approverRows, setApproverRows] = useState<string[]>(['']);
+  // TASK-ERP-BE-045 — per-row «ID 직접 입력» mode, kept beside the row values so
+  // removing a row cannot hand its mode to the row that slides into its index.
+  const [approverManual, setApproverManual] = useState<boolean[]>([false]);
   const [reason, setReason] = useState('');
   const createM = useCreateApproval();
 
@@ -107,13 +123,17 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
 
   function addApproverRow() {
     setApproverRows((prev) => [...prev, '']);
+    setApproverManual((prev) => [...prev, false]);
   }
 
   function removeApproverRow(idx: number) {
-    setApproverRows((prev) => {
-      if (prev.length <= 1) return prev; // at least 1 row
-      return prev.filter((_, i) => i !== idx);
-    });
+    if (approverRows.length <= 1) return; // at least 1 row
+    setApproverRows((prev) => prev.filter((_, i) => i !== idx));
+    setApproverManual((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function setApproverRowManual(idx: number, manual: boolean) {
+    setApproverManual((prev) => prev.map((v, i) => (i === idx ? manual : v)));
   }
 
   function setApproverRow(idx: number, value: string) {
@@ -200,6 +220,7 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
               id="approval-create-subjectId"
               blankOptionLabel="— 대상 직원 선택 —"
               inputPlaceholder="emp-…"
+              offerManual={picker.offerManual}
             />
           ) : departmentSelectorMode ? (
             <select
@@ -240,16 +261,22 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
               {employeeListFallbackText(employeesQ.error, '대상')}
             </p>
           )}
-          {subjectType === 'EMPLOYEE' &&
-            employeesQ.isSuccess &&
-            totalEmployees > employees.length && (
-              <p
-                className="mt-1 text-xs text-muted-foreground"
-                data-testid="approval-create-subjectId-truncated"
-              >
-                직원이 많아 처음 {employees.length}명만 표시합니다.
-              </p>
-            )}
+          {subjectType === 'EMPLOYEE' && picker.scoped && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="approval-create-subjectId-scoped"
+            >
+              {EMPLOYEE_PICKER_SCOPED_NOTICE}
+            </p>
+          )}
+          {subjectType === 'EMPLOYEE' && picker.truncated && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="approval-create-subjectId-truncated"
+            >
+              직원이 많아 처음 {employees.length}명만 표시합니다.
+            </p>
+          )}
           {subjectType === 'DEPARTMENT' && departmentsQ.isError && (
             <p
               className="mt-1 text-xs text-muted-foreground"
@@ -315,7 +342,16 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
               {employeeListFallbackText(employeesQ.error, '결재자')}
             </p>
           )}
-          {employeesQ.isSuccess && totalEmployees > employees.length && (
+          {/* TASK-ERP-BE-045 — ONE scoped notice for the whole approver block. */}
+          {picker.scoped && (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="approval-create-approvers-scoped"
+            >
+              {EMPLOYEE_PICKER_SCOPED_NOTICE}
+            </p>
+          )}
+          {picker.truncated && (
             <p
               className="mt-1 text-xs text-muted-foreground"
               data-testid="approval-create-approvers-truncated"
@@ -332,38 +368,25 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
                 <span className="w-10 shrink-0 text-xs text-muted-foreground">
                   {idx + 1}단계
                 </span>
-                {selectorMode ? (
-                  <select
-                    data-testid={`approval-create-approver-${idx}`}
-                    aria-label={`${idx + 1}단계 결재자`}
-                    value={row}
-                    disabled={employeesLoading}
-                    onChange={(e) => setApproverRow(idx, e.target.value)}
-                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  >
-                    <option value="">
-                      {employeesLoading ? '직원 목록 불러오는 중…' : '— 결재자 선택 —'}
-                    </option>
-                    {employees.map((e) => (
-                      <option
-                        key={e.id}
-                        value={e.id}
-                        data-unlinked={e.accountId ? undefined : 'true'}
-                      >
-                        {approverOptionLabel(e)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    data-testid={`approval-create-approver-${idx}`}
-                    aria-label={`${idx + 1}단계 결재자 직원 ID`}
-                    value={row}
-                    onChange={(e) => setApproverRow(idx, e.target.value)}
-                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                    placeholder="직원 ID"
-                  />
-                )}
+                {/* TASK-ERP-BE-045 — the shared picker primitive (same testid in
+                    select / fallback / «ID 직접 입력» modes; label rule via
+                    `approverOptionLabel` ≡ `employeeOptionLabel`). */}
+                <ErpEmployeeSelect
+                  employees={employees}
+                  isError={employeesQ.isError}
+                  isLoading={employeesLoading}
+                  value={row}
+                  onChange={(v) => setApproverRow(idx, v)}
+                  testId={`approval-create-approver-${idx}`}
+                  ariaLabel={`${idx + 1}단계 결재자`}
+                  inputAriaLabel={`${idx + 1}단계 결재자 직원 ID`}
+                  blankOptionLabel="— 결재자 선택 —"
+                  inputPlaceholder="직원 ID"
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  offerManual={picker.offerManual}
+                  manual={approverManual[idx] ?? false}
+                  onManualChange={(m) => setApproverRowManual(idx, m)}
+                />
                 <button
                   type="button"
                   data-testid={`approval-create-remove-stage-${idx}`}
@@ -375,7 +398,7 @@ export function ApprovalCreateDialog({ onClose }: { onClose: () => void }) {
                   삭제
                 </button>
               </div>
-              {picked && !picked.accountId && (
+              {picked && !picked.accountLinked && (
                 <p
                   className="ml-12 mt-1 text-xs text-destructive"
                   data-testid={`approval-create-approver-unlinked-${idx}`}

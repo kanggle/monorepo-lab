@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,15 @@ public interface DepartmentJpaRepository extends JpaRepository<Department, Strin
     Optional<Department> findByIdAndTenantId(String id, String tenantId);
 
     Optional<Department> findByCodeAndTenantId(String code, String tenantId);
+
+    /**
+     * Every {@code (id, parentId)} edge of the tenant's department forest — one row per department, all statuses
+     * (TASK-ERP-BE-045 subtree expansion; the single-target walk does not filter by status either).
+     */
+    @Query("SELECT d.id, d.parentId FROM Department d WHERE d.tenantId = :tenantId")
+    List<Object[]> findHierarchyEdges(@Param("tenantId") String tenantId);
+
+    List<Department> findAllByTenantIdAndIdIn(String tenantId, Collection<String> ids);
 
     List<Department> findAllByParentIdAndTenantIdAndStatus(String parentId, String tenantId,
                                                           com.example.erp.masterdata.domain.common.MasterStatus status);

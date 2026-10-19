@@ -12,8 +12,15 @@ import {
   type ErpDetailQueryParams,
   type CreateEmployeeInput,
   type UpdateEmployeeInput,
+  EmployeePickerListResponseSchema,
+  type EmployeePickerListResponse,
+  type EmployeePickerQueryParams,
 } from '../../api/types';
-import { employeeDetailKey, employeesListKey } from '../../api/erp-keys';
+import {
+  employeeDetailKey,
+  employeePickerKey,
+  employeesListKey,
+} from '../../api/erp-keys';
 import {
   clampSize,
   buildListQs,
@@ -63,6 +70,41 @@ export function useEmployees(
     initialData: seeded ? initial : undefined,
     staleTime: seeded ? 15_000 : 0,
     refetchOnMount: seeded ? false : true,
+    ...READ_QUERY_REFETCH,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// employees — «선택용» picker list (TASK-ERP-BE-045; PII — never logged).
+// The four employee pickers (결재 대상 · 결재선 · 대결자 · 위임 사실 필터) read this,
+// NOT `useEmployees` (which stays the 직원 master screen's list): the picker opens
+// to the ERP approval-write role too and is narrowed to the operator's subtree.
+// ---------------------------------------------------------------------------
+
+async function fetchEmployeePicker(
+  params: EmployeePickerQueryParams,
+): Promise<EmployeePickerListResponse> {
+  const raw = await apiClient.get<unknown>(
+    `/api/erp/masterdata/employees/picker?${buildListQs({
+      active: params.active,
+      page: params.page,
+      size: params.size,
+    })}`,
+  );
+  return EmployeePickerListResponseSchema.parse(raw);
+}
+
+export function useEmployeePicker(params: EmployeePickerQueryParams = {}) {
+  return useQuery({
+    queryKey: employeePickerKey(
+      params.page ?? 0,
+      clampSize(params.size),
+      params.active,
+    ),
+    queryFn: () => fetchEmployeePicker(params),
+    staleTime: 0,
+    refetchOnMount: true,
     ...READ_QUERY_REFETCH,
     retry: false,
   });

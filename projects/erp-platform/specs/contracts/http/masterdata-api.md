@@ -224,6 +224,35 @@ department/costCenter/jobGrade unknown), 422
 
 **200**: list envelope.
 
+### GET /api/erp/masterdata/employees/picker
+
+> **v1.2 AMENDMENT (TASK-ERP-BE-045, 2026-10-20 UTC — additive).** 직원 «선택용» 축약 목록.
+> 결재 상신(대상 · 결재선) · 위임 생성(대결자) · 위임 사실 필터가 직원을 고를 때 쓴다.
+> 기준정보 조회 역할 없이 결재 변경 역할만 가진 운영자에게도 열리므로, 선택에 필요한 값만 싣는다.
+
+**Query**: `?active=&page=&size=` (`active=true` → `ACTIVE` 만; 생략 → 전부. `size` 상한은 목록과 같다)
+
+**Auth**: `ERP_MASTERDATA_READ ∨ ERP_MASTERDATA_WRITE ∨ ERP_APPROVAL_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'`
+— `GET /employees/{id}` 와 **같은 술어**(erp [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md) Q3).
+`ERP_APPROVAL_READ` 만으로는 **403** `PERMISSION_DENIED`.
+
+**Data scope** (목록과 다르다 — 이 엔드포인트는 범위를 **건다**):
+- `org_scope ∋ "*"` (플랫폼 범위 · 범위 없는 배정 · 기계 토큰) → 테넌트 전체.
+- 부서 루트 id 목록 → 그 루트들의 **서브트리** 안 부서에 속한 직원만(단건 판정 `RoleScopeAuthorizationAdapter` 와 같은 포함 규칙).
+- 범위 없음(빈 / 부재) → **200 빈 목록**(fail-closed — 403 이 아니다: 역할은 통과했다).
+
+**200**: list envelope. 원소:
+```json
+{ "id": "emp-...", "employeeNumber": "E-1001", "name": "홍길동",
+  "departmentId": "dept-...", "departmentName": "영업본부",
+  "status": "ACTIVE|RETIRED", "accountLinked": true }
+```
+- 정렬 = `employeeNumber` 오름차순. `departmentName` = 오늘(UTC) 유효한 부서 이름 — 풀리지 않으면 ABSENT.
+- 🔴 이 원소 밖의 값(비용센터 · 직급 · 유효기간 · `accountId` · 리비전)은 **싣지 않는다**. `accountLinked` 는 `accountId` 의 존재만 알린다(계정 id 비노출).
+- `meta` 에 **`scope`**: `"TENANT"`(테넌트 전체를 본 것) | `"SUBTREE"`(범위로 좁힌 것) — 소비자가 «목록에 없는 직원» 을 안내할 근거.
+
+**Errors**: 403 `PERMISSION_DENIED`.
+
 ### GET /api/erp/masterdata/employees/{id}
 
 **Query**: `?asOf=`

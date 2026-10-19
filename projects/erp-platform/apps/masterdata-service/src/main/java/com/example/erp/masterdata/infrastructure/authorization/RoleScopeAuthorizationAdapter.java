@@ -3,6 +3,7 @@ package com.example.erp.masterdata.infrastructure.authorization;
 import com.example.erp.masterdata.application.ActorContext;
 import com.example.erp.masterdata.application.port.outbound.AuthorizationPort;
 import com.example.erp.masterdata.domain.authorization.AuthorizationDecision;
+import com.example.erp.masterdata.domain.authorization.ListDataScope;
 import com.example.erp.masterdata.domain.authorization.RequiredScope;
 import com.example.erp.masterdata.domain.department.Department;
 import com.example.erp.masterdata.domain.department.repository.DepartmentRepository;
@@ -99,7 +100,9 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
         boolean roleOk = switch (required) {
             case READ -> masterdataRead;
             // Q3 — approval-service forwards the submitter's token to resolve the approval subject.
-            case SUBJECT_READ -> masterdataRead || actor.hasRole(ROLE_APPROVAL_WRITE);
+            // TASK-ERP-BE-045 — the employee picker opens on exactly this predicate (owner decision 2026-10-20 UTC);
+            // one arm for both so the picker cannot drift from the subject check.
+            case SUBJECT_READ, PICKER -> masterdataRead || actor.hasRole(ROLE_APPROVAL_WRITE);
             // Q2 — «about me», not masterdata: any ERP business role, the entry role, an erp scope, or '*'.
             case SELF -> wildcard || actor.hasScope(SCOPE_READ) || actor.hasScope(SCOPE_WRITE)
                     || actor.hasRole(ROLE_ENTRY) || ERP_BUSINESS_ROLES.stream().anyMatch(actor::hasRole);
@@ -134,6 +137,40 @@ public class RoleScopeAuthorizationAdapter implements AuthorizationPort {
         }
         return AuthorizationDecision.denyScope(
                 "target department " + targetDepartmentId + " outside actor scope subtree");
+    }
+
+    /**
+     * List data scope (TASK-ERP-BE-045 — {@code GET /employees/picker}). Same containment rule as the single-target
+     * check below, applied to a whole list at once: rather than one ancestor walk per row, the roots are expanded
+     * ONCE into the set of in-scope department ids ({@link DepartmentRepository#subtreeIds}) and the caller filters
+     * its query by that set.
+     *
+     * <ul>
+     *   <li>{@code "*"} → {@link ListDataScope#tenant()} (platform bypass — unchanged meaning).</li>
+     *   <li>roots → {@link ListDataScope#subtree} of roots ∪ descendants.</li>
+     *   <li>empty / absent / no actor → {@link ListDataScope#none()} — fail-CLOSED (empty list).</li>
+     *   <li>hierarchy port not wired → the roots themselves (flat; never widens) — same fallback as
+     *       {@link #isWithinScopedSubtree}.</li>
+     * </ul>
+     *
+     * <p>Role is NOT checked here: the caller has already passed {@link #evaluate} for the same actor.
+     */
+    @Override
+    public ListDataScope resolveListScope(ActorContext actor) {
+        if (actor == null) {
+            return ListDataScope.none();
+        }
+        if (actor.isPlatformScope()) {
+            return ListDataScope.tenant();
+        }
+        Set<String> roots = actor.dataScopeDepartmentIds();
+        if (roots == null || roots.isEmpty()) {
+            return ListDataScope.none();
+        }
+        if (departmentRepository == null || actor.tenantId() == null) {
+            return ListDataScope.subtree(roots);
+        }
+        return ListDataScope.subtree(departmentRepository.subtreeIds(roots, actor.tenantId()));
     }
 
     /**

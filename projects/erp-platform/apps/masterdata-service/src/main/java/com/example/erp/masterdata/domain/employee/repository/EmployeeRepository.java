@@ -5,6 +5,7 @@ import com.example.erp.masterdata.domain.employee.Employee;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface EmployeeRepository {
 
@@ -31,6 +32,18 @@ public interface EmployeeRepository {
      * (masterdata-api.md § GET /employees + § PageMeta).
      */
     PageResult<Employee> findAll(String tenantId, EmployeeListFilter filter, int page, int size);
+
+    /**
+     * The employee picker page (TASK-ERP-BE-045, masterdata-api.md § GET /employees/picker), ordered by
+     * {@code employeeNumber} ascending, with the TRUE total-row count.
+     *
+     * @param active        {@code true} = ACTIVE only · {@code false} = RETIRED only · {@code null} = all
+     *                      (same mapping as the list filters)
+     * @param departmentIds {@code null} = the whole tenant; otherwise only employees whose department is in this
+     *                      (already subtree-expanded) set — an EMPTY set yields an empty page, never the tenant
+     */
+    PageResult<Employee> findPickerPage(String tenantId, Boolean active, Set<String> departmentIds,
+                                        int page, int size);
 
     /** Active employees referencing the given department — for retire guard. */
     List<Employee> findActiveByDepartmentId(String departmentId, String tenantId);

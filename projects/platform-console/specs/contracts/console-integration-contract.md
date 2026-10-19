@@ -2270,6 +2270,22 @@ binding is the **fourth** instance that verifies ADR-MONO-013 § 3.3's
     `accountId` «연결된 계정 없음» (selection is not blocked — the producer's
     submit-time refusal is the authority).
 
+- **Employee pickers read the picker list (TASK-ERP-BE-045, 2026-10-20 UTC)**: the
+  four employee selectors (`ApprovalCreateDialog` 대상 · 결재선, `DelegationScreen`
+  대결자, `DelegationFactCard` 위임자 · 대행자) read masterdata
+  `GET /employees/picker` (erp `masterdata-api.md` § employees/picker) through the
+  BFF `GET /api/erp/masterdata/employees/picker` — **not** `GET /employees`, which
+  stays the 직원 master screen's list. The picker opens to `ERP_MASTERDATA_READ ∨
+  _WRITE ∨ ERP_APPROVAL_WRITE`, so the default «결재 운영» set gets a list; the
+  «연결된 계정 없음» mark reads the element's `accountLinked` boolean.
+  - The list is **scoped to the operator's department subtree** (`meta.scope =
+    "SUBTREE"`), and an approver or delegate normally sits outside it. Every picker
+    therefore offers **«ID 직접 입력»** — a toggle that swaps the select for the raw
+    id input under the **same** `data-testid`. It is shown when the list is scoped
+    or truncated; a `403` still degrades straight to the input (unchanged).
+  - `403` now means «neither 기준정보 조회 nor 결재 변경» — the inline copy names
+    both, not only 기준정보 조회.
+
 - **erp internal-system producer obligations surfacing (erp domain
   constraint, normative — the erp analog of the scm § 2.4.6 S5 /
   finance § 2.4.7 F5/F7 obligations — contract obligations, NOT UX

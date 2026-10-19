@@ -59,6 +59,17 @@ export function employeesListKey(
   return [ERP_KEY, 'employees', 'list', asOf ?? null, page, size, filters ?? null] as const;
 }
 
+/** TASK-ERP-BE-045 — the employee «선택용» picker list. Under the `employees`
+ *  prefix so every employee write's `invalidateMaster(qc, 'employees')` refreshes
+ *  the pickers too. */
+export function employeePickerKey(
+  page: number,
+  size: number,
+  active: boolean | undefined,
+) {
+  return [ERP_KEY, 'employees', 'picker', page, size, active ?? null] as const;
+}
+
 export function employeeDetailKey(
   id: string,
   asOf: string | undefined,

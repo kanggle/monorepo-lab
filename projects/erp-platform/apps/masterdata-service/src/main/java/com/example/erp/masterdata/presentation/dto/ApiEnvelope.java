@@ -42,11 +42,23 @@ public record ApiEnvelope<T>(T data, Map<String, Object> meta) {
      */
     public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size,
                                                   long totalElements, int totalPages) {
+        return ofList(data, page, size, totalElements, totalPages, Map.of());
+    }
+
+    /**
+     * {@link #ofList(List, int, int, long, int)} plus endpoint-specific meta keys, placed after the page keys and
+     * before {@code timestamp}. Used by {@code GET /employees/picker} for {@code meta.scope} (TASK-ERP-BE-045) —
+     * the other list endpoints keep the plain factory, so their meta is unchanged.
+     */
+    public static <T> ApiEnvelope<List<T>> ofList(List<T> data, int page, int size,
+                                                  long totalElements, int totalPages,
+                                                  Map<String, Object> extraMeta) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("page", page);
         meta.put("size", size);
         meta.put("totalElements", totalElements);
         meta.put("totalPages", totalPages);
+        meta.putAll(extraMeta);
         meta.put("timestamp", Instant.now().toString());
         return new ApiEnvelope<>(data, meta);
     }

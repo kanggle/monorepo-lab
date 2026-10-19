@@ -6,14 +6,16 @@ import {
   ERP_MAX_PAGE_SIZE,
   type DelegationFactListResponse,
   type DelegationFactListQueryParams,
-  type Employee,
 } from '../api/types';
 import { delegationStatusTone } from '../api/delegation-types';
-import { useDelegationFacts, useEmployees } from '../hooks/use-erp-ops';
+import { useDelegationFacts, useEmployeePicker } from '../hooks/use-erp-ops';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { statusToneClass } from '@/shared/ui/StatusBadge';
-import { ErpEmployeeSelect } from './ErpEmployeeSelect';
-import { employeeListFallbackText } from './employee-list-fallback';
+import { ErpEmployeeSelect, employeePickerView } from './ErpEmployeeSelect';
+import {
+  EMPLOYEE_PICKER_SCOPED_NOTICE,
+  employeeListFallbackText,
+} from './employee-list-fallback';
 
 /**
  * ERP "위임 현황" read-only card (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
@@ -61,9 +63,11 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
   // employees stay selectable — this is a historical filter, not a write).
   // The first option is "전체 …" (value `''`) — unchanged '' ⇒ the param is
   // simply omitted from the query (see `applyFilters` below).
-  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
-  const employees: Employee[] = employeesQ.data?.data ?? [];
-  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
+  // TASK-ERP-BE-045 — the «선택용» picker list (open to 결재 변경 — NOT to 결재 읽기, so a
+  // read-only approval operator still lands on the id-input fallback here).
+  const employeesQ = useEmployeePicker({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const picker = employeePickerView(employeesQ.data, employeesQ.isSuccess);
+  const employees = picker.employees;
 
   const resp = q.data ?? initial ?? {
     data: [],
@@ -133,6 +137,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
           blankOptionLabel="전체 위임자"
           inputPlaceholder="위임자 ID (delegatorId)"
           className="rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          offerManual={picker.offerManual}
         />
         <ErpEmployeeSelect
           employees={employees}
@@ -145,6 +150,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
           blankOptionLabel="전체 대행자"
           inputPlaceholder="대행자 ID (delegateId)"
           className="rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          offerManual={picker.offerManual}
         />
         <select
           value={filterStatus}
@@ -188,7 +194,15 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
           {employeeListFallbackText(employeesQ.error, '위임자/대행자')}
         </p>
       )}
-      {employeesQ.isSuccess && totalEmployees > employees.length && (
+      {picker.scoped && (
+        <p
+          className="mb-3 text-xs text-muted-foreground"
+          data-testid="delegation-fact-filter-employees-scoped"
+        >
+          {EMPLOYEE_PICKER_SCOPED_NOTICE}
+        </p>
+      )}
+      {picker.truncated && (
         <p
           className="mb-3 text-xs text-muted-foreground"
           data-testid="delegation-fact-filter-employees-truncated"

@@ -59,24 +59,34 @@ function errorResponse(code: string, status: number) {
 // feeds both; a default success stub below means every PRE-EXISTING test in
 // this file (none of which mocked `fetch` before — they relied solely on the
 // `initial` prop seeding the delegation-facts query) keeps working unchanged.
+// TASK-ERP-BE-045 — that fetch is now the «선택용» picker list
+// `GET /api/erp/masterdata/employees/picker` (elements carry `accountLinked`, `meta.scope`).
+const PICKER_PATH = '/api/erp/masterdata/employees/picker?';
 const FILTER_EMPLOYEES_PAGE = {
   data: [
     {
       id: 'emp-001',
       employeeNumber: 'E1',
       name: '김위임',
+      departmentId: 'dept-1',
+      departmentName: '총무부',
       status: 'ACTIVE',
-      effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
+      accountLinked: true,
     },
     {
       id: 'emp-002',
       employeeNumber: 'E2',
       name: '이대행',
+      departmentId: 'dept-1',
       status: 'RETIRED',
-      effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: '2024-01-01' },
+      accountLinked: false,
     },
   ],
-  meta: { page: 0, size: 100, totalElements: 2 },
+  meta: { page: 0, size: 100, totalElements: 2, scope: 'TENANT' },
+};
+const FILTER_EMPLOYEES_PAGE_SUBTREE = {
+  ...FILTER_EMPLOYEES_PAGE,
+  meta: { ...FILTER_EMPLOYEES_PAGE.meta, scope: 'SUBTREE' },
 };
 
 beforeEach(() => {
@@ -84,7 +94,7 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
-      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+      if (String(url).startsWith(PICKER_PATH)) {
         return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
       }
       return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
@@ -488,7 +498,7 @@ describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
 
   it('AC-5 — no filter chosen (default) → the delegatorId/delegateId params are OMITTED from the fetched query', async () => {
     const fetchMock = vi.fn((url: string) => {
-      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+      if (String(url).startsWith(PICKER_PATH)) {
         return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
       }
       if (String(url).startsWith('/api/erp/read-model/delegations')) {
@@ -519,7 +529,7 @@ describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
 
   it('AC-1/AC-5 — picking a delegatorId option and applying sends that CHOSEN id as `delegatorId` on the query', async () => {
     const fetchMock = vi.fn((url: string) => {
-      if (String(url).startsWith('/api/erp/masterdata/employees')) {
+      if (String(url).startsWith(PICKER_PATH)) {
         return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
       }
       if (String(url).startsWith('/api/erp/read-model/delegations')) {
@@ -561,10 +571,74 @@ describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
     await screen.findByTestId('delegation-fact-filter-employees-fallback');
     expect(screen.getByTestId('delegation-fact-filter-delegatorId').tagName).toBe('INPUT');
     expect(screen.getByTestId('delegation-fact-filter-delegateId').tagName).toBe('INPUT');
-    // TASK-PC-FE-349 — 403 wording.
+    // TASK-PC-FE-349 — 403 wording (TASK-ERP-BE-045 — names both permissions; a 결재 읽기-only
+    // operator lands here: the picker does not open to ERP_APPROVAL_READ).
     expect(screen.getByTestId('delegation-fact-filter-employees-fallback')).toHaveTextContent(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 위임자/대행자 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 위임자/대행자 직원 ID 를 직접 입력하세요.',
     );
+    expect(screen.queryByTestId('delegation-fact-filter-delegatorId-manual-toggle')).toBeNull();
+    expect(screen.queryByTestId('delegation-fact-filter-delegateId-manual-toggle')).toBeNull();
+  });
+
+  it('🔴 TASK-ERP-BE-045 — both filters are fed by `/employees/picker` (never the master `/employees` list)', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (String(url).startsWith(PICKER_PATH)) {
+        return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
+      }
+      return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<DelegationFactCard initial={makeListResp([ACTIVE_FACT])} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith(PICKER_PATH))).toBe(true);
+    expect(urls.some((u) => u.startsWith('/api/erp/masterdata/employees?'))).toBe(false);
+    const delegateSel = screen.getByTestId('delegation-fact-filter-delegateId') as HTMLSelectElement;
+    expect(Array.from(delegateSel.options).map((o) => o.value)).toEqual(['', 'emp-001', 'emp-002']);
+    // `accountLinked:false` → marked; retired → marked (both rules from the shared label).
+    const opt002 = Array.from(delegateSel.options).find((o) => o.value === 'emp-002')!;
+    expect(opt002.textContent).toContain('연결된 계정 없음');
+    expect(opt002.textContent).toContain('폐기된 직원');
+  });
+
+  it('TENANT scope + not truncated → no scoped notice, no toggles', async () => {
+    render(<DelegationFactCard initial={makeListResp([ACTIVE_FACT])} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    expect(screen.queryByTestId('delegation-fact-filter-employees-scoped')).toBeNull();
+    expect(screen.queryByTestId('delegation-fact-filter-delegatorId-manual-toggle')).toBeNull();
+    expect(screen.queryByTestId('delegation-fact-filter-delegateId-manual-toggle')).toBeNull();
+  });
+
+  it('🔴 SUBTREE scope → one scoped notice + a toggle per filter; each swaps independently (same testid)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (String(url).startsWith(PICKER_PATH)) {
+          return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE_SUBTREE));
+        }
+        return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+      }),
+    );
+    const user = userEvent.setup();
+    render(<DelegationFactCard initial={makeListResp([ACTIVE_FACT])} />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByTestId('delegation-fact-filter-delegatorId')).toBeEnabled(),
+    );
+    expect(screen.getByTestId('delegation-fact-filter-employees-scoped')).toHaveTextContent(
+      '내 부서 범위의 직원만 표시합니다. 목록에 없는 직원은 «ID 직접 입력» 을 누르세요.',
+    );
+    await user.click(screen.getByTestId('delegation-fact-filter-delegatorId-manual-toggle'));
+    expect(screen.getByTestId('delegation-fact-filter-delegatorId').tagName).toBe('INPUT');
+    expect(screen.getByTestId('delegation-fact-filter-delegateId').tagName).toBe('SELECT');
+    expect(
+      screen.getByTestId('delegation-fact-filter-delegatorId-manual-toggle'),
+    ).toHaveTextContent('목록에서 고르기');
+    await user.click(screen.getByTestId('delegation-fact-filter-delegatorId-manual-toggle'));
+    expect(screen.getByTestId('delegation-fact-filter-delegatorId').tagName).toBe('SELECT');
   });
 
   it('retired employees stay selectable in the filters (historical filter, not a write)', async () => {
