@@ -28,11 +28,10 @@ const DOMAIN_HEALTH_KEY = ['domain-health'] as const;
 export function useDomainHealth(initial?: DomainHealth) {
   return useQuery({
     queryKey: DOMAIN_HEALTH_KEY,
-    // TASK-PC-FE-037 — `fetchDomainHealth` now takes an optional server-only
-    // `cookieHeader`. React Query passes its context object to `queryFn`; wrap
-    // so the client path calls with no args (the browser supplies cookies
-    // natively via `credentials: 'include'`) — otherwise the context object
-    // would be sent as a bogus `Cookie` header.
+    // TASK-PC-FE-037 — wrapped so React Query's context object is never passed
+    // as an argument (it once became a bogus `Cookie` header). TASK-PC-FE-350
+    // removed the server-only parameters, but the wrapper stays: it keeps any
+    // future parameter from silently receiving the query context.
     queryFn: () => fetchDomainHealth(),
     initialData: initial,
     staleTime: 30_000,

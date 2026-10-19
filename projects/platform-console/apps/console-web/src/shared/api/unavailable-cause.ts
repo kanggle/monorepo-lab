@@ -67,6 +67,22 @@ export function classifyUnavailable(err: unknown): UnavailableCause {
   return { kind: 'unknown', name };
 }
 
+/**
+ * TASK-PC-FE-350 — the classifier for a composition run **in-process** (the SSR
+ * dashboards no longer fetch their own route).
+ *
+ * 🔴 Same order as {@link classifyUnavailable}, with ONE deliberate difference:
+ *    there is no transport in-process, so a thrown `TypeError` is **not**
+ *    `transport`. `fetch` failures of individual legs never reach here — the
+ *    composer turns them into per-card `degraded` — so a `TypeError` that does
+ *    reach here is a code fault, and calling it «could not reach» would point a
+ *    reader at the network. It is `unknown`.
+ */
+export function classifyInProcessFailure(err: unknown): UnavailableCause {
+  const c = classifyUnavailable(err);
+  return c.kind === 'transport' ? { kind: 'unknown', name: c.name } : c;
+}
+
 /** 로그 한 줄에 실을 짧은 표현. 🔵 값이 아니라 **모양**만 싣는다. */
 export function formatUnavailableCause(c: UnavailableCause): string {
   switch (c.kind) {

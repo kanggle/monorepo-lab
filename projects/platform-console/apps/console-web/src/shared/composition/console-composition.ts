@@ -9,8 +9,10 @@ import { logger } from '@/shared/lib/logger';
  * (§ 2.4.9.1) and `domain-health` (§ 2.4.9.2) without changing a byte of
  * their wire envelope.
  *
- * This module holds no network primitive. The route handler passes its own
- * `fetch` in, AFTER its `sampleGate(` — a sample visitor never reaches a leg
+ * This module holds no network primitive. The caller — the per-composition
+ * function (`operator-overview-composition.ts` · `domain-health-composition.ts`,
+ * shared by the route and the SSR page since TASK-PC-FE-350; the notification
+ * routes) — passes its own `fetch` in, AFTER its `sampleGate(` — a sample visitor never reaches a leg
  * (ADR-MONO-074 A2; `tests/unit/sample-fetch-allowlist.test.ts`) — and that
  * `fetch` runs each leg URL through `resolveBackendUrl` at the call site, so
  * the demo host is resolved where the request is made

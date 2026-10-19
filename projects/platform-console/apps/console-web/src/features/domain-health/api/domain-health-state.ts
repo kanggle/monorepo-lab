@@ -1,13 +1,13 @@
 import { ApiError } from '@/shared/api/errors';
 import {
-  classifyUnavailable,
+  classifyInProcessFailure,
   formatUnavailableCause,
   type UnavailableCause,
 } from '@/shared/api/unavailable-cause';
 import { logger } from '@/shared/lib/logger';
-import { selfOrigin } from '@/shared/config/self-origin';
-import { fetchDomainHealth } from './domain-health-api';
-import type { DomainHealth } from './types';
+import { composeDomainHealth } from '@/shared/composition/domain-health-composition';
+import { answerError } from '@/shared/composition/composition-answer';
+import { DomainHealthSchema, type DomainHealth } from './types';
 
 /**
  * SERVER-ONLY half of `features/domain-health/api` (TASK-MONO-585).
@@ -16,12 +16,11 @@ import type { DomainHealth } from './types';
  * `<RetryButton>` client component imports `use-domain-health`, which imports
  * that module. Everything reachable from there ships to the browser — and that
  * is exactly how the console's 12 backend URLs ended up in a client chunk
- * (`shared/config/env.ts` header carries the measurement). This module resolves
- * this app's own absolute origin, so it must stay OUT of that graph; the split
- * is the enforcement, not a convention.
+ * (`shared/config/env.ts` header carries the measurement). This module reads the
+ * session (through the composition), so it must stay OUT of that graph; the
+ * split is the enforcement, not a convention.
  *
- * <p>Nothing else moved: the fetch, the schema and the error mapping are still
- * in the sibling, shared by both callers.
+ * <p>The schema is shared with the sibling (both callers parse the same envelope).
  */
 
 /**
@@ -30,14 +29,13 @@ import type { DomainHealth } from './types';
  * `OperatorOverviewState` so the page handles the same three outcomes
  * uniformly:
  *
- *   - `noTenant: true` — proxy fast-failed with 400 NO_ACTIVE_TENANT.
- *   - `unauthorized: true` — proxy returned 401 (Spring Security
- *     rejected the inbound `Authorization` bearer).
+ *   - `noTenant: true` — the composition answered 400 NO_ACTIVE_TENANT.
+ *   - `unauthorized: true` — the composition answered 401 (no IAM session).
  *   - `health` present — render `<DomainHealthScreen>`.
  *
  * Per-card degrade lives INSIDE `health.cards[i].status` (the 200
  * payload); it is NEVER a state field here. A whole-fan-out failure
- * (proxy 502 BAD_GATEWAY) surfaces as `bffUnavailable: true`.
+ * (a 502 answer, or the composition throwing) surfaces as `bffUnavailable: true`.
  */
 export interface DomainHealthState {
   health: DomainHealth | null;
@@ -48,21 +46,18 @@ export interface DomainHealthState {
   unavailableCause?: UnavailableCause;
 }
 
+/**
+ * 🔴 TASK-PC-FE-350 — runs the route's composition IN-PROCESS
+ * (`composeDomainHealth()`, the same function the route handler calls) instead of
+ * fetching `/api/console/dashboards/domain-health` at `selfOrigin()` with a
+ * hand-forwarded Cookie header (TASK-PC-FE-037). See the operator-overview
+ * sibling for the measured reason.
+ */
 export async function getDomainHealthState(): Promise<DomainHealthState> {
   try {
-    // TASK-PC-FE-037 — forward the page's request cookies to the in-process
-    // proxy fetch (the operator-overview sibling already does this via
-    // TASK-PC-FE-030). Next.js Node `fetch` does NOT auto-forward cookies on
-    // internal calls (`credentials: 'include'` is browser-only), so without
-    // this explicit header the proxy's `cookies()` reads empty → 400
-    // NO_ACTIVE_TENANT → `noTenant: true` even when the session HAS an active
-    // tenant.
-    const { cookies } = await import('next/headers');
-    const cookieHeader = (await cookies()).toString();
-    // 🔴 Node's `fetch` needs an ABSOLUTE url here — this leg is server→server
-    //    even though the proxy route runs in-process. `selfOrigin()` is this
-    //    app's own origin, NOT a backend address (see that module's header).
-    const health = await fetchDomainHealth(cookieHeader, selfOrigin());
+    const answer = await composeDomainHealth();
+    if (answer.status !== 200) throw answerError(answer);
+    const health = DomainHealthSchema.parse(answer.body);
     return {
       health,
       noTenant: false,
@@ -88,7 +83,8 @@ export async function getDomainHealthState(): Promise<DomainHealthState> {
         };
       }
     }
-    const unavailableCause = classifyUnavailable(err);
+    // In-process: a thrown TypeError is a code fault, not a transport failure.
+    const unavailableCause = classifyInProcessFailure(err);
     logger.warn('domain_health_bff_unavailable', {
       cause: formatUnavailableCause(unavailableCause),
     });

@@ -11,14 +11,17 @@ import { sampleResponse, type SampleRequest } from '@/shared/sample/router';
  *   - the six gateway cores (`callAdminGateway`, `fetchRegistry`,
  *     `callWmsGateway`, `callEcommerceGateway`, `callFlatEnvelopeGateway`
  *     — which `callScmGateway` shims onto);
- *   - the out-of-core composition routes that call the domains themselves
- *     (`api/console/dashboards/{operator-overview,domain-health}`,
- *     `api/console/notifications/{inbox,[sourceDomain]/[id]/read}`) and the
+ *   - the out-of-core compositions that call the domains themselves — the two
+ *     dashboard composition functions (`shared/composition/{operator-overview,
+ *     domain-health}-composition.ts`, run by both their route and the SSR page
+ *     since TASK-PC-FE-350), the notification routes
+ *     (`api/console/notifications/{inbox,[sourceDomain]/[id]/read}`) — and the
  *     tenant switch (`api/tenant`).
  *
  * `tests/unit/sample-fetch-allowlist.test.ts` pins that list: in each of those
  * files `sampleGate(` appears before the first token read and the first
- * `fetch(`.
+ * `fetch(`, and the dashboard routes / SSR state functions have no backend
+ * reach except through their composition function.
  *
  * -----------------------------------------------------------------------------
  * 🔴 If the predicate itself throws, the answer is «not a sample visitor»

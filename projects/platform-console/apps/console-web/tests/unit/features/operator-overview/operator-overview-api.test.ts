@@ -17,21 +17,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     a BE drift;
  *   - non-2xx → ApiError(status, code);
  *   - `getOperatorOverviewState` maps the 3 fail modes (no tenant /
- *     unauthorized / bff unavailable) to the discriminated state the
- *     SSR page consumes.
+ *     unauthorized / bff unavailable) of the in-process composition answer
+ *     to the discriminated state the SSR page consumes (TASK-PC-FE-350).
  */
 
-// TASK-PC-FE-030 — `getOperatorOverviewState()` lazy-imports `next/headers`
-// `cookies()` and forwards `(await cookies()).toString()` as the Cookie
-// header to the in-process proxy fetch. Outside a request scope the real
-// `cookies()` throws, so it must be mocked here; the `toString()` shape is
-// what the wrapper reads (the discriminated-state assertions exercise the
-// proxy response, not the cookie contents).
-vi.mock('next/headers', () => ({
-  cookies: async () => ({
-    toString: () => 'gap_at=a; gap_op=op; gap_tenant=wms',
-    get: () => undefined,
-  }),
+// TASK-PC-FE-350 — `getOperatorOverviewState()` no longer fetches the route at
+// this app's own origin; it calls `composeOperatorOverview()` in-process (the
+// function the route itself runs). THAT is the seam the state tests below mock:
+// each case hands the state function the answer the route would have put on the
+// wire (status + body) — the same inputs these cases used to feed through a
+// stubbed self-fetch — so their assertions keep their meaning. The composition
+// itself (session reads, sample gate, legs) is exercised un-mocked in
+// `tests/unit/dashboard-ssr-direct-composition.test.ts`.
+// (Before 350: the TASK-PC-FE-030 `next/headers` mock + forwarded Cookie header.)
+vi.mock('@/shared/composition/operator-overview-composition', () => ({
+  composeOperatorOverview: vi.fn(),
 }));
 
 import {
@@ -40,6 +40,7 @@ import {
   getOperatorOverviewState,
 } from '@/features/operator-overview';
 import { ApiError } from '@/shared/api/errors';
+import { composeOperatorOverview } from '@/shared/composition/operator-overview-composition';
 
 const { ENV } = vi.hoisted(() => ({
   ENV: {
@@ -109,7 +110,13 @@ const HAPPY_ENVELOPE = {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  vi.mocked(composeOperatorOverview).mockReset();
 });
+
+/** The answer the route would put on the wire — what the old self-fetch returned. */
+function answer(body: unknown, status = 200) {
+  vi.mocked(composeOperatorOverview).mockResolvedValue({ status, body });
+}
 
 describe('OperatorOverviewSchema — runtime validation', () => {
   it('accepts the canonical 6-card envelope (mixed statuses)', () => {
@@ -260,45 +267,34 @@ describe('fetchOperatorOverview — error mapping', () => {
 });
 
 describe('getOperatorOverviewState — discriminated server-side state', () => {
-  it('200 → { overview }', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE)));
+  it('200 → { overview } — and 🔴 no fetch at all (TASK-PC-FE-350: no self-fetch)', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    answer(HAPPY_ENVELOPE);
     const state = await getOperatorOverviewState();
     expect(state.overview).not.toBeNull();
     expect(state.noTenant).toBe(false);
     expect(state.unauthorized).toBe(false);
     expect(state.bffUnavailable).toBe(false);
+    expect(composeOperatorOverview).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('400 NO_ACTIVE_TENANT → { noTenant: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'NO_ACTIVE_TENANT', message: 'x' }, 400),
-      ),
-    );
+    answer({ code: 'NO_ACTIVE_TENANT', message: 'x' }, 400);
     const state = await getOperatorOverviewState();
     expect(state.overview).toBeNull();
     expect(state.noTenant).toBe(true);
   });
 
   it('401 → { unauthorized: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'TOKEN_INVALID', message: 'x' }, 401),
-      ),
-    );
+    answer({ code: 'TOKEN_INVALID', message: 'x' }, 401);
     const state = await getOperatorOverviewState();
     expect(state.unauthorized).toBe(true);
   });
 
   it('502 BAD_GATEWAY → { bffUnavailable: true } + 사유가 status:502 다 (TASK-MONO-711 ②)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502),
-      ),
-    );
+    answer({ code: 'BAD_GATEWAY', message: 'x' }, 502);
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(true);
     expect(state.unavailableCause).toEqual({
@@ -308,47 +304,52 @@ describe('getOperatorOverviewState — discriminated server-side state', () => {
     });
   });
 
-  it('network failure (fetch throws) → { bffUnavailable: true } + 사유가 transport 다 (TASK-MONO-711 ②)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new TypeError('network down')),
-    );
+  it('a malformed 200 body → { bffUnavailable: true } (the schema still guards the SSR path)', async () => {
+    answer({ asOf: 'x', cards: [] });
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(true);
-    // 🔴 «응답이 나빴다» 가 아니라 «응답에 닿지도 못했다» — Vercel 콘솔이 상시 머무는 상태다.
-    expect(state.unavailableCause?.kind).toBe('transport');
+    expect(state.unavailableCause?.kind).toBe('unknown');
   });
 
-  // 🔴🔴 TASK-MONO-711 ② 의 본체. 위 두 칸은 각각 자기 사유를 단언하지만, 둘이
+  it('the composition throws a TypeError → { bffUnavailable: true } + 사유가 unknown 이다 — 🔴 transport 가 아니다 (TASK-PC-FE-350)', async () => {
+    // Before 350 this case was «network failure (fetch throws) → transport»: the
+    // self-fetch could fail to reach this app. In-process there is no transport;
+    // leg network failures degrade their card inside the composer, so a
+    // TypeError reaching here is a code fault.
+    vi.mocked(composeOperatorOverview).mockRejectedValue(new TypeError('boom'));
+    const state = await getOperatorOverviewState();
+    expect(state.bffUnavailable).toBe(true);
+    expect(state.unavailableCause).toEqual({ kind: 'unknown', name: 'TypeError' });
+  });
+
+  // 🔴🔴 TASK-MONO-711 ② 의 본체. 위 칸들은 각각 자기 사유를 단언하지만, 둘이
   //    **서로 다른가** 는 아무도 안 묻는다 — 그리고 그것이 이 티켓의 질문이다.
   //    «기록된 영구 한계» 와 «진짜 장애» 가 같은 값으로 나오면 신호가 죽는다.
   //    이 칸은 누가 사유를 다시 하나로 뭉개면(예: 전부 'unknown') 빨개진다.
+  //    🔵 TASK-PC-FE-350: 둘째 종류가 'transport' → 'unknown' 으로 바뀌었다(위 칸) —
+  //    «셋이 서로 다르다» 는 그대로다.
   it('🔴 서로 다른 실패는 서로 다른 사유를 낸다 — 하나로 뭉개지지 않는다', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502)),
-    );
+    answer({ code: 'BAD_GATEWAY', message: 'x' }, 502);
     const bad = await getOperatorOverviewState();
 
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
-    const down = await getOperatorOverviewState();
+    vi.mocked(composeOperatorOverview).mockRejectedValue(new TypeError('boom'));
+    const broken = await getOperatorOverviewState();
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+    vi.mocked(composeOperatorOverview).mockRejectedValue(
+      Object.assign(new Error('aborted'), { name: 'AbortError' }),
     );
     const aborted = await getOperatorOverviewState();
 
     // 셋 다 같은 플래그다 — 그 플래그만으로는 못 가른다는 것이 이 티켓의 전제다.
-    expect([bad, down, aborted].map((s) => s.bffUnavailable)).toEqual([true, true, true]);
+    expect([bad, broken, aborted].map((s) => s.bffUnavailable)).toEqual([true, true, true]);
 
-    const kinds = [bad, down, aborted].map((s) => s.unavailableCause?.kind);
-    expect(kinds).toEqual(['status', 'transport', 'timeout']);
+    const kinds = [bad, broken, aborted].map((s) => s.unavailableCause?.kind);
+    expect(kinds).toEqual(['status', 'unknown', 'timeout']);
     expect(new Set(kinds).size).toBe(3);
   });
 
   it('🔵 대조군 — 성공하면 사유를 지어내지 않는다', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE)));
+    answer(HAPPY_ENVELOPE);
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(false);
     expect(state.unavailableCause).toBeUndefined();
