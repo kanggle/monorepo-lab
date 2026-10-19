@@ -3,19 +3,22 @@ import { ApiError } from '@/shared/api/errors';
 import { employeeListFallbackText } from '@/features/erp-ops/components/employee-list-fallback';
 
 /**
- * TASK-PC-FE-349 — an operator holding only the ERP approval roles (the shipped «결재 운영» set =
+ * TASK-PC-FE-349 (403 wording revised by TASK-ERP-BE-045) — an operator holding only the ERP approval roles (the shipped «결재 운영» set =
  * ERP_APPROVAL_READ + ERP_APPROVAL_WRITE) gets `403` on the masterdata employee LIST (READ scope =
  * masterdata roles only). The four employee pickers used to call that «불러오지 못해» — an outage
  * wording for a permission answer. A 403 now says so; every other failure keeps the old wording.
  */
 describe('employeeListFallbackText', () => {
-  it('403 → says the masterdata read permission is missing (owner-approved copy, 2026-10-19 UTC)', () => {
-    const e = new ApiError(403, 'DATA_SCOPE_FORBIDDEN', 'forbidden');
+  // TASK-ERP-BE-045 — the pickers now read `GET /employees/picker`, open to 기준정보 조회 ∨ 기준정보
+  // 변경 ∨ 결재 변경. A 403 there means the operator holds NEITHER, so the copy names both (console
+  // contract § 2.4.8 «Employee pickers read the picker list»).
+  it('403 → names both missing permissions (기준정보 조회 · 결재 변경)', () => {
+    const e = new ApiError(403, 'PERMISSION_DENIED', 'forbidden');
     expect(employeeListFallbackText(e, '결재자')).toBe(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 결재자 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 결재자 직원 ID 를 직접 입력하세요.',
     );
     expect(employeeListFallbackText(e, '위임자/대행자')).toBe(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 위임자/대행자 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 위임자/대행자 직원 ID 를 직접 입력하세요.',
     );
   });
 

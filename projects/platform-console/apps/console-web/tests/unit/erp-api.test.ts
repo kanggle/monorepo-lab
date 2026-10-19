@@ -397,6 +397,9 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
         'listDepartments',
         'listEmployees',
         'listJobGrades',
+        // TASK-ERP-BE-045: the employee «선택용» picker list (masterdata-api.md
+        // § employees/picker) — read-only, no write counterpart.
+        'listEmployeePicker',
         // TASK-PC-FE-049: 2 read-model reads (READ-ONLY, no write)
         'listEmployeeOrgViews',
         'getEmployeeOrgView',
@@ -490,7 +493,8 @@ describe('erp-api — STRICTLY read-only (no mutation artifacts anywhere; § 2.4
     //  the bell now reads the notification aggregator under /api/console.)
     // + TASK-PC-FE-318: 2 account-link GET routes (employees/[id]/
     //   account-link-proposals history, account-link-proposals/mine) = 20.
-    expect(getRouteFiles).toBe(20);
+    // + TASK-ERP-BE-045: 1 employee picker GET route (employees/picker) = 21.
+    expect(getRouteFiles).toBe(21);
     // POST routes: 5 masters × {create on list route, update on [id] route,
     // retire on [id]/retire route} = 15, + department move-parent = 16
     // + TASK-PC-FE-051: 2 approval POST routes (requests create, the

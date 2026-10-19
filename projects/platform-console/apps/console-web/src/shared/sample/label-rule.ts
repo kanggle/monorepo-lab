@@ -73,6 +73,10 @@ const HUMAN_READABLE_KEYS = new Set([
   'supplierName',
   'reasonNote',
   'message',
+  // TASK-ERP-BE-045 — the erp employee picker's denormalized department display name
+  // (`masterdata-api.md` § employees/picker). A person reads it like the department's own
+  // `name` it is copied from (which already carries the suffix).
+  'departmentName',
 ]);
 
 const MACHINE_KEYS = new Set([

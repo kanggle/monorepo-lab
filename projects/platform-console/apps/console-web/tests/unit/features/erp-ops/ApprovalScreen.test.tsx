@@ -384,31 +384,43 @@ describe('ApprovalDetail — inline error mapping (graceful, no crash)', () => {
 
 // TASK-PC-FE-318 AC-4 — the approver route is an EMPLOYEE SELECTOR now (it was
 // a raw-id text input). Same testid `approval-create-approver-${idx}`, but a
-// <select> fed by `GET /api/erp/masterdata/employees`; an employee without
-// `accountId` is marked «연결된 계정 없음» (not disabled).
-const EMP = (id: string, num: string, name: string, accountId?: string) => ({
+// <select>; an employee without a linked account is marked «연결된 계정 없음»
+// (not disabled).
+// TASK-ERP-BE-045 — the selector reads the «선택용» picker list
+// `GET /api/erp/masterdata/employees/picker` (NOT `GET /employees`, which stays the
+// 직원 master screen's list). Picker elements carry the boolean `accountLinked`
+// instead of `accountId`, and `meta.scope` says whether the list was narrowed.
+const PICKER_PATH = '/api/erp/masterdata/employees/picker?';
+const EMP = (id: string, num: string, name: string, accountLinked: boolean) => ({
   id,
   employeeNumber: num,
   name,
+  departmentId: 'dept-1',
+  departmentName: '총무부',
   status: 'ACTIVE',
-  employmentStatus: 'EMPLOYED',
-  effectivePeriod: { effectiveFrom: '2026-01-01', effectiveTo: null },
-  ...(accountId ? { accountId } : {}),
+  accountLinked,
 });
 const EMPLOYEES_PAGE = {
   data: [
-    EMP('emp-a', 'E-A', '김승인', 'acc-a'),
-    EMP('emp-b', 'E-B', '이승인', 'acc-b'),
-    EMP('emp-x', 'E-X', '박미연결'),
+    EMP('emp-a', 'E-A', '김승인', true),
+    EMP('emp-b', 'E-B', '이승인', true),
+    EMP('emp-x', 'E-X', '박미연결', false),
   ],
-  meta: { page: 0, size: 100, totalElements: 3 },
+  meta: { page: 0, size: 100, totalElements: 3, scope: 'TENANT' },
+};
+/** Same rows, narrowed to the operator's department subtree. */
+const EMPLOYEES_PAGE_SUBTREE = {
+  ...EMPLOYEES_PAGE,
+  meta: { ...EMPLOYEES_PAGE.meta, scope: 'SUBTREE' },
 };
 
-/** fetch mock: employee list for the selector, DRAFT for the create POST. */
-function createDialogFetch() {
+/** fetch mock: employee picker list for the selector, DRAFT for the create POST.
+ *  The master LIST path (`/employees?`) deliberately falls through to 404 — a
+ *  picker that still read it would land on the fallback input, not a select. */
+function createDialogFetch(page: unknown = EMPLOYEES_PAGE) {
   return vi.fn((url: string, init?: RequestInit) => {
-    if (String(url).startsWith('/api/erp/masterdata/employees?')) {
-      return Promise.resolve(jsonResponse(EMPLOYEES_PAGE));
+    if (String(url).startsWith(PICKER_PATH)) {
+      return Promise.resolve(jsonResponse(page));
     }
     if (init?.method === 'POST') {
       return Promise.resolve(jsonResponse({ data: DRAFT }, 201));
@@ -557,9 +569,118 @@ describe('ApprovalScreen — create dialog', () => {
     await screen.findByTestId('approval-create-approvers-fallback');
     expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('INPUT');
     // TASK-PC-FE-349 — a 403 is a permission answer, not an outage.
+    // TASK-ERP-BE-045 — the picker opens to 기준정보 조회 ∨ 결재 변경, so the copy names both.
     expect(screen.getByTestId('approval-create-approvers-fallback')).toHaveTextContent(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 결재자 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 결재자 직원 ID 를 직접 입력하세요.',
     );
+    // a 403 degrades straight to the input — no toggle to a list that cannot be read.
+    expect(screen.queryByTestId('approval-create-approver-0-manual-toggle')).toBeNull();
+  });
+});
+
+// ===========================================================================
+// TASK-ERP-BE-045 — the pickers read `GET /employees/picker`; a scoped or truncated list
+// offers «ID 직접 입력» (an approver normally sits outside the operator's subtree).
+// ===========================================================================
+
+describe('ApprovalScreen — create dialog reads the picker list (TASK-ERP-BE-045)', () => {
+  it('🔴 the approver selector is fed by `/employees/picker`, never by the master `/employees` list', async () => {
+    const fetchMock = createDialogFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith(PICKER_PATH))).toBe(true);
+    expect(urls.some((u) => u.startsWith('/api/erp/masterdata/employees?'))).toBe(false);
+    const select = screen.getByTestId('approval-create-approver-0') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['', 'emp-a', 'emp-b', 'emp-x']);
+  });
+
+  it('TENANT scope + not truncated → no scoped notice and no «ID 직접 입력» toggle', async () => {
+    vi.stubGlobal('fetch', createDialogFetch(EMPLOYEES_PAGE));
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    expect(screen.queryByTestId('approval-create-approvers-scoped')).toBeNull();
+    expect(screen.queryByTestId('approval-create-approver-0-manual-toggle')).toBeNull();
+  });
+
+  it('🔴 SUBTREE scope → one scoped notice for the approver block + a per-row toggle that swaps select ↔ input under the SAME testid', async () => {
+    const fetchMock = createDialogFetch(EMPLOYEES_PAGE_SUBTREE);
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    expect(screen.getByTestId('approval-create-approvers-scoped')).toHaveTextContent(
+      '내 부서 범위의 직원만 표시합니다. 목록에 없는 직원은 «ID 직접 입력» 을 누르세요.',
+    );
+    const toggle = screen.getByTestId('approval-create-approver-0-manual-toggle');
+    expect(toggle).toHaveTextContent('ID 직접 입력');
+    await user.click(toggle);
+    expect(screen.getByTestId('approval-create-approver-0').tagName).toBe('INPUT');
+    expect(screen.getByTestId('approval-create-approver-0-manual-toggle')).toHaveTextContent(
+      '목록에서 고르기',
+    );
+    // an approver outside the subtree is typed in and reaches the create body.
+    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-outside');
+    await user.type(screen.getByTestId('approval-create-subjectId'), 'dept-1');
+    await user.type(screen.getByTestId('approval-create-title'), '범위 밖 결재자');
+    await user.click(screen.getByTestId('approval-create-submit'));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => String(c[0]) === '/api/erp/approval/requests'),
+      ).toBe(true),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]) === '/api/erp/approval/requests',
+    )!;
+    expect(JSON.parse((createCall[1] as RequestInit).body as string).approverId).toBe(
+      'emp-outside',
+    );
+  });
+
+  it('the toggle swaps back to the list («목록에서 고르기»); a typed id that is not in the list is cleared, not hidden', async () => {
+    vi.stubGlobal('fetch', createDialogFetch(EMPLOYEES_PAGE_SUBTREE));
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    await user.click(screen.getByTestId('approval-create-approver-0-manual-toggle'));
+    await user.type(screen.getByTestId('approval-create-approver-0'), 'emp-outside');
+    await user.click(screen.getByTestId('approval-create-approver-0-manual-toggle'));
+    const select = screen.getByTestId('approval-create-approver-0') as HTMLSelectElement;
+    expect(select.tagName).toBe('SELECT');
+    expect(select.value).toBe('');
+    expect(screen.getByTestId('approval-create-approver-0-manual-toggle')).toHaveTextContent(
+      'ID 직접 입력',
+    );
+  });
+
+  it('TENANT scope but truncated (totalElements > shown) → the toggle is offered too (no scoped notice)', async () => {
+    const truncated = {
+      ...EMPLOYEES_PAGE,
+      meta: { ...EMPLOYEES_PAGE.meta, totalElements: 250 },
+    };
+    vi.stubGlobal('fetch', createDialogFetch(truncated));
+    const user = userEvent.setup();
+    await openCreateWithEmployees(user);
+    expect(screen.getByTestId('approval-create-approver-0-manual-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('approval-create-approvers-truncated')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-create-approvers-scoped')).toBeNull();
+  });
+
+  it('SUBTREE scope on the EMPLOYEE 대상 → its own scoped notice + toggle (same testid swap)', async () => {
+    vi.stubGlobal('fetch', subjectIdDialogFetch(EMPLOYEES_PAGE_SUBTREE));
+    const user = userEvent.setup();
+    render(<ApprovalScreen canWrite initialRequests={LIST} initialInbox={INBOX} />, {
+      wrapper: wrapper(),
+    });
+    await user.click(screen.getByTestId('approval-create'));
+    await user.selectOptions(screen.getByTestId('approval-create-subjectType'), 'EMPLOYEE');
+    await waitFor(() =>
+      expect(screen.getByTestId('approval-create-subjectId')).toBeEnabled(),
+    );
+    expect(screen.getByTestId('approval-create-subjectId-scoped')).toHaveTextContent(
+      '내 부서 범위의 직원만 표시합니다. 목록에 없는 직원은 «ID 직접 입력» 을 누르세요.',
+    );
+    await user.click(screen.getByTestId('approval-create-subjectId-manual-toggle'));
+    expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
   });
 });
 
@@ -589,10 +710,10 @@ const DEPARTMENTS_PAGE = {
 
 /** Both the employees AND departments lists resolve (unlike
  *  `createDialogFetch()`, which 404s departments). */
-function subjectIdDialogFetch() {
+function subjectIdDialogFetch(page: unknown = EMPLOYEES_PAGE) {
   return vi.fn((url: string, init?: RequestInit) => {
-    if (String(url).startsWith('/api/erp/masterdata/employees?')) {
-      return Promise.resolve(jsonResponse(EMPLOYEES_PAGE));
+    if (String(url).startsWith(PICKER_PATH)) {
+      return Promise.resolve(jsonResponse(page));
     }
     if (String(url).startsWith('/api/erp/masterdata/departments?')) {
       return Promise.resolve(jsonResponse(DEPARTMENTS_PAGE));
@@ -688,9 +809,9 @@ describe('ApprovalScreen — create dialog 대상 ID selector (TASK-PC-FE-335)',
     await user.selectOptions(screen.getByTestId('approval-create-subjectType'), 'EMPLOYEE');
     await screen.findByTestId('approval-create-subjectId-fallback');
     expect(screen.getByTestId('approval-create-subjectId').tagName).toBe('INPUT');
-    // TASK-PC-FE-349 — 403 wording.
+    // TASK-PC-FE-349 — 403 wording (TASK-ERP-BE-045 — names both permissions).
     expect(screen.getByTestId('approval-create-subjectId-fallback')).toHaveTextContent(
-      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 대상 직원 ID 를 직접 입력하세요.',
+      '기준정보 조회 · 결재 변경 권한이 없어 직원 목록을 볼 수 없습니다. 대상 직원 ID 를 직접 입력하세요.',
     );
   });
 });

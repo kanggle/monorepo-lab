@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import type { DelegationGrant } from '../api/delegation-types';
-import { ERP_MAX_PAGE_SIZE, type Employee } from '../api/types';
+import { ERP_MAX_PAGE_SIZE } from '../api/types';
 import {
   useDelegations,
   useCreateDelegation,
   useRevokeDelegation,
-  useEmployees,
+  useEmployeePicker,
 } from './use-erp-ops';
+import { employeePickerView } from '../components/ErpEmployeeSelect';
 
 /**
  * `<DelegationScreen>` container hook (TASK-PC-FE-150 — behaviour-
@@ -67,9 +68,11 @@ export function useDelegationCreate(onClose: () => void) {
   // ERP_MAX_PAGE_SIZE, fallback to the id input on error, same testid). RETIRED
   // employees stay listed but are NOT selectable here — `delegateId` must be an
   // ACTIVE employee (the producer refuses otherwise with 422 `delegate_unresolved`).
-  const employeesQ = useEmployees({ page: 0, size: ERP_MAX_PAGE_SIZE });
-  const employees: Employee[] = employeesQ.data?.data ?? [];
-  const totalEmployees = employeesQ.data?.meta.totalElements ?? employees.length;
+  // TASK-ERP-BE-045 — reads the «선택용» picker list (open to 결재 변경, narrowed to the
+  // operator's subtree); `picker.offerManual` drives the «ID 직접 입력» toggle.
+  const employeesQ = useEmployeePicker({ page: 0, size: ERP_MAX_PAGE_SIZE });
+  const picker = employeePickerView(employeesQ.data, employeesQ.isSuccess);
+  const employees = picker.employees;
 
   const ok = delegateId.trim() !== '' && validFrom.trim() !== '';
   const canConfirm = ok && !createM.isPending;
@@ -104,7 +107,7 @@ export function useDelegationCreate(onClose: () => void) {
     onConfirm,
     employeesQ,
     employees,
-    totalEmployees,
+    picker,
   };
 }
 

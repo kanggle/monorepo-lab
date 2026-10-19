@@ -74,6 +74,8 @@ import { GET as deptListGET } from '@/app/api/erp/masterdata/departments/route';
 import { GET as deptDetailGET } from '@/app/api/erp/masterdata/departments/[id]/route';
 import { GET as empListGET } from '@/app/api/erp/masterdata/employees/route';
 import { GET as empDetailGET } from '@/app/api/erp/masterdata/employees/[id]/route';
+// TASK-ERP-BE-045 — the employee «선택용» picker list (static segment beside `[id]`).
+import * as empPickerRoute from '@/app/api/erp/masterdata/employees/picker/route';
 import { GET as jgListGET } from '@/app/api/erp/masterdata/job-grades/route';
 import { GET as jgDetailGET } from '@/app/api/erp/masterdata/job-grades/[id]/route';
 import { GET as ccListGET } from '@/app/api/erp/masterdata/cost-centers/route';
@@ -306,6 +308,92 @@ describe('GET /api/erp/masterdata/employees + employees/{id} proxies (read-only)
     const upstream = new URL(String(fetchMock.mock.calls[0][0]));
     expect(upstream.pathname).toBe('/api/erp/masterdata/employees/emp-1');
     expect(upstream.searchParams.get('asOf')).toBe('2025-06-01');
+  });
+});
+
+// TASK-ERP-BE-045 — `GET /api/erp/masterdata/employees/picker` (masterdata-api.md §
+// employees/picker). Mirrors the employees LIST proxy: IAM token server-side, active/page/size
+// passthrough, error mapping (the 403 is what the pickers turn into the «권한 없음» fallback).
+const PICKER_ENV = {
+  data: [
+    {
+      id: 'emp-1',
+      employeeNumber: 'E-1001',
+      name: '홍길동',
+      departmentId: 'dept-1',
+      departmentName: '영업본부',
+      status: 'ACTIVE',
+      accountLinked: true,
+    },
+  ],
+  meta: { page: 0, size: 100, totalElements: 1, scope: 'SUBTREE', timestamp: 'x' },
+};
+
+describe('GET /api/erp/masterdata/employees/picker proxy (read-only, TASK-ERP-BE-045)', () => {
+  it('exports GET only (no write handler on the picker)', () => {
+    expect(Object.keys(empPickerRoute).filter((k) => k !== 'runtime').sort()).toEqual(['GET']);
+  });
+
+  it('attaches the IAM OIDC access token (NOT the operator token) and calls the picker path upstream', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PICKER_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await empPickerRoute.GET(
+      new Request('http://console.local/api/erp/masterdata/employees/picker?page=0&size=100'),
+    );
+    expect(res.status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0];
+    const h = (init as RequestInit).headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer GAP-ACCESS');
+    expect(h.Authorization).not.toContain('OP-MUST-NOT-USE');
+    expect((init as RequestInit).method).toBe('GET');
+    const upstream = new URL(String(url));
+    expect(upstream.pathname).toBe('/api/erp/masterdata/employees/picker');
+    expect(upstream.searchParams.get('page')).toBe('0');
+    expect(upstream.searchParams.get('size')).toBe('100');
+    // the body passes through with `meta.scope` and the boolean `accountLinked`.
+    const body = await res.json();
+    expect(body.meta.scope).toBe('SUBTREE');
+    expect(body.data[0].accountLinked).toBe(true);
+  });
+
+  it('passes active/page/size through; drops what the picker does not accept (asOf, departmentId)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PICKER_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+    await empPickerRoute.GET(
+      new Request(
+        'http://console.local/api/erp/masterdata/employees/picker?active=true&page=1&size=50&asOf=2025-01-01&departmentId=dept-1',
+      ),
+    );
+    const upstream = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(upstream.searchParams.get('active')).toBe('true');
+    expect(upstream.searchParams.get('page')).toBe('1');
+    expect(upstream.searchParams.get('size')).toBe('50');
+    expect(upstream.searchParams.get('asOf')).toBeNull();
+    expect(upstream.searchParams.get('departmentId')).toBeNull();
+  });
+
+  it('no IAM session → 401 (no upstream call)', async () => {
+    cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await empPickerRoute.GET(
+      new Request('http://console.local/api/erp/masterdata/employees/picker'),
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('403 PERMISSION_DENIED → 403 (the pickers degrade to the id input)', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(erpError('PERMISSION_DENIED', 403)));
+    const res = await empPickerRoute.GET(
+      new Request('http://console.local/api/erp/masterdata/employees/picker'),
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('PERMISSION_DENIED');
   });
 });
 

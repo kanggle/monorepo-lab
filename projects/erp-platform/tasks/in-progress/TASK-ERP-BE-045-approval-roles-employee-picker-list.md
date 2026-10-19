@@ -57,9 +57,11 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 소유자 결정(선택지 · 추천 · ADR 영향 판정)을 적는다. → 아래 § AC-0.
-- [ ] **AC-1** — 계약 · (필요하면) ADR 개정이 코드보다 먼저.
+- [x] **AC-1** — 계약 · (필요하면) ADR 개정이 코드보다 먼저. → 커밋 `d0a04d320`(계약만) 이 구현 커밋보다 앞선다. ADR 개정 불필요(§ AC-0).
 - [ ] **AC-2** — 서버 인가 시험 대조군 4 칸(위) 빨강 → 초록. 응답에 선택용 최소 필드 외의 값이 없다((가) 일 때).
 - [ ] **AC-3** — 콘솔: «결재 운영» 운영자가 4 곳에서 목록으로 고른다(폴백 문구가 안 뜬다). 기준정보 운영자 · 데모 운영자 비회귀.
+- 🔵 **AC-2 진행 (2026-10-20 UTC)** — 빨강: 시험만 먼저 → 컴파일 실패, 순진한 스텁 → 253 중 28 실패(전부 새 picker 칸, 기존 225 통과). 초록: `:masterdata-service:test` 253/0 · rc=0. 대조군 4 칸 = `EmployeePickerControllerSliceTest`(실제 서비스 + 어댑터, 저장소만 mock) · 응답 키 집합 = 정확히 7(부서 미해소 시 6) · 범위 `'*'`/서브트리/없음. ⚪ `EmployeePickerIntegrationTest`(MySQL Testcontainers) 는 로컬 Docker 꺼짐 → CI `integrationTest` 결과로 닫는다.
+- 🔵 **AC-3 진행** — 콘솔 4 곳이 `GET /api/erp/masterdata/employees/picker` 로 읽고 «ID 직접 입력» 토글(범위 ≠ TENANT 또는 잘림). 빨강 37 실패 → 초록 300(9 파일) · 전체 4922/0 · tsc 0 · lint 0. 문구 = `employee-list-fallback.ts` 한 곳. ⚪ 브라우저 · 라이브(«결재 운영» 운영자) 미확인 → 굽기 뒤.
 - [ ] **AC-4** — 배포 상태(AMI 굽기 · Vercel · 라이브 «Still open» 11 ④)를 따로 적는다.
 
 # Related Specs

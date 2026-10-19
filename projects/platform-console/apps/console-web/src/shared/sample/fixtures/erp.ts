@@ -270,6 +270,49 @@ function accountLinkFixture(path: string): unknown {
   return undefined;
 }
 
+// ===========================================================================
+// employee «선택용» picker — GET /api/erp/masterdata/employees/picker
+// (TASK-ERP-BE-045, masterdata-api.md v1.2). DERIVED from `ERP_EMPLOYEES` (one
+// employee world — never a second hand-typed list that could drift): the picker
+// fields only, `accountLinked` = «has an `accountId`» (the id itself is not
+// carried), sorted by 사번, `departmentName` = the department's name when that
+// department is valid today (a RETIRED department resolves to nothing → ABSENT,
+// as the producer documents). The sample visitor sees the whole tenant, so
+// `meta.scope = 'TENANT'`.
+// 🔴 Routed BEFORE `employeesFixture`: its detail matcher `^…/employees/([^/]+)$`
+// would otherwise answer `/employees/picker` as «employee `picker` not found».
+// ===========================================================================
+
+const EMPLOYEE_PICKER_PATH = `${EMPLOYEES_PATH}/picker`;
+
+export const ERP_EMPLOYEE_PICKER = [...ERP_EMPLOYEES]
+  .sort((a, b) => a.employeeNumber.localeCompare(b.employeeNumber))
+  .map((e) => {
+    const dept = e.departmentId
+      ? ERP_DEPARTMENTS.find((d) => d.id === e.departmentId && d.status === 'ACTIVE')
+      : undefined;
+    return {
+      id: e.id,
+      employeeNumber: e.employeeNumber,
+      name: e.name,
+      departmentId: e.departmentId,
+      ...(dept ? { departmentName: dept.name } : {}),
+      status: e.status,
+      accountLinked: 'accountId' in e && Boolean(e.accountId),
+    };
+  });
+
+function employeePickerFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  if (pathname !== EMPLOYEE_PICKER_PATH) return undefined;
+  const active = query.get('active');
+  const page = intParam(query, 'page', 0);
+  const size = intParam(query, 'size', 20);
+  let rows = [...ERP_EMPLOYEE_PICKER];
+  if (active === 'true') rows = rows.filter((e) => e.status === 'ACTIVE');
+  return pageEnvelope(rows, page, size, { scope: 'TENANT' });
+}
+
 function employeesFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
 
@@ -625,6 +668,7 @@ function erpFixture(path: string): unknown {
   return (
     departmentsFixture(path) ??
     accountLinkFixture(path) ??
+    employeePickerFixture(path) ??
     employeesFixture(path) ??
     jobGradesFixture(path) ??
     costCentersFixture(path) ??
@@ -921,6 +965,7 @@ export const ERP_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'flat:erp': {
     departments: ERP_DEPARTMENTS,
     employees: ERP_EMPLOYEES,
+    employeePicker: ERP_EMPLOYEE_PICKER,
     jobGrades: ERP_JOB_GRADES,
     costCenters: ERP_COST_CENTERS,
     businessPartners: ERP_BUSINESS_PARTNERS,

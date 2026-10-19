@@ -7,6 +7,9 @@ import {
   type ErpDetailQueryParams,
   type CreateEmployeeInput,
   type UpdateEmployeeInput,
+  EmployeePickerListResponseSchema,
+  type EmployeePickerListResponse,
+  type EmployeePickerQueryParams,
 } from '../types';
 import { callErp } from '../erp-client';
 import { listQs, detailQs, compact } from './masters-qs';
@@ -21,6 +24,7 @@ import { listQs, detailQs, compact } from './masters-qs';
 // employees — list + detail
 //   GET /api/erp/masterdata/employees
 //   GET /api/erp/masterdata/employees/{id}
+//   GET /api/erp/masterdata/employees/picker   (TASK-ERP-BE-045)
 // ---------------------------------------------------------------------------
 
 export async function listEmployees(
@@ -32,6 +36,25 @@ export async function listEmployees(
       logPath: '/api/erp/masterdata/employees',
     },
     (json) => EmployeeListResponseSchema.parse(json),
+  );
+}
+
+/**
+ * TASK-ERP-BE-045 — the employee «선택용» picker list
+ * (`GET /api/erp/masterdata/employees/picker`, masterdata-api.md v1.2). Only
+ * `active` / `page` / `size` are forwarded — the picker has no `asOf` and no
+ * per-master filters. Same hardened `callErp` (domain-facing token, error map).
+ */
+export async function listEmployeePicker(
+  params: EmployeePickerQueryParams = {},
+): Promise<EmployeePickerListResponse> {
+  const { active, page, size } = params;
+  return callErp(
+    {
+      path: `/api/erp/masterdata/employees/picker?${listQs({ active, page, size })}`,
+      logPath: '/api/erp/masterdata/employees/picker',
+    },
+    (json) => EmployeePickerListResponseSchema.parse(json),
   );
 }
 

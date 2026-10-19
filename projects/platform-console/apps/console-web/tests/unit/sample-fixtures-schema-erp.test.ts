@@ -44,6 +44,7 @@ import {
   DelegationFactListResponseSchema,
   DelegationFactDetailResponseSchema,
   AccountLinkProposalListResponseSchema,
+  EmployeePickerListResponseSchema,
 } from '@/features/erp-ops/api/types';
 import {
   ApprovalListResponseSchema,
@@ -159,6 +160,98 @@ describe('employees (AC-1 / AC-3)', () => {
     );
     expect(list.data.some((e) => e.employmentStatus === 'SEPARATED')).toBe(true);
     expect(list.data.some((e) => e.departmentId == null)).toBe(true);
+  });
+});
+
+// TASK-ERP-BE-045 — `GET /employees/picker` (the four employee pickers). 🔴 The path sits under
+// `/employees/`, so the detail matcher `^/employees/([^/]+)$` would answer it as «employee
+// `picker` not found» (404) unless the picker is routed first — the sample visitor's pickers would
+// then all degrade to the id input. Every cell goes through `sampleResponse`.
+describe('employees/picker (TASK-ERP-BE-045)', () => {
+  const PICKER = '/api/erp/masterdata/employees/picker';
+
+  it('answers 200 (not the detail 404) and parses with EmployeePickerListResponseSchema; scope = TENANT', async () => {
+    const res = erp(`${PICKER}?page=0&size=100`);
+    expect(res.status).toBe(200);
+    const parsed = EmployeePickerListResponseSchema.parse(await res.json());
+    expect(parsed.meta.scope).toBe('TENANT');
+    expect(parsed.meta.totalElements).toBe(parsed.data.length);
+    expect(parsed.data.length).toBeGreaterThan(0);
+  });
+
+  it('is derived from the SAME employee world as the master list (same ids, same order by 사번)', async () => {
+    const master = EmployeeListResponseSchema.parse(
+      await erp('/api/erp/masterdata/employees?page=0&size=100').json(),
+    );
+    const picker = EmployeePickerListResponseSchema.parse(
+      await erp(`${PICKER}?page=0&size=100`).json(),
+    );
+    const byNumber = [...master.data].sort((a, b) =>
+      a.employeeNumber.localeCompare(b.employeeNumber),
+    );
+    expect(picker.data.map((e) => e.id)).toEqual(byNumber.map((e) => e.id));
+    for (const p of picker.data) {
+      const m = master.data.find((e) => e.id === p.id)!;
+      expect(p.accountLinked, p.id).toBe(Boolean(m.accountId));
+      expect(p.status).toBe(m.status);
+    }
+  });
+
+  it('carries only the picker fields — no accountId / cost center / job grade / effective period', async () => {
+    const body = (await erp(`${PICKER}?page=0&size=100`).json()) as {
+      data: Record<string, unknown>[];
+    };
+    const allowed = new Set([
+      'id',
+      'employeeNumber',
+      'name',
+      'departmentId',
+      'departmentName',
+      'status',
+      'accountLinked',
+    ]);
+    for (const row of body.data) {
+      for (const k of Object.keys(row)) expect(allowed.has(k), k).toBe(true);
+    }
+    expect(body.data.some((r) => r.accountLinked === false)).toBe(true);
+    expect(body.data.some((r) => r.accountLinked === true)).toBe(true);
+  });
+
+  it('departmentName = the department valid today; a RETIRED department or no department → ABSENT (producer rule)', async () => {
+    const picker = EmployeePickerListResponseSchema.parse(
+      await erp(`${PICKER}?page=0&size=100`).json(),
+    );
+    let sawResolved = false;
+    let sawRetiredAbsent = false;
+    for (const p of picker.data) {
+      if (!p.departmentId) {
+        expect(p.departmentName).toBeUndefined();
+        continue;
+      }
+      const dept = DepartmentDetailResponseSchema.parse(
+        await erp(`/api/erp/masterdata/departments/${p.departmentId}`).json(),
+      );
+      if (dept.data.status === 'RETIRED') {
+        expect(p.departmentName, p.id).toBeUndefined();
+        sawRetiredAbsent = true;
+      } else {
+        expect(p.departmentName, p.id).toBe(dept.data.name);
+        sawResolved = true;
+      }
+    }
+    expect(sawResolved).toBe(true);
+    expect(sawRetiredAbsent).toBe(true);
+  });
+
+  it('active=true narrows to ACTIVE; page/size paginate with a stable totalElements', async () => {
+    const all = EmployeePickerListResponseSchema.parse(await erp(`${PICKER}?page=0&size=100`).json());
+    const active = EmployeePickerListResponseSchema.parse(
+      await erp(`${PICKER}?active=true&page=0&size=100`).json(),
+    );
+    expect(active.data.every((e) => e.status === 'ACTIVE')).toBe(true);
+    const page0 = EmployeePickerListResponseSchema.parse(await erp(`${PICKER}?page=0&size=1`).json());
+    expect(page0.data.length).toBe(1);
+    expect(page0.meta.totalElements).toBe(all.meta.totalElements);
   });
 });
 
