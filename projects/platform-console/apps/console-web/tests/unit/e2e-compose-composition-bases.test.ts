@@ -28,6 +28,30 @@ function compositionEnvKeys(): string[] {
   return [...keys].sort();
 }
 
+/**
+ * TASK-PC-FE-351 — every server env key whose code default is a `*.local` URL (unresolvable in the
+ * e2e stack). Parsed per key BLOCK of the zod schema (`  KEY: z…` up to the next key), because a
+ * flat regex over the file pairs a key with the NEXT key's default.
+ */
+function localDefaultEnvKeys(): string[] {
+  const lines = readFileSync(path.join(APP, 'src/shared/config/env.ts'), 'utf8').split(/\r?\n/);
+  const out: string[] = [];
+  let key: string | null = null;
+  let text = '';
+  const flush = () => {
+    const d = text.match(/\.default\(\s*'([^']*)'/);
+    if (key && d && /^https?:\/\/[^/:]*\.local(?=[/:]|$)/.test(d[1])) out.push(key);
+  };
+  for (const l of lines) {
+    const m = l.match(/^ {2}([A-Z][A-Z0-9_]*): z\b/);
+    if (m) { flush(); key = m[1]; text = l; continue; }
+    if (key && (/^ {2}[A-Z][A-Z0-9_]*:/.test(l) || /^\S/.test(l))) { flush(); key = null; text = ''; continue; }
+    if (key) text += ' ' + l;
+  }
+  flush();
+  return out.sort();
+}
+
 function consoleWebComposeKeys(): Set<string> {
   const lines = readFileSync(COMPOSE, 'utf8').split(/\r?\n/);
   const start = lines.findIndex((l) => /^ {2}console-web:\s*$/.test(l));
@@ -55,6 +79,21 @@ describe('docker-compose.e2e.yml sets every composition domain base for console-
     const keys = consoleWebComposeKeys();
     expect(keys.has('NEXT_PUBLIC_APP_URL')).toBe(true);
     expect(keys.has('FINANCE_BASE_URL')).toBe(true);
+  });
+
+  it('TASK-PC-FE-351 non-vacuous: the env.ts parser pairs keys with their own defaults', () => {
+    const keys = localDefaultEnvKeys();
+    // Pinned pairs (env.ts 2026-10-19): a mis-pairing extractor drops or shifts these.
+    expect(keys).toContain('ECOMMERCE_ADMIN_BASE_URL');
+    expect(keys).toContain('NEXT_PUBLIC_APP_URL');
+    expect(keys).not.toContain('REGISTRY_TIMEOUT_MS');
+    expect(keys.length).toBeGreaterThanOrEqual(14);
+  });
+
+  it('TASK-PC-FE-351 — every env key with a *.local default is set for console-web (not only the composition legs)', () => {
+    const keys = consoleWebComposeKeys();
+    const missing = localDefaultEnvKeys().filter((k) => !keys.has(k));
+    expect(missing, 'set these for console-web in docker-compose.e2e.yml (non-routable is fine, e.g. http://127.0.0.1:9)').toEqual([]);
   });
 
   it('every composition base is set (a missing one falls back to an unresolvable *.local default)', () => {

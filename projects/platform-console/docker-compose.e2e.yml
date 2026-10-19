@@ -451,6 +451,13 @@ services:
       # added to console-web MUST be listed here too, or it silently brings this back.
       ECOMMERCE_ADMIN_BASE_URL: http://127.0.0.1:9/api/admin
       ECOMMERCE_PUBLIC_BASE_URL: http://127.0.0.1:9/api
+      # TASK-PC-FE-351 — the three screen-level bases with a `*.local` default that no e2e spec
+      # opens today. Non-routable now, so the day a spec opens /wms/outbound · /ledger · a fan
+      # screen it fails fast instead of reviving the 341 lookup stall. The guard
+      # `e2e-compose-composition-bases.test.ts` now checks EVERY `*.local`-defaulted base.
+      WMS_OUTBOUND_BASE_URL: http://127.0.0.1:9/api/v1/outbound
+      LEDGER_BASE_URL: http://127.0.0.1:9
+      FAN_GATEWAY_BASE_URL: http://127.0.0.1:9
       # The browser-visible Next.js public origin. Playwright `baseURL` matches.
       NEXT_PUBLIC_APP_URL: http://localhost:3000
     depends_on:
