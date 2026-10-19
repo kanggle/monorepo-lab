@@ -466,6 +466,10 @@ describe('DelegationScreen — create dialog', () => {
     await user.click(screen.getByTestId('delegation-create'));
     await screen.findByTestId('delegation-create-delegateId-fallback');
     expect(screen.getByTestId('delegation-create-delegateId').tagName).toBe('INPUT');
+    // TASK-PC-FE-349 — the mock answers 403 (approval-only operator): permission wording.
+    expect(screen.getByTestId('delegation-create-delegateId-fallback')).toHaveTextContent(
+      '기준정보 조회 권한이 없어 직원 목록을 볼 수 없습니다. 대결자 직원 ID 를 직접 입력하세요.',
+    );
     await user.type(screen.getByTestId('delegation-create-delegateId'), 'emp-manual');
     await user.type(screen.getByTestId('delegation-create-validFrom'), '2026-06-10');
     await user.click(screen.getByTestId('delegation-create-submit'));

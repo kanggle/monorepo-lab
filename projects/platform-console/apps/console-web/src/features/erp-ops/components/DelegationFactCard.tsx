@@ -13,6 +13,7 @@ import { useDelegationFacts, useEmployees } from '../hooks/use-erp-ops';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { statusToneClass } from '@/shared/ui/StatusBadge';
 import { ErpEmployeeSelect } from './ErpEmployeeSelect';
+import { employeeListFallbackText } from './employee-list-fallback';
 
 /**
  * ERP "위임 현황" read-only card (TASK-PC-FE-055 — ADR-MONO-013 §D3.1).
@@ -184,7 +185,7 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
           role="status"
           data-testid="delegation-fact-filter-employees-fallback"
         >
-          직원 목록을 불러오지 못해 위임자/대행자 직원 ID 를 직접 입력합니다.
+          {employeeListFallbackText(employeesQ.error, '위임자/대행자')}
         </p>
       )}
       {employeesQ.isSuccess && totalEmployees > employees.length && (
