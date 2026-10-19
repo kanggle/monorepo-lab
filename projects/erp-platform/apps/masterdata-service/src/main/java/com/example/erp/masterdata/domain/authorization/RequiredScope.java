@@ -16,6 +16,15 @@ public enum RequiredScope {
      */
     SUBJECT_READ,
     /**
+     * The employee picker ({@code GET /employees/picker}, TASK-ERP-BE-045) — the SAME role predicate as
+     * {@link #SUBJECT_READ} ({@link #READ} {@code ∨ ERP_APPROVAL_WRITE}; {@code ERP_APPROVAL_READ} alone is refused).
+     * A separate value rather than reusing {@code SUBJECT_READ}: the matrix is declared per use case
+     * (architecture.md § Authorization matrix), and this use case differs from the subject GETs in what it returns
+     * (a scoped LIST, not one row checked against its department) — reading {@code SUBJECT_READ} at a list call
+     * site would hide that. The adapter maps both values onto one arm, so they cannot drift apart.
+     */
+    PICKER,
+    /**
      * A personal endpoint — the caller's own employee record, link proposals addressed to them, an approver
      * reference (owner decisions Q2 · Q3): any ERP business role or the derived entry role, or an erp scope, or
      * tenant {@code '*'}.

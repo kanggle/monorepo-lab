@@ -9,9 +9,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -72,5 +77,44 @@ public class DepartmentRepositoryImpl implements DepartmentRepository {
             cur = jpa.findByIdAndTenantId(parent, tenantId);
         }
         return chain;
+    }
+
+    /**
+     * One tenant-scoped {@code (id, parent_id)} projection, then a breadth-first walk DOWN from the roots in
+     * memory. One query per request regardless of tree depth or root count — the department table is master data
+     * (tens to low thousands of rows per tenant). If it ever grows past that, a recursive CTE is the next step;
+     * the port signature does not change.
+     */
+    @Override
+    public Set<String> subtreeIds(Set<String> rootIds, String tenantId) {
+        if (rootIds == null || rootIds.isEmpty()) {
+            return Set.of();
+        }
+        Map<String, List<String>> children = new HashMap<>();
+        for (Object[] edge : jpa.findHierarchyEdges(tenantId)) {
+            String id = (String) edge[0];
+            String parentId = (String) edge[1];
+            if (parentId != null) {
+                children.computeIfAbsent(parentId, k -> new ArrayList<>()).add(id);
+            }
+        }
+        Set<String> result = new HashSet<>(rootIds);
+        Deque<String> queue = new ArrayDeque<>(rootIds);
+        while (!queue.isEmpty()) {
+            for (String child : children.getOrDefault(queue.poll(), List.of())) {
+                if (result.add(child)) { // visited guard — terminates on a corrupt cycle
+                    queue.add(child);
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<Department> findAllByIds(Collection<String> ids, String tenantId) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return jpa.findAllByTenantIdAndIdIn(tenantId, ids);
     }
 }

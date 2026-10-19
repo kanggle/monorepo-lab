@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,4 +61,48 @@ public interface EmployeeJpaRepository extends JpaRepository<Employee, String> {
                        @Param("departmentId") String departmentId,
                        @Param("costCenterId") String costCenterId,
                        @Param("asOf") LocalDate asOf);
+
+    // ---- TASK-ERP-BE-045 employee picker (masterdata-api.md § GET /employees/picker) ----------------------
+    // Two variants instead of a nullable collection parameter: «whole tenant» and «these departments» must never
+    // be told apart by a NULL check on a collection (an empty set would silently mean «no filter»).
+
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.tenantId = :tenantId
+              AND (:status IS NULL OR e.status = :status)
+            ORDER BY e.employeeNumber ASC
+            """)
+    List<Employee> findPickerInTenant(@Param("tenantId") String tenantId,
+                                      @Param("status") MasterStatus status,
+                                      Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(e) FROM Employee e
+            WHERE e.tenantId = :tenantId
+              AND (:status IS NULL OR e.status = :status)
+            """)
+    long countPickerInTenant(@Param("tenantId") String tenantId,
+                             @Param("status") MasterStatus status);
+
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.tenantId = :tenantId
+              AND (:status IS NULL OR e.status = :status)
+              AND e.departmentId IN :departmentIds
+            ORDER BY e.employeeNumber ASC
+            """)
+    List<Employee> findPickerInDepartments(@Param("tenantId") String tenantId,
+                                           @Param("status") MasterStatus status,
+                                           @Param("departmentIds") Collection<String> departmentIds,
+                                           Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(e) FROM Employee e
+            WHERE e.tenantId = :tenantId
+              AND (:status IS NULL OR e.status = :status)
+              AND e.departmentId IN :departmentIds
+            """)
+    long countPickerInDepartments(@Param("tenantId") String tenantId,
+                                  @Param("status") MasterStatus status,
+                                  @Param("departmentIds") Collection<String> departmentIds);
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -68,6 +69,30 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
                 filter.costCenterId(), filter.asOf());
         // size is always >= 1 here — PageRequest.of() above throws for size < 1 before this
         // line is reached, so the ceiling-division is divide-by-zero-safe.
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new PageResult<>(content, page, size, total, totalPages);
+    }
+
+    @Override
+    public PageResult<Employee> findPickerPage(String tenantId, Boolean active, Set<String> departmentIds,
+                                               int page, int size) {
+        // Validates page/size exactly like findAll (PageRequest.of throws for size < 1 / page < 0).
+        PageRequest pageable = PageRequest.of(page, size);
+        if (departmentIds != null && departmentIds.isEmpty()) {
+            // Fail-closed: no department → no row. Never reaches a query (an empty IN () is invalid SQL and
+            // must not degrade to «no filter»).
+            return new PageResult<>(List.of(), page, size, 0L, 0);
+        }
+        MasterStatus status = MasterStatusFilters.toStatus(active);
+        List<Employee> content;
+        long total;
+        if (departmentIds == null) {
+            content = jpa.findPickerInTenant(tenantId, status, pageable);
+            total = jpa.countPickerInTenant(tenantId, status);
+        } else {
+            content = jpa.findPickerInDepartments(tenantId, status, departmentIds, pageable);
+            total = jpa.countPickerInDepartments(tenantId, status, departmentIds);
+        }
         int totalPages = (int) Math.ceil((double) total / size);
         return new PageResult<>(content, page, size, total, totalPages);
     }

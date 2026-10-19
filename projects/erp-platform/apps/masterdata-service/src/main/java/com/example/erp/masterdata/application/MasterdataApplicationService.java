@@ -9,6 +9,9 @@ import com.example.erp.masterdata.application.command.Commands.RevokeAccountLink
 import com.example.erp.masterdata.application.command.Commands.UnlinkAccountCommand;
 import com.example.erp.masterdata.application.view.EmployeeAccountLinkProposalView;
 import com.example.erp.masterdata.application.view.EmployeeApproverRefView;
+import com.example.erp.masterdata.application.view.EmployeePickerResult;
+import com.example.erp.masterdata.application.view.EmployeePickerView;
+import com.example.erp.masterdata.domain.authorization.ListDataScope;
 import com.example.erp.masterdata.domain.employee.link.EmployeeAccountLinkProposal;
 import com.example.erp.masterdata.domain.employee.link.repository.EmployeeAccountLinkProposalRepository;
 import com.example.erp.masterdata.domain.error.DomainErrors.EmployeeLinkConflictException;
@@ -78,10 +81,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -353,6 +359,45 @@ public class MasterdataApplicationService {
         authorize(actor, RequiredScope.READ, null);
         return employeeRepository.findAll(actor.tenantId(), filter, page, size)
                 .map(EmployeeView::from);
+    }
+
+    /**
+     * {@code GET /employees/picker} (TASK-ERP-BE-045 — owner decision 2026-10-20 UTC). Unlike
+     * {@link #listEmployees} this list IS data-scoped, because it opens to {@code ERP_APPROVAL_WRITE} holders who
+     * hold no masterdata read role:
+     * <ol>
+     *   <li>role gate {@link RequiredScope#PICKER} (= the {@code SUBJECT_READ} predicate) before any repository;</li>
+     *   <li>the data scope comes from the SAME port ({@link AuthorizationPort#resolveListScope}) — this layer never
+     *       reads {@code org_scope} itself;</li>
+     *   <li>no scope → empty page, without querying (fail-closed; 200, not 403 — the role passed).</li>
+     * </ol>
+     * The element is {@link EmployeePickerView} — never {@link EmployeeView} (no cost center / job grade /
+     * period / {@code accountId}).
+     */
+    @Transactional(readOnly = true)
+    public EmployeePickerResult listEmployeePicker(ActorContext actor, Boolean active, int page, int size) {
+        authorize(actor, RequiredScope.PICKER, null);
+        ListDataScope scope = authorizationPort.resolveListScope(actor);
+        if (scope.isEmpty()) {
+            return new EmployeePickerResult(new PageResult<>(List.of(), page, size, 0L, 0), scope.kind());
+        }
+        PageResult<Employee> employees = employeeRepository.findPickerPage(actor.tenantId(), active,
+                scope.isTenantWide() ? null : scope.departmentIds(), page, size);
+        if (employees.content().isEmpty()) {
+            return new EmployeePickerResult(employees.map(e -> EmployeePickerView.from(e, null)), scope.kind());
+        }
+        // departmentName = the name effective today (UTC); unresolved → null → ABSENT on the wire.
+        LocalDate today = clock.now().atZone(ZoneOffset.UTC).toLocalDate();
+        Set<String> departmentIds = new HashSet<>();
+        employees.content().forEach(e -> departmentIds.add(e.getDepartmentId()));
+        Map<String, String> names = new HashMap<>();
+        for (Department d : departmentRepository.findAllByIds(departmentIds, actor.tenantId())) {
+            if (d.period().contains(today)) {
+                names.put(d.getId(), d.getName());
+            }
+        }
+        return new EmployeePickerResult(
+                employees.map(e -> EmployeePickerView.from(e, names.get(e.getDepartmentId()))), scope.kind());
     }
 
     // ====================================================================

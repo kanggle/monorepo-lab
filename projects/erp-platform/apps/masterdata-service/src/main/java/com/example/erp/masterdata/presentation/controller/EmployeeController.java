@@ -10,6 +10,8 @@ import com.example.erp.masterdata.application.command.Commands.UpdateEmployeeCom
 import com.example.common.page.PageResult;
 import com.example.erp.masterdata.application.view.EmployeeAccountLinkProposalView;
 import com.example.erp.masterdata.application.view.EmployeeApproverRefView;
+import com.example.erp.masterdata.application.view.EmployeePickerResult;
+import com.example.erp.masterdata.application.view.EmployeePickerView;
 import com.example.erp.masterdata.application.view.EmployeeView;
 import com.example.erp.masterdata.presentation.dto.AccountLinkRequests.ProposeAccountLinkRequest;
 import com.example.erp.masterdata.presentation.dto.AccountLinkRequests.UnlinkAccountRequest;
@@ -88,6 +90,24 @@ public class EmployeeController {
     public ResponseEntity<ApiEnvelope<EmployeeView>> me() {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         return ResponseEntity.ok(ApiEnvelope.of(service.getMyEmployee(actor)));
+    }
+
+    /**
+     * The employee «picker» list (TASK-ERP-BE-045, masterdata-api.md § GET /employees/picker). Same literal-segment
+     * routing as {@code /me}: Spring prefers it over {@code /{id}}, so {@code picker} is never read as an id.
+     * Page params mirror {@link #list} exactly (defaults 0/20, no extra cap — the contract's «size cap = the list's»).
+     * {@code meta.scope} ({@code TENANT}|{@code SUBTREE}) is added for this endpoint only.
+     */
+    @GetMapping("/picker")
+    public ResponseEntity<ApiEnvelope<List<EmployeePickerView>>> picker(
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
+        EmployeePickerResult result = service.listEmployeePicker(actor, active, page, size);
+        PageResult<EmployeePickerView> p = result.page();
+        return ResponseEntity.ok(ApiEnvelope.ofList(p.content(), p.page(), p.size(),
+                p.totalElements(), p.totalPages(), Map.of("scope", result.scope().name())));
     }
 
     /** Approval-line resolution view {@code {id,status,accountId?}} — no department data scope. */

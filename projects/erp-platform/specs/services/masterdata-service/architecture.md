@@ -542,6 +542,20 @@ non-null `targetDepartmentId` and no `org_scope` still fails closed
 (`DATA_SCOPE_FORBIDDEN`); entitlement-trust grants the **READ-overview**
 (`targetDepartmentId == null`) granularity only.
 
+**The employee picker is the one scoped list (TASK-ERP-BE-045, 2026-10-20 UTC).** Every other list
+endpoint authorizes with `targetDepartmentId == null` and returns the whole tenant (READ-overview).
+`GET /employees/picker` is different because it opens to `ERP_APPROVAL_WRITE` holders without a masterdata
+read role: its requirement is `RequiredScope.PICKER` (the same role arm as `SUBJECT_READ` in
+`RoleScopeAuthorizationAdapter` — one `case`, so the two cannot drift), and after the role check the
+application service asks the same port for the list scope (`AuthorizationPort.resolveListScope` →
+`ListDataScope`): `org_scope ∋ "*"` → whole tenant (`meta.scope=TENANT`); subtree roots → roots ∪ descendants,
+expanded once per request from a single tenant-scoped `(id, parent_id)` query
+(`DepartmentRepository.subtreeIds` — same containment rule as the single-target ancestor walk), then
+`department_id IN (…)` (`meta.scope=SUBTREE`); no `org_scope` → empty page without a query (fail-closed, 200).
+The application layer never interprets `org_scope` itself. The element is a dedicated
+`EmployeePickerView` (`id · employeeNumber · name · departmentId · departmentName? · status · accountLinked`),
+not `EmployeeView`, so nothing outside the contract can leak through it.
+
 The matrix is per-use-case (declared in `MasterdataApplicationService`
 method signatures via constants), not a generic interceptor — the
 declaration is auditable by reading the use-case source.
