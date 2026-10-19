@@ -8,7 +8,7 @@ nightly 콘솔 e2e `sample-visitor-transition.spec.ts:19` 가 `TASK-MONO-773` S6
 
 # Status
 
-in-progress (2026-10-19 UTC — AC-1 판정: 원인 = e2e 의 E-Commerce 주소 누락(`ecommerce.local` 기본값) · 조작 실험으로 확정 · 수선 머지 뒤 AC-2 의 main 5 런 대조 대기)
+done
 
 # Owner
 
@@ -67,8 +67,9 @@ platform-console
 
 - [x] **AC-0** (2026-10-18 UTC — 아래 § AC-0 측정) — 착수 시 재측정(결정 아님): 이 티켓 기안 뒤 **연속 nightly 최소 5 런**(또는 착수 시점까지 쌓인 전부)에서 콘솔 잡의 `N passed` · `flaky` 수와 flaky 칸 이름을 표로 적는다. 각 flaky 에 대해 ① 실패 단계(`:26` 익명 / `:35` 로그인 뒤) ② 같은 시각에 다른 워커가 돌던 spec(Playwright 보고서의 시작 · 종료 시각) ③ 문서 응답 시간 ④ console-web 서버 로그의 개요 저하 사유(어느 다리). 0 런 재발이면 그 사실과 런 목록을 적고 «재발 없음 — 관찰 종료» 를 소유자에게 제안한다.
 - [x] **AC-1** (2026-10-19 UTC — **판정: e2e 설정 누락 — 아래 § 판정 (조작 실험)**. 2026-10-18 의 «미확정» 기록은 § AC-1 판정에 그대로 둔다) — AC-0 의 표로 원인을 하나로 좁힌다: (가) 동시 실행 상관(이 spec 실패가 773 spec 과 겹친 런에만) / (나) 겹침과 무관한 개요 SSR 지연 / (다) 익명 단계 저하(샘플 경로가 BFF 를 부름). 근거 없이 고르지 않는다 — 좁혀지지 않으면 «미확정» 으로 적고 추가 계측(개요 다리별 시간 로그)을 제안한다.
-- [ ] **AC-2** — 판정에 맞는 수선 + 대조군: 수선 뒤 연속 nightly 5 런 flaky 0, 그리고 773 spec 3 칸 · 이 spec 이 모두 첫 시도 통과. (다)면 단위 시험으로 «익명 샘플 렌더의 BFF fetch 0» 을 먼저 빨갛게 재현한다.
+- [x] **AC-2** — 판정에 맞는 수선 + 대조군: 수선 뒤 연속 nightly 5 런 flaky 0, 그리고 773 spec 3 칸 · 이 spec 이 모두 첫 시도 통과. (다)면 단위 시험으로 «익명 샘플 렌더의 BFF fetch 0» 을 먼저 빨갛게 재현한다.
   - 🔵 수선 = `docker-compose.e2e.yml` console-web 에 `ECOMMERCE_ADMIN_BASE_URL` · `ECOMMERCE_PUBLIC_BASE_URL` = `127.0.0.1:9`(다른 도메인과 같은 non-routable) + 가드 시험 `e2e-compose-composition-bases.test.ts`. 대조군 = 실험 3 런(아래 표). ⏳ 남은 것 = 머지 뒤 **main** nightly 연속 5 런 flaky 0 · 773 spec · 이 spec 첫 시도 통과 — 그때 체크.
+  - ✅ 2026-10-19 UTC — 수선을 실은 nightly **연속 6 런**(14:51Z 이후 nightly 전부, 수선 없는 런 끼어들지 않음): 39137849403 · 39138716016 · 39139604078(실험 브랜치) · 39141931002(수선 PR 브랜치) · 39142846794(main push `b1c87eaa6`) · 39163307647(main schedule). 6/6 모두 `e2e-results.json` 에서 12 expected · flaky 0 · unexpected 0 · 재시도 0, 773 spec 4 칸 + 이 spec 1 칸이 첫 시도 통과, `*_bff_unavailable` 0. 런 결론 failure 는 6 개 모두 «AMI generation» 잡 하나(재굽기 대기 — 콘솔 잡 아님). 🔵 위 줄의 «main nightly 연속 5 런» 은 AC 원문(«nightly 5 런»)보다 엄격하게 적은 내 해석이었다 — 소유자 결정(2026-10-19 UTC «지금 닫는다»)으로 원문대로 닫는다. main 은 6 중 2 런이다.
 
 # Related Specs
 
@@ -262,3 +263,15 @@ platform-console
 - 🔴 **기전은 재지 않았다.** «취소할 수 없는 `getaddrinfo(ecommerce.local)` 가 libuv threadpool(기본 4)을 채워, 개요의 자기 자신 fetch 가 `localhost` 를 찾는 일이 줄을 서다 undici 10 s connect timeout 에 걸린다» 는 관측 전부와 맞는 **가장 그럴듯한 설명**일 뿐이다. 확인은 제품 쪽 티켓 `TASK-PC-FE-350` 의 AC-0 이다.
 - 가설 정리: (가) 동시 실행 상관 — 사건이 back-link 칸과 겹친 것은 그 칸이 개요를 빠르게 여러 번 열어 E-Commerce 조회를 몰아서 냈기 때문으로 읽힌다(원인은 아니고 증폭기 후보). (나) 개요 SSR 지연 — 맞다. 다만 제품 코드가 아니라 e2e 설정이 만든 지연이다. (다) 익명 단계 — 기각. 계측 런의 익명 렌더는 모두 11~50 ms 였다.
 - Failure Scenario 1(«타임아웃을 늘려 초록」) 대조: 이 수선은 대기 · 재시도 · 바닥을 손대지 않는다. 그 스택에 없는 도메인을 다른 셋과 같은 방식으로 막았을 뿐이다. 사용자에게 갈 수 있는 제품 쪽 위험(풀리지 않는 도메인 주소 하나가 콘솔 SSR 전체를 막을 수 있는가)은 `TASK-PC-FE-350` 으로 떼었다.
+
+# 닫기 (2026-10-19 UTC) — in-progress → done
+
+- (a) 구현 PR 셋 전부 `state=MERGED`: #4410 `b74e05ab7`(계측) · #4412 `79f74def4`(사유 코드 · 중간 기록) · #4413 `b1c87eaa6`(수선 · 가드).
+- (b) 셋 다 `origin/main`(`b1c87eaa6`)의 조상.
+- (c) 머지된 PR 의 `statusCheckRollup`(브랜치 nightly 제외) 실패 0: #4410 SUCCESS 42 · #4412 SUCCESS 12 · #4413 SUCCESS 10. 브랜치 nightly 의 «AMI generation» 실패는 PR 체크가 아니다.
+- (d) AC 를 동사별로 확인했다.
+  - AC-0 «재측정해 표로 적는다» ✅
+  - AC-1 «하나로 좁힌다 · 근거 없이 고르지 않는다» ✅ — 조작 실험
+  - AC-2 «수선 + 대조군 · 연속 5 런 flaky 0 · 첫 시도 통과» ✅ — 위 6 런
+- 🔴 기전(threadpool 점유)은 이 티켓에서 재지 않았다 → `TASK-PC-FE-350`. 이 티켓이 확정한 것은 «e2e 의 E-Commerce 주소 누락이 원인» 까지다.
+- `review/` 단계는 거치지 않고 바로 `done/`: 구현 PR 셋은 머지 시점에 검토됐다. 마지막 AC 는 머지 뒤 측정이었다.
