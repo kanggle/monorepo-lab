@@ -2481,7 +2481,17 @@ The producer of these routes is the **`console-web` server**: the App Router
 route handlers under `apps/console-web/src/app/api/console/dashboards/` compose
 the response themselves through `src/shared/composition/console-composition.ts`.
 There is no second hop — the browser calls the same-origin route, and that route
-calls the domains. The **consumed-from-this-section** legs (e.g.
+calls the domains. **The server-rendered pages do not call the route at all**
+(TASK-PC-FE-350): the SSR entry points (`getOperatorOverviewState`,
+`getDomainHealthState`) call the **same server-only composition function** the
+route handler calls (`src/shared/composition/{operator-overview,domain-health}-composition.ts`),
+in-process, reading the same session cookies through `next/headers`. The route
+stays for the browser (`<RetryButton>` / React Query) and its wire shape is the
+one this section defines; the SSR path is not a second wire — it is the route's
+own body without the HTTP round trip. (Before TASK-PC-FE-350 the pages fetched
+the route over HTTP at this app's own origin; that inherited hop added a name
+lookup and undici's 10 s connect timeout, which stalled behind a saturated libuv
+threadpool — measured in TASK-PC-FE-350 § AC-0.) The **consumed-from-this-section** legs (e.g.
 `GET /api/admin/accounts` count, wms inventory health, …) remain authoritatively
 owned by their respective domains and are **NOT redefined here**
 (ADR-MONO-017 D3.A / § 3.3 "zero retrofit", fifth confirmation across the
@@ -2515,8 +2525,9 @@ portfolio).
 > unified composition token) or D4.C (operator-token-only across all domains)
 > on any future § 2.4.9.X composition route is a contract defect.
 
-- **Inbound**: the browser's same-origin request to the route, carrying only the
-  console session cookie. Every credential is read **server-side** from the
+- **Inbound**: the browser's same-origin request to the route — or, for the
+  server-rendered page, that page's own request (TASK-PC-FE-350, above) —
+  carrying only the console session cookie. Every credential is read **server-side** from the
   session established at login (per
   [`console-web/architecture.md`](../services/console-web/architecture.md) +
   FE-002a) — `getActiveTenant()`, `getAccessToken()`, `getOperatorToken()`,

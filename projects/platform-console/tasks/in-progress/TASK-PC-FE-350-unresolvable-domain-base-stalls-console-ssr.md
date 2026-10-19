@@ -8,7 +8,7 @@ TASK-PC-FE-350
 
 # Status
 
-in-progress (2026-10-19 UTC — AC-0 측정 완료 · 소유자 결정 대기)
+in-progress (2026-10-19 UTC — AC-0 측정 완료 · AC-1 소유자 결정 (나) · AC-2 구현)
 
 # Owner
 
@@ -58,8 +58,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** (2026-10-19 UTC — 아래 § AC-0 측정. ① 로컬 재현됨(Windows · Node 20.19.5/24.14.0, Linux/musl 미측정) · ② 표 · ③ 판독) — 위 ①②③ 을 각각 «재 봤다 / 못 쟀다(이유)» 로 적는다. ① 이 재현되지 않으면 341 의 판정 문구 «기전은 가설» 을 그대로 두고, 이 티켓은 ② 결과만으로 닫을지 소유자에게 묻는다.
-- [ ] **AC-1** — 소유자 결정(선택지 + 추천)을 적는다.
-- [ ] **AC-2** — 결정한 수선 + 빨강 먼저 시험(① 의 재현이 시험이 된다) + 대조군.
+- [x] **AC-1** (2026-10-19 UTC — 소유자 결정 **(나)**. 아래 § AC-1 결정) — 소유자 결정(선택지 + 추천)을 적는다.
+- [x] **AC-2** (2026-10-19 UTC — 아래 § AC-2 구현. 빨강 15/15 AssertionError → 초록 vitest 408 파일 / 4892 시험) — 결정한 수선 + 빨강 먼저 시험(① 의 재현이 시험이 된다) + 대조군.
 - [ ] **AC-3** — 배포 상태(Vercel · 데모)를 따로 적는다.
 
 # Related Specs
@@ -216,3 +216,33 @@ frontend
 **추천: (나) 를 먼저, (가) 를 조사 항목으로.** (나) 는 잰 대조군(IP 리터럴 = 조회 없음)이 직접 뒷받침하고, 바뀌는 면이 두 SSR 진입점뿐이며, 341 이 본 사건 모양 전체를 없앤다. (가) 는 원인 쪽이지만 «취소 가능한 해석» 이 musl/Vercel 에서 어떻게 도는지 재지 않았으므로 측정 티켓으로 둔다. (라) 는 컨테이너 배포에 한해 의미가 있고 Vercel 설계와 충돌한다 — 하려면 «Vercel 에서는 `DEMO_API_BASE` 가 있을 때만 `.local` 허용» 같은 조건부여야 하고 그것은 별도 결정이다. (다) 는 단독으로 넣지 않는다.
 
 **아직 모르는 것**: ⓐ 컨테이너(musl)에서 `ecommerce.local` 한 번의 조회 시간 → 341 사건을 이 기전으로 **귀속**할 근거(Docker 필요) · ⓑ Vercel 에서 `.local` 이 빨리 실패하는가(소유자 로그 4번) · ⓒ Vercel 인스턴스 안에서 점유가 요청 사이로 이어지는가.
+
+# AC-1 결정 (2026-10-19 UTC)
+
+- **소유자 결정: (나) — 자기 자신 HTTP 호출을 함수 호출로 대체.** 위 § 추천 의 «(나) 를 먼저, (가) 를 조사 항목으로» 를 따른다.
+- 범위: `getOperatorOverviewState` · `getDomainHealthState` 두 SSR 진입점이 `selfOrigin()` 의 조합 라우트를 HTTP 로 부르지 않고, **라우트와 같은 서버 전용 함수**를 같은 프로세스에서 부른다. 라우트(`/api/console/dashboards/{operator-overview,domain-health}`)는 브라우저 `<RetryButton>` 용으로 그대로 남고, 응답 본문 · 상태코드는 바뀌지 않는다.
+- 이 결정이 **막지 않는 것**(표 그대로): 도메인 다리 · 레이아웃(registry · token-exchange)의 조회는 여전히 같은 threadpool 대기열에 선다 — 그쪽은 다리 타임아웃으로 카드 저하까지 간다. (가) 는 별도 측정 항목으로 남는다(이 티켓에서 하지 않는다). (다) · (라) 는 넣지 않는다.
+
+# AC-2 구현 (2026-10-19 UTC)
+
+**명세 먼저**: 계약 § 2.4.9 생산자 문단 · Inbound 항목과 `architecture.md` ADR-MONO-081 일반 규칙 블록에 «SSR 은 route 를 HTTP 로 부르지 않고 같은 서버 전용 합성 함수를 같은 프로세스에서 부른다» 를 적었다(빨강 커밋에 함께).
+
+**이음매**(`apps/console-web/src/shared/composition/`):
+- `operator-overview-composition.ts` → `composeOperatorOverview()` · `domain-health-composition.ts` → `composeDomainHealth()`. 옛 route 본문 그대로(첫 줄 `sampleGate` → 테넌트 → 토큰 → 다리 → 교차 401). `Response` 대신 `CompositionAnswer { status, body }` 값을 돌려준다(`composition-answer.ts`, `answerError()` 가 옛 `readErrorEnvelope` 와 같은 기본값으로 `ApiError` 를 만든다).
+- route 두 개는 `NextResponse.json(answer.body, { status: answer.status })` 한 줄 — 상태코드 · 본문 불변(`dashboard-composition-routes.test.ts` 무수정 초록).
+- `getOperatorOverviewState` / `getDomainHealthState` 는 같은 함수를 부르고, 200 이 아니면 `answerError` 로 옛 `ApiError` 를 만들어 **같은 분기**를 탄다: 400 `NO_ACTIVE_TENANT` → `noTenant` · 401 → `unauthorized` · 그 밖(샘플 비-200 = 502 `BAD_GATEWAY`, 스키마 실패, 예외) → `bffUnavailable` + `unavailableCause`. 카드 저하는 계속 payload 안.
+- `classifyInProcessFailure()`(`shared/api/unavailable-cause.ts`): 옛 분류기와 같고 **`transport` → `unknown`** 만 다르다 — 프로세스 안에는 전송이 없고, 다리의 네트워크 실패는 합성기가 카드 저하로 바꾸므로 여기까지 오는 `TypeError` 는 코드 결함이다.
+- 클라이언트 fetcher(`fetchOperatorOverview` · `fetchDomainHealth`)에서 서버 전용 인자 `cookieHeader` · `baseUrl` 을 지웠다 — 서버 호출자가 0 이 되었고, 남겨 두면 자기 호출이 다시 들어올 자리다(tsc 가 막는다).
+
+**`sampleGate` 순서**: `sample-fetch-allowlist.test.ts` 의 `gated` 목록에서 두 route 를 빼고(이제 `fetch(` 0) 두 합성 파일을 넣었다(각 1). 순서 검사가 파일 단위라 «호출자가 게이트 앞에서 토큰을 읽는가» 를 못 보므로 **세 번째 단언**을 더했다: route 2 + SSR state 2(`DELEGATING_FILES`)는 자기 합성 함수를 부르고, 그 함수는 `gated` 파일에 정의돼 있으며, 그 파일 자신에는 백엔드 접근(`fetch` · 토큰 · 테넌트 · registry · 교환)이 **0** 이어야 한다. 익명 샘플 방문자가 SSR 페이지를 열어도 첫 접근은 합성 함수의 `sampleGate` 다(직접 경로 시험의 «샘플 방문자 fetch 0» 칸이 동작으로도 잰다).
+
+**빨강 먼저**: `tests/unit/dashboard-ssr-direct-composition.test.ts`(15 칸) — 실제 세션 읽기(`next/headers` 쿠키 단지) · 실제 `sampleGate` · 실제 합성기, 네트워크만 스텁. fetch 스파이가 **자기 오리진/상대경로 호출**과 **도메인 다리 호출**을 갈라 센다(«fetch 0» 은 불가능하고 «fetch 있음» 은 아무것도 증명 못 하므로). 수선 전(`17c56744a`, src 무수정)에서 **15/15 실패, 전부 `AssertionError`**(던짐 0) — 자기 fetch 1 회 · 상태가 전부 `bffUnavailable`/`status:599`. 수선 후 15/15 초록.
+- 대조군(같은 파일): «SSR 카드 == route 카드»(한 함수 두 호출자) · 다리 하나 실패 = 카드 저하(전체 저하 아님) · 건강 다리 401 = 카드 저하(교차 401 없음).
+
+**기존 시험**(지우지 않고 이음매로 옮김): `operator-overview-api.test.ts` · `domain-health-api.test.ts` 의 state 칸이 자기 fetch 스텁 대신 `composeX` 모의에 **route 가 내던 같은 (status, body)** 를 준다. 037 의 «Cookie 헤더 전달» 칸은 «route 와 같은 합성을 프로세스 안에서 부르고 fetch 0» 으로 바꿔 적었다(실제 쿠키 → noTenant 아님 은 직접 경로 시험이 잰다). «서로 다른 실패 = 서로 다른 사유» 칸은 `transport` 자리가 `unknown` 으로 바뀌었고 «서로 다르다» 는 그대로다.
+
+**게이트**: vitest 408 파일 / 4892 시험 rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0(경고 2건, 둘 다 이 변경과 무관한 기존 파일).
+
+**남은 `selfOrigin` 호출자: 0.** 정의(`shared/config/self-origin.ts`)와 주석 언급(`env.ts` · `demo-backend.ts` · `client.ts` · 두 state 파일의 이력 주석)만 남았다. 모듈 삭제는 하지 않았다 — 다른 가드/주석이 그 경계를 가리키므로 별건.
+
+**피할 수 없었던 동작 차이**: 합성 안에서 예외가 나면 옛 SSR 은 HTTP 500 을 받아 `status:500/HTTP_500` 으로 적었다. 이제 같은 경우가 `unknown:<에러 이름>` 이다(진단 값만 바뀜 · 화면은 같은 «일시적으로 불러올 수 없습니다»). SSR 경로에는 더 이상 undici 10 s connect timeout 이 없다 — 그것이 이 수선의 목적이다. 🔴 도메인 다리 · 레이아웃 조회는 여전히 같은 threadpool 대기열에 선다(AC-1 의 «막지 않는 것»).

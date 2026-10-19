@@ -30,10 +30,10 @@ const OPERATOR_OVERVIEW_KEY = ['operator-overview'] as const;
 export function useOperatorOverview(initial?: OperatorOverview) {
   return useQuery({
     queryKey: OPERATOR_OVERVIEW_KEY,
-    // TASK-PC-FE-030 — `fetchOperatorOverview` now takes an optional
-    // server-only `cookieHeader`. React Query passes its context object
-    // to `queryFn`; wrap so the client path calls with no args (the
-    // browser supplies cookies natively via `credentials: 'include'`).
+    // TASK-PC-FE-030 — wrapped so React Query's context object is never
+    // passed as an argument. TASK-PC-FE-350 removed the server-only
+    // parameters; the wrapper stays so a future parameter cannot silently
+    // receive the query context.
     queryFn: () => fetchOperatorOverview(),
     initialData: initial,
     // Seeded from the SSR render ⇒ fresh; the operator decides when

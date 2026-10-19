@@ -8,9 +8,8 @@ import { DomainHealthSchema, type DomainHealth } from './types';
  * Sibling of `features/operator-overview/api/operator-overview-api.ts`
  * (TASK-PC-FE-011 / § 2.4.9.1) — same posture, distinct route.
  *
- * Both callers below go through the SAME-ORIGIN Next.js route
- * (`/api/console/dashboards/domain-health`), which composes the health
- * envelope server-side (`shared/composition/console-composition.ts`). The
+ * The health envelope is composed server-side by `composeDomainHealth()`
+ * (`shared/composition/domain-health-composition.ts`). The
  * BROWSER NEVER reaches a domain directly; client JS NEVER reads
  * a session token (HttpOnly cookie + server route = trust-boundary
  * invariant of the platform — frontend-app.md § Authentication).
@@ -21,14 +20,15 @@ import { DomainHealthSchema, type DomainHealth } from './types';
  * session before any leg.
  *
  *   - {@link fetchDomainHealth} — client-side caller used by the
- *     React Query hook (`<RetryButton>` only). Uses the RELATIVE
- *     same-origin path and sets `credentials: 'include'` so the
- *     HttpOnly session cookies ride.
+ *     React Query hook (`<RetryButton>` only). GETs the SAME-ORIGIN route
+ *     (`/api/console/dashboards/domain-health`) on the RELATIVE path and
+ *     sets `credentials: 'include'` so the HttpOnly session cookies ride.
  *   - `getDomainHealthState` — server-side caller for the SSR route
- *     entry (`(console)/dashboards/health/page.tsx`). It lives in the
- *     sibling `domain-health-state.ts` because it needs this app's
- *     absolute origin, and THAT module must never be reachable from
- *     the client graph (TASK-MONO-585 — see `shared/config/env.ts`).
+ *     entry (`(console)/dashboards/health/page.tsx`). Since TASK-PC-FE-350
+ *     it calls the composition IN-PROCESS — it no longer fetches the route.
+ *     It lives in the sibling `domain-health-state.ts` because it reads the
+ *     session, and THAT module must never be reachable from the client graph
+ *     (TASK-MONO-585 — see `shared/config/env.ts`).
  *
  * Both paths share `DomainHealthSchema` for runtime validation — the
  * contract is byte-verbatim from § 2.4.9.2 and the BE
@@ -62,50 +62,17 @@ async function readErrorEnvelope(
  * BFF proxy route. Throws `ApiError(status, code, message)` for any
  * non-2xx response; returns the parsed/validated envelope otherwise.
  */
-export async function fetchDomainHealth(
-  /**
-   * Optional Cookie header for server-side callers (the SSR
-   * {@link getDomainHealthState} wrapper passes the page's request cookies
-   * verbatim here). On the client, `credentials: 'include'` lets the browser
-   * attach the HttpOnly cookies natively, so this stays undefined.
-   *
-   * <p>TASK-PC-FE-037 (mirrors the TASK-PC-FE-011/030 fix on the
-   * operator-overview sibling) — Node `fetch` in a server component has no
-   * cookie jar, and `credentials: 'include'` is a browser-only directive.
-   * Without this explicit forward, the in-process proxy route's `cookies()`
-   * read returns empty → the proxy bails with `400 NO_ACTIVE_TENANT` → the
-   * 도메인 상태 개요 page shows "select a tenant" on EVERY load even after
-   * the operator has selected one (the bug this closes).
-   */
-  cookieHeader?: string,
-  /**
-   * Absolute origin to prefix the same-origin path with — server callers ONLY.
-   *
-   * <p>TASK-MONO-585. In the browser this stays undefined and the fetch uses the
-   * RELATIVE path: same-origin by definition, and no base MAY be used, because
-   * `NEXT_PUBLIC_APP_URL` is inlined at BUILD time (TASK-MONO-358) — a prebuilt
-   * artifact would send the browser to whatever host the build knew about
-   * (`console.local`) instead of the one it is being served from.
-   *
-   * <p>🔴 It is a PARAMETER rather than something this module resolves itself
-   * for one reason: this module is in the CLIENT graph (the React Query hook
-   * imports it), so anything it imports ships to the browser. The server caller
-   * (`domain-health-state.ts`) resolves the origin and passes it in.
-   */
-  baseUrl?: string,
-): Promise<DomainHealth> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (cookieHeader) {
-    headers.Cookie = cookieHeader;
-  }
-  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다).
-  //   브라우저 경로는 상대경로, 서버 경로는 호출자가 건넨 `selfOrigin()`.
-  const res = await fetch(`${baseUrl ?? ''}${DOMAIN_HEALTH_PATH}`, {
+export async function fetchDomainHealth(): Promise<DomainHealth> {
+  // TASK-PC-FE-350 — browser-only. The `cookieHeader` / `baseUrl` parameters the
+  // SSR path used (TASK-PC-FE-037 / TASK-MONO-585) are gone with that path: the
+  // server pages compose in-process (`domain-health-state.ts`), so nothing on the
+  // server fetches this route any more. A new server caller would be the hop 350
+  // removed — call `composeDomainHealth()` instead.
+  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다). 브라우저 전용 상대경로.
+  const res = await fetch(DOMAIN_HEALTH_PATH, {
     method: 'GET',
-    headers,
-    // Same-origin HttpOnly session cookies ride through the proxy on the
-    // browser path; on the server path the `Cookie` header above carries them
-    // explicitly (Node fetch has no implicit cookie jar).
+    headers: { Accept: 'application/json' },
+    // Same-origin HttpOnly session cookies ride on the browser path.
     credentials: 'include',
     cache: 'no-store',
   });

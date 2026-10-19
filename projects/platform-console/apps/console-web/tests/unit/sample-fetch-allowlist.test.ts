@@ -15,11 +15,13 @@
  *    behind the sample branch, or provably unreachable for a sample visitor?».
  *    Neither replaces the other.
  *
- * Two assertions:
+ * Three assertions:
  *   1. the per-file count of network primitives equals ALLOWED exactly (a new
  *      site → red; a removed site → red, so the list cannot go stale);
  *   2. in each GATED file, `sampleGate(` appears BEFORE the first token read,
- *      tenant read, registry read, token exchange and `fetch(`.
+ *      tenant read, registry read, token exchange and `fetch(`;
+ *   3. (TASK-PC-FE-350) each file that reaches the backend through a gated
+ *      composition function calls it and has no reach of its own.
  */
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -59,15 +61,19 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
     category: 'gated',
     why: 'callFlatEnvelopeGateway (callScmGateway shims onto it)',
   },
-  'app/api/console/dashboards/operator-overview/route.ts': {
+  // TASK-PC-FE-350 — the two dashboard compositions moved out of their route
+  // files into one server-only function each, so the route (browser) AND the SSR
+  // state function (page) run the same gated body. The legs' `fetch(` moved with
+  // them; the route files now hold 0 primitives. See DELEGATING_FILES below.
+  'shared/composition/operator-overview-composition.ts': {
     count: 1,
     category: 'gated',
-    why: 'operator overview legs (composed here — ADR-MONO-081)',
+    why: 'operator overview legs (composed in this server — ADR-MONO-081; one function for route + SSR — TASK-PC-FE-350)',
   },
-  'app/api/console/dashboards/domain-health/route.ts': {
+  'shared/composition/domain-health-composition.ts': {
     count: 1,
     category: 'gated',
-    why: 'domain health legs (composed here — ADR-MONO-081)',
+    why: 'domain health legs (composed in this server — ADR-MONO-081; one function for route + SSR — TASK-PC-FE-350)',
   },
   'app/api/console/notifications/inbox/route.ts': {
     count: 1,
@@ -242,4 +248,44 @@ describe('gated files ask the sample branch first (AC-2 / AC-5)', () => {
       }
     }
   });
+});
+
+/**
+ * TASK-PC-FE-350 — files that reach a backend ONLY through a gated composition
+ * function. The ordering check above is per file, so it says nothing about a
+ * caller: a route or SSR state function that read a token or fetched BEFORE (or
+ * besides) calling `composeX()` would bypass the gate and still pass. These
+ * files must therefore (a) call their composition and (b) contain NO backend
+ * reach of their own — then «the composition asks `sampleGate(` first» is also
+ * true for them. 🔴 The two SSR state functions are listed because an anonymous
+ * sample visitor renders those pages: they must not trigger a token read or a
+ * leg before the gate.
+ */
+const DELEGATING_FILES: Record<string, string> = {
+  'app/api/console/dashboards/operator-overview/route.ts': 'composeOperatorOverview',
+  'features/operator-overview/api/operator-overview-state.ts': 'composeOperatorOverview',
+  'app/api/console/dashboards/domain-health/route.ts': 'composeDomainHealth',
+  'features/domain-health/api/domain-health-state.ts': 'composeDomainHealth',
+};
+
+describe('callers of a gated composition reach the backend only through it (TASK-PC-FE-350)', () => {
+  it.each(Object.entries(DELEGATING_FILES))(
+    '%s — calls %s() and has no backend reach of its own',
+    (file, composer) => {
+      const source = stripComments(readFileSync(path.join(SRC, file), 'utf8'));
+      expect(source, `${file} does not call ${composer}(`).toMatch(
+        new RegExp(`(?<![\\w.$])${composer}\\s*\\(`),
+      );
+      // The composer itself must be in the gated set — otherwise (a) proves nothing.
+      expect(
+        GATED_FILES.some((g) =>
+          readFileSync(path.join(SRC, g), 'utf8').includes(`export async function ${composer}(`),
+        ),
+        `${composer} is not defined in a gated file`,
+      ).toBe(true);
+      for (const re of REACH) {
+        expect(re.exec(source), `${file}: own backend reach ${re}`).toBeNull();
+      }
+    },
+  );
 });

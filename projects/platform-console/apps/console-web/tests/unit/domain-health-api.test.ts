@@ -19,19 +19,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     Spring Boot health enum is fixed: UP/DOWN/OUT_OF_SERVICE/UNKNOWN);
  *   - non-2xx → ApiError(status, code);
  *   - `getDomainHealthState` maps the 3 fail modes (no tenant /
- *     unauthorized / bff unavailable) to the discriminated state the
- *     SSR page consumes.
+ *     unauthorized / bff unavailable) of the in-process composition answer
+ *     to the discriminated state the SSR page consumes (TASK-PC-FE-350).
  */
 
-// TASK-PC-FE-037 — `getDomainHealthState()` now lazy-imports `next/headers`
-// `cookies()` and forwards `(await cookies()).toString()` as the Cookie header
-// to the in-process proxy fetch (mirrors the operator-overview sibling). Outside
-// a request scope the real `cookies()` throws, so it must be mocked here.
-vi.mock('next/headers', () => ({
-  cookies: async () => ({
-    toString: () => 'console_access_token=a; console_operator_token=op; console_active_tenant=acme-corp',
-    get: () => undefined,
-  }),
+// TASK-PC-FE-350 — `getDomainHealthState()` no longer fetches the route at this
+// app's own origin; it calls `composeDomainHealth()` in-process (the function the
+// route itself runs). THAT is the seam the state tests below mock: each case
+// hands the state function the answer the route would have put on the wire —
+// the same inputs these cases used to feed through a stubbed self-fetch. The
+// composition itself (session reads via `next/headers`, sample gate, legs) runs
+// un-mocked in `tests/unit/dashboard-ssr-direct-composition.test.ts`.
+// (Before 350: the TASK-PC-FE-037 `next/headers` mock + forwarded Cookie header.)
+vi.mock('@/shared/composition/domain-health-composition', () => ({
+  composeDomainHealth: vi.fn(),
 }));
 
 import {
@@ -40,6 +41,7 @@ import {
   getDomainHealthState,
 } from '@/features/domain-health';
 import { ApiError } from '@/shared/api/errors';
+import { composeDomainHealth } from '@/shared/composition/domain-health-composition';
 
 const { ENV } = vi.hoisted(() => ({
   ENV: {
@@ -93,7 +95,13 @@ const HAPPY_ENVELOPE = {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  vi.mocked(composeDomainHealth).mockReset();
 });
+
+/** The answer the route would put on the wire — what the old self-fetch returned. */
+function answer(body: unknown, status = 200) {
+  vi.mocked(composeDomainHealth).mockResolvedValue({ status, body });
+}
 
 describe('DomainHealthSchema — runtime validation', () => {
   it('accepts the canonical 6-card envelope (mixed ok + degraded)', () => {
@@ -273,7 +281,7 @@ describe('fetchDomainHealth — error mapping', () => {
 
 describe('getDomainHealthState — discriminated server-side state', () => {
   it('200 → { health }', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE)));
+    answer(HAPPY_ENVELOPE);
     const state = await getDomainHealthState();
     expect(state.health).not.toBeNull();
     expect(state.noTenant).toBe(false);
@@ -282,57 +290,45 @@ describe('getDomainHealthState — discriminated server-side state', () => {
   });
 
   it('400 NO_ACTIVE_TENANT → { noTenant: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'NO_ACTIVE_TENANT', message: 'x' }, 400),
-      ),
-    );
+    answer({ code: 'NO_ACTIVE_TENANT', message: 'x' }, 400);
     const state = await getDomainHealthState();
     expect(state.health).toBeNull();
     expect(state.noTenant).toBe(true);
   });
 
-  it('forwards the request cookies as the Cookie header to the in-process proxy (TASK-PC-FE-037 regression) — without this the SSR fetch carries no session cookie and the proxy fast-fails NO_ACTIVE_TENANT on every load', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(HAPPY_ENVELOPE));
-    vi.stubGlobal('fetch', fetchMock);
+  // TASK-PC-FE-037 regression, re-stated for TASK-PC-FE-350. The bug 037 closed:
+  // the SSR call carried no session, so the route read an empty cookie jar and
+  // answered NO_ACTIVE_TENANT on every load. 037 fixed it by forwarding the
+  // Cookie header over the self-fetch; 350 removes the hop, so the session is
+  // read by the composition from THIS request's `cookies()`. What must stay true:
+  // the SSR path runs the route's own composition (not a copy that could read the
+  // session differently) and does not go over HTTP. The «real cookie jar → not
+  // noTenant» half is asserted un-mocked in dashboard-ssr-direct-composition.test.ts.
+  it('runs the SAME composition the route runs, in-process — no fetch, no forwarded Cookie header (TASK-PC-FE-037 → TASK-PC-FE-350)', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    answer(HAPPY_ENVELOPE);
 
     await getDomainHealthState();
 
-    const [, init] = fetchMock.mock.calls[0];
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers.Cookie).toBe(
-      'console_access_token=a; console_operator_token=op; console_active_tenant=acme-corp',
-    );
+    expect(composeDomainHealth).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('401 → { unauthorized: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'TOKEN_INVALID', message: 'x' }, 401),
-      ),
-    );
+    answer({ code: 'TOKEN_INVALID', message: 'x' }, 401);
     const state = await getDomainHealthState();
     expect(state.unauthorized).toBe(true);
   });
 
   it('502 BAD_GATEWAY → { bffUnavailable: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502),
-      ),
-    );
+    answer({ code: 'BAD_GATEWAY', message: 'x' }, 502);
     const state = await getDomainHealthState();
     expect(state.bffUnavailable).toBe(true);
   });
 
-  it('network failure (fetch throws) → { bffUnavailable: true }', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new TypeError('network down')),
-    );
+  it('the composition throws → { bffUnavailable: true }', async () => {
+    vi.mocked(composeDomainHealth).mockRejectedValue(new TypeError('boom'));
     const state = await getDomainHealthState();
     expect(state.bffUnavailable).toBe(true);
   });
@@ -342,24 +338,23 @@ describe('getDomainHealthState — discriminated server-side state', () => {
   //    혼자 뒤처진다 — 이 저장소의 «한 사실이 두 집을 갖는다» 축이다. 그래서 같은
   //    칸을 여기에도 둔다. 🔵 분류기는 두 기능이 **한 모듈**(«shared/api/unavailable-cause»)
   //    을 공유하므로, 이 칸은 그 배선이 이쪽에도 걸려 있는지를 문다.
+  //    🔵 TASK-PC-FE-350: 프로세스 안 예외는 'transport' 가 아니라 'unknown' 이다
+  //    (개요 쪽과 같은 `classifyInProcessFailure`).
   it('🔴 서로 다른 실패는 서로 다른 사유를 낸다 — 개요 쪽과 같은 분류기를 쓴다', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ code: 'BAD_GATEWAY', message: 'x' }, 502)),
-    );
+    answer({ code: 'BAD_GATEWAY', message: 'x' }, 502);
     const bad = await getDomainHealthState();
 
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
-    const down = await getDomainHealthState();
+    vi.mocked(composeDomainHealth).mockRejectedValue(new TypeError('boom'));
+    const broken = await getDomainHealthState();
 
     expect(bad.bffUnavailable).toBe(true);
-    expect(down.bffUnavailable).toBe(true);
+    expect(broken.bffUnavailable).toBe(true);
     expect(bad.unavailableCause).toEqual({
       kind: 'status',
       status: 502,
       code: 'BAD_GATEWAY',
     });
-    expect(down.unavailableCause?.kind).toBe('transport');
-    expect(bad.unavailableCause?.kind).not.toBe(down.unavailableCause?.kind);
+    expect(broken.unavailableCause).toEqual({ kind: 'unknown', name: 'TypeError' });
+    expect(bad.unavailableCause?.kind).not.toBe(broken.unavailableCause?.kind);
   });
 });

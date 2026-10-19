@@ -8,23 +8,22 @@ import {
  * Operator-overview fetcher (TASK-PC-FE-011 — ADR-MONO-017 § D8 Phase 7
  * MVP / `console-integration-contract.md` § 2.4.9.1).
  *
- * This module exports two callers — both go through the SAME-ORIGIN
- * Next.js route (`/api/console/dashboards/operator-overview`), which
- * composes the envelope server-side from the session's tokens
- * (`shared/composition/console-composition.ts`). The BROWSER NEVER reaches
- * a domain directly; client JS NEVER reads a session token (the HttpOnly
- * cookie + server route are the trust-boundary invariant of the platform —
- * frontend-app.md § Authentication).
+ * The envelope is composed server-side from the session's tokens by
+ * `composeOperatorOverview()` (`shared/composition/operator-overview-composition.ts`).
+ * The BROWSER NEVER reaches a domain directly; client JS NEVER reads a session
+ * token (the HttpOnly cookie + server route are the trust-boundary invariant of
+ * the platform — frontend-app.md § Authentication). Two callers:
  *
- *   - {@link fetchOperatorOverview} — client-side caller used by the
- *     React Query hook (`<RetryButton>` only). Uses the RELATIVE
- *     same-origin path and sets `credentials: 'include'` so the
- *     HttpOnly session cookies ride.
- *   - `getOperatorOverviewState` — server-side caller for the SSR
- *     route entry (`(console)/dashboards/overview/page.tsx`). It lives
- *     in the sibling `operator-overview-state.ts` because it needs this
- *     app's absolute origin, and THAT module must never be reachable
- *     from the client graph (TASK-MONO-585 — see `shared/config/env.ts`).
+ *   - {@link fetchOperatorOverview} (this module) — client-side caller used by
+ *     the React Query hook (`<RetryButton>` only). GETs the SAME-ORIGIN route
+ *     (`/api/console/dashboards/operator-overview`) on the RELATIVE path with
+ *     `credentials: 'include'` so the HttpOnly session cookies ride.
+ *   - `getOperatorOverviewState` — server-side caller for the SSR route entry
+ *     (`(console)/dashboards/overview/page.tsx`). Since TASK-PC-FE-350 it calls
+ *     the composition IN-PROCESS — it no longer fetches the route. It lives in
+ *     the sibling `operator-overview-state.ts` because it reads the session, and
+ *     THAT module must never be reachable from the client graph (TASK-MONO-585 —
+ *     see `shared/config/env.ts`).
  *
  * Both paths share `OperatorOverviewSchema` for runtime validation —
  * the contract is byte-verbatim from § 2.4.9.1 and the BE `OperatorOverviewResponse`
@@ -62,45 +61,21 @@ async function readErrorEnvelope(
  * Used by the React Query hook (client-side) — that's why this
  * function does NOT import server-only modules (`shared/lib/session`,
  * `next/headers`, `shared/config/*`) — it is in the CLIENT graph, so anything
- * it imports ships to the browser. The server SSR caller uses
- * `getOperatorOverviewState` (sibling `operator-overview-state.ts`), which can
- * react to ApiError for redirects.
+ * it imports ships to the browser. The server SSR caller is
+ * `getOperatorOverviewState` (sibling `operator-overview-state.ts`), which
+ * composes in-process and maps the answer for redirects.
  */
-export async function fetchOperatorOverview(
-  /**
-   * Optional Cookie header for server-side callers (the SSR
-   * `getOperatorOverviewState` wrapper passes the page's request cookies
-   * verbatim here). On the client, `credentials: 'include'` lets the
-   * browser attach HttpOnly cookies natively, so this stays undefined.
-   *
-   * <p>TASK-PC-FE-030 — Node `fetch` in a server component has no cookie
-   * jar, and `credentials: 'include'` is a browser-only directive. Without
-   * this explicit forward, the in-process proxy route's `cookies()` read
-   * returns empty → the proxy bails with `400 NO_ACTIVE_TENANT` → the
-   * page sees `noTenant: true` even when the browser HAS the cookie.
-   */
-  cookieHeader?: string,
-  /**
-   * Absolute origin to prefix the same-origin path with — server callers ONLY.
-   * Undefined in the browser, where the RELATIVE path is both correct and the
-   * only safe choice (`NEXT_PUBLIC_APP_URL` is build-time inlined,
-   * TASK-MONO-358). See the sibling `domain-health-api.ts` for why this is a
-   * parameter instead of something this module resolves (TASK-MONO-585).
-   */
-  baseUrl?: string,
-): Promise<OperatorOverview> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (cookieHeader) {
-    headers.Cookie = cookieHeader;
-  }
-  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다).
-  //   브라우저 경로는 상대경로, 서버 경로는 호출자가 건넨 `selfOrigin()`.
-  const res = await fetch(`${baseUrl ?? ''}${OPERATOR_OVERVIEW_PATH}`, {
+export async function fetchOperatorOverview(): Promise<OperatorOverview> {
+  // TASK-PC-FE-350 — browser-only. The `cookieHeader` / `baseUrl` parameters the
+  // SSR path used (TASK-PC-FE-030 / TASK-MONO-585) are gone with that path: the
+  // server page composes in-process (`operator-overview-state.ts`), so nothing on
+  // the server fetches this route any more. A new server caller would be the hop
+  // 350 removed — call `composeOperatorOverview()` instead.
+  // DEMO-URL-EXEMPT: same-origin — 이 앱 자신의 라우트 핸들러다(백엔드가 아니다). 브라우저 전용 상대경로.
+  const res = await fetch(OPERATOR_OVERVIEW_PATH, {
     method: 'GET',
-    headers,
-    // Same-origin HttpOnly session cookies ride through the proxy on the
-    // browser path; on the server path the `Cookie` header above carries
-    // them explicitly (Node fetch has no implicit cookie jar).
+    headers: { Accept: 'application/json' },
+    // Same-origin HttpOnly session cookies ride on the browser path.
     credentials: 'include',
     cache: 'no-store',
   });
