@@ -121,6 +121,7 @@ OIDC 표준 scope (`openid`, `profile`, `email`, `offline_access`) 는 콘솔 us
 |---|---|---|
 | masterdata 조회(목록 · 상세 · 연결 제안 이력) | `MD_READ ∨ MD_WRITE ∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q1 |
 | masterdata `GET /departments/{id}` · `GET /employees/{id}` (결재 대상 확인 — approval 이 운영자 토큰으로 부른다) | 위 ∨ **`ERP_APPROVAL_WRITE`** | Q3 |
+| masterdata `GET /employees/picker` (직원 선택용 축약 목록 — 결재 상신 · 위임 생성의 선택 칸, TASK-ERP-BE-045) | 위와 같다(Q3 술어) — `ERP_APPROVAL_READ` 만으로는 403 · **부서 서브트리 범위를 건다**(목록 행과 다름) | Q3 · BE-045 |
 | masterdata 변경 | `MD_WRITE ∨ erp.write` | — |
 | 🔵 **개인 엔드포인트** — masterdata `GET /employees/me` · `GET /employees/{id}/approver-ref` · `GET /account-link-proposals/mine` · `POST …/{id}/accept` · `POST …/{id}/decline` · `POST /employees/{id}/account-link/unlink`(본인 계정일 때 — 아니면 `MD_WRITE` + 부서 범위) · notification 3 엔드포인트 | **ERP 업무 역할 하나라도**(= 파생 `ERP_OPERATOR` ∨ 네 역할 중 하나) `∨ erp.read ∨ erp.write ∨ tenant_id='*'` | Q2 · Q3(approver-ref) · Q6(알림) |
 | approval 조회(요청 목록/상세 · 결재함 · 위임 목록) | `AP_READ ∨ AP_WRITE ∨ erp.read ∨ erp.write` | — |

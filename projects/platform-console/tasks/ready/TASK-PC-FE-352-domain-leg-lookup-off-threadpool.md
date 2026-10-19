@@ -24,6 +24,7 @@ frontend
 
 > **분석 모델:** Opus 5.5 / **구현 권장:** Opus (Node DNS · undici `connect.lookup` · musl/Vercel 측정)
 > 기안 2026-10-19 UTC — `TASK-PC-FE-350` 의 남은 위험. 급하지 않다: 350 (나) 로 «개요 전체 저하» 경로는 사라졌고, 남은 영향은 카드 하나의 저하다.
+> 🔵 **착수 결정 (소유자, 2026-10-20 UTC — 선택창)**: (가) **`TASK-ERP-BE-045` 머지 뒤 AC-0 측정 착수**(보류 · 닫음 아님). 데모 불필요 — 로컬 + Docker `node:20-alpine`. 수선 범위는 AC-0 결과로 AC-1 에서 다시 묻는다.
 
 # Dependency Markers
 

@@ -8,7 +8,7 @@ TASK-ERP-BE-045
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -56,7 +56,7 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 소유자 결정(선택지 · 추천 · ADR 영향 판정)을 적는다.
+- [x] **AC-0** — 소유자 결정(선택지 · 추천 · ADR 영향 판정)을 적는다. → 아래 § AC-0.
 - [ ] **AC-1** — 계약 · (필요하면) ADR 개정이 코드보다 먼저.
 - [ ] **AC-2** — 서버 인가 시험 대조군 4 칸(위) 빨강 → 초록. 응답에 선택용 최소 필드 외의 값이 없다((가) 일 때).
 - [ ] **AC-3** — 콘솔: «결재 운영» 운영자가 4 곳에서 목록으로 고른다(폴백 문구가 안 뜬다). 기준정보 운영자 · 데모 운영자 비회귀.
@@ -83,3 +83,29 @@ backend
 1. 콘솔이 단건 조회를 여러 번 불러 목록을 재구성한다 — 서버가 열지 않은 목록을 사실상 우회한다.
 2. (나)/(다)를 «쉬우니까» 고른다 — 결재 담당자에게 거래처 · 비용센터까지 읽기가 열린다. 범위는 AC-0 에서 명시적으로 정한다.
 3. 선택 목록이 데이터 범위(부서 서브트리)를 무시한다 — 협력사 운영자가 범위 밖 직원을 본다.
+4. 범위를 적용한 목록이 «고르기만» 허용한다 — 범위를 가진 운영자가 범위 밖 결재자 · 대결자를 아예 지정할 수 없게 된다(오늘은 403 폴백으로 ID 입력이 되므로 **회귀**).
+
+---
+
+# AC-0 — 측정 · 결정 (2026-10-20 UTC)
+
+## 측정 (코드 읽기 · 정적)
+
+- 기존 `GET /employees` 목록은 부서 범위를 **걸지 않는다** — `MasterdataApplicationService.listEmployees` = `authorize(READ, null)` → 테넌트 전체(`architecture.md` § E6 «READ-overview granularity»). 범위 판정은 단건(`getEmployee` = `SUBJECT_READ` + 직원 부서)에만 있다.
+- 콘솔은 같은 목록으로 **대상 · 결재선(결재자 N 단계) · 대결자 · 위임 사실 필터(위임자/대행자)** 를 채운다(`ApprovalCreateDialog` · `DelegationScreen` · `DelegationFactCard`, 라벨 규칙 `employeeOptionLabel` = 사번 · 이름 · 폐기 · 계정 미연결).
+- 결재자는 보통 상신자 범위 **밖**(상위 부서)에 있다 — 그래서 `approver-ref` 는 범위를 걸지 않고 **이름(PII)을 싣지 않는다**(`masterdata-api.md` § approver-ref).
+- `DelegationFact` 는 `delegatorId/delegateId` 를 불투명 id 로만 싣는다 — 결재 읽기 운영자에게 이름 목록은 지금 없다.
+- `org_scope` NULL(= `'*'`, 기본) 운영자는 어느 선택지든 테넌트 전체 — 차이는 범위를 가진(협력사) 운영자에게만 난다.
+- 남는 것(이 티켓 밖): 대상 유형 «부서» 의 선택 목록(`GET /departments`)은 여전히 기준정보 조회 역할만 — 결재 운영 세트에서는 부서 ID 입력 폴백이 남는다.
+
+## 결정 (소유자, 2026-10-20 UTC — 선택창)
+
+| 질문 | 결정 |
+|---|---|
+| 여는 방식 | **(가)** 새 축약 엔드포인트 `GET /api/erp/masterdata/employees/picker` |
+| 판정 | **`ERP_MASTERDATA_READ ∨ ERP_MASTERDATA_WRITE ∨ ERP_APPROVAL_WRITE`**(+ 범위 갈래 `erp.read ∨ erp.write ∨ tenant_id='*'` — 793 Q3 의 `SUBJECT_READ` 와 같은 술어). **`ERP_APPROVAL_READ` 는 열지 않는다** — 결재 읽기 전용 운영자의 위임 사실 필터는 ID 입력으로 남는다 |
+| 데이터 범위 | **부서 서브트리 적용** — `'*'` = 테넌트 전체 · 루트 목록 = 그 서브트리 안 직원만 · 범위 없음 = 빈 목록(fail-closed). 범위 밖 결재자 · 대결자는 콘솔에서 «ID 직접 입력» 으로 지정(Failure 4) |
+
+- 응답 원소 = `{ id, employeeNumber, name, departmentId, departmentName, status, accountLinked }` — 콘솔 라벨 규칙에 필요한 것만. `accountId` 대신 **불리언** `accountLinked`(계정 id 를 노출하지 않는다). 비용센터 · 직급 · 유효기간은 없다.
+- **ADR 영향 판정 = 개정 불필요.** (가) 는 793 Q3 이 정한 술어(«한 경로만 두 역할»)를 새 경로 하나에 그대로 쓴다 — `ADR-MONO-083` P6 본문도, 793 Q1 ~ Q6 의 답도 바꾸지 않는다. 정본 갱신은 erp `iam-integration.md` § 업무 역할 표 · `masterdata-api.md` · 콘솔 계약 § 2.4.8 (AC-1). (나) · (다) 였다면 793 Q6 · Q3 결정 변경이라 ADR 개정이 먼저였다.
+- [x] AC-0 닫힘.

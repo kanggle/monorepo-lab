@@ -82,11 +82,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-ERP-BE-045-approval-roles-employee-picker-list.md` — **결재 권한(`ERP_APPROVAL_WRITE`)으로 직원 «선택용» 축약 목록을 연다 — 기본 «결재 운영» 세트 운영자의 결재자 · 대결자 ID 손입력 해소** (READY, 2026-10-19 UTC 기안 · `TASK-PC-FE-349` 의 (나)). 🔴 결정 티켓 먼저: AC-0 = 범위 선택((가) 축약 엔드포인트 추천 · (나) 기존 목록 개방 · (다) 세트에 기준정보 조회 추가) + `ADR-MONO-083` P6 영향 판정. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 ## in-progress
 
-(empty)
+- `TASK-ERP-BE-045-approval-roles-employee-picker-list.md` — **결재 권한(`ERP_APPROVAL_WRITE`)으로 직원 «선택용» 축약 목록을 연다 — 기본 «결재 운영» 세트 운영자의 결재자 · 대결자 ID 손입력 해소** (IN-PROGRESS, 2026-10-20 UTC 착수). AC-0 결정 = (가) 축약 `GET /employees/picker` · `MD_READ ∨ MD_WRITE ∨ AP_WRITE`(AP_READ 제외) · 부서 서브트리 범위 적용 · ADR 개정 불필요(793 Q3 술어 재사용). 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## review
 
