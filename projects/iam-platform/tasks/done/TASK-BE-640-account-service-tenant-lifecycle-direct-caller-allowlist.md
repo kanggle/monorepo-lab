@@ -8,7 +8,7 @@ The tenant lifecycle API can still be called around the gateway: in the demo, ac
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -162,3 +162,10 @@ Passed on both commits (controls): admin full lifecycle · auth `GET /{id}` · s
 **Branch e2e (internal auth surface used by seeds and e2e):**
 - `federation-hardening-e2e.yml` run `38953380249`, job `117150753714`: **20 passed, 1 flaky** — `tenant-switch-rescope.spec.ts:110` (known, `TASK-BE-516`; this time the «scm leg must be HEALTHY on globex» assertion, passed on retry). The IdP logins in this suite go through auth-service's `GET /internal/tenants/{id}` on the branch build.
 - `nightly-e2e.yml` run `38953389471`: conclusion success. Platform Console full-stack (job `117150433477`) **12 passed, 0 flaky** · web-store full-stack (job `117150546261`) **14 passed** · wms gateway-master, fan live-trio, scm cross-service, ecommerce×wms, web-store GAP logout: success. ⚪ `E2E full (iam docker-compose)` (job `117150114203`) shows `:projects:iam-platform:tests:e2e:e2eFullTest FROM-CACHE` — it did **not** execute against this change.
+
+# Live record (31st demo window, 2026-10-20 UTC — `TASK-MONO-672` § Order «Still open» 9 and § 31st window — harvest)
+
+On `ami-01681ef55def7d15c` (`RepoCommit` `e44142d34`, `da99f32bb` is an ancestor), a host script over SSM:
+- ② `product-service-client` (`client_credentials`, `internal.invoke`; secret = the app default — no compose file sets it) straight to `http://iam-account-service:8082`: `PATCH /internal/tenants/ecommerce {"status":"ACTIVE"}` · `POST /internal/tenants` (body `{}`) · `GET /internal/tenants` · `GET /internal/tenants/ecommerce` → **403 ×4**; `ecommerce` `ACTIVE` before and after. The same token's sub-resource `GET …/entitled-domains` → 200 (unchanged, out of scope here).
+- ③ controls: `admin-service-client` → `GET /internal/tenants/ecommerce` 200 · `…/entitled-domains` 200. AC-2's live half: admin-service tenant create (201 `PENDING`) and suspend (200 `SUSPENDED`) through `/api/admin/tenants` in the 29th window; IdP logins (auth-service reads `GET /internal/tenants/{id}`) succeeded on every run.
+- ① 🟡 partial: `traefik-net` held only the booted bundles (iam 8 · erp 5 · traefik) — non-IAM members configured with an `internal.invoke` client: **0**. The ecommerce · wms · scm · finance · fan members were not up, so AC-0's census is confirmed live for erp only; the allow-list (AC-1) holds whatever network the caller is on, which is why this ticket closes on ② / ③.
