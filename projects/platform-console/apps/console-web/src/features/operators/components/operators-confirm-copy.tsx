@@ -156,6 +156,17 @@ export function operatorConfirmDescription(pending: PendingAction): ReactNode {
       )}{' '}
       이 작업은 운영자 권한 부여에 해당하므로 사유가 요구됩니다.
     </>
+  ) : pending.kind === 'edit-roles' && pending.tenantId === '*' ? (
+    // TASK-PC-FE-354 — a platform ('*') target: the producer replaces its '*'
+    // roles whatever the header (`PatchOperatorRoleUseCase`
+    // resolveActingTenant). It has no companies, so the per-company sentences
+    // of the branch below would be false here.
+    <>
+      <strong>{pending.operator?.email}</strong> 운영자의{' '}
+      <strong>모든 테넌트(*)</strong> 역할을 전체 교체합니다. 이 운영자의
+      역할은 모든 테넌트에 적용되며, <strong>SUPER_ADMIN</strong> 부여는 특권
+      상승입니다. 사유가 요구됩니다.
+    </>
   ) : pending.kind === 'edit-roles' ? (
     // TASK-MONO-784 S6 — edit-roles replaces only the ACTIVE company's direct
     // roles (console-integration-contract § «한 사람 · 여러 회사» row 3); the

@@ -100,7 +100,43 @@ describe('POST /api/operators/{operatorId}/domain-permission-sets (row 7 — DIR
       opParams('op-1'),
     );
     expect(res.status).toBe(201);
-    expect(grantOperatorDomainSet).toHaveBeenCalledWith('op-1', 'set-1', 'onboarding');
+    // TASK-PC-FE-354 — no `allTenants` in the body ⇒ the active tenant.
+    expect(grantOperatorDomainSet).toHaveBeenCalledWith('op-1', 'set-1', 'onboarding', {
+      allTenants: false,
+    });
+  });
+
+  it("TASK-PC-FE-354 — `allTenants: true` is forwarded (the api layer sends X-Tenant-Id '*')", async () => {
+    grantOperatorDomainSet.mockResolvedValue({
+      operatorId: 'op-star',
+      tenantId: '*',
+      setId: 'preset-1',
+      source: 'DIRECT',
+      grantedAt: '2026-10-20T00:00:00Z',
+      grantedBy: 'op-9',
+      selfGrant: false,
+    });
+    const res = await grantPOST(
+      jsonReq('http://console.local/x', 'POST', {
+        setId: 'preset-1',
+        reason: 'r',
+        allTenants: true,
+      }),
+      opParams('op-star'),
+    );
+    expect(res.status).toBe(201);
+    expect(grantOperatorDomainSet).toHaveBeenCalledWith('op-star', 'preset-1', 'r', {
+      allTenants: true,
+    });
+  });
+
+  it('TASK-PC-FE-354 — a non-boolean `allTenants` is a 422 (never coerced into a header)', async () => {
+    const res = await grantPOST(
+      jsonReq('http://console.local/x', 'POST', { setId: 's', reason: 'r', allTenants: '*' }),
+      opParams('op-1'),
+    );
+    expect(res.status).toBe(422);
+    expect(grantOperatorDomainSet).not.toHaveBeenCalled();
   });
 
   it('422 when the body carries an idempotencyKey (.strict() rejects unknown keys)', async () => {
@@ -149,7 +185,21 @@ describe('DELETE /api/operators/{operatorId}/domain-permission-sets/{setId} (row
       opSetParams('op-1', 'set-1'),
     );
     expect(res.status).toBe(204);
-    expect(revokeOperatorDomainSet).toHaveBeenCalledWith('op-1', 'set-1', 'cleanup');
+    expect(revokeOperatorDomainSet).toHaveBeenCalledWith('op-1', 'set-1', 'cleanup', {
+      allTenants: false,
+    });
+  });
+
+  it("TASK-PC-FE-354 — `allTenants: true` (the '*' source row) is forwarded", async () => {
+    revokeOperatorDomainSet.mockResolvedValue(undefined);
+    const res = await revokeDELETE(
+      jsonReq('http://console.local/x', 'DELETE', { reason: 'cleanup', allTenants: true }),
+      opSetParams('op-star', 'set-1'),
+    );
+    expect(res.status).toBe(204);
+    expect(revokeOperatorDomainSet).toHaveBeenCalledWith('op-star', 'set-1', 'cleanup', {
+      allTenants: true,
+    });
   });
 
   it('404 DOMAIN_PERMISSION_SET_NOT_FOUND (group-only set — nothing to revoke) passes through', async () => {

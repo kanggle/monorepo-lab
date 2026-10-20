@@ -35,7 +35,11 @@ export async function DELETE(
     return badRequest();
   }
   try {
-    await revokeOperatorDomainSet(operatorId, setId, body.reason);
+    // TASK-PC-FE-354 — `allTenants` ⇒ `X-Tenant-Id: *` (removes the source
+    // whose tenantId is '*'); omitted ⇒ the active tenant.
+    await revokeOperatorDomainSet(operatorId, setId, body.reason, {
+      allTenants: body.allTenants === true,
+    });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return mapError(err, requestId);

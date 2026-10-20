@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ApiError, messageForCode } from '@/shared/api/errors';
+import { Button } from '@/shared/ui/Button';
 import {
   useOperatorInvitations,
   useInviteOperator,
@@ -138,9 +139,20 @@ export function OperatorsScreen({
     size: number;
   }>({ page: initial.page, size: initial.size });
 
+  // TASK-PC-FE-354 — «모든 테넌트» view: a platform-scope caller ONLY (the
+  // page's `isPlatformOperator`). `'*'` operators hold no assignment row, so
+  // the all-tenants listing (`tenantId='*'`) is the only place they appear.
+  const [allTenantsView, setAllTenantsView] = useState(false);
+  const showAllTenants = isPlatformOperator && allTenantsView;
+
   const seeded =
-    query.page === initial.page && query.status === undefined;
-  const list = useOperatorsList(query, seeded ? initial : undefined);
+    query.page === initial.page &&
+    query.status === undefined &&
+    !showAllTenants;
+  const list = useOperatorsList(
+    showAllTenants ? { ...query, tenantId: '*' } : query,
+    seeded ? initial : undefined,
+  );
   const page = list.data;
 
   const create = useCreateOperator();
@@ -398,7 +410,11 @@ export function OperatorsScreen({
       // direct roles (the header the producer already reads); name it in
       // the confirm copy so the operator isn't surprised other companies
       // are untouched.
-      tenantId: activeTenant ?? undefined,
+      // TASK-PC-FE-354 — a '*' target's roles are replaced in '*' whatever
+      // the header (`PatchOperatorRoleUseCase` resolveActingTenant), so the
+      // copy names '*' for it instead of the active company.
+      tenantId:
+        operator.homeTenantId === '*' ? '*' : (activeTenant ?? undefined),
       // Elevated copy is computed from the FINAL selection at confirm time
       // (grant SUPER_ADMIN / remove-all) — start elevated so the wording
       // is strong by default for this escalation surface.
@@ -416,7 +432,13 @@ export function OperatorsScreen({
       nextStatus,
       // TASK-MONO-784 S6 — a platform-scope ('*') actor's suspend reaches
       // every one of the target's companies (row-wide — R3); say so.
-      allCompanies: nextStatus === 'SUSPENDED' && isPlatformOperator,
+      // TASK-PC-FE-354 — not for a '*' target: it belongs to no company, so
+      // «여러 회사에 소속돼 있습니다» would be false (its suspension is still
+      // row-wide; the base copy says so without the membership claim).
+      allCompanies:
+        nextStatus === 'SUSPENDED' &&
+        isPlatformOperator &&
+        operator.homeTenantId !== '*',
       // Suspending is privilege-high → elevated copy; re-activating is not.
       elevated: nextStatus === 'SUSPENDED',
     });
@@ -707,7 +729,55 @@ export function OperatorsScreen({
             />
           )}
 
+          {/* TASK-PC-FE-354 — the view toggle, platform-scope callers only. */}
+          {isPlatformOperator && (
+            <div className="mb-3 space-y-2">
+              <div
+                role="group"
+                aria-label="운영자 목록 범위"
+                data-testid="operators-view-toggle"
+                className="flex gap-2"
+              >
+                <Button
+                  size="sm"
+                  variant={showAllTenants ? 'secondary' : 'primary'}
+                  aria-pressed={!showAllTenants}
+                  onClick={() => {
+                    setAllTenantsView(false);
+                    setQuery((q) => ({ ...q, page: 0 }));
+                  }}
+                  data-testid="operators-view-tenant"
+                >
+                  현재 테넌트
+                </Button>
+                <Button
+                  size="sm"
+                  variant={showAllTenants ? 'primary' : 'secondary'}
+                  aria-pressed={showAllTenants}
+                  onClick={() => {
+                    setAllTenantsView(true);
+                    setQuery((q) => ({ ...q, page: 0 }));
+                  }}
+                  data-testid="operators-view-all-tenants"
+                >
+                  모든 테넌트
+                </Button>
+              </div>
+              {showAllTenants && (
+                <p
+                  role="note"
+                  data-testid="operators-all-tenants-note"
+                  className="text-xs text-muted-foreground"
+                >
+                  모든 테넌트의 운영자입니다. 회사 운영자의 역할·조직 스코프·업무
+                  권한·내보내기는 그 회사를 활성 테넌트로 고른 뒤 바꾸세요.
+                </p>
+              )}
+            </div>
+          )}
+
           <OperatorsTable
+            allTenantsView={showAllTenants}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             onSubmitFilter={submitFilter}
@@ -743,7 +813,11 @@ export function OperatorsScreen({
           elevated={pending.elevated}
           roleEditor={
             pending.kind === 'edit-roles'
-              ? { initialRoles: pending.operator?.roles ?? [] }
+              ? {
+                  initialRoles: pending.operator?.roles ?? [],
+                  // TASK-PC-FE-354 — '*' target ⇒ '*'-wide editor copy.
+                  allTenants: pending.tenantId === '*',
+                }
               : undefined
           }
           grantableRoles={grantableRoles}
@@ -809,6 +883,8 @@ export function OperatorsScreen({
             selfOperatorId === domainAccessFor.operatorId
           }
           subscribedDomains={subscribedDomains}
+          targetIsPlatform={domainAccessFor.homeTenantId === '*'}
+          callerIsPlatform={isPlatformOperator}
           onClose={() => setDomainAccessOperatorId(null)}
         />
       )}

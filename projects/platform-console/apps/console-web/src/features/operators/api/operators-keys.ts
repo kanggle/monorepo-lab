@@ -13,12 +13,15 @@ import { type OperatorListParams } from './types';
 const OPERATORS_KEY = 'operators';
 
 function listKey(params: OperatorListParams) {
-  return [
+  const base = [
     OPERATORS_KEY,
     params.status ?? null,
     params.page ?? 0,
     params.size ?? 20,
   ] as const;
+  // TASK-PC-FE-354 — the «모든 테넌트» view (`tenantId='*'`) is its own cache
+  // entry; without an explicit tenant the key is exactly the pre-354 key.
+  return params.tenantId ? ([...base, params.tenantId] as const) : base;
 }
 
 function invalidateOperators(qc: ReturnType<typeof useQueryClient>) {

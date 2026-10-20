@@ -91,6 +91,9 @@ export interface CallOptions {
   body?: unknown;
   /** Self path (`/me/password`) returns 204 with no body. */
   expectNoContent?: boolean;
+  /** TASK-PC-FE-354 — `X-Tenant-Id: *` for this call only (a `'*'` target's
+   *  «모든 테넌트» row). Absent ⇒ the active tenant (every other caller). */
+  tenantOverride?: '*';
 }
 
 /**
@@ -133,6 +136,9 @@ export async function callGapOperators<T>(
       idempotencyKey: opts.idempotencyKey,
       body: opts.body,
       expectNoContent: opts.expectNoContent,
+      // Spread only when set, so the request object of every other caller is
+      // the same shape as before (TASK-PC-FE-354).
+      ...(opts.tenantOverride ? { tenantOverride: opts.tenantOverride } : {}),
     },
     parse,
     OPERATORS_PROFILE,

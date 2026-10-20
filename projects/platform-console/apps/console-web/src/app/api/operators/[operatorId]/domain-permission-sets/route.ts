@@ -31,7 +31,11 @@ export async function POST(
     return badRequest();
   }
   try {
-    const result = await grantOperatorDomainSet(operatorId, body.setId, body.reason);
+    // TASK-PC-FE-354 — `allTenants` ⇒ `X-Tenant-Id: *` (the '*' target's
+    // «모든 테넌트» row); omitted ⇒ the active tenant.
+    const result = await grantOperatorDomainSet(operatorId, body.setId, body.reason, {
+      allTenants: body.allTenants === true,
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     return mapError(err, requestId);

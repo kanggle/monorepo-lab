@@ -171,12 +171,19 @@ describe('«초대» replaces «등록» for company operators', () => {
     await screen.findByTestId('operator-invitations-empty');
   });
 
-  it('the active tenant `*` is never an invitation target (no invite form)', async () => {
+  // TASK-PC-FE-354 — was `activeTenant: '*'`, a state that cannot occur (`*`
+  // is never a switcher entry — TASK-PC-FE-353 AC-0 ①). The real state of a
+  // platform-scope operator is a REAL active tenant: it invites into that
+  // tenant like anyone else, and additionally gets the `*`-only create form.
+  it('a platform operator on a real active tenant sees the invite form (that tenant, never `*`) AND the platform create form', async () => {
     stubFetch({});
-    renderScreen({ activeTenant: '*', isPlatformOperator: true });
-    expect(screen.queryByTestId('invite-operator-form')).not.toBeInTheDocument();
+    renderScreen({ activeTenant: 'acme-corp', isPlatformOperator: true });
+    expect(screen.getByTestId('invite-operator-form')).toBeInTheDocument();
+    expect(screen.getByTestId('invite-operator-tenant')).toHaveTextContent('acme-corp');
+    expect(screen.getByTestId('invite-operator-tenant')).not.toHaveTextContent('*');
     // The platform create form is the path for `*`.
     expect(screen.getByTestId('create-operator-form')).toBeInTheDocument();
+    await screen.findByTestId('operator-invitations-empty');
   });
 });
 

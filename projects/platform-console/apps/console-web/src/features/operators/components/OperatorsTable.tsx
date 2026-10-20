@@ -45,6 +45,8 @@ export interface OperatorsTableProps {
   /** TASK-PC-FE-157 — remove this operator's assignment to the active tenant.
    *  Omitted (⇒ button hidden) when no active tenant is resolved. */
   onUnassign?: (op: OperatorSummary) => void;
+  /** TASK-PC-FE-354 — the rows come from the «모든 테넌트» listing. */
+  allTenantsView?: boolean;
 }
 
 export function OperatorsTable({
@@ -64,6 +66,7 @@ export function OperatorsTable({
   onOrgScope,
   onDomainAccess,
   onUnassign,
+  allTenantsView = false,
 }: OperatorsTableProps) {
   return (
     <>
@@ -132,6 +135,7 @@ export function OperatorsTable({
                   onOrgScope={onOrgScope}
                   onDomainAccess={onDomainAccess}
                   onUnassign={onUnassign}
+                  allTenantsView={allTenantsView}
                 />
               ))}
             </tbody>
