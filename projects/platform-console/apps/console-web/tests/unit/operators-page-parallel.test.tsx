@@ -43,7 +43,7 @@ function me(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
-/** `demo-star-owner`: home `'*'`, SUPER_ADMIN on `'*'`, no memberships. */
+/** A platform-scope operator: home `'*'`, SUPER_ADMIN on `'*'`, no memberships. */
 const STAR_OWNER = me({
   operatorId: 'op-star',
   homeTenantId: '*',
