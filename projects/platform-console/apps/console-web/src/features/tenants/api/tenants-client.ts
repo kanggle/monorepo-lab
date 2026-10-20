@@ -24,9 +24,9 @@ import {
  * when none is selected — even though `TenantAdminController`'s authority
  * check is driven entirely by the JWT `tenant_id='*'` claim (the header is a
  * consistency invariant across every IAM admin surface, not something this
- * particular producer endpoint consumes). A SUPER_ADMIN operator selects `*`
- * (the platform-scope sentinel, offered by the tenant switcher) as their
- * active tenant to satisfy this gate.
+ * particular producer endpoint consumes). Any registry tenant
+ * satisfies this gate and the list is the same whichever one is active — the
+ * switcher never offers `*` (TASK-PC-FE-353 AC-0 ①).
  *
  * Header matrix (contract § Tenant Lifecycle): create/update carry
  * `X-Operator-Reason` (the general `/api/admin/*` auth rule — percent-encoded

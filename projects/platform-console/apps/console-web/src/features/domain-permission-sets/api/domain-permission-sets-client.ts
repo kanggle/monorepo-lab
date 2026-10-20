@@ -18,8 +18,8 @@ import {
  * Auth invariant (§ 2.1): the `/api/admin/**` credential is the EXCHANGED
  * operator token (`getOperatorToken()`), NEVER the IAM OIDC access token.
  * Absent ⇒ `401 TOKEN_INVALID`, no fetch. The active tenant always rides as
- * `X-Tenant-Id` (a SUPER_ADMIN selects `*` — a `'*'` request sees presets
- * only, per the producer).
+ * `X-Tenant-Id` (a `'*'` request would see presets only, per the producer —
+ * but the switcher never offers `*`, TASK-PC-FE-353).
  *
  * Resilience (§ 2.5): 401 → `ApiError` (whole-session re-login); 403 →
  * `ApiError` (`forbiddenMode: 'generic'` — inline "not permitted", since even

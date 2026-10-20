@@ -3,8 +3,8 @@ import { render } from '@testing-library/react';
 
 /**
  * TASK-MONO-771 S5 — `/security-settings` («보안 설정», § 2.4.3.3 OD-1): the
- * page targets the ACTIVE tenant; no tenant → tenant gate; platform scope `*`
- * → pointer to 테넌트 상세 (no policy read at all); otherwise the control.
+ * page targets the ACTIVE tenant; no tenant → tenant gate; otherwise the
+ * control (TASK-PC-FE-353 removed the `*` branch — it could not run).
  */
 
 const session = vi.hoisted(() => ({ activeTenant: 'acme' as string | null }));
@@ -23,12 +23,6 @@ vi.mock('@/features/tenant-entry-policy', () => ({
 vi.mock('@/widgets/no-tenant-notice', () => ({
   NoTenantNotice: async ({ testId }: { testId: string }) => <div data-testid={testId} />,
 }));
-vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
-  ),
-}));
-
 import SecuritySettingsPage from '@/app/(console)/security-settings/page';
 
 beforeEach(() => {
@@ -58,11 +52,8 @@ describe('SecuritySettingsPage', () => {
     expect(getEntryPolicyState).not.toHaveBeenCalled();
   });
 
-  it("platform scope '*' → pointer to 테넌트 상세, no policy read ('*' cannot hold a policy)", async () => {
-    session.activeTenant = '*';
-    const { getByTestId, queryByTestId } = render(await SecuritySettingsPage());
-    expect(getByTestId('security-settings-platform-scope')).toHaveTextContent('테넌트');
-    expect(queryByTestId('entry-policy-section')).toBeNull();
-    expect(getEntryPolicyState).not.toHaveBeenCalled();
-  });
+  // TASK-PC-FE-353 — the `'*'` branch («플랫폼 스코프(*)에는 진입 정책이 없습니다»)
+  // was removed: the switcher never offers `*`, so the active tenant is always a
+  // registry tenant and that branch could not run. The copy pin lives in
+  // `no-platform-scope-in-switcher-copy.test.ts`.
 });

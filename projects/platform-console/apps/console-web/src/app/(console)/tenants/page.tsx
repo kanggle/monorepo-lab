@@ -17,8 +17,8 @@ export const dynamic = 'force-dynamic';
  * IAM admin-service client with the HttpOnly operator token + active tenant
  * (`getTenantsListState()`). Resilience is handled there:
  *   - 401 → `redirect('/login')` (handled inside `getTenantsListState`).
- *   - no active tenant → a "select a tenant" gate (a SUPER_ADMIN selects `*`
- *     via the tenant switcher; never an empty `X-Tenant-Id`).
+ *   - no active tenant → a "select a tenant" gate (any registry tenant —
+ *     the switcher never offers `*`; never an empty `X-Tenant-Id`).
  *   - 403 PERMISSION_DENIED / TENANT_SCOPE_DENIED (not SUPER_ADMIN) → an
  *     inline "not permitted" notice (no crash, no re-login loop) — since the
  *     LIST read itself requires SUPER_ADMIN, this single gate covers BOTH
@@ -40,8 +40,8 @@ export default async function TenantsPage() {
           description: (
             <>
               테넌트 관리는 SUPER_ADMIN 전용이며 활성 테넌트가 선택되어 있어야
-              합니다. 상단의 테넌트 스위처에서 플랫폼 스코프(*)를 선택한 뒤
-              다시 시도하세요.
+              합니다. 상단의 테넌트 스위처에서 테넌트를 하나 선택한 뒤 다시
+              시도하세요. 어느 테넌트를 골라도 보이는 목록은 같습니다.
             </>
           ),
         })}
