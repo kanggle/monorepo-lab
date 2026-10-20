@@ -95,7 +95,7 @@ Services that return additional context (trace/request ids, structured `details`
 | Code | HTTP | Description |
 |---|---|---|
 | VALIDATION_ERROR | 400 | Request field is missing, malformed, or fails validation |
-| BAD_REQUEST | 400 | Request violates structural constraints not captured by a specific validation code |
+| BAD_REQUEST | 400 | Request violates structural constraints not captured by a specific validation code. Also the answer to a request the servlet firewall rejects for a header or value (Spring Security `RequestRejectedException`, recognised by class name in the shared servlet catch-all): fixed message that never echoes the rejected value, one `WARN` log line, never the catch-all `INTERNAL_ERROR` 500 (TASK-MONO-800) |
 | INVALID_REQUEST | 400 | Request rejected by an application-level precondition rather than field validation (`InvalidRequestException`). Emitted by ecommerce `order-service` and IAM `admin-service` with identical semantics. Overlaps `BAD_REQUEST` in shape — prefer `VALIDATION_ERROR` / `BAD_REQUEST` in new code; this row registers what two live services already emit (TASK-MONO-352) |
 
 ## Rate Limiting

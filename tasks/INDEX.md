@@ -204,7 +204,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-800-request-rejected-by-firewall-answers-500.md` — **서블릿 방화벽이 거절한 요청이 400 이 아니라 500 `INTERNAL_ERROR` 로 나간다** (IN-PROGRESS, 2026-10-20 UTC · AC-0 측정 + 소유자 결정). 헤더 모양(UTF-8 바이트 0x80–0x9F 를 품은 값 — 대부분의 한글 · `④`)은 읽힐 때 거절되고 MVC catch-all(`CommonGlobalExceptionHandler.java:153-157`)이 삼켜 500(실측 — 헤더를 읽는 엔드포인트와 `@RequestBody` 엔드포인트 모두). 결정: 코드 = 기존 **`BAD_REQUEST`** · catch-all 안에서 **클래스 이름으로** 식별(라이브러리 · 일부 서비스에 spring-security-web 이 없다) · wms master · admin 은 전달을 따로 · 다시 던지지 않는다(던지면 401). 🔴 MockMvc 의 `header(…,"④")` 는 방화벽을 통과한다 — 빨간 시험은 ISO-8859-1 로 풀린 모양을 써야 한다. 경로 모양 401 은 `TASK-MONO-801`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
@@ -216,7 +215,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-(empty)
+- `TASK-MONO-800-request-rejected-by-firewall-answers-500.md` — **서블릿 방화벽이 거절한 요청이 400 이 아니라 500 `INTERNAL_ERROR` 로 나간다** (REVIEW, 2026-10-20 UTC · AC-0~3 닫힘 · AC-4 = 다음 굽기 + 창). `CommonGlobalExceptionHandler.handleGeneral` 이 `RequestRejectedException` 을 **클래스 이름으로** 식별(라이브러리 · 일부 서비스에 spring-security-web 이 없다) → 400 **`BAD_REQUEST`** · 고정 문장(값 미반향) · WARN 한 줄 · 다시 던지지 않음(던지면 401). wms master · admin 은 `SHARED.handleGeneral` 전달이라 무변경으로 따라온다. 시험: 라이브러리 3(진짜 `StrictHttpFirewall` 거절) · iam admin 슬라이스 2(진짜 `FilterChainProxy`) — 빨강→초록 rc 기록. 🔴 MockMvc 의 `header(…,"④")` 는 방화벽을 통과한다 — ISO-8859-1 로 풀린 모양을 써야 문다. 경로 모양 401 은 `TASK-MONO-801`. 분석=Opus 5.5 / 구현=Sonnet.
 
 
 ## done
