@@ -375,12 +375,12 @@ export const SHUTDOWN_RULES: GuideFact[] = [
   {
     title: '한 번에 최대 180분',
     body: '계속 쓰고 있어도 켠 지 180분이 지나면 꺼집니다.',
-    sources: ['infra/demo/aws/terraform/variables.tf:139-142'],
+    sources: ['infra/demo/aws/terraform/variables.tf:150-154'],
   },
   {
-    title: '한 달에 최대 1800분',
-    body: '이번 달 켜진 시간이 합쳐서 1800분을 넘으면 그달에는 더 켤 수 없습니다.',
-    sources: ['infra/demo/aws/terraform/variables.tf:185-188', 'infra/demo/aws/README.md:238-240'],
+    title: '한 달에 최대 2400분',
+    body: '이번 달 켜진 시간이 합쳐서 2400분을 넘으면 그달에는 더 켤 수 없습니다.',
+    sources: ['infra/demo/aws/terraform/variables.tf:205-209', 'infra/demo/aws/README.md:242'],
   },
   {
     title: '꺼져 있을 때',
