@@ -26,7 +26,7 @@ backend
 
 # Dependency Markers
 
-- 출처: 32차 창 — `requester@demo.com` 이 콘솔에서 로그아웃 → 브라우저가 `https://auth.hubwang.com/connect/logout?id_token_hint=…&post_logout_redirect_uri=https%3A%2F%2Fconsole.hubwang.com%2Flogin&client_id=platform-console-web` 로 가서 `{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}` 를 받았다(소유자).
+- 출처: 32차 창 — `requester@demo.com` 이 콘솔에서 로그아웃 → 브라우저가 `https://auth.hubwang.com/connect/logout` 로 가서(쿼리: `id_token_hint` · `post_logout_redirect_uri` = 콘솔 `/login` 을 퍼센트 인코딩한 값 · `client_id=platform-console-web`) `{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}` 를 받았다(소유자).
 - 관련: `TASK-MONO-801` AC-0 — iam auth-service `SecurityConfig.java:188`(Order 2) 의 진입점이 같은 문구 «Missing or invalid internal credentials» 를 낸다(추론으로 적혀 있던 것).
 - 선행 없음.
 
