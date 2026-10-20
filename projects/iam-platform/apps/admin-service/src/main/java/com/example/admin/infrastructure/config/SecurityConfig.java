@@ -5,6 +5,7 @@ import com.example.admin.infrastructure.security.BootstrapAuthenticationFilter;
 import com.example.admin.infrastructure.security.BootstrapTokenService;
 import com.example.admin.infrastructure.security.OperatorAuthenticationFilter;
 import com.example.security.jwt.JwtVerifier;
+import com.example.security.servlet.FirewallRejections;
 import com.example.web.security.RequiredScopeValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.time.Instant;
@@ -268,5 +270,12 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    // One bean covers both chains (one FilterChainProxy).
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 }

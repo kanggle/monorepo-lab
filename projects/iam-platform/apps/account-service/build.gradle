@@ -11,6 +11,8 @@ dependencies {
     implementation project(':libs:java-messaging')
     // TASK-BE-568 (ADR-MONO-058 § D6): canonical IamClientCredentialsTokenProvider.
     implementation project(':libs:java-security')
+    // TASK-MONO-801: FirewallRejections — the shared RequestRejectedHandler factory.
+    implementation project(':libs:java-security-servlet')
     implementation project(':libs:java-observability')
 
     // Spring Boot starters

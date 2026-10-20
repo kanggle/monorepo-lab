@@ -203,7 +203,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-801-up-front-firewall-rejection-answers-401.md` — **방화벽이 경로를 거절한 요청(`;` · `//` · `%25`)이 400 이 아니라 401 «Authentication required» 로 나간다** (IN-PROGRESS, 2026-10-20 UTC · AC-0 측정 + 소유자 결정). 실측: denyAll 체인(erp · scm · fan · iam · finance) · authenticated 체인(wms) 모두 401 — **유효한 토큰으로도**(거절이 인증 필터보다 먼저라 `/error` dispatch 는 늘 익명) · permitAll(ecommerce product · order)은 이미 400 이지만 Boot 본문이 경로를 되돌린다. 게이트웨이 7 중 6 은 먼저 400(빈 본문) · iam 게이트웨이는 spring-security 가 없어 `;` · `%25` 를 그대로 넘긴다. 결정: **(a)** `libs/java-security-servlet` 에 공장 함수 + **25 서비스** 가 `RequestRejectedHandler` 빈 선언(한 PR) · wms 는 자기 봉투 유지(본문 작성기 인자). (b) `/error` 허용은 기각 — 필터 예외 403 이 500 + 예외 메시지로 바뀐다(실측). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -215,6 +214,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-801-up-front-firewall-rejection-answers-401.md` — **방화벽이 경로를 거절한 요청(`;` · `//` · `%25`)이 400 이 아니라 401 «Authentication required» 로 나간다** (REVIEW, 2026-10-20 UTC · AC-0~3 닫힘 · AC-4 = 다음 굽기 + 창). `libs/java-security-servlet` `FirewallRejections` 공장(400 `BAD_REQUEST` · 고정 문장 · 경로 미반향 · WARN 한 줄 · 자동 구성 없음 · 🔴 빈은 서비스당 **하나** — 둘이면 Spring 이 조용히 기본값으로 돌아간다) + **24 서비스** 빈(ecommerce auth-service 는 빌드 제외라 25 가 아니다) · wms master · admin 은 중첩 봉투, inbound · outbound · inventory 는 이미 쓰는 평평한 `ErrorResponse`. iam 3 · ecommerce product · order 는 라이브러리 의존 추가. 시험: 라이브러리 9 + 서비스 슬라이스 3(모양 A · B · C, 진짜 `FilterChainProxy`) 빨강→초록. 🔴 Docker 미기동 — Testcontainers IT 는 CI 에서. 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-800-request-rejected-by-firewall-answers-500.md` — **서블릿 방화벽이 거절한 요청이 400 이 아니라 500 `INTERNAL_ERROR` 로 나간다** (REVIEW, 2026-10-20 UTC · AC-0~3 닫힘 · AC-4 = 다음 굽기 + 창). `CommonGlobalExceptionHandler.handleGeneral` 이 `RequestRejectedException` 을 **클래스 이름으로** 식별(라이브러리 · 일부 서비스에 spring-security-web 이 없다) → 400 **`BAD_REQUEST`** · 고정 문장(값 미반향) · WARN 한 줄 · 다시 던지지 않음(던지면 401). wms master · admin 은 `SHARED.handleGeneral` 전달이라 무변경으로 따라온다. 시험: 라이브러리 3(진짜 `StrictHttpFirewall` 거절) · iam admin 슬라이스 2(진짜 `FilterChainProxy`) — 빨강→초록 rc 기록. 🔴 MockMvc 의 `header(…,"④")` 는 방화벽을 통과한다 — ISO-8859-1 로 풀린 모양을 써야 문다. 경로 모양 401 은 `TASK-MONO-801`. 분석=Opus 5.5 / 구현=Sonnet.
 

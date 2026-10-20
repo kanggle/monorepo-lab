@@ -10,6 +10,9 @@ dependencies {
     // Servlet-stack exception scaffolding — CommonGlobalExceptionHandler (ADR-MONO-058 § D2)
     implementation project(':libs:java-web-servlet')
 
+    // TASK-MONO-801: FirewallRejections — the shared RequestRejectedHandler factory.
+    implementation project(':libs:java-security-servlet')
+
     // Common
     implementation project(':libs:java-common')
 

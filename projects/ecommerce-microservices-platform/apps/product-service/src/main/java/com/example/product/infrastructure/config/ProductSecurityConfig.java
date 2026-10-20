@@ -1,6 +1,7 @@
 package com.example.product.infrastructure.config;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.FirewallRejections;
 import com.example.web.security.RequiredScopeValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,6 +26,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 import java.io.IOException;
 import java.util.List;
@@ -151,6 +153,13 @@ public class ProductSecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST in the common envelope here,
+    // not Boot's /error body (which echoes the path). One bean covers both chains.
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,

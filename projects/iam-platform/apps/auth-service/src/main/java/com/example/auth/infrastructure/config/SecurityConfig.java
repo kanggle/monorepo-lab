@@ -25,7 +25,9 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
+import com.example.security.servlet.FirewallRejections;
 import com.example.web.security.RequiredScopeValidator;
 
 import java.io.IOException;
@@ -194,6 +196,13 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    // One bean covers all three chains (SAS · web login · this one — one FilterChainProxy).
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     private static final String INTERNAL_PATH_PREFIX = "/internal/";
