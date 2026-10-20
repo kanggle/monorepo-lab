@@ -65,7 +65,7 @@ frontend
 - [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `ee65d15b2`.
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`finance-read`) → Finance 메뉴 배지 없음 · 쓰기 버튼 없음 / 계좌 세트만(`finance-account-operate`) → `/ledger` 배지 / 원장 운영 세트(`finance-ledger-operate`) → `/finance/accounts` 배지, `/ledger` 버튼 보임 / 원장 통제만 → `/ledger` 배지 없음 · 버튼 없음 / Finance 세트 0 → Finance 메뉴 전부 배지. → `console-nav-business-permission.test.ts` § TASK-PC-FE-344(+ 진입 역할 0 가드 · 통제 역할 미선언 가드) · `LedgerOpsScreen.test.tsx`(`DiscrepancyDetail` · 두 패널) · `LedgerFxRates.test.tsx`.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → row 12 `undefined` → 배지 없음 · `canWriteOn` true · `canWrite` 생략 = 보임(대조군 시험).
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `465b39a94` → `Production – kanggle-console` 배포 7130932170 state=success (2026-10-16T22:34:17Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -129,3 +129,11 @@ frontend
 
 - 가이드 문안 후속 `TASK-PC-FE-348`(ready) 을 이 PR 에서 기안 — 코디네이터 지시(SCM · E-commerce · IAM · WMS 가이드의 «`*_OPERATOR` 하나 · 자동 부여» 문장).
 - `TASK-PC-FE-341` 에 `overview-consolidation.spec.ts:133` 첫 시도 flaky 증거 한 줄 추가(343 브랜치 nightly run 38965748396 / job 117192025297 — 원인 가설은 미확정).
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7130932170`(`465b39a94`) success(10-18 기록).
+- `/ledger` FX «새로고침»: demo@ **보임** → `finance-read` **없음** → `finance-ledger-operate`(`FINANCE_LEDGER_WRITE`) **다시 보임** — 양방향 ✅. `finance-ledger-operate` 에서 «계좌» 메뉴 배지 ✅(계좌 역할 없음).
+- ⚪ «해소»: OPEN 대사 차이 행이 없어 판정 불가. ⚪ CONTROL 단독 세트는 프리셋에 없어(`admin-api.md:3840`) 안 쟀다.
+- 🔴 `in-progress` 유지 — AC-0 체크박스가 비어 있다.

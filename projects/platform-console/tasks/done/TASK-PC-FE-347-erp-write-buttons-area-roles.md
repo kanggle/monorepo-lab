@@ -8,7 +8,7 @@ TASK-PC-FE-347
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -59,7 +59,7 @@ frontend
 - [x] **AC-1** — 계약 개정이 코드보다 먼저. ✅ § 2.4.3.4 «Declared today» ERP 3 행 + «Scales with P5–P8» P6 문장 «done» — red 커밋 `27c7fa4f7` 이 계약을 포함하고 `permission-map.ts` 데이터는 그 뒤 green 커밋.
 - [x] **AC-2** — 🔴 대조군: `erp-read` → 3 화면 쓰기 버튼 없음 + «조회 전용» / 결재 세트만 → `/erp/approval` 버튼 보임 · `/erp/masters` 버튼 없음 / 기준정보 세트만 → `/erp/masters` 버튼 보임. ✅ `erp-write-buttons.test.tsx`(화면: masters 17 컨트롤 · 결재 작성 + 상세 4 전이 · 위임 생성/회수) · `erp-write-buttons-pages.test.tsx`(실제 `resolveErpCanWrite → getDomainBusinessRoles → canWriteOn` 사슬: erp-read / 결재 세트 / 기준정보 세트 / 데모 운영자 / 진입 역할 단독 / 타 도메인 역할) · `console-nav-business-permission.test.ts`(행). red 46 실패 → green 0.
 - [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. ✅ 3 화면 × (row 12 실패 · 테넌트 없음 · 샘플 방문자 · 레지스트리 tenants 미상) 12 케이스 + `canWriteOn(href, undefined)`.
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. ⏳ 배포 상태 — 머지 후 기록.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `8a12cf6b8` → `Production – kanggle-console` 배포 7153567913 state=success (2026-10-18T10:58:45Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -118,3 +118,15 @@ Searched repo-wide (`tests/e2e`, `e2e-smoke`, federation, `.github`, `scripts`, 
 - Own `ReadOnlyNote` in `features/erp-ops` (features may not import each other, so 346's is not shared).
 - Open doubt (not changed): the 「위임 생성」 dialog picks the delegate from the masterdata employee list (`GET /employees` = masterdata READ), which an approval-only operator (`ERP_APPROVAL_WRITE` without a masterdata role) does not hold — the dialog appears to fall back to its manual-id input (delegateId-fallback testid; not verified live). Out of scope here; a follow-up may decide whether to expose a SELF-class lookup.
 - Gates: vitest 403 files / 4823 tests rc=0 · tsc --noEmit rc=0 · next lint rc=0.
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7153567913`(`8a12cf6b8`) success(10-18 기록).
+- ③ `erp-read`: `/erp/masters`(다섯 목록 작업 칸 없음) · `/erp/approval` · `/erp/delegation` 모두 «조회 전용 — …해당 버튼을 숨겼습니다» ✅.
+- ④ `erp-approval-operate`: `/erp/approval` «결재 요청 작성» **보임**(③ 에선 없음 — 양방향) ✅ · `/erp/delegation` «위임 생성» 보임 ✅ · `/erp/masters` 는 기준정보 권한이 없어 화면 자체가 권한 없음 — 등록 없음 ✅. ⚪ 미결 건의 승인/반려 — 주체의 미결함이 비어 판정 불가(상신된 두 건의 결재자는 김본부 = demo). (31차: 대상 직원 · 결재선 · 대결자가 직원 목록 — ERP-BE-045.)
+- ⑤ demo@: 마스터 «추가 · 수정 · 이동 · 폐기 · 계정 연결» · «결재 요청 작성» 보임 ✅.
+- 🔴 곁에서(이 티켓 밖): `/erp/delegation` «내가 위임한» 칸이 세트와 무관하게 «결재 서비스를 일시적으로 사용할 수 없습니다» + «위임한 grant 가 없습니다» 를 함께 그린다(API `?role=DELEGATOR` 는 200 `[]`) · 콘솔 상신 실패 → `TASK-PC-FE-355`.
+
+### 4차원 (close chore)
+- (a) #4408 `MERGED` · (b) `8a12cf6b8` ⊂ `origin/main` · (c) 머지 시점 FAILURE 0 · SUCCESS 15 · (d) AC-0~AC-4 닫힘.

@@ -8,7 +8,7 @@ TASK-PC-FE-346
 
 # Status
 
-ready
+done
 
 # Owner
 
@@ -63,7 +63,7 @@ frontend
 - [x] **AC-1** — 계약 개정이 코드보다 먼저. → red 커밋 `ac348f63b`(계약 § 2.4.3.4 `Declared today` E-commerce 7행 + `Scales with P5–P8` P8 «done»).
 - [x] **AC-2** — 🔴 대조군: `ecommerce-read` → 7 화면 쓰기 버튼 없음 + «조회 전용» / `ecommerce-order-operate` 만 → 주문 상태 전이 버튼 보임, 다른 화면 버튼 없음 / 상품 운영 세트 → 상품 · 판매자 버튼 보임. → `ecommerce-write-buttons.test.tsx`(화면 11종 × canWrite false/true + ImageManager) · `ecommerce-write-buttons-pages.test.tsx`(실제 `resolveEcommerceCanWrite` → `getDomainBusinessRoles` → `canWriteOn` 체인: 읽기 세트 · 주문 운영 세트 · 상품 운영 세트 · 데모 운영자 13 역할 · 진입 역할 단독 · 다른 영역 역할) · `console-nav-business-permission.test.ts` § TASK-PC-FE-346(행 선언 + 같은 대조군 3종). `new`/`edit` 7 라우트는 폼 대신 «조회 전용» 안내.
 - [x] **AC-3** — fail-open: row 12 실패 · 테넌트 없음 · 샘플 방문자 → 버튼 보임. → 페이지 11종 × (row 12 실패 · 활성 테넌트 없음 · 샘플 방문자 · 레지스트리 테넌트 미상) 모두 `canWrite=true`, `new`/`edit` 7종은 row 12 실패 시 폼 — `ecommerce-write-buttons-pages.test.tsx`. (`getDomainBusinessRoles` 가 `undefined` 를 돌려주고 `canWriteOn(…, undefined)` 가 `true` — 새 규칙 없음.)
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → 배포 상태 — 머지 후 기록.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브. → 배포 상태 — 머지 후 기록.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `23b0cc1bd` → `Production – kanggle-console` 배포 7153236004 state=success (2026-10-18T10:27:10Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -130,3 +130,14 @@ frontend
 - green — `permission-map.ts` 7행 `writeRequires`(`ECOMMERCE_WRITE` 상수 + 서버 근거 주석) · 화면 컴포넌트 22개의 `canWrite`(**필수** prop) · 페이지 18곳 배선(`resolveEcommerceCanWrite`) · 기존 시험의 렌더 호출 25곳에 `canWrite` 추가(필수 prop 이라 `tsc` 가 잡았다) · `ecommerce-seller-detail-page.test.tsx` 의 `_eligibility` / `_write-access` 목 보강.
 - 게이트: vitest **401 파일 · 4769 시험 통과** rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0 (경고 1건은 기존 `received-invitations/route.ts` 의 `_req` — 이 변경 밖).
 - 🔵 가드가 없는 곳(남김): 페이지 배선은 `ecommerce-write-buttons-pages.test.tsx` 가 **열거**(`SCREEN_PAGES` 11 + `FORM_PAGES` 7)로만 보장한다 — 새 E-commerce 라우트를 더하면 이 목록에도 더해야 한다(자동 발견 아님). 필수 prop 은 화면 컴포넌트까지만 강제하고, 페이지가 `resolveEcommerceCanWrite` 를 부르는지는 이 열거 시험만 본다.
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7153236004`(`23b0cc1bd`) success(10-18 기록).
+- ① `ecommerce-read`: `/ecommerce/products` · `/sellers` · `/shippings` · `/promotions` · `/settlements` · `/notifications/templates` 쓰기 버튼 없음 + «조회 전용» ✅ · `/ecommerce/products/new` 직접 → «조회 전용 — 상품 등록에 필요한 업무 권한(상품 변경)이 … 이 화면을 열지 않습니다» + «목록으로» ✅(폼 대신 안내).
+- ② `ecommerce-order-operate`: `/ecommerce/products` 는 상품 조회 권한이 없어 화면 자체가 권한 없음 — 등록 링크도 없다 ✅. ⚪ 주문 상세의 상태 변경 버튼 — `demo-corp` 에 주문 0 건이라 판정 불가.
+- ⑤ demo@: «상품 등록» 보임 ✅. ⚪ 주문 상태 변경(같은 이유).
+
+### 4차원 (close chore)
+- (a) #4406 `MERGED` · (b) `23b0cc1bd` ⊂ `origin/main` · (c) 머지 시점 FAILURE 0 · SUCCESS 15 · (d) AC-0~AC-4 닫힘(AC-4 의 동사 «따로 적는다» — 위 기록, ⚪ 둘은 이유와 함께).

@@ -8,7 +8,7 @@ TASK-PC-FE-353
 
 # Status
 
-review (2026-10-20 UTC AC-0~2 닫힘 · AC-3 = Vercel 배포 · 다음 데모 창 라이브)
+review (2026-10-20 UTC AC-0~2 닫힘 · AC-3 절반 — 32차 창: 화면 진입 ✅ · «테넌트 없음» 안내는 정상 흐름으로 안 보임 ⚪ · 소유자 판단 대기)
 
 # Owner
 
@@ -151,3 +151,10 @@ BFF 는 늘 `X-Tenant-Id` = 활성 테넌트 쿠키를 보내고, 없으면 `400
 - `security-settings-page.test.tsx` 의 `'*'` 시험 삭제(분기가 없다) · 쓰이지 않게 된 `next/link` mock 삭제.
 - 비회귀: 스위처 코드(`tenant-options.ts` · `/api/tenant`)는 건드리지 않았다 ⇒ 일반 운영자 스위처 목록 불변.
 - console-web `tsc --noEmit` rc=0 · `next lint` rc=0 · `vitest run` rc=0(**410 파일 · 4927 시험**). e2e 에 옛 문장 · `security-settings-platform-scope` 고정 0 건(grep).
+
+## 32차 창 라이브 — AC-3 절반 (2026-10-20 UTC)
+
+- 배포: Vercel Production `7201847137`(`9a060da42`) **success**.
+- `star-owner@demo.com` 으로 `demo-corp` 선택 상태에서 `/tenants` · `/org-hierarchy` · `/operator-groups` · `/domain-permission-sets` 목록이 열리고 `/security-settings` 에 정책 토글(소유자 «확인»).
+- ⚪ **새 «테넌트 없음» 안내 자체는 라이브에서 못 봤다** — 로그인하면 콘솔이 기본 테넌트를 **자동으로 고른다**(소유자: «로그인시 테넌트는 골라져 있어»; `active-tenant-default.ts`). `'*'` 운영자는 선택 가능한 테넌트가 있으므로 정상 흐름에서 그 안내에 닿지 않는다. 문장은 단위 시험(`no-platform-scope-in-switcher-copy.test.ts`, bite 6/6)이 지킨다.
+- AC-3 의 동사는 «그 안내를 따라 화면에 들어간다» — 화면 진입은 성립, 안내를 «읽고 따르는» 부분은 정상 흐름에서 도달 불가. 닫을지(⚪ + 이유로) 는 소유자 판단.
