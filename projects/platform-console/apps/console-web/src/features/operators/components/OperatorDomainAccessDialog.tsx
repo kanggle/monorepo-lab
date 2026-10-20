@@ -45,7 +45,33 @@ export interface OperatorDomainAccessDialogProps {
   isSelf: boolean;
   /** `null` ⇒ unknown — a role is never marked «구독 없음» in that case. */
   subscribedDomains: string[] | null;
+  /** TASK-PC-FE-354 — the target is a platform (`'*'`) operator (its list
+   *  row's `homeTenantId === '*'` — the producer's own target predicate). */
+  targetIsPlatform?: boolean;
+  /** TASK-PC-FE-354 — the CALLER is platform-scope (`/me` `homeTenantId='*'`
+   *  + `operator.manage`; the page's `isPlatformOperator`). */
+  callerIsPlatform?: boolean;
   onClose: () => void;
+}
+
+/** TASK-PC-FE-354 — where a grant made in the platform mode lands. */
+type GrantScope = 'tenant' | 'all-tenants';
+
+/**
+ * TASK-PC-FE-354 — revoke confirm copy. Outside the platform mode
+ * (`scopeWord === null`) the text is exactly the pre-354 text.
+ */
+function revokeDescription(
+  setName: string,
+  groupNames: string[],
+  scopeWord: string | null,
+): string {
+  const scope = scopeWord ? `${scopeWord} ` : '';
+  return groupNames.length > 0
+    ? `"${setName}" 세트의 ${scope}직접 배정을 회수합니다. 그룹 ${groupNames.join(
+        ', ',
+      )} 에서 받은 같은 세트는 남습니다 — 그룹에서 빼야 사라집니다. ${DOMAIN_SET_LATENCY_COPY}`
+    : `"${setName}" 세트의 ${scope}배정을 회수합니다. ${DOMAIN_SET_LATENCY_COPY}`;
 }
 
 function errText(err: unknown): string | null {
@@ -67,11 +93,18 @@ export function OperatorDomainAccessDialog({
   operatorLabel,
   isSelf,
   subscribedDomains,
+  targetIsPlatform = false,
+  callerIsPlatform = false,
   onClose,
 }: OperatorDomainAccessDialogProps) {
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // TASK-PC-FE-354 — the ONLY case in which a write may address the target's
+  // «모든 테넌트» ('*') row. Every other case keeps the pre-354 behaviour
+  // (active tenant, one revoke per set, no scope choice).
+  const platformMode = targetIsPlatform && callerIsPlatform;
 
   const access = useOperatorDomainAccess(open ? operatorId : null);
   const grant = useGrantOperatorDomainSet();
@@ -79,10 +112,18 @@ export function OperatorDomainAccessDialog({
 
   const [addingGrant, setAddingGrant] = useState(false);
   const [pickedSetId, setPickedSetId] = useState('');
+  const [grantScope, setGrantScope] = useState<GrantScope>('tenant');
   const [confirmingGrant, setConfirmingGrant] = useState(false);
   const [revokingSet, setRevokingSet] = useState<DomainAccessSet | null>(null);
+  /** TASK-PC-FE-354 — the open revoke addresses the set's '*' source. */
+  const [revokingAllTenants, setRevokingAllTenants] = useState(false);
 
   const grantableSets = useGrantableDomainSets(addingGrant);
+  const grantAllTenants = platformMode && grantScope === 'all-tenants';
+  // A '*' row takes presets only (the producer answers a tenant set with 404).
+  const grantOptions = (grantableSets.data ?? []).filter(
+    (opt) => !grantAllTenants || opt.systemKey !== null,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -117,13 +158,27 @@ export function OperatorDomainAccessDialog({
   function openGrant() {
     grant.reset();
     setPickedSetId('');
+    setGrantScope('tenant');
     setAddingGrant(true);
+  }
+
+  function changeGrantScope(next: GrantScope) {
+    setGrantScope(next);
+    // The picked set may not exist in the narrowed (presets-only) list.
+    setPickedSetId('');
+  }
+
+  function openRevoke(set: DomainAccessSet, allTenants: boolean) {
+    setRevokingAllTenants(allTenants);
+    setRevokingSet(set);
   }
 
   function confirmGrant(reason: string) {
     if (!pickedSetId) return;
     grant.mutate(
-      { operatorId, setId: pickedSetId, reason },
+      grantAllTenants
+        ? { operatorId, setId: pickedSetId, reason, allTenants: true }
+        : { operatorId, setId: pickedSetId, reason },
       {
         onSuccess: () => {
           setConfirmingGrant(false);
@@ -136,8 +191,12 @@ export function OperatorDomainAccessDialog({
 
   function confirmRevoke(reason: string) {
     if (!revokingSet) return;
+    // `allTenants` only from the platform mode's '*'-source button.
+    const allTenants = platformMode && revokingAllTenants;
     revoke.mutate(
-      { operatorId, setId: revokingSet.setId, reason },
+      allTenants
+        ? { operatorId, setId: revokingSet.setId, reason, allTenants: true }
+        : { operatorId, setId: revokingSet.setId, reason },
       { onSuccess: () => setRevokingSet(null) },
     );
   }
@@ -211,9 +270,14 @@ export function OperatorDomainAccessDialog({
                   className="divide-y divide-border rounded-md border border-border"
                 >
                   {sets.map((s) => {
-                    const canRevoke = s.sources.some(
+                    const personal = s.sources.filter(
                       (src) => src.source === 'DIRECT' || src.source === 'MIGRATION',
                     );
+                    const canRevoke = personal.length > 0;
+                    // TASK-PC-FE-354 — platform mode: one revoke per source
+                    // tenant (the producer deletes (target, tenant, set)).
+                    const hasAllTenantsSource = personal.some((src) => src.tenantId === '*');
+                    const hasTenantSource = personal.some((src) => src.tenantId !== '*');
                     return (
                       <li
                         key={s.setId}
@@ -222,17 +286,45 @@ export function OperatorDomainAccessDialog({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-medium text-foreground">{s.name}</span>
-                          {canRevoke && (
+                          {canRevoke && !platformMode && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-destructive"
-                              onClick={() => setRevokingSet(s)}
+                              onClick={() => openRevoke(s, false)}
                               disabled={revoke.isPending}
                               data-testid={`operator-domain-access-set-${s.setId}-revoke`}
                             >
                               회수
                             </Button>
+                          )}
+                          {platformMode && (hasTenantSource || hasAllTenantsSource) && (
+                            <div className="flex flex-wrap justify-end gap-1">
+                              {hasTenantSource && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => openRevoke(s, false)}
+                                  disabled={revoke.isPending}
+                                  data-testid={`operator-domain-access-set-${s.setId}-revoke-tenant`}
+                                >
+                                  현재 테넌트에서 회수
+                                </Button>
+                              )}
+                              {hasAllTenantsSource && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => openRevoke(s, true)}
+                                  disabled={revoke.isPending}
+                                  data-testid={`operator-domain-access-set-${s.setId}-revoke-all-tenants`}
+                                >
+                                  모든 테넌트에서 회수
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -284,6 +376,38 @@ export function OperatorDomainAccessDialog({
 
               {addingGrant && (
                 <div className="space-y-2 rounded-md border border-border p-3">
+                  {/* TASK-PC-FE-354 — '*' target opened by a '*' caller only:
+                      choose the row the grant lands on. */}
+                  {platformMode && (
+                    <fieldset
+                      data-testid="operator-domain-access-grant-scope"
+                      className="space-y-1 text-sm"
+                    >
+                      <legend className="mb-1 text-xs text-muted-foreground">적용 범위</legend>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name={`${titleId}-grant-scope`}
+                          value="tenant"
+                          checked={grantScope === 'tenant'}
+                          onChange={() => changeGrantScope('tenant')}
+                          data-testid="operator-domain-access-grant-scope-tenant"
+                        />
+                        현재 테넌트
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name={`${titleId}-grant-scope`}
+                          value="all-tenants"
+                          checked={grantScope === 'all-tenants'}
+                          onChange={() => changeGrantScope('all-tenants')}
+                          data-testid="operator-domain-access-grant-scope-all-tenants"
+                        />
+                        모든 테넌트 (기본 제공 세트만)
+                      </label>
+                    </fieldset>
+                  )}
                   {grantableSets.isLoading ? (
                     <p className="text-sm text-muted-foreground">불러오는 중…</p>
                   ) : grantableSets.isError ? (
@@ -302,7 +426,7 @@ export function OperatorDomainAccessDialog({
                       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <option value="">(세트 선택)</option>
-                      {(grantableSets.data ?? []).map((opt) => (
+                      {grantOptions.map((opt) => (
                         <option key={opt.setId} value={opt.setId}>
                           {opt.name}
                           {opt.systemKey ? ' (시스템)' : ''} — {opt.domains.join(', ')}
@@ -384,9 +508,15 @@ export function OperatorDomainAccessDialog({
         <OperatorDomainSetReasonDialog
           title="업무 권한을 추가할까요?"
           description={
-            isSelf
+            (isSelf
               ? '자기 자신에게 업무 권한을 줍니다 — 감사 기록에 자기 배정으로 남습니다.'
-              : `${operatorLabel} 에게 선택한 업무 권한 세트를 직접 배정합니다.`
+              : `${operatorLabel} 에게 선택한 업무 권한 세트를 직접 배정합니다.`) +
+            // TASK-PC-FE-354 — the platform mode names the chosen row.
+            (platformMode
+              ? grantAllTenants
+                ? ' 모든 테넌트에 적용됩니다.'
+                : ' 현재 테넌트에만 적용됩니다.'
+              : '')
           }
           confirmLabel="추가"
           pending={grant.isPending}
@@ -399,13 +529,11 @@ export function OperatorDomainAccessDialog({
       {revokingSet && (
         <OperatorDomainSetReasonDialog
           title="업무 권한을 회수할까요?"
-          description={
-            revokingGroupNames.length > 0
-              ? `"${revokingSet.name}" 세트의 직접 배정을 회수합니다. 그룹 ${revokingGroupNames.join(
-                  ', ',
-                )} 에서 받은 같은 세트는 남습니다 — 그룹에서 빼야 사라집니다. ${DOMAIN_SET_LATENCY_COPY}`
-              : `"${revokingSet.name}" 세트의 배정을 회수합니다. ${DOMAIN_SET_LATENCY_COPY}`
-          }
+          description={revokeDescription(
+            revokingSet.name,
+            revokingGroupNames,
+            platformMode ? (revokingAllTenants ? '모든 테넌트' : '현재 테넌트') : null,
+          )}
           confirmLabel="회수"
           tone="destructive"
           pending={revoke.isPending}

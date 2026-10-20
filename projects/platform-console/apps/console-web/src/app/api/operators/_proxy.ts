@@ -177,22 +177,33 @@ export type AssignmentReasonBody = z.infer<typeof AssignmentReasonBodySchema>;
  * `409 DOMAIN_PERMISSION_SET_ALREADY_GRANTED`, never a double-submit retry
  * key — the per-endpoint header matrix is non-uniform, same posture as
  * `/roles` + `/status`). `.strict()` rejects unknown top-level keys.
+ *
+ * TASK-PC-FE-354 — optional `allTenants: boolean` (both grant and revoke):
+ * `true` ⇒ the api layer sends `X-Tenant-Id: *` for this one call (the `'*'`
+ * target's «모든 테넌트» row). Omitted ⇒ `false` ⇒ the active tenant, as
+ * before. Trusting the flag is safe: the producer refuses `*` on a company
+ * target (`400`) and from a non-`'*'` actor (`403`).
  */
 export const GrantDomainSetBodySchema = z
-  .object({ setId: z.string().min(1), reason: z.string() })
+  .object({
+    setId: z.string().min(1),
+    reason: z.string(),
+    allTenants: z.boolean().optional(),
+  })
   .strict();
 export type GrantDomainSetBody = z.infer<typeof GrantDomainSetBodySchema>;
 
 /**
  * personal revoke of a domain permission set (TASK-PC-FE-338 slice b — row
- * 8): the audit `reason` ONLY, in the request BODY (never the query string
- * — the org-nodes/groups DELETE precedent). Shares the SAME shape as
- * {@link AssignmentReasonBodySchema}; kept as its own named export so the
- * route handler's intent reads clearly (reuse is a deliberate choice, not an
- * accidental alias).
+ * 8): the audit `reason`, in the request BODY (never the query string — the
+ * org-nodes/groups DELETE precedent). TASK-PC-FE-354 — no longer an alias of
+ * {@link AssignmentReasonBodySchema}: it also takes the optional `allTenants`
+ * flag above (the assignment routes must keep rejecting it).
  */
-export const DomainSetReasonBodySchema = AssignmentReasonBodySchema;
-export type DomainSetReasonBody = AssignmentReasonBody;
+export const DomainSetReasonBodySchema = z
+  .object({ reason: z.string(), allTenants: z.boolean().optional() })
+  .strict();
+export type DomainSetReasonBody = z.infer<typeof DomainSetReasonBodySchema>;
 
 /**
  * invite (TASK-MONO-772 S5 — § 2.4.3 row 11): the draft + reason +

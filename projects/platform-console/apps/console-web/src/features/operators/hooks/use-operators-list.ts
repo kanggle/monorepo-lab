@@ -20,6 +20,10 @@ async function queryList(
   if (params.status) qs.set('status', params.status);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampPageSize(params.size, 20, 100)));
+  // TASK-PC-FE-354 — the «모든 테넌트» view passes `tenantId='*'` through the
+  // BFF's existing override (`app/api/operators/route.ts`); absent ⇒ the BFF
+  // uses the active tenant, the URL unchanged from before.
+  if (params.tenantId) qs.set('tenantId', params.tenantId);
   const raw = await apiClient.get<unknown>(
     `/api/operators?${qs.toString()}`,
   );

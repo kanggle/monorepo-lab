@@ -29,6 +29,11 @@ export interface OperatorRowProps {
   /** TASK-PC-FE-157 — remove this operator's assignment to the active tenant.
    *  Omitted (⇒ button hidden) when no active tenant is resolved. */
   onUnassign?: (op: OperatorSummary) => void;
+  /** TASK-PC-FE-354 — the row is shown in the «모든 테넌트» view
+   *  (`tenantId='*'` listing). Its `roles` are then every company's rows, so
+   *  the actions that act on the ACTIVE tenant's membership are hidden on a
+   *  company (non-`'*'`) row — they belong to that company's own listing. */
+  allTenantsView?: boolean;
 }
 
 export function OperatorRow({
@@ -40,7 +45,13 @@ export function OperatorRow({
   onOrgScope,
   onDomainAccess,
   onUnassign,
+  allTenantsView = false,
 }: OperatorRowProps) {
+  // TASK-PC-FE-354 — a platform ('*') operator has no assignment row in any
+  // tenant, so 조직 스코프 / 이 회사에서 내보내기 have nothing to act on.
+  const isPlatformTarget = op.homeTenantId === '*';
+  const companyRowInAllTenants = allTenantsView && !isPlatformTarget;
+  const showMembershipActions = !allTenantsView && !isPlatformTarget;
   return (
     <tr
       data-testid={`operator-row-${op.operatorId}`}
@@ -59,14 +70,16 @@ export function OperatorRow({
       </td>
       <td className="p-2">
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onEditRoles(op)}
-            data-testid={`action-edit-roles-${op.operatorId}`}
-          >
-            역할 변경
-          </Button>
+          {!companyRowInAllTenants && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onEditRoles(op)}
+              data-testid={`action-edit-roles-${op.operatorId}`}
+            >
+              역할 변경
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -106,18 +119,20 @@ export function OperatorRow({
           </Button>
           {/* TASK-PC-FE-050 — org_scope (데이터-스코프) per the
               active tenant's assignment row. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onOrgScope(op)}
-            data-testid={`action-org-scope-${op.operatorId}`}
-          >
-            조직 스코프
-          </Button>
+          {showMembershipActions && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onOrgScope(op)}
+              data-testid={`action-org-scope-${op.operatorId}`}
+            >
+              조직 스코프
+            </Button>
+          )}
           {/* TASK-PC-FE-338 slice b — ADR-MONO-083 「업무 권한」: per-set
               sources + the summed effective role, revoke (DIRECT/MIGRATION
               only) + grant. Omitted (⇒ hidden) with no active tenant. */}
-          {onDomainAccess && (
+          {onDomainAccess && !companyRowInAllTenants && (
             <Button
               variant="secondary"
               size="sm"
@@ -133,7 +148,7 @@ export function OperatorRow({
               TASK-MONO-784 S6 — label «배정 해제» → «이 회사에서
               내보내기» (the testid stays — no e2e/nav dependency on
               the old label). */}
-          {onUnassign && (
+          {onUnassign && showMembershipActions && (
             <Button
               variant="secondary"
               size="sm"

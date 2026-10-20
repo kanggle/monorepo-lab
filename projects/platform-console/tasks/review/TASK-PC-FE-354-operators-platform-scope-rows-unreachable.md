@@ -8,7 +8,7 @@ TASK-PC-FE-354
 
 # Status
 
-in-progress (2026-10-20 UTC AC-0 측정 · 소유자 결정 — 새 문안은 머지 전 승인)
+review (2026-10-20 UTC AC-0~3 닫힘 · AC-4 = Vercel 배포 · 다음 데모 창 라이브)
 
 # Owner
 
@@ -58,9 +58,9 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①②③④ 를 file:line 으로. ② 가 «안 나온다» 면 소유자에게 묻는다(목록까지 넓힐지). → § AC-0 결과 · § 소유자 결정.
-- [ ] **AC-1** — `*` 대상의 부여 · 회수가 `'*'` 행에 닿는다. 일반 대상 · 일반 호출자는 그대로(활성 테넌트).
-- [ ] **AC-2** — `'*'` 범위 운영자에게 «플랫폼 운영자 등록» 양식이 보이고, 아닌 운영자에게는 안 보인다.
-- [ ] **AC-3** — 시험: 헤더 선택(`*` 대상 + `'*'` 호출자 → `*` · 일반 대상 → 활성 테넌트 · `'*'` 없는 호출자 → 활성 테넌트) · 양식 표시 양방향 · 거짓 고정값 정정 후에도 초록. 문구가 바뀌면 소유자 문안 승인.
+- [x] **AC-1** — `*` 대상의 부여 · 회수가 `'*'` 행에 닿는다. 일반 대상 · 일반 호출자는 그대로(활성 테넌트). → § 구현 (코드 · 단위 시험까지 — 라이브는 AC-4)
+- [x] **AC-2** — `'*'` 범위 운영자에게 «플랫폼 운영자 등록» 양식이 보이고, 아닌 운영자에게는 안 보인다. → § 구현 (`/me` 판정 · 단위 시험 양방향)
+- [x] **AC-3** — 시험: 헤더 선택(`*` 대상 + `'*'` 호출자 → `*` · 일반 대상 → 활성 테넌트 · `'*'` 없는 호출자 → 활성 테넌트) · 양식 표시 양방향 · 거짓 고정값 정정 후에도 초록. 문구가 바뀌면 소유자 문안 승인. → 시험 부분은 완료(§ 구현) · 🟢 **새 · 바뀐 문안 소유자 승인 2026-10-20 UTC**(선택창 «이대로 승인» — «모든 테넌트» 보기에서 회사 행의 역할 · 조직 스코프 · 업무 권한 · 내보내기를 숨기는 것 포함).
 - [ ] **AC-4** — 배포(Vercel) · 라이브(`star-owner@demo.com` 으로 `*` 운영자의 «모든 테넌트» 행 회수 → 200, 다음 데모 창).
 
 # Related Specs
@@ -131,3 +131,22 @@ frontend
 - **부여 · 회수**: 부여 대화상자에서 «모든 테넌트(기본 제공 세트만)» / «현재 테넌트» 를 **고른다** · 회수는 **출처 행마다** 그 행의 테넌트로.
 - 양식(공백 2): `isPlatformOperator = me.homeTenantId === '*' && hasPermission(me.roles, 'operator.manage')`(`new-tenant` 선례).
 - 순서: 계약(`:261` · `:267`) 먼저 → 구현. 🔴 새 문안(보기 전환 · 부여 선택지 · 바뀌는 확인 문구)은 머지 전 소유자 승인.
+
+# 구현 (2026-10-20 UTC)
+
+**계약 먼저** — `console-integration-contract.md`: § 2.4.3 row 2(플랫폼 등록 양식의 판정 = `/me` `homeTenantId='*'` + `operator.manage`) · § 2.4.3.4 `:261`(활성 테넌트 원칙의 예외 하나) · `:267` 을 두 bullet 로(목록 = `?tenantId=*` 의 «모든 테넌트» 보기와 그 보기에서 숨는 행 동작 / 대화상자가 `*` 를 보내는 두 경우와 그 밖의 전부).
+
+**헤더(AC-1)** — `shared/api/iam-gateway.ts` `AdminGatewayRequest.tenantOverride?: '*'`(리터럴 — 임의 테넌트로 못 겨눈다) · `prepareAdminHeaders` 의 `X-Tenant-Id` 만 `req.tenantOverride ?? tenant`. 활성 테넌트 검사는 그대로 먼저(없으면 override 여도 400). `iam-operators-read.ts` `CallOptions.tenantOverride` 는 설정됐을 때만 펼친다 → 다른 호출자의 요청 객체 · 헤더 바이트 동일. `operators-domain-access-api.ts` grant/revoke 에 `{ allTenants }` 선택 인자 · BFF `_proxy.ts` `GrantDomainSetBodySchema` · `DomainSetReasonBodySchema` 에 `allTenants?: boolean`(후자는 이제 배정 스키마의 별칭이 아님 — 배정 경로는 그 키를 계속 422) · 두 route 가 `{ allTenants: body.allTenants === true }` 로 넘김. 클라이언트 훅은 `true` 일 때만 body 에 싣는다(그 밖의 body 는 `{ setId, reason }` / `{ reason }` 그대로).
+
+**대화상자** — `OperatorDomainAccessDialog` `targetIsPlatform`(행 `homeTenantId==='*'`) ∧ `callerIsPlatform`(페이지 판정) 일 때만: 부여에 «적용 범위» 라디오(기본 «현재 테넌트» · «모든 테넌트 (기본 제공 세트만)» 은 `systemKey!==null` 만 남기고 고른 세트 초기화) · 회수는 세트별 단일 버튼 대신 개인 출처(DIRECT/MIGRATION)의 테넌트마다 하나(«현재 테넌트에서 회수» / «모든 테넌트에서 회수» — 서버가 `(대상, 테넌트, 세트)` 단위로 지우므로 출처 행이 아니라 출처 테넌트 단위). 확인 문구가 고른 범위를 말한다. 그 밖의 경우는 이전과 같다.
+
+**목록(B)** — `OperatorsScreen`: `isPlatformOperator` 일 때만 «현재 테넌트 / 모든 테넌트» 전환 · 모든 테넌트 = `useOperatorsList({..., tenantId:'*'})` → BFF 기존 override(`listKey` 는 tenantId 가 있을 때만 끝에 붙음 — 기존 키 불변). 행 동작 점검: 모든 테넌트 보기의 **회사 행**은 역할 변경 · 조직 스코프 · 업무 권한 · 내보내기 숨김(그 목록의 `roles` 는 모든 회사의 행이라 역할 편집 초기값이 활성 테넌트 것이 아니게 된다 — 값싸게 참으로 만들 수 없음), 정지/활성화 · 프로파일 편집은 행 전체라 유지. **`'*'` 행**은 조직 스코프 · 내보내기 숨김(배정 행이 없다), 역할 변경은 확인문 · 편집기 legend · 전부 제거 경고를 «모든 테넌트(*)» 로(서버가 `'*'` 로 강제), 정지 확인은 «여러 회사에 소속» 문장을 뺐다(소속 0). 배정 양식(`AssignOperatorForm`)은 활성 테넌트로의 배정이라 문구가 참 — 무변경.
+
+**양식(AC-2)** — `operators/page.tsx` `getSelfOrNull()` 하나로 self id + `isPlatformOperator = me.homeTenantId==='*' && hasPermission(me.roles,'operator.manage')`. `selectableTenants(...).includes('*')` 제거. 카탈로그는 `subscribedDomains` 용으로만 남아, 활성 테넌트가 없을 때 await 되지 않으므로 거절을 미리 처리해 둔다.
+
+**시험(AC-3 시험 부분)** — `operators-page-parallel.test.tsx` 고정값 `['wms','*']` 제거 · `/me` 를 실제 모양으로 mock · 양식 판정 양방향 5건(`*`+SUPER_ADMIN → true / 회사 TENANT_ADMIN · `*` 역할 0 · homeTenantId 없음 · `/me` 실패 → false). 신규 `features/operators/operators-domain-access-tenant-header.test.ts`(grant/revoke `*` · 활성 · 활성 테넌트 없으면 400 무 fetch · 손대지 않은 호출자 5종 헤더 집합 고정). 신규 `OperatorsScreen-platform-scope.test.tsx`(전환 양방향 · `tenantId=*` 호출 · 행 동작 · 역할 확인 문구 대조 · 대화상자 행렬 6칸). `operators-domain-access-proxy.test.ts` 인자 단언 정정 + `allTenants` 전달 · 비불리언 422. `OperatorInvitations.test.tsx` 불가능 상태 `activeTenant:'*'` → 실제 상태.
+- bite 3건(`git stash push -- <src>` → 실행 → `pop`): `page.tsx` 되돌림 → 13 중 9 실패 · `iam-gateway.ts` → 헤더 시험 11 중 정확히 `*` 2건 실패(고정 9건은 양쪽 초록 = 바이트 동일) · `OperatorDomainAccessDialog.tsx` → 화면 시험 14 중 플랫폼 모드 4건 실패.
+- 게이트: `tsc --noEmit` rc=0 · `next lint` rc=0(경고 1 — 무관 파일 기존) · `vitest run` 전체 rc=0, 412 파일 / 4960 시험.
+- e2e: `tests/e2e/operators-admin-profile.spec.ts` 가 `/operators` 를 쓰지만 `action-edit-profile-*` 만 — 이 변경이 숨기지 않는 버튼. 바꾼 testid · 문구를 가리키는 spec 없음.
+
+**남은 것** — 🔴 새 · 바뀐 문안 소유자 승인(AC-3) · AC-4 라이브. 라이브 전 확인 거리: 모든 테넌트 보기에서 `'*'` 대상의 프로파일 편집 · 정지가 서버에서 통하는지는 코드로 재지 않았다(문구에 «이 회사» 가 없어 숨기지 않음).

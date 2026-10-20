@@ -33,7 +33,9 @@ import { sampleGate } from '@/shared/api/sample-gate';
  *   `401 TOKEN_INVALID`, no fetch.
  * - **Tenant**: the active tenant is always sent as `X-Tenant-Id`
  *   (`getActiveTenant()`); absent ⇒ `400 NO_ACTIVE_TENANT` (never an empty
- *   header — no cross-tenant leak).
+ *   header — no cross-tenant leak). The one exception is a caller-set
+ *   {@link AdminGatewayRequest.tenantOverride} of `'*'` (TASK-PC-FE-354),
+ *   still behind the same active-tenant check.
  * - **Per-endpoint header matrix** (§ 2.4.x — the key correctness risk): the
  *   reason (`X-Operator-Reason`, percent-encoded per TASK-MONO-176) and
  *   `Idempotency-Key` are applied per the caller's supplied fields, gated by the
@@ -83,6 +85,17 @@ export interface AdminGatewayRequest {
   /** Per-call override of {@link AdminGatewayProfile.requestFailedLabel} — the
    *  `!ok` fallback message (accounts `export` uses `'export failed'`). */
   failLabel?: string;
+  /**
+   * TASK-PC-FE-354 — per-call `X-Tenant-Id` override, and the ONLY one: `'*'`
+   * (the platform «모든 테넌트» row of a `'*'` target operator — contract
+   * § 2.4.3.4 rows 7–8). Typed as the literal so no caller can aim a write at
+   * an arbitrary other tenant. Absent ⇒ the active tenant, i.e. every caller
+   * that does not set it sends byte-identical headers. The active-tenant
+   * check still runs first: with no tenant selected the call is blocked
+   * exactly as before, override or not. The producer is authoritative
+   * (`400` on a company target, `403` for a non-`'*'` actor).
+   */
+  tenantOverride?: '*';
 }
 
 /**
@@ -308,7 +321,9 @@ async function prepareAdminHeaders(
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${token}`,
-    'X-Tenant-Id': tenant,
+    // TASK-PC-FE-354 — `tenantOverride` (only `'*'`) replaces the value;
+    // absent ⇒ the active tenant, unchanged for every other caller.
+    'X-Tenant-Id': req.tenantOverride ?? tenant,
     'X-Request-Id': requestId,
   };
 

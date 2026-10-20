@@ -21,6 +21,9 @@ export interface OperatorConfirmRoleEditorProps {
   removingAll: boolean;
   /** True ⇒ the selection includes the elevated (SUPER_ADMIN) role. */
   grantingElevated: boolean;
+  /** TASK-PC-FE-354 — the target is a platform (`'*'`) operator: its roles
+   *  live in `'*'` (no company), so the per-company copy would be false. */
+  allTenants?: boolean;
 }
 
 export function OperatorConfirmRoleEditor({
@@ -30,6 +33,7 @@ export function OperatorConfirmRoleEditor({
   toggleRole,
   removingAll,
   grantingElevated,
+  allTenants = false,
 }: OperatorConfirmRoleEditorProps) {
   return (
     <fieldset className="mt-4">
@@ -40,7 +44,9 @@ export function OperatorConfirmRoleEditor({
         {/* TASK-MONO-784 S6 — role edit is now per-company; the legend says
             so without needing the tenant id (the surrounding dialog
             description already names it). */}
-        역할 (이 회사 — 전체 교체, 비우면 이 회사의 역할만 제거)
+        {allTenants
+          ? '역할 (모든 테넌트(*) — 전체 교체)'
+          : '역할 (이 회사 — 전체 교체, 비우면 이 회사의 역할만 제거)'}
       </legend>
       <div
         className="mt-2 flex flex-wrap gap-3"
@@ -77,8 +83,9 @@ export function OperatorConfirmRoleEditor({
           data-testid="edit-roles-remove-all-warning"
           role="status"
         >
-          이 회사에서의 역할이 모두 제거됩니다 — 소속은 남습니다
-          (다른 회사의 역할은 그대로입니다).
+          {allTenants
+            ? '이 운영자의 모든 테넌트(*) 역할이 모두 제거됩니다.'
+            : '이 회사에서의 역할이 모두 제거됩니다 — 소속은 남습니다 (다른 회사의 역할은 그대로입니다).'}
         </p>
       )}
       {grantingElevated && (

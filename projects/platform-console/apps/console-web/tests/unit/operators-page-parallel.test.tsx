@@ -3,26 +3,53 @@ import { render } from '@testing-library/react';
 
 /**
  * TASK-PC-FE-118 — `/operators` parallelises the independent success-path
- * fetches that previously ran as a waterfall: the platform-scope hint
- * (`getCatalog` — TASK-MONO-772 S5: only `isPlatformOperator` is derived from it
- * now; the tenant picker went with the non-`*` create), the caller's own operatorId (`getSelfOperatorIdOrNull`), and
- * (feat/iam-grantable-roles-filter) the caller's grantable role set
- * (`getGrantableRolesOrNull`). All three run only past the
+ * fetches that previously ran as a waterfall: the catalog (`getCatalog` — the
+ * 업무 권한 dialog's subscribed-domain source), the caller's own `/me`
+ * (`getSelfOrNull`), and (feat/iam-grantable-roles-filter) the caller's
+ * grantable role set (`getGrantableRolesOrNull`). All three run only past the
  * noTenant/permissionError/degraded gates, so this is a pure post-gate
  * parallelisation (no speculative authorized fetch).
  *
- * Concurrency proof: with `getCatalog` left pending, the new shape still calls
- * `getSelfOperatorIdOrNull` + `getGrantableRolesOrNull` (all promises are
- * created before `await catalog`). The old waterfall would not call the
- * others until catalog resolved — so they'd stay at 0 calls while catalog
- * hangs.
+ * Concurrency proof: with `getCatalog` left pending, the page still calls
+ * `getSelfOrNull` + `getGrantableRolesOrNull` (all promises are created
+ * before any await).
+ *
+ * TASK-PC-FE-354 — the platform-scope judgement (`isPlatformOperator`) now
+ * comes from `/me`: `homeTenantId === '*'` + `operator.manage` (the
+ * `new-tenant/page.tsx` precedent). It used to be
+ * `selectableTenants(catalog).includes('*')`, mocked here as `['wms','*']` —
+ * a shape the registry never returns (`*` is not a switcher entry), which is
+ * what kept the «platform hint = true» assertion green while the live form
+ * never rendered. That fixture is gone; `/me` is mocked with the producer's
+ * real summary shape.
  */
 
 const getOperatorsListState = vi.fn();
-const getSelfOperatorIdOrNull = vi.fn();
+const getSelfOrNull = vi.fn();
 const getGrantableRolesOrNull = vi.fn();
 const getCatalog = vi.fn();
-const selectableTenants = vi.fn();
+
+/** A `GET /api/admin/me` body in the producer's shape (OperatorSummarySchema). */
+function me(over: Record<string, unknown> = {}) {
+  return {
+    operatorId: 'op-self',
+    email: 'self@x.com',
+    displayName: 'Self',
+    status: 'ACTIVE',
+    roles: ['TENANT_ADMIN'],
+    createdAt: '2026-01-01T00:00:00Z',
+    homeTenantId: 'demo-corp',
+    memberships: [{ tenantId: 'demo-corp', roles: ['TENANT_ADMIN'] }],
+    ...over,
+  };
+}
+/** A platform-scope operator: home `'*'`, SUPER_ADMIN on `'*'`, no memberships. */
+const STAR_OWNER = me({
+  operatorId: 'op-star',
+  homeTenantId: '*',
+  roles: ['SUPER_ADMIN'],
+  memberships: [],
+});
 
 vi.mock('@/features/operators', () => ({
   getOperatorsListState: (a: unknown) => getOperatorsListState(a),
@@ -44,13 +71,12 @@ vi.mock('@/features/operators', () => ({
   ),
 }));
 vi.mock('@/features/operators/api/operators-api', () => ({
-  getSelfOperatorIdOrNull: () => getSelfOperatorIdOrNull(),
   getGrantableRolesOrNull: () => getGrantableRolesOrNull(),
 }));
-vi.mock('@/features/catalog', () => ({ getCatalog: () => getCatalog() }));
-vi.mock('@/features/tenant', () => ({
-  selectableTenants: (p: unknown) => selectableTenants(p),
+vi.mock('@/shared/api/iam-operators-read', () => ({
+  getSelfOrNull: () => getSelfOrNull(),
 }));
+vi.mock('@/features/catalog', () => ({ getCatalog: () => getCatalog() }));
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -61,8 +87,7 @@ vi.mock('next/link', () => ({
  * TASK-PC-FE-301 — the no-tenant branch renders `NoTenantNotice`, which
  * resolves its OWN judgement via `noTenantNoticeKind`
  * (`@/shared/lib/active-tenant-default`) through `fetchRegistry` — a
- * DIFFERENT seam than `@/features/catalog`'s `getCatalog` mocked above (that
- * one only feeds the create-form tenant options on the SUCCESS path).
+ * DIFFERENT seam than `@/features/catalog`'s `getCatalog` mocked above.
  * Defaults to 'select' so the pre-301 no-tenant test below (which only
  * asserts the gate's testid, not its copy) is unaffected.
  */
@@ -81,78 +106,66 @@ const SUCCESS_STATE = {
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+async function renderedScreen() {
+  const ui = await OperatorsPage();
+  const { getByTestId } = render(ui);
+  return getByTestId('operators-screen');
+}
+
 beforeEach(() => {
   getOperatorsListState.mockReset();
-  getSelfOperatorIdOrNull.mockReset();
+  getSelfOrNull.mockReset();
   getGrantableRolesOrNull.mockReset();
   getGrantableRolesOrNull.mockResolvedValue(null);
   getCatalog.mockReset();
-  selectableTenants.mockReset();
-  selectableTenants.mockReturnValue(['wms', '*']);
   noTenantNoticeKindResult = 'select';
 });
 
 describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () => {
-  it('starts the self-operator + grantable-roles fetches concurrently with the catalog fetch (no waterfall)', async () => {
+  it('starts the /me + grantable-roles fetches concurrently with the catalog fetch (no waterfall)', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockReturnValue(new Promise(() => {})); // hangs forever
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
+    getSelfOrNull.mockReturnValue(new Promise(() => {})); // hangs forever
     getGrantableRolesOrNull.mockResolvedValue(['TENANT_ADMIN']);
 
-    // Page never settles (it awaits the hanging catalog); we only assert that
-    // self + grantable-roles were started despite catalog still pending.
     void OperatorsPage();
     await tick();
 
     expect(getCatalog).toHaveBeenCalledTimes(1);
-    // Waterfall regression: self would be 0 until catalog resolved.
-    expect(getSelfOperatorIdOrNull).toHaveBeenCalledTimes(1);
+    expect(getSelfOrNull).toHaveBeenCalledTimes(1);
     expect(getGrantableRolesOrNull).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the screen with the platform hint + self id + grantable roles on the success path', async () => {
+  it('renders the screen with the self id (from /me) + grantable roles on the success path', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockResolvedValue({ products: [] });
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
+    getSelfOrNull.mockResolvedValue(me());
     getGrantableRolesOrNull.mockResolvedValue(['TENANT_ADMIN', 'SUPPORT_LOCK']);
 
-    const ui = await OperatorsPage();
-    const { getByTestId } = render(ui);
-    const el = getByTestId('operators-screen');
-    expect(el).toHaveAttribute('data-platform', 'true'); // '*' among the tenants
+    const el = await renderedScreen();
     expect(el).toHaveAttribute('data-self', 'op-self');
-    expect(el).toHaveAttribute(
-      'data-grantable-roles',
-      'TENANT_ADMIN,SUPPORT_LOCK',
-    );
+    expect(el).toHaveAttribute('data-grantable-roles', 'TENANT_ADMIN,SUPPORT_LOCK');
   });
 
   it('passes null through when the grantable-roles fetch fails (fail-graceful wrapper)', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockResolvedValue({ products: [] });
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
+    getSelfOrNull.mockResolvedValue(me());
     getGrantableRolesOrNull.mockResolvedValue(null);
 
-    const ui = await OperatorsPage();
-    const { getByTestId } = render(ui);
-    // The mock renders `grantableRoles ?? []` joined — null renders as ''.
-    expect(getByTestId('operators-screen')).toHaveAttribute(
-      'data-grantable-roles',
-      '',
-    );
+    const el = await renderedScreen();
+    expect(el).toHaveAttribute('data-grantable-roles', '');
   });
 
-  it('keeps the independent self result when the catalog fetch rejects (registry down → no platform form)', async () => {
+  it('keeps the independent /me result when the catalog fetch rejects (registry down)', async () => {
     getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
     getCatalog.mockRejectedValue(new Error('registry down'));
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
+    getSelfOrNull.mockResolvedValue(STAR_OWNER);
 
-    const ui = await OperatorsPage();
-    const { getByTestId } = render(ui);
-    const el = getByTestId('operators-screen');
-    expect(el).toHaveAttribute('data-platform', 'false'); // fail-closed on failure
-    // The self promise is independent — its result survives the catalog reject.
-    expect(el).toHaveAttribute('data-self', 'op-self');
+    const el = await renderedScreen();
+    expect(el).toHaveAttribute('data-self', 'op-star');
+    // The platform judgement no longer depends on the registry at all.
+    expect(el).toHaveAttribute('data-platform', 'true');
   });
 
   it('does not fetch catalog/self on the no-tenant gate (gate decided before the parallel block)', async () => {
@@ -162,14 +175,12 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
       permissionError: null,
       degraded: false,
     });
-    getCatalog.mockResolvedValue({ products: [] });
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
 
     const ui = await OperatorsPage();
     const { getByTestId } = render(ui);
     expect(getByTestId('operators-no-tenant')).toBeInTheDocument();
     expect(getCatalog).not.toHaveBeenCalled();
-    expect(getSelfOperatorIdOrNull).not.toHaveBeenCalled();
+    expect(getSelfOrNull).not.toHaveBeenCalled();
     expect(getGrantableRolesOrNull).not.toHaveBeenCalled();
   });
 
@@ -212,14 +223,48 @@ describe('OperatorsPage — parallel post-gate SSR fetch (TASK-PC-FE-118)', () =
       permissionError: { code: 'TENANT_SCOPE_DENIED' },
       degraded: false,
     });
-    getCatalog.mockResolvedValue({ products: [] });
-    getSelfOperatorIdOrNull.mockResolvedValue('op-self');
 
     const ui = await OperatorsPage();
     const { getByTestId } = render(ui);
     expect(getByTestId('operators-permission-denied')).toBeInTheDocument();
     expect(getCatalog).not.toHaveBeenCalled();
-    expect(getSelfOperatorIdOrNull).not.toHaveBeenCalled();
+    expect(getSelfOrNull).not.toHaveBeenCalled();
     expect(getGrantableRolesOrNull).not.toHaveBeenCalled();
+  });
+});
+
+describe('OperatorsPage — platform-scope judgement from /me (TASK-PC-FE-354 AC-2)', () => {
+  beforeEach(() => {
+    getOperatorsListState.mockResolvedValue(SUCCESS_STATE);
+    getCatalog.mockResolvedValue({ products: [] });
+  });
+
+  it("home '*' + operator.manage (SUPER_ADMIN) ⇒ platform (the «플랫폼 운영자 등록» form is offered)", async () => {
+    getSelfOrNull.mockResolvedValue(STAR_OWNER);
+    expect(await renderedScreen()).toHaveAttribute('data-platform', 'true');
+  });
+
+  it('a company operator (home demo-corp, TENANT_ADMIN) ⇒ NOT platform', async () => {
+    getSelfOrNull.mockResolvedValue(me());
+    expect(await renderedScreen()).toHaveAttribute('data-platform', 'false');
+  });
+
+  it("home '*' but no operator.manage (demo-platform: no role rows) ⇒ NOT platform", async () => {
+    getSelfOrNull.mockResolvedValue(me({ homeTenantId: '*', roles: [], memberships: [] }));
+    expect(await renderedScreen()).toHaveAttribute('data-platform', 'false');
+  });
+
+  it('SUPER_ADMIN whose homeTenantId is ABSENT (optional field) ⇒ NOT platform', async () => {
+    const body: Record<string, unknown> = me({ roles: ['SUPER_ADMIN'] });
+    delete body.homeTenantId;
+    getSelfOrNull.mockResolvedValue(body);
+    expect(await renderedScreen()).toHaveAttribute('data-platform', 'false');
+  });
+
+  it('a failed /me (null) ⇒ NOT platform, and no self id', async () => {
+    getSelfOrNull.mockResolvedValue(null);
+    const el = await renderedScreen();
+    expect(el).toHaveAttribute('data-platform', 'false');
+    expect(el).toHaveAttribute('data-self', '');
   });
 });

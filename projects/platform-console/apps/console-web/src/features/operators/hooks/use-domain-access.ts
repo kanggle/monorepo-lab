@@ -86,15 +86,19 @@ interface GrantArgs {
   operatorId: string;
   setId: string;
   reason: string;
+  /** TASK-PC-FE-354 — `true` ⇒ the «모든 테넌트» (`'*'`) row of a `'*'`
+   *  target (the BFF sends `X-Tenant-Id: *`). Sent in the body ONLY when
+   *  `true`, so every other grant's body is unchanged (`{ setId, reason }`). */
+  allTenants?: boolean;
 }
 
 export function useGrantOperatorDomainSet() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ operatorId, setId, reason }: GrantArgs) => {
+    mutationFn: async ({ operatorId, setId, reason, allTenants }: GrantArgs) => {
       const raw = await apiClient.post<unknown>(
         `/api/operators/${encPath(operatorId)}/domain-permission-sets`,
-        { setId, reason },
+        allTenants ? { setId, reason, allTenants: true } : { setId, reason },
       );
       return GrantDomainSetResultSchema.parse(raw) as GrantDomainSetResult;
     },
@@ -114,15 +118,18 @@ interface RevokeArgs {
   operatorId: string;
   setId: string;
   reason: string;
+  /** TASK-PC-FE-354 — `true` ⇒ remove the source whose `tenantId` is `'*'`
+   *  (the BFF sends `X-Tenant-Id: *`). In the body ONLY when `true`. */
+  allTenants?: boolean;
 }
 
 export function useRevokeOperatorDomainSet() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ operatorId, setId, reason }: RevokeArgs) => {
+    mutationFn: async ({ operatorId, setId, reason, allTenants }: RevokeArgs) => {
       await apiClient.delete<void>(
         `/api/operators/${encPath(operatorId)}/domain-permission-sets/${encPath(setId)}`,
-        { body: { reason } },
+        { body: allTenants ? { reason, allTenants: true } : { reason } },
       );
     },
     onSuccess: (_data, vars) => {

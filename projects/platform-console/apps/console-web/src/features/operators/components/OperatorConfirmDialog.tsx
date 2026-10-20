@@ -43,7 +43,11 @@ export interface OperatorConfirmDialogProps {
   /** Inline actionable error from the last attempt (no crash). */
   errorMessage?: string | null;
   /** When set, render the role multi-select (edit-roles); seed selection. */
-  roleEditor?: { initialRoles: string[] };
+  roleEditor?: {
+    initialRoles: string[];
+    /** TASK-PC-FE-354 — a platform (`'*'`) target: '*'-wide role copy. */
+    allTenants?: boolean;
+  };
   /** feat/iam-grantable-roles-filter — the seed role names the CALLING
    *  operator may grant. The edit-roles checkboxes render the intersection
    *  of `KNOWN_OPERATOR_ROLES` and this set, UNIONED with the operator's
@@ -150,6 +154,7 @@ export function OperatorConfirmDialog({
           toggleRole={toggleRole}
           removingAll={removingAll}
           grantingElevated={grantingElevated}
+          allTenants={roleEditor.allTenants === true}
         />
       )}
 
