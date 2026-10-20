@@ -4,7 +4,7 @@ TASK-PC-FE-308
 
 # Status
 
-review
+done
 
 # Title
 
@@ -56,7 +56,7 @@ platform-console
 - [x] **AC-0** — 착수 시 재측정(file:line): ① `flat-envelope-gateway.ts` 의 버그 위치, ② `iam-gateway.ts` 의 형제 고정(TASK-MONO-176) 위치, ③ erp `approval-service` 프로듀서가 `X-Operator-Reason` 헤더를 실제로 읽는지(컨트롤러 전수 grep), ④ `flat-envelope-gateway.ts` 의 `operatorReason` 필드를 실제로 설정하는 호출부 전수(7개 call-core 중 몇 개).
 - [x] **AC-1** — 단위 시험: 한글 사유 → 헤더 값이 ASCII-only(`/^[\x00-\x7F]*$/`) 이고 `encodeURIComponent(원문)` 과 동일하며 `decodeURIComponent` 로 원문이 복원된다. ASCII 사유는 의미 불변(`encodeURIComponent` 가 공백만 `%20` 으로 바꾸는 등 — 영문 단어만 쓰는 기존 셀은 그대로 통과).
 - [x] **AC-2** — bite: 고정을 되돌리면(복사본 비교 기반, `git checkout --` 미사용) `approve WITH reason`/`reject`/`withdraw` 3개 셀만 빨강, 나머지 20개는 그대로 초록.
-- [ ] **AC-3 (라이브, ⚪)** — 다음 데모 창(23차 이후): 한글 사유로 `reject` → `200 REJECTED`(지금은 `503`). `withdraw` 도 동일하게 확인.
+- [x] **AC-3 (라이브)** — 다음 데모 창(23차 이후): 한글 사유로 `reject` → `200 REJECTED`(지금은 `503`). `withdraw` 도 동일하게 확인.
 
 # Related Specs
 
@@ -128,3 +128,13 @@ platform-console
 - 수정 전 대조군: 08:18:28Z 콘솔 라우트로 만든 요청(`appr-01a1104a-…`, 기안 ad03 → 결재 ad04)을 상신 후 한글 사유로 `withdraw` → **503** `{"code":"NETWORK_ERROR","message":"erp unavailable"}` (erp 로그에 흔적 0 — 콘솔을 떠나지 못함).
 - 배포 후: 같은 요청 · 같은 한글 사유 `withdraw` → **200 `WITHDRAWN`** (08:21:53Z). 중간의 403 `TENANT_FORBIDDEN`(08:19Z)은 그 실행의 테넌트 전환 미확인(하네스) — 전환 확인 후 재시도에서 200. 🔵 그 403 이 `flat-envelope-gateway.ts` 의 `res.status === 403` 분기에서 났다는 것 자체가 «요청이 상류까지 갔다» 의 증거였다.
 - ⏳ **AC-3 은 닫지 않는다** — AC 의 동사는 «한글 사유로 **reject** → 200 REJECTED» 다. 이 창에서 잰 것은 withdraw(같은 헤더 줄을 지나는 경로)이고, 반려는 데모 운영자가 결재자인 미결 건이 남지 않아(시드 2건을 승인·반려로 이미 씀) 재지 못했다. 수정 전 반려는 한글 사유 503 · ASCII 사유 200 REJECTED 로 원인 대조까지 했다(`TASK-MONO-764` 흐름 16).
+
+## 32차 창 라이브 — AC-3 닫힘 (2026-10-20 UTC)
+
+- 28차 이후 AMI `ami-01681ef55def7d15c` · Vercel Production(#4173 `552d3182b` 이후 다수 배포) · 32차 창(17:12Z–18:47Z, `console` + `console-erp`).
+- **reject**: `requester@demo.com` 이 «308 반려 확인»(대상 `DEPT-HQ`, 결재자 `EMP-0001` 김본부)을 만들고, `demo@demo.com`(김본부와 연결된 계정)이 콘솔에서 **한글 사유로 반려 → 목록 상태 «반려됨»**(소유자 브라우저). 수정 전에는 같은 경로가 503 이었다(23차 원인 대조).
+- **withdraw**: 23차에 이미 한글 사유 200 `WITHDRAWN`.
+- 🔵 곁에서 본 것(이 티켓 밖): 그 요청을 콘솔에서 **상신**하면 «요청을 처리하지 못했습니다» — 같은 DRAFT 를 API 로 상신하면 200 `SUBMITTED`(에이전트, 18:16Z). → `TASK-PC-FE-355`.
+
+### 4차원 (close chore)
+- (a) #4173 `MERGED` · (b) `552d3182b` ⊂ `origin/main` · (c) 머지 시점 FAILURE 0 · SUCCESS 11 · (d) AC-0~AC-3 전부 닫힘(AC-3 의 동사 «한글 사유로 reject → 200 REJECTED · withdraw 동일» — reject 는 이 창, withdraw 는 23차).

@@ -69,7 +69,7 @@ frontend
 - [x] **AC-1** — 계약 § 2.4.3.4 개정(`:281` · `:304` · `:307`) 이 코드보다 먼저. → red 커밋 `f17be4ff5` 에 계약 · 시험만(+ 중립 배관), 데이터는 green.
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`scm-read`) → SCM 메뉴 배지 없음 · 승인/기각/저장 버튼 없음 / 수요계획 세트만 → `/scm/procurement` · `/scm/inventory` 배지, `/scm/replenishment` 버튼 보임 / SCM 세트 0 → SCM 메뉴 전부 배지 / WMS 출고 세트만 → 출고 화면의 «발송 재시도» 없음. → `console-nav-business-permission.test.ts` · `sidebar-business-permission.test.tsx` · `ReplenishmentScreen` · `SeedConfigScreen` · `OutboundOpsScreen` · `domain-business-roles.test.ts` (§ 구현 기록).
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(행 12 `undefined` · 레지스트리 `null` · 샘플 방문자 · 테넌트 없음).
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면) 를 따로 적는다.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면) 를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `ce1277dfa` → `Production – kanggle-console` 배포 7128043458 state=success (2026-10-16T19:46:46Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -128,3 +128,14 @@ frontend
 
 - AC-4 배포 상태: `main` 미머지(DRAFT) · Vercel 미배포 · 라이브 화면 미확인 — 머지 후 다음 창.
 - 🔴 이 티켓 범위 밖이지만 같은 원인으로 **지금 틀린 문장**: SCM 가이드 `features/scm-guide/data.ts:363-369`(«SCM 운영자(SCM_OPERATOR) 권한 … 이 권한 하나뿐») · IAM 가이드 `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `SCM_OPERATOR`). 792 뒤로 거짓 — 가이드 문안 후속으로 남긴다(고치지 않음).
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7128043458`(`ce1277dfa`) success(10-18 기록).
+- demo@: SCM 메뉴 «업무 권한 없음» 배지 **없음** ✅.
+- `scm-read` + `wms-full`: SCM · WMS 메뉴 배지 없음 · ERP · Finance · E-commerce 배지 ✅ · `/scm/replenishment` «조회 전용 — 추천 승인 · 기각에 필요한 업무 권한(수요계획 변경)이 … 해당 버튼을 숨겼습니다» · 승인 · 기각 없음 ✅.
+- `finance-read` · `ecommerce-read` · `erp-read`: **SCM 배지** ✅.
+- ⚪ 보충 **설정 저장** 버튼은 안 봤다. ⚪ WMS 출고 «발송 재시도» — 숨어 있었지만 **판별력 없음**: 유일한 주문 `SO-DEMO-0001` 이 `SHIPPED` · saga `COMPLETED` 라 권한이 있어도 그 버튼이 안 나오는 상태다.
+- ⓘ WMS 메뉴는 세트 없이도 배지가 없다 — 설계(`permission-map.ts:722-725` 구독만으로 `WMS_VIEWER`).
+- 🔴 이 티켓은 `in-progress` 에 남는다 — AC-0 의 체크박스가 비어 있다(본문 기록과 별개로).

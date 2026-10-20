@@ -71,7 +71,7 @@ frontend
 - [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `96489e285`(계약 · 시험만).
 - [ ] **AC-2** — 🔴 대조군: 조회 세트(`ecommerce-read`) → E-commerce 메뉴 배지 없음 · 쓰기 버튼 없음 / 주문 운영 세트만(`ecommerce-order-operate`) → `/orders` 배지 없음 · 버튼 보임, 나머지 7 화면 배지 / 회원 조회 없는 세트 → `/users` 배지 / E-commerce 세트 0 → E-commerce 메뉴 전부 배지. → **메뉴 절반 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-345 · `sidebar-business-permission.test.tsx`). **버튼 절반(«쓰기 버튼 없음» · «버튼 보임») 은 `TASK-PC-FE-346` 으로 이관** — § 범위 결정.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(row 12 `undefined`) · 버튼은 이 PR 에서 선언 없음 = 늘 보임.
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `d64a6b8a7` → `Production – kanggle-console` 배포 7128901643 state=success (2026-10-16T20:32:51Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -147,3 +147,11 @@ c-2 시험이 이것을 못 잡은 이유: `console-nav-business-permission.test
 ## 함께 적는 것
 
 - 🔵 가이드 문안이 지금 틀림(이 티켓 범위 밖, 코디네이터가 끝에 후속 기안): `features/scm-guide/data.ts:363-369`(«SCM_OPERATOR 하나뿐») · `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `*_OPERATOR`) — 795 뒤로는 `ECOMMERCE_OPERATOR` 도 같은 처지.
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7128901643`(`d64a6b8a7`) success(10-18 기록).
+- 🔴 **라이브 퇴행 수리 확인**: demo@ 의 E-commerce 메뉴에 «업무 권한 없음» 배지 **없음** ✅(795 굽기 뒤의 거짓 배지 9 개가 사라졌다).
+- `ecommerce-order-operate` 만: **«주문» 만 열리고** 상품 · 배송 · 프로모션 · 사용자 · 셀러 · 정산 · 알림 배지 ✅ · `/ecommerce/products` = «이 화면을 조회할 권한이 없습니다» ✅. E-commerce 세트 0: E-commerce 메뉴 전부 배지 ✅. `ecommerce-read`: 배지 없음 ✅.
+- 🔴 `in-progress` 유지 — AC-0 · AC-2 체크박스가 비어 있다(AC-2 버튼 절반은 346 으로 이관됐고 346 이 이 창에서 닫혔다).

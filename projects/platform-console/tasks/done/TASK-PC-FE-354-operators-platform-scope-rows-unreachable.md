@@ -8,7 +8,7 @@ TASK-PC-FE-354
 
 # Status
 
-review (2026-10-20 UTC AC-0~3 닫힘 · AC-4 = Vercel 배포 · 다음 데모 창 라이브)
+done (2026-10-20 UTC — 32차 창 라이브로 AC-4 닫힘)
 
 # Owner
 
@@ -61,7 +61,7 @@ frontend
 - [x] **AC-1** — `*` 대상의 부여 · 회수가 `'*'` 행에 닿는다. 일반 대상 · 일반 호출자는 그대로(활성 테넌트). → § 구현 (코드 · 단위 시험까지 — 라이브는 AC-4)
 - [x] **AC-2** — `'*'` 범위 운영자에게 «플랫폼 운영자 등록» 양식이 보이고, 아닌 운영자에게는 안 보인다. → § 구현 (`/me` 판정 · 단위 시험 양방향)
 - [x] **AC-3** — 시험: 헤더 선택(`*` 대상 + `'*'` 호출자 → `*` · 일반 대상 → 활성 테넌트 · `'*'` 없는 호출자 → 활성 테넌트) · 양식 표시 양방향 · 거짓 고정값 정정 후에도 초록. 문구가 바뀌면 소유자 문안 승인. → 시험 부분은 완료(§ 구현) · 🟢 **새 · 바뀐 문안 소유자 승인 2026-10-20 UTC**(선택창 «이대로 승인» — «모든 테넌트» 보기에서 회사 행의 역할 · 조직 스코프 · 업무 권한 · 내보내기를 숨기는 것 포함).
-- [ ] **AC-4** — 배포(Vercel) · 라이브(`star-owner@demo.com` 으로 `*` 운영자의 «모든 테넌트» 행 회수 → 200, 다음 데모 창).
+- [x] **AC-4** — 배포(Vercel) · 라이브(`star-owner@demo.com` 으로 `*` 운영자의 «모든 테넌트» 행 회수 → 200, 다음 데모 창).
 
 # Related Specs
 
@@ -150,3 +150,22 @@ frontend
 - e2e: `tests/e2e/operators-admin-profile.spec.ts` 가 `/operators` 를 쓰지만 `action-edit-profile-*` 만 — 이 변경이 숨기지 않는 버튼. 바꾼 testid · 문구를 가리키는 spec 없음.
 
 **남은 것** — 🔴 새 · 바뀐 문안 소유자 승인(AC-3) · AC-4 라이브. 라이브 전 확인 거리: 모든 테넌트 보기에서 `'*'` 대상의 프로파일 편집 · 정지가 서버에서 통하는지는 코드로 재지 않았다(문구에 «이 회사» 가 없어 숨기지 않음).
+
+## 32차 창 라이브 — AC-4 닫힘 (2026-10-20 UTC)
+
+- 배포: Vercel Production `7205740591`(`30321a844`) **success**.
+- `star-owner@demo.com`(SSM `owner-operator.sh activate` 17:16Z → `deactivate` 18:47Z, refresh 토큰 0) 로 `/operators`: «현재 테넌트 / 모든 테넌트» 전환 · «플랫폼 운영자 등록» 양식이 보인다(소유자). «모든 테넌트» = **9 행**(서버 `?tenantId=*` 응답 9 와 일치, 에이전트 API 대조) · `*` 운영자 4 행(`star-owner@` · `platform@` · `admin@example.com` · `dev-super-admin@example.com`)에만 «역할 변경 · 업무 권한», 회사 운영자 5 행은 «정지 · 프로파일 편집» 만.
+- `platform@demo.com`(`demo-platform`) 업무 권한: «모든 테넌트 (기본 제공 세트만)» 로 프리셋 부여 → «모든 테넌트에서 회수» 를 두 번(소유자). 호스트 `admin_db.admin_actions`(에이전트, SSM):
+
+| 시각 (UTC) | `action_code` | `tenant_id` | 결과 | detail |
+|---|---|---|---|---|
+| 18:00:50 | `OPERATOR_DOMAIN_SET_GRANT` | `*` | SUCCESS | `setId=…0001 source=DIRECT` |
+| 18:02:08 | `OPERATOR_DOMAIN_SET_REVOKE` | `*` | SUCCESS | `removedSources=DIRECT` |
+| 18:02:21 | `OPERATOR_DOMAIN_SET_GRANT` | `*` | SUCCESS | |
+| 18:03:24 | `OPERATOR_DOMAIN_SET_REVOKE` | `*` | SUCCESS | |
+
+  네 건 모두 `'*'` 행 — 수정 전에는 콘솔이 늘 활성 테넌트(`demo-corp`)를 보내 이 행에 닿을 수 없었다. 끝 상태 = 시드 `legacy-compat` `MIGRATION@*` 하나(순증 0).
+- 🔵 곁에서: 로그아웃이 IdP `/connect/logout` 에서 401 — 이 티켓 밖, `TASK-BE-641`.
+
+### 4차원 (close chore)
+- (a) #4435 `MERGED` · (b) `30321a844` ⊂ `origin/main` · (c) 머지 시점 FAILURE 0 · SUCCESS 15(+ 브랜치 nightly 39456389803 success) · (d) AC-0~AC-4 닫힘.

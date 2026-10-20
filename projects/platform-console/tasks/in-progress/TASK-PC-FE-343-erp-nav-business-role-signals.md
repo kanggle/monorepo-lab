@@ -68,7 +68,7 @@ frontend
 - [x] **AC-1** — 계약 § 2.4.3.4 · § 2.4.8 개정이 코드보다 먼저. → red 커밋 `88d89e571`.
 - [ ] **AC-2** — 🔴 대조군: 조회 세트(`erp-read`) → ERP 메뉴 배지 없음 · 쓰기 버튼 없음 / 결재 세트만 → `/erp/masters` · `/erp/orgview` 배지, `/erp/approval` 버튼 보임 / 기준정보 세트만 → `/erp/approval` · `/erp/delegation` 배지 / ERP 세트 0 → ERP 메뉴 전부 배지 · 알림 종이 ERP 갈래를 부르지 않음(`degradedDomains` 에 erp 없음). → **메뉴 · 알림 종 몫 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-343 · `sidebar-business-permission.test.tsx` · `notification-routes.test.ts` § TASK-PC-FE-343). **버튼 몫(«쓰기 버튼 없음» · «`/erp/approval` 버튼 보임») 은 `TASK-PC-FE-347` 로** — § 범위 결정.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임 · 알림 종은 ERP 갈래를 부른다(지금 규칙 그대로). → row 12 `null`(실패 · 시간 초과 — `getMyDomainRolesOrNull` 이 모든 실패를 `null` 로) → 배지 없음 · 갈래 호출, 테넌트 없음 · `'*'` 도 호출.
-- [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다.
+- [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `82d857680` → `Production – kanggle-console` 배포 7129951620 state=success (2026-10-16T21:30:42Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
 
 # Related Specs
@@ -138,3 +138,11 @@ frontend
 
 - 🔵 가이드 문안이 지금 틀림(범위 밖 — 코디네이터가 끝에 후속 기안): `features/scm-guide/data.ts:363-369` · `features/iam-guide/data.ts:139,683`(도메인 역할 목록에 `ERP_OPERATOR` 등 진입 역할).
 - 🔵 알림 종 비용: 활성 테넌트가 있는 종 열기마다 row 12 호출 1 회가 늘었다(사이드바도 같은 호출을 레이아웃에서 한다 — 캐시 공유 없음). ERP 역할 0 운영자에게는 ERP 호출 1 회가 줄었다.
+
+## 32차 창 라이브 (2026-10-20 UTC · `console` + 콘솔 묶음 다섯 · 소유자 브라우저 + 에이전트 세트 전환)
+
+주체 `requester@demo.com`(`demo-corp`)의 세트를 한 조합씩 바꿨다(에이전트 `swap.sh` — 스냅샷 = `<domain>-full` 다섯 DIRECT, 끝에 복원 → assume 역할 42 개 스냅샷과 동일 · PASS 9 FAIL 0). 비교 기준 `demo@demo.com`(`legacy-compat`).
+- 배포: Vercel `7129951620`(`82d857680`) success(10-18 기록).
+- demo@: ERP 메뉴 배지 없음 ✅. ERP 세트 0(`scm-read` + `wms-full`): ERP 메뉴 배지 ✅ · **알림 종 «새 알림이 없습니다» — ERP 저하 보고 없음** ✅.
+- `ecommerce-order-operate` · `erp-approval-operate` · `finance-ledger-operate`: ERP «마스터 · 통합 조회» 배지 · «결재함 · 위임» 배지 없음 ✅.
+- 🔴 `in-progress` 유지 — AC-0 체크박스가 비어 있다.
