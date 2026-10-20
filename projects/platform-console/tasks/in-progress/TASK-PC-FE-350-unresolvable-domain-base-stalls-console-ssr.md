@@ -194,6 +194,8 @@ frontend
 3. `UV_THREADPOOL_SIZE` 가 설정돼 있는지.
 4. (가장 값이 큰 측정) **데모가 꺼진 시간대의 런타임 로그**에서 `console_composition_leg` 의 `reason` — `DOWNSTREAM_ERROR`(조회가 빨리 실패) 인지 `TIMEOUT` ~4000 ms(조회가 느림) 인지, 그리고 `operator_overview_bff_unavailable` / `domain_health_bff_unavailable` 의 `cause` 가 나오는지. 이것이 «Vercel 에서 `.local` 이 느리게 실패하는가» 를 재는 유일한 길이다.
 
+> 🔵 **소유자 답 (2026-10-20 UTC)** — ① 5 개 모두 Production and Preview ✅ · ② 14 개 전부 없음 ✅ · ③ `UV_THREADPOOL_SIZE` 없음(기본 4) · ④ 데모 off 비로그인 개요에 `console_composition_leg` 줄 **없음** — 샘플 게이트가 `fetch` 전에 답하므로 비로그인은 다리를 안 부르고, 데모 off 동안 새 로그인은 없다. 운영의 `*.local` 조회는 가장자리 둘(데모 끈 직후 살아 있는 세션 · `/status` 실패)뿐 — 판정 · 후속은 `TASK-PC-FE-352` § Vercel 확인 결과(닫음).
+
 ## ③ 왜 자기 자신을 HTTP 로 부르는가 — ✅ **판독했다**
 
 - 그 모양은 **설계 결정이 아니라 물려받은 것**이다. `TASK-PC-FE-011` 때 `/api/console/dashboards/operator-overview` 라우트는 console-bff 로 가는 **프록시**였고(AC-19, `CONSOLE_BFF_URL`), SSR 페이지와 브라우저 `<RetryButton>` 이 같은 라우트를 불렀다. `TASK-PC-FE-302`(ADR-MONO-081)가 라우트 안을 프록시 → **같은 프로세스 안의 합성**으로 바꿨지만, Scope 에 «화면 컴포넌트(선 모양이 같으므로 변경 0이어야 한다)» 라고 적어 페이지 쪽 호출은 손대지 않았다. ADR-MONO-081 · 302 · 303 · 계약 어디에도 «SSR 은 HTTP 를 거쳐야 한다» 는 요구는 없다(grep `self-fetch|in-process|selfOrigin|자기 자신` — specs 0건).

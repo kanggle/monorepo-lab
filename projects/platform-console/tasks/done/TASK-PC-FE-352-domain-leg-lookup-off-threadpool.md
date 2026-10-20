@@ -8,7 +8,7 @@ TASK-PC-FE-352
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -58,8 +58,26 @@ threadpool 을 쓰지 않는 조회로 바꾸면 이 공유 정체가 없어지�
 
 - [x] **AC-0** (2026-10-20 UTC — § AC-0: ① 쟀다 · ② Docker 꺼짐 · ③ 배포 필요 + 운영 노출 경로 = 소유자 확인 ④) — ①②③ 을 «쟀다 / 못 쟀다(이유)» 로 적는다. 대조군은 lookup 교체 없음 · `127.0.0.1` 리터럴 · pool 크기 상향.
 - [x] **AC-1** — 소유자 결정(선택지 · 추천). → **(가) Vercel 확인 ④ 를 보고 정한다** (소유자, 2026-10-20 UTC — 선택창, 추천안). 갈래: ④ 가 `TIMEOUT` ~4000 ms(느린 실패) → 혼성 전역 dispatcher(hosts 표 → `localhost` → c-ares, `src/instrumentation.ts` · `undici` 의존 추가) 구현 — 그 전에 ② alpine 측정(Docker); ④ 가 `DOWNSTREAM_ERROR`(빠른 실패) → 운영 노출 없음으로 적고 닫는다. 그 사이 티켓은 in-progress. 버린 선택지: (나) 지금 구현 착수 · (다) 하지 않음.
-- [ ] **AC-2** — 결정한 수선 + 빨강 먼저 시험(threadpool 을 채운 상태에서 다리 하나가 다른 다리를 막지 않는다) + 대조군.
-- [ ] **AC-3** — 배포 상태.
+  - 🔵 **AC-1 최종 (소유자, 2026-10-20 UTC — 선택창, 추천안): 기록하고 닫는다.** 근거 = 아래 § Vercel 확인 결과. 이 갈래는 위 두 갈래가 전제한 «④ 를 잴 수 있다» 가 성립하지 않아 생겼다 — 데모 off 동안에는 다리가 **돌지 않는다**.
+- [x] **AC-2** — 결정한 수선 + 빨강 먼저 시험 + 대조군. → **해당 없음 — 수선하지 않기로 결정**(AC-1 최종). AC-0 ① 의 재현 설계 · 혼성 dispatcher 설계는 이 티켓에 남는다(다시 열 때의 출발점).
+- [x] **AC-3** — 배포 상태. → **해당 없음**(코드 · 설정 변경 0). Vercel `kanggle-console` 은 이 티켓으로 바뀐 것이 없다.
+
+# Vercel 확인 결과 (소유자, 2026-10-20 UTC)
+
+| 항목 | 결과 |
+|---|---|
+| ① 있어야 할 5 개(`DEMO_API_BASE` · `CONSOLE_PUBLIC_ORIGIN` · `OIDC_ISSUER_URL` · `OIDC_REDIRECT_URI` · `OIDC_CLIENT_ID`) | ✅ 5 개 모두 Production and Preview (9 월 5 일 추가) |
+| ② 비어 있어야 할 14 개 | ✅ 목록에 없음 — 비어 있다 ⇒ 도메인 주소 = 코드 기본값 `*.local` → `resolveBackendUrl` 파생 |
+| ③ `UV_THREADPOOL_SIZE` | ✅ 설정 안 됨 ⇒ 기본 4 칸(AC-0 ① 과 같은 조건) |
+| ④ 데모 off 때 `console_composition_leg` | ⚪ **그 줄이 나오지 않는다** — 비로그인 `GET /dashboards/overview` 200 · `console_ssr_phase` `layout_total` 48 ms 만 |
+
+④ 판독 (코드):
+- 비로그인 방문자는 **다리를 부르지 않는다** — `shared/api/sample-gate.ts` `sampleGate()` 가 모든 백엔드 호출 지점(게이트웨이 코어 6 · 대시보드 합성 2 · 알림 · 테넌트 전환)에서 `fetch` 전에 샘플을 돌려준다(`tests/unit/sample-fetch-allowlist.test.ts` 가 고정).
+- 로그인 운영자는 IAM(데모) 로 로그인하므로 데모 off 동안 새로 생기지 않는다. 데모 on 동안에는 `resolveBackendUrl` 이 `*.local` 을 `.<데모 IP>.sslip.io` 로 바꾼다.
+- ⇒ **운영에서 풀리지 않는 `*.local` 을 조회하는 길은 가장자리 둘뿐**: (a) 데모를 끈 직후 아직 살아 있는 로그인 세션, (b) 데모 on 인데 `/status` 가 실패해 설정값을 그대로 쓰는 경우. 둘 다 일시적이고, 그때의 영향은 AC-0 대로 카드 저하(개요 전체는 350 (나) 로 이미 막힘).
+- 🔵 남는 같은 축(이 티켓 밖): 데모 on 동안 조회 대상은 공용 와일드카드 DNS(sslip.io) — 그 DNS 가 느리면 같은 threadpool 대기열이 생긴다. 일반 DNS 장애라 `*.local` 고유 문제가 아니다.
+
+**다시 열 조건**: 운영 로그에 **멀쩡한 호스트**로의 `UND_ERR_CONNECT_TIMEOUT` ~10 s(`cause.code`)가 다른 다리의 `TIMEOUT` 과 같은 시간대에 나온다 — 그때는 AC-0 의 혼성 dispatcher(hosts 표 → `localhost` → c-ares, `src/instrumentation.ts`)부터, ② alpine 측정을 먼저.
 
 # Related Specs
 
