@@ -1,6 +1,6 @@
 # TASK-MONO-800 — a request the servlet firewall rejects is answered 500 `INTERNAL_ERROR` instead of 400
 
-- **Status**: in-progress (AC-0 measured + owner decisions 2026-10-20 UTC)
+- **Status**: review (AC-0–3 closed 2026-10-20 UTC · AC-4 waits for the next AMI bake + demo window)
 - **Type**: fix (shared library — `libs/java-web-servlet`)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (`libs/java-web-servlet` is used by every servlet service)
@@ -32,9 +32,9 @@ A request the firewall rejects is a client error: answer **400** with a stable c
 # Acceptance Criteria
 
 - [x] **AC-0** — the reach (services × handler), the landing point of the exception, and the shapes, recorded with file:line. → § AC-0 result.
-- [ ] **AC-1** — a firewall-rejected request → 400 with a stable code; the body does not echo the rejected value; one `WARN` line, no `ERROR`.
-- [ ] **AC-2** — red → green tests in `libs/java-web-servlet` (+ one service-level slice if AC-0 shows the handler is not the landing point); controls: normal request unchanged, real unexpected exception still 500.
-- [ ] **AC-3** — the error-code catalog / contract that lists common error codes is updated (find it in AC-0; if none lists them, say so).
+- [x] **AC-1** — a firewall-rejected request → 400 with a stable code; the body does not echo the rejected value; one `WARN` line, no `ERROR`.
+- [x] **AC-2** — red → green tests in `libs/java-web-servlet` (+ one service-level slice if AC-0 shows the handler is not the landing point); controls: normal request unchanged, real unexpected exception still 500.
+- [x] **AC-3** — the error-code catalog / contract that lists common error codes is updated (find it in AC-0; if none lists them, say so).
 - [ ] **AC-4** — deploy state recorded (AMI bake needed for the demo; no live AC beyond «same request → 400» in the next window).
 
 # Related Specs
@@ -113,3 +113,23 @@ A request the firewall rejects is a client error: answer **400** with a stable c
 - Code = **`BAD_REQUEST`** (existing). AC-3 adds one line under it in `platform/error-handling.md` (no new code).
 - Path-shaped 401 = **separate ticket** `TASK-MONO-801`; this ticket fixes the header case only.
 - Fix location (from AC-0): `CommonGlobalExceptionHandler.handleGeneral` recognises `org.springframework.security.web.firewall.RequestRejectedException` by class name → 400 `BAD_REQUEST`, fixed message, one `WARN` line without the value; wms master-service · admin-service forward it (they don't inherit). Not rethrown.
+
+# Implementation (2026-10-20 UTC)
+
+**Changed files**
+- `libs/java-web-servlet/src/main/java/com/example/web/exception/CommonGlobalExceptionHandler.java` — `handleGeneral` recognises `org.springframework.security.web.firewall.RequestRejectedException` by class name (walks superclasses, no import) before the ERROR log: 400 `BAD_REQUEST`, fixed message, one `WARN` without message/stack.
+- `libs/java-web-servlet/build.gradle` — test-scope `spring-security-web` + `logback-classic` only.
+- `libs/java-web-servlet/src/test/.../CommonGlobalExceptionHandlerTest.java` — 3 tests: real `StrictHttpFirewall` rejection -> 400, no echo; WARN-only log; control RuntimeException -> 500 + ERROR.
+- `projects/iam-platform/apps/admin-service/src/test/.../OperatorAdminControllerSliceTest.java` — 2 tests through the real `FilterChainProxy` (WebMvcTest + spring-security-test): ISO-8859-1-decoded `④` in `X-Operator-Reason` -> 400 `BAD_REQUEST`; control `%E2%91%A3` -> 201.
+- `platform/error-handling.md` — `BAD_REQUEST` row notes the firewall case (AC-3; no new code).
+- wms master-service / admin-service: no change needed — their catch-all already forwards to `SHARED.handleGeneral`, and `rewrap` carries the status verbatim.
+
+**Red -> green**
+- lib: `:libs:java-web-servlet:test --tests *CommonGlobalExceptionHandlerTest` before fix rc=1 (2 new tests failed, control passed); after fix full `:libs:java-web-servlet:test` rc=0.
+- iam: `:projects:iam-platform:apps:admin-service:test --tests *OperatorAdminControllerSliceTest` with the handler change stashed rc=1 (only the new 400 test failed); with fix rc=0.
+- compile: wms master-service + admin-service + ecommerce user-service `compileJava compileTestJava` rc=0.
+
+**Not done / notes**
+- AC-4 (deploy state) stays open.
+- ecommerce user/notification/payment override the catch-all but declare no spring-security-web, so no firewall there; left untouched. ecommerce auth-service has an independent handler (still 500) and reactive gateways: out of scope.
+- Path-shaped rejections (401 via /error dispatch): TASK-MONO-801.

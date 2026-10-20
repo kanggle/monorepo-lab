@@ -351,6 +351,58 @@ class OperatorAdminControllerSliceTest {
                 .andExpect(jsonPath("$.tenantId").value("*"));
     }
 
+    // TASK-MONO-800 — goes through the REAL FilterChainProxy (MockMvc + spring-security-test
+    // applies springSecurityFilterChain), so StrictHttpFirewall wraps the request exactly as in
+    // production. Tomcat hands UTF-8 bytes of "④" to the app ISO-8859-1-decoded (a C1 control
+    // char); a plain "④" string would NOT be rejected, so the decoded form is used.
+    private static final String FIREWALL_REJECTED_REASON =
+            new String("④".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    java.nio.charset.StandardCharsets.ISO_8859_1);
+
+    private static final String CREATE_OPERATOR_BODY = """
+            {
+              "email": "new@example.com",
+              "displayName": "New",
+              "password": "StrongPass1!",
+              "roles": ["SUPPORT_LOCK"],
+              "tenantId": "*"
+            }
+            """;
+
+    @Test
+    void create_operator_firewall_rejected_reason_header_returns_400_bad_request() throws Exception {
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", FIREWALL_REJECTED_REASON)
+                        .header("Idempotency-Key", "idemp-fw")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_OPERATOR_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("X-Operator-Reason"))));
+    }
+
+    @Test
+    void create_operator_percent_encoded_reason_header_is_unaffected() throws Exception {
+        // control: what the console sends (TASK-PC-FE-308) still reaches the controller
+        when(createOperatorUseCase.createOperator(
+                anyString(), anyString(), anyString(), any(), any(), anyString(), anyString()))
+                .thenReturn(new CreateOperatorUseCase.CreateOperatorResult(
+                        "op-new", "new@example.com", "New", "ACTIVE",
+                        List.of("SUPPORT_LOCK"), false,
+                        Instant.parse("2026-04-24T10:00:00Z"),
+                        "audit-new", "*"));
+
+        mockMvc.perform(post("/api/admin/operators")
+                        .header("Authorization", bearer())
+                        .header("X-Operator-Reason", "%E2%91%A3")
+                        .header("Idempotency-Key", "idemp-fw-ok")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_OPERATOR_BODY))
+                .andExpect(status().isCreated());
+    }
+
     @Test
     void create_operator_duplicate_email_returns_409() throws Exception {
         doThrow(new OperatorEmailConflictException("dup"))

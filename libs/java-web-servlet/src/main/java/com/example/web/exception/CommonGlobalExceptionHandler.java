@@ -150,8 +150,40 @@ public abstract class CommonGlobalExceptionHandler {
                         "Request Content-Type is not supported by this endpoint"));
     }
 
+    /**
+     * Class name of Spring Security's firewall rejection. Matched by NAME, not by type: this
+     * module (and several services that subclass it) have no spring-security-web on the
+     * classpath, so a typed {@code @ExceptionHandler} or an import would fail to load there.
+     */
+    private static final String REQUEST_REJECTED_EXCEPTION =
+            "org.springframework.security.web.firewall.RequestRejectedException";
+
+    private static boolean isFirewallRejection(Throwable e) {
+        for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) {
+            if (REQUEST_REJECTED_EXCEPTION.equals(c.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Catch-all. TASK-MONO-800: a header or parameter the servlet firewall rejects is thrown
+     * lazily, when the controller or body reader first reads it — inside the dispatcher, so it
+     * lands HERE rather than in the filter chain's own 400 handler. It is a client error, not an
+     * unexpected one: answer 400 {@code BAD_REQUEST} and log one WARN. Neither the body nor the
+     * log carries the exception message, because that message echoes the rejected value (which
+     * may be a token). Not rethrown: rethrowing would send up-front path rejections through the
+     * container's error dispatch, which a deny-all security chain answers 401.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception e) {
+        if (isFirewallRejection(e)) {
+            log.warn("Request rejected by the servlet firewall ({})", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ErrorResponse.of("BAD_REQUEST",
+                            "The request was rejected because it contains a disallowed header or value"));
+        }
         log.error("Unexpected error", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));

@@ -1,7 +1,17 @@
 package com.example.web.exception;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.example.web.dto.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.DisplayName;
+import org.slf4j.LoggerFactory;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.web.firewall.RequestRejectedException;
+import org.springframework.security.web.firewall.StrictHttpFirewall;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -194,6 +204,93 @@ class CommonGlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
         assertThat(response.getBody().message()).isEqualTo("An unexpected error occurred");
+    }
+
+    // ---------------------------------------------------------------------
+    // TASK-MONO-800 — a request the servlet firewall rejects is a client error.
+    // The exception is produced by the REAL StrictHttpFirewall (not constructed by hand):
+    // a header value is validated only when somebody reads it from the wrapped request.
+    // A header whose UTF-8 bytes contain 0x80-0x9F reaches the app ISO-8859-1-decoded as a
+    // C1 control character; a plain "④" string would NOT be rejected (real Unicode passes).
+    // ---------------------------------------------------------------------
+
+    private static final String REJECTED_HEADER_VALUE =
+            new String("④ secret-reason".getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
+
+    private static Exception realFirewallRejection() {
+        MockHttpServletRequest raw = new MockHttpServletRequest("POST", "/api/anything");
+        raw.addHeader("X-Operator-Reason", REJECTED_HEADER_VALUE);
+        HttpServletRequest firewalled;
+        try {
+            firewalled = new StrictHttpFirewall().getFirewalledRequest(raw);
+        } catch (RequestRejectedException e) {
+            throw new AssertionError("expected the rejection to be deferred until the header is read", e);
+        }
+        try {
+            firewalled.getHeader("X-Operator-Reason");
+        } catch (RequestRejectedException e) {
+            return e;
+        }
+        throw new AssertionError("StrictHttpFirewall did not reject the header value");
+    }
+
+    @Test
+    @DisplayName("방화벽 RequestRejectedException — 400 BAD_REQUEST, 고정 메시지, 거부된 값을 되풀이하지 않음")
+    void handleGeneral_firewallRejection_returns400WithoutEchoingValue() {
+        Exception rejected = realFirewallRejection();
+        // sanity: the library really does echo the value in its own message
+        assertThat(rejected.getMessage()).contains("X-Operator-Reason");
+
+        ResponseEntity<ErrorResponse> response = handler.handleGeneral(rejected);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().code()).isEqualTo("BAD_REQUEST");
+        assertThat(response.getBody().message())
+                .isEqualTo("The request was rejected because it contains a disallowed header or value")
+                .doesNotContain("secret-reason")
+                .doesNotContain("X-Operator-Reason")
+                .doesNotContain(REJECTED_HEADER_VALUE);
+    }
+
+    @Test
+    @DisplayName("방화벽 거부 — WARN 한 줄(예외 메시지·스택 없음), ERROR 없음")
+    void handleGeneral_firewallRejection_logsOneWarnNoError() {
+        Logger logger = (Logger) LoggerFactory.getLogger(CommonGlobalExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            handler.handleGeneral(realFirewallRejection());
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).hasSize(1);
+        ILoggingEvent event = appender.list.get(0);
+        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+        assertThat(event.getThrowableProxy()).isNull();
+        assertThat(event.getFormattedMessage())
+                .doesNotContain("secret-reason")
+                .doesNotContain("X-Operator-Reason");
+    }
+
+    @Test
+    @DisplayName("통제 — 일반 RuntimeException 은 여전히 500 INTERNAL_ERROR + ERROR 로그")
+    void handleGeneral_ordinaryException_stillReturns500AndLogsError() {
+        Logger logger = (Logger) LoggerFactory.getLogger(CommonGlobalExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        ResponseEntity<ErrorResponse> response;
+        try {
+            response = handler.handleGeneral(new RuntimeException("boom"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
+        assertThat(appender.list).extracting(ILoggingEvent::getLevel).containsExactly(Level.ERROR);
     }
 
     // ---------------------------------------------------------------------

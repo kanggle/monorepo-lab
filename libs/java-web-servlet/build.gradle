@@ -42,6 +42,12 @@ dependencies {
     // Spring mock servlet objects (MockHttpServletRequest/Response, MockFilterChain)
     // for IdempotencyKeyFilter unit tests.
     testImplementation 'org.springframework:spring-test'
+    // TASK-MONO-800: test scope ONLY — the handler recognises the firewall's
+    // RequestRejectedException by class name (this module and several consumers have no
+    // spring-security-web), but the test needs a REAL one produced by StrictHttpFirewall.
+    testImplementation 'org.springframework.security:spring-security-web'
+    // Captures the handler's log level (WARN for a firewall rejection, ERROR otherwise).
+    testImplementation 'ch.qos.logback:logback-classic'
 }
 
 dependencyManagement {
