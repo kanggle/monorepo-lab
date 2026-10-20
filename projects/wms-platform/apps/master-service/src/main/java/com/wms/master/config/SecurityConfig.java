@@ -3,6 +3,7 @@ package com.wms.master.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wms.master.adapter.in.web.dto.response.ApiErrorEnvelope;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.FirewallRejections;
 import com.example.security.servlet.ResourceServerChainAssembler;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 @Configuration
 @EnableMethodSecurity
@@ -59,6 +61,14 @@ public class SecurityConfig {
                 .authenticationEntryPoint(authenticationEntryPoint(objectMapper))
                 .accessDeniedHandler(forbiddenHandler(objectMapper))
                 .build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST in this service's nested envelope,
+    // written here instead of the /error dispatch that anyRequest().authenticated() answers 401.
+    @Bean
+    RequestRejectedHandler requestRejectedHandler(ObjectMapper objectMapper) {
+        return FirewallRejections.handler((code, message) ->
+                objectMapper.writeValueAsString(ApiErrorEnvelope.of(code, message)));
     }
 
     /**

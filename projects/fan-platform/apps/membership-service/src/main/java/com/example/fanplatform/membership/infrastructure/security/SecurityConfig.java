@@ -1,6 +1,7 @@
 package com.example.fanplatform.membership.infrastructure.security;
 
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.FirewallRejections;
 import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
@@ -31,6 +32,7 @@ import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -176,6 +178,13 @@ public class SecurityConfig {
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    // One bean covers both chains (one FilterChainProxy).
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     // ----- internal chain handlers -----------------------------------------

@@ -1,6 +1,7 @@
 package com.example.scmplatform.inventoryvisibility.config;
 
 import com.example.scmplatform.inventoryvisibility.adapter.inbound.web.security.PublicPaths;
+import com.example.security.servlet.FirewallRejections;
 import com.example.security.servlet.ResourceServerChainAssembler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -80,6 +82,12 @@ public class SecurityConfig {
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     static void onAuthenticationFailure(HttpServletRequest request,

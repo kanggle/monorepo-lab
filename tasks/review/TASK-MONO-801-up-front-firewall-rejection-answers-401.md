@@ -1,6 +1,6 @@
 # TASK-MONO-801 — a request whose path the servlet firewall rejects up front is answered 401 «Authentication required» instead of 400
 
-- **Status**: in-progress (AC-0 measured + owner decisions 2026-10-20 UTC)
+- **Status**: review (AC-0–3 closed 2026-10-20 UTC · 24 services, ecommerce auth-service is excluded from the build · AC-4 waits for the next AMI bake + demo window)
 - **Type**: fix (servlet security configuration — shared shape across services)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (the same security-chain shape repeats in every servlet service; the fix may land in a shared library or in each service — AC-0 decides)
@@ -34,9 +34,9 @@ A request the firewall rejects for its path is a client error and is answered **
 # Acceptance Criteria
 
 - [x] **AC-0** (→ § AC-0 result) — the per-service table (security chain · `/error` treatment · today's status for `;` · `//` · `%25`), the gateway behaviour, and the chosen fix with its reason, recorded with file:line.
-- [ ] **AC-1** — an up-front firewall rejection → 400 `BAD_REQUEST` in the common envelope, no echo of the path, one `WARN` line, no `ERROR`; through the real filter chain.
-- [ ] **AC-2** — red → green tests for at least two shapes; controls: an unauthenticated normal request still 401, an authorised normal request unchanged, a real unexpected exception still 500.
-- [ ] **AC-3** — `platform/error-handling.md` note under `BAD_REQUEST` covers the path case too (one line with `TASK-MONO-800`'s).
+- [x] **AC-1** — an up-front firewall rejection → 400 `BAD_REQUEST` in the common envelope, no echo of the path, one `WARN` line, no `ERROR`; through the real filter chain. (→ § Implementation — MockMvc through the real `FilterChainProxy`, shapes A · B · C)
+- [x] **AC-2** — red → green tests for at least two shapes; controls: an unauthenticated normal request still 401, an authorised normal request unchanged, a real unexpected exception still 500. (→ § Implementation — three shapes)
+- [x] **AC-3** — `platform/error-handling.md` note under `BAD_REQUEST` covers the path case too (one line with `TASK-MONO-800`'s).
 - [ ] **AC-4** — deploy state (AMI bake for the demo); live «same request → 400» in the next window.
 
 # Related Specs
@@ -100,3 +100,50 @@ Side finding (out of scope, synthetic filter only): on shape B a servlet-filter 
 - **(a)** — factory in `libs/java-security-servlet` + a `RequestRejectedHandler` bean in **all 25 services**, one atomic PR.
 - **wms keeps its envelope** — the factory takes a body writer; wms writes its nested `{"error":{…}}`, everyone else the common `ErrorResponse` (`BAD_REQUEST`, fixed message, no path echo, one `WARN`).
 - Gateways' empty-body 400 and the shape-B filter-exception 500 stay out (separate decisions).
+
+# Implementation (2026-10-20 UTC)
+
+Worktree branch `task/mono-801-firewall-path-400` off `5b579488c`. Not committed.
+
+## What landed
+
+- **Factory** `libs/java-security-servlet/.../FirewallRejections.java` — `handler()` (flat `{code,message,timestamp}`, the shape the module's own 403 body already uses) and `handler(BodyWriter)` (`(code, message) -> String`, `throws IOException`). Sets 400 · `application/json` · UTF-8, writes `CODE = "BAD_REQUEST"` and the fixed `MESSAGE = "The request was rejected because its URL, method or headers are not allowed"`, logs exactly one `WARN` `Request rejected by the servlet firewall (RequestRejectedException)` (class name only — no path, no exception message, no stack), leaves an already-committed response alone. No auto-configuration.
+  - Message says «URL, method or headers», not only «URL or method»: `FilterChainProxy` also routes here a *lazy* rejection thrown inside a security filter (a header read during authentication).
+  - 🔴 **Exactly one bean per context.** Measured in `spring-security-config-6.4.2` `WebSecurity.setApplicationContext` (bytecode): `getBean(RequestRejectedHandler.class)` inside `catch (NoSuchBeanDefinitionException)` — two beans throw `NoUniqueBeanDefinitionException` (a subclass) and are **silently ignored** (default handler back). Recorded in the class javadoc. 25 declarations, one per service (grep `RequestRejectedHandler requestRejectedHandler` under `projects/` = 25 files). Also: a declared bean replaces the default `CompositeRequestRejectedHandler(ObservationMarking…, HttpStatus…)`, so the observation marking of a rejection is no longer emitted.
+- **Beans** — one `@Bean RequestRejectedHandler` next to the chain in each service's security configuration, one-line why-comment citing TASK-MONO-801:
+  - default `FirewallRejections.handler()`: erp approval · masterdata · notification · read-model; finance account · ledger; scm procurement · logistics · demand-planning · inventory-visibility; fan artist · community · membership · notification; iam admin · auth · account; ecommerce product · order.
+  - body-writer overload with the service's own envelope type: wms master (`ApiErrorEnvelope` nested) · admin (`ApiErrorEnvelope` nested) · inbound · outbound · inventory (`com.example.web.dto.ErrorResponse` — 🔵 these three emit the **flat** envelope, not the nested one; their contracts say so since TASK-BE-567 — so «wms writes its nested envelope» holds for master · admin only and the other three keep their own flat type).
+- **Dependency added** `implementation project(':libs:java-security-servlet')` to iam admin · auth · account, ecommerce product · order. Each already had `spring-boot-starter-security` + resource server (iam auth via the authorization-server starter), so the module adds no new framework surface; no documented rule against it found (ecommerce's TASK-BE-571 deferral concerns `TenantClaimEnforcer` only).
+- **`platform/error-handling.md`** `BAD_REQUEST` row extended in the same cell as TASK-MONO-800's sentence.
+
+## Deviation — 24 services, not 25
+
+🔴 **ecommerce auth-service is not built**: `settings.gradle:61` — «apps:auth-service excluded from build by TASK-BE-132 (decommissioned)». AC-0's list counted it from source. A bean was written, the Gradle task did not exist (`Cannot locate tasks … project 'auth-service' not found`), and the edit was reverted — adding code to a module nothing compiles would be unverifiable dead code. Live reach is therefore **24**.
+
+## Tests (red → green, MockMvc through the real `FilterChainProxy`)
+
+Raw paths passed as `java.net.URI` so MockMvc keeps them (a template string is re-encoded, `//x` parses as an authority). 🔵 **What red looks like in MockMvc**: 400 with an **empty body** — MockMvc does no error dispatch, so the 401 (A · B) / Boot-body (C) that AC-0 measured on Tomcat cannot appear here; the envelope assertions are what fail. The handler writes the response itself, so the container's error path is no longer on the route.
+
+| Test | Shape | Cases | Red (bean's `@Bean` commented out) | Green |
+|---|---|---|---|---|
+| `libs/java-security-servlet` `FirewallRejectionsTest` | unit, real `StrictHttpFirewall` rejections | 9 | compile failure (class absent) rc=1 | 9/9 rc=0 |
+| scm logistics `config/FirewallRejectionSliceTest` | A (`denyAll`) | 9 — `/x;y` · `…;jsessionid=` · `//` · `%25` · `%2E%2E`, with-token, controls 401 · 404 · 500 | 6 fail «No value at JSON path `$.code`», 3 controls pass, rc=1 | 9/9 |
+| wms master `controller/FirewallRejectionSliceTest` | B (`authenticated()`, nested) | 8 | 5 fail «No value at JSON path `$.error.code`», 3 controls pass, rc=1 | 8/8 |
+| ecommerce product `controller/FirewallRejectionSliceTest` | C (permit-all + `/internal/**`) | 8 (incl. `/internal/sellers/s-1;x`, `$.path` absent) | 5 fail «No value at JSON path `$.code`», 3 controls pass, rc=1 | 8/8 |
+
+Each rejection case asserts: 400 · `application/json` · `BAD_REQUEST` · the fixed message · timestamp · body does not contain the raw path · exactly one `WARN` from `FirewallRejections` · no `ERROR` on the root logger.
+
+## Commands (all rc read explicitly, logs in the session scratchpad)
+
+- `./gradlew :libs:java-security-servlet:test --tests '*FirewallRejectionsTest'` → rc=1 (red, compile) ; `./gradlew :libs:java-security-servlet:check` → rc=0
+- `./gradlew <24 × :projects:…:compileTestJava> --continue` → rc=0 (first attempt rc=1 only because the ecommerce auth-service task does not exist)
+- logistics slice: green rc=0 → red rc=1 → bean restored
+- master + product slices: green rc=0 → red rc=1 → beans restored (grep `RED-PROBE` under `projects/**/src` = 0)
+- `./gradlew :libs:java-security-servlet:check :projects:scm-platform:apps:logistics-service:test :projects:wms-platform:apps:master-service:test :projects:ecommerce-microservices-platform:apps:product-service:test --rerun --continue` → rc=0; logistics 89 tests / 0 skipped / 0 failed · wms master 759 / **43 skipped** / 0 failed · product 457 / 0 / 0
+
+## Not done / open
+
+- **Docker is not running on this host** (`docker info` → pipe not found). wms master's 43 skipped are its Docker-gated tests; no Testcontainers IT ran. Not affected by this change as far as read, but not measured.
+- Full `test` ran for the three services above only; the other 21 were compiled (`compileTestJava`), not tested.
+- No real-container (Tomcat, raw socket) run after the fix — AC-0's probe measured (a) on Tomcat for A · B · C; this run proves it through MockMvc's `FilterChainProxy`.
+- AC-4 (deploy + live) open.

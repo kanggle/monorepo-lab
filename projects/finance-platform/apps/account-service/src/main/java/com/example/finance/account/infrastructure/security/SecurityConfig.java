@@ -1,6 +1,7 @@
 package com.example.finance.account.infrastructure.security;
 
 import com.example.finance.account.presentation.security.PublicPaths;
+import com.example.security.servlet.FirewallRejections;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +11,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 /**
  * account-service Spring Security configuration.
@@ -96,5 +98,11 @@ public class SecurityConfig {
                         .accessDeniedHandler(securityErrorHandler::onAccessDenied)
                 );
         return http.build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 }

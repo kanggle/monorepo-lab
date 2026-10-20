@@ -10,6 +10,8 @@ dependencies {
     implementation project(':libs:java-web-servlet')
     implementation project(':libs:java-messaging')
     implementation project(':libs:java-security')
+    // TASK-MONO-801: FirewallRejections — the shared RequestRejectedHandler factory.
+    implementation project(':libs:java-security-servlet')
     implementation project(':libs:java-observability')
 
     // Spring Boot starters

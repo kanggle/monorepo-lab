@@ -17,6 +17,9 @@ dependencies {
     // for AccountServiceSellerProvisioner (ADR-MONO-058 § D6, TASK-BE-568).
     implementation project(':libs:java-security')
 
+    // TASK-MONO-801: FirewallRejections — the shared RequestRejectedHandler factory.
+    implementation project(':libs:java-security-servlet')
+
     // Observability
     implementation project(':libs:java-observability')
 

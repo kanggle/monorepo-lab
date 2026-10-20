@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.config;
 import com.example.fanplatform.artist.adapter.in.web.security.PublicPaths;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.security.oauth2.TenantClaimValidator;
+import com.example.security.servlet.FirewallRejections;
 import com.example.security.servlet.ResourceServerChainAssembler;
 import com.example.security.servlet.WorkloadIdentityAuthoritiesConverter;
 import com.example.security.servlet.actor.ActorContextJwtAuthenticationConverter;
@@ -27,6 +28,7 @@ import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -266,6 +268,13 @@ public class SecurityConfig {
                 .authenticationEntryPoint(SecurityConfig::onAuthenticationFailure)
                 .accessDeniedHandler(SecurityConfig::onAccessDenied)
                 .build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST here, not denyAll's 401 on /error.
+    // One bean covers both chains (one FilterChainProxy).
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     // ----- internal (workload-identity) chain handlers ---------------------

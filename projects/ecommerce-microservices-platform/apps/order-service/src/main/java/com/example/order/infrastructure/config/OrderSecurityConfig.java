@@ -21,6 +21,8 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.firewall.RequestRejectedHandler;
+import com.example.security.servlet.FirewallRejections;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -154,6 +156,13 @@ public class OrderSecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
+    }
+
+    // TASK-MONO-801: a path the firewall rejects up front → 400 BAD_REQUEST in the common envelope here,
+    // not Boot's /error body (which echoes the path). One bean covers both chains.
+    @Bean
+    public RequestRejectedHandler requestRejectedHandler() {
+        return FirewallRejections.handler();
     }
 
     /**
