@@ -109,3 +109,9 @@ All three ⚪ above are now measured, on `ami-01681ef55def7d15c` (`RepoCommit` `
 - ⚪ `deactivate` was **not** run live (the reboot forced SUSPENDED before it was needed) — covered by self-test (6) only.
 
 What it was for: 672 «Still open» 1 and 3 closed in the same window; 2 and 4 stay with 672 (the owner's second `activate` did not come). That is 672's list, not an AC of this ticket.
+
+---
+
+## CORRECTION (2026-10-20 UTC, 30th window)
+
+The line above «⚪ `deactivate` was **not** run live» is no longer true. In the 30th window (same instance, stop/start) `activate` → ACTIVE at 11:04:29Z, then `deactivate` at 11:16:18Z → `SUSPENDED — window closed. New exchanges are refused now; an operator access token already minted lives until its exp (ADMIN_JWT_ACCESS_TTL=3600s); refresh tokens revoked.` · status SUSPENDED · unrevoked admin refresh tokens 0. 672 «Still open» 2 and 4 were closed in that window too (`TASK-MONO-672` § 30th window — harvest).

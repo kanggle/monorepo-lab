@@ -62,7 +62,9 @@ backend
 - [ ] **AC-3** — 콘솔: «결재 운영» 운영자가 4 곳에서 목록으로 고른다(폴백 문구가 안 뜬다). 기준정보 운영자 · 데모 운영자 비회귀.
 - 🔵 **AC-2 진행 (2026-10-20 UTC)** — 빨강: 시험만 먼저 → 컴파일 실패, 순진한 스텁 → 253 중 28 실패(전부 새 picker 칸, 기존 225 통과). 초록: `:masterdata-service:test` 253/0 · rc=0. 대조군 4 칸 = `EmployeePickerControllerSliceTest`(실제 서비스 + 어댑터, 저장소만 mock) · 응답 키 집합 = 정확히 7(부서 미해소 시 6) · 범위 `'*'`/서브트리/없음. ⚪ `EmployeePickerIntegrationTest`(MySQL Testcontainers) 는 로컬 Docker 꺼짐 → CI `integrationTest` 결과로 닫는다.
 - 🔵 **AC-3 진행** — 콘솔 4 곳이 `GET /api/erp/masterdata/employees/picker` 로 읽고 «ID 직접 입력» 토글(범위 ≠ TENANT 또는 잘림). 빨강 37 실패 → 초록 300(9 파일) · 전체 4922/0 · tsc 0 · lint 0. 문구 = `employee-list-fallback.ts` 한 곳. ⚪ 브라우저 · 라이브(«결재 운영» 운영자) 미확인 → 굽기 뒤. 사용자 문구 3 종 = 소유자 승인(2026-10-20 UTC, 머지 전 선택창).
+- 🔵 **AC-3 라이브 비회귀 (30차 창, 2026-10-20 UTC)** — 데모 운영자 `demo@demo.com`(`demo-corp`, legacy-compat): `GET /employees/picker` 200 · `meta.scope="TENANT"` · 원소 키 정확히 7 · `?active=true` 200 · 기존 `GET /employees` 200 · `meta.scope` 없음 · 키 그대로. ⚪ 남은 것: «결재 운영» 세트**만** 가진 운영자가 4 곳에서 목록으로 고르는 화면(권한 세트를 바꾼 버리는 대상이 필요 — `TASK-MONO-672` «Still open» 11 의 ④ 와 같은 창) · 기준정보 운영자 비회귀.
 - [ ] **AC-4** — 배포 상태(AMI 굽기 · Vercel · 라이브 «Still open» 11 ④)를 따로 적는다.
+  - 🔵 2026-10-20 UTC: **AMI** = `ami-01681ef55def7d15c`(`RepoCommit` `e44142d34` ⊇ #4421 `6bbd0dba4`) 굽기 · apply · 위 라이브 비회귀까지. **Vercel** = #4421 의 콘솔 변경이 Production 에 나갔는지 배포 기록 확인은 아직(⚪). 라이브 «Still open» 11 ④ = ⚪.
 
 # Related Specs
 
