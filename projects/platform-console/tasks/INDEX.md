@@ -92,7 +92,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-354-operators-platform-scope-rows-unreachable.md` — **`/operators` 의 `'*'` 두 공백 — `*` 운영자의 «모든 테넌트» 업무 권한 행을 콘솔에서 주거나 회수할 수 없다(회수 = 404) · «플랫폼 운영자 등록» 양식이 한 번도 안 그려졌다** (READY, 2026-10-20 UTC 기안 · 출처 `TASK-PC-FE-353` AC-0 ②). 콘솔이 늘 활성 테넌트를 `X-Tenant-Id` 로 보내 `'*'` 행에 못 닿고, `operators/page.tsx:133` `selectableTenants(...).includes('*')` 는 늘 false. 스위처에 `*` 를 넣지 않는 좁은 수선(대상이 `*` 운영자 + 호출자 `'*'` 범위일 때만 `*` 전송 · 양식 표시 출처 교체). AC-0 = `*` 범위 출처 · 실제 테넌트 활성에서 `*` 대상이 목록에 나오나 · 계약 `:267`. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
+
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
 
@@ -117,6 +118,8 @@ _(직전 완료)_ **Finance 콘솔 메뉴 정석 정렬 완료** (PC-FE-229 DONE
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
 
 ## in-progress
+
+- `TASK-PC-FE-354-operators-platform-scope-rows-unreachable.md` — **`/operators` 의 `'*'` 두 공백 — `*` 운영자의 «모든 테넌트» 업무 권한 행을 콘솔에서 주거나 회수할 수 없다 · «플랫폼 운영자 등록» 양식이 한 번도 안 그려졌다** (IN-PROGRESS, 2026-10-20 UTC · AC-0 측정 + 소유자 결정). 🔴 실제 테넌트 활성에서 `*` 운영자는 목록에 **안 나온다**(목록 = 소속 행 기준, `'*'` 운영자는 소속 0). 결정: `'*'` 호출자에게 **«모든 테넌트» 보기**(기존 `?tenantId=*`, 서버 무변경) · 부여는 «모든 테넌트(기본 제공 세트만)» / «현재 테넌트» 를 고르고 회수는 출처 행마다 그 행의 테넌트로 · 양식은 `/me` `homeTenantId==='*'` + `operator.manage`. 계약 `:261` · `:267` 먼저. 🔴 새 문안 머지 전 승인. 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-PC-FE-350-unresolvable-domain-base-stalls-console-ssr.md` — **풀리지 않는 도메인 주소 하나가 콘솔 SSR 의 자기 자신 호출까지 막는가 — `getaddrinfo` threadpool 점유 가설 측정 · production 영향 확인** (IN-PROGRESS · 2026-10-19 UTC **AC-0 측정 완료 · 소유자 결정 대기**). ① 기전 로컬 재현(Windows · Node 20.19.5/24.14.0): 취소 안 되는 조회로 pool(4)을 채우면 `localhost` fetch 가 ~10.2–10.7 s `UND_ERR_CONNECT_TIMEOUT`, 4 s 에 abort 한 다리 뒤에도 같음 · IP 리터럴/pool 여유 대조군은 빠름 · pool 16 도 16 개로 채우면 재현. musl 컨테이너 · Vercel 은 미측정. ② 데모 호스트엔 콘솔이 안 돎 · Vercel 은 도메인 13개를 설계상 비우고 `.local` 을 런타임 파생(데모 off 면 `*.local` 그대로) → 소유자 확인 목록. ③ 자기 자신 HTTP 는 FE-011 프록시 시절의 물려받은 모양 — 함수 호출 가능. 추천 (나) → (가) 조사. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-PC-FE-346-ecommerce-write-buttons-area-roles.md` — **`ADR-MONO-083` P8 콘솔 후속 (2) — E-commerce 7 화면의 쓰기 버튼을 영역 `*_WRITE` 로 숨김** (IN-PROGRESS, 2026-10-16 UTC 기안 · 2026-10-18 UTC 착수 · `TASK-PC-FE-345` 에서 분리). 서버 라이브(795) — 머지 게이트 없음. `writeRequires` 7 행 + 7 화면 · 하위 라우트 배선(`canWrite` 필수 prop · «조회 전용» · `new`/`edit` 는 폼 대신 안내) — 342 의 SCM 화면 · 344 의 `/ledger` 와 같은 모양. 분석=Opus 5.5 / 구현=Sonnet.
