@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { getActiveTenant } from '@/shared/lib/session';
 import { EntryPolicySection, getEntryPolicyState } from '@/features/tenant-entry-policy';
 import { NoTenantNotice } from '@/widgets/no-tenant-notice';
@@ -12,9 +11,10 @@ export const dynamic = 'force-dynamic';
  * The producer (`tenant.security.manage` + path scope) is the authority; the
  * nav hides this entry for roles whose seed matrix lacks the key.
  *
- * Gates, in order: no active tenant → tenant gate · platform scope `*` → a
- * pointer to 테넌트 상세 (`'*'` cannot hold a policy) · otherwise the control
- * (its own 403 / 503 render inline — the page never crashes).
+ * Gates, in order: no active tenant → tenant gate · otherwise the control
+ * (its own 403 / 503 render inline — the page never crashes). There is no
+ * `*` branch: the active tenant is always a registry tenant — the switcher
+ * never offers `*` (TASK-PC-FE-353 AC-0 ①), so such a branch could not run.
  */
 export default async function SecuritySettingsPage() {
   const heading = (
@@ -37,26 +37,6 @@ export default async function SecuritySettingsPage() {
             </>
           ),
         })}
-      </section>
-    );
-  }
-
-  if (tenant === '*') {
-    return (
-      <section aria-labelledby="security-settings-heading">
-        {heading}
-        <div
-          role="status"
-          data-testid="security-settings-platform-scope"
-          className="rounded-md border border-border bg-muted px-4 py-6 text-sm text-muted-foreground"
-        >
-          플랫폼 스코프(*)에는 진입 정책이 없습니다 — 플랫폼 운영자의 2단계 인증은 역할이 요구합니다.
-          특정 테넌트의 정책은{' '}
-          <Link href="/tenants" className="underline">
-            테넌트
-          </Link>{' '}
-          상세에서 바꾸거나, 테넌트 스위처로 그 테넌트를 선택하세요.
-        </div>
       </section>
     );
   }

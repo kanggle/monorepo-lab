@@ -63,8 +63,8 @@ export default async function DomainPermissionSetsPage() {
           description: (
             <>
               업무 권한 세트 관리는 활성 테넌트가 선택되어 있어야 합니다. 상단의
-              테넌트 스위처에서 테넌트(SUPER_ADMIN 은 플랫폼 스코프 *)를 선택한
-              뒤 다시 시도하세요.
+              테넌트 스위처에서 테넌트를 선택한 뒤 다시 시도하세요. 기본 제공
+              세트와 고른 테넌트의 세트가 보입니다.
             </>
           ),
         })}

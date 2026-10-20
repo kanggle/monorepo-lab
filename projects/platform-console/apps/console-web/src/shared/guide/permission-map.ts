@@ -711,7 +711,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
       `${RBAC}:75 (tenant.security.manage)`,
     ],
     mismatch:
-      '활성 테넌트가 플랫폼 스코프(*)이면 정책을 둘 테넌트가 없어 테넌트 상세로 안내한다 — 데모 계정(SUPER_ADMIN)은 테넌트 상세에서 같은 토글을 쓴다.',
+      '활성 테넌트의 정책을 보여 주고 바꾼다 — 데모 계정(SUPER_ADMIN)은 테넌트 상세에서도 같은 토글을 쓴다.',
   },
 
   // ── WMS ───────────────────────────────────────────────────────────────

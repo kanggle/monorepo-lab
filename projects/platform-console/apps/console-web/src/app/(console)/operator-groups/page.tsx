@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * (`getOperatorGroupsState()`). Resilience is handled there (mirrors
  * `org-hierarchy/page.tsx`):
  *   - 401 → `redirect('/login')` (inside `getOperatorGroupsState`).
- *   - no active tenant → a "select a tenant" gate (a SUPER_ADMIN selects `*`).
+ *   - no active tenant → a "select a tenant" gate (any registry tenant; the switcher never offers `*`).
  *   - 403 (lacks `group.manage`) → an inline "group.manage required" notice.
  *   - 503 / timeout → a degraded notice; the console shell stays intact.
  *
@@ -45,8 +45,8 @@ export default async function OperatorGroupsPage() {
           description: (
             <>
               운영자 그룹 관리는 활성 테넌트가 선택되어 있어야 합니다. 상단의
-              테넌트 스위처에서 테넌트(SUPER_ADMIN 은 플랫폼 스코프 *)를
-              선택한 뒤 다시 시도하세요.
+              테넌트 스위처에서 테넌트를 하나 선택한 뒤 다시 시도하세요. 어느
+              테넌트를 골라도 내 권한 범위의 그룹이 모두 보입니다.
             </>
           ),
         })}

@@ -14,7 +14,8 @@ import type { DomainRole, DomainPermissionSet } from './types';
  * Resilience boundary (admin-api.md § 도메인 업무 권한 세트 / § 2.5):
  *   - 401 → `redirect('/login')` (clean re-login; no partial authed state).
  *   - no active tenant → a distinct "select a tenant" gate (never an empty
- *     `X-Tenant-Id`; a SUPER_ADMIN selects `*` via the tenant switcher).
+ *     `X-Tenant-Id`; any registry tenant satisfies it — the switcher never
+ *     offers `*`, TASK-PC-FE-353).
  *   - 403 (`PERMISSION_DENIED` / `TENANT_SCOPE_DENIED` — lacks
  *     `domain_access.manage`) → a `permissionError` state carrying the
  *     producer code so the page renders an inline "domain_access.manage

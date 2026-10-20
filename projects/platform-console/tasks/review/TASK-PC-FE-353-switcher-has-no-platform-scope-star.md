@@ -8,7 +8,7 @@ TASK-PC-FE-353
 
 # Status
 
-in-progress (2026-10-20 UTC AC-0 측정 · 소유자 결정 (가) — 문안 승인 대기)
+review (2026-10-20 UTC AC-0~2 닫힘 · AC-3 = Vercel 배포 · 다음 데모 창 라이브)
 
 # Owner
 
@@ -68,8 +68,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①②③ 을 file:line 으로 적는다. 소유자 결정(선택지 · 추천). → § AC-0 결과 · § 소유자 결정.
-- [ ] **AC-1** — 결정한 수선. 문구가 바뀌면 사용자 문안을 먼저 보여 주고 승인받는다.
-- [ ] **AC-2** — 시험: 고친 화면마다 «테넌트 없음» 안내가 따를 수 있는 동작을 말한다(문구 시험 또는 스위처 항목 시험) · 기존 비회귀(일반 운영자 스위처 목록 불변).
+- [x] **AC-1** — 결정한 수선. 문구가 바뀌면 사용자 문안을 먼저 보여 주고 승인받는다. → § 구현 (문안 승인 2026-10-20 UTC 선택창 «이대로 승인»).
+- [x] **AC-2** — 시험: 고친 화면마다 «테넌트 없음» 안내가 따를 수 있는 동작을 말한다(문구 시험 또는 스위처 항목 시험) · 기존 비회귀(일반 운영자 스위처 목록 불변). → § 구현.
 - [ ] **AC-3** — 배포 상태(Vercel) · 라이브(`star-owner@demo.com` 으로 그 안내를 따라 화면에 들어간다 — 다음 데모 창).
 
 # Related Specs
@@ -132,3 +132,22 @@ BFF 는 늘 `X-Tenant-Id` = 활성 테넌트 쿠키를 보내고, 없으면 `400
 
 - **(가) 문구만** + `/operators` 의 두 공백은 **별도 티켓 `TASK-PC-FE-354`**(스위처에 `*` 를 넣지 않는 좁은 수선). (나) 는 기안하지 않는다.
 - AC-1 범위: 여섯 곳을 실제 게이트에 맞는 문장으로(security-settings 는 실행 불가 분기 삭제) · 잘못된 주석 다섯 곳 정정. `/operators` 의 시험 고정값(`['wms','*']`)은 354 가 고친다. 🔴 새 문안은 머지 전에 소유자 승인.
+
+# 구현 (2026-10-20 UTC)
+
+🔵 구현 중 일곱째 자리를 찾았다 — 가이드 `shared/guide/permission-map.ts:714` 의 security-settings «차이» 칸이 지운 `*` 분기를 설명했다. 문안 승인에 함께 넣었다(⑦). 잘못된 주석도 측정의 다섯이 아니라 **일곱**(`*-state.ts` 넷 · `tenants-client.ts` · `domain-permission-sets-client.ts` · 페이지 주석 둘).
+
+| 자리 | 바뀐 것 (승인 문안) |
+|---|---|
+| ①② `tenants/page.tsx` · `tenants/[tenantId]/page.tsx` | «… 테넌트를 하나 선택한 뒤 다시 시도하세요. 어느 테넌트를 골라도 보이는 목록은 같습니다.» |
+| ③ `org-hierarchy/page.tsx` | «… 어느 테넌트를 골라도 내 권한 범위의 조직 계층이 보입니다.» |
+| ④ `operator-groups/page.tsx` | «… 어느 테넌트를 골라도 내 권한 범위의 그룹이 모두 보입니다.» |
+| ⑤ `domain-permission-sets/page.tsx` | «… 테넌트를 선택한 뒤 다시 시도하세요. 기본 제공 세트와 고른 테넌트의 세트가 보입니다.» |
+| ⑥ `security-settings/page.tsx` | `tenant === '*'` 분기 · `next/link` import 삭제, 머리 주석에 이유 |
+| ⑦ `permission-map.ts:714` | «활성 테넌트의 정책을 보여 주고 바꾼다 — 데모 계정(SUPER_ADMIN)은 테넌트 상세에서도 같은 토글을 쓴다.» |
+
+시험:
+- 새 `tests/unit/no-platform-scope-in-switcher-copy.test.ts`(6) — 다섯 페이지가 승인 문장을 담고 «플랫폼 스코프(*)» 를 담지 않음 · security-settings 에 `*` 분기 없음 · 가이드 새 문장. 🔴 **bite**: `src` 변경만 stash 한 트리에서 rc=1(6/6 실패) → 되돌리면 통과.
+- `security-settings-page.test.tsx` 의 `'*'` 시험 삭제(분기가 없다) · 쓰이지 않게 된 `next/link` mock 삭제.
+- 비회귀: 스위처 코드(`tenant-options.ts` · `/api/tenant`)는 건드리지 않았다 ⇒ 일반 운영자 스위처 목록 불변.
+- console-web `tsc --noEmit` rc=0 · `next lint` rc=0 · `vitest run` rc=0(**410 파일 · 4927 시험**). e2e 에 옛 문장 · `security-settings-platform-scope` 고정 0 건(grep).

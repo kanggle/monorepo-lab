@@ -13,7 +13,8 @@ import type { OrgNode } from './types';
  * Resilience boundary (admin-api.md § org-node / § 2.5):
  *   - 401 → `redirect('/login')` (clean re-login; no partial authed state).
  *   - `NO_ACTIVE_TENANT` → a distinct "select a tenant" gate (never an empty
- *     `X-Tenant-Id`; a SUPER_ADMIN selects `*` via the tenant switcher).
+ *     `X-Tenant-Id`; any registry tenant satisfies it — the switcher never
+ *     offers `*`, TASK-PC-FE-353).
  *   - 403 (`PERMISSION_DENIED` — lacks `org.manage`) → a `permissionError`
  *     state carrying the producer code so the page renders an inline
  *     "org.manage required" section (no crash, no re-login loop). Since the
