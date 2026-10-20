@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **🔴 보안 — 게이트웨이를 우회하는 직접 경로: 데모의 account-service 는 `traefik-net` 에도 붙어 있어, 그 망에서 `internal.invoke` 토큰을 가진 컨테이너는 테넌트 라이프사이클 API(`POST`/`GET /internal/tenants` · `PATCH /internal/tenants/{id}`)를 직접 부를 수 있다** (IN-PROGRESS 2026-10-17 UTC · 출처 `TASK-BE-638` AC-0 ⚪). 고침 = account-service 보안 체인의 호출자(`sub`) 허용 목록 — 쓰기 · 목록은 admin-service, 단건 읽기는 admin-service + auth-service. 분석=Opus 5.5 / 구현=Opus.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
@@ -124,6 +124,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 (empty)
 
 ## done
+- ✅ `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **DONE 2026-10-20 UTC (4-dim verified)** — **#4397**(`da99f32bb`, 머지 시점 실패 0 · SUCCESS 17 / SKIPPED 50). account-service 테넌트 라이프사이클 API 의 호출자(`sub`) 허용 목록. 31차 창 라이브(`ami-01681ef55def7d15c` ⊇ `da99f32bb`): `product-service-client` → PATCH · POST · 목록 · 단건 **403 ×4**, `ecommerce` ACTIVE 유지 · 대조 `admin-service-client` 200 ×2 · IdP 로그인 · admin-service 테넌트 생성/정지(29차) 정상. 🟡 traefik-net 구성원 조사는 켠 묶음(erp)만 — 다른 도메인 구성원은 미확인(`TASK-MONO-672` 9).
 - ✅ `TASK-BE-639-assume-into-non-active-tenant.md` — **DONE 2026-10-16 UTC (4-dim verified)** — **#4392**(`0f544dd64`, 0 failing checks at merge). Assume into a `PENDING` / `SUSPENDED` tenant → `400 invalid_grant` `tenant_not_active`; `entitled-domains` carries `tenantStatus`. 28th window live: company operator × `SUSPENDED` refused, nothing issued · reactivation → roles byte-identical · account-service `{"domainKeys":[],"tenantStatus":"SUSPENDED"}`. ⚪ `'*'` × `PENDING` / `SUSPENDED` live (no unconfined `'*'` IdP login in the demo) — carried by `TASK-MONO-672`.
 - ✅ `TASK-BE-638-gateway-internal-tenants-lifecycle-exposure.md` — **DONE 2026-10-16 UTC (4-dim verified)** — **#4390**(`a3eef4249`, 0 failing checks at merge). The iam gateway no longer carries `/internal/tenants` lifecycle paths. 28th window live: workload token (plain and assumed into `ecommerce`) PATCH / GET / POST / list / dot-segment → 404, `ecommerce` still `ACTIVE`; `entitled-domains` control 200.
 - ✅ `TASK-BE-632-assume-roles-from-assigned-sets.md` — **DONE 2026-10-15 UTC (4-dim verified · ⚪ 둘은 소유자 결정으로 닫음)** — **#4351**(`08f2da4a3`, 0 failing checks). ADR-083 P3 라이브(27차 창): 백필 게이트 0 · AC-4 roles 바이트 동일 · `erp.write` 없음 · TTL 300 · AC-1 세트대로 좁아짐(출고 · SCM 공급사 · ERP 쓰기 403). AC-6 실측 = 기존 토큰 `exp` + 60 s(Spring `JwtTimestampValidator` 기본 skew) → 계약 문장을 «최대 약 360초» 로 정정(소유자 결정). ⚪ 워크로드 클라이언트 ERP 쓰기 · AC-6 네 종류 → MONO-672 다음 창.

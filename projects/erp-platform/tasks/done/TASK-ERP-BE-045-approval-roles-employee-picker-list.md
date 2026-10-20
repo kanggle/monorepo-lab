@@ -8,7 +8,7 @@ TASK-ERP-BE-045
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -59,12 +59,14 @@ backend
 - [x] **AC-0** — 소유자 결정(선택지 · 추천 · ADR 영향 판정)을 적는다. → 아래 § AC-0.
 - [x] **AC-1** — 계약 · (필요하면) ADR 개정이 코드보다 먼저. → 커밋 `d0a04d320`(계약만) 이 구현 커밋보다 앞선다. ADR 개정 불필요(§ AC-0).
 - [x] **AC-2** — 서버 인가 시험 대조군 4 칸(위) 빨강 → 초록. 응답에 선택용 최소 필드 외의 값이 없다((가) 일 때). → 아래 «AC-2 진행» + ⚪ 였던 `EmployeePickerIntegrationTest` 는 #4421 CI `Integration (erp-platform, Testcontainers)` 로그에서 **6 건 전부 실행 · PASSED**(서브트리 · 자식 서브트리 · 빈 범위 · `'*'` · `active` · 페이징) — 머지 `6bbd0dba4`.
-- [ ] **AC-3** — 콘솔: «결재 운영» 운영자가 4 곳에서 목록으로 고른다(폴백 문구가 안 뜬다). 기준정보 운영자 · 데모 운영자 비회귀.
+- [x] **AC-3** — 콘솔: «결재 운영» 운영자가 4 곳에서 목록으로 고른다(폴백 문구가 안 뜬다). 기준정보 운영자 · 데모 운영자 비회귀. → 아래 «AC-3 «결재 운영» 운영자 (31차 창)» — 4 곳 모두 목록.
 - 🔵 **AC-2 진행 (2026-10-20 UTC)** — 빨강: 시험만 먼저 → 컴파일 실패, 순진한 스텁 → 253 중 28 실패(전부 새 picker 칸, 기존 225 통과). 초록: `:masterdata-service:test` 253/0 · rc=0. 대조군 4 칸 = `EmployeePickerControllerSliceTest`(실제 서비스 + 어댑터, 저장소만 mock) · 응답 키 집합 = 정확히 7(부서 미해소 시 6) · 범위 `'*'`/서브트리/없음. ⚪ `EmployeePickerIntegrationTest`(MySQL Testcontainers) 는 로컬 Docker 꺼짐 → CI `integrationTest` 결과로 닫는다.
 - 🔵 **AC-3 진행** — 콘솔 4 곳이 `GET /api/erp/masterdata/employees/picker` 로 읽고 «ID 직접 입력» 토글(범위 ≠ TENANT 또는 잘림). 빨강 37 실패 → 초록 300(9 파일) · 전체 4922/0 · tsc 0 · lint 0. 문구 = `employee-list-fallback.ts` 한 곳. ⚪ 브라우저 · 라이브(«결재 운영» 운영자) 미확인 → 굽기 뒤. 사용자 문구 3 종 = 소유자 승인(2026-10-20 UTC, 머지 전 선택창).
 - 🔵 **AC-3 라이브 비회귀 (30차 창, 2026-10-20 UTC)** — 데모 운영자 `demo@demo.com`(`demo-corp`, legacy-compat): `GET /employees/picker` 200 · `meta.scope="TENANT"` · 원소 키 정확히 7 · `?active=true` 200 · 기존 `GET /employees` 200 · `meta.scope` 없음 · 키 그대로. ⚪ 남은 것: «결재 운영» 세트**만** 가진 운영자가 4 곳에서 목록으로 고르는 화면(권한 세트를 바꾼 버리는 대상이 필요 — `TASK-MONO-672` «Still open» 11 의 ④ 와 같은 창) · 기준정보 운영자 비회귀.
-- [ ] **AC-4** — 배포 상태(AMI 굽기 · Vercel · 라이브 «Still open» 11 ④)를 따로 적는다.
+- ✅ **AC-3 «결재 운영» 운영자 (31차 창, 2026-10-20 UTC)** — `requester@demo.com` 을 `demo-corp` 에서 `erp-approval-operate` **만** 갖게 했다(assume 역할 = `ERP_APPROVAL_READ` · `ERP_APPROVAL_WRITE` · `ERP_OPERATOR`, 기준정보 역할 0). API: `GET /employees/picker` **200**(`TENANT` · 4 명 · 키 7) · `GET /employees` **403** — 서버가 이 운영자에게 목록은 열고 기준정보 목록은 닫는다. 소유자 브라우저: ① 결재 요청 작성 «대상 직원» ② «결재선» 1단계 ③ 위임 생성 «대결자» — **셋 다 직원 목록(폴백 문구 없음)**. ④ 위임 현황 필터(위임자 · 대행자) — 두 칸 다 **직원 목록**(소유자 답, 데모 정지 12:28Z 전 — 꺼진 뒤면 목록이 안 뜬다 · 콘솔은 assume 토큰을 ~4 분 캐시하므로 그때의 토큰은 «결재 운영» 전용). 원복 = `legacy-compat` 는 API 로 다시 줄 수 없어(400) `<도메인>-full` 5 개 DIRECT(소유자 승인) — assume 역할은 스냅샷과 같다(42), 행은 다음 굽기까지 다르다. 기준정보 · 데모 운영자 비회귀 = 30차 `demo@demo.com` picker 200 · `/employees` 200.
+- [x] **AC-4** — 배포 상태(AMI 굽기 · Vercel · 라이브 «Still open» 11 ④)를 따로 적는다.
   - 🔵 2026-10-20 UTC: **AMI** = `ami-01681ef55def7d15c`(`RepoCommit` `e44142d34` ⊇ #4421 `6bbd0dba4`) 굽기 · apply · 위 라이브 비회귀까지. **Vercel** = #4421 의 콘솔 변경이 Production 에 나갔는지 배포 기록 확인은 아직(⚪). 라이브 «Still open» 11 ④ = ⚪.
+  - ✅ 2026-10-20 UTC 갱신: **Vercel** — #4421 머지 커밋 `6bbd0dba4` 의 GitHub 배포 `7184033213`(`Production – kanggle-console`) **success** 2026-10-19T20:20:00Z · 운영 `console.hubwang.com/api/erp/masterdata/employees/picker` 200(비로그인 = 샘플 fixture, `meta.scope=TENANT` · 키 7). **라이브 11 ④** = 위 AC-3 기록(4 곳 모두 목록).
 
 # Related Specs
 
