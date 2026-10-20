@@ -203,7 +203,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-798-owner-only-star-super-admin-demo-operator.md` — **소유자 전용 · 무제한 `'*'` SUPER_ADMIN 데모 운영자를 시드한다** (IN-PROGRESS, 2026-10-17 UTC — 소유자 결정 원문은 티켓). IdP 로그인 · 공개 문서 미기재(가드 `owner-operator.sh --check-undisclosed`) · 저장소에 고정 비밀번호 없음(부팅 시 생성 → SSM SecureString, 그 뒤에만 자격 해시) · 기본 SUSPENDED, 소유자 래퍼 `infra/demo/owner-operator.sh activate|deactivate|status`. `TASK-MONO-672` «Still open» 1–4 를 잴 수 있게 한다. 🔴 다음 굽기 + `terraform apply`(PutParameter 한 ARN) 뒤에야 산다. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -219,6 +218,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## done
+- ✅ `TASK-MONO-798-owner-only-star-super-admin-demo-operator.md` — **DONE 2026-10-20 UTC (4-dim verified)** — impl PR **#4404**(`4d96f4457`, 머지 시점 실패 0 · SUCCESS 43 / SKIPPED 27). 소유자 전용 `'*'` SUPER_ADMIN 데모 운영자. 29차 창(`ami-01681ef55def7d15c`, `e44142d34`)에서 남은 ⚪ 셋을 라이브로 닫음: 부팅 provision(SSM SecureString v1 · SUSPENDED) · 인스턴스 역할 PutParameter + kms 경로 · 생성 비밀번호로 IdP 로그인 → `demo-star-owner` 운영자 토큰. 유휴 정지 뒤 재부팅 = SUSPENDED + 새 자격(Edge Case 1). ⚪ `deactivate` 라이브는 안 돌았다(자기시험 (6) 만). 672 «Still open» 1 · 3 은 같은 창에서 닫힘, 2 · 4 는 672 가 들고 간다.
 - ✅ `TASK-MONO-799-nightly-console-compose-logs-always.md` — **DONE 2026-10-18 UTC (4-dim verified)** — impl PR **#4410**(`b74e05ab7`, 머지 시점 실패 0 · 42 pass). nightly 콘솔 잡이 매 런 `test-results/compose-logs.txt`(`--timestamps`, `--tail` 없음, `continue-on-error`) 를 남긴다. 브랜치 nightly 39128709878 에서 812,430 B · `console_ssr_phase` 151 줄 확인. 다른 잡 무변경. `TASK-PC-FE-341` 재측정의 ④ 자료.
 - ✅ `TASK-MONO-797-nightly-e2e-cached-not-found-gradle-home.md` — **DONE 2026-10-18 UTC (4-dim verified)** — impl PR **#4391**(`dfb232a24`, 사후 실패 0 · 🔴 머지 명령은 pending 22 상태 — 절차 위반으로 기록). 공유 gradle-home 캐시의 «not found» 기록 → 감지 + 경고 + `--refresh-dependencies` 1회 재시도. ⚪ «main 이 깨끗한 캐시를 저장하나» 닫힘: 머지 직후 main 38894690325 scm·fan 둘 다 재시도 → 회복 · 최신 39130456238 둘 다 재시도 0. 🔴 첫 술어(`::warning`)는 대조군에서도 0 이었다(로그는 `##[warning]<본문>`) — 본문 문구로 다시 셌다.
 - ✅ `TASK-MONO-792-adr-083-p5-scm-fine-grained-authz.md` — **DONE 2026-10-16 UTC (4-dim verified)** — impl PR **#4382**(`81d00faf5`, 머지 시점 실패 0). `ADR-MONO-083` P5 SCM 세분 인가. 28차 창 라이브(AMI `ami-00ef8cc1057cca59b` @ `8905d2c29`): V0056 뒤 `SCM_OPERATOR` 세트 0 · `SCM_PROCUREMENT_WRITE` 4(앞 3 **+1** — `data-model.md` 주석의 «+2» 오기 정정) · legacy-compat roles = `SCM_OPERATOR` + 8 · `scm-read` 쓰기 403 · 출고 세트 `:retry` 403(Q3). 후속 `TASK-PC-FE-342` 머지 게이트 충족.

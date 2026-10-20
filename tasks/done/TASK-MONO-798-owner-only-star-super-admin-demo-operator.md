@@ -1,6 +1,6 @@
 # TASK-MONO-798 — seed one owner-only, unconfined `'*'` SUPER_ADMIN demo operator (IdP login, SUSPENDED by default)
 
-- **Status**: in-progress
+- **Status**: done
 - **Type**: feat (demo infra + iam dev seed)
 - **Created**: 2026-10-17 UTC
 - **Scope class**: monorepo-level (`infra/demo/**`, `.github/workflows/ci.yml`) + `projects/iam-platform/` dev seeds and tests (one atomic PR)
@@ -98,3 +98,14 @@ None changed. The seed uses existing tables; no API or event change.
 - After the fix (2026-10-18 UTC): CI `39110094469` **success** (43 pass · 27 skipping · 0 fail; `Demo wrapper smoke` log has `(z15)` and no FAIL, `[self-test] pass=35 fail=0`; `Owner-only demo operator is in no public doc` success; iam integration ran the four `798:` cases PASSED; `auth-service:test` ran in Build & Test). Nightly `39110115364` **success**, all 15 jobs. Federation: `38987350141` success on `4bcc07436`; not re-run on `b76b5d941` (the fix touches only `infra/demo/demo-up.sh` / `owner-operator.sh`, which federation does not exercise).
 - Guards on the staged tree: index-queue-drift · task-id-collision · walkthrough-ledger-drift · required-check-names · outside-module-input-filter-coverage · artifact-retention · libs-ci-coverage · ls-files-guard-count · dev-seed-migration-band · flyway-version-collision — all rc=0. Nothing added or deleted under `scripts/`.
 - ⚪ Not measured here: the live boot (needs a bake + `terraform apply`), the SSM put from the instance role (the kms path is inferred from the oauth SecureString read, not measured), an actual IdP login with the generated password.
+
+# Live record (29th window, 2026-10-20 UTC — `TASK-MONO-672` § 29th window — harvest)
+
+All three ⚪ above are now measured, on `ami-01681ef55def7d15c` (`RepoCommit` `e44142d34`, merged #4404 is an ancestor):
+
+- **Live boot (AC-3)** ✅ — the provision step ran as the last post-up step: `[owner-operator] provisioned: new password in SSM /portfolio-demo/owner-operator/password (SecureString) · credential updated · operator SUSPENDED`, then `[demo] up complete`. `status`: SUSPENDED · credential present 06:24:06Z · 0 unrevoked refresh tokens · «password provisioned this boot: yes». Once per boot held: the second boot of the day (09:23Z, after an idle stop with the operator `ACTIVE`) came up **SUSPENDED** with a new credential (09:25:14Z) — Edge Case 1, live.
+- **SSM put from the instance role (AC-6)** ✅ — parameter `SecureString`, version 1, LastModified 06:24:06Z. The plan showed the policy change as exactly one `ssm:PutParameter` on that one ARN (no Get, no wildcard, no kms statement) and the put succeeded, so the AWS-managed key path works without a grant — **measured, no longer inferred**.
+- **IdP login with the generated password (AC-1 · AC-4)** ✅ — after the owner's `activate` (wrapper output: `ACTIVE — measurement window open` + status ACTIVE): `star-owner@demo.com` logged in through `platform-console-web` PKCE (password from SSM into a 0600 file, never printed) → base token `sub` `0199de70-…-ad09` · `tenant_id=iam`; admin-service exchange → `sub=demo-star-owner` `token_type=admin`; assume `'*'` → 200; it then created / suspended tenants as `SUPER_ADMIN` (672 item 1).
+- ⚪ `deactivate` was **not** run live (the reboot forced SUSPENDED before it was needed) — covered by self-test (6) only.
+
+What it was for: 672 «Still open» 1 and 3 closed in the same window; 2 and 4 stay with 672 (the owner's second `activate` did not come). That is 672's list, not an AC of this ticket.
