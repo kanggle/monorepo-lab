@@ -127,11 +127,13 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-356-global-guide-monthly-budget-2400.md` — **콘솔 전역 가이드의 «한 달에 최대 1800분» → 2400분** (REVIEW, 2026-10-20 UTC · 소유자 결정 «2400» · 문안 승인). 같은 카드 · 옆 «180분» 카드의 낡은 출처 줄 번호도 고침. guide 시험 178 rc=0. AC-3 = Vercel 배포 기록(다음 세션). 분석=Opus 5.5 / 구현=Opus 5.5.
 
-- `TASK-PC-FE-353-switcher-has-no-platform-scope-star.md` — **다섯 화면이 «스위처에서 플랫폼 스코프(*)를 선택하라» 고 안내하고 한 화면은 활성 테넌트 `*` 를 전제하지만 스위처에 `*` 가 없다** (REVIEW, 2026-10-20 UTC · 소유자 결정 **(가) 문구만** · AC-0~2 닫힘 · AC-3 = Vercel · 다음 창). `*` 는 스위처에 한 번도 없었다 · 여섯 화면은 실제 테넌트로 `*` 와 같거나 더 본다. 승인 문안 일곱 곳(가이드 `permission-map.ts:714` 포함) · security-settings 의 실행 불가 `*` 분기 삭제 · 잘못된 주석 일곱 곳. 새 문구 시험 6(bite: 옛 src 에서 6/6 실패) · vitest 4927 rc=0. `/operators` 의 진짜 공백 둘은 `TASK-PC-FE-354`. 분석=Opus 5.5 / 구현=Opus 5.5.
+
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
+- ✅ `TASK-PC-FE-353-switcher-has-no-platform-scope-star.md` — **DONE 2026-10-20 UTC (4-dim verified · 소유자 결정)** — #4432(`9a060da42`, 실패 0 · SUCCESS 14). (가) 문구만 — 일곱 곳. AC-3 = «정상 흐름에서는 안내가 안 보임»(로그인이 테넌트를 자동 선택) 으로 소유자가 닫음 · 테넌트 선택 상태 화면 진입 ✅ · Vercel 7201847137.
 - ✅ `TASK-PC-FE-354-operators-platform-scope-rows-unreachable.md` — **DONE 2026-10-20 UTC (4-dim verified)** — #4435(`30321a844`, 머지 시점 실패 0 · SUCCESS 15 · 브랜치 nightly success). `'*'` 호출자 «모든 테넌트» 보기 · 부여 범위 선택 · 출처별 회수 · 플랫폼 운영자 등록 양식. 32차 창: 9 행(서버와 일치) · `platform@` 에 «모든 테넌트» 프리셋 부여 → 회수 ×2, `admin_actions.tenant_id='*'` SUCCESS ×4 · 순증 0. Vercel 7205740591.
 - ✅ `TASK-PC-FE-350-unresolvable-domain-base-stalls-console-ssr.md` — **DONE 2026-10-20 UTC (4-dim verified)** — #4416 · #4417(`c076be4d9`, 실패 0). (나) 개요 · 도메인 상태 SSR 이 조합 함수를 직접 호출. AC-3: Vercel(이후 Production 전부 포함 · success) · 데모 무관 · 32차 창 로그인 개요 정상.
 - ✅ `TASK-PC-FE-347-erp-write-buttons-area-roles.md` — **DONE 2026-10-20 UTC (4-dim verified)** — #4408(`8a12cf6b8`, 실패 0). 32차 창: `erp-read` 세 화면 «조회 전용» · 결재 세트 «결재 요청 작성» · «위임 생성» 보임(양방향) · demo@ 전부 보임. ⚪ 미결 건 승인/반려(주체 미결함 0).
