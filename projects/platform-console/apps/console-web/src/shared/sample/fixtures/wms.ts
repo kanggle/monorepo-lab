@@ -420,9 +420,80 @@ function inventoryByKeyFixture(path: string): unknown {
 // § 1.2 throughput — GET /dashboard/throughput
 // ---------------------------------------------------------------------------
 
+const THROUGHPUT_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** UTC epoch-ms of a real ISO `YYYY-MM-DD`, else `null`. Local to this module
+ *  (`shared/sample/**` must not import feature code). */
+function throughputDateMs(s: string | null): number | null {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const ms = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === s ? ms : null;
+}
+
+/**
+ * TASK-PC-FE-358 — the 개요 throughput card asks for the 14 UTC days ending
+ * TODAY, so a fixed September window would leave the anonymous sample screen
+ * permanently empty. When `from`/`to` are a valid ≤ 90-day window the fixture
+ * now answers THAT window, with deterministic synthetic counts derived from the
+ * day number (same date ⇒ same numbers on every render). Every 5th day is
+ * deliberately ABSENT from `days` — exactly like the real producer, which
+ * lists only days that have a row — so the sample exercises the console's
+ * zero-fill instead of hiding it. An unknown `warehouseId` → no rows (the
+ * producer's answer for a warehouse with no throughput). No/invalid window →
+ * the original fixed September answer (kept for the schema test + the R2ⓐ
+ * label-guard document below).
+ */
+function syntheticThroughput(warehouseId: string, fromMs: number, toMs: number): unknown {
+  const days: {
+    date: string;
+    inbound: { putawayCount: number; qtyReceived: number };
+    outbound: { shipmentCount: number; qtyShipped: number };
+  }[] = [];
+  if (warehouseId === WAREHOUSE.id) {
+    for (let ms = fromMs; ms <= toMs; ms += THROUGHPUT_DAY_MS) {
+      const n = Math.floor(ms / THROUGHPUT_DAY_MS);
+      if (n % 5 === 0) continue;
+      const putawayCount = 4 + ((n * 7) % 9);
+      const shipmentCount = 3 + ((n * 5) % 8);
+      days.push({
+        date: new Date(ms).toISOString().slice(0, 10),
+        inbound: { putawayCount, qtyReceived: putawayCount * 40 },
+        outbound: { shipmentCount, qtyShipped: shipmentCount * 30 },
+      });
+    }
+  }
+  const sum = (f: (d: (typeof days)[number]) => number) => days.reduce((a, d) => a + f(d), 0);
+  return {
+    warehouseId,
+    from: new Date(fromMs).toISOString().slice(0, 10),
+    to: new Date(toMs).toISOString().slice(0, 10),
+    days,
+    totals: {
+      inbound: {
+        putawayCount: sum((d) => d.inbound.putawayCount),
+        qtyReceived: sum((d) => d.inbound.qtyReceived),
+      },
+      outbound: {
+        shipmentCount: sum((d) => d.outbound.shipmentCount),
+        qtyShipped: sum((d) => d.outbound.qtyShipped),
+      },
+    },
+  };
+}
+
 function throughputFixture(path: string): unknown {
-  const { pathname } = splitPath(path);
+  const { pathname, query } = splitPath(path);
   if (!new RegExp(`^${ADMIN}/dashboard/throughput$`).test(pathname)) return undefined;
+  const fromMs = throughputDateMs(query.get('from'));
+  const toMs = throughputDateMs(query.get('to'));
+  if (
+    fromMs !== null &&
+    toMs !== null &&
+    toMs >= fromMs &&
+    (toMs - fromMs) / THROUGHPUT_DAY_MS + 1 <= 90
+  ) {
+    return syntheticThroughput(query.get('warehouseId') ?? WAREHOUSE.id, fromMs, toMs);
+  }
   return {
     warehouseId: WAREHOUSE.id,
     from: '2026-09-01',

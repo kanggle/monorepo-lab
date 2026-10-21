@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation';
 import {
   getWmsSectionState,
   getWmsOverviewState,
+  getWmsThroughputState,
   WmsOpsScreen,
+  WmsThroughputCard,
   WmsOverview,
   WmsRecentShipments,
   WmsRecentAdjustments,
@@ -93,11 +95,16 @@ export default async function WmsPage() {
   // read leg, NOT a cross-domain composition leg); both perform a whole-session
   // `redirect('/login')` internally on a 401 (no partial authed state). The
   // overview does per-cell degrade; the section-state gates the tables.
-  const [overviewState, state, businessRoles] = await Promise.all([
-    getWmsOverviewState(eligible),
-    getWmsSectionState(eligible),
-    getWmsBusinessRoles(wmsTenants),
-  ]);
+  // TASK-PC-FE-358 — the daily throughput card is a FOURTH, independent read
+  // (§ 2.4.5.2 «Daily throughput card»): it never throws except its own 401
+  // redirect, so its failure cannot blank the overview and vice versa.
+  const [overviewState, state, businessRoles, throughputState] =
+    await Promise.all([
+      getWmsOverviewState(eligible),
+      getWmsSectionState(eligible),
+      getWmsBusinessRoles(wmsTenants),
+      getWmsThroughputState(eligible),
+    ]);
 
   if (state.notEligible) {
     return (
@@ -172,6 +179,10 @@ export default async function WmsPage() {
       overview={<WmsOverview state={overviewState} />}
       recentActivity={
         <>
+          {/* TASK-PC-FE-358 — 활동 band, FIRST: a trend over days is activity,
+              and placing it in `overview` would split the alert distribution
+              from the alerts table (§ 2.4.5.2 Order, PC-FE-177). */}
+          <WmsThroughputCard state={throughputState} />
           <WmsRecentAdjustments state={overviewState} />
           <WmsRecentShipments state={overviewState} />
         </>
