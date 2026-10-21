@@ -115,13 +115,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`)가 401 «Missing or invalid internal credentials»** (IN-PROGRESS 2026-10-21 UTC · 출처 32차 데모 창). AC-0 완료: 정상 요청은 302, 오류 경로만 SAS `sendError(400)` → `/error` → Order 2 `denyAll` → 401. 소유자 결정 D1=(a) logout `errorResponseHandler` 가 400 OIDC JSON 을 직접 쓴다. 분석=Opus 5.5 / 구현=Opus 5.5.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
 
-(empty)
+- `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done
 - ✅ `TASK-BE-640-account-service-tenant-lifecycle-direct-caller-allowlist.md` — **DONE 2026-10-20 UTC (4-dim verified)** — **#4397**(`da99f32bb`, 머지 시점 실패 0 · SUCCESS 17 / SKIPPED 50). account-service 테넌트 라이프사이클 API 의 호출자(`sub`) 허용 목록. 31차 창 라이브(`ami-01681ef55def7d15c` ⊇ `da99f32bb`): `product-service-client` → PATCH · POST · 목록 · 단건 **403 ×4**, `ecommerce` ACTIVE 유지 · 대조 `admin-service-client` 200 ×2 · IdP 로그인 · admin-service 테넌트 생성/정지(29차) 정상. 🟡 traefik-net 구성원 조사는 켠 묶음(erp)만 — 다른 도메인 구성원은 미확인(`TASK-MONO-672` 9).
