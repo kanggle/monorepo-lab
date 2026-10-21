@@ -2,7 +2,17 @@
 
 import { messageForCode } from '@/shared/api/errors';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { BarSwatch, StackedBar, type BarSegment } from '@/shared/ui/InlineBar';
 import type { Inspection } from '../api/types';
+
+/** 통과 · 손상 · 부족 parts of the expected quantity (TASK-PC-FE-357). */
+export function inspectionSegments(data: Inspection): BarSegment[] {
+  return [
+    { key: 'passed', value: data.totalQtyPassed, tone: 'success' },
+    { key: 'damaged', value: data.totalQtyDamaged, tone: 'danger' },
+    { key: 'short', value: data.totalQtyShort, tone: 'warning' },
+  ];
+}
 
 /**
  * The ASN 검수(inspection) inline panel for {@link WmsInboundScreen}
@@ -82,6 +92,7 @@ export function AsnInspectionPanel({
             시도하세요.
           </div>
         ) : (
+          <>
           <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             <div>
               <dt className="text-muted-foreground">완료 시각</dt>
@@ -114,24 +125,44 @@ export function AsnInspectionPanel({
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">합격 수량</dt>
+              <dt className="text-muted-foreground">
+                <BarSwatch tone="success" />
+                합격 수량
+              </dt>
               <dd data-testid="wms-asn-inspection-passed">
                 {data.totalQtyPassed ?? '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">손상 수량</dt>
+              <dt className="text-muted-foreground">
+                <BarSwatch tone="danger" />
+                손상 수량
+              </dt>
               <dd data-testid="wms-asn-inspection-damaged">
                 {data.totalQtyDamaged ?? '—'}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">부족 수량</dt>
+              <dt className="text-muted-foreground">
+                <BarSwatch tone="warning" />
+                부족 수량
+              </dt>
               <dd data-testid="wms-asn-inspection-short">
                 {data.totalQtyShort ?? '—'}
               </dd>
             </div>
           </dl>
+          {typeof data.totalQtyExpected === 'number' &&
+            data.totalQtyExpected > 0 && (
+              <div className="mt-3">
+                <StackedBar
+                  segments={inspectionSegments(data)}
+                  expected={data.totalQtyExpected}
+                  testid="wms-asn-inspection-bar"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { formatPromotionDay } from './promotion-format';
+import { IssuanceBar } from './IssuanceBar';
 import { promotionStatusTone, type PromotionList } from '../api/promotion-types';
 
 interface PromotionsTableProps {
@@ -87,7 +88,16 @@ export function PromotionsTable({
                 {formatDiscount(p.discountType, p.discountValue)}
               </td>
               <td className="p-2">
-                {p.issuedCount} / {p.maxIssuanceCount}
+                <div className="flex items-center gap-2">
+                  <span>
+                    {p.issuedCount} / {p.maxIssuanceCount}
+                  </span>
+                  <IssuanceBar
+                    issued={p.issuedCount}
+                    max={p.maxIssuanceCount}
+                    testid={`promotion-row-issue-bar-${i}`}
+                  />
+                </div>
               </td>
               <td className="p-2">{formatPromotionDay(p.startDate)}</td>
               <td className="p-2">{formatPromotionDay(p.endDate)}</td>
