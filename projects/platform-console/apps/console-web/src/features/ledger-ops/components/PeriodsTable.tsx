@@ -12,6 +12,8 @@ import {
   type PeriodsResponse,
 } from '../api/types';
 import { usePeriods } from '../hooks/use-ledger-ops';
+import { ProportionBar } from '@/shared/ui/InlineBar';
+import { periodEntryMax, periodEntryBarScopeText } from '../lib/period-entry-bars';
 
 /**
  * Accounting periods table (TASK-PC-FE-072 — § 2.4.7.1).
@@ -24,6 +26,12 @@ import { usePeriods } from '../hooks/use-ledger-ops';
  *
  * STRICTLY READ-ONLY — no mutation affordance (no close-period button, no
  * confirm dialog).
+ *
+ * TASK-PC-FE-359 — an `entryCount` bar beside each count (shared
+ * `ProportionBar`, decorative; the number stays as text). The scale is the
+ * largest count on THIS page, and a sentence above the table says so. A
+ * null count (OPEN period) draws no bar — `entryCount` is a plain integer,
+ * not F5 money, so no chart-scale exception is involved.
  */
 export interface PeriodsTableProps {
   initial: PeriodsResponse;
@@ -48,6 +56,7 @@ export function PeriodsTable({
   const size = dataResp.meta.size ?? 20;
   const page = dataResp.meta.page ?? query.page ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalElements / Math.max(1, size)));
+  const entryMax = periodEntryMax(rows);
 
   return (
     <section aria-labelledby="ledger-periods-heading">
@@ -66,6 +75,12 @@ export function PeriodsTable({
         </p>
       ) : (
         <>
+          <p
+            className="mb-2 text-xs text-muted-foreground"
+            data-testid="ledger-periods-entry-bar-scope"
+          >
+            {periodEntryBarScopeText(rows.length, totalElements, page)}
+          </p>
           <table
             className="mb-3 data-table"
             data-testid="ledger-periods-table"
@@ -114,7 +129,19 @@ export function PeriodsTable({
                   </td>
                   <td className="p-2">{p.from ?? '—'}</td>
                   <td className="p-2">{p.to ?? '—'}</td>
-                  <td className="p-2">{p.entryCount ?? '—'}</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      {typeof p.entryCount === 'number' && p.entryCount > 0 ? (
+                        <ProportionBar
+                          value={p.entryCount}
+                          max={entryMax}
+                          className="w-20"
+                          testid={`ledger-period-entry-bar-${i}`}
+                        />
+                      ) : null}
+                      <span>{p.entryCount ?? '—'}</span>
+                    </div>
+                  </td>
                   <td className="p-2">
                     <Button
                       variant="secondary"

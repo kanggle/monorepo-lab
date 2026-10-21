@@ -55,8 +55,8 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~⑤ 를 file:line 과 함께.
-- [ ] **AC-1** — 스펙 예외 한 줄 + grep 시험 허용 목록 → 구현.
+- [x] **AC-0** — 위 ①~⑤ 를 file:line 과 함께. (아래 § AC-0 측정)
+- [x] **AC-1** — 스펙 예외 한 줄 + grep 시험 허용 목록 → 구현. (스펙 커밋 `61560c806` 먼저 · 기존 가드엔 허용 목록이 없어 새 가드에 둠 — § AC-0 ①)
 - [ ] **AC-2** — **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
 - [ ] **AC-3** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · **`node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`**(로컬, 스테이지 뒤) rc=0. SSR 화면이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-4** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.

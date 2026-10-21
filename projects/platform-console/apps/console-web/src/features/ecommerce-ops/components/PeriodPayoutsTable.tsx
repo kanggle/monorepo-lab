@@ -3,14 +3,18 @@
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { Button } from '@/shared/ui/Button';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { ProportionBar } from '@/shared/ui/InlineBar';
 import {
   payoutStatusTone,
   minorToWon,
   type PayoutsResponse,
 } from '../api/settlement-types';
+import { payoutBarMax, payoutBarScopeText } from '../lib/payout-bars';
 
 interface PeriodPayoutsTableProps {
   rows: PayoutsResponse['items'];
+  /** Producer `totalElements` — the bars compare only the rows on this page, so the screen says so when this page is not the whole set (TASK-PC-FE-359). */
+  totalElements: number;
   pagination: {
     prevDisabled: boolean;
     nextDisabled: boolean;
@@ -25,10 +29,33 @@ interface PeriodPayoutsTableProps {
  * only). READ display of the seller payouts a CLOSED period folded its accruals
  * into. Money renders via {@link minorToWon}; `paidAt` is a record timestamp.
  * Payout execution (PENDING → PAID/FAILED) is Phase B — no action column here.
+ *
+ * TASK-PC-FE-359 — a per-seller `payableNetMinor` bar beside each amount
+ * (shared `ProportionBar`, decorative, coloured by the payout status tone).
+ * The scale is the largest POSITIVE amount on THIS page; a zero / negative
+ * (clawback) amount draws no bar, its text stands alone. The amounts are
+ * integer `number`s (not F5 strings), so no chart-scale exception is used.
  */
-export function PeriodPayoutsTable({ rows, pagination }: PeriodPayoutsTableProps) {
+export function PeriodPayoutsTable({
+  rows,
+  totalElements,
+  pagination,
+}: PeriodPayoutsTableProps) {
+  const max = payoutBarMax(rows);
+  const hasNonPositive = rows.some((p) => !(p.payableNetMinor > 0));
   return (
     <>
+      <p
+        className="mb-2 text-xs text-muted-foreground"
+        data-testid="settlements-payouts-bar-scope"
+      >
+        {payoutBarScopeText(rows.length, totalElements)}
+        {hasNonPositive ? (
+          <span data-testid="settlements-payouts-bar-nonpositive">
+            {' 0원이거나 음수(되돌림)인 지급액은 막대 없이 금액만 표시합니다.'}
+          </span>
+        ) : null}
+      </p>
       <div className="overflow-x-auto">
         <table
           className="mb-3 data-table"
@@ -78,7 +105,18 @@ export function PeriodPayoutsTable({ rows, pagination }: PeriodPayoutsTableProps
                   </StatusBadge>
                 </td>
                 <td className="p-2 text-right tabular-nums">
-                  {minorToWon(p.payableNetMinor)}
+                  <div className="flex items-center justify-end gap-2">
+                    {p.payableNetMinor > 0 ? (
+                      <ProportionBar
+                        value={p.payableNetMinor}
+                        max={max}
+                        tone={payoutStatusTone(p.status)}
+                        className="w-20"
+                        testid={`payout-row-bar-${i}`}
+                      />
+                    ) : null}
+                    <span>{minorToWon(p.payableNetMinor)}</span>
+                  </div>
                 </td>
                 <td className="p-2 text-right tabular-nums">
                   {minorToWon(p.commissionMinor)}
