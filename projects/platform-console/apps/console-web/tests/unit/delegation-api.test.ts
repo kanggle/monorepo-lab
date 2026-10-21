@@ -205,6 +205,21 @@ describe('delegation-api — listDelegations (GET; role query forwarding)', () =
     expect(result.data).toHaveLength(2);
   });
 
+  it('parses an EMPTY list with the real server meta (size = item count = 0; TASK-PC-FE-355)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [],
+          meta: { page: 0, size: 0, totalElements: 0, timestamp: '2026-10-20T18:20:00Z' },
+        }),
+      ),
+    );
+    const result = await listDelegations('DELEGATOR');
+    expect(result.data).toEqual([]);
+    expect(result.meta.size).toBe(0);
+  });
+
   it('list with role=DELEGATOR: appends ?role=DELEGATOR to the URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(LIST_RESPONSE));
     vi.stubGlobal('fetch', fetchMock);
@@ -274,9 +289,10 @@ describe('delegation-api — createDelegation (POST + Idempotency-Key)', () => {
   });
 
   it('POST to /delegations with delegateId + validFrom; Idempotency-Key header; no X-Operator-Reason', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(ACTIVE_GRANT, 201));
+    // Real server shape: ApiEnvelope.of(grant) = { data: grant }.
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: ACTIVE_GRANT }, 201));
     vi.stubGlobal('fetch', fetchMock);
-    await createDelegation(
+    const created = await createDelegation(
       { delegateId: 'emp-delegate', validFrom: '2026-06-05T00:00:00Z' },
       'idem-create',
     );
@@ -292,10 +308,11 @@ describe('delegation-api — createDelegation (POST + Idempotency-Key)', () => {
     // validTo and reason omitted from input → absent in body.
     expect(body.validTo).toBeUndefined();
     expect(body.reason).toBeUndefined();
+    expect(created.id).toBe('del-1');
   });
 
   it('create with validTo + reason: both present in the body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(FULL_GRANT, 201));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: FULL_GRANT }, 201));
     vi.stubGlobal('fetch', fetchMock);
     await createDelegation(
       {
@@ -324,9 +341,10 @@ describe('delegation-api — revokeDelegation (POST /{id}/revoke)', () => {
   });
 
   it('POST to /delegations/{id}/revoke with reason + Idempotency-Key; no X-Operator-Reason', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(REVOKED_GRANT));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: REVOKED_GRANT }));
     vi.stubGlobal('fetch', fetchMock);
-    await revokeDelegation('del-3', '회수 사유', 'idem-revoke');
+    const revoked = await revokeDelegation('del-3', '회수 사유', 'idem-revoke');
+    expect(revoked.status).toBe('REVOKED');
     const { init, url, headers, body } = lastCall(fetchMock);
     expect(init.method).toBe('POST');
     expect(url).toBe('http://erp.local/api/erp/approval/delegations/del-3/revoke');
