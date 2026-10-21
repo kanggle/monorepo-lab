@@ -30,6 +30,20 @@
 //   3  Playwright 미설치 — 고장이 아니다
 //   1  그 밖의 실패 (백엔드가 안 떠 있음 · 로그인 불가 등)
 //
+// =============================================================================
+// 🔴🔴 한계 — 표지(`empty` · `degraded` · `denied` · `deniedTextOnly` · `partialDenied`)는 **후보를 줄일 뿐 고르지 않는다**
+// =============================================================================
+// 표지가 하나도 안 붙은 장은 «볼 만하다» 가 아니라 «이 표지로는 흠을 못 찾았다» 이다. 문자열 술어가 **원리상**
+// 판정하지 못하는 것:
+//   · 빈 검색 폼 — `/finance/accounts` 의 «조회할 accountId 를 입력하세요» 는 정상 안내문이다.
+//   · `/tenants` · `/org-hierarchy` · `/operator-groups` — 사람 눈 전수(TASK-MONO-648 § 사람 눈으로 전수)에서
+//     «볼 만하지 않다» 로 판정된 셋. 거부·빈값·저하 어느 문구/요소도 그 결론을 대신 내려 주지 않았다.
+//   · 글자는 가득한데 내용이 틀린 화면(raw UUID 가 박힌 `/erp/masters` 등).
+//   · 이 파일의 문구 목록(`EMPTY_NOUNS` · `DEGRADED_RE` · `SHOT_DENIED_MARKERS`)은 **소스에서 유도한 스냅샷**이다 —
+//     앱에 새 문구가 생기면 조용히 샌다.
+// ⇒ 큐레이션 전에 **사람이 그림을 연다.** 표지는 열어 볼 순서를 정할 뿐이다. (같은 문장이 티켓 TASK-MONO-648 에도 있다 —
+//    한쪽만 고치면 다른 쪽이 낡는다.)
+//
 // 🔴 선행: AMI 재굽기. 구워진 AMI 가 `main` 보다 낡으면 **옛 데이터가 담긴 화면**이 찍힌다.
 //    TASK-MONO-648 AC-0 이 그것을 STOP 게이트로 걸어 두었다.
 //
@@ -433,8 +447,37 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
   };
 }
 
-const judgeDenial = (page) =>
-  page.evaluate(judgeDenialInPage, { suffixes: DENIAL_SUFFIXES, textMarkers: DENIED_MARKERS });
+// -----------------------------------------------------------------------------
+// 장별 문구 표지 — 🔴 프로브 목록(`DENIED_MARKERS`)과 **일부러 다른 목록**이다 (TASK-MONO-648 § 표지)
+// -----------------------------------------------------------------------------
+// 프로브의 문구 적중은 **앱 전체를 건너뛰게** 한다. 그래서 거기에 «권한이 필요합니다» 같은 넓은 문구를
+// 더하면, 대시보드의 카드 하나가 그 문구를 그리는 날 앱 64장이 통째로 사라진다. 장별 문구 적중은 반대로
+// 판정에 안 쓰이고 `deniedTextOnly` 로 **사람이 열어 볼 목록**에만 오른다 — 넓혀도 틀리는 방향이 «일이
+// 늘어나는 쪽» 이다. 그래서 넓은 목록은 장별에만 쓴다.
+// 🔵 앱의 실제 거부 문구(소스에서 유도 · 모두 `src/` 기준). 기존 «권한이 없습니다» 는 «조회할 권한이
+//    없습니다»(wms/page.tsx:142 · finance/page.tsx:146 …) · «접근 권한이 없습니다»(wms/page.tsx:114 …) ·
+//    «수행할 권한이 없습니다»(audit/page.tsx:59) 의 부분 문자열이라 이미 덮는다 — 아래는 그것이 **못 잡는** 문구다:
+//      · «권한이 필요합니다» — 콘솔 app/(console)/org-hierarchy/page.tsx:55 · operators/page.tsx:79 ·
+//        permissions/page.tsx:59 · permission-sets/page.tsx:70 · accounts/page.tsx:103 ·
+//        partnerships/page.tsx:74 · operator-groups/page.tsx:70 (거부 화면이 «…권한이 필요합니다 (SUPER_ADMIN …)» 로 끝난다)
+//      · «SUPER_ADMIN 전용» — 콘솔 app/(console)/tenants/page.tsx:42,63 · tenants/[tenantId]/page.tsx:42,61
+//        («테넌트 관리는 SUPER_ADMIN 전용입니다»)
+//      · «권한으로 조회할 수 없습니다» — 콘솔 features/dashboards/components/IamComposedOverviewScreen.tsx:107,166
+//        («현재 권한으로 조회할 수 없습니다»)
+//      · «접근할 수 없습니다» — 스토어 features/order/model/use-shipping-tracking.ts:35 («배송 정보에 접근할 수 없습니다»)
+//    🔴 일부러 **넣지 않은** 것: «권한 없음» — 콘솔 사이드바 배지 «업무 권한 없음»
+//    (shared/ui/ConsoleSidebarNav.tsx:117)이 셸에 있는 모든 장의 본문 글자에 들어가 전량이 적중한다.
+//    영문 거부 문구는 렌더되는 곳을 못 찾았다(`Forbidden`·`403` 은 기존 목록이 이미 문다).
+const SHOT_DENIED_MARKERS = [
+  ...DENIED_MARKERS,
+  '권한이 필요합니다',
+  'SUPER_ADMIN 전용',
+  '권한으로 조회할 수 없습니다',
+  '접근할 수 없습니다',
+];
+
+const judgeDenial = (page, textMarkers = DENIED_MARKERS) =>
+  page.evaluate(judgeDenialInPage, { suffixes: DENIAL_SUFFIXES, textMarkers });
 
 // 🔵 항해와 **판정**을 나눈다 — 판정만 따로 부를 수 있어야 `--self-test` 가 픽스처로
 //    이 배선을 물 수 있다. 붙여 두면 self-test 는 `judgeDegraded()` 의 사본을 재게 되고,
@@ -534,12 +577,81 @@ async function resolveDynamic(page, app, route) {
 // 🔵 **고치지 않고 드러낸다.** 데이터가 왜 비었는지는 이 스크립트의 축이 아니다(별도 티켓).
 //    여기서 할 일은 «이 장은 큐레이션 후보가 아니다» 를 기계가 말하게 하는 것이다.
 // 🔴 실패로 세지 않는다 — 캡처는 **성공했다.** 빈 화면의 정직한 사진이다. 별도 범주로 센다.
-const EMPTY_RE = /표시할\s*[^.\n]{0,24}없습니다|(?:데이터|결과|항목|내역)[가이]?\s*없습니다|비어\s*있습니다/;
+//
+// 🔴🔴 **이 정규식은 «후보를 줄이는» 것이지 «고르는» 것이 아니다** (TASK-MONO-648 § 표지의 한계).
+//    아래 «못 보는 것» 은 문자열 술어로 **원리상** 판정할 수 없다 — 통과했다고 «볼 만하다» 가 아니다:
+//      ① 빈 검색 폼 — `/finance/accounts` 는 «조회할 accountId 를 입력하세요» 를 그린다. 정상 안내문이라
+//         «비었다» 와 «아직 안 물었다» 를 글자로 가를 수 없다.
+//      ② `/tenants` · `/org-hierarchy` · `/operator-groups` — 2026-09-09 사람 눈 전수에서 «볼 만하지 않다»
+//         로 판정된 셋. 거부·빈값·저하 어느 표지로도 «볼 만하지 않다» 를 말해 주지 않았다.
+//      ③ 글자는 가득한데 내용이 틀린 화면 — raw UUID 가 박힌 `/erp/masters`(TASK-PC-FE-276).
+//      ④ 새로 생긴 빈 상태 문구 — 아래 명사 목록은 **오늘 소스에서 유도한 스냅샷**이다. 앱에 새 문구가
+//         생기면 조용히 샌다(그 모양이 «0건 ≠ 없음»).
+//    ⇒ 표지가 0 이어도 **사람이 그림을 연다.** 표지의 일은 열어 볼 순서를 정하는 것이다.
+//
+// 🔵 명사 목록은 세 앱 `src`(테스트 제외)의 «<명사>이/가 없습니다» 렌더 문구에서 유도했다. 각 명사의 출처
+//    (콘솔=console-web · 스토어=web-store · 팬=fan-platform-web, 모두 `src/` 기준). 이미
+//    `표시할 …없습니다` 로 잡히는 문구(기록·활동·요청·기간·라인·차이·설정·상태·추천·템플릿…)는 넣지 않았다.
+export const EMPTY_NOUNS = [
+  '노드',     // 콘솔 features/org-hierarchy/components/OrgNodeTree.tsx:96     «조직 노드가 없습니다»
+  '그룹',     // 콘솔 features/operator-groups/components/GroupsTable.tsx:83   «등록된 운영자 그룹이 없습니다»
+  '계정',     // 콘솔 features/accounts/api/accounts-state.ts:27               «등록된 계정이 없습니다»
+  '이벤트',   // 콘솔 features/iam-overview/components/IamOverviewAuditCard.tsx:93 «최근 이벤트가 없습니다»
+  '이력',     // 콘솔 features/ledger-ops/components/FxRateHistoryTable.tsx:68 «환율 이력이 없습니다»
+  '스냅샷',   // 콘솔 features/finance-overview/components/FinanceOverviewScreen.tsx:200 «기본계좌 스냅샷이 없습니다»
+  '로트',     // 콘솔 features/ledger-ops/components/PositionLotsLookup.tsx:102 «외화 로트가 없습니다»
+  '분개',     // 콘솔 features/ledger-ops/components/AccountDetail.tsx:114     «기표된 분개가 없습니다»
+  '잔액',     // 콘솔 features/finance-ops/components/BalancesTable.tsx:33     «잔액이 없습니다»
+  '현황',     // 콘솔 features/erp-ops/components/DelegationFactCard.tsx:219   «위임 현황이 없습니다»
+  '초대',     // 콘솔 features/operators/components/OperatorInvitationsSection.tsx:135 «대기 중인 초대가 없습니다»
+  '파트너십', // 콘솔 features/partnerships/components/PartnershipsScreen.tsx:140 «발행한 파트너십이 없습니다»
+  '역할',     // 콘솔 features/permissions/components/PermissionsScreen.tsx:89 «정의된 역할이 없습니다»
+  '권한 키',  // 콘솔 features/permissions/components/PermissionsScreen.tsx:63 «정의된 권한 키가 없습니다»
+  '세트',     // 콘솔 features/domain-permission-sets/components/DomainPermissionSetsScreen.tsx:249 «등록된 테넌트 세트가 없습니다»
+  '프리셋',   // 콘솔 features/domain-permission-sets/components/DomainPermissionSetsScreen.tsx:196 «프리셋이 없습니다»
+  '서비스',   // 콘솔 features/catalog/components/ServiceCatalog.tsx:116       «이용 가능한 서비스가 없습니다»
+  '구성원',   // 콘솔 features/ecommerce-ops/components/SellerMembers.tsx:107  «아직 구성원이 없습니다»
+  '멤버',     // 콘솔 features/fan-directory/components/GroupDetail.tsx:52     «멤버가 없습니다»
+  '정보',     // 콘솔 features/finance-overview/components/FinanceOverviewScreen.tsx:61 «원장 집계 정보가 없습니다»
+  '테넌트',   // 콘솔 features/tenants/components/TenantsTable.tsx:180         «등록된 테넌트가 없습니다»
+  '이미지',   // 콘솔 features/ecommerce-ops/components/ImageManager.tsx:96    «등록된 이미지가 없습니다»
+  '소속사',   // 콘솔 features/fan-directory/components/AgenciesScreen.tsx:60  «등록된 소속사가 없습니다»
+  '결재',     // 콘솔 features/erp-ops/components/ApprovalScreen.tsx:81        «처리할 결재가 없습니다»
+  '상품',     // 스토어 features/product/ui/ProductList.tsx:13                 «등록된 상품이 없습니다»
+  '알림',     // 스토어 features/notification/ui/NotificationList.tsx:50       «알림이 없습니다»
+  '쿠폰',     // 스토어 features/coupon/ui/CouponList.tsx:86                   «보유한 쿠폰이 없습니다»
+  '리뷰',     // 스토어 features/review/ui/MyReviews.tsx:47                    «작성한 리뷰가 없습니다»
+  '배송지',   // 스토어 features/user/ui/AddressManager.tsx:84                 «등록된 배송지가 없습니다»
+  '기기',     // 스토어 features/notification/ui/PushDeviceList.tsx:54         «등록된 기기가 없습니다»
+  '댓글',     // 팬 features/post/ui/CommentPanel.tsx:125                      «아직 댓글이 없습니다»
+  '멤버십',   // 팬 app/(main)/membership/history/page.tsx:28                  «아직 구독한 멤버십이 없어요»
+  '포스트',   // 팬 app/(main)/artists/[id]/page.tsx:58                        «공개 포스트가 없습니다»
+  '작성한 글', // 팬 app/(main)/me/posts/page.tsx:38                           «아직 작성한 글이 없습니다»
+];
+// 어미: 콘솔·스토어는 «없습니다», 팬은 «없어요»(멤버십 이력). `비어 있…` 도 둘 다 받는다
+//   (스토어 CartSummary.tsx:17 «장바구니가 비어있습니다» · WishlistList.tsx:56 «위시리스트가 비어 있습니다»).
+export const EMPTY_RE = new RegExp(
+  '표시할\\s*[^.\\n]{0,24}없습니다' +
+    `|(?:데이터|결과|항목|내역|${EMPTY_NOUNS.join('|')})[가이]?\\s*(?:아직\\s*)?없(?:습니다|어요)` +
+    '|비어\\s*있(?:습니다|어요)',
+);
 // 🔴🔴 **문구만으로는 샌다** (TASK-MONO-707). 옛 정규식은 «**일시적으로** 불러올 수 없» 을
 //    요구했는데, `/ledger` 는 *"시산표를 불러올 수 없습니다"* 라 안 걸렸고 그 오류 화면이
 //    큐레이션 후보 목록에 «쓸 만한 화면» 으로 올라왔다(사람이 이미지를 열어서 걸렀다).
 //    2026-09-17 전수: 본문에 «불러올 수 없습니다» 를 쓰는 파일 **96** vs «일시적으로» **90**.
-const DEGRADED_RE = /불러올\s*수\s*없|잠시\s*후\s*다시\s*시도|오류가\s*발생/;
+// 🔴 영문 실패 문구 (TASK-MONO-648 § 표지): 콘솔의 읽기 클라이언트는 하류 장애를 **영문 한 줄**
+//    `<대상> unavailable` 로 `degraded` 사유에 담고, 화면이 그것을 그대로 그린다 — 2026-09-09 사람 눈 전수에서
+//    `/erp/delegation` 이 «erp unavailable» 을 빨간 글씨로 그렸는데 한국어만 묻는 옛 정규식은 못 봤다.
+//    소스의 실제 문자열: erp-ops/api/erp-client.ts:96 «erp unavailable» · erp-ops/api/delegation-api.ts:79
+//    «erp delegation unavailable» · erp-ops/api/approval-call.ts:88 «erp approval unavailable» ·
+//    shared/api/ledger-client.ts:113 «ledger unavailable» · shared/api/finance-accounts-read.ts:122
+//    «finance unavailable» · scm-ops/api/scm-client.ts:108 «scm gateway unavailable» ·
+//    wms-ops/api/wms-client.ts:113 «wms admin-service unavailable» · fan-directory/api/fan-api.ts:77
+//    «fan directory unavailable» · shared/api/proxy-factory.ts:111,118 «${domain} unavailable»
+//    (모두 console-web `src/` 기준). 🔵 `[\w-]+ unavailable` — 앞 단어가 있어야 한다. 단독 `unavailable` 은
+//    코드 식별자·가이드 인용에 걸릴 모집단이 더 크다. 스토어·팬의 렌더 문구에서는 영문 실패 문구를 못 찾았다
+//    (영문은 테스트 픽스처뿐 — 2026-10-21 grep, 테스트 제외).
+export const DEGRADED_RE = /불러올\s*수\s*없|잠시\s*후\s*다시\s*시도|오류가\s*발생|[\w-]+ unavailable\b/;
 // 🔵 그리고 문구에 **기대지 않는 두 번째 술어**를 둔다 — 저하 화면이 다는 `data-testid` 접미사.
 //    2026-09-17 전수(console-web/src): `-degraded` 96 · `-error` 62 · `-unavailable` 8 · `-stale` 3.
 //    🔴 접미사 하나만 보면 안 된다 — `/ledger` 의 마커는 `ledger-tb-unavailable` 이다(`-degraded` 아님).
@@ -585,7 +697,7 @@ async function captureOne(page, app, appKey, route, path, outDir) {
       return { route, path, file, ok: false, kind: 'redirected-to-login', status, url, landedOn: page.url() };
     }
     // 🔴 거부 화면도 로그인 화면과 같다 — «그 페이지의 사진» 으로 저장하지 않는다(AC-1b).
-    const denial = await judgeDenial(page);
+    const denial = await judgeDenial(page, SHOT_DENIED_MARKERS);
     if (denial.denied) {
       return { route, path, file, ok: false, kind: 'denied', status, url, deniedBy: denial.deniedBy };
     }
@@ -715,11 +827,30 @@ async function main() {
       // ⑤ 필터 폼 + 섹션 거부뿐 — 폼 글자는 본문이 아니다 = 페이지 거부
       { name: 'filter-form-and-forbidden-only', denied: true, partial: 0, textHit: true,
         html: '<main><section><h1>정산</h1><form><label>판매자 ID<input name="sellerId"></label><button type="submit">조회</button></form><div role="status" data-testid="settlements-accruals-forbidden">이 항목을 조회할 권한이 없습니다.</div></section></main>' },
+      // ── TASK-MONO-648 § 표지: 장별 문구 목록(`SHOT_DENIED_MARKERS`). `shot:true` 칸만 넓은 목록으로 잰다.
+      // 마커(testid) 없이 문구만 거부를 말하는 화면 — 요소 판정은 못 보고(denied=false) 문구 표지만 선다.
+      { name: 'shot-org-hierarchy-needs-permission', shot: true, denied: false, partial: 0, textHit: true,
+        html: '<main><h1>조직 계층</h1><p>조직 계층 관리는 org.manage 권한이 필요합니다 (SUPER_ADMIN 또는 상위 노드의 ORG_ADMIN).</p></main>' },
+      { name: 'shot-tenants-super-admin-only', shot: true, denied: false, partial: 0, textHit: true,
+        html: '<main><h1>테넌트</h1><p>테넌트 관리는 SUPER_ADMIN 전용입니다.</p></main>' },
+      { name: 'shot-current-permission-cannot-view', shot: true, denied: false, partial: 0, textHit: true,
+        html: '<main><h1>IAM 개요</h1><p>운영자 현황은 현재 권한으로 조회할 수 없습니다.</p></main>' },
+      { name: 'shot-store-access-denied-copy', shot: true, denied: false, partial: 0, textHit: true,
+        html: '<main><h1>배송 조회</h1><p>배송 정보에 접근할 수 없습니다.</p></main>' },
+      // 대조군 ① 같은 문구여도 프로브 목록(기본)은 안 문다 — 넓힌 것이 프로브로 새지 않았다는 증거
+      { name: 'default-list-ignores-shot-only-copy', denied: false, partial: 0, textHit: false,
+        html: '<main><h1>조직 계층</h1><p>조직 계층 관리는 org.manage 권한이 필요합니다 (SUPER_ADMIN 또는 상위 노드의 ORG_ADMIN).</p></main>' },
+      // 대조군 ② 넓은 목록으로 재도 멀쩡한 표는 안 걸린다
+      { name: 'shot-plain-table-no-hit', shot: true, denied: false, partial: 0, textHit: false,
+        html: '<main><h1>WMS 재고</h1><table><tr><td>SKU-APPLE-001</td><td>85</td></tr></table></main>' },
+      // 대조군 ③ 사이드바 배지 «업무 권한 없음» 은 셸의 모든 장에 있다 — 목록에 «권한 없음» 을 넣지 않은 이유
+      { name: 'shot-sidebar-badge-not-a-hit', shot: true, denied: false, partial: 0, textHit: false,
+        html: '<aside><nav><a href="/wms">WMS <span data-testid="nav-wms-no-biz-perm">업무 권한 없음</span></a></nav></aside><main><h1>WMS 재고</h1><table><tr><td>SKU-APPLE-001</td></tr></table></main>' },
     ];
     let bad = 0;
     for (const c of cases) {
       await page.setContent(c.html);
-      const j = await judgeDenial(page);
+      const j = await judgeDenial(page, c.shot ? SHOT_DENIED_MARKERS : DENIED_MARKERS);
       const got = { denied: j.denied, partial: j.partial.length, textHit: j.textHits.length > 0 };
       const ok = got.denied === c.denied && got.partial === c.partial && got.textHit === c.textHit;
       if (!ok) bad++;
@@ -754,6 +885,44 @@ async function main() {
       if (!ok) bad++;
       console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify({ degraded: c.degraded, byCount: c.byCount })} got=${JSON.stringify(got)}`);
     }
+    // --- 빈값·영문 저하 술어 (TASK-MONO-648 § 표지) — 문자열 술어라 브라우저 없이 같은 상수로 잰다 ---
+    // 🔴 양성 칸은 전부 **소스의 실제 문구**다(`EMPTY_NOUNS` 주석의 출처). 대조군 «아래 한계 칸» 은 반대로
+    //    **걸리지 않는 것이 정답**인 화면이다 — 표지가 못 보는 것을 «못 본다» 고 못박아 둔 칸이다.
+    const textCases = [
+      // 새 명사 — 옛 정규식(데이터|결과|항목|내역 + 표시할)이 놓친 모양. 각 칸은 명사 하나를 무는 칸이다
+      { name: 'empty-org-node', re: 'empty', text: '조직 노드가 없습니다. 최상위(루트) 노드를 먼저 생성하세요.', want: true },
+      { name: 'empty-operator-group', re: 'empty', text: '등록된 운영자 그룹이 없습니다. 총 0건', want: true },
+      { name: 'empty-account', re: 'empty', text: '등록된 계정이 없습니다', want: true },
+      { name: 'empty-fx-history', re: 'empty', text: '이 통화쌍의 환율 이력이 없습니다.', want: true },
+      { name: 'empty-store-product', re: 'empty', text: '등록된 상품이 없습니다.', want: true },
+      { name: 'empty-fan-membership-eoyo', re: 'empty', text: '아직 구독한 멤버십이 없어요.', want: true },
+      { name: 'empty-fan-my-posts', re: 'empty', text: '아직 작성한 글이 없습니다', want: true },
+      { name: 'empty-cart-no-space', re: 'empty', text: '장바구니가 비어있습니다', want: true },
+      // 옛 정규식이 이미 잡던 모양은 그대로 잡힌다(회귀 대조)
+      { name: 'empty-old-pyosihal', re: 'empty', text: '표시할 상품이 없습니다.', want: true },
+      { name: 'empty-old-data', re: 'empty', text: '아직 데이터가 없습니다', want: true },
+      // 대조군 — 채워진 화면 · 거부 문구(빈값이 아니다) · 오류(저하이지 빈값이 아니다)
+      { name: 'empty-control-filled-table', re: 'empty', text: '마스터 5종 DEPT-HQ 본사 DEPT-OPS 운영본부 active 2026-01-01', want: false },
+      { name: 'empty-control-denial-is-not-empty', re: 'empty', text: '이 화면을 조회할 권한이 없습니다.', want: false },
+      { name: 'empty-control-error-is-not-empty', re: 'empty', text: '시산표를 불러올 수 없습니다.', want: false },
+      // 🔴 한계 칸 — 정상 안내문. 걸리면 «표지가 빈 검색 폼까지 가렸다» 는 뜻이라 오히려 빨갛다
+      { name: 'LIMIT-empty-search-form-not-flagged', re: 'empty', text: '조회할 accountId 를 입력하세요', want: false },
+      // 영문 저하 — 한국어만 묻던 옛 정규식이 놓친 모양 (소스: erp-client.ts:96 등)
+      { name: 'degraded-en-erp', re: 'degraded', text: 'erp unavailable', want: true },
+      { name: 'degraded-en-scoped-service', re: 'degraded', text: 'wms admin-service unavailable', want: true },
+      { name: 'degraded-en-ledger', re: 'degraded', text: 'ledger unavailable', want: true },
+      { name: 'degraded-control-healthy', re: 'degraded', text: '마스터 5종 DEPT-HQ 본사 active 2026-01-01', want: false },
+      // 앞 단어가 없는 단독 낱말은 일부러 안 문다(코드 식별자·인용에 걸릴 모집단이 더 크다)
+      { name: 'degraded-control-bare-word', re: 'degraded', text: 'unavailable', want: false },
+    ];
+    const reOf = { empty: EMPTY_RE, degraded: DEGRADED_RE };
+    for (const c of textCases) {
+      const got = reOf[c.re].test(c.text);
+      const ok = got === c.want;
+      if (!ok) bad++;
+      console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${c.want} got=${got}`);
+    }
+
     // --- ③ 사전 확인이 저하를 **보는가** (TASK-MONO-711 ①) ---------------------
     // 🔴 위 ②는 `judgeDegraded()` 를 **직접** 부른다 — 그래서 «프로브가 그것을 부르는가» 는
     //    한 칸도 안 묻는다. 2026-09-18 창에서 프로브는 저하 화면을 `✔` 로 통과시켰고, 그때
@@ -771,6 +940,9 @@ async function main() {
       // 🔵 거부는 **여전히 막는다** — 저하를 통과시키는 것과 거부를 통과시키는 것은 다른 일이다.
       { name: 'probe-denied-still-blocks', ok: false, degraded: null,
         html: '<main><div data-testid="wms-overview-forbidden">권한이 없습니다</div></main>' },
+      // 🔴 TASK-MONO-648 § 표지: 장별 목록만 넓혔다 — 프로브가 «권한이 필요합니다» 한 줄에 앱 전체를 건너뛰면 안 된다
+      { name: 'probe-ignores-shot-only-copy', ok: true, degraded: false,
+        html: '<main><h1>운영자 통합 개요</h1><p>운영자 관리는 operator.manage 권한이 필요합니다.</p><table data-testid="overview-table"><tr><td>WMS</td><td>3</td></tr></table></main>' },
     ];
     const probeBrowser = await chromium.launch();
     const probePage = await probeBrowser.newPage();
@@ -795,12 +967,17 @@ async function main() {
     const probeDeg = probeCases.filter((c) => c.degraded === true).length;
     const probeClean = probeCases.filter((c) => c.degraded === false).length;
     const probeBlocked = probeCases.filter((c) => c.ok === false).length;
-    if (!pos || !neg || !degPos || !degNeg || !probeDeg || !probeClean || !probeBlocked) {
-      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg} · 프로브 저하${probeDeg}/정상${probeClean}/차단${probeBlocked})`);
+    // 문구 표지 칸도 같은 하한 — 빈값/영문저하 각각 양성·음성이 둘 다 있어야 «대조군 통과» 가 공허하지 않다
+    const txt = (re, want) => textCases.filter((c) => c.re === re && c.want === want).length;
+    const shotPos = cases.filter((c) => c.shot && c.textHit).length;
+    const shotNeg = cases.filter((c) => c.shot && !c.textHit).length;
+    if (!pos || !neg || !degPos || !degNeg || !probeDeg || !probeClean || !probeBlocked ||
+        !txt('empty', true) || !txt('empty', false) || !txt('degraded', true) || !txt('degraded', false) || !shotPos || !shotNeg) {
+      console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg} · 프로브 저하${probeDeg}/정상${probeClean}/차단${probeBlocked} · 빈값 ${txt('empty', true)}/${txt('empty', false)} · 영문저하 ${txt('degraded', true)}/${txt('degraded', false)} · 장별문구 ${shotPos}/${shotNeg})`);
       process.exit(1);
     }
-    const total = cases.length + degCases.length + probeCases.length;
-    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg} · 프로브 ${probeCases.length})`);
+    const total = cases.length + degCases.length + probeCases.length + textCases.length;
+    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg} · 프로브 ${probeCases.length} · 문구표지 ${textCases.length} · 장별문구 ${shotPos}/${shotNeg})`);
     process.exit(bad ? 1 : 0);
   }
 

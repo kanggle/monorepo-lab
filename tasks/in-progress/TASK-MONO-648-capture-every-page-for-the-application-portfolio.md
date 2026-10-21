@@ -406,13 +406,18 @@ AC-4 가 요구한 큐레이션 후보를 내려고 **19장 중 16장을 실제�
 적었다. 틀렸다.** `sanityCheck` 를 열어 보지 않고 그렇게 썼고, 열어 보니 앱당 1회다.
 ⇒ 대조군이라고 부른 것이 **대조군이 아니었다.**
 
-- [ ] 🔴 **표지를 넓혀라 — 다만 «고치는 것»이 아니라 «못 보는 것을 적는 것»이 먼저다.**
+- [x] 🔴 **표지를 넓혀라 — 다만 «고치는 것»이 아니라 «못 보는 것을 적는 것»이 먼저다.**
       `EMPTY_RE` 의 명사 목록을 늘리고, **장별 권한거부 판정을 더하고**, 영문 실패 문구를
       넣는다. 🔵 그래도 빈 검색 폼은 못 잡는다 — **그 한계를 명시적으로 적어라.**
       한계를 안 적으면 다음 사람이 「표지가 통과했으니 볼 만하다」로 읽는다.
-- [ ] 🔵 **사람 눈을 대체하려 하지 마라.** 이 표는 16장을 열어서 나왔고, 그 중 셋(`/tenants`
+      → 🟢 2026-10-21 UTC 닫음 — 아래 § «표지 넓히기 (2026-10-21)». 명사 34 · 장별 문구 4 · 영문 저하 1(`<대상> unavailable`) 전부
+      소스의 file:line 을 달았고, 한계는 스크립트 머리말과 이 티켓에 **둘 다** 적었다.
+      ⚪ 닫는 근거는 «술어가 픽스처에서 문다» 이지 «실제 콘솔이 그 문구를 그린다» 가 아니다 — 후자는 창에서 재촬영해야 보인다.
+- [x] 🔵 **사람 눈을 대체하려 하지 마라.** 이 표는 16장을 열어서 나왔고, 그 중 셋(`/tenants`
       `/org-hierarchy` `/operator-groups`)은 **어떤 문자열 술어로도 «볼 만하지 않다»를
       말해 주지 않았다.** 표지의 목적은 후보를 **줄이는 것**이지 고르는 것이 아니다.
+      → 🟢 2026-10-21 UTC — 스크립트 머리말 «한계» 절 + 아래 § 에 «표지가 0 이어도 사람이 그림을 연다» 로 못박았다.
+      🔵 이 칸의 동사는 «대체하려 하지 마라» 라 코드로 증명할 것이 없다 — 닫는 것은 **한계가 적혔다는 사실**이다.
 
 ### store · fan 도 사람 눈으로 (2026-09-09, 9/27 열람)
 
@@ -1753,7 +1758,7 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 
 - 🔴 **론처 배선은 창이 하나 더 필요하다.** 론처 썸네일은 `infra/demo/aws/site/capture-shots.mjs` 가 **창 안에서** 자기 규격(뷰포트·매니페스트)으로 찍고, (z37) 이 `capture-shots.mjs` SHOTS ↔ `index.html` SHOTS ↔ `thumbnails/*.jpg` 를 한 묶음으로 지킨다 ⇒ 포트폴리오 촬영본(1440 폭)을 그대로 끼울 수 없다. 다음 창에서: SHOTS 에 위 확정 장을 넣고 `capture-shots.mjs` 로 찍어 셋을 **한 커밋으로**.
 - `[ ]` 동적 경로(AC-1) — 남은 미해결은 앱 쪽 사유(템플릿 목록에 상세 링크 없음 · 정산 기간 부모 404 · store `/orders/[id]`)라 재촬영으로 안 풀린다. 오늘 콘솔 `ecommerce` 에서 fan·tenants 동적 4개도 미해결 = 그 테넌트에 권한이 없어서(의도).
-- `[ ]` 표지 넓히기 — 위 오탐 둘을 함께.
+- `[ ]` 표지 넓히기 — 위 오탐 둘을 함께. → 🔵 2026-10-21: «넓히기»(명사·장별 문구·영문)는 닫혔다(아래 § 2026-10-21). **위 오탐 둘(프로브의 부분 거부 · `'403'` 이 데이터 숫자에 걸림)은 아직 안 고쳤다** — 이 칸은 그래서 열어 둔다.
 
 # 🟢 2026-10-06 UTC 23차 AMI 창 — 론처 콘솔 카드 배선 완료
 
@@ -1770,3 +1775,54 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 ## CORRECTION (2026-10-06 UTC) — 론처 배포는 `terraform apply` 가 아니다
 
 바로 위 절의 «⏳ 론처 배포 = 이 PR 머지 뒤 `terraform apply`(site 는 S3)» 는 **틀렸다.** 론처는 Vercel(`https://hubwang.com`)이고 main 푸시로 배포된다(`check-launcher-fresh.sh`). #4174(`28fffa5f4`) 머지 뒤 실측: `terraform plan` «No changes» · `hubwang.com` 이 `console-{1..4}-*.jpg` 4장을 200 으로 서빙 · 옛 `console-1-erp-masters.jpg` 404 · `check-launcher-fresh.sh` rc=0 «서빙 커밋 = 기대 커밋 = 28fffa5f4». ⇒ **론처 콘솔 4장 배선은 끝났다.** 이 티켓의 남은 것은 위 «⏳ 남은 것» 의 동적 경로(AC-1)·표지 넓히기 두 칸이다.
+
+# 🟢 표지 넓히기 (2026-10-21 UTC · 창 없음 · 코드+테스트만)
+
+대상: `scripts/capture-portfolio.mjs`. 🔴 **라이브 스택에 대고 돌리지 않았다** — 술어를 브라우저 픽스처(`--self-test`)로만 쟀다.
+
+## 🔴 이 티켓의 «장별 권한거부 판정을 더하고» 는 반쯤 낡았다
+
+§ AC-1b(2026-09-16)가 이미 **장별** 판정(요소 `-permission-denied`/`-not-eligible`/`-forbidden` + 구조 술어)을 넣었다.
+위 § «왜 자동 판정이 19를 냈나» 표의 «`sanityCheck()` 는 앱당 한 번» 은 그 **이전** 상태다. 그래서 이번에 더한 것은
+«장별 판정 신설» 이 아니라 **장별 문구 표지의 목록을 넓힌 것**이다(`SHOT_DENIED_MARKERS` → 매니페스트 `deniedTextOnly`).
+
+## 무엇을 더했나 (소스 file:line 은 스크립트의 `EMPTY_NOUNS` · `DEGRADED_RE` · `SHOT_DENIED_MARKERS` 주석에 있다)
+
+| 표지 | 더한 것 | 출처 (console-web/`src` · web-store/`src` · fan-platform-web/`src`) |
+|---|---|---|
+| `empty` | 명사 **34** (콘솔 24 · 스토어 6 · 팬 4) + 어미 `없어요` · `비어 있어요` | 예: «조직 노드가 없습니다» `features/org-hierarchy/components/OrgNodeTree.tsx:96` · «등록된 운영자 그룹이 없습니다» `features/operator-groups/components/GroupsTable.tsx:83` · 팬 «아직 구독한 멤버십이 없어요» `app/(main)/membership/history/page.tsx:28` |
+| `degraded` | 영문 `<대상> unavailable` | `features/erp-ops/api/erp-client.ts:96` «erp unavailable» 외 8곳 |
+| `deniedTextOnly` (장별) | `권한이 필요합니다` · `SUPER_ADMIN 전용` · `권한으로 조회할 수 없습니다` · `접근할 수 없습니다` | `app/(console)/{org-hierarchy,operators,permissions,permission-sets,accounts,partnerships,operator-groups}/page.tsx` · `tenants/page.tsx:42,63` · `IamComposedOverviewScreen.tsx:107,166` · 스토어 `features/order/model/use-shipping-tracking.ts:35` |
+
+🔴 **일부러 넣지 않은 것 둘:**
+- «권한 없음» — 콘솔 사이드바 배지 «업무 권한 없음»(`shared/ui/ConsoleSidebarNav.tsx:117`)이 셸의 모든 장 본문에 있어 전량이 적중한다(대조군 칸이 이것을 문다).
+- 프로브(`sanityCheck`)의 문구 목록 — 프로브의 문구 적중은 **앱을 통째로 건너뛰게** 한다. 넓은 문구는 장별 목록에만 쓰고 `DENIED_MARKERS` 는 그대로 둔다
+  (대조군 칸 `probe-ignores-shot-only-copy`). 영문 **거부** 문구는 렌더되는 곳을 못 찾았다(영문은 테스트 픽스처뿐).
+
+## 🔴🔴 한계 — 이 표지가 못 잡는 것 (스크립트 머리말과 동일. 한쪽만 고치지 마라)
+
+표지가 하나도 안 붙은 장은 «볼 만하다» 가 아니라 **«이 표지로는 흠을 못 찾았다»** 이다. 문자열 술어가 **원리상** 판정하지 못하는 것:
+
+1. **빈 검색 폼** — `/finance/accounts` 의 «조회할 accountId 를 입력하세요» 는 정상 안내문이다(대조군 `LIMIT-empty-search-form-not-flagged` 가 «걸리지 않음» 을 못박는다).
+2. **`/tenants` · `/org-hierarchy` · `/operator-groups`** — 사람 눈 전수에서 «볼 만하지 않다» 로 판정된 셋. 거부·빈값·저하 어느 표지도 그 결론을 대신 내려 주지 않았다.
+3. **글자는 가득한데 내용이 틀린 화면**(raw UUID 의 `/erp/masters` 등).
+4. **새로 생긴 문구** — 명사 목록·문구 목록은 오늘 소스에서 유도한 **스냅샷**이다. 앱에 새 문구가 생기면 조용히 샌다.
+
+⇒ 표지는 **후보를 줄일 뿐 고르지 않는다.** 큐레이션 전에 사람이 그림을 연다.
+
+## 증거 (창 없이)
+
+- `node scripts/capture-portfolio.mjs --self-test --from <console-web>/node_modules/@playwright/test` → **rc=0, 47/47** (이전 20 → +27 칸: 장별 문구 7 · 문구표지 19 · 프로브 1, 양성·음성 하한 포함). `--dry-run` rc=0. `check-capture-route-staleness.mjs --self-test` rc=0 20/20. CI 는 이미 `capture-portfolio.mjs --self-test` 를 부른다(`ci.yml`) — 배선 추가 없음.
+- **mutation (편집→실행→되돌림, `git checkout --` 안 씀):**
+  - 장별 목록에서 `권한이 필요합니다` 를 `권한 없음` 으로 바꿈 → **rc=1**, `shot-org-hierarchy-needs-permission` 과 사이드바 대조군 `shot-sidebar-badge-not-a-hit` 가 빨강.
+  - `DEGRADED_RE` 에서 영문 가지를 뺌 → **rc=1**, `degraded-en-{erp,scoped-service,ledger}` 빨강.
+  - `EMPTY_RE` 에서 신규 명사를 뺌 → **rc=1**, 신규 명사 칸 7개 빨강(옛 모양 `표시할…`·`데이터가…` 와 `비어있습니다` 는 초록 유지 = 회귀 대조).
+  - 프로브가 장별 목록을 쓰게 바꿈 → **rc=1**, `probe-ignores-shot-only-copy` 빨강.
+  - 전부 원복 후 47/47.
+- ⚪ **안 쟀다:** `captureOne()` 이 `SHOT_DENIED_MARKERS` 를 **실제로 넘기는가** 는 픽스처가 못 문다(`captureOne` 은 라이브 페이지가 필요). 그 한 줄 배선은 다음 창의 매니페스트에 `deniedTextOnly` 에 신규 문구가 찍히는지로 확인한다.
+
+## ⏳ 이 절이 닫지 않은 것
+
+- `[ ]` 동적 경로 16개 (AC-1) — 손대지 않았다.
+- `[ ]` §«사전 점검 오탐 둘» — 프로브의 부분 거부 오독 · `'403'` 이 데이터 숫자(SKU `…403`)에 걸림. **둘 다 그대로다**(장별 문구 표지에도 `'403'` 은 남아 있어 `deniedTextOnly` 목록에 같은 소음이 낄 수 있다 — 소음이지 오분류는 아니다).
+- 매니페스트 필드·콘솔 출력의 형식은 안 바꿨다(`empty` · `degraded` · `deniedTextOnly` 그대로) — 지금까지의 촬영본과 비교 가능.
