@@ -37,7 +37,7 @@ A plan run on this host either computes the real capability or **fails loudly** 
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — the resolved interpreter on each shell, the cause, and the chosen fix, recorded.
+- [x] **AC-0** — the resolved interpreter on each shell, the cause, and the chosen fix, recorded. → § AC-0 measurement (2026-10-21 UTC). 🔴 The «WSL bash has no git» premise is wrong — see there.
 - [ ] **AC-1** — the failing shell no longer yields a silent `unknown` (plan fails, or computes `yes`), shown by running it.
 - [ ] **AC-2** — the existing capability tests (`infra/demo/aws/tests`, `(z40)` bite) still pass; a test or guard for the new behaviour.
 - [ ] **AC-3** — the runbook says how to run plan/apply on this host and to read the full diff.
@@ -59,3 +59,29 @@ A plan run on this host either computes the real capability or **fails loudly** 
 
 1. Make the script return `yes` when it cannot tell — the opposite failure (the guard exists so an old AMI is never offered bundle boot).
 2. Fix only the docs — the next apply from the wrong shell flips it again.
+
+---
+
+## AC-0 measurement (2026-10-21 UTC · no window · no terraform run · analysis=Opus 5.5)
+
+🔴 **The premise «the WSL bash has no git» is wrong (measured).** WSL Ubuntu-22.04 has git 2.34.1 and yields `capable=yes` in the main checkout. The incident's reason string («git 저장소 밖에서 실행됐습니다») reproduced in exactly one combination: **WSL bash run inside a git worktree**.
+
+| Shell | `bash` resolved | Script result |
+|---|---|---|
+| PowerShell, default PATH | `C:\Windows\System32\bash.exe` = WSL (Ubuntu-22.04 default distro, bash 5.1.16, `/usr/bin/git` 2.34.1). Default PATH has `Git\cmd` only, no Git `bin` | main checkout `yes` (measured) |
+| PowerShell, Git `bin;usr\bin` prepended | `C:\Program Files\Git\bin\bash.exe` (MINGW64, bash 5.2.26, git 2.45.1) | `yes` (measured) |
+| Git Bash tool | native PATH starts `~\bin`, `Git\mingw64\bin`, `Git\usr\bin` → first `bash.exe` = `Git\usr\bin\bash.exe` (measured by walking PATH from node.exe) | `yes` |
+
+- terraform v1.15.8 · external provider v2.4.1. Go `exec.LookPath` walks PATH in order and hands an absolute path to CreateProcess, so the «System32 first» CreateProcess rule does not apply (inferred). ⇒ from Git Bash the WSL launcher cannot win — the Origin's «ran from the Bash tool → WSL» does not match this measurement.
+- **Cause (file:line)**: `ami-bundle-capability.sh:94` `git -C "$GITROOT" rev-parse --git-dir` fails → reason «git 저장소 밖»; `:110-114` always `exit 0` in `--json` mode, so `unknown` leaves as **success** — an intended contract (`:57-60` header · `main.tf:363-365`). `main.tf:366-368` `program = ["bash", …]` = first bash on PATH. `main.tf:395` → Lambda env `BUNDLE_SELECTION_CAPABLE`; `handler.py:93` reads `unknown` as refusal.
+- **Reproduced mechanism (measured)**: a worktree's `.git` is a file `gitdir: C:/Users/.../monorepo-lab/.git/worktrees/<name>`; WSL git cannot read that Windows path — `fatal: not a git repository: /mnt/c/.../<wt>/C:/Users/...` (rc=128) → `{"capable":"unknown",…,"reason":"git 저장소 밖에서 실행됐습니다"}` rc=0. Git bash in the same worktree: normal.
+- ⚪ Not settled: state lives only in the main checkout and the incident plan showed two diff lines, so «it ran in a worktree» is not proven either. Remaining candidates (neither measurable now): ① a `-state`/`-chdir` combination from a worktree ② the default WSL distro was then a git-less one (rancher-desktop / docker-desktop; today it is Ubuntu).
+- Common defect: depending on which bash PATH yields first, the script can be blind to the repository, and `unknown` then leaves silently as success. Pinning the interpreter alone does not close every path.
+
+### Owner decision (2026-10-21 UTC) — fix = terraform `postcondition`
+
+- `data "external" "ami_bundle_capability"` gets `lifecycle { postcondition { condition = self.result.capable != "unknown" || var.allow_unknown_bundle_capability; error_message = <carries reason> } }` — the plan fails loudly. `no` is a real verdict and passes. One escape var (default false) for a deliberately repo-less / shallow run.
+- Script contract and `(z40)` («json rc=0 in all five states», `verify-demo-wrapper.sh:4252`, `:4257-4261`, `:4496`) stay. Add diagnostic flat-string fields `shell` (`uname -s`) and `git` (`command -v git`) to the JSON so the next error names its cause.
+- Rejected: (a) script exits non-zero on `unknown` (breaks z40 + header contract) · (b) `var.bash_path` (no default fits Linux/CI and Windows; does not cover the worktree/distro paths) · (c) replace bash (git ancestry cannot be computed by terraform functions).
+- AC-2: `(z40)` gains a wiring grep for the postcondition + one bite cell (removing the condition must trip). AC-3: README (`infra/demo/aws/README.md:49` names no shell today) — on PowerShell prepend Git `bin` to PATH · run from the main checkout · read every `~`/`+`/`-` line of the plan.
+- Files: `infra/demo/aws/terraform/main.tf` · `variables.tf` · `infra/demo/verify-demo-wrapper.sh` · `infra/demo/aws/README.md` · `ami-bundle-capability.sh` (diagnostic fields). No `scripts/` change (no guard-count ripple). Implementation = Sonnet. AC-1 = run `terraform plan` from PowerShell default PATH in a worktree and see it fail (owner/session runs terraform).

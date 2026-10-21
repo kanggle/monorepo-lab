@@ -53,7 +53,7 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — ①② 의 원인을 file:line 으로(실측 응답 · 콘솔 판정 지점). 원인이 둘이면 나눌지 적는다.
+- [x] **AC-0** — ①② 의 원인을 file:line 으로(실측 응답 · 콘솔 판정 지점). 원인이 둘이면 나눌지 적는다. → § AC-0 측정 (2026-10-21 UTC). 원인 둘 · 티켓은 나누지 않는다(소유자 결정).
 - [ ] **AC-1** — 수선(문구가 바뀌면 소유자 문안 승인).
 - [ ] **AC-2** — 시험: 위 세 고정값 + 기존 비회귀(결재 화면 · 위임 화면 스위트).
 - [ ] **AC-3** — 배포(Vercel) · 라이브(콘솔에서 상신 → `SUBMITTED` · «내가 위임한» 에 오류 문구 없음, 다음 데모 창).
@@ -75,3 +75,33 @@ frontend
 
 1. 오류 문구만 지우고 진짜 실패도 조용해진다 — 시험의 503 고정값이 막는다.
 2. 고정값을 손으로 만든 모양으로 쓴다 — 실측 응답(이 창의 200 본문)으로 쓴다.
+
+---
+
+## AC-0 측정 (2026-10-21 UTC · 창 없음 · 분석=Opus 5.5)
+
+실측 = 티켓에 적힌 라이브 API 응답 + console-web 의 zod 로 스키마 사본을 node 에서 판정(빈 위임 목록 `meta.size:0` → **false** · `size:1` → true · 감싸지 않은 본문 → `parseApprovalDetail` **false** · `{data}` → true). 나머지는 코드 추적. Vercel 로그는 안 읽었다.
+
+**① 실패한 것은 «상신» 이 아니라 «작성»(만들기)이다.**
+- BFF 가 감싸지 않는다: `apps/console-web/src/app/api/erp/approval/requests/route.ts:74` `NextResponse.json(result, { status: 201 })`. 형제 `requests/[id]/route.ts:23` · `[id]/[transition]/route.ts:105` 는 `{ data: result }`.
+- 클라이언트는 `{data}` 를 기대: `features/erp-ops/hooks/use-erp-approval.ts:118-121` `parseApprovalDetail` = `ApprovalRequestSchema.parse(env.data)` → `useCreateApproval`(`:157`) 에서 ZodError(브라우저).
+- 화면: ZodError 는 `ApiError` 가 아니라 `approval-error.ts:105` 대체 문구 «요청을 처리하지 못했습니다.» → `ApprovalCreateDialog.tsx:442-449` 표시 · `:163` `onSuccess` 미호출 → 대화상자 열린 채. 서버엔 DRAFT 가 이미 있다(18:14:02Z) — 그래서 에이전트의 API 상신이 409 가 아니라 200 이었다. 다시 누르면 새 Idempotency-Key 로 DRAFT 가 하나 더 생긴다. 버튼 testid `approval-create-submit` 의 라벨이 «작성» 이라 «상신» 으로 읽혔다.
+- 나이: `TASK-PC-FE-051`(#1108 `9f04b977e`) 부터. 시험이 못 잡은 이유: `tests/unit/features/erp-ops/ApprovalScreen.test.tsx:426` 이 BFF 를 손으로 만든 `{ data: DRAFT }` 로 흉내 · `tests/unit/approval-proxy.test.ts:179-205` 는 만들기 응답 본문 모양을 안 본다(Failure Scenario 2 그대로).
+- ⚪ 상세 화면의 «상신»(`ApprovalDetail.tsx:307-316` → `[transition]/route.ts`) 은 코드상 정상 · 라이브 미관찰.
+
+**② 빈 위임 목록의 `meta.size=0` 을 콘솔 스키마가 거절한다.**
+- 서버: `erp-platform/apps/approval-service/.../DelegationController.java:100` `ApiEnvelope.ofList(data, 0, data.size(), data.size())` — 페이지 없는 목록이라 size = 건수(`approval-api.md:211-213`).
+- 콘솔: `features/erp-ops/api/delegation-types.ts:60` `size: z.number().int().positive().optional()` 가 0 거절 → `delegation-api.ts:122` 파싱이 `shared/api/flat-envelope-gateway.ts:366` try 안 → `:383-388` catch → `ErpUnavailableError('NETWORK_ERROR')` → `shared/api/proxy-factory.ts:103-114` 503 → `approval-error.ts:63-64` «결재 서비스를 일시적으로 사용할 수 없습니다». 클라이언트 재파싱(`use-erp-delegation.ts:52`)도 같은 이유로 실패.
+- «나에게 위임된» 이 정상인 이유: 1건 → `size=1` 통과. 두 문구가 함께 나오는 이유: `DelegationGrantList.tsx:98-111` 이 `isError` 면 오류 문구, `grants=[]` 라 빈 목록 문구도.
+- 시험이 못 잡은 이유: `tests/unit/delegation-api.test.ts:130` 고정값 `size:20`. `ofList(…, data.size(), …)` 는 이 컨트롤러 하나뿐 — `approval-types.ts:103` · `types/common.ts:148` 의 `positive()` 는 지금은 무해.
+
+**형제 결함(코드 추적 · 라이브 미확인)**: 위임 **생성 · 회수** — `delegation-api.ts:150-153` · `:172-174` 가 응답을 감싸지 않은 grant 로 `DelegationGrantSchema.parse(json)`(주석 «201 body = grant»), 서버는 `ApiEnvelope.of(v)`(`DelegationController.java:59,74`) → grant 는 생기는데 콘솔은 503 문구일 것. 고정값 `delegation-api.test.ts:277,298,327` 이 감싸지 않은 grant.
+
+범위 밖(원인만): 위임 화면의 직원 id 표시 = `DelegationGrantList.tsx:120` 이 `{g[idField]}` 원문을 그린다(이름 풀이 없음).
+
+### 소유자 결정 (2026-10-21 UTC)
+
+- 나누지 않는다. ① = BFF 만들기 라우트를 `{ data: result }` 로(형제와 같게, 클라이언트 그대로) · ② = `delegation-types.ts:60` `nonnegative()` · 오류일 때 빈 목록 문구 숨김(`DelegationGrantList.tsx:107-111` 에 `!isError`) · **위임 생성 · 회수 결함도 이 티켓에 포함**(`.data` 를 꺼낸다). 서버 변경 없음.
+- 문구 변경 없음(기존 문구만 쓴다) — AC-1 문안 승인 대상 없음.
+- 시험: 고정값을 실제 서버 모양으로(만들기 BFF 응답 `{data}` 단언 · 빈 위임 목록 `meta:{page:0,size:0,totalElements:0,timestamp}` · 진짜 503 고정값은 오류 문구만 · 생성 · 회수 응답 `{data: grant}`).
+- 구현 = Sonnet.

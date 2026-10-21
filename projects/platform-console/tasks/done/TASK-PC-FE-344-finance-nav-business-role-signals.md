@@ -8,7 +8,7 @@ TASK-PC-FE-344
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -61,7 +61,8 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-794` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `FINANCE_ACCOUNT_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 Finance 5 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(account · ledger `SecurityConfig`)와 다시 대조.
+- [x] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-794` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `FINANCE_ACCOUNT_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 Finance 5 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(account · ledger `SecurityConfig`)와 다시 대조.
+  - ✅ (2026-10-21 UTC 정리 · 소유자 결정 «근거를 적고 체크 → done») 게이트 = **충족**: TASK-MONO-794 를 실은 굽기 `ami-00ef8cc1057cca59b` @ `8905d2c29` 가 28차 창(2026-10-16)에서 라이브 확인된 뒤 머지(§ Merge gate — 28th window · `TASK-MONO-672` § 28th window — harvest: `demo@` assume `demo-corp` 토큰 roles 에 Finance 5 역할 · V0056–V0059 행 수). 서버 코드 대조 = § 구현 기록 «AC-0 — 오늘 거짓 배지 · 숨김이 있는가 · 서버 대조»(account · ledger `SecurityConfig`). 🔵 원문의 두 하위 항목 중 `GET /api/admin/domain-roles` 는 **문자 그대로 잰 기록이 없다** — 카탈로그 코드 대조로 갈음. 라이브 `/me/domain-access` 는 32차 창 화면(데모 운영자 배지 없음 · 세트 0 배지 있음 — 판별력 있는 대조)으로 **간접** 확인.
 - [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `ee65d15b2`.
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`finance-read`) → Finance 메뉴 배지 없음 · 쓰기 버튼 없음 / 계좌 세트만(`finance-account-operate`) → `/ledger` 배지 / 원장 운영 세트(`finance-ledger-operate`) → `/finance/accounts` 배지, `/ledger` 버튼 보임 / 원장 통제만 → `/ledger` 배지 없음 · 버튼 없음 / Finance 세트 0 → Finance 메뉴 전부 배지. → `console-nav-business-permission.test.ts` § TASK-PC-FE-344(+ 진입 역할 0 가드 · 통제 역할 미선언 가드) · `LedgerOpsScreen.test.tsx`(`DiscrepancyDetail` · 두 패널) · `LedgerFxRates.test.tsx`.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → row 12 `undefined` → 배지 없음 · `canWriteOn` true · `canWrite` 생략 = 보임(대조군 시험).
@@ -137,3 +138,9 @@ frontend
 - `/ledger` FX «새로고침»: demo@ **보임** → `finance-read` **없음** → `finance-ledger-operate`(`FINANCE_LEDGER_WRITE`) **다시 보임** — 양방향 ✅. `finance-ledger-operate` 에서 «계좌» 메뉴 배지 ✅(계좌 역할 없음).
 - ⚪ «해소»: OPEN 대사 차이 행이 없어 판정 불가. ⚪ CONTROL 단독 세트는 프리셋에 없어(`admin-api.md:3840`) 안 쟀다.
 - 🔴 `in-progress` 유지 — AC-0 체크박스가 비어 있다.
+
+
+## 닫기 (2026-10-21 UTC — 4차원 확인)
+
+- (a) #4402 `state=MERGED` · (b) `465b39a94` 가 `origin/main` 조상 · (c) 머지 시점 체크 SUCCESS 14 · 실패 0 · (d) AC-0~AC-4 전부 닫힘(AC-0 ·  위 2026-10-21 줄, AC-4 = Vercel 7130932170 success + § 32차 창 라이브).
+- 빈 체크칸은 «체크만 빠진 것»으로 판정했다 — 본문 기록은 이미 있었다. in-progress → done.
