@@ -8,7 +8,7 @@ TASK-MONO-804
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -121,3 +121,8 @@ devops
 - `server-only --self-test` rc=0 — **11/11** · `backend-origins --self-test` rc=0 — **9/9**.
 - 실 트리 두 가드 rc=0 · hits=0. `reached` 변화(같은 그래프라 두 가드 동일): web-store **222 → 217** · fan-platform-web **41 → 35** · console-web **486 → 481** (빠진 16 = 타입 전용 연결). 뿌리 수 불변(83 · 21 · 326) · 하한(뿌리 ≥20 · 도달 ≥60) 여유.
 - CI: `ci.yml:1902-1956` 의 두 잡이 `scripts/client-graph.mjs` 변경에 걸려 자체 시험 + 실 트리를 돈다 — 이 PR 의 체크로 AC-2 를 닫는다.
+
+## CORRECTION (2026-10-21 UTC · close chore · 4차원 확인)
+
+- **AC-2 닫힘** — 위 AC 목록의 AC-2 칸은 review 시점 기록이라 빈 채로 둔다. impl PR #4453(head `e9b560150`) 의 체크: `Client graph server-only imports (the browser must not pull next/headers)` **pass** · `Client graph backend origins (the browser must not know the address)` **pass**(두 잡 모두 자체 시험 + 실 트리, `ci.yml:1902-1956`) · 전체 67 · pending 0 · fail 0. 실 트리 rc=0 · `reached` 변화는 § 구현에 기록.
+- 4차원: (a) `gh pr view 4453` `state=MERGED` · mergedAt 2026-10-21T19:13:59Z · (b) `origin/main` tip = 스쿼시 `c3a3509ac` · (c) 머지 전 head 체크 실패 0 · (d) AC-0 · AC-1 · AC-2 전부 그 AC 의 동사대로 닫힘(AC-2 는 이 CORRECTION).
