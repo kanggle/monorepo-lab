@@ -1,6 +1,6 @@
 # TASK-MONO-802 — on the Windows host `terraform plan` runs `ami-bundle-capability.sh` under a bash that has no git, computes `BUNDLE_SELECTION_CAPABLE=unknown`, and an apply that was meant to change something else silently turns bundle boot off
 
-- **Status**: ready
+- **Status**: review
 - **Type**: fix (demo infrastructure — `infra/demo/aws/terraform`)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (`infra/demo/` is shared demo infrastructure)
@@ -85,3 +85,14 @@ A plan run on this host either computes the real capability or **fails loudly** 
 - Rejected: (a) script exits non-zero on `unknown` (breaks z40 + header contract) · (b) `var.bash_path` (no default fits Linux/CI and Windows; does not cover the worktree/distro paths) · (c) replace bash (git ancestry cannot be computed by terraform functions).
 - AC-2: `(z40)` gains a wiring grep for the postcondition + one bite cell (removing the condition must trip). AC-3: README (`infra/demo/aws/README.md:49` names no shell today) — on PowerShell prepend Git `bin` to PATH · run from the main checkout · read every `~`/`+`/`-` line of the plan.
 - Files: `infra/demo/aws/terraform/main.tf` · `variables.tf` · `infra/demo/verify-demo-wrapper.sh` · `infra/demo/aws/README.md` · `ami-bundle-capability.sh` (diagnostic fields). No `scripts/` change (no guard-count ripple). Implementation = Sonnet. AC-1 = run `terraform plan` from PowerShell default PATH in a worktree and see it fail (owner/session runs terraform).
+
+## Implementation record (2026-10-21 UTC)
+
+- `infra/demo/aws/terraform/main.tf:366-392` — `data.external.ami_bundle_capability` gains `lifecycle { postcondition { condition = self.result.capable != "unknown" || var.allow_unknown_bundle_capability; error_message = <<-EOT … EOT } }`. **`error_message` DOES reference `self`** (reason, shell, git): measured on terraform v1.15.8 with a scratch `terraform_data` config (builtin provider, outside the repo, no AWS) — apply failed printing `REASON=<self.output.reason>`. Not measured on 1.6 (`required_version >= 1.6` unchanged; if a 1.6 user hits a parse error there, bump `required_version`). The message states the reason + shell + git + the three fix steps (Git `bin` first on PATH · main checkout, not a worktree · `bash infra/demo/aws/ami-bundle-capability.sh --json`) + the escape var.
+- `infra/demo/aws/terraform/variables.tf:211-216` — `allow_unknown_bundle_capability` (bool, default false).
+- `infra/demo/aws/ami-bundle-capability.sh` (json block) — flat-string `shell` (`uname -s`) and `git` (`command -v git`, quotes/backslashes stripped) added; rc=0 contract unchanged. Sample on this host: `"shell":"MINGW64_NT-10.0-26200","git":"/mingw64/bin/git"`.
+- `infra/demo/verify-demo-wrapper.sh` (z40): `shell`/`git` key assertion after the five `z40_expect` cells (~:4263); `z40_post_ok` wiring check + `variables.tf` var check (~:4412-4427); bite-5 (~:4522-4533) rewrites the condition to `true` and requires `z40_post_ok` to fail; `ok` line updated.
+- `infra/demo/aws/README.md` step 2: PowerShell PATH prefix, main checkout, read every `~`/`+`/`-` line, escape var.
+- Verification: `bash infra/demo/verify-demo-wrapper.sh --require-coverage` (the nightly invocation; ci.yml uses `--live`, not run) → log in scratchpad `z40-run1.log`, `rc=0`, `(z40) ok` line carries the new text, bite-5 inside the run passed. Independent mutation of main.tf (condition → `true`): `z40_post_ok` real=0, mutated=1. `python -m unittest infra/demo/aws/tests/test_handler.py` 126 OK. `terraform fmt -check` rc=0. `terraform validate`/init of the real config NOT run.
+- **AC-1 command (coordinator, PowerShell default PATH, from a worktree)**: `cd <any worktree>\infra\demo\aws\terraform; terraform plan` — expected: `Error: Resource postcondition failed` on `data.external.ami_bundle_capability` with 사유/진단 lines (if WSL bash is resolved; if it resolves to `yes` instead, the cause is not reproduced there). Then from the main checkout with Git `bin;usr\bin` prepended: plan must show no `BUNDLE_SELECTION_CAPABLE` change.
+- AC status at review: AC-0 closed · **AC-1 OPEN** (command above) · AC-2 closed (this record) · AC-3 closed (README). The checkboxes above were not edited because `review/` is frozen.

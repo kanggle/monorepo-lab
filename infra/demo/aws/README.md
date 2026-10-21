@@ -47,6 +47,18 @@ bash infra/demo/aws/packer/bake.sh
 cd ../terraform
 cp terraform.tfvars.example terraform.tfvars   # ami_id + admin_ssh_cidr 채우기
 terraform init && terraform apply
+#    🔴 TASK-MONO-802 — 이 호스트(Windows)에서 plan/apply 를 돌릴 때:
+#      · PowerShell 이면 먼저 Git 의 `bin` 과 `usr\bin` 을 PATH 맨 앞에 둔다
+#        ($env:PATH = "C:\Program Files\Git\bin;C:\Program Files\Git\usr\bin;$env:PATH").
+#        기본 PATH 에서 `bash` 는 WSL 런처(C:\Windows\System32\bash.exe)로 잡힌다 —
+#        terraform 의 `data.external.ami_bundle_capability` 가 그 bash 로 돈다.
+#      · **워크트리가 아니라 메인 체크아웃**에서 돌린다 (워크트리의 .git 은 Windows 경로를 가리키는
+#        파일이라 WSL git 이 못 읽는다 → 판정이 unknown).
+#      · plan 은 grep 으로 한 줄만 보지 말고 **바뀌는 줄(`~` `+` `-`)을 전부** 읽는다. 예산을 올리려던
+#        apply 에 `BUNDLE_SELECTION_CAPABLE = "yes" -> "unknown"` 이 섞여 묶음 기동이 꺼진 적이 있다(32차 창).
+#      · 판정이 unknown 이면 plan 이 postcondition 으로 **실패**하고 사유·shell·git 을 출력한다.
+#        직접 보려면: bash infra/demo/aws/ami-bundle-capability.sh --json
+#        의도적으로 저장소 밖/얕은 클론에서 돌 때만 -var allow_unknown_bundle_capability=true.
 
 # 3) 제어 API 주소를 Vercel 에 넣는다
 terraform output api_base_url

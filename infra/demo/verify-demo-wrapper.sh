@@ -4260,6 +4260,16 @@ z40_expect "임계 이후 커밋(정상 신세대)"    "$z40_later" yes 0
 z40_expect "이 저장소에 없는 커밋"         deadbeefdeadbeefdeadbeefdeadbeefdeadbeef unknown 2
 z40_expect "REPO_COMMIT 이 없는 핀"        ""           unknown 2
 
+# 🔵 TASK-MONO-802 — 진단 필드. terraform 의 postcondition 오류가 «어느 bash/git 에서 unknown 이
+#    났는가» 를 말하려면 JSON 에 있어야 한다. 값은 호스트마다 다르므로 **키가 있는가** 만 본다.
+#    (rc=0 계약은 위 z40_expect 가 이미 다섯 상태에서 잰다 — 필드를 더해도 안 깨졌다는 증거.)
+z40_dj="$(AMI_GIT_ROOT="$z40_hist" AMI_BUNDLE_MIN_COMMIT="$z40_feat" AMI_PIN_FILE="$z40_dir/pin.env" bash "$z40_cap" --json 2>/dev/null)"
+for z40_k in shell git; do
+  grepq -F "\"$z40_k\":\"" <<<"$z40_dj" \
+    || z40_die "(z40) --json 에 진단 필드 \"$z40_k\" 가 없습니다:"$'\n'"$z40_dj"\
+      $'\n'"→ unknown 의 plan 실패 메시지가 원인(어느 bash/git)을 못 말하게 됩니다 (TASK-MONO-802)."
+done
+
 # --- (1b) 실제 핀 대조 — **이력이 있을 때만**, 그리고 조용하지 않게 -----------------
 #
 # 🔴 자기 완결 칸은 «스크립트가 옳은가» 만 잰다. «배포된 AMI 가 실제로 어느 쪽인가» 는
@@ -4399,6 +4409,23 @@ grep -q 'BUNDLE_SELECTION_CAPABLE *= *data\.external\.ami_bundle_capability\.res
   || z40_die "(z40) Lambda env 의 BUNDLE_SELECTION_CAPABLE 이 판정 결과에서 오지 않습니다."\
     $'\n'"→ 상수로 박으면 재굽기 뒤에 이 코드를 또 고쳐야 하고, 그 티켓이 안 만들어지면 기능이 영원히 꺼집니다."
 
+# TASK-MONO-802 — 그 data source 가 `unknown` 을 **plan 실패**로 바꾸는 postcondition 을 갖는가.
+# 🔴 없으면 PATH 의 bash/워크트리 때문에 스크립트가 저장소를 못 볼 때 `yes -> unknown` 이 다른
+#    이유의 apply 에 조용히 섞여 묶음 기동이 꺼진다(32차 창). 스크립트는 rc=0 계약이라 못 막는다.
+# 🔵 data 블록 **안**만 본다(다른 곳의 postcondition 이 우연히 통과시키지 않게). 블록 끝 = 줄머리 `}`.
+z40_post_ok() {  # $1 = main.tf 경로 → 0=배선됨
+  local blk
+  blk="$(sed -n '/^data "external" "ami_bundle_capability"/,/^}/p' "$1")"
+  [ -n "$blk" ] \
+    && grep -q 'postcondition' <<<"$blk" \
+    && grep -q 'condition *= *self\.result\.capable *!= *"unknown" *|| *var\.allow_unknown_bundle_capability' <<<"$blk"
+}
+z40_post_ok "$z40_maintf" \
+  || z40_die "(z40) ami_bundle_capability 에 \`unknown\` 을 막는 postcondition 이 없습니다 (TASK-MONO-802)."\
+    $'\n'"→ 기대: lifecycle { postcondition { condition = self.result.capable != \"unknown\" || var.allow_unknown_bundle_capability … } }"
+grep -q '^variable "allow_unknown_bundle_capability"' "$ROOT/infra/demo/aws/terraform/variables.tf" \
+  || z40_die "(z40) variables.tf 에 allow_unknown_bundle_capability 가 없습니다 — postcondition 이 존재하지 않는 변수를 참조합니다."
+
 # ---------------------------------------------------------------------------
 # bite — 주입 · 실행 · 물기를 각각 단언한다
 # 🔴 변형이 문법을 깨서 난 빨강은 «문 것» 이 아니다. 그래서 실행 성공을 먼저 본다.
@@ -4492,8 +4519,21 @@ fi
   || z40_die "(z40) bite-4 — domain_start 가 꺼진 인스턴스를 직접 켜는데 가드가 **안 물었습니다.**"\
     $'\n'"→ 콜드 경로가 세대 거절을 우회합니다. 구세대 AMI 에서 200 을 내고 고른 것과 다른 것이 뜹니다."
 
+# (bite-5) TASK-MONO-802 — postcondition 의 조건을 `true` 로 바꾼다 = unknown 을 삼키는 모양.
+#          블록·문자열은 그대로 남으므로 «postcondition 이라는 단어가 있는가» 만 보는 grep 은 통과한다.
+z40_b5="$z40_dir/main-bite5.tf"
+sed 's/^\( *condition *= *\)self\.result\.capable *!= *"unknown" *|| *var\.allow_unknown_bundle_capability/\1true/' "$z40_maintf" > "$z40_b5"
+if cmp -s "$z40_maintf" "$z40_b5"; then
+  z40_die "(z40) bite-5 주입 실패 — postcondition 의 condition 줄이 안 바뀌었습니다."
+fi
+grep -q 'postcondition' "$z40_b5" \
+  || z40_die "(z40) bite-5 주입 실패 — postcondition 이 통째로 사라졌습니다. 이건 조건 축을 재지 못합니다."
+z40_post_ok "$z40_b5" \
+  && z40_die "(z40) bite-5 — postcondition 의 조건을 true 로 바꿨는데 가드가 **안 물었습니다.**"\
+    $'\n'"→ 블록이 있는지만 보고 있습니다. 조건이 비면 unknown 이 plan 을 통과해 묶음 기동이 조용히 꺼집니다."
+
 rm -rf "$z40_dir"
-ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + **domain_start 콜드 경로는 bundle_start 위임**(788) + start(전체)는 대조군으로 안 막힘 + terraform 배선 · bite 4칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동 · 콜드 경로 직접 기동) · 실제 핀 = $z40_real"
+ok "(z40) 세대 판정 **5상태 자기완결 대조**(임시 이력 base→feature→later 를 직접 세워서: 경계값 yes · 구세대 no · 신세대 yes · 없는커밋 unknown · 핀 결손 unknown, json 은 전부 rc=0) + 거절이 선택·기동보다 앞 + **domain_start 콜드 경로는 bundle_start 위임**(788) + start(전체)는 대조군으로 안 막힘 + terraform 배선(+ unknown 을 plan 실패로 바꾸는 postcondition · json 진단 필드 shell/git — 802) · bite 5칸(임계 무력화 · 모르면 허용 · 거절을 뒤로 이동 · 콜드 경로 직접 기동 · postcondition 조건 비우기) · 실제 핀 = $z40_real"
 
 # =============================================================================
 # (z41) 전체 집계 배지·카드 의존성 고지가 **카드 상태에서 파생되는가** — TASK-MONO-729

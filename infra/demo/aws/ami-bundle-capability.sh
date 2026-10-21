@@ -109,8 +109,14 @@ fi
 
 if [ "$MODE" = "json" ]; then
     # terraform external: 평평한 string 맵. 개행·따옴표를 넣지 않는다.
-    printf '{"capable":"%s","repo_commit":"%s","min_commit":"%s","reason":"%s"}\n' \
-        "$capable" "$repo_commit" "$BUNDLE_CAPABILITY_COMMIT" "${reason//\"/}"
+    # 🔵 TASK-MONO-802 — 진단 필드. unknown 이 «어느 bash/git 에서» 났는지 plan 오류가 말하게
+    #    한다(terraform 의 postcondition 이 읽는다). 평평한 문자열, 따옴표·역슬래시 제거.
+    diag_shell="$(uname -s 2>/dev/null || true)"
+    diag_git="$(command -v git 2>/dev/null || true)"
+    diag_shell="${diag_shell//[\"\\]/}"
+    diag_git="${diag_git//[\"\\]/}"
+    printf '{"capable":"%s","repo_commit":"%s","min_commit":"%s","reason":"%s","shell":"%s","git":"%s"}\n' \
+        "$capable" "$repo_commit" "$BUNDLE_CAPABILITY_COMMIT" "${reason//\"/}" "$diag_shell" "$diag_git"
     exit 0
 fi
 
