@@ -78,6 +78,27 @@ export const InventoryPageSchema = wmsPage(InventoryRowSchema);
 export type InventoryPage = z.infer<typeof InventoryPageSchema>;
 
 // --- 1.2 throughput -------------------------------------------------------
+// TASK-PC-FE-358 — tightened from `z.record` to the contract's NAMED counters
+// (`admin-service-api.md` § 1.2: `inbound{putawayCount, qtyReceived}` ·
+// `outbound{shipmentCount, qtyShipped}`). The two COUNTS are what the 개요
+// card draws, so they are required; the quantities feed only the totals text
+// and stay optional; unknown extra fields still pass through. A day missing
+// `inbound`/`outbound` entirely is tolerated (the producer always sends both —
+// `ThroughputDashboardController` :81-91 — but a missing side reads as 0).
+
+const ThroughputInboundSchema = z
+  .object({
+    putawayCount: z.number(),
+    qtyReceived: z.number().optional(),
+  })
+  .passthrough();
+
+const ThroughputOutboundSchema = z
+  .object({
+    shipmentCount: z.number(),
+    qtyShipped: z.number().optional(),
+  })
+  .passthrough();
 
 export const ThroughputSchema = z
   .object({
@@ -88,15 +109,15 @@ export const ThroughputSchema = z
       z
         .object({
           date: z.string(),
-          inbound: z.record(z.string(), z.number()).optional(),
-          outbound: z.record(z.string(), z.number()).optional(),
+          inbound: ThroughputInboundSchema.optional(),
+          outbound: ThroughputOutboundSchema.optional(),
         })
         .passthrough(),
     ),
     totals: z
       .object({
-        inbound: z.record(z.string(), z.number()).optional(),
-        outbound: z.record(z.string(), z.number()).optional(),
+        inbound: ThroughputInboundSchema.optional(),
+        outbound: ThroughputOutboundSchema.optional(),
       })
       .passthrough()
       .optional(),
