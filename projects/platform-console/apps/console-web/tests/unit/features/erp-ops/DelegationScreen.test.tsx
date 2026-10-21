@@ -211,7 +211,8 @@ describe('DelegationScreen — renders both lists', () => {
         within(delegatorSection).getByTestId('delegation-error'),
       ).toBeInTheDocument(),
     );
-    expect(delegatorSection.textContent).not.toContain('없습니다');
+    expect(delegatorSection.textContent).toContain('일시적으로 사용할 수 없습니다');
+    expect(delegatorSection.textContent).not.toContain('위임한 grant 가 없습니다');
   });
 });
 

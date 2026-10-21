@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **ERP 결재 화면의 콘솔 오류 둘 — 콘솔 상신이 «요청을 처리하지 못했습니다»(같은 DRAFT 의 API 상신은 200) · 위임 «내가 위임한» 칸이 오류 + 빈 목록 문구를 함께(API 200 `[]`)** (READY, 2026-10-20 UTC 기안 · 출처 32차 데모 창). 둘 다 성공을 실패로 그리는 모양 — AC-0 = 호출 사슬 · 응답 스키마 · Vercel 로그. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -123,6 +123,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **ERP 결재 화면의 콘솔 오류 둘 — 만들기 BFF 응답 `{data}` 로 감쌈 · 위임 목록 `meta.size` 0 허용 · 오류 시 빈 목록 문구 숨김 · 위임 생성·회수 `.data` 파싱** (REVIEW, 2026-10-21 UTC · 문구 변경 없음). AC-0 닫힘 · AC-1/AC-2 구현(vitest 412 files · 4962 tests 전부 통과, tsc/lint rc=0) · AC-3(Vercel/라이브, 다음 데모 창) 열림. 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 

@@ -71,7 +71,9 @@ export async function POST(req: Request) {
     // single-stage) — both are forwarded verbatim to the producer.
     const { idempotencyKey, ...input } = body;
     const result = await createApprovalRequest(input, idempotencyKey);
-    return NextResponse.json(result, { status: 201 });
+    // Wrapped `{ data }` like the sibling routes — the client's
+    // parseApprovalDetail reads `env.data` (TASK-PC-FE-355).
+    return NextResponse.json({ data: result }, { status: 201 });
   } catch (err) {
     return mapErpError(err, requestId);
   }

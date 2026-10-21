@@ -8,7 +8,7 @@ ERP 결재 화면의 콘솔 오류 둘 — ① 콘솔에서 결재 요청을 상
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -54,8 +54,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — ①② 의 원인을 file:line 으로(실측 응답 · 콘솔 판정 지점). 원인이 둘이면 나눌지 적는다. → § AC-0 측정 (2026-10-21 UTC). 원인 둘 · 티켓은 나누지 않는다(소유자 결정).
-- [ ] **AC-1** — 수선(문구가 바뀌면 소유자 문안 승인).
-- [ ] **AC-2** — 시험: 위 세 고정값 + 기존 비회귀(결재 화면 · 위임 화면 스위트).
+- [x] **AC-1** — 수선(문구가 바뀌면 소유자 문안 승인). → 문구 변경 없음. § 구현 (2026-10-21 UTC).
+- [x] **AC-2** — 시험: 위 세 고정값 + 기존 비회귀(결재 화면 · 위임 화면 스위트). → § 구현.
 - [ ] **AC-3** — 배포(Vercel) · 라이브(콘솔에서 상신 → `SUBMITTED` · «내가 위임한» 에 오류 문구 없음, 다음 데모 창).
 
 # Related Specs
@@ -105,3 +105,17 @@ frontend
 - 문구 변경 없음(기존 문구만 쓴다) — AC-1 문안 승인 대상 없음.
 - 시험: 고정값을 실제 서버 모양으로(만들기 BFF 응답 `{data}` 단언 · 빈 위임 목록 `meta:{page:0,size:0,totalElements:0,timestamp}` · 진짜 503 고정값은 오류 문구만 · 생성 · 회수 응답 `{data: grant}`).
 - 구현 = Sonnet.
+
+## 구현 (2026-10-21 UTC · Sonnet)
+
+수선 (모두 `apps/console-web/src/` 기준, 사용자에게 보이는 문구 변경 없음):
+- `app/api/erp/approval/requests/route.ts:74-76` — 만들기 응답 `NextResponse.json({ data: result }, { status: 201 })` (형제 라우트와 동일, 클라이언트 그대로).
+- `features/erp-ops/api/delegation-types.ts:60-62` — `meta.size` `positive()` → `nonnegative()`.
+- `features/erp-ops/components/DelegationGrantList.tsx:109-114` — `query.isError` 이면 빈 목록 문구를 그리지 않음(오류 문구만).
+- `features/erp-ops/api/delegation-api.ts` — `parseGrantEnvelope`(`.data` 를 꺼내 `DelegationGrantSchema` 파싱) 추가, `createDelegation` · `revokeDelegation` 이 사용. 서버 `DelegationController` 는 `ApiEnvelope.of(v)`. 위임 BFF 라우트는 여전히 풀린 grant 를 클라이언트에 돌려주므로 `use-erp-delegation.ts` 변경 없음.
+
+시험 (red 커밋 `8b05b9667` → green): `approval-proxy.test.ts`(만들기 응답 `data.id` 단언) · `delegation-api.test.ts`(빈 목록 `meta:{page:0,size:0,totalElements:0,timestamp}` · 생성/회수 `{data: grant}`) · `delegation-proxy.test.ts`(업스트림 `{data: grant}`, BFF 는 풀린 grant) · `DelegationScreen.test.tsx`(EMPTY_LIST 실제 모양 · 빈 목록에서 오류 없음 · 진짜 503 은 오류 문구만). `ApprovalScreen.test.tsx:426` 은 이미 `{data: DRAFT}` 라 변경 불필요.
+
+로컬: `npx vitest run --maxWorkers=4 --minWorkers=2` rc=0 — 412 files · 4962 tests 통과. (기본 병렬도에서는 무관한 6 파일이 타임아웃으로 흔들렸고 — 알려진 부하 flake — 낮춘 병렬도에서 전부 통과.) `tsc --noEmit` rc=0 · `next lint` rc=0(기존 경고만).
+
+열림: AC-3(Vercel 배포 · 라이브 — 콘솔에서 만들기 → 대화상자 닫힘/DRAFT 1건 · «내가 위임한» 오류 문구 없음 · 위임 생성/회수 성공, 다음 데모 창).

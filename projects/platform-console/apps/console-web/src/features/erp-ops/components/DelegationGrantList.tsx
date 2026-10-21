@@ -107,7 +107,10 @@ export function DelegationGrantList({
       {query.isLoading ? (
         <p className="text-sm text-muted-foreground">불러오는 중…</p>
       ) : grants.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
+        // On a failed query the error message above stands alone (FE-355).
+        query.isError ? null : (
+          <p className="text-sm text-muted-foreground">{emptyText}</p>
+        )
       ) : (
         <ul className="space-y-1">
           {grants.map((g: DelegationGrant) => (
