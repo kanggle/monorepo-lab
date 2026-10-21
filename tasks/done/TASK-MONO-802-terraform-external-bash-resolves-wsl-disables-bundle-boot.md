@@ -1,6 +1,6 @@
 # TASK-MONO-802 — on the Windows host `terraform plan` runs `ami-bundle-capability.sh` under a bash that has no git, computes `BUNDLE_SELECTION_CAPABLE=unknown`, and an apply that was meant to change something else silently turns bundle boot off
 
-- **Status**: review
+- **Status**: done
 - **Type**: fix (demo infrastructure — `infra/demo/aws/terraform`)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (`infra/demo/` is shared demo infrastructure)
@@ -96,3 +96,16 @@ A plan run on this host either computes the real capability or **fails loudly** 
 - Verification: `bash infra/demo/verify-demo-wrapper.sh --require-coverage` (the nightly invocation; ci.yml uses `--live`, not run) → log in scratchpad `z40-run1.log`, `rc=0`, `(z40) ok` line carries the new text, bite-5 inside the run passed. Independent mutation of main.tf (condition → `true`): `z40_post_ok` real=0, mutated=1. `python -m unittest infra/demo/aws/tests/test_handler.py` 126 OK. `terraform fmt -check` rc=0. `terraform validate`/init of the real config NOT run.
 - **AC-1 command (coordinator, PowerShell default PATH, from a worktree)**: `cd <any worktree>\infra\demo\aws\terraform; terraform plan` — expected: `Error: Resource postcondition failed` on `data.external.ami_bundle_capability` with 사유/진단 lines (if WSL bash is resolved; if it resolves to `yes` instead, the cause is not reproduced there). Then from the main checkout with Git `bin;usr\bin` prepended: plan must show no `BUNDLE_SELECTION_CAPABLE` change.
 - AC status at review: AC-0 closed · **AC-1 OPEN** (command above) · AC-2 closed (this record) · AC-3 closed (README). The checkboxes above were not edited because `review/` is frozen.
+
+---
+
+## CORRECTION (2026-10-21 UTC — AC-1 measured · all ACs closed · done)
+
+The `[ ]` boxes for AC-1 · AC-2 · AC-3 above are the review-time record; all four ACs are closed now.
+
+- **AC-1 ✅ (measured by the coordinating session after merge, owner-approved run)** on main `5ad7eaaa8`:
+  - **Failing shell** — a detached worktree, PowerShell default PATH (`Get-Command bash` → `C:\WINDOWS\system32\bash.exe` = WSL), `terraform plan -input=false -lock=false` (the main checkout's `.terraform` · lock · tfvars copied in, no state; worktree deleted afterwards): **rc=1** · `Error: Resource postcondition failed` · `on main.tf line 379, in data "external" "ami_bundle_capability"` · `사유: git 저장소 밖에서 실행됐습니다` · `진단: shell=Linux git=/usr/bin/git`. The silent `unknown` is now a loud failure, and the diagnostic line names the AC-0 mechanism (WSL bash with git present, blind to the worktree's `.git` file).
+  - **Correct shell** — main checkout, Git `bin;usr\bin` prepended (`bash` → `C:\Program Files\Git\bin\bash.exe`): **rc=0**, **`No changes. Your infrastructure matches the configuration.`** Every line of the plan was read — no `~`/`+`/`-` line at all, so `BUNDLE_SELECTION_CAPABLE` stays as deployed.
+- **AC-2 ✅** — § Implementation record (z40 shell/git keys, postcondition wiring check, bite-5; `verify-demo-wrapper.sh --require-coverage` rc=0; handler tests 126 OK). PR #4441 CI: SUCCESS 9 · SKIPPED 58 · failure 0; branch nightly run 39573773365 success.
+- **AC-3 ✅** — `infra/demo/aws/README.md` step 2 runbook.
+- 4-dim: (a) #4441 `state=MERGED` · (b) `5ad7eaaa8` = `origin/main` tip at close · (c) failure 0 at merge · (d) AC-0 … AC-3 closed (above). Owner approved the postcondition `error_message` wording before merge (2026-10-21 UTC).
