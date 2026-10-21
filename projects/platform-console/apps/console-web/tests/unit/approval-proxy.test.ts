@@ -193,6 +193,10 @@ describe('GET/POST /api/erp/approval/requests', () => {
       }),
     );
     expect(res.status).toBe(201);
+    // TASK-PC-FE-355 — the create response is wrapped `{ data }` like its
+    // siblings (the client's parseApprovalDetail reads `env.data`).
+    const created = await res.json();
+    expect(created.data.id).toBe('appr-1');
     const [url, init] = fetchMock.mock.calls[0];
     const h = (init as RequestInit).headers as Record<string, string>;
     expect((init as RequestInit).method).toBe('POST');

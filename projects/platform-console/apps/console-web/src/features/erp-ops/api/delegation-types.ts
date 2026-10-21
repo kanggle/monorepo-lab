@@ -57,7 +57,9 @@ export const DelegationListMetaSchema = z
   .object({
     timestamp: z.string().optional(),
     page: z.number().int().nonnegative().optional(),
-    size: z.number().int().positive().optional(),
+    // 0 is valid: the delegation list is unpaged (size = item count), so an
+    // empty list reports size 0 (TASK-PC-FE-355).
+    size: z.number().int().nonnegative().optional(),
     totalElements: z.number().int().nonnegative().optional(),
   })
   .passthrough();

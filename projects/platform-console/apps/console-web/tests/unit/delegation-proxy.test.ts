@@ -176,7 +176,8 @@ describe('GET /api/erp/approval/delegations', () => {
 describe('POST /api/erp/approval/delegations', () => {
   it('forwards delegateId + validFrom + Idempotency-Key; strips idempotencyKey from body; 201', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(GRANT, 201));
+    // Real server shape: ApiEnvelope.of(grant) = { data: grant } (TASK-PC-FE-355).
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: GRANT }, 201));
     vi.stubGlobal('fetch', fetchMock);
     const res = await delegationsPOST(
       new Request('http://console.local/api/erp/approval/delegations', {
@@ -189,6 +190,8 @@ describe('POST /api/erp/approval/delegations', () => {
       }),
     );
     expect(res.status).toBe(201);
+    // The BFF hands the client the unwrapped grant (client contract unchanged).
+    expect((await res.json()).id).toBe(GRANT.id);
     const [url, init] = fetchMock.mock.calls[0];
     const h = (init as RequestInit).headers as Record<string, string>;
     expect((init as RequestInit).method).toBe('POST');
@@ -204,7 +207,7 @@ describe('POST /api/erp/approval/delegations', () => {
 
   it('forwards optional validTo + reason when present', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(GRANT, 201));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: GRANT }, 201));
     vi.stubGlobal('fetch', fetchMock);
     await delegationsPOST(
       new Request('http://console.local/api/erp/approval/delegations', {
@@ -281,7 +284,7 @@ describe('POST /api/erp/approval/delegations/{id}/revoke', () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     cookieJar.set(OPERATOR_COOKIE, 'OP-MUST-NOT-USE');
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ ...GRANT, status: 'REVOKED' }),
+      jsonResponse({ data: { ...GRANT, status: 'REVOKED' } }),
     );
     vi.stubGlobal('fetch', fetchMock);
     const res = await revokeReq('del-1', {

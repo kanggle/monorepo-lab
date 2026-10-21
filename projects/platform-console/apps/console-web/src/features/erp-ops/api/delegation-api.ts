@@ -127,6 +127,12 @@ export async function listDelegations(
 // writes — create + revoke (each carries an Idempotency-Key).
 // ---------------------------------------------------------------------------
 
+/** create / revoke respond `{ data: grant, meta? }` (approval-service
+ *  DelegationController `ApiEnvelope.of`). TASK-PC-FE-355. */
+function parseGrantEnvelope(json: unknown): DelegationGrant {
+  return DelegationGrantSchema.parse((json as { data?: unknown } | null)?.data);
+}
+
 /** `POST /api/erp/approval/delegations` — create a delegation grant.
  *  The delegator identity is the JWT `sub`; NOT sent in the body.
  *  Reason rides in the body (NOT X-Operator-Reason). */
@@ -147,10 +153,8 @@ export async function createDelegation(
         ...(input.reason ? { reason: input.reason } : {}),
       },
     },
-    (json) => {
-      // The producer returns the grant directly (201 body = grant).
-      return DelegationGrantSchema.parse(json);
-    },
+    // The producer wraps the grant: ApiEnvelope.of(grant) = { data: grant }.
+    parseGrantEnvelope,
   );
 }
 
@@ -169,8 +173,6 @@ export async function revokeDelegation(
       idempotencyKey,
       body: { reason },
     },
-    (json) => {
-      return DelegationGrantSchema.parse(json);
-    },
+    parseGrantEnvelope,
   );
 }

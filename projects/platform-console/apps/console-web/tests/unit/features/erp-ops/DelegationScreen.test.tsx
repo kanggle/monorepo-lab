@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -97,7 +97,8 @@ const DELEGATE_LIST = {
 
 const EMPTY_LIST = {
   data: [],
-  meta: { page: 0, size: 20, totalElements: 0 },
+  // Real server shape for an empty list (DelegationController ofList(…, 0, size, size)).
+  meta: { page: 0, size: 0, totalElements: 0, timestamp: '2026-10-20T18:20:00Z' },
 };
 
 /** Mock fetch that returns delegator/delegate lists by role query param.
@@ -189,6 +190,29 @@ describe('DelegationScreen — renders both lists', () => {
       const delegatorSection = screen.getByTestId('delegation-list-delegator');
       expect(delegatorSection.textContent).toContain('없습니다');
     });
+    // A successful empty list is NOT an error (TASK-PC-FE-355).
+    expect(screen.queryByTestId('delegation-error')).not.toBeInTheDocument();
+  });
+
+  it('a genuine 503 on the delegator list shows only the error message, not the empty notice (TASK-PC-FE-355)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (String(url).includes('role=DELEGATE') && !String(url).includes('role=DELEGATOR')) {
+          return Promise.resolve(jsonResponse(EMPTY_LIST));
+        }
+        return Promise.resolve(errorResponse('SERVICE_UNAVAILABLE', 503));
+      }),
+    );
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
+    const delegatorSection = await screen.findByTestId('delegation-list-delegator');
+    await waitFor(() =>
+      expect(
+        within(delegatorSection).getByTestId('delegation-error'),
+      ).toBeInTheDocument(),
+    );
+    expect(delegatorSection.textContent).toContain('일시적으로 사용할 수 없습니다');
+    expect(delegatorSection.textContent).not.toContain('위임한 grant 가 없습니다');
   });
 });
 
