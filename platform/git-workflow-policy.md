@@ -28,6 +28,22 @@ Multiple interactive agent sessions (or routines) running at the same time must 
 - Worktree-add Windows pitfalls (DWIM remote-branch resolution, failed-remove, prune side effects) — always pass **absolute** worktree-add paths; a relative `../x` from a drifted shell cwd can nest a stray directory inside the main checkout and lose files. (Agent personal-memory detail, this host: `env_git_worktree_verify_windows`, `env_concurrent_git_branch_switch_hazard`.)
 - Worktree teardown on Windows with junctioned `node_modules` — when a frontend worktree shares the main checkout's `node_modules` via a directory junction (reparse point), tearing the worktree down naively (`Remove-Item -Recurse` / `git worktree remove`) follows the junction and **corrupts the main checkout's `node_modules`** (e.g. a missing `.pnpm` store then breaks the main tree's `tsc`/`vitest`). Remove the junction reparse points **first** (`cmd /c rmdir <junction>`, which unlinks without following), then delete the worktree directory. Recovery if corrupted: re-run the affected app's install (`pnpm install --force`). (Agent personal-memory detail, this host: `env_worktree_node_modules_junction_cleanup_hazard`.)
 
+### Before Starting a Ready Task — Look for In-Flight Work on the Same Ticket
+
+A `ready/` queue entry does not say whether another session has already picked it up: a concurrent session typically does not move the queue entry until its first commit, and its branch and worktree live in a directory your checkout's `git status` and `gh pr list` never show (no PR exists yet). Two sessions have come close to implementing the same ticket twice this way; in one case it was caught only because both tried to create a worktree directory with the same name.
+
+Before starting a `ready/` task — and after any hand-off or "continue this" instruction, which says what was measured but not what was already written — run:
+
+```bash
+git worktree list
+git branch -a | grep -i <ticket-number>      # also try the topic slug / feature keywords
+gh pr list --search <TASK-ID> --state all
+```
+
+- If a branch or worktree for the same ticket or topic exists, read it first (`git log -1 --stat <branch>`). If it is already the right change, land that rather than writing a second copy.
+- Do **not** delete or reset another session's worktree or branch, even when the duplication is confirmed — report it; that session cleans up its own.
+- The mirror image applies to the ID check in `tasks/INDEX.md` § Task ID Allocation: a claim that has not been pushed is invisible to every pre-check. "Not found" means "not found where I looked", not "does not exist".
+
 ### Shared-File Task Series — Reuse One Worktree, Serialize the Merges
 
 A series of tasks that each edit the **same shared file** (a nav config, a barrel `index.ts`, a shared
@@ -105,6 +121,25 @@ base is `main`, not as a chain of PRs pointed at each other.
 
 Before trusting a PR's check state, confirm the count is non-zero — an empty check list is a signal, not an
 absence of problems.
+
+### Zero checks has two distinct causes — diagnose before acting
+
+A PR that shows **0 checks** (and `gh api repos/<owner>/<repo>/actions/runs?head_sha=<sha>` reports `total_count=0`) is not an Actions outage and not a workflow syntax error. Two different conditions produce the same empty list, and `mergeable` tells them apart:
+
+| `mergeable` / `mergeStateStatus` | `baseRefName` | What is observable | Fix |
+|---|---|---|---|
+| `CONFLICTING` / `DIRTY` | any | GitHub cannot create the PR's merge ref (head merged into base), and `pull_request` workflows run on that ref — **no run is created at all**, not a failed one. Closing and reopening does not help: the event re-fires and the ref still cannot be built. | Resolve the conflict with the base and push; checks appear as soon as the push lands. Rebase or merge `origin/main` into the branch — a force-push needs separate authorization (§ Self-Merge and Force-Push). |
+| `MERGEABLE` / `CLEAN` or `UNSTABLE` | not `main` (e.g. a stacked PR on a feature branch) | The base does not match the workflow's `pull_request.branches` filter, so no workflow applies. The PR is **mergeable with no checks** — the dangerous case above. | Retarget to `main` and force a run (§ Retargeting above), or avoid the stack. |
+
+One command separates them:
+
+```bash
+gh pr view <n> --json mergeable,mergeStateStatus,baseRefName
+```
+
+Right after `gh pr create`, `mergeable` is briefly `UNKNOWN`; re-query before concluding. Whichever way the first row is worded — "the workflow matches but cannot run" or "no workflow run is created" — what you observe is the same: an empty check list and an empty runs list.
+
+**CI pollers**: a poller that treats "no checks yet" as "pending" will wait out its whole timeout and report only `TIMEOUT`, which erases the cause. Count consecutive polls with zero checks; after N polls (about two minutes) stop and report **"zero checks persisting for N polls — CI not started"** as its own outcome, distinct from pending and from failed, and run the diagnosis above.
 
 ### Retargeting the base does not retrigger CI
 
@@ -205,6 +240,14 @@ self-modification rule above:
    (`git push origin HEAD:<branch>-v2`) rather than forcing over the existing one.
 3. **`docker volume rm`** — gated as destructive-and-irreversible, on the same axis and with no relation to
    any path. Named here so a block on it is not mis-diagnosed as a self-modification block.
+
+---
+
+## A PR Title Is a Snapshot — Re-Read It Before the Squash
+
+A PR title records the PR's state **when it was opened** (e.g. "draft", "WIP", "PROPOSED", "red"). The repo squash-merges, and the squash commit subject is taken from the PR title, so a title that no longer describes the PR becomes the permanent `main` history line — a pushed subject cannot be corrected without rewriting `main`, which is forbidden.
+
+If the PR's scope or state changed after it was opened (draft → green, a status flipped to accepted, scope added or dropped), update the title **before** merging: `gh pr edit <n> --title "…"`, or override at merge time with `gh pr merge <n> --squash --subject "…"`. Make "does the title still describe this PR's current state?" part of the pre-merge check.
 
 ---
 
