@@ -72,9 +72,12 @@ import java.util.List;
  *
  * <p>Exposes the full OIDC discovery endpoint, JWKS endpoint, token endpoint,
  * userinfo endpoint, revocation endpoint, and introspection endpoint.
- * The SAS filter chain takes {@code @Order(1)} and matches only the SAS-managed
- * request matchers ({@code /oauth2/**}, {@code /.well-known/**}),
- * leaving the existing security filter chain ({@code @Order(2)}) fully intact.
+ * The SAS filter chain takes {@code @Order(1)} and matches only the SAS endpoints matcher
+ * ({@code getEndpointsMatcher()}: the {@code /oauth2/**} endpoints, the {@code /.well-known/**}
+ * metadata documents and the OIDC RP-initiated logout endpoint {@code /connect/logout} —
+ * TASK-BE-641), leaving the existing security filter chain ({@code @Order(2)}) fully intact.
+ * A container {@code /error} dispatch matches none of them and lands on Order 2's
+ * {@code denyAll}, so an endpoint here that must answer with its own error body writes it itself.
  *
  * <p>TASK-BE-252 changes:
  * <ul>
@@ -133,7 +136,9 @@ public class AuthorizationServerConfig {
     private long refreshTokenReuseGraceSeconds;
     /**
      * SAS security filter chain — Order(1).
-     * Covers: /oauth2/**, /.well-known/openid-configuration
+     * Covers the SAS endpoints matcher: the /oauth2/** endpoints, the /.well-known/** metadata
+     * documents and /connect/logout (TASK-BE-641 — its error response is written by
+     * {@link OidcLogoutErrorResponseHandler}, not by a {@code sendError} to /error).
      *
      * <p>Phase 2a: wires {@link OidcUserInfoMapper} into the OIDC userinfo configurer.
      *
@@ -234,7 +239,14 @@ public class AuthorizationServerConfig {
                         configurer
                                 .oidc(oidc ->
                                         oidc.userInfoEndpoint(userInfo ->
-                                                userInfo.userInfoMapper(oidcUserInfoMapper)))
+                                                        userInfo.userInfoMapper(oidcUserInfoMapper))
+                                                // TASK-BE-641 (D1 a): write the logout error (400 OIDC
+                                                // JSON) here. SAS's default sendError(400) dispatched to
+                                                // /error, which Order 2's denyAll turned into 401
+                                                // «Missing or invalid internal credentials».
+                                                .logoutEndpoint(logout ->
+                                                        logout.errorResponseHandler(
+                                                                new OidcLogoutErrorResponseHandler())))
                                 // TASK-BE-272 / ADR-003 option A: register the
                                 // public-client converters on the client
                                 // authentication filter (NOT on the

@@ -40,9 +40,13 @@ import java.util.List;
  *
  * <p>{@code @Order(2)} — runs after the SAS filter chain ({@code @Order(1)} in
  * {@link com.example.auth.infrastructure.oauth2.AuthorizationServerConfig}).
- * The SAS chain covers {@code /oauth2/**} and {@code /.well-known/**};
- * this chain covers the remaining {@code /api/auth/**}, {@code /api/accounts/me/sessions/**}
- * and {@code /internal/**} endpoints.
+ * The SAS chain covers its endpoints matcher — {@code /oauth2/**}, {@code /.well-known/**} and
+ * {@code /connect/logout}; the web-login chain ({@code @Order(0)}) covers the browser pages. This
+ * chain has no {@code securityMatcher} and takes every other request ({@code /api/auth/**},
+ * {@code /api/accounts/me/sessions/**}, {@code /internal/**}) — including the container's
+ * {@code /error} dispatch, which {@code denyAll} answers with the internal-credential 401 below.
+ * An endpoint on another chain that needs its own error body must write it itself instead of
+ * calling {@code sendError} (TASK-MONO-801 firewall rejections, TASK-BE-641 RP-initiated logout).
  *
  * <p><b>TASK-BE-398:</b> the legacy custom-JWT login surface ({@code POST /api/auth/login}
  * and {@code /api/auth/oauth/**}) was removed at its ADR-001 D2-b sunset (2026-08-01), along
