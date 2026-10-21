@@ -2521,6 +2521,15 @@ read-model/알림 concepts) is added, mirroring `features/finance-guide`
   - **활성 위임** — ACTIVE delegation-fact grants
     (`GET /api/erp/read-model/delegations?status=ACTIVE`, org-scope aware)
     `meta.totalElements` with `?page=0&size=1`.
+  - **결재 상태 분포 (TASK-PC-FE-360)** — `GET /api/erp/approval/requests?status=<S>&page=0&size=1`
+    `meta.totalElements` for each of the 6 statuses (`DRAFT` · `SUBMITTED` · `IN_REVIEW` · `APPROVED` ·
+    `REJECTED` · `WITHDRAWN`) — exactly **6** extra reads of the existing § 2.4.8 approval list (the
+    `status` filter is already bound). The 결재 대기 tile above stays on `/inbox` (the caller's own
+    queue) and is NOT reused: `/requests?status=SUBMITTED` is a different population. The producer
+    scopes `/requests` without `role` to the **tenant-wide** list for an operator / platform actor, and to
+    the caller's own submitter-or-approver rows otherwise (`ApprovalApplicationService.list`), so for a
+    non-operator caller the distribution is «내가 참여한 결재» — the overview says so. Each status is its
+    own cell; the stacked bar is drawn ONLY when all 6 are `ok`; current-time counts (no `asOf`).
 - **Read model (console-web DIRECT fan-out, unchanged model).** Reuses the
   existing § 2.4.8 master `list*` reads + the approval inbox read + the
   read-model delegation-facts read server-side (`getDomainFacingToken()`);
@@ -2533,7 +2542,7 @@ read-model/알림 concepts) is added, mirroring `features/finance-guide`
   inbox / an active grant has no historical point-in-time reading in the
   console's read surface).
 - **Independent degrade (the decisive resilience rule, unchanged shape).**
-  Each of the 7 count legs runs in its OWN try/catch (the `cell()` pattern) —
+  Each of the 7 count legs (and each of the 6 status-distribution legs) runs in its OWN try/catch (the `cell()` pattern) —
   a `503`/timeout/`403` in ANY ONE leg (e.g. approval-service down) degrades
   ONLY that tile; every sibling tile renders normally. A `401` in ANY leg
   triggers a whole-session `redirect('/login')` (no partial authed state).
@@ -3834,6 +3843,12 @@ retrofit, no § 2.4.9 composition leg**.
   `?page=0&size=1` (products/orders/users/promotions/shippings/sellers/notification-templates).
 - **Order-status distribution.** `GET /orders?status=<S>&page=0&size=1`.`totalElements`
   for each `OrderStatus` bucket.
+- **Shipping-status distribution (TASK-PC-FE-360).** `GET /shippings?status=<S>&page=0&size=1`.`totalElements`
+  for each of the 4 `ShippingStatus` buckets (`PREPARING` · `SHIPPED` · `IN_TRANSIT` · `DELIVERED`) —
+  exactly **4** extra reads (§ 2.4.10.3 list endpoint, `status` filter already bound; no new endpoint).
+  Each bucket is its own cell (own `ok` / `403` / degraded); a stacked bar is drawn ONLY when all 4
+  buckets are `ok` (a partial distribution would read as the whole) — the per-status numbers stay as
+  text either way. The distribution is shown on the overview only, never on the `/ecommerce/shippings` list.
 - **Recent activity.** `GET /orders?page=0&size=5` + `GET /sellers?page=0&size=5` `content`.
 - **No aggregation endpoint (ADR-MONO-017 D3.B).** There is deliberately **no**
   producer `/summary` / `/dashboard-card` endpoint; deriving counts from
