@@ -8,7 +8,7 @@ IdP 가 discovery 로 알리는 `end_session_endpoint`(`/connect/logout`)가 **4
 
 # Status
 
-ready
+in-progress
 
 # Owner
 

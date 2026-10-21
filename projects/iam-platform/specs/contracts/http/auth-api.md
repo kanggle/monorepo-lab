@@ -25,6 +25,7 @@ OIDC Discovery 문서. RFC 8414 준거.
   "userinfo_endpoint": "https://iam.example.com/oauth2/userinfo",
   "revocation_endpoint": "https://iam.example.com/oauth2/revoke",
   "introspection_endpoint": "https://iam.example.com/oauth2/introspect",
+  "end_session_endpoint": "https://iam.example.com/connect/logout",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
   "subject_types_supported": ["public"],
@@ -402,6 +403,48 @@ revoke 시 `OAuth2AuthorizationService.remove()` → `DomainSyncOAuth2Authorizat
 | Status | 조건 |
 |---|---|
 | 401 | client 인증 실패 |
+
+---
+
+### GET /connect/logout
+
+OIDC RP-Initiated Logout 1.0 의 `end_session_endpoint` (discovery 가 이 주소를 알린다). SAS 1.4.1 기본 경로 그대로 — `AuthorizationServerSettings` 는 이 경로를 바꾸지 않는다. **SAS 체인(Order 1)이 받는다**; Order 2 체인(`/internal/**` 내부 자격)은 이 경로의 응답을 정하지 않는다. (TASK-BE-641)
+
+**Auth required**: No — 요청은 `id_token_hint` 로 자신을 증명한다. IdP 브라우저 세션 쿠키가 있으면 그 세션을 끝낸다.
+
+**Query Parameters** (`POST` form 도 같은 이름):
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `id_token_hint` | Y | 이 IdP 가 발급한 ID Token. IdP 가 저장한 authorization 에서 찾을 수 있어야 한다 |
+| `client_id` | N | 주면 ID Token 을 받은 client 와 같아야 한다 |
+| `post_logout_redirect_uri` | N | 주면 그 client 에 **등록된** post-logout URI 와 정확히 같아야 한다 (등록 = `settings.client.post-logout-redirect-uris` → `OAuthClientMapper` 가 `RegisteredClient.postLogoutRedirectUris` 로 옮김 — TASK-BE-328) |
+| `state` | N | 주면 redirect 에 그대로 붙는다 |
+
+**Response — 정상**: **302** `Location: <post_logout_redirect_uri>[?state=…]` (`post_logout_redirect_uri` 없으면 302 `/`). IdP 브라우저 세션이 무효화된다 — 다음 `/oauth2/authorize` 는 다시 로그인 화면으로 간다(어느 사이트에서 로그아웃하든 IAM 세션 전체 — `specs/features/multi-tenancy.md` § 로그아웃 범위).
+
+**Response — 잘못된 요청**: **400** `Content-Type: application/json`, OAuth 2.0 / OIDC 오류 형식 (RP-Initiated Logout 1.0 § 4 Validation and Error Handling). 예 — `id_token_hint` 없음:
+
+```json
+{"error":"invalid_request","error_description":"OpenID Connect 1.0 Logout Request Parameter: id_token_hint"}
+```
+
+| 조건 (SAS 1.4.1 검사 순) | `error` | `error_description` 끝에 붙는 이름 |
+|---|---|---|
+| `id_token_hint` 없음 | `invalid_request` | `id_token_hint` |
+| `id_token_hint` 를 IdP 가 모름 · 무효 | `invalid_token` | `id_token_hint` |
+| ID Token `aud` 에 그 client 가 없음 | `invalid_token` | `aud` |
+| `client_id` 가 그 client 와 다름 | `invalid_request` | `client_id` |
+| `post_logout_redirect_uri` 미등록 | `invalid_request` | `post_logout_redirect_uri` |
+| 현재 IdP 세션의 사용자 ≠ ID Token `sub` | `invalid_token` | `sub` |
+| 현재 IdP 세션 ≠ ID Token `sid` | `invalid_token` | `sid` |
+
+- 본문은 정확히 `error` · `error_description` 두 필드다(`error_uri` 는 싣지 않는다). `error_description` 은 SAS 가 정한 고정 문장 — 요청 값을 되풀이하지 않는다 — 이고 200자로 자른다.
+- 🔴 **오류 응답은 이 엔드포인트가 직접 쓴다** — `sendError` 로 컨테이너 `/error` 디스패치를 타지 않는다. TASK-BE-641 이전 SAS 기본 처리는 `sendError(400)` 였고, 그 `/error` 디스패치가 Order 2 체인의 `denyAll` 에 걸려 **401 `{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}`** 로 바뀌어 나갔다. 그 401 은 이 엔드포인트의 계약이 아니다.
+- 오류는 redirect 하지 않는다(검증 안 된 `post_logout_redirect_uri` 로 보내지 않는다). 브라우저는 이 JSON 을 본다 — 사람용 오류 화면은 별도 결정(TASK-BE-641 D1 (b)).
+- 오류마다 auth-service 가 INFO 한 줄을 남긴다(`error` · `error_description` 만 — 토큰 값은 남기지 않는다).
+
+**만료된 `id_token_hint`**: **받아들여진다.** SAS 1.4.1 `OidcLogoutAuthenticationProvider` 는 ID Token 의 `exp` 를 검사하지 않는다(바이트코드 실측, TASK-BE-641 AC-0). 로그아웃은 ID Token 이 만료된 뒤에도 일어나야 하므로 의도된 동작으로 둔다. 단 IdP 가 그 authorization 을 이미 지웠으면 위 표의 `invalid_token`(`id_token_hint`) 이다.
 
 ---
 
