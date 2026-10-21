@@ -96,6 +96,25 @@ export function stripComments(src) {
 export const IMPORT_RE =
   /(?:^|[\s;}])(?:import|export)\s[^;]*?from\s*['"]([^'"]+)['"]|(?:^|[^\w.])import\s*\(\s*['"]([^'"]+)['"]\s*\)|(?:^|[\s;}])import\s*['"]([^'"]+)['"]\s*;?/g;
 
+/**
+ * 🔴 TASK-MONO-804 — **문장 전체가 타입 전용**인 임포트 · 재수출은 번들에 없다.
+ *
+ * `import type { A } from 'x'` · `export type { A } from 'x'` · `export type * from 'x'` 는
+ * TypeScript · SWC 가 지운다 ⇒ 그 연결로는 아무것도 브라우저에 가지 않는다. 그런데 이
+ * 순회기는 2026-10-21 까지 이것을 값 임포트처럼 따라갔고, PR #4451 에서 여러 줄
+ * `import type { … }` 하나가 두 가드를 빨갛게 했다(같은 커밋의 `next build` 는 성공).
+ *
+ * 🔴 `import type from './x'` 는 타입 전용이 **아니다** — 기본 바인딩의 이름이 `type` 이다
+ *    (`type` 다음이 `from` 이면 값 임포트).
+ * 🔵 인라인 수식자 `import { type A } from 'x'` 는 **계속 따라간다**(보수적). 문장 자체는
+ *    남고, `verbatimModuleSyntax` 아래에서는 `import {} from 'x'` 부수효과 임포트가 된다.
+ */
+export const TYPE_ONLY_STATEMENT_RE = /^(?:import|export)\s+type(?:\s*[{*]|\s+(?!from\b)[A-Za-z_$])/;
+
+export function isTypeOnlyStatement(matched) {
+  return TYPE_ONLY_STATEMENT_RE.test(matched.replace(/^[\s;}]+/, ''));
+}
+
 const EXT_ORDER = ['.ts', '.tsx', '.js', '.jsx', '.mjs'];
 
 /**
@@ -216,6 +235,8 @@ export function buildClientGraph(root, { synthetic = false } = {}) {
       while ((m = IMPORT_RE.exec(body))) {
         const spec = m[1] ?? m[2] ?? m[3];
         if (!spec) continue;
+        // 🔴 타입 전용 문장은 연결도 아니고 스펙도 아니다 — 위 `isTypeOnlyStatement` 참조.
+        if (m[1] && isTypeOnlyStatement(m[0])) continue;
         specs.push(spec);
         const target = resolveSpec(spec, f, aliasBase, files);
         if (target && !seen.has(target)) { seen.add(target); queue.push(target); }

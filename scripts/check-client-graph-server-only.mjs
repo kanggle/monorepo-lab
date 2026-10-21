@@ -47,7 +47,7 @@
 
 import { readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { repoRoot, buildClientGraph, stripComments, isServerBoundary } from './client-graph.mjs';
+import { repoRoot, buildClientGraph, isServerBoundary } from './client-graph.mjs';
 
 const SELF_TEST = process.argv.includes('--self-test');
 const ROOT = process.env.CGSO_ROOT ?? repoRoot();
@@ -64,10 +64,12 @@ const isServerOnlySpec = (spec) =>
 
 /**
  * 🔵 **타입 전용 임포트는 번들에 안 들어간다** ⇒ 물면 오탐이다(티켓 § Edge Cases).
- * `import type { X } from 'next/headers'` 같은 줄을 스펙 단계에서 거른다.
+ * 🔴 TASK-MONO-804: 그 판정은 이제 **순회기**(`client-graph.mjs` `isTypeOnlyStatement`)가
+ *    문장 단위로 한다 — 타입 전용 문장은 연결로도 안 따라가고 `importsOf` 에도 안 들어간다.
+ *    전에 여기 있던 **본문 단위** 필터(«이 파일 어딘가에 그 스펙의 `import type` 줄이 있는가»)
+ *    는 같은 파일의 **진짜** `import { headers } from 'next/headers'` 까지 지웠다 —
+ *    빨강이어야 할 것이 초록이었다(self-test (i)).
  */
-const TYPE_ONLY_RE = (spec) =>
-  new RegExp(`import\\s+type\\s[^;]*?from\\s*['"]${spec.replace(/[/\\-]/g, '\\$&')}['"]`);
 
 function run(root) {
   const g = buildClientGraph(root, { synthetic: synthetic() });
@@ -83,9 +85,7 @@ function run(root) {
       // 🔴 `'use server'` 모듈은 브라우저로 안 간다 — 세지 않는다. 순회는 그래프
       //    모듈에서 이미 멈췄지만, 그 모듈 자체는 `reached` 안에 있다.
       if (isServerBoundary(s)) continue;
-      const body = stripComments(s);
-      const specs = (a.importsOf.get(f) ?? []).filter(isServerOnlySpec);
-      const real = specs.filter((spec) => !TYPE_ONLY_RE(spec).test(body));
+      const real = (a.importsOf.get(f) ?? []).filter(isServerOnlySpec);
       if (real.length) hits.push({ file: f, specs: [...new Set(real)] });
     }
     report.apps.push({
@@ -182,6 +182,52 @@ function selfTest() {
       },
       expectBad: 0,
       expectRoots: 0,
+    },
+    {
+      // 🔴 TASK-MONO-804 — PR #4451 에서 실제로 밟은 모양(카드 → 서버 전용 상태 모듈을
+      //    여러 줄 타입 임포트로만). 번들러는 그 문장을 지운다 ⇒ 물면 오탐이다.
+      name: '(h) 여러 줄 `import type { … }` 로만 서버 전용 모듈에 닿는다  ->  안 문다',
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/Card.tsx':
+          "'use client';\nimport type {\n  St,\n  Shape,\n} from '@/state/s';\nexport const C = (s: St, x: Shape) => [s, x];\n",
+        'app/src/state/s.ts':
+          "import { cookies } from 'next/headers';\nexport type St = 1;\nexport type Shape = 2;\nexport const read = async () => (await cookies()).get('x');\n",
+      },
+      expectBad: 0,
+    },
+    {
+      // 🔴🔴 TASK-MONO-804 곁 결함 — 본문 단위 타입 필터가 같은 파일의 **진짜** 임포트까지
+      //    지웠다(놓침). 빨강이어야 할 것이 초록이었다.
+      name: '(i) 한 파일에 `import type` 과 **값** 임포트가 둘 다 `next/headers`  ->  문다',
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/B.tsx': "'use client';\nimport { r } from '@/lib/r';\nexport const B = () => r;\n",
+        'app/src/lib/r.ts':
+          "import type { ReadonlyHeaders } from 'next/headers';\nimport { headers } from 'next/headers';\nexport const r = async (): Promise<ReadonlyHeaders> => headers();\n",
+      },
+      expectBad: 1,
+    },
+    {
+      // 대조군 — 기본 바인딩 이름이 `type` 인 **값** 임포트는 타입 전용이 아니다.
+      name: "(j) `import type from './s'`(이름이 type 인 기본 임포트)  ->  문다",
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/B.tsx': "'use client';\nimport type from '@/lib/s';\nexport const B = () => type;\n",
+        'app/src/lib/s.ts': "import { cookies } from 'next/headers';\nexport default cookies;\n",
+      },
+      expectBad: 1,
+    },
+    {
+      name: "(k) `export type { … } from` · `export type * from` 재수출만  ->  안 문다",
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/B.tsx': "'use client';\nimport { v } from '@/lib/barrel';\nexport const B = () => v;\n",
+        'app/src/lib/barrel.ts':
+          "export const v = 1;\nexport type { St } from './s';\nexport type * from './s';\n",
+        'app/src/lib/s.ts': "import { cookies } from 'next/headers';\nexport type St = 1;\nexport const c = cookies;\n",
+      },
+      expectBad: 0,
     },
   ];
 

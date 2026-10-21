@@ -186,6 +186,30 @@ function selfTest() {
       expectBad: 0,
       expectRoots: 0,
     },
+    {
+      // 🔴 TASK-MONO-804 — PR #4451 에서 실제로 밟은 모양. 문장 전체가 타입 전용이면
+      //    번들러가 지운다 ⇒ 그 연결로 닿는 리터럴은 브라우저에 없다.
+      name: '(f) 여러 줄 `import type { … }` 로만 닿는다  ->  안 문다 (타입 전용 문장은 번들에 없다)',
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/Card.tsx':
+          "'use client';\nimport type {\n  A,\n  B,\n} from '@/state/s';\nexport const C = (a: A, b: B) => [a, b];\n",
+        'app/src/state/s.ts':
+          "export type A = 1;\nexport type B = 2;\nexport const base = 'http://iam.local';\n",
+      },
+      expectBad: 0,
+    },
+    {
+      // 대조군 — 같은 모양의 **값** 임포트는 여전히 문다(술어를 끊어 버리지 않았다).
+      name: '(f2) 같은 모양의 여러 줄 **값** 임포트  ->  문다',
+      files: {
+        'app/next.config.js': 'module.exports = {}\n',
+        'app/src/ui/Card.tsx':
+          "'use client';\nimport {\n  base,\n} from '@/state/s';\nexport const C = () => base;\n",
+        'app/src/state/s.ts': "export const base = 'http://iam.local';\n",
+      },
+      expectBad: 1,
+    },
   ];
 
   let failed = 0;

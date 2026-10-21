@@ -8,7 +8,7 @@ TASK-MONO-804
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -65,8 +65,8 @@ devops
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — ①②③ 이 고치기 전 기대와 다르게 나오는 것을 자체 시험 출력으로 기록. ③ 이 이미 기대대로(1)면 곁 결함은 «없음» 으로 적고 시험 칸만 남긴다.
-- [ ] **AC-1** — 수선 + 자체 시험 칸. `node scripts/check-client-graph-server-only.mjs --self-test` · `node scripts/check-client-graph-backend-origins.mjs --self-test` 전부 통과.
+- [x] **AC-0** — ①②③ 이 고치기 전 기대와 다르게 나오는 것을 자체 시험 출력으로 기록. ③ 이 이미 기대대로(1)면 곁 결함은 «없음» 으로 적고 시험 칸만 남긴다.
+- [x] **AC-1** — 수선 + 자체 시험 칸. `node scripts/check-client-graph-server-only.mjs --self-test` · `node scripts/check-client-graph-backend-origins.mjs --self-test` 전부 통과.
 - [ ] **AC-2** — 실 트리 두 가드 rc=0, `reached` 변화 기록. CI 의 두 체크 초록.
 
 # Related Specs
@@ -90,3 +90,34 @@ devops
 1. `import type from './x'`(이름이 `type` 인 기본 임포트)를 타입 전용으로 잘못 읽어 진짜 연결을 끊는다 → 대조군 칸이 막는다.
 2. 순회기만 고치고 `TYPE_ONLY_RE` 를 남긴다 → ③ 의 놓침이 그대로다.
 3. 자체 시험 없이 실 트리 rc=0 만 본다 → 「무는가」 를 증명하지 않은 가드(`client-graph.mjs` 의 2026-09-05 교훈).
+
+## AC-0 측정 (2026-10-21 UTC · 분석=Opus 5.5)
+
+고치기 **전** 트리(`b1e5a9271`)에 자체 시험 칸을 먼저 넣고 돌렸다.
+
+| 칸 | 가드 | 기대 | 고치기 전 |
+|---|---|---|---|
+| (h) 여러 줄 `import type { … }` → 서버 전용 모듈 | server-only | 0 | **1** (오탐) |
+| (k) `export type { … } from` · `export type * from` 재수출만 | server-only | 0 | **1** (오탐) |
+| (i) 한 파일에 `import type … 'next/headers'` + `import { headers } from 'next/headers'` | server-only | 1 | **0** (🔴 놓침 — 곁 결함 실재) |
+| (j) `import type from './s'`(이름이 `type` 인 기본 임포트) — 대조군 | server-only | 1 | 1 |
+| (f) 여러 줄 `import type { … }` → `http://iam.local` 리터럴 | backend-origins | 0 | **1** (오탐) |
+| (f2) 같은 모양의 여러 줄 **값** 임포트 — 대조군 | backend-origins | 1 | 1 |
+
+출력: `server-only --self-test` rc=1 «3건 실패»(h · i · k) · `backend-origins --self-test` rc=1 «1건 실패»(f).
+
+원인 둘:
+- `scripts/client-graph.mjs:216-221` — `IMPORT_RE` 가 잡은 모든 `… from 'x'` 를 연결로 따라갔다(타입 전용 문장 포함).
+- `scripts/check-client-graph-server-only.mjs:69-70, 88` — `TYPE_ONLY_RE` 가 **파일 본문 전체**에서 «그 스펙을 가리키는 `import type` 줄이 있는가» 를 보고 스펙을 통째로 지웠다 ⇒ (i).
+
+## 구현 (2026-10-21 UTC · Opus 5.5)
+
+- `scripts/client-graph.mjs`: `TYPE_ONLY_STATEMENT_RE` · `isTypeOnlyStatement()` 추가 — `import type {…}` · `import type X` · `import type * as` · `export type {…}` · `export type *` 는 연결로 안 따라가고 `importsOf` 에도 안 넣는다. `import type from` 은 값 임포트(기본 바인딩 이름 `type`). 인라인 `import { type A }` 는 계속 따라간다(보수적 — 주석에 이유).
+- `scripts/check-client-graph-server-only.mjs`: 본문 단위 `TYPE_ONLY_RE` 필터와 쓰이지 않게 된 `stripComments` 임포트 삭제 — 순회기가 문장 단위로 이미 뺀다. 자체 시험 칸 (h) (i) (j) (k).
+- `scripts/check-client-graph-backend-origins.mjs`: 자체 시험 칸 (f) (f2).
+- `scripts/` 파일 추가 · 삭제 없음(수정만 — `check-ls-files-guard-count.sh` 분모 불변).
+
+검증 (스테이지 뒤):
+- `server-only --self-test` rc=0 — **11/11** · `backend-origins --self-test` rc=0 — **9/9**.
+- 실 트리 두 가드 rc=0 · hits=0. `reached` 변화(같은 그래프라 두 가드 동일): web-store **222 → 217** · fan-platform-web **41 → 35** · console-web **486 → 481** (빠진 16 = 타입 전용 연결). 뿌리 수 불변(83 · 21 · 326) · 하한(뿌리 ≥20 · 도달 ≥60) 여유.
+- CI: `ci.yml:1902-1956` 의 두 잡이 `scripts/client-graph.mjs` 변경에 걸려 자체 시험 + 실 트리를 돈다 — 이 PR 의 체크로 AC-2 를 닫는다.
