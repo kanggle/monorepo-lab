@@ -363,8 +363,31 @@ resource "aws_iam_role_policy" "lambda" {
 # 🔴 그 스크립트는 --json 모드에서 **절대 죽지 않는다**(알 수 없으면 unknown 을 성공으로
 # 낸다). external data source 의 프로그램이 죽으면 plan 자체가 죽어서, 「묶음 기동을 못
 # 한다」가 「아무것도 배포 못 한다」가 되기 때문이다.
+#
+# 🔴🔴 TASK-MONO-802 — 그러나 «스크립트가 안 죽는다» 가 «plan 이 unknown 을 삼킨다» 가 되면
+# 안 된다. PATH 에서 어느 bash 가 먼저 잡히느냐(Git bash · WSL 런처)와 어느 체크아웃에서
+# 도느냐(워크트리의 .git 은 Windows 경로를 가리키는 파일이라 WSL git 이 못 읽는다)에 따라
+# 스크립트가 저장소를 못 볼 수 있고, 그때 `yes -> unknown` 이 **다른 이유의 apply** 에 섞여
+# 묶음 기동을 조용히 끈다(32차 창). 그래서 스크립트 계약은 그대로 두고(= rc=0, (z40)),
+# 소비 쪽에서 `unknown` 을 **큰 소리로 실패**시킨다. `no` 는 진짜 판정이라 통과한다.
+# 🔵 의도적으로 저장소 밖/얕은 클론에서 돌릴 때만 var.allow_unknown_bundle_capability = true.
 data "external" "ami_bundle_capability" {
   program = ["bash", "${path.module}/../ami-bundle-capability.sh", "--json"]
+
+  lifecycle {
+    postcondition {
+      condition     = self.result.capable != "unknown" || var.allow_unknown_bundle_capability
+      error_message = <<-EOT
+        묶음 기동 세대 판정이 unknown 입니다 (apply 하면 BUNDLE_SELECTION_CAPABLE 이 unknown 으로 바뀌어 묶음 기동이 꺼집니다).
+        사유: ${self.result.reason}
+        진단: shell=${self.result.shell} git=${self.result.git == "" ? "(없음)" : self.result.git}
+        고치는 법: (1) PowerShell 이면 Git 의 bin 과 usr\bin 을 PATH 맨 앞에 두고 다시 실행 (WSL 의 C:\Windows\System32\bash.exe 가 먼저 잡히면 안 됩니다).
+                   (2) 워크트리가 아니라 메인 체크아웃에서 plan/apply.
+                   (3) 직접 확인: bash infra/demo/aws/ami-bundle-capability.sh --json
+        의도적으로 저장소 밖/얕은 클론에서 도는 경우에만 -var allow_unknown_bundle_capability=true.
+      EOT
+    }
+  }
 }
 
 resource "aws_lambda_function" "control" {

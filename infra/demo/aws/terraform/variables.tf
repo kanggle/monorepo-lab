@@ -207,3 +207,10 @@ variable "monthly_budget_minutes" {
   type        = number
   default     = 2400
 }
+
+# TASK-MONO-802 — data.external.ami_bundle_capability 의 postcondition 탈출구.
+variable "allow_unknown_bundle_capability" {
+  description = "true 면 ami-bundle-capability.sh 가 unknown(저장소를 못 봄·얕은 클론)을 내도 plan/apply 를 막지 않는다. 기본 false: unknown 은 BUNDLE_SELECTION_CAPABLE 을 조용히 unknown 으로 바꿔 묶음 기동을 끄므로 plan 이 실패해야 한다. 의도적으로 저장소 밖에서 돌 때만 켠다"
+  type        = bool
+  default     = false
+}
