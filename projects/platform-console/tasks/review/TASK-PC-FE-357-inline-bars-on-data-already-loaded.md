@@ -8,7 +8,7 @@ TASK-PC-FE-357
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -58,7 +58,7 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 다섯 자리의 실제 데이터 모양 확인(위 file:line 이 지금도 맞는지 · 샘플 고정값 `shared/sample/fixtures/*` 에 값이 있는지 — 익명 방문자 샘플 화면에서도 막대가 보이는가). 어긋나면 이 표를 고친다.
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구(범례 · 단위 · 빈 상태 · 접근성 라벨) 목록을 소유자에게 보이고 승인**받은 뒤 머지. 문구가 없는 막대(장식)는 목록에 «문구 없음» 으로.
+- [x] **AC-1** — 구현 + **사용자에게 보이는 새 문구(범례 · 단위 · 빈 상태 · 접근성 라벨) 목록을 소유자에게 보이고 승인**받은 뒤 머지. 문구가 없는 막대(장식)는 목록에 «문구 없음» 으로.
 - [x] **AC-2** — 시험: 비율 · 0 · null · 빈 목록 · 합 불일치 · 최대값 0 · 기존 스위트 통과(`--maxWorkers=4 --minWorkers=2`), `tsc --noEmit` · `next lint` rc=0. 막대 출력이 바뀌는 화면의 e2e(`getByText` 류 · testid) 를 grep 해 깨지는 단언이 없는지 확인.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면에서 다섯 자리 확인(데모 창 불필요 — 샘플로 보인다. 샘플에 값이 없는 자리는 «로그인 운영자 · 다음 데모 창» 으로 남긴다).
 
@@ -100,7 +100,7 @@ frontend
 - e2e: `tests/e2e/` · `e2e-smoke/` 에서 `order-status` · `promotion-*` · `wms-asn-inspection` · `scm-sku` · `wms-operations` · `projection` grep **0건** → 깨질 단언 없음.
 - 기존 단위 시험의 단언(`order-status-PENDING` 텍스트 · 입고 검수 · SKU 표 · 투영 표)은 막대가 숫자 글자를 건드리지 않으므로 그대로 통과(전체 스위트로 확인).
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 UTC)
 
 | 위치 | 문구 | 언제 보이나 |
 |---|---|---|
@@ -141,3 +141,9 @@ frontend
 - `npx tsc --noEmit`: rc=0.
 - `npx next lint`: rc=0 (기존 경고 1건 `received-invitations/route.ts` `_req` — 이번 변경 아님).
 - e2e grep: 위 AC-0 참고, 0건.
+
+## 소유자 승인 · 후속 수정 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 위 새 문구 두 개 · 색 선택 = **소유자 승인**(선택창, 머지 전).
+- 후속 커밋: WMS 토픽별 지연 막대 색 `warning` → `neutral`(`WmsOperationsScreen.tsx`) — 값과 무관하게 경고색이면 정상 지연(1.4 s)도 문제로 읽힌다. `inline-bars.test.tsx` 31/31 · `tsc --noEmit` rc=0.
+- AC-1 닫힘(머지 전 승인). 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 화면 다섯 자리).
