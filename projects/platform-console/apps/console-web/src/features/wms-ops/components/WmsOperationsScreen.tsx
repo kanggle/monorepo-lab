@@ -291,7 +291,7 @@ function ProjectionSection({
                         <ProportionBar
                           value={p.lagSeconds}
                           max={maxLag}
-                          tone="warning"
+                          tone="neutral"
                           testid={`wms-operations-projection-lag-bar-${i}`}
                         />
                       </div>
