@@ -83,13 +83,39 @@ Authorization Code + PKCE 플로우 시작. PKCE (`code_challenge_method=S256`) 
 
 **Response**: 302 redirect to `redirect_uri?code=...&state=...`
 
-**Errors**:
+**Errors** (TASK-BE-642 정정 — 이전 표의 «미등록 client → `invalid_client`» · «PKCE 미포함 → 400» 은 실제와 달랐다). RFC 6749 § 4.1.2.1 대로 두 갈래다. **어느 갈래인지는 SAS 1.4.1 이 정한다** — 믿을 수 있는 `redirect_uri` 를 오류에 붙였는가(converter · provider · validator 바이트코드 실측, TASK-BE-642 AC-0).
 
-| 조건 | 응답 |
+**(1) redirect 할 수 없는 오류 → 400** `Content-Type: application/json`, `Cache-Control: no-store`, OAuth 2.0 오류 형식. 브라우저가 이 JSON 을 본다. 예 — 모르는 `client_id`:
+
+```json
+{"error":"invalid_request","error_description":"OAuth 2.0 Parameter: client_id"}
+```
+
+| 조건 | `error` | `error_description` 끝에 붙는 이름 |
+|---|---|---|
+| `client_id` 없음 · 중복 | `invalid_request` | `client_id` |
+| 미등록 `client_id` | `invalid_request` | `client_id` |
+| `redirect_uri` 가 등록값과 다름(미등록 콜백) · fragment 포함 · 파싱 불가 | `invalid_request` | `redirect_uri` |
+| `scope` 에 `openid` 가 있는데 `redirect_uri` 없음 (또는 `openid` 없이 등록 URI 가 여럿인데 `redirect_uri` 없음) | `invalid_request` | `redirect_uri` |
+| `response_type` 없음 · 중복 | `invalid_request` | `response_type` |
+| `response_type` ≠ `code` (SAS 1.4.1 은 이것을 redirect 하지 않는다) | `unsupported_response_type` | `response_type` |
+| `redirect_uri` · `scope` · `state` · `code_challenge` · `code_challenge_method` · `prompt` 중복 | `invalid_request` | 그 이름 |
+
+- 본문은 정확히 `error` · `error_description` 두 필드다(`error_uri` 는 싣지 않는다). `error_description` 은 SAS 의 고정 문장 `OAuth 2.0 Parameter: <이름>` — **요청 값(`client_id` · `redirect_uri` · `state`)을 되풀이하지 않는다** — 이고 200자로 자른다.
+- 🔴 **오류 응답은 이 엔드포인트가 직접 쓴다** — `sendError` 로 컨테이너 `/error` 디스패치를 타지 않는다. TASK-BE-642 이전 SAS 기본 처리는 `sendError(400)` 였고, 그 `/error` 디스패치가 Order 2 체인의 `denyAll` 에 걸려 **401 `{"code":"UNAUTHORIZED","message":"Missing or invalid internal credentials"}`** 로 바뀌어 나갔다(§ GET /connect/logout 과 같은 기전). 그 401 은 이 엔드포인트의 계약이 아니다.
+- 오류마다 auth-service 가 INFO 한 줄을 남긴다(`error` · `error_description` 만 — 요청 값은 남기지 않는다).
+- 사람용 HTML 오류 화면은 별도 결정이다(TASK-BE-641 D1 (b) 와 같은 자리).
+
+**(2) redirect 형 오류 → 302** `Location: <redirect_uri>?error=…&error_description=…&error_uri=…[&state=…]` — SAS 1.4.1 기본 동작 그대로(바뀌지 않음). `redirect_uri` 는 SAS 가 검증을 통과시킨 값(요청에 없으면 client 의 첫 등록 URI).
+
+| 조건 | `error` |
 |---|---|
-| PKCE 미포함 | 400 `invalid_request` |
-| 미등록 client | 400 `invalid_client` |
-| 미등록 redirect_uri | 400 `invalid_request` |
+| client 에 허용 안 된 `scope` | `invalid_scope` |
+| client 에 `authorization_code` grant 없음 | `unauthorized_client` |
+| PKCE 필수 client 에 `code_challenge` 없음 · `code_challenge_method` 가 `S256` 아님 | `invalid_request` |
+| `prompt=none` 에 다른 값이 섞임 | `invalid_request` |
+| `prompt=none` · 미인증 | `login_required` |
+| `prompt=none` · 동의 필요 | `consent_required` |
 
 #### Registration hint — `prompt=create` (TASK-BE-578)
 
