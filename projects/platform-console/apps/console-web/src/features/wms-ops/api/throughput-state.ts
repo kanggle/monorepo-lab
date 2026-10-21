@@ -8,9 +8,9 @@ import {
   sumThroughput,
   utcThroughputWindow,
   zeroFillThroughput,
-  type ThroughputDay,
-  type ThroughputTotals,
+  type ThroughputCardStatus,
   type WarehouseOption,
+  type WmsThroughputState,
 } from '../lib/throughput';
 
 /**
@@ -37,23 +37,7 @@ import {
  * through the same-origin proxy).
  */
 
-export type ThroughputCardStatus = CellStatus | 'no-warehouses';
-
-export interface WmsThroughputState {
-  /** True when the operator is not wms-eligible — no read was made. */
-  notEligible: boolean;
-  status: ThroughputCardStatus;
-  /** ACTIVE warehouses, code ascending (empty when the list did not resolve). */
-  warehouses: WarehouseOption[];
-  /** The warehouse whose window `days` describes (`null` = none). */
-  selectedWarehouseId: string | null;
-  /** UTC window, inclusive both ends. */
-  from: string;
-  to: string;
-  /** Zero-filled `from..to` days, or `null` when the read did not resolve. */
-  days: ThroughputDay[] | null;
-  totals: ThroughputTotals | null;
-}
+export type { ThroughputCardStatus, WmsThroughputState };
 
 const WAREHOUSE_LIST_SIZE = 100;
 

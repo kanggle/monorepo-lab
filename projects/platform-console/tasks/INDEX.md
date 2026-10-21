@@ -119,10 +119,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 승인 대기 (IN-PROGRESS, 2026-10-22 UTC). 분석=Opus 5.5 / 구현=Opus.
 
 
 ## review
+
+- `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **이미 받은 데이터로 그리는 막대 다섯**(이커머스 주문 상태 · 프로모션 발급률 · WMS 입고 검수 · SCM SKU 노드별 · WMS 투영 지연) — CSS 막대 · 서버/BFF 변경 없음 · 새 문구는 소유자 승인 (REVIEW, 2026-10-22 UTC · 새 문구 2 소유자 승인 · AC-3 Vercel/샘플 화면 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 

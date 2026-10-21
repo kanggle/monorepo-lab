@@ -8,7 +8,7 @@ WMS 개요에 일별 입고 · 출고 처리량 그래프 — 계약에 있고 A
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -57,8 +57,8 @@ frontend
 
 - [x] **AC-0** — ①~④ 를 file:line 과 함께 기록. ② 에서 콘솔 토큰이 통과하지 못하면 STOP → 서버 · 카탈로그 티켓 먼저(이 티켓은 그 뒤). → `## AC-0 측정` (② 통과, STOP 아님).
 - [x] **AC-1** — 소유자 결정(기본 창고 · 기간 · 막대/선 · 수량/건수)을 선택창으로 받는다(추천과 함께). → `### 소유자 결정 (2026-10-22 UTC)`.
-- [ ] **AC-2** — 계약 먼저 갱신 → 구현. **사용자에게 보이는 새 문구(제목 · 범례 · 단위 · 빈 상태 · 오류 · 창고 선택 라벨) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-3** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` rc=0. SSR 이 바뀌므로 **머지 전 브랜치에서 nightly 콘솔 잡** 실행 · 확인.
+- [x] **AC-2** — 계약 먼저 갱신 → 구현. **사용자에게 보이는 새 문구(제목 · 범례 · 단위 · 빈 상태 · 오류 · 창고 선택 라벨) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-3** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` rc=0. SSR 이 바뀌므로 **머지 전 브랜치에서 nightly 콘솔 잡** 실행 · 확인.
 - [ ] **AC-4** — 배포(Vercel Production 기록) · 익명 샘플 화면에서 그래프 확인 · 로그인 운영자 라이브 = 다음 데모 창(③ 에서 시드가 비면 «빈 그래프 문구» 가 보이는 것까지가 판정).
 
 # Related Specs
@@ -167,7 +167,7 @@ frontend
 - `npx next lint` → rc=0(새 파일 경고 0 — 남은 경고는 기존 파일).
 - e2e: `/wms` 를 여는 스펙은 `tests/federation-hardening-e2e/specs/wms-golden-path.spec.ts` 하나 — URL 과 첫 heading(`h1` «WMS 개요»)만 본다. 카드는 `h3` 이고 뒤에 오므로 깨지지 않는다. `e2e-smoke/sample-visitor-wms.spec.ts` 는 `/wms/inventory` 만. e2e 추가 없음.
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 UTC)
 
 경로 접두 `projects/platform-console/apps/console-web/src/features/wms-ops/components/`. `{…}` 는 값이 들어가는 자리.
 
@@ -188,3 +188,12 @@ frontend
 | `WmsThroughputChart.tsx:71` (+ `:30`) | `{M}월 {D}일: 입고 {n}건, 출고 {m}건` | 날마다 하나, 화면낭독 전용(`sr-only`) |
 
 새 문구가 아닌 것(참고): `권한 없음` · `점검 필요` 는 기존 공용 어휘 `src/shared/lib/overview-cell.ts:19` 를 그대로 쓴다(403 / 그 밖 실패). 막대 밑 날짜 `{M}/{D}` 와 숫자는 값이다. 선택 칸의 항목 글자 `{코드} · {이름}` 은 생산자 데이터다.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 새 문구 13개 · 카드 위치(«최근 활동» 칸 맨 앞) = **소유자 승인**(선택창, 머지 전) → AC-2 닫힘.
+- `TASK-PC-FE-357`(#4450 `d10f95e74`) 머지 뒤 rebase — `INDEX.md` 충돌 1곳(ready 칸: 357 은 review · 358 은 in-progress 로 갔으므로 `_(없음)_`). rebase 트리에서 vitest 418 files · 5061 tests · `tsc --noEmit` · `next lint` rc=0.
+- 브랜치 nightly run `39636295024`(head `c04b575e5`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success → AC-3 닫힘.
+- 🔴 PR 체크 2개 빨강(같은 head): `Client graph server-only imports` · `Client graph backend origins`. 원인 = 카드(`'use client'`)가 서버 전용 `api/throughput-state.ts` 를 **여러 줄 `import type { … }`** 로 가리켜, 가드의 그래프 걷기가 그 모듈 → `shared/lib/session.ts` → `next/headers` · `shared/config/env.ts` 의 백엔드 주소까지 닿았다. 수정 = 카드가 쓰는 두 타입(`ThroughputCardStatus` · `WmsThroughputState`)을 `lib/throughput.ts` 로 옮기고(`OverviewCellStatus` 기반) 상태 모듈은 다시 내보내기만. 로컬 두 가드 hits=0 · tsc · lint · vitest 위와 같음. 타입만 옮겼으므로 내보내는 JS 는 같다 — nightly 는 다시 돌리지 않았다.
+- 🔵 가드 쪽 관찰(이 티켓 밖): 옛 그래프도 nightly 의 `next build` 는 통과했다 — `import type` 은 번들에 안 들어간다. `scripts/check-client-graph-server-only.mjs:69-70` 의 `TYPE_ONLY_RE` 는 **마지막 대상**(`next/headers`) 을 가리키는 타입 임포트만 거르고, 로컬 모듈 사이의 `import type` 연결은 따라간다 ⇒ 오탐. 루트 티켓 후보(소유자에게 보고).
+- 열림: **AC-4**(Vercel Production 기록 · 익명 샘플 화면 · 로그인 운영자 라이브 = 다음 데모 창).

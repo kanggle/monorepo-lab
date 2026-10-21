@@ -1,3 +1,4 @@
+import type { OverviewCellStatus } from '@/shared/lib/overview-cell';
 import type { GenericRow, Throughput } from '../api/types';
 
 /**
@@ -180,6 +181,29 @@ export interface WarehouseOption {
   id: string;
   code: string;
   name: string | null;
+}
+
+/**
+ * The card's state shape. Declared HERE (not in `api/throughput-state`) so the
+ * `'use client'` card never imports the server-only state module — not even
+ * for types (the client-graph guards follow multi-line `import type` too).
+ */
+export type ThroughputCardStatus = OverviewCellStatus | 'no-warehouses';
+
+export interface WmsThroughputState {
+  /** True when the operator is not wms-eligible — no read was made. */
+  notEligible: boolean;
+  status: ThroughputCardStatus;
+  /** ACTIVE warehouses, code ascending (empty when the list did not resolve). */
+  warehouses: WarehouseOption[];
+  /** The warehouse whose window `days` describes (`null` = none). */
+  selectedWarehouseId: string | null;
+  /** UTC window, inclusive both ends. */
+  from: string;
+  to: string;
+  /** Zero-filled `from..to` days, or `null` when the read did not resolve. */
+  days: ThroughputDay[] | null;
+  totals: ThroughputTotals | null;
 }
 
 function str(v: unknown): string | null {

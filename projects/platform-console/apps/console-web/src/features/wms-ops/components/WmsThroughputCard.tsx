@@ -2,14 +2,12 @@
 
 import { useId, useMemo, useState } from 'react';
 import { ApiError } from '@/shared/api/errors';
-import type {
-  ThroughputCardStatus,
-  WmsThroughputState,
-} from '../api/throughput-state';
 import { useWmsThroughput } from '../hooks/use-wms-throughput';
 import {
   sumThroughput,
   zeroFillThroughput,
+  type ThroughputCardStatus,
+  type WmsThroughputState,
   type ThroughputDay,
   type ThroughputTotals,
   type WarehouseOption,
