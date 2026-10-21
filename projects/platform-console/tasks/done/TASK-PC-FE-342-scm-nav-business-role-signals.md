@@ -8,7 +8,7 @@ TASK-PC-FE-342
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -65,7 +65,8 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-792` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `SCM_PROCUREMENT_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 SCM 8 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(`SecurityConfig` 4개)와 다시 대조.
+- [x] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-792` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `SCM_PROCUREMENT_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 SCM 8 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(`SecurityConfig` 4개)와 다시 대조.
+  - ✅ (2026-10-21 UTC 정리 · 소유자 결정 «근거를 적고 체크 → done») 게이트 = **충족**: TASK-MONO-792 를 실은 굽기 `ami-00ef8cc1057cca59b` @ `8905d2c29` 가 28차 창(2026-10-16)에서 라이브 확인된 뒤 머지(§ Merge gate — 28th window · `TASK-MONO-672` § 28th window — harvest: `demo@` assume `demo-corp` 토큰 roles 에 SCM 8 역할 · V0056–V0059 행 수). 서버 코드 대조 = § 구현 기록 «AC-0 — 게이트 · 서버 대조»(SecurityConfig 4개 · `DomainRoleCatalog.java:52-59`). 🔵 원문의 두 하위 항목 중 `GET /api/admin/domain-roles` 는 **문자 그대로 잰 기록이 없다** — 카탈로그 코드 대조로 갈음. 라이브 `/me/domain-access` 는 32차 창 화면(데모 운영자 배지 없음 · 세트 0 배지 있음 — 판별력 있는 대조)으로 **간접** 확인.
 - [x] **AC-1** — 계약 § 2.4.3.4 개정(`:281` · `:304` · `:307`) 이 코드보다 먼저. → red 커밋 `f17be4ff5` 에 계약 · 시험만(+ 중립 배관), 데이터는 green.
 - [x] **AC-2** — 🔴 대조군: 조회 세트(`scm-read`) → SCM 메뉴 배지 없음 · 승인/기각/저장 버튼 없음 / 수요계획 세트만 → `/scm/procurement` · `/scm/inventory` 배지, `/scm/replenishment` 버튼 보임 / SCM 세트 0 → SCM 메뉴 전부 배지 / WMS 출고 세트만 → 출고 화면의 «발송 재시도» 없음. → `console-nav-business-permission.test.ts` · `sidebar-business-permission.test.tsx` · `ReplenishmentScreen` · `SeedConfigScreen` · `OutboundOpsScreen` · `domain-business-roles.test.ts` (§ 구현 기록).
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(행 12 `undefined` · 레지스트리 `null` · 샘플 방문자 · 테넌트 없음).
@@ -139,3 +140,9 @@ frontend
 - ⚪ 보충 **설정 저장** 버튼은 안 봤다. ⚪ WMS 출고 «발송 재시도» — 숨어 있었지만 **판별력 없음**: 유일한 주문 `SO-DEMO-0001` 이 `SHIPPED` · saga `COMPLETED` 라 권한이 있어도 그 버튼이 안 나오는 상태다.
 - ⓘ WMS 메뉴는 세트 없이도 배지가 없다 — 설계(`permission-map.ts:722-725` 구독만으로 `WMS_VIEWER`).
 - 🔴 이 티켓은 `in-progress` 에 남는다 — AC-0 의 체크박스가 비어 있다(본문 기록과 별개로).
+
+
+## 닫기 (2026-10-21 UTC — 4차원 확인)
+
+- (a) #4396 `state=MERGED` · (b) `ce1277dfa` 가 `origin/main` 조상 · (c) 머지 시점 체크 SUCCESS 14 · 실패 0 · (d) AC-0~AC-4 전부 닫힘(AC-0 ·  위 2026-10-21 줄, AC-4 = Vercel 7128043458 success + § 32차 창 라이브).
+- 빈 체크칸은 «체크만 빠진 것»으로 판정했다 — 본문 기록은 이미 있었다. in-progress → done.

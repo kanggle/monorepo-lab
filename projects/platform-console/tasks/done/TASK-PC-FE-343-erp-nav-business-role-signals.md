@@ -8,7 +8,7 @@ TASK-PC-FE-343
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -64,9 +64,11 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-793` 을 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ERP_MASTERDATA_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 ERP 4 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(masterdata `RoleScopeAuthorizationAdapter` · approval `ActorContext` · read-model / notification `ReadAuthorizationGate`)와 다시 대조.
+- [x] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-793` 을 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ERP_MASTERDATA_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 ERP 4 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(masterdata `RoleScopeAuthorizationAdapter` · approval `ActorContext` · read-model / notification `ReadAuthorizationGate`)와 다시 대조.
+  - ✅ (2026-10-21 UTC 정리 · 소유자 결정 «근거를 적고 체크 → done») 게이트 = **충족**: TASK-MONO-793 를 실은 굽기 `ami-00ef8cc1057cca59b` @ `8905d2c29` 가 28차 창(2026-10-16)에서 라이브 확인된 뒤 머지(§ Merge gate — 28th window · `TASK-MONO-672` § 28th window — harvest: `demo@` assume `demo-corp` 토큰 roles 에 ERP 4 역할 · V0056–V0059 행 수). 서버 코드 대조 = § 구현 기록 «AC-0 — 오늘 거짓 배지 · 숨김이 있는가 · 서버 대조»(`RoleScopeAuthorizationAdapter:55-58` · `ActorContext:59,69` · `ReadAuthorizationGate` 둘). 🔵 원문의 두 하위 항목 중 `GET /api/admin/domain-roles` 는 **문자 그대로 잰 기록이 없다** — 카탈로그 코드 대조로 갈음. 라이브 `/me/domain-access` 는 32차 창 화면(데모 운영자 배지 없음 · 세트 0 배지 있음 — 판별력 있는 대조)으로 **간접** 확인.
 - [x] **AC-1** — 계약 § 2.4.3.4 · § 2.4.8 개정이 코드보다 먼저. → red 커밋 `88d89e571`.
-- [ ] **AC-2** — 🔴 대조군: 조회 세트(`erp-read`) → ERP 메뉴 배지 없음 · 쓰기 버튼 없음 / 결재 세트만 → `/erp/masters` · `/erp/orgview` 배지, `/erp/approval` 버튼 보임 / 기준정보 세트만 → `/erp/approval` · `/erp/delegation` 배지 / ERP 세트 0 → ERP 메뉴 전부 배지 · 알림 종이 ERP 갈래를 부르지 않음(`degradedDomains` 에 erp 없음). → **메뉴 · 알림 종 몫 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-343 · `sidebar-business-permission.test.tsx` · `notification-routes.test.ts` § TASK-PC-FE-343). **버튼 몫(«쓰기 버튼 없음» · «`/erp/approval` 버튼 보임») 은 `TASK-PC-FE-347` 로** — § 범위 결정.
+- [x] **AC-2** — 🔴 대조군: 조회 세트(`erp-read`) → ERP 메뉴 배지 없음 · 쓰기 버튼 없음 / 결재 세트만 → `/erp/masters` · `/erp/orgview` 배지, `/erp/approval` 버튼 보임 / 기준정보 세트만 → `/erp/approval` · `/erp/delegation` 배지 / ERP 세트 0 → ERP 메뉴 전부 배지 · 알림 종이 ERP 갈래를 부르지 않음(`degradedDomains` 에 erp 없음). → **메뉴 · 알림 종 몫 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-343 · `sidebar-business-permission.test.tsx` · `notification-routes.test.ts` § TASK-PC-FE-343). **버튼 몫(«쓰기 버튼 없음» · «`/erp/approval` 버튼 보임») 은 `TASK-PC-FE-347` 로** — § 범위 결정.
+  - ✅ (2026-10-21 UTC 정리) 메뉴 절반 = 이 티켓(단위 시험 + 32차 창 라이브), 버튼 절반 = `TASK-PC-FE-347` 로 이관 · 그 티켓 **done**(32차 창 라이브 포함). 두 절반이 모두 닫혀 AC-2 를 닫는다.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임 · 알림 종은 ERP 갈래를 부른다(지금 규칙 그대로). → row 12 `null`(실패 · 시간 초과 — `getMyDomainRolesOrNull` 이 모든 실패를 `null` 로) → 배지 없음 · 갈래 호출, 테넌트 없음 · `'*'` 도 호출.
 - [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `82d857680` → `Production – kanggle-console` 배포 7129951620 state=success (2026-10-16T21:30:42Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
@@ -146,3 +148,9 @@ frontend
 - demo@: ERP 메뉴 배지 없음 ✅. ERP 세트 0(`scm-read` + `wms-full`): ERP 메뉴 배지 ✅ · **알림 종 «새 알림이 없습니다» — ERP 저하 보고 없음** ✅.
 - `ecommerce-order-operate` · `erp-approval-operate` · `finance-ledger-operate`: ERP «마스터 · 통합 조회» 배지 · «결재함 · 위임» 배지 없음 ✅.
 - 🔴 `in-progress` 유지 — AC-0 체크박스가 비어 있다.
+
+
+## 닫기 (2026-10-21 UTC — 4차원 확인)
+
+- (a) #4400 `state=MERGED` · (b) `82d857680` 가 `origin/main` 조상 · (c) 머지 시점 체크 SUCCESS 14 · 실패 0 · (d) AC-0~AC-4 전부 닫힘(AC-0 · AC-2 · 위 2026-10-21 줄, AC-4 = Vercel 7129951620 success + § 32차 창 라이브).
+- 빈 체크칸은 «체크만 빠진 것»으로 판정했다 — 본문 기록은 이미 있었다. in-progress → done.

@@ -8,7 +8,7 @@ TASK-PC-FE-356
 
 # Status
 
-review (2026-10-20 UTC — 구현 · 시험 끝 · AC-3 = Vercel 배포 기록)
+done (2026-10-20 UTC — 구현 · 시험 끝 · AC-3 = Vercel 배포 기록)
 
 # Owner
 
@@ -62,3 +62,10 @@ frontend
 # Failure Scenarios
 
 1. 값만 바꾸고 출처 줄을 안 바꾼다 — 가이드의 «근거» 링크가 엉뚱한 주석을 가리킨다(180분 카드가 이미 그랬다).
+
+---
+
+## CORRECTION (2026-10-21 UTC — AC-3 닫힘 · done)
+
+- **AC-3 ✅** — 머지 커밋 `cd5e7ab50` → `Production – kanggle-console` 배포 **7209332486** state=**success**(2026-10-20T19:41:10Z · 커밋 상태 pending 19:39:48Z → success 19:41:09Z). 정적 가이드 데이터라 백엔드 · 굽기 불필요. 위 AC 목록의 `[ ] AC-3` 은 review 시점 기록이고, 지금은 닫혔다.
+- 4차원: (a) #4438 `state=MERGED` 2026-10-20T19:39:29Z · (b) `cd5e7ab50` = `origin/main` tip · (c) 머지 시점 체크 SUCCESS 13 · SKIPPED 54 · 실패 0 · (d) AC-1 · AC-2 · AC-3 전부 닫힘.

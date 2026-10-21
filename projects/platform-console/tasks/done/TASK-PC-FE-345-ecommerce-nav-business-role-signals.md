@@ -8,7 +8,7 @@ TASK-PC-FE-345
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -67,9 +67,11 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-795` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ECOMMERCE_ORDER_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 E-commerce 13 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(`OrderOperatorAccess` · `ProductOperatorAccess` · 각 서비스 `OperatorRoleGuard` · `AdminUserController` · `TemplateController`)와 다시 대조.
+- [x] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-795` 를 담은 AMI 가 라이브인가(굽기 기록 · `GET /api/admin/domain-roles` 가 `ECOMMERCE_ORDER_READ` 를 내는가 · 라이브 `/me/domain-access` 가 데모 운영자에게 E-commerce 13 역할을 내는가). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표를 서버 코드(`OrderOperatorAccess` · `ProductOperatorAccess` · 각 서비스 `OperatorRoleGuard` · `AdminUserController` · `TemplateController`)와 다시 대조.
+  - ✅ (2026-10-21 UTC 정리 · 소유자 결정 «근거를 적고 체크 → done») 게이트 = **충족**: TASK-MONO-795 를 실은 굽기 `ami-00ef8cc1057cca59b` @ `8905d2c29` 가 28차 창(2026-10-16)에서 라이브 확인된 뒤 머지(§ Merge gate — 28th window · `TASK-MONO-672` § 28th window — harvest: `demo@` assume `demo-corp` 토큰 roles 에 E-commerce 13 역할 · V0056–V0059 행 수). 서버 코드 대조 = § 구현 기록 «AC-0 — 라이브 퇴행 확인 · 서버 대조»(`OrderOperatorAccess` · `ProductOperatorAccess` · `OperatorRoleGuard` · `AdminUserController` · `TemplateController`). 🔵 원문의 두 하위 항목 중 `GET /api/admin/domain-roles` 는 **문자 그대로 잰 기록이 없다** — 카탈로그 코드 대조로 갈음. 라이브 `/me/domain-access` 는 32차 창 화면(데모 운영자 배지 없음 · 세트 0 배지 있음 — 판별력 있는 대조)으로 **간접** 확인.
 - [x] **AC-1** — 계약 § 2.4.3.4 개정이 코드보다 먼저. → red 커밋 `96489e285`(계약 · 시험만).
-- [ ] **AC-2** — 🔴 대조군: 조회 세트(`ecommerce-read`) → E-commerce 메뉴 배지 없음 · 쓰기 버튼 없음 / 주문 운영 세트만(`ecommerce-order-operate`) → `/orders` 배지 없음 · 버튼 보임, 나머지 7 화면 배지 / 회원 조회 없는 세트 → `/users` 배지 / E-commerce 세트 0 → E-commerce 메뉴 전부 배지. → **메뉴 절반 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-345 · `sidebar-business-permission.test.tsx`). **버튼 절반(«쓰기 버튼 없음» · «버튼 보임») 은 `TASK-PC-FE-346` 으로 이관** — § 범위 결정.
+- [x] **AC-2** — 🔴 대조군: 조회 세트(`ecommerce-read`) → E-commerce 메뉴 배지 없음 · 쓰기 버튼 없음 / 주문 운영 세트만(`ecommerce-order-operate`) → `/orders` 배지 없음 · 버튼 보임, 나머지 7 화면 배지 / 회원 조회 없는 세트 → `/users` 배지 / E-commerce 세트 0 → E-commerce 메뉴 전부 배지. → **메뉴 절반 닫힘**(`console-nav-business-permission.test.ts` § TASK-PC-FE-345 · `sidebar-business-permission.test.tsx`). **버튼 절반(«쓰기 버튼 없음» · «버튼 보임») 은 `TASK-PC-FE-346` 으로 이관** — § 범위 결정.
+  - ✅ (2026-10-21 UTC 정리) 메뉴 절반 = 이 티켓(단위 시험 + 32차 창 라이브), 버튼 절반 = `TASK-PC-FE-346` 로 이관 · 그 티켓 **done**(32차 창 라이브 포함). 두 절반이 모두 닫혀 AC-2 를 닫는다.
 - [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음 · 버튼 보임(지금 규칙 그대로). → fail-open 시험(row 12 `undefined`) · 버튼은 이 PR 에서 선언 없음 = 늘 보임.
 - [x] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. → § 32차 창 라이브.
   - 🔵 Vercel 절반 ✅ (2026-10-18 UTC 측정): 머지 커밋 `d64a6b8a7` → `Production – kanggle-console` 배포 7128901643 state=success (2026-10-16T20:32:51Z). 🔴 라이브 화면 절반(로그인 운영자 · 세트별 배지/버튼)은 백엔드가 필요 — 다음 데모 창(`TASK-MONO-672` § Order «Still open» 10). 이 줄만으로 AC-4 를 닫지 않는다.
@@ -155,3 +157,9 @@ c-2 시험이 이것을 못 잡은 이유: `console-nav-business-permission.test
 - 🔴 **라이브 퇴행 수리 확인**: demo@ 의 E-commerce 메뉴에 «업무 권한 없음» 배지 **없음** ✅(795 굽기 뒤의 거짓 배지 9 개가 사라졌다).
 - `ecommerce-order-operate` 만: **«주문» 만 열리고** 상품 · 배송 · 프로모션 · 사용자 · 셀러 · 정산 · 알림 배지 ✅ · `/ecommerce/products` = «이 화면을 조회할 권한이 없습니다» ✅. E-commerce 세트 0: E-commerce 메뉴 전부 배지 ✅. `ecommerce-read`: 배지 없음 ✅.
 - 🔴 `in-progress` 유지 — AC-0 · AC-2 체크박스가 비어 있다(AC-2 버튼 절반은 346 으로 이관됐고 346 이 이 창에서 닫혔다).
+
+
+## 닫기 (2026-10-21 UTC — 4차원 확인)
+
+- (a) #4399 `state=MERGED` · (b) `d64a6b8a7` 가 `origin/main` 조상 · (c) 머지 시점 체크 SUCCESS 13 · 실패 0 · (d) AC-0~AC-4 전부 닫힘(AC-0 · AC-2 · 위 2026-10-21 줄, AC-4 = Vercel 7128901643 success + § 32차 창 라이브).
+- 빈 체크칸은 «체크만 빠진 것»으로 판정했다 — 본문 기록은 이미 있었다. in-progress → done.
