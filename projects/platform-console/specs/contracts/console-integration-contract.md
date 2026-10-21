@@ -508,6 +508,28 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   `WMS_VIEWER` read-only range. Consumed read-only; no producer contract
   change.
 
+  **Console-side routing note (TASK-PC-FE-358, non-normative — no producer
+  change)**: operation #3 (throughput, `GET /dashboard/throughput`, § 1.2) —
+  exported by `wms-inventory-api.ts` (`getThroughput`) since the § 1 client
+  split but with **zero consumers** — is surfaced as a **daily inbound/outbound
+  card on the `/wms` 개요** (§ 2.4.5.2 below), not on a dedicated route. The
+  server render reads the default warehouse's window; switching warehouse is a
+  client re-query through a **new same-origin read proxy
+  `GET /api/wms/throughput?warehouseId=<uuid>&from=<YYYY-MM-DD>&to=<YYYY-MM-DD>`**
+  (READ-ONLY — GET only, no `Idempotency-Key`, no `X-Operator-Reason`, no
+  body; the domain-facing IAM OIDC token is attached server-side exactly like
+  every other `/api/wms/**` read). The proxy **validates before any upstream
+  call** and answers `400 VALIDATION_ERROR` when `warehouseId` is not a UUID
+  (§ 1.2 types it `UUID`), `from`/`to` is not a real ISO `LocalDate`,
+  `to < from`, or the inclusive span exceeds 90 days (§ 1.2's own limits — the
+  console never sends a request the producer is documented to reject). A
+  valid request is forwarded verbatim; the `200` body is the producer's § 1.2
+  shape, parsed (unknown extra fields pass through). Errors map through the
+  shared `mapWmsError` (§ 2.5: 401 → 401, 403 → 403, 400/404 passthrough,
+  503/timeout/network → 503). Warehouse candidates come from op #11
+  (`GET /dashboard/refs/warehouses?status=ACTIVE`). Consumed read-only; no
+  producer contract change.
+
 - **Per-domain credential selection (the key correctness element — normative)**:
   **each § 2.4.x binding declares which credential it uses, and an
   implementer MUST NOT blanket-apply one domain's auth model to another.**
@@ -873,6 +895,52 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
   `redirect('/login')` (no partial authed state — mirrors `getWmsSectionState`).
   Read-only; no auto-refetch. `WmsUnavailableError` (503/timeout/network)
   degrades the cell, never a re-login.
+- **Daily throughput card (TASK-PC-FE-358).** A separate server state
+  (`getWmsThroughputState`), fanned out **in parallel with, and independent
+  of**, the cells above — its failure never degrades the count tiles, the
+  alert distribution or the recent glances, and theirs never degrades it.
+  **Placement**: the 활동 band, first (above 최근 재고 조정 / 최근 출고) — a trend
+  over days is activity, and placing it with the counts would split the alert
+  distribution from the alerts table (the Order rule above).
+  Two reads, in order:
+  1. **Warehouse list** — op #11 `GET /dashboard/refs/warehouses?status=ACTIVE&page=0&size=100`;
+     the console keeps only rows whose `status` is `ACTIVE` (or absent —
+     tolerant), and sorts them by warehouse code ascending (`code`, the
+     producer's `MasterRefResponse` field; `warehouseCode` / `id` as tolerant
+     fallbacks). **0 warehouses** → the card shows a "no warehouse" notice and
+     **no throughput read is issued**; **1** → that warehouse, no selector;
+     **≥ 2** → a selector, default = the first after sorting.
+  2. **Throughput** — op #3 `GET /dashboard/throughput?warehouseId=<default>&from=<to−13d>&to=<UTC today>`:
+     a **14-day window ending at the UTC calendar date of the request**. 🔴
+     **UTC, not KST**: the producer buckets each event by
+     `atZone(ZoneOffset.UTC).toLocalDate()` (wms `InboundProjectionService` /
+     `OutboundProjectionService`), so a KST "today" would ask for a day the
+     producer has not started between 00:00 and 09:00 KST. The card labels the
+     window as UTC on screen. This is deliberately **not** the
+     `kstPeriodBounds()` window the 배송 tile uses — that one filters
+     `shippedAt` instants, this one names producer-defined day buckets.
+  - **Zero-fill (normative).** § 1.2 lists **only days that have a row** (a
+    day with no putaway and no shipment is absent, not `0`). The console fills
+    every date `from..to` (inclusive) that the response omits with
+    `putawayCount = shipmentCount = 0` before rendering, so the horizontal
+    axis never skips a day (a skipped day would draw a false trend). A day
+    present in the response but outside `from..to` is ignored.
+  - **What is drawn.** Per day, a pair of bars: inbound `putawayCount` vs
+    outbound `shipmentCount` (counts, not quantities), scaled to the window's
+    max count (divide-by-zero guarded; an all-zero window renders the empty
+    notice instead of flat bars). `totals.inbound.qtyReceived` /
+    `totals.outbound.qtyShipped` appear as text only. Bars are
+    decorative (`aria-hidden`); every number is also text.
+  - **Degrade (per card, § 2.5).** Either read `403` → the card shows
+    "권한 없음"; `503`/timeout/network/parse/other → "점검 필요"-class notice;
+    a `401` in either read → the same whole-session `redirect('/login')` as
+    the other cells (no partial authed state). A client re-query (warehouse
+    switch, through the § 2.4.5 proxy above) that fails replaces only the
+    chart body with the notice; a `401` there follows the client api-client's
+    whole-session re-login.
+  - **Out of scope.** Multi-warehouse aggregation (one call per warehouse is a
+    separate decision), quantity-mode bars, any producer change (including the
+    upsert-guard undercount noted in the ticket — a wms-side ticket).
 
 > **Not a § 3 parity row**: consumes only already-listed § 2.4.5 endpoints in a
 > new read composition; adds no § 3 row and changes none.
