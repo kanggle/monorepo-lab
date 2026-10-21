@@ -3,6 +3,7 @@ import type { WmsOperationsSectionState } from '../api/operations-state';
 import type { CellStatus } from '../api/overview-state';
 import type { Setting } from '../api/types';
 import { cellPlaceholder } from './wms-overview-cell';
+import { ProportionBar, StackedBar, type BarSegment } from '@/shared/ui/InlineBar';
 
 /**
  * wms **운영설정**(operations settings) section — TASK-PC-FE-224, the
@@ -159,16 +160,63 @@ function SettingsSection({
   );
 }
 
+export interface ProjectionRow {
+  topic: string;
+  lagSeconds?: number;
+  lastProjectedAt?: string | null;
+  lifetimeApplied?: number;
+  lifetimeIgnoredDuplicate?: number;
+  lifetimeFailed?: number;
+}
+
+/** Largest numeric lag (the 100% reference of the per-topic lag bars). */
+export function maxLagSeconds(rows: readonly ProjectionRow[]): number {
+  return rows.reduce(
+    (max, r) =>
+      typeof r.lagSeconds === 'number' && r.lagSeconds > max ? r.lagSeconds : max,
+    0,
+  );
+}
+
+/** Lifetime counters (반영 · 중복 무시 · 실패) as a stacked bar + text. Nothing
+ *  when none of the three counters was reported; the bar only when they sum > 0. */
+function LifetimeTotals({ row, index }: { row: ProjectionRow; index: number }) {
+  const { lifetimeApplied: a, lifetimeIgnoredDuplicate: d, lifetimeFailed: f } = row;
+  if (![a, d, f].some((v) => typeof v === 'number')) return null;
+  const segments: BarSegment[] = [
+    { key: 'applied', value: a, tone: 'success' },
+    { key: 'ignored', value: d, tone: 'neutral' },
+    { key: 'failed', value: f, tone: 'warning' },
+  ];
+  const sum = segments.reduce((acc, s) => acc + (s.value ?? 0), 0);
+  return (
+    <div className="mt-1" data-testid={`wms-operations-projection-lifetime-${index}`}>
+      {sum > 0 && (
+        <StackedBar
+          segments={segments}
+          className="w-40"
+          testid={`wms-operations-projection-lifetime-bar-${index}`}
+        />
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        반영 {(a ?? 0).toLocaleString()} · 중복 무시 {(d ?? 0).toLocaleString()} · 실패{' '}
+        {(f ?? 0).toLocaleString()}
+      </p>
+    </div>
+  );
+}
+
 function ProjectionSection({
   status,
   projections,
   worstLagSeconds,
 }: {
   status: CellStatus;
-  projections: { topic: string; lagSeconds?: number; lastProjectedAt?: string | null }[] | null;
+  projections: ProjectionRow[] | null;
   worstLagSeconds: number | null;
 }) {
   const rows = status === 'ok' && projections ? projections : [];
+  const maxLag = maxLagSeconds(rows);
 
   return (
     <div>
@@ -227,7 +275,10 @@ function ProjectionSection({
                   data-testid={`wms-operations-projection-row-${i}`}
                   className="border-b border-border"
                 >
-                  <td className="p-2">{p.topic}</td>
+                  <td className="p-2">
+                    {p.topic}
+                    <LifetimeTotals row={p} index={i} />
+                  </td>
                   <td
                     className="p-2"
                     data-testid={`wms-operations-projection-lag-${i}`}
@@ -235,6 +286,16 @@ function ProjectionSection({
                     {typeof p.lagSeconds === 'number'
                       ? p.lagSeconds.toLocaleString()
                       : '—'}
+                    {typeof p.lagSeconds === 'number' && (
+                      <div className="mt-1">
+                        <ProportionBar
+                          value={p.lagSeconds}
+                          max={maxLag}
+                          tone="neutral"
+                          testid={`wms-operations-projection-lag-bar-${i}`}
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className="p-2">
                     {p.lastProjectedAt ? formatDateTime(p.lastProjectedAt) : '—'}

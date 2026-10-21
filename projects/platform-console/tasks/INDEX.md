@@ -92,7 +92,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **이미 받은 데이터로 그리는 막대 다섯**(이커머스 주문 상태 · 프로모션 발급률 · WMS 입고 검수 · SCM SKU 노드별 · WMS 투영 지연) — CSS 막대 · 서버/BFF 변경 없음 · 새 문구는 소유자 승인 (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0(창고 · 권한 · 시드 · 날짜 기준) 뒤 소유자 결정 (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
@@ -123,6 +122,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 
 ## review
+
+- `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **이미 받은 데이터로 그리는 막대 다섯**(이커머스 주문 상태 · 프로모션 발급률 · WMS 입고 검수 · SCM SKU 노드별 · WMS 투영 지연) — CSS 막대 · 서버/BFF 변경 없음 · 새 문구는 소유자 승인 (REVIEW, 2026-10-22 UTC · 새 문구 2 소유자 승인 · AC-3 Vercel/샘플 화면 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **ERP 결재 화면의 콘솔 오류 둘 — 만들기 BFF 응답 `{data}` 로 감쌈 · 위임 목록 `meta.size` 0 허용 · 오류 시 빈 목록 문구 숨김 · 위임 생성·회수 `.data` 파싱** (REVIEW, 2026-10-21 UTC · 문구 변경 없음). AC-0 닫힘 · AC-1/AC-2 구현(vitest 412 files · 4962 tests 전부 통과, tsc/lint rc=0) · AC-3(Vercel/라이브, 다음 데모 창) 열림. 분석=Opus 5.5 / 구현=Sonnet.
 

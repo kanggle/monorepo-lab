@@ -4,6 +4,9 @@ import { RankingBarChart } from './RankingBarChart';
 import { CountCard } from './EcommerceCountCard';
 import { RecentOrders, RecentSellers } from './EcommerceRecentPanels';
 import { ORDER_STATUS_LABELS } from './overview-labels';
+import { OrderStatusBar } from './OrderStatusBar';
+import { BarSwatch } from '@/shared/ui/InlineBar';
+import { orderStatusTone } from '../api/order-types';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
@@ -59,6 +62,7 @@ export function EcommerceOverview({
       {/* Order-status distribution. */}
       <div className="mb-8">
         <h3 className="mb-3 text-sm font-semibold text-foreground">주문 상태</h3>
+        <OrderStatusBar buckets={state.orderStatus} />
         <dl
           data-testid="ecommerce-order-status"
           className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
@@ -66,6 +70,7 @@ export function EcommerceOverview({
           {state.orderStatus.map((bucket) => (
             <div key={bucket.status}>
               <dt className="text-xs text-muted-foreground">
+                <BarSwatch tone={orderStatusTone(bucket.status)} />
                 {ORDER_STATUS_LABELS[bucket.status] ?? bucket.status}
               </dt>
               <dd

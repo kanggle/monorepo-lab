@@ -7,6 +7,7 @@ import {
   type PromotionDetail as PromotionDetailType,
 } from '../api/promotion-types';
 import { formatPromotionDay } from './promotion-format';
+import { IssuanceBar } from './IssuanceBar';
 
 interface PromotionDetailFieldsProps {
   data: PromotionDetailType;
@@ -61,6 +62,13 @@ export function PromotionDetailFields({ data }: PromotionDetailFieldsProps) {
         <dt className="text-muted-foreground">발급 / 한도</dt>
         <dd data-testid="promotion-detail-issue-count">
           {data.issuedCount} / {data.maxIssuanceCount}
+          <div className="mt-1">
+            <IssuanceBar
+              issued={data.issuedCount}
+              max={data.maxIssuanceCount}
+              testid="promotion-detail-issue-bar"
+            />
+          </div>
         </dd>
       </div>
       <div>

@@ -15,6 +15,17 @@ import type { SkuBreakdown, SnapshotResponse } from '../api/types';
  * via props. STRICTLY READ-ONLY.
  */
 import { S5Warning } from './S5Warning';
+import { ProportionBar } from '@/shared/ui/InlineBar';
+
+/** Largest numeric node quantity (the 100% reference of the per-node bars). */
+export function maxNodeQuantity(
+  nodes: readonly { quantity?: number }[],
+): number {
+  return nodes.reduce(
+    (max, n) => (typeof n.quantity === 'number' && n.quantity > max ? n.quantity : max),
+    0,
+  );
+}
 
 export interface ScmSkuBreakdownProps {
   /** The section-level S5 warning (from the snapshot view-model). */
@@ -119,7 +130,24 @@ export function ScmSkuBreakdown({
                   className="border-b border-border"
                 >
                   <td className="p-2">{n.nodeId}</td>
-                  <td className="p-2">{n.quantity ?? '—'}</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <span>{n.quantity ?? '—'}</span>
+                      {typeof n.quantity === 'number' && (
+                        <ProportionBar
+                          value={n.quantity}
+                          max={maxNodeQuantity(result.data.nodes)}
+                          tone={
+                            n.staleness === 'STALE' ||
+                            n.staleness === 'UNREACHABLE'
+                              ? 'warning'
+                              : 'progress'
+                          }
+                          testid={`scm-sku-node-bar-${i}`}
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td className="p-2">{n.staleness ?? '—'}</td>
                 </tr>
               ))}
