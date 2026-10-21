@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-642-authorize-error-path-answers-401.md` — **`/oauth2/authorize` 의 redirect 할 수 없는 오류(미등록 `redirect_uri` · 모르는 `client_id`)가 401 «Missing or invalid internal credentials»** (READY, 2026-10-21 UTC 기안 · `TASK-BE-641` 소유자 결정 D2). 같은 기전: SAS `sendError(400)` → `/error` → Order 2 `denyAll`. AC-0 = `sendError` 갈래 · 같은 기전의 다른 엔드포인트 · 본문 형식(소유자 결정). 선행 권장 = BE-641 머지(같은 파일 직렬). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -121,6 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
+- `TASK-BE-642-authorize-error-path-answers-401.md` — **`/oauth2/authorize` 의 redirect 할 수 없는 오류(미등록 `redirect_uri` · 모르는 `client_id`)가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4445 · 미머지). `authorizationEndpoint` `errorResponseHandler`: redirect 불가 → 400 `{error, error_description}` 직접 기록, redirect 형 → SAS 기본과 같은 302(단위 시험이 대조). Order 2 · `/error` 그대로. 실제 Tomcat 시험 CI 빨강 4/11(401) → 초록 11/11. 🔴 AC-1 «형식 = 소유자 결정»(JSON 은 641 D1 (a) 를 따름) · AC-3(굽기 · 라이브) 열림. 분석=Opus 5.5 / 구현=Opus 5.5.
 - `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5.
 
 ## done

@@ -138,7 +138,8 @@ public class AuthorizationServerConfig {
      * SAS security filter chain — Order(1).
      * Covers the SAS endpoints matcher: the /oauth2/** endpoints, the /.well-known/** metadata
      * documents and /connect/logout (TASK-BE-641 — its error response is written by
-     * {@link OidcLogoutErrorResponseHandler}, not by a {@code sendError} to /error).
+     * {@link OidcLogoutErrorResponseHandler}, not by a {@code sendError} to /error; TASK-BE-642 —
+     * likewise {@link AuthorizationEndpointErrorResponseHandler} for /oauth2/authorize).
      *
      * <p>Phase 2a: wires {@link OidcUserInfoMapper} into the OIDC userinfo configurer.
      *
@@ -247,6 +248,14 @@ public class AuthorizationServerConfig {
                                                 .logoutEndpoint(logout ->
                                                         logout.errorResponseHandler(
                                                                 new OidcLogoutErrorResponseHandler())))
+                                // TASK-BE-642: the same 401 on /oauth2/authorize. An error SAS may
+                                // not redirect (unknown client_id, untrusted redirect_uri, request
+                                // parsing) is written as 400 OAuth JSON here instead of SAS's
+                                // sendError(400) → /error → Order 2 denyAll; redirectable errors keep
+                                // SAS's redirect to the client unchanged.
+                                .authorizationEndpoint(authorization ->
+                                        authorization.errorResponseHandler(
+                                                new AuthorizationEndpointErrorResponseHandler()))
                                 // TASK-BE-272 / ADR-003 option A: register the
                                 // public-client converters on the client
                                 // authentication filter (NOT on the
