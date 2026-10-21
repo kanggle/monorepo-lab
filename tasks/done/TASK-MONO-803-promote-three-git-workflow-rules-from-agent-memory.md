@@ -1,6 +1,6 @@
 # TASK-MONO-803 — promote three git-workflow rules from agent memory into the policy docs
 
-- **Status**: review
+- **Status**: done
 - **Type**: docs (monorepo-level, doc-only)
 - **Created**: 2026-10-21 UTC
 - **Scope class**: monorepo-level (`platform/`, `CLAUDE.md`)
