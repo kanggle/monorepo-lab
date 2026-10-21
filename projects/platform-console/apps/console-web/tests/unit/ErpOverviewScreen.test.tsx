@@ -22,6 +22,14 @@ const baseState = (over: Partial<ErpOverviewState> = {}): ErpOverviewState => ({
     { key: 'pendingApprovals', label: '결재 대기', count: 3, status: 'ok' },
     { key: 'activeDelegations', label: '활성 위임', count: 2, status: 'ok' },
   ],
+  approvalStatus: [
+    { status: 'DRAFT', count: 0, cellStatus: 'ok' },
+    { status: 'SUBMITTED', count: 2, cellStatus: 'ok' },
+    { status: 'IN_REVIEW', count: 1, cellStatus: 'ok' },
+    { status: 'APPROVED', count: 1, cellStatus: 'ok' },
+    { status: 'REJECTED', count: 1, cellStatus: 'ok' },
+    { status: 'WITHDRAWN', count: 0, cellStatus: 'ok' },
+  ],
   ...over,
 });
 

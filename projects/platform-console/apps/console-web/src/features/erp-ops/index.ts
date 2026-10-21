@@ -43,6 +43,7 @@ export { getErpOverviewState } from './api/overview-state';
 export type {
   ErpOverviewState,
   ErpAreaCount,
+  ApprovalStatusCount,
   CellStatus as ErpOverviewCellStatus,
 } from './api/overview-state';
 // TASK-PC-FE-318 — «내 계정 앞으로 온 직원 연결 제안» (the account owner's

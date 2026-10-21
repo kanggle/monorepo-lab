@@ -7,7 +7,8 @@ import {
   listCostCenters,
   listBusinessPartners,
 } from './erp-api';
-import { listApprovalInbox } from './approval-api';
+import { listApprovalInbox, listApprovalRequests } from './approval-api';
+import { APPROVAL_STATUSES, type ApprovalStatus } from './approval-types';
 import { listDelegationFacts } from './erp-delegation-facts-api';
 import type { ErpListQueryParams } from './types';
 
@@ -70,10 +71,22 @@ export interface ErpAreaCount {
   status: CellStatus;
 }
 
+/** One approval-status distribution bucket (TASK-PC-FE-360) — its own cell. */
+export interface ApprovalStatusCount {
+  status: ApprovalStatus;
+  count: number | null;
+  cellStatus: CellStatus;
+}
+
 export interface ErpOverviewState {
   /** True when the operator is not erp-eligible — no fan-out was run. */
   notEligible: boolean;
   counts: ErpAreaCount[];
+  /** Approval-status distribution, one bucket per `APPROVAL_STATUSES`
+   *  (TASK-PC-FE-360) — 6 independent `listApprovalRequests({status,size:1})`
+   *  cells. Population = the producer's `/requests` scope (tenant-wide for an
+   *  operator, the caller's own rows otherwise). */
+  approvalStatus: ApprovalStatusCount[];
 }
 
 interface Cell<T> {
@@ -121,14 +134,15 @@ export async function getErpOverviewState(
   asOf?: string | null,
 ): Promise<ErpOverviewState> {
   if (!eligible) {
-    return { notEligible: true, counts: [] };
+    return { notEligible: true, counts: [], approvalStatus: [] };
   }
 
   const masterParams: ErpListQueryParams = { page: 0, size: 1 };
   if (asOf) masterParams.asOf = asOf;
 
   try {
-    const [dep, emp, jg, cc, bp, approval, delegation] = await Promise.all([
+    const [dep, emp, jg, cc, bp, approval, delegation, statusCells] =
+      await Promise.all([
       cell(listDepartments(masterParams)),
       cell(listEmployees(masterParams)),
       cell(listJobGrades(masterParams)),
@@ -136,6 +150,14 @@ export async function getErpOverviewState(
       cell(listBusinessPartners(masterParams)),
       cell(listApprovalInbox({ page: 0, size: 1 })),
       cell(listDelegationFacts({ status: 'ACTIVE', page: 0, size: 1 })),
+      // TASK-PC-FE-360 — exactly 6 reads, one per approval status. NOT the
+      // 결재 대기 `/inbox` leg above (a different population: the caller's own
+      // queue vs `/requests?status=SUBMITTED`).
+      Promise.all(
+        APPROVAL_STATUSES.map((s) =>
+          cell(listApprovalRequests({ status: s, page: 0, size: 1 })),
+        ),
+      ),
     ]);
 
     const counts: ErpAreaCount[] = [
@@ -163,7 +185,15 @@ export async function getErpOverviewState(
       },
     ];
 
-    return { notEligible: false, counts };
+    const approvalStatus: ApprovalStatusCount[] = APPROVAL_STATUSES.map(
+      (s, i) => ({
+        status: s,
+        count: countOf(statusCells[i]),
+        cellStatus: statusCells[i].status,
+      }),
+    );
+
+    return { notEligible: false, counts, approvalStatus };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
     if (err instanceof ApiError && err.status === 401) {

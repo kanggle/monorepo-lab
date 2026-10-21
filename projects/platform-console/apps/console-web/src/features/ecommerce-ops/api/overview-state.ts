@@ -4,7 +4,7 @@ import { getProductsSummary } from './products-api';
 import { getOrdersSummary, getOrderInsights, listOrders } from './orders-api';
 import { getUsersSummary } from './users-api';
 import { getPromotionsSummary } from './promotions-api';
-import { getShippingsSummary } from './shippings-api';
+import { getShippingsSummary, listShippings } from './shippings-api';
 import { getSellersSummary, listSellers } from './sellers-api';
 import { getTemplatesSummary } from './notifications-api';
 import {
@@ -14,6 +14,7 @@ import {
   type RankedEntry,
 } from './order-types';
 import { SELLER_MAX_PAGE_SIZE, type SellerSummary } from './seller-types';
+import { SHIPPING_STATUS_VALUES, type ShippingStatus } from './shipping-types';
 
 /**
  * Server-side ecommerce **operator overview snapshot** fan-out for the
@@ -69,6 +70,13 @@ export interface OrderStatusCount {
   cellStatus: CellStatus;
 }
 
+/** One shipping-status distribution bucket (TASK-PC-FE-360) — its own cell. */
+export interface ShippingStatusCount {
+  status: ShippingStatus;
+  count: number | null;
+  cellStatus: CellStatus;
+}
+
 /**
  * The four top-5 rankings surfaced by the 판매 순위 charts (TASK-PC-FE-172).
  * Product rankings carry the product name as `label`; seller rankings have the
@@ -87,6 +95,9 @@ export interface EcommerceOverviewState {
   notEligible: boolean;
   counts: AreaCount[];
   orderStatus: OrderStatusCount[];
+  /** Shipping-status distribution, one bucket per `SHIPPING_STATUS_VALUES`
+   *  (TASK-PC-FE-360) — 4 independent `listShippings({status,size:1})` cells. */
+  shippingStatus: ShippingStatusCount[];
   recentOrders: OrderSummary[] | null;
   recentOrdersStatus: CellStatus;
   recentSellers: SellerSummary[] | null;
@@ -100,6 +111,7 @@ const EMPTY: EcommerceOverviewState = {
   notEligible: false,
   counts: [],
   orderStatus: [],
+  shippingStatus: [],
   recentOrders: null,
   recentOrdersStatus: 'degraded',
   recentSellers: null,
@@ -179,6 +191,7 @@ export async function getEcommerceOverviewState(
     const [
       summaryCells,
       statusCells,
+      shippingStatusCells,
       recentOrdersCell,
       recentSellersCell,
       insightsCell,
@@ -188,6 +201,12 @@ export async function getEcommerceOverviewState(
       Promise.all(
         ORDER_STATUS_VALUES.map((s) =>
           cell(listOrders({ status: s, page: 0, size: 1 })),
+        ),
+      ),
+      // TASK-PC-FE-360 — exactly 4 reads, one per shipping status.
+      Promise.all(
+        SHIPPING_STATUS_VALUES.map((s) =>
+          cell(listShippings({ status: s, page: 0, size: 1 })),
         ),
       ),
       cell(listOrders({ page: 0, size: RECENT_SIZE })),
@@ -231,6 +250,14 @@ export async function getEcommerceOverviewState(
       cellStatus: statusCells[i].status,
     }));
 
+    const shippingStatus: ShippingStatusCount[] = SHIPPING_STATUS_VALUES.map(
+      (s, i) => ({
+        status: s,
+        count: shippingStatusCells[i].value?.totalElements ?? null,
+        cellStatus: shippingStatusCells[i].status,
+      }),
+    );
+
     // Seller-name overlay: build `sellerId → displayName` from the dedicated
     // name-map leg (only when it resolved). A degraded leg → empty map → the
     // seller rankings fall back to the raw id label (never blank).
@@ -261,6 +288,7 @@ export async function getEcommerceOverviewState(
       notEligible: false,
       counts,
       orderStatus,
+      shippingStatus,
       recentOrders: recentOrdersCell.value?.content.slice(0, RECENT_SIZE) ?? null,
       recentOrdersStatus: recentOrdersCell.status,
       recentSellers:

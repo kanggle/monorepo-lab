@@ -50,7 +50,7 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~④ 를 file:line 과 함께.
+- [x] **AC-0** — 위 ①~④ 를 file:line 과 함께. (아래 «AC-0 측정» · 계약 선수정 별도 커밋)
 - [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
 - [ ] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(로컬, 스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
@@ -93,4 +93,38 @@ frontend
 - 배송 `src/shared/sample/fixtures/ecommerce.ts:776-820`(행 3), 필터 `:828-834`, `totalElements = rows.length`(`:79`): PREPARING 1 · SHIPPED 1 · IN_TRANSIT 0 · DELIVERED 1 (합 3 = `SHIPPINGS_SUMMARY.total` `:822`).
 - 결재 `src/shared/sample/fixtures/erp.ts:726-818`(행 5), 필터 `:872-878`: DRAFT 0 · SUBMITTED 2 · IN_REVIEW 1 · APPROVED 1 · REJECTED 1 · WITHDRAWN 0 (합 5). 결재 대기(inbox) 타일은 2 로 SUBMITTED 와 우연히 같다(`:849-861`).
 
-**계약 선(先)수정** — `console-integration-contract.md` § 2.4.10.6(이커머스 개요: «Shipping-status distribution» 항목 추가), § 2.4.8.1(ERP 개요: «결재 상태 분포» 항목 + 독립 저하 문장에 6 호출 반영). 코드 앞 별도 커밋.
+**계약 선(先)수정** — `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.10.6(이커머스 개요: «Shipping-status distribution» 항목 추가), § 2.4.8.1(ERP 개요: «결재 상태 분포» 항목 + 독립 저하 문장에 6 호출 반영). 코드 앞 별도 커밋.
+
+## 새 문구 (소유자 승인 대기)
+
+경로는 `projects/platform-console/apps/console-web/src/features/` 기준. 막대 자체는 `aria-hidden` · 글자 없음이라 새 aria-label 은 **없다**. 상태 이름(준비중 · 발송 · 배송중 · 배송완료 / 작성중 · 상신됨 · 검토중 · 승인됨 · 반려됨 · 회수됨)은 기존 목록 화면 라벨(`shipping-labels.ts:11-16` · `approval-common.tsx:19-26`)을 **재사용**한 것이라 새 문구가 아니다.
+
+| 파일:줄 | 문구 | 언제 보이나 |
+|---|---|---|
+| `ecommerce-ops/components/EcommerceOverview.tsx:94` | `배송 상태` | 이커머스 개요(`/ecommerce`)의 새 구역 제목(`h3`) — 항상 |
+| `ecommerce-ops/components/ShippingStatusBar.tsx:47` | `배송이 없습니다.` | 배송 4상태 호출이 모두 성공이고 합계가 0 일 때(막대 대신) |
+| `ecommerce-ops/components/EcommerceOverview.tsx:112` | `—` (기존 주문 상태와 같은 글자) | 그 상태 한 칸의 호출이 실패(403 · 점검 필요)했을 때 숫자 자리 |
+| `erp-ops/components/ErpOverviewScreen.tsx:143` | `결재 상태` | ERP 개요(`/erp`)의 새 구역 제목(`h2`) — 결재 분포를 받은 경우(적격 운영자) |
+| `erp-ops/components/ErpOverviewScreen.tsx:148-149` | `운영자 권한이면 전체 결재, 그렇지 않으면 내가 상신했거나 결재할 건만 집계됩니다.` | 결재 상태 구역 제목 바로 아래 — 항상(범위 밝힘: AC-0 ②) |
+| `erp-ops/components/ApprovalStatusBar.tsx:47` | `결재가 없습니다.` | 결재 6상태 호출이 모두 성공이고 합계가 0 일 때(막대 대신) |
+| `erp-ops/components/ErpOverviewScreen.tsx:168` | `—` | 그 상태 한 칸의 호출이 실패했을 때 숫자 자리 |
+
+막대 없음(어느 한 칸이라도 실패)일 때 새 «막대를 못 그린다» 문구는 **두지 않았다** — 주문 상태 막대(357)와 같게 조용히 생략하고 숫자 칸의 `—` 만 남는다. 필요하면 소유자가 문구를 정한다.
+
+## 구현 (2026-10-21 UTC · Sonnet)
+
+**변경 파일** (`projects/platform-console/apps/console-web/` 기준)
+- `src/features/ecommerce-ops/api/overview-state.ts` — `ShippingStatusCount` · `EcommerceOverviewState.shippingStatus`(EMPTY `[]`) · 팬아웃에 `SHIPPING_STATUS_VALUES.map(s => cell(listShippings({status:s,page:0,size:1})))` 4 호출. 기존 숫자 · 셀 · 401 처리 그대로.
+- `src/features/ecommerce-ops/components/ShippingStatusBar.tsx`(신규) — `buildShippingStatusSegments`(어느 칸이든 비`ok`/null → `null` = 막대 없음) + `ShippingStatusBar`(합 0 → 빈 문구). `OrderStatusBar` 와 같은 모양, 공용 `StackedBar` 재사용(`InlineBar.tsx` 무수정).
+- `src/features/ecommerce-ops/components/EcommerceOverview.tsx` — 「배송 상태」 구역(막대 + `<dl>` 숫자 · `BarSwatch` 색 견본 · `data-testid` `shipping-status-<S>` · `ecommerce-shipping-status`).
+- `src/features/erp-ops/api/overview-state.ts` — `ApprovalStatusCount` · `ErpOverviewState.approvalStatus` · `APPROVAL_STATUSES.map(s => cell(listApprovalRequests({status:s,page:0,size:1})))` 6 호출(결재 대기 `/inbox` 는 다른 모집단이라 재사용 안 함 — AC-0 ②). 기존 7 타일 그대로.
+- `src/features/erp-ops/components/ApprovalStatusBar.tsx`(신규) · `ErpOverviewScreen.tsx` — 「결재 상태」 구역(범위 안내 + 막대 + 숫자, `approvalStatus` 가 빈 배열이면 구역 생략). `src/features/erp-ops/index.ts` — `ApprovalStatusCount` 타입 재수출.
+- 새 컴포넌트는 `'use client'` 없는 서버 컴포넌트(선례와 같다) — 서버 전용 모듈은 `import type` 만.
+- 시험: `tests/unit/status-distribution-bars.test.tsx`(신규 — 비율 · 칸 하나 저하 · 전부 0 · 403 · 빈 목록 · 화면 두 개) · `erp-overview-state.test.ts` · `ecommerce-overview-state.test.ts`(호출 수 6 · 4, 칸 독립 503 · 403, 401 → `redirect('/login?error=session_expired')`, 적격 아님 → 호출 0) · 기존 `ecommerce-overview.test.tsx` · `ErpOverviewScreen.test.tsx` · `ecommerce-page*.test.tsx` 의 상태 객체에 새 필드 추가(+ 두 상태 시험의 모의 모듈에 새 함수).
+- 샘플 픽스처는 이미 `status` 필터를 거르므로 **무수정** — 익명 샘플 화면은 배송 1·1·0·1, 결재 0·2·1·1·1·0.
+
+**결과**
+- `npx tsc --noEmit` rc=0 · `npx next lint` rc=0(기존 경고 1건 `received-invitations/route.ts` 무관).
+- vitest 전체(`--maxWorkers=4 --minWorkers=2`): **419 파일 · 5087 시험 전부 통과 rc=0**(최종 재실행). 1회차에서는 `tests/unit/features/tenants/TenantsScreen.test.tsx` 2건이 부하 타임아웃으로 실패했으나(내 변경과 무관 — `tenant-confirm-reason` 폼) 단독 재실행 통과, 전체 재실행에서 사라졌다.
+- 가드(`git add -A` 뒤, 워크트리 루트): `check-client-graph-server-only.mjs` rc=0 (console-web `client roots=326 reached=486 hits=0`) · `check-client-graph-backend-origins.mjs` rc=0 (`hits=0`) · `check-index-queue-drift.sh` rc=0 · `check-task-id-collision.sh` rc=0 · `check-walkthrough-ledger-drift.sh` rc=0.
+- **AC-2 는 체크하지 않음** — 머지 전 브랜치 nightly 콘솔 잡이 아직 안 돌았다. AC-1(소유자 문구 승인) · AC-3(배포 · 익명 샘플 확인) 도 열려 있다.
