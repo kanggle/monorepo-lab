@@ -77,13 +77,31 @@ Query: `status` (`SUGGESTED|APPROVED|MATERIALIZED|DISMISSED`, optional), `skuCod
       "status": "SUGGESTED",
       "source": "ALERT",
       "triggerAvailableQty": 5,
-      "materializedPoId": null,
+      "reorderPointAtTrigger": 10,
       "createdAt": "2026-06-11T10:05:00Z"
     }
   ],
   "meta": { "page": 0, "size": 20, "totalElements": 1, "totalPages": 1 }
 }
 ```
+
+**Absent keys, not `null` values.** The suggestion row is serialised with
+`@JsonInclude(NON_NULL)` (`SuggestionResponse`): a field whose value is null is
+**omitted from the object**, never emitted as `"field": null`. This applies to every
+nullable field in the table below. Consumers must treat a missing key as "no value".
+
+> **Example correction — TASK-SCM-BE-062.** The example above previously showed
+> `"materializedPoId": null`. That key was never on the wire for an un-materialized
+> suggestion (NON_NULL omits it); the example now shows only what is emitted.
+> (`warehouseCode` — present whenever the raise path learned a code — is likewise
+> omitted from this example for brevity; see the table.)
+
+| Field | Type | Present when | Meaning |
+|---|---|---|---|
+| `warehouseCode` | string | the raise path learned a warehouse code | Warehouse business CODE (ADR-MONO-050 D9). |
+| `triggerAvailableQty` | integer | set by both raise paths | `availableQty` at the moment the suggestion was raised. |
+| `reorderPointAtTrigger` | integer | the SKU had a `reorder_policy` row **when the suggestion was raised** | **Snapshot** of that policy's `reorderPoint` at raise time — the threshold `triggerAvailableQty` was compared against (`triggerAvailableQty <= reorderPointAtTrigger`). **Never re-read**: a later `PUT /policies/{skuCode}` does not change it, and approve / dismiss do not change it, so suggestions for the same SKU may legitimately carry different values. **Absent** when the suggestion was raised by the degraded no-policy fallback (the wms alert threshold on `ALERT` and the synthetic `availableQty` threshold on `BATCH` are not scm reorder points and are not reported here), and on every suggestion raised before this field existed (no backfill). Additive — TASK-SCM-BE-062. `safetyStock` is intentionally not carried. |
+| `materializedPoId` | uuid | status `MATERIALIZED` | The procurement DRAFT PO. |
 
 > **Wire-shape decision (ADR-MONO-058 § D3 / TASK-SCM-BE-056):** this endpoint's
 > `data`/`meta`-split envelope is **preserved unchanged** — `data` stays the bare

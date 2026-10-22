@@ -22,7 +22,51 @@ class ReorderSuggestionStateMachineTest {
 
     private ReorderSuggestion suggested() {
         return ReorderSuggestion.raiseFromAlert(ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
-                100, EVENT_ID, 5, "scm", Instant.now());
+                100, EVENT_ID, 5, 10, "scm", Instant.now());
+    }
+
+    // --- TASK-SCM-BE-062: reorderPointAtTrigger snapshot --------------------------------
+
+    @Test
+    void raiseFromAlert_carriesReorderPointAtTrigger() {
+        assertThat(suggested().getReorderPointAtTrigger()).isEqualTo(10);
+    }
+
+    @Test
+    void raiseFromBatch_carriesReorderPointAtTrigger_orNull() {
+        ReorderSuggestion withPolicy = ReorderSuggestion.raiseFromBatch(ID, "SKU-001", WAREHOUSE_ID,
+                WAREHOUSE_CODE, null, SUPPLIER_ID, 100, 3, 20, "scm", Instant.now());
+        ReorderSuggestion withoutPolicy = ReorderSuggestion.raiseFromBatch(ID, "SKU-001", WAREHOUSE_ID,
+                WAREHOUSE_CODE, null, SUPPLIER_ID, 100, 3, null, "scm", Instant.now());
+        assertThat(withPolicy.getReorderPointAtTrigger()).isEqualTo(20);
+        assertThat(withoutPolicy.getReorderPointAtTrigger()).isNull();
+    }
+
+    @Test
+    void transitions_neverChangeReorderPointAtTrigger() {
+        ReorderSuggestion approvedThenMaterialized = suggested();
+        approvedThenMaterialized.approve(Instant.now());
+        approvedThenMaterialized.materialize(UUID.randomUUID(), Instant.now());
+        assertThat(approvedThenMaterialized.getReorderPointAtTrigger()).isEqualTo(10);
+
+        ReorderSuggestion dismissed = suggested();
+        dismissed.dismiss(Instant.now());
+        assertThat(dismissed.getReorderPointAtTrigger()).isEqualTo(10);
+    }
+
+    @Test
+    void reconstitute_preservesReorderPointAtTrigger_andNull() {
+        Instant now = Instant.now();
+        ReorderSuggestion restored = ReorderSuggestion.reconstitute(ID, "SKU-001", WAREHOUSE_ID,
+                WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100, SuggestionStatus.APPROVED,
+                com.example.scmplatform.demandplanning.domain.model.SuggestionSource.ALERT,
+                EVENT_ID, 5, 10, null, "scm", 1, now, now);
+        ReorderSuggestion legacy = ReorderSuggestion.reconstitute(ID, "SKU-001", WAREHOUSE_ID,
+                WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID, 100, SuggestionStatus.SUGGESTED,
+                com.example.scmplatform.demandplanning.domain.model.SuggestionSource.ALERT,
+                EVENT_ID, 5, null, null, "scm", 0, now, now);
+        assertThat(restored.getReorderPointAtTrigger()).isEqualTo(10);
+        assertThat(legacy.getReorderPointAtTrigger()).isNull();
     }
 
     @Test

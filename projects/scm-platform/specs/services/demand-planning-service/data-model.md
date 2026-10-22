@@ -24,6 +24,11 @@ Distinct from the wms alert threshold. The scm reorder point/quantity per SKU.
 - If no policy row exists for a SKU, fall back to `sku_supplier_map.default_order_qty`
   and treat `reorder_point` as the wms alert's own threshold (degraded — a policy
   row is the intended source).
+  - **The batch sweep's fallback differs** (recorded TASK-SCM-BE-062 AC-0, code
+    `SweepReorderUseCase`): with no policy row it uses the candidate's own
+    `availableQty` as the threshold, so every mapped-but-unpoliced candidate
+    triggers. Neither fallback threshold is a scm reorder point, and neither is
+    snapshotted onto `reorder_suggestion.reorder_point_at_trigger`.
 
 ### `sku_supplier_map` — minimal SKU→supplier mapping (D3)
 
@@ -57,6 +62,7 @@ Deliberate minimal stand-in for the v2-deferred `supplier-service`.
 | `source` | VARCHAR | no | `ALERT` / `BATCH`. |
 | `trigger_event_id` | UUID | yes | The wms alert `eventId` (null for `BATCH` source). |
 | `trigger_available_qty` | INT | yes | `availableQty` at raise time (provenance). |
+| `reorder_point_at_trigger` | INT | yes | **Snapshot** of `reorder_policy.reorder_point` at raise time (provenance, TASK-SCM-BE-062, migration `V4`). Written once by the raise factory and never updated afterwards — a later policy `PUT` does not change it. **Null when the suggestion was raised without a policy row**: the degraded fallbacks' thresholds (the wms alert threshold on `ALERT`, the synthetic `availableQty` on `BATCH` — see the fallback note below the `reorder_policy` table) are **not** stored, because neither is a scm reorder point. Null on every row raised before `V4` (no backfill — back-filling from the current policy would record a value that did not trigger the row). `safety_stock` is deliberately **not** snapshotted (v1 decision logic does not use it). |
 | `materialized_po_id` | UUID | yes | Soft link to the procurement DRAFT PO (set on MATERIALIZED). **Not an FK.** |
 | `tenant_id` | VARCHAR | no | `"scm"`. |
 | `version` | INT | no | Optimistic lock (concurrent approve guard). |
