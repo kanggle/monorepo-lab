@@ -8,7 +8,7 @@ admin-service 일별 처리량 누계가 «마지막 이벤트 시각» 조건 �
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -67,7 +67,7 @@ backend
 
 - [x] **AC-0** — ①~④ 를 file:line · IT 출력과 함께 기록. ① 이 red 가 아니면(조건이 실제로는 안 무는 경로가 있으면) STOP 하고 이유를 적는다. — 아래 § AC-0. ① 의 «조건이 문다» 는 CI 런으로 확인(기존 시험이 버림을 단언한 채 초록), 새 역순 시험의 red 자체는 로컬 Docker 부재로 **관측 안 됨**. ③ ⚪(데모 창 필요).
 - [x] **AC-1** — 스펙 두 곳 갱신(이전 근거 보존) → 구현. — § 구현.
-- [ ] **AC-2** — 시험: 순서 뒤바뀜 · 같은 시각 두 건 → 2 · 같은 `event_id` 두 번 → 1 · 출고 동일 · 기존 IT 비회귀(CI 의 wms 잡). — 🔵 시험은 썼고 단위 시험은 로컬 초록. 🔴 저장소 · Kafka IT(역순 · 같은 시각 · 출고)는 **CI 에서만** 돈다 — 그 초록을 보기 전에는 닫지 않는다.
+- [x] **AC-2** — 시험: 순서 뒤바뀜 · 같은 시각 두 건 → 2 · 같은 `event_id` 두 번 → 1 · 출고 동일 · 기존 IT 비회귀(CI 의 wms 잡). — 🔵 시험은 썼고 단위 시험은 로컬 초록. 🔴 저장소 · Kafka IT(역순 · 같은 시각 · 출고)는 **CI 에서만** 돈다 — 그 초록을 보기 전에는 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브: 데모 시드(`infra/demo/seed/seed-wms.sh` — WH-MAIN 적치 86건)의 `putaway_count` 합이 적치 완료 이벤트 수와 같은가(다음 데모 창).
 
 # Related Specs
@@ -164,3 +164,10 @@ backend
 ### 남은 것
 
 - AC-2 의 CI 부분 · AC-3 (굽기 뒤 라이브: 데모 `putaway_count` 합 = 적치 완료 이벤트 수, 출고도). AC-0 ③ 도 그때.
+
+## CI 빨강 → 초록 증거 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 로컬에는 Docker 가 없어, 메인 세션이 **시험만 담은 첫 커밋 `44cb66958`** 만 올려 PR #4475(draft)를 열었다. CI run `39813085070` 의 `admin-service:integrationTest` **빨강** — 75 tests · **6 failed**, 정확히 새 시험들: `ReadModelPersistenceIntegrationTest` 의 입고 · 출고 × 역순 · 같은 시각 4개 + `InboundProjectionKafkaIT.putawayCompleted_reverseOrderAcrossAsns_countsBoth` · `OutboundProjectionKafkaIT.shippingConfirmed_reverseOrderAcrossShipments_countsBoth`. (같은 `event_id` 두 번 → 1회 시험은 중복 제거가 원래 막으므로 빨강이 아닌 것이 맞다.) ⇒ 결함 실재 · 시험이 문다.
+- 이어서 스펙 `528c12c2f` · 수선 `2aff22e9b` 를 앞으로 푸시(강제 아님) → 같은 PR 의 head `2aff22e9b` 체크 **pending 0 · fail 0** → AC-2 닫힘.
+- `TASK-BE-645`(#4474) · 티켓 PR(#4476) 머지 뒤 main 을 이 브랜치에 병합 — 충돌 없음.
+- 열림: **AC-3**(굽기 뒤 라이브 — 데모 시드 · 적치 · 출하 뒤 누계가 이벤트 수와 같은가). 서버 변경 = 굽기 대기.

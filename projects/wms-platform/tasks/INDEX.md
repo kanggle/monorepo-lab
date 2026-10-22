@@ -87,9 +87,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **IN-PROGRESS (2026-10-22 UTC · Opus).** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
-
 ## review
+
+- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **REVIEW (2026-10-22 UTC) — CI 빨강(6) → 초록 확인 · AC-3 = 굽기 뒤 라이브.** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
 
 (empty)
 
