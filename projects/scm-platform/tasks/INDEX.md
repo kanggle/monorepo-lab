@@ -82,6 +82,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **READY (2026-10-22 UTC) — 착수는 소유자 지시 때 · 서버 변경 = 굽기.** 보충 제안 행에 «발동 당시 재주문점» 을 저장 · 응답 — 콘솔이 SKU 마다 정책을 따로 부르지 않고 «재주문점 · 발동 재고 · 제안 수량» 막대를 그리게. AC-0: `ADR-MONO-017` 갈래 B(BFF 용 `/summary` 기각) 해당 여부 · 소비자 전수. 소유자 결정: 스냅샷(추천) vs 현재 정책. 후속 = 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus.
+
 ## in-progress
 
 ## review
