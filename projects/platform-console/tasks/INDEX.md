@@ -121,8 +121,6 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **콘솔이 이커머스 `BACKORDERED` 를 모른다 — 주문 상태 분포 · 필터에서 빠지고 운영자가 취소할 주문을 못 찾는다 · 곁: WMS 저재고 설명을 사실대로** — 서버 변경 없음 · AC-0 이 «백오더 응답을 zod 가 거부해 화면 저하» 인지 먼저 잰다 (REVIEW, 2026-10-22 UTC · 새 문구 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
@@ -132,6 +130,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
+- ✅ `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4471(`98ce32de2`, 실패 0). 이커머스 BACKORDERED 를 상태 목록 · 필터 · 분포 · 배지 · 가이드에 · 백오더 주문 취소 가능(상태 변경 창이 안 뜨던 결함) · WMS 저재고 주석 바로잡기 · 새 문구 승인 · Vercel `7253973395` success · 익명 샘플 화면 확인.
 - ✅ `TASK-PC-FE-363-overview-consistency-scm-wms-bars-money-format.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4467(`96bb5798e`, 실패 0). SCM 발주 · WMS 알림 상태 분포 막대 · SCM · Finance 개요 금액 서식(문자열 전용 서식 함수) · 새 문구 2 승인 · Vercel `7249961645` success · 익명 샘플 화면 확인.
 - ✅ `TASK-PC-FE-362-wms-outbound-pipeline-and-iam-ratio-bars.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4462(`a3cba169d`, 실패 0). 출고 화면 상태 파이프라인 막대(outbound-service 7호출 · SSR 1회) · IAM 개요 운영자 활성/정지 · 계정 잠금 막대 · 새 문구 3 승인 · Vercel `7247206852` success · 익명 샘플 화면 확인. 🔴 처음 계획한 WMS 개요는 admin 읽기 모델이 상태를 셋으로 접어 불가(소유자 결정 → 출고 화면).
 - ✅ `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4450(`d10f95e74`, 실패 0). 막대 다섯(주문 상태 · 발급률 · 입고 검수 · SCM 노드별 · WMS 투영) · 새 문구 2 승인 · Vercel `7231346845` success · 익명 샘플 화면 확인(서버 렌더 HTML + 헤드리스 브라우저).
