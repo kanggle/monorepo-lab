@@ -73,8 +73,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 - `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **READY (2026-10-22 UTC) — 착수는 소유자 지시 때 · 서버 변경 = 굽기.** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». inventory-service 알림(BE-459)은 설정을 따르므로 같은 개념이 두 기준으로 갈린다. 결정: 설정 따르기(추천) vs 계약을 상수로. 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`. 분석=Opus 5.5 / 구현 권장=Opus.
 
-- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **READY (2026-10-22 UTC).** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
-
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
 - **READY.** 🔴 `admin-service` 대시보드 읽기 표면에 **테넌트 축이 아예 없다.** `OrderDashboardController` 는 `@PreAuthorize("hasRole('WMS_VIEWER')")` 뿐이고 `CallerScope` 도 테넌트 필터도 안 쓴다. `admin_db` 는 `information_schema` 전수 **22개 테이블에 tenant 컬럼 0개** — 구조적으로 테넌트를 모른다. 실측(2026-08-13, 같은 운영자 토큰): admin 프로젝션 `totalElements=1` · outbound 원시 API `totalElements=0` ⇒ **관문 있는 표면은 굶고 관문 없는 형제가 같은 행을 무필터로 내준다**(erp `ADR-001` §3 와 같은 모양: *"관문 없는 형제 5개가 매일 깨고 있었고 관문이 있는 하나만 굶었다"*). 🔴 이 티켓은 "격리를 넣는다" 가 아니다 — 저장소 안에서 두 진술이 충돌한다: `PROJECT.md` § Out of Scope 는 **multi-tenant 를 의도적 제외**("단일 물류 센터 가정")로 선언하고 `TASK-MONO-304`/`ADR-MONO-022` §D9 는 outbound 를 테넌트로 격리한다. **어느 쪽인지가 AC-1**(A=전역 뷰로 명문화 / B=테넌트 축 신설 → **ADR 선행**). 🔴 B 면 마이그레이션이 코드 문제 이전에 **데이터 문제**다 — 기존 프로젝션 행에 테넌트가 없고 원본에도 `NULL` 행이 있으며 `ADR-MONO-064` 가 소급 stamp 를 금지했다. AC-0 은 dashboard 컨트롤러 전수(6개로 **추정** — 세지 않고 시작하면 낙오)와 `WMS_VIEWER` 를 얻는 신원 전수. `ADR-MONO-064` §M5·§D4 산물. 분석=Opus 5 / 구현 권장=Opus (A/B 판단 + 스키마 결정).
@@ -87,7 +85,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **IN-PROGRESS (2026-10-22 UTC · Opus).** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## review
 

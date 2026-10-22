@@ -8,7 +8,7 @@ admin-service 일별 처리량 누계가 «마지막 이벤트 시각» 조건 �
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -94,3 +94,34 @@ backend
 1. 조건만 지우고 재생 위험을 기록하지 않는다 → Edge Case 2 를 스펙에 적는 것이 AC-1.
 2. IT 가 이벤트를 `occurredAt` 순서대로만 보낸다 → 결함을 못 본다(지금 시험이 그렇다 — `TASK-BE-047` 의 replay 시험은 «같은 순서 재생» 이었다). ① 은 반드시 역순.
 3. 콘솔 쪽에서 값을 보정하려 한다 → 범위 밖, 원인은 서버다.
+
+---
+
+## AC-0 측정 (2026-10-22 UTC)
+
+### ① 재현 — 조건이 실제로 무는가
+
+- 🔴 **이 호스트에서는 red 를 직접 보지 못했다.** Docker 데몬이 없다(`docker info` → `open //./pipe/docker_engine: The system cannot find the file specified`). 새 역순 시험을 넣은 채 `:projects:wms-platform:apps:admin-service:integrationTest --tests '*ReadModelPersistenceIntegrationTest*'` → rc=1, 그러나 **20 개 전부**(손대지 않은 `warehouseRef_roundTrip` 등 포함)가 `IllegalStateException at DockerClientProviderStrategy.java:274` 로 실패 — 컨테이너를 못 띄운 것이지 단언이 진 것이 아니다. **판정 아님.**
+- 🔵 **조건이 무는 증거는 CI 에 이미 있다 — 기존 시험이 «버림» 을 단언하고 초록이었다.** `ReadModelPersistenceIntegrationTest.throughputInboundDaily_nativeUpsertIncrement_isAtomicAndLwwGuarded`(수정 전 `:396-405`): `NOW` 로 1건 · `NOW+60s` 로 1건 → 2, 그 다음 **`NOW-60s`(더 이른 시각) 호출은 `affected=0` · `putawayCount` 그대로 2 · `qtyReceived` 그대로 75** 를 단언한다. 이 시험은 저장소 메서드를 직접 부르므로(`event_id` 가 없다) 막은 것은 dedupe 가 아니라 **`WHERE last_event_at < EXCLUDED.last_event_at` 자체**다. main CI 런 `39789590298` (커밋 `98ce32de2`, 2026-10-22 13:50Z) 의 잡 `Integration (master-service + notification-service + outbound-service, Testcontainers)` → `admin-service:integrationTest | 68 | 0 | 0 | 0`(실패 0 · 건너뜀 0). ⇒ **더 이른 `occurredAt` 의 새 이벤트는 조용히 버려진다 = 결함이 실재한다.** STOP 조건 아님.
+- 같은 `occurredAt` 두 건: `<` 이므로 둘째가 0행 — SQL 로부터의 추론이고 **실행으로 본 것은 아니다**. 새 시험 `throughputInboundDaily_equalOccurredAt_countsBothEvents` 가 이것을 잰다.
+- 새 red 시험(수정 전 코드에서 실패해야 할 칸) — 이 티켓의 첫 커밋에 시험만 넣었다:
+  - `ReadModelPersistenceIntegrationTest` — `throughputInboundDaily_reverseOrderArrival_countsBothEvents`(T2 → T1, 기대 2 · 지금 1) · `throughputInboundDaily_equalOccurredAt_countsBothEvents`(기대 2 · 지금 1) · `throughputOutboundDaily_reverseOrderArrival_countsBothEvents` · `throughputOutboundDaily_equalOccurredAt_countsBothEvents`.
+  - `InboundProjectionKafkaIT.putawayCompleted_reverseOrderAcrossAsns_countsBoth`(소비 경로 전체 — 서로 다른 `asnId` 키, 늦은 것 먼저; 더 이른 이벤트의 dedupe outcome 이 `APPLIED` 여야 한다 — 지금은 `IGNORED_DUPLICATE_LATE`) · `OutboundProjectionKafkaIT.shippingConfirmed_reverseOrderAcrossShipments_countsBoth`.
+  - 🔴 이 칸들의 red 는 **첫 커밋만 CI 에 올렸을 때에만** 관측된다. 이 작업은 push 하지 않았으므로 관측되지 않았다.
+
+### ② 출고 쪽
+
+- 같은 SQL: `ThroughputOutboundDailyRepository.java:36` `WHERE admin_throughput_outbound_daily.last_event_at < EXCLUDED.last_event_at`.
+- 🔴 **출고는 입고보다 한 겹 더 조용하다.** `OutboundProjectionService.java:229` 가 `upsertIncrement` 의 반환값을 **버리고** `:230` 에서 무조건 `APPLIED` 를 돌려준다. 그래서 누계가 버려져도 dedupe outcome 은 `APPLIED`, `admin.projection.dropped.count{reason=stale}` 도 안 오른다 — 유실이 지표 어디에도 안 남는다. 입고는 `InboundProjectionService.java:256-258` 이 0행을 `IGNORED_DUPLICATE_LATE` 로 매핑해 `markStale` + `recordDropped("stale")` 를 남긴다(그 기록이 ③ 의 측정 근거가 될 수 있었던 이유).
+- 출고 핸들러의 다른 쓰기(`shipment_summary` `:186-189` · `order_summary` 의 `applyShipped` `:218-222`)는 **상태 덮어쓰기**이므로 LWW 가 맞다 — 손대지 않는다.
+
+### ③ 데모 DB 의 유실 건수 — ⚪ 측정 안 함
+
+- 데모 창이 필요하다(이 세션에서 데모 DB 에 닿지 않음). 덧붙여 ② 때문에 **출고 유실은 `admin_event_dedupe` 로는 셀 수 없다**(outcome 이 `APPLIED` 로 남는다). 입고만 `event_type='inbound.putaway.completed' AND outcome='IGNORED_DUPLICATE_LATE'` 로 셀 수 있다. AC-3 라이브 확인 때 함께.
+
+### ④ 같은 모양의 다른 누계 — 전수
+
+- `admin-service/src/main` 에서 `+ EXCLUDED.` · `+ 1` · `ON CONFLICT` · `last_event_at <` grep: 누계 SQL 은 **두 저장소뿐**(`ThroughputInboundDailyRepository.java:28-36` · `ThroughputOutboundDailyRepository.java:28-36`). 나머지 `ON CONFLICT` 는 `db/seed/*.sql` 의 `DO NOTHING` 뿐.
+- 엔티티의 `increment()`(`ThroughputInboundDailyEntity.java:58` · `ThroughputOutboundDailyEntity.java:55`)는 main 코드에서 호출자 0(시험 `throughputInboundDaily_compositePk_increment` 만 쓴다) — 경로 아님.
+- 다른 읽기 모델(`*_summary` · `*_snapshot` · `*_ref`)은 모두 «행 = 한 집계체의 현재 상태» 라 LWW 가 맞다. 범위 밖.
+- 🔵 **스펙 안의 충돌도 하나 있었다**: `database-design.md` § 13(`:745-760`)은 이미 «`WHERE` 없음 + `last_event_at = GREATEST(...)` · dedupe 가 멱등을 맡는다» 로 적혀 있었고, `idempotency.md` § 2.6 과 `admin-events.md:475-480` 만 조건을 적었다. 구현은 후자를 따랐다. 이 티켓은 전자 쪽으로 맞춘다.
