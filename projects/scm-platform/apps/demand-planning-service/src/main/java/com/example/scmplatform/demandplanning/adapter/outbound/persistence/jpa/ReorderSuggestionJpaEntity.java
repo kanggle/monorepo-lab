@@ -69,6 +69,11 @@ public class ReorderSuggestionJpaEntity implements Persistable<UUID> {
     @Column(name = "trigger_available_qty")
     private Integer triggerAvailableQty;
 
+    // TASK-SCM-BE-062 (V4): snapshot of the scm policy reorder point at raise time.
+    // Nullable — no policy at raise time, or a pre-V4 row (no backfill).
+    @Column(name = "reorder_point_at_trigger")
+    private Integer reorderPointAtTrigger;
+
     @Column(name = "materialized_po_id")
     private UUID materializedPoId;
 

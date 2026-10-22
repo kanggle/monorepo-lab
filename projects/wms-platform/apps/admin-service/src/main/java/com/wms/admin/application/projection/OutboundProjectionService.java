@@ -221,10 +221,12 @@ public class OutboundProjectionService {
             }
         });
 
-        // Throughput counter — atomic LWW upsert. INSERT ... ON CONFLICT DO
-        // UPDATE WHERE last_event_at < EXCLUDED.last_event_at handles both the
-        // initial insert and the LWW guard at the SQL layer; 0 affected rows
-        // simply means a newer event already won the race.
+        // Throughput counter — atomic upsert (INSERT ... ON CONFLICT DO UPDATE
+        // +1). 🔴 TASK-BE-643 — not last-write-wins: shipments of different
+        // orders have no ordering guarantee, so every new event counts.
+        // Exactly-once is the dedupe row (idempotency.md § 2.6). Until
+        // 2026-10-22 the SQL carried a last_event_at guard and this call's
+        // 0-row result was ignored, so dropped shipments were recorded APPLIED.
         LocalDate date = effectiveShipped.atZone(ZoneOffset.UTC).toLocalDate();
         throughputRepo.upsertIncrement(date, warehouseId, totalQty, occurredAt);
         return DedupeOutcome.APPLIED;

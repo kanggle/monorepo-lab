@@ -151,6 +151,46 @@ class SweepReorderUseCaseTest {
         assertThat(capturedSuggestion().getDestinationNodeType()).isEqualTo("WMS_WAREHOUSE");
     }
 
+    /** TASK-SCM-BE-062: the policy's reorder point (10) is snapshotted onto the BATCH suggestion. */
+    @Test
+    void batchSweepSnapshotsPolicyReorderPoint() {
+        when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, "WH01", "WMS_WAREHOUSE")));
+        stubHappyPath();
+
+        useCase.sweep();
+
+        ReorderSuggestion suggestion = capturedSuggestion();
+        assertThat(suggestion.getReorderPointAtTrigger()).isEqualTo(10);
+        assertThat(suggestion.getTriggerAvailableQty()).isEqualTo(3);
+    }
+
+    /**
+     * TASK-SCM-BE-062 owner decision (가-1): with no policy row the sweep uses the candidate's own
+     * availableQty as a synthetic "always trigger" threshold. That synthetic value (3 here) must
+     * NOT become the snapshot — the suggestion carries no reorder point at all.
+     */
+    @Test
+    void batchSweepNoPolicy_doesNotLeakSyntheticThresholdIntoSnapshot() {
+        when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(
+                new SkuWarehouseQty(SKU, WAREHOUSE_ID, 3, "WH01", "WMS_WAREHOUSE")));
+        when(mappingPort.findBySkuCode(TENANT, SKU)).thenReturn(Optional.of(
+                new SkuSupplierMapping(SKU, "SUP-0043", 25, 3, "KRW", TENANT)));
+        when(policyPort.findBySkuCode(TENANT, SKU)).thenReturn(Optional.empty());
+        when(suggestionPort.hasOpenSuggestion(eq(TENANT), eq(SKU), any(UUID.class)))
+                .thenReturn(false);
+        when(suggestionPort.save(any(ReorderSuggestion.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(useCase.sweep()).isEqualTo(1);
+
+        ReorderSuggestion suggestion = capturedSuggestion();
+        assertThat(suggestion.getSuggestedQty()).isEqualTo(25); // defaultOrderQty fallback still applies
+        assertThat(suggestion.getReorderPointAtTrigger())
+                .as("the synthetic availableQty threshold must not be snapshotted")
+                .isNull();
+    }
+
     @Test
     void aboveReorderPointRaisesNothing() {
         when(ivsPort.findAllBelowReorderPoint(TENANT)).thenReturn(List.of(

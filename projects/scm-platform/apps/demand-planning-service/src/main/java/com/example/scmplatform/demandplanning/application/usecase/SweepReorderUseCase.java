@@ -156,9 +156,16 @@ public class SweepReorderUseCase {
             return 0;
         }
 
+        // TASK-SCM-BE-062: snapshot the POLICY's reorder point only. On the no-policy path the
+        // local `reorderPoint` is the candidate's own availableQty (a synthetic "always
+        // trigger" threshold) — storing it would draw a made-up bar, so it stays null
+        // (owner decision (가-1)).
+        Integer reorderPointAtTrigger = policyOpt.map(ReorderPolicy::getReorderPoint).orElse(null);
+
         ReorderSuggestion suggestion = ReorderSuggestion.raiseFromBatch(
                 UUID.randomUUID(), skuCode, warehouseId, warehouseCode, nodeType,
-                mapping.getSupplierId(), reorderQty, availableQty, TENANT_ID, now);
+                mapping.getSupplierId(), reorderQty, availableQty, reorderPointAtTrigger,
+                TENANT_ID, now);
 
         suggestionPort.save(suggestion);
         sweepSuggestionsCounter.increment();

@@ -51,6 +51,9 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
         entity.setSource(suggestion.getSource());
         entity.setTriggerEventId(suggestion.getTriggerEventId());
         entity.setTriggerAvailableQty(suggestion.getTriggerAvailableQty());
+        // TASK-SCM-BE-062: every save rewrites every column from the domain, so the snapshot
+        // survives approve/dismiss/materialize only because the domain carries it through.
+        entity.setReorderPointAtTrigger(suggestion.getReorderPointAtTrigger());
         entity.setMaterializedPoId(suggestion.getMaterializedPoId());
         entity.setTenantId(suggestion.getTenantId());
         entity.setVersion(suggestion.getVersion());
@@ -86,7 +89,7 @@ public class ReorderSuggestionAdapter implements ReorderSuggestionPort {
                 e.getId(), e.getSkuCode(), e.getWarehouseId(), e.getWarehouseCode(),
                 e.getDestinationNodeType(), e.getSupplierId(),
                 e.getSuggestedQty(), e.getStatus(), e.getSource(),
-                e.getTriggerEventId(), e.getTriggerAvailableQty(),
+                e.getTriggerEventId(), e.getTriggerAvailableQty(), e.getReorderPointAtTrigger(),
                 e.getMaterializedPoId(), e.getTenantId(), e.getVersion(),
                 e.getCreatedAt(), e.getUpdatedAt());
     }

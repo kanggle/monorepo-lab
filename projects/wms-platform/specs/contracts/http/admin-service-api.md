@@ -246,7 +246,7 @@ Query parameters:
 | `locationId` | UUID | |
 | `skuId` | UUID | |
 | `lotId` | UUID | |
-| `lowStockOnly` | boolean | If `true`, only rows where `low_stock_flag = true` |
+| `lowStockOnly` | boolean | If `true`, only rows where `availableQty < threshold` (threshold = current setting, see `lowStockFlag` below) |
 | `minOnHand` | int | Only rows where `on_hand_qty >= minOnHand` |
 | pagination | | default sort `lastEventAt,desc` |
 
@@ -278,9 +278,18 @@ Response `200`:
 }
 ```
 
-`lowStockFlag` is read-model convenience, recomputed at projection time using
-the current `inventory.low_stock.default_threshold_qty` setting. Authoritative
-alerts are in `AlertLog`.
+`lowStockFlag` is read-model convenience, **computed at query time** (not
+stored) as `availableQty < threshold`, where `threshold` is the current GLOBAL
+`inventory.low_stock.default_threshold_qty` setting read on each request. If the
+setting row is missing or its value is not an integer, `threshold = 10` (the
+seed default). The boundary is strict (`<`): a row whose `availableQty` equals
+the threshold is **not** low-stock — the same comparison inventory-service uses
+when it raises `inventory.low-stock-detected`. A setting change therefore
+changes `lowStockFlag` and the `lowStockOnly` result for every row immediately,
+with no inventory event needed. The same rule applies to the `by-key` lookup
+below. Authoritative alerts are in `AlertLog`. (TASK-BE-644 — previously a
+stored flag computed at projection time against a hard-coded `<= 10` that
+ignored the setting.)
 
 #### `GET /api/v1/admin/dashboard/inventory/by-key` — Lookup by composite key
 

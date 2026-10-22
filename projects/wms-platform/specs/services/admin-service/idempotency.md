@@ -195,7 +195,8 @@ behavioural semantics of each outcome:
 `IGNORED_DUPLICATE` covers redelivery of the same `eventId`.
 `IGNORED_DUPLICATE_LATE` covers a fresh `eventId` whose `occurredAt` is older
 than the persisted `last_event_at` on the target row — the dedupe row is
-inserted but the projection mutation is skipped.
+inserted but the projection mutation is skipped. It applies to state-overwrite
+rows only; the throughput counters (§ 2.6) never produce it.
 
 Retention: 30 days. A nightly cron deletes
 `processed_at < now() - interval '30 days'`. 30 days covers operator-initiated
@@ -212,6 +213,9 @@ Within the same `@Transactional` boundary as the projection mutation:
    RETURNING event_id;
 
 2a. Row inserted (new event):
+    → Throughput counters (§ 2.6): ALWAYS apply the increment — no
+      occurredAt comparison; outcome stays APPLIED. Steps below are for
+      state-overwrite rows only.
     → Look up the affected read-model row(s)
     → If event.occurredAt > row.last_event_at (or row does not yet exist):
         → Apply mutation (upsert / append / increment)
@@ -251,8 +255,11 @@ Even if the dedupe table is somehow wiped (e.g., manual TRUNCATE during
 development), the PK conflict prevents double-append. Last-write-wins does
 not apply — these tables grow monotonically.
 
-### 2.5 Upsert Tables (`*_ref`, `*_summary`, `inventory_snapshot`,
-`throughput_*`)
+### 2.5 Upsert Tables (`*_ref`, `*_summary`, `inventory_snapshot`)
+
+> `throughput_*` was listed in this heading until `TASK-BE-643` (2026-10-22).
+> It is not a state-overwrite table and the guard below does not apply to it —
+> see § 2.6.
 
 For upsert tables, the projection runs a version-checked `UPDATE`:
 
@@ -280,14 +287,58 @@ VALUES (?, ?, 1, ?, ?, 1)
 ON CONFLICT (date, warehouse_id) DO UPDATE
   SET putaway_count = admin_throughput_inbound_daily.putaway_count + 1,
       qty_received = admin_throughput_inbound_daily.qty_received + EXCLUDED.qty_received,
-      last_event_at = EXCLUDED.last_event_at,
-      version = admin_throughput_inbound_daily.version + 1
-  WHERE admin_throughput_inbound_daily.last_event_at < EXCLUDED.last_event_at;
+      last_event_at = GREATEST(admin_throughput_inbound_daily.last_event_at,
+                               EXCLUDED.last_event_at),
+      version = admin_throughput_inbound_daily.version + 1;
+-- no WHERE clause: every new event increments (see "Why there is no
+-- last_event_at guard" below)
 ```
 
-EventDedupe ensures each event increments exactly once. The
-`last_event_at` guard prevents out-of-order events from incorrectly
-incrementing counters using a stale source.
+`admin_throughput_outbound_daily` is identical with `shipment_count` /
+`qty_shipped`.
+
+**Counters are idempotent by `event_id` dedupe only.** EventDedupe (§ 2.2 /
+§ 2.3) ensures each event increments exactly once; that is the whole
+idempotency mechanism for this table. `last_event_at` is bookkeeping — the
+latest `occurredAt` that has contributed to the row, kept as a maximum
+(`GREATEST`) so a late-arriving earlier event does not move it backwards. It is
+not consulted to decide whether to increment, and the counter path never
+produces `IGNORED_DUPLICATE_LATE`.
+
+#### Why there is no `last_event_at` guard (`TASK-BE-643`, 2026-10-22)
+
+Until 2026-10-22 this section specified
+`WHERE admin_throughput_inbound_daily.last_event_at < EXCLUDED.last_event_at`
+on the `DO UPDATE`, with `last_event_at = EXCLUDED.last_event_at`, and gave
+this rationale:
+
+> EventDedupe ensures each event increments exactly once. The
+> `last_event_at` guard prevents out-of-order events from incorrectly
+> incrementing counters using a stale source.
+
+That rationale is right for a row that holds **one aggregate's current
+state** (§ 2.5): an older event carries an older state, and applying it would
+overwrite newer truth. It is wrong for a counter. A counter row is
+«warehouse × day», and the events that land in it come from **different**
+ASNs / orders — independent occurrences, each of which must be counted once.
+An "older" putaway is not a stale version of a newer one; it is another
+putaway. Those events are partitioned by `asnId` / `orderId`
+(`inbound-events.md:18`, `outbound-events.md:19`), and the contract
+says not to assume ordering across `aggregateId`s (`inbound-events.md:400`),
+so arrival order ≠ `occurredAt` order is a normal condition, not an anomaly.
+
+With the guard, any event that arrived after a later-stamped event for the
+same (date, warehouse) matched 0 rows and was **silently dropped** (inbound
+recorded it as `IGNORED_DUPLICATE_LATE`; outbound ignored the row count and
+recorded `APPLIED`, so the loss left no trace at all). Two events with equal
+`occurredAt` also lost the second (strict `<`). The guard added no
+duplicate protection — that was already EventDedupe's job — only loss.
+`database-design.md` § 13 had already specified the unguarded `GREATEST`
+form; this section and `admin-events.md` § Projection Idempotency Pattern
+were the outliers, and the code followed them.
+
+What the guard did incidentally provide — partial protection against a
+replay after the dedupe row expired — is recorded in § 3.1.
 
 ### 2.7 Retry and DLT
 
@@ -332,7 +383,8 @@ All consumers share `admin-projection`. Partition assignment ensures:
 | REST grant with new key after Redis TTL, same `(userId, roleId, warehouseId)` | Domain unique constraint | 200 with existing assignment row |
 | REST POST `/users` with new key after Redis TTL, same `email` | Domain unique constraint | 409 `USER_EMAIL_DUPLICATE` |
 | Kafka broker redelivers same `eventId` | PostgreSQL dedupe table | Skip, log, IGNORED_DUPLICATE |
-| Kafka delivers fresh `eventId` with stale `occurredAt` (out of order) | last_event_at guard | Skip, log, IGNORED_DUPLICATE_LATE |
+| Kafka delivers fresh `eventId` with stale `occurredAt` (out of order) — state-overwrite rows (`*_ref`, `*_summary`, `inventory_snapshot`) | last_event_at guard | Skip, log, IGNORED_DUPLICATE_LATE |
+| Kafka delivers fresh `eventId` with older or equal `occurredAt` — throughput counters (§ 2.6) | PostgreSQL dedupe table only | Increment, APPLIED (a different occurrence, not a stale version) |
 | Kafka DLQ replay (operator-initiated) within 30d | PostgreSQL dedupe table | Skip if already processed |
 | Kafka DLQ replay after 30-day TTL purge | No dedupe row exists | Reprocess — accepted risk (see §3.1) |
 | Two pods consume same partition briefly (rebalance) | Kafka partition assignment | One consumer at a time per partition |
@@ -349,13 +401,48 @@ replay older than 30 days would:
    PK constraint on `id = eventId` — duplicate row insert silently fails
 
 Net effect: in v1, the 30-day replay risk is **mostly absorbed** by
-last-write-wins + PK uniqueness. The exception is throughput counters, which
-would double-increment if both the dedupe row and the projection state
-expired (counters do retain `last_event_at`, but the increment-by-one path
-does not consult it for duplicate-event protection — only for stale-order
-protection). Mitigation: ops replaying messages older than 30 days must
-verify counter ranges first; the read-model rebuild procedure
-(`runbooks/read-model-rebuild.md`) is the safe alternative.
+last-write-wins + PK uniqueness. The exception is throughput counters.
+
+**Throughput counters — replay after dedupe expiry (`TASK-BE-643`,
+2026-10-22).** Counters have no protection against this case at all: once the
+dedupe row is purged, a replayed `inbound.putaway.completed` /
+`outbound.shipping.confirmed` is indistinguishable from a new occurrence and
+**increments again**. This is a deliberate trade, stated here so it is not
+rediscovered as a bug:
+
+- Before `TASK-BE-643` the `last_event_at` guard (§ 2.6, "Why there is no
+  guard") blocked such a replay **only partially** — only when the same
+  (date, warehouse) row already held a later-stamped event. A replay of the
+  latest event of a day, or of a day with a single event, double-counted
+  anyway. It was never a replay defence; it was a side effect of an ordering
+  rule.
+- The same guard silently dropped legitimate out-of-order events in normal
+  operation (cross-ASN / cross-order arrival order is not guaranteed). Losing
+  counts every day to partially protect against a rare operator action is the
+  wrong side of the trade.
+- **Rule: never replay counter-feeding events older than the dedupe retention
+  (30 days) into a live counter table.** The only safe replay for
+  `admin_throughput_*_daily` is the rebuild procedure
+  (`runbooks/read-model-rebuild.md` § Step 3 — truncate the counter tables
+  **and** `admin_event_dedupe` together, then replay from the start of the
+  retained range), which makes the counters a pure function of the replayed
+  event set. A selective DLQ replay within the 30-day window is safe (dedupe
+  still holds the row).
+- Note that a rebuild replay is itself the most out-of-order situation the
+  consumer sees (every partition of every topic re-read from the start, in
+  parallel). Under the old guard a rebuild could undercount (inferred from
+  the SQL, not measured); without it, the rebuilt counters equal the number
+  of distinct replayed events.
+
+The previous text of this paragraph, kept for the record:
+
+> The exception is throughput counters, which would double-increment if both
+> the dedupe row and the projection state expired (counters do retain
+> `last_event_at`, but the increment-by-one path does not consult it for
+> duplicate-event protection — only for stale-order protection). Mitigation:
+> ops replaying messages older than 30 days must verify counter ranges first;
+> the read-model rebuild procedure (`runbooks/read-model-rebuild.md`) is the
+> safe alternative.
 
 ---
 
@@ -422,7 +509,8 @@ MUST cover (the two mechanisms in §1 / §2):
 4. **REST — key reuse (same key, different body)** → 409 `DUPLICATE_REQUEST`.
 5. **Kafka — first event** → `APPLIED` dedupe row + the projection mutation, in one `@Transactional`.
 6. **Kafka — redelivery (same eventId)** → `IGNORED_DUPLICATE`; no second projection.
-7. **Kafka — out-of-order (fresh eventId, `occurredAt` older than the row's `last_event_at`)** → `IGNORED_DUPLICATE_LATE`: dedupe row written but the projection mutation is **skipped** (LWW guard); `event_stale_dropped` logged.
+7. **Kafka — out-of-order (fresh eventId, `occurredAt` older than the row's `last_event_at`)** → `IGNORED_DUPLICATE_LATE`: dedupe row written but the projection mutation is **skipped** (LWW guard); `event_stale_dropped` logged. **Not for throughput counters** — see 7a.
+7a. **Kafka — throughput counters, out-of-order and equal `occurredAt`** (`TASK-BE-643`) → two different events for the same (date, warehouse) delivered **latest-first**, and two with the **same** `occurredAt`, both count (`= 2`, both `APPLIED`); the same `eventId` delivered twice counts once. Tests MUST send out of `occurredAt` order — a suite that only sends in order cannot see the defect this case exists for.
 8. **Concurrent same-eventId (two consumer instances)** → one wins; the other observes the PK constraint violation and exits cleanly.
 9. **Cross-context replay (full Spring restart)** → same eventId → dedupe hit → no duplicate projection.
 
