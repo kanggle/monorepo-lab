@@ -8,7 +8,7 @@ TASK-PC-FE-364
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -61,8 +61,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. ① SCM 테넌트가 고정이면 STOP. → 아래 `## AC-0 측정` (SCM 은 호출자 기준 — STOP 아님)
-- [ ] **AC-1** — 계약 먼저 → 구현 + **사용자에게 보이는 새 문구(카드 제목 · 설명 · «직원 연결 없음» · 링크 글자) 목록과 «권한 없음» 이 새로 생기는 운영자 표를 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`, 마지막 전체 실행은 최종 커밋에서) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 계약 먼저 → 구현 + **사용자에게 보이는 새 문구(카드 제목 · 설명 · «직원 연결 없음» · 링크 글자) 목록과 «권한 없음» 이 새로 생기는 운영자 표를 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`, 마지막 전체 실행은 최종 커밋에서) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인 · 로그인 운영자 라이브(권한별 «권한 없음» 표가 맞는가) = 다음 데모 창.
 
 # Related Specs
@@ -151,7 +151,7 @@ frontend
 
 ---
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 > 화면에 새로 보이는 한국어 문구 전부. 경로 접두 `apps/console-web/src/features/operator-overview/components/`. 새 `aria-label` 은 **없다**(링크는 보이는 글자가 곧 이름이고, IAM 제목의 기존 `sr-only` «상세 보기» 는 그대로). 🔴 **사라지는 문구**도 끝에 적었다.
 
@@ -275,3 +275,13 @@ frontend
 **남는 간극 (기록)**: 이 스택엔 erp 게이트웨이와 approval-service 가 없어 `ERP_BASE_URL` 이 masterdata 를 직접 가리킨다 — 개요 erp 다리(`/api/erp/approval/inbox`)는 masterdata 에 닿고, 같은 erp decode 게이트라 비구독 = 403 은 맞지만 구독 테넌트는 404 → `degraded`(«권한 없음 아님» 단언은 통과)이다. 진짜 inbox 를 재려면 erp 게이트웨이 + approval-service 추가가 필요 — 별도 변경 후보.
 
 ⚪ 로컬에선 도커 스택을 못 돌려 수정 효과는 **다음 브랜치 런이 판정**한다(`docker compose … config` rc=0 · 워크플로 YAML 파싱만 확인).
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- **소유자 승인**(선택창, 2026-10-22 KST, 머지 전): 새 문구 표 · 권한별 «권한 없음» 변화 표(SUPER_ADMIN 와일드카드 ERP 행은 추정 — AC-3 라이브로) → AC-1 닫힘(계약 먼저 = `0f689809a`).
+- `TASK-PC-FE-363` 머지(#4467 · #4468) 뒤 rebase — `INDEX.md` ready 칸 충돌 1곳(`_(없음)_`). 합친 트리 vitest 425 files · 5215 tests · tsc · lint · 가드 다섯 rc=0.
+- 🔴 첫 브랜치 federation-hardening-e2e run `39766172565`(head `e915c7de4`) **빨강** — 비구독 테넌트의 SCM 카드가 `forbidden` 대신 `degraded`(main 의 같은 잡은 최근 5회 전부 success ⇒ 이 브랜치가 만든 것). 원인 = 시험 스택(§ federation-hardening e2e 빨강 진단 · 수정): console-web 에 `LEDGER_BASE_URL` 이 없어 `*.local` 조회가 4 s+ 걸리며 Node 4-스레드 풀을 막아 모든 다리가 TIMEOUT · 스택에 ledger-service 자체가 없음. 생산자 게이트는 비구독 테넌트에 403(확인). 수정 `cc862528d` = 시험 인프라만(compose · seed · 워크플로 · 단위 가드 확장) — **단언은 그대로**.
+- 🔵 이 PR 은 공유 경로(`.github/workflows/federation-hardening-e2e.yml` · `tests/federation-hardening-e2e/`)도 바꾼다 — 이 변경 없이는 364 가 e2e 를 통과할 수 없어 같은 PR 에 묶었다(원자적 변경).
+- 재실행(head `cc862528d`): 콘솔 nightly run `39771872661` **success** · federation-hardening-e2e run `39771878976` **success** · PR #4469 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 남는 간극(이 티켓 밖): federation 스택에 erp 게이트웨이 · approval-service 가 없어 ERP 다리는 masterdata 에 닿는다 — 비구독 403 은 맞지만 구독 테넌트의 진짜 결재 대기 응답은 검사하지 않는다.
+- 열림: **AC-3**(Vercel Production · 익명 샘플 개요 · 로그인 운영자 라이브 — 권한 표 · SUPER_ADMIN 와일드카드 ERP 행).
