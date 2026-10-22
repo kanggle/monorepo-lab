@@ -71,8 +71,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **READY (2026-10-22 UTC) — 착수는 소유자 지시 때 · 서버 변경 = 굽기.** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». inventory-service 알림(BE-459)은 설정을 따르므로 같은 개념이 두 기준으로 갈린다. 결정: 설정 따르기(추천) vs 계약을 상수로. 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`. 분석=Opus 5.5 / 구현 권장=Opus.
-
 - `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **READY (2026-10-22 UTC).** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
@@ -87,7 +85,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **IN-PROGRESS (2026-10-22 UTC) — AC-0 측정 완료 · 소유자 결정 대기((가) 설정 따르기 / (나) 계약을 상수로).** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`(done — 가이드 «고정값 · 가용 10개 이하» 는 (가) 시 같은 PR 에서 고침). 서버 변경 = 굽기. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## review
 
