@@ -473,17 +473,36 @@ For each consumed event the projection handler runs in a single
    RETURNING event_id;
 
 2a. Row inserted:
-    - Look up the affected read-model row(s)
-    - If event.occurredAt > row.last_event_at: apply the projection mutation
-      (upsert / append / increment) and set last_event_at = event.occurredAt
-    - Else: skip (record outcome IGNORED_DUPLICATE_LATE — set via UPDATE on
-      the just-inserted dedupe row before commit)
+    - Throughput counters (admin_throughput_*_daily): always increment;
+      last_event_at = GREATEST(row.last_event_at, event.occurredAt);
+      outcome APPLIED. No occurredAt comparison — see note below.
+    - Every other read-model row (state overwrite):
+      - Look up the affected read-model row(s)
+      - If event.occurredAt > row.last_event_at: apply the projection mutation
+        (upsert / append) and set last_event_at = event.occurredAt
+      - Else: skip (record outcome IGNORED_DUPLICATE_LATE — set via UPDATE on
+        the just-inserted dedupe row before commit)
 
 2b. No row returned (duplicate eventId):
     - Skip mutation
     - Commit no-op TX (the existing dedupe row already reflects the prior
       outcome)
 ```
+
+> **Counters are not last-write-wins (`TASK-BE-643`, 2026-10-22).** Until
+> this date step 2a read, for every row: *"If event.occurredAt >
+> row.last_event_at: apply the projection mutation (upsert / append /
+> **increment**)"*. For a counter row («warehouse × day») that rule is wrong:
+> its events come from different ASNs / orders, which are partitioned by
+> `asnId` / `orderId` and therefore have no cross-aggregate ordering
+> guarantee (`inbound-events.md:400`). An earlier-stamped event arriving
+> late is another occurrence, not a stale version — the old rule dropped it
+> silently, and dropped the second of two events with equal `occurredAt`.
+> Counters are idempotent by `event_id` dedupe alone; `last_event_at` on a
+> counter row is bookkeeping (maximum seen). The consequence — a replay after
+> dedupe retention expiry double-counts — and the rule that follows from it
+> are in [`idempotency.md`](../../services/admin-service/idempotency.md)
+> § 2.6 and § 3.1.
 
 For details on dedupe-table schema, retention, replay risk, and DLT handling
 see [`idempotency.md`](../../services/admin-service/idempotency.md).
