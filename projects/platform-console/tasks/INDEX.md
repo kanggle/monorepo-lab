@@ -92,6 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-PC-FE-363-overview-consistency-scm-wms-bars-money-format.md` — **도메인 개요 모양 맞추기 — SCM 발주 상태 · WMS 알림 상태 분포 막대 · SCM · Finance 개요 금액 서식** — 서버 변경 없음 · 금액은 기존 서식 함수만 (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
