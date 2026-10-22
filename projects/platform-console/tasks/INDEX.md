@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **콘솔이 이커머스 `BACKORDERED` 를 모른다 — 주문 상태 분포 · 필터에서 빠지고 운영자가 취소할 주문을 못 찾는다 · 곁: WMS 저재고 설명을 사실대로** — 서버 변경 없음 · AC-0 이 «백오더 응답을 zod 가 거부해 화면 저하» 인지 먼저 잰다 (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -120,6 +120,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## in-progress
 
 ## review
+
+- `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **콘솔이 이커머스 `BACKORDERED` 를 모른다 — 주문 상태 분포 · 필터에서 빠지고 운영자가 취소할 주문을 못 찾는다 · 곁: WMS 저재고 설명을 사실대로** — 서버 변경 없음 · AC-0 이 «백오더 응답을 zod 가 거부해 화면 저하» 인지 먼저 잰다 (REVIEW, 2026-10-22 UTC · 새 문구 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus.
 

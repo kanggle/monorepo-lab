@@ -398,7 +398,8 @@ export function EcommerceGuideScreen() {
               <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
                 <strong>주문</strong> 화면(<Mono>/ecommerce/orders</Mono>)의 주문은 아래
                 흐름을 따릅니다. 정상 경로는{' '}
-                <Mono>대기 → 확정 → 배송중 → 배송완료</Mono> 이며, 예외 종료로 취소 ·
+                <Mono>대기 → 확정 → 배송중 → 배송완료</Mono> 이며, 재고가 모자라면{' '}
+                <Mono>재고부족 이월</Mono> 로 잠시 멈추고, 예외 종료로 취소 ·
                 복구실패가 있습니다. <strong>운영자가 직접 바꿀 수 있는 상태</strong>와{' '}
                 <strong>자동으로 바뀌는 읽기 전용 상태</strong>를 구분하세요 —
                 배송중/배송완료는 배송이 진행되면서 자동으로 바뀌며 운영자가 직접

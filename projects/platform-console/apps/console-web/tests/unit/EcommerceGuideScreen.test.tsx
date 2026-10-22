@@ -17,6 +17,10 @@ import {
   ECOMMERCE_GLOSSARY,
   ECOMMERCE_RECIPES,
 } from '@/features/ecommerce-guide/data';
+import {
+  allowedTransitions,
+  ORDER_STATUS_VALUES,
+} from '@/features/ecommerce-ops/api/order-types';
 import { runAxe } from '../a11y/axe-helper';
 import { expectDomainGuideTabs } from '../helpers/domain-guide-tabs';
 import { domainFeatureByKey } from '@/shared/guide/domain-features';
@@ -79,26 +83,32 @@ describe('EcommerceGuideScreen', () => {
     }
   });
 
-  it('renders the 6 console order states with operator-actionable distinction', () => {
+  it('renders the 7 console order states with operator-actionable distinction', () => {
     render(<EcommerceGuideScreen />);
     for (const s of ORDER_STATES) {
       const row = screen.getByTestId(`ecommerce-guide-order-${s.name}`);
       expect(within(row).getByText(s.name)).toBeInTheDocument();
       expect(within(row).getByText(s.label)).toBeInTheDocument();
     }
-    // The console order enum is exactly these six (BACKORDERED is backend-only).
+    // The guide lists exactly the console order enum (TASK-PC-FE-365: incl. BACKORDERED).
+    expect(ORDER_STATES.map((s) => s.name)).toEqual([...ORDER_STATUS_VALUES]);
     expect(ORDER_STATES.map((s) => s.name)).toEqual([
       'PENDING',
+      'BACKORDERED',
       'CONFIRMED',
       'SHIPPED',
       'DELIVERED',
       'CANCELLED',
       'STUCK_RECOVERY_FAILED',
     ]);
-    // Only 대기/확정 are operator-actionable; SHIPPED/DELIVERED are event-driven.
+    // Only 대기/재고부족 이월/확정 are operator-actionable (the last two: cancel
+    // only); SHIPPED/DELIVERED are event-driven. Must agree with allowedTransitions.
     expect(
       ORDER_STATES.filter((s) => s.operatorActionable).map((s) => s.name),
-    ).toEqual(['PENDING', 'CONFIRMED']);
+    ).toEqual(['PENDING', 'BACKORDERED', 'CONFIRMED']);
+    for (const s of ORDER_STATES) {
+      expect(s.operatorActionable).toBe(allowedTransitions(s.name).length > 0);
+    }
   });
 
   it('renders the 6 payment states', () => {

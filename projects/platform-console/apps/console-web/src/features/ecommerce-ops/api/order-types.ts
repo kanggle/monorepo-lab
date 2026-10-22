@@ -21,6 +21,7 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
  *
  * State machine — OPERATOR-INITIATED transitions only (Order.java + ADR-MONO-022 §D7):
  *   PENDING → {CONFIRMED, CANCELLED}
+ *   BACKORDERED → {CANCELLED}   (held for stock; restock confirms it, not the operator)
  *   CONFIRMED → {CANCELLED}
  *   SHIPPED, DELIVERED, CANCELLED, STUCK_RECOVERY_FAILED → (no operator action)
  *
@@ -36,6 +37,7 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
 
 export const ORDER_STATUS_VALUES = [
   'PENDING',
+  'BACKORDERED',
   'CONFIRMED',
   'SHIPPED',
   'DELIVERED',
@@ -47,13 +49,15 @@ export type OrderStatus = (typeof ORDER_STATUS_VALUES)[number];
 /**
  * Order status → shared semantic {@link StatusTone} (rendered via the shared
  * `<StatusBadge>` — TASK-PC-FE-158/159). PENDING awaits operator action
- * (warning); CONFIRMED/SHIPPED are mid-lifecycle (progress); DELIVERED is the
+ * (warning); BACKORDERED (held for stock) also awaits action (warning);
+ * CONFIRMED/SHIPPED are mid-lifecycle (progress); DELIVERED is the
  * happy terminal (success); CANCELLED and the stuck-recovery failure are
  * terminal-bad (danger). An unknown/future status → `neutral` (TOLERANCE — the
  * producer may add a status the console has not shipped yet).
  */
 const ORDER_STATUS_TONE: Record<OrderStatus, StatusTone> = {
   PENDING: 'warning',
+  BACKORDERED: 'warning',
   CONFIRMED: 'progress',
   SHIPPED: 'progress',
   DELIVERED: 'success',
@@ -73,6 +77,12 @@ export function orderStatusTone(status: string): StatusTone {
  */
 const TRANSITIONS: Record<string, OrderStatus[]> = {
   PENDING: ['CONFIRMED', 'CANCELLED'],
+  // BACKORDERED (TASK-PC-FE-365): the operator may only CANCEL a held order.
+  // Its way to CONFIRMED is the restock re-reservation saga (order-events.md §
+  // "Order lifecycle & BACKORDERED": "may be cancelled by an operator"); the
+  // producer's admin endpoint would technically accept CONFIRMED too
+  // (Order.confirm allows BACKORDERED) but that skips the stock reservation.
+  BACKORDERED: ['CANCELLED'],
   CONFIRMED: ['CANCELLED'],
   SHIPPED: [],
   DELIVERED: [],

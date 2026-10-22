@@ -54,6 +54,9 @@ vi.mock('next/navigation', () => ({
 
 import {
   allowedTransitions,
+  ORDER_STATUS_VALUES,
+  OrderDetailSchema,
+  OrderListSchema,
 } from '@/features/ecommerce-ops/api/order-types';
 import {
   getOrdersSectionState,
@@ -69,6 +72,50 @@ import { ACCESS_COOKIE } from '@/shared/lib/session';
 describe('allowedTransitions() — order status state machine', () => {
   it('PENDING → [CONFIRMED, CANCELLED]', () => {
     expect(allowedTransitions('PENDING')).toEqual(['CONFIRMED', 'CANCELLED']);
+  });
+
+  it('BACKORDERED → [CANCELLED] only (restock confirms it, not the operator) — TASK-PC-FE-365', () => {
+    expect(allowedTransitions('BACKORDERED')).toEqual(['CANCELLED']);
+  });
+
+  it('BACKORDERED is a known status; every ORDER_STATUS_VALUES entry has a transitions row', () => {
+    expect(ORDER_STATUS_VALUES).toContain('BACKORDERED');
+    for (const s of ORDER_STATUS_VALUES) {
+      expect(Array.isArray(allowedTransitions(s))).toBe(true);
+    }
+    // No status ever offers BACKORDERED as an operator target.
+    for (const s of ORDER_STATUS_VALUES) {
+      expect(allowedTransitions(s)).not.toContain('BACKORDERED');
+    }
+  });
+
+  it('list + detail schemas accept status BACKORDERED (no degrade) — TASK-PC-FE-365', () => {
+    const row = {
+      orderId: 'ord-bo',
+      userId: 'u-1',
+      status: 'BACKORDERED',
+      totalPrice: 45000,
+      itemCount: 1,
+      firstItemName: 'Hoodie',
+      createdAt: '2026-08-28T06:00:00Z',
+    };
+    expect(
+      OrderListSchema.parse({ content: [row], page: 0, size: 20, totalElements: 1 })
+        .content[0].status,
+    ).toBe('BACKORDERED');
+    expect(
+      OrderDetailSchema.parse({
+        ...row,
+        items: [],
+        shippingAddress: {
+          recipient: 'r',
+          phone: 'p',
+          zipCode: 'z',
+          address1: 'a',
+          address2: null,
+        },
+      }).status,
+    ).toBe('BACKORDERED');
   });
 
   it('CONFIRMED → [CANCELLED] (SHIPPED is shipping-event-driven, not operator)', () => {

@@ -482,9 +482,38 @@ export const ECOMMERCE_ORDERS: readonly OrderSeed[] = [
     createdAt: '2026-08-25T10:00:00Z',
     updatedAt: null,
   },
+  {
+    // TASK-PC-FE-365 — a BACKORDERED order (paid, but the stock reservation
+    // failed; held until restock — only the operator's CANCEL is possible).
+    // Not yet confirmed ⇒ no settlement accrual and no shipping row, and it is
+    // left out of the insights rankings (see computeInsights).
+    orderId: 'order-sample-0006',
+    userId: 'user-sample-0003',
+    status: 'BACKORDERED',
+    items: [
+      {
+        productId: 'prod-sample-0002',
+        variantId: 'variant-sample-0003',
+        productName: `코튼 후드 집업${SUFFIX}`,
+        optionName: `Free${SUFFIX}`,
+        quantity: 1,
+        unitPrice: 45000,
+        sellerId: 'seller-sample-0001',
+      },
+    ],
+    shippingAddress: {
+      recipient: `탈퇴 회원${SUFFIX}`,
+      phone: '010-0000-0000',
+      zipCode: '12345',
+      address1: `주소 비공개${SUFFIX}`,
+      address2: null,
+    },
+    createdAt: '2026-08-28T06:00:00Z',
+    updatedAt: '2026-08-28T06:01:00Z',
+  },
 ];
 
-const ORDERS_SUMMARY = { today: 0, week: 1, month: 5, total: 5 };
+const ORDERS_SUMMARY = { today: 0, week: 1, month: 6, total: 6 };
 
 function orderDetail(o: OrderSeed) {
   return { ...o, totalPrice: orderTotal(o.items) };
@@ -527,7 +556,9 @@ function sellerLabel(sellerId: string): string {
  * R2ⓐ-compliant on its own. Documented here rather than silently deviating.
  */
 function computeInsights() {
-  const active = ECOMMERCE_ORDERS.filter((o) => o.status !== 'CANCELLED');
+  const active = ECOMMERCE_ORDERS.filter(
+    (o) => o.status !== 'CANCELLED' && o.status !== 'BACKORDERED',
+  );
 
   const productOrderCount = new Map<string, number>();
   const productRevenue = new Map<string, number>();

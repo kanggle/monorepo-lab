@@ -324,6 +324,25 @@ describe('TASK-PC-FE-346 — product images (ImageManager, loaded asynchronously
   });
 });
 
+describe('TASK-PC-FE-365 — a BACKORDERED order offers cancel only', () => {
+  it('canWrite=true → only the 취소 button (no 확인/confirm, no BACKORDERED target)', () => {
+    render(<OrderDetail order={{ ...ORDER, status: 'BACKORDERED' } as never} canWrite />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('order-status-btn-cancelled')).toBeInTheDocument();
+    expect(screen.queryByTestId('order-status-btn-confirmed')).toBeNull();
+    expect(screen.queryByTestId('order-status-btn-backordered')).toBeNull();
+  });
+
+  it('canWrite=false → read-only note shown (the cancel control is hidden)', () => {
+    render(<OrderDetail order={{ ...ORDER, status: 'BACKORDERED' } as never} canWrite={false} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.queryByTestId('order-status-btn-cancelled')).toBeNull();
+    expect(screen.getByTestId('order-read-only-note')).toHaveTextContent('조회 전용');
+  });
+});
+
 describe('TASK-PC-FE-346 — order screens that have no mutation control carry no note', () => {
   it('a terminal order (no allowed transition) with canWrite=false shows no note (nothing was hidden)', () => {
     render(<OrderDetail order={{ ...ORDER, status: 'DELIVERED' } as never} canWrite={false} />, {

@@ -184,6 +184,16 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     const pending = state.orderStatus.find((b) => b.status === 'PENDING');
     expect(pending?.count).toBe(3);
     expect(pending?.cellStatus).toBe('ok');
+    // TASK-PC-FE-365 — a BACKORDERED bucket exists and issues its own read, so
+    // held orders are in the distribution instead of silently missing.
+    const backordered = state.orderStatus.find((b) => b.status === 'BACKORDERED');
+    expect(backordered?.count).toBe(1);
+    expect(backordered?.cellStatus).toBe('ok');
+    expect(m.listOrders).toHaveBeenCalledWith({
+      status: 'BACKORDERED',
+      page: 0,
+      size: 1,
+    });
 
     // Recent slices from the size=5 reads.
     expect(state.recentOrders).toHaveLength(2);

@@ -14,6 +14,7 @@ import { promotionStatusTone } from '@/features/ecommerce-ops/api/promotion-type
 describe('orderStatusTone', () => {
   it('maps each known order status to its semantic tone', () => {
     expect(orderStatusTone('PENDING')).toBe('warning');
+    expect(orderStatusTone('BACKORDERED')).toBe('warning');
     expect(orderStatusTone('CONFIRMED')).toBe('progress');
     expect(orderStatusTone('SHIPPED')).toBe('progress');
     expect(orderStatusTone('DELIVERED')).toBe('success');

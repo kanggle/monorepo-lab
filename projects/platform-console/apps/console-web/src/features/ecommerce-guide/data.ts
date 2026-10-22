@@ -143,10 +143,12 @@ export interface OrderState {
 }
 
 /**
- * 콘솔 주문 상태(6). 정상 경로 `대기(PENDING) → 확정(CONFIRMED) → 배송중
- * (SHIPPED) → 배송완료(DELIVERED)` + 예외 종료 2개(취소 · 복구실패). 콘솔이
- * 렌더하는 enum(`ORDER_STATUS_VALUES`)은 백엔드의 `BACKORDERED`(재고부족 이월,
- * 결제 후 예약 실패 시)를 운영자-선택 상태로 노출하지 않는다 — READ_NOTE 참조.
+ * 콘솔 주문 상태(7). 정상 경로 `대기(PENDING) → 확정(CONFIRMED) → 배송중
+ * (SHIPPED) → 배송완료(DELIVERED)` + 곁가지 재고부족 이월(BACKORDERED, 결제 후
+ * 예약 실패 시 — 재입고되면 확정, 운영자는 취소만 가능) + 예외 종료 2개(취소 ·
+ * 복구실패). 콘솔 `ORDER_STATUS_VALUES` 와 같은 값이다(TASK-PC-FE-365 — 그 전엔
+ * BACKORDERED 가 빠져 분포 막대 · 필터에서 보이지 않았다). 상태 **변경** 선택지는
+ * `allowedTransitions` 가 따로 정한다(BACKORDERED → 취소만).
  *
  * **핵심 구분**(order-types.ts 헤더): SHIPPED/DELIVERED 는 **운영자가 못 바꾼다**.
  * 오직 배송 서비스의 return-leg(`ShippingStatusChanged`)가 구동하며 상세에 읽기
@@ -160,6 +162,13 @@ export const ORDER_STATES: OrderState[] = [
     terminal: false,
     operatorActionable: true,
     desc: '주문이 접수되어 결제를 기다리는 상태입니다. 결제가 끝나면 자동으로 확정됩니다. 운영자는 확정하거나 취소할 수 있습니다.',
+  },
+  {
+    name: 'BACKORDERED',
+    label: '재고부족 이월',
+    terminal: false,
+    operatorActionable: true,
+    desc: '결제는 끝났지만 재고가 모자라 확정을 미뤄 둔 상태입니다. 다시 입고되면 먼저 들어온 주문부터 자동으로 확정됩니다. 운영자는 취소만 할 수 있습니다.',
   },
   {
     name: 'CONFIRMED',
@@ -199,12 +208,11 @@ export const ORDER_STATES: OrderState[] = [
 ];
 
 /**
- * 결제 → 확정 흐름 + BACKORDERED 안내. 콘솔 주문 enum 이 노출하지 않는 백엔드
- * 상태의 존재를 설명한다.
+ * 결제 → 확정 흐름 + BACKORDERED 안내.
  */
 export const ORDER_LIFECYCLE_NOTE = {
   title: '결제가 끝나면 자동으로 확정됩니다 (재고부족 이월: BACKORDERED)',
-  body: '주문은 결제가 끝나야 확정됩니다. 결제가 승인되면 주문이 자동으로 확정(CONFIRMED)되고, 이때 재고를 확보합니다. 재고가 부족하면 주문은 재고부족 이월(BACKORDERED) 상태가 되어 재고를 차감하지 않고 기다립니다 — 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 이 상태는 취소할 수 있지만 콘솔 화면의 상태 목록에는 나타나지 않고, 조회로만 확인할 수 있습니다.',
+  body: '주문은 결제가 끝나야 확정됩니다. 결제가 승인되면 주문이 자동으로 확정(CONFIRMED)되고, 이때 재고를 확보합니다. 재고가 부족하면 주문은 재고부족 이월(BACKORDERED) 상태가 되어 재고를 차감하지 않고 기다립니다 — 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 이 상태의 주문은 주문 화면의 상태 필터와 개요의 주문 상태 막대에서 확인할 수 있고, 운영자는 취소할 수 있습니다.',
 } as const;
 
 // ───────────────────────── 결제 (Payment) ─────────────────────────
@@ -625,7 +633,7 @@ export const ECOMMERCE_GLOSSARY: GlossaryEntry[] = [
     key: 'backorder',
     term: '재고부족 이월 (BACKORDERED)',
     meaning:
-      '주문을 확정할 때 재고가 모자라 잠시 미뤄지는 상태입니다. 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 콘솔 상태 목록에는 없고 조회로만 보입니다.',
+      '주문을 확정할 때 재고가 모자라 잠시 미뤄지는 상태입니다. 다시 입고되면 먼저 들어온 주문부터 확정됩니다. 주문 화면의 상태 필터에서 찾을 수 있습니다.',
   },
   {
     key: 'assume-tenant',

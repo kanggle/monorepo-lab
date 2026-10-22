@@ -153,6 +153,10 @@ export const INVENTORY_EVENTS: InventoryEvent[] = [
 /**
  * 저재고(저재고) — **두 개의 다른 메커니즘**이며 임계값이 다르다. 가이드에서
  * 반드시 구분: 테이블 배지와 운영자 알림이 서로 불일치할 수 있다.
+ *
+ * 🔴 첫 항목의 «10» 은 지금 서버 사실(admin-service `InventoryProjectionService`
+ * 의 상수 `availableQty <= 10`)이다. `TASK-BE-644` 가 (가) «설정을 따르게 고침» 으로
+ * 결정되면 이 항목(threshold · desc)이 거짓이 되므로 그 티켓과 같은 PR 에서 고칠 것.
  */
 export interface LowStockMechanism {
   where: string;
