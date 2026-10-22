@@ -2705,7 +2705,7 @@ portfolio).
 - **Which address each leg uses.** A leg calls the domain through the **same
   base URL + path the domain's own console screen already uses**
   (§§ 2.4.1–2.4.10 — e.g. scm through `SCM_GATEWAY_BASE_URL` +
-  `/api/v1/inventory-visibility/snapshot`), and the route's `fetch` resolves it
+  `/api/v1/procurement/po`; finance's ledger read through `LEDGER_BASE_URL`), and the route's `fetch` resolves it
   through the demo backend resolver (`resolveBackendUrl`) at the call site,
   exactly like those clients do. Those addresses are the ones proven to reach
   the domains from where console-web actually runs, including Vercel
@@ -2874,22 +2874,35 @@ files and are **not redefined here**:
 
 | # | Card | Composed producer endpoint (the address the domain's own console screen uses) | Domain credential (§ 2.4.9 D4) | Producer spec § (authoritative) | Read content surfaced |
 |---|---|---|---|---|---|
-| 1 | accounts summary | `GET ${IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1&tenantId={activeTenant}` (page total snapshot) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` + `X-Tenant-Id` (header **and** `tenantId` query param — TASK-PC-FE-304: the producer's `AccountAdminController#search` resolves the scope tenant EXCLUSIVELY from the `tenantId` query param, `QueryTenantScopeGate` falling back to the operator's HOME tenant when it is absent; the header alone is not read by this endpoint) | IAM [`admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005) | total account count (snapshot, **of the active tenant** — this is the tenant's own + pool-member end-user accounts; it excludes `admin_operators`, so it is NOT a platform-wide or operator-inclusive count) |
-| 2 | wms inventory health | `GET ${WMS_ADMIN_BASE_URL}/dashboard/inventory` (default `http://wms.local/api/v1/admin/dashboard/inventory`, snapshot) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.1 Dashboard / Read-Model (already bound by § 2.4.5 / FE-007) | inventory snapshot **row** count |
-| 3 | scm procurement / inventory | `GET ${SCM_GATEWAY_BASE_URL}/api/v1/inventory-visibility/snapshot` (snapshot) — through the scm gateway, the same route the § 2.4.6 console screen uses (see scm-leg topology note below) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.6 verbatim) | scm [`gateway-public-routes.md`](../../../scm-platform/specs/contracts/http/gateway-public-routes.md) § *platform-console operator read consumer* (already bound by § 2.4.6 / FE-008) | inventory visibility snapshot (the producer-meta-warning S5 "Not for procurement decisions" MUST surface as a non-blocking hint, per § 2.4.6 invariant) |
-| 4 | finance balance health | `GET ${FINANCE_BASE_URL}/api/finance/accounts/{operatorDefaultAccountId}/balances` (single account) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.7 verbatim) | finance [`account-api.md`](../../../finance-platform/specs/contracts/http/account-api.md) § Balances (already bound by § 2.4.7 / FE-009) | balance snapshot for the operator's default account; **honest constraint** (per § 2.4.7) — finance v1 has no list/search GET → the account id comes from the operator profile (§ Option (a) activation); if absent → that card renders `forbidden / MISSING_PREREQUISITE` with **no** call (not a crash) |
-| 5 | erp masterdata snapshot | `GET ${ERP_BASE_URL}/api/erp/masterdata/departments?active=true&page=0&size=1` (page total snapshot, asOf=now implicit) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.8 verbatim) | erp [`masterdata-api.md`](../../../erp-platform/specs/contracts/http/masterdata-api.md) § Departments (already bound by § 2.4.8 / FE-010) | active department count (snapshot, asOf=now — E3 effective-dating implicit) |
-| 6 | ecommerce product snapshot | `GET ${ECOMMERCE_ADMIN_BASE_URL}/products?page=0&size=1` (default `http://ecommerce.local/api/admin/products`, page total snapshot) — routed **through** the ecommerce gateway (see ecommerce-leg topology note below) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` | ecommerce [`product-api.md`](../../../ecommerce-microservices-platform/specs/contracts/http/product-api.md) § `GET /api/admin/products` (operator-plane read, TASK-MONO-243) | tenant product count (snapshot — `totalElements`) |
+| 1 | locked accounts | `GET ${IAM_ADMIN_API_BASE}/api/admin/accounts?status=LOCKED&page=0&size=1&tenantId={activeTenant}` (page total) | RFC 8693 exchanged **operator** token (§ 2.6) — `getOperatorToken()` + `X-Tenant-Id` (header **and** `tenantId` query param — TASK-PC-FE-304: the producer's `AccountAdminController#search` resolves the scope tenant EXCLUSIVELY from the `tenantId` query param, `QueryTenantScopeGate` falling back to the operator's HOME tenant when it is absent; the header alone is not read by this endpoint) | IAM [`admin-api.md`](../../../iam-platform/specs/contracts/http/admin-api.md) § Accounts (already bound by § 2.4.1 / FE-002 + the composed-overview pattern of § 2.4.4 / FE-005; `status` filter = TASK-BE-475) | **account-level** `LOCKED` count of the active tenant (its own + pool-member end-user accounts; excludes `admin_operators`). A pool account locked out of one **site** (membership `LOCKED`, account `ACTIVE`) is **not** counted — the filter is `a.status`, not the membership status (`AccountJpaRepository` site query) |
+| 2 | unshipped orders | `GET ${WMS_ADMIN_BASE_URL}/dashboard/orders?status=RECEIVED&page=0&size=1` (default `http://wms.local/api/v1/admin/dashboard/orders`) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.5 verbatim) | wms [`admin-service-api.md`](../../../wms-platform/specs/contracts/http/admin-service-api.md) § 1.3 Orders (already bound by § 2.4.5 / FE-007) | read-model orders in `RECEIVED` = received and neither shipped nor cancelled (the projection folds the order lifecycle to `RECEIVED` / `SHIPPED` / `CANCELLED`). **Tenant-owned** dashboard (§ 1.0, ADR-MONO-065 D1): the native wms plane sees every row; a customer tenant sees only its own rows, so `0` for it is a real answer |
+| 3 | draft purchase orders | `GET ${SCM_GATEWAY_BASE_URL}/api/v1/procurement/po?status=DRAFT&page=0&size=1` — through the scm gateway, the same route the § 2.4.6 procurement screen uses (see scm-leg topology note below) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.6 verbatim) | scm [`procurement-api.md`](../../../scm-platform/specs/contracts/http/procurement-api.md) § `GET /po` (already bound by § 2.4.6 / FE-008) | POs in `DRAFT` (not yet submitted to a supplier) of the **caller's** tenant — the service scopes by the JWT `tenant_id` claim (`ActorClaims` → `ActorContext.tenantId()` → `poRepository.search(tenantId, …)`); there is no fixed tenant on this read |
+| 4 | open reconciliation discrepancies | `GET ${LEDGER_BASE_URL}/api/finance/ledger/reconciliation/discrepancies?status=OPEN&page=0&size=1` | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.7 verbatim) | finance [`reconciliation-api.md`](../../../finance-platform/specs/contracts/http/reconciliation-api.md) § discrepancy queue (already bound by § 2.4.7.1 / FE-075) | `OPEN` discrepancies of the caller's tenant (`meta.totalElements`). 🔵 **No operator prerequisite**: this read needs no default account, so the card is called for every operator (TASK-PC-FE-364 retired the `MISSING_PREREQUISITE` path on this route) |
+| 5 | my approval inbox | `GET ${ERP_BASE_URL}/api/erp/approval/inbox?page=0&size=1` | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` (per § 2.4.8 verbatim) | erp [`approval-api.md`](../../../erp-platform/specs/contracts/http/approval-api.md) § `GET /inbox` (already bound by § 2.4.8 / FE-051) | requests whose **current** stage's approver is the caller's linked employee, status ∈ {`SUBMITTED`, `IN_REVIEW`} (`meta.totalElements`). 🔴 **`meta.actorEmployeeId` absent = the caller's account is linked to no employee** (approval-api § v2.4): the page is empty but that is «not linked», never «nothing waiting» — the card renders a distinct state and **never `0`** for it |
+| 6 | orders to ship | `GET ${ECOMMERCE_ADMIN_BASE_URL}/orders?status=CONFIRMED&page=0&size=1` (default `http://ecommerce.local/api/admin/orders`) — routed **through** the ecommerce gateway (see ecommerce-leg topology note below) | **domain-facing IAM OIDC access token** — `getDomainFacingToken()` | ecommerce [`order-api.md`](../../../ecommerce-microservices-platform/specs/contracts/http/order-api.md) § `GET /api/admin/orders` (already bound by § 2.4.10 / FE-083) | orders in `CONFIRMED` (payment confirmed, shipping not started) of the tenant (`totalElements`). `STUCK_RECOVERY_FAILED` is **not** used — no code path records it today, so it would always read 0 |
 
-**Producer immutability**: the first 5 producer contracts above are
-**byte-unchanged spec-side and impl-side** (ADR-MONO-017 § 3.3 sixth
-confirmation). The 6th (ecommerce) leg, TASK-MONO-243, adds a **net-new**
-operator-plane read endpoint (`GET /api/admin/products`) to the ecommerce
-product-service — it does **not** retrofit an existing producer, and no
-`/summary` / `/dashboard-card` aggregating endpoint is added to any producer
-(D3.B rejection — the new read mirrors the public `GET /api/products` query
-path exactly, on the operator plane). The composer calls the existing GETs
-verbatim.
+**Producer immutability**: every producer contract above is **byte-unchanged
+spec-side and impl-side** (ADR-MONO-017 § 3.3). Each row is an **existing**
+list read that the domain's own console screen already calls, asked with
+`size=1` so only its page total is used; no `/summary` / `/dashboard-card`
+aggregating endpoint is added to any producer (D3.B rejection). The composer
+calls the existing GETs verbatim.
+
+> **Card metrics swapped one-for-one (TASK-PC-FE-364, 2026-10-22 UTC — owner
+> decision 2026-10-22 KST).** Before 364 the six cards counted rows the
+> operator could not act on — accounts · inventory snapshot rows · scm
+> snapshot rows · «balance available» for the default account · active
+> departments · products. Each leg was **replaced**, not added to: still **one
+> call per card**, still six calls in total, and the same credential per leg
+> (§ 2.4.9 table). That is the «one call per card» rule below (owner,
+> `TASK-PC-FE-296`) applied unchanged — 364 changed which call, never how many.
+> What did change per operator is the **business permission** each producer
+> asks for (ADR-MONO-083): the scm, finance, erp and ecommerce reads are gated
+> on a different role than the reads they replaced, so an operator holding a
+> narrow permission set can see a card turn `forbidden` that used to be `ok`,
+> or the reverse. The per-set table is recorded in `TASK-PC-FE-364`
+> (§ 권한별 «권한 없음» 변화); a `403` still renders per card as `forbidden`,
+> exactly as before.
 
 > **accounts-leg tenant scoping fix (TASK-PC-FE-304, 2026-10-04 — additive,
 > card 1 query string only).** `AccountAdminController#search` resolves the
@@ -2908,7 +2921,11 @@ verbatim.
 > consult it) — this is additive, not a header removal.
 
 > **scm-leg topology (ADR-MONO-081 «Which address each leg uses»; supersedes the
-> TASK-MONO-162 direct-to-producer reading).** Card 3 goes **through the scm
+> TASK-MONO-162 direct-to-producer reading).** 🔵 Since TASK-PC-FE-364 card 3
+> reads `/api/v1/procurement/po` through the same scm gateway, the route the
+> § 2.4.6 procurement screen uses; the paragraph below is the history of the
+> previous inventory-visibility leg and its reasoning holds for this one too
+> (gateway, never the docker-only service address). Card 3 went **through the scm
 > gateway** (`/api/v1/inventory-visibility/snapshot`), the route § 2.4.6 and
 > `gateway-public-routes.md` already bind for the console. The former BFF called
 > the inventory-visibility service directly (`/api/inventory-visibility/snapshot`)
@@ -2923,6 +2940,12 @@ verbatim.
 > gateway route is a pass-through to that service).
 
 > **ecommerce-leg topology (TASK-MONO-243 — ADR-MONO-030 Step 4 facet a-후속-2).**
+> 🔵 Since TASK-PC-FE-364 card 6 reads `/api/admin/orders` (order-service) through
+> the same gateway; the gateway admits on the derived entry role and
+> **order-service re-checks `ECOMMERCE_ORDER_READ ∨ _WRITE`** (or the platform
+> wildcard tenant `*`) itself (`OrderOperatorAccess`, TASK-MONO-795) — the
+> «gateway is the single admission point» wording below predates that. The
+> rest of this note is the product-leg history.
 > Card 6 routes **through the ecommerce gateway** (`ecommerce.local`, the same
 > gateway origin the § 2.4.9.2 health leg uses and the same
 > `ECOMMERCE_ADMIN_BASE_URL` the § 2.4.10 product screens use). Rationale:
@@ -2956,15 +2979,20 @@ verbatim.
 {
   "asOf": "2026-05-20T10:30:00Z",
   "cards": [
-    { "domain": "iam",       "status": "ok",         "data": { "content": [ … ], "totalElements": 12345, "page": 0, "size": 1, "totalPages": 12345 } },
-    { "domain": "wms",       "status": "ok",         "data": { "content": [ … ], "page": { "number": 0, "size": 20, "totalElements": 438, "totalPages": 22 }, "sort": "lastEventAt,desc" } },
+    { "domain": "iam",       "status": "ok",         "data": { "content": [ … ], "totalElements": 3, "page": 0, "size": 1, "totalPages": 3 } },
+    { "domain": "wms",       "status": "ok",         "data": { "content": [ … ], "page": { "number": 0, "size": 1, "totalElements": 14, "totalPages": 14 }, "sort": "receivedAt,desc" } },
     { "domain": "scm",       "status": "degraded",   "reason": "DOWNSTREAM_ERROR" },
-    { "domain": "finance",   "status": "forbidden",  "reason": "TENANT_FORBIDDEN" },
-    { "domain": "erp",       "status": "ok",         "data": { "data": [ … ], "meta": { "page": 0, "size": 1, "totalElements": 87, "totalPages": 87, "timestamp": "…" } } },
-    { "domain": "ecommerce", "status": "ok",         "data": { "content": [ … ], "page": 0, "size": 1, "totalElements": 42, "totalPages": 42 } }
+    { "domain": "finance",   "status": "forbidden",  "reason": "PERMISSION_DENIED" },
+    { "domain": "erp",       "status": "ok",         "data": { "data": [ … ], "meta": { "page": 0, "size": 1, "totalElements": 2, "totalPages": 2, "timestamp": "…", "actorEmployeeId": "emp-…" } } },
+    { "domain": "ecommerce", "status": "ok",         "data": { "content": [ … ], "page": 0, "size": 1, "totalElements": 5 } }
   ]
 }
 ```
+
+> 🔵 Rewritten for TASK-PC-FE-364 from the six producers' controllers/DTOs
+> (the bodies in the fixture file below), following the rule in the next
+> paragraph. `ecommerce` has **no** `totalPages` (`AdminOrderListResponse`
+> carries `content, page, size, totalElements` only).
 
 > 🔴🔴 **This example was wrong until TASK-PC-FE-295, and the wrongness shipped.**
 > It previously showed `data: { "accountCount": 12345 }` for iam,
@@ -2984,7 +3012,7 @@ verbatim.
 - `cards[i].status` ∈ `{ "ok", "degraded", "forbidden" }`:
   - `ok` → `data` is the card's composed payload (domain-specific shape, declared per row in the producer endpoint above).
   - `degraded` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }` (`CIRCUIT_OPEN` stays in the vocabulary but is never produced — § 2.4.9 Resilience); `data` absent. Card renders "data unavailable, retry pending" placeholder.
-  - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }` (last covers e.g. finance's `operatorDefaultAccountId` absent); `data` absent. Card renders "not available to your role / tenant" placeholder.
+  - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }`; `data` absent. Card renders "not available to your role / tenant" placeholder. `MISSING_PREREQUISITE` stays in the vocabulary but this route **no longer produces it** (TASK-PC-FE-364 — it used to mean «finance `operatorDefaultAccountId` absent», and the finance card no longer needs one); consumers must not break on its absence or its presence.
 ##### `ok` card `data` shapes per leg (TASK-PC-FE-295)
 
 `data` on an `ok` card is **the producer's response body, verbatim** — the
@@ -3004,18 +3032,29 @@ cards were blank on screen.
 
 | # | Card | Producer body (the leg's `data`) | Field the card surfaces |
 |---|---|---|---|
-| 1 | iam | `{ content[], totalElements, page, size, totalPages }` | `totalElements` — account count |
-| 2 | wms | `{ content[], page: { number, size, totalElements, totalPages }, sort }` | `page.totalElements` — inventory snapshot **row** count |
-| 3 | scm | `{ data: { content[], page, size, totalElements, totalPages }, meta: { timestamp, warning, staleness } }` | `data.totalElements` — snapshot **row** count; `meta.warning` — the S5 hint (§ 2.4.6 invariant) |
-| 4 | finance | `{ data: [ { currency, ledger, available, held } ], meta }` — one row per currency, every money field a **minor-units string** (F5) | `data[]` non-empty ⇒ «잔액 조회 가능»; the currency chip only when there is exactly one row |
-| 5 | erp | `{ data: [], meta: { page, size, totalElements, totalPages, timestamp } }` | `meta.totalElements` — active department count |
-| 6 | ecommerce | `{ content[], page, size, totalElements, totalPages }` | `totalElements` — tenant product count |
+| 1 | iam | `{ content[], totalElements, page, size, totalPages }` (`AccountServiceClient.AccountSearchResponse`) | `totalElements` — account-level `LOCKED` count |
+| 2 | wms | `{ content[ OrderSummaryResponse ], page: { number, size, totalElements, totalPages }, sort }` (`PageResponse`) | `page.totalElements` — `RECEIVED` (unshipped) order count |
+| 3 | scm | `{ data: { content[ PurchaseOrderResponse ], page, size, totalElements, totalPages }, meta: { timestamp } }` (`ApiEnvelope<PageResponse>`) | `data.totalElements` — `DRAFT` PO count |
+| 4 | finance | `{ data: [ DiscrepancyResponse ], meta: { page, size, totalElements, totalPages, timestamp } }` — every money field (`expectedMinor`, `actualMinor`) a **minor-units string** (F5) | `meta.totalElements` — `OPEN` discrepancy count. The card shows **only the count**; no amount is read or rendered |
+| 5 | erp | `{ data: [ ApprovalSummaryView ], meta: { page, size, totalElements, totalPages, timestamp, actorEmployeeId? } }` (`ApiEnvelope.ofList`) | `meta.totalElements` — my pending approvals, **only when `meta.actorEmployeeId` is present**; absent ⇒ the «직원 연결 없음» state (never `0`) |
+| 6 | ecommerce | `{ content[ AdminOrderSummaryItem ], page, size, totalElements }` (`AdminOrderListResponse` — no `totalPages`) | `totalElements` — `CONFIRMED` order count |
 
-🔴 **Two cards are labelled «행 수», and that is the honest reading.** The wms
-and scm producers answer with **one page** of rows. A sum over that page
-(«총 재고») or a distinct-node count from it («노드 수») would present a
-page-local figure as a whole-set total, so the cards count rows — which is
-exactly what a page total can answer — and say so.
+🔵 **Each card links to the screen where that work is done** (TASK-PC-FE-364):
+iam → `/accounts`, wms → `/wms/outbound`, scm → `/scm/procurement`, finance →
+`/ledger`, erp → `/erp/approval`, ecommerce → `/ecommerce/orders`. 🔴 The links
+carry **no filter parameter** on purpose: none of those screens seeds its
+status filter from the URL today, and a `?status=LOCKED` the destination drops
+would land on the unfiltered list with nothing reporting it (the
+`TASK-PC-FE-296` lesson below). A filtered link needs the destination to honour
+the param first — a separate change. Zero calls either way.
+
+> **History (TASK-PC-FE-295 → 364).** Until 364 two cards were labelled
+> «행 수» (wms inventory snapshot rows, scm visibility snapshot rows) because a
+> page total of one page of rows can only honestly answer «how many rows». 364
+> replaced both legs with filtered list reads whose page total *is* the business
+> figure, so neither card counts rows any more. The same rule still binds:
+> never sum or de-duplicate one page and present the result as a whole-set
+> total.
 
 🟢 **The wms alert count is absent BY DECISION — this is settled, not pending**
 (owner, 2026-09-22, `TASK-PC-FE-296` AC-1 ⓒ). It needs a second query
@@ -3049,11 +3088,18 @@ row in the producer table above — not a rendering fix.
 param but the **screen dropped it**, so such a link would have landed on the
 unfiltered list with nothing reporting an error.
 
-🔵 **Finance multi-currency**: the balances body carries one row per currency
-and no "account currency" field, so a multi-currency account gets the
-availability statement without a currency chip — picking whichever row came
-first would present a guess as a fact. An **empty** `data[]` is the one honest
-«잔액 정보 없음».
+> 🔵 **TASK-PC-FE-364 — what the decision above means now.** The wms card's
+> number became **미출고 주문** (`dashboard/orders?status=RECEIVED`), replacing
+> the 재고 행 수 call one-for-one — still one call. The reasoning above is
+> unchanged and still decides the alert count: a low-stock number would be a
+> second call on the wms leg. The low-stock **link** stays on the wms card
+> (zero calls), next to the card's link to `/wms/outbound`.
+
+> **History — finance multi-currency (until TASK-PC-FE-364).** The balances body
+> carried one row per currency and no "account currency" field, so a
+> multi-currency account got the availability statement without a currency
+> chip. 364 replaced that leg with the discrepancy queue (count only), so the
+> card reads no balance at all.
 
 - **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 6 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
 
@@ -3099,12 +3145,22 @@ token), and for the cross-leg `401`, the route answers the console's standard
 Per leg: one `console_composition_leg` log line with `route = "operator-overview"`,
 `domain` ∈ `{iam,wms,scm,finance,erp,ecommerce}`, `status` ∈
 `{ok,degraded,forbidden,unauthorized}` and the card `reason`
-(`TIMEOUT`, `DOWNSTREAM_ERROR`, `TENANT_FORBIDDEN`, `PERMISSION_DENIED`,
-`MISSING_PREREQUISITE`) — the finance leg decided without a call still logs its
-line. One `console.composition.leg` span per leg with
+(`TIMEOUT`, `DOWNSTREAM_ERROR`, `TENANT_FORBIDDEN`, `PERMISSION_DENIED`). Since
+TASK-PC-FE-364 every leg is a real call (no leg is decided up front), so
+`MISSING_PREREQUISITE` no longer appears on this route's lines. One
+`console.composition.leg` span per leg with
 `composition.route = "operator-overview"`.
 
-##### Finance card prerequisite — `operatorDefaultAccountId`
+##### Finance card prerequisite — `operatorDefaultAccountId` (history — this route no longer reads it)
+
+> 🔵 **TASK-PC-FE-364 retired this prerequisite on this route.** The finance
+> card now reads the reconciliation discrepancy queue (producer table row 4),
+> which needs no account id, so the composition no longer calls
+> `getFinanceDefaultAccountId()` and no leg is decided as `MISSING_PREREQUISITE`.
+> The value itself, the registry wiring and the self-serve profile field are
+> **unchanged** — the `/finance` overview (§ 2.4.7) still reads the default
+> account. The text below records how this route used it from TASK-PC-FE-011 to
+> TASK-PC-FE-364.
 
 Two paths, both first-class:
 
