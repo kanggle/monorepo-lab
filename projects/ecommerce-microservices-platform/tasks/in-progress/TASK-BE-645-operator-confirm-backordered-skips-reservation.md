@@ -99,3 +99,19 @@ backend
 **④ 이미 운영자가 백오더를 확정한 데이터** — 리포 안에서는 **없다고 판정할 근거만 있다**: 데모 시드 `infra/demo/seed/seed-ecommerce.sh:63,347-359` 는 결제 → 사가 확정만 쓰고 `/api/admin/orders/{id}/status` 를 확정에 쓰지 않으며, 백오더 자체를 시드 실패로 본다(`seed-wms.sh:569`). order-service 마이그레이션·시드에 `BACKORDERED` 를 넣는 SQL 은 0건(`*.sql` 검색, product-service `V16` 주석뿐). ⚪ **라이브 DB 는 잴 수 없었다** — 데모 창 밖이고, 365 이전 콘솔이 백오더에 «확정» 을 냈는지에 따라 기존 행이 있을 수 있다. 조회 쿼리(다음 데모 창): `SELECT order_id, updated_at FROM orders WHERE status='CONFIRMED'` 중 product `stock_reservations.status='BACKORDERED'` 인 주문 — 두 DB 를 맞대야 한다.
 
 **곁 발견 (이 티켓 범위 밖 — 별도 티켓 필요).** 같은 운영자 엔드포인트의 **취소**도 `OrderCancelled` 를 내지 않는다(`AdminOrderStatusService.java:35` · 발행자 없음; `publishOrderCancelled` 를 부르는 곳은 `OperatorOrderCancellationService`(내부 API) 등 5곳이고 이 서비스는 아니다). 이벤트 계약 `order-events.md:218-219` 는 «운영자 취소 → `OrderCancelled` → 환불 fan-out» 이라 적는다. 결과: 콘솔(`console-web/.../orders-api.ts:155` 가 이 엔드포인트를 쓴다)이 백오더 주문을 취소하면 환불이 안 나가고, product 예약이 `BACKORDERED` 로 남아 다음 재입고에서 재고를 차감 → `ORDER_RESERVED` → order-service `confirm` 이 `CANCELLED` 에서 `InvalidOrderException`(`Order.java:214-215`) 으로 소비 실패. 이 티켓은 Scope 대로 «백오더 → 취소 = 200» 을 유지하고 계약도 그 이상을 약속하지 않게만 적는다.
+
+## 구현 (2026-10-22 UTC · Opus)
+
+**고른 수선 — 운영자 서비스에서 막는다 (도메인 `confirm` 은 그대로).** 이유: AC-0 ② 에서 `BACKORDERED → CONFIRMED` 를 정당하게 쓰는 호출자는 `OrderConfirmationService` 하나뿐이고, 잘못 쓰는 호출자도 `AdminOrderStatusService` 하나뿐이다. 도메인을 `confirmAfterPayment`·`confirmAfterReReservation` 으로 나누면 사가 쪽 호출자를 바꿔야 해서(Failure Scenario 1 의 위험면이 넓어진다) «사가 경로는 그대로» 를 코드로 보장하기 어렵다. 운영자 서비스의 한 갈래만 바꾸면 사가 경로는 diff 에 등장하지 않는다. 오류는 기존 어휘 `InvalidOrderException` → `400 INVALID_ORDER_REQUEST`(`GlobalExceptionHandler.java:109-113`) — 이미 `SHIPPED → CONFIRMED` 가 같은 예외·같은 코드로 거부된다(`AdminOrderStatusServiceTest` 기존 시험).
+
+경합(Edge Case 1): 운영자 요청이 `BACKORDERED` 를 읽으면 무조건 400 이고 아무것도 쓰지 않는다 — 재예약 쪽이 이긴다. 재예약이 먼저 커밋됐다면 운영자는 `CONFIRMED` 를 읽고 기존 멱등 no-op(200). 둘이 같은 행을 쓰는 경로는 남지 않는다. Edge Case 2(이미 `CONFIRMED`) = 기존 동작 유지, 시험으로 고정.
+
+**바뀐 파일**
+- 계약(먼저, 별도 커밋 `a650ade75`): `specs/contracts/http/order-api.md` — 운영자 상태 변경 절에 «`BACKORDERED` 에서는 `CANCELLED` 만», `BACKORDERED → CONFIRMED` = `400 INVALID_ORDER_REQUEST`, `CONFIRMED → CONFIRMED` 멱등. 상태 값 표에 `BACKORDERED` 행, 오류 표에 이미 있던 동작 `422 ORDER_CANNOT_BE_CANCELLED`, Notes 의 취소 가능 상태를 `isCancellable` 과 일치.
+- `apps/order-service/src/main/java/com/example/order/application/service/AdminOrderStatusService.java` — `CONFIRMED` 갈래에서 이전 상태가 `BACKORDERED` 면 `InvalidOrderException`(저장 없음).
+- 시험: `AdminOrderStatusServiceTest`(+3: 백오더→확정 거부·저장 없음·상태/`updatedAt` 불변 · 백오더→취소 성공 · 확정→확정 멱등), `OrderConfirmationServiceTest`(+1: 백오더 주문이 사가로 확정되고 `OrderConfirmed` 발행 — 이 경로의 시험이 **없었다**), `AdminOrderControllerSliceTest`(+1: 400 `INVALID_ORDER_REQUEST` · `message` · `timestamp` 형태). 대기→확정(운영자) 기존 시험 그대로 초록.
+
+**시험 결과**
+- 로컬: `./gradlew :projects:ecommerce-microservices-platform:apps:order-service:test` rc=0 — XML 63개 · **445 tests · 0 failures · 0 errors · 0 skipped**. 대상 넷: AdminOrderStatusServiceTest 14 · OrderConfirmationServiceTest 4 · AdminOrderControllerSliceTest 9 · OrderTest 42, 전부 통과.
+- ⚪ bite(가드를 끄고 새 시험이 빨개지는지) **측정 못 함** — 가드를 임시로 무력화하는 편집이 자동 모드 분류기에 막혔다. 논리 근거만: 가드가 없으면 `Order.confirm` 이 `BACKORDERED` 에서 성공한다는 것을 `OrderTest`(«BACKORDERED 상태에서 confirm 호출 시 CONFIRMED로 전이») 가 이미 증명하므로 `assertThatThrownBy` 가 실패한다.
+- ⚪ CI 전용: `integrationTest`(Testcontainers) 는 로컬에서 돌리지 않았다 — 이 경로를 타는 IT 는 없다(`src/test` 에서 `admin/orders/.*/status` 를 부르는 파일은 위 슬라이스 둘 · 서비스 단위 · 데모 시드 시험뿐). CI 의 ecommerce 잡 결과는 PR 후 — AC-1 은 그때 닫는다.
