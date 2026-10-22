@@ -8,7 +8,7 @@ TASK-PC-FE-360
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -51,8 +51,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④ 를 file:line 과 함께. (아래 «AC-0 측정» · 계약 선수정 별도 커밋)
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(로컬, 스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(로컬, 스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
 
 # Related Specs
@@ -95,7 +95,7 @@ frontend
 
 **계약 선(先)수정** — `projects/platform-console/specs/contracts/console-integration-contract.md` § 2.4.10.6(이커머스 개요: «Shipping-status distribution» 항목 추가), § 2.4.8.1(ERP 개요: «결재 상태 분포» 항목 + 독립 저하 문장에 6 호출 반영). 코드 앞 별도 커밋.
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 경로는 `projects/platform-console/apps/console-web/src/features/` 기준. 막대 자체는 `aria-hidden` · 글자 없음이라 새 aria-label 은 **없다**. 상태 이름(준비중 · 발송 · 배송중 · 배송완료 / 작성중 · 상신됨 · 검토중 · 승인됨 · 반려됨 · 회수됨)은 기존 목록 화면 라벨(`shipping-labels.ts:11-16` · `approval-common.tsx:19-26`)을 **재사용**한 것이라 새 문구가 아니다.
 
@@ -128,3 +128,10 @@ frontend
 - vitest 전체(`--maxWorkers=4 --minWorkers=2`): **419 파일 · 5087 시험 전부 통과 rc=0**(최종 재실행). 1회차에서는 `tests/unit/features/tenants/TenantsScreen.test.tsx` 2건이 부하 타임아웃으로 실패했으나(내 변경과 무관 — `tenant-confirm-reason` 폼) 단독 재실행 통과, 전체 재실행에서 사라졌다.
 - 가드(`git add -A` 뒤, 워크트리 루트): `check-client-graph-server-only.mjs` rc=0 (console-web `client roots=326 reached=486 hits=0`) · `check-client-graph-backend-origins.mjs` rc=0 (`hits=0`) · `check-index-queue-drift.sh` rc=0 · `check-task-id-collision.sh` rc=0 · `check-walkthrough-ledger-drift.sh` rc=0.
 - **AC-2 는 체크하지 않음** — 머지 전 브랜치 nightly 콘솔 잡이 아직 안 돌았다. AC-1(소유자 문구 승인) · AC-3(배포 · 익명 샘플 확인) 도 열려 있다.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-21 UTC · 분석=Opus 5.5)
+
+- 새 문구 5개 · ERP 개요 호출 7 → 13 = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전) → AC-1 닫힘.
+- `TASK-PC-FE-359`(같은 `tasks/INDEX.md` 구역) 위에 쌓아 시험 — 합친 트리 vitest 422 files · 5116 tests · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋 rc=0. 브랜치 nightly run `39720075716`(head `31ead2097`, 359+360 합친 트리) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success → AC-2 닫힘.
+- 359 머지(#4455 `14acf1440`) 뒤 이 두 커밋만 `main` 위로 옮김(`git rebase --onto`) — `INDEX.md` in-progress 칸 충돌 1곳(359 는 review 로 갔으므로 360 행만). `git diff 31ead2097 HEAD -- apps specs` = 0 ⇒ nightly 가 잰 코드와 같다(다른 것은 티켓 파일뿐).
+- 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 화면 — `/ecommerce` 배송 상태 · `/erp` 결재 상태).
