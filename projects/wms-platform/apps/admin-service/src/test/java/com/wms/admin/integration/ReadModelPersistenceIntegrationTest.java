@@ -372,7 +372,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     }
 
     @Test
-    void throughputInboundDaily_nativeUpsertIncrement_isAtomicAndLwwGuarded() {
+    void throughputInboundDaily_nativeUpsertIncrement_isAtomicAndCountsLateArrivals() {
         UUID warehouseId = UUID.randomUUID();
         LocalDate date = LocalDate.of(2026, 5, 10);
 
@@ -395,16 +395,21 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         assertThat(afterUpdate.getPutawayCount()).isEqualTo(2);
         assertThat(afterUpdate.getQtyReceived()).isEqualTo(75);
 
-        // Third call: stale event (occurredAt < existing last_event_at) — WHERE
-        // guard skips the UPDATE; affected = 0; row unchanged.
-        int staleAffected = throughputInboundRepo.upsertIncrement(
+        // Third call: earlier occurredAt than the row's last_event_at.
+        // 🔴 TASK-BE-643 — until 2026-10-22 this cell asserted affected = 0 and
+        // the row unchanged (the WHERE last_event_at < EXCLUDED guard), and it
+        // was green in CI: that green WAS the defect, pinned. A counter row's
+        // events are different occurrences (other ASNs), so a late arrival is
+        // counted; last_event_at stays at the maximum.
+        int lateAffected = throughputInboundRepo.upsertIncrement(
                 date, warehouseId, 999, NOW.minusSeconds(60));
-        assertThat(staleAffected).isEqualTo(0);
+        assertThat(lateAffected).isEqualTo(1);
 
-        var afterStale = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+        var afterLate = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
                 .orElseThrow();
-        assertThat(afterStale.getPutawayCount()).isEqualTo(2);
-        assertThat(afterStale.getQtyReceived()).isEqualTo(75);
+        assertThat(afterLate.getPutawayCount()).isEqualTo(3);
+        assertThat(afterLate.getQtyReceived()).isEqualTo(75 + 999);
+        assertThat(afterLate.getLastEventAt()).isEqualTo(NOW.plusSeconds(60));
     }
 
     // =========================================================================

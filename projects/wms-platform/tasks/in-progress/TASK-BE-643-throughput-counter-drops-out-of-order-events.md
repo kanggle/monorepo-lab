@@ -65,9 +65,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — ①~④ 를 file:line · IT 출력과 함께 기록. ① 이 red 가 아니면(조건이 실제로는 안 무는 경로가 있으면) STOP 하고 이유를 적는다.
-- [ ] **AC-1** — 스펙 두 곳 갱신(이전 근거 보존) → 구현.
-- [ ] **AC-2** — 시험: 순서 뒤바뀜 · 같은 시각 두 건 → 2 · 같은 `event_id` 두 번 → 1 · 출고 동일 · 기존 IT 비회귀(CI 의 wms 잡).
+- [x] **AC-0** — ①~④ 를 file:line · IT 출력과 함께 기록. ① 이 red 가 아니면(조건이 실제로는 안 무는 경로가 있으면) STOP 하고 이유를 적는다. — 아래 § AC-0. ① 의 «조건이 문다» 는 CI 런으로 확인(기존 시험이 버림을 단언한 채 초록), 새 역순 시험의 red 자체는 로컬 Docker 부재로 **관측 안 됨**. ③ ⚪(데모 창 필요).
+- [x] **AC-1** — 스펙 두 곳 갱신(이전 근거 보존) → 구현. — § 구현.
+- [ ] **AC-2** — 시험: 순서 뒤바뀜 · 같은 시각 두 건 → 2 · 같은 `event_id` 두 번 → 1 · 출고 동일 · 기존 IT 비회귀(CI 의 wms 잡). — 🔵 시험은 썼고 단위 시험은 로컬 초록. 🔴 저장소 · Kafka IT(역순 · 같은 시각 · 출고)는 **CI 에서만** 돈다 — 그 초록을 보기 전에는 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브: 데모 시드(`infra/demo/seed/seed-wms.sh` — WH-MAIN 적치 86건)의 `putaway_count` 합이 적치 완료 이벤트 수와 같은가(다음 데모 창).
 
 # Related Specs
@@ -125,3 +125,42 @@ backend
 - 엔티티의 `increment()`(`ThroughputInboundDailyEntity.java:58` · `ThroughputOutboundDailyEntity.java:55`)는 main 코드에서 호출자 0(시험 `throughputInboundDaily_compositePk_increment` 만 쓴다) — 경로 아님.
 - 다른 읽기 모델(`*_summary` · `*_snapshot` · `*_ref`)은 모두 «행 = 한 집계체의 현재 상태» 라 LWW 가 맞다. 범위 밖.
 - 🔵 **스펙 안의 충돌도 하나 있었다**: `database-design.md` § 13(`:745-760`)은 이미 «`WHERE` 없음 + `last_event_at = GREATEST(...)` · dedupe 가 멱등을 맡는다» 로 적혀 있었고, `idempotency.md` § 2.6 과 `admin-events.md:475-480` 만 조건을 적었다. 구현은 후자를 따랐다. 이 티켓은 전자 쪽으로 맞춘다.
+
+## 구현 (2026-10-22 UTC · Opus)
+
+커밋 셋 — 시험(red 여야 할 칸) → 스펙 → 구현 순서. push · PR 은 하지 않았다.
+
+### 스펙 (AC-1)
+
+- `specs/services/admin-service/idempotency.md`
+  - § 2.6: `WHERE ... last_event_at < EXCLUDED.last_event_at` 삭제 · `last_event_at = GREATEST(row, EXCLUDED)`. «누계는 `event_id` 중복 제거만으로 멱등 · `last_event_at` 은 기록용 최대값 · 누계 경로는 `IGNORED_DUPLICATE_LATE` 를 만들지 않는다». 새 절 «Why there is no `last_event_at` guard» 에 **이전 SQL 과 이전 근거 문장을 인용으로 보존**하고 왜 틀렸는지(행 = 창고 × 하루, 이벤트 = 서로 다른 ASN · 주문, 파티션 키 `asnId`/`orderId`, `inbound-events.md:400`) 적었다.
+  - § 2.2 · § 2.3 (2a 에 누계 분기) · § 2.5 제목에서 `throughput_*` 제외(이전 제목 기록) · § 3 결정표(상태 덮어쓰기 행 / 누계 행 분리) · § 6 시험 7a 신설(«반드시 역순으로 보낸다»).
+  - § 3.1 (Edge Case 2): dedupe 보존(30일) 뒤 재생은 누계를 **다시 올린다**. 예전 조건은 그날 더 늦은 이벤트가 있었을 때만 **일부** 막았을 뿐 재생 방어가 아니었다. 규칙: 30일 넘은 이벤트를 라이브 누계에 재생하지 않는다 · 안전한 재생은 재구축(`runbooks/read-model-rebuild.md` § Step 3 — 누계 **와** `admin_event_dedupe` 를 함께 비우고 재생)뿐. 재구축 재생이 오히려 가장 순서가 뒤섞인 상황이라 옛 조건 아래선 재구축이 덜 셀 수 있었다(SQL 로부터의 추론 — 측정 아님). 이전 문단은 인용으로 보존.
+- `specs/contracts/events/admin-events.md` § Projection Idempotency Pattern: 2a 를 «누계 — 항상 증가» / «상태 덮어쓰기 — 기존 LWW» 로 나누고, 이전 문장(«upsert / append / **increment**») 과 바꾼 이유를 인용 블록으로 남겼다.
+- `database-design.md` § 13 은 이미 목표 모양이라 손대지 않았다. 마이그레이션 `V2__init_readmodel.sql` 의 주석도 손대지 않았다(적용된 마이그레이션의 체크섬이 바뀐다).
+
+### 코드
+
+- `apps/admin-service/src/main/java/com/wms/admin/readmodel/throughput/ThroughputInboundDailyRepository.java` · `ThroughputOutboundDailyRepository.java` — `WHERE` 삭제, `last_event_at = GREATEST(...)`. javadoc 에 «다시 넣지 말 것» 과 이유.
+- `apps/admin-service/src/main/java/com/wms/admin/application/projection/InboundProjectionService.java` — `onPutawayCompleted` 의 «0행 → `IGNORED_DUPLICATE_LATE`» 분기 삭제, 항상 `APPLIED`(출고와 같은 모양). 이제 누계 경로에서 `markStale` · `recordDropped("stale")` 가 나오지 않는다.
+- `OutboundProjectionService.java` — 주석만(호출은 원래 반환값을 버리고 `APPLIED` 였다).
+- `ThroughputInboundDailyEntity.java` — javadoc «LWW guarded» 정정.
+- 다른 읽기 모델(`*_summary` · `*_snapshot` · `*_ref`)은 손대지 않았다.
+
+### 시험
+
+| 시험 | 종류 | 로컬 | 비고 |
+|---|---|---|---|
+| `InboundProjectionServiceTest.putawayCompleted_reverseOrderAcrossAsns_bothAppliedNeverStale` (옛 `..._zeroAffectedRowsMappedToIgnoredDuplicateLate` 대체) | 단위 | ✅ | 🔴 저장소가 mock 이라 **SQL 의 버림은 못 문다** — 지키는 것은 «누계 경로에 stale outcome 이 없다» 뿐 |
+| `InboundProjectionServiceTest.putawayCompleted_sameEventIdTwice_incrementsOnce` | 단위 | ✅ | dedupe 대조군 |
+| `OutboundProjectionServiceTest.shippingConfirmed_sameEventIdTwice_incrementsOnce` | 단위 | ✅ | dedupe 대조군 |
+| `ReadModelPersistenceIntegrationTest.throughput{Inbound,Outbound}Daily_{reverseOrderArrival,equalOccurredAt}_countsBothEvents` (4) | IT (Postgres) | ⚪ CI 전용 | **이것이 결함을 무는 칸** — 실제 SQL |
+| `ReadModelPersistenceIntegrationTest.throughputInboundDaily_nativeUpsertIncrement_isAtomicAndCountsLateArrivals` (옛 `..._isAtomicAndLwwGuarded`) | IT | ⚪ CI 전용 | 🔴 옛 이름의 셋째 칸은 **결함을 단언하고 초록**이었다 — 이제 3 · 75+999 · `last_event_at` 은 최대값 유지 |
+| `InboundProjectionKafkaIT.putawayCompleted_reverseOrderAcrossAsns_countsBoth` · `putawayCompleted_sameEventIdTwice_countsOnce` · `OutboundProjectionKafkaIT.shippingConfirmed_reverseOrderAcrossShipments_countsBoth` | IT (Kafka + Postgres) | ⚪ CI 전용 | 소비 경로 전체, 서로 다른 키 · 늦은 것 먼저 |
+
+- 로컬: `./gradlew :projects:wms-platform:apps:admin-service:test` → **rc=0**, 결과 XML 56 파일 · `<testcase` 326 · `<failure`/`<error` 0 (`InboundProjectionServiceTest` 10 · `OutboundProjectionServiceTest` 9 포함). `test` 는 `@Tag("integration")` 을 제외하므로 위 IT 는 **이 숫자에 없다**.
+- IT 는 Docker 부재로 로컬 실행 불가(§ AC-0 ①). CI 의 `Integration (master-service + notification-service + outbound-service, Testcontainers)` 잡(`:projects:wms-platform:apps:admin-service:integrationTest`)이 돌린다 — 그 잡의 초록을 본 뒤 AC-2 를 닫는다. 이번 기준선: 68 개(2026-10-22 main), 이 변경 뒤 기대 **75**(68 + 저장소 4 + Kafka 3 · 이름만 바뀐 1 은 그대로).
+
+### 남은 것
+
+- AC-2 의 CI 부분 · AC-3 (굽기 뒤 라이브: 데모 `putaway_count` 합 = 적치 완료 이벤트 수, 출고도). AC-0 ③ 도 그때.
