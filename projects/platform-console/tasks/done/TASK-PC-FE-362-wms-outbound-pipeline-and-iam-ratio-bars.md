@@ -8,7 +8,7 @@ TASK-PC-FE-362
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -149,3 +149,8 @@ frontend
 - 브랜치 nightly run `39743163723`(head `79d9cf783`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4462 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 🔴 메인 세션의 추천 오류 기록: 4차 추천에서 «개요가 이미 `RECEIVED` 를 상태별 `size:1` 로 센다 ⇒ 같은 방식으로 다섯 단계를 센다» 라고 했으나, 그 읽기(admin 읽기 모델)는 상태를 셋으로 접는다 — 코드 주석(`overview-state.ts:195-197`)이 이미 적고 있던 사실. 구현 에이전트의 AC-0 STOP 이 막았다.
 - 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/wms/outbound` 파이프라인 · `/iam` 비율 막대).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7247206852` success. 익명 샘플 화면(`https://console.hubwang.com`, 서버 렌더 HTML): `/wms/outbound` — `outbound-status-pipeline-bar`(세 칸 33.3% · 33.3% · 33.3% = 샘플 PICKING · PICKED · SHIPPED 각 1, CANCELLED 는 막대 밖) · «출고 상태» · 범위 문장(`outbound-status-pipeline-scope`); `/iam` — `iam-overview-operators-bar`(80% · 20%) · `iam-overview-accounts-bar`.
+- 4차원: (a) #4462 `state=MERGED` · (b) 스쿼시 `a3cba169d` = `origin/main` tip · (c) 머지 시점 `statusCheckRollup` 67 · 실패 0 · 대기 0 · (d) AC 원문의 남은 칸 = AC-3 하나 — 위 기록으로 «배포 · 확인» 대로 닫힘.
