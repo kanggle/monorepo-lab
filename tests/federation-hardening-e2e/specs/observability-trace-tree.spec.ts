@@ -44,9 +44,11 @@ const ROUTE_TAG = 'composition.route';
  */
 const KNOWN_PRODUCERS = [
   'scm-platform-gateway-service', // scm (console-web reaches scm through it)
-  'scm-platform-inventory-visibility-service',
-  'finance-platform-account-service', // finance
-  'erp-platform-masterdata-service', // erp
+  // TASK-PC-FE-364 — the overview legs became business figures: scm = PO list
+  // (procurement), finance = reconciliation queue (ledger).
+  'scm-platform-procurement-service',
+  'finance-platform-ledger-service', // finance
+  'erp-platform-masterdata-service', // erp (no approval-service in this stack)
 ];
 
 interface JaegerTag {

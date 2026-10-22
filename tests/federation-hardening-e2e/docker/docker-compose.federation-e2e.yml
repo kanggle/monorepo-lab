@@ -654,6 +654,54 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
+  # finance-ledger-service — TASK-PC-FE-364. The operator overview's finance
+  # card reads the reconciliation discrepancy queue
+  # (`/api/finance/ledger/reconciliation/discrepancies`), which lives in the
+  # ledger-service, NOT account-service. Without it console-web's
+  # LEDGER_BASE_URL fell back to its code default `http://finance.local` —
+  # unresolvable here — and that lookup stalled (see the console-web env note).
+  # Same finance tenant gate as account-service (ServiceLevelOAuth2Config:
+  # TenantClaimValidator.forTenant("finance").trustEntitledDomains()), so the
+  # entitlement specs keep measuring the real gate on the real producer.
+  # Own schema finance_ledger_db (created by fixtures/seed.sql phase 1.5).
+  # Kafka is a consumer-only dependency here (account-service transaction
+  # topics): pointed at a dead address like the other producers, and the
+  # outbox relay is off (no broker to publish to).
+  # ---------------------------------------------------------------------------
+  finance-ledger-service:
+    logging: *default-logging
+    build:
+      context: ../../../projects/finance-platform/apps/ledger-service
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DB: finance_ledger_db
+      MYSQL_USER: finance
+      MYSQL_PASSWORD: finance
+      OIDC_ISSUER_URL: http://auth-service:8081
+      JWT_JWKS_URI: http://auth-service:8081/oauth2/jwks
+      KAFKA_BOOTSTRAP: 127.0.0.1:9999
+      LEDGER_OUTBOX_POLLING_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "-Dnetworkaddress.cache.ttl=0 -Dnetworkaddress.cache.negative.ttl=0"
+      OTLP_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://victoriatraces:10428/insert/opentelemetry/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    depends_on:
+      mysql: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      victoriatraces: { condition: service_healthy }
+    ports: ["18097:8080"]
+    networks: [fed-e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
   # erp-masterdata-service — erp domain read endpoint.
   # Exposes /api/erp/masterdata/employees (employee list).
   # Uses MySQL (erp_db created at phase 1.5 seed.sql).
@@ -740,6 +788,40 @@ services:
       SCM_GATEWAY_BASE_URL: http://scm-gateway-service:8080
       FINANCE_BASE_URL: http://finance-account-service:8080
       ERP_BASE_URL: http://erp-masterdata-service:8080
+      # TASK-PC-FE-364 — the overview finance card is the ledger's discrepancy
+      # queue now (one call, swapped for the account-service balances read).
+      LEDGER_BASE_URL: http://finance-ledger-service:8080
+      # 🔴 TASK-PC-FE-364 (federation run 39766172565) — the SAME stall
+      #    TASK-PC-FE-341 / 351 measured and fixed in
+      #    projects/platform-console/docker-compose.e2e.yml, never applied here.
+      #    A base left on its code default `http://<x>.local/...` is unresolvable
+      #    in this stack, and the lookup does not fail — it HANGS past the 4 s leg
+      #    timeout. getaddrinfo cannot be cancelled and Node runs it on the
+      #    4-thread libuv pool, so two such lookups per overview render (ecommerce
+      #    since TASK-PC-FE-302, + LEDGER_BASE_URL before this line existed)
+      #    starved the pool: every leg's lookup queued behind them and the scm
+      #    card degraded to TIMEOUT instead of answering the gateway's 403 — the
+      #    entitlement specs read `degraded` where they require `forbidden`.
+      #    Measured in that run's console-web log: wms/scm/finance/erp/ecommerce
+      #    all `TIMEOUT` at 4000 ms in the same request (only iam answered).
+      #    Bases with no producer in this stack are therefore non-routable
+      #    (connection refused = fails in ms → `degraded`, no lookup at all).
+      #    🔴 A new console-web base defaulting to `*.local` MUST be listed here
+      #    too, or it silently brings this back.
+      # Onboarding (self tenant creation · received invitations) has a producer
+      # here — same value as projects/platform-console/docker-compose.e2e.yml.
+      CONSOLE_ONBOARDING_URL: http://admin-service:8085/api/admin/onboarding/organizations
+      ECOMMERCE_ADMIN_BASE_URL: http://127.0.0.1:9/api/admin
+      ECOMMERCE_PUBLIC_BASE_URL: http://127.0.0.1:9/api
+      WMS_OUTBOUND_BASE_URL: http://127.0.0.1:9/api/v1/outbound
+      FAN_GATEWAY_BASE_URL: http://127.0.0.1:9
+      # ERP_BASE_URL (above) is masterdata-service directly: this stack has no erp
+      # gateway and no approval-service, so the overview's erp card
+      # (`/api/erp/approval/inbox`, TASK-PC-FE-364) reaches masterdata, whose
+      # decode-time tenant gate is the same erp gate (non-entitled → 403) but
+      # which serves no inbox (entitled → 404 → `degraded`). Known gap —
+      # recorded in TASK-PC-FE-364; adding the erp gateway + approval-service is
+      # its own change.
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       # TASK-MONO-144 — otel-node (MONO-143 D3) starts the root SSR span +
       # undici auto-instrumentation injects W3C traceparent into each leg
@@ -756,6 +838,7 @@ services:
       # through the former BFF's depends_on; started (not healthy) is enough —
       # the workflow waits for each producer's health before the specs run.
       finance-account-service: { condition: service_started }
+      finance-ledger-service: { condition: service_started }
       wms-admin-service: { condition: service_started }
       erp-masterdata-service: { condition: service_started }
       scm-gateway-service: { condition: service_started }

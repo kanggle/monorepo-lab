@@ -76,7 +76,9 @@ jobs:
         # wms-admin + scm-inventory-visibility added TASK-MONO-162 (the producers
         # the operator-overview wms/scm legs call); scm-demand-planning added
         # TASK-SCM-INT-002 leg 2 (ADR-027 replenishment overlay consumer);
-        # wms-inbound added TASK-MONO-432 (ADR-050 inbound-expected live leg).
+        # wms-inbound added TASK-MONO-432 (ADR-050 inbound-expected live leg);
+        # finance-ledger added TASK-PC-FE-364 (the overview finance card reads
+        # its reconciliation discrepancy queue) — 13 jars.
         # console-web is a Next.js standalone build (handled in e2e job).
         run: >-
           ./gradlew
@@ -84,6 +86,7 @@ jobs:
           :projects:iam-platform:apps:account-service:bootJar
           :projects:iam-platform:apps:admin-service:bootJar
           :projects:finance-platform:apps:account-service:bootJar
+          :projects:finance-platform:apps:ledger-service:bootJar
           :projects:wms-platform:apps:master-service:bootJar
           :projects:wms-platform:apps:admin-service:bootJar
           :projects:scm-platform:apps:procurement-service:bootJar
@@ -106,6 +109,7 @@ jobs:
             projects/iam-platform/apps/account-service/build/libs/account-service.jar
             projects/iam-platform/apps/admin-service/build/libs/admin-service.jar
             projects/finance-platform/apps/account-service/build/libs/account-service.jar
+            projects/finance-platform/apps/ledger-service/build/libs/ledger-service.jar
             projects/wms-platform/apps/master-service/build/libs/master-service.jar
             projects/wms-platform/apps/admin-service/build/libs/admin-service.jar
             projects/wms-platform/apps/inbound-service/build/libs/inbound-service.jar
@@ -177,6 +181,10 @@ jobs:
           mkdir -p projects/finance-platform/apps/account-service/build/libs/
           mv artifact-staging/finance-platform/apps/account-service/build/libs/account-service.jar \
              projects/finance-platform/apps/account-service/build/libs/account-service.jar
+          # ledger-service (TASK-PC-FE-364 — overview finance card = reconciliation queue)
+          mkdir -p projects/finance-platform/apps/ledger-service/build/libs/
+          mv artifact-staging/finance-platform/apps/ledger-service/build/libs/ledger-service.jar \
+             projects/finance-platform/apps/ledger-service/build/libs/ledger-service.jar
 
           # wms-platform (master-service + admin-service — TASK-MONO-162)
           mkdir -p projects/wms-platform/apps/master-service/build/libs/
@@ -269,8 +277,25 @@ jobs:
             scm-procurement-service scm-inventory-visibility-service scm-gateway-service \
             scm-dp-postgres scm-demand-planning-service \
             wms-inbound-postgres wms-inbound-service \
-            finance-account-service erp-masterdata-service \
+            finance-account-service finance-ledger-service erp-masterdata-service \
             console-web
+
+      - name: Wait for finance-ledger-service health
+        # TASK-PC-FE-364 — the overview finance leg's producer.
+        working-directory: tests/federation-hardening-e2e/docker
+        run: |
+          echo "Waiting for finance-ledger-service health (up to ~5 min)..."
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml ps finance-ledger-service \
+                | grep -q "healthy"; then
+              echo "finance-ledger-service healthy after $((i * 10))s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "finance-ledger-service did not become healthy in time"
+          docker compose -f docker-compose.federation-e2e.yml -f docker-compose.federation-e2e.replenishment.yml -f docker-compose.federation-e2e.inbound-expected.yml logs --tail=50 finance-ledger-service
+          exit 1
 
       - name: Wait for finance-account-service health
         working-directory: tests/federation-hardening-e2e/docker

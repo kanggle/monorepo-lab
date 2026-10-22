@@ -315,11 +315,27 @@ export interface OverviewCredentials {
   operatorToken: string;
   /** Domain-facing IAM OIDC token — every non-IAM data leg. */
   domainFacingToken: string;
-  /** Finance card prerequisite; blank ⇒ `forbidden / MISSING_PREREQUISITE`. */
-  financeDefaultAccountId: string | null;
   requestId: string;
 }
 
+/**
+ * The six overview legs — one call per card (§ 2.4.9.1 producer table).
+ *
+ * TASK-PC-FE-364 swapped each card's call one-for-one from a row count to a
+ * business figure: locked accounts · unshipped orders · draft POs · open
+ * reconciliation discrepancies · my approval inbox · orders to ship. Every leg
+ * is still an existing list read asked with `size=1` (only the page total is
+ * used), still six calls in total, still the same credential per leg.
+ *
+ * 🔴 Do not add a second call to a card here. «One call per card» is an owner
+ * decision (contract § 2.4.9.1, `TASK-PC-FE-296`): `compose()` keys results by
+ * domain, so a second call would run inside the same leg under the same
+ * `LEG_TIMEOUT_MS` and could cost the card its only number.
+ *
+ * 🔵 Finance no longer has a prerequisite: the discrepancy queue needs no
+ * default account, so no leg is decided up front any more and the composition
+ * no longer reads `getFinanceDefaultAccountId()`.
+ */
 export async function operatorOverviewLegs(c: OverviewCredentials): Promise<LegSpec[]> {
   const env = getServerEnv();
   const domainHeaders = {
@@ -340,15 +356,6 @@ export async function operatorOverviewLegs(c: OverviewCredentials): Promise<LegS
     headers,
   });
 
-  const accountId = c.financeDefaultAccountId?.trim() ?? '';
-  const finance: LegSpec = accountId
-    ? await data(
-        'finance',
-        `${env.FINANCE_BASE_URL}/api/finance/accounts/${encodeURIComponent(accountId)}/balances`,
-        domainHeaders,
-      )
-    : { domain: 'finance', decided: card('finance', 'forbidden', 'MISSING_PREREQUISITE') };
-
   return [
     // TASK-PC-FE-304: `tenantId` MUST ride as a query param, not only the
     // `X-Tenant-Id` header — `AccountAdminController#search` (iam-platform
@@ -358,9 +365,12 @@ export async function operatorOverviewLegs(c: OverviewCredentials): Promise<LegS
     // every other card but left the IAM card pinned to the operator's home
     // tenant — the accounts screen (`searchAccounts`, TASK-BE-357) already
     // appends `tenantId` for the same reason; this leg now matches it.
+    //
+    // TASK-PC-FE-364: `status=LOCKED` is the ACCOUNT's status (TASK-BE-475 list
+    // filter) — a pool account locked out of one site only is not counted.
     await data(
       'iam',
-      `${env.IAM_ADMIN_API_BASE}/api/admin/accounts?page=0&size=1&tenantId=${encodeURIComponent(c.tenant)}`,
+      `${env.IAM_ADMIN_API_BASE}/api/admin/accounts?status=LOCKED&page=0&size=1&tenantId=${encodeURIComponent(c.tenant)}`,
       {
         Accept: 'application/json',
         Authorization: `Bearer ${c.operatorToken}`,
@@ -368,19 +378,37 @@ export async function operatorOverviewLegs(c: OverviewCredentials): Promise<LegS
         'X-Request-Id': c.requestId,
       },
     ),
-    await data('wms', `${env.WMS_ADMIN_BASE_URL}/dashboard/inventory`, domainHeaders),
+    // `RECEIVED` = received, neither shipped nor cancelled (the read model folds
+    // the order lifecycle to RECEIVED / SHIPPED / CANCELLED). Tenant-owned
+    // dashboard: a customer tenant sees only its own orders.
+    await data(
+      'wms',
+      `${env.WMS_ADMIN_BASE_URL}/dashboard/orders?status=RECEIVED&page=0&size=1`,
+      domainHeaders,
+    ),
+    // Through the scm gateway — the address the procurement screen uses.
     await data(
       'scm',
-      `${env.SCM_GATEWAY_BASE_URL}/api/v1/inventory-visibility/snapshot`,
+      `${env.SCM_GATEWAY_BASE_URL}/api/v1/procurement/po?status=DRAFT&page=0&size=1`,
       domainHeaders,
     ),
-    finance,
+    // The ledger service, at the base the `/ledger` screen uses — NOT the
+    // account-service `FINANCE_BASE_URL`.
     await data(
-      'erp',
-      `${env.ERP_BASE_URL}/api/erp/masterdata/departments?active=true&page=0&size=1`,
+      'finance',
+      `${env.LEDGER_BASE_URL}/api/finance/ledger/reconciliation/discrepancies?status=OPEN&page=0&size=1`,
       domainHeaders,
     ),
-    await data('ecommerce', `${env.ECOMMERCE_ADMIN_BASE_URL}/products?page=0&size=1`, domainHeaders),
+    // The caller's own queue (current stage = me, SUBMITTED ∪ IN_REVIEW). An
+    // unlinked account answers an empty page WITHOUT `meta.actorEmployeeId` —
+    // the card renders that as «not linked», never as 0.
+    await data('erp', `${env.ERP_BASE_URL}/api/erp/approval/inbox?page=0&size=1`, domainHeaders),
+    // `CONFIRMED` = paid, shipping not started.
+    await data(
+      'ecommerce',
+      `${env.ECOMMERCE_ADMIN_BASE_URL}/orders?status=CONFIRMED&page=0&size=1`,
+      domainHeaders,
+    ),
   ];
 }
 

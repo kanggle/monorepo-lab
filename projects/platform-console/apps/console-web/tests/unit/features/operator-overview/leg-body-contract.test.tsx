@@ -48,6 +48,7 @@ type LegFixture = {
 
 const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as {
   legs: Record<string, LegFixture>;
+  variants: { erpNotLinked: LegFixture };
 };
 
 function wrapper() {
@@ -62,23 +63,19 @@ function envelopeFor(card: Card): OperatorOverview {
 }
 
 /**
- * The testid whose text carries the card's headline number / status, plus the
- * rendered text that means "this card could not read its own producer body".
- * `—` is the numeric cards' placeholder; the finance card words it instead.
+ * The testid whose text carries the card's headline number, plus the number
+ * the fixture body says it must show (TASK-PC-FE-364 — every card is one page
+ * total now). `—` is the placeholder for «could not read my own producer body».
+ * Asserting the EXACT value, not just «not —», is what catches a renderer that
+ * reads a different field of the same body (e.g. `content.length`).
  */
-const HEADLINE: Record<DomainKey, { testId: string; emptyText: string }> = {
-  iam: { testId: 'operator-overview-card-iam-total', emptyText: '—' },
-  wms: { testId: 'operator-overview-card-wms-stock', emptyText: '—' },
-  scm: { testId: 'operator-overview-card-scm-nodes', emptyText: '—' },
-  finance: {
-    testId: 'operator-overview-card-finance-status',
-    emptyText: '잔액 정보 없음',
-  },
-  erp: { testId: 'operator-overview-card-erp-departments', emptyText: '—' },
-  ecommerce: {
-    testId: 'operator-overview-card-ecommerce-products',
-    emptyText: '—',
-  },
+const HEADLINE: Record<DomainKey, { testId: string; expected: string }> = {
+  iam: { testId: 'operator-overview-card-iam-locked', expected: '3' },
+  wms: { testId: 'operator-overview-card-wms-unshipped', expected: '14' },
+  scm: { testId: 'operator-overview-card-scm-draft-po', expected: '4' },
+  finance: { testId: 'operator-overview-card-finance-open-discrepancies', expected: '6' },
+  erp: { testId: 'operator-overview-card-erp-inbox', expected: '2' },
+  ecommerce: { testId: 'operator-overview-card-ecommerce-to-ship', expected: '5' },
 };
 
 describe('operator overview — every leg renders its producer body (AC-7 census)', () => {
@@ -99,16 +96,31 @@ describe('operator overview — every leg renders its producer body (AC-7 census
       const headline = screen.getByTestId(HEADLINE[domain].testId);
       expect(
         headline.textContent,
-        `${domain}: the card rendered its "no data" placeholder for a body the ` +
+        `${domain}: the card did not render the page total of a body the ` +
           `producer really sends (${leg.producer}) — the renderer and the ` +
           `producer disagree about the shape`,
-      ).not.toBe(HEADLINE[domain].emptyText);
+      ).toBe(HEADLINE[domain].expected);
     });
   }
 });
 
+describe('operator overview — the erp «not linked» body the producer really sends (TASK-PC-FE-364)', () => {
+  it('🔴 no meta.actorEmployeeId → «직원 연결 없음», and NO number (never a 0)', () => {
+    const card: Card = { domain: 'erp', status: 'ok', data: fixture.variants.erpNotLinked.body };
+    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('operator-overview-card-erp-not-linked')).toHaveTextContent(
+      '직원 연결 없음',
+    );
+    expect(screen.queryByTestId('operator-overview-card-erp-inbox')).not.toBeInTheDocument();
+    // The body's own totalElements is 0 — it must not surface anywhere.
+    expect(screen.getByTestId('operator-overview-card-erp').textContent).not.toMatch(/\b0\b/);
+  });
+});
+
 describe('operator overview — money discipline survives the real finance body (F5)', () => {
-  it('finance renders availability + currency without coercing any minor-units string', () => {
+  it('finance renders only the count — no minor-units string from a row, coerced or raw', () => {
     const card: Card = {
       domain: 'finance',
       status: 'ok',
@@ -118,27 +130,11 @@ describe('operator overview — money discipline survives the real finance body 
       wrapper: wrapper(),
     });
     expect(
-      screen.getByTestId('operator-overview-card-finance-status'),
-    ).toHaveTextContent('잔액 조회 가능');
-    expect(
-      screen.getByTestId('operator-overview-card-finance-currency'),
-    ).toHaveTextContent('KRW');
-    // F5: the minor-units string must never appear coerced/formatted.
-    expect(screen.queryByText('9,876,500')).not.toBeInTheDocument();
-    expect(screen.queryByText('9876500')).not.toBeInTheDocument();
-  });
-
-  it('an account with no balance rows is the one honest "no balance" case', () => {
-    const card: Card = {
-      domain: 'finance',
-      status: 'ok',
-      data: { data: [], meta: {} },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    expect(
-      screen.getByTestId('operator-overview-card-finance-status'),
-    ).toHaveTextContent('잔액 정보 없음');
+      screen.getByTestId('operator-overview-card-finance-open-discrepancies'),
+    ).toHaveTextContent('6');
+    // F5: the row's expectedMinor / actualMinor never reach the DOM.
+    for (const s of ['9876500', '9,876,500', '9877500', '9,877,500']) {
+      expect(screen.queryByText(s, { exact: false })).not.toBeInTheDocument();
+    }
   });
 });

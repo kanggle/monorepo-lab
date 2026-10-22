@@ -18,6 +18,22 @@ import { describe, expect, it } from 'vitest';
 const APP = process.cwd();
 const COMPOSITION_DIR = path.join(APP, 'src/shared/composition');
 const COMPOSE = path.join(APP, '../../docker-compose.e2e.yml');
+/**
+ * 🔴 TASK-PC-FE-364 — the SECOND stack that runs this console-web: the federation-hardening e2e
+ * (nightly). It was never in this test's population, so the 341/351 fix stopped at the console
+ * compose. When the overview's finance leg moved to `LEDGER_BASE_URL` the federation stack had no
+ * value for it; with ecommerce's (pre-existing) gap that made two hanging `*.local` lookups per
+ * render, the libuv pool starved, and every leg read `TIMEOUT` — the entitlement specs saw the scm
+ * card `degraded` where they require `forbidden` (run 39766172565). Same rule, both stacks.
+ */
+const FEDERATION_COMPOSE = path.join(
+  APP,
+  '../../../../tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml',
+);
+const STACKS: ReadonlyArray<readonly [string, string]> = [
+  ['docker-compose.e2e.yml', COMPOSE],
+  ['docker-compose.federation-e2e.yml', FEDERATION_COMPOSE],
+];
 
 function compositionEnvKeys(): string[] {
   const keys = new Set<string>();
@@ -52,10 +68,10 @@ function localDefaultEnvKeys(): string[] {
   return out.sort();
 }
 
-function consoleWebComposeKeys(): Set<string> {
-  const lines = readFileSync(COMPOSE, 'utf8').split(/\r?\n/);
+function consoleWebComposeKeys(file: string = COMPOSE): Set<string> {
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/);
   const start = lines.findIndex((l) => /^ {2}console-web:\s*$/.test(l));
-  if (start < 0) throw new Error('console-web service not found in docker-compose.e2e.yml');
+  if (start < 0) throw new Error(`console-web service not found in ${file}`);
   const keys = new Set<string>();
   for (let i = start + 1; i < lines.length; i++) {
     if (/^ {2}[a-z0-9-]+:\s*$/.test(lines[i])) break; // next service
@@ -75,8 +91,8 @@ describe('docker-compose.e2e.yml sets every composition domain base for console-
     expect(population).toContain('ECOMMERCE_ADMIN_BASE_URL');
   });
 
-  it('non-vacuous: the compose parser sees console-web keys it is known to carry', () => {
-    const keys = consoleWebComposeKeys();
+  it.each(STACKS)('non-vacuous: the compose parser sees console-web keys %s is known to carry', (_n, file) => {
+    const keys = consoleWebComposeKeys(file);
     expect(keys.has('NEXT_PUBLIC_APP_URL')).toBe(true);
     expect(keys.has('FINANCE_BASE_URL')).toBe(true);
   });
@@ -90,15 +106,15 @@ describe('docker-compose.e2e.yml sets every composition domain base for console-
     expect(keys.length).toBeGreaterThanOrEqual(14);
   });
 
-  it('TASK-PC-FE-351 — every env key with a *.local default is set for console-web (not only the composition legs)', () => {
-    const keys = consoleWebComposeKeys();
+  it.each(STACKS)('TASK-PC-FE-351 — %s: every env key with a *.local default is set for console-web (not only the composition legs)', (name, file) => {
+    const keys = consoleWebComposeKeys(file);
     const missing = localDefaultEnvKeys().filter((k) => !keys.has(k));
-    expect(missing, 'set these for console-web in docker-compose.e2e.yml (non-routable is fine, e.g. http://127.0.0.1:9)').toEqual([]);
+    expect(missing, `set these for console-web in ${name} (non-routable is fine, e.g. http://127.0.0.1:9)`).toEqual([]);
   });
 
-  it('every composition base is set (a missing one falls back to an unresolvable *.local default)', () => {
-    const keys = consoleWebComposeKeys();
+  it.each(STACKS)('%s: every composition base is set (a missing one falls back to an unresolvable *.local default)', (name, file) => {
+    const keys = consoleWebComposeKeys(file);
     const missing = population.filter((k) => !keys.has(k));
-    expect(missing, `set these for console-web in docker-compose.e2e.yml (non-routable is fine, e.g. http://127.0.0.1:9)`).toEqual([]);
+    expect(missing, `set these for console-web in ${name} (non-routable is fine, e.g. http://127.0.0.1:9)`).toEqual([]);
   });
 });

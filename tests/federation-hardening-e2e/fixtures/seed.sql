@@ -40,6 +40,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES,
       TRIGGER, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE TEMPORARY TABLES
   ON `finance_db`.* TO 'finance'@'%';
 
+-- finance_ledger_db — TASK-PC-FE-364: finance-ledger-service (the operator
+-- overview's finance card reads its reconciliation discrepancy queue). Own
+-- schema, separate from account-service's finance_db (ledger application.yml
+-- default `${MYSQL_DB:finance_ledger_db}`); same `finance` service user.
+CREATE DATABASE IF NOT EXISTS `finance_ledger_db`
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES,
+      TRIGGER, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE TEMPORARY TABLES
+  ON `finance_ledger_db`.* TO 'finance'@'%';
+
 -- wms_db — wms-master-service uses PostgreSQL (application.yml default
 -- jdbc:postgresql://localhost:5432/master_db). For the cross-product overlay,
 -- master-service is wired with its own PostgreSQL sidecar — NOT MySQL.

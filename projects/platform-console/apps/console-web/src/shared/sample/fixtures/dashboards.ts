@@ -2,72 +2,33 @@ import { SAMPLE_AS_OF } from '../codes';
 import { IAM_FIXTURE_HANDLERS } from './iam';
 import { ERP_FIXTURE_HANDLERS } from './erp';
 import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
-import { FINANCE_FIXTURE_HANDLERS, SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID } from './finance';
+import { LEDGER_FIXTURE_HANDLERS } from './ledger';
 import { WMS_FIXTURE_HANDLERS } from './wms';
 import { SCM_FIXTURE_HANDLERS } from './scm';
 
 /**
- * TASK-PC-FE-285 (coordinator review) — an overview card's count is NOT typed
- * here. It is the answer the SAME domain fixture gives to the SAME request the
- * overview composition leg makes, so the landing card and the list screen it
- * summarises cannot disagree. Before this, the cards said IAM 128 · ERP 12 ·
- * E-Commerce 342 while the lists they summarise held 5 · 3 · 3 — on the very
- * first screen an anonymous visitor lands on (`/` → `/dashboards/overview`).
+ * The sample operator overview (`/` → `/dashboards/overview`, the FIRST screen
+ * an anonymous visitor lands on).
  *
- * Paths mirror the overview's iam / erp / ecommerce legs
- * (`operatorOverviewLegs` in `shared/composition/console-composition.ts`;
- * originally the former BFF's read adapters). A fixture that
- * stops answering throws at module load — loud, never a silent fallback number.
- */
-function countFrom(
-  handler: ((path: string) => unknown) | undefined,
-  path: string,
-  pick: (body: never) => unknown,
-): number {
-  const body = handler?.(path);
-  const n = body === undefined ? undefined : pick(body as never);
-  if (typeof n !== 'number') {
-    throw new Error(`sample overview: no count for ${path}`);
-  }
-  return n;
-}
-
-const IAM_ACCOUNT_COUNT = countFrom(
-  IAM_FIXTURE_HANDLERS['iam:accounts'],
-  '/api/admin/accounts?page=0&size=1',
-  (b: { totalElements?: unknown }) => b.totalElements,
-);
-const ERP_ACTIVE_DEPARTMENT_COUNT = countFrom(
-  ERP_FIXTURE_HANDLERS['flat:erp'],
-  '/api/erp/masterdata/departments?active=true&page=0&size=1',
-  (b: { meta?: { totalElements?: unknown } }) => b.meta?.totalElements,
-);
-const ECOMMERCE_PRODUCT_COUNT = countFrom(
-  ECOMMERCE_FIXTURE_HANDLERS['ecommerce:ecommerce'],
-  '/api/admin/products?page=0&size=1',
-  (b: { totalElements?: unknown }) => b.totalElements,
-);
-
-/**
- * TASK-PC-FE-295 — the overview cards now carry the PRODUCER'S OWN response
- * body, because that is what the real leg carries: the finance / wms / scm
- * composition legs (`shared/composition/console-composition.ts`) load the
- * producer body verbatim into `cards[i].data`, with no reshaping anywhere on
- * the path.
+ * TASK-PC-FE-285 (coordinator review) — an overview card's number is NOT typed
+ * here. Each card's `data` is the answer the SAME domain fixture gives to the
+ * SAME request the overview composition leg makes, so the landing card and the
+ * list screen it summarises cannot disagree. Before 285 the cards said
+ * IAM 128 · ERP 12 · E-Commerce 342 while the lists held 5 · 3 · 3.
  *
- * 🔴🔴 Before 295 the three constants below deliberately emitted a DIFFERENT
- * shape — the one `FinanceDataSchema` / `WmsDataSchema` / `ScmDataSchema` read
- * — and each carried a comment saying so and calling the mismatch "out of
- * scope". They were right that a sample fixture cannot fix a production shape
- * bug; they were also, between them, the reason nothing went red: the sample
- * world rendered a working card out of an invented shape while the logged-in
- * operator got «잔액 정보 없음» and «—». 295 fixed the schemas against the
- * producers, so the sample world can now hand the card exactly what the wire
- * hands it, and any future divergence shows up HERE as a broken sample screen.
+ * TASK-PC-FE-295 — `data` is the PRODUCER'S OWN response body, because that is
+ * what the real leg carries (`console-composition.ts` loads it verbatim). A
+ * sample body in a shape the card schemas happen to read, but the wire never
+ * sends, is how three cards were blank for logged-in operators while the sample
+ * world looked fine.
  *
- * Each body is taken from the SAME fixture handler answering the SAME query
- * the real adapter sends, so a card's number and the list screen that number
- * summarises cannot disagree (TASK-PC-FE-285's rule, unchanged).
+ * TASK-PC-FE-364 — the six legs became business figures (locked accounts ·
+ * unshipped orders · draft POs · open reconciliation discrepancies · my
+ * approval inbox · orders to ship). The paths below are the leg paths of
+ * `operatorOverviewLegs` with the deployment base stripped (each domain's
+ * fixture is keyed by the path its own console client sends). A fixture that
+ * stops answering — or answers 0 — throws at module load: loud, never a silent
+ * fallback, and never a sample overview that shows «nothing to do».
  */
 function legBody(
   handler: ((path: string) => unknown) | undefined,
@@ -80,77 +41,80 @@ function legBody(
   return body as Record<string, unknown>;
 }
 
-/**
- * `GET /api/finance/accounts/{id}/balances` — `{ data: [ {currency, ledger,
- * available, held} ], meta }`. The card reads `data[]` (F5: every money field
- * stays a minor-units string and is never coerced).
- */
-const FINANCE_BALANCES_BODY = (() => {
-  const path = `/api/finance/accounts/${SAMPLE_FINANCE_DEFAULT_ACCOUNT_ID}/balances`;
-  const body = legBody(FINANCE_FIXTURE_HANDLERS['flat:finance'], path);
-  const rows = body.data;
-  // Not vacuous: an empty `data[]` is the ONE honest "no balance" case, so a
-  // sample world that fell to it would prove the card can render nothing.
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error(`sample overview: no finance balance rows for ${path}`);
+/** Not vacuous: a 0 would render as «nothing waiting» on the landing screen. */
+function requirePositive(n: unknown, what: string): void {
+  if (typeof n !== 'number' || n <= 0) {
+    throw new Error(`sample overview: ${what} must be a positive count (got ${String(n)})`);
   }
+}
+
+/** `GET /api/admin/accounts?status=LOCKED…` — `{ content, totalElements, … }`. */
+const IAM_LOCKED_BODY = (() => {
+  const path = '/api/admin/accounts?status=LOCKED&page=0&size=1';
+  const body = legBody(IAM_FIXTURE_HANDLERS['iam:accounts'], path);
+  requirePositive(body.totalElements, `iam ${path} totalElements`);
   return body;
 })();
 
-/**
- * `GET /api/v1/admin/dashboard/inventory` — the read-model page
- * `{ content[], page: {number,size,totalElements,totalPages}, sort }`. The
- * card reads `page.totalElements` = inventory snapshot ROW count.
- *
- * 🔴 No stock-unit sum is derived here any more. The producer returns one
- * page; summing it and calling the result «총 재고» is the fabricated total
- * TASK-PC-FE-295 AC-6 rules out. The alert tile is gone for the same reason —
- * an alert count needs a second query (`lowStockOnly=true`), i.e. a second
- * outbound leg, which is a cost decision and not a rendering fix.
- */
-const WMS_INVENTORY_BODY = (() => {
-  const path = '/api/v1/admin/dashboard/inventory';
+/** `GET /api/v1/admin/dashboard/orders?status=RECEIVED…` — the read-model page. */
+const WMS_UNSHIPPED_BODY = (() => {
+  const path = '/api/v1/admin/dashboard/orders?status=RECEIVED&page=0&size=1';
   const body = legBody(WMS_FIXTURE_HANDLERS['wms:wms'], path);
-  const page = body.page as { totalElements?: unknown } | undefined;
-  if (!page || typeof page.totalElements !== 'number' || page.totalElements <= 0) {
-    throw new Error(`sample overview: no wms page total for ${path}`);
-  }
+  requirePositive(
+    (body.page as { totalElements?: unknown } | undefined)?.totalElements,
+    `wms ${path} page.totalElements`,
+  );
+  return body;
+})();
+
+/** `GET /api/v1/procurement/po?status=DRAFT…` — `{ data: <page>, meta }`. */
+const SCM_DRAFT_PO_BODY = (() => {
+  const path = '/api/v1/procurement/po?status=DRAFT&page=0&size=1';
+  const body = legBody(SCM_FIXTURE_HANDLERS['flat:scm'], path);
+  requirePositive(
+    (body.data as { totalElements?: unknown } | undefined)?.totalElements,
+    `scm ${path} data.totalElements`,
+  );
   return body;
 })();
 
 /**
- * `GET /api/v1/inventory-visibility/snapshot` — `{ data: { content[], page,
- * size, totalElements, totalPages }, meta: { timestamp, warning, staleness } }`.
- * The card reads `data.totalElements` = snapshot ROW count, plus the S5
- * `meta.warning` hint.
- *
- * 🔵 The literal path differs from the production leg's
- * (`/api/inventory-visibility/snapshot`, direct-to-producer per
- * TASK-MONO-162) because this console's own scm client goes through the scm
- * gateway; the BODY SHAPE is the same envelope, which is what the card reads.
+ * `GET /api/finance/ledger/reconciliation/discrepancies?status=OPEN…` —
+ * `{ data: [ Discrepancy ], meta: { …, totalElements } }`. The card reads only
+ * `meta.totalElements` (F5: the rows' minor-units strings are never touched).
  */
-const SCM_SNAPSHOT_BODY = (() => {
-  const path = '/api/v1/inventory-visibility/snapshot';
-  const body = legBody(SCM_FIXTURE_HANDLERS['flat:scm'], path);
-  const data = body.data as { content?: unknown; totalElements?: unknown } | undefined;
-  const meta = body.meta as { warning?: unknown } | undefined;
-  if (!data || typeof data.totalElements !== 'number' || data.totalElements <= 0) {
-    throw new Error(`sample overview: no scm snapshot total for ${path}`);
-  }
-  if (typeof meta?.warning !== 'string') {
-    throw new Error(`sample overview: no scm S5 warning for ${path}`);
-  }
-  const rows = Array.isArray(data.content) ? data.content : [];
-  const nodeIds = new Set(
-    rows
-      .map((r) => (r as { nodeId?: unknown }).nodeId)
-      .filter((id): id is string => typeof id === 'string'),
+const FINANCE_OPEN_DISCREPANCIES_BODY = (() => {
+  const path = '/api/finance/ledger/reconciliation/discrepancies?status=OPEN&page=0&size=1';
+  const body = legBody(LEDGER_FIXTURE_HANDLERS['flat:ledger'], path);
+  requirePositive(
+    (body.meta as { totalElements?: unknown } | undefined)?.totalElements,
+    `finance ${path} meta.totalElements`,
   );
-  // Not vacuous: a single-node world could not tell "rows" from "nodes", and
-  // telling those two apart is exactly what 295 corrected on this card.
-  if (nodeIds.size < 2) {
-    throw new Error('sample overview: scm snapshot must span 2+ nodes');
+  return body;
+})();
+
+/**
+ * `GET /api/erp/approval/inbox?page=0&size=1` — `{ data, meta: { …,
+ * actorEmployeeId } }`. 🔴 The sample visitor IS linked to an employee
+ * (`actorEmployeeId` present); a body without it would render «직원 연결 없음»
+ * on the landing screen, so that is asserted too.
+ */
+const ERP_INBOX_BODY = (() => {
+  const path = '/api/erp/approval/inbox?page=0&size=1';
+  const body = legBody(ERP_FIXTURE_HANDLERS['flat:erp_approval'], path);
+  const meta = body.meta as { totalElements?: unknown; actorEmployeeId?: unknown } | undefined;
+  requirePositive(meta?.totalElements, `erp ${path} meta.totalElements`);
+  if (typeof meta?.actorEmployeeId !== 'string' || meta.actorEmployeeId.length === 0) {
+    throw new Error(`sample overview: erp ${path} must carry meta.actorEmployeeId`);
   }
+  return body;
+})();
+
+/** `GET /api/admin/orders?status=CONFIRMED…` — `{ content, page, size, totalElements }`. */
+const ECOMMERCE_TO_SHIP_BODY = (() => {
+  const path = '/api/admin/orders?status=CONFIRMED&page=0&size=1';
+  const body = legBody(ECOMMERCE_FIXTURE_HANDLERS['ecommerce:ecommerce_order'], path);
+  requirePositive(body.totalElements, `ecommerce ${path} totalElements`);
   return body;
 })();
 
@@ -171,12 +135,12 @@ const SCM_SNAPSHOT_BODY = (() => {
 export const SAMPLE_OPERATOR_OVERVIEW = {
   asOf: SAMPLE_AS_OF,
   cards: [
-    { domain: 'iam', status: 'ok', data: { totalElements: IAM_ACCOUNT_COUNT } },
-    { domain: 'wms', status: 'ok', data: WMS_INVENTORY_BODY },
-    { domain: 'scm', status: 'ok', data: SCM_SNAPSHOT_BODY },
-    { domain: 'finance', status: 'ok', data: FINANCE_BALANCES_BODY },
-    { domain: 'erp', status: 'ok', data: { meta: { totalElements: ERP_ACTIVE_DEPARTMENT_COUNT } } },
-    { domain: 'ecommerce', status: 'ok', data: { totalElements: ECOMMERCE_PRODUCT_COUNT } },
+    { domain: 'iam', status: 'ok', data: IAM_LOCKED_BODY },
+    { domain: 'wms', status: 'ok', data: WMS_UNSHIPPED_BODY },
+    { domain: 'scm', status: 'ok', data: SCM_DRAFT_PO_BODY },
+    { domain: 'finance', status: 'ok', data: FINANCE_OPEN_DISCREPANCIES_BODY },
+    { domain: 'erp', status: 'ok', data: ERP_INBOX_BODY },
+    { domain: 'ecommerce', status: 'ok', data: ECOMMERCE_TO_SHIP_BODY },
   ],
 } as const;
 

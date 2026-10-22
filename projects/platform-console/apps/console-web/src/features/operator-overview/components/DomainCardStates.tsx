@@ -17,9 +17,12 @@ import { RetryButton } from './RetryButton';
  *    Reason ∈ { DOWNSTREAM_ERROR, TIMEOUT, CIRCUIT_OPEN } surfaced as
  *    user-friendly Korean copy.
  *  - `forbidden` — "not available to your role / tenant" placeholder.
- *    Reason ∈ { PERMISSION_DENIED, TENANT_FORBIDDEN, MISSING_PREREQUISITE };
- *    `MISSING_PREREQUISITE` on the finance card surfaces an actionable hint
- *    per § 2.4.9.1 Implementation guidance.
+ *    Reason ∈ { PERMISSION_DENIED, TENANT_FORBIDDEN, MISSING_PREREQUISITE }.
+ *    TASK-PC-FE-364: the finance-only «set a default finance account» hint is
+ *    gone — the finance card reads the reconciliation queue, which needs no
+ *    default account, so this route no longer produces MISSING_PREREQUISITE.
+ *    The reason stays in the vocabulary (wire compatibility) and keeps its
+ *    generic copy.
  */
 
 const DEGRADED_COPY: Record<DegradedReason, string> = {
@@ -82,15 +85,6 @@ export function ForbiddenState({ card }: { card: ForbiddenCard }) {
       >
         사유: {card.reason}
       </p>
-      {card.domain === 'finance' &&
-        card.reason === 'MISSING_PREREQUISITE' && (
-          <p
-            data-testid="operator-overview-card-finance-missing-hint"
-            className="text-xs text-muted-foreground"
-          >
-            운영자 프로필에서 기본 finance 계정을 설정하세요.
-          </p>
-        )}
     </div>
   );
 }

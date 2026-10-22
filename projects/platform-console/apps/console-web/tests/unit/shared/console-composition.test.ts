@@ -16,6 +16,10 @@ vi.mock('@/shared/config/env', () => ({
     WMS_ADMIN_BASE_URL: 'http://wms.local/api/v1/admin',
     SCM_GATEWAY_BASE_URL: 'http://scm.local',
     FINANCE_BASE_URL: 'http://finance.local',
+    // TASK-PC-FE-364: the finance leg is the ledger read — a DIFFERENT base from
+    // FINANCE_BASE_URL in deployment (here only the host differs, so a leg that
+    // picked the wrong base is visible in the URL assertions below).
+    LEDGER_BASE_URL: 'http://ledger.finance.local',
     ERP_BASE_URL: 'http://erp.local',
     ECOMMERCE_ADMIN_BASE_URL: 'http://ecommerce.local/api/admin',
   }),
@@ -62,14 +66,14 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** Which leg a URL belongs to — by the path each leg uses. */
+/** Which leg a URL belongs to — by the path each leg uses (TASK-PC-FE-364). */
 function legOf(url: string): string {
   if (url.includes('/api/admin/accounts')) return 'iam';
-  if (url.includes('/dashboard/inventory')) return 'wms';
-  if (url.includes('/inventory-visibility/snapshot')) return 'scm';
-  if (url.includes('/balances')) return 'finance';
-  if (url.includes('/masterdata/departments')) return 'erp';
-  if (url.includes('/products')) return 'ecommerce';
+  if (url.includes('/dashboard/orders')) return 'wms';
+  if (url.includes('/procurement/po')) return 'scm';
+  if (url.includes('/reconciliation/discrepancies')) return 'finance';
+  if (url.includes('/approval/inbox')) return 'erp';
+  if (url.includes('/api/admin/orders')) return 'ecommerce';
   throw new Error(`unexpected leg url ${url}`);
 }
 
@@ -77,8 +81,18 @@ const CREDS = {
   tenant: 'acme',
   operatorToken: 'OP-TOKEN',
   domainFacingToken: 'DOMAIN-TOKEN',
-  financeDefaultAccountId: 'acc-7',
   requestId: 'req-1',
+};
+
+/** The exact URL each card asks — the § 2.4.9.1 producer table, one per card. */
+const EXPECTED_LEG_URLS: Record<string, string> = {
+  iam: 'http://iam.local/api/admin/accounts?status=LOCKED&page=0&size=1&tenantId=acme',
+  wms: 'http://wms.local/api/v1/admin/dashboard/orders?status=RECEIVED&page=0&size=1',
+  scm: 'http://scm.local/api/v1/procurement/po?status=DRAFT&page=0&size=1',
+  finance:
+    'http://ledger.finance.local/api/finance/ledger/reconciliation/discrepancies?status=OPEN&page=0&size=1',
+  erp: 'http://erp.local/api/erp/approval/inbox?page=0&size=1',
+  ecommerce: 'http://ecommerce.local/api/admin/orders?status=CONFIRMED&page=0&size=1',
 };
 
 beforeEach(() => {
@@ -228,7 +242,7 @@ describe('credentials per leg (AC-5 — ADR-MONO-017 D4)', () => {
     }
   });
 
-  it('scm goes through the gateway path the scm screen uses — not the docker-only service path', async () => {
+  it('scm goes through the gateway path the procurement screen uses — not the docker-only service path', async () => {
     const urls: string[] = [];
     await compose(await operatorOverviewLegs(CREDS), {
       route: 'operator-overview',
@@ -238,9 +252,9 @@ describe('credentials per leg (AC-5 — ADR-MONO-017 D4)', () => {
         return json(fixture.legs[legOf(url)].body);
       },
     });
-    const scm = urls.find((u) => u.includes('inventory-visibility'))!;
-    expect(scm).toContain('/api/v1/inventory-visibility/snapshot');
-    expect(scm).not.toMatch(/\/api\/inventory-visibility\//);
+    const scm = urls.find((u) => u.includes('/procurement/po'))!;
+    expect(scm).toContain('/api/v1/procurement/po');
+    expect(scm).not.toMatch(/\/api\/procurement\//);
   });
 
   it('iam leg sends tenantId as a query param for the ACTIVE (selected) tenant, not only X-Tenant-Id (TASK-PC-FE-304)', async () => {
@@ -258,28 +272,84 @@ describe('credentials per leg (AC-5 — ADR-MONO-017 D4)', () => {
     expect(new URL(iam).searchParams.get('tenantId')).toBe('ecommerce');
   });
 
-  it.each([null, '', '   '])(
-    'no finance default account (%j) → finance forbidden/MISSING_PREREQUISITE and NO finance call',
-    async (acc) => {
-      const urls: string[] = [];
-      const r = await compose(await operatorOverviewLegs({ ...CREDS, financeDefaultAccountId: acc }), {
-        route: 'operator-overview',
-        requestId: 'req-1',
-        fetchLeg: async (url) => {
-          urls.push(url);
-          return json(fixture.legs[legOf(url)].body);
-        },
-      });
-      if (r.unauthorized) throw new Error('unexpected 401');
-      expect(r.envelope.cards.find((c) => c.domain === 'finance')).toEqual({
-        domain: 'finance',
-        status: 'forbidden',
-        reason: 'MISSING_PREREQUISITE',
-      });
-      expect(urls.some((u) => u.includes('/balances'))).toBe(false);
-      expect(urls).toHaveLength(5);
-    },
-  );
+});
+
+describe('TASK-PC-FE-364 — one call per card, swapped one-for-one', () => {
+  it('🔴 exactly ONE call per card and six in total — each to the § 2.4.9.1 URL', async () => {
+    const urls: string[] = [];
+    const r = await compose(await operatorOverviewLegs(CREDS), {
+      route: 'operator-overview',
+      requestId: 'req-1',
+      fetchLeg: async (url) => {
+        urls.push(url);
+        return json(fixture.legs[legOf(url)].body);
+      },
+    });
+    if (r.unauthorized) throw new Error('unexpected 401');
+    // Total unchanged by the swap (owner decision «one call per card»).
+    expect(urls).toHaveLength(6);
+    const perCard = Object.fromEntries(
+      CARD_ORDER.map((d) => [d, urls.filter((u) => legOf(u) === d)]),
+    );
+    for (const d of CARD_ORDER) {
+      expect(perCard[d], `${d}: calls`).toEqual([EXPECTED_LEG_URLS[d]]);
+    }
+  });
+
+  it('every leg is a real call — no card is decided up front (finance needs no default account)', async () => {
+    const legs = await operatorOverviewLegs(CREDS);
+    expect(legs).toHaveLength(6);
+    for (const l of legs) {
+      expect('decided' in l, `${l.domain} decided without a call`).toBe(false);
+    }
+  });
+
+  it('the finance leg is the ledger read at LEDGER_BASE_URL — not account-service balances', async () => {
+    const legs = (await operatorOverviewLegs(CREDS)) as Extract<LegSpec, { url: string }>[];
+    const finance = legs.find((l) => l.domain === 'finance')!;
+    expect(finance.url.startsWith('http://ledger.finance.local/')).toBe(true);
+    expect(finance.url).not.toContain('/balances');
+    expect(finance.url).not.toContain('http://finance.local/');
+  });
+
+  it('a 403 on a swapped leg is still a per-card `forbidden` — the other five stay ok', async () => {
+    const fetchLeg: FetchLeg = async (url) =>
+      legOf(url) === 'scm'
+        ? json({ code: 'PERMISSION_DENIED', message: 'Access denied' }, 403)
+        : json(fixture.legs[legOf(url)].body);
+    const r = await compose(await operatorOverviewLegs(CREDS), {
+      route: 'operator-overview',
+      requestId: 'req-1',
+      fetchLeg,
+    });
+    if (r.unauthorized) throw new Error('unexpected 401');
+    expect(r.envelope.cards.find((c) => c.domain === 'scm')).toEqual({
+      domain: 'scm',
+      status: 'forbidden',
+      reason: 'PERMISSION_DENIED',
+    });
+    expect(r.envelope.cards.filter((c) => c.status === 'ok')).toHaveLength(5);
+  });
+
+  it('an unlinked erp inbox (no meta.actorEmployeeId) passes through verbatim — the composer does not reshape it', async () => {
+    const notLinked = (
+      JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as {
+        variants: { erpNotLinked: { body: unknown } };
+      }
+    ).variants.erpNotLinked.body;
+    const r = await compose(await operatorOverviewLegs(CREDS), {
+      route: 'operator-overview',
+      requestId: 'req-1',
+      fetchLeg: async (url) =>
+        legOf(url) === 'erp' ? json(notLinked) : json(fixture.legs[legOf(url)].body),
+    });
+    if (r.unauthorized) throw new Error('unexpected 401');
+    expect(r.envelope.cards.find((c) => c.domain === 'erp')).toEqual({
+      domain: 'erp',
+      status: 'ok',
+      data: notLinked,
+    });
+  });
 });
 
 describe('R1 — one structured log line per leg, no secrets (AC-7)', () => {

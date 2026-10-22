@@ -132,6 +132,12 @@ test.describe('Active-tenant switch re-scope (A↔B: acme-corp [finance,wms] ↔
       await gotoOverview(page);
       await assertEntitlement(page, ['scm', 'erp'], ['finance', 'wms']);
 
+      // 🔵 TASK-PC-FE-364 — the overview scm leg is now the PO list
+      // (`/api/v1/procurement/po` through the same gateway), not the
+      // inventory-visibility snapshot. The `ok` requirement below now gates
+      // the procurement leg's health on globex; it no longer reaches the
+      // inventory-visibility `/snapshot` path the MONO-171 / SCM-BE-021 note
+      // describes (that history is kept for why the cell is strict).
       // TASK-MONO-173 — scm leg producer-health gate. The generic
       // assertEntitlement tolerates 'degraded' on the entitled side (line ~44:
       // "ok with live data OR at minimum degraded"), which let the

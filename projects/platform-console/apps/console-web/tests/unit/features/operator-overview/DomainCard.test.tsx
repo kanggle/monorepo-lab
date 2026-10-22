@@ -1,25 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { DomainCard } from '@/features/operator-overview';
 import type {
   Card,
+  DomainKey,
   OperatorOverview,
 } from '@/features/operator-overview';
 
 /**
- * `<DomainCard>` per-status branch coverage (TASK-PC-FE-011 / AC-20).
+ * `<DomainCard>` per-status branch coverage (TASK-PC-FE-011 / AC-20;
+ * TASK-PC-FE-364 business figures).
  *
  * Asserts the 3 distinct UI shapes per § 2.4.9.1:
- *  - `ok` — domain-specific summary using `data` (each domain has a
- *    distinct testid for its primary metric).
+ *  - `ok` — ONE business figure per card (the producer's page total), a
+ *    one-line description, and a link to the work screen. `0` renders as "0";
+ *    the erp card for an account linked to no employee renders «직원 연결 없음»
+ *    instead of a number (Failure Scenario 2).
  *  - `degraded` — "data unavailable" placeholder + reason copy +
  *    retry button (the only client-component branch).
  *  - `forbidden` — "not available to your role / tenant" placeholder
- *    + reason copy; the finance × MISSING_PREREQUISITE combo surfaces
- *    the actionable "Configure a default finance account" hint per
- *    § 2.4.9.1 Implementation guidance.
+ *    + reason copy.
  */
 
 function wrapper() {
@@ -37,260 +39,245 @@ function envelopeFor(card: Card): OperatorOverview {
   return { asOf: '2026-05-20T10:30:00Z', cards: [card, card, card, card, card] };
 }
 
-describe('DomainCard — ok branch (per-domain summaries)', () => {
-  it('gap ok → renders the total account count', () => {
-    const card: Card = {
-      domain: 'iam',
-      status: 'ok',
-      data: { totalElements: 12345 },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    expect(screen.getByTestId('operator-overview-card-iam')).toHaveAttribute(
-      'data-status',
-      'ok',
-    );
+function renderCard(card: Card) {
+  return render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
+    wrapper: wrapper(),
+  });
+}
+
+/** One producer-shaped `ok` body per card, carrying page total `n`. */
+function okBody(domain: DomainKey, n: number): unknown {
+  switch (domain) {
+    case 'iam':
+      return { content: [], totalElements: n, page: 0, size: 1, totalPages: n };
+    case 'wms':
+      return {
+        content: [],
+        page: { number: 0, size: 1, totalElements: n, totalPages: n },
+        sort: 'receivedAt,desc',
+      };
+    case 'scm':
+      return {
+        data: { content: [], page: 0, size: 1, totalElements: n, totalPages: n },
+        meta: { timestamp: '2026-10-22T02:00:00Z' },
+      };
+    case 'finance':
+      return {
+        data: [],
+        meta: { page: 0, size: 1, totalElements: n, totalPages: n, timestamp: 't' },
+      };
+    case 'erp':
+      return {
+        data: [],
+        meta: { page: 0, size: 1, totalElements: n, totalPages: n, actorEmployeeId: 'emp-7' },
+      };
+    case 'ecommerce':
+      return { content: [], page: 0, size: 1, totalElements: n };
+  }
+}
+
+const CASES: ReadonlyArray<{
+  domain: DomainKey;
+  title: string;
+  label: string;
+  testId: string;
+  href: string;
+  linkText: string;
+}> = [
+  {
+    domain: 'iam',
+    title: 'IAM 계정',
+    label: '잠긴 계정 (이 테넌트)',
+    testId: 'operator-overview-card-iam-locked',
+    href: '/accounts',
+    linkText: '계정 운영으로 이동',
+  },
+  {
+    domain: 'wms',
+    title: 'WMS 출고',
+    label: '미출고 주문',
+    testId: 'operator-overview-card-wms-unshipped',
+    href: '/wms/outbound',
+    linkText: '출고 화면으로 이동',
+  },
+  {
+    domain: 'scm',
+    title: 'SCM 발주',
+    label: '제출 대기 발주 (초안)',
+    testId: 'operator-overview-card-scm-draft-po',
+    href: '/scm/procurement',
+    linkText: '조달 화면으로 이동',
+  },
+  {
+    domain: 'finance',
+    title: 'Finance 대사',
+    label: '미해소 대사 차이',
+    testId: 'operator-overview-card-finance-open-discrepancies',
+    href: '/ledger',
+    linkText: '원장 화면으로 이동',
+  },
+  {
+    domain: 'erp',
+    title: 'ERP 결재',
+    label: '내 결재 대기',
+    testId: 'operator-overview-card-erp-inbox',
+    href: '/erp/approval',
+    linkText: '결재함으로 이동',
+  },
+  {
+    domain: 'ecommerce',
+    title: 'ecommerce 주문',
+    label: '출고 대기 주문 (결제 완료)',
+    testId: 'operator-overview-card-ecommerce-to-ship',
+    href: '/ecommerce/orders',
+    linkText: '주문 화면으로 이동',
+  },
+];
+
+describe('DomainCard — ok branch: one business figure per card (TASK-PC-FE-364)', () => {
+  it.each(CASES)('$domain ok → title, label and the page total', (c) => {
+    renderCard({ domain: c.domain, status: 'ok', data: okBody(c.domain, 12345) });
+    const section = screen.getByTestId(`operator-overview-card-${c.domain}`);
+    expect(section).toHaveAttribute('data-status', 'ok');
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent(c.title);
+    expect(within(section).getByText(c.label)).toBeInTheDocument();
+    expect(screen.getByTestId(c.testId)).toHaveTextContent('12,345');
     expect(
-      screen.getByTestId('operator-overview-card-iam-total'),
-    ).toHaveTextContent('12,345');
+      screen.getByTestId(`operator-overview-card-${c.domain}-description`).textContent,
+    ).not.toBe('');
   });
 
-  it('gap ok → renders the drill-down link to the IAM detail (/dashboards) (TASK-PC-FE-034 AC-5)', () => {
-    const card: Card = {
-      domain: 'iam',
-      status: 'ok',
-      data: { totalElements: 12345 },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
+  it.each(CASES)('$domain ok with a 0 total → renders "0", not the "—" fallback', (c) => {
+    renderCard({ domain: c.domain, status: 'ok', data: okBody(c.domain, 0) });
+    const value = screen.getByTestId(c.testId);
+    expect(value).toHaveTextContent(/^0$/);
+  });
+
+  it.each(CASES)('$domain ok → links to its work screen ($href) with no filter param', (c) => {
+    renderCard({ domain: c.domain, status: 'ok', data: okBody(c.domain, 1) });
+    const link = screen.getByTestId(`operator-overview-card-${c.domain}-work-link`);
+    // 🔴 verbatim, no query: the destinations do not seed a status filter from
+    // the URL, so a `?status=…` would land on the unfiltered list silently.
+    expect(link).toHaveAttribute('href', c.href);
+    expect(link).toHaveTextContent(c.linkText);
+  });
+
+  it.each(CASES)('$domain ok but an unreadable body → "—" placeholder, never a crash', (c) => {
+    renderCard({ domain: c.domain, status: 'ok', data: 'not-an-object' });
+    // erp: an unparseable body is not «not linked» either — it is «—».
+    expect(screen.getByTestId(c.testId)).toHaveTextContent('—');
+  });
+
+  it('gap ok → the heading still drills down to the IAM detail (/dashboards) (TASK-PC-FE-034 AC-5)', () => {
+    renderCard({ domain: 'iam', status: 'ok', data: okBody('iam', 3) });
     const link = screen.getByTestId('operator-overview-card-iam-drilldown');
-    expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/dashboards');
-    // The link carries the IAM card heading text (accessible name) so the
-    // heading semantics are preserved (AC-5 a11y).
     expect(link).toHaveAccessibleName(/IAM 계정/);
   });
 
   it.each(['wms', 'scm', 'finance', 'erp', 'ecommerce'] as const)(
-    '%s ok → does NOT render a drill-down link (AC-6: IAM card only)',
+    '%s ok → does NOT render the heading drill-down (AC-6: IAM card only)',
     (domain) => {
-      const card: Card = { domain, status: 'ok', data: {} };
-      render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-        wrapper: wrapper(),
-      });
+      renderCard({ domain, status: 'ok', data: okBody(domain, 1) });
       expect(
         screen.queryByTestId('operator-overview-card-iam-drilldown'),
       ).not.toBeInTheDocument();
     },
   );
 
-  it('wms ok → renders the snapshot row count from the read-model page', () => {
-    // TASK-PC-FE-295: the producer body IS the read-model page
-    // (`PageResponse<InventorySnapshotResponse>`); the card reads
-    // `page.totalElements` = row count. It is not a stock-unit sum, and there
-    // is no alert tile — an alert count needs a second query the leg does not
-    // make. The old cell seeded `inventorySnapshot.{totalStockUnits,alertCount}`,
-    // keys the producer has never emitted.
-    const card: Card = {
-      domain: 'wms',
-      status: 'ok',
-      data: {
-        content: [{ skuCode: 'SKU-0001', onHandQty: 125, lowStockFlag: false }],
-        page: { number: 0, size: 20, totalElements: 438, totalPages: 22 },
-        sort: 'lastEventAt,desc',
-      },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    expect(
-      screen.getByTestId('operator-overview-card-wms-stock'),
-    ).toHaveTextContent('438');
-    expect(
-      screen.queryByTestId('operator-overview-card-wms-alerts'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('wms ok → answers the low-stock question with a LINK, not a second call', () => {
-    // TASK-PC-FE-296 — owner decision ⓒ. AC-0 measured why a number here is
-    // not free: the second producer query (`lowStockOnly=true&size=1`) cannot
-    // be a 7th parallel leg (the fan-out is keyed per DOMAIN), so it runs
-    // sequentially inside the wms leg body with the retry wrapping BOTH calls
-    // — worst case 8.15s against a 5s COMPOSITION_TIMEOUT. Paying for the
-    // alert count therefore risks losing the row count that works today.
-    //
+  it('wms ok → keeps the low-stock LINK (TASK-PC-FE-296 ⓒ — zero calls), next to the outbound link', () => {
     // 🔴 The href is asserted VERBATIM on purpose. `wms/inventory/page.tsx`
-    //    seeds its 저재고 filter from exactly `?lowStockOnly=true`
-    //    (strict `=== 'true'`, mirroring the proxy route). Drift either side
-    //    and the link lands on the UNFILTERED list — which is what the screen
-    //    did before 296, silently and with no error anywhere.
-    const card: Card = {
+    //    seeds its 저재고 filter from exactly `?lowStockOnly=true`.
+    renderCard({ domain: 'wms', status: 'ok', data: okBody('wms', 14) });
+    expect(screen.getByTestId('operator-overview-card-wms-lowstock-link')).toHaveAttribute(
+      'href',
+      '/wms/inventory?lowStockOnly=true',
+    );
+    expect(screen.getByTestId('operator-overview-card-wms-unshipped')).toHaveTextContent('14');
+    expect(screen.queryByTestId('operator-overview-card-wms-alerts')).not.toBeInTheDocument();
+  });
+
+  it('wms ok → the count is page.totalElements, never a sum over content[] (295 AC-6)', () => {
+    renderCard({
       domain: 'wms',
       status: 'ok',
       data: {
-        content: [],
-        page: { number: 0, size: 20, totalElements: 438, totalPages: 22 },
+        content: [{ lineCount: 5 }, { lineCount: 7 }],
+        page: { number: 0, size: 2, totalElements: 9, totalPages: 5 },
       },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
     });
-    const link = screen.getByTestId(
-      'operator-overview-card-wms-lowstock-link',
-    );
-    expect(link).toHaveAttribute('href', '/wms/inventory?lowStockOnly=true');
-    // The row count must SURVIVE the addition — ⓒ was chosen precisely so
-    // that the tile which works today is not put at risk.
-    expect(
-      screen.getByTestId('operator-overview-card-wms-stock'),
-    ).toHaveTextContent('438');
+    expect(screen.getByTestId('operator-overview-card-wms-unshipped')).toHaveTextContent(/^9$/);
   });
 
-  it('scm ok → renders the snapshot row count + surfaces meta.warning (S5 hint)', () => {
-    // TASK-PC-FE-295: the producer body is `{ data: <page>, meta }`; the count
-    // comes from `data.totalElements` (rows, not distinct nodes — a page
-    // cannot answer "how many nodes"). The old cell seeded a top-level
-    // `nodes[]` the producer has never emitted, so only the warning resolved.
-    const card: Card = {
-      domain: 'scm',
-      status: 'ok',
-      data: {
-        data: {
-          content: [{ nodeId: 'NODE-SEOUL', sku: 'SKU-0001', quantity: 120 }],
-          page: 0,
-          size: 20,
-          totalElements: 57,
-          totalPages: 3,
-        },
-        meta: {
-          timestamp: '2026-09-18T02:00:00Z',
-          warning: 'Not for procurement decisions (S5)',
-          staleness: 'FRESH',
-        },
-      },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    expect(
-      screen.getByTestId('operator-overview-card-scm-nodes'),
-    ).toHaveTextContent('57');
-    expect(
-      screen.getByTestId('operator-overview-card-scm-warning'),
-    ).toHaveTextContent('S5');
-  });
-
-  it('finance ok → renders "balance available" + currency code WITHOUT numeric coercion (F5)', () => {
-    // TASK-PC-FE-295: the producer body is the balances envelope
-    // `{ data: [ {currency, ledger, available, held} ], meta }`. The old cell
-    // seeded `{ balance: { amount, currency } }` — a shape no finance producer
-    // emits — which is why this cell stayed green while the real card said
-    // «잔액 정보 없음».
-    const card: Card = {
+  it('finance ok → shows the count only; no minor-units string from a row reaches the DOM (F5)', () => {
+    renderCard({
       domain: 'finance',
       status: 'ok',
       data: {
-        data: [
-          { currency: 'KRW', ledger: '1234500', available: '1234500', held: '0' },
-        ],
-        meta: { timestamp: '2026-09-18T02:00:00Z' },
+        data: [{ expectedMinor: '1234500', actualMinor: '1234600', currency: 'KRW' }],
+        meta: { totalElements: 1 },
       },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    // F5: the UI surfaces only the "available" status + currency
-    // code; the raw amount string is NOT rendered as a number.
-    expect(
-      screen.getByTestId('operator-overview-card-finance-status'),
-    ).toHaveTextContent('잔액 조회 가능');
-    expect(
-      screen.getByTestId('operator-overview-card-finance-currency'),
-    ).toHaveTextContent('KRW');
-    // The raw minor-units string MUST NOT appear in the rendered DOM
-    // as a number — verify the literal string is not present.
-    expect(
-      screen.queryByText('1,234,500'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('1234500'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('finance ok with several currencies → availability yes, currency chip omitted', () => {
-    // The producer body carries no "account currency" field, so a
-    // multi-currency account has no single answer for the chip. Showing
-    // whichever row came first would be a guess presented as a fact.
-    const card: Card = {
-      domain: 'finance',
-      status: 'ok',
-      data: {
-        data: [
-          { currency: 'KRW', ledger: '1000', available: '1000', held: '0' },
-          { currency: 'USD', ledger: '20', available: '20', held: '0' },
-        ],
-        meta: {},
-      },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
     });
     expect(
-      screen.getByTestId('operator-overview-card-finance-status'),
-    ).toHaveTextContent('잔액 조회 가능');
-    expect(
-      screen.queryByTestId('operator-overview-card-finance-currency'),
-    ).not.toBeInTheDocument();
+      screen.getByTestId('operator-overview-card-finance-open-discrepancies'),
+    ).toHaveTextContent('1');
+    for (const s of ['1234500', '1,234,500', '1234600', '1,234,600', 'KRW']) {
+      expect(screen.queryByText(s, { exact: false })).not.toBeInTheDocument();
+    }
   });
 
-  it('erp ok → renders active department count from meta.totalElements', () => {
-    const card: Card = {
+  it('finance ok → no balance / default-account wording is left on the card', () => {
+    renderCard({ domain: 'finance', status: 'ok', data: okBody('finance', 2) });
+    const section = screen.getByTestId('operator-overview-card-finance');
+    expect(section.textContent).not.toMatch(/잔액|기본 finance 계정/);
+  });
+});
+
+describe('DomainCard — erp «직원 연결 없음» (TASK-PC-FE-364 Failure Scenario 2)', () => {
+  it('🔴 meta.actorEmployeeId absent → «직원 연결 없음», NO number and NO 0', () => {
+    renderCard({
       domain: 'erp',
       status: 'ok',
-      data: { meta: { totalElements: 87 } },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
+      data: { data: [], meta: { page: 0, size: 1, totalElements: 0, totalPages: 0 } },
     });
-    expect(
-      screen.getByTestId('operator-overview-card-erp-departments'),
-    ).toHaveTextContent('87');
-  });
-
-  it('ecommerce ok → renders tenant product count from totalElements', () => {
-    const card: Card = {
-      domain: 'ecommerce',
-      status: 'ok',
-      data: { totalElements: 42 },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    expect(
-      screen.getByTestId('operator-overview-card-ecommerce'),
-    ).toHaveAttribute('data-status', 'ok');
-    expect(
-      screen.getByTestId('operator-overview-card-ecommerce-products'),
-    ).toHaveTextContent('42');
-  });
-
-  it('ecommerce ok → renders "0" for an empty catalog (totalElements: 0 NOT hidden)', () => {
-    const card: Card = {
-      domain: 'ecommerce',
-      status: 'ok',
-      data: { totalElements: 0 },
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
-    // 0 is a valid empty catalog — surfaced as "0", NOT the "—" fallback.
-    const count = screen.getByTestId(
-      'operator-overview-card-ecommerce-products',
+    expect(screen.getByTestId('operator-overview-card-erp-not-linked')).toHaveTextContent(
+      '직원 연결 없음',
     );
-    expect(count).toHaveTextContent('0');
-    expect(count).not.toHaveTextContent('—');
+    expect(screen.queryByTestId('operator-overview-card-erp-inbox')).not.toBeInTheDocument();
+    expect(screen.getByTestId('operator-overview-card-erp').textContent).not.toMatch(/\b0\b/);
+    // The work screen is still one click away.
+    expect(screen.getByTestId('operator-overview-card-erp-work-link')).toHaveAttribute(
+      'href',
+      '/erp/approval',
+    );
+  });
+
+  it('meta.actorEmployeeId null → also «not linked» (never a failed parse into «—»)', () => {
+    renderCard({
+      domain: 'erp',
+      status: 'ok',
+      data: { data: [], meta: { totalElements: 0, actorEmployeeId: null } },
+    });
+    expect(screen.getByTestId('operator-overview-card-erp-not-linked')).toBeInTheDocument();
+  });
+
+  it('linked with nothing waiting → a real "0" (a different state from «not linked»)', () => {
+    renderCard({
+      domain: 'erp',
+      status: 'ok',
+      data: { data: [], meta: { totalElements: 0, actorEmployeeId: 'emp-7' } },
+    });
+    expect(screen.getByTestId('operator-overview-card-erp-inbox')).toHaveTextContent(/^0$/);
+    expect(screen.queryByTestId('operator-overview-card-erp-not-linked')).not.toBeInTheDocument();
+  });
+
+  it('the employee id is never rendered', () => {
+    renderCard({
+      domain: 'erp',
+      status: 'ok',
+      data: { data: [], meta: { totalElements: 2, actorEmployeeId: 'emp-secret-77' } },
+    });
+    expect(screen.queryByText('emp-secret-77', { exact: false })).not.toBeInTheDocument();
   });
 });
 
@@ -303,12 +290,9 @@ describe('DomainCard — degraded branch', () => {
     ['erp', 'TIMEOUT'],
     ['ecommerce', 'CIRCUIT_OPEN'],
   ] as const)(
-    '%s degraded/%s → placeholder + reason + retry button',
+    '%s degraded/%s → placeholder + reason + retry button, no work link',
     (domain, reason) => {
-      const card: Card = { domain, status: 'degraded', reason };
-      render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-        wrapper: wrapper(),
-      });
+      renderCard({ domain, status: 'degraded', reason });
       expect(
         screen.getByTestId(`operator-overview-card-${domain}-degraded`),
       ).toBeInTheDocument();
@@ -320,32 +304,21 @@ describe('DomainCard — degraded branch', () => {
       expect(
         screen.getByTestId(`operator-overview-retry-${domain}-degraded`),
       ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId(`operator-overview-card-${domain}-work-link`),
+      ).not.toBeInTheDocument();
     },
   );
 
   it('gap degraded → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
-    const card: Card = {
-      domain: 'iam',
-      status: 'degraded',
-      reason: 'TIMEOUT',
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
+    renderCard({ domain: 'iam', status: 'degraded', reason: 'TIMEOUT' });
     expect(
       screen.queryByTestId('operator-overview-card-iam-drilldown'),
     ).not.toBeInTheDocument();
   });
 
   it('degraded card status attribute is "degraded"', () => {
-    const card: Card = {
-      domain: 'iam',
-      status: 'degraded',
-      reason: 'TIMEOUT',
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
+    renderCard({ domain: 'iam', status: 'degraded', reason: 'TIMEOUT' });
     expect(screen.getByTestId('operator-overview-card-iam')).toHaveAttribute(
       'data-status',
       'degraded',
@@ -358,15 +331,13 @@ describe('DomainCard — forbidden branch', () => {
     ['iam', 'PERMISSION_DENIED'],
     ['wms', 'TENANT_FORBIDDEN'],
     ['scm', 'PERMISSION_DENIED'],
+    ['finance', 'PERMISSION_DENIED'],
     ['erp', 'TENANT_FORBIDDEN'],
-    ['ecommerce', 'TENANT_FORBIDDEN'],
+    ['ecommerce', 'PERMISSION_DENIED'],
   ] as const)(
-    '%s forbidden/%s → placeholder + reason, NO hint',
+    '%s forbidden/%s → placeholder + reason, no number and no work link',
     (domain, reason) => {
-      const card: Card = { domain, status: 'forbidden', reason };
-      render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-        wrapper: wrapper(),
-      });
+      renderCard({ domain, status: 'forbidden', reason });
       expect(
         screen.getByTestId(`operator-overview-card-${domain}-forbidden`),
       ).toBeInTheDocument();
@@ -375,58 +346,27 @@ describe('DomainCard — forbidden branch', () => {
           `operator-overview-card-${domain}-forbidden-reason`,
         ),
       ).toHaveTextContent(reason);
-      // Finance hint only appears on finance × MISSING_PREREQUISITE.
       expect(
-        screen.queryByTestId('operator-overview-card-finance-missing-hint'),
+        screen.queryByTestId(`operator-overview-card-${domain}-work-link`),
       ).not.toBeInTheDocument();
     },
   );
 
   it('gap forbidden → drill-down link is SUPPRESSED (AC-6: link only on ok)', () => {
-    const card: Card = {
-      domain: 'iam',
-      status: 'forbidden',
-      reason: 'PERMISSION_DENIED',
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
+    renderCard({ domain: 'iam', status: 'forbidden', reason: 'PERMISSION_DENIED' });
     expect(
       screen.queryByTestId('operator-overview-card-iam-drilldown'),
     ).not.toBeInTheDocument();
   });
 
-  it('finance forbidden/MISSING_PREREQUISITE → actionable hint surfaces (§ 2.4.9.1)', () => {
-    const card: Card = {
-      domain: 'finance',
-      status: 'forbidden',
-      reason: 'MISSING_PREREQUISITE',
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
+  it('MISSING_PREREQUISITE (still in the wire vocabulary) → generic copy, no finance-account hint', () => {
+    // TASK-PC-FE-364: this route no longer produces it; a consumer must still
+    // render it without breaking, and the old «set a default finance account»
+    // hint is gone with the prerequisite.
+    renderCard({ domain: 'finance', status: 'forbidden', reason: 'MISSING_PREREQUISITE' });
     expect(
-      screen.getByTestId('operator-overview-card-finance-forbidden'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId(
-        'operator-overview-card-finance-forbidden-reason',
-      ),
+      screen.getByTestId('operator-overview-card-finance-forbidden-reason'),
     ).toHaveTextContent('MISSING_PREREQUISITE');
-    expect(
-      screen.getByTestId('operator-overview-card-finance-missing-hint'),
-    ).toBeInTheDocument();
-  });
-
-  it('finance forbidden/TENANT_FORBIDDEN → NO MISSING_PREREQUISITE hint', () => {
-    const card: Card = {
-      domain: 'finance',
-      status: 'forbidden',
-      reason: 'TENANT_FORBIDDEN',
-    };
-    render(<DomainCard card={card} overviewForRetry={envelopeFor(card)} />, {
-      wrapper: wrapper(),
-    });
     expect(
       screen.queryByTestId('operator-overview-card-finance-missing-hint'),
     ).not.toBeInTheDocument();
