@@ -57,9 +57,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~④.
-- [ ] **AC-1** — 소유자 결정(가/나) 선택창 · 스펙 먼저.
-- [ ] **AC-2** — 구현 + 시험 · CI 의 wms 잡 초록.
+- [x] **AC-0** — 위 ①~④. (아래 `## AC-0 측정`)
+- [x] **AC-1** — 소유자 결정(가/나) 선택창 · 스펙 먼저. ((가-2) · 경계 `<` · 칼럼 제거 — 아래 `### 소유자 결정`; 스펙은 별도 커밋으로 먼저)
+- [ ] **AC-2** — 구현 + 시험 · CI 의 wms 잡 초록. (구현 + 로컬 `admin-service:check` 초록 완료 · **남은 것**: Testcontainers IT 는 이 호스트에 Docker 가 없어 CI 전용 · CI 미실행 — 아래 `## 구현`)
 - [ ] **AC-3** — 굽기 뒤 라이브: 설정을 바꾸면 콘솔 저재고 필터 결과가 따라 바뀌는가(다음 데모 창).
 
 # Related Specs
@@ -158,3 +158,53 @@ backend
 - (ii) **`low_stock_flag` 칼럼 + 부분 인덱스 제거** — (가-2) 의 일부로 수용.
 - (iii) inventory-service 재기동 → 임계값 없음 → 알림 0건 은 **별도 티켓 `TASK-BE-647`**(메인 세션 기안). 이 티켓 범위 아님.
 - 콘솔 문구는 **이 브랜치에서 바꾸지 않는다** — 콘솔은 머지 즉시 배포(Vercel)되고 서버 변경은 굽기 뒤에 나가므로, 문구는 아래 `## 콘솔 후속 문구 (굽기 직후 머지)` 에 적어 두고 메인 세션이 굽기 직후 콘솔 PR 로 싣는다.
+
+---
+
+## 구현 (2026-10-22 UTC · Opus)
+
+커밋 둘: 스펙 먼저(`docs(wms): …`) → 구현(`fix(wms): …`). 경로는 `projects/wms-platform/apps/admin-service/src/` 기준.
+
+| 파일 | 변경 |
+|---|---|
+| `main/java/com/wms/admin/application/settings/LowStockThresholdReader.java` (신규) | `currentThreshold()` — `SettingRepository.find(KEY, null)` → JSON 정수 ≥ 0 이면 그 값, 행 없음 · 정수 아님 · 음수 · int 범위 밖 · 깨진 JSON → `10`(경고 로그, 요청은 실패하지 않음). `isLowStock(avail, t) = avail < t` 한 곳에 경계를 둔다. |
+| `main/java/com/wms/admin/readmodel/inventory/InventorySnapshotRepository.java` | `search(…, boolean lowStockOnly, int lowStockThreshold, …)` — `(:lowStockOnly = FALSE OR i.availableQty < :lowStockThreshold)` |
+| `main/java/com/wms/admin/api/dashboard/dto/InventorySnapshotResponse.java` | `from(entity, threshold)` — `lowStockFlag` 를 계산해 싣는다 |
+| `main/java/com/wms/admin/api/dashboard/InventoryDashboardController.java` | 목록은 요청당 임계값을 **한 번** 읽어 필터와 플래그에 같이 쓴다(한 응답 안에서 둘이 어긋날 수 없다) · `by-key` 도 같은 규칙 |
+| `main/java/com/wms/admin/readmodel/inventory/InventorySnapshotEntity.java` | `lowStockFlag` 필드 · 생성자/`apply` 인자 · getter 제거 |
+| `main/java/com/wms/admin/application/projection/InventoryProjectionService.java` | 상수 `DEFAULT_LOW_STOCK_THRESHOLD` 와 플래그 쓰기 제거(되살리지 말라는 주석) |
+| `main/resources/db/migration/V5__drop_inventory_low_stock_flag.sql` (신규) | `DROP INDEX IF EXISTS idx_admin_inventory_snapshot_low_stock` · `ALTER TABLE … DROP COLUMN IF EXISTS low_stock_flag`. 데이터 손실 없음(상수의 함수였다). 🔴 V5 적용 뒤 이미지를 그 아래로 **되돌리면** 옛 코드가 없는 칼럼에 써서 프로젝션이 깨진다 — 앞으로만 간다. |
+
+**칼럼을 읽는 다른 곳 전수**(저장소 전체 `low_stock_flag|lowStockFlag`, `tasks/` 제외):
+- admin-service 밖에서 **칼럼**을 쓰는 곳은 SQL 시드 둘뿐이었다 — `scripts/console-demo/seed/05-wms-admin.sql:24-38` · `tests/federation-hardening-e2e/fixtures/seed-wms-admin.sql:24-46`(수정 전 줄 번호, 둘 다 `INSERT … low_stock_flag … FALSE`). 칼럼과 값을 뺐다. 칼럼이 `NOT NULL DEFAULT FALSE` 였으므로 **V5 전 스키마(지금 굽힌 데모)와 V5 뒤 스키마 둘 다에서 이 INSERT 가 성공**한다 — 굽기 순서와 무관. (공유 경로 `scripts/` · `tests/` — 이 변경의 원자적 적응분, 프로젝트 고유 내용은 원래부터 WMS 시드.)
+- 다른 서비스(inventory 등): 없음.
+- 콘솔: **API 필드** `lowStockFlag` 만 읽는다(`wms-ops/api/types.ts`, `WmsInventoryDataTable.tsx`, `overview-state.ts`, 샘플 `shared/sample/fixtures/wms.ts`, 시험 둘). 응답 모양은 그대로이므로 콘솔 코드 변경 불필요 — 문구만 아래 후속.
+- 스펙: `database-design.md` 의 V2 DDL 블록은 역사적 모양으로 두고, 근거 문단 · 인덱스 표 · 부분 인덱스 수 · 참조 목록에 V5 를 적었다(스펙 커밋).
+
+**시험**
+
+| 층 | 클래스 | 덮는 것 | 로컬 |
+|---|---|---|---|
+| 단위 (`MockitoExtension`, STRICT_STUBS) | `test/.../application/settings/LowStockThresholdReaderTest` (12) | 설정값 반환 · `0` 허용 · 행 없음 → 10 · 무효 8종(`"25"` 문자열, `2.5`, `-1`, `true`, `null`, 객체, 깨진 JSON, int 초과) → 10 · 경계 `9<10` 참 / `10<10` 거짓 | ✅ |
+| 슬라이스 (`@WebMvcTest` + `SecurityConfig` + `GlobalExceptionHandler` + **실제** 리더, 설정 저장소만 mock) | `test/.../api/dashboard/InventoryDashboardControllerSliceTest` (8) | 설정 25 → 저장소에 `eq(25)` 전달 · 24 참 / **25 거짓** / 26 거짓 · 15 는 25 에서 참(옛 `<=10` 이면 거짓이던 행) · 설정 없음 → `eq(10)`, 9 참 / 10 거짓 · 정수 아님 → 10 · `by-key` 도 설정을 따름 · 401 · 404 | ✅ |
+| 슬라이스 (기존) | `SecurityChainAssemblyParityTest` (11) | 새 의존(`LowStockThresholdReader`) mock 만 추가, 판정 불변 | ✅ |
+| IT (Testcontainers Postgres, `@Tag("integration")`) | `test/.../integration/InventoryLowStockThresholdIT` (2) | 행 4개(5·10·15·25)를 **한 번만** 쓰고 설정만 10 → 25 → 0 으로 바꿔 `lowStockOnly` 결과가 `{5}` → `{5,10,15}` → `{}` 로 바뀌는지 + 모든 행 `lowStockFlag == avail < 25` · V5 뒤 칼럼 · 인덱스 0개 | ⚪ **CI 전용** — 이 호스트 Docker 데몬 없음(`docker info` rc=1). 컴파일은 로컬 `test` 에서 통과. CI `integration-tests` 잡이 `:projects:wms-platform:apps:admin-service:integrationTest` 를 돈다(`ci.yml:3639`). |
+| IT (기존) | `ReadModelPersistenceIntegrationTest` | 생성자 인자 하나 줄인 것만(두 줄, throughput 부분은 안 건드림 — BE-643 동시 작업) | ⚪ CI 전용 |
+
+로컬 실행: `./gradlew :projects:wms-platform:apps:admin-service:test` rc=0 — **341 tests, 0 failed, 0 skipped** (JUnit XML 합계). 이어 `:admin-service:check` rc=0.
+
+## 콘솔 후속 문구 (굽기 직후 머지)
+
+> 메인 세션이 **굽기가 끝난 직후** 콘솔 PR 로 싣는다(콘솔은 머지 즉시 Vercel 배포 — 서버보다 먼저 나가면 문구가 거짓이 된다). 사용자 문구는 PC-FE-365 AC-1 관례대로 소유자 승인 대상. 경로는 `projects/platform-console/apps/console-web/src/features/` 기준. 이 문자열을 고정하는 시험은 없다(`고정값 · 가용 10개 이하` 검색 = `data.ts` 1곳).
+
+| 파일:줄 | 종류 | 지금 | 바꿀 문구 |
+|---|---|---|---|
+| `wms-guide/data.ts:157-159` | 주석 | `🔴 첫 항목의 «10» 은 지금 서버 사실(admin-service InventoryProjectionService 의 상수 availableQty <= 10)이다. TASK-BE-644 가 (가) «설정을 따르게 고침» 으로 결정되면 이 항목(threshold · desc)이 거짓이 되므로 그 티켓과 같은 PR 에서 고칠 것.` | `🔵 TASK-BE-644 (굽기 완료): 재고 테이블 배지·필터도 이제 설정 inventory.low_stock.default_threshold_qty 를 따른다(조회 시점 계산, availableQty < 기준, 설정 없음 = 10). 두 메커니즘의 차이는 «기준값» 이 아니라 «무엇을 하는가»(표시 vs 알림) 와 알림 쪽의 창고·SKU별 재정의다.` |
+| `wms-guide/data.ts:154-155` | 주석 | `저재고(저재고) — **두 개의 다른 메커니즘**이며 임계값이 다르다. 가이드에서 반드시 구분: 테이블 배지와 운영자 알림이 서로 불일치할 수 있다.` | `저재고 — **두 개의 다른 메커니즘**(표시 · 알림)이다. 기본 기준은 같은 설정값이지만, 알림은 창고·SKU별 재정의가 있을 수 있어 배지와 알림이 어긋날 수 있다.` (157-159 와 함께 고쳐야 같은 블록 안에서 모순이 안 생긴다) |
+| `wms-guide/data.ts:170` | 사용자 문구 `threshold` | `고정값 · 가용 10개 이하` | `설정값 · 가용 수량이 기준(기본 10)보다 적을 때` |
+| `wms-guide/data.ts:171` | 사용자 문구 `desc` | `가용 수량이 10개 이하면 자동으로 표시되는 고정 기준입니다. 상품(SKU)마다 다르게 정할 수는 없습니다.` | `가용 수량이 운영 설정의 저재고 기준(기본 10)보다 적으면 표시됩니다. 기준을 바꾸면 모든 재고에 바로 적용됩니다. 상품(SKU)마다 다르게 정할 수는 없습니다.` |
+| `wms-ops/components/WmsOperationsScreen.tsx:31-35` | 주석 | `NOTE (TASK-PC-FE-365): inventory.low_stock.default_threshold_qty drives the inventory-service low-stock ALERT only; the 재고 표 저재고 배지 / 개요 저재고 count come from admin-service's lowStockFlag, a fixed availableQty <= 10 today (TASK-BE-644 may change that).` | `NOTE (TASK-BE-644): inventory.low_stock.default_threshold_qty drives BOTH the inventory-service low-stock alert and admin-service's lowStockFlag (재고 표 저재고 배지 / 개요 저재고 count) — the latter derived at query time as availableQty < threshold (missing setting → 10).` |
+| `wms-ops/api/overview-state.ts:62-66` | 주석 | `… flags lowStockFlag (lowStockOnly=true; currently availableQty <= 10, a constant in admin-service that does NOT follow the inventory.low_stock.default_threshold_qty setting — TASK-BE-644; it is NOT a per-SKU reorder point), …` | `… flags lowStockFlag (lowStockOnly=true; availableQty < the current inventory.low_stock.default_threshold_qty setting, derived at query time — TASK-BE-644; it is NOT a per-SKU reorder point), …` |
+| `wms-ops/api/overview-state.ts:166-168` | 주석 | `// SKU-locations the read model flags low-stock (availableQty <= 10 today, // fixed in admin-service — TASK-BE-644).` | `// SKU-locations the read model flags low-stock (availableQty < the current // low-stock setting, derived at query time — TASK-BE-644).` |
+
+- 🔴 둘째 칸(`data.ts:174-176` «운영자 저재고 알림» · «기준을 정하지 않았으면 알림이 가지 않습니다») 은 **이 티켓이 건드리지 않는다** — 그 문장의 사실성은 `TASK-BE-647`(inventory 재기동 시 임계값 없음)의 결과에 달렸다. 647 이 고치면 그쪽 PR 에서 함께 본다.

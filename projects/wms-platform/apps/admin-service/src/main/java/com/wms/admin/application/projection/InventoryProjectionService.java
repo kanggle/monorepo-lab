@@ -51,8 +51,11 @@ public class InventoryProjectionService {
 
     private static final String SOURCE_SERVICE = "inventory";
 
-    /** v1 default low-stock alert threshold; recomputed at projection time. */
-    private static final int DEFAULT_LOW_STOCK_THRESHOLD = 10;
+    // 🔵 TASK-BE-644 — no low-stock computation here any more. It used to store
+    //    `availableQty <= 10` (a constant that ignored the setting) on each event,
+    //    so a setting change never reached rows without a new event. Low-stock is
+    //    now derived at query time from the current setting
+    //    (LowStockThresholdReader); do not reintroduce a stored flag.
 
     private final InventorySnapshotRepository snapshotRepo;
     private final AdjustmentAuditRepository auditRepo;
@@ -338,7 +341,6 @@ public class InventoryProjectionService {
     private void applySnapshot(InventorySnapshotEntity existing, UUID locationId, UUID skuId,
                                UUID lotId, UUID warehouseId, int availableQty, int reservedQty,
                                int damagedQty, Instant occurredAt) {
-        boolean lowStock = availableQty <= DEFAULT_LOW_STOCK_THRESHOLD;
         String warehouseCode = warehouseId == null ? null
                 : warehouseRepo.findById(warehouseId)
                         .map(WarehouseRefEntity::getWarehouseCode).orElse(null);
@@ -351,12 +353,12 @@ public class InventoryProjectionService {
             InventorySnapshotEntity row = new InventorySnapshotEntity(
                     locationId, skuId, lotId, warehouseId, warehouseCode, locationCode, skuCode,
                     lotNo,
-                    availableQty, reservedQty, damagedQty, lowStock, occurredAt, occurredAt);
+                    availableQty, reservedQty, damagedQty, occurredAt, occurredAt);
             snapshotRepo.save(row);
         } else {
             existing.apply(warehouseId, warehouseCode, locationCode, skuCode, lotNo,
                     availableQty, reservedQty,
-                    damagedQty, lowStock, occurredAt, occurredAt);
+                    damagedQty, occurredAt, occurredAt);
         }
     }
 }

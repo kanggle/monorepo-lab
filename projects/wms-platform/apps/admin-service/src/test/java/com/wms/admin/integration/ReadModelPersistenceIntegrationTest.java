@@ -122,7 +122,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID sku = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
         snapshotRepo.save(new InventorySnapshotEntity(location, sku, null, warehouse, null,
-                "WH01-A-01", "SKU-1", null, 100, 0, 0, false, NOW, NOW));
+                "WH01-A-01", "SKU-1", null, 100, 0, 0, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, null))
                 .orElseThrow();
@@ -137,7 +137,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID lot = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
         snapshotRepo.save(new InventorySnapshotEntity(location, sku, lot, warehouse, null,
-                null, null, "LOT-1", 50, 10, 0, false, NOW, NOW));
+                null, null, "LOT-1", 50, 10, 0, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, lot))
                 .orElseThrow();

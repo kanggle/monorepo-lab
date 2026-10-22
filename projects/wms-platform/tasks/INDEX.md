@@ -85,7 +85,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **IN-PROGRESS (2026-10-22 UTC) — AC-0 측정 완료 · 소유자 결정 대기((가) 설정 따르기 / (나) 계약을 상수로).** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`(done — 가이드 «고정값 · 가용 10개 이하» 는 (가) 시 같은 PR 에서 고침). 서버 변경 = 굽기. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **IN-PROGRESS (2026-10-22 UTC) — 소유자 결정 (가-2) 조회 시점 계산 · 경계 `<` · 칼럼 제거(V5). 구현 + 로컬 check 초록 · IT 는 CI 전용 · 콘솔 문구는 굽기 직후 별도 PR(티켓 `## 콘솔 후속 문구`).** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`(done — 가이드 «고정값 · 가용 10개 이하» 는 굽기 직후 콘솔 PR 에서 고침). 서버 변경 = 굽기. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## review
 
