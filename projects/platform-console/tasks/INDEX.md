@@ -119,9 +119,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-363-overview-consistency-scm-wms-bars-money-format.md` — **도메인 개요 모양 맞추기 — SCM 발주 상태 · WMS 알림 상태 분포 막대 · SCM · Finance 개요 금액 서식** — 서버 변경 없음 · 금액은 기존 서식 함수만 (IN-PROGRESS, 2026-10-22 UTC). 분석=Opus 5.5 / 구현=Sonnet.
-
 ## review
+
+- `TASK-PC-FE-363-overview-consistency-scm-wms-bars-money-format.md` — **도메인 개요 모양 맞추기 — SCM 발주 상태 · WMS 알림 상태 분포 막대 · SCM · Finance 개요 금액 서식** — 서버 변경 없음 · 금액은 기존 서식 함수만 (REVIEW, 2026-10-22 UTC · 새 문구 2 · 금액 서식 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
 

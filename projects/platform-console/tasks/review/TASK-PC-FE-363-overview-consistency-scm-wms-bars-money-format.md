@@ -8,7 +8,7 @@ TASK-PC-FE-363
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -55,8 +55,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. ① 이 «첫 페이지에서 셈» 이거나 상태를 접는다면 그 칸은 막대에서 빼고 이유를 적는다.
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록과 금액 서식 변경 전후를 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · Client graph 가드 둘(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록과 금액 서식 변경 전후를 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · Client graph 가드 둘(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
 
 # Related Specs
@@ -102,7 +102,7 @@ frontend
 
 **④ 샘플 고정값**: SCM `totalAmount` `125000.00`/`100000.00`/`62500.00`/`24000.00`(KRW — `fixtures/scm.ts:179,206,234,259`) → `₩125,000` 등. Finance 샘플 잔액은 `fixtures/finance.ts`(KRW). 샘플 데이터는 바꾸지 않는다(표시만 바뀜).
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 | 파일:줄 | 문구 | 언제 보이나 |
 |---|---|---|
@@ -131,3 +131,11 @@ frontend
 - SSR vs 클라이언트: 새 컴포넌트 · 함수 모두 `'use client'` 없음 — 기존처럼 **SSR 서버 컴포넌트** 에서 그려진다. 새 호출 · 서버 변경 없음, 기존 숫자 · testid 유지.
 - 결과(최종 코드): vitest 전체 `--maxWorkers=4 --minWorkers=2` 426 파일 / 5192 테스트 통과 rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0(기존 경고 1) · Client graph 가드 둘 rc=0(console-web hits=0) · INDEX 큐 드리프트 · Task ID 충돌 · Walkthrough 원장 드리프트 rc=0(스테이지 뒤).
 - 남음: AC-1(소유자 승인) · AC-2 의 브랜치 nightly 콘솔 잡 · AC-3.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- **소유자 승인**(선택창, 2026-10-22 KST, 머지 전): 새 문구 2개 · 금액 서식 전후 표 · 구현자가 정한 셋(비원화 = 코드 접미 `1,234.50 USD` · 알림 막대 미확인 노랑 / 확인 회색 · SCM `SETTLED` · `CLOSED` 칸 유지 — 늘 0 이지만 접힌 상태가 아니라 정산 서비스가 붙기 전이라 생길 수 없는 상태) → AC-1 닫힘.
+- 메인 세션이 `money.ts` 의 추가 줄에 `Number(` · `parseFloat` · `parseInt` 0건을 확인.
+- `TASK-PC-FE-364` 티켓 머지(#4466) 뒤 rebase — `INDEX.md` ready 칸 충돌 1곳(364 행만 남김). 기준 변화는 티켓 문서뿐(코드 동일).
+- 브랜치 nightly run `39760579750`(head `60fd20c1d`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4467 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 `/scm` · `/wms` · `/finance` 개요).
