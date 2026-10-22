@@ -76,15 +76,17 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **READY (2026-10-22 UTC) — 소유자 결정: 굽기 전 구현 · 선행 = `TASK-BE-645`(같은 파일).** 관리자 상태 변경의 «취소»(콘솔이 쓰는 경로)가 `OrderCancelled` 를 내지 않는다(`AdminOrderStatusService.java:35`) — 환불 · 재고 해제 없음 · 백오더는 다음 재입고 때 차감 뒤 소비 실패. 이벤트를 내는 `OperatorOrderCancellationService` 는 내부 엔드포인트에만 붙어 있다. 분석=Opus 5.5 / 구현 권장=Opus.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-- `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **IN-PROGRESS (2026-10-22 UTC) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus.
-
 ## review
+
+- `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **REVIEW (2026-10-22 UTC · #4474 머지 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus.
+
+- `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **REVIEW (2026-10-22 UTC · CI 빨강(6) → 초록 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기 · 선행 `TASK-BE-645` 머지됨.** 관리자 상태 변경의 «취소»(콘솔이 쓰는 경로)가 `OrderCancelled` 를 내지 않는다(`AdminOrderStatusService.java:51`) — 환불 · 재고 해제 없음 · 백오더는 다음 재입고 때 차감 뒤 소비 실패. 이벤트를 내는 `OperatorOrderCancellationService` 는 내부 엔드포인트에만 붙어 있다. 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-FE-109-store-post-login-405-in-logs.md` — **스토어 Vercel 로그의 `POST /login 405` 반복 — 출처 밝히기** (REVIEW, 2026-10-13 UTC · impl PR **#4328**). AC-0 가설 확인: `/api/vitals` 비콘(`web-vitals.tsx:32-36`)이 `middleware.ts` 공개 경로 목록에 없어 307→`/login`(메서드 보존)→405. 수정: 두 공개 경로 표(`middleware.ts`·`auth.ts`)에 `/api/vitals` 추가. bite = CI run 38412464400(수정 전, 2 실패) → 38413114273(수정 후, 17/17 통과). AC-0~1 ✅ · ⚪ "다음 창 Vercel 로그 0줄"은 다음 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 

@@ -8,7 +8,7 @@ TASK-BE-645
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -54,7 +54,7 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. ③ 이 틀리면 STOP. → 아래 `## AC-0 측정` (③ 전제 확인됨 — STOP 아님).
-- [ ] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록.
+- [x] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록.
 - [ ] **AC-2** — 굽기 뒤 라이브: 데모에서 백오더 주문을 운영자 API 로 확정하면 400(다음 데모 창 · 백오더 주문이 있을 때).
 
 # Related Specs
@@ -115,3 +115,10 @@ backend
 - 로컬: `./gradlew :projects:ecommerce-microservices-platform:apps:order-service:test` rc=0 — XML 63개 · **445 tests · 0 failures · 0 errors · 0 skipped**. 대상 넷: AdminOrderStatusServiceTest 14 · OrderConfirmationServiceTest 4 · AdminOrderControllerSliceTest 9 · OrderTest 42, 전부 통과.
 - ⚪ bite(가드를 끄고 새 시험이 빨개지는지) **측정 못 함** — 가드를 임시로 무력화하는 편집이 자동 모드 분류기에 막혔다. 논리 근거만: 가드가 없으면 `Order.confirm` 이 `BACKORDERED` 에서 성공한다는 것을 `OrderTest`(«BACKORDERED 상태에서 confirm 호출 시 CONFIRMED로 전이») 가 이미 증명하므로 `assertThatThrownBy` 가 실패한다.
 - ⚪ CI 전용: `integrationTest`(Testcontainers) 는 로컬에서 돌리지 않았다 — 이 경로를 타는 IT 는 없다(`src/test` 에서 `admin/orders/.*/status` 를 부르는 파일은 위 슬라이스 둘 · 서비스 단위 · 데모 시드 시험뿐). CI 의 ecommerce 잡 결과는 PR 후 — AC-1 은 그때 닫는다.
+
+## 머지 기록 (2026-10-22 UTC · 분석=Opus 5.5 · TASK-BE-646 PR 에서 함께 기록)
+
+- impl PR #4474(head `fb1962f41`) 체크 69 · pending 0 · fail 0 → 스쿼시 `5f06aad3b` 머지 → AC-1 닫힘(CI 의 ecommerce 잡 초록).
+- 🔴 머지 때 이 티켓을 review 로 옮기는 기록을 빠뜨려 in-progress 에 남아 있었다 — `TASK-BE-646` PR 에서 바로잡는다.
+- bite(가드를 꺼서 시험이 빨개지는지)는 자동 모드 분류기가 «보안 시험 제거» 로 막아 ⚪ — 우회하지 않음. 근거는 논리(가드가 없으면 `OrderTest` 가 보여 주듯 백오더에서 `confirm` 이 성공 → 새 시험의 `assertThatThrownBy` 실패).
+- 열림: **AC-2**(굽기 뒤 라이브 — 백오더 주문을 운영자 API 로 확정하면 400).

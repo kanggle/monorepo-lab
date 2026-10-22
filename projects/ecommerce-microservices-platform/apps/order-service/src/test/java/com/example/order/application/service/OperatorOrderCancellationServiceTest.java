@@ -107,6 +107,25 @@ class OperatorOrderCancellationServiceTest {
     }
 
     @Test
+    @DisplayName("이미 불러온 주문을 넘기면(관리자 경로) 테넌트 무관 재조회 없이 같은 취소 · 지표 · order.cancelled(OPERATOR) 를 낸다 (TASK-BE-646)")
+    void loadedOrder_cancelledWithoutCrossTenantReload() {
+        Order order = order(OrderStatus.CONFIRMED);
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        CancelOrderResult result = service.cancel(order, "admin status change");
+
+        assertThat(result.status()).isEqualTo(OrderStatus.CANCELLED.name());
+        verify(orderRepository, never()).findByIdAcrossTenants(any());
+        verify(orderRepository).save(order);
+        verify(orderMetrics).recordOrderCancelled("operator");
+        verify(orderMetrics).recordStatusTransition("CONFIRMED", "CANCELLED");
+        ArgumentCaptor<OrderCancelledEvent> captor = ArgumentCaptor.forClass(OrderCancelledEvent.class);
+        verify(orderEventPublisher).publishOrderCancelled(captor.capture());
+        assertThat(captor.getValue().payload().cancelReason()).isEqualTo("OPERATOR");
+    }
+
+    @Test
     @DisplayName("존재하지 않는 주문은 OrderNotFoundException 을 던진다")
     void unknownOrder_throwsNotFound() {
         given(orderRepository.findByIdAcrossTenants("nope")).willReturn(Optional.empty());

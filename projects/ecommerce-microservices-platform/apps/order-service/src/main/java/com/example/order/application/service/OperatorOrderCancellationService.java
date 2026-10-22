@@ -32,6 +32,12 @@ import java.time.Clock;
  * <p>Tenant-agnostic system path: the order is addressed by its globally-unique id
  * ({@link OrderRepository#findByIdAcrossTenants}); the order's immutable tenant is
  * preserved on save and stamped onto the emitted {@code order.cancelled} envelope.
+ *
+ * <p>TASK-BE-646: the console cancels through the admin status endpoint, not the internal one.
+ * {@link AdminOrderStatusService} loads the order in the caller's tenant and hands it to
+ * {@link #cancel(Order, String)} — the same cancel / save / metric / {@code order.cancelled}
+ * sequence in the caller's transaction — so an operator cancel compensates identically on
+ * either path.
  */
 @Slf4j
 @Service
@@ -47,7 +53,20 @@ public class OperatorOrderCancellationService {
     public CancelOrderResult cancel(String orderId, String reason) {
         Order order = orderRepository.findByIdAcrossTenants(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+        return cancel(order, reason);
+    }
 
+    /**
+     * Operator-cancel an order the caller has already loaded (and, for the admin HTTP path,
+     * already scoped to the caller's tenant). Joins the caller's transaction, so the status
+     * change and the {@code order.cancelled} outbox row commit or roll back together. A
+     * non-cancellable order — including one already {@code CANCELLED} — surfaces
+     * {@code OrderCannotBeCancelledException} before anything is saved or published, which is
+     * what makes a repeated request emit no second compensation.
+     */
+    @Transactional
+    public CancelOrderResult cancel(Order order, String reason) {
+        String orderId = order.getOrderId();
         String previousStatus = order.getStatus().name();
         order.cancel(CancelReason.OPERATOR, clock);
         orderRepository.save(order);
