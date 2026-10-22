@@ -376,7 +376,7 @@ Projected from `wms.outbound.*` events. One row per Order.
 | `warehouse_id` | UUID | |
 | `customer_partner_id` | UUID | |
 | `customer_name` | String(200) | Denormalized |
-| `status` | enum | Mirrors Order status |
+| `status` | enum `RECEIVED` / `SHIPPED` / `CANCELLED` | **Collapsed, not a mirror** of the Order state machine: `outbound.order.received` → `RECEIVED`, `outbound.order.cancelled` → `CANCELLED`, `outbound.shipping.confirmed` → `SHIPPED` (`OrderSummaryEntity.applyReceived/applyCancelled/applyShipped`). Picking/packing events do not change this column — progress is in `saga_state`. Corrected in TASK-BE-644: it used to say "Mirrors Order status", and `TASK-PC-FE-362` had to re-plan after planning against that sentence |
 | `source` | enum | |
 | `required_ship_date` | LocalDate | Nullable |
 | `line_count` | Integer | |
@@ -426,14 +426,23 @@ This is the **primary dashboard data source** for real-time stock visibility.
 | `reserved_qty` | Integer | |
 | `damaged_qty` | Integer | |
 | `on_hand_qty` | Integer | Stored (= available + reserved + damaged); updated at projection time |
-| `low_stock_flag` | Boolean | Set when `available_qty ≤ threshold` (from Settings); updated on each event |
 | `last_adjusted_at` | Instant | Timestamp of last mutation event |
 | `last_event_at` | Instant | For last-write-wins |
 | `version` | Long | |
 
-`low_stock_flag` is recomputed at projection time using the current Setting
-`inventory.low_stock.default_threshold_qty`. It is a read-model convenience
-field — not authoritative. The authoritative low-stock alert is in `AlertLog`.
+**Low-stock is derived at query time, not stored** (TASK-BE-644). The API's
+`lowStockFlag` and the `lowStockOnly` filter evaluate `available_qty < threshold`
+on each request, where `threshold` is the current GLOBAL Setting
+`inventory.low_stock.default_threshold_qty` (missing row or non-integer value →
+`10`, the seed default). The strict `<` matches inventory-service's low-stock
+alert comparison, so a row exactly at the threshold is neither badged nor
+alerted. Admin owns the Setting table, so the per-request read is a same-DB PK
+lookup. Deriving at read time means a setting change applies to every row at
+once; a stored flag would keep the old threshold on every row that had not
+received an inventory event since the change. The former `low_stock_flag`
+column and its partial index were dropped in `V5`. The value is a read-model
+convenience, not authoritative — the authoritative low-stock alert is in
+`AlertLog`.
 
 ---
 
