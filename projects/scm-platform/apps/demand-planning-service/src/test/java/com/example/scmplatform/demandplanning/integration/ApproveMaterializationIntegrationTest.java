@@ -86,6 +86,7 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         s.setSource(SuggestionSource.ALERT);
         s.setTriggerEventId(UUID.randomUUID());
         s.setTriggerAvailableQty(5);
+        s.setReorderPointAtTrigger(10); // TASK-SCM-BE-062 snapshot — must survive approve
         s.setTenantId(TENANT_SCM);
         s.setVersion(0);
         s.setCreatedAt(Instant.now());
@@ -161,6 +162,9 @@ class ApproveMaterializationIntegrationTest extends AbstractDemandPlanningIntegr
         ReorderSuggestionJpaEntity persisted = suggestionJpa.findById(suggestionId).orElseThrow();
         assertThat(persisted.getStatus()).isEqualTo(SuggestionStatus.MATERIALIZED);
         assertThat(persisted.getMaterializedPoId()).hasToString(poId);
+        // TASK-SCM-BE-062: approve → materialize saves twice, each rewriting every column from
+        // the domain. The raise-time snapshot must come out the other side unchanged.
+        assertThat(persisted.getReorderPointAtTrigger()).isEqualTo(10);
 
         // The procurement request carried origin + sourceSuggestionId + the line.
         RecordedRequest request = procurementMock.takeRequest(2, TimeUnit.SECONDS);

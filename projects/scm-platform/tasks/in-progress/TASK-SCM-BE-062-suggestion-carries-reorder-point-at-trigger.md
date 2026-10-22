@@ -56,9 +56,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~④. ② 가 «해당» 이면 STOP.
-- [ ] **AC-1** — 소유자 결정(가/나) 선택창 · 계약 먼저.
-- [ ] **AC-2** — 구현 + 시험(위 목록) · CI 의 scm 잡 초록.
+- [x] **AC-0** — 위 ①~④. ② 가 «해당» 이면 STOP. → 해당 안 함(아래 § AC-0 ②). ③(b) 는 정정 있음(§ 구현 «AC-0 정정»).
+- [x] **AC-1** — 소유자 결정(가/나) 선택창 · 계약 먼저. → (가) + (가-1) + (가-2), 계약 커밋 `7726cda04` 가 구현 커밋보다 먼저.
+- [ ] **AC-2** — 구현 + 시험(위 목록) · CI 의 scm 잡 초록. → 구현 · 단위/슬라이스/계약 시험은 로컬 초록(118/118). **Testcontainers IT 6건(신규 3 · 기존 시험에 단언 추가 3)은 로컬에서 못 돌렸다**(Docker 데몬 없음) — CI `demand-planning-service:integrationTest` 와 scm 잡 초록을 보기 전에는 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브: 데모에서 새로 발동된 제안 응답에 값이 실리고, 옛 제안은 `null`(다음 데모 창). 닫을 때 콘솔 후속 티켓 기안.
 
 # Related Specs
@@ -168,3 +168,50 @@ backend
 - **(가-1) 포함** — 정책 없이 발동한 제안은 값을 **갖지 않는다**(wms 경보 임계값도, BATCH 합성값도 아님).
 - **(가-2) 포함** — `safetyStock` 은 싣지 않는다.
 - 옛 행 · 값 없음의 전선 표현 = **키 없음**(`SuggestionResponse` 가 `@JsonInclude(NON_NULL)`).
+
+## 구현 (2026-10-22 UTC · Opus)
+
+### 🔴 AC-0 정정 — ③(b) «Testcontainers IT 가 0» 은 **틀렸다**
+
+AC-0 은 `*IT*.java` 로 Glob 했고 0 을 받았다. 이 서비스의 IT 이름은 `*IntegrationTest.java` 라 그 패턴에 안 걸린다 — **패턴이 0 이었지 IT 가 0 이 아니었다.** 실제로는 `src/test/java/.../integration/` 에 `AbstractDemandPlanningIntegrationTest`(Postgres 16 + Kafka, `ddl-auto=validate`, Flyway) 와 IT 4 클래스가 있고, `build.gradle:107-125` 의 `integrationTest` 태스크가 `@Tag("integration")` 만 돌리며, CI 가 그것을 부른다(`.github/workflows/ci.yml:3959`). 그래서 새 IT 는 «처음 만드는 일» 이 아니라 기존 기반에 얹는 일이었다. ③(a) «suggestion 행 계약 시험 0» 은 맞았다(있던 계약 시험은 오류 봉투 `GlobalExceptionHandlerEnvelopeContractTest` 하나).
+
+### 커밋
+
+| 커밋 | 내용 |
+|---|---|
+| `6afeb9151` | AC-0 측정 · ready → in-progress |
+| `7726cda04` | **계약 먼저** — `demand-planning-api.md` · `data-model.md` · 소유자 결정 기록 |
+| (이 커밋) | 구현 + 시험 |
+
+### 계약 차이 (`7726cda04`)
+
+- `demand-planning-api.md` § GET /suggestions: 예시에 `"reorderPointAtTrigger": 10` 추가. **«값 없음 = 키 없음»** 단락(NON_NULL). 필드 표 신설 — `reorderPointAtTrigger` 는 «발동 순간 정책이 있었을 때만», 정책 PUT · 승인 · 기각으로 바뀌지 않음, 정책 없이 발동(ALERT 경보 임계값 · BATCH 합성값) 과 V4 이전 행은 키 없음, `safetyStock` 안 실음. 예시의 `"materializedPoId": null` 은 전선에 나간 적 없는 값이라 지우고 정정 주석.
+- `data-model.md`: `reorder_point_at_trigger INT null` 행(V4 · 백필 없음 · 이유). `reorder_policy` 대체 경로 주석에 **BATCH 쪽 대체(availableQty 합성 임계값)** 를 처음 적음 — AC-0 ① 에서 찾은 스펙 공백.
+- 이벤트 계약: 변경 없음(demand-planning 은 이벤트를 내지 않는다, AC-0 ③).
+
+### 코드 (`projects/scm-platform/apps/demand-planning-service/src/main/`)
+
+- `resources/db/migration/demand-planning/V4__reorder_suggestion_reorder_point_at_trigger.sql` — `ADD COLUMN reorder_point_at_trigger INT`, nullable, **백필 없음**.
+- `domain/model/ReorderSuggestion.java` — `final Integer reorderPointAtTrigger`(어떤 전이도 안 건드림), `raiseFromAlert` · `raiseFromBatch` · `reconstitute` 세 팩터리 모두에 인자 추가, getter.
+- `application/usecase/EvaluateReorderUseCase.java` · `SweepReorderUseCase.java` — `policyOpt.map(ReorderPolicy::getReorderPoint).orElse(null)` 를 넘김. 지역 변수 `reorderPoint`(대체 경로 값이 들어 있을 수 있음) 는 **넘기지 않는다**.
+- `adapter/outbound/persistence/jpa/ReorderSuggestionJpaEntity.java` — 열 매핑. `adapter/.../ReorderSuggestionAdapter.java` — `save` · `toDomain` 양쪽.
+- `adapter/inbound/web/dto/SuggestionResponse.java` — `Integer reorderPointAtTrigger`(NON_NULL 그대로).
+- 테넌트 고정 · 상태 기계 · 정책 API · 이벤트: 변경 없음.
+
+### 시험
+
+| 층 | 파일 | 무엇을 | 로컬 |
+|---|---|---|---|
+| 도메인 단위 | `domain/ReorderSuggestionStateMachineTest` (+4) | 두 팩터리가 값/`null` 을 싣는다 · 승인→발주화 · 기각 뒤에도 불변 · `reconstitute` 가 값과 `null` 을 보존 | ✅ |
+| use case 단위 | `application/EvaluateReorderUseCaseTest` (+2) | 정책 있음 → 10(경보 임계값 8 과 구별되게) · **정책 없음 → `null`(임계값 8 이 새지 않음)** | ✅ |
+| use case 단위 | `application/SweepReorderUseCaseTest` (+2) | 정책 있음 → 10 · **정책 없음 → `null`(합성값 3 이 새지 않음)** | ✅ |
+| 슬라이스 | `adapter/inbound/web/SuggestionControllerSliceTest` (+1, 단언 +3) | 목록 · 상세 · 기각 응답에 값 · **`null` 이면 키 자체가 없다**(`doesNotExist` + `not(hasKey)`) | ✅ |
+| **계약(첫)** | `adapter/inbound/web/SuggestionResponseContractTest` (신규 2) | 실 MVC+Jackson 으로 — 다 찬 행의 키 집합 = 계약 필드 집합(내부 `destinationNodeType` · `tenantId` · `version` 누출 없음) · 최소 행에 `null` 값 키 0 | ✅ |
+| Testcontainers IT | `integration/AlertConsumerIntegrationTest` (+2, 단언 +1) | 실 Kafka→Postgres 로 발동 → 10 · **정책 10→3 변경 뒤에도 10 · 기각 뒤에도 10** · 정책 없는 SKU → `null` | ⚪ CI 전용 |
+| Testcontainers IT | `integration/ApproveMaterializationIntegrationTest` (단언 +1) | 승인→발주화(저장 2회, 매번 모든 열 재기록) 뒤 10 유지 | ⚪ CI 전용 |
+| Testcontainers IT | `integration/SweepSchedulerIntegrationTest` (+1, 단언 +1) | BATCH 정책 있음 → 20 · 정책 없음 → `null`(합성값 7 이 새지 않음) | ⚪ CI 전용 |
+
+- 갱신만 한 호출처: `application/SuggestionApprovalTxnTest`(시그니처 6곳). 시그니처는 인자 **개수**가 바뀌어 옛 호출이 조용히 자리를 밀리지 않고 컴파일 오류가 난다(`Integer`·`UUID` 둘 다 nullable 이라 개수가 같았다면 위험했을 자리).
+- **로컬 실행**: `./gradlew :projects:scm-platform:apps:demand-planning-service:test` → **rc=0, 20 스위트 118 시험, 실패 0 · 건너뜀 0**(`build/test-results/test/*.xml` 합산). `test` 태스크가 `integration` 태그를 빼므로 IT 는 여기서 **컴파일만** 되었다(같은 source set).
+- **bite**: 두 use case 에서 `policyOpt.map(...)` 을 지역 변수 `reorderPoint` 로 바꿔 넣고 두 단위 시험 클래스를 돌림 → rc=1, **정확히 두 «새지 않음» 시험만 실패**(17 중 2) → 되돌림. 즉 그 두 시험이 (가-1) 을 실제로 문다.
+- **⚪ CI 전용 — 왜**: 이 호스트에 Docker 데몬이 없다(`docker info` → `npipe:////./pipe/docker_engine` 없음). IT 는 `DockerAvailableCondition` 이 있어 로컬에서 돌렸어도 «건너뜀» 이었을 것이고, 그것을 통과로 세지 않는다. CI `ci.yml:3959` 가 `demand-planning-service:integrationTest` 를 돌린다 — 그 결과가 V4 마이그레이션 + `ddl-auto=validate` 의 첫 실측이다.

@@ -156,6 +156,33 @@ class SweepSchedulerIntegrationTest extends AbstractDemandPlanningIntegrationTes
         assertThat(s.getSupplierId()).isEqualTo(supplier);
         // ADR-MONO-050 D9 batch-path: IVS carries no warehouse code → null (follow-up).
         assertThat(s.getWarehouseCode()).isNull();
+        // TASK-SCM-BE-062: the policy reorderPoint is snapshotted onto the BATCH row.
+        assertThat(s.getReorderPointAtTrigger()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("TASK-SCM-BE-062: no policy → BATCH suggestion raised, synthetic threshold NOT snapshotted")
+    void sweep_noPolicy_raisesWithoutReorderPointSnapshot() {
+        String sku = uniqueSku();
+        UUID warehouse = UUID.randomUUID();
+        SkuSupplierMappingJpaEntity mapping = new SkuSupplierMappingJpaEntity();
+        mapping.setTenantId(TENANT_SCM);
+        mapping.setSkuCode(sku);
+        mapping.setSupplierId("SUP-SWEEP-01");
+        mapping.setDefaultOrderQty(100);
+        mapping.setLeadTimeDays(5);
+        mapping.setCurrency("USD");
+        mappingJpa.save(mapping);
+        expectSnapshot(sku, warehouse, 7); // no policy → sweep uses 7 itself as the threshold
+
+        sweepUseCase.sweep();
+
+        List<ReorderSuggestionJpaEntity> mine = suggestionsFor(sku);
+        assertThat(mine).hasSize(1);
+        assertThat(mine.get(0).getTriggerAvailableQty()).isEqualTo(7);
+        assertThat(mine.get(0).getReorderPointAtTrigger())
+                .as("the synthetic availableQty threshold must not be snapshotted")
+                .isNull();
     }
 
     @Test

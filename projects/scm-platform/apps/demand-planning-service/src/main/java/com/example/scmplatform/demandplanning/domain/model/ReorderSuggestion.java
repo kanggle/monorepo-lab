@@ -56,6 +56,13 @@ public class ReorderSuggestion {
     private final SuggestionSource source;
     private final UUID triggerEventId;        // null for BATCH source
     private final Integer triggerAvailableQty;
+    /**
+     * TASK-SCM-BE-062 — snapshot of the scm {@code reorder_policy.reorder_point} at raise time.
+     * Final: no transition touches it, so a later policy change cannot rewrite why an old
+     * suggestion fired. <b>Null</b> when the suggestion was raised without a policy row
+     * (the degraded fallback thresholds are not scm reorder points) and on pre-V4 rows.
+     */
+    private final Integer reorderPointAtTrigger;
     private UUID materializedPoId;           // set on MATERIALIZED
     private final String tenantId;
     private int version;
@@ -66,6 +73,7 @@ public class ReorderSuggestion {
                                String destinationNodeType, String supplierId, int suggestedQty,
                                SuggestionStatus status,
                                SuggestionSource source, UUID triggerEventId, Integer triggerAvailableQty,
+                               Integer reorderPointAtTrigger,
                                UUID materializedPoId, String tenantId, int version,
                                Instant createdAt, Instant updatedAt) {
         this.id = Objects.requireNonNull(id, "id");
@@ -82,6 +90,7 @@ public class ReorderSuggestion {
         this.source = Objects.requireNonNull(source, "source");
         this.triggerEventId = triggerEventId;
         this.triggerAvailableQty = triggerAvailableQty;
+        this.reorderPointAtTrigger = reorderPointAtTrigger; // nullable — no policy / pre-V4
         this.materializedPoId = materializedPoId;
         this.tenantId = Objects.requireNonNull(tenantId, "tenantId");
         this.version = version;
@@ -97,15 +106,21 @@ public class ReorderSuggestion {
      * fires only for wms nodes), so the destination node type is always
      * {@code WMS_WAREHOUSE}. The signature is deliberately unchanged: 3PL replenishment
      * rides the batch/snapshot path only ({@link #raiseFromBatch}).
+     *
+     * @param reorderPointAtTrigger TASK-SCM-BE-062 — the scm policy's reorder point read in the
+     *                              raising transaction, or {@code null} when no policy row
+     *                              existed (never the wms alert threshold).
      */
     public static ReorderSuggestion raiseFromAlert(UUID id, String skuCode, UUID warehouseId,
                                                     String warehouseCode, String supplierId, int suggestedQty,
                                                     UUID triggerEventId, int triggerAvailableQty,
+                                                    Integer reorderPointAtTrigger,
                                                     String tenantId, Instant now) {
         return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
                 NODE_TYPE_WMS_WAREHOUSE, supplierId, suggestedQty,
                 SuggestionStatus.SUGGESTED, SuggestionSource.ALERT,
-                triggerEventId, triggerAvailableQty, null, tenantId, 0, now, now);
+                triggerEventId, triggerAvailableQty, reorderPointAtTrigger,
+                null, tenantId, 0, now, now);
     }
 
     /**
@@ -121,32 +136,42 @@ public class ReorderSuggestion {
      * the IVS read-model, so a below-reorder {@code THIRD_PARTY_LOGISTICS} node drafts a PO
      * addressed to that 3PL node. A null {@code destinationNodeType} normalises to
      * {@code WMS_WAREHOUSE} in the constructor (backward compat).
+     *
+     * @param reorderPointAtTrigger TASK-SCM-BE-062 — the scm policy's reorder point read in the
+     *                              raising transaction, or {@code null} when no policy row
+     *                              existed (never the sweep's synthetic availableQty threshold).
      */
     public static ReorderSuggestion raiseFromBatch(UUID id, String skuCode, UUID warehouseId,
                                                     String warehouseCode, String destinationNodeType,
                                                     String supplierId, int suggestedQty,
                                                     int triggerAvailableQty,
+                                                    Integer reorderPointAtTrigger,
                                                     String tenantId, Instant now) {
         return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
                 destinationNodeType, supplierId, suggestedQty,
                 SuggestionStatus.SUGGESTED, SuggestionSource.BATCH,
-                null, triggerAvailableQty, null, tenantId, 0, now, now);
+                null, triggerAvailableQty, reorderPointAtTrigger,
+                null, tenantId, 0, now, now);
     }
 
     /**
      * Reconstruct from persistence. A null {@code destinationNodeType} (a pre-ADR-055
      * in-flight row) normalises to {@code WMS_WAREHOUSE} in the constructor (backward compat).
+     * {@code reorderPointAtTrigger} MUST be threaded through: the persistence adapter rewrites
+     * every column from the domain on each save, so dropping it here would wipe the snapshot
+     * on the first approve / dismiss (TASK-SCM-BE-062 AC-0 ①).
      */
     public static ReorderSuggestion reconstitute(UUID id, String skuCode, UUID warehouseId,
                                                   String warehouseCode, String destinationNodeType,
                                                   String supplierId, int suggestedQty,
                                                   SuggestionStatus status, SuggestionSource source,
                                                   UUID triggerEventId, Integer triggerAvailableQty,
+                                                  Integer reorderPointAtTrigger,
                                                   UUID materializedPoId, String tenantId, int version,
                                                   Instant createdAt, Instant updatedAt) {
         return new ReorderSuggestion(id, skuCode, warehouseId, warehouseCode,
                 destinationNodeType, supplierId, suggestedQty,
-                status, source, triggerEventId, triggerAvailableQty,
+                status, source, triggerEventId, triggerAvailableQty, reorderPointAtTrigger,
                 materializedPoId, tenantId, version, createdAt, updatedAt);
     }
 
@@ -202,6 +227,8 @@ public class ReorderSuggestion {
     public SuggestionSource getSource() { return source; }
     public UUID getTriggerEventId() { return triggerEventId; }
     public Integer getTriggerAvailableQty() { return triggerAvailableQty; }
+    /** Snapshot of the scm reorder point at raise time (TASK-SCM-BE-062); null = no policy / pre-V4. */
+    public Integer getReorderPointAtTrigger() { return reorderPointAtTrigger; }
     public UUID getMaterializedPoId() { return materializedPoId; }
     public String getTenantId() { return tenantId; }
     public int getVersion() { return version; }

@@ -55,7 +55,7 @@ class SuggestionControllerSliceTest {
     void listSuggestions_returns200_withPageMeta() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
-                100, UUID.randomUUID(), 5, "scm", Instant.now());
+                100, UUID.randomUUID(), 5, 10, "scm", Instant.now());
 
         when(suggestionQueryUseCase.listSuggestions(anyString(), eq(null), eq(null), any(PageQuery.class)))
                 .thenReturn(new PageResult<>(List.of(s), 0, 20, 1, 1));
@@ -64,8 +64,31 @@ class SuggestionControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(SUGGESTION_ID.toString()))
                 .andExpect(jsonPath("$.data[0].status").value("SUGGESTED"))
+                .andExpect(jsonPath("$.data[0].reorderPointAtTrigger").value(10))
                 .andExpect(jsonPath("$.meta.totalElements").value(1))
                 .andExpect(jsonPath("$.meta.totalPages").value(1));
+    }
+
+    /**
+     * TASK-SCM-BE-062: a suggestion raised without a policy (or a pre-V4 row) has no snapshot.
+     * {@code NON_NULL} must render that as an ABSENT key — not {@code "reorderPointAtTrigger": null}
+     * — which is what demand-planning-api.md promises.
+     */
+    @Test
+    @WithMockUser(roles = "SCM_DEMAND_PLANNING_WRITE")
+    void listSuggestions_omitsReorderPointAtTriggerKey_whenNoSnapshot() throws Exception {
+        ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
+                SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
+                100, UUID.randomUUID(), 5, null, "scm", Instant.now());
+        when(suggestionQueryUseCase.listSuggestions(anyString(), eq(null), eq(null), any(PageQuery.class)))
+                .thenReturn(new PageResult<>(List.of(s), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/demand-planning/suggestions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].triggerAvailableQty").value(5))
+                .andExpect(jsonPath("$.data[0].reorderPointAtTrigger").doesNotExist())
+                .andExpect(jsonPath("$.data[0]", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasKey("reorderPointAtTrigger"))));
     }
 
     @Test
@@ -73,12 +96,13 @@ class SuggestionControllerSliceTest {
     void getSuggestion_returns200() throws Exception {
         ReorderSuggestion s = ReorderSuggestion.raiseFromAlert(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, SUPPLIER_ID,
-                100, UUID.randomUUID(), 5, "scm", Instant.now());
+                100, UUID.randomUUID(), 5, 10, "scm", Instant.now());
         when(suggestionQueryUseCase.getById(SUGGESTION_ID)).thenReturn(s);
 
         mockMvc.perform(get("/api/demand-planning/suggestions/" + SUGGESTION_ID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(SUGGESTION_ID.toString()));
+                .andExpect(jsonPath("$.data.id").value(SUGGESTION_ID.toString()))
+                .andExpect(jsonPath("$.data.reorderPointAtTrigger").value(10));
     }
 
     @Test
@@ -99,14 +123,16 @@ class SuggestionControllerSliceTest {
         ReorderSuggestion dismissed = ReorderSuggestion.reconstitute(
                 SUGGESTION_ID, "SKU-001", WAREHOUSE_ID, WAREHOUSE_CODE, "WMS_WAREHOUSE", SUPPLIER_ID,
                 100, SuggestionStatus.DISMISSED, SuggestionSource.ALERT,
-                null, 5, null, "scm", 1, Instant.now(), Instant.now());
+                null, 5, 10, null, "scm", 1, Instant.now(), Instant.now());
         when(suggestionQueryUseCase.dismiss(eq(SUGGESTION_ID), any())).thenReturn(dismissed);
 
         mockMvc.perform(post("/api/demand-planning/suggestions/" + SUGGESTION_ID + "/dismiss")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"stale\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("DISMISSED"));
+                .andExpect(jsonPath("$.data.status").value("DISMISSED"))
+                // the snapshot rides the dismiss response unchanged (TASK-SCM-BE-062)
+                .andExpect(jsonPath("$.data.reorderPointAtTrigger").value(10));
     }
 
     @Test
