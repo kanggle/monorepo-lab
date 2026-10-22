@@ -1,5 +1,9 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
+import { BarSwatch } from '@/shared/ui/InlineBar';
+import { approvalStatusTone } from '../api/approval-types';
+import { statusLabel as approvalStatusLabel } from './approval-common';
+import { ApprovalStatusBar } from './ApprovalStatusBar';
 import type { ErpOverviewState, ErpAreaCount } from '../api/overview-state';
 import {
   overviewCellPlaceholder as cellPlaceholder,
@@ -132,6 +136,42 @@ export function ErpOverviewScreen({ state }: ErpOverviewScreenProps) {
           <CountTile key={area.key} area={area} />
         ))}
       </div>
+
+      {/* Approval-status distribution (TASK-PC-FE-360). */}
+      {state.approvalStatus.length > 0 && (
+      <div className="mt-8" data-testid="erp-overview-approval-status">
+        <h2 className="mb-1 text-sm font-semibold text-foreground">결재 상태</h2>
+        <p
+          className="mb-3 text-xs text-muted-foreground"
+          data-testid="erp-overview-approval-status-scope"
+        >
+          운영자 권한이면 전체 결재, 그렇지 않으면 내가 상신했거나 결재할 건만
+          집계됩니다.
+        </p>
+        <ApprovalStatusBar buckets={state.approvalStatus} />
+        <dl
+          data-testid="erp-overview-approval-status-list"
+          className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
+        >
+          {state.approvalStatus.map((bucket) => (
+            <div key={bucket.status}>
+              <dt className="text-xs text-muted-foreground">
+                <BarSwatch tone={approvalStatusTone(bucket.status)} />
+                {approvalStatusLabel(bucket.status)}
+              </dt>
+              <dd
+                className="text-lg font-semibold tabular-nums text-foreground"
+                data-testid={`erp-overview-approval-status-${bucket.status}`}
+              >
+                {bucket.cellStatus === 'ok' && bucket.count !== null
+                  ? bucket.count.toLocaleString()
+                  : '—'}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      )}
     </section>
   );
 }

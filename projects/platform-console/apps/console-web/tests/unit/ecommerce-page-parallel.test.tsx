@@ -34,6 +34,7 @@ const getEcommerceOverviewState = vi.fn().mockResolvedValue({
   notEligible: false,
   counts: [],
   orderStatus: [],
+  shippingStatus: [],
   recentOrders: null,
   recentOrdersStatus: 'ok',
   recentSellers: null,

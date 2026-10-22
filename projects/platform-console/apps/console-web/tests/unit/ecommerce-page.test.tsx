@@ -87,6 +87,7 @@ beforeEach(() => {
     notEligible: false,
     counts: [],
     orderStatus: [],
+    shippingStatus: [],
     recentOrders: null,
     recentOrdersStatus: 'ok',
     recentSellers: null,

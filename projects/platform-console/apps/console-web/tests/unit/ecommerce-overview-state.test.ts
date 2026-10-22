@@ -28,6 +28,7 @@ const m = vi.hoisted(() => ({
   getShippingsSummary: vi.fn(),
   getSellersSummary: vi.fn(),
   getTemplatesSummary: vi.fn(),
+  listShippings: vi.fn(),
   listOrders: vi.fn(),
   listSellers: vi.fn(),
 }));
@@ -39,7 +40,10 @@ vi.mock('@/features/ecommerce-ops/api/orders-api', () => ({
 }));
 vi.mock('@/features/ecommerce-ops/api/users-api', () => ({ getUsersSummary: m.getUsersSummary }));
 vi.mock('@/features/ecommerce-ops/api/promotions-api', () => ({ getPromotionsSummary: m.getPromotionsSummary }));
-vi.mock('@/features/ecommerce-ops/api/shippings-api', () => ({ getShippingsSummary: m.getShippingsSummary }));
+vi.mock('@/features/ecommerce-ops/api/shippings-api', () => ({
+  getShippingsSummary: m.getShippingsSummary,
+  listShippings: m.listShippings,
+}));
 vi.mock('@/features/ecommerce-ops/api/sellers-api', () => ({
   getSellersSummary: m.getSellersSummary,
   listSellers: m.listSellers,
@@ -97,6 +101,18 @@ function seedHappy() {
   m.getTemplatesSummary.mockResolvedValue(summary(0, 3, 55, 550));
   m.getOrdersSummary.mockResolvedValue(summary(5, 25, 7, 70));
   m.getOrderInsights.mockResolvedValue(insightsFixture());
+  // TASK-PC-FE-360 — per-status shipping counts: PREPARING 1 · SHIPPED 2 ·
+  // IN_TRANSIT 0 · DELIVERED 4.
+  m.listShippings.mockImplementation((p: { status?: string } = {}) =>
+    Promise.resolve(
+      list(
+        ({ PREPARING: 1, SHIPPED: 2, IN_TRANSIT: 0, DELIVERED: 4 } as Record<
+          string,
+          number
+        >)[p.status ?? ''] ?? 0,
+      ),
+    ),
+  );
   // size===5 → the recent-5 sellers cell; size===100 → the top-volume
   // name-map cell (sellerId → displayName), with s1 named "셀러 원".
   m.listSellers.mockImplementation((p: { size?: number } = {}) =>
@@ -222,6 +238,71 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
       'REDIRECT:/login',
     );
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  // ── TASK-PC-FE-360 — shipping-status distribution (4 independent cells) ───
+
+  it('shipping status: exactly 4 reads (size 1, one per status), mapped in lifecycle order', async () => {
+    seedHappy();
+    const state = await getEcommerceOverviewState(true);
+
+    expect(m.listShippings).toHaveBeenCalledTimes(4);
+    for (const status of ['PREPARING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED']) {
+      expect(m.listShippings).toHaveBeenCalledWith({ status, page: 0, size: 1 });
+    }
+    expect(
+      state.shippingStatus.map((b) => [b.status, b.count, b.cellStatus]),
+    ).toEqual([
+      ['PREPARING', 1, 'ok'],
+      ['SHIPPED', 2, 'ok'],
+      ['IN_TRANSIT', 0, 'ok'],
+      ['DELIVERED', 4, 'ok'],
+    ]);
+  });
+
+  it('shipping status: one 503 degrades ONLY that bucket (others + the rest of the snapshot stay ok)', async () => {
+    seedHappy();
+    m.listShippings.mockImplementation((p: { status?: string } = {}) =>
+      p.status === 'IN_TRANSIT'
+        ? Promise.reject(
+            new EcommerceUnavailableError('downstream', 'ECOMMERCE_UNAVAILABLE', 'down'),
+          )
+        : Promise.resolve(list(5)),
+    );
+    const state = await getEcommerceOverviewState(true);
+    const byStatus = Object.fromEntries(state.shippingStatus.map((b) => [b.status, b]));
+    expect(byStatus.IN_TRANSIT.count).toBeNull();
+    expect(byStatus.IN_TRANSIT.cellStatus).toBe('degraded');
+    expect(byStatus.PREPARING.cellStatus).toBe('ok');
+    expect(byStatus.DELIVERED.count).toBe(5);
+    expect(state.counts.find((c) => c.key === 'shippings')!.status).toBe('ok');
+    expect(state.orderStatus.every((b) => b.cellStatus === 'ok')).toBe(true);
+  });
+
+  it('shipping status: a 403 bucket → forbidden', async () => {
+    seedHappy();
+    m.listShippings.mockImplementation((p: { status?: string } = {}) =>
+      p.status === 'SHIPPED'
+        ? Promise.reject(new ApiError(403, 'ACCESS_DENIED', 'no'))
+        : Promise.resolve(list(1)),
+    );
+    const state = await getEcommerceOverviewState(true);
+    const shipped = state.shippingStatus.find((b) => b.status === 'SHIPPED')!;
+    expect(shipped.cellStatus).toBe('forbidden');
+    expect(shipped.count).toBeNull();
+  });
+
+  it('shipping status: a 401 in a bucket → whole-session redirect(/login)', async () => {
+    seedHappy();
+    m.listShippings.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
+    await expect(getEcommerceOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  it('not eligible → no shipping reads and an empty distribution', async () => {
+    const state = await getEcommerceOverviewState(false);
+    expect(state.shippingStatus).toEqual([]);
+    expect(m.listShippings).not.toHaveBeenCalled();
   });
 
   // ── TASK-PC-FE-172 — insights leg + seller-name overlay ──────────────────

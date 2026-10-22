@@ -29,6 +29,7 @@ const m = vi.hoisted(() => ({
   listCostCenters: vi.fn(),
   listBusinessPartners: vi.fn(),
   listApprovalInbox: vi.fn(),
+  listApprovalRequests: vi.fn(),
   listDelegationFacts: vi.fn(),
 }));
 vi.mock('@/features/erp-ops/api/erp-api', () => ({
@@ -40,6 +41,7 @@ vi.mock('@/features/erp-ops/api/erp-api', () => ({
 }));
 vi.mock('@/features/erp-ops/api/approval-api', () => ({
   listApprovalInbox: m.listApprovalInbox,
+  listApprovalRequests: m.listApprovalRequests,
 }));
 vi.mock('@/features/erp-ops/api/erp-delegation-facts-api', () => ({
   listDelegationFacts: m.listDelegationFacts,
@@ -61,6 +63,18 @@ function seedHappy() {
   m.listBusinessPartners.mockResolvedValue(listResp(37));
   m.listApprovalInbox.mockResolvedValue(listResp(3));
   m.listDelegationFacts.mockResolvedValue(listResp(2));
+  // TASK-PC-FE-360 — per-status approval counts: DRAFT 0 · SUBMITTED 2 ·
+  // IN_REVIEW 1 · APPROVED 4 · REJECTED 1 · WITHDRAWN 0.
+  m.listApprovalRequests.mockImplementation((p: { status?: string } = {}) =>
+    Promise.resolve(
+      listResp(
+        ({ SUBMITTED: 2, IN_REVIEW: 1, APPROVED: 4, REJECTED: 1 } as Record<
+          string,
+          number
+        >)[p.status ?? ''] ?? 0,
+      ),
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -189,6 +203,87 @@ describe('getErpOverviewState (TASK-PC-FE-232)', () => {
       'REDIRECT:/login',
     );
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  // ── TASK-PC-FE-360 — approval-status distribution (6 independent cells) ───
+
+  it('approval status: exactly 6 reads (size 1, one per status) + the inbox leg is NOT reused', async () => {
+    seedHappy();
+    const state = await getErpOverviewState(true);
+
+    expect(m.listApprovalRequests).toHaveBeenCalledTimes(6);
+    for (const status of [
+      'DRAFT',
+      'SUBMITTED',
+      'IN_REVIEW',
+      'APPROVED',
+      'REJECTED',
+      'WITHDRAWN',
+    ]) {
+      expect(m.listApprovalRequests).toHaveBeenCalledWith({
+        status,
+        page: 0,
+        size: 1,
+      });
+    }
+    // The 결재 대기 tile still comes from the inbox, one call.
+    expect(m.listApprovalInbox).toHaveBeenCalledTimes(1);
+    expect(
+      state.approvalStatus.map((b) => [b.status, b.count, b.cellStatus]),
+    ).toEqual([
+      ['DRAFT', 0, 'ok'],
+      ['SUBMITTED', 2, 'ok'],
+      ['IN_REVIEW', 1, 'ok'],
+      ['APPROVED', 4, 'ok'],
+      ['REJECTED', 1, 'ok'],
+      ['WITHDRAWN', 0, 'ok'],
+    ]);
+  });
+
+  it('approval status: one 503 degrades ONLY that bucket — tiles + sibling buckets stay ok', async () => {
+    seedHappy();
+    m.listApprovalRequests.mockImplementation((p: { status?: string } = {}) =>
+      p.status === 'IN_REVIEW'
+        ? Promise.reject(
+            new ErpUnavailableError('downstream', 'SERVICE_UNAVAILABLE', 'down'),
+          )
+        : Promise.resolve(listResp(3)),
+    );
+    const state = await getErpOverviewState(true);
+    const byStatus = Object.fromEntries(state.approvalStatus.map((b) => [b.status, b]));
+    expect(byStatus.IN_REVIEW.count).toBeNull();
+    expect(byStatus.IN_REVIEW.cellStatus).toBe('degraded');
+    expect(byStatus.APPROVED.count).toBe(3);
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+  });
+
+  it('approval status: a 403 bucket → forbidden', async () => {
+    seedHappy();
+    m.listApprovalRequests.mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'no'));
+    const state = await getErpOverviewState(true);
+    expect(state.approvalStatus.every((b) => b.cellStatus === 'forbidden')).toBe(true);
+    expect(state.counts.find((c) => c.key === 'pendingApprovals')!.status).toBe('ok');
+  });
+
+  it('approval status: a 401 in a bucket → whole-session redirect(/login)', async () => {
+    seedHappy();
+    m.listApprovalRequests.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
+    await expect(getErpOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  it('approval status: asOf does not reach the status reads; not eligible → none', async () => {
+    seedHappy();
+    await getErpOverviewState(true, '2026-01-01');
+    expect(m.listApprovalRequests).toHaveBeenCalledWith({
+      status: 'DRAFT',
+      page: 0,
+      size: 1,
+    });
+    vi.clearAllMocks();
+    const off = await getErpOverviewState(false);
+    expect(off.approvalStatus).toEqual([]);
+    expect(m.listApprovalRequests).not.toHaveBeenCalled();
   });
 
   it('401 in any masterdata leg → whole-session redirect(/login) (not a per-cell degrade)', async () => {

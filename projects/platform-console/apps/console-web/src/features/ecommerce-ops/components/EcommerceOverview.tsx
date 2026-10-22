@@ -7,6 +7,9 @@ import { ORDER_STATUS_LABELS } from './overview-labels';
 import { OrderStatusBar } from './OrderStatusBar';
 import { BarSwatch } from '@/shared/ui/InlineBar';
 import { orderStatusTone } from '../api/order-types';
+import { ShippingStatusBar } from './ShippingStatusBar';
+import { shippingStatusTone } from '../api/shipping-types';
+import { statusLabel as shippingStatusLabel } from './shipping-labels';
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
@@ -76,6 +79,33 @@ export function EcommerceOverview({
               <dd
                 className="text-lg font-semibold tabular-nums text-foreground"
                 data-testid={`order-status-${bucket.status}`}
+              >
+                {bucket.cellStatus === 'ok' && bucket.count !== null
+                  ? bucket.count.toLocaleString()
+                  : '—'}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Shipping-status distribution (TASK-PC-FE-360). */}
+      <div className="mb-8">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">배송 상태</h3>
+        <ShippingStatusBar buckets={state.shippingStatus} />
+        <dl
+          data-testid="ecommerce-shipping-status"
+          className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
+        >
+          {state.shippingStatus.map((bucket) => (
+            <div key={bucket.status}>
+              <dt className="text-xs text-muted-foreground">
+                <BarSwatch tone={shippingStatusTone(bucket.status)} />
+                {shippingStatusLabel(bucket.status)}
+              </dt>
+              <dd
+                className="text-lg font-semibold tabular-nums text-foreground"
+                data-testid={`shipping-status-${bucket.status}`}
               >
                 {bucket.cellStatus === 'ok' && bucket.count !== null
                   ? bucket.count.toLocaleString()
