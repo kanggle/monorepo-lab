@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **READY (2026-10-22 UTC) — 소유자 결정: 굽기 전 구현 · 선행 = `TASK-BE-645`(같은 파일).** 관리자 상태 변경의 «취소»(콘솔이 쓰는 경로)가 `OrderCancelled` 를 내지 않는다(`AdminOrderStatusService.java:35`) — 환불 · 재고 해제 없음 · 백오더는 다음 재입고 때 차감 뒤 소비 실패. 이벤트를 내는 `OperatorOrderCancellationService` 는 내부 엔드포인트에만 붙어 있다. 분석=Opus 5.5 / 구현 권장=Opus.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
