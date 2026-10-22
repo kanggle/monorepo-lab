@@ -253,3 +253,25 @@ frontend
 **e2e 영향 (grep)**: `e2e-smoke/sample-visitor.spec.ts`(옛 testid 둘 — 고침) · `tests/e2e/operators-profile.spec.ts`(개요 finance 카드로 기본계좌 확인 — `/finance` 로 고침) · `tests/e2e/overview-consolidation.spec.ts:133-157`(IAM 제목 링크 — 그대로 유효). 🔴 **고치지 않고 보고**: `tests/federation-hardening-e2e/specs/{entitlement-trust-crossdomain,tenant-switch-rescope}.spec.ts` 는 카드 `data-status` 로 테넌트 entitlement 를 판정한다. 새 다리는 다른 업무 역할을 요구하므로, 그 시드 운영자(`fixtures/seed.sql` — acme · multi, `permission_set_id NULL` = 상속)의 assume 토큰에 `SCM_PROCUREMENT_*` · `FINANCE_LEDGER_*` · `ERP_APPROVAL_*` 가 실리는지에 따라 «entitled 인데 forbidden» 으로 빨개질 수 있다 — 로컬에서 판정 불가(도커 스택). 또 `tenant-switch-rescope.spec.ts:135-152` 의 «scm = ok» 칸은 inventory-visibility `/snapshot` 422 회귀(MONO-171/SCM-BE-021)를 잡으려던 것인데, 개요가 그 엔드포인트를 더는 부르지 않으므로 **그 회귀를 더 이상 물지 않는다**. ⇒ 머지 전 브랜치에서 `nightly-e2e`(콘솔) **와** `federation-hardening-e2e` 를 돌려야 한다.
 
 **남은 것**: AC-1(새 문구 · 권한 표 소유자 승인) · AC-2 의 브랜치 nightly · AC-3(배포 · 샘플 화면 · 로그인 운영자 라이브 — 특히 위 표의 ⚪ 행).
+
+## federation-hardening e2e 빨강 진단 · 수정 (2026-10-22 UTC · Opus)
+
+> 브랜치 런 **39766172565**(head `e915c7de4`) 빨강 2칸 — `entitlement-trust-crossdomain.spec.ts:100` · `tenant-switch-rescope.spec.ts:85`(:125 경유): acme-corp 의 scm 카드가 `forbidden` 이어야 하는데 `degraded`. 콘솔 nightly(39766167157)는 초록.
+
+**원인 (증거)** — 생산자 문제가 **아니라** 시험 스택 문제다.
+1. 그 런의 console-web 로그(«Dump docker compose logs on failure» 스텝): 같은 요청 `270f34aa…` 에서 **wms · scm · finance · erp · ecommerce 다섯 다리 모두 `TIMEOUT` 4000 ms**, iam 만 응답. 바뀌지 않은 wms 다리까지 시간 초과 ⇒ 개별 생산자의 답이 아니라 console-web 쪽 정체. 요청 `04a0a372…` 에선 erp 가 17 ms 에 답(`DOWNSTREAM_ERROR`)했는데 scm 은 그 뒤 ~4 s 에 `TIMEOUT` — 조회가 줄 서 있었다.
+2. 정체의 원인: `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml` 의 console-web 에 **`LEDGER_BASE_URL` 이 없었다** → 코드 기본값 `http://finance.local`(`src/shared/config/env.ts:253`) — 이 스택에서 해석 불가, 그리고 실패하지 않고 **4 s 넘게 걸린다**. 기존부터 `ECOMMERCE_ADMIN_BASE_URL` 도 같은 상태(`ecommerce.local`). getaddrinfo 는 취소 불가 · libuv 4-스레드 풀에서 돌므로 렌더당 두 개의 멈춘 조회가 풀을 막아 나머지 다리의 조회가 전부 줄을 섰다. 이 기전은 콘솔 e2e 스택에서 이미 측정 · 수정됐다(`projects/platform-console/docker-compose.e2e.yml:445-460`, TASK-PC-FE-341 · 351) — **federation 스택에는 적용된 적이 없고, 그 가드(`tests/unit/e2e-compose-composition-bases.test.ts`)의 모집단에도 없었다.**
+3. 게다가 이 스택엔 **finance ledger-service 가 없었다**(boot jar 목록 · compose 모두) → `LEDGER_BASE_URL` 을 고쳐도 가리킬 생산자가 없었다.
+4. (b) 생산자 게이트는 정상: scm 게이트웨이 `projects/scm-platform/apps/gateway-service/src/main/java/com/example/scmplatform/gateway/config/OAuth2ResourceServerConfig.java:98-101` 와 procurement `…/procurement-service/…/security/ServiceLevelOAuth2Config.java:66-68, 88-91` 가 inventory-visibility 와 같은 decode 시점 `TenantClaimValidator.forTenant(scm).trustEntitledDomains()` — 비구독 테넌트는 라우트와 무관하게 403. (c) ledger `…/ledger-service/…/ServiceLevelOAuth2Config.java:69-72, 90-94`, approval `…/approval-service/…/ServiceLevelOAuth2Config.java:69-71, 88-91` 도 같은 게이트. ⇒ STOP 조건(생산자가 비구독에 403 아닌 답) **아님**.
+5. erp 는 단언이 scm 에서 먼저 멈춰서 판정되지 않았다(`NON_ENTITLED_DOMAINS = ['scm','erp']` 순서) — 로그상 erp 도 같은 `TIMEOUT` 이었다.
+
+**수정 (시험 인프라만 — 단언은 그대로)**
+- `tests/federation-hardening-e2e/docker/docker-compose.federation-e2e.yml`: `finance-ledger-service` 추가(MySQL `finance_ledger_db` · OIDC = auth-service · Kafka 죽은 주소 · outbox 끔) · console-web `LEDGER_BASE_URL: http://finance-ledger-service:8080` · 생산자 없는 `*.local` 기본값들(`ECOMMERCE_ADMIN/PUBLIC_BASE_URL` · `WMS_OUTBOUND_BASE_URL` · `FAN_GATEWAY_BASE_URL`)은 341/351 관례대로 `http://127.0.0.1:9`(즉시 연결 거부 → `degraded`, 조회 없음) · `CONSOLE_ONBOARDING_URL` 은 admin-service(콘솔 스택과 같은 값).
+- `tests/federation-hardening-e2e/fixtures/seed.sql`: `finance_ledger_db` 생성 + `finance` 권한.
+- `.github/workflows/federation-hardening-e2e.yml`: ledger-service bootJar · 업로드 · 경로 복원 · Phase 2 기동 목록 · 헬스 대기.
+- `apps/console-web/tests/unit/e2e-compose-composition-bases.test.ts`: 같은 두 칸(«`*.local` 기본값 전부 설정» · «합성 base 전부 설정»)을 **federation compose 에도** 적용. bite: federation 의 `LEDGER_BASE_URL` 을 주석 처리 → 정확히 federation 두 칸만 빨강(`expected [ 'LEDGER_BASE_URL' ]`) → 원복.
+- 진단용 주석만: `observability-trace-tree.spec.ts` 의 `KNOWN_PRODUCERS`(진단 출력용 — 판정에 안 씀) · `tenant-switch-rescope.spec.ts` 의 «scm = ok» 칸 주석(이제 procurement 다리를 문다; 단언 불변).
+
+**남는 간극 (기록)**: 이 스택엔 erp 게이트웨이와 approval-service 가 없어 `ERP_BASE_URL` 이 masterdata 를 직접 가리킨다 — 개요 erp 다리(`/api/erp/approval/inbox`)는 masterdata 에 닿고, 같은 erp decode 게이트라 비구독 = 403 은 맞지만 구독 테넌트는 404 → `degraded`(«권한 없음 아님» 단언은 통과)이다. 진짜 inbox 를 재려면 erp 게이트웨이 + approval-service 추가가 필요 — 별도 변경 후보.
+
+⚪ 로컬에선 도커 스택을 못 돌려 수정 효과는 **다음 브랜치 런이 판정**한다(`docker compose … config` rc=0 · 워크플로 YAML 파싱만 확인).
