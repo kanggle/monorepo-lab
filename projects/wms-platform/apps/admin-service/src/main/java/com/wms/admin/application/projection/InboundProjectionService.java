@@ -250,13 +250,13 @@ public class InboundProjectionService {
             qtyDelta += optionalInteger(line, "qtyReceived", 0);
         }
 
-        // Atomic LWW upsert: insert or +1 with WHERE last_event_at <
-        // EXCLUDED.last_event_at. 0 affected rows = stale event silently
-        // skipped (no read-modify-write race window cross-pod).
-        int affected = throughputRepo.upsertIncrement(date, warehouseId, qtyDelta, occurredAt);
-        if (affected == 0) {
-            return DedupeOutcome.IGNORED_DUPLICATE_LATE;
-        }
+        // Atomic upsert: insert or +1 (no read-modify-write race window
+        // cross-pod). 🔴 TASK-BE-643 — a counter is NOT last-write-wins: this
+        // path never yields IGNORED_DUPLICATE_LATE. Putaways of different ASNs
+        // are partitioned by asnId, so an earlier-stamped one arriving late is
+        // another putaway to count, not a stale version. Exactly-once is the
+        // dedupe row recorded in project() (idempotency.md § 2.6).
+        throughputRepo.upsertIncrement(date, warehouseId, qtyDelta, occurredAt);
         return DedupeOutcome.APPLIED;
     }
 

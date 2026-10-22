@@ -90,6 +90,50 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         });
     }
 
+    // ----- TASK-BE-643: counters are not LWW ---------------------------
+    // Two shipments of *different* orders on the same (date, warehouse) row,
+    // sent latest-first. Partition key is orderId/shipmentId, so cross-order
+    // arrival order is not guaranteed.
+
+    @Test
+    void shippingConfirmed_reverseOrderAcrossShipments_countsBoth() {
+        UUID warehouseId = UUID.randomUUID();
+        Instant t2 = Instant.parse("2026-05-10T16:00:00Z");
+        Instant t1 = Instant.parse("2026-05-10T08:00:00Z");
+        LocalDate date = LocalDate.of(2026, 5, 10);
+        UUID laterId = UUID.randomUUID();
+        UUID earlierId = UUID.randomUUID();
+        UUID shipLater = UUID.randomUUID();
+        UUID shipEarlier = UUID.randomUUID();
+
+        kafkaTemplate.send("wms.outbound.shipping.confirmed.v1", shipLater.toString(),
+                KafkaTestSupport.envelope(laterId, "outbound.shipping.confirmed", t2,
+                        shipLater.toString(), shippingPayload(shipLater, warehouseId, t2, 100)));
+        await().atMost(AWAIT).untilAsserted(() ->
+                assertThat(dedupe.existsById(laterId)).isTrue());
+
+        kafkaTemplate.send("wms.outbound.shipping.confirmed.v1", shipEarlier.toString(),
+                KafkaTestSupport.envelope(earlierId, "outbound.shipping.confirmed", t1,
+                        shipEarlier.toString(), shippingPayload(shipEarlier, warehouseId, t1, 50)));
+
+        await().atMost(AWAIT).untilAsserted(() -> {
+            assertThat(shipmentRepo.findById(shipEarlier)).isPresent();
+            assertThat(throughputRepo.findById(new ThroughputDailyId(date, warehouseId)))
+                    .isPresent().get().satisfies(t -> {
+                        assertThat(t.getShipmentCount()).isEqualTo(2);
+                        assertThat(t.getQtyShipped()).isEqualTo(150);
+                    });
+        });
+    }
+
+    private static String shippingPayload(UUID shipmentId, UUID warehouseId, Instant shippedAt,
+                                          int qty) {
+        return """
+                {"shipmentId":"%s","orderId":"%s","warehouseId":"%s",
+                "shippedAt":"%s","carrierCode":"DHL","lines":[{"qtyConfirmed":%d}]}"""
+                .formatted(shipmentId, UUID.randomUUID(), warehouseId, shippedAt, qty);
+    }
+
     // ----- dedupe-hit -------------------------------------------------
 
     @Test
