@@ -8,7 +8,7 @@ TASK-PC-FE-363
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -139,3 +139,8 @@ frontend
 - `TASK-PC-FE-364` 티켓 머지(#4466) 뒤 rebase — `INDEX.md` ready 칸 충돌 1곳(364 행만 남김). 기준 변화는 티켓 문서뿐(코드 동일).
 - 브랜치 nightly run `39760579750`(head `60fd20c1d`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4467 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 `/scm` · `/wms` · `/finance` 개요).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7249961645` success. 익명 샘플 화면(`https://console.hubwang.com`, 서버 렌더 HTML, 2026-10-22 UTC): `/scm` — `scm-po-status-bar` · 최근 발주 `₩125,000` · `₩100,000` · `₩62,500` · `₩24,000`; `/wms` — `wms-alert-status-bar`; `/finance` — 기본계좌 `₩80,000`.
+- 4차원: (a) #4467 `state=MERGED` · (b) 스쿼시 `96bb5798e` 가 `origin/main` 조상 · (c) 머지 시점 `statusCheckRollup` 실패 0 · 대기 0 · (d) AC 원문의 남은 칸 = AC-3 하나 — 위 기록으로 «배포 · 확인» 대로 닫힘.
