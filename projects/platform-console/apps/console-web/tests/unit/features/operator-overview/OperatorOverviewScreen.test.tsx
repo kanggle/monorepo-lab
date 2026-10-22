@@ -30,31 +30,32 @@ function wrapper() {
 const HAPPY: OperatorOverview = {
   asOf: '2026-05-20T10:30:00Z',
   cards: [
-    { domain: 'iam', status: 'ok', data: { totalElements: 12345 } },
+    // TASK-PC-FE-364 — producer-shaped bodies of the six business-figure legs.
+    { domain: 'iam', status: 'ok', data: { totalElements: 3 } },
     {
       domain: 'wms',
       status: 'ok',
-      data: { inventorySnapshot: { totalStockUnits: 99000, alertCount: 3 } },
+      data: { content: [], page: { number: 0, size: 1, totalElements: 14, totalPages: 14 } },
     },
     {
       domain: 'scm',
       status: 'ok',
-      data: { meta: { warning: 'Not for procurement decisions (S5)' } },
+      data: { data: { content: [], totalElements: 4 }, meta: {} },
     },
     {
       domain: 'finance',
       status: 'ok',
-      data: { balance: { amount: '1234500', currency: 'KRW' } },
+      data: { data: [], meta: { totalElements: 6 } },
     },
     {
       domain: 'erp',
       status: 'ok',
-      data: { meta: { totalElements: 87 } },
+      data: { data: [], meta: { totalElements: 2, actorEmployeeId: 'emp-7' } },
     },
     {
       domain: 'ecommerce',
       status: 'ok',
-      data: { totalElements: 42 },
+      data: { content: [], totalElements: 5 },
     },
   ],
 };

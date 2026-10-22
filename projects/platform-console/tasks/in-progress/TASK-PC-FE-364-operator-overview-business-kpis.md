@@ -148,3 +148,108 @@ frontend
 | Finance | `…/fixtures/ledger.ts:547-567` | `status` 지킴 | `OPEN` 1 |
 | ERP | `…/fixtures/erp.ts:849-861` | 현재 결재자 = 나 ∧ `SUBMITTED/IN_REVIEW`, `actorEmployeeId` 있음 | 2 |
 | E-commerce | `…/fixtures/ecommerce.ts:584-590` | 🔵 **확인됨**: `status` 지킴(측정 보고의 «행 구성 미확인» 해소) | `CONFIRMED` 2 (`order-sample-0002` · `-0005`) |
+
+---
+
+## 새 문구 (소유자 승인 대기)
+
+> 화면에 새로 보이는 한국어 문구 전부. 경로 접두 `apps/console-web/src/features/operator-overview/components/`. 새 `aria-label` 은 **없다**(링크는 보이는 글자가 곧 이름이고, IAM 제목의 기존 `sr-only` «상세 보기» 는 그대로). 🔴 **사라지는 문구**도 끝에 적었다.
+
+| file:line | 문구 | 언제 보이나 |
+|---|---|---|
+| `DomainCard.tsx:35` | `WMS 출고` | WMS 카드 제목 (항상) — 이전 `WMS 재고` |
+| `DomainCard.tsx:36` | `SCM 발주` | SCM 카드 제목 (항상) — 이전 `SCM 가시성` |
+| `DomainCard.tsx:37` | `Finance 대사` | Finance 카드 제목 (항상) — 이전 `Finance 잔액` |
+| `DomainCard.tsx:38` | `ERP 결재` | ERP 카드 제목 (항상) — 이전 `ERP 마스터` |
+| `DomainCard.tsx:39` | `ecommerce 주문` | E-commerce 카드 제목 (항상) — 이전 `ecommerce 상품` |
+| `DomainCard.tsx:34` | `IAM 계정` | (바뀌지 않음 — `/dashboards` 상세 링크의 접근 가능한 이름이라 유지) |
+| `DomainCardSummaries.tsx:109` | `잠긴 계정 (이 테넌트)` | IAM 카드 `ok` — 숫자 라벨 (이전 `회원 계정 (이 테넌트)`) |
+| `DomainCardSummaries.tsx:110` | `계정 자체가 잠긴 회원 계정입니다. 사이트에서만 잠긴 계정은 세지 않습니다.` | IAM 카드 `ok` — 숫자 아래 설명 |
+| `DomainCardSummaries.tsx:115` | `계정 운영으로 이동` | IAM 카드 `ok` — `/accounts` 링크 |
+| `DomainCardSummaries.tsx:134` | `미출고 주문` | WMS 카드 `ok` — 숫자 라벨 (이전 `재고 행 수`) |
+| `DomainCardSummaries.tsx:135` | `접수됐고 아직 출하 · 취소되지 않은 출고 주문입니다.` | WMS 카드 `ok` — 설명 |
+| `DomainCardSummaries.tsx:141` | `출고 화면으로 이동` | WMS 카드 `ok` — `/wms/outbound` 링크 |
+| `DomainCardSummaries.tsx:159` | `저재고 재고 보기` | (바뀌지 않음 — `TASK-PC-FE-296` 링크 유지) |
+| `DomainCardSummaries.tsx:178` | `제출 대기 발주 (초안)` | SCM 카드 `ok` — 숫자 라벨 (이전 `스냅샷 행 수`) |
+| `DomainCardSummaries.tsx:179` | `초안 상태로 아직 공급사에 제출하지 않은 발주입니다.` | SCM 카드 `ok` — 설명 |
+| `DomainCardSummaries.tsx:184` | `조달 화면으로 이동` | SCM 카드 `ok` — `/scm/procurement` 링크 |
+| `DomainCardSummaries.tsx:202` | `미해소 대사 차이` | Finance 카드 `ok` — 숫자 라벨 (이전 `잔액 정보`) |
+| `DomainCardSummaries.tsx:203` | `대사에서 발견됐고 아직 해소하지 않은 차이입니다.` | Finance 카드 `ok` — 설명 |
+| `DomainCardSummaries.tsx:208` | `원장 화면으로 이동` | Finance 카드 `ok` — `/ledger` 링크 |
+| `DomainCardSummaries.tsx:256` | `내 결재 대기` | ERP 카드 `ok` · 직원 연결됨 — 숫자 라벨 (이전 `활성 부서 수`) |
+| `DomainCardSummaries.tsx:257` | `지금 내가 결재할 차례인 요청(상신 · 검토 중)입니다.` | ERP 카드 `ok` · 직원 연결됨 — 설명 |
+| `DomainCardSummaries.tsx:234` | `내 결재 대기` | ERP 카드 `ok` · **직원 연결 없음** — 라벨 |
+| `DomainCardSummaries.tsx:239` | `직원 연결 없음` | ERP 카드 `ok` · 응답에 `meta.actorEmployeeId` 없음 — 숫자 자리에 (숫자·`0` 은 그리지 않음) |
+| `DomainCardSummaries.tsx:242` | `이 운영자 계정에 연결된 직원이 없어 결재 대기를 셀 수 없습니다.` | 같은 상태 — 설명 |
+| `DomainCardSummaries.tsx:246` · `:262` | `결재함으로 이동` | ERP 카드 `ok`(연결 여부 무관) — `/erp/approval` 링크 |
+| `DomainCardSummaries.tsx:280` | `출고 대기 주문 (결제 완료)` | E-commerce 카드 `ok` — 숫자 라벨 (이전 `상품 수`) |
+| `DomainCardSummaries.tsx:281` | `결제가 확인됐고 아직 배송을 시작하지 않은 주문입니다.` | E-commerce 카드 `ok` — 설명 |
+| `DomainCardSummaries.tsx:286` | `주문 화면으로 이동` | E-commerce 카드 `ok` — `/ecommerce/orders` 링크 |
+
+🔴 사라지는 문구: `잔액 조회 가능` · `잔액 정보 없음` · 통화 칩(예 `KRW`) · SCM `meta.warning` 안내(S5 «Not for procurement decisions» — 발주 목록 응답엔 없다) · `운영자 프로필에서 기본 finance 계정을 설정하세요.`(`DomainCardStates.tsx` — 이 경로가 더 이상 `MISSING_PREREQUISITE` 를 만들지 않음; 사유 자체는 어휘에 남고 일반 문구 `조회에 필요한 사전 설정이 누락되었습니다.` 는 그대로).
+
+🔵 링크에 필터 파라미터가 **없다**(예 `/accounts?status=LOCKED` 가 아니라 `/accounts`): 다섯 목적지 화면 모두 URL 에서 상태 필터를 읽지 않는다(`app/(console)/accounts/page.tsx` · `wms/outbound/page.tsx` · `scm/procurement/page.tsx` · `ecommerce/orders/page.tsx` 에 `searchParams` 없음, `ledger/page.tsx` 는 `entryId/accountCode/statementId` 만). 읽지 않는 파라미터를 붙이면 필터 안 된 목록에 조용히 떨어진다(`TASK-PC-FE-296` 교훈). 필터 링크는 목적지가 파라미터를 받는 변경이 먼저 — 별도 티켓 후보.
+
+## 권한별 «권한 없음» 변화
+
+> 카드 `forbidden` = 생산자 403(그 밖 오류는 «점검 필요», 401 은 전체 재로그인 — 규칙 그대로). 세트 = ADR-MONO-083 시스템 프리셋(`system_key`, 마이그레이션 file:line 은 `## AC-0 측정` ②). «이전/이후» 는 그 세트**만** 가진 운영자 기준. 테넌트 범위(구독 · 소속)는 바뀌지 않으므로 표에 없다.
+
+| 업무 권한 세트 | 바뀌는 카드 | 이전 | 이후 | 비고 |
+|---|---|---|---|---|
+| `scm-inventory-visibility-operate` (재고 가시성 운영) | SCM | ok | 🔴 **권한 없음** | 새 다리는 `SCM_PROCUREMENT_*` |
+| `scm-procurement-operate` (발주 운영) | SCM | 권한 없음 | ✅ ok | |
+| `scm-demand-planning-operate` · `scm-logistics-operate` | SCM | 권한 없음 | 권한 없음 | 변화 없음 |
+| `scm-read` · `scm-full` · `all-domains-full` · `legacy-compat` | SCM | ok | ok | 둘 다 가짐 |
+| `finance-account-operate` (계좌 운영) | Finance | ok (기본계좌 있을 때) / 권한 없음 (`MISSING_PREREQUISITE`, 기본계좌 없을 때) | 🔴 **권한 없음** | 새 다리는 `FINANCE_LEDGER_*` |
+| `finance-ledger-operate` (원장 운영) | Finance | 권한 없음 (계좌 읽기 권한 없음, 또는 기본계좌 없음) | ✅ ok | |
+| `finance-read` · `finance-full` · `all-domains-full` · `legacy-compat` | Finance | ok (기본계좌 있을 때만) | ✅ ok (기본계좌 무관) | 🔵 기본계좌 없는 운영자에게 생기던 «권한 없음» 이 사라진다 |
+| `erp-masterdata-operate` (기준정보 운영) | ERP | ok | 🔴 **권한 없음** | 새 다리는 `ERP_APPROVAL_*` |
+| `erp-approval-operate` (결재 운영) | ERP | 권한 없음 | ✅ ok | 직원 미연결이면 «직원 연결 없음» |
+| `erp-read` · `erp-full` · `all-domains-full` · `legacy-compat` | ERP | ok | ok | 직원 미연결이면 숫자 대신 «직원 연결 없음» |
+| `ecommerce-product-operate` (상품 운영) | E-commerce | ok | 🔴 **권한 없음** | 새 다리는 `ECOMMERCE_ORDER_*` |
+| `ecommerce-order-operate` (주문 운영) | E-commerce | 권한 없음 | ✅ ok | |
+| `ecommerce-settlement-` · `-promotion-` · `-shipping-` · `-notification-operate` | E-commerce | 권한 없음 | 권한 없음 | 변화 없음 |
+| `ecommerce-read` · `ecommerce-full` · `all-domains-full` · `legacy-compat` | E-commerce | ok | ok | |
+| 모든 IAM 역할 · WMS 세트(`wms-*`) | IAM · WMS | — | — | 게이트가 글자 그대로 같다(`account.read` · `WMS_VIEWER`) — 변화 없음 |
+| ⚪ 플랫폼 SUPER_ADMIN 와일드카드 토큰(`tenant_id='*'`, 업무 역할 없음) | ERP | ok (masterdata 가 `'*'` 허용 — `RequiredScope.java:9`) | 🔴 **권한 없음** (추정) | approval 읽기엔 `'*'` 갈래 없음(`ActorContext.java:68-72` · `JwtBackedAuthorizationAdapter.java:33`). 🔴 **추정**: TASK-PC-FE-338 이후 테넌트를 고르면 assume 토큰이 실리므로 이 토큰이 개요 다리에 실제로 실리는 경로가 있는지는 **안 쟀다** — AC-3 라이브에서 확인. SCM 은 이전·이후 모두 역할만 보므로 변화 없음, Finance · E-commerce 는 둘 다 `'*'`/SUPERADMIN_READ 허용 |
+
+## 구현 (2026-10-22 UTC · Opus)
+
+**SSR vs 클라이언트**: 바뀐 코드는 전부 **서버 쪽**이다 — 합성(`shared/composition/*`, 서버 전용)과 카드(`DomainCard` · `DomainCardSummaries` · `DomainCardStates`, 서버 컴포넌트). 새 `'use client'` 없음, 클라이언트 그래프에 새 import 없음(유일한 클라이언트 잎 `RetryButton` 그대로). 데이터는 SSR 에서 합성 함수를 프로세스 안에서 부르고(TASK-PC-FE-350), 브라우저는 «다시 시도» 때만 같은 경로를 부른다 — 둘 다 같은 `composeOperatorOverview()`.
+
+**바꾼 파일**
+
+| 파일 | 변경 |
+|---|---|
+| `specs/contracts/console-integration-contract.md` § 2.4.9 · § 2.4.9.1 | 계약 먼저(별도 커밋) — `## AC-0 측정` ③ 의 자리 전부 |
+| `specs/contracts/fixtures/operator-overview-leg-bodies.json` | 여섯 본문 + `variants.erpNotLinked` |
+| `apps/console-web/src/shared/composition/console-composition.ts` | `operatorOverviewLegs` 여섯 URL 1:1 교체 · `financeDefaultAccountId` 제거(정해진 다리 0) · finance = `LEDGER_BASE_URL` |
+| `apps/console-web/src/shared/composition/operator-overview-composition.ts` | `getFinanceDefaultAccountId()` 호출 제거 |
+| `apps/console-web/src/features/operator-overview/api/operator-overview-types.ts` | `Scm/Finance/ErpDataSchema` 를 새 생산자 본문으로(`Erp` 에 `actorEmployeeId`) |
+| `apps/console-web/src/features/operator-overview/components/DomainCard.tsx` | 제목 5개 |
+| `apps/console-web/src/features/operator-overview/components/DomainCardSummaries.tsx` | 카드마다 숫자 하나 · 설명 · 작업 화면 링크 · ERP «직원 연결 없음» · WMS 저재고 링크 유지 |
+| `apps/console-web/src/features/operator-overview/components/DomainCardStates.tsx` | finance 기본계좌 힌트 제거 |
+| `apps/console-web/src/shared/sample/fixtures/dashboards.ts` | 여섯 카드 = 같은 도메인 픽스처에 같은 질의로 물은 본문, 0 이면 모듈 로드 시 throw |
+| `apps/console-web/tests/unit/shared/console-composition.test.ts` | 새 URL · **카드당 호출 1 · 총 6**(카드별 URL 정확 일치) · 정해진 다리 0 · finance 주소 · 403 per-card · 미연결 ERP 통과 |
+| `apps/console-web/tests/unit/dashboard-composition-routes.test.ts` | 경로로 카드당 1회 · 기본계좌 없어도 finance ok/6회 · 403 per-card |
+| `apps/console-web/tests/unit/dashboard-ssr-direct-composition.test.ts` | 새 경로 · 프로세스 안 throw 주입을 env 로 |
+| `apps/console-web/tests/unit/features/operator-overview/leg-body-contract.test.tsx` | 고정값 본문 → **정확한 숫자** 단언(«— 아님» 보다 강함) · 미연결 ERP · F5 |
+| `apps/console-web/tests/unit/features/operator-overview/DomainCard.test.tsx` | 카드마다 ok · 0 · 링크 · 읽을 수 없는 본문 · 저하 · 권한 없음 · ERP 연결 없음/null/연결+0/id 비노출 |
+| `apps/console-web/tests/unit/features/operator-overview/OperatorOverviewScreen.test.tsx` | 고정값을 생산자 모양으로 |
+| `apps/console-web/tests/unit/features/operator-overview/finance-option-a-render.test.tsx` | **삭제** — 전제(개요 finance 카드가 기본계좌를 읽음)가 사라짐 |
+| `apps/console-web/tests/unit/sample-fixtures-schema.test.ts` · `sample-overview-cards-match-lists.test.ts` | 여섯 카드 = 목록을 카드의 술어로 걸러 센 값(목록에 술어가 **빼는** 행도 있어야 통과 — 필터가 무시되면 빨강) |
+| `apps/console-web/e2e-smoke/sample-visitor.spec.ts` | 새 testid(`iam-locked` · `ecommerce-to-ship` · `erp-inbox`) |
+| `apps/console-web/tests/e2e/operators-profile.spec.ts` | 기본계좌 확인을 `/finance` 개요로 옮김(개요 카드는 이제 기본계좌와 무관) |
+
+**결과** (worktree, 마지막 전체 실행 = 최종 코드)
+
+| 게이트 | 결과 |
+|---|---|
+| `npx vitest run --maxWorkers=4 --minWorkers=2` | rc=0 · **424 files · 5199 tests 통과** |
+| `npx tsc --noEmit` | rc=0 |
+| `npx next lint` | rc=0 (경고 1 — 기존 `src/app/api/onboarding/received-invitations/route.ts:26`, 이 변경과 무관) |
+| bite — `ErpSummary` 가 `actorEmployeeId` 를 무시하게 바꿔 실행 | 정확히 «연결 없음» 칸 3개만 빨강(`DomainCard.test.tsx` 2 · `leg-body-contract.test.tsx` 1) → 원복 |
+
+**e2e 영향 (grep)**: `e2e-smoke/sample-visitor.spec.ts`(옛 testid 둘 — 고침) · `tests/e2e/operators-profile.spec.ts`(개요 finance 카드로 기본계좌 확인 — `/finance` 로 고침) · `tests/e2e/overview-consolidation.spec.ts:133-157`(IAM 제목 링크 — 그대로 유효). 🔴 **고치지 않고 보고**: `tests/federation-hardening-e2e/specs/{entitlement-trust-crossdomain,tenant-switch-rescope}.spec.ts` 는 카드 `data-status` 로 테넌트 entitlement 를 판정한다. 새 다리는 다른 업무 역할을 요구하므로, 그 시드 운영자(`fixtures/seed.sql` — acme · multi, `permission_set_id NULL` = 상속)의 assume 토큰에 `SCM_PROCUREMENT_*` · `FINANCE_LEDGER_*` · `ERP_APPROVAL_*` 가 실리는지에 따라 «entitled 인데 forbidden» 으로 빨개질 수 있다 — 로컬에서 판정 불가(도커 스택). 또 `tenant-switch-rescope.spec.ts:135-152` 의 «scm = ok» 칸은 inventory-visibility `/snapshot` 422 회귀(MONO-171/SCM-BE-021)를 잡으려던 것인데, 개요가 그 엔드포인트를 더는 부르지 않으므로 **그 회귀를 더 이상 물지 않는다**. ⇒ 머지 전 브랜치에서 `nightly-e2e`(콘솔) **와** `federation-hardening-e2e` 를 돌려야 한다.
+
+**남은 것**: AC-1(새 문구 · 권한 표 소유자 승인) · AC-2 의 브랜치 nightly · AC-3(배포 · 샘플 화면 · 로그인 운영자 라이브 — 특히 위 표의 ⚪ 행).

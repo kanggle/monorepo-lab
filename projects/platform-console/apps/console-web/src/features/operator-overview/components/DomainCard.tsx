@@ -18,7 +18,7 @@ import { DegradedState, ForbiddenState } from './DomainCardStates';
  *  - `degraded` — {@link DegradedState}: "data unavailable" placeholder +
  *    `<RetryButton>`.
  *  - `forbidden` — {@link ForbiddenState}: "not available to your role /
- *    tenant" placeholder (+ finance `MISSING_PREREQUISITE` hint).
+ *    tenant" placeholder.
  *
  * TASK-PC-FE-212: the `ok`-branch per-domain summaries ({@link OkSummary}) and
  * the non-`ok` state blocks ({@link DegradedState}/{@link ForbiddenState}) live
@@ -26,13 +26,17 @@ import { DegradedState, ForbiddenState } from './DomainCardStates';
  * (behavior-preserving split).
  */
 
+// TASK-PC-FE-364 — titles name the work each card now counts (출고 · 발주 · 대사
+// · 결재 · 주문), not the master data it used to count. `IAM 계정` is unchanged:
+// the card still counts accounts (now the locked ones), and its heading is the
+// accessible name of the `/dashboards` drill-down (overview-consolidation e2e).
 const DOMAIN_TITLE: Record<DomainKey, string> = {
   iam: 'IAM 계정',
-  wms: 'WMS 재고',
-  scm: 'SCM 가시성',
-  finance: 'Finance 잔액',
-  erp: 'ERP 마스터',
-  ecommerce: 'ecommerce 상품',
+  wms: 'WMS 출고',
+  scm: 'SCM 발주',
+  finance: 'Finance 대사',
+  erp: 'ERP 결재',
+  ecommerce: 'ecommerce 주문',
 };
 
 // -------------------------------------------------------------------------

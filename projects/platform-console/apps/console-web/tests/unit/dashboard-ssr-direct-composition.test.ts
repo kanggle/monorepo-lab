@@ -24,8 +24,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * The behaviour half asserts every SSR outcome the page branches on — `noTenant`,
  * `unauthorized`, `bffUnavailable` + `unavailableCause`, per-card degrade inside
  * the payload — through the REAL session reads (cookie jar via `next/headers`),
- * the real `sampleGate`, the real composer. Only the network and the finance
- * prerequisite are stubbed (same seams as `dashboard-composition-routes.test.ts`).
+ * the real `sampleGate`, the real composer. Only the network (and the finance
+ * default-account read, which the overview no longer calls since
+ * TASK-PC-FE-364) are stubbed (same seams as `dashboard-composition-routes.test.ts`).
  */
 
 const SELF = 'http://console.self.test';
@@ -49,6 +50,7 @@ vi.mock('@/shared/config/env', () => ({
       WMS_ADMIN_BASE_URL: 'http://wms.local/api/v1/admin',
       SCM_GATEWAY_BASE_URL: 'http://scm.local',
       FINANCE_BASE_URL: 'http://finance.local',
+      LEDGER_BASE_URL: 'http://finance.local',
       ERP_BASE_URL: 'http://erp.local',
       ECOMMERCE_ADMIN_BASE_URL: 'http://ecommerce.local/api/admin',
     };
@@ -117,11 +119,11 @@ function isSelf(url: string): boolean {
 function legOf(url: string): string {
   if (url.includes('/actuator/health')) return 'health';
   if (url.includes('/api/admin/accounts')) return 'iam';
-  if (url.includes('/dashboard/inventory')) return 'wms';
-  if (url.includes('/inventory-visibility/snapshot')) return 'scm';
-  if (url.includes('/balances')) return 'finance';
-  if (url.includes('/masterdata/departments')) return 'erp';
-  if (url.includes('/products')) return 'ecommerce';
+  if (url.includes('/dashboard/orders')) return 'wms';
+  if (url.includes('/procurement/po')) return 'scm';
+  if (url.includes('/reconciliation/discrepancies')) return 'finance';
+  if (url.includes('/approval/inbox')) return 'erp';
+  if (url.includes('/api/admin/orders')) return 'ecommerce';
   return 'unknown';
 }
 
@@ -279,7 +281,9 @@ describe('getOperatorOverviewState — every SSR outcome via the direct path', (
     // classifier called it `transport`. In-process there is no transport: a
     // TypeError here is a code fault, and reporting it as «could not reach» would
     // send a reader to the network.
-    vi.mocked(getFinanceDefaultAccountId).mockRejectedValue(new TypeError('boom'));
+    // TASK-PC-FE-364: the overview no longer reads the finance default account,
+    // so the in-process throw is injected at the leg builder's env read instead.
+    envState.throwWith = new TypeError('boom');
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(true);
     expect(state.overview).toBeNull();

@@ -24,9 +24,16 @@ import { test, expect } from '@playwright/test';
  *      here from /operators — 계정 설정 = 내 것)
  *   2. enter the seeded finance account UUID into MyProfileForm
  *   3. click Save → success message visible
- *   4. navigate to /dashboards/overview
- *   5. assert the finance card renders `ok` (NOT `forbidden /
- *      MISSING_PREREQUISITE`).
+ *   4. navigate to /finance (the finance overview)
+ *   5. assert the default-account snapshot renders (NOT the «기본 finance
+ *      계좌 미설정» notice).
+ *
+ * 🔴 TASK-PC-FE-364 — steps 4–5 used to read the operator overview's finance
+ * card. That card no longer reads the default account (it counts open
+ * reconciliation discrepancies, which need none), so it would be `ok` or
+ * `forbidden` regardless of what this spec saved — the assertion would pass
+ * or fail for a reason unrelated to the profile. The `/finance` overview is
+ * the screen that still reads the default account (§ 2.4.7).
  *
  * Failure modes (each maps to a documented architecture defect, not a
  * test flake — investigate at impl-PR cycle):
@@ -62,16 +69,10 @@ test.describe('@e2e operators profile — finance default account self-serve', (
     await page.getByTestId('my-profile-save').click();
     await expect(page.getByTestId('my-profile-success')).toBeVisible();
 
-    await page.goto('/dashboards/overview');
-    // The finance card on overview must render `ok` with balance data
-    // (NOT `forbidden / MISSING_PREREQUISITE`). The data-status attribute
-    // is owned by features/operator-overview/components/DomainCard.tsx.
-    // TASK-PC-FE-030 — testid uses the `operator-overview-card-<domain>`
-    // convention the component established (sibling internal testids
-    // `operator-overview-card-finance-status` / `-currency` follow the
-    // same prefix). The original `domain-card-finance` name was the
-    // `aria-labelledby` id, not the testid.
-    const financeCard = page.getByTestId('operator-overview-card-finance');
-    await expect(financeCard).toHaveAttribute('data-status', 'ok');
+    await page.goto('/finance');
+    // TASK-PC-FE-364 — the default account is read by the /finance overview
+    // (features/finance-overview), not by the operator overview any more.
+    await expect(page.getByTestId('finance-overview-account-snapshot')).toBeVisible();
+    await expect(page.getByTestId('finance-overview-account-missing')).toHaveCount(0);
   });
 });

@@ -25,6 +25,7 @@ vi.mock('@/shared/config/env', () => ({
     WMS_ADMIN_BASE_URL: 'http://wms.local/api/v1/admin',
     SCM_GATEWAY_BASE_URL: 'http://scm.local',
     FINANCE_BASE_URL: 'http://finance.local',
+    LEDGER_BASE_URL: 'http://finance.local',
     ERP_BASE_URL: 'http://erp.local',
     ECOMMERCE_ADMIN_BASE_URL: 'http://ecommerce.local/api/admin',
   }),
@@ -34,6 +35,8 @@ vi.mock('@/shared/config/demo-backend', () => ({
   resolveBackendUrl: async (u: string) => u,
 }));
 
+// TASK-PC-FE-364 — the overview no longer reads the finance default account.
+// Still mocked so that a reintroduced read is observable (asserted below).
 vi.mock('@/shared/lib/finance-default-account-id', () => ({
   getFinanceDefaultAccountId: vi.fn(),
 }));
@@ -67,11 +70,11 @@ function json(body: unknown, status = 200): Response {
 function legOf(url: string): string {
   if (url.includes('/actuator/health')) return 'health';
   if (url.includes('/api/admin/accounts')) return 'iam';
-  if (url.includes('/dashboard/inventory')) return 'wms';
-  if (url.includes('/inventory-visibility/snapshot')) return 'scm';
-  if (url.includes('/balances')) return 'finance';
-  if (url.includes('/masterdata/departments')) return 'erp';
-  if (url.includes('/products')) return 'ecommerce';
+  if (url.includes('/dashboard/orders')) return 'wms';
+  if (url.includes('/procurement/po')) return 'scm';
+  if (url.includes('/reconciliation/discrepancies')) return 'finance';
+  if (url.includes('/approval/inbox')) return 'erp';
+  if (url.includes('/api/admin/orders')) return 'ecommerce';
   throw new Error(`unexpected url ${url}`);
 }
 
@@ -155,16 +158,40 @@ describe('operator overview route', () => {
     });
   });
 
-  it('finance default account absent → finance forbidden/MISSING_PREREQUISITE, five calls', async () => {
+  it('TASK-PC-FE-364 — no finance default account → the finance card is still called and ok; six calls', async () => {
     fullSession();
     vi.mocked(getFinanceDefaultAccountId).mockResolvedValue(null);
     const res = await overviewGET();
     const body = OperatorOverviewSchema.parse(await res.json());
-    expect(body.cards.find((c) => c.domain === 'finance')).toMatchObject({
-      status: 'forbidden',
-      reason: 'MISSING_PREREQUISITE',
+    expect(body.cards.find((c) => c.domain === 'finance')).toMatchObject({ status: 'ok' });
+    expect(body.cards.some((c) => c.status === 'forbidden')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    // The overview does not read the default account at all any more.
+    expect(getFinanceDefaultAccountId).not.toHaveBeenCalled();
+  });
+
+  it('TASK-PC-FE-364 — one call per card through the route (each leg exactly once)', async () => {
+    fullSession();
+    await overviewGET();
+    const legs = fetchMock.mock.calls.map(([u]) => legOf(String(u)));
+    expect(legs.sort()).toEqual(['ecommerce', 'erp', 'finance', 'iam', 'scm', 'wms']);
+  });
+
+  it('a producer 403 on one swapped leg → that card forbidden, route 200', async () => {
+    fullSession();
+    fetchMock.mockImplementation(async (url: string) => {
+      const leg = legOf(String(url));
+      return leg === 'erp'
+        ? json({ code: 'PERMISSION_DENIED', message: 'required role not present' }, 403)
+        : json(fixture.legs[leg].body);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    const res = await overviewGET();
+    expect(res.status).toBe(200);
+    const body = OperatorOverviewSchema.parse(await res.json());
+    expect(body.cards.find((c) => c.domain === 'erp')).toMatchObject({
+      status: 'forbidden',
+      reason: 'PERMISSION_DENIED',
+    });
   });
 });
 

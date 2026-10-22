@@ -24,8 +24,13 @@ test.describe('샘플 방문자 — 실제 개요 (backend 미기동 · 미인�
       '샘플 데이터로 보는 실제 콘솔 화면입니다 · 로그인하면 실제 데이터',
     );
     await expect(page.getByTestId('operator-overview-cards')).toBeVisible();
-    await expect(page.getByTestId('operator-overview-card-iam-total')).toHaveText(/^[1-9][\d,]*$/);
-    await expect(page.getByTestId('operator-overview-card-ecommerce-products')).toHaveText(/^[1-9][\d,]*$/);
+    // TASK-PC-FE-364 — the cards became business figures (잠긴 계정 · 출고 대기 주문 …);
+    // the testids follow the figure, not the old row count.
+    await expect(page.getByTestId('operator-overview-card-iam-locked')).toHaveText(/^[1-9][\d,]*$/);
+    await expect(page.getByTestId('operator-overview-card-ecommerce-to-ship')).toHaveText(/^[1-9][\d,]*$/);
+    // 🔴 the sample visitor is linked to an employee — «직원 연결 없음» here would mean the
+    //    sample inbox body lost `meta.actorEmployeeId`.
+    await expect(page.getByTestId('operator-overview-card-erp-inbox')).toHaveText(/^[1-9][\d,]*$/);
     // ready 화면에는 «준비 중» 이 없다.
     await expect(page.getByTestId('sample-screen-not-ready')).toHaveCount(0);
   });

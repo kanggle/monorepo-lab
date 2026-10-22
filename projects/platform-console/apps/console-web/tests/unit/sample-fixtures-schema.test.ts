@@ -63,13 +63,16 @@ describe('sample fixtures parse with the production schemas', () => {
     // exactly how the finance / wms / scm mismatch survived). The assertions
     // are therefore on the VALUES, and the render-side proof is the AC-7
     // census in `features/operator-overview/leg-body-contract.test.tsx`.
-    expect(GapDataSchema.parse(byDomain.iam).totalElements).toBeTypeOf('number');
-    expect(WmsDataSchema.parse(byDomain.wms).page?.totalElements).toBeTypeOf('number');
-    expect(ScmDataSchema.parse(byDomain.scm).data?.totalElements).toBeTypeOf('number');
-    expect(FinanceDataSchema.parse(byDomain.finance).data?.length).toBeGreaterThan(0);
-    expect(FinanceDataSchema.parse(byDomain.finance).data?.[0].ledger).toBeTypeOf('string');
-    expect(ErpDataSchema.parse(byDomain.erp).meta?.totalElements).toBeTypeOf('number');
-    expect(EcommerceDataSchema.parse(byDomain.ecommerce).totalElements).toBeTypeOf('number');
+    // TASK-PC-FE-364: every card is one page total now, and a sample 0 would
+    // read as «nothing to do» on the landing screen — so each is > 0.
+    expect(GapDataSchema.parse(byDomain.iam).totalElements).toBeGreaterThan(0);
+    expect(WmsDataSchema.parse(byDomain.wms).page?.totalElements).toBeGreaterThan(0);
+    expect(ScmDataSchema.parse(byDomain.scm).data?.totalElements).toBeGreaterThan(0);
+    expect(FinanceDataSchema.parse(byDomain.finance).meta?.totalElements).toBeGreaterThan(0);
+    expect(ErpDataSchema.parse(byDomain.erp).meta?.totalElements).toBeGreaterThan(0);
+    // 🔴 the sample visitor is linked — otherwise the card says «직원 연결 없음».
+    expect(ErpDataSchema.parse(byDomain.erp).meta?.actorEmployeeId).toBeTypeOf('string');
+    expect(EcommerceDataSchema.parse(byDomain.ecommerce).totalElements).toBeGreaterThan(0);
   });
 
   it('domain health', () => {

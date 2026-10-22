@@ -4,7 +4,6 @@ import {
   getOperatorToken,
   getActiveTenant,
 } from '@/shared/lib/session';
-import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
 import { resolveBackendUrl } from '@/shared/config/demo-backend';
@@ -25,9 +24,11 @@ import type { CompositionAnswer } from './composition-answer';
  * Six legs, each through the address the domain's own console screen uses
  * (`console-composition.ts`):
  *   - IAM: RFC 8693 operator token + `X-Tenant-Id` (ADR-MONO-017 D4);
- *   - wms / scm / finance / erp / ecommerce: domain-facing IAM OIDC token;
- *   - finance only when the operator has a default account (option (a),
- *     TASK-PC-FE-014); otherwise `forbidden / MISSING_PREREQUISITE`, no call.
+ *   - wms / scm / finance / erp / ecommerce: domain-facing IAM OIDC token.
+ *   TASK-PC-FE-364 — every card is one real call; the finance card reads the
+ *   reconciliation queue, which needs no default account, so this function no
+ *   longer reads `getFinanceDefaultAccountId()` (the `/finance` overview still
+ *   does).
  *
  * Answers:
  *   - sample visitor → the sample envelope (200), or 502 BAD_GATEWAY if the
@@ -75,7 +76,6 @@ export async function composeOperatorOverview(): Promise<CompositionAnswer> {
     tenant,
     operatorToken,
     domainFacingToken,
-    financeDefaultAccountId: await getFinanceDefaultAccountId(),
     requestId,
   });
   const result = await compose(legs, {
