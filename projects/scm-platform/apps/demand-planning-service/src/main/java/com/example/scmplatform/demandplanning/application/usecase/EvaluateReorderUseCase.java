@@ -145,10 +145,15 @@ public class EvaluateReorderUseCase {
             return;
         }
 
+        // TASK-SCM-BE-062: snapshot the POLICY's reorder point only. The local `reorderPoint`
+        // may be the wms alertThreshold fallback, which is not a scm reorder point — a
+        // policy-less suggestion carries no value (owner decision (가-1)).
+        Integer reorderPointAtTrigger = policyOpt.map(ReorderPolicy::getReorderPoint).orElse(null);
+
         Instant now = Instant.now();
         ReorderSuggestion suggestion = ReorderSuggestion.raiseFromAlert(
                 UUID.randomUUID(), skuCode, warehouseId, warehouseCode, mapping.getSupplierId(),
-                reorderQty, eventId, availableQty, TENANT_ID, now);
+                reorderQty, eventId, availableQty, reorderPointAtTrigger, TENANT_ID, now);
 
         suggestionPort.save(suggestion);
         processedEventPort.markProcessed(eventId, TENANT_ID, now, TOPIC_ALERT);

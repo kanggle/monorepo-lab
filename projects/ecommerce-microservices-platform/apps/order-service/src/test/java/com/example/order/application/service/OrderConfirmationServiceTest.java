@@ -85,6 +85,27 @@ class OrderConfirmationServiceTest {
     }
 
     @Test
+    @DisplayName("BACKORDERED 주문은 재입고 재예약 사가(ORDER_RESERVED)로 CONFIRMED가 되고 OrderConfirmed가 발행된다 — 운영자 경로 차단(TASK-BE-645)이 사가를 막지 않는다")
+    void confirmOrder_backorderedOrder_reReservationSagaConfirmsAndPublishes() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+        order.markBackordered(FIXED_CLOCK);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.BACKORDERED);
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        orderConfirmationService.confirmOrder(order.getOrderId());
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        verify(orderRepository).save(order);
+        verify(orderMetrics).recordOrderConfirmed();
+        verify(orderMetrics).recordStatusTransition("BACKORDERED", "CONFIRMED");
+        verify(orderEventPublisher).publishOrderConfirmed(any(OrderConfirmedEvent.class));
+    }
+
+    @Test
     @DisplayName("이미 CONFIRMED인 주문 확정 시 메트릭이 기록되지 않는다")
     void confirmOrder_alreadyConfirmed_doesNotRecordMetrics() {
         Order order = Order.create("user1",

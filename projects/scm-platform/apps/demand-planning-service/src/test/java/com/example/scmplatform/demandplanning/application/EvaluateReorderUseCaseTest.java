@@ -163,6 +163,47 @@ class EvaluateReorderUseCaseTest {
         verify(suggestionPort).save(any(ReorderSuggestion.class));
     }
 
+    @Test
+    void evaluateFromAlert_snapshotsPolicyReorderPoint_BE062() {
+        when(processedEventPort.isDuplicate(EVENT_ID)).thenReturn(false);
+        when(mappingPort.findBySkuCode("scm", SKU)).thenReturn(Optional.of(mapping()));
+        // policy reorderPoint (10) deliberately differs from the wms alertThreshold (8), so the
+        // assertion tells the two sources apart.
+        when(policyPort.findBySkuCode("scm", SKU)).thenReturn(Optional.of(policy(10, 100)));
+        when(suggestionPort.hasOpenSuggestion("scm", SKU, WAREHOUSE_ID)).thenReturn(false);
+        when(suggestionPort.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
+
+        org.mockito.ArgumentCaptor<ReorderSuggestion> saved =
+                org.mockito.ArgumentCaptor.forClass(ReorderSuggestion.class);
+        verify(suggestionPort).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getReorderPointAtTrigger())
+                .isEqualTo(10);
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getTriggerAvailableQty())
+                .isEqualTo(5);
+    }
+
+    @Test
+    void evaluateFromAlert_noPolicy_doesNotLeakAlertThresholdIntoSnapshot_BE062() {
+        when(processedEventPort.isDuplicate(EVENT_ID)).thenReturn(false);
+        when(mappingPort.findBySkuCode("scm", SKU)).thenReturn(Optional.of(mapping()));
+        when(policyPort.findBySkuCode("scm", SKU)).thenReturn(Optional.empty());
+        when(suggestionPort.hasOpenSuggestion("scm", SKU, WAREHOUSE_ID)).thenReturn(false);
+        when(suggestionPort.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // degraded path: compares against alertThreshold=8 and raises — but 8 is the wms
+        // threshold, not a scm reorder point, so it must NOT be recorded (owner decision (가-1)).
+        useCase.evaluateFromAlert(EVENT_ID, SKU, WAREHOUSE_ID, WAREHOUSE_CODE, 5, 8, Instant.now());
+
+        org.mockito.ArgumentCaptor<ReorderSuggestion> saved =
+                org.mockito.ArgumentCaptor.forClass(ReorderSuggestion.class);
+        verify(suggestionPort).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getReorderPointAtTrigger())
+                .as("the wms alertThreshold fallback must not be snapshotted")
+                .isNull();
+    }
+
     private static ReorderPolicy policy(int reorderPoint, int reorderQty) {
         return new ReorderPolicy(SKU, reorderPoint, 5, reorderQty, "scm", 0, Instant.now());
     }

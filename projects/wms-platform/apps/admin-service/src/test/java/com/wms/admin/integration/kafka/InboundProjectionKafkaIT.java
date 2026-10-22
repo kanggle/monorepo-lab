@@ -142,6 +142,74 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         });
     }
 
+    // ----- TASK-BE-643: counters are not LWW ---------------------------
+    // Two putaways of *different* ASNs land on the same (date, warehouse) row.
+    // They are keyed by asnId, so arrival order is not occurredAt order
+    // (inbound-events.md:400). Sent latest-first on purpose — the earlier suite
+    // only ever sent in occurredAt order and so could not see the drop.
+
+    @Test
+    void putawayCompleted_reverseOrderAcrossAsns_countsBoth() {
+        UUID warehouseId = UUID.randomUUID();
+        Instant t2 = Instant.parse("2026-05-10T15:00:00Z");
+        Instant t1 = Instant.parse("2026-05-10T09:00:00Z");
+        LocalDate date = LocalDate.of(2026, 5, 10);
+        UUID laterId = UUID.randomUUID();
+        UUID earlierId = UUID.randomUUID();
+        UUID asnLater = UUID.randomUUID();
+        UUID asnEarlier = UUID.randomUUID();
+
+        kafkaTemplate.send("wms.inbound.putaway.completed.v1", asnLater.toString(),
+                KafkaTestSupport.envelope(laterId, "inbound.putaway.completed", t2,
+                        asnLater.toString(), putawayPayload(warehouseId, t2, 10)));
+        await().atMost(AWAIT).untilAsserted(() ->
+                assertThat(dedupe.existsById(laterId)).isTrue());
+
+        kafkaTemplate.send("wms.inbound.putaway.completed.v1", asnEarlier.toString(),
+                KafkaTestSupport.envelope(earlierId, "inbound.putaway.completed", t1,
+                        asnEarlier.toString(), putawayPayload(warehouseId, t1, 15)));
+
+        await().atMost(AWAIT).untilAsserted(() -> {
+            assertThat(dedupe.findById(earlierId)).isPresent().get()
+                    .satisfies(d -> assertThat(d.getOutcome()).isEqualTo("APPLIED"));
+            assertThat(throughputRepo.findById(new ThroughputDailyId(date, warehouseId)))
+                    .isPresent().get().satisfies(t -> {
+                        assertThat(t.getPutawayCount()).isEqualTo(2);
+                        assertThat(t.getQtyReceived()).isEqualTo(25);
+                    });
+        });
+    }
+
+    @Test
+    void putawayCompleted_sameEventIdTwice_countsOnce() throws Exception {
+        // 대조군 — 조건을 지운 뒤에도 같은 event_id 의 재전달은 dedupe 가 막는다.
+        UUID warehouseId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        UUID asnId = UUID.randomUUID();
+        Instant at = Instant.parse("2026-05-11T10:00:00Z");
+        LocalDate date = LocalDate.of(2026, 5, 11);
+        String env = KafkaTestSupport.envelope(eventId, "inbound.putaway.completed", at,
+                asnId.toString(), putawayPayload(warehouseId, at, 7));
+
+        kafkaTemplate.send("wms.inbound.putaway.completed.v1", asnId.toString(), env).get();
+        await().atMost(AWAIT).untilAsserted(() ->
+                assertThat(throughputRepo.findById(new ThroughputDailyId(date, warehouseId)))
+                        .isPresent());
+
+        kafkaTemplate.send("wms.inbound.putaway.completed.v1", asnId.toString(), env).get();
+        Thread.sleep(3_000);
+
+        var row = throughputRepo.findById(new ThroughputDailyId(date, warehouseId)).orElseThrow();
+        assertThat(row.getPutawayCount()).as("redelivery must not double-count").isEqualTo(1);
+        assertThat(row.getQtyReceived()).isEqualTo(7);
+    }
+
+    private static String putawayPayload(UUID warehouseId, Instant completedAt, int qty) {
+        return """
+                {"warehouseId":"%s","completedAt":"%s","lines":[{"qtyReceived":%d}]}"""
+                .formatted(warehouseId, completedAt, qty);
+    }
+
     // ----- dedupe-hit -------------------------------------------------
 
     @Test

@@ -198,6 +198,51 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
+    @DisplayName("BACKORDERED 주문을 운영자가 CONFIRMED로 변경하면 InvalidOrderException으로 거부되고 상태·저장이 그대로다 (재고 예약 없는 확정 금지 — TASK-BE-645)")
+    void changeStatus_backorderedToConfirmed_rejectedWithoutSave() {
+        String orderId = "order-011";
+        Order order = createOrderWithStatus(orderId, OrderStatus.BACKORDERED);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
+                .isInstanceOf(InvalidOrderException.class)
+                .hasMessageContaining("BACKORDERED");
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.BACKORDERED);
+        assertThat(order.getUpdatedAt()).isEqualTo(FIXED_NOW);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BACKORDERED 주문을 운영자가 CANCELLED로 변경하면 성공한다 (백오더에서 운영자가 할 수 있는 유일한 전이 — TASK-BE-645)")
+    void changeStatus_backorderedToCancelled_success() {
+        String orderId = "order-012";
+        Order order = createOrderWithStatus(orderId, OrderStatus.BACKORDERED);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CANCELLED");
+
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    @DisplayName("이미 CONFIRMED인 주문을 운영자가 CONFIRMED로 변경하면 멱등 no-op으로 200 결과를 돌려준다 (기존 동작 유지)")
+    void changeStatus_confirmedToConfirmed_idempotentNoOp() {
+        String orderId = "order-013";
+        Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+
+        assertThat(result.status()).isEqualTo("CONFIRMED");
+        assertThat(order.getUpdatedAt()).isEqualTo(FIXED_NOW);
+    }
+
+    @Test
     @DisplayName("raw status가 잘못된 enum 값이거나 null이면 InvalidOrderStatusException이 발생한다")
     void changeStatus_throwsInvalidOrderStatusExceptionWhenRawStatusIsInvalid() {
         assertThatThrownBy(() -> adminOrderStatusService.changeStatus("order-x", "FOO"))

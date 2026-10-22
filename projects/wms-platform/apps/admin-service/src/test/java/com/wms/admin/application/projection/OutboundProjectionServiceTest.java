@@ -93,6 +93,32 @@ class OutboundProjectionServiceTest {
                 eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(150), any(Instant.class));
     }
 
+    /**
+     * TASK-BE-643 — 대조군: 누계의 last_event_at 조건을 지운 뒤에도 같은 event_id 의
+     * 재전달은 dedupe 가 막아 누계는 한 번만 오른다.
+     */
+    @Test
+    void shippingConfirmed_sameEventIdTwice_incrementsOnce() throws Exception {
+        UUID shipmentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        when(shipmentRepo.findById(shipmentId)).thenReturn(Optional.empty());
+        when(orderRepo.findById(orderId)).thenReturn(Optional.empty());
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
+
+        ProjectionEnvelope env = new ProjectionEnvelope(UUID.randomUUID(),
+                "outbound.shipping.confirmed", NOW, "agg", "wms.outbound.shipping.confirmed.v1",
+                null, MAPPER.readTree("{\"shipmentId\":\"" + shipmentId + "\",\"orderId\":\""
+                        + orderId + "\",\"warehouseId\":\"" + warehouseId
+                        + "\",\"shippedAt\":\"2026-05-09T15:00:00Z\","
+                        + "\"lines\":[{\"qtyConfirmed\":100}]}"));
+
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.DUPLICATE);
+        verify(throughputRepo, times(1)).upsertIncrement(any(), any(), anyInt(), any());
+    }
+
     @Test
     void orderCancelled_setsStatus() throws Exception {
         UUID orderId = UUID.randomUUID();

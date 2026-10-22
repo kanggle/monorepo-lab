@@ -246,6 +246,7 @@ Cancel an order. Only the order owner may cancel.
 |---|---|
 | `PENDING` | Order placed, awaiting confirmation |
 | `CONFIRMED` | Order confirmed by system or admin |
+| `BACKORDERED` | Paid, but stock could not be reserved; held until a restock re-reserves it (system-driven `→ CONFIRMED`) or it is cancelled |
 | `SHIPPED` | Order shipped |
 | `DELIVERED` | Order delivered |
 | `CANCELLED` | Order cancelled |
@@ -403,7 +404,15 @@ Change order status (admin only).
 
 **Allowed transitions (operator-initiated):**
 - `PENDING` → `CONFIRMED`
-- `PENDING` or `CONFIRMED` → `CANCELLED`
+- `PENDING`, `CONFIRMED` or `BACKORDERED` → `CANCELLED`
+- `CONFIRMED` → `CONFIRMED` is an idempotent no-op (`200`, status unchanged).
+
+**From `BACKORDERED`, only `CANCELLED` is operator-settable** (TASK-BE-645). A
+`BACKORDERED` order holds **no** stock reservation; it reaches `CONFIRMED` solely via the
+restock re-reservation saga (`StockChanged(ORDER_RESERVED)` → `OrderConfirmed`, see
+`events/order-events.md` § Order lifecycle & BACKORDERED). Submitting `status: CONFIRMED`
+for a `BACKORDERED` order returns `400 INVALID_ORDER_REQUEST` and leaves the order
+unchanged — an operator confirm would skip the reservation and emit no `OrderConfirmed`.
 
 `SHIPPED` and `DELIVERED` are **not** operator-settable on this endpoint. The Order
 reaches those states solely via the shipping-driven return-leg — the
@@ -430,10 +439,11 @@ preventing order/shipping status divergence.
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
-| 400 | INVALID_ORDER_REQUEST | Invalid status value or transition |
+| 400 | INVALID_ORDER_REQUEST | Invalid status value or transition (incl. `BACKORDERED` → `CONFIRMED`) |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Requires ADMIN role |
 | 404 | ORDER_NOT_FOUND | Order with given ID does not exist |
+| 422 | ORDER_CANNOT_BE_CANCELLED | `status: CANCELLED` for an order whose status does not allow cancellation |
 
 ---
 
@@ -470,7 +480,8 @@ this recovery.
 
 ## Notes
 - `userId` is extracted from the authentication token, not from the request body.
-- An order may only be cancelled when its status is `PENDING` or `CONFIRMED`.
+- An order may only be cancelled when its status is `PENDING`, `CONFIRMED` or `BACKORDERED`
+  (`OrderStatus.isCancellable`).
 - Internal stack traces must not appear in error responses.
 - The `/api/internal/orders/**` tree is gateway-excluded and authenticated by `client_credentials`
   Bearer (system-to-system), distinct from the user/admin Bearer auth of all `/api/orders/**` and
