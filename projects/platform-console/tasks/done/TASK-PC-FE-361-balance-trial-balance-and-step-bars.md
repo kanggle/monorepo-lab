@@ -8,7 +8,7 @@ TASK-PC-FE-361
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -142,3 +142,8 @@ frontend
 - 금액 폭 = `chartMagnitude` 만(`balance-bars.ts:24` · `trial-balance-bars.ts:27`) · 대차 판정 = `tb.inBalance` 그대로(`TrialBalanceTable.tsx:60-65`) — 메인 세션이 grep 으로 확인.
 - 브랜치 nightly run `39727008251`(head `591749bcc`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4459 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/finance/accounts` · `/ledger` · `/erp/approval` 은 SSR, `/wms/outbound` 주문 상세는 클라이언트 패널이라 브라우저 · 소유자).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7245551198` success. 익명 샘플 화면: 시산표 막대 안내 문장 · 결재 목록 `2/2 단계`(`approval-steps-bar-1`) = 2026-10-22 UTC 서버 렌더 HTML; 재무 잔액(`sample-account-0001` 조회 → 막대 80% · 20% · «막대는 통화별 장부 잔액 대비 …») · 출고 상세(`outbound-drill-0..2` = PICKING · PICKED · SHIPPED 에 «진행 단계» · `-3` = CANCELLED 에 «정상 흐름 밖 상태: CANCELLED», 막대 없음) = 2026-10-22 UTC 헤드리스 브라우저(Playwright · 메인 세션, 익명 샘플 `https://console.hubwang.com`). 🔵 AC 원문의 «클라이언트 패널은 브라우저 · 소유자» 중 **브라우저** 로 닫았다 — 소유자 눈 확인은 아니다.
+- 4차원: (a) #4459 `state=MERGED` · (b) 스쿼시 `e35c77765` 가 `origin/main` 조상(tip `e35c77765`) · (c) 머지 시점 `statusCheckRollup` 67 · 실패 0 · 대기 0 · (d) AC 원문을 열어 남은 칸 = AC-3 하나 — 위 기록으로 그 동사(«배포 · 확인»)대로 닫힘.

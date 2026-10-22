@@ -121,21 +121,17 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
-- `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **그래프 3차 — 재무 잔액 «사용 가능 + 보류» 막대 · 시산표 차변 · 대변 막대 · ERP 결재 행별 단계 진행 · WMS 출고 상세 진행 단계** — 서버 변경 없음 · 금액 폭은 `chartMagnitude` 만 (REVIEW, 2026-10-21 UTC · 새 문구 8 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
-- `TASK-PC-FE-360-overview-status-distribution-bars.md` — **그래프 2차 ② — 이커머스 개요 배송 상태 · ERP 개요 결재 상태 분포 막대** — 상태별 총 건수 호출(4 · 6), 개요 화면에만(소유자 결정) (REVIEW, 2026-10-21 UTC · 새 문구 5 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
-- `TASK-PC-FE-359-fx-history-and-payout-charts.md` — **그래프 2차 ① — 원장 환율 추이 선 · 정산 기간별 지급액 막대 · 원장 기간별 전표 수 막대** — 문자열 금액 · 환율은 «그래프 폭 계산» 한 함수에서만 숫자로(소유자 결정 · F5 스펙 예외 먼저) (REVIEW, 2026-10-21 UTC · 새 문구 11 소유자 승인 · 브랜치 nightly success · AC-4 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Opus.
-
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
-
-- `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **이미 받은 데이터로 그리는 막대 다섯**(이커머스 주문 상태 · 프로모션 발급률 · WMS 입고 검수 · SCM SKU 노드별 · WMS 투영 지연) — CSS 막대 · 서버/BFF 변경 없음 · 새 문구는 소유자 승인 (REVIEW, 2026-10-22 UTC · 새 문구 2 소유자 승인 · AC-3 Vercel/샘플 화면 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **ERP 결재 화면의 콘솔 오류 둘 — 만들기 BFF 응답 `{data}` 로 감쌈 · 위임 목록 `meta.size` 0 허용 · 오류 시 빈 목록 문구 숨김 · 위임 생성·회수 `.data` 파싱** (REVIEW, 2026-10-21 UTC · 문구 변경 없음). AC-0 닫힘 · AC-1/AC-2 구현(vitest 412 files · 4962 tests 전부 통과, tsc/lint rc=0) · AC-3(Vercel/라이브, 다음 데모 창) 열림. 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
+- ✅ `TASK-PC-FE-357-inline-bars-on-data-already-loaded.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4450(`d10f95e74`, 실패 0). 막대 다섯(주문 상태 · 발급률 · 입고 검수 · SCM 노드별 · WMS 투영) · 새 문구 2 승인 · Vercel `7231346845` success · 익명 샘플 화면 확인(서버 렌더 HTML + 헤드리스 브라우저).
+- ✅ `TASK-PC-FE-359-fx-history-and-payout-charts.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4455(`14acf1440`, 실패 0). 환율 추이 선 · 정산 지급액 막대 · 원장 전표 수 막대 · F5 그래프 기하 예외 · 새 문구 11 승인 · Vercel `7243610439` success · 익명 샘플 화면 확인(서버 렌더 HTML + 헤드리스 브라우저).
+- ✅ `TASK-PC-FE-360-overview-status-distribution-bars.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4457(`d2ea0c2c6`, 실패 0). 이커머스 개요 배송 상태 · ERP 개요 결재 상태 분포 막대 · 새 문구 5 승인 · Vercel `7243777747` success · 익명 샘플 화면 확인(서버 렌더 HTML + 헤드리스 브라우저).
+- ✅ `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4459(`e35c77765`, 실패 0). 재무 잔액 · 시산표 막대 · 결재 행별 단계 · 출고 상세 진행 단계 · 새 문구 8 승인 · Vercel `7245551198` success · 익명 샘플 화면 확인(서버 렌더 HTML + 헤드리스 브라우저).
 - ✅ `TASK-PC-FE-345-ecommerce-nav-business-role-signals.md` — **DONE 2026-10-21 UTC (4-dim verified · 소유자 결정 «근거를 적고 체크»)** — #4399(`d64a6b8a7`, 실패 0 · SUCCESS 13). E-commerce 메뉴 신호를 영역 역할로(795 뒤 거짓 배지 퇴행 수리 — 32차 창 라이브 ✅). 버튼 절반 = 346(done). AC-0 `/domain-roles` 문자 그대로 측정 기록 없음 — 코드 대조로 갈음. Vercel 7128901643.
 - ✅ `TASK-PC-FE-344-finance-nav-business-role-signals.md` — **DONE 2026-10-21 UTC (4-dim verified · 소유자 결정 «근거를 적고 체크»)** — #4402(`465b39a94`, 실패 0 · SUCCESS 14). Finance 메뉴 신호 · `/ledger` 쓰기 버튼 = `FINANCE_LEDGER_WRITE`(32차 창 양방향 ✅). AC-0 `/domain-roles` 문자 그대로 측정 기록 없음 — 코드 대조로 갈음. Vercel 7130932170.
 - ✅ `TASK-PC-FE-343-erp-nav-business-role-signals.md` — **DONE 2026-10-21 UTC (4-dim verified · 소유자 결정 «근거를 적고 체크»)** — #4400(`82d857680`, 실패 0 · SUCCESS 14). ERP 메뉴 신호 · ERP 역할 없으면 알림 종이 ERP 갈래를 안 부름(32차 창 ✅). 버튼 절반 = 347(done). AC-0 `/domain-roles` 문자 그대로 측정 기록 없음 — 코드 대조로 갈음. Vercel 7129951620.

@@ -8,7 +8,7 @@ TASK-PC-FE-359
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -154,3 +154,8 @@ frontend
 - `main`(`ea299d688`, `TASK-MONO-804` 의 순회기 수정 포함) 위로 rebase — 충돌 없음. 새 순회기로 `check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs` rc=0 · console-web hits=0 · 큐 가드 셋 rc=0.
 - 브랜치 nightly run `39664325985`(head `c18e0066a`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4455 같은 head 체크 pending 0 · fail 0 → AC-3 닫힘.
 - 열림: **AC-4**(Vercel Production 기록 · 익명 샘플 화면 — 환율 이력 · 정산 기간 상세 · 원장 기간).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-4 닫힘** — 위 AC 목록의 AC-4 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7243610439` success. 익명 샘플 화면: 환율 추이 선(`/ledger` FX 환율 피드 → USD 이력 → `ledger-fx-history-chart-svg` · «최신 1300.00000000» · «최저 1298.50000000» · «최고 1300.00000000» · «받아 온 최근 2건 …») · 기간 전표 수 막대(«막대는 회계 기간 2개 전체 중 …») = 2026-10-22 UTC 헤드리스 브라우저(Playwright · 메인 세션, 익명 샘플 `https://console.hubwang.com`); 지급액 막대(`/ecommerce/settlements/periods/period-sample-0001` → `payout-row-bar-0` 100% · `-1` 63.8% · «막대는 이 기간 지급 2건 중 …») = 같은 날 서버 렌더 HTML.
+- 4차원: (a) #4455 `state=MERGED` · (b) 스쿼시 `14acf1440` 가 `origin/main` 조상(tip `e35c77765`) · (c) 머지 시점 `statusCheckRollup` 67 · 실패 0 · 대기 0 · (d) AC 원문을 열어 남은 칸 = AC-4 하나 — 위 기록으로 그 동사(«배포 · 확인»)대로 닫힘.
