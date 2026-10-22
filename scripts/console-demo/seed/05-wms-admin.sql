@@ -25,7 +25,7 @@ INSERT INTO admin_inventory_snapshot (
     location_id, sku_id, lot_id, warehouse_id,
     location_code, sku_code, lot_no,
     available_qty, reserved_qty, damaged_qty, on_hand_qty,
-    low_stock_flag, last_adjusted_at, last_event_at, version
+    last_adjusted_at, last_event_at, version
 ) VALUES (
     'b0000000-0000-0000-0000-000000000001'::uuid,
     'c0000000-0000-0000-0000-000000000001'::uuid,
@@ -33,6 +33,6 @@ INSERT INTO admin_inventory_snapshot (
     'a0000000-0000-0000-0000-000000000001'::uuid,
     'DEMO-LOC-01', 'DEMO-SKU-01', NULL,
     100, 0, 0, 100,
-    FALSE, NOW(), NOW(), 0
+    NOW(), NOW(), 0
 )
 ON CONFLICT (location_id, sku_id, lot_id) DO NOTHING;

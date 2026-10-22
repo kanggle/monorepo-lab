@@ -1,5 +1,6 @@
 package com.wms.admin.api.dashboard.dto;
 
+import com.wms.admin.application.settings.LowStockThresholdReader;
 import com.wms.admin.readmodel.inventory.InventorySnapshotEntity;
 import java.time.Instant;
 import java.util.UUID;
@@ -23,11 +24,17 @@ public record InventorySnapshotResponse(
         Instant lastEventAt,
         long version) {
 
-    public static InventorySnapshotResponse from(InventorySnapshotEntity e) {
+    /**
+     * {@code lowStockFlag} is derived here, not stored — TASK-BE-644: the
+     * caller passes the current setting's threshold, compared with strict
+     * {@code <}.
+     */
+    public static InventorySnapshotResponse from(InventorySnapshotEntity e, int lowStockThreshold) {
         return new InventorySnapshotResponse(
                 e.getLocationId(), e.getSkuId(), e.getLotIdOrNull(), e.getWarehouseId(),
                 e.getWarehouseCode(), e.getLocationCode(), e.getSkuCode(), e.getLotNo(),
                 e.getAvailableQty(), e.getReservedQty(), e.getDamagedQty(), e.getOnHandQty(),
-                e.isLowStockFlag(), e.getLastAdjustedAt(), e.getLastEventAt(), e.getVersion());
+                LowStockThresholdReader.isLowStock(e.getAvailableQty(), lowStockThreshold),
+                e.getLastAdjustedAt(), e.getLastEventAt(), e.getVersion());
     }
 }

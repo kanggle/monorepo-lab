@@ -64,8 +64,10 @@ public class InventorySnapshotEntity {
     @Column(name = "on_hand_qty", nullable = false)
     private int onHandQty;
 
-    @Column(name = "low_stock_flag", nullable = false)
-    private boolean lowStockFlag;
+    // 🔵 TASK-BE-644 — no stored low-stock flag. It is derived at query time from
+    //    the current setting (InventorySnapshotRepository.search /
+    //    InventorySnapshotResponse.from); the column was dropped in V5. A stored
+    //    flag kept the old threshold on every row without a new inventory event.
 
     @Column(name = "last_adjusted_at")
     private Instant lastAdjustedAt;
@@ -84,8 +86,7 @@ public class InventorySnapshotEntity {
                                    String warehouseCode, String locationCode, String skuCode,
                                    String lotNo,
                                    int availableQty, int reservedQty, int damagedQty,
-                                   boolean lowStockFlag, Instant lastAdjustedAt,
-                                   Instant lastEventAt) {
+                                   Instant lastAdjustedAt, Instant lastEventAt) {
         this.locationId = locationId;
         this.skuId = skuId;
         this.lotId = lotId == null ? InventorySnapshotId.NULL_SENTINEL : lotId;
@@ -98,14 +99,13 @@ public class InventorySnapshotEntity {
         this.reservedQty = reservedQty;
         this.damagedQty = damagedQty;
         this.onHandQty = availableQty + reservedQty + damagedQty;
-        this.lowStockFlag = lowStockFlag;
         this.lastAdjustedAt = lastAdjustedAt;
         this.lastEventAt = lastEventAt;
     }
 
     public void apply(UUID warehouseId, String warehouseCode, String locationCode,
                       String skuCode, String lotNo,
-                      int availableQty, int reservedQty, int damagedQty, boolean lowStockFlag,
+                      int availableQty, int reservedQty, int damagedQty,
                       Instant lastAdjustedAt, Instant lastEventAt) {
         if (warehouseId != null) {
             this.warehouseId = warehouseId;
@@ -128,7 +128,6 @@ public class InventorySnapshotEntity {
         this.reservedQty = reservedQty;
         this.damagedQty = damagedQty;
         this.onHandQty = availableQty + reservedQty + damagedQty;
-        this.lowStockFlag = lowStockFlag;
         if (lastAdjustedAt != null) {
             this.lastAdjustedAt = lastAdjustedAt;
         }
@@ -151,7 +150,6 @@ public class InventorySnapshotEntity {
     public int getReservedQty() { return reservedQty; }
     public int getDamagedQty() { return damagedQty; }
     public int getOnHandQty() { return onHandQty; }
-    public boolean isLowStockFlag() { return lowStockFlag; }
     public Instant getLastAdjustedAt() { return lastAdjustedAt; }
     public Instant getLastEventAt() { return lastEventAt; }
     public long getVersion() { return version; }

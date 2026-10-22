@@ -20,6 +20,7 @@ import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
 import com.wms.admin.readmodel.throughput.ThroughputDailyId;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyEntity;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
+import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -76,6 +77,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     @Autowired AdjustmentAuditRepository auditRepo;
     @Autowired AlertLogRepository alertRepo;
     @Autowired ThroughputInboundDailyRepository throughputInboundRepo;
+    @Autowired ThroughputOutboundDailyRepository throughputOutboundRepo;
     @Autowired ShipmentSummaryRepository shipmentRepo;
 
     @Test
@@ -122,7 +124,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID sku = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
         snapshotRepo.save(new InventorySnapshotEntity(location, sku, null, warehouse, null,
-                "WH01-A-01", "SKU-1", null, 100, 0, 0, false, NOW, NOW));
+                "WH01-A-01", "SKU-1", null, 100, 0, 0, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, null))
                 .orElseThrow();
@@ -137,7 +139,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         UUID lot = UUID.randomUUID();
         UUID warehouse = UUID.randomUUID();
         snapshotRepo.save(new InventorySnapshotEntity(location, sku, lot, warehouse, null,
-                null, null, "LOT-1", 50, 10, 0, false, NOW, NOW));
+                null, null, "LOT-1", 50, 10, 0, NOW, NOW));
 
         var loaded = snapshotRepo.findById(new InventorySnapshotId(location, sku, lot))
                 .orElseThrow();
@@ -370,7 +372,7 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
     }
 
     @Test
-    void throughputInboundDaily_nativeUpsertIncrement_isAtomicAndLwwGuarded() {
+    void throughputInboundDaily_nativeUpsertIncrement_isAtomicAndCountsLateArrivals() {
         UUID warehouseId = UUID.randomUUID();
         LocalDate date = LocalDate.of(2026, 5, 10);
 
@@ -393,15 +395,92 @@ class ReadModelPersistenceIntegrationTest extends AdminServiceIntegrationBase {
         assertThat(afterUpdate.getPutawayCount()).isEqualTo(2);
         assertThat(afterUpdate.getQtyReceived()).isEqualTo(75);
 
-        // Third call: stale event (occurredAt < existing last_event_at) — WHERE
-        // guard skips the UPDATE; affected = 0; row unchanged.
-        int staleAffected = throughputInboundRepo.upsertIncrement(
+        // Third call: earlier occurredAt than the row's last_event_at.
+        // 🔴 TASK-BE-643 — until 2026-10-22 this cell asserted affected = 0 and
+        // the row unchanged (the WHERE last_event_at < EXCLUDED guard), and it
+        // was green in CI: that green WAS the defect, pinned. A counter row's
+        // events are different occurrences (other ASNs), so a late arrival is
+        // counted; last_event_at stays at the maximum.
+        int lateAffected = throughputInboundRepo.upsertIncrement(
                 date, warehouseId, 999, NOW.minusSeconds(60));
-        assertThat(staleAffected).isEqualTo(0);
+        assertThat(lateAffected).isEqualTo(1);
 
-        var afterStale = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+        var afterLate = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
                 .orElseThrow();
-        assertThat(afterStale.getPutawayCount()).isEqualTo(2);
-        assertThat(afterStale.getQtyReceived()).isEqualTo(75);
+        assertThat(afterLate.getPutawayCount()).isEqualTo(3);
+        assertThat(afterLate.getQtyReceived()).isEqualTo(75 + 999);
+        assertThat(afterLate.getLastEventAt()).isEqualTo(NOW.plusSeconds(60));
+    }
+
+    // =========================================================================
+    // TASK-BE-643 — 누계는 서로 다른 사건을 센다. 순서가 뒤바뀐 이벤트도 세어야 한다.
+    // =========================================================================
+    // 한 행 = «창고 × 하루». 그 안의 이벤트는 서로 다른 ASN · 주문에서 오고, 파티션 키가
+    // asnId / orderId 이므로 도착 순서가 occurredAt 순서와 같다는 보장이 없다
+    // (inbound-events.md:400). 🔴 기존 시험은 이벤트를 occurredAt 순서대로만 보냈기 때문에
+    // 이 결함을 보지 못했다 — 아래 칸은 반드시 «늦은 것 먼저» 로 보낸다.
+
+    @Test
+    void throughputInboundDaily_reverseOrderArrival_countsBothEvents() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 11);
+        Instant t2 = NOW.plusSeconds(3_600);
+        Instant t1 = NOW;   // t1 < t2, 같은 날 · 같은 창고
+
+        throughputInboundRepo.upsertIncrement(date, warehouseId, 10, t2);
+        throughputInboundRepo.upsertIncrement(date, warehouseId, 15, t1);
+
+        var row = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(row.getPutawayCount()).as("두 적치 완료 모두 세어야 한다").isEqualTo(2);
+        assertThat(row.getQtyReceived()).isEqualTo(25);
+        // last_event_at 은 기록용 최대값 — 더 이른 이벤트가 뒤로 되돌리지 않는다.
+        assertThat(row.getLastEventAt()).isEqualTo(t2);
+    }
+
+    @Test
+    void throughputInboundDaily_equalOccurredAt_countsBothEvents() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 12);
+
+        throughputInboundRepo.upsertIncrement(date, warehouseId, 10, NOW);
+        throughputInboundRepo.upsertIncrement(date, warehouseId, 15, NOW);
+
+        var row = throughputInboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(row.getPutawayCount()).isEqualTo(2);
+        assertThat(row.getQtyReceived()).isEqualTo(25);
+        assertThat(row.getLastEventAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void throughputOutboundDaily_reverseOrderArrival_countsBothEvents() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 11);
+        Instant t2 = NOW.plusSeconds(3_600);
+        Instant t1 = NOW;
+
+        throughputOutboundRepo.upsertIncrement(date, warehouseId, 100, t2);
+        throughputOutboundRepo.upsertIncrement(date, warehouseId, 50, t1);
+
+        var row = throughputOutboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(row.getShipmentCount()).as("두 출고 확정 모두 세어야 한다").isEqualTo(2);
+        assertThat(row.getQtyShipped()).isEqualTo(150);
+        assertThat(row.getLastEventAt()).isEqualTo(t2);
+    }
+
+    @Test
+    void throughputOutboundDaily_equalOccurredAt_countsBothEvents() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate date = LocalDate.of(2026, 5, 12);
+
+        throughputOutboundRepo.upsertIncrement(date, warehouseId, 100, NOW);
+        throughputOutboundRepo.upsertIncrement(date, warehouseId, 50, NOW);
+
+        var row = throughputOutboundRepo.findById(new ThroughputDailyId(date, warehouseId))
+                .orElseThrow();
+        assertThat(row.getShipmentCount()).isEqualTo(2);
+        assertThat(row.getQtyShipped()).isEqualTo(150);
     }
 }

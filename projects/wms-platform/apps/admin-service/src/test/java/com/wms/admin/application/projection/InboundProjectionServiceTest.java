@@ -121,18 +121,47 @@ class InboundProjectionServiceTest {
                 eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(25), any(Instant.class));
     }
 
+    /**
+     * TASK-BE-643 — replaces {@code putawayCompleted_zeroAffectedRowsMappedToIgnoredDuplicateLate}.
+     * The counter path no longer has a "stale" outcome: two putaways of different
+     * ASNs for the same (date, warehouse), the later-stamped one first, are both
+     * APPLIED, both reach the increment, and neither is marked stale.
+     */
     @Test
-    void putawayCompleted_zeroAffectedRowsMappedToIgnoredDuplicateLate() throws Exception {
+    void putawayCompleted_reverseOrderAcrossAsns_bothAppliedNeverStale() throws Exception {
         UUID warehouseId = UUID.randomUUID();
-        when(throughputRepo.upsertIncrement(any(LocalDate.class), any(UUID.class), anyInt(),
-                any(Instant.class))).thenReturn(0);
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
 
-        ProjectionEnvelope env = envelope("inbound.putaway.completed",
-                "wms.inbound.putaway.completed.v1",
+        ProjectionEnvelope later = envelopeAt(UUID.randomUUID(), Instant.parse("2026-05-09T15:00:00Z"),
+                "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T15:00:00Z\","
+                        + "\"lines\":[{\"qtyReceived\":10}]}");
+        ProjectionEnvelope earlier = envelopeAt(UUID.randomUUID(), Instant.parse("2026-05-09T09:00:00Z"),
+                "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T09:00:00Z\","
+                        + "\"lines\":[{\"qtyReceived\":15}]}");
+
+        assertThat(service.project(later)).isEqualTo(DedupeOutcome.APPLIED);
+        assertThat(service.project(earlier)).isEqualTo(DedupeOutcome.APPLIED);
+
+        verify(throughputRepo, times(2)).upsertIncrement(
+                eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), anyInt(), any(Instant.class));
+        assertThat(dedupe.isStale(earlier.eventId())).isFalse();
+    }
+
+    @Test
+    void putawayCompleted_sameEventIdTwice_incrementsOnce() throws Exception {
+        // 대조군 — 조건을 지운 뒤에도 같은 event_id 재전달은 dedupe 가 막는다.
+        UUID warehouseId = UUID.randomUUID();
+        when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
+                any(Instant.class))).thenReturn(1);
+        ProjectionEnvelope env = envelopeAt(UUID.randomUUID(), NOW,
                 "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T10:00:00Z\","
                         + "\"lines\":[{\"qtyReceived\":10}]}");
 
-        assertThat(service.project(env)).isEqualTo(DedupeOutcome.IGNORED_DUPLICATE_LATE);
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+        assertThat(service.project(env)).isEqualTo(DedupeOutcome.DUPLICATE);
+
+        verify(throughputRepo, times(1)).upsertIncrement(any(), any(), anyInt(), any());
     }
 
     @Test
@@ -164,6 +193,12 @@ class InboundProjectionServiceTest {
                                         String payloadJson) throws Exception {
         JsonNode payload = MAPPER.readTree(payloadJson);
         return new ProjectionEnvelope(eventId, eventType, NOW, "agg", topic, null, payload);
+    }
+
+    private ProjectionEnvelope envelopeAt(UUID eventId, Instant occurredAt, String payloadJson)
+            throws Exception {
+        return new ProjectionEnvelope(eventId, "inbound.putaway.completed", occurredAt, "agg",
+                "wms.inbound.putaway.completed.v1", null, MAPPER.readTree(payloadJson));
     }
 
     // =========================================================================

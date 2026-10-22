@@ -14,8 +14,9 @@ import java.util.UUID;
  * Daily inbound throughput counter projected from
  * {@code wms.inbound.putaway.completed.v1}. Composite PK
  * {@code (date, warehouse_id)}. Atomic increment via
- * {@code INSERT ... ON CONFLICT DO UPDATE}; LWW guarded by
- * {@code last_event_at}. Per {@code domain-model.md § 13}.
+ * {@code INSERT ... ON CONFLICT DO UPDATE}; idempotent by event-id dedupe
+ * only — {@code last_event_at} is a bookkeeping maximum, not an LWW guard
+ * (TASK-BE-643, {@code idempotency.md § 2.6}). Per {@code domain-model.md § 13}.
  */
 @Entity
 @Table(name = "admin_throughput_inbound_daily")
