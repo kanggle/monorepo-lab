@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { formatDecimalDisplay } from '@/shared/lib/money';
+import { BarSwatch } from '@/shared/ui/InlineBar';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { PoStatusBar } from './PoStatusBar';
 import type {
   ScmOverviewState,
   ScmAreaCount,
@@ -118,6 +121,7 @@ export function ScmOverview({ state }: { state: ScmOverviewState }) {
       {/* PO-status distribution. */}
       <div className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-foreground">발주 상태</h3>
+        <PoStatusBar buckets={state.poStatus} />
         <dl
           data-testid="scm-po-status"
           className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
@@ -125,6 +129,7 @@ export function ScmOverview({ state }: { state: ScmOverviewState }) {
           {state.poStatus.map((bucket) => (
             <div key={bucket.status}>
               <dt className="text-xs text-muted-foreground">
+                <BarSwatch tone={poStatusTone(bucket.status)} />
                 {PO_STATUS_LABELS[bucket.status] ?? bucket.status}
               </dt>
               <dd
@@ -182,8 +187,7 @@ function RecentPurchaseOrders({
               </StatusBadge>
               {po.totalAmount ? (
                 <span className="shrink-0 tabular-nums text-foreground">
-                  {po.totalAmount}
-                  {po.currency ? ` ${po.currency}` : ''}
+                  {formatDecimalDisplay(po.totalAmount, po.currency)}
                 </span>
               ) : null}
               <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">

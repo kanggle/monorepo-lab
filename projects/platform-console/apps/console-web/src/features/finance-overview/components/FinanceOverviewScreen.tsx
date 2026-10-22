@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Card } from '@/shared/ui/Card';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import { labelForUnknown } from '@/shared/lib/tolerant-label';
-import { formatMoney } from '@/shared/lib/money';
+import { formatMoneyDisplay } from '@/shared/lib/money';
 import {
   KNOWN_ACCOUNT_STATUSES,
   financeAccountStatusTone,
@@ -20,7 +20,7 @@ import type { FinanceOverviewState } from '../api/overview-state';
  *   - the ledger aggregate tiles (trial-balance `inBalance` / OPEN periods
  *     / OPEN discrepancies / FX feed freshness);
  *   - the operator's own default-account snapshot (status + per-currency
- *     balances via `formatMoney` — F5, NEVER `Number()`/`parseFloat()`/
+ *     balances via `formatMoneyDisplay` — F5, NEVER `Number()`/`parseFloat()`/
  *     `parseInt()`).
  *
  * A `ledgerDegraded` never blanks the account snapshot and vice versa —
@@ -244,8 +244,8 @@ function AccountSnapshotCard({ state }: { state: FinanceOverviewState }) {
           data-testid="finance-overview-balances"
         >
           {snapshot.balances.data.map((b, i) => {
-            // F5 — pure string passing into `formatMoney`. NO `Number()`
-            // coercion of `amount` anywhere on this line.
+            // F5 — pure string passing into `formatMoneyDisplay`. NO
+            // `Number()` coercion of `amount` anywhere on this line.
             const m = balanceMoney(b);
             return (
               <li
@@ -253,7 +253,7 @@ function AccountSnapshotCard({ state }: { state: FinanceOverviewState }) {
                 data-testid={`finance-overview-balance-${i}`}
                 className="text-sm text-foreground"
               >
-                {b.currency}: {formatMoney(m.available)} (가용)
+                {b.currency}: {formatMoneyDisplay(m.available)} (가용)
               </li>
             );
           })}
