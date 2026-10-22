@@ -8,7 +8,7 @@ TASK-PC-FE-360
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -135,3 +135,8 @@ frontend
 - `TASK-PC-FE-359`(같은 `tasks/INDEX.md` 구역) 위에 쌓아 시험 — 합친 트리 vitest 422 files · 5116 tests · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋 rc=0. 브랜치 nightly run `39720075716`(head `31ead2097`, 359+360 합친 트리) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success → AC-2 닫힘.
 - 359 머지(#4455 `14acf1440`) 뒤 이 두 커밋만 `main` 위로 옮김(`git rebase --onto`) — `INDEX.md` in-progress 칸 충돌 1곳(359 는 review 로 갔으므로 360 행만). `git diff 31ead2097 HEAD -- apps specs` = 0 ⇒ nightly 가 잰 코드와 같다(다른 것은 티켓 파일뿐).
 - 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 화면 — `/ecommerce` 배송 상태 · `/erp` 결재 상태).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7243777747` success. 익명 샘플 화면: `/ecommerce` 배송 상태(`ecommerce-shipping-status-bar`) · `/erp` 결재 상태(`erp-overview-approval-status-bar` · 범위 문장 `-scope`) = 2026-10-22 UTC 서버 렌더 HTML.
+- 4차원: (a) #4457 `state=MERGED` · (b) 스쿼시 `d2ea0c2c6` 가 `origin/main` 조상(tip `e35c77765`) · (c) 머지 시점 `statusCheckRollup` 67 · 실패 0 · 대기 0 · (d) AC 원문을 열어 남은 칸 = AC-3 하나 — 위 기록으로 그 동사(«배포 · 확인»)대로 닫힘.

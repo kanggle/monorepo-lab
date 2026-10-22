@@ -8,7 +8,7 @@ TASK-PC-FE-357
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -147,3 +147,8 @@ frontend
 - 위 새 문구 두 개 · 색 선택 = **소유자 승인**(선택창, 머지 전).
 - 후속 커밋: WMS 토픽별 지연 막대 색 `warning` → `neutral`(`WmsOperationsScreen.tsx`) — 값과 무관하게 경고색이면 정상 지연(1.4 s)도 문제로 읽힌다. `inline-bars.test.tsx` 31/31 · `tsc --noEmit` rc=0.
 - AC-1 닫힘(머지 전 승인). 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 화면 다섯 자리).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7231346845` success. 익명 샘플 화면: 다섯 자리 전부 확인 — 주문 상태 막대 `ecommerce-order-status-bar` · 발급률 막대 `promotion-row-issue-bar-0`(42% 파랑) · `-1`(100% 노랑) · WMS 투영 지연/누계 막대(`wms-operations-projection-lag-bar-0/1` · `-lifetime-bar-0/1`) = 2026-10-21 UTC 서버 렌더 HTML; 입고 검수 막대(`wms-asn-inspection-bar`, 패널 `wms-asn-inspection-1` 을 연 뒤 · 100%) · SKU 노드별 막대(`SKU-SAMPLE-001` → `scm-sku-node-bar-0` 100% · `-1` 62.5%) = 2026-10-22 UTC 헤드리스 브라우저(Playwright · 메인 세션, 익명 샘플 `https://console.hubwang.com`).
+- 4차원: (a) #4450 `state=MERGED` · (b) 스쿼시 `d10f95e74` 가 `origin/main` 조상(tip `e35c77765`) · (c) 머지 시점 `statusCheckRollup` 67 · 실패 0 · 대기 0 · (d) AC 원문을 열어 남은 칸 = AC-3 하나 — 위 기록으로 그 동사(«배포 · 확인»)대로 닫힘.
