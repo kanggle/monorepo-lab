@@ -154,6 +154,25 @@ class AdminOrderControllerSliceTest {
     }
 
     @Test
+    @DisplayName("BACKORDERED 주문을 CONFIRMED로 변경 요청 시 400 INVALID_ORDER_REQUEST (기존 오류 형태 — TASK-BE-645)")
+    void changeStatus_backorderedToConfirmed_returns400InvalidOrderRequest() throws Exception {
+        given(adminOrderStatusService.changeStatus(eq("order-b"), eq("CONFIRMED")))
+                .willThrow(new com.example.order.domain.exception.InvalidOrderException(
+                        "A BACKORDERED order cannot be confirmed by an operator; "
+                                + "it is confirmed by the restock re-reservation, or may be cancelled"));
+
+        mockMvc.perform(post("/api/admin/orders/order-b/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "CONFIRMED"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ORDER_REQUEST"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("BACKORDERED")))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
     @DisplayName("status 필드가 빈 문자열인 요청 시 400 유효성 검사 오류 반환")
     void changeStatus_blankStatus_returns400ValidationError() throws Exception {
         mockMvc.perform(post("/api/admin/orders/order-1/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
