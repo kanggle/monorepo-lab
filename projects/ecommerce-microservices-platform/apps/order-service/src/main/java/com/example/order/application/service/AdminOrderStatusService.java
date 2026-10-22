@@ -35,20 +35,21 @@ public class AdminOrderStatusService {
 
         switch (targetStatus) {
             case CONFIRMED -> {
-                // TASK-BE-645: a BACKORDERED order holds NO stock reservation. Order.confirm
-                // accepts BACKORDERED only for the restock re-reservation saga
-                // (StockChanged(ORDER_RESERVED) -> OrderConfirmationService), which confirms
-                // AFTER product-service decremented stock and then emits OrderConfirmed. This
-                // endpoint does neither, so an operator confirm here would yield a CONFIRMED
-                // order with no reserved stock and no fulfillment. From BACKORDERED the
-                // operator may only cancel (order-api.md § POST /api/admin/orders/{id}/status).
-                // Guarded here, not in the domain, so the saga's BACKORDERED -> CONFIRMED stays.
-                if (previousStatus == OrderStatus.BACKORDERED) {
-                    throw new InvalidOrderException(
-                            "A BACKORDERED order cannot be confirmed by an operator; "
-                                    + "it is confirmed by the restock re-reservation, or may be cancelled");
-                }
-                order.confirm(clock);
+                // TASK-BE-648 (BACKORDERED first closed by TASK-BE-645): an operator never
+                // confirms, from ANY current status. Confirmation belongs to the payment /
+                // stock-reservation saga (OrderConfirmationService — StockChanged(ORDER_RESERVED),
+                // the restock re-reservation, the stale-paid forward-confirm), which reserves
+                // stock and emits OrderConfirmed (order-events.md § OrderConfirmed). This
+                // endpoint did neither: it saved CONFIRMED with no reservation and no event, and
+                // a later payment then found Order.confirm == false and never emitted
+                // OrderConfirmed — and an unpaid one fell out of the PENDING-only stuck sweep.
+                // An already-CONFIRMED order is refused too (no idempotent 200): CONFIRMED is
+                // simply not in this endpoint's vocabulary (order-api.md). Guarded here, not in
+                // the domain, so Order.confirm stays open to the saga.
+                throw new InvalidOrderException(
+                        "An order cannot be confirmed by an operator (current status: " + previousStatus
+                                + "); orders are confirmed only by the payment / stock-reservation saga. "
+                                + "An operator may only cancel an order (from PENDING, CONFIRMED or BACKORDERED)");
             }
             case CANCELLED -> {
                 // TASK-BE-646: this is the console's cancel. It must compensate exactly like the
@@ -72,10 +73,6 @@ public class AdminOrderStatusService {
             // rejected (400 INVALID_ORDER_REQUEST) to prevent order/shipping divergence.
             default -> throw new IllegalArgumentException("Unsupported target status: " + targetStatus);
         }
-
-        orderRepository.save(order);
-        log.info("Admin changed order status: orderId={}, {} -> {}", orderId, previousStatus, targetStatus);
-        return new AdminOrderStatusChangeResult(order.getOrderId(), order.getStatus().name());
     }
 
     private static OrderStatus parseStatus(String raw) {

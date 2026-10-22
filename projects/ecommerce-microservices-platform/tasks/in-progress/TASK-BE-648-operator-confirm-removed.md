@@ -52,7 +52,7 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~③. ② 에서 정당한 필요가 있으면 STOP(소유자에게).
+- [x] **AC-0** — 위 ①~③. ② 에서 정당한 필요가 있으면 STOP(소유자에게). → 아래 `## AC-0 측정` — 정당한 필요 없음 · 이미 확정된 주문도 400.
 - [ ] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록(가능하면 시험만 커밋으로 빨강 먼저).
 - [ ] **AC-2** — 굽기 뒤 라이브: 운영자 API 로 대기 주문 확정 → 400(다음 데모 창).
 
@@ -108,3 +108,18 @@ backend
 - **400 으로 바꾼다**(지금은 `Order.confirm` 멱등 → `save` → 200, `AdminOrderStatusServiceTest.java:255-267`).
 - 이유: (a) 계약을 «운영자가 정할 수 있는 상태는 `CANCELLED` 하나» 로 좁히면 목표 `CONFIRMED` 는 **현재 상태와 무관하게** 이 엔드포인트의 어휘 밖이다 — `SHIPPED`·`DELIVERED`·`PENDING` 목표가 현재 상태와 무관하게 400 인 것과 같은 규칙. (b) 200 을 남기면 «운영자 확정» 이 계약에 한 갈래 살아 있어, 다른 클라이언트가 그것을 근거로 확정을 다시 내기 쉽다. (c) 잃는 것이 없다 — 상태를 안 바꾸는 요청이었고, 콘솔은 `TASK-PC-FE-366` 부터 확정을 안 낸다.
 - 거부는 `findById` **뒤** 에 한다: 없는 주문은 지금처럼 404(`AdminOrderStatusServiceTest.java:159-168`), 있는 주문은 상태와 무관하게 400 · 저장 없음.
+
+---
+
+## 구현 (2026-10-22 UTC · Opus)
+
+브랜치 `task/be-648-impl`(기준 `origin/main` `40d7c6263`). 커밋 순서:
+
+1. `5e71a5ae9` — 착수(ready → in-progress · INDEX 행 이동 · AC-0 측정).
+2. `50a662f32` — **시험만**. `AdminOrderStatusServiceTest`: 목표 `CONFIRMED` 를 `OrderStatus` 전체(7개)에서 거부 · 상태/`updatedAt` 그대로 · `save` 없음 · 발행/지표/`clock` 상호작용 없음(파라미터화) · `PENDING` 거부 뒤 `PENDING` 유지 · `CONFIRMED → CONFIRMED` 도 400 · 거부가 `OrderCancelled` 로 새지 않음. 확정을 쓰던 `save` 검증은 취소로 바꿨다. BE-646 운영자 취소 시험은 그대로. `AdminOrderControllerSliceTest`: 200 형태 시험은 `CANCELLED` 로 · `PENDING → CONFIRMED` 400 `INVALID_ORDER_REQUEST`(code · message · timestamp) 추가. `OrderConfirmationServiceTest`: 사가의 `PENDING → CONFIRMED` + `OrderConfirmed` 시험은 단언 불변(표시 이름만 연결).
+   - **현재 코드에서 빨강 실측**: `./gradlew :projects:ecommerce-microservices-platform:apps:order-service:test` → `rc=1`, `462 tests completed, 9 failed` — 실패 9개가 전부 이 커밋의 신규/개정 시험(파라미터화 6개: `PENDING` · `CONFIRMED` · `SHIPPED` · `DELIVERED` · `CANCELLED` · `STUCK_RECOVERY_FAILED` → `CONFIRMED`, + `PENDING` 유지 · `OrderCancelled` 무발행 · `CONFIRMED → CONFIRMED` 400). `BACKORDERED → CONFIRMED` 는 BE-645 가 이미 막아 처음부터 초록.
+3. `ee066be17` — 계약 `specs/contracts/http/order-api.md` § `POST /api/admin/orders/{orderId}/status`: 운영자가 정할 수 있는 상태 = `CANCELLED` 하나(대기 · 확정 · 백오더에서) · 목표 `CONFIRMED` 는 모든 현재 상태에서 400 · `order-events.md:84-89` 와의 충돌 해소를 **History** 블록으로 · 예시를 `CANCELLED` 로 · `Order Status Values` 의 `CONFIRMED` 설명에서 «admin» 제거.
+4. (이 커밋) — 수선 `AdminOrderStatusService.java` 만: `CONFIRMED` 갈래가 현재 상태와 무관하게 `InvalidOrderException`(→ 400 `INVALID_ORDER_REQUEST`, 메시지에 현재 상태). 모든 갈래가 던지거나 돌려주게 되어 switch 뒤의 `save` 꼬리를 지웠다. 도메인 `Order.confirm` · `OrderConfirmationService` · `StalePaidOrderConfirmHandler` 불변.
+   - **초록 실측**: 같은 명령 `rc=0`, JUnit XML 합계 `tests=462 failures=0 errors=0 skipped=0`(`AdminOrderStatusServiceTest` 27 · `AdminOrderControllerSliceTest` 10 · `OrderConfirmationServiceTest` 6 · `EcommerceOrderDemoSeedTest` 9 — 전부 0 실패). Testcontainers IT 는 로컬 Docker 없음 → CI 몫(AC-1).
+
+남은 것: `Clock` 필드는 이제 이 서비스에서 쓰이지 않지만 생성자 시그니처 · 시험 배선을 바꾸지 않으려고 남겼다. `EcommerceOrderDemoSeedTest.java:216-224` 의 설명 문구는 여전히 참인 핀이라 손대지 않았다(AC-0 ①). 콘솔 선택지 제거 = `TASK-PC-FE-366`(Failure Scenario 2 — 366 을 먼저 또는 함께 머지).
