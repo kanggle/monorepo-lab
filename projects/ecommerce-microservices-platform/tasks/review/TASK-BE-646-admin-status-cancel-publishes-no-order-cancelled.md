@@ -8,7 +8,7 @@ TASK-BE-646
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -58,7 +58,7 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. ④ 의 범위는 소유자 결정. → 아래 `## AC-0 측정` (④ = 결함, 고치지 않고 `### 소유자 결정 필요` 로 넘김 · ③ 라이브 DB 는 ⚪ 다음 데모 창).
-- [ ] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록.
+- [x] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록.
 - [ ] **AC-2** — 굽기 뒤 라이브: 데모에서 콘솔로 주문 하나 취소 → `OrderCancelled` · 환불 · 재고 해제 확인(다음 데모 창).
 
 # Related Specs
@@ -154,3 +154,12 @@ backend
 - ⚪ 서비스 사이 사슬(order 발행 → product 해제 → 재입고 무시)은 두 서비스의 단위 시험을 이어 붙인 것이다 — 하나의 시험으로 끝에서 끝까지 잰 것이 아니다. 라이브 확인은 AC-2.
 
 AC-1 은 CI 의 ecommerce 잡 초록을 본 뒤 닫는다. AC-2 는 굽기 뒤 다음 데모 창.
+
+## CI 빨강 → 초록 증거 · 소유자 결정 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 메인 세션이 **시험만 담은 커밋 `ffd5d4c11`** 까지 올려 PR #4480(draft) CI run `39820761928` 을 봤다 — **빨강, 정확히 새 시험 6개**: `order-service:test` 453 중 5 failed(관리자 취소 대기 · 확정 · 백오더 → `OrderCancelled` 1회 3건 · 반복 422 1건 · 취소된 백오더의 늦은 `ORDER_RESERVED` no-op 1건) + `order-service:integrationTest` 69 중 1 failed(`OrderEventPublishIntegrationTest` — 관리자 취소가 `order_outbox` 에 `OrderCancelled(OPERATOR)` 1행). ⇒ 결함 실재 · 시험이 문다.
+- 계약 `cc5eb0299` · 수선 `a503c0949` 를 앞으로 푸시 → 같은 PR head `a503c0949` 체크 **pending 0 · fail 0** → AC-1 닫힘.
+- **§ 소유자 결정 필요 의 답 (선택창, 2026-10-22 KST)**:
+  - ④ 운영자 «대기 → 확정» 이 `OrderConfirmed` 를 내지 않는 문제 = **운영자 확정 없애기 · 티켓**(서버 거부 + 콘솔 선택지 제거 — 굽기 전 구현) → 별도 티켓.
+  - 곁 (b) 배송 서비스가 `order.order.cancelled` 를 소비하지 않는 문제 = **ready 티켓만**(출고 취소 흐름 설계 — 이번 굽기에 싣지 않음) → 별도 티켓.
+- 열림: **AC-2**(굽기 뒤 라이브 — 콘솔로 주문 하나 취소 → `OrderCancelled` · 환불 · 재고 해제; 이미 이벤트 없이 취소된 주문이 있는지 세 DB 대조 조회는 § AC-0 ③).
