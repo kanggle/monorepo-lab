@@ -8,7 +8,7 @@ TASK-PC-FE-359
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -57,8 +57,8 @@ frontend
 
 - [x] **AC-0** — 위 ①~⑤ 를 file:line 과 함께. (아래 § AC-0 측정)
 - [x] **AC-1** — 스펙 예외 한 줄 + grep 시험 허용 목록 → 구현. (스펙 커밋 `61560c806` 먼저 · 기존 가드엔 허용 목록이 없어 새 가드에 둠 — § AC-0 ①)
-- [ ] **AC-2** — **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-3** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · **`node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`**(로컬, 스테이지 뒤) rc=0. SSR 화면이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-2** — **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-3** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · **`node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`**(로컬, 스테이지 뒤) rc=0. SSR 화면이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-4** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
 
 ## AC-0 측정 (2026-10-21 UTC)
@@ -97,7 +97,7 @@ frontend
 
 **⑤ 샘플 고정값** — 세 자리 모두 값이 있다: 환율 이력 USD 2점(`1300.00000000` · `1298.50000000`) · JPY 1점(`9.10000000`) — `src/shared/sample/fixtures/ledger.ts:693-701`(JPY 가 «점 1개» 가장자리를 샘플에서 보인다); 원장 기간 2개 `entryCount` 2 · 1 — `ledger.ts:430-455`; 지급 2건 `payableNetMinor` 82800 · 52800 — `src/shared/sample/fixtures/ecommerce.ts:1071-1095`(음수 지급 샘플은 없다).
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 | # | file:line | 문구 | 언제 보이나 |
 |---|---|---|---|
@@ -147,3 +147,10 @@ frontend
 1. 예외 함수의 결과가 화면 금액 글자로 새어 나가 반올림된 값이 보인다 → 시험이 «글자는 원문» 을 단언한다.
 2. 예외가 허용 목록 없이 넓어져 F5 grep 시험이 무력해진다 → bite 시험.
 3. 20건 페이지를 전체처럼 그린다 → 밝힘 문구 + 시험.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-21 UTC · 분석=Opus 5.5)
+
+- 새 문구 11개 = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전) → AC-2 닫힘.
+- `main`(`ea299d688`, `TASK-MONO-804` 의 순회기 수정 포함) 위로 rebase — 충돌 없음. 새 순회기로 `check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs` rc=0 · console-web hits=0 · 큐 가드 셋 rc=0.
+- 브랜치 nightly run `39664325985`(head `c18e0066a`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4455 같은 head 체크 pending 0 · fail 0 → AC-3 닫힘.
+- 열림: **AC-4**(Vercel Production 기록 · 익명 샘플 화면 — 환율 이력 · 정산 기간 상세 · 원장 기간).
