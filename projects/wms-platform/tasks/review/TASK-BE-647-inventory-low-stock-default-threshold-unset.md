@@ -8,7 +8,7 @@ inventory-service 의 저재고 기본 임계값 설정(`inventory.alert.low-sto
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -50,7 +50,7 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~③ (아래 `## AC-0 측정`).
-- [ ] **AC-1** — 구현 + 시험 완료(로컬 `:inventory-service:test` rc=0) · **CI 의 wms 잡 초록은 PR 뒤 확인** — 그때 체크.
+- [x] **AC-1** — 구현 + 시험 완료(로컬 `:inventory-service:test` rc=0) · **CI 의 wms 잡 초록은 PR 뒤 확인** — 그때 체크.
 - [ ] **AC-2** — 굽기 뒤 라이브: 재기동된 데모에서 재고를 기준 아래로 내리면 저재고 알림이 생기는가(다음 데모 창).
 
 # Related Specs
@@ -82,3 +82,9 @@ backend
 - `ApplicationContextSmokeTest.lowStockDefaultThresholdResolvesToTenFromBaseConfig` — 시험 쪽 프로퍼티 오버라이드 없이 실제 base config 에서 묶인 값이 10 인지 단언(yml 줄이 없으면 `Optional.empty` 로 **구성상 실패**). 이어 `updateDefaultThreshold(25)` 후 25 로 바뀜을 확인(BE-459 비회귀의 컨텍스트 수준 확인; 이벤트 경로 자체는 기존 `AdminSettingsConsumerTest` · `AdminSettingsConsumerIntegrationTest` 가 덮는다).
 - 로컬: `./gradlew :projects:wms-platform:apps:inventory-service:test` rc=0 (tests=259, failures=0, errors=0, skipped=0). Testcontainers IT 는 CI 전용.
 - AC-2(굽기 뒤 라이브)는 열려 있음.
+
+## 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- PR #4479(head `6f7438245`) 체크 pending 0 · fail 0 · 설정 파일 변경이라 브랜치 nightly run `39817975871` **success** → AC-1 닫힘.
+- `TASK-BE-643` · `TASK-BE-644` 머지 뒤 main 병합 — `INDEX.md` 충돌 2곳(ready = `(empty)` · in-progress = BE-647) 해소. 곁: review 칸에 남아 있던 `(empty)` 표시(643 · 644 를 review 로 옮길 때 지우지 않음)를 지웠다.
+- 열림: **AC-2**(굽기 뒤 라이브 — 재기동된 데모에서 재고를 기준 아래로 내리면 저재고 알림이 생기는가).
