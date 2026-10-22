@@ -125,6 +125,43 @@ class OrderConfirmationServiceTest {
     }
 
     @Test
+    @DisplayName("취소된 백오더 주문에 늦게 온 재입고 ORDER_RESERVED 는 소비를 실패시키지 않고 no-op 이다 — 저장 · 발행 · 지표 없음, 재고는 product 가 OrderCancelled 소비로 복원 (TASK-BE-646)")
+    void confirmOrder_cancelledBackorderedOrder_lateReservationIsNoOp() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+        order.markBackordered(FIXED_CLOCK);
+        order.cancel(FIXED_CLOCK);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+
+        assertThatCode(() -> orderConfirmationService.confirmOrder(order.getOrderId()))
+                .doesNotThrowAnyException();
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository, never()).save(any());
+        verify(orderEventPublisher, never()).publishOrderConfirmed(any());
+        verify(orderMetrics, never()).recordOrderConfirmed();
+        verify(orderMetrics, never()).recordStatusTransition(any(), any());
+    }
+
+    @Test
+    @DisplayName("SHIPPED 주문에 온 ORDER_RESERVED 는 여전히 InvalidOrderException 이다 — no-op 은 CANCELLED 에만 (TASK-BE-646)")
+    void confirmOrder_shippedOrder_stillThrows() {
+        Order order = Order.create("user1",
+                List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
+                ADDRESS, FIXED_CLOCK);
+        order.confirm(FIXED_CLOCK);
+        order.ship(FIXED_CLOCK);
+        given(orderRepository.findByIdAcrossTenants(order.getOrderId())).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderConfirmationService.confirmOrder(order.getOrderId()))
+                .isInstanceOf(com.example.order.domain.exception.InvalidOrderException.class);
+
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("존재하지 않는 orderId 확정 시 OrderNotFoundException이 발생한다")
     void confirmOrder_notFound_throwsOrderNotFoundException() {
         given(orderRepository.findByIdAcrossTenants("nonexistent")).willReturn(Optional.empty());

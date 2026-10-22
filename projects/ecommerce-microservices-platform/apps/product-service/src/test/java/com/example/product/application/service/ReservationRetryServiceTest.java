@@ -33,6 +33,7 @@ class ReservationRetryServiceTest {
     private FakeInventory inventory;
     private ReservationService reservationService;
     private ReservationRetryService retryService;
+    private EventPublishingHelper publisher;
 
     private final UUID variant = UUID.randomUUID();
     private final UUID product = UUID.randomUUID();
@@ -41,7 +42,7 @@ class ReservationRetryServiceTest {
     void setUp() {
         reservationRepository = new InMemoryReservationRepository();
         inventory = new FakeInventory();
-        EventPublishingHelper publisher = mock(EventPublishingHelper.class);
+        publisher = mock(EventPublishingHelper.class);
         reservationService = new ReservationService(
                 reservationRepository, inventory.repository(), publisher,
                 java.time.Clock.systemUTC());
@@ -92,6 +93,24 @@ class ReservationRetryServiceTest {
         assertThat(reservationRepository.findByOrderId(b.getOrderId()).orElseThrow().getStatus())
                 .isEqualTo(ReservationStatus.RESERVED);
         assertThat(inventory.get(variant)).isEqualTo(2); // 10 - 5 - 3
+    }
+
+    @Test
+    @DisplayName("OrderCancelled 로 풀린 백오더 예약은 재입고가 와도 다시 잡히지 않는다 — 재고 그대로 · 이벤트 없음 (TASK-BE-646: 관리자 취소가 OrderCancelled 를 내야 하는 이유)")
+    void releasedBackorder_isNotReReservedByRestock() {
+        Instant t0 = Instant.parse("2026-06-23T09:00:00Z");
+        StockReservation cancelled = backordered(5, t0);
+        reservationService.release(cancelled.getOrderId()); // the OrderCancelled leg
+        assertThat(reservationRepository.findByOrderId(cancelled.getOrderId()).orElseThrow().getStatus())
+                .isEqualTo(ReservationStatus.RELEASED);
+        inventory.set(variant, 10);
+
+        retryService.onStockIncreased(variant);
+
+        assertThat(reservationRepository.findByOrderId(cancelled.getOrderId()).orElseThrow().getStatus())
+                .isEqualTo(ReservationStatus.RELEASED);
+        assertThat(inventory.get(variant)).isEqualTo(10);
+        org.mockito.Mockito.verifyNoInteractions(publisher);
     }
 
     @Test

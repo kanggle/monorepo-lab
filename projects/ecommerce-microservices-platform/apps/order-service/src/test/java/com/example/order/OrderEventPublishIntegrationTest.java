@@ -138,6 +138,46 @@ class OrderEventPublishIntegrationTest {
     }
 
     @Test
+    @DisplayName("관리자 상태 변경 CANCELLED 는 같은 트랜잭션에서 order_outbox 에 OrderCancelled(OPERATOR) 1행을 남기고, 반복 요청은 422 · 행 그대로 (TASK-BE-646)")
+    void adminStatusCancel_writesOneOrderCancelledOutboxRow() throws Exception {
+        String userId = "event-admin-cancel-user-" + System.nanoTime();
+
+        String createResponse = mockMvc.perform(post("/api/orders")
+                        .header("X-User-Id", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(PLACE_BODY))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        String orderId = createResponse.replaceAll(".*\"orderId\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(post("/api/admin/orders/" + orderId + "/status")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_WRITE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isOk());
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT payload FROM order_outbox WHERE aggregate_id = ? AND event_type = 'OrderCancelled'",
+                orderId);
+        assertThat(rows).hasSize(1);
+        assertThat((String) rows.get(0).get("payload")).contains("\"cancelReason\":\"OPERATOR\"");
+
+        // The same console click delivered twice: the second one is refused by the domain
+        // (422 ORDER_CANNOT_BE_CANCELLED) and must not enqueue a second compensation.
+        mockMvc.perform(post("/api/admin/orders/" + orderId + "/status")
+                        .header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_WRITE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isUnprocessableEntity());
+
+        Long after = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM order_outbox WHERE aggregate_id = ? AND event_type = 'OrderCancelled'",
+                Long.class, orderId);
+        assertThat(after).isEqualTo(1L);
+    }
+
+    @Test
     @DisplayName("트랜잭션 롤백 시 order_outbox 레코드도 롤백되어 저장되지 않는다")
     void placeOrder_rollback_noOutboxEntry() throws Exception {
         String invalidBody = """

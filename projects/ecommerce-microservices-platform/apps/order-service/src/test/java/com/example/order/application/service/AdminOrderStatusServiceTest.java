@@ -1,6 +1,9 @@
 package com.example.order.application.service;
 
 import com.example.order.application.dto.AdminOrderStatusChangeResult;
+import com.example.order.application.event.OrderCancelledEvent;
+import com.example.order.application.port.OrderEventPublisher;
+import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.InvalidOrderException;
 import com.example.order.domain.exception.OrderCannotBeCancelledException;
 import com.example.order.domain.exception.OrderNotFoundException;
@@ -13,6 +16,9 @@ import com.example.order.application.exception.InvalidOrderStatusException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,7 +33,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AdminOrderStatusService 단위 테스트")
@@ -41,6 +49,12 @@ class AdminOrderStatusServiceTest {
 
     @Mock
     private Clock clock;
+
+    @Mock
+    private OrderEventPublisher orderEventPublisher;
+
+    @Mock
+    private OrderMetricsPort orderMetrics;
 
     private static final Instant FIXED_NOW = Instant.parse("2026-03-25T10:00:00Z");
 
@@ -252,5 +266,82 @@ class AdminOrderStatusServiceTest {
                 .isInstanceOf(InvalidOrderStatusException.class);
 
         verify(orderRepository, never()).save(any());
+    }
+
+    // ─── TASK-BE-646: 관리자 취소 = 운영자 취소 (OrderCancelled → 환불 · 예약 해제 · 쿠폰 복원) ───
+
+    @ParameterizedTest(name = "{0} → CANCELLED")
+    @EnumSource(value = OrderStatus.class, names = {"PENDING", "CONFIRMED", "BACKORDERED"})
+    @DisplayName("관리자 취소는 OrderCancelled(cancelReason=OPERATOR)를 정확히 1회 발행하고 운영자 취소 지표를 남긴다 (TASK-BE-646)")
+    void changeStatus_cancel_publishesOrderCancelledOnceAsOperator(OrderStatus from) {
+        String orderId = "order-646-" + from.name().toLowerCase();
+        Order order = createOrderWithStatus(orderId, from);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CANCELLED");
+
+        assertThat(result.orderId()).isEqualTo(orderId);
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        verify(orderRepository, times(1)).save(order);
+
+        ArgumentCaptor<OrderCancelledEvent> captor = ArgumentCaptor.forClass(OrderCancelledEvent.class);
+        verify(orderEventPublisher, times(1)).publishOrderCancelled(captor.capture());
+        OrderCancelledEvent published = captor.getValue();
+        assertThat(published.eventType()).isEqualTo("OrderCancelled");
+        assertThat(published.payload().orderId()).isEqualTo(orderId);
+        assertThat(published.payload().userId()).isEqualTo("user-1");
+        assertThat(published.payload().cancelReason()).isEqualTo("OPERATOR");
+        assertThat(published.payload().cancelledAt()).isEqualTo(FIXED_NOW.toString());
+
+        verify(orderMetrics).recordOrderCancelled("operator");
+        verify(orderMetrics).recordStatusTransition(from.name(), "CANCELLED");
+    }
+
+    @Test
+    @DisplayName("같은 관리자 취소를 두 번 보내면 두 번째는 422(OrderCannotBeCancelledException)이고 OrderCancelled 는 1회뿐이다 (멱등 — TASK-BE-646)")
+    void changeStatus_cancelTwice_publishesExactlyOnce() {
+        String orderId = "order-646-twice";
+        Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        adminOrderStatusService.changeStatus(orderId, "CANCELLED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CANCELLED"))
+                .isInstanceOf(OrderCannotBeCancelledException.class);
+
+        verify(orderRepository, times(1)).save(any());
+        verify(orderEventPublisher, times(1)).publishOrderCancelled(any());
+        verify(orderMetrics, times(1)).recordOrderCancelled("operator");
+    }
+
+    @Test
+    @DisplayName("이미 CANCELLED 인 주문의 관리자 취소는 기존대로 OrderCannotBeCancelledException 이고 저장 · 발행 · 지표가 없다 (TASK-BE-646)")
+    void changeStatus_alreadyCancelled_existingBehaviourNoEvent() {
+        String orderId = "order-646-cancelled";
+        Order order = createOrderWithStatus(orderId, OrderStatus.CANCELLED);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CANCELLED"))
+                .isInstanceOf(OrderCannotBeCancelledException.class);
+
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(orderEventPublisher, orderMetrics);
+    }
+
+    @Test
+    @DisplayName("관리자 확정(PENDING → CONFIRMED)은 OrderCancelled 를 내지 않는다 — 취소 갈래만 바뀐다 (TASK-BE-646 · 확정 무발행은 소유자 결정 대기)")
+    void changeStatus_confirm_publishesNoOrderCancelled() {
+        String orderId = "order-646-confirm";
+        Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(clock.instant()).willReturn(FIXED_NOW);
+
+        adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+
+        verify(orderEventPublisher, never()).publishOrderCancelled(any());
     }
 }
