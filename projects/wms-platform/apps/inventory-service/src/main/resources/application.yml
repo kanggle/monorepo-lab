@@ -109,6 +109,14 @@ wms:
     required-tenant-id: ${OIDC_REQUIRED_TENANT_ID:wms}
 
 inventory:
+  alert:
+    low-stock:
+      # TASK-BE-647: bootstrap default for the low-stock threshold. Without it the
+      # @Value in AlertConfig resolves to null and detection is silently disabled
+      # after every restart until an admin.settings.changed event arrives.
+      # Value = spec default (admin-service domain-model.md:221); the event still
+      # overrides it live (TASK-BE-459).
+      default-threshold: 10
   idempotency:
     ttl-seconds: 86400
   kafka:

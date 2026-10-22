@@ -8,7 +8,7 @@ inventory-service 의 저재고 기본 임계값 설정(`inventory.alert.low-sto
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -49,8 +49,8 @@ backend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~③.
-- [ ] **AC-1** — 구현 + 시험 · CI 의 wms 잡 초록.
+- [x] **AC-0** — 위 ①~③ (아래 `## AC-0 측정`).
+- [ ] **AC-1** — 구현 + 시험 완료(로컬 `:inventory-service:test` rc=0) · **CI 의 wms 잡 초록은 PR 뒤 확인** — 그때 체크.
 - [ ] **AC-2** — 굽기 뒤 라이브: 재기동된 데모에서 재고를 기준 아래로 내리면 저재고 알림이 생기는가(다음 데모 창).
 
 # Related Specs
@@ -69,3 +69,16 @@ backend
 # Failure Scenarios
 
 1. 시험 프로필에만 값을 넣어 운영 프로필은 여전히 비어 있다 → AC-0 ① 전수 + «프로퍼티 없는 컨텍스트» 시험.
+
+## AC-0 측정 (2026-10-22 UTC)
+
+- **① 프로퍼티를 넣는 곳 전수**: 저장소 전체 grep(`default-threshold` · `INVENTORY_ALERT_LOW`) 결과 **소비처는 `AlertConfig.java:44` 하나뿐**, 값을 넣는 곳은 **0 곳** — `inventory-service` 의 `application.yml` · `application-dev.yml` · `application-integration.yml` · `application-standalone.yml` 어디에도 없고, env 이름 `INVENTORY_ALERT_LOW_STOCK_*` 도 어떤 compose/문서에도 없다. 구동 경로(`projects/wms-platform/docker-compose.e2e.yml:159-` · `tests/fulfillment-demo/docker-compose.ecommerce-fulfillment.yml:93-`) 는 `SPRING_PROFILES_ACTIVE` 를 **지정하지 않아** 기본 프로필(`application.yml`)만 읽는다 ⇒ 기본 프로필에 넣으면 데모·운영 모두 닿는다. (`infra/demo` 에는 inventory-service 서비스 정의가 없음.)
+- **② 기동 시 admin 현재 설정을 읽는 길**: 지금은 **없다**. `InMemoryLowStockThresholdAdapter.java:20-22` 가 «시작 시 HTTP 조회가 필요한데 WMS 에 서비스 간 HTTP 인증이 없다» 로 보류를 명시. 대안인 컨슈머 오프셋 처음부터 재생은 `application.yml:45` `auto-offset-reset: earliest` 가 **그룹 신규일 때만** 적용(커밋된 오프셋이 있으면 재생 안 됨)이라 재기동엔 값싸지 않다. 기록만 — 소유자에게 «시작 시 1회 조회» 는 별도 제안 사항.
+- **③ 시험 프로필이 값을 넣어 결함을 가렸나**: **아니다.** `src/test/resources` 자체가 없고 시험 어디에서도 이 프로퍼티를 넣지 않는다. 다만 컨텍스트에서 **기본값을 단언하는 시험이 없었다**(`ApplicationContextSmokeTest` 는 빈 존재만 확인, 통합 시험은 `setDefaultThreshold(20)` 등을 직접 호출) ⇒ CI 가 볼 수 없던 구조.
+
+## 구현 (2026-10-22 UTC · Sonnet)
+
+- `apps/inventory-service/src/main/resources/application.yml` — `inventory.alert.low-stock.default-threshold: 10` + 주석(스펙 기본값 `admin-service/domain-model.md:221`, BE-459 이벤트가 여전히 라이브 덮어씀).
+- `ApplicationContextSmokeTest.lowStockDefaultThresholdResolvesToTenFromBaseConfig` — 시험 쪽 프로퍼티 오버라이드 없이 실제 base config 에서 묶인 값이 10 인지 단언(yml 줄이 없으면 `Optional.empty` 로 **구성상 실패**). 이어 `updateDefaultThreshold(25)` 후 25 로 바뀜을 확인(BE-459 비회귀의 컨텍스트 수준 확인; 이벤트 경로 자체는 기존 `AdminSettingsConsumerTest` · `AdminSettingsConsumerIntegrationTest` 가 덮는다).
+- 로컬: `./gradlew :projects:wms-platform:apps:inventory-service:test` rc=0 (tests=259, failures=0, errors=0, skipped=0). Testcontainers IT 는 CI 전용.
+- AC-2(굽기 뒤 라이브)는 열려 있음.
