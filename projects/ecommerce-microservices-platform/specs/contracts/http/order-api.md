@@ -414,6 +414,19 @@ restock re-reservation saga (`StockChanged(ORDER_RESERVED)` → `OrderConfirmed`
 for a `BACKORDERED` order returns `400 INVALID_ORDER_REQUEST` and leaves the order
 unchanged — an operator confirm would skip the reservation and emit no `OrderConfirmed`.
 
+**`CANCELLED` is an operator cancel with the full compensation fan-out** (TASK-BE-646). It
+runs the same application path as the internal operator cancel
+(`POST /api/internal/orders/{orderId}/cancel`): in one transaction the order moves to
+`CANCELLED` and `OrderCancelled` with `cancelReason = "OPERATOR"` is written to the outbox
+(`events/order-events.md` § OrderCancelled). Consumers then refund a captured payment / void a
+pending one (payment-service), release the stock reservation — restoring stock if it was
+reserved, and detaching a `BACKORDERED` hold so a later restock does not bind to the cancelled
+order (product-service) — and restore a used coupon (promotion-service). The order is looked up
+in the caller's tenant (cross-tenant id → `404`). A repeated request finds the order already
+`CANCELLED` and returns `422 ORDER_CANNOT_BE_CANCELLED` **without** a second `OrderCancelled`;
+of two concurrent cancels (operator + customer) only one commits (optimistic lock), so the
+compensation is published once.
+
 `SHIPPED` and `DELIVERED` are **not** operator-settable on this endpoint. The Order
 reaches those states solely via the shipping-driven return-leg — the
 `ShippingStatusChanged` event consumed by order-service flips the Order
@@ -443,7 +456,7 @@ preventing order/shipping status divergence.
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Requires ADMIN role |
 | 404 | ORDER_NOT_FOUND | Order with given ID does not exist |
-| 422 | ORDER_CANNOT_BE_CANCELLED | `status: CANCELLED` for an order whose status does not allow cancellation |
+| 422 | ORDER_CANNOT_BE_CANCELLED | `status: CANCELLED` for an order whose status does not allow cancellation (incl. one already `CANCELLED` — no second `OrderCancelled`) |
 
 ---
 

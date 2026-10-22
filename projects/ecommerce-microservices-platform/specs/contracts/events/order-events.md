@@ -127,9 +127,12 @@ transition via the transactional outbox.
 
 ## OrderCancelled
 
-Published when an order is cancelled.
+Published when an order is cancelled — by every cancel path: customer cancel, operator cancel
+(admin status change `CANCELLED` and the internal operator-cancel endpoint, TASK-BE-646),
+warehouse-backorder cancel, user-withdrawal cascade, stuck-detector payment timeout.
 
-**Consumers:** payment-service, promotion-service
+**Consumers:** payment-service (refund / void), product-service (stock-reservation release —
+TASK-BE-428), promotion-service (coupon restore)
 
 **Payload**
 ```json
