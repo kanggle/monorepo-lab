@@ -1,5 +1,6 @@
 import { messageForCode } from '@/shared/api/errors';
 import type { StatusTone } from '@/shared/ui/StatusBadge';
+import { stepStates, type StepState } from '@/shared/ui/InlineBar';
 
 /**
  * Pure helpers for the wms outbound operations surface (TASK-PC-FE-101 split).
@@ -40,6 +41,39 @@ const OUTBOUND_STATUS_TONE: Record<string, StatusTone> = {
 
 export function outboundStatusTone(status: string | undefined): StatusTone {
   return status ? (OUTBOUND_STATUS_TONE[status] ?? 'neutral') : 'neutral';
+}
+
+/**
+ * The order's NORMAL flow, in the contract's order (TASK-PC-FE-361) —
+ * `wms-platform/specs/services/outbound-service/state-machines/order-status.md`
+ * § Transitions: `PICKING → PICKED → PACKING → PACKED → SHIPPED`.
+ * (`RECEIVED` is transient — advanced to `PICKING` in the same TX — so it is
+ * not a resting step.) Position comes from the ORDER status only: the saga is
+ * a separate machine (`saga-status.md`) that moves in lock-step but is shown
+ * as its own text, never as a step.
+ */
+export const OUTBOUND_FLOW = ['PICKING', 'PICKED', 'PACKING', 'PACKED', 'SHIPPED'] as const;
+
+/** Terminal states OFF the normal flow (order-status.md): cancelled before
+ *  shipping, and reserve-failed. Never placed on the flow bar. */
+export const OUTBOUND_SIDE_BRANCHES = ['CANCELLED', 'BACKORDERED'] as const;
+
+export type OutboundProgress =
+  | { kind: 'flow'; states: StepState[]; labels: string[] }
+  | { kind: 'side'; status: string };
+
+/** `null` for an absent / unknown / transient (`RECEIVED`) status — the badge
+ *  text alone then stands. */
+export function outboundProgress(status: string | undefined): OutboundProgress | null {
+  if (!status) return null;
+  if ((OUTBOUND_SIDE_BRANCHES as readonly string[]).includes(status)) {
+    return { kind: 'side', status };
+  }
+  const idx = (OUTBOUND_FLOW as readonly string[]).indexOf(status);
+  if (idx < 0) return null;
+  const finished = status === OUTBOUND_FLOW[OUTBOUND_FLOW.length - 1];
+  const states = stepStates(idx, OUTBOUND_FLOW.length, finished);
+  return states ? { kind: 'flow', states, labels: [...OUTBOUND_FLOW] } : null;
 }
 
 export const ACTION_COPY: Record<

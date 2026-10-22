@@ -1,4 +1,9 @@
 import { formatMoney, type TrialBalance } from '../api/types';
+import { BarSwatch, ProportionBar } from '@/shared/ui/InlineBar';
+import {
+  trialBalanceBarCurrencies,
+  trialBalanceBars,
+} from '../lib/trial-balance-bars';
 
 /**
  * Trial balance table (TASK-PC-FE-072 — § 2.4.7.1).
@@ -38,6 +43,8 @@ export function TrialBalanceTable({
   onSelectAccount,
 }: TrialBalanceTableProps) {
   const tb = trialBalance;
+  const bars = trialBalanceBars(tb.accounts);
+  const barCurrencies = trialBalanceBarCurrencies(bars);
   return (
     <section aria-labelledby="ledger-tb-heading" className="mb-8">
       <div className="mb-3 flex items-center gap-3">
@@ -85,6 +92,11 @@ export function TrialBalanceTable({
               <th scope="col" className="p-2">
                 기준 대변 (base credit)
               </th>
+              <th scope="col" className="p-2" data-testid="ledger-tb-bar-head">
+                <BarSwatch tone="progress" />
+                차변 <BarSwatch tone="warning" />
+                대변
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -123,6 +135,26 @@ export function TrialBalanceTable({
                 >
                   {formatMoney(a.baseCreditTotal)}
                 </td>
+                <td className="w-40 p-2">
+                  {bars[i] ? (
+                    <div className="space-y-1" data-testid={`ledger-tb-bar-${i}`}>
+                      <ProportionBar
+                        value={bars[i]!.debit}
+                        max={bars[i]!.max}
+                        tone="progress"
+                        className="w-full"
+                        testid={`ledger-tb-bar-debit-${i}`}
+                      />
+                      <ProportionBar
+                        value={bars[i]!.credit}
+                        max={bars[i]!.max}
+                        tone="warning"
+                        className="w-full"
+                        testid={`ledger-tb-bar-credit-${i}`}
+                      />
+                    </div>
+                  ) : null}
+                </td>
               </tr>
             ))}
             <tr className="border-t-2 border-border font-medium">
@@ -139,10 +171,21 @@ export function TrialBalanceTable({
               <td className="p-2" data-testid="ledger-tb-grand-base-credit">
                 {formatMoney(tb.grandBaseCreditTotal)}
               </td>
+              <td className="p-2" />
             </tr>
           </tbody>
         </table>
       )}
+      {tb.accounts.length > 0 && barCurrencies.length > 0 ? (
+        <p
+          className="-mt-2 mb-4 text-xs text-muted-foreground"
+          data-testid="ledger-tb-bar-scope"
+        >
+          {barCurrencies.length > 1
+            ? '막대는 같은 통화 계정끼리, 그 통화에서 가장 큰 차변 · 대변 합계 대비 길이입니다.'
+            : '막대는 이 시산표에서 가장 큰 차변 · 대변 합계 대비 길이입니다.'}
+        </p>
+      ) : null}
     </section>
   );
 }

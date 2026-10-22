@@ -17,6 +17,7 @@ import { ApprovalSubjectRef } from './approval-refs';
 import { ApprovalDetail } from './ApprovalDetail';
 import { ApprovalCreateDialog } from './ApprovalCreateDialog';
 import { ReadOnlyNote } from './ReadOnlyNotice';
+import { ApprovalStepProgressView } from './ApprovalStepProgressView';
 
 /**
  * ERP "결재함" screen (TASK-PC-FE-051 — ADR-MONO-016 § D3.1 parity slice).
@@ -257,6 +258,7 @@ export function ApprovalScreen({
                 </td>
                 <td className="p-2">
                   <StatusBadge status={r.status} />
+                  <ApprovalStepProgressView row={r} index={i} />
                 </td>
                 <td className="p-2">
                   <Button
