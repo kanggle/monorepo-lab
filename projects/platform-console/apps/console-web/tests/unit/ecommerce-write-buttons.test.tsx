@@ -229,7 +229,7 @@ const CASES: Case[] = [
   {
     name: '/ecommerce/orders/[id] — detail (상태 전이)',
     ui: (canWrite) => <OrderDetail order={ORDER as never} canWrite={canWrite} />,
-    writeTestIds: ['order-status-btn-confirmed', 'order-status-btn-cancelled'],
+    writeTestIds: ['order-status-btn-cancelled'],
     note: 'order-read-only-note',
     kept: 'order-items',
   },
@@ -340,6 +340,16 @@ describe('TASK-PC-FE-365 — a BACKORDERED order offers cancel only', () => {
     });
     expect(screen.queryByTestId('order-status-btn-cancelled')).toBeNull();
     expect(screen.getByTestId('order-read-only-note')).toHaveTextContent('조회 전용');
+  });
+});
+
+describe('TASK-PC-FE-366 — a PENDING order offers cancel only (no operator confirm)', () => {
+  it('canWrite=true → only the 취소 button, no 확인/confirm', () => {
+    render(<OrderDetail order={{ ...ORDER, status: 'PENDING' } as never} canWrite />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('order-status-btn-cancelled')).toHaveTextContent('취소');
+    expect(screen.queryByTestId('order-status-btn-confirmed')).toBeNull();
   });
 });
 

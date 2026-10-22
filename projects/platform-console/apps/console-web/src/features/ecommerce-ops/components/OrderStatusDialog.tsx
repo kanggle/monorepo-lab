@@ -17,8 +17,8 @@ import { ReadOnlyNote } from './ReadOnlyNotice';
  * integration in `ProductDetail`.
  *
  * Only shows buttons for **allowed operator transitions** from the current status
- * (PENDING → {CONFIRMED, CANCELLED}, BACKORDERED → {CANCELLED}, CONFIRMED → {CANCELLED}, everything else →
- * none). SHIPPED/DELIVERED are driven by the shipping return-leg
+ * (PENDING → {CANCELLED}, BACKORDERED → {CANCELLED}, CONFIRMED → {CANCELLED}, everything else →
+ * none; TASK-PC-FE-366 — the operator never confirms, so the only control is a single «취소» button). SHIPPED/DELIVERED are driven by the shipping return-leg
  * (`ShippingStatusChanged`), not operator action — the order detail shows them
  * read-only. The UI is the UX defence; the producer is the final authority —
  * 400/422/409/404 are surfaced inline.
@@ -43,7 +43,6 @@ export interface OrderStatusDialogProps {
 // Operator-actionable targets only. SHIPPED/DELIVERED are not operator transitions
 // (shipping-event-driven), so they never appear as buttons here.
 const STATUS_LABELS: Record<string, string> = {
-  CONFIRMED: '확인',
   CANCELLED: '취소',
 };
 
