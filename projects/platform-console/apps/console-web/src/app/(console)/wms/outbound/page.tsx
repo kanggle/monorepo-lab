@@ -174,6 +174,7 @@ export default async function WmsOutboundPage() {
     <>
       <OutboundOpsScreen
         orders={state.orders}
+        statusCounts={state.statusCounts}
         canWrite={canWriteOn('/wms/outbound', businessRoles)}
         canRetry={canWriteOn('/wms/outbound', businessRoles, 'retry-dispatch')}
       />
