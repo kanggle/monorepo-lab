@@ -8,7 +8,7 @@ TASK-PC-FE-365
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -55,8 +55,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. ① 이 «거부 → 저하» 면 그것을 운영 결함으로 명시하고 우선 수선.
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구(상태 라벨 · 가이드 설명 · 저재고 설명) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`, 마지막 전체 실행은 최종 커밋에서) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋(스테이지 뒤) rc=0. SSR 이 바뀌면 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 구현 + **사용자에게 보이는 새 문구(상태 라벨 · 가이드 설명 · 저재고 설명) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`, 마지막 전체 실행은 최종 커밋에서) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋(스테이지 뒤) rc=0. SSR 이 바뀌면 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
 
 # Related Specs
@@ -95,7 +95,7 @@ frontend
   - 거짓 주석 2곳: `wms-ops/api/overview-state.ts:62-63` · `:164-165` «below their reorder point(재주문점 아래)» → 실제는 `availableQty <= 10` 상수, SKU 별 재주문점 아님. `wms-ops/components/WmsOperationsScreen.tsx:31-33` «the two settings the 개요 저재고/재고 배지 derive from» → `inventory.low_stock.default_threshold_qty` 는 **알림**에만 쓰이고 배지는 설정을 따르지 않는다. 둘 다 주석만 바로잡았다.
   - 숫자 10 의 처리(BE-644 와 맞춤): BE-644 의 (가) «설정을 따르게 고침» 이 추천안이므로 이 숫자는 **그 티켓이 (가) 로 끝나는 순간 거짓**이 된다. 사용자 문구에서 10 을 빼 «기준값 이하» 로만 쓰면 지금도 맞고 (가) 뒤에도 맞지만, 가이드의 두 번째 칸(알림은 설정 가능)과 대비되는 핵심이 «고정 vs 설정» 이라 숫자 없는 문장으로는 대비가 사라진다. ⇒ **사용자 문구는 현 사실 그대로 두고**, `wms-guide/data.ts` 의 해당 상수 위에 «BE-644 (가) 결정 시 같은 PR 에서 고칠 것» 경고 주석을 달았다. 결정은 소유자 몫(아래 «새 문구» 끝의 질문).
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 | 파일:줄 | 문구 | 언제 보이나 |
 |---|---|---|
@@ -116,3 +116,10 @@ frontend
 - **결과**: `vitest run --maxWorkers=4 --minWorkers=2` 426 파일 · 5227 시험 통과(rc=0, 최종 코드) · `tsc --noEmit` rc=0 · `next lint` rc=0(기존 경고 1건, 무관) · 가드 결과는 커밋 메시지/보고에 기재. 샘플 정합 시험(`sample-overview-cards-match-lists` 등)은 수정 없이 통과.
 - **SSR vs 클라이언트**: 상태 목록 · 라벨 · 톤은 서버 컴포넌트(개요 `EcommerceOverview` · `OrderStatusBar` 의 분포 읽기 — 읽기 호출이 6 → 7개) · 클라이언트(`OrdersScreen` 필터 · `OrderStatusDialog`) 양쪽에 쓰인다. **SSR 이 바뀌므로(개요 7번째 상태 읽기) 머지 전 브랜치 nightly 콘솔 잡 필요**(AC-2). 막대에서 대기 · 백오더가 같은 `warning` 색이라 인접 조각이 붙어 보인다 — 숫자는 `<dl>` 에 따로 있고 막대는 장식이라 두었다(구분이 필요하면 후속 결정).
 - **남은 것**: AC-1(소유자 문구 승인) · AC-2(nightly) · AC-3(배포 · 샘플 화면 확인). 기록용: 생산자는 운영자의 «BACKORDERED → CONFIRMED» 도 기술적으로 수락(AC-0 ③).
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 새 문구(라벨 «재고부족 이월» · 가이드 새 행 · 소개 · 안내 카드 · 용어집) = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전) → AC-1 닫힘.
+- 소유자 결정 둘: ① 운영자 API 의 `BACKORDERED → CONFIRMED` 수락(`AdminOrderStatusService.java:34` → `Order.java:214`, 메인 세션 확인) = **이커머스 ready 티켓** → `TASK-BE-645`(#4472) ② WMS 가이드 «고정값 · 가용 10개 이하» = **지금 그대로**(사실과 맞음 · BE-644 구현 때 같은 PR 에서 고친다 — 코드 주석 · 짝 티켓에 기록됨).
+- 브랜치 nightly run `39784005005`(head `56c8a5ff6`) **success** · PR #4471 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 열림: **AC-3**(Vercel Production · 익명 샘플 — 개요 주문 상태 막대의 «재고부족 이월» · 주문 목록 필터 · 가이드).
