@@ -111,8 +111,11 @@ export function positionLotMoney(lot: PositionLot): {
 // F5 RATE INVARIANT — `rate` is a precision-exact **decimal string** from the
 // producer (e.g. "1300.12345678" for KRW/USD; "0.00076923" for USD/KRW).
 // It MUST be rendered verbatim (string as-is). NEVER apply `Number()`,
-// `parseFloat()`, or `parseInt()` to `rate` — the ledger-ops grep guard
-// covers `rate` as well as `amount`/`exchangeRate`. `ageSeconds` IS a number
+// `parseFloat()`, or `parseInt()` to `rate`. (Until TASK-PC-FE-359 this line
+// claimed the ledger-ops grep guard covered `rate` — it did not: those guards
+// key on `amount`/`exchangeRate`. `tests/unit/f5-chart-geometry-exception.test.ts`
+// now forbids every coercion call here, `rate` included; the one exception is
+// chart geometry via `shared/lib/chart-scale.ts`.) `ageSeconds` IS a number
 // (duration, not money — F5 invariant is amount/rate-only).
 // ---------------------------------------------------------------------------
 

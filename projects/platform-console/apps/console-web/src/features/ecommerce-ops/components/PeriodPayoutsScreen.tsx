@@ -149,6 +149,7 @@ export function PeriodPayoutsScreen({
       ) : (
         <PeriodPayoutsTable
           rows={rows}
+          totalElements={data?.totalElements ?? rows.length}
           pagination={{
             prevDisabled: (query.page ?? 0) <= 0,
             nextDisabled: (data?.page ?? 0) + 1 >= totalPages,

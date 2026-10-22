@@ -92,7 +92,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-359-fx-history-and-payout-charts.md` — **그래프 2차 ① — 원장 환율 추이 선 · 정산 기간별 지급액 막대 · 원장 기간별 전표 수 막대** — 문자열 금액 · 환율은 «그래프 폭 계산» 한 함수에서만 숫자로(소유자 결정 · F5 스펙 예외 먼저) (READY, 2026-10-21 UTC). 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-PC-FE-360-overview-status-distribution-bars.md` — **그래프 2차 ② — 이커머스 개요 배송 상태 · ERP 개요 결재 상태 분포 막대** — 상태별 총 건수 호출(4 · 6), 개요 화면에만(소유자 결정) (READY, 2026-10-21 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
@@ -121,8 +120,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## in-progress
 
 
-
 ## review
+
+- `TASK-PC-FE-359-fx-history-and-payout-charts.md` — **그래프 2차 ① — 원장 환율 추이 선 · 정산 기간별 지급액 막대 · 원장 기간별 전표 수 막대** — 문자열 금액 · 환율은 «그래프 폭 계산» 한 함수에서만 숫자로(소유자 결정 · F5 스펙 예외 먼저) (REVIEW, 2026-10-21 UTC · 새 문구 11 소유자 승인 · 브랜치 nightly success · AC-4 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
 

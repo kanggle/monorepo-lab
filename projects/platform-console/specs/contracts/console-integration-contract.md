@@ -1480,6 +1480,14 @@ time** (it is reused verbatim here, not re-derived).
     **bit-exact** as a string. Asserted by test — there is **no**
     `Number(...)` / `parseFloat(...)` / `parseInt(...)` applied to an
     `amount` value anywhere in `features/finance-ops/`.
+    **Sole exception — chart geometry (TASK-PC-FE-359, owner decision
+    2026-10-22 KST)**: one function, `shared/lib/chart-scale.ts`
+    `chartMagnitude(decimalString)`, may turn a money / rate decimal string
+    into a JS `Number`, and its result may feed **only** chart geometry (bar
+    width, line y). It never feeds displayed text, totals or comparisons —
+    every visible figure stays the original string / `formatMoney`. Canonical
+    wording and the guard test: `console-web/architecture.md` § Integration
+    Rules «F5 의 유일한 예외». The same exception covers § 2.4.7.1.
 
   - **confidential + F7 discipline**: finance is
     `data_sensitivity: confidential`; producer masks PII / regulated
@@ -1829,6 +1837,9 @@ obligation and points at the owning finance specs.
     rate (e.g. `"13.5"`) MUST be **bit-exact** as a string. Asserted by test —
     there is **no** `Number(...)` / `parseFloat(...)` / `parseInt(...)` applied
     to an `amount` or `exchangeRate` value anywhere in `features/ledger-ops/`.
+    The one exception is chart geometry via `shared/lib/chart-scale.ts`
+    `chartMagnitude` only (§ 2.4.7 «Sole exception», TASK-PC-FE-359) — e.g.
+    the FX history line's y coordinates; the rate text stays verbatim.
     The trial-balance `inBalance` and the entry `balanced` flags (which hold by
     the posting guard) are surfaced honestly.
 

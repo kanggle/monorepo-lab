@@ -2,6 +2,7 @@
 
 import type { FxRateHistoryResponse } from '../api/types';
 import { formatDateTime } from '@/shared/lib/datetime';
+import { FxRateHistoryChart } from './FxRateHistoryChart';
 
 /**
  * FX 환율 history 드릴 테이블 (TASK-PC-FE-104 — § 2.4.7.1 / ledger-api.md § 14.1).
@@ -68,46 +69,50 @@ export function FxRateHistoryTable({ data, onRefresh }: FxRateHistoryTableProps)
           이 통화쌍의 환율 이력이 없습니다.
         </p>
       ) : (
-        <table
-          className="w-full data-table text-sm"
-          data-testid="ledger-fx-history-table"
-          aria-label={`${base}/${foreign} 환율 이력`}
-        >
-          <caption className="sr-only">{base}/{foreign} 환율 이력</caption>
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th scope="col" className="p-2">
-                환율
-              </th>
-              <th scope="col" className="p-2">
-                as-of
-              </th>
-              <th scope="col" className="p-2">
-                fetched
-              </th>
-              <th scope="col" className="p-2">
-                출처
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {quotes.map((q, i) => (
-              <tr
-                key={`${q.fetchedAt}-${i}`}
-                data-testid={`ledger-fx-history-row-${i}`}
-                className="border-b border-border"
-              >
-                <td className="p-2 font-mono text-foreground">
-                  {/* F5: rate is rendered as-is (string). NEVER Number()/parseFloat(). */}
-                  {q.rate}
-                </td>
-                <td className="p-2 text-muted-foreground">{formatDateTime(q.asOf)}</td>
-                <td className="p-2 text-muted-foreground">{formatDateTime(q.fetchedAt)}</td>
-                <td className="p-2 text-muted-foreground">{q.source}</td>
+        <>
+          {/* TASK-PC-FE-359 — 환율 추이 선 (decorative SVG; labels = original strings). */}
+          <FxRateHistoryChart quotes={quotes} />
+          <table
+            className="w-full data-table text-sm"
+            data-testid="ledger-fx-history-table"
+            aria-label={`${base}/${foreign} 환율 이력`}
+          >
+            <caption className="sr-only">{base}/{foreign} 환율 이력</caption>
+            <thead>
+              <tr className="border-b border-border text-left">
+                <th scope="col" className="p-2">
+                  환율
+                </th>
+                <th scope="col" className="p-2">
+                  as-of
+                </th>
+                <th scope="col" className="p-2">
+                  fetched
+                </th>
+                <th scope="col" className="p-2">
+                  출처
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {quotes.map((q, i) => (
+                <tr
+                  key={`${q.fetchedAt}-${i}`}
+                  data-testid={`ledger-fx-history-row-${i}`}
+                  className="border-b border-border"
+                >
+                  <td className="p-2 font-mono text-foreground">
+                    {/* F5: rate is rendered as-is (string). NEVER Number()/parseFloat(). */}
+                    {q.rate}
+                  </td>
+                  <td className="p-2 text-muted-foreground">{formatDateTime(q.asOf)}</td>
+                  <td className="p-2 text-muted-foreground">{formatDateTime(q.fetchedAt)}</td>
+                  <td className="p-2 text-muted-foreground">{q.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </section>
   );
