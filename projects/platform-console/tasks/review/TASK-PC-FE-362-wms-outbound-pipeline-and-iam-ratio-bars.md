@@ -8,7 +8,7 @@ TASK-PC-FE-362
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -64,8 +64,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~⑤. (2026-10-22 UTC, 아래 `## AC-0 측정`)
-- [ ] **AC-1** — 계약 먼저 → 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 계약 먼저 → 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(스테이지 뒤) rc=0. SSR 이 바뀌므로 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인.
 
 # Related Specs
@@ -116,7 +116,7 @@ frontend
 - 출고: `shared/sample/fixtures/wms.ts:1012-1040` `ordersListFixture` 가 **출고 쪽 `GET /orders` 를 서빙**하고 `status` 필터를 적용(`:1031,1035`), 실제 상태 값(`PICKING` · `PICKED` · `SHIPPED` · `CANCELLED` 각 1건, `:557,580,603,626`)을 쓴다. 개요 쪽 admin 샘플은 `collapseStatus` 로 접힌다(위 ①). ⇒ 샘플 모드에서 7읽기가 각각 0/1 로 합쳐져 `PICKING 1 · PICKED 1 · SHIPPED 1 · CANCELLED 1` 막대가 나온다(`PACKING`/`PACKED`/`BACKORDERED` 0). 코드 읽기로 확인한 것이고 화면 실행은 AC-3 에서.
 - IAM: 샘플 운영자/계정에 `SUSPENDED`(`fixtures/iam.ts:296,525,765`) · `LOCKED`(`:101,107`) 행이 있다.
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 | file:line | 문구 | 언제 보이나 |
 |---|---|---|
@@ -141,3 +141,11 @@ frontend
 - `/iam`: `IamOverviewSummaryCards` 는 서버 컴포넌트 그대로, 새 호출 0.
 
 **검증 (2026-10-22 UTC, 로컬)** — `vitest run --maxWorkers=4 --minWorkers=2` 425 파일 · 5176 시험 rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0 · `check-client-graph-server-only.mjs` rc=0(console-web hits=0) · `check-client-graph-backend-origins.mjs` rc=0(console-web hits=0) · `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` 각 rc=0(스테이지 뒤). AC-1(소유자 문구 승인) · AC-2(브랜치 nightly) · AC-3(배포 · 샘플 화면)은 열려 있다.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 새 문구 3개 = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전) → AC-1 닫힘(계약 먼저 = 커밋 `09a3652a9`).
+- 메인 세션이 최종 커밋 `79d9cf783` 에서 전체 스위트를 다시 돌렸다 — 구현 에이전트는 시험 파일 타입 수정 **뒤** 전체를 다시 돌리지 않았다: vitest **425 files · 5176 tests** rc=0 · `tsc --noEmit` rc=0.
+- 브랜치 nightly run `39743163723`(head `79d9cf783`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4462 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 🔴 메인 세션의 추천 오류 기록: 4차 추천에서 «개요가 이미 `RECEIVED` 를 상태별 `size:1` 로 센다 ⇒ 같은 방식으로 다섯 단계를 센다» 라고 했으나, 그 읽기(admin 읽기 모델)는 상태를 셋으로 접는다 — 코드 주석(`overview-state.ts:195-197`)이 이미 적고 있던 사실. 구현 에이전트의 AC-0 STOP 이 막았다.
+- 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/wms/outbound` 파이프라인 · `/iam` 비율 막대).

@@ -119,9 +119,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-362-wms-outbound-pipeline-and-iam-ratio-bars.md` — **그래프 4차 — WMS 출고 화면(`/wms/outbound`) 상태 파이프라인 막대 · IAM 개요 운영자 활성/정지 · 계정 잠김 비율 막대** — 출고 상태별 총 건수 7호출(SSR 1회) · 서버 변경 없음 · 소유자 결정(개요 아님, 출고 화면) (IN-PROGRESS, 2026-10-22 UTC). 분석=Opus 5.5 / 구현=Sonnet.
-
 ## review
+
+- `TASK-PC-FE-362-wms-outbound-pipeline-and-iam-ratio-bars.md` — **그래프 4차 — WMS 출고 화면(`/wms/outbound`) 상태 파이프라인 막대 · IAM 개요 운영자 활성/정지 · 계정 잠김 비율 막대** — 출고 상태별 총 건수 7호출(SSR 1회) · 서버 변경 없음 · 소유자 결정(개요 아님, 출고 화면) (REVIEW, 2026-10-22 UTC · 새 문구 3 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus.
 
