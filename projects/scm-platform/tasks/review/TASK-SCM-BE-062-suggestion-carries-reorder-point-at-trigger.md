@@ -8,7 +8,7 @@ TASK-SCM-BE-062
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -58,7 +58,7 @@ backend
 
 - [x] **AC-0** — 위 ①~④. ② 가 «해당» 이면 STOP. → 해당 안 함(아래 § AC-0 ②). ③(b) 는 정정 있음(§ 구현 «AC-0 정정»).
 - [x] **AC-1** — 소유자 결정(가/나) 선택창 · 계약 먼저. → (가) + (가-1) + (가-2), 계약 커밋 `7726cda04` 가 구현 커밋보다 먼저.
-- [ ] **AC-2** — 구현 + 시험(위 목록) · CI 의 scm 잡 초록. → 구현 · 단위/슬라이스/계약 시험은 로컬 초록(118/118). **Testcontainers IT 6건(신규 3 · 기존 시험에 단언 추가 3)은 로컬에서 못 돌렸다**(Docker 데몬 없음) — CI `demand-planning-service:integrationTest` 와 scm 잡 초록을 보기 전에는 닫지 않는다.
+- [x] **AC-2** — 구현 + 시험(위 목록) · CI 의 scm 잡 초록. → 구현 · 단위/슬라이스/계약 시험은 로컬 초록(118/118). **Testcontainers IT 6건(신규 3 · 기존 시험에 단언 추가 3)은 로컬에서 못 돌렸다**(Docker 데몬 없음) — CI `demand-planning-service:integrationTest` 와 scm 잡 초록을 보기 전에는 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브: 데모에서 새로 발동된 제안 응답에 값이 실리고, 옛 제안은 `null`(다음 데모 창). 닫을 때 콘솔 후속 티켓 기안.
 
 # Related Specs
@@ -215,3 +215,8 @@ AC-0 은 `*IT*.java` 로 Glob 했고 0 을 받았다. 이 서비스의 IT 이름
 - **로컬 실행**: `./gradlew :projects:scm-platform:apps:demand-planning-service:test` → **rc=0, 20 스위트 118 시험, 실패 0 · 건너뜀 0**(`build/test-results/test/*.xml` 합산). `test` 태스크가 `integration` 태그를 빼므로 IT 는 여기서 **컴파일만** 되었다(같은 source set).
 - **bite**: 두 use case 에서 `policyOpt.map(...)` 을 지역 변수 `reorderPoint` 로 바꿔 넣고 두 단위 시험 클래스를 돌림 → rc=1, **정확히 두 «새지 않음» 시험만 실패**(17 중 2) → 되돌림. 즉 그 두 시험이 (가-1) 을 실제로 문다.
 - **⚪ CI 전용 — 왜**: 이 호스트에 Docker 데몬이 없다(`docker info` → `npipe:////./pipe/docker_engine` 없음). IT 는 `DockerAvailableCondition` 이 있어 로컬에서 돌렸어도 «건너뜀» 이었을 것이고, 그것을 통과로 세지 않는다. CI `ci.yml:3959` 가 `demand-planning-service:integrationTest` 를 돌린다 — 그 결과가 V4 마이그레이션 + `ddl-auto=validate` 의 첫 실측이다.
+
+## 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- PR #4477(head `20f75411e`) 체크 pending 0 · fail 0. 로컬에서 못 돈 Testcontainers IT 를 CI 에서 확인: run `39814660754` 의 `Integration (scm-platform, Testcontainers)` **pass** — `demand-planning-service:integrationTest` 가 `AlertConsumerIntegrationTest` · `ApproveMaterializationIntegrationTest` · `SweepSchedulerIntegrationTest` 를 실제 Postgres 로 돌렸다(V4 마이그레이션 · `ddl-auto=validate` 포함). `E2E (scm-platform v1 cross-service smoke)` pass. → AC-2 닫힘.
+- 열림: **AC-3**(굽기 뒤 라이브 — 새로 발동한 제안에 `reorderPointAtTrigger`, 옛 제안은 키 없음 · 닫을 때 콘솔 후속 티켓 기안).

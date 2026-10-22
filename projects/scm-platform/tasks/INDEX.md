@@ -84,9 +84,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **IN-PROGRESS (2026-10-22 UTC) — 소유자 결정 (가) 스냅샷 `reorderPointAtTrigger` · 계약 · 구현 완료, 단위/슬라이스/계약 시험 로컬 초록 · Testcontainers IT 는 CI 대기 · 서버 변경 = 굽기.** 보충 제안 행에 «발동 당시 재주문점» 을 저장 · 응답 — 콘솔이 SKU 마다 정책을 따로 부르지 않고 «재주문점 · 발동 재고 · 제안 수량» 막대를 그리게. AC-0: `ADR-MONO-017` 갈래 B 해당 **안 함**(D3 = 교차 도메인 집계 엔드포인트 · 이것은 단일 도메인 기존 행의 필드 추가) · 콘솔 zod `.passthrough()` 라 추가가 안 깨짐. 소유자 결정: 스냅샷(추천) vs 현재 정책. 후속 = 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus.
-
 ## review
+
+- `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **REVIEW (2026-10-22 UTC · CI IT pass · AC-3 = 굽기 뒤 라이브) — 소유자 결정 (가) 스냅샷 `reorderPointAtTrigger` · 계약 · 구현 완료, 단위/슬라이스/계약 시험 로컬 초록 · Testcontainers IT 는 CI 대기 · 서버 변경 = 굽기.** 보충 제안 행에 «발동 당시 재주문점» 을 저장 · 응답 — 콘솔이 SKU 마다 정책을 따로 부르지 않고 «재주문점 · 발동 재고 · 제안 수량» 막대를 그리게. AC-0: `ADR-MONO-017` 갈래 B 해당 **안 함**(D3 = 교차 도메인 집계 엔드포인트 · 이것은 단일 도메인 기존 행의 필드 추가) · 콘솔 zod `.passthrough()` 라 추가가 안 깨짐. 소유자 결정: 스냅샷(추천) vs 현재 정책. 후속 = 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
