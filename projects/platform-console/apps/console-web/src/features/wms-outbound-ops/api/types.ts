@@ -313,6 +313,19 @@ export interface OutboundListParams {
   size?: number;
 }
 
+// --- status distribution (TASK-PC-FE-362) ----------------------------------
+// Client-safe (no server-only import): the server state fills these, the
+// presentational pipeline bar reads them.
+
+export type OutboundCountCellStatus = 'ok' | 'forbidden' | 'degraded';
+
+/** One order-status total — its own `GET /orders?status=…&size=1` cell. */
+export interface OutboundStatusCount {
+  status: string;
+  count: number | null;
+  cellStatus: OutboundCountCellStatus;
+}
+
 // --- action gating helpers (UI mirror of the producer state machine) -----
 // The console mirrors the producer state machine for UX only — the producer
 // is the final authority (a server 422 STATE_TRANSITION_INVALID is still

@@ -15,7 +15,9 @@ import {
   canRetryDispatch,
   type OutboundOrderPage,
   type OutboundListParams,
+  type OutboundStatusCount,
 } from '../api/types';
+import { OutboundStatusPipeline } from './OutboundStatusPipeline';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { OutboundCancelDialog } from './OutboundCancelDialog';
 import { OutboundOpsHeader } from './OutboundOpsHeader';
@@ -79,12 +81,18 @@ export interface OutboundOpsScreenProps {
    * Omitted / `true` = shown (fail-open).
    */
   canRetry?: boolean;
+  /**
+   * TASK-PC-FE-362 — per-status totals counted once on the server for the
+   * pipeline bar. Omitted / empty → the section is not shown.
+   */
+  statusCounts?: readonly OutboundStatusCount[];
 }
 
 export function OutboundOpsScreen({
   orders,
   canWrite = true,
   canRetry = true,
+  statusCounts = [],
 }: OutboundOpsScreenProps) {
   const statusFid = useId();
 
@@ -169,6 +177,9 @@ export function OutboundOpsScreen({
   return (
     <section aria-labelledby="wms-outbound-heading">
       <OutboundOpsHeader />
+
+      {/* TASK-PC-FE-362 — SSR-counted once; filter / paging never re-read it. */}
+      <OutboundStatusPipeline counts={statusCounts} />
 
       <OutboundOrdersTable
         statusFid={statusFid}

@@ -25,4 +25,5 @@ export type {
   PackingUnit,
   Shipment,
   OutboundListParams,
+  OutboundStatusCount,
 } from './api/types';

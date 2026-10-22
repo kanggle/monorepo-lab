@@ -1,7 +1,11 @@
 import { redirect } from 'next/navigation';
 import { ApiError, WmsOutboundUnavailableError } from '@/shared/api/errors';
 import { listOrders } from './outbound-api';
-import type { OutboundOrderPage } from './types';
+import type { OutboundOrderPage, OutboundStatusCount } from './types';
+import {
+  OUTBOUND_FLOW,
+  OUTBOUND_SIDE_BRANCHES,
+} from '../components/outbound-ops-helpers';
 
 /**
  * Server-side wms outbound operations section state for the
@@ -40,9 +44,37 @@ export interface OutboundSectionState {
   forbidden: boolean;
   /** True on 503 / timeout / network — section degrades only. */
   degraded: boolean;
+  /** Per-status order totals for the pipeline bar (TASK-PC-FE-362) — one
+   *  independent cell per `OUTBOUND_COUNT_STATUSES` entry, in that order. */
+  statusCounts: OutboundStatusCount[];
+}
+
+/** Flow (contract order) then side branches — 7 reads. */
+const OUTBOUND_COUNT_STATUSES: readonly string[] = [
+  ...OUTBOUND_FLOW,
+  ...OUTBOUND_SIDE_BRANCHES,
+];
+
+/**
+ * One status total as its own cell. `401` is re-thrown (whole-session
+ * re-login by the caller's catch); `403` → `forbidden`; anything else →
+ * `degraded`. Never fails the page — a bad count only hides the bar.
+ */
+async function countCell(status: string): Promise<OutboundStatusCount> {
+  try {
+    const page = await listOrders({ status, page: 0, size: 1 });
+    return { status, count: page.page.totalElements, cellStatus: 'ok' };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) throw err;
+    if (err instanceof ApiError && err.status === 403) {
+      return { status, count: null, cellStatus: 'forbidden' };
+    }
+    return { status, count: null, cellStatus: 'degraded' };
+  }
 }
 
 const EMPTY: OutboundSectionState = {
+  statusCounts: [],
   orders: null,
   notEligible: false,
   forbidden: false,
@@ -62,8 +94,14 @@ export async function getOutboundSectionState(
   }
 
   try {
-    const orders = await listOrders({ page: 0, size: 20 });
-    return { ...EMPTY, orders };
+    // TASK-PC-FE-362 — the page-0 list plus one `size=1` total per status
+    // (5 flow + 2 side branches), all counted ONCE here at SSR time with the
+    // same credential / role / tenant scope. Each count is its own cell.
+    const [orders, ...countCells] = await Promise.all([
+      listOrders({ page: 0, size: 20 }),
+      ...OUTBOUND_COUNT_STATUSES.map((s) => countCell(s)),
+    ]);
+    return { ...EMPTY, orders, statusCounts: countCells };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       // No partial authed state → clean WHOLE-SESSION re-login.

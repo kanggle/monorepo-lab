@@ -190,6 +190,7 @@ The `/iam` landing (formerly the static RBAC guide of TASK-PC-FE-163) is split: 
 
 - **Read model (console-web DIRECT fan-out).** Unlike the console-wide operator overview (§ 2.4.4 / § 2.4.9.1, the bounded cross-domain composition), this is a **domain-internal** snapshot: it runs server-side in the console-web landing over the three IAM list endpoints already consumed, each authenticated with the **exchanged operator token** (`getOperatorToken()`, § 2.1/§ 2.6 trust boundary — never the IAM OIDC token) and scoped to the active tenant (§ 2.4).
 - **Counts.** `GET /api/admin/operators?page=0&size=1`.`totalElements` (총계) + the `status=ACTIVE` / `status=SUSPENDED` filtered totals (split); `GET /api/admin/accounts?page=0&size=1`.`totalElements` (계정 총계) + `?status=LOCKED&page=0&size=1`.`totalElements` (잠금 현황 — TASK-PC-FE-181, via the TASK-BE-475 producer `status` filter; its own sub-leg so a degrade never blanks the total); `GET /api/admin/audit?page=0&size=5` → `totalElements` (스코프 내 총 이벤트) + `content` (recent 5 rows).
+- **Ratio bars (TASK-PC-FE-362) — zero new reads.** The 운영자 card draws a 활성 · 정지 stacked bar and the 계정 card a 잠금 / 전체 bar from the numbers above, which are all **full-population** `totalElements` of status-filtered `size=1` reads (never a first page or a bounded slice). Rules: the 운영자 bar is drawn only when total, 활성 and 정지 are all `ok` and total > 0 (the whole is the 총계; any remainder — operators in neither status — leaves the track empty, an overshoot scales the bar to the sum); the 계정 bar only when total and 잠금 are `ok` and total > 0 (잠금 / 총계). Any `null` / non-`ok` number → no bar (numbers still print). Account statuses other than `LOCKED` are not read, so the 계정 bar is «잠금 vs 나머지», never an active/dormant split.
 - **No aggregation endpoint (ADR-MONO-017 D3.B).** There is deliberately **no** producer `/summary` endpoint; deriving counts from `totalElements` is the sealed pattern (same discipline as § 2.4.10.6). Re-introducing an aggregation endpoint for this snapshot is a contract defect.
 - **Per-cell status.** Derived from each fan-out cell's outcome — `ok` / `403 → 권한 없음` / `503|timeout|network → 점검 필요`. A `403` (`PERMISSION_DENIED` / `TENANT_SCOPE_DENIED`) is a **normal forbidden cell for a narrow role** (the rbac.md access matrix — e.g. `SUPPORT_LOCK` lacks `account.read`, `SECURITY_ANALYST` lacks `operator.manage`), NOT an outage. NB the IAM error taxonomy differs from ecommerce's single `ApiError`: 503/timeout surface as the per-surface `OperatorsUnavailableError` / `AccountsUnavailableError` / `AuditUnavailableError`, so the cell resolver keys off both those and `ApiError`.
 - **Tenant gate.** All three legs require an active tenant (the api fns raise `400 NO_ACTIVE_TENANT` before fetch). The snapshot short-circuits to ONE page-level tenant-gate note (not three duplicate per-cell messages), mirroring the sibling IAM screens.
@@ -834,6 +835,39 @@ the **§ 3 parity matrix is NOT mutated** (additive domain scope, no § 3 row).
   outbound producer contract is a wms project-internal spec-first change in
   `outbound-service-api.md`; this section follows it, never redefines it (§ 5
   Change Rule).
+
+- **Order-status distribution — pipeline bar (TASK-PC-FE-362).** The `/wms/outbound`
+  page's server state (`getOutboundSectionState`) additionally counts the orders
+  per status with **7 extra reads of op 1** — `GET /orders?status=<S>&page=0&size=1`.`totalElements`
+  for `S ∈ {PICKING, PICKED, PACKING, PACKED, SHIPPED}` (the normal flow) and
+  `S ∈ {CANCELLED, BACKORDERED}` (side branches). Normative points:
+  - **Why here and not on the `/wms` overview (§ 2.4.5.2, unchanged).** The overview
+    reads the admin-service order read model (`GET /dashboard/orders`), which only
+    ever holds `RECEIVED` / `SHIPPED` / `CANCELLED` (picking and packing events do not
+    change its `status`); `status=PICKING` there is always 0. Op 1 filters on the
+    real order status, so it is the only source for the five flow states.
+  - **Order of the bar** = the producer state machine
+    (`outbound-service/state-machines/order-status.md` § Transitions):
+    `PICKING → PICKED → PACKING → PACKED → SHIPPED`. `RECEIVED` is transient (same
+    TX to `PICKING`) and is not counted. `CANCELLED` / `BACKORDERED` are terminal
+    off-flow states — shown as plain numbers **outside** the bar, never on it.
+  - **Counted once per page load (SSR)**, in the same server state as the page-0
+    list, with the **same credential, role (`OUTBOUND_READ`) and tenant scope** as
+    op 1. A list filter or paging change in the client does **not** re-run them.
+  - **Tenant scope (producer `outbound-service-api.md` § Tenant scoping)**: a native
+    `wms` operator is unrestricted and counts every order; a customer-tenant
+    operator counts only its own tenant's orders (`orders.tenant_id` is forced
+    producer-side; B2B / `null`-tenant orders are not visible to it). The screen
+    states this in one sentence next to the bar.
+  - **Independent cells.** Each status is its own read: `401` in any → whole-session
+    `redirect('/login')`; `403` / `503` / timeout / other → that cell only is
+    non-`ok`. If **any** cell is non-`ok` the bar is not drawn (a partial
+    distribution would read as the whole) and that number shows `—`; the other
+    numbers stay. All seven `0` → an empty note instead of a bar. The page-0 list
+    read keeps its existing page-level rules.
+  - No producer change, no aggregation endpoint (ADR-MONO-017 D3.B — counts are
+    `totalElements`). An unknown/future status is not counted (the bar is the known
+    lifecycle; the list stays authoritative).
 
 > **Not a § 3 parity row** (same as § 2.4.5): the wms outbound surface is
 > additive federated **domain** scope, not a IAM `admin-web` parity capability;
