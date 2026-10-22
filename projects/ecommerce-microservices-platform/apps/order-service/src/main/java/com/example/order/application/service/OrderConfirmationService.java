@@ -6,6 +6,7 @@ import com.example.order.application.port.OrderMetricsPort;
 import com.example.order.domain.exception.OrderNotFoundException;
 import com.example.order.domain.model.Order;
 import com.example.order.domain.model.OrderItem;
+import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.model.ShippingAddress;
 import com.example.order.domain.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,17 @@ public class OrderConfirmationService {
     public void confirmOrder(String orderId) {
         Order order = orderRepository.findByIdAcrossTenants(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            // TASK-BE-646: a reservation that committed before product-service consumed this
+            // order's OrderCancelled (e.g. a restock re-reserving a backordered order the operator
+            // just cancelled) still emits ORDER_RESERVED. A CANCELLED order can never confirm, and
+            // product-service restores that stock when it consumes the OrderCancelled (RESERVED →
+            // restore). Throwing here would only retry this message into the DLT, so end it as a
+            // no-op. Order.confirm itself still rejects CANCELLED — the admin endpoint relies on it.
+            log.warn("ORDER_RESERVED for a CANCELLED order ignored; product-service releases the "
+                    + "reservation on OrderCancelled. orderId={}", orderId);
+            return;
+        }
         String previousStatus = order.getStatus().name();
         boolean changed = order.confirm(clock);
         orderRepository.save(order);

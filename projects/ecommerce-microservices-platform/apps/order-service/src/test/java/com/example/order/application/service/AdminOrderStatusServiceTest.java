@@ -13,13 +13,13 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.order.domain.model.ShippingAddress;
 import com.example.order.domain.repository.OrderRepository;
 import com.example.order.application.exception.InvalidOrderStatusException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -41,7 +41,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @DisplayName("AdminOrderStatusService 단위 테스트")
 class AdminOrderStatusServiceTest {
 
-    @InjectMocks
+    /**
+     * Wired by hand around a REAL {@link OperatorOrderCancellationService} over the same mocks,
+     * so the cancel assertions observe the event / metric the admin path actually produces
+     * (TASK-BE-646) rather than an interaction with a stubbed delegate.
+     */
     private AdminOrderStatusService adminOrderStatusService;
 
     @Mock
@@ -65,6 +69,12 @@ class AdminOrderStatusServiceTest {
     private static final List<OrderItem> ITEMS = List.of(
             OrderItem.reconstitute("item-1", "prod-1", "var-1", "노트북", "블랙", 1, 1_000_000L)
     );
+
+    @BeforeEach
+    void setUp() {
+        adminOrderStatusService = new AdminOrderStatusService(orderRepository, clock,
+                new OperatorOrderCancellationService(orderRepository, orderEventPublisher, orderMetrics, clock));
+    }
 
     private Order createOrderWithStatus(String orderId, OrderStatus status) {
         return Order.reconstitute(

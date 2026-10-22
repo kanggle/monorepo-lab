@@ -137,3 +137,20 @@ backend
 - **A (권장) — 운영자 확정을 없앤다.** `order-api.md` 허용 전이에서 `PENDING → CONFIRMED` 를 지우고 서버는 `400 INVALID_ORDER_REQUEST`(645 와 같은 어휘), 콘솔 전이표 `order-types.ts:79` 에서 `CONFIRMED` 를 뺀다. 확정은 결제 → 예약 사가만 한다. 서버 + 콘솔 두 티켓, 둘 다 작다.
 - **B — 운영자 확정을 사가 경로로 보낸다.** 결제 완료(`payment_id` 있음)인 `PENDING` 만 허용하고 `OrderConfirmationService` 를 탄다. 그러나 확정의 전제인 재고 예약은 product 가 하므로, 예약 없이 `OrderConfirmed` 를 내면 재고 없는 출고가 된다 — 사실상 «예약 재시도 요청» 이라는 새 경로가 필요하다(계약 · 설계 결정).
 - **C — 그대로 두고 계약에 «운영자 확정은 이벤트를 내지 않는다» 를 적는다.** ⓒ 의 재고 누수가 남는다.
+
+## 구현 (2026-10-22 UTC · Opus)
+
+**커밋 순서** (브랜치 `task/be-646-impl`): ⓪ 착수 + AC-0 `acaa646d6` → ① 시험만 `ffd5d4c11`(수선 전 빨강이어야 함) → ② 계약 `cc5eb0299` → ③ 수선(이 커밋).
+
+**수선.**
+- `OperatorOrderCancellationService` 에 `cancel(Order, String)` 을 두고 기존 `cancel(String, String)`(내부 엔드포인트)은 테넌트 무관 조회 뒤 그것을 부른다 — 내부 엔드포인트 동작 불변.
+- `AdminOrderStatusService` 의 `CANCELLED` 갈래: 테넌트 범위로 이미 불러온 주문을 `operatorOrderCancellationService.cancel(order, …)` 에 넘긴다 — 같은 트랜잭션(`@Transactional` REQUIRED 합류) · 같은 이벤트 `OrderCancelled(OPERATOR)` · 같은 지표(`operator` + 상태 전이). 응답 모양(`AdminOrderStatusChangeResult`) · 오류 어휘(`422 ORDER_CANNOT_BE_CANCELLED` 등) 그대로. `CONFIRMED` 갈래 · `TASK-BE-645` 의 `BACKORDERED → CONFIRMED` 거부 그대로. 운영자 서비스를 위임으로 쓰므로 이 파일에 발행자 포트가 주입되지 않는다 — `EcommerceOrderDemoSeedTest.java:215-224` 의 고정(«확정은 아무것도 안 낸다» — ④ 그대로)은 초록 유지.
+- `OrderConfirmationService`: `CANCELLED` 주문에 온 `ORDER_RESERVED` 는 경고 로그 + no-op(저장 · 발행 · 지표 없음). AC-0 ② 의 경합 창 몫. 도메인 `Order.confirm` 은 그대로라 관리자 `CANCELLED → CONFIRMED` 는 여전히 400, `SHIPPED` 에 온 `ORDER_RESERVED` 도 여전히 던진다(시험 고정).
+
+**시험 (빨강 → 초록).**
+- ① 커밋에서 로컬 `./gradlew :…:order-service:test :…:product-service:test --continue` **rc=1 — order-service 453 중 5 실패**: `AdminOrderStatusServiceTest` 매개변수 시험 3(PENDING · CONFIRMED · BACKORDERED → `WantedButNotInvoked publishOrderCancelled`) · 두 번 보내기 1(`WantedButNotInvoked`) · `OrderConfirmationServiceTest` 취소된 백오더 no-op 1(`InvalidOrderException` 이 던져짐). 나머지 새 시험(이미 취소 · 확정 무발행 · SHIPPED 여전히 던짐 · product 풀린 예약 재입고 무시)은 수선 전에도 초록인 **고정**이다. product-service 458/0.
+- ③ 수선 뒤 같은 명령 **rc=0 — order-service XML 63 · 454 tests · 0 failures · 0 errors · 0 skipped**, product-service XML 67 · 458 · 0 · 0 · 0. (454 = 453 + `OperatorOrderCancellationServiceTest` 의 «불러온 주문 — 재조회 없음» 1.) 시험 배선 변경: `AdminOrderStatusServiceTest` 가 `@InjectMocks` 대신 진짜 `OperatorOrderCancellationService` 를 같은 목 위에 손으로 엮는다(위임이 아니라 실제로 나가는 이벤트를 보려고) — 단언은 ① 커밋 그대로.
+- ⚪ CI 전용: `OrderEventPublishIntegrationTest.adminStatusCancel_writesOneOrderCancelledOutboxRow`(Testcontainers — 관리자 취소 → `order_outbox` `OrderCancelled` 1행 · payload `cancelReason":"OPERATOR"` · 반복 422 · 행 그대로). 이 호스트에 Docker 가 없어 로컬에서 돌리지 않았다. ① 커밋에서 이 IT 가 빨강인지도 CI 로만 볼 수 있다.
+- ⚪ 서비스 사이 사슬(order 발행 → product 해제 → 재입고 무시)은 두 서비스의 단위 시험을 이어 붙인 것이다 — 하나의 시험으로 끝에서 끝까지 잰 것이 아니다. 라이브 확인은 AC-2.
+
+AC-1 은 CI 의 ecommerce 잡 초록을 본 뒤 닫는다. AC-2 는 굽기 뒤 다음 데모 창.
