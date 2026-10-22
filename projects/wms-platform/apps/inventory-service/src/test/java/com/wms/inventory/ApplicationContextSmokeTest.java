@@ -99,6 +99,29 @@ class ApplicationContextSmokeTest {
         assertThat(context.getBean(LowStockAlertDebouncePort.class)).isNotNull();
     }
 
+    /**
+     * TASK-BE-647 — no test-side property override: the value must come from the
+     * real base {@code application.yml}. Without the yml default the holder is
+     * empty and low-stock detection is silently off after a restart.
+     * BE-459 regression: a settings-changed update still overrides it.
+     */
+    @Test
+    void lowStockDefaultThresholdResolvesToTenFromBaseConfig() {
+        LowStockThresholdPort port = context.getBean(LowStockThresholdPort.class);
+        java.util.UUID wh = java.util.UUID.randomUUID();
+        java.util.UUID sku = java.util.UUID.randomUUID();
+        assertThat(port.findThreshold(wh, sku)).contains(10);
+
+        com.wms.inventory.application.port.out.LowStockThresholdWriterPort writer =
+                context.getBean(com.wms.inventory.application.port.out.LowStockThresholdWriterPort.class);
+        try {
+            writer.updateDefaultThreshold(25);
+            assertThat(port.findThreshold(wh, sku)).contains(25);
+        } finally {
+            writer.updateDefaultThreshold(10);
+        }
+    }
+
     @Test
     void webControllersAreRegistered() {
         assertThat(context.getBean(InventoryQueryController.class)).isNotNull();
