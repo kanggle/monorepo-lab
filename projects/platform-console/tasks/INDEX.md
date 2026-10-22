@@ -119,9 +119,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **그래프 3차 — 재무 잔액 «사용 가능 + 보류» 막대 · 시산표 차변 · 대변 막대 · ERP 결재 행별 단계 진행 · WMS 출고 상세 진행 단계** — 서버 변경 없음 · 금액 폭은 `chartMagnitude` 만 (IN-PROGRESS, 2026-10-21 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 ## review
+
+- `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **그래프 3차 — 재무 잔액 «사용 가능 + 보류» 막대 · 시산표 차변 · 대변 막대 · ERP 결재 행별 단계 진행 · WMS 출고 상세 진행 단계** — 서버 변경 없음 · 금액 폭은 `chartMagnitude` 만 (REVIEW, 2026-10-21 UTC · 새 문구 8 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-360-overview-status-distribution-bars.md` — **그래프 2차 ② — 이커머스 개요 배송 상태 · ERP 개요 결재 상태 분포 막대** — 상태별 총 건수 호출(4 · 6), 개요 화면에만(소유자 결정) (REVIEW, 2026-10-21 UTC · 새 문구 5 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 

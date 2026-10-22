@@ -8,7 +8,7 @@ TASK-PC-FE-361
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -54,8 +54,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~⑤. (2026-10-21 UTC, 아래 `## AC-0 측정`)
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(스테이지 뒤) rc=0. SSR 이 바뀌면 머지 전 브랜치 nightly 콘솔 잡.
+- [x] **AC-1** — 구현 + **사용자에게 보이는 새 문구 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 위 목록 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · `node scripts/check-client-graph-server-only.mjs` · `check-client-graph-backend-origins.mjs`(스테이지 뒤) rc=0. SSR 이 바뀌면 머지 전 브랜치 nightly 콘솔 잡.
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플 화면 확인(클라이언트 패널은 브라우저 · 소유자).
 
 # Related Specs
@@ -108,7 +108,7 @@ frontend
 **⑤ 샘플 고정값의 네 자리 값**
 - `shared/sample/fixtures/finance.ts:86` 잔액 `ledger '100000' / available '80000' / held '20000'` — 다섯 자리 이상. 샘플 원장 `fixtures/ledger.ts:146-196` 금액도 `500000` · `50000` · `10000`(USD scale 2) · `130000`. 네 자리 값은 없다. 결재 샘플 `fixtures/erp.ts:757-758` `currentStage: 1, totalStages: 2`(0 기반이라 «2/2 단계»). 출고 샘플은 기존 `status` 문자열을 그대로 쓴다.
 
-## 새 문구 (소유자 승인 대기)
+## 새 문구 (소유자 승인 2026-10-22 KST)
 
 | file:line | 문구 | 언제 보이나 |
 |---|---|---|
@@ -134,3 +134,11 @@ frontend
 - 시험: `tests/unit/graph-batch-3-bars.test.tsx` 39건(단계 원자 · 비율 · 0 · 파싱 실패 · 음수 · 통화 섞임 묶음 분리 · 0/1 기반 경계 · 종결 · 곁가지 · 알 수 없는 상태 · F5 새 파일 `Number(` 없음). 기존 `f5-chart-geometry-exception.test.ts` 가 새 `lib/` 파일도 훑어 초록.
 - 결과: 전체 vitest `--maxWorkers=4 --minWorkers=2` 423 파일 · 5155 통과 rc=0 · `tsc --noEmit` rc=0 · `next lint` rc=0(기존 경고 1건 `received-invitations/route.ts` 무관).
 - SSR 여부: 네 화면 모두 `export const dynamic = 'force-dynamic'` 서버 페이지 안의 **클라이언트 컴포넌트**다. 재무 잔액(`/finance/accounts`, `initialBalances` 시드), 시산표(`/ledger`, `page.tsx:173` `trialBalance={state.trialBalance}` 시드), 결재 목록(`/erp/approval`, `initialApprovalRequests` 시드)은 첫 페인트 HTML 에 새 막대가 서버 렌더로 들어간다(필터 · 후속 조회는 클라이언트). 출고 상세(`/wms/outbound` 주문 드릴)는 행을 눌러 클라이언트에서 불러오는 패널이라 클라이언트 전용. → SSR 이 바뀌므로 AC-2 의 브랜치 nightly 콘솔 잡 필요(본 세션에서 안 돌림).
+
+## 소유자 승인 · 머지 전 확인 (2026-10-21 UTC · 분석=Opus 5.5)
+
+- 새 문구 8개 = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전 — 출고 단계 이름은 상태 코드 영문 그대로) → AC-1 닫힘.
+- 🔵 티켓과 다르게 한 것(소유자에게 보고함): 출고 진행 단계는 주문 `status` 로만 정했다 — 사가 상태는 별도 기계라 곁가지(`CANCELLATION_REQUESTED` 등)가 정상 흐름 위에 놓인다.
+- 금액 폭 = `chartMagnitude` 만(`balance-bars.ts:24` · `trial-balance-bars.ts:27`) · 대차 판정 = `tb.inBalance` 그대로(`TrialBalanceTable.tsx:60-65`) — 메인 세션이 grep 으로 확인.
+- 브랜치 nightly run `39727008251`(head `591749bcc`) **success** — `Package platform-console e2e boot jars (nightly)` · `Platform Console E2E full-stack (Playwright + docker compose)` 둘 다 success. PR #4459 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/finance/accounts` · `/ledger` · `/erp/approval` 은 SSR, `/wms/outbound` 주문 상세는 클라이언트 패널이라 브라우저 · 소유자).
