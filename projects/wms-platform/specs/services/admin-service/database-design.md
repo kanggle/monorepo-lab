@@ -616,11 +616,18 @@ queries can choose the relevant bucket without an arithmetic step.
 `on_hand_qty` is a denormalisation of `available + reserved` so
 "total on-hand" queries are a single column read.
 
-**`low_stock_flag` + partial index `WHERE low_stock_flag=TRUE`**: the
-"warehouses with low-stock alerts" dashboard query scans only the
-flagged rows — the partial index size scales with the small fraction
-of rows that are actually low-stock at any moment, not with total
-SKU x location count.
+**`low_stock_flag` + partial index `WHERE low_stock_flag=TRUE` — dropped in
+`V5__drop_inventory_low_stock_flag.sql` (TASK-BE-644).** The stored flag was
+computed at projection time against a hard-coded `<= 10` and never followed the
+`inventory.low_stock.default_threshold_qty` setting; storing it at all meant a
+setting change would leave every row without a new inventory event on the old
+threshold. Low-stock is now derived at query time (`available_qty < :threshold`,
+see `domain-model.md` § InventorySnapshot), so there is no flag to index. The
+`warehouse_id` index plus the predicate covers the read-model sizes in play; if
+the table grows to where the low-stock filter needs its own index, an
+expression index cannot help (the threshold is a parameter) — revisit with a
+`(warehouse_id, available_qty)` btree. The DDL block above is kept as the V2
+historical shape.
 
 ---
 
@@ -848,7 +855,7 @@ the full seed catalog.
 | `admin_shipment_summary` | `idx_admin_shipment_summary_shipped_at` | btree | recency sort |
 | `admin_inventory_snapshot` | `admin_inventory_snapshot_pkey` | PK compound 3-col | (location, sku, lot=sentinel) |
 | `admin_inventory_snapshot` | `idx_admin_inventory_snapshot_warehouse` | btree | warehouse drill-down |
-| `admin_inventory_snapshot` | `idx_admin_inventory_snapshot_low_stock` | partial (`low_stock_flag=TRUE`) | dashboard hot path |
+| ~~`admin_inventory_snapshot`~~ | ~~`idx_admin_inventory_snapshot_low_stock`~~ | ~~partial (`low_stock_flag=TRUE`)~~ | dropped in V5 (TASK-BE-644) |
 | `admin_inventory_snapshot` | `idx_admin_inventory_snapshot_last_event_at` | btree | recently-changed query |
 | `admin_adjustment_audit` | `admin_adjustment_audit_pkey` (id = eventId) | PK natural dedupe | append-only |
 | `admin_adjustment_audit` | `idx_admin_adjustment_audit_warehouse` | btree | warehouse drill-down |
@@ -864,9 +871,9 @@ the full seed catalog.
 | `admin_throughput_outbound_daily` | `admin_throughput_outbound_daily_pkey` | PK compound | (date, warehouse_id) |
 | `admin_throughput_outbound_daily` | `idx_admin_throughput_outbound_daily_warehouse` | btree | warehouse drill-down |
 
-**Partial indexes (5)**: outbox pending / inventory low_stock /
-alert_log unacked / user_role assignment active / user email
-case-insensitive. Each filters to the dashboard hot path; the rest of
+**Partial indexes (4)**: outbox pending / alert_log unacked /
+user_role assignment active / user email case-insensitive (the fifth,
+inventory low_stock, was dropped in V5 — TASK-BE-644). Each filters to the dashboard hot path; the rest of
 the rows live outside the index footprint.
 
 ---
@@ -900,6 +907,8 @@ retrospective contract introduced by TASK-BE-157).
 - `../../../apps/admin-service/src/main/resources/db/migration/V1__init.sql`
 - `../../../apps/admin-service/src/main/resources/db/migration/V2__init_readmodel.sql`
 - `../../../apps/admin-service/src/main/resources/db/migration/V3__order_shipment_tenant_axis.sql`
+- `../../../apps/admin-service/src/main/resources/db/migration/V5__drop_inventory_low_stock_flag.sql`
+  — TASK-BE-644 (low-stock derived at query time)
 - `../../../apps/admin-service/src/main/resources/db/seed/R__seed_dev_data.sql`
   — dev/demo only; was `db/migration/V99__seed_dev_data.sql` until TASK-BE-585
   (versioned → repeatable) and TASK-BE-587 (production location → `db/seed`)

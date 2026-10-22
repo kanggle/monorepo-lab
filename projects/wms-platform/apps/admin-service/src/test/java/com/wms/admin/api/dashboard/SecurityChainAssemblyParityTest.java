@@ -2,6 +2,7 @@ package com.wms.admin.api.dashboard;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.security.oauth2.TenantClaimValidator;
 import com.wms.admin.api.advice.GlobalExceptionHandler;
+import com.wms.admin.application.settings.LowStockThresholdReader;
 import com.wms.admin.config.SecurityConfig;
 import com.wms.admin.readmodel.inventory.InventorySnapshotEntity;
 import com.wms.admin.readmodel.inventory.InventorySnapshotRepository;
@@ -74,9 +76,13 @@ class SecurityChainAssemblyParityTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
+    /** TASK-BE-644 — the controller now reads the low-stock threshold per request. */
+    @MockitoBean
+    private LowStockThresholdReader thresholdReader;
+
     private void stubOnePage() {
         Page<InventorySnapshotEntity> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        when(repository.search(any(), any(), any(), any(), anyBoolean(), any(), any()))
+        when(repository.search(any(), any(), any(), any(), anyBoolean(), anyInt(), any(), any()))
                 .thenReturn(page);
     }
 
