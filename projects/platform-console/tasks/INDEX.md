@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **콘솔이 이커머스 `BACKORDERED` 를 모른다 — 주문 상태 분포 · 필터에서 빠지고 운영자가 취소할 주문을 못 찾는다 · 곁: WMS 저재고 설명을 사실대로** — 서버 변경 없음 · AC-0 이 «백오더 응답을 zod 가 거부해 화면 저하» 인지 먼저 잰다 (READY, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -118,6 +118,8 @@ _(직전 완료)_ **Finance 콘솔 메뉴 정석 정렬 완료** (PC-FE-229 DONE
 _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-07-08). 개요가 조달·재고 두 기능을 한 화면에 얹던 것을 분리: 개요=요약 밴드만, 조달(`/scm/procurement`)·재고(`/scm/inventory`) 신규 라우트, 보충/설정→보충 계획/보충 계획 설정 명칭 정리. 내부적으로 `getScmSectionState`→procurement/inventory 2분할 + `ScmOpsScreen`→2화면 분할. (WMS 기능-메뉴 배치 PC-FE-222~224와 같은 기능↔메뉴 정렬 계열.)
 
 ## in-progress
+
+- `TASK-PC-FE-365-ecommerce-backordered-status-and-low-stock-wording.md` — **콘솔이 이커머스 `BACKORDERED` 를 모른다 — 주문 상태 분포 · 필터에서 빠지고 운영자가 취소할 주문을 못 찾는다 · 곁: WMS 저재고 설명을 사실대로** — 서버 변경 없음 · AC-0 이 «백오더 응답을 zod 가 거부해 화면 저하» 인지 먼저 잰다 (IN-PROGRESS, 2026-10-22 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## review
 

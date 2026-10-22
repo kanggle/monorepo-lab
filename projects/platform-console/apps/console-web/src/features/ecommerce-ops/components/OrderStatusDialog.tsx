@@ -17,7 +17,7 @@ import { ReadOnlyNote } from './ReadOnlyNotice';
  * integration in `ProductDetail`.
  *
  * Only shows buttons for **allowed operator transitions** from the current status
- * (PENDING → {CONFIRMED, CANCELLED}, CONFIRMED → {CANCELLED}, everything else →
+ * (PENDING → {CONFIRMED, CANCELLED}, BACKORDERED → {CANCELLED}, CONFIRMED → {CANCELLED}, everything else →
  * none). SHIPPED/DELIVERED are driven by the shipping return-leg
  * (`ShippingStatusChanged`), not operator action — the order detail shows them
  * read-only. The UI is the UX defence; the producer is the final authority —

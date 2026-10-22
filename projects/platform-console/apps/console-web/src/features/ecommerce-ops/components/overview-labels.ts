@@ -14,6 +14,7 @@ import type { OrderStatus } from '../api/order-types';
  * unmapped/future status falls back to the raw value at the call site). */
 export const ORDER_STATUS_LABELS: Partial<Record<OrderStatus, string>> = {
   PENDING: '대기',
+  BACKORDERED: '재고부족 이월',
   CONFIRMED: '확정',
   SHIPPED: '배송중',
   DELIVERED: '배송완료',
