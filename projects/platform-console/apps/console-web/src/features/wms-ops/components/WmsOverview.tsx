@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { WmsOverviewState } from '../api/overview-state';
+import { BarSwatch } from '@/shared/ui/InlineBar';
 import { CountTile } from './WmsOverviewCountTile';
+import { AlertStatusBar, alertStatusTone } from './AlertStatusBar';
 
 /**
  * wms operator **overview snapshot** presentation (TASK-PC-FE-166 — the first
@@ -64,13 +66,17 @@ export function WmsOverview({ state }: { state: WmsOverviewState }) {
       {/* Alert-acknowledgement distribution. */}
       <div className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-foreground">알림 상태</h3>
+        <AlertStatusBar buckets={state.alertStatus} />
         <dl
           data-testid="wms-alert-status"
           className="flex flex-wrap gap-x-8 gap-y-3 rounded-md border border-border bg-background px-4 py-4"
         >
           {state.alertStatus.map((bucket) => (
             <div key={bucket.key}>
-              <dt className="text-xs text-muted-foreground">{bucket.label}</dt>
+              <dt className="text-xs text-muted-foreground">
+                <BarSwatch tone={alertStatusTone(bucket.key)} />
+                {bucket.label}
+              </dt>
               <dd
                 className="text-lg font-semibold tabular-nums text-foreground"
                 data-testid={`wms-alert-status-${bucket.key}`}

@@ -77,12 +77,12 @@ describe('FinanceOverviewScreen (TASK-PC-FE-229)', () => {
     );
   });
 
-  it('F5: renders the available balance from the string minor-units via formatMoney (no raw minor-units digits)', () => {
+  it('F5: renders the available balance from the string minor-units via formatMoneyDisplay (grouped, ₩ mark — TASK-PC-FE-363)', () => {
     render(<FinanceOverviewScreen state={BASE} />);
     const row = screen.getByTestId('finance-overview-balance-0');
-    // formatMoney(KRW scale 0) renders the digits as-is with a currency
-    // suffix — assert the FORMATTED string, not a raw Number() coercion.
-    expect(row).toHaveTextContent('100000 KRW');
+    // formatMoneyDisplay(KRW scale 0) groups the digits with a ₩ prefix —
+    // assert the FORMATTED string, not a raw Number() coercion.
+    expect(row).toHaveTextContent('KRW: ₩100,000 (가용)');
   });
 
   it('trial-balance out-of-balance renders honestly (danger tone, "불균형")', () => {

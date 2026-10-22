@@ -89,6 +89,18 @@ export function formatMoney(
   money: Money,
   scales: Readonly<Record<string, number>> = DEFAULT_CURRENCY_SCALES,
 ): string {
+  return `${minorUnitsToDecimal(money, scales)} ${money.currency}`;
+}
+
+/**
+ * Minor-units `amount` → plain decimal string (sign kept, no grouping, no
+ * currency). String manipulation only — shared by {@link formatMoney} and
+ * {@link formatMoneyDisplay}.
+ */
+function minorUnitsToDecimal(
+  money: Money,
+  scales: Readonly<Record<string, number>>,
+): string {
   const scale = scales[money.currency] ?? 0;
   const isNegative = money.amount.startsWith('-');
   const digits = isNegative ? money.amount.slice(1) : money.amount;
@@ -106,5 +118,52 @@ export function formatMoney(
     const fracPart = padded.slice(padded.length - scale);
     body = `${intPart}.${fracPart}`;
   }
-  return `${isNegative ? '-' : ''}${body} ${money.currency}`;
+  return `${isNegative ? '-' : ''}${body}`;
+}
+
+/** Insert a thousands separator into a digit run — regex on the STRING, no
+ *  numeric coercion (so a 20-digit amount keeps every digit). */
+function groupThousands(intDigits: string): string {
+  return intDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+const DECIMAL_STRING = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+/**
+ * Display form of a decimal STRING amount (TASK-PC-FE-363) — thousands
+ * separators + a currency mark, the same look the ecommerce overview gives its
+ * numeric prices (`₩38,000`). KRW → `₩` prefix; any other currency keeps the
+ * code as a suffix (`1,234.50 USD`); no currency → the grouped number alone.
+ * A zero-scale currency (KRW / JPY) drops an all-zero fraction (`125000.00` →
+ * `₩125,000`); a non-zero fraction is kept untouched (never rounds). Anything
+ * that is not a plain decimal string → returned verbatim (tolerant, never
+ * throws). String manipulation only — F5: no `Number` coercion.
+ */
+export function formatDecimalDisplay(
+  decimal: string,
+  currency?: string | null,
+  scales: Readonly<Record<string, number>> = DEFAULT_CURRENCY_SCALES,
+): string {
+  const m = DECIMAL_STRING.exec(decimal.trim());
+  if (!m) return decimal;
+  const [, sign, intDigits, frac] = m;
+  const scale = currency ? scales[currency] : undefined;
+  const keepFrac = frac !== undefined && !(scale === 0 && /^0+$/.test(frac));
+  const body = `${sign}${groupThousands(intDigits)}${keepFrac ? `.${frac}` : ''}`;
+  if (!currency) return body;
+  if (currency === 'KRW') return `${sign}₩${body.slice(sign.length)}`;
+  return `${body} ${currency}`;
+}
+
+/** {@link formatMoney}'s value rendered in the {@link formatDecimalDisplay}
+ *  look (`{ amount: '80000', currency: 'KRW' }` → `₩80,000`). */
+export function formatMoneyDisplay(
+  money: Money,
+  scales: Readonly<Record<string, number>> = DEFAULT_CURRENCY_SCALES,
+): string {
+  return formatDecimalDisplay(
+    minorUnitsToDecimal(money, scales),
+    money.currency,
+    scales,
+  );
 }
