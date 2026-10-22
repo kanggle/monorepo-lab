@@ -8,7 +8,7 @@ admin-service 재고 읽기 모델의 `lowStockFlag` 가 저재고 설정(`inven
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -59,7 +59,7 @@ backend
 
 - [x] **AC-0** — 위 ①~④. (아래 `## AC-0 측정`)
 - [x] **AC-1** — 소유자 결정(가/나) 선택창 · 스펙 먼저. ((가-2) · 경계 `<` · 칼럼 제거 — 아래 `### 소유자 결정`; 스펙은 별도 커밋으로 먼저)
-- [ ] **AC-2** — 구현 + 시험 · CI 의 wms 잡 초록. (구현 + 로컬 `admin-service:check` 초록 완료 · **남은 것**: Testcontainers IT 는 이 호스트에 Docker 가 없어 CI 전용 · CI 미실행 — 아래 `## 구현`)
+- [x] **AC-2** — 구현 + 시험 · CI 의 wms 잡 초록. (구현 + 로컬 `admin-service:check` 초록 완료 · **남은 것**: Testcontainers IT 는 이 호스트에 Docker 가 없어 CI 전용 · CI 미실행 — 아래 `## 구현`)
 - [ ] **AC-3** — 굽기 뒤 라이브: 설정을 바꾸면 콘솔 저재고 필터 결과가 따라 바뀌는가(다음 데모 창).
 
 # Related Specs
@@ -208,3 +208,12 @@ backend
 | `wms-ops/api/overview-state.ts:166-168` | 주석 | `// SKU-locations the read model flags low-stock (availableQty <= 10 today, // fixed in admin-service — TASK-BE-644).` | `// SKU-locations the read model flags low-stock (availableQty < the current // low-stock setting, derived at query time — TASK-BE-644).` |
 
 - 🔴 둘째 칸(`data.ts:174-176` «운영자 저재고 알림» · «기준을 정하지 않았으면 알림이 가지 않습니다») 은 **이 티켓이 건드리지 않는다** — 그 문장의 사실성은 `TASK-BE-647`(inventory 재기동 시 임계값 없음)의 결과에 달렸다. 647 이 고치면 그쪽 PR 에서 함께 본다.
+
+## 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- PR #4478(head `b7e172245`) 체크 pending 0 · fail 0 — CI 의 wms 통합 잡이 `InventoryLowStockThresholdIT`(설정만 바꿔 결과가 바뀌는가 · V5 뒤 칼럼 0)를 돌렸다.
+- 공유 경로 시드 두 파일을 고쳤으므로 브랜치에서 e2e 둘을 돌렸다: 콘솔 nightly run `39815095104` **success** · federation-hardening-e2e run `39815099153` **success** → AC-2 닫힘.
+- `TASK-BE-643`(#4475) · 티켓 PR(#4476) 머지 뒤 main 병합 — `INDEX.md` 충돌 2곳(ready = BE-647 만 · in-progress = BE-644) 해소.
+- 🔴 **굽기 직후 할 일**: § 콘솔 후속 문구(굽기 직후 머지) 의 표를 콘솔 PR 로 — 사용자 문구 두 줄(`wms-guide/data.ts:170-171`)은 머지 전 소유자 승인. 지금 머지하면 굽기 전까지 화면 설명이 서버와 어긋난다.
+- 🔴 V5 적용 뒤 이전 이미지로 되돌리면 프로젝션이 깨진다 — 앞으로만 고친다.
+- 열림: **AC-3**(굽기 뒤 라이브 — 설정을 바꾸면 콘솔 저재고 필터 결과가 따라 바뀌는가).
