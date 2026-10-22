@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **그래프 3차 — 재무 잔액 «사용 가능 + 보류» 막대 · 시산표 차변 · 대변 막대 · ERP 결재 행별 단계 진행 · WMS 출고 상세 진행 단계** — 서버 변경 없음 · 금액 폭은 `chartMagnitude` 만 (READY, 2026-10-21 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -120,6 +120,8 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 ## in-progress
 
 ## review
+
+- `TASK-PC-FE-361-balance-trial-balance-and-step-bars.md` — **그래프 3차 — 재무 잔액 «사용 가능 + 보류» 막대 · 시산표 차변 · 대변 막대 · ERP 결재 행별 단계 진행 · WMS 출고 상세 진행 단계** — 서버 변경 없음 · 금액 폭은 `chartMagnitude` 만 (REVIEW, 2026-10-21 UTC · 새 문구 8 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-360-overview-status-distribution-bars.md` — **그래프 2차 ② — 이커머스 개요 배송 상태 · ERP 개요 결재 상태 분포 막대** — 상태별 총 건수 호출(4 · 6), 개요 화면에만(소유자 결정) (REVIEW, 2026-10-21 UTC · 새 문구 5 소유자 승인 · 브랜치 nightly success · AC-3 Vercel/샘플 열림). 분석=Opus 5.5 / 구현 권장=Sonnet.
 

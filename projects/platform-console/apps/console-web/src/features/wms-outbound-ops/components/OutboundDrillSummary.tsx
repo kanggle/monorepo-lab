@@ -2,7 +2,8 @@
 
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import type { OutboundOrderDetail, OutboundSaga } from '../api/types';
-import { outboundStatusTone } from './outbound-ops-helpers';
+import { StepBar } from '@/shared/ui/InlineBar';
+import { outboundProgress, outboundStatusTone } from './outbound-ops-helpers';
 
 /**
  * Order-drill summary field grid (TASK-PC-FE-198 split) — the `<dl>` header
@@ -16,7 +17,9 @@ export interface OutboundDrillSummaryProps {
 }
 
 export function OutboundDrillSummary({ detail, saga }: OutboundDrillSummaryProps) {
+  const progress = outboundProgress(detail.status);
   return (
+    <>
     <dl className="mb-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
       <div>
         <dt className="text-muted-foreground">주문번호</dt>
@@ -41,5 +44,23 @@ export function OutboundDrillSummary({ detail, saga }: OutboundDrillSummaryProps
         <dd>{detail.version}</dd>
       </div>
     </dl>
+      {progress?.kind === 'flow' ? (
+        <div className="mb-4" data-testid="outbound-drill-progress">
+          <div className="mb-1 text-sm text-muted-foreground">진행 단계</div>
+          <StepBar
+            states={progress.states}
+            labels={progress.labels}
+            testid="outbound-drill-progress-bar"
+          />
+        </div>
+      ) : progress?.kind === 'side' ? (
+        <p
+          className="mb-4 text-sm text-muted-foreground"
+          data-testid="outbound-drill-progress-side"
+        >
+          정상 흐름 밖 상태: {progress.status}
+        </p>
+      ) : null}
+    </>
   );
 }

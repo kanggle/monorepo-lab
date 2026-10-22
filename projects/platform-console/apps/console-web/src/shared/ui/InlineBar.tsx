@@ -150,6 +150,83 @@ export function StackedBar({
   );
 }
 
+/** Where one step of a {@link StepBar} stands. */
+export type StepState = 'done' | 'current' | 'todo';
+
+/**
+ * Step states for a route of `total` steps whose zero-based current step is
+ * `position` (TASK-PC-FE-361). `finished` marks every step done (a terminal
+ * success). Returns `null` when the route cannot be drawn honestly: `total`
+ * not a positive integer, or `position` not an integer inside `[0, total)` —
+ * a bad number must never read as a position.
+ */
+export function stepStates(
+  position: number | null | undefined,
+  total: number | null | undefined,
+  finished = false,
+): StepState[] | null {
+  if (typeof total !== 'number' || !Number.isInteger(total) || total < 1) return null;
+  if (finished) return Array.from({ length: total }, () => 'done' as const);
+  if (
+    typeof position !== 'number' ||
+    !Number.isInteger(position) ||
+    position < 0 ||
+    position >= total
+  ) {
+    return null;
+  }
+  return Array.from({ length: total }, (_, i): StepState =>
+    i < position ? 'done' : i === position ? 'current' : 'todo',
+  );
+}
+
+const STEP_CLASS: Record<StepState, string> = {
+  done: 'bg-green-500 dark:bg-green-400',
+  current: 'bg-blue-500 dark:bg-blue-400',
+  todo: 'bg-muted',
+};
+
+/**
+ * One segment per step (done / current / todo). Optional `labels` (same length)
+ * print under each segment. Purely decorative (`aria-hidden`) — the current
+ * position stays available as text next to it. Backward-compatible addition
+ * to this module (no existing export changed).
+ */
+export function StepBar({
+  states,
+  labels,
+  className = 'w-full',
+  testid,
+}: {
+  states: readonly StepState[];
+  labels?: readonly string[];
+  className?: string;
+  testid?: string;
+}) {
+  return (
+    <div
+      className={`flex gap-0.5 ${className}`}
+      aria-hidden="true"
+      data-testid={testid}
+    >
+      {states.map((s, i) => (
+        <div key={i} className="min-w-0 flex-1" data-step={s}>
+          <div className={`h-2 rounded-sm ${STEP_CLASS[s]}`} />
+          {labels ? (
+            <div
+              className={`mt-1 truncate text-xs ${
+                s === 'current' ? 'font-medium text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              {labels[i]}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Small colour key (no text) to put before a label so a stacked bar's colours
  *  map onto the numbers already printed beside it. Decorative. */
 export function BarSwatch({ tone }: { tone: StatusTone }) {
