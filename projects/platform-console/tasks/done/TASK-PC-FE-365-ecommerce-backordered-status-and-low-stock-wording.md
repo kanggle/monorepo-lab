@@ -8,7 +8,7 @@ TASK-PC-FE-365
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -123,3 +123,8 @@ frontend
 - 소유자 결정 둘: ① 운영자 API 의 `BACKORDERED → CONFIRMED` 수락(`AdminOrderStatusService.java:34` → `Order.java:214`, 메인 세션 확인) = **이커머스 ready 티켓** → `TASK-BE-645`(#4472) ② WMS 가이드 «고정값 · 가용 10개 이하» = **지금 그대로**(사실과 맞음 · BE-644 구현 때 같은 PR 에서 고친다 — 코드 주석 · 짝 티켓에 기록됨).
 - 브랜치 nightly run `39784005005`(head `56c8a5ff6`) **success** · PR #4471 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 열림: **AC-3**(Vercel Production · 익명 샘플 — 개요 주문 상태 막대의 «재고부족 이월» · 주문 목록 필터 · 가이드).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7253973395` success. 익명 샘플 화면(`https://console.hubwang.com`, 서버 렌더 HTML, 2026-10-22 UTC): `/ecommerce` — 주문 상태에 «재고부족 이월»(샘플 `order-sample-0006`) · `/ecommerce/orders` — 상태 필터에 `BACKORDERED` · `/ecommerce/guide` — 주문 상태 표 · 용어집에 «재고부족 이월».
+- 4차원: (a) #4471 `state=MERGED` · (b) 스쿼시 `98ce32de2` 가 `origin/main` 조상 · (c) 머지 시점 `statusCheckRollup` 실패 0 · 대기 0 · (d) AC 원문의 남은 칸 = AC-3 하나 — 위 기록으로 «배포 · 확인» 대로 닫힘.
