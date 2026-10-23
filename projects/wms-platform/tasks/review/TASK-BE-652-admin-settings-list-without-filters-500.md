@@ -8,7 +8,7 @@ admin-service 의 조건 없는 `GET /api/v1/admin/settings` 가 500 — `AdminS
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -59,7 +59,7 @@ Fix issue found in TASK-BE-644. 콘솔 `GET /api/wms/settings` → admin-service
 # Acceptance Criteria
 
 - [ ] **AC-0** — 위 ①~③ 을 file:line · IT 출력으로. ② 에서 형제가 같은 500 이면 범위(이 티켓 / 별도)를 적는다.
-- [ ] **AC-1** — 구현 + 실 DB 시험(시험만 담은 커밋으로 CI 빨강 먼저) · CI 의 wms 잡 초록.
+- [x] **AC-1** — 구현 + 실 DB 시험(시험만 담은 커밋으로 CI 빨강 먼저) · CI 의 wms 잡 초록. ✅ 2026-10-24 UTC (메인 세션) — PR #4502. 시험만 담은 커밋 `874b09b4b` 의 CI run `39969962421` 에서 `users_noFilters_and_eachFilterAlone` 만 빨강이었다(PSQLException). 🔴 그때 settings 시험 넷은 **수정 전 코드에서도 초록** → 라이브를 재현하지 못했다. 그래서 콘솔 호출 모양(정렬된 `size=20` + 쿼리 해석 캐시를 비운 첫 실행)의 `SettingsListLiveShapeIT` 를 `501b5d582` 로 더했다. 그 커밋에서는 settings 둘도 `SQLGrammarException` 빨강이었다(85건 중 3건 실패). 구현 `8b7ed5239` 뒤 head 체크 67개 pending 0 · fail 0. AC-0 ③ 의 «콘솔 쓰기 경로 부재» 는 여전히 미측정.
 - [ ] **AC-2** — 굽기 뒤 라이브: 콘솔 WMS 운영설정 화면 · `GET /api/wms/settings` 200 + 설정 행(`inventory.low_stock.default_threshold_qty` 포함). 같은 창에서 `TASK-BE-644` AC-3 을 잴 수 있으면 잰다.
 
 # Related Specs
