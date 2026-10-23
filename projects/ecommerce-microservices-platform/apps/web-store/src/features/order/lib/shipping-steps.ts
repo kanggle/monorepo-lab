@@ -7,6 +7,12 @@ export const SHIPPING_STEPS: { status: ShippingStatus; label: string }[] = [
   { status: 'DELIVERED', label: '배송 완료' },
 ];
 
+export const SHIPPING_CANCELLED_MESSAGE = '주문이 취소되어 배송이 취소되었습니다.';
+
+export function isShippingCancelled(shipping: ShippingResponse): boolean {
+  return shipping.status === 'CANCELLED';
+}
+
 export function getStepIndex(status: ShippingStatus): number {
   return SHIPPING_STEPS.findIndex((step) => step.status === status);
 }

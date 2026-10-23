@@ -1,6 +1,9 @@
 // Shipping domain types based on specs/contracts/http/shipping-api.md
 
-export type ShippingStatus = 'PREPARING' | 'SHIPPED' | 'IN_TRANSIT' | 'DELIVERED';
+export type ShippingStatus = 'PREPARING' | 'SHIPPED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+
+// CANCELLED is a terminal, system-only state (order cancelled before dispatch) — never an operator target.
+export type OperatorShippingTarget = Exclude<ShippingStatus, 'CANCELLED'>;
 
 export interface ShippingStatusHistoryEntry {
   status: ShippingStatus;
@@ -37,7 +40,7 @@ export interface ShippingListParams {
 }
 
 export interface UpdateShippingStatusRequest {
-  status: ShippingStatus;
+  status: OperatorShippingTarget;
   trackingNumber?: string;
   carrier?: string;
 }

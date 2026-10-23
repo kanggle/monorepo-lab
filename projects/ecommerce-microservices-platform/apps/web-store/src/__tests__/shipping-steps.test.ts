@@ -4,6 +4,8 @@ import {
   SHIPPING_STEPS,
   getStepIndex,
   getDeliveredDate,
+  isShippingCancelled,
+  SHIPPING_CANCELLED_MESSAGE,
 } from '@/features/order/lib/shipping-steps';
 
 /**
@@ -51,6 +53,27 @@ describe('getStepIndex', () => {
 
   it('returns -1 for an unknown status', () => {
     expect(getStepIndex('UNKNOWN' as ShippingStatus)).toBe(-1);
+  });
+});
+
+describe('CANCELLED shipping', () => {
+  it('is not one of the progress steps and has no step index', () => {
+    expect(SHIPPING_STEPS.map((s) => s.status)).not.toContain('CANCELLED');
+    expect(getStepIndex('CANCELLED')).toBe(-1);
+  });
+
+  it('isShippingCancelled is true only for CANCELLED', () => {
+    expect(isShippingCancelled(createShipping({ status: 'CANCELLED' }))).toBe(true);
+    expect(isShippingCancelled(createShipping({ status: 'PREPARING' }))).toBe(false);
+    expect(isShippingCancelled(createShipping({ status: 'DELIVERED' }))).toBe(false);
+  });
+
+  it('exposes the buyer-facing message', () => {
+    expect(SHIPPING_CANCELLED_MESSAGE).toBe('주문이 취소되어 배송이 취소되었습니다.');
+  });
+
+  it('getDeliveredDate returns null', () => {
+    expect(getDeliveredDate(createShipping({ status: 'CANCELLED' }))).toBeNull();
   });
 });
 
