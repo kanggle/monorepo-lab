@@ -76,8 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-648-operator-confirm-removed.md` — **READY (2026-10-22 UTC) — 소유자 결정: 운영자 확정 없애기 · 굽기 전 구현.** 관리자 상태 변경의 `PENDING → CONFIRMED` 가 `OrderConfirmed` · 재고 예약을 거치지 않아 나중 결제 뒤에도 확정 이벤트가 영영 안 나간다(`TASK-BE-646` AC-0 ④). 운영자는 취소만 · 확정은 사가만. 짝 = 콘솔 `TASK-PC-FE-366`(먼저 머지 안전). 분석=Opus 5.5 / 구현 권장=Opus.
-
 - `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **READY (2026-10-22 UTC) — 소유자 결정: ready 만(이번 굽기 제외).** shipping-service 가 `order.order.cancelled` 를 소비하지 않아 출고 요청이 나간 확정 주문을 취소해도 배송 · 출고 쪽은 모른다. 취소 가능 범위 vs 출고 취소 보상 = 설계 결정(ADR 여부). 분석=Opus 5.5 / 구현 권장=Opus.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
@@ -85,6 +83,8 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 ## in-progress
 
 ## review
+
+- `TASK-BE-648-operator-confirm-removed.md` — **REVIEW (2026-10-22 UTC · CI 빨강(9) → 초록 · AC-2 = 굽기 뒤 라이브) — 소유자 결정: 운영자 확정 없애기 · 굽기 전 구현.** 관리자 상태 변경의 `PENDING → CONFIRMED` 가 `OrderConfirmed` · 재고 예약을 거치지 않아 나중 결제 뒤에도 확정 이벤트가 영영 안 나간다(`TASK-BE-646` AC-0 ④). 운영자는 취소만 · 확정은 사가만. 짝 = 콘솔 `TASK-PC-FE-366`(먼저 머지 안전). 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **REVIEW (2026-10-22 UTC · #4474 머지 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus.
 

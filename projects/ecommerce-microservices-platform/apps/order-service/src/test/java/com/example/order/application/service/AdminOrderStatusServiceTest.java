@@ -85,19 +85,39 @@ class AdminOrderStatusServiceTest {
         );
     }
 
+    // ─── TASK-BE-648: 운영자는 확정하지 못한다 — 확정은 결제 · 재고 예약 사가(OrderConfirmationService)만 ───
+
+    @ParameterizedTest(name = "{0} → CONFIRMED")
+    @EnumSource(OrderStatus.class)
+    @DisplayName("운영자 확정은 현재 상태와 무관하게 InvalidOrderException(400 INVALID_ORDER_REQUEST)으로 거부되고 상태 · 저장 · 발행 · 지표가 그대로다 (TASK-BE-648)")
+    void changeStatus_operatorConfirm_rejectedForEveryCurrentStatus(OrderStatus from) {
+        String orderId = "order-648-" + from.name().toLowerCase();
+        Order order = createOrderWithStatus(orderId, from);
+        given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
+                .isInstanceOf(InvalidOrderException.class)
+                .hasMessageContaining("cannot be confirmed by an operator");
+
+        assertThat(order.getStatus()).isEqualTo(from);
+        assertThat(order.getUpdatedAt()).isEqualTo(FIXED_NOW);
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(orderEventPublisher, orderMetrics, clock);
+    }
+
     @Test
-    @DisplayName("PENDING 상태 주문을 CONFIRMED로 변경하면 성공하고 변경된 DTO를 반환한다")
-    void changeStatus_pendingToConfirmed_successReturnsUpdatedOrder() {
+    @DisplayName("결제 전 PENDING 주문의 운영자 확정은 거부된다 — 나중에 결제가 끝나도 사가가 PENDING → CONFIRMED 로 확정하고 OrderConfirmed 를 낼 수 있게 PENDING 그대로 (TASK-BE-648)")
+    void changeStatus_pendingToConfirmed_rejectedSoTheSagaCanStillConfirm() {
         String orderId = "order-001";
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(clock.instant()).willReturn(FIXED_NOW);
 
-        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
+                .isInstanceOf(InvalidOrderException.class);
 
-        assertThat(result.status()).isEqualTo("CONFIRMED");
-        assertThat(result.orderId()).isEqualTo(orderId);
+        // The saga's guard is Order.confirm returning true; it can only do so while PENDING.
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
@@ -208,7 +228,7 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
-    @DisplayName("상태 변경 성공 후 orderRepository.save()가 호출된다")
+    @DisplayName("상태 변경(취소) 성공 후 orderRepository.save()가 호출된다")
     void changeStatus_successfulTransition_saveIsCalled() {
         String orderId = "order-010";
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
@@ -216,7 +236,7 @@ class AdminOrderStatusServiceTest {
         given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
         given(clock.instant()).willReturn(FIXED_NOW);
 
-        adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+        adminOrderStatusService.changeStatus(orderId, "CANCELLED");
 
         verify(orderRepository).save(order);
     }
@@ -253,17 +273,18 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
-    @DisplayName("이미 CONFIRMED인 주문을 운영자가 CONFIRMED로 변경하면 멱등 no-op으로 200 결과를 돌려준다 (기존 동작 유지)")
-    void changeStatus_confirmedToConfirmed_idempotentNoOp() {
+    @DisplayName("이미 CONFIRMED인 주문의 운영자 확정도 이제 400(InvalidOrderException)이다 — 멱등 200 폐기, 저장 없음 (TASK-BE-648 AC-0 판정)")
+    void changeStatus_confirmedToConfirmed_nowRejected() {
         String orderId = "order-013";
         Order order = createOrderWithStatus(orderId, OrderStatus.CONFIRMED);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
-        AdminOrderStatusChangeResult result = adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
+                .isInstanceOf(InvalidOrderException.class);
 
-        assertThat(result.status()).isEqualTo("CONFIRMED");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(order.getUpdatedAt()).isEqualTo(FIXED_NOW);
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
@@ -342,15 +363,14 @@ class AdminOrderStatusServiceTest {
     }
 
     @Test
-    @DisplayName("관리자 확정(PENDING → CONFIRMED)은 OrderCancelled 를 내지 않는다 — 취소 갈래만 바뀐다 (TASK-BE-646 · 확정 무발행은 소유자 결정 대기)")
+    @DisplayName("거부된 관리자 확정(PENDING → CONFIRMED)은 OrderCancelled 도 내지 않는다 — 거부는 취소 갈래로 새지 않는다 (TASK-BE-646 · 확정 제거는 TASK-BE-648)")
     void changeStatus_confirm_publishesNoOrderCancelled() {
         String orderId = "order-646-confirm";
         Order order = createOrderWithStatus(orderId, OrderStatus.PENDING);
         given(orderRepository.findById(orderId)).willReturn(Optional.of(order));
-        given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(clock.instant()).willReturn(FIXED_NOW);
 
-        adminOrderStatusService.changeStatus(orderId, "CONFIRMED");
+        assertThatThrownBy(() -> adminOrderStatusService.changeStatus(orderId, "CONFIRMED"))
+                .isInstanceOf(InvalidOrderException.class);
 
         verify(orderEventPublisher, never()).publishOrderCancelled(any());
     }

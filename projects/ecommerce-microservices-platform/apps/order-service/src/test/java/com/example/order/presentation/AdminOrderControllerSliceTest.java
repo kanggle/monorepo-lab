@@ -121,21 +121,41 @@ class AdminOrderControllerSliceTest {
     // ─── POST /api/admin/orders/{orderId}/status ─────────────────────────
 
     @Test
-    @DisplayName("유효한 상태 CONFIRMED로 변경 시 200과 변경된 상태 반환 (operator-plane, TASK-MONO-795 서비스 재검사)")
+    @DisplayName("유효한 상태 CANCELLED로 변경 시 200과 변경된 상태 반환 (operator-plane, TASK-MONO-795 서비스 재검사 · 운영자가 정할 수 있는 유일한 상태 — TASK-BE-648)")
     void changeStatus_validStatus_returns200WithUpdatedStatus() throws Exception {
-        given(adminOrderStatusService.changeStatus(eq("order-1"), eq("CONFIRMED")))
-                .willReturn(new AdminOrderStatusChangeResult("order-1", "CONFIRMED"));
+        given(adminOrderStatusService.changeStatus(eq("order-1"), eq("CANCELLED")))
+                .willReturn(new AdminOrderStatusChangeResult("order-1", "CANCELLED"));
 
         // TASK-MONO-795: a business-role header — the service now re-checks it (was: no X-User-Role header) — operator-plane write: authz is the gateway's
         // OPERATOR + tenant_id + WHERE tenant_id, not this controller.
         mockMvc.perform(post("/api/admin/orders/order-1/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"status": "CONFIRMED"}
+                                {"status": "CANCELLED"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value("order-1"))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("PENDING 주문을 운영자가 CONFIRMED로 변경 요청 시 400 INVALID_ORDER_REQUEST (BE-645 와 같은 오류 형태 — TASK-BE-648)")
+    void changeStatus_pendingToConfirmed_returns400InvalidOrderRequest() throws Exception {
+        given(adminOrderStatusService.changeStatus(eq("order-p"), eq("CONFIRMED")))
+                .willThrow(new com.example.order.domain.exception.InvalidOrderException(
+                        "An order cannot be confirmed by an operator (current status: PENDING); "
+                                + "orders are confirmed only by the payment / stock-reservation saga. "
+                                + "An operator may only cancel an order (from PENDING, CONFIRMED or BACKORDERED)"));
+
+        mockMvc.perform(post("/api/admin/orders/order-p/status").header("X-User-Role", "ECOMMERCE_OPERATOR,ECOMMERCE_ORDER_READ,ECOMMERCE_ORDER_WRITE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status": "CONFIRMED"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ORDER_REQUEST"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("cannot be confirmed by an operator")))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test

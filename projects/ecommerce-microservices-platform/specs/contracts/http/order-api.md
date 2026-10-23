@@ -245,7 +245,7 @@ Cancel an order. Only the order owner may cancel.
 | Status | Description |
 |---|---|
 | `PENDING` | Order placed, awaiting confirmation |
-| `CONFIRMED` | Order confirmed by system or admin |
+| `CONFIRMED` | Order confirmed by the system (payment / stock-reservation saga) — never by an admin (TASK-BE-648) |
 | `BACKORDERED` | Paid, but stock could not be reserved; held until a restock re-reserves it (system-driven `→ CONFIRMED`) or it is cancelled |
 | `SHIPPED` | Order shipped |
 | `DELIVERED` | Order delivered |
@@ -403,16 +403,26 @@ Get order detail (admin view). Includes order owner userId.
 Change order status (admin only).
 
 **Allowed transitions (operator-initiated):**
-- `PENDING` → `CONFIRMED`
-- `PENDING`, `CONFIRMED` or `BACKORDERED` → `CANCELLED`
-- `CONFIRMED` → `CONFIRMED` is an idempotent no-op (`200`, status unchanged).
+- `PENDING`, `CONFIRMED` or `BACKORDERED` → `CANCELLED` — **the only status an operator can set.**
 
-**From `BACKORDERED`, only `CANCELLED` is operator-settable** (TASK-BE-645). A
-`BACKORDERED` order holds **no** stock reservation; it reaches `CONFIRMED` solely via the
-restock re-reservation saga (`StockChanged(ORDER_RESERVED)` → `OrderConfirmed`, see
-`events/order-events.md` § Order lifecycle & BACKORDERED). Submitting `status: CONFIRMED`
-for a `BACKORDERED` order returns `400 INVALID_ORDER_REQUEST` and leaves the order
-unchanged — an operator confirm would skip the reservation and emit no `OrderConfirmed`.
+**`CONFIRMED` is not operator-settable, from any current status** (TASK-BE-648). An order is
+confirmed solely by the payment / stock-reservation saga (`OrderConfirmationService` — the
+`StockChanged(ORDER_RESERVED)` consumer, the restock re-reservation of a `BACKORDERED` order, and
+the system stale-paid forward-confirm `POST /api/internal/orders/confirm-paid-stale`), which is
+the path that reserves stock and emits `OrderConfirmed` (`events/order-events.md` § OrderConfirmed).
+Submitting `status: CONFIRMED` returns `400 INVALID_ORDER_REQUEST` and leaves the order unchanged
+(no save, no event) — for a `PENDING`, a `BACKORDERED` (TASK-BE-645) and an already-`CONFIRMED`
+order alike. A missing order is still `404`.
+
+> **History — conflict resolved (TASK-BE-648, 2026-10-22).** This section used to allow
+> `PENDING → CONFIRMED` and a `CONFIRMED → CONFIRMED` idempotent no-op (`200`), while
+> `events/order-events.md:84-89` says `OrderConfirmed` is published whenever an order is
+> confirmed, co-committed with the transition. The operator path did neither: it saved
+> `CONFIRMED` with no stock reservation and no `OrderConfirmed`. A later payment then found the
+> order already `CONFIRMED` (`Order.confirm` → `false`), so `OrderConfirmed` was **never**
+> emitted — no shipment — and if payment never came the order also left the stuck-order sweep,
+> which targets `PENDING` only. TASK-BE-645 first closed `BACKORDERED → CONFIRMED`; TASK-BE-648
+> closes the rest. The event contract wins: every confirmation goes through the saga.
 
 **`CANCELLED` is an operator cancel with the full compensation fan-out** (TASK-BE-646). It
 runs the same application path as the internal operator cancel
@@ -437,7 +447,7 @@ preventing order/shipping status divergence.
 **Request Body**
 ```json
 {
-  "status": "CONFIRMED"
+  "status": "CANCELLED"
 }
 ```
 
@@ -445,14 +455,14 @@ preventing order/shipping status divergence.
 ```json
 {
   "orderId": "string (UUID)",
-  "status": "CONFIRMED"
+  "status": "CANCELLED"
 }
 ```
 
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
-| 400 | INVALID_ORDER_REQUEST | Invalid status value or transition (incl. `BACKORDERED` → `CONFIRMED`) |
+| 400 | INVALID_ORDER_REQUEST | Invalid status value or transition — incl. `status: CONFIRMED` from any current status (TASK-BE-648), and `SHIPPED` / `DELIVERED` / `PENDING` |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Requires ADMIN role |
 | 404 | ORDER_NOT_FOUND | Order with given ID does not exist |

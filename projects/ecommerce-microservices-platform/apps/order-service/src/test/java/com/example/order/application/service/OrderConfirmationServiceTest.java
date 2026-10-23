@@ -54,7 +54,7 @@ class OrderConfirmationServiceTest {
     );
 
     @Test
-    @DisplayName("PENDING 주문 확정 시 CONFIRMED 상태로 변경되고 메트릭이 기록된다")
+    @DisplayName("PENDING 주문 확정 시 CONFIRMED 상태로 변경되고 메트릭이 기록되고 OrderConfirmed 가 발행된다 — 운영자 확정 제거(TASK-BE-648)가 사가의 PENDING → CONFIRMED 를 막지 않는다")
     void confirmOrder_pendingOrder_becomesConfirmedAndRecordsMetrics() {
         Order order = Order.create("user1",
                 List.of(new Order.OrderItemData("p1", "v1", "노트북", null, 1, 1000L)),
