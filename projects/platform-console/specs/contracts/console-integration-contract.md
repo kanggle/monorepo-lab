@@ -982,7 +982,7 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
      day strings are KST days, so «UTC 기준» becomes wrong and, between 00:00 and
      09:00 KST, the UTC `to` omits the newest day. Switching this card to a KST
      window + label must therefore ship **with** that bake, not after it
-     (`TASK-MONO-814`).
+     (`TASK-MONO-815`).
   - **Zero-fill (normative).** § 1.2 lists **only days that have a row** (a
     day with no putaway and no shipment is absent, not `0`). The console fills
     every date `from..to` (inclusive) that the response omits with

@@ -1,6 +1,6 @@
 # Task ID
 
-TASK-MONO-814
+TASK-MONO-815
 
 # Title
 
@@ -24,6 +24,7 @@ monorepo
 ---
 
 > **분석 모델:** Opus 5.5 / **구현 권장:** Sonnet (콘솔 한 카드 · 문구 · 시험)
+> 🔵 **번호 변경 2026-10-24 UTC**: `TASK-MONO-814` 로 기안됐다가(#4506) 동시 세션의 `TASK-MONO-814`(데모 주소 해석기, PR #4508)와 겹쳐 815 로 옮겼다 — 이쪽은 착수 전이고 저쪽은 진행 중이라.
 > ⏳ **DO NOT MERGE before** wms admin-service V6(`TASK-MONO-808`)를 담은 AMI 가 데모에 올라가는 창. 콘솔은 Vercel 이라 머지 즉시 나간다 — 먼저 나가면 화면이 «한국 시간» 이라 말하는데 데이터는 아직 UTC 날이다.
 
 # Dependency Markers
