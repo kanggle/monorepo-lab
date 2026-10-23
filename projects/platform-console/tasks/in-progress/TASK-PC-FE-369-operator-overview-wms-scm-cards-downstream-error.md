@@ -164,3 +164,27 @@ Fix issue found in TASK-PC-FE-364. 33차 창(2026-10-23 UTC), 로그인(`demo-co
 기전 (e) 가 측정으로 확인됐을 때의 수선 후보(지금 구현하지 않음):
 
 - `@demo/backend-resolver` 의 `resolveSnapshot` 에 진행 중 약속 공유(동시 호출은 `/status` 하나를 기다린다) + 실패 결과가 좋은 캐시를 덮어쓰지 않게. 🔴 `infra/demo/` 는 공유 경로 — 루트 티켓(세 앱이 같은 해석기를 쓴다). 콘솔 쪽만 고치려 `demo-backend.ts` 에 캐시를 두면 `scripts/check-demo-resolver-copies.sh` 의 «앱 안의 구현» 지문에 걸릴 수 있다(그 파일 헤더 `:11-14`).
+
+# 측정 (2026-10-24 UTC)
+
+> 위 «다음 창 · 그 전에 잴 것» 1 · 2 를 메인 세션이 쟀다 — 읽기 전용 CloudWatch, 33차 창 2026-10-23 13:25–13:45 UTC. 🔵 기전 (e) 가 **1 분 해상도로 확인**됐다.
+
+| 지표 (분당) | 13:32 | 13:33 | 13:35 | 13:37 | 그 밖의 분 |
+|---|---|---|---|---|---|
+| 람다 `portfolio-demo-control` `Throttles` (Sum) | 4 | 4 | 12 | 4 | 0 |
+| 람다 `ConcurrentExecutions` (Max) | 10 | 10 | 10 | 10 | 2 |
+| API Gateway `$default` `5xx` (Sum) | 4 | 4 | 12 | 4 | 0 |
+| API Gateway `$default` `4xx` (Sum) | 0 | 0 | 0 | 0 | 0 |
+
+- `aws lambda get-account-settings`: 계정 `ConcurrentExecutions` 한도 **10** · 미예약 10 · 이 함수의 예약 동시성 없음. 스테이지 스로틀 rate 5 / burst 10(`infra/demo/aws/terraform/main.tf:516-517`) 은 **발화하지 않았다**(4xx 0) — 걸린 것은 계정 동시 실행 한도다. 위 «남는 기전» 4 의 «스로틀을 넘기면 429» 추정은 틀린 갈래였고, 실제 갈래는 람다 스로틀 → 5xx 다(어느 쪽이든 `fetchStatus` 는 `null` 이라 결과는 같다).
+- 그 분들은 로그인 개요를 연 때(13:33 · ~13:36)와 그 사이 점검들이다.
+- ⇒ 동시 `/status` 가 10 을 넘는다 → 스로틀 → 5xx → `resolveSnapshot` 이 `null` 을 캐시(좋은 스냅샷을 덮는다) → 다리가 `*.local` 로 → fetch 가 던진다 → `DOWNSTREAM_ERROR`. 🔵 **어느 다리가** 스로틀된 조회를 받았는지는 여전히 추론이다(지표는 요청을 세지 호출자를 세지 않는다).
+
+## 소유자 결정 (2026-10-24 선택 창)
+
+«주소 조회를 한 번으로 묶기» — 코드로 고친다. 공유 `@demo/backend-resolver` 가 동시 조회를 진행 중 `/status` **하나**로 묶고, 실패한 조회가 좋은 캐시를 덮지 않는다. AWS 무변경.
+
+## 수선의 자리 — `TASK-MONO-814` (같은 PR)
+
+- `infra/demo/` 는 공유 경로라 수선은 루트 티켓 `tasks/in-progress/TASK-MONO-814-demo-backend-resolver-single-flight.md` 이 싣는다. 이 티켓의 콘솔 쪽 변경은 그 수선의 시험(`tests/unit/demo-backend.test.ts`)뿐이고 같은 PR 에 탄다.
+- 🔴 **이 티켓은 열어 둔다.** AC-1 은 814 의 AC-1~4 로 닫히지만 AC-2(라이브)는 다음 창 — 차가운 개요의 여섯 카드 + 그 분 람다 `Throttles` 0(814 AC-6) — 를 기다린다.
