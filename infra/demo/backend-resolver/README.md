@@ -39,6 +39,26 @@ export const {
 
 ---
 
+## 조회는 한 번 · 실패는 좋은 답을 안 덮는다 (`TASK-MONO-814`)
+
+33차 창(2026-10-23 UTC)에서 콘솔 개요 한 렌더가 다리마다 `/status` 를 따로 쳤다. 그 요청들이
+계정의 Lambda 동시 실행 한도 **10** 을 넘겨 스로틀됐다(분당 Throttles 4·4·12·4, APIGW 5xx 도
+같은 수, 4xx 는 0). 실패한 조회는 `null` 을 캐시해 좋은 스냅샷을 덮었고, 그 다리들은 `*.local`
+로 떨어져 `DOWNSTREAM_ERROR` 를 냈다(`TASK-PC-FE-369` § 측정).
+
+| 성질 | 동작 |
+|---|---|
+| **single-flight** | 캐시가 비었거나 만료된 채로 동시에 들어온 호출은 진행 중인 `/status` **하나**를 같이 기다린다. 해석기 인스턴스(= 프로세스) 단위이고, 서버 인스턴스끼리는 묶지 않는다. |
+| **keep-last-good** | 조회 **실패**(비-2xx · 스로틀 · 2 s 시한 · 네트워크 · 비-JSON · 객체 아닌 본문) 때 마지막 좋은 답의 나이가 **60 s 이하**(`STALE_ON_ERROR_MAX_MS`)이면 그 답을 준다. 그 밖에는 예전처럼 `null` 이다. |
+| 실패 캐시 | 그대로다. 실패도 TTL(15 s) 동안 캐시하므로 실효 상한은 **75 s** 다. |
+| 확정 답 | 🔴 `stopped` · ip 없음은 실패가 **아니다**. 즉시 `null` 이고 마지막 좋은 답도 지운다. 옛 IP 로 조용히 붙지 않는다. |
+
+🔵 60 s 인 이유: IP 는 부팅 때만 바뀌고 부팅은 약 11 분이 걸린다. 그래서 1 분 전 주소가 그사이
+다른 running 인스턴스의 주소가 될 수 없다. 남는 위험은 «그사이 멈췄는데 `/status` 도 마침
+실패한다» 하나이고, 상한이 그 창을 묶는다.
+
+---
+
 ## 자리 — 왜 `infra/demo/` 이고 왜 나머지가 아닌가
 
 `TASK-MONO-614 AC-1` 이 *"고르고 나서 「왜 나머지가 아닌가」를 적어라"* 를 요구한다.
@@ -200,6 +220,13 @@ node -e "console.log(require('fs').realpathSync('node_modules/@demo/backend-reso
 `ecommerce + fan-platform + console-web` 워크스페이스를 돌 뿐, `infra/` 를 돌지 않는다.
 러너 없는 스위트는 썩고, 썩은 스위트는 «있다» 는 이유로 아무도 안 본다.
 스위트를 여기 두려면 **CI 잡을 같이** 만들어야 한다.
+
+🔵 `TASK-MONO-814` 의 시험(single-flight · keep-last-good)도 같은 이유로 소비자 쪽에 산다.
+결함이 드러난 콘솔의 `projects/platform-console/apps/console-web/tests/unit/demo-backend.test.ts`
+§ `TASK-MONO-814` 다. 🔴 `ci.yml` 의 `platform-console` · `ecommerce` · `fan` 경로 필터는
+`infra/demo/backend-resolver/**` 를 안 본다(2026-10-24 판독). 그래서 이 패키지**만** 바꾼 PR 에서는
+PR 단계에서 세 소비자 스위트가 **안 돈다**. `main` push 에서는 `code-changed` 로 돌므로, 빨강은
+머지 **뒤에야** 보인다. 이 패키지를 고칠 때는 소비자 스위트를 로컬에서 직접 돌려라.
 
 ---
 

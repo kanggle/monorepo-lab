@@ -28,6 +28,9 @@
 //     가장 나쁘다 — 그 IP 는 이미 **남의 인스턴스**일 수 있다(AWS 가 회수해 재할당한다).
 //  3. `/status` 가 실패하면(5xx·타임아웃·비-JSON) **기존 동작으로 떨어진다**. 판정 불가를
 //     "꺼짐" 으로도 "켜짐" 으로도 번역하지 않는다.
+//     🔵 단 **1분 안에 받은 좋은 답이 있으면** 그것을 준다(`TASK-MONO-814`, 아래
+//     `STALE_ON_ERROR_MAX_MS`) — 실패 한 번이 좋은 캐시를 덮지 않게. 그리고 동시 호출은
+//     `/status` **하나**를 같이 기다린다. 둘 다 «실패» 에만 걸리고 «확정 답» 은 그대로다.
 //
 // -----------------------------------------------------------------------------
 // 🔵 서버 전용이다
@@ -141,6 +144,23 @@ const STATUS_TIMEOUT_MS = 2_000;
  */
 const CACHE_TTL_MS = 15_000;
 
+/**
+ * 조회가 **실패**했을 때 마지막 좋은 스냅샷을 계속 줄 수 있는 나이의 상한 (`TASK-MONO-814`).
+ *
+ * 🔴🔴 왜 있나: 33차 창(2026-10-23 UTC)에 콘솔 개요 한 렌더의 `/status` 가 계정 동시 실행
+ *    한도(10)를 넘겨 스로틀됐고(람다 Throttles 4·4·12·4 = APIGW 5xx 같은 수), 이전 판은 그
+ *    실패를 `null` 로 **캐시해 좋은 스냅샷을 덮었다** → 다리들이 `*.local` 로 떨어져
+ *    `DOWNSTREAM_ERROR`. 실패 한 번이 15 초 동안 그 프로세스의 모든 다리를 죽인 것이다.
+ *
+ * 🔵 왜 60초인가: 데모 IP 는 **부팅 때만** 바뀌고 부팅은 약 11분이다 ⇒ 60초 전에 running 이던
+ *    인스턴스의 주소가 그사이 **다른 running 인스턴스**의 주소가 될 수는 없다. 남는 위험은
+ *    «그사이 멈췄고 `/status` 도 마침 실패한다» 뿐이고, 상한이 그 창을 1분으로 묶는다.
+ *    (멈춤 자체는 `/status` 가 `stopped` 로 **답하므로** 실패가 아니다 — 아래 resolveSnapshot.)
+ * 🔴 실효 상한은 이 값 + `CACHE_TTL_MS` 다: 실패도 TTL 동안 캐시하므로, 상한 직전에 실패해
+ *    채운 칸은 최대 75초 된 스냅샷을 준다. 나이는 «좋은 답을 받은 시각» 에서 잰다.
+ */
+const STALE_ON_ERROR_MAX_MS = 60_000;
+
 function controlPlaneBase(): string | null {
   const raw = process.env.DEMO_API_BASE;
   if (typeof raw !== 'string') return null;
@@ -163,6 +183,13 @@ function controlPlaneBase(): string | null {
  * 부팅을 대조한다. 이 파일은 그 가드의 모집단이 아니므로, 규칙을 바꿀 일이 생기면
  * **세 곳을 함께** 고쳐야 한다.
  */
+/** 한 번의 `/status` 답에서 나온 것. 🔴 주소와 `starting` 은 **같은 답**에서 와야 한다. */
+interface Snapshot {
+  at: number;
+  value: DemoBackend | null;
+  starting: boolean;
+}
+
 function demoDomainFromIp(ip: string): string {
   return `${ip.replace(/\./g, '-')}.sslip.io`;
 }
@@ -201,21 +228,43 @@ export function createDemoBackendResolver(
 ): DemoBackendResolver {
   // 🔴 `starting` 은 **주소와 같은 응답**에서 온 값이어야 한다 — 따로 캐시하면 TTL 경계에서
   //    «새 주소 + 옛 준비여부» 가 섞인다. 그래서 한 칸에 같이 둔다.
-  let cache: { at: number; value: DemoBackend | null; starting: boolean } | null = null;
+  let cache: Snapshot | null = null;
 
-  const resolveSnapshot = async (
-    base: string,
-  ): Promise<{ value: DemoBackend | null; starting: boolean }> => {
-    const now = Date.now();
-    if (cache && now - cache.at < CACHE_TTL_MS) return cache;
+  // 🔴🔴 TASK-MONO-814 — **진행 중 조회 하나**. 캐시가 비었거나 만료된 채로 동시에 들어온
+  //    호출들은 이 약속 하나를 같이 기다린다. 이전 판은 호출마다 `/status` 를 따로 쳤고, 콘솔
+  //    개요 한 렌더(다리 13개 이상)가 그것만으로 계정 동시 실행 한도 10 을 넘겼다.
+  // 🔵 인스턴스(= 프로세스 안의 이 해석기) 단위다 — 서로 다른 서버 인스턴스끼리는 묶지
+  //    않는다. 그것까지 묶으려면 이 모듈 밖의 공유 상태가 필요하고, 그것은 이 티켓 범위 밖이다.
+  let inFlight: Promise<Snapshot> | null = null;
 
+  // 🔴 TASK-MONO-814 — 마지막 **좋은**(주소를 만든) 답. 조회가 **실패**했을 때만 쓴다.
+  //    확정 답(`stopped`·ip 없음)이 오면 지운다 — «꺼졌다» 는 답을 옛 주소로 가리면 안 된다.
+  let lastGood: (Snapshot & { value: DemoBackend }) | null = null;
+
+  const lookup = async (base: string): Promise<Snapshot> => {
     const status = await fetchStatus(base);
+    const at = Date.now();
+
+    // 🔴🔴 **실패**와 **확정 답**을 가른다. 실패 = 5xx·스로틀·시한·네트워크·비-JSON·객체가
+    //    아닌 본문 — 컨트롤 플레인이 «모른다» 고 한 것이 아니라 **대답을 못 한** 것이다.
+    if (status === null || typeof status !== 'object') {
+      // 마지막 좋은 답이 상한 안이면 그것을 준다 — 실패가 좋은 캐시를 **덮지 않는다**.
+      if (lastGood && at - lastGood.at <= STALE_ON_ERROR_MAX_MS) {
+        cache = { at, value: lastGood.value, starting: lastGood.starting };
+      } else {
+        // 좋은 답이 없었거나 너무 오래됐다 ⇒ 이전 판과 같다: 판정 불가 → `null`.
+        // 🔵 실패도 TTL 동안 캐시한다 — 컨트롤 플레인이 죽었을 때 매 요청 재시도하지 않는다.
+        cache = { at, value: null, starting: false };
+      }
+      return cache;
+    }
+
     let value: DemoBackend | null = null;
     let starting = false;
 
     // 🔴 `state` 와 `ip` 를 **둘 다** 요구한다. `state=running` 인데 `ip` 가 없는 반쪽
     //    응답으로 주소를 만들면, 만들어진 주소가 무엇을 가리키는지 아무도 모른다.
-    if (status && status.state === 'running' && isPlausibleIpv4(status.ip)) {
+    if (status.state === 'running' && isPlausibleIpv4(status.ip)) {
       const demoDomain = demoDomainFromIp(status.ip);
       value = {
         baseUrl: `http://${config.servicePrefix}.${demoDomain}`,
@@ -228,8 +277,24 @@ export function createDemoBackendResolver(
       starting = status.selection_ready === false;
     }
 
-    cache = { at: now, value, starting };
+    cache = { at, value, starting };
+    // 🔴 확정 답이 «주소 없음» 이면 마지막 좋은 답도 지운다 — 그 뒤의 실패가 옛 IP 를
+    //    되살리면 «조용히 옛 IP 로 붙는다»(헤더 2번)가 된다.
+    lastGood = value ? { at, value, starting } : null;
     return cache;
+  };
+
+  const resolveSnapshot = async (base: string): Promise<Snapshot> => {
+    if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache;
+    if (inFlight) return inFlight;
+
+    const p = lookup(base).finally(() => {
+      // 🔴 끝나면(성공이든 실패든) 비운다 — 실패한 약속을 붙잡아 두면 TTL 이 지나도 다시
+      //    묻지 않는다. `reset` 이 그사이 새 약속을 걸었을 수 있으므로 **자기 것일 때만** 비운다.
+      if (inFlight === p) inFlight = null;
+    });
+    inFlight = p;
+    return p;
   };
 
   const resolveDemoBackend = async (): Promise<DemoBackend | null> => {
@@ -261,6 +326,8 @@ export function createDemoBackendResolver(
 
   const __resetDemoBackendCache = (): void => {
     cache = null;
+    inFlight = null;
+    lastGood = null;
   };
 
   return {
