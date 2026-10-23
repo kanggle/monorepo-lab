@@ -1,6 +1,8 @@
 package com.example.shipping.infrastructure.event;
 
 import com.example.messaging.dedupe.EventDedupePort;
+import com.example.shipping.domain.model.Shipping;
+import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.repository.ShippingRepository;
 import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -12,13 +14,23 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 /**
  * Backorder/cancel path of the storefront→warehouse loop (ADR-MONO-022 §D4):
  * consumes the wms {@code outbound.order.cancelled} event and raises an ops alert.
  *
- * <p>This consumer stays <b>alert-only</b> and intentionally leaves the Shipping in
- * {@code PREPARING} (flagged via the alert log): at backorder time no Shipping row
- * typically exists yet, and {@code ShippingStatus} has no terminal CANCELLED state.
+ * <p>This consumer stays <b>alert-only</b>: it never mutates the Shipping (at backorder time
+ * no Shipping row typically exists yet; the order cancel is order-service's, below).
+ *
+ * <p><b>Echo suppression (ADR-MONO-022 D4 v2(d), TASK-BE-649).</b> When ecommerce cancels an
+ * order, {@link OrderCancelledEventConsumer} moves the Shipping {@code PREPARING → CANCELLED}
+ * and asks wms to cancel; a wms auto-cancel then emits this very event back. If the local
+ * Shipping row is already {@code CANCELLED}, the event is that echo (or a wms admin finishing
+ * the cancel we asked for after put-back), not a warehouse problem, so the {@code ALERT} is
+ * replaced by an INFO line. Every other case — no row, {@code PREPARING} (backorder),
+ * {@code SHIPPED}+ — still raises the {@code ALERT}. The decision reads the Shipping status, not
+ * the echoed {@code reason}.
  *
  * <p>As of ADR-022 §D4 <b>v2(a)</b> (TASK-MONO-197) the order cancel + refund is owned
  * by <b>order-service</b>'s own consumer of this topic (group {@code order-service-wms}),
@@ -58,9 +70,22 @@ public class WmsOutboundCancelledConsumer {
             return;
         }
 
-        TenantContext.set(resolveTenant(event.tenantId(), event.payload().orderNo()));
+        String orderNo = event.payload().orderNo();
+        Optional<Shipping> row = (orderNo == null || orderNo.isBlank())
+                ? Optional.empty()
+                : shippingRepository.findByOrderId(orderNo);
+
+        TenantContext.set(resolveTenant(event.tenantId(), row));
         try {
-            // ALERT: warehouse could not fulfill — backorder/cancel. v1 leaves Shipping in PREPARING.
+            if (row.isPresent() && row.get().getStatus() == ShippingStatus.CANCELLED) {
+                // Echo of the cancel shipping-service requested (D4 v2(d)) — not a warehouse alert.
+                log.info("wms outbound.cancelled for an already-CANCELLED shipping — echo of our own "
+                                + "cancel request, ALERT suppressed. tenantId={}, orderNo={}, previousStatus={}, reason={}",
+                        TenantContext.currentTenant(), orderNo,
+                        event.payload().previousStatus(), event.payload().reason());
+                return;
+            }
+            // ALERT: warehouse could not fulfill — backorder/cancel. The Shipping is not mutated.
             log.error("ALERT wms outbound cancelled — backorder/manual intervention needed. "
                             + "tenantId={}, orderNo={}, previousStatus={}, reason={}",
                     TenantContext.currentTenant(), event.payload().orderNo(),
@@ -72,18 +97,13 @@ public class WmsOutboundCancelledConsumer {
 
     /**
      * Envelope {@code tenantId} when present; otherwise the local Shipping row's
-     * tenant by {@code orderNo} (a row may not exist yet at backorder time → then
+     * tenant (looked up by {@code orderNo}; a row may not exist yet at backorder time → then
      * {@code null} → default tenant, net-zero D8).
      */
-    private String resolveTenant(String envelopeTenantId, String orderNo) {
+    private static String resolveTenant(String envelopeTenantId, Optional<Shipping> row) {
         if (envelopeTenantId != null && !envelopeTenantId.isBlank()) {
             return envelopeTenantId;
         }
-        if (orderNo == null || orderNo.isBlank()) {
-            return null;
-        }
-        return shippingRepository.findByOrderId(orderNo)
-                .map(s -> s.getTenantId())
-                .orElse(null);
+        return row.map(Shipping::getTenantId).orElse(null);
     }
 }

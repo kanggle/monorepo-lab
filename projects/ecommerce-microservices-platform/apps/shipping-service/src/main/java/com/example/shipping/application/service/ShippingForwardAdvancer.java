@@ -18,6 +18,10 @@ import java.util.Optional;
  * unchanged (shipments never regress). Returns the <em>original</em> status when a net
  * change occurred (so the caller can publish one consolidated {@code original → final}
  * event), or {@link Optional#empty()} when nothing changed.
+ *
+ * <p><b>CANCELLED (TASK-BE-649).</b> {@code CANCELLED} is declared last in
+ * {@link ShippingStatus}, after {@code DELIVERED}, so every carrier goal is "behind" a cancelled
+ * shipment and this loop never runs for it — a carrier report cannot resurrect a cancel.
  */
 public final class ShippingForwardAdvancer {
 

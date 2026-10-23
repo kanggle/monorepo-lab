@@ -155,6 +155,88 @@ class ShippingTest {
                 .isInstanceOf(InvalidStatusTransitionException.class);
     }
 
+    // ─── TASK-BE-649 (ADR-MONO-022 D4 v2(d)) — cancel ───────────────────────
+
+    @Test
+    @DisplayName("BE-649: PREPARING 배송을 cancel 하면 CANCELLED + 히스토리 기록, 이전 상태 PREPARING 반환")
+    void cancel_preparing_becomesCancelled() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        shipping.markWmsRouted();
+
+        ShippingStatus previous = shipping.cancel(clock);
+
+        assertThat(previous).isEqualTo(ShippingStatus.PREPARING);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        assertThat(shipping.getStatusHistory()).hasSize(2);
+        assertThat(shipping.getStatusHistory().get(1).status()).isEqualTo(ShippingStatus.CANCELLED);
+        assertThat(shipping.getUpdatedAt()).isEqualTo(Instant.parse("2026-01-01T00:00:00Z"));
+        // the routing flag is a fact about the past, not a state — cancel keeps it
+        assertThat(shipping.isWmsRouted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("BE-649: SHIPPED 배송은 cancel 불가 (출고 뒤 = 반품 흐름)")
+    void cancel_shipped_throws() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
+
+        assertThatThrownBy(() -> shipping.cancel(clock))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
+        assertThat(shipping.getStatusHistory()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("BE-649: IN_TRANSIT / DELIVERED 배송도 cancel 불가")
+    void cancel_inTransitOrDelivered_throws() {
+        Shipping inTransit = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        inTransit.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", clock);
+        inTransit.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock);
+
+        Shipping delivered = Shipping.create("tenant-a", "order-2", "user-1", clock);
+        delivered.transitionTo(ShippingStatus.SHIPPED, "TRK-002", "CJ대한통운", clock);
+        delivered.transitionTo(ShippingStatus.IN_TRANSIT, null, null, clock);
+        delivered.transitionTo(ShippingStatus.DELIVERED, null, null, clock);
+
+        assertThatThrownBy(() -> inTransit.cancel(clock)).isInstanceOf(InvalidStatusTransitionException.class);
+        assertThatThrownBy(() -> delivered.cancel(clock)).isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(inTransit.getStatus()).isEqualTo(ShippingStatus.IN_TRANSIT);
+        assertThat(delivered.getStatus()).isEqualTo(ShippingStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("BE-649: 이미 CANCELLED 면 다시 cancel 불가 (자기 전이 없음)")
+    void cancel_alreadyCancelled_throws() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        shipping.cancel(clock);
+
+        assertThatThrownBy(() -> shipping.cancel(clock))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(shipping.getStatusHistory()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("BE-649: transitionTo 는 CANCELLED 를 거부한다 — 운영자 PUT 경로로는 닿지 않는다")
+    void transitionTo_cancelled_rejectedEvenFromPreparing() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
+
+        assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.CANCELLED, null, null, clock))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.PREPARING);
+        assertThat(shipping.getStatusHistory()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("BE-649: CANCELLED 에서 SHIPPED 로 되살릴 수 없다")
+    void transitionTo_fromCancelled_rejected() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        shipping.cancel(clock);
+
+        assertThatThrownBy(() -> shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ", clock))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+    }
+
     @Test
     @DisplayName("statusHistory는 불변 리스트")
     void getStatusHistory_returnsUnmodifiableList() {

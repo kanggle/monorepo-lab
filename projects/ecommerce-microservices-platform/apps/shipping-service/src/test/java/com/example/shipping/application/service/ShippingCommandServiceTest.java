@@ -1,5 +1,6 @@
 package com.example.shipping.application.service;
 
+import com.example.shipping.application.command.CancelShippingCommand;
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.command.UpdateShippingStatusCommand;
 import com.example.web.exception.AccessDeniedException;
@@ -148,6 +149,144 @@ class ShippingCommandServiceTest {
         verify(shippingRepository, never()).save(any());
         verify(shippingEventPublisher, never()).publishShippingStatusChanged(
                 any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-649: markShippedByOrderId — 이미 CANCELLED 배송이면 되살리지 않는다 (ALERT + no-op, 예외 없음)")
+    void markShippedByOrderId_cancelled_alertNoOp() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        shipping.cancel(fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        assertThatCode(() -> shippingCommandService.markShippedByOrderId("order-1", "SHP-001", "CJ-LOGISTICS"))
+                .doesNotThrowAnyException();
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        assertThat(shipping.getTrackingNumber()).isNull();
+        verify(shippingRepository, never()).save(any());
+        verify(shippingEventPublisher, never()).publishShippingStatusChanged(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-649: 운영자 PUT 으로 CANCELLED 를 요청하면 INVALID_STATUS_TRANSITION (시스템 전용 대상)")
+    void updateStatus_cancelledTarget_rejected() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByIdForTenant(shipping.getShippingId())).willReturn(Optional.of(shipping));
+
+        assertThatThrownBy(() -> shippingCommandService.updateStatus(
+                new UpdateShippingStatusCommand(shipping.getShippingId(), ShippingStatus.CANCELLED, null, null,
+                        false, "ECOMMERCE_OPERATOR,ECOMMERCE_SHIPPING_READ,ECOMMERCE_SHIPPING_WRITE")))
+                .isInstanceOf(InvalidStatusTransitionException.class);
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.PREPARING);
+        verify(shippingRepository, never()).save(any());
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    // ─── cancelByOrderId (TASK-BE-649, ADR-MONO-022 D4 v2(d) X-A / Y-A) ─────
+
+    private static final Instant CANCELLED_AT = Instant.parse("2026-10-23T10:00:00Z");
+
+    @Test
+    @DisplayName("BE-649: PREPARING + wmsRouted → CANCELLED 저장 + 같은 호출에서 cancel-requested 발행")
+    void cancelByOrderId_preparingRouted_cancelsAndRequestsWmsCancel() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.cancelByOrderId(new CancelShippingCommand("order-1", CANCELLED_AT));
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        verify(shippingRepository).save(shipping);
+        verify(shippingEventPublisher).publishFulfillmentCancelRequested("tenant-a", "order-1", CANCELLED_AT);
+        // No ShippingStatusChanged for CANCELLED (shipping-events.md — notification copy unapproved).
+        verify(shippingEventPublisher, never()).publishShippingStatusChanged(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-649: PREPARING + wmsRouted=false → CANCELLED 저장, WMS 취소 요청 없음")
+    void cancelByOrderId_preparingNotRouted_cancelsWithoutWmsRequest() {
+        Shipping shipping = Shipping.create("tenant-a", "order-1", "user-1", fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.cancelByOrderId(new CancelShippingCommand("order-1", CANCELLED_AT));
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        verify(shippingRepository).save(shipping);
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("BE-649: SHIPPED 배송은 건드리지 않는다 (반품 흐름 — no-op)")
+    void cancelByOrderId_shipped_noOp() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        assertThatCode(() -> shippingCommandService.cancelByOrderId(
+                new CancelShippingCommand("order-1", CANCELLED_AT))).doesNotThrowAnyException();
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.SHIPPED);
+        verify(shippingRepository, never()).save(any());
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("BE-649: DELIVERED 배송도 no-op")
+    void cancelByOrderId_delivered_noOp() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        shipping.transitionTo(ShippingStatus.SHIPPED, "TRK-001", "CJ대한통운", fixedClock);
+        shipping.transitionTo(ShippingStatus.IN_TRANSIT, null, null, fixedClock);
+        shipping.transitionTo(ShippingStatus.DELIVERED, null, null, fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        shippingCommandService.cancelByOrderId(new CancelShippingCommand("order-1", CANCELLED_AT));
+
+        assertThat(shipping.getStatus()).isEqualTo(ShippingStatus.DELIVERED);
+        verify(shippingRepository, never()).save(any());
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("BE-649: 이미 CANCELLED (재전달) → no-op, 두 번째 취소 요청 없음")
+    void cancelByOrderId_alreadyCancelled_idempotent() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        shipping.cancel(fixedClock);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+
+        assertThatCode(() -> shippingCommandService.cancelByOrderId(
+                new CancelShippingCommand("order-1", CANCELLED_AT))).doesNotThrowAnyException();
+
+        assertThat(shipping.getStatusHistory()).hasSize(2);
+        verify(shippingRepository, never()).save(any());
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("BE-649: 배송 행이 없는 주문(확정 전 취소 · 모르는 주문) → no-op, 예외 없음")
+    void cancelByOrderId_unknownOrder_noOp() {
+        given(shippingRepository.findByOrderId("order-x")).willReturn(Optional.empty());
+
+        assertThatCode(() -> shippingCommandService.cancelByOrderId(
+                new CancelShippingCommand("order-x", CANCELLED_AT))).doesNotThrowAnyException();
+
+        verify(shippingRepository, never()).save(any());
+        verifyNoInteractions(shippingEventPublisher);
+    }
+
+    @Test
+    @DisplayName("BE-649: cancelledAt 이 없으면 requestedAt 은 서비스 시계")
+    void cancelByOrderId_noCancelledAt_usesClock() {
+        Shipping shipping = wmsRoutedPreparingShipping();
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipping));
+        given(shippingRepository.save(any(Shipping.class))).willAnswer(inv -> inv.getArgument(0));
+
+        shippingCommandService.cancelByOrderId(new CancelShippingCommand("order-1", null));
+
+        verify(shippingEventPublisher).publishFulfillmentCancelRequested(
+                "tenant-a", "order-1", Instant.parse("2026-01-01T00:00:00Z"));
     }
 
     @Test

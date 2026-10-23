@@ -1,5 +1,6 @@
 package com.example.shipping.application.service;
 
+import com.example.shipping.application.command.CancelShippingCommand;
 import com.example.shipping.application.command.CreateShippingCommand;
 import com.example.shipping.application.command.UpdateShippingStatusCommand;
 import com.example.shipping.application.port.ShippingEventPublisher;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 
 @Slf4j
 @Service
@@ -71,6 +73,16 @@ public class ShippingCommandService {
         Shipping shipping = shippingRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ShippingNotFoundException(orderId));
 
+        if (shipping.getStatus() == ShippingStatus.CANCELLED) {
+            // TASK-BE-649 (D4 v2(d), Y-A): the order was cancelled and refunded, but wms shipped
+            // anyway — it refused the cancel after pick (X-A), or ship-confirm raced it. Never
+            // resurrect the shipment; this is the return flow and needs a human.
+            log.error("ALERT wms shipped an order whose shipping is CANCELLED — return flow needed. "
+                            + "shippingId={}, orderId={}, tracking={}, carrier={}",
+                    shipping.getShippingId(), orderId, trackingNumber, carrier);
+            return;
+        }
+
         if (shipping.getStatus() == ShippingStatus.SHIPPED
                 || shipping.getStatus() == ShippingStatus.IN_TRANSIT
                 || shipping.getStatus() == ShippingStatus.DELIVERED) {
@@ -85,6 +97,60 @@ public class ShippingCommandService {
 
         log.info("Shipping marked SHIPPED via wms confirmation: shippingId={}, orderId={}, tracking={}, carrier={}",
                 saved.getShippingId(), orderId, trackingNumber, carrier);
+    }
+
+    /**
+     * Pre-dispatch cancel on a consumed {@code OrderCancelled} (ADR-MONO-022 D4 v2(d), X-A /
+     * Y-A, TASK-BE-649). Located by {@code orderId} (tenant-agnostic system path; the row keeps
+     * its own tenant). System-driven, so no operator role check.
+     *
+     * <ul>
+     *   <li>{@code PREPARING} → {@code CANCELLED}. When the row is {@code wmsRouted}, the
+     *       {@code ecommerce.fulfillment.cancel-requested.v1} outbox row is written in this
+     *       same transaction, so wms is asked to cancel exactly when the shipment is.</li>
+     *   <li>{@code SHIPPED} / {@code IN_TRANSIT} / {@code DELIVERED} → logged no-op (the goods
+     *       have left: return flow, not a cancel).</li>
+     *   <li>already {@code CANCELLED} / no row → no-op (redelivery; cancel before confirm).</li>
+     * </ul>
+     *
+     * <p>No {@code ShippingStatusChanged} is published for {@code CANCELLED}: order-service
+     * ignores it and notification-service would send the customer an unapproved shipping notice
+     * (shipping-events.md § ShippingStatusChanged).
+     */
+    @Transactional
+    public void cancelByOrderId(CancelShippingCommand command) {
+        String orderId = command.orderId();
+        Shipping shipping = shippingRepository.findByOrderId(orderId).orElse(null);
+        if (shipping == null) {
+            log.info("cancelByOrderId: no shipping for orderId={} (cancelled before confirm?), skipping",
+                    orderId);
+            return;
+        }
+
+        ShippingStatus current = shipping.getStatus();
+        if (current == ShippingStatus.CANCELLED) {
+            log.info("Shipping for orderId={} already CANCELLED, skipping (idempotent)", orderId);
+            return;
+        }
+        if (!current.canTransitionTo(ShippingStatus.CANCELLED)) {
+            log.warn("Order cancelled after dispatch — shipping not cancelled (return flow). "
+                    + "shippingId={}, orderId={}, status={}", shipping.getShippingId(), orderId, current);
+            return;
+        }
+
+        shipping.cancel(clock);
+        Shipping saved = shippingRepository.save(shipping);
+
+        if (saved.isWmsRouted()) {
+            Instant requestedAt = command.cancelledAt() != null ? command.cancelledAt() : Instant.now(clock);
+            shippingEventPublisher.publishFulfillmentCancelRequested(
+                    saved.getTenantId(), saved.getOrderId(), requestedAt);
+            log.info("Shipping cancelled + wms cancel requested: shippingId={}, orderId={}",
+                    saved.getShippingId(), orderId);
+        } else {
+            log.info("Shipping cancelled (not wms-routed, nothing to ask wms): shippingId={}, orderId={}",
+                    saved.getShippingId(), orderId);
+        }
     }
 
     @Transactional

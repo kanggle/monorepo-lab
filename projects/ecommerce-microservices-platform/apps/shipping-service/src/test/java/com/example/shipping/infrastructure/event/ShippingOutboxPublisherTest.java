@@ -49,6 +49,10 @@ class ShippingOutboxPublisherTest {
                 .isEqualTo("ecommerce.fulfillment.requested.v1");
         assertThat(ShippingOutboxPublisher.topicFor("ManualShipConfirmRequested"))
                 .isEqualTo("ecommerce.shipping.manual-confirm-requested.v1");
+        // TASK-BE-649 — must equal the topic the merged wms consumer listens on
+        // (FulfillmentCancelRequestedConsumer, fulfillment-events.md § Event 3).
+        assertThat(ShippingOutboxPublisher.topicFor("FulfillmentCancelRequested"))
+                .isEqualTo("ecommerce.fulfillment.cancel-requested.v1");
     }
 
     @Test

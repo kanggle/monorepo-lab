@@ -1,6 +1,12 @@
 package com.example.shipping.infrastructure.event;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.example.messaging.dedupe.EventDedupePort;
+import com.example.shipping.domain.model.Shipping;
+import com.example.shipping.domain.model.ShippingStatus;
 import com.example.shipping.domain.repository.ShippingRepository;
 import com.example.shipping.domain.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +18,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,9 +68,27 @@ class WmsOutboundCancelledConsumerTest {
                 });
     }
 
+    private Logger consumerLogger;
+    private ListAppender<ILoggingEvent> logAppender;
+
+    @BeforeEach
+    void captureLogs() {
+        consumerLogger = (Logger) LoggerFactory.getLogger(WmsOutboundCancelledConsumer.class);
+        logAppender = new ListAppender<>();
+        logAppender.start();
+        consumerLogger.addAppender(logAppender);
+    }
+
     @AfterEach
     void clearTenant() {
         TenantContext.clear();
+        consumerLogger.detachAppender(logAppender);
+    }
+
+    private List<ILoggingEvent> alerts() {
+        return logAppender.list.stream()
+                .filter(e -> e.getLevel() == Level.ERROR && e.getFormattedMessage().startsWith("ALERT"))
+                .toList();
     }
 
     private WmsOutboundCancelledEvent event(String reason) {
@@ -106,5 +136,64 @@ class WmsOutboundCancelledConsumerTest {
         consumer.handle(event);
 
         assertThat(TenantContext.currentTenant()).isEqualTo(TenantContext.DEFAULT_TENANT_ID);
+    }
+
+    // ─── TASK-BE-649 — suppress the echo of our own cancel request (ADR-MONO-022 D4 v2(d)) ──
+
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    @DisplayName("BE-649: 배송이 이미 CANCELLED 면 ALERT 를 내지 않는다 (자기가 요청한 취소의 메아리)")
+    void handle_shippingAlreadyCancelled_suppressesAlert() {
+        Shipping cancelled = Shipping.create("store-acme", "order-1", "user-1", CLOCK);
+        cancelled.markWmsRouted();
+        cancelled.cancel(CLOCK);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(cancelled));
+
+        consumer.handle(event("ORDER_CANCELLED"));
+
+        assertThat(alerts()).isEmpty();
+        assertThat(logAppender.list)
+                .anySatisfy(e -> {
+                    assertThat(e.getLevel()).isEqualTo(Level.INFO);
+                    assertThat(e.getFormattedMessage()).contains("order-1");
+                });
+        assertThat(cancelled.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        verify(shippingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BE-649: 배송이 PREPARING 이면 (backorder 등) 여전히 ALERT")
+    void handle_shippingPreparing_stillAlerts() {
+        Shipping preparing = Shipping.create("store-acme", "order-1", "user-1", CLOCK);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(preparing));
+
+        consumer.handle(event("INSUFFICIENT_STOCK"));
+
+        assertThat(alerts()).hasSize(1);
+        assertThat(alerts().get(0).getFormattedMessage()).contains("orderNo=order-1");
+        verify(shippingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("BE-649: 배송 행이 없어도 (backorder 시점) 여전히 ALERT")
+    void handle_noShippingRow_stillAlerts() {
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.empty());
+
+        consumer.handle(event("INSUFFICIENT_STOCK"));
+
+        assertThat(alerts()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("BE-649: reason 이 ORDER_CANCELLED 여도 배송이 CANCELLED 가 아니면 ALERT (판정은 배송 상태)")
+    void handle_orderCancelledReasonButShippingNotCancelled_stillAlerts() {
+        Shipping shipped = Shipping.create("store-acme", "order-1", "user-1", CLOCK);
+        shipped.transitionTo(ShippingStatus.SHIPPED, "TRK-1", "CJ", CLOCK);
+        given(shippingRepository.findByOrderId("order-1")).willReturn(Optional.of(shipped));
+
+        consumer.handle(event("ORDER_CANCELLED"));
+
+        assertThat(alerts()).hasSize(1);
     }
 }

@@ -2,6 +2,8 @@ package com.example.shipping.application.port;
 
 import com.example.shipping.domain.model.ShippingStatus;
 
+import java.time.Instant;
+
 public interface ShippingEventPublisher {
 
     /**
@@ -38,4 +40,17 @@ public interface ShippingEventPublisher {
      */
     void publishManualShipConfirmRequested(String tenantId, String orderId,
                                            String carrier, String trackingNumber);
+
+    /**
+     * Writes an outbox row asking wms to cancel the outbound order it holds for a cancelled
+     * order (ADR-MONO-022 D4 v2(d), {@code ecommerce.fulfillment.cancel-requested.v1},
+     * TASK-BE-649). Called in the same transaction that moves a {@code wmsRouted} Shipping
+     * {@code PREPARING → CANCELLED}. wms camelCase envelope (same ACL convention as the other
+     * two legs); contract: {@code fulfillment-events.md} § Event 3.
+     *
+     * @param tenantId    the shipping row tenant (envelope + payload {@code tenantId}); nullable.
+     * @param orderId     ecommerce orderId == wms orderNo (D5 correlation key).
+     * @param requestedAt when ecommerce accepted the order cancel.
+     */
+    void publishFulfillmentCancelRequested(String tenantId, String orderId, Instant requestedAt);
 }

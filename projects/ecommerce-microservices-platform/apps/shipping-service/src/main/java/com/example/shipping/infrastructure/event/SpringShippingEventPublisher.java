@@ -29,8 +29,9 @@ import java.util.UUID;
  * key, which falls back to {@code aggregate_id}, matches v1), and the topics are
  * resolved by the same mixed-convention switch in {@link ShippingOutboxPublisher}.
  *
- * <p>{@code event_id}: the two structured envelopes ({@code ShippingStatusChanged},
- * {@code ManualShipConfirmRequested}) reuse the envelope's own {@code event_id} as
+ * <p>{@code event_id}: the structured envelopes ({@code ShippingStatusChanged},
+ * {@code ManualShipConfirmRequested}, {@code FulfillmentCancelRequested} — the last added by
+ * TASK-BE-649 with a per-order deterministic id) reuse the envelope's own {@code event_id} as
  * the row PK so the Kafka header {@code eventId} matches the payload. The forward
  * fulfillment leg receives an opaque pre-serialized {@code messageJson}, so a fresh
  * UUID is minted for the row PK; the wms outbound-service dedupes on the payload's
@@ -58,6 +59,8 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
 
     private static final String AGGREGATE_TYPE_SHIPPING = "Shipping";
     private static final String AGGREGATE_TYPE_FULFILLMENT = "Fulfillment";
+    /** Cancel reason sent to wms — a constant in v1 (fulfillment-events.md § Event 3). */
+    private static final String CANCEL_REASON_ORDER_CANCELLED = "ORDER_CANCELLED";
 
     private final ShippingOutboxJpaRepository outboxRepository;
     private final ObjectMapper objectMapper;
@@ -129,6 +132,44 @@ public class SpringShippingEventPublisher implements ShippingEventPublisher {
                 null, // partition_key: publisher falls back to aggregateId (orderId)
                 serialize(message),
                 Instant.parse(message.occurredAt())));
+    }
+
+    @Override
+    public void publishFulfillmentCancelRequested(String tenantId, String orderId, Instant requestedAt) {
+        // wms camelCase envelope (ACL convention, same as manual-confirm). Contract:
+        // fulfillment-events.md § Event 3 — aggregateType "fulfillment", reason constant in v1.
+        FulfillmentCancelRequestedMessage message = new FulfillmentCancelRequestedMessage(
+                deterministicCancelRequestedEventId(orderId).toString(),
+                "ecommerce.fulfillment.cancel-requested",
+                Instant.now(clock).toString(),
+                "fulfillment",
+                orderId,
+                tenantId,
+                new FulfillmentCancelRequestedMessage.Payload(
+                        orderId, tenantId, CANCEL_REASON_ORDER_CANCELLED, requestedAt.toString())
+        );
+
+        outboxRepository.save(new ShippingOutboxEntity(
+                UUID.fromString(message.eventId()),
+                "FulfillmentCancelRequested",
+                AGGREGATE_TYPE_FULFILLMENT,
+                orderId,
+                null, // partition_key: publisher falls back to aggregateId (orderId)
+                serialize(message),
+                Instant.parse(message.occurredAt())));
+    }
+
+    /**
+     * Deterministic {@code eventId} for the cancel request, derived from {@code orderId}
+     * (TASK-BE-649). A Shipping is cancelled at most once ({@code PREPARING → CANCELLED} is
+     * terminal), so one order has at most one legitimate cancel request. Because the id is also
+     * the {@code shipping_outbox} PK, a concurrent double cancel collides on it and rolls back
+     * rather than sending wms two requests (same reasoning as BE-547). Name-based UUID — a valid
+     * UUID, as the wms {@code EventEnvelopeParser} requires.
+     */
+    static UUID deterministicCancelRequestedEventId(String orderId) {
+        String seed = "FulfillmentCancelRequested:" + orderId;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

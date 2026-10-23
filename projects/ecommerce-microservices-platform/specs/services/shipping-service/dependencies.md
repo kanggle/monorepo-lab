@@ -27,12 +27,14 @@
 | Source | Contract | Purpose |
 |---|---|---|
 | order-service | `specs/contracts/events/order-events.md` — topic `order.order.confirmed` | Create a new shipping record when an order transitions to CONFIRMED state |
+| order-service | `specs/contracts/events/order-events.md` — topic `order.order.cancelled` | Cancel a still-`PREPARING` shipping record; request the wms cancel when it is `wmsRouted` (ADR-MONO-022 D4 v2(d), TASK-BE-649) |
 
 ## Publishes To
 
 | Topic | Contract | Purpose |
 |---|---|---|
-| `shipping.shipping.status-changed` | `specs/contracts/events/shipping-events.md` | Notify order-service and notification-service of every shipping status transition |
+| `shipping.shipping.status-changed` | `specs/contracts/events/shipping-events.md` | Notify order-service and notification-service of every shipping status transition except `PREPARING → CANCELLED` |
+| `ecommerce.fulfillment.cancel-requested.v1` | `specs/contracts/events/fulfillment-events.md` § Event 3 | Ask wms outbound-service to cancel the outbound order of a cancelled, still-`PREPARING`, `wmsRouted` shipping (TASK-BE-649) |
 
 ## Forbidden Dependencies
 - direct database access to another service (per `service-boundaries.md`)
