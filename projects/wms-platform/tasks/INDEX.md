@@ -85,9 +85,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **IN-PROGRESS (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 이번 굽기 제외.** outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
-
 ## review
+
+- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A).** 생산자 BE-649 전에는 굽기에 실려도 동작 변화 없음. outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-BE-647-inventory-low-stock-default-threshold-unset.md` — **REVIEW (2026-10-22 UTC · nightly success · AC-2 = 굽기 뒤 라이브) — 소유자 결정: 굽기 전 구현.** inventory-service 저재고 기본 임계값 프로퍼티(`AlertConfig.java:44`)를 넣는 곳이 없어 재기동 직후 저재고 알림 0 건(설정 변경 이벤트가 다시 올 때까지). 최소안 `application.yml` 에 10. `TASK-BE-644` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Sonnet.
 

@@ -8,7 +8,7 @@ outbound-service 가 이커머스 출고 취소 요청(`ecommerce.fulfillment.ca
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -62,7 +62,8 @@ backend
 
 - [x] **AC-0** — `CancelOrderService` 의 권한 판정이 시스템 호출자(보안 컨텍스트 없음)를 어떻게 다루는지 측정한다(file:line). D9 의 «internal = unrestricted» 와 충돌하지 않게, 시스템 요청이 ADMIN 범위로 새지 않는지 확인한다. 측정 2026-10-23 UTC — 아래 § AC-0 측정 결과. 결론: **아키텍처 변경 없이** 명령에 `callerRoles = {ROLE_OUTBOUND_WRITE}` 를 넣으면 WRITE 범위로 고정된다.
 - [x] **AC-1** — 계약 커밋이 구현보다 먼저. ✅ 2026-10-23 UTC — 브랜치 `task/be-650-wms-cancel-consumer` 커밋 순서: `c3d3bd250`(계약만: 이커머스 `fulfillment-events.md` § Event 3 · WMS `ecommerce-fulfillment-subscriptions.md` · `outbound-events.md` · `architecture.md` · events `README.md`) → `955c985c1`(시험만) → 구현 커밋. 🔴 PR 이 스쿼시 머지되면 main 에는 한 커밋이 된다 — 순서의 증거는 PR 의 커밋 목록이다.
-- [ ] **AC-2** — 구현 + 시험 · CI 초록 (시험만 담은 커밋으로 CI 빨강을 먼저 본다). 🟡 2026-10-23 UTC — 구현 · 시험은 들어갔다. **CI 는 아직 안 봤다**(푸시 전). 로컬에서 돈 것:
+- [x] **AC-2** — 구현 + 시험 · CI 초록 (시험만 담은 커밋으로 CI 빨강을 먼저 본다). ✅ 2026-10-23 UTC (메인 세션) — PR #4488 에 시험만 담은 커밋 `955c985c1` 까지 먼저 올렸다. CI run `39912885526` 에서 `Build & Test` · `Integration (… outbound-service, Testcontainers)` 두 체크가 빨강이었고, 원인은 `outbound-service:compileTestJava FAILED`(새 시험 두 파일이 소비자 클래스를 못 찾음)다. 🔴 이것은 **컴파일 빨강**이다. 시험이 새 코드를 참조한다는 것만 증명하고, 동작이 틀리면 시험이 무는지는 증명하지 않는다(아래 ⚪ 변이 확인은 여전히 미측정). 구현 `f084d9cd3` 을 올린 뒤 head 체크 69개 pending 0 · fail 0 이다. Testcontainers 통합 레인(`ListenerTopicsPrecreatedIT` 포함)도 초록이다. 설정을 바꾸는 PR 이라 브랜치 nightly `39913529748` 을 돌렸고 success 다(콘솔 full-stack · 이커머스×WMS 이행 루프 e2e 포함). 🔵 생산자(`TASK-BE-649`)가 없어서 이 PR 만 굽기에 실려도 동작 변화는 없다.
+  - 로컬에서 돈 것:
   - `./gradlew :projects:wms-platform:apps:outbound-service:test --no-daemon` → rc=0, BUILD SUCCESSFUL. 결과 XML 51 클래스 · 321 시험 · 실패 0 · 오류 0 · 건너뜀 4(`OrderJpaRepositoryFilterIT` — 이 티켓과 무관한 기존 건너뜀). 새 시험: `FulfillmentCancelRequestedConsumerTest` 15 · `FulfillmentCancelRequestedConsumerCancelPathTest` 6, 모두 통과.
   - `bash scripts/check-cross-project-topic-relay.sh` → rc=0 (19 routes / 5 flows). 물기 확인: 이 브랜치 전의 `mm2.properties` 로 돌리면 rc=1, `listener route [ecommerce->wms ecommerce.fulfillment.cancel-requested.v1] 가 릴레이 화이트리스트에 없다`.
   - ⚪ **돌지 않은 것**: `integrationTest` 레인(Testcontainers — `ListenerTopicsPrecreatedIT` 가 새 토픽 목록 줄을 확인하는 곳) 은 로컬에서 돌리지 않았다. CI 전용으로 본다.
