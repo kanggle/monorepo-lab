@@ -1042,6 +1042,25 @@ verbatim here, not re-derived).
   | 4 | inventory-visibility per-SKU | `GET /api/v1/inventory-visibility/sku/{sku}` (Redis-cached, `X-Cache` header) | read |
   | 5 | inventory-visibility staleness | `GET /api/v1/inventory-visibility/staleness` (FRESH/STALE/UNREACHABLE per node) | read |
   | 6 | inventory-visibility nodes | `GET /api/v1/inventory-visibility/nodes` (node list + status) | read |
+  | 7 | PO performance metrics («실적» strip — ADR-MONO-084 P5, TASK-MONO-810) | `GET /api/v1/procurement/po/metrics?period=week\|month` (`procurement-api.md` § `GET /api/procurement/po/metrics`) | read |
+
+  **PO list filters (TASK-MONO-810).** Row 1 is called with `status`,
+  `supplierId` and — added with the «실적» strip — `submittedFrom` /
+  `submittedTo` (ISO-8601 instants, half-open `[submittedFrom, submittedTo)` on
+  `submittedAt`, the same rule as the metrics window) and `excludeStatus` (one
+  PoStatus left out); all combinable, ANDed. The `/api/scm/po` proxy forwards
+  all five verbatim; the `/scm/procurement` page reads `?status=` /
+  `?submittedFrom=` / `?submittedTo=` / `?excludeStatus=` from its URL (the
+  strip's card links) and **drops a value it can tell is malformed** — an
+  unknown status / excluded status, or a bound that is not an offset-qualified
+  instant — naming it in a notice instead of sending it (a producer `400` would
+  surface as the list's transient «일시적으로 불러올 수 없습니다», wrong for a bad
+  link). An applied card filter shows as one line («제출 기간: … · 취소 제외», in
+  KST) with a 해제 button that clears the window and the exclusion together and
+  removes both from the address. **The list a 발주 건수 / 발주 금액 card opens
+  (`submittedFrom=<current.from>&submittedTo=<current.to>&excludeStatus=CANCELED`)
+  has `totalElements` equal to that card's `poCount`** — same window, same
+  exclusion.
 
   The scm PO **write** surface (`procurement-api.md`
   `POST /api/procurement/po`, `.../{poId}/submit|confirm|cancel`) and the
@@ -1424,9 +1443,40 @@ recent-PO glance. Follows the PC-FE-168 shared read-leg decision
 - **Resilience (§ 2.5).** Per-cell degrade cell-local; a `401` in ANY leg →
   whole-session `redirect('/login')`. Read-only; no auto-refetch. `429` is
   already bounded by the § 2.4.6 client backoff (the overview does not re-storm).
+- **Performance metrics strip (§ 2.4.6 row 7) — ADR-MONO-084 P5 / TASK-MONO-810.**
+  `GET /api/v1/procurement/po/metrics?period=week|month` feeds the «실적» strip,
+  the **first** block of the overview band: 발주 건수 (`poCount`) · 발주 금액
+  (`poAmount:<CUR>` — **one card per currency**, labelled «발주 금액 (KRW)»; never
+  added across currencies) · 입고 완료 (`receivedCount`), current vs the
+  same-length previous KST window, with a daily series (the chart draws
+  `poCount`). Meaning per key is the producer's (`procurement-api.md`): 건수 · 금액
+  = `submittedAt` in the window and not `CANCELED` now (a later cancel lowers a
+  past value); 입고 완료 = POs whose `→ RECEIVED` transition happened in the window.
+  The strip carries a one-line scope note saying so. Shape, windows and error
+  handling are
+  [`platform/contracts/performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md);
+  the body is the bare shape (a `{ data, meta }` envelope is unwrapped too).
+  Parsed by `shared/api/performance-metrics.ts` (integer strings — F5) as its
+  **own cell** inside `getScmOverviewState`: `403` → «권한 없음» in the strip, any
+  other failure or an unparseable body → «실적을 불러올 수 없습니다», while the
+  tiles, the distribution and the recent list render; a `401` → the same
+  whole-session re-login; not eligible → no call. The page reads `?period=`
+  (default `month`; absent or unknown → the default, never a 400 page).
+  - **Card links (the one deviation from the tiles above).** The strip's cards
+    ARE links (`PerformanceStrip`'s optional `cardHref`; strips without it are
+    unchanged): 발주 건수 and every 발주 금액 card → `/scm/procurement?
+    submittedFrom=<current.from>&submittedTo=<current.to>&excludeStatus=CANCELED`
+    (the response's own window strings, URL-encoded — the list then holds exactly
+    the counted POs: its `totalElements` = the card's `poCount`); 입고 완료 →
+    `/scm/procurement?status=RECEIVED` (receipt time is not a list filter, so no
+    submit window is put on it — that would list a different set of POs).
+  - **Sample mode.** The `flat:scm` fixture answers `/po/metrics` from the same
+    seed POs the list shows (by the rules above, KRW minor units = won); the seed
+    has no status history, so 입고 완료 is honestly `0`. Its `/po` list honours
+    `submittedFrom` / `submittedTo` / `excludeStatus`.
 
-> **Not a § 3 parity row**: consumes only already-listed § 2.4.6 endpoints in a
-> new read composition; adds no § 3 row and changes none.
+> **Not a § 3 parity row**: consumes only § 2.4.6 endpoints in a new read
+> composition; adds no § 3 row and changes none.
 
 #### 2.4.7 finance operations surface (TASK-PC-FE-009 — cross-reference, not a redefinition)
 

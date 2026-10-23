@@ -273,6 +273,11 @@ const MACHINE_KEYS = new Set([
   'submitted', // series value (integer string) — 상신
   'approved', // series value (integer string) — 승인
   'rejected', // series value (integer string) — 반려
+  // TASK-MONO-810 — the scm PO «실적» strip's series value keys (same shape).
+  // `poAmount` is per currency (`poAmount:<CUR>`); the sample world is KRW only.
+  'poCount', // series value (integer string) — 발주 건수
+  'poAmount:KRW', // series value (integer string, KRW minor units) — 발주 금액
+  'receivedCount', // series value (integer string) — 입고 완료
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

@@ -5,6 +5,7 @@ import com.example.common.page.PageResult;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -30,9 +31,14 @@ public interface PurchaseOrderRepository {
     Optional<PurchaseOrder> findBySourceSuggestionId(String sourceSuggestionId, String tenantId);
 
     /**
-     * Search with optional filters. {@code status} and {@code supplierId}
-     * may be null. Paging + sort are carried by the framework-free {@link PageQuery};
+     * Search with optional filters. {@code status}, {@code excludeStatus}, {@code supplierId},
+     * {@code submittedFrom} and {@code submittedTo} may be null. {@code excludeStatus} drops POs
+     * currently in that status (TASK-MONO-810). The two instants are a
+     * half-open {@code [submittedFrom, submittedTo)} on {@code submitted_at}; when either is
+     * given, a PO never submitted (no {@code submitted_at}) is excluded (TASK-MONO-810).
+     * Paging + sort are carried by the framework-free {@link PageQuery};
      * infrastructure adapters convert it to the JPA paging types at the boundary.
      */
-    PageResult<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, PageQuery pageQuery);
+    PageResult<PurchaseOrder> search(String tenantId, PoStatus status, PoStatus excludeStatus, String supplierId,
+                                     Instant submittedFrom, Instant submittedTo, PageQuery pageQuery);
 }

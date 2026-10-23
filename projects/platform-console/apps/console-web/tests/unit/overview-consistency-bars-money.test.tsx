@@ -167,6 +167,9 @@ const scmState = (over: Partial<ScmOverviewState> = {}): ScmOverviewState => ({
   ],
   recentPosStatus: 'ok',
   s5Warning: null,
+  // TASK-MONO-810 — the «실적» strip cell (not under test here).
+  period: 'month',
+  performance: { status: 'degraded', value: null },
   ...over,
 });
 

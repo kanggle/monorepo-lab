@@ -86,6 +86,39 @@ describe('PerformanceStrip', () => {
     expect(screen.getByTestId('performance-strip-period-week')).toHaveAttribute('aria-current', 'page');
   });
 
+  it('TASK-MONO-810 — no cardHref (every strip before it): no card is a link, markup unchanged', () => {
+    render(<PerformanceStrip cell={OK} selected="month" periodHrefs={HREFS} labels={LABELS} />);
+    const strip = screen.getByTestId('performance-strip');
+    // Only the two period links exist.
+    expect(within(strip).getAllByRole('link')).toHaveLength(2);
+    expect(screen.queryByTestId('performance-strip-kpi-amount-link')).toBeNull();
+    expect(screen.getByTestId('performance-strip-kpi-amount')).toHaveClass('px-4', 'py-3');
+  });
+
+  it('TASK-MONO-810 — cardHref makes the chosen cards links (with the response at hand); null → plain card', () => {
+    const seen: string[] = [];
+    render(
+      <PerformanceStrip
+        cell={OK}
+        selected="month"
+        periodHrefs={HREFS}
+        labels={LABELS}
+        cardHref={(metric, data) => {
+          seen.push(`${metric.key}@${data.current.from}`);
+          return metric.key === 'amount' ? `/list?from=${encodeURIComponent(data.current.from)}` : null;
+        }}
+      />,
+    );
+    expect(seen).toEqual(['amount@2026-10-01T00:00:00+09:00', 'items@2026-10-01T00:00:00+09:00']);
+    const link = screen.getByTestId('performance-strip-kpi-amount-link');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/list?from=2026-10-01T00%3A00%3A00%2B09%3A00');
+    expect(screen.getByRole('link', { name: /^매출 ₩12,340,000.*목록에서 보기$/ })).toBe(link);
+    // The value testid still resolves inside the link.
+    expect(within(link).getByTestId('performance-strip-kpi-amount-value')).toHaveTextContent('₩12,340,000');
+    expect(screen.queryByTestId('performance-strip-kpi-items-link')).toBeNull();
+  });
+
   it('forbidden and empty', () => {
     const { unmount } = render(
       <PerformanceStrip cell={{ status: 'forbidden', value: null }} selected="week" periodHrefs={HREFS} labels={LABELS} />,

@@ -4,6 +4,7 @@ import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
 import {
   getScmProcurementState,
+  parsePoListSearchParams,
   ScmProcurementScreen,
 } from '@/features/scm-ops';
 
@@ -19,8 +20,22 @@ export const dynamic = 'force-dynamic';
  * a non-eligible operator. 401 → whole-session re-login; 403 → inline "not
  * scoped"; 429 → rate-limited notice; 503/timeout → this section degrades
  * only (the console shell + other sections stay).
+ *
+ * TASK-MONO-810 — reads `?status=` / `?submittedFrom=` / `?submittedTo=` /
+ * `?excludeStatus=` (the
+ * 개요 «실적» cards link here with them). Malformed values are dropped and
+ * named on screen, never sent (`parsePoListSearchParams`).
  */
-export default async function ScmProcurementPage() {
+export default async function ScmProcurementPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    status?: string | string[];
+    submittedFrom?: string | string[];
+    submittedTo?: string | string[];
+    excludeStatus?: string | string[];
+  }>;
+}) {
   let eligible = false;
   let registryDegraded = false;
   try {
@@ -52,7 +67,8 @@ export default async function ScmProcurementPage() {
     );
   }
 
-  const state = await getScmProcurementState(eligible);
+  const { filter, ignored } = parsePoListSearchParams((await searchParams) ?? {});
+  const state = await getScmProcurementState(eligible, filter);
 
   if (state.notEligible) {
     return (
@@ -137,5 +153,11 @@ export default async function ScmProcurementPage() {
     );
   }
 
-  return <ScmProcurementScreen poList={state.poList} />;
+  return (
+    <ScmProcurementScreen
+      poList={state.poList}
+      initialFilter={state.filter}
+      ignoredParams={ignored}
+    />
+  );
 }

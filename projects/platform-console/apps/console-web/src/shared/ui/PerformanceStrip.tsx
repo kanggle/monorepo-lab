@@ -13,7 +13,22 @@ import {
   seriesBars,
   shortDate,
 } from '@/shared/lib/performance-format';
-import type { PerformanceCell, PerformanceMetric } from '@/shared/api/performance-metrics';
+import type {
+  PerformanceCell,
+  PerformanceMetric,
+  PerformanceMetrics,
+} from '@/shared/api/performance-metrics';
+
+/**
+ * Optional per-card drill-in (TASK-MONO-810): the list a card's number came
+ * from. Called with the metric and the whole response (so a link can carry the
+ * response's own `current` window). Return `null`/`undefined` for a card with
+ * no list behind it. Absent ⇒ no card is a link (every strip before 810).
+ */
+export type PerformanceCardHref = (
+  metric: PerformanceMetric,
+  data: PerformanceMetrics,
+) => string | null | undefined;
 
 /**
  * The «실적» strip at the top of a domain overview (ADR-MONO-084 D1,
@@ -35,6 +50,7 @@ export function PerformanceStrip({
   periodHrefs,
   labels,
   chartKey,
+  cardHref,
   testid = 'performance-strip',
 }: {
   cell: PerformanceCell;
@@ -45,6 +61,8 @@ export function PerformanceStrip({
   labels: Readonly<Record<string, string>>;
   /** Which metric the trend chart draws; defaults to the first one. */
   chartKey?: string;
+  /** Optional per-card link to the list behind the number (see {@link PerformanceCardHref}). */
+  cardHref?: PerformanceCardHref;
   testid?: string;
 }) {
   const headingId = `${testid}-heading`;
@@ -75,7 +93,13 @@ export function PerformanceStrip({
             ))}
           </nav>
         </div>
-        <StripBody cell={cell} labels={labels} chartKey={chartKey} testid={testid} />
+        <StripBody
+          cell={cell}
+          labels={labels}
+          chartKey={chartKey}
+          cardHref={cardHref}
+          testid={testid}
+        />
       </Card>
     </section>
   );
@@ -85,11 +109,13 @@ function StripBody({
   cell,
   labels,
   chartKey,
+  cardHref,
   testid,
 }: {
   cell: PerformanceCell;
   labels: Readonly<Record<string, string>>;
   chartKey?: string;
+  cardHref?: PerformanceCardHref;
   testid: string;
 }) {
   if (cell.status !== 'ok') {
@@ -122,7 +148,13 @@ function StripBody({
       </p>
       <ul className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {data.metrics.map((m) => (
-          <KpiCard key={m.key} metric={m} labels={labels} testid={testid} />
+          <KpiCard
+            key={m.key}
+            metric={m}
+            labels={labels}
+            href={cardHref?.(m, data) ?? null}
+            testid={testid}
+          />
         ))}
       </ul>
       <TrendChart
@@ -138,6 +170,41 @@ function StripBody({
 function KpiCard({
   metric,
   labels,
+  href,
+  testid,
+}: {
+  metric: PerformanceMetric;
+  labels: Readonly<Record<string, string>>;
+  href: string | null;
+  testid: string;
+}) {
+  const body = <KpiBody metric={metric} labels={labels} testid={testid} />;
+  return (
+    <li
+      data-testid={`${testid}-kpi-${metric.key}`}
+      className={cn('rounded-md border border-border', href ? '' : 'px-4 py-3')}
+    >
+      {href ? (
+        // The whole card is the link; its accessible name is the card's own
+        // text (label · value · change) plus where it goes.
+        <Link
+          href={href}
+          data-testid={`${testid}-kpi-${metric.key}-link`}
+          className="block rounded-md px-4 py-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {body}
+          <span className="sr-only"> — 목록에서 보기</span>
+        </Link>
+      ) : (
+        body
+      )}
+    </li>
+  );
+}
+
+function KpiBody({
+  metric,
+  labels,
   testid,
 }: {
   metric: PerformanceMetric;
@@ -146,10 +213,7 @@ function KpiCard({
 }) {
   const delta = metricDelta(metric.current, metric.previous);
   return (
-    <li
-      data-testid={`${testid}-kpi-${metric.key}`}
-      className="rounded-md border border-border px-4 py-3"
-    >
+    <>
       <p className="text-xs text-muted-foreground">{metricLabel(metric, labels)}</p>
       <p data-testid={`${testid}-kpi-${metric.key}-value`} className="mt-1 text-xl font-semibold tabular-nums">
         {formatMetricValue(metric.current, metric)}
@@ -161,7 +225,7 @@ function KpiCard({
         <span className="sr-only">{describeDelta(delta)}</span>
         <span className="ml-2">직전 {formatMetricValue(metric.previous, metric)}</span>
       </p>
-    </li>
+    </>
   );
 }
 

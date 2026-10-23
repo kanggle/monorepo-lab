@@ -453,10 +453,10 @@ class PurchaseOrderApplicationServiceTest {
     void searchForwardsPageQueryAndMapsResult() {
         PageQuery pageQuery = PageQuery.of(0, 10, "createdAt", "desc");
         ArgumentCaptor<PageQuery> captor = ArgumentCaptor.forClass(PageQuery.class);
-        when(poRepository.search(eq(TENANT), any(), any(), captor.capture()))
+        when(poRepository.search(eq(TENANT), any(), any(), any(), any(), any(), captor.capture()))
                 .thenReturn(new PageResult<>(List.of(), 0, 10, 0, 0));
 
-        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null, pageQuery);
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null, null, null, null, pageQuery);
 
         // The service forwards sort as data on the PageQuery; the PageQuery -> Spring Sort
         // mapping is covered Docker-free by PageRequestsTest.
@@ -465,6 +465,22 @@ class PurchaseOrderApplicationServiceTest {
         assertThat(result.content()).isEmpty();
         assertThat(result.page()).isEqualTo(0);
         assertThat(result.size()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("TASK-MONO-810 search() forwards status, excludeStatus, supplierId and the submit-date bounds unchanged to the port")
+    void searchForwardsSubmitDateBounds() {
+        java.time.Instant from = java.time.Instant.parse("2026-10-18T15:00:00Z");
+        java.time.Instant to = java.time.Instant.parse("2026-10-24T05:05:00Z");
+        PageQuery pageQuery = PageQuery.of(0, 20, "createdAt", "DESC");
+        when(poRepository.search(TENANT, PoStatus.SUBMITTED, PoStatus.CANCELED, "sup-1", from, to, pageQuery))
+                .thenReturn(new PageResult<>(List.of(), 0, 20, 0, 0));
+
+        PageResult<PurchaseOrderView> result =
+                service.search(BUYER, PoStatus.SUBMITTED, PoStatus.CANCELED, "sup-1", from, to, pageQuery);
+
+        assertThat(result.content()).isEmpty();
+        verify(poRepository).search(TENANT, PoStatus.SUBMITTED, PoStatus.CANCELED, "sup-1", from, to, pageQuery);
     }
 
     // ---------------- SUPPLIER REFERENCE (TASK-MONO-677) ----------------
@@ -572,7 +588,7 @@ class PurchaseOrderApplicationServiceTest {
         PurchaseOrder viaCode = poReferencing("po-b", dpCode);
         PurchaseOrder unresolved = poReferencing("po-c", "operator-free-text");
         PurchaseOrder viaIdAgain = poReferencing("po-d", SUPPLIER_UUID);
-        when(poRepository.search(eq(TENANT), any(), any(), any()))
+        when(poRepository.search(eq(TENANT), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResult<>(List.of(viaId, viaCode, unresolved, viaIdAgain), 0, 20, 4, 1));
         when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID, dpCode, "operator-free-text"), TENANT))
                 .thenReturn(List.of(supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier",
@@ -582,7 +598,7 @@ class PurchaseOrderApplicationServiceTest {
                 .thenReturn(List.of(supplier("01a09478-0000-7000-8000-0000000000b2", TENANT, dpCode,
                         "dp supplier", SupplierStatus.ACTIVE)));
 
-        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null,
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null, null, null, null,
                 PageQuery.of(0, 20, "createdAt", "DESC"));
 
         assertThat(result.content()).extracting(PurchaseOrderView::id, PurchaseOrderView::supplierCode,
@@ -602,12 +618,12 @@ class PurchaseOrderApplicationServiceTest {
     @DisplayName("677 search() — when every ref hits by id, no code query is issued")
     void searchSkipsCodeBatchWhenAllRefsHitById() {
         PurchaseOrder po = poReferencing("po-e", SUPPLIER_UUID);
-        when(poRepository.search(eq(TENANT), any(), any(), any()))
+        when(poRepository.search(eq(TENANT), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageResult<>(List.of(po), 0, 20, 1, 1));
         when(supplierRepository.findAllByIds(Set.of(SUPPLIER_UUID), TENANT)).thenReturn(List.of(
                 supplier(SUPPLIER_UUID, TENANT, "SUP-DEMO-01", "demo supplier", SupplierStatus.ACTIVE)));
 
-        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null,
+        PageResult<PurchaseOrderView> result = service.search(BUYER, null, null, null, null, null,
                 PageQuery.of(0, 20, "createdAt", "DESC"));
 
         assertThat(result.content().get(0).supplierCode()).isEqualTo("SUP-DEMO-01");

@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-816-consumer-failure-cause-logging-and-missing-dead-letter.md` — **소비자 실패 원인 로깅 + 데드레터 없는 소비자 하나** (READY, 2026-10-24 UTC): `TASK-MONO-813` AC-0 ⑤ 에서 나눠 왔다(소유자 «별도 티켓으로 분리»). 원인을 남기지 않는 곳: wms 4 · scm logistics · `@RetryableTopic` 5 서비스(⚪ 기본 DLT 핸들러가 원인을 남기는지 먼저 잰다). iam account-service 는 error handler 가 없어 재시도 뒤 레코드를 버린다. `TASK-BE-651` 의 `CauseLoggingRetryListener` 를 복사한다. 🔴 813 머지 뒤 착수(같은 파일). 분석=Opus 5.5 / 구현 권장=Sonnet.
@@ -223,6 +222,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **데드레터 토픽 이름을 `<topic>.DLT` 하나로** (REVIEW, 2026-10-24 UTC · `ADR-MONO-085 ACCEPTED — A` · AC-0~2 닫힘 · AC-3 = 다음 굽기 뒤). 규칙 3파일 + 스킬 2개, 보내는 쪽 13곳(`.dlq`→`.DLT`, 그중 12곳은 원본 파티션 번호 대신 `-1`), 생성 스크립트 5개, 읽는 쪽(iam 게이지 · 계약 · 테스트 · 재처리 런북)을 한 PR에서 옮겼다. 가드 `check-dead-letter-suffix.sh`(R1~R6 + 모집단 하한)는 수정 전 커밋에서 rc=1, 수정 후 rc=0. 유지: `outbox.dlq.size`(메트릭) · `<group>.dlq`(컨슈머 그룹). ⚪ Docker 기반 DLQ IT 는 로컬 미실행 → CI 가 판정한다. 🔴 AC-3(데모 브로커에서 미리 만든 `.DLT` 에 레코드가 떨어지는지)은 굽기 뒤 — 닫을 때 남아 있으면 `TASK-MONO-672` 로 넘긴다. 분석=Opus 5.5 / 구현=Opus 5.5.
+
+- `TASK-MONO-810-scm-overview-performance-metrics.md` — **`ADR-MONO-084` P5 SCM 실적 지표** (REVIEW, 2026-10-24 UTC · main `769829962` · AC-0~3 닫힘(AC-1 · 2 = CI 실 Postgres) · AC-4 = 다음 굽기 + 창). procurement-service `GET /api/procurement/po/metrics` — 발주 건수 · 금액(통화마다 한 키, 합계 한 번 반올림) = 제출 시각 · 지금 CANCELED 제외 / 입고 완료 = 이력의 →RECEIVED 시각(소유자 결정) · `GET /po` 에 `submittedFrom/To` · `excludeStatus` ⇒ 카드 목록 건수 = `poCount` · V7 인덱스 / 콘솔 `/scm` 실적 줄 · 카드 → 기간 걸린 목록. ASN 결함 → `TASK-SCM-BE-063`. 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · main `c76a60d73` · AC-0~3 닫힘(AC-1 · 2 = CI 실 MySQL) · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 
