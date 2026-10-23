@@ -8,7 +8,7 @@ TASK-MONO-814
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -77,7 +77,7 @@ On the 33rd window (2026-10-23 UTC) the logged-in operator overview showed «WMS
 
 - [x] **AC-1** — single-flight: N concurrent calls on a cold cache → exactly **1** `fetch`, and all N get the same result. This includes the case where the lookup fails.
 - [x] **AC-2** — keep-last-good: a good snapshot, then TTL expiry, then a failed lookup → the good snapshot is returned. A following call within the TTL still returns it, so the cache is not clobbered. A first-ever failure → `null` and the configured `.local` URL. A good snapshot older than the bound, then a failure → `null`. A definitive `state=stopped` after a good snapshot → `null`, not the old IP.
-- [x] **AC-3** — the AC-1 and AC-2 tests are committed **before** the fix and fail on today's code on behaviour, not on compilation. Record the red run, then the green run.
+- [x] **AC-3** — the AC-1 and AC-2 tests are committed **before** the fix and fail on today's code on behaviour, not on compilation. Record the red run, then the green run. 🔵 CI (메인 세션, 2026-10-24 UTC): 시험만 담은 커밋 `d2153b806` 의 PR #4508 run `39990587357` — `Frontend unit tests` 5311건 중 **정확히 새 3건만** 실패(`demo-backend.test.ts` § TASK-MONO-814). 구현 `b4971661a` + main 병합 뒤 head `68f2e995d` 체크 67개 pending 0 · fail 0 · 브랜치 nightly `39992831188` success. (같은 run 의 `Task ID collision` 빨강은 동시 세션이 MONO-814 를 같이 잡았던 것 — 그 세션이 815 로 바꿔 main 에 머지 `159d40a1a`, 병합 뒤 해소.)
 - [x] **AC-4** — console-web `tsc --noEmit` · `next lint` · vitest (`--maxWorkers=2`) · `scripts/check-demo-resolver-copies.sh` (+ `--self-test`) · Client graph guards · the three queue guards (after staging) all rc=0.
 - [ ] **AC-5** — shipping: the change reaches every consumer's Vercel build. All four consumers use `link:`, and each `vercel-ignore.sh` includes `:/infra/demo/backend-resolver`. Record the Vercel Production deployment for console-web after merge.
 - [ ] **AC-6** — live, next demo window. Load the logged-in (`demo-corp`) overview **cold**, as the first render in more than 15 s. All six data cards draw a value or a legitimate «권한 없음», and the domain status summary has no «점검 불가» for a running bundle. CloudWatch Lambda `Throttles` = **0** in that minute. Closes `TASK-PC-FE-369` AC-2.

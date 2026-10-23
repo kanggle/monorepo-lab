@@ -212,8 +212,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **IN-PROGRESS (2026-10-24 UTC 착수) — 소유자 결정: «주소 조회를 한 번으로 묶기»(코드 수선 · AWS 무변경).** `@demo/backend-resolver` 가 캐시가 비면 호출마다 `/status` 를 따로 친다 → 콘솔 개요 한 렌더가 계정 동시 실행 한도 **10** 을 넘겨 람다 `Throttles` 4·4·12·4 = APIGW 5xx 같은 수(33차 창, 개요를 연 분) → 조회 실패가 좋은 캐시를 덮고 다리가 `*.local` 로 떨어져 `DOWNSTREAM_ERROR`. 수선 = 진행 중 조회 공유(single-flight) + 실패가 마지막 좋은 스냅샷을 안 덮음(상한 있음). 라이브 AC = 다음 창 차가운 개요 여섯 카드 + 그 분 `Throttles` 0. 출처 `TASK-PC-FE-369` 기전 (e). 분석=Opus 5.5 / 구현 권장=Opus.
-
 
 
 
@@ -224,6 +222,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **REVIEW (2026-10-24 UTC · CI 빨강(3, 동작) → 초록 · nightly success · AC-5 = 머지 뒤 Vercel · AC-6 = 다음 창) — 소유자 결정: «주소 조회를 한 번으로 묶기»(코드 수선 · AWS 무변경).** `@demo/backend-resolver` 가 캐시가 비면 호출마다 `/status` 를 따로 친다 → 콘솔 개요 한 렌더가 계정 동시 실행 한도 **10** 을 넘겨 람다 `Throttles` 4·4·12·4 = APIGW 5xx 같은 수(33차 창, 개요를 연 분) → 조회 실패가 좋은 캐시를 덮고 다리가 `*.local` 로 떨어져 `DOWNSTREAM_ERROR`. 수선 = 진행 중 조회 공유(single-flight) + 실패가 마지막 좋은 스냅샷을 안 덮음(상한 있음). 라이브 AC = 다음 창 차가운 개요 여섯 카드 + 그 분 `Throttles` 0. 출처 `TASK-PC-FE-369` 기전 (e). 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-MONO-808-wms-overview-performance-metrics-kst-rebucket.md` — **`ADR-MONO-084` P3 WMS 실적 지표 · 일별 처리량 KST 날짜** (REVIEW, 2026-10-24 UTC · main `4335ed688` · AC-0~4 닫힘(AC-2 = CI 실 Postgres) · AC-5 = 다음 굽기 + 창). 🔴 일별 행엔 시각이 없어 그것만으로 다시 못 자른다 → 소유자 결정 «건별 기록 추가»: admin V6 `admin_putaway_fact`(투영이 같은 트랜잭션에서) · 출고는 V6 가 `admin_shipment_summary` 로 그 자리에서 다시 쌓음 · 입고 옛 행은 운영자 백필 스크립트(outbox → 건별 표, admin 이 APPLIED 한 것만) · 함수는 건별 행이 모자라면 거부. `GET /dashboard/metrics?period=` (입고 수량 · 출고 수량 · 출고 건수, 창고 전체) / 콘솔 `/wms` 실적 줄. «UTC 기준» 문구는 `TASK-MONO-815`(굽기와 같은 창). 분석=Opus 5.5 / 구현=Opus.
 
