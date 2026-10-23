@@ -21,12 +21,13 @@ public interface AdminUserJpaRepository extends JpaRepository<AdminUserJpaEntity
             SELECT u FROM AdminUserJpaEntity u
             WHERE (:status IS NULL OR u.status = :status)
               AND (:warehouseId IS NULL OR u.defaultWarehouseId = :warehouseId)
-              AND (:q IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
-                              OR LOWER(u.name) LIKE LOWER(CONCAT('%', :q, '%'))
-                              OR LOWER(u.userCode) LIKE LOWER(CONCAT('%', :q, '%')))
+              AND (:qPattern IS NULL OR LOWER(u.email) LIKE :qPattern
+                                     OR LOWER(u.name) LIKE :qPattern
+                                     OR LOWER(u.userCode) LIKE :qPattern)
             """)
+    // qPattern = finished lower-cased `%q%` pattern or null (see LikePatterns, TASK-BE-652).
     Page<AdminUserJpaEntity> search(@Param("status") UserStatus status,
                                     @Param("warehouseId") UUID warehouseId,
-                                    @Param("q") String q,
+                                    @Param("qPattern") String qPattern,
                                     Pageable pageable);
 }

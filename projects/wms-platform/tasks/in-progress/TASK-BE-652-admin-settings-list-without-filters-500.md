@@ -80,3 +80,30 @@ Fix issue found in TASK-BE-644. 콘솔 `GET /api/wms/settings` → admin-service
 
 1. H2 · mock 저장소 시험으로 초록 — PostgreSQL 에서만 나는 결함이다 → 실 DB IT.
 2. 이 쿼리만 고치고 같은 모양 형제(`AdminUserJpaRepository`)를 남긴다 → AC-0 ②.
+
+# 구현 노트 (2026-10-23 UTC)
+
+## AC-0 (코드 측정 — 실 DB IT 출력은 CI 전용: 이 호스트에 Docker 없음)
+
+- ① 깨지는 쿼리: `infra/persistence/AdminSettingJpaRepository.java:15` `:keyPrefix IS NULL OR s.key LIKE CONCAT(:keyPrefix, '%')`. `keyPrefix` 가 null 이면 `CONCAT` 안의 null 이 bytea 로 바인딩돼 `varchar ~~ bytea`. 따라서 **`keyPrefix` 가 없는 모든 호출**(무필터 · `scope` 만 · `warehouseId` 만)이 500 이고, `keyPrefix` 가 있으면 200 이다(추정 — IT `AdminListSearchIT` 의 네 조합이 CI 에서 확인). `:scope` · `:warehouseId`(enum · UUID)의 널 비교(`:x IS NULL OR …`)는 형제 `readmodel/**` 쿼리가 CI IT 에서 이미 서므로 같은 문제 없음(`MasterRefSearchIntegrationTest.everySearch_allNullFilters_…`).
+- ② 같은 모양 형제(admin-service 전수 grep `IS NULL OR|CONCAT`): **`infra/persistence/AdminUserJpaRepository.java:24-26`** `:q IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) …` — 같은 `CONCAT` 모양 ⇒ 무필터 `GET /users` 도 같은 500 이었을 것(같은 티켓에서 수선). 나머지 `AdminRoleJpaRepository:20` · `AdminAssignmentJpaRepository:56-59`(`CONCAT` 없음, 평범한 `IS NULL`) 와 `readmodel/**`(`RefSearch.likePattern` 으로 패턴을 자바에서 조립 · 시간 경계는 `CAST(:p AS string)`)는 이미 고쳐진 형제. wms 다른 서비스는 grep 하지 않음(범위 밖) — 필요하면 별도.
+- 왜 못 잡았나: 이 두 쿼리를 도는 시험이 모두 mock/in-memory 저장소(`InMemorySettingRepository`) 또는 컨트롤러 슬라이스였고 실 PostgreSQL 에서 목록 쿼리를 부르는 IT 가 없었다. TASK-BE-630 의 IT 는 `readmodel/master` 만 덮었다.
+- ③ (콘솔 경로 · 쓰기 경로 없음 관측)은 이번 구현에서 측정하지 않았다 — 열려 있음(644 AC-3 선행).
+
+## 수선
+
+- 형제의 해법 복사: `readmodel/master/RefSearch.likePattern`(TASK-BE-630) — LIKE 패턴을 JPQL 이 아니라 자바에서 조립하고 JPQL 은 `:p IS NULL OR x LIKE :p` 로 둔다. `infra/persistence/LikePatterns` 신설(`prefix` · `lowerContains`), `SettingRepositoryImpl` · `UserRepositoryImpl` 이 호출.
+- 의미 불변: `%` `_` 이스케이프를 **넣지 않았다**(수선 전과 같이 와일드카드로 읽힘). 바꾸려면 계약 먼저. 계약 변경 없음.
+
+## 검증
+
+- 로컬: `./gradlew :projects:wms-platform:apps:admin-service:test --offline` 초록(`LikePatternsTest` 포함). `AdminListSearchIT` 는 컴파일만 — Docker 없음 ⇒ 실행은 CI(`integrationTest`). 시험 커밋(`874b09b4b`)이 수선 전 CI 에서 빨강이어야 한다는 것은 **이 호스트에서 확인하지 못함**.
+- AC-2(굽기 뒤 라이브) 는 열려 있음.
+
+## AC-0 보강 — 라이브 호출과 첫 IT 의 차이 (CI 실측: PR #4502 run 39969962421)
+
+- 사실(CI): 첫 시험 커밋 `874b09b4b` 에서 `AdminListSearchIT` 는 `users_*` 1건만 빨강이고 `settings_*` 4건은 **수선 전 코드에서도 초록**이었다 — 그 settings 시험은 라이브 500 을 재현하지 못했다.
+- 라이브 호출 경로(코드 확인): 콘솔 `listSettings` (`console-web/src/features/wms-ops/api/wms-settings-api.ts:25-37`) 는 `keyPrefix`/`scope`/`warehouseId` 를 비면 보내지 않고 `page=0&size=20`(`wms-client.ts:145-157`, `WMS_DEFAULT_PAGE_SIZE=20` `types.ts:331`)만 보낸다 → `SettingsController.list:46-56` 이 `PageableSupport.pageable`(`PageableSupport.java:15-23`)로 **정렬된** `PageRequest`(`Sort.by(ASC,"key")`) 를 만든다.
+- 첫 IT 와의 차이(코드 측정): ① IT 는 정렬 없는 `PageRequest.of(0,200)` 를 직접 저장소에 넘겼다(컨트롤러 · 정렬 없음). ② IT 는 같은 Spring 컨텍스트에서 `keyPrefix` 있는 호출이 먼저 실행됐을 수 있다(Hibernate 쿼리 해석 캐시가 따뜻함). 라이브는 재기동 뒤 첫 호출이 곧 무필터 호출이다.
+- 배제한 차이: DB 버전(IT `postgres:16-alpine` = `docker-compose.yml:51`), Hibernate 속성(`application.yml:13-20` 이 IT·라이브 동일, `application-test.yml` 은 `ddl-auto` 만), 시드 행 4개라 `size=20` 에서 count 쿼리는 양쪽 모두 안 돈다.
+- 후속 시험: `SettingsListLiveShapeIT`(컨트롤러 `list(null,null,null,0,20,"key,asc")` + 정렬된 Pageable 저장소 호출, 매 시험 전 `getQueryEngine().getInterpretationCache().close()`). 🔴 **이 호스트에서 실행하지 못했다(Docker 없음)** — 위 ①②중 어느 쪽이 원인인지는 CI 빨강으로만 가려진다. 둘 다 초록이면 차이는 아직 못 찾은 것이다.
