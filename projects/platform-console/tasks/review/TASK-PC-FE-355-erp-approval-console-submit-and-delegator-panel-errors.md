@@ -119,3 +119,10 @@ frontend
 로컬: `npx vitest run --maxWorkers=4 --minWorkers=2` rc=0 — 412 files · 4962 tests 통과. (기본 병렬도에서는 무관한 6 파일이 타임아웃으로 흔들렸고 — 알려진 부하 flake — 낮춘 병렬도에서 전부 통과.) `tsc --noEmit` rc=0 · `next lint` rc=0(기존 경고만).
 
 열림: AC-3(Vercel 배포 · 라이브 — 콘솔에서 만들기 → 대화상자 닫힘/DRAFT 1건 · «내가 위임한» 오류 문구 없음 · 위임 생성/회수 성공, 다음 데모 창).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 백엔드: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`.
+- **AC-3 🟡 절반** — `/erp/delegation` «내가 위임한» 에 위임 1 건, 오류 문구 0.
+- 미측정: 상신(→ `SUBMITTED`) — `requester@demo.com` 작성 대화상자가 필요해 이번 창에서 하지 않았다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

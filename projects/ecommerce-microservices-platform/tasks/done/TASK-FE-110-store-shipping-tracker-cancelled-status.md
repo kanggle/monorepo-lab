@@ -8,7 +8,7 @@ TASK-FE-110
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -72,3 +72,20 @@ frontend
 # Failure Scenarios
 
 1. 취소된 배송이 «준비중» 처럼 읽혀 구매자가 물건을 기다린다 → AC-0 · 문구.
+
+## CORRECTION (2026-10-23 UTC)
+
+- **AC-0 의 체크 칸 `[ ]` 은 표시 누락이다.** 그 줄 본문이 «**측정함 (2026-10-23 UTC)**» 과 측정 내용(file:line 다섯 곳 · 소비 지점 · i18n 없음 · 운영자 요청 타입 제외)을 담고 있어, AC-0 의 동사(«위 측정») 는 그 줄 자체로 닫혀 있다. 동결 규칙으로 칸은 고치지 않는다.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 화면은 #4491(`e5fb1e715`) 머지로 Vercel 에 이미 있었고, `CANCELLED` 배송을 만드는 서버 쪽(`TASK-BE-649`)이 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899` 로 실렸다.
+- **AC-3 ✅** — 데모 구매자로 웹스토어 `/my/orders/49eae2f6…`(이 창에서 콘솔로 취소한 `CONFIRMED` 주문 — `TASK-BE-646` · `TASK-BE-649` 와 같은 주문) → «배송 추적» 아래 «주문이 취소되어 배송이 취소되었습니다.» (빨간 글씨) · 단계/택배사/운송장 없음 (스크린샷 확인).
+
+### 닫기 — 4차원 확인 (2026-10-23 UTC)
+
+- (a) PR #4491 `state=MERGED` · `mergedAt` 2026-10-23T09:52:54Z.
+- (b) 머지 커밋 `e5fb1e715` = `origin/main` 조상(`git merge-base --is-ancestor`), 굽기 커밋 `283fd39cf` 의 조상이기도 하다.
+- (c) 머지된 PR 의 `statusCheckRollup` 69 칸 중 실패 0 (SUCCESS 19 · SKIPPED 50).
+- (d) `# Acceptance Criteria` 를 열어 읽음 — AC-0 ✅(위 CORRECTION) · AC-1 · AC-2 ✅(기존) · AC-3 ✅(위). 체크 칸은 `review/` 동결 규칙으로 고치지 않았다 — 닫힘은 이 절이 기록한다.
+- ⇒ `review/ → done/`.

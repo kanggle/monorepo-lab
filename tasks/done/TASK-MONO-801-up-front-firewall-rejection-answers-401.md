@@ -1,6 +1,6 @@
 # TASK-MONO-801 — a request whose path the servlet firewall rejects up front is answered 401 «Authentication required» instead of 400
 
-- **Status**: review (AC-0–3 closed 2026-10-20 UTC · 24 services, ecommerce auth-service is excluded from the build · AC-4 waits for the next AMI bake + demo window)
+- **Status**: done (AC-0–3 closed 2026-10-20 UTC · 24 services, ecommerce auth-service is excluded from the build · AC-4 closed 2026-10-23 UTC, 33rd window)
 - **Type**: fix (servlet security configuration — shared shape across services)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (the same security-chain shape repeats in every servlet service; the fix may land in a shared library or in each service — AC-0 decides)
@@ -147,3 +147,17 @@ Each rejection case asserts: 400 · `application/json` · `BAD_REQUEST` · the f
 - Full `test` ran for the three services above only; the other 21 were compiled (`compileTestJava`), not tested.
 - No real-container (Tomcat, raw socket) run after the fix — AC-0's probe measured (a) on Tomcat for A · B · C; this run proves it through MockMvc's `FilterChainProxy`.
 - AC-4 (deploy + live) open.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- Deploy state: baked — `283fd39cf` → AMI `ami-02b3ba00a3b2ff622` (tag RepoCommit matches) · pin PR #4498 (`c5e3ddad3`) · instance `i-0f39aec49ddbaa899`. The impl merge `4d35a61ee` (#4434) is an ancestor of `283fd39cf`.
+- **AC-4 ✅** — `GET https://auth.hubwang.com/oauth2/authorize;y` → **400** `{"code":"BAD_REQUEST","message":"The request was rejected because its URL, method or headers are not allowed"}` (the common envelope, no path echo).
+- 🔵 Limit of the path through the forwarder: `/x;y` is treated like `/x` by the Vercel auth-forwarder (→ 404), so a path whose `;` the forwarder strips never reaches the firewall. Not measured in this window: `TASK-MONO-672` § Order «Still open» 12 ② (`/api/admin/x;y` · `/%25` through the iam gateway with an operator token) and ③ (wms master `GET /x;y` direct, nested envelope). AC-4's verb («same request → 400») is met by the request above.
+
+### Close — four dimensions (2026-10-23 UTC)
+
+- (a) PR #4434 `state=MERGED` · `mergedAt` 2026-10-20T16:45:29Z.
+- (b) merge commit `4d35a61ee` is an ancestor of `origin/main` (`git merge-base --is-ancestor`) and of the baked `283fd39cf`.
+- (c) the merged PR's `statusCheckRollup`: 70 checks, 0 failing (SUCCESS 38 · SKIPPED 32).
+- (d) `# Acceptance Criteria` opened and read — AC-0–3 ✅ (existing) · AC-4 ✅ (above). The AC-4 box is left as it was (a `review/` file is frozen); this section records the closure.
+- ⇒ `review/ → done/`.

@@ -166,3 +166,11 @@ X-A 의 포장 뒤 거부나 출하 확정과의 경합이면, 취소된 배송�
 # Failure Scenarios
 
 1. 배송 서비스만 취소를 받고 WMS 출고는 계속 → 출고된 물건 · 취소된 주문. AC-0 ① · ④ 가 연동 전체를 본다.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `8de95f2c7`(#4490) 는 `283fd39cf` 의 조상.
+- **AC-3 ✅ (경보 메아리만 ⚪)** — 주문 `49eae2f6…` 의 콘솔 취소(`TASK-BE-646` 과 같은 취소) → 배송 `4d8b7a3c-…` `PREPARING → CANCELLED`(13:16:22.04), 그 뒤 WMS 출고 `CANCELLED`(13:16:30.57 — 취소 요청이 실제로 WMS 에 갔다).
+- ⚪ shipping-service 로그의 거짓 `ALERT wms outbound cancelled`(자기가 요청한 취소의 메아리) 부재는 확인하지 않았다.
+- 🔴 같은 취소에서 WMS 쪽 예약이 풀리지 않았다 — 이 티켓 밖(wms inventory-service), `TASK-BE-650` § 라이브 확인 · 새 `TASK-BE-651`.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

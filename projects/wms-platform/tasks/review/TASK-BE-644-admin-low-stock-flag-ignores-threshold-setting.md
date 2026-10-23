@@ -217,3 +217,11 @@ backend
 - 🔴 **굽기 직후 할 일**: § 콘솔 후속 문구(굽기 직후 머지) 의 표를 콘솔 PR 로 — 사용자 문구 두 줄(`wms-guide/data.ts:170-171`)은 머지 전 소유자 승인. 지금 머지하면 굽기 전까지 화면 설명이 서버와 어긋난다.
 - 🔴 V5 적용 뒤 이전 이미지로 되돌리면 프로젝션이 깨진다 — 앞으로만 고친다.
 - 열림: **AC-3**(굽기 뒤 라이브 — 설정을 바꾸면 콘솔 저재고 필터 결과가 따라 바뀌는가).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `10f43b6f2`(#4478) 는 `283fd39cf` 의 조상. § 콘솔 후속 문구 = PR #4496(`0824ed547`), 굽기 라이브 **뒤** 머지 — 브랜치 nightly `39957126998` success · Vercel `7279505197` success · 라이브 `/wms/guide`: 옛 문장 0, 새 문장 각 1.
+- **AC-3 ⚪ 측정 못 함 (이유)** — 콘솔 `GET /api/wms/settings` → **500**. admin-service `SettingRepositoryImpl.search` → `AdminSettingJpaRepository.java:13-18`(`:keyPrefix IS NULL OR s.key LIKE CONCAT(:keyPrefix,'%')`) 가 PostgreSQL `operator does not exist: character varying ~~ bytea`. **굽기와 무관한 기존 결함**(창 기록은 «그 파일 마지막 변경 `b47209acf`» — 기안 때 `git log` 로 보니 `b47209acf` 는 `SettingRepositoryImpl.java` 의 마지막 변경이고 `AdminSettingJpaRepository.java` 는 `38d525f3a`(#280); 어느 쪽이든 굽기 전). 콘솔에 설정 쓰기 경로도 없어 10 → 25 변경을 못 했다.
+- 부분 관측: «저재고만» 0 건 · 가용 99 행은 `lowStockFlag=false`.
+- 새 티켓: **`TASK-BE-652`**(조건 없는 `GET /settings` 500). 그것이 실린 뒤 설정을 바꿀 길(API `PUT /settings/{key}` 등)과 함께 AC-3 을 다시 잰다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).
