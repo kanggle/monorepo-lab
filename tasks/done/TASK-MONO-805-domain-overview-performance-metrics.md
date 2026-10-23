@@ -8,7 +8,7 @@ TASK-MONO-805
 
 # Status
 
-review
+done
 
 # Owner
 
