@@ -19,8 +19,8 @@ and `platform/architecture-decision-rule.md`.
 | Bounded Context | Shipping (shipping aggregates / status transitions / event-driven lifecycle) |
 | Deployable unit | `apps/shipping-service/` |
 | Data store | PostgreSQL (owned) |
-| Event publication | Kafka via outbox: `shipping.shipping.status-changed` (ShippingStatusChanged); `ecommerce.fulfillment.requested.v1` (FulfillmentRequested, ADR-022 forward leg, via outbox `OutboxPollingScheduler`) |
-| Event consumption | `OrderConfirmed` from `order.order.confirmed` (idempotent via `EventDeduplicationChecker`, creates Shipping records); `wms.outbound.shipping.confirmed.v1` (WmsShippingConfirmedConsumer, group `shipping-service-wms`, ADR-022 return leg); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, group `shipping-service-wms`, ADR-022 return leg) |
+| Event publication | Kafka via outbox: `shipping.shipping.status-changed` (ShippingStatusChanged); `ecommerce.fulfillment.requested.v1` (FulfillmentRequested, ADR-022 forward leg, via outbox `OutboxPollingScheduler`); `ecommerce.shipping.manual-confirm-requested.v1` (ManualShipConfirmRequested, D4 v2(c)); `ecommerce.fulfillment.cancel-requested.v1` (FulfillmentCancelRequested, D4 v2(d), TASK-BE-649) |
+| Event consumption | `OrderConfirmed` from `order.order.confirmed` (idempotent via `EventDeduplicationChecker`, creates Shipping records); `OrderCancelled` from `order.order.cancelled` (OrderCancelledEventConsumer, group `shipping-service`, D4 v2(d) — pre-dispatch cancel, TASK-BE-649); `wms.outbound.shipping.confirmed.v1` (WmsShippingConfirmedConsumer, group `shipping-service-wms`, ADR-022 return leg); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, group `shipping-service-wms`, ADR-022 return leg) |
 
 ### Service Type Composition
 
@@ -28,7 +28,8 @@ and `platform/architecture-decision-rule.md`.
 `platform/service-types/INDEX.md` § Hybrid Cases (REST service that also
 consumes events). Primary type is `rest-api`; the secondary `event-consumer`
 capability subscribes to `order.order.confirmed` to bootstrap Shipping
-aggregates upon order confirmation. The primary type determines the spec read
+aggregates upon order confirmation, and to `order.order.cancelled` to cancel a
+still-`PREPARING` Shipping (TASK-BE-649). The primary type determines the spec read
 order — applied rules:
 [platform/service-types/rest-api.md](../../../../../platform/service-types/rest-api.md).
 The secondary capability is documented under "Integration Rules" below with
@@ -55,7 +56,7 @@ Recommended internal areas:
 Key domain concepts:
 - Aggregates: Shipping
 - Entities: none (Shipping is the root)
-- Value Objects: ShippingStatus (PREPARING, SHIPPED, IN_TRANSIT, DELIVERED), TrackingInfo
+- Value Objects: ShippingStatus (PREPARING, SHIPPED, IN_TRANSIT, DELIVERED, CANCELLED), TrackingInfo
 - Domain Events: ShippingStatusChanged
 - Domain Services: ShippingStatusTransitionValidator
 - Repositories: ShippingRepository
@@ -80,7 +81,7 @@ Key domain concepts:
 
 ## Domain Scope
 - Shipping (order reference, status, tracking number, carrier, status history, timestamps)
-- Status transition rules (PREPARING -> SHIPPED -> IN_TRANSIT -> DELIVERED, no backward transitions)
+- Status transition rules (PREPARING -> SHIPPED -> IN_TRANSIT -> DELIVERED, no backward transitions; terminal side branch PREPARING -> CANCELLED, reachable only through `Shipping.cancel` on a consumed `OrderCancelled` — `transitionTo` refuses `CANCELLED`, so the operator `PUT …/status` path cannot reach it)
 
 ## Domain Constraints
 - shipping-service must NOT own order or payment data
@@ -92,8 +93,9 @@ Key domain concepts:
 
 **이 절은 재조사를 막기 위한 기록이다. 아래는 추론이 아니라 실제 Testcontainers Postgres 에서 관측된 값이다.**
 
-`ShippingStatus.ALLOWED_TRANSITIONS` 는 상태당 후속이 하나뿐인
-`Map<status,status>` 이고 자기 전이 항목이 없으므로, `Shipping.transitionTo`
+`ShippingStatus.ALLOWED_TRANSITIONS` 는 자기 전이 항목이 없는 상태별 후속 집합이므로
+(TASK-BE-649 이전에는 상태당 후속이 하나뿐인 `Map<status,status>` 였다 — `PREPARING` 에
+`CANCELLED` 가 더해지며 집합이 되었다), `Shipping.transitionTo`
 (`Shipping.java:87-89`) 는 **순차** 재생 `SHIPPED` 를 결정론적으로 거부한다. 이것은
 확인된 사실이다(ADR-002 D3 census / TASK-BE-538).
 
@@ -144,17 +146,19 @@ read-A → read-B → commit-A → commit-B 이며, 읽기가 잠금을 잡지 �
   - `ShippingStatusChanged` → `shipping.shipping.status-changed`
   - `FulfillmentRequested` → `ecommerce.fulfillment.requested.v1`
   - `ManualShipConfirmRequested` → `ecommerce.shipping.manual-confirm-requested.v1`
+  - `FulfillmentCancelRequested` → `ecommerce.fulfillment.cancel-requested.v1` (TASK-BE-649). Its envelope `eventId` (= row PK) is deterministic per order — `UUID.nameUUIDFromBytes("FulfillmentCancelRequested:" + orderId)` — because a Shipping is cancelled at most once; a concurrent double cancel collides on the PK and rolls back (same reasoning as BE-547).
 
 ## Integration Rules
 - HTTP behavior must follow published contracts
 - Domain events must follow published event contracts
 - Consumes OrderConfirmed from order-service to create shipping records
+- Consumes OrderCancelled from order-service to cancel a still-`PREPARING` shipping record (and request the wms cancel when it is `wmsRouted`)
 - notification-service consumes ShippingStatusChanged events
 - Shared libraries may be used only under shared-library policy
 
 ## Events
-- Publishes: `ShippingStatusChanged` (`shipping.shipping.status-changed`); `FulfillmentRequested` (`ecommerce.fulfillment.requested.v1`, ADR-022 forward leg, via outbox)
-- Consumes: `OrderConfirmed` (order-service, `order.order.confirmed`); `wms.outbound.shipping.confirmed.v1` (WmsShippingConfirmedConsumer, group `shipping-service-wms`); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, group `shipping-service-wms`)
+- Publishes: `ShippingStatusChanged` (`shipping.shipping.status-changed`; **not** for `PREPARING → CANCELLED`); `FulfillmentRequested` (`ecommerce.fulfillment.requested.v1`, ADR-022 forward leg, via outbox); `ManualShipConfirmRequested` (`ecommerce.shipping.manual-confirm-requested.v1`); `FulfillmentCancelRequested` (`ecommerce.fulfillment.cancel-requested.v1`, D4 v2(d))
+- Consumes: `OrderConfirmed` (order-service, `order.order.confirmed`); `OrderCancelled` (order-service, `order.order.cancelled`, group `shipping-service`); `wms.outbound.shipping.confirmed.v1` (WmsShippingConfirmedConsumer, group `shipping-service-wms`); `wms.outbound.order.cancelled.v1` (WmsOutboundCancelledConsumer, group `shipping-service-wms`)
 
 ## Testing Expectations
 Required emphasis:
@@ -211,8 +215,24 @@ triggering wms to create an outbound order.
   `carrier = carrierCode`. The existing `ShippingStatusChanged` then drives the
   order-service `Order → SHIPPED`.
 - `wms.outbound.order.cancelled.v1` → `WmsOutboundCancelledConsumer`: backorder/cancel
-  ops alert; Shipping stays `PREPARING`-flagged. (No Shipping row typically exists yet
-  at backorder time.)
+  ops alert; it never mutates the Shipping. **Exception (TASK-BE-649):** when the local
+  Shipping row is already `CANCELLED`, the wms cancel is the echo of the cancel this
+  service requested (D4 v2(d)), so the `ALERT` is suppressed (INFO log instead).
+
+**Ecommerce-initiated cancel (D4 v2(d), X-A / Y-A, TASK-BE-649)** — consumer group
+`shipping-service`:
+- `order.order.cancelled` → `OrderCancelledEventConsumer` →
+  `ShippingCommandService.cancelByOrderId`. `PREPARING` → `CANCELLED`; when the row is
+  `wmsRouted`, the same transaction writes `ecommerce.fulfillment.cancel-requested.v1`
+  (wms camelCase envelope, `fulfillment-events.md` § Event 3). `SHIPPED`+ is a logged
+  no-op (return flow); an unknown order, an already-`CANCELLED` row and a redelivery are
+  no-ops. No `ShippingStatusChanged` is published for this transition.
+- Tenant: the envelope `tenant_id` is bound into `TenantContext` (fallback: the local row's
+  tenant) and cleared in a `finally`, as the other consumers do. The outbox envelope
+  `tenantId` is the row's own tenant.
+- The order cancel and refund do not wait for wms (Y-A). A wms refusal (post-pick, X-A)
+  ends as an `ALERT` on the wms side. A wms ship-confirm that later arrives for a
+  `CANCELLED` row is an `ALERT` + no-op here (`markShippedByOrderId`), never a resurrection.
 
 SoT for the cross-service event contract:
 [specs/contracts/events/wms-shipment-subscriptions.md](../../contracts/events/wms-shipment-subscriptions.md).

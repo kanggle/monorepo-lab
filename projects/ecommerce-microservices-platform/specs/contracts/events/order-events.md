@@ -132,7 +132,25 @@ Published when an order is cancelled — by every cancel path: customer cancel, 
 warehouse-backorder cancel, user-withdrawal cascade, stuck-detector payment timeout.
 
 **Consumers:** payment-service (refund / void), product-service (stock-reservation release —
-TASK-BE-428), promotion-service (coupon restore)
+TASK-BE-428), promotion-service (coupon restore), shipping-service (pre-dispatch shipment
+cancel — ADR-MONO-022 D4 v2(d), TASK-BE-649)
+
+**shipping-service semantics** (`OrderCancelledEventConsumer`, group `shipping-service`,
+dedupe on `event_id`). It locates the Shipping row by `payload.orderId` and decides by
+the row's status:
+
+| Shipping row | Effect |
+|---|---|
+| `PREPARING`, `wmsRouted = true` | → `CANCELLED`, and in the **same transaction** writes `ecommerce.fulfillment.cancel-requested.v1` to the outbox (`fulfillment-events.md` § Event 3). |
+| `PREPARING`, `wmsRouted = false` | → `CANCELLED`. No outbox row (wms holds no outbound order). |
+| `SHIPPED` / `IN_TRANSIT` / `DELIVERED` | Logged no-op. The goods have left; that is the return flow, not a cancel. |
+| already `CANCELLED` | No-op (redelivery / idempotent). |
+| no row (cancel before confirm, unknown order) | No-op. |
+
+The order cancel and refund do **not** wait for this (Y-A best-effort). A missing or blank
+`orderId` / null payload is skipped with a WARN log, as the `OrderConfirmed` consumer does.
+The `PREPARING → CANCELLED` transition publishes **no** `ShippingStatusChanged`
+(`shipping-events.md` § ShippingStatusChanged).
 
 **Payload**
 ```json

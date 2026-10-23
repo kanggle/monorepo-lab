@@ -37,7 +37,7 @@
 | Topic | Contract | Purpose |
 |---|---|---|
 | `order.order.placed` | `specs/contracts/events/order-events.md` | Notify payment-service and promotion-service that a new order was created |
-| `order.order.cancelled` | `specs/contracts/events/order-events.md` | Notify payment-service (refund) and promotion-service (coupon restore) of cancellation |
+| `order.order.cancelled` | `specs/contracts/events/order-events.md` | Notify payment-service (refund), product-service (reservation release), promotion-service (coupon restore) and shipping-service (pre-dispatch shipping cancel, TASK-BE-649) of cancellation |
 | `order.order.confirmed` | `specs/contracts/events/order-events.md` | Notify shipping-service to create a shipment record after order is confirmed |
 
 ## Forbidden Dependencies

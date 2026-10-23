@@ -14,14 +14,15 @@
 | Deployable unit | `apps/shipping-service/` |
 | Bounded Context | `Shipping` |
 | Persistent stores | PostgreSQL (shipping aggregate + status history) + Kafka outbox table |
-| Event publication | `shipping.shipping.status-changed` (ShippingStatusChanged) |
+| Event publication | `shipping.shipping.status-changed` (ShippingStatusChanged); wms-bound fulfillment legs incl. `ecommerce.fulfillment.cancel-requested.v1` (TASK-BE-649) |
 
 ## Responsibilities
 
 - Create shipping record on `OrderConfirmed` event (idempotent by `orderId` — duplicate event = no-op).
-- Enforce **strict unidirectional status transitions**: `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`.
+- Enforce **strict unidirectional status transitions**: `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`, plus the terminal side branch `PREPARING → CANCELLED` (system-only, on `OrderCancelled` — TASK-BE-649).
+- Cancel a still-`PREPARING` shipping on `OrderCancelled`; when it is `wmsRouted`, ask wms to cancel its outbound order (`ecommerce.fulfillment.cancel-requested.v1`, same transaction). `SHIPPED`+ is not cancelled (return flow).
 - Provide shipping status query by `orderId`.
-- Publish `ShippingStatusChanged` on every transition (consumed by `notification-service`).
+- Publish `ShippingStatusChanged` on every transition except `PREPARING → CANCELLED` (consumed by `order-service` and `notification-service` — see `shipping-events.md`).
 - **External carrier integration — outbound pull (TASK-BE-293)**: an admin-triggered
   `refresh-tracking` reads the shipment's carrier status via `CarrierTrackingPort` and
   advances it forward. Default `shipping.carrier.mode=mock` (no-op = the v1 admin-driven
@@ -65,16 +66,18 @@
 | REST | `POST /api/shippings/{id}/refresh-tracking` | `X-User-Role: ADMIN` | carrier-driven status refresh (TASK-BE-293, best-effort) |
 | REST | `POST /api/shippings/carrier-webhook` | HMAC sig (`X-Carrier-Signature`) | inbound carrier tracking webhook (TASK-BE-294, idempotent, best-effort) |
 | Kafka consume | `order.order.confirmed` | — | shipping record creation |
+| Kafka consume | `order.order.cancelled` | — | pre-dispatch shipping cancel + wms cancel request (ADR-022 D4 v2(d), group `shipping-service`, TASK-BE-649) |
 | Kafka consume | `wms.outbound.shipping.confirmed.v1` | — | advance Shipping `PREPARING → SHIPPED` (ADR-022 return leg, group `shipping-service-wms`) |
-| Kafka consume | `wms.outbound.order.cancelled.v1` | — | backorder/cancel ops alert (ADR-022 return leg, group `shipping-service-wms`) |
+| Kafka consume | `wms.outbound.order.cancelled.v1` | — | backorder/cancel ops alert (ADR-022 return leg, group `shipping-service-wms`); suppressed when the Shipping is already `CANCELLED` (echo of our own request) |
 | Kafka publish | `shipping.shipping.status-changed` | — | notification consumers |
 | Kafka publish | `ecommerce.fulfillment.requested.v1` | — | wms fulfillment trigger (ADR-022 forward leg, via outbox) |
+| Kafka publish | `ecommerce.fulfillment.cancel-requested.v1` | — | wms outbound cancel request (ADR-022 D4 v2(d), via outbox, TASK-BE-649) |
 
 자세한 spec 은 [`../../contracts/http/shipping-api.md`](../../contracts/http/shipping-api.md) + [`../../contracts/events/shipping-events.md`](../../contracts/events/shipping-events.md) 참조.
 
 ## Key invariants
 
-1. **Status transitions strictly unidirectional** — `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`; backward / skip 금지 (`IllegalShippingTransition`).
+1. **Status transitions strictly unidirectional** — `PREPARING → SHIPPED → IN_TRANSIT → DELIVERED`; backward / skip 금지 (`IllegalShippingTransition`). 끝 상태 곁가지 `PREPARING → CANCELLED` 는 `OrderCancelled` 소비로만 간다(운영자 `PUT …/status` 는 `CANCELLED` 를 거부 — TASK-BE-649).
 2. **One shipping record per order** — `orderId` unique constraint + domain check.
 3. **Idempotent creation on duplicate `OrderConfirmed`** — same `orderId` 재수신 시 새 record 생성 안 함 (no-op + WARN log).
 4. **No order / payment ownership** — shipping-service 는 shipping aggregate 만 소유.

@@ -8,7 +8,7 @@ shipping-service 가 `order.order.cancelled` 를 소비하지 않는다 — 출�
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -84,6 +84,31 @@ backend
   2. WMS 가 **포장 뒤(`PICKED`/`PACKING`/`PACKED`) 자동 취소를 받을지** — 지금은 사람 관리자(`ROLE_OUTBOUND_ADMIN`)만 할 수 있다. 시스템 호출에 그 권한을 줄지, 아니면 포장 뒤는 거부하고 이커머스에 «취소 실패» 를 돌려줄지는 정책 결정이다.
   3. 거부 · 경합(WMS 가 이미 출하 확정)일 때 이커머스 주문 · 환불을 어떻게 할지 — 지금 주문 취소는 동기로 끝나고 환불도 이미 나간다. «출고 전에만 취소» 를 지키려면 취소를 WMS 응답까지 미루는 사가(`CANCELLATION_REQUESTED` 류) 가 필요할 수 있다 = 명세에 없는 아키텍처 결정(중단 조건 (b) 도 닿는다).
   4. 루프 확인: WMS 취소는 `outbound.order.cancelled` 를 다시 내고 이커머스 order-service 가 그것을 자동 취소로 소비한다 — 이미 `CANCELLED` 인 주문에서 no-op 인지 확인해야 한다.
+
+## 구현 기록 (2026-10-23 UTC)
+
+### 결정 — `ShippingStatusChanged(CANCELLED)` 는 내지 않는다
+
+`shipping.shipping.status-changed` 의 `src/main` 소비자는 저장소 전체에 둘이다(검색어 `shipping.shipping.status-changed`, `projects/**/src/main/**`).
+
+| 소비자 | `CANCELLED` 를 받으면 | 근거 |
+|---|---|---|
+| order-service `ShippingStatusChangedEventConsumer` | 무시(no-op) — `SHIPPED` · `DELIVERED` 가 아니면 바로 돌아간다 | `apps/order-service/.../infrastructure/event/ShippingStatusChangedEventConsumer.java:51-56` |
+| notification-service `ShippingStatusChangedEventConsumer` | **고객에게 알림을 보낸다** — 상태를 가리지 않고 `SHIPPING_STATUS_CHANGED` 템플릿에 날 문자열 `newStatus` 를 넣는다 | `apps/notification-service/.../adapter/in/event/ShippingStatusChangedEventConsumer.java:46-59` |
+
+settlement · search · batch-worker 는 이 토픽을 구독하지 않는다(0 건). 내면 고객이 «배송 상태 `CANCELLED`» 알림을 받는다. 그 문구는 소유자 승인이 없다(ADR-MONO-022 D4 v2(d) «Known costs» 가 콘솔 문구도 승인 대상으로 적는다). 그래서 **내지 않는다**. 취소는 배송 조회 API 의 `status` · `statusHistory` 로 보인다. 나중에 내려면 알림 문구를 먼저 정해야 하고, 그때는 덧붙이는 변경이다. 계약: `shipping-events.md` § ShippingStatusChanged.
+
+### 결정 — 운영자는 배송을 `CANCELLED` 로 보낼 수 없다
+
+`ShippingController.parseStatus` 는 `ShippingStatus.valueOf` 라(`ShippingController.java:101-108`) enum 에 `CANCELLED` 를 넣는 순간 `PUT /api/shippings/{id}/status` 로 들어올 수 있다. 그러면 환불도 WMS 취소 요청도 없이 배송만 취소된다 — 계약에 없는 API 다. 그래서 `Shipping.transitionTo` 는 `CANCELLED` 를 거부하고(→ `422 INVALID_STATUS_TRANSITION`), `CANCELLED` 로 가는 길은 `Shipping.cancel` 하나다. 계약: `shipping-api.md` § Allowed Status Transitions.
+
+### 결정 — `CANCELLED` 배송에 WMS 출하 확정이 오면 경보 + no-op
+
+X-A 의 포장 뒤 거부나 출하 확정과의 경합이면, 취소된 배송에 `wms.outbound.shipping.confirmed.v1` 이 올 수 있다. 지금 `markShippedByOrderId`(`ShippingCommandService.java:74-80`)는 `SHIPPED`/`IN_TRANSIT`/`DELIVERED` 만 건너뛰므로 `CANCELLED` 에서 `transitionTo(SHIPPED)` 가 예외를 내고, 재시도 뒤 DLQ 로 간다. 이것을 `ALERT` 로그 + no-op 으로 바꾼다(되살리지 않는다 — Y-A 에서 그것은 반품 흐름이다).
+
+### 측정 — DB 에 상태 제약 없음 → 마이그레이션 없음
+
+`shippings.status` · `shipping_status_history.status` 는 `VARCHAR(50)` 이고 CHECK 제약이 없다(`V1__create_shippings_table.sql:5`, `V2__create_shipping_status_history_table.sql:4`). JPA 는 `@Enumerated(EnumType.STRING)`(`ShippingJpaEntity.java:32`, `StatusHistoryJpaEntity.java:27`). Flyway 는 필요 없다.
 
 # Related Specs
 

@@ -240,6 +240,12 @@ is already `CANCELLED`, so a self-requested cancel raises no false ALERT (`TASK-
 ### Delivery semantics / idempotency
 - At-least-once (outbox). Consumer dedupes on envelope `eventId` (T8) + order
   terminal-state guard (already `CANCELLED` ⇒ no-op).
+- Producer `eventId` is deterministic per order —
+  `UUID.nameUUIDFromBytes("FulfillmentCancelRequested:" + orderNo)` — because one
+  Shipping is cancelled at most once (`PREPARING → CANCELLED` is terminal). It is a valid
+  UUID (name-based), as the wms `EventEnvelopeParser` requires. Producer-side redelivery
+  of `order.order.cancelled` writes nothing (ecommerce dedupe + the row is no longer
+  `PREPARING`).
 - `findByOrderNo` miss ⇒ safe no-op (debug log), NOT a DLT.
 - A post-pick refusal is NOT an error (ALERT no-op), never a DLT.
 - Unparseable envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT.

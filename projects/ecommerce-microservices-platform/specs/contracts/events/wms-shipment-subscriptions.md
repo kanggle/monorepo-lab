@@ -27,7 +27,7 @@ The authoritative envelope + payload schemas live in the **producing service** (
 | Topic | wms event | Consumer (group) | Effect on ecommerce |
 |---|---|---|---|
 | `wms.outbound.shipping.confirmed.v1` | `outbound.shipping.confirmed` | `WmsShippingConfirmedConsumer` (`shipping-service-wms`) | Shipping `PREPARING → SHIPPED` with `trackingNumber = shipmentNo`, `carrier = carrierCode`; existing `ShippingStatusChanged` then drives order-service `Order → SHIPPED`. |
-| `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`shipping-service-wms`) | Backorder/cancel path: ops alert; Shipping stays `PREPARING`-flagged (no Shipping row typically exists yet at backorder time). Unchanged from MONO-196. |
+| `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`shipping-service-wms`) | Backorder/cancel path: ops alert; never mutates the Shipping. Unchanged from MONO-196, **except** (TASK-BE-649): when the local Shipping row is already `CANCELLED`, the event is the echo of the cancel shipping-service requested (`fulfillment-events.md` § Event 3), so the `ALERT` is suppressed (INFO log). |
 | `wms.outbound.order.cancelled.v1` | `outbound.order.cancelled` | `WmsOutboundCancelledConsumer` (`order-service-wms`, implemented) | Locate Order by `orderId == orderNo`; if cancellable (PENDING/CONFIRMED) → `Order → CANCELLED` (system-initiated) → emit `order.cancelled` → existing `payment-service` refund + `promotion-service` coupon-restore fan-out. Status-safe + idempotent (see § order-service consumer). |
 
 ## Envelope — **wms convention (camelCase)**

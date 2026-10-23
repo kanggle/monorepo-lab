@@ -79,7 +79,7 @@ Update shipping status. Only forward transitions are allowed.
 | 403 | ACCESS_DENIED | Not an admin user |
 | 404 | SHIPPING_NOT_FOUND | Shipping record does not exist |
 | 409 | DATA_INTEGRITY_VIOLATION | Concurrent conflict: another request transitioned this shipment to the same status at the same instant. The transition is idempotent on `(shippingId, newStatus)` via the `ShippingStatusChanged` event id (= `shipping_outbox` PK), so the race loser rolls back and the winner's transition stands. A retry observes the shipment already in the target status (TASK-BE-547). |
-| 422 | INVALID_STATUS_TRANSITION | Status transition is not allowed |
+| 422 | INVALID_STATUS_TRANSITION | Status transition is not allowed — incl. any `status: CANCELLED` (system-only target, TASK-BE-649) and any transition out of `CANCELLED` |
 
 ---
 
@@ -183,16 +183,27 @@ in `shipping.carrier.webhook.secret`). Fail-closed: blank secret → 401 for eve
 | `SHIPPED` | Package handed to carrier |
 | `IN_TRANSIT` | Package in transit |
 | `DELIVERED` | Package delivered to recipient |
+| `CANCELLED` | Order cancelled before dispatch; terminal (ADR-MONO-022 D4 v2(d), TASK-BE-649) |
+
+Every read that returns `status` (`GET /api/shippings/orders/{orderId}`, `GET /api/shippings`,
+`statusHistory[].status`, the `PUT …/status` and `POST …/refresh-tracking` responses) may
+carry `CANCELLED`. The `GET /api/shippings?status=` filter accepts it.
 
 ## Allowed Status Transitions
 
-| From | To |
-|---|---|
-| `PREPARING` | `SHIPPED` |
-| `SHIPPED` | `IN_TRANSIT` |
-| `IN_TRANSIT` | `DELIVERED` |
+| From | To | Who |
+|---|---|---|
+| `PREPARING` | `SHIPPED` | operator (`PUT …/status`), wms ship-confirm, carrier refresh / webhook |
+| `SHIPPED` | `IN_TRANSIT` | operator, carrier refresh / webhook |
+| `IN_TRANSIT` | `DELIVERED` | operator, carrier refresh / webhook |
+| `PREPARING` | `CANCELLED` | **system only** — shipping-service consuming `OrderCancelled` (`order-events.md`) |
 
-Backward or skip transitions are not allowed.
+Backward or skip transitions are not allowed. `CANCELLED` is terminal.
+
+`CANCELLED` is **not** an operator target. `PUT /api/shippings/{id}/status` with
+`status: CANCELLED` returns `422 INVALID_STATUS_TRANSITION` from every current status — an
+operator cancels the **order**, and the shipment follows. (Cancelling only the shipment
+would skip the refund and the wms cancel request.)
 
 ---
 
