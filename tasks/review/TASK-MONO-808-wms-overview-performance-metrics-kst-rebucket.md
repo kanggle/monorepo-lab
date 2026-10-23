@@ -134,6 +134,12 @@ WMS 의 일별 입고 · 출고 집계는 지금 UTC 날짜로 잘려 저장된�
 - Edge «이벤트 시각이 없는 옛 행» — 일별 행엔 늘 `date` 가 있고, 사건엔 `completedAt` 이 없으면 엔벨로프 `occurredAt`(늘 있음)을 쓴다 — 투영 · 백필 스크립트 같은 규칙. 0 건이 아니라 **생길 수 없는 경우**.
 - Failure «신선 볼륨 CI 는 영원히 초록» — IT 가 **옛 볼륨의 모양을 손으로 심어** 다시 쌓기를 잰다. 남은 공백: Flyway V6 자체를 «이미 행이 있는 볼륨» 에서 돌리는 판은 IT 가 아니라 함수 호출로 대신 쟀다(V6 의 마지막 문장이 같은 함수다).
 
+### 🔴 CI 첫 판(PR #4506, `2d1d4e4a1`)이 잡은 것 — 내 시험 고침이 반쪽이었다
+
+`Integration (master + notification + outbound)` 묶음(admin-service IT 가 여기 산다) 92 개 중 **2 빨강**: `InboundProjectionKafkaIT.putawayCompleted_reverseOrderAcrossAsns_countsBoth` · `OutboundProjectionKafkaIT.shippingConfirmed_reverseOrderAcrossShipments_countsBoth`. 두 시험은 «같은 날 행에 두 건, 늦은 쪽이 먼저 도착» 을 재는데 늦은 쪽 시각이 `15:00Z` · `16:00Z` — **UTC 로는 05-10, KST 로는 05-11** 이라 두 건이 다른 행으로 갈라졌다. 코드 결함이 아니라 **날 경계가 옮겨 간 것을 시험이 정확히 문 것**이다. 고침: 늦은 쪽을 `14:00Z`(23:00 KST)로 — 시험의 뜻(같은 날 · 늦은 쪽 먼저)은 그대로.
+
+🔴 **놓친 이유**: Kafka IT 를 고칠 때 `atZone(ZoneOffset.UTC)` 만 grep 했다. 이 두 시험은 계산이 아니라 **날짜를 손으로 박아(`LocalDate.of`)** 그 grep 에 안 걸린다. 단위 시험에서 같은 모양(`reverseOrderAcrossAsns` 의 `15:00Z`)을 이미 한 번 고쳤으면서 IT 쪽 쌍둥이를 안 찾았다. ⇒ 고친 뒤 `T(1[5-9]|2[0-3]):..:..Z` 로 admin-service 시험 전체를 다시 훑었다 — 나머지는 의도된 경계 시험이거나 날짜를 단언하지 않는다.
+
 ## 배포 상태
 
 - `main` ⏳ 이 PR.

@@ -98,7 +98,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
     @Test
     void shippingConfirmed_reverseOrderAcrossShipments_countsBoth() {
         UUID warehouseId = UUID.randomUUID();
-        Instant t2 = Instant.parse("2026-05-10T16:00:00Z");
+        Instant t2 = Instant.parse("2026-05-10T14:00:00Z"); // 23:00 KST — same KST day as t1 (TASK-MONO-808)
         Instant t1 = Instant.parse("2026-05-10T08:00:00Z");
         LocalDate date = LocalDate.of(2026, 5, 10);
         UUID laterId = UUID.randomUUID();
