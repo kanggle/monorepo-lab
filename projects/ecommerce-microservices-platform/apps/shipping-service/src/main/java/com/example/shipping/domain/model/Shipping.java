@@ -82,9 +82,28 @@ public class Shipping {
         this.wmsRouted = true;
     }
 
+    /**
+     * Cancels a shipment that has not left yet: {@code PREPARING → CANCELLED} (terminal,
+     * ADR-MONO-022 D4 v2(d), TASK-BE-649). The only way into {@code CANCELLED} — it follows an
+     * order cancel, so {@link #transitionTo} refuses it. {@code wmsRouted} is kept: it records
+     * that wms holds an outbound order, which is what the caller needs to ask wms to cancel.
+     *
+     * @return the previous status ({@code PREPARING})
+     * @throws InvalidStatusTransitionException from any other status (a shipment that has
+     *                                          left is the return flow, not a cancel)
+     */
+    public ShippingStatus cancel(Clock clock) {
+        if (!this.status.canTransitionTo(ShippingStatus.CANCELLED)) {
+            throw new InvalidStatusTransitionException(this.status, ShippingStatus.CANCELLED);
+        }
+        return applyStatus(ShippingStatus.CANCELLED, clock);
+    }
+
     public ShippingStatus transitionTo(ShippingStatus newStatus, String trackingNumber,
                                         String carrier, Clock clock) {
-        if (!this.status.canTransitionTo(newStatus)) {
+        // CANCELLED is reachable only through cancel(): an operator who could set it here
+        // would cancel the shipment without the order, its refund or the wms cancel request.
+        if (newStatus == ShippingStatus.CANCELLED || !this.status.canTransitionTo(newStatus)) {
             throw new InvalidStatusTransitionException(this.status, newStatus);
         }
 
@@ -99,6 +118,10 @@ public class Shipping {
             this.carrier = carrier;
         }
 
+        return applyStatus(newStatus, clock);
+    }
+
+    private ShippingStatus applyStatus(ShippingStatus newStatus, Clock clock) {
         ShippingStatus previousStatus = this.status;
         this.status = newStatus;
         Instant now = Instant.now(clock);

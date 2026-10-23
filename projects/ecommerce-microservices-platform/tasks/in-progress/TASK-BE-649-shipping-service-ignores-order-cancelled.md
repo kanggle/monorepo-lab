@@ -51,7 +51,7 @@ backend
 
 - [x] **AC-0** — 위 ①~④. 측정 2026-10-23 UTC — 아래 § AC-0 측정 결과.
 - [x] **AC-1** — 소유자 결정 · 필요하면 ADR 먼저. ✅ 2026-10-23 UTC **ADR-MONO-022 D4 v2(d) ACCEPTED — X-A / Y-A** (소유자 선택창, 정확형). 구현 순서: 계약 → WMS 티켓 → 이 티켓 → 콘솔 «취소됨» 배송 라벨 티켓. 🔵 소유자 결정 2026-10-23 KST: **«아직 출고 전인 배송만 취소»**. 🔴 **그러나 이 결정만으로는 닫히지 않는다** — AC-0 ①·④ 가 보이듯 «출고 전» 배송은 기본 설정에서 **이미 WMS 출고 주문이 나가 있고**, 그것을 취소할 이커머스 → WMS 경로(이벤트 · 계약)가 없다. 결정을 이행하려면 새 프로젝트 간 이벤트 + ADR-MONO-022 개정이 먼저다(§ 착수 중단). 소유자 선택 대기. 🟡 2026-10-23 UTC 소유자 선택 «ADR 초안 · 굽기는 안 기다림» → ADR-MONO-022 **D4 v2(d) PROPOSED** 초안(선택지 X: WMS 자동 취소 깊이 · Y: 주문 · 환불 시점). 승인은 정확형 `ADR-MONO-022 D4 v2(d) ACCEPTED — X-? / Y-?` 만. 이번 굽기에 싣지 않는다.
-- [ ] **AC-2** — 구현 + 시험 · CI 초록. 미착수 — 위 중단 때문에 구현 · 시험을 쓰지 않았다(로컬에서 돈 시험 없음).
+- [ ] **AC-2** — 구현 + 시험 · CI 초록. 🟡 2026-10-23 UTC 구현 · 시험 커밋됨(계약 `08baf0e55` → 시험 `b45296e0f` → 구현). 로컬에서 돈 것 = 단위 시험만(아래 § 로컬에서 돈 것). **Testcontainers 통합 시험은 로컬에서 돌지 않았다**(Docker 없음) — CI `ecommerce-integration-tests` 가 판정한다. CI 초록 전이라 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브.
 
 ## ACCEPTED 뒤 범위 (2026-10-23 UTC — ADR-MONO-022 D4 v2(d) · X-A / Y-A)
@@ -109,6 +109,46 @@ X-A 의 포장 뒤 거부나 출하 확정과의 경합이면, 취소된 배송�
 ### 측정 — DB 에 상태 제약 없음 → 마이그레이션 없음
 
 `shippings.status` · `shipping_status_history.status` 는 `VARCHAR(50)` 이고 CHECK 제약이 없다(`V1__create_shippings_table.sql:5`, `V2__create_shipping_status_history_table.sql:4`). JPA 는 `@Enumerated(EnumType.STRING)`(`ShippingJpaEntity.java:32`, `StatusHistoryJpaEntity.java:27`). Flyway 는 필요 없다.
+
+### 구현 (2026-10-23 UTC)
+
+- 도메인: `ShippingStatus` 에 `CANCELLED`(맨 뒤 — 정방향 전진기가 ordinal 로 걷기 때문), 허용 전이를 상태별 **집합**으로(`PREPARING → {SHIPPED, CANCELLED}`). `Shipping.cancel(Clock)` 이 유일한 입구, `transitionTo` 는 `CANCELLED` 거부.
+- 응용: `ShippingCommandService.cancelByOrderId(CancelShippingCommand)` — `PREPARING` → `CANCELLED` · `wmsRouted` 면 같은 트랜잭션에서 `publishFulfillmentCancelRequested`. `SHIPPED`+ = WARN no-op, 이미 `CANCELLED` · 행 없음 = no-op. `ShippingStatusChanged` 안 냄. `markShippedByOrderId` 는 `CANCELLED` 에서 `ALERT` + no-op.
+- 소비자: `OrderCancelledEventConsumer`(`order.order.cancelled`, 그룹 `shipping-service` — 같은 order-service 토픽을 읽는 `OrderConfirmedEventConsumer` 와 같은 그룹). dedupe `OrderCancelled`, 봉투 `tenant_id` → `TenantContext`(없으면 행의 tenant) · `finally` 해제, null payload / 빈 orderId = WARN 건너뜀, JSON · UUID 실패 = 기존 `KafkaConsumerConfig` 가 `order.order.cancelled.dlq` 로.
+- 발행: `FulfillmentCancelRequestedMessage` — 계약 Event 3 필드 그대로(봉투 `eventId/eventType/occurredAt/aggregateType/aggregateId/tenantId/payload`, payload `orderNo/tenantId/reason/requestedAt`), outbox 라우팅 키 `FulfillmentCancelRequested` → `ecommerce.fulfillment.cancel-requested.v1`. `eventId` = `UUID.nameUUIDFromBytes("FulfillmentCancelRequested:" + orderId)`(한 배송은 한 번만 취소 — 동시 이중 취소는 outbox PK 충돌로 롤백). WMS 소비자(`FulfillmentCancelRequestedConsumer.java:124,130-150`)의 토픽 · 봉투 파서 요구(UUID `eventId` · `aggregateId`, `payload.orderNo`)와 맞다.
+- 경보 억제: `WmsOutboundCancelledConsumer` — 배송 행이 이미 `CANCELLED` 면 `ALERT` 대신 INFO. 판정은 배송 상태이지 메아리의 `reason` 이 아니다(WMS 관리자가 포장 뒤 사람 손으로 끝낸 취소도 우리가 요청한 것이다).
+- DB: 마이그레이션 없음(위 측정).
+
+### 로컬에서 돈 것 (2026-10-23 UTC, 이 worktree)
+
+| 명령 | 결과 |
+|---|---|
+| `./gradlew :projects:ecommerce-microservices-platform:apps:shipping-service:test` | `BUILD SUCCESSFUL` — JUnit XML 합계 **239 tests · 0 failures · 0 errors**. 새 시험 포함 확인: `OrderCancelledEventConsumerTest` 8, `WmsOutboundCancelledConsumerTest` 8, `SpringShippingEventPublisherTest` 8, `ShippingStatusTest` 10, `ShippingTest` 20, `ShippingCommandServiceTest` 30, `ShippingForwardAdvancerTest` 4, `ShippingOutboxPublisherTest` 5. `@Tag("integration")` 시험은 이 태스크에서 제외된다(설계). 통합 시험 소스는 `compileTestJava` 로 컴파일만 됐다. |
+| 같은 명령, 구현에 결함 4개를 일부러 넣고(cancel-request 발행 끔 · 경보 억제 끔 · `transitionTo` 의 `CANCELLED` 거부 뺌 · `CANCELLED` 를 `DELIVERED` 앞으로) | **13 failed** — 넷 모두 겨냥한 시험이 빨강(`cancel-requested 발행`, `ALERT 억제`, `transitionTo 는 CANCELLED 를 거부`, `정방향 사슬의 맨 뒤` 등). 원복 뒤 다시 239/0. |
+| `bash scripts/check-cross-project-topic-relay.sh` | `rc=0` — 19 routes, `ecommerce.fulfillment.cancel-requested.v1` 은 BE-650 이 넣은 `mm2.properties:110` 화이트리스트에 있다. |
+| `bash scripts/check-service-type-drift.sh` | `rc=0` |
+| `check-index-queue-drift.sh` · `check-task-id-collision.sh` · `check-walkthrough-ledger-drift.sh` (스테이지 뒤) | 셋 다 `rc=0` |
+| `FulfillmentIntegrationTest`(Testcontainers) 새 5건 | **돌지 않음** — 이 호스트에 Docker 없음(`docker info` rc=1). |
+| 시험만 담은 커밋 `b45296e0f` 단독 | **돌리지 않았다.** 새 API(`CANCELLED` · `cancel` · `cancelByOrderId` · 새 소비자)를 참조하므로 그 커밋에서 CI 빨강은 행동 실패가 아니라 `compileTestJava` 실패다. |
+
+### 배송 상태를 늘어놓는 곳 (전수, 2026-10-23 UTC)
+
+| 곳 | 처리 |
+|---|---|
+| `apps/shipping-service/.../domain/model/ShippingStatus.java` | 바꿈 |
+| `.../domain/model/Shipping.java` (`transitionTo` 의 SHIPPED 분기) | 바꿈 (`CANCELLED` 거부 + `cancel`) |
+| `.../application/service/ShippingCommandService.java` `markShippedByOrderId` 의 `SHIPPED/IN_TRANSIT/DELIVERED` 나열 | 바꿈 (`CANCELLED` → ALERT no-op) |
+| `.../application/service/ShippingForwardAdvancer.java` (`values()` ordinal) | 동작은 enum 순서로 지킴, javadoc 만 |
+| `.../infrastructure/persistence/ShippingRepositoryImpl.java:111-112` `IN_FLIGHT = {SHIPPED, IN_TRANSIT}` | 안 바꿈 — 취소된 배송은 추적 대상이 아니다 |
+| `.../application/service/CarrierStatusMapper.java:38-69` | 안 바꿈 — 택배사 코드는 취소로 매핑되지 않는다(취소는 주문에서만 온다) |
+| `.../interfaces/rest/controller/ShippingController.java:101-108` `valueOf` | 안 바꿈 — 목록 `?status=CANCELLED` 는 받고, PUT 은 도메인이 422 |
+| order-service `ShippingStatusChangedEventConsumer.java:51-56` | 안 바꿈 — `CANCELLED` 를 받지 않는다(안 냄) |
+| notification-service `ShippingStatusChangedEventConsumer.java:46-59` | 안 바꿈 — 같은 이유 |
+| 계약 `shipping-api.md` · `shipping-events.md` · `order-events.md` · `fulfillment-events.md` · `wms-shipment-subscriptions.md`, 서비스 스펙 3 · order-service `dependencies.md` | 바꿈 (계약 커밋) |
+| `tests/e2e/.../FulfillmentLoopE2ETest.java` · `KafkaTestProducer.java` | 안 바꿈 — backorder 시나리오는 주문 `CANCELLED` 와 `order.cancelled` 만 단언한다. 이제 그 취소가 배송도 `CANCELLED` 로 보내고 cancel-request 행을 쓰지만 단언에 닿지 않는다(nightly 전용 — 다음 nightly 를 한 번 볼 것). |
+| `infra/demo/seed/seed-ecommerce.sh:299,502-` 배송 진행 | 안 바꿈 — 시드가 취소하는 주문은 슬롯 1 하나이고 결제 전 취소라 배송 행이 없다(no-op). 배송 하한 2건(슬롯 4 · 5)은 그대로. |
+| web-store `packages/types/src/shipping.ts:3` · `apps/web-store/src/features/order/lib/shipping-steps.ts:3-12` · `ShippingTracker.tsx:51` | **안 바꿈 (범위 밖 · 후속 필요)** — 구매자 주문 상세가 `CANCELLED` 배송을 받으면 `getStepIndex` = -1 → 단계 표시에 켜진 단계가 없다. 깨지지는 않는다. 지금까지 취소 주문은 «상품 준비중» 으로 보였다. |
+| platform-console `features/ecommerce-ops/api/shipping-types.ts:30-73` · `components/shipping-labels.ts:9-30` | **안 바꿈 — `TASK-PC-FE-367`.** 콘솔이 받을 것: 목록 · 상세의 `status: "CANCELLED"` 와 `statusHistory[].status: "CANCELLED"`(Zod 는 `z.string()` 이라 통과), `?status=CANCELLED` 필터 응답. 지금 콘솔은 라벨 없이 날 `CANCELLED` · 톤 `neutral` · 다음 전이 버튼 없음(`allowedNextStatus` = null)으로 그린다. 필터 선택지(`STATUS_FILTER_OPTIONS`)에는 없다. |
 
 # Related Specs
 

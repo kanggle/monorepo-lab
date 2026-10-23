@@ -19,10 +19,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>A thin wrapper around the shared {@link AbstractOutboxPublisher}
  * (TASK-MONO-049 / ADR-MONO-004 § 5). Supplies the shipping-service specifics:
  * the {@code shipping_outbox} repository, a {@link TopicResolver} mapping the
- * three event types to their existing topics (ported verbatim from the v1
+ * event types to their topics (ported verbatim from the v1
  * {@code OutboxPollingScheduler.resolveTopic} — note the <b>mixed</b> topic
  * conventions: {@code ShippingStatusChanged} has no {@code .v1} suffix while the
- * two wms-bound fulfillment legs do; preserved exactly), a
+ * wms-bound fulfillment legs do; preserved exactly — the cancel-request leg added by
+ * TASK-BE-649 follows the {@code .v1} convention), a
  * {@link MicrometerOutboxMetrics} with the {@code shipping} prefix + a preserved
  * {@code shipping.outbox.pending.count} gauge, and the {@code @Scheduled} trigger.
  *
@@ -35,6 +36,8 @@ public class ShippingOutboxPublisher extends AbstractOutboxPublisher<ShippingOut
     static final String TOPIC_SHIPPING_STATUS_CHANGED = "shipping.shipping.status-changed";
     static final String TOPIC_FULFILLMENT_REQUESTED = "ecommerce.fulfillment.requested.v1";
     static final String TOPIC_MANUAL_SHIP_CONFIRM_REQUESTED = "ecommerce.shipping.manual-confirm-requested.v1";
+    /** ADR-MONO-022 D4 v2(d), TASK-BE-649 — consumed by wms outbound-service (TASK-BE-650). */
+    static final String TOPIC_FULFILLMENT_CANCEL_REQUESTED = "ecommerce.fulfillment.cancel-requested.v1";
 
     public ShippingOutboxPublisher(ShippingOutboxJpaRepository repository,
                                    KafkaTemplate<String, String> kafkaTemplate,
@@ -84,6 +87,7 @@ public class ShippingOutboxPublisher extends AbstractOutboxPublisher<ShippingOut
             case "ShippingStatusChanged" -> TOPIC_SHIPPING_STATUS_CHANGED;
             case "FulfillmentRequested" -> TOPIC_FULFILLMENT_REQUESTED;
             case "ManualShipConfirmRequested" -> TOPIC_MANUAL_SHIP_CONFIRM_REQUESTED;
+            case "FulfillmentCancelRequested" -> TOPIC_FULFILLMENT_CANCEL_REQUESTED;
             default -> throw new IllegalArgumentException("Unknown event type: " + eventType);
         };
     }
