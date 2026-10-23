@@ -151,12 +151,14 @@ export const INVENTORY_EVENTS: InventoryEvent[] = [
 ];
 
 /**
- * 저재고(저재고) — **두 개의 다른 메커니즘**이며 임계값이 다르다. 가이드에서
- * 반드시 구분: 테이블 배지와 운영자 알림이 서로 불일치할 수 있다.
+ * 저재고 — **두 개의 다른 메커니즘**(표시 · 알림)이다. 기본 기준은 같은 설정값이지만,
+ * 알림은 창고·SKU별 재정의가 있을 수 있어 배지와 알림이 어긋날 수 있다.
  *
- * 🔴 첫 항목의 «10» 은 지금 서버 사실(admin-service `InventoryProjectionService`
- * 의 상수 `availableQty <= 10`)이다. `TASK-BE-644` 가 (가) «설정을 따르게 고침» 으로
- * 결정되면 이 항목(threshold · desc)이 거짓이 되므로 그 티켓과 같은 PR 에서 고칠 것.
+ * 🔵 `TASK-BE-644` (굽기 완료): 재고 테이블 배지·필터도 이제 설정
+ * `inventory.low_stock.default_threshold_qty` 를 따른다(조회 시점 계산, `availableQty < 기준`,
+ * 설정 없음 = 10). `TASK-BE-647`: inventory-service 도 설정이 없으면 기본 10 으로 알린다.
+ * 두 메커니즘의 차이는 «기준값» 이 아니라 «무엇을 하는가»(표시 vs 알림) 와 알림 쪽의
+ * 창고·SKU별 재정의다.
  */
 export interface LowStockMechanism {
   where: string;
@@ -167,13 +169,13 @@ export interface LowStockMechanism {
 export const LOW_STOCK_MECHANISMS: LowStockMechanism[] = [
   {
     where: '재고 테이블 "저재고" 배지 / "저재고만" 필터',
-    threshold: '고정값 · 가용 10개 이하',
-    desc: '가용 수량이 10개 이하면 자동으로 표시되는 고정 기준입니다. 상품(SKU)마다 다르게 정할 수는 없습니다.',
+    threshold: '설정값 · 가용 수량이 기준(기본 10)보다 적을 때',
+    desc: '가용 수량이 운영 설정의 저재고 기준(기본 10)보다 적으면 표시됩니다. 기준을 바꾸면 모든 재고에 바로 적용됩니다. 상품(SKU)마다 다르게 정할 수는 없습니다.',
   },
   {
     where: '운영자 저재고 알림',
     threshold: '설정 가능 · 창고·상품(SKU)별로 정함, 없으면 전체 기본값',
-    desc: '가용 수량이 미리 정한 기준보다 적어지면 운영자에게 알림이 갑니다. 기준을 정하지 않았으면 알림이 가지 않습니다.',
+    desc: '가용 수량이 미리 정한 기준보다 적어지면 운영자에게 알림이 갑니다. 창고·상품(SKU)별 기준이 없으면 전체 기본값(기본 10)을 씁니다.',
   },
 ];
 

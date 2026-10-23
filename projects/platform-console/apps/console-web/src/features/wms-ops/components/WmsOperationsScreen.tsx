@@ -29,10 +29,10 @@ export interface WmsOperationsScreenProps {
 
 /**
  * The operational settings surfaced on this screen (task Goal). NOTE
- * (TASK-PC-FE-365): `inventory.low_stock.default_threshold_qty` drives the
- * inventory-service low-stock ALERT only; the 재고 표 저재고 배지 / 개요 저재고
- * count come from admin-service's `lowStockFlag`, a fixed availableQty <= 10
- * today (TASK-BE-644 may change that). A fixed, ordered
+ * (TASK-BE-644): `inventory.low_stock.default_threshold_qty` drives BOTH the
+ * inventory-service low-stock alert and admin-service's `lowStockFlag` (재고 표
+ * 저재고 배지 / 개요 저재고 count) — the latter derived at query time as
+ * availableQty < threshold (missing setting → 10). A fixed, ordered
  * key→label catalog: the console never invents a settings key the producer
  * doesn't document (§ 5.1); an absent key simply produces no row (task Edge
  * Case), never a forced-blank placeholder row.

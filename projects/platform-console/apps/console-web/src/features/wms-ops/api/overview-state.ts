@@ -61,9 +61,9 @@ export interface WmsAreaCount {
   period?: WmsAreaPeriod | null;
   /** Low-stock sub-count for the 재고 LEVEL area (PC-FE-177) — the number of
    *  SKU-locations the admin read model flags `lowStockFlag` (`lowStockOnly=true`;
-   *  currently availableQty <= 10, a constant in admin-service that does NOT
-   *  follow the `inventory.low_stock.default_threshold_qty` setting — TASK-BE-644;
-   *  it is NOT a per-SKU reorder point), a
+   *  availableQty < the current `inventory.low_stock.default_threshold_qty`
+   *  setting, derived at query time — TASK-BE-644; it is NOT a per-SKU reorder
+   *  point), a
    *  replenishment attention signal. `undefined` for non-inventory tiles;
    *  `null` when the low-stock sub-read did not resolve (the tile stays `ok`
    *  on its total read — same pattern as a 배송 period sub-read). */
@@ -164,8 +164,8 @@ export async function getWmsOverviewState(
     ] = await Promise.all([
       cell(listInventory({ page: 0, size: 1 })),
       // 저재고 (low-stock) attention sub-count for the 재고 tile (PC-FE-177) —
-      // SKU-locations the read model flags low-stock (availableQty <= 10 today,
-      // fixed in admin-service — TASK-BE-644). Own cell: a degrade nulls the
+      // SKU-locations the read model flags low-stock (availableQty < the current
+      // low-stock setting, derived at query time — TASK-BE-644). Own cell: a degrade nulls the
       // sub-count only, the 재고 tile stays ok on its total read.
       cell(listInventory({ lowStockOnly: true, page: 0, size: 1 })),
       cell(listShipments({ page: 0, size: 1 })),
