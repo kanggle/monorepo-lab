@@ -219,6 +219,14 @@ wms-internal order status is `BACKORDERED`, but the cross-project notification
 rides this topic so the consumer needs only one subscription. `reason`
 distinguishes a manual cancel from an auto-backorder.
 
+**Also emitted on an ecommerce-initiated cancel** (TASK-BE-650, ADR-MONO-022 §D4
+v2(d) X-A): `FulfillmentCancelRequestedConsumer` cancels a `RECEIVED`/`PICKING`
+order through the same `CancelOrderUseCase`, so this same event is emitted
+unchanged, with `reason="ORDER_CANCELLED"` (the inbound request's reason),
+`previousStatus ∈ {RECEIVED, PICKING}` and `actorId="system:fulfillment-cancel-request"`.
+The ecommerce order is already `CANCELLED` when it arrives, so the ecommerce
+consumers no-op on it (`ecommerce-fulfillment-subscriptions.md` § Ecommerce-initiated cancel).
+
 Topic: `wms.outbound.order.cancelled.v1`
 Partition key: `orderId`
 `aggregateType`: `order`
@@ -238,8 +246,8 @@ Partition key: `orderId`
 |---|---|---|---|
 | `orderId` | UUID | no | |
 | `orderNo` | string | no | |
-| `previousStatus` | string | no | `PICKING` \| `PICKED` \| `PACKING` \| `PACKED` (manual cancel); `RECEIVED` \| `PICKING` (auto-backorder) |
-| `reason` | string | no | free text for manual cancel; `INSUFFICIENT_STOCK` for auto-backorder |
+| `previousStatus` | string | no | `PICKING` \| `PICKED` \| `PACKING` \| `PACKED` (manual cancel); `RECEIVED` \| `PICKING` (auto-backorder, ecommerce-initiated cancel) |
+| `reason` | string | no | free text for manual cancel; `INSUFFICIENT_STOCK` for auto-backorder; `ORDER_CANCELLED` for an ecommerce-initiated cancel |
 | `cancelledAt` | ISO-8601 UTC | no | for auto-backorder = the reserve-fail timestamp |
 
 > **Envelope `tenantId` (ADR-MONO-022 facet d, TASK-MONO-296; semantics revised by

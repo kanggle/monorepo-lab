@@ -160,10 +160,96 @@ deduction). Authoritative consumer contract:
 - Saga not yet `PACKING_CONFIRMED` ⇒ WARN no-op (physically un-picked; never a forced skip).
 - Unparseable envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT.
 
+## Event 3 — `ecommerce.fulfillment.cancel-requested.v1` (ADR-MONO-022 D4 v2(d))
+
+Published when an ecommerce order is cancelled after `CONFIRMED` (customer, or
+operator) and its Shipping row is still `PREPARING` **and** `wmsRouted` (the
+forward-leg Event 1 was actually published for it). It asks wms to cancel the
+outbound order it already holds. ADR-MONO-022 D4 v2(d), choices **X-A / Y-A**.
+
+- **Producer:** `shipping-service`, on consuming `order.order.cancelled`. In the
+  **same transaction** that moves the Shipping row `PREPARING → CANCELLED`, it writes
+  this event to the outbox (same transactional outbox + `OutboxPollingScheduler` as
+  Events 1 and 2). Producer implementation: `TASK-BE-649`.
+- **Not emitted** when the Shipping row is `SHIPPED` or later (return flow, out of
+  scope), when it is not `wmsRouted` (wms holds no outbound order), when the row is
+  missing, or on a redelivered `order.order.cancelled`.
+- **Best-effort (Y-A).** The ecommerce order cancel and the refund complete
+  immediately, as before. This event does **not** wait for, or roll back on, the wms
+  outcome. A wms refusal ends as an `ALERT` on the wms side; there is no ack event.
+
+### Topic
+`ecommerce.fulfillment.cancel-requested.v1`
+- Partition key: `orderNo`. Retention ≥ 7 days. DLT: `<topic>.DLT` (consumer-side).
+- 🔴 **No cross-topic ordering.** Event 1 and Event 3 are different topics, so Kafka does
+  not order Event 3 after its own Event 1. The producer writes Event 1 first (the Shipping
+  row is `wmsRouted` only after it), but if Event 3 is consumed before Event 1, wms finds no
+  order (`findByOrderNo` miss ⇒ no-op) and then creates the order from Event 1 with nothing
+  left to cancel it. This window is recorded, not closed, in v1 (TASK-BE-650 open question).
+
+### Envelope — wms-compatible (camelCase), by ACL design (same shape as Event 2)
+```json
+{
+  "eventId": "uuidv7",
+  "eventType": "ecommerce.fulfillment.cancel-requested",
+  "occurredAt": "2026-10-23T10:00:00.000Z",
+  "aggregateType": "fulfillment",
+  "aggregateId": "<ecommerce orderId>",
+  "tenantId": "<ecommerce tenant (facet d) | null>",
+  "payload": { }
+}
+```
+
+### Payload
+```json
+{
+  "orderNo": "<ecommerce orderId == wms orderNo (D5 correlation key)>",
+  "tenantId": "<ecommerce tenant | null>",
+  "reason": "ORDER_CANCELLED",
+  "requestedAt": "2026-10-23T10:00:00.000Z"
+}
+```
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `orderNo` | string | no | ecommerce orderId; resolves the wms outbound order via `findByOrderNo`. |
+| `tenantId` | string | yes | ecommerce tenant. **Opaque correlation** on the wms side (facet d) — wms never gates on it. Same value as the envelope `tenantId`. |
+| `reason` | string | no | Constant `ORDER_CANCELLED` in v1. wms records it as the outbound cancel reason, so it is echoed back on `wms.outbound.order.cancelled.v1`. |
+| `requestedAt` | string (ISO-8601 instant) | no | When ecommerce accepted the order cancel. Informational on the wms side. |
+
+### Consumer (wms)
+`outbound-service` — `FulfillmentCancelRequestedConsumer` (group `outbound-service`,
+`@Profile("!standalone")`). `findByOrderNo` → decide by the wms **order** status (X-A):
+
+| wms outbound order status | Effect |
+|---|---|
+| `RECEIVED` · `PICKING` | Auto-cancel via the **existing** `CancelOrderUseCase`, with the **WRITE role only** (`ROLE_OUTBOUND_WRITE`; never `ROLE_OUTBOUND_ADMIN`). Existing compensation (`wms.outbound.picking.cancelled.v1` → reservation release) and existing `wms.outbound.order.cancelled.v1` emission, unchanged. |
+| `PICKED` · `PACKING` · `PACKED` | **Not cancelled.** `ALERT` log naming `orderNo` + status. A wms admin (`ROLE_OUTBOUND_ADMIN`) cancels through the existing admin path once goods are put back. |
+| `SHIPPED` | Logged no-op (return flow). |
+| `CANCELLED` · `BACKORDERED` · unknown `orderNo` | No-op (already terminal / never routed through wms). |
+
+Authoritative consumer contract:
+`projects/wms-platform/specs/contracts/events/ecommerce-fulfillment-subscriptions.md` § Ecommerce-initiated cancel.
+
+### Echo back to ecommerce (no loop)
+A wms auto-cancel emits `wms.outbound.order.cancelled.v1` (existing). order-service
+skips an order that is already `CANCELLED` (`OrderBackorderCancellationService`).
+shipping-service's alert-only `WmsOutboundCancelledConsumer` must skip a Shipping row that
+is already `CANCELLED`, so a self-requested cancel raises no false ALERT (`TASK-BE-649`).
+
+### Delivery semantics / idempotency
+- At-least-once (outbox). Consumer dedupes on envelope `eventId` (T8) + order
+  terminal-state guard (already `CANCELLED` ⇒ no-op).
+- `findByOrderNo` miss ⇒ safe no-op (debug log), NOT a DLT.
+- A post-pick refusal is NOT an error (ALERT no-op), never a DLT.
+- Unparseable envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT.
+
 ---
 
 ## Not in v1
 
 - Multi-warehouse routing (single default warehouse).
-- Cancellation/amendment of an already-requested fulfillment (handled via the wms cancel path + return leg).
+- Amendment of an already-requested fulfillment. (Cancellation now has a wire — Event 3,
+  ADR-MONO-022 D4 v2(d) — for pre-pick wms orders; post-pick and shipped orders stay on
+  the wms admin cancel path and the return flow.)
 - Real carrier tracking-number assignment at request time (assigned by wms at ship).

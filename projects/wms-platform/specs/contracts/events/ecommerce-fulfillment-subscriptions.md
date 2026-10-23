@@ -26,6 +26,7 @@ Authoritative producer schema: `projects/ecommerce-microservices-platform/specs/
 |---|---|---|---|
 | `ecommerce.fulfillment.requested.v1` | `ecommerce.fulfillment.requested` | `FulfillmentRequestedConsumer` | Resolve codes→uuids via `MasterReadModelPort`; build `ReceiveOrderCommand` (`source = FULFILLMENT_ECOMMERCE`, additive `shipTo`); call `ReceiveOrderUseCase.receive(...)` → Order + saga created, `outbound.order.received` + `outbound.picking.requested` emitted in the same TX. |
 | `ecommerce.shipping.manual-confirm-requested.v1` | `ecommerce.shipping.manual-confirm-requested` | `ManualShipConfirmConsumer` (new) | Resolve `orderNo`→Order via `findByOrderNo`; **iff** saga `PACKING_CONFIRMED` call the existing `ConfirmShippingUseCase` → `wms.outbound.shipping.confirmed.v1` → inventory deduction. ADR-MONO-022 D4 v2(c). See § Manual ship-confirm. |
+| `ecommerce.fulfillment.cancel-requested.v1` | `ecommerce.fulfillment.cancel-requested` | `FulfillmentCancelRequestedConsumer` (new) | Resolve `orderNo`→Order via `findByOrderNo`; **iff** order `RECEIVED`/`PICKING` call the existing `CancelOrderUseCase` with the **WRITE role only** → existing `wms.outbound.order.cancelled.v1` (+ `wms.outbound.picking.cancelled.v1` if a reservation is held). Post-pick ⇒ `ALERT`, no cancel. ADR-MONO-022 D4 v2(d), X-A. See § Ecommerce-initiated cancel. |
 
 ## Envelope
 
@@ -133,6 +134,56 @@ fulfillment consumer:
 Idempotency: envelope `eventId` dedupe (T8) + saga terminal-state guard. Unparseable
 envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT. Authoritative producer schema:
 `projects/ecommerce-microservices-platform/specs/contracts/events/fulfillment-events.md` § Event 2.
+
+## Ecommerce-initiated cancel (ADR-MONO-022 D4 v2(d), X-A — TASK-BE-650)
+
+A third subscribed topic — `ecommerce.fulfillment.cancel-requested.v1` — carries an
+ecommerce order cancel that happened after `CONFIRMED`, while the ecommerce Shipping row
+was still `PREPARING` and `wmsRouted`. Until now cancellation ran only wms → ecommerce
+(D4 v2(a)); without this wire a cancelled, refunded ecommerce order could still be
+picked, packed and shipped.
+
+New `FulfillmentCancelRequestedConsumer` (`@Profile("!standalone")`, group
+`outbound-service`) — same envelope convention + `EventEnvelopeParser` +
+`outbound_event_dedupe` (T8) as the two consumers above.
+
+Payload consumed: `orderNo` (required), `tenantId` (opaque, facet d — never gated on),
+`reason` (`ORDER_CANCELLED`; absent ⇒ `ORDER_CANCELLED`), `requestedAt` (informational).
+
+1. Resolve `payload.orderNo` → outbound `Order` via `findByOrderNo`.
+   **Miss ⇒ no-op** (never routed through wms; debug log, no DLT).
+2. Decide by the **order** status (`OrderStatus`, not the saga status):
+
+| wms outbound order status | Effect |
+|---|---|
+| `RECEIVED` · `PICKING` | Auto-cancel: call the **existing** `CancelOrderUseCase.cancel` with `callerRoles = {ROLE_OUTBOUND_WRITE}` (never `ROLE_OUTBOUND_ADMIN`), `expectedVersion = -1` (system trigger, no `If-Match`), `actorId = system:fulfillment-cancel-request`, `reason` = payload `reason`. Existing compensation (`wms.outbound.picking.cancelled.v1` → inventory releases the reservation) and existing `wms.outbound.order.cancelled.v1` emission, **unchanged**. |
+| `PICKED` · `PACKING` · `PACKED` | **Not cancelled.** `ALERT` log (ERROR level) naming `orderNo` + status. A wms admin (`ROLE_OUTBOUND_ADMIN`) cancels through the existing admin path once goods are physically put back. Not a DLT. |
+| `SHIPPED` | Logged no-op (return flow). Not a DLT. |
+| `CANCELLED` · `BACKORDERED` | No-op (already terminal). |
+
+**Why the WRITE role is fixed, and why D9 does not widen it.** `CancelOrderService` has two
+independent guards. The **role** guard reads only the command's `callerRoles` — post-pick
+cancel requires `ROLE_OUTBOUND_ADMIN`. The **tenant-visibility** guard (D9 `CallerScope`)
+reads the security context, and an internal caller with no security context is
+*unrestricted* — that widens **which tenants' orders** it may see, never **which states it
+may cancel**. Supplying exactly `{ROLE_OUTBOUND_WRITE}` therefore makes the service itself
+refuse a post-pick cancel (`AccessDeniedException`) even if the order moves to `PICKED`
+between the consumer's status read and the service's own read. That refusal is retried;
+on retry the consumer reads the new status and ends with the `ALERT`. The REST cancel path
+is untouched.
+
+Echo: the auto-cancel's `wms.outbound.order.cancelled.v1` returns to ecommerce, where
+order-service no-ops an already-`CANCELLED` order and shipping-service suppresses the ALERT
+for an already-`CANCELLED` Shipping row (`TASK-BE-649`). No loop.
+
+Idempotency: envelope `eventId` dedupe (T8) + order terminal-state guard (already
+`CANCELLED` ⇒ no-op). Unparseable envelope / missing `orderNo` ⇒ non-retryable ⇒ DLT.
+Authoritative producer schema:
+`projects/ecommerce-microservices-platform/specs/contracts/events/fulfillment-events.md` § Event 3.
+
+> 🔴 **Known window — no cross-topic ordering.** If this event is consumed before the same
+> order's `ecommerce.fulfillment.requested.v1`, step 1 misses and the order is created
+> afterwards with nothing left to cancel it. Recorded, not closed, in v1.
 
 ## Standalone-publish degradation (ADR-022 D8)
 
