@@ -76,15 +76,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **READY (2026-10-23 UTC) — TASK-BE-649 곁 발견.** 웹스토어 배송 추적이 «취소됨»(`CANCELLED`) 배송을 몰라서 켜지는 단계 없이 빈 추적기가 보인다(깨지지는 않는다). 타입 · 추적기 · 문구(머지 전 소유자 승인). 콘솔 짝 = `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-- `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **IN-PROGRESS (2026-10-23 UTC 착수) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 선행 TASK-BE-650 머지됨 · 이번 굽기 제외.** shipping-service 가 `order.order.cancelled` 를 받아 `PREPARING` 배송을 끝 상태 `CANCELLED` 로 보낸다. WMS 를 거친 배송이면 `ecommerce.fulfillment.cancel-requested.v1` 을 낸다. 주문 취소 · 환불은 지금처럼 즉시 끝난다. 선행 = WMS `TASK-BE-650`(계약 + 소비자). 분석=Opus 5.5 / 구현 권장=Opus.
-
 ## review
+
+- `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 선행 TASK-BE-650 머지됨 · 이번 굽기 제외.** shipping-service 가 `order.order.cancelled` 를 받아 `PREPARING` 배송을 끝 상태 `CANCELLED` 로 보낸다. WMS 를 거친 배송이면 `ecommerce.fulfillment.cancel-requested.v1` 을 낸다. 주문 취소 · 환불은 지금처럼 즉시 끝난다. 선행 = WMS `TASK-BE-650`(계약 + 소비자). 분석=Opus 5.5 / 구현 권장=Opus.
 
 - `TASK-BE-648-operator-confirm-removed.md` — **REVIEW (2026-10-22 UTC · CI 빨강(9) → 초록 · AC-2 = 굽기 뒤 라이브) — 소유자 결정: 운영자 확정 없애기 · 굽기 전 구현.** 관리자 상태 변경의 `PENDING → CONFIRMED` 가 `OrderConfirmed` · 재고 예약을 거치지 않아 나중 결제 뒤에도 확정 이벤트가 영영 안 나간다(`TASK-BE-646` AC-0 ④). 운영자는 취소만 · 확정은 사가만. 짝 = 콘솔 `TASK-PC-FE-366`(먼저 머지 안전). 분석=Opus 5.5 / 구현 권장=Opus.
 

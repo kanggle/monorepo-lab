@@ -8,7 +8,7 @@ shipping-service 가 `order.order.cancelled` 를 소비하지 않는다 — 출�
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -51,7 +51,7 @@ backend
 
 - [x] **AC-0** — 위 ①~④. 측정 2026-10-23 UTC — 아래 § AC-0 측정 결과.
 - [x] **AC-1** — 소유자 결정 · 필요하면 ADR 먼저. ✅ 2026-10-23 UTC **ADR-MONO-022 D4 v2(d) ACCEPTED — X-A / Y-A** (소유자 선택창, 정확형). 구현 순서: 계약 → WMS 티켓 → 이 티켓 → 콘솔 «취소됨» 배송 라벨 티켓. 🔵 소유자 결정 2026-10-23 KST: **«아직 출고 전인 배송만 취소»**. 🔴 **그러나 이 결정만으로는 닫히지 않는다** — AC-0 ①·④ 가 보이듯 «출고 전» 배송은 기본 설정에서 **이미 WMS 출고 주문이 나가 있고**, 그것을 취소할 이커머스 → WMS 경로(이벤트 · 계약)가 없다. 결정을 이행하려면 새 프로젝트 간 이벤트 + ADR-MONO-022 개정이 먼저다(§ 착수 중단). 소유자 선택 대기. 🟡 2026-10-23 UTC 소유자 선택 «ADR 초안 · 굽기는 안 기다림» → ADR-MONO-022 **D4 v2(d) PROPOSED** 초안(선택지 X: WMS 자동 취소 깊이 · Y: 주문 · 환불 시점). 승인은 정확형 `ADR-MONO-022 D4 v2(d) ACCEPTED — X-? / Y-?` 만. 이번 굽기에 싣지 않는다.
-- [ ] **AC-2** — 구현 + 시험 · CI 초록. 🟡 2026-10-23 UTC 구현 · 시험 커밋됨(계약 `08baf0e55` → 시험 `b45296e0f` → 구현). 로컬에서 돈 것 = 단위 시험만(아래 § 로컬에서 돈 것). **Testcontainers 통합 시험은 로컬에서 돌지 않았다**(Docker 없음) — CI `ecommerce-integration-tests` 가 판정한다. CI 초록 전이라 닫지 않는다.
+- [x] **AC-2** — 구현 + 시험 · CI 초록. ✅ 2026-10-23 UTC (메인 세션) — PR #4490 에 시험만 담은 커밋 `b45296e0f` 를 먼저 올렸다. CI run `39923015012` 의 `Integration (ecommerce C, Testcontainers)` 가 `shipping-service:compileTestJava FAILED` 로 빨강이었다(**컴파일 빨강** — 동작이 틀리면 시험이 무는지는 아래 결함 주입 실험이 증명한다). 구현 `8361c2675` 를 올린 뒤 head 체크 69개 pending 0 · fail 0 이다(Testcontainers `FulfillmentIntegrationTest` 새 5건 포함). 브랜치 nightly `39923232935` success(이커머스×WMS 이행 루프 e2e 포함). 구매자 화면 후속 = `TASK-FE-110`. 🟡 (구현 시점 기록) 2026-10-23 UTC 구현 · 시험 커밋됨(계약 `08baf0e55` → 시험 `b45296e0f` → 구현). 로컬에서 돈 것 = 단위 시험만(아래 § 로컬에서 돈 것). **Testcontainers 통합 시험은 로컬에서 돌지 않았다**(Docker 없음) — CI `ecommerce-integration-tests` 가 판정한다. CI 초록 전이라 닫지 않는다.
 - [ ] **AC-3** — 굽기 뒤 라이브.
 
 ## ACCEPTED 뒤 범위 (2026-10-23 UTC — ADR-MONO-022 D4 v2(d) · X-A / Y-A)
