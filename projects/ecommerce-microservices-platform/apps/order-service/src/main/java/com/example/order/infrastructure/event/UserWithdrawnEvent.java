@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * {@code FAIL_ON_UNKNOWN_PROPERTIES} is <em>disabled</em> by default (measured against the running
  * {@code OrderServiceApplication} context: the bean reports the feature {@code false} and accepts
  * the full {@code tenant_id} envelope with or without this annotation). Real {@code UserWithdrawn}
- * messages were therefore never rejected and never routed to {@code user.user.withdrawn.dlq}. The
+ * messages were therefore never rejected and never routed to {@code user.user.withdrawn.DLT}. The
  * earlier claim that "every real message threw {@code UnrecognizedPropertyException}" came from a
  * unit test using a bare {@code new ObjectMapper()} — which enables strict unknown-field handling —
  * an artifact of the fixture's mapper, not the production path. This annotation changes behavior

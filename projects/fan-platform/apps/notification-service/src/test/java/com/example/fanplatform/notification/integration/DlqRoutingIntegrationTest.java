@@ -25,7 +25,7 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * A persistent / non-retryable failure (unsupported {@code schemaVersion}) is
- * routed to {@code <topic>.dlq} with the original value, no notification is
+ * routed to {@code <topic>.DLT} with the original value, no notification is
  * created, and the listener container keeps running — no partition stall
  * (architecture.md § Retry and DLQ, AC-3).
  */
@@ -41,7 +41,7 @@ class DlqRoutingIntegrationTest extends NotificationServiceIntegrationBase {
     }
 
     @Test
-    @DisplayName("unsupported schemaVersion → fan.membership.activated.v1.dlq, no notification, container alive")
+    @DisplayName("unsupported schemaVersion → fan.membership.activated.v1.DLT, no notification, container alive")
     void unsupportedSchemaRoutedToDlq() {
         // "evt-poison-1" is intentionally NOT run through EventIds.uuid(...) (TASK-FAN-BE-042):
         // EventEnvelope.parse throws UnsupportedSchemaVersionException for the
@@ -54,12 +54,12 @@ class DlqRoutingIntegrationTest extends NotificationServiceIntegrationBase {
         producer().send(TOPIC_ACTIVATED, "mem-1", poison);
 
         try (KafkaConsumer<String, String> dlqConsumer = newDlqConsumer()) {
-            dlqConsumer.subscribe(List.of(TOPIC_ACTIVATED + ".dlq"));
+            dlqConsumer.subscribe(List.of(TOPIC_ACTIVATED + ".DLT"));
             await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = dlqConsumer.poll(Duration.ofMillis(500));
                 List<ConsumerRecord<String, String>> collected = new ArrayList<>();
                 records.forEach(collected::add);
-                assertThat(collected).as("poison event must reach the .dlq topic").isNotEmpty();
+                assertThat(collected).as("poison event must reach the .DLT topic").isNotEmpty();
                 assertThat(collected.get(0).value()).contains("evt-poison-1");
             });
         }

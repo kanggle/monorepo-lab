@@ -38,7 +38,7 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * Integration test verifying that the real {@code ErrorHandlingDeserializer}
- * path routes poison-pill payloads to {@code <topic>.dlq} after the configured
+ * path routes poison-pill payloads to {@code <topic>.DLT} after the configured
  * retry budget, while the original listener container remains healthy.
  */
 @SpringBootTest
@@ -92,7 +92,7 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(1)
-    @DisplayName("Malformed JSON payload triggers DeserializationException and lands on .dlq")
+    @DisplayName("Malformed JSON payload triggers DeserializationException and lands on .DLT")
     void malformedJsonRoutedToDlq() {
         String malformedEvent = "THIS IS NOT VALID JSON {{{";
         assertDlqContainsValue("auth.login.succeeded",
@@ -120,12 +120,12 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
         // Wait for DLQ arrival
         try (KafkaConsumer<String, String> dlqConsumer = newStringDlqConsumer()) {
-            dlqConsumer.subscribe(List.of(topic + ".dlq"));
+            dlqConsumer.subscribe(List.of(topic + ".DLT"));
             await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = dlqConsumer.poll(Duration.ofMillis(500));
                 List<ConsumerRecord<String, String>> dlqRecords = new ArrayList<>();
                 records.forEach(dlqRecords::add);
-                assertThat(dlqRecords).as("missing tenant_id event must reach .dlq").isNotEmpty();
+                assertThat(dlqRecords).as("missing tenant_id event must reach .DLT").isNotEmpty();
             });
         }
 
@@ -151,12 +151,12 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(3)
-    @DisplayName("TASK-BE-041b-fix: account.locked payload missing eventId is routed to account.locked.dlq")
+    @DisplayName("TASK-BE-041b-fix: account.locked payload missing eventId is routed to account.locked.DLT")
     void accountLockedMissingEventIdRoutedToDlq() {
         // Contract (specs/contracts/events/account-events.md) now mandates eventId on
         // the account.locked payload. AccountLockedConsumer throws
         // IllegalArgumentException when it is absent, and DefaultErrorHandler routes
-        // the record to account.locked.dlq after exhausting retries.
+        // the record to account.locked.DLT after exhausting retries.
         String noEventId = """
                 {"accountId":"acc-dlq-003","reasonCode":"ADMIN_LOCK",
                  "actorType":"operator","actorId":"op-1","lockedAt":"2026-04-14T10:00:00Z"}
@@ -167,19 +167,19 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("Invalid UTF-8 / non-JSON bytes are routed to .dlq via ErrorHandlingDeserializer")
+    @DisplayName("Invalid UTF-8 / non-JSON bytes are routed to .DLT via ErrorHandlingDeserializer")
     void invalidBytesRoutedToDlq() {
         byte[] poison = new byte[]{(byte) 0xC3, (byte) 0x28, 0x00, 0x1F, (byte) 0xFF};
         String accountId = "acc-dlq-002";
         byteTemplate.send(new ProducerRecord<>("auth.login.failed", accountId, poison));
 
         try (KafkaConsumer<String, byte[]> dlqConsumer = newByteDlqConsumer()) {
-            dlqConsumer.subscribe(List.of("auth.login.failed.dlq"));
+            dlqConsumer.subscribe(List.of("auth.login.failed.DLT"));
             await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, byte[]> records = dlqConsumer.poll(Duration.ofMillis(500));
                 List<ConsumerRecord<String, byte[]>> collected = new ArrayList<>();
                 records.forEach(collected::add);
-                assertThat(collected).as("poison bytes routed to .dlq").isNotEmpty();
+                assertThat(collected).as("poison bytes routed to .DLT").isNotEmpty();
                 assertThat(collected.get(0).value()).isEqualTo(poison);
             });
         }
@@ -190,7 +190,7 @@ class DlqRoutingIntegrationTest extends AbstractIntegrationTest {
         stringTemplate.send(new ProducerRecord<>(topic, key, sentValue));
 
         try (KafkaConsumer<String, String> dlqConsumer = newStringDlqConsumer()) {
-            dlqConsumer.subscribe(List.of(topic + ".dlq"));
+            dlqConsumer.subscribe(List.of(topic + ".DLT"));
             await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
                 ConsumerRecords<String, String> records = dlqConsumer.poll(Duration.ofMillis(500));
                 List<ConsumerRecord<String, String>> dlqRecords = new ArrayList<>();

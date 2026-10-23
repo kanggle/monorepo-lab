@@ -358,5 +358,5 @@ device session이 revoke될 때 발행. 사용자 명시 revoke, concurrent-sess
 - **멱등 처리 필수**: `eventId`(UUID v7) 기반 dedupe. Redis + MySQL 이중 방어 (T8)
 - **순서 보장**: 같은 `account_id`의 이벤트는 같은 파티션에 도착. 교차 계정 순서 보장은 하지 않음
 - **schema tolerance**: 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion`이 지원 범위 밖이면 DLQ로 이관
-- **DLQ**: `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5)
+- **DLQ**: `<topic>.DLT`. 3회 지수 백오프 재시도 후 이관 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5)
 - **trace propagation**: envelope 또는 Kafka 헤더의 `traceparent`를 MDC로 복원

@@ -108,7 +108,11 @@ public class KafkaConsumerConfig {
                             record.topic(), record.key(),
                             value == null ? "null" : value.getClass().getName(),
                             rootCause);
-                    return new TopicPartition(record.topic() + ".dlq", record.partition());
+                    // Partition -1: the producer chooses. The iam compose files create the
+                    // sources with 3 partitions and their .DLT topics with 1, so copying the
+                    // source partition aimed records from partitions 1 and 2 at partitions
+                    // that do not exist (ADR-MONO-085 D3 — auth-service already did this).
+                    return new TopicPartition(record.topic() + ".DLT", -1);
                 }
         );
 

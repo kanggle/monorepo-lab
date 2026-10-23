@@ -34,7 +34,7 @@ Consumers:
 Topic versioning: a breaking payload change publishes on `<eventType>.v2`
 with a coexistence period. v1 is the only published version today.
 
-DLQ: per `platform/event-driven-policy.md`, each topic has a `<topic>.dlq`
+DLQ: per `platform/event-driven-policy.md`, each topic has a `<topic>.DLT`
 companion. The artist-service producer does NOT write to DLQs (it retries
 indefinitely with exponential backoff and surfaces failures via
 `artist_outbox_publish_failures_total`); DLQs apply on the consumer side.
@@ -189,4 +189,4 @@ removal time so consumers can render history without an extra lookup.
   vs. artist archive), use `occurredAt` to resolve.
 - **DLQ** — consumers handle their own retry + DLQ policy per
   `platform/event-driven-policy.md`. Recommended: 3 retries with exponential
-  backoff, then DLQ to `<topic>.dlq`.
+  backoff, then DLQ to `<topic>.DLT`.

@@ -40,7 +40,7 @@ import java.time.Instant;
  *
  * <p><b>Failures propagate.</b> Nothing here catches: a failed revoke rolls the dedupe row
  * back and the exception reaches the Kafka error handler, which retries and then routes the
- * record to {@code account.locked.dlq}.
+ * record to {@code account.locked.DLT}.
  */
 @Slf4j
 @Service

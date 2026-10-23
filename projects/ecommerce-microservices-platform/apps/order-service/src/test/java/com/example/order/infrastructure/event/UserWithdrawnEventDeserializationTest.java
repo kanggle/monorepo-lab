@@ -81,7 +81,7 @@ class UserWithdrawnEventDeserializationTest {
      * {@code FAIL_ON_UNKNOWN_PROPERTIES} is disabled by default — so the real envelope deserialises
      * regardless of whether {@code UserWithdrawnEvent} declares {@code @JsonIgnoreProperties}. This
      * models that production mapper (feature off) and shows the field is accepted: real messages
-     * were never rejected, never routed to {@code user.user.withdrawn.dlq}. The original claim came
+     * were never rejected, never routed to {@code user.user.withdrawn.DLT}. The original claim came
      * from a bare {@code new ObjectMapper()}, which enables the strict feature — see the strict-mapper
      * test below for the configuration under which the annotation actually matters.
      */

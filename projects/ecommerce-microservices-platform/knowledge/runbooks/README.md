@@ -12,7 +12,7 @@ mitigation for both of its Scenario B decisions.
 
 | Runbook | Triggered by | Covers |
 |---|---|---|
-| [`notification-dlq-replay.md`](notification-dlq-replay.md) | `NotificationDeliveryFailureRateHigh` / `Critical`, or a consumer error spike | Draining and replaying `<topic>.dlq` for notification-service |
+| [`notification-dlq-replay.md`](notification-dlq-replay.md) | `NotificationDeliveryFailureRateHigh` / `Critical`, or a consumer error spike | Draining and replaying `<topic>.DLT` for notification-service |
 | [`user-withdrawn-not-cancelled.md`](user-withdrawn-not-cancelled.md) | `UserWithdrawnEventPublishFailure` | Finding users withdrawn in user-service whose orders were never cancelled, and repairing them |
 
 ---

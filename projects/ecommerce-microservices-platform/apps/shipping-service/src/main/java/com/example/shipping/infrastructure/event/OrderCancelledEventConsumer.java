@@ -33,7 +33,7 @@ import java.time.format.DateTimeParseException;
  * snake_case envelope, as {@link OrderConfirmedEventConsumer} (the other order-service topic);
  * dedupe on {@code event_id} through {@link EventDedupePort}; a null payload or blank
  * {@code orderId} is skipped with a WARN (no DLQ), as {@code OrderConfirmed} is. JSON / UUID
- * parse failures are non-retryable and go to {@code order.order.cancelled.dlq} through the
+ * parse failures are non-retryable and go to {@code order.order.cancelled.DLT} through the
  * shared {@code KafkaConsumerConfig} error handler.
  *
  * <p><b>Tenant binding.</b> As {@link WmsShippingConfirmedConsumer}: the envelope

@@ -37,7 +37,7 @@ import java.util.UUID;
  *       propagation-lag metric.</li>
  * </ul>
  * Both exceptions are non-retryable in {@code KafkaConsumerConfig}: the record goes
- * straight to {@code account.locked.dlq}. Anything the use case throws is retried, then
+ * straight to {@code account.locked.DLT}. Anything the use case throws is retried, then
  * dead-lettered — never swallowed here.
  *
  * <p><b>Group.</b> {@code auth-service-account-locked}, independent of security-service's

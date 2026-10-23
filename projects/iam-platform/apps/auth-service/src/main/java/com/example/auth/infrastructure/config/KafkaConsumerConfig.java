@@ -20,10 +20,10 @@ import org.springframework.util.backoff.ExponentialBackOff;
  * auto-configured listener container factory.
  *
  * <p>Mirrors security-service's {@code KafkaConsumerConfig} (the iam convention,
- * account-events.md § Consumer Rules — DLQ {@code <topic>.dlq}, 3 attempts):
+ * account-events.md § Consumer Rules — DLQ {@code <topic>.DLT}, 3 attempts):
  * <ul>
  *   <li><b>Retry</b> — exponential back-off 1s × 2, capped at 30s, 3 attempts; then the
- *       record is published to {@code <topic>.dlq}. A failed revoke is therefore never
+ *       record is published to {@code <topic>.DLT}. A failed revoke is therefore never
  *       dropped silently: it is retried, then parked where an operator sees it.</li>
  *   <li><b>No retry</b> — {@link MissingTenantIdException} and
  *       {@link InvalidEventPayloadException}: the bytes will not change, so they go
@@ -32,12 +32,14 @@ import org.springframework.util.backoff.ExponentialBackOff;
  *       security-service so one alert rule covers both.</li>
  * </ul>
  *
- * <p>Two deliberate differences from security-service:
+ * <p>The DLQ record is sent WITHOUT a fixed partition (partition {@code -1} → the
+ * producer chooses). The iam compose files create {@code account.locked} with 3
+ * partitions but {@code account.locked.DLT} with 1, so copying the source partition
+ * would fail to publish every record that came from partition 1 or 2. This used to be
+ * a difference from security-service; ADR-MONO-085 D3 made it the rule for both.
+ *
+ * <p>One deliberate difference from security-service:
  * <ul>
- *   <li>The DLQ record is sent WITHOUT a fixed partition (partition {@code -1} → the
- *       producer chooses). The iam compose files create {@code account.locked} with 3
- *       partitions but {@code account.locked.dlq} with 1, so copying the source partition
- *       would fail to publish every record that came from partition 1 or 2.</li>
  *   <li>The DLQ publisher is the application's existing {@code KafkaTemplate<String,String>}
  *       (the outbox relay's). This consumer reads plain {@code String} values with no
  *       {@code ErrorHandlingDeserializer}, so there is no {@code byte[]} value to route and
@@ -76,7 +78,7 @@ public class KafkaConsumerConfig {
                     log.error("Sending to DLQ: topic={} partition={} offset={} key={} reason={} error={}",
                             record.topic(), record.partition(), record.offset(), record.key(),
                             reason, ex.getMessage());
-                    return new TopicPartition(record.topic() + ".dlq", -1);
+                    return new TopicPartition(record.topic() + ".DLT", -1);
                 });
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);

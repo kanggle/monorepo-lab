@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * deduplicates Kafka at-least-once replays. A {@link DataIntegrityViolationException}
  * from a duplicate {@code event_id} is treated as success (already processed) and must
  * NOT propagate — otherwise the shared {@code DefaultErrorHandler} would route a
- * harmless duplicate to {@code account.locked.dlq}.
+ * harmless duplicate to {@code account.locked.DLT}.
  *
  * <p>No outer {@code @Transactional} boundary: this is a single-row append, so the
  * repository save runs in its own transaction and the duplicate-key violation can be

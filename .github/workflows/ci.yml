@@ -348,6 +348,11 @@ jobs:
       # 100% of this guard's defect class, so AND-ing would switch it off entirely.
       # Same reasoning as `adr-index` above, one level down.
       project-adr-index: ${{ steps.filter.outputs.project-adr-index }}
+      # TASK-MONO-813: raw filter, NOT AND-combined with `code-changed`. Half of
+      # this guard's arrival paths are not code — a compose file that pre-creates
+      # topics, a provisioning script, or the platform rule text — and
+      # `code-changed` is false on every one of them.
+      dead-letter-suffix: ${{ steps.filter.outputs.dead-letter-suffix }}
       # TASK-MONO-371: raw filter, NOT AND-combined with `code-changed`.
       #
       # The task specified an AND here, reasoning that this drift arrives as a
@@ -782,6 +787,19 @@ jobs:
             project-adr-index:
               - 'projects/*/docs/adr/**'
               - 'scripts/check-project-adr-index-drift.sh'
+            # TASK-MONO-813 (ADR-MONO-085 D5): the dead-letter topic name has to
+            # agree in four places — senders (consumer config), suffix settings
+            # (application*.yml), provisioning (compose / topic scripts) and the
+            # platform rule. Each of those is an arrival path, so each is listed.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            dead-letter-suffix:
+              - 'projects/*/apps/*/src/main/**'
+              - 'projects/*/docker-compose*.yml'
+              - 'projects/*/scripts/**'
+              - 'platform/event-driven-policy.md'
+              - 'platform/service-types/event-consumer.md'
+              - 'platform/glossary.md'
+              - 'scripts/check-dead-letter-suffix.sh'
             # TASK-MONO-518: docs/guides/interview-demo-walkthrough.md § 6 is read by an
             # interviewer, and a row whose ticket closed keeps saying a fixed defect is
             # live. TASK-MONO-517 measured 7 of 26 ticket-citing rows stale in one audit,
@@ -2389,6 +2407,42 @@ jobs:
 
       - name: Guard — every project ADR is indexed and its Status matches
         run: bash scripts/check-project-adr-index-drift.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-813 (ADR-MONO-085 D5) — one dead-letter topic name, everywhere.
+  #
+  # The fleet's dead-letter suffix was split: the platform rule and three
+  # projects said `<topic>.dlq`, four projects' consumers sent to `<topic>.DLT`,
+  # and the only pre-created dead-letter topics were `.dlq`. A wms consumer
+  # dead-lettered onto a topic nobody had created. This job keeps senders,
+  # suffix settings, provisioning scripts and the rule text on one name, and
+  # keeps resolvers from copying the source partition number onto a
+  # one-partition dead-letter topic.
+  #
+  # `--self-test` runs first: the predicates are awk parsers over Java,
+  # annotations, YAML and shell, and a parser that stopped matching would
+  # report agreement. The script also has population floors for the same reason.
+  # Cheap (a few seconds of bash).
+  # ---------------------------------------------------------------------------
+  dead-letter-suffix:
+    name: Dead-letter topic suffix (senders vs provisioning vs platform rule)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.dead-letter-suffix == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-dead-letter-suffix.sh
+
+      - name: Self-test the predicates
+        run: bash scripts/check-dead-letter-suffix.sh --self-test
+
+      - name: Guard — senders, provisioning and the rule name one dead-letter topic
+        run: bash scripts/check-dead-letter-suffix.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-374 — post-merge baseline reachability.

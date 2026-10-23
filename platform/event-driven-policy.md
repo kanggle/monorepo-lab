@@ -17,7 +17,7 @@ Defines rules for asynchronous event communication between services. This docume
 
 - Default message broker: **Apache Kafka**.
 - Topic naming: `{domain}.{aggregate}.{version}` (e.g., `wms.master.sku.v1`, `ecom.order.v1`) OR `{service}.{aggregate}.{version}` — the project chooses one convention and documents it in its `specs/contracts/events/README.md`.
-- Dead-letter topic per source topic: `<topic>.dlq`.
+- Dead-letter topic per source topic: `<topic>.DLT` (ADR-MONO-085).
 
 ---
 
@@ -110,7 +110,10 @@ Projects may override these defaults per consumer in `specs/services/<service>/a
 
 ## DLQ Policy
 
-- DLQ topic naming: `<original-topic>.dlq`.
+- DLQ topic naming: `<original-topic>.DLT` (ADR-MONO-085), **written out at every site** — a `DeadLetterPublishingRecoverer` destination resolver appends the literal `".DLT"`, and every `@RetryableTopic` declares `dltTopicSuffix = ".DLT"`. Do not rely on a framework default: `DeadLetterPublishingRecoverer` defaults to `.DLT`, but `@RetryableTopic` defaults to `-dlt`.
+- DLQ partition: let the producer choose (resolver partition `-1`). A pre-created DLQ topic may have fewer partitions than its source, so copying the source partition can aim a record at a partition that does not exist.
+- DLQ topics are provisioned the same way as their source topics: where a project pre-creates its source topics, the same script pre-creates `<topic>.DLT` for each of them.
+- `scripts/check-dead-letter-suffix.sh` (CI) fails when a sender, a provisioning script or this rule names anything else.
 - DLQ messages MUST retain original envelope fields (`eventId`, `eventType`, `occurredAt`, `source`).
 - Add error metadata to the DLQ message: `error_message`, `retry_count`, `failed_at`, `consumer_group`.
 - DLQ depth > 0 MUST trigger an alert (see `observability.md`).

@@ -8,7 +8,7 @@ Dead-letter topic suffix is split across the fleet — platform says `<topic>.dl
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -76,7 +76,20 @@ Make one dead-letter naming rule true everywhere — the platform rule, every co
   - 2026-10-24 UTC: the selection window offered (a)/(b)/(c), and the owner chose «(a) .DLT 로 통일 (Recommended)». 🔴 **That is not the ADR ACCEPT.** The question named no ADR, because none existed yet, and the chosen label carried the agent's «Recommended» (`platform/architecture-decision-rule.md` § The ACCEPTED Gate, shapes ② and ③). It caused `ADR-MONO-085` to be written as **PROPOSED**.
   - ~~**Open:** the exact form `ADR-MONO-085 ACCEPTED — <A|B|C>`. Until it arrives this task stays in `ready/` and AC-2 does not start (HARDSTOP-09).~~
   - → **Closed 2026-10-24 UTC: `ADR-MONO-085 ACCEPTED — A`** (owner, exact form; the PROPOSED PR #4513 was merged first so the number was fixed on main). OD-1 and OD-2 were not answered, so both take their defaults («no»). AC-2 is now authorised.
-- [ ] **AC-2** — implementation: rule, recoverers, provisioning, and readers all agree, plus a guard that fails when a consumer's dead-letter suffix and the pre-created topics disagree. The guard must bite: show it red on today's tree.
+- [x] **AC-2** — implementation: rule, recoverers, provisioning, and readers all agree, plus a guard that fails when a consumer's dead-letter suffix and the pre-created topics disagree. The guard must bite: show it red on today's tree.
+  - **Guard:** `scripts/check-dead-letter-suffix.sh`. It reads 19 resolver files, 24 `@RetryableTopic`, 6 provisioning files and 3 rule files, and has rules R1–R6 plus population floors. `--self-test` passes 16/16. It is wired as the CI job **Dead-letter topic suffix (senders vs provisioning vs platform rule)**, on a raw filter that is not AND-combined with `code-changed`.
+  - **Bite:** the guard landed in its own commit (`37798041c`) **before** any fix. On that tree it gave rc=1: R1 13 `.dlq` senders · R4 5 provisioning files · R5 3 rule files · R6 12 resolvers using the source partition. After the fix it gives rc=0. It discriminates correctly: iam auth and scm logistics (already `-1`) and the wms 5 (`createProducerRecord` drops the partition) were never flagged.
+  - **Rule:** `platform/event-driven-policy.md` § Broker · § DLQ Policy (name, explicit suffix, partition `-1`, provisioning follows the source, guard pointer) · `platform/service-types/event-consumer.md` · `platform/glossary.md` · skills `messaging/consumer-retry-dlq` · `service-types/event-consumer-setup`.
+  - **Senders (D1 · D3):** `.dlq` → `.DLT` and `record.partition()` → `-1` in ecommerce 10 (9 live + the decommissioned `auth-service`, see the correction below) · fan notification · iam security. iam auth already used `-1`, so only its suffix changed.
+  - **Provisioning (D2):** iam `docker-compose.yml` · `docker-compose.e2e.yml`, wms `docker-compose.yml` · `scripts/kafka-create-topics.sh` · `scripts/test-kafka-topics-idempotency.sh` now create `<topic>.DLT`.
+  - **Readers (D4):** iam `SecurityMetricsConfig` topic list (6) · contracts and specs (ecommerce · fan · iam) · tests (ecommerce 1 · fan 1 · iam 5 + e2e 1) · the ecommerce runbook `notification-dlq-replay.md`. That runbook is a reader AC-0 ④ missed: it documents replaying dead letters by hand, and it now also says where records dead-lettered before 2026-10-24 still sit.
+  - **Kept on purpose:** the metric name `outbox.dlq.size` and the iam consumer-group name `<group>.dlq` (`SecurityMetricsConfig.java:63`). Neither is a topic. The `security_dlq_depth` alert and dashboards keep working unchanged.
+  - **Verification:**
+    - `./gradlew <12 live touched modules>:test :projects:iam-platform:tests:e2e:compileTestJava` → rc=0. 3,907 tests, 0 failures, 46 skipped.
+    - ⚪ The Docker-backed dead-letter ITs (`DlqRoutingIntegrationTest` iam · fan, `AccountLockedSessionRevocationIntegrationTest`) **did not run locally**: Docker is not running on this host, and they live in `integrationTest`, not `test`. CI runs them (`ci.yml` iam/fan `integrationTest` lanes). Their verdict is the PR's CI.
+    - All `scripts/check-*.sh` re-run because `scripts/` gained a file. `check-ls-files-guard-count.sh` moved 26/66 → 27/67, so both prose homes were updated.
+  - **Correction to AC-0 ①:** «ecommerce 10» counted `apps/auth-service`, which is decommissioned (`settings.gradle:61`, TASK-BE-132; source kept, not built). Live ecommerce senders = **9**. Its file was changed anyway, so the guard has one population and no exemption list.
+  - ⚪ **D3 on the `@RetryableTopic` path** (erp · scm · finance) was not measured, as ADR-MONO-085 D3 says. Those projects auto-create their topics, so today a dead-letter topic gets the broker default partition count on first send. Whether Spring's retry-topic recoverer keeps the source partition there is still open. If it matters, it surfaces when OD-1 changes.
 - [ ] **AC-3** — after the next bake: one deliberately failed record lands on a pre-created dead-letter topic on the demo broker.
 
 # Related Specs

@@ -601,7 +601,7 @@ public void onAccountDeleted(ConsumerRecord<String, AccountEvent> rec) {
   복제하므로, 소비자가 보는 스트림에는 **여러 테넌트의 이벤트가 그대로 섞여 있다** ⇒ 규칙 자체는
   **불변이고 여전히 필수다.** 바뀐 것은 "왜 섞여 있는가" 뿐이다(공유 클러스터가 아니라 릴레이).
 - **schema tolerance** — 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion` 미지원 시 DLQ.
-- **DLQ** — `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관.
+- **DLQ** — `<topic>.DLT`. 3회 지수 백오프 재시도 후 이관.
 - **순서** — `accountId` 단일 파티션 키. 같은 사용자의 이벤트는 발행 순서대로 도착하지만 다른 사용자 사이의 순서는 보장 없음.
 - **trace propagation** — Kafka 헤더의 `traceparent` 를 MDC 로 복원.
 
@@ -702,7 +702,7 @@ public class JwtDecoderConfig {
 - [ ] JWKS endpoint health check 운영 모니터링 등록.
 - [ ] client_secret 시크릿 스토어 보관 (DB 평문 금지).
 - [ ] Kafka consumer group ID 사전 등록 + lag 모니터링 알람.
-- [ ] DLQ 토픽 `<topic>.dlq` 처리 절차 문서화.
+- [ ] DLQ 토픽 `<topic>.DLT` 처리 절차 문서화.
 - [ ] 4개 이벤트 토픽 구독 — `account.created`, `account.locked`, `account.deleted`, `account.status.changed` (또는 통합 `account.status.changed` 만).
 - [ ] `account.deleted` anonymized=true 처리 경로 검증 (GDPR).
 - [ ] 운영 사고 대응 대비: IAM 장애 시 fail-closed 기본값 (캐시된 사용자 정보로 read-only 모드만 허용).

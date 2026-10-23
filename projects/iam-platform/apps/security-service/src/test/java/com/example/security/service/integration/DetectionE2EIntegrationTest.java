@@ -225,7 +225,7 @@ class DetectionE2EIntegrationTest extends AbstractIntegrationTest {
 
     private String buildLoginFailedEvent(String eventId, String accountId) {
         // TASK-BE-248 Phase 2a: tenantId in envelope is required — events without it
-        // are routed to .dlq by AbstractAuthEventConsumer (MissingTenantIdException).
+        // are routed to .DLT by AbstractAuthEventConsumer (MissingTenantIdException).
         return """
                 {
                   "eventId": "%s",

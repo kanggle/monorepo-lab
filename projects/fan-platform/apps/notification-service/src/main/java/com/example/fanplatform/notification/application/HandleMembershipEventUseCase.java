@@ -33,7 +33,7 @@ import java.util.UUID;
  * {@code processed_events} mark all run in one transaction. A channel adapter
  * that threw would roll the whole unit back; the consumer's
  * {@code DefaultErrorHandler} then retries and finally routes to
- * {@code <topic>.dlq} (emit-not-throw — the partition never stalls). The v1
+ * {@code <topic>.DLT} (emit-not-throw — the partition never stalls). The v1
  * logged mock channels never throw on the happy path.
  */
 @Slf4j

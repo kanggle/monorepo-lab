@@ -95,8 +95,8 @@ marketplace seller. Before this, an admin-locked seller stayed `ACTIVE` in the m
 
 > **DLQ / error handler.** product-service has a single shared `CommonErrorHandler` bean
 > (`WmsReconciliationConfig.wmsReconciliationErrorHandler`) auto-wired to the default Kafka
-> listener container factory. It already routes any topic to `<topic>.dlq` (so
-> `account.status.changed.dlq`) and marks `JsonProcessingException` + `IllegalArgumentException`
+> listener container factory. It already routes any topic to `<topic>.DLT` (so
+> `account.status.changed.DLT`) and marks `JsonProcessingException` + `IllegalArgumentException`
 > as not-retryable. The IAM consumer reuses this shared handler rather than registering a second
 > `CommonErrorHandler` bean (a second bean would defeat Spring Boot's single-bean auto-detection
 > and silently un-wire DLQ for ALL listeners).
@@ -132,7 +132,7 @@ additive forward-compatibility.
 
 ## Consumer Rules
 
-- **Fail-soft** (ADR-MONO-037 P5): a null payload / missing `accountId` is logged and skipped; a malformed message routes to the standard `<topic>.dlq`. A poison message never blocks the lifecycle partition.
+- **Fail-soft** (ADR-MONO-037 P5): a null payload / missing `accountId` is logged and skipped; a malformed message routes to the standard `<topic>.DLT`. A poison message never blocks the lifecycle partition.
 - **Idempotent without a dedup store**: the reactions are naturally idempotent over the monotonic `ACTIVE → WITHDRAWN → anonymized` transition (create skips on `existsByUserId`; `withdrawProfile` no-ops on missing / already-WITHDRAWN; `anonymizeProfile` no-ops on missing and re-clears already-null fields). Kafka at-least-once re-delivery and the two `account.deleted` emissions (false then true) are therefore safe.
 - Do **not** call IAM HTTP APIs to backfill missing event data (consumer rule). Onboarding PII arrives via the OIDC token, not a synchronous fetch.
 - Fields not listed in the IAM producer contract must not be relied upon.

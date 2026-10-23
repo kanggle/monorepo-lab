@@ -52,7 +52,7 @@ spring:
       # production uses. Plain StringDeserializer (the previous override)
       # silently decoded poison bytes to garbage strings + bypassed EHD's
       # header-stash + byte[]-restore path, so the byte[] DLPR test never
-      # received the original bytes on .dlq.
+      # received the original bytes on .DLT.
       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       # TASK-BE-075: reconnect backoff tuning for Testcontainers Kafka.

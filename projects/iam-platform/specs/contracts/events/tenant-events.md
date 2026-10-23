@@ -189,6 +189,6 @@ admin-service 가 발행하는 테넌트 lifecycle 이벤트. account-service �
 - **멱등 처리 필수**: `eventId` (UUID v7) 기반 dedupe. 같은 `tenantId` 의 같은 transition 이 중복 발행될 수 있음 (Kafka at-least-once).
 - **순서 보장**: 같은 `tenantId` 의 이벤트는 같은 파티션에 도착. 다른 `tenantId` 사이 순서 보장은 없음.
 - **schema tolerance**: 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion` 이 지원 범위 밖이면 DLQ 로 이관.
-- **DLQ**: `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관.
+- **DLQ**: `<topic>.DLT`. 3회 지수 백오프 재시도 후 이관.
 - **PII 금지**: `reason` 필드에 이메일·전화·이름 등 PII 포함 금지 (admin 입력 validation 의 책임).
 - **schema bump 정책**: 새 필드는 additive 로 추가하고 기존 schemaVersion 유지. breaking change 시 schemaVersion +1 + 마이그레이션 가이드.

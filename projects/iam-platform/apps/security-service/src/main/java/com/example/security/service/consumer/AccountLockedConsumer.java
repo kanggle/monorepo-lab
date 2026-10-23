@@ -28,7 +28,7 @@ import java.time.Instant;
  * duplicate replay is swallowed there, so {@link #onMessage} only propagates genuine
  * failures — deserialization errors and invalid payloads (missing eventId/accountId/
  * reason/tenantId) bubble up as {@link RuntimeException} so the shared
- * {@code DefaultErrorHandler} routes them to {@code account.locked.dlq}
+ * {@code DefaultErrorHandler} routes them to {@code account.locked.DLT}
  * (platform/event-driven-policy.md).
  */
 @Slf4j
@@ -55,7 +55,7 @@ public class AccountLockedConsumer {
             if (eventId == null || eventId.isBlank()) {
                 // TASK-BE-041b-fix Critical 1: the account-events contract now mandates
                 // eventId on the account.locked payload. Messages without it are treated
-                // as invalid and routed to account.locked.dlq via DefaultErrorHandler
+                // as invalid and routed to account.locked.DLT via DefaultErrorHandler
                 // rather than given a synthetic UUID (which would break idempotency on
                 // Kafka at-least-once redelivery by producing different event_id values
                 // for the same logical message).
@@ -79,7 +79,7 @@ public class AccountLockedConsumer {
             // TASK-BE-248 Phase 2b: tenant_id is now required on all account.locked events.
             // The lenient fallback to DEFAULT_TENANT_ID is removed — upstream publishers
             // (account-service AccountEventPublisher) always include tenantId since Phase 2b.
-            // Messages without tenant_id are routed to account.locked.dlq via MissingTenantIdException.
+            // Messages without tenant_id are routed to account.locked.DLT via MissingTenantIdException.
             String tenantId = ConsumerUtils.firstNonBlank(
                     root.path("tenantId").asText(null),
                     payload.path("tenantId").asText(null));

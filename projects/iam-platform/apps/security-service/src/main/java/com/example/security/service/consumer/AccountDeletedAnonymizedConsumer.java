@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * <p>DLQ routing: any {@link RuntimeException} propagates to the shared
  * {@code DefaultErrorHandler} (configured in {@code KafkaConsumerConfig}), which
  * applies exponential back-off (3 retries) and then routes to
- * {@code account.deleted.dlq}.
+ * {@code account.deleted.DLT}.
  *
  * <p>Tenant validation: events without a {@code tenant_id} are rejected immediately
  * via {@link MissingTenantIdException} (non-retryable → DLQ).

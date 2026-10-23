@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  *
  * <p>Wired behind {@link org.springframework.kafka.support.serializer.ErrorHandlingDeserializer}
  * so that malformed payloads surface as a genuine {@code DeserializationException},
- * which the {@code DefaultErrorHandler} routes to {@code <topic>.dlq} after retries.
+ * which the {@code DefaultErrorHandler} routes to {@code <topic>.DLT} after retries.
  * This keeps downstream consumer methods simple (they still receive {@code String})
  * while moving poison-pill detection to the deserialization boundary.</p>
  *

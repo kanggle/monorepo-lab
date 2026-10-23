@@ -52,7 +52,7 @@ Defines **platform-wide** terms used across specs, tasks, and documentation. Thi
 | **Consumer** | A service that subscribes to and processes an event |
 | **Outbox Pattern** | Transactional pattern: state change and event row are written to the same DB in one transaction; a separate process forwards outbox rows to the broker |
 | **Idempotent Consumer** | A consumer that produces the same business result even if the same event is delivered multiple times |
-| **DLQ (Dead-Letter Queue)** | A Kafka topic holding messages that failed processing after retry. Named `<topic>.dlq` |
+| **DLQ (Dead-Letter Queue)** | A Kafka topic holding messages that failed processing after retry. Named `<topic>.DLT` (ADR-MONO-085) |
 | **Partition Key** | The field (typically aggregate id) used by Kafka to decide which partition receives the message. Guarantees per-key ordering |
 | **Schema Version** | Integer version of an event's payload schema. Bumped on breaking changes |
 

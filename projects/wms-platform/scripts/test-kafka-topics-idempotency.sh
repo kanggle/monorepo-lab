@@ -40,7 +40,7 @@ docker exec "${CONTAINER_NAME}" bash -c '
   )
   for t in "${TOPICS[@]}"; do
     $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t" --partitions 3 --replication-factor 1 --config retention.ms=604800000 2>&1
-    $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t.dlq" --partitions 1 --replication-factor 1 --config retention.ms=2592000000 2>&1
+    $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t.DLT" --partitions 1 --replication-factor 1 --config retention.ms=2592000000 2>&1
   done
   echo "Run 1 complete."
 '
@@ -63,7 +63,7 @@ docker exec "${CONTAINER_NAME}" bash -c '
   )
   for t in "${TOPICS[@]}"; do
     $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t" --partitions 3 --replication-factor 1 --config retention.ms=604800000 2>&1
-    $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t.dlq" --partitions 1 --replication-factor 1 --config retention.ms=2592000000 2>&1
+    $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP --create --if-not-exists --topic "$t.DLT" --partitions 1 --replication-factor 1 --config retention.ms=2592000000 2>&1
   done
   echo "Run 2 complete."
 '

@@ -53,7 +53,7 @@
 
 **consumer group**: `security-service`. 파티션 키는 `account_id`로 auth-service가 설정하므로 동일 계정의 이벤트는 순서 보장.
 
-**재시도/DLQ**: 지수 백오프 3회 → `<topic>.dlq` 이관. DLQ 깊이 메트릭·알림 필수 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5).
+**재시도/DLQ**: 지수 백오프 3회 → `<topic>.DLT` 이관. DLQ 깊이 메트릭·알림 필수 ([rules/traits/integration-heavy.md](../../../../../rules/traits/integration-heavy.md) I5).
 
 ### Kafka Producer
 

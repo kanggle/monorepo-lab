@@ -24,8 +24,10 @@ reader who guesses them will find empty topics and conclude "nothing to replay".
 - **Retries**: exponential backoff, initial 1s, multiplier 2.0, max interval 30s, **max 3 attempts**.
 - **Not retried**: `JsonProcessingException` (a malformed payload will never parse — it goes
   straight to the DLQ).
-- **DLQ topic name**: the **original topic plus the literal suffix `.dlq`**, same partition.
-  Note this is `<topic>.dlq`, *not* the spring-kafka default `<topic>.DLT`. ADR-006's prose
+- **DLQ topic name**: the **original topic plus the literal suffix `.DLT`** (ADR-MONO-085 — until
+  2026-10-24 this project used `.dlq`; records dead-lettered before that sit on the old `<topic>.dlq`
+  topics). The partition is left to the producer (`-1`), so do not assume a DLQ record sits on the
+  same partition number as its source. ADR-006's prose
   mentions `notification.send.failed.DLT`; **no such topic exists** — the resolver in
   `KafkaConsumerConfig` is authoritative.
 
@@ -33,10 +35,10 @@ So the four DLQ topics are exactly:
 
 | Consumer | Source topic | DLQ topic |
 |---|---|---|
-| `AccountCreatedEventConsumer` | `account.created` | `account.created.dlq` |
-| `OrderPlacedEventConsumer` | `order.order.placed` | `order.order.placed.dlq` |
-| `PaymentCompletedEventConsumer` | `payment.payment.completed` | `payment.payment.completed.dlq` |
-| `ShippingStatusChangedEventConsumer` | `shipping.shipping.status-changed` | `shipping.shipping.status-changed.dlq` |
+| `AccountCreatedEventConsumer` | `account.created` | `account.created.DLT` |
+| `OrderPlacedEventConsumer` | `order.order.placed` | `order.order.placed.DLT` |
+| `PaymentCompletedEventConsumer` | `payment.payment.completed` | `payment.payment.completed.DLT` |
+| `ShippingStatusChangedEventConsumer` | `shipping.shipping.status-changed` | `shipping.shipping.status-changed.DLT` |
 
 All four consumers use consumer group **`notification-service`**.
 
@@ -55,14 +57,14 @@ All commands run against the local compose stack. Kafka is `ecommerce-kafka`, br
 ```bash
 # List DLQ topics that exist at all (an absent topic means nothing was ever dead-lettered).
 docker exec ecommerce-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 --list | grep '\.dlq$'
+  --bootstrap-server localhost:9092 --list | grep '\.DLT$'
 ```
 
 Count the messages sitting in one:
 
 ```bash
 # Replace TOPIC with a value from the table in §0.
-TOPIC=order.order.placed.dlq
+TOPIC=order.order.placed.DLT
 
 docker exec ecommerce-kafka /opt/kafka/bin/kafka-run-class.sh \
   kafka.tools.GetOffsetShell --bootstrap-server localhost:9092 --topic "$TOPIC"
@@ -78,7 +80,7 @@ listed → nothing was dead-lettered.** Stop here and go to [§5](#5-when-the-me
 Never replay blind — if the cause is a malformed payload, replaying just refills the DLQ.
 
 ```bash
-TOPIC=order.order.placed.dlq
+TOPIC=order.order.placed.DLT
 
 docker exec ecommerce-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
@@ -133,7 +135,7 @@ compose-level override) answers before replaying.
 
 ## 4. Replay
 
-Replay = consume from `<topic>.dlq` and re-produce to the original topic. The consumers are
+Replay = consume from `<topic>.DLT` and re-produce to the original topic. The consumers are
 idempotent on `eventId` (see §0), so this is safe to run more than once.
 
 **Step 4a — capture the DLQ contents to a file.** Keys must be preserved (they carry the partition
@@ -145,7 +147,7 @@ mkdir -p /tmp/dlq-replay
 
 docker exec ecommerce-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic "${TOPIC}.dlq" \
+  --topic "${TOPIC}.DLT" \
   --from-beginning \
   --timeout-ms 15000 \
   --property print.key=true \
@@ -199,7 +201,7 @@ Expect `SENT` rows. `FAILED` rows here mean the send is failing for a *new* reas
 TOPIC=order.order.placed
 
 cat > /tmp/dlq-replay/purge.json <<EOF
-{"partitions": [{"topic": "${TOPIC}.dlq", "partition": 0, "offset": -1}], "version": 1}
+{"partitions": [{"topic": "${TOPIC}.DLT", "partition": 0, "offset": -1}], "version": 1}
 EOF
 docker cp /tmp/dlq-replay/purge.json ecommerce-kafka:/tmp/purge.json
 

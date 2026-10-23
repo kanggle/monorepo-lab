@@ -144,7 +144,7 @@ apps/auth-service/src/main/java/com/example/auth/
         ├── PersistenceConfig.java
         ├── RedisConfig.java
         ├── KafkaConfig.java
-        ├── KafkaConsumerConfig.java     ← TASK-BE-601: DefaultErrorHandler (3회 백오프 → <topic>.dlq)
+        ├── KafkaConsumerConfig.java     ← TASK-BE-601: DefaultErrorHandler (3회 백오프 → <topic>.DLT)
         └── SecurityConfig.java          ← @Order(2) 기존 /api/auth/** 체인
 ```
 
@@ -244,7 +244,7 @@ apps/auth-service/src/main/java/com/example/auth/
 
 | Topic | Group | Producer | Partition key | Handler | DLQ |
 |---|---|---|---|---|---|
-| `account.locked` | `auth-service-account-locked` | account-service (outbox, flat wire) | `account_id` — 한 계정의 잠금은 순서대로 온다 | `AccountLockedConsumer` → `RevokeSessionsOnAccountLockedUseCase` | `account.locked.dlq` (security-service 그룹과 공유 — `kafka_dlt-original-consumer-group` 헤더로 구분) |
+| `account.locked` | `auth-service-account-locked` | account-service (outbox, flat wire) | `account_id` — 한 계정의 잠금은 순서대로 온다 | `AccountLockedConsumer` → `RevokeSessionsOnAccountLockedUseCase` | `account.locked.DLT` (security-service 그룹과 공유 — `kafka_dlt-original-consumer-group` 헤더로 구분) |
 
 [event-consumer.md](../../../../../platform/service-types/event-consumer.md) MUST 적용 현황:
 
@@ -252,8 +252,8 @@ apps/auth-service/src/main/java/com/example/auth/
 |---|---|
 | 구독 토픽 선언 · 그룹 `<service>-<purpose>` | ✅ 위 표 |
 | 멱등 (eventId 테이블) | ✅ `processed_events` (`JdbcEventDedupeAdapter`) — 🔵 TTL/정리 작업 없음(행은 남는다; 24h+ 보존 요건은 충족, 무한 성장은 후속) |
-| 재시도 → DLQ `<topic>.dlq` · 파싱 오류 삼킴 금지 | ✅ `KafkaConsumerConfig` (지수 백오프 3회 · 잘못된 봉투는 즉시 DLQ) |
-| DLQ depth 알림 | 🔵 `account.locked.dlq` 는 security-service `SecurityMetricsConfig.DLQ_TOPICS` 가 이미 깊이를 잰다(토픽 단위라 이 그룹의 DLQ 기록도 포함). auth-service 는 `outbox.dlq.size{reason}` 카운터 |
+| 재시도 → DLQ `<topic>.DLT` · 파싱 오류 삼킴 금지 | ✅ `KafkaConsumerConfig` (지수 백오프 3회 · 잘못된 봉투는 즉시 DLQ) |
+| DLQ depth 알림 | 🔵 `account.locked.DLT` 는 security-service `SecurityMetricsConfig.DLQ_TOPICS` 가 이미 깊이를 잰다(토픽 단위라 이 그룹의 DLQ 기록도 포함). auth-service 는 `outbox.dlq.size{reason}` 카운터 |
 | eventVersion 분기 | ✅ 있으면 1·2 만, 그 밖은 DLQ |
 | OTel 전파 | 🔵 `spring.kafka.listener.observation-enabled=true` (traceparent 헤더가 있으면 이어 받는다). 명시적 `KafkaPropagator` 는 iam 어느 소비자에도 없다 — 플랫폼 공통 잔여 |
 | consumer lag 메트릭 · 알림 | ⚪ 미구성 — 후속 |
@@ -361,7 +361,7 @@ presentation → application → domain
 - **HTTP 컨트랙트 (내부, → account-service)**: [specs/contracts/http/internal/auth-to-account.md](../../contracts/http/internal/auth-to-account.md) — tenant-info lookup (응답 array `[{accountId, tenantId, tenantType}]`, TASK-BE-229), 계정 상태 조회. entitled_domains lookup (TASK-BE-324) — **fail-soft** (caller 가 claim 생략).
 - **HTTP 컨트랙트 (내부, → admin-service)** (TASK-BE-327, 신규 outbound edge): [specs/contracts/http/internal/auth-to-admin.md](../../contracts/http/internal/auth-to-admin.md) — assume-tenant 발급 시점의 1회성 assignment 확인 (`GET /internal/operator-assignments/check`). IAM `client_credentials` Bearer JWT (`IamClientCredentialsTokenProvider` 재사용). **fail-CLOSED**: 실패 시 발급 거부. per-request 도메인→IAM callback 이 아니라 issuance-time one-shot (ADR-MONO-020 § 3.1 은 후자만 금지).
 - **이벤트 발행**: [specs/contracts/events/auth-events.md](../../contracts/events/) — `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`. 모두 **outbox 경유**, 페이로드에 `tenant_id` 포함
-- **이벤트 구독** (TASK-BE-601): [account-events.md § account.locked](../../contracts/events/account-events.md#accountlocked) — group `auth-service`, DLQ `account.locked.dlq`. 위 § Event Consumption
+- **이벤트 구독** (TASK-BE-601): [account-events.md § account.locked](../../contracts/events/account-events.md#accountlocked) — group `auth-service`, DLQ `account.locked.DLT`. 위 § Event Consumption
 
 ### Outbox (v2)
 

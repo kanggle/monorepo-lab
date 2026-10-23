@@ -22,8 +22,9 @@ import java.util.Map;
  * Consumer retry + dead-letter wiring (consumer-retry-dlq.md;
  * platform/event-driven-policy.md Retry Policy: base 1s, ×2, max 30s, 3
  * attempts). On exhaustion (or immediately for a non-retryable exception) the
- * record is published to {@code <topic>.dlq} — the platform {@code .dlq} suffix,
- * NOT Spring Kafka's default {@code .DLT} — via a custom destination resolver.
+ * record is published to {@code <topic>.DLT} (ADR-MONO-085) via a custom destination
+ * resolver that leaves the partition to the producer ({@code -1}): a dead-letter
+ * topic need not have as many partitions as its source.
  *
  * <p>This single {@link DefaultErrorHandler} bean is auto-wired by Spring Boot
  * into the auto-configured listener container factory. The DLQ
@@ -50,12 +51,12 @@ public class KafkaConsumerConfig {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 dlqTemplate,
                 (record, ex) -> {
-                    String dlqTopic = record.topic() + ".dlq";
+                    String dlqTopic = record.topic() + ".DLT";
                     meterRegistry.counter(DLQ_METRIC, "topic", record.topic()).increment();
                     log.warn("Routing to DLQ: topic={}, dlq={}, key={}, offset={}, reason={}",
                             record.topic(), dlqTopic, record.key(), record.offset(),
                             ex.getMessage());
-                    return new TopicPartition(dlqTopic, record.partition());
+                    return new TopicPartition(dlqTopic, -1);
                 });
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
