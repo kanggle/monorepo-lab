@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **READY (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 이번 굽기 제외.** outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 

@@ -50,9 +50,20 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~④. 측정 2026-10-23 UTC — 아래 § AC-0 측정 결과.
-- [ ] **AC-1** — 소유자 결정 · 필요하면 ADR 먼저. 🔵 소유자 결정 2026-10-23 KST: **«아직 출고 전인 배송만 취소»**. 🔴 **그러나 이 결정만으로는 닫히지 않는다** — AC-0 ①·④ 가 보이듯 «출고 전» 배송은 기본 설정에서 **이미 WMS 출고 주문이 나가 있고**, 그것을 취소할 이커머스 → WMS 경로(이벤트 · 계약)가 없다. 결정을 이행하려면 새 프로젝트 간 이벤트 + ADR-MONO-022 개정이 먼저다(§ 착수 중단). 소유자 선택 대기. 🟡 2026-10-23 UTC 소유자 선택 «ADR 초안 · 굽기는 안 기다림» → ADR-MONO-022 **D4 v2(d) PROPOSED** 초안(선택지 X: WMS 자동 취소 깊이 · Y: 주문 · 환불 시점). 승인은 정확형 `ADR-MONO-022 D4 v2(d) ACCEPTED — X-? / Y-?` 만. 이번 굽기에 싣지 않는다.
+- [x] **AC-1** — 소유자 결정 · 필요하면 ADR 먼저. ✅ 2026-10-23 UTC **ADR-MONO-022 D4 v2(d) ACCEPTED — X-A / Y-A** (소유자 선택창, 정확형). 구현 순서: 계약 → WMS 티켓 → 이 티켓 → 콘솔 «취소됨» 배송 라벨 티켓. 🔵 소유자 결정 2026-10-23 KST: **«아직 출고 전인 배송만 취소»**. 🔴 **그러나 이 결정만으로는 닫히지 않는다** — AC-0 ①·④ 가 보이듯 «출고 전» 배송은 기본 설정에서 **이미 WMS 출고 주문이 나가 있고**, 그것을 취소할 이커머스 → WMS 경로(이벤트 · 계약)가 없다. 결정을 이행하려면 새 프로젝트 간 이벤트 + ADR-MONO-022 개정이 먼저다(§ 착수 중단). 소유자 선택 대기. 🟡 2026-10-23 UTC 소유자 선택 «ADR 초안 · 굽기는 안 기다림» → ADR-MONO-022 **D4 v2(d) PROPOSED** 초안(선택지 X: WMS 자동 취소 깊이 · Y: 주문 · 환불 시점). 승인은 정확형 `ADR-MONO-022 D4 v2(d) ACCEPTED — X-? / Y-?` 만. 이번 굽기에 싣지 않는다.
 - [ ] **AC-2** — 구현 + 시험 · CI 초록. 미착수 — 위 중단 때문에 구현 · 시험을 쓰지 않았다(로컬에서 돈 시험 없음).
 - [ ] **AC-3** — 굽기 뒤 라이브.
+
+## ACCEPTED 뒤 범위 (2026-10-23 UTC — ADR-MONO-022 D4 v2(d) · X-A / Y-A)
+
+- **선행**: WMS `TASK-BE-650` 이 양쪽 계약(`fulfillment-events.md` 의 `ecommerce.fulfillment.cancel-requested.v1` · WMS 구독 파일)과 소비자를 먼저 놓는다.
+- **이 티켓**:
+  - 계약: `order-events.md` 의 `OrderCancelled` 소비자 목록에 shipping-service 를 넣는다. `shipping-events.md` 와 shipping-service 스펙의 상태 기계에 끝 상태 `CANCELLED`(`PREPARING` 에서만 갈 수 있음)를 넣는다. `ShippingStatusChanged(CANCELLED)` 를 내면 order-service 소비자가 그것을 무시하는지 확인한다.
+  - 구현: shipping-service 가 `order.order.cancelled` 를 소비한다. `PREPARING` 이면 `CANCELLED` 로 보내고, `wmsRouted` 면 같은 트랜잭션에서 아웃박스로 취소 요청을 쓴다. `SHIPPED` 이후 · 모르는 주문 · 재전달은 no-op 이다.
+  - 경보 억제: shipping-service `WmsOutboundCancelledConsumer` 는 배송이 이미 `CANCELLED` 면 경보를 내지 않는다(자기가 요청한 취소의 메아리).
+  - 시험: 위 각 경우와 경보 억제. 시험만 담은 커밋으로 CI 빨강을 먼저 본다.
+- **Y-A**: 주문 취소 · 환불은 지금처럼 즉시 끝난다. 새 주문 상태는 없다. WMS 가 거부하면 경보만 남는다.
+- 콘솔 라벨 = `TASK-PC-FE-367`.
 
 ## AC-0 측정 결과 (2026-10-23 UTC)
 
