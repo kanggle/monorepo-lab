@@ -8,7 +8,7 @@ TASK-BE-648
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -53,7 +53,7 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①~③. ② 에서 정당한 필요가 있으면 STOP(소유자에게). → 아래 `## AC-0 측정` — 정당한 필요 없음 · 이미 확정된 주문도 400.
-- [ ] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록(가능하면 시험만 커밋으로 빨강 먼저).
+- [x] **AC-1** — 계약 먼저 → 구현 + 시험 · CI 의 ecommerce 잡 초록(가능하면 시험만 커밋으로 빨강 먼저).
 - [ ] **AC-2** — 굽기 뒤 라이브: 운영자 API 로 대기 주문 확정 → 400(다음 데모 창).
 
 # Related Specs
@@ -123,3 +123,10 @@ backend
    - **초록 실측**: 같은 명령 `rc=0`, JUnit XML 합계 `tests=462 failures=0 errors=0 skipped=0`(`AdminOrderStatusServiceTest` 27 · `AdminOrderControllerSliceTest` 10 · `OrderConfirmationServiceTest` 6 · `EcommerceOrderDemoSeedTest` 9 — 전부 0 실패). Testcontainers IT 는 로컬 Docker 없음 → CI 몫(AC-1).
 
 남은 것: `Clock` 필드는 이제 이 서비스에서 쓰이지 않지만 생성자 시그니처 · 시험 배선을 바꾸지 않으려고 남겼다. `EcommerceOrderDemoSeedTest.java:216-224` 의 설명 문구는 여전히 참인 핀이라 손대지 않았다(AC-0 ①). 콘솔 선택지 제거 = `TASK-PC-FE-366`(Failure Scenario 2 — 366 을 먼저 또는 함께 머지).
+
+## CI 빨강 → 초록 증거 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 메인 세션이 **시험만 담은 커밋 `50a662f32`** 까지 올려 PR #4485(draft) CI run `39850742272` 을 봤다 — `order-service:test` 462 중 **9 failed**, 정확히 새 시험들(목표 `CONFIRMED` 파라미터 6 · 대기 확정 거부 · 확정→확정 400 · 거부가 취소로 새지 않음). ⇒ 결함 실재 · 시험이 문다.
+- 계약 `ee066be17` · 수선 `5485efe34` 를 앞으로 푸시 → head `5485efe34` 체크 pending 0 · fail 0 → AC-1 닫힘.
+- 콘솔 짝 `TASK-PC-FE-366`(#4484 `c8b7262d8`)을 **먼저** 머지 — 콘솔은 더 이상 «확정» 을 내지 않는다.
+- 열림: **AC-2**(굽기 뒤 라이브 — 운영자 API 로 대기 주문 확정 → 400).
