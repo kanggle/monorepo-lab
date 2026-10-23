@@ -68,10 +68,67 @@ const baseState = (
     },
   ],
   recentAdjustmentsStatus: 'ok',
+  // TASK-MONO-808 — the «실적» strip (warehouse-global /dashboard/metrics).
+  period: 'month',
+  performance: {
+    status: 'ok',
+    value: {
+      period: 'month',
+      timezone: 'Asia/Seoul',
+      current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-24T14:05:00+09:00' },
+      previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-24T14:05:00+09:00' },
+      metrics: [
+        { key: 'qtyReceived', unit: 'count', currency: null, current: '12400', previous: '11000' },
+        { key: 'qtyShipped', unit: 'count', currency: null, current: '9800', previous: '10100' },
+        { key: 'shipmentCount', unit: 'count', currency: null, current: '312', previous: '300' },
+      ],
+      series: [
+        { date: '2026-10-01', values: { qtyReceived: '500', qtyShipped: '400', shipmentCount: '12' } },
+        { date: '2026-10-02', values: { qtyReceived: '0', qtyShipped: '800', shipmentCount: '20' } },
+      ],
+    },
+  },
   ...over,
 });
 
 describe('WmsOverview (TASK-PC-FE-166)', () => {
+  it('TASK-MONO-808 — the «실적» strip comes first, with the WMS labels and period links', () => {
+    render(<WmsOverview state={baseState()} />);
+    const strip = screen.getByTestId('wms-performance');
+    expect(screen.getByTestId('wms-overview').firstElementChild).toBe(strip);
+
+    expect(screen.getByTestId('wms-performance-kpi-qtyReceived')).toHaveTextContent('입고 수량');
+    expect(screen.getByTestId('wms-performance-kpi-qtyReceived-value')).toHaveTextContent('12,400');
+    expect(screen.getByTestId('wms-performance-kpi-qtyShipped')).toHaveTextContent('출고 수량');
+    expect(screen.getByTestId('wms-performance-kpi-shipmentCount')).toHaveTextContent('출고 건수');
+    expect(screen.getByTestId('wms-performance-period-week')).toHaveAttribute('href', '/wms?period=week');
+    expect(screen.getByTestId('wms-performance-period-month')).toHaveAttribute('href', '/wms?period=month');
+    expect(screen.getByTestId('wms-performance-period-month')).toHaveAttribute('aria-current', 'page');
+    // The trend chart draws 출고 수량 (chartKey), not the first metric.
+    expect(screen.getByTestId('wms-performance-trend')).toHaveTextContent('출고 수량 · 일별');
+  });
+
+  it('TASK-MONO-808 — a failed strip does not take the tiles with it; the 배송 tile keeps its own counts', () => {
+    render(
+      <WmsOverview
+        state={baseState({ period: 'week', performance: { status: 'degraded', value: null } })}
+      />,
+    );
+    expect(screen.getByTestId('wms-performance-degraded')).toHaveTextContent('실적을 불러올 수 없습니다');
+    expect(screen.getByTestId('wms-performance-period-week')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('wms-inventory-count')).toHaveTextContent('42');
+    expect(screen.getByTestId('wms-shipments-count-week')).toHaveTextContent('5');
+    expect(screen.getByTestId('wms-alert-status-unacknowledged')).toHaveTextContent('3');
+  });
+
+  it('TASK-MONO-808 — a forbidden strip says so in words, never a 0', () => {
+    render(
+      <WmsOverview state={baseState({ performance: { status: 'forbidden', value: null } })} />,
+    );
+    expect(screen.getByTestId('wms-performance-forbidden')).toHaveTextContent('권한이 없습니다');
+    expect(screen.queryByTestId('wms-performance-kpi-qtyShipped')).toBeNull();
+  });
+
   it('notEligible → renders nothing', () => {
     const { container } = render(
       <WmsOverview state={baseState({ notEligible: true, counts: [] })} />,

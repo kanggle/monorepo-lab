@@ -1,5 +1,17 @@
 import { SAMPLE_AS_OF, SAMPLE_LABEL_SUFFIX } from '../codes';
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+  type SampleWindow,
+} from './metrics-windows';
+
+// TASK-MONO-808 — the windows moved to `./metrics-windows` (shared with wms);
+// re-exported so existing importers keep one name.
+export { SAMPLE_METRICS_WINDOWS };
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -617,33 +629,7 @@ function computeInsights(window: SampleWindow | null) {
 /** The producer's realised-sale statuses (order-api.md § /metrics). */
 const REALISED_SALE = new Set(['CONFIRMED', 'SHIPPED', 'DELIVERED']);
 
-interface SampleWindow {
-  from: string;
-  to: string;
-}
-
-type SamplePeriod = 'week' | 'month';
-
-/**
- * The windows the producer would compute at `SAMPLE_AS_OF` (2026-09-15 20:00 KST,
- * a Tuesday). Written out — `shared/sample/**` may not import `shared/lib/kst-period`
- * (isolation guard) — and pinned against `kstMetricsWindows` by
- * `tests/unit/sample-ecommerce-metrics.test.ts`, so they cannot drift from it.
- */
-export const SAMPLE_METRICS_WINDOWS: Readonly<
-  Record<SamplePeriod, { current: SampleWindow; previous: SampleWindow; dates: readonly string[] }>
-> = {
-  week: {
-    current: { from: '2026-09-14T00:00:00+09:00', to: '2026-09-15T20:00:00+09:00' },
-    previous: { from: '2026-09-07T00:00:00+09:00', to: '2026-09-08T20:00:00+09:00' },
-    dates: ['2026-09-14', '2026-09-15'],
-  },
-  month: {
-    current: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-15T20:00:00+09:00' },
-    previous: { from: '2026-08-01T00:00:00+09:00', to: '2026-08-15T20:00:00+09:00' },
-    dates: Array.from({ length: 15 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`),
-  },
-};
+// The windows (`SAMPLE_METRICS_WINDOWS`) live in `./metrics-windows` (TASK-MONO-808).
 
 /** A seed order's synthetic paid time: its last update, else its creation. */
 function samplePaidAt(o: OrderSeed): string {
@@ -651,18 +637,7 @@ function samplePaidAt(o: OrderSeed): string {
 }
 
 function paidInside(o: OrderSeed, w: SampleWindow): boolean {
-  const t = Date.parse(samplePaidAt(o));
-  return t >= Date.parse(w.from) && t < Date.parse(w.to);
-}
-
-/** KST calendar date of an instant (fixed +09:00 — no DST). */
-function kstDate(iso: string): string {
-  return new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-function samplePeriod(query: URLSearchParams): SamplePeriod | null {
-  const p = query.get('period')?.toLowerCase();
-  return p === 'week' || p === 'month' ? p : null;
+  return instantInside(samplePaidAt(o), w);
 }
 
 function computeMetrics(period: SamplePeriod) {

@@ -24,6 +24,7 @@ const m = vi.hoisted(() => ({
   listShipments: vi.fn(),
   listAdjustments: vi.fn(),
   listAlerts: vi.fn(),
+  getWmsMetrics: vi.fn(),
 }));
 vi.mock('@/features/wms-ops/api/wms-inventory-api', () => ({
   listInventory: m.listInventory,
@@ -35,6 +36,9 @@ vi.mock('@/features/wms-ops/api/wms-shipments-api', () => ({
 }));
 vi.mock('@/features/wms-ops/api/wms-alerts-api', () => ({
   listAlerts: m.listAlerts,
+}));
+vi.mock('@/features/wms-ops/api/wms-metrics-api', () => ({
+  getWmsMetrics: m.getWmsMetrics,
 }));
 
 import { getWmsOverviewState } from '@/features/wms-ops/api/overview-state';
@@ -93,6 +97,20 @@ const adjRow = (id: string) => ({
  *  under the same per-test pin. */
 let bounds: KstPeriodBounds;
 
+/** `/dashboard/metrics` body (TASK-MONO-808) — the shared contract shape. */
+const metricsFixture = () => ({
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-07-01T00:00:00+09:00', to: '2026-07-15T12:00:00+09:00' },
+  previous: { from: '2026-06-01T00:00:00+09:00', to: '2026-06-15T12:00:00+09:00' },
+  metrics: [
+    { key: 'qtyReceived', unit: 'count', currency: null, current: '1200', previous: '900' },
+    { key: 'qtyShipped', unit: 'count', currency: null, current: '800', previous: '850' },
+    { key: 'shipmentCount', unit: 'count', currency: null, current: '40', previous: '41' },
+  ],
+  series: [{ date: '2026-07-01', values: { qtyReceived: '80', qtyShipped: '50', shipmentCount: '3' } }],
+});
+
 /** Default happy fan-out: every leg resolves. 배송 period reads (keyed by
  *  `shippedAtFrom`) return distinct counts; the total read (no window) is 7. */
 function seedHappy() {
@@ -133,6 +151,8 @@ function seedHappy() {
   m.listAdjustments.mockResolvedValue(
     wmsResult(2, [adjRow('adj1'), adjRow('adj2')]),
   );
+  // «실적» strip (TASK-MONO-808).
+  m.getWmsMetrics.mockResolvedValue(metricsFixture());
 }
 
 beforeEach(() => {
@@ -160,6 +180,8 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     expect(m.listInventory).not.toHaveBeenCalled();
     expect(m.listShipments).not.toHaveBeenCalled();
     expect(m.listAlerts).not.toHaveBeenCalled();
+    expect(m.getWmsMetrics).not.toHaveBeenCalled();
+    expect(state.performance.status).toBe('degraded');
   });
 
   it('happy → maps area counts + alert-ack distribution + recent shipments', async () => {
@@ -352,6 +374,71 @@ describe('getWmsOverviewState (TASK-PC-FE-166)', () => {
     seedHappy();
     m.listAlerts.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
 
+    await expect(getWmsOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  // ── TASK-MONO-808 — the «실적» strip ────────────────────────────────────
+
+  it('performance: the period reaches the metrics leg, read warehouse-global (no warehouseId)', async () => {
+    seedHappy();
+    const state = await getWmsOverviewState(true, 'week');
+
+    expect(m.getWmsMetrics).toHaveBeenCalledTimes(1);
+    expect(m.getWmsMetrics.mock.calls[0]).toEqual(['week']);
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual([
+      'qtyReceived',
+      'qtyShipped',
+      'shipmentCount',
+    ]);
+  });
+
+  it('performance: default period is the month', async () => {
+    seedHappy();
+    const state = await getWmsOverviewState(true);
+    expect(m.getWmsMetrics).toHaveBeenCalledWith('month');
+    expect(state.period).toBe('month');
+  });
+
+  it('performance: a 503 degrades only the strip — every other cell stays ok', async () => {
+    seedHappy();
+    m.getWmsMetrics.mockRejectedValue(
+      new WmsUnavailableError('downstream', 'SERVICE_UNAVAILABLE', 'down'),
+    );
+    const state = await getWmsOverviewState(true);
+
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+    expect(state.alertStatus.every((b) => b.cellStatus === 'ok')).toBe(true);
+    expect(state.recentShipmentsStatus).toBe('ok');
+    expect(state.recentAdjustmentsStatus).toBe('ok');
+    // The tenant-owned 배송 period counts are untouched by the strip.
+    expect(state.counts.find((c) => c.key === 'shipments')!.period).toEqual({
+      today: 2,
+      week: 5,
+      month: 6,
+    });
+  });
+
+  it('performance: a 400 (e.g. VALIDATION_ERROR) or an unparseable body degrades the strip only', async () => {
+    seedHappy();
+    m.getWmsMetrics.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'period'));
+    expect((await getWmsOverviewState(true)).performance.status).toBe('degraded');
+
+    m.getWmsMetrics.mockResolvedValue({ ...metricsFixture(), metrics: [{ key: 'qtyShipped', unit: 'count', currency: null, current: 12, previous: '1' }] });
+    const state = await getWmsOverviewState(true);
+    expect(state.performance.status).toBe('degraded');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+  });
+
+  it('performance: a 403 → forbidden; a 401 → whole-session redirect', async () => {
+    seedHappy();
+    m.getWmsMetrics.mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'no'));
+    expect((await getWmsOverviewState(true)).performance.status).toBe('forbidden');
+
+    m.getWmsMetrics.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
     await expect(getWmsOverviewState(true)).rejects.toThrow('REDIRECT:/login');
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });

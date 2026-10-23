@@ -89,8 +89,9 @@ class OutboundProjectionServiceTest {
 
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
         verify(shipmentRepo, times(1)).save(any(ShipmentSummaryEntity.class));
+        // TASK-MONO-808 — shippedAt 15:00Z is 00:00 KST on 05-10: the KST day, not UTC's 05-09.
         verify(throughputRepo, times(1)).upsertIncrement(
-                eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(150), any(Instant.class));
+                eq(LocalDate.of(2026, 5, 10)), eq(warehouseId), eq(150), any(Instant.class));
     }
 
     /**

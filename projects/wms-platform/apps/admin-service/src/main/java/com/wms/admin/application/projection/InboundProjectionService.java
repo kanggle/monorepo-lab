@@ -9,6 +9,7 @@ import static com.wms.admin.application.projection.PayloadJson.requireArray;
 import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
+import com.example.common.time.KstPeriodBounds;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
@@ -20,11 +21,11 @@ import com.wms.admin.readmodel.master.PartnerRefEntity;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
 import com.wms.admin.readmodel.master.WarehouseRefEntity;
 import com.wms.admin.readmodel.master.WarehouseRefRepository;
+import com.wms.admin.readmodel.throughput.PutawayFactRepository;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,7 @@ public class InboundProjectionService {
     private final AsnSummaryRepository asnRepo;
     private final InspectionSummaryRepository inspectionRepo;
     private final ThroughputInboundDailyRepository throughputRepo;
+    private final PutawayFactRepository putawayFactRepo;
     private final PartnerRefRepository partnerRepo;
     // 🔴 TASK-MONO-659 — partnerRepo 는 이미 있었고 이것만 없었다.
     private final WarehouseRefRepository warehouseRepo;
@@ -57,6 +59,7 @@ public class InboundProjectionService {
     public InboundProjectionService(AsnSummaryRepository asnRepo,
                                     InspectionSummaryRepository inspectionRepo,
                                     ThroughputInboundDailyRepository throughputRepo,
+                                    PutawayFactRepository putawayFactRepo,
                                     PartnerRefRepository partnerRepo,
                                     WarehouseRefRepository warehouseRepo,
                                     AdminEventDedupeRepository dedupe,
@@ -65,6 +68,7 @@ public class InboundProjectionService {
         this.asnRepo = asnRepo;
         this.inspectionRepo = inspectionRepo;
         this.throughputRepo = throughputRepo;
+        this.putawayFactRepo = putawayFactRepo;
         this.partnerRepo = partnerRepo;
         this.warehouseRepo = warehouseRepo;
         this.dedupe = dedupe;
@@ -243,7 +247,9 @@ public class InboundProjectionService {
         Instant occurredAt = envelope.occurredAt();
         Instant completedAt = optionalInstant(p, "completedAt");
         Instant effectiveAt = completedAt == null ? occurredAt : completedAt;
-        LocalDate date = effectiveAt.atZone(ZoneOffset.UTC).toLocalDate();
+        // ADR-MONO-084 D3 (TASK-MONO-808) — the KST day, not the UTC day. Until V6 this
+        // was atZone(UTC), which put 00:00–09:00 KST putaways on the previous day.
+        LocalDate date = KstPeriodBounds.dateOf(effectiveAt);
         int qtyDelta = 0;
         JsonNode lines = requireArray(p, "lines");
         for (JsonNode line : lines) {
@@ -257,6 +263,9 @@ public class InboundProjectionService {
         // another putaway to count, not a stale version. Exactly-once is the
         // dedupe row recorded in project() (idempotency.md § 2.6).
         throughputRepo.upsertIncrement(date, warehouseId, qtyDelta, occurredAt);
+        // The per-event row the daily counter cannot be rebuilt or windowed without
+        // (V6). Same transaction, so the two never disagree about an applied event.
+        putawayFactRepo.insertIfAbsent(envelope.eventId(), warehouseId, effectiveAt, qtyDelta);
         return DedupeOutcome.APPLIED;
     }
 

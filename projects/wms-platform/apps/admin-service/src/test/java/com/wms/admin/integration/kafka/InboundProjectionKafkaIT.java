@@ -6,13 +6,14 @@ import static org.awaitility.Awaitility.await;
 import com.wms.admin.infra.persistence.readmodel.AdminEventDedupeJpaRepository;
 import com.wms.admin.readmodel.inbound.AsnSummaryRepository;
 import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
+import com.wms.admin.readmodel.throughput.PutawayFactRepository;
 import com.wms.admin.readmodel.throughput.ThroughputDailyId;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import com.example.common.time.KstPeriodBounds;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
     @Autowired AsnSummaryRepository asnRepo;
     @Autowired InspectionSummaryRepository inspectionRepo;
     @Autowired ThroughputInboundDailyRepository throughputRepo;
+    @Autowired PutawayFactRepository putawayFactRepo;
     @Autowired MeterRegistry meterRegistry;
 
     private static final Duration AWAIT = Duration.ofSeconds(30);
@@ -122,7 +124,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         UUID eventId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         Instant occurredAt = Instant.parse("2026-05-09T13:45:00Z");
-        LocalDate date = occurredAt.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate date = KstPeriodBounds.dateOf(occurredAt); // TASK-MONO-808 — the KST day
         String payload = """
                 {"warehouseId":"%s","completedAt":"%s",
                 "lines":[{"qtyReceived":10},{"qtyReceived":15}]}"""
@@ -139,6 +141,12 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
                         assertThat(t.getPutawayCount()).isEqualTo(1);
                         assertThat(t.getQtyReceived()).isEqualTo(25);
                     });
+            // TASK-MONO-808 — the per-event row, in the same transaction (V6)
+            assertThat(putawayFactRepo.findById(eventId)).isPresent().get().satisfies(f -> {
+                assertThat(f.getWarehouseId()).isEqualTo(warehouseId);
+                assertThat(f.getCompletedAt()).isEqualTo(occurredAt);
+                assertThat(f.getQtyReceived()).isEqualTo(25);
+            });
         });
     }
 
@@ -151,7 +159,7 @@ class InboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
     @Test
     void putawayCompleted_reverseOrderAcrossAsns_countsBoth() {
         UUID warehouseId = UUID.randomUUID();
-        Instant t2 = Instant.parse("2026-05-10T15:00:00Z");
+        Instant t2 = Instant.parse("2026-05-10T14:00:00Z"); // 23:00 KST — same KST day as t1 (TASK-MONO-808)
         Instant t1 = Instant.parse("2026-05-10T09:00:00Z");
         LocalDate date = LocalDate.of(2026, 5, 10);
         UUID laterId = UUID.randomUUID();

@@ -20,6 +20,7 @@ import com.wms.admin.readmodel.inbound.InspectionSummaryRepository;
 import com.wms.admin.readmodel.master.PartnerRefRepository;
 import com.wms.admin.readmodel.master.WarehouseRefEntity;
 import com.wms.admin.readmodel.master.WarehouseRefRepository;
+import com.wms.admin.readmodel.throughput.PutawayFactRepository;
 import com.wms.admin.readmodel.throughput.ThroughputInboundDailyRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -27,10 +28,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.TimeZone;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,6 +48,7 @@ class InboundProjectionServiceTest {
     @Mock AsnSummaryRepository asnRepo;
     @Mock InspectionSummaryRepository inspectionRepo;
     @Mock ThroughputInboundDailyRepository throughputRepo;
+    @Mock PutawayFactRepository putawayFactRepo;
     @Mock PartnerRefRepository partnerRepo;
     @Mock WarehouseRefRepository warehouseRepo;
 
@@ -55,7 +60,7 @@ class InboundProjectionServiceTest {
         dedupe = new InMemoryDedupePort();
         ProjectionMetrics metrics = new ProjectionMetrics(new SimpleMeterRegistry(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        service = new InboundProjectionService(asnRepo, inspectionRepo, throughputRepo,
+        service = new InboundProjectionService(asnRepo, inspectionRepo, throughputRepo, putawayFactRepo,
                 partnerRepo, warehouseRepo, dedupe, metrics, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -133,8 +138,8 @@ class InboundProjectionServiceTest {
         when(throughputRepo.upsertIncrement(any(LocalDate.class), eq(warehouseId), anyInt(),
                 any(Instant.class))).thenReturn(1);
 
-        ProjectionEnvelope later = envelopeAt(UUID.randomUUID(), Instant.parse("2026-05-09T15:00:00Z"),
-                "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T15:00:00Z\","
+        ProjectionEnvelope later = envelopeAt(UUID.randomUUID(), Instant.parse("2026-05-09T14:00:00Z"),
+                "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T14:00:00Z\","
                         + "\"lines\":[{\"qtyReceived\":10}]}");
         ProjectionEnvelope earlier = envelopeAt(UUID.randomUUID(), Instant.parse("2026-05-09T09:00:00Z"),
                 "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T09:00:00Z\","
@@ -162,6 +167,65 @@ class InboundProjectionServiceTest {
         assertThat(service.project(env)).isEqualTo(DedupeOutcome.DUPLICATE);
 
         verify(throughputRepo, times(1)).upsertIncrement(any(), any(), anyInt(), any());
+        verify(putawayFactRepo, times(1)).insertIfAbsent(any(), any(), any(), anyInt());
+    }
+
+    /**
+     * TASK-MONO-808 AC-1 — 15:30 UTC is 00:30 KST the next day, so it is counted on the
+     * KST date. Run under both JVM default zones: the cut must not depend on the host
+     * (the bug it replaces was a hard-coded UTC, the regression to guard is the default).
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"UTC", "Asia/Seoul"})
+    void putawayCompleted_bucketsOnTheKstDay(String jvmZone) throws Exception {
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone(jvmZone));
+        try {
+            UUID warehouseId = UUID.randomUUID();
+            UUID eventId = UUID.randomUUID();
+            Instant completedAt = Instant.parse("2026-05-09T15:30:00Z");
+            ProjectionEnvelope env = envelopeAt(eventId, completedAt,
+                    "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T15:30:00Z\","
+                            + "\"lines\":[{\"qtyReceived\":7}]}");
+
+            assertThat(service.project(env)).isEqualTo(DedupeOutcome.APPLIED);
+
+            verify(throughputRepo).upsertIncrement(
+                    eq(LocalDate.of(2026, 5, 10)), eq(warehouseId), eq(7), any(Instant.class));
+            // the per-event row keeps the instant, not a day — the metrics window on it
+            verify(putawayFactRepo).insertIfAbsent(eventId, warehouseId, completedAt, 7);
+        } finally {
+            TimeZone.setDefault(original);
+        }
+    }
+
+    @Test
+    void putawayCompleted_justBeforeKstMidnight_staysOnThatDay() throws Exception {
+        // control: 14:59:59Z = 23:59:59 KST — the same KST day
+        UUID warehouseId = UUID.randomUUID();
+        ProjectionEnvelope env = envelopeAt(UUID.randomUUID(), NOW,
+                "{\"warehouseId\":\"" + warehouseId + "\",\"completedAt\":\"2026-05-09T14:59:59Z\","
+                        + "\"lines\":[{\"qtyReceived\":1}]}");
+
+        service.project(env);
+
+        verify(throughputRepo).upsertIncrement(
+                eq(LocalDate.of(2026, 5, 9)), eq(warehouseId), eq(1), any(Instant.class));
+    }
+
+    @Test
+    void putawayCompleted_withoutCompletedAt_recordsOccurredAt() throws Exception {
+        UUID warehouseId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        Instant occurredAt = Instant.parse("2026-05-09T16:00:00Z");
+        ProjectionEnvelope env = envelopeAt(eventId, occurredAt,
+                "{\"warehouseId\":\"" + warehouseId + "\",\"lines\":[{\"qtyReceived\":3}]}");
+
+        service.project(env);
+
+        verify(putawayFactRepo).insertIfAbsent(eventId, warehouseId, occurredAt, 3);
+        verify(throughputRepo).upsertIncrement(
+                eq(LocalDate.of(2026, 5, 10)), eq(warehouseId), eq(3), any(Instant.class));
     }
 
     @Test
