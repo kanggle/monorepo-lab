@@ -30,6 +30,6 @@ public class SettingRepositoryImpl implements SettingRepository {
 
     @Override
     public Page<Setting> search(String keyPrefix, SettingScope scope, UUID warehouseId, Pageable pageable) {
-        return repo.search(keyPrefix, scope, warehouseId, pageable).map(AdminSettingJpaEntity::toDomain);
+        return repo.search(LikePatterns.prefix(keyPrefix), scope, warehouseId, pageable).map(AdminSettingJpaEntity::toDomain);
     }
 }

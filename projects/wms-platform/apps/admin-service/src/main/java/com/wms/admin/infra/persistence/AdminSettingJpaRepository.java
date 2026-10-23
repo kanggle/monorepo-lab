@@ -10,13 +10,15 @@ import org.springframework.data.repository.query.Param;
 public interface AdminSettingJpaRepository
         extends JpaRepository<AdminSettingJpaEntity, AdminSettingId> {
 
+    // keyPattern is the finished LIKE pattern (`prefix%`) or null — never CONCAT(:p, '%')
+    // here: a null inside CONCAT binds as bytea on PostgreSQL (TASK-BE-652).
     @Query("""
             SELECT s FROM AdminSettingJpaEntity s
-            WHERE (:keyPrefix IS NULL OR s.key LIKE CONCAT(:keyPrefix, '%'))
+            WHERE (:keyPattern IS NULL OR s.key LIKE :keyPattern)
               AND (:scope IS NULL OR s.scope = :scope)
               AND (:warehouseId IS NULL OR s.warehouseId = :warehouseId)
             """)
-    Page<AdminSettingJpaEntity> search(@Param("keyPrefix") String keyPrefix,
+    Page<AdminSettingJpaEntity> search(@Param("keyPattern") String keyPattern,
                                        @Param("scope") SettingScope scope,
                                        @Param("warehouseId") java.util.UUID warehouseId,
                                        Pageable pageable);
