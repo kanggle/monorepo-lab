@@ -45,7 +45,7 @@ export default async function EcommercePage({
 }: {
   /** `?period=week|month` — the «실적» strip + rankings period (TASK-MONO-807). */
   searchParams?: Promise<{ period?: string }>;
-} = {}) {
+}) {
   // Eligibility pre-flight from the data-driven registry (§ 2.2).
   let eligible = false;
   let registryDegraded = false;

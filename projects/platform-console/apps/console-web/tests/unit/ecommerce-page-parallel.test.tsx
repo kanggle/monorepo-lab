@@ -67,7 +67,7 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
   it('fires the catalog eligibility pre-flight on entry', () => {
     getCatalog.mockReturnValue(new Promise(() => {}));
 
-    void EcommercePage();
+    void EcommercePage({});
 
     expect(getCatalog).toHaveBeenCalledTimes(1);
   });
@@ -75,7 +75,7 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
   it('renders the overview on the eligible path (no domain-health leg)', async () => {
     getCatalog.mockResolvedValue(ELIGIBLE_CATALOG);
 
-    const ui = await EcommercePage();
+    const ui = await EcommercePage({});
     const { getByTestId } = render(ui);
     expect(getByTestId('ecommerce-section')).toBeInTheDocument();
     expect(getByTestId('ecommerce-overview')).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
       products: [{ productKey: 'ecommerce', available: false, tenants: [] }],
     });
 
-    const ui = await EcommercePage();
+    const ui = await EcommercePage({});
     const { getByTestId, queryByTestId } = render(ui);
     expect(getByTestId('ecommerce-not-eligible')).toBeInTheDocument();
     expect(queryByTestId('ecommerce-overview')).toBeNull();
@@ -98,7 +98,7 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
   it('renders the registry-degraded gate unchanged', async () => {
     getCatalog.mockResolvedValue({ degraded: true, products: [] });
 
-    const ui = await EcommercePage();
+    const ui = await EcommercePage({});
     const { getByTestId, queryByTestId } = render(ui);
     expect(getByTestId('ecommerce-degraded')).toBeInTheDocument();
     expect(queryByTestId('ecommerce-overview')).toBeNull();
@@ -107,7 +107,7 @@ describe('EcommercePage — SSR gating (TASK-PC-FE-118 / TASK-PC-FE-172)', () =>
   it('redirects to /login on a catalog 401', async () => {
     getCatalog.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'nope'));
 
-    await expect(EcommercePage()).rejects.toThrow('NEXT_REDIRECT:/login');
+    await expect(EcommercePage({})).rejects.toThrow('NEXT_REDIRECT:/login');
     expect(redirect).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

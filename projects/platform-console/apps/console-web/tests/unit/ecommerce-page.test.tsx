@@ -99,7 +99,7 @@ beforeEach(() => {
 });
 
 async function renderPage() {
-  render(await EcommercePage());
+  render(await EcommercePage({}));
 }
 
 describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {

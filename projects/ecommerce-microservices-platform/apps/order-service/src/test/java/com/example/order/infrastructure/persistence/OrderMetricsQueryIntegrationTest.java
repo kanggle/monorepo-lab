@@ -192,7 +192,8 @@ class OrderMetricsQueryIntegrationTest {
     // ---- seeding --------------------------------------------------------------------------
 
     private OrderItem line(String productId, String sellerId, int quantity, long unitPrice) {
-        return OrderItem.reconstitute(UUID.randomUUID().toString(), productId, null,
+        // order_items.variant_id is NOT NULL (V1)
+        return OrderItem.reconstitute(UUID.randomUUID().toString(), productId, "v-" + productId,
                 "상품 " + productId, null, quantity, unitPrice, sellerId);
     }
 
@@ -207,7 +208,8 @@ class OrderMetricsQueryIntegrationTest {
                 status, totalPrice,
                 ShippingAddress.reconstitute("홍길동", "010-1234-5678", "12345", "서울시 강남구", null),
                 createdAt, createdAt,
-                paidAt == null ? null : "pay-" + UUID.randomUUID(), paidAt, refundedAt,
+                // payment_id is VARCHAR(36) (V2) — a bare UUID, no prefix
+                paidAt == null ? null : UUID.randomUUID().toString(), paidAt, refundedAt,
                 0, null, null);
         orderRepository.save(order);
     }

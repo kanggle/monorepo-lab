@@ -88,6 +88,11 @@ E-Commerce 개요(`/ecommerce`) 맨 위에 이번 주 · 이번 달 **매출 · 
 | 콘솔 전체 | `TZ=UTC vitest run --maxWorkers=2 --minWorkers=1` | 5276 / 5277 → 빨강 1 = 샘플 라벨 규칙(위) → 고친 뒤 그 파일 포함 4 파일 97 / 97 |
 | bite | 일별 버킷을 UTC 날짜로 | `OrderQueryServiceMetricsTest` 빨강 → 복원 후 초록 |
 
+### 🔴 CI 첫 판(PR #4499, `f6e156be3`)이 잡은 것 둘 — 둘 다 로컬 게이트가 못 봤다
+
+1. **`Integration (ecommerce A)` — 새 IT 5개가 시드 단계에서 빨강.** `value too long for type character varying(36)`: 시험 데이터 `payment_id` 를 `"pay-" + UUID`(40자)로 넣었는데 칸이 `VARCHAR(36)`(V2). 같은 시드는 `variant_id` 에 `null` 을 넣고 있었다(V1 `NOT NULL` — 다음에 터졌을 것). ⇒ 코드 결함이 아니라 **시험 데이터 결함**, 지표 쿼리는 아직 한 번도 실 DB 에서 판정되지 않았다. 고침: 접두어 없는 UUID · `variant_id = "v-" + productId`. 🔴 로컬은 Docker 가 없어 `compileTestJava` 까지만 갔다 — «컴파일 통과» 는 스키마 제약을 하나도 재지 않는다.
+2. **`Frontend E2E smoke` — `next build` 타입 검사 실패.** `Type '{ searchParams?: … } | undefined' does not satisfy the constraint 'PageProps'`: 페이지 인자에 기본값 `= {}` 를 줘서 props 타입이 `| undefined` 가 됐다. `tsc --noEmit` 은 통과했다 — **Next 의 페이지 props 검사는 `next build` 에만 있다.** 고침: 기본값 제거(ERP 페이지와 같은 모양) · 시험이 `EcommercePage({})` 로 부른다. 🔴 앱 코드를 바꾸면 `next build` 를 돌린다는 규칙을 이번에 건너뛰었다. → 고친 뒤 로컬 `next build` rc=0(84 페이지) · `tsc` rc=0 · 페이지 시험 2 파일 10 / 10.
+
 ## 배포 상태
 
 - `main` ⏳ 이 PR · AMI ⚪ 다음 굽기(order-service 새 이미지 + `V13` 인덱스) · 콘솔은 Vercel(머지 뒤 배포 — 백엔드가 굽기 전이면 데모에서 실적 줄은 «불러올 수 없음», 다른 블록은 그대로) · 라이브 ⚪ 데모 창.
