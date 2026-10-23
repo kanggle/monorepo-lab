@@ -894,12 +894,13 @@ All under `/api/erp/approval/**` (gateway, when introduced, rewrites
 | `POST` | `/api/erp/approval/requests/{id}/reject` | JWT (`erp.approval.approve` / `erp.write`) | required | `SUBMITTED → REJECTED` (**reason required**) |
 | `POST` | `/api/erp/approval/requests/{id}/withdraw` | JWT (`erp.approval.create` / `erp.write`) | required | `* → WITHDRAWN` (submitter, **reason required**) |
 | `GET` | `/api/erp/approval/inbox` | JWT (`erp.read` / entitled) | n/a | pending-for-current-approver (basic; `?page=&size=`) |
+| `GET` | `/api/erp/approval/metrics` | JWT (`erp.read` / entitled — same as list) | n/a | overview performance metrics (`?period=week\|month`; TASK-MONO-809, ADR-MONO-084 P4) |
 | `GET` | `/actuator/{health,info}` | none | n/a | probes / build info |
 | `GET` | `/actuator/prometheus` | network-isolated | n/a | metrics scrape (internal docker network only) |
 
 Endpoint count = 1 create + 2 reads (list, detail) + 4 transitions (submit / approve /
-reject / withdraw) + 1 inbox = **8 business endpoints** + 2 actuator probes =
-**10 total**.
+reject / withdraw) + 1 inbox + 1 performance metrics = **9 business endpoints** + 2
+actuator probes = **11 total**.
 
 ---
 

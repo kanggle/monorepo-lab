@@ -256,12 +256,22 @@ public abstract class AbstractApprovalIntegrationTest {
 
     protected String token(String actorId, String scope, String tenant,
                            List<String> entitledDomains) throws Exception {
+        return token(actorId, scope, tenant, entitledDomains, "*");
+    }
+
+    /**
+     * Same, with an explicit {@code org_scope}. The default {@code "*"} is platform-wide, which
+     * makes every list/metrics read tenant-wide; a participant-scoped read (TASK-MONO-809) needs
+     * a department scope instead.
+     */
+    protected String token(String actorId, String scope, String tenant,
+                           List<String> entitledDomains, String orgScope) throws Exception {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(actorId)
                 .issuer(ISSUER)
                 .claim("tenant_id", tenant)
                 .claim("scope", scope)
-                .claim("org_scope", "*")
+                .claim("org_scope", orgScope)
                 .issueTime(new Date())
                 .expirationTime(Date.from(Instant.now().plusSeconds(300)));
         if (entitledDomains != null) {

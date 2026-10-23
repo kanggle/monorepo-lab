@@ -269,6 +269,8 @@ const erpState = (approvalStatus: ApprovalStatusCount[]): ErpOverviewState => ({
   notEligible: false,
   counts: [{ key: 'departments', label: '부서', count: 5, status: 'ok' }],
   approvalStatus,
+  period: 'month',
+  performance: { status: 'degraded', value: null },
 });
 
 describe('④ ErpOverviewScreen approval section', () => {

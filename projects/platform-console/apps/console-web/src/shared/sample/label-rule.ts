@@ -269,6 +269,10 @@ const MACHINE_KEYS = new Set([
   'qtyReceived', // series value (integer string) — 입고 수량
   'qtyShipped', // series value (integer string) — 출고 수량
   'shipmentCount', // series value (integer string) — 출고 건수
+  // TASK-MONO-809 — the erp approval «실적» strip's series value keys (same shape).
+  'submitted', // series value (integer string) — 상신
+  'approved', // series value (integer string) — 승인
+  'rejected', // series value (integer string) — 반려
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

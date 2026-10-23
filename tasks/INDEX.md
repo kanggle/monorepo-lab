@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-809-erp-overview-performance-metrics.md` — **P4 ERP** (READY): 결재 상신 · 승인 · 반려(전이 시각 귀속). 선행 806. 분석=Opus 5.5 / 구현 권장=Sonnet(AC-0 에서 전이 시각이 없으면 Opus).
 - `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
@@ -223,6 +222,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0 · 3 닫힘 · AC-1 · 2 = CI 의 MySQL IT · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-MONO-808-wms-overview-performance-metrics-kst-rebucket.md` — **`ADR-MONO-084` P3 WMS 실적 지표 · 일별 처리량 KST 날짜** (REVIEW, 2026-10-24 UTC · main `4335ed688` · AC-0~4 닫힘(AC-2 = CI 실 Postgres) · AC-5 = 다음 굽기 + 창). 🔴 일별 행엔 시각이 없어 그것만으로 다시 못 자른다 → 소유자 결정 «건별 기록 추가»: admin V6 `admin_putaway_fact`(투영이 같은 트랜잭션에서) · 출고는 V6 가 `admin_shipment_summary` 로 그 자리에서 다시 쌓음 · 입고 옛 행은 운영자 백필 스크립트(outbox → 건별 표, admin 이 APPLIED 한 것만) · 함수는 건별 행이 모자라면 거부. `GET /dashboard/metrics?period=` (입고 수량 · 출고 수량 · 출고 건수, 창고 전체) / 콘솔 `/wms` 실적 줄. «UTC 기준» 문구는 `TASK-MONO-815`(굽기와 같은 창). 분석=Opus 5.5 / 구현=Opus.
 

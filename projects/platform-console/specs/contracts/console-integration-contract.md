@@ -2594,6 +2594,36 @@ read-model/알림 concepts) is added, mirroring `features/finance-guide`
     the caller's own submitter-or-approver rows otherwise (`ApprovalApplicationService.list`), so for a
     non-operator caller the distribution is «내가 참여한 결재» — the overview says so. Each status is its
     own cell; the stacked bar is drawn ONLY when all 6 are `ok`; current-time counts (no `asOf`).
+  - **결재 실적 («실적» strip) — ADR-MONO-084 P4 / TASK-MONO-809** — one more read, op row:
+
+    | # | Op | Endpoint (erp `approval-api.md`) | Kind |
+    |---|---|---|---|
+    | A1 | approval performance metrics («실적» strip) | `GET /api/erp/approval/metrics?period=week\|month` | read |
+
+- **Performance metrics strip (A1) — ADR-MONO-084 P4 / TASK-MONO-809.**
+  `GET /api/erp/approval/metrics?period=week|month` feeds the «실적» strip, the
+  **first** block of the `/erp` overview (above the title and the count tiles): 상신
+  (`submitted`) · 승인 (`approved` — final approval only) · 반려 (`rejected`), all
+  `count`, current vs the same-length previous KST window, with a daily series (the
+  chart draws `submitted`). Shape, windows and error handling are
+  [`platform/contracts/performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md).
+  **Scope follows the approval list rule** (producer-side): operator / platform →
+  the whole tenant, otherwise only requests the caller takes part in (submitter or
+  approver), an unlinked caller → zeros; the strip carries a one-line scope note in
+  the same words as the 결재 상태 block. Parsed by `shared/api/performance-metrics.ts`
+  (integer strings — F5) as its **own cell** inside `getErpOverviewState`: `403` →
+  «권한 없음» in the strip, a non-200 (incl. `400 VALIDATION_ERROR`) or an
+  unparseable body → «실적을 불러올 수 없습니다», while every other block renders; a
+  `401` → the same whole-session re-login; not eligible → no call. The page reads
+  `?period=` (default `month`; an absent or unknown value falls back to the default
+  — never a 400 page) and passes it as the third argument
+  (`getErpOverviewState(eligible, asOf, period)`).
+  **`?asOf=` rule (TASK-MONO-809 AC-0):** `asOf` applies **only** to the masterdata
+  counts; the strip is a *period* axis and always shows the «up to now» windows. The
+  period links keep an existing `asOf` (`/erp?asOf=…&period=…`), and when `asOf` is
+  present the strip shows the note «실적 줄은 기준일(asOf)과 관계없이 오늘까지의
+  기간입니다.» (`erp-performance-asof-note`); absent otherwise. Sample mode answers
+  the same path from the approval seed (`submittedAt` · final status at `finalizedAt`).
 - **Read model (console-web DIRECT fan-out, unchanged model).** Reuses the
   existing § 2.4.8 master `list*` reads + the approval inbox read + the
   read-model delegation-facts read server-side (`getDomainFacingToken()`);

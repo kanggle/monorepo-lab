@@ -539,6 +539,64 @@ filtering (v2 deferred).
 403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`, 503 `SERVICE_UNAVAILABLE` (could not
 resolve the caller's employee — v2.4; never answered with an empty page).
 
+### GET /api/erp/approval/metrics?period=week|month
+
+Overview performance metrics (ADR-MONO-084 P4, TASK-MONO-809). The response is the shared
+shape of [`performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md)
+— **bare JSON, not wrapped in `{data, meta}`** — and the windows (KST, half-open `[from, to)`,
+previous window of the same elapsed length) are defined there.
+
+**Headers**: `Authorization` (req)
+
+**Query**: `period` — required, `week | month` (case-insensitive).
+
+**Authorization**: the same read gate as the list (P6 banner): `ERP_APPROVAL_READ ∨
+ERP_APPROVAL_WRITE ∨ erp.read ∨ erp.write`.
+
+**Scope** = the list's rule, unchanged: an operator / platform-scope caller → the whole
+tenant; any other caller → only requests where the caller's linked employee is
+`submitterId` **or** `approverId` (the same predicate as `?role=` absent on the list).
+A caller linked to no employee → every value `"0"` (not an error). Rationale: the overview's
+status block is already drawn with this rule; two approval numbers on one screen must share
+one scope.
+
+**200** — three metrics, in this order, all `unit: "count"`, `currency: null`, integer strings.
+The unit counted is the **request** (one row of `approval_request`), never a history row:
+
+| key | normative meaning |
+|---|---|
+| `submitted` | Requests whose `submitted_at` ∈ window, **whatever their later status**. A request withdrawn after submit still counts in the window it was submitted in; a draft withdrawn before submit has no `submitted_at` and never counts. |
+| `approved` | Requests with `status = APPROVED` and `finalized_at` ∈ window — the **final-stage** approval only. An intermediate-stage approval (request stays `IN_REVIEW`) is not counted; it only advances the stage. |
+| `rejected` | Requests with `status = REJECTED` and `finalized_at` ∈ window — a rejection at **any** stage (it ends the request). |
+
+Withdrawals are counted in **none** of the three. Each request is attributed by its own
+transition timestamp, so a request submitted last week and approved this week is `submitted`
+last week and `approved` this week. Delegated (대결) actions are one transition on one request:
+no double count. A past day's value does not change retroactively except by a request
+finalizing later (it lands on the day it finalizes, never on the day it was submitted).
+
+```json
+{
+  "period": "week",
+  "timezone": "Asia/Seoul",
+  "current":  { "from": "2026-10-19T00:00:00+09:00", "to": "2026-10-23T14:05:00+09:00" },
+  "previous": { "from": "2026-10-12T00:00:00+09:00", "to": "2026-10-16T14:05:00+09:00" },
+  "metrics": [
+    { "key": "submitted", "unit": "count", "currency": null, "current": "12", "previous": "9" },
+    { "key": "approved",  "unit": "count", "currency": null, "current": "7",  "previous": "8" },
+    { "key": "rejected",  "unit": "count", "currency": null, "current": "1",  "previous": "2" }
+  ],
+  "series": [
+    { "date": "2026-10-19", "values": { "submitted": "3", "approved": "2", "rejected": "0" } },
+    { "date": "2026-10-20", "values": { "submitted": "0", "approved": "0", "rejected": "0" } }
+  ]
+}
+```
+
+**Errors**: 400 `VALIDATION_ERROR` (`period` missing or unknown), 401 `UNAUTHORIZED`,
+403 `PERMISSION_DENIED`, 403 `TENANT_FORBIDDEN`, 503 `SERVICE_UNAVAILABLE` (could not resolve
+the caller's employee for a non-operator caller — never answered with zeros).
+
 ---
 
 ## Error code → HTTP status (approval)
