@@ -20,6 +20,11 @@ export async function GET(req: Request) {
   const params: PoQueryParams = {
     status: sp.get('status') ?? undefined,
     supplierId: sp.get('supplierId') ?? undefined,
+    // TASK-MONO-810 — passed through unvalidated like the others; a bad value
+    // is the producer's 400, mapped by `mapScmError`.
+    submittedFrom: sp.get('submittedFrom') ?? undefined,
+    submittedTo: sp.get('submittedTo') ?? undefined,
+    excludeStatus: sp.get('excludeStatus') ?? undefined,
     page: sp.has('page') ? Number(sp.get('page')) : undefined,
     size: sp.has('size') ? Number(sp.get('size')) : undefined,
   };

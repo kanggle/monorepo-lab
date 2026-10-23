@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,8 +49,12 @@ public class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
     }
 
     @Override
-    public PageResult<PurchaseOrder> search(String tenantId, PoStatus status, String supplierId, PageQuery pageQuery) {
-        Page<PurchaseOrder> page = poJpa.search(tenantId, status, supplierId, PageRequests.toPageable(pageQuery));
+    public PageResult<PurchaseOrder> search(String tenantId, PoStatus status, PoStatus excludeStatus,
+                                            String supplierId, Instant submittedFrom, Instant submittedTo,
+                                            PageQuery pageQuery) {
+        Page<PurchaseOrder> page = poJpa.search(tenantId, status, excludeStatus, supplierId,
+                submittedFrom, submittedTo,
+                PageRequests.toPageable(pageQuery));
         return new PageResult<>(
                 page.getContent().stream().map(this::hydrate).toList(),
                 page.getNumber(),

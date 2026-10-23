@@ -165,6 +165,9 @@ describe('ErpOverviewScreen (TASK-PC-FE-232)', () => {
     expect(screen.getByTestId('erp-performance-period-month')).toHaveAttribute('href', '/erp?period=month');
     expect(screen.getByTestId('erp-performance-period-month')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTestId('erp-performance-scope')).toHaveTextContent('운영자 권한이면 전체 결재');
+    // TASK-MONO-810 — the card-link prop is opt-in; the ERP strip's cards stay plain.
+    expect(strip.querySelector('[data-testid$="-link"]')).toBeNull();
+    expect(strip.querySelectorAll('a')).toHaveLength(2); // the period switch only
   });
 
   it('performance: period links keep an existing asOf; the asOf note appears only with asOf', () => {

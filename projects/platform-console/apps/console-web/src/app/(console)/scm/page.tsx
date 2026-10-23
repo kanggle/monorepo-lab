@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
-import { getScmOverviewState, ScmOverview } from '@/features/scm-ops';
+import {
+  DEFAULT_OVERVIEW_PERIOD,
+  getScmOverviewState,
+  ScmOverview,
+} from '@/features/scm-ops';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +33,15 @@ export const dynamic = 'force-dynamic';
  * registry and passes it into `getScmOverviewState()`. Resilience (§ 2.5):
  * 401 → whole-session re-login; not-eligible → inline "not scoped"; the
  * overview band does per-cell degrade for a downstream 403/503/timeout.
+ *
+ * TASK-MONO-810 — `?period=week|month` drives the «실적» strip; an absent or
+ * unknown value falls back to `DEFAULT_OVERVIEW_PERIOD` (never a 400 page).
  */
-export default async function ScmPage() {
+export default async function ScmPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ period?: string }>;
+}) {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
   // registry 401 → whole-session re-login (no partial authed state); a
   // registry failure → treat as degraded (cannot prove ineligibility from
@@ -97,7 +109,11 @@ export default async function ScmPage() {
   // Operator overview-snapshot fan-out (TASK-PC-FE-167) — console-web DIRECT
   // reads over the scm gateway (PC-FE-168 read-leg decision); redirects
   // '/login' on a 401 internally. The overview does per-cell degrade.
-  const overviewState = await getScmOverviewState(eligible);
+  const requested = ((await searchParams) ?? {}).period;
+  const period = (METRICS_PERIODS as readonly string[]).includes(requested ?? '')
+    ? (requested as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
+  const overviewState = await getScmOverviewState(eligible, period);
 
   return (
     <section aria-labelledby="scm-heading">

@@ -106,6 +106,9 @@ describe('WmsOverview (TASK-PC-FE-166)', () => {
     expect(screen.getByTestId('wms-performance-period-month')).toHaveAttribute('aria-current', 'page');
     // The trend chart draws 출고 수량 (chartKey), not the first metric.
     expect(screen.getByTestId('wms-performance-trend')).toHaveTextContent('출고 수량 · 일별');
+    // TASK-MONO-810 — the card-link prop is opt-in; the WMS strip's cards stay plain.
+    expect(strip.querySelector('[data-testid$="-link"]')).toBeNull();
+    expect(strip.querySelectorAll('a')).toHaveLength(2); // the period switch only
   });
 
   it('TASK-MONO-808 — a failed strip does not take the tiles with it; the 배송 tile keeps its own counts', () => {

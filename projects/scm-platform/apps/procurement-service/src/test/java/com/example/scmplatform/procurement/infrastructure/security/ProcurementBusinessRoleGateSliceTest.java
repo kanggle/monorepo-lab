@@ -143,6 +143,38 @@ class ProcurementBusinessRoleGateSliceTest {
         expectDenied(post("/api/procurement/suppliers"), List.of("SCM_PROCUREMENT_READ"));
     }
 
+    // ── TASK-MONO-810: GET /po/metrics — the same gate as every other GET ─────────
+
+    @Test
+    @DisplayName("MONO-810 procurement read (or write) → GET /po/metrics passes the gate")
+    void metrics_readOrWrite_allowed() throws Exception {
+        expectAllowed(get("/api/procurement/po/metrics").param("period", "week"), List.of("SCM_PROCUREMENT_READ"));
+        expectAllowed(get("/api/procurement/po/metrics").param("period", "week"), List.of("SCM_PROCUREMENT_WRITE"));
+        expectAllowed(get("/api/procurement/po").param("submittedFrom", "2026-10-18T15:00:00Z"),
+                List.of("SCM_PROCUREMENT_READ"));
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-810 no procurement role (entry role / demand-planning / WMS) → GET /po/metrics 403 PERMISSION_DENIED")
+    void metrics_noRole_denied() throws Exception {
+        expectDenied(get("/api/procurement/po/metrics").param("period", "week"), List.of("SCM_OPERATOR"));
+        expectDenied(get("/api/procurement/po/metrics").param("period", "week"),
+                List.of("SCM_DEMAND_PLANNING_READ", "SCM_DEMAND_PLANNING_WRITE"));
+        expectDenied(get("/api/procurement/po/metrics").param("period", "week"), List.of("WMS_OPERATOR"));
+    }
+
+    @Test
+    @DisplayName("🔴 MONO-810 GET /po/metrics: no token → 401 UNAUTHORIZED; foreign tenant → 403 TENANT_FORBIDDEN")
+    void metrics_unauthenticatedAndForeignTenant() throws Exception {
+        mockMvc.perform(get("/api/procurement/po/metrics").param("period", "week"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        mockMvc.perform(get("/api/procurement/po/metrics").param("period", "week")
+                        .header("Authorization", "Bearer " + token(List.of("SCM_PROCUREMENT_READ"), "wms")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_FORBIDDEN"));
+    }
+
     // ── AC-1: entry role alone ────────────────────────────────────────────────────
 
     @Test
@@ -216,13 +248,17 @@ class ProcurementBusinessRoleGateSliceTest {
     }
 
     private static String token(List<String> roles) throws Exception {
+        return token(roles, "scm");
+    }
+
+    private static String token(List<String> roles, String tenantId) throws Exception {
         Instant now = Instant.now();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject("console-operator-792")
                 .issuer(ISSUER)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plusSeconds(300)))
-                .claim(TenantClaimValidator.CLAIM_TENANT_ID, "scm")
+                .claim(TenantClaimValidator.CLAIM_TENANT_ID, tenantId)
                 .claim("roles", roles)
                 .build();
         SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).build(), claims);

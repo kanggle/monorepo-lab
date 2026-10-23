@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -432,10 +433,16 @@ public class PurchaseOrderApplicationService {
     @Transactional(readOnly = true)
     public PageResult<PurchaseOrderView> search(ActorContext actor,
                                                 PoStatus status,
+                                                PoStatus excludeStatus,
                                                 String supplierId,
+                                                Instant submittedFrom,
+                                                Instant submittedTo,
                                                 PageQuery pageQuery) {
-        PageResult<PurchaseOrder> page =
-                poRepository.search(actor.tenantId(), status, supplierId, pageQuery);
+        // TASK-MONO-810: submittedFrom / submittedTo = half-open [from, to) on submitted_at;
+        // excludeStatus drops one current status (the metrics card link sends CANCELED, so the
+        // page's totalElements equals poCount for that window).
+        PageResult<PurchaseOrder> page = poRepository.search(
+                actor.tenantId(), status, excludeStatus, supplierId, submittedFrom, submittedTo, pageQuery);
         // TASK-MONO-677: one batched resolution for the whole page — never a lookup per row.
         Map<String, Supplier> suppliers = resolveSuppliers(
                 page.content().stream().map(PurchaseOrder::getSupplierId).toList(),

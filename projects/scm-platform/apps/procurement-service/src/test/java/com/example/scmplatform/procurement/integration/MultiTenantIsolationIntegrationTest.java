@@ -91,16 +91,16 @@ class MultiTenantIsolationIntegrationTest extends AbstractProcurementIntegration
         // List path (the batched IN-queries) must give the same three answers. Filtering
         // by the stored supplierId keeps each page to exactly this test's PO.
         PageQuery page = PageQuery.of(0, 20, "createdAt", "DESC");
-        assertThat(service.search(buyer, null, own.getId(), page).content())
+        assertThat(service.search(buyer, null, null, own.getId(), null, null, page).content())
                 .singleElement()
                 .satisfies(v -> {
                     assertThat(v.supplierCode()).isEqualTo(own.getCode());
                     assertThat(v.supplierName()).isEqualTo(own.getName());
                 });
-        assertThat(service.search(buyer, null, own.getCode(), page).content())
+        assertThat(service.search(buyer, null, null, own.getCode(), null, null, page).content())
                 .singleElement()
                 .satisfies(v -> assertThat(v.supplierName()).isEqualTo(own.getName()));
-        assertThat(service.search(buyer, null, foreign.getId(), page).content())
+        assertThat(service.search(buyer, null, null, foreign.getId(), null, null, page).content())
                 .singleElement()
                 .satisfies(v -> {
                     assertThat(v.supplierCode()).isNull();

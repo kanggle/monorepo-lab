@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **READY (2026-10-24 UTC) — 소유자 결정: 별도 루트 티켓(착수 미지시).** 데드레터 접미사가 갈렸다 — platform 규칙 `.dlq` · 코드 `.dlq`(이커머스 · iam · fan) vs `.DLT`(erp · finance · scm · wms) · 브로커 선생성은 `.dlq` 만. AC-0 측정 → 소유자 선택((a) 규칙을 `.DLT` 로 · (b) 코드를 `.dlq` 로 · (c) 프로젝트별 Overrides) → 원자적 PR + 어긋남을 무는 가드. 출처 `TASK-BE-651` AC-0 ③. 분석=Opus 5.5 / 구현 권장=Opus.
@@ -221,6 +220,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-810-scm-overview-performance-metrics.md` — **`ADR-MONO-084` P5 SCM 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0 · 3 닫힘 · AC-1 · 2 = CI 의 Postgres IT · AC-4 = 다음 굽기 + 창). procurement-service `GET /api/procurement/po/metrics` — 발주 건수 · 금액(통화마다 한 키, 합계 한 번 반올림) = 제출 시각 · 지금 CANCELED 제외 / 입고 완료 = 이력의 →RECEIVED 시각(소유자 결정) · `GET /po` 에 `submittedFrom/To` · `excludeStatus` ⇒ 카드 목록 건수 = `poCount` · V7 인덱스 / 콘솔 `/scm` 실적 줄 · 카드 → 기간 걸린 목록. ASN 결함 → `TASK-SCM-BE-063`. 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · main `c76a60d73` · AC-0~3 닫힘(AC-1 · 2 = CI 실 MySQL) · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 
