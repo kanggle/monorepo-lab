@@ -170,6 +170,78 @@ class SpringShippingEventPublisherTest {
         assertThat(payload).contains("\"trackingNo\":null");
     }
 
+    // ─── TASK-BE-649 — ecommerce.fulfillment.cancel-requested.v1 (fulfillment-events.md § Event 3) ──
+
+    @Test
+    @DisplayName("BE-649: cancel-requested 를 계약 그대로의 wms camelCase 봉투로 저장한다 (필드 집합 정확히 일치)")
+    void publishFulfillmentCancelRequested_savesContractEnvelope() throws Exception {
+        String orderId = "7f0c2b8e-1d3a-4c5b-9e6f-0a1b2c3d4e5f";
+        Instant requestedAt = Instant.parse("2026-10-23T09:59:59Z");
+
+        publisher.publishFulfillmentCancelRequested("tenant-a", orderId, requestedAt);
+
+        ShippingOutboxEntity row = capturedRow();
+        assertThat(row.getEventType()).isEqualTo("FulfillmentCancelRequested");
+        assertThat(row.getAggregateType()).isEqualTo("Fulfillment");
+        assertThat(row.getAggregateId()).isEqualTo(orderId);
+        assertThat(row.getPartitionKey()).isNull();
+        assertThat(row.getOccurredAt()).isEqualTo(Instant.parse("2026-01-01T00:00:00Z"));
+
+        com.fasterxml.jackson.databind.JsonNode envelope = objectMapper.readTree(row.getPayload());
+        assertThat(fieldNames(envelope)).containsExactlyInAnyOrder(
+                "eventId", "eventType", "occurredAt", "aggregateType", "aggregateId", "tenantId", "payload");
+        assertThat(envelope.get("eventId").asText()).isEqualTo(row.getEventId().toString());
+        assertThat(envelope.get("eventType").asText()).isEqualTo("ecommerce.fulfillment.cancel-requested");
+        assertThat(envelope.get("occurredAt").asText()).isEqualTo("2026-01-01T00:00:00Z");
+        assertThat(envelope.get("aggregateType").asText()).isEqualTo("fulfillment");
+        assertThat(envelope.get("aggregateId").asText()).isEqualTo(orderId);
+        assertThat(envelope.get("tenantId").asText()).isEqualTo("tenant-a");
+
+        com.fasterxml.jackson.databind.JsonNode payload = envelope.get("payload");
+        assertThat(fieldNames(payload)).containsExactlyInAnyOrder("orderNo", "tenantId", "reason", "requestedAt");
+        assertThat(payload.get("orderNo").asText()).isEqualTo(orderId);
+        assertThat(payload.get("tenantId").asText()).isEqualTo("tenant-a");
+        assertThat(payload.get("reason").asText()).isEqualTo("ORDER_CANCELLED");
+        assertThat(payload.get("requestedAt").asText()).isEqualTo("2026-10-23T09:59:59Z");
+    }
+
+    @Test
+    @DisplayName("BE-649: cancel-requested eventId 는 주문마다 결정적 (한 배송은 한 번만 취소된다)")
+    void publishFulfillmentCancelRequested_eventId_isDeterministicPerOrder() {
+        publisher.publishFulfillmentCancelRequested("tenant-a", "order-1", Instant.parse("2026-10-23T10:00:00Z"));
+        java.util.UUID first = capturedRow().getEventId();
+
+        reset(outboxRepository);
+        publisher.publishFulfillmentCancelRequested("tenant-b", "order-1", Instant.parse("2026-10-24T10:00:00Z"));
+        java.util.UUID again = capturedRow().getEventId();
+
+        reset(outboxRepository);
+        publisher.publishFulfillmentCancelRequested("tenant-a", "order-2", Instant.parse("2026-10-23T10:00:00Z"));
+        java.util.UUID other = capturedRow().getEventId();
+
+        assertThat(first).isEqualTo(java.util.UUID.nameUUIDFromBytes(
+                "FulfillmentCancelRequested:order-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertThat(again).isEqualTo(first);
+        assertThat(other).isNotEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("BE-649: tenant 가 없으면 tenantId 는 null 로 직렬화 (계약상 nullable)")
+    void publishFulfillmentCancelRequested_nullTenant_serializesNull() throws Exception {
+        publisher.publishFulfillmentCancelRequested(null, "order-3", Instant.parse("2026-10-23T10:00:00Z"));
+
+        com.fasterxml.jackson.databind.JsonNode envelope = objectMapper.readTree(capturedRow().getPayload());
+        assertThat(envelope.get("tenantId").isNull()).isTrue();
+        assertThat(envelope.get("payload").get("tenantId").isNull()).isTrue();
+        assertThat(envelope.get("payload").get("orderNo").asText()).isEqualTo("order-3");
+    }
+
+    private static java.util.List<String> fieldNames(com.fasterxml.jackson.databind.JsonNode node) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        node.fieldNames().forEachRemaining(names::add);
+        return names;
+    }
+
     private ShippingOutboxEntity capturedRow() {
         ArgumentCaptor<ShippingOutboxEntity> captor = ArgumentCaptor.forClass(ShippingOutboxEntity.class);
         verify(outboxRepository).save(captor.capture());

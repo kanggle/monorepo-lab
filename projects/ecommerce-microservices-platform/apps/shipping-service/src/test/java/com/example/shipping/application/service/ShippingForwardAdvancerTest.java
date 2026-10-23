@@ -54,4 +54,20 @@ class ShippingForwardAdvancerTest {
         assertThat(from).isEmpty();
         assertThat(s.getStatus()).isEqualTo(ShippingStatus.IN_TRANSIT);
     }
+
+    @Test
+    void cancelledShipping_isNeverAdvancedByACarrierGoal() {
+        // TASK-BE-649: a carrier refresh / webhook / auto-collect for a cancelled shipment
+        // must not resurrect it, whatever status the carrier reports.
+        Shipping s = Shipping.create("tenant-a", "order-1", "user-1", clock);
+        s.cancel(clock);
+
+        for (ShippingStatus goal : new ShippingStatus[] {
+                ShippingStatus.SHIPPED, ShippingStatus.IN_TRANSIT, ShippingStatus.DELIVERED}) {
+            Optional<ShippingStatus> from = ShippingForwardAdvancer.advanceForward(s, goal, clock);
+            assertThat(from).as("goal %s", goal).isEmpty();
+            assertThat(s.getStatus()).isEqualTo(ShippingStatus.CANCELLED);
+        }
+        assertThat(s.getStatusHistory()).hasSize(2);
+    }
 }
