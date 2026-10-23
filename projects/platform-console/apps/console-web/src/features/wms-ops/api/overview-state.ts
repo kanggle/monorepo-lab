@@ -3,7 +3,12 @@ import { ApiError } from '@/shared/api/errors';
 import { listInventory, listOrders } from './wms-inventory-api';
 import { listShipments, listAdjustments } from './wms-shipments-api';
 import { listAlerts } from './wms-alerts-api';
-import { kstPeriodBounds } from '@/shared/lib/kst-period';
+import { getWmsMetrics } from './wms-metrics-api';
+import { kstPeriodBounds, type MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
 import type { ShipmentRow, AdjustmentRow } from './types';
 
 /**
@@ -90,9 +95,21 @@ export interface WmsOverviewState {
    *  did not resolve (status carries the reason). */
   recentAdjustments: AdjustmentRow[] | null;
   recentAdjustmentsStatus: CellStatus;
+  /** The period the «실적» strip shows (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (ADR-MONO-084 P3, TASK-MONO-808) — its own cell. Read
+   *  warehouse-global (no `warehouseId`): the whole operation. A DIFFERENT
+   *  meaning from the 배송 tile's 오늘/주간/월간 above, which are tenant-owned
+   *  shipment counts — both stay. */
+  performance: PerformanceCell;
 }
 
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month (same as ecommerce). */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
+
 const EMPTY: WmsOverviewState = {
+  period: DEFAULT_OVERVIEW_PERIOD,
+  performance: { status: 'degraded', value: null },
   notEligible: false,
   counts: [],
   alertStatus: [],
@@ -135,12 +152,14 @@ async function cell<T>(p: Promise<T>): Promise<Cell<T>> {
  *   from the data-driven registry). `false` ⇒ no fan-out, no calls (never
  *   fabricate a cross-tenant wms call — wms resolves the tenant from the JWT
  *   claim, § 2.4.5).
+ * @param period the «실적» strip's period (TASK-MONO-808).
  */
 export async function getWmsOverviewState(
   eligible: boolean,
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
 ): Promise<WmsOverviewState> {
   if (!eligible) {
-    return { ...EMPTY, notEligible: true };
+    return { ...EMPTY, period, notEligible: true };
   }
 
   // KST period-to-date windows for the 배송 flow metrics (PC-FE-174). Computed
@@ -161,6 +180,7 @@ export async function getWmsOverviewState(
       recentCell,
       openOrdersCell,
       recentAdjCell,
+      performance,
     ] = await Promise.all([
       cell(listInventory({ page: 0, size: 1 })),
       // 저재고 (low-stock) attention sub-count for the 재고 tile (PC-FE-177) —
@@ -205,6 +225,9 @@ export async function getWmsOverviewState(
       // 최근 재고 조정 (recent inventory adjustments, PC-FE-186) — the 재고-side
       // activity glance companion to 최근 출고.
       cell(listAdjustments({ page: 0, size: RECENT_SIZE })),
+      // TASK-MONO-808 — the «실적» strip (warehouse-global, no warehouseId);
+      // 401 re-thrown like every other leg, anything else degrades the strip only.
+      performanceMetricsCell(getWmsMetrics(period)),
     ]);
 
     // Count tiles cover the WMS operational-scale areas only — 재고 and 배송
@@ -258,6 +281,8 @@ export async function getWmsOverviewState(
       recentAdjustments:
         recentAdjCell.value?.data.content.slice(0, RECENT_SIZE) ?? null,
       recentAdjustmentsStatus: recentAdjCell.status,
+      period,
+      performance,
     };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.

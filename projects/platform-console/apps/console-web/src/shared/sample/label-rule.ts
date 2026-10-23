@@ -264,6 +264,11 @@ const MACHINE_KEYS = new Set([
   'revenue', // series value (integer string, KRW minor units)
   'units', // series value (integer string)
   'orders', // series value (integer string)
+  // TASK-MONO-808 — the wms «실적» strip's series value keys (same shape, same
+  // reason: integer strings the console formats itself, never prose).
+  'qtyReceived', // series value (integer string) — 입고 수량
+  'qtyShipped', // series value (integer string) — 출고 수량
+  'shipmentCount', // series value (integer string) — 출고 건수
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

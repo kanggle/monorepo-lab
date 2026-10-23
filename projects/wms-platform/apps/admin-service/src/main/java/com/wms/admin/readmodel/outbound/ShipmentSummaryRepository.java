@@ -1,6 +1,8 @@
 package com.wms.admin.readmodel.outbound;
 
+import com.wms.admin.readmodel.throughput.TimedQuantity;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,4 +34,18 @@ public interface ShipmentSummaryRepository extends JpaRepository<ShipmentSummary
                                        @Param("shippedAtFrom") Instant shippedAtFrom,
                                        @Param("shippedAtTo") Instant shippedAtTo,
                                        Pageable pageable);
+
+    /**
+     * Shipments shipped in {@code [from, to)}, optionally in one warehouse — the
+     * outbound side of the performance metrics (TASK-MONO-808). 🔴 No tenant filter:
+     * the metrics are the warehouse-global class like § 1.2 throughput (contract
+     * § 1.0), and inbound — the other half of the same strip — has no tenant at all.
+     */
+    @Query("SELECT new com.wms.admin.readmodel.throughput.TimedQuantity(s.shippedAt, s.totalQty) "
+            + "FROM ShipmentSummaryEntity s "
+            + "WHERE (:warehouseId IS NULL OR s.warehouseId = :warehouseId) "
+            + "AND s.shippedAt >= :from AND s.shippedAt < :to")
+    List<TimedQuantity> findShippedInWindow(@Param("warehouseId") UUID warehouseId,
+                                            @Param("from") Instant from,
+                                            @Param("to") Instant to);
 }

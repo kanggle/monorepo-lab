@@ -30,6 +30,7 @@ import { findSurfaceCoverage } from '@/shared/sample/coverage';
 import { SAMPLE_READ_ONLY, SAMPLE_NOT_READY } from '@/shared/sample/codes';
 import { messageForCode } from '@/shared/api/errors';
 import { readWmsLagHeader } from '@/shared/api/wms-gateway';
+import { PerformanceMetricsSchema } from '@/shared/api/performance-metrics';
 import {
   InventoryPageSchema,
   InventoryRowSchema,
@@ -135,6 +136,14 @@ describe('AC-1 — wms admin read-model (surface `wms`) parses with production s
     );
     expect(res.status).toBe(200);
     ThroughputSchema.parse(await json(res));
+  });
+
+  it('GET /dashboard/metrics?period=week|month (TASK-MONO-808 — the «실적» strip)', async () => {
+    for (const period of ['week', 'month']) {
+      const res = admin(`/api/v1/admin/dashboard/metrics?period=${period}`);
+      expect(res.status, period).toBe(200);
+      PerformanceMetricsSchema.parse(await json(res));
+    }
   });
 
   it('GET /dashboard/orders', async () => {

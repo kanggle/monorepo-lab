@@ -11,8 +11,8 @@ import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import com.example.common.time.KstPeriodBounds;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +68,7 @@ class OutboundProjectionKafkaIT extends ProjectionKafkaIntegrationBase {
         UUID orderId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         Instant occurredAt = Instant.parse("2026-05-09T15:00:00Z");
-        LocalDate date = occurredAt.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate date = KstPeriodBounds.dateOf(occurredAt); // TASK-MONO-808 — the KST day
         String payload = """
                 {"shipmentId":"%s","orderId":"%s","warehouseId":"%s",
                 "shippedAt":"%s","carrierCode":"DHL",

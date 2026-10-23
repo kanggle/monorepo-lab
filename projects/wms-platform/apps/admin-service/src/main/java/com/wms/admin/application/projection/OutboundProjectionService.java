@@ -8,6 +8,7 @@ import static com.wms.admin.application.projection.PayloadJson.optionalUuid;
 import static com.wms.admin.application.projection.PayloadJson.text;
 import static com.wms.admin.application.projection.PayloadJson.uuid;
 
+import com.example.common.time.KstPeriodBounds;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.wms.admin.application.repository.AdminEventDedupeRepository;
 import com.wms.admin.infra.observability.ProjectionMetrics;
@@ -20,7 +21,6 @@ import com.wms.admin.readmodel.outbound.ShipmentSummaryRepository;
 import com.wms.admin.readmodel.throughput.ThroughputOutboundDailyRepository;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -227,7 +227,9 @@ public class OutboundProjectionService {
         // Exactly-once is the dedupe row (idempotency.md § 2.6). Until
         // 2026-10-22 the SQL carried a last_event_at guard and this call's
         // 0-row result was ignored, so dropped shipments were recorded APPLIED.
-        LocalDate date = effectiveShipped.atZone(ZoneOffset.UTC).toLocalDate();
+        // ADR-MONO-084 D3 (TASK-MONO-808) — the KST day, not the UTC day (V6 rebuilt
+        // the rows written before this from admin_shipment_summary).
+        LocalDate date = KstPeriodBounds.dateOf(effectiveShipped);
         throughputRepo.upsertIncrement(date, warehouseId, totalQty, occurredAt);
         return DedupeOutcome.APPLIED;
     }

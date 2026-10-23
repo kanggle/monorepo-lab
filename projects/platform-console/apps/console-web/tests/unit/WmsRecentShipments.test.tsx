@@ -29,6 +29,9 @@ const baseState = (
   recentShipmentsStatus: 'ok',
   recentAdjustments: null,
   recentAdjustmentsStatus: 'ok',
+  // TASK-MONO-808 — the «실적» strip (not under test here).
+  period: 'month',
+  performance: { status: 'degraded', value: null },
   ...over,
 });
 

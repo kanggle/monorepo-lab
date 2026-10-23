@@ -312,6 +312,15 @@ to zero stock.
 **Warehouse-global** (§ 1.0) — daily aggregates of the warehouse's own operation;
 not partitioned by tenant.
 
+**Day boundary = the KST (`Asia/Seoul`) calendar day** (ADR-MONO-084 D3, TASK-MONO-808).
+A putaway counts on the KST date of its `completedAt` (else `occurredAt`), a shipment
+on the KST date of its `shippedAt`. Until V6 both were cut on the **UTC** day, so
+00:00–09:00 KST work landed on the previous date. V6 rebuilt the outbound rows from
+`admin_shipment_summary`; the inbound rows written before V6 stay on the UTC day until
+the operator runs the backfill in
+[`read-model-rebuild.md` § KST day rebuild](../../services/admin-service/runbooks/read-model-rebuild.md#kst-day-rebuild)
+(a fresh volume needs nothing).
+
 #### `GET /api/v1/admin/dashboard/throughput` — Daily inbound + outbound counters
 
 Auth: `WMS_VIEWER` or higher.
@@ -346,6 +355,56 @@ Response `200`:
 ```
 
 Errors: `VALIDATION_ERROR` (400) if range > 90 days or `to < from`.
+
+#### `GET /api/v1/admin/dashboard/metrics` — Performance metrics (this week / this month vs the previous)
+
+ADR-MONO-084 P3 (TASK-MONO-808). The WMS row of the console overview's performance
+strip. **Warehouse-global** like throughput (§ 1.0) — the tenant claim does not filter it.
+
+Auth: `WMS_VIEWER` or higher.
+
+Query parameters:
+
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `period` | `week` \| `month` | yes | Case-insensitive. Missing or unknown → 400 |
+| `warehouseId` | UUID | no | Omitted = every warehouse |
+
+Response `200`: the shared shape of
+[`platform/contracts/performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md)
+— KST windows, `previous` ending at the same elapsed time, a zero-filled daily
+`series` over the current window, every value an integer string. Three metrics, all
+`unit: "count"`, `currency: null`:
+
+| `key` | Meaning | Source |
+|---|---|---|
+| `qtyReceived` | Σ putaway `qtyReceived` — the same definition as throughput `inbound.qtyReceived` | `admin_putaway_fact` (one row per putaway, V6) |
+| `qtyShipped` | Σ shipped quantity — throughput `outbound.qtyShipped` | `admin_shipment_summary` |
+| `shipmentCount` | shipments — throughput `outbound.shipmentCount` | `admin_shipment_summary` |
+
+🔴 Computed from per-event rows, not from the daily counters: a daily row cannot be cut
+at «the same elapsed time». On a volume that predates V6, `qtyReceived` counts only
+putaways since V6 until the runbook backfill has run.
+
+```json
+{
+  "period": "week",
+  "timezone": "Asia/Seoul",
+  "current":  { "from": "2026-10-19T00:00:00+09:00", "to": "2026-10-23T14:00:00+09:00" },
+  "previous": { "from": "2026-10-12T00:00:00+09:00", "to": "2026-10-16T14:00:00+09:00" },
+  "metrics": [
+    { "key": "qtyReceived",   "unit": "count", "currency": null, "current": "100", "previous": "80" },
+    { "key": "qtyShipped",    "unit": "count", "currency": null, "current": "12",  "previous": "9" },
+    { "key": "shipmentCount", "unit": "count", "currency": null, "current": "2",   "previous": "1" }
+  ],
+  "series": [
+    { "date": "2026-10-19", "values": { "qtyReceived": "0", "qtyShipped": "0", "shipmentCount": "0" } }
+  ]
+}
+```
+
+Errors: `VALIDATION_ERROR` (400) — `period` missing or not `week`/`month`, or
+`warehouseId` not a UUID.
 
 ### 1.3 Order / Shipment Summary
 

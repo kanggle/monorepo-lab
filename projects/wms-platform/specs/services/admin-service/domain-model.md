@@ -532,6 +532,28 @@ Projection handlers use `INSERT ... ON CONFLICT (date, warehouse_id) DO UPDATE`
 (PostgreSQL upsert) to increment counters atomically. EventDedupe ensures
 each event increments exactly once.
 
+**`date` is the KST (`Asia/Seoul`) calendar day** of the putaway's `completedAt`
+(else `occurredAt`) / the shipment's `shippedAt` — cut by
+`KstPeriodBounds.dateOf` (ADR-MONO-084 D3, TASK-MONO-808). Before V6 it was the
+UTC day; V6 rebuilt outbound from ShipmentSummary, inbound needs the runbook
+backfill on an old volume ([`read-model-rebuild.md` § KST day rebuild](runbooks/read-model-rebuild.md#kst-day-rebuild)).
+
+### PutawayFact
+
+One row per applied `inbound.putaway.completed` (V6). Written in the same
+transaction as the inbound daily increment. The per-event counterpart the daily
+row lacks: a date-only row can neither be re-cut to another day boundary nor
+answer «the previous period up to the same elapsed time» (the performance
+metrics, `admin-service-api.md § 1.2`). Outbound's equivalent is ShipmentSummary.
+
+| Field | Type | Notes |
+|---|---|---|
+| `event_id` | UUID | PK — the deduped event id; insert is `ON CONFLICT DO NOTHING` |
+| `warehouse_id` | UUID | |
+| `completed_at` | Instant | `completedAt`, else the envelope `occurredAt` |
+| `qty_received` | Integer | Σ `lines[].qtyReceived` — the same delta the daily row adds |
+| `recorded_at` | Instant | DB default `now()` |
+
 ---
 
 ## 14. AdminOutbox (infrastructure)
