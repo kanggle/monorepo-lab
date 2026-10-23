@@ -285,3 +285,12 @@ frontend
 - 재실행(head `cc862528d`): 콘솔 nightly run `39771872661` **success** · federation-hardening-e2e run `39771878976` **success** · PR #4469 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 남는 간극(이 티켓 밖): federation 스택에 erp 게이트웨이 · approval-service 가 없어 ERP 다리는 masterdata 에 닿는다 — 비구독 403 은 맞지만 구독 테넌트의 진짜 결재 대기 응답은 검사하지 않는다.
 - 열림: **AC-3**(Vercel Production · 익명 샘플 개요 · 로그인 운영자 라이브 — 권한 표 · SUPER_ADMIN 와일드카드 ERP 행).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 백엔드: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`.
+- **AC-3 ❌** — 로그인(`demo-corp`) 운영자 통합 개요: **«WMS 출고» · «SCM 발주» 카드가 «하위 서비스에서 오류가 발생했습니다 · 사유: DOWNSTREAM_ERROR»**(두 번 로드, 수 분 간격, 같음). 도메인 상태 요약 «WMS 점검 불가». 나머지 IAM 0 · Finance 0 · ERP 2 · ecommerce 0 은 표시.
+- 해당 서비스 로그(wms-admin-service · scm procurement)에 그 요청의 오류 없음 → 요청이 서비스에 안 닿은 것으로 보인다. 같은 `WMS_ADMIN_BASE_URL` 을 쓰는 `/wms` 화면은 정상. 콘솔 서버(Vercel) 로그는 볼 수 없었다(CLI 없음).
+- 권한 세트별 «권한 없음» 표는 이번 창에서 못 쟀다.
+- 새 티켓: **`TASK-PC-FE-369`**(개요 WMS · SCM 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가»). 그것이 고쳐진 뒤 AC-3 을 권한 표까지 다시 잰다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

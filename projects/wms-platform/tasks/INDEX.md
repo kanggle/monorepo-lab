@@ -71,7 +71,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-651-inventory-picking-cancelled-does-not-release-reservation.md` — **READY (2026-10-23 UTC) — `TASK-BE-650` 33차 창 라이브에서 발견.** inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 못 푼다 — 사가 `CANCELLATION_REQUESTED` 정지 · 예약 `RESERVED` · DLT 토픽 없음 · 리스너 예외 미기록. 기존 `CancelOrderUseCase` 보상 경로(운영자 취소도 — AC-0). 구현 권장 Opus.
+
+- `TASK-BE-652-admin-settings-list-without-filters-500.md` — **READY (2026-10-23 UTC) — `TASK-BE-644` AC-3 시도 중 발견.** admin-service 조건 없는 `GET /settings` → 500(`AdminSettingJpaRepository.java:13-18`, PostgreSQL `character varying ~~ bytea`) — 콘솔 WMS 운영설정 화면이 설정을 못 읽는다. 구현 권장 Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
@@ -87,15 +89,15 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A).** 생산자 BE-649 전에는 굽기에 실려도 동작 변화 없음. outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A).** 생산자 BE-649 전에는 굽기에 실려도 동작 변화 없음. outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — `PICKING` 자동 취소 ✅, 예약 미해제(inventory `picking.cancelled` → DLT · DLT 토픽 없음) → `TASK-BE-651`.
 
-- `TASK-BE-647-inventory-low-stock-default-threshold-unset.md` — **REVIEW (2026-10-22 UTC · nightly success · AC-2 = 굽기 뒤 라이브) — 소유자 결정: 굽기 전 구현.** inventory-service 저재고 기본 임계값 프로퍼티(`AlertConfig.java:44`)를 넣는 곳이 없어 재기동 직후 저재고 알림 0 건(설정 변경 이벤트가 다시 올 때까지). 최소안 `application.yml` 에 10. `TASK-BE-644` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-BE-647-inventory-low-stock-default-threshold-unset.md` — **REVIEW (2026-10-22 UTC · nightly success · AC-2 = 굽기 뒤 라이브) — 소유자 결정: 굽기 전 구현.** inventory-service 저재고 기본 임계값 프로퍼티(`AlertConfig.java:44`)를 넣는 곳이 없어 재기동 직후 저재고 알림 0 건(설정 변경 이벤트가 다시 올 때까지). 최소안 `application.yml` 에 10. `TASK-BE-644` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: AC-2 ⚪ — 10 아래 SKU 없음 · 알림 0.
 
-- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **REVIEW (2026-10-22 UTC · 콘솔 nightly · federation e2e success · 굽기 직후 콘솔 문구 PR · AC-3 = 라이브) — 소유자 결정 (가-2) 조회 시점 계산 · 경계 `<` · 칼럼 제거(V5). 구현 + 로컬 check 초록 · IT 는 CI 전용 · 콘솔 문구는 굽기 직후 별도 PR(티켓 `## 콘솔 후속 문구`).** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`(done — 가이드 «고정값 · 가용 10개 이하» 는 굽기 직후 콘솔 PR 에서 고침). 서버 변경 = 굽기. 분석=Opus 5.5 / 구현 권장=Opus.
-
-- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **REVIEW (2026-10-22 UTC) — CI 빨강(6) → 초록 확인 · AC-3 = 굽기 뒤 라이브.** 일별 처리량 누계의 `WHERE last_event_at < EXCLUDED.last_event_at` 이 서로 다른 ASN · 주문(파티션 다름 — 순서 비보장)의 늦게 도착한 이벤트를 조용히 버려 **누계가 적어진다**. 스펙 `idempotency.md` § 2.6 이 의도로 적었으므로 스펙 먼저. 중복 방지는 `event_id` 가 이미 한다. 서버 변경 = 굽기. `TASK-PC-FE-358` AC-0 곁 발견. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-644-admin-low-stock-flag-ignores-threshold-setting.md` — **REVIEW (2026-10-22 UTC · 콘솔 nightly · federation e2e success · 굽기 직후 콘솔 문구 PR · AC-3 = 라이브) — 소유자 결정 (가-2) 조회 시점 계산 · 경계 `<` · 칼럼 제거(V5). 구현 + 로컬 check 초록 · IT 는 CI 전용 · 콘솔 문구는 굽기 직후 별도 PR(티켓 `## 콘솔 후속 문구`).** admin 재고 읽기 모델의 `lowStockFlag` 가 설정 `inventory.low_stock.default_threshold_qty` 를 무시하고 상수 10(`InventoryProjectionService.java:55,341`) — 계약 `admin-service-api.md:281-282` 는 «현재 설정으로 재계산». 곁: `domain-model.md:379` «Mirrors Order status» 드리프트. 짝 = 콘솔 `TASK-PC-FE-365`(done — 가이드 «고정값 · 가용 10개 이하» 는 굽기 직후 콘솔 PR 에서 고침). 서버 변경 = 굽기. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: 콘솔 문구 PR #4496 굽기 뒤 머지 · AC-3 ⚪ — 조건 없는 `GET /settings` 500(기존 결함 → `TASK-BE-652`) · 콘솔 쓰기 경로 없음.
 
 ## done
+
+- `TASK-BE-643-throughput-counter-drops-out-of-order-events.md` — **✅ DONE (2026-10-23 UTC, 4차원 검증 — impl PR [#4475](https://github.com/kanggle/monorepo-lab/pull/4475) squash `a0383c947`; `state=MERGED` · main 조상 · 머지 시점 FAILURE 0 · AC 본문 열어 읽음)** — 일별 처리량 누계의 `last_event_at` 조건 삭제(역순 · 같은 시각 이벤트도 센다) · CI IT 빨강 6 → 초록. 33차 창 라이브(AC-3, `ami-02b3ba00a3b2ff622` ⊇ `a0383c947`): `admin_event_dedupe` 적치 완료 87 · 출하 확정 1 = `admin_throughput_inbound_daily` 2026-10-23 합 87 · outbound 1.
 
 - `TASK-BE-637-inventory-list-instant-timestamp-cast-500.md` — **✅ DONE (2026-10-16 UTC, 4차원 검증 — impl PR [#4389](https://github.com/kanggle/monorepo-lab/pull/4389) squash `f17216b1d`; `state=MERGED` · main 조상 · 머지 시점 FAILURE 0 · AC 본문 열어 읽음)** — inventory-service 목록 4종(재고 · 이동 · 조정 · 이력)의 `Instant`→`Timestamp` 캐스트 500 → `NativeRowValues` 하나로. 실 DB IT red 4/4 → green · `NativeRowValuesTest`. 28차 창 라이브(AC-3): `GET /api/v1/inventory?size=1` 200(27차 500) · 타임스탬프 3칸 non-null · 콘솔 «WMS 재고» 행 렌더.
 

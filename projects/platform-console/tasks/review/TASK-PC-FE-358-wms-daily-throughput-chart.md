@@ -197,3 +197,10 @@ frontend
 - 🔴 PR 체크 2개 빨강(같은 head): `Client graph server-only imports` · `Client graph backend origins`. 원인 = 카드(`'use client'`)가 서버 전용 `api/throughput-state.ts` 를 **여러 줄 `import type { … }`** 로 가리켜, 가드의 그래프 걷기가 그 모듈 → `shared/lib/session.ts` → `next/headers` · `shared/config/env.ts` 의 백엔드 주소까지 닿았다. 수정 = 카드가 쓰는 두 타입(`ThroughputCardStatus` · `WmsThroughputState`)을 `lib/throughput.ts` 로 옮기고(`OverviewCellStatus` 기반) 상태 모듈은 다시 내보내기만. 로컬 두 가드 hits=0 · tsc · lint · vitest 위와 같음. 타입만 옮겼으므로 내보내는 JS 는 같다 — nightly 는 다시 돌리지 않았다.
 - 🔵 가드 쪽 관찰(이 티켓 밖): 옛 그래프도 nightly 의 `next build` 는 통과했다 — `import type` 은 번들에 안 들어간다. `scripts/check-client-graph-server-only.mjs:69-70` 의 `TYPE_ONLY_RE` 는 **마지막 대상**(`next/headers`) 을 가리키는 타입 임포트만 거르고, 로컬 모듈 사이의 `import type` 연결은 따라간다 ⇒ 오탐. 루트 티켓 후보(소유자에게 보고).
 - 열림: **AC-4**(Vercel Production 기록 · 익명 샘플 화면 · 로그인 운영자 라이브 = 다음 데모 창).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 백엔드: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`.
+- **AC-4 🟡** — 로그인 WMS 개요의 «일별 입고·출고» 그래프가 14일 창(2026-10-10~23, UTC)으로 그려지고 빈 날은 0 — 10/23 입고 86.
+- ⚪ «빈 14일 창 = 빈 문구» 경우는 이 데이터로는 잴 수 없다(창에 값이 있다). Vercel Production 기록 · 익명 샘플 화면은 이 창 결과에 따로 적히지 않았다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

@@ -220,3 +220,9 @@ AC-0 은 `*IT*.java` 로 Glob 했고 0 을 받았다. 이 서비스의 IT 이름
 
 - PR #4477(head `20f75411e`) 체크 pending 0 · fail 0. 로컬에서 못 돈 Testcontainers IT 를 CI 에서 확인: run `39814660754` 의 `Integration (scm-platform, Testcontainers)` **pass** — `demand-planning-service:integrationTest` 가 `AlertConsumerIntegrationTest` · `ApproveMaterializationIntegrationTest` · `SweepSchedulerIntegrationTest` 를 실제 Postgres 로 돌렸다(V4 마이그레이션 · `ddl-auto=validate` 포함). `E2E (scm-platform v1 cross-service smoke)` pass. → AC-2 닫힘.
 - 열림: **AC-3**(굽기 뒤 라이브 — 새로 발동한 제안에 `reorderPointAtTrigger`, 옛 제안은 키 없음 · 닫을 때 콘솔 후속 티켓 기안).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `f23bec8e9`(#4477) 는 `283fd39cf` 의 조상.
+- **AC-3 ⚪ 측정 못 함 (이유)** — 보충 제안이 0 건이다(새로 발동한 제안도 옛 제안도 없음). 콘솔 후속 티켓 기안은 AC-3 이 닫힐 때로 미룬다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

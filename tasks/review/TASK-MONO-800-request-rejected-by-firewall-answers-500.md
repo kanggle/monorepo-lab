@@ -133,3 +133,9 @@ A request the firewall rejects is a client error: answer **400** with a stable c
 - AC-4 (deploy state) stays open.
 - ecommerce user/notification/payment override the catch-all but declare no spring-security-web, so no firewall there; left untouched. ecommerce auth-service has an independent handler (still 500) and reactive gateways: out of scope.
 - Path-shaped rejections (401 via /error dispatch): TASK-MONO-801.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- Deploy state (AC-4, first half): baked — `283fd39cf` → AMI `ami-02b3ba00a3b2ff622` (tag RepoCommit matches) · pin PR #4498 (`c5e3ddad3`). The impl merge `8e74909c3` (#4431) is an ancestor of `283fd39cf`.
+- Live «same request → 400»: ⚪ **not measured, and why** — the reference request (a raw Korean `X-Operator-Reason` header on an operator API) needs a raw client carrying the logged-in Bearer token, and the console percent-encodes the header, so the console cannot send it. No such client was available in this window.
+- ⇒ AC-4 stays open and the ticket stays in `review`. Next: a raw HTTP client with an operator token (`TASK-MONO-672` § Order «Still open» 12 ①).

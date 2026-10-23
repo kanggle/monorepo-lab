@@ -8,7 +8,7 @@ TASK-PC-FE-367
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -72,3 +72,17 @@ frontend
 # Failure Scenarios
 
 1. 모르는 상태 값이 와서 화면이 깨지거나 빈칸이 된다 → AC-0 이 지금 동작을 측정한다.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 화면은 #4492(`229ebc149`) 머지로 Vercel 에 이미 있었고, «취소됨» 을 만드는 서버 쪽(`TASK-BE-649`)이 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899` 로 실렸다.
+- **AC-3 ✅** — 콘솔 배송 목록에 «취소됨» 빨간 배지 · 작업 버튼 없음 · 상태 필터에 «취소됨» · 이커머스 개요에 «취소됨» 1 · 원문 `CANCELLED` 0 (스크린샷 확인).
+- 곁(기록만, 티켓 없음): 배송 화면 부제 «상태 전이(PREPARING→SHIPPED→IN_TRANSIT→DELIVERED)» 에 취소가 없다 — `TASK-MONO-672` § 33rd window — harvest.
+
+### 닫기 — 4차원 확인 (2026-10-23 UTC)
+
+- (a) PR #4492 `state=MERGED` · `mergedAt` 2026-10-23T10:06:50Z.
+- (b) 머지 커밋 `229ebc149` = `origin/main` 조상(`git merge-base --is-ancestor`), 굽기 커밋 `283fd39cf` 의 조상이기도 하다.
+- (c) 머지된 PR 의 `statusCheckRollup` 67 칸 중 실패 0 (SUCCESS 13 · SKIPPED 54).
+- (d) `# Acceptance Criteria` 를 열어 읽음 — AC-0 · AC-1 · AC-2 ✅(기존) · AC-3 ✅(위). 체크 칸은 `review/` 동결 규칙으로 고치지 않았다 — 닫힘은 이 절이 기록한다.
+- ⇒ `review/ → done/`.
