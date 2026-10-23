@@ -201,6 +201,9 @@ const wmsState = (alertStatus: WmsAlertStatusCount[]): WmsOverviewState => ({
   recentShipmentsStatus: 'ok',
   recentAdjustments: null,
   recentAdjustmentsStatus: 'ok',
+  // TASK-MONO-808 — the «실적» strip (not under test here).
+  period: 'month',
+  performance: { status: 'degraded', value: null },
 });
 
 describe('④ WmsOverview', () => {

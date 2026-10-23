@@ -30,3 +30,4 @@ export {
 } from './wms-shipments-api';
 export { listAlerts, acknowledgeAlert } from './wms-alerts-api';
 export { listRefs, getProjectionStatus } from './wms-refs-api';
+export { getWmsMetrics } from './wms-metrics-api';

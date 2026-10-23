@@ -3,6 +3,20 @@ import type { WmsOverviewState } from '../api/overview-state';
 import { BarSwatch } from '@/shared/ui/InlineBar';
 import { CountTile } from './WmsOverviewCountTile';
 import { AlertStatusBar, alertStatusTone } from './AlertStatusBar';
+import { PerformanceStrip } from '@/shared/ui/PerformanceStrip';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+
+/** `GET /dashboard/metrics` keys (admin-service-api.md) → screen names. */
+const PERFORMANCE_LABELS: Readonly<Record<string, string>> = {
+  qtyReceived: '입고 수량',
+  qtyShipped: '출고 수량',
+  shipmentCount: '출고 건수',
+};
+
+const PERIOD_HREFS: Readonly<Record<MetricsPeriod, string>> = {
+  week: '/wms?period=week',
+  month: '/wms?period=month',
+};
 
 /**
  * wms operator **overview snapshot** presentation (TASK-PC-FE-166 — the first
@@ -29,6 +43,12 @@ import { AlertStatusBar, alertStatusTone } from './AlertStatusBar';
  * `WmsOverviewCountTile` (+ the shared cell vocabulary in `wms-overview-cell`);
  * the 최근 출고 / 최근 재고 조정 glances live in `WmsRecentShipments` /
  * `WmsRecentAdjustments`. This file is the thin overview-section composer.
+ *
+ * ── «실적» STRIP (ADR-MONO-084 P3, TASK-MONO-808) ── first child of the
+ * section: 입고 수량 · 출고 수량 · 출고 건수 for the whole operation
+ * (warehouse-global), KST windows. Its failure is its own — the tiles below
+ * render regardless. The 배송 tile's 오늘/주간/월간 stay: those are the
+ * tenant's own shipment counts, a different question.
  */
 export function WmsOverview({ state }: { state: WmsOverviewState }) {
   if (state.notEligible) {
@@ -41,6 +61,15 @@ export function WmsOverview({ state }: { state: WmsOverviewState }) {
       aria-label="WMS 운영 개요"
       className="mb-8"
     >
+      <PerformanceStrip
+        cell={state.performance}
+        selected={state.period}
+        periodHrefs={PERIOD_HREFS}
+        labels={PERFORMANCE_LABELS}
+        chartKey="qtyShipped"
+        testid="wms-performance"
+      />
+
       <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
 
       <nav

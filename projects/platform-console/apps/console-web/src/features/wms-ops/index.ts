@@ -37,7 +37,10 @@ export { getWmsMasterState } from './api/master-state';
 export type { WmsMasterSectionState } from './api/master-state';
 export { getWmsOperationsState } from './api/operations-state';
 export type { WmsOperationsSectionState } from './api/operations-state';
-export { getWmsOverviewState } from './api/overview-state';
+export {
+  getWmsOverviewState,
+  DEFAULT_OVERVIEW_PERIOD,
+} from './api/overview-state';
 export type {
   WmsOverviewState,
   WmsAreaCount,

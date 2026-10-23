@@ -1,4 +1,11 @@
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+} from './metrics-windows';
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -790,21 +797,113 @@ function asnInspectionFixture(path: string): unknown {
   const m = pathname.match(new RegExp(`^${ADMIN}/dashboard/asns/([^/]+)/inspection$`));
   if (!m) return undefined;
   const asnId = decodeURIComponent(m[1]);
-  if (asnId === ASNS[1].asnId) {
-    return {
-      asnId: ASNS[1].asnId,
-      warehouseId: WAREHOUSE.id,
-      inspectionCompletedAt: T_MID,
-      inspectorId: 'insp-sample-0001',
-      totalLines: 5,
-      discrepancyCount: 0,
-      totalQtyExpected: 500,
-      totalQtyPassed: 500,
-      totalQtyDamaged: 0,
-      totalQtyShort: 0,
-    };
-  }
+  if (asnId === ASN_INSPECTION.asnId) return ASN_INSPECTION;
   return fixtureNotFound('NOT_FOUND', 'inspection not yet completed');
+}
+
+/** The one completed inspection (the CLOSED ASN). Named so the «실적» strip's
+ *  입고 수량 reads the SAME passed quantity (TASK-MONO-808). */
+const ASN_INSPECTION = {
+  asnId: ASNS[1].asnId,
+  warehouseId: WAREHOUSE.id,
+  inspectionCompletedAt: T_MID,
+  inspectorId: 'insp-sample-0001',
+  totalLines: 5,
+  discrepancyCount: 0,
+  totalQtyExpected: 500,
+  totalQtyPassed: 500,
+  totalQtyDamaged: 0,
+  totalQtyShort: 0,
+};
+
+// ---------------------------------------------------------------------------
+// GET /dashboard/metrics?period= — the 개요 «실적» strip (ADR-MONO-084 P3,
+// TASK-MONO-808). Derived from the SAME seed rows the other sample screens
+// show, so the strip never claims movement the sample lists do not:
+//   - 입고 수량 (`qtyReceived`) — putaway of the CLOSED ASN: its inspection's
+//     passed quantity, put away by `closedAt` (the RECEIVED ASN is not yet
+//     inspected, so nothing of it is put away).
+//   - 출고 수량 / 출고 건수 (`qtyShipped` / `shipmentCount`) — the admin
+//     `dashboard/shipments` rows (`totalQty`, `shippedAt`).
+// Warehouse-global, like the producer (admin contract § 1.0); an optional
+// `warehouseId` narrows to that warehouse.
+// ---------------------------------------------------------------------------
+
+interface SampleFlow {
+  at: string;
+  warehouseId: string;
+  qty: number;
+}
+
+const SAMPLE_PUTAWAYS: readonly SampleFlow[] = ASNS.filter(
+  (a) => a.status === 'CLOSED' && a.asnId === ASN_INSPECTION.asnId,
+).map((a) => ({ at: a.closedAt ?? a.lastEventAt, warehouseId: a.warehouseId, qty: ASN_INSPECTION.totalQtyPassed }));
+
+const SAMPLE_SHIPPED: readonly SampleFlow[] = SAMPLE_WMS_SHIPMENTS.map((s) => ({
+  at: s.shippedAt,
+  warehouseId: s.warehouseId,
+  qty: s.totalQty,
+}));
+
+function computeWmsMetrics(period: SamplePeriod, warehouseId: string | null) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  const scoped = (rows: readonly SampleFlow[]) =>
+    warehouseId === null ? rows : rows.filter((r) => r.warehouseId === warehouseId);
+  const putaways = scoped(SAMPLE_PUTAWAYS);
+  const shipped = scoped(SAMPLE_SHIPPED);
+  const qty = (rows: readonly SampleFlow[]) => rows.reduce((a, r) => a + r.qty, 0);
+  const inWindow = (rows: readonly SampleFlow[], win: { from: string; to: string }) =>
+    rows.filter((r) => instantInside(r.at, win));
+  const onDate = (rows: readonly SampleFlow[], date: string) =>
+    inWindow(rows, w.current).filter((r) => kstDate(r.at) === date);
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    // Integer STRINGS, like the producer (F5).
+    metrics: [
+      {
+        key: 'qtyReceived',
+        unit: 'count',
+        currency: null,
+        current: String(qty(inWindow(putaways, w.current))),
+        previous: String(qty(inWindow(putaways, w.previous))),
+      },
+      {
+        key: 'qtyShipped',
+        unit: 'count',
+        currency: null,
+        current: String(qty(inWindow(shipped, w.current))),
+        previous: String(qty(inWindow(shipped, w.previous))),
+      },
+      {
+        key: 'shipmentCount',
+        unit: 'count',
+        currency: null,
+        current: String(inWindow(shipped, w.current).length),
+        previous: String(inWindow(shipped, w.previous).length),
+      },
+    ],
+    // Every date of the current window, zero-filled.
+    series: w.dates.map((date) => ({
+      date,
+      values: {
+        qtyReceived: String(qty(onDate(putaways, date))),
+        qtyShipped: String(qty(onDate(shipped, date))),
+        shipmentCount: String(onDate(shipped, date).length),
+      },
+    })),
+  };
+}
+
+function metricsFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  if (pathname !== `${ADMIN}/dashboard/metrics`) return undefined;
+  const p = samplePeriod(query);
+  // No / unknown period: the producer answers 400; the console always sends one,
+  // so the sample leaves it unanswered (→ the router's 503 «not ready»).
+  return p ? computeWmsMetrics(p, query.get('warehouseId')) : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -988,6 +1087,8 @@ function projectionStatusFixture(path: string): unknown {
 
 function wmsAdminFixture(path: string): unknown {
   return (
+    // First: an exact-path match no later pattern may swallow (TASK-MONO-808).
+    metricsFixture(path) ??
     inventoryByKeyFixture(path) ??
     inventoryListFixture(path) ??
     throughputFixture(path) ??
@@ -1243,6 +1344,8 @@ export const WMS_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     partners: PARTNERS,
     inventory: INVENTORY,
     throughput: throughputFixture(`${ADMIN}/dashboard/throughput`),
+    // TASK-MONO-808 — the «실적» strip answers, so the label guard scans them too.
+    metrics: { week: computeWmsMetrics('week', null), month: computeWmsMetrics('month', null) },
     orders: ADMIN_ORDERS,
     shipments: SAMPLE_WMS_SHIPMENTS,
     asns: ASNS,

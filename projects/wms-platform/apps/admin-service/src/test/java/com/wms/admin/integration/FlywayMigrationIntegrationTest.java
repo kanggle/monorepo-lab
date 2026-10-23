@@ -95,6 +95,20 @@ class FlywayMigrationIntegrationTest extends AdminServiceIntegrationBase {
     }
 
     @Test
+    void v6_putawayFactAndKstRebuildFunctionsExist() {
+        // TASK-MONO-808 — the per-putaway table and the two KST day rebuild functions.
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name = 'admin_putaway_fact'",
+                Integer.class)).isEqualTo(1);
+        for (String fn : new String[]{"admin_rebuild_outbound_daily_kst", "admin_rebuild_inbound_daily_kst"}) {
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_proc WHERE proname = ?", Integer.class, fn))
+                    .as("function %s must exist", fn).isEqualTo(1);
+        }
+    }
+
+    @Test
     void v99_seeds_fourBuiltInRoles() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         Integer count = jdbc.queryForObject(

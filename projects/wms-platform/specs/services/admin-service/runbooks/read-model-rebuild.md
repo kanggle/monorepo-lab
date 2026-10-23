@@ -403,6 +403,54 @@ revert.
 
 ---
 
+## KST day rebuild
+
+One-off, TASK-MONO-808 (ADR-MONO-084 D3). **Not** the truncate-and-replay procedure
+above — that would erase every day older than the 7-day topic retention.
+
+Until V6 both throughput projections cut the day on **UTC**; they now cut on the KST
+(`Asia/Seoul`) day. The daily rows hold only «date + totals», so they cannot be re-cut
+on their own; each side is rebuilt from per-event rows:
+
+| Side | Per-event source | Who rebuilds it |
+|---|---|---|
+| outbound | `admin_shipment_summary` (admin_db) | **V6 itself**, at deploy — nothing to do |
+| inbound | `inbound_db.inbound_outbox` (another database — Flyway cannot read it) | **you**, with the script below |
+
+**Who needs it:** only a volume whose `admin_db` existed before V6 (a long-lived local
+volume; a demo instance kept across bakes). A fresh volume — CI, a newly baked demo
+instance — starts on the KST day and needs nothing. Until it is run on an old volume,
+inbound days before V6 stay on the UTC day and the metrics' `qtyReceived` counts only
+putaways since V6.
+
+```bash
+cd projects/wms-platform
+scripts/admin-throughput-kst-backfill.sh          # dry run — prints counts, rolls back
+scripts/admin-throughput-kst-backfill.sh --apply
+```
+
+It copies the putaways admin has **already applied** (`admin_event_dedupe.outcome =
+'APPLIED'`) into `admin_putaway_fact`, then calls `admin_rebuild_inbound_daily_kst()`,
+in one transaction. A published event admin has not consumed yet is left out on
+purpose — when consumed it adds itself to both the daily row and the facts; copying it
+now would count it twice. No consumer needs to be stopped: the rebuild locks the daily
+table until commit.
+
+**Reading the result** — the function returns `before_count / before_qty / after_count /
+after_qty`:
+
+- equal → only day boundaries moved (the preservation control of ADR-MONO-084 § Verification).
+- `after` > `before` → the old counter had dropped putaways (pre-TASK-BE-643 guard); the
+  facts are the per-event truth and are followed. A NOTICE says so.
+- **refused** (`backfill from inbound_outbox first`) → the facts hold less than the daily
+  rows; nothing was changed. Usually the script read a different `inbound_db` than this
+  `admin_db` was projected from — check `PSQL_INBOUND` / `PSQL_ADMIN`.
+
+Outbound's V6 rebuild reports the same four numbers as a NOTICE in the Flyway log when
+they differ (pre-TASK-BE-643 drops, or one shipment re-delivered under a new eventId).
+
+---
+
 ## Frequency and Triggers
 
 | Trigger | Frequency expectation |

@@ -3,6 +3,7 @@ import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
 import {
+  DEFAULT_OVERVIEW_PERIOD,
   getWmsSectionState,
   getWmsOverviewState,
   getWmsThroughputState,
@@ -14,6 +15,7 @@ import {
 } from '@/features/wms-ops';
 import { canWriteOn } from '@/shared/ui/console-nav-exposure';
 import { getWmsBusinessRoles } from './_lib/wms-business-roles';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +51,12 @@ export const dynamic = 'force-dynamic';
  * shipments count tile + 최근 출고 glance (`WmsOverview`) and the alerts
  * table. `getWmsSectionState` now seeds only alerts.
  */
-export default async function WmsPage() {
+export default async function WmsPage({
+  searchParams,
+}: {
+  /** `?period=week|month` — the «실적» strip period (TASK-MONO-808). */
+  searchParams?: Promise<{ period?: string }>;
+}) {
   // Eligibility pre-flight from the data-driven registry (§ 2.2). A
   // registry 401 → whole-session re-login (no partial authed state);
   // a registry failure → treat as degraded (cannot prove ineligibility
@@ -98,9 +105,15 @@ export default async function WmsPage() {
   // TASK-PC-FE-358 — the daily throughput card is a FOURTH, independent read
   // (§ 2.4.5.2 «Daily throughput card»): it never throws except its own 401
   // redirect, so its failure cannot blank the overview and vice versa.
+  // TASK-MONO-808 — an absent or unknown `?period=` falls back to the default
+  // (never a 400 page).
+  const requested = ((await searchParams) ?? {}).period;
+  const period = (METRICS_PERIODS as readonly string[]).includes(requested ?? '')
+    ? (requested as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
   const [overviewState, state, businessRoles, throughputState] =
     await Promise.all([
-      getWmsOverviewState(eligible),
+      getWmsOverviewState(eligible, period),
       getWmsSectionState(eligible),
       getWmsBusinessRoles(wmsTenants),
       getWmsThroughputState(eligible),

@@ -403,6 +403,7 @@ non-IAM domain is bound for the first time, and it surfaces a genuine
   | 12 | projection status | `GET /api/v1/admin/operations/projection-status` (§ 6.2) | read |
   | 13 | settings list | `GET /api/v1/admin/settings` (§ 5.1) | read |
   | 14 | settings get | `GET /api/v1/admin/settings/{key}` (§ 5.2) | read |
+  | 15 | performance metrics («실적» strip — sits with #3 in § 1.2) | `GET /api/v1/admin/dashboard/metrics?period=week\|month[&warehouseId=]` (§ 1.2) | read |
 
   The wms write-admin surface (`admin-service-api.md` §§ 2–4: User / Role /
   Assignment, `WMS_ADMIN`+ heavy writes) plus **settings write**
@@ -929,6 +930,26 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
   `redirect('/login')` (no partial authed state — mirrors `getWmsSectionState`).
   Read-only; no auto-refetch. `WmsUnavailableError` (503/timeout/network)
   degrades the cell, never a re-login.
+- **Performance metrics strip (#15) — ADR-MONO-084 P3 / TASK-MONO-808.**
+  `GET /dashboard/metrics?period=week|month` feeds the «실적» strip, the **first**
+  child of the 운영 개요 band (above the count tiles): 입고 수량 (`qtyReceived`) ·
+  출고 수량 (`qtyShipped`) · 출고 건수 (`shipmentCount`), current vs the
+  same-length previous KST window, with a daily series (the chart draws
+  `qtyShipped`). Shape, windows and error handling are
+  [`platform/contracts/performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md);
+  what each key counts is `admin-service-api.md` § 1.2 `GET /dashboard/metrics`.
+  **Warehouse-global** (§ 1.0 of the producer contract, like #3): the console
+  sends **no `warehouseId`** — the 개요 has no single selected warehouse (the
+  throughput card's selector is local to that card), so the strip describes the
+  whole operation. Parsed by `shared/api/performance-metrics.ts` (integer
+  strings — F5) as its **own cell** inside `getWmsOverviewState`: `403` →
+  «권한 없음» in the strip, a non-200 (incl. `400 VALIDATION_ERROR`) or an
+  unparseable body → «실적을 불러올 수 없습니다», while every other block renders;
+  a `401` → the same whole-session re-login. The page reads `?period=` (default
+  `month`; an absent or unknown value falls back to the default — never a 400
+  page). 🔵 It does **not** replace the 배송 tile's 오늘/주간/월간: those are the
+  caller's **tenant-owned** shipment counts (`shippedAt` windows), a different
+  question from the warehouse-global strip, and both stay.
 - **Daily throughput card (TASK-PC-FE-358).** A separate server state
   (`getWmsThroughputState`), fanned out **in parallel with, and independent
   of**, the cells above — its failure never degrades the count tiles, the
@@ -953,6 +974,15 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
      window as UTC on screen. This is deliberately **not** the
      `kstPeriodBounds()` window the 배송 tile uses — that one filters
      `shippedAt` instants, this one names producer-defined day buckets.
+     🔵 **Producer side has moved to the KST day** (wms admin V6, TASK-MONO-808,
+     `admin-service-api.md § 1.2`). This card deliberately still asks for the UTC
+     window and says «UTC 기준» until that producer is baked and an old volume's
+     inbound backfill has run — otherwise the screen would claim KST before the
+     data is. 🔴 **The reverse gap opens at the bake**: from then on the producer's
+     day strings are KST days, so «UTC 기준» becomes wrong and, between 00:00 and
+     09:00 KST, the UTC `to` omits the newest day. Switching this card to a KST
+     window + label must therefore ship **with** that bake, not after it
+     (`TASK-MONO-815`).
   - **Zero-fill (normative).** § 1.2 lists **only days that have a row** (a
     day with no putaway and no shipment is absent, not `0`). The console fills
     every date `from..to` (inclusive) that the response omits with
