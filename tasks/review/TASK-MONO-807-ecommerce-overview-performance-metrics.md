@@ -88,10 +88,11 @@ E-Commerce 개요(`/ecommerce`) 맨 위에 이번 주 · 이번 달 **매출 · 
 | 콘솔 전체 | `TZ=UTC vitest run --maxWorkers=2 --minWorkers=1` | 5276 / 5277 → 빨강 1 = 샘플 라벨 규칙(위) → 고친 뒤 그 파일 포함 4 파일 97 / 97 |
 | bite | 일별 버킷을 UTC 날짜로 | `OrderQueryServiceMetricsTest` 빨강 → 복원 후 초록 |
 
-### 🔴 CI 첫 판(PR #4499, `f6e156be3`)이 잡은 것 둘 — 둘 다 로컬 게이트가 못 봤다
+### 🔴 CI(PR #4499)가 잡은 것 셋 — 셋 다 로컬 게이트가 못 봤다 (첫 판 `f6e156be3` 둘 · 둘째 판 `a76754257` 하나)
 
 1. **`Integration (ecommerce A)` — 새 IT 5개가 시드 단계에서 빨강.** `value too long for type character varying(36)`: 시험 데이터 `payment_id` 를 `"pay-" + UUID`(40자)로 넣었는데 칸이 `VARCHAR(36)`(V2). 같은 시드는 `variant_id` 에 `null` 을 넣고 있었다(V1 `NOT NULL` — 다음에 터졌을 것). ⇒ 코드 결함이 아니라 **시험 데이터 결함**, 지표 쿼리는 아직 한 번도 실 DB 에서 판정되지 않았다. 고침: 접두어 없는 UUID · `variant_id = "v-" + productId`. 🔴 로컬은 Docker 가 없어 `compileTestJava` 까지만 갔다 — «컴파일 통과» 는 스키마 제약을 하나도 재지 않는다.
 2. **`Frontend E2E smoke` — `next build` 타입 검사 실패.** `Type '{ searchParams?: … } | undefined' does not satisfy the constraint 'PageProps'`: 페이지 인자에 기본값 `= {}` 를 줘서 props 타입이 `| undefined` 가 됐다. `tsc --noEmit` 은 통과했다 — **Next 의 페이지 props 검사는 `next build` 에만 있다.** 고침: 기본값 제거(ERP 페이지와 같은 모양) · 시험이 `EcommercePage({})` 로 부른다. 🔴 앱 코드를 바꾸면 `next build` 를 돌린다는 규칙을 이번에 건너뛰었다. → 고친 뒤 로컬 `next build` rc=0(84 페이지) · `tsc` rc=0 · 페이지 시험 2 파일 10 / 10.
+3. **둘째 판(`a76754257`) — `Integration (ecommerce A)` 74 개 중 1 개 빨강, 역시 시드.** `value too long for type character varying(20)`: 상태 대조군에 `STUCK_RECOVERY_FAILED`(21자)를 넣었는데 `orders.status` 가 `VARCHAR(20)`(V1). 나머지 IT 4 개(귀속 · 반열린 구간 · 쿠폰 · 셀러 범위 · 테넌트)는 이 판에서 **실 DB 초록** — 지표 쿼리의 첫 실측 판정이다. 고침: 그 행을 대조군에서 빼고 이유를 주석으로 남김(`REALISED_SALE` 은 허용 목록이라 어차피 제외). 🔵 운영 영향 없음: `main` 에서 `markStuckRecoveryFailed` 를 부르는 곳이 0 곳(TASK-MONO-306 이후 주 종착은 `CANCELLED(PAYMENT_TIMEOUT)`) — 다만 **누가 다시 부르면 저장이 터지는 잠복 결함**이고 이 태스크 범위 밖이라 여기 기록만 한다.
 
 ## 배포 상태
 
