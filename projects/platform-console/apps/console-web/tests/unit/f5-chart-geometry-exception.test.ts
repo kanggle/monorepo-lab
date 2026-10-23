@@ -36,6 +36,11 @@ const F5_ROOTS = [
   'shared/api/ledger-overview-read.ts',
   'shared/api/finance-accounts-read.ts',
   'shared/api/finance-accounts-types.ts',
+  // TASK-MONO-806 — the shared performance strip renders money (every overview's
+  // «실적» values are integer strings, money minor units included).
+  'shared/api/performance-metrics.ts',
+  'shared/lib/performance-format.ts',
+  'shared/ui/PerformanceStrip.tsx',
 ];
 
 /** The allow-list — exactly one file (repo-relative to `src/`, `/`-separated). */

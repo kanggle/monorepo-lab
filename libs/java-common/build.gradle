@@ -13,6 +13,9 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
     testImplementation 'org.assertj:assertj-core'
+    // Reads platform/contracts/fixtures/performance-metrics-windows.json and checks that
+    // PerformanceMetrics serialises to the contract shape (TASK-MONO-806) — test only.
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
 }
 
 dependencyManagement {

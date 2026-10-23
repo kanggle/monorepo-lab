@@ -40,6 +40,7 @@
 | [contracts/](contracts/) | 플랫폼 전반에서 공유되는 cross-cutting 계약 (모든 프로젝트에 동일 적용) |
 | [contracts/jwt-standard-claims.md](contracts/jwt-standard-claims.md) | JWT 표준 클레임·서명·검증 계약 — 모든 identity-platform 서비스와 게이트웨이가 따르는 토큰 구조 |
 | [contracts/notification-inbox-contract.md](contracts/notification-inbox-contract.md) | 도메인-무관 notification envelope + inbox REST shape + 콘솔 aggregator 소비 계약 (ADR-MONO-043 D3) — shape 만 공유, base-path·auth 는 도메인 소유 |
+| [contracts/performance-metrics-contract.md](contracts/performance-metrics-contract.md) | 도메인 개요 «실적» 응답 한 모양 + KST 기간 · 같은 길이 직전 구간 규칙 (ADR-MONO-084 D2 · D3) — 값은 정수 문자열, 지표의 뜻은 도메인 계약 소유 · 창 픽스처 `contracts/fixtures/performance-metrics-windows.json` |
 
 ---
 

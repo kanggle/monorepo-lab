@@ -1,0 +1,117 @@
+{
+  "description": "Shared window fixture for platform/contracts/performance-metrics-contract.md. Both the Java KstPeriodBounds tests (libs/java-common) and the console's kst-period tests read this file, so the two implementations cannot drift apart. Each case fixes `now` (a UTC instant) and gives, per period, the current and previous windows exactly as they appear on the wire (KST offset, whole seconds) plus the first and last KST date of the series and its row count.",
+  "cases": [
+    {
+      "name": "Saturday evening, mid-week and mid-month",
+      "now": "2026-07-04T12:00:00Z",
+      "week": {
+        "current": { "from": "2026-06-29T00:00:00+09:00", "to": "2026-07-04T21:00:00+09:00" },
+        "previous": { "from": "2026-06-22T00:00:00+09:00", "to": "2026-06-27T21:00:00+09:00" },
+        "firstDate": "2026-06-29", "lastDate": "2026-07-04", "dateCount": 6
+      },
+      "month": {
+        "current": { "from": "2026-07-01T00:00:00+09:00", "to": "2026-07-04T21:00:00+09:00" },
+        "previous": { "from": "2026-06-01T00:00:00+09:00", "to": "2026-06-04T21:00:00+09:00" },
+        "firstDate": "2026-07-01", "lastDate": "2026-07-04", "dateCount": 4
+      }
+    },
+    {
+      "name": "one second before KST midnight",
+      "now": "2026-07-04T14:59:59Z",
+      "week": {
+        "current": { "from": "2026-06-29T00:00:00+09:00", "to": "2026-07-04T23:59:59+09:00" },
+        "previous": { "from": "2026-06-22T00:00:00+09:00", "to": "2026-06-27T23:59:59+09:00" },
+        "firstDate": "2026-06-29", "lastDate": "2026-07-04", "dateCount": 6
+      },
+      "month": {
+        "current": { "from": "2026-07-01T00:00:00+09:00", "to": "2026-07-04T23:59:59+09:00" },
+        "previous": { "from": "2026-06-01T00:00:00+09:00", "to": "2026-06-04T23:59:59+09:00" },
+        "firstDate": "2026-07-01", "lastDate": "2026-07-04", "dateCount": 4
+      }
+    },
+    {
+      "name": "KST midnight exactly — the UTC date is still the day before",
+      "now": "2026-07-04T15:00:00Z",
+      "week": {
+        "current": { "from": "2026-06-29T00:00:00+09:00", "to": "2026-07-05T00:00:00+09:00" },
+        "previous": { "from": "2026-06-22T00:00:00+09:00", "to": "2026-06-28T00:00:00+09:00" },
+        "firstDate": "2026-06-29", "lastDate": "2026-07-05", "dateCount": 7
+      },
+      "month": {
+        "current": { "from": "2026-07-01T00:00:00+09:00", "to": "2026-07-05T00:00:00+09:00" },
+        "previous": { "from": "2026-06-01T00:00:00+09:00", "to": "2026-06-05T00:00:00+09:00" },
+        "firstDate": "2026-07-01", "lastDate": "2026-07-05", "dateCount": 5
+      }
+    },
+    {
+      "name": "thirty seconds into Monday — a new week of one day",
+      "now": "2026-07-05T15:00:30Z",
+      "week": {
+        "current": { "from": "2026-07-06T00:00:00+09:00", "to": "2026-07-06T00:00:30+09:00" },
+        "previous": { "from": "2026-06-29T00:00:00+09:00", "to": "2026-06-29T00:00:30+09:00" },
+        "firstDate": "2026-07-06", "lastDate": "2026-07-06", "dateCount": 1
+      },
+      "month": {
+        "current": { "from": "2026-07-01T00:00:00+09:00", "to": "2026-07-06T00:00:30+09:00" },
+        "previous": { "from": "2026-06-01T00:00:00+09:00", "to": "2026-06-06T00:00:30+09:00" },
+        "firstDate": "2026-07-01", "lastDate": "2026-07-06", "dateCount": 6
+      }
+    },
+    {
+      "name": "March 30 — the previous month is shorter and stops at its end",
+      "now": "2026-03-30T05:00:00Z",
+      "week": {
+        "current": { "from": "2026-03-30T00:00:00+09:00", "to": "2026-03-30T14:00:00+09:00" },
+        "previous": { "from": "2026-03-23T00:00:00+09:00", "to": "2026-03-23T14:00:00+09:00" },
+        "firstDate": "2026-03-30", "lastDate": "2026-03-30", "dateCount": 1
+      },
+      "month": {
+        "current": { "from": "2026-03-01T00:00:00+09:00", "to": "2026-03-30T14:00:00+09:00" },
+        "previous": { "from": "2026-02-01T00:00:00+09:00", "to": "2026-03-01T00:00:00+09:00" },
+        "firstDate": "2026-03-01", "lastDate": "2026-03-30", "dateCount": 30
+      }
+    },
+    {
+      "name": "mid-January — the previous month is last year's December",
+      "now": "2026-01-15T03:00:00Z",
+      "week": {
+        "current": { "from": "2026-01-12T00:00:00+09:00", "to": "2026-01-15T12:00:00+09:00" },
+        "previous": { "from": "2026-01-05T00:00:00+09:00", "to": "2026-01-08T12:00:00+09:00" },
+        "firstDate": "2026-01-12", "lastDate": "2026-01-15", "dateCount": 4
+      },
+      "month": {
+        "current": { "from": "2026-01-01T00:00:00+09:00", "to": "2026-01-15T12:00:00+09:00" },
+        "previous": { "from": "2025-12-01T00:00:00+09:00", "to": "2025-12-15T12:00:00+09:00" },
+        "firstDate": "2026-01-01", "lastDate": "2026-01-15", "dateCount": 15
+      }
+    },
+    {
+      "name": "New Year's Day — the week started last year",
+      "now": "2026-01-01T00:30:00Z",
+      "week": {
+        "current": { "from": "2025-12-29T00:00:00+09:00", "to": "2026-01-01T09:30:00+09:00" },
+        "previous": { "from": "2025-12-22T00:00:00+09:00", "to": "2025-12-25T09:30:00+09:00" },
+        "firstDate": "2025-12-29", "lastDate": "2026-01-01", "dateCount": 4
+      },
+      "month": {
+        "current": { "from": "2026-01-01T00:00:00+09:00", "to": "2026-01-01T09:30:00+09:00" },
+        "previous": { "from": "2025-12-01T00:00:00+09:00", "to": "2025-12-01T09:30:00+09:00" },
+        "firstDate": "2026-01-01", "lastDate": "2026-01-01", "dateCount": 1
+      }
+    },
+    {
+      "name": "01:30 KST — UTC says yesterday, the series must say today",
+      "now": "2026-10-22T16:30:00Z",
+      "week": {
+        "current": { "from": "2026-10-19T00:00:00+09:00", "to": "2026-10-23T01:30:00+09:00" },
+        "previous": { "from": "2026-10-12T00:00:00+09:00", "to": "2026-10-16T01:30:00+09:00" },
+        "firstDate": "2026-10-19", "lastDate": "2026-10-23", "dateCount": 5
+      },
+      "month": {
+        "current": { "from": "2026-10-01T00:00:00+09:00", "to": "2026-10-23T01:30:00+09:00" },
+        "previous": { "from": "2026-09-01T00:00:00+09:00", "to": "2026-09-23T01:30:00+09:00" },
+        "firstDate": "2026-10-01", "lastDate": "2026-10-23", "dateCount": 23
+      }
+    }
+  ]
+}
