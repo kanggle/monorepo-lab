@@ -65,8 +65,17 @@ Make one dead-letter naming rule true everywhere — the platform rule, every co
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — ①~⑤ above, recorded with file:line.
-- [ ] **AC-1** — owner decision (+ ADR if a platform rule changes).
+- [x] **AC-0** — ①~⑤ above, recorded with file:line. → **Closed 2026-10-24 UTC** (origin/main `6f5431876`). The full table with file:line is `docs/adr/ADR-MONO-085-dead-letter-topic-suffix-dlt.md` § M; it is not copied here, so the two cannot drift. Summary:
+  - ① 25 consuming services · 116 `@KafkaListener`. `.dlq` = ecommerce 10 · iam 2 · fan 1 resolvers (50 listeners). `.DLT` = wms 5 resolvers · erp 16 / scm 6 / finance 2 `@RetryableTopic` · scm logistics 1 resolver (65 listeners). **No dead letter at all**: iam account-service (`LoginSucceededConsumer.java:49`, no error-handler bean). `libs/` 0. 🔴 The «Spring default» is two different things: `DeadLetterPublishingRecoverer` → `.DLT`, `@RetryableTopic` → **`-dlt`**. Every `.DLT` `@RetryableTopic` today declares the suffix explicitly.
+  - ② As drafted, plus **two skills** that teach `.dlq`: `.claude/skills/messaging/consumer-retry-dlq/SKILL.md:33-36,68-76` (*«not Spring Kafka's default `.DLT`»*) · `.claude/skills/service-types/event-consumer-setup/SKILL.md:71,125`.
+  - ③ Pre-creation only in wms (`docker-compose.yml:239` · `scripts/kafka-create-topics.sh:76`) and iam (`docker-compose.yml:244` · `docker-compose.e2e.yml:174`), both `.dlq`, 1 partition, 30-day retention. The other five projects auto-create everything (`KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`). The demo relay (`infra/demo/relay/mm2.properties`) mirrors no dead-letter topic.
+  - ④ Replay tooling 0 · code subscribing to a dead-letter topic 0. The one code reader is iam `security_dlq_depth` (`SecurityMetricsConfig.java:42-51`, six `.dlq` topics hard-coded) + its alert (`iam-platform/infra/prometheus/alert-rules.yml:140`). A copy of that alert sits in wms, which has no service emitting the metric. Contracts: `.DLT` 31 · `.dlq` 15. Test files: `.DLT` 17 · `.dlq` 7.
+  - ⑤ Cause not logged: wms admin · inbound · notification · outbound, scm logistics, and the five `@RetryableTopic` services (no `@DltHandler`; whether the default handler logs the cause was not measured). → **moved to `TASK-MONO-816`** (owner, selection window 2026-10-24: «별도 티켓으로 분리»).
+  - 🆕 **Not in the draft — partitions.** Pre-created dead-letter topics have 1 partition, sources have 3. iam security-service sends to the **same partition number** as the source (`KafkaConsumerConfig.java:111`), so records from partitions 1 and 2 aim at partitions that do not exist. ⚪ This is a static reading; the failure was not reproduced. ADR-MONO-085 D3 covers it under every option.
+- [x] **AC-1** — owner decision (+ ADR if a platform rule changes).
+  - 2026-10-24 UTC: the selection window offered (a)/(b)/(c), and the owner chose «(a) .DLT 로 통일 (Recommended)». 🔴 **That is not the ADR ACCEPT.** The question named no ADR, because none existed yet, and the chosen label carried the agent's «Recommended» (`platform/architecture-decision-rule.md` § The ACCEPTED Gate, shapes ② and ③). It caused `ADR-MONO-085` to be written as **PROPOSED**.
+  - ~~**Open:** the exact form `ADR-MONO-085 ACCEPTED — <A|B|C>`. Until it arrives this task stays in `ready/` and AC-2 does not start (HARDSTOP-09).~~
+  - → **Closed 2026-10-24 UTC: `ADR-MONO-085 ACCEPTED — A`** (owner, exact form; the PROPOSED PR #4513 was merged first so the number was fixed on main). OD-1 and OD-2 were not answered, so both take their defaults («no»). AC-2 is now authorised.
 - [ ] **AC-2** — implementation: rule, recoverers, provisioning, and readers all agree, plus a guard that fails when a consumer's dead-letter suffix and the pre-created topics disagree. The guard must bite: show it red on today's tree.
 - [ ] **AC-3** — after the next bake: one deliberately failed record lands on a pre-created dead-letter topic on the demo broker.
 
