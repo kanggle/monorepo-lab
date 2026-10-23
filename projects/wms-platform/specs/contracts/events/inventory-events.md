@@ -505,26 +505,44 @@ Effect: on full coverage, calls `ReserveStockUseCase.reserveForPickingEvent` →
 `Reservation` for all lines atomically and publishes `inventory.reserved`. Idempotent on
 `eventId` (dedupe table) and on `reservationId` (existing reservation short-circuits).
 
-### C3. `outbound.picking.cancelled`
+### C3. `outbound.picking.cancelled`  ⚠️ Cross-service contract (TASK-BE-651)
 
 Topic: `wms.outbound.picking.cancelled.v1`
-Authoritative schema: `specs/contracts/events/outbound-events.md`
+Authoritative schema: `specs/contracts/events/outbound-events.md` §4 (producer SoT — owned
+jointly with this consumer).
 
-Expected shape:
+**Authoritative consumed shape** (mirrors the producer byte-for-byte — the previous
+`pickingRequestId` / `warehouseId` description was stale: the producer has never sent either
+field on this event, so the consumer NPE'd on every real cancel, retried, and dead-lettered while
+the reservation stayed `RESERVED` and the saga stuck in `CANCELLATION_REQUESTED`; corrected by
+TASK-BE-651, the compensation-leg sibling of the BE-431 / BE-437 fixes):
 
 ```json
 {
   "eventId": "uuid",
   "eventType": "outbound.picking.cancelled",
   "payload": {
-    "pickingRequestId": "uuid",
-    "warehouseId": "uuid"
+    "sagaId": "uuid",
+    "reservationId": "uuid",
+    "orderId": "uuid",
+    "reason": "고객 주문 취소 요청"
   }
 }
 ```
 
-Effect: calls `ReleaseReservationUseCase` with `reason = CANCELLED`.
-Publishes `inventory.released`.
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `reservationId` | UUID | no | Equals outbound `PickingRequest.id` — the same value §C2 received as `reservationId` and stored as the reservation's `picking_request_id`. The consumer looks the reservation up **by `picking_request_id`**, not by the reservation's own `id` (the two differ). The producer does **not** send `pickingRequestId` |
+| `sagaId` / `orderId` / `reason` | — | — | Unused by inventory; ignored. 🔵 In v1 `sagaId` and `reservationId` usually carry the same UUID (the saga seeds `pickingRequestId` from its own id), but nothing guarantees it — never resolve by `sagaId` |
+
+> ⚠️ A missing or non-text `reservationId` is a malformed event → `IllegalArgumentException`
+> (non-retryable) → `<topic>.DLT` at once, not three retries of a `NullPointerException`.
+
+Effect: finds the reservation by `picking_request_id = reservationId` and calls
+`ReleaseReservationUseCase` with `reason = CANCELLED`. Publishes `inventory.released`.
+Idempotent on `eventId` (dedupe table); a reservation already in a terminal state
+(`RELEASED` / `CONFIRMED`) is a WARN no-op; an unknown `reservationId` (cancel arrived before
+§C2 was applied) is a WARN no-op.
 
 ### C4. `outbound.shipping.confirmed`  ⚠️ Cross-service contract (TASK-BE-437)
 

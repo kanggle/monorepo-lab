@@ -71,8 +71,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-651-inventory-picking-cancelled-does-not-release-reservation.md` — **READY (2026-10-23 UTC) — `TASK-BE-650` 33차 창 라이브에서 발견.** inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 못 푼다 — 사가 `CANCELLATION_REQUESTED` 정지 · 예약 `RESERVED` · DLT 토픽 없음 · 리스너 예외 미기록. 기존 `CancelOrderUseCase` 보상 경로(운영자 취소도 — AC-0). 구현 권장 Opus.
-
 - `TASK-BE-652-admin-settings-list-without-filters-500.md` — **READY (2026-10-23 UTC) — `TASK-BE-644` AC-3 시도 중 발견.** admin-service 조건 없는 `GET /settings` → 500(`AdminSettingJpaRepository.java:13-18`, PostgreSQL `character varying ~~ bytea`) — 콘솔 WMS 운영설정 화면이 설정을 못 읽는다. 구현 권장 Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
@@ -86,6 +84,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 > 2026-07-12: `TASK-BE-438`(outbox v1→v2) 과 `TASK-BE-458`(prometheus IT 재활성화) 이 **이미 `done/` 에 있는데도 이 표에 `**READY**` 로 남아 있었다** — 두 close chore 가 파일만 옮기고 표를 안 지웠다. 표를 읽고 큐를 고르는 사람에게 이건 **이미 끝난 일을 집어들라는 지시**다. 제거함(`TASK-MONO-363` 곁다리, 같은 "손-유지 목록이 조용히 틀린다" 클래스).
 
 ## in-progress
+
+- `TASK-BE-651-inventory-picking-cancelled-does-not-release-reservation.md` — **IN-PROGRESS (2026-10-23 UTC) — `TASK-BE-650` 33차 창 라이브에서 발견.** inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 못 푼다 — 사가 `CANCELLATION_REQUESTED` 정지 · 예약 `RESERVED` · DLT 토픽 없음 · 리스너 예외 미기록. 기존 `CancelOrderUseCase` 보상 경로(운영자 취소도 — AC-0). 구현 권장 Opus.
 
 ## review
 

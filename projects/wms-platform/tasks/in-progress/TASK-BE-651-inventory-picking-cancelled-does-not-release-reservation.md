@@ -8,7 +8,7 @@ inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 풀지 �
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
