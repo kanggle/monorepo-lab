@@ -222,7 +222,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-810-scm-overview-performance-metrics.md` — **`ADR-MONO-084` P5 SCM 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0 · 3 닫힘 · AC-1 · 2 = CI 의 Postgres IT · AC-4 = 다음 굽기 + 창). procurement-service `GET /api/procurement/po/metrics` — 발주 건수 · 금액(통화마다 한 키, 합계 한 번 반올림) = 제출 시각 · 지금 CANCELED 제외 / 입고 완료 = 이력의 →RECEIVED 시각(소유자 결정) · `GET /po` 에 `submittedFrom/To` · `excludeStatus` ⇒ 카드 목록 건수 = `poCount` · V7 인덱스 / 콘솔 `/scm` 실적 줄 · 카드 → 기간 걸린 목록. ASN 결함 → `TASK-SCM-BE-063`. 분석=Opus 5.5 / 구현=Opus.
+- `TASK-MONO-810-scm-overview-performance-metrics.md` — **`ADR-MONO-084` P5 SCM 실적 지표** (REVIEW, 2026-10-24 UTC · main `769829962` · AC-0~3 닫힘(AC-1 · 2 = CI 실 Postgres) · AC-4 = 다음 굽기 + 창). procurement-service `GET /api/procurement/po/metrics` — 발주 건수 · 금액(통화마다 한 키, 합계 한 번 반올림) = 제출 시각 · 지금 CANCELED 제외 / 입고 완료 = 이력의 →RECEIVED 시각(소유자 결정) · `GET /po` 에 `submittedFrom/To` · `excludeStatus` ⇒ 카드 목록 건수 = `poCount` · V7 인덱스 / 콘솔 `/scm` 실적 줄 · 카드 → 기간 걸린 목록. ASN 결함 → `TASK-SCM-BE-063`. 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · main `c76a60d73` · AC-0~3 닫힘(AC-1 · 2 = CI 실 MySQL) · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 

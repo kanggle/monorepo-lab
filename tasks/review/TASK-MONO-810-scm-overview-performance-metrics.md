@@ -74,8 +74,8 @@ SCM 개요(`/scm`)는 발주 · 재고 스냅샷 건수와 발주 상태 분포�
 # Acceptance Criteria
 
 - [x] **AC-0** — 재측정: 발주 상태 기계(`DRAFT` → … → `CLOSED` / `CANCELED`)의 전이 시각 저장 여부 · 발주 금액 필드와 통화(여러 통화면 ADR-084 D2 대로 통화마다 한 줄) · 입고 완료의 정의(`RECEIVED` 인가 `CLOSED` 인가) · 테넌트 범위. 결과 → 이 파일 + 계약 문구.
-- [ ] **AC-1** — 🔴 대조군: `DRAFT` · `CANCELED` 발주는 `poCount` · `poAmount` 를 안 움직인다. 제출 하나 → 움직인다.
-- [ ] **AC-2** — 날짜 필터 시험(경계 포함/제외 · 다른 필터와 조합) · 경계 시험(`Clock` 주입, `TZ=UTC` · `TZ=Asia/Seoul`) · 테넌트 격리 · 인가.
+- [x] **AC-1** — 🔴 대조군: `DRAFT` · `CANCELED` 발주는 `poCount` · `poAmount` 를 안 움직인다. 제출 하나 → 움직인다.
+- [x] **AC-2** — 날짜 필터 시험(경계 포함/제외 · 다른 필터와 조합) · 경계 시험(`Clock` 주입, `TZ=UTC` · `TZ=Asia/Seoul`) · 테넌트 격리 · 인가.
 - [x] **AC-3** — 콘솔: 실적 줄 · 칸 실패 · 401 · 샘플 모드 응답 · 카드 → 기간 걸린 목록.
 - [ ] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다.
 
@@ -120,6 +120,11 @@ SCM 개요(`/scm`)는 발주 · 재고 스냅샷 건수와 발주 상태 분포�
 
 ## 배포 상태
 
-- `main` ⏳ 이 PR.
+- `main` ✅ `769829962`(PR #4515, 머지 직전 실패 0 · 27 pass / 40 skip).
 - AMI ⚪ 다음 굽기(procurement-service 새 이미지 + V7 인덱스). 굽기 전 데모의 실적 줄은 «불러올 수 없음». 🔵 옛 백엔드는 `submittedFrom` · `submittedTo` · `excludeStatus` 를 모르는 인자로 **조용히 무시**하므로, 손으로 만든 그 주소는 기간 없는 전체 목록을 보인다 — 다만 그때는 실적 줄이 degraded 라 카드(링크)가 없어 화면에서 그 경로로 갈 수 없다.
 - 라이브 ⚪ 데모 창: 신선 시드면 이번 달 발주 2(SUBMITTED · CONFIRMED) · 금액 KRW 200,000 · 입고 완료 0.
+
+## CI 판정 (PR #4515 `49dda47f1`, run 40018661633)
+
+- `Integration (scm-platform, Testcontainers)` 초록 · `E2E (scm-platform v1 cross-service smoke)` 초록. `PurchaseOrderMetricsIntegrationTest` 는 이 서비스의 IT 가 `DockerAvailableCondition` 으로 조용히 빠질 수 있어 초록만 보지 않았다 — job 로그에 그 클래스 실행 줄 5 곳 · `SKIPPED` / `FAILED` 0. ⇒ AC-1(DRAFT · 제출 뒤 취소 대조군) · AC-2(날짜 필터 경계 · 다른 필터와 조합 · 테넌트 격리 · 카드 목록 = `poCount`)가 **실 Postgres 에서 통과** — 닫힘. 위험으로 꼽았던 `CAST(:Instant AS string)` 바인딩 · 임베디드 `totalAmount.amount` 생성자식도 그 IT 가 앱 기동과 함께 통과시켰다.
+- AC-4(굽기 · 데모 창 라이브)가 남아 review 유지.
