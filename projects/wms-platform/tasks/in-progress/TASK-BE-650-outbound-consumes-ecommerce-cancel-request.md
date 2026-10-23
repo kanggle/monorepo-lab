@@ -61,8 +61,13 @@ backend
 # Acceptance Criteria
 
 - [x] **AC-0** — `CancelOrderService` 의 권한 판정이 시스템 호출자(보안 컨텍스트 없음)를 어떻게 다루는지 측정한다(file:line). D9 의 «internal = unrestricted» 와 충돌하지 않게, 시스템 요청이 ADMIN 범위로 새지 않는지 확인한다. 측정 2026-10-23 UTC — 아래 § AC-0 측정 결과. 결론: **아키텍처 변경 없이** 명령에 `callerRoles = {ROLE_OUTBOUND_WRITE}` 를 넣으면 WRITE 범위로 고정된다.
-- [ ] **AC-1** — 계약 커밋이 구현보다 먼저.
-- [ ] **AC-2** — 구현 + 시험 · CI 초록 (시험만 담은 커밋으로 CI 빨강을 먼저 본다).
+- [x] **AC-1** — 계약 커밋이 구현보다 먼저. ✅ 2026-10-23 UTC — 브랜치 `task/be-650-wms-cancel-consumer` 커밋 순서: `c3d3bd250`(계약만: 이커머스 `fulfillment-events.md` § Event 3 · WMS `ecommerce-fulfillment-subscriptions.md` · `outbound-events.md` · `architecture.md` · events `README.md`) → `955c985c1`(시험만) → 구현 커밋. 🔴 PR 이 스쿼시 머지되면 main 에는 한 커밋이 된다 — 순서의 증거는 PR 의 커밋 목록이다.
+- [ ] **AC-2** — 구현 + 시험 · CI 초록 (시험만 담은 커밋으로 CI 빨강을 먼저 본다). 🟡 2026-10-23 UTC — 구현 · 시험은 들어갔다. **CI 는 아직 안 봤다**(푸시 전). 로컬에서 돈 것:
+  - `./gradlew :projects:wms-platform:apps:outbound-service:test --no-daemon` → rc=0, BUILD SUCCESSFUL. 결과 XML 51 클래스 · 321 시험 · 실패 0 · 오류 0 · 건너뜀 4(`OrderJpaRepositoryFilterIT` — 이 티켓과 무관한 기존 건너뜀). 새 시험: `FulfillmentCancelRequestedConsumerTest` 15 · `FulfillmentCancelRequestedConsumerCancelPathTest` 6, 모두 통과.
+  - `bash scripts/check-cross-project-topic-relay.sh` → rc=0 (19 routes / 5 flows). 물기 확인: 이 브랜치 전의 `mm2.properties` 로 돌리면 rc=1, `listener route [ecommerce->wms ecommerce.fulfillment.cancel-requested.v1] 가 릴레이 화이트리스트에 없다`.
+  - ⚪ **돌지 않은 것**: `integrationTest` 레인(Testcontainers — `ListenerTopicsPrecreatedIT` 가 새 토픽 목록 줄을 확인하는 곳) 은 로컬에서 돌리지 않았다. CI 전용으로 본다.
+  - ⚪ **재지 못한 것**: «ADMIN 을 넣으면 시험이 빨강이 되는가» 변이 확인. `SYSTEM_ROLES` 에 ADMIN 을 넣는 임시 편집을 자동 모드 분류기가 막았다(권한 상수 편집). 그래서 측정하지 않았다. 근거는 추론뿐이다: `containsExactly("ROLE_OUTBOUND_WRITE")` 는 원소가 둘인 집합에서 실패하고, `CancelPathTest` 의 피킹 뒤 시험은 ADMIN 이 있으면 주문이 `CANCELLED` 가 되어 실패한다.
+  - 시험만 담은 커밋 `955c985c1` 은 소비자 클래스가 없어서 **컴파일 단계에서** 빨강이 된다(로컬에서 그 커밋만 따로 빌드해 보지는 않았다).
 - [ ] **AC-3** — 굽기 뒤 라이브.
 
 ## AC-0 측정 결과 (2026-10-23 UTC)
@@ -101,6 +106,7 @@ backend
 
 - WMS 가 자동 취소하면 `wms.outbound.order.cancelled.v1` 이 이커머스로 돌아간다. order-service 는 이미 `CANCELLED` 인 주문을 no-op 으로 넘기므로(`OrderBackorderCancellationService.java:55-58`) 루프가 생기지 않는다. shipping-service 쪽 경보 억제는 `TASK-BE-649` 가 맡는다.
 - 출하 확정과 경합하면 `SHIPPED` 가 된다. 이것은 no-op 이고 경보만 남긴다.
+- 🔴 **열린 질문 (2026-10-23 UTC, 구현 중 발견) — 토픽 사이 순서.** 취소 요청과 출고 요청(`ecommerce.fulfillment.requested.v1`)은 다른 토픽이라 Kafka 가 순서를 보장하지 않는다. 취소 요청이 먼저 소비되면 `findByOrderNo` 가 비어 no-op 으로 끝나고, 뒤이어 출고 요청이 주문을 만든다. 그 주문을 취소할 것은 남지 않는다. ADR 과 이 티켓은 이 창을 다루지 않는다. 그래서 계약 두 곳에 «기록만, v1 에서 닫지 않음» 으로 적었고 코드는 만들지 않았다. 닫을지는 소유자가 정한다.
 
 # Failure Scenarios
 

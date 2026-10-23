@@ -80,6 +80,7 @@ public abstract class OutboundServiceIntegrationBase {
     protected static final List<String> LISTENER_TOPICS = List.of(
             "ecommerce.fulfillment.requested.v1",
             "ecommerce.shipping.manual-confirm-requested.v1",
+            "ecommerce.fulfillment.cancel-requested.v1",
             "wms.inventory.confirmed.v1",
             "wms.inventory.released.v1",
             "wms.inventory.reserved.v1",
