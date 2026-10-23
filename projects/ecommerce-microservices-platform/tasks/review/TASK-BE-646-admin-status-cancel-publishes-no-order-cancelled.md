@@ -163,3 +163,10 @@ AC-1 은 CI 의 ecommerce 잡 초록을 본 뒤 닫는다. AC-2 는 굽기 뒤 �
   - ④ 운영자 «대기 → 확정» 이 `OrderConfirmed` 를 내지 않는 문제 = **운영자 확정 없애기 · 티켓**(서버 거부 + 콘솔 선택지 제거 — 굽기 전 구현) → 별도 티켓.
   - 곁 (b) 배송 서비스가 `order.order.cancelled` 를 소비하지 않는 문제 = **ready 티켓만**(출고 취소 흐름 설계 — 이번 굽기에 싣지 않음) → 별도 티켓.
 - 열림: **AC-2**(굽기 뒤 라이브 — 콘솔로 주문 하나 취소 → `OrderCancelled` · 환불 · 재고 해제; 이미 이벤트 없이 취소된 주문이 있는지 세 DB 대조 조회는 § AC-0 ③).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `ab7f5d26c`(#4480) 는 `283fd39cf` 의 조상.
+- **AC-2 🟡 절반** — `CONFIRMED` 주문 `49eae2f6-8813-43b4-94f9-1b333d3afa63` 을 콘솔에서 취소 → 200 `CANCELLED` · 웹스토어 결제 정보 **«환불 완료» 환불일 13:16:22** · 배송 `CANCELLED`.
+- 미측정: `order_outbox` 의 `OrderCancelled(OPERATOR)` 행 · 상품 예약 해제 · AC-0 ③ 세 DB 조회.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

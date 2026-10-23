@@ -140,3 +140,10 @@ IdP 가 모르는 hint 이면 `{"error":"invalid_token","error_description":"Ope
 - **AC-1 «정상 → 302» 의 소유자 사례** — 위 AC-1 참고. 배포 뒤 첫 창에서 그 브라우저의 응답 본문(또는 auth-service INFO `RP-initiated logout rejected: error=… description=…`)이 안쪽 원인을 말해 준다 → D1 (b) 화면 · (c) 관대 처리 재결정.
 - **AC-3** — 굽기 · 라이브(콘솔 로그아웃 → `console.hubwang.com/login`), 다음 창.
 - 🔵 디자인 메모: `OidcLogoutEndpointRealServerIntegrationTest` 는 형제 IT 와 달리 `test` 프로필을 안 쓴다(위 이유). CI 에서 기동 · 5/5 확인됨.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `c118382d8`(#4440) 는 `283fd39cf` 의 조상.
+- **AC-3 ✅** — 콘솔 계정 메뉴 → 로그아웃 → `https://console.hubwang.com/login` 착지. 대조: 잘못된 `GET /connect/logout?id_token_hint=garbage…` → **400 JSON `invalid_token`**(내부 자격 401 아님).
+- **AC-1 — 열림 그대로.** «소유자 브라우저 hint 사례» 절반은 이번 창에서 재지 않았다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

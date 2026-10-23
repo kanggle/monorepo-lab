@@ -113,3 +113,14 @@ backend
 
 1. 시스템 요청이 ADMIN 범위로 처리돼 포장된 물건이 사람 확인 없이 취소된다 → AC-0 · 시험이 막는다.
 2. 계약 없이 구현이 먼저 머지된다 → AC-1.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `bb4f73185`(#4488) 는 `283fd39cf` 의 조상.
+- **AC-3 ❌ 일부 실패.**
+  - ✅ X-A 대로인 부분: 출고 `01a168e0-1a3a-…`(orderNo `49eae2f6…`) 가 `PICKING` 에서 자동 취소 — `FulfillmentCancelRequestedConsumer fulfillment_cancel_applied … previousStatus=PICKING`, `CancelOrderService order_cancelled … reservationHeld=true`.
+  - ❌ **예약이 풀리지 않는다**: 사가가 `CANCELLATION_REQUESTED` 에 멈춤(13:22 sweeper 재발행 1회), inventory `reservation 2f397b48-… status=RESERVED`, SKU …0013 `reservedQty=1`. inventory-service 가 `wms.outbound.picking.cancelled.v1` 을 4회 재시도 뒤 DLT 로 보냄 — DLT 토픽 `wms.outbound.picking.cancelled.v1.DLT` 는 **없음**(UNKNOWN_TOPIC). 예외 본문은 로그에 **안 찍힘**.
+  - 메시지 페이로드 `reservationId = 01a168e0-1a3e-75f9-b61f-66166cd03ba1`(= sagaId) 인데 inventory 의 실제 예약 id 는 `2f397b48-…`(그 sagaId 는 `picking_request_id` 칼럼) — 창 기록은 «불일치가 유력 원인(추정, 소비자 코드 미확인)».
+  - 이 경로는 이 티켓이 새로 만든 것이 아니라 기존 `CancelOrderUseCase` 보상 경로다(운영자 취소도 영향받을 것으로 추정).
+- 새 티켓: **`TASK-BE-651`**(inventory-service 가 `picking.cancelled` 로 예약을 못 푼다 · DLT 토픽 없음 · 리스너 예외 미기록). 그것이 실린 뒤 이 AC-3 의 «예약 해제» 를 다시 잰다. PICKED–PACKED 거부(`ALERT ecommerce cancel request refused after pick`) 갈래는 이번 창에 그 상태의 주문이 없어 재지 않았다.
+- ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).

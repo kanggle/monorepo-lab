@@ -8,7 +8,7 @@ admin-service 일별 처리량 누계가 «마지막 이벤트 시각» 조건 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -171,3 +171,17 @@ backend
 - 이어서 스펙 `528c12c2f` · 수선 `2aff22e9b` 를 앞으로 푸시(강제 아님) → 같은 PR 의 head `2aff22e9b` 체크 **pending 0 · fail 0** → AC-2 닫힘.
 - `TASK-BE-645`(#4474) · 티켓 PR(#4476) 머지 뒤 main 을 이 브랜치에 병합 — 충돌 없음.
 - 열림: **AC-3**(굽기 뒤 라이브 — 데모 시드 · 적치 · 출하 뒤 누계가 이벤트 수와 같은가). 서버 변경 = 굽기 대기.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `a0383c947`(#4475) 는 `283fd39cf` 의 조상.
+- **AC-3 ✅** — `admin_db`: `admin_event_dedupe` 의 `inbound.putaway.completed` = **87** · `outbound.shipping.confirmed` = **1**. `admin_throughput_inbound_daily` 2026-10-23: WH …0001 = 1 + WH …0002 = 86 = **87**. `admin_throughput_outbound_daily`: WH …0001 = **1**. 이벤트 수와 누계가 입고 · 출고 모두 일치.
+- AC-0 ③(데모 창 필요로 ⚪ 였던 칸)도 위 대조로 채워졌다 — 출고 쪽은 고치기 전에 결과 기록이 없었다(AC-0 ②), 지금은 dedupe 행 수 = 누계.
+
+### 닫기 — 4차원 확인 (2026-10-23 UTC)
+
+- (a) PR #4475 `state=MERGED` · `mergedAt` 2026-10-22T16:56:59Z.
+- (b) 머지 커밋 `a0383c947` = `origin/main` 조상(`git merge-base --is-ancestor`), 굽기 커밋 `283fd39cf` 의 조상이기도 하다.
+- (c) 머지된 PR 의 `statusCheckRollup` 67 칸 중 실패 0 (SUCCESS 17 · SKIPPED 50).
+- (d) `# Acceptance Criteria` 를 열어 읽음 — AC-0 · AC-1 · AC-2 ✅(기존 — AC-2 의 CI 부분은 § CI 빨강 → 초록 증거) · AC-3 ✅(위). 체크 칸은 `review/` 동결 규칙으로 고치지 않았다 — 닫힘은 이 절이 기록한다.
+- ⇒ `review/ → done/`.

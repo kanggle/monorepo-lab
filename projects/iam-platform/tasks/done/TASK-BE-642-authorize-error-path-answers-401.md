@@ -8,7 +8,7 @@ TASK-BE-642
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -152,3 +152,21 @@ Cache-Control: no-store
 - **AC-1 의 «형식은 소유자 결정대로»** — 위 본문을 소유자에게 보이고 확인받는다(JSON 유지 / HTML 화면은 별도 티켓).
 - **AC-3** — 굽기 · 라이브(미등록 콜백 하나로 400 확인), 다음 창.
 - 🔵 남는 서술: `infra/demo/seed-demo-domain.sh:21` 헤더의 «401» 예시는 배포 뒤 낡는다(루트 경로 — 고치려면 monorepo-level 정정). 적용된 마이그레이션 `V0031` · `V0033` · `V0034` 헤더는 불변(체크섬).
+
+## CORRECTION (2026-10-23 UTC)
+
+- **AC-1 «형식은 소유자 결정대로» — 닫힘.** 소유자가 **2026-10-21** 에 § 사용자에게 보이는 본문 의 형식(400 OAuth JSON `{error, error_description}` — `TASK-BE-641` D1 (a) 와 같은 모양)을 승인했다(소유자의 상시 지시). 위 AC-1 의 «🔴 아직 안 닫혔다» 와 § 열린 것 첫 줄은 그 승인을 이 파일에 적기 전의 기록이다.
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `d3988188a`(#4445) 는 `283fd39cf` 의 조상.
+- **AC-3 ✅** — `GET https://auth.hubwang.com/oauth2/authorize?client_id=no-such-client&redirect_uri=https://evil.example/cb…` → **400 `application/json`** `{"error":"invalid_request","error_description":"OAuth 2.0 Parameter: client_id"}` (굽기 전 같은 갈래 = 401 내부 자격).
+- 🔵 잰 입력은 «모르는 `client_id` + 미등록 콜백» 이라 거절 사유는 `client_id` 다. 등록된 client 에 미등록 콜백만 준 갈래(`redirect_uri`)는 라이브로 따로 재지 않았다 — 같은 핸들러(`AuthorizationEndpointErrorResponseHandler`)의 같은 400 갈래이고, CI 실제 Tomcat 시험이 그 갈래의 400 `redirect_uri` 를 단언한다(§ 시험).
+
+### 닫기 — 4차원 확인 (2026-10-23 UTC)
+
+- (a) PR #4445 `state=MERGED` · `mergedAt` 2026-10-21T11:23:23Z.
+- (b) 머지 커밋 `d3988188a` = `origin/main` 조상(`git merge-base --is-ancestor`), 굽기 커밋 `283fd39cf` 의 조상이기도 하다.
+- (c) 머지된 PR 의 `statusCheckRollup` 68 칸 중 실패 0 (SUCCESS 18 · SKIPPED 50).
+- (d) `# Acceptance Criteria` 를 열어 읽음 — AC-0 · AC-2 ✅(기존) · AC-1 ✅(위 CORRECTION) · AC-3 ✅(위). 체크 칸은 `review/` 동결 규칙으로 고치지 않았다 — 닫힘은 이 절이 기록한다.
+- ⇒ `review/ → done/`.

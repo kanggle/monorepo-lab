@@ -8,7 +8,7 @@ TASK-BE-648
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -130,3 +130,16 @@ backend
 - 계약 `ee066be17` · 수선 `5485efe34` 를 앞으로 푸시 → head `5485efe34` 체크 pending 0 · fail 0 → AC-1 닫힘.
 - 콘솔 짝 `TASK-PC-FE-366`(#4484 `c8b7262d8`)을 **먼저** 머지 — 콘솔은 더 이상 «확정» 을 내지 않는다.
 - 열림: **AC-2**(굽기 뒤 라이브 — 운영자 API 로 대기 주문 확정 → 400).
+
+## 라이브 확인 (2026-10-23 UTC · 33차 창)
+
+- 배포 상태: 굽기 `283fd39cf` → AMI `ami-02b3ba00a3b2ff622`(51분 36초 · 태그 RepoCommit 일치) · 핀 PR #4498(`c5e3ddad3`) · 인스턴스 `i-0f39aec49ddbaa899`. impl 머지 `40992f1a6`(#4485) 는 `283fd39cf` 의 조상.
+- **AC-2 ✅** — `PENDING` 주문 `086a57a6-…` 에 콘솔 BFF `POST /api/ecommerce/orders/{id}/status {"status":"CONFIRMED"}` → **400 `INVALID_ORDER_REQUEST`** «An order cannot be confirmed by an operator (current status: PENDING) …».
+
+### 닫기 — 4차원 확인 (2026-10-23 UTC)
+
+- (a) PR #4485 `state=MERGED` · `mergedAt` 2026-10-23T01:58:26Z.
+- (b) 머지 커밋 `40992f1a6` = `origin/main` 조상(`git merge-base --is-ancestor`), 굽기 커밋 `283fd39cf` 의 조상이기도 하다.
+- (c) 머지된 PR 의 `statusCheckRollup` 69 칸 중 실패 0 (SUCCESS 19 · SKIPPED 50).
+- (d) `# Acceptance Criteria` 를 열어 읽음 — AC-0 · AC-1 ✅(기존) · AC-2 ✅(위). 체크 칸은 `review/` 동결 규칙으로 고치지 않았다 — 닫힘은 이 절이 기록한다.
+- ⇒ `review/ → done/`.
