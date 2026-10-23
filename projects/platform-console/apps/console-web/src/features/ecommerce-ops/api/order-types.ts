@@ -20,7 +20,7 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
  * An unknown / future `status` enum parses to a generic string and NEVER throws.
  *
  * State machine — OPERATOR-INITIATED transitions only (Order.java + ADR-MONO-022 §D7):
- *   PENDING → {CONFIRMED, CANCELLED}
+ *   PENDING → {CANCELLED}   (confirmation is the payment + stock-reservation saga's, not the operator's — TASK-PC-FE-366 / TASK-BE-648)
  *   BACKORDERED → {CANCELLED}   (held for stock; restock confirms it, not the operator)
  *   CONFIRMED → {CANCELLED}
  *   SHIPPED, DELIVERED, CANCELLED, STUCK_RECOVERY_FAILED → (no operator action)
@@ -76,7 +76,10 @@ export function orderStatusTone(status: string): StatusTone {
  * read-only.
  */
 const TRANSITIONS: Record<string, OrderStatus[]> = {
-  PENDING: ['CONFIRMED', 'CANCELLED'],
+  // TASK-PC-FE-366: no operator CONFIRMED. An operator confirm skips the stock
+  // reservation and `OrderConfirmed`, so a later payment never confirms the order
+  // (server pair TASK-BE-648). Confirmation is automatic after payment.
+  PENDING: ['CANCELLED'],
   // BACKORDERED (TASK-PC-FE-365): the operator may only CANCEL a held order.
   // Its way to CONFIRMED is the restock re-reservation saga (order-events.md §
   // "Order lifecycle & BACKORDERED": "may be cancelled by an operator"); the
