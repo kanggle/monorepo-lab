@@ -12,7 +12,7 @@ import org.springframework.util.backoff.ExponentialBackOff;
 
 /**
  * Retry → DLQ error handling. A malformed event (Jackson / illegal-argument) is
- * non-retryable and routed straight to {@code <topic>.dlq}; an unattributable accrual
+ * non-retryable and routed straight to {@code <topic>.DLT}; an unattributable accrual
  * (missing snapshot, F2) is retryable (the snapshot may still arrive) and exhausts to
  * DLQ. One bad event never fails the whole pipeline (consumer rule).
  */
@@ -28,7 +28,7 @@ public class KafkaConsumerConfig {
                     log.error("Sending record to DLQ. topic={}, offset={}, error={}",
                             record.topic(), record.offset(), ex.getMessage());
                     return new org.apache.kafka.common.TopicPartition(
-                            record.topic() + ".dlq", record.partition());
+                            record.topic() + ".DLT", -1);
                 });
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);

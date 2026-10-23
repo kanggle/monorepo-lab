@@ -96,7 +96,7 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
 
     private static final String GROUP_ID = "auth-service-it-be601";
     private static final String TOPIC = "account.locked";
-    private static final String DLQ = "account.locked.dlq";
+    private static final String DLQ = "account.locked.DLT";
 
     @Container
     @SuppressWarnings("resource")
@@ -212,7 +212,7 @@ class AccountLockedSessionRevocationIntegrationTest extends AbstractIntegrationT
     }
 
     @Test
-    @DisplayName("tenantId 없는 봉투 → account.locked.dlq 로 간다 (재시도 없이)")
+    @DisplayName("tenantId 없는 봉투 → account.locked.DLT 로 간다 (재시도 없이)")
     void missingTenant_isDeadLettered() {
         String key = "be601-dlq-" + UUID.randomUUID();
         publish(key, "{\"eventId\":\"" + UUID.randomUUID() + "\",\"accountId\":\"" + key

@@ -45,7 +45,7 @@ spring:
       properties:
         isolation.level: read_committed
     producer:
-      # Producer used ONLY by the DLQ recoverer (<topic>.dlq). This service
+      # Producer used ONLY by the DLQ recoverer (<topic>.DLT). This service
       # publishes NO domain events (terminal consumer).
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer

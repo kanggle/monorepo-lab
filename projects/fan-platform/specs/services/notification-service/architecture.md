@@ -105,7 +105,7 @@ com.example.fanplatform.notification/
 └── infrastructure/
     ├── config/JpaConfig.java + ClockConfig.java + KafkaConsumerConfig.java
     │                                             ← KafkaConsumerConfig owns the single DefaultErrorHandler
-    │                                               (retry backoff + DeadLetterPublishingRecoverer → <topic>.dlq)
+    │                                               (retry backoff + DeadLetterPublishingRecoverer → <topic>.DLT)
     │                                               shared by BOTH listener groups — topic-agnostic, no per-family class
     ├── jpa/                                      ← Spring Data adapter for NotificationRepository
     ├── messaging/
@@ -131,7 +131,7 @@ com.example.fanplatform.notification/
 
 - H2 / any in-memory DB (`platform/testing-strategy.md` — Postgres only).
 - `spring-cloud-starter-gateway` (downstream service, not an edge gateway).
-- An **outbox/producer** path — notification-service is a terminal consumer; it MUST NOT publish domain events. (The only Kafka *producer* use is the DLQ publisher writing to `<topic>.dlq`, which is infrastructure error-handling, not a domain event.)
+- An **outbox/producer** path — notification-service is a terminal consumer; it MUST NOT publish domain events. (The only Kafka *producer* use is the DLQ publisher writing to `<topic>.DLT`, which is infrastructure error-handling, not a domain event.)
 - Any real push/email SDK (FCM/APNs/SES/SMTP) — channels are deterministic logged mocks in v1; a real adapter is a future increment that re-implements `NotificationChannelPort`.
 - Cross-service repository imports (notification-service does not reach into membership/community/artist tables — it reacts to their events only).
 - `spring-boot-starter-data-redis` — no cache case in v1.
@@ -317,13 +317,13 @@ behaviour for membership events (one event → one recipient → one type).
 - Transient handler failures (e.g., a channel mock throwing a simulated transient
   error, a DB blip): in-process exponential backoff with jitter, **max 3 retries**.
 - Persistent failures (retries exhausted) and **un-parseable / unsupported-schema**
-  envelopes: routed to the DLQ topic **`<topic>.dlq`** (e.g.
-  `fan.membership.activated.v1.dlq`, `community.comment.added.v1.dlq`) with the
+  envelopes: routed to the DLQ topic **`<topic>.DLT`** (e.g.
+  `fan.membership.activated.v1.DLT`, `community.comment.added.v1.DLT`) with the
   **full original envelope + failure reason** header. The event is then marked
   consumed (offset committed) so the partition is never poisoned.
   The mechanism is a **single topic-agnostic** `DefaultErrorHandler` bean in
   `infrastructure/config/KafkaConsumerConfig` (backoff + a
-  `DeadLetterPublishingRecoverer` whose destination resolver appends `.dlq` to the
+  `DeadLetterPublishingRecoverer` whose destination resolver appends `.DLT` to the
   source topic), auto-wired into the listener container factory. It therefore
   covers **both** consumer groups with no per-family publisher class; the
   `MalformedEventException` / `UnsupportedSchemaVersionException` non-retryable
@@ -500,8 +500,8 @@ the same tenant+account scope.
 |---|---|
 | Duplicate event delivery (at-least-once) | idempotent no-op — no second notification, no second dispatch (`processed_events` + unique `sourceEventId`) |
 | Channel mock transient failure | bounded in-process retry (≤3, backoff+jitter); the inbox row is already durable |
-| Channel failure after retries exhausted | event → `<topic>.dlq` with envelope + reason; offset committed; `dlq_depth` alert |
-| Un-parseable envelope / unsupported `schemaVersion` | event → `<topic>.dlq` (never silent drop) |
+| Channel failure after retries exhausted | event → `<topic>.DLT` with envelope + reason; offset committed; `dlq_depth` alert |
+| Un-parseable envelope / unsupported `schemaVersion` | event → `<topic>.DLT` (never silent drop) |
 | Community event where the actor IS the post author (self-comment / self-reaction / self-mention) | no notification; logged; event marked processed (AC-3) |
 | Community event with **no** `postAuthorAccountId` (emitted before the TASK-FAN-BE-026 producer enrichment) | no addressable recipient → skip + log + mark processed. **NOT** a DLQ case — it is an expected rollout artifact, not a malformed event |
 | Community event whose recipient account is deleted/inactive | the notification row is still written (no cross-service read exists to detect it); it is simply never fetched by that account's inbox |
@@ -556,7 +556,7 @@ the same tenant+account scope.
   - `IdempotentConsumeIntegrationTest` — re-deliver the same `eventId` → single
     notification row (at-least-once tolerated).
   - `DlqRoutingIntegrationTest` — a forced persistent handler failure (or
-    unsupported `schemaVersion`) → event lands in `<topic>.dlq` with the original
+    unsupported `schemaVersion`) → event lands in `<topic>.DLT` with the original
     envelope + failure reason; partition continues.
   - `InboxApiIntegrationTest` — list (tenant+account scoped, status filter, paging)
     + mark-read; cross-account/cross-tenant → 404.

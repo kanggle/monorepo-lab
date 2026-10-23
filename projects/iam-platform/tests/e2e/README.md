@@ -46,7 +46,7 @@ the running cluster, and tears the stack down at JVM shutdown.
 | `GoldenPathE2ETest`               | JWKS → enroll → verify → login → refresh → logout → token revoked    |
 | `CrossServiceBulkLockE2ETest`     | admin bulk-lock → account_db LOCKED → security_db account_lock_history|
 | `RefreshReuseDetectionE2ETest`    | rotate refresh, then reuse original → chain-wide revoke               |
-| `DlqHandlingE2ETest`              | malformed `auth.login.succeeded` → `.dlq` topic arrival + observability|
+| `DlqHandlingE2ETest`              | malformed `auth.login.succeeded` → `.DLT` topic arrival + observability|
 
 ## Fixtures
 
@@ -64,7 +64,7 @@ the running cluster, and tears the stack down at JVM shutdown.
 - The TOTP step boundary is guarded by a 2.5s sleep when within the last 2s of
   the 30s window; worst-case run time adds ~3s.
 - The DLQ scenario relies on Spring Kafka's default `DefaultErrorHandler` routing
-  malformed payloads to `<topic>.dlq`. If a service overrides the handler to a
+  malformed payloads to `<topic>.DLT`. If a service overrides the handler to a
   different naming scheme, adjust `DLQ_TOPIC` accordingly.
 - bootJar staleness is NOT auto-detected. Re-run the `bootJar` command above
   before invoking `:tests:e2e:test` if service code changed.

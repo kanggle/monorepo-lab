@@ -27,7 +27,7 @@ import static org.awaitility.Awaitility.await;
  * DLQ handling E2E (TASK-BE-041c §5).
  *
  *   1. Produce invalid JSON to {@code auth.login.succeeded}
- *   2. Awaitility-poll {@code auth.login.succeeded.dlq} for arrival
+ *   2. Awaitility-poll {@code auth.login.succeeded.DLT} for arrival
  *   3. security-service /actuator/metrics/kafka.consumer.lag → 200 + value >= 0
  *   4. admin-service /actuator/health/circuitbreakers → 200
  */
@@ -35,7 +35,7 @@ import static org.awaitility.Awaitility.await;
 class DlqHandlingE2ETest extends E2EBase {
 
     private static final String SOURCE_TOPIC = "auth.login.succeeded";
-    private static final String DLQ_TOPIC = "auth.login.succeeded.dlq";
+    private static final String DLQ_TOPIC = "auth.login.succeeded.DLT";
 
     @Test
     @DisplayName("잘못된 JSON 메시지가 DLQ로 이관되고 관측 엔드포인트가 노출된다")

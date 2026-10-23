@@ -241,7 +241,7 @@ services:
 
         echo "=== Creating DLQ topics ==="
         for t in "$${TOPICS[@]}"; do
-          create_topic "$$t.dlq" $$DLQ_PARTITIONS $$DLQ_RETENTION_MS
+          create_topic "$$t.DLT" $$DLQ_PARTITIONS $$DLQ_RETENTION_MS
         done
 
         echo "=== Topic creation complete ==="

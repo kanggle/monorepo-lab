@@ -3,7 +3,7 @@ package com.example.fanplatform.notification.application.consumer;
 /**
  * Raised when an envelope's {@code schemaVersion} is not supported by this
  * consumer (architecture.md § Schema versioning). Treated as <b>non-retryable</b>
- * by the {@code DefaultErrorHandler} → routed straight to {@code <topic>.dlq}
+ * by the {@code DefaultErrorHandler} → routed straight to {@code <topic>.DLT}
  * (never silently dropped).
  */
 public class UnsupportedSchemaVersionException extends RuntimeException {

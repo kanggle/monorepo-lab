@@ -154,7 +154,7 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 ### consumer/
 - 각 consumer는 단일 topic 구독: `auth.login.attempted`, `auth.login.failed`, `auth.login.succeeded`, `auth.token.refreshed`, `auth.token.reuse.detected`, `account.locked` (TASK-BE-041b — `account_lock_history` 적재), `account.deleted` (TASK-BE-258 — `anonymized=true` 필터링 후 PII 마스킹)
 - **멱등 처리 필수**: Redis `EventDedupService`로 eventId 기반 dedupe. 미지원 시 `processed_events` 테이블 upsert ([rules/traits/transactional.md](../../../../../rules/traits/transactional.md) T8)
-- 실패 시 지수 백오프 3회 재시도 후 `<topic>.dlq`로 이관
+- 실패 시 지수 백오프 3회 재시도 후 `<topic>.DLT`로 이관
 - 소비 트레이스(`traceparent`)를 Kafka 헤더에서 MDC로 복원 ([platform/service-types/event-consumer.md](../../../../../platform/service-types/event-consumer.md))
 - 파티션 키: `account_id` (같은 계정의 이벤트 순서 보장)
 
@@ -201,7 +201,7 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 | Unit | 각 `SuspiciousActivityRule` 평가, `RiskScore` 산출 | JUnit 5 |
 | Consumer slice | 이벤트 payload → LoginHistoryEntry 매핑, dedupe 동작 | Spring Kafka Test |
 | Integration | 전체 소비 → DB 적재 → 자동 잠금 HTTP 호출 | Testcontainers (Kafka + MySQL + Redis) + WireMock (account-service) |
-| DLQ | 3회 실패 후 이벤트가 `<topic>.dlq`로 이관 | Kafka test |
+| DLQ | 3회 실패 후 이벤트가 `<topic>.DLT`로 이관 | Kafka test |
 | Query slice | 조회 컨트롤러 PII 마스킹, operator 인증 | `@WebMvcTest` |
 | Idempotency | 동일 eventId 재수신 시 `login_history` 중복 없음 | Integration |
 

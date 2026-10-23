@@ -122,7 +122,7 @@ CANCELLED order + refund; shipping-service's alert remains the ops signal.
 - Shipping transition `PREPARING → SHIPPED` is itself idempotent (re-applying SHIPPED to an
   already-SHIPPED record is a no-op per the shipping state machine).
 - order-service cancel is idempotent via dedupe **and** the CANCELLED-status no-op guard above.
-- Retry: 3 attempts exponential backoff; then `<topic>.dlq`. Unparseable / missing `orderNo` →
+- Retry: 3 attempts exponential backoff; then `<topic>.DLT`. Unparseable / missing `orderNo` →
   non-retryable → DLT + alert.
 
 ## Schema compatibility

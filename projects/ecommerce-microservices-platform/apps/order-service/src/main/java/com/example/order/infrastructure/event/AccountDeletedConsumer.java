@@ -42,7 +42,7 @@ import java.util.UUID;
  * is deterministically hashed into one via {@link UUID#nameUUIDFromBytes(byte[])} (a stable
  * name-based UUID — same composite always maps to the same id, so the dedup/duplicate
  * outcome is unchanged by this storage-format detail). A missing {@code accountId} is
- * logged and skipped; a malformed message routes to {@code account.deleted.dlq} (the
+ * logged and skipped; a malformed message routes to {@code account.deleted.DLT} (the
  * {@code DefaultErrorHandler} marks {@link JsonProcessingException} /
  * {@link IllegalArgumentException} non-retryable). The lifecycle partition never blocks on
  * a poison message. It does NOT self-schedule on {@code gracePeriodEndsAt} — the producer

@@ -156,7 +156,7 @@ auth-service·security-service 는 `accountId` 로 판단하므로 영향이 없
   (`platform/service-types/event-consumer.md`). 대가(안전한 쪽): 첫 기동 때 보존 기간(compose 7일) 안의 잠금이 재생되어, 그 사이 **해제된** 계정도
   현재 세션을 한 번 잃고 다시 로그인한다.
 - **봉투**: flat(루트 필드) — `payload` 래퍼도 허용. `eventId` 필수·UUID(dedupe 키) · `accountId` 필수 · **`tenantId` 필수**(누락 시
-  security-service 와 같은 규칙으로 재시도 없이 `account.locked.dlq`). 읽을 수 없는 봉투도 재시도 없이 DLQ. `reasonCode` · `lockedAt` 은 선택(로그 · 지연 메트릭).
+  security-service 와 같은 규칙으로 재시도 없이 `account.locked.DLT`). 읽을 수 없는 봉투도 재시도 없이 DLQ. `reasonCode` · `lockedAt` 은 선택(로그 · 지연 메트릭).
   `eventVersion`/`schemaVersion` 이 있으면 1·2 만 받고 그 밖은 DLQ(없으면 현재 = v2). 모르는 필드는 무시한다.
 - **동작**: `ForceLogoutUseCase` 의 **net-zero** 경로로 계정의 모든 refresh 를 폐기 — 레거시 `refresh_tokens` 행 + **SAS 인가(`oauth2_authorization`)의
   refresh·access 무효화** + Redis 무효화 마커. 테넌트 한정 오버로드(BE-468)에 `tenantId` 를 넘기지 않는다: 그 한정은 «다른 테넌트 운영자의 행위» 를 막는
@@ -164,7 +164,7 @@ auth-service·security-service 는 `accountId` 로 판단하므로 영향이 없
   계정에서 잠금이 **조용한 no-op** 이 된다. SAS 폐기는 인가 principal 의 `account_id` 로 확정해 같은 이메일의 다른 테넌트 계정을 건드리지 않는다.
 - **멱등**: `eventId` 당 1회(`processed_events` 에 같은 트랜잭션으로 기록). 재전달은 no-op + `outcome=duplicate` 로 센다 — 두 번째 폐기로 세지 않는다.
   («해제 → 재로그인» 뒤에 옛 잠금 이벤트가 재전달돼 **새 세션**을 끊는 것을 막는 것이 dedupe 의 실제 이유.)
-- **실패**: 삼키지 않는다. 폐기 실패 → 트랜잭션 롤백(dedupe 행 포함) → 지수 백오프 3회 → `account.locked.dlq`(파티션은 프로듀서가 선택 — DLQ 는 1 파티션).
+- **실패**: 삼키지 않는다. 폐기 실패 → 트랜잭션 롤백(dedupe 행 포함) → 지수 백오프 3회 → `account.locked.DLT`(파티션은 프로듀서가 선택 — DLQ 는 1 파티션).
   메트릭 `outbox.dlq.size{reason}`(security-service 와 같은 이름).
 - 🔵 **수용한 틈 (소유자 결정 2026-09-25)**: 잠금 → 이 소비까지의 전파 지연 동안에는 잠금 전 세션의 refresh 가 **성공할 수 있다**. «refresh 때마다 상태 조회»
   (fail-closed)는 account-service 장애가 모든 활성 세션의 갱신 장애로 번져 기각됐다. 지연은 `auth.account_locked.propagation.lag`(lockedAt → 폐기) 로 본다.
@@ -232,7 +232,7 @@ auth-service·security-service 는 `accountId` 로 판단하므로 영향이 없
 
 | 소비자 | 의무 행동 | SLA | 실패 처리 |
 |---|---|---|---|
-| **security-service** | `login_history`, `suspicious_events`, `account_lock_history` 의 `ip_address(ip_masked)`, `user_agent(user_agent_family)`, `device_fingerprint` 컬럼을 마스킹값으로 UPDATE (`ip_address='0.0.0.0'`, `user_agent='REDACTED'`, `device_fingerprint=SHA256(accountId\|\|salt)` — `salt`는 `app.pii.masking.fingerprint-salt` 로 주입되는 **애플리케이션-수준 고정값**으로 UUID 공간에 대한 pre-image 공격 방지 (TASK-BE-270). 운영 환경은 secret manager 또는 환경변수 override 의무. salt rotation은 기존 마스킹된 row의 hash 일관성을 깨뜨리므로 별도 절차 필요). `tenant_id`, `account_id`는 감사 무결성 보존 (삭제 금지). 마스킹 완료 후 `security.pii.masked` 이벤트를 outbox 로 발행하여 컴플라이언스 audit trail 제공. | 수신 후 24시간 이내 마스킹 완료 | Kafka consumer 실패 → `account.deleted.dlq`. retry 1시간 간격, 5회 초과 시 alert. SLA 24시간은 retry 시간 포함. |
+| **security-service** | `login_history`, `suspicious_events`, `account_lock_history` 의 `ip_address(ip_masked)`, `user_agent(user_agent_family)`, `device_fingerprint` 컬럼을 마스킹값으로 UPDATE (`ip_address='0.0.0.0'`, `user_agent='REDACTED'`, `device_fingerprint=SHA256(accountId\|\|salt)` — `salt`는 `app.pii.masking.fingerprint-salt` 로 주입되는 **애플리케이션-수준 고정값**으로 UUID 공간에 대한 pre-image 공격 방지 (TASK-BE-270). 운영 환경은 secret manager 또는 환경변수 override 의무. salt rotation은 기존 마스킹된 row의 hash 일관성을 깨뜨리므로 별도 절차 필요). `tenant_id`, `account_id`는 감사 무결성 보존 (삭제 금지). 마스킹 완료 후 `security.pii.masked` 이벤트를 outbox 로 발행하여 컴플라이언스 audit trail 제공. | 수신 후 24시간 이내 마스킹 완료 | Kafka consumer 실패 → `account.deleted.DLT`. retry 1시간 간격, 5회 초과 시 alert. SLA 24시간은 retry 시간 포함. |
 | **admin-service** | `admin_actions.target_id` 는 감사 무결성을 위해 변경하지 않음. 운영자 UI에서 해당 `target_id` 조회 시 `"(deleted user)"` 라벨을 표시. (UI 표시 로직은 admin-service 프레젠테이션 레이어 책임) | 즉시 (UI 렌더링 시점) | UI 표시 실패는 감사 데이터에 영향 없음. |
 
 > **TASK-MONO-394 (2026-07-14)**: `community-service` · `membership-service` 행이 제거되었다 — 두 서비스는 **RETIRED**(iam 의 FROZEN product-layer demo 였고, `fan-platform` 이 같은 도메인을 실제 배포하면서 중복이 되었다). 이 표는 **살아있는 IAM 내부 소비자만** 남긴다. GDPR 삭제 전파의 실제 소비자는 이제 `security-service` 와 `admin-service` 두 곳이다.
@@ -294,7 +294,7 @@ WMS, ERP, SCM, MES 등 외부 소비자는 자체 시스템에서 `account.delet
 [auth-events.md](auth-events.md)의 Consumer Rules와 동일:
 - 멱등 처리 (eventId dedupe)
 - forward-compatible schema
-- DLQ: `<topic>.dlq`, 3회 재시도
+- DLQ: `<topic>.DLT`, 3회 재시도
 - trace propagation
 
 ### Additive Change Policy (TASK-BE-228)

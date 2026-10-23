@@ -232,6 +232,6 @@ participant 해제 시 발행(B 가 자기 직원 offboard 또는 참여 종료,
 - **순서 보장**: 같은 `partnershipId` 의 이벤트는 같은 파티션에 도착(invite → accept → terminate 순서 보장). 다른 파트너십 사이 순서 보장은 없음.
 - **cascade 는 이벤트가 아닌 파생 소멸로 발효**: `partnership.terminated`/`suspended` 는 **one-shot** — 소비자는 이를 "이 파트너십의 모든 participant 접근이 무효화됨"으로 해석해야 하며, per-operator revocation 이벤트를 기대하지 않는다(발행되지 않음). 실제 접근 차단은 assume-tenant 발급기의 request-time 재평가([rbac.md](../../services/admin-service/rbac.md#cross-org-partner-delegation-confinement-adr-mono-045-d3d5))가 보장한다.
 - **schema tolerance**: 알 수 없는 필드는 무시 (forward-compatible). `schemaVersion` 이 지원 범위 밖이면 DLQ 로 이관.
-- **DLQ**: `<topic>.dlq`. 3회 지수 백오프 재시도 후 이관.
+- **DLQ**: `<topic>.DLT`. 3회 지수 백오프 재시도 후 이관.
 - **PII 금지**: `reason` 필드에 이메일·전화·이름 등 PII 포함 금지 (admin 입력 validation 의 책임). `delegatedScope`/`participantScope` 는 도메인/역할 키(비-PII).
 - **schema bump 정책**: 새 필드는 additive 로 추가하고 기존 schemaVersion 유지. breaking change 시 schemaVersion +1 + 마이그레이션 가이드.

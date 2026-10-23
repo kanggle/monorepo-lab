@@ -215,7 +215,7 @@
 |---|---|
 | 이벤트 이름 | PascalCase, 과거형 동사 사용 (예: `OrderPlaced`, `UserWithdrawn`) |
 | 토픽 이름 | `{service}.{entity}.{event}` 형식의 kebab-case (예: `order.order.placed`) |
-| DLQ 토픽 | `{원본-토픽}.dlq` (예: `order.order.placed.dlq`) |
+| DLQ 토픽 | `{원본-토픽}.DLT` (예: `order.order.placed.DLT`) |
 
 ### 메시지 브로커
 

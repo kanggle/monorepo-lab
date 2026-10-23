@@ -6,7 +6,7 @@ package com.example.security.service.consumer;
  * <p>TASK-BE-248 Phase 2a: events without {@code tenant_id} cannot be processed
  * because all detection rules require per-tenant isolation. The
  * {@code DefaultErrorHandler} treats this as a non-retryable exception and routes
- * the message directly to the DLQ topic ({@code <original-topic>.dlq}).
+ * the message directly to the DLQ topic ({@code <original-topic>.DLT}).
  *
  * <p>The {@code outbox.dlq.size} Micrometer counter is incremented (with tag
  * {@code reason=tenant_id_missing}) in {@code KafkaConsumerConfig}'s recoverer

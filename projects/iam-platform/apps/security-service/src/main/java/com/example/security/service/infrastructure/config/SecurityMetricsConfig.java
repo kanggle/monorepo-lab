@@ -40,15 +40,15 @@ public class SecurityMetricsConfig {
     private final String dlqConsumerGroup;
 
     private static final List<String> DLQ_TOPICS = List.of(
-            "auth.login.attempted.dlq",
-            "auth.login.failed.dlq",
-            "auth.login.succeeded.dlq",
-            "auth.token.refreshed.dlq",
-            "auth.token.reuse.detected.dlq",
+            "auth.login.attempted.DLT",
+            "auth.login.failed.DLT",
+            "auth.login.succeeded.DLT",
+            "auth.token.refreshed.DLT",
+            "auth.token.reuse.detected.DLT",
             // TASK-BE-041b-fix Critical 2: register the account.locked DLQ so dlq_depth
             // alerts fire for poison-pill account.locked events (e.g., messages missing
             // eventId after the contract was tightened).
-            "account.locked.dlq"
+            "account.locked.DLT"
     );
 
     public SecurityMetricsConfig(MeterRegistry meterRegistry,

@@ -27,7 +27,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * publish-failure counter would be dead weight). Consumer idempotency lives entirely in
  * this service's own {@code processed_events} dedupe table. The only Kafka
  * <i>producer</i> use is the DLQ recoverer ({@code KafkaConsumerConfig}) writing to
- * {@code <topic>.dlq} — infrastructure error-handling, not a domain event.
+ * {@code <topic>.DLT} — infrastructure error-handling, not a domain event.
  *
  * <p>The companion {@code exclude = OutboxAutoConfiguration.class} was dropped by
  * TASK-MONO-406: that auto-config's only remaining payload was an {@code @EntityScan} +

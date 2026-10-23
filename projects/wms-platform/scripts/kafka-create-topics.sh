@@ -73,7 +73,7 @@ echo ""
 # Create DLQ topics
 echo "--- DLQ Topics (${#TOPICS[@]}) ---"
 for topic in "${TOPICS[@]}"; do
-  create_topic "${topic}.dlq" "${DLQ_PARTITIONS}" "${DLQ_RETENTION_MS}"
+  create_topic "${topic}.DLT" "${DLQ_PARTITIONS}" "${DLQ_RETENTION_MS}"
 done
 
 echo ""

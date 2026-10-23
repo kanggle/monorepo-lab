@@ -68,7 +68,7 @@ public void onOrderEvent(OrderEvent event, Acknowledgment ack) {
 
 The container factory wires:
 - 3 in-process retries with exponential backoff + jitter
-- After exhaustion: send to `<topic>.dlq` with original payload + failure cause headers
+- After exhaustion: send to `<topic>.DLT` (partition chosen by the producer) with original payload + failure cause headers
 - Manual acknowledgment to avoid losing in-flight events on rebalance
 
 See `messaging/consumer-retry-dlq/SKILL.md` for the full container factory bean.
@@ -122,7 +122,7 @@ class OrderEventConsumerIntegrationTest {
         producer.send(event);
 
         await().untilAsserted(() ->
-            assertThat(dlqConsumer.received("order.events.v1.dlq")).hasSize(1)
+            assertThat(dlqConsumer.received("order.events.v1.DLT")).hasSize(1)
         );
     }
 }

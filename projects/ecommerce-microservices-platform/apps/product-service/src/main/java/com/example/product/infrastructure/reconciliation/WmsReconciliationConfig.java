@@ -34,7 +34,7 @@ public class WmsReconciliationConfig {
                 (ConsumerRecord<?, ?> record, Exception ex) -> {
                     log.error("Sending wms reconciliation record to DLQ. topic={}, offset={}, error={}",
                             record.topic(), record.offset(), ex.getMessage());
-                    return new TopicPartition(record.topic() + ".dlq", record.partition());
+                    return new TopicPartition(record.topic() + ".DLT", -1);
                 });
 
         ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);

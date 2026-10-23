@@ -32,7 +32,7 @@ Typical candidates include notification services (react to business events to se
 ## Retry and DLQ
 - Transient failures: in-process exponential backoff with jitter (max 3 retries by default)
 - Persistent failures: route to dead-letter queue with full event payload + failure reason
-- DLQ topic name: `<topic>.dlq`
+- DLQ topic name: `<topic>.DLT`, written out explicitly (`@RetryableTopic` defaults to `-dlt`); DLQ partition chosen by the producer (`-1`) — see `event-driven-policy.md` § DLQ Policy
 - Operator MUST be alerted when DLQ depth > 0
 - See `.claude/skills/messaging/consumer-retry-dlq/SKILL.md`
 

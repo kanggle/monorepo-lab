@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * {@link HandleCommunityEventUseCase}; it embeds NO business logic. A per-message
  * exception is rethrown so the shared {@code DefaultErrorHandler}
  * ({@code KafkaConsumerConfig}) retries (transient) or routes straight to
- * {@code <topic>.dlq} (non-retryable: unsupported schema / malformed) —
+ * {@code <topic>.DLT} (non-retryable: unsupported schema / malformed) —
  * emit-not-throw discipline: the exception escapes to the error handler, which
  * prevents the partition stall, it is never swallowed.
  *

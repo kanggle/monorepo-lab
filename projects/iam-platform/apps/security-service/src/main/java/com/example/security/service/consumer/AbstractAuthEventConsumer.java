@@ -55,7 +55,7 @@ public abstract class AbstractAuthEventConsumer {
 
             // TASK-BE-248 Phase 2a: reject events missing tenant_id — they cannot be
             // processed with per-tenant isolation guarantees. Non-retryable exception
-            // causes DefaultErrorHandler to route directly to <topic>.dlq and increments
+            // causes DefaultErrorHandler to route directly to <topic>.DLT and increments
             // the outbox.dlq.size counter (reason=tenant_id_missing).
             String tenantIdFromEnvelope = nullableText(envelope, "tenantId");
             String tenantIdFromPayload  = nullableText(envelope.path("payload"), "tenantId");

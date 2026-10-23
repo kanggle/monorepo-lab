@@ -30,10 +30,11 @@ public class KafkaConsumerConfig {
 
     @Bean
     public DefaultErrorHandler errorHandler(KafkaTemplate<String, String> kafkaTemplate) {
-        // Custom destination resolver: append ".dlq" instead of Spring's default ".DLT"
+        // Destination resolver: "<topic>.DLT" spelled out (ADR-MONO-085), partition -1 so the
+        // producer chooses — a pre-created DLT may have fewer partitions than its source.
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
             kafkaTemplate,
-            (record, ex) -> new TopicPartition(record.topic() + ".dlq", record.partition())
+            (record, ex) -> new TopicPartition(record.topic() + ".DLT", -1)
         );
 
         // Exponential backoff per event-driven-policy.md Retry Policy, with jitter (±0-250ms)
@@ -65,15 +66,20 @@ public class KafkaConsumerConfig {
 
 ## DLQ Topic Naming
 
-Pattern: `{original-topic}.dlq`
+Pattern: `{original-topic}.DLT`
 
-Per `platform/event-driven-policy.md`, DLQ topics use the `.dlq` suffix — **not** Spring Kafka's default `.DLT`. A custom destination resolver must be passed to `DeadLetterPublishingRecoverer` (see the configuration example above).
+Per `platform/event-driven-policy.md` § DLQ Policy (ADR-MONO-085), DLQ topics use the `.DLT` suffix, **written out at every site**:
+
+- `DeadLetterPublishingRecoverer` — pass a destination resolver that appends `".DLT"` with partition `-1` (see the configuration example above). Spring's default resolver also says `.DLT`, but it keeps the source partition number, which breaks on a DLT with fewer partitions than its source.
+- `@RetryableTopic` — always set `dltTopicSuffix = ".DLT"`. Its default is `-dlt`, which would be a third name.
+
+`scripts/check-dead-letter-suffix.sh` fails CI when either is missing or names anything else.
 
 The source topic's own naming is a project decision, not this skill's: `platform/event-driven-policy.md` § Broker states the canonical RULE (`{service|domain}.{aggregate}.{version}`, versioned); check the project's `specs/contracts/events/README.md` for the shape actually in use before wiring a listener — do not assume the unversioned examples below are correct for your project.
 
 Examples (illustrative placeholders, not a real project's topic names):
-- `order.order.placed` → `order.order.placed.dlq`
-- `product.product.stock-changed` → `product.product.stock-changed.dlq`
+- `order.order.placed` → `order.order.placed.DLT`
+- `product.product.stock-changed` → `product.product.stock-changed.DLT`
 
 ---
 
