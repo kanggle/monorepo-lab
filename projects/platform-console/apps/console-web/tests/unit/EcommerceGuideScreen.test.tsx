@@ -6,6 +6,7 @@ import {
   ORDER_STATES,
   PAYMENT_STATES,
   SHIPPING_STATES,
+  SHIPPING_CANCELLED_STATE,
   PRODUCT_STATES,
   PRODUCT_CONCEPTS,
   PROMOTION_STATES,
@@ -143,10 +144,21 @@ describe('EcommerceGuideScreen', () => {
       'IN_TRANSIT',
       'DELIVERED',
     ]);
-    // DELIVERED is the sole terminal.
+    // DELIVERED is the sole terminal of the linear flow; CANCELLED is a separate
+    // terminal row (TASK-PC-FE-367), not a flow step.
     expect(SHIPPING_STATES.filter((s) => s.terminal).map((s) => s.name)).toEqual(
       ['DELIVERED'],
     );
+  });
+
+  it('shipping table adds a «취소됨» terminal row, outside the flow diagram', () => {
+    render(<EcommerceGuideScreen />);
+    const row = screen.getByTestId('ecommerce-guide-shipping-CANCELLED');
+    expect(within(row).getByText('CANCELLED')).toBeInTheDocument();
+    expect(row).toHaveTextContent('출고 전에 주문이 취소되면 배송도 «취소됨»으로 바뀝니다.');
+    expect(row).toHaveTextContent('이미 출고된 배송은 취소되지 않습니다.');
+    expect(SHIPPING_CANCELLED_STATE.terminal).toBe(true);
+    expect(SHIPPING_STATES.map((s) => s.name)).not.toContain('CANCELLED');
   });
 
   it('renders product states + concepts', () => {

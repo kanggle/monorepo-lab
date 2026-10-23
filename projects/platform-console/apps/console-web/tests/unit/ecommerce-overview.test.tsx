@@ -53,6 +53,7 @@ const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOvervie
     { status: 'SHIPPED', count: 3, cellStatus: 'ok' },
     { status: 'IN_TRANSIT', count: 0, cellStatus: 'ok' },
     { status: 'DELIVERED', count: 4, cellStatus: 'ok' },
+    { status: 'CANCELLED', count: 1, cellStatus: 'ok' },
   ],
   recentOrders: [
     {

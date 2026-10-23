@@ -54,10 +54,16 @@ vi.mock('next/navigation', () => ({
 
 import {
   allowedNextStatus,
+  shippingStatusTone,
+  SHIPPING_STATUS_VALUES,
   ShippingSummarySchema,
   ShippingSchema,
   UpdateShippingStatusBodySchema,
 } from '@/features/ecommerce-ops/api/shipping-types';
+import {
+  statusLabel,
+  STATUS_FILTER_OPTIONS,
+} from '@/features/ecommerce-ops/components/shipping-labels';
 import { getShippingsSectionState } from '@/features/ecommerce-ops/api/shippings-state';
 import { ApiError, EcommerceUnavailableError } from '@/shared/api/errors';
 import { ACCESS_COOKIE } from '@/shared/lib/session';
@@ -81,6 +87,20 @@ describe('allowedNextStatus() — shipping status linear state machine', () => {
 
   it('DELIVERED → null (terminal)', () => {
     expect(allowedNextStatus('DELIVERED')).toBeNull();
+  });
+
+  it('CANCELLED → null (terminal; the operator never requests it — TASK-PC-FE-367)', () => {
+    expect(allowedNextStatus('CANCELLED')).toBeNull();
+    for (const s of ['PREPARING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED']) {
+      expect(allowedNextStatus(s)).not.toBe('CANCELLED');
+    }
+  });
+
+  it('CANCELLED label «취소됨», tone danger (same as order CANCELLED), listed in the filter', () => {
+    expect(statusLabel('CANCELLED')).toBe('취소됨');
+    expect(shippingStatusTone('CANCELLED')).toBe('danger');
+    expect(STATUS_FILTER_OPTIONS).toContain('CANCELLED');
+    expect(SHIPPING_STATUS_VALUES[SHIPPING_STATUS_VALUES.length - 1]).toBe('CANCELLED');
   });
 
   it('unknown/future status → null (fail-safe, no throw)', () => {

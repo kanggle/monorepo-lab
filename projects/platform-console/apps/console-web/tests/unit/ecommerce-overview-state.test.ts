@@ -102,11 +102,11 @@ function seedHappy() {
   m.getOrdersSummary.mockResolvedValue(summary(5, 25, 7, 70));
   m.getOrderInsights.mockResolvedValue(insightsFixture());
   // TASK-PC-FE-360 — per-status shipping counts: PREPARING 1 · SHIPPED 2 ·
-  // IN_TRANSIT 0 · DELIVERED 4.
+  // IN_TRANSIT 0 · DELIVERED 4 · CANCELLED 1 (TASK-PC-FE-367).
   m.listShippings.mockImplementation((p: { status?: string } = {}) =>
     Promise.resolve(
       list(
-        ({ PREPARING: 1, SHIPPED: 2, IN_TRANSIT: 0, DELIVERED: 4 } as Record<
+        ({ PREPARING: 1, SHIPPED: 2, IN_TRANSIT: 0, DELIVERED: 4, CANCELLED: 1 } as Record<
           string,
           number
         >)[p.status ?? ''] ?? 0,
@@ -252,12 +252,12 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
 
   // ── TASK-PC-FE-360 — shipping-status distribution (4 independent cells) ───
 
-  it('shipping status: exactly 4 reads (size 1, one per status), mapped in lifecycle order', async () => {
+  it('shipping status: exactly 5 reads (size 1, one per status), mapped in lifecycle order', async () => {
     seedHappy();
     const state = await getEcommerceOverviewState(true);
 
-    expect(m.listShippings).toHaveBeenCalledTimes(4);
-    for (const status of ['PREPARING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED']) {
+    expect(m.listShippings).toHaveBeenCalledTimes(5);
+    for (const status of ['PREPARING', 'SHIPPED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']) {
       expect(m.listShippings).toHaveBeenCalledWith({ status, page: 0, size: 1 });
     }
     expect(
@@ -267,6 +267,7 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
       ['SHIPPED', 2, 'ok'],
       ['IN_TRANSIT', 0, 'ok'],
       ['DELIVERED', 4, 'ok'],
+      ['CANCELLED', 1, 'ok'],
     ]);
   });
 
