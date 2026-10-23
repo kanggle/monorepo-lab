@@ -46,6 +46,6 @@ public class UserRepositoryImpl implements UserRepository {
 
     @Override
     public Page<User> search(UserStatus status, UUID warehouseId, String q, Pageable pageable) {
-        return repo.search(status, warehouseId, q, pageable).map(AdminUserJpaEntity::toDomain);
+        return repo.search(status, warehouseId, LikePatterns.lowerContains(q), pageable).map(AdminUserJpaEntity::toDomain);
     }
 }

@@ -6,9 +6,11 @@ import com.example.order.application.dto.AdminOrderSummary;
 import com.example.order.application.dto.OrderInsights;
 import com.example.order.application.service.AdminOrderStatusService;
 import com.example.order.application.service.OrderQueryService;
+import com.example.common.metrics.PerformanceMetrics;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.common.summary.PeriodSummary;
+import com.example.common.time.MetricsPeriod;
 import com.example.order.presentation.dto.AdminOrderDetailResponse;
 import com.example.order.presentation.dto.AdminOrderListResponse;
 import com.example.order.presentation.dto.AdminOrderStatusChangeRequest;
@@ -17,6 +19,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 /**
  * Operator-plane order administration (ADR-MONO-031 Phase 1a, TASK-BE-366).
@@ -59,12 +63,35 @@ public class AdminOrderController {
         return ResponseEntity.ok(orderQueryService.getPeriodSummary());
     }
 
+    /**
+     * Overview performance metrics (ADR-MONO-084, TASK-MONO-807) — the shared shape of
+     * {@code platform/contracts/performance-metrics-contract.md}. {@code period} is required;
+     * a missing or unknown value is {@code 400 INVALID_ORDER_REQUEST} (MetricsPeriod.parse →
+     * IllegalArgumentException → GlobalExceptionHandler). Declared {@code required = false} on
+     * purpose: Spring's own missing-parameter path answers {@code VALIDATION_ERROR} here
+     * ({@code handleMissingParam}), which would give one rule two codes.
+     */
+    @GetMapping("/metrics")
+    public ResponseEntity<PerformanceMetrics> getMetrics(
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
+            @RequestParam(required = false) String period) {
+        OrderOperatorAccess.requireRead(userRole, tenantId);
+        return ResponseEntity.ok(orderQueryService.getMetrics(MetricsPeriod.parse(period)));
+    }
+
+    /**
+     * Top-5 rankings. {@code period} is optional (TASK-MONO-807): with it, only orders paid
+     * in that period's current window; without it, every realised sale up to now.
+     */
     @GetMapping("/insights")
     public ResponseEntity<OrderInsights> getInsights(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
-            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
+            @RequestParam(required = false) String period) {
         OrderOperatorAccess.requireRead(userRole, tenantId);
-        return ResponseEntity.ok(orderQueryService.getInsights());
+        return ResponseEntity.ok(orderQueryService.getInsights(
+                period == null ? Optional.empty() : Optional.of(MetricsPeriod.parse(period))));
     }
 
     @GetMapping

@@ -64,6 +64,8 @@ class AdminOrderBusinessRoleGateSliceTest {
             return switch (name) {
                 case "summary" -> get("/api/admin/orders/summary");
                 case "insights" -> get("/api/admin/orders/insights");
+                // TASK-MONO-807 — the overview performance metrics: a read like the rest.
+                case "metrics" -> get("/api/admin/orders/metrics").param("period", "week");
                 case "list" -> get("/api/admin/orders");
                 case "detail" -> get("/api/admin/orders/order-1");
                 case "status" -> post("/api/admin/orders/order-1/status")
@@ -74,8 +76,8 @@ class AdminOrderBusinessRoleGateSliceTest {
     }
 
     private static final List<Endpoint> ENDPOINTS = List.of(
-            new Endpoint("summary", false), new Endpoint("insights", false), new Endpoint("list", false),
-            new Endpoint("detail", false), new Endpoint("status", true));
+            new Endpoint("summary", false), new Endpoint("insights", false), new Endpoint("metrics", false),
+            new Endpoint("list", false), new Endpoint("detail", false), new Endpoint("status", true));
 
     /** persona header · tenant header · may read · may write. */
     static Stream<Arguments> personas() {
@@ -95,7 +97,7 @@ class AdminOrderBusinessRoleGateSliceTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("personas")
-    @DisplayName("each persona × the five order operator paths")
+    @DisplayName("each persona × the six order operator paths")
     void gate(String persona, String roleHeader, String tenant, boolean mayRead, boolean mayWrite) throws Exception {
         List<String> wrong = new ArrayList<>();
         for (Endpoint e : ENDPOINTS) {

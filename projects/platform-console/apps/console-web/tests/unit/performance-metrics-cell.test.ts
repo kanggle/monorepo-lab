@@ -31,6 +31,18 @@ describe('PerformanceMetricsSchema', () => {
     expect(PerformanceMetricsSchema.safeParse(badSeries).success).toBe(false);
   });
 
+  it('a count with no currency field at all reads as null (a producer that drops nulls — TASK-MONO-807)', () => {
+    const { currency: _drop, ...countNoField } = BODY.metrics[1];
+    void _drop;
+    const parsed = PerformanceMetricsSchema.safeParse({ ...BODY, metrics: [BODY.metrics[0], countNoField] });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.metrics[1].currency).toBeNull();
+    // …but money still needs its currency
+    const { currency: _m, ...moneyNoField } = BODY.metrics[0];
+    void _m;
+    expect(PerformanceMetricsSchema.safeParse({ ...BODY, metrics: [moneyNoField] }).success).toBe(false);
+  });
+
   it('rejects duplicate keys and a unit / currency mismatch', () => {
     const dup = { ...BODY, metrics: [BODY.metrics[1], BODY.metrics[1]] };
     expect(PerformanceMetricsSchema.safeParse(dup).success).toBe(false);

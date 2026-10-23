@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-807-ecommerce-overview-performance-metrics.md` — **P2 E-Commerce** (READY): 매출 · 판매 수량 · 주문 수(`CONFIRMED` 이후 · `paidAt` 귀속 · 환불 · `BACKORDERED` 제외) + `/insights` 순위 기준 교정(지금은 누적 · `PENDING` 포함). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-808-wms-overview-performance-metrics-kst-rebucket.md` — **P3 WMS** (READY): 🔴 일별 집계 UTC → KST 날짜 · 읽기 모델 다시 쌓기(데이터가 본체) · 보존 대조군(전체 합계 불변). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **P4 ERP** (READY): 결재 상신 · 승인 · 반려(전이 시각 귀속). 선행 806. 분석=Opus 5.5 / 구현 권장=Sonnet(AC-0 에서 전이 시각이 없으면 Opus).
 - `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
@@ -223,6 +222,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-807-ecommerce-overview-performance-metrics.md` — **`ADR-MONO-084` P2 E-Commerce 실적 지표** (REVIEW, 2026-10-23 UTC · AC-0~5 닫힘 · AC-6 = 다음 굽기 + 창). order-service `GET /api/admin/orders/metrics?period=` (매출 = `total_price` · 판매 수량 · 주문 수 — `CONFIRMED`/`SHIPPED`/`DELIVERED` · 환불 제외 · `paid_at` 귀속 · KST 날짜) · `/insights` 같은 기준 + `?period=` · 🔴 판매자 범위를 순위에도 적용(전에는 무시) · `V13` `(tenant_id, paid_at)` 인덱스 / 콘솔 개요 맨 위 실적 줄 · 순위가 기간을 따름 · 샘플 모드 응답. 순위 전후(샘플): 상품1 57000→19000 · 셀러1 102000→64000(미결제 `PENDING` 빠짐). 🔴 `period` 누락이 `VALIDATION_ERROR` 로 새던 것을 시험이 잡았다 · 샘플 라벨 규칙에 키 7개 분류. ⚪ Testcontainers IT 는 CI 판정(Docker 없음). 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-800-request-rejected-by-firewall-answers-500.md` — **서블릿 방화벽이 거절한 요청이 400 이 아니라 500 `INTERNAL_ERROR` 로 나간다** (REVIEW, 2026-10-20 UTC · AC-0~3 닫힘 · AC-4 = 다음 굽기 + 창). `CommonGlobalExceptionHandler.handleGeneral` 이 `RequestRejectedException` 을 **클래스 이름으로** 식별(라이브러리 · 일부 서비스에 spring-security-web 이 없다) → 400 **`BAD_REQUEST`** · 고정 문장(값 미반향) · WARN 한 줄 · 다시 던지지 않음(던지면 401). wms master · admin 은 `SHARED.handleGeneral` 전달이라 무변경으로 따라온다. 시험: 라이브러리 3(진짜 `StrictHttpFirewall` 거절) · iam admin 슬라이스 2(진짜 `FilterChainProxy`) — 빨강→초록 rc 기록. 🔴 MockMvc 의 `header(…,"④")` 는 방화벽을 통과한다 — ISO-8859-1 로 풀린 모양을 써야 문다. 경로 모양 401 은 `TASK-MONO-801`. 분석=Opus 5.5 / 구현=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: 굽기 반영(`ami-02b3ba00a3b2ff622` ⊇ `8e74909c3`) · 라이브 ⚪(Bearer 를 실은 원시 클라이언트 없음 — 콘솔은 헤더를 인코딩한다).
 

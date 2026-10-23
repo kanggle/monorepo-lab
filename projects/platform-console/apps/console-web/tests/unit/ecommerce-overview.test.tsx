@@ -83,6 +83,22 @@ const baseState = (over: Partial<EcommerceOverviewState> = {}): EcommerceOvervie
     topSellersByRevenue: [{ id: 's1', label: '셀러 원', value: 400000 }],
   },
   insightsStatus: 'ok',
+  period: 'month',
+  performance: {
+    status: 'ok',
+    value: {
+      period: 'month',
+      timezone: 'Asia/Seoul',
+      current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-23T14:05:00+09:00' },
+      previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-23T14:05:00+09:00' },
+      metrics: [
+        { key: 'revenue', unit: 'money', currency: 'KRW', current: '12340000', previous: '11020000' },
+        { key: 'units', unit: 'count', currency: null, current: '812', previous: '790' },
+        { key: 'orders', unit: 'count', currency: null, current: '301', previous: '288' },
+      ],
+      series: [{ date: '2026-10-01', values: { revenue: '410000', units: '27', orders: '10' } }],
+    },
+  },
   ...over,
 });
 
@@ -92,6 +108,33 @@ describe('EcommerceOverview (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
       <EcommerceOverview state={baseState({ notEligible: true, counts: [] })} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('TASK-MONO-807 — the «실적» strip comes first, with the E-Commerce labels and period links', () => {
+    render(<EcommerceOverview state={baseState()} />);
+    const strip = screen.getByTestId('ecommerce-performance');
+    const overview = screen.getByTestId('ecommerce-overview');
+    expect(overview.firstElementChild).toBe(strip);
+
+    expect(screen.getByTestId('ecommerce-performance-kpi-revenue')).toHaveTextContent('매출');
+    expect(screen.getByTestId('ecommerce-performance-kpi-revenue-value')).toHaveTextContent('₩12,340,000');
+    expect(screen.getByTestId('ecommerce-performance-kpi-units')).toHaveTextContent('판매 수량');
+    expect(screen.getByTestId('ecommerce-performance-kpi-orders')).toHaveTextContent('주문 수');
+    expect(screen.getByTestId('ecommerce-performance-period-week')).toHaveAttribute('href', '/ecommerce?period=week');
+    expect(screen.getByTestId('ecommerce-performance-period-month')).toHaveAttribute('aria-current', 'page');
+    // the rankings name the period they follow
+    expect(screen.getByTestId('ecommerce-rank-period')).toHaveTextContent('이번 달');
+  });
+
+  it('TASK-MONO-807 — a failed strip does not take the rest of the overview with it', () => {
+    render(
+      <EcommerceOverview
+        state={baseState({ period: 'week', performance: { status: 'degraded', value: null } })}
+      />,
+    );
+    expect(screen.getByTestId('ecommerce-performance-degraded')).toHaveTextContent('실적을 불러올 수 없습니다');
+    expect(screen.getByTestId('ecommerce-ops-links')).toBeInTheDocument();
+    expect(screen.getByTestId('ecommerce-rank-period')).toHaveTextContent('이번 주');
   });
 
   it('links the overview to the E-Commerce guide (PC-FE-257 discoverability parity)', () => {

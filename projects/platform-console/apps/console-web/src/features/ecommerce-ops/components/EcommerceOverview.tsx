@@ -10,6 +10,21 @@ import { orderStatusTone } from '../api/order-types';
 import { ShippingStatusBar } from './ShippingStatusBar';
 import { shippingStatusTone } from '../api/shipping-types';
 import { statusLabel as shippingStatusLabel } from './shipping-labels';
+import { PerformanceStrip } from '@/shared/ui/PerformanceStrip';
+import { PERIOD_LABEL } from '@/shared/lib/performance-format';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+
+/** `GET /api/admin/orders/metrics` keys (order-api.md) → screen names. */
+const PERFORMANCE_LABELS: Readonly<Record<string, string>> = {
+  revenue: '매출',
+  units: '판매 수량',
+  orders: '주문 수',
+};
+
+const PERIOD_HREFS: Readonly<Record<MetricsPeriod, string>> = {
+  week: '/ecommerce?period=week',
+  month: '/ecommerce?period=month',
+};
 
 /**
  * ecommerce operator **overview snapshot** presentation (TASK-PC-FE-156;
@@ -37,6 +52,16 @@ export function EcommerceOverview({
 
   return (
     <section data-testid="ecommerce-overview" aria-label="이커머스 운영 개요">
+      {/* «실적» strip (ADR-MONO-084 D1, TASK-MONO-807) — on top; its failure is
+          its own and the current-state blocks below render regardless. */}
+      <PerformanceStrip
+        cell={state.performance}
+        selected={state.period}
+        periodHrefs={PERIOD_HREFS}
+        labels={PERFORMANCE_LABELS}
+        testid="ecommerce-performance"
+      />
+
       {/* Per-area count cards — each card IS the quick-launch link. */}
       <div className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
@@ -118,7 +143,11 @@ export function EcommerceOverview({
 
       {/* Sales rankings — top-5 product/seller charts (TASK-PC-FE-172). */}
       <div className="mb-8">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">판매 순위</h3>
+        <h3 className="mb-1 text-sm font-semibold text-foreground">판매 순위</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          <span data-testid="ecommerce-rank-period">{PERIOD_LABEL[state.period]}</span> · 결제가
+          확정된 주문만 · 매출은 상품 금액 기준(쿠폰 할인 배분 전)
+        </p>
         <div className="grid gap-6 md:grid-cols-2">
           <RankingBarChart
             title="상품별 주문횟수"

@@ -157,21 +157,64 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, String> {
     long countByTenantIdAndCreatedAtBetween(String tenantId, Instant from, Instant to);
 
     // ---- admin insights aggregation — tenant-scoped rankings (TASK-BE-469) ----
-    // Grouped over order line-items, excluding CANCELLED orders (not realised sales).
-    // COUNT(DISTINCT i.order.orderId) = distinct orders including the product/seller;
-    // SUM(i.unitPrice * i.quantity) = revenue. Never null (a group only exists if rows exist).
+    // Grouped over order line-items. COUNT(DISTINCT i.order.orderId) = distinct orders
+    // including the product/seller; SUM(i.unitPrice * i.quantity) = revenue (line amounts —
+    // the order-level coupon is not allocated to lines). Never null (a group only exists if
+    // rows exist).
+    //
+    // 🔴 TASK-MONO-807 (ADR-MONO-084 D5) — the basis changed from «status <> CANCELLED, all
+    // time» (which counted unpaid PENDING orders) to «realised sale: status IN :statuses
+    // (OrderStatus.REALISED_SALE), not refunded, paid in [:from, :to)». A bound seller scope
+    // now also narrows to that seller's lines (before, the rankings ignored it). Both
+    // predicates are nested inside the tenant filter, like every OPERATOR read here.
 
     @Query("SELECT i.productId, MAX(i.productName), COUNT(DISTINCT i.order.orderId), SUM(i.unitPrice * i.quantity) "
          + "FROM OrderItemJpaEntity i "
-         + "WHERE i.tenantId = :tenantId AND i.order.status <> :excluded "
+         + "WHERE i.tenantId = :tenantId AND i.order.tenantId = :tenantId "
+         + "AND i.order.status IN :statuses AND i.order.refundedAt IS NULL "
+         + "AND i.order.paidAt >= :from AND i.order.paidAt < :to "
+         + "AND (:sellerRestricted = false OR i.sellerId = :sellerScope) "
          + "GROUP BY i.productId")
     List<Object[]> aggregateProductRanking(@Param("tenantId") String tenantId,
-                                           @Param("excluded") OrderStatus excluded);
+                                           @Param("statuses") Collection<OrderStatus> statuses,
+                                           @Param("from") Instant from,
+                                           @Param("to") Instant to,
+                                           @Param("sellerRestricted") boolean sellerRestricted,
+                                           @Param("sellerScope") String sellerScope);
 
     @Query("SELECT i.sellerId, COUNT(DISTINCT i.order.orderId), SUM(i.unitPrice * i.quantity) "
          + "FROM OrderItemJpaEntity i "
-         + "WHERE i.tenantId = :tenantId AND i.order.status <> :excluded "
+         + "WHERE i.tenantId = :tenantId AND i.order.tenantId = :tenantId "
+         + "AND i.order.status IN :statuses AND i.order.refundedAt IS NULL "
+         + "AND i.order.paidAt >= :from AND i.order.paidAt < :to "
+         + "AND (:sellerRestricted = false OR i.sellerId = :sellerScope) "
          + "GROUP BY i.sellerId")
     List<Object[]> aggregateSellerRanking(@Param("tenantId") String tenantId,
-                                          @Param("excluded") OrderStatus excluded);
+                                          @Param("statuses") Collection<OrderStatus> statuses,
+                                          @Param("from") Instant from,
+                                          @Param("to") Instant to,
+                                          @Param("sellerRestricted") boolean sellerRestricted,
+                                          @Param("sellerScope") String sellerScope);
+
+    // ---- overview performance metrics (ADR-MONO-084, TASK-MONO-807) ----------------
+    // One row per realised-sale order paid in [:from, :to): paidAt, total_price, the sum of
+    // the lines in view, their quantity. With a seller scope bound, the line predicate keeps
+    // only that seller's lines, so the two sums are that seller's share; the caller then uses
+    // the line sum as revenue (total_price is the whole order's, coupon included). Unrestricted,
+    // the caller uses total_price (what the customer paid). Bucketing by KST date happens in
+    // the application layer (KstPeriodBounds.dateOf), never in SQL — a DB-side zone
+    // conversion would depend on the column's timezone handling.
+    @Query("SELECT o.paidAt, o.totalPrice, SUM(i.unitPrice * i.quantity), SUM(i.quantity) "
+         + "FROM OrderItemJpaEntity i JOIN i.order o "
+         + "WHERE o.tenantId = :tenantId AND i.tenantId = :tenantId "
+         + "AND o.status IN :statuses AND o.refundedAt IS NULL "
+         + "AND o.paidAt >= :from AND o.paidAt < :to "
+         + "AND (:sellerRestricted = false OR i.sellerId = :sellerScope) "
+         + "GROUP BY o.orderId, o.paidAt, o.totalPrice")
+    List<Object[]> findPaidOrderMetrics(@Param("tenantId") String tenantId,
+                                        @Param("statuses") Collection<OrderStatus> statuses,
+                                        @Param("from") Instant from,
+                                        @Param("to") Instant to,
+                                        @Param("sellerRestricted") boolean sellerRestricted,
+                                        @Param("sellerScope") String sellerScope);
 }

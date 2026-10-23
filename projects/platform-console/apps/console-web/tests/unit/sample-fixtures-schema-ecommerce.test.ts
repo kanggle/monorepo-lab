@@ -219,7 +219,7 @@ describe('orders (AC-1 / AC-3 / AC-4 / money)', () => {
     expect(body.code).toBe('ORDER_NOT_FOUND');
   });
 
-  it('insights parses with OrderInsightsSchema and CANCELLED orders are excluded (§ 2.4.10 #21)', async () => {
+  it('insights parses with OrderInsightsSchema and only realised sales count (§ 2.4.10 #21, TASK-MONO-807)', async () => {
     const insights = OrderInsightsSchema.parse(await json(get('ecommerce_order', '/api/admin/orders/insights')));
     // Every ranking is sorted DESC by value.
     for (const ranking of [
@@ -232,17 +232,20 @@ describe('orders (AC-1 / AC-3 / AC-4 / money)', () => {
         expect(ranking[i].value).toBeLessThanOrEqual(ranking[i - 1].value);
       }
     }
-    // Revenue by product excludes the CANCELLED order-sample-0004's line
-    // (prod-sample-0001 would otherwise carry 38000+20000+19000=77000, not
-    // 57000 — order-1's 38000 + order-5's 19000 item-1 subtotal).
+    // TASK-MONO-807 — realised sales only (CONFIRMED / SHIPPED / DELIVERED), the
+    // producer's new basis. prod-sample-0001 is now only order-5's 19000 line:
+    // the PENDING order-1 (38000 — unpaid) and the CANCELLED order-4 (20000) are
+    // out. Before 807 this read 57000 (PENDING was counted) — the correction,
+    // not a regression.
     const prod1 = insights.topProductsByRevenue.find((r) => r.id === 'prod-sample-0001');
-    expect(prod1?.value).toBe(57000);
+    expect(prod1?.value).toBe(19000);
     // Seller label is already resolved to the seller's own (suffixed)
     // displayName (§ ecommerce.ts doc comment on `computeInsights`).
     const seller1 = insights.topSellersByRevenue.find((r) => r.id === 'seller-sample-0001');
     expect(seller1?.label).toContain('(샘플)');
-    // order-1(38000) + order-2(45000) + order-5 item-1 subtotal(19000).
-    expect(seller1?.value).toBe(102000);
+    // order-2(45000) + order-5 item-1 subtotal(19000). Was 102000 with the PENDING
+    // order-1; the BACKORDERED order-6 (45000, paid but stock not held) is out too.
+    expect(seller1?.value).toBe(64000);
   });
 });
 

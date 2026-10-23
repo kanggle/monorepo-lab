@@ -1,7 +1,17 @@
 import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
 import { getProductsSummary } from './products-api';
-import { getOrdersSummary, getOrderInsights, listOrders } from './orders-api';
+import {
+  getOrdersSummary,
+  getOrderInsights,
+  getOrderMetrics,
+  listOrders,
+} from './orders-api';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
 import { getUsersSummary } from './users-api';
 import { getPromotionsSummary } from './promotions-api';
 import { getShippingsSummary, listShippings } from './shippings-api';
@@ -102,12 +112,22 @@ export interface EcommerceOverviewState {
   recentOrdersStatus: CellStatus;
   recentSellers: SellerSummary[] | null;
   recentSellersStatus: CellStatus;
-  /** Top-5 product/seller rankings (null when the insights leg did not resolve). */
+  /** Top-5 product/seller rankings (null when the insights leg did not resolve).
+   *  TASK-MONO-807: scoped to {@link period}'s current window. */
   insights: EcommerceInsights | null;
   insightsStatus: CellStatus;
+  /** The period the strip and the rankings show (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (ADR-MONO-084 P2, TASK-MONO-807) — its own cell. */
+  performance: PerformanceCell;
 }
 
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month (the owner's first example). */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
+
 const EMPTY: EcommerceOverviewState = {
+  period: DEFAULT_OVERVIEW_PERIOD,
+  performance: { status: 'degraded', value: null },
   notEligible: false,
   counts: [],
   orderStatus: [],
@@ -179,12 +199,14 @@ async function cell<T>(p: Promise<T>): Promise<Cell<T>> {
 /**
  * @param eligible whether the operator is ecommerce-eligible (resolved by the
  *   page from the data-driven registry). `false` ⇒ no fan-out, no calls.
+ * @param period the «실적» strip's period; the rankings follow it (TASK-MONO-807).
  */
 export async function getEcommerceOverviewState(
   eligible: boolean,
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
 ): Promise<EcommerceOverviewState> {
   if (!eligible) {
-    return { ...EMPTY, notEligible: true };
+    return { ...EMPTY, period, notEligible: true };
   }
 
   try {
@@ -196,6 +218,7 @@ export async function getEcommerceOverviewState(
       recentSellersCell,
       insightsCell,
       sellerNamesCell,
+      performance,
     ] = await Promise.all([
       Promise.all(AREAS.map((a) => cell(a.summary()))),
       Promise.all(
@@ -211,9 +234,11 @@ export async function getEcommerceOverviewState(
       ),
       cell(listOrders({ page: 0, size: RECENT_SIZE })),
       cell(listSellers({ page: 0, size: RECENT_SIZE })),
-      cell(getOrderInsights()),
+      cell(getOrderInsights(period)),
       // Separate seller fetch (top-volume name map — NOT the recent-5 above).
       cell(listSellers({ page: 0, size: SELLER_MAX_PAGE_SIZE })),
+      // TASK-MONO-807 — the «실적» strip; 401 re-thrown like every other leg.
+      performanceMetricsCell(getOrderMetrics(period)),
     ]);
 
     const counts: AreaCount[] = AREAS.map((a, i) => {
@@ -296,6 +321,8 @@ export async function getEcommerceOverviewState(
       recentSellersStatus: recentSellersCell.status,
       insights,
       insightsStatus: insightsCell.status,
+      period,
+      performance,
     };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
