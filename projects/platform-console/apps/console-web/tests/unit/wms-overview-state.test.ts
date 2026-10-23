@@ -38,8 +38,8 @@ vi.mock('@/features/wms-ops/api/wms-alerts-api', () => ({
 }));
 
 import { getWmsOverviewState } from '@/features/wms-ops/api/overview-state';
-import { kstPeriodBounds } from '@/features/wms-ops/api/kst-period';
-import type { KstPeriodBounds } from '@/features/wms-ops/api/kst-period';
+import { kstPeriodBounds } from '@/shared/lib/kst-period';
+import type { KstPeriodBounds } from '@/shared/lib/kst-period';
 
 /** wms `WmsResult<Page>` envelope: { data: { content, page:{totalElements} }, lagSeconds }. */
 const wmsResult = (totalElements: number, content: unknown[] = []) => ({

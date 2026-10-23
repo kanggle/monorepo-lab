@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-806-performance-metrics-shared-foundation.md` — **P1 공용 바탕** (READY, 2026-10-23 UTC): `KstPeriodBounds` 에 직전 구간 · 일별 경계 · 공용 응답 DTO(도메인 내용 금지) / 콘솔 «실적 줄» 컴포넌트(주 · 월 · KPI · 증감 · 추세 · 칸별 실패). 🔴 `TZ=UTC` · `TZ=Asia/Seoul` 두 환경 시험. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-807-ecommerce-overview-performance-metrics.md` — **P2 E-Commerce** (READY): 매출 · 판매 수량 · 주문 수(`CONFIRMED` 이후 · `paidAt` 귀속 · 환불 · `BACKORDERED` 제외) + `/insights` 순위 기준 교정(지금은 누적 · `PENDING` 포함). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-808-wms-overview-performance-metrics-kst-rebucket.md` — **P3 WMS** (READY): 🔴 일별 집계 UTC → KST 날짜 · 읽기 모델 다시 쌓기(데이터가 본체) · 보존 대조군(전체 합계 불변). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **P4 ERP** (READY): 결재 상신 · 승인 · 반려(전이 시각 귀속). 선행 806. 분석=Opus 5.5 / 구현 권장=Sonnet(AC-0 에서 전이 시각이 없으면 Opus).
@@ -224,6 +223,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-806-performance-metrics-shared-foundation.md` — **`ADR-MONO-084` P1 실적 지표 공용 바탕** (REVIEW, 2026-10-23 UTC · AC-0~5 닫힘). Java `KstPeriodBounds` `currentWindow` · `previousWindow`(같은 길이 · 짧은 달 말일 멈춤) · `currentDates` + `MetricsPeriod` · `KstWindow` · DTO `PerformanceMetrics`(0 채우기 · 키 중복 · 창 밖 날짜 거부) / 콘솔 `shared/lib/kst-period.ts`(wms 에서 옮김) `kstMetricsWindows` · `shared/api/performance-metrics.ts` · `shared/lib/performance-format.ts` · `shared/ui/PerformanceStrip.tsx` / 계약 `platform/contracts/performance-metrics-contract.md` + 두 언어 공용 창 픽스처. 🔴🔴 **값은 정수 문자열** — ADR D2 예시는 숫자였지만 콘솔 F5(돈은 문자열로만)와 맞췄다(ADR History 구현 메모) · 증감은 `BigInt`. bite 셋(Java 말일 멈춤 · 콘솔 말일 멈춤 · F5 `Number(`). 🔴 이 호스트의 콘솔 전체 스위트는 5초 타임아웃 flake 로 매번 다른 2~7개가 빨강 — **`main` 에서도 같은 명령이 4개 빨강**(내 변경 무관 실측). 분석=Opus 5.5 / 구현=Opus.
 
 - `TASK-MONO-801-up-front-firewall-rejection-answers-401.md` — **방화벽이 경로를 거절한 요청(`;` · `//` · `%25`)이 400 이 아니라 401 «Authentication required» 로 나간다** (REVIEW, 2026-10-20 UTC · AC-0~3 닫힘 · AC-4 = 다음 굽기 + 창). `libs/java-security-servlet` `FirewallRejections` 공장(400 `BAD_REQUEST` · 고정 문장 · 경로 미반향 · WARN 한 줄 · 자동 구성 없음 · 🔴 빈은 서비스당 **하나** — 둘이면 Spring 이 조용히 기본값으로 돌아간다) + **24 서비스** 빈(ecommerce auth-service 는 빌드 제외라 25 가 아니다) · wms master · admin 은 중첩 봉투, inbound · outbound · inventory 는 이미 쓰는 평평한 `ErrorResponse`. iam 3 · ecommerce product · order 는 라이브러리 의존 추가. 시험: 라이브러리 9 + 서비스 슬라이스 3(모양 A · B · C, 진짜 `FilterChainProxy`) 빨강→초록. 🔴 Docker 미기동 — Testcontainers IT 는 CI 에서. 분석=Opus 5.5 / 구현=Opus.
 

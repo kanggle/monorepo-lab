@@ -3,7 +3,7 @@ import { ApiError } from '@/shared/api/errors';
 import { listInventory, listOrders } from './wms-inventory-api';
 import { listShipments, listAdjustments } from './wms-shipments-api';
 import { listAlerts } from './wms-alerts-api';
-import { kstPeriodBounds } from './kst-period';
+import { kstPeriodBounds } from '@/shared/lib/kst-period';
 import type { ShipmentRow, AdjustmentRow } from './types';
 
 /**

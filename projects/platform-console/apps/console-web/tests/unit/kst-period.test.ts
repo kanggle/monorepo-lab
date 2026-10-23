@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { kstPeriodBounds } from '@/features/wms-ops/api/kst-period';
+import { kstPeriodBounds } from '@/shared/lib/kst-period';
 
 /**
  * TASK-PC-FE-174 — `kstPeriodBounds` KST calendar-period-to-date boundaries.
