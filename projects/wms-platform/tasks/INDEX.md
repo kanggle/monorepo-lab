@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **READY (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 이번 굽기 제외.** outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
@@ -84,6 +84,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 > 2026-07-12: `TASK-BE-438`(outbox v1→v2) 과 `TASK-BE-458`(prometheus IT 재활성화) 이 **이미 `done/` 에 있는데도 이 표에 `**READY**` 로 남아 있었다** — 두 close chore 가 파일만 옮기고 표를 안 지웠다. 표를 읽고 큐를 고르는 사람에게 이건 **이미 끝난 일을 집어들라는 지시**다. 제거함(`TASK-MONO-363` 곁다리, 같은 "손-유지 목록이 조용히 틀린다" 클래스).
 
 ## in-progress
+
+- `TASK-BE-650-outbound-consumes-ecommerce-cancel-request.md` — **IN-PROGRESS (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 이번 굽기 제외.** outbound-service 가 이커머스 출고 취소 요청 `ecommerce.fulfillment.cancel-requested.v1` 을 받는다. 접수 · 피킹 중이면 기존 `CancelOrderUseCase` 로 자동 취소하고, 피킹 뒤면 경보만 남겨 사람 관리자가 취소한다. 출하 뒤는 no-op. **양쪽 계약을 먼저 놓는다.** 후속 = 이커머스 `TASK-BE-649` · 콘솔 `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## review
 
