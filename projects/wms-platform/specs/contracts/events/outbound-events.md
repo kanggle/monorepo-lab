@@ -351,8 +351,8 @@ Partition key: `sagaId`
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
-| `sagaId` | UUID | no | Partition key; inventory uses to locate and release the reservation |
-| `reservationId` | UUID | no | Equals `PickingRequest.id`; inventory matches on this |
+| `sagaId` | UUID | no | Partition key. Inventory does **not** locate the reservation by it — see `reservationId` (TASK-BE-651: this cell used to say inventory used `sagaId` to locate the reservation, contradicting the next row) |
+| `reservationId` | UUID | no | Equals `PickingRequest.id`; inventory matches on this against its reservation's `picking_request_id` (`inventory-events.md` §C3). This event carries **no** `pickingRequestId` field |
 | `orderId` | UUID | no | |
 | `reason` | string | yes | Cancellation reason from `Order.cancel()` |
 

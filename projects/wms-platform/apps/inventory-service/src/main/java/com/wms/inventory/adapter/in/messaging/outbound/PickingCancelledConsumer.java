@@ -108,10 +108,17 @@ public class PickingCancelledConsumer {
      */
     private void applyCancel(OutboundEventParser.Parsed envelope) {
         JsonNode payload = envelope.payload();
-        UUID pickingRequestId = UUID.fromString(payload.get("pickingRequestId").asText());
+        // The producer (outbound-service EventEnvelopeSerializer.pickingCancelledPayload,
+        // authoritative schema outbound-events.md §4) emits `reservationId` (= outbound
+        // PickingRequest.id, stored here as the reservation's picking_request_id) — NOT a
+        // `pickingRequestId` field. The previous `pickingRequestId` read NPE'd on every real
+        // cancel, was retried and dead-lettered, and the reservation stayed RESERVED with the
+        // saga stuck in CANCELLATION_REQUESTED (TASK-BE-651; the compensation-leg sibling of
+        // BE-431 / BE-437). Never resolve by `sagaId`: it is not guaranteed to equal it.
+        UUID pickingRequestId = requireUuid(payload, "reservationId");
         Optional<Reservation> existing = reservationRepository.findByPickingRequestId(pickingRequestId);
         if (existing.isEmpty()) {
-            log.warn("Cancel for unknown pickingRequestId {} — ignored", pickingRequestId);
+            log.warn("Cancel for unknown reservationId {} — ignored", pickingRequestId);
             return;
         }
         Reservation reservation = existing.get();
@@ -129,5 +136,19 @@ public class PickingCancelledConsumer {
             // and release. Log and continue — already in a resolved terminal state.
             log.warn("Cancel race on reservation {}: {}", reservation.id(), e.getMessage());
         }
+    }
+
+    /**
+     * A missing or malformed id is a malformed event: {@link IllegalArgumentException} is
+     * non-retryable in {@code KafkaConsumerConfig}, so it goes to the DLT at once instead of
+     * burning the retry budget on a deterministic {@link NullPointerException}.
+     */
+    private static UUID requireUuid(JsonNode payload, String field) {
+        JsonNode v = payload == null ? null : payload.get(field);
+        if (v == null || v.isNull() || !v.isTextual()) {
+            throw new IllegalArgumentException(
+                    "outbound.picking.cancelled missing or non-text field: " + field);
+        }
+        return UUID.fromString(v.asText()); // malformed UUID → IllegalArgumentException as well
     }
 }
