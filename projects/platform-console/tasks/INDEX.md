@@ -119,9 +119,9 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-367-shipping-cancelled-status-label.md` — **IN-PROGRESS (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED.** 이커머스 배송 상태에 «취소됨»(`CANCELLED`, 출고 전에 취소된 주문의 배송) 라벨 · 배지 · 필터 · 가이드 문장을 넣는다. 문구는 머지 전 소유자 승인. 선행 = 이커머스 `TASK-BE-649` 계약(머지됨). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 ## review
+
+- `TASK-PC-FE-367-shipping-cancelled-status-label.md` — **REVIEW (2026-10-23 UTC · 문구 승인 · CI 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브)** 이커머스 배송 상태에 «취소됨»(`CANCELLED`, 출고 전에 취소된 주문의 배송) 라벨 · 배지 · 필터 · 가이드 문장을 넣는다. 문구는 머지 전 소유자 승인. 선행 = 이커머스 `TASK-BE-649` 계약(머지됨). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus.
 

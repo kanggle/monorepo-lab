@@ -8,7 +8,7 @@ TASK-PC-FE-367
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -53,8 +53,8 @@ frontend
   - `ecommerce-ops/api/overview-state.ts` + `components/EcommerceOverview.tsx` + `ShippingStatusBar.tsx` — 개요 배송 분포: `SHIPPING_STATUS_VALUES` 값마다 읽기 1회 → 4개라 `CANCELLED` 는 분포에서 빠짐(합계가 목록 총수보다 작아짐).
   - `ecommerce-guide/data.ts` `SHIPPING_STATES` + `EcommerceGuideScreen.tsx`(흐름도 `StateFlow` · 상태 표) — 4단 선형, `CANCELLED` 설명 없음.
   - 운영자 상태 변경 UI: 다음 단계 버튼 하나뿐(`allowedNextStatus`)이라 대상으로 `CANCELLED` 를 고르는 경로 없음. 샘플 픽스처(`shared/sample/fixtures/ecommerce.ts`)는 4값만 — 변경 안 함.
-- [ ] **AC-1** — 문구 소유자 승인. (OPEN — 승인 대기: 라벨 «취소됨» · 가이드 문장 «출고 전에 주문이 취소되면 배송도 «취소됨»으로 바뀝니다. 이미 출고된 배송은 취소되지 않습니다.»)
-- [ ] **AC-2** — 구현 + 단위 시험 · CI 초록 · 브랜치 nightly 콘솔 잡 확인(화면 · SSR 변경이면). (2026-10-23 UTC 구현 + 로컬: tsc 0 · next lint 0(기존 경고 1) · vitest shipping/ecommerce/overview/guide 96 파일 1197 통과. CI · nightly 는 미확인 — OPEN)
+- [x] **AC-1** — 문구 소유자 승인. ✅ 2026-10-23 UTC 소유자 선택창 «이대로 승인» — 라벨 «취소됨»(danger) · 가이드 표 행 «출고 전에 주문이 취소되면 배송도 «취소됨»으로 바뀝니다. 이미 출고된 배송은 취소되지 않습니다.»
+- [x] **AC-2** — 구현 + 단위 시험 · CI 초록 · 브랜치 nightly 콘솔 잡 확인(화면 · SSR 변경이면). (2026-10-23 UTC 구현 + 로컬: tsc 0 · next lint 0(기존 경고 1) · vitest shipping/ecommerce/overview/guide 96 파일 1197 통과. CI · nightly 는 미확인 — OPEN) ✅ 2026-10-23 UTC (메인 세션) — PR #4492 체크 pending 0 · fail 0. CI 로그로 새 시험이 돈 것을 확인했다: `EcommerceGuideScreen.test.tsx` 19건(기준 18) · `ecommerce-shippings-state.test.ts` 19건(기준 17), 모두 ✓. 브랜치 nightly `39929201288` success(콘솔 full-stack 포함).
 - [ ] **AC-3** — 굽기 뒤 라이브: 취소된 주문의 배송이 «취소됨» 으로 보인다.
 
 # Related Specs
