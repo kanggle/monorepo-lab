@@ -8,7 +8,7 @@ TASK-PC-FE-366
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -118,3 +118,8 @@ frontend
 - 브랜치 nightly run `39850739891`(head `96efdb1d2`) **success** · PR #4484 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
 - 서버 짝 `TASK-BE-648`(#4485)보다 **먼저** 머지한다 — 서버만 나가면 콘솔 «확정» 이 400 을 받는다.
 - 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/ecommerce/guide` «대기» 행 문장).
+
+## CORRECTION (2026-10-22 UTC · close chore · 4차원 확인)
+
+- **AC-3 닫힘** — 위 AC 목록의 AC-3 칸은 review 시점 기록이라 빈 채로 둔다. Vercel Production `7268124145` success. 익명 샘플 화면(`https://console.hubwang.com/ecommerce/guide`, 서버 렌더 HTML, 2026-10-22 UTC): «대기» 행에 «운영자가 직접 확정할 수는 없습니다» 가 있고, 옛 문장 «운영자는 확정하거나 취소할 수 있습니다» 는 0건. 대기 주문 상세의 버튼 감소(클라이언트 대화상자)는 단위 시험(`ecommerce-write-buttons.test.tsx`)으로 고정.
+- 4차원: (a) #4484 `state=MERGED` · (b) 스쿼시 `c8b7262d8` 가 `origin/main` 조상 · (c) 머지 시점 `statusCheckRollup` 실패 0 · 대기 0 · (d) AC 원문의 남은 칸 = AC-3 하나 — 위 기록으로 «배포 · 확인» 대로 닫힘.
