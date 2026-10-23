@@ -10,6 +10,7 @@ import {
   getStaleness,
 } from './scm-api';
 import type { PoPage, SnapshotResponse, StalenessResponse } from './types';
+import type { PoListInitialFilter } from './po-list-params';
 
 /**
  * Server-side scm section state for the split 조달/재고 routes
@@ -112,6 +113,9 @@ function classifyScmError(err: unknown): ScmResilienceFlags {
 
 export interface ScmProcurementState extends ScmResilienceFlags {
   poList: PoPage | null;
+  /** The filter the seeded first page was read with (TASK-MONO-810) — the
+   *  screen starts from it, so its first client query is this one. */
+  filter: PoListInitialFilter;
 }
 
 /**
@@ -119,19 +123,23 @@ export interface ScmProcurementState extends ScmResilienceFlags {
  *
  * @param eligible whether the operator is scm-eligible, resolved by the
  *   page from the data-driven registry. `false` ⇒ block (no scm call).
+ * @param filter the URL's already-validated `status` / `submittedFrom` /
+ *   `submittedTo` (TASK-MONO-810, `parsePoListSearchParams`) — the first page
+ *   is read with it, so a 개요 «실적» card lands on the list its number came from.
  */
 export async function getScmProcurementState(
   eligible: boolean,
+  filter: PoListInitialFilter = {},
 ): Promise<ScmProcurementState> {
   if (!eligible) {
     // Not scm-eligible — never fabricate a cross-tenant call.
-    return { poList: null, ...CLEAR, notEligible: true };
+    return { poList: null, filter, ...CLEAR, notEligible: true };
   }
   try {
-    const po = await listPurchaseOrders({ page: 0, size: 20 });
-    return { poList: po.data, ...CLEAR };
+    const po = await listPurchaseOrders({ ...filter, page: 0, size: 20 });
+    return { poList: po.data, filter, ...CLEAR };
   } catch (err) {
-    return { poList: null, ...classifyScmError(err) };
+    return { poList: null, filter, ...classifyScmError(err) };
   }
 }
 

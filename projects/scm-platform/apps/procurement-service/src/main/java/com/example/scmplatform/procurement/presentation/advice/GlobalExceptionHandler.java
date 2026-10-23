@@ -264,6 +264,16 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
                 .body(ErrorResponse.of("VALIDATION_ERROR", "Invalid parameter: " + e.getName()));
     }
 
+    /**
+     * TASK-MONO-810 — a query parameter whose contract says 400, not this service's usual 422
+     * for {@link IllegalArgumentException} ({@code GET /po/metrics?period=} missing / unknown).
+     */
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidQueryParameter(InvalidQueryParameterException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR", e.getMessage()));
+    }
+
     /** Registered as {@code ILLEGAL_STATE} 422 in {@code platform/error-handling.md} § General. */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException e) {

@@ -55,6 +55,9 @@ export function poListKey(params: PoQueryParams) {
     'po',
     params.status ?? null,
     params.supplierId ?? null,
+    params.submittedFrom ?? null,
+    params.submittedTo ?? null,
+    params.excludeStatus ?? null,
     Math.max(0, params.page ?? 0),
     clampSize(params.size),
   ] as const;
@@ -64,6 +67,9 @@ export function buildPoListQs(params: PoQueryParams): string {
   const qs = new URLSearchParams();
   if (params.status) qs.set('status', params.status);
   if (params.supplierId) qs.set('supplierId', params.supplierId);
+  if (params.submittedFrom) qs.set('submittedFrom', params.submittedFrom);
+  if (params.submittedTo) qs.set('submittedTo', params.submittedTo);
+  if (params.excludeStatus) qs.set('excludeStatus', params.excludeStatus);
   qs.set('page', String(Math.max(0, params.page ?? 0)));
   qs.set('size', String(clampSize(params.size)));
   return qs.toString();
@@ -76,12 +82,15 @@ async function fetchPoList(params: PoQueryParams): Promise<PoPage> {
   return PoPageSchema.parse(raw);
 }
 
+/**
+ * @param initial the server-rendered first page. Pass it ONLY while `params`
+ *   is the query the server ran (TASK-MONO-810: that query may now carry a
+ *   status and a submit window from the URL, so this hook can no longer infer
+ *   «seeded» from «no filters» — the screen, which knows what the server ran,
+ *   decides).
+ */
 export function useScmPoList(params: PoQueryParams, initial?: PoPage) {
-  const seeded =
-    initial !== undefined &&
-    (params.page ?? 0) === 0 &&
-    !params.status &&
-    !params.supplierId;
+  const seeded = initial !== undefined;
   return useQuery({
     queryKey: poListKey(params),
     queryFn: () => fetchPoList(params),

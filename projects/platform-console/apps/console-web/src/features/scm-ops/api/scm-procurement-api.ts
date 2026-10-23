@@ -28,6 +28,10 @@ export async function listPurchaseOrders(
   const qs = new URLSearchParams();
   if (params.status) qs.set('status', params.status);
   if (params.supplierId) qs.set('supplierId', params.supplierId);
+  // TASK-MONO-810 — forwarded verbatim; the producer validates them.
+  if (params.submittedFrom) qs.set('submittedFrom', params.submittedFrom);
+  if (params.submittedTo) qs.set('submittedTo', params.submittedTo);
+  if (params.excludeStatus) qs.set('excludeStatus', params.excludeStatus);
   pageParams(qs, params.page, params.size);
   const { raw } = await callScm(
     { path: `/api/v1/procurement/po?${qs.toString()}` },

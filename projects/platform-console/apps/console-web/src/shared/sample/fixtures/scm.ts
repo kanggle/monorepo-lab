@@ -1,5 +1,13 @@
 import { SAMPLE_AS_OF, SAMPLE_LABEL_SUFFIX, SAMPLE_TENANT_ID } from '../codes';
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+  type SampleWindow,
+} from './metrics-windows';
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -258,12 +266,16 @@ const SCM_POS: readonly PoSeed[] = [
     status: 'CANCELED',
     totalAmount: '24000.00',
     currency: 'KRW',
-    submittedAt: '2026-08-20T02:00:00Z',
+    // TASK-MONO-810 — moved from 08-20 to 08-05 so it falls INSIDE the
+    // previous-month «실적» window (Aug 1 – Aug 15 20:00 KST): the CANCELED
+    // exclusion is then a real control group (counting it would make 발주 건수
+    // previous = 1), not a vacuous one.
+    submittedAt: '2026-08-05T02:00:00Z',
     acknowledgedAt: null,
     confirmedAt: null,
-    canceledAt: '2026-08-21T00:00:00Z',
-    createdAt: '2026-08-20T01:00:00Z',
-    updatedAt: '2026-08-21T00:00:00Z',
+    canceledAt: '2026-08-06T00:00:00Z',
+    createdAt: '2026-08-05T01:00:00Z',
+    updatedAt: '2026-08-06T00:00:00Z',
     lines: [
       {
         id: 'poln-sample-0004-1',
@@ -303,8 +315,124 @@ function poView(po: PoSeed) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/v1/procurement/po/metrics?period= — the 개요 «실적» strip
+// (ADR-MONO-084 P5, TASK-MONO-810). Derived from the SAME `SCM_POS` the list
+// shows, by the producer's rules (procurement-api.md § `GET /po/metrics`):
+//   - 발주 건수 (`poCount`) — `submittedAt` in the window AND status ≠ CANCELED
+//     (DRAFT has no `submittedAt`, so it drops out by itself).
+//   - 발주 금액 (`poAmount:<CUR>`) — the same POs' `totalAmount`, one key per
+//     currency, summed exactly and rounded ONCE (half-up) to the currency's
+//     minor unit (KRW: 0 digits; others: 2). Never added across currencies.
+//     The union of currencies seen in either window; none → `poAmount:KRW` 0.
+//   - 입고 완료 (`receivedCount`) — the producer reads `→ RECEIVED` transitions
+//     from the status history. The sample has no status history and no
+//     RECEIVED PO (po-sample-0003 is CONFIRMED with its line fully received,
+//     which is not a RECEIVED transition), so it is honestly "0" in every
+//     window — not derived from `updatedAt` or line quantities.
+// The sample visitor sees the whole (sample) tenant.
+// ---------------------------------------------------------------------------
+
+const PO_METRICS_PATH = `${PO_PATH}/metrics`;
+
+/** ISO-4217 minor-unit digits the sample needs; any other code → 2 (the
+ *  producer's rule for a non-ISO / unknown code). */
+const FRACTION_DIGITS: Readonly<Record<string, number>> = { KRW: 0, JPY: 0 };
+
+/** Decimal string → integer at 4 decimal places, exactly (no float). */
+function toScale4(decimal: string): bigint {
+  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(decimal.trim());
+  if (!m) return BigInt(0);
+  const frac = (m[3] ?? '').padEnd(4, '0').slice(0, 4);
+  const v = BigInt(m[2] + frac);
+  return m[1] === '-' ? -v : v;
+}
+
+/** Scale-4 sum → minor units of `currency`, rounded half-up once. */
+function toMinorUnits(sumScale4: bigint, currency: string): string {
+  const digits = FRACTION_DIGITS[currency] ?? 2;
+  const divisor = BigInt(10) ** BigInt(4 - digits);
+  const half = divisor / BigInt(2);
+  const rounded =
+    sumScale4 >= BigInt(0)
+      ? (sumScale4 + half) / divisor
+      : -((-sumScale4 + half) / divisor);
+  return rounded.toString();
+}
+
+function countedPos(win: SampleWindow, date?: string): PoSeed[] {
+  return SCM_POS.filter(
+    (p) =>
+      p.status !== 'CANCELED' &&
+      p.submittedAt !== null &&
+      instantInside(p.submittedAt, win) &&
+      (date === undefined || kstDate(p.submittedAt) === date),
+  );
+}
+
+function amountKey(currency: string): string {
+  return `poAmount:${currency}`;
+}
+
+function amountIn(rows: readonly PoSeed[], currency: string): string {
+  const sum = rows
+    .filter((p) => p.currency === currency)
+    .reduce((acc, p) => acc + toScale4(p.totalAmount), BigInt(0));
+  return toMinorUnits(sum, currency);
+}
+
+function computePoMetrics(period: SamplePeriod) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  const cur = countedPos(w.current);
+  const prev = countedPos(w.previous);
+  const seen = [...new Set([...cur, ...prev].map((p) => p.currency))].sort();
+  const currencies = seen.length > 0 ? seen : ['KRW'];
+
+  const valuesFor = (rows: readonly PoSeed[]): Record<string, string> => ({
+    poCount: String(rows.length),
+    ...Object.fromEntries(currencies.map((c) => [amountKey(c), amountIn(rows, c)])),
+    // No status history in the sample (see the note above).
+    receivedCount: '0',
+  });
+  const curValues = valuesFor(cur);
+  const prevValues = valuesFor(prev);
+  const keys = ['poCount', ...currencies.map(amountKey), 'receivedCount'];
+
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    // Integer STRINGS, like the producer (F5).
+    metrics: keys.map((key) => {
+      const currency = key.startsWith('poAmount:') ? key.slice('poAmount:'.length) : null;
+      return {
+        key,
+        unit: currency ? 'money' : 'count',
+        currency,
+        current: curValues[key],
+        previous: prevValues[key],
+      };
+    }),
+    // Every date of the current window, zero-filled.
+    series: w.dates.map((date) => ({
+      date,
+      values: valuesFor(countedPos(w.current, date)),
+    })),
+  };
+}
+
 function poFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
+
+  // Matched on the exact path, ahead of the `/po/{poId}` detail regex below
+  // (which would otherwise read «metrics» as a PO id → 404 PO_NOT_FOUND).
+  if (pathname === PO_METRICS_PATH) {
+    const p = samplePeriod(query);
+    // No / unknown period: the producer answers 400; the console always sends
+    // one, so the sample leaves it unanswered (-> the router's 503 «not ready»).
+    return p ? computePoMetrics(p) : undefined;
+  }
 
   const detailMatch = pathname.match(new RegExp(`^${PO_PATH}/([^/]+)$`));
   if (detailMatch) {
@@ -320,11 +448,31 @@ function poFixture(path: string): unknown {
   // rule 6 — `supplierId` filter matches the STORED value exactly, never the
   // resolved code/name.
   const supplierId = query.get('supplierId');
+  // TASK-MONO-810 — `submittedAt` in the half-open `[submittedFrom,
+  // submittedTo)`; a PO never submitted (DRAFT) is outside any such window.
+  // Either bound alone narrows on its own side.
+  const submittedFrom = query.get('submittedFrom');
+  const submittedTo = query.get('submittedTo');
+  // TASK-MONO-810 — one status left out, ANDed with the rest.
+  const excludeStatus = query.get('excludeStatus');
   const page = intParam(query, 'page', 0);
   const size = intParam(query, 'size', 20);
   let rows = [...SCM_POS];
   if (status) rows = rows.filter((p) => p.status === status);
   if (supplierId) rows = rows.filter((p) => p.supplierId === supplierId);
+  if (excludeStatus) rows = rows.filter((p) => p.status !== excludeStatus);
+  if (submittedFrom || submittedTo) {
+    const from = submittedFrom ? Date.parse(submittedFrom) : -Infinity;
+    const to = submittedTo ? Date.parse(submittedTo) : Infinity;
+    // A bound that does not parse: the producer answers 400; the console never
+    // sends one (parsePoListSearchParams), so the sample leaves it unanswered.
+    if (Number.isNaN(from) || Number.isNaN(to)) return undefined;
+    rows = rows.filter((p) => {
+      if (p.submittedAt === null) return false;
+      const t = Date.parse(p.submittedAt);
+      return t >= from && t < to;
+    });
+  }
   const start = page * size;
   return {
     data: {
@@ -822,6 +970,7 @@ export const SCM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     nodes: SCM_NODES,
     snapshot: SCM_SNAPSHOT_ROWS,
     warning: S5_WARNING,
+    poMetrics: { week: computePoMetrics('week'), month: computePoMetrics('month') },
   },
   'flat:scm_replenishment': { suggestions: SCM_SUGGESTIONS },
   'flat:scm_config': { policies: POLICIES, supplierMaps: SUPPLIER_MAPS },

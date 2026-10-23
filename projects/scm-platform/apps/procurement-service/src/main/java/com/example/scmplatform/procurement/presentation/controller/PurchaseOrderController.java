@@ -21,8 +21,10 @@ import com.example.scmplatform.procurement.presentation.dto.PageResponse;
 import com.example.scmplatform.procurement.presentation.dto.PurchaseOrderResponse;
 import com.example.security.servlet.actor.ActorContextResolver;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -117,12 +119,20 @@ public class PurchaseOrderController {
     @GetMapping
     public ResponseEntity<ApiEnvelope<PageResponse<PurchaseOrderResponse>>> search(
             @RequestParam(required = false) PoStatus status,
+            // TASK-MONO-810: drop one status (unknown value → type mismatch → 400, like status).
+            @RequestParam(required = false) PoStatus excludeStatus,
             @RequestParam(required = false) String supplierId,
+            // TASK-MONO-810: half-open [submittedFrom, submittedTo) on submittedAt. A value
+            // that is not an ISO-8601 instant is a MethodArgumentTypeMismatchException → 400.
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant submittedFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant submittedTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
-        PageResult<PurchaseOrderView> result = service.search(actor, status, supplierId,
-                PageQuery.of(page, size, "createdAt", "DESC"));
+        PageResult<PurchaseOrderView> result = service.search(actor, status, excludeStatus, supplierId,
+                submittedFrom, submittedTo, PageQuery.of(page, size, "createdAt", "DESC"));
         return ResponseEntity.ok(ApiEnvelope.of(PageResponse.from(result.map(PurchaseOrderResponse::from))));
     }
 

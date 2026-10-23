@@ -199,9 +199,36 @@ Search POs (paginated, tenant-scoped).
 - `status` — optional `PoStatus` filter (one of `DRAFT`, `SUBMITTED`,
   `ACKNOWLEDGED`, `CONFIRMED`, `PARTIALLY_RECEIVED`, `RECEIVED`, `SETTLED`,
   `CLOSED`, `CANCELED`)
+- `excludeStatus` — optional single `PoStatus` (same values as `status`); drops POs whose
+  **current** status is that value. ANDed with every other filter. An unknown value →
+  **400 `VALIDATION_ERROR`** (as for `status`)
 - `supplierId` — optional supplier id filter
+- `submittedFrom` — optional ISO-8601 instant (`2026-10-19T00:00:00+09:00`,
+  `2026-10-18T15:00:00Z`); keeps POs with `submittedAt >= submittedFrom` (**inclusive**)
+- `submittedTo` — optional ISO-8601 instant; keeps POs with `submittedAt < submittedTo`
+  (**exclusive**)
 - `page` — default 0
 - `size` — default 20
+
+**Submit-date filter (TASK-MONO-810).** `submittedFrom` / `submittedTo` filter on
+`submittedAt` — **never `createdAt`** — over the half-open range `[submittedFrom,
+submittedTo)`, the same attribution and the same half-open rule as `poCount` in
+§ GET /po/metrics. Either bound may be given alone. When either bound is given, a PO with
+no `submittedAt` (a `DRAFT`, never submitted) is **excluded**. The bounds combine with
+`status`, `excludeStatus` and `supplierId` by AND. A value that is not an ISO-8601 instant (no offset, a bare date,
+garbage) → **400 `VALIDATION_ERROR`**. `submittedFrom >= submittedTo` is not an error —
+the range is empty and so is the page. A `+` offset must be percent-encoded in the query
+string (`%2B09:00`); a raw `+` decodes to a space and the value no longer parses.
+
+**Metrics card link (TASK-MONO-810).** The console links a `poCount` / `poAmount` card to
+`GET /po?submittedFrom=<current.from>&submittedTo=<current.to>&excludeStatus=CANCELED`.
+With exactly those three parameters the page's `totalElements` **equals that window's
+`poCount`**: the same `submittedAt` attribution, the same half-open range, and the same
+exclusion (current status `CANCELED`; `DRAFT` has no `submittedAt`). Without
+`excludeStatus=CANCELED` the list also shows POs canceled after submit and the numbers
+differ. The one residual gap is display precision: `current.to` is truncated to whole
+seconds on the wire, so a PO submitted in the sub-second before the metrics call is counted
+but not listed.
 
 **Response 200:**
 ```json
@@ -218,6 +245,82 @@ Search POs (paginated, tenant-scoped).
 ```
 
 Sort order: `createdAt DESC` (fixed).
+
+**Errors:** `VALIDATION_ERROR` (400 — unknown `status` / `excludeStatus`, malformed
+`submittedFrom` / `submittedTo`), `UNAUTHORIZED` (401), `PERMISSION_DENIED` (403), `TENANT_FORBIDDEN` (403).
+
+---
+
+## GET /api/procurement/po/metrics
+
+Overview performance metrics — the «실적» strip of the console SCM overview
+(TASK-MONO-810, ADR-MONO-084 P5). Shape, windows and the integer-string rule are the
+shared [`performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md);
+this section owns only what each key counts (ADR-MONO-084 D5).
+
+The literal `/po/metrics` path is matched ahead of `/po/{poId}` — `metrics` is never
+read as a PO id.
+
+**Authorization / tenancy:** the same as every other `GET /api/procurement/**` —
+`SCM_PROCUREMENT_READ` ∨ `SCM_PROCUREMENT_WRITE` (§ Business roles), tenant from the
+token's `tenant_id`. Every number covers only that tenant's POs.
+
+**Query parameters:**
+- `period` — **required**, `week` | `month` (case-insensitive).
+
+**Response 200:** the shared `PerformanceMetrics` body, **bare** (no `{ data, meta }`
+envelope — the shared contract's shape), every value an integer string:
+
+```json
+{
+  "period": "month",
+  "timezone": "Asia/Seoul",
+  "current":  { "from": "2026-10-01T00:00:00+09:00", "to": "2026-10-24T14:05:00+09:00" },
+  "previous": { "from": "2026-09-01T00:00:00+09:00", "to": "2026-09-24T14:05:00+09:00" },
+  "metrics": [
+    { "key": "poCount",      "unit": "count", "currency": null,  "current": "12",      "previous": "9" },
+    { "key": "poAmount:KRW", "unit": "money", "currency": "KRW", "current": "1200000", "previous": "900000" },
+    { "key": "poAmount:USD", "unit": "money", "currency": "USD", "current": "12345",   "previous": "0" },
+    { "key": "receivedCount","unit": "count", "currency": null,  "current": "4",       "previous": "6" }
+  ],
+  "series": [
+    { "date": "2026-10-01", "values": { "poCount": "1", "poAmount:KRW": "100000", "poAmount:USD": "0", "receivedCount": "0" } }
+  ]
+}
+```
+
+**Metric keys (normative — one line each):**
+
+| Key | Unit | Counts |
+|---|---|---|
+| `poCount` | count | POs whose `submittedAt` ∈ the window **and** whose **current** status is not `CANCELED`. A `DRAFT` has no `submittedAt` and never counts. 🔴 A PO canceled after it was submitted leaves its submit window when it is canceled — **a past window's value can decrease**. |
+| `poAmount:<CUR>` | money | Σ `totalAmount` of exactly the `poCount` set, **one key per currency** (`currency` = the PO's own 3-letter code), never converted or added across currencies (ADR-MONO-084 D2 · OD-3). The per-currency sum is taken in decimal and converted **once** to integer minor units with that currency's ISO-4217 default fraction digits (KRW 0, USD 2, …; a code that is not ISO-4217, or an ISO code with no minor unit such as `XXX` → 2), rounding **HALF_UP**. A PO drafted from a suggestion and submitted at unit price 0 counts in `poCount` and adds 0 here. Same decrease-on-cancel caveat as `poCount`. |
+| `receivedCount` | count | Distinct POs with a status-history transition **to `RECEIVED`** whose `occurredAt` ∈ the window — attributed to the **receipt time**, not the submit time (owner decision 2026-10-24), so a past window's value does not change. Its current status does not matter. 🔴 The supplier ASN path does not yet check the PO's status before applying a full receipt (`TASK-SCM-BE-063`), so a PO received after it was canceled is counted here. |
+
+- **Order:** `poCount`, then the `poAmount:<CUR>` keys sorted by currency code, then
+  `receivedCount`.
+- **Which currencies appear:** the union of the currencies that occur in the `poCount`
+  set of the **current or the previous** window, so `current` and `previous` of a key
+  are always comparable. When neither window has any, a single `poAmount:KRW` with
+  `"0"` / `"0"` is returned (the strip keeps its money cell).
+- **Series:** every key on every KST date of `current`, zero-filled. A day's
+  `poAmount:<CUR>` is that day's decimal sum converted with the same rule — rounded per
+  day — so the days add up to the window's total exactly whenever every amount is a whole
+  number of minor units (always for a currency with 2 or more fraction digits, since
+  amounts are stored with 2 decimals); only a fraction below the minor unit (e.g. KRW
+  `0.50`) can make the day sum differ from the total, by rounding alone.
+- **Drill-down:** `GET /po?submittedFrom=<current.from>&submittedTo=<current.to>&excludeStatus=CANCELED`
+  lists exactly the POs behind `poCount` / `poAmount`; its `totalElements` equals `poCount`
+  for that window (§ GET /po, «Metrics card link»).
+
+**Errors:**
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `period` missing or not `week` / `month` |
+| 401 | `UNAUTHORIZED` | no / invalid token |
+| 403 | `PERMISSION_DENIED` | neither `SCM_PROCUREMENT_READ` nor `SCM_PROCUREMENT_WRITE` |
+| 403 | `TENANT_FORBIDDEN` | the token's tenant is not admitted |
 
 ---
 
@@ -273,9 +376,11 @@ actor (i.e. the token's `roles` claim must contain `OPERATOR`/`ADMIN`/`SUPER_ADM
 
 ## POST /api/procurement/po/{poId}/cancel
 
-Transition any of `DRAFT / SUBMITTED / ACKNOWLEDGED → CANCELED`. BUYER or
-OPERATOR actor (see § Actor model). CONFIRMED+ POs cannot be canceled in v1
-(corrective tasks deferred).
+Transition any of `DRAFT / SUBMITTED / ACKNOWLEDGED / CONFIRMED → CANCELED`. BUYER or
+OPERATOR actor (see § Actor model). `CONFIRMED → CANCELED` (a confirmed, not yet received
+PO) is allowed since ADR-MONO-050 D6.3 / SCM-BE-036 (`PoStatusMachine`); once any goods
+are received (`PARTIALLY_RECEIVED`, `RECEIVED`) or the PO is `SETTLED` / `CLOSED` /
+already `CANCELED`, it cannot be canceled in v1 (returns are out of scope).
 
 **Request body (optional):**
 ```json
@@ -287,7 +392,7 @@ OPERATOR actor (see § Actor model). CONFIRMED+ POs cannot be canceled in v1
 `cancellationReason` echoed.
 
 **Errors:** `PO_NOT_FOUND` (404), `PO_STATUS_TRANSITION_INVALID` (422)
-(e.g., already CONFIRMED+).
+(e.g., already `PARTIALLY_RECEIVED`+ or `CANCELED`).
 
 ---
 

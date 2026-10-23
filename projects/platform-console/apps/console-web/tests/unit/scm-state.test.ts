@@ -154,6 +154,37 @@ describe('getScmProcurementState — eligibility gate + resilience (§ 2.4.6)', 
     }
   });
 
+  it('TASK-MONO-810 — the URL filter (status + submit window) reaches the seeded read and the state', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = routed();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const filter = {
+      status: 'SUBMITTED',
+      submittedFrom: '2026-10-01T00:00:00+09:00',
+      submittedTo: '2026-10-24T14:05:00+09:00',
+      excludeStatus: 'CANCELED',
+    };
+    const state = await getScmProcurementState(true, filter);
+    expect(state.filter).toEqual(filter);
+    const upstream = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(upstream.pathname).toBe('/api/v1/procurement/po');
+    expect(upstream.searchParams.get('status')).toBe('SUBMITTED');
+    expect(upstream.searchParams.get('excludeStatus')).toBe('CANCELED');
+    expect(upstream.searchParams.get('submittedFrom')).toBe('2026-10-01T00:00:00+09:00');
+    expect(upstream.searchParams.get('submittedTo')).toBe('2026-10-24T14:05:00+09:00');
+    expect(upstream.searchParams.get('page')).toBe('0');
+
+    // No filter → none of the three params is sent.
+    fetchMock.mockClear();
+    const plain = await getScmProcurementState(true);
+    expect(plain.filter).toEqual({});
+    const u2 = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(u2.searchParams.has('submittedFrom')).toBe(false);
+    expect(u2.searchParams.has('status')).toBe(false);
+    expect(u2.searchParams.has('excludeStatus')).toBe(false);
+  });
+
   it('403 → forbidden (inline, no crash)', async () => {
     cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
     vi.stubGlobal(

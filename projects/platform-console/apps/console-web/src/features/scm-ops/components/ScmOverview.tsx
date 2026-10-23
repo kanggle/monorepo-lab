@@ -4,6 +4,11 @@ import { formatDateTime } from '@/shared/lib/datetime';
 import { formatDecimalDisplay } from '@/shared/lib/money';
 import { BarSwatch } from '@/shared/ui/InlineBar';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import {
+  PerformanceStrip,
+  type PerformanceCardHref,
+} from '@/shared/ui/PerformanceStrip';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
 import { PoStatusBar } from './PoStatusBar';
 import type {
   ScmOverviewState,
@@ -30,7 +35,50 @@ import {
  * 스냅샷 count resolved, the REQUIRED S5 warning is rendered PROMINENTLY via
  * `<S5Warning>` (§ 2.4.6 obligation — never stripped). Count tiles are NOT nav
  * links (`/scm` is a single-route ops screen — PC-FE-168 deviation).
+ *
+ * TASK-MONO-810 — the «실적» strip (ADR-MONO-084 P5) is the first block:
+ * 발주 건수 · 발주 금액 (one card per currency) · 입고 완료. Unlike the tiles,
+ * its cards ARE links — each one to the PO list its number came from (see
+ * {@link scmPerformanceCardHref}).
  */
+
+/** `GET /po/metrics` keys (procurement-api.md) → screen names. `poAmount` is a
+ *  base key: `poAmount:KRW` reads «발주 금액 (KRW)» (`metricLabel`). */
+export const SCM_PERFORMANCE_LABELS: Readonly<Record<string, string>> = {
+  poCount: '발주 건수',
+  poAmount: '발주 금액',
+  receivedCount: '입고 완료',
+};
+
+const PROCUREMENT_PATH = '/scm/procurement';
+
+/**
+ * Card → list. 발주 건수 and every 발주 금액 card count POs by `submittedAt` in
+ * the window, excluding CANCELED, so they open the list filtered to the
+ * response's own `current` window (the same half-open bounds — the list's
+ * `submittedFrom/To`) with `excludeStatus=CANCELED`: the list's
+ * `totalElements` is then the card's 발주 건수.
+ * 입고 완료 is attributed to the receipt time, which the list cannot filter
+ * on; putting the submit window on it would show a different set of POs, so
+ * it opens the RECEIVED list instead (current status, all time).
+ */
+export const scmPerformanceCardHref: PerformanceCardHref = (metric, data) => {
+  const base = metric.key.split(':')[0];
+  if (base === 'poCount' || base === 'poAmount') {
+    const qs = new URLSearchParams({
+      submittedFrom: data.current.from,
+      submittedTo: data.current.to,
+      excludeStatus: 'CANCELED',
+    });
+    return `${PROCUREMENT_PATH}?${qs.toString()}`;
+  }
+  if (metric.key === 'receivedCount') return `${PROCUREMENT_PATH}?status=RECEIVED`;
+  return null;
+};
+
+function periodHrefs(): Readonly<Record<MetricsPeriod, string>> {
+  return { week: '/scm?period=week', month: '/scm?period=month' };
+}
 
 /** Korean labels for the PO-status distribution buckets. */
 const PO_STATUS_LABELS: Record<string, string> = {
@@ -92,6 +140,24 @@ export function ScmOverview({ state }: { state: ScmOverviewState }) {
 
   return (
     <section data-testid="scm-overview" aria-label="SCM 운영 개요" className="mb-8">
+      {/* «실적» strip (ADR-MONO-084 P5, TASK-MONO-810) — first block. */}
+      <PerformanceStrip
+        cell={state.performance}
+        selected={state.period}
+        periodHrefs={periodHrefs()}
+        labels={SCM_PERFORMANCE_LABELS}
+        chartKey="poCount"
+        cardHref={scmPerformanceCardHref}
+        testid="scm-performance"
+      />
+      <p
+        className="-mt-3 mb-6 text-xs text-muted-foreground"
+        data-testid="scm-performance-scope"
+      >
+        발주 건수 · 금액은 제출 시각 기준(취소된 발주 제외, 통화마다 따로), 입고
+        완료는 입고된 시각 기준입니다.
+      </p>
+
       <h2 className="mb-3 text-lg font-semibold text-foreground">운영 개요</h2>
 
       <nav

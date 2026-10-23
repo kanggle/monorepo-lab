@@ -82,6 +82,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-SCM-BE-063-asn-receipt-bypasses-po-status-check.md` — **READY (2026-10-24 UTC)**: 공급사 ASN 입고가 발주 상태 검사를 건너뛴다 — `PurchaseOrder.applyAsnLine` 이 전량이면 상태와 무관하게 `RECEIVED` ⇒ SUBMITTED · ACKNOWLEDGED · **CANCELED** 발주도 입고 완료(계약은 422 `PO_STATUS_TRANSITION_INVALID`). 출처 `TASK-MONO-810` AC-0. 분석=Opus 5.5 / 구현 권장=Opus.
+
 ## in-progress
 
 ## review

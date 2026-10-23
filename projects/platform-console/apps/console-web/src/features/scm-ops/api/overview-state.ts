@@ -2,7 +2,13 @@ import { redirect } from 'next/navigation';
 import { ApiError } from '@/shared/api/errors';
 import { listPurchaseOrders } from './scm-procurement-api';
 import { getSnapshot } from './scm-inventory-visibility-api';
+import { getPoMetrics } from './po-metrics-api';
 import type { PurchaseOrder } from './types';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
 
 /**
  * Server-side scm **operator overview snapshot** fan-out for the `/scm`
@@ -30,6 +36,12 @@ import type { PurchaseOrder } from './types';
  * top-level catch performs a whole-session `redirect('/login')`.
  * `ScmUnavailableError` / `ScmRateLimitedError` (not `ApiError`) degrade the
  * cell, never a re-login. No auto-refetch.
+ *
+ * ── «실적» strip (ADR-MONO-084 P5, TASK-MONO-810) ──
+ * One more cell, `performance` (`GET /po/metrics?period=`): 발주 건수 · 발주
+ * 금액 (per currency) · 입고 완료. Same rule as every leg — a 403 makes it
+ * `forbidden`, anything but a 401 `degraded`, and neither touches the tiles
+ * below it. Not eligible ⇒ not called.
  */
 
 export type CellStatus = 'ok' | 'forbidden' | 'degraded';
@@ -59,7 +71,14 @@ export interface ScmOverviewState {
   /** S5 visibility warning — surfaced when the 재고 스냅샷 cell resolved
    *  (inventory-visibility obligation, § 2.4.6); `null` otherwise. */
   s5Warning: string | null;
+  /** The period the «실적» strip shows (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (TASK-MONO-810) — its own cell. */
+  performance: PerformanceCell;
 }
+
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month. */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
 
 /** PO lifecycle statuses for the distribution (mirrors `KNOWN_PO_STATUSES`;
  *  kept local so the api layer does not import a components/ helper). Tolerant
@@ -86,6 +105,8 @@ const EMPTY: ScmOverviewState = {
   recentPos: null,
   recentPosStatus: 'degraded',
   s5Warning: null,
+  period: DEFAULT_OVERVIEW_PERIOD,
+  performance: { status: 'degraded', value: null },
 };
 
 interface Cell<T> {
@@ -120,13 +141,14 @@ async function cell<T>(p: Promise<T>): Promise<Cell<T>> {
  */
 export async function getScmOverviewState(
   eligible: boolean,
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
 ): Promise<ScmOverviewState> {
   if (!eligible) {
-    return { ...EMPTY, notEligible: true };
+    return { ...EMPTY, notEligible: true, period };
   }
 
   try {
-    const [poCell, snapCell, recentCell, statusCells] = await Promise.all([
+    const [poCell, snapCell, recentCell, statusCells, performance] = await Promise.all([
       cell(listPurchaseOrders({ page: 0, size: 1 })),
       cell(getSnapshot({ page: 0, size: 1 })),
       cell(listPurchaseOrders({ page: 0, size: RECENT_SIZE })),
@@ -135,6 +157,9 @@ export async function getScmOverviewState(
           cell(listPurchaseOrders({ status: s, page: 0, size: 1 })),
         ),
       ),
+      // TASK-MONO-810 — 401 re-thrown like every leg; anything else degrades
+      // the strip only.
+      performanceMetricsCell(getPoMetrics(period)),
     ]);
 
     // 재고 스냅샷 count + the REQUIRED S5 warning (surfaced when the cell ok).
@@ -176,6 +201,8 @@ export async function getScmOverviewState(
       recentPos: recentCell.value?.data.content.slice(0, RECENT_SIZE) ?? null,
       recentPosStatus: recentCell.status,
       s5Warning,
+      period,
+      performance,
     };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.

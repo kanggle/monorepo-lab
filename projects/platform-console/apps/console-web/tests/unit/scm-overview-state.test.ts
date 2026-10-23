@@ -21,6 +21,7 @@ vi.mock('next/navigation', () => ({
 const m = vi.hoisted(() => ({
   listPurchaseOrders: vi.fn(),
   getSnapshot: vi.fn(),
+  getPoMetrics: vi.fn(),
 }));
 vi.mock('@/features/scm-ops/api/scm-procurement-api', () => ({
   listPurchaseOrders: m.listPurchaseOrders,
@@ -28,6 +29,25 @@ vi.mock('@/features/scm-ops/api/scm-procurement-api', () => ({
 vi.mock('@/features/scm-ops/api/scm-inventory-visibility-api', () => ({
   getSnapshot: m.getSnapshot,
 }));
+vi.mock('@/features/scm-ops/api/po-metrics-api', () => ({
+  getPoMetrics: m.getPoMetrics,
+}));
+
+/** `/po/metrics` body (TASK-MONO-810) — the shared contract shape. */
+const metricsFixture = () => ({
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-24T14:05:00+09:00' },
+  previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-24T14:05:00+09:00' },
+  metrics: [
+    { key: 'poCount', unit: 'count', currency: null, current: '7', previous: '5' },
+    { key: 'poAmount:KRW', unit: 'money', currency: 'KRW', current: '1250000', previous: '1000000' },
+    { key: 'receivedCount', unit: 'count', currency: null, current: '3', previous: '3' },
+  ],
+  series: [
+    { date: '2026-10-01', values: { poCount: '2', 'poAmount:KRW': '250000', receivedCount: '1' } },
+  ],
+});
 
 import { getScmOverviewState } from '@/features/scm-ops/api/overview-state';
 
@@ -76,6 +96,7 @@ function seedHappy() {
     },
   );
   m.getSnapshot.mockResolvedValue(snapResult(30));
+  m.getPoMetrics.mockResolvedValue(metricsFixture());
 }
 
 beforeEach(() => {
@@ -89,6 +110,8 @@ describe('getScmOverviewState (TASK-PC-FE-167)', () => {
     expect(state.counts).toHaveLength(0);
     expect(m.listPurchaseOrders).not.toHaveBeenCalled();
     expect(m.getSnapshot).not.toHaveBeenCalled();
+    expect(m.getPoMetrics).not.toHaveBeenCalled();
+    expect(state.performance.status).toBe('degraded');
   });
 
   it('happy → maps po/inventory counts + PO-status distribution + recent POs + S5 warning', async () => {
@@ -167,6 +190,72 @@ describe('getScmOverviewState (TASK-PC-FE-167)', () => {
     seedHappy();
     m.getSnapshot.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
 
+    await expect(getScmOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  // ── TASK-MONO-810 — the «실적» strip ────────────────────────────────────
+
+  it('performance: the period reaches the metrics leg; ok → parsed cell', async () => {
+    seedHappy();
+    const state = await getScmOverviewState(true, 'week');
+    expect(m.getPoMetrics).toHaveBeenCalledTimes(1);
+    expect(m.getPoMetrics.mock.calls[0]).toEqual(['week']);
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual([
+      'poCount',
+      'poAmount:KRW',
+      'receivedCount',
+    ]);
+  });
+
+  it('performance: default period is the month; not eligible keeps the requested period', async () => {
+    seedHappy();
+    const state = await getScmOverviewState(true);
+    expect(m.getPoMetrics).toHaveBeenCalledWith('month');
+    expect(state.period).toBe('month');
+
+    vi.clearAllMocks();
+    const off = await getScmOverviewState(false, 'week');
+    expect(off.period).toBe('week');
+    expect(m.getPoMetrics).not.toHaveBeenCalled();
+  });
+
+  it('performance: a 503 degrades ONLY the strip — counts, distribution, recent stay ok', async () => {
+    seedHappy();
+    m.getPoMetrics.mockRejectedValue(
+      new ScmUnavailableError('downstream', 'SERVICE_UNAVAILABLE', 'down'),
+    );
+    const state = await getScmOverviewState(true);
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+    expect(state.poStatus.every((b) => b.cellStatus === 'ok')).toBe(true);
+    expect(state.recentPosStatus).toBe('ok');
+  });
+
+  it('performance: a 400 or an unparseable body (number where a string belongs, F5) degrades the strip only', async () => {
+    seedHappy();
+    m.getPoMetrics.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'period'));
+    expect((await getScmOverviewState(true)).performance.status).toBe('degraded');
+
+    m.getPoMetrics.mockResolvedValue({
+      ...metricsFixture(),
+      metrics: [{ key: 'poCount', unit: 'count', currency: null, current: 7, previous: '1' }],
+    });
+    const state = await getScmOverviewState(true);
+    expect(state.performance.status).toBe('degraded');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+  });
+
+  it('performance: a 403 → forbidden strip; a 401 → whole-session redirect', async () => {
+    seedHappy();
+    m.getPoMetrics.mockRejectedValue(new ApiError(403, 'PERMISSION_DENIED', 'no'));
+    const state = await getScmOverviewState(true);
+    expect(state.performance.status).toBe('forbidden');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+
+    m.getPoMetrics.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
     await expect(getScmOverviewState(true)).rejects.toThrow('REDIRECT:/login');
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });

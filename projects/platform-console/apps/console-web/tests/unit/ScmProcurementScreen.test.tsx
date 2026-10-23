@@ -117,6 +117,212 @@ function poCalls(fetchMock: ReturnType<typeof vi.fn>) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState(null, '', '/scm/procurement');
+});
+
+/** TASK-MONO-810 — a 개요 «실적» card's window (the response's `current`). */
+const FROM = '2026-10-01T00:00:00+09:00';
+const TO = '2026-10-24T14:05:00+09:00';
+
+describe('ScmProcurementScreen — URL filter from a «실적» card (TASK-MONO-810)', () => {
+  it('starts from the server-seeded filter: no client re-read, the period line shows in KST', async () => {
+    const fetchMock = routedFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <ScmProcurementScreen poList={PO} initialFilter={{ submittedFrom: FROM, submittedTo: TO }} />,
+      { wrapper: wrapper() },
+    );
+    // Seeded: the table is the server page, and no PO read goes out on mount.
+    expect(screen.getByTestId('scm-po-table')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) => String(u).includes('/api/scm/procurement/suppliers')),
+      ).toBe(true),
+    );
+    expect(poCalls(fetchMock)).toHaveLength(0);
+
+    expect(screen.getByTestId('scm-po-period-filter-range')).toHaveTextContent(
+      '제출 기간: 2026-10-01 00:00 – 2026-10-24 14:05',
+    );
+    expect(screen.getByTestId('scm-po-period-filter-range')).toHaveTextContent('한국 시간');
+    expect(screen.getByTestId('scm-po-period-filter-note')).toHaveTextContent(
+      '이 기간에 제출된 발주입니다.',
+    );
+    // The «list count may differ» caveat is gone (the card link now excludes CANCELED).
+    expect(screen.getByTestId('scm-po-period-filter')).not.toHaveTextContent('취소된 발주도');
+    expect(screen.queryByTestId('scm-po-period-filter-excluded')).toBeNull();
+  });
+
+  it('a card link (window + excludeStatus=CANCELED) shows «… · 취소 제외» and is seeded (no re-read)', async () => {
+    const fetchMock = routedFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <ScmProcurementScreen
+        poList={PO}
+        initialFilter={{ submittedFrom: FROM, submittedTo: TO, excludeStatus: 'CANCELED' }}
+      />,
+      { wrapper: wrapper() },
+    );
+    const range = screen.getByTestId('scm-po-period-filter-range');
+    expect(range).toHaveTextContent('제출 기간: 2026-10-01 00:00 – 2026-10-24 14:05');
+    expect(range).toHaveTextContent('· 취소 제외');
+    expect(screen.getByTestId('scm-po-period-filter-excluded')).toHaveTextContent('취소 제외');
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) => String(u).includes('/api/scm/procurement/suppliers')),
+      ).toBe(true),
+    );
+    expect(poCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it('the exclusion rides along on a filter submit; «제출 기간 해제» clears window AND exclusion (query + address)', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/scm/procurement?${new URLSearchParams({ submittedFrom: FROM, submittedTo: TO, excludeStatus: 'CANCELED' })}`,
+    );
+    const fetchMock = routedFetch({ po: () => jsonResponse({ ...PO, content: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(
+      <ScmProcurementScreen
+        poList={PO}
+        initialFilter={{ submittedFrom: FROM, submittedTo: TO, excludeStatus: 'CANCELED' }}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    await user.selectOptions(screen.getByTestId('scm-po-filter-status'), 'CONFIRMED');
+    await user.click(screen.getByTestId('scm-po-filter-submit'));
+    await waitFor(() => expect(poCalls(fetchMock).length).toBe(1));
+    let url = new URL(String(poCalls(fetchMock).at(-1)![0]), 'http://console.local');
+    expect(url.searchParams.get('excludeStatus')).toBe('CANCELED');
+    expect(url.searchParams.get('status')).toBe('CONFIRMED');
+    expect(url.searchParams.get('submittedFrom')).toBe(FROM);
+
+    await user.click(screen.getByTestId('scm-po-period-clear'));
+    expect(screen.queryByTestId('scm-po-period-filter')).toBeNull();
+    await waitFor(() => expect(poCalls(fetchMock).length).toBe(2));
+    url = new URL(String(poCalls(fetchMock).at(-1)![0]), 'http://console.local');
+    expect(url.searchParams.has('excludeStatus')).toBe(false);
+    expect(url.searchParams.has('submittedFrom')).toBe(false);
+    expect(url.searchParams.get('status')).toBe('CONFIRMED');
+    const here = new URL(window.location.href);
+    expect(here.searchParams.has('excludeStatus')).toBe(false);
+    expect(here.searchParams.has('submittedFrom')).toBe(false);
+  });
+
+  it('an exclusion without a window (hand-made URL) still shows and clears («제외 해제»)', async () => {
+    const fetchMock = routedFetch({ po: () => jsonResponse({ ...PO, content: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<ScmProcurementScreen poList={PO} initialFilter={{ excludeStatus: 'CANCELED' }} />, {
+      wrapper: wrapper(),
+    });
+    expect(screen.getByTestId('scm-po-period-filter-range')).toHaveTextContent(/^취소 제외$/);
+    expect(screen.queryByTestId('scm-po-period-filter-note')).toBeNull();
+    const clear = screen.getByTestId('scm-po-period-clear');
+    expect(clear).toHaveTextContent('제외 해제');
+    await user.click(clear);
+    await waitFor(() => expect(poCalls(fetchMock).length).toBe(1));
+    const url = new URL(String(poCalls(fetchMock).at(-1)![0]), 'http://console.local');
+    expect(url.searchParams.has('excludeStatus')).toBe(false);
+  });
+
+  it('a UTC-written bound is shown on the KST wall clock; a single bound reads open-ended', () => {
+    vi.stubGlobal('fetch', routedFetch());
+    render(
+      <ScmProcurementScreen poList={PO} initialFilter={{ submittedFrom: '2026-09-30T15:00:00Z' }} />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.getByTestId('scm-po-period-filter-range')).toHaveTextContent(
+      '제출 기간: 2026-10-01 00:00 – 지금',
+    );
+  });
+
+  it('status from the URL preselects the status select (입고 완료 card → RECEIVED); no period line', () => {
+    vi.stubGlobal('fetch', routedFetch());
+    render(<ScmProcurementScreen poList={PO} initialFilter={{ status: 'RECEIVED' }} />, {
+      wrapper: wrapper(),
+    });
+    expect((screen.getByTestId('scm-po-filter-status') as HTMLSelectElement).value).toBe('RECEIVED');
+    expect(screen.queryByTestId('scm-po-period-filter')).toBeNull();
+  });
+
+  it('the period rides along on a filter submit and on paging (combined with status)', async () => {
+    const fetchMock = routedFetch({ po: () => jsonResponse({ ...PO, content: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(
+      <ScmProcurementScreen poList={PO} initialFilter={{ submittedFrom: FROM, submittedTo: TO }} />,
+      { wrapper: wrapper() },
+    );
+
+    await user.selectOptions(screen.getByTestId('scm-po-filter-status'), 'CONFIRMED');
+    await user.click(screen.getByTestId('scm-po-filter-submit'));
+    await waitFor(() => expect(poCalls(fetchMock).length).toBeGreaterThan(0));
+    const url = new URL(String(poCalls(fetchMock).at(-1)![0]), 'http://console.local');
+    expect(url.pathname).toBe('/api/scm/po');
+    expect(url.searchParams.get('status')).toBe('CONFIRMED');
+    expect(url.searchParams.get('submittedFrom')).toBe(FROM);
+    expect(url.searchParams.get('submittedTo')).toBe(TO);
+    expect(screen.getByTestId('scm-po-period-filter')).toBeInTheDocument();
+  });
+
+  it('«제출 기간 해제» drops the period from the next read AND from the address', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/scm/procurement?${new URLSearchParams({ submittedFrom: FROM, submittedTo: TO, status: 'SUBMITTED' })}`,
+    );
+    const fetchMock = routedFetch({ po: () => jsonResponse({ ...PO, content: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(
+      <ScmProcurementScreen
+        poList={PO}
+        initialFilter={{ status: 'SUBMITTED', submittedFrom: FROM, submittedTo: TO }}
+      />,
+      { wrapper: wrapper() },
+    );
+
+    await user.click(screen.getByTestId('scm-po-period-clear'));
+    expect(screen.queryByTestId('scm-po-period-filter')).toBeNull();
+    await waitFor(() => expect(poCalls(fetchMock).length).toBeGreaterThan(0));
+    const url = new URL(String(poCalls(fetchMock).at(-1)![0]), 'http://console.local');
+    expect(url.searchParams.has('submittedFrom')).toBe(false);
+    expect(url.searchParams.has('submittedTo')).toBe(false);
+    // The status filter is untouched.
+    expect(url.searchParams.get('status')).toBe('SUBMITTED');
+    // The address no longer carries the window (a reload would not re-apply it).
+    const here = new URL(window.location.href);
+    expect(here.pathname).toBe('/scm/procurement');
+    expect(here.searchParams.has('submittedFrom')).toBe(false);
+    expect(here.searchParams.has('submittedTo')).toBe(false);
+    expect(here.searchParams.get('status')).toBe('SUBMITTED');
+  });
+
+  it('ignored URL values are named in a notice; without any, no notice', () => {
+    vi.stubGlobal('fetch', routedFetch());
+    const { unmount } = render(
+      <ScmProcurementScreen
+        poList={PO}
+        ignoredParams={['submittedFrom', 'status', 'excludeStatus']}
+      />,
+      { wrapper: wrapper() },
+    );
+    const note = screen.getByTestId('scm-po-url-ignored');
+    expect(note).toHaveTextContent('제외 상태');
+    expect(note).toHaveTextContent('제출 기간 시작');
+    expect(note).toHaveTextContent('상태');
+    expect(note).toHaveTextContent('적용하지');
+    expect(screen.queryByTestId('scm-po-period-filter')).toBeNull();
+    unmount();
+
+    render(<ScmProcurementScreen poList={PO} />, { wrapper: wrapper() });
+    expect(screen.queryByTestId('scm-po-url-ignored')).toBeNull();
+    expect(screen.queryByTestId('scm-po-period-filter')).toBeNull();
+  });
 });
 
 describe('ScmProcurementScreen — render & read table (read-only)', () => {
@@ -413,6 +619,26 @@ describe('ScmProcurementScreen — degrade & a11y', () => {
     const user = userEvent.setup();
     await user.tab();
     expect(document.activeElement).toBeTruthy();
+  }, 15_000);
+
+  it('TASK-MONO-810 — the submit-period line + the ignored-filter notice are axe-clean', async () => {
+    vi.stubGlobal('fetch', routedFetch());
+    const { container } = render(
+      <ScmProcurementScreen
+        poList={PO}
+        initialFilter={{ submittedFrom: FROM, submittedTo: TO }}
+        ignoredParams={['status']}
+      />,
+      { wrapper: wrapper() },
+    );
+    await waitFor(
+      () =>
+        expect(
+          (screen.getByTestId('scm-po-filter-supplier') as HTMLElement).tagName,
+        ).toBe('SELECT'),
+      { timeout: 10_000 },
+    );
+    expect(await runAxe(container)).toEqual([]);
   }, 15_000);
 
   it('the PO detail dialog is axe-clean and Escape-cancellable', async () => {

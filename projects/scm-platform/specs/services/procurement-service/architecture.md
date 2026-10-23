@@ -139,6 +139,8 @@ com.example.scmplatform.procurement/
 │   │   ├── PurchaseOrderLine.java
 │   │   ├── Money.java                        ← embedded value object
 │   │   ├── repository/PurchaseOrderRepository.java   ← outbound port
+│   │   ├── repository/PurchaseOrderMetricsQuery.java ← read port for GET /po/metrics (TASK-MONO-810)
+│   │   │                                               + its row records SubmittedPoRow, ReceivedTransitionRow
 │   │   └── status/
 │   │       ├── PoStatus.java                 ← 9-state enum
 │   │       ├── PoStatusMachine.java          ← transition matrix
@@ -165,6 +167,9 @@ com.example.scmplatform.procurement/
 │   │                                            its role literals). Stays here by ADR-MONO-058
 │   │                                            § D1's Ownership Rule; only the claim-lifting
 │   │                                            mechanism moved to libs (TASK-SCM-BE-054).
+│   ├── PurchaseOrderMetricsService.java      ← read-only overview metrics (TASK-MONO-810); no command,
+│   │                                            so it does not contradict the "only transactional
+│   │                                            command boundary" rule below
 │   ├── PurchaseOrderView.java                ← read-model DTOs
 │   ├── AsnView.java
 │   ├── command/                              ← use-case input records
@@ -202,6 +207,7 @@ com.example.scmplatform.procurement/
 └── presentation/                             ← inbound web adapter
     ├── controller/
     │   ├── PurchaseOrderController.java        ← /api/procurement/po/**
+    │   ├── PurchaseOrderMetricsController.java ← /api/procurement/po/metrics (literal; wins over /po/{poId})
     │   ├── SupplierController.java             ← /api/procurement/suppliers/**
     │   ├── SupplierAckWebhookController.java   ← /api/procurement/webhooks/supplier-ack
     │   └── AsnWebhookController.java           ← /api/procurement/webhooks/asn

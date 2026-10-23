@@ -224,6 +224,14 @@ export const SCM_MAX_PAGE_SIZE = 100;
 export interface PoQueryParams {
   status?: string;
   supplierId?: string;
+  /** TASK-MONO-810 — `submittedAt` window, ISO-8601 instants, half-open
+   *  `[submittedFrom, submittedTo)` (procurement-api.md § `GET /po`). The same
+   *  rule as the «실적» window, so a card's number and its list agree. */
+  submittedFrom?: string;
+  submittedTo?: string;
+  /** TASK-MONO-810 — one PoStatus to leave out, ANDed with the rest (the 개요
+   *  card links send `CANCELED`, so the list equals the card's 발주 건수). */
+  excludeStatus?: string;
   page?: number;
   size?: number;
 }

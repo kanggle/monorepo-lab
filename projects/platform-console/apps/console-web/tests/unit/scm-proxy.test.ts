@@ -129,6 +129,39 @@ describe('GET /api/scm/po proxy (read-only)', () => {
     expect(upstream.searchParams.get('size')).toBe('100'); // capped
   });
 
+  it('TASK-MONO-810 — forwards submittedFrom / submittedTo verbatim, combined with status', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(PO_ENV));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const qs = new URLSearchParams({
+      status: 'CONFIRMED',
+      submittedFrom: '2026-10-01T00:00:00+09:00',
+      submittedTo: '2026-10-24T14:05:00+09:00',
+      excludeStatus: 'CANCELED',
+    });
+    const res = await poGET(new Request(`http://console.local/api/scm/po?${qs.toString()}`));
+    expect(res.status).toBe(200);
+    const upstream = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(upstream.searchParams.get('status')).toBe('CONFIRMED');
+    expect(upstream.searchParams.get('excludeStatus')).toBe('CANCELED');
+    expect(upstream.searchParams.get('submittedFrom')).toBe('2026-10-01T00:00:00+09:00');
+    expect(upstream.searchParams.get('submittedTo')).toBe('2026-10-24T14:05:00+09:00');
+  });
+
+  it('TASK-MONO-810 — a bad bound is not validated here: the producer 400 passes through', async () => {
+    cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
+    const fetchMock = vi.fn().mockResolvedValue(scmError('VALIDATION_ERROR', 400));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await poGET(
+      new Request('http://console.local/api/scm/po?submittedFrom=yesterday'),
+    );
+    expect(new URL(String(fetchMock.mock.calls[0][0])).searchParams.get('submittedFrom')).toBe(
+      'yesterday',
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('no IAM session → 401 (no upstream call)', async () => {
     // ADR-MONO-074 A1 — an empty jar is a sample visitor now; the 401 path is the half session.
     cookieJar.set(OPERATOR_COOKIE, 'OPERATOR-ONLY-HALF-SESSION');

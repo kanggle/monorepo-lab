@@ -287,7 +287,7 @@ class PurchaseOrderControllerSliceTest {
     void searchWithStatusFilter() throws Exception {
         com.example.common.page.PageResult<PurchaseOrderView> pageResult =
                 new com.example.common.page.PageResult<>(List.of(draftView()), 0, 20, 1L, 1);
-        when(service.search(any(ActorContext.class), eq(PoStatus.DRAFT), isNull(), any()))
+        when(service.search(any(ActorContext.class), eq(PoStatus.DRAFT), isNull(), isNull(), isNull(), isNull(), any()))
                 .thenReturn(pageResult);
 
         mockMvc.perform(get(BASE_URL).param("status", "DRAFT"))
@@ -333,7 +333,7 @@ class PurchaseOrderControllerSliceTest {
     void searchUnresolvedSupplierIsExplicitNull() throws Exception {
         com.example.common.page.PageResult<PurchaseOrderView> pageResult =
                 new com.example.common.page.PageResult<>(List.of(viewWithSupplier(null, null)), 0, 20, 1L, 1);
-        when(service.search(any(ActorContext.class), isNull(), isNull(), any())).thenReturn(pageResult);
+        when(service.search(any(ActorContext.class), isNull(), isNull(), isNull(), isNull(), isNull(), any())).thenReturn(pageResult);
 
         String body = mockMvc.perform(get(BASE_URL))
                 .andExpect(status().isOk())
