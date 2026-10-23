@@ -8,7 +8,7 @@ admin-service 의 조건 없는 `GET /api/v1/admin/settings` 가 500 — `AdminS
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
