@@ -211,7 +211,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **IN-PROGRESS (2026-10-24 UTC) — AC-2 구현 중 (`ADR-MONO-085 ACCEPTED — A`).** 데드레터 접미사가 갈렸다 — platform 규칙 `.dlq` · 코드 `.dlq`(이커머스 · iam · fan) vs `.DLT`(erp · finance · scm · wms) · 브로커 선생성은 `.dlq` 만. AC-0 측정 → 소유자 선택((a) 규칙을 `.DLT` 로 · (b) 코드를 `.dlq` 로 · (c) 프로젝트별 Overrides) → 원자적 PR + 어긋남을 무는 가드. 출처 `TASK-BE-651` AC-0 ③. 분석=Opus 5.5 / 구현 권장=Opus. 🟢 **AC-0 닫힘 (2026-10-24 UTC)** — 전체 표는 `ADR-MONO-085` § M에 있다. 기안에 없던 것 둘: 스킬 2개가 `.dlq` 를 가르친다 · 미리 만든 데드레터 토픽은 파티션 1개인데 iam security 가 원본 파티션 번호로 보낸다(정적 판독). 🟢 **AC-1 닫힘 — `ADR-MONO-085 ACCEPTED — A`** (2026-10-24 UTC, 소유자 정확형 · OD 기본값). 선택창의 «(a)» 는 ACCEPT 로 세지 않았다. 다음은 AC-2 원자 PR 이다. ⑤ → `TASK-MONO-816`.
 
 
 
@@ -222,6 +221,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **데드레터 토픽 이름을 `<topic>.DLT` 하나로** (REVIEW, 2026-10-24 UTC · `ADR-MONO-085 ACCEPTED — A` · AC-0~2 닫힘 · AC-3 = 다음 굽기 뒤). 규칙 3파일 + 스킬 2개, 보내는 쪽 13곳(`.dlq`→`.DLT`, 그중 12곳은 원본 파티션 번호 대신 `-1`), 생성 스크립트 5개, 읽는 쪽(iam 게이지 · 계약 · 테스트 · 재처리 런북)을 한 PR에서 옮겼다. 가드 `check-dead-letter-suffix.sh`(R1~R6 + 모집단 하한)는 수정 전 커밋에서 rc=1, 수정 후 rc=0. 유지: `outbox.dlq.size`(메트릭) · `<group>.dlq`(컨슈머 그룹). ⚪ Docker 기반 DLQ IT 는 로컬 미실행 → CI 가 판정한다. 🔴 AC-3(데모 브로커에서 미리 만든 `.DLT` 에 레코드가 떨어지는지)은 굽기 뒤 — 닫을 때 남아 있으면 `TASK-MONO-672` 로 넘긴다. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · main `c76a60d73` · AC-0~3 닫힘(AC-1 · 2 = CI 실 MySQL) · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 
