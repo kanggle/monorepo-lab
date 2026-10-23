@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<string, string> = {
   SHIPPED: '발송',
   IN_TRANSIT: '배송중',
   DELIVERED: '배송완료',
+  CANCELLED: '취소됨',
 };
 
 export function statusLabel(s: string): string {

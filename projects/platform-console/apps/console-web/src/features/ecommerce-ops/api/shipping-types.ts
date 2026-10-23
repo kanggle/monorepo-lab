@@ -21,6 +21,9 @@ import type { StatusTone } from '@/shared/ui/StatusBadge';
  * State machine (ShippingStatus.java confirmed — STRICTLY LINEAR, single successor):
  *   PREPARING → SHIPPED → IN_TRANSIT → DELIVERED
  *   DELIVERED is terminal. PREPARING→SHIPPED requires carrier+trackingNumber.
+ *   CANCELLED (TASK-PC-FE-367 / TASK-BE-649) is a second terminal reached ONLY from
+ *   PREPARING, by the server, when the order is cancelled before dispatch — it is
+ *   NOT a step and the operator never requests it (PUT → 422).
  */
 
 // ===========================================================================
@@ -32,6 +35,7 @@ export const SHIPPING_STATUS_VALUES = [
   'SHIPPED',
   'IN_TRANSIT',
   'DELIVERED',
+  'CANCELLED',
 ] as const;
 export type ShippingStatus = (typeof SHIPPING_STATUS_VALUES)[number];
 
@@ -39,13 +43,14 @@ export type ShippingStatus = (typeof SHIPPING_STATUS_VALUES)[number];
  * Shipping status → shared semantic {@link StatusTone} (rendered via the shared
  * `<StatusBadge>` — TASK-PC-FE-158/159). PREPARING awaits dispatch (warning);
  * SHIPPED/IN_TRANSIT are mid-flight (progress); DELIVERED is the happy terminal
- * (success). An unknown/future status → `neutral` (TOLERANCE).
+ * (success); CANCELLED is `danger`, like the order's CANCELLED. An unknown/future status → `neutral` (TOLERANCE).
  */
 const SHIPPING_STATUS_TONE: Record<ShippingStatus, StatusTone> = {
   PREPARING: 'warning',
   SHIPPED: 'progress',
   IN_TRANSIT: 'progress',
   DELIVERED: 'success',
+  CANCELLED: 'danger',
 };
 
 export function shippingStatusTone(status: string): StatusTone {
@@ -61,6 +66,7 @@ const LINEAR_TRANSITIONS: Record<string, ShippingStatus | null> = {
   SHIPPED: 'IN_TRANSIT',
   IN_TRANSIT: 'DELIVERED',
   DELIVERED: null,
+  CANCELLED: null,
 };
 
 /**

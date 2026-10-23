@@ -308,6 +308,17 @@ export const SHIPPING_STATES: ShippingState[] = [
 ];
 
 /**
+ * 배송의 «취소됨» 종료 상태(TASK-PC-FE-367 / TASK-BE-649). 순서 단계가 아니라 준비중에서만
+ * 갈라지는 별도 종료라서 {@link SHIPPING_STATES}(흐름도)에는 넣지 않고 표에만 한 줄 더한다.
+ */
+export const SHIPPING_CANCELLED_STATE: ShippingState = {
+  name: 'CANCELLED',
+  label: '취소됨',
+  terminal: true,
+  desc: '출고 전에 주문이 취소되면 배송도 «취소됨»으로 바뀝니다. 이미 출고된 배송은 취소되지 않습니다.',
+};
+
+/**
  * WMS 연계(ADR-MONO-022) 안내 — 이커머스 배송이 WMS 풀필먼트로 라우팅된 경우.
  */
 export const SHIPPING_WMS_NOTE = {

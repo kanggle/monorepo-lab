@@ -203,7 +203,7 @@ export async function getEcommerceOverviewState(
           cell(listOrders({ status: s, page: 0, size: 1 })),
         ),
       ),
-      // TASK-PC-FE-360 — exactly 4 reads, one per shipping status.
+      // TASK-PC-FE-360 — exactly 5 reads, one per shipping status.
       Promise.all(
         SHIPPING_STATUS_VALUES.map((s) =>
           cell(listShippings({ status: s, page: 0, size: 1 })),

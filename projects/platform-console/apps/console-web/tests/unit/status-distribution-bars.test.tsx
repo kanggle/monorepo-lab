@@ -54,6 +54,7 @@ const SHIPPING_ALL = (c: number): ShippingStatusCount[] => [
   ship('SHIPPED', c),
   ship('IN_TRANSIT', c),
   ship('DELIVERED', c),
+  ship('CANCELLED', c),
 ];
 const APPROVAL_ALL = (c: number): ApprovalStatusCount[] => [
   appr('DRAFT', c),
@@ -71,12 +72,14 @@ describe('① shipping status bar', () => {
       ship('SHIPPED', 3),
       ship('IN_TRANSIT', 0),
       ship('DELIVERED', 4),
+      ship('CANCELLED', 2),
     ]);
     expect(segs?.map((s) => [s.key, s.value, s.tone])).toEqual([
       ['PREPARING', 1, 'warning'],
       ['SHIPPED', 3, 'progress'],
       ['IN_TRANSIT', 0, 'progress'],
       ['DELIVERED', 4, 'success'],
+      ['CANCELLED', 2, 'danger'],
     ]);
   });
 

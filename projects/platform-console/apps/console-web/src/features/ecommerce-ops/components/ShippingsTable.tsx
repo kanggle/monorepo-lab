@@ -119,7 +119,9 @@ export function ShippingsTable({
                         {nextStatusLabel(next)}
                       </Button>
                     )}
-                    {s.status !== 'PREPARING' && s.status !== 'DELIVERED' && (
+                    {s.status !== 'PREPARING' &&
+                      s.status !== 'DELIVERED' &&
+                      s.status !== 'CANCELLED' && (
                       <Button
                         variant="secondary"
                         size="sm"

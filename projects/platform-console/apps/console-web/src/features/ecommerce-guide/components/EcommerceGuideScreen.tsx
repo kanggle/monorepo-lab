@@ -17,6 +17,7 @@ import {
   PROMOTION_STATES,
   SELLER_STATES,
   SHIPPING_STATES,
+  SHIPPING_CANCELLED_STATE,
   SHIPPING_WMS_NOTE,
   TEMPLATE_TYPES,
   USER_NOTE,
@@ -531,7 +532,7 @@ export function EcommerceGuideScreen() {
                     </tr>
                   </thead>
                   <tbody>
-                    {SHIPPING_STATES.map((s) => (
+                    {[...SHIPPING_STATES, SHIPPING_CANCELLED_STATE].map((s) => (
                       <tr
                         key={s.name}
                         data-testid={`ecommerce-guide-shipping-${s.name}`}
