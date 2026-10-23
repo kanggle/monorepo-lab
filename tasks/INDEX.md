@@ -191,7 +191,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **READY (2026-10-24 UTC) — 소유자 결정: 별도 루트 티켓(착수 미지시).** 데드레터 접미사가 갈렸다 — platform 규칙 `.dlq` · 코드 `.dlq`(이커머스 · iam · fan) vs `.DLT`(erp · finance · scm · wms) · 브로커 선생성은 `.dlq` 만. AC-0 측정 → 소유자 선택((a) 규칙을 `.DLT` 로 · (b) 코드를 `.dlq` 로 · (c) 프로젝트별 Overrides) → 원자적 PR + 어긋남을 무는 가드. 출처 `TASK-BE-651` AC-0 ③. 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **READY (2026-10-24 UTC) — 소유자 결정: «주소 조회를 한 번으로 묶기»(코드 수선 · AWS 무변경).** `@demo/backend-resolver` 가 캐시가 비면 호출마다 `/status` 를 따로 친다 → 콘솔 개요 한 렌더가 계정 동시 실행 한도 **10** 을 넘겨 람다 `Throttles` 4·4·12·4 = APIGW 5xx 같은 수(33차 창, 개요를 연 분) → 조회 실패가 좋은 캐시를 덮고 다리가 `*.local` 로 떨어져 `DOWNSTREAM_ERROR`. 수선 = 진행 중 조회 공유(single-flight) + 실패가 마지막 좋은 스냅샷을 안 덮음(상한 있음). 라이브 AC = 다음 창 차가운 개요 여섯 카드 + 그 분 `Throttles` 0. 출처 `TASK-PC-FE-369` 기전 (e). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -213,6 +212,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **IN-PROGRESS (2026-10-24 UTC 착수) — 소유자 결정: «주소 조회를 한 번으로 묶기»(코드 수선 · AWS 무변경).** `@demo/backend-resolver` 가 캐시가 비면 호출마다 `/status` 를 따로 친다 → 콘솔 개요 한 렌더가 계정 동시 실행 한도 **10** 을 넘겨 람다 `Throttles` 4·4·12·4 = APIGW 5xx 같은 수(33차 창, 개요를 연 분) → 조회 실패가 좋은 캐시를 덮고 다리가 `*.local` 로 떨어져 `DOWNSTREAM_ERROR`. 수선 = 진행 중 조회 공유(single-flight) + 실패가 마지막 좋은 스냅샷을 안 덮음(상한 있음). 라이브 AC = 다음 창 차가운 개요 여섯 카드 + 그 분 `Throttles` 0. 출처 `TASK-PC-FE-369` 기전 (e). 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
