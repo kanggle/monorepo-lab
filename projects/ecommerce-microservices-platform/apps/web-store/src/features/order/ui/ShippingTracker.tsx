@@ -2,7 +2,12 @@
 
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useShippingTracking } from '../model/use-shipping-tracking';
-import { getStepIndex, getDeliveredDate } from '../lib/shipping-steps';
+import {
+  getStepIndex,
+  getDeliveredDate,
+  isShippingCancelled,
+  SHIPPING_CANCELLED_MESSAGE,
+} from '../lib/shipping-steps';
 import { ShippingStepIndicator } from './ShippingStepIndicator';
 import { formatDateTime } from '@/shared/lib';
 
@@ -47,6 +52,17 @@ export function ShippingTracker({ orderId }: Props) {
   }
 
   if (!shipping) return null;
+
+  if (isShippingCancelled(shipping)) {
+    return (
+      <section style={{ marginBottom: 'var(--space-8)' }}>
+        <h2 className="section-title">배송 추적</h2>
+        <p role="status" style={{ color: 'var(--color-error)' }}>
+          {SHIPPING_CANCELLED_MESSAGE}
+        </p>
+      </section>
+    );
+  }
 
   const currentIndex = getStepIndex(shipping.status);
   const deliveredDate = getDeliveredDate(shipping);
