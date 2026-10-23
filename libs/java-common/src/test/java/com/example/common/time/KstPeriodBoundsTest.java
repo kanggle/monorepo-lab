@@ -66,6 +66,13 @@ class KstPeriodBoundsTest {
     }
 
     @Test
+    void dateOf_cuts_the_kst_day_not_the_utc_day() {
+        assertThat(KstPeriodBounds.dateOf(Instant.parse("2026-10-22T14:59:59Z"))).hasToString("2026-10-22");
+        assertThat(KstPeriodBounds.dateOf(Instant.parse("2026-10-22T15:00:00Z"))).hasToString("2026-10-23");
+        assertThat(KstPeriodBounds.dateOf(Instant.parse("2026-10-22T16:30:00Z"))).hasToString("2026-10-23");
+    }
+
+    @Test
     void period_parses_case_insensitively_and_rejects_anything_else() {
         assertThat(MetricsPeriod.parse("week")).isEqualTo(MetricsPeriod.WEEK);
         assertThat(MetricsPeriod.parse(" MONTH ")).isEqualTo(MetricsPeriod.MONTH);

@@ -45,6 +45,7 @@ const getEcommerceOverviewState = vi.fn().mockResolvedValue({
 vi.mock('@/features/ecommerce-ops', () => ({
   getEcommerceOverviewState: () => getEcommerceOverviewState(),
   EcommerceOverview: () => <div data-testid="ecommerce-overview" />,
+  DEFAULT_OVERVIEW_PERIOD: 'month',
 }));
 
 import EcommercePage from '@/app/(console)/ecommerce/page';

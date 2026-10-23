@@ -3,9 +3,11 @@ import { redirect } from 'next/navigation';
 import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import {
+  DEFAULT_OVERVIEW_PERIOD,
   EcommerceOverview,
   getEcommerceOverviewState,
 } from '@/features/ecommerce-ops';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +40,12 @@ export const dynamic = 'force-dynamic';
  * section degrades on a transient failure; the `(console)` shell + other
  * sections stay intact (mirrors the scm/wms section degrade discipline).
  */
-export default async function EcommercePage() {
+export default async function EcommercePage({
+  searchParams,
+}: {
+  /** `?period=week|month` — the «실적» strip + rankings period (TASK-MONO-807). */
+  searchParams?: Promise<{ period?: string }>;
+} = {}) {
   // Eligibility pre-flight from the data-driven registry (§ 2.2).
   let eligible = false;
   let registryDegraded = false;
@@ -117,7 +124,12 @@ export default async function EcommercePage() {
   // The overview is a server-side direct fan-out over the ecommerce
   // list/summary/insights endpoints (per-cell degrade; a 401 in any leg
   // redirects to /login — no auth hole from removing the health leg).
-  const overviewPromise = getEcommerceOverviewState(true);
+  // An absent or unknown `?period=` falls back to the default — never a 400 page.
+  const requested = ((await searchParams) ?? {}).period;
+  const period = (METRICS_PERIODS as readonly string[]).includes(requested ?? '')
+    ? (requested as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
+  const overviewPromise = getEcommerceOverviewState(true, period);
   const overviewState = await overviewPromise;
 
   return (

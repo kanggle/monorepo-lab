@@ -5,6 +5,7 @@ import com.example.order.domain.model.OrderStatus;
 import com.example.common.page.PageQuery;
 import com.example.common.page.PageResult;
 import com.example.order.domain.repository.OrderRepository;
+import com.example.order.domain.repository.PaidOrderMetricRow;
 import com.example.order.domain.repository.ProductOrderRankingRow;
 import com.example.order.domain.repository.SellerOrderRankingRow;
 import com.example.order.domain.seller.SellerScopeContext;
@@ -265,8 +266,10 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductOrderRankingRow> aggregateProductRanking() {
-        return jpaRepository.aggregateProductRanking(TenantContext.currentTenant(), OrderStatus.CANCELLED).stream()
+    public List<ProductOrderRankingRow> aggregateProductRanking(Instant paidFrom, Instant paidTo) {
+        return jpaRepository.aggregateProductRanking(TenantContext.currentTenant(), OrderStatus.REALISED_SALE,
+                        paidFrom, paidTo,
+                        SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope()).stream()
                 .map(r -> new ProductOrderRankingRow(
                         (String) r[0], (String) r[1],
                         ((Number) r[2]).longValue(), ((Number) r[3]).longValue()))
@@ -275,10 +278,27 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SellerOrderRankingRow> aggregateSellerRanking() {
-        return jpaRepository.aggregateSellerRanking(TenantContext.currentTenant(), OrderStatus.CANCELLED).stream()
+    public List<SellerOrderRankingRow> aggregateSellerRanking(Instant paidFrom, Instant paidTo) {
+        return jpaRepository.aggregateSellerRanking(TenantContext.currentTenant(), OrderStatus.REALISED_SALE,
+                        paidFrom, paidTo,
+                        SellerScopeContext.isRestricted(), SellerScopeContext.currentSellerScope()).stream()
                 .map(r -> new SellerOrderRankingRow(
                         (String) r[0], ((Number) r[1]).longValue(), ((Number) r[2]).longValue()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaidOrderMetricRow> findPaidOrderMetrics(Instant paidFrom, Instant paidTo) {
+        boolean restricted = SellerScopeContext.isRestricted();
+        return jpaRepository.findPaidOrderMetrics(TenantContext.currentTenant(), OrderStatus.REALISED_SALE,
+                        paidFrom, paidTo, restricted, SellerScopeContext.currentSellerScope()).stream()
+                .map(r -> new PaidOrderMetricRow(
+                        (Instant) r[0],
+                        // Unrestricted: what the customer paid (coupon included). Seller-scoped:
+                        // that seller's line amounts — the order total would leak other sellers'.
+                        restricted ? ((Number) r[2]).longValue() : ((Number) r[1]).longValue(),
+                        ((Number) r[3]).longValue()))
                 .toList();
     }
 

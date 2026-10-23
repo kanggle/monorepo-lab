@@ -23,6 +23,7 @@ const m = vi.hoisted(() => ({
   getProductsSummary: vi.fn(),
   getOrdersSummary: vi.fn(),
   getOrderInsights: vi.fn(),
+  getOrderMetrics: vi.fn(),
   getUsersSummary: vi.fn(),
   getPromotionsSummary: vi.fn(),
   getShippingsSummary: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('@/features/ecommerce-ops/api/products-api', () => ({ getProductsSummary
 vi.mock('@/features/ecommerce-ops/api/orders-api', () => ({
   getOrdersSummary: m.getOrdersSummary,
   getOrderInsights: m.getOrderInsights,
+  getOrderMetrics: m.getOrderMetrics,
   listOrders: m.listOrders,
 }));
 vi.mock('@/features/ecommerce-ops/api/users-api', () => ({ getUsersSummary: m.getUsersSummary }));
@@ -91,6 +93,20 @@ const insightsFixture = () => ({
   topSellersByRevenue: [{ id: 's1', label: 's1', value: 400000 }],
 });
 
+/** `/orders/metrics` fixture (TASK-MONO-807) — the shared contract shape. */
+const metricsFixture = () => ({
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-23T14:05:00+09:00' },
+  previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-23T14:05:00+09:00' },
+  metrics: [
+    { key: 'revenue', unit: 'money', currency: 'KRW', current: '12340000', previous: '11020000' },
+    { key: 'units', unit: 'count', currency: null, current: '812', previous: '790' },
+    { key: 'orders', unit: 'count', currency: null, current: '301', previous: '288' },
+  ],
+  series: [{ date: '2026-10-01', values: { revenue: '410000', units: '27', orders: '10' } }],
+});
+
 /** Default happy fan-out: every leg resolves. */
 function seedHappy() {
   m.getProductsSummary.mockResolvedValue(summary(1, 5, 11, 100));
@@ -101,6 +117,7 @@ function seedHappy() {
   m.getTemplatesSummary.mockResolvedValue(summary(0, 3, 55, 550));
   m.getOrdersSummary.mockResolvedValue(summary(5, 25, 7, 70));
   m.getOrderInsights.mockResolvedValue(insightsFixture());
+  m.getOrderMetrics.mockResolvedValue(metricsFixture());
   // TASK-PC-FE-360 — per-status shipping counts: PREPARING 1 · SHIPPED 2 ·
   // IN_TRANSIT 0 · DELIVERED 4 · CANCELLED 1 (TASK-PC-FE-367).
   m.listShippings.mockImplementation((p: { status?: string } = {}) =>
@@ -314,6 +331,51 @@ describe('getEcommerceOverviewState (TASK-PC-FE-156 / TASK-PC-FE-164)', () => {
     const state = await getEcommerceOverviewState(false);
     expect(state.shippingStatus).toEqual([]);
     expect(m.listShippings).not.toHaveBeenCalled();
+  });
+
+  // ── TASK-MONO-807 — the «실적» strip + period-scoped rankings ─────────────
+
+  it('performance: the period reaches both the metrics and the insights leg', async () => {
+    seedHappy();
+    const state = await getEcommerceOverviewState(true, 'week');
+
+    expect(m.getOrderMetrics).toHaveBeenCalledWith('week');
+    expect(m.getOrderInsights).toHaveBeenCalledWith('week');
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual(['revenue', 'units', 'orders']);
+  });
+
+  it('performance: default period is the month', async () => {
+    seedHappy();
+    const state = await getEcommerceOverviewState(true);
+    expect(m.getOrderMetrics).toHaveBeenCalledWith('month');
+    expect(state.period).toBe('month');
+  });
+
+  it('performance: a 503 degrades only the strip — every other cell stays ok', async () => {
+    seedHappy();
+    m.getOrderMetrics.mockRejectedValue(new ApiError(503, 'UNAVAILABLE', 'down'));
+    const state = await getEcommerceOverviewState(true);
+
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.insightsStatus).toBe('ok');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+  });
+
+  it('performance: a 403 → forbidden; a 401 → whole-session redirect', async () => {
+    seedHappy();
+    m.getOrderMetrics.mockRejectedValue(new ApiError(403, 'ACCESS_DENIED', 'no'));
+    expect((await getEcommerceOverviewState(true)).performance.status).toBe('forbidden');
+
+    m.getOrderMetrics.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
+    await expect(getEcommerceOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+  });
+
+  it('not eligible → no metrics read', async () => {
+    const state = await getEcommerceOverviewState(false, 'week');
+    expect(m.getOrderMetrics).not.toHaveBeenCalled();
+    expect(state.performance.status).toBe('degraded');
   });
 
   // ── TASK-PC-FE-172 — insights leg + seller-name overlay ──────────────────

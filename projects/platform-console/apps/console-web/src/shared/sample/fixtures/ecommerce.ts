@@ -555,9 +555,11 @@ function sellerLabel(sellerId: string): string {
  * overlay is a no-op on a match) while keeping the raw fixture document
  * R2ⓐ-compliant on its own. Documented here rather than silently deviating.
  */
-function computeInsights() {
+function computeInsights(window: SampleWindow | null) {
+  // TASK-MONO-807 — the producer's basis: realised sales (paid + stock-reserved),
+  // optionally only those paid inside the period's current window.
   const active = ECOMMERCE_ORDERS.filter(
-    (o) => o.status !== 'CANCELLED' && o.status !== 'BACKORDERED',
+    (o) => REALISED_SALE.has(o.status) && (window === null || paidInside(o, window)),
   );
 
   const productOrderCount = new Map<string, number>();
@@ -606,11 +608,107 @@ function computeInsights() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/admin/orders/metrics?period= — the «실적» strip (TASK-MONO-807).
+// Derived from the same seed orders as every other sample screen, so the strip
+// never claims sales the sample order list does not show.
+// ---------------------------------------------------------------------------
+
+/** The producer's realised-sale statuses (order-api.md § /metrics). */
+const REALISED_SALE = new Set(['CONFIRMED', 'SHIPPED', 'DELIVERED']);
+
+interface SampleWindow {
+  from: string;
+  to: string;
+}
+
+type SamplePeriod = 'week' | 'month';
+
+/**
+ * The windows the producer would compute at `SAMPLE_AS_OF` (2026-09-15 20:00 KST,
+ * a Tuesday). Written out — `shared/sample/**` may not import `shared/lib/kst-period`
+ * (isolation guard) — and pinned against `kstMetricsWindows` by
+ * `tests/unit/sample-ecommerce-metrics.test.ts`, so they cannot drift from it.
+ */
+export const SAMPLE_METRICS_WINDOWS: Readonly<
+  Record<SamplePeriod, { current: SampleWindow; previous: SampleWindow; dates: readonly string[] }>
+> = {
+  week: {
+    current: { from: '2026-09-14T00:00:00+09:00', to: '2026-09-15T20:00:00+09:00' },
+    previous: { from: '2026-09-07T00:00:00+09:00', to: '2026-09-08T20:00:00+09:00' },
+    dates: ['2026-09-14', '2026-09-15'],
+  },
+  month: {
+    current: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-15T20:00:00+09:00' },
+    previous: { from: '2026-08-01T00:00:00+09:00', to: '2026-08-15T20:00:00+09:00' },
+    dates: Array.from({ length: 15 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`),
+  },
+};
+
+/** A seed order's synthetic paid time: its last update, else its creation. */
+function samplePaidAt(o: OrderSeed): string {
+  return o.updatedAt ?? o.createdAt;
+}
+
+function paidInside(o: OrderSeed, w: SampleWindow): boolean {
+  const t = Date.parse(samplePaidAt(o));
+  return t >= Date.parse(w.from) && t < Date.parse(w.to);
+}
+
+/** KST calendar date of an instant (fixed +09:00 — no DST). */
+function kstDate(iso: string): string {
+  return new Date(Date.parse(iso) + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function samplePeriod(query: URLSearchParams): SamplePeriod | null {
+  const p = query.get('period')?.toLowerCase();
+  return p === 'week' || p === 'month' ? p : null;
+}
+
+function computeMetrics(period: SamplePeriod) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  const realised = ECOMMERCE_ORDERS.filter((o) => REALISED_SALE.has(o.status));
+  const current = realised.filter((o) => paidInside(o, w.current));
+  const previous = realised.filter((o) => paidInside(o, w.previous));
+  const revenue = (os: readonly OrderSeed[]) => os.reduce((s, o) => s + orderTotal(o.items), 0);
+  const units = (os: readonly OrderSeed[]) =>
+    os.reduce((s, o) => s + o.items.reduce((a, it) => a + it.quantity, 0), 0);
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    // Integer STRINGS, like the producer (F5).
+    metrics: [
+      { key: 'revenue', unit: 'money', currency: 'KRW', current: String(revenue(current)), previous: String(revenue(previous)) },
+      { key: 'units', unit: 'count', currency: null, current: String(units(current)), previous: String(units(previous)) },
+      { key: 'orders', unit: 'count', currency: null, current: String(current.length), previous: String(previous.length) },
+    ],
+    series: w.dates.map((date) => {
+      const day = current.filter((o) => kstDate(samplePaidAt(o)) === date);
+      return {
+        date,
+        values: { revenue: String(revenue(day)), units: String(units(day)), orders: String(day.length) },
+      };
+    }),
+  };
+}
+
 function ordersFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
 
   if (pathname === `${ORDERS_PATH}/summary`) return ORDERS_SUMMARY;
-  if (pathname === `${ORDERS_PATH}/insights`) return computeInsights();
+  if (pathname === `${ORDERS_PATH}/insights`) {
+    const p = samplePeriod(query);
+    return computeInsights(p ? SAMPLE_METRICS_WINDOWS[p].current : null);
+  }
+  // Before the `/{id}` detail match below, which would read `metrics` as an order id.
+  if (pathname === `${ORDERS_PATH}/metrics`) {
+    const p = samplePeriod(query);
+    // No / unknown period: the producer answers 400; the console always sends one, so
+    // the sample leaves it unanswered (→ the router's 503 «not ready»).
+    return p ? computeMetrics(p) : undefined;
+  }
 
   if (pathname === ORDERS_PATH) {
     const status = query.get('status');
@@ -1208,7 +1306,9 @@ export const ECOMMERCE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   'ecommerce:ecommerce_image': {},
   'ecommerce:ecommerce_order': {
     content: ECOMMERCE_ORDERS,
-    insights: computeInsights(),
+    insights: computeInsights(null),
+    // TASK-MONO-807 — the «실적» strip answers, so the label guard scans them too.
+    metrics: { week: computeMetrics('week'), month: computeMetrics('month') },
   },
   'ecommerce:ecommerce_user': { content: ECOMMERCE_USERS },
   'ecommerce:ecommerce_promotion': { content: ECOMMERCE_PROMOTIONS },

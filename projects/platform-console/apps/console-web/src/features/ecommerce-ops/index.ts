@@ -272,7 +272,10 @@ export {
 // ---------------------------------------------------------------------------
 export { EcommerceOverview } from './components/EcommerceOverview';
 export { RankingBarChart } from './components/RankingBarChart';
-export { getEcommerceOverviewState } from './api/overview-state';
+export {
+  getEcommerceOverviewState,
+  DEFAULT_OVERVIEW_PERIOD,
+} from './api/overview-state';
 export type {
   EcommerceOverviewState,
   EcommerceInsights,

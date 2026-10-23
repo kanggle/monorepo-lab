@@ -62,6 +62,7 @@ const { getEcommerceOverviewStateMock } = vi.hoisted(() => ({
 vi.mock('@/features/ecommerce-ops', () => ({
   getEcommerceOverviewState: getEcommerceOverviewStateMock,
   EcommerceOverview: () => <div data-testid="ecommerce-overview" />,
+  DEFAULT_OVERVIEW_PERIOD: 'month',
 }));
 
 import EcommercePage from '@/app/(console)/ecommerce/page';
@@ -113,12 +114,25 @@ describe('EcommercePage (TASK-MONO-241 /ecommerce drill-in)', () => {
     ).toBeInTheDocument();
     // The operator overview snapshot is composed onto the eligible path.
     expect(screen.getByTestId('ecommerce-overview')).toBeInTheDocument();
-    expect(getEcommerceOverviewStateMock).toHaveBeenCalledWith(true);
+    // TASK-MONO-807 — no `?period=` → the default period.
+    expect(getEcommerceOverviewStateMock).toHaveBeenCalledWith(true, 'month');
     // The removed 도메인 상태 block no longer renders a health card.
     expect(screen.queryByTestId('domain-health-card-ecommerce')).toBeNull();
     expect(screen.queryByText('도메인 상태')).toBeNull();
     // The stale "준비중" coming-soon note is gone.
     expect(screen.queryByTestId('ecommerce-ops-coming-soon')).toBeNull();
+  });
+
+  it('TASK-MONO-807 — ?period=week is passed through; an unknown value falls back to the default', async () => {
+    getCatalogMock.mockResolvedValue(ELIGIBLE_CATALOG);
+
+    render(await EcommercePage({ searchParams: Promise.resolve({ period: 'week' }) }));
+    expect(getEcommerceOverviewStateMock).toHaveBeenLastCalledWith(true, 'week');
+
+    cleanup();
+    render(await EcommercePage({ searchParams: Promise.resolve({ period: 'year' }) }));
+    expect(getEcommerceOverviewStateMock).toHaveBeenLastCalledWith(true, 'month');
+    expect(screen.getByTestId('ecommerce-section')).toBeInTheDocument();
   });
 
   it('registry degraded → degraded note (never blocks on an unproven negative)', async () => {

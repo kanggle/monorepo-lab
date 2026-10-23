@@ -54,6 +54,15 @@ public final class KstPeriodBounds {
         return new KstPeriodBounds(ZonedDateTime.now(clock).withZoneSameInstant(KST));
     }
 
+    /**
+     * The KST calendar date an instant falls on — the series bucket of a row attributed to
+     * that instant (ADR-MONO-084 D3, TASK-MONO-807). {@code 2026-10-22T16:30Z} is
+     * {@code 2026-10-23}: the UTC date would put a 01:30 KST sale on the day before.
+     */
+    public static LocalDate dateOf(Instant instant) {
+        return instant.atZone(KST).toLocalDate();
+    }
+
     public Instant nowInstant() {
         return now.toInstant();
     }

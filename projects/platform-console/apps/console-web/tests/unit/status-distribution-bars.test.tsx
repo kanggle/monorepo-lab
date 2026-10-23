@@ -213,6 +213,8 @@ const ecommerceState = (
   recentSellersStatus: 'ok',
   insights: null,
   insightsStatus: 'ok',
+  period: 'month',
+  performance: { status: 'degraded', value: null },
 });
 
 describe('③ EcommerceOverview shipping section', () => {
