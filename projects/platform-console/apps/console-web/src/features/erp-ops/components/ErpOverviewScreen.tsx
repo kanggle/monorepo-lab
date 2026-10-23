@@ -5,6 +5,8 @@ import { approvalStatusTone } from '../api/approval-types';
 import { statusLabel as approvalStatusLabel } from './approval-common';
 import { ApprovalStatusBar } from './ApprovalStatusBar';
 import type { ErpOverviewState, ErpAreaCount } from '../api/overview-state';
+import { PerformanceStrip } from '@/shared/ui/PerformanceStrip';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
 import {
   overviewCellPlaceholder as cellPlaceholder,
   OVERVIEW_STATUS_DOT as SERVICE_STATUS_DOT,
@@ -33,6 +35,26 @@ import {
  */
 export interface ErpOverviewScreenProps {
   state: ErpOverviewState;
+  /** The page's `?asOf=` (masterdata counts only). Carried so the «실적» period
+   *  links keep it and the strip can say it is NOT asOf-driven. */
+  asOf?: string | null;
+}
+
+/** `GET /api/erp/approval/metrics` keys (approval-api.md) -> screen names. */
+const PERFORMANCE_LABELS: Readonly<Record<string, string>> = {
+  submitted: '상신',
+  approved: '승인',
+  rejected: '반려',
+};
+
+function periodHrefs(asOf?: string | null): Readonly<Record<MetricsPeriod, string>> {
+  const href = (p: MetricsPeriod) => {
+    const qs = new URLSearchParams();
+    if (asOf) qs.set('asOf', asOf);
+    qs.set('period', p);
+    return `/erp?${qs.toString()}`;
+  };
+  return { week: href('week'), month: href('month') };
 }
 
 function CountTile({ area }: { area: ErpAreaCount }) {
@@ -75,9 +97,31 @@ function CountTile({ area }: { area: ErpAreaCount }) {
   );
 }
 
-export function ErpOverviewScreen({ state }: ErpOverviewScreenProps) {
+export function ErpOverviewScreen({ state, asOf }: ErpOverviewScreenProps) {
   return (
     <section aria-labelledby="erp-overview-heading" data-testid="erp-overview">
+      {/* «실적» strip (ADR-MONO-084 P4, TASK-MONO-809) — first block of the
+          overview. A period axis: always «up to now», never asOf-driven. */}
+      <PerformanceStrip
+        cell={state.performance}
+        selected={state.period}
+        periodHrefs={periodHrefs(asOf)}
+        labels={PERFORMANCE_LABELS}
+        chartKey="submitted"
+        testid="erp-performance"
+      />
+      <div className="-mt-3 mb-6 space-y-1 text-xs text-muted-foreground">
+        <p data-testid="erp-performance-scope">
+          운영자 권한이면 전체 결재, 그렇지 않으면 내가 상신했거나 결재할 건만
+          집계됩니다.
+        </p>
+        {asOf && (
+          <p data-testid="erp-performance-asof-note">
+            실적 줄은 기준일(asOf)과 관계없이 오늘까지의 기간입니다.
+          </p>
+        )}
+      </div>
+
       <h1 id="erp-overview-heading" className="mb-2 text-2xl font-semibold">
         ERP 개요
       </h1>

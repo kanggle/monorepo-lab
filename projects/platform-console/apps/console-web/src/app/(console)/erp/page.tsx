@@ -1,10 +1,12 @@
 import {
+  DEFAULT_OVERVIEW_PERIOD,
   ErpOverviewScreen,
   ErpSectionNotice,
   getErpOverviewState,
   MyAccountLinkProposalsCard,
 } from '@/features/erp-ops';
 import { resolveErpEligibility } from './_eligibility';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +42,9 @@ const HEADING = 'ERP 개요';
 export default async function ErpOverviewPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ asOf?: string }>;
+  /** `?asOf=` masterdata counts only; `?period=week|month` the «실적» strip
+   *  (TASK-MONO-809). */
+  searchParams?: Promise<{ asOf?: string; period?: string }>;
 }) {
   const { eligible, registryDegraded } = await resolveErpEligibility();
   if (registryDegraded) {
@@ -50,7 +54,13 @@ export default async function ErpOverviewPage({
   const sp = (await searchParams) ?? {};
   const asOf = sp.asOf?.trim() || null;
 
-  const state = await getErpOverviewState(eligible, asOf);
+  // An absent or unknown `?period=` falls back to the default (never a 400 page).
+  const requested = sp.period;
+  const period = (METRICS_PERIODS as readonly string[]).includes(requested ?? '')
+    ? (requested as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
+
+  const state = await getErpOverviewState(eligible, asOf, period);
 
   if (state.notEligible) {
     return <ErpSectionNotice kind="notEligible" heading={HEADING} />;
@@ -62,7 +72,7 @@ export default async function ErpOverviewPage({
   // (client, degrades on its own — AC-0 ② placement).
   return (
     <>
-      <ErpOverviewScreen state={state} />
+      <ErpOverviewScreen state={state} asOf={asOf} />
       <MyAccountLinkProposalsCard />
     </>
   );

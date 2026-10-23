@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-809-erp-overview-performance-metrics.md` — **P4 ERP** (READY): 결재 상신 · 승인 · 반려(전이 시각 귀속). 선행 806. 분석=Opus 5.5 / 구현 권장=Sonnet(AC-0 에서 전이 시각이 없으면 Opus).
 - `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
@@ -222,6 +221,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-809-erp-overview-performance-metrics.md` — **`ADR-MONO-084` P4 ERP 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0 · 3 닫힘 · AC-1 · 2 = CI 의 MySQL IT · AC-4 = 다음 굽기 + 창). approval-service `GET /api/erp/approval/metrics?period=` — 상신(`submitted_at`) · 승인(`finalized_at` + APPROVED, 최종 단계만) · 반려(`finalized_at` + REJECTED) · 🔴 중간 단계 승인은 이력 표에 `APPROVED` 로 남고 회수도 `finalized_at` 을 써서 상태 필터 없이는 섞인다 · 범위 = 목록 Q4 · V6 인덱스 / 콘솔 `/erp` 실적 줄 · `?asOf=` 는 마스터 건수만(실적 줄에 안내). 분석=Opus 5.5 / 구현=Sonnet.
 
 - `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **REVIEW (2026-10-24 UTC · CI 빨강(3, 동작) → 초록 · nightly success · AC-5 = 머지 뒤 Vercel · AC-6 = 다음 창) — 소유자 결정: «주소 조회를 한 번으로 묶기»(코드 수선 · AWS 무변경).** `@demo/backend-resolver` 가 캐시가 비면 호출마다 `/status` 를 따로 친다 → 콘솔 개요 한 렌더가 계정 동시 실행 한도 **10** 을 넘겨 람다 `Throttles` 4·4·12·4 = APIGW 5xx 같은 수(33차 창, 개요를 연 분) → 조회 실패가 좋은 캐시를 덮고 다리가 `*.local` 로 떨어져 `DOWNSTREAM_ERROR`. 수선 = 진행 중 조회 공유(single-flight) + 실패가 마지막 좋은 스냅샷을 안 덮음(상한 있음). 라이브 AC = 다음 창 차가운 개요 여섯 카드 + 그 분 `Throttles` 0. 출처 `TASK-PC-FE-369` 기전 (e). 분석=Opus 5.5 / 구현 권장=Opus.
 

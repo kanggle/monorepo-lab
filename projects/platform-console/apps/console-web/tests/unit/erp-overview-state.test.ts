@@ -31,6 +31,7 @@ const m = vi.hoisted(() => ({
   listApprovalInbox: vi.fn(),
   listApprovalRequests: vi.fn(),
   listDelegationFacts: vi.fn(),
+  getApprovalMetrics: vi.fn(),
 }));
 vi.mock('@/features/erp-ops/api/erp-api', () => ({
   listDepartments: m.listDepartments,
@@ -42,6 +43,7 @@ vi.mock('@/features/erp-ops/api/erp-api', () => ({
 vi.mock('@/features/erp-ops/api/approval-api', () => ({
   listApprovalInbox: m.listApprovalInbox,
   listApprovalRequests: m.listApprovalRequests,
+  getApprovalMetrics: m.getApprovalMetrics,
 }));
 vi.mock('@/features/erp-ops/api/erp-delegation-facts-api', () => ({
   listDelegationFacts: m.listDelegationFacts,
@@ -55,7 +57,22 @@ const listResp = (totalElements: number, len = 0) => ({
   meta: { totalElements },
 });
 
+/** `/api/erp/approval/metrics` body (TASK-MONO-809) — the shared contract shape. */
+const metricsFixture = () => ({
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-07-01T00:00:00+09:00', to: '2026-07-15T12:00:00+09:00' },
+  previous: { from: '2026-06-01T00:00:00+09:00', to: '2026-06-15T12:00:00+09:00' },
+  metrics: [
+    { key: 'submitted', unit: 'count', currency: null, current: '12', previous: '9' },
+    { key: 'approved', unit: 'count', currency: null, current: '8', previous: '8' },
+    { key: 'rejected', unit: 'count', currency: null, current: '1', previous: '2' },
+  ],
+  series: [{ date: '2026-07-01', values: { submitted: '2', approved: '1', rejected: '0' } }],
+});
+
 function seedHappy() {
+  m.getApprovalMetrics.mockResolvedValue(metricsFixture());
   m.listDepartments.mockResolvedValue(listResp(5));
   m.listEmployees.mockResolvedValue(listResp(120));
   m.listJobGrades.mockResolvedValue(listResp(8));
@@ -89,6 +106,8 @@ describe('getErpOverviewState (TASK-PC-FE-232)', () => {
     expect(m.listDepartments).not.toHaveBeenCalled();
     expect(m.listApprovalInbox).not.toHaveBeenCalled();
     expect(m.listDelegationFacts).not.toHaveBeenCalled();
+    expect(m.getApprovalMetrics).not.toHaveBeenCalled();
+    expect(state.performance.status).toBe('degraded');
   });
 
   it('happy → maps all 7 counts from meta.totalElements', async () => {
@@ -294,6 +313,70 @@ describe('getErpOverviewState (TASK-PC-FE-232)', () => {
     await expect(getErpOverviewState(true)).rejects.toThrow(
       'REDIRECT:/login',
     );
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  // ── TASK-MONO-809 — the «실적» strip ────────────────────────────────────
+
+  it('performance: the period reaches the metrics leg (asOf is NOT passed)', async () => {
+    seedHappy();
+    const state = await getErpOverviewState(true, '2026-01-01', 'week');
+
+    expect(m.getApprovalMetrics).toHaveBeenCalledTimes(1);
+    expect(m.getApprovalMetrics.mock.calls[0]).toEqual(['week']);
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual([
+      'submitted',
+      'approved',
+      'rejected',
+    ]);
+    // asOf still reaches the masterdata legs only.
+    expect(m.listEmployees).toHaveBeenCalledWith({ page: 0, size: 1, asOf: '2026-01-01' });
+    expect(m.listApprovalInbox).toHaveBeenCalledWith({ page: 0, size: 1 });
+  });
+
+  it('performance: default period is the month', async () => {
+    seedHappy();
+    const state = await getErpOverviewState(true);
+    expect(m.getApprovalMetrics).toHaveBeenCalledWith('month');
+    expect(state.period).toBe('month');
+  });
+
+  it('performance: a 503 degrades only the strip — the status block + counts stay ok', async () => {
+    seedHappy();
+    m.getApprovalMetrics.mockRejectedValue(
+      new ErpUnavailableError('downstream', 'SERVICE_UNAVAILABLE', 'down'),
+    );
+    const state = await getErpOverviewState(true);
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+    expect(state.approvalStatus.every((b) => b.cellStatus === 'ok')).toBe(true);
+  });
+
+  it('performance: a 400 or an unparseable body degrades the strip only', async () => {
+    seedHappy();
+    m.getApprovalMetrics.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'period'));
+    expect((await getErpOverviewState(true)).performance.status).toBe('degraded');
+
+    m.getApprovalMetrics.mockResolvedValue({
+      ...metricsFixture(),
+      metrics: [{ key: 'submitted', unit: 'count', currency: null, current: 12, previous: '1' }],
+    });
+    const state = await getErpOverviewState(true);
+    expect(state.performance.status).toBe('degraded');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+  });
+
+  it('performance: a 403 -> forbidden; a 401 -> whole-session redirect', async () => {
+    seedHappy();
+    m.getApprovalMetrics.mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'no'));
+    const state = await getErpOverviewState(true);
+    expect(state.performance.status).toBe('forbidden');
+    expect(state.counts.every((c) => c.status === 'ok')).toBe(true);
+
+    m.getApprovalMetrics.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
+    await expect(getErpOverviewState(true)).rejects.toThrow('REDIRECT:/login');
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 });

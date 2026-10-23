@@ -24,6 +24,7 @@ export {
   getApprovalRequest,
   listApprovalInbox,
 } from './approval-reads';
+export { getApprovalMetrics } from './approval-metrics-api';
 export {
   createApprovalRequest,
   submitApproval,

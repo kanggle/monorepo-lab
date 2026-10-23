@@ -1,5 +1,12 @@
 import { SAMPLE_AS_OF, SAMPLE_LABEL_SUFFIX } from '../codes';
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+} from './metrics-windows';
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -684,6 +691,7 @@ function erpFixture(path: string): unknown {
 
 const APPROVAL_REQUESTS_PATH = '/api/erp/approval/requests';
 const APPROVAL_INBOX_PATH = '/api/erp/approval/inbox';
+const APPROVAL_METRICS_PATH = '/api/erp/approval/metrics';
 
 interface ApprovalHistoryEntrySeed {
   transition: string;
@@ -843,8 +851,74 @@ function requestSummary(r: ApprovalRequestSeed) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/erp/approval/metrics?period= — the 개요 «실적» strip (ADR-MONO-084
+// P4, TASK-MONO-809). Derived from the SAME seed requests the 결재함 shows:
+//   - 상신 (`submitted`) — `submittedAt` inside the window.
+//   - 승인 (`approved`) — FINAL approval only: status APPROVED, at `finalizedAt`
+//     (the IN_REVIEW request's stage-0 approval is not a final approval).
+//   - 반려 (`rejected`) — status REJECTED, at `finalizedAt`.
+// Every terminal seed row carries `finalizedAt`, so nothing is derived. The
+// sample visitor is treated as an operator: the whole (sample) tenant.
+// ---------------------------------------------------------------------------
+
+type ApprovalMetricKey = 'submitted' | 'approved' | 'rejected';
+const APPROVAL_METRIC_KEYS: readonly ApprovalMetricKey[] = ['submitted', 'approved', 'rejected'];
+
+interface ApprovalEvent {
+  key: ApprovalMetricKey;
+  at: string;
+}
+
+const APPROVAL_EVENTS: readonly ApprovalEvent[] = ERP_APPROVAL_REQUESTS.flatMap(
+  (r): ApprovalEvent[] => {
+    const events: ApprovalEvent[] = [];
+    if (r.submittedAt) events.push({ key: 'submitted', at: r.submittedAt });
+    if (r.status === 'APPROVED' && r.finalizedAt) events.push({ key: 'approved', at: r.finalizedAt });
+    if (r.status === 'REJECTED' && r.finalizedAt) events.push({ key: 'rejected', at: r.finalizedAt });
+    return events;
+  },
+);
+
+function computeApprovalMetrics(period: SamplePeriod) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  const count = (key: ApprovalMetricKey, win: { from: string; to: string }, date?: string) =>
+    APPROVAL_EVENTS.filter(
+      (e) => e.key === key && instantInside(e.at, win) && (date === undefined || kstDate(e.at) === date),
+    ).length;
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    // Integer STRINGS, like the producer (F5).
+    metrics: APPROVAL_METRIC_KEYS.map((key) => ({
+      key,
+      unit: 'count',
+      currency: null,
+      current: String(count(key, w.current)),
+      previous: String(count(key, w.previous)),
+    })),
+    // Every date of the current window, zero-filled.
+    series: w.dates.map((date) => ({
+      date,
+      values: Object.fromEntries(
+        APPROVAL_METRIC_KEYS.map((key) => [key, String(count(key, w.current, date))]),
+      ),
+    })),
+  };
+}
+
 function approvalFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
+
+  // Matched on the exact path, ahead of the `/requests/{id}` regex below.
+  if (pathname === APPROVAL_METRICS_PATH) {
+    const p = samplePeriod(query);
+    // No / unknown period: the producer answers 400; the console always sends
+    // one, so the sample leaves it unanswered (-> the router's 503 «not ready»).
+    return p ? computeApprovalMetrics(p) : undefined;
+  }
 
   if (pathname === APPROVAL_INBOX_PATH) {
     const page = intParam(query, 'page', 0);

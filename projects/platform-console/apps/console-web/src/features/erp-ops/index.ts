@@ -39,7 +39,10 @@ export type { ErpMastersScreenProps } from './components/ErpMastersScreen';
 // expands the former TASK-PC-FE-161 masters-embedded overview.
 export { ErpOverviewScreen } from './components/ErpOverviewScreen';
 export type { ErpOverviewScreenProps } from './components/ErpOverviewScreen';
-export { getErpOverviewState } from './api/overview-state';
+export {
+  getErpOverviewState,
+  DEFAULT_OVERVIEW_PERIOD,
+} from './api/overview-state';
 export type {
   ErpOverviewState,
   ErpAreaCount,

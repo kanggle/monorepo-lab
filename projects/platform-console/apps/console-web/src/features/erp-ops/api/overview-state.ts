@@ -7,7 +7,16 @@ import {
   listCostCenters,
   listBusinessPartners,
 } from './erp-api';
-import { listApprovalInbox, listApprovalRequests } from './approval-api';
+import {
+  listApprovalInbox,
+  listApprovalRequests,
+  getApprovalMetrics,
+} from './approval-api';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
 import { APPROVAL_STATUSES, type ApprovalStatus } from './approval-types';
 import { listDelegationFacts } from './erp-delegation-facts-api';
 import type { ErpListQueryParams } from './types';
@@ -87,7 +96,15 @@ export interface ErpOverviewState {
    *  cells. Population = the producer's `/requests` scope (tenant-wide for an
    *  operator, the caller's own rows otherwise). */
   approvalStatus: ApprovalStatusCount[];
+  /** The period the «실적» strip shows (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (ADR-MONO-084 P4, TASK-MONO-809) — its own cell: 상신 ·
+   *  승인 · 반려. A period axis, NOT asOf-driven (always «up to now» windows). */
+  performance: PerformanceCell;
 }
+
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month. */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
 
 interface Cell<T> {
   value: T | null;
@@ -124,6 +141,7 @@ function countOf(
 /**
  * @param eligible whether the operator is erp-eligible (resolved by the page
  *   from the data-driven registry). `false` ⇒ no fan-out, no calls.
+ * @param period the «실적» strip's period (TASK-MONO-809); not asOf-driven.
  * @param asOf optional E3 point-in-time read — threaded through every
  *   MASTERDATA count leg verbatim (matching `getErpMastersState`). Omitted
  *   ⇒ producer resolves "today". Does NOT thread into the approval /
@@ -132,16 +150,23 @@ function countOf(
 export async function getErpOverviewState(
   eligible: boolean,
   asOf?: string | null,
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
 ): Promise<ErpOverviewState> {
   if (!eligible) {
-    return { notEligible: true, counts: [], approvalStatus: [] };
+    return {
+      notEligible: true,
+      counts: [],
+      approvalStatus: [],
+      period,
+      performance: { status: 'degraded', value: null },
+    };
   }
 
   const masterParams: ErpListQueryParams = { page: 0, size: 1 };
   if (asOf) masterParams.asOf = asOf;
 
   try {
-    const [dep, emp, jg, cc, bp, approval, delegation, statusCells] =
+    const [dep, emp, jg, cc, bp, approval, delegation, statusCells, performance] =
       await Promise.all([
       cell(listDepartments(masterParams)),
       cell(listEmployees(masterParams)),
@@ -158,6 +183,9 @@ export async function getErpOverviewState(
           cell(listApprovalRequests({ status: s, page: 0, size: 1 })),
         ),
       ),
+      // TASK-MONO-809 — the «실적» strip; 401 re-thrown like every leg, anything
+      // else degrades the strip only. `asOf` is deliberately NOT passed.
+      performanceMetricsCell(getApprovalMetrics(period)),
     ]);
 
     const counts: ErpAreaCount[] = [
@@ -193,7 +221,7 @@ export async function getErpOverviewState(
       }),
     );
 
-    return { notEligible: false, counts, approvalStatus };
+    return { notEligible: false, counts, approvalStatus, period, performance };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
     if (err instanceof ApiError && err.status === 401) {
