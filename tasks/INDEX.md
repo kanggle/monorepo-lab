@@ -189,6 +189,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 - `TASK-MONO-810-scm-overview-performance-metrics.md` — **P5 SCM** (READY): 발주 건수 · 금액 · 입고 완료 + 발주 목록 날짜 필터. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **READY (2026-10-24 UTC) — 소유자 결정: 별도 루트 티켓(착수 미지시).** 데드레터 접미사가 갈렸다 — platform 규칙 `.dlq` · 코드 `.dlq`(이커머스 · iam · fan) vs `.DLT`(erp · finance · scm · wms) · 브로커 선생성은 `.dlq` 만. AC-0 측정 → 소유자 선택((a) 규칙을 `.DLT` 로 · (b) 코드를 `.dlq` 로 · (c) 프로젝트별 Overrides) → 원자적 PR + 어긋남을 무는 가드. 출처 `TASK-BE-651` AC-0 ③. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-814-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드 KST 창 · 문구** (READY, 2026-10-24 UTC): 🔴 `TASK-MONO-808` admin V6 를 싣는 **굽기와 같은 창에** 머지(콘솔은 Vercel 즉시 배포 — 먼저 나가면 화면이 데이터보다 앞서 «한국 시간» 이라 말한다). 선행 808 + 굽기. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
