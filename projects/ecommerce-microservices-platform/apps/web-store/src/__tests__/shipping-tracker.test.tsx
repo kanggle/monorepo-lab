@@ -70,6 +70,20 @@ const MOCK_SHIPPING_DELIVERED: ShippingResponse = {
   updatedAt: '2026-04-03T11:30:00Z',
 };
 
+const MOCK_SHIPPING_CANCELLED: ShippingResponse = {
+  shippingId: 'ship-1',
+  orderId: 'order-1',
+  status: 'CANCELLED',
+  trackingNumber: null,
+  carrier: null,
+  statusHistory: [
+    { status: 'PREPARING', changedAt: '2026-04-01T10:00:00Z' },
+    { status: 'CANCELLED', changedAt: '2026-04-01T12:00:00Z' },
+  ],
+  createdAt: '2026-04-01T10:00:00Z',
+  updatedAt: '2026-04-01T12:00:00Z',
+};
+
 describe('ShippingTracker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -300,6 +314,25 @@ describe('ShippingTracker', () => {
     });
 
     expect(screen.getByText(/운송장 번호: 정보 없음/)).toBeInTheDocument();
+  });
+
+  it('CANCELLED 상태에서 단계 대신 취소 안내를 표시한다', async () => {
+    mockGetShippingByOrder.mockResolvedValueOnce(MOCK_SHIPPING_CANCELLED);
+
+    render(
+      <TestQueryProvider>
+        <ShippingTracker orderId="order-1" />
+      </TestQueryProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('주문이 취소되어 배송이 취소되었습니다.')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('list', { name: '배송 진행 상태' })).not.toBeInTheDocument();
+    expect(screen.queryByText('상품 준비중')).not.toBeInTheDocument();
+    expect(screen.queryByText(/택배사:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/배송 완료일:/)).not.toBeInTheDocument();
   });
 
   it('스텝 인디케이터에 role="list" 속성이 있다', async () => {

@@ -8,7 +8,7 @@ TASK-FE-110
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -46,7 +46,13 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 측정.
+- [ ] **AC-0** — 위 측정. **측정함 (2026-10-23 UTC)** — 웹스토어가 `ShippingStatus` 를 받는 곳:
+  `packages/types/src/shipping.ts:3`(유니온 · `ShippingStatusHistoryEntry:6` · `ShippingResponse:13` 이 씀) ·
+  `apps/web-store/src/features/order/lib/shipping-steps.ts:3-12`(`SHIPPING_STEPS` · `getStepIndex` → 모르는 값은 -1) ·
+  `features/order/ui/ShippingTracker.tsx:51`(`currentIndex=-1` → `ShippingStepIndicator` 가 켜진 단계 없이 그림) ·
+  `ShippingStepIndicator.tsx:19-21`. 소비 지점은 `OrderDetailView.tsx:97` 하나뿐 — 주문 목록에는 배송 표시가 없다.
+  `OrderStatusBadge.tsx:8` 은 *주문* 상태(`CANCELLED` 는 이미 있음)라 무관. 메시지 카탈로그(i18n) 없음 — 한국어 문자열 직접 기재라 로케일은 하나.
+  `UpdateShippingStatusRequest.status`(`shipping.ts:40`)는 운영자 대상이라 `CANCELLED` 제외(계약 `shipping-api.md:203`).
 - [ ] **AC-1** — 문구 소유자 승인.
 - [ ] **AC-2** — 구현 + 단위 시험 · CI 초록 · 브랜치 nightly(web-store full-stack) 확인.
 - [ ] **AC-3** — 굽기 뒤 라이브: 출고 전에 취소한 주문의 배송이 취소로 보인다.

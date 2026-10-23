@@ -76,11 +76,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **READY (2026-10-23 UTC) — TASK-BE-649 곁 발견.** 웹스토어 배송 추적이 «취소됨»(`CANCELLED`) 배송을 몰라서 켜지는 단계 없이 빈 추적기가 보인다(깨지지는 않는다). 타입 · 추적기 · 문구(머지 전 소유자 승인). 콘솔 짝 = `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
+
+- `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **IN-PROGRESS (2026-10-23 UTC) — TASK-BE-649 곁 발견.** 웹스토어 배송 추적이 «취소됨»(`CANCELLED`) 배송을 몰라서 켜지는 단계 없이 빈 추적기가 보인다(깨지지는 않는다). 타입 · 추적기 · 문구(머지 전 소유자 승인). 콘솔 짝 = `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## review
 
