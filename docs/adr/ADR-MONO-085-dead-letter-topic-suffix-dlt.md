@@ -1,13 +1,16 @@
 # ADR-MONO-085 — 데드레터 토픽 이름을 하나로 정한다 (갈래 A·B·C, 추천 A = `<topic>.DLT`)
 
-**Status:** PROPOSED
-**Date:** 2026-10-24
+**Status:** ACCEPTED — A
+**Date:** 2026-10-24 (PROPOSED · 같은 날 ACCEPTED)
 **주관 티켓:** `TASK-MONO-813`
 **Decision driver:** 33차 창 관측 — wms inventory-service 가 `wms.outbound.picking.cancelled.v1.DLT` 로 데드레터를 보냈는데 그 토픽이 없었다(첫 전송에 `UNKNOWN_TOPIC_OR_PARTITION`). `TASK-BE-651` AC-0 ③ 이 그것을 함대 전체의 접미사 분열로 넓혔고, 소유자가 2026-10-24 선택창에서 «별도 루트 티켓으로» 를 골라 `TASK-MONO-813` 이 기안됐다.
 **Supersedes:** 없음. 이 ADR 이 ACCEPT 되면 `platform/event-driven-policy.md` § Broker · § DLQ Policy, `platform/service-types/event-consumer.md` § Retry and DLQ, `platform/glossary.md` «DLQ» 행의 이름 규칙을 바꾼다.
 **Related:** [`ADR-MONO-005`](ADR-MONO-005-saga-timeout-escalation-dead-letter-policy.md) (데드레터 *범주*를 정했고 이름은 `event-driven-policy.md` 에 맡겼다 — 이 ADR 은 그 맡겨진 이름을 정한다) · [`ADR-MONO-062`](ADR-MONO-062-cross-project-event-delivery.md) (데모 릴레이 — 데드레터 토픽은 중계하지 않는다) · `TASK-BE-651` · `TASK-MONO-706`(데모 브로커가 `.DLT` 를 처음 보낼 때 자동 생성하고 레코드를 보존함을 실측) · `TASK-MONO-816`(이 ADR 이 다루지 않는 원인 로깅 · 데드레터 부재)
 
-> 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-085 ACCEPTED — A`**(또는 `— B` · `— C`)로만 넘어간다. 이름 · `ACCEPTED` · 갈래 글자 셋이 한 메시지에 있어야 한다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
+> 🟢 **ACCEPTED — A** (2026-10-24 UTC, 소유자 정확형 *«ADR-MONO-085 ACCEPTED — A»*). 이름 · `ACCEPTED` · 갈래 글자 세 요건이 한 메시지에 왔다. OD-1 · OD-2 답은 공급되지 않았다 → 기본값(둘 다 «아니오»). § ACCEPT 대조.
+> 아래 PROPOSED 시점 머리말과 본문은 그대로 둔다(finalise 이지 re-decide 가 아니다).
+>
+> (PROPOSED 시점 머리말) 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-085 ACCEPTED — A`**(또는 `— B` · `— C`)로만 넘어간다. 이름 · `ACCEPTED` · 갈래 글자 셋이 한 메시지에 있어야 한다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
 > 🔴 **2026-10-24 선택창의 «(a) .DLT 로 통일 (Recommended)» 는 이 ADR 의 ACCEPT 가 아니다.** ADR 을 이름으로 지목하지 않았고, 고른 선택지가 **에이전트 추천**이었다(§ The ACCEPTED Gate 표의 ②·③ 모양). 그 선택은 이 ADR 을 *쓰게* 했을 뿐이다 — § History.
 > 이 문서는 구현을 인가하지 않는다. 구현은 ACCEPT 뒤 `TASK-MONO-813` 이 `in-progress/` 로 옮겨 가며 한 원자 PR 로 한다.
 
@@ -174,3 +177,11 @@ Kafka 소비자가 재시도를 다 쓴 레코드를 보내는 **데드레터 �
 - **2026-10-24 UTC — PROPOSED.** `TASK-MONO-813` AC-0 측정 뒤 소유자에게 선택창으로 (a)/(b)/(c) 를 물었고 «(a) .DLT 로 통일 (Recommended)» 가 왔다. 🔴 **그것을 ACCEPT 로 기록하지 않았다** — 선택창의 질문이 ADR 을 이름으로 지목하지 않았고(이 ADR 은 그때 존재하지 않았다), 선택지 라벨에 에이전트의 «Recommended» 가 붙어 있었다. 게이트가 요구하는 형식을 묻지 않은 것은 **에이전트의 질문 형식** 탓이다. 정확형 `ADR-MONO-085 ACCEPTED — <A|B|C>` 를 따로 받는다.
 - 같은 질문의 둘째 항목(원인 로깅 · iam account-service 데드레터 부재를 이 티켓에 싣나)에는 «별도 티켓으로 분리» 가 왔다 → `TASK-MONO-816` 기안. 그것은 ADR 결정이 아니라 티켓 범위 결정이다.
 - 측정 중에 § M ⑤(파티션)가 새로 드러났다 — 선택창을 낼 때는 몰랐던 사실이고, D3 으로 넣었다. 어느 갈래든 적용되므로 선택의 전제를 바꾸지 않는다.
+- PROPOSED PR `#4513` 머지(`109de97f8`) — 번호 085 를 main 에서 확정한 **뒤에** ACCEPT 를 물었다(번호가 남에게 넘어가 정확형 줄이 다른 결정을 가리키는 일을 막기 위해).
+- **2026-10-24 UTC — ACCEPTED — A.** 소유자 원문: *«ADR-MONO-085 ACCEPTED — A»*. 세 요건(이름 · `ACCEPTED` · 글자)을 따로 확인했다. 글자 `A` 는 소유자가 직접 적었다 — 앞 턴에서 정확형 줄을 복사 가능한 형태로 주고, 선택지 라벨이 아닌 메시지로 받았다.
+
+## ACCEPT 대조
+
+- **Rider 점검:** A 본문에는 «이 안의 미결 질문» 으로 명명된 하위 질문이 없다. 열린 것은 OD-1 · OD-2 뿐이고, 둘 다 기본값을 명시해 두었으므로 rider 가 아니다. ⇒ 미결로 남는 항목 없음.
+- **OD 답:** 미공급 → 기본값. OD-1 = 자동 생성 프로젝트 5개는 데드레터를 미리 만들지 않는다(D2 가 «원본을 따른다» 로 만족). OD-2 = iam 기존 볼륨의 옛 `.dlq` 정리 단계를 두지 않는다.
+- **ACCEPT 가 만든 새 의무:** 새 티켓 없음. 단계 P1 · P2 는 이미 `TASK-MONO-813` AC-2 · AC-3 이다. 후속(원인 로깅 · account-service)은 PROPOSED 시점에 `TASK-MONO-816` 으로 이미 기안했다. 🔴 816 AC-2 는 «ADR-MONO-085 가 정하는 이름» 에 걸려 있었다 — 이제 그 이름은 `.DLT` 다.
