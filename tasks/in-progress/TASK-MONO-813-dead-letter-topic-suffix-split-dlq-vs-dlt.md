@@ -8,7 +8,7 @@ Dead-letter topic suffix is split across the fleet — platform says `<topic>.dl
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
