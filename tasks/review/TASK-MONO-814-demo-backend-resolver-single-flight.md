@@ -120,3 +120,7 @@ On the 33rd window (2026-10-23 UTC) the logged-in operator overview showed «WMS
   - 수선 뒤 `29 passed (29)`.
 - 출하: 소비자 넷(console-web · web-store · fan-platform-web · auth-forwarder)이 전부 `link:` 라 락파일 변경이 없다(패키지의 `package.json` 무변경). 네 `vercel-ignore.sh` 가 전부 `:/infra/demo/backend-resolver` 를 pathspec 에 둔다 ⇒ 머지 커밋이 네 프로젝트를 다 다시 굽는다. AC-5 의 Production 기록은 머지 뒤에 남긴다.
 - ⚪ CI 공백(기록만): `ci.yml` 의 `platform-console` · `ecommerce` · `fan` 경로 필터는 `infra/demo/backend-resolver/**` 를 안 본다. 이 PR 은 console-web 시험을 건드리므로 콘솔 스위트가 돈다. 그러나 패키지만 바꾼 PR 에서는 세 소비자 스위트가 PR 단계에서 안 돈다(`main` push 에서는 `code-changed` 로 돈다).
+
+## 배포 기록 (2026-10-24 UTC) — AC-5
+
+- #4508 squash `45fa46428` 하나로 네 소비자가 다시 빌드됐다: Vercel Production `kanggle-console` `7284959963` · `kanggle-store` `7284948646` · `kanggle-fan` `7284936901` · `kanggle-auth` `7284934419` — 넷 다 `success`(GitHub deployments API). ⇒ AC-5 충족(체크칸은 review 동결로 그대로). AC-6 = 다음 창(`TASK-MONO-672` 항목 19).
