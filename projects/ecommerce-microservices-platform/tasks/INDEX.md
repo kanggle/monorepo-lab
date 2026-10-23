@@ -82,9 +82,9 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
-- `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **IN-PROGRESS (2026-10-23 UTC) — TASK-BE-649 곁 발견.** 웹스토어 배송 추적이 «취소됨»(`CANCELLED`) 배송을 몰라서 켜지는 단계 없이 빈 추적기가 보인다(깨지지는 않는다). 타입 · 추적기 · 문구(머지 전 소유자 승인). 콘솔 짝 = `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 ## review
+
+- `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **REVIEW (2026-10-23 UTC · 문구 승인 · CI 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브)** 웹스토어 배송 추적이 «취소됨»(`CANCELLED`) 배송을 몰라서 켜지는 단계 없이 빈 추적기가 보인다(깨지지는 않는다). 타입 · 추적기 · 문구(머지 전 소유자 승인). 콘솔 짝 = `TASK-PC-FE-367`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 선행 TASK-BE-650 머지됨 · 이번 굽기 제외.** shipping-service 가 `order.order.cancelled` 를 받아 `PREPARING` 배송을 끝 상태 `CANCELLED` 로 보낸다. WMS 를 거친 배송이면 `ecommerce.fulfillment.cancel-requested.v1` 을 낸다. 주문 취소 · 환불은 지금처럼 즉시 끝난다. 선행 = WMS `TASK-BE-650`(계약 + 소비자). 분석=Opus 5.5 / 구현 권장=Opus.
 

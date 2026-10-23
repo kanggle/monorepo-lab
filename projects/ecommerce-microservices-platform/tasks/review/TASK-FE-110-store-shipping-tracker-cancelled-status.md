@@ -8,7 +8,7 @@ TASK-FE-110
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -53,8 +53,8 @@ frontend
   `ShippingStepIndicator.tsx:19-21`. 소비 지점은 `OrderDetailView.tsx:97` 하나뿐 — 주문 목록에는 배송 표시가 없다.
   `OrderStatusBadge.tsx:8` 은 *주문* 상태(`CANCELLED` 는 이미 있음)라 무관. 메시지 카탈로그(i18n) 없음 — 한국어 문자열 직접 기재라 로케일은 하나.
   `UpdateShippingStatusRequest.status`(`shipping.ts:40`)는 운영자 대상이라 `CANCELLED` 제외(계약 `shipping-api.md:203`).
-- [ ] **AC-1** — 문구 소유자 승인.
-- [ ] **AC-2** — 구현 + 단위 시험 · CI 초록 · 브랜치 nightly(web-store full-stack) 확인.
+- [x] **AC-1** — 문구 소유자 승인. ✅ 2026-10-23 UTC 소유자 선택창 «이대로 승인» — «주문이 취소되어 배송이 취소되었습니다.»
+- [x] **AC-2** — 구현 + 단위 시험 · CI 초록 · 브랜치 nightly(web-store full-stack) 확인. ✅ 2026-10-23 UTC (메인 세션) — PR #4491 체크 pending 0 · fail 0. 로컬에서 vitest 가 돌지 않았으므로 CI 로그에서 새 시험이 돈 것을 확인했다: `shipping-tracker.test.tsx` 15건(기준 14) · `shipping-steps.test.ts` 10건(기준 6), 모두 ✓. 브랜치 nightly `39929126854` success(web-store full-stack 포함).
 - [ ] **AC-3** — 굽기 뒤 라이브: 출고 전에 취소한 주문의 배송이 취소로 보인다.
 
 # Related Specs
