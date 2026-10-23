@@ -101,7 +101,11 @@ describe('EcommerceGuideScreen', () => {
       'CANCELLED',
       'STUCK_RECOVERY_FAILED',
     ]);
-    // Only 대기/재고부족 이월/확정 are operator-actionable (the last two: cancel
+    // TASK-PC-FE-366: the guide never says an operator can confirm.
+    const pending = ORDER_STATES.find((s) => s.name === 'PENDING');
+    expect(pending?.desc).toContain('운영자는 취소만');
+    expect(pending?.desc).not.toContain('확정하거나');
+    // Only 대기/재고부족 이월/확정 are operator-actionable (all cancel
     // only); SHIPPED/DELIVERED are event-driven. Must agree with allowedTransitions.
     expect(
       ORDER_STATES.filter((s) => s.operatorActionable).map((s) => s.name),

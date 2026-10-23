@@ -153,7 +153,9 @@ export interface OrderState {
  * **핵심 구분**(order-types.ts 헤더): SHIPPED/DELIVERED 는 **운영자가 못 바꾼다**.
  * 오직 배송 서비스의 return-leg(`ShippingStatusChanged`)가 구동하며 상세에 읽기
  * 전용으로 표시된다(운영자가 SHIPPED/DELIVERED 를 시도하면 producer 가 400).
- * 운영자 가능 전이는 `대기→{확정,취소}`, `확정→{취소}` 뿐이다.
+ * 운영자 가능 전이는 `대기→{취소}`, `재고부족 이월→{취소}`, `확정→{취소}` 뿐이다 —
+ * 확정은 결제 · 재고 확보가 끝나면 자동으로 되고 운영자가 직접 하지 않는다
+ * (TASK-PC-FE-366).
  */
 export const ORDER_STATES: OrderState[] = [
   {
@@ -161,7 +163,7 @@ export const ORDER_STATES: OrderState[] = [
     label: '대기',
     terminal: false,
     operatorActionable: true,
-    desc: '주문이 접수되어 결제를 기다리는 상태입니다. 결제가 끝나면 자동으로 확정됩니다. 운영자는 확정하거나 취소할 수 있습니다.',
+    desc: '주문이 접수되어 결제를 기다리는 상태입니다. 결제가 끝나고 재고가 확보되면 자동으로 확정되며, 운영자가 직접 확정할 수는 없습니다. 운영자는 취소만 할 수 있습니다.',
   },
   {
     name: 'BACKORDERED',

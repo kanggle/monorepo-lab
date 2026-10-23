@@ -70,8 +70,14 @@ import { ACCESS_COOKIE } from '@/shared/lib/session';
 // ---------------------------------------------------------------------------
 
 describe('allowedTransitions() — order status state machine', () => {
-  it('PENDING → [CONFIRMED, CANCELLED]', () => {
-    expect(allowedTransitions('PENDING')).toEqual(['CONFIRMED', 'CANCELLED']);
+  it('PENDING → [CANCELLED] only (confirmation is automatic, never the operator) — TASK-PC-FE-366', () => {
+    expect(allowedTransitions('PENDING')).toEqual(['CANCELLED']);
+  });
+
+  it('no status ever offers CONFIRMED as an operator target — TASK-PC-FE-366', () => {
+    for (const s of ORDER_STATUS_VALUES) {
+      expect(allowedTransitions(s)).not.toContain('CONFIRMED');
+    }
   });
 
   it('BACKORDERED → [CANCELLED] only (restock confirms it, not the operator) — TASK-PC-FE-365', () => {
