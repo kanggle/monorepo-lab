@@ -203,6 +203,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-805-domain-overview-performance-metrics.md` — **도메인 개요에 실적 지표(이번 주 · 이번 달 · 직전 대비 · 일별) — `ADR-MONO-084` 발행 · ACCEPT 뒤 단계 티켓 P1~P8 기안** (IN-PROGRESS, 2026-10-23 UTC · AC-0 닫힘 · AC-1 = PROPOSED 머지). 결정 티켓, 코드 변경 0. 🔴 소유자의 «추천대로 진행» 은 ACCEPT 가 아니다 — 정확형 `ADR-MONO-084 ACCEPTED` 대기. 분석=Opus 5.5 / 구현 권장=Opus.
+
 
 
 
