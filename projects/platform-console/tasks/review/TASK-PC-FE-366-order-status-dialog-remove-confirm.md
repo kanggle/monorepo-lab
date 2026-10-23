@@ -8,7 +8,7 @@ TASK-PC-FE-366
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -47,8 +47,8 @@ frontend
 # Acceptance Criteria
 
 - [x] **AC-0** — 위 ①②. (아래 «AC-0 측정»)
-- [ ] **AC-1** — 구현 + **사용자에게 보이는 바뀐 문구(가이드 · 대화상자) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
-- [ ] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋 rc=0. 대화상자가 클라이언트 전용이면 nightly 는 판단(SSR 변화 없음을 기록).
+- [x] **AC-1** — 구현 + **사용자에게 보이는 바뀐 문구(가이드 · 대화상자) 목록을 소유자에게 보이고 승인** 받은 뒤 머지.
+- [x] **AC-2** — 시험 + 기존 스위트(`--maxWorkers=4 --minWorkers=2`) · `tsc --noEmit` · `next lint` · Client graph 가드 둘 · 큐 가드 셋 rc=0. 대화상자가 클라이언트 전용이면 nightly 는 판단(SSR 변화 없음을 기록).
 - [ ] **AC-3** — 배포(Vercel Production 기록) · 익명 샘플에서 대기 주문 상세의 상태 변경 선택지 확인.
 
 # Related Specs
@@ -111,3 +111,10 @@ frontend
 - 시험: `ecommerce-orders-state`(PENDING=['CANCELLED'] · 어떤 상태도 CONFIRMED 를 제안하지 않음) · `ecommerce-write-buttons`(쓰기 testid 목록에서 confirmed 제거 + «대기 주문은 취소만» 신설) · `EcommerceGuideScreen`(PENDING 설명이 «확정하거나» 를 말하지 않음).
 - 검증: vitest 426 files / 5229 tests pass · `tsc --noEmit` rc=0 · `next lint` rc=0 (기존 경고만) · 가드는 커밋 메시지/보고에 기록.
 - **SSR 영향**: 대화상자(`OrderStatusDialog`, `'use client'`)는 주문 상세 클라이언트 트리 안이라 SSR HTML 은 `allowedTransitions` 결과를 반영하는 버튼 목록만 다르다(대기 주문의 «확인» 버튼 1개 제거). 가이드 페이지(`ecommerce-guide`)는 정적 서버 렌더라 PENDING 설명 한 문장이 SSR HTML 에서 바뀐다. 새 fetch · 라우트 · 서버 전용 모듈 경계 변화 없음 → nightly 는 가이드 문구/대기 주문 버튼 외 영향 없음으로 판단.
+
+## 소유자 승인 · 머지 전 확인 (2026-10-22 UTC · 분석=Opus 5.5)
+
+- 가이드 «대기» 설명 변경 · 대기 주문의 «확인» 버튼 제거 = **소유자 승인**(선택창, 2026-10-22 KST, 머지 전) → AC-1 닫힘.
+- 브랜치 nightly run `39850739891`(head `96efdb1d2`) **success** · PR #4484 같은 head 체크 pending 0 · fail 0 → AC-2 닫힘.
+- 서버 짝 `TASK-BE-648`(#4485)보다 **먼저** 머지한다 — 서버만 나가면 콘솔 «확정» 이 400 을 받는다.
+- 열림: **AC-3**(Vercel Production 기록 · 익명 샘플 — `/ecommerce/guide` «대기» 행 문장).
