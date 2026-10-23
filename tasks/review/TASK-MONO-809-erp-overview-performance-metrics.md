@@ -72,8 +72,8 @@ ERP 개요(`/erp`)는 지금 마스터 건수 · 결재 상태 분포 · 내 결
 # Acceptance Criteria
 
 - [x] **AC-0** — 재측정: 결재 요청 · 단계의 상태 전이 시각이 저장돼 있는가(상신 · 승인 · 반려 각각) · 회수 · 재상신의 셈법 · 위임 결재의 귀속 · 테넌트 범위 · 조회 인가 역할. 결과 → 이 파일 + 계약 문구.
-- [ ] **AC-1** — 🔴 대조군: 초안(상신 전) · 회수된 요청은 `submitted` 를 안 움직인다(AC-0 정의대로). 승인 하나 → `approved` 만 움직인다.
-- [ ] **AC-2** — 경계 시험(`Clock` 주입, `TZ=UTC` · `TZ=Asia/Seoul`) · 테넌트 격리 · 인가 없는 토큰 403.
+- [x] **AC-1** — 🔴 대조군: 초안(상신 전) · 회수된 요청은 `submitted` 를 안 움직인다(AC-0 정의대로). 승인 하나 → `approved` 만 움직인다.
+- [x] **AC-2** — 경계 시험(`Clock` 주입, `TZ=UTC` · `TZ=Asia/Seoul`) · 테넌트 격리 · 인가 없는 토큰 403.
 - [x] **AC-3** — 콘솔: 실적 줄 렌더 · 칸 실패 시 현재 상태 블록이 선다 · 401 · 샘플 모드 응답.
 - [ ] **AC-4** — 배포 상태(`main` · AMI · 데모 창 라이브)를 따로 적는다.
 
@@ -119,6 +119,11 @@ ERP 개요(`/erp`)는 지금 마스터 건수 · 결재 상태 분포 · 내 결
 
 ## 배포 상태
 
-- `main` ⏳ 이 PR.
+- `main` ✅ `c76a60d73`(PR #4510, 머지 직전 실패 0 · 25 pass / 42 skip).
 - AMI ⚪ 다음 굽기(approval-service 새 이미지 + V6 인덱스). 굽기 전 데모의 실적 줄은 «불러올 수 없음»(엔드포인트 없음 → degraded), 다른 블록은 그대로.
 - 라이브 ⚪ 데모 창: 신선 시드면 이번 달 상신 2 · 승인 0 · 반려 0(`seed-erp.sh` §6).
+
+## CI 판정 (PR #4510 `657293d21`)
+
+- `Integration (erp-platform, Testcontainers)` 초록. `ApprovalMetricsIntegrationTest` 가 **건너뛴 것이 아니라 돌았다** — 이 서비스의 IT 는 `DockerAvailableCondition` 으로 Docker 가 없으면 조용히 빠지므로 초록만으로는 부족하다; job 로그에 그 클래스의 `STANDARD_OUT` 과 Spring 컨텍스트 기동 줄이 있다(27 곳). ⇒ AC-1(대조군: 회수 · 중간 단계 승인이 섞이지 않음) · AC-2(테넌트 격리 · `TENANT_FORBIDDEN` · 반열린 창)가 **실 MySQL 에서 통과** — 닫힘.
+- AC-4(굽기 · 데모 창 라이브)가 남아 review 유지.
