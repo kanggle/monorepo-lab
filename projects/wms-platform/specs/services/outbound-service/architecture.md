@@ -106,6 +106,7 @@ com.wms.outbound/
 │   │                            #   InventoryReservedConsumer, InventoryReleasedConsumer,
 │   │                            #   InventoryConfirmedConsumer, InventoryReserveFailedConsumer (saga steps),
 │   │                            #   ManualShipConfirmConsumer (ADR-022 D4 v2(c) manual ship-confirm),
+│   │                            #   FulfillmentCancelRequestedConsumer (ADR-022 D4 v2(d) ecommerce cancel),
 │   │                            #   MasterLocationConsumer, MasterSkuConsumer, MasterPartnerConsumer
 │   └── out/
 │       ├── persistence/
@@ -234,6 +235,7 @@ Full schemas: `specs/contracts/events/outbound-events.md`.
 > **Cross-project + backorder consumers** (saga-adjacent; schemas owned by their own contracts, so kept out of the table above to avoid duplication):
 > - `ecommerce.fulfillment.requested.v1` → `FulfillmentRequestedConsumer` creates the wms outbound order (ADR-MONO-022 D1 forward-leg, TASK-BE-340).
 > - `ecommerce.shipping.manual-confirm-requested.v1` → `ManualShipConfirmConsumer`: operator-gated manual ship-confirm; iff saga `PACKING_CONFIRMED` reuses `ConfirmShippingUseCase` → `wms.outbound.shipping.confirmed.v1` → inventory deduction (ADR-MONO-022 D4 v2(c), TASK-MONO-305).
+> - `ecommerce.fulfillment.cancel-requested.v1` → `FulfillmentCancelRequestedConsumer`: ecommerce-initiated cancel; iff order `RECEIVED`/`PICKING` reuses `CancelOrderUseCase` with the WRITE role only → existing `wms.outbound.order.cancelled.v1` (+ `picking.cancelled` compensation); post-pick ⇒ `ALERT`, no cancel; `SHIPPED`/terminal/unknown ⇒ no-op (ADR-MONO-022 D4 v2(d) X-A, TASK-BE-650).
 > - `wms.inventory.reserve.failed.v1` → `InventoryReserveFailedConsumer`: out-of-stock during reserve → backorder signal (TASK-BE-431).
 >
 > Authoritative cross-project schemas: `specs/contracts/events/ecommerce-fulfillment-subscriptions.md`.

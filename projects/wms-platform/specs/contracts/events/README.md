@@ -12,7 +12,7 @@ Index of this project's event contracts and the project's declared choices for t
 
 Examples: `wms.master.warehouse.v1`, `wms.outbound.picking.requested.v1`, `wms.admin.assignment.v1`, `wms.notification.delivered.v1`.
 
-Cross-project topics produced for ecommerce-microservices-platform to consume (`ecommerce.fulfillment.requested.v1`, `ecommerce.shipping.manual-confirm-requested.v1`) follow the same `<domain>.<x>.v1` shape but under the ecommerce namespace — not a wms-internal divergence, just evidence the shared `<domain>.<aggregate>.<fact>.v<N>` pattern is used by both sides of that integration.
+Cross-project topics produced for ecommerce-microservices-platform to consume (`ecommerce.fulfillment.requested.v1`, `ecommerce.shipping.manual-confirm-requested.v1`, `ecommerce.fulfillment.cancel-requested.v1`) follow the same `<domain>.<x>.v1` shape but under the ecommerce namespace — not a wms-internal divergence, just evidence the shared `<domain>.<aggregate>.<fact>.v<N>` pattern is used by both sides of that integration.
 
 ## 2. `eventType` Naming
 
@@ -37,7 +37,7 @@ Cross-project topics produced for ecommerce-microservices-platform to consume (`
 | `admin-events.md` | admin-service — producer |
 | `notification-events.md` | notification-service — producer |
 | `notification-subscriptions.md` | notification-service — consumer-side subscription overview |
-| `ecommerce-fulfillment-subscriptions.md` | outbound-service — consumer of ecommerce-microservices-platform's `ecommerce.fulfillment.requested.v1` / `ecommerce.shipping.manual-confirm-requested.v1` |
+| `ecommerce-fulfillment-subscriptions.md` | outbound-service — consumer of ecommerce-microservices-platform's `ecommerce.fulfillment.requested.v1` / `ecommerce.shipping.manual-confirm-requested.v1` / `ecommerce.fulfillment.cancel-requested.v1` |
 | `scm-inbound-expected-subscriptions.md` | inbound-service — consumer of scm-platform's `scm.procurement.inbound-expected.v1` / `.cancelled.v1` (ADR-MONO-050; first `scm → wms` coupling) |
 
 ---
