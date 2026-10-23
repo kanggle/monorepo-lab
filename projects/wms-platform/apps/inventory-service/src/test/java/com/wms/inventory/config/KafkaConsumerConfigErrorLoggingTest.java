@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.core.read.ListAppender;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -93,8 +94,7 @@ class KafkaConsumerConfigErrorLoggingTest {
         assertThat(warn.getFormattedMessage())
                 .contains(TOPIC).contains("42").contains("attempt");
         assertThat(warn.getThrowableProxy()).as("the cause is attached, not just named").isNotNull();
-        assertThat(warn.getThrowableProxy().getClassName())
-                .isEqualTo(NullPointerException.class.getName());
+        assertThat(causeChain(warn)).contains(NullPointerException.class.getName());
         assertNoPayloadLogged();
     }
 
@@ -123,8 +123,7 @@ class KafkaConsumerConfigErrorLoggingTest {
         ILoggingEvent error = only(Level.ERROR);
         assertThat(error.getFormattedMessage()).contains(TOPIC).contains("7").contains(".DLT");
         assertThat(error.getThrowableProxy()).isNotNull();
-        assertThat(error.getThrowableProxy().getClassName())
-                .isEqualTo(NullPointerException.class.getName());
+        assertThat(causeChain(error)).contains(NullPointerException.class.getName());
         assertNoPayloadLogged();
     }
 
@@ -143,8 +142,7 @@ class KafkaConsumerConfigErrorLoggingTest {
         verify(kafkaConsumer, never()).seek(any(), any(Long.class));
 
         ILoggingEvent error = only(Level.ERROR);
-        assertThat(error.getThrowableProxy().getClassName())
-                .isEqualTo(IllegalArgumentException.class.getName());
+        assertThat(causeChain(error)).contains(IllegalArgumentException.class.getName());
         assertNoPayloadLogged();
     }
 
@@ -167,6 +165,19 @@ class KafkaConsumerConfigErrorLoggingTest {
                 .filter(e -> e.getLevel() == level).toList();
         assertThat(atLevel).as("%s lines on the KafkaConsumerConfig logger", level).isNotEmpty();
         return atLevel.get(atLevel.size() - 1);
+    }
+
+    /**
+     * Class names along the attached throwable's cause chain. The container hands the handler a
+     * {@code ListenerExecutionFailedException} wrapping the listener's own exception; the log line
+     * carries the wrapper, so the listener's exception must appear as one of its causes.
+     */
+    private static List<String> causeChain(ILoggingEvent event) {
+        List<String> names = new java.util.ArrayList<>();
+        for (IThrowableProxy t = event.getThrowableProxy(); t != null; t = t.getCause()) {
+            names.add(t.getClassName());
+        }
+        return names;
     }
 
     private void assertNoPayloadLogged() {
