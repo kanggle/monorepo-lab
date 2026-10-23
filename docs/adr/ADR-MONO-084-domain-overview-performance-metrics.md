@@ -1,13 +1,15 @@
 # ADR-MONO-084 — 도메인 개요에 **실적 지표**를 싣는다: 한 응답 모양 · 한국 시간 기간 · 백엔드 집계 (Fan 은 뺀다)
 
-**Status:** PROPOSED
-**Date:** 2026-10-23
+**Status:** ACCEPTED
+**Date:** 2026-10-23 (PROPOSED · 같은 날 ACCEPTED)
 **주관 티켓:** `TASK-MONO-805`
 **Decision driver:** 소유자 요구(2026-10-23 대화) — «개요가 현재 상태만 보여 준다. 이번 달 · 이번 주 매출, 판매 수량 같은 인사이트가 없다» → «이커머스만이 아니라 모든 도메인에». 화면 배치(메뉴를 새로 만들지 않고 각 도메인 «개요» 맨 위에 둔다) · 시간대(한국 시간 통일) · Fan 제외 · 매출 기준(결제 확정 주문)은 같은 대화에서 소유자가 **추천대로 진행**으로 방향을 정했다. 🔴 그 문장은 이 ADR 의 ACCEPT 가 아니다(§ 수락 형식).
 **Supersedes:** 없음.
 **Related:** [`ADR-MONO-015`](ADR-MONO-015-platform-console-dashboards-model.md) (콘솔 «대시보드» = 업무 데이터 합성, Grafana 아님 — 이 ADR 은 그 안에서 **기간 축**을 더한다) · [`ADR-MONO-017`](ADR-MONO-017-platform-console-bff-architecture.md) (D3.B 도메인 안 개요 = console-web 직접 fan-out · D5 실패 격리) · [`ADR-MONO-081`](ADR-MONO-081-console-composition-in-the-console-server.md) (교차 도메인 합성 = 콘솔 서버) · [`ADR-MONO-079`](ADR-MONO-079-agencies-sellers-and-console-fan-management.md) D4-A · [`ADR-MONO-059`](ADR-MONO-059-fan-authoring-identity-plane.md) (팬 운영자 = 디렉터리 관리만) · `TASK-MONO-322`(이커머스 `/summary` 공용화) · `TASK-BE-648`(`CONFIRMED` = 사가만)
 
-> 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-084 ACCEPTED`** 로만 넘어간다. 이 ADR 은 갈래를 내놓지 않으므로 갈래 글자가 없다. «진행» · «좋아» · «추천대로» 는 수락이 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
+> 🟢 **ACCEPTED** (2026-10-23 UTC, 소유자 정확형 *«ADR-MONO-084 ACCEPTED»*). 이름 · `ACCEPTED` 두 요건이 한 문장에 도착했고, 이 ADR 은 갈래가 없어 셋째 요건(갈래 글자)이 없다.
+> 🔴 **OD 답은 공급되지 않았다** — OD-1~OD-4 는 기본값으로 간다(§ OD 대조). 단계 티켓은 이 ACCEPT PR 안에서 기안했다(§ ACCEPT 가 만든 새 의무). 아래 PROPOSED 시점 본문은 그대로다.
+> (PROPOSED 시점 머리말) 🟡 **PROPOSED** — 소유자 ACCEPT 는 정확형 **`ADR-MONO-084 ACCEPTED`** 로만 넘어간다. 이 ADR 은 갈래를 내놓지 않으므로 갈래 글자가 없다. «진행» · «좋아» · «추천대로» 는 수락이 아니다(`platform/architecture-decision-rule.md` § The ACCEPTED Gate).
 > 이 문서는 구현을 인가하지 않는다. 단계 티켓은 ACCEPT PR 안에서 기안한다(§ 단계).
 
 ---
@@ -196,3 +198,29 @@ P2~P7 은 서로 독립이다. 다만 전부 콘솔의 같은 공용 컴포넌�
 ## History
 
 - 2026-10-23 UTC — PROPOSED (`TASK-MONO-805`).
+- 2026-10-23 UTC — **ACCEPTED**. 소유자 정확형 *«ADR-MONO-084 ACCEPTED»* (PR #4489 머지 전, 같은 PR 에 실었다).
+  - 🔵 **게이트가 한 번 멈췄다**: 같은 대화의 앞선 «추천대로 진행» 을 수락으로 읽지 않고 PROPOSED 로 발행해 정확형을 다시 받았다.
+
+## OD 대조 (ACCEPT 시점)
+
+| OD | 소유자 답 | 적용 |
+|---|---|---|
+| OD-1 `BACKORDERED` | 미공급 | 기본값 — 넣지 않는다, `CONFIRMED` 시점에 `paidAt` 날짜로 들어간다 → P2 AC |
+| OD-2 할인 전/후 | 미공급 | 기본값 — 할인 후 결제 금액, P2 AC-0 이 필드 의미를 잰다 |
+| OD-3 Finance 다통화 | 미공급 | 기본값 — 통화마다 한 줄, 환산 없음 → P7 AC |
+| OD-4 «오늘» 선택 | 미공급 | 기본값 — 주 · 월 둘 → P1 AC |
+
+## ACCEPT 가 만든 새 의무 (단계 티켓)
+
+| 단계 | 티켓 | 큐 |
+|---|---|---|
+| P1 공용 바탕 | `TASK-MONO-806` | 루트 `tasks/ready/` |
+| P2 E-Commerce | `TASK-MONO-807` | 루트 `tasks/ready/` |
+| P3 WMS | `TASK-MONO-808` | 루트 `tasks/ready/` |
+| P4 ERP | `TASK-MONO-809` | 루트 `tasks/ready/` |
+| P5 SCM | `TASK-MONO-810` | 루트 `tasks/ready/` |
+| P6 IAM | `TASK-MONO-811` | 루트 `tasks/ready/` |
+| P7 Finance | `TASK-MONO-812` | 루트 `tasks/ready/` |
+| P8 전체 홈 | `TASK-PC-FE-368` | `projects/platform-console/tasks/ready/` |
+
+P2~P7 은 도메인 백엔드와 콘솔을 함께 바꾸는 원자 PR 이라 루트 큐에 둔다. P8 은 콘솔만 바꾼다.

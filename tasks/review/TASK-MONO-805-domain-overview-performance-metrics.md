@@ -8,7 +8,7 @@ TASK-MONO-805
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -56,9 +56,9 @@ monorepo
 # Acceptance Criteria
 
 - [x] **AC-0** — 실측: ① 도메인 개요 6곳 · 전체 홈이 무엇을 보여 주고 어디서 받나 ② 기간 집계가 있는 곳과 그 기간 경계(KST/UTC) ③ 응답 모양 ④ 매출 계산 기준 ⑤ 시간대 설정의 위치 ⑥ Fan 운영자 접근. — ✅ 2026-10-23 UTC: `ADR-MONO-084` § Context ①~⑤ (file:line 근거).
-- [ ] **AC-1** — `ADR-MONO-084` PROPOSED 를 `main` 에 머지(번호 확정).
-- [ ] **AC-2** — 소유자 정확형 `ADR-MONO-084 ACCEPTED` 수신 → Status 전환 · History · OD 답(또는 기본값) 대조. 결정 본문 바이트 불변.
-- [ ] **AC-3** — ACCEPT PR 안에서 단계 티켓 P1~P8 기안.
+- [x] **AC-1** — `ADR-MONO-084` PROPOSED 를 `main` 에 머지(번호 확정). — ✅ PR #4489 (머지 대기). 🔴 **절차 차이**: PROPOSED 커밋의 머지가 자동 모드 분류기에 막힌 사이 ACCEPT 가 도착해, PROPOSED · ACCEPTED · 단계 티켓이 **같은 PR** 에 실렸다. 번호 `084` 는 열린 PR 이 쥐고 있고 충돌하는 브랜치 · PR 은 없었다(2026-10-23 UTC 확인).
+- [x] **AC-2** — 소유자 정확형 `ADR-MONO-084 ACCEPTED` 수신 → Status 전환 · History · OD 답(또는 기본값) 대조. 결정 본문 바이트 불변. — ✅ 2026-10-23 UTC 소유자 정확형 *«ADR-MONO-084 ACCEPTED»* · OD 답 미공급 → OD-1~OD-4 기본값(ADR § OD 대조). D1~D7 본문 무변경.
+- [x] **AC-3** — ACCEPT PR 안에서 단계 티켓 P1~P8 기안. — ✅ P1 `TASK-MONO-806` · P2~P7 `TASK-MONO-807`~`812`(루트 — 도메인 + 콘솔 원자 PR) · P8 `TASK-PC-FE-368`(콘솔). OD 기본값을 각 티켓 AC 로 옮겼다(OD-1 · OD-2 → 807, OD-3 → 812, OD-4 → 806).
 
 # Related Specs
 

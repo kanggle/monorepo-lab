@@ -92,6 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **READY (2026-10-23 UTC) — ADR-MONO-084 P8 (D7).** 전체 홈 도메인 카드에 대표 실적 지표 하나(이번 주 값 · 직전 대비). 합성은 콘솔 서버(ADR-081) · 응답 모양 · 카드 순서 · 실패 격리 불변, 칸만 추가. 선행 = 루트 `TASK-MONO-807`~`812`(P2~P7) 의 `…/metrics`. 🔴 nightly e2e grep. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-367-shipping-cancelled-status-label.md` — **READY (2026-10-23 UTC) — ADR-MONO-022 D4 v2(d) ACCEPTED.** 이커머스 배송 상태에 «취소됨»(`CANCELLED`, 출고 전에 취소된 주문의 배송) 라벨 · 배지 · 필터 · 가이드 문장을 넣는다. 문구는 머지 전 소유자 승인. 선행 = 이커머스 `TASK-BE-649` 계약. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
