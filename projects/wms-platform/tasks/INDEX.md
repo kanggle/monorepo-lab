@@ -85,9 +85,9 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-651-inventory-picking-cancelled-does-not-release-reservation.md` — **IN-PROGRESS (2026-10-23 UTC) — `TASK-BE-650` 33차 창 라이브에서 발견.** inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 못 푼다 — 사가 `CANCELLATION_REQUESTED` 정지 · 예약 `RESERVED` · DLT 토픽 없음 · 리스너 예외 미기록. 기존 `CancelOrderUseCase` 보상 경로(운영자 취소도 — AC-0). 구현 권장 Opus.
-
 ## review
+
+- `TASK-BE-651-inventory-picking-cancelled-does-not-release-reservation.md` — **REVIEW (2026-10-24 UTC · CI 빨강(11, 동작) → 초록 · AC-2 = 굽기 뒤 라이브)** inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 못 푼다 — 사가 `CANCELLATION_REQUESTED` 정지 · 예약 `RESERVED` · DLT 토픽 없음 · 리스너 예외 미기록. 기존 `CancelOrderUseCase` 보상 경로(운영자 취소도 — AC-0). 구현 권장 Opus.
 
 - `TASK-BE-652-admin-settings-list-without-filters-500.md` — **REVIEW (2026-10-24 UTC · CI 빨강 → 초록 · AC-2 = 굽기 뒤 라이브) — `TASK-BE-644` AC-3 시도 중 발견.** admin-service 조건 없는 `GET /settings` → 500(`AdminSettingJpaRepository.java:13-18`, PostgreSQL `character varying ~~ bytea`) — 콘솔 WMS 운영설정 화면이 설정을 못 읽는다. 구현 권장 Sonnet.
 

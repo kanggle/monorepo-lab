@@ -8,7 +8,7 @@ inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 풀지 �
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -72,8 +72,8 @@ Fix issue found in TASK-BE-650. 출고가 예약을 잡은 상태에서 취소�
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 ①~⑤ 를 file:line · 실행 출력으로. ① 의 원인이 «코드 읽기» 와 다르면 그 차이를 적고 수선 범위를 다시 정한다. ③ 에서 DLT 부재가 다른 소비자에도 해당하면 범위(이 티켓 / 별도)를 소유자에게 묻는다.
-- [ ] **AC-1** — 계약 먼저(`inventory-events.md` § C3) → 구현 + 시험(시험만 담은 커밋으로 CI 빨강을 먼저 본다) · CI 의 wms 잡 초록.
+- [x] **AC-0** — 위 ①~⑤ 를 file:line · 실행 출력으로. ① 의 원인이 «코드 읽기» 와 다르면 그 차이를 적고 수선 범위를 다시 정한다. ③ 에서 DLT 부재가 다른 소비자에도 해당하면 범위(이 티켓 / 별도)를 소유자에게 묻는다. ✅ 2026-10-24 UTC — ③ 의 DLT 접미사 충돌은 소유자 선택창 «별도 루트 티켓으로» → `TASK-MONO-813`(저장소 전체가 `.dlq` = 이커머스 · iam · fan / `.DLT` = erp · finance · scm · wms 로 갈림, platform 규칙은 `.dlq`). 이 티켓 범위는 소비자 수정 · 원인 로그까지.
+- [x] **AC-1** — 계약 먼저(`inventory-events.md` § C3) → 구현 + 시험(시험만 담은 커밋으로 CI 빨강을 먼저 본다) · CI 의 wms 잡 초록. ✅ 2026-10-24 UTC (메인 세션) — PR #4503. 계약 `0e8a8df44` → 시험만 담은 커밋 `6df523c63` 의 CI run `39973453427` 에서 `inventory-service:test` 271건 중 11건 빨강(**동작 실패** — `PickingCancelledConsumerTest` 8 · `KafkaConsumerConfigErrorLoggingTest` 3). 구현 `a983e2c75` · main 병합 `76b55c0c0` 뒤 head 체크 67개 pending 0 · fail 0(`Integration (inventory + inbound + gateway-service)` pass 포함).
 - [ ] **AC-2** — 굽기 뒤 라이브: 피킹 중(`PICKING`) 출고 하나를 취소 → 예약 `RELEASED` · SKU `reservedQty` 원복 · 사가 `CANCELLED` · inventory 로그에 실패 없음(다음 데모 창). 33차 창에서 멈춘 사가가 볼륨에 남아 있으면 그것도 풀리는가 — 굽기가 볼륨을 새로 만들면 ⚪ + 이유.
 
 # Related Specs
