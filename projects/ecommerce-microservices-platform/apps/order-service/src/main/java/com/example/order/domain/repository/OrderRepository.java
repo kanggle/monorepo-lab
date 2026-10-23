@@ -149,16 +149,22 @@ public interface OrderRepository {
     List<Order> findStalePaidUnconfirmed(Instant cutoff, int limit);
 
     /**
-     * Tenant-scoped, CANCELLED-excluded product ranking rows aggregated from
-     * {@code order_items} (TASK-BE-469), the source for the admin insights
-     * endpoint's product rankings (by order-count and by revenue).
+     * Product ranking rows aggregated from {@code order_items} (TASK-BE-469), the source
+     * for the admin insights endpoint's product rankings (by order-count and by revenue).
+     * Only realised sales ({@link OrderStatus#REALISED_SALE}, not refunded) paid in
+     * {@code [paidFrom, paidTo)} — TASK-MONO-807 replaced the former «everything but
+     * CANCELLED, all time» basis. Tenant-scoped, and narrowed to the seller's own lines
+     * when a seller scope is bound.
      */
-    List<ProductOrderRankingRow> aggregateProductRanking();
+    List<ProductOrderRankingRow> aggregateProductRanking(Instant paidFrom, Instant paidTo);
+
+    /** Seller ranking rows — same basis and scope as {@link #aggregateProductRanking}. */
+    List<SellerOrderRankingRow> aggregateSellerRanking(Instant paidFrom, Instant paidTo);
 
     /**
-     * Tenant-scoped, CANCELLED-excluded seller ranking rows aggregated from
-     * {@code order_items} (TASK-BE-469), the source for the admin insights
-     * endpoint's seller rankings (by order-count and by revenue).
+     * One row per realised-sale order paid in {@code [paidFrom, paidTo)} — the source of
+     * the overview performance metrics (ADR-MONO-084, TASK-MONO-807). Tenant-scoped; a bound
+     * seller scope narrows to orders with that seller's lines and to those lines only.
      */
-    List<SellerOrderRankingRow> aggregateSellerRanking();
+    List<PaidOrderMetricRow> findPaidOrderMetrics(Instant paidFrom, Instant paidTo);
 }

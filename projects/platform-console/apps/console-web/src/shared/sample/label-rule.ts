@@ -252,6 +252,18 @@ const MACHINE_KEYS = new Set([
   'topic', // projection-status Kafka topic name
   'consumerGroup', // projection-status Kafka consumer-group id
   'key', // Setting's own dot-notation key (machine-formatted, not a display label)
+  // TASK-MONO-807 — the performance-metrics shape (`platform/contracts/
+  // performance-metrics-contract.md`). Every string is parsed: an enum, a wire
+  // window bound, or an integer string the console formats itself (F5). The
+  // screen names of the metrics come from the console's own label map, never
+  // from the response, so nothing here is read as prose.
+  'period', // week | month
+  'unit', // count | money
+  'current', // integer string — value over the current window
+  'previous', // integer string — value over the previous window
+  'revenue', // series value (integer string, KRW minor units)
+  'units', // series value (integer string)
+  'orders', // series value (integer string)
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

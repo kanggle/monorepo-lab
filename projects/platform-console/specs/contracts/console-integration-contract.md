@@ -3484,7 +3484,8 @@ scope, no § 3 row — attestation count stays **16**).
   | 18 | products period summary | `GET /admin/products/summary` | read |
   | 19 | sellers period summary | `GET /admin/sellers/summary` | read |
   | 20 | orders period summary | `GET /admin/orders/summary` | read |
-  | 21 | order insights (rankings) | `GET /admin/orders/insights` | read |
+  | 21 | order insights (rankings) | `GET /admin/orders/insights[?period=week\|month]` | read |
+  | 22 | order performance metrics («실적» strip) | `GET /admin/orders/metrics?period=week\|month` | read |
 
   **Operator-overview period summaries (#18–20 here + the per-area equivalents
   in §§ 2.4.10.2–.6) — TASK-BE-468 / TASK-PC-FE-164**: each operator area exposes
@@ -3528,7 +3529,12 @@ scope, no § 3 row — attestation count stays **16**).
   Each array holds ≤ 5 entries sorted by `value` DESC (ties by `id` ASC). `value`
   is a non-negative `long`: order-count = `COUNT(DISTINCT order)`, revenue =
   `SUM(unit_price × quantity)` over that product's / seller's lines. **CANCELLED
-  orders are excluded** from both metrics. Product `label` = the line's
+  orders are excluded** from both metrics. 🔴 **TASK-MONO-807 superseded that
+  basis**: only realised sales count (`CONFIRMED` / `SHIPPED` / `DELIVERED`, not
+  refunded — `PENDING` and `BACKORDERED` are out), attributed to `paid_at`, and a
+  bound seller scope narrows to that seller's lines; `?period=` keeps only orders
+  paid in that period's current window (the console passes the strip's period).
+  The normative rule is `order-api.md` § `GET /api/admin/orders/insights`. Product `label` = the line's
   denormalized `product_name`; seller `label` = the raw `seller_id` (order-service
   holds no seller display name — the console overlays the product-service seller
   `displayName` via the seller list, falling back to this id). Same admission +
@@ -3537,6 +3543,17 @@ scope, no § 3 row — attestation count stays **16**).
   "권한 없음" placeholder (never blanks the section). All four rankings share one
   source (`order_items`) so they are one endpoint on the order-line owner — no
   product-service join (name is denormalized) and revenue lives only on the line.
+
+  **Operator-overview performance metrics (#22) — ADR-MONO-084 P2 / TASK-MONO-807**:
+  `GET /admin/orders/metrics?period=week|month` on `order-service` feeds the «실적»
+  strip at the top of the 운영 개요 (revenue · units · orders, current vs the
+  same-length previous window, daily series). Shape, windows and error handling are
+  [`platform/contracts/performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md);
+  what each key counts is `order-api.md` § `GET /api/admin/orders/metrics`. Parsed by
+  `shared/api/performance-metrics.ts` (values are integer strings — F5); its own cell —
+  a non-200 or an unparseable body shows «실적을 불러올 수 없습니다» / «권한 없음» in the
+  strip while every other block renders. The page reads `?period=` (default `month`;
+  an unknown value falls back to the default) and passes the same period to #21.
 
   **Out of this binding (deferred, not silently dropped)**: seller admin
   (`AdminSellerController POST /admin/sellers`) and search reindex

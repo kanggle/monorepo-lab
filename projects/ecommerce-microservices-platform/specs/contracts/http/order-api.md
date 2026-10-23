@@ -292,8 +292,45 @@ Calendar-period-to-date order counts (KST calendar bounds), for the operator ove
 
 ---
 
+### GET /api/admin/orders/metrics
+Performance metrics for the operator overview's «실적» strip (ADR-MONO-084 P2, TASK-MONO-807). The response shape, the windows (KST, same-length previous window) and the error behaviour are **[`platform/contracts/performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md)** — this section only names the keys and what each one counts.
+
+**Query Parameters**
+- `period` (required) — `week` | `month`. Missing or unknown → `400 INVALID_ORDER_REQUEST`.
+
+**Metrics** (in this order)
+
+| Key | Unit | What it counts |
+|---|---|---|
+| `revenue` | money, `KRW` | Unrestricted view: the sum of `total_price` — what the customer paid, net of any coupon. Seller-scoped view (`X-Seller-Scope` bound): the sum of that seller's lines `unit_price × quantity`, **before** the order-level coupon (a coupon is not allocated to sellers). |
+| `units` | count | The sum of `quantity` over the lines in view (all lines, or the seller's). |
+| `orders` | count | Orders in view (with a seller scope: orders containing at least one of that seller's lines). |
+
+**Which orders count — the same for every key:**
+- **Included states:** `CONFIRMED`, `SHIPPED`, `DELIVERED` — paid *and* stock-reserved (`CONFIRMED` is set only by the payment / stock-reservation saga, TASK-BE-648).
+- **Excluded:** `PENDING` (unpaid), `BACKORDERED` (paid, stock not held), `CANCELLED`, `STUCK_RECOVERY_FAILED`, and any order with `refunded_at` set (a refund is only ever made on a cancelled order, so this is a second guard, not a second population).
+- **Attributed to:** `paid_at`, bucketed by its **KST** date. Not `created_at`: an order placed on Sunday and paid on Monday is Monday's sale.
+- 🔴 **A past day can still change.** A `BACKORDERED` order that is later confirmed joins the day it was **paid** (ADR-MONO-084 OD-1). And because payment and stock confirmation arrive on separate events, a just-confirmed order whose `paid_at` has not landed yet joins its paid day when it does.
+- Tenant-scoped; a bound seller scope narrows as above, inside the tenant filter.
+
+**Error responses**
+| Status | Code | Reason |
+|---|---|---|
+| 400 | INVALID_ORDER_REQUEST | `period` missing or not `week` / `month` |
+| 401 | UNAUTHORIZED | Missing or invalid access token |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` (same as the other admin order reads) |
+
+---
+
 ### GET /api/admin/orders/insights
 Four tenant-scoped top-5 rankings derived from `order_items`, for the operator overview.
+
+**Query Parameters**
+- `period` (optional, TASK-MONO-807) — `week` | `month`: only orders **paid** in that period's current window (the same window as `/metrics`). Omitted: every realised sale up to now. Unknown value → `400 INVALID_ORDER_REQUEST`.
+
+**Which orders count:** exactly the `/metrics` rule above — `CONFIRMED` / `SHIPPED` / `DELIVERED`, not refunded, by `paid_at`, seller scope applied. 🔴 Before TASK-MONO-807 the rankings counted every status except `CANCELLED` (so unpaid `PENDING` orders), over all time, and ignored the seller scope; the numbers drop where those orders were — a basis correction, not a regression.
+
+**Revenue here is line amounts** — `unit_price × quantity` per product / seller, before the order-level coupon (a coupon is not allocated to lines). So the sum of a ranking is not `/metrics` `revenue`, which is what customers paid.
 
 **Response 200**
 ```json
@@ -316,6 +353,7 @@ Four tenant-scoped top-5 rankings derived from `order_items`, for the operator o
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
+| 400 | INVALID_ORDER_REQUEST | `period` not `week` / `month` |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
 | 403 | ACCESS_DENIED | Requires ADMIN role |
 

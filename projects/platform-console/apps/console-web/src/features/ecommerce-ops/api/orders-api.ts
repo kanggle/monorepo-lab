@@ -1,5 +1,10 @@
 import { getServerEnv } from '@/shared/config/env';
 import { clampPageSize } from '@/shared/lib/pagination';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  PerformanceMetricsSchema,
+  type PerformanceMetrics,
+} from '@/shared/api/performance-metrics';
 import {
   callEcommerce,
   type EcommerceCallLabel,
@@ -106,12 +111,27 @@ export function getOrdersSummary(): Promise<OrderAreaSummary> {
   );
 }
 
-/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-172). */
-export function getOrderInsights(): Promise<OrderInsights> {
+/** GET /admin/orders/insights — top-5 product/seller rankings (TASK-PC-FE-172).
+ *  TASK-MONO-807: with `period`, only orders paid in that period's current window
+ *  (the same window as {@link getOrderMetrics}); without it, all time. */
+export function getOrderInsights(period?: MetricsPeriod): Promise<OrderInsights> {
+  const env = getServerEnv();
+  const path = period ? `/orders/insights?period=${period}` : '/orders/insights';
+  return callEcommerce(
+    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path },
+    (j) => OrderInsightsSchema.parse(j),
+    ORDER_LABEL,
+  );
+}
+
+/** GET /admin/orders/metrics?period= — the overview «실적» strip (ADR-MONO-084 P2,
+ *  TASK-MONO-807): revenue · units · orders, current vs the same-length previous
+ *  window, daily series. Shape = `platform/contracts/performance-metrics-contract.md`. */
+export function getOrderMetrics(period: MetricsPeriod): Promise<PerformanceMetrics> {
   const env = getServerEnv();
   return callEcommerce(
-    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path: '/orders/insights' },
-    (j) => OrderInsightsSchema.parse(j),
+    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path: `/orders/metrics?period=${period}` },
+    (j) => PerformanceMetricsSchema.parse(j),
     ORDER_LABEL,
   );
 }

@@ -25,7 +25,13 @@ const WindowSchema = z.object({
 export const PerformanceMetricSchema = z.object({
   key: z.string().min(1),
   unit: z.enum(['count', 'money']),
-  currency: z.string().length(3).nullable(),
+  // `null` on the wire for a count; a producer whose JSON drops nulls omits it —
+  // both read as null (TASK-MONO-807), so the parse does not depend on that setting.
+  currency: z
+    .string()
+    .length(3)
+    .nullish()
+    .transform((c) => c ?? null),
   current: INTEGER_STRING,
   previous: INTEGER_STRING,
 });
