@@ -8,7 +8,7 @@ The Finance transactions type filter offers `CREDIT` / `DEBIT`, which the backen
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -50,9 +50,21 @@ The type filter offers only values the backend accepts, so no choice in the drop
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — the above, file:line.
-- [ ] **AC-1** — every filter option, sent to the backend contract, is accepted. A test enumerates the options against the producer enum, so a future drift turns red.
-- [ ] **AC-2** — rows whose type is outside the producer enum still render with the generic «unknown» label. Control group: the table's rendering is unchanged.
+- [x] **AC-0** — the above, file:line.
+  - → **닫힘 2026-10-24 UTC** (origin/main `540dccd88`).
+  - **결함 확인:** 필터 `<select>`(`TransactionsTable.tsx:115`)의 옵션은 `KNOWN_TXN_TYPES` 9개였다. 백엔드 `TransactionType` 은 7개(`TOPUP · WITHDRAW · TRANSFER · HOLD · CAPTURE · RELEASE · REVERSAL`)다.
+  - **`CREDIT` / `DEBIT` 을 쓰는 곳:** 콘솔 코드 · 테스트에서 거래 유형으로 쓰는 곳은 `types.ts` 목록뿐이다. 저장소의 다른 `DEBIT`/`CREDIT` 은 ledger 분개 **방향**이라 다른 개념이다. → 표시용으로도 쓰이지 않는 값이다.
+  - **`WITHDRAW` · `REVERSAL`:** 필터에 넣었다. v1 에 쓰기 경로는 없지만 백엔드가 받는 값이라 무해하다.
+  - 백엔드의 400 vs 422 문제는 하지 않았다. finance 계약 변경이 필요하므로 기록만 한다.
+- [x] **AC-1** — every filter option, sent to the backend contract, is accepted. A test enumerates the options against the producer enum, so a future drift turns red.
+  - → 필터용 목록 `TXN_TYPE_FILTER_OPTIONS`(`types.ts`)를 새로 만들었다. 생산자 enum 7개, 선언 순서 그대로다. 드롭다운은 이 목록을 쓴다.
+  - `finance-txn-type-filter.test.tsx`:
+    - **Java 원본(`TransactionType.java`)을 읽어** enum 을 꺼내고, 목록과 렌더된 `<option>` 이 그것과 정확히 같은지 단언한다. enum 이 바뀌면 빨강이 된다.
+    - 비어 있으면 실패하는 하한(≥5 · `TOPUP` 포함)을 둬서 «0개끼리 같음» 을 막는다.
+  - 🔴 **무는가:** 드롭다운을 옛 `KNOWN_TXN_TYPES` 로 잠깐 되돌리면 그 시험 하나가 빨강이다(rc=1, 1 failed / 3 passed). 복구 뒤 4/4 이다.
+- [x] **AC-2** — rows whose type is outside the producer enum still render with the generic «unknown» label. Control group: the table's rendering is unchanged.
+  - → 대조군: 표시용 목록 `KNOWN_TXN_TYPES` 는 바이트 그대로다(시험이 9개를 고정한다). 아는 유형은 그대로 그 이름으로 그려지고, 모르는 값은 여전히 generic 라벨이다.
+  - **검증:** console-web `tsc` rc=0 · `pnpm lint` rc=0 · `pnpm test` 447 파일 5,540 통과.
 
 # Related Specs
 
