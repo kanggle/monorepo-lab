@@ -8,7 +8,7 @@ TASK-MONO-814
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -124,3 +124,12 @@ On the 33rd window (2026-10-23 UTC) the logged-in operator overview showed «WMS
 ## 배포 기록 (2026-10-24 UTC) — AC-5
 
 - #4508 squash `45fa46428` 하나로 네 소비자가 다시 빌드됐다: Vercel Production `kanggle-console` `7284959963` · `kanggle-store` `7284948646` · `kanggle-fan` `7284936901` · `kanggle-auth` `7284934419` — 넷 다 `success`(GitHub deployments API). ⇒ AC-5 충족(체크칸은 review 동결로 그대로). AC-6 = 다음 창(`TASK-MONO-672` 항목 19).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-5 — 닫힘.** 34차 창(2026-10-24 UTC): #4508 `45fa46428` 하나로 네 소비자가 다시 빌드됐다 — Vercel Production `kanggle-console` `7284959963` · `kanggle-store` `7284948646` · `kanggle-fan` `7284936901` · `kanggle-auth` `7284934419`, 모두 `success`. 그 sha 가 `origin/main` 의 조상임을 이 창에서 확인했다.
+- **AC-6 — 닫힘.** 34차 창(2026-10-24 UTC): 소유자가 로그인 직후 첫 렌더로 `demo-corp` 운영자 개요를 열었다(17:01:53Z). 여섯 카드가 전부 값을 그렸다 — IAM 0 · WMS 출고 0 + 이번 주 출고 수량 10 · SCM 초안 1 + ₩200,000 · Finance 0 + ₩100,000 · ERP 내 결재 대기 2 · ecommerce 0 + ₩0 — 도메인 상태 요약 «정상 6 · 주의 0 · 점검 불가 0».
+- CloudWatch `AWS/Lambda` `portfolio-demo-control` 17:01Z: Invocations 22 · Throttles **0** · Errors 0. 33차 창의 같은 분은 Throttles 4–12 였다. 15:30Z–16:35Z 의 1분 점 65개도 Throttles 전부 0 (o07).
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 들의 닫힘 기록이다.)

@@ -8,7 +8,7 @@ TASK-MONO-811
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -137,3 +137,10 @@ IAM 개요(`/iam`)는 운영자 · 계정 · 감사 건수만 보여 준다. 맨
 
 - 집계 API 가 행을 내려주고 콘솔이 센다 → 개인 정보가 콘솔로 나간다(AC-2 가 막는다).
 - 서비스마다 경계 계산을 따로 한다 → P1 `KstPeriodBounds` 가 아닌 곳이 생긴다.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-5 — 닫힘.** 34차 창(2026-10-24 UTC): `main` = #4519 `067f7aed6` · AMI = `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ `067f7aed6`) · 라이브 = `GET /api/admin/metrics?tenantId=demo-corp` 200, `loginSuccess` 0 · `newAccount` 1. `tenantId` 없이 부르면 400 `VALIDATION_ERROR` — 운영자가 둘 이상의 테넌트에서 `audit.read` 를 가지면 생략할 수 없다는 문서화된 규칙 그대로다. 소유자 화면 렌더됨. (증거 o04)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다.)

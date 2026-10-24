@@ -120,20 +120,20 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **IN-PROGRESS (2026-10-24 UTC) — `TASK-PC-FE-364` AC-3 라이브(33차 창)에서 발견.** 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` · 도메인 상태 «WMS 점검 불가» — 서비스엔 요청이 안 닿음, 같은 `WMS_ADMIN_BASE_URL` 의 `/wms` 화면은 정상. 🔵 AC-0(코드 판독): 의심 (a)~(d) 전부 배제 · 남는 기전 = 다리마다 따로 도는 데모 주소 해석(`/status`) — **원인으로 증명 안 됨** ⇒ 수선 보류, 다음 측정 제안. 구현 권장 Opus.
+_(없음)_
 
 ## review
 
-- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **ADR-MONO-084 P8 — 홈 도메인 카드에 대표 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · AC-4 = 머지 뒤 첫 nightly · AC-5 = 배포 상태). 콘솔 서버 합성에 지표 레그 6개를 별도 패스로 더했다(병렬 · 자기 시한 · 카드 숫자 불변). 대표 지표는 소유자 확인(«기본안 + finance=이체 금액»). 실패는 0 이 아니라 칸만 degraded / «권한 없음». 🔴 기록된 위험: 홈 합성이 도메인 지표 경로를 다시 적었고, fetcher 와의 대조 시험이 없다. 분석=Opus 5.5 / 구현=Sonnet 5.5 + diff 대조.
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-4 🟡 — 14일 창 그래프 ✅ · 빈 창 문구는 데이터상 못 잼.
 
-- `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **ERP 결재 화면의 콘솔 오류 둘 — 만들기 BFF 응답 `{data}` 로 감쌈 · 위임 목록 `meta.size` 0 허용 · 오류 시 빈 목록 문구 숨김 · 위임 생성·회수 `.data` 파싱** (REVIEW, 2026-10-21 UTC · 문구 변경 없음). AC-0 닫힘 · AC-1/AC-2 구현(vitest 412 files · 4962 tests 전부 통과, tsc/lint rc=0) · AC-3(Vercel/라이브, 다음 데모 창) 열림. 분석=Opus 5.5 / 구현=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 🟡 — «내가 위임한» 오류 문구 0 · 상신 안 함.
-
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: AC-11 미착수.
 
 ## done
+- ✅ `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4508(`45fa46428`, 실패 0) · 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` — 원인은 데모 주소 해석기의 동시 `/status`(수선 = `TASK-MONO-814`) · 34차 창 로그인 직후 첫 개요에서 여섯 카드가 값을 그렸고 도메인 상태 «정상 6 · 주의 0 · 점검 불가 0».
+- ✅ `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4524(`540dccd88`, 실패 0) · `ADR-MONO-084` P8 — 홈 도메인 카드에 대표 실적 지표 · 머지 뒤 첫 nightly `40087927639` success · 34차 창 홈 카드 여섯 도메인 모두 대표 지표 표시.
+- ✅ `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4442(`dd643f54a`, 실패 0) · ERP 결재 화면의 콘솔 오류 둘 — 상신 응답 감싸기 · 위임 목록 오류 문구 · 34차 창 콘솔 상신 → `SUBMITTED` · «내가 위임한» 오류 문구 0. 🔵 위임 행이 직원 이름 대신 원시 id 를 그림(기록만).
 - ✅ `TASK-PC-FE-370-finance-transaction-type-filter-sends-unknown-types.md` — **DONE 2026-10-24 UTC (4-dim verified)** — #4525(`83aef7c3b`, 실패 0 · 13 pass / 55 skip — Frontend unit · E2E smoke SUCCESS). Finance 거래 유형 필터 = 생산자 enum 7개(`TXN_TYPE_FILTER_OPTIONS`) · 시험이 `TransactionType.java` 를 직접 읽어 대조(옛 목록이면 빨강) · 표시 목록 불변. AC-0~2 닫힘. 기록만: 백엔드가 모르는 `type` 에 400 이 아니라 422 `AMOUNT_INVALID`(finance 계약 변경 필요).
 - ✅ `TASK-PC-FE-367-shipping-cancelled-status-label.md` — **DONE 2026-10-23 UTC (4-dim verified)** — #4492(`229ebc149`, 실패 0). 이커머스 배송 «취소됨»(danger) — 라벨 · 배지 · 필터 · 개요 분포 · 가이드 표 행 · 문구 승인 · 브랜치 nightly `39929201288` success. 33차 창 라이브(AC-3): 목록 빨간 배지 · 작업 버튼 없음 · 필터 · 개요 «취소됨» 1 · 원문 `CANCELLED` 0.
 - ✅ `TASK-PC-FE-366-order-status-dialog-remove-confirm.md` — **DONE 2026-10-22 UTC (4-dim verified)** — #4484(`c8b7262d8`, 실패 0). 주문 상태 변경에서 «확정» 빼기 — 운영자는 취소만 · 가이드 «대기» 문장 · 문구 승인 (서버 짝 TASK-BE-648) · Vercel `7268124145` success · 익명 샘플 화면 확인.

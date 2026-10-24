@@ -8,7 +8,7 @@ TASK-PC-FE-369
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -69,7 +69,8 @@ Fix issue found in TASK-PC-FE-364. 33차 창(2026-10-23 UTC), 로그인(`demo-co
   - → **닫힘 (2026-10-24 UTC 기록 정리)** — ①~④ 는 아래 § 기전 (e) · § ② · § ③ · § ④ · § 측정(2026-10-24 UTC, CloudWatch 1분 해상도)에 있다. 원인은 콘솔 밖이었다(`infra/demo/` 공유 해석기, 동시 `/status` 가 람다 한도 10 을 넘음). AC-0 이 요구한 대로 해당 티켓 `TASK-MONO-814` 를 기안했다. 🔵 이 칸은 수선 PR(#4508)이 머지될 때 체크되지 않은 채 남아 있었다 — 본문은 이미 닫힌 상태를 적고 있었다.
 - [x] **AC-1** — 수선 + 시험(원인을 재현하는 고정값 · 실패 분류) · `tsc --noEmit` · `next lint` · vitest(`--maxWorkers=4 --minWorkers=2`) · Client graph 가드 둘 · 큐 가드 셋(스테이지 뒤) rc=0. SSR · 합성이 바뀌면 머지 전 브랜치 nightly 콘솔 잡 · federation e2e.
   - → **닫힘 — `TASK-MONO-814` AC-1~4 로** (같은 PR #4508, `45fa46428`; 814 는 `review/` 에서 AC-1~4 체크 확인). 본문 § 수선의 자리: «AC-1 은 814 의 AC-1~4 로 닫힌다». 남는 것은 AC-2(라이브) 하나다 — 다음 창, `TASK-MONO-672` 목록(814 AC-6 과 같이).
-- [ ] **AC-2** — 배포(Vercel Production 기록) · 라이브: 로그인(`demo-corp`) 개요의 «WMS 출고» · «SCM 발주» 카드가 값을 그리고 도메인 상태 요약에 «WMS 점검 불가» 가 없다(다음 데모 창 — wms · scm 묶음이 켜져 있을 때).
+- [x] **AC-2** — 배포(Vercel Production 기록) · 라이브: 로그인(`demo-corp`) 개요의 «WMS 출고» · «SCM 발주» 카드가 값을 그리고 도메인 상태 요약에 «WMS 점검 불가» 가 없다(다음 데모 창 — wms · scm 묶음이 켜져 있을 때).
+  - → 34차 창(2026-10-24 UTC): 배포 = `TASK-MONO-814` #4508 `45fa46428` 의 Vercel Production 넷(`kanggle-console` `7284959963` 외, 모두 `success`). 라이브 = 소유자가 로그인 직후 첫 화면으로 `demo-corp` 개요를 열었다(17:01:53Z). 여섯 카드가 전부 값을 그렸다 — IAM 0 · WMS 출고 0 + 이번 주 출고 수량 10 · SCM 초안 1 + ₩200,000 · Finance 0 + ₩100,000 · ERP 내 결재 대기 2 · ecommerce 0 + ₩0. 도메인 상태 요약 «정상 6 · 주의 0 · 점검 불가 0». 33차 창의 `DOWNSTREAM_ERROR` 두 카드와 «WMS 점검 불가» 가 사라졌다. 람다 `Throttles` 17:01Z = 0(33차 같은 분 4–12). 이 칸은 `TASK-MONO-814` AC-6 과 같은 측정이다.
 
 # Related Specs
 

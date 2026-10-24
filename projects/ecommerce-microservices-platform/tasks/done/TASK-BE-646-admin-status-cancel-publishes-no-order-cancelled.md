@@ -8,7 +8,7 @@ TASK-BE-646
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -170,3 +170,11 @@ AC-1 은 CI 의 ecommerce 잡 초록을 본 뒤 닫는다. AC-2 는 굽기 뒤 �
 - **AC-2 🟡 절반** — `CONFIRMED` 주문 `49eae2f6-8813-43b4-94f9-1b333d3afa63` 을 콘솔에서 취소 → 200 `CANCELLED` · 웹스토어 결제 정보 **«환불 완료» 환불일 13:16:22** · 배송 `CANCELLED`.
 - 미측정: `order_outbox` 의 `OrderCancelled(OPERATOR)` 행 · 상품 예약 해제 · AC-0 ③ 세 DB 조회.
 - ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-2 — 닫힘.** 34차 창(2026-10-24 UTC): 주문 `7e457d10-56e6-4c9b-a54d-6f7f7f83885f`(`CONFIRMED`, wms 쪽 `PICKING`)을 ecommerce 게이트웨이 `POST /api/admin/orders/{id}/status {"status":"CANCELLED"}` 로 취소 → 200, 16:30:29Z. `order_outbox` 에 `OrderCancelled` 16:30:29.83(발행 16:30:30.57) · payment `REFUNDED` 3,490,000 · product 예약 `RESERVED→RELEASED` · 로그 «Reservation released on cancel». (증거 o07 · o11)
+- AC-0 ③ 라이브 절반: 이미 `CANCELLED` 인 주문 `f72dcd1d` 는 payment `PENDING` · 예약 `RELEASED` 로 남은 상태가 없다(보정 필요 없음).
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «이 티켓은 `review` 에 남는다» 문장은 33차 창 시점의 기록이며 지금은 `done` 이다.)

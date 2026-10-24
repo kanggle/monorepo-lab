@@ -1,6 +1,6 @@
 # TASK-MONO-800 — a request the servlet firewall rejects is answered 500 `INTERNAL_ERROR` instead of 400
 
-- **Status**: review (AC-0–3 closed 2026-10-20 UTC · AC-4 waits for the next AMI bake + demo window)
+- **Status**: done (AC-0–3 closed 2026-10-20 UTC · AC-4 waits for the next AMI bake + demo window)
 - **Type**: fix (shared library — `libs/java-web-servlet`)
 - **Created**: 2026-10-20 UTC
 - **Scope class**: monorepo-level (`libs/java-web-servlet` is used by every servlet service)
@@ -139,3 +139,10 @@ A request the firewall rejects is a client error: answer **400** with a stable c
 - Deploy state (AC-4, first half): baked — `283fd39cf` → AMI `ami-02b3ba00a3b2ff622` (tag RepoCommit matches) · pin PR #4498 (`c5e3ddad3`). The impl merge `8e74909c3` (#4431) is an ancestor of `283fd39cf`.
 - Live «same request → 400»: ⚪ **not measured, and why** — the reference request (a raw Korean `X-Operator-Reason` header on an operator API) needs a raw client carrying the logged-in Bearer token, and the console percent-encodes the header, so the console cannot send it. No such client was available in this window.
 - ⇒ AC-4 stays open and the ticket stays in `review`. Next: a raw HTTP client with an operator token (`TASK-MONO-672` § Order «Still open» 12 ①).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-4 — 닫힘.** 34차 창(2026-10-24 UTC): `main` = #4431 `8e74909c3` · AMI = `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ `8e74909c3`). Live: a raw UTF-8 `X-Operator-Reason: ④` on `GET /api/admin/audit` — via the iam gateway and direct to admin-service (18085) — answers 400 `BAD_REQUEST` «disallowed header or value». The value is not echoed, there is one WARN per request (`Request rejected by the servlet firewall`) and ERROR 0. An ASCII control value answers 200 (o09, o10). The 33rd window's ⚪ (no raw client) is closed.
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «AC-4 stays open and the ticket stays in `review`» 문장은 33차 창 시점의 기록이며 지금은 `done` 이다.)

@@ -8,7 +8,7 @@ outbound-service 가 이커머스 출고 취소 요청(`ecommerce.fulfillment.ca
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -124,3 +124,10 @@ backend
   - 이 경로는 이 티켓이 새로 만든 것이 아니라 기존 `CancelOrderUseCase` 보상 경로다(운영자 취소도 영향받을 것으로 추정).
 - 새 티켓: **`TASK-BE-651`**(inventory-service 가 `picking.cancelled` 로 예약을 못 푼다 · DLT 토픽 없음 · 리스너 예외 미기록). 그것이 실린 뒤 이 AC-3 의 «예약 해제» 를 다시 잰다. PICKED–PACKED 거부(`ALERT ecommerce cancel request refused after pick`) 갈래는 이번 창에 그 상태의 주문이 없어 재지 않았다.
 - ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-3 — 닫힘.** 34차 창(2026-10-24 UTC): `TASK-BE-646` 의 취소 주문 `7e457d10-…` 에 대해 wms 출고가 `PICKING→CANCELLED` 16:30:34Z 로 자동 취소됐다. 로그 `CancelOrderService order_cancelled … reservationHeld=true`. 예약 해제 절반은 `TASK-BE-651` AC-2 에서 닫혔다(예약 `RELEASED`, SKU …2013 `reservedQty` 1→0). (증거 o07 · o11)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «이 티켓은 `review` 에 남는다» 문장은 33차 창 시점의 기록이며 지금은 `done` 이다.)

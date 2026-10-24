@@ -147,3 +147,11 @@ IdP 가 모르는 hint 이면 `{"error":"invalid_token","error_description":"Ope
 - **AC-3 ✅** — 콘솔 계정 메뉴 → 로그아웃 → `https://console.hubwang.com/login` 착지. 대조: 잘못된 `GET /connect/logout?id_token_hint=garbage…` → **400 JSON `invalid_token`**(내부 자격 401 아님).
 - **AC-1 — 열림 그대로.** «소유자 브라우저 hint 사례» 절반은 이번 창에서 재지 않았다.
 - ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-3 — 닫힘.** 34차 창(2026-10-24 UTC): ✅ 소유자가 콘솔에서 로그아웃하자 `console.hubwang.com/login` 에 착지했다.
+- **AC-1 — 34차 창 결과 (열린 채 유지).** «소유자 브라우저 사례(hint 있음)» 절반은 이 측정으로 따로 판정하지 않았으므로 AC-1 은 열어 둔다 — 티켓은 `review` 에 남는다.
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 AC-3 의 닫힘 기록이다.)

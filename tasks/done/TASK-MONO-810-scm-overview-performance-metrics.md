@@ -8,7 +8,7 @@ TASK-MONO-810
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -128,3 +128,10 @@ SCM 개요(`/scm`)는 발주 · 재고 스냅샷 건수와 발주 상태 분포�
 
 - `Integration (scm-platform, Testcontainers)` 초록 · `E2E (scm-platform v1 cross-service smoke)` 초록. `PurchaseOrderMetricsIntegrationTest` 는 이 서비스의 IT 가 `DockerAvailableCondition` 으로 조용히 빠질 수 있어 초록만 보지 않았다 — job 로그에 그 클래스 실행 줄 5 곳 · `SKIPPED` / `FAILED` 0. ⇒ AC-1(DRAFT · 제출 뒤 취소 대조군) · AC-2(날짜 필터 경계 · 다른 필터와 조합 · 테넌트 격리 · 카드 목록 = `poCount`)가 **실 Postgres 에서 통과** — 닫힘. 위험으로 꼽았던 `CAST(:Instant AS string)` 바인딩 · 임베디드 `totalAmount.amount` 생성자식도 그 IT 가 앱 기동과 함께 통과시켰다.
 - AC-4(굽기 · 데모 창 라이브)가 남아 review 유지.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-4 — 닫힘.** 34차 창(2026-10-24 UTC): `main` = #4515 `769829962` · AMI = `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ `769829962`) · 라이브 = scm `GET /api/v1/procurement/po/metrics` 200, `poCount` 2 · `poAmount` 200,000 KRW. 소유자 화면 `/scm` 실적 줄이 렌더되고 홈 카드는 ₩200,000. 🔵 라이브 경로 접두어는 `/api/v1/` 이다(INDEX 행의 `/api/procurement/…` 표기는 `v1` 이 빠져 있다). (증거 o04)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «review 유지» 문장은 CI 판정 시점의 기록이며 지금은 `done` 이다.)
