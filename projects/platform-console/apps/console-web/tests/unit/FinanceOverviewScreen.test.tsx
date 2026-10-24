@@ -1,7 +1,66 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { FinanceOverviewScreen } from '@/features/finance-overview';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { render, screen, within } from '@testing-library/react';
+import {
+  FinanceOverviewScreen,
+  FINANCE_PERFORMANCE_SCOPE_NOTE,
+} from '@/features/finance-overview';
 import type { FinanceOverviewState } from '@/features/finance-overview';
+import type { PerformanceCell } from '@/shared/api/performance-metrics';
+import { runAxe } from '../a11y/axe-helper';
+
+/** `GET /api/finance/accounts/metrics` (TASK-MONO-812) — KRW and USD, in the producer's order. */
+const PERF_OK: PerformanceCell = {
+  status: 'ok',
+  value: {
+    period: 'month',
+    timezone: 'Asia/Seoul',
+    current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-24T14:05:00+09:00' },
+    previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-24T14:05:00+09:00' },
+    metrics: [
+      { key: 'topupCount', unit: 'count', currency: null, current: '3', previous: '2' },
+      { key: 'topupAmount:KRW', unit: 'money', currency: 'KRW', current: '900000', previous: '400000' },
+      { key: 'topupAmount:USD', unit: 'money', currency: 'USD', current: '2550', previous: '0' },
+      { key: 'transferCount', unit: 'count', currency: null, current: '1', previous: '0' },
+      { key: 'transferAmount:KRW', unit: 'money', currency: 'KRW', current: '50000', previous: '0' },
+      { key: 'transferAmount:USD', unit: 'money', currency: 'USD', current: '0', previous: '0' },
+      { key: 'captureCount', unit: 'count', currency: null, current: '1', previous: '1' },
+      { key: 'captureAmount:KRW', unit: 'money', currency: 'KRW', current: '12000', previous: '8000' },
+      { key: 'captureAmount:USD', unit: 'money', currency: 'USD', current: '0', previous: '0' },
+    ],
+    series: [
+      {
+        date: '2026-10-01',
+        values: {
+          topupCount: '1',
+          'topupAmount:KRW': '300000',
+          'topupAmount:USD': '0',
+          transferCount: '0',
+          'transferAmount:KRW': '0',
+          'transferAmount:USD': '0',
+          captureCount: '0',
+          'captureAmount:KRW': '0',
+          'captureAmount:USD': '0',
+        },
+      },
+      {
+        date: '2026-10-02',
+        values: {
+          topupCount: '2',
+          'topupAmount:KRW': '600000',
+          'topupAmount:USD': '2550',
+          transferCount: '1',
+          'transferAmount:KRW': '50000',
+          'transferAmount:USD': '0',
+          captureCount: '1',
+          'captureAmount:KRW': '12000',
+          'captureAmount:USD': '0',
+        },
+      },
+    ],
+  },
+};
 
 /**
  * TASK-PC-FE-229 — `FinanceOverviewScreen` (the `/finance` overview
@@ -43,6 +102,8 @@ const BASE: FinanceOverviewState = {
   },
   accountDegraded: false,
   accountNotFound: false,
+  period: 'month',
+  performance: PERF_OK,
 };
 
 describe('FinanceOverviewScreen (TASK-PC-FE-229)', () => {
@@ -190,5 +251,97 @@ describe('FinanceOverviewScreen (TASK-PC-FE-229)', () => {
       'href',
       '/ledger',
     );
+  });
+});
+
+describe('FinanceOverviewScreen — «실적» strip (TASK-MONO-812)', () => {
+  const kpis = () =>
+    within(screen.getByTestId('finance-performance'))
+      .getAllByRole('listitem')
+      .filter((li) => /^finance-performance-kpi-[A-Za-z:]+$/.test(li.getAttribute('data-testid') ?? ''));
+
+  it('is the first block under the heading and intro, before the ledger tiles', () => {
+    render(<FinanceOverviewScreen state={BASE} />);
+    const strip = screen.getByTestId('finance-performance');
+    expect(within(strip).getByRole('heading', { name: '실적' })).toBeInTheDocument();
+    const tiles = screen.getByTestId('finance-overview-ledger-tiles');
+    // DOCUMENT_POSITION_FOLLOWING — the tiles come after the strip.
+    expect(strip.compareDocumentPosition(tiles) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('one KPI per type count and per type × currency, in the producer order — KRW and USD separate', () => {
+    render(<FinanceOverviewScreen state={BASE} />);
+    expect(kpis().map((li) => li.getAttribute('data-testid'))).toEqual([
+      'finance-performance-kpi-topupCount',
+      'finance-performance-kpi-topupAmount:KRW',
+      'finance-performance-kpi-topupAmount:USD',
+      'finance-performance-kpi-transferCount',
+      'finance-performance-kpi-transferAmount:KRW',
+      'finance-performance-kpi-transferAmount:USD',
+      'finance-performance-kpi-captureCount',
+      'finance-performance-kpi-captureAmount:KRW',
+      'finance-performance-kpi-captureAmount:USD',
+    ]);
+    const strip = screen.getByTestId('finance-performance');
+    expect(within(strip).getByText('충전 건수')).toBeInTheDocument();
+    expect(within(strip).getByText('충전 금액 (KRW)')).toBeInTheDocument();
+    expect(within(strip).getByText('충전 금액 (USD)')).toBeInTheDocument();
+    expect(within(strip).getByText('캡처 금액 (KRW)')).toBeInTheDocument();
+    expect(screen.getByTestId('finance-performance-kpi-topupCount-value')).toHaveTextContent('3');
+    expect(screen.getByTestId('finance-performance-kpi-topupAmount:KRW-value')).toHaveTextContent('900,000');
+    // USD minor units (cents) rendered as dollars — and never folded into the won card.
+    expect(screen.getByTestId('finance-performance-kpi-topupAmount:USD-value')).toHaveTextContent('25.50');
+    expect(screen.getByTestId('finance-performance-kpi-topupAmount:KRW-value')).not.toHaveTextContent('25.50');
+    // The chart draws 충전 건수; no card is a link (no list filters by settle time).
+    expect(screen.getByTestId('finance-performance-trend')).toHaveTextContent('충전 건수 · 일별');
+    expect(screen.queryByTestId('finance-performance-kpi-topupCount-link')).toBeNull();
+  });
+
+  it('carries the D5 scope note — and the contract quotes it verbatim', () => {
+    render(<FinanceOverviewScreen state={BASE} />);
+    expect(screen.getByTestId('finance-performance-scope')).toHaveTextContent(FINANCE_PERFORMANCE_SCOPE_NOTE);
+    expect(FINANCE_PERFORMANCE_SCOPE_NOTE).toContain('보류는 캡처된 금액만');
+    expect(FINANCE_PERFORMANCE_SCOPE_NOTE).toContain('서로 더하거나 환산하지 않습니다');
+    const contract = readFileSync(
+      path.resolve(__dirname, '..', '..', '..', '..', 'specs', 'contracts', 'console-integration-contract.md'),
+      'utf8',
+    );
+    expect(contract).toContain(`«${FINANCE_PERFORMANCE_SCOPE_NOTE}»`);
+  });
+
+  it('period switch links to /finance?period=…, the selected one marked', () => {
+    render(<FinanceOverviewScreen state={{ ...BASE, period: 'week' }} />);
+    expect(screen.getByTestId('finance-performance-period-week')).toHaveAttribute('href', '/finance?period=week');
+    expect(screen.getByTestId('finance-performance-period-week')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('finance-performance-period-month')).toHaveAttribute('href', '/finance?period=month');
+  });
+
+  it('a failed strip says «불러올 수 없습니다» in words, shows no number (never 0) — tiles and snapshot stay', () => {
+    render(<FinanceOverviewScreen state={{ ...BASE, performance: { status: 'degraded', value: null } }} />);
+    expect(screen.getByTestId('finance-performance-degraded')).toHaveTextContent('실적을 불러올 수 없습니다');
+    expect(screen.getByTestId('finance-performance').textContent).not.toMatch(/\d/);
+    expect(screen.queryByTestId('finance-performance-kpi-topupCount')).toBeNull();
+    expect(screen.getByTestId('finance-overview-ledger-tiles')).toBeInTheDocument();
+    expect(screen.getByTestId('finance-overview-account-snapshot')).toBeInTheDocument();
+  });
+
+  it('forbidden strip → «권한이 없습니다», the rest of the overview renders', () => {
+    render(<FinanceOverviewScreen state={{ ...BASE, performance: { status: 'forbidden', value: null } }} />);
+    expect(screen.getByTestId('finance-performance-forbidden')).toHaveTextContent('실적을 볼 권한이 없습니다');
+    expect(screen.getByTestId('finance-performance').textContent).not.toMatch(/\d/);
+    expect(screen.getByTestId('finance-overview-ledger-discrepancies')).toHaveTextContent('5');
+  });
+
+  it('no account id appears inside the strip', () => {
+    render(<FinanceOverviewScreen state={BASE} />);
+    expect(screen.getByTestId('finance-performance').textContent).not.toContain('acct-1');
+  });
+
+  // Scoped to the strip: the pre-existing ledger tiles below it carry a `<p>`
+  // directly inside a `<dl>` (axe `definition-list`, serious) — a defect of
+  // those tiles, recorded by TASK-MONO-812 and not this strip's to fix.
+  it('the strip is axe-clean', async () => {
+    render(<FinanceOverviewScreen state={BASE} />);
+    expect(await runAxe(screen.getByTestId('finance-performance'))).toEqual([]);
   });
 });

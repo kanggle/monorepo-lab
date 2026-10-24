@@ -1,5 +1,13 @@
 import { SAMPLE_AS_OF } from '../codes';
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+  type SampleWindow,
+} from './metrics-windows';
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -130,17 +138,24 @@ function balancesFixture(path: string): unknown {
 // ===========================================================================
 
 /**
- * Three transactions, honestly disjoint outcomes: a COMPLETED credit (landed
+ * Three transactions, honestly disjoint outcomes: a COMPLETED top-up (landed
  * in `available`), an ACTIVE hold (sitting in `held` — never in `available`
  * until captured/released), and a FAILED transfer (never affected the balance
  * at all — a failed transaction is surfaced HONESTLY, not hidden, per
  * `txnStatusTone`'s FAILED/REVERSED danger tone). This is what makes
  * `ledger = available + held` true without needing the failed row.
+ *
+ * TASK-MONO-812 — the first row's type was `CREDIT`, a value the producer
+ * never emits (account-service `TransactionType` = TOPUP · WITHDRAW · TRANSFER
+ * · HOLD · CAPTURE · RELEASE · REVERSAL; the v1 credit IS a `TOPUP` —
+ * account-api.md § POST /{id}/topups). It is `TOPUP` now so the «실적»
+ * strip, which is computed from these rows by the producer's own rule, counts
+ * it as the 충전 it is instead of silently dropping it.
  */
 export const SAMPLE_FINANCE_TRANSACTIONS = [
   {
     transactionId: 'txn-sample-0001',
-    type: 'CREDIT',
+    type: 'TOPUP',
     status: 'COMPLETED',
     money: { amount: '80000', currency: 'KRW' },
     counterpartyAccountId: null,
@@ -199,10 +214,115 @@ function transactionsFixture(path: string): unknown {
 }
 
 // ===========================================================================
+// metrics — GET /api/finance/accounts/metrics?period= (the 개요 «실적» strip,
+// ADR-MONO-084 P7, TASK-MONO-812)
+// ===========================================================================
+//
+// Derived from the SAME transaction rows the 계좌 screen lists — never a
+// separate table of invented totals — by the producer's own rule
+// (account-api.md § GET /api/finance/accounts/metrics): a row counts when its
+// type is TOPUP / TRANSFER / CAPTURE and its status is SETTLED / COMPLETED,
+// attributed to `settledAt`. So in this one-account sample world the month
+// shows the one 80,000 원 top-up (09-01), while the ACTIVE hold and the FAILED
+// transfer honestly move nothing — the strip's control group, visible.
+// The sample world is KRW only, so the money keys are the `:KRW` ones (the
+// producer's empty-world default is KRW too).
+
+const METRICS_PATH = `${ACCOUNTS_PATH}/metrics`;
+
+const FINANCE_COUNTED_TYPES = ['TOPUP', 'TRANSFER', 'CAPTURE'] as const;
+type FinanceCountedType = (typeof FINANCE_COUNTED_TYPES)[number];
+const FINANCE_SETTLED_STATUSES: readonly string[] = ['SETTLED', 'COMPLETED'];
+const FINANCE_METRIC_PREFIX: Readonly<Record<FinanceCountedType, string>> = {
+  TOPUP: 'topup',
+  TRANSFER: 'transfer',
+  CAPTURE: 'capture',
+};
+const FINANCE_SAMPLE_CURRENCY = 'KRW';
+
+function countedRows(type: FinanceCountedType, win: SampleWindow, date?: string) {
+  return SAMPLE_FINANCE_TRANSACTIONS.filter(
+    (t) =>
+      t.type === type &&
+      FINANCE_SETTLED_STATUSES.includes(t.status) &&
+      t.settledAt !== null &&
+      instantInside(t.settledAt, win) &&
+      (date === undefined || kstDate(t.settledAt) === date),
+  );
+}
+
+/** Sum of integer-string minor units — BigInt, never a JS number (F5). */
+function sumAmounts(rows: ReadonlyArray<{ money: { amount: string } }>): string {
+  return String(rows.reduce((a, t) => a + BigInt(t.money.amount), BigInt(0)));
+}
+
+function computeFinanceMetrics(period: SamplePeriod) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  const metrics = FINANCE_COUNTED_TYPES.flatMap((type) => {
+    const prefix = FINANCE_METRIC_PREFIX[type];
+    const now = countedRows(type, w.current);
+    const before = countedRows(type, w.previous);
+    return [
+      {
+        key: `${prefix}Count`,
+        unit: 'count',
+        currency: null,
+        current: String(now.length),
+        previous: String(before.length),
+      },
+      {
+        key: `${prefix}Amount:${FINANCE_SAMPLE_CURRENCY}`,
+        unit: 'money',
+        currency: FINANCE_SAMPLE_CURRENCY,
+        current: sumAmounts(now),
+        previous: sumAmounts(before),
+      },
+    ];
+  });
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    metrics,
+    // Every date of the current window, zero-filled, every key.
+    series: w.dates.map((date) => ({
+      date,
+      values: Object.fromEntries(
+        FINANCE_COUNTED_TYPES.flatMap((type) => {
+          const prefix = FINANCE_METRIC_PREFIX[type];
+          const day = countedRows(type, w.current, date);
+          return [
+            [`${prefix}Count`, String(day.length)],
+            [`${prefix}Amount:${FINANCE_SAMPLE_CURRENCY}`, sumAmounts(day)],
+          ];
+        }),
+      ),
+    })),
+  };
+}
+
+function metricsFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  if (pathname !== METRICS_PATH) return undefined;
+  const p = samplePeriod(query);
+  // No / unknown period: the producer answers 400; the console always sends
+  // one, so the sample leaves it unanswered (-> the router's 503 «not ready»).
+  // Never fall through to the account-detail matcher, which would read
+  // `metrics` as an account id and answer 404.
+  return p ? computeFinanceMetrics(p) : null;
+}
+
+// ===========================================================================
 // finance surface — dispatch
 // ===========================================================================
 
 function financeFixture(path: string): unknown {
+  // `metrics` first: `/accounts/metrics` would otherwise match the
+  // `/accounts/{id}` detail pattern (the producer's literal route wins the
+  // same way — account-api.md § GET /api/finance/accounts/metrics).
+  const metrics = metricsFixture(path);
+  if (metrics !== undefined) return metrics ?? undefined;
   return (
     transactionsFixture(path) ?? balancesFixture(path) ?? accountDetailFixture(path)
   );
@@ -221,5 +341,6 @@ export const FINANCE_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     account: SAMPLE_FINANCE_ACCOUNT,
     balances: SAMPLE_FINANCE_BALANCES,
     transactions: SAMPLE_FINANCE_TRANSACTIONS,
+    metrics: { week: computeFinanceMetrics('week'), month: computeFinanceMetrics('month') },
   },
 };

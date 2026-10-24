@@ -2054,10 +2054,11 @@ concepts) is added, mirroring `features/scm-guide` (TASK-PC-FE-188) /
   ever made; a test pins this (the overview state seed calls `getAccount`
   exactly once, never a list endpoint).
 - **Read model (console-web DIRECT, reused clients).** No new producer
-  endpoint, no § 2.4.9 composition leg — the overview composes the SAME
-  `features/ledger-ops` + `features/finance-ops` server clients already bound
-  by §§ 2.4.7/2.4.7.1, exactly as the § 2.4.3.1 IAM overview snapshot composes
-  the existing IAM list clients.
+  endpoint for the tiles and the snapshot, no § 2.4.9 composition leg — the
+  overview composes the SAME `features/ledger-ops` + `features/finance-ops`
+  server clients already bound by §§ 2.4.7/2.4.7.1, exactly as the § 2.4.3.1
+  IAM overview snapshot composes the existing IAM list clients. (The «실적»
+  strip below is the one ADR-MONO-084 producer read added on top.)
 - **Independent degrade (the decisive resilience rule).** The ledger leg and
   the account leg run in their OWN try/catch — a `503`/timeout in ONE leg
   degrades ONLY that tile; the sibling tile renders normally (`ledgerDegraded`
@@ -2083,11 +2084,51 @@ concepts) is added, mirroring `features/scm-guide` (TASK-PC-FE-188) /
   `baseRoute` stays `/finance`); the destination now being an overview
   landing instead of an empty account-lookup form is a UX improvement, not a
   contract change.
+- **Performance metrics strip — ADR-MONO-084 P7 / TASK-MONO-812.**
+  `GET /api/finance/accounts/metrics?period=week|month` on account-service
+  (`features/finance-overview/api/finance-metrics-api.ts`, through the SAME
+  `callFinance` hardened call site as § 2.4.7: the domain-facing IAM OIDC token,
+  never the operator token, no `X-Tenant-Id` — finance resolves the tenant from
+  the token) feeds the «실적» strip, the **first** block under the heading:
+  충전 건수 (`topupCount`) · 충전 금액 (`topupAmount:<CUR>`) · 이체 건수
+  (`transferCount`) · 이체 금액 (`transferAmount:<CUR>`) · 캡처 건수
+  (`captureCount`) · 캡처 금액 (`captureAmount:<CUR>`), in that order with
+  **one card per currency** (KRW and USD are separate cards, never added or
+  converted — ADR-MONO-084 OD-3), current vs the same-length previous KST
+  window, with a daily series (the chart draws `topupCount`). Meaning per key
+  is the producer's (`finance-platform/specs/contracts/http/account-api.md`
+  § `GET /api/finance/accounts/metrics`); the strip carries a one-line scope
+  note, verbatim:
+  «확정된 거래만 셉니다 — 보류는 캡처된 금액만 들어가고, 해제된 보류와 실패한 거래는 0입니다. 이체는 한 번만 셉니다. 금액은 통화마다 따로이며 서로 더하거나 환산하지 않습니다. 테넌트 전체 합계이고 계좌별로 나누지 않습니다.»
+  Shape, windows and error handling are
+  [`platform/contracts/performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md);
+  the body is the bare shape. Parsed by `shared/api/performance-metrics.ts`
+  (integer strings — F5) as its **own leg** inside `getFinanceOverviewState`.
+  🔴 **It does not take part in the shared-credential `forbidden` rule above**:
+  a `403` on it → «권한 없음» in the strip only; `5xx` / timeout / any other
+  failure or an unparseable body → «실적을 불러올 수 없음» (never a `0`); in
+  both cases the ledger tiles and the account snapshot render. A `401` → the
+  same whole-session re-login; not eligible → no call. The page reads
+  `?period=` (default `month`; absent or unknown → the default, never a 400
+  page). The cards are **not** links (no list filters by settle time, and
+  there is no account list). **Honest constraint preserved**: this is not an
+  account list/search and not a console-side sum — the producer aggregates the
+  tenant's settled transactions and returns tenant-wide totals only; no
+  account id crosses to the console.
+  - **Sample mode.** The `flat:finance` fixture answers
+    `/api/finance/accounts/metrics` (matched before the `/accounts/{id}`
+    detail pattern) from the SAME transaction rows the 계좌 screen lists, by
+    the producer's rule — so the month shows the one 80,000 원 top-up and the
+    ACTIVE hold and the FAILED transfer move nothing. That seed row's type was
+    `CREDIT`, which the producer never emits; it is now `TOPUP` (and
+    `features/finance-ops` `KNOWN_TXN_TYPES` gained the producer's `TOPUP` /
+    `WITHDRAW`).
 
 > **Not a § 3 parity row**: like § 2.4.7 / § 2.4.7.1, this is an additive
-> nav/route composition over already-listed §§ 2.4.7/2.4.7.1 endpoints — adds
-> no § 3 row and changes none (count stays exactly 16 — the FE-006 no-drift
-> guard remains green).
+> nav/route composition over already-listed §§ 2.4.7/2.4.7.1 endpoints, plus
+> the ADR-MONO-084 performance read above (an overview-only read, not an
+> admin-web parity function) — adds no § 3 row and changes none (count stays
+> exactly 16 — the FE-006 no-drift guard remains green).
 
 #### 2.4.8 erp operations surface (TASK-PC-FE-010 — cross-reference, not a redefinition)
 

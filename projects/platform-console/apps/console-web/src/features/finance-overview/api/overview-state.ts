@@ -12,6 +12,12 @@ import type {
   BalancesResponse,
 } from '@/shared/api/finance-accounts-types';
 import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account-id';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
+import { getFinanceMetrics } from './finance-metrics-api';
 
 /**
  * Server-side finance domain **overview snapshot** for the `/finance`
@@ -70,6 +76,19 @@ import { getFinanceDefaultAccountId } from '@/shared/lib/finance-default-account
  * `getFinanceDefaultAccountId()` (a registry read, not an account-service
  * call) followed by AT MOST one `getAccount(id)` + `getBalances(id)` pair
  * for the operator's OWN default account.
+ *
+ * ── «실적» strip (ADR-MONO-084 P7, TASK-MONO-812) ──
+ * A third leg, `performance` (`GET /api/finance/accounts/metrics?period=`):
+ * 충전 · 이체 · 캡처 건수 and their amounts, one card per currency. This is
+ * NOT a list/search call and does not soften the honest constraint above: the
+ * producer aggregates the tenant's settled transactions itself (ADR-MONO-084
+ * D4) and returns only tenant-wide totals — no account id reaches the console,
+ * and the console never sums anything. Unlike the two legs above it does NOT
+ * follow the shared-credential `forbidden` rule: a `403` on it makes ONLY the
+ * strip «권한 없음», and any other failure (`503`, timeout, an unparseable
+ * body) makes it «불러올 수 없음» — never zeros — while the ledger tiles and
+ * the account snapshot render as before. A `401` re-login is the same as every
+ * leg. Not eligible ⇒ not called.
  */
 
 export interface LedgerOverviewSummary {
@@ -129,7 +148,14 @@ export interface FinanceOverviewState {
   /** True on a 404 `ACCOUNT_NOT_FOUND` for the registry-configured
    *  default account id (stale/deleted account — Edge Cases). */
   accountNotFound: boolean;
+  /** The period the «실적» strip shows (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (TASK-MONO-812) — its own cell, its own failure. */
+  performance: PerformanceCell;
 }
+
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month. */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
 
 const EMPTY: FinanceOverviewState = {
   notEligible: false,
@@ -140,6 +166,8 @@ const EMPTY: FinanceOverviewState = {
   accountSnapshot: null,
   accountDegraded: false,
   accountNotFound: false,
+  period: DEFAULT_OVERVIEW_PERIOD,
+  performance: { status: 'degraded', value: null },
 };
 
 /** Bounded page size for the periods browsable read (mirrors
@@ -253,24 +281,47 @@ async function fetchAccountSnapshot(): Promise<AccountLegOutcome> {
  *   mirrors `/finance/accounts` + `/ledger`). `false` ⇒ block (no ledger
  *   or account call fabricated).
  */
+/** The «실적» leg: an outcome that never throws, like the two legs above. */
+type PerformanceLegOutcome =
+  | { kind: 'ok'; cell: PerformanceCell }
+  | { kind: 'unauthorized' };
+
+async function fetchPerformance(period: MetricsPeriod): Promise<PerformanceLegOutcome> {
+  try {
+    return { kind: 'ok', cell: await performanceMetricsCell(getFinanceMetrics(period)) };
+  } catch (err) {
+    // `performanceMetricsCell` re-throws ONLY a 401 — every other failure is
+    // already a `forbidden` / `degraded` cell.
+    if (err instanceof ApiError && err.status === 401) return { kind: 'unauthorized' };
+    return { kind: 'ok', cell: { status: 'degraded', value: null } };
+  }
+}
+
+/**
+ * @param period  the «실적» strip's period (`?period=`; the page has already
+ *   folded an absent / unknown value into {@link DEFAULT_OVERVIEW_PERIOD}).
+ */
 export async function getFinanceOverviewState(
   eligible: boolean,
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
 ): Promise<FinanceOverviewState> {
   if (!eligible) {
-    return { ...EMPTY, notEligible: true };
+    return { ...EMPTY, notEligible: true, period };
   }
 
   // Each leg resolves to an outcome object and NEVER throws (own
-  // try/catch) — Promise.all here only awaits both settling, it does NOT
-  // couple their failure handling (independent degrade).
-  const [ledgerOutcome, accountOutcome] = await Promise.all([
+  // try/catch) — Promise.all here only awaits all three settling, it does
+  // NOT couple their failure handling (independent degrade).
+  const [ledgerOutcome, accountOutcome, performanceOutcome] = await Promise.all([
     fetchLedgerSummary(),
     fetchAccountSnapshot(),
+    fetchPerformance(period),
   ]);
 
   if (
     ledgerOutcome.kind === 'unauthorized' ||
-    accountOutcome.kind === 'unauthorized'
+    accountOutcome.kind === 'unauthorized' ||
+    performanceOutcome.kind === 'unauthorized'
   ) {
     // Shared credential — no partial authed state → ONE whole-session
     // re-login (never per-leg).
@@ -282,7 +333,7 @@ export async function getFinanceOverviewState(
     // legs — a 403 on either means the operator's token is not
     // finance-scoped at all (mirrors the `/finance/accounts` + `/ledger`
     // page-level `forbidden` block).
-    return { ...EMPTY, forbidden: true };
+    return { ...EMPTY, forbidden: true, period };
   }
 
   return {
@@ -294,5 +345,9 @@ export async function getFinanceOverviewState(
     accountSnapshot: accountOutcome.kind === 'ok' ? accountOutcome.snapshot : null,
     accountDegraded: accountOutcome.kind === 'degraded',
     accountNotFound: accountOutcome.kind === 'notFound',
+    period,
+    performance: performanceOutcome.kind === 'ok'
+      ? performanceOutcome.cell
+      : { status: 'degraded', value: null },
   };
 }

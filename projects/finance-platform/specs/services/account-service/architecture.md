@@ -497,6 +497,7 @@ All under `/api/finance/**` (gateway, when introduced, rewrites
 | `POST` | `/api/finance/accounts/{id}/holds/{holdId}/release` | JWT | required | release a hold |
 | `POST` | `/api/finance/accounts/{id}/transfers` | JWT | required | atomic transfer to another finance account |
 | `GET` | `/api/finance/accounts/{id}/transactions` | JWT | n/a | paginated transaction history |
+| `GET` | `/api/finance/accounts/metrics?period=week\|month` | JWT (account read gate) | n/a | overview performance metrics — tenant-wide settled totals per type and currency, no per-account row (TASK-MONO-812) |
 | `GET` | `/actuator/{health,info}` | none | n/a | probes / build info |
 | `GET` | `/actuator/prometheus` | network-isolated | n/a | metrics scrape (internal only) |
 

@@ -152,6 +152,16 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
         return respond("AMOUNT_INVALID", e.getMessage());
     }
 
+    /**
+     * TASK-MONO-812 — a query parameter whose contract says 400, not this service's 422 for a
+     * bare {@link IllegalArgumentException} ({@code GET /accounts/metrics?period=} missing /
+     * unknown — {@code platform/contracts/performance-metrics-contract.md} § 4).
+     */
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidQueryParameter(InvalidQueryParameterException e) {
+        return respond("VALIDATION_ERROR", e.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(
             MethodArgumentTypeMismatchException e) {
