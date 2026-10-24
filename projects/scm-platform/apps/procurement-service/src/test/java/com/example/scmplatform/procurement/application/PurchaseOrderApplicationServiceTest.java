@@ -423,6 +423,123 @@ class PurchaseOrderApplicationServiceTest {
         verify(eventPublisher, never()).publishAsnReceived(any(), any(), any(), any(), any(), any());
     }
 
+    // ---------------- RECEIVE ASN — PO status guard (TASK-SCM-BE-063) ----------------
+
+    private ReceiveAsnCommand fullAsn(PurchaseOrder po, String ref) {
+        return new ReceiveAsnCommand(TENANT, po.getId(), ref, Instant.now(),
+                List.of(new ReceiveAsnCommand.AsnLine("line-001", new BigDecimal("10"))));
+    }
+
+    private void verifyNothingWritten() {
+        verify(asnRepository, never()).save(any());
+        verify(poRepository, never()).save(any());
+        verify(historyRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+        verify(eventPublisher, never()).publishAsnReceived(any(), any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishPoReceived(any());
+    }
+
+    @Test
+    @DisplayName("🔴 063 receiveAsn() on a CANCELED PO → PO_STATUS_TRANSITION_INVALID (CANCELED→RECEIVED, SYSTEM); no ASN · PO · history · audit · outbox write")
+    void receiveAsnOnCanceledPoIsRejectedWithNothingWritten() {
+        PurchaseOrder po = confirmedPo();
+        po.cancel(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR, "withdrawn");
+        when(asnRepository.findBySupplierAsnRef("ASN-CXL", TENANT)).thenReturn(Optional.empty());
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        assertThatThrownBy(() -> service.receiveAsn(fullAsn(po, "ASN-CXL")))
+                .isInstanceOfSatisfying(
+                        com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException.class,
+                        e -> {
+                            assertThat(e.getFrom()).isEqualTo(PoStatus.CANCELED);
+                            assertThat(e.getTo()).isEqualTo(PoStatus.RECEIVED);
+                            assertThat(e.getActor()).isEqualTo(
+                                    com.example.scmplatform.procurement.domain.po.status.ActorType.SYSTEM);
+                        });
+
+        assertThat(po.getStatus()).isEqualTo(PoStatus.CANCELED);
+        assertThat(po.linesView().get(0).getReceivedQuantity()).isEqualByComparingTo("0");
+        verifyNothingWritten();
+    }
+
+    @Test
+    @DisplayName("🔴 063 receiveAsn() on a SUBMITTED / ACKNOWLEDGED PO → PO_STATUS_TRANSITION_INVALID; nothing written")
+    void receiveAsnBeforeConfirmIsRejected() {
+        PurchaseOrder submitted = freshDraftPo();
+        submitted.submit(com.example.scmplatform.procurement.domain.po.status.ActorType.BUYER);
+        PurchaseOrder acknowledged = acknowledgedPo();
+        for (PurchaseOrder po : List.of(submitted, acknowledged)) {
+            PoStatus before = po.getStatus();
+            when(asnRepository.findBySupplierAsnRef("ASN-EARLY", TENANT)).thenReturn(Optional.empty());
+            when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+            assertThatThrownBy(() -> service.receiveAsn(fullAsn(po, "ASN-EARLY")))
+                    .isInstanceOf(com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException.class);
+            assertThat(po.getStatus()).isEqualTo(before);
+            assertThat(po.linesView().get(0).getReceivedQuantity()).isEqualByComparingTo("0");
+        }
+        verifyNothingWritten();
+    }
+
+    @Test
+    @DisplayName("063 replay of a REJECTED ASN is evaluated again (it was never stored) — 422 both times, still nothing written")
+    void replayOfRejectedAsnIsRejectedAgain() {
+        PurchaseOrder po = confirmedPo();
+        po.cancel(com.example.scmplatform.procurement.domain.po.status.ActorType.OPERATOR, null);
+        when(asnRepository.findBySupplierAsnRef("ASN-RPL", TENANT)).thenReturn(Optional.empty());
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+
+        for (int i = 0; i < 2; i++) {
+            assertThatThrownBy(() -> service.receiveAsn(fullAsn(po, "ASN-RPL")))
+                    .isInstanceOf(com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException.class);
+        }
+        verify(asnRepository, times(2)).findBySupplierAsnRef("ASN-RPL", TENANT);
+        verifyNothingWritten();
+    }
+
+    @Test
+    @DisplayName("063 control: CONFIRMED + full ASN → ONE history row CONFIRMED→RECEIVED (SYSTEM) + po.received + asn.received")
+    void receiveAsnOnConfirmedWritesOneTransition() {
+        PurchaseOrder po = confirmedPo();
+        when(asnRepository.findBySupplierAsnRef("ASN-OK", TENANT)).thenReturn(Optional.empty());
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+        when(asnRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.receiveAsn(fullAsn(po, "ASN-OK"));
+
+        ArgumentCaptor<com.example.scmplatform.procurement.domain.po.status.PoStatusHistory> history =
+                ArgumentCaptor.forClass(com.example.scmplatform.procurement.domain.po.status.PoStatusHistory.class);
+        verify(historyRepository, times(1)).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(PoStatus.CONFIRMED);
+        assertThat(history.getValue().getToStatus()).isEqualTo(PoStatus.RECEIVED);
+        assertThat(history.getValue().getActorType())
+                .isEqualTo(com.example.scmplatform.procurement.domain.po.status.ActorType.SYSTEM);
+        assertThat(po.getStatus()).isEqualTo(PoStatus.RECEIVED);
+        verify(eventPublisher, times(1)).publishPoReceived(po);
+        verify(eventPublisher, times(1))
+                .publishAsnReceived(any(), eq(po.getId()), eq(TENANT), eq("ASN-OK"), any(), any());
+    }
+
+    @Test
+    @DisplayName("063 control: PARTIALLY_RECEIVED + another partial ASN → accepted, no history row (no transition), no po.received")
+    void receiveFurtherPartialOnPartiallyReceived() {
+        PurchaseOrder po = confirmedPo();
+        po.applyAsn(List.of(new com.example.scmplatform.procurement.domain.po.AsnLineReceipt(
+                "line-001", new BigDecimal("3"))));
+        when(asnRepository.findBySupplierAsnRef("ASN-P2", TENANT)).thenReturn(Optional.empty());
+        when(poRepository.findById(po.getId(), TENANT)).thenReturn(Optional.of(po));
+        when(asnRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.receiveAsn(new ReceiveAsnCommand(TENANT, po.getId(), "ASN-P2", Instant.now(),
+                List.of(new ReceiveAsnCommand.AsnLine("line-001", new BigDecimal("2")))));
+
+        assertThat(po.getStatus()).isEqualTo(PoStatus.PARTIALLY_RECEIVED);
+        assertThat(po.linesView().get(0).getReceivedQuantity()).isEqualByComparingTo("5");
+        verify(historyRepository, never()).save(any());
+        verify(asnRepository, times(1)).save(any());
+        verify(eventPublisher, never()).publishPoReceived(any());
+    }
+
     // ---------------- READS ----------------
 
     @Test

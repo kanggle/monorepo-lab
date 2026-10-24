@@ -77,6 +77,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-BE-653-login-events-carry-site-tenant-for-pool-accounts.md` — **소비자 풀 계정의 로그인 · 잠금이 사이트가 아니라 `consumer-pool` 로 기록된다** (READY, 2026-10-24 UTC): `TASK-MONO-811` AC-0 에서 나왔다(소유자 «지금 기록대로 + 후속 티켓»). 원인은 `CredentialAuthenticationProvider.java:401` 이 `credential.getTenantId()` 를 싣는 것이다. 그래서 사이트 테넌트의 IAM 실적 · 테넌트별 보안 규칙이 자기 소비자를 못 본다. 데모 소비자는 전원 풀 계정이다(`TASK-MONO-744`). 추가 필드냐 `tenantId` 재정의냐 = AC-0 뒤 소유자 결정. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-BE-654-security-internal-queries-not-meta-audited.md` — **`security-query-api.md` 는 내부 조회를 모두 감사한다(A5)고 적었는데 security-service 에는 그 감사가 없다** (READY, 2026-10-24 UTC): `TASK-MONO-811` 구현 보고에서 나왔다. admin-service 가 `GET /api/admin/audit` 을 이미 meta-audit 하므로 «호출자가 감사한다» 로 계약만 고칠지, security 도 기록할지 = AC-0 뒤 소유자 결정. 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
