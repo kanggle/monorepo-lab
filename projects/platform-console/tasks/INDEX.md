@@ -92,7 +92,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **READY (2026-10-23 UTC) — ADR-MONO-084 P8 (D7).** 전체 홈 도메인 카드에 대표 실적 지표 하나(이번 주 값 · 직전 대비). 합성은 콘솔 서버(ADR-081) · 응답 모양 · 카드 순서 · 실패 격리 불변, 칸만 추가. 선행 = 루트 `TASK-MONO-807`~`812`(P2~P7) 의 `…/metrics`. 🔴 nightly e2e grep. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
+
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -119,6 +120,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
+- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **IN-PROGRESS (2026-10-24 UTC) — ADR-MONO-084 P8 (D7).** 전체 홈 도메인 카드에 대표 실적 지표 하나(이번 주 값 · 직전 대비). 합성은 콘솔 서버(ADR-081) · 응답 모양 · 카드 순서 · 실패 격리 불변, 칸만 추가. 선행 = 루트 `TASK-MONO-807`~`812`(P2~P7) 의 `…/metrics`. 🔴 nightly e2e grep. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **IN-PROGRESS (2026-10-24 UTC) — `TASK-PC-FE-364` AC-3 라이브(33차 창)에서 발견.** 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` · 도메인 상태 «WMS 점검 불가» — 서비스엔 요청이 안 닿음, 같은 `WMS_ADMIN_BASE_URL` 의 `/wms` 화면은 정상. 🔵 AC-0(코드 판독): 의심 (a)~(d) 전부 배제 · 남는 기전 = 다리마다 따로 도는 데모 주소 해석(`/status`) — **원인으로 증명 안 됨** ⇒ 수선 보류, 다음 측정 제안. 구현 권장 Opus.
 
 ## review
