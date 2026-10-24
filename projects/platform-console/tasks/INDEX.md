@@ -93,6 +93,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **READY (2026-10-23 UTC) — ADR-MONO-084 P8 (D7).** 전체 홈 도메인 카드에 대표 실적 지표 하나(이번 주 값 · 직전 대비). 합성은 콘솔 서버(ADR-081) · 응답 모양 · 카드 순서 · 실패 격리 불변, 칸만 추가. 선행 = 루트 `TASK-MONO-807`~`812`(P2~P7) 의 `…/metrics`. 🔴 nightly e2e grep. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-PC-FE-370-finance-transaction-type-filter-sends-unknown-types.md` — **Finance 거래 유형 필터가 백엔드에 없는 `CREDIT`/`DEBIT` 을 보내 422 `AMOUNT_INVALID`** (READY, 2026-10-24 UTC): 옵션 목록(`TransactionsTable.tsx:115` ← `KNOWN_TXN_TYPES`)에 표시용 값이 섞였다. 백엔드는 `TransactionType.valueOf`(`AccountApplicationService.java:396`)에서 실패한다. 표시용 목록과 필터용 목록(생산자 enum)을 나누고, 옵션이 enum 을 벗어나면 빨강이 되는 시험을 둔다. 출처 `TASK-MONO-812`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
